@@ -1,0 +1,71 @@
+// 백엔드 빌드 스크립트. 레포 전체에서 이 파일 하나뿐이다.
+//
+// 폴더는 도메인별로 나뉘어 있지만(common/be, story/be, ...) 빌드는 하나로 합친다.
+// 아래 srcDirs 가 흩어진 도메인 폴더를 하나의 컴파일 단위로 묶어주는 부분.
+//
+// 그래서 각 도메인 담당자는:
+//   - 자기 폴더(예: comic/be/src/main/java) 안에서만 작업하면 되고
+//   - 공통 기능은 그냥 import 해서 쓰면 된다 (예: import com.lore.common.response.ApiResponse;)
+//   - Gradle 모듈 / 의존성 선언을 몰라도 된다. 의존성은 아래 dependencies 한 곳에만 적는다.
+
+plugins {
+    id 'java'
+    // Spring Boot / dependency-management 플러그인 및 버전 확정은 백엔드 담당자 몫으로 비워둠.
+    // id 'org.springframework.boot' version '3.x.x'
+    // id 'io.spring.dependency-management' version '1.x.x'
+}
+
+group = 'com.lore'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    // 팀 공용 Java 버전. 확정은 백엔드 담당자 판단에 맡김 (Spring Boot 버전과 함께 결정).
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+// 도메인별로 흩어진 소스 폴더를 하나로 묶는다.
+// 새 도메인이 생기면 여기에 한 줄 추가하면 된다.
+sourceSets {
+    main {
+        java {
+            srcDirs = [
+                'common/be/src/main/java',   // 공통: config, 인증, 공통 응답
+                'story/be/src/main/java',    // 하은
+                'comic/be/src/main/java',    // 상훈
+                'trailer/be/src/main/java',  // 병연
+                'apps/api/src/main/java'     // 서버 실행 진입점(main 클래스)
+            ]
+        }
+        resources {
+            srcDirs = ['apps/api/src/main/resources']  // application.yml 등 실행 설정
+        }
+    }
+    test {
+        java {
+            srcDirs = [
+                'common/be/src/test/java',
+                'story/be/src/test/java',
+                'comic/be/src/test/java',
+                'trailer/be/src/test/java'
+            ]
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // 의존성은 도메인 구분 없이 여기 한 곳에만 적는다.
+    //
+    // Spring 스타터(web, data-jpa, security, springdoc 등)와 DB 드라이버는
+    // 버전 정책과 함께 백엔드 담당자가 확정하는 게 맞다고 보고 비워둠.
+    //
+    // implementation 'org.springframework.boot:spring-boot-starter-web'
+    // implementation 'org.springframework.boot:spring-boot-starter-security'
+    // runtimeOnly 'org.postgresql:postgresql'
+    // testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}

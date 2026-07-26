@@ -1,0 +1,43 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    // 도메인 폴더를 import 할 때 쓰는 별칭.
+    // 이 설정 덕분에 라우팅 파일에서 상대경로(../../../story/fe) 없이 @story/... 로 부를 수 있다.
+    "paths": {
+      "@/*": ["./*"],
+      "@common/*": ["../../common/fe/*"],
+      "@story/*": ["../../story/fe/*"],
+      "@comic/*": ["../../comic/fe/*"],
+      "@trailer/*": ["../../trailer/fe/*"]
+    }
+  },
+  // 각 도메인의 fe/ 는 apps/web 바깥에 있으므로 명시적으로 포함시켜야 타입 체크가 걸린다.
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "../../common/fe/**/*.ts",
+    "../../common/fe/**/*.tsx",
+    "../../story/fe/**/*.ts",
+    "../../story/fe/**/*.tsx",
+    "../../comic/fe/**/*.ts",
+    "../../comic/fe/**/*.tsx",
+    "../../trailer/fe/**/*.ts",
+    "../../trailer/fe/**/*.tsx"
+  ],
+  "exclude": ["node_modules"]
+}

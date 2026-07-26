@@ -1,0 +1,23 @@
+{
+  "name": "lore-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lore 프론트엔드 셸 (Next.js App Router). 실제 화면 코드는 각 도메인의 fe/ 폴더에 있다.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.6.0"
+  }
+}

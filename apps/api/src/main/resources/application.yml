@@ -1,0 +1,11 @@
+# 서버 실행 설정 자리.
+# DB 연결(datasource), JPA, 프로필 분리 등은 백엔드 담당자 몫으로 비워둠.
+#
+# server:
+#   port: 8080
+#
+# spring:
+#   datasource:
+#     url: ${DB_URL}
+#     username: ${DB_USERNAME}
+#     password: ${DB_PASSWORD}
