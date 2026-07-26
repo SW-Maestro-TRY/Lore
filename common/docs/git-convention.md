@@ -95,6 +95,8 @@ Chore: 레포 도메인별 구조 초기 세팅
 - 추가 수정 사항 → `REFACTOR`
 - `FIX`는 배포 후 버그 수정 시에만 사용
 
+커밋 타입은 12개를 세분화해서 사용하되, GitHub 이슈/PR 라벨은 FEAT / FIX / REFACTOR / DESIGN / DOCS / CHORE / TEST / BUILD 8개로 운영한다. (Style, Rename, Remove, Comment 관련 작업은 가장 가까운 라벨로 대체)
+
 **브랜치 생성**
 
 이슈 생성 후 브랜치 생성: `[이슈타입]/#이슈번호`
