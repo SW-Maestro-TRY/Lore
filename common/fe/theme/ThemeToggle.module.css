@@ -1,0 +1,50 @@
+/* 헤더 안에 들어가는 pill 토글. 디자인 규칙대로 그림자 없이 보더 + 배경색으로만 위계를 준다. */
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.toggle:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* 라이트 = 빈 원, 다크 = 채운 원 */
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  background: transparent;
+}
+
+:global([data-theme="dark"]) .dot {
+  background: currentColor;
+}
+
+.dark {
+  display: none;
+}
+
+:global([data-theme="dark"]) .light {
+  display: none;
+}
+
+:global([data-theme="dark"]) .dark {
+  display: inline;
+}

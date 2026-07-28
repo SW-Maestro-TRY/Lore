@@ -1,0 +1,96 @@
+/* 사이트 공통 sticky 헤더. 랜딩과 도메인 탭이 같은 헤더를 쓴다.
+ * 색·간격은 전부 common/fe/styles/tokens.css 의 변수를 참조한다. */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: var(--header-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+
+.headerInner {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 12px var(--gutter);
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 3vw, 30px);
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+/* 마침표만 Comic 액센트 */
+.wordmarkDot {
+  color: var(--accent-comic);
+}
+
+.nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 2.4vw, 20px);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.navLink {
+  color: var(--text-muted);
+  padding: 8px 10px;
+  border-radius: 999px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.navLink:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+/* 현재 보고 있는 탭 */
+.navLinkActive {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headerCta {
+  padding: 10px 18px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font-size: 13.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.headerCta:hover {
+  background: var(--accent-story);
+  color: #fff;
+}
+
+/* 원 디자인에는 테마 토글이 없었다. 토글이 추가되면서 좁은 화면에서 헤더 한 줄이
+ * 넘치기 때문에, 여기서만 미디어쿼리로 내비를 숨긴다.
+ * (Comic/Trailer/Story 진입점은 랜딩 탭 카드와 푸터에도 있어 잃는 게 없다.) */
+@media (max-width: 640px) {
+  .nav {
+    display: none;
+  }
+
+  .headerActions {
+    margin-left: auto;
+  }
+}
