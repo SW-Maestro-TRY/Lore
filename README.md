@@ -19,8 +19,13 @@
 repo/
 ├── common/                  # 3개 도메인이 공유하는 영역
 │   ├── be/                  # config(Swagger/Security), ApiResponse, 회원가입/로그인
-│   ├── fe/                  # 공용 UI (Navigation 등)
-│   └── docs/                # 아키텍처 / API 명세 / 깃 컨벤션
+│   ├── fe/                  # 공용 UI
+│   │   ├── SiteHeader.tsx   # 랜딩 · 도메인 탭이 함께 쓰는 상단 헤더
+│   │   ├── links.ts         # 탭 순서 (Comic → Trailer → Story) 단일 출처
+│   │   ├── landing/         # 랜딩페이지 화면 (특정 도메인 소유가 아님)
+│   │   ├── theme/           # 라이트/다크 테마 토글 + 초기화 스크립트
+│   │   └── styles/          # 디자인 토큰 (tokens.css)
+│   └── docs/                # 아키텍처 / API 명세 / 깃 컨벤션 / 디자인 핸드오프
 │
 ├── story/                   # 담당: 하은
 │   ├── be/                  # 백엔드 (com.lore.story 패키지)
@@ -32,11 +37,13 @@ repo/
 ├── apps/                    # 나뉜 코드를 하나로 합쳐 실행하는 자리 (로직 없음)
 │   ├── web/                 # Next.js 라우팅 셸
 │   │   └── app/
-│   │       ├── layout.tsx         # common/fe 의 Navigation 렌더링
-│   │       ├── page.tsx           # 랜딩
-│   │       ├── story/page.tsx     # story/fe 에서 import 만
-│   │       ├── comic/page.tsx     # comic/fe 에서 import 만
-│   │       └── trailer/page.tsx   # trailer/fe 에서 import 만
+│   │       ├── layout.tsx         # 폰트 + 테마 초기화 + 전역 스타일
+│   │       ├── page.tsx           # 랜딩 — common/fe/landing 에서 import 만
+│   │       └── (domains)/         # URL 에 영향 없는 라우트 그룹
+│   │           ├── layout.tsx         # common/fe 의 SiteHeader 렌더링
+│   │           ├── story/page.tsx     # story/fe 에서 import 만   → /story
+│   │           ├── comic/page.tsx     # comic/fe 에서 import 만   → /comic
+│   │           └── trailer/page.tsx   # trailer/fe 에서 import 만 → /trailer
 │   └── api/                 # Spring Boot 실행 셸 (main 클래스 + application.yml)
 │
 ├── build.gradle             # 백엔드 빌드 설정 (레포 전체에 이거 하나뿐)
@@ -52,7 +59,7 @@ repo/
 
 | | 하는 일 | 지우면 | 방향 |
 | --- | --- | --- | --- |
-| `common/` | 여러 도메인이 **가져다 쓰는 기능 코드** (로그인, ApiResponse, Navigation) | 기능이 사라진다 | 도메인 → common 을 import |
+| `common/` | 여러 도메인이 **가져다 쓰는 기능 코드** (로그인, ApiResponse, SiteHeader) | 기능이 사라진다 | 도메인 → common 을 import |
 | `apps/` | **실행·연결 껍데기.** 기능 코드는 없다 | 기능은 그대로, 앱이 안 켜진다 | apps → 도메인들을 import |
 
 `apps/` 는 프레임워크가 "이 위치에 파일이 있어야 한다"고 강제해서 생긴 자리다.
@@ -60,6 +67,10 @@ repo/
 - **FE**: Next.js App Router 는 URL 이 파일 위치로 결정된다. `/comic` 이 존재하려면
   `apps/web/app/comic/page.tsx` 가 반드시 있어야 하므로, 이 파일은 `comic/fe` 를 import 만 하는
   한 줄짜리로 두고 실제 화면은 `comic/fe/` 에 둔다. 담당자는 `comic/fe/` 안에서만 작업하면 된다.
+  세 도메인 라우트를 `(domains)` 라우트 그룹으로 묶은 이유는 공용 `SiteHeader` 를 붙일 위치가
+  필요해서다. 괄호 폴더는 URL 에 나타나지 않으므로 `/comic` 은 그대로 `/comic` 이다.
+  (랜딩은 헤더 아래 자체 푸터까지 갖는 한 장짜리 화면이라 헤더를 직접 렌더링한다.
+  헤더 컴포넌트 자체는 랜딩과 도메인 탭이 같은 것을 쓴다.)
 - **BE**: `@SpringBootApplication` main 클래스는 특정 도메인 소유가 아니라 공용 실행 지점이다.
 
 > `apps/` 안에는 로직을 넣지 않는다. 화면/기능 코드가 여기 들어가기 시작하면 오너십 경계가 무너진다.
