@@ -1,0 +1,678 @@
+/* 랜딩페이지 스타일. 색·간격 값은 전부 common/fe/styles/tokens.css 의 변수를 참조한다.
+ * (여기에 hex 를 직접 적으면 다크 모드가 깨진다. 예외는 Story 카드 / CTA 처럼
+ *  두 테마 모두 진한 색면 위라서 항상 흰 글자인 자리뿐이다.)
+ *
+ * 반응형은 clamp() 와 repeat(auto-fit, minmax()) 로 처리하고 미디어쿼리는 쓰지 않는다.
+ * 단 하나의 예외는 헤더 내비게이션이며, 이유는 아래에 적어뒀다. */
+
+.container {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding-left: var(--gutter);
+  padding-right: var(--gutter);
+}
+
+/* 1. 헤더는 랜딩 전용이 아니라 도메인 탭과 공유하므로 common/fe/SiteHeader.module.css 에 있다. */
+
+/* ── 버튼 공통 ───────────────────────────────────────── */
+
+.btnPrimary {
+  padding: 16px 28px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 999px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.btnPrimary:hover {
+  background: var(--accent-story);
+  color: #fff;
+}
+
+.btnSecondary {
+  padding: 16px 26px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 999px;
+  transition: background-color 150ms ease;
+}
+
+.btnSecondary:hover {
+  background: var(--surface-hover);
+}
+
+/* ── 2. 히어로 ───────────────────────────────────────── */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--hero-bg);
+}
+
+.heroInner {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: clamp(28px, 5vw, 56px);
+  align-items: center;
+  padding-top: clamp(34px, 7vw, 84px);
+  padding-bottom: clamp(38px, 7vw, 84px);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.badgeDot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-comic);
+}
+
+/* vw 계수 4.6 은 의도값. 올리면 900~1250px 구간에서 컬럼보다 글자가 커져 줄이 깨진다. */
+.heroTitle {
+  font-weight: 900;
+  font-size: clamp(34px, 4.6vw, 62px);
+  line-height: 1.16;
+  letter-spacing: -0.04em;
+  margin: 18px 0 0;
+  text-wrap: pretty;
+}
+
+.heroBody {
+  font-size: clamp(15px, 3.6vw, 17px);
+  line-height: 1.8;
+  color: var(--text-muted);
+  margin: 18px 0 0;
+  max-width: 34ch;
+  text-wrap: pretty;
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+/* 이미지 콜라주 — 실제 아트가 준비되면 같은 비율의 슬롯에 그대로 갈아 끼운다. */
+.collage {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(10px, 1.6vw, 16px);
+  animation: loreBob 11s ease-in-out infinite;
+}
+
+.collageStack {
+  display: grid;
+  gap: clamp(10px, 1.6vw, 16px);
+}
+
+.slot {
+  border-radius: 22px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  padding: 12px;
+}
+
+.slotSheet {
+  aspect-ratio: 3 / 4;
+  padding: 14px;
+  background-color: var(--tint-story);
+  background-image: repeating-linear-gradient(135deg, var(--hatch-story) 0 7px, transparent 7px 16px);
+}
+
+.slotCut {
+  aspect-ratio: 1 / 1;
+  background-color: var(--tint-comic-strong);
+  background-image: repeating-linear-gradient(135deg, var(--hatch-comic) 0 7px, transparent 7px 16px);
+}
+
+.slotTeaser {
+  aspect-ratio: 4 / 3;
+  background-color: var(--tint-trailer-strong);
+  background-image: repeating-linear-gradient(135deg, var(--hatch-trailer) 0 7px, transparent 7px 16px);
+}
+
+.slotLabel {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+}
+
+.labelStory {
+  color: var(--accent-story);
+}
+
+.labelComic {
+  color: var(--accent-comic-deep);
+}
+
+.labelTrailer {
+  color: var(--accent-trailer);
+}
+
+/* 히어로 하단 바 */
+.heroBar {
+  background: var(--hero-bar-bg);
+  border-top: 1px solid var(--border);
+}
+
+.heroBarInner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.heroBarPill {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
+.heroBarText {
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+/* ── 3. 섹션 인트로 ──────────────────────────────────── */
+
+.intro {
+  padding-top: clamp(46px, 8vw, 96px);
+  padding-bottom: clamp(20px, 3vw, 32px);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-story);
+}
+
+.eyebrowComic {
+  color: var(--accent-comic);
+}
+
+.introTitle {
+  font-weight: 900;
+  font-size: clamp(27px, 6.6vw, 48px);
+  line-height: 1.22;
+  letter-spacing: -0.035em;
+  margin: 12px 0 0;
+  max-width: 22ch;
+  text-wrap: pretty;
+}
+
+.introBody {
+  font-size: 15.5px;
+  line-height: 1.8;
+  color: var(--text-muted);
+  margin: 14px 0 0;
+  max-width: 42ch;
+  text-wrap: pretty;
+}
+
+/* ── 4. 탭 카드 (Comic → Trailer → Story) ───────────── */
+
+.tabs {
+  /* sticky 헤더에 제목이 가리지 않도록 앵커 도착 지점을 내린다. */
+  scroll-margin-top: 72px;
+}
+
+.tabGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: clamp(14px, 2vw, 20px);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  min-height: clamp(340px, 64vw, 440px);
+  padding: clamp(22px, 4vw, 30px);
+  border-radius: 28px;
+  border: 1px solid transparent;
+  transition: background-color 150ms ease;
+}
+
+.cardComic {
+  background: var(--tint-comic);
+  border-color: var(--border-comic);
+  color: var(--text);
+}
+
+.cardComic:hover {
+  background: var(--tint-comic-strong);
+}
+
+.cardTrailer {
+  background: var(--tint-trailer);
+  border-color: var(--border-trailer);
+  color: var(--text);
+}
+
+.cardTrailer:hover {
+  background: var(--tint-trailer-strong);
+}
+
+.cardStory {
+  background: var(--story-card);
+  color: #fff;
+}
+
+.cardStory:hover {
+  background: var(--story-card-hover);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cardBadge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #fff;
+}
+
+.badgeComic {
+  background: var(--accent-comic);
+}
+
+.badgeTrailer {
+  background: var(--accent-trailer);
+}
+
+.badgeStory {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cardArrow {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  /* Story 카드에서는 상속받은 흰색을 그대로 쓴다. */
+  color: inherit;
+}
+
+.arrowComic {
+  color: var(--accent-comic);
+}
+
+.arrowTrailer {
+  color: var(--accent-trailer);
+}
+
+.cardTitle {
+  font-weight: 900;
+  font-size: clamp(22px, 4.6vw, 27px);
+  line-height: 1.32;
+  letter-spacing: -0.025em;
+  margin: 18px 0 0;
+}
+
+.cardBody {
+  font-size: 14.5px;
+  line-height: 1.75;
+  color: var(--text-muted);
+  margin: 12px 0 0;
+  max-width: 32ch;
+}
+
+/* Story 카드는 두 테마 모두 진한 색면 위라 흰 글자로 고정한다. */
+.cardBodyOnInk {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.preview {
+  margin-top: auto;
+  padding-top: 22px;
+}
+
+/* Comic 프리뷰: 2×2, 마지막 칸이 펀치라인 */
+.comicGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.comicCell {
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--border-comic);
+  display: flex;
+  align-items: flex-start;
+  padding: 9px;
+}
+
+.comicCellPunch {
+  background: var(--accent-comic);
+  border-color: transparent;
+  align-items: center;
+  justify-content: center;
+}
+
+.cellNum {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--accent-comic-deep);
+}
+
+/* Trailer 프리뷰: 16:9 와이드 + 1:1 3컷 */
+.trailerWide {
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--border-trailer);
+  display: flex;
+  align-items: flex-end;
+  padding: 10px;
+}
+
+.trailerRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.trailerCell {
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--border-trailer);
+}
+
+.trailerCellLast {
+  background: var(--accent-trailer);
+  border-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Story 프리뷰: 세로 스택 + 3/4 */
+.storyPreview {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.storyStack {
+  flex: 1.3;
+  display: grid;
+  gap: 6px;
+}
+
+.storyWide {
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.storyScroll {
+  aspect-ratio: 16 / 11;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: flex-end;
+  padding: 9px;
+}
+
+.storySide {
+  flex: 1;
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.previewLabelOnInk {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #fff;
+}
+
+.cellLabelOnInk {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: #fff;
+}
+
+.previewLabel {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--accent-trailer);
+}
+
+/* ── 5. 캐릭터 시트 ──────────────────────────────────── */
+
+.sheet {
+  margin-top: clamp(46px, 8vw, 96px);
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.sheetInner {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: clamp(26px, 5vw, 56px);
+  align-items: start;
+  padding-top: clamp(44px, 7vw, 84px);
+  padding-bottom: clamp(44px, 7vw, 84px);
+}
+
+.sheetTitle {
+  font-weight: 900;
+  font-size: clamp(26px, 6vw, 42px);
+  line-height: 1.24;
+  letter-spacing: -0.035em;
+  margin: 12px 0 0;
+  text-wrap: pretty;
+}
+
+.sheetBody {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text-muted);
+  margin: 14px 0 0;
+  max-width: 34ch;
+}
+
+.steps {
+  display: grid;
+  gap: 12px;
+}
+
+.step {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  padding: 18px 20px;
+}
+
+.stepNum {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 13px;
+  color: #fff;
+  min-width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stepNumStory {
+  background: var(--accent-story);
+}
+
+.stepNumComic {
+  background: var(--accent-comic);
+}
+
+.stepNumTrailer {
+  background: var(--accent-trailer);
+}
+
+.stepTitle {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.stepDesc {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ── 7. CTA ─────────────────────────────────────────── */
+
+.cta {
+  background: var(--ink-section);
+  color: #fff;
+}
+
+.ctaInner {
+  padding-top: clamp(46px, 8vw, 92px);
+  padding-bottom: clamp(46px, 8vw, 92px);
+}
+
+.ctaTitle {
+  font-weight: 900;
+  font-size: clamp(28px, 7.2vw, 56px);
+  line-height: 1.18;
+  letter-spacing: -0.04em;
+  margin: 0;
+  max-width: 20ch;
+  text-wrap: pretty;
+}
+
+.ctaBody {
+  font-size: 15.5px;
+  line-height: 1.75;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 16px 0 0;
+  max-width: 36ch;
+  text-wrap: pretty;
+}
+
+.ctaActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+.btnComic {
+  padding: 16px 28px;
+  background: var(--accent-comic);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 999px;
+  transition: background-color 150ms ease;
+}
+
+.btnComic:hover {
+  background: var(--accent-comic-hover);
+}
+
+.btnGhost {
+  padding: 16px 26px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  border-radius: 999px;
+  transition: background-color 150ms ease;
+}
+
+.btnGhost:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── 8. 푸터 ────────────────────────────────────────── */
+
+.footer {
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.footerInner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  padding-top: 26px;
+  padding-bottom: 40px;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+}
+
+.footerMark {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 17px;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+/* 워드마크 마침표만 Comic 액센트 */
+.markDot {
+  color: var(--accent-comic);
+}
+
+.footerLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.footerLink {
+  color: var(--text-subtle);
+  transition: color 150ms ease;
+}
+
+.footerLink:hover {
+  color: var(--text);
+}
+
+.copyright {
+  margin-left: auto;
+}
