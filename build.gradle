@@ -71,6 +71,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+    // 서버가 살아 있는지 알려주는 상태 확인 엔드포인트(/actuator/health).
+    // 배포 직후 "떴는가" 확인, 앞단 게이트웨이(Nginx)·나중의 로드밸런서 헬스체크, CI/CD 배포 성공 판정에 쓴다.
+    // 이게 없으면 확인에 일반 API 를 써야 해서 확인할 때마다 DB 조회가 발생한다.
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
     // API 문서(Swagger UI). 2.x 는 Boot 3.x 용이라 Boot 4 에서는 3.x 를 써야 한다.
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 
