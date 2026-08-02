@@ -81,6 +81,12 @@ dependencies {
 
     runtimeOnly 'org.postgresql:postgresql'
 
+    // AWS S3 (v2) — 콘텐츠 이미지 presigned URL 발급용.
+    // 실제 업로드는 브라우저 → S3 직접(presigned PUT)이라 서버(t3.micro)를 안 거친다.
+    // BOM 으로 버전을 한 곳에서 관리한다.
+    implementation platform('software.amazon.awssdk:bom:2.28.16')
+    implementation 'software.amazon.awssdk:s3'
+
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
