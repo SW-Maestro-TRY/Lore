@@ -37,3 +37,15 @@ spring:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+# 상태 확인(헬스체크) 엔드포인트.
+# /actuator/health 가 200 이면 서버가 정상. 배포 직후 확인·CI/CD 배포 성공 판정에 쓴다.
+# 서버 내부 사정(DB 주소·디스크 등)이 밖으로 새지 않도록 상세 정보는 감춘다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
