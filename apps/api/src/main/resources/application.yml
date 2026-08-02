@@ -49,3 +49,12 @@ management:
   endpoint:
     health:
       show-details: never
+
+# 콘텐츠 이미지 S3 (presigned 업로드).
+# 실제 업로드는 브라우저 → S3 직접(presigned PUT)이라 서버(t3.micro)를 안 거친다.
+# 버킷 이름은 환경변수로 주입한다(로컬은 미설정 가능, EC2 는 배포 시 주입).
+app:
+  s3:
+    region: ${AWS_REGION:ap-northeast-2}
+    content-bucket: ${CONTENT_S3_BUCKET:}
+    presign-expiry-minutes: ${S3_PRESIGN_EXPIRY:10}
