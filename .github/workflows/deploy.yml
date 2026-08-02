@@ -1,0 +1,116 @@
+# 백엔드 자동 배포 (CI/CD) — SSM 방식
+#
+# develop 에 "백엔드 코드"가 머지되면 자동으로:
+#   1) 빌드   2) jar를 S3에 업로드   3) SSM으로 서버에 "받아서 교체·재시작" 명령
+#   → 서버 포트는 하나도 안 연다 (SSM은 아웃바운드 연결만 씀)
+#
+# 프론트(**/fe)는 Vercel 이 배포하므로 paths 에서 제외.
+
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'common/be/**'
+      - 'comic/be/**'
+      - 'story/be/**'
+      - 'trailer/be/**'
+      - 'apps/api/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle/**'
+      - 'gradlew'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write     # OIDC 신분증 발급 (AWS 명찰 걸기용)
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+  ROLE_ARN: arn:aws:iam::359463332248:role/lore-github-deploy
+  S3_BUCKET: lore-deploy-artifacts-359463332248
+  INSTANCE_ID: i-06b64088f58bdf24f
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 받기
+        uses: actions/checkout@v4
+
+      - name: Java 21 준비 (+ Gradle 캐시)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: gradlew 실행권한
+        run: chmod +x ./gradlew
+
+      - name: 빌드 (테스트 제외)
+        run: ./gradlew clean build -x test
+
+      - name: 배포용 jar 한 개로 추리기
+        run: |
+          jar=$(ls build/libs/*.jar | grep -v plain)
+          cp "$jar" build/libs/app.jar
+
+      - name: AWS 명찰 걸기 (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: jar를 S3에 업로드
+        run: |
+          KEY="builds/lore-${GITHUB_SHA}.jar"
+          echo "S3_KEY=$KEY" >> "$GITHUB_ENV"
+          aws s3 cp build/libs/app.jar "s3://$S3_BUCKET/$KEY" --region "$AWS_REGION"
+          echo "업로드 완료: s3://$S3_BUCKET/$KEY"
+
+      - name: SSM으로 서버에 배포 명령 (포트 안 엶)
+        run: |
+          # 서버가 실행할 스크립트: S3에서 받아 → 백업 → 교체 → 재시작 → 실패 시 롤백
+          CMD_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy lore ${GITHUB_SHA}" \
+            --parameters commands="[\
+              \"set -e\",\
+              \"aws s3 cp s3://$S3_BUCKET/$S3_KEY /tmp/app.jar --region $AWS_REGION\",\
+              \"cp /opt/lore/lore.jar /opt/lore/lore.jar.bak 2>/dev/null || true\",\
+              \"mv /tmp/app.jar /opt/lore/lore.jar\",\
+              \"chown ubuntu:ubuntu /opt/lore/lore.jar\",\
+              \"systemctl restart lore\",\
+              \"sleep 5\",\
+              \"if systemctl is-active --quiet lore; then echo DEPLOY_OK; rm -f /opt/lore/lore.jar.bak; else echo DEPLOY_FAIL_ROLLBACK; mv /opt/lore/lore.jar.bak /opt/lore/lore.jar; systemctl restart lore; exit 1; fi\"\
+            ]" \
+            --query "Command.CommandId" --output text)
+          echo "command-id: $CMD_ID"
+
+          # 명령이 끝날 때까지 대기 (실패해도 wait는 non-zero → 아래서 상태 판정)
+          aws ssm wait command-executed \
+            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
+
+          # 결과 상태·출력 회수
+          STATUS=$(aws ssm get-command-invocation \
+            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query "Status" --output text)
+          echo "===== 서버 출력 ====="
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query "StandardOutputContent" --output text
+          echo "배포 상태: $STATUS"
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "===== 에러 출력 ====="
+            aws ssm get-command-invocation \
+              --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+              --query "StandardErrorContent" --output text
+            exit 1
+          fi
