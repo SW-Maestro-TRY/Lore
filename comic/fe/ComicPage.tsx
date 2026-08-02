@@ -1,11 +1,25 @@
 // Comic 탭의 실제 화면. (담당: 상훈)
-// 라우팅 파일(apps/web/app/comic/page.tsx)은 이 컴포넌트를 불러다 렌더링만 하므로,
-// 화면 작업은 이 폴더(comic/fe) 안에서만 하면 된다.
+//
+// jakae 자캐툰 랜딩을 이식했다. 섹션 UI·프론트 인터랙션은 그대로 살렸고,
+// 백엔드 통신(측정·저장)만 lib/analytics 를 no-op stub 으로 무력화했다.
+// 나중에 백엔드가 생기면 그 stub 만 실제 전송으로 채우면 된다.
+// 전역 오염을 막으려고 .comic-page 스코프로 감싼다(comic.css 참고).
+import "./comic.css";
+
+import SeasonBanner from "./sections/SeasonBanner";
+import Hero from "./sections/Hero";
+import HowItWorks from "./sections/HowItWorks";
+import CharacterCreator from "./sections/CharacterCreator";
+import Closing from "./sections/Closing";
+
 export default function ComicPage() {
   return (
-    <section>
-      <h2>Comic</h2>
-      <p>이 탭은 준비 중입니다.</p>
-    </section>
+    <div className="comic-page">
+      <SeasonBanner />
+      <Hero />
+      <HowItWorks />
+      <CharacterCreator />
+      <Closing />
+    </div>
   );
 }
