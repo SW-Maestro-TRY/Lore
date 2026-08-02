@@ -59,12 +59,6 @@ jobs:
           jar=$(ls build/libs/*.jar | grep -v plain)
           cp "$jar" build/libs/app.jar
 
-      - name: OIDC claims 디버그 (임시 - 원인 찾으면 제거)
-        run: |
-          IDT=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
-          echo "$IDT" | python3 -c "import sys,json,base64; t=json.load(sys.stdin)['value']; p=t.split('.')[1]; p+='='*(-len(p)%4); c=json.loads(base64.urlsafe_b64decode(p)); print('SUB =', c.get('sub')); print('AUD =', c.get('aud')); print('REPO =', c.get('repository')); print('REF =', c.get('ref'))"
-
       - name: AWS 명찰 걸기 (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
