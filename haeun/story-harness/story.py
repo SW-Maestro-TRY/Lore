@@ -1664,7 +1664,32 @@ def _stem(word: str) -> str:
     return w
 
 
-def gate_p1(p1: dict, character_input: str = "") -> list:
+def gate_name(p1: dict, given_name: str = "") -> list:
+    """작가가 준 이름이 카드에서 바뀌지 않게 한다.
+
+    이 게이트가 생긴 이유: 편지지 같은 소품 텍스트 속 캐릭터 이름이 작가가
+    입력한 이름(예: 초롱)과 다르게 나온 사고가 있었다. p1['name'] 은 엔진
+    카드를 거쳐 4~8단계 프롬프트 전체의 출발점이라, 여기서부터 어긋나면
+    뒤에서는 바로잡을 자리가 없다.
+
+    given_name 이 비어 있으면(작가가 이름을 안 주고 파일명만 있으면) 검사하지
+    않는다 — 그때는 모델이 이름을 짓는 것이 맞다. gate_gender 와 같은 이유로
+    같은 자리에 둔다: 작가가 정한 사실은 창작 대상이 아니라 제약이다.
+    """
+    name = str(given_name or "").strip()
+    if not name:
+        return []
+    card_name = str(p1.get("name") or "").strip()
+    if not card_name:
+        return [f"name 이 비어 있습니다. 작가가 이름을 '{name}' 으로 정했습니다. "
+                "그대로 쓰세요."]
+    if card_name != name:
+        return [f"작가는 이름을 '{name}' 으로 정했는데 카드의 name 이 "
+                f"'{card_name}' 입니다. 작가가 정한 이름은 바꾸지 않습니다."]
+    return []
+
+
+def gate_p1(p1: dict, character_input: str = "", given_name: str = "") -> list:
     """저격 구조를 코드로만 판정한다. 비어있으면 통과.
 
     character_input 은 작가가 준 원문이다. 카드가 그 사실(성별 등)을 버리지
@@ -1691,6 +1716,7 @@ def gate_p1(p1: dict, character_input: str = "") -> list:
     # 저격이 깨졌다고 이것들을 안 보면, 재생성 한 번에 하나씩만 고치게 된다.
     failures += gate_gender(p1, character_input)
     failures += gate_supporting_cast(p1)
+    failures += gate_name(p1, given_name)
 
     if not ea_word:
         failures.append("ea_key_word 가 비어있습니다. E(A)의 핵심을 한 단어로 쓰세요.")
@@ -2976,7 +3002,7 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
 
     sheet, _ = caller.json_call("P1", prompt(), TEMP_CREATIVE, usage)
     for regens in range(max_retries):
-        p1_gate = gate_p1(sheet, row.get("character") or "")
+        p1_gate = gate_p1(sheet, row.get("character") or "", row.get("_given_name") or "")
         if not p1_gate:
             return sheet, regens
         log(f"    P1 카드 게이트 실패 {len(p1_gate)}건 — P1 재실행")
@@ -5477,6 +5503,7 @@ def read_character(path: Path) -> dict:
         "photos": photo_paths,
         "photo_note": _clean(data.get("photo_note")),
         "_name": name,
+        "_given_name": given_name,
         "_source": str(path),
     }
 
