@@ -255,8 +255,28 @@
           <figcaption>생성된 시트</figcaption>
         </figure>
       </div>
+      <details class="sheet-approval-edit">
+        <summary>틀린 부분 고치기 (이름 · 외형 · 고정 소지품)</summary>
+        <p class="sheet-approval-edit-hint">
+          여기서 고친 내용은 "수정 반영해서 다시 만들기"를 눌러야 반영됩니다 —
+          글자만 고치고 "이대로 진행"을 누르면 지금 보이는 그림 그대로
+          확정됩니다.
+        </p>
+        <label class="field">
+          <span>이름</span>
+          <input type="text" id="sheetEditName">
+        </label>
+        <label class="field">
+          <span>외형 묘사 (영문 — 이미지 생성에 그대로 들어갑니다)</span>
+          <textarea id="sheetEditAppearance" rows="4"></textarea>
+        </label>
+        <label class="field">
+          <span>고정 소지품·복장 (한 줄에 하나씩 — 지팡이, 모자 등)</span>
+          <textarea id="sheetEditDetails" rows="3"></textarea>
+        </label>
+      </details>
       <div class="sheet-approval-actions">
-        <button type="button" class="btn btn-quiet" id="sheetRetryBtn">다시 만들기</button>
+        <button type="button" class="btn btn-quiet" id="sheetRetryBtn">수정 반영해서 다시 만들기</button>
         <button type="button" class="btn btn-primary" id="sheetApproveBtn">이대로 진행</button>
       </div>
     </div>
