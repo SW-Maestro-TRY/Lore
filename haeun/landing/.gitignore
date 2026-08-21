@@ -1,0 +1,6 @@
+# 실행마다 쌓이는 것 — 입력·설정·로그·올린 사진·축소 캐시.
+# 산출물 자체는 여기 없습니다 (story-harness/runs, webtoon-harness/outputs 에 남습니다).
+jobs/
+
+__pycache__/
+*.pyc

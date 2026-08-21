@@ -1,0 +1,149 @@
+전체 구조
+
+두 개의 독립된 프로그램이 있고, 파일로 연결됩니다.
+
+story-harness (story.py + webtoon.py)
+  "무엇을 만들 것인가"를 정합니다.
+  캐릭터 → 설정 → 스토리 → Arc → 회차 → 컷 분해
+
+         ↓ 파일로 넘김 (runs/<run_id>/)
+
+webtoon-harness (run.py)
+  "그것을 어떻게 그릴 것인가"를 정합니다.
+  컷 서술 → 영어 프롬프트 → 이미지 생성 → 세로 스크롤 배치
+story-harness: 7단계 파이프라인
+story.py가 하는 것 (P1~P3 + scene)
+
+P1 — 캐릭터 시트 (p1.json)
+
+입력: 사용자가 준 캐릭터 이름 + 한 줄 설명
+산출물: 성격, 관계, 외형(appearance_en), 디자인 고정 요소(design_details), 색상표(color_palette), 표정 6종(expression_set), 기대배신 구조(A면/B면)
+
+핵심 개념 — 기대배신: 독자가 A를 기대하게 만들고 B를 보여주는 것. "세상 누구 말도 안 듣는 황제가, 오직 이 사람 말만 듣는다" 같은 것. P1은 이 A와 B를 캐릭터 안에 설치합니다.
+
+P2 — 프리미스/엔진 (p2.json)
+
+P1의 캐릭터를 받아서 이야기를 굴릴 엔진을 설계합니다.
+
+엔진의 세 부품:
+
+부품	역할	예시
+Rule	등장할 때마다 발동하는 법칙	"황제가 황후 앞에서만 순종적이 된다" — 황후가 나올 때마다 긴장이 재생산됨
+Cost	목표에 다가갈수록 잃는 구조	"황권을 강화할수록, 자기 논리로 자신을 황후 후보에서 지운다" — 전진 자체가 상실
+Irony	해소 불가능한 정면충돌	"한쪽은 사람을 원하고 다른 쪽은 제국을 원한다" — 어느 쪽이 이겨도 무너짐
+
+추가로 정합니다:
+
+logline — 한 문장 로그라인
+drop (낙차) — "사적 감정 하나가 바뀌면 세계 레벨에서 뭐가 바뀌나"
+engine_question — 시즌 내내 닫지 않는 중심 질문
+generative_check — 이 설정에서 저절로 나오는 사건 10개 (Rule/Cost/Irony별 최소 3개씩)
+forbidden_subversion — 절대 쓰지 않을 뒤집기 (이미 써먹힌 반전, 전제를 무효로 만드는 반전)
+
+P3 — 검수 (p3.json)
+
+P1+P2를 편집자 시점으로 9개 항목 검수합니다. 전부 yes/no. 판정 기준이 매우 상세합니다 (예: sniping_verified는 ea_key_word와 b_trait_word 두 단어만 놓고 반의 관계인지만 봄). no가 하나라도 있으면 regeneration_directive로 P1 또는 P2를 재생성합니다.
+
+scene — 1화 도입부 (scenes.json)
+
+P1+P2를 받아 장면 3개짜리 1화 도입부를 씁니다. 각 장면마다:
+
+text — 본문 4~6문장
+choice — 인물이 한 선택 (발견이 아니라 행동)
+source — rule/cost/irony/want_need/new 중 어디서 나왔는지
+one_line — 실제로 벌어진 일 한 줄
+
+이게 나중에 엔진 카드에 "사람이 통과시킨 1화 도입부"로 실려 W4~W7 전체의 기준선이 됩니다.
+
+webtoon.py가 하는 것 (W4~W7)
+
+python webtoon.py --run <run_id>로 실행합니다.
+
+W4 — Arc 분할 (arcs.json)
+
+P2의 엔진을 Arc 4~6개로 분배합니다.
+
+Arc란: 큰 줄거리 단위입니다. 하나의 Arc는 2~5화 분량이고, 하나의 주제/국면을 다룹니다.
+
+Arc 타입 4종:
+
+전개 — 설정과 관계를 세우고 전제를 믿게 만듦
+반전 — 앞에서 믿게 만든 전제를 뒤집음 (전체의 1/3 이상이어야 함)
+상승 — 전제 유지, 대가와 압력을 키움
+해소 — 부채를 대량 상환하고 다음 전제를 심음
+
+각 Arc마다 opens(여는 질문)과 closes(닫는 질문)를 정합니다. 엔진급 질문은 어떤 Arc에서도 닫지 않습니다 — 닫으면 이야기가 끝나니까요.
+
+W5 — 회차 분해 (arc*_episodes.json)
+
+각 Arc를 화 단위로 쪼갭니다.
+
+핵심 개념 — 질문 장부 (부채와 신용):
+
+질문을 여는 것 = 부채 발행
+질문에 답하는 것 = 상환
+떡밥만 뿌리고 회수 안 하면 = 신용 파산 (고구마)
+답이 또 하나의 기대배신인 것 = 최상급 상환 (사이다)
+
+질문의 3유형:
+
+유형	만드는 법	예시
+mystery (왜?)	정보를 숨겨서	"왜 황제가 갑자기 태도를 바꿨지?"
+suspense (어떻게 되지?)	정보를 줘서	"폭탄이 있다는 걸 관객이 아는데, 주인공은 모른다"
+dramatic_irony (안 돼, 저러다…)	독자에게만 정보를 줘서	"독자만 아는 비밀을 주인공이 곧 알게 될 텐데…"
+
+규칙: 신규 질문 중 절반 이상이 ②③형이어야 합니다. ①형은 화당 최대 1개. 이유: "질문을 만들어라"는 지시를 받으면 가장 싼 경로가 정보 은닉(미스터리 박스)이기 때문.
+
+각 화마다:
+
+summary — 이 화에서 벌어지는 사건
+engine_fired — 어떤 엔진 요소가 발동하는지 (빈 배열 금지)
+questions_opened — 새로 여는 질문
+questions_closed — 닫는 질문 (장부에서 원문 그대로 복사)
+stinger — 마지막 컷의 훅 (열린 질문과 연결)
+
+W6 — 회차 검수 (arc*_review.json)
+
+W5의 결과를 편집자 시점으로 7개 항목 검수합니다:
+
+question_type_ratio — suspense/dramatic_irony 비율 50% 이상인가
+mystery_quota — mystery 2개 이상이면 위반
+debt_closed — Arc 안에서 최소 한 화는 질문을 닫았는가
+closure_is_betrayal — 답 자체가 기대배신인가
+engine_fired — 적힌 엔진 요소가 실제로 발동하는가
+stinger_linked — 스팅어가 질문과 실제로 이어지는가
+eq_untouched — 엔진급 질문을 닫지 않았는가
+
+불합격 화는 W5로 돌려보내 재생성합니다.
+
+W7 — 컷 분해 (ep*_cuts.json)
+
+각 화를 컷 8~16개로 쪼갭니다. 이게 실제로 그림이 되는 단위입니다.
+
+컷마다 정하는 것:
+
+필드	역할	값
+description	무엇이 보이는가 (카메라+장면)	"클로즈업. 제라프의 눈동자에 미묘한 떨림이 감돈다"
+dialogue	말풍선 대사	"제1 황녀에게 남작 작위를 내린다."
+narration	나레이션	"알베리온 제국의 새로운 황제가 즉위하는 날."
+thought	속마음	"(왜 하필 지금…)"
+sfx	효과음 한글	"머엉", "두근", "꼬옥"
+size	종횡비	wide(16:9) / normal(4:3) / tall(3:4) / impact(9:16)
+beat	리듬 역할	setup / build / turn / release / hold
+render_style	그림체	normal / sd / emphasis
+
+코드가 자동으로 정하는 것 (모델은 안 씀):
+
+gap_after — 컷 사이 여백 (beat에 따라)
+scene_break — 화면 경계 (hold/turn 자리에서)
+gaze — 시선 방향
+
+게이트 규칙:
+
+같은 size 4컷 연속 금지 ("크기 같은 이미지 나열")
+같은 beat 4컷 연속 금지 ("리듬이 아니라 평지")
+impact 화당 최대 2개
+마지막 컷(스팅어)은 impact 또는 tall, beat는 turn 또는 hold
+render_style이 sd인 컷: release/hold/build 비트에서만, 스팅어 금지
+리듬표 선출력 — beat/size 수열을 먼저 한 줄로 뽑고 4연속 없는지 확인한 뒤 서술 채움
+4연속 size 위반은 코드가 자동 수리 (repair_sizes())
