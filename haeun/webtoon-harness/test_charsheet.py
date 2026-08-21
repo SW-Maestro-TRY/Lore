@@ -81,6 +81,29 @@ ok("경고: design_details 에 길이가 있으면 조용하다",
 ok("경고: 길이 형용사 자체가 없으면 조용하다",
    C.hair_warning(sheet, "wavy ash blonde hair") == "")
 
+# ---------------- 소지품·머리장식 경고 ----------------
+# 지팡이·모자가 appearance_en 에는 있는데 design_details 에 없어 컷마다
+# 디자인이 바뀌거나 사라졌던 실제 사고(1컷·2컷 지팡이 불일치, 모자 착탈).
+STAFF_APPEARANCE = ("A young woman with short black hair, always seen carrying "
+                     "a wooden staff and wearing a wide-brimmed hat.")
+sheet_no_accessory = C.Sheet(run_dir=None, appearance=STAFF_APPEARANCE,
+                              design_details="A thin scar above the left eyebrow")
+ok("소지품 경고: 지팡이·모자가 appearance 에만 있으면 알린다",
+   "staff" in C.accessory_warning(sheet_no_accessory, STAFF_APPEARANCE)
+   and "hat" in C.accessory_warning(sheet_no_accessory, STAFF_APPEARANCE))
+sheet_with_accessory = C.Sheet(
+    run_dir=None, appearance=STAFF_APPEARANCE,
+    design_details="Carries a gnarled wooden staff with a blue crystal tip; "
+                    "wears a wide-brimmed hat with a single feather")
+ok("소지품 경고: design_details 에 이미 있으면 조용하다",
+   C.accessory_warning(sheet_with_accessory, STAFF_APPEARANCE) == "")
+ok("소지품 경고: 소지품 단어 자체가 없으면 조용하다",
+   C.accessory_warning(sheet, SIHA) == "")
+ok("소지품 경고: 시트가 없으면 터지지 않는다",
+   C.accessory_warning(None, STAFF_APPEARANCE) == "")
+ok("소지품 경고: 빈 appearance 에서 터지지 않는다",
+   C.accessory_warning(sheet_no_accessory, "") == "")
+
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
