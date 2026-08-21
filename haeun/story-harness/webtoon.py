@@ -665,6 +665,8 @@ def build_engine_card(p1: dict, p2: dict, idea: str, scenes: list,
         f"[금지된 뒤집기] {_fmt(p2.get('forbidden_subversion'))}",
         "",
         f"[주인공] {_fmt(p1.get('name'))}",
+        "  편지·쪽지 등 소품 텍스트에 등장하는 인물 이름도 항상 이 이름을 "
+        "그대로 쓴다. 새 이름을 짓지 않는다.",
         f"  성격: {_fmt(p1.get('personality'))}",
         f"  카드 한 줄(intro): {_fmt(p1.get('intro'))}",
         f"  직함: {_fmt(p1.get('rank'))}",
@@ -1524,6 +1526,83 @@ def gate_episodes_shape(payload: dict, ledger: Ledger, arc: dict = None,
     return failures
 
 
+# beat 문장에서 핵심 명사/동사만 남기는 거친 토큰화 — story.py 의 _stem 과
+# 같은 정신이다: 정교한 형태소 분석 없이, 조사·어미만 떼면 충분히 걸린다.
+_BEAT_PARTICLE = re.compile(
+    r"(을|를|이|가|은|는|에게|한테|에서|으로|로|과|와|도|만|의)$")
+# 마지막 토큰(대개 동사)의 활용형 차이를 흡수한다. "구출한다"/"구출했다"/
+# "구출할게" 가 다 다른 문자열이라 그대로 대조하면 대사에서 다른 활용형으로
+# 같은 행동을 말해도 놓친 것으로 잡힌다 — 어간만 남겨 부분일치로 본다.
+_VERB_ENDING = re.compile(
+    r"(한다면|했었다|하는데|하고서|한다|했다|할게|할까|하는|해서|하며|"
+    r"았다|었다|인다|된다|됐다|는다|ㄴ다)$")
+
+
+def _beat_tokens(beat: str) -> list:
+    words = re.split(r"[\s,.·]+", str(beat or "").strip())
+    out = []
+    for w in words:
+        w = _BEAT_PARTICLE.sub("", w).strip()
+        if len(w) >= 2:
+            out.append(w)
+    return out
+
+
+def _verb_stem(token: str) -> str:
+    stemmed = _VERB_ENDING.sub("", token)
+    return stemmed if len(stemmed) >= 2 else token
+
+
+def gate_beat_coverage(cuts: list, beats: list) -> list:
+    """beats 에 적힌 핵심 행동이 컷에서 통째로 빠지지 않았는지 본다.
+
+    실제 사고: 생쥐를 구출하는 핵심 장면(그림+말풍선)이 통째로 빠지고 결과
+    (생쥐를 안고 있는 모습)만 남아서, 독자가 상황 파악에 시간이 걸렸다.
+    W5(에피소드 플랜)의 beats 를 컷의 description·대사와 대조해, 어느 컷에도
+    흔적이 없는 행동을 잡는다.
+
+    beat 하나에 토큰이 **하나라도** haystack 에 있으면 통과시킨다 — 정교한
+    의미 분석이 아니라 "완전히 안 그렸다"만 잡는 낮은 문턱이다. 이 게이트는
+    실패하면 W7 재시도로 이어지므로, 문턱을 높이면 오탐이 재시도 루프를
+    낭비한다.
+
+    beats 가 없는(과거 run, 또는 이 필드를 아직 안 채우는 옛 ep_plan) 경우는
+    빈 배열로 취급해 항상 통과한다 — 과거 데이터를 다시 돌려도 동작이
+    바뀌지 않아야 한다.
+    """
+    if not isinstance(beats, list) or not beats:
+        return []
+    cuts = [c for c in cuts if isinstance(c, dict)]
+    if not cuts:
+        return []
+    haystack_parts = []
+    for c in cuts:
+        haystack_parts.append(str(c.get("description") or ""))
+        for ln in (c.get("lines") if isinstance(c.get("lines"), list) else []):
+            if isinstance(ln, dict):
+                haystack_parts.append(str(ln.get("text") or ""))
+    haystack = " ".join(haystack_parts)
+
+    out = []
+    for beat in beats:
+        text = str(beat or "").strip()
+        if not text:
+            continue
+        tokens = _beat_tokens(text)
+        if not tokens:
+            continue
+        # 마지막 토큰만 본다 — 한국어 beat 문장은 "목적어를 동사한다" 꼴이라
+        # 끝 토큰이 대개 동사(행동 그 자체)다. 앞쪽 명사(예: "생쥐")만으로
+        # 통과시키면, 그 명사가 결과 컷("생쥐를 안고 있다")에도 나오기 때문에
+        # 정작 잡아야 할 "행동 자체가 빠졌다"는 못 잡는다.
+        if _verb_stem(tokens[-1]) not in haystack:
+            out.append(
+                f"beats 의 '{text}' 이 어느 컷의 description·대사에도 나타나지 "
+                "않습니다. 결과만 그리고 그 행동 자체가 통째로 빠진 것일 수 "
+                "있습니다 — 이 행동이 실제로 벌어지는 컷을 추가하세요.")
+    return out
+
+
 def gate_cuts(payload: dict, episode: dict, irony_present: bool,
               known_zones: set = None, known: set = None) -> list:
     """7단계 게이트: 내용(엔진 컷·스팅어·독자 우위) + 세로 스크롤 문법(크기·여백·리듬).
@@ -1592,6 +1671,7 @@ def gate_cuts(payload: dict, episode: dict, irony_present: bool,
                 "이 화에 dramatic_irony 질문이 있는데 reader_only 컷이 없습니다. "
                 "독자만 알고 인물은 모르는 컷이 그 질문의 물리적 구현입니다.")
 
+    failures.extend(gate_beat_coverage(cuts, episode.get("beats")))
     failures.extend(gate_scenes(payload, len(cuts)))
     failures.extend(gate_layout(cuts))
     # 대사에 화자가 있는가만 막는다. 말의 밀도·비율은 text_warnings 로 내려갔다 —
@@ -2542,6 +2622,44 @@ def prose_warnings(cuts: list, known: set = None) -> list:
     return out
 
 
+# 소품 텍스트(편지·쪽지 등) 속 인명 — advisory-only.
+#
+# 실제 사고: 편지지 속 캐릭터 이름이 작가가 입력한 이름과 다르게 나왔다.
+# 대사 화자는 known_speakers() 로 이미 검증되지만(위 "명부에 없는 사람이
+# 말하고 있는가"), screen_text 는 검증 대상이 아니었다 — W7 이 description
+# 처럼 자유 생성하고 그대로 scenegen 프롬프트로 흘러간다.
+#
+# 한국어에는 대문자가 없어 고유명사를 정확히 가려낼 수 없다 — 그래서
+# 호격 조사(-에게/-한테/-아/-야) 앞, 또는 편지 서명 낱말(-올림/-드림/-씀)
+# 앞의 낱말만 이름 후보로 본다. 오탐 위험이
+# 있는 휴리스틱이라 하드 블록이 아니라 advisory 로만 남긴다(tone_warnings 와
+# 같은 급).
+_PROP_NAME_TOKEN = re.compile(
+    r"[가-힣]{2,4}(?=(?:에게|한테|아|야|보고\s*싶)\b)"
+    r"|[가-힣]{2,4}(?=\s*(?:올림|드림|씀)\b)")
+
+
+def prop_text_name_check(cuts: list, known: set = None) -> list:
+    """screen_text(편지·쪽지·화면 글자)에 명부에 없는 이름이 나오는지 본다."""
+    out = []
+    known = {str(n).strip() for n in (known or set()) if str(n).strip()}
+    for c in cuts:
+        if not isinstance(c, dict):
+            continue
+        text = str(c.get("screen_text") or "")
+        if not text:
+            continue
+        hits = {m.group(0) for m in _PROP_NAME_TOKEN.finditer(text)}
+        strangers = sorted(h for h in hits if h not in known)
+        if strangers:
+            out.append(
+                f"컷 {c.get('cut_number')} 의 screen_text에 {strangers} 로 보이는 "
+                "이름이 있는데 명부(주인공·조연)에 없습니다. 작가가 정한 이름과 "
+                "다르게 새로 지어낸 것일 수 있습니다 (오탐일 수 있습니다 — 실제 "
+                "인물이 아니면 무시해도 됩니다).")
+    return out
+
+
 # ------------------------------------------------------- 코드 수리 (안전망)
 
 def _shot_of(cut: dict) -> str:
@@ -2808,7 +2926,17 @@ def repair_tone_lock(cuts: list, scenes: list) -> list:
     return notes
 
 
-def tone_warnings(cuts: list, scenes: list) -> list:
+# 성격에 없는 진지함이 갑자기 튀어나오는 사고 — 실제 사고: "장난스럽다"만
+# 적었는데 후반부가 급격히 진지해졌고, 빌드업 없이 "모든 선택을 바꿔놓았다"
+# 류 단정적 전환 문장이 뜬금없이 들어갔다. hard block 이 아니라 다른 tone
+# 경고와 같은 급의 advisory — 오탐이 있어도 실행을 막지 않는다.
+_SERIOUS_PERSONALITY_WORDS = ("진지", "무겁", "심각", "냉철", "비장", "우울")
+_ABRUPT_SHIFT_PATTERN = re.compile(
+    r"모든.{0,10}?(바꾸|바꿔|바꿨|바뀌|바뀐|달라지|달라진|달라졌|"
+    r"뒤바뀌|뒤바뀐|무너지|무너진|무너졌|무너뜨리)")
+
+
+def tone_warnings(cuts: list, scenes: list, personality: str = "") -> list:
     """tone 을 적어 놓고 살리지 않은 자리 — **세기만 하고 막지 않는다.**
 
     개그 장면을 전부 normal 로 그리는 것은 위반이 아니다. 정식 작화로 웃기는
@@ -2819,6 +2947,22 @@ def tone_warnings(cuts: list, scenes: list) -> list:
     대개는 장면을 나눠 놓고 성격을 안 준 것이다.
     """
     out = []
+    personality_text = str(personality or "")
+    if not any(w in personality_text for w in _SERIOUS_PERSONALITY_WORDS):
+        for c in cuts:
+            if not isinstance(c, dict):
+                continue
+            lines = c.get("lines") if isinstance(c.get("lines"), list) else []
+            texts = [str(ln.get("text") or "") for ln in lines
+                     if isinstance(ln, dict) and ln.get("kind") in ("narration", "dialogue")]
+            hit = next((t for t in texts if _ABRUPT_SHIFT_PATTERN.search(t)), None)
+            if hit:
+                out.append(
+                    f"컷 {c.get('cut_number')}에 '{hit.strip()}' 처럼 단정적인 전환 "
+                    "문장이 있는데, personality 에는 진지함을 가리키는 말이 없습니다. "
+                    "지정 안 한 성격 이탈(설정 붕괴)일 수 있습니다 — 빌드업 없이 "
+                    "톤이 급전환된 것이 아닌지 보세요.")
+                break
     cuts = [c for c in cuts if isinstance(c, dict)]
     scenes = [s for s in (scenes or []) if isinstance(s, dict)]
     if not cuts or not scenes:
@@ -3190,7 +3334,7 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                ledger_snapshot: str, irony_present: bool, absolute: int,
                max_retries: int, spent: int = 0, known: set = None,
                series_arc: str = "", zones_txt: str = "",
-               known_zones: set = None) -> tuple:
+               known_zones: set = None, personality: str = "") -> tuple:
     """(게이트를 통과하고 연출이 계산된 payload, 재시도 횟수, 메모). 못 하면 Stopped.
 
     run_webtoon 의 7단계와 --cuts-only 가 같은 것을 쓰게 하려고 밖에 둔다.
@@ -3240,8 +3384,9 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
             notes += [f"연출 메모: {x}" for x in apply_layout(
                 cuts, payload.get("scenes"))]
             notes += [f"서술 경고: {x}" for x in prose_warnings(cuts, known)]
+            notes += [f"이름 경고: {x}" for x in prop_text_name_check(cuts, known)]
             notes += [f"톤 메모: {x}" for x in tone_warnings(
-                cuts, payload.get("scenes"))]
+                cuts, payload.get("scenes"), personality)]
             notes += [f"공간 메모: {x}" for x in zone_warnings(cuts)]
             return payload, regens, notes
         log(f"  {absolute}화 7단계 게이트 실패 {len(failures)}건")
@@ -4130,7 +4275,8 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                                          state.cast),
                     series_arc=series_arc_block(arcs, arc),
                     zones_txt=zones_block(state, episode),
-                    known_zones={z["zone_id"] for z in state.zones})
+                    known_zones={z["zone_id"] for z in state.zones},
+                    personality=p1.get("personality"))
                 result.regen_stage7 += regens
 
                 # ---- 8단계: 컷이 확정된 뒤에 글자만 다시 쓴다 ----------
@@ -4354,7 +4500,8 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
                 series_arc=series_arc_block([arcs[k] for k in sorted(arcs)],
                                             arcs.get(arc_order)),
                 zones_txt=zones_block(state, episode),
-                known_zones={z["zone_id"] for z in state.zones})
+                known_zones={z["zone_id"] for z in state.zones},
+                personality=story["p1"].get("personality"))
         except Stopped as exc:
             # 게이트를 못 넘겼다. 트레이스백으로 죽지 않고 무엇이 걸렸는지만
             # 보여 준다 — 사람이 고칠 것은 프롬프트지 파이썬 스택이 아니다.
