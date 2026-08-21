@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LORE — 캐릭터 한 명이면, 웹툰 한 화</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖌️</text></svg>">
+</head>
+<body data-view="landing">
+
+<header class="topbar">
+  <a class="brand" href="#top">
+    <span class="brand-mark">L</span>
+    <span class="brand-name">LORE</span>
+    <span class="brand-sub">웹툰 스튜디오</span>
+  </a>
+  <nav class="topnav">
+    <a href="#how">어떻게 만드나</a>
+    <a href="#gallery">결과 예시</a>
+    <a href="/editor">편집실 <span class="nav-tag">목업</span></a>
+    <a class="btn btn-ghost" href="#studio">만들어보기</a>
+  </nav>
+</header>
+
+<!-- ===================================================== 랜딩 ============ -->
+<main id="landing">
+
+  <section class="hero" id="top">
+    <div class="hero-copy">
+      <p class="eyebrow">캐릭터 → 이야기 → 콘티 → 그림, 한 번에</p>
+      <h1>캐릭터 한 명이면,<br><em>웹툰 한 화</em>가 나옵니다.</h1>
+      <p class="lede">
+        캐릭터 시트를 채우고 만들고 싶은 이야기를 한 줄 적으면,
+        이야기 설계부터 컷 나누기, 그림, <strong>말풍선과 대사</strong>까지
+        AI 가 끝까지 만듭니다. 완성본은 세로로 이어 붙인 웹툰 한 편입니다.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#studio">내 캐릭터로 만들기</a>
+        <a class="btn btn-quiet" href="/editor">결과물 화면 둘러보기</a>
+      </div>
+      <ul class="hero-facts">
+        <li><b>1화</b> 완성본 PNG</li>
+        <li><b>10~15분</b> 소요</li>
+        <li><b>단계별</b> 진행 표시</li>
+      </ul>
+    </div>
+
+    <div class="hero-art" aria-hidden="true">
+      <div class="marquee">
+        <div class="marquee-track">
+          <img src="/static/samples/ex-cinematic-1.jpg" alt="">
+          <img src="/static/samples/ex-lineart-1.jpg" alt="">
+          <img src="/static/samples/ex-romance-1.jpg" alt="">
+          <img src="/static/samples/ex-cinematic-1.jpg" alt="">
+          <img src="/static/samples/ex-lineart-1.jpg" alt="">
+          <img src="/static/samples/ex-romance-1.jpg" alt="">
+        </div>
+      </div>
+      <div class="marquee marquee-slow">
+        <div class="marquee-track">
+          <img src="/static/samples/ex-cinematic-2.jpg" alt="">
+          <img src="/static/samples/ex-romance-2.jpg" alt="">
+          <img src="/static/samples/ex-lineart-2.jpg" alt="">
+          <img src="/static/samples/ex-cinematic-2.jpg" alt="">
+          <img src="/static/samples/ex-romance-2.jpg" alt="">
+          <img src="/static/samples/ex-lineart-2.jpg" alt="">
+        </div>
+      </div>
+      <div class="hero-fade"></div>
+    </div>
+  </section>
+
+  <section class="how" id="how">
+    <h2>버튼 하나를 누르면, 안에서 이런 일이 벌어집니다</h2>
+    <p class="section-lede">
+      기다리는 동안 지금 어느 단계인지, 무엇을 하고 있는지 그대로 보여드립니다.
+    </p>
+    <ol class="how-grid">
+      <li>
+        <span class="how-no">01</span>
+        <h3>이야기 설계</h3>
+        <p>캐릭터에서 장르·세계관·이야기 뼈대를 세우고, 구조 검수를 통과할 때까지 다시 씁니다.</p>
+      </li>
+      <li>
+        <span class="how-no">02</span>
+        <h3>캐릭터 시트</h3>
+        <p>4면도·표정·디테일·색을 한 장에. 이후 모든 컷이 이 얼굴을 기준으로 그려집니다.</p>
+        <img src="/static/samples/sheet.jpg" alt="캐릭터 시트 예시" loading="lazy">
+      </li>
+      <li>
+        <span class="how-no">03</span>
+        <h3>회차 설계 · 콘티</h3>
+        <p>1화를 컷으로 나누고 카메라·크기·여백·대사를 붙입니다. 검사에 걸리면 되돌아가 다시 씁니다.</p>
+      </li>
+      <li>
+        <span class="how-no">04</span>
+        <h3>그림 그리기</h3>
+        <p><b>한 장에 3컷씩</b> 함께 굽습니다. 한 장 안은 저절로 통일되고, 직전 장을 함께 보여줘서 장 사이도 이어집니다.</p>
+      </li>
+      <li>
+        <span class="how-no">05</span>
+        <h3>한 편으로 잇기</h3>
+        <p>그린 장을 순서대로 틈 없이 세로로 이어 붙입니다. 그게 완성본입니다.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section class="gallery" id="gallery">
+    <h2>실제로 이렇게 나옵니다</h2>
+    <p class="section-lede">
+      말풍선과 대사는 그림 안에 함께 그려집니다 — 따로 얹은 자막이 아닙니다.
+      <a class="inline-link" href="/editor">완성본 화면을 그대로 열어보기 →</a>
+    </p>
+    <div class="gallery-grid">
+      <figure><img src="/static/samples/ex-cinematic-1.jpg" alt="시네마틱 반실사 예시" loading="lazy"><figcaption>시네마틱 반실사</figcaption></figure>
+      <figure><img src="/static/samples/ex-cinematic-2.jpg" alt="시네마틱 반실사 예시" loading="lazy"><figcaption>말풍선·나레이션</figcaption></figure>
+      <figure><img src="/static/samples/ex-romance-1.jpg" alt="로맨스 판타지 예시" loading="lazy"><figcaption>로맨스 판타지</figcaption></figure>
+      <figure><img src="/static/samples/ex-lineart-2.jpg" alt="선화 액션 예시" loading="lazy"><figcaption>선화 · 액션</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ============================================ 캐릭터 시트 입력 ====== -->
+  <section class="studio" id="studio">
+    <div class="studio-head">
+      <h2>캐릭터 시트</h2>
+      <p class="section-lede">
+        <b>아는 만큼만</b> 적으세요. 빈 칸은 AI 가 캐릭터를 보고 채웁니다 —
+        적어 주신 것은 바꾸지 않습니다.
+      </p>
+    </div>
+
+    <form id="form" class="studio-grid" autocomplete="off">
+      <!-- 왼쪽: 캐릭터 -->
+      <div class="card sheet-card">
+        <div class="card-tab">CHARACTER SHEET</div>
+
+        <div class="photo-row">
+          <label class="photo-drop" id="photoDrop">
+            <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" hidden>
+            <img id="photoPreview" alt="" hidden>
+            <span class="photo-hint">
+              <b>사진 올리기</b>
+              <small>선택 · 있으면 머리·눈·체형·옷을 읽어 반영합니다</small>
+            </span>
+            <button type="button" class="photo-clear" id="photoClear" hidden aria-label="사진 지우기">✕</button>
+          </label>
+          <div class="photo-side">
+            <label class="field">
+              <span>이름</span>
+              <input type="text" name="name" placeholder="예: 민시하" maxlength="40">
+            </label>
+            <label class="field">
+              <span>사진 메모 <small>선택</small></span>
+              <input type="text" name="photo_note" placeholder="예: 오른쪽 사람입니다 / 원래는 은발">
+            </label>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>캐릭터 설명</span>
+          <textarea name="character" rows="5" placeholder="형식 없이 아는 만큼 적어주세요.&#10;&#10;잘 되는 설명에는 모순이 있습니다 —&#10;“착하다” 보다 “남 부탁은 다 들어주면서 정작 자기 얘기는 안 한다”."></textarea>
+        </label>
+
+        <fieldset class="fields">
+          <legend>항목 <small>전부 선택</small></legend>
+          <div class="fields-grid" id="fieldsGrid"></div>
+        </fieldset>
+      </div>
+
+      <!-- 오른쪽: 이야기 -->
+      <div class="stack">
+        <div class="card prompt-card">
+          <label class="field big">
+            <span>어떤 이야기를 만들까요?</span>
+            <textarea name="story" rows="4" id="storyInput"
+              placeholder="한 줄이어도 되고 줄거리여도 됩니다.&#10;예) 몰락한 문파에 혼자 남은 검객이, 습격해 온 적 앞으로 걸어 나간다."></textarea>
+          </label>
+          <div class="chips" id="ideaChips"></div>
+        </div>
+
+        <div class="card">
+          <div class="two">
+            <label class="field">
+              <span>장르 <small>비우면 AI 가 고릅니다</small></span>
+              <input type="text" name="genre" list="genreList" placeholder="예: 무협 / 로맨스 판타지">
+              <datalist id="genreList">
+                <option value="로맨스 판타지"><option value="헌터·게이트"><option value="아이돌">
+                <option value="마법학교"><option value="무협"><option value="오컬트 미스터리">
+                <option value="좀비 아포칼립스"><option value="현대 판타지">
+              </datalist>
+            </label>
+            <label class="field">
+              <span>세계관 <small>선택</small></span>
+              <input type="text" name="world" placeholder="예: 각성자만 게이트에 들어갈 수 있는 현대 한국">
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="field-label">그림체</div>
+          <div class="styles" id="styles"></div>
+        </div>
+
+        <div class="card submit-card">
+          <label class="toggle">
+            <input type="checkbox" name="preview" id="previewToggle">
+            <span>
+              <b>빠른 미리보기</b>
+              <small>첫 한 장(앞 3컷)만 그립니다. 그림체와 인물을 먼저 확인할 때.</small>
+            </span>
+          </label>
+          <button type="submit" class="btn btn-primary btn-big" id="submitBtn">
+            웹툰 만들기 <span class="cost-chip" id="costChip">−240 크레딧</span>
+          </button>
+          <p class="submit-note" id="submitNote">
+            이름 · 설명 · 항목 · 사진 중 하나만 있으면 시작할 수 있습니다.
+          </p>
+        </div>
+      </div>
+    </form>
+  </section>
+</main>
+
+<!-- ===================================================== 진행 ============ -->
+<section id="progress" class="progress" hidden>
+  <div class="progress-inner">
+    <header class="progress-head">
+      <div>
+        <p class="eyebrow" id="progEyebrow">만드는 중</p>
+        <h2 id="progTitle">웹툰을 만들고 있습니다</h2>
+        <p class="progress-sub" id="progSub">잠시만요 — 지금 무엇을 하고 있는지 아래에 그대로 보여드립니다.</p>
+      </div>
+      <div class="progress-clock">
+        <div class="clock-time" id="clock">0:00</div>
+        <div class="clock-label" id="clockLabel">경과</div>
+        <button type="button" class="btn btn-quiet btn-sm" id="cancelBtn">중단</button>
+      </div>
+    </header>
+
+    <ol class="rail" id="rail"></ol>
+
+    <div class="cutstrip" id="cutstrip" hidden>
+      <div class="cutstrip-head">
+        <span>그려진 장</span>
+        <span id="cutCount"></span>
+      </div>
+      <div class="cutstrip-grid" id="cutGrid"></div>
+    </div>
+
+    <details class="console">
+      <summary>자세히 보기 <small>파이프라인 로그</small></summary>
+      <pre id="logBox"></pre>
+    </details>
+  </div>
+</section>
+
+<!-- ===================================================== 결과 ============ -->
+<section id="result" class="result" hidden>
+  <header class="result-head">
+    <div class="result-meta">
+      <p class="eyebrow" id="resGenre"></p>
+      <h2 id="resTitle"></h2>
+      <p class="result-logline" id="resLogline"></p>
+      <p class="result-sub" id="resSub"></p>
+    </div>
+    <div class="result-actions">
+      <a class="btn btn-quiet btn-sm" href="/editor">편집실에서 열기</a>
+      <button type="button" class="btn btn-quiet btn-sm" id="scriptBtn">대사 스크립트</button>
+      <a class="btn btn-quiet btn-sm" id="downloadBtn" download>PNG 내려받기</a>
+      <button type="button" class="btn btn-primary btn-sm" id="againBtn">새로 만들기</button>
+    </div>
+  </header>
+
+  <div class="reader" id="reader"></div>
+
+  <aside class="script-panel" id="scriptPanel" hidden>
+    <div class="script-head">
+      <b>대사 스크립트</b>
+      <button type="button" class="icon-btn" id="scriptClose" aria-label="닫기">✕</button>
+    </div>
+    <div class="script-body" id="scriptBody"></div>
+  </aside>
+</section>
+
+<footer class="foot">
+  <span>LORE 웹툰 스튜디오</span>
+  <span class="foot-note">그림 조건 <b>S+</b> · 한 장에 <b>3컷</b> · 말풍선과 대사는 그림 안에 함께 그려집니다</span>
+</footer>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
