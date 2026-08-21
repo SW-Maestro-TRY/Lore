@@ -1,0 +1,107 @@
+webtoon-harness: 그림 생성
+입력
+
+story-harness의 runs/<run_id>/ 폴더에서 읽습니다:
+
+ep*_cuts.json — 컷 서술, 대사, 효과음, size, beat, render_style
+p1.json — 외형, 디자인 고정 요소, 색상표, 표정
+charsheet/ — 캐릭터 시트 이미지
+meta.json — style_suffix 비교용
+처리 과정
+외형 결정 — p1.json의 appearance_en 우선, 없으면 config.yaml 폴백. 성별 명시 (The character is a man.)
+등장인물 판별 — cast.json으로 컷마다 주인공이 나오는지 확인. 주인공 없는 컷에는 시트/외형 안 붙임
+영어 프롬프트 생성 — 한국어 컷 서술을 텍스트 LLM이 영어로 변환
+레이아웃 생성 — Scene 단위로 패널 배치 결정 (겹침/번짐 구조)
+이미지 생성 — Gemini 이미지 모델로 실제 그림 생성
+뷰어 생성 — --view로 세로 스크롤 확인
+스타일 시스템
+
+config.yaml의 styles: 에 이름 붙여 등록:
+
+--style romance — 로판 일러스트 풍 (화려, 광택, 홍조)
+--style webtoon — 네이버 웹툰 풍 (깔끔, 단순)
+--style flat — 원래 값 (실험 비교용)
+
+render_style 별로 독립된 스타일 문구:
+
+normal — 선택한 style의 정식 작화
+sd — 2~3등신, 단순화, 파스텔, 장식
+emphasis — 배경 날리고 인물만, 집중선
+텍스트 처리
+필드	그림에 그리는 것	방식
+dialogue	말풍선 + 한글 대사	그림 안에 직접 (in_image)
+narration	캡션 + 한글 텍스트	그림 안에 직접
+thought	구름 풍선 + 한글 텍스트	그림 안에 직접
+sfx	효과음 레터링	그림 안에 직접
+
+말풍선 6종 (자동 선택):
+
+평범한 대사 → 둥근 타원
+! 포함 → 뾰족한 폭발형
+… 또는 괄호 → 점선 테두리, 작게
+thought → 구름형
+narration → 테두리 없이 글자만
+reader_only → 흐릿한 테두리
+화면 보정 (beat 기반)
+turn → 집중선 + 배경 탈색
+release → 빛번짐
+hold → 모노크롬 + 그레인
+build → 비네팅 + 레이킹 라이트
+setup → 없음
+캐릭터 시트 연동
+조건	시트 사용
+C	turnaround 1장
+C+	turnaround + expressions + details 3장
+A	없음 (문구만으로 그림)
+
+refs/turnaround.png에 통합 시트를 넣어두면 조건 C 폴백으로 읽힙니다.
+
+파일 구조
+C:\lore\story-harness\
+  prompts\
+    p1.txt, p2.txt, p3.txt, scene.txt     ← P1~P3 프롬프트
+    w4.txt, w5.txt, w6.txt, w7.txt         ← W4~W7 프롬프트
+  runs\
+    20260813T194826-6d1514\
+      p1.json              ← 캐릭터 시트
+      p2.json              ← 프리미스/엔진
+      p3.json              ← 검수 결과
+      scenes.json          ← 1화 도입부
+      meta.json            ← 실행 메타정보
+      charsheet\           ← 캐릭터 시트 이미지
+      webtoon\
+        arcs.json          ← Arc 4~6개
+        arc1_episodes.json ← Arc 1의 회차들
+        arc1_review.json   ← Arc 1 검수 결과
+        ep01_cuts.json     ← 1화 컷 8~16개
+        ...
+
+C:\lore\webtoon-harness\
+  config.yaml              ← 스타일, 모델, 비용 설정
+  refs\turnaround.png      ← 캐릭터 시트 (폴백)
+  outputs\
+    20260813T194826-6d1514\
+      ep1\
+        C\                 ← 조건 C 이미지들
+        cast.json          ← 컷별 등장인물
+        prompts.json       ← 영어 프롬프트
+실행 순서 요약
+1. python story.py --input inputs_one.csv --n 1
+   → P1 → P2 → P3(검수) → scene → runs/<run_id>/ 생성
+
+2. python story.py --charsheet --run-id <id> --candidates 1 --provider gemini
+   → 캐릭터 시트 이미지 생성
+
+3. python webtoon.py --run <id>
+   → W4(Arc) → W5(회차) → W6(검수) → W7(컷 분해)
+
+4. refs/turnaround.png 에 시트 복사
+
+5. python run.py --run-id <id> --episode 1 --sfx-test 1 -c C --candidates 1 --dry-run
+   → 프롬프트 확인 (0원)
+
+6. python run.py --run-id <id> --episode 1 --sfx-test 1 -c C --candidates 1
+   → 실제 이미지 생성 (약 202원)
+
+7. python run.py --run-id <id> --episode 1 -c C --view
+   → 세로 스크롤 확인 (0원)
