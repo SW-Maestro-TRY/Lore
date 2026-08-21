@@ -1,0 +1,174 @@
+{
+ "title": "새벽, 게이트가 열린 편의점",
+ "character": "서리",
+ "genre": "헌터·게이트",
+ "style_label": "일반 웹툰",
+ "logline": "항상 다른 사람 부탁을 거절 못 하던 야간 알바생 서리가, 모두가 도망친 게이트 속에서 유일 각성자가 되어 살아남으려 애쓰지만, 남의 부탁을 거절할 용기가 없는 자신의 한계와 싸우며 진짜 자신을 드러낼 수 있을지 고민한다.",
+ "cuts_per_sheet": 3,
+ "scenes": [
+  {
+   "no": 1,
+   "image": "/static/samples/mock/scene1.jpg",
+   "w": 900,
+   "h": 1612,
+   "cuts": [
+    {
+     "no": 1,
+     "shot": "원경",
+     "beat": "setup",
+     "speaker": "",
+     "dialogue": "",
+     "narration": "늦봄, 새벽 2시. 편의점은 환하게 밝혀져 있지만 바깥은 흐린 밤이다.",
+     "thought": "",
+     "sfx": "",
+     "description": "매장 전체가 보인다. 네온 간판 불빛이 유리문을 통해 들어오고, 잘 정돈된 진열대 사이로 서리가 카운터에 앉아 있다. 새벽의 고요에 형광등 불빛만 퍼져 있다."
+    },
+    {
+     "no": 2,
+     "shot": "전신",
+     "beat": "build",
+     "speaker": "서리",
+     "dialogue": "어서 오세요, 남지우 씨.",
+     "narration": "",
+     "thought": "",
+     "sfx": "딩동",
+     "description": "화면 왼쪽에는 야간 알바 유니폼 셔츠와 후드집업을 허리에 묶은 서리가 계산대에 구부정하게 기대서 손님을 맞고 있다. 화면 오른쪽, 단골 학생 남지우가 교복 바지와 헝클어진 회색 후드를 입고 들어온다. 문 쪽에는 김예진(여성, 짧은 붉은 머리, 알바조끼, 팔찌, 두꺼운 뿔테 안경)이 퇴근 준비로 가방을 들고 있다."
+    },
+    {
+     "no": 3,
+     "shot": "중간",
+     "beat": "build",
+     "speaker": "서리",
+     "dialogue": "오늘은 많이 힘드셨죠? 새벽엔 손님이 거의 없네요.",
+     "narration": "",
+     "thought": "",
+     "sfx": "삑",
+     "description": "중립 — 피곤하지만 억지로 웃는 얼굴의 서리가 바코드 리더기로 간식을 찍으며 화면 중앙에 있다. 오른쪽 테이블 위에는 삼각김밥 포장지가 하나 놓여 있다."
+    }
+   ]
+  },
+  {
+   "no": 2,
+   "image": "/static/samples/mock/scene2.jpg",
+   "w": 900,
+   "h": 1612,
+   "cuts": [
+    {
+     "no": 4,
+     "shot": "인서트",
+     "beat": "hold",
+     "speaker": "",
+     "dialogue": "",
+     "narration": "",
+     "thought": "",
+     "sfx": "",
+     "description": "알바 출근표가 붙은 시간표 보드와 바코드 리더기가 가지런히 놓여 있다. 조용한 한밤의 공기가 느껴진다."
+    },
+    {
+     "no": 5,
+     "shot": "전신",
+     "beat": "build",
+     "speaker": "",
+     "dialogue": "",
+     "narration": "",
+     "thought": "",
+     "sfx": "위이잉",
+     "description": "매장 한가운데에서 갑자기 푸른 빛기둥이 뻗어 나온다. 진열대 근처에서 놀란 남지우와 김예진이 뒤로 물러서고, 서리는 순간 주춤하며 멈춰선다."
+    },
+    {
+     "no": 6,
+     "shot": "원경",
+     "beat": "turn",
+     "speaker": "",
+     "dialogue": "",
+     "narration": "게이트가 열린 현장. 누구도 이런 상황을 마주한 적이 없었다.",
+     "thought": "",
+     "sfx": "우당탕",
+     "description": "푸른빛 게이트가 점점 커지며 매장 전체를 물들이고, 손님들이 서로 뒤엉켜 퇴장구로 몰려간다. 김예진은 핸드폰을 들고 허둥지둥 입구 쪽으로 향한다."
+    }
+   ]
+  },
+  {
+   "no": 3,
+   "image": "/static/samples/mock/scene3.jpg",
+   "w": 900,
+   "h": 1612,
+   "cuts": [
+    {
+     "no": 7,
+     "shot": "바스트",
+     "beat": "build",
+     "speaker": "김예진",
+     "dialogue": "서리야, 문 좀 잠가줘! 내가 전화 돌릴 테니까!",
+     "narration": "",
+     "thought": "",
+     "sfx": "",
+     "description": "난처함 — 미소가 어색하게 굳고, 시선을 아래로 내리깔고 있는 서리. 김예진(여성, 짧은 붉은 머리, 팔찌, 뿔테 안경)이 당황한 표정으로 팔을 잡는다."
+    },
+    {
+     "no": 8,
+     "shot": "전신",
+     "beat": "hold",
+     "speaker": "",
+     "dialogue": "",
+     "narration": "",
+     "thought": "",
+     "sfx": "",
+     "description": "남지우(남성, 검은 단발, 마른 체형, 교복 바지에 헝클어진 회색 후드, 오른뺨에 점)가 진열대 너머로 서리를 돌아본다. 다른 손님들은 이미 출입문 쪽으로 빠져나가려 하고, 서리는 매장 한가운데 남겨졌다."
+    },
+    {
+     "no": 9,
+     "shot": "인서트",
+     "beat": "hold",
+     "speaker": "",
+     "dialogue": "",
+     "narration": "",
+     "thought": "",
+     "sfx": "사아-",
+     "description": "바닥에 떨어진 삼각김밥 포장지가, 늘어나는 빛에 비쳐 희미하게 흔들린다."
+    }
+   ]
+  },
+  {
+   "no": 4,
+   "image": "/static/samples/mock/scene4.jpg",
+   "w": 900,
+   "h": 1612,
+   "cuts": [
+    {
+     "no": 10,
+     "shot": "바스트",
+     "beat": "build",
+     "speaker": "서리",
+     "dialogue": "",
+     "narration": "",
+     "thought": "…다들 내게 부탁만 남기고 떠나버렸다.",
+     "sfx": "",
+     "description": "참음 — 입술을 꽉 깨물고 슬며시 눈물이 맺힌 채 마지못해 미소를 짓는 서리. 화면 뒤쪽엔 빛기둥과 출입문만 덩그러니 남아 있다."
+    },
+    {
+     "no": 11,
+     "shot": "중간",
+     "beat": "release",
+     "speaker": "남지우",
+     "dialogue": "…나도 남을게.",
+     "narration": "",
+     "thought": "",
+     "sfx": "",
+     "description": "겁먹음 — 동공이 커지고 손끝이 소매를 움켜잡은 서리 옆으로, 남지우(남성, 검은 단발)가 조용히 다가와 선다."
+    },
+    {
+     "no": 12,
+     "shot": "익스트림",
+     "beat": "turn",
+     "speaker": "",
+     "dialogue": "",
+     "narration": "",
+     "thought": "",
+     "sfx": "윽—",
+     "description": "푸른 게이트 빛기둥 일부와 그 속에 흔들리는 삼각김밥 포장지, 빛 너머 어둠 속에서 익숙한 목소리가 들려오는 듯하다."
+    }
+   ]
+  }
+ ]
+}
