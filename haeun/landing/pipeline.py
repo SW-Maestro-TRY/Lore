@@ -47,6 +47,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -242,7 +243,8 @@ class Job:
     preview: bool
     has_photo: bool
 
-    status: str = "queued"          # queued | running | done | error | cancelled
+    # queued | running | awaiting_sheet_approval | done | error | cancelled
+    status: str = "queued"
     run_id: str | None = None
     error: str | None = None
     created_at: float = field(default_factory=time.time)
@@ -261,6 +263,19 @@ class Job:
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _proc: subprocess.Popen | None = field(default=None, repr=False)
     _cancel: bool = field(default=False, repr=False)
+
+    # awaiting_sheet_approval 동안 execute() 를 세워 두는 신호. state.json 에는
+    # 안 남는다 — 서버가 재시작되면 execute() 를 돌리던 스레드 자체가 죽어서
+    # 이 Event 를 아무도 못 깨우고, "running" 이 재시작 후 error 로 바뀌는 것과
+    # 같은 이유로 load() 에서 error 로 바꾼다.
+    sheet_approval: threading.Event = field(default_factory=threading.Event, repr=False)
+    sheet_decision: str = field(default="", repr=False)
+
+    def decide_sheet(self, decision: str) -> None:
+        """승인 화면의 '이대로 진행'/'다시 만들기' 클릭이 여기로 온다."""
+        with self._lock:
+            self.sheet_decision = decision
+        self.sheet_approval.set()
 
     # ---- 상태 -------------------------------------------------------------- #
 
@@ -350,6 +365,7 @@ class Job:
                 "style": self.style,
                 "style_label": STYLES.get(self.style, self.style),
                 "preview": self.preview,
+                "has_photo": self.has_photo,
             }
 
     # ---- 저장 · 복원 -------------------------------------------------------- #
@@ -377,7 +393,7 @@ class Job:
             d = json.loads((path / "state.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
-        if d.get("status") == "running":
+        if d.get("status") in ("running", "awaiting_sheet_approval"):
             d["status"] = "error"
             d["error"] = "서버가 다시 시작되어 이 작업은 끊겼습니다."
         job = cls(id=d["id"], form=d.get("form") or {}, dir=path,
@@ -405,6 +421,9 @@ class Job:
                 proc.terminate()
             except OSError:
                 pass
+        # awaiting_sheet_approval 이면 프로세스가 없다 — execute() 가
+        # sheet_approval.wait() 에 걸려 있으므로 깨워야 _cancel 을 보고 멈춘다.
+        self.sheet_approval.set()
 
     def _env(self) -> dict[str, str]:
         env = dict(os.environ)
@@ -619,19 +638,44 @@ def execute(job: Job) -> None:
         # ---- 2. 캐릭터 시트 ---------------------------------------------- #
         _enter(job, 1)
         job.note("외형 사양을 정리하는 중")
-        code = job._run(
-            # 시트 이미지 기본값은 story.py 안에서 gemini 다 — 텍스트 단계용
-            # --provider(.env PROVIDER=openai)는 여기 안 먹는다. 캐릭터 시트는
-            # OpenAI(gpt-image-2)로 고정한다고 정했으므로 여기서 명시로 준다.
-            ["story.py", "--charsheet", "--run-id", run_id,
-             "--provider", "openai", "--yes"],
-            STORY, lambda ln: _sheet_line(job, ln))
-        if job._cancel:
-            raise Failed("취소됨")
-        picks = STORY / "runs" / run_id / "charsheet" / "charsheet_picks.json"
-        if code != 0 or not picks.exists():
-            raise Failed("캐릭터 시트를 만들지 못했습니다. "
-                         "조건 S+ 는 시트 없이는 돌 수 없습니다.")
+        sheet_dir = STORY / "runs" / run_id / "charsheet"
+        picks = sheet_dir / "charsheet_picks.json"
+        while True:
+            code = job._run(
+                # 시트 이미지 기본값은 story.py 안에서 gemini 다 — 텍스트 단계용
+                # --provider(.env PROVIDER=openai)는 여기 안 먹는다. 캐릭터 시트는
+                # OpenAI(gpt-image-2)로 고정한다고 정했으므로 여기서 명시로 준다.
+                ["story.py", "--charsheet", "--run-id", run_id,
+                 "--provider", "openai", "--yes"],
+                STORY, lambda ln: _sheet_line(job, ln))
+            if job._cancel:
+                raise Failed("취소됨")
+            if code != 0 or not picks.exists():
+                raise Failed("캐릭터 시트를 만들지 못했습니다. "
+                             "조건 S+ 는 시트 없이는 돌 수 없습니다.")
+
+            # 시트가 나온 뒤 사람이 보는 지점 — P0-1. story.py 의 --yes 와
+            # 후보 1장 자동 채택(자체 게이트)은 그대로 두고, 그 다음 단계로
+            # 넘어가기 전에 여기서 한 번 세운다. "아예 다른 사람이 됐다" 같은
+            # 사고가 이 지점에서 멈춰야 뒤 컷 전부가 오염되지 않는다.
+            job.status = "awaiting_sheet_approval"
+            job.note("캐릭터 시트가 나왔습니다 — 확인해 주세요")
+            job.save()
+            job.sheet_approval.wait()
+            job.sheet_approval.clear()
+            with job._lock:
+                decision = job.sheet_decision
+                job.sheet_decision = ""
+            job.status = "running"
+            if job._cancel:
+                raise Failed("취소됨")
+            if decision != "retry":
+                break                   # approve (또는 알 수 없는 값 — 진행 쪽이 안전)
+            # 다시 만들기 — story.py 는 이 폴더가 있으면 재생성을 건너뛰므로
+            # (story.py 의 "다시 뽑고 싶으면 이 폴더를 사람이 직접 지운다"와
+            # 동일한 방식) 지우고 같은 루프를 한 번 더 돈다.
+            shutil.rmtree(sheet_dir, ignore_errors=True)
+            job.note("시트를 다시 만드는 중")
         _leave(job)
 
         # ---- 3. 콘티 ------------------------------------------------------ #
