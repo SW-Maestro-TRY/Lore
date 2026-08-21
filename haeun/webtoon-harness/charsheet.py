@@ -658,6 +658,62 @@ def hair_warning(sheet: "Sheet | None", hair: str) -> str:
         "원본에서 없애려면 p1.json 의 design_details 에 길이를 한 줄 넣으세요.")
 
 
+# 소지품·머리장식 경고. hair_warning 과 같은 이유, 같은 자리.
+#
+# 실제 사고: 1컷·2컷 지팡이 디자인이 달랐고, 모자를 썼다 벗었다 했다. 머리
+# 길이와 똑같은 패턴이다 — appearance_en 에는 "지팡이를 든", "모자를 쓴" 같은
+# 서술이 있는데 design_details(실제로 지켜지는 자리)에는 안 들어간 것.
+# hair 처럼 몸에 항상 있는 요소가 아니라 있을 수도 없을 수도 있는 것이라,
+# 자동으로 문구를 만들어 박지는 않는다(hair_text 같은 함수 없음) — 있는지
+# 없는지 자체가 창작 판단이라 코드가 지어내면 오히려 사고가 난다. 그래서
+# hair_warning 과 동일하게 "경고만" 한다: 사람이 보고 p1.json 을 고친다.
+_ACCESSORY_WORDS = {
+    "staff": "지팡이", "wand": "지팡이", "cane": "지팡이",
+    "sword": "검", "blade": "검", "dagger": "단검", "spear": "창",
+    "bow": "활", "shield": "방패",
+    "bag": "가방", "backpack": "가방", "satchel": "가방", "pouch": "주머니",
+    "hat": "모자", "cap": "모자", "hood": "후드", "crown": "왕관",
+    "circlet": "서클릿", "tiara": "티아라", "headband": "머리띠",
+    "veil": "베일", "mask": "가면", "goggles": "고글",
+    "cape": "망토", "cloak": "망토",
+    "glasses": "안경", "earrings": "귀걸이",
+}
+_ACCESSORY_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(w) for w in _ACCESSORY_WORDS) + r")\b",
+    re.IGNORECASE)
+
+
+def accessory_warning(sheet: "Sheet | None", appearance: str) -> str:
+    """소지품·머리장식이 appearance 에만 있고 design_details 에는 없을 때 알린다.
+
+    hair_warning 과 동일한 컨벤션: 자동으로 고치지 않는다. 여기서 잡는 키워드는
+    영문 사전식 목록이라 오탐(false positive)이 날 수 있지만, 경고일 뿐 출력을
+    막지 않으므로 안전하다.
+    """
+    if sheet is None:
+        return ""
+    text = str(appearance or "").strip()
+    if not text:
+        return ""
+    found = {m.group(1).lower() for m in _ACCESSORY_PATTERN.finditer(text)}
+    if not found:
+        return ""
+    design = sheet.design_details or ""
+    missing = sorted(w for w in found if not re.search(
+        rf"\b{re.escape(w)}\b", design, re.IGNORECASE))
+    if not missing:
+        return ""
+    labels = ", ".join(f"{w}({_ACCESSORY_WORDS[w]})" for w in missing)
+    return (
+        f"소지품·머리장식({labels})으로 보이는 단어가 appearance_en 에만 있고 "
+        "design_details 에는 없습니다 — 프롬프트에서 실제로 지켜지는 쪽은 "
+        "design_details 입니다.\n"
+        "         컷마다 생겼다 사라지거나 다른 디자인으로 바뀔 수 있습니다. "
+        "원본에서 없애려면 p1.json 의 design_details 에 해당 소지품을 위치·색·"
+        "형태와 함께 한 줄 넣으세요 (오탐일 수 있습니다 — 실제로 지닌 소지품이 "
+        "아니면 무시해도 됩니다).")
+
+
 def lock_text(sheet: Sheet | None, outfit: str = "", hair: str = "",
               monochrome: bool = False, accent_keys: "tuple | list" = ()) -> str:
     """design_details / color_palette / expression_set 을 프롬프트 끝에 박는다.
