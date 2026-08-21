@@ -1,0 +1,128 @@
+
+# =============================================================================
+# 그림체(스타일) 비교 실험 설정
+#   python run.py --config config.style.yaml --all --dry-run
+#   python run.py --config config.style.yaml --all
+#
+# 캐릭터 일관성 실험(config.yaml)과 변수를 뒤집은 버전이다.
+#   고정: 캐릭터 1명(유나), 장면 1개, 레퍼런스 없음
+#   변수: 스타일 문구 6종  ->  compare.html 에서 1행 6열로 나란히 비교
+#
+# 장면은 config.yaml 의 s1_cafe 와 글자까지 동일하다. 따라서 이미 뽑아둔
+# outputs/A/s1_cafe_r*.png (semi-realistic) 가 그대로 대조군이 된다.
+# =============================================================================
+
+provider:
+  name: gemini
+  model: gemini-3-pro-image-preview
+  api_key_env: GEMINI_API_KEY
+  cost_per_image_usd: 0.134
+  options:
+    response_modalities: ["TEXT", "IMAGE"]
+    aspect_ratio: "1:1"
+    image_size: "2K"
+    timeout_sec: 300
+
+pricing:
+  usd_to_krw: 1400
+
+limits:
+  max_total_calls: 20       # 이 실험은 12회. 실수로 늘어나면 막힌다.
+
+retry:
+  max_retries: 2
+  backoff_sec: 5
+
+repeats: 2                  # 스타일당 2장 = 6 x 1 x 2 = 12장
+
+prompt_template: |
+  {character}
+
+  Scene: {scene}
+
+  {style}
+  {extra}
+
+# 캐릭터: config.yaml 과 동일 (일관성 실험으로 넘어갈 때 그대로 이어쓰기 위함)
+character_prompt: >-
+  A 24-year-old East Asian woman named Yuna. Shoulder-length wavy dark brown hair
+  with a blunt fringe. Oval face, single-lidded almond eyes with a slight downturn
+  at the outer corners, small straight nose, thin lips. A small mole under her left
+  eye. She wears round thin-rimmed silver glasses, a mustard-yellow oversized knit
+  cardigan over a white cotton tee.
+
+# 여기에는 그림체 관련 단어를 절대 넣지 않는다.
+# 스타일은 전부 conditions.extra 로만 들어가야 변수가 오염되지 않는다.
+style_suffix: >-
+  Composition: upper body, three-quarter view, single character only, face clearly
+  visible, background kept simple and secondary to the character.
+
+scenes:
+  - id: s1_cafe
+    prompt: >-
+      Sitting alone at a window seat in a quiet cafe on a rainy afternoon,
+      holding a warm mug with both hands, looking out at the wet street.
+
+# -----------------------------------------------------------------------------
+# 실험 조건 = 스타일 문구 6종. 레퍼런스 이미지는 전부 사용하지 않는다.
+# (레퍼런스를 붙이면 그림체가 레퍼런스에 끌려가서 문구 효과를 못 잰다)
+# -----------------------------------------------------------------------------
+conditions:
+  ST1:
+    label: "기준선 — webtoon 한 단어"
+    refs: []
+    use_previous_scene: false
+    sequential: false
+    extra: >-
+      Art style: webtoon style.
+
+  ST2:
+    label: "플랫 셀셰이딩 + 광택 제거"
+    refs: []
+    use_previous_scene: false
+    sequential: false
+    extra: >-
+      Art style: Korean webtoon. Flat cel shading with hard-edged shadows, clean
+      bold lineart of even weight, matte colours, no glossy highlights, no soft
+      airbrushed gradients.
+
+  ST3:
+    label: "잉크 아웃라인 + 제한 팔레트"
+    refs: []
+    use_previous_scene: false
+    sequential: false
+    extra: >-
+      Art style: manhwa illustration. Confident ink outline, strictly limited
+      colour palette of about six flat colours, fully 2D flat illustration with no
+      rendered volume, visible hand-drawn quality in the linework.
+
+  ST4:
+    label: "인쇄 만화 질감"
+    refs: []
+    use_previous_scene: false
+    sequential: false
+    extra: >-
+      Art style: printed comic page look. Halftone screen tone texture for shading,
+      slightly rough and uneven linework, muted desaturated colours, faint paper
+      grain.
+
+  ST5:
+    label: "네이버 웹툰 로맨스 계열"
+    refs: []
+    use_previous_scene: false
+    sequential: false
+    extra: >-
+      Art style: in the style of a Naver webtoon romance series. Soft flat colours,
+      thin clean lines of consistent weight, minimal shading limited to a single
+      shadow tone, light and airy overall.
+
+  ST6:
+    label: "명시적 배제문(안티 AI티)"
+    refs: []
+    use_previous_scene: false
+    sequential: false
+    extra: >-
+      Art style: 2D animation keyframe, cel shaded, drawn by hand.
+      Do not produce any of the following: 3D rendering, plastic or glossy skin,
+      airbrushed gradients, photorealistic texture, shallow depth of field blur,
+      lens bokeh, oversized sparkling anime eyes.
