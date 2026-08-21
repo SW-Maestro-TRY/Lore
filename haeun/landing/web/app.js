@@ -27,6 +27,7 @@ let jobId    = sessionStorage.getItem("lore_job") || null;
 let poll     = null;
 let photoData = null;
 let shownCuts = new Set();
+let lastStatus = null;
 
 /* ------------------------------------------------------------------ 초기화 */
 
@@ -146,6 +147,7 @@ function startPolling() {
   view("running");
   $("#progress").hidden = false;
   $("#result").hidden = true;
+  lastStatus = null;
   tick();
   clearInterval(poll);
   poll = setInterval(tick, 800);
@@ -169,6 +171,7 @@ async function tick() {
     clearInterval(poll); poll = null;
     renderFailure(state);
   }
+  lastStatus = state.status;
 }
 
 function mmss(sec) {
@@ -178,6 +181,29 @@ function mmss(sec) {
 
 function renderProgress(s) {
   $("#clock").textContent = mmss(s.elapsed);
+
+  const approvalBox = $("#sheetApproval");
+  if (s.status === "awaiting_sheet_approval") {
+    approvalBox.hidden = false;
+    // 매번 새로 그리지 않는다 — '다시 만들기'로 두 번째 시트가 나왔을 때만
+    // 이미지 src 를 바꾼다. no-store 라 캐시는 안 걸리지만, 같은 문자열로
+    // src 를 다시 대입하면 브라우저가 재요청하지 않는 경우가 있어 캐시
+    // 버스터를 붙인다.
+    if (lastStatus !== "awaiting_sheet_approval") {
+      const v = Date.now();
+      $("#approvalSheet").src = `/api/jobs/${jobId}/sheet?v=${v}`;
+      const photoBox = $("#approvalPhotoBox");
+      if (s.has_photo) {
+        photoBox.hidden = false;
+        $("#approvalPhoto").src = `/api/jobs/${jobId}/photo?v=${v}`;
+      } else {
+        photoBox.hidden = true;
+      }
+      setSheetButtonsBusy(false);
+    }
+  } else {
+    approvalBox.hidden = true;
+  }
 
   if (s.status === "queued") {
     $("#progEyebrow").textContent = "대기 중";
@@ -234,6 +260,29 @@ function renderProgress(s) {
   }
 
   $("#logBox").textContent = s.log.join("\n");
+}
+
+function setSheetButtonsBusy(busy) {
+  $("#sheetApproveBtn").disabled = busy;
+  $("#sheetRetryBtn").disabled = busy;
+}
+
+async function sendSheetDecision(decision) {
+  if (!jobId) return;
+  setSheetButtonsBusy(true);
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/sheet-decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
+  } catch (err) {
+    toast(err.message);
+    setSheetButtonsBusy(false);
+  }
 }
 
 function renderFailure(s) {
@@ -385,6 +434,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!jobId || !confirm("만드는 것을 중단할까요? 지금까지 그린 컷은 남습니다.")) return;
     await fetch(`/api/jobs/${jobId}/cancel`, { method: "POST" });
   });
+  $("#sheetApproveBtn").addEventListener("click", () => sendSheetDecision("approve"));
+  $("#sheetRetryBtn").addEventListener("click", () => sendSheetDecision("retry"));
   $("#againBtn").addEventListener("click", forget);
   $("#scriptBtn").addEventListener("click", () => {
     $("#scriptPanel").hidden = !$("#scriptPanel").hidden;
