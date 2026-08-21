@@ -270,11 +270,19 @@ class Job:
     # 같은 이유로 load() 에서 error 로 바꾼다.
     sheet_approval: threading.Event = field(default_factory=threading.Event, repr=False)
     sheet_decision: str = field(default="", repr=False)
+    sheet_edit_fields: dict[str, Any] | None = field(default=None, repr=False)
 
-    def decide_sheet(self, decision: str) -> None:
-        """승인 화면의 '이대로 진행'/'다시 만들기' 클릭이 여기로 온다."""
+    def decide_sheet(self, decision: str, fields: dict[str, Any] | None = None) -> None:
+        """승인 화면의 '이대로 진행'/'수정 후 다시 만들기' 클릭이 여기로 온다.
+
+        fields 는 사람이 approvalSheet 화면에서 고친 p1.json 일부 필드(선택) —
+        retry 일 때만 의미가 있다. approve 에 fields 가 오면 무시한다 (이미
+        채택한 그림은 텍스트를 나중에 고쳐도 안 바뀌므로, 고친 걸 반영하려면
+        다시 그려야 한다 — retry 경로로만 받는다).
+        """
         with self._lock:
             self.sheet_decision = decision
+            self.sheet_edit_fields = fields or None
         self.sheet_approval.set()
 
     # ---- 상태 -------------------------------------------------------------- #
@@ -604,6 +612,51 @@ class Failed(RuntimeError):
     pass
 
 
+# 승인 화면에서 사람이 직접 고칠 수 있게 여는 p1.json 필드. 여기 없는 필드
+# (color_palette, expression_set 등)는 지금은 화면에 안 보여준다 — appearance_en
+# 과 design_details 가 "아예 다른 사람이 됐다"/"소품이 컷마다 바뀐다" 피드백의
+# 직접 원인이라 이 둘 + name 만으로 시작한다.
+SHEET_EDIT_FIELDS = ("name", "appearance_en", "design_details")
+
+
+def sheet_fields(run_id: str) -> dict[str, Any]:
+    """승인 화면 수정 폼에 채워 줄 현재 p1.json 값."""
+    p1 = _read_json(STORY / "runs" / run_id, "p1.json")
+    return {
+        "name": str(p1.get("name") or ""),
+        "appearance_en": str(p1.get("appearance_en") or ""),
+        "design_details": [str(d) for d in (p1.get("design_details") or []) if str(d or "").strip()],
+    }
+
+
+def _apply_sheet_edits(run_dir: Path, fields: dict[str, Any]) -> None:
+    """사람이 고친 필드를 p1.json 에 그대로 반영한다 (화이트리스트 밖은 무시).
+
+    이 다음에 charsheet 폴더를 지우고 다시 뽑으면, 새 시트는 이 고친 값으로
+    그려진다 — story.py 의 --charsheet 는 p1.json 을 읽기만 하고 새로 쓰지
+    않으므로(3236행에서 한 번만 씀), 여기서 먼저 써 둬야 반영된다.
+    """
+    p1_path = run_dir / "p1.json"
+    p1 = _read_json(run_dir, "p1.json")
+    if not p1:
+        return
+    if "name" in fields:
+        name = str(fields.get("name") or "").strip()
+        if name:
+            p1["name"] = name
+    if "appearance_en" in fields:
+        text = str(fields.get("appearance_en") or "").strip()
+        if text:
+            p1["appearance_en"] = text
+    if "design_details" in fields:
+        raw = fields.get("design_details")
+        items = raw if isinstance(raw, list) else str(raw or "").splitlines()
+        details = [str(d).strip() for d in items if str(d or "").strip()]
+        if details:
+            p1["design_details"] = details
+    p1_path.write_text(json.dumps(p1, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def execute(job: Job) -> None:
     job.status = "running"
     job.started_at = time.time()
@@ -666,11 +719,16 @@ def execute(job: Job) -> None:
             with job._lock:
                 decision = job.sheet_decision
                 job.sheet_decision = ""
+                edit_fields = job.sheet_edit_fields
+                job.sheet_edit_fields = None
             job.status = "running"
             if job._cancel:
                 raise Failed("취소됨")
             if decision != "retry":
                 break                   # approve (또는 알 수 없는 값 — 진행 쪽이 안전)
+            if edit_fields:
+                job.note("고친 내용을 저장하는 중")
+                _apply_sheet_edits(STORY / "runs" / run_id, edit_fields)
             # 다시 만들기 — story.py 는 이 폴더가 있으면 재생성을 건너뛰므로
             # (story.py 의 "다시 뽑고 싶으면 이 폴더를 사람이 직접 지운다"와
             # 동일한 방식) 지우고 같은 루프를 한 번 더 돈다.
