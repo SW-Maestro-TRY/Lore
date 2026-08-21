@@ -2865,6 +2865,10 @@ def main() -> int:
               "구절이 없습니다.\n"
               "       컷마다 길이가 달라질 수 있습니다 (시트가 있어도 짧아지는 쪽으로 "
               "흐릅니다).")
+    accessory_note = charsheet.accessory_warning(
+        sheets, sheets.appearance if sheets else "")
+    if accessory_note:
+        print(f"[소지품] {accessory_note}")
     if outfit:
         print(f"[outfit] 기본 의상을 고정합니다 — {outfit[:60]}"
               f"{'…' if len(outfit) > 60 else ''}")
