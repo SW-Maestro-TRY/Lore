@@ -188,6 +188,7 @@
                 <option value="로맨스 판타지"><option value="헌터·게이트"><option value="아이돌">
                 <option value="마법학교"><option value="무협"><option value="오컬트 미스터리">
                 <option value="좀비 아포칼립스"><option value="현대 판타지">
+                <option value="판타지"><option value="일상">
               </datalist>
             </label>
             <label class="field">
@@ -237,6 +238,28 @@
         <button type="button" class="btn btn-quiet btn-sm" id="cancelBtn">중단</button>
       </div>
     </header>
+
+    <div class="sheet-approval" id="sheetApproval" hidden>
+      <div class="sheet-approval-head">
+        <h3>캐릭터 시트를 확인해 주세요</h3>
+        <p>이제부터 모든 컷이 이 얼굴을 따라갑니다. 원본과 다르면 여기서 다시 만드세요 —
+           진행한 뒤에는 뒤 컷 전부가 이 시트를 기준으로 그려집니다.</p>
+      </div>
+      <div class="sheet-approval-compare">
+        <figure class="sheet-approval-photo" id="approvalPhotoBox" hidden>
+          <img id="approvalPhoto" alt="업로드한 원본 사진">
+          <figcaption>원본</figcaption>
+        </figure>
+        <figure class="sheet-approval-sheet">
+          <img id="approvalSheet" alt="생성된 캐릭터 시트">
+          <figcaption>생성된 시트</figcaption>
+        </figure>
+      </div>
+      <div class="sheet-approval-actions">
+        <button type="button" class="btn btn-quiet" id="sheetRetryBtn">다시 만들기</button>
+        <button type="button" class="btn btn-primary" id="sheetApproveBtn">이대로 진행</button>
+      </div>
+    </div>
 
     <ol class="rail" id="rail"></ol>
 
