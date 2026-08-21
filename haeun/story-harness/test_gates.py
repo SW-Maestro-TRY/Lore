@@ -2,6 +2,7 @@
 import sys
 sys.path.insert(0, r"C:\lore\story-harness")
 
+import json
 import story, webtoon, samples
 
 fails = []
@@ -2612,12 +2613,43 @@ ok("템플릿: 파이프라인 프리셋 4종이 전부 매핑돼 있다",
    all(story.resolve_genre_templates(k) for k in ("hunter", "romance", "academy", "idol")))
 ok("템플릿: 한글 장르명은 그대로 쓴다",
    story.resolve_genre_templates("판타지") == ["판타지"])
-ok("템플릿: 자유 입력에서 장르명을 찾아낸다",
-   set(story.resolve_genre_templates("로맨스 판타지")) == {"로맨스", "판타지"},
-   story.resolve_genre_templates("로맨스 판타지"))
+ok("템플릿: 자유 입력에서 장르명을 찾아낸다 (전용 키가 없는 조합은 부분일치)",
+   set(story.resolve_genre_templates("액션 스릴러")) == {"액션", "스릴러"},
+   story.resolve_genre_templates("액션 스릴러"))
+# P0-4: '로맨스 판타지'는 더 이상 로맨스+판타지 부분일치로 섞이지 않는다.
+# 로판 특유의 필수 트로프(궁정 신분·빙의)가 둘 다 빠지는 사고가 있었다.
+ok("템플릿: '로맨스 판타지'는 전용 로판 템플릿으로 정확매치된다",
+   story.resolve_genre_templates("로맨스 판타지") == ["로맨스 판타지"])
+ok("템플릿: '로판' 도 같은 전용 템플릿으로 매칭된다",
+   story.resolve_genre_templates("로판") == ["로맨스 판타지"])
+ok("템플릿: 로판 템플릿에 궁정 신분·빙의 트로프가 들어 있다",
+   "황태자" in json.dumps(story.load_genre_templates()["로맨스 판타지"], ensure_ascii=False)
+   and "빙의" in json.dumps(story.load_genre_templates()["로맨스 판타지"], ensure_ascii=False))
+# UI 가 제안하는 '헌터·게이트'/'아이돌' 을 그대로 입력해도(원문 그대로, genre_key
+# 경유 없이) 템플릿이 걸려야 한다 — 전에는 부분일치 대상 장르명이 문자열에
+# 하나도 없어 조용히 빈 템플릿으로 빠졌다.
+ok("템플릿: '헌터·게이트' 를 그대로 입력해도 템플릿이 걸린다",
+   story.resolve_genre_templates("헌터·게이트") == ["판타지", "액션", "스릴러"])
+ok("템플릿: '아이돌' 을 그대로 입력해도 템플릿이 걸린다",
+   story.resolve_genre_templates("아이돌") == ["일상", "로맨스"])
+# UI placeholder 가 예시로 드는 '무협' 도 전용 템플릿이 있어야 한다.
+ok("템플릿: '무협' 도 전용 템플릿으로 매칭된다",
+   story.resolve_genre_templates("무협") == ["무협"])
+# landing/web/index.html 의 장르 datalist 에 있는 나머지 값들도 전부 확인한다
+# — 하나라도 별칭이 빠지면 그 옵션을 고른 사용자는 템플릿 없이 생성된다.
+ok("템플릿: '마법학교' 를 그대로 입력해도 템플릿이 걸린다",
+   story.resolve_genre_templates("마법학교") == ["판타지", "일상"])
+ok("템플릿: '오컬트 미스터리' 를 그대로 입력해도 템플릿이 걸린다",
+   story.resolve_genre_templates("오컬트 미스터리") == ["판타지", "스릴러"])
+ok("템플릿: '좀비 아포칼립스' 를 그대로 입력해도 템플릿이 걸린다",
+   story.resolve_genre_templates("좀비 아포칼립스") == ["액션", "스릴러"])
+ok("템플릿: '현대 판타지' 는 부분일치로 이미 걸려 있었다 (회귀 확인)",
+   story.resolve_genre_templates("현대 판타지") == ["판타지"])
 # 못 찾으면 아무거나 끼워 넣지 않는다. 안 맞는 장르 문법은 캐릭터를 끌고 간다.
+# ('오컬트 미스터리'는 예전엔 이 예시였지만 이제 별칭이 생겨 더 이상 빈 목록이
+# 아니다 — 위 "'오컬트 미스터리' 를 그대로 입력해도" 테스트가 그걸 확인한다.)
 ok("템플릿: 모르는 장르면 빈 목록 (억지로 안 고른다)",
-   story.resolve_genre_templates("오컬트 미스터리") == []
+   story.resolve_genre_templates("존재하지 않는 장르 이름 123") == []
    and story.resolve_genre_templates("") == [])
 
 _g = story.genre_template_block(story.resolve_genre_templates("hunter"))
@@ -2944,6 +2976,58 @@ ok("장면 점검: '설정 증발'은 사람이 봐야 하는 항목이다",
    "설정 증발" in story.SCENE_BLOCKING_CHECKS)
 ok("장면 점검: '대사 없음'은 메모로만 남긴다 (막지 않는다)",
    "대사 없음" not in story.SCENE_BLOCKING_CHECKS)
+
+# ---------------- P0 수정 (2026-08) ----------------
+# user_feedback_summary.md 의 P0 6건 중 하네스 게이트로 반영한 것들.
+
+# P0-3: 이름 게이트 — 작가가 준 이름이 카드에서 바뀌면 안 된다.
+ok("이름 게이트: given_name 이 비어 있으면 검사하지 않는다",
+   story.gate_name({"name": "아무개"}, "") == [])
+ok("이름 게이트: 카드 이름이 일치하면 통과",
+   story.gate_name({"name": "초롱"}, "초롱") == [])
+ok("이름 게이트: 카드 이름이 다르면 탈락",
+   any("초롱" in f for f in story.gate_name({"name": "루나"}, "초롱")))
+ok("이름 게이트: 카드 이름이 비어 있으면 탈락",
+   story.gate_name({"name": ""}, "초롱") != [])
+
+# P0-5: 지정 안 한 성격 이탈 — personality 에 진지함 신호가 없는데 대사·
+# 나레이션에 단정적 전환 문장이 있으면 경고(advisory, 막지 않는다).
+_abrupt_cuts = [{"cut_number": 3, "lines": [
+    {"kind": "narration", "text": "그 순간이 모든 것을 바꿔놓았다"}]}]
+ok("톤 경고: 장난스러운 personality + 단정적 전환 문장 -> 경고",
+   any("성격 이탈" in w for w in webtoon.tone_warnings(_abrupt_cuts, [], "장난스럽다")))
+ok("톤 경고: personality 에 '진지'가 있으면 조용하다",
+   not any("성격 이탈" in w for w in
+           webtoon.tone_warnings(_abrupt_cuts, [], "평소엔 장난스럽지만 진지한 순간도 있다")))
+ok("톤 경고: 단정적 전환 문장이 없으면 조용하다",
+   not any("성격 이탈" in w for w in
+           webtoon.tone_warnings(
+               [{"cut_number": 1, "lines": [{"kind": "dialogue", "text": "그냥 평범한 하루였다"}]}],
+               [], "장난스럽다")))
+
+# P0-6: 핵심 액션 비트 — beats 가 어느 컷에도 안 나오면 탈락(hard gate).
+_beat_missing = [{"cut_number": 1, "description": "시하가 생쥐를 안고 있다", "lines": []}]
+_beat_present = [{"cut_number": 1,
+                  "description": "시하가 덫에 걸린 생쥐를 손으로 구출한다", "lines": []}]
+_beat_dialogue = [{"cut_number": 1, "description": "시하가 무릎을 굽힌다",
+                   "lines": [{"kind": "dialogue", "text": "지금 구출할게"}]}]
+ok("beat 게이트: beats 없는 옛 run 은 항상 통과",
+   webtoon.gate_beat_coverage(_beat_missing, None) == [])
+ok("beat 게이트: 행동이 어느 컷에도 없으면 탈락",
+   webtoon.gate_beat_coverage(_beat_missing, ["생쥐를 구출한다"]) != [])
+ok("beat 게이트: description 에 그대로 있으면 통과",
+   webtoon.gate_beat_coverage(_beat_present, ["생쥐를 구출한다"]) == [])
+ok("beat 게이트: 활용형이 달라도(구출할게) 어간이 맞으면 통과",
+   webtoon.gate_beat_coverage(_beat_dialogue, ["생쥐를 구출한다"]) == [])
+
+# P0-3: 소품 텍스트(편지 등) 속 이름 — advisory.
+_prop_cuts_stranger = [{"cut_number": 5, "screen_text": "초롱에게, 잘 지내고 있어? - 루나 올림"}]
+ok("소품 이름 경고: 명부에 없는 이름이 screen_text 에 있으면 경고",
+   any("루나" in w for w in webtoon.prop_text_name_check(_prop_cuts_stranger, {"초롱"})))
+ok("소품 이름 경고: 명부에 있는 이름만 있으면 조용하다",
+   webtoon.prop_text_name_check(_prop_cuts_stranger, {"초롱", "루나"}) == [])
+ok("소품 이름 경고: screen_text 가 비어 있으면 조용하다",
+   webtoon.prop_text_name_check([{"cut_number": 1, "screen_text": ""}], {"초롱"}) == [])
 
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")
