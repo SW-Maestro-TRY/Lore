@@ -235,6 +235,14 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:                                   # noqa: BLE001
                 return self._file(src)
 
+        # 시트 승인 화면에서 원본 참조 사진과 나란히 보여줄 자리.
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/photo", path)
+        if m:
+            job = runner.get(m.group(1))
+            if not job or not job.has_photo:
+                return self._error(404, "업로드한 사진이 없습니다")
+            return self._file(job.dir / "photo.png")
+
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/episode\.png", path)
         if m:
             job = runner.get(m.group(1))
@@ -296,6 +304,24 @@ class Handler(BaseHTTPRequestHandler):
             if not job:
                 return self._error(404, "그런 작업이 없습니다")
             job.cancel()
+            return self._json({"ok": True})
+
+        # 시트 승인 화면의 "이대로 진행" / "다시 만들기" 버튼.
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/sheet-decision", url.path)
+        if m:
+            job = runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            if job.status != "awaiting_sheet_approval":
+                return self._error(409, "지금은 시트 확인 단계가 아닙니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            decision = str(body.get("decision") or "")
+            if decision not in ("approve", "retry"):
+                return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
+            job.decide_sheet(decision)
             return self._json({"ok": True})
 
         return self._error(404, "없는 주소입니다")
