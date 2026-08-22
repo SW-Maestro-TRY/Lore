@@ -27,9 +27,14 @@ OneDrive로 동기화되는 실제 파일이라 기기(윈도우 노트북/맥�
 
 ## 병렬 에이전트 작업 (worktree)
 
-**Claude Code 세션을 2개 이상 동시에 띄워 각자 다른 미션을 맡길 때는, 같은
-워킹트리(`haeun/` 폴더 그 자체)를 공유하지 말고 세션마다 `git worktree`로
-독립된 작업공간을 준다.**
+**세션이 스스로 한다 — 사용자가 미리 폴더를 파둘 필요 없다.** 새 세션이
+열렸고(대화 초반), 사용자가 파일 수정이 걸린 미션 하나를 통째로 맡겼고,
+지금 위치가 이미 `agent-*` 워크트리 안이 아니라 원본 `haeun/`라면 —
+**조사·수정을 시작하기 전에 먼저 아래 "쓰는 법"대로 스스로 워크트리를
+판다.** 사용자에게 물어보지 않는다(이것도 haeun 안 자유 작업 범위). 단순
+질문이나 파일을 안 고치는 조사만 하는 세션은 격리할 게 없으니 생략해도
+된다. 워크트리를 팠으면 세션 시작할 때 한 줄로 알린다 (예: "agent-feedback
+워크트리에서 작업합니다").
 
 2026-08-23에 이걸 안 지켜서 실제로 사고가 날 뻔했다 — 세션 A(이 정비 작업)와
 세션 B(그림체 추가)가 같은 폴더에서 동시에 돌면서, `config.yaml`·
@@ -49,21 +54,38 @@ OneDrive로 동기화되는 실제 파일이라 기기(윈도우 노트북/맥�
 worktree 안에는 프로젝트 전체가 그대로 있고, 에이전트는 그 안에서 자유롭게
 조사·수정·테스트·커밋한다.
 
-### 쓰는 법
+### 쓰는 법 (세션이 스스로 실행)
 
 ```
-# 세션마다, haeun 브랜치 최신에서 새 브랜치+worktree를 판다
-git worktree add ../agent-<미션명> -b agent/<미션명> haeun
+# 1. 사용자가 준 미션에서 짧은 영문 슬러그를 스스로 뽑는다
+#    (예: "그림 생성 화풍 확인해" -> image-style, "비용 트래킹 확인해" -> cost-tracking)
+# 2. 이미 쓰는 이름인지 확인하고, 겹치면 -2, -3 ... 을 붙인다
+git worktree list | grep -q "agent-<슬러그>" && 슬러그="<슬러그>-2"   # 필요할 때만
 
-# 예: 사용자 피드백 반영 확인 담당 세션
+# 3. haeun 브랜치 최신에서 새 브랜치+worktree를 판다
+git worktree add ../agent-<슬러그> -b agent/<슬러그> haeun
+
+# 예: 사용자 피드백 반영 확인 미션을 받았을 때
 git worktree add ../agent-feedback -b agent/feedback haeun
 ```
 
-- 브랜치명은 `agent/<미션명>` (예: `agent/feedback`, `agent/image-review`,
+```
+# 4. .env 심링크 (아래 "git이 안 보는 것" 절 참고 — 안 하면 실제 생성 때 키 없음으로 죽는다)
+ln -s "$(pwd)/haeun/story-harness/.env" agent-<슬러그>/story-harness/.env
+ln -s "$(pwd)/haeun/webtoon-harness/.env" agent-<슬러그>/webtoon-harness/.env
+```
+
+그 다음부터 이 세션의 모든 파일 읽기·수정·Bash 작업 기준 경로는
+`../agent-<슬러그>/` 다 — 원본 `haeun/`는 더 이상 건드리지 않는다(같은
+저장소의 다른 커밋되지 않은 상태를 볼 뿐, 실수로 거기 쓰면 다시 섞이는
+사고가 재현된다).
+
+- 브랜치명은 `agent/<미션명>` (예: `agent/feedback`, `agent/image-style`,
   `agent/cost-tracking`) — 담당 파일이 아니라 **미션**을 이름으로 쓴다.
 - 세션 하나 = worktree 하나 = 브랜치 하나. 같은 브랜치를 두 worktree에서
   동시에 체크아웃할 수 없으니 자연히 강제된다.
-- 작업이 끝나면(테스트 통과 확인 후) `haeun`으로 병합한다:
+- 작업이 끝나면(테스트 통과 확인 후, 그리고 사용자가 병합해도 된다고
+  확인해주면) `haeun`으로 병합한다:
   ```
   git checkout haeun
   git merge agent/<미션명>          # 충돌 나면 그때 해결
