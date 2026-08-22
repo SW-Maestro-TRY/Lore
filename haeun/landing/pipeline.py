@@ -59,8 +59,8 @@ from typing import Any, Callable
 
 HERE = Path(__file__).resolve().parent
 JOBS_DIR = HERE / "jobs"
-STORY = Path("C:/lore/story-harness")
-WEBTOON = Path("C:/lore/webtoon-harness")
+STORY = HERE.parent / "story-harness"
+WEBTOON = HERE.parent / "webtoon-harness"
 
 # 그림 조건. 합격본이 S+ 다 — 통합 시트 + 직전 컷을 붙여서, 조연이 같은
 # 사람으로 이어지고 채색이 컷마다 갈리지 않는다. config.yaml 자체가
