@@ -160,8 +160,9 @@ def _replace_block(text: str, key: str, value: str) -> str:
     return pattern.sub(f"{key}: {value}", text, count=1)
 
 
-def build_config(job_dir: Path, style: str) -> Path:
-    """이 실행에만 쓸 config.yaml. 원본에서 딱 다섯 값만 바꾼다."""
+def build_config(job_dir: Path, style: str, head_ratio: str = "",
+                 genre: str = "") -> Path:
+    """이 실행에만 쓸 config.yaml. 원본에서 몇 값만 바꾼다."""
     text = (WEBTOON / "config.yaml").read_text(encoding="utf-8")
 
     # 1. 그림체 — 시트(story.py)와 컷(run.py)이 같은 값을 봐야 한다.
@@ -193,6 +194,23 @@ def build_config(job_dir: Path, style: str) -> Path:
                   f"  cuts_per_scene: {CUTS_PER_SHEET}", text, count=1)
     text = re.sub(r"(?m)^  max_cuts_per_scene:.*$",
                   f"  max_cuts_per_scene: {CUTS_PER_SHEET}", text, count=1)
+
+    # 7. 실사용자 피드백(2026-08)으로 생긴 값들. 하네스 기본은 전부 꺼짐이라
+    #    (예전 run 재현용) 제품 쪽에서 켠다.
+    #
+    #    · 스티커 평면화 · 포즈 지시 — 사용자가 고를 것이 아니라 항상 맞는
+    #      쪽이라 그냥 켠다. "스티커가 3D 라 그림체와 안 맞는다", "포즈가
+    #      어색하다"에 대해 끄고 싶어할 이유가 없다.
+    #    · 등신 비율 — 사용자가 고른다. 안 골랐으면 그림체 기본값.
+    #    · 장르 — 톤 상한에만 쓴다. 로판을 골랐는데 공포 조명이 나오던 문제.
+    text = _replace_block(text, "flat_stickers", "true")
+    text = _replace_block(text, "pose_guidance", "true")
+    if head_ratio in ("sd", "md", "ld"):
+        text = _replace_block(text, "head_ratio", head_ratio)
+    if genre.strip():
+        # 값에 콜론·따옴표가 들어와도 YAML 이 안 깨지게 통째로 인용한다.
+        safe = genre.strip().replace('"', "'")
+        text = _replace_block(text, "genre", f'"{safe}"')
 
     out = job_dir / "config.yaml"
     out.write_text(text, encoding="utf-8")
@@ -319,6 +337,11 @@ class Job:
     art_done: int = 0
     art_seconds: list[float] = field(default_factory=list)
     ready_cuts: list[int] = field(default_factory=list)
+
+    # 이미지 모델이 "못 그리겠다"고 거절한 적이 있는가. 거절은 실패와 다르다 —
+    # 다시 시도해도 같은 답이 오고, 고칠 사람은 우리가 아니라 사용자다.
+    # (예: 캐릭터 나이를 13세로 적으면 미성년 묘사로 보고 거절할 수 있다.)
+    saw_refusal: bool = False
 
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _proc: subprocess.Popen | None = field(default=None, repr=False)
@@ -448,6 +471,10 @@ class Job:
                 "style_label": STYLES.get(self.style, self.style),
                 "preview": self.preview,
                 "has_photo": self.has_photo,
+                # 거절이 있었을 때만 파일을 읽는다. 매 폴링(1초)마다 읽으면
+                # 아무 일도 없는 대부분의 run 에서 헛일이 된다.
+                "refusals": (read_refusals(self.run_id)
+                             if self.saw_refusal and self.run_id else []),
             }
 
     # ---- 저장 · 복원 -------------------------------------------------------- #
@@ -643,6 +670,13 @@ def _art_line(job: Job, line: str) -> None:
             if unit not in job.ready_cuts:
                 job.ready_cuts.append(unit)
                 job.ready_cuts.sort()
+    elif line.lstrip().startswith("↳ 모델이 거절했습니다"):
+        # 안전 필터 거절. 재시도해도 같은 답이 오므로 "다시 시도하는 중"이라고
+        # 하면 거짓말이 된다. 사유는 다음 줄들로 이어져 오고, 원문 전체는
+        # 하네스가 refusals.jsonl 에 남긴다 — 그건 결과 화면에서 읽는다.
+        job.note("모델이 이 장을 그리기를 거절했습니다 — 사유를 확인해 주세요")
+        with job._lock:
+            job.saw_refusal = True
     elif line.lstrip().startswith("실패 (시도"):
         job.note("한 장이 실패했습니다 — 다시 시도하는 중")
 
@@ -715,7 +749,9 @@ def execute(job: Job) -> None:
     job_dir = job.dir
 
     try:
-        build_config(job_dir, job.style)
+        build_config(job_dir, job.style,
+                     head_ratio=str(job.form.get("head_ratio") or "").strip().lower(),
+                     genre=str(job.form.get("genre") or ""))
         char_path = write_character(job_dir, job.form)
 
         # ---- 1. 이야기 --------------------------------------------------- #
@@ -910,6 +946,59 @@ def execute(job: Job) -> None:
 
 def episode_dir(run_id: str) -> Path:
     return WEBTOON / "outputs" / run_id / "ep1"
+
+
+# 하네스(run.py)의 REFUSAL_HINTS 와 짝이다. 저쪽은 터미널에, 이쪽은 화면에 쓴다.
+# 사유 코드는 이미지 모델이 주는 것이라 둘 다 같은 표를 봐야 말이 안 갈린다.
+REFUSAL_HINTS = {
+    "PROHIBITED_CONTENT": "모델이 금지된 내용으로 판단했습니다. 캐릭터 나이가 "
+                          "어리면(대략 15세 미만) 걸리는 경우가 많습니다 — 나이를 "
+                          "올리거나 폭력·노출 묘사를 덜어 보세요.",
+    "IMAGE_SAFETY": "이미지 안전 필터에 걸렸습니다. 유혈·상해 묘사나 어린 "
+                    "캐릭터의 신체 묘사가 원인인 경우가 많습니다.",
+    "SAFETY": "안전 필터에 걸렸습니다. 장면 설명에서 폭력·공포 묘사를 덜어 보세요.",
+    "BLOCKLIST": "차단된 표현이 프롬프트에 들어 있습니다. 장면 설명이나 대사에 "
+                 "쓴 낱말 중 하나가 걸렸습니다.",
+    "SPII": "개인정보로 보이는 내용이 들어 있습니다. 실존 인물의 이름 같은 것이 "
+            "들어갔는지 보세요.",
+    "RECITATION": "저작물을 그대로 재현하려는 것으로 판단했습니다. 기존 작품의 "
+                  "캐릭터나 장면을 그대로 지시하지 않았는지 보세요.",
+}
+
+
+def read_refusals(run_id: str, limit: int = 20) -> list[dict[str, Any]]:
+    """하네스가 남긴 refusals.jsonl 을 읽어 화면에 쓸 모양으로 돌려준다.
+
+    파일이 없으면 빈 목록이다 — 거절이 한 번도 없었으면 안 만들어지고, 예전
+    run 에는 애초에 없다. 없다고 오류로 취급하면 안 된다.
+    """
+    path = episode_dir(run_id) / "refusals.jsonl"
+    if not path.exists():
+        return []
+    out: list[dict[str, Any]] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            code = str(rec.get("reason") or "UNKNOWN").upper()
+            out.append({
+                "reason": code,
+                "hint": REFUSAL_HINTS.get(code, "모델이 생성을 거절했습니다."),
+                # 모델이 직접 한 말. 무엇을 고쳐야 할지는 대개 여기에만 있다.
+                "model_said": str(rec.get("model_said") or "")[:400],
+                "cut_number": rec.get("cut_number"),
+                "unit": rec.get("unit") or "장",
+                "description": str(rec.get("description_ko") or "")[:200],
+                "timestamp": rec.get("timestamp") or "",
+            })
+    except OSError:
+        return []
+    return out[-limit:]
 
 
 def unit_image(run_id: str, no: int) -> Path | None:

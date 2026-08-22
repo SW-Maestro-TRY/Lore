@@ -295,6 +295,9 @@ function renderProgress(s) {
       : "지금 무엇을 하고 있는지 아래에 그대로 보여드립니다.";
   }
 
+  paintMascot(s, currentStage);
+  paintRefusals(s.refusals);
+
   $("#rail").innerHTML = s.stages.map((st, i) => {
     const num = String(i + 1).padStart(2, "0");
     const mark = st.state === "done" ? "✓" : st.state === "error" ? "!" : num;
@@ -336,6 +339,66 @@ function renderProgress(s) {
   }
 
   $("#logBox").textContent = s.log.join("\n");
+}
+
+// ------------------------------------------------------------------ 거절
+// 이미지 모델이 "못 그리겠다"고 답한 장을 사용자에게 그대로 보여준다. 사유를
+// 숨기고 "생성 실패"라고만 쓰면 사용자는 무엇을 고쳐야 할지 알 수 없다.
+function paintRefusals(list) {
+  const box = $("#refusals");
+  if (!box) return;
+  if (!list || !list.length) { box.hidden = true; return; }
+  box.hidden = false;
+  $("#refusalList").innerHTML = list.map(r => `
+    <li class="refusal">
+      <div class="refusal-top">
+        <span class="refusal-code">${esc(r.reason)}</span>
+        <span class="refusal-where">${r.cut_number != null
+          ? `${esc(String(r.cut_number))}번째 ${esc(r.unit || "장")}` : ""}</span>
+      </div>
+      <p class="refusal-hint">${esc(r.hint)}</p>
+      ${r.model_said ? `<p class="refusal-said">모델이 한 말 — ${esc(r.model_said)}</p>` : ""}
+      ${r.description ? `<p class="refusal-desc">해당 장면 — ${esc(r.description)}</p>` : ""}
+    </li>`).join("");
+}
+
+// ---------------------------------------------------------------- 마스코트
+// 단계 key → 표정 + 한 줄. 사용자는 10분 가까이 이 화면을 본다. rail 은 무엇을
+// 하는지 기계적으로 적고, 마스코트는 그걸 사람 말로 한 번 더 말한다.
+const MASCOT_MOODS = {
+  story: ["write", "이야기를 짜는 중이에요. 결말부터 거꾸로 세워 봅니다."],
+  sheet: ["draw", "얼굴을 잡는 중이에요 — 여기가 흔들리면 뒤가 다 흔들려서요."],
+  board: ["read", "컷을 나누는 중이에요. 어디서 넘길지 세어 봅니다."],
+  art:   ["draw", "그리는 중이에요. 한 장씩 나오는 대로 아래에 올려 둘게요."],
+  bind:  ["read", "한 편으로 잇는 중이에요. 거의 다 왔습니다."],
+};
+const MASCOT_WAITING = "확인해 주실 게 있어요 — 아래에서 골라 주세요.";
+
+function paintMascot(s, currentStage) {
+  const box = $("#mascot");
+  if (!box) return;
+  let mood = "think";
+  let line = "";
+
+  if (s.status && s.status.startsWith("awaiting_")) {
+    mood = "ask";
+    line = MASCOT_WAITING;
+  } else if (s.status === "done") {
+    mood = "done";
+    line = "다 됐어요. 처음부터 한 번 읽어 보세요.";
+  } else if (s.status === "error" || s.status === "canceled") {
+    mood = "error";
+    line = s.status === "canceled" ? "여기서 멈췄어요." : "여기서 막혔어요.";
+  } else if (s.status === "queued") {
+    mood = "think";
+    line = "앞 작품이 끝나면 바로 시작할게요.";
+  } else if (currentStage) {
+    const hit = MASCOT_MOODS[currentStage.key];
+    if (hit) [mood, line] = hit;
+  }
+
+  box.dataset.mood = mood;
+  $("#mascotLine").textContent = line;
 }
 
 function setSheetButtonsBusy(busy) {
