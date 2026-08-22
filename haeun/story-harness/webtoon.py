@@ -442,6 +442,13 @@ QUESTION_TYPES = ("mystery", "suspense", "dramatic_irony")
 # 문서 4장: 떡밥 상한은 코드가 8, 기준 문서가 5. 작업기억 근거를 따라 5 를 기본으로 둔다.
 DEFAULT_LEDGER_CAP = 5
 
+# 몇 화가 지나도록 안 갚으면 "오래 묵었다"고 볼 것인가.
+#
+# 상환 일정을 미리 짜지 않는 대신 나이로 본다. 4로 잡은 이유: Arc 하나가
+# 2~5화(gate_arcs)라, 4화가 지났다는 것은 그 질문을 연 Arc 가 사실상 끝났는데
+# 아직 안 갚았다는 뜻이다.
+STALE_AFTER = 4
+
 WEBTOON_SUMMARY_COLUMNS = [
     "run_id", "character", "genre",
     "arc_count", "reversal_ratio", "episode_count", "series_total", "cut_count",
@@ -838,8 +845,21 @@ class Ledger:
 
         # 연체 경고는 없앴다. 몇 화에 갚겠다는 계획을 미리 세우지 않기 때문이다 —
         # 연재는 앞 화를 보고 다음 화를 정하는 것이지, 17화치 상환 일정을 1화에서
-        # 짜는 것이 아니다. 남은 신호는 "지금 몇 개가 열려 있나" 하나뿐이고,
-        # 그건 위의 과부하 경고가 본다.
+        # 짜는 것이 아니다.
+        #
+        # 그렇다고 "언제 갚나"를 아예 안 볼 수는 없다. 개수 상한(과부하)과 최근
+        # 상환 여부(미스터리 박스)만으로는 **오래 묵은 질문 하나**가 안 잡힌다 —
+        # 개수가 상한 안이고 매 화 뭔가 갚고 있어도, 3화에 연 질문이 12화까지
+        # 열려 있으면 독자는 그것을 잊는다. 일정 대신 **나이**로 본다.
+        stale = [q for q in self.open_items
+                 if current_episode - q.opened_episode >= STALE_AFTER]
+        if stale:
+            oldest = min(stale, key=lambda q: q.opened_episode)
+            out.append(
+                f"장기 미상환: {len(stale)}개가 {STALE_AFTER}화 넘게 열려 있습니다 "
+                f"(가장 오래된 것은 {oldest.opened_episode}화에 연 "
+                f"\"{str(oldest.text)[:40]}\"). 갚거나, 지금 다시 꺼내 살려 두세요 "
+                "— 오래 묵으면 독자는 그것을 궁금해하지 않고 잊습니다.")
 
         if not self.engine.is_open:
             out.append("엔진급 훼손: 엔진급 질문이 닫혔습니다 — 치명, 즉시 중단.")
@@ -856,6 +876,15 @@ class Ledger:
             d = q.as_dict()
             if hide_ids:
                 d.pop("id", None)
+            # 열린 질문에는 **몇 화째 열려 있는지**를 같이 준다. 작가가 목록만
+            # 보면 다섯 개가 다 똑같이 급해 보이는데, 실제로 급한 것은 오래
+            # 묵은 쪽이다. 상환 순서를 정하는 유일한 단서가 이 숫자다.
+            if q.is_open and not q.is_engine:
+                age = current_episode - q.opened_episode
+                if age >= 0:
+                    d["openFor"] = age
+                    if age >= STALE_AFTER:
+                        d["stale"] = True
             return d
 
         engine = {"text": self.engine.text,
@@ -1105,7 +1134,13 @@ class SeriesState:
             out.append(f"[열려 있는 질문 {len(open_qs)}개 — 닫을 것이 있으면 "
                        f"문장을 그대로 옮겨 적으세요]")
             for q in open_qs:
-                out.append(f'  - "{q.text}" ({q.opened_episode}화에 열림, {q.type})')
+                # 몇 화째 열려 있는지를 같이 준다. 목록만 보면 다섯 개가 다
+                # 똑같이 급해 보이는데, 실제로 급한 것은 오래 묵은 쪽이다.
+                age = self.made - q.opened_episode
+                aged = f", {age}화째" if age >= 1 else ""
+                mark = "  ← 오래 묵음" if age >= STALE_AFTER else ""
+                out.append(f'  - "{q.text}" ({q.opened_episode}화에 열림, '
+                           f'{q.type}{aged}){mark}')
             if len(open_qs) > ledger.cap:
                 out.append("")
                 out.append(f"  ★ 열린 질문이 {len(open_qs)}개로 많습니다(권장 "
@@ -1650,6 +1685,49 @@ def gate_episodes_shape(payload: dict, ledger: Ledger, arc: dict = None,
             "합니다. 닫는 화의 questions_closed[].question_text 에 아래 본문을 "
             "그대로 옮겨 적으세요:\n" + listed)
 
+    failures.extend(gate_why_now(eps))
+    return failures
+
+
+# 화면에 없는 이유를 "있다"고 우기는 답. shown_by 가 이것들로 때워지면
+# 독자에게는 아무것도 안 보인다 — 독자는 설정집을 안 읽는다.
+_WHY_DODGE = ("설정상", "앞에서 설명", "앞 화에서 설명", "이미 설명", "기존 설정",
+              "독자는 안다", "말할 필요", "당연", "자명")
+
+
+def gate_why_now(eps: list) -> list:
+    """인물이 그 행동을 하는 이유가 **이 화의 화면에** 있는가.
+
+    머릿속 설정으로만 성립하는 행동은 독자에게 개연성이 없다. 실제로 그렇게
+    나왔다 — 인물이 갑자기 노래를 부르는데 왜 불러야 하는지가 어디에도 없어서
+    독자가 납득하지 못했다. 설정집에는 이유가 있었고 화면에는 없었다.
+
+    **why_now 가 한 화에도 없으면 아무것도 검사하지 않는다.** 이 칸이 생기기
+    전에 돌린 run 을 다시 돌려도 결과가 그대로여야 한다.
+    """
+    eps = [e for e in eps if isinstance(e, dict)]
+    if not any(e.get("why_now") for e in eps):
+        return []
+
+    failures = []
+    for e in eps:
+        label = f"{e.get('order') or e.get('episode') or '?'}화"
+        w = e.get("why_now")
+        if not isinstance(w, dict) or not w:
+            failures.append(f"{label}: why_now 가 없습니다 — 이 화의 중심 행동과 "
+                            "그 이유, 그 이유가 화면에 어떻게 보이는지를 적습니다.")
+            continue
+        for key, why in (("action", "이 화의 중심 행동"),
+                         ("reason", "그 행동을 하는 이유"),
+                         ("shown_by", "그 이유가 화면에 보이는 방식")):
+            if not str(w.get(key) or "").strip():
+                failures.append(f"{label}: why_now.{key} 가 비어 있습니다 ({why}).")
+        shown = str(w.get("shown_by") or "").strip()
+        if shown and any(d in shown for d in _WHY_DODGE):
+            failures.append(
+                f"{label}: why_now.shown_by 가 \"{shown[:40]}\" 입니다. "
+                "화면 밖을 가리키는 답은 답이 아닙니다 — 이 화의 대사 한 줄, "
+                "나레이션 한 줄, 또는 눈에 보이는 사건으로 적으세요.")
     return failures
 
 

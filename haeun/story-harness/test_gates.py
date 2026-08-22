@@ -491,6 +491,53 @@ ok("4단계: cast_roles 없으면 지도 출력이 예전 그대로",
 ok("4단계: 관통 인물을 찾는다", webtoon._through_line(_curve) == "서지한"
    and webtoon._through_line(good_arcs["arcs"]) == "")
 
+# ---- 행동의 이유가 화면에 있는가 (#29) ----
+#
+# 머릿속 설정으로만 성립하는 행동은 독자에게 개연성이 없다. 실제로 그렇게 나왔다
+# — 인물이 갑자기 노래를 부르는데 왜 불러야 하는지가 어디에도 없었다.
+ok("5단계: why_now 가 없는 옛 run 은 검사하지 않는다",
+   webtoon.gate_why_now([{"order": 1, "summary": "s"}, {"order": 2}]) == [])
+_why_ok = [{"order": 1, "why_now": {
+    "action": "노래를 부른다", "reason": "동생 병원비가 오늘까지다",
+    "shown_by": '컷2에 독촉 문자가 보이고, 컷3 대사 "오늘까지래"'}}]
+ok("5단계: 행동·이유·화면이 다 있으면 통과", webtoon.gate_why_now(_why_ok) == [],
+   webtoon.gate_why_now(_why_ok))
+ok("5단계: why_now 자체가 비면 탈락",
+   any("why_now 가 없습니다" in f for f in webtoon.gate_why_now([{"order": 1, "why_now": {}},
+                                                                _why_ok[0]])))
+ok("5단계: reason 이 비면 탈락",
+   any("reason" in f for f in webtoon.gate_why_now(
+       [{"order": 1, "why_now": {"action": "a", "reason": "", "shown_by": "컷2 대사"}}])))
+# 화면 밖을 가리키는 답은 답이 아니다 — 독자는 설정집을 안 읽는다.
+for _dodge in ("설정상 가수 지망생이라서", "앞 화에서 설명했다", "이미 설명한 대로"):
+    ok(f"5단계: shown_by 가 화면 밖을 가리키면 탈락 ({_dodge[:8]}…)",
+       any("화면 밖" in f for f in webtoon.gate_why_now(
+           [{"order": 1, "why_now": {"action": "a", "reason": "r", "shown_by": _dodge}}])))
+
+# ---- 오래 묵은 질문 (#30) ----
+#
+# 상환 일정을 미리 짜지 않는 대신 **나이**로 본다. 개수 상한과 최근 상환 여부만으로는
+# 오래 묵은 질문 하나가 안 잡힌다 — 3화에 연 질문이 12화까지 열려 있으면 독자는 잊는다.
+_led = webtoon.Ledger("주인공은 왜 돌아왔는가", cap=5)
+_led.open("흉터의 정체는?", "mystery", 1, 2)
+_led.open("오늘 밤 무슨 일이?", "suspense", 2, 8)
+_q = _led.open("갚을 것", "mystery", 2, 7)
+_led.close(_q.id, 2, 8, False)
+ok("장부: 오래 묵은 질문을 경고한다",
+   any("장기 미상환" in w for w in _led.warnings(9)), _led.warnings(9))
+ok("장부: 아직 안 묵었으면 조용하다",
+   not any("장기 미상환" in w for w in _led.warnings(4)), _led.warnings(4))
+_snap = json.loads(_led.snapshot(9, hide_ids=True))
+_by_text = {o["text"]: o for o in _snap["open"]}
+ok("장부: 열린 질문마다 몇 화째인지 실린다",
+   _by_text["흉터의 정체는?"]["openFor"] == 7
+   and _by_text["오늘 밤 무슨 일이?"]["openFor"] == 1)
+ok("장부: 오래 묵은 것만 표시된다",
+   _by_text["흉터의 정체는?"].get("stale") is True
+   and "stale" not in _by_text["오늘 밤 무슨 일이?"])
+ok("장부: 엔진급 질문에는 나이를 안 붙인다",
+   "openFor" not in json.loads(_led.snapshot(9))["engine_question"])
+
 # ---------------- 질문 장부 (webtoon) ----------------
 led = webtoon.Ledger("그는 끝내 무엇을 택하는가", cap=5)
 ok("장부: EQ 는 열린 부채로 세지 않는다", led.open_items == [])
