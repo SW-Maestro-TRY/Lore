@@ -380,6 +380,67 @@ def structure_summary(picked: dict) -> str:
     return " · ".join(str(v.get("이름", "")) for v in (picked or {}).values())
 
 
+# --------------------------------------------------- 최근 것과 겹치지 않게
+#
+# 축과 구조를 무작위로 뽑으면 조합은 넓지만(7,560 × 50) **바로 직전과 같은 것이
+# 나오는 일**은 여전히 생긴다. 한 번 겪으면 "또 이거네"가 되고, 다양성을
+# 넓힌 보람이 그 자리에서 사라진다.
+#
+# 전부를 기억하지는 않는다. 최근 몇 개만 피한다 — 오래된 것까지 피하려 들면
+# 뽑을 것이 없어지고, 결국 "안 겹치는 하나"로 다시 고정된다.
+
+AVOID_RECENT = 5          # 최근 몇 번의 생성을 피할 것인가
+_AVOID_TRIES = 12         # 다시 뽑는 횟수 상한. 넘으면 그냥 마지막 것을 쓴다
+
+
+def _combo_key(axes: dict, structure: dict = None) -> str:
+    """한 번의 생성을 한 줄로. 겹쳤는지 보는 기준이 이것이다."""
+    parts = [str(v.get("이름", "")) for v in (axes or {}).values()]
+    parts += [str(v.get("이름", "")) for v in (structure or {}).values()]
+    return "|".join(parts)
+
+
+def recent_combos(runs_dir, limit: int = AVOID_RECENT) -> list:
+    """최근 run 들이 쓴 조합. 읽다 실패하면 조용히 건너뛴다 —
+    회피는 있으면 좋은 것이지, 이것 때문에 생성이 멈추면 안 된다."""
+    from pathlib import Path
+    root = Path(runs_dir)
+    if not root.is_dir():
+        return []
+    out = []
+    for d in sorted((p for p in root.iterdir() if p.is_dir()),
+                    key=lambda p: p.name, reverse=True):
+        if len(out) >= limit:
+            break
+        try:
+            data = json.loads((d / "axes.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        key = _combo_key(data.get("축") or {}, data.get("구조") or {})
+        if key.strip("|"):
+            out.append(key)
+    return out
+
+
+def pick_fresh(genre: str = "", runs_dir=None, rng=None, seed=None) -> tuple:
+    """최근 것과 겹치지 않는 (축, 구조). runs_dir 이 없으면 그냥 한 번 뽑는다.
+
+    완전히 같은 조합만 피한다. "축 하나라도 겹치면 다시"로 하면 값이 몇 개
+    안 되는 축(톤 6개)이 금세 바닥나서, 피하려던 고정이 오히려 생긴다.
+    """
+    r = rng or (random.Random(seed) if seed is not None else random)
+    seen = set(recent_combos(runs_dir)) if runs_dir else set()
+    axes = structure = None
+    for _ in range(_AVOID_TRIES if seen else 1):
+        axes = pick_axes(genre, rng=r)
+        structure = pick_structure(genre, rng=r)
+        if _combo_key(axes, structure) not in seen:
+            return axes, structure, True
+    # 여기까지 왔으면 뽑을 수 있는 조합이 좁다는 뜻이다(장르 제약이 센 경우).
+    # 겹치더라도 생성은 계속한다 — 멈추는 것이 더 나쁘다.
+    return axes, structure, False
+
+
 def guess_genre(text: str) -> str:
     """자유 입력 장르 문자열 → 샘플 장르 키. 못 찾으면 빈 문자열.
 

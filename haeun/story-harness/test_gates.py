@@ -2927,6 +2927,53 @@ _mixed = all(any(int(i.split("-")[1]) <= 3 for i in s)
 ok("샘플: 정통과 반전이 항상 함께 뽑힌다", _mixed)
 ok("샘플: pick=0 이면 예전처럼 전부 넣는다 (--card-mix 용)",
    samples.exemplars("fantasy", pick=0).count("[샘플") == 6)
+# ---------------- 최근 것과 겹치지 않게 (#82) ----------------
+#
+# 조합이 넓어도(7,560 x 50) **바로 직전과 같은 것**이 나오면 "또 이거네"가 되고
+# 다양성을 넓힌 보람이 그 자리에서 사라진다. 최근 몇 개만 피한다 — 전부 피하려
+# 들면 뽑을 것이 없어져서 결국 "안 겹치는 하나"로 다시 고정된다.
+import tempfile as _tf, shutil as _sh
+_avoid = Path(_tf.mkdtemp())
+_recent = []
+for _i in range(6):
+    _a = samples.pick_axes("판타지"); _s = samples.pick_structure("판타지")
+    _d = _avoid / f"2026run{_i:02d}"; _d.mkdir()
+    _d.joinpath("axes.json").write_text(
+        json.dumps({"축": _a, "구조": _s}, ensure_ascii=False), encoding="utf-8")
+    _recent.append(samples._combo_key(_a, _s))
+
+ok("회피: 최근 것만 읽는다 (전부가 아니라)",
+   len(samples.recent_combos(_avoid)) == samples.AVOID_RECENT,
+   len(samples.recent_combos(_avoid)))
+ok("회피: 최신부터 읽는다", samples.recent_combos(_avoid)[0] == _recent[-1])
+
+_seen = set(samples.recent_combos(_avoid))
+_dups = sum(1 for _ in range(200)
+            if samples._combo_key(*samples.pick_fresh("판타지", runs_dir=_avoid)[:2]) in _seen)
+ok("회피: 200회 뽑아도 최근 조합과 안 겹친다", _dups == 0, _dups)
+
+_a, _s, _fresh = samples.pick_fresh("판타지")
+ok("회피: runs_dir 이 없으면 예전처럼 그냥 뽑는다 (회귀)",
+   bool(_a) and bool(_s) and _fresh is True)
+
+# 뽑을 폭이 좁아도 멈추지 않는다 — 겹치는 것보다 안 만들어지는 것이 나쁘다.
+_narrow = _avoid / "narrow"; _narrow.mkdir()
+for _i in range(60):
+    _a2 = samples.pick_axes("개그"); _s2 = samples.pick_structure("개그")
+    _d2 = _narrow / f"2026n{_i:02d}"; _d2.mkdir()
+    _d2.joinpath("axes.json").write_text(
+        json.dumps({"축": _a2, "구조": _s2}, ensure_ascii=False), encoding="utf-8")
+_a3, _s3, _ = samples.pick_fresh("개그", runs_dir=_narrow)
+ok("회피: 폭이 좁아도 결과는 나온다 (멈추지 않는다)", bool(_a3) and bool(_s3))
+
+_avoid.joinpath("2026bad").mkdir()
+_avoid.joinpath("2026bad", "axes.json").write_text("{깨짐", encoding="utf-8")
+ok("회피: 깨진 axes.json 이 섞여도 안 터진다",
+   len(samples.recent_combos(_avoid)) == samples.AVOID_RECENT)
+ok("회피: runs 폴더가 아예 없어도 안 터진다",
+   samples.recent_combos(_avoid / "없는폴더") == [])
+_sh.rmtree(_avoid)
+
 ok("샘플: 폴백은 장르 몇 개만 보여준다 (13종을 다 넣지 않는다)",
    samples.exemplars_all().count("──") <= 3,
    samples.exemplars_all().count("──"))

@@ -3118,8 +3118,9 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
         # run 마다 여기서 한 번만 뽑는다. P1 게이트 재시도에서 다시 뽑으면
         # "무엇을 고쳐서 통과했는지"가 흐려지고, 재시도가 곧 재추첨이 되어
         # 게이트를 통과할 때까지 설정이 계속 바뀐다.
-        axes = samples.pick_axes(row["genre"])
-        structure = samples.pick_structure(row["genre"])
+        # 최근 run 들이 쓴 조합은 피한다. 조합이 넓어도 **바로 직전과 같은 것**이
+        # 나오면 "또 이거네"가 되고, 다양성을 넓힌 보람이 그 자리에서 사라진다.
+        axes, structure, fresh = samples.pick_fresh(row["genre"], runs_dir=out_dir)
         if axes or structure:
             write_json(run_dir / "axes.json",
                        {"축": axes, "구조": structure})
@@ -3127,6 +3128,10 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
             log(f"    이야기 변수: {samples.axes_summary(axes)}")
         if structure:
             log(f"    회차 구조: {samples.structure_summary(structure)}")
+        if not fresh:
+            # 장르 제약이 세서 뽑을 수 있는 조합이 좁을 때 여기로 온다.
+            # 멈추지는 않는다 — 겹치는 것보다 안 만들어지는 것이 나쁘다.
+            log("    (최근 생성물과 조합이 겹칩니다 — 고를 수 있는 폭이 좁습니다)")
 
         # ---- P1
         p1 = generate_p1()
