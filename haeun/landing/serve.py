@@ -269,12 +269,29 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(src)
 
         # 시트 승인 화면에서 원본 참조 사진과 나란히 보여줄 자리.
-        m = re.fullmatch(r"/api/jobs/([\w.-]+)/photo", path)
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/photo(?:/(\d+))?", path)
         if m:
             job = runner.get(m.group(1))
             if not job or not job.has_photo:
                 return self._error(404, "업로드한 사진이 없습니다")
-            return self._file(job.dir / "photo.png")
+            shots = pipeline.job_photos(job.dir)
+            if not shots:
+                return self._error(404, "업로드한 사진이 없습니다")
+            idx = int(m.group(2) or 1)
+            if not 1 <= idx <= len(shots):
+                return self._error(404, "그 번호의 사진이 없습니다")
+            return self._file(shots[idx - 1])
+
+        # 몇 장이 올라왔는지 — 시트 승인 화면이 몇 칸을 그릴지 정하는 데 쓴다.
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/photos", path)
+        if m:
+            job = runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            n = len(pipeline.job_photos(job.dir))
+            return self._json({"count": n,
+                               "urls": [f"/api/jobs/{job.id}/photo/{i}"
+                                        for i in range(1, n + 1)]})
 
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/episode\.png", path)
         if m:
@@ -295,15 +312,28 @@ class Handler(BaseHTTPRequestHandler):
             except (json.JSONDecodeError, UnicodeDecodeError):
                 return self._error(400, "입력을 읽지 못했습니다")
 
-            photo = None
-            data_url = str(form.pop("photo_data", "") or "")
-            if data_url.startswith("data:"):
+            # 사진은 여러 장 올 수 있다 — 한 사람을 여러 각도로 찍은 것이다.
+            # 한 장으로는 늘 안 보이는 칸(하의·신발·뒤통수)이 남고, 다른 각도가
+            # 그 칸을 채운다. 옛 화면은 photo_data 하나만 보내므로 둘 다 받는다.
+            urls = form.pop("photos_data", None)
+            if not isinstance(urls, list):
+                urls = []
+            single = str(form.pop("photo_data", "") or "")
+            if single:
+                urls.insert(0, single)
+            urls = [u for u in urls if str(u or "").startswith("data:")]
+            if len(urls) > pipeline.MAX_PHOTOS:
+                return self._error(400,
+                                   f"사진은 {pipeline.MAX_PHOTOS}장까지 올릴 수 있습니다")
+
+            photos = []
+            for i, data_url in enumerate(urls, 1):
                 try:
                     raw = base64.b64decode(data_url.split(",", 1)[1])
                 except (ValueError, IndexError):
-                    return self._error(400, "사진을 읽지 못했습니다")
+                    return self._error(400, f"{i}번째 사진을 읽지 못했습니다")
                 if len(raw) > MAX_PHOTO_BYTES:
-                    return self._error(400, "사진이 너무 큽니다 (6MB 까지)")
+                    return self._error(400, f"{i}번째 사진이 너무 큽니다 (6MB 까지)")
                 try:
                     from PIL import Image
                     im = Image.open(io.BytesIO(raw))
@@ -313,9 +343,10 @@ class Handler(BaseHTTPRequestHandler):
                         im = im.resize((1400, h), Image.LANCZOS)
                     buf = io.BytesIO()
                     im.convert("RGB").save(buf, "PNG")
-                    photo = buf.getvalue()
+                    photos.append(buf.getvalue())
                 except Exception:                               # noqa: BLE001
-                    return self._error(400, "사진 형식을 알 수 없습니다")
+                    return self._error(400, f"{i}번째 사진의 형식을 알 수 없습니다")
+            photo = photos
 
             # 캐릭터를 알 수 있는 것이 하나는 있어야 한다 — story.py 가 그렇게
             # 요구하고, 그 이유가 맞다. 아무것도 없으면 모델이 인물을 통째로
@@ -323,7 +354,7 @@ class Handler(BaseHTTPRequestHandler):
             known = any(str(form.get(k) or "").strip()
                         for k in ("name", "character")) or \
                 any(str(v or "").strip() for v in (form.get("fields") or {}).values()) \
-                or photo is not None
+                or bool(photos)
             if not known:
                 return self._error(400, "캐릭터를 알 수 있는 것이 하나는 필요합니다 — "
                                         "이름 · 설명 · 항목 · 사진 중 아무거나요.")

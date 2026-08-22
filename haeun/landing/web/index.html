@@ -137,13 +137,14 @@
 
         <div class="photo-row">
           <label class="photo-drop" id="photoDrop">
-            <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" hidden>
-            <img id="photoPreview" alt="" hidden>
+            <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" multiple hidden>
+            <div class="photo-strip" id="photoStrip"></div>
             <span class="photo-hint">
               <b>사진 올리기</b>
-              <small>선택 · 있으면 머리·눈·체형·옷을 읽어 반영합니다</small>
+              <small>선택 · 최대 4장까지, <b>같은 사람</b>을 여러 각도로</small>
+              <small>한 장으로는 안 보이는 곳(하의·신발·뒤통수)을 다른 장이 채웁니다</small>
             </span>
-            <button type="button" class="photo-clear" id="photoClear" hidden aria-label="사진 지우기">✕</button>
+            <span class="photo-count" id="photoCount"></span>
           </label>
           <div class="photo-side">
             <label class="field">

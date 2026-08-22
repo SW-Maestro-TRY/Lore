@@ -205,6 +205,28 @@ def build_config(job_dir: Path, style: str) -> Path:
 
 FIELD_KEYS = ("나이", "성별", "직업", "성격", "말투", "과거", "관계", "약점")
 
+# 한 사람을 여러 각도로 찍은 사진을 몇 장까지 받을 것인가.
+#
+# 여러 장을 받는 이유는 하나다 — 한 장으로는 늘 안 보이는 칸이 남는다(하의,
+# 뒤통수, 신발). 다른 각도가 그 칸을 채운다. 반대로 장수를 늘릴수록 첨부가
+# 커져 LOOK 호출이 비싸지고, 서로 어긋나는 칸도 같이 늘어난다. 4장이면
+# 앞·옆·전신·얼굴을 덮는다.
+MAX_PHOTOS = 4
+
+
+def job_photos(job_dir: Path) -> list:
+    """이 작업에 올라온 사진. 순서가 곧 LOOK 에 붙는 순서다.
+
+    옛 job 은 photo.png 하나뿐이고 새 job 은 photo1.png… 를 쓴다. 둘 다 읽는다 —
+    예전 작업의 결과 화면이 그대로 열려야 한다.
+    """
+    out = [job_dir / f"photo{i}.png" for i in range(1, MAX_PHOTOS + 1)]
+    out = [p for p in out if p.exists()]
+    legacy = job_dir / "photo.png"
+    if legacy.exists():
+        out.insert(0, legacy)
+    return out
+
 
 def world_presets() -> list[dict[str, str]]:
     """세계관 프리셋 목록. story-harness 의 worlds.json 이 유일한 출처다.
@@ -251,9 +273,12 @@ def write_character(job_dir: Path, form: dict[str, Any]) -> Path:
                   "text": str(form.get("world", "")).strip()},
         "story": str(form.get("story", "")).strip(),
     }
-    photo = job_dir / "photo.png"
-    if photo.exists():
-        doc["photo"] = str(photo)
+    # 사진은 여러 장일 수 있다. story.read_character 의 photo 는 문자열도
+    # 배열도 받으므로, 한 장이면 예전처럼 문자열로 넘긴다 — 옛 job 폴더
+    # (photo.png 하나만 있는)도 그대로 열린다.
+    shots = job_photos(job_dir)
+    if shots:
+        doc["photo"] = str(shots[0]) if len(shots) == 1 else [str(p) for p in shots]
         note = str(form.get("photo_note", "")).strip()
         if note:
             doc["photo_note"] = note
@@ -1552,17 +1577,19 @@ class Runner:
                 found += 1
         return found
 
-    def create(self, form: dict[str, Any], photo: bytes | None) -> Job:
+    def create(self, form: dict[str, Any], photo=None) -> Job:
+        """photo 는 bytes 하나 또는 bytes 목록. 한 사람을 여러 각도로 찍은 것이다."""
         job_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4]
         job_dir = JOBS_DIR / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
-        if photo:
-            (job_dir / "photo.png").write_bytes(photo)
+        shots = [photo] if isinstance(photo, (bytes, bytearray)) else list(photo or [])
+        for i, raw in enumerate(shots[:MAX_PHOTOS], 1):
+            (job_dir / f"photo{i}.png").write_bytes(raw)
         style = str(form.get("style") or "webtoon")
         if style not in STYLES:
             style = "webtoon"
         job = Job(id=job_id, form=form, dir=job_dir, style=style,
-                  preview=bool(form.get("preview")), has_photo=bool(photo))
+                  preview=bool(form.get("preview")), has_photo=bool(shots))
         job.build_stages()
         (job_dir / "input.json").write_text(
             json.dumps(form, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -28,7 +28,10 @@ const IDEAS = [
 
 let jobId    = sessionStorage.getItem("lore_job") || null;
 let poll     = null;
-let photoData = null;
+/* 사진은 여러 장 받는다 — 한 사람을 여러 각도로 찍은 것이다.
+   한 장으로는 늘 안 보이는 칸(하의·신발·뒤통수)이 남고, 다른 각도가 그 칸을 채운다. */
+const MAX_PHOTOS = 4;
+let photos = [];          // data URL 목록. 순서가 LOOK 에 붙는 순서다.
 let shownCuts = new Set();
 let lastStatus = null;
 
@@ -84,34 +87,49 @@ async function loadWorlds() {
 }
 
 function setupPhoto() {
-  const drop = $("#photoDrop"), input = $("#photo"), prev = $("#photoPreview");
+  const drop = $("#photoDrop"), input = $("#photo");
 
-  const load = file => {
-    if (!file || !file.type.startsWith("image/")) return;
-    if (file.size > 6 * 1024 * 1024) return toast("사진이 너무 큽니다 (6MB 까지)");
-    const fr = new FileReader();
-    fr.onload = () => {
-      photoData = fr.result;
-      prev.src = fr.result; prev.hidden = false;
-      drop.classList.add("has-photo");
-      $("#photoClear").hidden = false;
-    };
-    fr.readAsDataURL(file);
+  const paint = () => {
+    $("#photoStrip").innerHTML = photos.map((src, i) => `
+      <figure class="shot">
+        <img src="${src}" alt="${i + 1}번째 사진">
+        <button type="button" class="shot-x" data-i="${i}" aria-label="지우기">✕</button>
+      </figure>`).join("");
+    $$("#photoStrip .shot-x").forEach(b => b.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation();
+      photos.splice(Number(b.dataset.i), 1); paint();
+    }));
+    drop.classList.toggle("has-photo", photos.length > 0);
+    $("#photoCount").textContent = photos.length
+      ? `${photos.length} / ${MAX_PHOTOS}장 · 같은 사람을 여러 각도로`
+      : "";
+    input.value = "";
   };
 
-  input.addEventListener("change", e => load(e.target.files[0]));
+  const load = files => {
+    const list = [...(files || [])];
+    if (!list.length) return;
+    const room = MAX_PHOTOS - photos.length;
+    if (room <= 0) return toast(`사진은 ${MAX_PHOTOS}장까지 올릴 수 있습니다`);
+    if (list.length > room) toast(`${room}장만 추가합니다 (최대 ${MAX_PHOTOS}장)`);
+    list.slice(0, room).forEach(file => {
+      if (!file.type.startsWith("image/")) return;
+      if (file.size > 6 * 1024 * 1024) return toast("사진이 너무 큽니다 (6MB 까지)");
+      const fr = new FileReader();
+      fr.onload = () => { photos.push(fr.result); paint(); };
+      fr.readAsDataURL(file);
+    });
+  };
+
+  input.addEventListener("change", e => load(e.target.files));
   ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => {
     e.preventDefault(); drop.classList.add("drag");
   }));
   ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => {
     e.preventDefault(); drop.classList.remove("drag");
   }));
-  drop.addEventListener("drop", e => load(e.dataTransfer.files[0]));
-  $("#photoClear").addEventListener("click", e => {
-    e.preventDefault(); e.stopPropagation();
-    photoData = null; input.value = ""; prev.hidden = true;
-    drop.classList.remove("has-photo"); $("#photoClear").hidden = true;
-  });
+  drop.addEventListener("drop", e => load(e.dataTransfer.files));
+  paint();
 }
 
 
@@ -144,8 +162,10 @@ function collect() {
     world_preset: form.world_preset ? form.world_preset.value : "",
     story:      form.story.value.trim(),
     style:      form.style.value,
+    // "" | sd | md | ld. 빈 값이면 그림체가 정한 등신 그대로 간다.
+    head_ratio: form.head_ratio ? form.head_ratio.value : "",
     preview:    $("#previewToggle").checked,
-    photo_data: photoData || "",
+    photos_data: photos,
   };
 }
 
