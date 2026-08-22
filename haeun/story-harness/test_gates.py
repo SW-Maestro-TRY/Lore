@@ -443,6 +443,54 @@ ok("4단계: 화 수 2~5 위반 탈락",
 ok("4단계: Arc 개수 4~6 위반 탈락",
    any("4~6" in f for f in webtoon.gate_arcs({"arcs": [arc(1, "반전", ["rule", "cost", "irony"])]})))
 
+# ---- Arc 인물 역할 (#28) ----
+#
+# Arc 요약은 "무슨 일이 벌어지는가"만 말한다. 누가 그 일을 밀고 누가 막는지가
+# 없으면 W5 가 매번 인물을 새로 배치하고, 주인공이 Arc 마다 다른 사람처럼 움직인다.
+#
+# ★ 가장 중요한 것: **cast_roles 가 없는 옛 run 은 아무것도 검사하지 않는다.**
+#   이 칸이 생기기 전에 돌린 run 을 다시 돌려도 결과가 그대로여야 한다.
+ok("4단계: cast_roles 가 없으면 검사하지 않는다 (옛 run 회귀)",
+   webtoon.gate_arc_cast(good_arcs["arcs"]) == []
+   and webtoon.gate_arcs(good_arcs) == [])
+
+def _role(n, ch="달라진다"):
+    return {"name": n, "role": "쫓는다", "change": ch}
+
+def _cast(arcs, rows_by_order):
+    return {"arcs": [dict(a, cast_roles=rows_by_order[a["order"]]) for a in arcs]}
+
+_ok_cast = _cast(good_arcs["arcs"], {i: [_role("서지한"), _role("한다인")] for i in range(1, 5)})
+ok("4단계: cast_roles 를 제대로 채우면 통과",
+   webtoon.gate_arcs(_ok_cast) == [], webtoon.gate_arcs(_ok_cast))
+
+_no_through = _cast(good_arcs["arcs"], {1: [_role("서지한")], 2: [_role("서지한")],
+                                        3: [_role("딴사람")], 4: [_role("서지한")]})
+ok("4단계: 모든 Arc 에 나오는 인물이 없으면 탈락 (주인공 실종)",
+   any("모든 Arc" in f for f in webtoon.gate_arcs(_no_through)))
+
+_blank = _cast(good_arcs["arcs"], {1: [{"name": "서지한", "role": "쫓는다", "change": ""}],
+                                   2: [_role("서지한")], 3: [_role("서지한")],
+                                   4: [_role("서지한")]})
+ok("4단계: change 가 비면 탈락 (달라지는 게 없으면 그 Arc 에 있을 이유가 없다)",
+   any("change" in f for f in webtoon.gate_arcs(_blank)))
+
+_empty = _cast(good_arcs["arcs"], {1: [], 2: [_role("서지한")], 3: [_role("서지한")],
+                                   4: [_role("서지한")]})
+ok("4단계: cast_roles 가 빈 배열인 Arc 는 탈락",
+   any("비어 있습니다" in f for f in webtoon.gate_arcs(_empty)))
+
+# 전체 줄거리 지도에 주인공 변화 곡선이 실리는가.
+_curve = [dict(a, cast_roles=[_role("서지한", f"{a['order']}번째로 달라진다")])
+          for a in good_arcs["arcs"]]
+_blk = webtoon.series_arc_block(_curve, _curve[1])
+ok("4단계: 지도에 주인공 변화가 Arc 순서대로 실린다",
+   _blk.count("서지한:") == 4 and "2번째로 달라진다" in _blk, _blk[:70])
+ok("4단계: cast_roles 없으면 지도 출력이 예전 그대로",
+   "서지한" not in webtoon.series_arc_block(good_arcs["arcs"], good_arcs["arcs"][1]))
+ok("4단계: 관통 인물을 찾는다", webtoon._through_line(_curve) == "서지한"
+   and webtoon._through_line(good_arcs["arcs"]) == "")
+
 # ---------------- 질문 장부 (webtoon) ----------------
 led = webtoon.Ledger("그는 끝내 무엇을 택하는가", cap=5)
 ok("장부: EQ 는 열린 부채로 세지 않는다", led.open_items == [])

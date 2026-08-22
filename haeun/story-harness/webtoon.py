@@ -1157,6 +1157,12 @@ def series_arc_block(arcs: list, current: dict = None) -> str:
     if not arcs:
         return "(아직 큰 줄거리가 없습니다)"
     now = (current or {}).get("order")
+    # 전 Arc 를 관통하는 인물 = 주인공. 그 사람의 change 를 Arc 순서대로 이어
+    # 보여주면 W5 가 **변화 곡선** 위에서 이번 화를 쓴다. 사건 줄거리만 주면
+    # 인물이 매 화 같은 자리로 돌아온다.
+    #
+    # 여기서도 한 줄씩만이다 — 줄거리 한 줄, 인물 한 줄. 전문은 arc_json 으로 간다.
+    through = _through_line(arcs)
     lines = []
     for a in arcs:
         if not isinstance(a, dict):
@@ -1171,7 +1177,38 @@ def series_arc_block(arcs: list, current: dict = None) -> str:
         one = a.get("summary") or a.get("one_line")
         if not is_blank(one):
             lines.append(f"      {str(one).strip().splitlines()[0][:90]}")
+        if through:
+            change = _arc_change(a, through)
+            if change:
+                lines.append(f"      {through}: {change[:80]}")
     return "\n".join(lines)
+
+
+def _through_line(arcs: list) -> str:
+    """전 Arc 의 cast_roles 에 모두 나오는 인물. 없으면 빈 문자열.
+
+    cast_roles 가 없는 옛 run 은 언제나 빈 문자열이라 예전 출력이 그대로 나온다.
+    """
+    sets = []
+    for a in arcs:
+        if not isinstance(a, dict):
+            continue
+        rows = a.get("cast_roles")
+        if not isinstance(rows, list) or not rows:
+            return ""
+        sets.append({str(r.get("name") or "").strip()
+                     for r in rows if isinstance(r, dict) and r.get("name")})
+    if not sets:
+        return ""
+    both = set.intersection(*sets)
+    return sorted(both)[0] if both else ""
+
+
+def _arc_change(arc: dict, name: str) -> str:
+    for r in (arc.get("cast_roles") or []):
+        if isinstance(r, dict) and str(r.get("name") or "").strip() == name:
+            return " ".join(str(r.get("change") or "").split())
+    return ""
 
 
 def arc_for_episode(arcs: list, no: int) -> dict:
@@ -1403,6 +1440,57 @@ def gate_arcs(payload: dict) -> list:
             f"반전 Arc 가 {reversal}/{len(arcs)} 로 1/3 미만입니다. "
             "전개·상승만 이어지면 설정집 비대증에 빠집니다.")
 
+    failures.extend(gate_arc_cast(arcs))
+    return failures
+
+
+def gate_arc_cast(arcs: list) -> list:
+    """Arc 마다 그 Arc 를 움직이는 인물과 그 인물의 자리가 적혀 있는가.
+
+    Arc 요약은 "무슨 일이 벌어지는가"만 말한다. 누가 그 일을 밀고 누가 막는지가
+    없으면 화 단위 설계(W5)가 매번 인물을 새로 배치하고, 그러면 주인공이 Arc
+    마다 다른 사람처럼 움직인다.
+
+    **cast_roles 가 한 Arc 에도 없으면 아무것도 검사하지 않는다.** 이 칸이
+    생기기 전에 돌린 run 을 다시 돌려도 결과가 그대로여야 한다.
+    """
+    arcs = [a for a in arcs if isinstance(a, dict)]
+    if not any(a.get("cast_roles") for a in arcs):
+        return []
+
+    failures = []
+    per_arc = []
+    for a in arcs:
+        label = f"Arc {a.get('order')}"
+        rows = a.get("cast_roles")
+        if not isinstance(rows, list) or not rows:
+            failures.append(f"{label}: cast_roles 가 비어 있습니다. "
+                            "그 Arc 를 움직이는 인물을 최소 한 명 적습니다.")
+            per_arc.append(set())
+            continue
+        names = set()
+        for r in rows:
+            if not isinstance(r, dict):
+                failures.append(f"{label}: cast_roles 안에 객체가 아닌 항목이 있습니다.")
+                continue
+            name = str(r.get("name") or "").strip()
+            if not name:
+                failures.append(f"{label}: cast_roles 에 이름 없는 항목이 있습니다.")
+                continue
+            names.add(name)
+            for key, why in (("role", "그 인물이 이 Arc 에서 하는 일"),
+                             ("change", "이 Arc 를 지나며 그 인물에게서 달라지는 것")):
+                if not str(r.get(key) or "").strip():
+                    failures.append(f"{label} · {name}: {key} 가 비어 있습니다 ({why}).")
+        per_arc.append(names)
+
+    # 모든 Arc 에 걸쳐 있는 인물이 하나도 없으면 연재를 관통하는 사람이 없다.
+    # 주인공 이름을 여기서 알 수 없으므로(캐릭터 시트는 이 게이트에 안 온다)
+    # "전 Arc 에 나오는 사람이 있는가" 로 대신 본다.
+    if per_arc and not set.intersection(*per_arc):
+        failures.append(
+            "모든 Arc 에 나오는 인물이 없습니다. 주인공은 전 Arc 의 cast_roles 에 "
+            "들어가야 합니다 — 주인공이 빠진 Arc 는 주인공의 이야기가 아닙니다.")
     return failures
 
 
