@@ -3008,7 +3008,7 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
             "one_line_intro": row.get("one_line") or "",
             "world": row.get("world") or "(없음)",
             "character_input": row.get("character") or "",
-            "card_json": (json.dumps(card_input, ensure_ascii=False, indent=2)
+            "card_json": (json.dumps(card_input, ensure_ascii=False, separators=(",", ":"))
                           if card_input else
                           "(없음 — 한 줄 입력에서 카드를 새로 만든다)"),
             "sample_cards": sample_cards,
@@ -3142,7 +3142,7 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                     "story_template": story_tpl or "(스토리 템플릿이 없습니다)",
                     "story_structure": (samples.structure_block(structure)
                                         or "(이번에는 구조 지정 없이 씁니다)"),
-                    "character_sheet": json.dumps(p1, ensure_ascii=False, indent=2),
+                    "character_sheet": json.dumps(p1, ensure_ascii=False, separators=(",", ":")),
                     "retry_feedback": feedback_block(p2_feedback),
                 }),
                 TEMP_CREATIVE, usage)
@@ -3173,8 +3173,8 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
 
             # ---- P3 : 새 호출, 히스토리 없음, 산출물만 전달
             p3_prompt = render(ps.texts["p3"], {
-                "character_sheet": json.dumps(p1, ensure_ascii=False, indent=2),
-                "premise_json": json.dumps(p2, ensure_ascii=False, indent=2),
+                "character_sheet": json.dumps(p1, ensure_ascii=False, separators=(",", ":")),
+                "premise_json": json.dumps(p2, ensure_ascii=False, separators=(",", ":")),
                 # 샘플 intro 는 원본 입력이 아니라 시장 기준선이다. 심사자가
                 # "이 줄이 저 줄들 사이에서 눌리는가"를 볼 근거가 된다.
                 "sample_intros": (samples.intro_list(sample_key) if sample_key
@@ -3224,8 +3224,8 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                     render(ps.texts["scene"], {
                         "scene_count": scene_count,
                         "idea": row["one_line"],
-                        "character_sheet_json": json.dumps(p1, ensure_ascii=False, indent=2),
-                        "premise_json": json.dumps(p2, ensure_ascii=False, indent=2),
+                        "character_sheet_json": json.dumps(p1, ensure_ascii=False, separators=(",", ":")),
+                        "premise_json": json.dumps(p2, ensure_ascii=False, separators=(",", ":")),
                         "fix_directive": fix_directive,
                     }),
                     TEMP_CREATIVE, usage)

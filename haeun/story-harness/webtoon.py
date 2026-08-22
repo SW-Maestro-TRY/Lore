@@ -839,7 +839,7 @@ class Ledger:
             "open_count": len(self.open_items),
             "open_cap": self.cap,
             "warnings": self.warnings(current_episode),
-        }, ensure_ascii=False, indent=2)
+        }, ensure_ascii=False, separators=(",", ":"))
 
     def as_dict(self) -> dict:
         return {"cap": self.cap, "questions": [q.as_dict() for q in self.items]}
@@ -3354,7 +3354,7 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                 "engine_card": card,
                 "series_arc": series_arc or "(큰 줄거리가 넘어오지 않았습니다)",
                 "arc_json": arc_json,
-                "episode_json": json.dumps(episode, ensure_ascii=False, indent=2),
+                "episode_json": json.dumps(episode, ensure_ascii=False, separators=(",", ":")),
                 "ledger_snapshot": ledger_snapshot,
                 "engine_fired_list": fired_list(episode),
                 "setting_block": setting_block(episode),
@@ -3611,9 +3611,9 @@ def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
             "W8", f"{absolute}화 글자 다시 쓰기",
             render(ps.texts["w8"], {
                 "engine_card": card,
-                "episode_json": json.dumps(episode, ensure_ascii=False, indent=2),
+                "episode_json": json.dumps(episode, ensure_ascii=False, separators=(",", ":")),
                 "ledger_snapshot": ledger_snapshot,
-                "cuts_json": json.dumps(cuts, ensure_ascii=False, indent=2),
+                "cuts_json": json.dumps(cuts, ensure_ascii=False, separators=(",", ":")),
                 "pov": pov or "(엔진 카드에서 주인공을 찾지 못했습니다)",
                 "banned_words": " · ".join(BANNED_IN_DIALOGUE),
                 "retry_feedback": feedback_block(feedback),
@@ -4045,7 +4045,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
     (wt_dir / "engine_card.txt").write_text(card, encoding="utf-8")
 
     ledger = Ledger(str(p2.get("engine_question") or ""), cap=ledger_cap)
-    sheet = json.dumps(p1, ensure_ascii=False, indent=2)
+    sheet = json.dumps(p1, ensure_ascii=False, separators=(",", ":"))
 
     def call(stage: str, label: str, prompt: str, temp: float, verdict_of=None):
         start = len(usage.records)
@@ -4148,7 +4148,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
             (wt_dir / "engine_card.txt").write_text(card, encoding="utf-8")
             arc = arc_for_episode(arcs, no)
             arc_order = arc.get("order")
-            arc_json = json.dumps(arc, ensure_ascii=False, indent=2)
+            arc_json = json.dumps(arc, ensure_ascii=False, separators=(",", ":"))
             ep_path = wt_dir / f"arc{arc_order}_episodes.json"
             rv_path = wt_dir / f"ep{no:02d}_review.json"
             cut_path = wt_dir / f"ep{no:02d}_cuts.json"
@@ -4198,7 +4198,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                         "engine_card": card, "arc_json": arc_json,
                         "ledger_snapshot": ledger.snapshot(no),
                         "episodes_json": json.dumps(
-                            {"episodes": episodes}, ensure_ascii=False, indent=2),
+                            {"episodes": episodes}, ensure_ascii=False, separators=(",", ":")),
                     }),
                     TEMP_JUDGE,
                     lambda o: "검사 완료")
@@ -4491,7 +4491,7 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
                 break
 
         arc_json = json.dumps(arcs.get(arc_order) or {"order": arc_order},
-                              ensure_ascii=False, indent=2)
+                              ensure_ascii=False, separators=(",", ":"))
         try:
             payload, _, notes = solve_cuts(
                 ps, call, card, arc_json, episode,
