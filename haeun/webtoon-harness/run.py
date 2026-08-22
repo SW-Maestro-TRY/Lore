@@ -57,6 +57,7 @@ import yaml
 import bubbles
 import cast
 import charsheet
+import directing
 import episode
 import scenegen
 import storyload
@@ -970,9 +971,14 @@ def generate_prompts(cfg: dict[str, Any], args, ep: storyload.Episode, ep_dir: P
     cuts_json = json.dumps(
         [{"cut_number": c["cut_number"], "description": c["description"],
           "dialogue": c["dialogue"]} for c in base], ensure_ascii=False, indent=2)
+    # 이번 화 컷 서술·대사에 등장하는 태그와 겹치는 연출 지식만 골라 붙인다 —
+    # story-harness 의 resolve_directing_notes 와 같은 저장소, 같은 방식.
+    haystack = " ".join(f"{c['description']} {c['dialogue']}" for c in base)
+    directing_notes = directing.resolve_notes(directing.DEFAULT_ROOT, haystack)
     prompt = (tmpl.replace("{episode_title}", ep.title)
                   .replace("{cut_count}", str(len(base)))
-                  .replace("{cuts_json}", cuts_json))
+                  .replace("{cuts_json}", cuts_json)
+                  .replace("{directing_notes}", directing_notes or "(none)"))
 
     client = make_text_client()
     print(f"[prompt_gen] {client.describe()} 호출 — 컷 {len(base)}개 한국어 서술 → 영어 장면...")

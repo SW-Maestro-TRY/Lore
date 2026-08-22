@@ -23,6 +23,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+import directing
+
 CACHE_FILE = "scenes.json"
 
 # --------------------------------------------------------------------------- #
@@ -872,10 +874,17 @@ def build_prompt(template: str, title: str, scenes: list[Scene],
         row.update(scene_intent(story_scenes or [], sc.scene_number))
         row["cuts"] = [_cut_for_prompt(c) for c in sc.cuts]
         payload.append(row)
+    # 이번 화 컷 서술·대사에 등장하는 태그와 겹치는 연출 지식만 골라 붙인다 —
+    # story-harness 의 resolve_directing_notes 와 같은 저장소, 같은 방식.
+    haystack = " ".join(
+        f"{c.get('description', '')} {c.get('dialogue', '')}"
+        for row in payload for c in row["cuts"])
+    directing_notes = directing.resolve_notes(directing.DEFAULT_ROOT, haystack)
     return (template.replace("{episode_title}", title)
                     .replace("{scene_count}", str(len(scenes)))
                     .replace("{staging}", staging_text(setting))
                     .replace("{treatment_guide}", treatment_text(cfg))
+                    .replace("{directing_notes}", directing_notes or "(none)")
                     .replace("{scenes_json}", json.dumps(payload, ensure_ascii=False, indent=2)))
 
 
