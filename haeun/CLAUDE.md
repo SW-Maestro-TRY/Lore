@@ -220,9 +220,62 @@ git 설정(`git config user.name`/`user.email`, 지금은 `haeun
   메시지는 백틱(inline code)으로 감쌉니다. 메시지 안에 `[#18][#19]...`처럼 이슈
   번호가 여러 개 있으면, 백틱 없이 그냥 쓸 경우 GitHub이 그 번호들을 전부
   "이슈 전체 제목" 링크로 자동 확장해버려서 댓글이 못 알아보게 지저분해집니다
-  (실제로 겪음, 2026-08-21). 이 저장소엔 `gh` CLI가 없어서, 댓글은
-  `git credential fill`로 이 컴퓨터에 저장된 토큰을 꺼내 GitHub REST API
-  (`POST /repos/{owner}/{repo}/issues/{n}/comments`)로 직접 올립니다.
+  (실제로 겪음, 2026-08-21).
+- **GitHub 접근은 `gh` CLI를 씁니다.** (2026-08-23 정정 — 전에는 "이 저장소엔
+  `gh` CLI가 없다"고 적혀 있었는데 사실이 아니었습니다. `/opt/homebrew/bin/gh`에
+  설치돼 있고 `haeun9634`로 로그인돼 있습니다.) `gh` 토큰에는 `project` 스코프가
+  있고 `git credential fill`로 꺼내는 토큰에는 **없습니다** — 프로젝트 보드를
+  건드리려면 반드시 `gh`를 써야 합니다. 이슈 댓글처럼 repo 스코프면 되는 일은
+  둘 다 되지만, 굳이 나눌 이유가 없으니 `gh`로 통일합니다
+  (`gh api`, `gh api graphql`, `gh project ...`).
+
+### GitHub 프로젝트 보드 (`lore`)
+
+이슈 상태는 **`SW-Maestro-TRY` 조직의 `lore` 프로젝트(번호 3)** 에서 관리합니다.
+새 프로젝트를 만들지 말고 항상 이것을 씁니다.
+
+```
+gh project list --owner SW-Maestro-TRY          # lore = 3
+gh project field-list 3 --owner SW-Maestro-TRY  # Status 필드 id 확인
+```
+
+`Status` 단일선택 필드의 칸(2026-08-23 기준):
+
+| 칸 | 뜻 |
+| --- | --- |
+| `Backlog` | 아직 손 안 댐 |
+| `이번주에 할거` | 이번 주 예정 |
+| `이번주 진행중` | 지금 하는 중 (일부 구현됨) |
+| `개발된거(Done)` | 개발 완료 |
+| `In review` · `Done` | 기본 템플릿에서 남은 칸 — 이 프로젝트에서는 안 씁니다 |
+
+**정리 작업을 요청받으면 (예: "이슈 상태 정리해줘"):**
+
+1. **대상은 `haeun9634`가 만든 이슈만.** 팀원이 만든 이슈는 건드리지 않습니다
+   (`gh api ... --jq '.[] | select(.user.login=="haeun9634")'`).
+2. **체크리스트는 이슈 본문이 아니라 코드를 기준으로 판정합니다.** 이미 찍혀
+   있는 `[x]`를 믿지 말고, 실제 구현을 찾아 확인한 뒤 갱신합니다. 근거로
+   `파일:줄`을 댈 수 없으면 체크하지 않습니다.
+3. 코드로 확인할 수 없는 항목(디자인 검토, "결과 확인", 실험 정리 등)은
+   **추측해서 체크하지 않고** 그대로 둡니다.
+4. 판정 → 칸 이동:
+   - 확인 가능한 항목이 전부 구현됨 → `개발된거(Done)`
+   - 일부만 구현됨 → `이번주 진행중`
+   - 아무것도 없음 → `Backlog` 유지
+5. **이슈를 닫지는 않습니다.** 칸 이동과 체크리스트 갱신까지만 합니다
+   (닫는 것은 사람이 판단합니다).
+6. 기능이 **기본값 꺼짐**으로 들어가 있어도, 제품 레이어(`landing`)가 켜고
+   있으면 구현된 것으로 봅니다 — 그 사실을 근거에 같이 적습니다.
+
+카드 이동은 GraphQL 로 합니다 (`gh project item-edit` 도 되지만 item id 를
+따로 구해야 하는 건 같습니다):
+
+```
+gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
+  projectId:"<PVT_...>" itemId:"<PVTI_...>"
+  fieldId:"<PVTSSF_...>" value:{singleSelectOptionId:"<옵션id>"}
+}){ projectV2Item{ id } } }'
+```
 
 ## 환경 관련 주의사항
 
