@@ -2157,9 +2157,29 @@ _STOP = {"그", "그녀", "그것", "이", "가", "은", "는", "을", "를", "�
 
 
 def _content_words(text: str) -> set:
-    """조사·흔한 낱말을 뺀 알맹이. 같은 주제를 말하는지 보는 데만 쓴다."""
+    """조사·흔한 낱말을 뺀 알맹이. 사람에게 보여 줄 주제 낱말을 고르는 데 쓴다."""
     words = re.findall(r"[가-힣A-Za-z]{2,}", str(text or ""))
     return {w for w in words if w not in _STOP}
+
+
+def _bigrams(text: str) -> set:
+    """글자 두 개씩. 한국어는 조사가 붙어서 낱말 단위로 비교하면 안 맞는다 —
+    '동아리방에는' 과 '동아리방' 은 다른 낱말이지만 같은 것을 말한다."""
+    s = re.sub(r"[^가-힣A-Za-z0-9]", "", str(text or ""))
+    return {s[i:i + 2] for i in range(len(s) - 1)}
+
+
+def _same_topic(a: str, b: str) -> bool:
+    """두 문장이 같은 것을 말하는가. 짧은 쪽 기준으로 얼마나 겹치는지 본다.
+
+    자카드(합집합 기준)를 쓰면 한쪽이 길 때 값이 눌린다 — "창이 없다" 처럼
+    짧은 설정이 긴 설정과 부딪히는 경우가 정확히 그 모양이라, 짧은 쪽을 분모로
+    둔다.
+    """
+    ga, gb = _bigrams(a), _bigrams(b)
+    if not ga or not gb:
+        return False
+    return len(ga & gb) / min(len(ga), len(gb)) >= 0.30
 
 
 def _negated(text: str) -> bool:
@@ -2178,10 +2198,10 @@ def fact_conflicts(facts: list) -> list:
         for j in range(i + 1, len(rows)):
             a, b = rows[i], rows[j]
             ta, tb = str(a["fact"]), str(b["fact"])
-            shared = _content_words(ta) & _content_words(tb)
-            if len(shared) < 2:
+            if not _same_topic(ta, tb):
                 continue                      # 다른 이야기다
-            topic = ", ".join(sorted(shared)[:3])
+            shared = _content_words(ta) & _content_words(tb)
+            topic = ", ".join(sorted(shared)[:3]) or "같은 대상"
             where = (f"{a.get('first_episode', '?')}화 ↔ "
                      f"{b.get('first_episode', '?')}화")
 
@@ -2198,7 +2218,7 @@ def fact_conflicts(facts: list) -> list:
                 u = clash[0]
                 out.append(
                     f"설정 충돌 의심 ({where}) — 같은 것({topic})에 "
-                    f"{na[u]}{u} 와 {nb[u]}{u} 가 함께 있습니다.\n"
+                    f"{na[u]}{u} 과(와) {nb[u]}{u} 이(가) 함께 있습니다.\n"
                     f"    · \"{ta[:60]}\"\n    · \"{tb[:60]}\"")
     return out
 
