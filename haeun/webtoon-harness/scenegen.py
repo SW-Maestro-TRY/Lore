@@ -23,6 +23,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+import directing
+
 CACHE_FILE = "scenes.json"
 
 # --------------------------------------------------------------------------- #
@@ -441,6 +443,50 @@ def screen_ui_clause(cfg: dict[str, Any], cut: dict[str, Any]) -> list[str]:
     return [SCREEN_UI_CLAUSE.format(where=where)]
 
 
+# 종이 위의 글자 — 편지·쪽지·간판·책·현수막.
+#
+# 실사용자 지적(2026-08): "편지지의 글자가 온전하게 읽을 수 있는 글자로 출력되게
+# 수정되어야 할 것 같음." 그리고 같은 컷에서 편지 속 이름이 사용자가 적은 이름
+# (초롱)과 달랐다.
+#
+# 화면(screen_text)은 이미 비워 그리고 합성하는데, **종이는 그 길이 없었다.**
+# 콘티에 구조화된 칸이 없어서 편지 내용이 서술의 자유 문장으로 넘어가고, 이미지
+# 모델이 한글을 직접 그리려다 뭉갠다. 한글 자모는 획이 많아 작은 크기에서 반드시
+# 깨진다 — 이건 모델을 잘 달래서 될 일이 아니다.
+#
+# 그래서 여기서는 **읽히는 척하지 말라**고만 한다. 진짜 문구가 필요하면
+# screen_text 로 넘겨서 합성 경로를 타야 하고, 그게 아니면 글자는 글자 모양의
+# 질감으로 남는 편이 낫다 — 뭉개진 가짜 한글보다 훨씬 덜 어색하다.
+PROP_TEXT_CLAUSE = (
+    "WRITING ON PAPER OR SIGNS in this panel (a letter, a note, a page, a "
+    "signboard, a banner, a book): do NOT attempt to render legible Korean or "
+    "English words. Korean letterforms break apart at this size and come out as "
+    "broken strokes that read as a mistake. Draw the writing as an abstract "
+    "texture instead — even rows of small marks that clearly read as 'writing' "
+    "from a distance without resolving into letters — or leave the surface "
+    "blank. Never invent words, names or signatures."
+)
+
+# 글자가 적힐 만한 물건. 서술에서 이 낱말이 보이면 위 절을 붙인다.
+_PROP_TEXT_WORDS = re.compile(
+    r"\b(letter|envelope|note|notes|page|pages|paper|document|scroll|sign|"
+    r"signboard|signage|banner|poster|book|books|notebook|diary|journal|"
+    r"newspaper|ledger|map|label|plaque|placard)\b", re.IGNORECASE)
+
+
+def prop_text_clause(cut: dict[str, Any], panel_text: str = "") -> list[str]:
+    """종이 위 글자 지시. 그럴 만한 물건이 안 보이면 붙이지 않는다.
+
+    screen_text 가 있는 컷에는 안 붙인다 — 그쪽은 이미 "비워 그리고 합성한다"
+    는 더 정확한 지시를 받고 있고, 두 지시가 겹치면 서로 어긋난다.
+    """
+    if str(cut.get("screen_text") or "").strip():
+        return []
+    haystack = " ".join(str(x or "") for x in (
+        panel_text, cut.get("description"), cut.get("props")))
+    return [PROP_TEXT_CLAUSE] if _PROP_TEXT_WORDS.search(haystack) else []
+
+
 # 말풍선이 놓일 자리를 비워 두라는 지시. 보장이 아니라 확률을 올리는 힌트다 —
 # 최종 안전장치는 합성 단계(bubbles.py)이고, 이건 그 앞에서 얼굴 위에 글자가
 # 얹히는 경우를 줄인다.
@@ -531,16 +577,56 @@ def gaze_clause(cut: dict[str, Any]) -> list[str]:
     return [text] if text else []
 
 
-def panel_clauses(cfg: dict[str, Any], cut: dict[str, Any]) -> str:
+# 포즈 — 실사용자 지적: "'이 검 엄청 가벼워요' 컷의 포즈가 어색하다."
+#
+# 포즈는 지금까지 코드가 한 마디도 안 하는 자리였다. shot(거리) · composition
+# (구도) · gaze(시선)는 절이 있는데 몸이 어떻게 서 있는지는 전부 패널 서술의
+# 자유 문장에 맡겨져 있었다. 그래서 모델이 기본값으로 돌아간다 — 정면으로 서서
+# 카메라를 보고 팔은 몸 옆에 붙은, 게임 캐릭터 셀렉트 화면 같은 자세.
+#
+# 무엇을 하는 포즈인지는 코드가 알 수 없다(그건 서술의 몫이다). 코드가 할 수
+# 있는 것은 **어떤 포즈가 어색한지**를 막는 것뿐이라, 금지 쪽으로만 적는다.
+POSE_CLAUSE = (
+    "POSE: give the body real weight and intent — the pose must show what the "
+    "character is doing and how heavy or light it is. Shift the weight onto one "
+    "leg, let the shoulders and hips tilt against each other, and let the arms "
+    "do something specific. If a character holds or swings an object, the grip, "
+    "the wrist angle and the strain in the arm must match how heavy that object "
+    "is. Avoid a stiff symmetrical front-facing stand with both arms hanging "
+    "straight down and both feet flat and parallel — that reads as a character "
+    "select screen, not a story panel."
+)
+
+
+def pose_clause(cfg: dict[str, Any], cut: dict[str, Any]) -> list[str]:
+    """포즈 지시. config 의 pose_guidance 로 켠다(기본 꺼짐).
+
+    인물이 없는 컷(인서트·원경)에는 붙이지 않는다 — 사물만 있는 컷에 "체중을
+    한쪽 다리에" 라고 말하면 없는 인물을 만들어 넣는다. 실제로 인서트 컷에
+    사람이 나오는 것은 콘티 게이트가 따로 잡을 만큼 잦은 사고다.
+    """
+    if not cfg.get("pose_guidance"):
+        return []
+    if str(cut.get("shot") or "").strip().lower() in ("insert", "인서트"):
+        return []
+    return [POSE_CLAUSE]
+
+
+def panel_clauses(cfg: dict[str, Any], cut: dict[str, Any],
+                  panel_text: str = "") -> str:
     """패널 하나에 코드가 덧붙이는 전부.
 
-    거리 → 구도 → 말풍선 → 효과음 → 화면 UI → 자리 비우기 → 보정 순이다. 거리와
-    구도가 맨 앞인 이유: 나머지는 "그 위에 무엇을 얹을지" 인데 이 둘은 **무엇을
-    그릴지** 라서, 뒤에 두면 모델이 이미 잡은 화면에 억지로 끼워 맞춘다.
+    거리 → 구도 → 시선 → 포즈 → 말풍선 → 효과음 → 화면 UI → 자리 비우기 → 보정
+    순이다. 거리와 구도가 맨 앞인 이유: 나머지는 "그 위에 무엇을 얹을지" 인데
+    이 둘은 **무엇을 그릴지** 라서, 뒤에 두면 모델이 이미 잡은 화면에 억지로
+    끼워 맞춘다. 포즈는 그 셋 바로 뒤다 — 몸이 정해진 다음에 말풍선 자리가
+    정해져야 말풍선이 얼굴을 가리지 않는다.
     """
     parts = (shot_clause(cut) + composition_clause(cut) + gaze_clause(cut)
+             + pose_clause(cfg, cut)
              + bubble_clause(cfg, cut)
              + sfx_clause(cfg, cut) + screen_ui_clause(cfg, cut)
+             + prop_text_clause(cut, panel_text)
              + bubble_zone_clause(cut) + treatment_clause(cfg, cut))
     return " ".join(p for p in parts if p)
 
@@ -701,6 +787,87 @@ def seam_text(prev: Scene | None, nxt: Scene | None) -> str:
     return "\n".join(lines)
 
 
+# --------------------------------------------------------------------------- #
+# 등신 비율 (head_ratio) — 실사용자 지적으로 새로 만든 축
+# --------------------------------------------------------------------------- #
+# 실사용자 지적(2026-08): "SD 로 넣은 캐릭터가 웹툰에서는 LD 로 출력된다."
+# 그리고 팀과 사용자가 쓰는 낱말 자체가 어긋나 있었다. 사용자 기준은 이렇다:
+#
+#   SD  머리 비중이 매우 크다 (2~3등신)
+#   MD  중간 등신 (4~5등신)
+#   LD  실제 등신 (7~8등신)
+#
+# ★ 이름 충돌 주의 — 이 저장소에는 이미 "sd" 가 있다. 그건 **컷의 종류**다
+#   (render_style: normal | sd | emphasis, config 의 styles.<이름>.sd). 코미디용
+#   2~3등신 삽입 컷을 가리키는 말이라, 지금 이 축과는 완전히 다른 것이다.
+#   그래서 이 축의 config 키를 `head_ratio` 로 따로 뒀다. 값에 sd/md/ld 를 그대로
+#   쓰는 것은 **사용자가 그 낱말로 말하기 때문**이고, 키 이름이 다르므로
+#   `head_ratio: sd` 와 `render_style: sd` 는 서로 헷갈릴 자리가 없다.
+#
+# ★ 왜 config 의 styles 문구를 고치지 않고 여기에 따로 두는가: styles 의 일곱
+#   그림체는 전부 PROPORTION 줄에 성인 등신을 **박아** 두었다(7~9등신). 그 줄을
+#   고치면 그림체마다 다시 균형을 잡아야 하고, 예전 run 의 결과도 바뀐다.
+#   대신 프롬프트 **뒤쪽**에 덮어쓰는 문구를 붙인다 — 이 저장소의 규칙대로
+#   뒤에 온 것이 이긴다 (style_suffix·design_lock 과 같은 방식).
+HEAD_RATIO = {
+    "sd": (
+        "HEAD-TO-BODY RATIO — OVERRIDE any head-count given above. Draw every "
+        "character SUPER-DEFORMED at 2 to 3 heads tall: the head is as large as "
+        "the entire torso, the face fills most of the head, the limbs are short "
+        "and simplified, and there is almost no neck. This is the defining "
+        "feature of the art and it must hold in EVERY panel, including wide "
+        "shots and serious moments — a serious scene drawn at this ratio simply "
+        "reads as a cute character being serious, which is correct and intended."),
+    "md": (
+        "HEAD-TO-BODY RATIO — OVERRIDE any head-count given above. Draw every "
+        "character at a MID ratio of 4 to 5 heads tall: the head is clearly "
+        "larger than realistic but the body still has real shoulders, waist and "
+        "legs. Faces stay expressive and slightly enlarged. Hold this ratio in "
+        "EVERY panel, including wide shots."),
+    "ld": (
+        "HEAD-TO-BODY RATIO — draw every character at a REALISTIC ratio of 7 to "
+        "8 heads tall, with correct adult anatomy and a head that is small "
+        "relative to the body. Hold this ratio in EVERY panel."),
+}
+HEAD_RATIO_LABEL = {"sd": "SD (2~3등신)", "md": "MD (4~5등신)", "ld": "LD (7~8등신)"}
+
+
+def sticker_flat(cfg: dict[str, Any]) -> bool:
+    """스티커 평면화 문구를 붙일까. config 의 flat_stickers 로 켠다(기본 꺼짐)."""
+    return bool(cfg.get("flat_stickers"))
+
+
+def head_ratio(cfg: dict[str, Any]) -> str:
+    """config 의 head_ratio 값. 비었거나 모르는 값이면 빈 문자열(=그림체 기본)."""
+    key = str(cfg.get("head_ratio") or "").strip().lower()
+    return key if key in HEAD_RATIO else ""
+
+
+def head_ratio_tail(cfg: dict[str, Any]) -> str:
+    """등신 비율 덮어쓰기 문구. head_ratio 가 없으면 빈 문자열이라 예전과 같다."""
+    key = head_ratio(cfg)
+    return HEAD_RATIO[key] if key else ""
+
+
+# --------------------------------------------------------------------------- #
+# 스티커 평면화 — 실사용자 지적 "스티커가 3D 느낌이라 그림체와 안 맞는다"
+# --------------------------------------------------------------------------- #
+# 여기서 말하는 스티커는 그림 안에 그려지는 작은 장식들이다 — 땀방울, 하트,
+# 별, 반짝임, 화난 십자 표시, 물음표, 뭉게구름 같은 것. 이미지 모델은 아무 말이
+# 없으면 이것들을 **입체로** 그린다(그라데이션·하이라이트·드롭섀도). 그러면
+# 만화 그림 위에 3D 이모지를 얹은 것처럼 보여서 그림체와 따로 논다.
+STICKER_FLAT = (
+    "EMOTE MARKS AND SMALL SYMBOLS — sweat drops, hearts, stars, sparkles, "
+    "anger crosses, question and exclamation marks, puff clouds and similar "
+    "cartoon marks must be drawn COMPLETELY FLAT, in the same ink and the same "
+    "line weight as the rest of the drawing, as if inked by the same hand on "
+    "the same layer. They are part of the drawing, not stickers placed on top "
+    "of it. NO gradients, NO glossy highlights, NO drop shadows, NO bevels, NO "
+    "3D or plastic or emoji rendering, NO outer glow, and no rim of white "
+    "separating them from the art."
+)
+
+
 def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
              with_lock: bool = True, style_text: str = "",
              prev: "Scene | None" = None, nxt: "Scene | None" = None) -> str:
@@ -719,7 +886,7 @@ def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
     rows = []
     for i, text in enumerate(scene.panels, 1):
         cut = scene.cuts[i - 1] if i - 1 < len(scene.cuts) else {}
-        extra_clauses = panel_clauses(cfg, cut)
+        extra_clauses = panel_clauses(cfg, cut, text)
         rows.append(f"Panel {i}: {text.strip()}"
                     + (f" {extra_clauses}" if extra_clauses else ""))
     panels = "\n".join(rows)
@@ -743,6 +910,13 @@ def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
     tail = str(cfg.get("global_suffix") or "").strip()
     if tail:
         text = f"{text.rstrip()}\n{tail}"
+    # 등신 비율은 그림체 문구(PROPORTION)를 덮어써야 하므로 그보다 뒤에 온다.
+    # head_ratio 를 안 적으면 빈 문자열이라 예전 프롬프트와 한 글자도 안 다르다.
+    ratio = head_ratio_tail(cfg)
+    if ratio:
+        text = f"{text.rstrip()}\n{ratio}"
+    if sticker_flat(cfg):
+        text = f"{text.rstrip()}\n{STICKER_FLAT}"
     text = f"{text.rstrip()}\n{lettering_tail(cfg)}"
     if monochrome(cfg):
         text = f"{text.rstrip()}\n{mono_tail(cfg)}"
@@ -859,7 +1033,50 @@ def treatment_text(cfg: dict[str, Any] | None) -> str:
             "temperature shifts, saturated accents, desaturation); reach for the "
             "ink techniques instead — heavy blacks, hatching, halftone, speed "
             "lines, focus lines, white slash trails.")
+    # 장르가 있으면 톤의 상한을 말해 준다. 실사용자 지적(2026-08): 로맨스 판타지를
+    # 골랐는데 "덫에 걸린 생쥐" 장면이 피 묻은 덫과 새빨간 조명의 공포 연출로
+    # 나왔다 — "공포 느낌을 따로 작성하지 않았는데 뭔가 공포 분위기로 간 것 같다."
+    #
+    # 원인은 이 단계가 **소재만 보고 톤을 정하기 때문**이다. 덫·숲·밤이라는
+    # 낱말만 있으면 모델은 그 조합의 가장 극적인 그림(=공포)으로 간다. 장르는
+    # 여기까지 한 번도 전달된 적이 없었다 (scenegen 전체에 genre 가 없었다).
+    warn = genre_tone_guard(cfg)
+    if warn:
+        rows.append("")
+        rows.append(warn)
     return "\n".join(rows)
+
+
+# 어두운 톤이 **장르상 맞는** 장르들. 여기 속하면 톤 상한을 걸지 않는다.
+DARK_GENRES = ("스릴러", "공포", "호러", "오컬트", "좀비", "느와르", "미스터리",
+               "thriller", "horror", "occult", "zombie", "noir", "mystery")
+
+GENRE_TONE_GUARD = (
+    "TONE CEILING — this episode's genre is {genre}, which is NOT a horror or "
+    "thriller genre. Do not let the subject matter alone push the panel into "
+    "horror. A trap, a forest at night, an injured animal, a dark corridor or a "
+    "wound is a situation, not a horror scene: draw it with the tension the "
+    "story asks for and no more. Specifically, do NOT reach for blood-red or "
+    "sickly green key light, blood smears, gore, dread-filled negative space, "
+    "or a threatening presence in the dark unless the scene's own mood line "
+    "explicitly calls for fear. When a night or forest scene needs atmosphere, "
+    "reach for cool moonlight, blue and green shadow, mist and warm lantern "
+    "light instead."
+)
+
+
+def genre_tone_guard(cfg: dict[str, Any] | None) -> str:
+    """장르가 어두운 계열이 아니면 톤 상한 문구를 준다. 장르가 없으면 빈 문자열.
+
+    장르를 config 에 안 넣은 예전 run 은 빈 문자열이라 프롬프트가 안 바뀐다.
+    """
+    genre = str((cfg or {}).get("genre") or "").strip()
+    if not genre:
+        return ""
+    low = genre.lower()
+    if any(word in low for word in DARK_GENRES):
+        return ""
+    return GENRE_TONE_GUARD.format(genre=genre)
 
 
 def build_prompt(template: str, title: str, scenes: list[Scene],
@@ -872,10 +1089,17 @@ def build_prompt(template: str, title: str, scenes: list[Scene],
         row.update(scene_intent(story_scenes or [], sc.scene_number))
         row["cuts"] = [_cut_for_prompt(c) for c in sc.cuts]
         payload.append(row)
+    # 이번 화 컷 서술·대사에 등장하는 태그와 겹치는 연출 지식만 골라 붙인다 —
+    # story-harness 의 resolve_directing_notes 와 같은 저장소, 같은 방식.
+    haystack = " ".join(
+        f"{c.get('description', '')} {c.get('dialogue', '')}"
+        for row in payload for c in row["cuts"])
+    directing_notes = directing.resolve_notes(directing.DEFAULT_ROOT, haystack)
     return (template.replace("{episode_title}", title)
                     .replace("{scene_count}", str(len(scenes)))
                     .replace("{staging}", staging_text(setting))
                     .replace("{treatment_guide}", treatment_text(cfg))
+                    .replace("{directing_notes}", directing_notes or "(none)")
                     .replace("{scenes_json}", json.dumps(payload, ensure_ascii=False, indent=2)))
 
 

@@ -75,6 +75,104 @@ empty        : 말풍선을 얹어도 **얼굴이나 중요한 것을 가리지 
 다른 말 없이 JSON 만 출력하세요."""
 
 
+# --------------------------------------------------------------------------- #
+# 작화 사고 검수 — 실사용자 지적으로 새로 만든 것 (2026-08)
+# --------------------------------------------------------------------------- #
+# "덫에 걸린 생쥐의 머리가 발로 되어 있고, 새싹이 그 위에 자라나 있는 등
+#  ai 생성물의 어색함이 드러난다."
+#
+# 이런 것은 프롬프트로 못 막는다 — 모델은 자기가 손가락을 여섯 개 그린 줄
+# 모른다. 그린 다음에 **보고** 잡는 수밖에 없다. 그래서 그림을 그린 것과 같은
+# 계열의 모델에게 "이 그림에 이상한 것이 있냐"고 되묻는다.
+#
+# ★ 기본으로 돌지 않는다. 컷마다 API 호출이 한 번씩 더 붙어서 원가가 오른다
+#   (지금도 1회 생성 1,600원 vs 지불 의사 700~800원으로 역마진이다).
+#   run.py --check-art 로 켤 때만 돈다.
+# ★ 판정이 아니라 **제보**다. 여기서 이상하다고 한 컷을 자동으로 다시 뽑지
+#   않는다. 오탐이 있을 수밖에 없고, 다시 뽑는 것은 또 돈이 드는 일이라
+#   사람이 보고 정하는 편이 맞다.
+INSPECT_ASK = """이 웹툰 컷 그림에 **그림 자체의 사고**가 있는지 보고 JSON 으로만 답하세요.
+
+찾는 것 — 이미지 생성 모델이 흔히 내는 사고입니다:
+- 손·발이 잘못 붙었거나 개수가 틀림 (손가락 6개, 발이 머리 자리에 붙음 등)
+- 몸의 일부가 사라졌거나 두 번 그려짐, 팔다리가 몸과 안 이어짐
+- 동물·사물의 구조가 말이 안 됨 (머리와 다리가 뒤바뀜 등)
+- 있어야 할 곳이 아닌 데서 자라거나 솟은 것 (몸 위의 새싹, 벽을 뚫은 가구)
+- 물건이 공중에 떠 있거나 손을 통과함
+- 얼굴이 녹거나 눈이 짝짝이로 뭉개짐
+- 글자가 글자처럼 보이지만 읽을 수 없음
+
+찾지 않는 것 — 이것들은 사고가 아닙니다:
+- 그림체·화풍·색감이 취향에 안 맞는 것
+- 구도나 연출이 밋밋한 것
+- 만화적 과장 (큰 눈, 과장된 표정, 데포르메)
+
+{{"issues": [{{"box": [y,x,y,x], "what": "무엇이 어떻게 잘못됐는지 한 줄",
+              "severity": "high 또는 low"}}]}}
+
+box       : **0~1000 정규화**한 [ymin, xmin, ymax, xmax].
+severity  : high = 독자가 바로 알아본다. low = 뜯어봐야 보인다.
+이상이 없으면 issues 를 빈 배열로 두세요.
+
+확신이 없으면 넣지 마세요 — 없는 것을 있다고 하는 편이 더 나쁩니다.
+다른 말 없이 JSON 만 출력하세요."""
+
+
+def inspect_art(img, api_key: str, model: str,
+                timeout: float = 180.0) -> list[dict[str, Any]]:
+    """이 컷에 작화 사고가 있는지 묻는다. [{box, what, severity}] 로 돌려준다.
+
+    locate() 와 같은 길을 쓴다 — 같은 엔드포인트, 같은 축소, 같은 좌표 규약.
+    실패하면 VisionError 를 던진다. 부르는 쪽(run.py)이 잡아서 경고만 찍고
+    넘어간다 — 검수가 안 됐다고 그림 생성을 멈출 이유는 없다.
+    """
+    import requests
+
+    w, h = img.size
+    body = {
+        "contents": [{"role": "user", "parts": [
+            {"text": INSPECT_ASK},
+            {"inline_data": {"mime_type": "image/png", "data": _b64(img)}}]}],
+        "generationConfig": {"temperature": 0.1},
+    }
+    try:
+        resp = requests.post(
+            ENDPOINT.format(model=model),
+            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+            json=body, timeout=timeout)
+    except Exception as exc:
+        raise VisionError(f"작화 검수 요청 실패: {exc}") from exc
+    if resp.status_code != 200:
+        raise VisionError(f"작화 검수 요청 실패 ({resp.status_code}): {resp.text[:200]}")
+
+    text = ""
+    for cand in resp.json().get("candidates") or []:
+        for part in (cand.get("content") or {}).get("parts") or []:
+            text += part.get("text") or ""
+    m = re.search(r"\{.*\}", text, re.S)
+    if not m:
+        raise VisionError(f"검수 JSON 을 찾지 못했습니다: {text[:200]}")
+    try:
+        raw = json.loads(m.group(0))
+    except json.JSONDecodeError as exc:
+        raise VisionError(f"검수 JSON 을 읽지 못했습니다: {exc}") from exc
+
+    out = []
+    for it in raw.get("issues") or []:
+        if not isinstance(it, dict):
+            continue
+        what = str(it.get("what") or "").strip()
+        if not what:
+            continue
+        sev = str(it.get("severity") or "low").strip().lower()
+        out.append({
+            "box": _to_px(it.get("box"), w, h),
+            "what": what,
+            "severity": "high" if sev == "high" else "low",
+        })
+    return out
+
+
 def _b64(img, fmt="PNG") -> str:
     small = img.copy()
     small.thumbnail((PROBE_MAX, PROBE_MAX))

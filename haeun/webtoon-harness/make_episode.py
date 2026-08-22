@@ -37,7 +37,14 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STORY = Path("C:/lore/story-harness")
+STORY = HERE.parent / "story-harness"
+
+# story.py/webtoon.py 의 STATUS_OK·STATUS_HUMAN 과 같은 문자열이다. 두 CLI 모두
+# 게이트가 소진돼 사람 확인이 필요한 상태에서도 프로세스 종료 코드는 0 을
+# 낸다(각자의 main() 이 항상 return 0) — 그래서 exit code 만으로는 못 잡고,
+# 각 단계가 남긴 meta.json 의 status 를 직접 읽어야 한다.
+STATUS_OK = "ok"
+STATUS_HUMAN = "사람확인필요"
 
 # 콘솔이 cp949 면 '—' 같은 문자에서 print 가 UnicodeEncodeError 로 죽는다.
 # 안내 문구 하나 때문에 실행이 멈추면 안 되므로 못 찍는 글자는 대체 문자로
@@ -78,6 +85,17 @@ def blind_done(runs: Path, run_id: str) -> bool:
     return csv.exists() and run_id in csv.read_text(encoding="utf-8-sig", errors="ignore")
 
 
+def stage_status(meta_path: Path) -> tuple[str | None, str]:
+    """단계가 남긴 meta.json 의 (status, note). 없거나 못 읽으면 (None, "")."""
+    if not meta_path.exists():
+        return None, ""
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None, ""
+    return data.get("status"), data.get("note") or ""
+
+
 def main() -> int:
     p = argparse.ArgumentParser(
         description="웹툰 1화를 끝까지 만든다 (스토리 → 시트 → 컷 → 그림).")
@@ -114,6 +132,22 @@ def main() -> int:
         print(f"\n[중단] {runs / run_id} 에 p1.json 이 없습니다.")
         return 1
 
+    status, note = stage_status(runs / run_id / "meta.json")
+    if status == STATUS_HUMAN:
+        print(f"\n{'=' * 78}")
+        print("[사람이 할 차례] 스토리 단계 게이트 재시도가 소진돼 사람 확인이 필요합니다.")
+        if note:
+            print(f"  {note}")
+        print(f"    cd {STORY}")
+        print(f"    python story.py --character <카드 수정> 로 다시 만들거나,")
+        print(f"    또는 이 run_id 로 그대로 진행할지 직접 판단하세요.")
+        return 2
+    elif status not in (None, STATUS_OK):
+        print(f"\n[중단] 스토리 단계가 실패로 끝났습니다 ({status}).")
+        if note:
+            print(f"  {note}")
+        return 1
+
     # ---- 2. 재미 판정 — 사람만 하는 일 ------------------------------------ #
     if not blind_done(runs, run_id):
         print(f"\n{'=' * 78}")
@@ -147,9 +181,26 @@ def main() -> int:
     cuts = runs / run_id / "webtoon" / f"ep{args.episode:02d}_cuts.json"
     if cuts.exists():
         print(f"\n[콘티] {cuts.name} 이 이미 있습니다 — 건너뜁니다.")
-    elif run(["webtoon.py", "--run", run_id], STORY) != 0:
-        print("\n[중단] 콘티 생성이 실패했습니다.")
-        return 1
+    else:
+        if run(["webtoon.py", "--run", run_id], STORY) != 0:
+            print("\n[중단] 콘티 생성이 실패했습니다.")
+            return 1
+        # webtoon.py 의 main() 도 STATUS_HUMAN/실패에서 종료 코드는 항상 0 이라
+        # (story.py 와 같은 사정) meta.json 을 따로 읽어야 한다.
+        status, note = stage_status(runs / run_id / "webtoon" / "meta.json")
+        if status == STATUS_HUMAN:
+            print(f"\n{'=' * 78}")
+            print("[사람이 할 차례] 콘티 단계 게이트 재시도가 소진돼 사람 확인이 필요합니다.")
+            if note:
+                print(f"  {note}")
+            print(f"    cd {STORY}")
+            print(f"    python webtoon.py --run {run_id} --resume  # 확인 후 이어서")
+            return 2
+        elif status not in (None, STATUS_OK):
+            print(f"\n[중단] 콘티 단계가 실패로 끝났습니다 ({status}).")
+            if note:
+                print(f"  {note}")
+            return 1
 
     # ---- 5. 그림 ---------------------------------------------------------- #
     cmd = ["run.py", "--run-id", run_id, "--episode", str(args.episode),

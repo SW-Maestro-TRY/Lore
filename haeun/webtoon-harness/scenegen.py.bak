@@ -1,0 +1,1029 @@
+"""Scene 모드 — 컷 여러 개를 "웹툰 페이지 한 장"으로 묶어 한 번에 생성.
+
+컷 모드는 컷 1개 = 이미지 1장이다. Scene 모드는 컷 N개(기본 3) = 이미지 1장이며,
+한 장 안에 패널이 여러 개 들어간다. 컷 10개 기준 호출 수가 30회에서 12회로 준다.
+
+두 모드를 나란히 비교하는 것이 목적이므로 프롬프트의 고정 부분(외형·스타일)은
+컷 모드와 글자 그대로 같게 쓴다. 달라지는 것은 두 가지뿐이다:
+  1) 장면 서술이 패널 여러 개로 묶여 들어간다 (prompts/scene_gen.txt)
+  2) 레이아웃 지시가 붙는다 (config 의 layout_templates)
+
+말풍선은 모델이 빈 껍데기만 그리고, 글자는 뷰어가 그 위에 얹는다. CSS 로 그린
+말풍선은 그림과 따로 놀았기 때문이다 — 선 굵기도 질감도 원근도 맞지 않는다.
+그래서 코드가 맨 끝에 강제로 붙이는 문구는 "말풍선 금지" 가 아니라
+"말풍선 안의 글자 금지" 다. config 로 끌 수 없다.
+효과음은 반대로 그림에 녹아드는 레터링이라 모델이 글자까지 직접 그린다.
+"""
+
+from __future__ import annotations
+
+import json
+import random
+import re
+from dataclasses import dataclass, field
+from typing import Any
+
+import directing
+
+CACHE_FILE = "scenes.json"
+
+# --------------------------------------------------------------------------- #
+# 글자를 누가 그리는가 — scene.lettering 이 정한다.
+#
+#   overlay   말풍선은 빈 껍데기로 그리고 글자는 뷰어가 얹는다. 한글이 절대
+#             안 깨지지만, 말풍선 모양과 글자가 따로 논다.
+#   in_image  대사·나레이션·속마음까지 모델이 그림 안에 직접 그린다. 효과음을
+#             이미 그렇게 맡기고 있으므로 같은 논리다. 한글이 깨질 수 있고,
+#             깨지는지는 뽑아 봐야 안다.
+#
+# 어느 쪽이든 코드가 프롬프트 맨 끝에 강제로 한 줄을 박는다. config 로 문구를
+# 바꿀 수는 없고, 어느 쪽을 쓸지만 고른다.
+# --------------------------------------------------------------------------- #
+#   none      말풍선도 그리지 않는다. 컷은 그림만이고 글자는 **전부** 후처리다.
+#             액션 컷용이다 — 풍선과 효과음 레터링이 얹히는 순간 그 컷은
+#             "그림 한 장"이 아니라 "완성된 만화 페이지"가 되고, 동작이 아니라
+#             레터링이 먼저 읽힌다. 자리 비우기(bubble_zone)는 그대로 둔다.
+#   sfx_only  **효과음만** 그림에 굽고 말풍선·나레이션은 후처리한다.
+#             효과음은 레터링이 아니라 그림의 일부다 — 기울고, 깨지고, 인물
+#             뒤로 지나가고, 칸 밖으로 넘친다. 그걸 나중에 얹으면 그냥 글자가
+#             된다. 반대로 대사 풍선은 위치가 바뀌기 쉬워서 후처리가 낫다.
+#             none 으로 두면 효과음까지 사라져 웹툰다움이 눈에 띄게 준다.
+LETTERING_MODES = ("in_image", "overlay", "none", "sfx_only")
+
+NO_TEXT = "No dialogue text, no lettering inside bubbles, no watermark."
+DRAW_TEXT = (
+    "Draw the Korean text inside every speech bubble, caption box and thought "
+    "bubble, exactly as given, in clean legible Hangul at a readable size. "
+    "No watermark.")
+NO_BUBBLE = (
+    "Draw NO speech bubbles, NO thought bubbles, NO caption boxes, NO "
+    "sound-effect lettering and NO text of any kind anywhere in this image — not "
+    "in Korean, not in English, not as decoration. This is artwork only; every "
+    "balloon and every word is added afterwards. No watermark, no signature.")
+SFX_ONLY = (
+    "Draw NO speech bubbles, NO thought bubbles and NO caption boxes, and no "
+    "dialogue text of any kind — those are added afterwards. The ONLY lettering "
+    "in this image is the Korean sound effect described above, drawn as part of "
+    "the artwork. No watermark, no signature.")
+
+
+def lettering(cfg: dict[str, Any]) -> str:
+    """scene.lettering 값. 모르는 값이면 세운다 — 조용히 반대로 도는 것이 최악이다."""
+    mode = str((cfg.get("scene") or {}).get("lettering") or "in_image").strip().lower()
+    if mode not in LETTERING_MODES:
+        raise SceneError(
+            f'config.yaml 의 scene.lettering 값 "{mode}" 를 모릅니다. '
+            f"{' 또는 '.join(LETTERING_MODES)} 이어야 합니다.")
+    return mode
+
+
+def lettering_tail(cfg: dict[str, Any]) -> str:
+    mode = lettering(cfg)
+    if mode == "in_image":
+        return DRAW_TEXT
+    if mode == "sfx_only":
+        return SFX_ONLY
+    return NO_BUBBLE if mode == "none" else NO_TEXT
+
+
+# 흑백 그림체의 마지막 못. assemble() 이 프롬프트 **맨 끝**에 붙인다 — 같은
+# 파일의 seam 주석과 같은 이유다(모델은 마지막에 읽은 것을 가장 잘 지킨다).
+# 그림체 문구는 프롬프트 중간에 있고, 그 뒤로 조건 extra·조연·의상·머리·팔레트가
+# 줄줄이 따라오면서 "색"이라는 낱말이 여러 번 지나간다. 그중 하나라도 색을
+# 부르면 페이지 전체가 컬러로 돌아간다.
+MONO_TAIL = (
+    "FINAL CONSTRAINT, OVERRIDING EVERYTHING ABOVE: this image is BLACK INK ON "
+    "WHITE PAPER. There is no colour anywhere in it — not one tinted pixel. Skin, "
+    "hair, clothing, sky, fire, blood, petals and light are all rendered in black "
+    "ink and bare white paper. If anything above named a colour, draw it as its "
+    "value in ink instead. Not coloured, not sepia, not a single accent colour, "
+    "not a greyscale painting — inked line art.")
+
+# 스팟 컬러가 있을 때의 마지막 못. {spots} 자리에 "the eyes" 처럼 들어간다.
+# MONO_TAIL 을 그대로 쓰면 "색이 하나도 없다"가 스팟 컬러를 죽인다.
+SPOT_TAIL = (
+    "FINAL CONSTRAINT, OVERRIDING EVERYTHING ABOVE: this image is BLACK INK ON "
+    "WHITE PAPER, and the ONLY colour anywhere in it is {spots}. Everything else "
+    "— skin, hair, clothing, sky, fire, petals, light, effect lines — is black "
+    "ink and bare white paper with no tint at all. If anything above named a "
+    "colour for anything else, draw that as its value in ink instead. Not a "
+    "coloured illustration, not sepia, not a greyscale painting — line art with "
+    "one spot colour.")
+
+
+def monochrome(cfg: dict[str, Any]) -> bool:
+    """지금 그림체가 흑백인가. run.py 가 style_monochrome 에 넣어 둔다."""
+    return bool(cfg.get("style_monochrome"))
+
+
+def mono_tail(cfg: dict[str, Any], spots: bool = True) -> str:
+    """흑백 못. 스팟 컬러가 있으면 그것만 예외로 남기는 문장으로 바꾼다.
+
+    spots=False 는 **주인공이 안 나오는 컷**이다. 이 자리에서 "주인공의 붉은 눈만
+    색이다" 라고 말하면, 화면에 있는 사람이 조연뿐일 때 그 조연이 그 색을 가져간다
+    — 실제로 적장이 주인공의 붉은 눈을 달고 나왔다. 주인공이 없으면 스팟 컬러도
+    없으므로 완전 무채색으로 말한다.
+    """
+    keys = [str(k).strip() for k in (cfg.get("style_accent_keys") or []) if str(k).strip()]
+    if not keys or not spots:
+        return MONO_TAIL
+    joined = ", ".join(keys)
+    text = " and ".join(joined.rsplit(", ", 1)) if len(keys) > 1 else joined
+    return SPOT_TAIL.format(spots=f"the main character's {text}")
+
+
+class SceneError(RuntimeError):
+    """Scene 분해/프롬프트 생성 실패. run.py 가 사람이 읽을 메시지로 바꿔 출력한다."""
+
+
+@dataclass
+class Scene:
+    scene_number: int
+    cuts: list[dict[str, Any]]          # prompts.json 의 컷 dict 그대로
+    panels: list[str] = field(default_factory=list)   # 패널별 영어 장면 서술 (LLM)
+    layout: str = ""                    # config layout_templates 중 하나
+    warnings: list[str] = field(default_factory=list)  # 금지어 lint 결과
+
+    @property
+    def gap_after(self) -> int:
+        """이 Scene 뒤의 여백 = 마지막 컷의 gap_after. 연출이 없으면 1(보통)."""
+        if not self.cuts:
+            return 1
+        gap = self.cuts[-1].get("gap_after")
+        return gap if isinstance(gap, int) and 0 <= gap <= 3 else 1
+
+    @property
+    def beats(self) -> list[str]:
+        return [str(c.get("beat") or "") for c in self.cuts]
+
+    @property
+    def cut_numbers(self) -> list[int]:
+        return [int(c["cut_number"]) for c in self.cuts]
+
+    @property
+    def label(self) -> str:
+        nums = self.cut_numbers
+        return f"컷 {nums[0]}" if len(nums) == 1 else f"컷 {nums[0]}~{nums[-1]}"
+
+    def description(self) -> str:
+        return "\n".join(f"[컷 {c['cut_number']}] {c.get('description') or ''}"
+                         for c in self.cuts)
+
+    def dialogue(self) -> str:
+        mark = {"dialogue": "", "narration": "N ", "thought": "T ", "sfx": "SFX "}
+        lines = []
+        for c in self.cuts:
+            for key in ("dialogue", "narration", "thought", "sfx"):
+                text = str(c.get(key) or "").strip()
+                if text:
+                    lines.append(f"[컷 {c['cut_number']}] {mark[key]}{text}")
+        return "\n".join(lines)
+
+    def reader_only(self) -> bool:
+        return any(c.get("reader_only") for c in self.cuts)
+
+
+def group(cuts: list[dict[str, Any]], per: int) -> list[Scene]:
+    """컷 목록을 앞에서부터 per 개씩 묶는다. 마지막 묶음은 짧을 수 있다.
+
+    연출(W7.5)이 없는 run 의 예비 경로다. 개수로 자르면 경계가 아무 데나 떨어진다 —
+    설명하다 만 자리에서 화면이 넘어가고, 궁금증이 남지 않는다.
+    """
+    if per < 1:
+        raise SceneError("config.yaml 의 scene.cuts_per_scene 은 1 이상이어야 합니다.")
+    return [Scene(scene_number=i, cuts=cuts[s:s + per])
+            for i, s in enumerate(range(0, len(cuts), per), 1)]
+
+
+def group_by_break(cuts: list[dict[str, Any]],
+                   max_cuts: int = 0) -> list[Scene]:
+    """scene_break 가 true 인 컷 뒤에서 끊는다 (W7.5 연출 기반).
+
+    개수가 아니라 리듬이 경계를 정한다. beat 가 hold/turn 으로 끝나는 자리에서만
+    끊기므로, 화면 한 번이 끝날 때마다 작은 궁금증이 남는다.
+
+    다만 한 장에 들어갈 수 있는 컷 수에는 물리적인 한계가 있다. 캔버스는
+    9:16(세로 1.78배)이 최대인데 거기에 컷 4개를 넣으라고 하면 모델은 격자를
+    만든다 — 세로 스크롤이 아니라 만화 페이지가 된다. 그래서 리듬이 정한
+    경계는 그대로 두되, 너무 커진 묶음만 앞에서부터 잘라 나눈다.
+
+    max_cuts=0 이면 자르지 않는다 (예전 동작).
+    """
+    scenes: list[Scene] = []
+    bucket: list[dict[str, Any]] = []
+
+    def flush(b: list[dict[str, Any]]) -> None:
+        """리듬 경계는 살리되 크기 상한만 지킨다. 넘치면 **고르게** 나눈다.
+
+        앞에서부터 max 씩 잘랐더니 4컷이 3+1 이 되어 마지막 컷이 혼자 한 장을
+        받았다. 그 컷이 인서트(사물·화면)면 사물 하나가 캔버스를 통째로 먹는다 —
+        실제로 휴대폰 한 대가 한 장이 됐다.
+
+        그래서 조각 수만 정하고 나머지를 앞쪽부터 하나씩 나눠 준다:
+        4컷·상한3 → 2+2, 5컷·상한3 → 3+2, 7컷·상한3 → 3+2+2.
+        혼자 남는 컷이 없어지고 묶음 크기도 덜 튄다.
+        """
+        if not (max_cuts and len(b) > max_cuts):
+            scenes.append(Scene(scene_number=len(scenes) + 1, cuts=b))
+            return
+        parts = -(-len(b) // max_cuts)          # 올림
+        base, extra = divmod(len(b), parts)
+        at = 0
+        for i in range(parts):
+            take = base + (1 if i < extra else 0)
+            scenes.append(Scene(scene_number=len(scenes) + 1,
+                                cuts=b[at:at + take]))
+            at += take
+
+    for c in cuts:
+        bucket.append(c)
+        if c.get("scene_break"):
+            flush(bucket)
+            bucket = []
+    if bucket:                       # 마지막 컷에 경계가 없으면 남은 것을 한 장으로
+        flush(bucket)
+    if not scenes:
+        raise SceneError("컷이 없어 Scene 을 만들 수 없습니다.")
+    return scenes
+
+
+def assign_layouts(scenes: list[Scene], templates: list[str], mode: str, seed: str) -> None:
+    """Scene 마다 레이아웃 템플릿을 하나씩 붙인다.
+
+    random 이어도 seed(run_id+화)로 고정한다. 다시 실행할 때 레이아웃이 바뀌면
+    "레이아웃이 달라서 좋아진 건지 조건이 달라서 좋아진 건지"를 알 수 없다.
+    """
+    if not templates:
+        raise SceneError("config.yaml 의 scene.layout_templates 가 비어 있습니다. "
+                         "레이아웃 지시는 Scene 모드의 핵심 변수입니다.")
+    order = list(range(len(templates)))
+    if str(mode).strip().lower() == "random":
+        random.Random(seed).shuffle(order)
+    elif str(mode).strip().lower() != "cycle":
+        raise SceneError(f'config.yaml 의 scene.layout_pick 값 "{mode}" 를 모릅니다. '
+                         f"cycle 또는 random 이어야 합니다.")
+    for i, sc in enumerate(scenes):
+        sc.layout = str(templates[order[i % len(order)]]).strip()
+
+
+# --------------------------------------------------------------------------- #
+# 말풍선 / 효과음 / 화면 보정 — 코드가 고르고 코드가 박는다.
+#
+# scene_gen(LLM)은 패널 **안의 내용**만 쓴다. 모양을 고르는 일까지 맡기면 매번
+# 조금씩 달라져서 "이번엔 왜 다르지"를 추적할 수 없고, --dry-run 으로 미리 볼
+# 수도 없다. 여기서 고르면 호출 없이 전부 눈으로 확인된다.
+# --------------------------------------------------------------------------- #
+SHOUT = re.compile(r"[!！]")
+TRAIL = re.compile(r"(\.\.\.|[…⋯])")
+ARTICLE = re.compile(r"^(a|an)\s+", re.IGNORECASE)
+# 모양 문구가 이미 크기를 말하고 있으면(속삭임의 "small ...") 크기를 또 붙이지 않는다.
+HAS_SIZE = re.compile(r"^(small|medium|large|big|huge|tiny)\b", re.IGNORECASE)
+
+
+def _phrase(text: str) -> str:
+    """config 의 모양 문구에서 맨 앞 관사를 뗀다. 앞에 크기 낱말을 붙여야 하는데
+    그대로 두면 "A medium a caption ..." 이 된다."""
+    return ARTICLE.sub("", str(text or "").strip())
+
+
+def bubble_kind(cut: dict[str, Any], field: str) -> str:
+    """이 글자에 어떤 말풍선을 씌울지. w7 이 bubble_shape 를 주면 그것이 우선."""
+    given = str(cut.get("bubble_shape") or "").strip().lower()
+    if given:
+        return given
+    if field == "narration":
+        return "narration"
+    if field == "thought":
+        return "thought"
+    if cut.get("reader_only"):
+        return "flashback"
+    text = str(cut.get(field) or "").strip()
+    if SHOUT.search(text):
+        return "shout"
+    if TRAIL.search(text) or (text.startswith("(") and text.endswith(")")):
+        return "whisper"
+    return "normal"
+
+
+SPEECH_KINDS = ("narration", "dialogue", "thought")
+
+
+def speech_rows(cut: dict[str, Any]) -> list[dict[str, Any]]:
+    """이 컷의 말 목록 [{kind, text, speaker, side}].
+
+    cut_rows() 가 실어 준 lines 가 있으면 그것이 전부다. 없으면(옛 run) 옛 세
+    칸에서 같은 모양을 만든다. storyload.speech_lines 와 같은 규칙이며, 이쪽은
+    Cut 객체가 아니라 **dict** 를 받는다.
+    """
+    rows = cut.get("lines")
+    if isinstance(rows, list) and rows:
+        out = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            text = str(row.get("text") or "").strip()
+            kind = str(row.get("kind") or "dialogue").strip().lower()
+            if text and kind in SPEECH_KINDS:
+                out.append({"kind": kind, "text": text,
+                            "speaker": str(row.get("speaker") or "").strip(),
+                            "side": str(row.get("side") or "").strip().lower()})
+        return out
+    speaker = str(cut.get("speaker") or "").strip()
+    side = str(cut.get("speaker_side") or "").strip().lower()
+    out = []
+    for kind in SPEECH_KINDS:
+        text = str(cut.get(kind) or "").strip()
+        if not text:
+            continue
+        out.append({"kind": kind, "text": text,
+                    "speaker": "" if kind == "narration" else speaker,
+                    "side": "" if kind == "narration" else side})
+    return out
+
+
+def bubble_clause(cfg: dict[str, Any], cut: dict[str, Any]) -> list[str]:
+    """이 컷의 대사·나레이션·속마음을 그릴 지시. 글자를 넣을지는 lettering 이 정한다."""
+    shapes = dict((cfg.get("scene") or {}).get("bubbles") or {})
+    mode = lettering(cfg)
+    if not shapes or mode in ("none", "sfx_only"):
+        # 둘 다 풍선 자체를 안 그린다. 자리는 bubble_zone_clause 가 비워 둔다.
+        return []
+    draw = mode == "in_image"
+    out: list[str] = []
+    rows = speech_rows(cut)
+    multi = len([r for r in rows if r["kind"] != "narration"]) > 1
+    for row in rows:
+        field, text = row["kind"], row["text"]
+        kind = bubble_kind(cut, field)
+        shape = _phrase(shapes.get(kind) or shapes.get("normal") or "")
+        if not shape:
+            continue
+        # 말풍선 꼬리를 누구에게 붙일지. 콘티가 speaker 를 정해 보내므로 짐작하지
+        # 않는다 — 세 사람이 주고받는 장면에서 꼬리가 엉뚱한 쪽을 가리키면 대사가
+        # 통째로 다른 사람 것이 된다. 나레이션 상자는 화자가 없다.
+        tail = ""
+        who = row["speaker"] or str(cut.get("speaker") or "").strip()
+        side = row["side"] or str(cut.get("speaker_side") or "").strip().lower()
+        if who and field in ("dialogue", "thought"):
+            tail = (" Its tail points at the character who is speaking"
+                    if field == "dialogue" else
+                    " It belongs to the character whose inner voice this is")
+            tail += " (the same person in every panel where they appear)."
+            # 한 컷에 풍선이 둘 이상이면 좌우를 못박아야 꼬리가 갈라지고 읽는
+            # 순서가 선다. 하나뿐이면 배치는 그리는 쪽에 맡긴다.
+            if multi and side in ("left", "right", "center"):
+                tail += (f" This bubble sits on the {side} side of the panel."
+                         if side != "center" else
+                         " This bubble sits in the middle of the panel.")
+        if draw:
+            # 글자가 실제로 들어가므로 길이에 맞는 크기가 중요해진다.
+            size = ("small" if len(text) <= 10 else
+                    "medium" if len(text) <= 25 else "large")
+            head = shape if HAS_SIZE.match(shape) else f"{size} {shape}"
+            out.append(f'A {head}, carrying the Korean text "{text}" '
+                       f"in clean legible Hangul.{tail}")
+        else:
+            out.append(f"A {shape}, completely blank inside with "
+                       f"no lettering.{tail}")
+    if len(out) > 1:
+        out.append(f"There are {len(out)} separate balloons in this panel; "
+                   "arrange them so the reader reads them top to bottom in the "
+                   "order given, and keep them from overlapping each other or "
+                   "covering a face.")
+    return out
+
+
+def sfx_clause(cfg: dict[str, Any], cut: dict[str, Any]) -> list[str]:
+    """효과음 — **낱말만** 코드가 보장한다. 어떻게 생겼는지는 scene_gen 이 쓴다.
+
+    낱말을 코드가 쥐는 이유: 한글이 정확해야 하고, 굽기 전에 눈으로 확인되어야
+    한다. LLM 이 다시 쓰면 "스윽" 이 "스슥" 이 된다.
+
+    꾸미는 방식을 넘긴 이유: 예전에는 beat 로 골랐다. 그런데 beat 는 이야기의
+    리듬이지 소리가 아니다 — "쿵" 과 "톡톡톡" 이 같은 beat 에 있으면 같은
+    레터링을 받았다. 어떤 소리인지 아는 것은 그 패널을 쓰는 쪽뿐이다.
+
+    **lettering 모드를 따른다.** 예전에는 모드와 무관하게 언제나 이미지에
+    구웠다 — 효과음은 그림에 녹아드는 레터링이라는 이유였는데, 그 결과
+    overlay 모드에서도 한글이 깨질 수 있는 자리가 하나 남아 있었다. 글자를
+    합성으로 돌리기로 한 이상 예외를 둘 이유가 없다.
+    """
+    text = str(cut.get("sfx") or "").strip()
+    if not text:
+        return []
+    if lettering(cfg) not in ("in_image", "sfx_only"):
+        # 자리만 비워 둔다. 실제 글자는 뷰어가(none 이면 사람이) 얹는다.
+        return ["Leave clear empty space in this panel where a hand-lettered "
+                "sound effect will be placed later — no lettering drawn here."]
+    return [f'The Korean sound effect "{text}" is drawn into this panel as '
+            f'lettering, spelled exactly as written.']
+
+
+# 화면 안 글자 — 휴대폰·모니터·전광판. 말풍선이 아니라 UI 다.
+#
+# 이미지 모델은 한글 UI 를 못 그린다. 단톡방 문구를 서술에 적어 넘겼더니 글자가
+# 아예 안 나오거나 뭉개진 획이 나왔다. 그래서 **화면은 비워 그리게 하고** 글자는
+# 합성한다 — lettering 모드와 무관하게 언제나 그렇다. 말풍선과 달리 여기는
+# 선택지가 없다: 한글 UI 를 그려 달라고 하면 반드시 깨진다.
+SCREEN_UI_CLAUSE = (
+    "A device screen ({where}) is clearly visible in this panel, angled so its "
+    "full face reads flat to the camera. Draw the screen's frame, glow and "
+    "surroundings but leave the screen surface itself EMPTY — a clean blank "
+    "panel of even colour with no text, no icons, no UI chrome of any kind. "
+    "Korean text will be composited onto it afterwards.")
+
+
+def screen_ui_clause(cfg: dict[str, Any], cut: dict[str, Any]) -> list[str]:
+    """휴대폰·모니터 화면 안의 글자. 화면은 비워 그리고 글자는 합성한다."""
+    text = str(cut.get("screen_text") or "").strip()
+    if not text:
+        return []
+    where = str((cfg.get("scene") or {}).get("screen_ui_hint")
+                or "a phone screen").strip()
+    return [SCREEN_UI_CLAUSE.format(where=where)]
+
+
+# 말풍선이 놓일 자리를 비워 두라는 지시. 보장이 아니라 확률을 올리는 힌트다 —
+# 최종 안전장치는 합성 단계(bubbles.py)이고, 이건 그 앞에서 얼굴 위에 글자가
+# 얹히는 경우를 줄인다.
+ZONE_WORDS = {
+    "top": "the upper third", "bottom": "the lower third",
+    "left": "the left third", "right": "the right third",
+    "center": "the middle",
+}
+
+
+def bubble_zone_clause(cut: dict[str, Any]) -> list[str]:
+    """이 컷에서 글자가 놓일 자리를 비워 두라는 한 줄."""
+    where = ZONE_WORDS.get(str(cut.get("bubble_zone") or "").strip().lower())
+    if not where:
+        return []
+    return [f"Keep {where} of this panel visually quiet — no faces and no "
+            f"important detail there. Speech balloons will sit in that space."]
+
+
+def treatment_clause(cfg: dict[str, Any], cut: dict[str, Any]) -> list[str]:
+    """연출이 컷에 직접 적어 둔 보정만 박는다.
+
+    beat 로 고르던 고정 문구는 없앴다. 13컷짜리 한 화에 같은 문장이 4번·3번
+    그대로 반복됐다 — build 비트면 무조건 같은 vignette 였다. 같은 비트라도
+    잔디밭 낮과 밤 복도는 다른 보정을 받아야 하는데 코드는 그 차이를 모른다.
+    지금은 어휘(scene.treatment_guide)를 scene_gen 에 넘기고 거기서 고른다.
+
+    다만 컷에 treatment 필드가 직접 적혀 있으면 사람이나 연출이 지목한 것이므로
+    그대로 박는다 — 넘겨짚지 않는다.
+    """
+    given = str(cut.get("treatment") or "").strip()
+    return [f"{given}."] if given else []
+
+
+# 거리 — 콘티의 shot 을 그리는 쪽 말로 옮긴다.
+#
+# 예전에는 이것을 **코드가 옮기지 않았다.** 거리가 프롬프트에 들어가는 유일한 길이
+# prompt_gen/scene_gen 의 LLM 이 영어 서술에 그 말을 써 주는 것뿐이었고, 안 쓰면
+# 이미지 모델이 알아서 정했다. 실제로 콘티가 `클로즈업 · 얼굴이 화면을 가득 채운다`
+# 인 컷이 수십 명이 늘어선 원경 투샷으로 나왔다 — 그 화에서 가장 중요한 얼굴이
+# 사라졌다. 크기·앵글·그림체를 전부 코드가 박으면서 거리만 LLM 에 맡길 이유가 없다.
+# 아래 SHOT_EN(파일 뒤쪽)과 **다른 물건이다.** 저쪽은 텍스트 LLM 에게 넘기는 짧은
+# 힌트이고("close-up filling the frame with the face"), 이쪽은 이미지 모델에게
+# 코드가 직접 박는 지시다. 같은 낱말을 써도 세기가 달라야 한다 — 힌트는 참고이고
+# 이것은 명령이라, 여기서는 "물러서지 마라"까지 말한다.
+SHOT_FRAMING_EN = {
+    "원경": "FRAMING — an extreme wide establishing shot: the figures are small "
+            "in a large space and the place itself is the subject.",
+    "전신": "FRAMING — a full-body shot: the whole figure, head to feet, fills "
+            "most of the frame height.",
+    "중간": "FRAMING — a medium shot, framed from roughly the waist up.",
+    "바스트": "FRAMING — a bust shot, framed from the chest up. The face is the "
+             "subject and the background is barely present.",
+    "클로즈업": "FRAMING — a close-up: the face fills most of the frame and the "
+              "expression is unmistakable. Do NOT pull back, do NOT show the "
+              "whole body, do NOT show the wider scene.",
+    "익스트림": "FRAMING — an extreme close-up on one detail (eyes, mouth, hands, "
+              "an object) that fills the frame. Nothing else is in shot.",
+    "인서트": "FRAMING — an insert shot of an object or detail. No face in frame.",
+}
+
+
+def shot_clause(cut: dict[str, Any]) -> list[str]:
+    """거리 지시. 모르는 값이면 아무것도 붙이지 않는다 (콘티가 값을 늘릴 수 있다)."""
+    text = SHOT_FRAMING_EN.get(str(cut.get("shot") or "").strip())
+    return [text] if text else []
+
+
+# 시선 — 세로 스크롤에서만 성립하는 연출이다. 독자의 눈이 다음 컷으로 넘어가는
+# 길을 인물의 시선이 만든다. 콘티가 컷마다 정하는데, 지금까지 그 값은 텍스트
+# LLM 에게 참고로만 넘어갔고(그것도 Scene 모드에서만) 이미지 프롬프트에는
+# 한 번도 도달하지 않았다.
+GAZE_EN = {
+    "down": "The character's eyes are cast downward, leading the reader's eye "
+            "toward the bottom of the panel.",
+    "toward-next": "The character looks off toward the bottom edge of the panel, "
+                   "pulling the reader onward to what comes next.",
+    "at-viewer": "The character looks straight out of the panel at the reader, "
+                 "meeting them head-on.",
+    "away": "The character looks away, out of the panel and off to the side, "
+            "their attention somewhere the reader cannot see.",
+}
+
+
+def gaze_clause(cut: dict[str, Any]) -> list[str]:
+    """시선 지시. 인물이 없는 컷(인서트)에는 gaze 가 없으므로 자연히 빠진다."""
+    text = GAZE_EN.get(str(cut.get("gaze") or "").strip().lower())
+    return [text] if text else []
+
+
+def panel_clauses(cfg: dict[str, Any], cut: dict[str, Any]) -> str:
+    """패널 하나에 코드가 덧붙이는 전부.
+
+    거리 → 구도 → 말풍선 → 효과음 → 화면 UI → 자리 비우기 → 보정 순이다. 거리와
+    구도가 맨 앞인 이유: 나머지는 "그 위에 무엇을 얹을지" 인데 이 둘은 **무엇을
+    그릴지** 라서, 뒤에 두면 모델이 이미 잡은 화면에 억지로 끼워 맞춘다.
+    """
+    parts = (shot_clause(cut) + composition_clause(cut) + gaze_clause(cut)
+             + bubble_clause(cfg, cut)
+             + sfx_clause(cfg, cut) + screen_ui_clause(cfg, cut)
+             + bubble_zone_clause(cut) + treatment_clause(cfg, cut))
+    return " ".join(p for p in parts if p)
+
+
+# 구도 — 콘티가 고른 낱말을 그리는 쪽 말로 옮긴다. 서술의 "몰래 촬영한다" 같은
+# 의도는 그려지지 않지만 이 문구는 그려진다.
+COMPOSITION_EN = {
+    "over-the-shoulder": (
+        "Framed over a character's shoulder: that character's shoulder and the "
+        "back of their head sit large in the near foreground, slightly out of "
+        "focus, and we look past them at the subject beyond"),
+    "two-shot": (
+        "A two-shot: both characters share the frame at the same time, their "
+        "distance from each other clearly readable"),
+    "silhouette": (
+        "The subject reads as a silhouette — backlit so the shape is filled "
+        "dark against a bright background, features lost"),
+    "reflection": (
+        "We see the subject as a reflection — in a mirror, a window or water — "
+        "with the reflecting surface itself visible"),
+    "frame-in-frame": (
+        "A frame within the frame: something in the near foreground (a screen, "
+        "a doorway, a gap) contains the real subject, which appears smaller "
+        "inside it"),
+}
+
+
+def composition_clause(cut: dict[str, Any]) -> list[str]:
+    """구도 지정. none 이면 아무것도 붙이지 않는다."""
+    kind = str(cut.get("composition") or "none").strip().lower()
+    head = COMPOSITION_EN.get(kind)
+    if not head:
+        return []
+    note = str(cut.get("composition_note") or "").strip()
+    return [f"{head}. {note}" if note else f"{head}."]
+
+
+def layout_text(cfg: dict[str, Any], scene: Scene) -> str:
+    """{layout} 자리에 들어갈 문구. w7 의 size 를 패널 높이·폭으로 옮긴다.
+
+    지금까지 이 자리에는 config 의 고정 문구가 순서대로 돌아가며 들어갔다
+    ("three horizontal panels stacked with thin white gutters, equal heights").
+    그래서 어떤 화를 뽑아도 균등한 가로 띠가 나왔다 — 만화 페이지지 웹툰이 아니다.
+    w7 은 이미 컷마다 size 를 정해 두었는데 그 값이 여기까지 오지 않았다.
+
+    size 가 하나도 없으면(예전 run) 예전처럼 고정 템플릿을 쓴다.
+    """
+    comp = dict((cfg.get("scene") or {}).get("composition") or {})
+    table = dict((cfg.get("scene") or {}).get("panel_style") or {})
+    if not comp or not comp.get("slots"):
+        return scene.layout          # composition 설정이 없으면 예전 템플릿
+
+    def weight_of(cut: dict[str, Any]) -> float:
+        spec = dict(table.get(str(cut.get("size") or "").strip().lower()) or {})
+        try:
+            return max(0.05, float(spec.get("height") or 1.0))
+        except (TypeError, ValueError):
+            return 1.0
+
+    weights = [weight_of(c) for c in scene.cuts]
+    total = sum(weights) or 1.0
+    # 가장 큰 컷이 바탕이 된다. 같으면 뒤쪽 — 감정의 정점은 대개 뒤에 온다.
+    base_i = max(range(len(weights)), key=lambda i: (weights[i], i))
+
+    slots = [str(s).strip() for s in (comp.get("slots") or []) if str(s).strip()]
+    renders = dict((cfg.get("scene") or {}).get("panel_render") or {})
+
+    def render_note(cut: dict[str, Any]) -> str:
+        note = str(renders.get(
+            str(cut.get("render_style") or "normal").strip().lower()) or "").strip()
+        return f" {note}." if note else ""
+
+    lines: list[str] = []
+    base_cut = scene.cuts[base_i]
+    where = ("upper" if base_i * 3 < len(scene.cuts)
+             else "middle" if base_i * 3 < len(scene.cuts) * 2 else "lower")
+    # 바탕 컷은 이 장에서 가장 큰 컷이다. 크기 지시만 주면 독자는 그냥 지나간다 —
+    # 시청 시간은 크기가 아니라 볼 것의 양에 따라간다(Ikuta et al. 2023). 그래서
+    # 크기 뒤에 밀도 지시를 한 줄 더 붙인다.
+    density = str(comp.get("base_density") or "").strip()
+    lines.append(
+        f"BASE LAYER — Panel {base_i + 1}: {str(comp.get('base') or '').strip()}. "
+        f"Its focal subject sits in the {where} part of the sheet so the reading "
+        f"order still runs from top to bottom."
+        f"{' ' + density + '.' if density else ''}{render_note(base_cut)}")
+
+    k = 0
+    for i, (cut, weight) in enumerate(zip(scene.cuts, weights)):
+        if i == base_i:
+            continue
+        slot = slots[k % len(slots)]
+        k += 1
+        lines.append(
+            f"OVER THE BASE — Panel {i + 1}: {slot}, covering roughly "
+            f"{round(weight / total * 100)}% of the sheet.{render_note(cut)}")
+
+    rules = str(comp.get("rules") or "").strip()
+    return "\n".join(lines) + (f"\n{rules}" if rules else "")
+
+
+def render_style(scene: Scene) -> str:
+    """이 Scene 한 장에 적용할 작화 변주.
+
+    Scene 은 컷 여러 개가 한 장에 구워진다. 한 패널만 SD 로 그리라고 시킬 방법이
+    없으므로, 묶인 컷이 전부 같은 render_style 일 때만 그것을 쓴다. 섞여 있으면
+    normal 로 둔다 — 한 컷 때문에 페이지 전체가 SD 가 되는 편이 더 나쁘다.
+    (컷 모드에서는 컷마다 따로 적용되므로 이런 문제가 없다.)
+    """
+    kinds = {str(c.get("render_style") or "normal").strip().lower() for c in scene.cuts}
+    return kinds.pop() if len(kinds) == 1 else "normal"
+
+
+def scene_zone(scene: Scene) -> str:
+    """이 Scene 한 장에 붙일 존 배경 자산의 id. 컷마다 존이 갈리면 붙이지 않는다.
+
+    render_style 과 같은 이유다 — 한 장 안에 두 존이 섞이면 배경 하나를 붙이는
+    것이 오히려 틀린 신호가 된다. zone 이 없는 컷(예전 run)이 섞여도 마찬가지로
+    붙이지 않는다.
+    """
+    zones = {str(c.get("zone") or "").strip() for c in scene.cuts}
+    zones.discard("")
+    if len(zones) == 1:
+        return zones.pop()
+    return ""
+
+
+def seam_text(prev: Scene | None, nxt: Scene | None) -> str:
+    """이 장의 위·아래가 무엇과 붙는가.
+
+    Scene 을 한 장씩 따로 굽고 그것을 세로로 **틈 없이** 이어 붙인다. 그런데
+    프롬프트가 앞뒤 장을 한 마디도 말해 주지 않으면, 모델은 매번 자기 안에서
+    완결되는 그림을 그린다 — 실제로 그렇게 나왔다. 이어 붙이면 잔디밭에서
+    캠퍼스로, 복도로 뚝뚝 끊긴다.
+
+    앞 장의 **마지막 컷**과 뒷 장의 **첫 컷**만 알려 준다. 장 전체를 넘기면
+    모델이 앞 장을 다시 그리려 든다 — 필요한 것은 맞닿는 한 컷씩뿐이다.
+    """
+    lines: list[str] = []
+    if prev is not None and prev.cuts:
+        tail = str(prev.cuts[-1].get("description") or "").strip()
+        lines.append(
+            "CONTINUES FROM ABOVE. The sheet directly above this one ended with: "
+            f"\"{tail}\" — the top of this sheet is joined to it with no gap. "
+            "Unless the description says the story has moved somewhere else, this "
+            "is the SAME PLACE in the SAME TONE: the same room or street with the "
+            "same surfaces and the same objects in it, the same light coming from "
+            "the same direction, the same colour grade, and the same emotional "
+            "temperature. Everything that fills the place carries over with it, "
+            "down to the anonymous figures in the background. Do not restate that "
+            "moment and do not copy its layout; just make sure the reader cannot "
+            "tell where one sheet ended and this one began.")
+    if nxt is not None and nxt.cuts:
+        head = str(nxt.cuts[0].get("description") or "").strip()
+        lines.append(
+            "LEADS INTO BELOW. The sheet directly under this one begins with: "
+            f"\"{head}\" — leave the bottom edge open toward it: let the artwork "
+            "run off the bottom edge and keep the eye moving downward.")
+    return "\n".join(lines)
+
+
+def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
+             with_lock: bool = True, style_text: str = "",
+             prev: "Scene | None" = None, nxt: "Scene | None" = None) -> str:
+    """Scene 프롬프트 조립. 코드가 강제한다 — LLM 은 패널 서술만 썼다.
+
+    컷 모드의 run.assemble() 과 짝이다. 같은 자리에 같은 문구가 들어가야
+    두 모드의 차이가 "묶음 + 레이아웃" 으로만 남는다. lock(캐릭터 시트의
+    design_details/color_palette)도 그래서 양쪽 같은 자리에 붙는다.
+
+    style_text: 작화 변주까지 얹은 {style} 문구. 비우면 style_suffix 그대로.
+    prev/nxt : 위아래로 붙는 장. 이음매 문구를 만드는 데만 쓴다.
+    """
+    lock = str(cfg.get("design_lock") or "") if with_lock else ""
+    # 패널 서술(LLM) 뒤에 말풍선·효과음·보정을 코드가 붙인다. LLM 이 고르게 두면
+    # 매번 조금씩 달라져 --dry-run 으로 미리 볼 수 없다.
+    rows = []
+    for i, text in enumerate(scene.panels, 1):
+        cut = scene.cuts[i - 1] if i - 1 < len(scene.cuts) else {}
+        extra_clauses = panel_clauses(cfg, cut)
+        rows.append(f"Panel {i}: {text.strip()}"
+                    + (f" {extra_clauses}" if extra_clauses else ""))
+    panels = "\n".join(rows)
+    text = str(cfg["scene"]["prompt_template"])
+    for token, value in (
+        ("{appearance}", appearance.strip()),
+        ("{panel_count}", str(len(scene.panels))),
+        ("{panels}", panels),
+        ("{layout}", layout_text(cfg, scene).strip()),
+        ("{style}", (style_text or str(cfg["style_suffix"])).strip()),
+        ("{extra}", str(extra or "").strip()),
+    ):
+        text = text.replace(token, value)
+    # 이음매는 레이아웃 지시 바로 뒤가 아니라 끝에 둔다 — 모델이 마지막에 읽은
+    # 것을 더 잘 지키고, 이건 "이 장을 어떻게 끝낼 것인가" 의 지시라서 그렇다.
+    seam = seam_text(prev, nxt)
+    if seam:
+        text = f"{text.rstrip()}\n{seam}"
+    if lock.strip():
+        text = f"{text.rstrip()}\n{lock.strip()}"
+    tail = str(cfg.get("global_suffix") or "").strip()
+    if tail:
+        text = f"{text.rstrip()}\n{tail}"
+    text = f"{text.rstrip()}\n{lettering_tail(cfg)}"
+    if monochrome(cfg):
+        text = f"{text.rstrip()}\n{mono_tail(cfg)}"
+    text = text.replace("1 panels", "1 panel")  # 마지막 묶음이 1컷일 때
+    text = "\n".join(line.rstrip() for line in text.splitlines())
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+# --------------------------------------------------------------------------- #
+# scene_gen (텍스트 LLM) — 컷 서술을 패널 서술로. 화당 1회, 조건과 무관하게 공유.
+# --------------------------------------------------------------------------- #
+# 콘티(W5)가 무대에 적는 여섯 칸. **여섯 개를 다 읽어야 한다.**
+#
+# 예전에는 앞의 넷만 읽고 props 와 movement 를 버렸다. 그런데 W5 는 props 를
+# 이렇게 강조하며 쓴다: "인물 없이 사물만 나오는 컷이 여기서 나오고, 그런 컷이
+# 없으면 화 전체가 얼굴 나열이 된다." 배경을 실제 장소로 만드는 것이 바로 그
+# 만질 수 있는 사물들인데, 그림 단계가 그걸 못 보고 있었다.
+STAGING_FIELDS = (
+    ("place", "Place"),
+    ("time", "Time of day"),
+    ("weather", "Weather / season"),
+    ("light", "Light source"),
+    ("props", "Objects actually visible in this place"),
+    ("movement", "How people move through it"),
+)
+
+
+def staging_text(setting: dict[str, Any] | None) -> str:
+    """무대를 프롬프트에 박는다 — 이 화 내내 같아야 하는 것.
+
+    이게 없으면 패널마다 장소와 조명이 새로 정해진다. Scene 을 한 장씩 따로
+    굽는 구조라서, 적어 주지 않으면 이어 볼 방법이 아예 없다. 무엇을 그릴지는
+    콘티가 정하고 여기서는 옮길 뿐이다.
+    """
+    rows = []
+    for key, label in STAGING_FIELDS:
+        value = _text_value((setting or {}).get(key))
+        if value:
+            rows.append(f"{label}: {value}")
+    return "\n".join(rows) if rows else \
+        "(not given — pick one reading and keep it identical in every panel)"
+
+
+def _text_value(value: Any) -> str:
+    """props 는 목록으로 온다. 나머지는 문자열."""
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(v).strip() for v in value if str(v or "").strip())
+    return str(value or "").strip()
+
+
+def scene_intent(story_scenes: list, scene_number: int) -> dict[str, str]:
+    """콘티가 이 Scene 에 적어 둔 의도 — 무슨 장면(what)이고 어떤 공기(mood)인가.
+
+    **mood 가 이 파이프라인에서 가장 중요한 한 줄이다.** 컷 서술(description)은
+    "무엇이 보이는가" 만 말한다. "어떤 공기로 그릴 것인가" 는 여기에만 있고,
+    이게 안 넘어오면 그림 쪽 LLM 이 패널마다 톤을 새로 정한다 — 같은 장면인데
+    한 컷은 서정적이고 다음 컷은 스릴러가 된다.
+
+    Scene 번호는 1부터이고 콘티의 scenes 배열 순서와 같다 (둘 다 last_cut 으로
+    끊은 같은 경계다). 길이가 어긋나면 빈 dict 를 돌려 조용히 넘어간다.
+    """
+    if not isinstance(story_scenes, list):
+        return {}
+    i = scene_number - 1
+    if not 0 <= i < len(story_scenes):
+        return {}
+    sc = story_scenes[i]
+    if not isinstance(sc, dict):
+        return {}
+    out = {}
+    for key in ("what", "mood"):
+        value = str(sc.get(key) or "").strip()
+        if value:
+            out[key] = value
+    return out
+
+
+def treatment_text(cfg: dict[str, Any] | None) -> str:
+    """화면 보정 어휘 — 고르라고 주는 목록이 아니라 "이런 것들이 있다" 이다.
+
+    문구를 통째로 박던 것을 그만두고 어휘만 넘긴다. 같은 비트라도 잔디밭 낮과
+    밤 복도는 다른 보정을 받아야 하는데, 그 차이를 아는 것은 mood 를 가진
+    이쪽뿐이다.
+    """
+    guide = dict(((cfg or {}).get("scene") or {}).get("treatment_guide") or {})
+    if not guide:
+        return "(none given — choose from the mood, or leave the panel plain)"
+    rows = []
+    intents = dict(guide.get("intents") or {})
+    if intents:
+        rows.append("What each beat wants the screen to do:")
+        for beat, intent in intents.items():
+            text = str(intent or "").strip()
+            rows.append(f"  {beat:<8} {text or '(no treatment — leave it plain)'}")
+    box = str(guide.get("toolbox") or "").strip()
+    if box:
+        rows.append("")
+        rows.append(f"Techniques available (not a menu to pick from — a sense of "
+                    f"the range): {box}")
+    # 흑백 그림체면 여기서 말해 줘야 한다. 이 어휘 목록에는 "colour temperature
+    # shift", "a single saturated accent" 처럼 색이 있어야 성립하는 것이 섞여
+    # 있고, 5.1 항은 효과음 레터링에 "what colour" 를 아예 물어본다. 그대로 두면
+    # 패널 서술에 "massive cracked dark red lettering" 이 적혀 나오고, 그건
+    # 그림체 문구가 아니라 **그 패널의 지시**라서 이미지 모델이 그대로 따른다
+    # (실제로 그렇게 나왔다).
+    if monochrome(cfg):
+        rows.append("")
+        rows.append(
+            "THIS EPISODE IS DRAWN IN BLACK INK WITH NO COLOUR AT ALL. Never name "
+            "a colour anywhere in your panel descriptions — not for clothing, "
+            "light, fire, blood, petals or sound-effect lettering. Describe value "
+            "instead: solid black, dense hatching, open screentone, bare white "
+            "paper. Ignore every colour-dependent item in the list above (colour "
+            "temperature shifts, saturated accents, desaturation); reach for the "
+            "ink techniques instead — heavy blacks, hatching, halftone, speed "
+            "lines, focus lines, white slash trails.")
+    return "\n".join(rows)
+
+
+def build_prompt(template: str, title: str, scenes: list[Scene],
+                 setting: dict[str, Any] | None = None,
+                 story_scenes: list | None = None,
+                 cfg: dict[str, Any] | None = None) -> str:
+    payload = []
+    for sc in scenes:
+        row = {"scene_number": sc.scene_number}
+        row.update(scene_intent(story_scenes or [], sc.scene_number))
+        row["cuts"] = [_cut_for_prompt(c) for c in sc.cuts]
+        payload.append(row)
+    # 이번 화 컷 서술·대사에 등장하는 태그와 겹치는 연출 지식만 골라 붙인다 —
+    # story-harness 의 resolve_directing_notes 와 같은 저장소, 같은 방식.
+    haystack = " ".join(
+        f"{c.get('description', '')} {c.get('dialogue', '')}"
+        for row in payload for c in row["cuts"])
+    directing_notes = directing.resolve_notes(directing.DEFAULT_ROOT, haystack)
+    return (template.replace("{episode_title}", title)
+                    .replace("{scene_count}", str(len(scenes)))
+                    .replace("{staging}", staging_text(setting))
+                    .replace("{treatment_guide}", treatment_text(cfg))
+                    .replace("{directing_notes}", directing_notes or "(none)")
+                    .replace("{scenes_json}", json.dumps(payload, ensure_ascii=False, indent=2)))
+
+
+def overlay_lines(cuts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """뷰어가 그림 위에 얹을 글자들. 대사·나레이션·속마음.
+
+    표시 규약은 bubbles.is_narration 이 이미 쓰던 것을 따른다:
+      대사    그대로
+      나레이션 [대괄호]
+      속마음   (소괄호)
+    효과음은 여기 없다 — 그림 안에 레터링으로 그려지기 때문이다.
+    한 컷에 여럿이 있으면 여러 줄이 된다.
+    """
+    out: list[dict[str, Any]] = []
+    for c in cuts:
+        num = int(c["cut_number"])
+        zone = str(c.get("bubble_zone") or "none").strip().lower()
+        for key, wrap in (("dialogue", "{}"), ("narration", "[{}]"),
+                          ("thought", "({})")):
+            text = str(c.get(key) or "").strip()
+            if text:
+                out.append({"cut": num, "text": wrap.format(text), "kind": key,
+                            # 콘티가 정해 둔 자리. 사람이 사각형을 그리기 전까지
+                            # 자동 배치의 근거가 된다 (bubbles.auto_regions).
+                            "zone": zone})
+        # 화면 안 글자는 말풍선이 아니라 화면 UI 로 얹힌다. 자리는 그 화면이
+        # 어디 있는지에 달려 있어서 콘티가 정할 수 없다 — 사람이 그린다.
+        screen = str(c.get("screen_text") or "").strip()
+        if screen:
+            out.append({"cut": num, "text": screen, "kind": "screen_text",
+                        "zone": "none"})
+    return out
+
+
+# 콘티(한글) -> 이미지 프롬프트(영어). 콘티가 거리와 앵글을 **직교하는 두 축**으로
+# 정하므로 여기서도 따로 옮긴다. 한 낱말로 뭉치면 같은 클로즈업이 올려다본 것인지
+# 내려다본 것인지가 사라진다.
+SHOT_EN = {
+    "원경": "extreme wide shot, figures small in the environment",
+    "전신": "full shot, the whole figure visible head to toe",
+    "중간": "medium shot from the waist up",
+    "바스트": "medium close-up, chest up",
+    "클로즈업": "close-up filling the frame with the face",
+    "익스트림": "extreme close-up on a single detail (eyes, hand, object)",
+    "인서트": "insert shot of an object or detail, no face in frame",
+}
+ANGLE_EN = {
+    "수평": "eye-level angle",
+    "부감": "high angle looking down, the subject made smaller",
+    "앙각": "low angle looking up, the subject made larger",
+    "수직": "top-down bird's-eye view",
+    "기울임": "dutch tilt, the horizon visibly canted",
+}
+
+
+def _cut_for_prompt(c: dict[str, Any]) -> dict[str, Any]:
+    """LLM 에 넘길 컷 한 개. 연출이 붙어 있으면 gaze 와 beat 도 같이 넘긴다.
+
+    gap_after 와 scene_break 은 넘기지 않는다. 그 둘은 이미 Scene 을 어떻게 나눌지로
+    반영되었고, 패널 안에 그릴 수 있는 것이 아니다. gaze 만 그림의 내용이다.
+    """
+    out = {"cut_number": c["cut_number"],
+           "description": c.get("description") or "",
+           "dialogue": c.get("dialogue") or ""}
+    # 텍스트 세 종류를 더 넘긴다. narration/thought 는 **빈 상자를 그리게** 하려는
+    # 것이고(글자는 뷰어가 얹는다), sfx 는 **그 낱말 그대로** 그리게 하려는 것이다.
+    # 예전에는 scene_gen 이 서술을 보고 효과음을 지어냈다 — 이제 W7 이 정한다.
+    for key in ("narration", "thought", "sfx"):
+        if str(c.get(key) or "").strip():
+            out[key] = str(c[key]).strip()
+    if c.get("gaze"):
+        out["gaze"] = str(c["gaze"])
+    if c.get("beat"):
+        out["beat"] = str(c["beat"])
+    # 카메라. 콘티가 낱말로 정한 것을 영어 샷 용어로 옮겨 넘긴다 — 안 넘기면
+    # 그림 쪽 LLM 이 거리를 매번 임의로 정하고, 그러면 컷 60% 가 얼굴이 된다
+    # (콘티에서 그 비율을 세어 막는 이유가 그림에 닿지 않는다).
+    if SHOT_EN.get(str(c.get("shot") or "").strip()):
+        out["shot"] = SHOT_EN[str(c["shot"]).strip()]
+    if ANGLE_EN.get(str(c.get("angle") or "").strip()):
+        out["angle"] = ANGLE_EN[str(c["angle"]).strip()]
+    # 화자 — 말풍선 꼬리를 누구에게 붙일지. 없으면 그리는 쪽이 짐작한다.
+    if str(c.get("speaker") or "").strip():
+        out["speaker"] = str(c["speaker"]).strip()
+    return out
+
+
+def fill_panels(scenes: list[Scene], parsed: Any) -> list[int]:
+    """LLM 응답을 Scene 에 채우고, 패널을 못 받은 Scene 번호를 돌려준다."""
+    raw = parsed.get("scenes") if isinstance(parsed, dict) else parsed
+    if not isinstance(raw, list):
+        raise SceneError(f"scene_gen 응답에서 scenes 를 찾지 못했습니다: {str(parsed)[:200]}")
+
+    by_cut: dict[int, str] = {}
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        for p in item.get("panels") or []:
+            if not isinstance(p, dict):
+                continue
+            try:
+                by_cut[int(p["cut_number"])] = str(p.get("scene") or "").strip()
+            except (KeyError, TypeError, ValueError):
+                continue
+
+    missing: list[int] = []
+    for sc in scenes:
+        sc.panels = [by_cut.get(n, "") for n in sc.cut_numbers]
+        if not all(sc.panels):
+            missing.append(sc.scene_number)
+    return missing
+
+
+def to_json(scenes: list[Scene]) -> list[dict[str, Any]]:
+    return [{"scene_number": sc.scene_number,
+             "cut_numbers": sc.cut_numbers,
+             "layout": sc.layout,
+             "panels": sc.panels,
+             # 연출 — 뷰어가 여백을 그릴 때 쓴다. 연출이 없으면 전부 기본값이다.
+             "gap_after": sc.gap_after,
+             "beats": sc.beats,
+             "gazes": [str(c.get("gaze") or "") for c in sc.cuts],
+             # 대사는 이미지에 그리지 않는다. 말풍선으로 얹으려면 컷별로 남아 있어야 한다.
+             "dialogues": overlay_lines(sc.cuts),
+             "warnings": sc.warnings} for sc in scenes]
+
+
+def from_json(data: list[dict[str, Any]], cuts: list[dict[str, Any]]) -> list[Scene]:
+    """scenes.json 캐시 → Scene 목록. 컷 번호가 안 맞으면 SceneError."""
+    by_num = {int(c["cut_number"]): c for c in cuts}
+    out: list[Scene] = []
+    for item in data:
+        try:
+            nums = [int(n) for n in item["cut_numbers"]]
+            picked = [by_num[n] for n in nums]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise SceneError(f"{CACHE_FILE} 이 지금 컷과 맞지 않습니다: {exc}") from exc
+        out.append(Scene(scene_number=int(item["scene_number"]), cuts=picked,
+                         panels=[str(p) for p in item.get("panels") or []],
+                         layout=str(item.get("layout") or ""),
+                         warnings=[str(w) for w in item.get("warnings") or []]))
+    return out

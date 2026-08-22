@@ -1,22 +1,26 @@
 package com.lore.common.config;
 
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
 /**
- * Swagger(API 문서) 설정 자리.
+ * Swagger(API 문서) 설정.
  *
  * 도메인이 3개로 나뉘어 있어도 문서는 한 곳에서 모아 보는 게 편하므로 common 에 둔다.
+ * springdoc 의존성만으로도 문서는 뜨지만, 제목·설명·버전은 여기서 정해준다.
  *
- * springdoc 의존성이 아직 없어서 애노테이션은 주석으로만 남겨둠.
- * 의존성 추가 후 백엔드 담당자가 아래 형태로 채우면 된다.
- *
- * <pre>
- * &#64;Configuration
- * public class SwaggerConfig {
- *     &#64;Bean
- *     public OpenAPI openAPI() {
- *         return new OpenAPI().info(new Info().title("Lore API").version("v0.0.1"));
- *     }
- * }
- * </pre>
+ * 문서 주소: http://localhost:8080/swagger-ui.html
  */
+@Configuration
 public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI loreOpenAPI() {
+        return new OpenAPI().info(new Info()
+                .title("Lore API")
+                .description("Lore 창작 플랫폼 API 문서 (comic / story / trailer)")
+                .version("v0.0.1"));
+    }
 }

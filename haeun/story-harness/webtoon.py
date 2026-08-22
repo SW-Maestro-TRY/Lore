@@ -71,6 +71,7 @@ from story import (
     ParseFailure, ApiFailure, Usage, PromptSet, cost_text, append_csv_row,
     load_prompts, render, feedback_block, write_json, log, warn,
     is_blank, normalize_source, log_prompt_hashes, normalize_palette,
+    resolve_directing_notes,
 )
 
 
@@ -84,6 +85,7 @@ WEBTOON_CONTRACT = {
     "w7": {"engine_card", "series_arc", "arc_json", "episode_json",
            "ledger_snapshot",
            "engine_fired_list", "setting_block", "zones_block",
+           "directing_notes",
            "retry_feedback"},
     "w8": {"engine_card", "episode_json", "ledger_snapshot", "cuts_json",
            "pov", "banned_words", "retry_feedback"},
@@ -440,6 +442,13 @@ QUESTION_TYPES = ("mystery", "suspense", "dramatic_irony")
 # 문서 4장: 떡밥 상한은 코드가 8, 기준 문서가 5. 작업기억 근거를 따라 5 를 기본으로 둔다.
 DEFAULT_LEDGER_CAP = 5
 
+# 몇 화가 지나도록 안 갚으면 "오래 묵었다"고 볼 것인가.
+#
+# 상환 일정을 미리 짜지 않는 대신 나이로 본다. 4로 잡은 이유: Arc 하나가
+# 2~5화(gate_arcs)라, 4화가 지났다는 것은 그 질문을 연 Arc 가 사실상 끝났는데
+# 아직 안 갚았다는 뜻이다.
+STALE_AFTER = 4
+
 WEBTOON_SUMMARY_COLUMNS = [
     "run_id", "character", "genre",
     "arc_count", "reversal_ratio", "episode_count", "series_total", "cut_count",
@@ -746,17 +755,45 @@ class Question:
         }
 
 
+@dataclass
+class Fact:
+    """열린/닫힌 질문과는 다른 것 — 답이 정해질 질문이 아니라 이미 확정된 사실.
+
+    "3화에서 왼손에 흉터가 생겼다" 같은 것. Question 은 "언젠가 닫힐 궁금증"을
+    추적하고, Fact 는 "이후 화들이 잊으면 안 되는 확정된 사실"을 추적한다 —
+    둘을 같은 목록에 섞으면 열림/닫힘 상태가 없는 Fact 가 open_items/
+    closed_items 계산을 흐린다.
+    """
+    id: str
+    text: str
+    established_episode: int      # 통산 화 번호
+
+    def as_dict(self) -> dict:
+        return {"id": self.id, "text": self.text,
+                "establishedEpisode": self.established_episode}
+
+
 class Ledger:
-    """열린 질문·닫힌 질문을 코드가 추적한다. 검사자가 인정한 것만 들어온다."""
+    """열린 질문·닫힌 질문·확정된 사실을 코드가 추적한다. 검사자가 인정한 것만 들어온다."""
 
     def __init__(self, engine_question: str, cap: int = DEFAULT_LEDGER_CAP):
         self.items: list = []
+        self.facts: list = []
+        self.fact_seq = 0
         self.cap = cap
         self.seq = 0
         self.engine = Question(
             id="EQ", text=engine_question or "(엔진급 질문 미지정)",
             type="engine", opened_arc=0, opened_episode=0, is_engine=True)
         self.items.append(self.engine)
+
+    def add_fact(self, text: str, episode: int) -> Fact:
+        """확정된 사실을 하나 기록한다. 지금은 자동 추출이 없다 — 사람/도구가
+        직접 부른다(인프라만, 검증은 실제 여러-화 데이터가 쌓인 뒤로 미룸)."""
+        self.fact_seq += 1
+        f = Fact(id=f"F-{self.fact_seq}", text=text, established_episode=episode)
+        self.facts.append(f)
+        return f
 
     # -- 조회
     def get(self, qid: str):
@@ -808,8 +845,21 @@ class Ledger:
 
         # 연체 경고는 없앴다. 몇 화에 갚겠다는 계획을 미리 세우지 않기 때문이다 —
         # 연재는 앞 화를 보고 다음 화를 정하는 것이지, 17화치 상환 일정을 1화에서
-        # 짜는 것이 아니다. 남은 신호는 "지금 몇 개가 열려 있나" 하나뿐이고,
-        # 그건 위의 과부하 경고가 본다.
+        # 짜는 것이 아니다.
+        #
+        # 그렇다고 "언제 갚나"를 아예 안 볼 수는 없다. 개수 상한(과부하)과 최근
+        # 상환 여부(미스터리 박스)만으로는 **오래 묵은 질문 하나**가 안 잡힌다 —
+        # 개수가 상한 안이고 매 화 뭔가 갚고 있어도, 3화에 연 질문이 12화까지
+        # 열려 있으면 독자는 그것을 잊는다. 일정 대신 **나이**로 본다.
+        stale = [q for q in self.open_items
+                 if current_episode - q.opened_episode >= STALE_AFTER]
+        if stale:
+            oldest = min(stale, key=lambda q: q.opened_episode)
+            out.append(
+                f"장기 미상환: {len(stale)}개가 {STALE_AFTER}화 넘게 열려 있습니다 "
+                f"(가장 오래된 것은 {oldest.opened_episode}화에 연 "
+                f"\"{str(oldest.text)[:40]}\"). 갚거나, 지금 다시 꺼내 살려 두세요 "
+                "— 오래 묵으면 독자는 그것을 궁금해하지 않고 잊습니다.")
 
         if not self.engine.is_open:
             out.append("엔진급 훼손: 엔진급 질문이 닫혔습니다 — 치명, 즉시 중단.")
@@ -826,6 +876,15 @@ class Ledger:
             d = q.as_dict()
             if hide_ids:
                 d.pop("id", None)
+            # 열린 질문에는 **몇 화째 열려 있는지**를 같이 준다. 작가가 목록만
+            # 보면 다섯 개가 다 똑같이 급해 보이는데, 실제로 급한 것은 오래
+            # 묵은 쪽이다. 상환 순서를 정하는 유일한 단서가 이 숫자다.
+            if q.is_open and not q.is_engine:
+                age = current_episode - q.opened_episode
+                if age >= 0:
+                    d["openFor"] = age
+                    if age >= STALE_AFTER:
+                        d["stale"] = True
             return d
 
         engine = {"text": self.engine.text,
@@ -838,11 +897,13 @@ class Ledger:
             "closed": [view(q) for q in self.closed_items],
             "open_count": len(self.open_items),
             "open_cap": self.cap,
+            "established_facts": [f.as_dict() for f in self.facts],
             "warnings": self.warnings(current_episode),
-        }, ensure_ascii=False, indent=2)
+        }, ensure_ascii=False, separators=(",", ":"))
 
     def as_dict(self) -> dict:
-        return {"cap": self.cap, "questions": [q.as_dict() for q in self.items]}
+        return {"cap": self.cap, "questions": [q.as_dict() for q in self.items],
+                "facts": [f.as_dict() for f in self.facts]}
 
     @classmethod
     def from_dict(cls, data: dict) -> "Ledger":
@@ -872,6 +933,13 @@ class Ledger:
         if not any(q.is_engine for q in led.items):
             led.items.insert(0, led.engine)
         led.seq = len([q for q in led.items if not q.is_engine])
+        # "facts" 키가 없는 예전 ledger.json 도 그대로 읽는다 — 순수 추가라
+        # 없으면 그냥 빈 목록.
+        for d in data.get("facts") or []:
+            led.facts.append(Fact(
+                id=str(d.get("id") or ""), text=str(d.get("text") or ""),
+                established_episode=d.get("establishedEpisode") or 0))
+        led.fact_seq = len(led.facts)
         return led
 
 
@@ -1059,6 +1127,15 @@ class SeriesState:
             out.append("[확정된 설정 — 이미 독자가 본 것이라 뒤집을 수 없습니다]")
             for f in self.facts:
                 out.append(f"  - {f['fact']} ({f['first_episode']}화)")
+            # 쌓기만 하고 서로 부딪히는지 안 보면, 3화에서 "창이 없다"고 정해 놓고
+            # 7화에서 창밖을 그리는 일이 그대로 통과한다.
+            clashes = fact_conflicts(self.facts)
+            if clashes:
+                out.append("")
+                out.append("  ★ 아래 설정끼리 어긋나 보입니다. 이번 화를 쓰기 전에 "
+                           "어느 쪽이 맞는지 정하고, 맞는 쪽만 지키세요:")
+                for c in clashes:
+                    out.append("  " + c.replace("\n", "\n  "))
 
         open_qs = ledger.open_items
         out.append("")
@@ -1066,7 +1143,13 @@ class SeriesState:
             out.append(f"[열려 있는 질문 {len(open_qs)}개 — 닫을 것이 있으면 "
                        f"문장을 그대로 옮겨 적으세요]")
             for q in open_qs:
-                out.append(f'  - "{q.text}" ({q.opened_episode}화에 열림, {q.type})')
+                # 몇 화째 열려 있는지를 같이 준다. 목록만 보면 다섯 개가 다
+                # 똑같이 급해 보이는데, 실제로 급한 것은 오래 묵은 쪽이다.
+                age = self.made - q.opened_episode
+                aged = f", {age}화째" if age >= 1 else ""
+                mark = "  ← 오래 묵음" if age >= STALE_AFTER else ""
+                out.append(f'  - "{q.text}" ({q.opened_episode}화에 열림, '
+                           f'{q.type}{aged}){mark}')
             if len(open_qs) > ledger.cap:
                 out.append("")
                 out.append(f"  ★ 열린 질문이 {len(open_qs)}개로 많습니다(권장 "
@@ -1118,6 +1201,12 @@ def series_arc_block(arcs: list, current: dict = None) -> str:
     if not arcs:
         return "(아직 큰 줄거리가 없습니다)"
     now = (current or {}).get("order")
+    # 전 Arc 를 관통하는 인물 = 주인공. 그 사람의 change 를 Arc 순서대로 이어
+    # 보여주면 W5 가 **변화 곡선** 위에서 이번 화를 쓴다. 사건 줄거리만 주면
+    # 인물이 매 화 같은 자리로 돌아온다.
+    #
+    # 여기서도 한 줄씩만이다 — 줄거리 한 줄, 인물 한 줄. 전문은 arc_json 으로 간다.
+    through = _through_line(arcs)
     lines = []
     for a in arcs:
         if not isinstance(a, dict):
@@ -1132,7 +1221,38 @@ def series_arc_block(arcs: list, current: dict = None) -> str:
         one = a.get("summary") or a.get("one_line")
         if not is_blank(one):
             lines.append(f"      {str(one).strip().splitlines()[0][:90]}")
+        if through:
+            change = _arc_change(a, through)
+            if change:
+                lines.append(f"      {through}: {change[:80]}")
     return "\n".join(lines)
+
+
+def _through_line(arcs: list) -> str:
+    """전 Arc 의 cast_roles 에 모두 나오는 인물. 없으면 빈 문자열.
+
+    cast_roles 가 없는 옛 run 은 언제나 빈 문자열이라 예전 출력이 그대로 나온다.
+    """
+    sets = []
+    for a in arcs:
+        if not isinstance(a, dict):
+            continue
+        rows = a.get("cast_roles")
+        if not isinstance(rows, list) or not rows:
+            return ""
+        sets.append({str(r.get("name") or "").strip()
+                     for r in rows if isinstance(r, dict) and r.get("name")})
+    if not sets:
+        return ""
+    both = set.intersection(*sets)
+    return sorted(both)[0] if both else ""
+
+
+def _arc_change(arc: dict, name: str) -> str:
+    for r in (arc.get("cast_roles") or []):
+        if isinstance(r, dict) and str(r.get("name") or "").strip() == name:
+            return " ".join(str(r.get("change") or "").split())
+    return ""
 
 
 def arc_for_episode(arcs: list, no: int) -> dict:
@@ -1364,6 +1484,57 @@ def gate_arcs(payload: dict) -> list:
             f"반전 Arc 가 {reversal}/{len(arcs)} 로 1/3 미만입니다. "
             "전개·상승만 이어지면 설정집 비대증에 빠집니다.")
 
+    failures.extend(gate_arc_cast(arcs))
+    return failures
+
+
+def gate_arc_cast(arcs: list) -> list:
+    """Arc 마다 그 Arc 를 움직이는 인물과 그 인물의 자리가 적혀 있는가.
+
+    Arc 요약은 "무슨 일이 벌어지는가"만 말한다. 누가 그 일을 밀고 누가 막는지가
+    없으면 화 단위 설계(W5)가 매번 인물을 새로 배치하고, 그러면 주인공이 Arc
+    마다 다른 사람처럼 움직인다.
+
+    **cast_roles 가 한 Arc 에도 없으면 아무것도 검사하지 않는다.** 이 칸이
+    생기기 전에 돌린 run 을 다시 돌려도 결과가 그대로여야 한다.
+    """
+    arcs = [a for a in arcs if isinstance(a, dict)]
+    if not any(a.get("cast_roles") for a in arcs):
+        return []
+
+    failures = []
+    per_arc = []
+    for a in arcs:
+        label = f"Arc {a.get('order')}"
+        rows = a.get("cast_roles")
+        if not isinstance(rows, list) or not rows:
+            failures.append(f"{label}: cast_roles 가 비어 있습니다. "
+                            "그 Arc 를 움직이는 인물을 최소 한 명 적습니다.")
+            per_arc.append(set())
+            continue
+        names = set()
+        for r in rows:
+            if not isinstance(r, dict):
+                failures.append(f"{label}: cast_roles 안에 객체가 아닌 항목이 있습니다.")
+                continue
+            name = str(r.get("name") or "").strip()
+            if not name:
+                failures.append(f"{label}: cast_roles 에 이름 없는 항목이 있습니다.")
+                continue
+            names.add(name)
+            for key, why in (("role", "그 인물이 이 Arc 에서 하는 일"),
+                             ("change", "이 Arc 를 지나며 그 인물에게서 달라지는 것")):
+                if not str(r.get(key) or "").strip():
+                    failures.append(f"{label} · {name}: {key} 가 비어 있습니다 ({why}).")
+        per_arc.append(names)
+
+    # 모든 Arc 에 걸쳐 있는 인물이 하나도 없으면 연재를 관통하는 사람이 없다.
+    # 주인공 이름을 여기서 알 수 없으므로(캐릭터 시트는 이 게이트에 안 온다)
+    # "전 Arc 에 나오는 사람이 있는가" 로 대신 본다.
+    if per_arc and not set.intersection(*per_arc):
+        failures.append(
+            "모든 Arc 에 나오는 인물이 없습니다. 주인공은 전 Arc 의 cast_roles 에 "
+            "들어가야 합니다 — 주인공이 빠진 Arc 는 주인공의 이야기가 아닙니다.")
     return failures
 
 
@@ -1523,6 +1694,49 @@ def gate_episodes_shape(payload: dict, ledger: Ledger, arc: dict = None,
             "합니다. 닫는 화의 questions_closed[].question_text 에 아래 본문을 "
             "그대로 옮겨 적으세요:\n" + listed)
 
+    failures.extend(gate_why_now(eps))
+    return failures
+
+
+# 화면에 없는 이유를 "있다"고 우기는 답. shown_by 가 이것들로 때워지면
+# 독자에게는 아무것도 안 보인다 — 독자는 설정집을 안 읽는다.
+_WHY_DODGE = ("설정상", "앞에서 설명", "앞 화에서 설명", "이미 설명", "기존 설정",
+              "독자는 안다", "말할 필요", "당연", "자명")
+
+
+def gate_why_now(eps: list) -> list:
+    """인물이 그 행동을 하는 이유가 **이 화의 화면에** 있는가.
+
+    머릿속 설정으로만 성립하는 행동은 독자에게 개연성이 없다. 실제로 그렇게
+    나왔다 — 인물이 갑자기 노래를 부르는데 왜 불러야 하는지가 어디에도 없어서
+    독자가 납득하지 못했다. 설정집에는 이유가 있었고 화면에는 없었다.
+
+    **why_now 가 한 화에도 없으면 아무것도 검사하지 않는다.** 이 칸이 생기기
+    전에 돌린 run 을 다시 돌려도 결과가 그대로여야 한다.
+    """
+    eps = [e for e in eps if isinstance(e, dict)]
+    if not any(e.get("why_now") for e in eps):
+        return []
+
+    failures = []
+    for e in eps:
+        label = f"{e.get('order') or e.get('episode') or '?'}화"
+        w = e.get("why_now")
+        if not isinstance(w, dict) or not w:
+            failures.append(f"{label}: why_now 가 없습니다 — 이 화의 중심 행동과 "
+                            "그 이유, 그 이유가 화면에 어떻게 보이는지를 적습니다.")
+            continue
+        for key, why in (("action", "이 화의 중심 행동"),
+                         ("reason", "그 행동을 하는 이유"),
+                         ("shown_by", "그 이유가 화면에 보이는 방식")):
+            if not str(w.get(key) or "").strip():
+                failures.append(f"{label}: why_now.{key} 가 비어 있습니다 ({why}).")
+        shown = str(w.get("shown_by") or "").strip()
+        if shown and any(d in shown for d in _WHY_DODGE):
+            failures.append(
+                f"{label}: why_now.shown_by 가 \"{shown[:40]}\" 입니다. "
+                "화면 밖을 가리키는 답은 답이 아닙니다 — 이 화의 대사 한 줄, "
+                "나레이션 한 줄, 또는 눈에 보이는 사건으로 적으세요.")
     return failures
 
 
@@ -1922,6 +2136,147 @@ def zone_warnings(cuts: list) -> list:
     return out
 
 
+# ---- 설정끼리 어긋나는가 --------------------------------------------------
+#
+# 확정된 설정(new_facts)은 "다음 화가 지켜야 할 것"으로 쌓인다. 그런데 쌓기만
+# 하고 **서로 부딪히는지는 아무도 안 봤다.** 3화에서 "그 방에는 창이 없다"고
+# 정해 놓고 7화에서 "창밖으로 비가 보였다"고 쓰면, 둘 다 목록에 나란히 남는다.
+#
+# 의미 충돌을 기계가 다 잡을 수는 없다. 그래서 **오탐이 적은 두 패턴만** 본다:
+#   1. 같은 것을 말하는데 한쪽에만 부정어가 있다 ("창이 있다" / "창이 없다")
+#   2. 같은 단위의 숫자가 다르다 ("3층" / "5층")
+# 나머지는 사람이 본다. 못 잡는 것이 많아도, 잡는 것이 진짜이면 쓸모가 있다.
+
+_NEG_MARKS = ("없다", "없었", "없는", "아니다", "아니었", "아닌", "않다", "않았",
+              "않는", "못한", "못했", " 안 ", "못 ")
+_NUM_UNIT = re.compile(r"(\d+)\s*(층|명|화|년|살|개|번|시|분|주|달|권|회)")
+# 조사·흔한 낱말은 겹쳐도 같은 주제라는 신호가 아니다.
+_STOP = {"그", "그녀", "그것", "이", "가", "은", "는", "을", "를", "의", "에", "에서",
+         "으로", "로", "와", "과", "도", "만", "하다", "한다", "있다", "없다", "된다",
+         "것", "수", "때", "더", "안", "못", "이다", "였다", "했다"}
+
+
+def _content_words(text: str) -> set:
+    """조사·흔한 낱말을 뺀 알맹이. 사람에게 보여 줄 주제 낱말을 고르는 데 쓴다."""
+    words = re.findall(r"[가-힣A-Za-z]{2,}", str(text or ""))
+    return {w for w in words if w not in _STOP}
+
+
+def _bigrams(text: str) -> set:
+    """글자 두 개씩. 한국어는 조사가 붙어서 낱말 단위로 비교하면 안 맞는다 —
+    '동아리방에는' 과 '동아리방' 은 다른 낱말이지만 같은 것을 말한다."""
+    s = re.sub(r"[^가-힣A-Za-z0-9]", "", str(text or ""))
+    return {s[i:i + 2] for i in range(len(s) - 1)}
+
+
+def _same_topic(a: str, b: str) -> bool:
+    """두 문장이 같은 것을 말하는가. 짧은 쪽 기준으로 얼마나 겹치는지 본다.
+
+    자카드(합집합 기준)를 쓰면 한쪽이 길 때 값이 눌린다 — "창이 없다" 처럼
+    짧은 설정이 긴 설정과 부딪히는 경우가 정확히 그 모양이라, 짧은 쪽을 분모로
+    둔다.
+    """
+    ga, gb = _bigrams(a), _bigrams(b)
+    if not ga or not gb:
+        return False
+    return len(ga & gb) / min(len(ga), len(gb)) >= 0.30
+
+
+def _negated(text: str) -> bool:
+    return any(m in str(text or "") for m in _NEG_MARKS)
+
+
+def fact_conflicts(facts: list) -> list:
+    """확정된 설정끼리 부딪히는 자리. **되돌리지 않고 경고만 한다.**
+
+    facts 는 [{"fact": 문장, "first_episode": n}, …] (SeriesState.facts).
+    같은 주제를 말하는 두 문장만 비교한다 — 알맹이 낱말이 2개 이상 겹칠 때.
+    """
+    rows = [f for f in (facts or []) if isinstance(f, dict) and str(f.get("fact") or "").strip()]
+    out = []
+    for i in range(len(rows)):
+        for j in range(i + 1, len(rows)):
+            a, b = rows[i], rows[j]
+            ta, tb = str(a["fact"]), str(b["fact"])
+            if not _same_topic(ta, tb):
+                continue                      # 다른 이야기다
+            shared = _content_words(ta) & _content_words(tb)
+            topic = ", ".join(sorted(shared)[:3]) or "같은 대상"
+            where = (f"{a.get('first_episode', '?')}화 ↔ "
+                     f"{b.get('first_episode', '?')}화")
+
+            if _negated(ta) != _negated(tb):
+                out.append(
+                    f"설정 충돌 의심 ({where}) — 같은 것({topic})을 말하는데 "
+                    f"한쪽만 부정입니다.\n    · \"{ta[:60]}\"\n    · \"{tb[:60]}\"")
+                continue
+
+            na = dict((u, n) for n, u in _NUM_UNIT.findall(ta))
+            nb = dict((u, n) for n, u in _NUM_UNIT.findall(tb))
+            clash = [u for u in na if u in nb and na[u] != nb[u]]
+            if clash:
+                u = clash[0]
+                out.append(
+                    f"설정 충돌 의심 ({where}) — 같은 것({topic})에 "
+                    f"{na[u]}{u} 과(와) {nb[u]}{u} 이(가) 함께 있습니다.\n"
+                    f"    · \"{ta[:60]}\"\n    · \"{tb[:60]}\"")
+    return out
+
+
+# ---- 글자 길이 -----------------------------------------------------------
+#
+# 지금까지 길이는 **하한만** 봤다(말 있는 컷 비율, 무음 연속). 상한이 없으니
+# 반대쪽으로 넘어가는 것을 아무도 안 막았다.
+#
+# 말풍선은 그림 위에 얹힌다. 길어지면 그림을 가리고, 세로 스크롤에서는 그
+# 컷에서 눈이 멈춘다 — 체류 시간이 텍스트 길이에 비례한다는 것은 침묵을
+# 경계하는 근거이자 **장문을 경계하는 근거**이기도 하다.
+#
+# 종류마다 다르게 잡는다. 말풍선(대사·속마음)은 인물 옆에 떠서 그림을 직접
+# 가리지만, 나레이션은 보통 여백의 띠로 들어가 덜 가린다.
+MAX_DIALOGUE_CHARS = 40       # 한 말풍선. 넘으면 두 개로 나누는 편이 낫다
+MAX_NARRATION_CHARS = 70      # 나레이션 상자
+MAX_CUT_CHARS = 110           # 한 컷의 글자 총합. 말풍선이 여러 개일 때
+_LEN_CAP = {"dialogue": MAX_DIALOGUE_CHARS, "thought": MAX_DIALOGUE_CHARS,
+            "narration": MAX_NARRATION_CHARS}
+
+
+def length_warnings(cuts: list) -> list:
+    """말풍선이 그림을 가릴 만큼 길지 않은가. **되돌리지 않고 경고만 한다.**
+
+    길이는 판단이 필요한 자리다 — 독백 한 편이 통째로 들어가야 하는 컷도 있고,
+    그때는 긴 것이 맞다. 숫자로 막으면 모델이 숫자를 맞추느라 문장을 자르고,
+    잘린 문장은 짧아진 것이지 좋아진 것이 아니다.
+    """
+    out = []
+    for c in cuts:
+        if not isinstance(c, dict):
+            continue
+        no = c.get("cut_number")
+        total = 0
+        for ln in speech_lines(c):
+            text = " ".join(str(ln.get("text") or "").split())
+            if not text:
+                continue
+            total += len(text)
+            cap = _LEN_CAP.get(str(ln.get("kind") or "dialogue"))
+            if cap and len(text) > cap:
+                # 조사까지 같이 적어 둔다 — 받침이 있고 없고가 낱말마다 달라서
+                # "나레이션가" 같은 문장이 사람 눈에 걸린다.
+                kind_ko = {"dialogue": "대사가", "thought": "속마음이",
+                           "narration": "나레이션이"}.get(ln.get("kind"), "글자가")
+                out.append(
+                    f"컷 {no} {kind_ko} {len(text)}자입니다(권장 {cap}자 이내): "
+                    f"\"{text[:28]}…\". 말풍선이 길면 그림을 가리고 그 컷에서 "
+                    "눈이 멈춥니다 — 두 개로 나누거나, 그림이 이미 말하는 부분을 "
+                    "덜어내세요.")
+        if total > MAX_CUT_CHARS:
+            out.append(
+                f"컷 {no} 의 글자가 모두 {total}자입니다(권장 {MAX_CUT_CHARS}자 이내). "
+                "한 컷에 말풍선이 여러 개면 그림이 설 자리가 없습니다.")
+    return out
+
+
 def text_warnings(cuts: list) -> list:
     """말의 밀도와 자리 — **되돌리지 않고 경고만 한다.**
 
@@ -1962,6 +2317,8 @@ def text_warnings(cuts: list) -> list:
         out.append(
             f"컷 {num[at]}~{num[at + best - 1]} 이 말 없이 {best}컷 연속입니다. "
             "그 구간에서 이야기가 멈춘 것처럼 읽힐 수 있습니다.")
+
+    out += length_warnings(cuts)
 
     # ---- 종류 편중 ----------------------------------------------------
     # 밀도와 따로 센다. 말이 충분해도 **전부 대사**면 화면이 납작해진다 —
@@ -2949,9 +3306,8 @@ def tone_warnings(cuts: list, scenes: list, personality: str = "") -> list:
     out = []
     personality_text = str(personality or "")
     if not any(w in personality_text for w in _SERIOUS_PERSONALITY_WORDS):
-        for c in cuts:
-            if not isinstance(c, dict):
-                continue
+        cuts_list = [c for c in cuts if isinstance(c, dict)]
+        for i, c in enumerate(cuts_list):
             lines = c.get("lines") if isinstance(c.get("lines"), list) else []
             texts = [str(ln.get("text") or "") for ln in lines
                      if isinstance(ln, dict) and ln.get("kind") in ("narration", "dialogue")]
@@ -2962,6 +3318,20 @@ def tone_warnings(cuts: list, scenes: list, personality: str = "") -> list:
                     "문장이 있는데, personality 에는 진지함을 가리키는 말이 없습니다. "
                     "지정 안 한 성격 이탈(설정 붕괴)일 수 있습니다 — 빌드업 없이 "
                     "톤이 급전환된 것이 아닌지 보세요.")
+                # 실제 사고에서 "빌드업 없이" 가 핵심이었다 — 급전환 문장 자체보다,
+                # 그 앞에 조짐이 한 비트도 없이 바로 꺾이는 것이 문제였다. beat 가
+                # build/turn 인 컷이 하나라도 앞에 있으면 이미 조여지고 있었던
+                # 것으로 보고, 없으면 별도로 한 번 더 짚는다.
+                lead = cuts_list[max(0, i - 2):i]
+                has_buildup = any(
+                    str(p.get("beat") or "").strip().lower() in ("build", "turn")
+                    for p in lead)
+                if not has_buildup:
+                    out.append(
+                        f"컷 {c.get('cut_number')} 앞 두 컷 모두 beat 가 build/turn 이 "
+                        "아닙니다 — 전환 직전에 조짐(빌드업)이 없다는 뜻일 수 있습니다. "
+                        "장난스러운 흐름이 예고 없이 바로 진지하게 꺾이는 것이 아닌지 "
+                        "보세요.")
                 break
     cuts = [c for c in cuts if isinstance(c, dict)]
     scenes = [s for s in (scenes or []) if isinstance(s, dict)]
@@ -2996,6 +3366,35 @@ def tone_warnings(cuts: list, scenes: list, personality: str = "") -> list:
                 f"tone 이 '개그' 인데 컷이 전부 normal 입니다. 의도한 것이면 그대로 "
                 "두세요 — 다만 개그로 잡아 놓고 정식 작화로만 그리면 그 장면을 "
                 "살리지 않은 것입니다 (sd·emphasis 가 이 자리의 카드입니다).")
+    return out
+
+
+# 인접 컷에서 얼굴 방향이 예고 없이 뒤집히는 사고 — 실제 사고: "1·3컷은 정면인데
+# 2컷만 갑자기 뒷모습이라 독자가 읽는 흐름에 불편감을 느낀다"는 피드백. shot·angle
+# 필드에는 얼굴 방향(정면/뒷모습)이 없다 — 카메라의 거리·높이일 뿐, 인물이 카메라를
+# 보고 있는지는 서술(description)의 자연어로만 존재해서 게이트가 못 본다. 그래서
+# advisory 로, 인접한 두 컷의 서술에서 정면류/뒷모습류 낱말이 그대로 부딪힐 때만
+# 짚는다 — 오탐을 피하려고 낱말을 좁게 잡았다(넓게 잡으면 "돌아서서 걷는다"류의
+# 흔한 동작 서술까지 다 걸린다).
+_FRONT_FACING = re.compile(r"(정면|마주\s*보|마주본|얼굴을\s*보)")
+_BACK_FACING = re.compile(r"(뒷모습|뒤통수|등을\s*보이|등을\s*돌리)")
+
+
+def facing_warnings(cuts: list) -> list:
+    """인접 컷 사이 얼굴 방향(정면 ↔ 뒷모습)이 완충 없이 뒤집히는 자리 — advisory."""
+    out = []
+    cuts = [c for c in cuts if isinstance(c, dict)]
+    for prev, cur in zip(cuts, cuts[1:]):
+        prev_desc = str(prev.get("description") or "")
+        cur_desc = str(cur.get("description") or "")
+        flipped = ((_FRONT_FACING.search(prev_desc) and _BACK_FACING.search(cur_desc))
+                   or (_BACK_FACING.search(prev_desc) and _FRONT_FACING.search(cur_desc)))
+        if flipped:
+            out.append(
+                f"컷 {prev.get('cut_number')}→{cur.get('cut_number')} 사이 얼굴 방향이 "
+                "정면↔뒷모습으로 바로 뒤집힙니다. 독자가 읽는 흐름이 끊길 수 있습니다 — "
+                "옆모습·반측면처럼 완충이 되는 각도를 사이에 넣거나, 한쪽 방향을 "
+                "맞추는 것을 검토하세요.")
     return out
 
 
@@ -3347,6 +3746,10 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
     코드가 여백·경계·시선을 계산해 붙인다. 계산 결과로 모델을 되돌리지 않는다.
     """
     feedback, regens = "", 0
+    # 이번 화 서술에 등장하는 태그와 겹치는 연출 지식만 골라 붙인다 — 액션 장면이
+    # 아니면 액션 연출 지식은 안 붙는다 (resolve_directing_notes 문서 참고).
+    directing_notes = resolve_directing_notes(
+        card, json.dumps(episode, ensure_ascii=False))
     while True:
         payload = call(
             "W7", f"{absolute}화 컷 분해",
@@ -3354,11 +3757,12 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                 "engine_card": card,
                 "series_arc": series_arc or "(큰 줄거리가 넘어오지 않았습니다)",
                 "arc_json": arc_json,
-                "episode_json": json.dumps(episode, ensure_ascii=False, indent=2),
+                "episode_json": json.dumps(episode, ensure_ascii=False, separators=(",", ":")),
                 "ledger_snapshot": ledger_snapshot,
                 "engine_fired_list": fired_list(episode),
                 "setting_block": setting_block(episode),
                 "zones_block": zones_txt or "(등록된 존이 없습니다)",
+                "directing_notes": directing_notes or "(해당 없음)",
                 "retry_feedback": feedback_block(feedback),
             }),
             TEMP_CREATIVE,
@@ -3387,6 +3791,7 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
             notes += [f"이름 경고: {x}" for x in prop_text_name_check(cuts, known)]
             notes += [f"톤 메모: {x}" for x in tone_warnings(
                 cuts, payload.get("scenes"), personality)]
+            notes += [f"각도 메모: {x}" for x in facing_warnings(cuts)]
             notes += [f"공간 메모: {x}" for x in zone_warnings(cuts)]
             return payload, regens, notes
         log(f"  {absolute}화 7단계 게이트 실패 {len(failures)}건")
@@ -3611,9 +4016,9 @@ def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
             "W8", f"{absolute}화 글자 다시 쓰기",
             render(ps.texts["w8"], {
                 "engine_card": card,
-                "episode_json": json.dumps(episode, ensure_ascii=False, indent=2),
+                "episode_json": json.dumps(episode, ensure_ascii=False, separators=(",", ":")),
                 "ledger_snapshot": ledger_snapshot,
-                "cuts_json": json.dumps(cuts, ensure_ascii=False, indent=2),
+                "cuts_json": json.dumps(cuts, ensure_ascii=False, separators=(",", ":")),
                 "pov": pov or "(엔진 카드에서 주인공을 찾지 못했습니다)",
                 "banned_words": " · ".join(BANNED_IN_DIALOGUE),
                 "retry_feedback": feedback_block(feedback),
@@ -4045,7 +4450,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
     (wt_dir / "engine_card.txt").write_text(card, encoding="utf-8")
 
     ledger = Ledger(str(p2.get("engine_question") or ""), cap=ledger_cap)
-    sheet = json.dumps(p1, ensure_ascii=False, indent=2)
+    sheet = json.dumps(p1, ensure_ascii=False, separators=(",", ":"))
 
     def call(stage: str, label: str, prompt: str, temp: float, verdict_of=None):
         start = len(usage.records)
@@ -4148,7 +4553,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
             (wt_dir / "engine_card.txt").write_text(card, encoding="utf-8")
             arc = arc_for_episode(arcs, no)
             arc_order = arc.get("order")
-            arc_json = json.dumps(arc, ensure_ascii=False, indent=2)
+            arc_json = json.dumps(arc, ensure_ascii=False, separators=(",", ":"))
             ep_path = wt_dir / f"arc{arc_order}_episodes.json"
             rv_path = wt_dir / f"ep{no:02d}_review.json"
             cut_path = wt_dir / f"ep{no:02d}_cuts.json"
@@ -4198,7 +4603,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                         "engine_card": card, "arc_json": arc_json,
                         "ledger_snapshot": ledger.snapshot(no),
                         "episodes_json": json.dumps(
-                            {"episodes": episodes}, ensure_ascii=False, indent=2),
+                            {"episodes": episodes}, ensure_ascii=False, separators=(",", ":")),
                     }),
                     TEMP_JUDGE,
                     lambda o: "검사 완료")
@@ -4491,7 +4896,7 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
                 break
 
         arc_json = json.dumps(arcs.get(arc_order) or {"order": arc_order},
-                              ensure_ascii=False, indent=2)
+                              ensure_ascii=False, separators=(",", ":"))
         try:
             payload, _, notes = solve_cuts(
                 ps, call, card, arc_json, episode,

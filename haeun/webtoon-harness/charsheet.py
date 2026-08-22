@@ -71,6 +71,7 @@ class Sheet:
     run_dir: Path
     name: str = ""                             # p1.json 의 name (컷별 등장 판별에 쓴다)
     gender: str = ""                           # p1.json 의 gender (있으면)
+    age: str = ""                              # p1.json 의 age (없으면 빈 문자열)
     appearance: str = ""                       # p1.json 의 appearance_en
     design_details: str = ""
     color_palette: str = ""
@@ -177,6 +178,7 @@ def load(runs_root: Path, run_id: str) -> Sheet:
     if isinstance(p1, dict):
         sheet.name = _text(p1.get("name"))
         sheet.gender = _text(p1.get("gender") or p1.get("sex"))
+        sheet.age = _text(p1.get("age") or p1.get("나이"))
         sheet.appearance = _text(p1.get("appearance_en"))
         sheet.design_details = _text(p1.get("design_details"))
         sheet.color_palette = _text(p1.get("color_palette"))
@@ -714,6 +716,80 @@ def accessory_warning(sheet: "Sheet | None", appearance: str) -> str:
         "아니면 무시해도 됩니다).")
 
 
+# 나이 → 얼굴·몸 지시. 실사용자 지적(2026-08): "나이 비율에 비해 얼굴이 성숙해
+# 보인다. 나이대를 못 맞춘다" (18세로 적었는데 20대 중후반 얼굴이 나왔다).
+#
+# 원인은 프롬프트에 나이가 **아예 안 들어가고 있었던 것**이다. p1.json 에 age 가
+# 있어도 charsheet 가 안 읽었고, 그래서 design_lock 에도 안 실렸다. 이미지 모델은
+# 아무 말이 없으면 웹툰 주인공의 기본값(성인 초중반)으로 그린다.
+#
+# ★ 숫자만 주면 안 된다. "18 years old" 라고만 쓰면 모델이 거의 안 듣는다.
+#   **얼굴의 어디가 달라지는지**를 적어야 실제로 바뀐다 (볼살·턱선·눈 크기 비율).
+# ★ 등신은 여기서 건드리지 않는다 — 그건 head_ratio 쪽 일이다. 여기는 얼굴이다.
+AGE_LOOK = (
+    (0, 12,  "a CHILD: round soft face, full cheeks, no jawline definition, "
+             "large eyes set low and wide in the face, small nose and mouth, "
+             "short neck"),
+    (13, 15, "an EARLY TEEN: still-soft round cheeks, a barely-there jawline, "
+             "noticeably large eyes for the face, a small thin neck — clearly "
+             "younger than a high-school upperclassman"),
+    (16, 19, "a TEENAGER (high-school age): youthful soft cheeks with only a "
+             "gentle jawline, eyes large relative to the face, a smooth "
+             "unlined forehead, a slim neck. NOT an adult face — do not draw "
+             "sharp cheekbones, a narrow defined jaw, or a mature sultry look"),
+    (20, 29, "a YOUNG ADULT in their twenties: a defined but still soft "
+             "jawline, balanced eye-to-face proportion, smooth skin"),
+    (30, 44, "an ADULT in their thirties or forties: a clearly defined jaw and "
+             "cheekbones, eyes in adult proportion to the face, faint "
+             "expression lines"),
+    (45, 200, "a MIDDLE-AGED OR OLDER person: a set jaw, visible expression "
+              "lines around eyes and mouth, softer eyelids, an adult "
+              "eye-to-face proportion"),
+)
+AGE_HEAD = "AGE — the face must read as"
+
+_AGE_NUM = re.compile(r"(\d{1,3})")
+
+
+def age_look(age: str) -> str:
+    """'18' / '18세' / '열여덟' → 얼굴 지시문. 못 읽으면 빈 문자열.
+
+    숫자를 못 찾으면 조용히 포기한다. 나이를 안 적은 캐릭터(대부분의 예전 run)
+    에서 이 자리가 비어야 예전과 똑같이 동작하기 때문이다.
+    """
+    m = _AGE_NUM.search(str(age or ""))
+    if not m:
+        return ""
+    try:
+        n = int(m.group(1))
+    except ValueError:
+        return ""
+    if not 0 <= n <= 200:
+        return ""
+    for lo, hi, look in AGE_LOOK:
+        if lo <= n <= hi:
+            return f"{AGE_HEAD} {look}. The character is {n} years old."
+    return ""
+
+
+def age_warning(sheet: "Sheet | None") -> str:
+    """나이를 못 읽었을 때 알린다. hair_warning / accessory_warning 과 같은 컨벤션.
+
+    나이를 아예 안 적은 경우는 경고하지 않는다 — 안 적는 것도 정상이다.
+    적었는데 숫자를 못 뽑아낸 경우만 알린다 (예: "청년", "고등학생").
+    """
+    if sheet is None:
+        return ""
+    raw = str(sheet.age or "").strip()
+    if not raw or age_look(raw):
+        return ""
+    return (
+        f"p1.json 의 age(\"{raw}\")에서 숫자를 찾지 못해 나이 지시문을 못 넣었습니다.\n"
+        "         나이를 안 넣으면 이미지 모델은 성인 초중반 얼굴로 그립니다 — "
+        "실제로 18세 캐릭터가 20대 중후반으로 나온 적이 있습니다.\n"
+        "         age 를 숫자로 적어 주세요 (예: \"18\" 또는 \"18세\").")
+
+
 def lock_text(sheet: Sheet | None, outfit: str = "", hair: str = "",
               monochrome: bool = False, accent_keys: "tuple | list" = ()) -> str:
     """design_details / color_palette / expression_set 을 프롬프트 끝에 박는다.
@@ -745,6 +821,12 @@ def lock_text(sheet: Sheet | None, outfit: str = "", hair: str = "",
         parts.append(hair_text(hair_line))
     if sheet is None:
         return "\n".join(parts)
+    # 나이는 design_details 보다 **앞**에 둔다. 얼굴이 몇 살로 보이는지는 옷·
+    # 소품보다 먼저 정해져야 하는 것이고, 뒤에 두면 앞의 긴 디테일 나열에
+    # 묻힌다. age 가 없는 예전 run 은 빈 문자열이라 이 줄이 통째로 빠진다.
+    age_line = age_look(sheet.age)
+    if age_line:
+        parts.append(age_line)
     if sheet.design_details:
         parts.append(f"{LOCK_HEAD} {sheet.design_details}")
     if sheet.color_palette:
