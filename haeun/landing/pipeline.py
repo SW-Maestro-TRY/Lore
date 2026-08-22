@@ -87,6 +87,9 @@ STYLES = {
     "webtoon":   "일반 웹툰",
     "romance":   "로맨스 판타지",
     "cinematic": "시네마틱 반실사",
+    "pastel":    "일상툰 감성",
+    "noir":      "다크 느와르",
+    "shoujo":    "순정 · BL",
 }
 
 # 사용자에게 보이는 단계. 하네스의 내부 단계 이름(P1/W5/…)은 올리지 않는다 —
@@ -203,6 +206,32 @@ def build_config(job_dir: Path, style: str) -> Path:
 FIELD_KEYS = ("나이", "성별", "직업", "성격", "말투", "과거", "관계", "약점")
 
 
+def world_presets() -> list[dict[str, str]]:
+    """세계관 프리셋 목록. story-harness 의 worlds.json 이 유일한 출처다.
+
+    여기서 목록을 따로 들고 있으면 두 곳이 갈라진다 — story.py 는 실제로
+    `world.preset` 키를 worlds.json 에서 찾아 본문으로 바꾸므로(world_preset_text),
+    화면이 보여 준 키가 거기 없으면 그 실행은 통째로 멈춘다.
+    """
+    try:
+        data = json.loads((STORY / "worlds.json").read_text(encoding="utf-8"))
+    except Exception:                                          # noqa: BLE001
+        return []
+    out = []
+    for key, v in (data.get("presets") or {}).items():
+        if not isinstance(v, dict):
+            continue
+        text = str(v.get("text") or "").strip()
+        out.append({
+            "key": key,
+            "label": str(v.get("label") or key),
+            # 고르면 무엇이 들어가는지 화면에서 바로 보여 준다. 고르고 나서야
+            # 아는 것보다 고르기 전에 아는 편이 낫다.
+            "text": text,
+        })
+    return out
+
+
 def write_character(job_dir: Path, form: dict[str, Any]) -> Path:
     """폼 입력을 story.py 가 읽는 캐릭터 파일로.
 
@@ -215,7 +244,11 @@ def write_character(job_dir: Path, form: dict[str, Any]) -> Path:
         "character": str(form.get("character", "")).strip(),
         "fields": {k: v for k, v in fields.items() if v},
         "genre": str(form.get("genre", "")).strip(),
-        "world": {"preset": "", "text": str(form.get("world", "")).strip()},
+        # 프리셋과 자유 입력은 같이 올 수 있다. story.py 는 자유 입력이 있으면
+        # 그쪽을 쓰고, 비어 있을 때만 프리셋 본문을 채운다(read_character) —
+        # 골라 두고 직접 고쳐 쓴 사람의 글이 프리셋에 덮이지 않게 하는 순서다.
+        "world": {"preset": str(form.get("world_preset", "")).strip(),
+                  "text": str(form.get("world", "")).strip()},
         "story": str(form.get("story", "")).strip(),
     }
     photo = job_dir / "photo.png"
@@ -827,6 +860,323 @@ def unit_image(run_id: str, no: int) -> Path | None:
             if p.exists():
                 return p
     return None
+
+
+# --------------------------------------------------------------------------- #
+# 장(Scene) 다시 그리기
+#
+# 이미지는 컷이 아니라 **장 단위**로 굽는다 — 한 장에 3컷이 함께 그려진다.
+# 그래서 "컷 하나만" 다시 뽑는 길은 없고, 다시 그리는 최소 단위는 장이다.
+#
+# 지키는 것 두 가지:
+#   1. 새로 그리다 실패해도 **이미 있던 그림은 그대로 남는다.** 다시 그리기를
+#      눌렀다가 원본까지 잃으면 누구도 그 버튼을 두 번 누르지 않는다.
+#   2. 이전 판을 버리지 않는다. 새로 뽑은 게 더 나쁠 수 있고, 그건 눌러 보기
+#      전에는 모른다.
+# --------------------------------------------------------------------------- #
+
+def scene_cut_range(run_id: str, scene_no: int) -> tuple[int, int] | None:
+    """그 장에 들어 있는 컷 번호의 처음과 끝. run.py 의 --cuts 에 그대로 준다.
+
+    scene 모드에서 --cuts 는 "그 컷이 들어 있는 장"을 고르므로, 장 하나를
+    다시 그리려면 그 장의 컷 범위를 주면 된다.
+    """
+    grouping = _read_json(episode_dir(run_id), "scenes.json").get("scenes") or []
+    for sc in grouping:
+        if int(sc.get("scene_number") or 0) != int(scene_no):
+            continue
+        nums = [int(n) for n in (sc.get("cut_numbers") or [])]
+        if nums:
+            return min(nums), max(nums)
+    # scenes.json 이 없는 옛 실행 — editor_data 와 같은 규칙으로 떨어진다
+    # (장 번호 = 컷 번호).
+    cuts = _read_json(STORY / "runs" / run_id / "webtoon", "ep01_cuts.json").get("cuts") or []
+    if any(int(c.get("cut_number") or 0) == int(scene_no) for c in cuts):
+        return int(scene_no), int(scene_no)
+    return None
+
+
+def _versions_dir(run_id: str) -> Path:
+    return episode_dir(run_id) / "versions"
+
+
+def scene_versions(run_id: str, scene_no: int) -> list[dict[str, Any]]:
+    """그 장의 지난 판 목록. 최신이 앞에 온다."""
+    vdir = _versions_dir(run_id)
+    if not vdir.exists():
+        return []
+    out = []
+    for p in vdir.glob(f"scene{int(scene_no)}.v*.png"):
+        try:
+            v = int(p.stem.rsplit(".v", 1)[1])
+        except (ValueError, IndexError):
+            continue
+        out.append({"version": v, "at": p.stat().st_mtime,
+                    "url": f"/api/runs/{run_id}/scenes/{scene_no}/versions/{v}"})
+    return sorted(out, key=lambda d: -d["version"])
+
+
+def _next_version(run_id: str, scene_no: int) -> int:
+    got = scene_versions(run_id, scene_no)
+    return (got[0]["version"] + 1) if got else 1
+
+
+def archive_scene(run_id: str, scene_no: int) -> int | None:
+    """지금 걸려 있는 그림을 판본으로 떠 둔다. 새로 굽기 **직전**에 부른다."""
+    src = unit_image(run_id, scene_no)
+    if not src:
+        return None
+    vdir = _versions_dir(run_id)
+    vdir.mkdir(parents=True, exist_ok=True)
+    v = _next_version(run_id, scene_no)
+    shutil.copy2(src, vdir / f"scene{int(scene_no)}.v{v}.png")
+    return v
+
+
+def version_path(run_id: str, scene_no: int, version: int) -> Path | None:
+    p = _versions_dir(run_id) / f"scene{int(scene_no)}.v{int(version)}.png"
+    return p if p.exists() else None
+
+
+def revert_scene(run_id: str, scene_no: int, version: int) -> bool:
+    """지난 판으로 되돌린다. 되돌리기 전의 그림도 판본으로 남긴다 —
+    되돌린 것을 다시 되돌릴 수 있어야 한다."""
+    src = version_path(run_id, scene_no, version)
+    dest = unit_image(run_id, scene_no)
+    if not src or not dest:
+        return False
+    archive_scene(run_id, scene_no)
+    shutil.copy2(src, dest)
+    _clear_cache(run_id, scene_no)
+    return True
+
+
+def _clear_cache(run_id: str, scene_no: int) -> None:
+    """줄여 둔 그림을 지운다. 안 지우면 새로 그려도 화면은 옛 그림을 계속 준다
+    (thumbnail 이 mtime 으로 캐시를 판단하는데, job 폴더 캐시는 여기서 못 본다)."""
+    for cache in episode_dir(run_id).glob("cache/page*"):
+        if cache.stem.startswith(f"page{int(scene_no)}_"):
+            cache.unlink(missing_ok=True)
+
+
+def _append_to_extra(text: str, cond: str, note: str) -> str:
+    """조건의 `extra:` 블록 **끝에** 한 줄 덧붙인다.
+
+    S+ 의 extra 는 블록 스칼라(`>-`)이고, 그 안에 시트를 어떻게 보라는 지침이
+    통째로 들어 있다. 통으로 바꾸면 그 지침이 사라져서 다시 그린 장만 얼굴이
+    달라진다 — 덮어쓰지 않고 뒤에 붙이는 이유다.
+    """
+    lines = text.splitlines(keepends=True)
+    # 조건 블록의 시작. 키가 S+ 처럼 따옴표가 붙어 있을 수도 있다.
+    head = re.compile(rf'^  "?{re.escape(cond)}"?:\s*$')
+    start = next((i for i, l in enumerate(lines) if head.match(l.rstrip("\n"))), -1)
+    if start < 0:
+        return text
+    # 그 블록 안의 extra 줄.
+    ex = -1
+    for i in range(start + 1, len(lines)):
+        s = lines[i].rstrip("\n")
+        if s and not s.startswith("    "):
+            break                      # 다음 조건으로 넘어갔다
+        if re.match(r"^    extra:", s):
+            ex = i
+            break
+    if ex < 0:
+        return text
+    if not re.match(r"^    extra:\s*[>|]", lines[ex].rstrip("\n")):
+        return text                    # 블록 스칼라가 아니면 건드리지 않는다
+    # 블록 스칼라 본문이 끝나는 자리를 찾는다 (더 깊이 들여쓴 줄들).
+    end = ex + 1
+    while end < len(lines):
+        s = lines[end].rstrip("\n")
+        if s.strip() and not s.startswith("      "):
+            break
+        end += 1
+    lines.insert(end, f"      {note}\n")
+    return "".join(lines)
+
+
+def _origin_config(run_id: str) -> Path | None:
+    """그 run 을 만들 때 쓴 config.yaml. 못 찾으면 None.
+
+    다시 그릴 때 config 를 원본에서 새로 만들면 **그림체가 바뀐다** —
+    build_config 가 style_default 를 덮어쓰기 때문이다. 한 장만 다른 그림체로
+    그려지면 그게 재생성 실패보다 나쁘다. 그래서 그 실행이 실제로 쓴 config 를
+    먼저 찾는다.
+    """
+    if not JOBS_DIR.is_dir():
+        return None
+    for job_dir in JOBS_DIR.iterdir():
+        marker = job_dir / "run_id.txt"
+        cfg = job_dir / "config.yaml"
+        if not (marker.exists() and cfg.exists()):
+            continue
+        try:
+            if marker.read_text(encoding="utf-8").strip() == run_id:
+                return cfg
+        except OSError:
+            continue
+    return None
+
+
+def regen_config(run_id: str, feedback: str, style: str = "") -> Path:
+    """다시 그리기 전용 config. 피드백을 조건의 {extra} 뒤에 얹는다.
+
+    하네스를 고치지 않는다 — run.py 의 프롬프트 틀에 이미 {extra} 자리가 있고
+    그 값은 config 의 조건에서 온다(cond_extra). 그래서 config 사본만 만들면
+    사용자가 쓴 말이 그림 프롬프트에 그대로 붙는다.
+    """
+    out_dir = episode_dir(run_id) / "regen"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "config.yaml"
+    origin = _origin_config(run_id)
+    if origin:
+        shutil.copy2(origin, path)
+    else:
+        # 하네스를 직접 돌린 run 이라 job 이 없다. 원본에서 만들되 그림체는
+        # 호출자가 준 것을 쓴다(안 주면 하네스 기본값).
+        build_config(out_dir, style or next(iter(STYLES)))
+    note = " ".join(str(feedback or "").split())
+    if note:
+        # 줄바꿈만 지운다. 블록 스칼라 안이라 따옴표는 그대로 둬도 되고,
+        # 오히려 이스케이프하면 그 글자가 프롬프트에 그대로 나간다.
+        path.write_text(
+            _append_to_extra(path.read_text(encoding="utf-8"), CONDITION,
+                             f"Revision requested by the author: {note}"),
+            encoding="utf-8")
+    return path
+
+
+@dataclass
+class Regen:
+    """장 하나를 다시 그리는 작업. 전체 파이프라인 Job 과 달리 단계가 없다."""
+    id: str
+    run_id: str
+    scene_no: int
+    feedback: str = ""
+    status: str = "queued"                  # queued / running / done / error
+    error: str = ""
+    note: str = ""
+    version: int | None = None              # 되돌아갈 수 있는 직전 판
+    started_at: float = 0.0
+    finished_at: float = 0.0
+    _proc: subprocess.Popen | None = field(default=None, repr=False)
+    _cancel: bool = False
+
+    def snapshot(self) -> dict[str, Any]:
+        return {"id": self.id, "run_id": self.run_id, "scene": self.scene_no,
+                "status": self.status, "error": self.error, "note": self.note,
+                "version": self.version,
+                "image": f"/api/runs/{self.run_id}/page/{self.scene_no}",
+                "versions": scene_versions(self.run_id, self.scene_no)}
+
+    def cancel(self) -> None:
+        self._cancel = True
+        if self._proc and self._proc.poll() is None:
+            self._proc.terminate()
+
+
+class RegenRunner:
+    """다시 그리기 작업들. 한 번에 하나만 돌린다 — 같은 run 의 두 장을 동시에
+    구우면 직전 장을 참조하는 S+ 조건이 서로를 덮어쓴다."""
+
+    def __init__(self) -> None:
+        self.jobs: dict[str, Regen] = {}
+        self._lock = threading.Lock()
+        self._gate = threading.Semaphore(1)
+
+    def get(self, rid: str) -> Regen | None:
+        return self.jobs.get(rid)
+
+    def start(self, run_id: str, scene_no: int, feedback: str = "",
+              style: str = "") -> Regen:
+        job = Regen(id=uuid.uuid4().hex[:12], run_id=run_id,
+                    scene_no=int(scene_no), feedback=feedback)
+        with self._lock:
+            self.jobs[job.id] = job
+        threading.Thread(target=self._work, args=(job, style), daemon=True).start()
+        return job
+
+    def _work(self, job: Regen, style: str) -> None:
+        with self._gate:
+            backup = None
+            try:
+                job.status = "running"
+                job.started_at = time.time()
+
+                rng = scene_cut_range(job.run_id, job.scene_no)
+                if not rng:
+                    raise Failed("그 장을 찾지 못했습니다.")
+
+                # 굽기 **전에** 지금 그림을 떠 둔다. run.py 는 같은 자리에
+                # 덮어쓰므로, 이걸 안 하면 실패했을 때 원본까지 사라진다.
+                job.note = "지금 그림을 보관하는 중"
+                job.version = archive_scene(job.run_id, job.scene_no)
+                if job.version:
+                    backup = version_path(job.run_id, job.scene_no, job.version)
+
+                job.note = "다시 그리는 중"
+                cfg = regen_config(job.run_id, job.feedback, style)
+                cmd = ["run.py", "--run-id", job.run_id, "--episode", "1",
+                       "--mode", MODE, "-c", CONDITION,
+                       "--cuts", f"{rng[0]}-{rng[1]}",
+                       "--config", str(cfg), "--yes"]
+                code = self._spawn(job, cmd)
+                if job._cancel:
+                    raise Failed("취소됨")
+                if code != 0:
+                    raise Failed("그림을 다시 그리지 못했습니다.")
+
+                _clear_cache(job.run_id, job.scene_no)
+                job.status = "done"
+                job.note = "새로 그렸습니다"
+            except Failed as exc:
+                job.status = "cancelled" if job._cancel else "error"
+                job.error = str(exc)
+                self._restore(job, backup)
+            except Exception as exc:                            # noqa: BLE001
+                job.status = "error"
+                job.error = f"{type(exc).__name__}: {exc}"
+                self._restore(job, backup)
+            finally:
+                job.finished_at = time.time()
+                job._proc = None
+
+    def _restore(self, job: Regen, backup: Path | None) -> None:
+        """실패했으면 있던 그림을 되돌려 놓는다. **이게 이 기능의 약속이다** —
+        다시 그리기를 눌렀다가 원본까지 잃으면 아무도 두 번 누르지 않는다."""
+        if not backup or not backup.exists():
+            return
+        dest = unit_image(job.run_id, job.scene_no)
+        if dest:
+            try:
+                shutil.copy2(backup, dest)
+                _clear_cache(job.run_id, job.scene_no)
+                job.note = "실패해서 원래 그림으로 되돌렸습니다"
+            except OSError:
+                pass
+
+    def _spawn(self, job: Regen, cmd: list[str]) -> int:
+        log = episode_dir(job.run_id) / "regen" / f"{job.id}.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ)
+        env["PYTHONIOENCODING"] = "utf-8"
+        proc = subprocess.Popen(
+            [sys.executable, "-u", *cmd], cwd=str(WEBTOON), env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace", bufsize=1)
+        job._proc = proc
+        with log.open("w", encoding="utf-8") as fh:
+            fh.write(" ".join(["python", *cmd]) + "\n")
+            for raw in proc.stdout:                 # type: ignore[union-attr]
+                line = raw.rstrip("\n")
+                fh.write(line + "\n")
+                if line.strip():
+                    job.note = line.strip()[:120]
+        return proc.wait()
+
+
+regens = RegenRunner()
 
 
 def _read_json(base: Path, name: str) -> dict:

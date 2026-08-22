@@ -252,6 +252,9 @@ body[data-view="result"]  .topbar { display: none; }
 .chip:hover { border-color: var(--accent); color: var(--text); }
 
 .styles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* 그림체가 홀수 개면 마지막 카드가 한 줄에 혼자 남아 오른쪽이 비어 보인다.
+   그때만 두 칸을 다 쓰게 해서 줄을 채운다 (7개 → 2·2·2·꽉 찬 1). */
+.style-opt:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .style-opt { position: relative; cursor: pointer; }
 .style-opt input { position: absolute; opacity: 0; pointer-events: none; }
 .style-box {
@@ -465,3 +468,39 @@ body[data-view="result"]  .topbar { display: none; }
 }
 .inline-link { color: var(--gold); border-bottom: 1px solid rgba(217,180,101,.4); }
 .inline-link:hover { color: #f0d090; }
+
+/* ---- 장 다시 그리기 (#59) ------------------------------------------- */
+/* 그림은 장 단위로 굽는다. 그래서 버튼도 컷이 아니라 장에 붙는다. */
+
+.page { position: relative; }
+
+.page-tools {
+  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  padding: .45rem .2rem .1rem;
+}
+/* 읽는 것이 먼저다 — 도구는 그 장에 마우스를 올리거나 포커스가 갔을 때만
+   또렷해진다. 늘 진하면 읽는 흐름을 끊는다. */
+.page-tools { opacity: .25; transition: opacity .15s ease; }
+.page:hover .page-tools,
+.page:focus-within .page-tools { opacity: 1; }
+
+.page-versions { font-size: .78rem; color: var(--muted, #8a8a94); }
+.chip-sm { padding: .1rem .45rem; font-size: .75rem; margin-left: .25rem; }
+
+.regen-box {
+  border: 1px solid var(--line, #2a2a33);
+  border-radius: .6rem;
+  padding: .7rem .8rem;
+  margin: .2rem .2rem .9rem;
+  background: var(--card, rgba(255,255,255,.03));
+}
+.regen-box textarea { width: 100%; resize: vertical; }
+.regen-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.regen-note { font-size: .78rem; color: var(--muted, #8a8a94); }
+
+/* 세계관 프리셋 (#68) */
+#worldPreset { margin-bottom: .4rem; }
+.field .hint {
+  display: block; margin-top: .35rem; font-size: .78rem; line-height: 1.5;
+  color: var(--muted, #8a8a94);
+}

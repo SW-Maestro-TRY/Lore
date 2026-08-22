@@ -150,6 +150,7 @@ class Handler(BaseHTTPRequestHandler):
                 "fields": list(pipeline.FIELD_KEYS),
                 "condition": pipeline.CONDITION,
                 "cuts_per_sheet": pipeline.CUTS_PER_SHEET,
+                "worlds": pipeline.world_presets(),
             })
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
@@ -167,6 +168,32 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/runs/([\w.-]+)/cost", path)
         if m:
             return self._json(pipeline.run_cost(m.group(1)))
+
+        # 다시 그리기 — 지난 판 목록과 그 그림.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions", path)
+        if m:
+            return self._json({"versions": pipeline.scene_versions(
+                m.group(1), int(m.group(2)))})
+
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions/(\d+)", path)
+        if m:
+            src = pipeline.version_path(m.group(1), int(m.group(2)), int(m.group(3)))
+            if not src:
+                return self._error(404, "그 판본이 없습니다")
+            width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
+            dest = (pipeline.episode_dir(m.group(1)) / "cache"
+                    / f"v{m.group(2)}_{m.group(3)}_w{width}.jpg")
+            try:
+                return self._file(thumbnail(src, dest, width))
+            except Exception:                                   # noqa: BLE001
+                return self._file(src)
+
+        m = re.fullmatch(r"/api/regens/([\w.-]+)", path)
+        if m:
+            job = pipeline.regens.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            return self._json(job.snapshot())
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/page/(\d+)", path)
         if m:
@@ -297,6 +324,54 @@ class Handler(BaseHTTPRequestHandler):
 
             job = runner.create(form, photo)
             return self._json({"id": job.id, "queue_position": runner.position(job.id)})
+
+        # ---- 장(Scene) 다시 그리기 ------------------------------------- #
+        #
+        # 크레딧 차감은 없다 (#16 이 백로그라 붙일 곳이 없다). 실제 API 비용은
+        # 나가므로, 화면이 "몇 크레딧" 이라고 적어 두더라도 그건 목업이다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/regen", url.path)
+        if m:
+            run_id, scene_no = m.group(1), int(m.group(2))
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            if not pipeline.scene_cut_range(run_id, scene_no):
+                return self._error(404, "그 장을 찾지 못했습니다")
+            if not pipeline.unit_image(run_id, scene_no):
+                return self._error(409, "아직 그려지지 않은 장입니다")
+            feedback = str(body.get("feedback") or "").strip()
+            if len(feedback) > 500:
+                return self._error(400, "요청은 500자까지 적어 주세요")
+            job = pipeline.regens.start(run_id, scene_no, feedback,
+                                        str(body.get("style") or ""))
+            return self._json(job.snapshot())
+
+        m = re.fullmatch(r"/api/regens/([\w.-]+)/cancel", url.path)
+        if m:
+            job = pipeline.regens.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            job.cancel()
+            return self._json({"ok": True})
+
+        # 지난 판으로 되돌리기. 되돌리기 직전 그림도 판본으로 남으므로
+        # "되돌린 것을 다시 되돌리기" 도 된다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/revert", url.path)
+        if m:
+            run_id, scene_no = m.group(1), int(m.group(2))
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            try:
+                version = int(body.get("version"))
+            except (TypeError, ValueError):
+                return self._error(400, "version 이 필요합니다")
+            if not pipeline.revert_scene(run_id, scene_no, version):
+                return self._error(404, "그 판본으로 되돌리지 못했습니다")
+            return self._json({"ok": True,
+                               "versions": pipeline.scene_versions(run_id, scene_no)})
 
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/cancel", url.path)
         if m:

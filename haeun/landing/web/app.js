@@ -14,6 +14,9 @@ const STYLE_INFO = [
   ["romance",   "로맨스 판타지",  "표지 일러스트급 밀도. 보석 같은 눈, 장미와 금박, 레이스까지 하나하나."],
   ["cinematic", "시네마틱 반실사","빛으로 화려해집니다. 역광·공기·얕은 심도·필름 색보정. 얼굴은 웹툰 그대로."],
   ["lineart",   "선화 · 액션",    "선과 여백이 다 합니다. 톤을 거의 안 쓰고 포즈와 실루엣으로 읽힙니다."],
+  ["pastel",    "일상툰 감성",    "일부러 덜 완성한 그림. 흔들리는 연필선, 종이 결, 바랜 파스텔 몇 색."],
+  ["noir",      "다크 느와르",    "어둠이 주인공입니다. 화면 대부분이 먹으로 덮이고 빛은 얇게 남습니다."],
+  ["shoujo",    "순정 · BL",      "얼굴과 둘 사이의 거리. 길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃."],
 ];
 
 const IDEAS = [
@@ -49,6 +52,35 @@ function buildForm() {
     $("#storyInput").value = btn.textContent;
     $("#storyInput").focus();
   }));
+}
+
+/* 세계관 프리셋 — 목록은 서버(story-harness/worlds.json)에서 받는다.
+   여기에 베껴 두면 두 곳이 갈라지고, 화면에만 있는 키를 고르면 story.py 가
+   worlds.json 에서 그 키를 못 찾아 실행이 통째로 멈춘다. */
+async function loadWorlds() {
+  const sel = $("#worldPreset"), hint = $("#worldHint");
+  if (!sel) return;
+  let worlds = [];
+  try {
+    worlds = (await (await fetch("/api/config")).json()).worlds || [];
+  } catch { return; }               // 못 받아도 자유 입력은 그대로 된다
+  if (!worlds.length) return;
+
+  sel.append(...worlds.map(w => {
+    const o = document.createElement("option");
+    o.value = w.key; o.textContent = w.label; o.dataset.text = w.text || "";
+    return o;
+  }));
+
+  sel.addEventListener("change", () => {
+    const text = sel.selectedOptions[0]?.dataset.text || "";
+    hint.textContent = text;
+    hint.hidden = !text;
+    // 고르면 본문을 입력칸에 채워 준다 — 그대로 써도 되고 고쳐 써도 된다.
+    // 이미 직접 쓴 글이 있으면 덮지 않는다. 골랐다고 남의 글을 지우면 안 된다.
+    const box = $("#form").world;
+    if (text && !box.value.trim()) box.value = text;
+  });
 }
 
 function setupPhoto() {
@@ -109,6 +141,7 @@ function collect() {
     fields,
     genre:      form.genre.value.trim(),
     world:      form.world.value.trim(),
+    world_preset: form.world_preset ? form.world_preset.value : "",
     story:      form.story.value.trim(),
     style:      form.style.value,
     preview:    $("#previewToggle").checked,
@@ -371,12 +404,18 @@ async function showResult(attempt = 0) {
 
   // 장은 틈 없이 이어 붙인다 — episode.png 를 만드는 방식과 같게(episode.stitch).
   // 컷 사이 호흡은 이제 한 장 안에서 모델이 정하므로 여기서 넣을 여백이 없다.
+  resultRunId = r.run_id || "";
   $("#reader").innerHTML = r.pages.map(pg => `
-    <div class="page">
+    <div class="page" data-scene="${pg.no}">
       <img class="cut-img" src="/api/jobs/${jobId}/page/${pg.no}?w=1080"
            alt="${pg.no}번째 장" loading="lazy">
+      ${resultRunId ? pageTools(pg.no) : ""}
     </div>
   `).join("");
+  if (resultRunId) {
+    wireRegen();
+    r.pages.forEach(pg => paintVersions(pg.no));
+  }
 
   $("#scriptBody").innerHTML = r.pages.map(pg => `
     <div class="script-page">
@@ -388,6 +427,131 @@ async function showResult(attempt = 0) {
   $("#progress").hidden = true;
   $("#result").hidden = false;
   window.scrollTo(0, 0);
+}
+
+/* ------------------------------------------------- 장 다시 그리기 (#59)
+ *
+ * 그림은 컷이 아니라 **장 단위**로 굽는다 — 한 장에 3컷이 함께 그려지므로
+ * "컷 하나만" 다시 뽑는 길은 없다. 다시 그리는 최소 단위가 장이다.
+ *
+ * 크레딧 차감은 없다 (#16 이 백로그). 실제 API 비용은 나간다. */
+
+let resultRunId = "";
+
+function pageTools(no) {
+  return `
+    <div class="page-tools">
+      <button type="button" class="btn btn-quiet btn-sm js-regen-open">이 장 다시 그리기</button>
+      <span class="page-versions" data-versions="${no}"></span>
+    </div>
+    <div class="regen-box" hidden>
+      <label class="field">
+        <span>무엇을 고칠까요? <small>비워도 됩니다 — 그냥 한 번 더 그립니다</small></span>
+        <textarea rows="2" class="js-regen-note" maxlength="500"
+          placeholder="예: 표정을 더 밝게 / 배경을 밤으로 / 인물을 왼쪽에"></textarea>
+      </label>
+      <div class="regen-actions">
+        <button type="button" class="btn btn-primary btn-sm js-regen-go">다시 그리기</button>
+        <button type="button" class="btn btn-quiet btn-sm js-regen-cancel">닫기</button>
+        <span class="regen-note js-regen-status"></span>
+      </div>
+    </div>`;
+}
+
+function wireRegen() {
+  $$("#reader .page").forEach(page => {
+    const no  = Number(page.dataset.scene);
+    const box = $(".regen-box", page);
+    $(".js-regen-open", page).addEventListener("click", () => {
+      box.hidden = !box.hidden;
+      if (!box.hidden) $(".js-regen-note", box).focus();
+    });
+    $(".js-regen-cancel", box).addEventListener("click", () => { box.hidden = true; });
+    $(".js-regen-go", box).addEventListener("click", () =>
+      runRegen(no, $(".js-regen-note", box).value.trim(), page));
+  });
+}
+
+async function runRegen(no, feedback, page) {
+  const status = $(".js-regen-status", page);
+  const go     = $(".js-regen-go", page);
+  go.disabled = true;
+  status.textContent = "시작하는 중…";
+  let job;
+  try {
+    const res = await fetch(
+      `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/regen`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback }) });
+    job = await res.json();
+    if (!res.ok) throw new Error(job.error || "시작하지 못했습니다");
+  } catch (err) {
+    go.disabled = false;
+    status.textContent = "";
+    return toast(err.message);
+  }
+
+  // 폴링. 한 장 굽는 데 1~2분이라 2초면 충분하다.
+  while (true) {
+    await new Promise(r => setTimeout(r, 2000));
+    let s;
+    try { s = await (await fetch(`/api/regens/${job.id}`)).json(); }
+    catch { continue; }                       // 잠깐 끊겨도 다음 번에 이어진다
+    status.textContent = s.note || s.status;
+    if (s.status === "done") {
+      bustImage(page, no);
+      paintVersions(no, s.versions);
+      status.textContent = "새로 그렸습니다";
+      toast(`${no}번째 장을 다시 그렸습니다`);
+      break;
+    }
+    if (s.status === "error" || s.status === "cancelled") {
+      // 실패해도 원래 그림은 서버가 되돌려 놓는다. 화면도 그대로 두면 된다.
+      status.textContent = s.note || s.error || "실패했습니다";
+      toast(s.error || "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
+      break;
+    }
+  }
+  go.disabled = false;
+}
+
+/* 브라우저가 같은 주소를 캐시하므로, 새로 그려도 주소가 같으면 옛 그림이 뜬다. */
+function bustImage(page, no) {
+  const img = $(".cut-img", page);
+  img.src = `/api/jobs/${jobId}/page/${no}?w=1080&t=${Date.now()}`;
+}
+
+async function paintVersions(no, versions) {
+  const slot = $(`[data-versions="${no}"]`);
+  if (!slot) return;
+  if (!versions) {
+    try {
+      versions = (await (await fetch(
+        `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/versions`)).json()).versions;
+    } catch { return; }
+  }
+  if (!versions || !versions.length) { slot.innerHTML = ""; return; }
+  // 지난 판이 있다는 것만 알려 주고, 누르면 그때로 되돌린다.
+  slot.innerHTML = `이전 판 ` + versions.map(v =>
+    `<button type="button" class="chip chip-sm js-revert" data-v="${v.version}">v${v.version}</button>`
+  ).join("");
+  $$(".js-revert", slot).forEach(btn => btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      const res = await fetch(
+        `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/revert`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: Number(btn.dataset.v) }) });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || "되돌리지 못했습니다");
+      bustImage($(`#reader .page[data-scene="${no}"]`), no);
+      paintVersions(no, out.versions);
+      toast(`${no}번째 장을 v${btn.dataset.v} 로 되돌렸습니다`);
+    } catch (err) {
+      toast(err.message);
+    }
+    btn.disabled = false;
+  }));
 }
 
 function scriptCut(c) {
@@ -456,6 +620,7 @@ function toast(msg) {
 
 document.addEventListener("DOMContentLoaded", () => {
   buildForm();
+  loadWorlds();
   setupPhoto();
   $("#form").addEventListener("submit", submit);
   $("#previewToggle").addEventListener("change", paintCost);

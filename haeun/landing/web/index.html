@@ -195,8 +195,12 @@
               </datalist>
             </label>
             <label class="field">
-              <span>세계관 <small>선택</small></span>
+              <span>세계관 <small>비우면 AI 가 정합니다</small></span>
+              <select name="world_preset" id="worldPreset">
+                <option value="">직접 쓰기 / 비워두기</option>
+              </select>
               <input type="text" name="world" placeholder="예: 각성자만 게이트에 들어갈 수 있는 현대 한국">
+              <small class="hint" id="worldHint" hidden></small>
             </label>
           </div>
         </div>
