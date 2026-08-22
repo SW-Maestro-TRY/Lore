@@ -443,6 +443,65 @@ ok("4단계: 화 수 2~5 위반 탈락",
 ok("4단계: Arc 개수 4~6 위반 탈락",
    any("4~6" in f for f in webtoon.gate_arcs({"arcs": [arc(1, "반전", ["rule", "cost", "irony"])]})))
 
+# ---- 글자 길이 (#21) ----
+#
+# 지금까지 길이는 하한만 봤다(말 있는 컷 비율, 무음 연속). 상한이 없으니 반대쪽으로
+# 넘어가는 것을 아무도 안 막았다 — 말풍선이 길면 그림을 가리고 그 컷에서 눈이 멈춘다.
+_long = [
+    {"cut_number": 1, "lines": [{"kind": "dialogue", "speaker": "A", "text": "짧게."}]},
+    {"cut_number": 2, "lines": [{"kind": "dialogue", "speaker": "A", "text": "가" * 45}]},
+    {"cut_number": 3, "lines": [{"kind": "narration", "text": "나" * 80}]},
+    {"cut_number": 4, "lines": [{"kind": "dialogue", "speaker": "A", "text": "다" * 39},
+                                {"kind": "dialogue", "speaker": "B", "text": "라" * 39},
+                                {"kind": "dialogue", "speaker": "A", "text": "마" * 39}]},
+]
+_lw = webtoon.length_warnings(_long)
+ok("길이: 짧은 대사는 조용하다", not any("컷 1" in x for x in _lw))
+ok("길이: 긴 대사를 잡는다", any("컷 2" in x and "대사가" in x for x in _lw), _lw[:1])
+ok("길이: 나레이션은 더 길게 허용한다 (70자)",
+   webtoon.MAX_NARRATION_CHARS > webtoon.MAX_DIALOGUE_CHARS
+   and any("컷 3" in x and "나레이션이" in x for x in _lw))
+ok("길이: 한 컷 총합도 본다", any("컷 4" in x and "모두" in x for x in _lw))
+ok("길이: 옛 형식(narration 칸)도 읽는다",
+   any("나레이션이" in x for x in webtoon.length_warnings(
+       [{"cut_number": 9, "narration": "바" * 90}])))
+ok("길이: 빈 입력에서 안 터진다", webtoon.length_warnings([]) == []
+   and webtoon.length_warnings([{"cut_number": 1}]) == [])
+# text_warnings 안에 물려 있어야 실제로 사람 눈에 닿는다.
+ok("길이: text_warnings 로 함께 나간다",
+   any("자입니다" in x for x in webtoon.text_warnings(_long)))
+
+# ---- 설정끼리 어긋나는가 (#26) ----
+#
+# 확정된 설정을 쌓기만 하고 서로 부딪히는지 안 보면, 3화에서 "창이 없다"고 정해 놓고
+# 7화에서 창밖을 그리는 일이 그대로 통과한다. 의미 충돌을 다 잡을 수는 없으니
+# **오탐이 적은 두 패턴만** 본다 — 부정어 비대칭, 같은 단위의 다른 숫자.
+def _f(text, ep):
+    return {"fact": text, "first_episode": ep}
+
+ok("충돌: 정면으로 부정되는 설정을 잡는다",
+   any("한쪽만 부정" in c for c in webtoon.fact_conflicts(
+       [_f("그 방에는 창이 없다", 3), _f("그 방에는 창이 있다", 7)])))
+ok("충돌: 같은 단위의 다른 숫자를 잡는다",
+   any("3층" in c and "5층" in c for c in webtoon.fact_conflicts(
+       [_f("학생회관은 3층 건물이다", 2), _f("학생회관은 5층까지 있다", 8)])))
+ok("충돌: 어느 화끼리 부딪히는지 알려준다",
+   any("2화 ↔ 8화" in c for c in webtoon.fact_conflicts(
+       [_f("학생회관은 3층 건물이다", 2), _f("학생회관은 5층까지 있다", 8)])))
+
+# 오탐이 나면 아무도 안 본다. 붙지 말아야 할 것들.
+for _name, _rows in (
+    ("무관한 설정", [_f("시하는 커피를 좋아한다", 1), _f("윤재는 기타를 친다", 4)]),
+    ("같은 사람 다른 이야기", [_f("시하는 커피를 좋아한다", 1), _f("시하는 기타를 못 친다", 3)]),
+    ("같은 숫자 반복", [_f("학생회관은 3층 건물이다", 1), _f("학생회관 3층에 동아리방이 있다", 2)]),
+    ("서로 보완하는 설정", [_f("윤재는 3학년이다", 1), _f("윤재는 밴드부 부장이다", 2)]),
+):
+    ok(f"충돌: 오탐 없음 — {_name}", webtoon.fact_conflicts(_rows) == [],
+       webtoon.fact_conflicts(_rows))
+
+ok("충돌: 빈 입력에서 안 터진다",
+   webtoon.fact_conflicts([]) == [] and webtoon.fact_conflicts(None) == [])
+
 # ---- Arc 인물 역할 (#28) ----
 #
 # Arc 요약은 "무슨 일이 벌어지는가"만 말한다. 누가 그 일을 밀고 누가 막는지가
