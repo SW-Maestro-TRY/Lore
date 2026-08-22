@@ -205,6 +205,14 @@ function renderProgress(s) {
     approvalBox.hidden = true;
   }
 
+  const storyApprovalBox = $("#storyApproval");
+  if (s.status === "awaiting_story_approval") {
+    storyApprovalBox.hidden = false;
+    if (lastStatus !== "awaiting_story_approval") setStoryButtonsBusy(false);
+  } else {
+    storyApprovalBox.hidden = true;
+  }
+
   if (s.status === "queued") {
     $("#progEyebrow").textContent = "대기 중";
     $("#progTitle").textContent = "앞에 만들고 있는 작품이 있습니다";
@@ -282,6 +290,29 @@ async function sendSheetDecision(decision) {
   } catch (err) {
     toast(err.message);
     setSheetButtonsBusy(false);
+  }
+}
+
+function setStoryButtonsBusy(busy) {
+  $("#storyApproveBtn").disabled = busy;
+  $("#storyRetryBtn").disabled = busy;
+}
+
+async function sendStoryDecision(decision) {
+  if (!jobId) return;
+  setStoryButtonsBusy(true);
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/story-decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
+  } catch (err) {
+    toast(err.message);
+    setStoryButtonsBusy(false);
   }
 }
 
@@ -436,6 +467,8 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("#sheetApproveBtn").addEventListener("click", () => sendSheetDecision("approve"));
   $("#sheetRetryBtn").addEventListener("click", () => sendSheetDecision("retry"));
+  $("#storyApproveBtn").addEventListener("click", () => sendStoryDecision("approve"));
+  $("#storyRetryBtn").addEventListener("click", () => sendStoryDecision("retry"));
   $("#againBtn").addEventListener("click", forget);
   $("#scriptBtn").addEventListener("click", () => {
     $("#scriptPanel").hidden = !$("#scriptPanel").hidden;

@@ -243,7 +243,8 @@ class Job:
     preview: bool
     has_photo: bool
 
-    # queued | running | awaiting_sheet_approval | done | error | cancelled
+    # queued | running | awaiting_story_approval | awaiting_sheet_approval |
+    # done | error | cancelled
     status: str = "queued"
     run_id: str | None = None
     error: str | None = None
@@ -276,6 +277,17 @@ class Job:
         with self._lock:
             self.sheet_decision = decision
         self.sheet_approval.set()
+
+    # awaiting_story_approval 용 — sheet_approval 과 같은 이유, 같은 방식.
+    # 스토리 단계가 STATUS_HUMAN(게이트 재시도 소진)으로 끝났을 때만 켜진다.
+    story_approval: threading.Event = field(default_factory=threading.Event, repr=False)
+    story_decision: str = field(default="", repr=False)
+
+    def decide_story(self, decision: str) -> None:
+        """스토리 확인 화면의 '이대로 진행'/'다시 만들기' 클릭이 여기로 온다."""
+        with self._lock:
+            self.story_decision = decision
+        self.story_approval.set()
 
     # ---- 상태 -------------------------------------------------------------- #
 
@@ -393,7 +405,7 @@ class Job:
             d = json.loads((path / "state.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
-        if d.get("status") in ("running", "awaiting_sheet_approval"):
+        if d.get("status") in ("running", "awaiting_sheet_approval", "awaiting_story_approval"):
             d["status"] = "error"
             d["error"] = "서버가 다시 시작되어 이 작업은 끊겼습니다."
         job = cls(id=d["id"], form=d.get("form") or {}, dir=path,
@@ -421,9 +433,10 @@ class Job:
                 proc.terminate()
             except OSError:
                 pass
-        # awaiting_sheet_approval 이면 프로세스가 없다 — execute() 가
-        # sheet_approval.wait() 에 걸려 있으므로 깨워야 _cancel 을 보고 멈춘다.
+        # awaiting_*_approval 이면 프로세스가 없다 — execute() 가 해당
+        # *_approval.wait() 에 걸려 있으므로 깨워야 _cancel 을 보고 멈춘다.
         self.sheet_approval.set()
+        self.story_approval.set()
 
     def _env(self) -> dict[str, str]:
         env = dict(os.environ)
@@ -572,6 +585,25 @@ def _bind_line(job: Job, line: str) -> None:
 # 파이프라인
 # --------------------------------------------------------------------------- #
 
+# story.py/webtoon.py 의 STATUS_HUMAN 과 같은 문자열. 두 CLI 모두 게이트가
+# 소진돼 사람 확인이 필요한 상태에서도 프로세스 종료 코드는 0 이라(각자의
+# main() 이 항상 return 0) exit code 만으로는 못 잡고, 각 단계가 남긴
+# meta.json 의 status 를 직접 읽어야 한다 — make_episode.py 의 stage_status()
+# 와 같은 이유, 같은 방식.
+STATUS_HUMAN = "사람확인필요"
+
+
+def _meta_status(meta_path: Path) -> tuple[str | None, str]:
+    """단계가 남긴 meta.json 의 (status, note). 없거나 못 읽으면 (None, "")."""
+    if not meta_path.exists():
+        return None, ""
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None, ""
+    return data.get("status"), data.get("note") or ""
+
+
 def _latest_run(before: set[str]) -> str | None:
     runs = STORY / "runs"
     fresh = [d for d in runs.iterdir()
@@ -616,23 +648,50 @@ def execute(job: Job) -> None:
 
         # ---- 1. 이야기 --------------------------------------------------- #
         _enter(job, 0)
-        job.note("캐릭터를 읽는 중")
-        before = {d.name for d in (STORY / "runs").iterdir() if d.is_dir()}
-        code = job._run(
-            ["story.py", "--character", str(char_path), "--scenes", "3", "--no-read"],
-            STORY, lambda ln: _story_line(job, ln))
-        if job._cancel:
-            raise Failed("취소됨")
-        if code != 0:
-            raise Failed("이야기를 만들지 못했습니다.")
-        run_id = _latest_run(before)
-        if not run_id:
-            raise Failed("이야기는 돌았지만 결과 폴더를 찾지 못했습니다.")
-        job.run_id = run_id
-        (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
-        if not (STORY / "runs" / run_id / "scenes.json").exists():
-            raise Failed("장면까지 나오지 못했습니다. 캐릭터 설명을 조금 더 "
-                         "구체적으로 적고 다시 시도해 주세요.")
+        while True:
+            job.note("캐릭터를 읽는 중")
+            before = {d.name for d in (STORY / "runs").iterdir() if d.is_dir()}
+            code = job._run(
+                ["story.py", "--character", str(char_path), "--scenes", "3", "--no-read"],
+                STORY, lambda ln: _story_line(job, ln))
+            if job._cancel:
+                raise Failed("취소됨")
+            if code != 0:
+                raise Failed("이야기를 만들지 못했습니다.")
+            run_id = _latest_run(before)
+            if not run_id:
+                raise Failed("이야기는 돌았지만 결과 폴더를 찾지 못했습니다.")
+            job.run_id = run_id
+            (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
+            if not (STORY / "runs" / run_id / "scenes.json").exists():
+                raise Failed("장면까지 나오지 못했습니다. 캐릭터 설명을 조금 더 "
+                             "구체적으로 적고 다시 시도해 주세요.")
+
+            # story.py 의 main() 은 게이트가 소진돼 사람 확인이 필요한
+            # 상태(STATUS_HUMAN)에서도 종료 코드는 항상 0 을 낸다 — 그래서
+            # exit code 만으로는 못 잡고 meta.json 을 직접 읽는다.
+            status, note = _meta_status(STORY / "runs" / run_id / "meta.json")
+            if status != STATUS_HUMAN:
+                break                  # STATUS_OK(또는 알 수 없는 값) — 정상 진행
+
+            job.status = "awaiting_story_approval"
+            job.note("구조 검수에서 게이트 재시도가 소진됐습니다 — 확인해 주세요"
+                      + (f" ({note})" if note else ""))
+            job.save()
+            job.story_approval.wait()
+            job.story_approval.clear()
+            with job._lock:
+                decision = job.story_decision
+                job.story_decision = ""
+            job.status = "running"
+            if job._cancel:
+                raise Failed("취소됨")
+            if decision != "retry":
+                break                   # approve (또는 알 수 없는 값 — 진행 쪽이 안전)
+            # 다시 만들기 — 시트처럼 같은 run_id 폴더를 지우고 재시도하는 방식이
+            # 아니다. story.py 는 --character 를 받으면 항상 새 run_id 를
+            # 만들므로, 같은 캐릭터 입력으로 통째로 한 번 더 돈다.
+            job.note("캐릭터를 다시 읽는 중 — 이야기를 새로 만드는 중")
         _leave(job)
 
         # ---- 2. 캐릭터 시트 ---------------------------------------------- #

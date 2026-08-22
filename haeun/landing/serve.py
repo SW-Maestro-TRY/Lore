@@ -324,6 +324,25 @@ class Handler(BaseHTTPRequestHandler):
             job.decide_sheet(decision)
             return self._json({"ok": True})
 
+        # 스토리 확인 화면의 "이대로 진행" / "다시 만들기" 버튼 — 스토리 단계
+        # 게이트 재시도가 소진돼(STATUS_HUMAN) 사람 확인이 필요할 때만 뜬다.
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/story-decision", url.path)
+        if m:
+            job = runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            if job.status != "awaiting_story_approval":
+                return self._error(409, "지금은 스토리 확인 단계가 아닙니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            decision = str(body.get("decision") or "")
+            if decision not in ("approve", "retry"):
+                return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
+            job.decide_story(decision)
+            return self._json({"ok": True})
+
         return self._error(404, "없는 주소입니다")
 
 
