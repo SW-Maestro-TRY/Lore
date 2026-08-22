@@ -128,6 +128,10 @@ python story.py --charsheet --run-id <id> --pick   # 채택 (이걸 해야 다�
 python run.py --run-id <id> --episode 1 -c S+ --style webtoon    # 일반 웹툰
 python run.py --run-id <id> --episode 1 -c S+ --style romance    # 로판 표지 일러스트
 python run.py --run-id <id> --episode 1 -c S+ --style cinematic  # 시네마틱 반실사
+python run.py --run-id <id> --episode 1 -c S+ --style lineart    # 선화 · 액션
+python run.py --run-id <id> --episode 1 -c S+ --style pastel     # 일상툰 감성체
+python run.py --run-id <id> --episode 1 -c S+ --style noir       # 다크 느와르
+python run.py --run-id <id> --episode 1 -c S+ --style shoujo     # 순정만화 / BL풍
 python run.py --run-id <id> --episode 1 -c S+ --style flat       # 기존 실험 값
 ```
 
@@ -141,6 +145,10 @@ python run.py --run-id <id> --episode 1 -c S+ --style flat       # 기존 실험
 | `webtoon` | 일반 웹툰(네이버 웹툰 풍) — 균일한 깔끔한 선, 셀 채색(밑색 + 그림자 1단), 눈 하이라이트 1~2개, 배경은 단색·톤·최소한의 사물, 동세는 효과선으로 |
 | `romance` | 로판 표지 일러스트 — 홍채를 여러 겹으로 쌓고 하이라이트 3~4개, 머리카락 광택 띠 여러 줄, 레이스/자수/보석 하나하나, 배경에 장미·빛번짐·금박 |
 | `cinematic` | 고퀄 웹툰 + 시네마틱 반실사 — 방향이 분명한 키라이트와 림라이트, 공기 중의 빛(헤이즈·먼지·블룸), 얕은 심도와 보케, 필름 컬러그레이딩, 7등신 비율, 얼굴은 웹툰 그대로 |
+| `lineart` | 선화 — 톤을 거의 안 쓰고 흰 여백을 그대로 남깁니다. 채워지는 건 머리카락(검정)과 옷(단일 톤)뿐이고 살결·배경·금속은 흰 종이. 액션 컷용 (`monochrome_styles` 에 등록돼 있어 눈·안깃·문양만 색으로 남습니다) |
+| `pastel` | 일상툰 감성체 — 흔들리는 손그림 선, 열린 형태, 종이 결, 선 밖으로 삐져나온 색, 채도 낮은 대여섯 색. **덜 완성돼 보이는 것 자체가 스타일** (일상·학원·코미디) |
+| `noir` | 다크 느와르 — 화면 대부분이 먹으로 덮이고 명암은 4단으로 뭉갭니다. 하드에지 그림자 덩어리(블라인드살·창틀·난간), 붓과 먹번짐, 거의 무채색 + 강조색 하나 (헌터·스릴러·액션·다크판타지) |
+| `shoujo` | 순정만화 / BL풍 — 길고 날카로운 눈, 각진 턱선, 9등신, 스크린톤 점망 음영, 흐르는 머리카락, 여백에 그려 넣은 꽃과 반짝임. 얼굴 클로즈업과 두 사람 사이의 거리가 주제 (오메가버스·센티넬·BL) |
 | `flat` | 기존 실험 값 (flat colors / minimal shading). 이전 결과와 비교하려면 필요합니다 |
 
 **`romance` 와 `cinematic` 은 화려해지는 방식이 다릅니다.**
@@ -160,6 +168,36 @@ python run.py --run-id <id> --episode 1 -c S+ --style flat       # 기존 실험
 
 `webtoon` 은 나머지 둘과 **반대 방향**입니다 — "덜 그리는 것"이 스타일이고
 기준은 읽히는 속도입니다.
+
+**나중에 붙인 셋도 각자 "무엇으로 화면을 만드는가"가 다릅니다.** 이 축이
+겹치는 순간 두 그림체는 같은 그림이 됩니다.
+
+| | 화면을 만드는 재료 | 붙으면 안 되는 것 |
+| --- | --- | --- |
+| `pastel` | **손자국** — 흔들리는 선, 종이 결, 어긋난 색 | 깔끔한 닫힌 선·셀 채색(→ `webtoon`), 림라이트·보케·반짝임(→ `cinematic`/`romance`) |
+| `noir` | **검은 덩어리** — 뭉갠 명암, 하드에지 그림자, 먹번짐 | 흰 여백과 얇은 선(→ `lineart`), 부드러운 감쇠·심도·블룸·색보정(→ `cinematic`) |
+| `shoujo` | **선과 스크린톤** — 점망 음영, 여백, 그려 넣은 꽃 | 보석 눈·금박·레이스·풀컬러 장식(→ `romance`) |
+
+특히 `noir` 와 `lineart` 는 **정반대**입니다. `lineart` 는 화면이 밝고
+(살결·배경이 흰 종이) 검정은 머리카락과 옷에만 쓰지만, `noir` 는 화면이 어둡고
+(대부분이 먹) 흰 곳이 소수의 빛뿐입니다. `noir` 와 `cinematic` 도 빛을 다루는
+방식이 다릅니다 — `cinematic` 은 실제 렌즈의 빛을 **흉내내고**(감쇠·심도·보케),
+`noir` 는 그림자를 **도형으로 그립니다**(감쇠 없이 딱 끊기는 검은 덩어리).
+
+**`pastel` · `noir` · `shoujo` 는 `monochrome_styles` 에 넣지 않았습니다.** 셋 다
+색이 적지만 무채색은 아닙니다. 그 훅이 프롬프트 맨 끝에 박는 문장은
+*"BLACK INK ON WHITE PAPER … inked line art"* 라서 (`scenegen.MONO_TAIL`),
+켜는 순간 `pastel` 의 파스텔은 지워지고 `noir` 는 흰 종이 선화로 뒤집히고
+`shoujo` 는 딱 한 자리 남겨 둔 강조색까지 잃습니다. 채도를 죽이는 일은 각
+그림체의 `COLOUR` 문구가 직접 합니다.
+
+**이름은 그림체 낱말로만 짓습니다.** story-harness 의 장르 이름(`romance` ·
+`idol` · `hunter` · `academy` · `fantasy` · `daily` · `martial` · `action` ·
+`thriller` · `comedy` · `sentinel` · `omegaverse` · `gamefantasy`)과 겹치면
+`--style romance` 가 그림체를 가리키는지 장르를 가리키는지 알 수 없어집니다.
+`romance` 는 이미 겹쳤고 그건 남겨 둔 빚입니다 — 새로 만들 때는 겹치지 마세요.
+그래서 일상툰을 `daily` 가 아니라 `pastel` 로, BL풍을 `omegaverse` 가 아니라
+`shoujo` 로 등록했습니다.
 
 문구가 길고 집요한 것은 실수가 아닙니다. "glossy detailed eyes" 정도로 줄이면
 모델이 곧바로 평범한 웹툰 얼굴로 돌아갑니다. 홍채를 몇 겹 쌓는지, 빛이 어디서
