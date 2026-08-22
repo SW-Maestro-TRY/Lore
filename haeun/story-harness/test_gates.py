@@ -2813,6 +2813,64 @@ ok("샘플: 폴백은 장르 몇 개만 보여준다 (13종을 다 넣지 않는
    samples.exemplars_all().count("──") <= 3,
    samples.exemplars_all().count("──"))
 
+# ---------------- 회차 구조 다양화 ----------------
+#
+# story_templates.json 의 '스토리 구조'는 3막 하나뿐이라, 어떤 장르를 골라도
+# 같은 리듬으로 나왔다 — 일상물인데도 사건이 터지고 반전이 생기고 다음 화
+# 떡밥이 깔리던 이유다.
+
+_st_names = samples.structure_names()
+ok("구조: story_structures.json 이 읽힌다",
+   "구조" in _st_names and "반전_배치" in _st_names, _st_names)
+_structs = {v["이름"] for v in samples.load_structures()["구조"]["값"]}
+ok("구조: 3막 말고도 여러 구조가 있다", len(_structs) >= 8, sorted(_structs))
+ok("구조: 반전을 넣지 않는 선택지도 있다",
+   "정공법" in {v["이름"] for v in samples.load_structures()["반전_배치"]["값"]})
+
+_pick_st = samples.pick_structure("판타지")
+ok("구조: 구조와 반전 배치가 하나씩 뽑힌다",
+   set(_pick_st) == set(_st_names), sorted(_pick_st))
+ok("구조: 뽑힌 구조에 단계가 들어 있다",
+   len(_pick_st["구조"].get("단계") or []) >= 3, _pick_st["구조"].get("이름"))
+
+_st_runs = {samples.pick_structure("판타지")["구조"]["이름"] for _ in range(200)}
+ok("구조: 매번 3막으로 굳지 않는다", len(_st_runs) >= 8, sorted(_st_runs))
+
+# 장르에 안 맞는 구조는 잘린다. 일상물에 '추락'·'구출'·'대결'이 걸리면
+# 지금 고치려는 증상(일상인데 사건이 터진다)이 그대로 돌아온다.
+_daily_st = {samples.pick_structure("일상")["구조"]["이름"] for _ in range(300)}
+ok("구조: 일상에는 추락·구출·대결이 안 나온다",
+   not (_daily_st & {"추락", "구출", "대결"}), sorted(_daily_st))
+ok("구조: 일상에도 선택지가 여럿 남는다 (과하게 자르지 않았다)",
+   len(_daily_st) >= 4, sorted(_daily_st))
+ok("구조: 모르는 장르는 전체 구조를 쓴다",
+   len({samples.pick_structure("듣도보도 못한 장르")["구조"]["이름"]
+        for _ in range(300)}) == len(_structs))
+
+_st_blk = samples.structure_block(samples.pick_structure("일상", seed=5))
+ok("구조: 프롬프트 블록에 단계와 끝내는 법이 같이 나간다",
+   "→" in _st_blk and ("끝내는 법" in _st_blk or "배치" in _st_blk), _st_blk[:60])
+ok("구조: 비면 빈 문자열", samples.structure_block({}) == "")
+ok("구조: seed 를 주면 재현된다",
+   samples.structure_summary(samples.pick_structure("판타지", seed=9))
+   == samples.structure_summary(samples.pick_structure("판타지", seed=9)))
+
+# P2 가 실제로 구조를 받는가.
+ok("P2: 회차 구조가 P2 에 주입된다",
+   "story_structure" in story.declared_vars(_ps.texts["p2"]),
+   sorted(story.declared_vars(_ps.texts["p2"])))
+_p2_rendered = story.render(_ps.texts["p2"], {
+    "genre": "일상", "world": "(없음)", "character_sheet": "{}",
+    "genre_template": story.genre_template_block(story.resolve_genre_templates("일상")),
+    "story_template": story.story_template_block(),
+    "story_structure": samples.structure_block(samples.pick_structure("일상", seed=5)),
+    "retry_feedback": "",
+})
+ok("P2: 렌더 후 안 채워진 자리가 없다",
+   story.declared_vars(_p2_rendered) == set(), story.declared_vars(_p2_rendered))
+ok("P2: 참고 자료의 3막보다 지정 구조가 우선이라고 못 박는다",
+   "이쪽이 우선" in _p2_rendered)
+
 # 결과 검사는 구조적 차단을 대신하지 않는다. 모델은 자기가 아는 작품도 꺼낸다.
 ok("저작권: 결과물에 작품명이 있으면 잡아낸다",
    story.check_borrowed_titles({"logline": "왕좌의 게임 같은 이야기"}) == ["왕좌의 게임"],

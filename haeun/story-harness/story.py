@@ -511,7 +511,7 @@ PROMPT_CONTRACT = {
            "sample_cards", "retry_feedback", "world",
            "genre_template", "variation_axes"},
     "p2": {"genre", "character_sheet", "retry_feedback", "world",
-           "genre_template", "story_template"},
+           "genre_template", "story_template", "story_structure"},
     "p3": {"character_sheet", "premise_json", "sample_intros"},
     "scene": {"scene_count", "idea", "character_sheet_json", "premise_json",
               "fix_directive"},
@@ -3049,6 +3049,7 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
     look = seed = None
     tpl_names, genre_tpl, story_tpl = [], "", ""
     axes = {}
+    structure = {}
     regen_total = gate_regen = p3_regen = scene_regen = 0
     p1_feedback = p2_feedback = ""
     card_input = row.get("card")
@@ -3118,9 +3119,14 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
         # "무엇을 고쳐서 통과했는지"가 흐려지고, 재시도가 곧 재추첨이 되어
         # 게이트를 통과할 때까지 설정이 계속 바뀐다.
         axes = samples.pick_axes(row["genre"])
+        structure = samples.pick_structure(row["genre"])
+        if axes or structure:
+            write_json(run_dir / "axes.json",
+                       {"축": axes, "구조": structure})
         if axes:
-            write_json(run_dir / "axes.json", axes)
             log(f"    이야기 변수: {samples.axes_summary(axes)}")
+        if structure:
+            log(f"    회차 구조: {samples.structure_summary(structure)}")
 
         # ---- P1
         p1 = generate_p1()
@@ -3134,6 +3140,8 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                     "world": row.get("world") or "(없음)",
                     "genre_template": genre_tpl or "(이 장르의 템플릿이 없습니다)",
                     "story_template": story_tpl or "(스토리 템플릿이 없습니다)",
+                    "story_structure": (samples.structure_block(structure)
+                                        or "(이번에는 구조 지정 없이 씁니다)"),
                     "character_sheet": json.dumps(p1, ensure_ascii=False, indent=2),
                     "retry_feedback": feedback_block(p2_feedback),
                 }),

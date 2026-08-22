@@ -24,6 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SAMPLE_DIR = ROOT / "samples"
 AXES_FILE = SAMPLE_DIR / "variation_axes.json"
+STRUCTURE_FILE = SAMPLE_DIR / "story_structures.json"
 
 # 장르 키 → (파일, 사람이 읽는 이름). --genre 값이 이 키다.
 #
@@ -315,6 +316,67 @@ def axes_block(picked: dict) -> str:
 
 def axes_summary(picked: dict) -> str:
     """로그 한 줄용. '최약체 · 균열의 순간 · 정보 격차 · 라이벌 · 냉소'"""
+    return " · ".join(str(v.get("이름", "")) for v in (picked or {}).values())
+
+
+# ------------------------------------------------------------- 회차 구조
+#
+# story_templates.json 의 '스토리 구조'는 3막(도입→전개→절정→결말) 하나뿐이라,
+# 어떤 장르를 골라도 같은 리듬으로 나왔다 — 일상물인데도 사건이 터지고 반전이
+# 생기고 다음 화 떡밥이 깔리던 이유다. 축과 같은 방식으로 매번 하나씩 고른다.
+#
+# 축이 "누가 어디에 서 있는가"라면 구조는 "어떤 순서로 보여주는가"다.
+
+
+def load_structures() -> dict:
+    """story_structures.json. 없거나 깨졌으면 빈 dict — 구조 없이 진행한다."""
+    try:
+        data = json.loads(STRUCTURE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def structure_names() -> list:
+    return [k for k in load_structures() if not str(k).startswith("_")]
+
+
+def pick_structure(genre: str = "", rng=None, seed=None) -> dict:
+    """회차 구조와 반전 배치를 하나씩 뽑는다. {"구조": {...}, "반전_배치": {...}}."""
+    table = load_structures()
+    if not table:
+        return {}
+    r = rng or (random.Random(seed) if seed is not None else random)
+    gkey = _override_key(table, genre)
+    picked = {}
+    for name in structure_names():
+        values = _axis_values(table, name, gkey)
+        if values:
+            picked[name] = r.choice(values)
+    return picked
+
+
+def structure_block(picked: dict) -> str:
+    """뽑힌 구조를 P2 프롬프트에 넣을 문자열로."""
+    if not picked:
+        return ""
+    out = []
+    for name, value in picked.items():
+        out.append(f"[{name.replace('_', ' ')}] {value.get('이름', '')}")
+        desc = str(value.get("설명") or "").strip()
+        if desc:
+            out.append(f"  {desc}")
+        for step in (value.get("단계") or []):
+            out.append(f"  → {step}")
+        for label in ("배치", "끝내는 법"):
+            if str(value.get(label) or "").strip():
+                out.append(f"  {label}: {value[label]}")
+        out.append("")
+    return "\n".join(out).rstrip()
+
+
+def structure_summary(picked: dict) -> str:
+    """로그 한 줄용. '수수께끼 · 조기 공개'"""
     return " · ".join(str(v.get("이름", "")) for v in (picked or {}).values())
 
 
