@@ -748,17 +748,45 @@ class Question:
         }
 
 
+@dataclass
+class Fact:
+    """열린/닫힌 질문과는 다른 것 — 답이 정해질 질문이 아니라 이미 확정된 사실.
+
+    "3화에서 왼손에 흉터가 생겼다" 같은 것. Question 은 "언젠가 닫힐 궁금증"을
+    추적하고, Fact 는 "이후 화들이 잊으면 안 되는 확정된 사실"을 추적한다 —
+    둘을 같은 목록에 섞으면 열림/닫힘 상태가 없는 Fact 가 open_items/
+    closed_items 계산을 흐린다.
+    """
+    id: str
+    text: str
+    established_episode: int      # 통산 화 번호
+
+    def as_dict(self) -> dict:
+        return {"id": self.id, "text": self.text,
+                "establishedEpisode": self.established_episode}
+
+
 class Ledger:
-    """열린 질문·닫힌 질문을 코드가 추적한다. 검사자가 인정한 것만 들어온다."""
+    """열린 질문·닫힌 질문·확정된 사실을 코드가 추적한다. 검사자가 인정한 것만 들어온다."""
 
     def __init__(self, engine_question: str, cap: int = DEFAULT_LEDGER_CAP):
         self.items: list = []
+        self.facts: list = []
+        self.fact_seq = 0
         self.cap = cap
         self.seq = 0
         self.engine = Question(
             id="EQ", text=engine_question or "(엔진급 질문 미지정)",
             type="engine", opened_arc=0, opened_episode=0, is_engine=True)
         self.items.append(self.engine)
+
+    def add_fact(self, text: str, episode: int) -> Fact:
+        """확정된 사실을 하나 기록한다. 지금은 자동 추출이 없다 — 사람/도구가
+        직접 부른다(인프라만, 검증은 실제 여러-화 데이터가 쌓인 뒤로 미룸)."""
+        self.fact_seq += 1
+        f = Fact(id=f"F-{self.fact_seq}", text=text, established_episode=episode)
+        self.facts.append(f)
+        return f
 
     # -- 조회
     def get(self, qid: str):
@@ -840,11 +868,13 @@ class Ledger:
             "closed": [view(q) for q in self.closed_items],
             "open_count": len(self.open_items),
             "open_cap": self.cap,
+            "established_facts": [f.as_dict() for f in self.facts],
             "warnings": self.warnings(current_episode),
         }, ensure_ascii=False, separators=(",", ":"))
 
     def as_dict(self) -> dict:
-        return {"cap": self.cap, "questions": [q.as_dict() for q in self.items]}
+        return {"cap": self.cap, "questions": [q.as_dict() for q in self.items],
+                "facts": [f.as_dict() for f in self.facts]}
 
     @classmethod
     def from_dict(cls, data: dict) -> "Ledger":
@@ -874,6 +904,13 @@ class Ledger:
         if not any(q.is_engine for q in led.items):
             led.items.insert(0, led.engine)
         led.seq = len([q for q in led.items if not q.is_engine])
+        # "facts" 키가 없는 예전 ledger.json 도 그대로 읽는다 — 순수 추가라
+        # 없으면 그냥 빈 목록.
+        for d in data.get("facts") or []:
+            led.facts.append(Fact(
+                id=str(d.get("id") or ""), text=str(d.get("text") or ""),
+                established_episode=d.get("establishedEpisode") or 0))
+        led.fact_seq = len(led.facts)
         return led
 
 

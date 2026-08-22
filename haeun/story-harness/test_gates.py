@@ -467,6 +467,29 @@ led2.open("a", "suspense", 1, 1)
 ok("장부: 미스터리 박스 경고 (최근 3화 상환 0건)",
    any("미스터리 박스" in w for w in led2.warnings(5)))
 
+# ---------------- 장부: 확정된 사실 (facts) ----------------
+led3 = webtoon.Ledger("EQ", cap=5)
+f1 = led3.add_fact("3화에서 왼손에 흉터가 생겼다", 3)
+f2 = led3.add_fact("주인공은 커피를 못 마신다", 1)
+ok("장부: fact id 발급", (f1.id, f2.id) == ("F-1", "F-2"))
+d3 = led3.as_dict()
+ok("장부: as_dict 에 facts 포함", len(d3.get("facts") or []) == 2)
+led3b = webtoon.Ledger.from_dict(d3)
+ok("장부: facts 라운드트립",
+   [(f.id, f.text, f.established_episode) for f in led3b.facts]
+   == [("F-1", "3화에서 왼손에 흉터가 생겼다", 3), ("F-2", "주인공은 커피를 못 마신다", 1)])
+snap3 = json.loads(led3b.snapshot(4))
+ok("장부: snapshot 에 established_facts 포함", len(snap3.get("established_facts") or []) == 2)
+
+old_ledger = {"cap": 40, "questions": [
+    {"id": "EQ", "text": "엔진 질문", "type": "engine",
+     "openedAt": {"arc": 0, "episode": 0}, "closedAt": None,
+     "plannedPayoffEpisode": None, "isEngine": True, "isBetrayal": None},
+]}
+led_old = webtoon.Ledger.from_dict(old_ledger)
+ok("장부: facts 키 없는 예전 ledger.json 도 그대로 읽힌다 (하위호환)",
+   led_old.facts == [] and led_old.fact_seq == 0)
+
 # ---------------- 본문 -> id 매칭 (5단계 정합성) ----------------
 def led_with(*texts):
     L = webtoon.Ledger("그는 끝내 무엇을 택하는가", cap=5)
