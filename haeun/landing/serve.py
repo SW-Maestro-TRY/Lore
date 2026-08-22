@@ -188,6 +188,12 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:                                   # noqa: BLE001
                 return self._file(src)
 
+        # 존(배경) 목록. **이미지가 아니라 글이다** — 어떤 자리가 있고 그 서술이
+        # 어디에 쓰이는지만 보여 준다. 틀린 곳은 series.json 한 줄을 고친다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/zones", path)
+        if m:
+            return self._json({"zones": pipeline.zone_list(m.group(1))})
+
         m = re.fullmatch(r"/api/regens/([\w.-]+)", path)
         if m:
             job = pipeline.regens.get(m.group(1))

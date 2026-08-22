@@ -1087,6 +1087,53 @@ def regen_config(run_id: str, feedback: str, style: str = "") -> Path:
     return path
 
 
+def zone_list(run_id: str) -> list[dict[str, Any]]:
+    """이 실행이 쓰는 존(배경) 목록과 그 존을 쓰는 컷·장.
+
+    **배경은 이미지로 굽지 않는다.** 한 번 구운 배경을 모든 컷이 참조하면 그
+    안에 잘못 들어간 것(자판기 위의 머그컵)이 화 전체에 박히고, 되돌리려면 그
+    존의 컷을 전부 다시 뽑아야 한다 — 실제로 그렇게 났고, 그래서 하네스는
+    존을 **글로** 넘긴다(charsheet.load_zone_text).
+
+    그러면 관리할 자산은 이미지가 아니라 **서술 한 줄**이다. 여기서 하는 일은
+    그 한 줄이 어디에 쓰이는지 보여 주는 것뿐이다 — 틀린 곳을 찾으면
+    series.json 한 줄을 고치면 되고, 다시 구울 자산이 없다.
+    """
+    run_dir = STORY / "runs" / run_id
+    zones = {}
+    for z in (_read_json(run_dir / "webtoon", "series.json").get("zones") or []):
+        if not isinstance(z, dict):
+            continue
+        zid = str(z.get("zone_id") or "").strip()
+        if zid:
+            zones[zid] = {"zone_id": zid,
+                          "label": str(z.get("label") or "").strip(),
+                          "cuts": [], "scenes": []}
+
+    by_cut = {}
+    for c in (_read_json(run_dir / "webtoon", "ep01_cuts.json").get("cuts") or []):
+        no = int(c.get("cut_number") or 0)
+        zid = str(c.get("zone") or "").strip()
+        if not no or not zid:
+            continue
+        by_cut[no] = zid
+        # series.json 에 없는 존을 컷이 가리킬 수 있다. 그래도 목록에서 지우지
+        # 않는다 — 서술이 비어 있다는 것 자체가 고칠 거리다.
+        zones.setdefault(zid, {"zone_id": zid, "label": "", "cuts": [], "scenes": []})
+        zones[zid]["cuts"].append(no)
+
+    grouping = _read_json(episode_dir(run_id), "scenes.json").get("scenes") or []
+    for sc in grouping:
+        nums = [int(n) for n in (sc.get("cut_numbers") or [])]
+        kinds = {by_cut.get(n) for n in nums} - {None}
+        # 한 장에 두 존이 섞이면 하네스가 존 서술을 아예 안 붙인다
+        # (scenegen.scene_zone). 그 사실을 그대로 보여 준다.
+        if len(kinds) == 1:
+            zones[kinds.pop()]["scenes"].append(int(sc.get("scene_number") or 0))
+
+    return sorted(zones.values(), key=lambda z: (z["cuts"] or [999])[0])
+
+
 @dataclass
 class Regen:
     """장 하나를 다시 그리는 작업. 전체 파이프라인 Job 과 달리 단계가 없다."""

@@ -397,10 +397,21 @@ def cond_extra(cfg: dict[str, Any], cond: dict[str, Any], render_style: str,
                f"it for anyone else and never blend its face or design into "
                f"another character.").strip()
     if str(zone_text or "").strip():
+        # 고정되는 것은 **장소**이지 카메라가 아니다. 예전 문구는 "change nothing
+        # from panel to panel" 로 끝나서, 모델이 앵글까지 고정으로 읽었다 —
+        # 같은 존이 이어지면 같은 구도가 반복돼 화면이 정지한다. 무엇이 같아야
+        # 하고 무엇이 달라져야 하는지를 나눠서 말한다.
         text = (f"{text}\nTHIS PLACE — the setting of this page, written out so "
                f"it stays the same every time it appears. Draw the environment "
-               f"to match it exactly, and change nothing about the place itself "
-               f"from panel to panel:\n{str(zone_text).strip()}").strip()
+               f"to match it exactly: the same room or street with the same "
+               f"surfaces, the same objects in the same positions, the same "
+               f"light from the same direction and the same colour grade. "
+               f"WHAT MUST NOT CHANGE is the place itself. WHAT SHOULD CHANGE "
+               f"is the camera: vary the angle, the distance and the part of "
+               f"the place you frame from panel to panel, exactly as the panel "
+               f"descriptions ask. Repeating one identical view of the same "
+               f"place makes the page read as a still image:"
+               f"\n{str(zone_text).strip()}").strip()
     crowd = supporting.block(cfg.get("supporting_book") or supporting.Book(),
                              description)
     return f"{text}\n{crowd}".strip() if crowd else text
