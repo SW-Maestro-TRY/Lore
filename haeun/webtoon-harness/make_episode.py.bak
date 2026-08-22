@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STORY = HERE.parent / "story-harness"
+STORY = Path("C:/lore/story-harness")
 
 # 콘솔이 cp949 면 '—' 같은 문자에서 print 가 UnicodeEncodeError 로 죽는다.
 # 안내 문구 하나 때문에 실행이 멈추면 안 되므로 못 찍는 글자는 대체 문자로

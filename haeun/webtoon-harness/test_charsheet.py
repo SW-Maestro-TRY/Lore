@@ -5,7 +5,8 @@
 프롬프트에서 실제로 지켜지는 자리(design_details)에 길이가 없었던 것이다.
 """
 import sys
-sys.path.insert(0, r"C:\lore\webtoon-harness")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import charsheet as C
 

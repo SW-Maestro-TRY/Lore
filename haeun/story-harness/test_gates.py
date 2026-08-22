@@ -1,6 +1,7 @@
 """게이트·장부·판정 로직 직접 검증. API 없음."""
 import sys
-sys.path.insert(0, r"C:\lore\story-harness")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import json
 import story, webtoon, samples
@@ -2692,13 +2693,14 @@ ok("저작권: 제목이 겹쳐도 반쪽만 남지 않는다",
    story.redact_titles("신의 탑 이야기"))
 
 # 통째로 보내는 것보다 실제로 작아졌는가.
-_full = (_P(r"C:\lore\story-harness\samples\genre_template.json").read_text(encoding="utf-8")
-         + _P(r"C:\lore\story-harness\samples\story_templates.json").read_text(encoding="utf-8"))
+_TG_ROOT = _P(__file__).resolve().parent
+_full = (_P(_TG_ROOT / "samples" / "genre_template.json").read_text(encoding="utf-8")
+         + _P(_TG_ROOT / "samples" / "story_templates.json").read_text(encoding="utf-8"))
 ok(f"템플릿: 통째로 보내는 것보다 작다 ({len(_g)+len(_s):,}자 < {len(_full):,}자)",
    len(_g) + len(_s) < len(_full) * 0.5)
 
 # 이미 만들어 둔 산출물도 같은 기준으로 본다.
-_out = _P(r"C:\lore\story-harness\outputs\chadogyeong")
+_out = _TG_ROOT / "outputs" / "chadogyeong"
 if _out.exists():
     for _f in sorted(_out.glob("*.json")):
         _hit = story.check_borrowed_titles(_f.read_text(encoding="utf-8"))
@@ -2848,7 +2850,7 @@ ok("성별 게이트: 낱말 안에 우연히 들어간 글자에 속지 않는�
        "")))
 
 # 실제로 망가진 그 카드가 걸리는지 — 이 게이트가 존재하는 이유 그 자체다.
-_broken = _P(r"C:\lore\story-harness\runs\20260815T001950-b5af28\p1.json")
+_broken = _TG_ROOT / "runs" / "20260815T001950-b5af28" / "p1.json"
 if _broken.exists():
     _card = _j.loads(_broken.read_text(encoding="utf-8"))
     _hits = story.gate_gender(_card, "여성, 능글맞고 장난기 많지만")

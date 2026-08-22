@@ -125,7 +125,11 @@ def load_config(path: Path) -> dict[str, Any]:
     # 적는 값이 아니라 run.py 가 p1.json 을 읽어 채운다.
     cfg.setdefault("design_lock", "")
     cfg.setdefault("prompt_template", "{appearance}\n\nScene: {scene}\n\n{style}\n{extra}")
-    cfg.setdefault("story_runs_root", "C:/lore/story-harness/runs")
+    cfg.setdefault("story_runs_root", "../story-harness/runs")
+    runs_root = Path(str(cfg["story_runs_root"]))
+    if not runs_root.is_absolute():
+        runs_root = (ROOT / runs_root).resolve()
+    cfg["story_runs_root"] = str(runs_root)
     cfg.setdefault("pricing", {}).setdefault("usd_to_krw", 1400)
     lim = cfg.setdefault("limits", {})
     lim.setdefault("max_calls_per_condition", 36)
