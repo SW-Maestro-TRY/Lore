@@ -253,6 +253,7 @@ function renderProgress(s) {
         photoBox.hidden = true;
       }
       setSheetButtonsBusy(false);
+      loadSheetFields();
     }
   } else {
     approvalBox.hidden = true;
@@ -406,14 +407,44 @@ function setSheetButtonsBusy(busy) {
   $("#sheetRetryBtn").disabled = busy;
 }
 
+// 승인 화면이 뜰 때마다 현재 p1.json 값을 수정 폼에 채운다. 실패해도(아직
+// run_id 가 없거나 p1.json 이 없거나) 폼을 빈 채로 두고 그냥 넘어간다 —
+// 수정은 선택 사항이라 이것 때문에 승인 화면 자체를 막지 않는다.
+async function loadSheetFields() {
+  if (!jobId) return;
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/sheet-fields`);
+    if (!res.ok) return;
+    const f = await res.json();
+    $("#sheetEditName").value = f.name || "";
+    $("#sheetEditAppearance").value = f.appearance_en || "";
+    $("#sheetEditDetails").value = (f.design_details || []).join("\n");
+  } catch (err) {
+    // 조용히 무시 — 수정 폼은 선택 사항이다.
+  }
+}
+
+function sheetEditFields() {
+  return {
+    name: $("#sheetEditName").value,
+    appearance_en: $("#sheetEditAppearance").value,
+    design_details: $("#sheetEditDetails").value
+      .split("\n").map(s => s.trim()).filter(Boolean),
+  };
+}
+
 async function sendSheetDecision(decision) {
   if (!jobId) return;
   setSheetButtonsBusy(true);
   try {
+    const body = { decision };
+    // 수정한 값은 approve 에는 의미가 없다 — 이미 채택한 그림을 텍스트만
+    // 바꿔서 바꿀 수는 없으므로, 반영하려면 retry 로 다시 그려야 한다.
+    if (decision === "retry") body.fields = sheetEditFields();
     const res = await fetch(`/api/jobs/${jobId}/sheet-decision`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");

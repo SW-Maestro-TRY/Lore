@@ -293,6 +293,14 @@ class Handler(BaseHTTPRequestHandler):
                                "urls": [f"/api/jobs/{job.id}/photo/{i}"
                                         for i in range(1, n + 1)]})
 
+        # 시트 승인 화면의 수정 폼에 채워 줄 현재 값 (name/appearance_en/design_details).
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/sheet-fields", path)
+        if m:
+            job = runner.get(m.group(1))
+            if not job or not job.run_id:
+                return self._error(404, "아직입니다")
+            return self._json(pipeline.sheet_fields(job.run_id))
+
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/episode\.png", path)
         if m:
             job = runner.get(m.group(1))
@@ -433,7 +441,9 @@ class Handler(BaseHTTPRequestHandler):
             decision = str(body.get("decision") or "")
             if decision not in ("approve", "retry"):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
-            job.decide_sheet(decision)
+            fields = body.get("fields")
+            fields = fields if isinstance(fields, dict) else None
+            job.decide_sheet(decision, fields)
             return self._json({"ok": True})
 
         # 스토리 확인 화면의 "이대로 진행" / "다시 만들기" 버튼 — 스토리 단계
