@@ -5714,7 +5714,10 @@ def run_card_mix(caller: Caller, ps: PromptSet, genre: str, n: int,
                       "샘플 카드와 소재가 겹치지 않게 할 것)"),
         "card": None,
     }
-    sample_cards = samples.exemplars(genre)
+    # 여기서는 일부만 보여주면 안 된다. 시험지에는 샘플 6장이 **전부** 올라가는데
+    # P1 이 그중 셋만 봤다면, 못 본 카드와 소재가 겹쳐도 피할 수가 없다.
+    # 그러면 사람이 골라낸 이유가 "AI 라서"가 아니라 "겹쳐서"가 되어 시험이 망가진다.
+    sample_cards = samples.exemplars(genre, pick=0)
 
     base_material = row["character"]
     made = []

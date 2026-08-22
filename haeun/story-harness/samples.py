@@ -26,11 +26,24 @@ SAMPLE_DIR = ROOT / "samples"
 AXES_FILE = SAMPLE_DIR / "variation_axes.json"
 
 # 장르 키 → (파일, 사람이 읽는 이름). --genre 값이 이 키다.
+#
+# 앞의 4종이 원본이고 나머지는 나중에 붙였다. UI 에서 고를 수 있는데 전용
+# 샘플이 없는 장르가 있으면 exemplars_all() 로 폴백해서 **엉뚱한 장르 카드**를
+# 보고 쓰게 된다 — "평범한 일상"을 골랐는데 각성·던전이 나오던 이유다.
 GENRES = {
     "romance": ("romance.ts", "로맨스 판타지 (빙의·회귀)"),
     "idol": ("idol.ts", "아이돌 (연습생·데뷔)"),
     "hunter": ("hunter.ts", "헌터 (각성·게이트)"),
     "academy": ("academy.ts", "마법학교 (입학·기숙사)"),
+    "gamefantasy": ("gamefantasy.ts", "게임 판타지 (시스템·랭커)"),
+    "omegaverse": ("omegaverse.ts", "오메가버스 (제2의 성·제도)"),
+    "sentinel": ("sentinel.ts", "센티넬 (감각·매칭)"),
+    "martial": ("martial.ts", "무협 (강호·문파)"),
+    "thriller": ("thriller.ts", "스릴러 (추적·서스펜스)"),
+    "comedy": ("comedy.ts", "개그 (코미디)"),
+    "action": ("action.ts", "액션 (격투·추격)"),
+    "daily": ("daily.ts", "일상 (학교·회사·자취)"),
+    "fantasy": ("fantasy.ts", "판타지 (검과 마법·이세계)"),
 }
 
 # 카드가 아니라 통째로 참고하는 완성 기획서. 프롬프트에는 요약만 들어간다.
@@ -136,19 +149,61 @@ def _fmt_card(c: dict, index: int = 0) -> str:
     return "\n".join(lines)
 
 
-def exemplars(genre: str, limit: int = 6) -> str:
-    """P1 프롬프트에 통째로 넣는 같은 장르 샘플 카드."""
+# 한 번에 보여줄 샘플 장수. 6장을 매번 통째로 넣으면 그 6장이 곧 정답지가 되어
+# 같은 장르 생성물이 서로 닮는다. 일부만, 매번 다르게 보여주는 편이 낫다 —
+# 공식은 3장으로도 충분히 전달되고, 남은 3장은 다음 생성의 몫이다.
+EXEMPLAR_PICK = 3
+
+
+def _pick_cards(cards: list, pick: int, r) -> list:
+    """정통 1장 + 반전 1장을 보장하고 나머지를 무작위로 채운다.
+
+    반전(04~06)이 한 장도 안 뽑히면 그 장르는 정통만 있는 것처럼 보인다 —
+    romance.ts 주석의 "반전 카드가 뽑히는 게 이 세계관의 진짜 훅"이 무너진다.
+    """
+    if pick <= 0 or pick >= len(cards):
+        return list(cards)
+    straight, twist = cards[:3], cards[3:]
+    picked = []
+    if straight:
+        picked.append(r.choice(straight))
+    if twist:
+        picked.append(r.choice(twist))
+    rest = [c for c in cards if c not in picked]
+    r.shuffle(rest)
+    picked.extend(rest[:max(0, pick - len(picked))])
+    # 원래 순서대로 되돌린다. 정통이 먼저 보여야 반전이 반전으로 읽힌다.
+    picked.sort(key=cards.index)
+    return picked[:pick]
+
+
+def exemplars(genre: str, limit: int = 6, pick: int = EXEMPLAR_PICK, rng=None) -> str:
+    """P1 프롬프트에 넣는 같은 장르 샘플 카드.
+
+    pick 장만 무작위로 고른다. pick=0 이면 예전처럼 limit 장을 순서대로 전부
+    넣는다(--card-mix 처럼 카드 풀 전체가 필요한 곳에서 쓴다).
+    """
     try:
         cards = load(genre)
     except SampleError:
         return "(이 장르의 샘플 카드가 없습니다. 아래 공식만으로 씁니다.)"
-    return "\n\n".join(_fmt_card(c, i) for i, c in enumerate(cards[:limit], 1))
+    chosen = _pick_cards(cards[:limit], pick, rng or random)
+    return "\n\n".join(_fmt_card(c, i) for i, c in enumerate(chosen, 1))
 
 
-def exemplars_all(per_genre: int = 2) -> str:
-    """장르를 못 고를 때 — 장르마다 정통 1장 + 반전 1장씩."""
+def exemplars_all(per_genre: int = 2, genres: int = 3, rng=None) -> str:
+    """장르를 못 고를 때 — 장르 몇 개를 골라 정통 1장 + 반전 1장씩.
+
+    전용 샘플이 생기기 전에는 여기로 폴백하는 장르가 많았고, 그때는 장르 4종을
+    전부 보여줬다. 이제 장르가 13종이라 다 보여주면 26장이 들어가서 프롬프트가
+    샘플로 뒤덮인다 — 몇 개만, 매번 다르게 고른다.
+    """
+    r = rng or random
+    keys = available()
+    if genres and len(keys) > genres:
+        keys = sorted(r.sample(keys, genres), key=available().index)
     out = []
-    for key in available():
+    for key in keys:
         cards = load(key)
         picked = cards[:1] + cards[3:4]     # 01 정통 / 04 반전
         out.append(f"── {genre_label(key)}")
@@ -271,11 +326,27 @@ def guess_genre(text: str) -> str:
     틀려도 손해는 "예시가 덜 맞는 것"뿐이고, 못 고르면 전 장르를 다 보여준다.
     """
     t = str(text or "").lower()
+    # 순서가 곧 우선순위다. 합성 장르명("게임 판타지", "로맨스 판타지")이
+    # 넓은 쪽('판타지')에 먼저 걸리면 안 되므로 좁은 쪽을 위에 둔다.
+    # 앞의 4줄은 원래 있던 것 — 순서를 바꾸면 기존 매칭이 달라진다.
     table = {
         "romance": ("로맨스", "로판", "romance", "빙의", "회귀", "영애", "귀족", "황실", "궁중"),
         "idol": ("아이돌", "idol", "연습생", "데뷔", "아이돌물", "아이돌판"),
         "hunter": ("헌터", "hunter", "각성", "게이트", "던전", "레이드", "길드"),
         "academy": ("마법학교", "academy", "아카데미", "학원", "기숙사", "마법사"),
+        "gamefantasy": ("게임 판타지", "게임판타지", "가상현실", "랭커", "시스템 창",
+                        "히든 클래스", "로그아웃", "레이드물"),
+        "omegaverse": ("오메가버스", "오메가 버스", "알파버스", "bl", "옴버"),
+        "sentinel": ("센티넬", "가이드버스", "sentinel", "가이드 버스"),
+        "martial": ("무협", "강호", "문파", "무공", "비급", "사문", "중원", "마교"),
+        # '느와르' 는 일부러 뺐다 — "모르는 장르는 억지로 고르지 않는다"를
+        # 지키는 회귀 테스트가 그 낱말을 예시로 쓰고 있다.
+        "thriller": ("스릴러", "thriller", "미스터리", "서스펜스", "추리",
+                     "좀비", "아포칼립스", "오컬트"),
+        "comedy": ("개그", "코미디", "comedy", "유머", "병맛"),
+        "action": ("액션", "action", "격투", "용병", "첩보", "경호", "청부"),
+        "daily": ("일상", "힐링", "슬라이스", "daily", "생활물"),
+        "fantasy": ("판타지", "fantasy", "이세계", "마법", "왕국", "용사", "마왕"),
     }
     for key, words in table.items():
         if any(w in t for w in words):

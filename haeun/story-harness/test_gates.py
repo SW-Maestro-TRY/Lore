@@ -2756,6 +2756,63 @@ ok("P1: 렌더 후 안 채워진 자리가 없다",
 ok("P1: '일상'을 고르면 일상 문법이 실제로 실린다",
    "일상" in _p1_rendered and "사건전개패턴" in _p1_rendered)
 
+# ---------------- 장르별 샘플 카드 ----------------
+#
+# 전에는 샘플이 romance/idol/hunter/academy 4종뿐이라, 그 밖의 장르를 고르면
+# exemplars_all() 로 폴백해 **엉뚱한 장르 카드**를 보고 썼다. "평범한 일상"을
+# 골랐는데 각성·던전이 나오던 원인이다.
+
+_TONES = {"somber", "serene", "radiant", "intense"}
+ok("샘플: 장르가 13종으로 늘었다", len(samples.GENRES) >= 13, len(samples.GENRES))
+ok("샘플: 등록된 장르에 파일이 전부 있다",
+   sorted(samples.available()) == sorted(samples.GENRES),
+   [k for k in samples.GENRES if k not in samples.available()])
+
+for _key in sorted(samples.GENRES):
+    _cards = samples.load(_key)
+    _tones = {t for c in _cards for t in (c.get("tones") or [])}
+    _missing = [f for c in _cards
+                for f in ("id", "intro", "name", "personality", "quote",
+                          "appearance", "fateBeats") if f not in c]
+    ok(f"샘플[{_key}]: 6장 · 필수 칸 · 톤 4종",
+       len(_cards) == 6 and not _missing and _tones == _TONES,
+       f"n={len(_cards)} 빠진칸={_missing[:3]} 톤={sorted(_tones)}")
+
+# 저작권 — 새로 쓴 카드에 실존 작품명이 섞이면 프롬프트로 새어 나간다.
+for _key in sorted(samples.GENRES):
+    _raw = (samples.SAMPLE_DIR / samples.GENRES[_key][0]).read_text(encoding="utf-8")
+    ok(f"샘플[{_key}]: 실존 작품명이 없다",
+       story.check_borrowed_titles(_raw) == [], story.check_borrowed_titles(_raw))
+
+# UI 에서 고를 수 있는 장르가 전부 전용 샘플로 이어지는가.
+# 하나라도 빈 문자열이면 그 장르는 여전히 남의 장르 카드를 보고 쓴다.
+for _g in ("판타지", "일상", "무협", "액션", "스릴러", "개그", "센티넬",
+           "게임 판타지", "BL(오메가버스)", "헌터·게이트", "로맨스 판타지",
+           "아이돌", "마법학교", "현대 판타지", "오컬트 미스터리", "좀비 아포칼립스"):
+    ok(f"샘플: '{_g}' 가 전용 샘플로 이어진다",
+       samples.guess_genre(_g) in samples.GENRES, repr(samples.guess_genre(_g)))
+ok("샘플: 모르는 장르는 여전히 빈 문자열 (억지로 안 고른다)",
+   samples.guess_genre("느와르") == "" and samples.guess_genre("") == "")
+
+# --- 샘플을 일부만, 매번 다르게 보여준다 ---
+#
+# 6장을 통째로 넣으면 그 6장이 곧 정답지가 되어 같은 장르 생성물이 서로 닮는다.
+_pick_runs = [{l.split()[-1] for l in samples.exemplars("fantasy").splitlines()
+               if l.startswith("[샘플")} for _ in range(40)]
+ok("샘플: 기본은 일부만 넣는다", all(len(s) == samples.EXEMPLAR_PICK for s in _pick_runs),
+   sorted(_pick_runs[0]))
+ok("샘플: 매번 다른 조합이 뽑힌다", len({frozenset(s) for s in _pick_runs}) >= 5,
+   len({frozenset(s) for s in _pick_runs}))
+# 반전(04~06)이 한 장도 안 뽑히면 그 장르는 정통만 있는 것처럼 보인다.
+_mixed = all(any(int(i.split("-")[1]) <= 3 for i in s)
+             and any(int(i.split("-")[1]) >= 4 for i in s) for s in _pick_runs)
+ok("샘플: 정통과 반전이 항상 함께 뽑힌다", _mixed)
+ok("샘플: pick=0 이면 예전처럼 전부 넣는다 (--card-mix 용)",
+   samples.exemplars("fantasy", pick=0).count("[샘플") == 6)
+ok("샘플: 폴백은 장르 몇 개만 보여준다 (13종을 다 넣지 않는다)",
+   samples.exemplars_all().count("──") <= 3,
+   samples.exemplars_all().count("──"))
+
 # 결과 검사는 구조적 차단을 대신하지 않는다. 모델은 자기가 아는 작품도 꺼낸다.
 ok("저작권: 결과물에 작품명이 있으면 잡아낸다",
    story.check_borrowed_titles({"logline": "왕좌의 게임 같은 이야기"}) == ["왕좌의 게임"],
