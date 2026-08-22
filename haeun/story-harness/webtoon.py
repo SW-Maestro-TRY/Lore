@@ -71,6 +71,7 @@ from story import (
     ParseFailure, ApiFailure, Usage, PromptSet, cost_text, append_csv_row,
     load_prompts, render, feedback_block, write_json, log, warn,
     is_blank, normalize_source, log_prompt_hashes, normalize_palette,
+    resolve_directing_notes,
 )
 
 
@@ -84,6 +85,7 @@ WEBTOON_CONTRACT = {
     "w7": {"engine_card", "series_arc", "arc_json", "episode_json",
            "ledger_snapshot",
            "engine_fired_list", "setting_block", "zones_block",
+           "directing_notes",
            "retry_feedback"},
     "w8": {"engine_card", "episode_json", "ledger_snapshot", "cuts_json",
            "pov", "banned_words", "retry_feedback"},
@@ -3347,6 +3349,10 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
     코드가 여백·경계·시선을 계산해 붙인다. 계산 결과로 모델을 되돌리지 않는다.
     """
     feedback, regens = "", 0
+    # 이번 화 서술에 등장하는 태그와 겹치는 연출 지식만 골라 붙인다 — 액션 장면이
+    # 아니면 액션 연출 지식은 안 붙는다 (resolve_directing_notes 문서 참고).
+    directing_notes = resolve_directing_notes(
+        card, json.dumps(episode, ensure_ascii=False))
     while True:
         payload = call(
             "W7", f"{absolute}화 컷 분해",
@@ -3359,6 +3365,7 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                 "engine_fired_list": fired_list(episode),
                 "setting_block": setting_block(episode),
                 "zones_block": zones_txt or "(등록된 존이 없습니다)",
+                "directing_notes": directing_notes or "(해당 없음)",
                 "retry_feedback": feedback_block(feedback),
             }),
             TEMP_CREATIVE,

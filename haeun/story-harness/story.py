@@ -5341,6 +5341,66 @@ def resolve_genre_templates(genre: str) -> list:
     return hits
 
 
+# 연출 지식 조각(chunk) 저장소. story-harness/docs/*.md 의 웹툰 연출 리서치를
+# 사람이 한 번 청크·태그로 나눠 둔 것 — 요약이 아니라 원문 그대로다. 벡터
+# 검색이 아니라 resolve_genre_templates 와 같은 "태그 문자열이 겹치면 쓴다"
+# 방식. 캐릭터/장면 설명에 액션·로맨스처럼 구체적인 상황이 언급될 때만 관련
+# 조각을 골라 붙이고, 하나도 안 걸리면 빈 문자열을 준다 — 아무 것도 안 주는
+# 편이 안 맞는 연출 지식을 우기는 것보다 낫다(resolve_genre_templates 와 같은
+# 이유).
+DIRECTING_KNOWLEDGE_DIR = env("DIRECTING_KNOWLEDGE_FILE", "knowledge/directing")
+DIRECTING_NOTES_LIMIT = 3
+
+_DIRECTING_CHUNKS_CACHE: list | None = None
+
+
+def load_directing_chunks() -> list:
+    """knowledge/directing/*.json 을 한 번만 읽어 합친다.
+
+    각 파일은 [{"id", "tags": [...], "text"}, ...] 형태의 배열이다. 폴더가
+    없거나 비어 있으면 빈 목록 — 조각이 없으면 그냥 아무것도 안 붙는다.
+    """
+    global _DIRECTING_CHUNKS_CACHE
+    if _DIRECTING_CHUNKS_CACHE is not None:
+        return _DIRECTING_CHUNKS_CACHE
+    d = Path(DIRECTING_KNOWLEDGE_DIR)
+    if not d.is_absolute():
+        d = ROOT / d
+    chunks = []
+    if d.is_dir():
+        for p in sorted(d.glob("*.json")):
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+            except Exception as e:
+                warn(f"연출 지식을 읽지 못했습니다 ({p.name}: {e}). 건너뜁니다.")
+                continue
+            if isinstance(data, list):
+                chunks.extend(c for c in data
+                             if isinstance(c, dict) and c.get("text") and c.get("tags"))
+    _DIRECTING_CHUNKS_CACHE = chunks
+    return chunks
+
+
+def resolve_directing_notes(*texts: str, limit: int = DIRECTING_NOTES_LIMIT) -> str:
+    """texts 안에 태그가 등장하는 연출 지식 조각만 원문 그대로 이어 붙인다.
+
+    아무 것도 안 걸리면 빈 문자열 — 호출부는 항상 이 값을 프롬프트에 넣는다.
+    render() 는 매칭 안 되는 {token} 을 그대로 남겨두므로, 여기서 늘 문자열을
+    돌려줘야 프롬프트에 "{directing_notes}" 가 글자 그대로 남는 사고를 막는다.
+    """
+    chunks = load_directing_chunks()
+    if not chunks:
+        return ""
+    haystack = " ".join(t for t in texts if t)
+    if not haystack:
+        return ""
+    hits = [c for c in chunks if any(tag in haystack for tag in c["tags"])]
+    if not hits:
+        return ""
+    picked = hits[:limit]
+    return "\n\n".join(f"[연출 참고 — {c['id']}]\n{c['text']}" for c in picked)
+
+
 def _strip_template(node):
     """저작권 민감 칸을 재귀적으로 걷어낸다.
 
