@@ -355,7 +355,8 @@ def render_suffix(cfg: dict[str, Any], render_style: str) -> str:
 def cond_extra(cfg: dict[str, Any], cond: dict[str, Any], render_style: str,
                attached: bool, description: str = "",
                second_lead: "charsheet.Sheet | None" = None,
-               zone_text: str = "", uses_previous: bool = False) -> str:
+               zone_text: str = "", uses_previous: bool = False,
+               staging: dict = None) -> str:
     """조건의 {extra} + 시트 사용 지침 + 이 컷에 나오는 조연의 외형.
 
     시트가 실제로 붙은 컷에만 시트 지침을 붙인다 — 첨부가 없는데 "attached
@@ -410,11 +411,76 @@ def cond_extra(cfg: dict[str, Any], cond: dict[str, Any], render_style: str,
                f"is the camera: vary the angle, the distance and the part of "
                f"the place you frame from panel to panel, exactly as the panel "
                f"descriptions ask. Repeating one identical view of the same "
-               f"place makes the page read as a still image:"
+               f"place makes the page read as a still image. "
+               # 실사용자 지적(2026-08): "1컷·2컷 배경이 완전히 동일 — 대충 만든
+               # 느낌." 위 문장은 "카메라를 바꿔라"라고 말하지만 **얼마나** 바꿔야
+               # 하는지를 안 말해서, 모델이 몇 도만 틀고 같은 그림을 냈다. 붙어
+               # 있는 두 패널에 대해서만 최소치를 못박는다 — 화면 전체에 걸면
+               # 장소가 흔들려서 애초에 zone 을 고정한 이유가 사라진다.
+               f"HARD RULE FOR ADJACENT PANELS: no two panels that sit next to "
+               f"each other may share the same framing of this place. Between "
+               f"one panel and the next, change the shot distance by at least "
+               f"one step (close-up / medium / wide) OR move to a clearly "
+               f"different part of the place — a different wall, a different "
+               f"window, a different piece of furniture in the foreground. "
+               f"Cropping the same view tighter is NOT a change. If a panel "
+               f"would otherwise repeat the previous one, push in on a detail "
+               f"of this place instead:"
                f"\n{str(zone_text).strip()}").strip()
+    # 무대 — 이 화의 장소·시간·빛과 **그 안에 실제로 있는 사물**.
+    #
+    # 지금까지 이 값은 컷 분할 단계(scene_gen)에만 갔다. 거기서 패널 서술에
+    # 옮겨 적히면 그려지고, 안 적히면 사라졌다 — 자판기가 있는 장면인데 패널
+    # 글에 자판기가 안 나오면 그림에도 없다. 배경을 실제 장소로 만드는 것이
+    # 바로 그 만질 수 있는 사물들이라, 그리는 쪽이 직접 봐야 한다.
+    #
+    # zone_text 가 "여기가 어디인가" 라면 이것은 "그 안에 무엇이 있는가" 다.
+    stage = staging_clause(staging)
+    if stage:
+        text = f"{text}\n{stage}".strip()
+
     crowd = supporting.block(cfg.get("supporting_book") or supporting.Book(),
                              description)
     return f"{text}\n{crowd}".strip() if crowd else text
+
+
+# 무대에서 그리는 쪽에 넘길 칸과 그 영문 라벨. scenegen.STAGING_FIELDS 와
+# 같은 값을 보지만 문구가 다르다 — 거기는 "패널을 이렇게 써라" 이고
+# 여기는 "이렇게 그려라" 다.
+_STAGE_LABEL = (
+    ("place", "the place"),
+    ("time", "time of day"),
+    ("weather", "weather"),
+    ("light", "light"),
+    ("props", "objects that must actually appear in the artwork"),
+)
+
+
+def staging_clause(staging: dict = None) -> str:
+    """무대를 그림 프롬프트 문장으로. 비어 있으면 빈 문자열.
+
+    props 를 특히 못박는다 — 나머지 칸은 분위기로 스며들지만 사물은 그리거나
+    안 그리거나 둘 중 하나다. 안 그리면 배경이 텅 빈 벽이 되고, 그러면 컷마다
+    같은 장소로 안 읽힌다.
+    """
+    if not isinstance(staging, dict) or not staging:
+        return ""
+    rows = []
+    for key, label in _STAGE_LABEL:
+        value = staging.get(key)
+        if isinstance(value, (list, tuple)):
+            value = ", ".join(str(v).strip() for v in value if str(v or "").strip())
+        value = str(value or "").strip()
+        if value:
+            rows.append(f"  {label}: {value}")
+    if not rows:
+        return ""
+    return ("THE STAGE — this episode happens here. Draw the environment from "
+            "these values and keep them identical across panels unless a panel "
+            "says the story moved elsewhere. The listed objects are not "
+            "decoration: they are what makes this a real place instead of a "
+            "blank wall, so put them in frame where the composition allows.\n"
+            + "\n".join(rows))
 
 
 def style_block(cfg: dict[str, Any], render_style: str) -> str:
@@ -497,6 +563,88 @@ def log_line(ep_dir: Path, record: dict[str, Any]) -> None:
     with (ep_dir / "log.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
         fh.flush()
+
+
+# 모델이 거절한 기록만 따로 모으는 파일. log.jsonl 에도 남지만 그건 수천 줄짜리
+# 전체 호출 기록이라, 사람이 "왜 안 나왔지"를 찾으려면 이 파일이 따로 있어야 한다.
+REFUSAL_FILE = "refusals.jsonl"
+
+# 거절 사유 코드 → 사람이 읽을 한 줄 + 무엇을 고치면 되는지.
+# 지금 실제로 걸릴 만한 자리는 나이다: 캐릭터를 13세로 적으면 미성년 묘사로 보고
+# 거절할 수 있다. 그때 "생성 실패"만 뜨면 사용자는 손댈 곳을 못 찾는다.
+REFUSAL_HINTS = {
+    "PROHIBITED_CONTENT": (
+        "모델이 금지된 내용으로 판단했습니다.",
+        "캐릭터 나이가 어리면(대략 15세 미만) 걸리는 경우가 많습니다 — "
+        "나이를 올리거나, 폭력·노출 묘사를 덜어 보세요."),
+    "IMAGE_SAFETY": (
+        "이미지 안전 필터에 걸렸습니다.",
+        "장면의 유혈·상해 묘사나 어린 캐릭터의 신체 묘사가 원인인 경우가 "
+        "많습니다."),
+    "SAFETY": (
+        "안전 필터에 걸렸습니다.",
+        "장면 설명에서 폭력·공포 묘사를 덜어 보세요."),
+    "BLOCKLIST": (
+        "차단된 표현이 프롬프트에 들어 있습니다.",
+        "장면 설명이나 대사에 쓴 낱말 중 하나가 걸렸습니다."),
+    "SPII": (
+        "개인정보로 보이는 내용이 들어 있습니다.",
+        "실존 인물의 이름·주소 같은 것이 프롬프트에 들어갔는지 보세요."),
+    "RECITATION": (
+        "저작물을 그대로 재현하려는 것으로 판단했습니다.",
+        "기존 작품의 캐릭터나 장면을 그대로 지시하지 않았는지 보세요."),
+}
+
+
+def refusal_lines(refusal: dict[str, Any]) -> list[str]:
+    """거절 기록 → 화면에 찍을 몇 줄. landing 도 같은 함수를 쓴다."""
+    code = str(refusal.get("reason") or "").upper()
+    what, fix = REFUSAL_HINTS.get(code, ("모델이 생성을 거절했습니다.", ""))
+    out = [what]
+    said = str(refusal.get("model_said") or "").strip()
+    if said:
+        out.append(f"모델이 한 말: {said[:300]}")
+    if fix:
+        out.append(f"고칠 곳: {fix}")
+    return out
+
+
+def record_refusal(ep_dir: Path, job: "Job", provider,
+                   exc: ProviderError) -> dict[str, Any]:
+    """거절을 refusals.jsonl 에 통째로 남기고, 요약 dict 를 돌려준다.
+
+    남기는 것은 **모델이 돌려준 원문 그대로**다. 사유 코드만 남기면 나중에
+    "왜 거절당했는지"를 다시 못 맞춘다 — 어떤 컷의, 어떤 프롬프트가, 어떤
+    등급으로 걸렸는지가 전부 있어야 고칠 수 있다.
+    """
+    detail = dict(getattr(exc, "detail", None) or {})
+    reason = (detail.get("finish_reason") or detail.get("block_reason") or "")
+    summary = {
+        "reason": str(reason or "UNKNOWN"),
+        "stage": detail.get("stage") or "",
+        "model_said": detail.get("block_reason_message") or detail.get("model_said") or "",
+        "cut_number": job.cut_number,
+        "candidate": job.candidate,
+        "condition": job.condition,
+    }
+    record = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        **summary,
+        "unit": job.unit,
+        "provider": provider.name,
+        "model": provider.model,
+        "message": str(exc),
+        "description_ko": job.description,
+        "dialogue_ko": job.dialogue,
+        # 프롬프트 전문. 무엇이 걸렸는지는 결국 이걸 읽어야 안다.
+        "prompt": job.prompt,
+        "detail": detail,
+    }
+    ep_dir.mkdir(parents=True, exist_ok=True)
+    with (ep_dir / REFUSAL_FILE).open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        fh.flush()
+    return summary
 
 
 def rel(path: Path) -> str:
@@ -1260,7 +1408,8 @@ def build_jobs(cfg: dict[str, Any], appearance: str, cuts: list[dict[str, Any]],
                                          str(cut.get("description") or ""),
                                          second_lead if here_2nd else None,
                                          zone_text=(zone_text or {}).get(zid, ""),
-                                         uses_previous=uses_prev)
+                                         uses_previous=uses_prev,
+                                         staging=ep.setting)
                               + prev_note
                               + "\n" + strip.text_clause(cut, scenegen.lettering(cfg))
                               + composition_line(cfg, cut),
@@ -1495,7 +1644,8 @@ def build_scene_jobs(cfg: dict[str, Any], appearance: str, scenes: list[scenegen
                 cond_extra(cfg, cond, kind, here and bool(refs), sc.description(),
                           second_lead if here_2nd else None,
                           zone_text=(zone_text or {}).get(zid, ""),
-                          uses_previous=bool(cond.get("use_previous_cut")) and i > 0),
+                          uses_previous=bool(cond.get("use_previous_cut")) and i > 0,
+                          staging=ep.setting),
                 with_lock=here, style_text=style_block(cfg, kind),
                 prev=scenes[i - 1] if i else None,
                 nxt=scenes[i + 1] if i + 1 < len(scenes) else None)
@@ -1569,6 +1719,92 @@ def resolve_attachments(job: Job, ep_dir: Path, picks: dict[tuple[str, int], int
     return paths
 
 
+ART_ISSUE_FILE = "art_issues.jsonl"
+
+
+def check_art(ep_dir: Path, job: Job, cfg: dict[str, Any],
+              env: dict[str, str], image_model: str = "") -> None:
+    """방금 그린 컷에 작화 사고가 있는지 되묻고 art_issues.jsonl 에 남긴다.
+
+    실사용자 지적: "덫에 걸린 생쥐의 머리가 발로 되어 있고, 새싹이 그 위에
+    자라나 있는 등 ai 생성물의 어색함이 드러난다." 이런 것은 프롬프트로 못
+    막는다 — 모델은 자기가 잘못 그린 줄 모른다. 그린 다음에 보고 잡아야 한다.
+
+    ★ --check-art 로 켤 때만 돈다. 컷마다 호출이 하나씩 더 붙는다.
+    ★ 실패해도 조용히 넘어간다. 검수가 안 됐다고 그림을 버릴 이유는 없다.
+    ★ 자동으로 다시 뽑지 않는다 — 오탐이 있고, 재생성은 또 돈이다. 사람이
+      보고 정한다.
+    """
+    try:
+        import vision
+        from PIL import Image
+    except ImportError as exc:
+        print(f"    ! 작화 검수를 건너뜁니다 ({exc})")
+        return
+    key = env_key(env, str(cfg["provider"]["api_key_env"]))
+    if not key:
+        print("    ! 작화 검수를 건너뜁니다 (API 키 없음)")
+        return
+    try:
+        with Image.open(job.out_path) as img:
+            issues = vision.inspect_art(img, key, image_model)
+    except Exception as exc:
+        print(f"    ! 작화 검수 실패: {exc}")
+        return
+    if not issues:
+        print("    · 작화 검수: 이상 없음")
+        return
+    ep_dir.mkdir(parents=True, exist_ok=True)
+    with (ep_dir / ART_ISSUE_FILE).open("a", encoding="utf-8") as fh:
+        for it in issues:
+            fh.write(json.dumps({
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                "cut_number": job.cut_number,
+                "candidate": job.candidate,
+                "condition": job.condition,
+                "unit": job.unit,
+                "image": rel(job.out_path),
+                **it,
+            }, ensure_ascii=False) + "\n")
+    high = [i for i in issues if i["severity"] == "high"]
+    print(f"    · 작화 검수: {len(issues)}건 (눈에 띄는 것 {len(high)}건) "
+          f"— {ART_ISSUE_FILE}")
+    for it in issues[:3]:
+        print(f"      [{it['severity']}] {it['what']}")
+
+
+def job_seed(cfg: dict[str, Any], job: Job) -> int | None:
+    """이 컷에 쓸 시드. provider.options.seed_base 가 없으면 None(=시드 안 씀).
+
+    실사용자 지적(2026-08): "같은 프롬프트, 같은 모델인데도 그림체가 다르게
+    나온다." 이미지 모델은 아무것도 안 정해주면 매번 다른 난수로 출발하므로,
+    같은 콘티를 다시 돌려도 그림체가 흔들린다. 시드를 고정하면 그 흔들림이
+    줄어든다.
+
+    ★ 컷마다 **다른** 시드를 준다. 한 화 전체에 같은 시드를 박으면 컷들이 서로
+      닮아버려서, 실사용자가 따로 지적한 "1컷·2컷 배경이 완전히 동일" 문제를
+      오히려 키운다. 재현성은 "같은 컷을 다시 뽑으면 같은 그림"이면 충분하다.
+    ★ 후보(c1·c2·…)도 시드가 갈려야 한다. 안 그러면 후보를 여러 장 뽑아도 전부
+      같은 그림이 나와서 고를 것이 없어진다.
+    ★ seed_base 를 config 에 안 적으면 이 함수는 None 을 돌려주고, 요청 본문에
+      seed 키 자체가 안 붙는다 — 예전 run 은 동작이 한 글자도 안 바뀐다.
+    """
+    base = (cfg.get("provider") or {}).get("options") or {}
+    raw = base.get("seed_base")
+    if raw is None:
+        return None
+    try:
+        root = int(raw)
+    except (TypeError, ValueError):
+        return None
+    # 컷 번호·후보·조건·stem 을 섞어 컷마다 다른, 그러나 매번 같은 값을 만든다.
+    # hash() 는 파이썬 실행마다 바뀌므로(PYTHONHASHSEED) 쓸 수 없다 — 재현이
+    # 목적인데 실행마다 달라지면 아무 의미가 없다.
+    key = f"{job.condition}|{job.stem}|{job.cut_number}|{job.candidate}"
+    digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:8]
+    return (root + int(digest, 16)) % 2_147_483_647
+
+
 def run_job(job: Job, provider, cfg: dict[str, Any], ep_dir: Path,
             picks: dict[tuple[str, int], int], cut_numbers: list[int],
             image_model: str = "", env: dict[str, str] | None = None) -> bool:
@@ -1578,14 +1814,24 @@ def run_job(job: Job, provider, cfg: dict[str, Any], ep_dir: Path,
     # 컷마다 캔버스 모양이 다르면 그 컷 전용 provider 를 만든다. provider 는
     # 만들 때 옵션이 굳으므로 하나를 돌려 쓰면 전역 비율로만 뽑힌다.
     base = dict(cfg["provider"].get("options") or {})
-    if job.aspect and job.aspect != str(base.get("aspect_ratio") or ""):
+    want_aspect = bool(job.aspect and job.aspect != str(base.get("aspect_ratio") or ""))
+    seed = job_seed(cfg, job)
+    if want_aspect or seed is not None:
+        opts = dict(base)
+        if want_aspect:
+            opts["aspect_ratio"] = job.aspect
+        if seed is not None:
+            opts["seed"] = seed
         try:
             provider = build_provider(
                 name=str(cfg["provider"]["name"]), model=image_model,
                 api_key=(env_key(env or {}, str(cfg["provider"]["api_key_env"]))
                          if str(cfg["provider"]["name"]) != "mock" else None),
-                options=dict(base, aspect_ratio=job.aspect))
-            print(f"    · 캔버스 {job.aspect} (size 에서)")
+                options=opts)
+            if want_aspect:
+                print(f"    · 캔버스 {job.aspect} (size 에서)")
+            if seed is not None:
+                print(f"    · 시드 {seed}")
         except Exception as exc:
             print(f"    ! 비율 {job.aspect} 로 바꾸지 못했습니다: {exc}")
 
@@ -1594,6 +1840,7 @@ def run_job(job: Job, provider, cfg: dict[str, Any], ep_dir: Path,
     for attempt in range(1, max_retries + 2):
         started = time.time()
         ok, err, meta, retryable = False, None, {}, True
+        refusal: dict[str, Any] | None = None
         try:
             result = provider.generate(GenRequest(prompt=job.prompt, images=job.attachments))
             job.out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1601,6 +1848,8 @@ def run_job(job: Job, provider, cfg: dict[str, Any], ep_dir: Path,
             ok, meta = True, result.meta
         except ProviderError as exc:
             err, retryable = str(exc), exc.retryable
+            if getattr(exc, "refusal", False):
+                refusal = record_refusal(ep_dir, job, provider, exc)
         except Exception as exc:  # provider 구현 밖의 예기치 못한 오류
             err = f"{type(exc).__name__}: {exc}"
 
@@ -1627,12 +1876,19 @@ def run_job(job: Job, provider, cfg: dict[str, Any], ep_dir: Path,
             **cost_fields(cfg, provider.model, "image", meta, ok),
             "output_path": rel(job.out_path) if ok else None,
             "provider_meta": meta or None,
+            "refusal": refusal,
         })
 
         if ok:
             print(f"    OK ({elapsed}s) -> {rel(job.out_path)}")
+            if cfg.get("check_art"):
+                check_art(ep_dir, job, cfg, env or {}, image_model)
             return True
         print(f"    실패 (시도 {attempt}/{max_retries + 1}, {elapsed}s): {err}")
+        if refusal:
+            print(f"    ↳ 모델이 거절했습니다. 사유를 {REFUSAL_FILE} 에 남겼습니다.")
+            for line in refusal_lines(refusal):
+                print(f"      {line}")
         if not retryable:
             print("    재시도해도 소용없는 오류라 건너뜁니다.")
             return False
@@ -1680,6 +1936,10 @@ def parse_args() -> argparse.Namespace:
                    help="Scene 전체를 현재 scene_gen.txt 로 후보 몇 장씩만 뽑아 "
                         "그림체·말풍선·효과음·통독을 한 벌로 검증 (verify/ 에 저장, "
                         "기존 scene_<조건>/ 은 그대로). --dry-run 으로 프롬프트만 확인 가능")
+    p.add_argument("--check-art", action="store_true",
+                   help="그린 컷마다 작화 사고(손가락 6개·구조 오류 등)를 "
+                        "이미지 모델에게 되물어 art_issues.jsonl 에 남깁니다. "
+                        "컷당 호출이 한 번씩 늘어 원가가 오릅니다.")
     p.add_argument("--regen-prompts", action="store_true", help="prompts.json 캐시를 무시하고 다시 생성")
     p.add_argument("--cut-count", type=int, default=10, help="예비 경로(cut_split)에서 만들 컷 수")
     p.add_argument("--yes", "-y", action="store_true", help="확인 프롬프트 건너뛰기")
@@ -2841,6 +3101,8 @@ def main() -> int:
                     for k, val in mono_cfg.items()}
     else:
         mono_map = {str(x).strip(): [] for x in mono_cfg}
+    # --check-art 는 컷마다 되묻는 검수라 cfg 를 타고 run_job 까지 내려가야 한다.
+    cfg["check_art"] = bool(getattr(args, "check_art", False))
     cfg["style_monochrome"] = style_name in mono_map
     cfg["style_accent_keys"] = mono_map.get(style_name, [])
     if cfg["style_monochrome"]:
@@ -2890,6 +3152,18 @@ def main() -> int:
         sheets, sheets.appearance if sheets else "")
     if accessory_note:
         print(f"[소지품] {accessory_note}")
+    # 나이 — 실사용자 지적("18세인데 얼굴이 성숙해 보인다") 이후 넣었다.
+    # p1.json 에 age 가 있으면 얼굴 지시문이 design_lock 에 실린다.
+    age_look_line = charsheet.age_look(sheets.age if sheets else "")
+    if age_look_line:
+        print(f"[나이] {sheets.age} — 얼굴을 그 나이대로 고정합니다.")
+    age_note = charsheet.age_warning(sheets)
+    if age_note:
+        print(f"[나이] {age_note}")
+    elif not age_look_line:
+        print("[나이] p1.json 에 age 가 없습니다 — 이미지 모델은 나이를 안 알려주면 "
+              "성인 초중반 얼굴로 그립니다.\n"
+              "       10대 캐릭터라면 p1.json 에 age 를 숫자로 넣어 주세요.")
     if outfit:
         print(f"[outfit] 기본 의상을 고정합니다 — {outfit[:60]}"
               f"{'…' if len(outfit) > 60 else ''}")
