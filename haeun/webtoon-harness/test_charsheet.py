@@ -5,7 +5,8 @@
 프롬프트에서 실제로 지켜지는 자리(design_details)에 길이가 없었던 것이다.
 """
 import sys
-sys.path.insert(0, r"C:\lore\webtoon-harness")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import charsheet as C
 
@@ -103,6 +104,39 @@ ok("소지품 경고: 시트가 없으면 터지지 않는다",
    C.accessory_warning(None, STAFF_APPEARANCE) == "")
 ok("소지품 경고: 빈 appearance 에서 터지지 않는다",
    C.accessory_warning(sheet_no_accessory, "") == "")
+
+# ---------------- 나이 ----------------
+# 실사용자 지적: "나이 비율에 비해 얼굴이 성숙해 보인다. 나이대를 못맞춘다."
+# (18세로 적었는데 20대 중후반 얼굴이 나왔다.) 원인은 나이가 프롬프트에 아예
+# 안 들어가고 있었던 것 — charsheet 가 p1.json 의 age 를 읽지 않았다.
+ok("나이: 18 이면 10대 얼굴 지시가 나온다",
+   "TEENAGER" in C.age_look("18"))
+ok("나이: '18세' 처럼 단위가 붙어도 읽는다",
+   "TEENAGER" in C.age_look("18세"))
+ok("나이: 13 은 10대 초반으로 따로 잡는다",
+   "EARLY TEEN" in C.age_look("13"))
+ok("나이: 35 는 성인으로 잡는다",
+   "thirties" in C.age_look("35"))
+ok("나이: 숫자가 없으면 조용하다 (예전 run 은 그대로 돈다)",
+   C.age_look("") == "" and C.age_look("청년") == "")
+ok("나이: 사람 나이가 아닌 값은 무시한다",
+   C.age_look("999") == "")
+
+# 경고는 "적었는데 못 읽은" 경우에만. 안 적은 것은 정상이라 조용해야 한다.
+ok("나이 경고: 숫자를 못 뽑으면 알린다",
+   "age" in C.age_warning(C.Sheet(run_dir=None, age="고등학생")))
+ok("나이 경고: 숫자를 읽었으면 조용하다",
+   C.age_warning(C.Sheet(run_dir=None, age="18")) == "")
+ok("나이 경고: 나이를 안 적었으면 조용하다",
+   C.age_warning(C.Sheet(run_dir=None)) == "")
+ok("나이 경고: 시트가 없으면 터지지 않는다",
+   C.age_warning(None) == "")
+
+# design_lock 에 실제로 실리는지 — 이게 안 되면 위의 것들이 다 무의미하다.
+ok("나이: lock_text 에 얼굴 지시가 실린다",
+   "TEENAGER" in C.lock_text(C.Sheet(run_dir=None, age="18")))
+ok("나이: age 가 없으면 lock_text 가 예전과 같다",
+   C.lock_text(C.Sheet(run_dir=None)) == "")
 
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")

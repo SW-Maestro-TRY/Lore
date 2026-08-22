@@ -40,6 +40,11 @@ Carry these values through all of them.
    beat = its role in the rhythm]
 {scenes_json}
 
+[DIRECTING REFERENCE — optional, Korean, only when relevant to these scenes.
+Use it to inform shot/composition choices; it never overrides STAGING above
+or the RULES below.]
+{directing_notes}
+
 [RULES]
 
 1. Write one English "scene" string per panel, in the same order, same cut_number,

@@ -150,6 +150,7 @@ class Handler(BaseHTTPRequestHandler):
                 "fields": list(pipeline.FIELD_KEYS),
                 "condition": pipeline.CONDITION,
                 "cuts_per_sheet": pipeline.CUTS_PER_SHEET,
+                "worlds": pipeline.world_presets(),
             })
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
@@ -167,6 +168,38 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/runs/([\w.-]+)/cost", path)
         if m:
             return self._json(pipeline.run_cost(m.group(1)))
+
+        # 다시 그리기 — 지난 판 목록과 그 그림.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions", path)
+        if m:
+            return self._json({"versions": pipeline.scene_versions(
+                m.group(1), int(m.group(2)))})
+
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions/(\d+)", path)
+        if m:
+            src = pipeline.version_path(m.group(1), int(m.group(2)), int(m.group(3)))
+            if not src:
+                return self._error(404, "그 판본이 없습니다")
+            width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
+            dest = (pipeline.episode_dir(m.group(1)) / "cache"
+                    / f"v{m.group(2)}_{m.group(3)}_w{width}.jpg")
+            try:
+                return self._file(thumbnail(src, dest, width))
+            except Exception:                                   # noqa: BLE001
+                return self._file(src)
+
+        # 존(배경) 목록. **이미지가 아니라 글이다** — 어떤 자리가 있고 그 서술이
+        # 어디에 쓰이는지만 보여 준다. 틀린 곳은 series.json 한 줄을 고친다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/zones", path)
+        if m:
+            return self._json({"zones": pipeline.zone_list(m.group(1))})
+
+        m = re.fullmatch(r"/api/regens/([\w.-]+)", path)
+        if m:
+            job = pipeline.regens.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            return self._json(job.snapshot())
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/page/(\d+)", path)
         if m:
@@ -236,12 +269,29 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(src)
 
         # 시트 승인 화면에서 원본 참조 사진과 나란히 보여줄 자리.
-        m = re.fullmatch(r"/api/jobs/([\w.-]+)/photo", path)
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/photo(?:/(\d+))?", path)
         if m:
             job = runner.get(m.group(1))
             if not job or not job.has_photo:
                 return self._error(404, "업로드한 사진이 없습니다")
-            return self._file(job.dir / "photo.png")
+            shots = pipeline.job_photos(job.dir)
+            if not shots:
+                return self._error(404, "업로드한 사진이 없습니다")
+            idx = int(m.group(2) or 1)
+            if not 1 <= idx <= len(shots):
+                return self._error(404, "그 번호의 사진이 없습니다")
+            return self._file(shots[idx - 1])
+
+        # 몇 장이 올라왔는지 — 시트 승인 화면이 몇 칸을 그릴지 정하는 데 쓴다.
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/photos", path)
+        if m:
+            job = runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            n = len(pipeline.job_photos(job.dir))
+            return self._json({"count": n,
+                               "urls": [f"/api/jobs/{job.id}/photo/{i}"
+                                        for i in range(1, n + 1)]})
 
         # 시트 승인 화면의 수정 폼에 채워 줄 현재 값 (name/appearance_en/design_details).
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/sheet-fields", path)
@@ -270,15 +320,28 @@ class Handler(BaseHTTPRequestHandler):
             except (json.JSONDecodeError, UnicodeDecodeError):
                 return self._error(400, "입력을 읽지 못했습니다")
 
-            photo = None
-            data_url = str(form.pop("photo_data", "") or "")
-            if data_url.startswith("data:"):
+            # 사진은 여러 장 올 수 있다 — 한 사람을 여러 각도로 찍은 것이다.
+            # 한 장으로는 늘 안 보이는 칸(하의·신발·뒤통수)이 남고, 다른 각도가
+            # 그 칸을 채운다. 옛 화면은 photo_data 하나만 보내므로 둘 다 받는다.
+            urls = form.pop("photos_data", None)
+            if not isinstance(urls, list):
+                urls = []
+            single = str(form.pop("photo_data", "") or "")
+            if single:
+                urls.insert(0, single)
+            urls = [u for u in urls if str(u or "").startswith("data:")]
+            if len(urls) > pipeline.MAX_PHOTOS:
+                return self._error(400,
+                                   f"사진은 {pipeline.MAX_PHOTOS}장까지 올릴 수 있습니다")
+
+            photos = []
+            for i, data_url in enumerate(urls, 1):
                 try:
                     raw = base64.b64decode(data_url.split(",", 1)[1])
                 except (ValueError, IndexError):
-                    return self._error(400, "사진을 읽지 못했습니다")
+                    return self._error(400, f"{i}번째 사진을 읽지 못했습니다")
                 if len(raw) > MAX_PHOTO_BYTES:
-                    return self._error(400, "사진이 너무 큽니다 (6MB 까지)")
+                    return self._error(400, f"{i}번째 사진이 너무 큽니다 (6MB 까지)")
                 try:
                     from PIL import Image
                     im = Image.open(io.BytesIO(raw))
@@ -288,9 +351,10 @@ class Handler(BaseHTTPRequestHandler):
                         im = im.resize((1400, h), Image.LANCZOS)
                     buf = io.BytesIO()
                     im.convert("RGB").save(buf, "PNG")
-                    photo = buf.getvalue()
+                    photos.append(buf.getvalue())
                 except Exception:                               # noqa: BLE001
-                    return self._error(400, "사진 형식을 알 수 없습니다")
+                    return self._error(400, f"{i}번째 사진의 형식을 알 수 없습니다")
+            photo = photos
 
             # 캐릭터를 알 수 있는 것이 하나는 있어야 한다 — story.py 가 그렇게
             # 요구하고, 그 이유가 맞다. 아무것도 없으면 모델이 인물을 통째로
@@ -298,13 +362,61 @@ class Handler(BaseHTTPRequestHandler):
             known = any(str(form.get(k) or "").strip()
                         for k in ("name", "character")) or \
                 any(str(v or "").strip() for v in (form.get("fields") or {}).values()) \
-                or photo is not None
+                or bool(photos)
             if not known:
                 return self._error(400, "캐릭터를 알 수 있는 것이 하나는 필요합니다 — "
                                         "이름 · 설명 · 항목 · 사진 중 아무거나요.")
 
             job = runner.create(form, photo)
             return self._json({"id": job.id, "queue_position": runner.position(job.id)})
+
+        # ---- 장(Scene) 다시 그리기 ------------------------------------- #
+        #
+        # 크레딧 차감은 없다 (#16 이 백로그라 붙일 곳이 없다). 실제 API 비용은
+        # 나가므로, 화면이 "몇 크레딧" 이라고 적어 두더라도 그건 목업이다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/regen", url.path)
+        if m:
+            run_id, scene_no = m.group(1), int(m.group(2))
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            if not pipeline.scene_cut_range(run_id, scene_no):
+                return self._error(404, "그 장을 찾지 못했습니다")
+            if not pipeline.unit_image(run_id, scene_no):
+                return self._error(409, "아직 그려지지 않은 장입니다")
+            feedback = str(body.get("feedback") or "").strip()
+            if len(feedback) > 500:
+                return self._error(400, "요청은 500자까지 적어 주세요")
+            job = pipeline.regens.start(run_id, scene_no, feedback,
+                                        str(body.get("style") or ""))
+            return self._json(job.snapshot())
+
+        m = re.fullmatch(r"/api/regens/([\w.-]+)/cancel", url.path)
+        if m:
+            job = pipeline.regens.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            job.cancel()
+            return self._json({"ok": True})
+
+        # 지난 판으로 되돌리기. 되돌리기 직전 그림도 판본으로 남으므로
+        # "되돌린 것을 다시 되돌리기" 도 된다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/revert", url.path)
+        if m:
+            run_id, scene_no = m.group(1), int(m.group(2))
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            try:
+                version = int(body.get("version"))
+            except (TypeError, ValueError):
+                return self._error(400, "version 이 필요합니다")
+            if not pipeline.revert_scene(run_id, scene_no, version):
+                return self._error(404, "그 판본으로 되돌리지 못했습니다")
+            return self._json({"ok": True,
+                               "versions": pipeline.scene_versions(run_id, scene_no)})
 
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/cancel", url.path)
         if m:
@@ -332,6 +444,44 @@ class Handler(BaseHTTPRequestHandler):
             fields = body.get("fields")
             fields = fields if isinstance(fields, dict) else None
             job.decide_sheet(decision, fields)
+            return self._json({"ok": True})
+
+        # 스토리 확인 화면의 "이대로 진행" / "다시 만들기" 버튼 — 스토리 단계
+        # 게이트 재시도가 소진돼(STATUS_HUMAN) 사람 확인이 필요할 때만 뜬다.
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/story-decision", url.path)
+        if m:
+            job = runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            if job.status != "awaiting_story_approval":
+                return self._error(409, "지금은 스토리 확인 단계가 아닙니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            decision = str(body.get("decision") or "")
+            if decision not in ("approve", "retry"):
+                return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
+            job.decide_story(decision)
+            return self._json({"ok": True})
+
+        # 콘티 확인 화면의 "이대로 진행" / "다시 만들기" 버튼 — 콘티 단계
+        # 게이트 재시도가 소진돼(STATUS_HUMAN) 사람 확인이 필요할 때만 뜬다.
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/board-decision", url.path)
+        if m:
+            job = runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            if job.status != "awaiting_board_approval":
+                return self._error(409, "지금은 콘티 확인 단계가 아닙니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            decision = str(body.get("decision") or "")
+            if decision not in ("approve", "retry"):
+                return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
+            job.decide_board(decision)
             return self._json({"ok": True})
 
         return self._error(404, "없는 주소입니다")

@@ -59,8 +59,8 @@ from typing import Any, Callable
 
 HERE = Path(__file__).resolve().parent
 JOBS_DIR = HERE / "jobs"
-STORY = Path("C:/lore/story-harness")
-WEBTOON = Path("C:/lore/webtoon-harness")
+STORY = HERE.parent / "story-harness"
+WEBTOON = HERE.parent / "webtoon-harness"
 
 # 그림 조건. 합격본이 S+ 다 — 통합 시트 + 직전 컷을 붙여서, 조연이 같은
 # 사람으로 이어지고 채색이 컷마다 갈리지 않는다. config.yaml 자체가
@@ -87,6 +87,9 @@ STYLES = {
     "webtoon":   "일반 웹툰",
     "romance":   "로맨스 판타지",
     "cinematic": "시네마틱 반실사",
+    "pastel":    "일상툰 감성",
+    "noir":      "다크 느와르",
+    "shoujo":    "순정 · BL",
 }
 
 # 사용자에게 보이는 단계. 하네스의 내부 단계 이름(P1/W5/…)은 올리지 않는다 —
@@ -157,8 +160,9 @@ def _replace_block(text: str, key: str, value: str) -> str:
     return pattern.sub(f"{key}: {value}", text, count=1)
 
 
-def build_config(job_dir: Path, style: str) -> Path:
-    """이 실행에만 쓸 config.yaml. 원본에서 딱 다섯 값만 바꾼다."""
+def build_config(job_dir: Path, style: str, head_ratio: str = "",
+                 genre: str = "") -> Path:
+    """이 실행에만 쓸 config.yaml. 원본에서 몇 값만 바꾼다."""
     text = (WEBTOON / "config.yaml").read_text(encoding="utf-8")
 
     # 1. 그림체 — 시트(story.py)와 컷(run.py)이 같은 값을 봐야 한다.
@@ -191,6 +195,23 @@ def build_config(job_dir: Path, style: str) -> Path:
     text = re.sub(r"(?m)^  max_cuts_per_scene:.*$",
                   f"  max_cuts_per_scene: {CUTS_PER_SHEET}", text, count=1)
 
+    # 7. 실사용자 피드백(2026-08)으로 생긴 값들. 하네스 기본은 전부 꺼짐이라
+    #    (예전 run 재현용) 제품 쪽에서 켠다.
+    #
+    #    · 스티커 평면화 · 포즈 지시 — 사용자가 고를 것이 아니라 항상 맞는
+    #      쪽이라 그냥 켠다. "스티커가 3D 라 그림체와 안 맞는다", "포즈가
+    #      어색하다"에 대해 끄고 싶어할 이유가 없다.
+    #    · 등신 비율 — 사용자가 고른다. 안 골랐으면 그림체 기본값.
+    #    · 장르 — 톤 상한에만 쓴다. 로판을 골랐는데 공포 조명이 나오던 문제.
+    text = _replace_block(text, "flat_stickers", "true")
+    text = _replace_block(text, "pose_guidance", "true")
+    if head_ratio in ("sd", "md", "ld"):
+        text = _replace_block(text, "head_ratio", head_ratio)
+    if genre.strip():
+        # 값에 콜론·따옴표가 들어와도 YAML 이 안 깨지게 통째로 인용한다.
+        safe = genre.strip().replace('"', "'")
+        text = _replace_block(text, "genre", f'"{safe}"')
+
     out = job_dir / "config.yaml"
     out.write_text(text, encoding="utf-8")
     return out
@@ -201,6 +222,54 @@ def build_config(job_dir: Path, style: str) -> Path:
 # --------------------------------------------------------------------------- #
 
 FIELD_KEYS = ("나이", "성별", "직업", "성격", "말투", "과거", "관계", "약점")
+
+# 한 사람을 여러 각도로 찍은 사진을 몇 장까지 받을 것인가.
+#
+# 여러 장을 받는 이유는 하나다 — 한 장으로는 늘 안 보이는 칸이 남는다(하의,
+# 뒤통수, 신발). 다른 각도가 그 칸을 채운다. 반대로 장수를 늘릴수록 첨부가
+# 커져 LOOK 호출이 비싸지고, 서로 어긋나는 칸도 같이 늘어난다. 4장이면
+# 앞·옆·전신·얼굴을 덮는다.
+MAX_PHOTOS = 4
+
+
+def job_photos(job_dir: Path) -> list:
+    """이 작업에 올라온 사진. 순서가 곧 LOOK 에 붙는 순서다.
+
+    옛 job 은 photo.png 하나뿐이고 새 job 은 photo1.png… 를 쓴다. 둘 다 읽는다 —
+    예전 작업의 결과 화면이 그대로 열려야 한다.
+    """
+    out = [job_dir / f"photo{i}.png" for i in range(1, MAX_PHOTOS + 1)]
+    out = [p for p in out if p.exists()]
+    legacy = job_dir / "photo.png"
+    if legacy.exists():
+        out.insert(0, legacy)
+    return out
+
+
+def world_presets() -> list[dict[str, str]]:
+    """세계관 프리셋 목록. story-harness 의 worlds.json 이 유일한 출처다.
+
+    여기서 목록을 따로 들고 있으면 두 곳이 갈라진다 — story.py 는 실제로
+    `world.preset` 키를 worlds.json 에서 찾아 본문으로 바꾸므로(world_preset_text),
+    화면이 보여 준 키가 거기 없으면 그 실행은 통째로 멈춘다.
+    """
+    try:
+        data = json.loads((STORY / "worlds.json").read_text(encoding="utf-8"))
+    except Exception:                                          # noqa: BLE001
+        return []
+    out = []
+    for key, v in (data.get("presets") or {}).items():
+        if not isinstance(v, dict):
+            continue
+        text = str(v.get("text") or "").strip()
+        out.append({
+            "key": key,
+            "label": str(v.get("label") or key),
+            # 고르면 무엇이 들어가는지 화면에서 바로 보여 준다. 고르고 나서야
+            # 아는 것보다 고르기 전에 아는 편이 낫다.
+            "text": text,
+        })
+    return out
 
 
 def write_character(job_dir: Path, form: dict[str, Any]) -> Path:
@@ -215,12 +284,19 @@ def write_character(job_dir: Path, form: dict[str, Any]) -> Path:
         "character": str(form.get("character", "")).strip(),
         "fields": {k: v for k, v in fields.items() if v},
         "genre": str(form.get("genre", "")).strip(),
-        "world": {"preset": "", "text": str(form.get("world", "")).strip()},
+        # 프리셋과 자유 입력은 같이 올 수 있다. story.py 는 자유 입력이 있으면
+        # 그쪽을 쓰고, 비어 있을 때만 프리셋 본문을 채운다(read_character) —
+        # 골라 두고 직접 고쳐 쓴 사람의 글이 프리셋에 덮이지 않게 하는 순서다.
+        "world": {"preset": str(form.get("world_preset", "")).strip(),
+                  "text": str(form.get("world", "")).strip()},
         "story": str(form.get("story", "")).strip(),
     }
-    photo = job_dir / "photo.png"
-    if photo.exists():
-        doc["photo"] = str(photo)
+    # 사진은 여러 장일 수 있다. story.read_character 의 photo 는 문자열도
+    # 배열도 받으므로, 한 장이면 예전처럼 문자열로 넘긴다 — 옛 job 폴더
+    # (photo.png 하나만 있는)도 그대로 열린다.
+    shots = job_photos(job_dir)
+    if shots:
+        doc["photo"] = str(shots[0]) if len(shots) == 1 else [str(p) for p in shots]
         note = str(form.get("photo_note", "")).strip()
         if note:
             doc["photo_note"] = note
@@ -243,7 +319,9 @@ class Job:
     preview: bool
     has_photo: bool
 
-    # queued | running | awaiting_sheet_approval | done | error | cancelled
+    # queued | running | awaiting_story_approval | awaiting_board_approval |
+    # awaiting_sheet_approval |
+    # done | error | cancelled
     status: str = "queued"
     run_id: str | None = None
     error: str | None = None
@@ -259,6 +337,11 @@ class Job:
     art_done: int = 0
     art_seconds: list[float] = field(default_factory=list)
     ready_cuts: list[int] = field(default_factory=list)
+
+    # 이미지 모델이 "못 그리겠다"고 거절한 적이 있는가. 거절은 실패와 다르다 —
+    # 다시 시도해도 같은 답이 오고, 고칠 사람은 우리가 아니라 사용자다.
+    # (예: 캐릭터 나이를 13세로 적으면 미성년 묘사로 보고 거절할 수 있다.)
+    saw_refusal: bool = False
 
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _proc: subprocess.Popen | None = field(default=None, repr=False)
@@ -284,6 +367,28 @@ class Job:
             self.sheet_decision = decision
             self.sheet_edit_fields = fields or None
         self.sheet_approval.set()
+
+    # awaiting_story_approval 용 — sheet_approval 과 같은 이유, 같은 방식.
+    # 스토리 단계가 STATUS_HUMAN(게이트 재시도 소진)으로 끝났을 때만 켜진다.
+    story_approval: threading.Event = field(default_factory=threading.Event, repr=False)
+    story_decision: str = field(default="", repr=False)
+
+    def decide_story(self, decision: str) -> None:
+        """스토리 확인 화면의 '이대로 진행'/'다시 만들기' 클릭이 여기로 온다."""
+        with self._lock:
+            self.story_decision = decision
+        self.story_approval.set()
+
+    # awaiting_board_approval 용 — story_approval 과 같은 이유, 같은 방식.
+    # 콘티(webtoon.py, W4~W8) 단계가 STATUS_HUMAN 으로 끝났을 때만 켜진다.
+    board_approval: threading.Event = field(default_factory=threading.Event, repr=False)
+    board_decision: str = field(default="", repr=False)
+
+    def decide_board(self, decision: str) -> None:
+        """콘티 확인 화면의 '이대로 진행'/'다시 만들기' 클릭이 여기로 온다."""
+        with self._lock:
+            self.board_decision = decision
+        self.board_approval.set()
 
     # ---- 상태 -------------------------------------------------------------- #
 
@@ -374,6 +479,10 @@ class Job:
                 "style_label": STYLES.get(self.style, self.style),
                 "preview": self.preview,
                 "has_photo": self.has_photo,
+                # 거절이 있었을 때만 파일을 읽는다. 매 폴링(1초)마다 읽으면
+                # 아무 일도 없는 대부분의 run 에서 헛일이 된다.
+                "refusals": (read_refusals(self.run_id)
+                             if self.saw_refusal and self.run_id else []),
             }
 
     # ---- 저장 · 복원 -------------------------------------------------------- #
@@ -401,7 +510,8 @@ class Job:
             d = json.loads((path / "state.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
-        if d.get("status") in ("running", "awaiting_sheet_approval"):
+        if d.get("status") in ("running", "awaiting_sheet_approval",
+                               "awaiting_story_approval", "awaiting_board_approval"):
             d["status"] = "error"
             d["error"] = "서버가 다시 시작되어 이 작업은 끊겼습니다."
         job = cls(id=d["id"], form=d.get("form") or {}, dir=path,
@@ -429,9 +539,11 @@ class Job:
                 proc.terminate()
             except OSError:
                 pass
-        # awaiting_sheet_approval 이면 프로세스가 없다 — execute() 가
-        # sheet_approval.wait() 에 걸려 있으므로 깨워야 _cancel 을 보고 멈춘다.
+        # awaiting_*_approval 이면 프로세스가 없다 — execute() 가 해당
+        # *_approval.wait() 에 걸려 있으므로 깨워야 _cancel 을 보고 멈춘다.
         self.sheet_approval.set()
+        self.story_approval.set()
+        self.board_approval.set()
 
     def _env(self) -> dict[str, str]:
         env = dict(os.environ)
@@ -566,6 +678,13 @@ def _art_line(job: Job, line: str) -> None:
             if unit not in job.ready_cuts:
                 job.ready_cuts.append(unit)
                 job.ready_cuts.sort()
+    elif line.lstrip().startswith("↳ 모델이 거절했습니다"):
+        # 안전 필터 거절. 재시도해도 같은 답이 오므로 "다시 시도하는 중"이라고
+        # 하면 거짓말이 된다. 사유는 다음 줄들로 이어져 오고, 원문 전체는
+        # 하네스가 refusals.jsonl 에 남긴다 — 그건 결과 화면에서 읽는다.
+        job.note("모델이 이 장을 그리기를 거절했습니다 — 사유를 확인해 주세요")
+        with job._lock:
+            job.saw_refusal = True
     elif line.lstrip().startswith("실패 (시도"):
         job.note("한 장이 실패했습니다 — 다시 시도하는 중")
 
@@ -579,6 +698,25 @@ def _bind_line(job: Job, line: str) -> None:
 # --------------------------------------------------------------------------- #
 # 파이프라인
 # --------------------------------------------------------------------------- #
+
+# story.py/webtoon.py 의 STATUS_HUMAN 과 같은 문자열. 두 CLI 모두 게이트가
+# 소진돼 사람 확인이 필요한 상태에서도 프로세스 종료 코드는 0 이라(각자의
+# main() 이 항상 return 0) exit code 만으로는 못 잡고, 각 단계가 남긴
+# meta.json 의 status 를 직접 읽어야 한다 — make_episode.py 의 stage_status()
+# 와 같은 이유, 같은 방식.
+STATUS_HUMAN = "사람확인필요"
+
+
+def _meta_status(meta_path: Path) -> tuple[str | None, str]:
+    """단계가 남긴 meta.json 의 (status, note). 없거나 못 읽으면 (None, "")."""
+    if not meta_path.exists():
+        return None, ""
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None, ""
+    return data.get("status"), data.get("note") or ""
+
 
 def _latest_run(before: set[str]) -> str | None:
     runs = STORY / "runs"
@@ -664,28 +802,57 @@ def execute(job: Job) -> None:
     job_dir = job.dir
 
     try:
-        build_config(job_dir, job.style)
+        build_config(job_dir, job.style,
+                     head_ratio=str(job.form.get("head_ratio") or "").strip().lower(),
+                     genre=str(job.form.get("genre") or ""))
         char_path = write_character(job_dir, job.form)
 
         # ---- 1. 이야기 --------------------------------------------------- #
         _enter(job, 0)
-        job.note("캐릭터를 읽는 중")
-        before = {d.name for d in (STORY / "runs").iterdir() if d.is_dir()}
-        code = job._run(
-            ["story.py", "--character", str(char_path), "--scenes", "3", "--no-read"],
-            STORY, lambda ln: _story_line(job, ln))
-        if job._cancel:
-            raise Failed("취소됨")
-        if code != 0:
-            raise Failed("이야기를 만들지 못했습니다.")
-        run_id = _latest_run(before)
-        if not run_id:
-            raise Failed("이야기는 돌았지만 결과 폴더를 찾지 못했습니다.")
-        job.run_id = run_id
-        (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
-        if not (STORY / "runs" / run_id / "scenes.json").exists():
-            raise Failed("장면까지 나오지 못했습니다. 캐릭터 설명을 조금 더 "
-                         "구체적으로 적고 다시 시도해 주세요.")
+        while True:
+            job.note("캐릭터를 읽는 중")
+            before = {d.name for d in (STORY / "runs").iterdir() if d.is_dir()}
+            code = job._run(
+                ["story.py", "--character", str(char_path), "--scenes", "3", "--no-read"],
+                STORY, lambda ln: _story_line(job, ln))
+            if job._cancel:
+                raise Failed("취소됨")
+            if code != 0:
+                raise Failed("이야기를 만들지 못했습니다.")
+            run_id = _latest_run(before)
+            if not run_id:
+                raise Failed("이야기는 돌았지만 결과 폴더를 찾지 못했습니다.")
+            job.run_id = run_id
+            (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
+            if not (STORY / "runs" / run_id / "scenes.json").exists():
+                raise Failed("장면까지 나오지 못했습니다. 캐릭터 설명을 조금 더 "
+                             "구체적으로 적고 다시 시도해 주세요.")
+
+            # story.py 의 main() 은 게이트가 소진돼 사람 확인이 필요한
+            # 상태(STATUS_HUMAN)에서도 종료 코드는 항상 0 을 낸다 — 그래서
+            # exit code 만으로는 못 잡고 meta.json 을 직접 읽는다.
+            status, note = _meta_status(STORY / "runs" / run_id / "meta.json")
+            if status != STATUS_HUMAN:
+                break                  # STATUS_OK(또는 알 수 없는 값) — 정상 진행
+
+            job.status = "awaiting_story_approval"
+            job.note("구조 검수에서 게이트 재시도가 소진됐습니다 — 확인해 주세요"
+                      + (f" ({note})" if note else ""))
+            job.save()
+            job.story_approval.wait()
+            job.story_approval.clear()
+            with job._lock:
+                decision = job.story_decision
+                job.story_decision = ""
+            job.status = "running"
+            if job._cancel:
+                raise Failed("취소됨")
+            if decision != "retry":
+                break                   # approve (또는 알 수 없는 값 — 진행 쪽이 안전)
+            # 다시 만들기 — 시트처럼 같은 run_id 폴더를 지우고 재시도하는 방식이
+            # 아니다. story.py 는 --character 를 받으면 항상 새 run_id 를
+            # 만들므로, 같은 캐릭터 입력으로 통째로 한 번 더 돈다.
+            job.note("캐릭터를 다시 읽는 중 — 이야기를 새로 만드는 중")
         _leave(job)
 
         # ---- 2. 캐릭터 시트 ---------------------------------------------- #
@@ -738,15 +905,41 @@ def execute(job: Job) -> None:
 
         # ---- 3. 콘티 ------------------------------------------------------ #
         _enter(job, 2)
-        job.note("큰 줄거리를 세우는 중")
-        code = job._run(
-            ["webtoon.py", "--run", run_id, "--episodes", "1", "--skip-human-gate"],
-            STORY, lambda ln: _board_line(job, ln))
-        if job._cancel:
-            raise Failed("취소됨")
-        cuts_path = STORY / "runs" / run_id / "webtoon" / "ep01_cuts.json"
-        if code != 0 or not cuts_path.exists():
-            raise Failed("콘티(컷 설계)를 만들지 못했습니다.")
+        board_meta = STORY / "runs" / run_id / "webtoon" / "meta.json"
+        replan = False
+        while True:
+            job.note("큰 줄거리를 세우는 중" if not replan else "콘티를 다시 짜는 중")
+            cmd = ["webtoon.py", "--run", run_id, "--episodes", "1", "--skip-human-gate"]
+            if replan:
+                cmd.append("--replan")
+            code = job._run(cmd, STORY, lambda ln: _board_line(job, ln))
+            if job._cancel:
+                raise Failed("취소됨")
+            cuts_path = STORY / "runs" / run_id / "webtoon" / "ep01_cuts.json"
+            if code != 0 or not cuts_path.exists():
+                raise Failed("콘티(컷 설계)를 만들지 못했습니다.")
+
+            # webtoon.py 의 main() 도 STATUS_HUMAN/실패에서 종료 코드는 항상 0 —
+            # story.py 와 같은 사정. meta.json 을 직접 읽어야 한다.
+            status, note = _meta_status(board_meta)
+            if status != STATUS_HUMAN:
+                break                  # STATUS_OK(또는 알 수 없는 값) — 정상 진행
+
+            job.status = "awaiting_board_approval"
+            job.note("콘티 단계 게이트 재시도가 소진됐습니다 — 확인해 주세요"
+                      + (f" ({note})" if note else ""))
+            job.save()
+            job.board_approval.wait()
+            job.board_approval.clear()
+            with job._lock:
+                decision = job.board_decision
+                job.board_decision = ""
+            job.status = "running"
+            if job._cancel:
+                raise Failed("취소됨")
+            if decision != "retry":
+                break                   # approve — 이 콘티 그대로 진행
+            replan = True
         _leave(job)
 
         # ---- 4·5. 그림 + 이어 붙이기 -------------------------------------- #
@@ -813,6 +1006,59 @@ def episode_dir(run_id: str) -> Path:
     return WEBTOON / "outputs" / run_id / "ep1"
 
 
+# 하네스(run.py)의 REFUSAL_HINTS 와 짝이다. 저쪽은 터미널에, 이쪽은 화면에 쓴다.
+# 사유 코드는 이미지 모델이 주는 것이라 둘 다 같은 표를 봐야 말이 안 갈린다.
+REFUSAL_HINTS = {
+    "PROHIBITED_CONTENT": "모델이 금지된 내용으로 판단했습니다. 캐릭터 나이가 "
+                          "어리면(대략 15세 미만) 걸리는 경우가 많습니다 — 나이를 "
+                          "올리거나 폭력·노출 묘사를 덜어 보세요.",
+    "IMAGE_SAFETY": "이미지 안전 필터에 걸렸습니다. 유혈·상해 묘사나 어린 "
+                    "캐릭터의 신체 묘사가 원인인 경우가 많습니다.",
+    "SAFETY": "안전 필터에 걸렸습니다. 장면 설명에서 폭력·공포 묘사를 덜어 보세요.",
+    "BLOCKLIST": "차단된 표현이 프롬프트에 들어 있습니다. 장면 설명이나 대사에 "
+                 "쓴 낱말 중 하나가 걸렸습니다.",
+    "SPII": "개인정보로 보이는 내용이 들어 있습니다. 실존 인물의 이름 같은 것이 "
+            "들어갔는지 보세요.",
+    "RECITATION": "저작물을 그대로 재현하려는 것으로 판단했습니다. 기존 작품의 "
+                  "캐릭터나 장면을 그대로 지시하지 않았는지 보세요.",
+}
+
+
+def read_refusals(run_id: str, limit: int = 20) -> list[dict[str, Any]]:
+    """하네스가 남긴 refusals.jsonl 을 읽어 화면에 쓸 모양으로 돌려준다.
+
+    파일이 없으면 빈 목록이다 — 거절이 한 번도 없었으면 안 만들어지고, 예전
+    run 에는 애초에 없다. 없다고 오류로 취급하면 안 된다.
+    """
+    path = episode_dir(run_id) / "refusals.jsonl"
+    if not path.exists():
+        return []
+    out: list[dict[str, Any]] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            code = str(rec.get("reason") or "UNKNOWN").upper()
+            out.append({
+                "reason": code,
+                "hint": REFUSAL_HINTS.get(code, "모델이 생성을 거절했습니다."),
+                # 모델이 직접 한 말. 무엇을 고쳐야 할지는 대개 여기에만 있다.
+                "model_said": str(rec.get("model_said") or "")[:400],
+                "cut_number": rec.get("cut_number"),
+                "unit": rec.get("unit") or "장",
+                "description": str(rec.get("description_ko") or "")[:200],
+                "timestamp": rec.get("timestamp") or "",
+            })
+    except OSError:
+        return []
+    return out[-limit:]
+
+
 def unit_image(run_id: str, no: int) -> Path | None:
     """장(Scene) 하나의 그림. MODE 를 컷으로 되돌려도 같은 함수로 찾는다.
 
@@ -826,6 +1072,370 @@ def unit_image(run_id: str, no: int) -> Path | None:
             if p.exists():
                 return p
     return None
+
+
+# --------------------------------------------------------------------------- #
+# 장(Scene) 다시 그리기
+#
+# 이미지는 컷이 아니라 **장 단위**로 굽는다 — 한 장에 3컷이 함께 그려진다.
+# 그래서 "컷 하나만" 다시 뽑는 길은 없고, 다시 그리는 최소 단위는 장이다.
+#
+# 지키는 것 두 가지:
+#   1. 새로 그리다 실패해도 **이미 있던 그림은 그대로 남는다.** 다시 그리기를
+#      눌렀다가 원본까지 잃으면 누구도 그 버튼을 두 번 누르지 않는다.
+#   2. 이전 판을 버리지 않는다. 새로 뽑은 게 더 나쁠 수 있고, 그건 눌러 보기
+#      전에는 모른다.
+# --------------------------------------------------------------------------- #
+
+def scene_cut_range(run_id: str, scene_no: int) -> tuple[int, int] | None:
+    """그 장에 들어 있는 컷 번호의 처음과 끝. run.py 의 --cuts 에 그대로 준다.
+
+    scene 모드에서 --cuts 는 "그 컷이 들어 있는 장"을 고르므로, 장 하나를
+    다시 그리려면 그 장의 컷 범위를 주면 된다.
+    """
+    grouping = _read_json(episode_dir(run_id), "scenes.json").get("scenes") or []
+    for sc in grouping:
+        if int(sc.get("scene_number") or 0) != int(scene_no):
+            continue
+        nums = [int(n) for n in (sc.get("cut_numbers") or [])]
+        if nums:
+            return min(nums), max(nums)
+    # scenes.json 이 없는 옛 실행 — editor_data 와 같은 규칙으로 떨어진다
+    # (장 번호 = 컷 번호).
+    cuts = _read_json(STORY / "runs" / run_id / "webtoon", "ep01_cuts.json").get("cuts") or []
+    if any(int(c.get("cut_number") or 0) == int(scene_no) for c in cuts):
+        return int(scene_no), int(scene_no)
+    return None
+
+
+def _versions_dir(run_id: str) -> Path:
+    return episode_dir(run_id) / "versions"
+
+
+def scene_versions(run_id: str, scene_no: int) -> list[dict[str, Any]]:
+    """그 장의 지난 판 목록. 최신이 앞에 온다."""
+    vdir = _versions_dir(run_id)
+    if not vdir.exists():
+        return []
+    out = []
+    for p in vdir.glob(f"scene{int(scene_no)}.v*.png"):
+        try:
+            v = int(p.stem.rsplit(".v", 1)[1])
+        except (ValueError, IndexError):
+            continue
+        out.append({"version": v, "at": p.stat().st_mtime,
+                    "url": f"/api/runs/{run_id}/scenes/{scene_no}/versions/{v}"})
+    return sorted(out, key=lambda d: -d["version"])
+
+
+def _next_version(run_id: str, scene_no: int) -> int:
+    got = scene_versions(run_id, scene_no)
+    return (got[0]["version"] + 1) if got else 1
+
+
+def archive_scene(run_id: str, scene_no: int) -> int | None:
+    """지금 걸려 있는 그림을 판본으로 떠 둔다. 새로 굽기 **직전**에 부른다."""
+    src = unit_image(run_id, scene_no)
+    if not src:
+        return None
+    vdir = _versions_dir(run_id)
+    vdir.mkdir(parents=True, exist_ok=True)
+    v = _next_version(run_id, scene_no)
+    shutil.copy2(src, vdir / f"scene{int(scene_no)}.v{v}.png")
+    return v
+
+
+def version_path(run_id: str, scene_no: int, version: int) -> Path | None:
+    p = _versions_dir(run_id) / f"scene{int(scene_no)}.v{int(version)}.png"
+    return p if p.exists() else None
+
+
+def revert_scene(run_id: str, scene_no: int, version: int) -> bool:
+    """지난 판으로 되돌린다. 되돌리기 전의 그림도 판본으로 남긴다 —
+    되돌린 것을 다시 되돌릴 수 있어야 한다."""
+    src = version_path(run_id, scene_no, version)
+    dest = unit_image(run_id, scene_no)
+    if not src or not dest:
+        return False
+    archive_scene(run_id, scene_no)
+    shutil.copy2(src, dest)
+    _clear_cache(run_id, scene_no)
+    return True
+
+
+def _clear_cache(run_id: str, scene_no: int) -> None:
+    """줄여 둔 그림을 지운다. 안 지우면 새로 그려도 화면은 옛 그림을 계속 준다
+    (thumbnail 이 mtime 으로 캐시를 판단하는데, job 폴더 캐시는 여기서 못 본다)."""
+    for cache in episode_dir(run_id).glob("cache/page*"):
+        if cache.stem.startswith(f"page{int(scene_no)}_"):
+            cache.unlink(missing_ok=True)
+
+
+def _append_to_extra(text: str, cond: str, note: str) -> str:
+    """조건의 `extra:` 블록 **끝에** 한 줄 덧붙인다.
+
+    S+ 의 extra 는 블록 스칼라(`>-`)이고, 그 안에 시트를 어떻게 보라는 지침이
+    통째로 들어 있다. 통으로 바꾸면 그 지침이 사라져서 다시 그린 장만 얼굴이
+    달라진다 — 덮어쓰지 않고 뒤에 붙이는 이유다.
+    """
+    lines = text.splitlines(keepends=True)
+    # 조건 블록의 시작. 키가 S+ 처럼 따옴표가 붙어 있을 수도 있다.
+    head = re.compile(rf'^  "?{re.escape(cond)}"?:\s*$')
+    start = next((i for i, l in enumerate(lines) if head.match(l.rstrip("\n"))), -1)
+    if start < 0:
+        return text
+    # 그 블록 안의 extra 줄.
+    ex = -1
+    for i in range(start + 1, len(lines)):
+        s = lines[i].rstrip("\n")
+        if s and not s.startswith("    "):
+            break                      # 다음 조건으로 넘어갔다
+        if re.match(r"^    extra:", s):
+            ex = i
+            break
+    if ex < 0:
+        return text
+    if not re.match(r"^    extra:\s*[>|]", lines[ex].rstrip("\n")):
+        return text                    # 블록 스칼라가 아니면 건드리지 않는다
+    # 블록 스칼라 본문이 끝나는 자리를 찾는다 (더 깊이 들여쓴 줄들).
+    end = ex + 1
+    while end < len(lines):
+        s = lines[end].rstrip("\n")
+        if s.strip() and not s.startswith("      "):
+            break
+        end += 1
+    lines.insert(end, f"      {note}\n")
+    return "".join(lines)
+
+
+def _origin_config(run_id: str) -> Path | None:
+    """그 run 을 만들 때 쓴 config.yaml. 못 찾으면 None.
+
+    다시 그릴 때 config 를 원본에서 새로 만들면 **그림체가 바뀐다** —
+    build_config 가 style_default 를 덮어쓰기 때문이다. 한 장만 다른 그림체로
+    그려지면 그게 재생성 실패보다 나쁘다. 그래서 그 실행이 실제로 쓴 config 를
+    먼저 찾는다.
+    """
+    if not JOBS_DIR.is_dir():
+        return None
+    for job_dir in JOBS_DIR.iterdir():
+        marker = job_dir / "run_id.txt"
+        cfg = job_dir / "config.yaml"
+        if not (marker.exists() and cfg.exists()):
+            continue
+        try:
+            if marker.read_text(encoding="utf-8").strip() == run_id:
+                return cfg
+        except OSError:
+            continue
+    return None
+
+
+def regen_config(run_id: str, feedback: str, style: str = "") -> Path:
+    """다시 그리기 전용 config. 피드백을 조건의 {extra} 뒤에 얹는다.
+
+    하네스를 고치지 않는다 — run.py 의 프롬프트 틀에 이미 {extra} 자리가 있고
+    그 값은 config 의 조건에서 온다(cond_extra). 그래서 config 사본만 만들면
+    사용자가 쓴 말이 그림 프롬프트에 그대로 붙는다.
+    """
+    out_dir = episode_dir(run_id) / "regen"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "config.yaml"
+    origin = _origin_config(run_id)
+    if origin:
+        shutil.copy2(origin, path)
+    else:
+        # 하네스를 직접 돌린 run 이라 job 이 없다. 원본에서 만들되 그림체는
+        # 호출자가 준 것을 쓴다(안 주면 하네스 기본값).
+        build_config(out_dir, style or next(iter(STYLES)))
+    note = " ".join(str(feedback or "").split())
+    if note:
+        # 줄바꿈만 지운다. 블록 스칼라 안이라 따옴표는 그대로 둬도 되고,
+        # 오히려 이스케이프하면 그 글자가 프롬프트에 그대로 나간다.
+        path.write_text(
+            _append_to_extra(path.read_text(encoding="utf-8"), CONDITION,
+                             f"Revision requested by the author: {note}"),
+            encoding="utf-8")
+    return path
+
+
+def zone_list(run_id: str) -> list[dict[str, Any]]:
+    """이 실행이 쓰는 존(배경) 목록과 그 존을 쓰는 컷·장.
+
+    **배경은 이미지로 굽지 않는다.** 한 번 구운 배경을 모든 컷이 참조하면 그
+    안에 잘못 들어간 것(자판기 위의 머그컵)이 화 전체에 박히고, 되돌리려면 그
+    존의 컷을 전부 다시 뽑아야 한다 — 실제로 그렇게 났고, 그래서 하네스는
+    존을 **글로** 넘긴다(charsheet.load_zone_text).
+
+    그러면 관리할 자산은 이미지가 아니라 **서술 한 줄**이다. 여기서 하는 일은
+    그 한 줄이 어디에 쓰이는지 보여 주는 것뿐이다 — 틀린 곳을 찾으면
+    series.json 한 줄을 고치면 되고, 다시 구울 자산이 없다.
+    """
+    run_dir = STORY / "runs" / run_id
+    zones = {}
+    for z in (_read_json(run_dir / "webtoon", "series.json").get("zones") or []):
+        if not isinstance(z, dict):
+            continue
+        zid = str(z.get("zone_id") or "").strip()
+        if zid:
+            zones[zid] = {"zone_id": zid,
+                          "label": str(z.get("label") or "").strip(),
+                          "cuts": [], "scenes": []}
+
+    by_cut = {}
+    for c in (_read_json(run_dir / "webtoon", "ep01_cuts.json").get("cuts") or []):
+        no = int(c.get("cut_number") or 0)
+        zid = str(c.get("zone") or "").strip()
+        if not no or not zid:
+            continue
+        by_cut[no] = zid
+        # series.json 에 없는 존을 컷이 가리킬 수 있다. 그래도 목록에서 지우지
+        # 않는다 — 서술이 비어 있다는 것 자체가 고칠 거리다.
+        zones.setdefault(zid, {"zone_id": zid, "label": "", "cuts": [], "scenes": []})
+        zones[zid]["cuts"].append(no)
+
+    grouping = _read_json(episode_dir(run_id), "scenes.json").get("scenes") or []
+    for sc in grouping:
+        nums = [int(n) for n in (sc.get("cut_numbers") or [])]
+        kinds = {by_cut.get(n) for n in nums} - {None}
+        # 한 장에 두 존이 섞이면 하네스가 존 서술을 아예 안 붙인다
+        # (scenegen.scene_zone). 그 사실을 그대로 보여 준다.
+        if len(kinds) == 1:
+            zones[kinds.pop()]["scenes"].append(int(sc.get("scene_number") or 0))
+
+    return sorted(zones.values(), key=lambda z: (z["cuts"] or [999])[0])
+
+
+@dataclass
+class Regen:
+    """장 하나를 다시 그리는 작업. 전체 파이프라인 Job 과 달리 단계가 없다."""
+    id: str
+    run_id: str
+    scene_no: int
+    feedback: str = ""
+    status: str = "queued"                  # queued / running / done / error
+    error: str = ""
+    note: str = ""
+    version: int | None = None              # 되돌아갈 수 있는 직전 판
+    started_at: float = 0.0
+    finished_at: float = 0.0
+    _proc: subprocess.Popen | None = field(default=None, repr=False)
+    _cancel: bool = False
+
+    def snapshot(self) -> dict[str, Any]:
+        return {"id": self.id, "run_id": self.run_id, "scene": self.scene_no,
+                "status": self.status, "error": self.error, "note": self.note,
+                "version": self.version,
+                "image": f"/api/runs/{self.run_id}/page/{self.scene_no}",
+                "versions": scene_versions(self.run_id, self.scene_no)}
+
+    def cancel(self) -> None:
+        self._cancel = True
+        if self._proc and self._proc.poll() is None:
+            self._proc.terminate()
+
+
+class RegenRunner:
+    """다시 그리기 작업들. 한 번에 하나만 돌린다 — 같은 run 의 두 장을 동시에
+    구우면 직전 장을 참조하는 S+ 조건이 서로를 덮어쓴다."""
+
+    def __init__(self) -> None:
+        self.jobs: dict[str, Regen] = {}
+        self._lock = threading.Lock()
+        self._gate = threading.Semaphore(1)
+
+    def get(self, rid: str) -> Regen | None:
+        return self.jobs.get(rid)
+
+    def start(self, run_id: str, scene_no: int, feedback: str = "",
+              style: str = "") -> Regen:
+        job = Regen(id=uuid.uuid4().hex[:12], run_id=run_id,
+                    scene_no=int(scene_no), feedback=feedback)
+        with self._lock:
+            self.jobs[job.id] = job
+        threading.Thread(target=self._work, args=(job, style), daemon=True).start()
+        return job
+
+    def _work(self, job: Regen, style: str) -> None:
+        with self._gate:
+            backup = None
+            try:
+                job.status = "running"
+                job.started_at = time.time()
+
+                rng = scene_cut_range(job.run_id, job.scene_no)
+                if not rng:
+                    raise Failed("그 장을 찾지 못했습니다.")
+
+                # 굽기 **전에** 지금 그림을 떠 둔다. run.py 는 같은 자리에
+                # 덮어쓰므로, 이걸 안 하면 실패했을 때 원본까지 사라진다.
+                job.note = "지금 그림을 보관하는 중"
+                job.version = archive_scene(job.run_id, job.scene_no)
+                if job.version:
+                    backup = version_path(job.run_id, job.scene_no, job.version)
+
+                job.note = "다시 그리는 중"
+                cfg = regen_config(job.run_id, job.feedback, style)
+                cmd = ["run.py", "--run-id", job.run_id, "--episode", "1",
+                       "--mode", MODE, "-c", CONDITION,
+                       "--cuts", f"{rng[0]}-{rng[1]}",
+                       "--config", str(cfg), "--yes"]
+                code = self._spawn(job, cmd)
+                if job._cancel:
+                    raise Failed("취소됨")
+                if code != 0:
+                    raise Failed("그림을 다시 그리지 못했습니다.")
+
+                _clear_cache(job.run_id, job.scene_no)
+                job.status = "done"
+                job.note = "새로 그렸습니다"
+            except Failed as exc:
+                job.status = "cancelled" if job._cancel else "error"
+                job.error = str(exc)
+                self._restore(job, backup)
+            except Exception as exc:                            # noqa: BLE001
+                job.status = "error"
+                job.error = f"{type(exc).__name__}: {exc}"
+                self._restore(job, backup)
+            finally:
+                job.finished_at = time.time()
+                job._proc = None
+
+    def _restore(self, job: Regen, backup: Path | None) -> None:
+        """실패했으면 있던 그림을 되돌려 놓는다. **이게 이 기능의 약속이다** —
+        다시 그리기를 눌렀다가 원본까지 잃으면 아무도 두 번 누르지 않는다."""
+        if not backup or not backup.exists():
+            return
+        dest = unit_image(job.run_id, job.scene_no)
+        if dest:
+            try:
+                shutil.copy2(backup, dest)
+                _clear_cache(job.run_id, job.scene_no)
+                job.note = "실패해서 원래 그림으로 되돌렸습니다"
+            except OSError:
+                pass
+
+    def _spawn(self, job: Regen, cmd: list[str]) -> int:
+        log = episode_dir(job.run_id) / "regen" / f"{job.id}.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ)
+        env["PYTHONIOENCODING"] = "utf-8"
+        proc = subprocess.Popen(
+            [sys.executable, "-u", *cmd], cwd=str(WEBTOON), env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace", bufsize=1)
+        job._proc = proc
+        with log.open("w", encoding="utf-8") as fh:
+            fh.write(" ".join(["python", *cmd]) + "\n")
+            for raw in proc.stdout:                 # type: ignore[union-attr]
+                line = raw.rstrip("\n")
+                fh.write(line + "\n")
+                if line.strip():
+                    job.note = line.strip()[:120]
+        return proc.wait()
+
+
+regens = RegenRunner()
 
 
 def _read_json(base: Path, name: str) -> dict:
@@ -1114,17 +1724,19 @@ class Runner:
                 found += 1
         return found
 
-    def create(self, form: dict[str, Any], photo: bytes | None) -> Job:
+    def create(self, form: dict[str, Any], photo=None) -> Job:
+        """photo 는 bytes 하나 또는 bytes 목록. 한 사람을 여러 각도로 찍은 것이다."""
         job_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4]
         job_dir = JOBS_DIR / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
-        if photo:
-            (job_dir / "photo.png").write_bytes(photo)
+        shots = [photo] if isinstance(photo, (bytes, bytearray)) else list(photo or [])
+        for i, raw in enumerate(shots[:MAX_PHOTOS], 1):
+            (job_dir / f"photo{i}.png").write_bytes(raw)
         style = str(form.get("style") or "webtoon")
         if style not in STYLES:
             style = "webtoon"
         job = Job(id=job_id, form=form, dir=job_dir, style=style,
-                  preview=bool(form.get("preview")), has_photo=bool(photo))
+                  preview=bool(form.get("preview")), has_photo=bool(shots))
         job.build_stages()
         (job_dir / "input.json").write_text(
             json.dumps(form, ensure_ascii=False, indent=2), encoding="utf-8")

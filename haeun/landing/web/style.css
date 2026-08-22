@@ -252,6 +252,9 @@ body[data-view="result"]  .topbar { display: none; }
 .chip:hover { border-color: var(--accent); color: var(--text); }
 
 .styles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* 그림체가 홀수 개면 마지막 카드가 한 줄에 혼자 남아 오른쪽이 비어 보인다.
+   그때만 두 칸을 다 쓰게 해서 줄을 채운다 (7개 → 2·2·2·꽉 찬 1). */
+.style-opt:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .style-opt { position: relative; cursor: pointer; }
 .style-opt input { position: absolute; opacity: 0; pointer-events: none; }
 .style-box {
@@ -266,6 +269,22 @@ body[data-view="result"]  .topbar { display: none; }
   border-color: var(--accent); background: rgba(229,73,60,.1);
 }
 .style-opt input:focus-visible + .style-box { box-shadow: 0 0 0 3px rgba(229,73,60,.25); }
+
+/* 등신 비율 — 그림체 카드와 같은 문법, 네 칸이라 더 좁다. */
+.ratios { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+.ratio { position: relative; cursor: pointer; }
+.ratio input { position: absolute; opacity: 0; pointer-events: none; }
+.ratio span {
+  display: grid; gap: .2em; padding: 11px 9px; border-radius: 10px;
+  border: 1px solid var(--line-2); background: var(--ink-2); height: 100%;
+  text-align: center; transition: border-color .16s ease, background .16s ease;
+}
+.ratio b { font-size: .9rem; }
+.ratio small { color: var(--dim); font-size: .7rem; line-height: 1.35; }
+.ratio:hover span { background: #191c26; }
+.ratio input:checked + span { border-color: var(--accent); background: rgba(229,73,60,.1); }
+.ratio input:focus-visible + span { box-shadow: 0 0 0 3px rgba(229,73,60,.25); }
+@media (max-width: 560px) { .ratios { grid-template-columns: 1fr 1fr; } }
 
 .submit-card { display: grid; gap: 16px; }
 .toggle { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
@@ -287,8 +306,105 @@ body[data-view="result"]  .topbar { display: none; }
 .progress-head h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); font-weight: 800; }
 .progress-sub { color: var(--muted); margin: .6em 0 0; max-width: 52ch; }
 .progress-clock { text-align: right; display: grid; gap: 6px; justify-items: end; }
+
+/* ------------------------------------------------------ 마스코트 "먹이" */
+/* 먹 한 방울이 굳어 생긴 것이라는 설정이라, 색은 팔레트의 --accent 와
+   --gold 만 쓴다. 새 색을 들이면 화면에서 얘만 떠 보인다. */
+.progress-lead { display: flex; align-items: flex-start; gap: 18px; }
+.mascot { flex: 0 0 auto; width: 76px; height: 76px; margin-top: 2px; }
+.mascot-svg { width: 100%; height: 100%; overflow: visible; }
+.m-shadow { fill: rgba(0,0,0,.4); }
+.m-blob   { fill: var(--accent); }
+.m-tuft   { fill: var(--accent-d); }
+.m-eye    { fill: var(--ink); }
+.m-spark  { fill: var(--paper); }
+.m-mouth  { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; }
+.m-blush  { fill: rgba(255,255,255,.22); }
+.m-brush rect { fill: var(--gold); }
+.m-brush-tip  { fill: var(--ink); }
+.m-pop    { fill: var(--gold); opacity: 0; }
+
+/* 기본은 숨겨 두고 단계별로 켠다 */
+.m-brush { opacity: 0; transform-origin: 76px 52px; }
+
+.m-body   { transform-origin: 48px 76px; animation: mascot-bob 2.6s ease-in-out infinite; }
+.m-eyes   { animation: mascot-blink 4.2s steps(1, end) infinite; transform-origin: 48px 44px; }
+
+@keyframes mascot-bob {
+  0%, 100% { transform: translateY(0)     scale(1,     1); }
+  50%      { transform: translateY(-4px)  scale(.985, 1.02); }
+}
+@keyframes mascot-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(.1); }
+}
+
+/* 단계별 표정 — data-mood 를 app.js 가 바꾼다 */
+.mascot[data-mood="read"]  .m-mouth { d: path("M43 57q5 2 10 0"); }
+.mascot[data-mood="write"] .m-mouth { d: path("M44 56q4 6 8 0"); }
+.mascot[data-mood="draw"]  .m-brush { opacity: 1; animation: mascot-paint 1.1s ease-in-out infinite; }
+.mascot[data-mood="draw"]  .m-body  { animation-duration: 1.4s; }
+.mascot[data-mood="ask"]   .m-body  { animation: mascot-tilt 2.4s ease-in-out infinite; }
+.mascot[data-mood="done"]  .m-pop   { animation: mascot-pop 1.6s ease-out infinite; }
+.mascot[data-mood="done"]  .m-mouth { d: path("M41 55q7 8 14 0"); }
+.mascot[data-mood="error"] .m-body  { animation: none; transform: translateY(3px); }
+.mascot[data-mood="error"] .m-mouth { d: path("M43 59q5 -5 10 0"); }
+.mascot[data-mood="error"] .m-blob  { fill: var(--dim); }
+
+@keyframes mascot-paint {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(-16deg) translateY(3px); }
+}
+@keyframes mascot-tilt {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(7deg); }
+}
+@keyframes mascot-pop {
+  0%   { opacity: 0; transform: scale(.4); }
+  35%  { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+/* 마스코트가 지금 무엇을 하는지 한 줄로 말한다 — 진행 상태 텍스트의 인간적인
+   버전이라, 아래 rail 의 기계적인 로그와 역할이 겹치지 않는다. */
+.mascot-line {
+  margin: .5em 0 0; color: var(--gold); font-size: .92rem; font-weight: 600;
+}
+.mascot-line:empty { display: none; }
+
+/* 움직임을 줄여 달라는 설정은 지킨다 — 로딩 화면이라 계속 움직이는 요소다. */
+@media (prefers-reduced-motion: reduce) {
+  .m-body, .m-eyes, .m-brush, .m-pop { animation: none !important; }
+  .mascot[data-mood="draw"] .m-brush { opacity: 1; }
+}
 .clock-time { font-family: var(--mono); font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .clock-label { color: var(--dim); font-size: .78rem; letter-spacing: .1em; }
+
+/* --------------------------------------------------------------- 거절 */
+/* 실패(회색 · 재시도로 풀림)와 눈으로 구분돼야 한다. 여기는 사용자가 손대야만
+   풀리는 것이라, 지나치지 못하게 테두리를 준다. */
+.refusals {
+  border: 1px solid var(--accent); border-radius: var(--radius);
+  background: rgba(229,73,60,.07); padding: 18px 20px; margin-bottom: 18px;
+}
+.refusals-head h3 { font-size: 1.05rem; }
+.refusals-head p { color: var(--muted); margin: .5em 0 0; font-size: .93rem; max-width: 60ch; }
+.refusal-list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 10px; }
+.refusal {
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); padding: 12px 14px;
+}
+.refusal-top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.refusal-code {
+  font-family: var(--mono); font-size: .74rem; font-weight: 700;
+  color: var(--accent); letter-spacing: .06em;
+}
+.refusal-where { color: var(--dim); font-size: .8rem; }
+.refusal-hint { margin: .45em 0 0; font-size: .92rem; }
+.refusal-said, .refusal-desc {
+  margin: .4em 0 0; color: var(--muted); font-size: .86rem;
+  border-left: 2px solid var(--line-2); padding-left: .7em;
+}
 
 .rail { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .stage {
@@ -346,6 +462,8 @@ body[data-view="result"]  .topbar { display: none; }
 .sheet-approval { margin: 22px 0; border: 1px solid var(--line-2); border-radius: var(--radius); padding: 20px 22px; background: var(--card-2); }
 .sheet-approval-head h3 { font-size: 1.1rem; margin-bottom: 6px; }
 .sheet-approval-head p { color: var(--muted); font-size: .9rem; margin: 0 0 16px; }
+.approval-reason { color: var(--text); font-size: .92rem; margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--gold); background: var(--ink-2); border-radius: 6px; }
+.approval-reason:empty { display: none; }
 .sheet-approval-compare { display: flex; gap: 16px; flex-wrap: wrap; }
 .sheet-approval-compare figure { margin: 0; flex: 1 1 200px; max-width: 320px; }
 .sheet-approval-compare img { width: 100%; border-radius: 10px; border: 1px solid var(--line); background: var(--ink-2); aspect-ratio: 3/4; object-fit: cover; }
@@ -472,3 +590,56 @@ body[data-view="result"]  .topbar { display: none; }
 }
 .inline-link { color: var(--gold); border-bottom: 1px solid rgba(217,180,101,.4); }
 .inline-link:hover { color: #f0d090; }
+
+/* ---- 장 다시 그리기 (#59) ------------------------------------------- */
+/* 그림은 장 단위로 굽는다. 그래서 버튼도 컷이 아니라 장에 붙는다. */
+
+.page { position: relative; }
+
+.page-tools {
+  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  padding: .45rem .2rem .1rem;
+}
+/* 읽는 것이 먼저다 — 도구는 그 장에 마우스를 올리거나 포커스가 갔을 때만
+   또렷해진다. 늘 진하면 읽는 흐름을 끊는다. */
+.page-tools { opacity: .25; transition: opacity .15s ease; }
+.page:hover .page-tools,
+.page:focus-within .page-tools { opacity: 1; }
+
+.page-versions { font-size: .78rem; color: var(--muted, #8a8a94); }
+.chip-sm { padding: .1rem .45rem; font-size: .75rem; margin-left: .25rem; }
+
+.regen-box {
+  border: 1px solid var(--line, #2a2a33);
+  border-radius: .6rem;
+  padding: .7rem .8rem;
+  margin: .2rem .2rem .9rem;
+  background: var(--card, rgba(255,255,255,.03));
+}
+.regen-box textarea { width: 100%; resize: vertical; }
+.regen-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.regen-note { font-size: .78rem; color: var(--muted, #8a8a94); }
+
+/* 세계관 프리셋 (#68) */
+#worldPreset { margin-bottom: .4rem; }
+.field .hint {
+  display: block; margin-top: .35rem; font-size: .78rem; line-height: 1.5;
+  color: var(--muted, #8a8a94);
+}
+
+/* ---- 사진 여러 장 (#67) --------------------------------------------- */
+/* 한 사람을 여러 각도로. 한 장으로는 늘 안 보이는 칸이 남는다. */
+.photo-strip { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; }
+.photo-strip:empty { display: none; }
+.photo-strip .shot { position: relative; margin: 0; width: 68px; height: 68px; }
+.photo-strip .shot img {
+  width: 100%; height: 100%; object-fit: cover;
+  border-radius: .4rem; display: block;
+}
+.photo-strip .shot-x {
+  position: absolute; top: -6px; right: -6px;
+  width: 18px; height: 18px; line-height: 1; padding: 0;
+  border-radius: 50%; border: none; cursor: pointer;
+  background: var(--ink, #16161c); color: #fff; font-size: .68rem;
+}
+.photo-count { font-size: .74rem; color: var(--muted, #8a8a94); margin-top: .35rem; }

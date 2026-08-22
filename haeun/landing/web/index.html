@@ -137,13 +137,14 @@
 
         <div class="photo-row">
           <label class="photo-drop" id="photoDrop">
-            <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" hidden>
-            <img id="photoPreview" alt="" hidden>
+            <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" multiple hidden>
+            <div class="photo-strip" id="photoStrip"></div>
             <span class="photo-hint">
               <b>사진 올리기</b>
-              <small>선택 · 있으면 머리·눈·체형·옷을 읽어 반영합니다</small>
+              <small>선택 · 최대 4장까지, <b>같은 사람</b>을 여러 각도로</small>
+              <small>한 장으로는 안 보이는 곳(하의·신발·뒤통수)을 다른 장이 채웁니다</small>
             </span>
-            <button type="button" class="photo-clear" id="photoClear" hidden aria-label="사진 지우기">✕</button>
+            <span class="photo-count" id="photoCount"></span>
           </label>
           <div class="photo-side">
             <label class="field">
@@ -185,15 +186,22 @@
               <span>장르 <small>비우면 AI 가 고릅니다</small></span>
               <input type="text" name="genre" list="genreList" placeholder="예: 무협 / 로맨스 판타지">
               <datalist id="genreList">
-                <option value="로맨스 판타지"><option value="헌터·게이트"><option value="아이돌">
-                <option value="마법학교"><option value="무협"><option value="오컬트 미스터리">
-                <option value="좀비 아포칼립스"><option value="현대 판타지">
-                <option value="판타지"><option value="일상">
+                <option value="판타지"><option value="액션"><option value="스릴러">
+                <option value="헌터·게이트"><option value="센티넬"><option value="게임 판타지">
+                <option value="BL(오메가버스)"><option value="로맨스"><option value="로맨스 판타지">
+                <option value="학원로맨스"><option value="무협"><option value="개그">
+                <option value="일상"><option value="아이돌"><option value="마법학교">
+                <option value="현대 판타지"><option value="오컬트 미스터리">
+                <option value="좀비 아포칼립스">
               </datalist>
             </label>
             <label class="field">
-              <span>세계관 <small>선택</small></span>
+              <span>세계관 <small>비우면 AI 가 정합니다</small></span>
+              <select name="world_preset" id="worldPreset">
+                <option value="">직접 쓰기 / 비워두기</option>
+              </select>
               <input type="text" name="world" placeholder="예: 각성자만 게이트에 들어갈 수 있는 현대 한국">
+              <small class="hint" id="worldHint" hidden></small>
             </label>
           </div>
         </div>
@@ -201,6 +209,28 @@
         <div class="card">
           <div class="field-label">그림체</div>
           <div class="styles" id="styles"></div>
+        </div>
+
+        <div class="card">
+          <div class="field-label">등신 비율 <small>비우면 그림체 기본값</small></div>
+          <div class="ratios">
+            <label class="ratio">
+              <input type="radio" name="head_ratio" value="" checked>
+              <span><b>기본</b><small>그림체가 정한 등신</small></span>
+            </label>
+            <label class="ratio">
+              <input type="radio" name="head_ratio" value="sd">
+              <span><b>SD</b><small>2~3등신 · 머리가 크다</small></span>
+            </label>
+            <label class="ratio">
+              <input type="radio" name="head_ratio" value="md">
+              <span><b>MD</b><small>4~5등신 · 중간</small></span>
+            </label>
+            <label class="ratio">
+              <input type="radio" name="head_ratio" value="ld">
+              <span><b>LD</b><small>7~8등신 · 실제 등신</small></span>
+            </label>
+          </div>
         </div>
 
         <div class="card submit-card">
@@ -227,10 +257,46 @@
 <section id="progress" class="progress" hidden>
   <div class="progress-inner">
     <header class="progress-head">
-      <div>
-        <p class="eyebrow" id="progEyebrow">만드는 중</p>
-        <h2 id="progTitle">웹툰을 만들고 있습니다</h2>
-        <p class="progress-sub" id="progSub">잠시만요 — 지금 무엇을 하고 있는지 아래에 그대로 보여드립니다.</p>
+      <div class="progress-lead">
+        <!-- 마스코트 "먹이" — 단계마다 표정과 소품이 바뀐다. 진행 여부를 숫자가
+             아니라 살아 있는 것으로 보여주는 자리라, 10분을 기다리는 동안
+             화면이 멈춘 것처럼 보이지 않게 하는 것이 목적이다. -->
+        <div class="mascot" id="mascot" data-mood="think" aria-hidden="true">
+          <svg viewBox="0 0 96 96" class="mascot-svg">
+            <ellipse class="m-shadow" cx="48" cy="86" rx="26" ry="5"/>
+            <g class="m-body">
+              <path class="m-blob" d="M48 12c19 0 30 14 30 32 0 20-13 32-30 32S18 64 18 44C18 26 29 12 48 12z"/>
+              <path class="m-tuft" d="M48 12c-2-7-1-10 2-12 1 5 3 8 6 9-3 1-6 2-8 3z"/>
+              <g class="m-face">
+                <g class="m-eyes">
+                  <ellipse class="m-eye" cx="38" cy="44" rx="4.2" ry="5"/>
+                  <ellipse class="m-eye" cx="58" cy="44" rx="4.2" ry="5"/>
+                  <circle class="m-spark" cx="39.6" cy="42.2" r="1.5"/>
+                  <circle class="m-spark" cx="59.6" cy="42.2" r="1.5"/>
+                </g>
+                <path class="m-mouth" d="M43 57q5 5 10 0"/>
+                <ellipse class="m-blush" cx="30" cy="53" rx="4.5" ry="2.6"/>
+                <ellipse class="m-blush" cx="66" cy="53" rx="4.5" ry="2.6"/>
+              </g>
+              <!-- 붓: 그림 단계에서만 든다 -->
+              <g class="m-brush">
+                <rect x="74" y="40" width="4" height="26" rx="2"/>
+                <path class="m-brush-tip" d="M76 66c-3 4-3 8 0 11 3-3 3-7 0-11z"/>
+              </g>
+            </g>
+            <!-- 다 됐을 때 튀는 반짝이 -->
+            <g class="m-pop">
+              <path d="M16 26l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/>
+              <path d="M80 22l1.5 3.5L85 27l-3.5 1.5L80 32l-1.5-3.5L75 27l3.5-1.5z"/>
+            </g>
+          </svg>
+        </div>
+        <div>
+          <p class="eyebrow" id="progEyebrow">만드는 중</p>
+          <h2 id="progTitle">웹툰을 만들고 있습니다</h2>
+          <p class="progress-sub" id="progSub">잠시만요 — 지금 무엇을 하고 있는지 아래에 그대로 보여드립니다.</p>
+          <p class="mascot-line" id="mascotLine"></p>
+        </div>
       </div>
       <div class="progress-clock">
         <div class="clock-time" id="clock">0:00</div>
@@ -280,6 +346,51 @@
         <button type="button" class="btn btn-primary" id="sheetApproveBtn">이대로 진행</button>
       </div>
     </div>
+
+    <div class="sheet-approval" id="storyApproval" hidden>
+      <div class="sheet-approval-head">
+        <h3>이야기 구조를 확인해 주세요</h3>
+        <p class="approval-reason" id="storyApprovalReason"></p>
+        <p>
+          자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
+          <b>이대로 진행</b>하면 지금 이 상태 그대로 다음 단계(캐릭터 시트)로
+          넘어갑니다 — <b>다시 만들기</b>를 누르면 같은 캐릭터로 이야기를
+          처음부터 새로 뽑습니다(새 시도이니 다른 결과가 나올 수 있습니다).
+        </p>
+      </div>
+      <div class="sheet-approval-actions">
+        <button type="button" class="btn btn-quiet" id="storyRetryBtn">다시 만들기</button>
+        <button type="button" class="btn btn-primary" id="storyApproveBtn">이대로 진행</button>
+      </div>
+    </div>
+
+    <div class="sheet-approval" id="boardApproval" hidden>
+      <div class="sheet-approval-head">
+        <h3>콘티(컷 설계)를 확인해 주세요</h3>
+        <p class="approval-reason" id="boardApprovalReason"></p>
+        <p>
+          자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
+          <b>이대로 진행</b>하면 지금 이 콘티 그대로 그림 단계로 넘어갑니다 —
+          <b>다시 만들기</b>를 누르면 콘티를 처음부터 다시 짭니다(새 시도이니
+          다른 결과가 나올 수 있습니다).
+        </p>
+      </div>
+      <div class="sheet-approval-actions">
+        <button type="button" class="btn btn-quiet" id="boardRetryBtn">다시 만들기</button>
+        <button type="button" class="btn btn-primary" id="boardApproveBtn">이대로 진행</button>
+      </div>
+    </div>
+
+    <!-- 이미지 모델이 거절한 장. 실패(재시도로 풀림)와 성격이 달라서 자리를
+         따로 준다 — 재시도해도 같은 답이 오고, 고칠 곳은 사용자의 입력이다. -->
+    <section class="refusals" id="refusals" hidden>
+      <div class="refusals-head">
+        <h3>모델이 그리기를 거절한 장이 있습니다</h3>
+        <p>안전 필터에 걸린 것이라 다시 시도해도 같은 결과가 나옵니다.
+           아래 사유를 보고 캐릭터 설정이나 장면 설명을 고쳐 주세요.</p>
+      </div>
+      <ul class="refusal-list" id="refusalList"></ul>
+    </section>
 
     <ol class="rail" id="rail"></ol>
 

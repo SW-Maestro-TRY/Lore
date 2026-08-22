@@ -14,6 +14,9 @@ const STYLE_INFO = [
   ["romance",   "로맨스 판타지",  "표지 일러스트급 밀도. 보석 같은 눈, 장미와 금박, 레이스까지 하나하나."],
   ["cinematic", "시네마틱 반실사","빛으로 화려해집니다. 역광·공기·얕은 심도·필름 색보정. 얼굴은 웹툰 그대로."],
   ["lineart",   "선화 · 액션",    "선과 여백이 다 합니다. 톤을 거의 안 쓰고 포즈와 실루엣으로 읽힙니다."],
+  ["pastel",    "일상툰 감성",    "일부러 덜 완성한 그림. 흔들리는 연필선, 종이 결, 바랜 파스텔 몇 색."],
+  ["noir",      "다크 느와르",    "어둠이 주인공입니다. 화면 대부분이 먹으로 덮이고 빛은 얇게 남습니다."],
+  ["shoujo",    "순정 · BL",      "얼굴과 둘 사이의 거리. 길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃."],
 ];
 
 const IDEAS = [
@@ -25,7 +28,10 @@ const IDEAS = [
 
 let jobId    = sessionStorage.getItem("lore_job") || null;
 let poll     = null;
-let photoData = null;
+/* 사진은 여러 장 받는다 — 한 사람을 여러 각도로 찍은 것이다.
+   한 장으로는 늘 안 보이는 칸(하의·신발·뒤통수)이 남고, 다른 각도가 그 칸을 채운다. */
+const MAX_PHOTOS = 4;
+let photos = [];          // data URL 목록. 순서가 LOOK 에 붙는 순서다.
 let shownCuts = new Set();
 let lastStatus = null;
 
@@ -51,35 +57,79 @@ function buildForm() {
   }));
 }
 
-function setupPhoto() {
-  const drop = $("#photoDrop"), input = $("#photo"), prev = $("#photoPreview");
+/* 세계관 프리셋 — 목록은 서버(story-harness/worlds.json)에서 받는다.
+   여기에 베껴 두면 두 곳이 갈라지고, 화면에만 있는 키를 고르면 story.py 가
+   worlds.json 에서 그 키를 못 찾아 실행이 통째로 멈춘다. */
+async function loadWorlds() {
+  const sel = $("#worldPreset"), hint = $("#worldHint");
+  if (!sel) return;
+  let worlds = [];
+  try {
+    worlds = (await (await fetch("/api/config")).json()).worlds || [];
+  } catch { return; }               // 못 받아도 자유 입력은 그대로 된다
+  if (!worlds.length) return;
 
-  const load = file => {
-    if (!file || !file.type.startsWith("image/")) return;
-    if (file.size > 6 * 1024 * 1024) return toast("사진이 너무 큽니다 (6MB 까지)");
-    const fr = new FileReader();
-    fr.onload = () => {
-      photoData = fr.result;
-      prev.src = fr.result; prev.hidden = false;
-      drop.classList.add("has-photo");
-      $("#photoClear").hidden = false;
-    };
-    fr.readAsDataURL(file);
+  sel.append(...worlds.map(w => {
+    const o = document.createElement("option");
+    o.value = w.key; o.textContent = w.label; o.dataset.text = w.text || "";
+    return o;
+  }));
+
+  sel.addEventListener("change", () => {
+    const text = sel.selectedOptions[0]?.dataset.text || "";
+    hint.textContent = text;
+    hint.hidden = !text;
+    // 고르면 본문을 입력칸에 채워 준다 — 그대로 써도 되고 고쳐 써도 된다.
+    // 이미 직접 쓴 글이 있으면 덮지 않는다. 골랐다고 남의 글을 지우면 안 된다.
+    const box = $("#form").world;
+    if (text && !box.value.trim()) box.value = text;
+  });
+}
+
+function setupPhoto() {
+  const drop = $("#photoDrop"), input = $("#photo");
+
+  const paint = () => {
+    $("#photoStrip").innerHTML = photos.map((src, i) => `
+      <figure class="shot">
+        <img src="${src}" alt="${i + 1}번째 사진">
+        <button type="button" class="shot-x" data-i="${i}" aria-label="지우기">✕</button>
+      </figure>`).join("");
+    $$("#photoStrip .shot-x").forEach(b => b.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation();
+      photos.splice(Number(b.dataset.i), 1); paint();
+    }));
+    drop.classList.toggle("has-photo", photos.length > 0);
+    $("#photoCount").textContent = photos.length
+      ? `${photos.length} / ${MAX_PHOTOS}장 · 같은 사람을 여러 각도로`
+      : "";
+    input.value = "";
   };
 
-  input.addEventListener("change", e => load(e.target.files[0]));
+  const load = files => {
+    const list = [...(files || [])];
+    if (!list.length) return;
+    const room = MAX_PHOTOS - photos.length;
+    if (room <= 0) return toast(`사진은 ${MAX_PHOTOS}장까지 올릴 수 있습니다`);
+    if (list.length > room) toast(`${room}장만 추가합니다 (최대 ${MAX_PHOTOS}장)`);
+    list.slice(0, room).forEach(file => {
+      if (!file.type.startsWith("image/")) return;
+      if (file.size > 6 * 1024 * 1024) return toast("사진이 너무 큽니다 (6MB 까지)");
+      const fr = new FileReader();
+      fr.onload = () => { photos.push(fr.result); paint(); };
+      fr.readAsDataURL(file);
+    });
+  };
+
+  input.addEventListener("change", e => load(e.target.files));
   ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => {
     e.preventDefault(); drop.classList.add("drag");
   }));
   ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => {
     e.preventDefault(); drop.classList.remove("drag");
   }));
-  drop.addEventListener("drop", e => load(e.dataTransfer.files[0]));
-  $("#photoClear").addEventListener("click", e => {
-    e.preventDefault(); e.stopPropagation();
-    photoData = null; input.value = ""; prev.hidden = true;
-    drop.classList.remove("has-photo"); $("#photoClear").hidden = true;
-  });
+  drop.addEventListener("drop", e => load(e.dataTransfer.files));
+  paint();
 }
 
 
@@ -109,10 +159,13 @@ function collect() {
     fields,
     genre:      form.genre.value.trim(),
     world:      form.world.value.trim(),
+    world_preset: form.world_preset ? form.world_preset.value : "",
     story:      form.story.value.trim(),
     style:      form.style.value,
+    // "" | sd | md | ld. 빈 값이면 그림체가 정한 등신 그대로 간다.
+    head_ratio: form.head_ratio ? form.head_ratio.value : "",
     preview:    $("#previewToggle").checked,
-    photo_data: photoData || "",
+    photos_data: photos,
   };
 }
 
@@ -206,6 +259,29 @@ function renderProgress(s) {
     approvalBox.hidden = true;
   }
 
+  // 사람 확인이 필요한 이유 — 그 단계가 남긴 note 를 그대로 보여준다.
+  // "멈췄습니다"만 뜨고 왜 멈췄는지 안 보이면 사용자가 판단할 근거가 없다.
+  const currentStage = s.stages && s.stages[s.stage_index];
+  const stageReason = (currentStage && currentStage.note) || "";
+
+  const storyApprovalBox = $("#storyApproval");
+  if (s.status === "awaiting_story_approval") {
+    storyApprovalBox.hidden = false;
+    $("#storyApprovalReason").textContent = stageReason;
+    if (lastStatus !== "awaiting_story_approval") setStoryButtonsBusy(false);
+  } else {
+    storyApprovalBox.hidden = true;
+  }
+
+  const boardApprovalBox = $("#boardApproval");
+  if (s.status === "awaiting_board_approval") {
+    boardApprovalBox.hidden = false;
+    $("#boardApprovalReason").textContent = stageReason;
+    if (lastStatus !== "awaiting_board_approval") setBoardButtonsBusy(false);
+  } else {
+    boardApprovalBox.hidden = true;
+  }
+
   if (s.status === "queued") {
     $("#progEyebrow").textContent = "대기 중";
     $("#progTitle").textContent = "앞에 만들고 있는 작품이 있습니다";
@@ -219,6 +295,9 @@ function renderProgress(s) {
       ? `그림 단계입니다 — 남은 시간 약 ${mmss(art.eta_sec)}.`
       : "지금 무엇을 하고 있는지 아래에 그대로 보여드립니다.";
   }
+
+  paintMascot(s, currentStage);
+  paintRefusals(s.refusals);
 
   $("#rail").innerHTML = s.stages.map((st, i) => {
     const num = String(i + 1).padStart(2, "0");
@@ -261,6 +340,66 @@ function renderProgress(s) {
   }
 
   $("#logBox").textContent = s.log.join("\n");
+}
+
+// ------------------------------------------------------------------ 거절
+// 이미지 모델이 "못 그리겠다"고 답한 장을 사용자에게 그대로 보여준다. 사유를
+// 숨기고 "생성 실패"라고만 쓰면 사용자는 무엇을 고쳐야 할지 알 수 없다.
+function paintRefusals(list) {
+  const box = $("#refusals");
+  if (!box) return;
+  if (!list || !list.length) { box.hidden = true; return; }
+  box.hidden = false;
+  $("#refusalList").innerHTML = list.map(r => `
+    <li class="refusal">
+      <div class="refusal-top">
+        <span class="refusal-code">${esc(r.reason)}</span>
+        <span class="refusal-where">${r.cut_number != null
+          ? `${esc(String(r.cut_number))}번째 ${esc(r.unit || "장")}` : ""}</span>
+      </div>
+      <p class="refusal-hint">${esc(r.hint)}</p>
+      ${r.model_said ? `<p class="refusal-said">모델이 한 말 — ${esc(r.model_said)}</p>` : ""}
+      ${r.description ? `<p class="refusal-desc">해당 장면 — ${esc(r.description)}</p>` : ""}
+    </li>`).join("");
+}
+
+// ---------------------------------------------------------------- 마스코트
+// 단계 key → 표정 + 한 줄. 사용자는 10분 가까이 이 화면을 본다. rail 은 무엇을
+// 하는지 기계적으로 적고, 마스코트는 그걸 사람 말로 한 번 더 말한다.
+const MASCOT_MOODS = {
+  story: ["write", "이야기를 짜는 중이에요. 결말부터 거꾸로 세워 봅니다."],
+  sheet: ["draw", "얼굴을 잡는 중이에요 — 여기가 흔들리면 뒤가 다 흔들려서요."],
+  board: ["read", "컷을 나누는 중이에요. 어디서 넘길지 세어 봅니다."],
+  art:   ["draw", "그리는 중이에요. 한 장씩 나오는 대로 아래에 올려 둘게요."],
+  bind:  ["read", "한 편으로 잇는 중이에요. 거의 다 왔습니다."],
+};
+const MASCOT_WAITING = "확인해 주실 게 있어요 — 아래에서 골라 주세요.";
+
+function paintMascot(s, currentStage) {
+  const box = $("#mascot");
+  if (!box) return;
+  let mood = "think";
+  let line = "";
+
+  if (s.status && s.status.startsWith("awaiting_")) {
+    mood = "ask";
+    line = MASCOT_WAITING;
+  } else if (s.status === "done") {
+    mood = "done";
+    line = "다 됐어요. 처음부터 한 번 읽어 보세요.";
+  } else if (s.status === "error" || s.status === "canceled") {
+    mood = "error";
+    line = s.status === "canceled" ? "여기서 멈췄어요." : "여기서 막혔어요.";
+  } else if (s.status === "queued") {
+    mood = "think";
+    line = "앞 작품이 끝나면 바로 시작할게요.";
+  } else if (currentStage) {
+    const hit = MASCOT_MOODS[currentStage.key];
+    if (hit) [mood, line] = hit;
+  }
+
+  box.dataset.mood = mood;
+  $("#mascotLine").textContent = line;
 }
 
 function setSheetButtonsBusy(busy) {
@@ -313,6 +452,52 @@ async function sendSheetDecision(decision) {
   } catch (err) {
     toast(err.message);
     setSheetButtonsBusy(false);
+  }
+}
+
+function setStoryButtonsBusy(busy) {
+  $("#storyApproveBtn").disabled = busy;
+  $("#storyRetryBtn").disabled = busy;
+}
+
+async function sendStoryDecision(decision) {
+  if (!jobId) return;
+  setStoryButtonsBusy(true);
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/story-decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
+  } catch (err) {
+    toast(err.message);
+    setStoryButtonsBusy(false);
+  }
+}
+
+function setBoardButtonsBusy(busy) {
+  $("#boardApproveBtn").disabled = busy;
+  $("#boardRetryBtn").disabled = busy;
+}
+
+async function sendBoardDecision(decision) {
+  if (!jobId) return;
+  setBoardButtonsBusy(true);
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/board-decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
+  } catch (err) {
+    toast(err.message);
+    setBoardButtonsBusy(false);
   }
 }
 
@@ -371,12 +556,18 @@ async function showResult(attempt = 0) {
 
   // 장은 틈 없이 이어 붙인다 — episode.png 를 만드는 방식과 같게(episode.stitch).
   // 컷 사이 호흡은 이제 한 장 안에서 모델이 정하므로 여기서 넣을 여백이 없다.
+  resultRunId = r.run_id || "";
   $("#reader").innerHTML = r.pages.map(pg => `
-    <div class="page">
+    <div class="page" data-scene="${pg.no}">
       <img class="cut-img" src="/api/jobs/${jobId}/page/${pg.no}?w=1080"
            alt="${pg.no}번째 장" loading="lazy">
+      ${resultRunId ? pageTools(pg.no) : ""}
     </div>
   `).join("");
+  if (resultRunId) {
+    wireRegen();
+    r.pages.forEach(pg => paintVersions(pg.no));
+  }
 
   $("#scriptBody").innerHTML = r.pages.map(pg => `
     <div class="script-page">
@@ -388,6 +579,131 @@ async function showResult(attempt = 0) {
   $("#progress").hidden = true;
   $("#result").hidden = false;
   window.scrollTo(0, 0);
+}
+
+/* ------------------------------------------------- 장 다시 그리기 (#59)
+ *
+ * 그림은 컷이 아니라 **장 단위**로 굽는다 — 한 장에 3컷이 함께 그려지므로
+ * "컷 하나만" 다시 뽑는 길은 없다. 다시 그리는 최소 단위가 장이다.
+ *
+ * 크레딧 차감은 없다 (#16 이 백로그). 실제 API 비용은 나간다. */
+
+let resultRunId = "";
+
+function pageTools(no) {
+  return `
+    <div class="page-tools">
+      <button type="button" class="btn btn-quiet btn-sm js-regen-open">이 장 다시 그리기</button>
+      <span class="page-versions" data-versions="${no}"></span>
+    </div>
+    <div class="regen-box" hidden>
+      <label class="field">
+        <span>무엇을 고칠까요? <small>비워도 됩니다 — 그냥 한 번 더 그립니다</small></span>
+        <textarea rows="2" class="js-regen-note" maxlength="500"
+          placeholder="예: 표정을 더 밝게 / 배경을 밤으로 / 인물을 왼쪽에"></textarea>
+      </label>
+      <div class="regen-actions">
+        <button type="button" class="btn btn-primary btn-sm js-regen-go">다시 그리기</button>
+        <button type="button" class="btn btn-quiet btn-sm js-regen-cancel">닫기</button>
+        <span class="regen-note js-regen-status"></span>
+      </div>
+    </div>`;
+}
+
+function wireRegen() {
+  $$("#reader .page").forEach(page => {
+    const no  = Number(page.dataset.scene);
+    const box = $(".regen-box", page);
+    $(".js-regen-open", page).addEventListener("click", () => {
+      box.hidden = !box.hidden;
+      if (!box.hidden) $(".js-regen-note", box).focus();
+    });
+    $(".js-regen-cancel", box).addEventListener("click", () => { box.hidden = true; });
+    $(".js-regen-go", box).addEventListener("click", () =>
+      runRegen(no, $(".js-regen-note", box).value.trim(), page));
+  });
+}
+
+async function runRegen(no, feedback, page) {
+  const status = $(".js-regen-status", page);
+  const go     = $(".js-regen-go", page);
+  go.disabled = true;
+  status.textContent = "시작하는 중…";
+  let job;
+  try {
+    const res = await fetch(
+      `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/regen`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback }) });
+    job = await res.json();
+    if (!res.ok) throw new Error(job.error || "시작하지 못했습니다");
+  } catch (err) {
+    go.disabled = false;
+    status.textContent = "";
+    return toast(err.message);
+  }
+
+  // 폴링. 한 장 굽는 데 1~2분이라 2초면 충분하다.
+  while (true) {
+    await new Promise(r => setTimeout(r, 2000));
+    let s;
+    try { s = await (await fetch(`/api/regens/${job.id}`)).json(); }
+    catch { continue; }                       // 잠깐 끊겨도 다음 번에 이어진다
+    status.textContent = s.note || s.status;
+    if (s.status === "done") {
+      bustImage(page, no);
+      paintVersions(no, s.versions);
+      status.textContent = "새로 그렸습니다";
+      toast(`${no}번째 장을 다시 그렸습니다`);
+      break;
+    }
+    if (s.status === "error" || s.status === "cancelled") {
+      // 실패해도 원래 그림은 서버가 되돌려 놓는다. 화면도 그대로 두면 된다.
+      status.textContent = s.note || s.error || "실패했습니다";
+      toast(s.error || "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
+      break;
+    }
+  }
+  go.disabled = false;
+}
+
+/* 브라우저가 같은 주소를 캐시하므로, 새로 그려도 주소가 같으면 옛 그림이 뜬다. */
+function bustImage(page, no) {
+  const img = $(".cut-img", page);
+  img.src = `/api/jobs/${jobId}/page/${no}?w=1080&t=${Date.now()}`;
+}
+
+async function paintVersions(no, versions) {
+  const slot = $(`[data-versions="${no}"]`);
+  if (!slot) return;
+  if (!versions) {
+    try {
+      versions = (await (await fetch(
+        `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/versions`)).json()).versions;
+    } catch { return; }
+  }
+  if (!versions || !versions.length) { slot.innerHTML = ""; return; }
+  // 지난 판이 있다는 것만 알려 주고, 누르면 그때로 되돌린다.
+  slot.innerHTML = `이전 판 ` + versions.map(v =>
+    `<button type="button" class="chip chip-sm js-revert" data-v="${v.version}">v${v.version}</button>`
+  ).join("");
+  $$(".js-revert", slot).forEach(btn => btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      const res = await fetch(
+        `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/revert`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: Number(btn.dataset.v) }) });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || "되돌리지 못했습니다");
+      bustImage($(`#reader .page[data-scene="${no}"]`), no);
+      paintVersions(no, out.versions);
+      toast(`${no}번째 장을 v${btn.dataset.v} 로 되돌렸습니다`);
+    } catch (err) {
+      toast(err.message);
+    }
+    btn.disabled = false;
+  }));
 }
 
 function scriptCut(c) {
@@ -456,6 +772,7 @@ function toast(msg) {
 
 document.addEventListener("DOMContentLoaded", () => {
   buildForm();
+  loadWorlds();
   setupPhoto();
   $("#form").addEventListener("submit", submit);
   $("#previewToggle").addEventListener("change", paintCost);
@@ -467,6 +784,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("#sheetApproveBtn").addEventListener("click", () => sendSheetDecision("approve"));
   $("#sheetRetryBtn").addEventListener("click", () => sendSheetDecision("retry"));
+  $("#storyApproveBtn").addEventListener("click", () => sendStoryDecision("approve"));
+  $("#storyRetryBtn").addEventListener("click", () => sendStoryDecision("retry"));
+  $("#boardApproveBtn").addEventListener("click", () => sendBoardDecision("approve"));
+  $("#boardRetryBtn").addEventListener("click", () => sendBoardDecision("retry"));
   $("#againBtn").addEventListener("click", forget);
   $("#scriptBtn").addEventListener("click", () => {
     $("#scriptPanel").hidden = !$("#scriptPanel").hidden;

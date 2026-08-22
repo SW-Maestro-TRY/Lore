@@ -1,6 +1,7 @@
 """게이트·장부·판정 로직 직접 검증. API 없음."""
 import sys
-sys.path.insert(0, r"C:\lore\story-harness")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import json
 import story, webtoon, samples
@@ -442,6 +443,160 @@ ok("4단계: 화 수 2~5 위반 탈락",
 ok("4단계: Arc 개수 4~6 위반 탈락",
    any("4~6" in f for f in webtoon.gate_arcs({"arcs": [arc(1, "반전", ["rule", "cost", "irony"])]})))
 
+# ---- 글자 길이 (#21) ----
+#
+# 지금까지 길이는 하한만 봤다(말 있는 컷 비율, 무음 연속). 상한이 없으니 반대쪽으로
+# 넘어가는 것을 아무도 안 막았다 — 말풍선이 길면 그림을 가리고 그 컷에서 눈이 멈춘다.
+_long = [
+    {"cut_number": 1, "lines": [{"kind": "dialogue", "speaker": "A", "text": "짧게."}]},
+    {"cut_number": 2, "lines": [{"kind": "dialogue", "speaker": "A", "text": "가" * 45}]},
+    {"cut_number": 3, "lines": [{"kind": "narration", "text": "나" * 80}]},
+    {"cut_number": 4, "lines": [{"kind": "dialogue", "speaker": "A", "text": "다" * 39},
+                                {"kind": "dialogue", "speaker": "B", "text": "라" * 39},
+                                {"kind": "dialogue", "speaker": "A", "text": "마" * 39}]},
+]
+_lw = webtoon.length_warnings(_long)
+ok("길이: 짧은 대사는 조용하다", not any("컷 1" in x for x in _lw))
+ok("길이: 긴 대사를 잡는다", any("컷 2" in x and "대사가" in x for x in _lw), _lw[:1])
+ok("길이: 나레이션은 더 길게 허용한다 (70자)",
+   webtoon.MAX_NARRATION_CHARS > webtoon.MAX_DIALOGUE_CHARS
+   and any("컷 3" in x and "나레이션이" in x for x in _lw))
+ok("길이: 한 컷 총합도 본다", any("컷 4" in x and "모두" in x for x in _lw))
+ok("길이: 옛 형식(narration 칸)도 읽는다",
+   any("나레이션이" in x for x in webtoon.length_warnings(
+       [{"cut_number": 9, "narration": "바" * 90}])))
+ok("길이: 빈 입력에서 안 터진다", webtoon.length_warnings([]) == []
+   and webtoon.length_warnings([{"cut_number": 1}]) == [])
+# text_warnings 안에 물려 있어야 실제로 사람 눈에 닿는다.
+ok("길이: text_warnings 로 함께 나간다",
+   any("자입니다" in x for x in webtoon.text_warnings(_long)))
+
+# ---- 설정끼리 어긋나는가 (#26) ----
+#
+# 확정된 설정을 쌓기만 하고 서로 부딪히는지 안 보면, 3화에서 "창이 없다"고 정해 놓고
+# 7화에서 창밖을 그리는 일이 그대로 통과한다. 의미 충돌을 다 잡을 수는 없으니
+# **오탐이 적은 두 패턴만** 본다 — 부정어 비대칭, 같은 단위의 다른 숫자.
+def _f(text, ep):
+    return {"fact": text, "first_episode": ep}
+
+ok("충돌: 정면으로 부정되는 설정을 잡는다",
+   any("한쪽만 부정" in c for c in webtoon.fact_conflicts(
+       [_f("그 방에는 창이 없다", 3), _f("그 방에는 창이 있다", 7)])))
+ok("충돌: 같은 단위의 다른 숫자를 잡는다",
+   any("3층" in c and "5층" in c for c in webtoon.fact_conflicts(
+       [_f("학생회관은 3층 건물이다", 2), _f("학생회관은 5층까지 있다", 8)])))
+ok("충돌: 어느 화끼리 부딪히는지 알려준다",
+   any("2화 ↔ 8화" in c for c in webtoon.fact_conflicts(
+       [_f("학생회관은 3층 건물이다", 2), _f("학생회관은 5층까지 있다", 8)])))
+
+# 오탐이 나면 아무도 안 본다. 붙지 말아야 할 것들.
+for _name, _rows in (
+    ("무관한 설정", [_f("시하는 커피를 좋아한다", 1), _f("윤재는 기타를 친다", 4)]),
+    ("같은 사람 다른 이야기", [_f("시하는 커피를 좋아한다", 1), _f("시하는 기타를 못 친다", 3)]),
+    ("같은 숫자 반복", [_f("학생회관은 3층 건물이다", 1), _f("학생회관 3층에 동아리방이 있다", 2)]),
+    ("서로 보완하는 설정", [_f("윤재는 3학년이다", 1), _f("윤재는 밴드부 부장이다", 2)]),
+):
+    ok(f"충돌: 오탐 없음 — {_name}", webtoon.fact_conflicts(_rows) == [],
+       webtoon.fact_conflicts(_rows))
+
+ok("충돌: 빈 입력에서 안 터진다",
+   webtoon.fact_conflicts([]) == [] and webtoon.fact_conflicts(None) == [])
+
+# ---- Arc 인물 역할 (#28) ----
+#
+# Arc 요약은 "무슨 일이 벌어지는가"만 말한다. 누가 그 일을 밀고 누가 막는지가
+# 없으면 W5 가 매번 인물을 새로 배치하고, 주인공이 Arc 마다 다른 사람처럼 움직인다.
+#
+# ★ 가장 중요한 것: **cast_roles 가 없는 옛 run 은 아무것도 검사하지 않는다.**
+#   이 칸이 생기기 전에 돌린 run 을 다시 돌려도 결과가 그대로여야 한다.
+ok("4단계: cast_roles 가 없으면 검사하지 않는다 (옛 run 회귀)",
+   webtoon.gate_arc_cast(good_arcs["arcs"]) == []
+   and webtoon.gate_arcs(good_arcs) == [])
+
+def _role(n, ch="달라진다"):
+    return {"name": n, "role": "쫓는다", "change": ch}
+
+def _cast(arcs, rows_by_order):
+    return {"arcs": [dict(a, cast_roles=rows_by_order[a["order"]]) for a in arcs]}
+
+_ok_cast = _cast(good_arcs["arcs"], {i: [_role("서지한"), _role("한다인")] for i in range(1, 5)})
+ok("4단계: cast_roles 를 제대로 채우면 통과",
+   webtoon.gate_arcs(_ok_cast) == [], webtoon.gate_arcs(_ok_cast))
+
+_no_through = _cast(good_arcs["arcs"], {1: [_role("서지한")], 2: [_role("서지한")],
+                                        3: [_role("딴사람")], 4: [_role("서지한")]})
+ok("4단계: 모든 Arc 에 나오는 인물이 없으면 탈락 (주인공 실종)",
+   any("모든 Arc" in f for f in webtoon.gate_arcs(_no_through)))
+
+_blank = _cast(good_arcs["arcs"], {1: [{"name": "서지한", "role": "쫓는다", "change": ""}],
+                                   2: [_role("서지한")], 3: [_role("서지한")],
+                                   4: [_role("서지한")]})
+ok("4단계: change 가 비면 탈락 (달라지는 게 없으면 그 Arc 에 있을 이유가 없다)",
+   any("change" in f for f in webtoon.gate_arcs(_blank)))
+
+_empty = _cast(good_arcs["arcs"], {1: [], 2: [_role("서지한")], 3: [_role("서지한")],
+                                   4: [_role("서지한")]})
+ok("4단계: cast_roles 가 빈 배열인 Arc 는 탈락",
+   any("비어 있습니다" in f for f in webtoon.gate_arcs(_empty)))
+
+# 전체 줄거리 지도에 주인공 변화 곡선이 실리는가.
+_curve = [dict(a, cast_roles=[_role("서지한", f"{a['order']}번째로 달라진다")])
+          for a in good_arcs["arcs"]]
+_blk = webtoon.series_arc_block(_curve, _curve[1])
+ok("4단계: 지도에 주인공 변화가 Arc 순서대로 실린다",
+   _blk.count("서지한:") == 4 and "2번째로 달라진다" in _blk, _blk[:70])
+ok("4단계: cast_roles 없으면 지도 출력이 예전 그대로",
+   "서지한" not in webtoon.series_arc_block(good_arcs["arcs"], good_arcs["arcs"][1]))
+ok("4단계: 관통 인물을 찾는다", webtoon._through_line(_curve) == "서지한"
+   and webtoon._through_line(good_arcs["arcs"]) == "")
+
+# ---- 행동의 이유가 화면에 있는가 (#29) ----
+#
+# 머릿속 설정으로만 성립하는 행동은 독자에게 개연성이 없다. 실제로 그렇게 나왔다
+# — 인물이 갑자기 노래를 부르는데 왜 불러야 하는지가 어디에도 없었다.
+ok("5단계: why_now 가 없는 옛 run 은 검사하지 않는다",
+   webtoon.gate_why_now([{"order": 1, "summary": "s"}, {"order": 2}]) == [])
+_why_ok = [{"order": 1, "why_now": {
+    "action": "노래를 부른다", "reason": "동생 병원비가 오늘까지다",
+    "shown_by": '컷2에 독촉 문자가 보이고, 컷3 대사 "오늘까지래"'}}]
+ok("5단계: 행동·이유·화면이 다 있으면 통과", webtoon.gate_why_now(_why_ok) == [],
+   webtoon.gate_why_now(_why_ok))
+ok("5단계: why_now 자체가 비면 탈락",
+   any("why_now 가 없습니다" in f for f in webtoon.gate_why_now([{"order": 1, "why_now": {}},
+                                                                _why_ok[0]])))
+ok("5단계: reason 이 비면 탈락",
+   any("reason" in f for f in webtoon.gate_why_now(
+       [{"order": 1, "why_now": {"action": "a", "reason": "", "shown_by": "컷2 대사"}}])))
+# 화면 밖을 가리키는 답은 답이 아니다 — 독자는 설정집을 안 읽는다.
+for _dodge in ("설정상 가수 지망생이라서", "앞 화에서 설명했다", "이미 설명한 대로"):
+    ok(f"5단계: shown_by 가 화면 밖을 가리키면 탈락 ({_dodge[:8]}…)",
+       any("화면 밖" in f for f in webtoon.gate_why_now(
+           [{"order": 1, "why_now": {"action": "a", "reason": "r", "shown_by": _dodge}}])))
+
+# ---- 오래 묵은 질문 (#30) ----
+#
+# 상환 일정을 미리 짜지 않는 대신 **나이**로 본다. 개수 상한과 최근 상환 여부만으로는
+# 오래 묵은 질문 하나가 안 잡힌다 — 3화에 연 질문이 12화까지 열려 있으면 독자는 잊는다.
+_led = webtoon.Ledger("주인공은 왜 돌아왔는가", cap=5)
+_led.open("흉터의 정체는?", "mystery", 1, 2)
+_led.open("오늘 밤 무슨 일이?", "suspense", 2, 8)
+_q = _led.open("갚을 것", "mystery", 2, 7)
+_led.close(_q.id, 2, 8, False)
+ok("장부: 오래 묵은 질문을 경고한다",
+   any("장기 미상환" in w for w in _led.warnings(9)), _led.warnings(9))
+ok("장부: 아직 안 묵었으면 조용하다",
+   not any("장기 미상환" in w for w in _led.warnings(4)), _led.warnings(4))
+_snap = json.loads(_led.snapshot(9, hide_ids=True))
+_by_text = {o["text"]: o for o in _snap["open"]}
+ok("장부: 열린 질문마다 몇 화째인지 실린다",
+   _by_text["흉터의 정체는?"]["openFor"] == 7
+   and _by_text["오늘 밤 무슨 일이?"]["openFor"] == 1)
+ok("장부: 오래 묵은 것만 표시된다",
+   _by_text["흉터의 정체는?"].get("stale") is True
+   and "stale" not in _by_text["오늘 밤 무슨 일이?"])
+ok("장부: 엔진급 질문에는 나이를 안 붙인다",
+   "openFor" not in json.loads(_led.snapshot(9))["engine_question"])
+
 # ---------------- 질문 장부 (webtoon) ----------------
 led = webtoon.Ledger("그는 끝내 무엇을 택하는가", cap=5)
 ok("장부: EQ 는 열린 부채로 세지 않는다", led.open_items == [])
@@ -465,6 +620,29 @@ led2 = webtoon.Ledger("EQ", cap=5)
 led2.open("a", "suspense", 1, 1)
 ok("장부: 미스터리 박스 경고 (최근 3화 상환 0건)",
    any("미스터리 박스" in w for w in led2.warnings(5)))
+
+# ---------------- 장부: 확정된 사실 (facts) ----------------
+led3 = webtoon.Ledger("EQ", cap=5)
+f1 = led3.add_fact("3화에서 왼손에 흉터가 생겼다", 3)
+f2 = led3.add_fact("주인공은 커피를 못 마신다", 1)
+ok("장부: fact id 발급", (f1.id, f2.id) == ("F-1", "F-2"))
+d3 = led3.as_dict()
+ok("장부: as_dict 에 facts 포함", len(d3.get("facts") or []) == 2)
+led3b = webtoon.Ledger.from_dict(d3)
+ok("장부: facts 라운드트립",
+   [(f.id, f.text, f.established_episode) for f in led3b.facts]
+   == [("F-1", "3화에서 왼손에 흉터가 생겼다", 3), ("F-2", "주인공은 커피를 못 마신다", 1)])
+snap3 = json.loads(led3b.snapshot(4))
+ok("장부: snapshot 에 established_facts 포함", len(snap3.get("established_facts") or []) == 2)
+
+old_ledger = {"cap": 40, "questions": [
+    {"id": "EQ", "text": "엔진 질문", "type": "engine",
+     "openedAt": {"arc": 0, "episode": 0}, "closedAt": None,
+     "plannedPayoffEpisode": None, "isEngine": True, "isBetrayal": None},
+]}
+led_old = webtoon.Ledger.from_dict(old_ledger)
+ok("장부: facts 키 없는 예전 ledger.json 도 그대로 읽힌다 (하위호환)",
+   led_old.facts == [] and led_old.fact_seq == 0)
 
 # ---------------- 본문 -> id 매칭 (5단계 정합성) ----------------
 def led_with(*texts):
@@ -2678,6 +2856,245 @@ ok("저작권: 설명문 본문의 작품명까지 지워진다",
    story.check_borrowed_titles(_g + _s))
 ok("저작권: 지운 자리에 표시가 남는다", story.TITLE_REDACTION in _s)
 
+# ---------------- 새로 추가된 장르 ----------------
+#
+# 전에는 UI 에서 고를 수 있는데 템플릿이 없는 장르가 있었다. 템플릿이 없으면
+# resolve 가 빈 목록을 주고, 그러면 P1·P2 둘 다 장르를 '문자열 한 줄'로만 안다.
+for _new in ("센티넬", "오메가버스", "게임 판타지", "학원로맨스", "BL(오메가버스)"):
+    ok(f"템플릿: '{_new}' 가 장르로 풀린다",
+       bool(story.resolve_genre_templates(_new)), story.resolve_genre_templates(_new))
+ok("템플릿: 새 장르를 넣어도 기존 매핑이 그대로다",
+   story.resolve_genre_templates("판타지") == ["판타지"]
+   and story.resolve_genre_templates("헌터·게이트") == ["판타지", "액션", "스릴러"]
+   and story.resolve_genre_templates("현대 판타지") == ["판타지"])
+
+# ---------------- 이야기 변수 축 ----------------
+#
+# 여기서 지키려는 것:
+#   1) 축이 실제로 매번 달라진다 (고정되면 넣은 의미가 없다)
+#   2) 장르에 안 맞는 조합은 미리 잘린다 (개그인데 '음울' 같은 것)
+#   3) 축이 없거나 깨져도 파이프라인이 서지 않는다
+
+_axes_names = samples.axis_names()
+ok("축: variation_axes.json 이 읽힌다", len(_axes_names) >= 5, _axes_names)
+ok("축: 관계 구도가 장르가 아니라 축으로 들어가 있다",
+   "관계_구도" in _axes_names
+   and {"삼각관계", "라이벌"} <= {v["이름"] for v in
+                                samples.load_axes()["관계_구도"]["값"]})
+
+_pick = samples.pick_axes("판타지")
+ok("축: 축마다 값이 하나씩 뽑힌다", set(_pick) == set(_axes_names), sorted(_pick))
+ok("축: 뽑힌 값에 이름과 설명이 다 있다",
+   all(v.get("이름") and v.get("설명") for v in _pick.values()))
+
+# 다양성 — 이 축을 넣은 유일한 이유다. 200회에서 고유 조합이 절반도 안 나오면
+# 어딘가 고정돼 있다는 뜻이라, 샘플 카드만 늘렸을 때와 다를 게 없어진다.
+_combos = {samples.axes_summary(samples.pick_axes("판타지")) for _ in range(200)}
+ok("축: 200회 뽑으면 조합이 실제로 흩어진다", len(_combos) >= 150, len(_combos))
+
+_gag_tones = {samples.pick_axes("개그")["톤"]["이름"] for _ in range(120)}
+ok("축: 장르에 안 맞는 값은 잘린다 (개그에 '음울'이 안 나온다)",
+   "음울" not in _gag_tones, sorted(_gag_tones))
+_daily_starts = {samples.pick_axes("일상")["이야기_시작점"]["이름"] for _ in range(120)}
+ok("축: 일상에는 '폐허 이후'가 안 나온다",
+   "폐허 이후" not in _daily_starts, sorted(_daily_starts))
+ok("축: 모르는 장르는 전체 값을 그대로 쓴다",
+   len({samples.pick_axes("듣도보도 못한 장르")["톤"]["이름"] for _ in range(120)}) >= 5)
+
+ok("축: seed 를 주면 같은 조합이 재현된다",
+   samples.axes_summary(samples.pick_axes("판타지", seed=42))
+   == samples.axes_summary(samples.pick_axes("판타지", seed=42)))
+
+_blk = samples.axes_block(samples.pick_axes("판타지", seed=1))
+ok("축: 프롬프트 블록에 축 이름과 설명이 같이 나간다",
+   "톤:" in _blk and len(_blk.splitlines()) >= len(_axes_names) * 2, _blk[:60])
+ok("축: 축이 비면 빈 문자열 (프롬프트에 빈 자리를 안 남긴다)",
+   samples.axes_block({}) == "")
+
+# ---------------- P1 이 장르를 아는가 ----------------
+#
+# 이게 이번 수정의 핵심이다. 예전 P1 은 장르를 '{genre}' 문자열로만 받아서,
+# 전용 샘플이 없는 장르는 엉뚱한 장르 카드를 보고 썼다.
+_p1_vars = story.declared_vars(_ps.texts["p1"])
+ok("P1: 장르 문법이 P1 에 주입된다", "genre_template" in _p1_vars, sorted(_p1_vars))
+ok("P1: 이야기 변수가 P1 에 주입된다", "variation_axes" in _p1_vars)
+ok("P1: P2 도 장르 문법을 그대로 받는다",
+   "genre_template" in story.declared_vars(_ps.texts["p2"]))
+
+_p1_rendered = story.render(_ps.texts["p1"], {
+    "genre": "일상", "one_line_intro": "", "world": "(없음)",
+    "character_input": "", "card_json": "(없음)", "sample_cards": "(생략)",
+    "genre_template": story.genre_template_block(story.resolve_genre_templates("일상")),
+    "variation_axes": samples.axes_block(samples.pick_axes("일상", seed=3)),
+    "retry_feedback": "",
+})
+ok("P1: 렌더 후 안 채워진 자리가 없다",
+   story.declared_vars(_p1_rendered) == set(), story.declared_vars(_p1_rendered))
+ok("P1: '일상'을 고르면 일상 문법이 실제로 실린다",
+   "일상" in _p1_rendered and "사건전개패턴" in _p1_rendered)
+
+# ---------------- 장르별 샘플 카드 ----------------
+#
+# 전에는 샘플이 romance/idol/hunter/academy 4종뿐이라, 그 밖의 장르를 고르면
+# exemplars_all() 로 폴백해 **엉뚱한 장르 카드**를 보고 썼다. "평범한 일상"을
+# 골랐는데 각성·던전이 나오던 원인이다.
+
+_TONES = {"somber", "serene", "radiant", "intense"}
+ok("샘플: 장르가 13종으로 늘었다", len(samples.GENRES) >= 13, len(samples.GENRES))
+ok("샘플: 등록된 장르에 파일이 전부 있다",
+   sorted(samples.available()) == sorted(samples.GENRES),
+   [k for k in samples.GENRES if k not in samples.available()])
+
+for _key in sorted(samples.GENRES):
+    _cards = samples.load(_key)
+    _tones = {t for c in _cards for t in (c.get("tones") or [])}
+    _missing = [f for c in _cards
+                for f in ("id", "intro", "name", "personality", "quote",
+                          "appearance", "fateBeats") if f not in c]
+    ok(f"샘플[{_key}]: 6장 · 필수 칸 · 톤 4종",
+       len(_cards) == 6 and not _missing and _tones == _TONES,
+       f"n={len(_cards)} 빠진칸={_missing[:3]} 톤={sorted(_tones)}")
+
+# 저작권 — 새로 쓴 카드에 실존 작품명이 섞이면 프롬프트로 새어 나간다.
+for _key in sorted(samples.GENRES):
+    _raw = (samples.SAMPLE_DIR / samples.GENRES[_key][0]).read_text(encoding="utf-8")
+    ok(f"샘플[{_key}]: 실존 작품명이 없다",
+       story.check_borrowed_titles(_raw) == [], story.check_borrowed_titles(_raw))
+
+# UI 에서 고를 수 있는 장르가 전부 전용 샘플로 이어지는가.
+# 하나라도 빈 문자열이면 그 장르는 여전히 남의 장르 카드를 보고 쓴다.
+for _g in ("판타지", "일상", "무협", "액션", "스릴러", "개그", "센티넬",
+           "게임 판타지", "BL(오메가버스)", "헌터·게이트", "로맨스 판타지",
+           "아이돌", "마법학교", "현대 판타지", "오컬트 미스터리", "좀비 아포칼립스"):
+    ok(f"샘플: '{_g}' 가 전용 샘플로 이어진다",
+       samples.guess_genre(_g) in samples.GENRES, repr(samples.guess_genre(_g)))
+ok("샘플: 모르는 장르는 여전히 빈 문자열 (억지로 안 고른다)",
+   samples.guess_genre("느와르") == "" and samples.guess_genre("") == "")
+
+# --- 샘플을 일부만, 매번 다르게 보여준다 ---
+#
+# 6장을 통째로 넣으면 그 6장이 곧 정답지가 되어 같은 장르 생성물이 서로 닮는다.
+_pick_runs = [{l.split()[-1] for l in samples.exemplars("fantasy").splitlines()
+               if l.startswith("[샘플")} for _ in range(40)]
+ok("샘플: 기본은 일부만 넣는다", all(len(s) == samples.EXEMPLAR_PICK for s in _pick_runs),
+   sorted(_pick_runs[0]))
+ok("샘플: 매번 다른 조합이 뽑힌다", len({frozenset(s) for s in _pick_runs}) >= 5,
+   len({frozenset(s) for s in _pick_runs}))
+# 반전(04~06)이 한 장도 안 뽑히면 그 장르는 정통만 있는 것처럼 보인다.
+_mixed = all(any(int(i.split("-")[1]) <= 3 for i in s)
+             and any(int(i.split("-")[1]) >= 4 for i in s) for s in _pick_runs)
+ok("샘플: 정통과 반전이 항상 함께 뽑힌다", _mixed)
+ok("샘플: pick=0 이면 예전처럼 전부 넣는다 (--card-mix 용)",
+   samples.exemplars("fantasy", pick=0).count("[샘플") == 6)
+# ---------------- 최근 것과 겹치지 않게 (#82) ----------------
+#
+# 조합이 넓어도(7,560 x 50) **바로 직전과 같은 것**이 나오면 "또 이거네"가 되고
+# 다양성을 넓힌 보람이 그 자리에서 사라진다. 최근 몇 개만 피한다 — 전부 피하려
+# 들면 뽑을 것이 없어져서 결국 "안 겹치는 하나"로 다시 고정된다.
+import tempfile as _tf, shutil as _sh
+_avoid = Path(_tf.mkdtemp())
+_recent = []
+for _i in range(6):
+    _a = samples.pick_axes("판타지"); _s = samples.pick_structure("판타지")
+    _d = _avoid / f"2026run{_i:02d}"; _d.mkdir()
+    _d.joinpath("axes.json").write_text(
+        json.dumps({"축": _a, "구조": _s}, ensure_ascii=False), encoding="utf-8")
+    _recent.append(samples._combo_key(_a, _s))
+
+ok("회피: 최근 것만 읽는다 (전부가 아니라)",
+   len(samples.recent_combos(_avoid)) == samples.AVOID_RECENT,
+   len(samples.recent_combos(_avoid)))
+ok("회피: 최신부터 읽는다", samples.recent_combos(_avoid)[0] == _recent[-1])
+
+_seen = set(samples.recent_combos(_avoid))
+_dups = sum(1 for _ in range(200)
+            if samples._combo_key(*samples.pick_fresh("판타지", runs_dir=_avoid)[:2]) in _seen)
+ok("회피: 200회 뽑아도 최근 조합과 안 겹친다", _dups == 0, _dups)
+
+_a, _s, _fresh = samples.pick_fresh("판타지")
+ok("회피: runs_dir 이 없으면 예전처럼 그냥 뽑는다 (회귀)",
+   bool(_a) and bool(_s) and _fresh is True)
+
+# 뽑을 폭이 좁아도 멈추지 않는다 — 겹치는 것보다 안 만들어지는 것이 나쁘다.
+_narrow = _avoid / "narrow"; _narrow.mkdir()
+for _i in range(60):
+    _a2 = samples.pick_axes("개그"); _s2 = samples.pick_structure("개그")
+    _d2 = _narrow / f"2026n{_i:02d}"; _d2.mkdir()
+    _d2.joinpath("axes.json").write_text(
+        json.dumps({"축": _a2, "구조": _s2}, ensure_ascii=False), encoding="utf-8")
+_a3, _s3, _ = samples.pick_fresh("개그", runs_dir=_narrow)
+ok("회피: 폭이 좁아도 결과는 나온다 (멈추지 않는다)", bool(_a3) and bool(_s3))
+
+_avoid.joinpath("2026bad").mkdir()
+_avoid.joinpath("2026bad", "axes.json").write_text("{깨짐", encoding="utf-8")
+ok("회피: 깨진 axes.json 이 섞여도 안 터진다",
+   len(samples.recent_combos(_avoid)) == samples.AVOID_RECENT)
+ok("회피: runs 폴더가 아예 없어도 안 터진다",
+   samples.recent_combos(_avoid / "없는폴더") == [])
+_sh.rmtree(_avoid)
+
+ok("샘플: 폴백은 장르 몇 개만 보여준다 (13종을 다 넣지 않는다)",
+   samples.exemplars_all().count("──") <= 3,
+   samples.exemplars_all().count("──"))
+
+# ---------------- 회차 구조 다양화 ----------------
+#
+# story_templates.json 의 '스토리 구조'는 3막 하나뿐이라, 어떤 장르를 골라도
+# 같은 리듬으로 나왔다 — 일상물인데도 사건이 터지고 반전이 생기고 다음 화
+# 떡밥이 깔리던 이유다.
+
+_st_names = samples.structure_names()
+ok("구조: story_structures.json 이 읽힌다",
+   "구조" in _st_names and "반전_배치" in _st_names, _st_names)
+_structs = {v["이름"] for v in samples.load_structures()["구조"]["값"]}
+ok("구조: 3막 말고도 여러 구조가 있다", len(_structs) >= 8, sorted(_structs))
+ok("구조: 반전을 넣지 않는 선택지도 있다",
+   "정공법" in {v["이름"] for v in samples.load_structures()["반전_배치"]["값"]})
+
+_pick_st = samples.pick_structure("판타지")
+ok("구조: 구조와 반전 배치가 하나씩 뽑힌다",
+   set(_pick_st) == set(_st_names), sorted(_pick_st))
+ok("구조: 뽑힌 구조에 단계가 들어 있다",
+   len(_pick_st["구조"].get("단계") or []) >= 3, _pick_st["구조"].get("이름"))
+
+_st_runs = {samples.pick_structure("판타지")["구조"]["이름"] for _ in range(200)}
+ok("구조: 매번 3막으로 굳지 않는다", len(_st_runs) >= 8, sorted(_st_runs))
+
+# 장르에 안 맞는 구조는 잘린다. 일상물에 '추락'·'구출'·'대결'이 걸리면
+# 지금 고치려는 증상(일상인데 사건이 터진다)이 그대로 돌아온다.
+_daily_st = {samples.pick_structure("일상")["구조"]["이름"] for _ in range(300)}
+ok("구조: 일상에는 추락·구출·대결이 안 나온다",
+   not (_daily_st & {"추락", "구출", "대결"}), sorted(_daily_st))
+ok("구조: 일상에도 선택지가 여럿 남는다 (과하게 자르지 않았다)",
+   len(_daily_st) >= 4, sorted(_daily_st))
+ok("구조: 모르는 장르는 전체 구조를 쓴다",
+   len({samples.pick_structure("듣도보도 못한 장르")["구조"]["이름"]
+        for _ in range(300)}) == len(_structs))
+
+_st_blk = samples.structure_block(samples.pick_structure("일상", seed=5))
+ok("구조: 프롬프트 블록에 단계와 끝내는 법이 같이 나간다",
+   "→" in _st_blk and ("끝내는 법" in _st_blk or "배치" in _st_blk), _st_blk[:60])
+ok("구조: 비면 빈 문자열", samples.structure_block({}) == "")
+ok("구조: seed 를 주면 재현된다",
+   samples.structure_summary(samples.pick_structure("판타지", seed=9))
+   == samples.structure_summary(samples.pick_structure("판타지", seed=9)))
+
+# P2 가 실제로 구조를 받는가.
+ok("P2: 회차 구조가 P2 에 주입된다",
+   "story_structure" in story.declared_vars(_ps.texts["p2"]),
+   sorted(story.declared_vars(_ps.texts["p2"])))
+_p2_rendered = story.render(_ps.texts["p2"], {
+    "genre": "일상", "world": "(없음)", "character_sheet": "{}",
+    "genre_template": story.genre_template_block(story.resolve_genre_templates("일상")),
+    "story_template": story.story_template_block(),
+    "story_structure": samples.structure_block(samples.pick_structure("일상", seed=5)),
+    "retry_feedback": "",
+})
+ok("P2: 렌더 후 안 채워진 자리가 없다",
+   story.declared_vars(_p2_rendered) == set(), story.declared_vars(_p2_rendered))
+ok("P2: 참고 자료의 3막보다 지정 구조가 우선이라고 못 박는다",
+   "이쪽이 우선" in _p2_rendered)
+
 # 결과 검사는 구조적 차단을 대신하지 않는다. 모델은 자기가 아는 작품도 꺼낸다.
 ok("저작권: 결과물에 작품명이 있으면 잡아낸다",
    story.check_borrowed_titles({"logline": "왕좌의 게임 같은 이야기"}) == ["왕좌의 게임"],
@@ -2692,13 +3109,14 @@ ok("저작권: 제목이 겹쳐도 반쪽만 남지 않는다",
    story.redact_titles("신의 탑 이야기"))
 
 # 통째로 보내는 것보다 실제로 작아졌는가.
-_full = (_P(r"C:\lore\story-harness\samples\genre_template.json").read_text(encoding="utf-8")
-         + _P(r"C:\lore\story-harness\samples\story_templates.json").read_text(encoding="utf-8"))
+_TG_ROOT = _P(__file__).resolve().parent
+_full = (_P(_TG_ROOT / "samples" / "genre_template.json").read_text(encoding="utf-8")
+         + _P(_TG_ROOT / "samples" / "story_templates.json").read_text(encoding="utf-8"))
 ok(f"템플릿: 통째로 보내는 것보다 작다 ({len(_g)+len(_s):,}자 < {len(_full):,}자)",
    len(_g) + len(_s) < len(_full) * 0.5)
 
 # 이미 만들어 둔 산출물도 같은 기준으로 본다.
-_out = _P(r"C:\lore\story-harness\outputs\chadogyeong")
+_out = _TG_ROOT / "outputs" / "chadogyeong"
 if _out.exists():
     for _f in sorted(_out.glob("*.json")):
         _hit = story.check_borrowed_titles(_f.read_text(encoding="utf-8"))
@@ -2848,7 +3266,7 @@ ok("성별 게이트: 낱말 안에 우연히 들어간 글자에 속지 않는�
        "")))
 
 # 실제로 망가진 그 카드가 걸리는지 — 이 게이트가 존재하는 이유 그 자체다.
-_broken = _P(r"C:\lore\story-harness\runs\20260815T001950-b5af28\p1.json")
+_broken = _TG_ROOT / "runs" / "20260815T001950-b5af28" / "p1.json"
 if _broken.exists():
     _card = _j.loads(_broken.read_text(encoding="utf-8"))
     _hits = story.gate_gender(_card, "여성, 능글맞고 장난기 많지만")
@@ -3004,6 +3422,46 @@ ok("톤 경고: 단정적 전환 문장이 없으면 조용하다",
            webtoon.tone_warnings(
                [{"cut_number": 1, "lines": [{"kind": "dialogue", "text": "그냥 평범한 하루였다"}]}],
                [], "장난스럽다")))
+
+# P1: 톤 전환 빌드업 — 급전환 문장 앞 두 컷 모두 beat 가 build/turn 이 아니면
+# "빌드업이 없다" 는 경고를 추가로 남긴다(advisory, 여전히 막지 않는다).
+_abrupt_no_buildup = [
+    {"cut_number": 1, "beat": "setup", "lines": []},
+    {"cut_number": 2, "beat": "setup", "lines": []},
+    {"cut_number": 3, "beat": "turn", "lines": [
+        {"kind": "narration", "text": "그 순간이 모든 것을 바꿔놓았다"}]},
+]
+_abrupt_with_buildup = [
+    {"cut_number": 1, "beat": "setup", "lines": []},
+    {"cut_number": 2, "beat": "build", "lines": []},
+    {"cut_number": 3, "beat": "turn", "lines": [
+        {"kind": "narration", "text": "그 순간이 모든 것을 바꿔놓았다"}]},
+]
+ok("톤 경고: 빌드업 없이(앞 두 컷 setup) 급전환하면 빌드업 경고가 붙는다",
+   any("앞 두 컷" in w for w in webtoon.tone_warnings(_abrupt_no_buildup, [], "장난스럽다")))
+ok("톤 경고: 앞 컷에 build 가 있으면 빌드업 경고는 조용하다",
+   not any("앞 두 컷" in w for w in webtoon.tone_warnings(_abrupt_with_buildup, [], "장난스럽다")))
+ok("톤 경고: beat 필드가 없는 옛 run 도 에러 없이 빌드업 경고를 남긴다",
+   any("앞 두 컷" in w for w in webtoon.tone_warnings(_abrupt_cuts, [], "장난스럽다")))
+
+# P1: 얼굴 방향 연속성 — 인접 컷이 정면 <-> 뒷모습으로 완충 없이 뒤집히면 경고
+# (advisory, description 자연어만 보므로 필드 게이트가 아니다).
+_facing_flip = [
+    {"cut_number": 1, "description": "시하가 정면을 보며 웃는다"},
+    {"cut_number": 2, "description": "시하의 뒷모습, 복도를 걸어간다"},
+    {"cut_number": 3, "description": "다시 정면으로 돌아본 얼굴"},
+]
+_facing_smooth = [
+    {"cut_number": 1, "description": "시하가 정면을 보며 웃는다"},
+    {"cut_number": 2, "description": "옆모습으로 복도를 걸어가는 시하"},
+    {"cut_number": 3, "description": "뒷모습으로 멀어지는 시하"},
+]
+ok("각도 경고: 정면->뒷모습으로 바로 뒤집히면 경고",
+   any("완충" in w for w in webtoon.facing_warnings(_facing_flip)))
+ok("각도 경고: 옆모습으로 완충되면 조용하다",
+   webtoon.facing_warnings(_facing_smooth) == [])
+ok("각도 경고: description 이 없는 옛 run 은 조용하다",
+   webtoon.facing_warnings([{"cut_number": 1}, {"cut_number": 2}]) == [])
 
 # P0-6: 핵심 액션 비트 — beats 가 어느 컷에도 안 나오면 탈락(hard gate).
 _beat_missing = [{"cut_number": 1, "description": "시하가 생쥐를 안고 있다", "lines": []}]

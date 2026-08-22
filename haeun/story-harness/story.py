@@ -508,9 +508,10 @@ PROMPT_CONTRACT = {
     "seed": {"character_material", "genre_input", "world_input", "story_input",
              "genre_presets", "world_presets"},
     "p1": {"genre", "one_line_intro", "character_input", "card_json",
-           "sample_cards", "retry_feedback", "world"},
+           "sample_cards", "retry_feedback", "world",
+           "genre_template", "variation_axes"},
     "p2": {"genre", "character_sheet", "retry_feedback", "world",
-           "genre_template", "story_template"},
+           "genre_template", "story_template", "story_structure"},
     "p3": {"character_sheet", "premise_json", "sample_intros"},
     "scene": {"scene_count", "idea", "character_sheet_json", "premise_json",
               "fix_directive"},
@@ -2973,7 +2974,8 @@ def write_scenes_md(run_dir: Path, scenes: list) -> None:
 
 
 def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
-            usage: Usage, sample_cards: str = None) -> tuple:
+            usage: Usage, sample_cards: str = None,
+            genre_tpl: str = None, axes: dict = None) -> tuple:
     """P1 을 부르고, 카드 게이트를 통과할 때까지 재호출한다. (카드, 재생성 횟수).
 
     파이프라인과 --card-mix 가 **같은 함수**를 써야 한다. 시험지에 올라가는 카드가
@@ -2984,6 +2986,19 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
     if sample_cards is None:
         key = samples.guess_genre(f"{row.get('genre', '')} {row.get('one_line', '')}")
         sample_cards = samples.exemplars(key) if key else samples.exemplars_all()
+
+    # P1 은 원래 장르를 **문자열 한 줄**로만 받았다. 장르가 무엇인지 설명하는
+    # 자료는 P2 에 가서야 들어오는데, 그때는 카드가 이미 만들어진 뒤다.
+    # 그래서 P1 입장에서는 사실상 샘플 카드가 장르 정보의 전부였고 —
+    # 전용 샘플이 없는 장르(판타지·일상·무협…)를 고르면 엉뚱한 장르의 카드를
+    # 보고 썼다. 여기서 장르 문법을 같이 준다.
+    if genre_tpl is None:
+        genre_tpl = genre_template_block(resolve_genre_templates(row.get("genre") or ""))
+    # 축은 매 호출마다 새로 뽑는 것이 목적이라 None 과 {} 를 구분한다 —
+    # {} 는 "축 없이 간다"는 명시적 요청이다.
+    if axes is None:
+        axes = samples.pick_axes(row.get("genre") or "")
+
     card_input = row.get("card")
     feedback = ""
 
@@ -2993,10 +3008,12 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
             "one_line_intro": row.get("one_line") or "",
             "world": row.get("world") or "(없음)",
             "character_input": row.get("character") or "",
-            "card_json": (json.dumps(card_input, ensure_ascii=False, indent=2)
+            "card_json": (json.dumps(card_input, ensure_ascii=False, separators=(",", ":"))
                           if card_input else
                           "(없음 — 한 줄 입력에서 카드를 새로 만든다)"),
             "sample_cards": sample_cards,
+            "genre_template": genre_tpl or "(이 장르의 템플릿이 없습니다 — 장르명만 보고 씁니다)",
+            "variation_axes": samples.axes_block(axes) or "(이번에는 이야기 변수 없이 씁니다)",
             "retry_feedback": feedback_block(feedback),
         })
 
@@ -3031,6 +3048,8 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
     gate_failures = []
     look = seed = None
     tpl_names, genre_tpl, story_tpl = [], "", ""
+    axes = {}
+    structure = {}
     regen_total = gate_regen = p3_regen = scene_regen = 0
     p1_feedback = p2_feedback = ""
     card_input = row.get("card")
@@ -3038,7 +3057,8 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
     def generate_p1():
         nonlocal regen_total
         sheet, regens = call_p1(caller, ps, row, max_gate_retries, usage,
-                                sample_cards=sample_cards)
+                                sample_cards=sample_cards,
+                                genre_tpl=genre_tpl, axes=axes)
         regen_total += regens
         return sheet
 
@@ -3093,6 +3113,26 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                  f"— 템플릿 없이 진행합니다 (samples/genre_template.json 의 "
                  f"_preset_map 에 추가할 수 있습니다)")
 
+        # ---- 이야기 변수 축
+        #
+        # run 마다 여기서 한 번만 뽑는다. P1 게이트 재시도에서 다시 뽑으면
+        # "무엇을 고쳐서 통과했는지"가 흐려지고, 재시도가 곧 재추첨이 되어
+        # 게이트를 통과할 때까지 설정이 계속 바뀐다.
+        # 최근 run 들이 쓴 조합은 피한다. 조합이 넓어도 **바로 직전과 같은 것**이
+        # 나오면 "또 이거네"가 되고, 다양성을 넓힌 보람이 그 자리에서 사라진다.
+        axes, structure, fresh = samples.pick_fresh(row["genre"], runs_dir=out_dir)
+        if axes or structure:
+            write_json(run_dir / "axes.json",
+                       {"축": axes, "구조": structure})
+        if axes:
+            log(f"    이야기 변수: {samples.axes_summary(axes)}")
+        if structure:
+            log(f"    회차 구조: {samples.structure_summary(structure)}")
+        if not fresh:
+            # 장르 제약이 세서 뽑을 수 있는 조합이 좁을 때 여기로 온다.
+            # 멈추지는 않는다 — 겹치는 것보다 안 만들어지는 것이 나쁘다.
+            log("    (최근 생성물과 조합이 겹칩니다 — 고를 수 있는 폭이 좁습니다)")
+
         # ---- P1
         p1 = generate_p1()
 
@@ -3105,7 +3145,9 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                     "world": row.get("world") or "(없음)",
                     "genre_template": genre_tpl or "(이 장르의 템플릿이 없습니다)",
                     "story_template": story_tpl or "(스토리 템플릿이 없습니다)",
-                    "character_sheet": json.dumps(p1, ensure_ascii=False, indent=2),
+                    "story_structure": (samples.structure_block(structure)
+                                        or "(이번에는 구조 지정 없이 씁니다)"),
+                    "character_sheet": json.dumps(p1, ensure_ascii=False, separators=(",", ":")),
                     "retry_feedback": feedback_block(p2_feedback),
                 }),
                 TEMP_CREATIVE, usage)
@@ -3136,8 +3178,8 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
 
             # ---- P3 : 새 호출, 히스토리 없음, 산출물만 전달
             p3_prompt = render(ps.texts["p3"], {
-                "character_sheet": json.dumps(p1, ensure_ascii=False, indent=2),
-                "premise_json": json.dumps(p2, ensure_ascii=False, indent=2),
+                "character_sheet": json.dumps(p1, ensure_ascii=False, separators=(",", ":")),
+                "premise_json": json.dumps(p2, ensure_ascii=False, separators=(",", ":")),
                 # 샘플 intro 는 원본 입력이 아니라 시장 기준선이다. 심사자가
                 # "이 줄이 저 줄들 사이에서 눌리는가"를 볼 근거가 된다.
                 "sample_intros": (samples.intro_list(sample_key) if sample_key
@@ -3187,8 +3229,8 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                     render(ps.texts["scene"], {
                         "scene_count": scene_count,
                         "idea": row["one_line"],
-                        "character_sheet_json": json.dumps(p1, ensure_ascii=False, indent=2),
-                        "premise_json": json.dumps(p2, ensure_ascii=False, indent=2),
+                        "character_sheet_json": json.dumps(p1, ensure_ascii=False, separators=(",", ":")),
+                        "premise_json": json.dumps(p2, ensure_ascii=False, separators=(",", ":")),
                         "fix_directive": fix_directive,
                     }),
                     TEMP_CREATIVE, usage)
@@ -5304,6 +5346,66 @@ def resolve_genre_templates(genre: str) -> list:
     return hits
 
 
+# 연출 지식 조각(chunk) 저장소. story-harness/docs/*.md 의 웹툰 연출 리서치를
+# 사람이 한 번 청크·태그로 나눠 둔 것 — 요약이 아니라 원문 그대로다. 벡터
+# 검색이 아니라 resolve_genre_templates 와 같은 "태그 문자열이 겹치면 쓴다"
+# 방식. 캐릭터/장면 설명에 액션·로맨스처럼 구체적인 상황이 언급될 때만 관련
+# 조각을 골라 붙이고, 하나도 안 걸리면 빈 문자열을 준다 — 아무 것도 안 주는
+# 편이 안 맞는 연출 지식을 우기는 것보다 낫다(resolve_genre_templates 와 같은
+# 이유).
+DIRECTING_KNOWLEDGE_DIR = env("DIRECTING_KNOWLEDGE_FILE", "knowledge/directing")
+DIRECTING_NOTES_LIMIT = 3
+
+_DIRECTING_CHUNKS_CACHE: list | None = None
+
+
+def load_directing_chunks() -> list:
+    """knowledge/directing/*.json 을 한 번만 읽어 합친다.
+
+    각 파일은 [{"id", "tags": [...], "text"}, ...] 형태의 배열이다. 폴더가
+    없거나 비어 있으면 빈 목록 — 조각이 없으면 그냥 아무것도 안 붙는다.
+    """
+    global _DIRECTING_CHUNKS_CACHE
+    if _DIRECTING_CHUNKS_CACHE is not None:
+        return _DIRECTING_CHUNKS_CACHE
+    d = Path(DIRECTING_KNOWLEDGE_DIR)
+    if not d.is_absolute():
+        d = ROOT / d
+    chunks = []
+    if d.is_dir():
+        for p in sorted(d.glob("*.json")):
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+            except Exception as e:
+                warn(f"연출 지식을 읽지 못했습니다 ({p.name}: {e}). 건너뜁니다.")
+                continue
+            if isinstance(data, list):
+                chunks.extend(c for c in data
+                             if isinstance(c, dict) and c.get("text") and c.get("tags"))
+    _DIRECTING_CHUNKS_CACHE = chunks
+    return chunks
+
+
+def resolve_directing_notes(*texts: str, limit: int = DIRECTING_NOTES_LIMIT) -> str:
+    """texts 안에 태그가 등장하는 연출 지식 조각만 원문 그대로 이어 붙인다.
+
+    아무 것도 안 걸리면 빈 문자열 — 호출부는 항상 이 값을 프롬프트에 넣는다.
+    render() 는 매칭 안 되는 {token} 을 그대로 남겨두므로, 여기서 늘 문자열을
+    돌려줘야 프롬프트에 "{directing_notes}" 가 글자 그대로 남는 사고를 막는다.
+    """
+    chunks = load_directing_chunks()
+    if not chunks:
+        return ""
+    haystack = " ".join(t for t in texts if t)
+    if not haystack:
+        return ""
+    hits = [c for c in chunks if any(tag in haystack for tag in c["tags"])]
+    if not hits:
+        return ""
+    picked = hits[:limit]
+    return "\n\n".join(f"[연출 참고 — {c['id']}]\n{c['text']}" for c in picked)
+
+
 def _strip_template(node):
     """저작권 민감 칸을 재귀적으로 걷어낸다.
 
@@ -5685,7 +5787,10 @@ def run_card_mix(caller: Caller, ps: PromptSet, genre: str, n: int,
                       "샘플 카드와 소재가 겹치지 않게 할 것)"),
         "card": None,
     }
-    sample_cards = samples.exemplars(genre)
+    # 여기서는 일부만 보여주면 안 된다. 시험지에는 샘플 6장이 **전부** 올라가는데
+    # P1 이 그중 셋만 봤다면, 못 본 카드와 소재가 겹쳐도 피할 수가 없다.
+    # 그러면 사람이 골라낸 이유가 "AI 라서"가 아니라 "겹쳐서"가 되어 시험이 망가진다.
+    sample_cards = samples.exemplars(genre, pick=0)
 
     base_material = row["character"]
     made = []
