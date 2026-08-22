@@ -17,11 +17,13 @@ samples/ 는 사람이 검수해서 실제로 서비스에 나간 카드 24장(�
 from __future__ import annotations
 
 import json
+import random
 import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 SAMPLE_DIR = ROOT / "samples"
+AXES_FILE = SAMPLE_DIR / "variation_axes.json"
 
 # 장르 키 → (파일, 사람이 읽는 이름). --genre 값이 이 키다.
 GENRES = {
@@ -170,6 +172,95 @@ def all_intros(limit_per_genre: int = 6) -> str:
         out.append(f"[{genre_label(key)}]")
         out.append(intro_list(key, limit_per_genre))
     return "\n".join(out) or "(샘플 카드가 없습니다.)"
+
+
+# ------------------------------------------------------- 이야기 변수 축(축)
+#
+# 샘플 카드는 **수렴 장치**다. "이렇게 써라"라고 보여주는 것이라, 장르마다
+# 전용 카드를 붙이면 장르 오염은 사라지지만 같은 장르 안에서는 오히려 더
+# 비슷해진다. 다양성은 예시를 늘려서 나오지 않고 **입력이 매번 달라져야**
+# 나온다 — 그 달라지는 입력이 이 축이다.
+#
+# 축은 소재가 아니라 자리다. 장르와 직교하기 때문에 12개 장르 × 7,000여 조합이
+# 곱해진다. 샘플 카드를 몇 장 더 쓰는 것과 비교가 안 되는 폭이다.
+
+
+def load_axes() -> dict:
+    """variation_axes.json. 없거나 깨졌으면 빈 dict — 축 없이 그냥 진행한다."""
+    try:
+        data = json.loads(AXES_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def axis_names() -> list:
+    """실제로 뽑을 축 이름. `_` 로 시작하는 메타 키는 뺀다."""
+    return [k for k in load_axes() if not str(k).startswith("_")]
+
+
+def _axis_values(table: dict, axis: str, genre: str) -> list:
+    """한 축에서 이 장르가 쓸 수 있는 값 목록.
+
+    _genre_overrides 에 걸리면 그만큼만, 아니면 전체. 못 걸러도 손해는
+    "이상한 조합이 한 번 나오는 것"이라 값이 하나도 안 남는 쪽을 더 조심한다.
+    """
+    node = table.get(axis) or {}
+    values = [v for v in (node.get("값") or []) if isinstance(v, dict) and v.get("이름")]
+    allowed = ((table.get("_genre_overrides") or {}).get(genre) or {}).get(axis)
+    if allowed:
+        narrowed = [v for v in values if v["이름"] in allowed]
+        if narrowed:
+            return narrowed
+    return values
+
+
+def _override_key(table: dict, genre: str) -> str:
+    """자유 입력 장르 문자열 → _genre_overrides 키. 못 찾으면 빈 문자열."""
+    g = str(genre or "").strip()
+    if not g:
+        return ""
+    keys = [k for k in (table.get("_genre_overrides") or {}) if not str(k).startswith("_")]
+    if g in keys:
+        return g
+    return next((k for k in keys if k in g), "")
+
+
+def pick_axes(genre: str = "", rng=None, seed=None) -> dict:
+    """축마다 값 하나씩 뽑는다. {축이름: {"이름":…, "설명":…}}.
+
+    seed 를 주면 같은 조합이 다시 나온다 — 테스트와 "이 run 을 그대로 재현"에
+    쓴다. 안 주면 매 호출마다 달라지는 것이 이 함수의 목적이다.
+    """
+    table = load_axes()
+    if not table:
+        return {}
+    r = rng or (random.Random(seed) if seed is not None else random)
+    gkey = _override_key(table, genre)
+    picked = {}
+    for axis in axis_names():
+        values = _axis_values(table, axis, gkey)
+        if values:
+            picked[axis] = r.choice(values)
+    return picked
+
+
+def axes_block(picked: dict) -> str:
+    """뽑힌 조합을 P1 프롬프트에 넣을 문자열로."""
+    if not picked:
+        return ""
+    lines = []
+    for axis, value in picked.items():
+        lines.append(f"- {axis.replace('_', ' ')}: **{value.get('이름', '')}**")
+        desc = str(value.get("설명") or "").strip()
+        if desc:
+            lines.append(f"    {desc}")
+    return "\n".join(lines)
+
+
+def axes_summary(picked: dict) -> str:
+    """로그 한 줄용. '최약체 · 균열의 순간 · 정보 격차 · 라이벌 · 냉소'"""
+    return " · ".join(str(v.get("이름", "")) for v in (picked or {}).values())
 
 
 def guess_genre(text: str) -> str:

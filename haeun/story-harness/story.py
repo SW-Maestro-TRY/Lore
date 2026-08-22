@@ -508,7 +508,8 @@ PROMPT_CONTRACT = {
     "seed": {"character_material", "genre_input", "world_input", "story_input",
              "genre_presets", "world_presets"},
     "p1": {"genre", "one_line_intro", "character_input", "card_json",
-           "sample_cards", "retry_feedback", "world"},
+           "sample_cards", "retry_feedback", "world",
+           "genre_template", "variation_axes"},
     "p2": {"genre", "character_sheet", "retry_feedback", "world",
            "genre_template", "story_template"},
     "p3": {"character_sheet", "premise_json", "sample_intros"},
@@ -2973,7 +2974,8 @@ def write_scenes_md(run_dir: Path, scenes: list) -> None:
 
 
 def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
-            usage: Usage, sample_cards: str = None) -> tuple:
+            usage: Usage, sample_cards: str = None,
+            genre_tpl: str = None, axes: dict = None) -> tuple:
     """P1 을 부르고, 카드 게이트를 통과할 때까지 재호출한다. (카드, 재생성 횟수).
 
     파이프라인과 --card-mix 가 **같은 함수**를 써야 한다. 시험지에 올라가는 카드가
@@ -2984,6 +2986,19 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
     if sample_cards is None:
         key = samples.guess_genre(f"{row.get('genre', '')} {row.get('one_line', '')}")
         sample_cards = samples.exemplars(key) if key else samples.exemplars_all()
+
+    # P1 은 원래 장르를 **문자열 한 줄**로만 받았다. 장르가 무엇인지 설명하는
+    # 자료는 P2 에 가서야 들어오는데, 그때는 카드가 이미 만들어진 뒤다.
+    # 그래서 P1 입장에서는 사실상 샘플 카드가 장르 정보의 전부였고 —
+    # 전용 샘플이 없는 장르(판타지·일상·무협…)를 고르면 엉뚱한 장르의 카드를
+    # 보고 썼다. 여기서 장르 문법을 같이 준다.
+    if genre_tpl is None:
+        genre_tpl = genre_template_block(resolve_genre_templates(row.get("genre") or ""))
+    # 축은 매 호출마다 새로 뽑는 것이 목적이라 None 과 {} 를 구분한다 —
+    # {} 는 "축 없이 간다"는 명시적 요청이다.
+    if axes is None:
+        axes = samples.pick_axes(row.get("genre") or "")
+
     card_input = row.get("card")
     feedback = ""
 
@@ -2997,6 +3012,8 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
                           if card_input else
                           "(없음 — 한 줄 입력에서 카드를 새로 만든다)"),
             "sample_cards": sample_cards,
+            "genre_template": genre_tpl or "(이 장르의 템플릿이 없습니다 — 장르명만 보고 씁니다)",
+            "variation_axes": samples.axes_block(axes) or "(이번에는 이야기 변수 없이 씁니다)",
             "retry_feedback": feedback_block(feedback),
         })
 
@@ -3031,6 +3048,7 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
     gate_failures = []
     look = seed = None
     tpl_names, genre_tpl, story_tpl = [], "", ""
+    axes = {}
     regen_total = gate_regen = p3_regen = scene_regen = 0
     p1_feedback = p2_feedback = ""
     card_input = row.get("card")
@@ -3038,7 +3056,8 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
     def generate_p1():
         nonlocal regen_total
         sheet, regens = call_p1(caller, ps, row, max_gate_retries, usage,
-                                sample_cards=sample_cards)
+                                sample_cards=sample_cards,
+                                genre_tpl=genre_tpl, axes=axes)
         regen_total += regens
         return sheet
 
@@ -3092,6 +3111,16 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
             warn(f"    템플릿: '{row['genre']}' 에 맞는 장르 템플릿이 없습니다 "
                  f"— 템플릿 없이 진행합니다 (samples/genre_template.json 의 "
                  f"_preset_map 에 추가할 수 있습니다)")
+
+        # ---- 이야기 변수 축
+        #
+        # run 마다 여기서 한 번만 뽑는다. P1 게이트 재시도에서 다시 뽑으면
+        # "무엇을 고쳐서 통과했는지"가 흐려지고, 재시도가 곧 재추첨이 되어
+        # 게이트를 통과할 때까지 설정이 계속 바뀐다.
+        axes = samples.pick_axes(row["genre"])
+        if axes:
+            write_json(run_dir / "axes.json", axes)
+            log(f"    이야기 변수: {samples.axes_summary(axes)}")
 
         # ---- P1
         p1 = generate_p1()

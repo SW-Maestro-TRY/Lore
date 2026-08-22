@@ -2679,6 +2679,83 @@ ok("저작권: 설명문 본문의 작품명까지 지워진다",
    story.check_borrowed_titles(_g + _s))
 ok("저작권: 지운 자리에 표시가 남는다", story.TITLE_REDACTION in _s)
 
+# ---------------- 새로 추가된 장르 ----------------
+#
+# 전에는 UI 에서 고를 수 있는데 템플릿이 없는 장르가 있었다. 템플릿이 없으면
+# resolve 가 빈 목록을 주고, 그러면 P1·P2 둘 다 장르를 '문자열 한 줄'로만 안다.
+for _new in ("센티넬", "오메가버스", "게임 판타지", "학원로맨스", "BL(오메가버스)"):
+    ok(f"템플릿: '{_new}' 가 장르로 풀린다",
+       bool(story.resolve_genre_templates(_new)), story.resolve_genre_templates(_new))
+ok("템플릿: 새 장르를 넣어도 기존 매핑이 그대로다",
+   story.resolve_genre_templates("판타지") == ["판타지"]
+   and story.resolve_genre_templates("헌터·게이트") == ["판타지", "액션", "스릴러"]
+   and story.resolve_genre_templates("현대 판타지") == ["판타지"])
+
+# ---------------- 이야기 변수 축 ----------------
+#
+# 여기서 지키려는 것:
+#   1) 축이 실제로 매번 달라진다 (고정되면 넣은 의미가 없다)
+#   2) 장르에 안 맞는 조합은 미리 잘린다 (개그인데 '음울' 같은 것)
+#   3) 축이 없거나 깨져도 파이프라인이 서지 않는다
+
+_axes_names = samples.axis_names()
+ok("축: variation_axes.json 이 읽힌다", len(_axes_names) >= 5, _axes_names)
+ok("축: 관계 구도가 장르가 아니라 축으로 들어가 있다",
+   "관계_구도" in _axes_names
+   and {"삼각관계", "라이벌"} <= {v["이름"] for v in
+                                samples.load_axes()["관계_구도"]["값"]})
+
+_pick = samples.pick_axes("판타지")
+ok("축: 축마다 값이 하나씩 뽑힌다", set(_pick) == set(_axes_names), sorted(_pick))
+ok("축: 뽑힌 값에 이름과 설명이 다 있다",
+   all(v.get("이름") and v.get("설명") for v in _pick.values()))
+
+# 다양성 — 이 축을 넣은 유일한 이유다. 200회에서 고유 조합이 절반도 안 나오면
+# 어딘가 고정돼 있다는 뜻이라, 샘플 카드만 늘렸을 때와 다를 게 없어진다.
+_combos = {samples.axes_summary(samples.pick_axes("판타지")) for _ in range(200)}
+ok("축: 200회 뽑으면 조합이 실제로 흩어진다", len(_combos) >= 150, len(_combos))
+
+_gag_tones = {samples.pick_axes("개그")["톤"]["이름"] for _ in range(120)}
+ok("축: 장르에 안 맞는 값은 잘린다 (개그에 '음울'이 안 나온다)",
+   "음울" not in _gag_tones, sorted(_gag_tones))
+_daily_starts = {samples.pick_axes("일상")["이야기_시작점"]["이름"] for _ in range(120)}
+ok("축: 일상에는 '폐허 이후'가 안 나온다",
+   "폐허 이후" not in _daily_starts, sorted(_daily_starts))
+ok("축: 모르는 장르는 전체 값을 그대로 쓴다",
+   len({samples.pick_axes("듣도보도 못한 장르")["톤"]["이름"] for _ in range(120)}) >= 5)
+
+ok("축: seed 를 주면 같은 조합이 재현된다",
+   samples.axes_summary(samples.pick_axes("판타지", seed=42))
+   == samples.axes_summary(samples.pick_axes("판타지", seed=42)))
+
+_blk = samples.axes_block(samples.pick_axes("판타지", seed=1))
+ok("축: 프롬프트 블록에 축 이름과 설명이 같이 나간다",
+   "톤:" in _blk and len(_blk.splitlines()) >= len(_axes_names) * 2, _blk[:60])
+ok("축: 축이 비면 빈 문자열 (프롬프트에 빈 자리를 안 남긴다)",
+   samples.axes_block({}) == "")
+
+# ---------------- P1 이 장르를 아는가 ----------------
+#
+# 이게 이번 수정의 핵심이다. 예전 P1 은 장르를 '{genre}' 문자열로만 받아서,
+# 전용 샘플이 없는 장르는 엉뚱한 장르 카드를 보고 썼다.
+_p1_vars = story.declared_vars(_ps.texts["p1"])
+ok("P1: 장르 문법이 P1 에 주입된다", "genre_template" in _p1_vars, sorted(_p1_vars))
+ok("P1: 이야기 변수가 P1 에 주입된다", "variation_axes" in _p1_vars)
+ok("P1: P2 도 장르 문법을 그대로 받는다",
+   "genre_template" in story.declared_vars(_ps.texts["p2"]))
+
+_p1_rendered = story.render(_ps.texts["p1"], {
+    "genre": "일상", "one_line_intro": "", "world": "(없음)",
+    "character_input": "", "card_json": "(없음)", "sample_cards": "(생략)",
+    "genre_template": story.genre_template_block(story.resolve_genre_templates("일상")),
+    "variation_axes": samples.axes_block(samples.pick_axes("일상", seed=3)),
+    "retry_feedback": "",
+})
+ok("P1: 렌더 후 안 채워진 자리가 없다",
+   story.declared_vars(_p1_rendered) == set(), story.declared_vars(_p1_rendered))
+ok("P1: '일상'을 고르면 일상 문법이 실제로 실린다",
+   "일상" in _p1_rendered and "사건전개패턴" in _p1_rendered)
+
 # 결과 검사는 구조적 차단을 대신하지 않는다. 모델은 자기가 아는 작품도 꺼낸다.
 ok("저작권: 결과물에 작품명이 있으면 잡아낸다",
    story.check_borrowed_titles({"logline": "왕좌의 게임 같은 이야기"}) == ["왕좌의 게임"],
