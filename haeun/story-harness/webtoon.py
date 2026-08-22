@@ -1127,6 +1127,15 @@ class SeriesState:
             out.append("[확정된 설정 — 이미 독자가 본 것이라 뒤집을 수 없습니다]")
             for f in self.facts:
                 out.append(f"  - {f['fact']} ({f['first_episode']}화)")
+            # 쌓기만 하고 서로 부딪히는지 안 보면, 3화에서 "창이 없다"고 정해 놓고
+            # 7화에서 창밖을 그리는 일이 그대로 통과한다.
+            clashes = fact_conflicts(self.facts)
+            if clashes:
+                out.append("")
+                out.append("  ★ 아래 설정끼리 어긋나 보입니다. 이번 화를 쓰기 전에 "
+                           "어느 쪽이 맞는지 정하고, 맞는 쪽만 지키세요:")
+                for c in clashes:
+                    out.append("  " + c.replace("\n", "\n  "))
 
         open_qs = ledger.open_items
         out.append("")
@@ -2127,6 +2136,127 @@ def zone_warnings(cuts: list) -> list:
     return out
 
 
+# ---- 설정끼리 어긋나는가 --------------------------------------------------
+#
+# 확정된 설정(new_facts)은 "다음 화가 지켜야 할 것"으로 쌓인다. 그런데 쌓기만
+# 하고 **서로 부딪히는지는 아무도 안 봤다.** 3화에서 "그 방에는 창이 없다"고
+# 정해 놓고 7화에서 "창밖으로 비가 보였다"고 쓰면, 둘 다 목록에 나란히 남는다.
+#
+# 의미 충돌을 기계가 다 잡을 수는 없다. 그래서 **오탐이 적은 두 패턴만** 본다:
+#   1. 같은 것을 말하는데 한쪽에만 부정어가 있다 ("창이 있다" / "창이 없다")
+#   2. 같은 단위의 숫자가 다르다 ("3층" / "5층")
+# 나머지는 사람이 본다. 못 잡는 것이 많아도, 잡는 것이 진짜이면 쓸모가 있다.
+
+_NEG_MARKS = ("없다", "없었", "없는", "아니다", "아니었", "아닌", "않다", "않았",
+              "않는", "못한", "못했", " 안 ", "못 ")
+_NUM_UNIT = re.compile(r"(\d+)\s*(층|명|화|년|살|개|번|시|분|주|달|권|회)")
+# 조사·흔한 낱말은 겹쳐도 같은 주제라는 신호가 아니다.
+_STOP = {"그", "그녀", "그것", "이", "가", "은", "는", "을", "를", "의", "에", "에서",
+         "으로", "로", "와", "과", "도", "만", "하다", "한다", "있다", "없다", "된다",
+         "것", "수", "때", "더", "안", "못", "이다", "였다", "했다"}
+
+
+def _content_words(text: str) -> set:
+    """조사·흔한 낱말을 뺀 알맹이. 같은 주제를 말하는지 보는 데만 쓴다."""
+    words = re.findall(r"[가-힣A-Za-z]{2,}", str(text or ""))
+    return {w for w in words if w not in _STOP}
+
+
+def _negated(text: str) -> bool:
+    return any(m in str(text or "") for m in _NEG_MARKS)
+
+
+def fact_conflicts(facts: list) -> list:
+    """확정된 설정끼리 부딪히는 자리. **되돌리지 않고 경고만 한다.**
+
+    facts 는 [{"fact": 문장, "first_episode": n}, …] (SeriesState.facts).
+    같은 주제를 말하는 두 문장만 비교한다 — 알맹이 낱말이 2개 이상 겹칠 때.
+    """
+    rows = [f for f in (facts or []) if isinstance(f, dict) and str(f.get("fact") or "").strip()]
+    out = []
+    for i in range(len(rows)):
+        for j in range(i + 1, len(rows)):
+            a, b = rows[i], rows[j]
+            ta, tb = str(a["fact"]), str(b["fact"])
+            shared = _content_words(ta) & _content_words(tb)
+            if len(shared) < 2:
+                continue                      # 다른 이야기다
+            topic = ", ".join(sorted(shared)[:3])
+            where = (f"{a.get('first_episode', '?')}화 ↔ "
+                     f"{b.get('first_episode', '?')}화")
+
+            if _negated(ta) != _negated(tb):
+                out.append(
+                    f"설정 충돌 의심 ({where}) — 같은 것({topic})을 말하는데 "
+                    f"한쪽만 부정입니다.\n    · \"{ta[:60]}\"\n    · \"{tb[:60]}\"")
+                continue
+
+            na = dict((u, n) for n, u in _NUM_UNIT.findall(ta))
+            nb = dict((u, n) for n, u in _NUM_UNIT.findall(tb))
+            clash = [u for u in na if u in nb and na[u] != nb[u]]
+            if clash:
+                u = clash[0]
+                out.append(
+                    f"설정 충돌 의심 ({where}) — 같은 것({topic})에 "
+                    f"{na[u]}{u} 와 {nb[u]}{u} 가 함께 있습니다.\n"
+                    f"    · \"{ta[:60]}\"\n    · \"{tb[:60]}\"")
+    return out
+
+
+# ---- 글자 길이 -----------------------------------------------------------
+#
+# 지금까지 길이는 **하한만** 봤다(말 있는 컷 비율, 무음 연속). 상한이 없으니
+# 반대쪽으로 넘어가는 것을 아무도 안 막았다.
+#
+# 말풍선은 그림 위에 얹힌다. 길어지면 그림을 가리고, 세로 스크롤에서는 그
+# 컷에서 눈이 멈춘다 — 체류 시간이 텍스트 길이에 비례한다는 것은 침묵을
+# 경계하는 근거이자 **장문을 경계하는 근거**이기도 하다.
+#
+# 종류마다 다르게 잡는다. 말풍선(대사·속마음)은 인물 옆에 떠서 그림을 직접
+# 가리지만, 나레이션은 보통 여백의 띠로 들어가 덜 가린다.
+MAX_DIALOGUE_CHARS = 40       # 한 말풍선. 넘으면 두 개로 나누는 편이 낫다
+MAX_NARRATION_CHARS = 70      # 나레이션 상자
+MAX_CUT_CHARS = 110           # 한 컷의 글자 총합. 말풍선이 여러 개일 때
+_LEN_CAP = {"dialogue": MAX_DIALOGUE_CHARS, "thought": MAX_DIALOGUE_CHARS,
+            "narration": MAX_NARRATION_CHARS}
+
+
+def length_warnings(cuts: list) -> list:
+    """말풍선이 그림을 가릴 만큼 길지 않은가. **되돌리지 않고 경고만 한다.**
+
+    길이는 판단이 필요한 자리다 — 독백 한 편이 통째로 들어가야 하는 컷도 있고,
+    그때는 긴 것이 맞다. 숫자로 막으면 모델이 숫자를 맞추느라 문장을 자르고,
+    잘린 문장은 짧아진 것이지 좋아진 것이 아니다.
+    """
+    out = []
+    for c in cuts:
+        if not isinstance(c, dict):
+            continue
+        no = c.get("cut_number")
+        total = 0
+        for ln in speech_lines(c):
+            text = " ".join(str(ln.get("text") or "").split())
+            if not text:
+                continue
+            total += len(text)
+            cap = _LEN_CAP.get(str(ln.get("kind") or "dialogue"))
+            if cap and len(text) > cap:
+                # 조사까지 같이 적어 둔다 — 받침이 있고 없고가 낱말마다 달라서
+                # "나레이션가" 같은 문장이 사람 눈에 걸린다.
+                kind_ko = {"dialogue": "대사가", "thought": "속마음이",
+                           "narration": "나레이션이"}.get(ln.get("kind"), "글자가")
+                out.append(
+                    f"컷 {no} {kind_ko} {len(text)}자입니다(권장 {cap}자 이내): "
+                    f"\"{text[:28]}…\". 말풍선이 길면 그림을 가리고 그 컷에서 "
+                    "눈이 멈춥니다 — 두 개로 나누거나, 그림이 이미 말하는 부분을 "
+                    "덜어내세요.")
+        if total > MAX_CUT_CHARS:
+            out.append(
+                f"컷 {no} 의 글자가 모두 {total}자입니다(권장 {MAX_CUT_CHARS}자 이내). "
+                "한 컷에 말풍선이 여러 개면 그림이 설 자리가 없습니다.")
+    return out
+
+
 def text_warnings(cuts: list) -> list:
     """말의 밀도와 자리 — **되돌리지 않고 경고만 한다.**
 
@@ -2167,6 +2297,8 @@ def text_warnings(cuts: list) -> list:
         out.append(
             f"컷 {num[at]}~{num[at + best - 1]} 이 말 없이 {best}컷 연속입니다. "
             "그 구간에서 이야기가 멈춘 것처럼 읽힐 수 있습니다.")
+
+    out += length_warnings(cuts)
 
     # ---- 종류 편중 ----------------------------------------------------
     # 밀도와 따로 센다. 말이 충분해도 **전부 대사**면 화면이 납작해진다 —
@@ -3154,9 +3286,8 @@ def tone_warnings(cuts: list, scenes: list, personality: str = "") -> list:
     out = []
     personality_text = str(personality or "")
     if not any(w in personality_text for w in _SERIOUS_PERSONALITY_WORDS):
-        for c in cuts:
-            if not isinstance(c, dict):
-                continue
+        cuts_list = [c for c in cuts if isinstance(c, dict)]
+        for i, c in enumerate(cuts_list):
             lines = c.get("lines") if isinstance(c.get("lines"), list) else []
             texts = [str(ln.get("text") or "") for ln in lines
                      if isinstance(ln, dict) and ln.get("kind") in ("narration", "dialogue")]
@@ -3167,6 +3298,20 @@ def tone_warnings(cuts: list, scenes: list, personality: str = "") -> list:
                     "문장이 있는데, personality 에는 진지함을 가리키는 말이 없습니다. "
                     "지정 안 한 성격 이탈(설정 붕괴)일 수 있습니다 — 빌드업 없이 "
                     "톤이 급전환된 것이 아닌지 보세요.")
+                # 실제 사고에서 "빌드업 없이" 가 핵심이었다 — 급전환 문장 자체보다,
+                # 그 앞에 조짐이 한 비트도 없이 바로 꺾이는 것이 문제였다. beat 가
+                # build/turn 인 컷이 하나라도 앞에 있으면 이미 조여지고 있었던
+                # 것으로 보고, 없으면 별도로 한 번 더 짚는다.
+                lead = cuts_list[max(0, i - 2):i]
+                has_buildup = any(
+                    str(p.get("beat") or "").strip().lower() in ("build", "turn")
+                    for p in lead)
+                if not has_buildup:
+                    out.append(
+                        f"컷 {c.get('cut_number')} 앞 두 컷 모두 beat 가 build/turn 이 "
+                        "아닙니다 — 전환 직전에 조짐(빌드업)이 없다는 뜻일 수 있습니다. "
+                        "장난스러운 흐름이 예고 없이 바로 진지하게 꺾이는 것이 아닌지 "
+                        "보세요.")
                 break
     cuts = [c for c in cuts if isinstance(c, dict)]
     scenes = [s for s in (scenes or []) if isinstance(s, dict)]
@@ -3201,6 +3346,35 @@ def tone_warnings(cuts: list, scenes: list, personality: str = "") -> list:
                 f"tone 이 '개그' 인데 컷이 전부 normal 입니다. 의도한 것이면 그대로 "
                 "두세요 — 다만 개그로 잡아 놓고 정식 작화로만 그리면 그 장면을 "
                 "살리지 않은 것입니다 (sd·emphasis 가 이 자리의 카드입니다).")
+    return out
+
+
+# 인접 컷에서 얼굴 방향이 예고 없이 뒤집히는 사고 — 실제 사고: "1·3컷은 정면인데
+# 2컷만 갑자기 뒷모습이라 독자가 읽는 흐름에 불편감을 느낀다"는 피드백. shot·angle
+# 필드에는 얼굴 방향(정면/뒷모습)이 없다 — 카메라의 거리·높이일 뿐, 인물이 카메라를
+# 보고 있는지는 서술(description)의 자연어로만 존재해서 게이트가 못 본다. 그래서
+# advisory 로, 인접한 두 컷의 서술에서 정면류/뒷모습류 낱말이 그대로 부딪힐 때만
+# 짚는다 — 오탐을 피하려고 낱말을 좁게 잡았다(넓게 잡으면 "돌아서서 걷는다"류의
+# 흔한 동작 서술까지 다 걸린다).
+_FRONT_FACING = re.compile(r"(정면|마주\s*보|마주본|얼굴을\s*보)")
+_BACK_FACING = re.compile(r"(뒷모습|뒤통수|등을\s*보이|등을\s*돌리)")
+
+
+def facing_warnings(cuts: list) -> list:
+    """인접 컷 사이 얼굴 방향(정면 ↔ 뒷모습)이 완충 없이 뒤집히는 자리 — advisory."""
+    out = []
+    cuts = [c for c in cuts if isinstance(c, dict)]
+    for prev, cur in zip(cuts, cuts[1:]):
+        prev_desc = str(prev.get("description") or "")
+        cur_desc = str(cur.get("description") or "")
+        flipped = ((_FRONT_FACING.search(prev_desc) and _BACK_FACING.search(cur_desc))
+                   or (_BACK_FACING.search(prev_desc) and _FRONT_FACING.search(cur_desc)))
+        if flipped:
+            out.append(
+                f"컷 {prev.get('cut_number')}→{cur.get('cut_number')} 사이 얼굴 방향이 "
+                "정면↔뒷모습으로 바로 뒤집힙니다. 독자가 읽는 흐름이 끊길 수 있습니다 — "
+                "옆모습·반측면처럼 완충이 되는 각도를 사이에 넣거나, 한쪽 방향을 "
+                "맞추는 것을 검토하세요.")
     return out
 
 
@@ -3597,6 +3771,7 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
             notes += [f"이름 경고: {x}" for x in prop_text_name_check(cuts, known)]
             notes += [f"톤 메모: {x}" for x in tone_warnings(
                 cuts, payload.get("scenes"), personality)]
+            notes += [f"각도 메모: {x}" for x in facing_warnings(cuts)]
             notes += [f"공간 메모: {x}" for x in zone_warnings(cuts)]
             return payload, regens, notes
         log(f"  {absolute}화 7단계 게이트 실패 {len(failures)}건")

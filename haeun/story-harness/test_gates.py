@@ -3364,6 +3364,46 @@ ok("톤 경고: 단정적 전환 문장이 없으면 조용하다",
                [{"cut_number": 1, "lines": [{"kind": "dialogue", "text": "그냥 평범한 하루였다"}]}],
                [], "장난스럽다")))
 
+# P1: 톤 전환 빌드업 — 급전환 문장 앞 두 컷 모두 beat 가 build/turn 이 아니면
+# "빌드업이 없다" 는 경고를 추가로 남긴다(advisory, 여전히 막지 않는다).
+_abrupt_no_buildup = [
+    {"cut_number": 1, "beat": "setup", "lines": []},
+    {"cut_number": 2, "beat": "setup", "lines": []},
+    {"cut_number": 3, "beat": "turn", "lines": [
+        {"kind": "narration", "text": "그 순간이 모든 것을 바꿔놓았다"}]},
+]
+_abrupt_with_buildup = [
+    {"cut_number": 1, "beat": "setup", "lines": []},
+    {"cut_number": 2, "beat": "build", "lines": []},
+    {"cut_number": 3, "beat": "turn", "lines": [
+        {"kind": "narration", "text": "그 순간이 모든 것을 바꿔놓았다"}]},
+]
+ok("톤 경고: 빌드업 없이(앞 두 컷 setup) 급전환하면 빌드업 경고가 붙는다",
+   any("앞 두 컷" in w for w in webtoon.tone_warnings(_abrupt_no_buildup, [], "장난스럽다")))
+ok("톤 경고: 앞 컷에 build 가 있으면 빌드업 경고는 조용하다",
+   not any("앞 두 컷" in w for w in webtoon.tone_warnings(_abrupt_with_buildup, [], "장난스럽다")))
+ok("톤 경고: beat 필드가 없는 옛 run 도 에러 없이 빌드업 경고를 남긴다",
+   any("앞 두 컷" in w for w in webtoon.tone_warnings(_abrupt_cuts, [], "장난스럽다")))
+
+# P1: 얼굴 방향 연속성 — 인접 컷이 정면 <-> 뒷모습으로 완충 없이 뒤집히면 경고
+# (advisory, description 자연어만 보므로 필드 게이트가 아니다).
+_facing_flip = [
+    {"cut_number": 1, "description": "시하가 정면을 보며 웃는다"},
+    {"cut_number": 2, "description": "시하의 뒷모습, 복도를 걸어간다"},
+    {"cut_number": 3, "description": "다시 정면으로 돌아본 얼굴"},
+]
+_facing_smooth = [
+    {"cut_number": 1, "description": "시하가 정면을 보며 웃는다"},
+    {"cut_number": 2, "description": "옆모습으로 복도를 걸어가는 시하"},
+    {"cut_number": 3, "description": "뒷모습으로 멀어지는 시하"},
+]
+ok("각도 경고: 정면->뒷모습으로 바로 뒤집히면 경고",
+   any("완충" in w for w in webtoon.facing_warnings(_facing_flip)))
+ok("각도 경고: 옆모습으로 완충되면 조용하다",
+   webtoon.facing_warnings(_facing_smooth) == [])
+ok("각도 경고: description 이 없는 옛 run 은 조용하다",
+   webtoon.facing_warnings([{"cut_number": 1}, {"cut_number": 2}]) == [])
+
 # P0-6: 핵심 액션 비트 — beats 가 어느 컷에도 안 나오면 탈락(hard gate).
 _beat_missing = [{"cut_number": 1, "description": "시하가 생쥐를 안고 있다", "lines": []}]
 _beat_present = [{"cut_number": 1,
