@@ -276,7 +276,8 @@ class Job:
     preview: bool
     has_photo: bool
 
-    # queued | running | awaiting_story_approval | awaiting_sheet_approval |
+    # queued | running | awaiting_story_approval | awaiting_board_approval |
+    # awaiting_sheet_approval |
     # done | error | cancelled
     status: str = "queued"
     run_id: str | None = None
@@ -321,6 +322,17 @@ class Job:
         with self._lock:
             self.story_decision = decision
         self.story_approval.set()
+
+    # awaiting_board_approval 용 — story_approval 과 같은 이유, 같은 방식.
+    # 콘티(webtoon.py, W4~W8) 단계가 STATUS_HUMAN 으로 끝났을 때만 켜진다.
+    board_approval: threading.Event = field(default_factory=threading.Event, repr=False)
+    board_decision: str = field(default="", repr=False)
+
+    def decide_board(self, decision: str) -> None:
+        """콘티 확인 화면의 '이대로 진행'/'다시 만들기' 클릭이 여기로 온다."""
+        with self._lock:
+            self.board_decision = decision
+        self.board_approval.set()
 
     # ---- 상태 -------------------------------------------------------------- #
 
@@ -438,7 +450,8 @@ class Job:
             d = json.loads((path / "state.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
-        if d.get("status") in ("running", "awaiting_sheet_approval", "awaiting_story_approval"):
+        if d.get("status") in ("running", "awaiting_sheet_approval",
+                               "awaiting_story_approval", "awaiting_board_approval"):
             d["status"] = "error"
             d["error"] = "서버가 다시 시작되어 이 작업은 끊겼습니다."
         job = cls(id=d["id"], form=d.get("form") or {}, dir=path,
@@ -470,6 +483,7 @@ class Job:
         # *_approval.wait() 에 걸려 있으므로 깨워야 _cancel 을 보고 멈춘다.
         self.sheet_approval.set()
         self.story_approval.set()
+        self.board_approval.set()
 
     def _env(self) -> dict[str, str]:
         env = dict(os.environ)
@@ -772,15 +786,41 @@ def execute(job: Job) -> None:
 
         # ---- 3. 콘티 ------------------------------------------------------ #
         _enter(job, 2)
-        job.note("큰 줄거리를 세우는 중")
-        code = job._run(
-            ["webtoon.py", "--run", run_id, "--episodes", "1", "--skip-human-gate"],
-            STORY, lambda ln: _board_line(job, ln))
-        if job._cancel:
-            raise Failed("취소됨")
-        cuts_path = STORY / "runs" / run_id / "webtoon" / "ep01_cuts.json"
-        if code != 0 or not cuts_path.exists():
-            raise Failed("콘티(컷 설계)를 만들지 못했습니다.")
+        board_meta = STORY / "runs" / run_id / "webtoon" / "meta.json"
+        replan = False
+        while True:
+            job.note("큰 줄거리를 세우는 중" if not replan else "콘티를 다시 짜는 중")
+            cmd = ["webtoon.py", "--run", run_id, "--episodes", "1", "--skip-human-gate"]
+            if replan:
+                cmd.append("--replan")
+            code = job._run(cmd, STORY, lambda ln: _board_line(job, ln))
+            if job._cancel:
+                raise Failed("취소됨")
+            cuts_path = STORY / "runs" / run_id / "webtoon" / "ep01_cuts.json"
+            if code != 0 or not cuts_path.exists():
+                raise Failed("콘티(컷 설계)를 만들지 못했습니다.")
+
+            # webtoon.py 의 main() 도 STATUS_HUMAN/실패에서 종료 코드는 항상 0 —
+            # story.py 와 같은 사정. meta.json 을 직접 읽어야 한다.
+            status, note = _meta_status(board_meta)
+            if status != STATUS_HUMAN:
+                break                  # STATUS_OK(또는 알 수 없는 값) — 정상 진행
+
+            job.status = "awaiting_board_approval"
+            job.note("콘티 단계 게이트 재시도가 소진됐습니다 — 확인해 주세요"
+                      + (f" ({note})" if note else ""))
+            job.save()
+            job.board_approval.wait()
+            job.board_approval.clear()
+            with job._lock:
+                decision = job.board_decision
+                job.board_decision = ""
+            job.status = "running"
+            if job._cancel:
+                raise Failed("취소됨")
+            if decision != "retry":
+                break                   # approve — 이 콘티 그대로 진행
+            replan = True
         _leave(job)
 
         # ---- 4·5. 그림 + 이어 붙이기 -------------------------------------- #

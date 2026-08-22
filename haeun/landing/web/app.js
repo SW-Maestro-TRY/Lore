@@ -238,12 +238,27 @@ function renderProgress(s) {
     approvalBox.hidden = true;
   }
 
+  // 사람 확인이 필요한 이유 — 그 단계가 남긴 note 를 그대로 보여준다.
+  // "멈췄습니다"만 뜨고 왜 멈췄는지 안 보이면 사용자가 판단할 근거가 없다.
+  const currentStage = s.stages && s.stages[s.stage_index];
+  const stageReason = (currentStage && currentStage.note) || "";
+
   const storyApprovalBox = $("#storyApproval");
   if (s.status === "awaiting_story_approval") {
     storyApprovalBox.hidden = false;
+    $("#storyApprovalReason").textContent = stageReason;
     if (lastStatus !== "awaiting_story_approval") setStoryButtonsBusy(false);
   } else {
     storyApprovalBox.hidden = true;
+  }
+
+  const boardApprovalBox = $("#boardApproval");
+  if (s.status === "awaiting_board_approval") {
+    boardApprovalBox.hidden = false;
+    $("#boardApprovalReason").textContent = stageReason;
+    if (lastStatus !== "awaiting_board_approval") setBoardButtonsBusy(false);
+  } else {
+    boardApprovalBox.hidden = true;
   }
 
   if (s.status === "queued") {
@@ -346,6 +361,29 @@ async function sendStoryDecision(decision) {
   } catch (err) {
     toast(err.message);
     setStoryButtonsBusy(false);
+  }
+}
+
+function setBoardButtonsBusy(busy) {
+  $("#boardApproveBtn").disabled = busy;
+  $("#boardRetryBtn").disabled = busy;
+}
+
+async function sendBoardDecision(decision) {
+  if (!jobId) return;
+  setBoardButtonsBusy(true);
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/board-decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
+  } catch (err) {
+    toast(err.message);
+    setBoardButtonsBusy(false);
   }
 }
 
@@ -634,6 +672,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#sheetRetryBtn").addEventListener("click", () => sendSheetDecision("retry"));
   $("#storyApproveBtn").addEventListener("click", () => sendStoryDecision("approve"));
   $("#storyRetryBtn").addEventListener("click", () => sendStoryDecision("retry"));
+  $("#boardApproveBtn").addEventListener("click", () => sendBoardDecision("approve"));
+  $("#boardRetryBtn").addEventListener("click", () => sendBoardDecision("retry"));
   $("#againBtn").addEventListener("click", forget);
   $("#scriptBtn").addEventListener("click", () => {
     $("#scriptPanel").hidden = !$("#scriptPanel").hidden;

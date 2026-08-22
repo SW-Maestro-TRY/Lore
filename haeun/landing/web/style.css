@@ -349,6 +349,8 @@ body[data-view="result"]  .topbar { display: none; }
 .sheet-approval { margin: 22px 0; border: 1px solid var(--line-2); border-radius: var(--radius); padding: 20px 22px; background: var(--card-2); }
 .sheet-approval-head h3 { font-size: 1.1rem; margin-bottom: 6px; }
 .sheet-approval-head p { color: var(--muted); font-size: .9rem; margin: 0 0 16px; }
+.approval-reason { color: var(--text); font-size: .92rem; margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--gold); background: var(--ink-2); border-radius: 6px; }
+.approval-reason:empty { display: none; }
 .sheet-approval-compare { display: flex; gap: 16px; flex-wrap: wrap; }
 .sheet-approval-compare figure { margin: 0; flex: 1 1 200px; max-width: 320px; }
 .sheet-approval-compare img { width: 100%; border-radius: 10px; border: 1px solid var(--line); background: var(--ink-2); aspect-ratio: 3/4; object-fit: cover; }
