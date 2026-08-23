@@ -79,6 +79,23 @@ CONDITION = "S+"
 # 코드가 정했다. 되돌리려면 MODE 를 "cut" 으로 바꾸면 그 경로가 그대로 산다.
 MODE = "scene"
 CUTS_PER_SHEET = 3
+
+# 위 두 값은 **기본 경로**다. 사용자가 폼에서 "웹툰"을 고르면 컷 모드로 간다.
+#
+# 컷 모드에서는 컷 하나가 캔버스 하나를 통째로 쓴다. 그러면 위에 적어 둔 대가가
+# 그대로 사라진다 — 격자가 안 나오고(모델이 배치할 칸이 없다), 컷 사이 여백을
+# 콘티의 gap_after 대로 코드가 넣고, 컷이 800px 로 줄지 않는다. 대신 이미지
+# 호출이 컷 수만큼이라 세 배가 된다. 그래서 고르게 두고 기본은 그대로 둔다.
+LAYOUT_MODES = {
+    "fast":    {"mode": "scene", "label": "빠르게 · 한 장에 3컷"},
+    "webtoon": {"mode": "cut",   "label": "웹툰 · 컷마다 한 장"},
+}
+
+
+def layout_mode(form: dict[str, Any]) -> str:
+    """폼의 layout_mode → fast | webtoon. 모르는 값은 fast (지금까지의 방식)."""
+    v = str((form or {}).get("layout_mode") or "").strip().lower()
+    return v if v in LAYOUT_MODES else "fast"
 # 비용 안내용 환율. webtoon-harness config.yaml 의 pricing.usd_to_krw 와 같은 값.
 USD_TO_KRW = 1400
 
@@ -161,7 +178,7 @@ def _replace_block(text: str, key: str, value: str) -> str:
 
 
 def build_config(job_dir: Path, style: str, head_ratio: str = "",
-                 genre: str = "") -> Path:
+                 genre: str = "", mode: str = "fast") -> Path:
     """이 실행에만 쓸 config.yaml. 원본에서 몇 값만 바꾼다."""
     text = (WEBTOON / "config.yaml").read_text(encoding="utf-8")
 
@@ -211,6 +228,26 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
         # 값에 콜론·따옴표가 들어와도 YAML 이 안 깨지게 통째로 인용한다.
         safe = genre.strip().replace('"', "'")
         text = _replace_block(text, "genre", f'"{safe}"')
+
+    # 8. 세로 스크롤 연출 — "웹툰"을 고른 실행에서만 켠다.
+    #
+    #    · vertical_link — 같은 장소에서 붙어 있는 두 컷의 배경을 위에서 아래로
+    #      이어 그린다. 무대는 그대로 두고 카메라만 내려가는 자리라, 스크롤
+    #      자체가 카메라가 된다. 직전 컷이 첨부되는 조건(S+)에서만 뜻이 있는데
+    #      제품이 쓰는 조건이 마침 S+ 다.
+    #    · gap_ratio — 컷 사이 여백을 몇 px 로 그릴지. 하네스 기본값
+    #      (0 / 56 / 208 / 496px @800폭)은 세로 스크롤 작법이 쓰는 눈금보다
+    #      좁다. 특히 낙차(3)가 폰 화면 하나를 못 채워서 "조금 넓은 여백"이
+    #      된다. 아래 값은 0 / 128 / 256 / 720px 로, 각각 작법이 말하는
+    #      빠른 동작(100~150) · 감정(200~300) · 낙차(600~800) 범위에 든다.
+    #
+    #    "빠르게"(scene 모드)에서는 둘 다 안 켠다 — 컷 사이 여백도 배경 연결도
+    #    한 캔버스 안에서 모델이 정하는 구조라 코드가 넣을 자리가 없다.
+    if mode == "webtoon":
+        text = _replace_block(text, "vertical_link", "true")
+        text = re.sub(r"(?m)^  gap_ratio:.*$",
+                      "  gap_ratio: {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}",
+                      text, count=1)
 
     out = job_dir / "config.yaml"
     out.write_text(text, encoding="utf-8")
@@ -394,13 +431,22 @@ class Job:
 
     def build_stages(self) -> None:
         self.stages = []
+        webtoon = layout_mode(self.form) == "webtoon"
         for spec in STAGE_SPEC:
             steps = []
             for key, label in spec["steps"]:
                 state = SKIP if (key == "look" and not self.has_photo) else TODO
+                # 컷 모드에는 "묶기" 단계가 없다 — 컷 하나가 곧 한 장이다.
+                if key == "group" and webtoon:
+                    label = "컷마다 캔버스 잡기"
                 steps.append({"key": key, "label": label, "state": state})
+            desc = spec["desc"]
+            if webtoon and spec["key"] == "art":
+                desc = "컷 하나를 한 장씩 그립니다 — 컷 사이 여백이 살아납니다"
+            elif webtoon and spec["key"] == "bind":
+                desc = "컷을 콘티가 정한 여백대로 세로로 이어 붙입니다"
             self.stages.append({
-                "key": spec["key"], "title": spec["title"], "desc": spec["desc"],
+                "key": spec["key"], "title": spec["title"], "desc": desc,
                 "state": TODO, "note": "", "steps": steps,
                 "started_at": None, "seconds": None,
             })
@@ -804,7 +850,8 @@ def execute(job: Job) -> None:
     try:
         build_config(job_dir, job.style,
                      head_ratio=str(job.form.get("head_ratio") or "").strip().lower(),
-                     genre=str(job.form.get("genre") or ""))
+                     genre=str(job.form.get("genre") or ""),
+                     mode=layout_mode(job.form))
         char_path = write_character(job_dir, job.form)
 
         # ---- 1. 이야기 --------------------------------------------------- #
@@ -947,12 +994,14 @@ def execute(job: Job) -> None:
         # episode.png 까지 만든다.
         _enter(job, 3)
         job.note("컷 서술을 옮기는 중")
+        mode = LAYOUT_MODES[layout_mode(job.form)]["mode"]
         cmd = ["run.py", "--run-id", run_id, "--episode", "1",
-               "--mode", MODE, "-c", CONDITION, "--style", job.style,
+               "--mode", mode, "-c", CONDITION, "--style", job.style,
                "--config", str(job_dir / "config.yaml"), "--yes"]
         if job.preview:
-            # Scene 모드에서 --cuts 는 "그 컷이 들어 있는 장"을 고른다.
-            # 1~3 이면 첫 장 하나 = 3컷.
+            # Scene 모드에서 --cuts 는 "그 컷이 들어 있는 장"을 고르므로 1~3 이
+            # 첫 장 하나(=3컷)다. 컷 모드에서는 말 그대로 컷 1~3 이라, 어느
+            # 쪽이든 "앞 3컷"이 되어 미리보기의 뜻이 같다.
             cmd += ["--cuts", f"1-{CUTS_PER_SHEET}"]
 
         def art_or_bind(line: str) -> None:
@@ -1072,6 +1121,23 @@ def unit_image(run_id: str, no: int) -> Path | None:
             if p.exists():
                 return p
     return None
+
+
+def run_mode(run_id: str) -> str:
+    """이 실행이 어느 모드로 그려졌는가 — "scene" | "cut".
+
+    폼 값이 아니라 **떨어진 파일**을 본다. 다시 그리기는 job 이 사라진 뒤에도
+    (서버를 껐다 켜거나, 하네스를 직접 돌린 실행에서도) 눌릴 수 있어서, 그때
+    모드를 틀리면 run.py 가 있지도 않은 장을 찾거나 컷을 통째로 다시 묶는다.
+    아무것도 없으면 기본값(scene)으로 본다 — 지금까지의 방식이다.
+    """
+    ep = episode_dir(run_id)
+    for cond in (CONDITION, "S", "A"):
+        if any((ep / f"scene_{cond}").glob("scene*_c*.png")):
+            return "scene"
+        if any((ep / cond).glob("cut*_c*.png")):
+            return "cut"
+    return MODE
 
 
 # --------------------------------------------------------------------------- #
@@ -1377,7 +1443,7 @@ class RegenRunner:
                 job.note = "다시 그리는 중"
                 cfg = regen_config(job.run_id, job.feedback, style)
                 cmd = ["run.py", "--run-id", job.run_id, "--episode", "1",
-                       "--mode", MODE, "-c", CONDITION,
+                       "--mode", run_mode(job.run_id), "-c", CONDITION,
                        "--cuts", f"{rng[0]}-{rng[1]}",
                        "--config", str(cfg), "--yes"]
                 code = self._spawn(job, cmd)

@@ -362,27 +362,6 @@ body.no-dgap .gapx { display: none; }
 body.hide-no .gapx b { display: none; }
 .gapx.lv0 b { display: none; }
 
-/* --- 스크롤 폴드 눈금 -------------------------------------------------------
-   폴드는 독자의 화면이 끝나는 자리다. 엄지가 멈추는 곳이 늘 거기라서, 그 선
-   바로 아래에 무엇이 오는지가 "다음도 볼까"를 정한다. 웹툰 작법이 말하는 것도
-   그것이다 — 폴드에서 평평한 대사 컷을 만나면 독자가 빠져나가고, 리빌이나
-   임팩트를 만나면 계속 내려간다.
-   눈금은 **그림 위에 겹쳐 그리는 자**일 뿐이라 화의 내용을 바꾸지 않는다.
-   기본은 꺼짐이다 — 켜야 보인다. */
-.strip { position: relative; }
-.fold { position: absolute; left: 0; right: 0; height: 0; pointer-events: none;
-        border-top: 1px dashed color-mix(in srgb, var(--fg, #111) 45%, transparent);
-        z-index: 4; display: none; }
-body.show-fold .fold { display: block; }
-.fold b { position: absolute; right: 4px; top: 3px; font: 700 10px/1 ui-monospace,
-          "Consolas", monospace; letter-spacing: .04em; padding: 3px 6px;
-          border-radius: 3px; background: var(--cap-bg); color: var(--dim); }
-
-/* 앞 컷에서 배경이 이어지는 컷. 두 컷이 한 공간의 위/아래라는 표시다. */
-.cut .link { display: none; }
-.cut.linked .link { display: inline-block; margin-left: 6px; opacity: .75; }
-body.hide-no .cut .link { display: none; }
-
 footer { width: var(--w); max-width: 100%; margin: 0 auto; padding: 28px 16px 56px;
          font-size: 12.5px; color: var(--dim); }
 body.compare footer { width: auto; max-width: 1420px; }
@@ -407,32 +386,6 @@ const cap = document.getElementById("cap"), num = document.getElementById("num")
       dirty = document.getElementById("dirty"), bar = document.querySelector(".bar");
 // 연출 여백 토글. 연출본이 아닌 뷰어에는 없다 — 그때는 null 로 두고 전부 건너뛴다.
 const dgap = document.getElementById("dgap");
-const foldbox = document.getElementById("fold");
-
-/* --- 스크롤 폴드 눈금 -------------------------------------------------------
-   화면 하나 높이마다 띠 위에 선을 하나 긋고 번호를 붙인다. 독자의 엄지가 멈추는
-   자리가 늘 그 선이라, "몇 번째 화면에서 무엇을 보게 되는가"를 눈으로 확인하려는
-   것이다. 화면 높이는 창 크기에서 오므로 창을 줄이면 눈금도 따라 움직인다 —
-   폰과 데스크톱에서 폴드가 다른 자리에 떨어지는 것을 그대로 보여 준다.
-   선은 겹쳐 그리는 자일 뿐이라 컷의 배치를 건드리지 않는다. */
-const stripEl = document.querySelector(".strip");
-function drawFolds() {
-  if (!stripEl || !foldbox) return;
-  stripEl.querySelectorAll(".fold").forEach(el => el.remove());
-  if (!foldbox.checked) return;
-  const screen = Math.max(200, window.innerHeight - (bar ? bar.offsetHeight : 0));
-  const total = stripEl.scrollHeight;
-  const frag = document.createDocumentFragment();
-  // 화면 하나를 넘기지 못하는 짧은 화에는 그을 선이 없다.
-  for (let y = screen, i = 2; y < total && i < 400; y += screen, i++) {
-    const line = document.createElement("div");
-    line.className = "fold";
-    line.style.top = y + "px";
-    line.innerHTML = "<b>화면 " + i + "</b>";
-    frag.appendChild(line);
-  }
-  stripEl.appendChild(frag);
-}
 const cuts = Array.prototype.slice.call(document.querySelectorAll(".cut"));
 const names = META.order;
 
@@ -463,7 +416,6 @@ function apply() {
   body.classList.toggle("fit-contain", !fit.checked);
   body.classList.toggle("edit", edit.checked);
   if (dgap) body.classList.toggle("no-dgap", !dgap.checked);
-  if (foldbox) { body.classList.toggle("show-fold", foldbox.checked); drawFolds(); }
   root.style.setProperty("--gap", gap.value + "px");
   gapv.textContent = gap.value + "px";
   fitBar();
@@ -473,8 +425,7 @@ function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify({cap: cap.checked, num: num.checked,
       fit: fit.checked, edit: edit.checked, gap: gap.value,
-      dgap: dgap ? dgap.checked : null,
-      fold: foldbox ? foldbox.checked : null}));
+      dgap: dgap ? dgap.checked : null}));
   } catch (e) {}
 }
 
@@ -488,13 +439,11 @@ function load() {
     edit.checked = s.edit !== false;
     if (s.gap != null) gap.value = s.gap;
     if (dgap && s.dgap != null) dgap.checked = s.dgap !== false;
-    // 폴드 눈금은 기본이 꺼짐이다 — 켜 둔 적이 있을 때만 켜진 채로 돌아온다.
-    if (foldbox && s.fold != null) foldbox.checked = s.fold === true;
   }
   apply();
 }
 
-[cap, num, fit, edit, gap, dgap, foldbox].filter(Boolean).forEach(el =>
+[cap, num, fit, edit, gap, dgap].filter(Boolean).forEach(el =>
   el.addEventListener("input", () => { apply(); save(); }));
 
 /* --- 배치 ------------------------------------------------------------------- */
@@ -594,9 +543,8 @@ function onScroll() {
   });
 }
 window.addEventListener("scroll", onScroll, {passive: true});
-window.addEventListener("resize", () => { fitBar(); onScroll(); drawFolds(); });
-// 그림이 lazy 로 들어오면서 띠 높이가 늘어난다 — 다 들어온 뒤에 눈금을 다시 긋는다.
-window.addEventListener("load", () => { fitBar(); onScroll(); drawFolds(); });
+window.addEventListener("resize", () => { fitBar(); onScroll(); });
+window.addEventListener("load", () => { fitBar(); onScroll(); });
 
 try {
   const stored = JSON.parse(localStorage.getItem(LKEY) || "null");
@@ -1114,15 +1062,10 @@ def _cut_items(
             inner = (f'<div>컷 {n} · {_esc(why)}'
                      f'<span class="d">{_esc(cut.get("description"))}</span></div>')
 
-        # 앞 컷에서 배경이 이어지는 컷 — 콘티(W7.5)의 vertical_link.
-        # 옛 run 에는 이 칸이 없다. 없으면 표시가 안 붙을 뿐 나머지는 그대로다.
-        linked = bool(cut.get("vertical_link"))
-        link_mark = '<span class="link">↕ 이어짐</span>' if linked else ""
         items.append(
-            f'<section class="cut{" linked" if linked else ""}" id="cut{n}" '
-            f'data-cut="{n}" data-size="{_esc(size)}">'
+            f'<section class="cut" id="cut{n}" data-cut="{n}" data-size="{_esc(size)}">'
             f'<div class="{frame_cls}"{style}>{inner}</div>'
-            f'<div class="no">컷 {n} <i>{_esc(size)}</i>{link_mark}</div>'
+            f'<div class="no">컷 {n} <i>{_esc(size)}</i></div>'
             f'<div class="pick">{buttons}</div>'
             f'{_caption(cut.get("dialogue"), bool(cut.get("reader_only")))}</section>'
         )
@@ -1335,17 +1278,6 @@ def build_viewer(
         "saved": {str(n): layout[n] for n in numbers if n in layout},
     }, ensure_ascii=False).replace("</", "<\\/")
 
-    n_link = sum(1 for c in cuts if c.get("vertical_link"))
-    link_note = (
-        f'<b>↕ 이어짐</b> 표시가 붙은 컷 {n_link}개는 앞 컷과 배경이 위에서 아래로 '
-        f'이어지는 자리입니다 (콘티가 계산한 vertical_link — 여백 0 · 같은 존). '
-        f'무대는 그대로 두고 카메라만 아래로 내려간 자리라, 두 컷이 한 공간의 위와 '
-        f'아래로 읽혀야 맞습니다. 실제로 이어 그리려면 config 의 '
-        f'<code>vertical_link: true</code> 를 켜세요 (기본 꺼짐).'
-        if n_link else
-        '이 화에는 배경이 이어지는 자리(<b>↕ 이어짐</b>)가 없습니다 — 여백 0 으로 '
-        '붙은 컷이 없거나, 붙은 두 컷의 존이 서로 다릅니다.')
-
     mix = " · ".join(f"{name} {tally[name]}" for name in sizes if tally[name])
     has_screen = any(sizes[layout.get(n, DEFAULT_SIZE)][0] == SCREEN for n in numbers)
     keys = ", ".join(f"<kbd>{i}</kbd> {_esc(name)}"
@@ -1371,8 +1303,7 @@ def build_viewer(
   <label><input type="checkbox" id="fit" checked> 잘라 채우기</label>
   <label>간격 <input type="range" id="gap" min="0" max="64" step="2" value="{gap}">
     <span id="gapv">{gap}px</span></label>
-{dtoggle}  <label><input type="checkbox" id="fold"> 스크롤 폴드</label>
-  <label><input type="checkbox" id="edit" checked> 크기 편집</label>
+{dtoggle}  <label><input type="checkbox" id="edit" checked> 크기 편집</label>
   <span class="edit-only">
     <button class="primary" id="download">layout.json 내려받기</button>
     <button id="copy">복사</button>
@@ -1400,12 +1331,6 @@ def build_viewer(
   <p>이미지는 다시 만들지 않고 틀에 맞춰 잘라 넣은 것이라,
      <b>잘라 채우기</b> 를 끄면 원본 전체가 보입니다.
      말풍선 합성은 아직 없습니다 — 대사는 이미지 아래 캡션입니다.</p>
-  <p><b>스크롤 폴드</b> · 켜면 화면 하나 높이마다 띠 위에 점선이 그어집니다.
-     독자의 엄지가 멈추는 자리가 늘 그 선이라, 선 <b>바로 아래</b>에 무엇이 오는지가
-     다음 화면까지 내려갈지를 정합니다 — 리빌·임팩트·반전이면 계속 내려가고,
-     평평한 대사 컷이면 거기서 빠져나갑니다. 창을 좁히면 눈금이 따라 움직이므로
-     폰에서 폴드가 어디 떨어지는지도 같은 창에서 볼 수 있습니다.
-     {link_note}</p>
   <p>생성 {datetime.now().isoformat(timespec='seconds')}</p>
 </footer>
 <script>const META = {meta};{JS}</script>

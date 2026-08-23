@@ -3627,6 +3627,31 @@ def derive_layout(cuts: list, scenes=None) -> list:
         cuts[i]["scene_break"] = bool(breaks[i])
         cuts[i]["gaze"] = gaze
 
+    # ---- vertical_link — 배경이 컷을 넘어 이어지는 자리 ---------------------
+    # 세로 스크롤을 만화와 가르는 것이 여백만은 아니다. 붙여 놓은 두 컷이 서로
+    # 무관한 그림이면 붙여도 나열이고, 독자는 "칸 여덟 개짜리 만화 페이지를 세로로
+    # 잘라 놓은 것"으로 읽는다. 웹툰에서만 되는 연출은 그 반대다 — **무대는
+    # 그대로 두고 카메라만 아래로 내리는 것.** 탑을 올려다보다 내려오고, 떨어지는
+    # 인물을 따라가고, 방 안을 위에서 아래로 훑는 컷들이 그것이다.
+    #
+    # 어디가 그 자리인지는 이미 계산해 둔 값에 다 들어 있다:
+    #   · 앞 컷의 여백이 0        같은 동작의 다음 찰나라 시간이 거의 안 흘렀다
+    #   · zone 이 같다            무대가 바뀌지 않았다
+    #   · 둘 다 sd 가 아니다      데포르메 컷은 배경이 파스텔로 빠져 이어질 것이 없다
+    #   · 뒤 컷이 bleed 가 아니다 통컷은 혼자 화면을 먹는 카드다
+    #
+    # 값은 **뒤 컷**에 붙는다 — "이 컷은 앞 컷에서 이어진다"는 뜻이다.
+    # 여기서 정하는 것은 자리뿐이고, 그 자리를 실제로 이어 그릴지는 웹툰 하네스가
+    # config 로 켠다(기본 꺼짐). 그래서 이 값이 생겨도 예전 run 의 그림은 그대로다.
+    zones = [str(c.get("zone") or "").strip() for c in cuts]
+    for i in range(n):
+        cuts[i]["vertical_link"] = bool(
+            i > 0
+            and gaps[i - 1] == 0
+            and zones[i] and zones[i] == zones[i - 1]
+            and renders[i] != "sd" and renders[i - 1] != "sd"
+            and renders[i] != "bleed")
+
     return notes
 
 

@@ -622,7 +622,7 @@ body[data-view="result"]  .topbar { display: none; }
 
 /* 세계관 프리셋 (#68) */
 #worldPreset { margin-bottom: .4rem; }
-.field .hint {
+.field .hint, .card > .hint {
   display: block; margin-top: .35rem; font-size: .78rem; line-height: 1.5;
   color: var(--muted, #8a8a94);
 }

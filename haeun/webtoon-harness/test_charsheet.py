@@ -138,6 +138,42 @@ ok("나이: lock_text 에 얼굴 지시가 실린다",
 ok("나이: age 가 없으면 lock_text 가 예전과 같다",
    C.lock_text(C.Sheet(run_dir=None)) == "")
 
+# ---------------- 세로 스크롤: 여백 눈금과 배경 이어짐 ----------------
+#
+# 컷 사이 여백을 몇 px 로 그릴지(strip.gap_ratio_table)와, 앞 컷에서 배경이
+# 이어지는 컷을 콘티에서 읽어 오는지(storyload.vertical_link)를 본다.
+# 둘 다 **없으면 예전 그대로**여야 한다 — 이미 뽑아 둔 화가 달라지면 안 된다.
+import storyload as SL
+import strip as ST
+
+ok("여백 눈금: config 가 없으면 예전 값 그대로",
+   ST.gap_ratio_table(None) == ST.GAP_RATIO
+   and ST.gap_ratio_table({}) == ST.GAP_RATIO
+   and ST.gap_ratio_table({"scene": {}}) == ST.GAP_RATIO)
+ok("여백 눈금: 적어 놓은 칸만 갈아 끼운다",
+   ST.gap_ratio_table({"scene": {"gap_ratio": {3: 0.9}}})
+   == {**ST.GAP_RATIO, 3: 0.9})
+ok("여백 눈금: 문자열 키·값도 읽는다 (YAML 이 그렇게 줄 수 있다)",
+   ST.gap_ratio_table({"scene": {"gap_ratio": {"1": "0.16"}}})[1] == 0.16)
+ok("여백 눈금: 읽을 수 없는 값은 건너뛴다 (오타 하나로 조립이 막히지 않는다)",
+   ST.gap_ratio_table({"scene": {"gap_ratio": {"x": 1, 9: 0.1, 2: "많이"}}})
+   == ST.GAP_RATIO)
+ok("여백 눈금: 800px 폭에서 웹툰 눈금이 작법 범위 안에 든다",
+   [ST.gap_px(800, lv, ST.WEBTOON_GAP_RATIO) for lv in (0, 1, 2, 3)]
+   == [0, 128, 256, 720],
+   [ST.gap_px(800, lv, ST.WEBTOON_GAP_RATIO) for lv in (0, 1, 2, 3)])
+ok("여백 눈금: 표를 안 넘기면 예전 픽셀 그대로",
+   [ST.gap_px(800, lv) for lv in (0, 1, 2, 3)] == [0, 56, 208, 496],
+   [ST.gap_px(800, lv) for lv in (0, 1, 2, 3)])
+
+ok("이어짐: 콘티가 보낸 vertical_link 를 그대로 읽는다",
+   SL._cut_from({"cut_number": 2, "vertical_link": True}, 2).vertical_link is True)
+ok("이어짐: 칸이 없는 옛 화는 안 이어진다",
+   SL._cut_from({"cut_number": 2}, 2).vertical_link is False)
+ok("이어짐: 값이 이상해도 터지지 않는다",
+   SL._cut_from({"cut_number": 2, "vertical_link": "yes"}, 2).vertical_link is True
+   and SL._cut_from({"cut_number": 2, "vertical_link": None}, 2).vertical_link is False)
+
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
