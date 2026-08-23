@@ -54,7 +54,12 @@ NO_TEXT = "No dialogue text, no lettering inside bubbles, no watermark."
 DRAW_TEXT = (
     "Draw the Korean text inside every speech bubble, caption box and thought "
     "bubble, exactly as given, in clean legible Hangul at a readable size. "
-    "No watermark.")
+    # 실제 피드백(2026-08-23): 그림 한가운데 영어 문장이 장식처럼 그려져 나왔다.
+    # 풍선 안 글자만 허락하고 나머지는 전부 막는다 — 간판·옷·배경의 알아볼 수
+    # 없는 글자는 지시한 적 없는 것이 새어 나온 것이다.
+    "Write NO other text anywhere else in the image — no English words or "
+    "sentences, no random lettering on signs, clothing, walls or backgrounds, "
+    "no decorative gibberish. No watermark.")
 NO_BUBBLE = (
     "Draw NO speech bubbles, NO thought bubbles, NO caption boxes, NO "
     "sound-effect lettering and NO text of any kind anywhere in this image — not "
@@ -414,9 +419,16 @@ def bubble_clause(cfg: dict[str, Any], cut: dict[str, Any]) -> list[str]:
         who = row["speaker"] or str(cut.get("speaker") or "").strip()
         side = row["side"] or str(cut.get("speaker_side") or "").strip().lower()
         if who and field in ("dialogue", "thought"):
-            tail = (" Its tail points at the character who is speaking"
+            # "대사인데 생각구름으로 그려진" 실제 피드백(2026-08-23) 때문에
+            # 무엇이 소리이고 무엇이 속마음인지 풍선마다 못박는다 — 모양 서술
+            # (config 의 bubbles 표)만으로는 모델이 가끔 구름을 골랐다.
+            tail = ((" This line is SPOKEN ALOUD — a speech bubble with a "
+                     "solid outline, never a cloud-shaped thought bubble. "
+                     "Its tail points at the character who is speaking")
                     if field == "dialogue" else
-                    " It belongs to the character whose inner voice this is")
+                    (" This is an INNER THOUGHT, not spoken — a cloud-shaped "
+                     "thought bubble. It belongs to the character whose inner "
+                     "voice this is"))
             tail += " (the same person in every panel where they appear)."
             # 한 컷에 풍선이 둘 이상이면 좌우를 못박아야 꼬리가 갈라지고 읽는
             # 순서가 선다. 하나뿐이면 배치는 그리는 쪽에 맡긴다.

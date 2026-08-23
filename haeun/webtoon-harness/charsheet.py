@@ -359,8 +359,12 @@ def gender_warning(sheet: Sheet, config_gender: str) -> str:
 # 가 있는 캐릭터가 어느 컷에서 다른 머리로 나옴) — 컷 프롬프트에서는 이
 # 한국어 문장이 어떻게 읽혀야 하는지가 안 적혀 있던 것이 원인 후보 중 하나다.
 # 실사용자 지적: "지금 캐릭터 시트와 너무 다르게 나온 컷이 많아."
-LOCK_HEAD = ("These character design details, written in Korean — follow "
-            "them literally — must stay identical in every panel:")
+# ★ 언어를 단정하지 않는다. "written in Korean" 이라고 적었더니 P1 이
+#   design_details 를 영어로 뽑은 run(사진 입력 경로)에서 지시가 거짓이 됐다 —
+#   내용은 영어인데 "한국어로 적혀 있다"고 말하는 프롬프트를 모델이 어떻게
+#   읽을지 알 수 없다. "글자 그대로, 한 단어도 빼지 말고"는 어느 언어든 성립한다.
+LOCK_HEAD = ("These character design details must be followed literally, "
+            "word for word, and must stay identical in every panel:")
 PALETTE_HEAD = "Color palette (use these exact colors):"
 
 # --------------------------------------------------------------------------- #
@@ -481,9 +485,9 @@ def ink_palette(palette: str, keep: "tuple | list | set" = ()) -> str:
         blocks.append("\n".join(rows))
     return "\n".join(blocks)
 EXPRESSION_HEAD = (
-    "How this character's face moves, written in Korean — follow it "
-    "literally. Pick the one that matches the panel and draw it plainly — "
-    "a blank face reads as nothing:")
+    "How this character's face moves — follow it literally. Pick the one "
+    "that matches the panel and draw it plainly — a blank face reads as "
+    "nothing:")
 
 # 의상 고정. appearance_en 을 정면으로 덮어써야 하므로 문구가 강하다.
 #

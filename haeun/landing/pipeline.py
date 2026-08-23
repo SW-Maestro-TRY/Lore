@@ -2001,12 +2001,26 @@ def regen_config(run_id: str, feedback: str, style: str = "",
     out_dir = episode_dir(run_id, episode) / "regen"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "config.yaml"
-    origin = _origin_config(run_id)
-    if origin:
-        shutil.copy2(origin, path)
+    # 예전에는 job 의 config.yaml 사본을 그대로 썼다. 그림체가 안 바뀌는 것은
+    # 좋았는데, **프롬프트 문구까지 작품을 만들던 날짜에 얼어붙었다** — 시트
+    # 참조를 강하게 고쳐도(2026-08-23, S+ 문구) 기존 작품의 다시 그리기는
+    # 영원히 옛 문구로 돌았다. 실제로 그렇게 됐다: "시트와 옷이 다르다"는
+    # 피드백을 받고 다시 그렸는데, 그 재생성이 문제의 옛 문구로 그려졌다.
+    #
+    # 그래서 뒤집는다: config 는 **지금 코드로 새로 굽고**, 사용자가 고른
+    # 것(그림체·등신·장르·연출 모드)만 원래 입력(input.json)에서 이식한다.
+    # "그림체가 바뀌면 안 된다"는 원래 이유는 이걸로 그대로 지켜진다 —
+    # build_config 의 style 이 그 사용자의 선택이니까.
+    form = origin_form(run_id)
+    if form:
+        build_config(out_dir,
+                     str(form.get("style") or style or "webtoon"),
+                     head_ratio=str(form.get("head_ratio") or "").strip().lower(),
+                     genre=str(form.get("genre") or ""),
+                     mode=layout_mode(form))
     else:
-        # 하네스를 직접 돌린 run 이라 job 이 없다. 원본에서 만들되 그림체는
-        # 호출자가 준 것을 쓴다(안 주면 하네스 기본값).
+        # 하네스를 직접 돌린 run 이라 폼이 없다. 그림체는 호출자가 준 것을
+        # 쓴다(안 주면 하네스 기본값).
         build_config(out_dir, style or next(iter(STYLES)))
     text = path.read_text(encoding="utf-8")
     note = " ".join(str(feedback or "").split())
