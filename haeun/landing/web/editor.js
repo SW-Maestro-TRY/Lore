@@ -1,11 +1,13 @@
 /* LORE 편집실
  *
- * `?run=<run_id>` 로 열면 **그 작품의 실제 1화**를 열고, 다시 그리기는 진짜로
- * 그립니다(장 단위 · `/api/runs/{run}/scenes/{n}/regen`). run 없이 열면 예전처럼
- * `/static/samples/mock.json` 목업이라 서버가 없어도 화면을 볼 수 있습니다.
+ * `?run=<run_id>&ep=<N>` 로 열면 **그 작품의 그 회차**를 열고, 다시 그리기는
+ * 진짜로 그립니다(장 단위 · `/api/runs/{run}/scenes/{n}/regen`). `ep` 를 빼면
+ * 1화입니다. run 없이 열면 예전처럼 `/static/samples/mock.json` 목업이라 서버가
+ * 없어도 화면을 볼 수 있습니다.
  *
  * 여기서 하는 일:
- *   · 장마다 다시 그리기 — 피드백을 적어서, 또는 글자 없이
+ *   · 회차 고르기 (여러 편을 만든 작품)
+ *   · 장마다 다시 그리기 — 확인 창에서 항목·말을 받고 나서 굽습니다
  *   · 지난 판을 나란히 놓고 눌러서 바꾸기
  *   · 그림 위에 말풍선·스티커·효과음 얹기
  *
@@ -29,9 +31,17 @@
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-/* 지금 열고 있는 작품. 저장 열쇠와 API 주소가 전부 이 값에 매인다. */
+/* 지금 열고 있는 작품과 회차. 저장 열쇠와 API 주소가 전부 이 두 값에 매인다.
+ *
+ * 회차를 안 보내면 서버가 1화로 알아듣는다 — 그래서 2화를 이어 만들어 놓고도
+ * 편집실은 늘 1화만 열었고, 거기서 다시 그리면 **1화 그림을 덮어썼다.**
+ * 저장 열쇠에도 회차를 넣는다: 장 번호가 회차마다 1부터 다시 시작하므로,
+ * 열쇠가 회차를 모르면 2화 3번 장에 얹은 말풍선이 1화 3번 장에도 뜬다. */
 let RUN_ID = "";
-function storeKey() { return `lore_editor_v2:${RUN_ID || "__mock__"}`; }
+let EPISODE = 1;
+function storeKey() { return `lore_editor_v2:${RUN_ID || "__mock__"}:ep${EPISODE}`; }
+/* API 주소에 붙일 회차 꼬리. 물음표가 이미 있는 주소에는 &, 없으면 ?. */
+function epq(sep = "?") { return `${sep}ep=${EPISODE}`; }
 
 /* 크레딧은 아직 안 붙었습니다 (#16). 목업에서만 흉내로 셉니다. */
 const COST = { regen: 40, regenFeedback: 60, nobubble: 0 };
@@ -107,7 +117,7 @@ async function pushNow() {
   if (pushing) { pushDirty = true; return; }
   pushing = true;
   try {
-    await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay`,
+    await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
       { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(overlayPayload()) });
   } catch { /* 아래에서 다시 시도된다 */ }
@@ -168,19 +178,42 @@ function paintLedger() {
 /* ------------------------------------------------------------------ 장 그리기 */
 
 function render() {
+  const ep = data.episode || EPISODE;
   $("#edTitle").textContent = data.title;
   $("#edMeta").textContent =
-    `${data.character} · 1화 · ${data.scenes.length}장 / ` +
+    `${data.character} · ${ep}화 · ${data.scenes.length}장 / ` +
     `${data.scenes.reduce((n, s) => n + s.cuts.length, 0)}컷 · 한 장에 ${data.cuts_per_sheet}컷`;
   $("#edGenre").textContent = `${data.genre} · ${data.style_label}`;
   $("#edEpisode").textContent = data.title;
   $("#edLogline").textContent = data.logline;
+  $("#edFootNote").textContent =
+    `여기까지가 ${ep}화입니다. 장 사이는 완성본과 같이 틈 없이 이어집니다.`;
+  paintEpTabs();
 
   $("#scenes").innerHTML = data.scenes.map(s => sceneCard(s)).join("");
   data.scenes.forEach(s => { paintItems(s.no); paintFeedback(s.no); });
   wireScenes();
   // 지난 판은 서버에만 있다 — 목업에는 없다.
   if (RUN_ID) data.scenes.forEach(s => paintVersions(s.no));
+}
+
+/* 회차 고르개. 한 편뿐이면 안 그린다 — 고를 것이 없는 자리에 고르개를 두면
+   "여기 뭔가 더 있나" 하고 누르게 된다. 고르면 주소를 바꾸고 새로 연다:
+   얹은 것이 회차마다 다른 칸에 저장돼 있어서(storeKey), 화면만 갈아 끼우면 앞
+   회차의 state 가 남는다. */
+function paintEpTabs() {
+  const host = $("#edEpTabs");
+  const eps = (data && data.episodes) || [];
+  if (!RUN_ID || eps.length < 2) { host.hidden = true; host.innerHTML = ""; return; }
+  const cur = data.episode || EPISODE;
+  host.hidden = false;
+  host.innerHTML = eps.map(n =>
+    `<button type="button" class="ep-tab" data-ep="${n}"` +
+    `${n === cur ? ' aria-current="true"' : ""}>${n}화</button>`).join("");
+  $$(".ep-tab", host).forEach(b => b.addEventListener("click", () => {
+    if (b.getAttribute("aria-current") === "true") return;
+    location.search = `?run=${encodeURIComponent(RUN_ID)}&ep=${b.dataset.ep}`;
+  }));
 }
 
 function sceneCard(s) {
@@ -232,6 +265,15 @@ function sceneCard(s) {
         </label>
       </div>
 
+      <!-- 세 칸에 나눠 담기 어려운 말을 받는 자리. 셋으로만 물으면 "그냥 이
+           장이 통째로 별로다" 같은 말을 적을 곳이 없어서 아무 데나 끼워 넣게
+           되고, 그러면 프롬프트에 엉뚱한 이름표(스토리:/연출:)가 붙는다. -->
+      <label class="fb-cell fb-all">
+        <span>💬 전체<small>어디에 넣을지 애매한 말 · 이 장 전체에 대한 말</small></span>
+        <textarea maxlength="320" data-fbk="all"
+          placeholder="예: 이 장은 통째로 다시 갔으면 좋겠어요 / 앞 장이랑 분위기가 안 이어져요"></textarea>
+      </label>
+
       <div class="fb-cuts">
         ${s.cuts.map(c => `
           <div class="fb-cut">
@@ -262,19 +304,16 @@ function wireScenes() {
     $("[data-act='fb']", el).addEventListener("click", () =>
       $("[data-fb]", el).classList.toggle("is-open"));
 
+    // 두 단추 다 확인 창을 거친다 — 굽는 데 1~2분과 실제 비용이 들어서, 잘못
+    // 누른 것을 되돌릴 길이 없다. 다른 점은 창을 열 때 무엇이 채워져 있느냐뿐이다.
     $("[data-act='regen']", el).addEventListener("click", e =>
-      regen(no, e.currentTarget, COST.regen, []));
+      askRegen(no, e.currentTarget, COST.regen, []));
 
-    $("[data-act='fbregen']", el).addEventListener("click", e => {
-      const notes = ["story", "direct", "art"]
-        .map(k => [k, ($(`[data-fbk='${k}']`, el).value || "").trim()])
-        .filter(([, v]) => v);
-      if (!notes.length) return toast("피드백을 한 칸이라도 적어 주세요.");
-      regen(no, e.currentTarget, COST.regenFeedback, notes);
-    });
+    $("[data-act='fbregen']", el).addEventListener("click", e =>
+      askRegen(no, e.currentTarget, COST.regenFeedback, readNotes(el)));
 
     $("[data-act='fbclear']", el).addEventListener("click", () => {
-      ["story", "direct", "art"].forEach(k => { $(`[data-fbk='${k}']`, el).value = ""; });
+      FB_KEYS.forEach(k => { $(`[data-fbk='${k}']`, el).value = ""; });
       sc(no).fb = {}; save();
     });
 
@@ -304,21 +343,103 @@ function setActive(no) {
  * 굽기 전에 지금 그림을 판본으로 뜨고, 실패하면 서버가 되돌려 놓는다.
  * 목업일 때만 기다리는 모습만 흉내낸다. */
 
-function regenBody(no, notes) {
-  const st = sc(no);
-  // 세 칸(스토리·연출·그림)은 사람에게 나눠 물은 것이고, 프롬프트에는 한 줄로
-  // 간다 — run.py 의 {extra} 자리는 문장 하나를 받는다.
-  const label = { story: "스토리", direct: "연출", art: "그림" };
-  const feedback = notes.map(([k, v]) => `${label[k]}: ${v}`).join(" / ");
-  return { feedback, textless: !!st.noBubble };
+/* 장 밑 피드백 칸에 적힌 것. 사람에게는 갈래로 나눠 물었지만 프롬프트에는 한
+   줄로 간다 — run.py 의 {extra} 자리는 문장 하나를 받는다. "전체" 는 갈래가
+   아니라서 이름표 없이 그대로 싣는다. */
+const FB_KEYS = ["story", "direct", "art", "all"];
+const FB_LABEL = { story: "스토리", direct: "연출", art: "그림", all: "" };
+
+function readNotes(el) {
+  return FB_KEYS
+    .map(k => [k, ($(`[data-fbk='${k}']`, el)?.value || "").trim()])
+    .filter(([, v]) => v);
 }
 
-function regen(no, btn, cost, notes) {
+function notesToText(notes) {
+  return notes.map(([k, v]) => (FB_LABEL[k] ? `${FB_LABEL[k]}: ${v}` : v)).join(" / ");
+}
+
+/* ---- 다시 그리기 확인 창 -----------------------------------------------
+ *
+ * 예전에는 단추를 누른 순간 바로 구웠다. 한 장에 1~2분과 실제 생성 비용이 드는
+ * 일이라 잘못 누른 것을 되돌릴 길이 없었고, **왜** 다시 그리는지를 적을 자리도
+ * 그 흐름에는 없었다(장 밑 피드백 칸을 미리 펴 두는 사람은 드물다). 여기서 한
+ * 번 멈춰서 항목·말·글자 여부를 받고, 취소할 길을 준다. 다 비워 둔 채 눌러도
+ * 된다 — 그러면 같은 조건으로 한 번 더 그린다. */
+
+let askCtx = null;                 // { no, btn, cost }
+let sceneTags = [];                // /api/config 의 feedback_tags.scene
+
+async function loadSceneTags() {
+  try {
+    const cfg = await (await fetch("/api/config")).json();
+    sceneTags = (cfg.feedback_tags || {}).scene || [];
+  } catch { /* 못 받으면 자유 입력만 남는다 — 다시 그리기 자체는 막지 않는다 */ }
+}
+
+function paintAskTags() {
+  const wrap = $("#regenAskTags");
+  wrap.replaceChildren(...sceneTags.map(t => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "fb-tag";
+    b.dataset.tagId = t.id;
+    b.textContent = t.label;
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () => b.setAttribute("aria-pressed",
+      b.getAttribute("aria-pressed") === "true" ? "false" : "true"));
+    return b;
+  }));
+}
+
+function askRegen(no, btn, cost, notes) {
+  askCtx = { no, btn, cost };
+  const st = sc(no);
+  $("#regenAskTitle").textContent = `${no}번째 장 다시 그리기`;
+  $("#regenAskSub").textContent = RUN_ID
+    ? "이 장만 새로 굽습니다. 지금 그림은 지난 판으로 남아서 언제든 되돌릴 수 있습니다."
+    : "샘플이라 실제로 그리지는 않습니다 — 화면만 흉내 냅니다.";
+  paintAskTags();
+  // 장 밑에 이미 적어 둔 것이 있으면 그대로 실어 준다. 여기서 고쳐도 되고,
+  // 다 지우고 눌러도 된다.
+  $("#regenAskText").value = notesToText(notes);
+  $("#regenAskTextless").checked = !!st.noBubble;
+  $("#regenAsk").hidden = false;
+  $("#regenAskText").focus();
+}
+
+function closeAsk() {
+  $("#regenAsk").hidden = true;
+  askCtx = null;
+}
+
+function confirmAsk() {
+  if (!askCtx) return;
+  const { no, btn, cost } = askCtx;
+  const tags = [...document.querySelectorAll('#regenAskTags .fb-tag[aria-pressed="true"]')]
+    .map(b => b.dataset.tagId);
+  const feedback = $("#regenAskText").value.trim();
+  const textless = $("#regenAskTextless").checked;
+  // 확인 창에서 바꾼 "글자 없이" 는 그 장의 설정이 된다 — 창을 닫자마자
+  // 장 머리의 표시와 갈리면 어느 쪽이 참인지 알 수 없다.
+  const st = sc(no);
+  st.noBubble = textless; save();
+  const el = $(`#scene-${no}`);
+  $("[data-nobubble]", el).checked = textless;
+  $("[data-nobub]", el).hidden = !textless;
+  closeAsk();
+  regen(no, btn, cost, { feedback, textless, tags });
+}
+
+function regen(no, btn, cost, body) {
   const el = $(`#scene-${no}`), wrap = $("[data-wrap]", el);
   const st = sc(no);
-  const body = regenBody(no, notes);
-  const what = [st.noBubble ? "글자 없이" : "글자 포함",
-                ...notes.map(([k, v]) => `${{ story: "스토리", direct: "연출", art: "그림" }[k]}: ${v}`)];
+  // 기다리는 동안 **무엇을 반영해서** 그리는 중인지 보여 준다. 항목만 고르고
+  // 아무 말도 안 적는 사람이 대부분이라, 고른 항목도 같이 적는다.
+  const picked = (body.tags || [])
+    .map(id => (sceneTags.find(t => t.id === id) || {}).label).filter(Boolean);
+  const what = [body.textless ? "글자 없이" : "글자 포함",
+                ...picked, body.feedback].filter(Boolean);
 
   const veil = document.createElement("div");
   veil.className = "regen-veil";
@@ -348,7 +469,7 @@ async function realRegen(no, btn, body, veil, el) {
   let job;
   try {
     const res = await fetch(
-      `/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/regen`,
+      `/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/regen${epq()}`,
       { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body) });
     job = await res.json();
@@ -388,7 +509,7 @@ const sceneBust = {};
 function bustScene(no) {
   sceneBust[no] = Date.now();
   const img = $(`#scene-${no} [data-wrap] img`);
-  if (img) img.src = `/api/runs/${encodeURIComponent(RUN_ID)}/page/${no}?w=1080&t=${sceneBust[no]}`;
+  if (img) img.src = `/api/runs/${encodeURIComponent(RUN_ID)}/page/${no}?w=1080${epq("&")}&t=${sceneBust[no]}`;
 }
 
 /* 지난 판 — 결과 화면과 같이 작은 그림으로 늘어놓고, 눌러서 그때그때 바꾼다. */
@@ -398,19 +519,19 @@ async function paintVersions(no, versions) {
   if (!versions) {
     try {
       versions = (await (await fetch(
-        `/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/versions`)).json()).versions;
+        `/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/versions${epq()}`)).json()).versions;
     } catch { return; }
   }
   if (!versions || !versions.length) { slot.innerHTML = ""; return; }
   const cur = `
     <span class="ver-thumb is-current" title="지금 걸린 그림">
-      <img src="/api/runs/${encodeURIComponent(RUN_ID)}/page/${no}?w=160&t=${sceneBust[no] || 0}"
+      <img src="/api/runs/${encodeURIComponent(RUN_ID)}/page/${no}?w=160${epq('&')}&t=${sceneBust[no] || 0}"
            alt="지금 그림" loading="lazy">
       <span class="ver-label">지금</span>
     </span>`;
   const past = versions.map(v => `
     <button type="button" class="ver-thumb js-revert" data-v="${v.version}" title="이 판으로 바꾸기">
-      <img src="/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/versions/${v.version}?w=160"
+      <img src="/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/versions/${v.version}?w=160${epq('&')}"
            alt="v${v.version}" loading="lazy">
       <span class="ver-label">v${v.version}</span>
     </button>`).join("");
@@ -421,7 +542,7 @@ async function paintVersions(no, versions) {
     b.disabled = true;
     try {
       const res = await fetch(
-        `/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/revert`,
+        `/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/revert${epq()}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ version: Number(b.dataset.v) }) });
       const out = await res.json();
@@ -464,7 +585,7 @@ function paintItems(no) {
 
 function paintFeedback(no) {
   const el = $(`#scene-${no}`), fb = sc(no).fb || {};
-  ["story", "direct", "art"].forEach(k => {
+  FB_KEYS.forEach(k => {
     const t = $(`[data-fbk='${k}']`, el);
     if (t && fb[k]) { t.value = fb[k]; $("[data-fb]", el).classList.add("is-open"); }
   });
@@ -655,7 +776,10 @@ function workCard(r, current) {
     r.page_count ? `${r.page_count}장` : "",
     r.genre || "",
   ].filter(Boolean).join(" · ");
+  // 그 작품에서 **실제로 그려진 첫 회차**를 연다. 1화를 못 그리고 2화만 남은
+  // run 이 있어서, 늘 1화로 보내면 열자마자 "열지 못했습니다"가 뜬다.
   return `<button type="button" class="work-card" data-run="${esc(r.run_id)}"`
+    + ` data-ep="${eps[0] || 1}"`
     + `${on ? ' aria-current="true"' : ""}>`
     + thumb
     + `<span><span class="work-name">${esc(r.character || "이름 없음")}`
@@ -695,7 +819,8 @@ async function paintWorks(current) {
   host.addEventListener("click", e => {
     const card = e.target.closest(".work-card");
     if (!card || card.getAttribute("aria-current") === "true") return;
-    location.search = card.dataset.run ? `?run=${encodeURIComponent(card.dataset.run)}` : "";
+    location.search = card.dataset.run
+      ? `?run=${encodeURIComponent(card.dataset.run)}&ep=${card.dataset.ep || 1}` : "";
   });
 }
 
@@ -720,18 +845,21 @@ function setupWorksToggle() {
 /* ------------------------------------------------------------------ 시작 */
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // ?run=<run_id> 가 있으면 **그 작품의 1화**를 연다. 없으면 목업이다.
-  // 편집기는 "이미 그려진 것을 고치는 자리" 라서, 랜딩에서 만든 것이든 하네스를
-  // 직접 돌린 것이든 똑같이 열려야 한다.
-  RUN_ID = new URLSearchParams(location.search).get("run") || "";
-  // load() 는 RUN_ID 가 정해진 **뒤에** 부른다 — 열쇠가 거기 매여 있다.
+  // ?run=<run_id> 가 있으면 그 작품을, ?ep=<N> 이 있으면 그 회차를 연다
+  // (없으면 1화). run 이 없으면 목업이다. 편집기는 "이미 그려진 것을 고치는
+  // 자리" 라서, 랜딩에서 만든 것이든 하네스를 직접 돌린 것이든 똑같이 열려야 한다.
+  const params = new URLSearchParams(location.search);
+  RUN_ID = params.get("run") || "";
+  EPISODE = Number(params.get("ep")) || 1;
+  // load() 는 RUN_ID·EPISODE 가 정해진 **뒤에** 부른다 — 열쇠가 거기 매여 있다.
   load(); paintCredit(); paintLedger(); paintDock();
+  loadSceneTags();
   // 작품 목록은 **여는 데 실패해도** 남아 있어야 한다. 한 작품이 안 열린다고
   // 목록까지 사라지면 다른 작품으로 건너갈 길이 없어서 주소를 직접 고쳐야 한다.
   paintWorks(RUN_ID);
   setupWorksToggle();
 
-  const src = RUN_ID ? `/api/runs/${encodeURIComponent(RUN_ID)}/episode`
+  const src = RUN_ID ? `/api/runs/${encodeURIComponent(RUN_ID)}/episode${epq()}`
                      : "/static/samples/mock.json";
   try {
     const res = await fetch(src);
@@ -743,8 +871,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const stage = $("#stageCol");
     const html =
       `<p style="padding:60px;text-align:center;color:#969aa8">` +
-      (RUN_ID ? `<b>${esc(RUN_ID)}</b> 을(를) 열지 못했습니다.<br>`
-              + `그 작품에 1화 컷과 그려진 장이 있어야 합니다.`
+      (RUN_ID ? `<b>${esc(RUN_ID)}</b> 의 ${EPISODE}화를 열지 못했습니다.<br>`
+              + `그 회차에 콘티와 그려진 장이 있어야 합니다.`
               : `목업 데이터를 읽지 못했습니다 (web/samples/mock.json).`) +
       `<br><br>왼쪽 목록에서 다른 작품을 골라 보세요.` +
       `<br><a href="/editor" style="color:#7aa2ff">샘플로 돌아가기</a></p>`;
@@ -764,7 +892,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (RUN_ID) {
     try {
       const got = await (await fetch(
-        `/api/runs/${encodeURIComponent(RUN_ID)}/overlay`)).json();
+        `/api/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`)).json();
       for (const [no, sp] of Object.entries(got.scenes || {})) {
         if (Array.isArray(sp.items)) sc(Number(no)).items = sp.items.map(
           (it, i) => ({ ...it, id: it.id || `s${no}_${i}_${++uid}` }));
@@ -839,7 +967,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!RUN_ID) return toast("샘플입니다 — 얹은 것은 이 브라우저에만 저장됩니다.");
     clearTimeout(pushT);
     try {
-      const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay`,
+      const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(overlayPayload()) });
       const out = await res.json();
@@ -859,7 +987,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     btn.textContent = "굽는 중…";
     clearTimeout(pushT);
     try {
-      const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/bake`,
+      const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/bake${epq()}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(overlayPayload()) });
       const out = await res.json();
@@ -870,7 +998,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     btn.textContent = was;
   });
 
+  // 다시 그리기 확인 창. 바깥을 눌러도 닫힌다 — 실수로 연 것을 닫는 데
+  // 단추를 찾아야 하면 그 자체가 성가시다.
+  $("#regenAskCancel").addEventListener("click", closeAsk);
+  $("#regenAskGo").addEventListener("click", confirmAsk);
+  $("#regenAsk").addEventListener("click", e => {
+    if (e.target.id === "regenAsk") closeAsk();
+  });
+
   document.addEventListener("keydown", e => {
+    // 확인 창이 열려 있으면 그 창부터 받는다 — 뒤에 있는 선택 해제나 삭제가
+    // 먼저 먹으면 창을 띄워 둔 채로 그림이 지워진다.
+    if (!$("#regenAsk").hidden) {
+      if (e.key === "Escape") { e.preventDefault(); closeAsk(); }
+      return;
+    }
     if ((e.key === "Delete" || e.key === "Backspace") && sel &&
         !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
       e.preventDefault(); $("#propDel").click();
