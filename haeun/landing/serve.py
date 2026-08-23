@@ -32,6 +32,23 @@ MAX_PHOTO_BYTES = 6 * 1024 * 1024
 
 runner = pipeline.Runner()
 _thumb_lock = threading.Lock()
+_warned_no_pillow = False
+
+
+def warn_no_pillow() -> None:
+    """Pillow 가 없다는 것을 콘솔에 **한 번만** 알린다.
+
+    이 자리(줄이기)는 없어도 화면이 뜨기는 한다 — 부르는 쪽이 원본을 그대로
+    내려보낸다. 그래서 조용히 넘어가면 아무도 모르는 채로 컷 한 장에 수 MB 씩
+    나가고 결과 화면이 한참 안 열린다. 매 요청마다 찍으면 폴링 때문에 콘솔이
+    못 쓰게 되므로 한 번만 찍는다.
+    """
+    global _warned_no_pillow
+    if not _warned_no_pillow:
+        _warned_no_pillow = True
+        print("[경고] Pillow 가 없어 그림을 줄이지 못합니다 — 원본을 그대로 "
+              "내려보냅니다(느립니다). 사진 업로드도 안 됩니다.\n"
+              "        pip install Pillow")
 
 
 def thumbnail(src: Path, dest: Path, width: int) -> Path:
@@ -43,7 +60,11 @@ def thumbnail(src: Path, dest: Path, width: int) -> Path:
     if dest.exists() and dest.stat().st_mtime >= src.stat().st_mtime:
         return dest
     with _thumb_lock:
-        from PIL import Image
+        try:
+            from PIL import Image
+        except ImportError:
+            warn_no_pillow()
+            raise
         im = Image.open(src)
         im.load()
         if im.width > width:
@@ -385,8 +406,20 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error(400, f"{i}번째 사진을 읽지 못했습니다")
                 if len(raw) > MAX_PHOTO_BYTES:
                     return self._error(400, f"{i}번째 사진이 너무 큽니다 (6MB 까지)")
+                # Pillow 가 없는 것과 사진이 이상한 것을 **따로** 잡는다.
+                # 한 덩이로 잡으면 라이브러리가 없을 때도 "사진 형식을 알 수
+                # 없습니다" 가 나가서, 멀쩡한 사진을 올린 사람이 사진만 계속
+                # 바꿔 보게 된다 (실제로 그렇게 헤맸다). 하네스의 strip.py ·
+                # episode.py 는 처음부터 ImportError 를 따로 잡고 있었다 —
+                # 여기만 빠져 있었다.
                 try:
                     from PIL import Image
+                except ImportError:
+                    return self._error(
+                        500, "서버에 Pillow 가 없어 사진을 처리하지 못합니다. "
+                             "pip install Pillow 로 설치한 뒤 서버를 다시 켜 주세요. "
+                             "(사진 없이 만드시려면 올린 사진을 지우고 진행하세요.)")
+                try:
                     im = Image.open(io.BytesIO(raw))
                     im.load()
                     if im.width > 1400:
@@ -396,7 +429,11 @@ class Handler(BaseHTTPRequestHandler):
                     im.convert("RGB").save(buf, "PNG")
                     photos.append(buf.getvalue())
                 except Exception:                               # noqa: BLE001
-                    return self._error(400, f"{i}번째 사진의 형식을 알 수 없습니다")
+                    # 아이폰 기본 설정이 HEIC 라서 이 자리에 가장 많이 걸린다.
+                    # Pillow 는 HEIC 를 기본으로 못 읽는다.
+                    return self._error(
+                        400, f"{i}번째 사진을 열지 못했습니다. 아이폰 사진(HEIC)이면 "
+                             "JPG 나 PNG 로 바꿔서 올려 주세요.")
             photo = photos
 
             # 캐릭터를 알 수 있는 것이 하나는 있어야 한다 — story.py 가 그렇게

@@ -1020,6 +1020,11 @@ def execute(job: Job) -> None:
         # --author-note 로 실려 P1·P2 프롬프트의 {retry_feedback} 자리에 들어간다.
         story_note = ""
         prev_run_id = ""
+        # 아직 한 번도 안 돌린 설치에는 runs/ 가 없다 (gitignore 라 새로 받은
+        # 폴더·새 worktree 는 늘 이 상태로 시작한다). 없다고 터지면 첫 생성이
+        # FileNotFoundError 트레이스백으로 죽어서, 처음 쓰는 사람이 가장 먼저
+        # 보는 화면이 그것이 된다. story.py 가 어차피 여기에 쓰므로 미리 만든다.
+        (STORY / "runs").mkdir(parents=True, exist_ok=True)
         while True:
             job.note("캐릭터를 읽는 중")
             before = {d.name for d in (STORY / "runs").iterdir() if d.is_dir()}
