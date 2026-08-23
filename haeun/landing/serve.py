@@ -138,6 +138,19 @@ class Handler(BaseHTTPRequestHandler):
                 pass
             self.close_connection = True
 
+    @staticmethod
+    def _ep(query: dict) -> int:
+        """?ep=N — 몇 화를 볼 것인가. 없으면 1화다.
+
+        주소에 회차를 **선택 항목**으로 둔 이유: 1화만 있던 시절의 주소가 그대로
+        살아 있어야 한다. 편집기·결과 화면이 옛 주소로 저장해 둔 링크가 많다.
+        """
+        try:
+            n = int((query.get("ep") or ["1"])[0])
+        except (TypeError, ValueError):
+            return 1
+        return n if 1 <= n <= 999 else 1
+
     def do_GET(self) -> None:                                   # noqa: N802
         url = urlparse(self.path)
         path, query = url.path, parse_qs(url.query)
@@ -178,7 +191,7 @@ class Handler(BaseHTTPRequestHandler):
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/episode", path)
         if m:
-            data = pipeline.editor_data(m.group(1))
+            data = pipeline.editor_data(m.group(1), self._ep(query))
             if not data:
                 return self._error(404, "그 run 의 1화 컷을 찾지 못했습니다")
             return self._json(data)
@@ -197,15 +210,17 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions", path)
         if m:
             return self._json({"versions": pipeline.scene_versions(
-                m.group(1), int(m.group(2)))})
+                m.group(1), int(m.group(2)), self._ep(query))})
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions/(\d+)", path)
         if m:
-            src = pipeline.version_path(m.group(1), int(m.group(2)), int(m.group(3)))
+            ep = self._ep(query)
+            src = pipeline.version_path(m.group(1), int(m.group(2)),
+                                        int(m.group(3)), ep)
             if not src:
                 return self._error(404, "그 판본이 없습니다")
             width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
-            dest = (pipeline.episode_dir(m.group(1)) / "cache"
+            dest = (pipeline.episode_dir(m.group(1), ep) / "cache"
                     / f"v{m.group(2)}_{m.group(3)}_w{width}.jpg")
             try:
                 return self._file(thumbnail(src, dest, width))
@@ -227,11 +242,12 @@ class Handler(BaseHTTPRequestHandler):
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/page/(\d+)", path)
         if m:
-            src = pipeline.unit_image(m.group(1), int(m.group(2)))
+            ep = self._ep(query)
+            src = pipeline.unit_image(m.group(1), int(m.group(2)), ep)
             if not src:
                 return self._error(404, "그 장의 그림이 없습니다")
             width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
-            dest = (pipeline.WEBTOON / "outputs" / m.group(1) / "ep1" / "cache"
+            dest = (pipeline.episode_dir(m.group(1), ep) / "cache"
                     / f"page{m.group(2)}_w{width}.jpg")
             try:
                 return self._file(thumbnail(src, dest, width))
@@ -405,9 +421,12 @@ class Handler(BaseHTTPRequestHandler):
                 body = self._body()
             except (json.JSONDecodeError, UnicodeDecodeError):
                 body = {}
-            if not pipeline.scene_cut_range(run_id, scene_no):
+            ep = self._ep({**parse_qs(url.query),
+                           **({"ep": [str(body["episode"])]} if body.get("episode")
+                              else {})})
+            if not pipeline.scene_cut_range(run_id, scene_no, ep):
                 return self._error(404, "그 장을 찾지 못했습니다")
-            if not pipeline.unit_image(run_id, scene_no):
+            if not pipeline.unit_image(run_id, scene_no, ep):
                 return self._error(409, "아직 그려지지 않은 장입니다")
             feedback = str(body.get("feedback") or "").strip()
             if len(feedback) > pipeline.FEEDBACK_TEXT_MAX:
@@ -416,7 +435,8 @@ class Handler(BaseHTTPRequestHandler):
             job = pipeline.regens.start(run_id, scene_no, feedback,
                                         str(body.get("style") or ""),
                                         bool(body.get("textless")),
-                                        pipeline.clean_tags("scene", body.get("tags")))
+                                        pipeline.clean_tags("scene", body.get("tags")),
+                                        ep)
             return self._json(job.snapshot())
 
         m = re.fullmatch(r"/api/regens/([\w.-]+)/cancel", url.path)
@@ -440,10 +460,46 @@ class Handler(BaseHTTPRequestHandler):
                 version = int(body.get("version"))
             except (TypeError, ValueError):
                 return self._error(400, "version 이 필요합니다")
-            if not pipeline.revert_scene(run_id, scene_no, version):
+            ep = self._ep({**parse_qs(url.query),
+                           **({"ep": [str(body["episode"])]} if body.get("episode")
+                              else {})})
+            if not pipeline.revert_scene(run_id, scene_no, version, ep):
                 return self._error(404, "그 판본으로 되돌리지 못했습니다")
             return self._json({"ok": True,
-                               "versions": pipeline.scene_versions(run_id, scene_no)})
+                               "versions": pipeline.scene_versions(run_id, scene_no, ep)})
+
+        # ---- 다음 화 이어서 만들기 (#72) -------------------------------- #
+        #
+        # 이야기·캐릭터 시트는 안 돈다 — 1화 것을 그대로 쓴다. 콘티부터 시작해서
+        # 그림·잇기까지 간다. 회차 번호는 서버가 정한다(스토리 하네스의 next_no)
+        # — 화면이 보내는 번호를 믿으면 두 창에서 동시에 눌렀을 때 같은 번호를
+        # 두 번 만들려 든다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/next-episode", url.path)
+        if m:
+            run_id = m.group(1)
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            if not pipeline.made_episodes(run_id):
+                return self._error(404, "1화 콘티가 없는 작품입니다")
+            # 같은 작품을 동시에 두 번 이어 만들면 회차가 꼬인다.
+            busy = [j for j in runner.jobs.values()
+                    if j.run_id == run_id and j.status in
+                    ("queued", "running", "awaiting_board_approval",
+                     "awaiting_story_approval", "awaiting_sheet_approval")]
+            if busy:
+                return self._error(409, "이 작품은 지금 만드는 중입니다")
+            note = str(body.get("author_note") or "").strip()
+            if len(note) > pipeline.FEEDBACK_TEXT_MAX:
+                return self._error(
+                    400, f"요청은 {pipeline.FEEDBACK_TEXT_MAX}자까지 적어 주세요")
+            try:
+                job = runner.create_next(run_id, {"author_note": note} if note else {})
+            except pipeline.Failed as exc:
+                return self._error(409, str(exc))
+            return self._json({"id": job.id, "episode": job.episode,
+                               "queue_position": runner.position(job.id)})
 
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/cancel", url.path)
         if m:

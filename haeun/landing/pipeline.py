@@ -167,6 +167,12 @@ STAGE_SPEC: list[dict[str, Any]] = [
 TODO, ACTIVE, DONE, ERROR, SKIP = "todo", "active", "done", "error", "skip"
 
 
+# 이어 만들기(2화 이상)에서 도는 단계. 이야기·시트는 1화 것을 그대로 쓰므로
+# 목록에서 아예 뺀다 — SKIP 으로 두면 화면에 회색 줄로 남아서 "안 한 것"처럼
+# 보이는데, 실제로는 **할 필요가 없는** 것이다.
+NEXT_STAGE_KEYS = ("board", "art", "bind")
+
+
 # --------------------------------------------------------------------------- #
 # config 덮어쓰기
 #
@@ -369,6 +375,11 @@ class Job:
     preview: bool
     has_photo: bool
 
+    # 이어 만들기 (#72). episode 가 2 이상이면 **이야기·시트 단계를 건너뛰고**
+    # 콘티부터 시작한다 — 인물과 세계는 1화에서 이미 정해졌고, 다시 만들면
+    # 그게 흔들린다. run_id 도 새로 파지 않고 이 값을 그대로 쓴다.
+    episode: int = 1
+
     # queued | running | awaiting_story_approval | awaiting_board_approval |
     # awaiting_sheet_approval |
     # done | error | cancelled
@@ -446,10 +457,17 @@ class Job:
 
     # ---- 상태 -------------------------------------------------------------- #
 
+    @property
+    def is_next(self) -> bool:
+        """이어 만들기인가 (2화 이상)."""
+        return int(self.episode) > 1
+
     def build_stages(self) -> None:
         self.stages = []
         webtoon = layout_mode(self.form) == "webtoon"
-        for spec in STAGE_SPEC:
+        specs = ([sp for sp in STAGE_SPEC if sp["key"] in NEXT_STAGE_KEYS]
+                 if self.is_next else STAGE_SPEC)
+        for spec in specs:
             steps = []
             for key, label in spec["steps"]:
                 state = SKIP if (key == "look" and not self.has_photo) else TODO
@@ -458,6 +476,16 @@ class Job:
                     label = "컷 무게대로 묶기"
                 steps.append({"key": key, "label": label, "state": state})
             desc = spec["desc"]
+            if spec["key"] == "board":
+                # "1화" 가 박혀 있으면 3화를 만들 때도 1화라고 적힌다.
+                desc = f"{int(self.episode)}화를 컷으로 나누고 대사를 붙입니다"
+                for st in steps:
+                    if st["key"] == "episode":
+                        st["label"] = f"{int(self.episode)}화 설계"
+                    # 큰 줄거리(arc)는 1화에서 이미 세웠다 — 이어 만들 때는
+                    # arcs.json 을 그대로 재사용하므로 도는 단계가 아니다.
+                    if st["key"] == "arc" and self.is_next:
+                        st["state"] = SKIP
             if webtoon and spec["key"] == "art":
                 desc = "무거운 컷은 한 장씩, 가벼운 컷은 묶어서 그립니다"
             elif webtoon and spec["key"] == "bind":
@@ -544,8 +572,10 @@ class Job:
                 "has_photo": self.has_photo,
                 # 거절이 있었을 때만 파일을 읽는다. 매 폴링(1초)마다 읽으면
                 # 아무 일도 없는 대부분의 run 에서 헛일이 된다.
-                "refusals": (read_refusals(self.run_id)
+                "refusals": (read_refusals(self.run_id, self.episode)
                              if self.saw_refusal and self.run_id else []),
+                "episode": int(self.episode),
+                "is_next": self.is_next,
             }
 
     # ---- 저장 · 복원 -------------------------------------------------------- #
@@ -560,6 +590,7 @@ class Job:
                 "id": self.id, "status": self.status, "run_id": self.run_id,
                 "error": self.error, "style": self.style, "preview": self.preview,
                 "has_photo": self.has_photo, "form": self.form,
+                "episode": int(self.episode),
                 "stages": self.stages, "stage_i": self.stage_i,
                 "started_at": self.started_at, "finished_at": self.finished_at,
                 "ready_cuts": self.ready_cuts,
@@ -579,7 +610,9 @@ class Job:
             d["error"] = "서버가 다시 시작되어 이 작업은 끊겼습니다."
         job = cls(id=d["id"], form=d.get("form") or {}, dir=path,
                   style=d.get("style") or "webtoon", preview=bool(d.get("preview")),
-                  has_photo=bool(d.get("has_photo")))
+                  has_photo=bool(d.get("has_photo")),
+                  # 회차 칸이 없는 옛 state.json 은 1화다.
+                  episode=int(d.get("episode") or 1))
         job.status = d.get("status") or "error"
         job.run_id = d.get("run_id")
         job.error = d.get("error")
@@ -858,6 +891,99 @@ def _apply_sheet_edits(run_dir: Path, fields: dict[str, Any]) -> None:
     p1_path.write_text(json.dumps(p1, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# --------------------------------------------------------------------------- #
+# 이어 만들기 (#72) — 콘티 · 그림 · 잇기만 돈다
+#
+# 스토리 하네스는 이미 이 일을 할 줄 안다. `webtoon.py --run <run_id>` 는 회차
+# 번호를 인자로 받지 않고 series.json 의 next_no() 를 보고 **다음 화**를 만든다.
+# 그래서 1화가 있는 run 에 그대로 부르면 2화가 나오고, 앞 화의 인물·설정·미회수
+# 복선(ledger.json)이 자동으로 이어진다. 여기서 새로 만든 것은 그 길을 제품
+# 화면에 잇는 것뿐이다.
+#
+# 못 하는 것: 콘티가 마음에 안 들 때 **같은 회차를 다시 짜는 것.** webtoon.py 는
+# 성공하면 series.json 에 그 회차를 적고, 다시 부르면 그 다음 회차를 만든다 —
+# 되돌리려면 series.json·ledger.json 을 회차 단위로 롤백해야 하는데 그 길이
+# 아직 없다. 그래서 승인 화면은 "이대로 진행" 과 "중단" 만 준다.
+# --------------------------------------------------------------------------- #
+
+def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
+    # ---- 1. 콘티 ---------------------------------------------------------- #
+    _enter(job, 0)
+    job.note("앞 화를 읽는 중")
+    before = set(made_episodes(run_id))
+    board_meta = STORY / "runs" / run_id / "webtoon" / "meta.json"
+
+    cmd = ["webtoon.py", "--run", run_id, "--episodes", "1", "--skip-human-gate"]
+    note = str(job.form.get("author_note") or "").strip()
+    if note:
+        cmd += ["--author-note", note]
+    code = job._run(cmd, STORY, lambda ln: _board_line(job, ln))
+    if job._cancel:
+        raise Failed("취소됨")
+
+    made = sorted(set(made_episodes(run_id)) - before)
+    if code != 0 or not made:
+        raise Failed("다음 화 콘티를 만들지 못했습니다.")
+    # 실제로 몇 화가 나왔는지는 하네스가 정한다(next_no). 화면이 말하는 번호를
+    # 여기에 맞춰 둔다 — 어긋나면 그림을 엉뚱한 폴더에서 찾는다.
+    job.episode = made[-1]
+    job.build_stages()
+
+    # webtoon.py 의 main() 은 게이트 소진(STATUS_HUMAN)에서도 종료 코드가 0 이다.
+    # meta.json 을 직접 읽어야 한다 — story.py 와 같은 사정.
+    status, why = _meta_status(board_meta)
+    if status == STATUS_HUMAN:
+        job.status = "awaiting_board_approval"
+        job.note("콘티 단계 게이트 재시도가 소진됐습니다 — 확인해 주세요"
+                 + (f" ({why})" if why else ""))
+        job.save()
+        job.board_approval.wait()
+        job.board_approval.clear()
+        with job._lock:
+            decision = job.board_decision
+            job.board_decision = ""
+        job.status = "running"
+        if job._cancel or decision == "retry":
+            # 여기서 "다시" 는 지원하지 않는다 (위 주석 참고) — 멈추고 사람에게
+            # 넘긴다. 콘티 자체는 남아 있으므로 나중에 그림만 이어 그릴 수 있다.
+            raise Failed("콘티를 확인하고 중단했습니다. "
+                         f"{job.episode}화 콘티는 그대로 남아 있습니다.")
+    _leave(job)
+
+    # ---- 2·3. 그림 + 이어 붙이기 ------------------------------------------ #
+    _enter(job, 1)
+    job.note("컷 서술을 옮기는 중")
+    mode = LAYOUT_MODES[layout_mode(job.form)]["mode"]
+    art_cmd = ["run.py", "--run-id", run_id, "--episode", str(job.episode),
+               "--mode", mode, "-c", CONDITION, "--style", job.style,
+               "--config", str(job_dir / "config.yaml"), "--yes"]
+    if job.preview:
+        art_cmd += ["--cuts", f"1-{CUTS_PER_SHEET}"]
+
+    def art_or_bind(line: str) -> None:
+        if job.stage_i == 1 and (line.startswith("episode.png")
+                                 or line.startswith("완료:")):
+            _leave(job)
+            _enter(job, 2)
+            job.note("그린 장을 순서대로 이어 붙이는 중")
+        if job.stage_i == 1:
+            _art_line(job, line)
+        else:
+            _bind_line(job, line)
+
+    code = job._run(art_cmd, WEBTOON, art_or_bind)
+    if job._cancel:
+        raise Failed("취소됨")
+    if job.stage_i == 1:
+        _leave(job)
+        _enter(job, 2)
+    if code != 0:
+        raise Failed("그림 생성이 실패했습니다.")
+    if not (episode_dir(run_id, job.episode) / "episode.png").exists():
+        raise Failed("그림은 나왔지만 한 편으로 잇지 못했습니다.")
+    _leave(job)
+
+
 def execute(job: Job) -> None:
     job.status = "running"
     job.started_at = time.time()
@@ -869,6 +995,23 @@ def execute(job: Job) -> None:
                      head_ratio=str(job.form.get("head_ratio") or "").strip().lower(),
                      genre=str(job.form.get("genre") or ""),
                      mode=layout_mode(job.form))
+
+        # ---- 이어 만들기 — 이야기·시트를 건너뛰고 콘티부터 -------------- #
+        #
+        # 인물·세계·캐릭터 시트는 1화에서 이미 정해졌고, 여기서 다시 만들면
+        # 그게 흔들린다(같은 캐릭터가 다른 얼굴이 된다). run_id 도 새로 파지
+        # 않고 그대로 쓰므로, 스토리 하네스의 series.json·ledger.json 이
+        # 이어져서 앞 화의 인물·설정·미회수 복선이 그대로 따라온다.
+        if job.is_next:
+            run_id = job.run_id or ""
+            if not run_id:
+                raise Failed("이어 만들 작품을 찾지 못했습니다.")
+            (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
+            _next_episode_stages(job, run_id, job_dir)
+            job.status = "done"
+            job.finished_at = time.time()
+            return
+
         char_path = write_character(job_dir, job.form)
 
         # ---- 1. 이야기 --------------------------------------------------- #
@@ -1093,8 +1236,56 @@ def execute(job: Job) -> None:
 # 결과 읽기
 # --------------------------------------------------------------------------- #
 
-def episode_dir(run_id: str) -> Path:
-    return WEBTOON / "outputs" / run_id / "ep1"
+def episode_dir(run_id: str, episode: int = 1) -> Path:
+    """그 회차의 그림이 떨어지는 폴더.
+
+    하네스는 회차마다 폴더를 따로 쓴다(`outputs/<run>/ep1`, `ep2`, …) — 장 번호가
+    회차마다 1부터 다시 시작하므로, 한 폴더에 몰면 2화 1장이 1화 1장을 덮어쓴다.
+    기본값이 1인 이유는 이 함수를 부르는 옛 자리들이 전부 1화를 뜻하기 때문이다.
+    """
+    return WEBTOON / "outputs" / run_id / f"ep{int(episode)}"
+
+
+def cuts_filename(episode: int = 1) -> str:
+    """그 회차의 콘티 파일 이름. 스토리 하네스는 두 자리로 적는다(ep01_cuts.json)."""
+    return f"ep{int(episode):02d}_cuts.json"
+
+
+def cuts_path(run_id: str, episode: int = 1) -> Path:
+    return STORY / "runs" / run_id / "webtoon" / cuts_filename(episode)
+
+
+def made_episodes(run_id: str) -> list[int]:
+    """이 작품에 콘티가 나와 있는 회차 번호 — 작은 것부터.
+
+    series.json 이 아니라 **파일**을 센다. 콘티까지만 나오고 그림이 없는 회차도
+    있고(중간에 끊긴 실행), 하네스를 직접 돌려 만든 회차도 있어서, 상태 파일보다
+    떨어진 결과가 언제나 사실에 가깝다.
+    """
+    wt = STORY / "runs" / run_id / "webtoon"
+    if not wt.is_dir():
+        return []
+    out = []
+    for p in wt.glob("ep*_cuts.json"):
+        m = re.fullmatch(r"ep(\d+)_cuts\.json", p.name)
+        if m:
+            out.append(int(m.group(1)))
+    return sorted(out)
+
+
+def episode_title(run_id: str, episode: int = 1) -> str:
+    """그 회차의 제목.
+
+    arc{N}_episodes.json 이 아니라 **series.json** 을 본다. arc 파일에 실리는 것은
+    5단계가 쓴 회차 카드 그대로라 회차 번호 칸이 없고, 게다가 회차가 쌓이면 2화가
+    arc2 로 넘어갈 수 있어서(story-harness 의 arc_for_episode) 파일 하나만 봐서는
+    못 찾는다. series.json 은 회차마다 no·title 을 같이 남긴다.
+    """
+    wt = STORY / "runs" / run_id / "webtoon"
+    for ep in (_read_json(wt, "series.json").get("episodes") or []):
+        if isinstance(ep, dict) and int(ep.get("no") or 0) == int(episode):
+            return str(ep.get("title") or "")
+    return ""
 
 
 # 하네스(run.py)의 REFUSAL_HINTS 와 짝이다. 저쪽은 터미널에, 이쪽은 화면에 쓴다.
@@ -1115,13 +1306,13 @@ REFUSAL_HINTS = {
 }
 
 
-def read_refusals(run_id: str, limit: int = 20) -> list[dict[str, Any]]:
+def read_refusals(run_id: str, episode: int = 1, limit: int = 20) -> list[dict[str, Any]]:
     """하네스가 남긴 refusals.jsonl 을 읽어 화면에 쓸 모양으로 돌려준다.
 
     파일이 없으면 빈 목록이다 — 거절이 한 번도 없었으면 안 만들어지고, 예전
     run 에는 애초에 없다. 없다고 오류로 취급하면 안 된다.
     """
-    path = episode_dir(run_id) / "refusals.jsonl"
+    path = episode_dir(run_id, episode) / "refusals.jsonl"
     if not path.exists():
         return []
     out: list[dict[str, Any]] = []
@@ -1300,13 +1491,13 @@ def author_note(stage: str, tags: list[str], text: str) -> str:
     return "\n".join(parts)
 
 
-def unit_image(run_id: str, no: int) -> Path | None:
+def unit_image(run_id: str, no: int, episode: int = 1) -> Path | None:
     """장(Scene) 하나의 그림. MODE 를 컷으로 되돌려도 같은 함수로 찾는다.
 
     Scene 모드는 `scene_S+/scene3_c1.png`, 컷 모드는 `S+/cut3_c1.png` 다.
     조건은 S+ 가 기본이고, 시트가 없어 A 로 떨어진 옛 실행도 받아 준다.
     """
-    ep = episode_dir(run_id)
+    ep = episode_dir(run_id, episode)
     for cond in (CONDITION, "S", "A"):
         for folder, stem in ((f"scene_{cond}", "scene"), (cond, "cut")):
             p = ep / folder / f"{stem}{no}_c1.png"
@@ -1315,7 +1506,7 @@ def unit_image(run_id: str, no: int) -> Path | None:
     return None
 
 
-def run_mode(run_id: str) -> str:
+def run_mode(run_id: str, episode: int = 1) -> str:
     """이 실행이 어느 모드로 그려졌는가 — "scene" | "cut".
 
     폼 값이 아니라 **떨어진 파일**을 본다. 다시 그리기는 job 이 사라진 뒤에도
@@ -1323,7 +1514,7 @@ def run_mode(run_id: str) -> str:
     모드를 틀리면 run.py 가 있지도 않은 장을 찾거나 컷을 통째로 다시 묶는다.
     아무것도 없으면 기본값(scene)으로 본다 — 지금까지의 방식이다.
     """
-    ep = episode_dir(run_id)
+    ep = episode_dir(run_id, episode)
     for cond in (CONDITION, "S", "A"):
         if any((ep / f"scene_{cond}").glob("scene*_c*.png")):
             return "scene"
@@ -1345,13 +1536,13 @@ def run_mode(run_id: str) -> str:
 #      전에는 모른다.
 # --------------------------------------------------------------------------- #
 
-def scene_cut_range(run_id: str, scene_no: int) -> tuple[int, int] | None:
+def scene_cut_range(run_id: str, scene_no: int, episode: int = 1) -> tuple[int, int] | None:
     """그 장에 들어 있는 컷 번호의 처음과 끝. run.py 의 --cuts 에 그대로 준다.
 
     scene 모드에서 --cuts 는 "그 컷이 들어 있는 장"을 고르므로, 장 하나를
     다시 그리려면 그 장의 컷 범위를 주면 된다.
     """
-    grouping = _read_json(episode_dir(run_id), "scenes.json").get("scenes") or []
+    grouping = _read_json(episode_dir(run_id, episode), "scenes.json").get("scenes") or []
     for sc in grouping:
         if int(sc.get("scene_number") or 0) != int(scene_no):
             continue
@@ -1360,19 +1551,26 @@ def scene_cut_range(run_id: str, scene_no: int) -> tuple[int, int] | None:
             return min(nums), max(nums)
     # scenes.json 이 없는 옛 실행 — editor_data 와 같은 규칙으로 떨어진다
     # (장 번호 = 컷 번호).
-    cuts = _read_json(STORY / "runs" / run_id / "webtoon", "ep01_cuts.json").get("cuts") or []
+    cuts = _read_json(STORY / "runs" / run_id / "webtoon",
+                      cuts_filename(episode)).get("cuts") or []
     if any(int(c.get("cut_number") or 0) == int(scene_no) for c in cuts):
         return int(scene_no), int(scene_no)
     return None
 
 
-def _versions_dir(run_id: str) -> Path:
-    return episode_dir(run_id) / "versions"
+def _versions_dir(run_id: str, episode: int = 1) -> Path:
+    return episode_dir(run_id, episode) / "versions"
 
 
-def scene_versions(run_id: str, scene_no: int) -> list[dict[str, Any]]:
+def _ep_q(episode: int) -> str:
+    """주소에 붙일 회차 꼬리표. 1화는 안 붙인다 — 예전 주소가 그대로 살아야 한다."""
+    return "" if int(episode) == 1 else f"?ep={int(episode)}"
+
+
+def scene_versions(run_id: str, scene_no: int,
+                   episode: int = 1) -> list[dict[str, Any]]:
     """그 장의 지난 판 목록. 최신이 앞에 온다."""
-    vdir = _versions_dir(run_id)
+    vdir = _versions_dir(run_id, episode)
     if not vdir.exists():
         return []
     out = []
@@ -1382,49 +1580,52 @@ def scene_versions(run_id: str, scene_no: int) -> list[dict[str, Any]]:
         except (ValueError, IndexError):
             continue
         out.append({"version": v, "at": p.stat().st_mtime,
-                    "url": f"/api/runs/{run_id}/scenes/{scene_no}/versions/{v}"})
+                    "url": f"/api/runs/{run_id}/scenes/{scene_no}/versions/{v}"
+                           + _ep_q(episode)})
     return sorted(out, key=lambda d: -d["version"])
 
 
-def _next_version(run_id: str, scene_no: int) -> int:
-    got = scene_versions(run_id, scene_no)
+def _next_version(run_id: str, scene_no: int, episode: int = 1) -> int:
+    got = scene_versions(run_id, scene_no, episode)
     return (got[0]["version"] + 1) if got else 1
 
 
-def archive_scene(run_id: str, scene_no: int) -> int | None:
+def archive_scene(run_id: str, scene_no: int, episode: int = 1) -> int | None:
     """지금 걸려 있는 그림을 판본으로 떠 둔다. 새로 굽기 **직전**에 부른다."""
-    src = unit_image(run_id, scene_no)
+    src = unit_image(run_id, scene_no, episode)
     if not src:
         return None
-    vdir = _versions_dir(run_id)
+    vdir = _versions_dir(run_id, episode)
     vdir.mkdir(parents=True, exist_ok=True)
-    v = _next_version(run_id, scene_no)
+    v = _next_version(run_id, scene_no, episode)
     shutil.copy2(src, vdir / f"scene{int(scene_no)}.v{v}.png")
     return v
 
 
-def version_path(run_id: str, scene_no: int, version: int) -> Path | None:
-    p = _versions_dir(run_id) / f"scene{int(scene_no)}.v{int(version)}.png"
+def version_path(run_id: str, scene_no: int, version: int,
+                 episode: int = 1) -> Path | None:
+    p = _versions_dir(run_id, episode) / f"scene{int(scene_no)}.v{int(version)}.png"
     return p if p.exists() else None
 
 
-def revert_scene(run_id: str, scene_no: int, version: int) -> bool:
+def revert_scene(run_id: str, scene_no: int, version: int,
+                 episode: int = 1) -> bool:
     """지난 판으로 되돌린다. 되돌리기 전의 그림도 판본으로 남긴다 —
     되돌린 것을 다시 되돌릴 수 있어야 한다."""
-    src = version_path(run_id, scene_no, version)
-    dest = unit_image(run_id, scene_no)
+    src = version_path(run_id, scene_no, version, episode)
+    dest = unit_image(run_id, scene_no, episode)
     if not src or not dest:
         return False
-    archive_scene(run_id, scene_no)
+    archive_scene(run_id, scene_no, episode)
     shutil.copy2(src, dest)
-    _clear_cache(run_id, scene_no)
+    _clear_cache(run_id, scene_no, episode)
     return True
 
 
-def _clear_cache(run_id: str, scene_no: int) -> None:
+def _clear_cache(run_id: str, scene_no: int, episode: int = 1) -> None:
     """줄여 둔 그림을 지운다. 안 지우면 새로 그려도 화면은 옛 그림을 계속 준다
     (thumbnail 이 mtime 으로 캐시를 판단하는데, job 폴더 캐시는 여기서 못 본다)."""
-    for cache in episode_dir(run_id).glob("cache/page*"):
+    for cache in episode_dir(run_id, episode).glob("cache/page*"):
         if cache.stem.startswith(f"page{int(scene_no)}_"):
             cache.unlink(missing_ok=True)
 
@@ -1497,15 +1698,39 @@ def _origin_config(run_id: str) -> Path | None:
 REGEN_LETTERING = "overlay"
 
 
+def origin_form(run_id: str) -> dict[str, Any]:
+    """그 작품을 만들 때 사람이 넣은 입력(input.json). 못 찾으면 빈 dict.
+
+    이어 만들 때 그림체·등신·연출 모드를 여기서 물려받는다 — 다시 고르게 하면
+    같은 작품의 회차마다 그림이 달라진다. _origin_config 과 같은 방식으로 job 을
+    찾는다(run_id.txt 가 이 run 을 가리키는 폴더).
+    """
+    if not JOBS_DIR.is_dir():
+        return {}
+    for job_dir in JOBS_DIR.iterdir():
+        marker = job_dir / "run_id.txt"
+        if not marker.exists():
+            continue
+        try:
+            if marker.read_text(encoding="utf-8").strip() != run_id:
+                continue
+        except OSError:
+            continue
+        got = _read_json(job_dir, "input.json")
+        if got:
+            return got
+    return {}
+
+
 def regen_config(run_id: str, feedback: str, style: str = "",
-                 textless: bool = False) -> Path:
+                 textless: bool = False, episode: int = 1) -> Path:
     """다시 그리기 전용 config. 피드백을 조건의 {extra} 뒤에 얹는다.
 
     하네스를 고치지 않는다 — run.py 의 프롬프트 틀에 이미 {extra} 자리가 있고
     그 값은 config 의 조건에서 온다(cond_extra). 그래서 config 사본만 만들면
     사용자가 쓴 말이 그림 프롬프트에 그대로 붙는다.
     """
-    out_dir = episode_dir(run_id) / "regen"
+    out_dir = episode_dir(run_id, episode) / "regen"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "config.yaml"
     origin = _origin_config(run_id)
@@ -1584,6 +1809,7 @@ class Regen:
     id: str
     run_id: str
     scene_no: int
+    episode: int = 1
     feedback: str = ""
     textless: bool = False                  # 글자(말풍선 안 글자) 없이 그림만
     status: str = "queued"                  # queued / running / done / error
@@ -1597,10 +1823,12 @@ class Regen:
 
     def snapshot(self) -> dict[str, Any]:
         return {"id": self.id, "run_id": self.run_id, "scene": self.scene_no,
+                "episode": self.episode,
                 "status": self.status, "error": self.error, "note": self.note,
                 "version": self.version, "textless": self.textless,
-                "image": f"/api/runs/{self.run_id}/page/{self.scene_no}",
-                "versions": scene_versions(self.run_id, self.scene_no)}
+                "image": f"/api/runs/{self.run_id}/page/{self.scene_no}"
+                         + _ep_q(self.episode),
+                "versions": scene_versions(self.run_id, self.scene_no, self.episode)}
 
     def cancel(self) -> None:
         self._cancel = True
@@ -1622,12 +1850,13 @@ class RegenRunner:
 
     def start(self, run_id: str, scene_no: int, feedback: str = "",
               style: str = "", textless: bool = False,
-              tags: list[str] | None = None) -> Regen:
+              tags: list[str] | None = None, episode: int = 1) -> Regen:
         tags = tags or []
         append_feedback(run_id, "scene", tags, feedback, scene_no=scene_no,
                         decision="retry")
         # 고른 항목도 프롬프트로 간다 — 대부분은 항목만 누르고 아무 말도 안 적는다.
         job = Regen(id=uuid.uuid4().hex[:12], run_id=run_id, scene_no=int(scene_no),
+                    episode=int(episode),
                     feedback=author_note("scene", tags, feedback),
                     textless=textless)
         with self._lock:
@@ -1642,21 +1871,24 @@ class RegenRunner:
                 job.status = "running"
                 job.started_at = time.time()
 
-                rng = scene_cut_range(job.run_id, job.scene_no)
+                rng = scene_cut_range(job.run_id, job.scene_no, job.episode)
                 if not rng:
                     raise Failed("그 장을 찾지 못했습니다.")
 
                 # 굽기 **전에** 지금 그림을 떠 둔다. run.py 는 같은 자리에
                 # 덮어쓰므로, 이걸 안 하면 실패했을 때 원본까지 사라진다.
                 job.note = "지금 그림을 보관하는 중"
-                job.version = archive_scene(job.run_id, job.scene_no)
+                job.version = archive_scene(job.run_id, job.scene_no, job.episode)
                 if job.version:
-                    backup = version_path(job.run_id, job.scene_no, job.version)
+                    backup = version_path(job.run_id, job.scene_no, job.version,
+                                          job.episode)
 
                 job.note = "다시 그리는 중"
-                cfg = regen_config(job.run_id, job.feedback, style, job.textless)
-                cmd = ["run.py", "--run-id", job.run_id, "--episode", "1",
-                       "--mode", run_mode(job.run_id), "-c", CONDITION,
+                cfg = regen_config(job.run_id, job.feedback, style, job.textless,
+                                   job.episode)
+                cmd = ["run.py", "--run-id", job.run_id,
+                       "--episode", str(job.episode),
+                       "--mode", run_mode(job.run_id, job.episode), "-c", CONDITION,
                        "--cuts", f"{rng[0]}-{rng[1]}",
                        "--config", str(cfg), "--yes"]
                 code = self._spawn(job, cmd)
@@ -1665,7 +1897,7 @@ class RegenRunner:
                 if code != 0:
                     raise Failed("그림을 다시 그리지 못했습니다.")
 
-                _clear_cache(job.run_id, job.scene_no)
+                _clear_cache(job.run_id, job.scene_no, job.episode)
                 job.status = "done"
                 job.note = "새로 그렸습니다"
             except Failed as exc:
@@ -1685,17 +1917,17 @@ class RegenRunner:
         다시 그리기를 눌렀다가 원본까지 잃으면 아무도 두 번 누르지 않는다."""
         if not backup or not backup.exists():
             return
-        dest = unit_image(job.run_id, job.scene_no)
+        dest = unit_image(job.run_id, job.scene_no, job.episode)
         if dest:
             try:
                 shutil.copy2(backup, dest)
-                _clear_cache(job.run_id, job.scene_no)
+                _clear_cache(job.run_id, job.scene_no, job.episode)
                 job.note = "실패해서 원래 그림으로 되돌렸습니다"
             except OSError:
                 pass
 
     def _spawn(self, job: Regen, cmd: list[str]) -> int:
-        log = episode_dir(job.run_id) / "regen" / f"{job.id}.log"
+        log = episode_dir(job.run_id, job.episode) / "regen" / f"{job.id}.log"
         log.parent.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ)
         env["PYTHONIOENCODING"] = "utf-8"
@@ -1737,26 +1969,34 @@ def list_runs(limit: int = 60) -> list[dict[str, Any]]:
     if not root.is_dir():
         return out
     for run_dir in sorted(root.glob("2026*"), reverse=True):
-        if not (run_dir / "webtoon" / "ep01_cuts.json").exists():
+        rid = run_dir.name
+        # 콘티가 나온 회차 전부. 1화만 세면 이어 만든 2화가 목록에서 사라진다.
+        planned = made_episodes(rid)
+        if not planned:
             continue
         # 1번 장만 보지 않는다. 일부만 뽑아 둔 run 이 흔하고(3·4번만 뽑는 식),
         # 그런 run 도 그려진 장은 편집할 수 있어야 한다.
-        if not any(unit_image(run_dir.name, n) for n in range(1, 13)):
+        drawn = [e for e in planned
+                 if any(unit_image(rid, n, e) for n in range(1, 13))]
+        if not drawn:
             continue                       # 그림이 하나도 없으면 편집할 것이 없다
         p1 = _read_json(run_dir, "p1.json")
-        eps = _read_json(run_dir / "webtoon", "arc1_episodes.json").get("episodes") or []
         out.append({
-            "run_id": run_dir.name,
+            "run_id": rid,
             "character": str(p1.get("name") or ""),
-            "title": (eps[0].get("title") if eps else "") or "1화",
+            "title": episode_title(rid, drawn[0]) or f"{drawn[0]}화",
             "genre": str(_read_json(run_dir, "meta.json").get("input", {}).get("genre") or ""),
+            # 이어 만든 회차까지. 화면이 "다음 화" 를 붙일지 정하는 근거다.
+            "episodes": drawn,
+            "planned_episodes": planned,
+            "next_episode": (planned[-1] + 1) if planned else 1,
         })
         if len(out) >= limit:
             break
     return out
 
 
-def editor_data(run_id: str) -> dict[str, Any]:
+def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
     """편집기 화면이 그대로 먹는 모양. mock.json 과 같은 구조다.
 
     result(job) 과 두 가지가 다르다:
@@ -1765,7 +2005,7 @@ def editor_data(run_id: str) -> dict[str, Any]:
         말풍선을 얹으므로 원본 크기를 알아야 좌표를 퍼센트로 다룰 수 있다.
     """
     run_dir = STORY / "runs" / run_id
-    data = _read_json(run_dir / "webtoon", "ep01_cuts.json")
+    data = _read_json(run_dir / "webtoon", cuts_filename(episode))
     if not data:
         return {}
     p1 = _read_json(run_dir, "p1.json")
@@ -1786,7 +2026,7 @@ def editor_data(run_id: str) -> dict[str, Any]:
                 "lines": c.get("lines") or []}
 
     by_no = {int(c.get("cut_number") or 0): c for c in (data.get("cuts") or [])}
-    ep_dir = episode_dir(run_id)
+    ep_dir = episode_dir(run_id, episode)
     grouping = _read_json(ep_dir, "scenes.json").get("scenes") or []
     if not grouping:
         grouping = [{"scene_number": n, "cut_numbers": [n]} for n in sorted(by_no)]
@@ -1794,22 +2034,25 @@ def editor_data(run_id: str) -> dict[str, Any]:
     scenes = []
     for sc in grouping:
         no = int(sc.get("scene_number") or 0)
-        src = unit_image(run_id, no)
+        src = unit_image(run_id, no, episode)
         if not src:
             continue
         w, h = _image_size(src)
         scenes.append({
             "no": no,
-            "image": f"/api/runs/{run_id}/page/{no}",
+            "image": f"/api/runs/{run_id}/page/{no}" + _ep_q(episode),
             "w": w, "h": h,
             "cuts": [cut_card(by_no[n]) for n in (sc.get("cut_numbers") or [])
                      if n in by_no],
         })
 
-    eps = _read_json(run_dir / "webtoon", "arc1_episodes.json").get("episodes") or []
+    planned = made_episodes(run_id)
     return {
         "run_id": run_id,
-        "title": (eps[0].get("title") if eps else "") or "1화",
+        "episode": int(episode),
+        "episodes": planned,
+        "next_episode": (planned[-1] + 1) if planned else 1,
+        "title": episode_title(run_id, episode) or f"{int(episode)}화",
         "character": str(p1.get("name") or ""),
         "genre": str(_read_json(run_dir, "meta.json").get("input", {}).get("genre") or ""),
         "style_label": "",
@@ -1902,10 +2145,10 @@ def result(job: Job) -> dict[str, Any]:
     if not job.run_id:
         return {}
     run_dir = STORY / "runs" / job.run_id
-    cuts_path = run_dir / "webtoon" / "ep01_cuts.json"
-    if not cuts_path.exists():
+    cut_file = run_dir / "webtoon" / cuts_filename(job.episode)
+    if not cut_file.exists():
         return {}
-    data = json.loads(cuts_path.read_text(encoding="utf-8-sig"))
+    data = json.loads(cut_file.read_text(encoding="utf-8-sig"))
 
     def load(base: Path, name: str) -> dict:
         try:
@@ -1914,8 +2157,7 @@ def result(job: Job) -> dict[str, Any]:
             return {}
 
     p1, p2 = load(run_dir, "p1.json"), load(run_dir, "p2.json")
-    eps = load(run_dir, "webtoon/arc1_episodes.json").get("episodes") or []
-    title = (eps[0].get("title") if eps else "") or "1화"
+    title = episode_title(job.run_id, job.episode) or f"{int(job.episode)}화"
 
     def cut_card(c: dict) -> dict:
         return {
@@ -1932,7 +2174,7 @@ def result(job: Job) -> dict[str, Any]:
     by_no = {int(c.get("cut_number") or 0): c for c in (data.get("cuts") or [])}
 
     # 어느 컷이 어느 장에 묶였는지는 그림 쪽이 안다 (scenes.json).
-    ep_dir = episode_dir(job.run_id)
+    ep_dir = episode_dir(job.run_id, job.episode)
     grouping = load(ep_dir, "scenes.json").get("scenes") or []
     if not grouping:
         # 컷 모드로 되돌렸거나 아직 묶기 전 — 컷 하나를 한 장으로 본다.
@@ -1941,7 +2183,7 @@ def result(job: Job) -> dict[str, Any]:
     pages, drawn_cuts = [], 0
     for sc in grouping:
         no = int(sc.get("scene_number") or 0)
-        if not unit_image(job.run_id, no):
+        if not unit_image(job.run_id, no, job.episode):
             continue                       # 아직 안 그렸거나 미리보기로 빠진 장
         cards = [cut_card(by_no[n]) for n in (sc.get("cut_numbers") or [])
                  if n in by_no]
@@ -1972,6 +2214,8 @@ def result(job: Job) -> dict[str, Any]:
         "preview": job.preview,
         "has_episode_png": ep_png.exists(),
         "run_id": job.run_id,
+        "episode": int(job.episode),
+        "next_episode": (made_episodes(job.run_id) or [0])[-1] + 1,
     }
 
 
@@ -2019,6 +2263,46 @@ class Runner:
         job.build_stages()
         (job_dir / "input.json").write_text(
             json.dumps(form, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        with self._lock:
+            self.jobs[job_id] = job
+            self.queue.append(job_id)
+            if self._worker is None or not self._worker.is_alive():
+                self._worker = threading.Thread(target=self._drain, daemon=True)
+                self._worker.start()
+        return job
+
+    def create_next(self, run_id: str, form: dict[str, Any] | None = None) -> Job:
+        """이어 만들기 — 이미 있는 작품의 다음 화 (#72).
+
+        create() 와 다른 점은 셋뿐이다: 사진을 안 받고, run_id 를 새로 파지 않고,
+        회차가 2 이상이다. 나머지(대기줄·워커·config)는 같은 길을 쓴다.
+
+        그림 설정(그림체·등신·연출 모드)은 **1화가 쓴 값을 그대로 물려받는다.**
+        여기서 다시 고르게 하면 같은 작품의 회차마다 그림체가 달라진다.
+        """
+        planned = made_episodes(run_id)
+        if not planned:
+            raise Failed("1화 콘티가 없는 작품입니다.")
+        form = {**(origin_form(run_id) or {}), **(form or {})}
+        # 미리보기는 이어 만들 때 물려받지 않는다 — 앞 화를 미리보기로 뽑았다고
+        # 다음 화도 앞부분만 나오면 연재가 안 된다. 사용자가 다시 고르게 둔다.
+        form.pop("preview", None)
+
+        job_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4]
+        job_dir = JOBS_DIR / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        style = str(form.get("style") or "webtoon")
+        if style not in STYLES:
+            style = "webtoon"
+        job = Job(id=job_id, form=form, dir=job_dir, style=style,
+                  preview=False, has_photo=False,
+                  episode=planned[-1] + 1)
+        job.run_id = run_id
+        job.build_stages()
+        (job_dir / "input.json").write_text(
+            json.dumps(form, ensure_ascii=False, indent=2), encoding="utf-8")
+        (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
 
         with self._lock:
             self.jobs[job_id] = job

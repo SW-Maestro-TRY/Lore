@@ -481,7 +481,8 @@
       <a class="btn btn-quiet btn-sm" href="/editor">편집실에서 열기</a>
       <button type="button" class="btn btn-quiet btn-sm" id="scriptBtn">대사 스크립트</button>
       <a class="btn btn-quiet btn-sm" id="downloadBtn" download>PNG 내려받기</a>
-      <button type="button" class="btn btn-primary btn-sm" id="againBtn">새로 만들기</button>
+      <button type="button" class="btn btn-primary btn-sm" id="nextEpBtn" hidden>다음 화 만들기</button>
+      <button type="button" class="btn btn-quiet btn-sm" id="againBtn">새로 만들기</button>
     </div>
   </header>
 
@@ -494,6 +495,48 @@
     </div>
     <div class="script-body" id="scriptBody"></div>
   </aside>
+</section>
+
+<!-- ============================================================ 다음 화 (#72)
+     1화용 진행 화면(#progress)을 재사용하지 않는다. 이어 만들기는 도는 단계가
+     셋뿐이고(콘티·그림·잇기), 사람이 궁금해하는 것도 다르다 — "인물이 그대로
+     따라오는가", "몇 화가 나오는가". 그래서 화면을 따로 둔다. -->
+<section id="nextEp" class="nextep" hidden>
+  <header class="nextep-head">
+    <p class="eyebrow" id="nextEpWork"></p>
+    <h2 id="nextEpTitle">다음 화 만들기</h2>
+    <p class="nextep-sub" id="nextEpSub"></p>
+  </header>
+
+  <!-- 시작 전 — 무엇을 물려받는지 밝히고, 이번 화에 바라는 것을 받는다 -->
+  <div class="nextep-ask" id="nextEpAsk">
+    <ul class="nextep-keeps">
+      <li><b>그대로 갑니다</b> — 인물·세계관·캐릭터 시트·그림체</li>
+      <li><b>이어집니다</b> — 앞 화에서 정해진 설정과 아직 안 풀린 복선</li>
+      <li><b>새로 만듭니다</b> — 이 화의 콘티(컷·대사)와 그림</li>
+    </ul>
+    <label class="field">
+      <span>이번 화는 어떻게 갈까요? <small>안 적어도 됩니다</small></span>
+      <textarea id="nextEpNote" rows="2" maxlength="500"
+        placeholder="예: 둘이 처음으로 크게 싸우는 화 / 학교 밖으로 나가는 이야기"></textarea>
+    </label>
+    <div class="nextep-actions">
+      <button type="button" class="btn btn-primary" id="nextEpGo">이어서 만들기</button>
+      <button type="button" class="btn btn-quiet" id="nextEpBack">돌아가기</button>
+    </div>
+    <p class="nextep-warn">
+      실제로 그림을 그립니다 — 한 화에 몇 분이 걸리고 생성 비용이 나갑니다.
+    </p>
+  </div>
+
+  <!-- 도는 중 -->
+  <div class="nextep-run" id="nextEpRun" hidden>
+    <ol class="nextep-steps" id="nextEpSteps"></ol>
+    <p class="nextep-note" id="nextEpNote2">시작하는 중…</p>
+    <div class="nextep-actions">
+      <button type="button" class="btn btn-quiet btn-sm" id="nextEpCancel">중단</button>
+    </div>
+  </div>
 </section>
 
 <footer class="foot">

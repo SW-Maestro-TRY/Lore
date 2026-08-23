@@ -46,7 +46,9 @@ body[data-view="running"] #landing,
 body[data-view="running"] .topbar,
 body[data-view="running"] .foot,
 body[data-view="result"]  #landing,
-body[data-view="result"]  .topbar { display: none; }
+body[data-view="result"]  .topbar,
+body[data-view="nextep"]  #landing,
+body[data-view="nextep"]  .topbar { display: none; }
 
 /* ------------------------------------------------------------------ 공통 */
 
@@ -692,3 +694,59 @@ body[data-view="result"]  .topbar { display: none; }
   background: var(--ink, #16161c); color: #fff; font-size: .68rem;
 }
 .photo-count { font-size: .74rem; color: var(--muted, #8a8a94); margin-top: .35rem; }
+
+
+/* ---- 다음 화 만들기 (#72) -------------------------------------------- */
+/* 1화용 진행 화면과 따로 둔다 — 도는 단계가 셋뿐이고, 사람이 궁금해하는 것도
+   "무엇이 그대로 따라오는가" 라서 보여줄 것이 다르다. */
+.nextep { max-width: 620px; margin: 0 auto; padding: 3rem 1.2rem 4rem; }
+.nextep-head { text-align: center; margin-bottom: 1.6rem; }
+.nextep-head h2 { margin: .2rem 0 .4rem; }
+.nextep-sub { color: var(--muted, #8a8a94); font-size: .9rem; }
+
+.nextep-keeps {
+  list-style: none; padding: .9rem 1rem; margin: 0 0 1.1rem;
+  border: 1px solid var(--line, #2a2a33); border-radius: .7rem;
+  background: var(--card, rgba(255,255,255,.03));
+  font-size: .88rem; line-height: 1.9;
+}
+.nextep-keeps b { font-weight: 700; }
+
+.nextep-ask textarea { width: 100%; resize: vertical; }
+.nextep-actions {
+  display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem;
+  justify-content: center;
+}
+.nextep-warn {
+  margin-top: .9rem; text-align: center;
+  font-size: .78rem; color: var(--muted, #8a8a94);
+}
+
+.nextep-steps { list-style: none; padding: 0; margin: 0 0 1rem; }
+.nextep-steps li {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .7rem .9rem; margin-bottom: .4rem;
+  border: 1px solid var(--line, #2a2a33); border-radius: .6rem;
+  font-size: .9rem; color: var(--muted, #8a8a94);
+}
+.nextep-steps li .dot {
+  width: .55rem; height: .55rem; border-radius: 50%;
+  background: var(--line, #2a2a33); flex: none;
+}
+.nextep-steps li.is-active {
+  color: var(--text); border-color: var(--accent);
+}
+.nextep-steps li.is-active .dot {
+  background: var(--accent); animation: nextep-pulse 1.2s ease-in-out infinite;
+}
+.nextep-steps li.is-done { color: var(--text); }
+.nextep-steps li.is-done .dot { background: var(--gold, #c9a227); }
+@keyframes nextep-pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) {
+  .nextep-steps li.is-active .dot { animation: none; }
+}
+
+.nextep-note {
+  text-align: center; font-size: .82rem; color: var(--muted, #8a8a94);
+  min-height: 1.2em;
+}

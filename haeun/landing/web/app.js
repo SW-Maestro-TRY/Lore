@@ -631,8 +631,9 @@ async function showResult(attempt = 0) {
   // 얼마나 걸렸는지는 결과에도 남긴다 — 다음에 또 만들 때 기다릴 시간을
   // 가늠하는 유일한 근거다. 단계별 내역은 title 로 붙여 둔다.
   const took = r.seconds ? ` · ${mmss(r.seconds)} 걸림` : "";
+  const epNo = r.episode || 1;
   $("#resSub").textContent =
-    `${r.character ? r.character + " · " : ""}1화 · ${r.page_count}장 / ${r.cut_count}컷` +
+    `${r.character ? r.character + " · " : ""}${epNo}화 · ${r.page_count}장 / ${r.cut_count}컷` +
     ` · 한 장에 ${r.cuts_per_sheet}컷${short}${took}`;
   $("#resSub").title = (r.stage_times || [])
     .map(s => `${s.title} ${mmss(s.seconds)}`).join("  ·  ");
@@ -658,6 +659,14 @@ async function showResult(attempt = 0) {
       <div class="script-page-no">${pg.no}번째 장 · 컷 ${pg.cuts.map(c => c.no).join("·")}</div>
       ${pg.cuts.map(scriptCut).join("")}
     </div>`).join("");
+
+  // 이어 만들기 단추 — 그린 작품이 있어야 뜻이 있다.
+  nextEpCtx = resultRunId
+    ? { runId: resultRunId, next: r.next_episode || (epNo + 1),
+        character: r.character || "", title: r.title || "" }
+    : null;
+  $("#nextEpBtn").hidden = !nextEpCtx;
+  if (nextEpCtx) $("#nextEpBtn").textContent = `${nextEpCtx.next}화 만들기`;
 
   view("result");
   $("#progress").hidden = true;
@@ -858,6 +867,118 @@ async function openExisting(id) {
   }
 }
 
+/* ------------------------------------------------- 다음 화 이어서 만들기 (#72)
+ *
+ * 1화용 진행 화면(#progress)을 쓰지 않는다. 이어 만들기는 도는 단계가 셋뿐이고
+ * (콘티 · 그림 · 잇기), 이야기와 캐릭터 시트는 1화 것을 그대로 쓴다. 사람이
+ * 궁금해하는 것도 다르다 — "인물이 그대로 따라오는가", "몇 화가 나오는가".
+ *
+ * 회차 번호는 **서버가 정한다.** 화면이 보낸 번호를 믿으면 창을 두 개 띄워
+ * 놓고 눌렀을 때 같은 번호를 두 번 만들려 든다. */
+
+let nextEpCtx = null;      // { runId, next, character, title }
+let nextEpJob = null;      // 도는 중인 작업 id
+let nextEpPoll = null;
+
+function openNextEp() {
+  if (!nextEpCtx) return;
+  $("#nextEpWork").textContent = [nextEpCtx.character, nextEpCtx.title]
+    .filter(Boolean).join(" · ");
+  $("#nextEpTitle").textContent = `${nextEpCtx.next}화 만들기`;
+  $("#nextEpSub").textContent =
+    `${nextEpCtx.next - 1}화에 이어서 만듭니다. 이야기와 캐릭터는 다시 만들지 않습니다.`;
+  $("#nextEpAsk").hidden = false;
+  $("#nextEpRun").hidden = true;
+  $("#nextEpNote").value = "";
+  $("#nextEp").hidden = false;
+  $("#result").hidden = true;
+  view("nextep");
+  window.scrollTo(0, 0);
+}
+
+function closeNextEp() {
+  clearInterval(nextEpPoll); nextEpPoll = null; nextEpJob = null;
+  $("#nextEp").hidden = true;
+  $("#result").hidden = false;
+  view("result");
+}
+
+async function startNextEp() {
+  if (!nextEpCtx) return;
+  const go = $("#nextEpGo");
+  go.disabled = true;
+  try {
+    const res = await fetch(
+      `/api/runs/${encodeURIComponent(nextEpCtx.runId)}/next-episode`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ author_note: $("#nextEpNote").value.trim() }) });
+    const out = await res.json();
+    if (!res.ok) throw new Error(out.error || "시작하지 못했습니다");
+    nextEpJob = out.id;
+    // 서버가 정한 번호로 맞춘다 — 화면이 짐작한 것과 다를 수 있다.
+    if (out.episode) {
+      nextEpCtx.next = out.episode;
+      $("#nextEpTitle").textContent = `${out.episode}화 만들기`;
+    }
+    $("#nextEpAsk").hidden = true;
+    $("#nextEpRun").hidden = false;
+    nextEpPoll = setInterval(tickNextEp, 1500);
+    tickNextEp();
+  } catch (err) {
+    toast(err.message);
+  }
+  go.disabled = false;
+}
+
+async function tickNextEp() {
+  if (!nextEpJob) return;
+  let s;
+  try { s = await (await fetch(`/api/jobs/${nextEpJob}`)).json(); }
+  catch { return; }                        // 잠깐 끊겨도 다음 번에 이어진다
+
+  const stages = s.stages || [];
+  $("#nextEpSteps").innerHTML = stages.map((st, i) => {
+    const cls = st.state === "done" ? "is-done"
+              : (i === s.stage_index ? "is-active" : "");
+    return `<li class="${cls}"><span class="dot"></span>
+      <span>${esc(st.title)}</span>
+      <small style="margin-left:auto;color:var(--muted,#8a8a94)">${esc(st.desc || "")}</small>
+    </li>`;
+  }).join("");
+  const cur = stages[s.stage_index] || {};
+  $("#nextEpNote2").textContent = cur.note || s.error || "";
+
+  if (s.status === "done") {
+    clearInterval(nextEpPoll); nextEpPoll = null;
+    // 완성본은 1화와 같은 결과 화면에서 본다 — 읽는 화면은 회차가 달라도 같다.
+    jobId = nextEpJob;
+    sessionStorage.setItem("lore_job", jobId);
+    nextEpJob = null;
+    $("#nextEp").hidden = true;
+    toast(`${nextEpCtx.next}화가 나왔습니다`);
+    showResult();
+    return;
+  }
+  if (s.status === "error" || s.status === "cancelled") {
+    clearInterval(nextEpPoll); nextEpPoll = null;
+    $("#nextEpNote2").textContent = s.error || "만들지 못했습니다";
+    $("#nextEpAsk").hidden = false;       // 다시 눌러 볼 수 있게 되돌린다
+    nextEpJob = null;
+  }
+  // 콘티 승인이 필요한 상태 — 이어 만들기에서는 "다시 짜기" 를 못 한다
+  // (스토리 하네스가 회차를 되돌리는 길을 아직 안 준다). 진행만 물어본다.
+  if (s.status === "awaiting_board_approval") {
+    $("#nextEpNote2").innerHTML =
+      `${esc(s.stages?.[s.stage_index]?.note || "콘티를 확인해 주세요")}<br>` +
+      `<button type="button" class="btn btn-primary btn-sm" id="nextEpApprove">이대로 진행</button>`;
+    document.getElementById("nextEpApprove")?.addEventListener("click", async () => {
+      await fetch(`/api/jobs/${nextEpJob}/board-decision`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "approve" }) });
+    }, { once: true });
+  }
+}
+
 /* ------------------------------------------------------------------ 잡동사니 */
 
 function view(name) { document.body.dataset.view = name; }
@@ -873,6 +994,10 @@ function forget() {
   $("#clockLabel").textContent = "경과";
   view("landing"); $("#progress").hidden = true; $("#result").hidden = true;
   $("#scriptPanel").hidden = true;
+  // 이어 만들기 화면도 같이 닫는다 — 안 닫으면 "새로 만들기" 를 눌러도
+  // 앞 작품의 다음 화 화면이 뒤에 남는다.
+  clearInterval(nextEpPoll); nextEpPoll = null; nextEpJob = null; nextEpCtx = null;
+  $("#nextEp").hidden = true; $("#nextEpBtn").hidden = true;
   // /result 로 들어왔으면 주소도 되돌린다 — 안 그러면 새로고침에 다시 결과가 뜬다.
   if (location.pathname !== "/" || location.search) history.replaceState(null, "", "/");
   document.querySelector("#studio").scrollIntoView();
@@ -908,6 +1033,16 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#boardApproveBtn").addEventListener("click", () => sendBoardDecision("approve"));
   $("#boardRetryBtn").addEventListener("click", () => sendBoardDecision("retry"));
   $("#againBtn").addEventListener("click", forget);
+  $("#nextEpBtn").addEventListener("click", openNextEp);
+  $("#nextEpGo").addEventListener("click", startNextEp);
+  $("#nextEpBack").addEventListener("click", closeNextEp);
+  $("#nextEpCancel").addEventListener("click", async () => {
+    if (nextEpJob) {
+      try { await fetch(`/api/jobs/${nextEpJob}/cancel`, { method: "POST" }); }
+      catch { /* 이미 끝났을 수 있다 */ }
+    }
+    closeNextEp();
+  });
   $("#scriptBtn").addEventListener("click", () => {
     $("#scriptPanel").hidden = !$("#scriptPanel").hidden;
   });
