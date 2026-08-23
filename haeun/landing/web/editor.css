@@ -360,3 +360,18 @@
    또렷해지는데, 편집실의 상자는 .scene 이라 그 규칙이 안 걸린다 — 여기서는
    늘 보이게 둔다. 편집실은 읽는 자리가 아니라 고치는 자리다. */
 .scene .page-versions { opacity: 1; padding: .1rem .2rem .4rem; }
+
+
+/* ---- 구운 결과 (이미지로 뽑기) --------------------------------------------
+   머리말 바로 아래에 띠로 붙는다. 토스트로 띄우지 않는 이유: 빠진 장이나 못
+   그린 스티커를 알려야 하고 내려받을 자리도 줘야 하는데, 그게 한 줄에 안 들어간다. */
+.bake-result {
+  position: sticky; top: 0; z-index: 40;
+  border-bottom: 1px solid var(--line); background: var(--panel, #14151a);
+  padding: 12px 18px; display: grid; gap: 8px;
+}
+.bake-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bake-head span { font-size: .78rem; color: var(--muted, #8a8a94); }
+.bake-warn { margin: 0; font-size: .78rem; color: #e0b25e; }
+.bake-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.bake-acts .btn { text-decoration: none; }

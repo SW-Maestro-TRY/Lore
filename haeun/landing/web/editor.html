@@ -35,9 +35,15 @@
       <span class="credit-unit">크레딧</span>
     </div>
     <button type="button" class="btn btn-quiet btn-sm" id="ledgerBtn">사용 내역</button>
-    <button type="button" class="btn btn-primary btn-sm" id="saveBtn">저장</button>
+    <button type="button" class="btn btn-quiet btn-sm" id="saveBtn">저장</button>
+    <!-- 얹은 것을 진짜 그림에 굽는다. 여기까지 와야 가져갈 것이 생긴다 —
+         이 단추가 없던 동안, 배치한 말풍선은 브라우저 밖으로 나갈 길이 없었다. -->
+    <button type="button" class="btn btn-primary btn-sm" id="bakeBtn">이미지로 뽑기</button>
   </div>
 </header>
+
+<!-- 구운 결과. 몇 장을 구웠는지, 무엇이 빠졌는지, 어디서 받는지. -->
+<div class="bake-result" id="bakeResult" hidden></div>
 
 <div class="ed-body">
   <!-- ============================================ 작품 목록 ============ -->

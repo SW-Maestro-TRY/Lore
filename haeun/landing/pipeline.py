@@ -58,6 +58,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+import overlay          # 편집실에서 얹은 것을 저장하고 그림에 굽는다
+
 HERE = Path(__file__).resolve().parent
 JOBS_DIR = HERE / "jobs"
 STORY = HERE.parent / "story-harness"
@@ -1333,7 +1335,7 @@ def made_episodes(run_id: str) -> list[int]:
     return sorted(out)
 
 
-def episode_filename(run_id: str, episode: int = 1) -> str:
+def episode_filename(run_id: str, episode: int = 1, baked: bool = False) -> str:
     """내려받을 때 붙는 이름 — 작품(주인공 이름)과 회차를 반영한다.
 
     예전에는 `webtoon_<run_id>_1화.png` 였다. run_id 는 만들어진 시각이라
@@ -1346,7 +1348,70 @@ def episode_filename(run_id: str, episode: int = 1) -> str:
     name = str(_read_json(STORY / "runs" / run_id, "p1.json").get("name") or "").strip()
     safe = re.sub(r'[\\/:*?"<>|]', "", name).strip()
     head = safe or run_id
-    return f"{head}_{int(episode)}화.png"
+    tail = "_말풍선" if baked else ""
+    return f"{head}_{int(episode)}화{tail}.png"
+
+
+# --------------------------------------------------------------------------- #
+# 편집실에서 얹은 것 — 저장하고, 그림에 굽는다
+#
+# 지금까지 편집실의 말풍선·스티커는 **브라우저에만** 있었다. 공들여 배치해 놓고도
+# 가져갈 수 있는 것은 말풍선 없는 원본뿐이었다. 여기가 그 둘을 잇는다.
+# 그리는 일 자체는 overlay.py 가 한다 — 이쪽은 경로와 장 목록만 맞춰 준다.
+# --------------------------------------------------------------------------- #
+
+def _scene_numbers(run_id: str, episode: int = 1) -> list[int]:
+    """이 회차의 장 번호. scenes.json 이 없으면 컷 하나가 곧 한 장이다."""
+    ep_dir = episode_dir(run_id, episode)
+    grouping = _read_json(ep_dir, "scenes.json").get("scenes") or []
+    if grouping:
+        return sorted({int(sc.get("scene_number") or 0) for sc in grouping} - {0})
+    cuts = _read_json(STORY / "runs" / run_id / "webtoon",
+                      f"ep{int(episode):02d}_cuts.json").get("cuts") or []
+    return sorted({int(c.get("cut_number") or 0) for c in cuts} - {0})
+
+
+def read_overlay(run_id: str, episode: int = 1) -> dict[str, Any]:
+    return overlay.load_overlay(episode_dir(run_id, episode))
+
+
+def write_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
+    ep_dir = episode_dir(run_id, episode)
+    if not ep_dir.exists():
+        raise Failed("그 작품의 회차 폴더를 찾지 못했습니다.")
+    data = overlay.save_overlay(ep_dir, body)
+    return {"ok": True, "items": overlay.count_items(data)}
+
+
+def baked_episode(run_id: str, episode: int = 1) -> Path | None:
+    p = overlay.baked_episode_path(episode_dir(run_id, episode))
+    return p if p.exists() else None
+
+
+def bake_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
+    """얹은 것을 그림에 굽는다. body 에 얹은 것이 실려 오면 그것을 먼저 저장한다.
+
+    저장과 굽기를 한 번에 하는 이유: 사용자가 누르는 버튼은 하나("이미지로
+    뽑기")인데, 저장이 따로 왕복하면 그 사이에 실패했을 때 화면에 보이는 것과
+    구운 것이 갈린다.
+    """
+    ep_dir = episode_dir(run_id, episode)
+    if not ep_dir.exists():
+        raise Failed("그 작품의 회차 폴더를 찾지 못했습니다.")
+    data = (overlay.save_overlay(ep_dir, body)
+            if isinstance(body, dict) and body.get("scenes") is not None
+            else overlay.load_overlay(ep_dir))
+    numbers = _scene_numbers(run_id, episode)
+    if not numbers:
+        raise Failed("이 회차의 장을 찾지 못했습니다.")
+    try:
+        res = overlay.bake(ep_dir, numbers,
+                           lambda n: unit_image(run_id, n, episode), data)
+    except overlay.OverlayError as exc:
+        raise Failed(str(exc)) from exc
+    res["url"] = f"/api/runs/{run_id}/baked.png?ep={int(episode)}"
+    res["items"] = overlay.count_items(data)
+    return res
 
 
 def episode_title(run_id: str, episode: int = 1) -> str:
@@ -1667,15 +1732,53 @@ def _next_version(run_id: str, scene_no: int, episode: int = 1) -> int:
 
 
 def archive_scene(run_id: str, scene_no: int, episode: int = 1) -> int | None:
-    """지금 걸려 있는 그림을 판본으로 떠 둔다. 새로 굽기 **직전**에 부른다."""
+    """지금 걸려 있는 그림을 판본으로 떠 둔다. 새로 굽기 **직전**에 부른다.
+
+    **이미 판본으로 있는 그림이면 새로 뜨지 않고 그 번호를 돌려준다.**
+    이게 없던 동안, 지난 판을 눌러 보기만 해도 판본이 계속 늘어났다 — v1~v3 를
+    번갈아 눌러 보면 v4·v5·v6 이 생기고, 그 셋은 v1~v3 와 픽셀 하나까지 같은
+    그림이었다. 사용자가 본 것이 그것이다 ("갑자기 v7 v8 이런 식으로 생성").
+    되돌리기가 되돌리기 전 그림을 떠 두는 것 자체는 맞다 — 되돌린 것을 다시
+    되돌릴 수 있어야 하니까. 다만 그 그림이 이미 판본에 있으면 뜰 것이 없다.
+
+    돌려주는 번호는 실패했을 때 되살릴 자리라(version_path), 기존 번호를
+    돌려줘도 복구는 그대로 된다.
+    """
     src = unit_image(run_id, scene_no, episode)
     if not src:
         return None
     vdir = _versions_dir(run_id, episode)
     vdir.mkdir(parents=True, exist_ok=True)
+    same = _version_matching(run_id, scene_no, src, episode)
+    if same is not None:
+        return same
     v = _next_version(run_id, scene_no, episode)
     shutil.copy2(src, vdir / f"scene{int(scene_no)}.v{v}.png")
     return v
+
+
+def _version_matching(run_id: str, scene_no: int, src: Path,
+                      episode: int = 1) -> int | None:
+    """이 그림과 **내용이 같은** 판본이 이미 있으면 그 번호. 없으면 None.
+
+    크기부터 본다 — 판본이 수십 장이어도 대개 첫 비교에서 갈린다. 크기가 같을
+    때만 바이트를 읽는다. 읽다 실패하면 "같지 않다"로 본다(판본을 하나 더 뜨는
+    것이 지우는 것보다 안전하다).
+    """
+    try:
+        size = src.stat().st_size
+        blob = None
+        for got in scene_versions(run_id, scene_no, episode):
+            p = version_path(run_id, scene_no, got["version"], episode)
+            if p is None or p.stat().st_size != size:
+                continue
+            if blob is None:
+                blob = src.read_bytes()
+            if p.read_bytes() == blob:
+                return int(got["version"])
+    except OSError:
+        return None
+    return None
 
 
 def version_path(run_id: str, scene_no: int, version: int,
