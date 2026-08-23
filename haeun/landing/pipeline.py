@@ -594,6 +594,9 @@ class Job:
                 "stages": self.stages, "stage_i": self.stage_i,
                 "started_at": self.started_at, "finished_at": self.finished_at,
                 "ready_cuts": self.ready_cuts,
+                # 재시작 후에도 결과 화면의 거절 표시가 남아야 한다 — 이 값이
+                # 없으면 snapshot() 이 refusals.jsonl 을 아예 안 읽는다.
+                "saw_refusal": self.saw_refusal,
             }, ensure_ascii=False, indent=1), encoding="utf-8")
         except OSError:
             pass                      # 기록을 못 남겨도 이번 실행은 살아 있다
@@ -621,6 +624,7 @@ class Job:
         job.started_at = d.get("started_at")
         job.finished_at = d.get("finished_at")
         job.ready_cuts = list(d.get("ready_cuts") or [])
+        job.saw_refusal = bool(d.get("saw_refusal"))
         if not job.stages:
             job.build_stages()
         return job
@@ -655,6 +659,10 @@ class Job:
         # 못 만든다.** 하네스 기본값은 예전 run 재현을 위해 그대로 두고 제품에서만
         # 켠다. 사람이 .env 에 직접 값을 정해 뒀으면 그 뜻을 존중해 덮지 않는다.
         env.setdefault("BEAT_GATE_LOOSE", "1")
+        # 무게 묶음(웹툰 연출)은 컷 대부분이 자기 장을 가져서 한 편이 세로
+        # 33,000px 을 넘는다 — 하네스 기본 상한(30,000px)이면 다 그려 놓고
+        # 합치기에서 죽는다. 12컷 × 2752px 에 여유를 둔 값.
+        env.setdefault("EPISODE_MAX_HEIGHT", "40000")
         return env
 
     def _run(self, cmd: list[str], cwd: Path, on_line: Callable[[str], None]) -> int:
@@ -795,6 +803,11 @@ def _bind_line(job: Job, line: str) -> None:
     if line.startswith("episode.png"):
         job.mark("strip", DONE)
         job.note(line.strip())
+    elif "이어 붙이지 못했습니다" in line:
+        # 합치기 실패 사유는 이 [경고] 한 줄에만 있다 ("세로 33,024px 입니다
+        # (상한 …)" 등). 안 옮기면 화면에는 "잇지 못했습니다"만 남고, 고칠
+        # 단서는 log.txt 를 열어야 보인다.
+        job.note(line.strip().removeprefix("[경고]").strip())
 
 
 # --------------------------------------------------------------------------- #
@@ -933,7 +946,17 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
     # 실제로 몇 화가 나왔는지는 하네스가 정한다(next_no). 화면이 말하는 번호를
     # 여기에 맞춰 둔다 — 어긋나면 그림을 엉뚱한 폴더에서 찾는다.
     job.episode = made[-1]
-    job.build_stages()
+    # 라벨만 제자리에서 고친다. 예전에는 build_stages() 를 통째로 다시 불렀는데,
+    # 그러면 지금 도는 콘티 단계의 state·started_at·하위 표시가 전부 TODO 로
+    # 초기화돼서 진행 표시가 리셋되고 걸린 시간이 안 남았다.
+    with job._lock:
+        for st in job.stages:
+            if st["key"] != "board":
+                continue
+            st["desc"] = f"{int(job.episode)}화를 컷으로 나누고 대사를 붙입니다"
+            for s in st["steps"]:
+                if s["key"] == "episode":
+                    s["label"] = f"{int(job.episode)}화 설계"
 
     # webtoon.py 의 main() 은 게이트 소진(STATUS_HUMAN)에서도 종료 코드가 0 이다.
     # meta.json 을 직접 읽어야 한다 — story.py 와 같은 사정.
@@ -983,9 +1006,11 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
     if job.stage_i == 1:
         _leave(job)
         _enter(job, 2)
-    if code != 0:
-        raise Failed("그림 생성이 실패했습니다.")
+    # 완성본이 있으면 종료 코드보다 그것을 믿는다 — 1화 쪽과 같은 이유
+    # (한 장 거절돼도 나머지와 완성본이 있으면 결과 화면으로 간다).
     if not (episode_dir(run_id, job.episode) / "episode.png").exists():
+        if code != 0:
+            raise Failed("그림 생성이 실패했습니다.")
         raise Failed("그림은 나왔지만 한 편으로 잇지 못했습니다.")
     _leave(job)
 
@@ -1238,11 +1263,15 @@ def execute(job: Job) -> None:
         if job.stage_i == 3:
             _leave(job)
             _enter(job, 4)
-        if code != 0:
-            raise Failed("그림 생성이 실패했습니다.")
-
+        # 완성본이 있는지 **먼저** 본다. run.py 는 12장 중 1장만 실패(거절 포함)
+        # 해도 종료 코드 1을 내는데, code 만 보고 죽으면 11장과 episode.png 가
+        # 있어도 사용자는 결과 화면에 영영 못 간다 — 거절 사유 표시(refusals)도
+        # 결과 화면이 아니라 진행 화면에만 있어서 아무도 못 본다. 완성본이
+        # 있으면 그대로 보여 주고, 실패는 화면의 거절/실패 표시가 맡는다.
         out = WEBTOON / "outputs" / run_id / "ep1" / "episode.png"
         if not out.exists():
+            if code != 0:
+                raise Failed("그림 생성이 실패했습니다.")
             raise Failed("그림은 나왔지만 한 편으로 잇지 못했습니다.")
         _leave(job)
 
@@ -1665,6 +1694,12 @@ def revert_scene(run_id: str, scene_no: int, version: int,
         return False
     archive_scene(run_id, scene_no, episode)
     shutil.copy2(src, dest)
+    # copy2 는 **판본 파일의 옛 mtime 까지** 복사한다. 그대로 두면 되돌린
+    # 그림이 캐시(JPEG)보다 오래된 파일이 되어, thumbnail() 이 "캐시가 더
+    # 새것" 이라며 옛 그림을 계속 내려보낸다 — 화면상 되돌리기가 아무 일도
+    # 안 한 것처럼 보인다. job 폴더 캐시는 _clear_cache 가 못 보는 곳이라
+    # 지우는 것으로는 부족하고, 시간을 지금으로 찍어야 양쪽 캐시가 다 진다.
+    os.utime(dest, None)
     _clear_cache(run_id, scene_no, episode)
     return True
 
@@ -1913,6 +1948,13 @@ class RegenRunner:
 
     def _work(self, job: Regen, style: str) -> None:
         with self._gate:
+            # 줄 서서 기다리는 동안 취소를 눌렀을 수 있다. cancel() 은 _proc 만
+            # 죽이는데 대기 중에는 _proc 이 아직 없다 — 여기서 안 보면 취소된
+            # 작업이 차례가 오자마자 한 장을 통째로 그려서 돈만 쓰고 버린다.
+            if job._cancel:
+                job.status = "cancelled"
+                job.finished_at = time.time()
+                return
             backup = None
             try:
                 job.status = "running"

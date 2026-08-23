@@ -305,11 +305,16 @@ class Handler(BaseHTTPRequestHandler):
             job = runner.get(m.group(1))
             if not job or not job.run_id:
                 return self._error(404, "아직입니다")
-            src = pipeline.unit_image(job.run_id, int(m.group(2)))
+            # job.episode 를 꼭 넘긴다 — 안 넘기면 ep1 로 떨어져서, 2화 작업의
+            # 결과 화면이 1화 그림을 보여 준다 (내려받기는 #64 에서 같은 이유로
+            # 이미 회차를 따라가게 고쳤는데 이 자리가 빠져 있었다).
+            src = pipeline.unit_image(job.run_id, int(m.group(2)), job.episode)
             if not src:
                 return self._error(404, "아직입니다")
             width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
-            dest = job.dir / "cache" / f"page{m.group(2)}_w{width}.jpg"
+            # 캐시 열쇠에도 회차를 넣는다 — 같은 job 폴더에서 1화 캐시가 2화
+            # 이름을 차지하면 위 수정이 무효가 된다.
+            dest = job.dir / "cache" / f"ep{job.episode}_page{m.group(2)}_w{width}.jpg"
             try:
                 return self._file(thumbnail(src, dest, width))
             except Exception:                                   # noqa: BLE001
@@ -468,6 +473,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(404, "그 장을 찾지 못했습니다")
             if not pipeline.unit_image(run_id, scene_no, ep):
                 return self._error(409, "아직 그려지지 않은 장입니다")
+            # 이 작품을 본 파이프라인이 그리는 중이면 막는다 — regen 과 run.py 가
+            # 같은 ep 폴더의 scenes.json·episode.png 를 동시에 쓰면 서로를
+            # 덮어쓴다. next-episode 의 가드와 같은 이유, 같은 기준이다.
+            busy = [j for j in runner.jobs.values()
+                    if j.run_id == run_id and j.status in
+                    ("queued", "running", "awaiting_board_approval",
+                     "awaiting_story_approval", "awaiting_sheet_approval")]
+            if busy:
+                return self._error(409, "이 작품은 지금 만드는 중입니다 — "
+                                        "끝난 뒤 다시 그려 주세요")
             feedback = str(body.get("feedback") or "").strip()
             if len(feedback) > pipeline.FEEDBACK_TEXT_MAX:
                 return self._error(

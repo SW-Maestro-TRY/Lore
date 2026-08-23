@@ -21,13 +21,22 @@ HTML 뷰어를 열어야 했고, 넘겨줄 것도 PNG 여러 장이었다. 그�
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 EPISODE_FILE = "episode.png"
 
 # 한 장이 너무 크면(2K x 7장 = 세로 16,800px) 뷰어와 편집기가 버거워한다.
 # PNG 자체 한계(65,535px)보다 훨씬 앞에서 실용 한계가 온다.
-MAX_HEIGHT = 30000
+#
+# EPISODE_MAX_HEIGHT 로 올릴 수 있다 — 무게 묶음(grouping: weight)은 컷
+# 대부분이 자기 장을 가져서 12컷이면 12장 × 2752px = 33,024px 로 이 상한을
+# 넘는다. 안 열어 두면 그 모드는 그림을 다 그려 놓고 마지막 합치기에서 항상
+# 죽는다. 기본값은 그대로라 이 값을 안 준 실행은 예전과 똑같다.
+try:
+    MAX_HEIGHT = int(os.environ.get("EPISODE_MAX_HEIGHT", "") or 30000)
+except ValueError:
+    MAX_HEIGHT = 30000
 
 
 class StitchError(RuntimeError):

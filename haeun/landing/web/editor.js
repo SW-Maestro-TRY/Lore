@@ -166,15 +166,15 @@ function sceneCard(s) {
       <div class="fb-grid">
         <label class="fb-cell fb-story">
           <span>📖 스토리<small>대사가 어색하다 / 이 장면 필요 없다 / 훅이 약하다</small></span>
-          <textarea data-fbk="story" placeholder="이야기 자체에 대한 말"></textarea>
+          <textarea maxlength="160" data-fbk="story" placeholder="이야기 자체에 대한 말"></textarea>
         </label>
         <label class="fb-cell fb-direct">
           <span>🎬 연출<small>컷을 더 붙여라 / 여기서 끊어라 / 클로즈업으로</small></span>
-          <textarea data-fbk="direct" placeholder="컷 나누기·카메라·리듬에 대한 말"></textarea>
+          <textarea maxlength="160" data-fbk="direct" placeholder="컷 나누기·카메라·리듬에 대한 말"></textarea>
         </label>
         <label class="fb-cell fb-art">
           <span>🎨 그림<small>옷이 다르다 / 얼굴이 작다 / 서술과 다르게 그려졌다</small></span>
-          <textarea data-fbk="art" placeholder="그림에 대한 말"></textarea>
+          <textarea maxlength="160" data-fbk="art" placeholder="그림에 대한 말"></textarea>
         </label>
       </div>
 

@@ -642,6 +642,7 @@ async function showResult(attempt = 0) {
   // 장은 틈 없이 이어 붙인다 — episode.png 를 만드는 방식과 같게(episode.stitch).
   // 컷 사이 호흡은 이제 한 장 안에서 모델이 정하므로 여기서 넣을 여백이 없다.
   resultRunId = r.run_id || "";
+  resultEpisode = epNo;
   $("#reader").innerHTML = r.pages.map(pg => `
     <div class="page" data-scene="${pg.no}">
       <img class="cut-img" src="/api/jobs/${jobId}/page/${pg.no}?w=1080"
@@ -682,6 +683,10 @@ async function showResult(attempt = 0) {
  * 크레딧 차감은 없다 (#16 이 백로그). 실제 API 비용은 나간다. */
 
 let resultRunId = "";
+// 지금 결과 화면이 몇 화인가. 다시 그리기·되돌리기·판 목록이 전부 이 값을
+// 보내야 한다 — 안 보내면 서버가 1화로 알아듣고 2화 화면을 보면서 **1화
+// 그림을 덮어쓴다** (실제 코드 감사에서 발견).
+let resultEpisode = 1;
 
 function pageTools(no) {
   return `
@@ -737,7 +742,7 @@ async function runRegen(no, box, page) {
     const res = await fetch(
       `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/regen`,
       { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedback, textless, tags }) });
+        body: JSON.stringify({ feedback, textless, tags, episode: resultEpisode }) });
     job = await res.json();
     if (!res.ok) throw new Error(job.error || "시작하지 못했습니다");
     fbClear(box);
@@ -792,7 +797,7 @@ async function paintVersions(no, versions) {
   if (!versions) {
     try {
       versions = (await (await fetch(
-        `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/versions`)).json()).versions;
+        `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/versions?ep=${resultEpisode}`)).json()).versions;
     } catch { return; }
   }
   if (!versions || !versions.length) { slot.innerHTML = ""; return; }
@@ -804,7 +809,7 @@ async function paintVersions(no, versions) {
   const past = versions.map(v => `
     <button type="button" class="ver-thumb js-revert" data-v="${v.version}"
             title="이 판으로 바꾸기">
-      <img src="/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/versions/${v.version}?w=160"
+      <img src="/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/versions/${v.version}?w=160&ep=${resultEpisode}"
            alt="v${v.version}" loading="lazy">
       <span class="ver-label">v${v.version}</span>
     </button>`).join("");
@@ -817,7 +822,7 @@ async function paintVersions(no, versions) {
       const res = await fetch(
         `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/revert`,
         { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ version: Number(btn.dataset.v) }) });
+          body: JSON.stringify({ version: Number(btn.dataset.v), episode: resultEpisode }) });
       const out = await res.json();
       if (!res.ok) throw new Error(out.error || "되돌리지 못했습니다");
       bustImage($(`#reader .page[data-scene="${no}"]`), no);

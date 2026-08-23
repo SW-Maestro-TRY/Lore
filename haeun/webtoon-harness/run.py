@@ -1680,7 +1680,8 @@ def build_scene_jobs(cfg: dict[str, Any], appearance: str, scenes: list[scenegen
                      second_lead: "charsheet.Sheet | None" = None,
                      present_2nd: dict[int, bool] | None = None,
                      zone_text: dict[str, str] | None = None,
-                     staging: dict | None = None) -> list[Job]:
+                     staging: dict | None = None,
+                     all_scenes: "list[scenegen.Scene] | None" = None) -> list[Job]:
     """second_lead/present_2nd 는 '그 한 사람' 시트가 있을 때만 넘어온다
     (주연만 시트를 뽑는다 — 조연 전원이 아니다). 주인공 refs 와는 독립적으로
     그 장면에 그 인물이 나올 때만 붙는다.
@@ -1699,7 +1700,14 @@ def build_scene_jobs(cfg: dict[str, Any], appearance: str, scenes: list[scenegen
         refs = [ref_path(r) for r in (cond.get("refs") or [])]
         # COND_D 의 체인이 성립하려면 Scene 순서대로 돌아야 한다.
         # 앞뒤 장을 같이 넘긴다 — 이 장들은 틈 없이 세로로 붙는다.
-        for i, sc in enumerate(scenes):
+        # 앞뒤 장은 **화 전체 목록**에서 찾는다. --cuts 로 일부만 다시 뽑을 때
+        # 필터된 목록의 이웃을 보면, 그 장이 '첫 장' 취급되어 직전 장 문맥과
+        # 배경 이어짐(vertical_link)이 통째로 빠진다.
+        seq = all_scenes if all_scenes else scenes
+        pos = {id(x): k for k, x in enumerate(seq)}
+        bynum = {x.scene_number: k for k, x in enumerate(seq)}
+        for sc in scenes:
+            i = pos.get(id(sc), bynum.get(sc.scene_number, 0))
             here = scene_has_main(sc, present)
             here_2nd = bool(lead_refs) and scene_has_main(sc, present_2nd)
             zid = scenegen.scene_zone(sc)
@@ -1712,8 +1720,8 @@ def build_scene_jobs(cfg: dict[str, Any], appearance: str, scenes: list[scenegen
                           uses_previous=bool(cond.get("use_previous_cut")) and i > 0,
                           staging=staging),
                 with_lock=here, style_text=style_block(cfg, kind),
-                prev=scenes[i - 1] if i else None,
-                nxt=scenes[i + 1] if i + 1 < len(scenes) else None,
+                prev=seq[i - 1] if i else None,
+                nxt=seq[i + 1] if i + 1 < len(seq) else None,
                 # 이 장의 첫 컷이 앞 장 마지막 컷에서 배경이 이어지는 자리인가.
                 # 컷 모드의 LINK_CUT_CLAUSE 와 같은 값을 보고, 같은 config 로 켠다.
                 link_above=bool(cfg.get("vertical_link") and i
@@ -3495,14 +3503,17 @@ def main() -> int:
         scene_jobs = build_scene_jobs(cfg, appearance, scenes, conditions, ep_dir,
                                       present, second_lead=second_lead,
                                       present_2nd=present_2nd, zone_text=zone_text,
-                                      staging=ep.setting)
+                                      staging=ep.setting, all_scenes=all_scenes)
         enforce_per_condition(cfg, len(scenes), int(cfg["scene"]["candidates_per_scene"]),
                               unit="Scene", knob="scene.candidates_per_scene")
         jobs += scene_jobs
 
     # ---- 3. render -------------------------------------------------------- #
     enforce_total(jobs, cfg, conditions)
-    scene_numbers = [sc.scene_number for sc in scenes]
+    # 체인(직전 장 참조)은 **화 전체** 번호로 잇는다. 필터된 scenes 를 쓰면
+    # --cuts 로 한 장만 다시 뽑을 때 그 장이 '첫 장' 이 되어 직전 장 그림이
+    # 안 붙는다 — 다시 그린 장만 색·선이 옆 장과 어긋나는 원인이었다.
+    scene_numbers = [sc.scene_number for sc in all_scenes]
 
     def numbers_for(job: Job) -> list[int]:
         """COND_D 체인이 쓸 단위 번호 목록. 모드마다 다르다."""
