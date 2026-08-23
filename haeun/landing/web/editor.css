@@ -7,7 +7,7 @@
 
 .ed-top {
   position: sticky; top: 0; z-index: 60;
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px;
+  display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 18px;
   padding: 12px clamp(14px, 3vw, 28px);
   background: rgba(11,12,17,.9); backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
@@ -37,9 +37,15 @@
 /* ------------------------------------------------------------------ 뼈대 */
 
 .ed-body {
-  display: grid; grid-template-columns: minmax(0, 1fr) clamp(268px, 24vw, 340px);
+  display: grid;
+  grid-template-columns:
+    clamp(190px, 17vw, 244px) minmax(0, 1fr) clamp(268px, 24vw, 340px);
   align-items: start; max-width: 1400px; margin: 0 auto;
 }
+/* 접으면 목록 칸이 통째로 사라지고 캔버스가 그만큼 넓어진다. 화면을 좁게 쓰는
+   사람에게 목록은 늘 켜 둘 것이 아니다 — 고르고 나면 볼 일이 없다. */
+.ed-body.works-off { grid-template-columns: 0 minmax(0, 1fr) clamp(268px, 24vw, 340px); }
+.ed-body.works-off .ed-works { display: none; }
 .ed-stage { padding: 26px clamp(14px, 3vw, 28px) 120px; min-width: 0; }
 .ed-stage-head {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -280,28 +286,75 @@
 }
 
 @media (max-width: 880px) {
-  .ed-body { grid-template-columns: 1fr; }
+  .ed-body,
+  .ed-body.works-off { grid-template-columns: 1fr; }
   .ed-dock {
     position: static; height: auto; border-left: none;
     border-top: 1px solid var(--line);
   }
+  /* 좁은 화면에서는 목록이 캔버스 위에 가로로 눕는다. 세로로 세우면 스크롤을
+     한참 내려야 그림이 나온다. */
+  .ed-works {
+    position: static; height: auto; max-height: 42vh;
+    border-right: none; border-bottom: 1px solid var(--line);
+  }
   .fb-grid { grid-template-columns: 1fr; }
-  .ed-top { grid-template-columns: auto 1fr; }
+  .ed-top { grid-template-columns: auto auto 1fr; }
   .ed-top-right { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; }
 }
 
-/* 작품 고르개 — 편집실 상단. 어떤 웹툰을 열지 여기서 바꾼다. */
-.run-pick-box { display: inline-flex; align-items: center; gap: .35rem; }
-.run-pick-label {
-  font-size: .72rem; font-weight: 700; letter-spacing: .04em;
-  color: var(--muted, #8a8a94);
+/* 작품 목록 — 만들어 둔 웹툰을 그림째로 늘어놓고 눌러서 옮겨 다니는 자리.
+   전에는 상단의 작은 select 하나였는데, 작품이 0개면 통째로 사라져서 그런
+   기능이 있는 줄도 몰랐다. 이제는 비어 있어도 자리를 지키고 왜 비었는지 쓴다. */
+
+.ed-works-toggle {
+  border: 1px solid var(--line-2); border-radius: 8px;
+  padding: .4em .7em; font: inherit; font-size: .78rem; font-weight: 700;
+  background: transparent; color: var(--text); cursor: pointer; white-space: nowrap;
 }
-.run-pick {
-  max-width: 220px; padding: .38em .5em; font-size: .78rem; font-weight: 600;
-  color: inherit; background: transparent; cursor: pointer;
-  border: 1px solid rgba(127, 127, 127, .35); border-radius: 7px;
+.ed-works-toggle:hover { background: rgba(255,255,255,.07); }
+.ed-works-toggle[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+
+.ed-works {
+  position: sticky; top: 61px; align-self: start;
+  height: calc(100vh - 61px); overflow: auto;
+  border-right: 1px solid var(--line); background: var(--ink-2);
+  padding: 16px 12px 40px;
 }
-.run-pick:hover { border-color: rgba(127, 127, 127, .6); }
+.ed-works-head {
+  margin: 0 0 .6rem; font-size: .72rem; font-weight: 800; letter-spacing: .1em;
+  color: var(--dim); text-transform: uppercase;
+}
+.work-card {
+  display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: .55rem;
+  width: 100%; text-align: left; align-items: center;
+  padding: .45rem; margin-bottom: .3rem;
+  border: 1px solid transparent; border-radius: .55rem;
+  background: none; color: inherit; font: inherit; cursor: pointer;
+}
+.work-card:hover { background: rgba(255,255,255,.06); }
+/* 지금 보고 있는 작품은 누를 것이 없다 — 색만 주는 것이 아니라 커서까지 바꿔서
+   "여기가 지금 자리"임을 두 가지로 알린다. */
+.work-card[aria-current="true"] {
+  border-color: var(--accent); background: rgba(229,73,60,.10); cursor: default;
+}
+.work-thumb {
+  width: 46px; height: 46px; border-radius: .35rem; object-fit: cover;
+  display: block; background: var(--card);
+}
+.work-thumb.is-empty {
+  display: grid; place-items: center; font-size: 1.1rem; color: var(--dim);
+}
+.work-name {
+  font-size: .82rem; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.work-sub {
+  font-size: .72rem; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ed-works-empty { font-size: .78rem; line-height: 1.6; color: var(--muted); }
+.ed-works-empty a { color: var(--accent); }
 
 /* 지난 판 목록. 결과 화면(style.css)에서는 .page 에 마우스를 올렸을 때만
    또렷해지는데, 편집실의 상자는 .scene 이라 그 규칙이 안 걸린다 — 여기서는

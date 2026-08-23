@@ -17,6 +17,11 @@
     <span class="brand-sub">편집실</span>
   </a>
 
+  <button type="button" class="ed-works-toggle" id="worksToggle"
+          aria-expanded="true" aria-controls="edWorks">
+    <span aria-hidden="true">☰</span> 작품
+  </button>
+
   <div class="ed-title">
     <b id="edTitle">—</b>
     <span id="edMeta"></span>
@@ -35,6 +40,14 @@
 </header>
 
 <div class="ed-body">
+  <!-- ============================================ 작품 목록 ============ -->
+  <!-- 만들어 둔 웹툰 전부. 목록이 비어 있어도(아직 하나도 안 만든 사람) 자리를
+       지운다 — 자리가 사라지면 "그런 기능이 없다"로 읽힌다. -->
+  <aside class="ed-works" id="edWorks">
+    <p class="ed-works-head">내 작품</p>
+    <div id="worksList"></div>
+  </aside>
+
   <!-- ============================================ 웹툰 스크롤 ========== -->
   <main class="ed-stage" id="stageCol">
     <div class="ed-stage-head">
