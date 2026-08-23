@@ -10,8 +10,15 @@
  *   · 그림 위에 말풍선·스티커·효과음 얹기
  *
  * ── 얹은 것은 어디에 남는가 ────────────────────────────────────────────
- * **이 브라우저에만** 남습니다(localStorage). 서버로 보내지 않고 그림에도 굽지
- * 않습니다 — 다른 기기에서 열면 없습니다.
+ * 실제 작품(`?run=`)을 열었으면 **작품 폴더에 저장됩니다**(`overlay.json`).
+ * 브라우저를 비워도, 다른 기기에서 열어도 그대로 있습니다. localStorage 는 그
+ * 앞단의 임시 칸으로만 남깁니다 — 서버가 잠깐 안 되어도 하던 작업이 안 날아가게.
+ *
+ * 그리고 **그림으로 구울 수 있습니다** ("이미지로 뽑기"). 원본은 그대로 두고
+ * `baked/scene{n}.png` 와 `episode_baked.png` 를 따로 만듭니다 — 말풍선을 옮긴 뒤
+ * 다시 구우려면 밑그림이 깨끗해야 하기 때문입니다.
+ *
+ * 샘플(`run` 없음)은 예전처럼 이 브라우저에만 남습니다. 구울 그림이 없습니다.
  *
  * 저장 칸은 **작품마다 따로**입니다(`lore_editor_v2:<run_id>`). 예전에는 열쇠가
  * 하나뿐이라, A 작품에 얹은 스티커가 B 작품을 열었을 때 그대로 따라왔습니다 —
@@ -65,6 +72,53 @@ function load() {
 }
 function save() {
   try { localStorage.setItem(storeKey(), JSON.stringify(state)); } catch { /* 용량 초과 */ }
+  pushSoon();
+}
+
+/* ── 서버로 올리기 ──────────────────────────────────────────────────────
+   끌 때마다 올리면 초당 수십 번이 된다. 손을 멈추고 600ms 뒤에 한 번만 올린다.
+   실패해도 조용히 넘어간다 — localStorage 에는 이미 들어갔고, "이미지로 뽑기"
+   가 어차피 지금 상태를 통째로 다시 올린다. 여기서 토스트를 띄우면 서버가
+   잠깐 느릴 때마다 편집을 방해한다. */
+let pushT = null, pushing = false, pushDirty = false;
+
+/* 그림이 화면에서 몇 px 로 보이는가 — 글자 크기를 그림 해상도로 옮길 때 쓴다.
+   퍼센트인 자리(x·y·w)와 달리 size 는 CSS 픽셀이라 기준 폭이 있어야 한다. */
+function refWidth(no) {
+  const wrap = document.querySelector(`#scene-${no} [data-wrap]`);
+  const w = wrap ? Math.round(wrap.getBoundingClientRect().width) : 0;
+  return w > 0 ? w : 720;
+}
+
+function overlayPayload() {
+  const scenes = {};
+  for (const s of (data?.scenes || [])) {
+    const st = state.scenes[s.no];
+    // 한 번도 안 건드린 장은 안 보낸다. 빈 배열을 보내면 서버가 "여기 있던 것을
+    // 지웠다" 로 읽어서, 다른 기기에서 얹어 둔 것이 사라진다.
+    if (!st || !Array.isArray(st.items)) continue;
+    scenes[s.no] = { ref_w: refWidth(s.no), items: st.items };
+  }
+  return { scenes };
+}
+
+async function pushNow() {
+  if (!RUN_ID) return;                       // 샘플은 올릴 곳이 없다
+  if (pushing) { pushDirty = true; return; }
+  pushing = true;
+  try {
+    await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(overlayPayload()) });
+  } catch { /* 아래에서 다시 시도된다 */ }
+  pushing = false;
+  if (pushDirty) { pushDirty = false; pushSoon(); }
+}
+
+function pushSoon() {
+  if (!RUN_ID) return;
+  clearTimeout(pushT);
+  pushT = setTimeout(pushNow, 600);
 }
 function sc(no) {
   if (!state.scenes[no]) state.scenes[no] = { items: [], fb: {}, ver: 1, noBubble: false };
@@ -543,6 +597,32 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"]/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
+/* 구운 결과 — 몇 장을 구웠고 무엇이 빠졌는지 말하고, 내려받을 자리를 준다.
+   토스트 한 줄로 끝내지 않는 이유: 스티커가 빠졌거나 안 그려진 장이 있으면
+   그것을 알아야 하고, 그건 한 줄에 안 들어간다. */
+function showBaked(out) {
+  const box = $("#bakeResult");
+  if (!box) return toast(`${out.scenes.length}장을 구웠습니다`);
+  const gone = (out.missing || []).length
+    ? `<p class="bake-warn">아직 안 그려진 장 ${out.missing.join(", ")}번은 빠졌습니다.</p>` : "";
+  const skip = (out.skipped || []).length
+    ? `<p class="bake-warn">못 그린 것: ${out.skipped.map(esc).join(", ")}`
+      + ` — 이모지 글꼴이 없는 서버에서는 스티커가 빠집니다.</p>` : "";
+  box.innerHTML = `
+    <div class="bake-head">
+      <b>${out.scenes.length}장을 구웠습니다</b>
+      <span>${out.width}×${out.height}px · 얹은 것 ${out.items}개</span>
+    </div>
+    ${gone}${skip}
+    <div class="bake-acts">
+      <a class="btn btn-primary btn-sm" href="${out.url}" download>내려받기</a>
+      <a class="btn btn-quiet btn-sm" href="${out.url}" target="_blank" rel="noopener">새 탭에서 보기</a>
+      <button type="button" class="btn btn-quiet btn-sm" id="bakeClose">닫기</button>
+    </div>`;
+  box.hidden = false;
+  $("#bakeClose").addEventListener("click", () => { box.hidden = true; });
+}
+
 let toastT = null;
 function toast(msg) {
   const el = $("#toast");
@@ -678,6 +758,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector("#creditBox")?.remove();
     document.querySelector("#ledgerBtn")?.remove();
   }
+  // 서버에 저장된 것이 **기준**이다. 다른 기기에서 얹은 것도 여기서 따라온다.
+  // 서버가 조용하면(못 읽으면) localStorage 에 있던 것을 그대로 쓴다 — 하던
+  // 작업이 통신 한 번 실패했다고 사라지면 안 된다.
+  if (RUN_ID) {
+    try {
+      const got = await (await fetch(
+        `/api/runs/${encodeURIComponent(RUN_ID)}/overlay`)).json();
+      for (const [no, sp] of Object.entries(got.scenes || {})) {
+        if (Array.isArray(sp.items)) sc(Number(no)).items = sp.items.map(
+          (it, i) => ({ ...it, id: it.id || `s${no}_${i}_${++uid}` }));
+      }
+    } catch { /* localStorage 것을 쓴다 */ }
+  }
+
   render();
 
   $$(".dock-tab").forEach(b => b.addEventListener("click", () => {
@@ -737,14 +831,43 @@ document.addEventListener("DOMContentLoaded", async () => {
     { $("#dockLedger").hidden = !$("#dockLedger").hidden; });
   $("#ledgerClose").addEventListener("click", () => { $("#dockLedger").hidden = true; });
 
-  // 저장은 이미 항목을 건드릴 때마다 자동으로 되고 있다(save()). 이 단추는
-  // **어디에 저장됐는지**를 밝히는 자리다 — 서버에 올라간 줄 알면 다른 기기에서
-  // 열었을 때 사라진 것으로 보인다.
-  $("#saveBtn").addEventListener("click", () => {
+  // 저장은 항목을 건드릴 때마다 자동으로 된다(save() → pushSoon()). 이 단추는
+  // **지금 당장** 올리고 그 결과를 말해 주는 자리다 — 자동 저장은 조용해서,
+  // 창을 닫기 전에 확인하고 싶을 때 누를 곳이 있어야 한다.
+  $("#saveBtn").addEventListener("click", async () => {
     save();
-    toast(RUN_ID
-      ? "얹은 것은 이 브라우저에만 저장됩니다 — 그림에는 굽지 않습니다."
-      : "샘플입니다 — 얹은 것과 피드백은 이 브라우저에만 저장됩니다.");
+    if (!RUN_ID) return toast("샘플입니다 — 얹은 것은 이 브라우저에만 저장됩니다.");
+    clearTimeout(pushT);
+    try {
+      const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(overlayPayload()) });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || "저장하지 못했습니다");
+      toast(`작품 폴더에 저장했습니다 — 얹은 것 ${out.items}개`);
+    } catch (err) { toast(err.message); }
+  });
+
+  // 이미지로 뽑기 — 얹은 것을 그림에 구워서 내려받는다.
+  // 저장과 굽기를 한 번에 보낸다. 따로 왕복하면 그 사이에 실패했을 때 화면에
+  // 보이는 것과 구운 것이 갈린다.
+  $("#bakeBtn")?.addEventListener("click", async () => {
+    if (!RUN_ID) return toast("샘플에는 구울 그림이 없습니다. 실제 작품을 열어 주세요.");
+    const btn = $("#bakeBtn");
+    btn.disabled = true;
+    const was = btn.textContent;
+    btn.textContent = "굽는 중…";
+    clearTimeout(pushT);
+    try {
+      const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/bake`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(overlayPayload()) });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || "굽지 못했습니다");
+      showBaked(out);
+    } catch (err) { toast(err.message); }
+    btn.disabled = false;
+    btn.textContent = was;
   });
 
   document.addEventListener("keydown", e => {

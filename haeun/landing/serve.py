@@ -217,6 +217,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(404, "그 run 의 1화 컷을 찾지 못했습니다")
             return self._json(data)
 
+        # 편집실에서 얹은 말풍선·스티커. 브라우저가 아니라 **작품 폴더**에 있어서
+        # 다른 기기에서 열어도 그대로다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/overlay", path)
+        if m:
+            return self._json(pipeline.read_overlay(m.group(1), self._ep(query)))
+
+        # 구워 놓은 한 편 내려받기. 아직 안 구웠으면 404 — 화면이 "먼저 구우세요"
+        # 라고 말할 수 있어야 하므로 원본으로 슬쩍 바꿔치지 않는다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/baked\.png", path)
+        if m:
+            ep = self._ep(query)
+            src = pipeline.baked_episode(m.group(1), ep)
+            if not src:
+                return self._error(404, "아직 구운 그림이 없습니다")
+            return self._file(src, download=pipeline.episode_filename(
+                m.group(1), ep, baked=True))
+
         m = re.fullmatch(r"/api/runs/([\w.-]+)/cost", path)
         if m:
             return self._json(pipeline.run_cost(m.group(1)))
@@ -624,6 +641,34 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
             job.decide_board(decision, self._record_feedback(job, "board", decision, body))
             return self._json({"ok": True})
+
+        # 편집실에서 얹은 것을 작품 폴더에 저장한다. 그림은 안 건드린다 —
+        # 굽는 것은 아래 /bake 이고, 저장은 굽지 않아도 남아야 한다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/overlay", url.path)
+        if m:
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            ep = self._ep(parse_qs(url.query))
+            try:
+                return self._json(pipeline.write_overlay(m.group(1), body, ep))
+            except pipeline.Failed as exc:
+                return self._error(400, str(exc))
+
+        # 얹은 것을 그림에 굽는다. 원본은 그대로 두고 baked/ 에 따로 쓴다 —
+        # 말풍선을 옮긴 뒤 다시 구우려면 밑그림이 깨끗해야 한다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/bake", url.path)
+        if m:
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            ep = self._ep(parse_qs(url.query))
+            try:
+                return self._json(pipeline.bake_overlay(m.group(1), body, ep))
+            except pipeline.Failed as exc:
+                return self._error(400, str(exc))
 
         return self._error(404, "없는 주소입니다")
 
