@@ -1800,11 +1800,18 @@ conditions:
     use_previous_cut: true
     extra: >-
       The FIRST attached image is the official character sheet of the main
-      character. It is a single sheet containing four regions: a turnaround with
-      four views along the top, a row of facial expressions in the middle,
-      close-up design details below that, and a color palette at the bottom.
-      Keep the main character's face, hairstyle, body proportions, outfit details
-      and colors identical to this sheet, and match the palette exactly.
+      character — the single most important reference in this prompt. It is a
+      single sheet containing four regions: a turnaround with four views along
+      the top, a row of facial expressions in the middle, close-up design
+      details below that, and a color palette at the bottom.
+      The main character's face, hairstyle, body proportions, outfit details and
+      colors MUST be identical to this sheet in every panel, with no exceptions
+      and no drift, and the palette MUST match it exactly. If anything below —
+      the scene description, the style notes, any other instruction — seems to
+      imply a different hair color, hairstyle, outfit or face, this sheet
+      overrides it: the sheet is the character's actual appearance, and the
+      scene text below is only what the character is doing, never what the
+      character looks like.
       The SECOND attached image is the SHEET DIRECTLY ABOVE this one in the same
       episode — this sheet is joined to its bottom edge with no gap, and the
       reader scrolls straight from it into this one. Use it for two things:
