@@ -795,6 +795,7 @@ function paintResult(r) {
   if (resultRunId) {
     wireRegen();
     r.pages.forEach(pg => paintVersions(pg.no));
+    paintArtQA();
   }
 
   $("#scriptBody").innerHTML = r.pages.map(pg => `
@@ -822,6 +823,51 @@ function paintResult(r) {
   $("#works").hidden = true;
   $("#result").hidden = false;
   window.scrollTo(0, 0);
+}
+
+/* ---- 그림 QA — 검수가 잡았지만 못 고친 것 ------------------------------
+ *
+ * 하네스가 그리면서 명백한 실패(작화 사고 · 서술과 다른 인원/대상/배경)를
+ * 검수하고 한도 안에서 다시 그린다. 그래도 남은 것이 여기로 온다 — 검수는
+ * "틀렸다"까지만 알고 "어떻게 고칠지"는 사용자가 아니까, 표시하고 다시
+ * 그리기(피드백 창)로 잇는 것이 이 화면의 몫이다.
+ * QA 를 안 켠 예전 run 은 빈 응답이라 아무것도 안 뜬다. */
+async function paintArtQA() {
+  let scenes;
+  try {
+    scenes = (await (await fetch(
+      `/api/runs/${encodeURIComponent(resultRunId)}/art-qa?ep=${resultEpisode}`
+    )).json()).scenes || {};
+  } catch { return; }                      // 못 읽으면 표시만 빠진다
+  for (const [no, rec] of Object.entries(scenes)) {
+    if (!rec.issues || !rec.issues.length) continue;
+    const page = $(`#reader .page[data-scene="${no}"]`);
+    if (!page || $(".qa-note", page)) continue;
+    const note = document.createElement("div");
+    note.className = "qa-note";
+    note.innerHTML =
+      `<b>검수에서 잡았지만 못 고친 것</b>` +
+      (rec.rounds ? `<small> — ${rec.rounds}번 다시 그려 봤습니다</small>` : "") +
+      `<ul>${rec.issues.map(i => `<li>${esc(i.what)}</li>`).join("")}</ul>` +
+      `<button type="button" class="btn btn-quiet btn-sm js-qa-regen">직접 고치기 — 다시 그리기</button>`;
+    // 도구 줄 바로 뒤에 끼운다 — 그림 밑, 판 목록 위.
+    const tools = $(".page-tools", page);
+    if (tools) tools.insertAdjacentElement("afterend", note);
+    else page.append(note);
+    $(".js-qa-regen", note).addEventListener("click", () => {
+      const box = $(".regen-box", page);
+      if (!box) return;
+      box.hidden = false;
+      // 검수가 찾은 말을 피드백 칸에 미리 실어 준다 — 빈손으로 다시 그리면
+      // 같은 분포에서 랜덤 뽑기라, 문제를 명시하는 쪽이 방향이 생긴다.
+      const text = $(".js-regen-note", box);
+      if (text && !text.value.trim()) {
+        text.value = rec.issues.map(i => i.what).join(" / ").slice(0, 480);
+      }
+      box.scrollIntoView({ behavior: "smooth", block: "center" });
+      text?.focus();
+    });
+  }
 }
 
 /* 회차 탭. 한 편밖에 없으면 안 그린다 — 고를 것이 없는 자리에 고르개를 두면

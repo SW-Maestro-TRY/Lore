@@ -273,6 +273,13 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             return self._json({"feedback": pipeline.read_feedback(m.group(1))})
 
+        # 그림 QA 최종 판정 — 검수가 잡았지만 재생성 한도 안에서 못 고친 것.
+        # 결과 화면이 장 밑에 표시하고 "다시 그리기"(사용자 피드백)로 잇는다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/art-qa", path)
+        if m:
+            return self._json({"scenes": pipeline.read_art_qa(
+                m.group(1), self._ep(query))})
+
         # 다시 그리기 — 지난 판 목록과 그 그림.
         m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions", path)
         if m:

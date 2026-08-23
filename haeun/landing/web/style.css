@@ -837,3 +837,19 @@ body[data-view="nextep"]  .topbar { display: none; }
 .mem-box .field { margin-top: .6rem; }
 .mem-count { font-weight: 700; }
 .mem-status { font-size: .78rem; color: var(--muted, #8a8a94); }
+
+/* ---- 그림 QA — 검수가 잡았지만 못 고친 것 -------------------------------
+   경고지만 빨간 오류처럼 굴지 않는다 — 그림은 살아 있고, 고칠지는 사용자가
+   정한다. 도구(page-tools)와 달리 늘 또렷하다: 마우스를 안 올려도 보여야
+   "검수가 있었다"는 사실 자체가 전달된다. */
+.qa-note {
+  margin: .3rem .2rem .6rem;
+  border: 1px solid rgba(217,180,101,.4);
+  border-radius: .6rem; padding: .6rem .8rem;
+  background: rgba(217,180,101,.08);
+  font-size: .84rem;
+}
+.qa-note b { color: var(--gold); font-size: .82rem; }
+.qa-note small { color: var(--dim); }
+.qa-note ul { margin: .4rem 0 .5rem; padding-left: 1.2em; color: var(--muted); }
+.qa-note li { margin: .15em 0; }
