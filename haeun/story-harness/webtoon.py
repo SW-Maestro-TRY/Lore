@@ -69,7 +69,7 @@ from story import (
     STATUS_OK, STATUS_HUMAN, STATUS_PARSE_FAIL, STATUS_API_FAIL,
     Caller, MockBackend, make_backend, resolve_provider, describe_setup,
     ParseFailure, ApiFailure, Usage, PromptSet, cost_text, append_csv_row,
-    load_prompts, render, feedback_block, write_json, log, warn,
+    load_prompts, render, feedback_block, feedback_slot, write_json, log, warn,
     is_blank, normalize_source, log_prompt_hashes, normalize_palette,
     resolve_directing_notes,
 )
@@ -3843,7 +3843,8 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                ledger_snapshot: str, irony_present: bool, absolute: int,
                max_retries: int, spent: int = 0, known: set = None,
                series_arc: str = "", zones_txt: str = "",
-               known_zones: set = None, personality: str = "") -> tuple:
+               known_zones: set = None, personality: str = "",
+               author_note: str = "") -> tuple:
     """(게이트를 통과하고 연출이 계산된 payload, 재시도 횟수, 메모). 못 하면 Stopped.
 
     run_webtoon 의 7단계와 --cuts-only 가 같은 것을 쓰게 하려고 밖에 둔다.
@@ -3873,7 +3874,7 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                 "setting_block": setting_block(episode),
                 "zones_block": zones_txt or "(등록된 존이 없습니다)",
                 "directing_notes": directing_notes or "(해당 없음)",
-                "retry_feedback": feedback_block(feedback),
+                "retry_feedback": feedback_slot(author_note, feedback),
             }),
             TEMP_CREATIVE,
             lambda o: cuts_brief(o.get("cuts") or []))
@@ -4271,7 +4272,7 @@ def text_pass_warnings(cuts: list, scenes: list, facts: list = None) -> list:
 
 def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
                ledger_snapshot: str, absolute: int, max_retries: int,
-               facts: list = None) -> tuple:
+               facts: list = None, author_note: str = "") -> tuple:
     """(글자를 다시 쓴 payload, 재시도 횟수, 메모). 못 하면 원본을 그대로 돌려준다.
 
     7단계와 달리 **막히면 중단하지 않는다.** 여기서 세우면 이미 통과한 컷
@@ -4291,7 +4292,7 @@ def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
                 "cuts_json": json.dumps(cuts, ensure_ascii=False, separators=(",", ":")),
                 "pov": pov or "(엔진 카드에서 주인공을 찾지 못했습니다)",
                 "banned_words": " · ".join(BANNED_IN_DIALOGUE),
-                "retry_feedback": feedback_block(feedback),
+                "retry_feedback": feedback_slot(author_note, feedback),
             }),
             TEMP_CREATIVE)
 
@@ -4692,7 +4693,8 @@ def load_story_run(run_dir: Path) -> dict:
 
 def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                 max_retries: int, ledger_cap: int, resume: bool,
-                episode_target: int = 1, replan: bool = False) -> WebtoonResult:
+                episode_target: int = 1, replan: bool = False,
+                author_note: str = "") -> WebtoonResult:
     """Arc 큰 줄거리를 잡고, **다음 화부터 episode_target 편**을 만든다.
 
     기본이 1편인 이유: 지금 보고 싶은 것은 1화다. 1화가 재미있으면 그때 2화를
@@ -4762,7 +4764,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                     "W4", "큰 줄거리 분할",
                     render(ps.texts["w4"], {
                         "engine_card": card, "character_sheet": sheet,
-                        "retry_feedback": feedback_block(feedback),
+                        "retry_feedback": feedback_slot(author_note, feedback),
                     }),
                     TEMP_CREATIVE,
                     lambda o: f"Arc {len(o.get('arcs') or [])}개")
@@ -4839,7 +4841,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                         # 앞 화 요약만이 아니라 **인물·설정 명부까지** 넘긴다.
                         # 요약만 주면 3화가 1화의 인물 이름을 잊는다.
                         "series_state": state.brief(ledger),
-                        "retry_feedback": feedback_block(feedback),
+                        "retry_feedback": feedback_slot(author_note, feedback),
                     }),
                     TEMP_CREATIVE,
                     lambda o: str(o.get("title") or "")[:20])
@@ -4954,13 +4956,14 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                     series_arc=series_arc_block(arcs, arc),
                     zones_txt=zones_block(state, episode),
                     known_zones={z["zone_id"] for z in state.zones},
-                    personality=p1.get("personality"))
+                    personality=p1.get("personality"),
+                    author_note=author_note)
                 result.regen_stage7 += regens
 
                 # ---- 8단계: 컷이 확정된 뒤에 글자만 다시 쓴다 ----------
                 payload, w8_regens, w8_notes = solve_text(
                     ps, call, card, episode, payload, ledger.snapshot(no),
-                    no, max_retries, facts=state.facts)
+                    no, max_retries, facts=state.facts, author_note=author_note)
                 notes += w8_notes
                 for note in notes:
                     warn(f"    {note}")
@@ -5081,7 +5084,8 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
 # ---------------------------------------------------------------- 기록
 
 def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
-                  max_retries: int, resume: bool, only: list = None) -> int:
+                  max_retries: int, resume: bool, only: list = None,
+                  author_note: str = "") -> int:
     """이미 회차까지 나온 run 의 컷만 다시 뽑는다 (화당 호출 1회).
 
     4~6단계를 다시 돌지 않는 것이 요점이다. 같은 회차 설계에 컷 분해만 바꿔 보고
@@ -5182,7 +5186,8 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
                                             arcs.get(arc_order)),
                 zones_txt=zones_block(state, episode),
                 known_zones={z["zone_id"] for z in state.zones},
-                personality=story["p1"].get("personality"))
+                personality=story["p1"].get("personality"),
+                author_note=author_note)
         except Stopped as exc:
             # 게이트를 못 넘겼다. 트레이스백으로 죽지 않고 무엇이 걸렸는지만
             # 보여 준다 — 사람이 고칠 것은 프롬프트지 파이썬 스택이 아니다.
@@ -5192,7 +5197,7 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
             continue
         payload, _, w8_notes = solve_text(
             ps, call, card, episode, payload, ledger.snapshot(absolute),
-            absolute, max_retries, facts=state.facts)
+            absolute, max_retries, facts=state.facts, author_note=author_note)
         notes += w8_notes
         for note in notes:
             warn(f"    {note}")
@@ -5852,6 +5857,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", default=str(RUNS_DIR), help="runs 디렉터리")
     p.add_argument("--check", action="store_true", help="API 없이 프롬프트 변수만 점검")
     p.add_argument("--mock", action="store_true", help="API 없이 게이트·장부만 점검")
+    # 작가가 콘티를 보고 "이걸 고쳐 달라"고 적은 말. W4·W5·W7·W8 프롬프트의
+    # {retry_feedback} 자리에 [작가 요청] 블록으로 들어간다. 안 주면 예전과 똑같다.
+    p.add_argument("--author-note", default="",
+                   help="작가가 다시 만들며 요청한 것 (W4·W5·W7·W8 프롬프트에 실림)")
     return p
 
 
@@ -5971,7 +5980,7 @@ def main(argv=None) -> int:
         for run_dir in targets:
             log(f"컷만 다시 뽑기 · {run_dir.name}")
             run_cuts_only(caller, ps, run_dir, args.max_retries, args.resume,
-                          only=args.episode)
+                          only=args.episode, author_note=args.author_note)
             build_webtoon_output(run_dir)
         return 0
 
@@ -5982,7 +5991,7 @@ def main(argv=None) -> int:
         res = run_webtoon(caller, ps, run_dir, out_dir,
                           args.max_retries, args.ledger_cap, args.resume,
                           episode_target=max(1, args.episodes),
-                          replan=args.replan)
+                          replan=args.replan, author_note=args.author_note)
         tally[res.status] = tally.get(res.status, 0) + 1
         made = (f"{res.episode_count}화"
                 + (f"(누적 {res.series_total}화)"

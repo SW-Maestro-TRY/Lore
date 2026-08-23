@@ -107,6 +107,20 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         return json.loads(self.rfile.read(length).decode("utf-8"))
 
+    def _record_feedback(self, job, stage: str, decision: str, body: dict) -> str:
+        """승인 화면에서 온 항목·자유 입력을 run 폴더에 남기고, 프롬프트에 실을
+        글로 돌려준다.
+
+        approve 에도 남긴다 — "이대로 진행"을 누르면서 불만을 적는 사람이 있고,
+        그건 다음 판을 고칠 근거로는 오히려 더 정확하다. 다만 approve 는 다시
+        만들지 않으므로 돌려주는 글은 쓰이지 않는다.
+        """
+        tags = pipeline.clean_tags(stage, body.get("tags"))
+        text = str(body.get("feedback") or "").strip()[:pipeline.FEEDBACK_TEXT_MAX]
+        if job.run_id:
+            pipeline.append_feedback(job.run_id, stage, tags, text, decision=decision)
+        return pipeline.author_note(stage, tags, text)
+
     # ---- 라우팅 ------------------------------------------------------------ #
 
     # 요청 하나가 터져도 서버는 계속 돌아야 한다. 브라우저는 0.8초마다
@@ -151,6 +165,10 @@ class Handler(BaseHTTPRequestHandler):
                 "condition": pipeline.CONDITION,
                 "cuts_per_sheet": pipeline.CUTS_PER_SHEET,
                 "worlds": pipeline.world_presets(),
+                # 단계별로 고를 수 있는 불만 항목. 화면이 목록을 들고 있지 않게
+                # 해서, 항목을 늘릴 때 파이썬 한 군데만 고치면 되게 한다.
+                "feedback_tags": pipeline.FEEDBACK_TAGS,
+                "feedback_text_max": pipeline.FEEDBACK_TEXT_MAX,
             })
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
@@ -168,6 +186,12 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/runs/([\w.-]+)/cost", path)
         if m:
             return self._json(pipeline.run_cost(m.group(1)))
+
+        # 이 작품에 지금까지 어떤 말을 했는가. 화면이 "적어 주신 것" 목록을
+        # 그리는 데 쓰고, 사람이 직접 열어 봐도 된다 (runs/<id>/feedback.jsonl).
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/feedback", path)
+        if m:
+            return self._json({"feedback": pipeline.read_feedback(m.group(1))})
 
         # 다시 그리기 — 지난 판 목록과 그 그림.
         m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions", path)
@@ -386,11 +410,13 @@ class Handler(BaseHTTPRequestHandler):
             if not pipeline.unit_image(run_id, scene_no):
                 return self._error(409, "아직 그려지지 않은 장입니다")
             feedback = str(body.get("feedback") or "").strip()
-            if len(feedback) > 500:
-                return self._error(400, "요청은 500자까지 적어 주세요")
+            if len(feedback) > pipeline.FEEDBACK_TEXT_MAX:
+                return self._error(
+                    400, f"요청은 {pipeline.FEEDBACK_TEXT_MAX}자까지 적어 주세요")
             job = pipeline.regens.start(run_id, scene_no, feedback,
                                         str(body.get("style") or ""),
-                                        bool(body.get("textless")))
+                                        bool(body.get("textless")),
+                                        pipeline.clean_tags("scene", body.get("tags")))
             return self._json(job.snapshot())
 
         m = re.fullmatch(r"/api/regens/([\w.-]+)/cancel", url.path)
@@ -444,6 +470,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
             fields = body.get("fields")
             fields = fields if isinstance(fields, dict) else None
+            # 시트는 고른 항목·적은 말을 프롬프트로 보내지 않는다 (pipeline 의
+            # 시트 단계 주석 참고) — 기록만 하고, 실제 수정은 fields 가 한다.
+            self._record_feedback(job, "sheet", decision, body)
             job.decide_sheet(decision, fields)
             return self._json({"ok": True})
 
@@ -463,7 +492,7 @@ class Handler(BaseHTTPRequestHandler):
             decision = str(body.get("decision") or "")
             if decision not in ("approve", "retry"):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
-            job.decide_story(decision)
+            job.decide_story(decision, self._record_feedback(job, "story", decision, body))
             return self._json({"ok": True})
 
         # 콘티 확인 화면의 "이대로 진행" / "다시 만들기" 버튼 — 콘티 단계
@@ -482,7 +511,7 @@ class Handler(BaseHTTPRequestHandler):
             decision = str(body.get("decision") or "")
             if decision not in ("approve", "retry"):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
-            job.decide_board(decision)
+            job.decide_board(decision, self._record_feedback(job, "board", decision, body))
             return self._json({"ok": True})
 
         return self._error(404, "없는 주소입니다")

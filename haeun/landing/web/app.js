@@ -57,15 +57,82 @@ function buildForm() {
   }));
 }
 
+/* ---- 사용자 피드백 ---------------------------------------------------- *
+ *
+ * 자유 입력만 두면 대부분 아무것도 안 적고 넘어간다 — 그러면 왜 다시 만들라고
+ * 했는지가 남지 않는다. 그래서 자주 나온 불만을 버튼으로 먼저 보여 주고, 그
+ * 밖의 말은 그대로 적게 한다. 둘 다 선택이라 아무것도 안 하고 눌러도 된다.
+ *
+ * 항목 목록은 서버(/api/config)가 준다. 화면에 베껴 두면 pipeline.py 의
+ * FEEDBACK_TAGS 와 갈라지고, 화면에만 있는 id 를 보내면 서버가 버린다. */
+
+let fbTagsByStage = {};
+let fbTextMax = 500;
+
+function fbChips(stage, wrap, max) {
+  wrap.replaceChildren(...(fbTagsByStage[stage] || []).map(t => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "fb-tag";
+    b.dataset.tagId = t.id;
+    b.textContent = t.label;
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () =>
+      b.setAttribute("aria-pressed",
+                     b.getAttribute("aria-pressed") === "true" ? "false" : "true"));
+    return b;
+  }));
+  if (max) max.maxLength = fbTextMax;
+}
+
+async function loadFeedbackTags() {
+  try {
+    const cfg = await getConfig();
+    fbTagsByStage = cfg.feedback_tags || {};
+    fbTextMax = cfg.feedback_text_max || fbTextMax;
+  } catch { return; }      // 못 받으면 자유 입력만 남는다 — 승인 자체는 안 막는다
+  document.querySelectorAll(".fb-box").forEach(box =>
+    fbChips(box.dataset.fbStage, $(".fb-tags", box), $(".fb-text", box)));
+}
+
+/* 그 단계에서 고른 항목과 적은 말. 상자가 없거나 아무것도 안 했으면 빈 값이다. */
+function fbRead(box) {
+  if (!box) return { tags: [], feedback: "" };
+  return {
+    tags: [...box.querySelectorAll('.fb-tag[aria-pressed="true"]')]
+      .map(b => b.dataset.tagId),
+    feedback: ($(".fb-text", box)?.value || "").trim(),
+  };
+}
+
+/* 보낸 뒤에는 비운다. 다음 판에도 지난번에 고른 것이 눌린 채로 남아 있으면
+   사람이 다시 고른 것처럼 보여서 같은 말이 두 번 프롬프트에 실린다. */
+function fbClear(box) {
+  if (!box) return;
+  box.querySelectorAll(".fb-tag").forEach(b => b.setAttribute("aria-pressed", "false"));
+  const text = $(".fb-text", box);
+  if (text) text.value = "";
+}
+
+function fbStageBox(stage) {
+  return document.querySelector(`.fb-box[data-fb-stage="${stage}"]`);
+}
+
 /* 세계관 프리셋 — 목록은 서버(story-harness/worlds.json)에서 받는다.
    여기에 베껴 두면 두 곳이 갈라지고, 화면에만 있는 키를 고르면 story.py 가
    worlds.json 에서 그 키를 못 찾아 실행이 통째로 멈춘다. */
+let configOnce = null;
+function getConfig() {
+  if (!configOnce) configOnce = fetch("/api/config").then(r => r.json());
+  return configOnce;
+}
+
 async function loadWorlds() {
   const sel = $("#worldPreset"), hint = $("#worldHint");
   if (!sel) return;
   let worlds = [];
   try {
-    worlds = (await (await fetch("/api/config")).json()).worlds || [];
+    worlds = (await getConfig()).worlds || [];
   } catch { return; }               // 못 받아도 자유 입력은 그대로 된다
   if (!worlds.length) return;
 
@@ -449,7 +516,9 @@ async function sendSheetDecision(decision) {
   if (!jobId) return;
   setSheetButtonsBusy(true);
   try {
-    const body = { decision };
+    // 고른 항목·적은 말은 approve 에도 보낸다 — "이대로 진행"을 누르면서도
+    // 불만은 적는 사람이 있고, 그게 다음 판을 고칠 근거가 된다.
+    const body = { decision, ...fbRead(fbStageBox("sheet")) };
     // 수정한 값은 approve 에는 의미가 없다 — 이미 채택한 그림을 텍스트만
     // 바꿔서 바꿀 수는 없으므로, 반영하려면 retry 로 다시 그려야 한다.
     if (decision === "retry") body.fields = sheetEditFields();
@@ -460,6 +529,7 @@ async function sendSheetDecision(decision) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    fbClear(fbStageBox("sheet"));
     // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
   } catch (err) {
     toast(err.message);
@@ -479,10 +549,11 @@ async function sendStoryDecision(decision) {
     const res = await fetch(`/api/jobs/${jobId}/story-decision`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, ...fbRead(fbStageBox("story")) }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    fbClear(fbStageBox("story"));
     // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
   } catch (err) {
     toast(err.message);
@@ -502,10 +573,11 @@ async function sendBoardDecision(decision) {
     const res = await fetch(`/api/jobs/${jobId}/board-decision`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, ...fbRead(fbStageBox("board")) }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    fbClear(fbStageBox("board"));
     // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
   } catch (err) {
     toast(err.message);
@@ -607,10 +679,13 @@ function pageTools(no) {
     <div class="page-tools">
       <button type="button" class="btn btn-quiet btn-sm js-regen-open">이 장 다시 그리기</button>
     </div>
-    <div class="regen-box" hidden>
+    <div class="regen-box fb-box" data-fb-stage="scene" hidden>
+      <p class="fb-lead">무엇이 마음에 안 드나요?
+        <small>고르면 다시 그릴 때 반영됩니다 — 안 골라도 됩니다</small></p>
+      <div class="fb-tags"></div>
       <label class="field">
         <span>무엇을 고칠까요? <small>비워도 됩니다 — 그냥 한 번 더 그립니다</small></span>
-        <textarea rows="2" class="js-regen-note" maxlength="500"
+        <textarea rows="2" class="js-regen-note fb-text" maxlength="500"
           placeholder="예: 표정을 더 밝게 / 배경을 밤으로 / 인물을 왼쪽에"></textarea>
       </label>
       <label class="check-line">
@@ -630,18 +705,20 @@ function wireRegen() {
   $$("#reader .page").forEach(page => {
     const no  = Number(page.dataset.scene);
     const box = $(".regen-box", page);
+    // 장마다 상자가 하나씩이라 항목도 장마다 새로 그린다.
+    fbChips("scene", $(".fb-tags", box), $(".fb-text", box));
     $(".js-regen-open", page).addEventListener("click", () => {
       box.hidden = !box.hidden;
       if (!box.hidden) $(".js-regen-note", box).focus();
     });
     $(".js-regen-cancel", box).addEventListener("click", () => { box.hidden = true; });
-    $(".js-regen-go", box).addEventListener("click", () =>
-      runRegen(no, $(".js-regen-note", box).value.trim(),
-               $(".js-regen-textless", box).checked, page));
+    $(".js-regen-go", box).addEventListener("click", () => runRegen(no, box, page));
   });
 }
 
-async function runRegen(no, feedback, textless, page) {
+async function runRegen(no, box, page) {
+  const { tags, feedback } = fbRead(box);
+  const textless = $(".js-regen-textless", box).checked;
   const status = $(".js-regen-status", page);
   const go     = $(".js-regen-go", page);
   go.disabled = true;
@@ -651,9 +728,10 @@ async function runRegen(no, feedback, textless, page) {
     const res = await fetch(
       `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/regen`,
       { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedback, textless }) });
+        body: JSON.stringify({ feedback, textless, tags }) });
     job = await res.json();
     if (!res.ok) throw new Error(job.error || "시작하지 못했습니다");
+    fbClear(box);
   } catch (err) {
     go.disabled = false;
     status.textContent = "";
@@ -810,6 +888,7 @@ function toast(msg) {
 document.addEventListener("DOMContentLoaded", () => {
   buildForm();
   loadWorlds();
+  loadFeedbackTags();
   setupPhoto();
   $("#form").addEventListener("submit", submit);
   $("#previewToggle").addEventListener("change", paintCost);
