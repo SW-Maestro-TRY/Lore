@@ -57,15 +57,82 @@ function buildForm() {
   }));
 }
 
+/* ---- 사용자 피드백 ---------------------------------------------------- *
+ *
+ * 자유 입력만 두면 대부분 아무것도 안 적고 넘어간다 — 그러면 왜 다시 만들라고
+ * 했는지가 남지 않는다. 그래서 자주 나온 불만을 버튼으로 먼저 보여 주고, 그
+ * 밖의 말은 그대로 적게 한다. 둘 다 선택이라 아무것도 안 하고 눌러도 된다.
+ *
+ * 항목 목록은 서버(/api/config)가 준다. 화면에 베껴 두면 pipeline.py 의
+ * FEEDBACK_TAGS 와 갈라지고, 화면에만 있는 id 를 보내면 서버가 버린다. */
+
+let fbTagsByStage = {};
+let fbTextMax = 500;
+
+function fbChips(stage, wrap, max) {
+  wrap.replaceChildren(...(fbTagsByStage[stage] || []).map(t => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "fb-tag";
+    b.dataset.tagId = t.id;
+    b.textContent = t.label;
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () =>
+      b.setAttribute("aria-pressed",
+                     b.getAttribute("aria-pressed") === "true" ? "false" : "true"));
+    return b;
+  }));
+  if (max) max.maxLength = fbTextMax;
+}
+
+async function loadFeedbackTags() {
+  try {
+    const cfg = await getConfig();
+    fbTagsByStage = cfg.feedback_tags || {};
+    fbTextMax = cfg.feedback_text_max || fbTextMax;
+  } catch { return; }      // 못 받으면 자유 입력만 남는다 — 승인 자체는 안 막는다
+  document.querySelectorAll(".fb-box").forEach(box =>
+    fbChips(box.dataset.fbStage, $(".fb-tags", box), $(".fb-text", box)));
+}
+
+/* 그 단계에서 고른 항목과 적은 말. 상자가 없거나 아무것도 안 했으면 빈 값이다. */
+function fbRead(box) {
+  if (!box) return { tags: [], feedback: "" };
+  return {
+    tags: [...box.querySelectorAll('.fb-tag[aria-pressed="true"]')]
+      .map(b => b.dataset.tagId),
+    feedback: ($(".fb-text", box)?.value || "").trim(),
+  };
+}
+
+/* 보낸 뒤에는 비운다. 다음 판에도 지난번에 고른 것이 눌린 채로 남아 있으면
+   사람이 다시 고른 것처럼 보여서 같은 말이 두 번 프롬프트에 실린다. */
+function fbClear(box) {
+  if (!box) return;
+  box.querySelectorAll(".fb-tag").forEach(b => b.setAttribute("aria-pressed", "false"));
+  const text = $(".fb-text", box);
+  if (text) text.value = "";
+}
+
+function fbStageBox(stage) {
+  return document.querySelector(`.fb-box[data-fb-stage="${stage}"]`);
+}
+
 /* 세계관 프리셋 — 목록은 서버(story-harness/worlds.json)에서 받는다.
    여기에 베껴 두면 두 곳이 갈라지고, 화면에만 있는 키를 고르면 story.py 가
    worlds.json 에서 그 키를 못 찾아 실행이 통째로 멈춘다. */
+let configOnce = null;
+function getConfig() {
+  if (!configOnce) configOnce = fetch("/api/config").then(r => r.json());
+  return configOnce;
+}
+
 async function loadWorlds() {
   const sel = $("#worldPreset"), hint = $("#worldHint");
   if (!sel) return;
   let worlds = [];
   try {
-    worlds = (await (await fetch("/api/config")).json()).worlds || [];
+    worlds = (await getConfig()).worlds || [];
   } catch { return; }               // 못 받아도 자유 입력은 그대로 된다
   if (!worlds.length) return;
 
@@ -136,10 +203,20 @@ function setupPhoto() {
 /* 크레딧은 **목업**입니다 — 실제 과금과 무관하고, 화면에 얼마가 드는지
    보이게 하려고만 둡니다. 편집실(/editor)의 잔액과 같은 값을 씁니다. */
 const CREDIT = { full: 240, preview: 60 };
+// 컷 모드는 컷 하나가 이미지 한 장이라 그림 호출이 3배다 (지금은 한 장에 3컷).
+// 이야기 단계 비용은 그대로이므로 그림 몫만 늘려 어림한다.
+const WEBTOON_MULT = 3;
+
+function layoutMode() {
+  const el = document.querySelector('input[name="layout_mode"]:checked');
+  return el ? el.value : "fast";
+}
 
 function paintCost() {
   const preview = $("#previewToggle").checked;
-  $("#costChip").textContent = `−${preview ? CREDIT.preview : CREDIT.full} 크레딧`;
+  const base = preview ? CREDIT.preview : CREDIT.full;
+  const cost = layoutMode() === "webtoon" ? base * WEBTOON_MULT : base;
+  $("#costChip").textContent = `−${cost} 크레딧`;
   $("#submitBtn").firstChild.textContent =
     preview ? "미리보기 만들기 " : "웹툰 만들기 ";
 }
@@ -164,6 +241,8 @@ function collect() {
     style:      form.style.value,
     // "" | sd | md | ld. 빈 값이면 그림체가 정한 등신 그대로 간다.
     head_ratio: form.head_ratio ? form.head_ratio.value : "",
+    // fast(한 장에 3컷) | webtoon(컷마다 한 장). 비우면 fast — 지금까지의 방식이다.
+    layout_mode: form.layout_mode ? form.layout_mode.value : "fast",
     preview:    $("#previewToggle").checked,
     photos_data: photos,
   };
@@ -437,7 +516,9 @@ async function sendSheetDecision(decision) {
   if (!jobId) return;
   setSheetButtonsBusy(true);
   try {
-    const body = { decision };
+    // 고른 항목·적은 말은 approve 에도 보낸다 — "이대로 진행"을 누르면서도
+    // 불만은 적는 사람이 있고, 그게 다음 판을 고칠 근거가 된다.
+    const body = { decision, ...fbRead(fbStageBox("sheet")) };
     // 수정한 값은 approve 에는 의미가 없다 — 이미 채택한 그림을 텍스트만
     // 바꿔서 바꿀 수는 없으므로, 반영하려면 retry 로 다시 그려야 한다.
     if (decision === "retry") body.fields = sheetEditFields();
@@ -448,6 +529,7 @@ async function sendSheetDecision(decision) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    fbClear(fbStageBox("sheet"));
     // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
   } catch (err) {
     toast(err.message);
@@ -467,10 +549,11 @@ async function sendStoryDecision(decision) {
     const res = await fetch(`/api/jobs/${jobId}/story-decision`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, ...fbRead(fbStageBox("story")) }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    fbClear(fbStageBox("story"));
     // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
   } catch (err) {
     toast(err.message);
@@ -490,10 +573,11 @@ async function sendBoardDecision(decision) {
     const res = await fetch(`/api/jobs/${jobId}/board-decision`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, ...fbRead(fbStageBox("board")) }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    fbClear(fbStageBox("board"));
     // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
   } catch (err) {
     toast(err.message);
@@ -547,8 +631,9 @@ async function showResult(attempt = 0) {
   // 얼마나 걸렸는지는 결과에도 남긴다 — 다음에 또 만들 때 기다릴 시간을
   // 가늠하는 유일한 근거다. 단계별 내역은 title 로 붙여 둔다.
   const took = r.seconds ? ` · ${mmss(r.seconds)} 걸림` : "";
+  const epNo = r.episode || 1;
   $("#resSub").textContent =
-    `${r.character ? r.character + " · " : ""}1화 · ${r.page_count}장 / ${r.cut_count}컷` +
+    `${r.character ? r.character + " · " : ""}${epNo}화 · ${r.page_count}장 / ${r.cut_count}컷` +
     ` · 한 장에 ${r.cuts_per_sheet}컷${short}${took}`;
   $("#resSub").title = (r.stage_times || [])
     .map(s => `${s.title} ${mmss(s.seconds)}`).join("  ·  ");
@@ -575,6 +660,14 @@ async function showResult(attempt = 0) {
       ${pg.cuts.map(scriptCut).join("")}
     </div>`).join("");
 
+  // 이어 만들기 단추 — 그린 작품이 있어야 뜻이 있다.
+  nextEpCtx = resultRunId
+    ? { runId: resultRunId, next: r.next_episode || (epNo + 1),
+        character: r.character || "", title: r.title || "" }
+    : null;
+  $("#nextEpBtn").hidden = !nextEpCtx;
+  if (nextEpCtx) $("#nextEpBtn").textContent = `${nextEpCtx.next}화 만들기`;
+
   view("result");
   $("#progress").hidden = true;
   $("#result").hidden = false;
@@ -594,37 +687,47 @@ function pageTools(no) {
   return `
     <div class="page-tools">
       <button type="button" class="btn btn-quiet btn-sm js-regen-open">이 장 다시 그리기</button>
-      <span class="page-versions" data-versions="${no}"></span>
     </div>
-    <div class="regen-box" hidden>
+    <div class="regen-box fb-box" data-fb-stage="scene" hidden>
+      <p class="fb-lead">무엇이 마음에 안 드나요?
+        <small>고르면 다시 그릴 때 반영됩니다 — 안 골라도 됩니다</small></p>
+      <div class="fb-tags"></div>
       <label class="field">
         <span>무엇을 고칠까요? <small>비워도 됩니다 — 그냥 한 번 더 그립니다</small></span>
-        <textarea rows="2" class="js-regen-note" maxlength="500"
+        <textarea rows="2" class="js-regen-note fb-text" maxlength="500"
           placeholder="예: 표정을 더 밝게 / 배경을 밤으로 / 인물을 왼쪽에"></textarea>
+      </label>
+      <label class="check-line">
+        <input type="checkbox" class="js-regen-textless">
+        <span>글자 없이 그림만 다시 그리기 <small>말풍선 안 글자는 비웁니다</small></span>
       </label>
       <div class="regen-actions">
         <button type="button" class="btn btn-primary btn-sm js-regen-go">다시 그리기</button>
         <button type="button" class="btn btn-quiet btn-sm js-regen-cancel">닫기</button>
         <span class="regen-note js-regen-status"></span>
       </div>
-    </div>`;
+    </div>
+    <div class="page-versions" data-versions="${no}"></div>`;
 }
 
 function wireRegen() {
   $$("#reader .page").forEach(page => {
     const no  = Number(page.dataset.scene);
     const box = $(".regen-box", page);
+    // 장마다 상자가 하나씩이라 항목도 장마다 새로 그린다.
+    fbChips("scene", $(".fb-tags", box), $(".fb-text", box));
     $(".js-regen-open", page).addEventListener("click", () => {
       box.hidden = !box.hidden;
       if (!box.hidden) $(".js-regen-note", box).focus();
     });
     $(".js-regen-cancel", box).addEventListener("click", () => { box.hidden = true; });
-    $(".js-regen-go", box).addEventListener("click", () =>
-      runRegen(no, $(".js-regen-note", box).value.trim(), page));
+    $(".js-regen-go", box).addEventListener("click", () => runRegen(no, box, page));
   });
 }
 
-async function runRegen(no, feedback, page) {
+async function runRegen(no, box, page) {
+  const { tags, feedback } = fbRead(box);
+  const textless = $(".js-regen-textless", box).checked;
   const status = $(".js-regen-status", page);
   const go     = $(".js-regen-go", page);
   go.disabled = true;
@@ -634,9 +737,10 @@ async function runRegen(no, feedback, page) {
     const res = await fetch(
       `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/regen`,
       { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedback }) });
+        body: JSON.stringify({ feedback, textless, tags }) });
     job = await res.json();
     if (!res.ok) throw new Error(job.error || "시작하지 못했습니다");
+    fbClear(box);
   } catch (err) {
     go.disabled = false;
     status.textContent = "";
@@ -667,12 +771,21 @@ async function runRegen(no, feedback, page) {
   go.disabled = false;
 }
 
+// 장마다 지금 그림을 마지막으로 새로 그린 시각. 판 목록의 "지금" 썸네일도
+// 같은 값으로 캐시를 깨야 나란히 놓았을 때 옛 그림이 안 남는다.
+const verBust = {};
+
 /* 브라우저가 같은 주소를 캐시하므로, 새로 그려도 주소가 같으면 옛 그림이 뜬다. */
 function bustImage(page, no) {
+  verBust[no] = Date.now();
   const img = $(".cut-img", page);
-  img.src = `/api/jobs/${jobId}/page/${no}?w=1080&t=${Date.now()}`;
+  img.src = `/api/jobs/${jobId}/page/${no}?w=1080&t=${verBust[no]}`;
 }
 
+/* 판 목록 — 고르는 자리가 아니라 **둘러보는** 자리다. 지금 그림과 지난 판을
+ * 나란히 작게 늘어놓고, 아무 때나 눌러서 그때그때 바꿔 볼 수 있게 한다.
+ * "새로 그린 걸 채택할지 고르세요" 모달을 만들지 않은 이유이기도 하다 —
+ * 채택은 한 번뿐인 결정이 아니라, 나중에 다시 봐도 계속 바뀔 수 있는 것이다. */
 async function paintVersions(no, versions) {
   const slot = $(`[data-versions="${no}"]`);
   if (!slot) return;
@@ -683,10 +796,21 @@ async function paintVersions(no, versions) {
     } catch { return; }
   }
   if (!versions || !versions.length) { slot.innerHTML = ""; return; }
-  // 지난 판이 있다는 것만 알려 주고, 누르면 그때로 되돌린다.
-  slot.innerHTML = `이전 판 ` + versions.map(v =>
-    `<button type="button" class="chip chip-sm js-revert" data-v="${v.version}">v${v.version}</button>`
-  ).join("");
+  const cur = `
+    <span class="ver-thumb is-current" title="지금 걸린 그림">
+      <img src="/api/jobs/${jobId}/page/${no}?w=160&t=${verBust[no] || 0}" alt="지금 그림" loading="lazy">
+      <span class="ver-label">지금</span>
+    </span>`;
+  const past = versions.map(v => `
+    <button type="button" class="ver-thumb js-revert" data-v="${v.version}"
+            title="이 판으로 바꾸기">
+      <img src="/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/versions/${v.version}?w=160"
+           alt="v${v.version}" loading="lazy">
+      <span class="ver-label">v${v.version}</span>
+    </button>`).join("");
+  slot.innerHTML = `
+    <span class="ver-strip-label">지난 판 — 눌러서 바꿔 보기</span>
+    <div class="ver-strip">${cur}${past}</div>`;
   $$(".js-revert", slot).forEach(btn => btn.addEventListener("click", async () => {
     btn.disabled = true;
     try {
@@ -698,7 +822,7 @@ async function paintVersions(no, versions) {
       if (!res.ok) throw new Error(out.error || "되돌리지 못했습니다");
       bustImage($(`#reader .page[data-scene="${no}"]`), no);
       paintVersions(no, out.versions);
-      toast(`${no}번째 장을 v${btn.dataset.v} 로 되돌렸습니다`);
+      toast(`${no}번째 장을 v${btn.dataset.v} 로 바꿨습니다`);
     } catch (err) {
       toast(err.message);
     }
@@ -743,6 +867,118 @@ async function openExisting(id) {
   }
 }
 
+/* ------------------------------------------------- 다음 화 이어서 만들기 (#72)
+ *
+ * 1화용 진행 화면(#progress)을 쓰지 않는다. 이어 만들기는 도는 단계가 셋뿐이고
+ * (콘티 · 그림 · 잇기), 이야기와 캐릭터 시트는 1화 것을 그대로 쓴다. 사람이
+ * 궁금해하는 것도 다르다 — "인물이 그대로 따라오는가", "몇 화가 나오는가".
+ *
+ * 회차 번호는 **서버가 정한다.** 화면이 보낸 번호를 믿으면 창을 두 개 띄워
+ * 놓고 눌렀을 때 같은 번호를 두 번 만들려 든다. */
+
+let nextEpCtx = null;      // { runId, next, character, title }
+let nextEpJob = null;      // 도는 중인 작업 id
+let nextEpPoll = null;
+
+function openNextEp() {
+  if (!nextEpCtx) return;
+  $("#nextEpWork").textContent = [nextEpCtx.character, nextEpCtx.title]
+    .filter(Boolean).join(" · ");
+  $("#nextEpTitle").textContent = `${nextEpCtx.next}화 만들기`;
+  $("#nextEpSub").textContent =
+    `${nextEpCtx.next - 1}화에 이어서 만듭니다. 이야기와 캐릭터는 다시 만들지 않습니다.`;
+  $("#nextEpAsk").hidden = false;
+  $("#nextEpRun").hidden = true;
+  $("#nextEpNote").value = "";
+  $("#nextEp").hidden = false;
+  $("#result").hidden = true;
+  view("nextep");
+  window.scrollTo(0, 0);
+}
+
+function closeNextEp() {
+  clearInterval(nextEpPoll); nextEpPoll = null; nextEpJob = null;
+  $("#nextEp").hidden = true;
+  $("#result").hidden = false;
+  view("result");
+}
+
+async function startNextEp() {
+  if (!nextEpCtx) return;
+  const go = $("#nextEpGo");
+  go.disabled = true;
+  try {
+    const res = await fetch(
+      `/api/runs/${encodeURIComponent(nextEpCtx.runId)}/next-episode`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ author_note: $("#nextEpNote").value.trim() }) });
+    const out = await res.json();
+    if (!res.ok) throw new Error(out.error || "시작하지 못했습니다");
+    nextEpJob = out.id;
+    // 서버가 정한 번호로 맞춘다 — 화면이 짐작한 것과 다를 수 있다.
+    if (out.episode) {
+      nextEpCtx.next = out.episode;
+      $("#nextEpTitle").textContent = `${out.episode}화 만들기`;
+    }
+    $("#nextEpAsk").hidden = true;
+    $("#nextEpRun").hidden = false;
+    nextEpPoll = setInterval(tickNextEp, 1500);
+    tickNextEp();
+  } catch (err) {
+    toast(err.message);
+  }
+  go.disabled = false;
+}
+
+async function tickNextEp() {
+  if (!nextEpJob) return;
+  let s;
+  try { s = await (await fetch(`/api/jobs/${nextEpJob}`)).json(); }
+  catch { return; }                        // 잠깐 끊겨도 다음 번에 이어진다
+
+  const stages = s.stages || [];
+  $("#nextEpSteps").innerHTML = stages.map((st, i) => {
+    const cls = st.state === "done" ? "is-done"
+              : (i === s.stage_index ? "is-active" : "");
+    return `<li class="${cls}"><span class="dot"></span>
+      <span>${esc(st.title)}</span>
+      <small style="margin-left:auto;color:var(--muted,#8a8a94)">${esc(st.desc || "")}</small>
+    </li>`;
+  }).join("");
+  const cur = stages[s.stage_index] || {};
+  $("#nextEpNote2").textContent = cur.note || s.error || "";
+
+  if (s.status === "done") {
+    clearInterval(nextEpPoll); nextEpPoll = null;
+    // 완성본은 1화와 같은 결과 화면에서 본다 — 읽는 화면은 회차가 달라도 같다.
+    jobId = nextEpJob;
+    sessionStorage.setItem("lore_job", jobId);
+    nextEpJob = null;
+    $("#nextEp").hidden = true;
+    toast(`${nextEpCtx.next}화가 나왔습니다`);
+    showResult();
+    return;
+  }
+  if (s.status === "error" || s.status === "cancelled") {
+    clearInterval(nextEpPoll); nextEpPoll = null;
+    $("#nextEpNote2").textContent = s.error || "만들지 못했습니다";
+    $("#nextEpAsk").hidden = false;       // 다시 눌러 볼 수 있게 되돌린다
+    nextEpJob = null;
+  }
+  // 콘티 승인이 필요한 상태 — 이어 만들기에서는 "다시 짜기" 를 못 한다
+  // (스토리 하네스가 회차를 되돌리는 길을 아직 안 준다). 진행만 물어본다.
+  if (s.status === "awaiting_board_approval") {
+    $("#nextEpNote2").innerHTML =
+      `${esc(s.stages?.[s.stage_index]?.note || "콘티를 확인해 주세요")}<br>` +
+      `<button type="button" class="btn btn-primary btn-sm" id="nextEpApprove">이대로 진행</button>`;
+    document.getElementById("nextEpApprove")?.addEventListener("click", async () => {
+      await fetch(`/api/jobs/${nextEpJob}/board-decision`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "approve" }) });
+    }, { once: true });
+  }
+}
+
 /* ------------------------------------------------------------------ 잡동사니 */
 
 function view(name) { document.body.dataset.view = name; }
@@ -758,6 +994,10 @@ function forget() {
   $("#clockLabel").textContent = "경과";
   view("landing"); $("#progress").hidden = true; $("#result").hidden = true;
   $("#scriptPanel").hidden = true;
+  // 이어 만들기 화면도 같이 닫는다 — 안 닫으면 "새로 만들기" 를 눌러도
+  // 앞 작품의 다음 화 화면이 뒤에 남는다.
+  clearInterval(nextEpPoll); nextEpPoll = null; nextEpJob = null; nextEpCtx = null;
+  $("#nextEp").hidden = true; $("#nextEpBtn").hidden = true;
   // /result 로 들어왔으면 주소도 되돌린다 — 안 그러면 새로고침에 다시 결과가 뜬다.
   if (location.pathname !== "/" || location.search) history.replaceState(null, "", "/");
   document.querySelector("#studio").scrollIntoView();
@@ -773,9 +1013,13 @@ function toast(msg) {
 document.addEventListener("DOMContentLoaded", () => {
   buildForm();
   loadWorlds();
+  loadFeedbackTags();
   setupPhoto();
   $("#form").addEventListener("submit", submit);
   $("#previewToggle").addEventListener("change", paintCost);
+  // 연출(빠르게/웹툰)이 바뀌면 그림 호출 수가 달라져 비용도 달라진다.
+  document.querySelectorAll('input[name="layout_mode"]').forEach(
+    el => el.addEventListener("change", paintCost));
   paintCost();
 
   $("#cancelBtn").addEventListener("click", async () => {
@@ -789,6 +1033,16 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#boardApproveBtn").addEventListener("click", () => sendBoardDecision("approve"));
   $("#boardRetryBtn").addEventListener("click", () => sendBoardDecision("retry"));
   $("#againBtn").addEventListener("click", forget);
+  $("#nextEpBtn").addEventListener("click", openNextEp);
+  $("#nextEpGo").addEventListener("click", startNextEp);
+  $("#nextEpBack").addEventListener("click", closeNextEp);
+  $("#nextEpCancel").addEventListener("click", async () => {
+    if (nextEpJob) {
+      try { await fetch(`/api/jobs/${nextEpJob}/cancel`, { method: "POST" }); }
+      catch { /* 이미 끝났을 수 있다 */ }
+    }
+    closeNextEp();
+  });
   $("#scriptBtn").addEventListener("click", () => {
     $("#scriptPanel").hidden = !$("#scriptPanel").hidden;
   });

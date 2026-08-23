@@ -490,6 +490,32 @@ def feedback_block(text: str) -> str:
     )
 
 
+def author_block(text: str) -> str:
+    """작가가 직접 적은 요청. 게이트가 만든 재생성 지시와는 무게가 다르다.
+
+    게이트 지시는 "형식이 틀렸다"이고 이것은 "내가 원한 게 이게 아니다"다.
+    앞엣것은 고치면 통과하지만 뒤엣것은 통과 기준이 사람에게 있다 — 그래서
+    블록을 따로 두고, 먼저 읽히게 앞에 놓는다.
+    """
+    if not text:
+        return ""
+    return (
+        "[작가 요청]\n"
+        "작가가 직전 결과를 보고 아래를 고쳐 달라고 했다. 반드시 반영하라.\n"
+        f"{text}\n"
+        "[/작가 요청]"
+    )
+
+
+def feedback_slot(author_note: str, retry: str) -> str:
+    """프롬프트의 {retry_feedback} 자리에 들어갈 글.
+
+    작가 요청이 없으면(기본) 예전과 똑같이 feedback_block(retry) 하나만 나간다 —
+    --author-note 를 안 준 실행은 프롬프트가 한 글자도 안 바뀐다.
+    """
+    return "\n\n".join(x for x in (author_block(author_note), feedback_block(retry)) if x)
+
+
 # ---------------------------------------------------------------- prompts
 
 @dataclass
@@ -2975,7 +3001,8 @@ def write_scenes_md(run_dir: Path, scenes: list) -> None:
 
 def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
             usage: Usage, sample_cards: str = None,
-            genre_tpl: str = None, axes: dict = None) -> tuple:
+            genre_tpl: str = None, axes: dict = None,
+            author_note: str = "") -> tuple:
     """P1 을 부르고, 카드 게이트를 통과할 때까지 재호출한다. (카드, 재생성 횟수).
 
     파이프라인과 --card-mix 가 **같은 함수**를 써야 한다. 시험지에 올라가는 카드가
@@ -3014,7 +3041,7 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
             "sample_cards": sample_cards,
             "genre_template": genre_tpl or "(이 장르의 템플릿이 없습니다 — 장르명만 보고 씁니다)",
             "variation_axes": samples.axes_block(axes) or "(이번에는 이야기 변수 없이 씁니다)",
-            "retry_feedback": feedback_block(feedback),
+            "retry_feedback": feedback_slot(author_note, feedback),
         })
 
     sheet, _ = caller.json_call("P1", prompt(), TEMP_CREATIVE, usage)
@@ -3032,7 +3059,8 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
 
 def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                  scene_count: int, max_gate_retries: int, max_p3_retries: int,
-                 max_scene_fixes: int, out_dir: Path) -> RunResult:
+                 max_scene_fixes: int, out_dir: Path,
+                 author_note: str = "") -> RunResult:
     run_id = new_run_id()
     run_dir = out_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -3058,7 +3086,8 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
         nonlocal regen_total
         sheet, regens = call_p1(caller, ps, row, max_gate_retries, usage,
                                 sample_cards=sample_cards,
-                                genre_tpl=genre_tpl, axes=axes)
+                                genre_tpl=genre_tpl, axes=axes,
+                                author_note=author_note)
         regen_total += regens
         return sheet
 
@@ -3148,7 +3177,7 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                     "story_structure": (samples.structure_block(structure)
                                         or "(이번에는 구조 지정 없이 씁니다)"),
                     "character_sheet": json.dumps(p1, ensure_ascii=False, separators=(",", ":")),
-                    "retry_feedback": feedback_block(p2_feedback),
+                    "retry_feedback": feedback_slot(author_note, p2_feedback),
                 }),
                 TEMP_CREATIVE, usage)
 
@@ -6175,6 +6204,11 @@ def build_parser() -> argparse.ArgumentParser:
                         "채워진 뒤에만 쓸 수 있음 (charsheet_2nd/ 에 저장)")
     p.add_argument("--yes", action="store_true",
                    help="--charsheet 의 비용 확인 프롬프트를 건너뜀")
+    # 작가가 결과를 보고 "이걸 고쳐 달라"고 적은 말. P1·P2 프롬프트의
+    # {retry_feedback} 자리에 [작가 요청] 블록으로 들어간다. 안 주면 예전과
+    # 똑같다. --charsheet 모드에는 안 먹는다 (시트는 p1.json 사양으로만 그린다).
+    p.add_argument("--author-note", default="",
+                   help="작가가 다시 만들며 요청한 것 (P1·P2 프롬프트에 실림)")
     return p
 
 
@@ -6301,7 +6335,8 @@ def main(argv=None) -> int:
                 if cond == "pipeline":
                     res = run_pipeline(caller, ps, row, i, args.scenes,
                                        args.max_gate_retries, args.max_p3_retries,
-                                       args.scene_fix, out_dir)
+                                       args.scene_fix, out_dir,
+                                       author_note=args.author_note)
                 else:
                     res = run_control(caller, ps, row, i, args.scenes, out_dir)
                 append_summary(out_dir, res)

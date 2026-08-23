@@ -1235,6 +1235,110 @@ for n in (8, 10, 11, 12, 14, 16):
        webtoon.layout_violations(payload["cuts"]) == [],
        webtoon.layout_violations(payload["cuts"]))
 
+# ---- vertical_link — 배경이 컷을 넘어 이어지는 자리 ----------------------------
+#
+# 세로 스크롤과 "만화 여덟 칸을 세로로 자른 것"을 가르는 자리다. 붙어 있고(여백 0)
+# 무대가 같으면(zone) 두 컷은 한 공간의 위와 아래로 읽혀야 한다.
+link = cuts(10, engine=(2, 6))
+for c in link["cuts"]:
+    c["zone"] = "z1"
+webtoon.derive_layout(link["cuts"])
+lg = [c["gap_after"] for c in link["cuts"]]
+lk = [c["vertical_link"] for c in link["cuts"]]
+ok("이어짐: 첫 컷은 이어질 앞이 없다", lk[0] is False)
+# 붙은 자리가 하나도 없으면 아래 규칙 검사가 공짜로 통과한다 — 먼저 자리가 있는지 본다
+ok("이어짐: 이 화에는 붙은 자리가 있다", 0 in lg[:-1], lg)
+ok("이어짐: 여백 0 으로 붙은 자리가 이어진다",
+   all(lk[i + 1] is (lg[i] == 0) for i in range(len(lg) - 1))
+   and any(lk), list(zip(lg, lk)))
+
+# 무대가 바뀌면 붙어 있어도 이어질 배경이 없다
+zone2 = cuts(10, engine=(2, 6))
+for i, c in enumerate(zone2["cuts"]):
+    c["zone"] = "z1" if i % 2 == 0 else "z2"
+webtoon.derive_layout(zone2["cuts"])
+ok("이어짐: 존이 다르면 붙어 있어도 안 이어진다",
+   not any(c["vertical_link"] for c in zone2["cuts"]),
+   [(c["zone"], c["gap_after"], c["vertical_link"]) for c in zone2["cuts"]])
+
+# zone 이 아예 없는 옛 화 — 이어질 자리가 하나도 안 잡힌다 (예전과 같은 결과)
+nozone = cuts(10, engine=(2, 6))
+for c in nozone["cuts"]:
+    c.pop("zone", None)
+webtoon.derive_layout(nozone["cuts"])
+ok("이어짐: zone 이 없는 화는 한 자리도 안 이어진다",
+   not any(c["vertical_link"] for c in nozone["cuts"]))
+
+# 데포르메 컷은 배경이 파스텔로 빠져서 이어 붙일 배경이 없다
+sd = cuts(10, engine=(2, 6))
+for c in sd["cuts"]:
+    c["zone"] = "z1"
+    c["render_style"] = "sd"
+webtoon.derive_layout(sd["cuts"])
+ok("이어짐: sd 컷은 이어지지 않는다",
+   not any(c["vertical_link"] for c in sd["cuts"]))
+
+# 여백·화면 경계·시선은 건드리지 않는다 — 순수 추가여야 예전 화가 그대로 다시 그려진다
+before = cuts(12, engine=(2, 6))
+for c in before["cuts"]:
+    c["zone"] = "z1"
+webtoon.derive_layout(before["cuts"])
+ok("이어짐: 여백·경계·시선은 그대로다",
+   [(c["gap_after"], c["scene_break"], c["gaze"]) for c in before["cuts"]]
+   == [(c["gap_after"], c["scene_break"], c["gaze"])
+       for c in (lambda p: (webtoon.derive_layout(p["cuts"]), p)[1])(
+           cuts(12, engine=(2, 6)))["cuts"]])
+
+# ---- weight — 컷이 지면을 얼마나 먹는가 ---------------------------------------
+#
+# 한 화의 모든 컷이 같은 무게일 필요는 없다. 무게는 모델이 정하지 않고
+# render_style·size 에서 나오는 산수다.
+wt = cuts(10, engine=(2, 6))
+for c in wt["cuts"]:
+    c["zone"] = "z1"
+webtoon.derive_layout(wt["cuts"])
+ok("무게: 모든 컷에 값이 붙는다",
+   all(c["weight"] in ("full", "normal", "light") for c in wt["cuts"]),
+   [c["weight"] for c in wt["cuts"]])
+ok("무게: impact 컷은 full 이다",
+   all(c["weight"] == "full" for c in wt["cuts"] if c["size"] == "impact"),
+   [(c["size"], c["weight"]) for c in wt["cuts"]])
+
+# float 컷 = 가벼운 컷. bleed = 통째로.
+mix = cuts(10, engine=(2, 6))
+for i, c in enumerate(mix["cuts"]):
+    c["zone"] = "z1"
+    if i in (2, 3):
+        c["beat"], c["render_style"], c["size"] = "release", "float", "wide"
+    elif i == 6:
+        c["beat"], c["render_style"], c["size"] = "turn", "bleed", "tall"
+webtoon.derive_layout(mix["cuts"])
+got = [c["weight"] for c in mix["cuts"]]
+ok("무게: float 컷은 light 다", got[2] == "light" and got[3] == "light", got)
+ok("무게: bleed 컷은 full 이다", got[6] == "full", got)
+ok("무게: 나머지는 normal 이다",
+   all(got[i] == "normal" for i in (0, 1, 4, 5) if mix["cuts"][i]["size"] != "impact"),
+   got)
+
+# 자리 규칙 — float 은 sd 와 같은 자리이고, 스팅어에는 못 온다
+bad = cuts(10, engine=(2, 6))
+for c in bad["cuts"]:
+    c["zone"] = "z1"
+spot = next(i for i, c in enumerate(bad["cuts"]) if c["beat"] == "turn")
+bad["cuts"][spot]["render_style"] = "float"
+bad["cuts"][-1]["render_style"] = "float"
+notes = webtoon.repair_render_styles(bad["cuts"])
+ok("무게: turn 자리의 float 은 normal 로 내려간다",
+   bad["cuts"][spot]["render_style"] == "normal", notes)
+ok("무게: 스팅어의 float 은 normal 로 내려간다",
+   bad["cuts"][-1]["render_style"] == "normal", notes)
+
+# float 이 없는 화는 예전과 똑같다 — 전부 normal 무게
+plain = cuts(10, engine=(2, 6))
+webtoon.derive_layout(plain["cuts"])
+ok("무게: float 이 없으면 light 가 하나도 없다",
+   not any(c["weight"] == "light" for c in plain["cuts"]))
+
 broken = derived()
 for i in range(len(broken) - 1):                    # turn 직전을 손으로 망가뜨린다
     if broken[i + 1]["beat"] == "turn":
@@ -3486,6 +3590,87 @@ ok("소품 이름 경고: 명부에 있는 이름만 있으면 조용하다",
    webtoon.prop_text_name_check(_prop_cuts_stranger, {"초롱", "루나"}) == [])
 ok("소품 이름 경고: screen_text 가 비어 있으면 조용하다",
    webtoon.prop_text_name_check([{"cut_number": 1, "screen_text": ""}], {"초롱"}) == [])
+
+
+# ---- 나레이션이 한 가지 일만 하고 있는가 (advisory) ----------------------
+def _narr(*texts):
+    return [{"cut_number": i + 1,
+             "lines": [{"kind": "narration", "text": t}]}
+            for i, t in enumerate(texts)]
+
+ok("나레이션 분류: 명사로 끝나는 시간·장소 표찰은 ①",
+   webtoon.narration_kinds(_narr("늦은 오후, 라운지 한켠."))["stamp"] != [])
+ok("나레이션 분류: '다'로 끝나는 세계관 서술은 ① 이 아니다",
+   webtoon.narration_kinds(
+       _narr("게이트가 열린 지 20년. 등급은 국가가 매긴다."))["beyond"] != [])
+ok("나레이션 분류: 1인칭 회고는 ① 이 아니다",
+   webtoon.narration_kinds(_narr("나는 그때 이미 알고 있었다."))["beyond"] != [])
+ok("나레이션 경고: 전부 시간·장소 표시면 경고",
+   webtoon.narration_warnings(
+       _narr("늦은 오후, 라운지 한켠.", "늦은 밤, 캠퍼스 골목.")) != [])
+ok("나레이션 경고: 세계관 서술이 섞여 있으면 조용하다",
+   webtoon.narration_warnings(
+       _narr("늦은 오후, 라운지 한켠.",
+             "엘젠하르트 제국. 황후는 열여섯에 정해진다.")) == [])
+ok("나레이션 경고: 나레이션이 하나도 없으면 경고",
+   webtoon.narration_warnings(
+       [{"cut_number": 1,
+         "lines": [{"kind": "dialogue", "text": "응."}]}]) != [])
+ok("나레이션 경고: 표찰이 하나뿐이면 조용하다 (한 번은 정상)",
+   webtoon.narration_warnings(_narr("사흘 뒤")) == [])
+ok("나레이션 경고: 컷이 없으면 조용하다",
+   webtoon.narration_warnings([]) == [])
+
+# ---- 말이 확정된 설정·서로와 어긋나는가 (advisory) -----------------------
+_facts_window = [{"fact": "그 방에는 창이 없다", "first_episode": 3}]
+ok("모순 경고: 나레이션이 확정된 설정과 반대면 경고",
+   webtoon.contradiction_warnings(
+       _narr("그 방에는 창이 있다"), _facts_window) != [])
+ok("모순 경고: 설정과 같은 말이면 조용하다",
+   webtoon.contradiction_warnings(
+       _narr("그 방에는 창이 없다"), _facts_window) == [])
+ok("모순 경고: 주제가 다르면 조용하다",
+   webtoon.contradiction_warnings(
+       _narr("복도에 사람이 많았다"), _facts_window) == [])
+ok("모순 경고: 같은 단위의 숫자가 다르면 경고",
+   webtoon.contradiction_warnings(
+       _narr("윤재는 2학년이다"),
+       [{"fact": "윤재는 3학년이다", "first_episode": 1}]) != [])
+ok("모순 경고: 이 화 안에서 앞뒤 말이 어긋나면 경고",
+   webtoon.contradiction_warnings(
+       _narr("시하는 혼자 왔다", "시하는 혼자 오지 않았다")) != [])
+ok("모순 경고: facts 가 없는 옛 run 은 설정 대조를 하지 않는다",
+   webtoon.contradiction_warnings(_narr("그 방에는 창이 있다")) == [])
+ok("모순 경고: 컷이 없으면 조용하다",
+   webtoon.contradiction_warnings([], _facts_window) == [])
+
+# ---- 확정된 설정이 7·8단계 스냅샷까지 도달하는가 ------------------------
+_led = webtoon.Ledger("엔진급 질문")
+ok("설정 통로: sync_facts 전에는 established_facts 가 비어 있다",
+   json.loads(_led.snapshot(1))["established_facts"] == [])
+ok("설정 통로: sync_facts 가 회차 명부를 장부로 옮긴다",
+   _led.sync_facts([{"fact": "그 방에는 창이 없다", "first_episode": 3}]) == 1)
+ok("설정 통로: 옮긴 뒤 스냅샷에 실린다",
+   any(f["text"] == "그 방에는 창이 없다"
+       for f in json.loads(_led.snapshot(4))["established_facts"]))
+ok("설정 통로: 같은 문장을 두 번 넣지 않는다",
+   _led.sync_facts([{"fact": "그 방에는 창이 없다", "first_episode": 3}]) == 0)
+ok("설정 통로: 빈 명부는 아무것도 안 한다",
+   _led.sync_facts([]) == 0 and _led.sync_facts(None) == 0)
+
+# ---- 말투(voice_notes) 가 엔진 카드까지 실리는가 -------------------------
+_p1_voice = {"name": "시하", "personality": "장난스럽다",
+             "voice_notes": "말끝을 흐린다"}
+ok("말투: p1 에 있으면 엔진 카드에 실린다",
+   "말끝을 흐린다" in webtoon.build_engine_card(_p1_voice, {}, "한 줄", []))
+ok("말투: 없으면 카드에 그 줄이 아예 안 생긴다",
+   "말투" not in webtoon.build_engine_card(
+       {"name": "시하", "personality": "장난스럽다"}, {}, "한 줄", []))
+ok("말투: 조연 명부에도 실린다",
+   "받아치듯 짧게" in "\n".join(webtoon.cast_block(
+       [{"name": "윤재", "gender": "남", "voice_notes": "받아치듯 짧게"}])))
+ok("말투: voice_notes 는 필수 항목이 아니다 (게이트가 안 막는다)",
+   "voice_notes" not in webtoon.CAST_FIELDS)
 
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")

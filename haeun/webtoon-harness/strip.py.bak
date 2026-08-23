@@ -429,36 +429,6 @@ def is_screen_cut(cut: dict[str, Any]) -> bool:
 # 굴려야 다음 컷이 나올 만큼 비운다.
 GAP_RATIO = {0: 0.0, 1: 0.07, 2: 0.26, 3: 0.62}
 
-# 위 값은 **지면 폭 대비**라, 폭을 800px 로 두면 0 / 56 / 208 / 496px 이 된다.
-# 세로 스크롤 작법이 실제로 쓰는 눈금은 이보다 넓다 (컷 폭 800px 기준):
-#
-#     빠른 동작·추격   100–150px    엄지가 안 멈춘다
-#     감정 리액션      200–300px    한 박자 쉬고 다음 컷이 들어온다
-#     장면 전환        400–600px    낮에서 밤으로, 다른 장소로
-#     낙차·클리프행어  600–800px    화면이 통째로 비고 다음 컷이 나온다
-#
-# 특히 양 끝이 어긋난다 — 1(56px)은 "붙인 것"과 구분이 안 갈 만큼 좁고,
-# 3(496px)은 폰 화면 하나를 채우지 못해서 "낙차"가 아니라 "조금 넓은 여백"이
-# 된다. 뷰어는 3 을 이미 80vh(≈ 화면 하나)로 그리고 있어서, 같은 화를 뷰어로
-# 볼 때와 PNG 한 장으로 볼 때 호흡이 서로 달랐다.
-#
-# 기본값은 그대로 둔다 — 이미 뽑아 둔 화의 PNG 가 다시 뽑을 때마다 달라지면
-# 무엇이 바뀐 것인지 구분할 수 없다. 위 눈금으로 벌리려면 config 에 적는다:
-#
-#     scene:
-#       gap_ratio: {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}
-#
-# (0.16 · 0.32 · 0.90 = 800px 폭에서 128 / 256 / 720px — 위 표의 각 구간 안이다.)
-#
-# ⚠️ 위 눈금은 **작법서가 적어 둔 픽셀 값 그대로**이고, 그 값들은 화면이 지금보다
-#    짧던 시절에 잡힌 것이다. 요즘 폰(19.5:9)에서 폭 800px 캔버스의 한 화면은
-#    캔버스 좌표로 1700px 쯤이라, 720px 여백은 화면 하나가 아니라 **화면의 약 40%**
-#    다. 뷰어는 같은 자리를 80vh(=화면 하나)로 그리므로, 같은 화를 뷰어로 볼 때가
-#    PNG 로 볼 때보다 여전히 더 크게 뜸을 들인다.
-#    낙차를 폰 화면 하나로 맞추고 싶으면 3 을 1.8 쯤으로 올린다 — 다만 그러면 화
-#    전체 길이가 눈에 띄게 늘어난다(낙차 두 자리에 화면 두 개가 통째로 빈다).
-WEBTOON_GAP_RATIO = {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}
-
 
 # 컷이 가로를 얼마나 쓸까 — **기본은 꽉 채운다.**
 #
@@ -472,25 +442,8 @@ WEBTOON_GAP_RATIO = {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}
 #
 # 특정 size 만 좁히고 싶으면 config 의 scene.width_ratio 에 그것만 적는다.
 # 비워 두면(기본) 전부 1.0 이다.
-#
-# **무게(weight)는 예외다.** 위에서 size 별 고정표를 뺀 이유는 "모든 normal 컷을
-# 똑같이 조금 비워라"가 "모든 컷을 꽉 채워라"만큼이나 기계적이기 때문이었다.
-# 무게는 그 얘기가 아니다 — 좁아지는 것은 **콘티가 가볍다고 정한 컷뿐**이고,
-# 그 컷은 배경도 없다. 지면을 덜 먹는 것이 곧 그 컷이 가볍다는 뜻이라, 폭이
-# 내용에서 나온다.
-#
-# weight 가 없는 옛 컷은 전부 "normal" 로 읽히므로 예전처럼 1.0 이다.
-LIGHT_WIDTH = 0.55        # 떠 있는 컷이 쓰는 지면 폭
-
-
-def width_ratio(cut: dict[str, Any], table: dict[str, Any] | None = None,
-                light: float = LIGHT_WIDTH) -> float:
+def width_ratio(cut: dict[str, Any], table: dict[str, Any] | None = None) -> float:
     """이 컷이 지면 폭을 얼마나 쓸까 (0~1). 기본 1.0 = 꽉 채움."""
-    if str(cut.get("weight") or "normal").strip().lower() == "light":
-        try:
-            return max(0.3, min(1.0, float(light)))
-        except (TypeError, ValueError):
-            return LIGHT_WIDTH
     if not table:
         return 1.0
     try:
@@ -500,35 +453,12 @@ def width_ratio(cut: dict[str, Any], table: dict[str, Any] | None = None,
         return 1.0
 
 
-def gap_ratio_table(cfg: dict[str, Any] | None = None) -> dict[int, float]:
-    """config 의 scene.gap_ratio → {0..3: 폭 대비 비율}. 없으면 기본값 그대로.
-
-    적어 놓은 칸만 갈아 끼운다 — {3: 0.9} 라고만 적으면 나머지 셋은 기본값이다.
-    읽을 수 없는 값은 조용히 건너뛴다. 여기서 세우면 config 오타 하나에 이미 뽑아
-    둔 화의 조립이 통째로 막힌다.
-    """
-    out = dict(GAP_RATIO)
-    raw = ((cfg or {}).get("scene") or {}).get("gap_ratio") or {}
-    if not isinstance(raw, dict):
-        return out
-    for k, v in raw.items():
-        try:
-            lv = int(k)
-            val = float(v)
-        except (TypeError, ValueError):
-            continue
-        if 0 <= lv <= 3 and 0.0 <= val <= 3.0:
-            out[lv] = val
-    return out
-
-
-def gap_px(width: int, gap_after: Any, table: dict[int, float] | None = None) -> int:
+def gap_px(width: int, gap_after: Any) -> int:
     try:
         g = int(gap_after)
     except (TypeError, ValueError):
         g = 1
-    tab = table or GAP_RATIO
-    return int(width * tab.get(max(0, min(3, g)), 0.05))
+    return int(width * GAP_RATIO.get(max(0, min(3, g)), 0.05))
 
 
 def stitch_strip(items: list[tuple[Any, int, float]], out: Path,
