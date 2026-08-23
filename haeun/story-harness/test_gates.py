@@ -1289,6 +1289,56 @@ ok("이어짐: 여백·경계·시선은 그대로다",
        for c in (lambda p: (webtoon.derive_layout(p["cuts"]), p)[1])(
            cuts(12, engine=(2, 6)))["cuts"]])
 
+# ---- weight — 컷이 지면을 얼마나 먹는가 ---------------------------------------
+#
+# 한 화의 모든 컷이 같은 무게일 필요는 없다. 무게는 모델이 정하지 않고
+# render_style·size 에서 나오는 산수다.
+wt = cuts(10, engine=(2, 6))
+for c in wt["cuts"]:
+    c["zone"] = "z1"
+webtoon.derive_layout(wt["cuts"])
+ok("무게: 모든 컷에 값이 붙는다",
+   all(c["weight"] in ("full", "normal", "light") for c in wt["cuts"]),
+   [c["weight"] for c in wt["cuts"]])
+ok("무게: impact 컷은 full 이다",
+   all(c["weight"] == "full" for c in wt["cuts"] if c["size"] == "impact"),
+   [(c["size"], c["weight"]) for c in wt["cuts"]])
+
+# float 컷 = 가벼운 컷. bleed = 통째로.
+mix = cuts(10, engine=(2, 6))
+for i, c in enumerate(mix["cuts"]):
+    c["zone"] = "z1"
+    if i in (2, 3):
+        c["beat"], c["render_style"], c["size"] = "release", "float", "wide"
+    elif i == 6:
+        c["beat"], c["render_style"], c["size"] = "turn", "bleed", "tall"
+webtoon.derive_layout(mix["cuts"])
+got = [c["weight"] for c in mix["cuts"]]
+ok("무게: float 컷은 light 다", got[2] == "light" and got[3] == "light", got)
+ok("무게: bleed 컷은 full 이다", got[6] == "full", got)
+ok("무게: 나머지는 normal 이다",
+   all(got[i] == "normal" for i in (0, 1, 4, 5) if mix["cuts"][i]["size"] != "impact"),
+   got)
+
+# 자리 규칙 — float 은 sd 와 같은 자리이고, 스팅어에는 못 온다
+bad = cuts(10, engine=(2, 6))
+for c in bad["cuts"]:
+    c["zone"] = "z1"
+spot = next(i for i, c in enumerate(bad["cuts"]) if c["beat"] == "turn")
+bad["cuts"][spot]["render_style"] = "float"
+bad["cuts"][-1]["render_style"] = "float"
+notes = webtoon.repair_render_styles(bad["cuts"])
+ok("무게: turn 자리의 float 은 normal 로 내려간다",
+   bad["cuts"][spot]["render_style"] == "normal", notes)
+ok("무게: 스팅어의 float 은 normal 로 내려간다",
+   bad["cuts"][-1]["render_style"] == "normal", notes)
+
+# float 이 없는 화는 예전과 똑같다 — 전부 normal 무게
+plain = cuts(10, engine=(2, 6))
+webtoon.derive_layout(plain["cuts"])
+ok("무게: float 이 없으면 light 가 하나도 없다",
+   not any(c["weight"] == "light" for c in plain["cuts"]))
+
 broken = derived()
 for i in range(len(broken) - 1):                    # turn 직전을 손으로 망가뜨린다
     if broken[i + 1]["beat"] == "turn":

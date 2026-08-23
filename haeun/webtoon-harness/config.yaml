@@ -1053,7 +1053,7 @@ render_style_suffix:
   #   정한 컷이 평범한 컷으로 그려졌습니다. Scene 모드는 scene.panel_render 에
   #   네 개를 다 갖고 있어서 그쪽만 동작했고, 그래서 "웹툰 연출이 안 보인다"가
   #   컷 모드에서만 났습니다. RENDER_STYLES 는 다섯 개입니다 — 여기도 다섯 개여야
-  #   합니다.
+  #   합니다. (2026-08-23: float 이 들어와 여섯 개가 됐습니다.)
   bleed: >-
     This is the full-bleed panel of the episode — the single biggest moment. The
     artwork runs edge to edge with no border and no margin, continuing off all
@@ -1065,6 +1065,21 @@ render_style_suffix:
     of debris crosses the edge of the frame and overlaps the empty space beside
     it, while the rest of the figure stays inside. Draw that crossing element
     fully, past the boundary, so the panel cannot contain it.
+
+  # 떠 있는 컷 — 칸도 배경도 없습니다. emphasis 와 반대 방향입니다: emphasis 는
+  # 배경을 지워서 **강조**하고(집중선·림라이트), float 은 **굳이 그릴 것이 없어서**
+  # 안 그립니다. 그래서 극적 장치를 하나도 넣지 않는 것이 중요합니다 —
+  # 집중선이 들어가는 순간 가벼운 컷이 아니라 센 컷이 됩니다.
+  float: >-
+    No panel and no background. The character floats on a plain flat field of a
+    single soft colour — bare white or a very light flat tone — with no horizon,
+    no floor, no furniture, no scenery and no perspective of any kind. Do NOT add
+    speed lines, focus lines, rim light, glow or any dramatic effect: this panel
+    is deliberately low-energy. At most a couple of small flat doodle marks
+    floating near the character (a question mark, a sweat drop, two or three tiny
+    stars or dots), drawn in the same ink as the figure. The figure is small in
+    the frame with generous empty space around it, and it is not cropped by any
+    border.
 
 # 프롬프트 조립은 코드가 강제합니다. 아래 placeholder 만 사용 가능:
 #   {appearance} {scene} {style} {extra}
@@ -1147,7 +1162,39 @@ scene:
   # 화면이 넘어갈 수 있습니다. 그래서 기본은 rhythm 입니다.
   #
   # 값을 바꾸면 scenes.json 캐시가 자동으로 무효화됩니다.
-  grouping: rhythm          # rhythm | fixed
+  grouping: rhythm          # rhythm | fixed | weight
+
+  # ---------------------------------------------------------------------------
+  # weight — 컷의 **무게**가 묶음을 정합니다 (개수 규칙이 아예 없습니다)
+  #
+  # "한 장에 3컷" 도 "한 컷에 한 장" 도 둘 다 임의의 규칙이었습니다. 3컷씩 묶으면
+  # 배경이 있는 컷 셋이 한 캔버스에 들어가 격자가 되고, 1컷씩 뽑으면 스쳐 가는
+  # 리액션 한 컷이 절정 컷과 같은 지면·같은 비용을 먹습니다. 실제 웹툰에서 컷의
+  # 무게는 균일하지 않으므로, 묶음도 균일할 이유가 없습니다.
+  #
+  # 콘티(W7.5)가 컷마다 계산해 보내는 weight 를 그대로 따릅니다:
+  #
+  #   full   통컷(bleed)이거나 size 가 impact 인 컷 → 혼자 한 장
+  #   normal 보통 컷                                → 혼자 한 장 (컷 모드와 같음)
+  #   light  떠 있는 컷(render_style: float)        → 연달아 붙은 것끼리 한 장
+  #
+  # light 만 묶이는 이유는 **배경이 없어서 나눌 배경도 없기 때문**입니다. 배경이
+  # 있는 컷 둘을 한 캔버스에 넣으면 모델이 그 사이에 경계를 그려서 격자가 되는데,
+  # 단색 위에 떠 있는 SD 인물 둘은 나란히 놓아도 그냥 한 그림입니다.
+  #
+  # weight 가 없는 옛 화는 전부 normal 로 읽히므로 컷 하나당 한 장 — 즉 컷 모드와
+  # 같은 결과가 됩니다.
+  max_light_per_scene: 3    # 한 장에 묶을 light 컷 상한. 넷을 넘기면 인물이 작아집니다
+
+  # 떠 있는 컷이 쓰는 지면 폭 (0~1). 가벼운 컷은 지면을 덜 먹는 것이 곧 가볍다는
+  # 뜻이라 좁힙니다. light 가 아닌 컷은 아래 width_ratio 를 따릅니다.
+  light_width: 0.55
+
+  # size 별로 지면 폭을 좁히고 싶을 때만 씁니다 (예: {tall: 0.8}).
+  # 비워 두면(기본) 전부 1.0 = 꽉 채웁니다. 모든 컷을 똑같이 조금 비우는 것은
+  # 꽉 채우는 것만큼이나 기계적이라, 기본은 비워 둡니다 — 폭의 변화는 이미
+  # 컷마다 다른 캔버스 비율(16:9 / 4:3 / 3:4 / 9:16)에서 나옵니다.
+  width_ratio: {}
 
   # ---------------------------------------------------------------------------
   # 컷 사이 여백의 크기 (컷 모드 PNG 조립 — strip.stitch_strip)
@@ -1488,6 +1535,16 @@ scene:
       Part of this panel's subject breaks past its own boundary and overlaps the
       empty space beside it — a hand, a weapon, hair or spray crossing the edge —
       while the rest of the figure stays inside
+    # 떠 있는 컷 — sd 와 비슷해 보이지만 방향이 다릅니다. sd 는 파스텔 워시라도
+    # 배경이 남고, float 은 아무것도 없습니다. 그리고 **작습니다** — 이 컷이
+    # 가벼운 컷이라는 것은 지면을 덜 먹는다는 뜻입니다.
+    float: >-
+      This panel is a light throwaway beat: the figure is drawn chibi /
+      super-deformed (2-3 heads tall), small, with no frame and no background at
+      all — just bare flat colour around it, no horizon, no floor, no scenery.
+      It takes up only about half the sheet width, centred, with generous empty
+      space on both sides, and carries no speed lines, focus lines or glow. At
+      most two or three tiny flat doodle marks float beside it
 
   # 패널 배치 전체에 걸리는 규칙. 코드가 패널별 줄 뒤에 그대로 붙입니다.
   layout_rules: >-

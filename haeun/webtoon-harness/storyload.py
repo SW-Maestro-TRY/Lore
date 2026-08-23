@@ -35,11 +35,13 @@ CUT_FILE_RE = re.compile(r"^ep(\d+)_cuts\.json$")
 BEATS = ("setup", "build", "turn", "release", "hold")
 GAZES = ("down", "toward-next", "at-viewer", "away")
 SIZES = ("wide", "normal", "tall", "impact")
+# 컷이 지면을 먹는 무게. 콘티가 계산해서 보내는 값이라 여기서는 받기만 한다.
+WEIGHTS = ("full", "normal", "light")
 # 한 화 안에서 그림체가 바뀐다. 진지한 컷은 정식 작화, 분위기 푸는 컷은 SD.
 # bleed(통컷)·breakout(칸 밖으로)은 그림체가 아니라 **칸을 어떻게 쓰는가**지만,
 # 컷 하나에 붙는 배타적 선택이라 콘티(W7)가 같은 필드에 담아 보낸다.
 # 여기 목록에 없으면 _one_of 가 조용히 "normal" 로 깎는다 — 실제로 그랬다.
-RENDER_STYLES = ("normal", "sd", "emphasis", "bleed", "breakout")
+RENDER_STYLES = ("normal", "sd", "emphasis", "bleed", "breakout", "float")
 # 구도와 말풍선 자리. story-harness 의 COMPOSITIONS / BUBBLE_ZONES 와 같은 목록이다 —
 # 한쪽이 값을 늘리면 여기도 같이 늘려야 한다 (RENDER_STYLES 와 같은 주의).
 COMPOSITIONS = ("none", "over-the-shoulder", "two-shot", "silhouette",
@@ -117,6 +119,11 @@ class Cut:
     # 아래로 내리는 자리라, 켜 두면 두 컷이 한 공간의 위/아래로 읽힌다.
     # 옛 run 에는 이 칸이 없다 — 없으면 False 라 예전과 똑같이 굴러간다.
     vertical_link: bool = False
+    # 이 컷이 지면을 얼마나 먹는가 — full | normal | light. 콘티(W7.5)가
+    # render_style 과 size 에서 계산해 보낸다. light 는 배경이 없는 컷이라
+    # 여럿이 한 캔버스를 나눠 써도 격자가 안 생긴다.
+    # 옛 run 에는 이 칸이 없다 — 없으면 "normal" 이라 예전과 똑같이 굴러간다.
+    weight: str = "normal"
     size: str = ""            # wide | normal | tall | impact
     render_style: str = "normal"   # normal | sd | emphasis | bleed | breakout
     # ---- 카메라. 예전에는 콘티가 서술 첫머리에 낱말로 적어 보냈는데, 그 자리에
@@ -327,6 +334,7 @@ def _cut_from(c: dict, i: int) -> Cut:
         gaze=_one_of(c.get("gaze"), GAZES, ""),
         scene_break=bool(c.get("scene_break")),
         vertical_link=bool(c.get("vertical_link")),
+        weight=_one_of(c.get("weight"), WEIGHTS, "normal"),
         size=_one_of(c.get("size"), SIZES, ""),
         render_style=_one_of(c.get("render_style"), RENDER_STYLES, "normal"),
         shot=_one_of(c.get("shot"), SHOTS, ""),

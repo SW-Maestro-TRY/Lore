@@ -318,3 +318,10 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
   있게 함 · 컷 뷰어에 **스크롤 폴드 눈금** 토글. 새 값은 전부 기본이 꺼짐이라
   예전 run 은 안 바뀐다.
   자세한 내용: [`docs/webtoon-scroll-2026-08-23.md`](docs/webtoon-scroll-2026-08-23.md)
+- 2026-08-23 — 컷의 **무게** 도입 (이슈 #25/#23): "한 장에 3컷 / 한 컷에 한 장"
+  이라는 개수 규칙을 없애고 컷마다 무게(full·normal·light)를 세게 함 ·
+  `float` 그림체 신설(칸도 배경도 없는 가벼운 컷) · `grouping: weight` 신설 —
+  무거운 컷은 혼자 한 장, 배경 없는 가벼운 컷만 붙은 것끼리 한 장에 묶인다
+  (나눌 배경이 없어 격자가 안 생김) · scene 모드 이음매에도 `vertical_link` 연결.
+  옛 화는 전부 normal 로 읽혀 컷 하나당 한 장 — 결과가 안 바뀐다.
+  자세한 내용: [`docs/panel-weight-2026-08-23.md`](docs/panel-weight-2026-08-23.md)

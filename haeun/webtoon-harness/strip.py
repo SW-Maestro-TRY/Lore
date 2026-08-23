@@ -472,8 +472,25 @@ WEBTOON_GAP_RATIO = {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}
 #
 # 특정 size 만 좁히고 싶으면 config 의 scene.width_ratio 에 그것만 적는다.
 # 비워 두면(기본) 전부 1.0 이다.
-def width_ratio(cut: dict[str, Any], table: dict[str, Any] | None = None) -> float:
+#
+# **무게(weight)는 예외다.** 위에서 size 별 고정표를 뺀 이유는 "모든 normal 컷을
+# 똑같이 조금 비워라"가 "모든 컷을 꽉 채워라"만큼이나 기계적이기 때문이었다.
+# 무게는 그 얘기가 아니다 — 좁아지는 것은 **콘티가 가볍다고 정한 컷뿐**이고,
+# 그 컷은 배경도 없다. 지면을 덜 먹는 것이 곧 그 컷이 가볍다는 뜻이라, 폭이
+# 내용에서 나온다.
+#
+# weight 가 없는 옛 컷은 전부 "normal" 로 읽히므로 예전처럼 1.0 이다.
+LIGHT_WIDTH = 0.55        # 떠 있는 컷이 쓰는 지면 폭
+
+
+def width_ratio(cut: dict[str, Any], table: dict[str, Any] | None = None,
+                light: float = LIGHT_WIDTH) -> float:
     """이 컷이 지면 폭을 얼마나 쓸까 (0~1). 기본 1.0 = 꽉 채움."""
+    if str(cut.get("weight") or "normal").strip().lower() == "light":
+        try:
+            return max(0.3, min(1.0, float(light)))
+        except (TypeError, ValueError):
+            return LIGHT_WIDTH
     if not table:
         return 1.0
     try:

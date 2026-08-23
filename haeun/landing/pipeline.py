@@ -86,9 +86,13 @@ CUTS_PER_SHEET = 3
 # 그대로 사라진다 — 격자가 안 나오고(모델이 배치할 칸이 없다), 컷 사이 여백을
 # 콘티의 gap_after 대로 코드가 넣고, 컷이 800px 로 줄지 않는다. 대신 이미지
 # 호출이 컷 수만큼이라 세 배가 된다. 그래서 고르게 두고 기본은 그대로 둔다.
+# 웹툰 모드도 run.py 에는 "scene" 으로 간다. 컷 모드가 아니라 **묶음 규칙을
+# 무게로 바꾼 scene 모드**이기 때문이다 (config 의 scene.grouping: weight).
+# 무거운 컷은 어차피 혼자 한 장이 되므로 컷 모드와 같은 그림이 나오고, 그 위에
+# 배경 없는 가벼운 컷만 여럿이 한 장을 나눠 쓴다 — 컷 모드로는 못 하는 것이다.
 LAYOUT_MODES = {
     "fast":    {"mode": "scene", "label": "빠르게 · 한 장에 3컷"},
-    "webtoon": {"mode": "cut",   "label": "웹툰 · 컷마다 한 장"},
+    "webtoon": {"mode": "scene", "label": "웹툰 · 무게가 묶음을 정함"},
 }
 
 
@@ -248,6 +252,14 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
         text = re.sub(r"(?m)^  gap_ratio:.*$",
                       "  gap_ratio: {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}",
                       text, count=1)
+        # 9. 묶기를 **무게**가 정하게 한다 — "한 장에 3컷" 도 "한 컷에 한 장" 도
+        #    임의의 규칙이었다. 실제 웹툰은 컷마다 무게가 달라서, 스쳐 가는
+        #    리액션과 판이 뒤집히는 컷이 같은 지면을 먹지 않는다.
+        #    무거운 컷은 혼자 한 장, 배경 없는 가벼운 컷(float)만 연달아 붙은
+        #    것끼리 한 장에 묶인다 — 나눌 배경이 없어서 격자가 안 생긴다.
+        #    위의 grouping/cuts_per_scene 을 여기서 덮어쓴다(6번에서 fixed 로
+        #    바꿔 뒀는데, 웹툰 모드에서는 개수 규칙 자체를 안 쓴다).
+        text = re.sub(r"(?m)^  grouping:.*$", "  grouping: weight", text, count=1)
 
     out = job_dir / "config.yaml"
     out.write_text(text, encoding="utf-8")
@@ -438,11 +450,11 @@ class Job:
                 state = SKIP if (key == "look" and not self.has_photo) else TODO
                 # 컷 모드에는 "묶기" 단계가 없다 — 컷 하나가 곧 한 장이다.
                 if key == "group" and webtoon:
-                    label = "컷마다 캔버스 잡기"
+                    label = "컷 무게대로 묶기"
                 steps.append({"key": key, "label": label, "state": state})
             desc = spec["desc"]
             if webtoon and spec["key"] == "art":
-                desc = "컷 하나를 한 장씩 그립니다 — 컷 사이 여백이 살아납니다"
+                desc = "무거운 컷은 한 장씩, 가벼운 컷은 묶어서 그립니다"
             elif webtoon and spec["key"] == "bind":
                 desc = "컷을 콘티가 정한 여백대로 세로로 이어 붙입니다"
             self.stages.append({

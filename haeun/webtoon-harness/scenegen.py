@@ -195,6 +195,55 @@ def group(cuts: list[dict[str, Any]], per: int) -> list[Scene]:
             for i, s in enumerate(range(0, len(cuts), per), 1)]
 
 
+def group_by_weight(cuts: list[dict[str, Any]], max_light: int = 3) -> list[Scene]:
+    """컷의 **무게**가 묶음을 정한다. 개수 규칙이 아예 없다.
+
+    "한 장에 3컷" 도 "한 컷에 한 장" 도 둘 다 임의의 규칙이었다. 3컷씩 묶으면
+    배경이 있는 컷 셋이 한 캔버스에 들어가 격자가 되고, 1컷씩 뽑으면 스쳐 가는
+    리액션 한 컷이 절정 컷과 같은 지면·같은 비용을 먹는다. 실제 웹툰에서 컷의
+    무게는 균일하지 않으므로, 묶음도 균일할 이유가 없다.
+
+    콘티가 계산해 둔 weight 를 그대로 따른다:
+
+      full   통컷이거나 화면을 꽉 채우는 컷. **혼자 한 장.**
+      normal 보통 컷. **혼자 한 장.** (컷 모드와 같다)
+      light  떠 있는 컷(float). 배경이 없다 — 그래서 **연달아 붙은 것끼리
+             한 장에 묶어도 격자가 안 생긴다.** 나눌 배경 자체가 없기 때문이다.
+             이것이 이 함수의 전부다.
+
+    max_light 는 한 장에 들어갈 light 컷의 상한이다. 배경이 없어도 넷을 넘기면
+    캔버스가 세로로 길어져 인물이 작아지기 시작한다.
+
+    weight 가 없는 옛 컷은 전부 normal 로 읽히므로, 결과가 컷 하나당 한 장 —
+    즉 컷 모드와 같아진다.
+    """
+    if max_light < 1:
+        raise SceneError("한 장에 묶을 light 컷 수는 1 이상이어야 합니다.")
+    scenes: list[Scene] = []
+    bucket: list[dict[str, Any]] = []
+
+    def flush() -> None:
+        if bucket:
+            scenes.append(Scene(scene_number=len(scenes) + 1, cuts=list(bucket)))
+            bucket.clear()
+
+    for c in cuts:
+        if str(c.get("weight") or "normal").strip().lower() == "light":
+            bucket.append(c)
+            if len(bucket) >= max_light:
+                flush()
+            continue
+        flush()                       # 무거운 컷 앞에서 가벼운 묶음을 끊는다
+        scenes.append(Scene(scene_number=len(scenes) + 1, cuts=[c]))
+    flush()
+    if not scenes:
+        raise SceneError("묶을 컷이 하나도 없습니다.")
+    # 위에서 무거운 컷을 먼저 넣은 자리가 있어 번호가 어긋날 수 있다 — 다시 매긴다.
+    for i, sc in enumerate(scenes, 1):
+        sc.scene_number = i
+    return scenes
+
+
 def group_by_break(cuts: list[dict[str, Any]],
                    max_cuts: int = 0) -> list[Scene]:
     """scene_break 가 true 인 컷 뒤에서 끊는다 (W7.5 연출 기반).
@@ -753,7 +802,24 @@ def scene_zone(scene: Scene) -> str:
     return ""
 
 
-def seam_text(prev: Scene | None, nxt: Scene | None) -> str:
+# 콘티가 "여기는 배경이 이어진다"고 확정한 자리에 덧붙이는 문구.
+#
+# 위의 seam_text 는 이미 "웬만하면 같은 장소"라고 말하지만, 어디까지나 웬만하면
+# 이다 — 서술이 다른 곳을 가리키면 모델이 그쪽을 따른다. 그게 기본값으로는 맞다.
+# 다만 콘티가 여백 0 · 같은 zone 으로 확정한 자리(vertical_link)는 추측할 것이
+# 없다. 무대는 확실히 그대로이고 카메라만 아래로 내려간 자리라, 거기서는 못박는다.
+LINK_SEAM = (
+    "This join is a VERTICAL CAMERA MOVE, not a cut: the sheet above and this "
+    "sheet are one continuous space that the reader scrolls down through. The "
+    "place does not change at all — same room or street, same architecture, same "
+    "horizon line, same light direction and colour temperature — and the only "
+    "thing that changed is that the camera travelled further DOWN, so this sheet "
+    "shows what lies below what the sheet above showed. Line the two up so the "
+    "walls, floor, sky or ground read as the same continuous surface.")
+
+
+def seam_text(prev: Scene | None, nxt: Scene | None,
+              link_above: bool = False) -> str:
     """이 장의 위·아래가 무엇과 붙는가.
 
     Scene 을 한 장씩 따로 굽고 그것을 세로로 **틈 없이** 이어 붙인다. 그런데
@@ -778,6 +844,8 @@ def seam_text(prev: Scene | None, nxt: Scene | None) -> str:
             "down to the anonymous figures in the background. Do not restate that "
             "moment and do not copy its layout; just make sure the reader cannot "
             "tell where one sheet ended and this one began.")
+        if link_above:
+            lines.append(LINK_SEAM)
     if nxt is not None and nxt.cuts:
         head = str(nxt.cuts[0].get("description") or "").strip()
         lines.append(
@@ -870,7 +938,8 @@ STICKER_FLAT = (
 
 def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
              with_lock: bool = True, style_text: str = "",
-             prev: "Scene | None" = None, nxt: "Scene | None" = None) -> str:
+             prev: "Scene | None" = None, nxt: "Scene | None" = None,
+             link_above: bool = False) -> str:
     """Scene 프롬프트 조립. 코드가 강제한다 — LLM 은 패널 서술만 썼다.
 
     컷 모드의 run.assemble() 과 짝이다. 같은 자리에 같은 문구가 들어가야
@@ -879,6 +948,8 @@ def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
 
     style_text: 작화 변주까지 얹은 {style} 문구. 비우면 style_suffix 그대로.
     prev/nxt : 위아래로 붙는 장. 이음매 문구를 만드는 데만 쓴다.
+    link_above: 이 장의 첫 컷이 앞 장 마지막 컷에서 **배경이 이어지는** 자리인가
+                (콘티의 vertical_link). 켜면 이음매 문구를 못박는다.
     """
     lock = str(cfg.get("design_lock") or "") if with_lock else ""
     # 패널 서술(LLM) 뒤에 말풍선·효과음·보정을 코드가 붙인다. LLM 이 고르게 두면
@@ -902,7 +973,7 @@ def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
         text = text.replace(token, value)
     # 이음매는 레이아웃 지시 바로 뒤가 아니라 끝에 둔다 — 모델이 마지막에 읽은
     # 것을 더 잘 지키고, 이건 "이 장을 어떻게 끝낼 것인가" 의 지시라서 그렇다.
-    seam = seam_text(prev, nxt)
+    seam = seam_text(prev, nxt, link_above)
     if seam:
         text = f"{text.rstrip()}\n{seam}"
     if lock.strip():

@@ -39,6 +39,9 @@ SCREEN = "screen"  # 비율 대신 화면 높이를 쓰는 특수값
 SCREEN_RATIO = 9 / 16
 # 이보다 납작한 틀은 세로가 많이 잘리므로 위쪽(얼굴)을 남기고 자른다.
 FLAT_RATIO = 0.7
+# 가벼운 컷(weight: light)이 쓰는 지면 폭. strip.LIGHT_WIDTH 와 같은 값이다 —
+# 뷰어와 PNG 가 다른 폭으로 그리면 같은 화가 두 가지로 보인다.
+LIGHT_WIDTH = 0.55
 
 CUT_KEY_RE = re.compile(r"^(?:cut)?\s*(\d+)$", re.IGNORECASE)
 
@@ -377,6 +380,15 @@ body.show-fold .fold { display: block; }
 .fold b { position: absolute; right: 4px; top: 3px; font: 700 10px/1 ui-monospace,
           "Consolas", monospace; letter-spacing: .04em; padding: 3px 6px;
           border-radius: 3px; background: var(--cap-bg); color: var(--dim); }
+
+/* 무게 — 가벼운 컷(float)은 지면을 덜 먹는다. 배경이 없어서 좁혀도 잘릴 것이
+   없고, 좁다는 것 자체가 "이 컷은 스쳐 가는 컷"이라는 신호다.
+   weight 가 없는 옛 화는 전부 normal 로 읽혀 예전처럼 꽉 찬다. */
+.cut.w-light { width: 55%; margin-left: auto; margin-right: auto; }
+.cut.w-light .frame { background: var(--cap-bg); }
+.cut .wt { display: none; }
+.cut.w-light .wt, .cut.w-full .wt { display: inline-block; margin-left: 6px; opacity: .7; }
+body.hide-no .cut .wt { display: none; }
 
 /* 앞 컷에서 배경이 이어지는 컷. 두 컷이 한 공간의 위/아래라는 표시다. */
 .cut .link { display: none; }
@@ -1090,7 +1102,10 @@ def _cut_items(
         size = layout.get(n, DEFAULT_SIZE)
         ratio, h_mult = sizes[size]
         tally[size] += 1
-        strip_h += round(width * h_mult)
+        # 가벼운 컷은 폭이 55% 라 높이도 그만큼 준다. 총 높이 어림이 이걸
+        # 안 보면 화가 실제보다 길게 찍힌다.
+        wt_now = str(cut.get("weight") or "normal").strip().lower()
+        strip_h += round(width * h_mult * (LIGHT_WIDTH if wt_now == "light" else 1.0))
 
         # JS 없이도 맞게 보이도록 초기 크기는 파이썬이 박아 둔다. 이후는 JS 가 다시 칠한다.
         frame_cls = "frame screen" if ratio == SCREEN else "frame"
@@ -1118,11 +1133,17 @@ def _cut_items(
         # 옛 run 에는 이 칸이 없다. 없으면 표시가 안 붙을 뿐 나머지는 그대로다.
         linked = bool(cut.get("vertical_link"))
         link_mark = '<span class="link">↕ 이어짐</span>' if linked else ""
+        # 무게 — 콘티(W7.5)의 weight. 없으면 normal 이라 예전과 같이 꽉 찬다.
+        wt = str(cut.get("weight") or "normal").strip().lower()
+        wt = wt if wt in ("full", "normal", "light") else "normal"
+        wt_cls = f" w-{wt}" if wt != "normal" else ""
+        wt_mark = ('<span class="wt">· 가벼운 컷</span>' if wt == "light"
+                   else '<span class="wt">· 통째로</span>' if wt == "full" else "")
         items.append(
-            f'<section class="cut{" linked" if linked else ""}" id="cut{n}" '
-            f'data-cut="{n}" data-size="{_esc(size)}">'
+            f'<section class="cut{" linked" if linked else ""}{wt_cls}" id="cut{n}" '
+            f'data-cut="{n}" data-size="{_esc(size)}" data-weight="{wt}">'
             f'<div class="{frame_cls}"{style}>{inner}</div>'
-            f'<div class="no">컷 {n} <i>{_esc(size)}</i>{link_mark}</div>'
+            f'<div class="no">컷 {n} <i>{_esc(size)}</i>{wt_mark}{link_mark}</div>'
             f'<div class="pick">{buttons}</div>'
             f'{_caption(cut.get("dialogue"), bool(cut.get("reader_only")))}</section>'
         )
@@ -1335,6 +1356,19 @@ def build_viewer(
         "saved": {str(n): layout[n] for n in numbers if n in layout},
     }, ensure_ascii=False).replace("</", "<\\/")
 
+    n_light = sum(1 for c in cuts
+                  if str(c.get("weight") or "").strip().lower() == "light")
+    n_full = sum(1 for c in cuts
+                 if str(c.get("weight") or "").strip().lower() == "full")
+    weight_note = (
+        f'<b>컷 무게</b> · 가벼운 컷 {n_light}개(지면 폭 {int(LIGHT_WIDTH * 100)}%), '
+        f'통째로 쓰는 컷 {n_full}개. 한 화의 모든 컷이 같은 무게일 필요는 없습니다 — '
+        f'스쳐 가는 리액션과 판이 뒤집히는 컷이 같은 지면을 먹으면 정작 큰 컷이 '
+        f'안 커 보입니다. 무게는 콘티가 render_style·size 에서 계산합니다.'
+        if (n_light or n_full) else
+        '<b>컷 무게</b> · 이 화는 모든 컷이 같은 무게입니다 (가벼운 컷도 통컷도 '
+        '없습니다). 콘티가 render_style 을 float 이나 bleed 로 두면 여기가 갈립니다.')
+
     n_link = sum(1 for c in cuts if c.get("vertical_link"))
     link_note = (
         f'<b>↕ 이어짐</b> 표시가 붙은 컷 {n_link}개는 앞 컷과 배경이 위에서 아래로 '
@@ -1400,6 +1434,7 @@ def build_viewer(
   <p>이미지는 다시 만들지 않고 틀에 맞춰 잘라 넣은 것이라,
      <b>잘라 채우기</b> 를 끄면 원본 전체가 보입니다.
      말풍선 합성은 아직 없습니다 — 대사는 이미지 아래 캡션입니다.</p>
+  <p>{weight_note}</p>
   <p><b>스크롤 폴드</b> · 켜면 화면 하나 높이마다 띠 위에 점선이 그어집니다.
      독자의 엄지가 멈추는 자리가 늘 그 선이라, 선 <b>바로 아래</b>에 무엇이 오는지가
      다음 화면까지 내려갈지를 정합니다 — 리빌·임팩트·반전이면 계속 내려가고,
