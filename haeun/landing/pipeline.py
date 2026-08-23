@@ -1151,13 +1151,22 @@ def execute(job: Job) -> None:
             if job._cancel:
                 raise Failed("취소됨")
             cuts_path = STORY / "runs" / run_id / "webtoon" / "ep01_cuts.json"
-            if code != 0 or not cuts_path.exists():
-                raise Failed("콘티(컷 설계)를 만들지 못했습니다.")
 
             # webtoon.py 의 main() 도 STATUS_HUMAN/실패에서 종료 코드는 항상 0 —
             # story.py 와 같은 사정. meta.json 을 직접 읽어야 한다.
+            #
+            # **이 판정이 컷 파일 검사보다 먼저 와야 한다.** 게이트가 소진되면
+            # webtoon.py 는 컷을 한 개도 안 쓰고 멈추므로(로그의 "컷 0"),
+            # 순서가 반대면 ep01_cuts.json 이 없다는 이유로 먼저 실패해서
+            # **승인 화면에 영영 닿지 못한다** — 그 화면이 존재하는 이유가 바로
+            # 이 경우인데도. 2026-08-23 실제 실행에서 이렇게 막혔다:
+            # meta.json 은 '사람확인필요' 인데 화면에는 "콘티를 만들지
+            # 못했습니다" 만 떴고, 사용자가 왜 걸렸는지도 다시 시도할 길도 없었다.
             status, note = _meta_status(board_meta)
-            if status != STATUS_HUMAN:
+            human = status == STATUS_HUMAN
+            if code != 0 or (not cuts_path.exists() and not human):
+                raise Failed("콘티(컷 설계)를 만들지 못했습니다.")
+            if not human:
                 break                  # STATUS_OK(또는 알 수 없는 값) — 정상 진행
 
             job.status = "awaiting_board_approval"
@@ -1175,6 +1184,17 @@ def execute(job: Job) -> None:
             if job._cancel:
                 raise Failed("취소됨")
             if decision != "retry":
+                # 게이트가 소진된 자리는 두 가지다. 컷이 나왔는데 기준에 걸린
+                # 것이면 "이대로 진행" 이 말이 된다 — 사람이 보고 괜찮다고 한
+                # 것이니 그 콘티로 그린다. 컷이 아예 안 나온 것이면 진행할
+                # 대상이 없으므로, 그리기로 넘어가 봐야 거기서 다시 죽는다.
+                # 그때 나오는 말("컷 서술을 옮기지 못했습니다")은 원인에서
+                # 멀어져서 더 알아보기 어렵다 — 여기서 멈추고 이유를 말한다.
+                if not cuts_path.exists():
+                    raise Failed(
+                        "콘티가 한 컷도 나오지 않아 이대로는 진행할 수 없습니다. "
+                        "무엇이 걸렸는지 적어서 '다시 만들기'를 눌러 주세요."
+                        + (f" ({note})" if note else ""))
                 break                   # approve — 이 콘티 그대로 진행
             replan = True
         _leave(job)
