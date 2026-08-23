@@ -1773,11 +1773,17 @@ def _origin_config(run_id: str) -> Path | None:
 
 
 # 다시 그리기에서 고를 수 있는 글자 모드. 하네스의 scene.lettering 값 그대로다
-# (webtoon-harness/scenegen.py 의 LETTERING_MODES). "overlay" 를 쓰는 이유:
-# 말풍선 **모양**은 그대로 그리되 그 안의 글자만 비운다 — bubbles.py 가 나중에
-# 그 자리에 글자를 얹는 것을 전제로 한 값이다. "none" 은 말풍선 모양까지
-# 지워서, 나중에 글자를 얹을 자리 자체가 안 남는다.
-REGEN_LETTERING = "overlay"
+# (webtoon-harness/scenegen.py 의 LETTERING_MODES).
+#
+# 2026-08-23 "overlay"에서 "none"으로 바꿨다. overlay는 말풍선 **모양**은
+# 그대로 그리고 그 안 글자만 비우는 값인데, 그 자리를 채우는 쪽
+# (webtoon-harness/bubbles.py)은 review.html에서 사람이 내려받은
+# bubbles.json을 --view로 합성하는 별도 도구다 — 랜딩의 다시 그리기 경로
+# 어디도 그걸 부르지 않는다. 그래서 텅 빈 말풍선 껍데기만 영영 남았다
+# ("글자는 없고 말풍선은 있어서 더 어색하다"는 실사용자 지적). "none"은
+# 말풍선 자체를 안 그린다 — 화면·편집실 문구("말풍선 없이 그립니다")가
+# 이미 이 동작을 약속하고 있었으니, 실제 동작을 그 말에 맞춘 것이기도 하다.
+REGEN_LETTERING = "none"
 
 
 def origin_form(run_id: str) -> dict[str, Any]:
@@ -1893,7 +1899,7 @@ class Regen:
     scene_no: int
     episode: int = 1
     feedback: str = ""
-    textless: bool = False                  # 글자(말풍선 안 글자) 없이 그림만
+    textless: bool = False                  # 말풍선까지 없이 그림만 (REGEN_LETTERING)
     status: str = "queued"                  # queued / running / done / error
     error: str = ""
     note: str = ""

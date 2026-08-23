@@ -704,7 +704,7 @@ function pageTools(no) {
       </label>
       <label class="check-line">
         <input type="checkbox" class="js-regen-textless">
-        <span>글자 없이 그림만 다시 그리기 <small>말풍선 안 글자는 비웁니다</small></span>
+        <span>말풍선 없이 그림만 다시 그리기 <small>말풍선까지 안 그립니다 — 대사는 나중에 편집실에서 얹으세요</small></span>
       </label>
       <div class="regen-actions">
         <button type="button" class="btn btn-primary btn-sm js-regen-go">다시 그리기</button>
