@@ -3582,6 +3582,24 @@ ok("beat 게이트: description 에 그대로 있으면 통과",
 ok("beat 게이트: 활용형이 달라도(구출할게) 어간이 맞으면 통과",
    webtoon.gate_beat_coverage(_beat_dialogue, ["생쥐를 구출한다"]) == [])
 
+# 느슨한 판정(BEAT_GATE_LOOSE=1) — 낱말이 다를 뿐 그린 경우를 살린다.
+# 엄격 판정은 동사 문자열이 그대로 나와야 해서 같은 장면을 다른 말로 쓰면 걸린다.
+# 2026-08-23 실제 실행에서 이것 때문에 재시도가 소진돼 생성이 끝까지 못 갔다.
+_beat_synonym = [{"cut_number": 1,
+                  "description": "초롱이 덫에 걸린 생쥐를 보고 눈이 커진다",
+                  "lines": []}]
+_BEAT_SYN = ["초롱이 덫에 걸린 생쥐를 발견한다"]
+ok("beat 게이트(엄격): 뜻이 같아도 동사 낱말이 다르면 탈락 — 기본 동작은 그대로",
+   webtoon.gate_beat_coverage(_beat_synonym, _BEAT_SYN, loose=False) != [])
+ok("beat 게이트(느슨): 동사가 달라도 장면 낱말이 2개 이상이면 통과",
+   webtoon.gate_beat_coverage(_beat_synonym, _BEAT_SYN, loose=True) == [])
+ok("beat 게이트(느슨): 결과만 그린 컷은 여전히 탈락 — 낱말이 '생쥐' 하나뿐이다",
+   webtoon.gate_beat_coverage(_beat_missing, ["생쥐를 구출한다"], loose=True) != [])
+ok("beat 게이트(느슨): 행동이 통째로 빠지면 탈락 — 원래 잡던 사고는 그대로 잡는다",
+   webtoon.gate_beat_coverage(
+       [{"cut_number": 1, "description": "숲에 바람이 분다", "lines": []}],
+       _BEAT_SYN, loose=True) != [])
+
 # P0-3: 소품 텍스트(편지 등) 속 이름 — advisory.
 _prop_cuts_stranger = [{"cut_number": 5, "screen_text": "초롱에게, 잘 지내고 있어? - 루나 올림"}]
 ok("소품 이름 경고: 명부에 없는 이름이 screen_text 에 있으면 경고",

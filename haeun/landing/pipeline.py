@@ -649,6 +649,12 @@ class Job:
         # story.py --charsheet 가 그림체 문구를 여기서 읽는다. job 폴더를
         # 가리켜야 시트와 컷이 같은 그림체를 본다.
         env["WEBTOON_HARNESS_DIR"] = str(self.dir)
+        # beat 게이트를 느슨하게 — 하네스 기본은 엄격(beat 의 동사가 컷에
+        # 문자열 그대로 나와야 통과)이라, 같은 장면을 다른 낱말로 쓰면 걸린다.
+        # 그러면 재시도가 소진되고 컷이 한 개도 저장되지 않아 **제품이 한 편도
+        # 못 만든다.** 하네스 기본값은 예전 run 재현을 위해 그대로 두고 제품에서만
+        # 켠다. 사람이 .env 에 직접 값을 정해 뒀으면 그 뜻을 존중해 덮지 않는다.
+        env.setdefault("BEAT_GATE_LOOSE", "1")
         return env
 
     def _run(self, cmd: list[str], cwd: Path, on_line: Callable[[str], None]) -> int:
