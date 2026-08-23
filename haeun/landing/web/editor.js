@@ -1,24 +1,32 @@
-/* LORE 편집실 — **목업입니다.**
+/* LORE 편집실
  *
- * 아무것도 생성하지 않습니다. 이미 만들어 둔 1화(`/static/samples/mock.json`)를
- * 재료로 읽어서, 결과물을 웹툰처럼 내려 읽으면서
+ * `?run=<run_id>` 로 열면 **그 작품의 실제 1화**를 열고, 다시 그리기는 진짜로
+ * 그립니다(장 단위 · `/api/runs/{run}/scenes/{n}/regen`). run 없이 열면 예전처럼
+ * `/static/samples/mock.json` 목업이라 서버가 없어도 화면을 볼 수 있습니다.
  *
- *   · 장마다 다시 그리기 (크레딧이 빠져나가는 것까지 흉내)
- *   · 말풍선 없이 다시 그리기
- *   · 스토리 / 연출 / 그림으로 나뉜 피드백
+ * 여기서 하는 일:
+ *   · 장마다 다시 그리기 — 피드백을 적어서, 또는 글자 없이
+ *   · 지난 판을 나란히 놓고 눌러서 바꾸기
  *   · 그림 위에 말풍선·스티커·효과음 얹기
  *
- * 를 해 보는 화면입니다. 서버 상태가 필요 없어서 **한 번도 안 돌려도** 열립니다.
+ * ── 얹은 것은 어디에 남는가 ────────────────────────────────────────────
+ * **이 브라우저에만** 남습니다(localStorage). 서버로 보내지 않고 그림에도 굽지
+ * 않습니다 — 다른 기기에서 열면 없습니다.
  *
- * 얹은 것과 피드백, 크레딧 잔액은 localStorage 에 남습니다 — 새로고침해도
- * 그대로입니다. 목업이라 서버로는 아무것도 안 보냅니다.
+ * 저장 칸은 **작품마다 따로**입니다(`lore_editor_v2:<run_id>`). 예전에는 열쇠가
+ * 하나뿐이라, A 작품에 얹은 스티커가 B 작품을 열었을 때 그대로 따라왔습니다 —
+ * 장 번호만 같으면 남의 그림 위에 얹혔습니다. 이제 작품을 바꾸면 그 작품의
+ * 것만 보입니다(처음 여는 작품이면 비어 있습니다).
  */
 
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const KEY = "lore_editor_mock_v1";
 
-/* 크레딧 값은 전부 가짜입니다. 실제 과금과 무관합니다. */
+/* 지금 열고 있는 작품. 저장 열쇠와 API 주소가 전부 이 값에 매인다. */
+let RUN_ID = "";
+function storeKey() { return `lore_editor_v2:${RUN_ID || "__mock__"}`; }
+
+/* 크레딧은 아직 안 붙었습니다 (#16). 목업에서만 흉내로 셉니다. */
 const COST = { regen: 40, regenFeedback: 60, nobubble: 0 };
 const START_CREDIT = 1240;
 
@@ -46,14 +54,17 @@ let uid = Date.now();
 
 /* ------------------------------------------------------------------ 저장 */
 
+/* 작품이 정해진 **뒤에** 부른다 — 열쇠가 run_id 에 매여 있어서, 먼저 부르면
+   앞 작품 칸을 읽는다. */
 function load() {
+  state = { credit: START_CREDIT, scenes: {}, ledger: [] };
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || "null");
+    const raw = JSON.parse(localStorage.getItem(storeKey()) || "null");
     if (raw && typeof raw === "object") state = { ...state, ...raw };
   } catch { /* 망가졌으면 새로 시작한다 */ }
 }
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* 용량 초과 */ }
+  try { localStorage.setItem(storeKey(), JSON.stringify(state)); } catch { /* 용량 초과 */ }
 }
 function sc(no) {
   if (!state.scenes[no]) state.scenes[no] = { items: [], fb: {}, ver: 1, noBubble: false };
@@ -114,6 +125,8 @@ function render() {
   $("#scenes").innerHTML = data.scenes.map(s => sceneCard(s)).join("");
   data.scenes.forEach(s => { paintItems(s.no); paintFeedback(s.no); });
   wireScenes();
+  // 지난 판은 서버에만 있다 — 목업에는 없다.
+  if (RUN_ID) data.scenes.forEach(s => paintVersions(s.no));
 }
 
 function sceneCard(s) {
@@ -137,15 +150,17 @@ function sceneCard(s) {
 
     <div class="scene-tools">
       <button type="button" class="btn btn-quiet btn-sm" data-act="regen">
-        다시 그리기 <span class="cost">−${COST.regen} C</span>
+        다시 그리기${RUN_ID ? "" : ` <span class="cost">−${COST.regen} C</span>`}
       </button>
       <label class="chk">
         <input type="checkbox" data-nobubble ${st.noBubble ? "checked" : ""}>
-        말풍선 없이
+        글자 없이
       </label>
       <span class="spacer"></span>
       <button type="button" class="btn btn-quiet btn-sm" data-act="fb">피드백</button>
     </div>
+
+    <div class="page-versions" data-versions></div>
 
     <div class="fb" data-fb>
       <div class="fb-grid">
@@ -177,7 +192,7 @@ function sceneCard(s) {
       <div class="fb-send">
         <button type="button" class="btn btn-quiet btn-sm" data-act="fbclear">비우기</button>
         <button type="button" class="btn btn-primary btn-sm" data-act="fbregen">
-          피드백 반영해 다시 그리기 <span class="cost">−${COST.regenFeedback} C</span>
+          피드백 반영해 다시 그리기${RUN_ID ? "" : ` <span class="cost">−${COST.regenFeedback} C</span>`}
         </button>
       </div>
     </div>
@@ -229,34 +244,140 @@ function setActive(no) {
   $("#activeSceneLabel").textContent = `${no}번째 장`;
 }
 
-/* ------------------------------------------------------------------ 다시 그리기 (흉내) */
+/* ------------------------------------------------------------------ 다시 그리기
+ *
+ * 작품을 열고 있으면(RUN_ID) **진짜로 그린다.** 결과 화면과 같은 API 를 쓴다 —
+ * 굽기 전에 지금 그림을 판본으로 뜨고, 실패하면 서버가 되돌려 놓는다.
+ * 목업일 때만 기다리는 모습만 흉내낸다. */
+
+function regenBody(no, notes) {
+  const st = sc(no);
+  // 세 칸(스토리·연출·그림)은 사람에게 나눠 물은 것이고, 프롬프트에는 한 줄로
+  // 간다 — run.py 의 {extra} 자리는 문장 하나를 받는다.
+  const label = { story: "스토리", direct: "연출", art: "그림" };
+  const feedback = notes.map(([k, v]) => `${label[k]}: ${v}`).join(" / ");
+  return { feedback, textless: !!st.noBubble };
+}
 
 function regen(no, btn, cost, notes) {
   const el = $(`#scene-${no}`), wrap = $("[data-wrap]", el);
-  if (state.credit < cost) return toast("크레딧이 모자랍니다. (목업이라 충전은 없습니다)");
-
   const st = sc(no);
-  const what = [
-    st.noBubble ? "말풍선 없이" : "말풍선 포함",
-    ...notes.map(([k, v]) => `${{ story: "스토리", direct: "연출", art: "그림" }[k]}: ${v}`),
-  ];
+  const body = regenBody(no, notes);
+  const what = [st.noBubble ? "글자 없이" : "글자 포함",
+                ...notes.map(([k, v]) => `${{ story: "스토리", direct: "연출", art: "그림" }[k]}: ${v}`)];
 
   const veil = document.createElement("div");
   veil.className = "regen-veil";
-  veil.innerHTML = `<div class="spin"></div><div>${no}번째 장을 다시 그리는 중…<br>
+  veil.innerHTML = `<div class="spin"></div><div data-veil-msg>${no}번째 장을 다시 그리는 중…<br>
     <small style="color:#9a9aa5">${esc(what.join(" · ").slice(0, 90))}</small></div>`;
   wrap.append(veil);
 
-  spend(cost, `${no}번째 장 다시 그리기`, btn);
+  if (!RUN_ID) {
+    // 목업 — 서버가 없다. 크레딧 흉내와 기다리는 모습만.
+    if (state.credit < cost) { veil.remove(); return toast("크레딧이 모자랍니다. (목업이라 충전은 없습니다)"); }
+    spend(cost, `${no}번째 장 다시 그리기`, btn);
+    setTimeout(() => {
+      veil.remove();
+      st.ver += 1; save();
+      $("[data-ver]", el).textContent = `v${st.ver}`;
+      $("[data-nobub]", el).hidden = !st.noBubble;
+      toast(`목업입니다 — 실제 작품을 열면 여기서 진짜로 다시 그립니다.`);
+    }, 1800 + Math.random() * 900);
+    return;
+  }
+  realRegen(no, btn, body, veil, el);
+}
 
-  // 실제 생성은 여기에 연결됩니다. 지금은 기다리는 모습만 보여줍니다.
-  setTimeout(() => {
-    veil.remove();
-    st.ver += 1; save();
-    $("[data-ver]", el).textContent = `v${st.ver}`;
-    $("[data-nobub]", el).hidden = !st.noBubble;
-    toast(`목업입니다 — 실제로는 여기서 ${no}번째 장이 v${st.ver} 로 다시 그려집니다.`);
-  }, 1800 + Math.random() * 900);
+async function realRegen(no, btn, body, veil, el) {
+  const msg = $("[data-veil-msg]", veil);
+  btn.disabled = true;
+  let job;
+  try {
+    const res = await fetch(
+      `/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/regen`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body) });
+    job = await res.json();
+    if (!res.ok) throw new Error(job.error || "시작하지 못했습니다");
+  } catch (err) {
+    veil.remove(); btn.disabled = false;
+    return toast(err.message);
+  }
+
+  // 한 장 굽는 데 1~2분이라 2초 간격이면 충분하다.
+  while (true) {
+    await new Promise(r => setTimeout(r, 2000));
+    let s;
+    try { s = await (await fetch(`/api/regens/${job.id}`)).json(); }
+    catch { continue; }                       // 잠깐 끊겨도 다음 번에 이어진다
+    if (msg && s.note) msg.innerHTML =
+      `${no}번째 장을 다시 그리는 중…<br><small style="color:#9a9aa5">${esc(s.note.slice(0, 90))}</small>`;
+    if (s.status === "done") {
+      veil.remove();
+      bustScene(no);
+      paintVersions(no, s.versions);
+      toast(`${no}번째 장을 다시 그렸습니다`);
+      break;
+    }
+    if (s.status === "error" || s.status === "cancelled") {
+      // 실패해도 원래 그림은 서버가 되돌려 놓는다. 화면은 그대로 두면 된다.
+      veil.remove();
+      toast(s.error || "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
+      break;
+    }
+  }
+  btn.disabled = false;
+}
+
+/* 브라우저가 같은 주소를 캐시하므로, 새로 그려도 주소가 같으면 옛 그림이 뜬다. */
+const sceneBust = {};
+function bustScene(no) {
+  sceneBust[no] = Date.now();
+  const img = $(`#scene-${no} [data-wrap] img`);
+  if (img) img.src = `/api/runs/${encodeURIComponent(RUN_ID)}/page/${no}?w=1080&t=${sceneBust[no]}`;
+}
+
+/* 지난 판 — 결과 화면과 같이 작은 그림으로 늘어놓고, 눌러서 그때그때 바꾼다. */
+async function paintVersions(no, versions) {
+  const slot = $(`#scene-${no} [data-versions]`);
+  if (!slot || !RUN_ID) return;
+  if (!versions) {
+    try {
+      versions = (await (await fetch(
+        `/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/versions`)).json()).versions;
+    } catch { return; }
+  }
+  if (!versions || !versions.length) { slot.innerHTML = ""; return; }
+  const cur = `
+    <span class="ver-thumb is-current" title="지금 걸린 그림">
+      <img src="/api/runs/${encodeURIComponent(RUN_ID)}/page/${no}?w=160&t=${sceneBust[no] || 0}"
+           alt="지금 그림" loading="lazy">
+      <span class="ver-label">지금</span>
+    </span>`;
+  const past = versions.map(v => `
+    <button type="button" class="ver-thumb js-revert" data-v="${v.version}" title="이 판으로 바꾸기">
+      <img src="/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/versions/${v.version}?w=160"
+           alt="v${v.version}" loading="lazy">
+      <span class="ver-label">v${v.version}</span>
+    </button>`).join("");
+  slot.innerHTML =
+    `<span class="ver-strip-label">지난 판 — 눌러서 바꿔 보기</span>
+     <div class="ver-strip">${cur}${past}</div>`;
+  $$(".js-revert", slot).forEach(b => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try {
+      const res = await fetch(
+        `/api/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/revert`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: Number(b.dataset.v) }) });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || "되돌리지 못했습니다");
+      bustScene(no);
+      paintVersions(no, out.versions);
+      toast(`${no}번째 장을 v${b.dataset.v} 로 바꿨습니다`);
+    } catch (err) { toast(err.message); }
+    b.disabled = false;
+  }));
 }
 
 /* ------------------------------------------------------------------ 얹는 것 */
@@ -429,36 +550,45 @@ function toast(msg) {
   clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 3200);
 }
 
-/* ---- run 고르개 — 어떤 작품을 편집할지 -------------------------------- */
+/* ---- 작품 고르개 — 어떤 웹툰을 편집할지 -------------------------------
+ *
+ * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것·피드백이
+ * 작품마다 다른 칸에 저장돼 있어서(storeKey), 화면만 갈아 끼우면 앞 작품의
+ * state 가 남는다. 새로 열면 load() 가 그 작품 칸을 처음부터 읽는다. */
 async function paintRunPicker(current) {
   const host = $(".ed-top-right");
   if (!host) return;
   let runs = [];
   try { runs = (await (await fetch("/api/runs")).json()).runs || []; } catch { return; }
   if (!runs.length) return;
-  const sel = document.createElement("select");
-  sel.className = "run-pick";
-  sel.innerHTML =
-    `<option value="">목업 보기</option>` +
+  const box = document.createElement("label");
+  box.className = "run-pick-box";
+  box.innerHTML =
+    `<span class="run-pick-label">작품</span>` +
+    `<select class="run-pick">` +
     runs.map(r => `<option value="${esc(r.run_id)}"${r.run_id === current ? " selected" : ""}>`
-      + `${esc(r.character || "?")} — ${esc(r.title || "")}</option>`).join("");
+      + `${esc(r.character || "?")} — ${esc(r.title || "")}</option>`).join("") +
+    `<option value=""${current ? "" : " selected"}>샘플 보기 (목업)</option>` +
+    `</select>`;
+  const sel = $("select", box);
   sel.addEventListener("change", () => {
     location.search = sel.value ? `?run=${encodeURIComponent(sel.value)}` : "";
   });
-  host.prepend(sel);
+  host.prepend(box);
 }
 
 /* ------------------------------------------------------------------ 시작 */
 
 document.addEventListener("DOMContentLoaded", async () => {
-  load(); paintCredit(); paintLedger(); paintDock();
-
-  // ?run=<run_id> 가 있으면 **그 run 의 1화**를 연다. 없으면 예전처럼 목업이다.
+  // ?run=<run_id> 가 있으면 **그 작품의 1화**를 연다. 없으면 목업이다.
   // 편집기는 "이미 그려진 것을 고치는 자리" 라서, 랜딩에서 만든 것이든 하네스를
   // 직접 돌린 것이든 똑같이 열려야 한다.
-  const runId = new URLSearchParams(location.search).get("run");
-  const src = runId ? `/api/runs/${encodeURIComponent(runId)}/episode`
-                    : "/static/samples/mock.json";
+  RUN_ID = new URLSearchParams(location.search).get("run") || "";
+  // load() 는 RUN_ID 가 정해진 **뒤에** 부른다 — 열쇠가 거기 매여 있다.
+  load(); paintCredit(); paintLedger(); paintDock();
+
+  const src = RUN_ID ? `/api/runs/${encodeURIComponent(RUN_ID)}/episode`
+                     : "/static/samples/mock.json";
   try {
     const res = await fetch(src);
     if (!res.ok) throw new Error(await res.text());
@@ -466,20 +596,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (err) {
     document.body.innerHTML =
       `<p style="padding:60px;text-align:center;color:#969aa8">` +
-      (runId ? `<b>${esc(runId)}</b> 을(를) 열지 못했습니다.<br>`
-             + `그 run 에 1화 컷과 그려진 장이 있어야 합니다.`
-             : `목업 데이터를 읽지 못했습니다 (web/samples/mock.json).`) +
-      `<br><br><a href="/editor" style="color:#7aa2ff">목업으로 돌아가기</a></p>`;
+      (RUN_ID ? `<b>${esc(RUN_ID)}</b> 을(를) 열지 못했습니다.<br>`
+              + `그 작품에 1화 컷과 그려진 장이 있어야 합니다.`
+              : `목업 데이터를 읽지 못했습니다 (web/samples/mock.json).`) +
+      `<br><br><a href="/editor" style="color:#7aa2ff">샘플로 돌아가기</a></p>`;
     return;
   }
-  // 목업이 아니면 배지를 지우고 어떤 run 인지 밝힌다.
-  if (runId) {
+  // 실제 작품이면 목업 배지를 지운다 — 여기서부터는 진짜로 그린다.
+  if (RUN_ID) {
     document.querySelector(".mock-badge")?.remove();
-    const meta = $("#edMeta");
-    if (meta) meta.textContent = `${data.character || ""} · ${runId}`;
+    document.querySelector("#creditBox")?.remove();
+    document.querySelector("#ledgerBtn")?.remove();
   }
   render();
-  paintRunPicker(runId);
+  paintRunPicker(RUN_ID);
 
   $$(".dock-tab").forEach(b => b.addEventListener("click", () => {
     tab = b.dataset.tab; paintDock();
@@ -534,12 +664,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     paintProps();
   });
 
-  $("#ledgerBtn").addEventListener("click", () =>
+  $("#ledgerBtn")?.addEventListener("click", () =>
     { $("#dockLedger").hidden = !$("#dockLedger").hidden; });
   $("#ledgerClose").addEventListener("click", () => { $("#dockLedger").hidden = true; });
 
-  $("#saveBtn").addEventListener("click", () =>
-    toast("목업입니다 — 얹은 것과 피드백은 이 브라우저에만 저장됩니다."));
+  // 저장은 이미 항목을 건드릴 때마다 자동으로 되고 있다(save()). 이 단추는
+  // **어디에 저장됐는지**를 밝히는 자리다 — 서버에 올라간 줄 알면 다른 기기에서
+  // 열었을 때 사라진 것으로 보인다.
+  $("#saveBtn").addEventListener("click", () => {
+    save();
+    toast(RUN_ID
+      ? "얹은 것은 이 브라우저에만 저장됩니다 — 그림에는 굽지 않습니다."
+      : "샘플입니다 — 얹은 것과 피드백은 이 브라우저에만 저장됩니다.");
+  });
 
   document.addEventListener("keydown", e => {
     if ((e.key === "Delete" || e.key === "Backspace") && sel &&

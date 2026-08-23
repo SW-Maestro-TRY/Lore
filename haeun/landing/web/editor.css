@@ -290,10 +290,20 @@
   .ed-top-right { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; }
 }
 
-/* run 고르개 — 편집실 상단. 어떤 작품을 열지 여기서 바꾼다. */
+/* 작품 고르개 — 편집실 상단. 어떤 웹툰을 열지 여기서 바꾼다. */
+.run-pick-box { display: inline-flex; align-items: center; gap: .35rem; }
+.run-pick-label {
+  font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+  color: var(--muted, #8a8a94);
+}
 .run-pick {
   max-width: 220px; padding: .38em .5em; font-size: .78rem; font-weight: 600;
   color: inherit; background: transparent; cursor: pointer;
   border: 1px solid rgba(127, 127, 127, .35); border-radius: 7px;
 }
 .run-pick:hover { border-color: rgba(127, 127, 127, .6); }
+
+/* 지난 판 목록. 결과 화면(style.css)에서는 .page 에 마우스를 올렸을 때만
+   또렷해지는데, 편집실의 상자는 .scene 이라 그 규칙이 안 걸린다 — 여기서는
+   늘 보이게 둔다. 편집실은 읽는 자리가 아니라 고치는 자리다. */
+.scene .page-versions { opacity: 1; padding: .1rem .2rem .4rem; }
