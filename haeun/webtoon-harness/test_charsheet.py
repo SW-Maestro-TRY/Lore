@@ -174,6 +174,64 @@ ok("이어짐: 값이 이상해도 터지지 않는다",
    SL._cut_from({"cut_number": 2, "vertical_link": "yes"}, 2).vertical_link is True
    and SL._cut_from({"cut_number": 2, "vertical_link": None}, 2).vertical_link is False)
 
+# ---------------- 컷 무게 — 묶음과 지면 폭 ----------------
+#
+# "한 장에 3컷" 도 "한 컷에 한 장" 도 임의의 규칙이었다. 무게가 정하게 하면
+# 무거운 컷은 혼자 한 장, 배경 없는 가벼운 컷만 붙은 것끼리 묶인다.
+import scenegen as SG
+
+
+def _c(n, weight=None):
+    d = {"cut_number": n, "description": f"컷 {n}"}
+    if weight:
+        d["weight"] = weight
+    return d
+
+
+ok("무게: float 은 render_style 로 받아진다",
+   SL._cut_from({"cut_number": 1, "render_style": "float"}, 1).render_style == "float")
+ok("무게: 콘티가 보낸 weight 를 그대로 읽는다",
+   SL._cut_from({"cut_number": 1, "weight": "light"}, 1).weight == "light")
+ok("무게: 칸이 없는 옛 컷은 normal 이다",
+   SL._cut_from({"cut_number": 1}, 1).weight == "normal")
+ok("무게: 모르는 값은 normal 로 떨어진다",
+   SL._cut_from({"cut_number": 1, "weight": "무거움"}, 1).weight == "normal")
+
+# 묶기 — 가벼운 컷만 붙은 것끼리
+g = SG.group_by_weight([_c(1), _c(2, "light"), _c(3, "light"),
+                        _c(4), _c(5, "full")], 3)
+ok("묶기: 무거운 컷은 혼자 한 장",
+   [s.cut_numbers for s in g] == [[1], [2, 3], [4], [5]],
+   [s.cut_numbers for s in g])
+ok("묶기: 장 번호가 1부터 연속이다",
+   [s.scene_number for s in g] == [1, 2, 3, 4], [s.scene_number for s in g])
+
+# 상한 — 넷을 넘기면 캔버스가 길어져 인물이 작아진다
+g4 = SG.group_by_weight([_c(i, "light") for i in range(1, 8)], 3)
+ok("묶기: light 묶음은 상한을 넘지 않는다",
+   [s.cut_numbers for s in g4] == [[1, 2, 3], [4, 5, 6], [7]],
+   [s.cut_numbers for s in g4])
+
+# 옛 화 — weight 가 없으면 컷 하나당 한 장 (컷 모드와 같다)
+gold = SG.group_by_weight([_c(i) for i in range(1, 5)], 3)
+ok("묶기: weight 가 없는 옛 화는 컷 하나당 한 장",
+   [s.cut_numbers for s in gold] == [[1], [2], [3], [4]],
+   [s.cut_numbers for s in gold])
+
+# 지면 폭 — 가벼운 컷만 좁아진다
+ok("폭: 가벼운 컷은 지면을 덜 먹는다",
+   ST.width_ratio({"weight": "light"}) == ST.LIGHT_WIDTH)
+ok("폭: 나머지 컷은 예전처럼 꽉 채운다",
+   ST.width_ratio({"weight": "normal"}) == 1.0
+   and ST.width_ratio({"weight": "full"}) == 1.0
+   and ST.width_ratio({}) == 1.0)
+ok("폭: light 는 size 표보다 먼저다",
+   ST.width_ratio({"weight": "light", "size": "tall"}, {"tall": 1.0}) == ST.LIGHT_WIDTH)
+ok("폭: config 로 값을 바꿀 수 있다",
+   ST.width_ratio({"weight": "light"}, None, 0.4) == 0.4)
+ok("폭: 이상한 값이 와도 터지지 않는다",
+   ST.width_ratio({"weight": "light"}, None, "반쯤") == ST.LIGHT_WIDTH)
+
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

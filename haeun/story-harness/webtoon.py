@@ -164,7 +164,7 @@ SCENE_TRANSITION = "장면"     # 시간·장소가 건너뛴다. 첫 컷은 언
 # bleed·breakout 은 그림체가 아니라 **칸을 어떻게 쓰는가**인데, 컷 하나에 붙는
 # 배타적 선택이라는 점이 같아서 같은 필드에 둔다. 축을 더 늘리면 온도 0.9 에서
 # 서로 얽힌 조건이 다시 폭발한다 (아래 gate_layout 주석의 실패 이력을 볼 것).
-RENDER_STYLES = ("normal", "sd", "emphasis", "bleed", "breakout")
+RENDER_STYLES = ("normal", "sd", "emphasis", "bleed", "breakout", "float")
 # 하한은 두지 않는다. 최소 개수를 강제하면 모델은 자리를 채우려고 진지한 컷을
 # 데포르메로 올린다 — 개수는 맞지만 그 장면이 가벼워진다. SD 는 장면이 부를 때
 # 나와야 하는 것이라(긴장이 풀리는 리액션 컷, 개그·당황, 분위기 전환) 진지한
@@ -184,6 +184,23 @@ BLEED_BEATS = ("turn", "release")
 # 매 컷이 튀어나오면 칸이 없는 것과 같아진다.
 BREAKOUT_MAX = 2
 BREAKOUT_BEATS = ("build", "turn", "release")
+# 떠 있는 컷 — **칸도 배경도 없다.** 인물만 단색(또는 톤·별 몇 개) 위에 떠 있고,
+# 지면 폭도 절반쯤만 쓴다.
+#
+# 왜 필요했나: 실제 웹툰은 컷마다 무게가 다르다. 스쳐 가는 리액션 한 컷과 판이
+# 뒤집히는 컷이 같은 지면을 먹을 이유가 없는데, 지금까지 이 하네스의 컷은 전부
+# 캔버스 하나를 통째로 썼다 — "한 컷 한 컷이 다 의미 있는 컷"이라는 전제가
+# size 표에 박혀 있었다.
+#
+# emphasis 와 다른 점: emphasis 는 배경을 지우고 집중선을 넣는 **극적인** 카드라
+# 한 방을 세게 칠 때 쓴다. float 은 그 반대로 **힘을 빼는** 자리다 — 배경을 안
+# 그리는 이유가 강조가 아니라 "여기는 굳이 그릴 것이 없어서"다.
+# sd 와 다른 점: sd 는 그림체(2~3등신)만 바꾸고 배경은 파스텔로라도 남는다.
+#
+# 자리는 sd 와 같다(가벼워지는 자리). 상한이 sd 보다 낮은 것은, 배경 없는 컷이
+# 이어지면 이야기가 어디서 벌어지는지가 통째로 사라지기 때문이다.
+FLOAT_MAX = 3
+FLOAT_BEATS = ("release", "hold", "build")
 BEATS = ("setup", "build", "turn", "release", "hold")
 GAZES = ("down", "toward-next", "at-viewer", "away")
 MAX_GAP = 3
@@ -2124,7 +2141,9 @@ def render_warnings(cuts: list) -> list:
             ("bleed", BLEED_MAX, "통컷이 여러 번 나오면 두 번째부터는 그냥 큰 "
                                  "그림입니다"),
             ("breakout", BREAKOUT_MAX, "매 컷이 칸을 넘으면 칸이 없는 것과 "
-                                       "같습니다")):
+                                       "같습니다"),
+            ("float", FLOAT_MAX, "배경 없는 컷이 이어지면 이야기가 어디서 "
+                                 "벌어지는지가 사라집니다")):
         spots = [c.get("cut_number") for c, g in zip(cuts, got) if g == style]
         if len(spots) > many:
             out.append(
@@ -3256,8 +3275,11 @@ def repair_render_styles(cuts: list) -> list:
             demote(i, f"beat 가 '{beats[i]}' 라 통컷 자리가 아닙니다")
         elif r == "breakout" and beats[i] not in BREAKOUT_BEATS:
             demote(i, f"beat 가 '{beats[i]}' 라 칸 밖으로 나갈 자리가 아닙니다")
-    if renders[-1] == "sd":
-        demote(len(renders) - 1, "스팅어는 데포르메로 끝내지 않습니다")
+        elif r == "float" and beats[i] not in FLOAT_BEATS:
+            demote(i, f"beat 가 '{beats[i]}' 라 힘을 빼는 자리가 아닙니다")
+    if renders[-1] in ("sd", "float"):
+        demote(len(renders) - 1,
+               "스팅어는 데포르메나 배경 없는 컷으로 끝내지 않습니다")
 
     # 개수로는 강등하지 않는다. 몇 개가 맞는지는 이야기가 정한다 — 코드가 여섯
     # 번째 sd 를 조용히 normal 로 내리면, 그 화가 왜 심심해졌는지 아무도 모른다.
@@ -3650,7 +3672,33 @@ def derive_layout(cuts: list, scenes=None) -> list:
             and gaps[i - 1] == 0
             and zones[i] and zones[i] == zones[i - 1]
             and renders[i] != "sd" and renders[i - 1] != "sd"
-            and renders[i] != "bleed")
+            and renders[i] not in ("bleed", "float"))
+
+    # ---- weight — 이 컷이 지면을 얼마나 먹는가 -----------------------------
+    # 지금까지 컷은 전부 캔버스 하나를 통째로 썼다. 그런데 실제 웹툰에서 컷의
+    # 무게는 균일하지 않다 — 스쳐 가는 리액션과 판이 뒤집히는 컷이 같은 지면을
+    # 먹을 이유가 없다. "한 컷 한 컷이 다 의미 있는 컷"은 만화 페이지의 전제이지
+    # 세로 스크롤의 전제가 아니다.
+    #
+    # 무게는 **모델이 정하지 않는다.** 축을 하나 더 주면 온도 0.9 에서 조건이
+    # 서로 얽힌다(위 gate_layout 주석의 실패 이력). 모델은 "이 컷이 무엇인가"
+    # (render_style·size)만 정하고, 무게는 거기서 나오는 산수다:
+    #
+    #   full   통컷이거나 화면을 꽉 채우는 컷. 캔버스 하나를 혼자 쓴다.
+    #   light  떠 있는 컷. 배경이 없어서 옆 컷과 나눌 배경도 없다 —
+    #          그래서 여럿이 한 캔버스를 나눠 써도 격자가 생기지 않는다.
+    #   normal 나머지.
+    #
+    # 이 값을 실제로 쓸지는 웹툰 하네스가 config 로 켠다(기본 꺼짐). 그래서 값이
+    # 생겨도 예전 run 의 묶기와 그림은 그대로다.
+    for i in range(n):
+        if renders[i] == "bleed" or sizes[i] == "impact":
+            weight = "full"
+        elif renders[i] == "float":
+            weight = "light"
+        else:
+            weight = "normal"
+        cuts[i]["weight"] = weight
 
     return notes
 

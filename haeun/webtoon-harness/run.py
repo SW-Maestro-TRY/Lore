@@ -492,6 +492,14 @@ def style_block(cfg: dict[str, Any], render_style: str) -> str:
     """
     kind = str(render_style or "normal").strip().lower()
     variants = dict(cfg.get("style_variants") or {})
+    # float 의 **바탕 작화**는 sd 다 — 떠 있는 컷은 대개 데포르메 리액션이고,
+    # Scene 모드의 panel_render.sd 도 이미 "테두리 없이 워시 위에 떠 있다"고
+    # 적고 있었다. 다른 점은 배경이 아예 없다는 것과 작다는 것이라, 그 두 가지는
+    # render_style_suffix.float 이 말한다. styles 표에 float 문구를 따로 쓰면
+    # 그림체 일곱 개에 같은 말을 일곱 번 적게 된다.
+    if kind == "float" and "float" not in variants and "sd" in variants:
+        tail = render_suffix(cfg, "float")
+        return f"{variants['sd']}\n{tail}" if tail else variants["sd"]
     if kind in variants:
         return variants[kind]
     base = str(cfg["style_suffix"]).strip()
@@ -1061,6 +1069,10 @@ def direction_fingerprint(ep: storyload.Episode) -> str:
     links = [c.cut_number for c in ep.cuts if getattr(c, "vertical_link", False)]
     if links:
         blob += "|link" + json.dumps(links)
+    weights = [[c.cut_number, getattr(c, "weight", "normal")] for c in ep.cuts
+               if str(getattr(c, "weight", "normal") or "normal") != "normal"]
+    if weights:
+        blob += "|w" + json.dumps(weights)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
@@ -1077,6 +1089,7 @@ def cut_rows(ep: storyload.Episode) -> list[dict[str, Any]]:
              "beat": c.beat, "gap_after": c.gap_after, "gaze": c.gaze,
              "scene_break": c.scene_break,
              "vertical_link": bool(getattr(c, "vertical_link", False)),
+             "weight": str(getattr(c, "weight", "normal") or "normal"),
              "size": getattr(c, "size", ""),
              "render_style": getattr(c, "render_style", "normal"),
              # 텍스트 네 종류. 말풍선만으로 굴러가지 않는다.
@@ -1314,7 +1327,8 @@ def write_strip(cfg, ep_dir, cuts, conditions, sheets,
     #   layout, cache = vision.load_layout(ep_dir), vision.load_cache(ep_dir)
     #   ... vision.locate → vision.place → strip.draw_bubble ...
     wtab = dict((cfg.get("scene") or {}).get("width_ratio") or {})
-    drawn = [(im.convert("RGB"), gap, strip.width_ratio(c, wtab))
+    lw = float((cfg.get("scene") or {}).get("light_width") or strip.LIGHT_WIDTH)
+    drawn = [(im.convert("RGB"), gap, strip.width_ratio(c, wtab, lw))
              for im, c, gap in items]
     items = drawn
     if not items:
@@ -1495,9 +1509,12 @@ def grouping_mode(cfg: dict[str, Any], ep: storyload.Episode) -> str:
     그래서 기본값은 건드리지 않았고, config 에 명시해야만 켜진다.
     """
     mode = str((cfg.get("scene") or {}).get("grouping") or "rhythm").strip().lower()
-    if mode not in ("rhythm", "fixed"):
+    if mode not in ("rhythm", "fixed", "weight"):
         die(f'config.yaml 의 scene.grouping 값 "{mode}" 를 모릅니다. '
-            f"rhythm(연출 리듬이 경계를 정함) 또는 fixed(개수로 고정) 여야 합니다.")
+            f"rhythm(연출 리듬이 경계를 정함) · fixed(개수로 고정) · "
+            f"weight(컷의 무게가 정함) 중 하나여야 합니다.")
+    if mode == "weight":
+        return "weight"
     return "direction" if (mode == "rhythm" and ep.has_direction) else "fixed"
 
 
@@ -1506,7 +1523,13 @@ def group_scenes(cfg: dict[str, Any], ep: storyload.Episode,
     """컷을 Scene 으로 묶는다. 세 곳(본 생성 · verify-all · probe)이 같이 쓴다."""
     per = int(cfg["scene"]["cuts_per_scene"])
     max_per = int(cfg["scene"].get("max_cuts_per_scene") or 0)
-    if grouping_mode(cfg, ep) == "direction":
+    mode = grouping_mode(cfg, ep)
+    if mode == "weight":
+        # 개수가 아니라 무게가 정한다 — 무거운 컷은 혼자 한 장, 배경 없는
+        # 가벼운 컷만 연달아 붙은 것끼리 묶인다.
+        return scenegen.group_by_weight(
+            base, int(cfg["scene"].get("max_light_per_scene") or 3))
+    if mode == "direction":
         return scenegen.group_by_break(base, max_per)
     return scenegen.group(base, min(per, max_per) if max_per else per)
 
@@ -1688,7 +1711,11 @@ def build_scene_jobs(cfg: dict[str, Any], appearance: str, scenes: list[scenegen
                           staging=ep.setting),
                 with_lock=here, style_text=style_block(cfg, kind),
                 prev=scenes[i - 1] if i else None,
-                nxt=scenes[i + 1] if i + 1 < len(scenes) else None)
+                nxt=scenes[i + 1] if i + 1 < len(scenes) else None,
+                # 이 장의 첫 컷이 앞 장 마지막 컷에서 배경이 이어지는 자리인가.
+                # 컷 모드의 LINK_CUT_CLAUSE 와 같은 값을 보고, 같은 config 로 켠다.
+                link_above=bool(cfg.get("vertical_link") and i
+                                and sc.cuts and sc.cuts[0].get("vertical_link")))
             for k in range(1, candidates + 1):
                 jobs.append(Job(
                     condition=scene_cond(cname),
