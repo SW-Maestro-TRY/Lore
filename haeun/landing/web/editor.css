@@ -200,6 +200,11 @@
 .fb-story > span { color: #8fb8ff; }
 .fb-direct > span { color: #d9b465; }
 .fb-art > span   { color: #ff9c93; }
+/* 전체는 갈래가 아니라 "나머지 전부" 라서 세 칸 밑에 한 줄로 눕힌다 —
+   네 번째 칸으로 나란히 두면 같은 층위의 갈래로 읽힌다. */
+.fb-all { margin-top: 10px; }
+.fb-all > span { color: var(--muted); }
+.fb-all textarea { min-height: 58px; }
 .fb-cuts {
   margin-top: 12px; display: grid; gap: 6px;
   border-top: 1px solid var(--line); padding-top: 12px;
@@ -375,3 +380,42 @@
 .bake-warn { margin: 0; font-size: .78rem; color: #e0b25e; }
 .bake-acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .bake-acts .btn { text-decoration: none; }
+
+
+/* ---- 회차 고르개 --------------------------------------------------------
+   여러 편을 만든 작품에서만 뜬다. 지금 보고 있는 회차는 누를 것이 없어서
+   커서까지 바꾼다 — 색만으로 알리면 눌러 보고 나서야 안다. */
+.ep-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 18px; }
+.ep-tab {
+  border: 1px solid var(--line-2); background: transparent; color: var(--text);
+  border-radius: 999px; padding: .28em .85em; font: inherit; font-size: .82rem;
+  cursor: pointer; transition: background .14s ease, border-color .14s ease;
+}
+.ep-tab:hover { border-color: var(--accent); }
+.ep-tab[aria-current="true"] {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+  font-weight: 600; cursor: default;
+}
+
+
+/* ---- 다시 그리기 확인 창 ------------------------------------------------
+   한 장에 1~2분과 실제 생성 비용이 드는 일이라, 누른 것을 되돌릴 수 있어야
+   한다. 화면을 덮어서 "지금은 이것부터 정하는 자리"임을 분명히 한다. */
+.ask {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: rgba(6,7,10,.72); padding: 20px;
+}
+.ask-box {
+  width: min(520px, 100%); max-height: 88vh; overflow: auto;
+  background: var(--card); border: 1px solid var(--line-2);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 22px 24px 20px;
+}
+.ask-box h2 { font-size: 1.1rem; font-weight: 800; margin-bottom: .3em; }
+.ask-sub { margin: 0 0 1.1em; color: var(--muted); font-size: .85rem; line-height: 1.6; }
+.ask-box .fb-lead { margin-bottom: .5rem; }
+.ask-box .field { margin-bottom: 12px; }
+.ask-warn {
+  margin: .2em 0 1.2em; font-size: .78rem; color: #e0b25e;
+}
+.ask-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }

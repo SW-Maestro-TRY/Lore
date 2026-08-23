@@ -18,7 +18,8 @@
   <nav class="topnav">
     <a href="#how">어떻게 만드나</a>
     <a href="#gallery">결과 예시</a>
-    <a href="/editor">편집실 <span class="nav-tag">목업</span></a>
+    <a href="/works">내 웹툰</a>
+    <a href="/editor">편집실</a>
     <a class="btn btn-ghost" href="#studio">만들어보기</a>
   </nav>
 </header>
@@ -37,7 +38,7 @@
       </p>
       <div class="hero-cta">
         <a class="btn btn-primary" href="#studio">내 캐릭터로 만들기</a>
-        <a class="btn btn-quiet" href="/editor">결과물 화면 둘러보기</a>
+        <a class="btn btn-quiet" href="/works">내 웹툰 보기</a>
       </div>
       <ul class="hero-facts">
         <li><b>1화</b> 완성본 PNG</li>
@@ -110,7 +111,7 @@
     <h2>실제로 이렇게 나옵니다</h2>
     <p class="section-lede">
       말풍선과 대사는 그림 안에 함께 그려집니다 — 따로 얹은 자막이 아닙니다.
-      <a class="inline-link" href="/editor">완성본 화면을 그대로 열어보기 →</a>
+      <a class="inline-link" href="/works">내가 만든 웹툰 보러 가기 →</a>
     </p>
     <div class="gallery-grid">
       <figure><img src="/static/samples/ex-cinematic-1.jpg" alt="시네마틱 반실사 예시" loading="lazy"><figcaption>시네마틱 반실사</figcaption></figure>
@@ -502,6 +503,27 @@
   </div>
 </section>
 
+<!-- ================================================== 내 웹툰 목록 ======
+     지금까지 만든 것을 **읽으려고** 여는 자리. 편집실은 고치는 자리라 도구가
+     늘 곁에 붙어 있어서 읽기에는 맞지 않는다. 여기서 고르면 완성본 화면이
+     그대로 열리고, 회차가 여럿이면 회차마다 단추가 붙는다. -->
+<section id="works" class="works" hidden>
+  <header class="works-head">
+    <div>
+      <p class="eyebrow">완성본</p>
+      <h2>내 웹툰</h2>
+      <p class="section-lede">
+        만든 작품 전부입니다. 표지를 누르면 세로로 이어 붙인 완성본을 그대로 읽습니다.
+      </p>
+    </div>
+    <div class="works-actions">
+      <a class="btn btn-quiet btn-sm" href="/">랜딩으로</a>
+      <a class="btn btn-primary btn-sm" href="/#studio">새 웹툰 만들기</a>
+    </div>
+  </header>
+  <div class="works-grid" id="worksGrid"></div>
+</section>
+
 <!-- ===================================================== 결과 ============ -->
 <section id="result" class="result" hidden>
   <header class="result-head">
@@ -510,9 +532,12 @@
       <h2 id="resTitle"></h2>
       <p class="result-logline" id="resLogline"></p>
       <p class="result-sub" id="resSub"></p>
+      <!-- 회차 고르개. 한 편뿐이면 app.js 가 통째로 감춘다. -->
+      <div class="ep-tabs" id="resEpisodes" hidden></div>
     </div>
     <div class="result-actions">
-      <a class="btn btn-quiet btn-sm" href="/editor">편집실에서 열기</a>
+      <button type="button" class="btn btn-quiet btn-sm" id="backToWorks">목록으로</button>
+      <a class="btn btn-quiet btn-sm" id="editorLink" href="/editor">편집실에서 열기</a>
       <button type="button" class="btn btn-quiet btn-sm" id="scriptBtn">대사 스크립트</button>
       <a class="btn btn-quiet btn-sm" id="downloadBtn" download>PNG 내려받기</a>
       <button type="button" class="btn btn-primary btn-sm" id="nextEpBtn" hidden>다음 화 만들기</button>

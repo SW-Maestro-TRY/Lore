@@ -2419,17 +2419,20 @@ def run_cost(run_id: str) -> dict[str, Any]:
             "exact": not estimated}
 
 
-def result(job: Job) -> dict[str, Any]:
-    """완성본 한 편 + 그 안에 무엇이 담겼는지.
+def _result_body(run_id: str, episode: int, style_label: str) -> dict[str, Any]:
+    """완성본 한 편 + 그 안에 무엇이 담겼는지 — job 이 있든 없든 공통인 부분.
 
     결과물의 단위는 **장(Scene)** 이다 — 한 장에 컷이 3개씩 들어 있으므로,
     화면에도 장을 보여주고 그 장이 어느 컷들을 담고 있는지 같이 준다.
     대사 스크립트가 컷 단위여야 "이 말풍선이 몇 번 컷 것인가"를 볼 수 있다.
+
+    `result(job)` 과 `result_by_run(run_id, episode)` 둘 다 이걸 쓴다 — 랜딩에서
+    만든 것이든(job 있음) 하네스를 직접 돌렸거나 편집기로 이어 만든 것이든(job
+    없음) 같은 모양으로 결과 화면에 떨어져야, "완성본 보기"가 어떻게 만들어진
+    것인지에 상관없이 똑같이 동작한다.
     """
-    if not job.run_id:
-        return {}
-    run_dir = STORY / "runs" / job.run_id
-    cut_file = run_dir / "webtoon" / cuts_filename(job.episode)
+    run_dir = STORY / "runs" / run_id
+    cut_file = run_dir / "webtoon" / cuts_filename(episode)
     if not cut_file.exists():
         return {}
     data = json.loads(cut_file.read_text(encoding="utf-8-sig"))
@@ -2441,7 +2444,7 @@ def result(job: Job) -> dict[str, Any]:
             return {}
 
     p1, p2 = load(run_dir, "p1.json"), load(run_dir, "p2.json")
-    title = episode_title(job.run_id, job.episode) or f"{int(job.episode)}화"
+    title = episode_title(run_id, episode) or f"{int(episode)}화"
 
     def cut_card(c: dict) -> dict:
         return {
@@ -2458,7 +2461,7 @@ def result(job: Job) -> dict[str, Any]:
     by_no = {int(c.get("cut_number") or 0): c for c in (data.get("cuts") or [])}
 
     # 어느 컷이 어느 장에 묶였는지는 그림 쪽이 안다 (scenes.json).
-    ep_dir = episode_dir(job.run_id, job.episode)
+    ep_dir = episode_dir(run_id, episode)
     grouping = load(ep_dir, "scenes.json").get("scenes") or []
     if not grouping:
         # 컷 모드로 되돌렸거나 아직 묶기 전 — 컷 하나를 한 장으로 본다.
@@ -2467,7 +2470,7 @@ def result(job: Job) -> dict[str, Any]:
     pages, drawn_cuts = [], 0
     for sc in grouping:
         no = int(sc.get("scene_number") or 0)
-        if not unit_image(job.run_id, no, job.episode):
+        if not unit_image(run_id, no, episode):
             continue                       # 아직 안 그렸거나 미리보기로 빠진 장
         cards = [cut_card(by_no[n]) for n in (sc.get("cut_numbers") or [])
                  if n in by_no]
@@ -2475,14 +2478,37 @@ def result(job: Job) -> dict[str, Any]:
         pages.append({"no": no, "cuts": cards})
 
     ep_png = ep_dir / "episode.png"
+    planned = made_episodes(run_id)
     return {
         "title": title,
         "character": str(p1.get("name") or ""),
         "intro": str(p1.get("intro") or ""),
         "logline": str(p2.get("logline") or ""),
         "genre": str(load(run_dir, "meta.json").get("input", {}).get("genre") or ""),
-        "style_label": STYLES.get(job.style, job.style),
+        "style_label": style_label,
         "cuts_per_sheet": CUTS_PER_SHEET,
+        "pages": pages,
+        "page_count": len(pages),
+        "cut_count": drawn_cuts,
+        "planned_cuts": len(by_no),
+        "planned_pages": len(grouping),
+        "has_episode_png": ep_png.exists(),
+        "run_id": run_id,
+        "episode": int(episode),
+        # 이 작품에 그려진 회차 전부 — 화면이 회차 탭을 그리는 근거다.
+        "episodes": planned,
+        "next_episode": (planned or [0])[-1] + 1,
+    }
+
+
+def result(job: Job) -> dict[str, Any]:
+    """job 이 방금 완성한 결과물 — 걸린 시간처럼 job 에만 있는 정보를 더한다."""
+    if not job.run_id:
+        return {}
+    body = _result_body(job.run_id, job.episode, STYLES.get(job.style, job.style))
+    if not body:
+        return {}
+    body.update({
         # 얼마나 걸렸는가. 단계별로도 준다 — "어디서 오래 걸렸나"가 총 시간보다
         # 쓸모 있다 (그림이 대부분이고, 이야기가 길어지면 재생성이 돈 것이다).
         "seconds": round(
@@ -2490,17 +2516,27 @@ def result(job: Job) -> dict[str, Any]:
             else job.stage_seconds(), 1),
         "stage_times": [{"title": st["title"], "seconds": st.get("seconds")}
                         for st in job.stages if st.get("seconds") is not None],
-        "pages": pages,
-        "page_count": len(pages),
-        "cut_count": drawn_cuts,
-        "planned_cuts": len(by_no),
-        "planned_pages": len(grouping),
         "preview": job.preview,
-        "has_episode_png": ep_png.exists(),
-        "run_id": job.run_id,
-        "episode": int(job.episode),
-        "next_episode": (made_episodes(job.run_id) or [0])[-1] + 1,
-    }
+    })
+    return body
+
+
+def result_by_run(run_id: str, episode: int = 1) -> dict[str, Any]:
+    """job 을 거치지 않고 run_id 로 바로 여는 완성본 — "내 웹툰" 목록에서 쓴다.
+
+    job 이 없는 회차도 있다 (하네스를 직접 돌렸거나 편집기의 "다음 화 이어서
+    만들기" 로 만든 회차는 landing/jobs/ 에 기록이 안 남는다) — 그런 회차도
+    똑같이 완성본으로 열 수 있어야 한다.
+    """
+    run_dir = STORY / "runs" / run_id
+    style_label = ""
+    try:
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8-sig"))
+        style_key = str(meta.get("charsheet", {}).get("style") or "")
+        style_label = STYLES.get(style_key, style_key)
+    except (OSError, json.JSONDecodeError):
+        pass
+    return _result_body(run_id, episode, style_label)
 
 
 # --------------------------------------------------------------------------- #
