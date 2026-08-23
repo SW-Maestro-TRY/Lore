@@ -346,8 +346,11 @@ class Handler(BaseHTTPRequestHandler):
             job = runner.get(m.group(1))
             if not job or not job.run_id:
                 return self._error(404, "아직입니다")
-            src = pipeline.episode_dir(job.run_id) / "episode.png"
-            return self._file(src, download=f"webtoon_{job.run_id}_1화.png")
+            # 회차를 무시하면 2화 작업이 1화 파일을 내려받는다 — episode_dir 의
+            # 기본값이 ep1 이라 조용히 틀린 파일이 나간다.
+            src = pipeline.episode_dir(job.run_id, job.episode) / "episode.png"
+            return self._file(src, download=pipeline.episode_filename(
+                job.run_id, job.episode))
 
         return self._error(404, "없는 주소입니다")
 

@@ -1273,6 +1273,22 @@ def made_episodes(run_id: str) -> list[int]:
     return sorted(out)
 
 
+def episode_filename(run_id: str, episode: int = 1) -> str:
+    """내려받을 때 붙는 이름 — 작품(주인공 이름)과 회차를 반영한다.
+
+    예전에는 `webtoon_<run_id>_1화.png` 였다. run_id 는 만들어진 시각이라
+    사람에게는 아무 뜻이 없고, 회차도 1화로 박혀 있어서 2화를 받아도 1화라고
+    적혔다. 여러 편을 받아 폴더에 모아 두면 어느 것이 무엇인지 알 수 없다.
+
+    파일 이름에 쓸 수 없는 글자는 지운다 — 이름은 사용자가 적은 것이라
+    슬래시·콜론이 들어올 수 있고, 그대로 두면 저장이 실패한다.
+    """
+    name = str(_read_json(STORY / "runs" / run_id, "p1.json").get("name") or "").strip()
+    safe = re.sub(r'[\\/:*?"<>|]', "", name).strip()
+    head = safe or run_id
+    return f"{head}_{int(episode)}화.png"
+
+
 def episode_title(run_id: str, episode: int = 1) -> str:
     """그 회차의 제목.
 
