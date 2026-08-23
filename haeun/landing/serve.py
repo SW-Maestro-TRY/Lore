@@ -186,6 +186,10 @@ class Handler(BaseHTTPRequestHandler):
         # app.js 가 주소를 보고 폼 대신 결과 화면부터 띄운다.
         if path in ("/result", "/result/"):
             return self._file(WEB / "index.html")
+        # 내가 만든 웹툰 전부 — 완성본을 훑어보는 목록. job 을 거치지 않는다
+        # (하네스를 직접 돌렸거나 이어 만든 회차도 여기 나와야 한다).
+        if path in ("/works", "/works/"):
+            return self._file(WEB / "index.html")
         if path.startswith("/static/"):
             rel = path[len("/static/"):]
             target = (WEB / rel).resolve()
@@ -216,6 +220,23 @@ class Handler(BaseHTTPRequestHandler):
             if not data:
                 return self._error(404, "그 run 의 1화 컷을 찾지 못했습니다")
             return self._json(data)
+
+        # "내 웹툰" 목록에서 바로 여는 완성본 — job 없이 run_id 로만 연다.
+        # 하네스를 직접 돌렸거나 편집기의 "다음 화 이어서 만들기" 로 나온
+        # 회차는 landing/jobs/ 에 기록이 없어서, job 기반 결과 화면(/api/jobs/…)
+        # 으로는 못 열었다 (초롱 2화가 그랬다).
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/result", path)
+        if m:
+            out = pipeline.result_by_run(m.group(1), self._ep(query))
+            if not out:
+                return self._error(404, "그 회차의 결과물을 찾지 못했습니다")
+            return self._json(out)
+
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/episode\.png", path)
+        if m:
+            ep = self._ep(query)
+            src = pipeline.episode_dir(m.group(1), ep) / "episode.png"
+            return self._file(src, download=pipeline.episode_filename(m.group(1), ep))
 
         # 편집실에서 얹은 말풍선·스티커. 브라우저가 아니라 **작품 폴더**에 있어서
         # 다른 기기에서 열어도 그대로다.
@@ -695,6 +716,7 @@ def main() -> int:
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"랜딩페이지:  {url}")
     print(f"결과물 바로:  {url}result      (이미 만들어 둔 마지막 1화)")
+    print(f"내 웹툰 목록: {url}works       (만든 것 전부 · 회차 골라 보기)")
     print(f"편집실(목업): {url}editor      (아무것도 안 돌려도 열립니다)")
     print(f"  그림 조건 {pipeline.CONDITION} · 한 장에 {pipeline.CUTS_PER_SHEET}컷 · "
           f"말풍선과 대사는 그림 안에")
