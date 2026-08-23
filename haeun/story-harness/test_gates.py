@@ -1235,6 +1235,60 @@ for n in (8, 10, 11, 12, 14, 16):
        webtoon.layout_violations(payload["cuts"]) == [],
        webtoon.layout_violations(payload["cuts"]))
 
+# ---- vertical_link — 배경이 컷을 넘어 이어지는 자리 ----------------------------
+#
+# 세로 스크롤과 "만화 여덟 칸을 세로로 자른 것"을 가르는 자리다. 붙어 있고(여백 0)
+# 무대가 같으면(zone) 두 컷은 한 공간의 위와 아래로 읽혀야 한다.
+link = cuts(10, engine=(2, 6))
+for c in link["cuts"]:
+    c["zone"] = "z1"
+webtoon.derive_layout(link["cuts"])
+lg = [c["gap_after"] for c in link["cuts"]]
+lk = [c["vertical_link"] for c in link["cuts"]]
+ok("이어짐: 첫 컷은 이어질 앞이 없다", lk[0] is False)
+# 붙은 자리가 하나도 없으면 아래 규칙 검사가 공짜로 통과한다 — 먼저 자리가 있는지 본다
+ok("이어짐: 이 화에는 붙은 자리가 있다", 0 in lg[:-1], lg)
+ok("이어짐: 여백 0 으로 붙은 자리가 이어진다",
+   all(lk[i + 1] is (lg[i] == 0) for i in range(len(lg) - 1))
+   and any(lk), list(zip(lg, lk)))
+
+# 무대가 바뀌면 붙어 있어도 이어질 배경이 없다
+zone2 = cuts(10, engine=(2, 6))
+for i, c in enumerate(zone2["cuts"]):
+    c["zone"] = "z1" if i % 2 == 0 else "z2"
+webtoon.derive_layout(zone2["cuts"])
+ok("이어짐: 존이 다르면 붙어 있어도 안 이어진다",
+   not any(c["vertical_link"] for c in zone2["cuts"]),
+   [(c["zone"], c["gap_after"], c["vertical_link"]) for c in zone2["cuts"]])
+
+# zone 이 아예 없는 옛 화 — 이어질 자리가 하나도 안 잡힌다 (예전과 같은 결과)
+nozone = cuts(10, engine=(2, 6))
+for c in nozone["cuts"]:
+    c.pop("zone", None)
+webtoon.derive_layout(nozone["cuts"])
+ok("이어짐: zone 이 없는 화는 한 자리도 안 이어진다",
+   not any(c["vertical_link"] for c in nozone["cuts"]))
+
+# 데포르메 컷은 배경이 파스텔로 빠져서 이어 붙일 배경이 없다
+sd = cuts(10, engine=(2, 6))
+for c in sd["cuts"]:
+    c["zone"] = "z1"
+    c["render_style"] = "sd"
+webtoon.derive_layout(sd["cuts"])
+ok("이어짐: sd 컷은 이어지지 않는다",
+   not any(c["vertical_link"] for c in sd["cuts"]))
+
+# 여백·화면 경계·시선은 건드리지 않는다 — 순수 추가여야 예전 화가 그대로 다시 그려진다
+before = cuts(12, engine=(2, 6))
+for c in before["cuts"]:
+    c["zone"] = "z1"
+webtoon.derive_layout(before["cuts"])
+ok("이어짐: 여백·경계·시선은 그대로다",
+   [(c["gap_after"], c["scene_break"], c["gaze"]) for c in before["cuts"]]
+   == [(c["gap_after"], c["scene_break"], c["gaze"])
+       for c in (lambda p: (webtoon.derive_layout(p["cuts"]), p)[1])(
+           cuts(12, engine=(2, 6)))["cuts"]])
+
 broken = derived()
 for i in range(len(broken) - 1):                    # turn 직전을 손으로 망가뜨린다
     if broken[i + 1]["beat"] == "turn":

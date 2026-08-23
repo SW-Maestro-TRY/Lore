@@ -112,11 +112,6 @@ class Cut:
     gap_after: int = 1        # 0=붙임 1=보통 2=길게 3=낙차용
     gaze: str = ""            # down | toward-next | at-viewer | away
     scene_break: bool = False
-    # 이 컷은 **앞 컷과 같은 배경이 위에서 아래로 이어지는가.** 콘티(W7.5)가
-    # 여백 0 · 같은 zone 자리에서 계산해 보낸다. 무대는 그대로 두고 카메라만
-    # 아래로 내리는 자리라, 켜 두면 두 컷이 한 공간의 위/아래로 읽힌다.
-    # 옛 run 에는 이 칸이 없다 — 없으면 False 라 예전과 똑같이 굴러간다.
-    vertical_link: bool = False
     size: str = ""            # wide | normal | tall | impact
     render_style: str = "normal"   # normal | sd | emphasis | bleed | breakout
     # ---- 카메라. 예전에는 콘티가 서술 첫머리에 낱말로 적어 보냈는데, 그 자리에
@@ -326,7 +321,6 @@ def _cut_from(c: dict, i: int) -> Cut:
                    and 0 <= c.get("gap_after") <= 3 else 1),
         gaze=_one_of(c.get("gaze"), GAZES, ""),
         scene_break=bool(c.get("scene_break")),
-        vertical_link=bool(c.get("vertical_link")),
         size=_one_of(c.get("size"), SIZES, ""),
         render_style=_one_of(c.get("render_style"), RENDER_STYLES, "normal"),
         shot=_one_of(c.get("shot"), SHOTS, ""),

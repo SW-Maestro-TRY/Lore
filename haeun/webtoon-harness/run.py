@@ -1055,6 +1055,12 @@ def direction_fingerprint(ep: storyload.Episode) -> str:
     blob = json.dumps([[c.cut_number, c.beat, c.gap_after, c.gaze, c.scene_break,
                         getattr(c, "size", ""), getattr(c, "render_style", "normal")]
                        for c in ep.cuts], ensure_ascii=False)
+    # 배경 이어짐(vertical_link)도 프롬프트를 바꾸므로 지문에 들어가야 한다. 다만
+    # 이어지는 자리가 **하나도 없으면 아예 붙이지 않는다** — 붙이면 이 칸이 없던
+    # 예전 run 의 지문까지 전부 달라져서, 그림이 똑같은데도 캐시가 통째로 깨진다.
+    links = [c.cut_number for c in ep.cuts if getattr(c, "vertical_link", False)]
+    if links:
+        blob += "|link" + json.dumps(links)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
@@ -1070,6 +1076,7 @@ def cut_rows(ep: storyload.Episode) -> list[dict[str, Any]]:
              "dialogue": c.dialogue, "reader_only": c.reader_only,
              "beat": c.beat, "gap_after": c.gap_after, "gaze": c.gaze,
              "scene_break": c.scene_break,
+             "vertical_link": bool(getattr(c, "vertical_link", False)),
              "size": getattr(c, "size", ""),
              "render_style": getattr(c, "render_style", "normal"),
              # 텍스트 네 종류. 말풍선만으로 굴러가지 않는다.
@@ -1275,6 +1282,7 @@ def write_strip(cfg, ep_dir, cuts, conditions, sheets,
               f"(찾아본 조건: {', '.join(conditions) or '없음'}).")
         return
     items, notes, missing = [], [], 0
+    gtab = strip.gap_ratio_table(cfg)
     for c in cuts:
         n = int(c["cut_number"])
         k = picks.get((cond, n)) or 1
@@ -1292,7 +1300,7 @@ def write_strip(cfg, ep_dir, cuts, conditions, sheets,
             print(f"[경고] 컷 {n} 을 읽지 못했습니다: {exc}")
             missing += 1
             continue
-        items.append((im, c, strip.gap_px(im.width, c.get("gap_after"))))
+        items.append((im, c, strip.gap_px(im.width, c.get("gap_after"), gtab)))
 
     # ---- 말풍선 ------------------------------------------------------------
     # 지금은 **이미지 모델이 그린다** (strip.draw_text_clause 로 프롬프트에 한글
@@ -1360,6 +1368,32 @@ PREV_CUT_CLAUSE = (
     "character's face from it either — the character sheet decides that.")
 
 
+# 배경이 컷을 넘어 이어지는 자리(콘티의 vertical_link)에 붙는 문구.
+#
+# PREV_CUT_CLAUSE 는 일부러 그 반대를 말한다 — "구도·프레이밍·카메라 거리는 절대
+# 베끼지 마라". 그림체만 이어지게 하려는 문구라서 그렇다. 그런데 세로 스크롤에서
+# 컷이 진짜 이어져 보이는 자리는 **무대가 그대로이고 카메라만 아래로 내려간** 곳이다.
+# 그 자리에서까지 구도를 새로 잡으면, 붙여 놓아도 서로 무관한 그림 두 장이라
+# "만화 페이지를 세로로 잘라 놓은 것"으로 읽힌다.
+#
+# 그래서 이 문구는 PREV_CUT_CLAUSE 뒤에 붙어 그 한 줄만 되돌린다: 같은 장소를,
+# 같은 빛으로, 같은 방향에서, 조금 아래를 본다. 인물의 자세와 표정은 그대로
+# 베끼지 않는다 — 시간이 아주 조금 흐른 다음 찰나이기 때문이다.
+LINK_CUT_CLAUSE = (
+    "VERTICAL CONTINUATION — this panel and the previous one are read as one "
+    "continuous space scrolled through, not as two separate shots. This REPLACES "
+    "the sentence above that forbids reusing the previous panel's composition. "
+    "Keep the SAME location, the same time of day, the same light direction and "
+    "colour temperature, and the same camera bearing on the scene; the only thing "
+    "that has changed is that the camera has travelled a little further DOWN, so "
+    "this panel shows the part of that space that lies below what the previous "
+    "panel showed. Architecture, furniture, horizon line, sky and ground must line "
+    "up as the same continuous background. Do NOT redraw the previous panel: the "
+    "characters have moved on by a moment, and their pose and expression are the "
+    "ones described for THIS panel."
+)
+
+
 def build_jobs(cfg: dict[str, Any], appearance: str, cuts: list[dict[str, Any]],
                conditions: list[str], ep_dir: Path,
                present: dict[int, bool] | None = None,
@@ -1399,6 +1433,12 @@ def build_jobs(cfg: dict[str, Any], appearance: str, cuts: list[dict[str, Any]],
             # 컷 모드에서는 첨부의 정체를 틀리게 설명한다. 첫 컷은 직전이 없다.
             has_prev = uses_prev and int(cut["cut_number"]) != first_number
             prev_note = ("\n" + PREV_CUT_CLAUSE) if has_prev else ""
+            # 이어지는 자리는 직전 컷이 **실제로 첨부될 때만** 성립한다. 첨부가
+            # 없으면 모델은 무엇에 이어 붙일지 모르는 채로 "아래를 보라"는 말만
+            # 듣게 되고, 그러면 배경이 이어지기는커녕 엉뚱한 곳이 나온다.
+            # config 의 vertical_link 로 켠다(기본 꺼짐 — 예전 run 은 그대로다).
+            if has_prev and cfg.get("vertical_link") and cut.get("vertical_link"):
+                prev_note += "\n" + LINK_CUT_CLAUSE
             # 조연 대조는 **한글 서술**로 한다. 영어 프롬프트(cut["scene"])에는
             # 이름이 로마자로 바뀌거나 "the companion" 으로 뭉개져 있다 — 실제로
             # 윤재가 "The companion" 으로만 나왔다.

@@ -136,10 +136,20 @@ function setupPhoto() {
 /* 크레딧은 **목업**입니다 — 실제 과금과 무관하고, 화면에 얼마가 드는지
    보이게 하려고만 둡니다. 편집실(/editor)의 잔액과 같은 값을 씁니다. */
 const CREDIT = { full: 240, preview: 60 };
+// 컷 모드는 컷 하나가 이미지 한 장이라 그림 호출이 3배다 (지금은 한 장에 3컷).
+// 이야기 단계 비용은 그대로이므로 그림 몫만 늘려 어림한다.
+const WEBTOON_MULT = 3;
+
+function layoutMode() {
+  const el = document.querySelector('input[name="layout_mode"]:checked');
+  return el ? el.value : "fast";
+}
 
 function paintCost() {
   const preview = $("#previewToggle").checked;
-  $("#costChip").textContent = `−${preview ? CREDIT.preview : CREDIT.full} 크레딧`;
+  const base = preview ? CREDIT.preview : CREDIT.full;
+  const cost = layoutMode() === "webtoon" ? base * WEBTOON_MULT : base;
+  $("#costChip").textContent = `−${cost} 크레딧`;
   $("#submitBtn").firstChild.textContent =
     preview ? "미리보기 만들기 " : "웹툰 만들기 ";
 }
@@ -164,6 +174,8 @@ function collect() {
     style:      form.style.value,
     // "" | sd | md | ld. 빈 값이면 그림체가 정한 등신 그대로 간다.
     head_ratio: form.head_ratio ? form.head_ratio.value : "",
+    // fast(한 장에 3컷) | webtoon(컷마다 한 장). 비우면 fast — 지금까지의 방식이다.
+    layout_mode: form.layout_mode ? form.layout_mode.value : "fast",
     preview:    $("#previewToggle").checked,
     photos_data: photos,
   };
@@ -776,6 +788,9 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPhoto();
   $("#form").addEventListener("submit", submit);
   $("#previewToggle").addEventListener("change", paintCost);
+  // 연출(빠르게/웹툰)이 바뀌면 그림 호출 수가 달라져 비용도 달라진다.
+  document.querySelectorAll('input[name="layout_mode"]').forEach(
+    el => el.addEventListener("change", paintCost));
   paintCost();
 
   $("#cancelBtn").addEventListener("click", async () => {
