@@ -1997,6 +1997,11 @@ def list_runs(limit: int = 60) -> list[dict[str, Any]]:
         if not drawn:
             continue                       # 그림이 하나도 없으면 편집할 것이 없다
         p1 = _read_json(run_dir, "p1.json")
+        # 목록에 그림을 걸려면 **어느 장을 걸지**를 알아야 한다. 1번 장이 있다고
+        # 칠 수 없다 — 3·4번만 뽑아 둔 run 이 흔하다. 그래서 표지로 쓸 장을
+        # 실제로 찾고, 같은 김에 몇 장이 그려졌는지도 센다.
+        cover_ep = drawn[0]
+        pages = [n for n in range(1, 13) if unit_image(rid, n, cover_ep)]
         out.append({
             "run_id": rid,
             "character": str(p1.get("name") or ""),
@@ -2006,6 +2011,10 @@ def list_runs(limit: int = 60) -> list[dict[str, Any]]:
             "episodes": drawn,
             "planned_episodes": planned,
             "next_episode": (planned[-1] + 1) if planned else 1,
+            # 목록 카드가 쓰는 것 — 표지 그림 주소를 만들 재료와 규모 표시.
+            "cover_episode": cover_ep,
+            "cover_page": pages[0] if pages else None,
+            "page_count": len(pages),
         })
         if len(out) >= limit:
             break

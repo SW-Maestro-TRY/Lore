@@ -555,26 +555,86 @@ function toast(msg) {
  * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것·피드백이
  * 작품마다 다른 칸에 저장돼 있어서(storeKey), 화면만 갈아 끼우면 앞 작품의
  * state 가 남는다. 새로 열면 load() 가 그 작품 칸을 처음부터 읽는다. */
-async function paintRunPicker(current) {
-  const host = $(".ed-top-right");
+/* 한 작품 = 카드 한 장. 표지 그림은 그 작품에 **실제로 그려진** 장에서 가져온다
+   (1번 장이 있다고 칠 수 없다 — 3·4번만 뽑아 둔 run 이 흔하다. 그래서 서버가
+   cover_page 를 같이 준다). 그림이 아직 없으면 자리만 비워 두고 카드는 남긴다. */
+function workCard(r, current) {
+  const on = r.run_id === current;
+  const thumb = r.cover_page
+    ? `<img class="work-thumb" loading="lazy" alt=""`
+      + ` src="/api/runs/${encodeURIComponent(r.run_id)}/page/${r.cover_page}`
+      + `?w=160&ep=${r.cover_episode || 1}">`
+    : `<span class="work-thumb is-empty" aria-hidden="true">🖼</span>`;
+  // "2화" 만 쓰면 **2편이 있다**는 뜻인지 **2화를 보고 있다**는 뜻인지 갈린다.
+  // 여러 편이면 범위로 적어서(1~3화) 그 애매함을 없앤다.
+  const eps = r.episodes || [];
+  const epLabel = eps.length > 1 ? `${eps[0]}~${eps[eps.length - 1]}화`
+                                 : `${eps[0] || 1}화`;
+  const sub = [
+    epLabel,
+    r.page_count ? `${r.page_count}장` : "",
+    r.genre || "",
+  ].filter(Boolean).join(" · ");
+  return `<button type="button" class="work-card" data-run="${esc(r.run_id)}"`
+    + `${on ? ' aria-current="true"' : ""}>`
+    + thumb
+    + `<span><span class="work-name">${esc(r.character || "이름 없음")}`
+    + `${r.title ? " · " + esc(r.title) : ""}</span>`
+    + `<span class="work-sub">${esc(sub)}</span></span></button>`;
+}
+
+/* ---- 작품 목록 — 어떤 웹툰을 편집할지 ---------------------------------
+ *
+ * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것·피드백이
+ * 작품마다 다른 칸에 저장돼 있어서(storeKey), 화면만 갈아 끼우면 앞 작품의
+ * state 가 남는다. 새로 열면 load() 가 그 작품 칸을 처음부터 읽는다. */
+async function paintWorks(current) {
+  const host = $("#worksList");
   if (!host) return;
-  let runs = [];
-  try { runs = (await (await fetch("/api/runs")).json()).runs || []; } catch { return; }
-  if (!runs.length) return;
-  const box = document.createElement("label");
-  box.className = "run-pick-box";
-  box.innerHTML =
-    `<span class="run-pick-label">작품</span>` +
-    `<select class="run-pick">` +
-    runs.map(r => `<option value="${esc(r.run_id)}"${r.run_id === current ? " selected" : ""}>`
-      + `${esc(r.character || "?")} — ${esc(r.title || "")}</option>`).join("") +
-    `<option value=""${current ? "" : " selected"}>샘플 보기 (목업)</option>` +
-    `</select>`;
-  const sel = $("select", box);
-  sel.addEventListener("change", () => {
-    location.search = sel.value ? `?run=${encodeURIComponent(sel.value)}` : "";
+  let runs = null;                    // null = 못 물어봄, [] = 물어봤는데 없음
+  try { runs = (await (await fetch("/api/runs")).json()).runs || []; } catch { /* 아래에서 */ }
+
+  if (runs === null) {
+    host.innerHTML = `<p class="ed-works-empty">작품 목록을 불러오지 못했습니다.`
+      + ` 서버(serve.py)가 떠 있는지 확인해 주세요.</p>`;
+    return;
+  }
+  if (!runs.length) {
+    // 목록을 아예 지우지 않는다 — 자리가 사라지면 기능이 없는 것과 구별이 안 된다.
+    host.innerHTML = `<p class="ed-works-empty">아직 만든 웹툰이 없습니다.`
+      + `<br><a href="/">첫 작품 만들러 가기</a></p>`;
+    return;
+  }
+  host.innerHTML = runs.map(r => workCard(r, current)).join("")
+    + `<button type="button" class="work-card" data-run=""`
+    + `${current ? "" : ' aria-current="true"'}>`
+    + `<span class="work-thumb is-empty" aria-hidden="true">◇</span>`
+    + `<span><span class="work-name">샘플 보기</span>`
+    + `<span class="work-sub">목업 — 서버 없이도 열립니다</span></span></button>`;
+
+  host.addEventListener("click", e => {
+    const card = e.target.closest(".work-card");
+    if (!card || card.getAttribute("aria-current") === "true") return;
+    location.search = card.dataset.run ? `?run=${encodeURIComponent(card.dataset.run)}` : "";
   });
-  host.prepend(box);
+}
+
+/* 목록을 접었는지는 기기마다 기억한다 — 좁은 화면에서 매번 접는 것은 일이다. */
+function setupWorksToggle() {
+  const btn = $("#worksToggle"), body = $(".ed-body");
+  if (!btn || !body) return;
+  const apply = off => {
+    body.classList.toggle("works-off", off);
+    btn.setAttribute("aria-expanded", off ? "false" : "true");
+  };
+  let off = false;
+  try { off = localStorage.getItem("lore_editor_works") === "off"; } catch { /* 비공개 창 */ }
+  apply(off);
+  btn.addEventListener("click", () => {
+    off = !off;
+    apply(off);
+    try { localStorage.setItem("lore_editor_works", off ? "off" : "on"); } catch { /* 무시 */ }
+  });
 }
 
 /* ------------------------------------------------------------------ 시작 */
@@ -586,6 +646,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   RUN_ID = new URLSearchParams(location.search).get("run") || "";
   // load() 는 RUN_ID 가 정해진 **뒤에** 부른다 — 열쇠가 거기 매여 있다.
   load(); paintCredit(); paintLedger(); paintDock();
+  // 작품 목록은 **여는 데 실패해도** 남아 있어야 한다. 한 작품이 안 열린다고
+  // 목록까지 사라지면 다른 작품으로 건너갈 길이 없어서 주소를 직접 고쳐야 한다.
+  paintWorks(RUN_ID);
+  setupWorksToggle();
 
   const src = RUN_ID ? `/api/runs/${encodeURIComponent(RUN_ID)}/episode`
                      : "/static/samples/mock.json";
@@ -594,12 +658,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!res.ok) throw new Error(await res.text());
     data = await res.json();
   } catch (err) {
-    document.body.innerHTML =
+    // 무대만 갈아 끼운다 (예전에는 document.body 를 통째로 덮었다 — 그러면
+    // 왼쪽 목록도 같이 지워져서 다른 작품을 고를 수가 없었다).
+    const stage = $("#stageCol");
+    const html =
       `<p style="padding:60px;text-align:center;color:#969aa8">` +
       (RUN_ID ? `<b>${esc(RUN_ID)}</b> 을(를) 열지 못했습니다.<br>`
               + `그 작품에 1화 컷과 그려진 장이 있어야 합니다.`
               : `목업 데이터를 읽지 못했습니다 (web/samples/mock.json).`) +
-      `<br><br><a href="/editor" style="color:#7aa2ff">샘플로 돌아가기</a></p>`;
+      `<br><br>왼쪽 목록에서 다른 작품을 골라 보세요.` +
+      `<br><a href="/editor" style="color:#7aa2ff">샘플로 돌아가기</a></p>`;
+    if (stage) stage.innerHTML = html;
+    else document.body.innerHTML = html;
     return;
   }
   // 실제 작품이면 목업 배지를 지운다 — 여기서부터는 진짜로 그린다.
@@ -609,7 +679,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector("#ledgerBtn")?.remove();
   }
   render();
-  paintRunPicker(RUN_ID);
 
   $$(".dock-tab").forEach(b => b.addEventListener("click", () => {
     tab = b.dataset.tab; paintDock();
