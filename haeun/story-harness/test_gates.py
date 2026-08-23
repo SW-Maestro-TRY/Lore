@@ -3031,6 +3031,7 @@ _p1_rendered = story.render(_ps.texts["p1"], {
     "genre_template": story.genre_template_block(story.resolve_genre_templates("일상")),
     "variation_axes": samples.axes_block(samples.pick_axes("일상", seed=3)),
     "retry_feedback": "",
+    "user_memory": "",
 })
 ok("P1: 렌더 후 안 채워진 자리가 없다",
    story.declared_vars(_p1_rendered) == set(), story.declared_vars(_p1_rendered))
@@ -3193,6 +3194,7 @@ _p2_rendered = story.render(_ps.texts["p2"], {
     "story_template": story.story_template_block(),
     "story_structure": samples.structure_block(samples.pick_structure("일상", seed=5)),
     "retry_feedback": "",
+    "user_memory": "",
 })
 ok("P2: 렌더 후 안 채워진 자리가 없다",
    story.declared_vars(_p2_rendered) == set(), story.declared_vars(_p2_rendered))
@@ -3582,6 +3584,24 @@ ok("beat 게이트: description 에 그대로 있으면 통과",
 ok("beat 게이트: 활용형이 달라도(구출할게) 어간이 맞으면 통과",
    webtoon.gate_beat_coverage(_beat_dialogue, ["생쥐를 구출한다"]) == [])
 
+# 느슨한 판정(BEAT_GATE_LOOSE=1) — 낱말이 다를 뿐 그린 경우를 살린다.
+# 엄격 판정은 동사 문자열이 그대로 나와야 해서 같은 장면을 다른 말로 쓰면 걸린다.
+# 2026-08-23 실제 실행에서 이것 때문에 재시도가 소진돼 생성이 끝까지 못 갔다.
+_beat_synonym = [{"cut_number": 1,
+                  "description": "초롱이 덫에 걸린 생쥐를 보고 눈이 커진다",
+                  "lines": []}]
+_BEAT_SYN = ["초롱이 덫에 걸린 생쥐를 발견한다"]
+ok("beat 게이트(엄격): 뜻이 같아도 동사 낱말이 다르면 탈락 — 기본 동작은 그대로",
+   webtoon.gate_beat_coverage(_beat_synonym, _BEAT_SYN, loose=False) != [])
+ok("beat 게이트(느슨): 동사가 달라도 장면 낱말이 2개 이상이면 통과",
+   webtoon.gate_beat_coverage(_beat_synonym, _BEAT_SYN, loose=True) == [])
+ok("beat 게이트(느슨): 결과만 그린 컷은 여전히 탈락 — 낱말이 '생쥐' 하나뿐이다",
+   webtoon.gate_beat_coverage(_beat_missing, ["생쥐를 구출한다"], loose=True) != [])
+ok("beat 게이트(느슨): 행동이 통째로 빠지면 탈락 — 원래 잡던 사고는 그대로 잡는다",
+   webtoon.gate_beat_coverage(
+       [{"cut_number": 1, "description": "숲에 바람이 분다", "lines": []}],
+       _BEAT_SYN, loose=True) != [])
+
 # P0-3: 소품 텍스트(편지 등) 속 이름 — advisory.
 _prop_cuts_stranger = [{"cut_number": 5, "screen_text": "초롱에게, 잘 지내고 있어? - 루나 올림"}]
 ok("소품 이름 경고: 명부에 없는 이름이 screen_text 에 있으면 경고",
@@ -3671,6 +3691,26 @@ ok("말투: 조연 명부에도 실린다",
        [{"name": "윤재", "gender": "남", "voice_notes": "받아치듯 짧게"}])))
 ok("말투: voice_notes 는 필수 항목이 아니다 (게이트가 안 막는다)",
    "voice_notes" not in webtoon.CAST_FIELDS)
+
+# ---- 작가 규칙(user memory) — always 는 늘, keyword 는 태그가 겹칠 때만 ----
+_mem = {"always": [{"text": "초롱은 존댓말을 안 쓴다"}],
+        "keyword": [{"tags": ["북부대공"], "text": "북부대공가의 문장은 은빛 늑대"}]}
+ok("작가 규칙: always 는 문맥에 이름이 없어도 실린다",
+   "존댓말" in story.resolve_user_memory(_mem, "숲에서 생쥐를 구한다"))
+ok("작가 규칙: keyword 는 태그가 문맥에 없으면 안 실린다",
+   "은빛 늑대" not in story.resolve_user_memory(_mem, "숲에서 생쥐를 구한다"))
+ok("작가 규칙: keyword 는 태그가 나타나면 실린다",
+   "은빛 늑대" in story.resolve_user_memory(_mem, "북부대공 저택에 도착한다"))
+ok("작가 규칙: 규칙이 하나도 안 걸리면 빈 문자열 — 머리말도 없다",
+   story.resolve_user_memory({"always": [], "keyword": []}, "아무 문맥") == "")
+ok("작가 규칙: 글자수 상한을 넘는 항목은 앞에서부터 싣고 자른다",
+   "둘째" not in story.resolve_user_memory(
+       {"always": [{"text": "첫째 " * 60}, {"text": "둘째 규칙"}], "keyword": []},
+       "문맥", always_limit=100))
+ok("작가 규칙: 충돌 시 우선을 머리말이 말한다",
+   "이긴다" in story.USER_MEMORY_HEAD)
+ok("작가 규칙: 깨진 memory.json 은 빈 구조로 (실행이 안 죽는다)",
+   story.load_user_memory("/no/such/file.json") == {"always": [], "keyword": []})
 
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")

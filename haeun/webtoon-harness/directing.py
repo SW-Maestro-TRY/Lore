@@ -64,3 +64,71 @@ def resolve_notes(root: str | Path, *texts: str, limit: int = DEFAULT_LIMIT) -> 
     if not hits:
         return ""
     return "\n\n".join(f"[direction ref — {c['id']}]\n{c['text']}" for c in hits[:limit])
+
+
+# --------------------------------------------------------------- user memory
+#
+# 작가가 직접 적은 작품 규칙(runs/<run_id>/memory.json). story.py 의
+# load_user_memory / resolve_user_memory 와 같은 파일을 같은 방식으로 읽는
+# 웹툰-하네스 쪽 짝이다 — 위 연출 지식과 같은 이유로 저장소를 가르지 않는다.
+# always 는 항상, keyword 는 태그가 문맥에 나타날 때만. 글자수로 자른다.
+
+MEMORY_ALWAYS_LIMIT = 500
+MEMORY_KEYWORD_LIMIT = 1500
+
+
+def load_memory(path) -> dict:
+    """memory.json 을 읽는다. 없거나 못 읽으면 빈 구조 (규칙 없이 간다)."""
+    empty = {"always": [], "keyword": []}
+    p = Path(path)
+    if not p.is_file():
+        return empty
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return empty
+    if not isinstance(data, dict):
+        return empty
+    out = {"always": [], "keyword": []}
+    for e in (data.get("always") or []):
+        if isinstance(e, dict) and str(e.get("text") or "").strip():
+            out["always"].append({"text": str(e["text"]).strip()})
+    for e in (data.get("keyword") or []):
+        text = str((e or {}).get("text") or "").strip() if isinstance(e, dict) else ""
+        tags = [str(t).strip() for t in ((e or {}).get("tags") or [])
+                if str(t or "").strip()] if isinstance(e, dict) else []
+        if text and tags:
+            out["keyword"].append({"tags": tags, "text": text})
+    return out
+
+
+def resolve_memory(memory: dict, *texts: str,
+                   always_limit: int = MEMORY_ALWAYS_LIMIT,
+                   keyword_limit: int = MEMORY_KEYWORD_LIMIT) -> str:
+    """규칙 → 프롬프트 줄들. 하나도 안 걸리면 빈 문자열.
+
+    머리말은 붙이지 않는다 — 이미지 프롬프트는 영어라, 부르는 쪽(run.cond_extra)
+    이 영어 머리말로 감싼다. 한국어 단계는 story.py 쪽 함수가 맡는다.
+    """
+    memory = memory or {}
+    lines: list[str] = []
+    used = 0
+    for e in memory.get("always") or []:
+        t = str(e.get("text") or "").strip()
+        if not t:
+            continue
+        if used + len(t) > always_limit:
+            break
+        lines.append(f"- {t}")
+        used += len(t)
+    haystack = " ".join(t for t in texts if t)
+    used = 0
+    for e in memory.get("keyword") or []:
+        t = str(e.get("text") or "").strip()
+        if not t or not any(tag in haystack for tag in (e.get("tags") or [])):
+            continue
+        if used + len(t) > keyword_limit:
+            break
+        lines.append(f"- {t}")
+        used += len(t)
+    return "\n".join(lines)

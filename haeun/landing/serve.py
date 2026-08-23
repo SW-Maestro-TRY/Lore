@@ -32,6 +32,23 @@ MAX_PHOTO_BYTES = 6 * 1024 * 1024
 
 runner = pipeline.Runner()
 _thumb_lock = threading.Lock()
+_warned_no_pillow = False
+
+
+def warn_no_pillow() -> None:
+    """Pillow 가 없다는 것을 콘솔에 **한 번만** 알린다.
+
+    이 자리(줄이기)는 없어도 화면이 뜨기는 한다 — 부르는 쪽이 원본을 그대로
+    내려보낸다. 그래서 조용히 넘어가면 아무도 모르는 채로 컷 한 장에 수 MB 씩
+    나가고 결과 화면이 한참 안 열린다. 매 요청마다 찍으면 폴링 때문에 콘솔이
+    못 쓰게 되므로 한 번만 찍는다.
+    """
+    global _warned_no_pillow
+    if not _warned_no_pillow:
+        _warned_no_pillow = True
+        print("[경고] Pillow 가 없어 그림을 줄이지 못합니다 — 원본을 그대로 "
+              "내려보냅니다(느립니다). 사진 업로드도 안 됩니다.\n"
+              "        pip install Pillow")
 
 
 def thumbnail(src: Path, dest: Path, width: int) -> Path:
@@ -43,7 +60,11 @@ def thumbnail(src: Path, dest: Path, width: int) -> Path:
     if dest.exists() and dest.stat().st_mtime >= src.stat().st_mtime:
         return dest
     with _thumb_lock:
-        from PIL import Image
+        try:
+            from PIL import Image
+        except ImportError:
+            warn_no_pillow()
+            raise
         im = Image.open(src)
         im.load()
         if im.width > width:
@@ -165,6 +186,10 @@ class Handler(BaseHTTPRequestHandler):
         # app.js 가 주소를 보고 폼 대신 결과 화면부터 띄운다.
         if path in ("/result", "/result/"):
             return self._file(WEB / "index.html")
+        # 내가 만든 웹툰 전부 — 완성본을 훑어보는 목록. job 을 거치지 않는다
+        # (하네스를 직접 돌렸거나 이어 만든 회차도 여기 나와야 한다).
+        if path in ("/works", "/works/"):
+            return self._file(WEB / "index.html")
         if path.startswith("/static/"):
             rel = path[len("/static/"):]
             target = (WEB / rel).resolve()
@@ -182,6 +207,9 @@ class Handler(BaseHTTPRequestHandler):
                 # 해서, 항목을 늘릴 때 파이썬 한 군데만 고치면 되게 한다.
                 "feedback_tags": pipeline.FEEDBACK_TAGS,
                 "feedback_text_max": pipeline.FEEDBACK_TEXT_MAX,
+                # 작가 규칙 글자수 상한 — 화면이 남은 글자수를 보여줄 근거
+                "memory_always_max": pipeline.MEMORY_ALWAYS_MAX,
+                "memory_keyword_max": pipeline.MEMORY_KEYWORD_MAX,
             })
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
@@ -196,15 +224,61 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(404, "그 run 의 1화 컷을 찾지 못했습니다")
             return self._json(data)
 
+        # "내 웹툰" 목록에서 바로 여는 완성본 — job 없이 run_id 로만 연다.
+        # 하네스를 직접 돌렸거나 편집기의 "다음 화 이어서 만들기" 로 나온
+        # 회차는 landing/jobs/ 에 기록이 없어서, job 기반 결과 화면(/api/jobs/…)
+        # 으로는 못 열었다 (초롱 2화가 그랬다).
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/result", path)
+        if m:
+            out = pipeline.result_by_run(m.group(1), self._ep(query))
+            if not out:
+                return self._error(404, "그 회차의 결과물을 찾지 못했습니다")
+            return self._json(out)
+
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/episode\.png", path)
+        if m:
+            ep = self._ep(query)
+            src = pipeline.episode_dir(m.group(1), ep) / "episode.png"
+            return self._file(src, download=pipeline.episode_filename(m.group(1), ep))
+
+        # 편집실에서 얹은 말풍선·스티커. 브라우저가 아니라 **작품 폴더**에 있어서
+        # 다른 기기에서 열어도 그대로다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/overlay", path)
+        if m:
+            return self._json(pipeline.read_overlay(m.group(1), self._ep(query)))
+
+        # 구워 놓은 한 편 내려받기. 아직 안 구웠으면 404 — 화면이 "먼저 구우세요"
+        # 라고 말할 수 있어야 하므로 원본으로 슬쩍 바꿔치지 않는다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/baked\.png", path)
+        if m:
+            ep = self._ep(query)
+            src = pipeline.baked_episode(m.group(1), ep)
+            if not src:
+                return self._error(404, "아직 구운 그림이 없습니다")
+            return self._file(src, download=pipeline.episode_filename(
+                m.group(1), ep, baked=True))
+
         m = re.fullmatch(r"/api/runs/([\w.-]+)/cost", path)
         if m:
             return self._json(pipeline.run_cost(m.group(1)))
 
         # 이 작품에 지금까지 어떤 말을 했는가. 화면이 "적어 주신 것" 목록을
         # 그리는 데 쓰고, 사람이 직접 열어 봐도 된다 (runs/<id>/feedback.jsonl).
+        # 작가 규칙 — 작품마다 하나. 승인 화면·결과 화면의 편집칸이 읽는다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/memory", path)
+        if m:
+            return self._json(pipeline.read_memory(m.group(1)))
+
         m = re.fullmatch(r"/api/runs/([\w.-]+)/feedback", path)
         if m:
             return self._json({"feedback": pipeline.read_feedback(m.group(1))})
+
+        # 그림 QA 최종 판정 — 검수가 잡았지만 재생성 한도 안에서 못 고친 것.
+        # 결과 화면이 장 밑에 표시하고 "다시 그리기"(사용자 피드백)로 잇는다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/art-qa", path)
+        if m:
+            return self._json({"scenes": pipeline.read_art_qa(
+                m.group(1), self._ep(query))})
 
         # 다시 그리기 — 지난 판 목록과 그 그림.
         m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions", path)
@@ -284,11 +358,16 @@ class Handler(BaseHTTPRequestHandler):
             job = runner.get(m.group(1))
             if not job or not job.run_id:
                 return self._error(404, "아직입니다")
-            src = pipeline.unit_image(job.run_id, int(m.group(2)))
+            # job.episode 를 꼭 넘긴다 — 안 넘기면 ep1 로 떨어져서, 2화 작업의
+            # 결과 화면이 1화 그림을 보여 준다 (내려받기는 #64 에서 같은 이유로
+            # 이미 회차를 따라가게 고쳤는데 이 자리가 빠져 있었다).
+            src = pipeline.unit_image(job.run_id, int(m.group(2)), job.episode)
             if not src:
                 return self._error(404, "아직입니다")
             width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
-            dest = job.dir / "cache" / f"page{m.group(2)}_w{width}.jpg"
+            # 캐시 열쇠에도 회차를 넣는다 — 같은 job 폴더에서 1화 캐시가 2화
+            # 이름을 차지하면 위 수정이 무효가 된다.
+            dest = job.dir / "cache" / f"ep{job.episode}_page{m.group(2)}_w{width}.jpg"
             try:
                 return self._file(thumbnail(src, dest, width))
             except Exception:                                   # noqa: BLE001
@@ -346,13 +425,29 @@ class Handler(BaseHTTPRequestHandler):
             job = runner.get(m.group(1))
             if not job or not job.run_id:
                 return self._error(404, "아직입니다")
-            src = pipeline.episode_dir(job.run_id) / "episode.png"
-            return self._file(src, download=f"webtoon_{job.run_id}_1화.png")
+            # 회차를 무시하면 2화 작업이 1화 파일을 내려받는다 — episode_dir 의
+            # 기본값이 ep1 이라 조용히 틀린 파일이 나간다.
+            src = pipeline.episode_dir(job.run_id, job.episode) / "episode.png"
+            return self._file(src, download=pipeline.episode_filename(
+                job.run_id, job.episode))
 
         return self._error(404, "없는 주소입니다")
 
     def do_POST(self) -> None:                                  # noqa: N802
         url = urlparse(self.path)
+
+        # 작가 규칙 저장. 상한을 넘으면 자르지 않고 거절한다 — 화면이 그 오류를
+        # 그대로 보여줘야 작가가 자기 글이 어디까지 실리는지 안다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/memory", url.path)
+        if m:
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            cleaned, err = pipeline.write_memory(m.group(1), body or {})
+            if err:
+                return self._error(400, err)
+            return self._json(cleaned)
 
         if url.path == "/api/create":
             try:
@@ -382,8 +477,20 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error(400, f"{i}번째 사진을 읽지 못했습니다")
                 if len(raw) > MAX_PHOTO_BYTES:
                     return self._error(400, f"{i}번째 사진이 너무 큽니다 (6MB 까지)")
+                # Pillow 가 없는 것과 사진이 이상한 것을 **따로** 잡는다.
+                # 한 덩이로 잡으면 라이브러리가 없을 때도 "사진 형식을 알 수
+                # 없습니다" 가 나가서, 멀쩡한 사진을 올린 사람이 사진만 계속
+                # 바꿔 보게 된다 (실제로 그렇게 헤맸다). 하네스의 strip.py ·
+                # episode.py 는 처음부터 ImportError 를 따로 잡고 있었다 —
+                # 여기만 빠져 있었다.
                 try:
                     from PIL import Image
+                except ImportError:
+                    return self._error(
+                        500, "서버에 Pillow 가 없어 사진을 처리하지 못합니다. "
+                             "pip install Pillow 로 설치한 뒤 서버를 다시 켜 주세요. "
+                             "(사진 없이 만드시려면 올린 사진을 지우고 진행하세요.)")
+                try:
                     im = Image.open(io.BytesIO(raw))
                     im.load()
                     if im.width > 1400:
@@ -393,7 +500,11 @@ class Handler(BaseHTTPRequestHandler):
                     im.convert("RGB").save(buf, "PNG")
                     photos.append(buf.getvalue())
                 except Exception:                               # noqa: BLE001
-                    return self._error(400, f"{i}번째 사진의 형식을 알 수 없습니다")
+                    # 아이폰 기본 설정이 HEIC 라서 이 자리에 가장 많이 걸린다.
+                    # Pillow 는 HEIC 를 기본으로 못 읽는다.
+                    return self._error(
+                        400, f"{i}번째 사진을 열지 못했습니다. 아이폰 사진(HEIC)이면 "
+                             "JPG 나 PNG 로 바꿔서 올려 주세요.")
             photo = photos
 
             # 캐릭터를 알 수 있는 것이 하나는 있어야 한다 — story.py 가 그렇게
@@ -428,6 +539,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(404, "그 장을 찾지 못했습니다")
             if not pipeline.unit_image(run_id, scene_no, ep):
                 return self._error(409, "아직 그려지지 않은 장입니다")
+            # 이 작품을 본 파이프라인이 그리는 중이면 막는다 — regen 과 run.py 가
+            # 같은 ep 폴더의 scenes.json·episode.png 를 동시에 쓰면 서로를
+            # 덮어쓴다. next-episode 의 가드와 같은 이유, 같은 기준이다.
+            busy = [j for j in runner.jobs.values()
+                    if j.run_id == run_id and j.status in
+                    ("queued", "running", "awaiting_board_approval",
+                     "awaiting_story_approval", "awaiting_sheet_approval")]
+            if busy:
+                return self._error(409, "이 작품은 지금 만드는 중입니다 — "
+                                        "끝난 뒤 다시 그려 주세요")
             feedback = str(body.get("feedback") or "").strip()
             if len(feedback) > pipeline.FEEDBACK_TEXT_MAX:
                 return self._error(
@@ -570,6 +691,34 @@ class Handler(BaseHTTPRequestHandler):
             job.decide_board(decision, self._record_feedback(job, "board", decision, body))
             return self._json({"ok": True})
 
+        # 편집실에서 얹은 것을 작품 폴더에 저장한다. 그림은 안 건드린다 —
+        # 굽는 것은 아래 /bake 이고, 저장은 굽지 않아도 남아야 한다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/overlay", url.path)
+        if m:
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            ep = self._ep(parse_qs(url.query))
+            try:
+                return self._json(pipeline.write_overlay(m.group(1), body, ep))
+            except pipeline.Failed as exc:
+                return self._error(400, str(exc))
+
+        # 얹은 것을 그림에 굽는다. 원본은 그대로 두고 baked/ 에 따로 쓴다 —
+        # 말풍선을 옮긴 뒤 다시 구우려면 밑그림이 깨끗해야 한다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/bake", url.path)
+        if m:
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            ep = self._ep(parse_qs(url.query))
+            try:
+                return self._json(pipeline.bake_overlay(m.group(1), body, ep))
+            except pipeline.Failed as exc:
+                return self._error(400, str(exc))
+
         return self._error(404, "없는 주소입니다")
 
 
@@ -595,6 +744,7 @@ def main() -> int:
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"랜딩페이지:  {url}")
     print(f"결과물 바로:  {url}result      (이미 만들어 둔 마지막 1화)")
+    print(f"내 웹툰 목록: {url}works       (만든 것 전부 · 회차 골라 보기)")
     print(f"편집실(목업): {url}editor      (아무것도 안 돌려도 열립니다)")
     print(f"  그림 조건 {pipeline.CONDITION} · 한 장에 {pipeline.CUTS_PER_SHEET}컷 · "
           f"말풍선과 대사는 그림 안에")

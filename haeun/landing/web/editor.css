@@ -7,7 +7,7 @@
 
 .ed-top {
   position: sticky; top: 0; z-index: 60;
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px;
+  display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 18px;
   padding: 12px clamp(14px, 3vw, 28px);
   background: rgba(11,12,17,.9); backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
@@ -37,9 +37,15 @@
 /* ------------------------------------------------------------------ 뼈대 */
 
 .ed-body {
-  display: grid; grid-template-columns: minmax(0, 1fr) clamp(268px, 24vw, 340px);
+  display: grid;
+  grid-template-columns:
+    clamp(190px, 17vw, 244px) minmax(0, 1fr) clamp(268px, 24vw, 340px);
   align-items: start; max-width: 1400px; margin: 0 auto;
 }
+/* 접으면 목록 칸이 통째로 사라지고 캔버스가 그만큼 넓어진다. 화면을 좁게 쓰는
+   사람에게 목록은 늘 켜 둘 것이 아니다 — 고르고 나면 볼 일이 없다. */
+.ed-body.works-off { grid-template-columns: 0 minmax(0, 1fr) clamp(268px, 24vw, 340px); }
+.ed-body.works-off .ed-works { display: none; }
 .ed-stage { padding: 26px clamp(14px, 3vw, 28px) 120px; min-width: 0; }
 .ed-stage-head {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -194,6 +200,11 @@
 .fb-story > span { color: #8fb8ff; }
 .fb-direct > span { color: #d9b465; }
 .fb-art > span   { color: #ff9c93; }
+/* 전체는 갈래가 아니라 "나머지 전부" 라서 세 칸 밑에 한 줄로 눕힌다 —
+   네 번째 칸으로 나란히 두면 같은 층위의 갈래로 읽힌다. */
+.fb-all { margin-top: 10px; }
+.fb-all > span { color: var(--muted); }
+.fb-all textarea { min-height: 58px; }
 .fb-cuts {
   margin-top: 12px; display: grid; gap: 6px;
   border-top: 1px solid var(--line); padding-top: 12px;
@@ -280,30 +291,131 @@
 }
 
 @media (max-width: 880px) {
-  .ed-body { grid-template-columns: 1fr; }
+  .ed-body,
+  .ed-body.works-off { grid-template-columns: 1fr; }
   .ed-dock {
     position: static; height: auto; border-left: none;
     border-top: 1px solid var(--line);
   }
+  /* 좁은 화면에서는 목록이 캔버스 위에 가로로 눕는다. 세로로 세우면 스크롤을
+     한참 내려야 그림이 나온다. */
+  .ed-works {
+    position: static; height: auto; max-height: 42vh;
+    border-right: none; border-bottom: 1px solid var(--line);
+  }
   .fb-grid { grid-template-columns: 1fr; }
-  .ed-top { grid-template-columns: auto 1fr; }
+  .ed-top { grid-template-columns: auto auto 1fr; }
   .ed-top-right { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; }
 }
 
-/* 작품 고르개 — 편집실 상단. 어떤 웹툰을 열지 여기서 바꾼다. */
-.run-pick-box { display: inline-flex; align-items: center; gap: .35rem; }
-.run-pick-label {
-  font-size: .72rem; font-weight: 700; letter-spacing: .04em;
-  color: var(--muted, #8a8a94);
+/* 작품 목록 — 만들어 둔 웹툰을 그림째로 늘어놓고 눌러서 옮겨 다니는 자리.
+   전에는 상단의 작은 select 하나였는데, 작품이 0개면 통째로 사라져서 그런
+   기능이 있는 줄도 몰랐다. 이제는 비어 있어도 자리를 지키고 왜 비었는지 쓴다. */
+
+.ed-works-toggle {
+  border: 1px solid var(--line-2); border-radius: 8px;
+  padding: .4em .7em; font: inherit; font-size: .78rem; font-weight: 700;
+  background: transparent; color: var(--text); cursor: pointer; white-space: nowrap;
 }
-.run-pick {
-  max-width: 220px; padding: .38em .5em; font-size: .78rem; font-weight: 600;
-  color: inherit; background: transparent; cursor: pointer;
-  border: 1px solid rgba(127, 127, 127, .35); border-radius: 7px;
+.ed-works-toggle:hover { background: rgba(255,255,255,.07); }
+.ed-works-toggle[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+
+.ed-works {
+  position: sticky; top: 61px; align-self: start;
+  height: calc(100vh - 61px); overflow: auto;
+  border-right: 1px solid var(--line); background: var(--ink-2);
+  padding: 16px 12px 40px;
 }
-.run-pick:hover { border-color: rgba(127, 127, 127, .6); }
+.ed-works-head {
+  margin: 0 0 .6rem; font-size: .72rem; font-weight: 800; letter-spacing: .1em;
+  color: var(--dim); text-transform: uppercase;
+}
+.work-card {
+  display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: .55rem;
+  width: 100%; text-align: left; align-items: center;
+  padding: .45rem; margin-bottom: .3rem;
+  border: 1px solid transparent; border-radius: .55rem;
+  background: none; color: inherit; font: inherit; cursor: pointer;
+}
+.work-card:hover { background: rgba(255,255,255,.06); }
+/* 지금 보고 있는 작품은 누를 것이 없다 — 색만 주는 것이 아니라 커서까지 바꿔서
+   "여기가 지금 자리"임을 두 가지로 알린다. */
+.work-card[aria-current="true"] {
+  border-color: var(--accent); background: rgba(229,73,60,.10); cursor: default;
+}
+.work-thumb {
+  width: 46px; height: 46px; border-radius: .35rem; object-fit: cover;
+  display: block; background: var(--card);
+}
+.work-thumb.is-empty {
+  display: grid; place-items: center; font-size: 1.1rem; color: var(--dim);
+}
+.work-name {
+  font-size: .82rem; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.work-sub {
+  font-size: .72rem; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ed-works-empty { font-size: .78rem; line-height: 1.6; color: var(--muted); }
+.ed-works-empty a { color: var(--accent); }
 
 /* 지난 판 목록. 결과 화면(style.css)에서는 .page 에 마우스를 올렸을 때만
    또렷해지는데, 편집실의 상자는 .scene 이라 그 규칙이 안 걸린다 — 여기서는
    늘 보이게 둔다. 편집실은 읽는 자리가 아니라 고치는 자리다. */
 .scene .page-versions { opacity: 1; padding: .1rem .2rem .4rem; }
+
+
+/* ---- 구운 결과 (이미지로 뽑기) --------------------------------------------
+   머리말 바로 아래에 띠로 붙는다. 토스트로 띄우지 않는 이유: 빠진 장이나 못
+   그린 스티커를 알려야 하고 내려받을 자리도 줘야 하는데, 그게 한 줄에 안 들어간다. */
+.bake-result {
+  position: sticky; top: 0; z-index: 40;
+  border-bottom: 1px solid var(--line); background: var(--panel, #14151a);
+  padding: 12px 18px; display: grid; gap: 8px;
+}
+.bake-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bake-head span { font-size: .78rem; color: var(--muted, #8a8a94); }
+.bake-warn { margin: 0; font-size: .78rem; color: #e0b25e; }
+.bake-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.bake-acts .btn { text-decoration: none; }
+
+
+/* ---- 회차 고르개 --------------------------------------------------------
+   여러 편을 만든 작품에서만 뜬다. 지금 보고 있는 회차는 누를 것이 없어서
+   커서까지 바꾼다 — 색만으로 알리면 눌러 보고 나서야 안다. */
+.ep-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 18px; }
+.ep-tab {
+  border: 1px solid var(--line-2); background: transparent; color: var(--text);
+  border-radius: 999px; padding: .28em .85em; font: inherit; font-size: .82rem;
+  cursor: pointer; transition: background .14s ease, border-color .14s ease;
+}
+.ep-tab:hover { border-color: var(--accent); }
+.ep-tab[aria-current="true"] {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+  font-weight: 600; cursor: default;
+}
+
+
+/* ---- 다시 그리기 확인 창 ------------------------------------------------
+   한 장에 1~2분과 실제 생성 비용이 드는 일이라, 누른 것을 되돌릴 수 있어야
+   한다. 화면을 덮어서 "지금은 이것부터 정하는 자리"임을 분명히 한다. */
+.ask {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: rgba(6,7,10,.72); padding: 20px;
+}
+.ask-box {
+  width: min(520px, 100%); max-height: 88vh; overflow: auto;
+  background: var(--card); border: 1px solid var(--line-2);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 22px 24px 20px;
+}
+.ask-box h2 { font-size: 1.1rem; font-weight: 800; margin-bottom: .3em; }
+.ask-sub { margin: 0 0 1.1em; color: var(--muted); font-size: .85rem; line-height: 1.6; }
+.ask-box .fb-lead { margin-bottom: .5rem; }
+.ask-box .field { margin-bottom: 12px; }
+.ask-warn {
+  margin: .2em 0 1.2em; font-size: .78rem; color: #e0b25e;
+}
+.ask-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }

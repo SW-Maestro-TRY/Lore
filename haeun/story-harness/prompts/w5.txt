@@ -229,6 +229,8 @@ beats 에 3~6개 적는다. 결과가 아니라 **행동**이다.
 - setting 을 비워 두거나 "학교" 처럼 넓은 말로 때우는 것.
 - summary 나 stinger 에 표정·속마음·카메라를 쓰는 것. 그건 컷 단계의 일이다.
 
+{user_memory}
+
 {retry_feedback}
 
 [출력 — JSON only. 화 **하나**다]

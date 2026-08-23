@@ -289,6 +289,12 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
 (둘 다 잘 동작하지만 정션이 더 이상 필요조건이 아님).
 
 ## 최근 작업 로그
+- 2026-08-23 — 편집실에서 얹은 말풍선·스티커를 **저장하고 그림으로 굽는다**
+  (이슈 #58/#64): 얹은 것이 브라우저에만 있어서 가져갈 길이 없던 것을 작품
+  폴더(`overlay.json`)에 저장하고, 「이미지로 뽑기」로 `baked/scene{n}.png` ·
+  `episode_baked.png` 를 만들어 내려받게 함 (`landing/overlay.py` 신설,
+  검사는 `landing/test_overlay.py`) · 지난 판을 눌러 보기만 해도 판본이
+  v7·v8 로 늘어나던 버그 수정 (`archive_scene` 이 같은 그림을 또 뜨던 것).
 - 2026-08-21 — `story-harness/docs/user_feedback_summary.md` P0 6건 전부 구현 +
   다른 장르(헌터·게이트/아이돌/마법학교/오컬트 미스터리/좀비 아포칼립스) 트로프
   라우팅 감사 + 무협 템플릿 신설 + 판타지/일상 landing UI 추가.

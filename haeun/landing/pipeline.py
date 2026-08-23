@@ -58,6 +58,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+import overlay          # 편집실에서 얹은 것을 저장하고 그림에 굽는다
+
 HERE = Path(__file__).resolve().parent
 JOBS_DIR = HERE / "jobs"
 STORY = HERE.parent / "story-harness"
@@ -233,6 +235,14 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
     #    · 장르 — 톤 상한에만 쓴다. 로판을 골랐는데 공포 조명이 나오던 문제.
     text = _replace_block(text, "flat_stickers", "true")
     text = _replace_block(text, "pose_guidance", "true")
+
+    #    · 그림 QA — 명백히 망한 그림(작화 사고 · 서술과 다른 인원/대상/배경)만
+    #      잡아서 최대 2번 다시 그린다. 하네스 기본은 꺼짐(예전 run 재현용)이라
+    #      제품이 켠다. 미적 판단은 안 잡는다 — 그건 결과 화면의 "다시 그리기"
+    #      (사용자 피드백)가 맡는 영역이고, 검수는 QA 지 예술 감독이 아니다.
+    #      한도가 차도 그림은 버리지 않고 art_qa.json 에 남겨서, 결과 화면이
+    #      "검수에서 잡았지만 못 고친 것"으로 보여준다.
+    text = _replace_block(text, "art_qa", "{enabled: true, regen_max: 2}")
     if head_ratio in ("sd", "md", "ld"):
         text = _replace_block(text, "head_ratio", head_ratio)
     if genre.strip():
@@ -594,6 +604,9 @@ class Job:
                 "stages": self.stages, "stage_i": self.stage_i,
                 "started_at": self.started_at, "finished_at": self.finished_at,
                 "ready_cuts": self.ready_cuts,
+                # 재시작 후에도 결과 화면의 거절 표시가 남아야 한다 — 이 값이
+                # 없으면 snapshot() 이 refusals.jsonl 을 아예 안 읽는다.
+                "saw_refusal": self.saw_refusal,
             }, ensure_ascii=False, indent=1), encoding="utf-8")
         except OSError:
             pass                      # 기록을 못 남겨도 이번 실행은 살아 있다
@@ -621,6 +634,7 @@ class Job:
         job.started_at = d.get("started_at")
         job.finished_at = d.get("finished_at")
         job.ready_cuts = list(d.get("ready_cuts") or [])
+        job.saw_refusal = bool(d.get("saw_refusal"))
         if not job.stages:
             job.build_stages()
         return job
@@ -649,6 +663,16 @@ class Job:
         # story.py --charsheet 가 그림체 문구를 여기서 읽는다. job 폴더를
         # 가리켜야 시트와 컷이 같은 그림체를 본다.
         env["WEBTOON_HARNESS_DIR"] = str(self.dir)
+        # beat 게이트를 느슨하게 — 하네스 기본은 엄격(beat 의 동사가 컷에
+        # 문자열 그대로 나와야 통과)이라, 같은 장면을 다른 낱말로 쓰면 걸린다.
+        # 그러면 재시도가 소진되고 컷이 한 개도 저장되지 않아 **제품이 한 편도
+        # 못 만든다.** 하네스 기본값은 예전 run 재현을 위해 그대로 두고 제품에서만
+        # 켠다. 사람이 .env 에 직접 값을 정해 뒀으면 그 뜻을 존중해 덮지 않는다.
+        env.setdefault("BEAT_GATE_LOOSE", "1")
+        # 무게 묶음(웹툰 연출)은 컷 대부분이 자기 장을 가져서 한 편이 세로
+        # 33,000px 을 넘는다 — 하네스 기본 상한(30,000px)이면 다 그려 놓고
+        # 합치기에서 죽는다. 12컷 × 2752px 에 여유를 둔 값.
+        env.setdefault("EPISODE_MAX_HEIGHT", "40000")
         return env
 
     def _run(self, cmd: list[str], cwd: Path, on_line: Callable[[str], None]) -> int:
@@ -789,6 +813,11 @@ def _bind_line(job: Job, line: str) -> None:
     if line.startswith("episode.png"):
         job.mark("strip", DONE)
         job.note(line.strip())
+    elif "이어 붙이지 못했습니다" in line:
+        # 합치기 실패 사유는 이 [경고] 한 줄에만 있다 ("세로 33,024px 입니다
+        # (상한 …)" 등). 안 옮기면 화면에는 "잇지 못했습니다"만 남고, 고칠
+        # 단서는 log.txt 를 열어야 보인다.
+        job.note(line.strip().removeprefix("[경고]").strip())
 
 
 # --------------------------------------------------------------------------- #
@@ -927,7 +956,17 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
     # 실제로 몇 화가 나왔는지는 하네스가 정한다(next_no). 화면이 말하는 번호를
     # 여기에 맞춰 둔다 — 어긋나면 그림을 엉뚱한 폴더에서 찾는다.
     job.episode = made[-1]
-    job.build_stages()
+    # 라벨만 제자리에서 고친다. 예전에는 build_stages() 를 통째로 다시 불렀는데,
+    # 그러면 지금 도는 콘티 단계의 state·started_at·하위 표시가 전부 TODO 로
+    # 초기화돼서 진행 표시가 리셋되고 걸린 시간이 안 남았다.
+    with job._lock:
+        for st in job.stages:
+            if st["key"] != "board":
+                continue
+            st["desc"] = f"{int(job.episode)}화를 컷으로 나누고 대사를 붙입니다"
+            for s in st["steps"]:
+                if s["key"] == "episode":
+                    s["label"] = f"{int(job.episode)}화 설계"
 
     # webtoon.py 의 main() 은 게이트 소진(STATUS_HUMAN)에서도 종료 코드가 0 이다.
     # meta.json 을 직접 읽어야 한다 — story.py 와 같은 사정.
@@ -977,9 +1016,11 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
     if job.stage_i == 1:
         _leave(job)
         _enter(job, 2)
-    if code != 0:
-        raise Failed("그림 생성이 실패했습니다.")
+    # 완성본이 있으면 종료 코드보다 그것을 믿는다 — 1화 쪽과 같은 이유
+    # (한 장 거절돼도 나머지와 완성본이 있으면 결과 화면으로 간다).
     if not (episode_dir(run_id, job.episode) / "episode.png").exists():
+        if code != 0:
+            raise Failed("그림 생성이 실패했습니다.")
         raise Failed("그림은 나왔지만 한 편으로 잇지 못했습니다.")
     _leave(job)
 
@@ -1020,12 +1061,24 @@ def execute(job: Job) -> None:
         # --author-note 로 실려 P1·P2 프롬프트의 {retry_feedback} 자리에 들어간다.
         story_note = ""
         prev_run_id = ""
+        # 아직 한 번도 안 돌린 설치에는 runs/ 가 없다 (gitignore 라 새로 받은
+        # 폴더·새 worktree 는 늘 이 상태로 시작한다). 없다고 터지면 첫 생성이
+        # FileNotFoundError 트레이스백으로 죽어서, 처음 쓰는 사람이 가장 먼저
+        # 보는 화면이 그것이 된다. story.py 가 어차피 여기에 쓰므로 미리 만든다.
+        (STORY / "runs").mkdir(parents=True, exist_ok=True)
         while True:
             job.note("캐릭터를 읽는 중")
             before = {d.name for d in (STORY / "runs").iterdir() if d.is_dir()}
             cmd = ["story.py", "--character", str(char_path), "--scenes", "3", "--no-read"]
             if story_note:
                 cmd += ["--author-note", story_note]
+            # 작가 규칙 — 다시 만들기는 새 run_id 를 만들므로, 이전 run 의
+            # memory.json 을 파일로 넘긴다. story.py 가 새 run 폴더에 사본을
+            # 남기고 P1·P2·SCENE 프롬프트에 싣는다.
+            prev_mem = (STORY / "runs" / prev_run_id / "memory.json"
+                        if prev_run_id else None)
+            if prev_mem and prev_mem.exists():
+                cmd += ["--memory-file", str(prev_mem)]
             code = job._run(cmd, STORY, lambda ln: _story_line(job, ln))
             if job._cancel:
                 raise Failed("취소됨")
@@ -1146,13 +1199,22 @@ def execute(job: Job) -> None:
             if job._cancel:
                 raise Failed("취소됨")
             cuts_path = STORY / "runs" / run_id / "webtoon" / "ep01_cuts.json"
-            if code != 0 or not cuts_path.exists():
-                raise Failed("콘티(컷 설계)를 만들지 못했습니다.")
 
             # webtoon.py 의 main() 도 STATUS_HUMAN/실패에서 종료 코드는 항상 0 —
             # story.py 와 같은 사정. meta.json 을 직접 읽어야 한다.
+            #
+            # **이 판정이 컷 파일 검사보다 먼저 와야 한다.** 게이트가 소진되면
+            # webtoon.py 는 컷을 한 개도 안 쓰고 멈추므로(로그의 "컷 0"),
+            # 순서가 반대면 ep01_cuts.json 이 없다는 이유로 먼저 실패해서
+            # **승인 화면에 영영 닿지 못한다** — 그 화면이 존재하는 이유가 바로
+            # 이 경우인데도. 2026-08-23 실제 실행에서 이렇게 막혔다:
+            # meta.json 은 '사람확인필요' 인데 화면에는 "콘티를 만들지
+            # 못했습니다" 만 떴고, 사용자가 왜 걸렸는지도 다시 시도할 길도 없었다.
             status, note = _meta_status(board_meta)
-            if status != STATUS_HUMAN:
+            human = status == STATUS_HUMAN
+            if code != 0 or (not cuts_path.exists() and not human):
+                raise Failed("콘티(컷 설계)를 만들지 못했습니다.")
+            if not human:
                 break                  # STATUS_OK(또는 알 수 없는 값) — 정상 진행
 
             job.status = "awaiting_board_approval"
@@ -1170,6 +1232,17 @@ def execute(job: Job) -> None:
             if job._cancel:
                 raise Failed("취소됨")
             if decision != "retry":
+                # 게이트가 소진된 자리는 두 가지다. 컷이 나왔는데 기준에 걸린
+                # 것이면 "이대로 진행" 이 말이 된다 — 사람이 보고 괜찮다고 한
+                # 것이니 그 콘티로 그린다. 컷이 아예 안 나온 것이면 진행할
+                # 대상이 없으므로, 그리기로 넘어가 봐야 거기서 다시 죽는다.
+                # 그때 나오는 말("컷 서술을 옮기지 못했습니다")은 원인에서
+                # 멀어져서 더 알아보기 어렵다 — 여기서 멈추고 이유를 말한다.
+                if not cuts_path.exists():
+                    raise Failed(
+                        "콘티가 한 컷도 나오지 않아 이대로는 진행할 수 없습니다. "
+                        "무엇이 걸렸는지 적어서 '다시 만들기'를 눌러 주세요."
+                        + (f" ({note})" if note else ""))
                 break                   # approve — 이 콘티 그대로 진행
             replan = True
         _leave(job)
@@ -1207,11 +1280,15 @@ def execute(job: Job) -> None:
         if job.stage_i == 3:
             _leave(job)
             _enter(job, 4)
-        if code != 0:
-            raise Failed("그림 생성이 실패했습니다.")
-
+        # 완성본이 있는지 **먼저** 본다. run.py 는 12장 중 1장만 실패(거절 포함)
+        # 해도 종료 코드 1을 내는데, code 만 보고 죽으면 11장과 episode.png 가
+        # 있어도 사용자는 결과 화면에 영영 못 간다 — 거절 사유 표시(refusals)도
+        # 결과 화면이 아니라 진행 화면에만 있어서 아무도 못 본다. 완성본이
+        # 있으면 그대로 보여 주고, 실패는 화면의 거절/실패 표시가 맡는다.
         out = WEBTOON / "outputs" / run_id / "ep1" / "episode.png"
         if not out.exists():
+            if code != 0:
+                raise Failed("그림 생성이 실패했습니다.")
             raise Failed("그림은 나왔지만 한 편으로 잇지 못했습니다.")
         _leave(job)
 
@@ -1271,6 +1348,85 @@ def made_episodes(run_id: str) -> list[int]:
         if m:
             out.append(int(m.group(1)))
     return sorted(out)
+
+
+def episode_filename(run_id: str, episode: int = 1, baked: bool = False) -> str:
+    """내려받을 때 붙는 이름 — 작품(주인공 이름)과 회차를 반영한다.
+
+    예전에는 `webtoon_<run_id>_1화.png` 였다. run_id 는 만들어진 시각이라
+    사람에게는 아무 뜻이 없고, 회차도 1화로 박혀 있어서 2화를 받아도 1화라고
+    적혔다. 여러 편을 받아 폴더에 모아 두면 어느 것이 무엇인지 알 수 없다.
+
+    파일 이름에 쓸 수 없는 글자는 지운다 — 이름은 사용자가 적은 것이라
+    슬래시·콜론이 들어올 수 있고, 그대로 두면 저장이 실패한다.
+    """
+    name = str(_read_json(STORY / "runs" / run_id, "p1.json").get("name") or "").strip()
+    safe = re.sub(r'[\\/:*?"<>|]', "", name).strip()
+    head = safe or run_id
+    tail = "_말풍선" if baked else ""
+    return f"{head}_{int(episode)}화{tail}.png"
+
+
+# --------------------------------------------------------------------------- #
+# 편집실에서 얹은 것 — 저장하고, 그림에 굽는다
+#
+# 지금까지 편집실의 말풍선·스티커는 **브라우저에만** 있었다. 공들여 배치해 놓고도
+# 가져갈 수 있는 것은 말풍선 없는 원본뿐이었다. 여기가 그 둘을 잇는다.
+# 그리는 일 자체는 overlay.py 가 한다 — 이쪽은 경로와 장 목록만 맞춰 준다.
+# --------------------------------------------------------------------------- #
+
+def _scene_numbers(run_id: str, episode: int = 1) -> list[int]:
+    """이 회차의 장 번호. scenes.json 이 없으면 컷 하나가 곧 한 장이다."""
+    ep_dir = episode_dir(run_id, episode)
+    grouping = _read_json(ep_dir, "scenes.json").get("scenes") or []
+    if grouping:
+        return sorted({int(sc.get("scene_number") or 0) for sc in grouping} - {0})
+    cuts = _read_json(STORY / "runs" / run_id / "webtoon",
+                      f"ep{int(episode):02d}_cuts.json").get("cuts") or []
+    return sorted({int(c.get("cut_number") or 0) for c in cuts} - {0})
+
+
+def read_overlay(run_id: str, episode: int = 1) -> dict[str, Any]:
+    return overlay.load_overlay(episode_dir(run_id, episode))
+
+
+def write_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
+    ep_dir = episode_dir(run_id, episode)
+    if not ep_dir.exists():
+        raise Failed("그 작품의 회차 폴더를 찾지 못했습니다.")
+    data = overlay.save_overlay(ep_dir, body)
+    return {"ok": True, "items": overlay.count_items(data)}
+
+
+def baked_episode(run_id: str, episode: int = 1) -> Path | None:
+    p = overlay.baked_episode_path(episode_dir(run_id, episode))
+    return p if p.exists() else None
+
+
+def bake_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
+    """얹은 것을 그림에 굽는다. body 에 얹은 것이 실려 오면 그것을 먼저 저장한다.
+
+    저장과 굽기를 한 번에 하는 이유: 사용자가 누르는 버튼은 하나("이미지로
+    뽑기")인데, 저장이 따로 왕복하면 그 사이에 실패했을 때 화면에 보이는 것과
+    구운 것이 갈린다.
+    """
+    ep_dir = episode_dir(run_id, episode)
+    if not ep_dir.exists():
+        raise Failed("그 작품의 회차 폴더를 찾지 못했습니다.")
+    data = (overlay.save_overlay(ep_dir, body)
+            if isinstance(body, dict) and body.get("scenes") is not None
+            else overlay.load_overlay(ep_dir))
+    numbers = _scene_numbers(run_id, episode)
+    if not numbers:
+        raise Failed("이 회차의 장을 찾지 못했습니다.")
+    try:
+        res = overlay.bake(ep_dir, numbers,
+                           lambda n: unit_image(run_id, n, episode), data)
+    except overlay.OverlayError as exc:
+        raise Failed(str(exc)) from exc
+    res["url"] = f"/api/runs/{run_id}/baked.png?ep={int(episode)}"
+    res["items"] = overlay.count_items(data)
+    return res
 
 
 def episode_title(run_id: str, episode: int = 1) -> str:
@@ -1341,6 +1497,43 @@ def read_refusals(run_id: str, episode: int = 1, limit: int = 20) -> list[dict[s
     return out[-limit:]
 
 
+def read_art_qa(run_id: str, episode: int = 1) -> dict[int, dict[str, Any]]:
+    """하네스의 그림 QA 최종 판정(art_qa.json)을 장 번호별로 돌려준다.
+
+    {장번호: {"rounds": 다시 그린 횟수, "issues": [남은 막는 이슈], ...}}.
+    파일이 없으면(QA 를 안 켠 예전 run) 빈 dict — refusals 와 같은 취급이다.
+    결과 화면이 이걸로 "검수에서 잡았지만 못 고친 것"을 장 밑에 표시하고,
+    다시 그리기(사용자 피드백)로 잇는다.
+    """
+    path = episode_dir(run_id, episode) / "art_qa.json"
+    if not path.exists():
+        return {}
+    try:
+        units = (json.loads(path.read_text(encoding="utf-8")) or {}).get("units") or {}
+    except (OSError, ValueError):
+        return {}
+    out: dict[int, dict[str, Any]] = {}
+    for rec in units.values():
+        if not isinstance(rec, dict):
+            continue
+        try:
+            no = int(rec.get("no") or 0)
+        except (TypeError, ValueError):
+            continue
+        if no <= 0:
+            continue
+        # 같은 장을 여러 후보(c1·c2)로 뽑은 경우 마지막 판정이 이긴다 —
+        # 제품은 후보 1장이라 실질적으로 겹치지 않는다.
+        out[no] = {
+            "rounds": int(rec.get("rounds") or 0),
+            "checked": bool(rec.get("checked")),
+            "issues": [{"what": str(i.get("what") or "")[:200],
+                        "kind": str(i.get("kind") or "artifact")}
+                       for i in (rec.get("issues") or []) if isinstance(i, dict)],
+        }
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # 사용자 피드백
 # --------------------------------------------------------------------------- #
@@ -1398,6 +1591,76 @@ _TAG_LABELS = {stage: {t["id"]: t["label"] for t in tags}
 
 FEEDBACK_TEXT_MAX = 500
 _feedback_lock = threading.Lock()
+
+# ---- 작가 규칙 (user memory) ------------------------------------------------
+#
+# 작가가 작품마다 직접 선언하는 규칙. 피드백(위)이 "지난 결과에 대한 말"이라면
+# 이것은 "앞으로 모든 생성이 지킬 것" 이다. 하네스(story.py·webtoon.py·run.py)가
+# runs/<run_id>/memory.json 을 읽어 매 단계 프롬프트에 싣는다.
+#   always  — 항상 실린다 ("초롱은 존댓말을 안 쓴다" 같은 작품 전체 규칙)
+#   keyword — 태그가 그 단계 문맥에 나타날 때만 ("북부대공 → 문장은 은빛 늑대")
+# 글자수 상한은 하네스의 것(story.MEMORY_*_LIMIT)과 같은 값이어야 한다 —
+# 화면이 더 받아 놓고 하네스가 자르면 작가는 왜 안 실리는지 모른다.
+MEMORY_ALWAYS_MAX = 500
+MEMORY_KEYWORD_MAX = 1500
+
+
+def memory_path(run_id: str) -> Path:
+    return STORY / "runs" / run_id / "memory.json"
+
+
+def read_memory(run_id: str) -> dict[str, Any]:
+    """이 작품의 규칙. 없으면 빈 구조 — 화면이 빈 편집칸을 그리면 된다."""
+    empty: dict[str, Any] = {"always": [], "keyword": []}
+    got = _read_json(STORY / "runs" / run_id, "memory.json")
+    if not isinstance(got, dict):
+        return empty
+    return {"always": [e for e in (got.get("always") or [])
+                       if isinstance(e, dict) and str(e.get("text") or "").strip()],
+            "keyword": [e for e in (got.get("keyword") or [])
+                        if isinstance(e, dict) and str(e.get("text") or "").strip()
+                        and [t for t in (e.get("tags") or []) if str(t or "").strip()]]}
+
+
+def write_memory(run_id: str, data: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """규칙을 저장한다. (정리된 규칙, 오류 문구) — 오류면 저장 안 한다.
+
+    검증을 여기서 하는 이유: 하네스는 상한 초과분을 조용히 자른다(실행을
+    멈추지 않으려고). 화면에서는 자르지 말고 **저장을 거절**해야 작가가 자기
+    글이 어디까지 실리는지 안다.
+    """
+    always, keyword = [], []
+    a_used = 0
+    for e in (data.get("always") or []):
+        t = " ".join(str((e or {}).get("text") or "").split())
+        if not t:
+            continue
+        a_used += len(t)
+        always.append({"text": t})
+    if a_used > MEMORY_ALWAYS_MAX:
+        return {}, f"항상 적용 규칙이 {a_used}자입니다 ({MEMORY_ALWAYS_MAX}자까지)"
+    k_used = 0
+    for e in (data.get("keyword") or []):
+        t = " ".join(str((e or {}).get("text") or "").split())
+        tags = [str(x).strip() for x in ((e or {}).get("tags") or [])
+                if str(x or "").strip()]
+        if not t:
+            continue
+        if not tags:
+            return {}, f"키워드 규칙 '{t[:20]}…' 에 키워드가 없습니다"
+        k_used += len(t)
+        keyword.append({"tags": tags, "text": t})
+    if k_used > MEMORY_KEYWORD_MAX:
+        return {}, f"키워드 규칙이 {k_used}자입니다 ({MEMORY_KEYWORD_MAX}자까지)"
+    cleaned = {"always": always, "keyword": keyword}
+    path = memory_path(run_id)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(cleaned, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+    except OSError as exc:
+        return {}, f"저장하지 못했습니다: {exc}"
+    return cleaned, ""
 
 
 def feedback_path(run_id: str) -> Path:
@@ -1591,15 +1854,53 @@ def _next_version(run_id: str, scene_no: int, episode: int = 1) -> int:
 
 
 def archive_scene(run_id: str, scene_no: int, episode: int = 1) -> int | None:
-    """지금 걸려 있는 그림을 판본으로 떠 둔다. 새로 굽기 **직전**에 부른다."""
+    """지금 걸려 있는 그림을 판본으로 떠 둔다. 새로 굽기 **직전**에 부른다.
+
+    **이미 판본으로 있는 그림이면 새로 뜨지 않고 그 번호를 돌려준다.**
+    이게 없던 동안, 지난 판을 눌러 보기만 해도 판본이 계속 늘어났다 — v1~v3 를
+    번갈아 눌러 보면 v4·v5·v6 이 생기고, 그 셋은 v1~v3 와 픽셀 하나까지 같은
+    그림이었다. 사용자가 본 것이 그것이다 ("갑자기 v7 v8 이런 식으로 생성").
+    되돌리기가 되돌리기 전 그림을 떠 두는 것 자체는 맞다 — 되돌린 것을 다시
+    되돌릴 수 있어야 하니까. 다만 그 그림이 이미 판본에 있으면 뜰 것이 없다.
+
+    돌려주는 번호는 실패했을 때 되살릴 자리라(version_path), 기존 번호를
+    돌려줘도 복구는 그대로 된다.
+    """
     src = unit_image(run_id, scene_no, episode)
     if not src:
         return None
     vdir = _versions_dir(run_id, episode)
     vdir.mkdir(parents=True, exist_ok=True)
+    same = _version_matching(run_id, scene_no, src, episode)
+    if same is not None:
+        return same
     v = _next_version(run_id, scene_no, episode)
     shutil.copy2(src, vdir / f"scene{int(scene_no)}.v{v}.png")
     return v
+
+
+def _version_matching(run_id: str, scene_no: int, src: Path,
+                      episode: int = 1) -> int | None:
+    """이 그림과 **내용이 같은** 판본이 이미 있으면 그 번호. 없으면 None.
+
+    크기부터 본다 — 판본이 수십 장이어도 대개 첫 비교에서 갈린다. 크기가 같을
+    때만 바이트를 읽는다. 읽다 실패하면 "같지 않다"로 본다(판본을 하나 더 뜨는
+    것이 지우는 것보다 안전하다).
+    """
+    try:
+        size = src.stat().st_size
+        blob = None
+        for got in scene_versions(run_id, scene_no, episode):
+            p = version_path(run_id, scene_no, got["version"], episode)
+            if p is None or p.stat().st_size != size:
+                continue
+            if blob is None:
+                blob = src.read_bytes()
+            if p.read_bytes() == blob:
+                return int(got["version"])
+    except OSError:
+        return None
+    return None
 
 
 def version_path(run_id: str, scene_no: int, version: int,
@@ -1618,6 +1919,12 @@ def revert_scene(run_id: str, scene_no: int, version: int,
         return False
     archive_scene(run_id, scene_no, episode)
     shutil.copy2(src, dest)
+    # copy2 는 **판본 파일의 옛 mtime 까지** 복사한다. 그대로 두면 되돌린
+    # 그림이 캐시(JPEG)보다 오래된 파일이 되어, thumbnail() 이 "캐시가 더
+    # 새것" 이라며 옛 그림을 계속 내려보낸다 — 화면상 되돌리기가 아무 일도
+    # 안 한 것처럼 보인다. job 폴더 캐시는 _clear_cache 가 못 보는 곳이라
+    # 지우는 것으로는 부족하고, 시간을 지금으로 찍어야 양쪽 캐시가 다 진다.
+    os.utime(dest, None)
     _clear_cache(run_id, scene_no, episode)
     return True
 
@@ -1691,11 +1998,17 @@ def _origin_config(run_id: str) -> Path | None:
 
 
 # 다시 그리기에서 고를 수 있는 글자 모드. 하네스의 scene.lettering 값 그대로다
-# (webtoon-harness/scenegen.py 의 LETTERING_MODES). "overlay" 를 쓰는 이유:
-# 말풍선 **모양**은 그대로 그리되 그 안의 글자만 비운다 — bubbles.py 가 나중에
-# 그 자리에 글자를 얹는 것을 전제로 한 값이다. "none" 은 말풍선 모양까지
-# 지워서, 나중에 글자를 얹을 자리 자체가 안 남는다.
-REGEN_LETTERING = "overlay"
+# (webtoon-harness/scenegen.py 의 LETTERING_MODES).
+#
+# 2026-08-23 "overlay"에서 "none"으로 바꿨다. overlay는 말풍선 **모양**은
+# 그대로 그리고 그 안 글자만 비우는 값인데, 그 자리를 채우는 쪽
+# (webtoon-harness/bubbles.py)은 review.html에서 사람이 내려받은
+# bubbles.json을 --view로 합성하는 별도 도구다 — 랜딩의 다시 그리기 경로
+# 어디도 그걸 부르지 않는다. 그래서 텅 빈 말풍선 껍데기만 영영 남았다
+# ("글자는 없고 말풍선은 있어서 더 어색하다"는 실사용자 지적). "none"은
+# 말풍선 자체를 안 그린다 — 화면·편집실 문구("말풍선 없이 그립니다")가
+# 이미 이 동작을 약속하고 있었으니, 실제 동작을 그 말에 맞춘 것이기도 하다.
+REGEN_LETTERING = "none"
 
 
 def origin_form(run_id: str) -> dict[str, Any]:
@@ -1733,12 +2046,26 @@ def regen_config(run_id: str, feedback: str, style: str = "",
     out_dir = episode_dir(run_id, episode) / "regen"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "config.yaml"
-    origin = _origin_config(run_id)
-    if origin:
-        shutil.copy2(origin, path)
+    # 예전에는 job 의 config.yaml 사본을 그대로 썼다. 그림체가 안 바뀌는 것은
+    # 좋았는데, **프롬프트 문구까지 작품을 만들던 날짜에 얼어붙었다** — 시트
+    # 참조를 강하게 고쳐도(2026-08-23, S+ 문구) 기존 작품의 다시 그리기는
+    # 영원히 옛 문구로 돌았다. 실제로 그렇게 됐다: "시트와 옷이 다르다"는
+    # 피드백을 받고 다시 그렸는데, 그 재생성이 문제의 옛 문구로 그려졌다.
+    #
+    # 그래서 뒤집는다: config 는 **지금 코드로 새로 굽고**, 사용자가 고른
+    # 것(그림체·등신·장르·연출 모드)만 원래 입력(input.json)에서 이식한다.
+    # "그림체가 바뀌면 안 된다"는 원래 이유는 이걸로 그대로 지켜진다 —
+    # build_config 의 style 이 그 사용자의 선택이니까.
+    form = origin_form(run_id)
+    if form:
+        build_config(out_dir,
+                     str(form.get("style") or style or "webtoon"),
+                     head_ratio=str(form.get("head_ratio") or "").strip().lower(),
+                     genre=str(form.get("genre") or ""),
+                     mode=layout_mode(form))
     else:
-        # 하네스를 직접 돌린 run 이라 job 이 없다. 원본에서 만들되 그림체는
-        # 호출자가 준 것을 쓴다(안 주면 하네스 기본값).
+        # 하네스를 직접 돌린 run 이라 폼이 없다. 그림체는 호출자가 준 것을
+        # 쓴다(안 주면 하네스 기본값).
         build_config(out_dir, style or next(iter(STYLES)))
     text = path.read_text(encoding="utf-8")
     note = " ".join(str(feedback or "").split())
@@ -1811,7 +2138,7 @@ class Regen:
     scene_no: int
     episode: int = 1
     feedback: str = ""
-    textless: bool = False                  # 글자(말풍선 안 글자) 없이 그림만
+    textless: bool = False                  # 말풍선까지 없이 그림만 (REGEN_LETTERING)
     status: str = "queued"                  # queued / running / done / error
     error: str = ""
     note: str = ""
@@ -1866,6 +2193,13 @@ class RegenRunner:
 
     def _work(self, job: Regen, style: str) -> None:
         with self._gate:
+            # 줄 서서 기다리는 동안 취소를 눌렀을 수 있다. cancel() 은 _proc 만
+            # 죽이는데 대기 중에는 _proc 이 아직 없다 — 여기서 안 보면 취소된
+            # 작업이 차례가 오자마자 한 장을 통째로 그려서 돈만 쓰고 버린다.
+            if job._cancel:
+                job.status = "cancelled"
+                job.finished_at = time.time()
+                return
             backup = None
             try:
                 job.status = "running"
@@ -1981,6 +2315,11 @@ def list_runs(limit: int = 60) -> list[dict[str, Any]]:
         if not drawn:
             continue                       # 그림이 하나도 없으면 편집할 것이 없다
         p1 = _read_json(run_dir, "p1.json")
+        # 목록에 그림을 걸려면 **어느 장을 걸지**를 알아야 한다. 1번 장이 있다고
+        # 칠 수 없다 — 3·4번만 뽑아 둔 run 이 흔하다. 그래서 표지로 쓸 장을
+        # 실제로 찾고, 같은 김에 몇 장이 그려졌는지도 센다.
+        cover_ep = drawn[0]
+        pages = [n for n in range(1, 13) if unit_image(rid, n, cover_ep)]
         out.append({
             "run_id": rid,
             "character": str(p1.get("name") or ""),
@@ -1990,6 +2329,10 @@ def list_runs(limit: int = 60) -> list[dict[str, Any]]:
             "episodes": drawn,
             "planned_episodes": planned,
             "next_episode": (planned[-1] + 1) if planned else 1,
+            # 목록 카드가 쓰는 것 — 표지 그림 주소를 만들 재료와 규모 표시.
+            "cover_episode": cover_ep,
+            "cover_page": pages[0] if pages else None,
+            "page_count": len(pages),
         })
         if len(out) >= limit:
             break
@@ -2135,17 +2478,20 @@ def run_cost(run_id: str) -> dict[str, Any]:
             "exact": not estimated}
 
 
-def result(job: Job) -> dict[str, Any]:
-    """완성본 한 편 + 그 안에 무엇이 담겼는지.
+def _result_body(run_id: str, episode: int, style_label: str) -> dict[str, Any]:
+    """완성본 한 편 + 그 안에 무엇이 담겼는지 — job 이 있든 없든 공통인 부분.
 
     결과물의 단위는 **장(Scene)** 이다 — 한 장에 컷이 3개씩 들어 있으므로,
     화면에도 장을 보여주고 그 장이 어느 컷들을 담고 있는지 같이 준다.
     대사 스크립트가 컷 단위여야 "이 말풍선이 몇 번 컷 것인가"를 볼 수 있다.
+
+    `result(job)` 과 `result_by_run(run_id, episode)` 둘 다 이걸 쓴다 — 랜딩에서
+    만든 것이든(job 있음) 하네스를 직접 돌렸거나 편집기로 이어 만든 것이든(job
+    없음) 같은 모양으로 결과 화면에 떨어져야, "완성본 보기"가 어떻게 만들어진
+    것인지에 상관없이 똑같이 동작한다.
     """
-    if not job.run_id:
-        return {}
-    run_dir = STORY / "runs" / job.run_id
-    cut_file = run_dir / "webtoon" / cuts_filename(job.episode)
+    run_dir = STORY / "runs" / run_id
+    cut_file = run_dir / "webtoon" / cuts_filename(episode)
     if not cut_file.exists():
         return {}
     data = json.loads(cut_file.read_text(encoding="utf-8-sig"))
@@ -2157,7 +2503,7 @@ def result(job: Job) -> dict[str, Any]:
             return {}
 
     p1, p2 = load(run_dir, "p1.json"), load(run_dir, "p2.json")
-    title = episode_title(job.run_id, job.episode) or f"{int(job.episode)}화"
+    title = episode_title(run_id, episode) or f"{int(episode)}화"
 
     def cut_card(c: dict) -> dict:
         return {
@@ -2174,7 +2520,7 @@ def result(job: Job) -> dict[str, Any]:
     by_no = {int(c.get("cut_number") or 0): c for c in (data.get("cuts") or [])}
 
     # 어느 컷이 어느 장에 묶였는지는 그림 쪽이 안다 (scenes.json).
-    ep_dir = episode_dir(job.run_id, job.episode)
+    ep_dir = episode_dir(run_id, episode)
     grouping = load(ep_dir, "scenes.json").get("scenes") or []
     if not grouping:
         # 컷 모드로 되돌렸거나 아직 묶기 전 — 컷 하나를 한 장으로 본다.
@@ -2183,7 +2529,7 @@ def result(job: Job) -> dict[str, Any]:
     pages, drawn_cuts = [], 0
     for sc in grouping:
         no = int(sc.get("scene_number") or 0)
-        if not unit_image(job.run_id, no, job.episode):
+        if not unit_image(run_id, no, episode):
             continue                       # 아직 안 그렸거나 미리보기로 빠진 장
         cards = [cut_card(by_no[n]) for n in (sc.get("cut_numbers") or [])
                  if n in by_no]
@@ -2191,14 +2537,37 @@ def result(job: Job) -> dict[str, Any]:
         pages.append({"no": no, "cuts": cards})
 
     ep_png = ep_dir / "episode.png"
+    planned = made_episodes(run_id)
     return {
         "title": title,
         "character": str(p1.get("name") or ""),
         "intro": str(p1.get("intro") or ""),
         "logline": str(p2.get("logline") or ""),
         "genre": str(load(run_dir, "meta.json").get("input", {}).get("genre") or ""),
-        "style_label": STYLES.get(job.style, job.style),
+        "style_label": style_label,
         "cuts_per_sheet": CUTS_PER_SHEET,
+        "pages": pages,
+        "page_count": len(pages),
+        "cut_count": drawn_cuts,
+        "planned_cuts": len(by_no),
+        "planned_pages": len(grouping),
+        "has_episode_png": ep_png.exists(),
+        "run_id": run_id,
+        "episode": int(episode),
+        # 이 작품에 그려진 회차 전부 — 화면이 회차 탭을 그리는 근거다.
+        "episodes": planned,
+        "next_episode": (planned or [0])[-1] + 1,
+    }
+
+
+def result(job: Job) -> dict[str, Any]:
+    """job 이 방금 완성한 결과물 — 걸린 시간처럼 job 에만 있는 정보를 더한다."""
+    if not job.run_id:
+        return {}
+    body = _result_body(job.run_id, job.episode, STYLES.get(job.style, job.style))
+    if not body:
+        return {}
+    body.update({
         # 얼마나 걸렸는가. 단계별로도 준다 — "어디서 오래 걸렸나"가 총 시간보다
         # 쓸모 있다 (그림이 대부분이고, 이야기가 길어지면 재생성이 돈 것이다).
         "seconds": round(
@@ -2206,17 +2575,27 @@ def result(job: Job) -> dict[str, Any]:
             else job.stage_seconds(), 1),
         "stage_times": [{"title": st["title"], "seconds": st.get("seconds")}
                         for st in job.stages if st.get("seconds") is not None],
-        "pages": pages,
-        "page_count": len(pages),
-        "cut_count": drawn_cuts,
-        "planned_cuts": len(by_no),
-        "planned_pages": len(grouping),
         "preview": job.preview,
-        "has_episode_png": ep_png.exists(),
-        "run_id": job.run_id,
-        "episode": int(job.episode),
-        "next_episode": (made_episodes(job.run_id) or [0])[-1] + 1,
-    }
+    })
+    return body
+
+
+def result_by_run(run_id: str, episode: int = 1) -> dict[str, Any]:
+    """job 을 거치지 않고 run_id 로 바로 여는 완성본 — "내 웹툰" 목록에서 쓴다.
+
+    job 이 없는 회차도 있다 (하네스를 직접 돌렸거나 편집기의 "다음 화 이어서
+    만들기" 로 만든 회차는 landing/jobs/ 에 기록이 안 남는다) — 그런 회차도
+    똑같이 완성본으로 열 수 있어야 한다.
+    """
+    run_dir = STORY / "runs" / run_id
+    style_label = ""
+    try:
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8-sig"))
+        style_key = str(meta.get("charsheet", {}).get("style") or "")
+        style_label = STYLES.get(style_key, style_key)
+    except (OSError, json.JSONDecodeError):
+        pass
+    return _result_body(run_id, episode, style_label)
 
 
 # --------------------------------------------------------------------------- #

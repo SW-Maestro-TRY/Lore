@@ -71,24 +71,25 @@ from story import (
     ParseFailure, ApiFailure, Usage, PromptSet, cost_text, append_csv_row,
     load_prompts, render, feedback_block, feedback_slot, write_json, log, warn,
     is_blank, normalize_source, log_prompt_hashes, normalize_palette,
-    resolve_directing_notes,
+    resolve_directing_notes, env_bool,
+    load_user_memory, resolve_user_memory, MEMORY_FILE,
 )
 
 
 STATUS_STOPPED = "중단(엔진급훼손)"
 
 WEBTOON_CONTRACT = {
-    "w4": {"engine_card", "character_sheet", "retry_feedback"},
+    "w4": {"engine_card", "character_sheet", "retry_feedback", "user_memory"},
     "w5": {"engine_card", "series_arc", "arc_json", "series_state",
-           "retry_feedback"},
+           "retry_feedback", "user_memory"},
     "w6": {"engine_card", "arc_json", "ledger_snapshot", "episodes_json"},
     "w7": {"engine_card", "series_arc", "arc_json", "episode_json",
            "ledger_snapshot",
            "engine_fired_list", "setting_block", "zones_block",
            "directing_notes",
-           "retry_feedback"},
+           "retry_feedback", "user_memory"},
     "w8": {"engine_card", "episode_json", "ledger_snapshot", "cuts_json",
-           "pov", "banned_words", "retry_feedback"},
+           "pov", "banned_words", "retry_feedback", "user_memory"},
 }
 
 # ---- 8단계 — 글자를 다시 쓴다 -------------------------------------------
@@ -1821,7 +1822,13 @@ def _verb_stem(token: str) -> str:
     return stemmed if len(stemmed) >= 2 else token
 
 
-def gate_beat_coverage(cuts: list, beats: list) -> list:
+# 느슨한 판정에서 동사 대신 인정할 명사 개수. 1 로 두면 결과만 그린 컷
+# ("생쥐를 안고 있다")이 '생쥐' 하나로 통과해 버려서, 이 게이트가 원래 잡으려던
+# 사고를 놓친다. 2 면 "덫" 과 "생쥐" 처럼 그 장면을 이루는 요소가 둘은 나와야 한다.
+BEAT_LOOSE_MIN_NOUNS = 2
+
+
+def gate_beat_coverage(cuts: list, beats: list, loose: bool = None) -> list:
     """beats 에 적힌 핵심 행동이 컷에서 통째로 빠지지 않았는지 본다.
 
     실제 사고: 생쥐를 구출하는 핵심 장면(그림+말풍선)이 통째로 빠지고 결과
@@ -1829,10 +1836,27 @@ def gate_beat_coverage(cuts: list, beats: list) -> list:
     W5(에피소드 플랜)의 beats 를 컷의 description·대사와 대조해, 어느 컷에도
     흔적이 없는 행동을 잡는다.
 
-    beat 하나에 토큰이 **하나라도** haystack 에 있으면 통과시킨다 — 정교한
-    의미 분석이 아니라 "완전히 안 그렸다"만 잡는 낮은 문턱이다. 이 게이트는
-    실패하면 W7 재시도로 이어지므로, 문턱을 높이면 오탐이 재시도 루프를
-    낭비한다.
+    판정은 두 가지다.
+
+    **엄격(기본)** — beat 의 마지막 토큰(대개 동사)을 어간으로 줄여 그 문자열이
+    컷 어딘가에 있는지만 본다. 앞쪽 명사만으로 통과시키면 그 명사가 결과 컷에도
+    나오기 때문에 "행동 자체가 빠졌다"를 못 잡는다는 판단이었다.
+
+    **느슨(BEAT_GATE_LOOSE=1)** — 동사가 그대로 안 나와도, 그 beat 의 다른
+    토큰이 BEAT_LOOSE_MIN_NOUNS 개 이상 나오면 통과시킨다.
+
+    느슨한 쪽을 연 이유(2026-08-23): 엄격 판정은 **낱말이 다르면 뜻이 같아도
+    실패한다.** "발견한다" 는 컷이 "보고 눈이 커진다" 로 그려도 '발견' 이 없어서
+    걸리고, "푼다" 는 어간이 한 글자라 원형으로 되돌아가 "풀어 준다" 조차 못
+    맞춘다. 실제 실행에서 이 게이트가 재시도를 다 태우고 멈췄고, 그러면 컷이
+    한 개도 저장되지 않아 사람이 승인으로도 넘어갈 수 없다 — 생성이 끝까지
+    가지 못한다.
+
+    (엄격 판정에는 반대 방향의 허점도 있다. 컷 전체를 한 덩이 문자열로 합쳐
+    찾으므로, 다른 컷에 우연히 같은 글자가 있으면 통과한다 — "주의를 준다" 가
+    옆 컷의 "풀어 준다" 에 걸리는 식이다. 그래서 엄격 = 정확이 아니다.)
+
+    기본값은 엄격 그대로다. 예전 run 을 다시 돌려도 결과가 안 바뀐다.
 
     beats 가 없는(과거 run, 또는 이 필드를 아직 안 채우는 옛 ep_plan) 경우는
     빈 배열로 취급해 항상 통과한다 — 과거 데이터를 다시 돌려도 동작이
@@ -1843,6 +1867,10 @@ def gate_beat_coverage(cuts: list, beats: list) -> list:
     cuts = [c for c in cuts if isinstance(c, dict)]
     if not cuts:
         return []
+    if loose is None:
+        # 호출 시점에 읽는다 — 모듈을 불러오는 시점에는 아직 load_dotenv 가
+        # 안 돌았을 수 있어서, 그때 읽으면 .env 의 값을 못 본다.
+        loose = env_bool("BEAT_GATE_LOOSE", False)
     haystack_parts = []
     for c in cuts:
         haystack_parts.append(str(c.get("description") or ""))
@@ -1860,14 +1888,19 @@ def gate_beat_coverage(cuts: list, beats: list) -> list:
         if not tokens:
             continue
         # 마지막 토큰만 본다 — 한국어 beat 문장은 "목적어를 동사한다" 꼴이라
-        # 끝 토큰이 대개 동사(행동 그 자체)다. 앞쪽 명사(예: "생쥐")만으로
-        # 통과시키면, 그 명사가 결과 컷("생쥐를 안고 있다")에도 나오기 때문에
-        # 정작 잡아야 할 "행동 자체가 빠졌다"는 못 잡는다.
-        if _verb_stem(tokens[-1]) not in haystack:
-            out.append(
-                f"beats 의 '{text}' 이 어느 컷의 description·대사에도 나타나지 "
-                "않습니다. 결과만 그리고 그 행동 자체가 통째로 빠진 것일 수 "
-                "있습니다 — 이 행동이 실제로 벌어지는 컷을 추가하세요.")
+        # 끝 토큰이 대개 동사(행동 그 자체)다.
+        if _verb_stem(tokens[-1]) in haystack:
+            continue
+        # 동사가 안 보인다. 느슨한 판정이면 그 장면을 이루는 다른 낱말이
+        # 충분히 나왔는지로 한 번 더 본다 — 낱말만 다를 뿐 그린 경우를 살린다.
+        if loose:
+            hits = sum(1 for t in tokens[:-1] if t in haystack)
+            if hits >= BEAT_LOOSE_MIN_NOUNS:
+                continue
+        out.append(
+            f"beats 의 '{text}' 이 어느 컷의 description·대사에도 나타나지 "
+            "않습니다. 결과만 그리고 그 행동 자체가 통째로 빠진 것일 수 "
+            "있습니다 — 이 행동이 실제로 벌어지는 컷을 추가하세요.")
     return out
 
 
@@ -3844,7 +3877,7 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                max_retries: int, spent: int = 0, known: set = None,
                series_arc: str = "", zones_txt: str = "",
                known_zones: set = None, personality: str = "",
-               author_note: str = "") -> tuple:
+               author_note: str = "", memory_text: str = "") -> tuple:
     """(게이트를 통과하고 연출이 계산된 payload, 재시도 횟수, 메모). 못 하면 Stopped.
 
     run_webtoon 의 7단계와 --cuts-only 가 같은 것을 쓰게 하려고 밖에 둔다.
@@ -3874,6 +3907,7 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                 "setting_block": setting_block(episode),
                 "zones_block": zones_txt or "(등록된 존이 없습니다)",
                 "directing_notes": directing_notes or "(해당 없음)",
+                "user_memory": memory_text,
                 "retry_feedback": feedback_slot(author_note, feedback),
             }),
             TEMP_CREATIVE,
@@ -4272,7 +4306,8 @@ def text_pass_warnings(cuts: list, scenes: list, facts: list = None) -> list:
 
 def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
                ledger_snapshot: str, absolute: int, max_retries: int,
-               facts: list = None, author_note: str = "") -> tuple:
+               facts: list = None, author_note: str = "",
+               memory_text: str = "") -> tuple:
     """(글자를 다시 쓴 payload, 재시도 횟수, 메모). 못 하면 원본을 그대로 돌려준다.
 
     7단계와 달리 **막히면 중단하지 않는다.** 여기서 세우면 이미 통과한 컷
@@ -4292,6 +4327,7 @@ def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
                 "cuts_json": json.dumps(cuts, ensure_ascii=False, separators=(",", ":")),
                 "pov": pov or "(엔진 카드에서 주인공을 찾지 못했습니다)",
                 "banned_words": " · ".join(BANNED_IN_DIALOGUE),
+                "user_memory": memory_text,
                 "retry_feedback": feedback_slot(author_note, feedback),
             }),
             TEMP_CREATIVE)
@@ -4723,6 +4759,9 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
 
     ledger = Ledger(str(p2.get("engine_question") or ""), cap=ledger_cap)
     sheet = json.dumps(p1, ensure_ascii=False, separators=(",", ":"))
+    # 작가 규칙 — run 폴더에 memory.json 이 있으면 매 단계 프롬프트에 실린다.
+    # 없으면 빈 구조라 resolve 가 늘 "" 를 주고, 프롬프트는 예전 그대로다.
+    user_mem = load_user_memory(run_dir / MEMORY_FILE)
 
     def call(stage: str, label: str, prompt: str, temp: float, verdict_of=None):
         start = len(usage.records)
@@ -4764,6 +4803,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                     "W4", "큰 줄거리 분할",
                     render(ps.texts["w4"], {
                         "engine_card": card, "character_sheet": sheet,
+                        "user_memory": resolve_user_memory(user_mem, card, sheet),
                         "retry_feedback": feedback_slot(author_note, feedback),
                     }),
                     TEMP_CREATIVE,
@@ -4841,6 +4881,8 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                         # 앞 화 요약만이 아니라 **인물·설정 명부까지** 넘긴다.
                         # 요약만 주면 3화가 1화의 인물 이름을 잊는다.
                         "series_state": state.brief(ledger),
+                        "user_memory": resolve_user_memory(
+                            user_mem, card, arc_json, state.brief(ledger)),
                         "retry_feedback": feedback_slot(author_note, feedback),
                     }),
                     TEMP_CREATIVE,
@@ -4957,13 +4999,19 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                     zones_txt=zones_block(state, episode),
                     known_zones={z["zone_id"] for z in state.zones},
                     personality=p1.get("personality"),
-                    author_note=author_note)
+                    author_note=author_note,
+                    memory_text=resolve_user_memory(
+                        user_mem, card,
+                        json.dumps(episode, ensure_ascii=False)))
                 result.regen_stage7 += regens
 
                 # ---- 8단계: 컷이 확정된 뒤에 글자만 다시 쓴다 ----------
                 payload, w8_regens, w8_notes = solve_text(
                     ps, call, card, episode, payload, ledger.snapshot(no),
-                    no, max_retries, facts=state.facts, author_note=author_note)
+                    no, max_retries, facts=state.facts, author_note=author_note,
+                    memory_text=resolve_user_memory(
+                        user_mem, card,
+                        json.dumps(payload, ensure_ascii=False)))
                 notes += w8_notes
                 for note in notes:
                     warn(f"    {note}")
@@ -5092,6 +5140,7 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
     "크기와 여백이 실제로 갈리는가"를 앞 단계 재생성 없이 확인한다.
     """
     story = load_story_run(run_dir)
+    cuts_mem = load_user_memory(run_dir / MEMORY_FILE)   # 작가 규칙 (없으면 빈 구조)
     wt_dir = run_dir / "webtoon"
     ep_paths = sorted(wt_dir.glob("arc*_episodes.json"))
     if not ep_paths:
@@ -5187,7 +5236,9 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
                 zones_txt=zones_block(state, episode),
                 known_zones={z["zone_id"] for z in state.zones},
                 personality=story["p1"].get("personality"),
-                author_note=author_note)
+                author_note=author_note,
+                memory_text=resolve_user_memory(
+                    cuts_mem, card, json.dumps(episode, ensure_ascii=False)))
         except Stopped as exc:
             # 게이트를 못 넘겼다. 트레이스백으로 죽지 않고 무엇이 걸렸는지만
             # 보여 준다 — 사람이 고칠 것은 프롬프트지 파이썬 스택이 아니다.
@@ -5197,7 +5248,9 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
             continue
         payload, _, w8_notes = solve_text(
             ps, call, card, episode, payload, ledger.snapshot(absolute),
-            absolute, max_retries, facts=state.facts, author_note=author_note)
+            absolute, max_retries, facts=state.facts, author_note=author_note,
+            memory_text=resolve_user_memory(
+                cuts_mem, card, json.dumps(payload, ensure_ascii=False)))
         notes += w8_notes
         for note in notes:
             warn(f"    {note}")

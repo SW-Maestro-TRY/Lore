@@ -348,7 +348,23 @@ def gender_warning(sheet: Sheet, config_gender: str) -> str:
 # --------------------------------------------------------------------------- #
 # 프롬프트에 강제로 박히는 블록
 # --------------------------------------------------------------------------- #
-LOCK_HEAD = "These character design details must stay identical in every panel:"
+#
+# 2026-08-23 LOCK_HEAD 에 "Written in Korean; follow them literally" 를
+# 추가했다 — story.charsheet_prompts() 의 시트 생성 프롬프트는 이 문구를
+# 이미 달고 있는데(story.py:4143 "FIXED DESIGN ELEMENTS ... Written in
+# Korean; follow them literally"), 같은 design_details 를 매 컷 프롬프트에
+# 다시 박는 이 자리(lock_text)에는 빠져 있었다. 시트 자체는 잘 나오는데
+# (그 프롬프트는 명시가 있다) 개별 컷이 시트에서 벗어나는 사례가 실제로
+# 있었다("헤어를 머리띠로 반묶음 — 오른쪽으로 흘러내린다" 같은 design_details
+# 가 있는 캐릭터가 어느 컷에서 다른 머리로 나옴) — 컷 프롬프트에서는 이
+# 한국어 문장이 어떻게 읽혀야 하는지가 안 적혀 있던 것이 원인 후보 중 하나다.
+# 실사용자 지적: "지금 캐릭터 시트와 너무 다르게 나온 컷이 많아."
+# ★ 언어를 단정하지 않는다. "written in Korean" 이라고 적었더니 P1 이
+#   design_details 를 영어로 뽑은 run(사진 입력 경로)에서 지시가 거짓이 됐다 —
+#   내용은 영어인데 "한국어로 적혀 있다"고 말하는 프롬프트를 모델이 어떻게
+#   읽을지 알 수 없다. "글자 그대로, 한 단어도 빼지 말고"는 어느 언어든 성립한다.
+LOCK_HEAD = ("These character design details must be followed literally, "
+            "word for word, and must stay identical in every panel:")
 PALETTE_HEAD = "Color palette (use these exact colors):"
 
 # --------------------------------------------------------------------------- #
@@ -469,8 +485,9 @@ def ink_palette(palette: str, keep: "tuple | list | set" = ()) -> str:
         blocks.append("\n".join(rows))
     return "\n".join(blocks)
 EXPRESSION_HEAD = (
-    "How this character's face moves. Pick the one that matches the panel and "
-    "draw it plainly — a blank face reads as nothing:")
+    "How this character's face moves — follow it literally. Pick the one "
+    "that matches the panel and draw it plainly — a blank face reads as "
+    "nothing:")
 
 # 의상 고정. appearance_en 을 정면으로 덮어써야 하므로 문구가 강하다.
 #

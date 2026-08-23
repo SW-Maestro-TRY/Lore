@@ -53,6 +53,8 @@
 - "위기가 고조된다" 같은 추상 서술. 무슨 사건으로 무엇이 뒤집히는지 쓴다.
 - estimated_episode_count 를 1 이나 6 이상으로 쓰는 것 (2~5 만 허용).
 
+{user_memory}
+
 {retry_feedback}
 
 [출력 — JSON only. order 는 1부터 연속]

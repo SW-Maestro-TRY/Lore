@@ -535,12 +535,12 @@ PROMPT_CONTRACT = {
              "genre_presets", "world_presets"},
     "p1": {"genre", "one_line_intro", "character_input", "card_json",
            "sample_cards", "retry_feedback", "world",
-           "genre_template", "variation_axes"},
+           "genre_template", "variation_axes", "user_memory"},
     "p2": {"genre", "character_sheet", "retry_feedback", "world",
-           "genre_template", "story_template", "story_structure"},
+           "genre_template", "story_template", "story_structure", "user_memory"},
     "p3": {"character_sheet", "premise_json", "sample_intros"},
     "scene": {"scene_count", "idea", "character_sheet_json", "premise_json",
-              "fix_directive"},
+              "fix_directive", "user_memory"},
     "control": {"genre", "character_input", "scene_count"},
     "lead_appearance": {"engine_card", "name", "gender", "appearance", "outfit",
                         "personality", "protagonist_appearance", "retry_feedback"},
@@ -550,7 +550,7 @@ PROMPT_CONTRACT = {
 # 심사자는 "누가 왜 만들었는지"를 몰라야 하므로 원본 입력과 재생성 지시를 차단한다.
 P3_FORBIDDEN_VARS = {
     "character", "one_line", "character_input", "one_line_intro", "idea",
-    "retry_feedback", "fix_directive", "previous_scenes",
+    "retry_feedback", "fix_directive", "previous_scenes", "user_memory",
 }
 
 
@@ -3002,7 +3002,7 @@ def write_scenes_md(run_dir: Path, scenes: list) -> None:
 def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
             usage: Usage, sample_cards: str = None,
             genre_tpl: str = None, axes: dict = None,
-            author_note: str = "") -> tuple:
+            author_note: str = "", memory_text: str = "") -> tuple:
     """P1 을 부르고, 카드 게이트를 통과할 때까지 재호출한다. (카드, 재생성 횟수).
 
     파이프라인과 --card-mix 가 **같은 함수**를 써야 한다. 시험지에 올라가는 카드가
@@ -3041,6 +3041,7 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
             "sample_cards": sample_cards,
             "genre_template": genre_tpl or "(이 장르의 템플릿이 없습니다 — 장르명만 보고 씁니다)",
             "variation_axes": samples.axes_block(axes) or "(이번에는 이야기 변수 없이 씁니다)",
+            "user_memory": memory_text,
             "retry_feedback": feedback_slot(author_note, feedback),
         })
 
@@ -3060,10 +3061,19 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
 def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                  scene_count: int, max_gate_retries: int, max_p3_retries: int,
                  max_scene_fixes: int, out_dir: Path,
-                 author_note: str = "") -> RunResult:
+                 author_note: str = "", memory: dict = None) -> RunResult:
     run_id = new_run_id()
     run_dir = out_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
+    # 작가 규칙 — P1·P2 는 아직 만들어진 이야기가 없으므로 keyword 를 맞춰 볼
+    # 문맥이 입력(캐릭터·한 줄·장르·세계관)뿐이다. 그 안에 태그가 나오면 싣는다.
+    memory_text = resolve_user_memory(
+        memory or {}, row.get("character") or "", row.get("one_line") or "",
+        row.get("genre") or "", row.get("world") or "")
+    # 규칙 사본을 새 run 폴더에 남긴다 — 다시 만들기는 늘 새 run_id 를 만드므로,
+    # 여기 안 남기면 콘티·그림 단계(webtoon.py·run.py)가 읽을 파일이 없다.
+    if (memory or {}).get("always") or (memory or {}).get("keyword"):
+        write_json(run_dir / MEMORY_FILE, memory)
     usage = Usage()
     t0 = time.monotonic()
 
@@ -3087,7 +3097,8 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
         sheet, regens = call_p1(caller, ps, row, max_gate_retries, usage,
                                 sample_cards=sample_cards,
                                 genre_tpl=genre_tpl, axes=axes,
-                                author_note=author_note)
+                                author_note=author_note,
+                                memory_text=memory_text)
         regen_total += regens
         return sheet
 
@@ -3177,6 +3188,7 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                     "story_structure": (samples.structure_block(structure)
                                         or "(이번에는 구조 지정 없이 씁니다)"),
                     "character_sheet": json.dumps(p1, ensure_ascii=False, separators=(",", ":")),
+                    "user_memory": memory_text,
                     "retry_feedback": feedback_slot(author_note, p2_feedback),
                 }),
                 TEMP_CREATIVE, usage)
@@ -3261,6 +3273,11 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                         "character_sheet_json": json.dumps(p1, ensure_ascii=False, separators=(",", ":")),
                         "premise_json": json.dumps(p2, ensure_ascii=False, separators=(",", ":")),
                         "fix_directive": fix_directive,
+                        "user_memory": resolve_user_memory(
+                            memory or {},
+                            json.dumps(p1, ensure_ascii=False),
+                            json.dumps(p2, ensure_ascii=False),
+                            row.get("one_line") or ""),
                     }),
                     TEMP_CREATIVE, usage)
                 scenes = parse_scenes(scene_obj)
@@ -5435,6 +5452,94 @@ def resolve_directing_notes(*texts: str, limit: int = DIRECTING_NOTES_LIMIT) -> 
     return "\n\n".join(f"[연출 참고 — {c['id']}]\n{c['text']}" for c in picked)
 
 
+# --------------------------------------------------------------- user memory
+#
+# 작가가 직접 적어 두는 작품 규칙. resolve_directing_notes(위)와 같은
+# "태그가 겹치면 원문 그대로 붙인다" 방식인데, 세 가지가 다르다:
+#   · 조각을 우리가 아니라 **작가가** 쓴다 (runs/<run_id>/memory.json)
+#   · always 칸은 태그 없이 **항상** 붙는다 — "초롱은 존댓말을 안 쓴다" 같은
+#     작품 전체 규칙은 그 이름이 문맥에 없어도 지켜져야 한다
+#   · 개수가 아니라 **글자수**로 자른다 — 조각 길이가 제각각이라 개수 제한은
+#     실제 주입량을 말해 주지 못하고, 화면에 보여줄 숫자로도 글자수가 정직하다
+#
+# 기계가 쌓는 확정 사실(webtoon.Ledger 의 facts)과는 별개다 — 그쪽은 AI 가
+# 진행 중 확정한 것, 이쪽은 사람이 선언한 것. 충돌하면 사람이 이긴다. 그래서
+# 블록 머리말에 "다른 지시·설정과 충돌하면 이 규칙이 이긴다"를 박는다.
+
+MEMORY_FILE = "memory.json"
+MEMORY_ALWAYS_LIMIT = 500        # always 전체 글자수 상한
+MEMORY_KEYWORD_LIMIT = 1500      # 이번 프롬프트에 실리는 keyword 조각 합계 상한
+
+USER_MEMORY_HEAD = (
+    "[작품 규칙 — 작가가 직접 정한 것. 아래의 다른 지시·설정과 충돌하면 "
+    "항상 이 규칙이 이긴다]")
+
+
+def load_user_memory(path) -> dict:
+    """memory.json 하나를 읽는다. 없거나 못 읽으면 빈 구조.
+
+    {"always": [{"text": ...}], "keyword": [{"tags": [...], "text": ...}]}
+    빈 구조를 돌려주는 이유: 호출부가 None 검사 없이 resolve 로 바로 넘긴다.
+    """
+    empty = {"always": [], "keyword": []}
+    p = Path(path)
+    if not p.is_file():
+        return empty
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        warn(f"작품 규칙을 읽지 못했습니다 ({p}). 이번 실행은 규칙 없이 갑니다.")
+        return empty
+    if not isinstance(data, dict):
+        return empty
+    out = {"always": [], "keyword": []}
+    for e in (data.get("always") or []):
+        if isinstance(e, dict) and str(e.get("text") or "").strip():
+            out["always"].append({"text": str(e["text"]).strip()})
+    for e in (data.get("keyword") or []):
+        text = str((e or {}).get("text") or "").strip() if isinstance(e, dict) else ""
+        tags = [str(t).strip() for t in ((e or {}).get("tags") or [])
+                if str(t or "").strip()] if isinstance(e, dict) else []
+        if text and tags:
+            out["keyword"].append({"tags": tags, "text": text})
+    return out
+
+
+def resolve_user_memory(memory: dict, *texts: str,
+                        always_limit: int = MEMORY_ALWAYS_LIMIT,
+                        keyword_limit: int = MEMORY_KEYWORD_LIMIT) -> str:
+    """작가 규칙 → 프롬프트에 넣을 블록. 규칙이 하나도 안 걸리면 빈 문자열.
+
+    always 는 무조건, keyword 는 태그가 texts 어딘가에 나타날 때만. 글자수
+    상한을 넘으면 **앞에서부터** 싣고 나머지는 자른다 — 작가가 위에 적은 것이
+    더 중요하다는 뜻으로 읽는 것이 순서를 섞는 것보다 예측 가능하다.
+    """
+    memory = memory or {}
+    lines: list[str] = []
+    used = 0
+    for e in memory.get("always") or []:
+        t = str(e.get("text") or "").strip()
+        if not t:
+            continue
+        if used + len(t) > always_limit:
+            break
+        lines.append(f"- {t}")
+        used += len(t)
+    haystack = " ".join(t for t in texts if t)
+    used = 0
+    for e in memory.get("keyword") or []:
+        t = str(e.get("text") or "").strip()
+        if not t or not any(tag in haystack for tag in (e.get("tags") or [])):
+            continue
+        if used + len(t) > keyword_limit:
+            break
+        lines.append(f"- {t}")
+        used += len(t)
+    if not lines:
+        return ""
+    return USER_MEMORY_HEAD + "\n" + "\n".join(lines)
+
+
 def _strip_template(node):
     """저작권 민감 칸을 재귀적으로 걷어낸다.
 
@@ -6209,12 +6314,20 @@ def build_parser() -> argparse.ArgumentParser:
     # 똑같다. --charsheet 모드에는 안 먹는다 (시트는 p1.json 사양으로만 그린다).
     p.add_argument("--author-note", default="",
                    help="작가가 다시 만들며 요청한 것 (P1·P2 프롬프트에 실림)")
+    # 작품 규칙 파일. 다시 만들기는 늘 **새 run_id** 를 만들므로(--character 를
+    # 받으면 새 폴더), 이전 run 의 memory.json 을 이 플래그로 넘겨받는다.
+    # 새 run 폴더에는 아래 main() 이 사본을 남긴다 — 규칙이 작품을 따라다닌다.
+    p.add_argument("--memory-file", default="",
+                   help="작품 규칙(memory.json) 경로 — P1·P2·SCENE 프롬프트에 실림")
     return p
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     out_dir = Path(args.out).resolve()
+    # 작품 규칙. 없으면 빈 구조라 프롬프트가 한 글자도 안 바뀐다.
+    user_memory = load_user_memory(args.memory_file) if args.memory_file \
+        else {"always": [], "keyword": []}
 
     if args.resolve_blind:
         resolve_blind(out_dir, Path(args.resolve_blind))
@@ -6336,7 +6449,8 @@ def main(argv=None) -> int:
                     res = run_pipeline(caller, ps, row, i, args.scenes,
                                        args.max_gate_retries, args.max_p3_retries,
                                        args.scene_fix, out_dir,
-                                       author_note=args.author_note)
+                                       author_note=args.author_note,
+                                       memory=user_memory)
                 else:
                     res = run_control(caller, ps, row, i, args.scenes, out_dir)
                 append_summary(out_dir, res)
