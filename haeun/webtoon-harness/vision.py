@@ -118,6 +118,119 @@ severity  : high = 독자가 바로 알아본다. low = 뜯어봐야 보인다.
 다른 말 없이 JSON 만 출력하세요."""
 
 
+# --------------------------------------------------------------------------- #
+# 그림 QA — "명백히 망한 그림"만 잡는 검수 (2026-08)
+# --------------------------------------------------------------------------- #
+# 위 작화 사고 검수(INSPECT_ASK)의 확장이다. 작화 사고에 더해, **그리려던 것**
+# (콘티 서술)과 명백히 어긋난 것까지 본다 — 인원수가 다르다, 서술의 핵심
+# 대상이 아예 없다, 밤이어야 하는데 낮이다.
+#
+# ★ 설계 원칙 — 검수는 "좋은 그림" 판정기가 아니라 QA 다.
+#   AI 는 "틀렸다"는 찾아도 "사용자가 원하는 방향"은 모른다. 그래서 여기서는
+#   객관적으로 확인 가능한 것만 잡고(인원·대상·배경), 미적 판단(구도·표정·
+#   화풍·디테일)은 전부 사용자에게 넘긴다 — 그쪽은 랜덤 재생성이 아니라
+#   사용자 피드백(다시 그리기)이 고치는 영역이다.
+# ★ inspect_art 는 그대로 둔다 — --check-art 의 예전 동작(작화 사고만,
+#   제보만)은 한 글자도 안 바뀐다. 이 함수는 art_qa 설정을 켠 실행만 쓴다.
+INSPECT_QA_ASK = """이 웹툰 컷 그림을 검수하고 JSON 으로만 답하세요.
+
+[이 컷이 그리려던 것]
+{brief}
+
+찾는 것 1 — 그림 자체의 사고 (kind: "artifact"):
+- 손·발이 잘못 붙었거나 개수가 틀림 (손가락 6개, 발이 머리 자리에 붙음 등)
+- 몸의 일부가 사라졌거나 두 번 그려짐, 팔다리가 몸과 안 이어짐
+- 동물·사물의 구조가 말이 안 됨 (머리와 다리가 뒤바뀜 등)
+- 있어야 할 곳이 아닌 데서 자라거나 솟은 것 (몸 위의 새싹, 벽을 뚫은 가구)
+- 물건이 공중에 떠 있거나 손을 통과함
+- 얼굴이 녹거나 눈이 짝짝이로 뭉개짐
+- 글자가 글자처럼 보이지만 읽을 수 없음
+
+찾는 것 2 — 그리려던 것과 명백히 다름 (kind: "contract"):
+- 인물 수가 명백히 다름 (두 사람이 마주보는 장면인데 한 명뿐)
+- 서술의 핵심 대상·소품이 아예 없음 (덫에 걸린 생쥐를 구하는 장면인데 생쥐가 없음)
+- 배경·시간대가 명백히 다름 (밤 장면인데 대낮, 실내인데 벌판)
+
+찾지 않는 것 — 이것들은 여기서 잡지 않습니다:
+- 그림체·화풍·색감이 취향에 안 맞는 것
+- 구도·표정·연출이 서술의 해석과 조금 다른 것 (사용자가 보고 정할 영역)
+- 만화적 과장 (큰 눈, 과장된 표정, 데포르메)
+- 소품의 생김새가 상상과 다른 것 (덫이 있긴 한데 모양이 다름 — 있으면 통과)
+
+{{"issues": [{{"box": [y,x,y,x], "what": "무엇이 어떻게 잘못됐는지 한 줄",
+              "severity": "high 또는 low", "kind": "artifact 또는 contract"}}]}}
+
+box       : **0~1000 정규화**한 [ymin, xmin, ymax, xmax].
+severity  : high = 독자가 바로 알아본다. low = 뜯어봐야 보인다.
+            contract 는 명백할 때만 넣는 것이므로 항상 high 입니다.
+확신이 없으면 넣지 마세요 — 없는 것을 있다고 하는 편이 더 나쁩니다.
+다른 말 없이 JSON 만 출력하세요."""
+
+
+def inspect_scene(img, brief: str, api_key: str, model: str,
+                  timeout: float = 180.0) -> list[dict[str, Any]]:
+    """이 컷에 명백한 사고(작화·조건 불일치)가 있는지 묻는다.
+
+    [{box, what, severity, kind}] 로 돌려준다. kind 는 artifact(그림 자체의
+    사고) 또는 contract(그리려던 것과 다름). 실패하면 VisionError — 부르는
+    쪽이 잡아서 경고만 찍고 넘어간다(검수가 안 됐다고 그림을 버리지 않는다).
+    """
+    prompt = INSPECT_QA_ASK.format(brief=(brief or "(서술 없음)").strip()[:1200])
+    raw = _ask_json(img, prompt, api_key, model, timeout, label="그림 QA")
+    w, h = img.size
+    out = []
+    for it in raw.get("issues") or []:
+        if not isinstance(it, dict):
+            continue
+        what = str(it.get("what") or "").strip()
+        if not what:
+            continue
+        sev = str(it.get("severity") or "low").strip().lower()
+        kind = str(it.get("kind") or "artifact").strip().lower()
+        kind = "contract" if kind == "contract" else "artifact"
+        out.append({
+            "box": _to_px(it.get("box"), w, h),
+            "what": what,
+            # 조건 불일치는 정의상 "명백할 때만" 넣으라고 했으므로 high 로 민다.
+            "severity": "high" if (sev == "high" or kind == "contract") else "low",
+            "kind": kind,
+        })
+    return out
+
+
+def _ask_json(img, prompt: str, api_key: str, model: str,
+              timeout: float, label: str) -> dict[str, Any]:
+    """그림 한 장 + 질문 → JSON 응답. inspect_art/locate 와 같은 길."""
+    import requests
+
+    body = {
+        "contents": [{"role": "user", "parts": [
+            {"text": prompt},
+            {"inline_data": {"mime_type": "image/png", "data": _b64(img)}}]}],
+        "generationConfig": {"temperature": 0.1},
+    }
+    try:
+        resp = requests.post(
+            ENDPOINT.format(model=model),
+            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+            json=body, timeout=timeout)
+    except Exception as exc:
+        raise VisionError(f"{label} 요청 실패: {exc}") from exc
+    if resp.status_code != 200:
+        raise VisionError(f"{label} 요청 실패 ({resp.status_code}): {resp.text[:200]}")
+    text = ""
+    for cand in resp.json().get("candidates") or []:
+        for part in (cand.get("content") or {}).get("parts") or []:
+            text += part.get("text") or ""
+    m = re.search(r"\{.*\}", text, re.S)
+    if not m:
+        raise VisionError(f"{label} JSON 을 찾지 못했습니다: {text[:200]}")
+    try:
+        return json.loads(m.group(0))
+    except json.JSONDecodeError as exc:
+        raise VisionError(f"{label} JSON 을 읽지 못했습니다: {exc}") from exc
+
+
 def inspect_art(img, api_key: str, model: str,
                 timeout: float = 180.0) -> list[dict[str, Any]]:
     """이 컷에 작화 사고가 있는지 묻는다. [{box, what, severity}] 로 돌려준다.

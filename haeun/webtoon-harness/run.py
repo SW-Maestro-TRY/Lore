@@ -1866,6 +1866,135 @@ def check_art(ep_dir: Path, job: Job, cfg: dict[str, Any],
         print(f"      [{it['severity']}] {it['what']}")
 
 
+# --------------------------------------------------------------------------- #
+# 그림 QA — 명백한 실패만 잡고, 제한된 횟수만 다시 그린다 (2026-08)
+# --------------------------------------------------------------------------- #
+# "검수해서 재생성하면 되지 않나"와 "재생성해 봤자 거기서 거기니 사용자가
+# 보게 하자" 사이의 결론이다: 검수는 **QA** 로 정의한다. 객관적으로 틀린 것
+# (작화 사고, 인원·핵심 대상·배경이 서술과 명백히 다름)만 잡고, 그때만
+# 정해진 횟수 안에서 다시 그린다. 다시 그릴 때는 찾은 문제를 프롬프트에
+# 실어 보낸다 — 안 그러면 같은 공간에서 랜덤 뽑기를 반복하는 꼴이 된다.
+# 미적 판단(구도·표정·화풍)은 잡지 않는다 — 그건 사용자 피드백(다시 그리기)
+# 이 고치는 영역이고, 검수가 대신 정하면 원하는 방향과 무관하게 돈만 쓴다.
+#
+# ★ config 의 art_qa 블록이 없으면 **아무것도 달라지지 않는다** (예전 run
+#   재현). --check-art 의 제보-전용 동작도 그대로 남아 있다.
+ART_QA_FILE = "art_qa.json"
+
+
+def art_qa_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
+    """art_qa 설정. 꺼져 있으면 빈 dict — 부르는 쪽이 falsy 로 거른다."""
+    raw = cfg.get("art_qa")
+    if not isinstance(raw, dict) or not raw.get("enabled"):
+        return {}
+    try:
+        regen = max(0, int(raw.get("regen_max") or 0))
+    except (TypeError, ValueError):
+        regen = 0
+    return {"regen_max": regen}
+
+
+def qa_inspect(ep_dir: Path, job: Job, cfg: dict[str, Any],
+               env: dict[str, str], image_model: str,
+               qa_round: int) -> list[dict[str, Any]] | None:
+    """방금 그린 것을 검수한다. 이슈 목록(빈 목록 = 통과), None = 검수 불가.
+
+    검수가 안 되는 것(모듈·키 없음, 호출 실패)과 "이상 없음"을 구별해야 한다 —
+    검수 실패를 통과로 치면 조용히 QA 가 꺼진 채 도는 것과 같아서 titles 만
+    믿게 된다. None 이면 재생성도 하지 않는다(근거 없는 재생성은 낭비다).
+    """
+    try:
+        import vision
+        from PIL import Image
+    except ImportError as exc:
+        print(f"    ! 그림 QA 를 건너뜁니다 ({exc})")
+        return None
+    key = env_key(env, str(cfg["provider"]["api_key_env"]))
+    if not key:
+        print("    ! 그림 QA 를 건너뜁니다 (API 키 없음)")
+        return None
+    brief = "\n".join(x for x in (
+        f"장면 서술: {job.description}" if job.description else "",
+        f"패널 구성:\n{job.scene}" if job.scene else "") if x)
+    try:
+        with Image.open(job.out_path) as img:
+            issues = vision.inspect_scene(img, brief, key, image_model)
+    except Exception as exc:                                    # noqa: BLE001
+        print(f"    ! 그림 QA 실패: {exc}")
+        return None
+    # 제보 파일에도 같이 남긴다 — --check-art 가 쓰던 것과 같은 자리라,
+    # 사람이 보는 곳이 하나로 유지된다. kind 필드만 더 붙는다.
+    if issues:
+        ep_dir.mkdir(parents=True, exist_ok=True)
+        with (ep_dir / ART_ISSUE_FILE).open("a", encoding="utf-8") as fh:
+            for it in issues:
+                fh.write(json.dumps({
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "cut_number": job.cut_number,
+                    "candidate": job.candidate,
+                    "condition": job.condition,
+                    "unit": job.unit,
+                    "qa_round": qa_round,
+                    "image": rel(job.out_path),
+                    **it,
+                }, ensure_ascii=False) + "\n")
+        blocking = [i for i in issues if i["severity"] == "high"]
+        print(f"    · 그림 QA: {len(issues)}건 (막는 것 {len(blocking)}건)")
+        for it in issues[:3]:
+            print(f"      [{it['kind']}/{it['severity']}] {it['what']}")
+    else:
+        print("    · 그림 QA: 통과")
+    return issues
+
+
+def qa_record(ep_dir: Path, job: Job, rounds: int, regen_max: int,
+              issues: list[dict[str, Any]] | None) -> None:
+    """이 장의 QA 최종 상태를 art_qa.json 에 남긴다 — 제품(landing)이 읽어서
+    "검수에서 잡았지만 못 고친 것"을 사용자에게 보여주고 다시 그리기로 잇는다.
+
+    art_issues.jsonl 은 시도마다 쌓이는 원장이라, "최종 그림에 무엇이 남았나"
+    를 화면이 알려면 마지막 판정만 따로 있어야 한다.
+    """
+    path = ep_dir / ART_QA_FILE
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    units = data.setdefault("units", {})
+    units[f"{job.condition}|{job.stem}{job.cut_number}|c{job.candidate}"] = {
+        "unit": job.unit, "no": job.cut_number, "candidate": job.candidate,
+        "condition": job.condition,
+        "rounds": rounds, "regen_max": regen_max,
+        # None = 검수를 못 했다(모듈·키·호출 실패). 빈 목록 = 봤는데 깨끗하다.
+        "checked": issues is not None,
+        "issues": [{"what": i["what"], "severity": i["severity"],
+                    "kind": i.get("kind", "artifact")} for i in (issues or [])
+                   if i["severity"] == "high"],
+        "checked_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    data["_설명"] = ("장(Scene)마다 그림 QA 의 마지막 판정. rounds = 검수 때문에 "
+                    "다시 그린 횟수, issues = 최종 그림에 남은 막는 이슈 "
+                    "(비어 있으면 통과). 상세 원장은 art_issues.jsonl.")
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                    encoding="utf-8")
+
+
+def qa_avoid_block(all_issues: list[dict[str, Any]]) -> str:
+    """다시 그릴 때 프롬프트에 붙일 "이번엔 이걸 피하라" 블록.
+
+    이게 없으면 재생성은 같은 분포에서 다시 뽑는 것뿐이라, 같은 사고가 그대로
+    다시 나올 수 있다. 문제를 명시하면 최소한 탐색 방향은 생긴다.
+    """
+    seen, lines = set(), []
+    for it in all_issues:
+        w = it["what"]
+        if w not in seen:
+            seen.add(w)
+            lines.append(f"- {w}")
+    return ("\n\n[QA — 직전 시도에서 발견된 문제. 이번에는 반드시 바로잡을 것]\n"
+            + "\n".join(lines))
+
+
 def job_seed(cfg: dict[str, Any], job: Job) -> int | None:
     """이 컷에 쓸 시드. provider.options.seed_base 가 없으면 None(=시드 안 씀).
 
@@ -1930,7 +2059,18 @@ def run_job(job: Job, provider, cfg: dict[str, Any], ep_dir: Path,
 
     job.attachments = resolve_attachments(job, ep_dir, picks, cut_numbers)
 
-    for attempt in range(1, max_retries + 2):
+    # 그림 QA (art_qa 설정을 켠 실행만). 검수가 막는 이슈를 찾으면 regen_max
+    # 안에서 다시 그린다. attempt(오류 재시도)와 별개의 예산이다 — 오류
+    # 재시도는 "그림이 안 나왔다"의 반복이고, QA 재생성은 "나왔는데 틀렸다"의
+    # 반복이라, 예산을 섞으면 QA 가 오류 재시도 몫을 잡아먹는다.
+    qa = art_qa_cfg(cfg)
+    qa_rounds = 0
+    qa_seen: list[dict[str, Any]] = []          # 지금까지 찾은 이슈 전부 (프롬프트용)
+    base_prompt = job.prompt
+
+    attempt = 0
+    while True:
+        attempt += 1
         started = time.time()
         ok, err, meta, retryable = False, None, {}, True
         refusal: dict[str, Any] | None = None
@@ -1955,6 +2095,9 @@ def run_job(job: Job, provider, cfg: dict[str, Any], ep_dir: Path,
             "cut_number": job.cut_number,
             "candidate": job.candidate,
             "attempt": attempt,
+            # QA 가 다시 그리게 한 몇 번째 판인가 (0 = 첫 판). art_qa 를 안 켠
+            # 실행에서는 늘 0 이라 예전 로그와 다를 것이 없다.
+            **({"qa_round": qa_rounds} if qa_rounds else {}),
             "description_ko": job.description,
             "dialogue_ko": job.dialogue,
             "scene_en": job.scene,
@@ -1974,7 +2117,27 @@ def run_job(job: Job, provider, cfg: dict[str, Any], ep_dir: Path,
 
         if ok:
             print(f"    OK ({elapsed}s) -> {rel(job.out_path)}")
-            if cfg.get("check_art"):
+            if qa:
+                issues = qa_inspect(ep_dir, job, cfg, env or {}, image_model,
+                                    qa_rounds)
+                blocking = [i for i in (issues or []) if i["severity"] == "high"]
+                if blocking and qa_rounds < qa["regen_max"]:
+                    qa_rounds += 1
+                    qa_seen.extend(issues or [])
+                    job.prompt = base_prompt + qa_avoid_block(qa_seen)
+                    attempt = 0            # 새로 그리는 것이니 오류 예산도 새로
+                    print(f"    ↳ 다시 그립니다 (QA {qa_rounds}/{qa['regen_max']}"
+                          f") — 찾은 문제를 프롬프트에 싣습니다")
+                    continue
+                # 예산이 다 됐거나 통과 — 최종 판정을 남기고 그대로 간다.
+                # 이슈가 남았어도 그림을 버리지 않는다: 여기서 못 고친 것은
+                # 사람이 보고 다시 그리기(피드백)로 정하는 것이 이 설계다.
+                qa_record(ep_dir, job, qa_rounds, qa["regen_max"], issues)
+                if blocking:
+                    print(f"    ↳ QA 재생성 한도를 다 썼습니다 — 남은 이슈 "
+                          f"{len(blocking)}건은 {ART_QA_FILE} 에 남깁니다 "
+                          f"(사용자가 보고 정합니다)")
+            elif cfg.get("check_art"):
                 check_art(ep_dir, job, cfg, env or {}, image_model)
             return True
         print(f"    실패 (시도 {attempt}/{max_retries + 1}, {elapsed}s): {err}")
@@ -1985,11 +2148,11 @@ def run_job(job: Job, provider, cfg: dict[str, Any], ep_dir: Path,
         if not retryable:
             print("    재시도해도 소용없는 오류라 건너뜁니다.")
             return False
-        if attempt <= max_retries:
-            wait = backoff * (2 ** (attempt - 1))
-            print(f"    {wait:.0f}초 후 재시도...")
-            time.sleep(wait)
-    return False
+        if attempt > max_retries:
+            return False
+        wait = backoff * (2 ** (attempt - 1))
+        print(f"    {wait:.0f}초 후 재시도...")
+        time.sleep(wait)
 
 
 # --------------------------------------------------------------------------- #
@@ -2033,6 +2196,13 @@ def parse_args() -> argparse.Namespace:
                    help="그린 컷마다 작화 사고(손가락 6개·구조 오류 등)를 "
                         "이미지 모델에게 되물어 art_issues.jsonl 에 남깁니다. "
                         "컷당 호출이 한 번씩 늘어 원가가 오릅니다.")
+    p.add_argument("--art-regen", type=int, default=None, metavar="N",
+                   help="그림 QA 를 켭니다: 그린 장마다 명백한 실패(작화 사고 · "
+                        "서술과 다른 인원·대상·배경)를 검수하고, 걸리면 최대 N번 "
+                        "다시 그립니다(찾은 문제를 프롬프트에 실어서). N=0 은 "
+                        "검수·기록만 하고 재생성 안 함. 미적 판단은 안 잡습니다 — "
+                        "그건 사용자 피드백 영역입니다. config 의 art_qa 블록과 "
+                        "같고, 이 플래그가 이깁니다.")
     p.add_argument("--regen-prompts", action="store_true", help="prompts.json 캐시를 무시하고 다시 생성")
     p.add_argument("--cut-count", type=int, default=10, help="예비 경로(cut_split)에서 만들 컷 수")
     p.add_argument("--yes", "-y", action="store_true", help="확인 프롬프트 건너뛰기")
@@ -3196,6 +3366,13 @@ def main() -> int:
         mono_map = {str(x).strip(): [] for x in mono_cfg}
     # --check-art 는 컷마다 되묻는 검수라 cfg 를 타고 run_job 까지 내려가야 한다.
     cfg["check_art"] = bool(getattr(args, "check_art", False))
+    # --art-regen N 은 config 의 art_qa 블록과 같은 것의 CLI 판 — 플래그가 이긴다.
+    # 안 주면 config 값 그대로(없으면 꺼짐 — 예전 run 재현).
+    if getattr(args, "art_regen", None) is not None:
+        cfg["art_qa"] = {"enabled": True, "regen_max": max(0, int(args.art_regen))}
+    if art_qa_cfg(cfg):
+        print(f"그림 QA: 켜짐 — 명백한 실패만 잡고, 최대 "
+              f"{art_qa_cfg(cfg)['regen_max']}번 다시 그립니다")
     cfg["style_monochrome"] = style_name in mono_map
     cfg["style_accent_keys"] = mono_map.get(style_name, [])
     if cfg["style_monochrome"]:

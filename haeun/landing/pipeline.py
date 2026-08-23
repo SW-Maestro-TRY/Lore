@@ -235,6 +235,14 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
     #    · 장르 — 톤 상한에만 쓴다. 로판을 골랐는데 공포 조명이 나오던 문제.
     text = _replace_block(text, "flat_stickers", "true")
     text = _replace_block(text, "pose_guidance", "true")
+
+    #    · 그림 QA — 명백히 망한 그림(작화 사고 · 서술과 다른 인원/대상/배경)만
+    #      잡아서 최대 2번 다시 그린다. 하네스 기본은 꺼짐(예전 run 재현용)이라
+    #      제품이 켠다. 미적 판단은 안 잡는다 — 그건 결과 화면의 "다시 그리기"
+    #      (사용자 피드백)가 맡는 영역이고, 검수는 QA 지 예술 감독이 아니다.
+    #      한도가 차도 그림은 버리지 않고 art_qa.json 에 남겨서, 결과 화면이
+    #      "검수에서 잡았지만 못 고친 것"으로 보여준다.
+    text = _replace_block(text, "art_qa", "{enabled: true, regen_max: 2}")
     if head_ratio in ("sd", "md", "ld"):
         text = _replace_block(text, "head_ratio", head_ratio)
     if genre.strip():
@@ -1487,6 +1495,43 @@ def read_refusals(run_id: str, episode: int = 1, limit: int = 20) -> list[dict[s
     except OSError:
         return []
     return out[-limit:]
+
+
+def read_art_qa(run_id: str, episode: int = 1) -> dict[int, dict[str, Any]]:
+    """하네스의 그림 QA 최종 판정(art_qa.json)을 장 번호별로 돌려준다.
+
+    {장번호: {"rounds": 다시 그린 횟수, "issues": [남은 막는 이슈], ...}}.
+    파일이 없으면(QA 를 안 켠 예전 run) 빈 dict — refusals 와 같은 취급이다.
+    결과 화면이 이걸로 "검수에서 잡았지만 못 고친 것"을 장 밑에 표시하고,
+    다시 그리기(사용자 피드백)로 잇는다.
+    """
+    path = episode_dir(run_id, episode) / "art_qa.json"
+    if not path.exists():
+        return {}
+    try:
+        units = (json.loads(path.read_text(encoding="utf-8")) or {}).get("units") or {}
+    except (OSError, ValueError):
+        return {}
+    out: dict[int, dict[str, Any]] = {}
+    for rec in units.values():
+        if not isinstance(rec, dict):
+            continue
+        try:
+            no = int(rec.get("no") or 0)
+        except (TypeError, ValueError):
+            continue
+        if no <= 0:
+            continue
+        # 같은 장을 여러 후보(c1·c2)로 뽑은 경우 마지막 판정이 이긴다 —
+        # 제품은 후보 1장이라 실질적으로 겹치지 않는다.
+        out[no] = {
+            "rounds": int(rec.get("rounds") or 0),
+            "checked": bool(rec.get("checked")),
+            "issues": [{"what": str(i.get("what") or "")[:200],
+                        "kind": str(i.get("kind") or "artifact")}
+                       for i in (rec.get("issues") or []) if isinstance(i, dict)],
+        }
+    return out
 
 
 # --------------------------------------------------------------------------- #
