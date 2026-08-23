@@ -363,6 +363,19 @@
           <textarea id="sheetEditDetails" rows="3"></textarea>
         </label>
       </details>
+      <!-- 고른 항목과 적은 말은 기록만 됩니다 — 시트를 실제로 바꾸는 것은 위
+           "틀린 부분 고치기" 폼입니다. 시트 프롬프트는 영문 사양(appearance_en ·
+           고정 소지품)으로만 만들어져서 한국어 문장을 끼워 넣을 자리가 없습니다. -->
+      <div class="fb-box" data-fb-stage="sheet">
+        <p class="fb-lead">무엇이 마음에 안 드나요?
+          <small>고르면 기록해 둡니다 — 안 골라도 됩니다</small></p>
+        <div class="fb-tags"></div>
+        <label class="field">
+          <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
+          <textarea class="fb-text" rows="2"
+            placeholder="예: 망토를 안 그렸어요 / 묶은머리인데 풀려 있어요"></textarea>
+        </label>
+      </div>
       <div class="sheet-approval-actions">
         <button type="button" class="btn btn-quiet" id="sheetRetryBtn">수정 반영해서 다시 만들기</button>
         <button type="button" class="btn btn-primary" id="sheetApproveBtn">이대로 진행</button>
@@ -380,6 +393,16 @@
           처음부터 새로 뽑습니다(새 시도이니 다른 결과가 나올 수 있습니다).
         </p>
       </div>
+      <div class="fb-box" data-fb-stage="story">
+        <p class="fb-lead">무엇이 마음에 안 드나요?
+          <small>고른 것과 적은 말이 다시 쓸 때 반영됩니다 — 안 골라도 됩니다</small></p>
+        <div class="fb-tags"></div>
+        <label class="field">
+          <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
+          <textarea class="fb-text" rows="2"
+            placeholder="예: 로맨스가 하나도 없어요 / 성격이 갑자기 진지해져요"></textarea>
+        </label>
+      </div>
       <div class="sheet-approval-actions">
         <button type="button" class="btn btn-quiet" id="storyRetryBtn">다시 만들기</button>
         <button type="button" class="btn btn-primary" id="storyApproveBtn">이대로 진행</button>
@@ -396,6 +419,16 @@
           <b>다시 만들기</b>를 누르면 콘티를 처음부터 다시 짭니다(새 시도이니
           다른 결과가 나올 수 있습니다).
         </p>
+      </div>
+      <div class="fb-box" data-fb-stage="board">
+        <p class="fb-lead">무엇이 마음에 안 드나요?
+          <small>고른 것과 적은 말이 다시 짤 때 반영됩니다 — 안 골라도 됩니다</small></p>
+        <div class="fb-tags"></div>
+        <label class="field">
+          <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
+          <textarea class="fb-text" rows="2"
+            placeholder="예: 생쥐를 구하는 장면이 통째로 빠졌어요"></textarea>
+        </label>
       </div>
       <div class="sheet-approval-actions">
         <button type="button" class="btn btn-quiet" id="boardRetryBtn">다시 만들기</button>

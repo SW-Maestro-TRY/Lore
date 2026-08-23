@@ -54,6 +54,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -409,22 +410,26 @@ class Job:
     # 스토리 단계가 STATUS_HUMAN(게이트 재시도 소진)으로 끝났을 때만 켜진다.
     story_approval: threading.Event = field(default_factory=threading.Event, repr=False)
     story_decision: str = field(default="", repr=False)
+    story_note: str = field(default="", repr=False)
 
-    def decide_story(self, decision: str) -> None:
+    def decide_story(self, decision: str, note: str = "") -> None:
         """스토리 확인 화면의 '이대로 진행'/'다시 만들기' 클릭이 여기로 온다."""
         with self._lock:
             self.story_decision = decision
+            self.story_note = note
         self.story_approval.set()
 
     # awaiting_board_approval 용 — story_approval 과 같은 이유, 같은 방식.
     # 콘티(webtoon.py, W4~W8) 단계가 STATUS_HUMAN 으로 끝났을 때만 켜진다.
     board_approval: threading.Event = field(default_factory=threading.Event, repr=False)
     board_decision: str = field(default="", repr=False)
+    board_note: str = field(default="", repr=False)
 
-    def decide_board(self, decision: str) -> None:
+    def decide_board(self, decision: str, note: str = "") -> None:
         """콘티 확인 화면의 '이대로 진행'/'다시 만들기' 클릭이 여기로 온다."""
         with self._lock:
             self.board_decision = decision
+            self.board_note = note
         self.board_approval.set()
 
     # ---- 상태 -------------------------------------------------------------- #
@@ -856,12 +861,17 @@ def execute(job: Job) -> None:
 
         # ---- 1. 이야기 --------------------------------------------------- #
         _enter(job, 0)
+        # 사람이 "다시 만들기"를 누르며 적은 말. 다음 바퀴의 story.py 에
+        # --author-note 로 실려 P1·P2 프롬프트의 {retry_feedback} 자리에 들어간다.
+        story_note = ""
+        prev_run_id = ""
         while True:
             job.note("캐릭터를 읽는 중")
             before = {d.name for d in (STORY / "runs").iterdir() if d.is_dir()}
-            code = job._run(
-                ["story.py", "--character", str(char_path), "--scenes", "3", "--no-read"],
-                STORY, lambda ln: _story_line(job, ln))
+            cmd = ["story.py", "--character", str(char_path), "--scenes", "3", "--no-read"]
+            if story_note:
+                cmd += ["--author-note", story_note]
+            code = job._run(cmd, STORY, lambda ln: _story_line(job, ln))
             if job._cancel:
                 raise Failed("취소됨")
             if code != 0:
@@ -869,6 +879,12 @@ def execute(job: Job) -> None:
             run_id = _latest_run(before)
             if not run_id:
                 raise Failed("이야기는 돌았지만 결과 폴더를 찾지 못했습니다.")
+            # 이야기를 다시 만들면 run_id 가 새로 생긴다 (story.py 는 --character 를
+            # 받으면 늘 새 폴더를 판다). 지금까지 적은 피드백을 새 폴더로 옮겨
+            # 붙여야 "이 작품에 무슨 말을 했는가"가 한 파일에서 이어진다.
+            if prev_run_id and prev_run_id != run_id:
+                _carry_feedback(prev_run_id, run_id)
+            prev_run_id = run_id
             job.run_id = run_id
             (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
             if not (STORY / "runs" / run_id / "scenes.json").exists():
@@ -891,6 +907,8 @@ def execute(job: Job) -> None:
             with job._lock:
                 decision = job.story_decision
                 job.story_decision = ""
+                story_note = job.story_note
+                job.story_note = ""
             job.status = "running"
             if job._cancel:
                 raise Failed("취소됨")
@@ -912,6 +930,13 @@ def execute(job: Job) -> None:
                 # 시트 이미지 기본값은 story.py 안에서 gemini 다 — 텍스트 단계용
                 # --provider(.env PROVIDER=openai)는 여기 안 먹는다. 캐릭터 시트는
                 # OpenAI(gpt-image-2)로 고정한다고 정했으므로 여기서 명시로 준다.
+                #
+                # --author-note 는 여기 안 붙인다. 시트 프롬프트는 p1.json 의
+                # appearance_en·design_details 로만 만들어지고 그 두 값은 게이트가
+                # (개수·추상어) 지키고 있어서, 사람이 쓴 한국어 문장을 끼워 넣으면
+                # gate_charsheet_source 에서 걸린다. 시트를 실제로 바꾸는 길은
+                # 승인 화면의 수정 폼(_apply_sheet_edits)이다 — 고른 항목과 적은
+                # 말은 기록만 하고, 무엇을 어떻게 바꿀지는 그 폼이 받는다.
                 ["story.py", "--charsheet", "--run-id", run_id,
                  "--provider", "openai", "--yes"],
                 STORY, lambda ln: _sheet_line(job, ln))
@@ -954,11 +979,14 @@ def execute(job: Job) -> None:
         _enter(job, 2)
         board_meta = STORY / "runs" / run_id / "webtoon" / "meta.json"
         replan = False
+        board_note = ""
         while True:
             job.note("큰 줄거리를 세우는 중" if not replan else "콘티를 다시 짜는 중")
             cmd = ["webtoon.py", "--run", run_id, "--episodes", "1", "--skip-human-gate"]
             if replan:
                 cmd.append("--replan")
+            if board_note:
+                cmd += ["--author-note", board_note]
             code = job._run(cmd, STORY, lambda ln: _board_line(job, ln))
             if job._cancel:
                 raise Failed("취소됨")
@@ -981,6 +1009,8 @@ def execute(job: Job) -> None:
             with job._lock:
                 decision = job.board_decision
                 job.board_decision = ""
+                board_note = job.board_note
+                job.board_note = ""
             job.status = "running"
             if job._cancel:
                 raise Failed("취소됨")
@@ -1106,6 +1136,156 @@ def read_refusals(run_id: str, limit: int = 20) -> list[dict[str, Any]]:
     except OSError:
         return []
     return out[-limit:]
+
+
+# --------------------------------------------------------------------------- #
+# 사용자 피드백
+# --------------------------------------------------------------------------- #
+#
+# 지금까지 피드백은 두 갈래로 흩어져 있었다. 화면에서 받은 말은 그 자리에서
+# 프롬프트에 얹혀 쓰이고 사라졌고(다시 그리기), 사람이 인터뷰에서 들은 말은
+# story-harness/docs/user_feedback_summary.md 에 손으로 옮겨 적었다. 앞엣것은
+# 남지 않아 무엇이 자주 나오는지 셀 수 없었고, 뒤엣것은 앱과 이어져 있지 않다.
+#
+# 여기서 하는 일은 화면에서 받은 말을 **run 폴더에 남기는 것**이다. DB 는 아직
+# 없다 — refusals.jsonl 과 같은 자리에 같은 방식으로 한 줄씩 쌓는다.
+
+# 고를 수 있는 항목. 자유 입력만 받으면 대부분 아무것도 안 적고 넘어가고,
+# 적더라도 집계가 안 된다. 항목은 지어낸 것이 아니라
+# story-harness/docs/user_feedback_summary.md 에 실제로 올라온 말에서 뽑았다.
+FEEDBACK_TAGS: dict[str, list[dict[str, str]]] = {
+    "sheet": [
+        {"id": "face", "label": "얼굴이 원본과 달라요"},
+        {"id": "outfit", "label": "옷·장신구가 달라요"},
+        {"id": "hair", "label": "머리 모양이 달라요"},
+        {"id": "prop", "label": "소품(무기·모자 등)이 달라요"},
+        {"id": "age", "label": "나이대가 안 맞아요"},
+        {"id": "style", "label": "그림체가 생각과 달라요"},
+        {"id": "ratio", "label": "등신 비율이 안 맞아요"},
+    ],
+    "story": [
+        {"id": "genre", "label": "고른 장르 느낌이 안 나요"},
+        {"id": "personality", "label": "성격이 설정과 달라요"},
+        {"id": "logic", "label": "개연성이 없어요"},
+        {"id": "line", "label": "대사가 어색해요"},
+        {"id": "name", "label": "이름이 잘못 나와요"},
+        {"id": "pace", "label": "전개가 급하거나 지루해요"},
+    ],
+    "board": [
+        {"id": "flow", "label": "컷 흐름이 끊겨요"},
+        {"id": "missing", "label": "중요한 장면이 빠졌어요"},
+        {"id": "angle", "label": "컷 앵글이 어색해요"},
+        {"id": "balance", "label": "컷 분량 배분이 이상해요"},
+        {"id": "line", "label": "대사 배치가 어색해요"},
+    ],
+    "scene": [
+        {"id": "character", "label": "캐릭터가 이상해요"},
+        {"id": "background", "label": "배경이 이상해요"},
+        {"id": "pose", "label": "포즈가 어색해요"},
+        {"id": "face", "label": "표정이 안 맞아요"},
+        {"id": "text", "label": "글자가 깨져요"},
+        {"id": "light", "label": "색·조명이 별로예요"},
+        {"id": "artifact", "label": "이상한 게 그려졌어요"},
+    ],
+}
+
+# 어느 항목이 어느 단계 것인지. 화면이 보낸 id 를 그대로 믿지 않는다.
+_TAG_LABELS = {stage: {t["id"]: t["label"] for t in tags}
+               for stage, tags in FEEDBACK_TAGS.items()}
+
+FEEDBACK_TEXT_MAX = 500
+_feedback_lock = threading.Lock()
+
+
+def feedback_path(run_id: str) -> Path:
+    return STORY / "runs" / run_id / "feedback.jsonl"
+
+
+def clean_tags(stage: str, raw: Any) -> list[str]:
+    """화면이 보낸 항목 id 중 이 단계에 실제로 있는 것만. 순서는 표시 순서."""
+    known = _TAG_LABELS.get(stage) or {}
+    picked = {str(t) for t in raw} if isinstance(raw, list) else set()
+    return [t["id"] for t in FEEDBACK_TAGS.get(stage, []) if t["id"] in picked]
+
+
+def append_feedback(run_id: str, stage: str, tags: list[str], text: str,
+                    scene_no: int | None = None, decision: str = "") -> None:
+    """피드백 한 줄을 run 폴더에 남긴다.
+
+    남기지 못해도 작업은 그대로 간다 — 기록은 곁다리다. 사용자가 다시 그리기를
+    눌렀는데 디스크가 꽉 찼다는 이유로 그리기가 멈추면 그게 더 나쁘다.
+    """
+    if not run_id or not (tags or text):
+        return                          # 아무것도 안 고른 채 그냥 누른 경우
+    rec = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "stage": stage,
+        "decision": decision,
+        "tags": tags,
+        "tag_labels": [(_TAG_LABELS.get(stage) or {}).get(t, t) for t in tags],
+        "text": text[:FEEDBACK_TEXT_MAX],
+    }
+    if scene_no is not None:
+        rec["scene"] = int(scene_no)
+    path = feedback_path(run_id)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with _feedback_lock, path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def read_feedback(run_id: str) -> list[dict[str, Any]]:
+    """이 run 에 쌓인 피드백 전부. 없으면 빈 목록 (옛 run 에는 파일이 없다)."""
+    path = feedback_path(run_id)
+    if not path.exists():
+        return []
+    out: list[dict[str, Any]] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except ValueError:
+                continue
+    except OSError:
+        return []
+    return out
+
+
+def _carry_feedback(old_run_id: str, new_run_id: str) -> None:
+    """옛 run 에 쌓인 피드백을 새 run 앞에 붙인다 (이야기를 다시 만들 때)."""
+    old = read_feedback(old_run_id)
+    if not old:
+        return
+    path = feedback_path(new_run_id)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with _feedback_lock, path.open("a", encoding="utf-8") as fh:
+            for rec in old:
+                rec = dict(rec, carried_from=old_run_id)
+                fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def author_note(stage: str, tags: list[str], text: str) -> str:
+    """고른 항목 + 자유 입력을 모델에게 넘길 한 덩이 글로.
+
+    항목만 고르고 아무 말도 안 적는 사람이 대부분이다. 그때도 "무엇이
+    불만인지"는 넘어가야 하므로 항목 이름 자체를 문장으로 쓴다.
+    """
+    labels = [(_TAG_LABELS.get(stage) or {}).get(t, t) for t in tags]
+    parts = []
+    if labels:
+        parts.append("작가가 고른 항목: " + ", ".join(labels))
+    note = " ".join(str(text or "").split())
+    if note:
+        parts.append("작가가 적은 말: " + note)
+    return "\n".join(parts)
 
 
 def unit_image(run_id: str, no: int) -> Path | None:
@@ -1414,9 +1594,13 @@ class RegenRunner:
         return self.jobs.get(rid)
 
     def start(self, run_id: str, scene_no: int, feedback: str = "",
-              style: str = "") -> Regen:
-        job = Regen(id=uuid.uuid4().hex[:12], run_id=run_id,
-                    scene_no=int(scene_no), feedback=feedback)
+              style: str = "", tags: list[str] | None = None) -> Regen:
+        tags = tags or []
+        append_feedback(run_id, "scene", tags, feedback, scene_no=scene_no,
+                        decision="retry")
+        # 고른 항목도 프롬프트로 간다 — 대부분은 항목만 누르고 아무 말도 안 적는다.
+        job = Regen(id=uuid.uuid4().hex[:12], run_id=run_id, scene_no=int(scene_no),
+                    feedback=author_note("scene", tags, feedback))
         with self._lock:
             self.jobs[job.id] = job
         threading.Thread(target=self._work, args=(job, style), daemon=True).start()

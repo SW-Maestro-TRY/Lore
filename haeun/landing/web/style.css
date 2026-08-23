@@ -620,6 +620,32 @@ body[data-view="result"]  .topbar { display: none; }
 .regen-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .regen-note { font-size: .78rem; color: var(--muted, #8a8a94); }
 
+/* ---- 사용자 피드백 (항목 고르기 + 자유 입력) -------------------------- *
+ * 자유 입력만 두면 대부분 비워 두고 넘어간다. 자주 나온 불만을 눌러서 고를 수
+ * 있게 두고, 그 밖의 말만 적게 한다 — 누르는 쪽이 적는 쪽보다 훨씬 싸다. */
+
+.fb-box { margin: .9rem 0 .2rem; }
+.fb-lead { margin: 0 0 .5rem; font-size: .88rem; font-weight: 600; }
+.fb-lead small {
+  display: block; margin-top: .15rem;
+  font-weight: 400; font-size: .78rem; color: var(--muted);
+}
+.fb-tags { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .6rem; }
+.fb-tag {
+  border: 1px solid var(--line-2); border-radius: 999px;
+  padding: .3rem .7rem; font: inherit; font-size: .8rem;
+  background: transparent; color: var(--text);
+  cursor: pointer; transition: background .12s ease, border-color .12s ease;
+}
+.fb-tag:hover { background: rgba(255,255,255,.07); }
+/* 고른 것은 색으로만 구분하지 않는다 — aria-pressed 가 상태의 근거이고,
+   테두리 굵기가 색을 못 보는 경우의 두 번째 단서다. */
+.fb-tag[aria-pressed="true"] {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; font-weight: 600;
+}
+.fb-box .fb-text { width: 100%; resize: vertical; }
+
 /* 세계관 프리셋 (#68) */
 #worldPreset { margin-bottom: .4rem; }
 .field .hint, .card > .hint {
