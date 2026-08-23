@@ -1414,7 +1414,8 @@ def build_jobs(cfg: dict[str, Any], appearance: str, cuts: list[dict[str, Any]],
                second_lead: "charsheet.Sheet | None" = None,
                present_2nd: dict[int, bool] | None = None,
                zone_text: dict[str, str] | None = None,
-               episode_cut_numbers: list[int] | None = None) -> list[Job]:
+               episode_cut_numbers: list[int] | None = None,
+               staging: dict | None = None) -> list[Job]:
     """present: {컷 번호: 주인공이 화면에 있는가}. 없는 컷에는 주인공의 외형 문구도
     디자인 고정 문구도 캐릭터 시트도 붙이지 않는다 — 붙이면 조연이 주인공 얼굴로
     그려진다.
@@ -1463,7 +1464,7 @@ def build_jobs(cfg: dict[str, Any], appearance: str, cuts: list[dict[str, Any]],
                                          second_lead if here_2nd else None,
                                          zone_text=(zone_text or {}).get(zid, ""),
                                          uses_previous=uses_prev,
-                                         staging=ep.setting)
+                                         staging=staging)
                               + prev_note
                               + "\n" + strip.text_clause(cut, scenegen.lettering(cfg))
                               + composition_line(cfg, cut),
@@ -1678,7 +1679,8 @@ def build_scene_jobs(cfg: dict[str, Any], appearance: str, scenes: list[scenegen
                      present: dict[int, bool] | None = None,
                      second_lead: "charsheet.Sheet | None" = None,
                      present_2nd: dict[int, bool] | None = None,
-                     zone_text: dict[str, str] | None = None) -> list[Job]:
+                     zone_text: dict[str, str] | None = None,
+                     staging: dict | None = None) -> list[Job]:
     """second_lead/present_2nd 는 '그 한 사람' 시트가 있을 때만 넘어온다
     (주연만 시트를 뽑는다 — 조연 전원이 아니다). 주인공 refs 와는 독립적으로
     그 장면에 그 인물이 나올 때만 붙는다.
@@ -1708,7 +1710,7 @@ def build_scene_jobs(cfg: dict[str, Any], appearance: str, scenes: list[scenegen
                           second_lead if here_2nd else None,
                           zone_text=(zone_text or {}).get(zid, ""),
                           uses_previous=bool(cond.get("use_previous_cut")) and i > 0,
-                          staging=ep.setting),
+                          staging=staging),
                 with_lock=here, style_text=style_block(cfg, kind),
                 prev=scenes[i - 1] if i else None,
                 nxt=scenes[i + 1] if i + 1 < len(scenes) else None,
@@ -3464,7 +3466,8 @@ def main() -> int:
                               second_lead=second_lead, present_2nd=present_2nd,
                               zone_text=zone_text,
                               episode_cut_numbers=[int(c["cut_number"])
-                                                   for c in all_cuts])
+                                                   for c in all_cuts],
+                              staging=ep.setting)
         enforce_per_condition(cfg, len(ep.cuts), int(cfg["candidates_per_cut"]))
         jobs += cut_jobs
 
@@ -3491,7 +3494,8 @@ def main() -> int:
         n_text_calls += 0 if (existed or args.dry_run) else 1
         scene_jobs = build_scene_jobs(cfg, appearance, scenes, conditions, ep_dir,
                                       present, second_lead=second_lead,
-                                      present_2nd=present_2nd, zone_text=zone_text)
+                                      present_2nd=present_2nd, zone_text=zone_text,
+                                      staging=ep.setting)
         enforce_per_condition(cfg, len(scenes), int(cfg["scene"]["candidates_per_scene"]),
                               unit="Scene", knob="scene.candidates_per_scene")
         jobs += scene_jobs
