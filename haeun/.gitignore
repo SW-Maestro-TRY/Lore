@@ -1,0 +1,8 @@
+# 파이썬 환경 — haeun 전체에 걸린다.
+#
+# 맥의 시스템 파이썬은 PEP 668 로 잠겨 있어서 `pip install` 이 거부된다.
+# 그래서 이 폴더 안에 전용 환경을 만들어 쓴다 (setup.sh 참고).
+.venv/
+venv/
+__pycache__/
+*.pyc
