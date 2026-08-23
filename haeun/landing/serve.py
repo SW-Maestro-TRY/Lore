@@ -389,7 +389,8 @@ class Handler(BaseHTTPRequestHandler):
             if len(feedback) > 500:
                 return self._error(400, "요청은 500자까지 적어 주세요")
             job = pipeline.regens.start(run_id, scene_no, feedback,
-                                        str(body.get("style") or ""))
+                                        str(body.get("style") or ""),
+                                        bool(body.get("textless")))
             return self._json(job.snapshot())
 
         m = re.fullmatch(r"/api/regens/([\w.-]+)/cancel", url.path)

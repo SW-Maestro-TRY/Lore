@@ -1297,7 +1297,16 @@ def _origin_config(run_id: str) -> Path | None:
     return None
 
 
-def regen_config(run_id: str, feedback: str, style: str = "") -> Path:
+# 다시 그리기에서 고를 수 있는 글자 모드. 하네스의 scene.lettering 값 그대로다
+# (webtoon-harness/scenegen.py 의 LETTERING_MODES). "overlay" 를 쓰는 이유:
+# 말풍선 **모양**은 그대로 그리되 그 안의 글자만 비운다 — bubbles.py 가 나중에
+# 그 자리에 글자를 얹는 것을 전제로 한 값이다. "none" 은 말풍선 모양까지
+# 지워서, 나중에 글자를 얹을 자리 자체가 안 남는다.
+REGEN_LETTERING = "overlay"
+
+
+def regen_config(run_id: str, feedback: str, style: str = "",
+                 textless: bool = False) -> Path:
     """다시 그리기 전용 config. 피드백을 조건의 {extra} 뒤에 얹는다.
 
     하네스를 고치지 않는다 — run.py 의 프롬프트 틀에 이미 {extra} 자리가 있고
@@ -1314,14 +1323,19 @@ def regen_config(run_id: str, feedback: str, style: str = "") -> Path:
         # 하네스를 직접 돌린 run 이라 job 이 없다. 원본에서 만들되 그림체는
         # 호출자가 준 것을 쓴다(안 주면 하네스 기본값).
         build_config(out_dir, style or next(iter(STYLES)))
+    text = path.read_text(encoding="utf-8")
     note = " ".join(str(feedback or "").split())
     if note:
         # 줄바꿈만 지운다. 블록 스칼라 안이라 따옴표는 그대로 둬도 되고,
         # 오히려 이스케이프하면 그 글자가 프롬프트에 그대로 나간다.
-        path.write_text(
-            _append_to_extra(path.read_text(encoding="utf-8"), CONDITION,
-                             f"Revision requested by the author: {note}"),
-            encoding="utf-8")
+        text = _append_to_extra(text, CONDITION,
+                                f"Revision requested by the author: {note}")
+    if textless:
+        # build_config 가 in_image 로 되돌려 둔 값을 다시 덮는다 — 같은 자리를
+        # 같은 정규식으로 바꾸는 것이라 build_config 의 규칙과 짝이 맞는다.
+        text = re.sub(r"(?m)^  lettering:.*$",
+                      f"  lettering: {REGEN_LETTERING}", text, count=1)
+    path.write_text(text, encoding="utf-8")
     return path
 
 
@@ -1379,6 +1393,7 @@ class Regen:
     run_id: str
     scene_no: int
     feedback: str = ""
+    textless: bool = False                  # 글자(말풍선 안 글자) 없이 그림만
     status: str = "queued"                  # queued / running / done / error
     error: str = ""
     note: str = ""
@@ -1391,7 +1406,7 @@ class Regen:
     def snapshot(self) -> dict[str, Any]:
         return {"id": self.id, "run_id": self.run_id, "scene": self.scene_no,
                 "status": self.status, "error": self.error, "note": self.note,
-                "version": self.version,
+                "version": self.version, "textless": self.textless,
                 "image": f"/api/runs/{self.run_id}/page/{self.scene_no}",
                 "versions": scene_versions(self.run_id, self.scene_no)}
 
@@ -1414,9 +1429,9 @@ class RegenRunner:
         return self.jobs.get(rid)
 
     def start(self, run_id: str, scene_no: int, feedback: str = "",
-              style: str = "") -> Regen:
+              style: str = "", textless: bool = False) -> Regen:
         job = Regen(id=uuid.uuid4().hex[:12], run_id=run_id,
-                    scene_no=int(scene_no), feedback=feedback)
+                    scene_no=int(scene_no), feedback=feedback, textless=textless)
         with self._lock:
             self.jobs[job.id] = job
         threading.Thread(target=self._work, args=(job, style), daemon=True).start()
@@ -1441,7 +1456,7 @@ class RegenRunner:
                     backup = version_path(job.run_id, job.scene_no, job.version)
 
                 job.note = "다시 그리는 중"
-                cfg = regen_config(job.run_id, job.feedback, style)
+                cfg = regen_config(job.run_id, job.feedback, style, job.textless)
                 cmd = ["run.py", "--run-id", job.run_id, "--episode", "1",
                        "--mode", run_mode(job.run_id), "-c", CONDITION,
                        "--cuts", f"{rng[0]}-{rng[1]}",

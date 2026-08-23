@@ -606,7 +606,6 @@ function pageTools(no) {
   return `
     <div class="page-tools">
       <button type="button" class="btn btn-quiet btn-sm js-regen-open">이 장 다시 그리기</button>
-      <span class="page-versions" data-versions="${no}"></span>
     </div>
     <div class="regen-box" hidden>
       <label class="field">
@@ -614,12 +613,17 @@ function pageTools(no) {
         <textarea rows="2" class="js-regen-note" maxlength="500"
           placeholder="예: 표정을 더 밝게 / 배경을 밤으로 / 인물을 왼쪽에"></textarea>
       </label>
+      <label class="check-line">
+        <input type="checkbox" class="js-regen-textless">
+        <span>글자 없이 그림만 다시 그리기 <small>말풍선 안 글자는 비웁니다</small></span>
+      </label>
       <div class="regen-actions">
         <button type="button" class="btn btn-primary btn-sm js-regen-go">다시 그리기</button>
         <button type="button" class="btn btn-quiet btn-sm js-regen-cancel">닫기</button>
         <span class="regen-note js-regen-status"></span>
       </div>
-    </div>`;
+    </div>
+    <div class="page-versions" data-versions="${no}"></div>`;
 }
 
 function wireRegen() {
@@ -632,11 +636,12 @@ function wireRegen() {
     });
     $(".js-regen-cancel", box).addEventListener("click", () => { box.hidden = true; });
     $(".js-regen-go", box).addEventListener("click", () =>
-      runRegen(no, $(".js-regen-note", box).value.trim(), page));
+      runRegen(no, $(".js-regen-note", box).value.trim(),
+               $(".js-regen-textless", box).checked, page));
   });
 }
 
-async function runRegen(no, feedback, page) {
+async function runRegen(no, feedback, textless, page) {
   const status = $(".js-regen-status", page);
   const go     = $(".js-regen-go", page);
   go.disabled = true;
@@ -646,7 +651,7 @@ async function runRegen(no, feedback, page) {
     const res = await fetch(
       `/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/regen`,
       { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedback }) });
+        body: JSON.stringify({ feedback, textless }) });
     job = await res.json();
     if (!res.ok) throw new Error(job.error || "시작하지 못했습니다");
   } catch (err) {
@@ -679,12 +684,21 @@ async function runRegen(no, feedback, page) {
   go.disabled = false;
 }
 
+// 장마다 지금 그림을 마지막으로 새로 그린 시각. 판 목록의 "지금" 썸네일도
+// 같은 값으로 캐시를 깨야 나란히 놓았을 때 옛 그림이 안 남는다.
+const verBust = {};
+
 /* 브라우저가 같은 주소를 캐시하므로, 새로 그려도 주소가 같으면 옛 그림이 뜬다. */
 function bustImage(page, no) {
+  verBust[no] = Date.now();
   const img = $(".cut-img", page);
-  img.src = `/api/jobs/${jobId}/page/${no}?w=1080&t=${Date.now()}`;
+  img.src = `/api/jobs/${jobId}/page/${no}?w=1080&t=${verBust[no]}`;
 }
 
+/* 판 목록 — 고르는 자리가 아니라 **둘러보는** 자리다. 지금 그림과 지난 판을
+ * 나란히 작게 늘어놓고, 아무 때나 눌러서 그때그때 바꿔 볼 수 있게 한다.
+ * "새로 그린 걸 채택할지 고르세요" 모달을 만들지 않은 이유이기도 하다 —
+ * 채택은 한 번뿐인 결정이 아니라, 나중에 다시 봐도 계속 바뀔 수 있는 것이다. */
 async function paintVersions(no, versions) {
   const slot = $(`[data-versions="${no}"]`);
   if (!slot) return;
@@ -695,10 +709,21 @@ async function paintVersions(no, versions) {
     } catch { return; }
   }
   if (!versions || !versions.length) { slot.innerHTML = ""; return; }
-  // 지난 판이 있다는 것만 알려 주고, 누르면 그때로 되돌린다.
-  slot.innerHTML = `이전 판 ` + versions.map(v =>
-    `<button type="button" class="chip chip-sm js-revert" data-v="${v.version}">v${v.version}</button>`
-  ).join("");
+  const cur = `
+    <span class="ver-thumb is-current" title="지금 걸린 그림">
+      <img src="/api/jobs/${jobId}/page/${no}?w=160&t=${verBust[no] || 0}" alt="지금 그림" loading="lazy">
+      <span class="ver-label">지금</span>
+    </span>`;
+  const past = versions.map(v => `
+    <button type="button" class="ver-thumb js-revert" data-v="${v.version}"
+            title="이 판으로 바꾸기">
+      <img src="/api/runs/${encodeURIComponent(resultRunId)}/scenes/${no}/versions/${v.version}?w=160"
+           alt="v${v.version}" loading="lazy">
+      <span class="ver-label">v${v.version}</span>
+    </button>`).join("");
+  slot.innerHTML = `
+    <span class="ver-strip-label">지난 판 — 눌러서 바꿔 보기</span>
+    <div class="ver-strip">${cur}${past}</div>`;
   $$(".js-revert", slot).forEach(btn => btn.addEventListener("click", async () => {
     btn.disabled = true;
     try {
@@ -710,7 +735,7 @@ async function paintVersions(no, versions) {
       if (!res.ok) throw new Error(out.error || "되돌리지 못했습니다");
       bustImage($(`#reader .page[data-scene="${no}"]`), no);
       paintVersions(no, out.versions);
-      toast(`${no}번째 장을 v${btn.dataset.v} 로 되돌렸습니다`);
+      toast(`${no}번째 장을 v${btn.dataset.v} 로 바꿨습니다`);
     } catch (err) {
       toast(err.message);
     }
