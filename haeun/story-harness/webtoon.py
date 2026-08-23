@@ -72,23 +72,24 @@ from story import (
     load_prompts, render, feedback_block, feedback_slot, write_json, log, warn,
     is_blank, normalize_source, log_prompt_hashes, normalize_palette,
     resolve_directing_notes, env_bool,
+    load_user_memory, resolve_user_memory, MEMORY_FILE,
 )
 
 
 STATUS_STOPPED = "중단(엔진급훼손)"
 
 WEBTOON_CONTRACT = {
-    "w4": {"engine_card", "character_sheet", "retry_feedback"},
+    "w4": {"engine_card", "character_sheet", "retry_feedback", "user_memory"},
     "w5": {"engine_card", "series_arc", "arc_json", "series_state",
-           "retry_feedback"},
+           "retry_feedback", "user_memory"},
     "w6": {"engine_card", "arc_json", "ledger_snapshot", "episodes_json"},
     "w7": {"engine_card", "series_arc", "arc_json", "episode_json",
            "ledger_snapshot",
            "engine_fired_list", "setting_block", "zones_block",
            "directing_notes",
-           "retry_feedback"},
+           "retry_feedback", "user_memory"},
     "w8": {"engine_card", "episode_json", "ledger_snapshot", "cuts_json",
-           "pov", "banned_words", "retry_feedback"},
+           "pov", "banned_words", "retry_feedback", "user_memory"},
 }
 
 # ---- 8단계 — 글자를 다시 쓴다 -------------------------------------------
@@ -3876,7 +3877,7 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                max_retries: int, spent: int = 0, known: set = None,
                series_arc: str = "", zones_txt: str = "",
                known_zones: set = None, personality: str = "",
-               author_note: str = "") -> tuple:
+               author_note: str = "", memory_text: str = "") -> tuple:
     """(게이트를 통과하고 연출이 계산된 payload, 재시도 횟수, 메모). 못 하면 Stopped.
 
     run_webtoon 의 7단계와 --cuts-only 가 같은 것을 쓰게 하려고 밖에 둔다.
@@ -3906,6 +3907,7 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                 "setting_block": setting_block(episode),
                 "zones_block": zones_txt or "(등록된 존이 없습니다)",
                 "directing_notes": directing_notes or "(해당 없음)",
+                "user_memory": memory_text,
                 "retry_feedback": feedback_slot(author_note, feedback),
             }),
             TEMP_CREATIVE,
@@ -4304,7 +4306,8 @@ def text_pass_warnings(cuts: list, scenes: list, facts: list = None) -> list:
 
 def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
                ledger_snapshot: str, absolute: int, max_retries: int,
-               facts: list = None, author_note: str = "") -> tuple:
+               facts: list = None, author_note: str = "",
+               memory_text: str = "") -> tuple:
     """(글자를 다시 쓴 payload, 재시도 횟수, 메모). 못 하면 원본을 그대로 돌려준다.
 
     7단계와 달리 **막히면 중단하지 않는다.** 여기서 세우면 이미 통과한 컷
@@ -4324,6 +4327,7 @@ def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
                 "cuts_json": json.dumps(cuts, ensure_ascii=False, separators=(",", ":")),
                 "pov": pov or "(엔진 카드에서 주인공을 찾지 못했습니다)",
                 "banned_words": " · ".join(BANNED_IN_DIALOGUE),
+                "user_memory": memory_text,
                 "retry_feedback": feedback_slot(author_note, feedback),
             }),
             TEMP_CREATIVE)
@@ -4755,6 +4759,9 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
 
     ledger = Ledger(str(p2.get("engine_question") or ""), cap=ledger_cap)
     sheet = json.dumps(p1, ensure_ascii=False, separators=(",", ":"))
+    # 작가 규칙 — run 폴더에 memory.json 이 있으면 매 단계 프롬프트에 실린다.
+    # 없으면 빈 구조라 resolve 가 늘 "" 를 주고, 프롬프트는 예전 그대로다.
+    user_mem = load_user_memory(run_dir / MEMORY_FILE)
 
     def call(stage: str, label: str, prompt: str, temp: float, verdict_of=None):
         start = len(usage.records)
@@ -4796,6 +4803,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                     "W4", "큰 줄거리 분할",
                     render(ps.texts["w4"], {
                         "engine_card": card, "character_sheet": sheet,
+                        "user_memory": resolve_user_memory(user_mem, card, sheet),
                         "retry_feedback": feedback_slot(author_note, feedback),
                     }),
                     TEMP_CREATIVE,
@@ -4873,6 +4881,8 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                         # 앞 화 요약만이 아니라 **인물·설정 명부까지** 넘긴다.
                         # 요약만 주면 3화가 1화의 인물 이름을 잊는다.
                         "series_state": state.brief(ledger),
+                        "user_memory": resolve_user_memory(
+                            user_mem, card, arc_json, state.brief(ledger)),
                         "retry_feedback": feedback_slot(author_note, feedback),
                     }),
                     TEMP_CREATIVE,
@@ -4989,13 +4999,19 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                     zones_txt=zones_block(state, episode),
                     known_zones={z["zone_id"] for z in state.zones},
                     personality=p1.get("personality"),
-                    author_note=author_note)
+                    author_note=author_note,
+                    memory_text=resolve_user_memory(
+                        user_mem, card,
+                        json.dumps(episode, ensure_ascii=False)))
                 result.regen_stage7 += regens
 
                 # ---- 8단계: 컷이 확정된 뒤에 글자만 다시 쓴다 ----------
                 payload, w8_regens, w8_notes = solve_text(
                     ps, call, card, episode, payload, ledger.snapshot(no),
-                    no, max_retries, facts=state.facts, author_note=author_note)
+                    no, max_retries, facts=state.facts, author_note=author_note,
+                    memory_text=resolve_user_memory(
+                        user_mem, card,
+                        json.dumps(payload, ensure_ascii=False)))
                 notes += w8_notes
                 for note in notes:
                     warn(f"    {note}")
@@ -5124,6 +5140,7 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
     "크기와 여백이 실제로 갈리는가"를 앞 단계 재생성 없이 확인한다.
     """
     story = load_story_run(run_dir)
+    cuts_mem = load_user_memory(run_dir / MEMORY_FILE)   # 작가 규칙 (없으면 빈 구조)
     wt_dir = run_dir / "webtoon"
     ep_paths = sorted(wt_dir.glob("arc*_episodes.json"))
     if not ep_paths:
@@ -5219,7 +5236,9 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
                 zones_txt=zones_block(state, episode),
                 known_zones={z["zone_id"] for z in state.zones},
                 personality=story["p1"].get("personality"),
-                author_note=author_note)
+                author_note=author_note,
+                memory_text=resolve_user_memory(
+                    cuts_mem, card, json.dumps(episode, ensure_ascii=False)))
         except Stopped as exc:
             # 게이트를 못 넘겼다. 트레이스백으로 죽지 않고 무엇이 걸렸는지만
             # 보여 준다 — 사람이 고칠 것은 프롬프트지 파이썬 스택이 아니다.
@@ -5229,7 +5248,9 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
             continue
         payload, _, w8_notes = solve_text(
             ps, call, card, episode, payload, ledger.snapshot(absolute),
-            absolute, max_retries, facts=state.facts, author_note=author_note)
+            absolute, max_retries, facts=state.facts, author_note=author_note,
+            memory_text=resolve_user_memory(
+                cuts_mem, card, json.dumps(payload, ensure_ascii=False)))
         notes += w8_notes
         for note in notes:
             warn(f"    {note}")

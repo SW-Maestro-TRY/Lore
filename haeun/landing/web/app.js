@@ -114,6 +114,90 @@ function fbClear(box) {
   if (text) text.value = "";
 }
 
+/* ---- 작품 규칙 (user memory) ------------------------------------------ *
+ *
+ * 작가가 작품마다 선언하는 규칙. 피드백이 "지난 결과에 대한 말" 이라면 이것은
+ * "앞으로 모든 생성이 지킬 것" 이다 — 스토리·콘티·그림 전 단계 프롬프트에
+ * 실리고, 다른 설정과 충돌하면 이긴다 (서버 쪽 pipeline.read/write_memory).
+ *
+ * 저장 형식은 구조(JSON)지만 화면은 줄 단위 텍스트로 편집한다:
+ *   항상 적용   한 줄 = 규칙 하나
+ *   키워드      「태그1, 태그2 :: 내용」 — :: 앞이 발동 키워드다 */
+
+let memLimits = { always: 500, keyword: 1500 };
+
+function memParse(box) {
+  const always = $(".mem-always", box).value.split("\n")
+    .map(t => t.trim()).filter(Boolean).map(text => ({ text }));
+  const keyword = [];
+  for (const line of $(".mem-keyword", box).value.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    const i = t.indexOf("::");
+    if (i < 0) return { error: `키워드 줄에 :: 가 없습니다 — "${t.slice(0, 24)}"` };
+    const tags = t.slice(0, i).split(",").map(x => x.trim()).filter(Boolean);
+    const text = t.slice(i + 2).trim();
+    if (!tags.length || !text)
+      return { error: `키워드 줄이 비었습니다 — "${t.slice(0, 24)}"` };
+    keyword.push({ tags, text });
+  }
+  return { always, keyword };
+}
+
+function memFill(box, data) {
+  $(".mem-always", box).value =
+    (data.always || []).map(e => e.text).join("\n");
+  $(".mem-keyword", box).value =
+    (data.keyword || []).map(e => `${e.tags.join(", ")} :: ${e.text}`).join("\n");
+  memCount(box);
+}
+
+function memCount(box) {
+  const a = (memParse(box).always || []).reduce((n, e) => n + e.text.length, 0);
+  const k = (memParse(box).keyword || []).reduce((n, e) => n + e.text.length, 0);
+  const ca = $('.mem-count[data-kind="always"]', box);
+  const ck = $('.mem-count[data-kind="keyword"]', box);
+  if (ca) { ca.textContent = `${a}/${memLimits.always}`;
+            ca.style.color = a > memLimits.always ? "var(--accent)" : ""; }
+  if (ck) { ck.textContent = `${k}/${memLimits.keyword}`;
+            ck.style.color = k > memLimits.keyword ? "var(--accent)" : ""; }
+}
+
+/* runId 의 규칙을 모든 .mem-box 에 채우고 저장 버튼을 잇는다. 화면에 상자가
+ * 여럿(승인·결과)이라 마지막으로 연 것이 저장하는 것이 자연스럽다 — 저장하면
+ * 다른 상자도 다시 채운다. */
+async function wireMemory(runId) {
+  if (!runId) return;
+  let data = { always: [], keyword: [] };
+  try {
+    const cfg = await getConfig();
+    memLimits = { always: cfg.memory_always_max || 500,
+                  keyword: cfg.memory_keyword_max || 1500 };
+    data = await (await fetch(`/api/runs/${encodeURIComponent(runId)}/memory`)).json();
+  } catch { /* 서버가 없으면 빈 칸 — 편집 자체는 된다 */ }
+  $$(".mem-box").forEach(box => {
+    memFill(box, data);
+    if (box.dataset.memWired) return;          // 리스너는 한 번만
+    box.dataset.memWired = "1";
+    box.addEventListener("input", () => memCount(box));
+    $(".mem-save", box).addEventListener("click", async () => {
+      const status = $(".mem-status", box);
+      const parsed = memParse(box);
+      if (parsed.error) { status.textContent = parsed.error; return; }
+      status.textContent = "저장하는 중…";
+      try {
+        const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/memory`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(parsed) });
+        const out = await res.json();
+        if (!res.ok) throw new Error(out.error || "저장하지 못했습니다");
+        status.textContent = "저장됨 — 다음 생성(다시 만들기·다음 화·다시 그리기)부터 적용됩니다";
+        $$(".mem-box").forEach(b => { if (b !== box) memFill(b, out); });
+      } catch (err) { status.textContent = err.message; }
+    });
+  });
+}
+
 function fbStageBox(stage) {
   return document.querySelector(`.fb-box[data-fb-stage="${stage}"]`);
 }
@@ -347,7 +431,10 @@ function renderProgress(s) {
   if (s.status === "awaiting_story_approval") {
     storyApprovalBox.hidden = false;
     $("#storyApprovalReason").textContent = stageReason;
-    if (lastStatus !== "awaiting_story_approval") setStoryButtonsBusy(false);
+    if (lastStatus !== "awaiting_story_approval") {
+      setStoryButtonsBusy(false);
+      wireMemory(s.run_id);
+    }
   } else {
     storyApprovalBox.hidden = true;
   }
@@ -356,7 +443,10 @@ function renderProgress(s) {
   if (s.status === "awaiting_board_approval") {
     boardApprovalBox.hidden = false;
     $("#boardApprovalReason").textContent = stageReason;
-    if (lastStatus !== "awaiting_board_approval") setBoardButtonsBusy(false);
+    if (lastStatus !== "awaiting_board_approval") {
+      setBoardButtonsBusy(false);
+      wireMemory(s.run_id);
+    }
   } else {
     boardApprovalBox.hidden = true;
   }
@@ -643,6 +733,7 @@ async function showResult(attempt = 0) {
   // 컷 사이 호흡은 이제 한 장 안에서 모델이 정하므로 여기서 넣을 여백이 없다.
   resultRunId = r.run_id || "";
   resultEpisode = epNo;
+  wireMemory(resultRunId);
   $("#reader").innerHTML = r.pages.map(pg => `
     <div class="page" data-scene="${pg.no}">
       <img class="cut-img" src="/api/jobs/${jobId}/page/${pg.no}?w=1080"

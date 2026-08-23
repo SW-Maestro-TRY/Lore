@@ -1006,6 +1006,8 @@ composition_note 에 **누가 어디에 있는지**를 적는다. 이게 없으�
 - 혼잣말을 말풍선으로 소리 내게 하는 것. 그건 thought 나 나레이션이다.
 - gap_after / scene_break / gaze 를 출력에 넣는 것.
 
+{user_memory}
+
 {retry_feedback}
 
 [내보내기 직전 자기검사]

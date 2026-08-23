@@ -3031,6 +3031,7 @@ _p1_rendered = story.render(_ps.texts["p1"], {
     "genre_template": story.genre_template_block(story.resolve_genre_templates("일상")),
     "variation_axes": samples.axes_block(samples.pick_axes("일상", seed=3)),
     "retry_feedback": "",
+    "user_memory": "",
 })
 ok("P1: 렌더 후 안 채워진 자리가 없다",
    story.declared_vars(_p1_rendered) == set(), story.declared_vars(_p1_rendered))
@@ -3193,6 +3194,7 @@ _p2_rendered = story.render(_ps.texts["p2"], {
     "story_template": story.story_template_block(),
     "story_structure": samples.structure_block(samples.pick_structure("일상", seed=5)),
     "retry_feedback": "",
+    "user_memory": "",
 })
 ok("P2: 렌더 후 안 채워진 자리가 없다",
    story.declared_vars(_p2_rendered) == set(), story.declared_vars(_p2_rendered))
@@ -3689,6 +3691,26 @@ ok("말투: 조연 명부에도 실린다",
        [{"name": "윤재", "gender": "남", "voice_notes": "받아치듯 짧게"}])))
 ok("말투: voice_notes 는 필수 항목이 아니다 (게이트가 안 막는다)",
    "voice_notes" not in webtoon.CAST_FIELDS)
+
+# ---- 작가 규칙(user memory) — always 는 늘, keyword 는 태그가 겹칠 때만 ----
+_mem = {"always": [{"text": "초롱은 존댓말을 안 쓴다"}],
+        "keyword": [{"tags": ["북부대공"], "text": "북부대공가의 문장은 은빛 늑대"}]}
+ok("작가 규칙: always 는 문맥에 이름이 없어도 실린다",
+   "존댓말" in story.resolve_user_memory(_mem, "숲에서 생쥐를 구한다"))
+ok("작가 규칙: keyword 는 태그가 문맥에 없으면 안 실린다",
+   "은빛 늑대" not in story.resolve_user_memory(_mem, "숲에서 생쥐를 구한다"))
+ok("작가 규칙: keyword 는 태그가 나타나면 실린다",
+   "은빛 늑대" in story.resolve_user_memory(_mem, "북부대공 저택에 도착한다"))
+ok("작가 규칙: 규칙이 하나도 안 걸리면 빈 문자열 — 머리말도 없다",
+   story.resolve_user_memory({"always": [], "keyword": []}, "아무 문맥") == "")
+ok("작가 규칙: 글자수 상한을 넘는 항목은 앞에서부터 싣고 자른다",
+   "둘째" not in story.resolve_user_memory(
+       {"always": [{"text": "첫째 " * 60}, {"text": "둘째 규칙"}], "keyword": []},
+       "문맥", always_limit=100))
+ok("작가 규칙: 충돌 시 우선을 머리말이 말한다",
+   "이긴다" in story.USER_MEMORY_HEAD)
+ok("작가 규칙: 깨진 memory.json 은 빈 구조로 (실행이 안 죽는다)",
+   story.load_user_memory("/no/such/file.json") == {"always": [], "keyword": []})
 
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")

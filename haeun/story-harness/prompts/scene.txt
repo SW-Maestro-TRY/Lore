@@ -197,6 +197,8 @@ new 는 설정이 정말로 비어 있을 때만 씁니다. 그때도 아래를 
 [설정]
 {premise_json}
 
+{user_memory}
+
 {fix_directive}
 
 [출력 — JSON만, 설명 금지]

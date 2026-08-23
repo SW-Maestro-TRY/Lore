@@ -407,6 +407,23 @@
             placeholder="예: 로맨스가 하나도 없어요 / 성격이 갑자기 진지해져요"></textarea>
         </label>
       </div>
+      <details class="mem-box">
+        <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
+        <label class="field">
+          <span>항상 적용 <small>한 줄에 하나 · <b class="mem-count" data-kind="always">0</b>자</small></span>
+          <textarea class="mem-always" rows="3"
+            placeholder="예: 초롱은 절대 존댓말을 쓰지 않는다"></textarea>
+        </label>
+        <label class="field">
+          <span>키워드가 나올 때만 <small>「키워드1, 키워드2 :: 내용」 꼴로 한 줄에 하나 · <b class="mem-count" data-kind="keyword">0</b>자</small></span>
+          <textarea class="mem-keyword" rows="3"
+            placeholder="예: 북부대공 :: 북부대공가의 문장은 은빛 늑대다"></textarea>
+        </label>
+        <div class="regen-actions">
+          <button type="button" class="btn btn-quiet btn-sm mem-save">규칙 저장</button>
+          <span class="regen-note mem-status"></span>
+        </div>
+      </details>
       <div class="sheet-approval-actions">
         <button type="button" class="btn btn-quiet" id="storyRetryBtn">다시 만들기</button>
         <button type="button" class="btn btn-primary" id="storyApproveBtn">이대로 진행</button>
@@ -434,6 +451,23 @@
             placeholder="예: 생쥐를 구하는 장면이 통째로 빠졌어요"></textarea>
         </label>
       </div>
+      <details class="mem-box">
+        <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
+        <label class="field">
+          <span>항상 적용 <small>한 줄에 하나 · <b class="mem-count" data-kind="always">0</b>자</small></span>
+          <textarea class="mem-always" rows="3"
+            placeholder="예: 초롱은 절대 존댓말을 쓰지 않는다"></textarea>
+        </label>
+        <label class="field">
+          <span>키워드가 나올 때만 <small>「키워드1, 키워드2 :: 내용」 꼴로 한 줄에 하나 · <b class="mem-count" data-kind="keyword">0</b>자</small></span>
+          <textarea class="mem-keyword" rows="3"
+            placeholder="예: 북부대공 :: 북부대공가의 문장은 은빛 늑대다"></textarea>
+        </label>
+        <div class="regen-actions">
+          <button type="button" class="btn btn-quiet btn-sm mem-save">규칙 저장</button>
+          <span class="regen-note mem-status"></span>
+        </div>
+      </details>
       <div class="sheet-approval-actions">
         <button type="button" class="btn btn-quiet" id="boardRetryBtn">다시 만들기</button>
         <button type="button" class="btn btn-primary" id="boardApproveBtn">이대로 진행</button>
@@ -485,6 +519,24 @@
       <button type="button" class="btn btn-quiet btn-sm" id="againBtn">새로 만들기</button>
     </div>
   </header>
+
+  <details class="mem-box">
+    <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
+    <label class="field">
+      <span>항상 적용 <small>한 줄에 하나 · <b class="mem-count" data-kind="always">0</b>자</small></span>
+      <textarea class="mem-always" rows="3"
+    placeholder="예: 초롱은 절대 존댓말을 쓰지 않는다"></textarea>
+    </label>
+    <label class="field">
+      <span>키워드가 나올 때만 <small>「키워드1, 키워드2 :: 내용」 꼴로 한 줄에 하나 · <b class="mem-count" data-kind="keyword">0</b>자</small></span>
+      <textarea class="mem-keyword" rows="3"
+    placeholder="예: 북부대공 :: 북부대공가의 문장은 은빛 늑대다"></textarea>
+    </label>
+    <div class="regen-actions">
+      <button type="button" class="btn btn-quiet btn-sm mem-save">규칙 저장</button>
+      <span class="regen-note mem-status"></span>
+    </div>
+  </details>
 
   <div class="reader" id="reader"></div>
 

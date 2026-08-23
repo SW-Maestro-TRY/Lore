@@ -356,7 +356,7 @@ def cond_extra(cfg: dict[str, Any], cond: dict[str, Any], render_style: str,
                attached: bool, description: str = "",
                second_lead: "charsheet.Sheet | None" = None,
                zone_text: str = "", uses_previous: bool = False,
-               staging: dict = None) -> str:
+               staging: dict = None, memory_text: str = "") -> str:
     """조건의 {extra} + 시트 사용 지침 + 이 컷에 나오는 조연의 외형.
 
     시트가 실제로 붙은 컷에만 시트 지침을 붙인다 — 첨부가 없는데 "attached
@@ -441,7 +441,15 @@ def cond_extra(cfg: dict[str, Any], cond: dict[str, Any], render_style: str,
 
     crowd = supporting.block(cfg.get("supporting_book") or supporting.Book(),
                              description)
-    return f"{text}\n{crowd}".strip() if crowd else text
+    if crowd:
+        text = f"{text}\n{crowd}".strip()
+    # 작가가 직접 정한 작품 규칙(runs/<id>/memory.json). 한국어 그대로 싣고,
+    # 충돌 시 이것이 이긴다고 영어로 못박는다 — design_details 와 같은 대우다.
+    if str(memory_text or "").strip():
+        text = (f"{text}\nAUTHOR'S RULES for this work, written in Korean — "
+               f"follow them literally; if anything in this prompt conflicts "
+               f"with them, THESE RULES WIN:\n{memory_text.strip()}").strip()
+    return text
 
 
 # 무대에서 그리는 쪽에 넘길 칸과 그 영문 라벨. scenegen.STAGING_FIELDS 와
@@ -1415,7 +1423,8 @@ def build_jobs(cfg: dict[str, Any], appearance: str, cuts: list[dict[str, Any]],
                present_2nd: dict[int, bool] | None = None,
                zone_text: dict[str, str] | None = None,
                episode_cut_numbers: list[int] | None = None,
-               staging: dict | None = None) -> list[Job]:
+               staging: dict | None = None,
+               user_mem: dict | None = None) -> list[Job]:
     """present: {컷 번호: 주인공이 화면에 있는가}. 없는 컷에는 주인공의 외형 문구도
     디자인 고정 문구도 캐릭터 시트도 붙이지 않는다 — 붙이면 조연이 주인공 얼굴로
     그려진다.
@@ -1464,7 +1473,11 @@ def build_jobs(cfg: dict[str, Any], appearance: str, cuts: list[dict[str, Any]],
                                          second_lead if here_2nd else None,
                                          zone_text=(zone_text or {}).get(zid, ""),
                                          uses_previous=uses_prev,
-                                         staging=staging)
+                                         staging=staging,
+                                         memory_text=directing.resolve_memory(
+                                             user_mem or {},
+                                             str(cut.get("description") or ""),
+                                             cut["scene"]))
                               + prev_note
                               + "\n" + strip.text_clause(cut, scenegen.lettering(cfg))
                               + composition_line(cfg, cut),
@@ -1681,7 +1694,8 @@ def build_scene_jobs(cfg: dict[str, Any], appearance: str, scenes: list[scenegen
                      present_2nd: dict[int, bool] | None = None,
                      zone_text: dict[str, str] | None = None,
                      staging: dict | None = None,
-                     all_scenes: "list[scenegen.Scene] | None" = None) -> list[Job]:
+                     all_scenes: "list[scenegen.Scene] | None" = None,
+                     user_mem: dict | None = None) -> list[Job]:
     """second_lead/present_2nd 는 '그 한 사람' 시트가 있을 때만 넘어온다
     (주연만 시트를 뽑는다 — 조연 전원이 아니다). 주인공 refs 와는 독립적으로
     그 장면에 그 인물이 나올 때만 붙는다.
@@ -1718,7 +1732,9 @@ def build_scene_jobs(cfg: dict[str, Any], appearance: str, scenes: list[scenegen
                           second_lead if here_2nd else None,
                           zone_text=(zone_text or {}).get(zid, ""),
                           uses_previous=bool(cond.get("use_previous_cut")) and i > 0,
-                          staging=staging),
+                          staging=staging,
+                          memory_text=directing.resolve_memory(
+                              user_mem or {}, sc.description())),
                 with_lock=here, style_text=style_block(cfg, kind),
                 prev=seq[i - 1] if i else None,
                 nxt=seq[i + 1] if i + 1 < len(seq) else None,
@@ -3327,6 +3343,13 @@ def main() -> int:
     # ---- 1. load ---------------------------------------------------------- #
     ep = load_episode(cfg, args, ep_dir, make_text_client)
     cut_numbers = [c.cut_number for c in ep.cuts]
+    # 작가 규칙 — 스토리 run 폴더의 memory.json. 없으면 빈 구조라 프롬프트가
+    # 예전 그대로다. 콘티(webtoon.py)와 같은 파일을 읽는다.
+    user_mem = directing.load_memory(
+        Path(cfg["story_runs_root"]) / args.run_id / "memory.json")
+    if user_mem["always"] or user_mem["keyword"]:
+        print(f"[규칙] 작가 규칙 always {len(user_mem['always'])}개 · "
+              f"keyword {len(user_mem['keyword'])}개 — 프롬프트에 싣습니다.")
     print(f"[load] {ep.run_id} · {ep.episode}화 「{ep.title}」 컷 {len(ep.cuts)}개 (출처 {ep.source})")
 
     # ---- 컷마다 누가 나오는가 ---------------------------------------------- #
@@ -3475,7 +3498,7 @@ def main() -> int:
                               zone_text=zone_text,
                               episode_cut_numbers=[int(c["cut_number"])
                                                    for c in all_cuts],
-                              staging=ep.setting)
+                              staging=ep.setting, user_mem=user_mem)
         enforce_per_condition(cfg, len(ep.cuts), int(cfg["candidates_per_cut"]))
         jobs += cut_jobs
 
@@ -3503,7 +3526,8 @@ def main() -> int:
         scene_jobs = build_scene_jobs(cfg, appearance, scenes, conditions, ep_dir,
                                       present, second_lead=second_lead,
                                       present_2nd=present_2nd, zone_text=zone_text,
-                                      staging=ep.setting, all_scenes=all_scenes)
+                                      staging=ep.setting, all_scenes=all_scenes,
+                                      user_mem=user_mem)
         enforce_per_condition(cfg, len(scenes), int(cfg["scene"]["candidates_per_scene"]),
                               unit="Scene", knob="scene.candidates_per_scene")
         jobs += scene_jobs

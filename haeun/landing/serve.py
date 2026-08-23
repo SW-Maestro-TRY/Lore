@@ -203,6 +203,9 @@ class Handler(BaseHTTPRequestHandler):
                 # 해서, 항목을 늘릴 때 파이썬 한 군데만 고치면 되게 한다.
                 "feedback_tags": pipeline.FEEDBACK_TAGS,
                 "feedback_text_max": pipeline.FEEDBACK_TEXT_MAX,
+                # 작가 규칙 글자수 상한 — 화면이 남은 글자수를 보여줄 근거
+                "memory_always_max": pipeline.MEMORY_ALWAYS_MAX,
+                "memory_keyword_max": pipeline.MEMORY_KEYWORD_MAX,
             })
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
@@ -240,6 +243,11 @@ class Handler(BaseHTTPRequestHandler):
 
         # 이 작품에 지금까지 어떤 말을 했는가. 화면이 "적어 주신 것" 목록을
         # 그리는 데 쓰고, 사람이 직접 열어 봐도 된다 (runs/<id>/feedback.jsonl).
+        # 작가 규칙 — 작품마다 하나. 승인 화면·결과 화면의 편집칸이 읽는다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/memory", path)
+        if m:
+            return self._json(pipeline.read_memory(m.group(1)))
+
         m = re.fullmatch(r"/api/runs/([\w.-]+)/feedback", path)
         if m:
             return self._json({"feedback": pipeline.read_feedback(m.group(1))})
@@ -399,6 +407,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:                                  # noqa: N802
         url = urlparse(self.path)
+
+        # 작가 규칙 저장. 상한을 넘으면 자르지 않고 거절한다 — 화면이 그 오류를
+        # 그대로 보여줘야 작가가 자기 글이 어디까지 실리는지 안다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/memory", url.path)
+        if m:
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            cleaned, err = pipeline.write_memory(m.group(1), body or {})
+            if err:
+                return self._error(400, err)
+            return self._json(cleaned)
 
         if url.path == "/api/create":
             try:

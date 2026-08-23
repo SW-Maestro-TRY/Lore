@@ -1064,6 +1064,13 @@ def execute(job: Job) -> None:
             cmd = ["story.py", "--character", str(char_path), "--scenes", "3", "--no-read"]
             if story_note:
                 cmd += ["--author-note", story_note]
+            # 작가 규칙 — 다시 만들기는 새 run_id 를 만들므로, 이전 run 의
+            # memory.json 을 파일로 넘긴다. story.py 가 새 run 폴더에 사본을
+            # 남기고 P1·P2·SCENE 프롬프트에 싣는다.
+            prev_mem = (STORY / "runs" / prev_run_id / "memory.json"
+                        if prev_run_id else None)
+            if prev_mem and prev_mem.exists():
+                cmd += ["--memory-file", str(prev_mem)]
             code = job._run(cmd, STORY, lambda ln: _story_line(job, ln))
             if job._cancel:
                 raise Failed("취소됨")
@@ -1539,6 +1546,76 @@ _TAG_LABELS = {stage: {t["id"]: t["label"] for t in tags}
 
 FEEDBACK_TEXT_MAX = 500
 _feedback_lock = threading.Lock()
+
+# ---- 작가 규칙 (user memory) ------------------------------------------------
+#
+# 작가가 작품마다 직접 선언하는 규칙. 피드백(위)이 "지난 결과에 대한 말"이라면
+# 이것은 "앞으로 모든 생성이 지킬 것" 이다. 하네스(story.py·webtoon.py·run.py)가
+# runs/<run_id>/memory.json 을 읽어 매 단계 프롬프트에 싣는다.
+#   always  — 항상 실린다 ("초롱은 존댓말을 안 쓴다" 같은 작품 전체 규칙)
+#   keyword — 태그가 그 단계 문맥에 나타날 때만 ("북부대공 → 문장은 은빛 늑대")
+# 글자수 상한은 하네스의 것(story.MEMORY_*_LIMIT)과 같은 값이어야 한다 —
+# 화면이 더 받아 놓고 하네스가 자르면 작가는 왜 안 실리는지 모른다.
+MEMORY_ALWAYS_MAX = 500
+MEMORY_KEYWORD_MAX = 1500
+
+
+def memory_path(run_id: str) -> Path:
+    return STORY / "runs" / run_id / "memory.json"
+
+
+def read_memory(run_id: str) -> dict[str, Any]:
+    """이 작품의 규칙. 없으면 빈 구조 — 화면이 빈 편집칸을 그리면 된다."""
+    empty: dict[str, Any] = {"always": [], "keyword": []}
+    got = _read_json(STORY / "runs" / run_id, "memory.json")
+    if not isinstance(got, dict):
+        return empty
+    return {"always": [e for e in (got.get("always") or [])
+                       if isinstance(e, dict) and str(e.get("text") or "").strip()],
+            "keyword": [e for e in (got.get("keyword") or [])
+                        if isinstance(e, dict) and str(e.get("text") or "").strip()
+                        and [t for t in (e.get("tags") or []) if str(t or "").strip()]]}
+
+
+def write_memory(run_id: str, data: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """규칙을 저장한다. (정리된 규칙, 오류 문구) — 오류면 저장 안 한다.
+
+    검증을 여기서 하는 이유: 하네스는 상한 초과분을 조용히 자른다(실행을
+    멈추지 않으려고). 화면에서는 자르지 말고 **저장을 거절**해야 작가가 자기
+    글이 어디까지 실리는지 안다.
+    """
+    always, keyword = [], []
+    a_used = 0
+    for e in (data.get("always") or []):
+        t = " ".join(str((e or {}).get("text") or "").split())
+        if not t:
+            continue
+        a_used += len(t)
+        always.append({"text": t})
+    if a_used > MEMORY_ALWAYS_MAX:
+        return {}, f"항상 적용 규칙이 {a_used}자입니다 ({MEMORY_ALWAYS_MAX}자까지)"
+    k_used = 0
+    for e in (data.get("keyword") or []):
+        t = " ".join(str((e or {}).get("text") or "").split())
+        tags = [str(x).strip() for x in ((e or {}).get("tags") or [])
+                if str(x or "").strip()]
+        if not t:
+            continue
+        if not tags:
+            return {}, f"키워드 규칙 '{t[:20]}…' 에 키워드가 없습니다"
+        k_used += len(t)
+        keyword.append({"tags": tags, "text": t})
+    if k_used > MEMORY_KEYWORD_MAX:
+        return {}, f"키워드 규칙이 {k_used}자입니다 ({MEMORY_KEYWORD_MAX}자까지)"
+    cleaned = {"always": always, "keyword": keyword}
+    path = memory_path(run_id)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(cleaned, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+    except OSError as exc:
+        return {}, f"저장하지 못했습니다: {exc}"
+    return cleaned, ""
 
 
 def feedback_path(run_id: str) -> Path:
