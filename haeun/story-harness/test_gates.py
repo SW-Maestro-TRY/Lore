@@ -3487,6 +3487,87 @@ ok("소품 이름 경고: 명부에 있는 이름만 있으면 조용하다",
 ok("소품 이름 경고: screen_text 가 비어 있으면 조용하다",
    webtoon.prop_text_name_check([{"cut_number": 1, "screen_text": ""}], {"초롱"}) == [])
 
+
+# ---- 나레이션이 한 가지 일만 하고 있는가 (advisory) ----------------------
+def _narr(*texts):
+    return [{"cut_number": i + 1,
+             "lines": [{"kind": "narration", "text": t}]}
+            for i, t in enumerate(texts)]
+
+ok("나레이션 분류: 명사로 끝나는 시간·장소 표찰은 ①",
+   webtoon.narration_kinds(_narr("늦은 오후, 라운지 한켠."))["stamp"] != [])
+ok("나레이션 분류: '다'로 끝나는 세계관 서술은 ① 이 아니다",
+   webtoon.narration_kinds(
+       _narr("게이트가 열린 지 20년. 등급은 국가가 매긴다."))["beyond"] != [])
+ok("나레이션 분류: 1인칭 회고는 ① 이 아니다",
+   webtoon.narration_kinds(_narr("나는 그때 이미 알고 있었다."))["beyond"] != [])
+ok("나레이션 경고: 전부 시간·장소 표시면 경고",
+   webtoon.narration_warnings(
+       _narr("늦은 오후, 라운지 한켠.", "늦은 밤, 캠퍼스 골목.")) != [])
+ok("나레이션 경고: 세계관 서술이 섞여 있으면 조용하다",
+   webtoon.narration_warnings(
+       _narr("늦은 오후, 라운지 한켠.",
+             "엘젠하르트 제국. 황후는 열여섯에 정해진다.")) == [])
+ok("나레이션 경고: 나레이션이 하나도 없으면 경고",
+   webtoon.narration_warnings(
+       [{"cut_number": 1,
+         "lines": [{"kind": "dialogue", "text": "응."}]}]) != [])
+ok("나레이션 경고: 표찰이 하나뿐이면 조용하다 (한 번은 정상)",
+   webtoon.narration_warnings(_narr("사흘 뒤")) == [])
+ok("나레이션 경고: 컷이 없으면 조용하다",
+   webtoon.narration_warnings([]) == [])
+
+# ---- 말이 확정된 설정·서로와 어긋나는가 (advisory) -----------------------
+_facts_window = [{"fact": "그 방에는 창이 없다", "first_episode": 3}]
+ok("모순 경고: 나레이션이 확정된 설정과 반대면 경고",
+   webtoon.contradiction_warnings(
+       _narr("그 방에는 창이 있다"), _facts_window) != [])
+ok("모순 경고: 설정과 같은 말이면 조용하다",
+   webtoon.contradiction_warnings(
+       _narr("그 방에는 창이 없다"), _facts_window) == [])
+ok("모순 경고: 주제가 다르면 조용하다",
+   webtoon.contradiction_warnings(
+       _narr("복도에 사람이 많았다"), _facts_window) == [])
+ok("모순 경고: 같은 단위의 숫자가 다르면 경고",
+   webtoon.contradiction_warnings(
+       _narr("윤재는 2학년이다"),
+       [{"fact": "윤재는 3학년이다", "first_episode": 1}]) != [])
+ok("모순 경고: 이 화 안에서 앞뒤 말이 어긋나면 경고",
+   webtoon.contradiction_warnings(
+       _narr("시하는 혼자 왔다", "시하는 혼자 오지 않았다")) != [])
+ok("모순 경고: facts 가 없는 옛 run 은 설정 대조를 하지 않는다",
+   webtoon.contradiction_warnings(_narr("그 방에는 창이 있다")) == [])
+ok("모순 경고: 컷이 없으면 조용하다",
+   webtoon.contradiction_warnings([], _facts_window) == [])
+
+# ---- 확정된 설정이 7·8단계 스냅샷까지 도달하는가 ------------------------
+_led = webtoon.Ledger("엔진급 질문")
+ok("설정 통로: sync_facts 전에는 established_facts 가 비어 있다",
+   json.loads(_led.snapshot(1))["established_facts"] == [])
+ok("설정 통로: sync_facts 가 회차 명부를 장부로 옮긴다",
+   _led.sync_facts([{"fact": "그 방에는 창이 없다", "first_episode": 3}]) == 1)
+ok("설정 통로: 옮긴 뒤 스냅샷에 실린다",
+   any(f["text"] == "그 방에는 창이 없다"
+       for f in json.loads(_led.snapshot(4))["established_facts"]))
+ok("설정 통로: 같은 문장을 두 번 넣지 않는다",
+   _led.sync_facts([{"fact": "그 방에는 창이 없다", "first_episode": 3}]) == 0)
+ok("설정 통로: 빈 명부는 아무것도 안 한다",
+   _led.sync_facts([]) == 0 and _led.sync_facts(None) == 0)
+
+# ---- 말투(voice_notes) 가 엔진 카드까지 실리는가 -------------------------
+_p1_voice = {"name": "시하", "personality": "장난스럽다",
+             "voice_notes": "말끝을 흐린다"}
+ok("말투: p1 에 있으면 엔진 카드에 실린다",
+   "말끝을 흐린다" in webtoon.build_engine_card(_p1_voice, {}, "한 줄", []))
+ok("말투: 없으면 카드에 그 줄이 아예 안 생긴다",
+   "말투" not in webtoon.build_engine_card(
+       {"name": "시하", "personality": "장난스럽다"}, {}, "한 줄", []))
+ok("말투: 조연 명부에도 실린다",
+   "받아치듯 짧게" in "\n".join(webtoon.cast_block(
+       [{"name": "윤재", "gender": "남", "voice_notes": "받아치듯 짧게"}])))
+ok("말투: voice_notes 는 필수 항목이 아니다 (게이트가 안 막는다)",
+   "voice_notes" not in webtoon.CAST_FIELDS)
+
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)
