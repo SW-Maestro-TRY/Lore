@@ -79,6 +79,8 @@ h1, h2, h3 { line-height: 1.25; letter-spacing: -.02em; margin: 0; }
 h1, h2, h3, p, li, label, legend, small, b { word-break: keep-all; }
 em { font-style: normal; color: var(--accent); }
 
+body[data-view="create"]  #landing,
+body[data-view="create"]  .foot,
 body[data-view="running"] #landing,
 body[data-view="running"] .topbar,
 body[data-view="running"] .foot,

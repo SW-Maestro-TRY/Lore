@@ -20,7 +20,7 @@
     <a href="#gallery">결과 예시</a>
     <a href="/works">내 웹툰</a>
     <a href="/editor">편집실</a>
-    <a class="btn btn-ghost" href="#studio">만들어보기</a>
+    <button type="button" class="btn btn-ghost" id="startBtnTop">만들어보기</button>
   </nav>
 </header>
 
@@ -54,7 +54,7 @@
          웹툰 한 화로 데려옵니다.</p>
       <img class="hero-lou" src="/static/lou/lou-hero.png" alt="LORE의 마스코트 고래 루">
       <div class="hero-cta">
-        <a class="btn btn-primary" href="#studio">내 캐릭터로 시작하기</a>
+        <button type="button" class="btn btn-primary" id="startBtn">내 캐릭터로 시작하기</button>
         <a class="btn btn-shell" href="/works">둘러보기</a>
       </div>
     </div>
@@ -75,7 +75,16 @@
       </li>
     </ol>
 
-    <div class="studio" id="studio">
+  </section>
+</main>
+
+
+<!-- ============================================ 만들기 (별도 화면) ====
+     캔버스에서 홈과 만들기는 **다른 아트보드**다. 홈의 "내 캐릭터로
+     시작하기"는 아래로 스크롤하는 것이 아니라 이 화면으로 **넘어온다**
+     (view 전환 — progress·works 와 같은 방식). 1걸음에서 뒤로 가면 홈이다. -->
+<section id="create" class="create" hidden>
+  <div class="studio" id="studio">
     <form id="form" class="wizard" autocomplete="off">
 
       <div class="wiz-head">
@@ -289,8 +298,7 @@
       <p class="submit-note" id="submitNote">사진과 이름만 있으면 시작합니다.</p>
     </form>
     </div>
-  </section>
-</main>
+</section>
 
 <!-- ===================================================== 진행 ============ -->
 <section id="progress" class="progress" hidden>

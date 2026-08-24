@@ -473,8 +473,8 @@ function wizGo(n, scroll = true) {
   $("#wizNext").hidden = atFork || atEnd;
   $("#submitBtn").hidden = !(atEnd && !atFork);
   $("#wizSkip").hidden = atFork || atEnd;
-  $("#wizPrev").disabled = wizStep === 1;
-  $("#wizBack").disabled = wizStep === 1;
+  // 1걸음에서도 뒤로 갈 곳이 있다 — 홈. 그래서 안 죽인다.
+  $("#wizPrev").textContent = wizStep === 1 ? "홈으로" : "이전";
   $("#submitNote").hidden = !(atEnd && !atFork);
   $(".wiz-foot").hidden = atFork;
 
@@ -482,13 +482,29 @@ function wizGo(n, scroll = true) {
   wizPaintGauge();
 
   if (!scroll) return;
-  const head = document.querySelector("#studio");
-  if (head) head.scrollIntoView({ block: "start", behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: "smooth" });   // 걸음마다 화면 맨 위부터
 }
 
 function setupWizard() {
   if (!$("#wizGauge")) return;
   const move = n => wizGo(n);
+  // 홈의 시작하기 — 아래로 스크롤이 아니라 **화면 전환**이다. 캔버스에서
+  // 홈과 만들기는 다른 아트보드다.
+  const openCreate = () => {
+    $("#create").hidden = false;
+    view("create");
+    wizGo(1, false);
+    window.scrollTo(0, 0);
+  };
+  const closeCreate = () => {
+    $("#create").hidden = true;
+    view("landing");
+    window.scrollTo(0, 0);
+  };
+  const start = $("#startBtn");
+  if (start) start.addEventListener("click", openCreate);
+  const startTop = $("#startBtnTop");
+  if (startTop) startTop.addEventListener("click", openCreate);
   // 1걸음의 약속: 사진과 이름은 필수다. 없이 넘어가려 하면 그 자리에서 말한다.
   const step1ok = () => {
     const form = $("#form");
@@ -504,8 +520,12 @@ function setupWizard() {
     if (wizStep === 1 && !step1ok()) return;
     move(wizStep + 1);
   });
-  $("#wizPrev").addEventListener("click", () => move(wizStep - 1));
-  $("#wizBack").addEventListener("click", () => move(wizStep - 1));
+  const back = () => {
+    if (wizStep === 1) { closeCreate(); return; }   // 1걸음의 뒤 = 홈
+    move(wizStep - 1);
+  };
+  $("#wizPrev").addEventListener("click", back);
+  $("#wizBack").addEventListener("click", back);
 
   // 갈림길 — 고르는 것이 곧 다음 동작이다.
   //   스토리 모드: 여기서 바로 출발한다(더 물어볼 것이 없다).
@@ -1559,7 +1579,7 @@ async function openExisting(id) {
   } catch (err) {
     toast(`${err.message} — 먼저 한 편 만들어 주세요.`);
     view("landing");
-    document.querySelector("#studio").scrollIntoView();
+    window.scrollTo(0, 0);
   }
 }
 
