@@ -1800,6 +1800,7 @@ button.inline-link:hover { color: #f0d090; }
 #shareInstaHint {
   border-top: 1px solid var(--line); margin-top: 4px; padding-top: .7em;
   color: var(--muted); font-size: .8rem;
+}
 
 /* 저장한 작품 — 옆으로 미는 줄.
    여백을 뚫고 화면 끝까지 흐르게 둔다: 오른쪽 카드가 살짝 잘려 보여야
