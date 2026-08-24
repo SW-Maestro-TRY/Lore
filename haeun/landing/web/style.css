@@ -66,7 +66,7 @@ html {
 [hidden] { display: none !important; }
 html { scroll-behavior: smooth; }
 body {
-  margin: 0 auto; max-width: 480px; min-height: 100vh;
+  margin: 0 auto; max-width: 480px; min-height: 100dvh;
   box-shadow: 0 0 0 1px rgba(38,64,58,.06), 0 24px 80px rgba(38,64,58,.16);
   background: var(--ink); color: var(--text);
   font-family: var(--font); font-size: 16px; line-height: 1.65;
@@ -152,7 +152,13 @@ body[data-view="nextep"]  .topbar { display: none; }
    벌리지 않고, 물이 화면 전체에 흐르고 내용은 가운데 한 줄기로 내려간다.
    값(크기·색·간격)은 아트보드에서 그대로 가져왔다. */
 
-.top { position: relative; overflow: hidden; }
+.top {
+  position: relative; overflow: hidden;
+  min-height: calc(100dvh - 59px);   /* 홈도 물이 바닥까지 간다 */
+  display: flex; flex-direction: column;
+}
+/* 깊이 목록이 남은 자리를 먹어서 물이 아래까지 이어지게 한다 */
+.depths { flex: 1; }
 .hero-sea {
   position: absolute; inset: 0;
   background: linear-gradient(180deg,
@@ -200,8 +206,14 @@ body[data-view="nextep"]  .topbar { display: none; }
 .depths b { display: block; font-size: .9rem; }
 .depths small { display: block; font-size: .78rem; opacity: .8; margin-top: 2px; }
 
-/* 만들기 — 물빛은 body[data-step] 이 정한다(위저드 절 참고) */
+/* 만들기 — 물빛은 body[data-step] 이 정한다(위저드 절 참고).
+
+   **바닥까지 채운다.** 걸음마다 내용 길이가 다른데, 짧은 걸음에서는 물이
+   내용에서 끊기고 그 아래로 body 의 민바탕이 보였다 — 화면이 잘린 것처럼
+   읽힌다. 상단바(59px)를 뺀 화면 높이를 최소로 잡아 늘 아래까지 물이 간다.
+   dvh 를 쓰는 이유: 폰 브라우저는 주소창이 접혔다 펴지면서 vh 가 튄다. */
 .studio {
+  min-height: calc(100dvh - 59px);
   position: relative; padding: 8px 16px clamp(36px, 6vw, 64px);
   transition: background .5s ease;
   scroll-margin-top: 64px;
@@ -544,7 +556,7 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
    내려가지 않고 한 톤으로 둔다(여기서 물빛을 바꾸면 루 그림이 매번 다른
    바탕 위에 놓여서 그림끼리 달라 보인다). */
 .progress {
-  min-height: 100vh; padding: clamp(24px, 5vw, 56px) clamp(16px, 5vw, 40px);
+  min-height: 100dvh; padding: clamp(24px, 5vw, 56px) clamp(16px, 5vw, 40px);
   background: linear-gradient(180deg, var(--sea-shore) 0%, var(--ink) 34%, var(--ink) 100%);
 }
 .progress-inner { max-width: 720px; margin: 0 auto; }
