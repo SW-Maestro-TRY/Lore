@@ -1533,6 +1533,36 @@ function runSource(runId, ep) {
   };
 }
 
+/* 결과 화면 **목업** — /demo/result.
+ *
+ * 실제로 만들지 않고 완성본 화면을 그대로 본다. 화면 코드는 진짜와 같은
+ * paintResult() 하나만 쓰고, 데이터만 web/samples/mock.json 에서 온다 —
+ * demo.html 처럼 화면을 통째로 베끼면 본편이 바뀔 때마다 갈라진다.
+ *
+ * "내려받기"는 진짜 파일을 준다. 샘플 장을 한 편으로 이어 붙인 뒤 실제
+ * 내려받기와 **같은 길**(watermark.for_download)로 나가므로, LORE 표시가
+ * 붙은 모습이 목업에서 그대로 보인다. */
+async function showMockResult() {
+  const r = await (await fetch("/static/samples/mock.json")).json();
+  const scenes = r.scenes || [];
+  resultSrc = {
+    page: no => (scenes.find(s => s.no === no) || {}).image || "",
+    download: "/api/demo/episode.png",
+  };
+  const cuts = scenes.reduce((n, s) => n + (s.cuts || []).length, 0);
+  paintResult({
+    ...r,
+    run_id: "",                       // 목업이라 서버에 없는 작품이다 —
+    pages: scenes,                    // 공유·다시 그리기·이어 만들기는 저절로 감춰진다
+    page_count: scenes.length,
+    cut_count: cuts,
+    seconds: 0,
+  });
+  // 목업이라는 것을 화면이 스스로 말해야 한다 — 안 그러면 진짜 결과로 읽힌다
+  const sub = $("#resSub");
+  if (sub) sub.textContent += " · 화면 구경용 목업입니다";
+}
+
 async function showResult(attempt = 0) {
   resultSrc = jobSource(jobId);
   const res = await fetch(`/api/jobs/${jobId}/result`);
@@ -2339,7 +2369,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const asked = params.get("job");
   const wantResult = location.pathname.startsWith("/result");
   const wantWorks = location.pathname.startsWith("/works");
-  if (wantWorks) {
+  const wantMock = location.pathname.startsWith("/demo/result");
+  if (wantMock) {
+    showMockResult();
+  } else if (wantWorks) {
     const run = params.get("run");
     if (run) showRunResult(run, Number(params.get("ep")) || 1);
     else showWorks();

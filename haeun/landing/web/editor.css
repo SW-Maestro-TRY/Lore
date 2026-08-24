@@ -301,18 +301,48 @@
 
 /* ------------------------------------------------------------------ 도구 서랍
 
-   화면 **아래**에 붙는다. 예전에는 오른쪽 세로 기둥이었는데, 480px 한
-   컬럼에서는 그럴 자리가 없다. 아래에 두면 그림은 위, 손은 아래 — 폰에서
-   자연스럽고, 접으면 그림 아래쪽까지 만질 수 있다. */
+   **오른쪽에서 밀려 나오는 서랍.** 예전에는 화면 아래에 붙어 있었다(sticky
+   bottom). 그림을 보면서 얹는 작업인데 화면 아래 절반을 늘 서랍이 차지하고
+   있어서, 한 장을 통째로 보려면 매번 접었다 폈다 해야 했다.
+
+   지금은 기본이 닫힘이다 — 그림이 먼저다. 오른쪽 가장자리의 ☰ 를 눌러야
+   열리고, 열려 있는 동안에는 뒤를 덮는 막(scrim)이 깔려서 실수로 캔버스를
+   건드리지 않는다. */
+
+/* 서랍을 여는 손잡이. 화면 오른쪽 가운데에 붙어 있어 어디까지 굴러도 늘 같은
+   자리에 있다. 서랍이 열리면 숨는다(닫는 단추가 서랍 안에 있다). */
+.dock-open {
+  position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 28;
+  display: grid; gap: 2px; place-items: center;
+  width: 52px; padding: 14px 0;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 16px 0 0 16px;
+  box-shadow: -6px 0 18px rgba(38,64,58,.18);
+  cursor: pointer; font: inherit;
+}
+.dock-open-icon { font-size: 1.15rem; line-height: 1; }
+.dock-open-label { font-size: .68rem; font-weight: 700; letter-spacing: .02em; }
+.dock-open:hover { filter: brightness(1.06); }
+body.dock-open-on .dock-open { display: none; }
+
+.dock-scrim {
+  position: fixed; inset: 0; z-index: 29;
+  background: rgba(31,63,60,.28);
+}
 
 .ed-dock {
-  position: sticky; bottom: 0; z-index: 30;
-  background: var(--card); border-top: 1px solid var(--line);
-  border-radius: 20px 20px 0 0;
-  box-shadow: 0 -10px 30px rgba(38,64,58,.12);
-  padding: 8px 14px calc(12px + env(safe-area-inset-bottom, 0px));
-  max-height: 62vh; overflow: auto;
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 30;
+  width: min(88vw, 340px);
+  background: var(--card); border-left: 1px solid var(--line);
+  box-shadow: -14px 0 34px rgba(38,64,58,.16);
+  padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  overflow: auto;
+  transform: translateX(100%);
+  transition: transform .22s ease;
 }
+.ed-dock.is-open { transform: translateX(0); }
+@media (prefers-reduced-motion: reduce) { .ed-dock { transition: none; } }
+
 .dock-bar { display: flex; align-items: center; gap: 8px; }
 .dock-tabs { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .dock-tab {
@@ -329,9 +359,7 @@
   display: grid; place-items: center;
 }
 .dock-fold:hover { border-color: var(--accent); color: var(--accent-d); }
-.dock-fold::before { content: "▾"; }
-.ed-dock.is-folded .dock-fold::before { content: "▴"; }
-.ed-dock.is-folded .dock-body { display: none; }
+.dock-fold::before { content: "✕"; }
 
 .dock-body { display: grid; gap: 12px; padding-top: 10px; }
 .dock-hint { order: -2; margin: 0; color: var(--dim); font-size: .78rem; }
@@ -521,8 +549,14 @@
 .ask-actions .btn { flex: 1; min-height: 46px; }
 
 /* ------------------------------------------------------------------ 큰 화면
-   480px 컬럼은 그대로 둔다(다른 화면과 같아야 한다). 다만 마우스가 있는
-   화면에서는 서랍이 화면 아래에 붙어 있을 이유가 없어서 조금 낮춘다. */
-@media (min-width: 900px) and (pointer: fine) {
-  .ed-dock { max-height: 52vh; }
+   480px 컬럼은 그대로 둔다(다른 화면과 같아야 한다). 다만 넓은 화면에서는
+   서랍이 컬럼 옆 빈 자리에 서므로 뒤를 덮을 이유가 없다 — 막을 걷고, 서랍을
+   연 채로 그림을 계속 만질 수 있게 한다. */
+@media (min-width: 900px) {
+  .dock-scrim { display: none; }
+  .ed-dock { width: 360px; }
 }
+
+/* 구운 결과 창의 워터마크 안내. 창에 적힌 크기는 **작품**의 크기라, 실제로
+   받는 파일은 표시 띠만큼 더 길다 — 그 차이를 여기서 말해 둔다. */
+.bake-wm { display: block; margin-top: 4px; font-size: .74rem; color: var(--dim); }

@@ -1494,3 +1494,9 @@ button.inline-link:hover { color: #f0d090; }
 .agree-line input[type="checkbox"] {
   flex: none; width: 1.15em; height: 1.15em; margin-top: .1em; accent-color: var(--accent);
 }
+
+/* 내려받기 옆 한 줄 — 파일에 LORE 표시가 붙는다는 것을 미리 말한다.
+   받아 보고 나서 알면 "왜 붙었지?" 가 되고, 미리 알면 그냥 사실이 된다. */
+.result-actions .wm-note {
+  flex-basis: 100%; margin: 0; font-size: .76rem; color: var(--dim);
+}
