@@ -84,6 +84,74 @@ OV.overlay_path(tmp).write_text("{ 망가진 json", encoding="utf-8")
 ok("저장: 파일이 깨져도 편집실이 열린다 (빈 것으로 본다)",
    OV.load_overlay(tmp) == {"scenes": {}})
 
+# ---- 일반/전문 모드 ---------------------------------------------------------
+
+ok("모드: 값이 없으면 일반 (기본이 안전한 쪽)", not P.expert_mode({}))
+ok("모드: 일반은 시트에서만 멈춘다",
+   P.checkpoints({}) == {"sheet": True, "story": False, "board": False, "artqa": False})
+ok("모드: 전문은 네 곳 모두에서 멈춘다",
+   all(P.checkpoints({"expert": True}).values()))
+ok("모드: 검수 강도는 전문에서만 먹는다 (일반은 늘 기본값)",
+   P.art_qa_regen_max({"art_qa_regen_max": 4}) == P.ART_QA_REGEN_DEFAULT)
+ok("모드: 전문이면 고른 값이 간다",
+   P.art_qa_regen_max({"expert": True, "art_qa_regen_max": 4}) == 4)
+ok("모드: 이상한 값이 와도 기본값으로 (실행이 안 죽는다)",
+   P.art_qa_regen_max({"expert": True, "art_qa_regen_max": "넷"}) == P.ART_QA_REGEN_DEFAULT)
+ok("모드: 상한을 넘겨 보내도 상한까지만",
+   P.art_qa_regen_max({"expert": True, "art_qa_regen_max": 99}) == P.ART_QA_REGEN_MAX)
+
+# ---- 시트 재생성 지시 --------------------------------------------------------
+#
+# 화면의 항목을 늘리면서 지시문을 안 쓰면, 그 항목은 눌러도 아무 일이 안 일어나는
+# 버튼이 된다 — 고른 사람은 반영된 줄 안다. 그 사고를 여기서 막는다.
+_sheet_tag_ids = {t["id"] for t in P.FEEDBACK_TAGS["sheet"]}
+ok("시트 지시: 모든 항목에 지시문이 있다",
+   _sheet_tag_ids <= set(P.SHEET_FIX_BY_TAG),
+   f"빠진 것: {sorted(_sheet_tag_ids - set(P.SHEET_FIX_BY_TAG))}")
+ok("시트 지시: 화면에 없는 지시문이 남아 있지 않다",
+   set(P.SHEET_FIX_BY_TAG) <= _sheet_tag_ids,
+   f"군더더기: {sorted(set(P.SHEET_FIX_BY_TAG) - _sheet_tag_ids)}")
+ok("시트 지시: 아무것도 안 고르면 빈 목록 (프롬프트가 안 바뀐다)",
+   P.sheet_corrections([], "") == [])
+ok("시트 지시: 모르는 항목은 버린다",
+   P.sheet_corrections(["없는항목"], "") == [])
+ok("시트 지시: 적은 말은 요약하지 않고 그대로 싣는다",
+   "망토를 안 그렸어요" in P.sheet_corrections([], "망토를 안 그렸어요")[0])
+ok("시트 지시: 너무 긴 말은 상한까지만",
+   len(P.sheet_corrections([], "가" * 900)[0]) <= P.FEEDBACK_TEXT_MAX + 40)
+
+_fix_dir = Path(tempfile.mkdtemp())
+(_fix_dir / "p1.json").write_text(
+    '{"name": "\\ubbfc\\uc2dc\\ud558", "design_details": ["\\uac00", "\\ub098", "\\ub2e4"]}',
+    encoding="utf-8")
+
+
+def _fixes_now():
+    import json
+    return json.loads((_fix_dir / "p1.json").read_text(encoding="utf-8")).get(
+        "sheet_corrections", [])
+
+
+P._merge_sheet_corrections(_fix_dir, P.sheet_corrections(["hair"], ""))
+P._merge_sheet_corrections(_fix_dir, P.sheet_corrections(["outfit"], ""))
+ok("시트 지시: 판을 거듭해도 앞 지시가 안 사라진다 (덮어쓰지 않고 쌓는다)",
+   len(_fixes_now()) == 2 and any("머리" in c for c in _fixes_now()))
+P._merge_sheet_corrections(_fix_dir, P.sheet_corrections(["hair"], ""))
+ok("시트 지시: 같은 말을 또 하면 중복 없이 맨 뒤로 (끝쪽이 세게 읽힌다)",
+   len(_fixes_now()) == 2 and "머리" in _fixes_now()[-1])
+for _i in range(P.SHEET_FIX_MAX + 4):
+    P._merge_sheet_corrections(_fix_dir, [f"지시 {_i}"])
+ok("시트 지시: 상한을 넘겨 쌓이지 않는다 (서로 부딪히면 앞엣것부터 흘린다)",
+   len(_fixes_now()) == P.SHEET_FIX_MAX)
+ok("시트 지시: design_details 는 안 건드린다 (시트 인셋 개수가 그대로)",
+   __import__("json").loads(
+       (_fix_dir / "p1.json").read_text(encoding="utf-8"))["design_details"]
+   == ["가", "나", "다"])
+P._merge_sheet_corrections(Path(tempfile.mkdtemp()), ["아무 지시"])   # p1.json 없음
+ok("시트 지시: p1.json 이 없어도 안 터진다", True)
+shutil.rmtree(_fix_dir, ignore_errors=True)
+
+
 # ---------------- 굽기 ----------------
 
 def one(kind, **over):

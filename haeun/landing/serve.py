@@ -656,10 +656,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
             fields = body.get("fields")
             fields = fields if isinstance(fields, dict) else None
-            # 시트는 고른 항목·적은 말을 프롬프트로 보내지 않는다 (pipeline 의
-            # 시트 단계 주석 참고) — 기록만 하고, 실제 수정은 fields 가 한다.
             self._record_feedback(job, "sheet", decision, body)
-            job.decide_sheet(decision, fields)
+            # 고른 항목·적은 말을 기록만 하고 끝내지 않는다 — 지시문으로 옮겨
+            # 다음 판 시트 프롬프트에 싣는다(pipeline.sheet_corrections).
+            # 일반 모드에는 사양 수정 폼이 없어서, 이것이 사용자의 말이 그림에
+            # 닿는 유일한 길이다.
+            fixes = pipeline.sheet_corrections(
+                pipeline.clean_tags("sheet", body.get("tags")),
+                str(body.get("feedback") or ""))
+            job.decide_sheet(decision, fields, fixes)
             return self._json({"ok": True})
 
         # 스토리 확인 화면의 "이대로 진행" / "다시 만들기" 버튼 — 스토리 단계

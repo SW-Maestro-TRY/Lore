@@ -3995,6 +3995,17 @@ def charsheet_source(p1: dict) -> dict:
                               for k in PALETTE_KEYS},
         "palette_notes": normalize_palette(palette)[1],
         "expression_set": [str(f).strip() for f in (faces or []) if str(f or "").strip()],
+        # 지난 시트를 사람이 보고 "이게 틀렸다"고 한 것. 다시 뽑을 때만 채워지고
+        # 첫 판에는 늘 비어 있다 — 비어 있으면 프롬프트가 예전과 한 글자도 안
+        # 달라진다(_corrections_block 참고).
+        #
+        # design_details 에 섞지 않고 자리를 따로 둔 이유: 그쪽은 "고정 디자인
+        # 요소" 라서 개수(n_details)가 region 3 의 인셋 개수를 정한다. 거기에
+        # "얼굴이 사진과 다르다" 같은 줄을 넣으면 시트에 그 말의 확대 컷이
+        # 하나 더 생긴다. 고쳐 달라는 말은 그릴 것이 아니라 지시다.
+        "sheet_corrections": [str(c).strip()
+                              for c in (p1.get("sheet_corrections") or [])
+                              if str(c or "").strip()],
     }
 
 
@@ -4132,6 +4143,25 @@ def _numbered(items: list) -> str:
     return "\n".join(f"  {i}. {x}" for i, x in enumerate(items, 1))
 
 
+def _corrections_block(src: dict) -> str:
+    """지난 시트에서 틀렸다고 한 것을 프롬프트 맨 끝에 붙인다.
+
+    **비어 있으면 빈 문자열을 돌려준다** — 첫 판(그리고 이 값을 안 쓰는 예전
+    run)의 프롬프트는 이 함수가 생기기 전과 한 글자도 같다.
+
+    맨 끝에 두는 이유: 이미지 모델은 뒤에 온 지시를 더 세게 듣는다. 앞의
+    CHARACTER·FIXED DESIGN ELEMENTS 와 부딪히라고 넣는 것이 아니라, 같은
+    사양을 **어느 쪽으로 다시 읽어야 하는지**를 마지막에 못박는 자리다.
+    """
+    fixes = src.get("sheet_corrections") or []
+    if not fixes:
+        return ""
+    return ("\nCORRECTIONS — the previous sheet was rejected by the author for the "
+            "reasons below. Keep everything else the same and fix exactly these. "
+            "Written in Korean; follow them literally:\n"
+            f"{_numbered(fixes)}\n")
+
+
 def charsheet_prompts(src: dict, style: str = None) -> dict:
     """P1 사양 -> 이미지 프롬프트 3개.
 
@@ -4194,7 +4224,8 @@ def charsheet_prompts(src: dict, style: str = None) -> dict:
     # {appearance} {scene} {style} {extra} 순으로 붙이는 것과 자리를 맞춘다.
     style = style if style is not None else read_style_suffix()[0]
     out = {"turnaround": turnaround, "expressions": expressions, "details": details}
-    return {k: f"{v}\nSTYLE\n{style}\n" for k, v in out.items()}
+    fixes = _corrections_block(src)          # 없으면 "" — 예전과 같은 문자열이다
+    return {k: f"{v}\nSTYLE\n{style}\n{fixes}" for k, v in out.items()}
 
 
 def charsheet_unified_prompt(src: dict, style: str = None) -> dict:
@@ -4243,7 +4274,8 @@ def charsheet_unified_prompt(src: dict, style: str = None) -> dict:
         f"{_numbered(src['expression_set'])}\n"
     )
     style = style if style is not None else read_style_suffix()[0]
-    return {UNIFIED_KIND: f"{body}\nSTYLE\n{style}\n"}
+    fixes = _corrections_block(src)          # 없으면 "" — 예전과 같은 문자열이다
+    return {UNIFIED_KIND: f"{body}\nSTYLE\n{style}\n{fixes}"}
 
 
 def build_sheet_prompts(src: dict, style: str = None, split: bool = False) -> dict:
