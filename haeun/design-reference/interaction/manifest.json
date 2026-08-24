@@ -72,8 +72,8 @@
         "seq2": {
           "source": "sheet3_sketch.png",
           "size": [
-            466,
-            271
+            468,
+            272
           ],
           "frames": [
             {
@@ -192,8 +192,8 @@
         "seq2": {
           "source": "sheet3_sketch.png",
           "size": [
-            463,
-            281
+            464,
+            287
           ],
           "frames": [
             {
@@ -278,7 +278,7 @@
           "source": "sheet3_sketch.png",
           "size": [
             281,
-            215
+            231
           ],
           "frames": [
             {

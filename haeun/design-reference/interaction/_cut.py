@@ -20,8 +20,10 @@ SRC = HERE / "_source"
 
 PAD = 12        # 스프라이트 가장자리에 남기는 투명 여백(px)
 INK = 14        # 배경(저주파 그라데이션)과 그림(고주파)을 가르는 문턱값
-# 3번 시트는 카드 테두리가 진해서 문턱값을 낮게 두면 카드 안쪽까지 통째로 따진다
-INK_PER_SHEET = {"sheet3_sketch.png": 24}
+# 시트마다 종이 질감이 달라 필요하면 여기서 문턱값을 따로 준다
+INK_PER_SHEET = {}
+LINE_RUN = 0.45   # 칸을 이만큼 곧게 가로지르면 직선으로 본다 (카드 테두리 찾기용)
+LINE_FILL = 0.12  # 그러면서 제 bbox 를 이만큼도 못 채우면 속 빈 사각 테두리다
 BLUR = 30       # 배경으로 볼 저주파의 크기
 DIL = 9         # 선을 이어 붙였다 되돌리는 폭 — 그림 내부를 채우려고
 MIN_AREA = 150  # 이보다 작은 조각(노이즈)은 버린다
@@ -201,9 +203,59 @@ def _components(img):
     return lab, stat, find
 
 
+def drop_frame_lines(mask):
+    """원본 카드의 사각 테두리를 지운다.
+
+    안 지우면 테두리가 닫힌 사각형이라, 뒤에서 구멍을 채울 때 카드 안쪽이
+    통째로 그림으로 딸려 와 스프라이트에 네모난 바탕 자국이 남는다.
+    가로·세로 양쪽으로 칸을 길게 가로지르면서 제 bbox 는 거의 못 채우는
+    성분만 고른다 — 고래는 윤곽이 곡선이라 세로로 길게 곧지 않고,
+    속이 꽉 차 있어서 걸리지 않는다.
+    """
+    W, H = mask.size
+    lab, stat, find = _components(mask)
+    run_h, run_v = {}, {}
+    for y in range(H):                       # 성분마다 가장 긴 가로 직선
+        row, cur, n = lab[y], 0, 0
+        for x in range(W):
+            r = find(row[x]) if row[x] else 0
+            if r and r == cur:
+                n += 1
+            else:
+                if cur: run_h[cur] = max(run_h.get(cur, 0), n)
+                cur, n = r, 1 if r else 0
+        if cur: run_h[cur] = max(run_h.get(cur, 0), n)
+    for x in range(W):                       # 세로도 같은 식으로
+        cur, n = 0, 0
+        for y in range(H):
+            r = find(lab[y][x]) if lab[y][x] else 0
+            if r and r == cur:
+                n += 1
+            else:
+                if cur: run_v[cur] = max(run_v.get(cur, 0), n)
+                cur, n = r, 1 if r else 0
+        if cur: run_v[cur] = max(run_v.get(cur, 0), n)
+    bad = set()
+    for r, (x0, y0, x1, y1, area) in stat.items():
+        box = max(1, (x1 - x0 + 1) * (y1 - y0 + 1))
+        if (run_h.get(r, 0) > W * LINE_RUN and run_v.get(r, 0) > H * LINE_RUN
+                and area < box * LINE_FILL):
+            bad.add(r)
+    if not bad:
+        return mask
+    out = mask.copy()
+    op = out.load()
+    for y in range(H):
+        row = lab[y]
+        for x in range(W):
+            if row[x] and find(row[x]) in bad:
+                op[x, y] = 0
+    return out
+
+
 def cutout_alpha(mask_crop):
     """선 마스크 -> 속이 채워진 알파. 노이즈와 카드 테두리는 버린다."""
-    m = mask_crop.filter(ImageFilter.MaxFilter(DIL))
+    m = drop_frame_lines(mask_crop).filter(ImageFilter.MaxFilter(DIL))
     w, h = m.size
     pad = Image.new("L", (w + 4, h + 4), 0)
     pad.paste(m, (2, 2))
