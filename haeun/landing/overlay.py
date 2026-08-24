@@ -411,12 +411,16 @@ def baked_episode_path(ep_dir: Path) -> Path:
     return ep_dir / BAKED_EPISODE
 
 
-def bake(ep_dir: Path, numbers: list[int], base_of, data: dict[str, Any] | None = None
-         ) -> dict[str, Any]:
+def bake(ep_dir: Path, numbers: list[int], base_of, data: dict[str, Any] | None = None,
+         layout: dict[int, tuple[int, str]] | None = None) -> dict[str, Any]:
     """얹은 것을 그림에 굽는다.
 
     numbers : 이 화의 장 번호들 (순서대로)
     base_of : 장 번호 -> 밑그림 경로. 없으면 None 을 돌려준다.
+    layout  : {장 번호: (gap_after, weight)}. 없으면(None) 전부 여백 없이 꽉
+              채워 잇는다(예전 동작 그대로). 있으면 원래 생성 때와 같은
+              여백·폭으로 다시 잇는다 — 편집실에서 다시 구웠다고 세로 스크롤의
+              리듬(#110)이 사라지면 안 된다.
 
     **얹은 것이 없는 장도 굽는다.** 안 그러면 한 편으로 이을 때 어떤 장은
     구운 것, 어떤 장은 원본이 되어 두 폴더를 섞어 읽어야 한다.
@@ -449,8 +453,17 @@ def bake(ep_dir: Path, numbers: list[int], base_of, data: dict[str, Any] | None 
         raise OverlayError("구울 그림이 하나도 없습니다. 먼저 웹툰을 만들어 주세요.")
 
     out = baked_episode_path(ep_dir)
+    layout = layout or {}
+    gaps = [layout.get(n, (1, "normal"))[0] for n in made]
+    weights = [layout.get(n, (1, "normal"))[1] for n in made]
+    # 원본 생성 때 실제로 쓴 config(scene.gap_ratio·light_width)까지는 여기서
+    # 모른다 — 기본 눈금(GAP_RATIO·LIGHT_WIDTH)으로 다시 잇는다. 여백 없이 전부
+    # 붙던 것보다는 훨씬 낫고, 정확한 눈금이 필요하면 호출부가 gap_table 을
+    # 따로 넘기면 된다(이 함수는 안 바뀐다).
+    ratios = [_strip.width_ratio({"weight": w}) for w in weights]
     try:
-        w, h = _episode.stitch([baked_scene_path(ep_dir, n) for n in made], out)
+        w, h = _episode.stitch([baked_scene_path(ep_dir, n) for n in made], out,
+                               gaps, ratios, _strip.gap_ratio_table())
     except _episode.StitchError as exc:
         raise OverlayError(f"한 편으로 잇지 못했습니다: {exc}") from exc
 

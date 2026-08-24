@@ -555,15 +555,28 @@ def stitch_strip(items: list[tuple[Any, int, float]], out: Path,
     #
     # 가장 좁은 폭에 맞추는 이유는 **줄이기만 하기 위해서**다. 늘리면 그 컷만
     # 흐려져서, 원인이 생성인지 조립인지 구분할 수 없게 된다.
-    page = min(im.width for im, _g, _r in items)
-    placed = []
-    for im, gap, _ratio in items:
-        if im.width != page:
-            im = im.resize((page, max(1, round(im.height * page / im.width))),
-                           Image.LANCZOS)
-        placed.append((im.convert("RGB"), max(0, int(gap))))
+    # 지면 폭은 **ratio == 1.0(꽉 채우는 컷)** 중 가장 좁은 것이 정한다. ratio 가
+    # 작은(가벼운) 컷은 원래부터 폭을 덜 쓰기로 되어 있으므로 지면 폭을 정하는
+    # 데서 빼야 한다 — 안 그러면 가벼운 컷 하나가 화면 전체를 좁혀 버린다.
+    # 전부 ratio < 1.0 인 (있을 수 없지만) 경우에는 예전처럼 가장 좁은 원본으로
+    # 되돌아간다.
+    full = [im.width for im, _g, r in items if r >= 0.999]
+    page = min(full) if full else min(im.width for im, _g, _r in items)
 
-    total = sum(im.height + gap for im, gap in placed)
+    placed = []
+    for im, gap, ratio in items:
+        # ratio 를 실제 픽셀에 적용한다. 그동안 이 값이 계산만 되고 여기서
+        # 버려지고 있었다 — width_ratio() 가 뭘 돌려주든 전부 꽉 채워 그려졌다.
+        target = page if ratio >= 0.999 else max(1, round(page * ratio))
+        # 늘리지는 않는다 — 늘리면 그 컷만 흐려져서, 원인이 생성인지 조립인지
+        # 구분할 수 없게 된다. target 이 원본보다 크면 원본 폭 그대로 둔다.
+        w = min(im.width, target)
+        if w != im.width:
+            im = im.resize((w, max(1, round(im.height * w / im.width))),
+                           Image.LANCZOS)
+        placed.append((im.convert("RGB"), max(0, int(gap)), w))
+
+    total = sum(im.height + gap for im, gap, _w in placed)
     total -= placed[-1][1]              # 마지막 뒤 여백은 버린다
     if total > MAX_HEIGHT:
         raise StripError(
@@ -572,8 +585,11 @@ def stitch_strip(items: list[tuple[Any, int, float]], out: Path,
 
     sheet = Image.new("RGB", (page, total), bg)
     y = 0
-    for i, (im, gap) in enumerate(placed):
-        sheet.paste(im, (0, y))
+    for i, (im, gap, w) in enumerate(placed):
+        # 지면보다 좁은 컷(ratio < 1.0)은 가운데 정렬한다 — 좌우에 남는 자리가
+        # 배경색으로 비어, "이 컷은 가볍다"는 것이 폭으로도 읽힌다.
+        x = (page - w) // 2
+        sheet.paste(im, (x, y))
         y += im.height + (gap if i < len(placed) - 1 else 0)
     out.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(out)

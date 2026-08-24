@@ -24,8 +24,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import strip     # 여백 눈금(gap_ratio_table)과 가벼운 컷 폭(width_ratio)을 그대로 쓴다
-
 EPISODE_FILE = "episode.png"
 
 # 한 장이 너무 크면(2K x 7장 = 세로 16,800px) 뷰어와 편집기가 버거워한다.
@@ -75,30 +73,12 @@ def pick_paths(ep_dir: Path, conditions: list[str], numbers: list[int],
     return best_cond, best_paths
 
 
-def stitch(paths: list[Path], out: Path,
-          gaps: list[int] | None = None, ratios: list[float] | None = None,
-          gap_table: dict[int, float] | None = None) -> tuple[int, int]:
-    """세로로 이어 붙여 한 장으로 저장한다. (가로, 세로) 를 돌려준다.
+def stitch(paths: list[Path], out: Path) -> tuple[int, int]:
+    """세로로 틈 없이 붙여 한 장으로 저장한다. (가로, 세로) 를 돌려준다.
 
-    **장(Scene) 안**은 틈 없이 이어진다 — 그 안의 컷들은 한 호출에서 함께
-    구워지므로, 이음매를 코드로 메우면 잘못을 감추는 것이지 고치는 것이 아니다.
-    이음매가 튀면 그건 프롬프트가 앞뒤 컷을 이어 그리지 못했다는 신호이고, 그
-    신호는 보여야 한다.
-
-    **장과 장 사이**는 다르다. `grouping: weight` 에서는 무거운 컷(bleed·impact)
-    이 혼자 한 장을 이루므로, 그 장은 컷 모드의 컷 하나와 다를 것이 없다 —
-    그런데 이 함수가 예전처럼 장끼리 무조건 붙여 버리면, 컷 모드에서는 지키는
-    gap_after 의 리듬(붙임 · 보통 · 길게 · 낙차)이 장 모드에서만 사라진다.
-
-    gaps: 각 장 **뒤**의 gap_after(0~3). 없으면(None) 전부 0 으로 봐서
-          예전처럼 틈 없이 붙는다 — 옛 호출부는 안 건드려도 그대로 돈다.
-    ratios: 각 장이 지면 폭을 얼마나 쓸까(0~1). 없으면 전부 1.0(꽉 채움).
-    gap_table: strip.gap_ratio_table() 이 돌려주는 눈금표. 없으면 strip 의
-               기본값(GAP_RATIO)을 쓴다.
-
-    picks·paths 는 컷 모드의 write_strip 과 자리를 맞춰 왔다 — 여백·폭 계산도
-    strip.gap_px / strip.width_ratio 를 그대로 써서, 같은 gap_after=2 가 컷
-    모드와 장 모드에서 다른 px 로 벌어지는 일이 없게 한다.
+    틈을 두지 않는 이유: 틈은 곧 흰 띠이고, 흰 띠가 보이는 순간 "이어진 한 편"
+    이 아니라 "장 여러 개" 로 읽힌다. 화면 사이 호흡은 이미 컷 설계(gap_after)가
+    그림 안에서 만들고 있다.
     """
     try:
         from PIL import Image
@@ -107,42 +87,29 @@ def stitch(paths: list[Path], out: Path,
             "Pillow 가 없어 1화를 이어 붙일 수 없습니다.\n"
             "        pip install Pillow") from exc
 
-    n = len(paths)
-    gaps = gaps if gaps is not None else [0] * n
-    ratios = ratios if ratios is not None else [1.0] * n
-    if len(gaps) != n or len(ratios) != n:
-        raise StitchError("gaps/ratios 의 길이가 paths 와 다릅니다 (코드 버그).")
-
-    rows = [(p, g, r) for p, g, r in zip(paths, gaps, ratios) if p.exists()]
-    if not rows:
+    usable = [p for p in paths if p.exists()]
+    if not usable:
         raise StitchError("이어 붙일 이미지가 하나도 없습니다.")
 
     images = []
     try:
-        for p, gap, ratio in rows:
+        for p in usable:
             im = Image.open(p)
             im.load()
-            images.append((im.convert("RGB"), gap, ratio))
+            images.append(im.convert("RGB"))
     except OSError as exc:
         raise StitchError(f"이미지를 읽지 못했습니다: {exc}") from exc
 
-    # 지면 폭은 ratio == 1.0(꽉 채우는 장) 중 가장 좁은 것이 정한다. strip.py 의
-    # stitch_strip 과 같은 규칙이다 — 가벼운 장 하나가 화면 전체를 좁히면 안 된다.
-    full = [im.width for im, _g, r in images if r >= 0.999]
-    width = min(full) if full else min(im.width for im, _g, _r in images)
+    width = min(im.width for im in images)
+    scaled = []
+    for im in images:
+        if im.width != width:
+            # 좁은 쪽에 맞춰 **줄이기만** 한다. 늘리면 그 장만 흐려진다.
+            h = max(1, round(im.height * width / im.width))
+            im = im.resize((width, h), Image.LANCZOS)
+        scaled.append(im)
 
-    table = gap_table or strip.GAP_RATIO
-    placed = []
-    for im, gap, ratio in images:
-        target = width if ratio >= 0.999 else max(1, round(width * ratio))
-        w = min(im.width, target)       # 늘리지 않는다 — 늘리면 그 장만 흐려진다
-        if w != im.width:
-            im = im.resize((w, max(1, round(im.height * w / im.width))),
-                           Image.LANCZOS)
-        placed.append((im, strip.gap_px(width, gap, table), w))
-
-    total = sum(im.height + g for im, g, _w in placed)
-    total -= placed[-1][1]              # 마지막 뒤 여백은 읽히지 않는다
+    total = sum(im.height for im in scaled)
     if total > MAX_HEIGHT:
         raise StitchError(
             f"이어 붙이면 세로 {total:,}px 입니다 (상한 {MAX_HEIGHT:,}px).\n"
@@ -150,10 +117,9 @@ def stitch(paths: list[Path], out: Path,
 
     sheet = Image.new("RGB", (width, total), (255, 255, 255))
     y = 0
-    for i, (im, gap, w) in enumerate(placed):
-        x = (width - w) // 2            # 지면보다 좁은 장은 가운데 정렬
-        sheet.paste(im, (x, y))
-        y += im.height + (gap if i < len(placed) - 1 else 0)
+    for im in scaled:
+        sheet.paste(im, (0, y))
+        y += im.height
     out.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(out)
     return width, total

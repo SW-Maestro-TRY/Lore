@@ -158,6 +158,21 @@ class Scene:
         return gap if isinstance(gap, int) and 0 <= gap <= 3 else 1
 
     @property
+    def weight(self) -> str:
+        """이 Scene 이 지면을 얼마나 먹는가 — full | normal | light.
+
+        `grouping: weight` 로 묶인 Scene 은 안의 컷이 전부 같은 weight 다
+        (group_by_weight 의 불변식 — light 는 light 끼리만 묶이고, full·normal 은
+        애초에 혼자 한 Scene 을 이룬다). 그래서 첫 컷의 값이 곧 Scene 전체의 값이다.
+        rhythm/fixed 로 묶인 옛 Scene 은 이 칸이 없어 normal 로 읽힌다 — 예전과
+        같다.
+        """
+        if not self.cuts:
+            return "normal"
+        w = str(self.cuts[0].get("weight") or "normal").strip().lower()
+        return w if w in ("full", "normal", "light") else "normal"
+
+    @property
     def beats(self) -> list[str]:
         return [str(c.get("beat") or "") for c in self.cuts]
 

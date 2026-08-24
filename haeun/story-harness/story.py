@@ -3002,7 +3002,8 @@ def write_scenes_md(run_dir: Path, scenes: list) -> None:
 def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
             usage: Usage, sample_cards: str = None,
             genre_tpl: str = None, axes: dict = None,
-            author_note: str = "", memory_text: str = "") -> tuple:
+            author_note: str = "", memory_text: str = "",
+            retry_feedback: str = "") -> tuple:
     """P1 을 부르고, 카드 게이트를 통과할 때까지 재호출한다. (카드, 재생성 횟수).
 
     파이프라인과 --card-mix 가 **같은 함수**를 써야 한다. 시험지에 올라가는 카드가
@@ -3027,7 +3028,12 @@ def call_p1(caller: Caller, ps: PromptSet, row: dict, max_retries: int,
         axes = samples.pick_axes(row.get("genre") or "")
 
     card_input = row.get("card")
-    feedback = ""
+    # P3 가 "P1 부터 다시" 라고 판정했으면 그 사유가 여기로 온다. 예전에는
+    # run_pipeline 이 p1_feedback 에 담아 두기만 하고 넘길 자리가 없어서 그대로
+    # 버려졌다 — P1 은 무엇이 문제였는지 모른 채 같은 조건으로 다시 썼고,
+    # 그래서 같은 이유로 또 떨어지는 일이 있었다(#114).
+    # 안 넘기면 예전과 똑같이 빈 문자열로 시작한다.
+    feedback = str(retry_feedback or "")
 
     def prompt() -> str:
         return render(ps.texts["p1"], {
@@ -3094,11 +3100,14 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
 
     def generate_p1():
         nonlocal regen_total
+        # p1_feedback 은 P3 가 "P1 부터 다시" 라고 할 때 채워진다. 첫 호출에서는
+        # 비어 있어서 예전과 같은 프롬프트가 나간다.
         sheet, regens = call_p1(caller, ps, row, max_gate_retries, usage,
                                 sample_cards=sample_cards,
                                 genre_tpl=genre_tpl, axes=axes,
                                 author_note=author_note,
-                                memory_text=memory_text)
+                                memory_text=memory_text,
+                                retry_feedback=p1_feedback)
         regen_total += regens
         return sheet
 
