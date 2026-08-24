@@ -137,9 +137,11 @@
            것은 아예 안 적었다. 그래서 칸을 하나로 두고, 적힌 것을 그대로
            character 와 story 양쪽에 보낸다(app.js collect 참고) — 시트를
            만들 때도 이야기를 짤 때도 같은 글을 본다. -->
+      <!-- 1 · 수면 — 누구를 데리고 갈까요 (사진 · 이름 · 캐릭터 설명) -->
       <section class="wiz-step" data-step="1">
-        <p class="wiz-eyebrow">수면 · STEP 1</p>
+        <p class="wiz-eyebrow">수면 · STEP 1 / 5</p>
         <h3 class="wiz-title">누구를 데리고<br>바다로 갈까요?</h3>
+        <p class="wiz-sub">아는 만큼만 적으세요. 빈 칸은 루가 채웁니다.</p>
 
         <div class="wiz-card">
           <div class="photo-row">
@@ -156,27 +158,41 @@
             <input type="text" name="name" placeholder="예: 민시하" maxlength="40" required>
           </label>
 
-          <label class="field big">
-            <span>어떤 캐릭터인가요? <small>선택</small></span>
-            <textarea name="story" rows="5" id="storyInput"
-              placeholder="성격이든 이야기든 자유롭게 적어주세요.&#10;&#10;예) 장난기 많은데 겁은 많아서 친구 앞에서만 센 척한다&#10;예) 평범한 회사원인데 로맨스 판타지 소설에 빙의했다"></textarea>
+          <label class="field">
+            <span>캐릭터 설명 <small>선택</small></span>
+            <textarea name="character" rows="4"
+              placeholder="성격·말투·관계 등 아는 만큼.&#10;예) 장난기 많은데 겁은 많아서 친구 앞에서만 센 척한다"></textarea>
           </label>
+
           <input type="hidden" name="photo_note" value="">
         </div>
       </section>
 
-      <!-- 2 · 갈림길 — 어떻게 만들지 -->
-      <!-- 2 · 장르와 그림체. 세계관은 안 묻는다 — 처음 만드는 사람에게
-           "각성자만 게이트에 들어갈 수 있는 현대 한국" 같은 것을 쓰라고 하면
-           거기서 멈춘다. 장르만 있으면 루가 세계도 맞춰 정한다. -->
+      <!-- 2 · 항해 — 어떤 이야기를 만들까요 -->
       <section class="wiz-step" data-step="2" hidden>
-        <p class="wiz-eyebrow">항해 · STEP 2</p>
-        <h3 class="wiz-title">어떤 웹툰으로<br>그릴까요?</h3>
-        <p class="wiz-sub">비우면 루가 이야기에 맞춰 고릅니다.</p>
+        <p class="wiz-eyebrow">항해 · STEP 2 / 5</p>
+        <h3 class="wiz-title">어떤 이야기를<br>만들까요?</h3>
+        <p class="wiz-sub">비우면 루가 캐릭터를 보고 짭니다.</p>
 
         <div class="wiz-card">
+          <label class="field big">
+            <span class="sr-only">이야기</span>
+            <textarea name="story" rows="5" id="storyInput"
+              placeholder="한 줄이어도 되고 줄거리여도 됩니다.&#10;예) 평범한 회사원인데 로맨스 판타지 소설에 빙의했다"></textarea>
+          </label>
+        </div>
+      </section>
+
+      <!-- 3 · 깊은 바다 — 장르. 안 골라도 되고, 고른 것을 다시 누르면 풀린다. -->
+      <section class="wiz-step" data-step="3" hidden>
+        <p class="wiz-eyebrow">깊은 바다 · STEP 3 / 5</p>
+        <h3 class="wiz-title">어떤 장르로<br>그릴까요?</h3>
+        <p class="wiz-sub">안 고르면 루가 이야기에 맞춰 정합니다.</p>
+
+        <div class="wiz-card">
+          <div class="genre-quick" id="genreQuick"></div>
           <label class="field">
-            <span>장르</span>
+            <span>직접 쓰기 <small>선택</small></span>
             <input type="text" name="genre" list="genreList" placeholder="예: 무협 / 로맨스 판타지">
             <datalist id="genreList">
               <option value="판타지"><option value="액션"><option value="스릴러">
@@ -188,27 +204,27 @@
               <option value="좀비 아포칼립스">
             </datalist>
           </label>
-          <div class="genre-quick" id="genreQuick"></div>
-          <!-- 고르든 안 고르든 늘 한 줄이 뜬다. 비어 있으면 고장으로 읽힌다. -->
+          <!-- 고르든 안 고르든 늘 한 줄이 뜬다. 비어 있으면 고장으로 읽힌다.
+               (단추는 이 카드 맨 위에 있다 — 고르는 것이 먼저고, 직접 쓰기는
+               단추에 없는 장르를 위한 자리다.) -->
           <p class="genre-note" id="genreNote" data-state="empty"></p>
         </div>
-
-        <div class="wiz-card">
-          <div class="field-label">그림체</div>
-          <div class="styles" id="styles"></div>
-        </div>
-
-        <!-- 세계관은 안 묻지만 서버 계약은 그대로라 빈 값으로 보낸다 -->
         <input type="hidden" name="world" value="">
       </section>
 
-      <!-- 3 · 갈림길. 고르는 것이 곧 다음 동작이다. -->
-      <!-- 3 · 갈림길. 고르면 바로 아래에 요약과 만들기 단추가 열린다.
-           예전에는 여기서 연출·등신·검수를 더 물었는데, 셋 다 처음 만드는
-           사람이 판단할 수 없는 것이라(등신 비율이 뭔지부터 모른다) 기본값으로
-           두고 화면에서 뺐다. 값은 아래 숨은 칸이 그대로 보낸다. -->
-      <section class="wiz-step wiz-step-fork" data-step="3" hidden>
-        <p class="wiz-eyebrow">갈림길</p>
+      <!-- 4 · 심해 — 그림체 -->
+      <section class="wiz-step" data-step="4" hidden>
+        <p class="wiz-eyebrow">심해 · STEP 4 / 5</p>
+        <h3 class="wiz-title">어떤 그림체로<br>그릴까요?</h3>
+
+        <div class="wiz-card">
+          <div class="styles" id="styles"></div>
+        </div>
+      </section>
+
+      <!-- 5 · 바닥 — 갈림길. 고르면 그 자리에서 요약과 만들기 단추가 열린다. -->
+      <section class="wiz-step wiz-step-fork" data-step="5" hidden>
+        <p class="wiz-eyebrow">바닥 · STEP 5 / 5</p>
         <h3 class="wiz-title">어떻게 볼까요?</h3>
 
         <div class="fork">
@@ -223,8 +239,6 @@
           </button>
         </div>
 
-        <!-- 고르기 전에는 안 보인다 — 고른 것이 무엇인지가 요약 위에 있어야
-             "이대로 만든다"가 말이 된다. -->
         <div class="wiz-after" id="wizAfter" hidden>
           <div class="wiz-card wiz-summary" id="wizSummary"></div>
         </div>
