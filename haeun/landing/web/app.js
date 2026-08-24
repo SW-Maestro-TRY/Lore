@@ -435,6 +435,7 @@ async function loadCreditConfig() {
     creditPackages = cfg.credit_packages || [];
   } catch { /* 못 받아도 화면은 뜬다 — 비용 칩만 0으로 보인다 */ }
   paintCost();
+  paintMyCreditHint();
 }
 
 async function refreshCreditBalance() {
@@ -446,10 +447,29 @@ async function refreshCreditBalance() {
 }
 
 function paintCreditPill() {
+  const shown = creditBalance == null ? "…" : creditBalance.toLocaleString("ko-KR");
   const el = $("#creditPillNum");
-  if (el) el.textContent = creditBalance == null ? "…" : creditBalance.toLocaleString("ko-KR");
+  if (el) el.textContent = shown;
   const cur = $("#chargeCurBalance");
-  if (cur) cur.textContent = creditBalance == null ? "…" : creditBalance.toLocaleString("ko-KR");
+  if (cur) cur.textContent = shown;
+  // 마이페이지에도 같은 숫자를 쓴다 — 두 군데가 다른 값을 보이면 어느 쪽이
+  // 참인지 알 수 없다. 잔액을 바꾸는 곳이 여기 하나뿐이라 저절로 맞는다.
+  const my = $("#myCreditNum");
+  if (my) my.textContent = shown;
+  paintMyCreditHint();
+}
+
+/* "1,240" 만 있으면 많은 건지 적은 건지 알 수 없다 — 한 편에 얼마인지를 같이
+   적어서, 몇 편 더 만들 수 있는지가 바로 보이게 한다. */
+function paintMyCreditHint() {
+  const el = $("#myCreditHint");
+  if (!el) return;
+  const one = creditCost.full;
+  if (!one) { el.textContent = ""; return; }
+  const left = creditBalance == null ? null : Math.floor(creditBalance / one);
+  el.textContent = left == null
+    ? `한 편 만드는 데 ${one.toLocaleString("ko-KR")} C`
+    : `한 편에 ${one.toLocaleString("ko-KR")} C — 지금 ${left}편 더 만들 수 있어요`;
 }
 
 function layoutMode() {
@@ -2246,6 +2266,7 @@ async function showMyPage() {
 
   $("#myPhoto").src = accountState.photo_url || GUEST_PILL_PHOTO;
   $("#myNickname").textContent = accountState.nickname || "";
+  refreshCreditBalance();          // 다른 탭에서 썼을 수 있다 — 열 때마다 새로 받는다
 
   const mine = accountState.claimed_runs || [];
   const host = $("#myWorksGrid");
@@ -2294,6 +2315,9 @@ function showMockMyPage() {
     card(1, "모모", "로맨스 판타지 · 약속의 무게, 장난의 시작")
     + card(3, "초롱", "무협 · 강호에 첫발");
   $("#myLogout").hidden = true;
+  // 잔액도 숫자가 있어야 화면이 완성돼 보인다 — 목업이라 서버 값이 아니다.
+  $("#myCreditNum").textContent = "1,240";
+  $("#myCreditHint").textContent = "한 편에 120 C — 지금 10편 더 만들 수 있어요";
   // 목업에서도 상단 배지가 로그인 뒤 모습(사진 + 마이페이지)으로 보여야
   // "로그인하면 여기가 바뀐다"가 화면으로 전달된다. 진짜 로그인은 아니다.
   mockAccountPill = true;
@@ -2359,28 +2383,6 @@ function workCard(r) {
 }
 
 /* ------------------------------------------------------------------ 잡동사니 */
-
-/* 결과 화면의 ⋯ — 첫 화면에 안 둔 것들이 여기 들어 있다. 바깥을 누르거나
-   Esc 를 누르면 닫히고, 안의 단추를 누르면(그 동작을 하고 나서) 같이 닫힌다. */
-function setMoreMenu(open) {
-  const menu = $("#moreMenu"), btn = $("#moreBtn");
-  if (!menu || !btn) return;
-  menu.hidden = !open;
-  btn.setAttribute("aria-expanded", open ? "true" : "false");
-}
-
-function wireMoreMenu() {
-  const menu = $("#moreMenu"), btn = $("#moreBtn");
-  if (!menu || !btn) return;
-  btn.addEventListener("click", e => { e.stopPropagation(); setMoreMenu(menu.hidden); });
-  menu.addEventListener("click", () => setMoreMenu(false));
-  document.addEventListener("click", e => {
-    if (!menu.hidden && !menu.contains(e.target) && e.target !== btn) setMoreMenu(false);
-  });
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") setMoreMenu(false);
-  });
-}
 
 function view(name) { document.body.dataset.view = name; }
 
@@ -2461,12 +2463,12 @@ document.addEventListener("DOMContentLoaded", () => {
   setupWizard();
   setupLou();
   setupTips();
-  wireMoreMenu();
   loadCreditConfig();       // /api/config 가 도착하면 비용 칩을 실제 값으로 다시 그린다
   refreshCreditBalance();
   paintCost();
 
   $("#chargeBtn").addEventListener("click", openChargeModal);
+  $("#myChargeBtn")?.addEventListener("click", openChargeModal);
   $("#chargeModalClose").addEventListener("click", closeChargeModal);
   $("#chargeBack").addEventListener("click", () => chargeStep("package"));
   $("#chargeDoneClose").addEventListener("click", closeChargeModal);

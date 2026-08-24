@@ -698,6 +698,18 @@
     </div>
   </header>
 
+  <!-- 크레딧. 상단 바 배지에도 숫자가 있지만 거기는 **알림**이고, 여기는
+       **자리**다 — 얼마 남았는지 보고 충전할지 정하는 곳. 한 편에 얼마인지를
+       같이 적어야 "1,240" 이 많은 건지 적은 건지 알 수 있다. -->
+  <div class="mypage-credit">
+    <div class="mypage-credit-main">
+      <p class="eyebrow">크레딧</p>
+      <p class="mypage-credit-num"><b id="myCreditNum">…</b> <span>C</span></p>
+      <p class="mypage-credit-hint" id="myCreditHint"></p>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" id="myChargeBtn">충전하기</button>
+  </div>
+
   <div class="mypage-section">
     <div class="mypage-section-head">
       <h3>저장한 작품</h3>
@@ -733,19 +745,7 @@
            또 하라고 권하는 단추만큼 쓸데없는 것이 없다. -->
       <button type="button" class="btn btn-quiet" id="claimBtn">서버에 저장하기</button>
 
-      <div class="result-more">
-        <button type="button" class="btn btn-quiet btn-icon" id="moreBtn"
-                aria-haspopup="true" aria-expanded="false" aria-label="더 보기">⋯</button>
-        <div class="more-menu" id="moreMenu" hidden>
-          <button type="button" id="moreCutsBtn" hidden>다음 장면 이어서 보기</button>
-          <button type="button" id="nextEpBtn" hidden>다음 화 만들기</button>
-          <button type="button" id="scriptBtn">대사 스크립트</button>
-          <!-- 폰이면 공유 시트(카톡·인스타…)가 뜨고, PC 면 링크를 복사한다. -->
-          <button type="button" id="shareBtn">공유</button>
-          <button type="button" id="backToWorks">목록으로</button>
-          <button type="button" id="againBtn">새로 만들기</button>
-        </div>
-      </div>
+      <a class="btn btn-quiet" href="/" id="homeBtn">홈</a>
     </div>
     <!-- 단추 셋이 각각 무엇인지 한 줄씩. 「서버에 저장하기」는 눌러야 할 이유가
          화면에 없으면 아무도 안 누른다 — 어디서 다시 보는지를 말해 준다. -->
@@ -778,6 +778,20 @@
   </details>
 
   <div class="reader" id="reader"></div>
+
+  <!-- 다 읽은 자리. "이어서 볼래?" 와 "남에게 보여줄래?" 는 읽기 **전**이 아니라
+       읽고 **난 뒤**에 생기는 마음이라, 머리에 두지 않고 여기로 내렸다. -->
+  <div class="read-end" id="readEnd">
+    <button type="button" class="btn btn-primary" id="moreCutsBtn" hidden>다음 장면 이어서 보기</button>
+    <button type="button" class="btn btn-primary" id="nextEpBtn" hidden>다음 화 만들기</button>
+    <div class="read-end-links">
+      <button type="button" class="inline-link" id="scriptBtn">대사 스크립트</button>
+      <!-- 폰이면 공유 시트(카톡·인스타…)가 뜨고, PC 면 링크를 복사한다. -->
+      <button type="button" class="inline-link" id="shareBtn">공유</button>
+      <button type="button" class="inline-link" id="backToWorks">목록으로</button>
+      <button type="button" class="inline-link" id="againBtn">새로 만들기</button>
+    </div>
+  </div>
 
   <aside class="script-panel" id="scriptPanel" hidden>
     <div class="script-head">
