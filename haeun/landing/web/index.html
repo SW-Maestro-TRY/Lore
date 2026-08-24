@@ -24,6 +24,58 @@
   </nav>
 </header>
 
+<!-- ================================================= 모드 고르기 ========= -->
+<!--
+  처음 온 사람이 가장 먼저 보는 화면. 고른 값은 브라우저에 남아서(lore_mode)
+  다음부터는 안 뜬다 — 계정이 없으므로 저장할 곳이 브라우저뿐이다.
+
+  두 모드가 **다른 기능**이 아니라는 것을 여기서 분명히 해야 한다. 만드는 길은
+  하나고, 다른 것은 "무엇을 물어보는가"와 "어디서 멈춰서 보여주는가" 뿐이다.
+-->
+<section id="modeGate" class="modegate" hidden>
+  <div class="modegate-inner">
+    <p class="eyebrow">시작하기 전에 하나만</p>
+    <h1>어떻게 만들까요?</h1>
+    <p class="modegate-sub">
+      만들어지는 웹툰은 같습니다. 다른 것은 <b>얼마나 물어보고, 어디서 멈춰서
+      보여드리는지</b>입니다. 나중에 언제든 바꿀 수 있습니다.
+    </p>
+
+    <div class="modegate-cards">
+      <button type="button" class="modecard" data-mode="simple">
+        <div class="modecard-tag">일반</div>
+        <h2>간단하게 만들기</h2>
+        <p class="modecard-lede">캐릭터와 이야기만 적으면 나머지는 AI 가 정합니다.</p>
+        <ul class="modecard-list">
+          <li><b>물어보는 것</b> 캐릭터 · 이야기 · 그림체</li>
+          <li><b>멈추는 곳</b> 캐릭터 시트 한 번
+            <small>얼굴이 틀어지면 뒤 컷 전부가 틀어져서, 여기는 꼭 보셔야 합니다</small></li>
+          <li><b>그림 검수</b> AI 가 알아서 — 명백히 망한 컷만 다시 그립니다</li>
+        </ul>
+        <span class="modecard-go">이걸로 시작 →</span>
+      </button>
+
+      <button type="button" class="modecard" data-mode="expert">
+        <div class="modecard-tag">전문</div>
+        <h2>직접 설정하기</h2>
+        <p class="modecard-lede">단계마다 결과를 보고, 마음에 안 들면 그 자리에서 다시 만듭니다.</p>
+        <ul class="modecard-list">
+          <li><b>물어보는 것</b> 위의 전부 + 연출 · 등신 비율 · 검수 강도</li>
+          <li><b>멈추는 곳</b> 이야기 · 캐릭터 시트 · 콘티 · 그림 검수
+            <small>네 곳 모두에서 보고 넘어갑니다 — 그만큼 오래 걸립니다</small></li>
+          <li><b>캐릭터 시트</b> 외형 사양을 직접 고쳐서 다시 만들 수 있습니다</li>
+        </ul>
+        <span class="modecard-go">이걸로 시작 →</span>
+      </button>
+    </div>
+
+    <p class="modegate-foot">
+      프롬프트 원문을 직접 쓰는 자리는 두 모드 모두 없습니다 — 적어 주신 말은
+      그대로 프롬프트에 실리지만, 그 문장을 조립하는 것은 하네스가 합니다.
+    </p>
+  </div>
+</section>
+
 <!-- ===================================================== 랜딩 ============ -->
 <main id="landing">
 
@@ -129,6 +181,11 @@
         <b>아는 만큼만</b> 적으세요. 빈 칸은 AI 가 캐릭터를 보고 채웁니다 —
         적어 주신 것은 바꾸지 않습니다.
       </p>
+      <div class="mode-bar">
+        <span class="mode-badge" id="modeBadge">일반 모드</span>
+        <span class="mode-bar-desc" id="modeBarDesc"></span>
+        <button type="button" class="btn btn-quiet btn-sm" id="modeSwitch">모드 바꾸기</button>
+      </div>
     </div>
 
     <form id="form" class="studio-grid" autocomplete="off">
@@ -212,7 +269,7 @@
           <div class="styles" id="styles"></div>
         </div>
 
-        <div class="card">
+        <div class="card" data-expert-only>
           <div class="field-label">연출 <small>컷을 어떻게 나눠 그릴지</small></div>
           <div class="ratios">
             <label class="ratio">
@@ -238,7 +295,7 @@
           </p>
         </div>
 
-        <div class="card">
+        <div class="card" data-expert-only>
           <div class="field-label">등신 비율 <small>비우면 그림체 기본값</small></div>
           <div class="ratios">
             <label class="ratio">
@@ -258,6 +315,52 @@
               <span><b>LD</b><small>7~8등신 · 실제 등신</small></span>
             </label>
           </div>
+        </div>
+
+        <div class="card" data-expert-only>
+          <div class="field-label">그림 검수 <small>망한 컷을 몇 번까지 다시 그릴지</small></div>
+          <div class="ratios">
+            <label class="ratio">
+              <input type="radio" name="art_qa_regen_max" value="0">
+              <span><b>안 함</b><small>잡기만 하고 안 고침</small></span>
+            </label>
+            <label class="ratio">
+              <input type="radio" name="art_qa_regen_max" value="1">
+              <span><b>1번</b><small>가볍게</small></span>
+            </label>
+            <label class="ratio">
+              <input type="radio" name="art_qa_regen_max" value="2" checked>
+              <span><b>2번</b><small>기본</small></span>
+            </label>
+            <label class="ratio">
+              <input type="radio" name="art_qa_regen_max" value="4">
+              <span><b>4번</b><small>끈질기게 · 비쌈</small></span>
+            </label>
+          </div>
+          <p class="hint">
+            검수는 <b>명백히 망한 것</b>만 잡습니다 — 서술과 다른 인원수·대상·배경,
+            작화 사고 같은 것들입니다. 구도·표정·화풍처럼 취향이 갈리는 것은 일부러
+            안 잡습니다(그건 결과 화면의 "다시 그리기"가 맡는 자리입니다).
+            <b>안 함</b>으로 두면 무엇이 걸렸는지는 그대로 보여드리고 다시 그리지만
+            않습니다 — 비용을 안 늘리면서 어디가 문제인지는 알고 싶을 때.
+            다시 그려도 못 고친 것은 버리지 않고 남겨서 검수 화면에 표시합니다.
+          </p>
+        </div>
+
+        <div class="card mode-checkpoints" data-expert-only>
+          <div class="field-label">어디서 멈추나요</div>
+          <ol class="checkpoint-list">
+            <li><b>이야기</b> 줄거리와 장면이 나온 뒤</li>
+            <li><b>캐릭터 시트</b> 얼굴이 나온 뒤 <small>일반 모드도 여기는 멈춥니다</small></li>
+            <li><b>콘티</b> 컷 나누기와 대사가 나온 뒤</li>
+            <li><b>그림 검수</b> 다 그린 뒤, 끝내기 전에 <small>잡힌 것이 있을 때만</small></li>
+          </ol>
+          <p class="hint">
+            각 자리에서 <b>이대로 진행</b>과 <b>다시 만들기</b>를 고릅니다. 다시
+            만들 때 고른 항목과 적어 주신 말이 다음 시도의 프롬프트에 실립니다.
+            멈춰 있는 동안에는 아무것도 안 돌아가므로 시간이 흐르는 것 말고는
+            비용이 들지 않습니다.
+          </p>
         </div>
 
         <div class="card submit-card">
@@ -348,7 +451,12 @@
           <figcaption>생성된 시트</figcaption>
         </figure>
       </div>
-      <details class="sheet-approval-edit">
+      <!-- 외형 사양을 직접 고치는 폼은 전문 모드에서만 연다. 일반 모드는 아래
+           항목(무엇이 마음에 안 드나요)을 고르고 다시 만들기만 한다 — 영문
+           appearance_en 을 손으로 쓰는 것은 "간단하게 만들기"가 약속한 것과
+           정반대다. 폼이 없어도 다시 만들기는 그대로 돈다(시트 폴더를 지우고
+           한 번 더 뽑는다). -->
+      <details class="sheet-approval-edit" data-expert-only>
         <summary>틀린 부분 고치기 (이름 · 외형 · 고정 소지품)</summary>
         <p class="sheet-approval-edit-hint">
           여기서 고친 내용은 "수정 반영해서 다시 만들기"를 눌러야 반영됩니다 —
@@ -472,6 +580,50 @@
       <div class="sheet-approval-actions">
         <button type="button" class="btn btn-quiet" id="boardRetryBtn">다시 만들기</button>
         <button type="button" class="btn btn-primary" id="boardApproveBtn">이대로 진행</button>
+      </div>
+    </div>
+
+    <!-- 그림 검수 결과 (전문 모드). 앞의 셋과 달리 "다시 만들기" 가 없다 —
+         그림은 이미 다 나왔고, 고치는 것은 결과 화면의 장 단위 다시 그리기다.
+         이 화면이 하는 일은 검수가 무엇을 했는지 끝나기 전에 한 번 보여주는
+         것이다. 일반 모드는 이 자리를 안 세우고, 못 고친 것만 결과 화면의
+         노트로 알린다. -->
+    <div class="sheet-approval" id="artqaApproval" hidden>
+      <div class="sheet-approval-head">
+        <h3>그림 검수 결과를 확인해 주세요</h3>
+        <p id="artqaSummary"></p>
+      </div>
+      <div class="qa-groups">
+        <div class="qa-group" id="artqaUnresolvedBox" hidden>
+          <h4>다시 그려도 못 고친 것</h4>
+          <p class="qa-group-lede">
+            여기 있는 장은 <b>그대로 완성본에 들어갑니다.</b> 마음에 안 들면 다음
+            화면에서 장을 골라 직접 다시 그려 주세요 — 그때는 무엇이 문제인지
+            적을 수 있어서 검수보다 잘 고칩니다.
+          </p>
+          <ul class="qa-list" id="artqaUnresolved"></ul>
+        </div>
+        <div class="qa-group" id="artqaFixedBox" hidden>
+          <h4>검수가 잡아서 다시 그린 것</h4>
+          <p class="qa-group-lede">
+            아래 장은 처음 그린 것이 서술과 달라서 검수가 다시 그리게 했고,
+            지금은 통과한 것입니다. 손대실 것은 없습니다.
+          </p>
+          <ul class="qa-list" id="artqaFixed"></ul>
+        </div>
+      </div>
+      <div class="fb-box" data-fb-stage="scene">
+        <p class="fb-lead">검수가 놓친 것이 있나요?
+          <small>고른 것과 적은 말은 기록만 됩니다 — 안 골라도 됩니다</small></p>
+        <div class="fb-tags"></div>
+        <label class="field">
+          <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
+          <textarea class="fb-text" rows="2"
+            placeholder="예: 3장에 손가락이 여섯 개인데 검수가 못 잡았어요"></textarea>
+        </label>
+      </div>
+      <div class="sheet-approval-actions">
+        <button type="button" class="btn btn-primary" id="artqaApproveBtn">확인했습니다 — 완성하기</button>
       </div>
     </div>
 

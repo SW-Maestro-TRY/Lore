@@ -103,6 +103,68 @@ def layout_mode(form: dict[str, Any]) -> str:
     """폼의 layout_mode → fast | webtoon. 모르는 값은 fast (지금까지의 방식)."""
     v = str((form or {}).get("layout_mode") or "").strip().lower()
     return v if v in LAYOUT_MODES else "fast"
+
+
+# --------------------------------------------------------------------------- #
+# 일반 모드 · 전문 모드
+# --------------------------------------------------------------------------- #
+#
+# 만드는 사람은 두 부류다. 하나는 "알아서 잘 만들어 줘" 이고, 하나는 "내가
+# 정하겠다" 다. 지금까지는 뒤엣것 하나만 있었다 — 폼에 그림체·연출·등신 비율이
+# 다 펼쳐져 있고, 처음 온 사람은 그중 무엇을 골라야 하는지 알 수가 없다.
+#
+# 그래서 **기능을 두 벌 만들지 않는다.** 만드는 길(캐릭터 → 이야기 → 시트 →
+# 콘티 → 그림)은 하나뿐이고, 모드가 정하는 것은 두 가지뿐이다:
+#
+#   1. 폼에서 무엇을 **보여줄 것인가** — 일반은 안 보여주고 기본값으로 간다.
+#      (안 보여준다고 값이 사라지는 게 아니다. 같은 기본값이 들어간다.)
+#   2. 어느 단계에서 사람을 **세울 것인가** — 아래 checkpoints().
+#
+# 값 자체는 한 벌이라, 일반 모드로 만든 작품을 전문 모드로 이어 만들어도
+# (create_next 가 origin_form 을 물려받는다) 아무것도 안 깨진다.
+
+def expert_mode(form: dict[str, Any]) -> bool:
+    """전문 모드로 만드는 중인가. 모르면 일반 모드 — 기본이 안전한 쪽이다."""
+    return bool((form or {}).get("expert"))
+
+
+# 각 단계에서 "사람이 볼 때까지 멈출 것인가".
+#
+#   True  — 결과가 멀쩡해도 무조건 멈추고 사람에게 보여준다.
+#   False — 하네스 게이트가 소진돼(STATUS_HUMAN) 자동으로는 더 못 고칠 때만
+#           멈춘다. 지금까지의 동작이다.
+#
+# 시트는 두 모드 모두 True 다. "아예 다른 사람이 됐다"는 사고는 뒤 컷 전부를
+# 오염시키므로 일반 모드에서도 여기는 세워야 한다 — 다만 화면이 다르다.
+# 일반 모드는 이유 항목(FEEDBACK_TAGS["sheet"])을 고르고 다시 만들기만,
+# 전문 모드는 지금처럼 외형 사양을 직접 고치는 폼까지 연다.
+def checkpoints(form: dict[str, Any]) -> dict[str, bool]:
+    expert = expert_mode(form)
+    return {
+        "sheet": True,       # 두 모드 공통 — 얼굴이 틀어지면 전부가 틀어진다
+        "story": expert,
+        "board": expert,
+        "artqa": expert,
+    }
+
+
+# 그림 QA 가 한 장을 최대 몇 번까지 다시 그릴 것인가. 전문 모드에서만 고를 수
+# 있고, 그 밖에는 하네스에 맞춘 기본값 2 다. 0 이면 QA 는 돌되 다시 그리지
+# 않는다 — "무엇이 걸렸는지는 보고 싶지만 비용은 더 안 쓰겠다" 는 선택이다.
+ART_QA_REGEN_DEFAULT = 2
+ART_QA_REGEN_MAX = 4
+
+
+def art_qa_regen_max(form: dict[str, Any]) -> int:
+    if not expert_mode(form):
+        return ART_QA_REGEN_DEFAULT
+    try:
+        n = int((form or {}).get("art_qa_regen_max"))
+    except (TypeError, ValueError):
+        return ART_QA_REGEN_DEFAULT
+    return max(0, min(ART_QA_REGEN_MAX, n))
+
+
 # 비용 안내용 환율. webtoon-harness config.yaml 의 pricing.usd_to_krw 와 같은 값.
 USD_TO_KRW = 1400
 
@@ -191,7 +253,8 @@ def _replace_block(text: str, key: str, value: str) -> str:
 
 
 def build_config(job_dir: Path, style: str, head_ratio: str = "",
-                 genre: str = "", mode: str = "fast") -> Path:
+                 genre: str = "", mode: str = "fast",
+                 qa_regen_max: int = ART_QA_REGEN_DEFAULT) -> Path:
     """이 실행에만 쓸 config.yaml. 원본에서 몇 값만 바꾼다."""
     text = (WEBTOON / "config.yaml").read_text(encoding="utf-8")
 
@@ -242,7 +305,12 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
     #      (사용자 피드백)가 맡는 영역이고, 검수는 QA 지 예술 감독이 아니다.
     #      한도가 차도 그림은 버리지 않고 art_qa.json 에 남겨서, 결과 화면이
     #      "검수에서 잡았지만 못 고친 것"으로 보여준다.
-    text = _replace_block(text, "art_qa", "{enabled: true, regen_max: 2}")
+    #
+    #      다시 그리는 횟수는 전문 모드에서만 고를 수 있다(art_qa_regen_max).
+    #      일반 모드는 늘 2 — 고를 것을 안 주는 것이 이 모드의 뜻이고, 2 는
+    #      하네스가 정한 값이다. 검수 자체는 두 모드 모두 켠다.
+    text = _replace_block(
+        text, "art_qa", f"{{enabled: true, regen_max: {int(qa_regen_max)}}}")
     if head_ratio in ("sd", "md", "ld"):
         text = _replace_block(text, "head_ratio", head_ratio)
     if genre.strip():
@@ -465,6 +533,19 @@ class Job:
             self.board_note = note
         self.board_approval.set()
 
+    # awaiting_artqa_approval 용 — 그림이 다 나온 뒤, 끝났다고 하기 전에 한 번.
+    #
+    # 앞의 셋과 성격이 다르다. 여기는 **되돌아갈 단계가 없다** — 그림은 이미
+    # 다 그려졌고 다시 그리기는 장 단위로(결과 화면의 regen) 하는 일이다.
+    # 그래서 결정이 approve 하나뿐이고, 이 자리가 하는 일은 "그림 QA 가 무엇을
+    # 잡았고 무엇을 못 고쳤는지"를 끝나기 전에 반드시 한 번 보게 하는 것이다.
+    # 일반 모드는 이 자리를 안 세우고 결과 화면의 노트로만 알린다.
+    artqa_approval: threading.Event = field(default_factory=threading.Event, repr=False)
+
+    def decide_artqa(self) -> None:
+        """그림 검수 화면의 '확인했습니다' 클릭이 여기로 온다."""
+        self.artqa_approval.set()
+
     # ---- 상태 -------------------------------------------------------------- #
 
     @property
@@ -586,6 +667,14 @@ class Job:
                              if self.saw_refusal and self.run_id else []),
                 "episode": int(self.episode),
                 "is_next": self.is_next,
+                # 화면이 어느 검수 화면을 어떤 깊이로 그릴지 정하는 근거.
+                # 폼(form)에서 다시 읽으므로 새로고침해도 같은 값이 나온다.
+                "expert": expert_mode(self.form),
+                # 그림 검수 확인 화면이 쓸 값. 그 단계에서만 읽는다 —
+                # 매 폴링(0.8초)마다 art_qa.json 을 여는 것은 헛일이다.
+                "art_qa": (art_qa_summary(self.run_id, self.episode)
+                           if self.status == "awaiting_artqa_approval" and self.run_id
+                           else None),
             }
 
     # ---- 저장 · 복원 -------------------------------------------------------- #
@@ -617,6 +706,12 @@ class Job:
             d = json.loads((path / "state.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
+        # 그림 검수 확인만 남은 채로 서버가 꺼졌으면 그것은 실패가 아니다 —
+        # episode.png 는 이미 다 나와 있고 남은 것은 사람이 한 번 보는 일뿐이다.
+        # 이것을 error 로 바꾸면 다 만든 웹툰이 "끊겼습니다"로 사라진다.
+        # 못 본 검수 결과는 결과 화면의 노트(art_qa.json)에 그대로 남는다.
+        if d.get("status") == "awaiting_artqa_approval":
+            d["status"] = "done"
         if d.get("status") in ("running", "awaiting_sheet_approval",
                                "awaiting_story_approval", "awaiting_board_approval"):
             d["status"] = "error"
@@ -654,6 +749,7 @@ class Job:
         self.sheet_approval.set()
         self.story_approval.set()
         self.board_approval.set()
+        self.artqa_approval.set()
 
     def _env(self) -> dict[str, str]:
         env = dict(os.environ)
@@ -1024,6 +1120,26 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
         raise Failed("그림은 나왔지만 한 편으로 잇지 못했습니다.")
     _leave(job)
 
+    # ---- 4. 그림 검수 확인 (전문 모드) ------------------------------------ #
+    #
+    # 1화와 같은 자리, 같은 조건. 이어 만들기는 form 을 1화에서 물려받으므로
+    # (create_next 의 origin_form) 전문 모드로 시작한 작품은 2화에서도 여기서
+    # 멈춘다 — 회차마다 다르게 굴면 사용자가 규칙을 못 읽는다.
+    #
+    # 앞의 콘티 승인과 달리 여기는 이어 만들기에서도 그대로 쓸 수 있다.
+    # 콘티 쪽은 "다시"가 없어서(위 주석) 전문 모드라고 늘 세우면 승인 아니면
+    # 중단뿐인 갈림길이 되지만, 이 자리는 원래 확인 하나뿐이다.
+    if checkpoints(job.form)["artqa"]:
+        qa = art_qa_summary(run_id, job.episode)
+        if qa.get("fixed") or qa.get("unresolved"):
+            job.status = "awaiting_artqa_approval"
+            job.note("그림 검수 결과를 확인해 주세요")
+            job.save()
+            job.artqa_approval.wait()
+            job.artqa_approval.clear()
+            # 여기서는 _cancel 을 안 본다 — 1화 쪽과 같은 이유(그 주석 참고).
+            job.status = "running"
+
 
 def execute(job: Job) -> None:
     job.status = "running"
@@ -1031,11 +1147,18 @@ def execute(job: Job) -> None:
     job.build_stages()
     job_dir = job.dir
 
+    # 어느 단계에서 사람을 세울지는 **시작할 때 한 번** 정한다. 도는 도중에
+    # 모드를 바꿔도 이번 실행의 검수 지점은 안 바뀐다 — 이야기는 자동으로
+    # 넘어갔는데 콘티에서만 갑자기 멈추는 식이 되면 사용자가 무슨 규칙인지 못
+    # 읽는다.
+    gates = checkpoints(job.form)
+
     try:
         build_config(job_dir, job.style,
                      head_ratio=str(job.form.get("head_ratio") or "").strip().lower(),
                      genre=str(job.form.get("genre") or ""),
-                     mode=layout_mode(job.form))
+                     mode=layout_mode(job.form),
+                     qa_regen_max=art_qa_regen_max(job.form))
 
         # ---- 이어 만들기 — 이야기·시트를 건너뛰고 콘티부터 -------------- #
         #
@@ -1103,12 +1226,20 @@ def execute(job: Job) -> None:
             # 상태(STATUS_HUMAN)에서도 종료 코드는 항상 0 을 낸다 — 그래서
             # exit code 만으로는 못 잡고 meta.json 을 직접 읽는다.
             status, note = _meta_status(STORY / "runs" / run_id / "meta.json")
-            if status != STATUS_HUMAN:
+            human = status == STATUS_HUMAN
+            # 일반 모드는 게이트가 소진됐을 때만 멈춘다(지금까지의 동작).
+            # 전문 모드는 멀쩡히 통과했어도 멈춘다 — 이야기가 마음에 안 드는
+            # 것은 게이트가 잡는 종류의 문제가 아니고, 여기서 안 잡으면 콘티와
+            # 그림까지 다 나온 뒤에야 알게 된다.
+            if not human and not gates["story"]:
                 break                  # STATUS_OK(또는 알 수 없는 값) — 정상 진행
 
             job.status = "awaiting_story_approval"
-            job.note("구조 검수에서 게이트 재시도가 소진됐습니다 — 확인해 주세요"
-                      + (f" ({note})" if note else ""))
+            if human:
+                job.note("구조 검수에서 게이트 재시도가 소진됐습니다 — 확인해 주세요"
+                         + (f" ({note})" if note else ""))
+            else:
+                job.note("이야기가 나왔습니다 — 확인해 주세요")
             job.save()
             job.story_approval.wait()
             job.story_approval.clear()
@@ -1214,12 +1345,16 @@ def execute(job: Job) -> None:
             human = status == STATUS_HUMAN
             if code != 0 or (not cuts_path.exists() and not human):
                 raise Failed("콘티(컷 설계)를 만들지 못했습니다.")
-            if not human:
+            # 스토리 단계와 같은 규칙 — 일반은 게이트 소진 때만, 전문은 늘.
+            if not human and not gates["board"]:
                 break                  # STATUS_OK(또는 알 수 없는 값) — 정상 진행
 
             job.status = "awaiting_board_approval"
-            job.note("콘티 단계 게이트 재시도가 소진됐습니다 — 확인해 주세요"
-                      + (f" ({note})" if note else ""))
+            if human:
+                job.note("콘티 단계 게이트 재시도가 소진됐습니다 — 확인해 주세요"
+                         + (f" ({note})" if note else ""))
+            else:
+                job.note("콘티가 나왔습니다 — 확인해 주세요")
             job.save()
             job.board_approval.wait()
             job.board_approval.clear()
@@ -1291,6 +1426,32 @@ def execute(job: Job) -> None:
                 raise Failed("그림 생성이 실패했습니다.")
             raise Failed("그림은 나왔지만 한 편으로 잇지 못했습니다.")
         _leave(job)
+
+        # ---- 6. 그림 검수 확인 (전문 모드) -------------------------------- #
+        #
+        # 그림 QA 는 두 모드 모두 돈다. 다른 것은 **결과를 언제 보여주는가**다.
+        # 일반 모드는 끝내고 결과 화면에서 "못 고친 것"만 노트로 알린다 —
+        # 자동으로 고쳐진 것은 아예 안 보인다(알 필요가 없다).
+        # 전문 모드는 끝났다고 하기 전에 여기서 세워서, 잡힌 것 전부를
+        # (다시 그려서 고쳐진 것까지) 보여준다.
+        #
+        # 잡힌 것이 하나도 없으면 안 세운다 — 보여줄 것이 없는 화면을 띄우고
+        # 확인 버튼을 누르게 하는 것은 검수가 아니라 절차다.
+        qa = (art_qa_summary(job.run_id, job.episode)
+              if gates["artqa"] and job.run_id else {})
+        if qa.get("fixed") or qa.get("unresolved"):
+            job.status = "awaiting_artqa_approval"
+            job.note("그림 검수 결과를 확인해 주세요")
+            job.save()
+            job.artqa_approval.wait()
+            job.artqa_approval.clear()
+            # **여기서는 _cancel 을 안 본다.** 앞의 세 승인 자리와 다른 점이다.
+            # 그 자리들은 아직 만들 것이 남아 있어서 취소가 "그만 만든다"는
+            # 뜻이지만, 여기는 episode.png 까지 다 나온 뒤다 — 취소할 대상이
+            # 없다. 그런데도 취소로 처리하면 **다 만든 웹툰이 "중단됨"이 되어**
+            # 결과 화면으로 못 간다. 취소든 확인이든 완성으로 끝낸다.
+            # (cancel() 이 이 Event 를 깨우는 것은 그대로 둔다 — 안 그러면
+            #  중단을 눌렀을 때 아무 반응 없이 화면이 멈춘 것처럼 보인다.)
 
         job.status = "done"
         job.finished_at = time.time()
@@ -1532,6 +1693,34 @@ def read_art_qa(run_id: str, episode: int = 1) -> dict[int, dict[str, Any]]:
                        for i in (rec.get("issues") or []) if isinstance(i, dict)],
         }
     return out
+
+
+def art_qa_summary(run_id: str, episode: int = 1) -> dict[str, Any]:
+    """그림 QA 가 무엇을 했는지 한 눈에. 전문 모드의 검수 확인 화면이 쓴다.
+
+    결과 화면의 노트(read_art_qa)와 보는 각도가 다르다. 노트는 "못 고친 것"만
+    말한다 — 사용자가 손댈 것이 그것뿐이라서다. 여기는 **다시 그려서 고친
+    것까지** 센다. 검수를 켜 둔 사람이 알고 싶은 것은 남은 흠만이 아니라
+    "검수가 실제로 일을 했는가" 이기 때문이다.
+
+    fixed 는 어림이다 — 다시 그린 뒤 이슈가 안 남았으면 고쳐진 것으로 본다.
+    하네스가 판마다의 판정을 안 남기므로 그보다 정확히는 셀 수 없다.
+    """
+    units = read_art_qa(run_id, episode)
+    fixed, unresolved = [], []
+    for no in sorted(units):
+        rec = units[no]
+        if rec.get("issues"):
+            unresolved.append({"scene": no, "issues": rec["issues"],
+                               "rounds": rec.get("rounds") or 0})
+        elif rec.get("rounds"):
+            fixed.append({"scene": no, "rounds": rec["rounds"]})
+    return {
+        "checked": sum(1 for r in units.values() if r.get("checked")),
+        "total": len(units),
+        "fixed": fixed,
+        "unresolved": unresolved,
+    }
 
 
 # --------------------------------------------------------------------------- #

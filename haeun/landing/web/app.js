@@ -26,6 +26,62 @@ const IDEAS = [
   "악역 영애로 빙의했는데 원작 내용을 하나도 모른다",
 ];
 
+/* ---- 일반 모드 · 전문 모드 ------------------------------------------- *
+ *
+ * 계정이 없으므로 고른 모드는 브라우저(localStorage)에 남는다. sessionStorage
+ * 가 아닌 이유: 창을 닫았다 열 때마다 "어떻게 만들까요?" 를 다시 묻는 것은
+ * 한 번 정한 사람에게는 그냥 방해다.
+ *
+ * 모드가 정하는 것은 두 가지뿐이다 —
+ *   1. 폼에서 [data-expert-only] 를 보여줄 것인가 (안 보여줘도 기본값은 간다)
+ *   2. 시트 검수 화면에서 외형 사양 편집 폼을 열 것인가
+ * 어느 단계에서 멈출지는 **서버가** 정한다(pipeline.checkpoints). 화면이 그
+ * 규칙을 베껴 두면 둘이 갈라져서, 고른 사람이 속은 것이 된다. */
+
+const MODES = {
+  simple: { label: "일반 모드", desc: "세부 설정 없이 자동으로 만듭니다 — 캐릭터 시트만 확인합니다." },
+  expert: { label: "전문 모드", desc: "이야기 · 시트 · 콘티 · 그림 검수, 네 곳에서 멈추고 보여드립니다." },
+};
+
+function currentMode() {
+  const m = localStorage.getItem("lore_mode");
+  return m === "expert" ? "expert" : m === "simple" ? "simple" : null;
+}
+
+function isExpert() { return currentMode() === "expert"; }
+
+/* 폼의 전문 전용 칸을 열고 닫는다. 숨긴 칸의 값은 **안 지운다** — 전문 모드로
+   골라 놓고 일반으로 바꿔도 라디오의 기본값(연출 fast · 등신 기본 · 검수 2번)이
+   그대로 남아서, collect() 가 보내는 값이 일반 모드가 약속한 것과 같다. */
+function applyMode() {
+  const mode = currentMode() || "simple";
+  const expert = mode === "expert";
+  document.body.dataset.mode = mode;
+  $$("[data-expert-only]").forEach(el => { el.hidden = !expert; });
+  const badge = $("#modeBadge");
+  if (badge) badge.textContent = MODES[mode].label;
+  const desc = $("#modeBarDesc");
+  if (desc) desc.textContent = MODES[mode].desc;
+  paintCost();
+}
+
+function setMode(mode) {
+  localStorage.setItem("lore_mode", mode === "expert" ? "expert" : "simple");
+  applyMode();
+}
+
+/* 아직 안 골랐으면 고르는 화면부터. 고르고 나면 다시 안 뜬다. */
+function openModeGate() {
+  $("#modeGate").hidden = false;
+  view("mode");
+  window.scrollTo(0, 0);
+}
+
+function closeModeGate() {
+  $("#modeGate").hidden = true;
+  view("landing");
+}
+
 let jobId    = sessionStorage.getItem("lore_job") || null;
 let poll     = null;
 /* 사진은 여러 장 받는다 — 한 사람을 여러 각도로 찍은 것이다.
@@ -328,6 +384,13 @@ function collect() {
     // fast(한 장에 3컷) | webtoon(컷마다 한 장). 비우면 fast — 지금까지의 방식이다.
     layout_mode: form.layout_mode ? form.layout_mode.value : "fast",
     preview:    $("#previewToggle").checked,
+    // 전문 모드인가. 서버는 이 한 값으로 어디서 멈출지(checkpoints)와 무엇을
+    // 고를 수 있는지를 정한다. 이번 실행에 박히므로, 도는 도중에 모드를
+    // 바꿔도 이 작업의 검수 지점은 안 바뀐다.
+    expert:     isExpert(),
+    // 전문 모드에서만 읽힌다 — 일반 모드는 서버가 기본값(2)으로 되돌린다.
+    art_qa_regen_max: form.art_qa_regen_max
+      ? Number(form.art_qa_regen_max.value) : 2,
     photos_data: photos,
   };
 }
@@ -398,6 +461,17 @@ function mmss(sec) {
 function renderProgress(s) {
   $("#clock").textContent = mmss(s.elapsed);
 
+  // 검수 화면은 **그 작업이 시작될 때의 모드**를 따른다 (localStorage 가 아니라
+  // 서버가 준 s.expert). 도는 중에 모드를 바꾼 사람에게, 시작할 때 약속한 것과
+  // 다른 화면이 뜨면 안 된다.
+  const jobExpert = !!s.expert;
+  const sheetEdit = $(".sheet-approval-edit");
+  if (sheetEdit) sheetEdit.hidden = !jobExpert;
+  // 일반 모드에는 외형 편집 폼이 없으니 "수정 반영해서" 라고 하면 안 맞는다 —
+  // 그 모드의 다시 만들기는 시트를 한 번 더 뽑는 것이다.
+  $("#sheetRetryBtn").textContent =
+    jobExpert ? "수정 반영해서 다시 만들기" : "다시 만들기";
+
   const approvalBox = $("#sheetApproval");
   if (s.status === "awaiting_sheet_approval") {
     approvalBox.hidden = false;
@@ -451,6 +525,22 @@ function renderProgress(s) {
     boardApprovalBox.hidden = true;
   }
 
+  const artqaBox = $("#artqaApproval");
+  if (s.status === "awaiting_artqa_approval") {
+    artqaBox.hidden = false;
+    if (lastStatus !== "awaiting_artqa_approval") {
+      renderArtQa(s.art_qa || {});
+      $("#artqaApproveBtn").disabled = false;
+    }
+    // 이 자리에서는 중단할 것이 없다 — 그림은 이미 다 나왔다. 버튼을 남겨 두면
+    // "다 만든 것을 버리는 버튼" 으로 읽힌다(서버는 어느 쪽이든 완성으로
+    // 끝내지만, 누르는 사람은 그걸 모른다).
+    $("#cancelBtn").hidden = true;
+  } else {
+    artqaBox.hidden = true;
+    $("#cancelBtn").hidden = false;
+  }
+
   if (s.status === "queued") {
     $("#progEyebrow").textContent = "대기 중";
     $("#progTitle").textContent = "앞에 만들고 있는 작품이 있습니다";
@@ -463,6 +553,14 @@ function renderProgress(s) {
     $("#progSub").textContent = art && art.eta_sec
       ? `그림 단계입니다 — 남은 시간 약 ${mmss(art.eta_sec)}.`
       : "지금 무엇을 하고 있는지 아래에 그대로 보여드립니다.";
+  } else if (s.status && s.status.startsWith("awaiting_")) {
+    // 멈춰서 기다리는 중인데 "만들고 있습니다" 가 그대로 떠 있으면, 사용자는
+    // 자기 차례인 줄 모르고 계속 기다린다 — 실제로 아무것도 안 돌아간다.
+    $("#progEyebrow").textContent = "확인이 필요합니다";
+    $("#progTitle").textContent = "잠깐 봐 주세요";
+    $("#progSub").textContent = s.status === "awaiting_artqa_approval"
+      ? "그림은 다 나왔습니다. 검수 결과만 확인하면 끝납니다."
+      : "아래에서 확인하고 넘어가 주세요 — 그동안은 아무것도 안 돌아갑니다.";
   }
 
   paintMascot(s, currentStage);
@@ -672,6 +770,63 @@ async function sendBoardDecision(decision) {
   } catch (err) {
     toast(err.message);
     setBoardButtonsBusy(false);
+  }
+}
+
+/* ---- 그림 검수 확인 (전문 모드) --------------------------------------- */
+
+function qaItems(list, render) {
+  return list.map(render).join("");
+}
+
+function renderArtQa(qa) {
+  const fixed = qa.fixed || [], unresolved = qa.unresolved || [];
+  const checked = qa.checked || 0;
+
+  const parts = [`장 ${checked}개를 검수했습니다.`];
+  if (fixed.length) parts.push(`${fixed.length}개는 다시 그려서 고쳤습니다.`);
+  if (unresolved.length) parts.push(`${unresolved.length}개는 못 고쳤습니다.`);
+  if (!fixed.length && !unresolved.length) parts.push("걸린 것은 없습니다.");
+  $("#artqaSummary").textContent = parts.join(" ");
+
+  const unresolvedBox = $("#artqaUnresolvedBox");
+  unresolvedBox.hidden = !unresolved.length;
+  $("#artqaUnresolved").innerHTML = qaItems(unresolved, u => `
+    <li>
+      <b>${esc(u.scene)}장</b>
+      <span class="qa-rounds">${u.rounds ? `${esc(u.rounds)}번 다시 그림` : "다시 안 그림"}</span>
+      <ul class="qa-issues">
+        ${(u.issues || []).map(i => `<li>${esc(i.what)}</li>`).join("")}
+      </ul>
+    </li>`);
+
+  const fixedBox = $("#artqaFixedBox");
+  fixedBox.hidden = !fixed.length;
+  $("#artqaFixed").innerHTML = qaItems(fixed, f => `
+    <li><b>${esc(f.scene)}장</b>
+      <span class="qa-rounds">${esc(f.rounds)}번 다시 그려서 통과</span></li>`);
+}
+
+async function sendArtqaDecision() {
+  if (!jobId) return;
+  const btn = $("#artqaApproveBtn");
+  btn.disabled = true;
+  // 이 화면의 상자를 직접 집는다 — data-fb-stage="scene" 은 결과 화면의 장별
+  // 다시 그리기 상자도 쓰므로, fbStageBox("scene") 은 엉뚱한 것을 집을 수 있다.
+  const box = $(".fb-box", $("#artqaApproval"));
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/artqa-decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fbRead(box)),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    fbClear(box);
+    // 다음 tick() 이 done 을 받아 결과 화면으로 넘긴다.
+  } catch (err) {
+    toast(err.message);
+    btn.disabled = false;
   }
 }
 
@@ -1305,6 +1460,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // 연출(빠르게/웹툰)이 바뀌면 그림 호출 수가 달라져 비용도 달라진다.
   document.querySelectorAll('input[name="layout_mode"]').forEach(
     el => el.addEventListener("change", paintCost));
+
+  // 모드 — 폼을 만든 **뒤에** 적용해야 한다(applyMode 가 폼의 칸을 여닫는다).
+  applyMode();
+  $$("#modeGate .modecard").forEach(card => card.addEventListener("click", () => {
+    setMode(card.dataset.mode);
+    closeModeGate();
+    document.querySelector("#studio").scrollIntoView();
+  }));
+  $("#modeSwitch").addEventListener("click", openModeGate);
+
   paintCost();
 
   $("#cancelBtn").addEventListener("click", async () => {
@@ -1317,6 +1482,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#storyRetryBtn").addEventListener("click", () => sendStoryDecision("retry"));
   $("#boardApproveBtn").addEventListener("click", () => sendBoardDecision("approve"));
   $("#boardRetryBtn").addEventListener("click", () => sendBoardDecision("retry"));
+  $("#artqaApproveBtn").addEventListener("click", sendArtqaDecision);
   $("#againBtn").addEventListener("click", forget);
   $("#nextEpBtn").addEventListener("click", openNextEp);
   $("#nextEpGo").addEventListener("click", startNextEp);
@@ -1354,5 +1520,9 @@ document.addEventListener("DOMContentLoaded", () => {
     openExisting(asked);
   } else if (jobId) {
     startPolling();          // 새로고침해도 돌던 작업으로 돌아온다
+  } else if (!currentMode()) {
+    // 처음 온 사람. 결과·목록·돌던 작업으로 바로 들어온 경우에는 안 띄운다 —
+    // 보러 온 사람에게 만들기 전 질문을 먼저 들이미는 꼴이 된다.
+    openModeGate();
   }
 });

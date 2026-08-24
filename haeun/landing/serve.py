@@ -210,6 +210,15 @@ class Handler(BaseHTTPRequestHandler):
                 # 작가 규칙 글자수 상한 — 화면이 남은 글자수를 보여줄 근거
                 "memory_always_max": pipeline.MEMORY_ALWAYS_MAX,
                 "memory_keyword_max": pipeline.MEMORY_KEYWORD_MAX,
+                # 일반/전문 모드. 어느 단계에서 사람을 세우는지를 화면이 베껴
+                # 두지 않게 서버가 준다 — 온보딩의 "무엇이 다른가" 설명과 실제
+                # 동작이 갈라지면, 고른 사람이 속은 것이 된다.
+                "modes": {
+                    "simple": pipeline.checkpoints({}),
+                    "expert": pipeline.checkpoints({"expert": True}),
+                },
+                "art_qa_regen_default": pipeline.ART_QA_REGEN_DEFAULT,
+                "art_qa_regen_max": pipeline.ART_QA_REGEN_MAX,
             })
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
@@ -689,6 +698,27 @@ class Handler(BaseHTTPRequestHandler):
             if decision not in ("approve", "retry"):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
             job.decide_board(decision, self._record_feedback(job, "board", decision, body))
+            return self._json({"ok": True})
+
+        # 그림 검수 확인 화면의 "확인했습니다" 버튼 — 전문 모드에서만 뜬다.
+        #
+        # 앞의 셋과 달리 decision 을 안 받는다. 이 자리에는 되돌아갈 단계가
+        # 없다(그림은 이미 다 나왔다) — 여기서 할 수 있는 일은 "봤다"뿐이고,
+        # 실제로 고치는 것은 결과 화면의 장 단위 다시 그리기다. 고른 항목과
+        # 적은 말은 다음 판을 고칠 근거로 남긴다.
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/artqa-decision", url.path)
+        if m:
+            job = runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            if job.status != "awaiting_artqa_approval":
+                return self._error(409, "지금은 그림 검수 확인 단계가 아닙니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            self._record_feedback(job, "scene", "approve", body)
+            job.decide_artqa()
             return self._json({"ok": True})
 
         # 편집실에서 얹은 것을 작품 폴더에 저장한다. 그림은 안 건드린다 —

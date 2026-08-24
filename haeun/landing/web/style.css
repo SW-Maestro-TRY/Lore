@@ -183,6 +183,63 @@ body[data-view="nextep"]  .topbar { display: none; }
   margin-top: .7em; color: var(--dim); font-size: .85rem; letter-spacing: .04em;
 }
 
+/* ------------------------------------------------- 모드 고르기(온보딩) */
+/*
+   처음 온 사람이 보는 첫 화면이라 랜딩·상단바를 통째로 덮는다. 두 카드를
+   나란히 놓아 **같은 무게**로 보이게 한다 — 한쪽을 크게 하거나 색을 주면
+   "이걸 고르라는 것" 이 되고, 그러면 고르는 화면이 아니라 안내 화면이다. */
+
+body[data-view="mode"] #landing,
+body[data-view="mode"] .topbar,
+body[data-view="mode"] .foot { display: none; }
+
+.modegate { min-height: 100vh; display: grid; place-items: center; padding: 5vh 22px; }
+.modegate-inner { max-width: 980px; width: 100%; }
+.modegate h1 { font-size: clamp(1.9rem, 4vw, 2.8rem); font-weight: 800; margin-top: .2em; }
+.modegate-sub { color: var(--muted); max-width: 58ch; margin: 1em 0 0; }
+.modegate-foot { color: var(--dim); font-size: .82rem; max-width: 64ch; margin: 2em auto 0; text-align: center; }
+
+.modegate-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 2.4em; }
+@media (max-width: 760px) { .modegate-cards { grid-template-columns: 1fr; } }
+
+.modecard {
+  position: relative; text-align: left; cursor: pointer; font: inherit; color: inherit;
+  background: var(--card); border: 1px solid var(--line-2); border-radius: var(--radius);
+  padding: 34px 24px 22px; display: flex; flex-direction: column; gap: 10px;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.modecard:hover { border-color: var(--accent); background: var(--card-2); transform: translateY(-2px); }
+.modecard:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.modecard-tag {
+  position: absolute; top: 0; left: 24px; transform: translateY(-50%);
+  background: var(--gold); color: var(--ink); font-size: .68rem; font-weight: 800;
+  letter-spacing: .18em; padding: .35em .9em; border-radius: 6px;
+}
+.modecard h2 { font-size: 1.3rem; }
+.modecard-lede { color: var(--muted); font-size: .9rem; margin: 0; }
+.modecard-list { list-style: none; padding: 0; margin: .6em 0 0; display: grid; gap: 10px; }
+.modecard-list li { font-size: .86rem; color: var(--text); line-height: 1.5; }
+.modecard-list li b {
+  display: block; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--dim); font-weight: 700; margin-bottom: 2px;
+}
+.modecard-list li small { display: block; color: var(--dim); font-size: .76rem; margin-top: 2px; }
+.modecard-go { margin-top: auto; padding-top: 14px; color: var(--accent); font-weight: 700; font-size: .88rem; }
+
+/* 폼 위의 현재 모드 표시. 지금 무엇으로 만들고 있는지가 안 보이면, 왜 어떤
+   칸은 있고 어떤 칸은 없는지를 사용자가 설명할 길이 없다. */
+.mode-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 1.4em; }
+.mode-badge {
+  background: var(--card-2); border: 1px solid var(--line-2); border-radius: 999px;
+  padding: .35em 1em; font-size: .8rem; font-weight: 700; white-space: nowrap;
+}
+body[data-mode="expert"] .mode-badge { border-color: var(--gold); color: var(--gold); }
+.mode-bar-desc { color: var(--dim); font-size: .82rem; flex: 1 1 20ch; }
+
+.checkpoint-list { margin: 10px 0 0; padding-left: 1.3em; display: grid; gap: 8px; }
+.checkpoint-list li { font-size: .86rem; line-height: 1.5; }
+.checkpoint-list li small { display: block; color: var(--dim); font-size: .76rem; }
+
 /* ------------------------------------------------------------------ 폼 */
 
 .studio-head { margin-bottom: 2.4em; }
@@ -481,6 +538,20 @@ body[data-view="nextep"]  .topbar { display: none; }
 .sheet-approval-edit[open] summary { margin-bottom: 12px; }
 .sheet-approval-edit-hint { color: var(--muted); font-size: .82rem; margin: 0 0 14px; }
 .sheet-approval-edit .field { margin-bottom: 12px; }
+
+/* 그림 검수 결과. 못 고친 것을 먼저(빨강), 고친 것을 나중에(초록) 둔다 —
+   사용자가 손댈 것이 있는 쪽이 위에 와야 한다. */
+.qa-groups { display: grid; gap: 16px; }
+.qa-group { border-left: 3px solid var(--line-2); padding-left: 14px; }
+#artqaUnresolvedBox { border-left-color: var(--accent); }
+#artqaFixedBox { border-left-color: var(--ok); }
+.qa-group h4 { font-size: .95rem; margin: 0 0 4px; }
+.qa-group-lede { color: var(--muted); font-size: .82rem; margin: 0 0 10px; }
+.qa-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.qa-list > li { font-size: .88rem; }
+.qa-rounds { color: var(--dim); font-size: .78rem; margin-left: .6em; }
+.qa-issues { margin: 6px 0 0; padding-left: 1.2em; color: var(--muted); }
+.qa-issues li { font-size: .82rem; line-height: 1.5; }
 
 .cutstrip { margin-top: 22px; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; background: var(--card); }
 .cutstrip-head { display: flex; justify-content: space-between; font-size: .85rem; color: var(--muted); margin-bottom: 12px; }
