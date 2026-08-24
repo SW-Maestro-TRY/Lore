@@ -24,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, quote
 
+import accounts
 import credits
 import pipeline
 
@@ -99,12 +100,35 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionAbortedError):
             pass
 
-    def _json(self, obj, code: int = 200) -> None:
+    def _json(self, obj, code: int = 200, headers: dict[str, str] | None = None) -> None:
         self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
-                   "application/json; charset=utf-8")
+                   "application/json; charset=utf-8", headers)
 
     def _error(self, code: int, message: str, **extra) -> None:
         self._json({"error": message, **extra}, code)
+
+    # ---- 계정 세션(쿠키) ---------------------------------------------------- #
+    #
+    # 로그인 안 해도 웹툰은 그대로 만든다 — 계정은 "이 작품 나중에도 찾기"
+    # 용 선택 기능이라, 세션 쿠키가 없어도 대부분의 자리는 그냥 게스트로 본다.
+
+    def _session_cookie(self) -> str | None:
+        raw = self.headers.get("Cookie", "")
+        for part in raw.split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == accounts.SESSION_COOKIE:
+                return v
+        return None
+
+    def _account_key(self) -> str | None:
+        return accounts.session_nickname_key(self._session_cookie())
+
+    def _set_session_header(self, token: str) -> dict[str, str]:
+        return {"Set-Cookie": f"{accounts.SESSION_COOKIE}={token}; Path=/; "
+                              f"Max-Age={accounts.SESSION_MAX_AGE}; SameSite=Lax; HttpOnly"}
+
+    def _clear_session_header(self) -> dict[str, str]:
+        return {"Set-Cookie": f"{accounts.SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly"}
 
     def _file(self, path: Path, download: str = "") -> None:
         if not path.exists() or not path.is_file():
@@ -232,6 +256,7 @@ class Handler(BaseHTTPRequestHandler):
                     "webtoon_mult": credits.CREDIT_WEBTOON_MULT,
                 },
                 "credit_packages": credits.PACKAGES,
+                "account_photo_presets": accounts.PRESET_PHOTOS,
             })
 
         # 잔액 — uid 는 브라우저(localStorage)가 만들어 붙인다(계정이 없어서).
@@ -240,6 +265,38 @@ class Handler(BaseHTTPRequestHandler):
             if not credits.valid_uid(uid):
                 return self._error(400, "uid 가 없습니다")
             return self._json({"balance": credits.balance(uid)})
+
+        # ---- 계정(선택 기능) ------------------------------------------------ #
+        #
+        # 로그인 안 해도(게스트) 웹툰은 그대로 만들 수 있다 — 여기 자리들은
+        # "이 작품 나중에도 찾기" 를 원하는 사람만 쓴다.
+        if path == "/api/account/me":
+            key = self._account_key()
+            if not key:
+                return self._json({"logged_in": False})
+            account = accounts.get_account(key)
+            if not account:
+                return self._json({"logged_in": False})
+            return self._json({"logged_in": True, **accounts.public_info(key, account)})
+
+        m = re.fullmatch(r"/api/account/avatar/([\w-]+)", path)
+        if m:
+            src = accounts.AVATARS_DIR / f"{m.group(1)}.jpg"
+            if not src.exists():
+                return self._error(404, "사진이 없습니다")
+            return self._file(src)
+
+        # 계정에 담아둔 작품 — list_runs() 를 재사용해서 claimed_runs 로 거른다.
+        # run 자체에 소유자 개념을 새로 넣지 않는다(기존 목록·편집기가
+        # run_id 만으로 도는 구조를 그대로 두고, "누구 것" 만 계정 쪽에 얹는다).
+        if path == "/api/account/works":
+            key = self._account_key()
+            if not key:
+                return self._error(401, "로그인이 필요합니다")
+            account = accounts.get_account(key)
+            claimed = set((account or {}).get("claimed_runs", []))
+            runs = [r for r in pipeline.list_runs(limit=200) if r["run_id"] in claimed]
+            return self._json({"runs": runs})
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
         # 작업(Job)을 거치지 않는다 — 하네스를 직접 돌린 run 도 똑같이 열린다.
@@ -464,6 +521,68 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:                                  # noqa: N802
         url = urlparse(self.path)
+
+        # ---- 계정(선택 기능) ------------------------------------------------ #
+        if url.path == "/api/account/signup":
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            account, err = accounts.signup(str(body.get("nickname") or ""),
+                                           str(body.get("password") or ""),
+                                           body.get("photo"))
+            if err:
+                return self._error(400, err)
+            token = accounts.create_session(account["key"])
+            return self._json({"logged_in": True, **account},
+                              headers=self._set_session_header(token))
+
+        if url.path == "/api/account/login":
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            account, err = accounts.verify_password(str(body.get("nickname") or ""),
+                                                     str(body.get("password") or ""))
+            if err:
+                return self._error(401, err)
+            token = accounts.create_session(account["key"])
+            return self._json({"logged_in": True, **account},
+                              headers=self._set_session_header(token))
+
+        if url.path == "/api/account/logout":
+            accounts.destroy_session(self._session_cookie())
+            return self._json({"ok": True}, headers=self._clear_session_header())
+
+        if url.path == "/api/account/photo":
+            key = self._account_key()
+            if not key:
+                return self._error(401, "로그인이 필요합니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            ok, err = accounts.set_photo(key, body.get("photo") or {})
+            if not ok:
+                return self._error(400, err)
+            account = accounts.get_account(key)
+            return self._json({"logged_in": True, **accounts.public_info(key, account)})
+
+        # 결과 화면의 "계정에 담아두기". 로그인이 안 돼 있으면 여기서 막고,
+        # 화면이 그 응답을 보고 로그인/회원가입 모달을 연다.
+        if url.path == "/api/account/claim":
+            key = self._account_key()
+            if not key:
+                return self._error(401, "로그인이 필요합니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            run_id = str(body.get("run_id") or "")
+            if not re.fullmatch(r"[\w.-]+", run_id):
+                return self._error(400, "run_id 가 없습니다")
+            accounts.claim_run(key, run_id)
+            return self._json({"ok": True})
 
         # ---- 크레딧 · 프리토타이핑 결제 ----------------------------------- #
         #

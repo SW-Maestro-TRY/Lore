@@ -26,9 +26,75 @@
       <span id="creditPillNum">…</span>
       <span class="credit-pill-plus">+</span>
     </button>
+    <!-- 계정은 선택 기능이다 — 안 눌러도 게스트로 그대로 만든다.
+         로그인 전엔 "로그인" 글자만, 로그인 후엔 프로필 사진+닉네임으로 바뀐다. -->
+    <button type="button" class="account-pill" id="accountBtn" title="로그인 · 내 계정">
+      <img class="account-pill-avatar" id="accountAvatarImg" alt="" hidden>
+      <span id="accountPillLabel">로그인</span>
+    </button>
     <button type="button" class="btn btn-ghost" id="startBtnTop">만들어보기</button>
   </nav>
 </header>
+
+<!-- ================================================= 계정(선택 기능) ===
+     닉네임+비밀번호만 — 이메일 인증·비밀번호 찾기 없음. 로그인 안 해도
+     웹툰은 그대로 만들 수 있고, "이 작품 나중에도 찾기" 를 원할 때만 쓴다. -->
+<div class="modal-veil" id="accountModal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="accountModalTitle">
+    <button type="button" class="modal-close" id="accountModalClose" aria-label="닫기">×</button>
+
+    <div id="accountAuth">
+      <div class="account-tabs">
+        <button type="button" class="account-tab is-active" id="tabLogin" data-tab="login">로그인</button>
+        <button type="button" class="account-tab" id="tabSignup" data-tab="signup">회원가입</button>
+      </div>
+
+      <form class="account-form" id="loginForm">
+        <h3 id="accountModalTitle">로그인</h3>
+        <label class="field"><span>닉네임</span>
+          <input type="text" name="nickname" maxlength="20" autocomplete="username" required>
+        </label>
+        <label class="field"><span>비밀번호</span>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <p class="account-error" id="loginError" hidden></p>
+        <button type="submit" class="btn btn-primary btn-big">로그인</button>
+      </form>
+
+      <form class="account-form" id="signupForm" hidden>
+        <h3>회원가입</h3>
+        <label class="field"><span>닉네임</span>
+          <input type="text" name="nickname" maxlength="20" autocomplete="username"
+                 placeholder="한글·영문·숫자 2~20자" required>
+        </label>
+        <label class="field"><span>비밀번호</span>
+          <input type="password" name="password" autocomplete="new-password"
+                 placeholder="4자 이상" required>
+        </label>
+        <div class="account-photo-picker">
+          <span class="field-label">프로필 사진</span>
+          <div class="photo-grid" id="photoGrid"></div>
+          <label class="photo-upload-btn">
+            내 사진 올리기
+            <input type="file" id="photoUpload" accept="image/*" hidden>
+          </label>
+        </div>
+        <p class="account-error" id="signupError" hidden></p>
+        <button type="submit" class="btn btn-primary btn-big">회원가입</button>
+      </form>
+    </div>
+
+    <div id="accountProfile" hidden>
+      <div class="account-profile-head">
+        <img id="profileAvatarImg" class="account-profile-avatar" alt="">
+        <b id="profileNickname"></b>
+      </div>
+      <p class="account-works-label">내가 담아둔 작품</p>
+      <div class="account-works" id="accountWorksList"></div>
+      <button type="button" class="btn btn-quiet btn-sm" id="logoutBtn">로그아웃</button>
+    </div>
+  </div>
+</div>
 
 <!-- ============================================= 크레딧 충전(프리토타이핑) ===
      실제 PG 연동이 없다 — 카드사를 고르면 그 자리에서 크레딧을 지급한다.
@@ -583,6 +649,13 @@
       <button type="button" class="btn btn-quiet btn-sm" id="againBtn">새로 만들기</button>
     </div>
   </header>
+
+  <!-- 계정이 없어도 작품은 브라우저에 남는다 — 이건 "그래도 계정에 담아
+       두면 다른 기기·브라우저를 지워도 찾을 수 있다" 는 선택 권유일 뿐이다. -->
+  <div class="claim-banner" id="claimBanner" hidden>
+    <span id="claimBannerText">이 작품을 나중에도 찾으시려면?</span>
+    <button type="button" class="btn btn-sm btn-primary" id="claimBtn">계정에 담아두기</button>
+  </div>
 
   <details class="mem-box">
     <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
