@@ -3,126 +3,57 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LORE — 화면 구경 (목업)</title>
+<title>LORE — 웹툰을 만들고 있습니다</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐋</text></svg>">
-<style>
-  /* 이 파일에만 필요한 소소한 것들 — 데모 조종대 */
-  .demo-nav {
-    max-width: 720px; margin: 0 auto; padding: 20px clamp(16px, 5vw, 40px) 0;
-  }
-  .demo-nav h1 { font-size: 1.3rem; font-weight: 800; color: var(--accent-d); }
-  .demo-nav p { color: var(--muted); font-size: .88rem; margin: .5em 0 0; }
-  .demo-links { display: grid; gap: 8px; margin-top: 16px; }
-  .demo-links a {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-    background: var(--card); border: 1px solid var(--line-2); border-radius: 14px;
-    padding: 14px 16px; color: var(--text);
-  }
-  .demo-links a b { color: var(--accent-d); }
-  .demo-links a small { color: var(--dim); }
-  .demo-links a:hover { border-color: var(--accent); }
-  .demo-ctl {
-    max-width: 720px; margin: 18px auto 0; padding: 0 clamp(16px, 5vw, 40px);
-    display: flex; flex-wrap: wrap; gap: 8px;
-  }
-  .demo-ctl button {
-    border: 1px solid var(--line-2); background: var(--card); border-radius: 999px;
-    padding: .5em 1em; font: inherit; font-size: .84rem; color: var(--muted);
-    cursor: pointer; min-height: 40px;
-  }
-  .demo-ctl button[aria-pressed="true"] {
-    background: var(--accent-d); border-color: var(--accent-d);
-    color: var(--on-sea); font-weight: 700;
-  }
-  .demo-note {
-    max-width: 720px; margin: 8px auto 0; padding: 0 clamp(16px, 5vw, 40px);
-    color: var(--dim); font-size: .78rem;
-  }
-</style>
 </head>
 <body data-view="running">
 
-<!-- ==================================================== 데모 안내 =======
-     실제 생성 없이 화면을 구경하는 자리. 서버 상태를 안 읽고 과금도 없다.
-     아래 로딩 화면은 index.html 의 #progress 마크업을 그대로 복사한 것이라,
-     본편의 클래스·구조가 바뀌면 여기도 같이 고쳐야 한다(수동 동기화). -->
-<div class="demo-nav">
-  <h1>LORE 화면 구경</h1>
-  <p>실제로 만들지 않고 화면만 봅니다 — 과금 없음. 아래는 <b>기다리는 화면</b>이
-     가짜 진행으로 돌고 있는 것이고, 다른 화면은 링크로 갑니다.</p>
-  <div class="demo-links">
-    <a href="/"><span><b>홈 · 만들기</b></span><small>소개 + 위저드 (실제 화면)</small></a>
-    <a href="/works"><span><b>내 웹툰</b></span><small>만든 작품 목록 — 지금까지 만든 게 있어야 차 있음</small></a>
-    <a href="/editor"><span><b>편집실</b></span><small>말풍선·스티커 목업 — 샘플 데이터로 동작</small></a>
-  </div>
-</div>
-
-<!-- 조종대 — 단계를 손으로 넘겨 본다 -->
-<div class="demo-ctl" id="demoCtl" role="group" aria-label="단계 고르기">
-  <button type="button" data-stage="story" aria-pressed="true">1 이야기</button>
-  <button type="button" data-stage="sheet" aria-pressed="false">2 시트</button>
-  <button type="button" data-stage="board" aria-pressed="false">3 콘티</button>
-  <button type="button" data-stage="art" aria-pressed="false">4 그림</button>
-  <button type="button" data-stage="bind" aria-pressed="false">5 잇기</button>
-  <button type="button" data-stage="done" aria-pressed="false">완료</button>
-  <button type="button" data-stage="error" aria-pressed="false">오류</button>
-</div>
-<p class="demo-note">자동으로도 넘어갑니다 · 루를 눌러 보세요 (한 번 / 두 번 / 연타 / 길게)</p>
-
-<!-- ================================================ 기다리는 화면 ========
-     index.html #progress 의 사본. id 는 그대로 둔다(스타일이 id 를 안 쓰고
-     클래스만 쓰므로 충돌 없음). -->
+<!-- 기다리는 화면 목업. index.html #progress 의 사본이라 마크업이 같아야
+     한다 — 본편이 바뀌면 여기도 같이 고친다. 다른 것은 진행이 가짜라는
+     것뿐이고, 화면에는 그 사실이 안 보인다. -->
 <section id="progress" class="progress">
   <div class="progress-inner">
+
     <header class="progress-head">
-      <button type="button" class="mascot" id="mascot"
-              data-mood="think" aria-label="루를 쓰다듬기"></button>
-      <p class="eyebrow" id="progEyebrow">만드는 중</p>
-      <h2 id="progTitle">웹툰을 만들고 있습니다</h2>
+      <div class="stage-art" id="stageArt" data-stage="story" aria-hidden="true"></div>
+      <p class="stage-say" id="mascotLine">루가 이야기를 만들고 있어요</p>
       <div class="lou-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="louProgress">
         <div class="lou-bar"><i id="louBarFill"></i></div>
         <span class="lou-pct" id="louPct">0%</span>
       </div>
-      <p class="mascot-line" id="mascotLine"></p>
-      <p class="progress-sub" id="progSub">잠시만요 — 지금 무엇을 하고 있는지 그대로 보여드립니다.</p>
-      <p class="mascot-poke">루를 눌러 보세요 — 기다리는 동안 놀아 줍니다</p>
       <div class="progress-clock">
         <span class="clock-time" id="clock">0:00</span>
         <span class="clock-label">경과</span>
-        <button type="button" class="btn btn-quiet btn-sm" onclick="location.href='/'">나가기</button>
+        <button type="button" class="btn btn-quiet btn-sm" onclick="location.href='/'">중단</button>
       </div>
     </header>
+
+    <div class="play">
+      <button type="button" class="mascot" id="mascot" aria-label="루를 쓰다듬기"></button>
+      <p class="play-say" id="playSay">루를 눌러 보세요</p>
+    </div>
+
   </div>
 </section>
 
 <script>
-/* 데모 전용 대본. app.js 를 안 불러온다 — 진짜 app.js 는 폼·목록 등 수십 개
-   요소를 배선하다 여기 없는 것에서 죽는다. 대신 같은 동작(단계 그림 · 진행
-   바 · 딴짓 · 만지기)을 이 파일 안에서 작게 다시 쓴다. 본편 동작이 바뀌면
-   여기도 맞춰야 한다. */
+/* 데모 대본. app.js 는 안 부른다(여기 없는 요소를 배선하다 죽는다) —
+   같은 동작을 작게 다시 쓴다. 본편 app.js 의 MASCOT_MOODS · LOU_REACT 와
+   짝이 맞아야 한다. */
 (() => {
   const $ = s => document.querySelector(s);
-  const mascot = $("#mascot"), line = $("#mascotLine");
+  const art = $("#stageArt"), say = $("#mascotLine");
+  const mascot = $("#mascot"), playSay = $("#playSay");
 
   const STAGES = ["story", "sheet", "board", "art", "bind"];
-  const STAGE_LINE = {
-    story: "이야기를 짜는 중이에요. 결말부터 거꾸로 세워 봅니다.",
-    sheet: "얼굴을 잡는 중이에요 — 여기가 흔들리면 뒤가 다 흔들려서요.",
-    board: "컷을 나누는 중이에요. 어디서 넘길지 세어 봅니다.",
-    art:   "그리는 중이에요. 한 장씩 나오는 대로 올려 둘게요.",
-    bind:  "한 편으로 잇는 중이에요. 거의 다 왔습니다.",
-    done:  "다 됐어요. 처음부터 한 번 읽어 보세요.",
-    error: "여기서 막혔어요.",
+  const SAY = {
+    story: "루가 이야기를 만들고 있어요",
+    sheet: "루가 캐릭터를 디자인하고 있어요",
+    board: "루가 콘티를 짜고 있어요",
+    art:   "루가 그림을 그리고 있어요",
+    bind:  "루가 완성도를 확인하고 있어요",
   };
-  const IDLE = [
-    ["lou-happy",   "루가 춤추고 있어요!"],
-    ["lou-idle",    "루가 물거품을 구경하고 있어요."],
-    ["lou-loading", "루가 이야기 조각을 주웠어요."],
-    ["lou-sleepy",  "루가 살짝 졸고 있어요… 일은 하고 있대요."],
-    ["lou-think",   "루가 다음 컷을 고민하고 있어요."],
-    ["lou-ask",     "루가 여러분을 흘끔 보고 있어요."],
-  ];
   const REACT = {
     click:      "앗! 지금 바빠요!",
     multiclick: "너무 많이 누르면 화날 거예요!",
@@ -130,88 +61,44 @@
     pet:        "헤헤~ 기분이 좋아요!",
   };
 
-  let stage = "story";
-  let pct = 3;
-  let started = Date.now();
-
-  function setStage(k) {
-    stage = k;
-    document.querySelectorAll("#demoCtl button").forEach(b =>
-      b.setAttribute("aria-pressed", String(b.dataset.stage === k)));
-    delete mascot.dataset.react;
-    delete mascot.dataset.idle;
-    mascot.style.backgroundImage = "";
-    if (k === "done") {
-      mascot.dataset.mood = "done"; delete mascot.dataset.stage;
-      pct = 100;
-      $("#progTitle").textContent = "다 만들었습니다";
-    } else if (k === "error") {
-      mascot.dataset.mood = "error"; delete mascot.dataset.stage;
-      $("#progTitle").textContent = "여기서 막혔습니다";
-    } else {
-      mascot.dataset.mood = "think"; mascot.dataset.stage = k;
-      $("#progTitle").textContent = "웹툰을 만들고 있습니다";
-      // 단계 위치에 맞춰 진행률을 당겨 놓는다
-      pct = Math.max(pct, Math.round(STAGES.indexOf(k) / STAGES.length * 100) + 4);
-    }
-    line.textContent = STAGE_LINE[k] || "";
-    paint();
-  }
+  let i = 0, pct = 2;
+  const started = Date.now();
 
   function paint() {
+    const k = STAGES[i];
+    art.dataset.stage = k;
+    say.textContent = SAY[k];
     $("#louBarFill").style.width = pct + "%";
     $("#louPct").textContent = pct + "%";
     $("#louProgress").setAttribute("aria-valuenow", String(pct));
   }
 
-  // 가짜 진행 — 조금씩 차고, 단계 경계에서 다음 단계로 넘어간다
+  // 진행 — 단계 경계를 넘으면 다음 단계로. 끝까지 가면 처음으로 돌아간다
+  // (구경하는 화면이라 계속 돈다).
   setInterval(() => {
-    if (stage === "done" || stage === "error") return;
-    pct = Math.min(99, pct + 1);
-    const bound = (STAGES.indexOf(stage) + 1) / STAGES.length * 100;
+    pct += 1;
+    const bound = (i + 1) / STAGES.length * 100;
     if (pct >= bound) {
-      const next = STAGES[STAGES.indexOf(stage) + 1];
-      setStage(next || "done");
-      return;
+      i += 1;
+      if (i >= STAGES.length) { i = 0; pct = 2; }
     }
     paint();
-  }, 900);
+  }, 700);
 
-  // 경과 시계
   setInterval(() => {
     const s = Math.floor((Date.now() - started) / 1000);
     $("#clock").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   }, 1000);
 
-  // 딴짓
-  setInterval(() => {
-    if (stage === "done" || stage === "error" || mascot.dataset.react) return;
-    const [img, text] = IDLE[Math.floor(Math.random() * IDLE.length)];
-    mascot.dataset.idle = img;
-    mascot.style.backgroundImage = `url("/static/lou/${img}.png")`;
-    const saved = line.textContent;
-    line.textContent = text;
-    setTimeout(() => {
-      delete mascot.dataset.idle;
-      mascot.style.backgroundImage = "";
-      if (line.textContent === text) line.textContent = saved;
-    }, 4200);
-  }, 9000);
-
-  // 만지기 — 본편 setupLou 와 같은 규칙
-  let clicks = 0, clickWin = null, pressAt = 0, reactTimer = null;
+  // 노는 자리 — 반응은 여기서만. 위쪽 진행 문구는 안 건드린다.
+  let clicks = 0, win = null, pressAt = 0, back = null;
   function react(kind) {
     mascot.dataset.react = kind;
-    mascot.style.backgroundImage = `url("/static/lou/react-${kind}.png")`;
-    const saved = STAGE_LINE[stage] || "";
-    line.textContent = REACT[kind];
-    line.classList.add("is-react");
-    clearTimeout(reactTimer);
-    reactTimer = setTimeout(() => {
+    playSay.textContent = REACT[kind];
+    clearTimeout(back);
+    back = setTimeout(() => {
       delete mascot.dataset.react;
-      mascot.style.backgroundImage = "";
-      line.textContent = saved;
-      line.classList.remove("is-react");
+      playSay.textContent = "루를 눌러 보세요";
     }, kind === "multiclick" ? 2200 : 1800);
   }
   mascot.addEventListener("pointerdown", () => { pressAt = Date.now(); });
@@ -220,15 +107,12 @@
     if (pressAt && held > 600) { react("longpress"); pressAt = 0; return; }
     pressAt = 0;
     clicks += 1;
-    clearTimeout(clickWin);
-    clickWin = setTimeout(() => { clicks = 0; }, 2000);
+    clearTimeout(win);
+    win = setTimeout(() => { clicks = 0; }, 2000);
     react(clicks >= 3 ? "multiclick" : (clicks === 2 ? "pet" : "click"));
   });
 
-  document.querySelectorAll("#demoCtl button").forEach(b =>
-    b.addEventListener("click", () => setStage(b.dataset.stage)));
-
-  setStage("story");
+  paint();
 })();
 </script>
 </body>

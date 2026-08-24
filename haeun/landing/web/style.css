@@ -518,74 +518,81 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
   border-radius: 999px; padding: 8px 8px 8px 18px;
 }
 
-/* ------------------------------------------------------------ 마스코트 루
+/* --------------------------------------------------- 기다리는 화면
 
-   10분을 기다리는 화면의 주인공. 단계마다 루가 실제로 무엇을 하는 그림이
-   있어서(design-reference/loading/*) 그걸 쓴다 — 표정만 바뀌는 것보다
-   "지금 콘티를 짜는 중"이 그림으로 보이는 편이 낫다.
+   두 자리로 나뉜다.
+     위  루가 **지금 무엇을 하는지** — 단계 그림 · 문구 · 진행 바.
+         셋이 같은 것을 말한다. 여기에는 잡담이 없다.
+     아래 기다리는 동안 **노는 자리** — 눌러야 반응하고, 반응은 그 안에서만
+         일어난다. 진행 문구를 가로채지 않는다.
 
-   그림 고르기는 전부 여기서 한다. app.js 는 세 가지만 적어 준다 —
-     data-stage  지금 단계(story·sheet·board·art·bind)
-     data-mood   감정(think·ask·done·error)
-     data-react  방금 만졌을 때의 반응(click·multiclick·longpress·pet)
-   뒤에 오는 규칙이 이기므로 반응 > 단계 > 감정 순으로 덮인다. */
+   예전에는 둘이 한 덩어리라, 루가 딴짓하는 문구가 진행 문구 자리를
+   빼앗았다("루가 춤추고 있어요"가 진행 표시 자리에 떴다). */
 
-.mascot {
-  flex: 0 0 auto; width: min(62vw, 240px); height: min(62vw, 240px);
-  border: 1px solid var(--line); border-radius: 22px; padding: 0;
+/* ---- 위: 단계 그림 ---- */
+.stage-art {
+  width: min(66vw, 260px); aspect-ratio: 1; margin: 0 auto;
+  border-radius: 24px; border: 1px solid var(--line);
   background: var(--card) center/cover no-repeat;
   background-image: url("/static/lou/lou-think.png");
-  cursor: pointer; overflow: hidden;
-  animation: lou-swim 4.6s ease-in-out infinite;
-  transition: transform .18s ease, box-shadow .18s ease;
 }
-.mascot:hover { box-shadow: 0 10px 26px rgba(38,64,58,.18); }
-.mascot:active { transform: scale(.96); }
+.stage-art[data-stage="story"] { background-image: url("/static/lou/stage-story.png"); }
+.stage-art[data-stage="sheet"] { background-image: url("/static/lou/stage-sheet.png"); }
+.stage-art[data-stage="board"] { background-image: url("/static/lou/stage-board.png"); }
+.stage-art[data-stage="art"]   { background-image: url("/static/lou/stage-art.png"); }
+.stage-art[data-stage="bind"]  { background-image: url("/static/lou/stage-bind.png"); }
+.stage-art[data-mood="ask"]   { background-image: url("/static/lou/lou-ask.png"); }
+.stage-art[data-mood="done"]  { background-image: url("/static/lou/stage-done.png"); }
+.stage-art[data-mood="error"] { background-image: url("/static/lou/lou-error.png"); }
+
+/* 지금 무엇을 하는지 — 화면에서 가장 큰 글자다 */
+.stage-say {
+  margin: 18px 0 0; text-align: center;
+  font-size: 1.15rem; font-weight: 800; color: var(--accent-d);
+}
+
+/* ---- 아래: 노는 자리 ---- */
+.play {
+  margin: 26px auto 0; padding: 18px;
+  max-width: 400px; text-align: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 22px;
+}
+.mascot {
+  width: 128px; height: 128px; margin: 0 auto; padding: 0; display: block;
+  border: none; border-radius: 20px; overflow: hidden;
+  background: var(--ink-2) center/cover no-repeat;
+  background-image: url("/static/lou/lou-idle.png");
+  cursor: pointer;
+  animation: lou-swim 4.6s ease-in-out infinite;
+  transition: transform .18s ease;
+}
+.mascot:active { transform: scale(.95); }
 .mascot:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-
-/* 감정 — 단계 그림이 없을 때의 바탕값 */
-.mascot[data-mood="think"] { background-image: url("/static/lou/lou-think.png"); }
-.mascot[data-mood="ask"]   { background-image: url("/static/lou/lou-ask.png"); }
-.mascot[data-mood="done"]  { background-image: url("/static/lou/stage-done.png"); }
-.mascot[data-mood="error"] { background-image: url("/static/lou/lou-error.png"); animation: none; }
-
-/* 단계 — 감정을 덮는다 */
-.mascot[data-stage="story"] { background-image: url("/static/lou/stage-story.png"); }
-.mascot[data-stage="sheet"] { background-image: url("/static/lou/stage-sheet.png"); }
-.mascot[data-stage="board"] { background-image: url("/static/lou/stage-board.png"); }
-.mascot[data-stage="art"]   { background-image: url("/static/lou/stage-art.png"); }
-.mascot[data-stage="bind"]  { background-image: url("/static/lou/stage-bind.png"); }
-.mascot[data-mood="done"][data-stage]  { background-image: url("/static/lou/stage-done.png"); }
-.mascot[data-mood="error"][data-stage] { background-image: url("/static/lou/lou-error.png"); }
-
-/* 반응 — 만졌을 때. 단계보다 세다(잠깐이고, 만진 것에 대한 답이라서). */
 .mascot[data-react="click"]      { background-image: url("/static/lou/react-click.png"); }
 .mascot[data-react="pet"]        { background-image: url("/static/lou/react-pet.png"); }
 .mascot[data-react="multiclick"] { background-image: url("/static/lou/react-multiclick.png"); }
 .mascot[data-react="longpress"]  { background-image: url("/static/lou/react-longpress.png"); }
 .mascot[data-react] { animation: lou-wiggle .5s ease-in-out 2; }
+.play-say { margin: 12px 0 0; font-size: .9rem; font-weight: 700; color: var(--muted); }
 
-/* 헤엄 — 위아래로 뜨면서 아주 조금 기운다. 화면이 멈춘 것처럼 안 보이게
-   하는 것이 목적이라 크게 움직이지 않는다. */
 @keyframes lou-swim {
   0%, 100% { transform: translateY(0)    rotate(0deg); }
   30%      { transform: translateY(-7px) rotate(-1.4deg); }
   65%      { transform: translateY(3px)  rotate(1.1deg); }
 }
 @keyframes lou-wiggle {
-  0%, 100% { transform: rotate(0deg)    scale(1); }
-  25%      { transform: rotate(-5deg)   scale(1.04); }
-  75%      { transform: rotate(5deg)    scale(1.04); }
+  0%, 100% { transform: rotate(0deg)  scale(1); }
+  25%      { transform: rotate(-5deg) scale(1.04); }
+  75%      { transform: rotate(5deg)  scale(1.04); }
 }
 @media (prefers-reduced-motion: reduce) {
   .mascot, .mascot[data-react] { animation: none; }
 }
 
-
 /* 진행 바 — 루 바로 아래. 두껍고(10px) 숫자가 붙는다. */
 .lou-progress {
   display: flex; align-items: center; gap: 12px;
-  width: min(100%, 380px); margin-top: 18px;
+  width: min(100%, 380px); margin: 16px auto 0;
 }
 .lou-bar {
   flex: 1; height: 10px; border-radius: 999px;
@@ -603,16 +610,7 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
   font-variant-numeric: tabular-nums;
 }
 
-/* 만질 수 있다는 것을 한 번은 말해 준다. 만지고 나면 굳이 안 보여도 된다. */
-.mascot-poke { color: var(--dim); font-size: .76rem; margin: .9em 0 0; }
-.mascot-line.is-react { color: var(--accent-d); font-weight: 700; }
-
-/* 마스코트가 지금 무엇을 하는지 한 줄로 말한다 — 진행 상태 텍스트의 인간적인
-   버전이라, 아래 rail 의 기계적인 로그와 역할이 겹치지 않는다. */
-.mascot-line {
-  margin: .5em 0 0; color: var(--gold); font-size: .92rem; font-weight: 600;
-}
-.mascot-line:empty { display: none; }
+/* (#mascotLine 은 이제 .stage-say 로 그린다 — 위 "기다리는 화면" 절 참고) */
 
 /* 움직임을 줄여 달라는 설정은 지킨다 — 로딩 화면이라 계속 움직이는 요소다. */
 @media (prefers-reduced-motion: reduce) {
