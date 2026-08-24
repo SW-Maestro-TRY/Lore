@@ -207,11 +207,22 @@
   </section>
 
   <!-- ============================================ 캐릭터 시트 입력 ====== -->
+  <!-- ======================================= 캐릭터 시트 · 위저드 ========
+       예전에는 이 한 화면에 사진·이름·설명·항목·이야기·장르·세계관·그림체·
+       연출·등신·검수·제출이 전부 들어 있었다. 처음 온 사람에게는 "채울 것이
+       너무 많은 화면"이었고, 폰에서는 스크롤이 끝없이 이어졌다.
+
+       그래서 **묻는 것을 여섯 걸음으로 나눈다.** 칸을 지우지는 않았다 —
+       같은 <form> 안에 그대로 있고 보이는 걸음만 바뀐다. 그래서 제출
+       로직(collect())은 예전 그대로 돌아간다.
+
+       걸음이 깊어질수록 배경이 수면에서 심해로 내려간다(body[data-step]).
+       진행 표시가 곧 수심계다. -->
   <section class="studio" id="studio">
     <div class="studio-head">
-      <h2>캐릭터 시트</h2>
+      <h2>루와 함께 시작하기</h2>
       <p class="section-lede">
-        <b>아는 만큼만</b> 적으세요. 빈 칸은 AI 가 캐릭터를 보고 채웁니다 —
+        <b>아는 만큼만</b> 적으세요. 빈 칸은 루가 캐릭터를 보고 채웁니다 —
         적어 주신 것은 바꾸지 않습니다.
       </p>
       <div class="mode-bar">
@@ -221,88 +232,129 @@
       </div>
     </div>
 
-    <form id="form" class="studio-grid" autocomplete="off">
-      <!-- 왼쪽: 캐릭터 -->
-      <div class="card sheet-card">
-        <div class="card-tab">CHARACTER SHEET</div>
+    <form id="form" class="wizard" autocomplete="off">
 
-        <div class="photo-row">
-          <label class="photo-drop" id="photoDrop">
-            <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" multiple hidden>
-            <div class="photo-strip" id="photoStrip"></div>
-            <span class="photo-hint">
-              <b>사진 올리기</b>
-              <small>선택 · 최대 4장까지, <b>같은 사람</b>을 여러 각도로</small>
-              <small>한 장으로는 안 보이는 곳(하의·신발·뒤통수)을 다른 장이 채웁니다</small>
-            </span>
-            <span class="photo-count" id="photoCount"></span>
-          </label>
-          <div class="photo-side">
-            <label class="field">
-              <span>이름</span>
-              <input type="text" name="name" placeholder="예: 민시하" maxlength="40">
-            </label>
-            <label class="field">
-              <span>사진 메모 <small>선택</small></span>
-              <input type="text" name="photo_note" placeholder="예: 오른쪽 사람입니다 / 원래는 은발">
-            </label>
-          </div>
-        </div>
-
-        <label class="field">
-          <span>캐릭터 설명</span>
-          <textarea name="character" rows="5" placeholder="형식 없이 아는 만큼 적어주세요.&#10;&#10;잘 되는 설명에는 모순이 있습니다 —&#10;“착하다” 보다 “남 부탁은 다 들어주면서 정작 자기 얘기는 안 한다”."></textarea>
-        </label>
-
-        <fieldset class="fields">
-          <legend>항목 <small>전부 선택</small></legend>
-          <div class="fields-grid" id="fieldsGrid"></div>
-        </fieldset>
+      <!-- 걸음 표시 — 뒤로 / 수심계 / 건너뛰기 -->
+      <div class="wiz-head">
+        <button type="button" class="wiz-back" id="wizBack" aria-label="이전 걸음">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <ol class="wiz-gauge" id="wizGauge" aria-label="진행"></ol>
+        <button type="button" class="wiz-skip" id="wizSkip">건너뛰기</button>
       </div>
 
-      <!-- 오른쪽: 이야기 -->
-      <div class="stack">
-        <div class="card prompt-card">
-          <label class="field big">
-            <span>어떤 이야기를 만들까요?</span>
-            <textarea name="story" rows="4" id="storyInput"
-              placeholder="한 줄이어도 되고 줄거리여도 됩니다.&#10;예) 몰락한 문파에 혼자 남은 검객이, 습격해 온 적 앞으로 걸어 나간다."></textarea>
-          </label>
-          <div class="chips" id="ideaChips"></div>
-        </div>
+      <!-- 1 / 6 · 수면 — 시작 -->
+      <section class="wiz-step" data-step="1">
+        <p class="wiz-eyebrow">수면 · STEP 1 / 6</p>
+        <h3 class="wiz-title">누구를 데리고<br>바다로 갈까요?</h3>
+        <p class="wiz-sub">사진이 없어도 됩니다. 이름만 적어도 루가 나머지를 채웁니다.</p>
 
-        <div class="card">
-          <div class="two">
-            <label class="field">
-              <span>장르 <small>비우면 AI 가 고릅니다</small></span>
-              <input type="text" name="genre" list="genreList" placeholder="예: 무협 / 로맨스 판타지">
-              <datalist id="genreList">
-                <option value="판타지"><option value="액션"><option value="스릴러">
-                <option value="헌터·게이트"><option value="센티넬"><option value="게임 판타지">
-                <option value="BL(오메가버스)"><option value="로맨스"><option value="로맨스 판타지">
-                <option value="학원로맨스"><option value="무협"><option value="개그">
-                <option value="일상"><option value="아이돌"><option value="마법학교">
-                <option value="현대 판타지"><option value="오컬트 미스터리">
-                <option value="좀비 아포칼립스">
-              </datalist>
+        <div class="wiz-card">
+          <div class="photo-row">
+            <label class="photo-drop" id="photoDrop">
+              <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" multiple hidden>
+              <div class="photo-strip" id="photoStrip"></div>
+              <span class="photo-hint">
+                <b>사진 올리기</b>
+                <small>선택 · 최대 4장까지, <b>같은 사람</b>을 여러 각도로</small>
+                <small>한 장으로는 안 보이는 곳(하의·신발·뒤통수)을 다른 장이 채웁니다</small>
+              </span>
+              <span class="photo-count" id="photoCount"></span>
             </label>
-            <label class="field">
-              <span>세계관 <small>비우면 AI 가 정합니다</small></span>
-              <select name="world_preset" id="worldPreset">
-                <option value="">직접 쓰기 / 비워두기</option>
-              </select>
-              <input type="text" name="world" placeholder="예: 각성자만 게이트에 들어갈 수 있는 현대 한국">
-              <small class="hint" id="worldHint" hidden></small>
-            </label>
+            <div class="photo-side">
+              <label class="field">
+                <span>이름</span>
+                <input type="text" name="name" placeholder="예: 민시하" maxlength="40">
+              </label>
+              <label class="field">
+                <span>사진 메모 <small>선택</small></span>
+                <input type="text" name="photo_note" placeholder="예: 오른쪽 사람입니다 / 원래는 은발">
+              </label>
+            </div>
           </div>
         </div>
+      </section>
 
-        <div class="card">
+      <!-- 2 / 6 · 얕은 바다 — 캐릭터 -->
+      <section class="wiz-step" data-step="2" hidden>
+        <p class="wiz-eyebrow">얕은 바다 · STEP 2 / 6</p>
+        <h3 class="wiz-title">어떤 사람인지<br>말해주세요</h3>
+
+        <div class="wiz-card">
+          <label class="field">
+            <span>캐릭터 설명</span>
+            <textarea name="character" rows="5" placeholder="형식 없이 아는 만큼 적어주세요.&#10;&#10;잘 되는 설명에는 모순이 있습니다 —&#10;“착하다” 보다 “남 부탁은 다 들어주면서 정작 자기 얘기는 안 한다”."></textarea>
+          </label>
+
+          <fieldset class="fields">
+            <legend>항목 <small>전부 선택</small></legend>
+            <div class="fields-grid" id="fieldsGrid"></div>
+          </fieldset>
+        </div>
+      </section>
+
+      <!-- 3 / 6 · 항해 — 이야기 -->
+      <section class="wiz-step" data-step="3" hidden>
+        <p class="wiz-eyebrow">항해 · STEP 3 / 6</p>
+        <h3 class="wiz-title">어떤 이야기를<br>만들까요?</h3>
+        <p class="wiz-sub">한 줄이어도 되고 줄거리여도 됩니다.</p>
+
+        <div class="wiz-card">
+          <label class="field big">
+            <span class="sr-only">이야기</span>
+            <textarea name="story" rows="5" id="storyInput"
+              placeholder="예) 몰락한 문파에 혼자 남은 검객이, 습격해 온 적 앞으로 걸어 나간다."></textarea>
+          </label>
+          <p class="wiz-hint">막힐 때 눌러 보세요</p>
+          <div class="chips" id="ideaChips"></div>
+        </div>
+      </section>
+
+      <!-- 4 / 6 · 깊은 바다 — 장르 · 세계관 -->
+      <section class="wiz-step" data-step="4" hidden>
+        <p class="wiz-eyebrow">깊은 바다 · STEP 4 / 6</p>
+        <h3 class="wiz-title">어떤 세계를<br>그릴까요?</h3>
+        <p class="wiz-sub">비우면 루가 이야기에 맞춰 고릅니다.</p>
+
+        <div class="wiz-card">
+          <label class="field">
+            <span>장르</span>
+            <input type="text" name="genre" list="genreList" placeholder="예: 무협 / 로맨스 판타지">
+            <datalist id="genreList">
+              <option value="판타지"><option value="액션"><option value="스릴러">
+              <option value="헌터·게이트"><option value="센티넬"><option value="게임 판타지">
+              <option value="BL(오메가버스)"><option value="로맨스"><option value="로맨스 판타지">
+              <option value="학원로맨스"><option value="무협"><option value="개그">
+              <option value="일상"><option value="아이돌"><option value="마법학교">
+              <option value="현대 판타지"><option value="오컬트 미스터리">
+              <option value="좀비 아포칼립스">
+            </datalist>
+          </label>
+          <div class="genre-quick" id="genreQuick"></div>
+
+          <label class="field">
+            <span>세계관 <small>비우면 루가 정합니다</small></span>
+            <select name="world_preset" id="worldPreset">
+              <option value="">직접 쓰기 / 비워두기</option>
+            </select>
+            <input type="text" name="world" placeholder="예: 각성자만 게이트에 들어갈 수 있는 현대 한국">
+            <small class="hint" id="worldHint" hidden></small>
+          </label>
+        </div>
+      </section>
+
+      <!-- 5 / 6 · 심해 — 그림 -->
+      <section class="wiz-step" data-step="5" hidden>
+        <p class="wiz-eyebrow">심해 · STEP 5 / 6</p>
+        <h3 class="wiz-title">그림은 어떻게<br>그릴까요?</h3>
+
+        <div class="wiz-card">
           <div class="field-label">그림체</div>
           <div class="styles" id="styles"></div>
         </div>
 
-        <div class="card" data-expert-only>
+        <div class="wiz-card" data-expert-only>
           <div class="field-label">연출 <small>컷을 어떻게 나눠 그릴지</small></div>
           <div class="ratios">
             <label class="ratio">
@@ -314,21 +366,24 @@
               <span><b>웹툰</b><small>무게가 묶음을 정함 · 비용 약 3배</small></span>
             </label>
           </div>
-          <p class="hint">
-            <b>빠르게</b> 는 컷 개수로 자릅니다 — 한 이미지 안에 컷 세 개를 나란히
-            그립니다. 호출이 1/3 이라 싸지만, 컷을 어떻게 배치할지와 그 사이를 얼마나
-            띄울지를 그림 모델이 정합니다 — 그래서 세로로 잘라 놓은 만화 페이지처럼
-            보일 때가 있습니다.
-            <b>웹툰</b> 은 개수 규칙을 아예 안 씁니다. 컷마다 <b>무게</b>가 다르다고
-            보고, 무거운 컷(통컷·화면을 꽉 채우는 컷)은 이미지 한 장을 혼자 쓰고,
-            스쳐 가는 가벼운 컷은 배경 없이 지면 폭의 절반만 쓰며 연달아 붙은 것끼리
-            한 장에 묶입니다. 컷 사이 여백은 콘티가 계산한 값(붙임 / 보통 / 길게 /
-            낙차)대로 코드가 넣고, 같은 장소에서 이어지는 컷은 배경이 위에서 아래로
-            이어지게 그립니다.
-          </p>
+          <details class="wiz-more">
+            <summary>둘이 어떻게 다른가요</summary>
+            <p class="hint">
+              <b>빠르게</b> 는 컷 개수로 자릅니다 — 한 이미지 안에 컷 세 개를 나란히
+              그립니다. 호출이 1/3 이라 싸지만, 컷을 어떻게 배치할지와 그 사이를 얼마나
+              띄울지를 그림 모델이 정합니다 — 그래서 세로로 잘라 놓은 만화 페이지처럼
+              보일 때가 있습니다.
+              <b>웹툰</b> 은 개수 규칙을 아예 안 씁니다. 컷마다 <b>무게</b>가 다르다고
+              보고, 무거운 컷(통컷·화면을 꽉 채우는 컷)은 이미지 한 장을 혼자 쓰고,
+              스쳐 가는 가벼운 컷은 배경 없이 지면 폭의 절반만 쓰며 연달아 붙은 것끼리
+              한 장에 묶입니다. 컷 사이 여백은 콘티가 계산한 값(붙임 / 보통 / 길게 /
+              낙차)대로 코드가 넣고, 같은 장소에서 이어지는 컷은 배경이 위에서 아래로
+              이어지게 그립니다.
+            </p>
+          </details>
         </div>
 
-        <div class="card" data-expert-only>
+        <div class="wiz-card" data-expert-only>
           <div class="field-label">등신 비율 <small>비우면 그림체 기본값</small></div>
           <div class="ratios">
             <label class="ratio">
@@ -350,7 +405,7 @@
           </div>
         </div>
 
-        <div class="card" data-expert-only>
+        <div class="wiz-card" data-expert-only>
           <div class="field-label">그림 검수 <small>망한 컷을 몇 번까지 다시 그릴지</small></div>
           <div class="ratios">
             <label class="ratio">
@@ -370,17 +425,37 @@
               <span><b>4번</b><small>끈질기게 · 비쌈</small></span>
             </label>
           </div>
-          <p class="hint">
-            검수는 <b>명백히 망한 것</b>만 잡습니다 — 서술과 다른 인원수·대상·배경,
-            작화 사고 같은 것들입니다. 구도·표정·화풍처럼 취향이 갈리는 것은 일부러
-            안 잡습니다(그건 결과 화면의 "다시 그리기"가 맡는 자리입니다).
-            <b>안 함</b>으로 두면 무엇이 걸렸는지는 그대로 보여드리고 다시 그리지만
-            않습니다 — 비용을 안 늘리면서 어디가 문제인지는 알고 싶을 때.
-            다시 그려도 못 고친 것은 버리지 않고 남겨서 검수 화면에 표시합니다.
-          </p>
+          <details class="wiz-more">
+            <summary>무엇을 잡나요</summary>
+            <p class="hint">
+              검수는 <b>명백히 망한 것</b>만 잡습니다 — 서술과 다른 인원수·대상·배경,
+              작화 사고 같은 것들입니다. 구도·표정·화풍처럼 취향이 갈리는 것은 일부러
+              안 잡습니다(그건 결과 화면의 "다시 그리기"가 맡는 자리입니다).
+              <b>안 함</b>으로 두면 무엇이 걸렸는지는 그대로 보여드리고 다시 그리지만
+              않습니다. 다시 그려도 못 고친 것은 남겨서 검수 화면에 표시합니다.
+            </p>
+          </details>
         </div>
+      </section>
 
-        <div class="card mode-checkpoints" data-expert-only>
+      <!-- 6 / 6 · 바닥 — 확인 -->
+      <section class="wiz-step" data-step="6" hidden>
+        <p class="wiz-eyebrow">바닥 · STEP 6 / 6</p>
+        <h3 class="wiz-title">이대로<br>떠날까요?</h3>
+
+        <!-- 요약은 app.js 가 지금 폼 값으로 그린다. 비운 칸은 "루가 정합니다"로
+             적어서, 안 적었다는 사실 자체가 결과로 보이게 한다. -->
+        <div class="wiz-card wiz-summary" id="wizSummary"></div>
+
+        <label class="toggle wiz-card">
+          <input type="checkbox" name="preview" id="previewToggle">
+          <span>
+            <b>빠른 미리보기</b>
+            <small>첫 한 장(앞 3컷)만 그립니다. 그림체와 인물을 먼저 확인할 때.</small>
+          </span>
+        </label>
+
+        <div class="wiz-card mode-checkpoints" data-expert-only>
           <div class="field-label">어디서 멈추나요</div>
           <ol class="checkpoint-list">
             <li><b>이야기</b> 줄거리와 장면이 나온 뒤</li>
@@ -389,30 +464,25 @@
             <li><b>그림 검수</b> 다 그린 뒤, 끝내기 전에 <small>잡힌 것이 있을 때만</small></li>
           </ol>
           <p class="hint">
-            각 자리에서 <b>이대로 진행</b>과 <b>다시 만들기</b>를 고릅니다. 다시
-            만들 때 고른 항목과 적어 주신 말이 다음 시도의 프롬프트에 실립니다.
-            멈춰 있는 동안에는 아무것도 안 돌아가므로 시간이 흐르는 것 말고는
-            비용이 들지 않습니다.
+            각 자리에서 <b>이대로 진행</b>과 <b>다시 만들기</b>를 고릅니다. 멈춰 있는
+            동안에는 아무것도 안 돌아가므로 시간이 흐르는 것 말고는 비용이 들지 않습니다.
           </p>
         </div>
+      </section>
 
-        <div class="card submit-card">
-          <label class="toggle">
-            <input type="checkbox" name="preview" id="previewToggle">
-            <span>
-              <b>빠른 미리보기</b>
-              <small>첫 한 장(앞 3컷)만 그립니다. 그림체와 인물을 먼저 확인할 때.</small>
-            </span>
-          </label>
-          <button type="submit" class="btn btn-primary btn-big" id="submitBtn">
-            웹툰 만들기 <span class="cost-chip" id="costChip">−240 크레딧</span>
-          </button>
-          <p class="submit-note" id="submitNote">
-            이름 · 설명 · 항목 · 사진 중 하나만 있으면 시작할 수 있습니다.
-          </p>
-        </div>
+      <!-- 아래 단추 — 걸음마다 오른쪽 단추만 바뀐다 -->
+      <div class="wiz-foot">
+        <button type="button" class="btn btn-quiet wiz-prev" id="wizPrev">이전</button>
+        <button type="button" class="btn btn-primary wiz-next" id="wizNext">다음</button>
+        <button type="submit" class="btn btn-primary wiz-go" id="submitBtn" hidden>
+          웹툰 만들기 <span class="cost-chip" id="costChip">−240 크레딧</span>
+        </button>
       </div>
+      <p class="submit-note" id="submitNote">
+        이름 · 설명 · 항목 · 사진 중 하나만 있으면 시작할 수 있습니다.
+      </p>
     </form>
+  </section>
   </section>
 </main>
 

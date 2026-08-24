@@ -25,6 +25,12 @@ const IDEAS = [
   "각성 등급 최하위인데 아무도 못 깨는 게이트를 혼자 연다",
   "악역 영애로 빙의했는데 원작 내용을 하나도 모른다",
 ];
+// 장르 단추로 먼저 꺼내 두는 것들. index.html 의 datalist 에는 더 많이 있고,
+// 여기 없는 장르도 칸에 직접 쓰면 그대로 간다.
+const GENRE_QUICK = [
+  "무협", "판타지", "로맨스 판타지", "헌터·게이트",
+  "학원로맨스", "현대 판타지", "오컬트 미스터리", "일상",
+];
 
 /* ---- 일반 모드 · 전문 모드 ------------------------------------------- *
  *
@@ -111,6 +117,24 @@ function buildForm() {
     $("#storyInput").value = btn.textContent;
     $("#storyInput").focus();
   }));
+
+  // 장르 빠른 고르개. datalist 는 폰에서 안 열리는 브라우저가 있어서, 자주
+  // 쓰는 것만 단추로 먼저 꺼내 둔다. 목록에 없는 장르는 그대로 칸에 쓰면 된다.
+  const quick = $("#genreQuick");
+  if (quick) {
+    quick.innerHTML = GENRE_QUICK
+      .map(g => `<button type="button" aria-pressed="false">${g}</button>`).join("");
+    const input = $("#form").genre;
+    const sync = () => $$("button", quick).forEach(b =>
+      b.setAttribute("aria-pressed", String(b.textContent === input.value.trim())));
+    $$("button", quick).forEach(btn => btn.addEventListener("click", () => {
+      // 눌린 것을 다시 누르면 비운다 — 비우면 루가 고른다
+      input.value = (input.value.trim() === btn.textContent) ? "" : btn.textContent;
+      sync();
+    }));
+    input.addEventListener("input", sync);
+    sync();
+  }
 }
 
 /* ---- 사용자 피드백 ---------------------------------------------------- *
@@ -359,6 +383,112 @@ function paintCost() {
   $("#costChip").textContent = `−${cost} 크레딧`;
   $("#submitBtn").firstChild.textContent =
     preview ? "미리보기 만들기 " : "웹툰 만들기 ";
+}
+
+/* ------------------------------------------------------------- 위저드
+
+   묻는 것을 여섯 걸음으로 나눈다. **칸을 지우지는 않았다** — 여섯 개의
+   .wiz-step 이 전부 같은 <form> 안에 그대로 있고, 지금 걸음만 보인다.
+   숨은 칸도 폼에는 남아 있으므로 collect() 는 예전과 똑같이 돈다.
+
+   걸음이 깊어질수록 배경이 수면에서 심해로 내려간다(body[data-step]).
+   진행 표시가 곧 수심계라, 지금 어디까지 왔는지를 숫자가 아니라 물빛으로
+   먼저 안다. */
+
+const WIZ_LAST = 6;
+// 수심계에 띄우는 이름. 걸음 제목과 같은 말을 써서 둘이 따로 놀지 않게 한다.
+const WIZ_NAMES = ["수면", "얕은 바다", "항해", "깊은 바다", "심해", "바닥"];
+let wizStep = 1;
+
+function wizPanels() { return $$(".wiz-step"); }
+
+function wizPaintGauge() {
+  const gauge = $("#wizGauge");
+  if (!gauge) return;
+  gauge.innerHTML = WIZ_NAMES.map((name, i) => {
+    const n = i + 1;
+    const state = n < wizStep ? "done" : (n === wizStep ? "on" : "");
+    return `<li class="wiz-tick ${state}" title="${n}. ${name}"
+                ${n === wizStep ? 'aria-current="step"' : ""}></li>`;
+  }).join("");
+}
+
+// 요약 — 비운 칸은 "루가 정합니다"로 적는다. 안 적었다는 사실 자체가
+// 결과로 보여야, 마지막 걸음에서 되돌아갈지 말지를 판단할 수 있다.
+function wizPaintSummary() {
+  const box = $("#wizSummary");
+  if (!box) return;
+  const form = $("#form");
+  const auto = `<i class="wiz-auto">루가 정합니다</i>`;
+  const val = v => (v && v.trim()) ? esc(v.trim()) : auto;
+
+  const styleEl = form.style;
+  const styleLabel = styleEl
+    ? (document.querySelector(`.style-opt input[value="${styleEl.value}"]`)
+        ?.closest(".style-opt")?.querySelector("b")?.textContent || styleEl.value)
+    : "";
+  const fieldsFilled = $$("[data-field]", form)
+    .filter(el => el.value.trim()).length;
+
+  const rows = [
+    ["캐릭터", val(form.name.value)],
+    ["설명", form.character.value.trim()
+      ? esc(form.character.value.trim().slice(0, 40)) +
+        (form.character.value.trim().length > 40 ? "…" : "")
+      : auto],
+    ["항목", fieldsFilled ? `${fieldsFilled}개 적음` : auto],
+    ["사진", photos.length ? `${photos.length}장` : `<i class="wiz-auto">없음</i>`],
+    ["이야기", form.story.value.trim()
+      ? esc(form.story.value.trim().slice(0, 40)) +
+        (form.story.value.trim().length > 40 ? "…" : "")
+      : auto],
+    ["장르", val(form.genre.value)],
+    ["세계관", val(form.world.value)],
+    ["그림체", styleLabel ? esc(styleLabel) : auto],
+  ];
+  if (isExpert()) {
+    rows.push(["연출", layoutMode() === "webtoon" ? "웹툰 · 무게로 묶음" : "빠르게 · 한 장 3컷"]);
+  }
+  box.innerHTML = rows.map(([k, v]) =>
+    `<div class="wiz-row"><span>${k}</span><b>${v}</b></div>`).join("");
+}
+
+function wizGo(n, scroll = true) {
+  wizStep = Math.min(WIZ_LAST, Math.max(1, n));
+  wizPanels().forEach(p => { p.hidden = Number(p.dataset.step) !== wizStep; });
+
+  // 물빛 — 걸음이 깊어질수록 어두워진다
+  document.body.dataset.step = String(wizStep);
+
+  const last = wizStep === WIZ_LAST;
+  $("#wizNext").hidden = last;
+  $("#submitBtn").hidden = !last;
+  $("#wizPrev").disabled = wizStep === 1;
+  $("#wizBack").disabled = wizStep === 1;
+  // 마지막 걸음에서는 건너뛸 곳이 없다
+  $("#wizSkip").hidden = last;
+  $("#submitNote").hidden = !last;
+
+  if (last) wizPaintSummary();
+
+  // 걸음을 옮기면 그 걸음의 머리가 보이게 한다 — 폰에서는 이게 없으면
+  // 이전 걸음의 중간 높이에 그대로 서 있어서 바뀐 걸 못 알아챈다.
+  // 첫 그리기(scroll=false)에서는 안 한다 — 랜딩으로 들어온 사람을 폼으로
+  // 끌어내리면 히어로를 못 보고 시작하게 된다.
+  if (!scroll) return;
+  const head = document.querySelector(".studio-head");
+  if (head) head.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+function setupWizard() {
+  if (!$("#wizGauge")) return;
+  wizPaintGauge();
+  const move = n => { wizGo(n); wizPaintGauge(); };
+  $("#wizNext").addEventListener("click", () => move(wizStep + 1));
+  $("#wizSkip").addEventListener("click", () => move(wizStep + 1));
+  $("#wizPrev").addEventListener("click", () => move(wizStep - 1));
+  $("#wizBack").addEventListener("click", () => move(wizStep - 1));
+  wizGo(1, false);
 }
 
 /* ------------------------------------------------------------------ 제출 */
@@ -1467,6 +1597,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 모드 — 폼을 만든 **뒤에** 적용해야 한다(applyMode 가 폼의 칸을 여닫는다).
   applyMode();
+  // 위저드도 폼을 만든 뒤에 켠다(그림체·항목 칸이 있어야 요약을 그릴 수 있다).
+  setupWizard();
   $$("#modeGate .modecard").forEach(card => card.addEventListener("click", () => {
     setMode(card.dataset.mode);
     closeModeGate();

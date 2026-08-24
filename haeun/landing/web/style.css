@@ -320,7 +320,15 @@ body[data-view="mode"] .foot { display: none; }
 
 /* 폼 위의 현재 모드 표시. 지금 무엇으로 만들고 있는지가 안 보이면, 왜 어떤
    칸은 있고 어떤 칸은 없는지를 사용자가 설명할 길이 없다. */
-.mode-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 1.4em; }
+.mode-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 1.4em;
+}
+/* 폰에서는 배지와 단추를 한 줄에 두고 설명을 그 아래로 내린다 — 셋을 한 줄에
+   욱여넣으면 단추가 혼자 다음 줄로 떨어져서 무엇에 딸린 단추인지 흐려진다. */
+.mode-bar .btn { margin-left: auto; }
+@media (max-width: 560px) {
+  .mode-bar-desc { order: 3; flex: 1 0 100%; margin-top: -2px; }
+}
 .mode-badge {
   background: var(--card-2); border: 1px solid var(--line-2); border-radius: 999px;
   padding: .35em 1em; font-size: .8rem; font-weight: 700; white-space: nowrap;
@@ -448,6 +456,161 @@ body[data-mode="expert"] .mode-badge { border-color: var(--gold); color: var(--g
 .toggle small { color: var(--dim); font-size: .8rem; }
 .submit-note { margin: 0; color: var(--dim); font-size: .82rem; text-align: center; }
 .submit-note.error { color: #ff8b80; }
+
+
+/* ------------------------------------------------------------- 위저드
+
+   여섯 걸음. 걸음이 깊어질수록 지면이 수면에서 심해로 내려간다.
+   짙은 걸음에서는 입력 칸을 밝은 상자로 띄워서 읽기를 지킨다 — 물빛은
+   분위기를 맡고, 글자는 항상 종이 위에 있다. */
+
+.wizard { display: block; max-width: 640px; margin: 0 auto; }
+/* 걸음을 옮기면 studio-head 로 스크롤한다. 상단 바가 sticky 라 그냥 두면
+   제목이 그 아래로 숨는다 — 바 높이만큼 미리 띄운다. */
+.studio-head { scroll-margin-top: 76px; }
+
+/* 지면 — body[data-step] 이 물빛을 정한다(app.js 가 적는다) */
+.studio { position: relative; transition: background .5s ease; }
+body[data-step="1"] .studio { background: linear-gradient(180deg, var(--sea-sand), var(--ink)); }
+body[data-step="2"] .studio { background: linear-gradient(180deg, var(--ink), var(--sea-shore)); }
+body[data-step="3"] .studio { background: linear-gradient(180deg, var(--sea-shore), var(--sea-mint)); }
+body[data-step="4"] .studio { background: linear-gradient(180deg, var(--sea-mint), var(--sea-mid)); }
+body[data-step="5"] .studio { background: linear-gradient(180deg, var(--sea-mid), var(--sea-deep)); }
+body[data-step="6"] .studio { background: linear-gradient(180deg, var(--sea-deep), var(--sea-abyss)); }
+
+/* 깊은 걸음에서는 제목·설명이 물 위에 얹히므로 밝은 글자로 바꾼다 */
+body[data-step="4"] .studio-head h2,
+body[data-step="5"] .studio-head h2,
+body[data-step="6"] .studio-head h2,
+body[data-step="4"] .wiz-title,
+body[data-step="5"] .wiz-title,
+body[data-step="6"] .wiz-title { color: var(--on-sea); }
+body[data-step="4"] .studio-head .section-lede,
+body[data-step="5"] .studio-head .section-lede,
+body[data-step="6"] .studio-head .section-lede,
+body[data-step="4"] .wiz-sub,
+body[data-step="5"] .wiz-sub,
+body[data-step="6"] .wiz-sub { color: rgba(247,243,234,.78); }
+body[data-step="4"] .studio-head .section-lede b,
+body[data-step="5"] .studio-head .section-lede b,
+body[data-step="6"] .studio-head .section-lede b { color: var(--on-sea); }
+body[data-step="5"] .wiz-back, body[data-step="6"] .wiz-back,
+body[data-step="4"] .wiz-back { color: var(--on-sea); }
+body[data-step="4"] .mode-bar-desc,
+body[data-step="5"] .mode-bar-desc,
+body[data-step="6"] .mode-bar-desc { color: rgba(247,243,234,.72); }
+body[data-step="4"] .mode-bar .btn-quiet,
+body[data-step="5"] .mode-bar .btn-quiet,
+body[data-step="6"] .mode-bar .btn-quiet {
+  background: rgba(247,243,234,.16); color: var(--on-sea);
+}
+body[data-step="4"] .wiz-skip,
+body[data-step="5"] .wiz-skip,
+body[data-step="6"] .wiz-skip { color: rgba(247,243,234,.75); }
+
+/* 머리 — 뒤로 / 수심계 / 건너뛰기 */
+.wiz-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 20px;
+}
+.wiz-back {
+  background: none; border: none; padding: 4px; cursor: pointer;
+  color: var(--accent-d); display: grid; place-items: center;
+  min-width: 44px; min-height: 44px;   /* 폰에서 눌리는 크기 */
+}
+.wiz-back:disabled { opacity: .28; cursor: default; }
+.wiz-skip {
+  background: none; border: none; cursor: pointer; font: inherit;
+  font-size: .86rem; font-weight: 600; color: var(--muted);
+  min-height: 44px; padding: 0 4px;
+}
+.wiz-gauge {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; gap: 5px; align-items: center;
+}
+.wiz-tick {
+  width: 16px; height: 4px; border-radius: 999px;
+  background: rgba(34,48,44,.18); transition: all .3s ease;
+}
+.wiz-tick.done { background: var(--sea-mid); }
+.wiz-tick.on   { background: var(--accent-d); width: 24px; }
+body[data-step="4"] .wiz-tick, body[data-step="5"] .wiz-tick,
+body[data-step="6"] .wiz-tick { background: rgba(247,243,234,.3); }
+body[data-step="4"] .wiz-tick.done, body[data-step="5"] .wiz-tick.done,
+body[data-step="6"] .wiz-tick.done { background: rgba(247,243,234,.75); }
+body[data-step="4"] .wiz-tick.on, body[data-step="5"] .wiz-tick.on,
+body[data-step="6"] .wiz-tick.on { background: var(--on-sea); }
+
+/* 걸음 */
+.wiz-eyebrow {
+  margin: 0; font-size: .68rem; font-weight: 800; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--sea-mid);
+}
+body[data-step="4"] .wiz-eyebrow, body[data-step="5"] .wiz-eyebrow,
+body[data-step="6"] .wiz-eyebrow { color: var(--sea-sand); }
+.wiz-title {
+  font-size: clamp(1.5rem, 5.5vw, 1.9rem); font-weight: 800;
+  margin: 10px 0 0; color: var(--accent-d);
+}
+.wiz-sub { color: var(--muted); font-size: .94rem; margin: 10px 0 0; }
+
+/* 입력 상자 — 물이 아무리 깊어도 이 안은 종이다 */
+.wiz-card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 20px; padding: 20px; margin-top: 20px;
+  box-shadow: 0 10px 28px rgba(38,64,58,.10);
+}
+.wiz-card .field:last-child { margin-bottom: 0; }
+.wiz-hint { color: var(--dim); font-size: .8rem; margin: 14px 0 8px; }
+.wiz-more summary {
+  cursor: pointer; font-size: .82rem; color: var(--muted);
+  margin-top: 12px; list-style: none;
+}
+.wiz-more summary::-webkit-details-marker { display: none; }
+.wiz-more summary::before { content: "＋ "; color: var(--accent); }
+.wiz-more[open] summary::before { content: "－ "; }
+.wiz-more .hint { margin-top: 8px; }
+
+/* 장르 빠른 고르개 — 칸을 직접 쓰기 전에 눌러서 채운다 */
+.genre-quick { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 16px; }
+.genre-quick button {
+  border: 1px solid var(--line-2); background: var(--ink-2);
+  border-radius: 999px; padding: .5em 1em; font: inherit; font-size: .84rem;
+  color: var(--muted); cursor: pointer; min-height: 40px;
+}
+.genre-quick button:hover { border-color: var(--accent); color: var(--accent-d); }
+.genre-quick button[aria-pressed="true"] {
+  background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700;
+}
+
+/* 요약 */
+.wiz-summary { padding: 6px 20px; }
+.wiz-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  padding: 12px 0; border-bottom: 1px solid var(--line);
+}
+.wiz-row:last-child { border-bottom: none; }
+.wiz-row span { color: var(--dim); font-size: .84rem; flex: none; }
+.wiz-row b { font-size: .9rem; text-align: right; color: var(--accent-d); }
+.wiz-auto { font-style: normal; color: var(--dim); font-weight: 500; }
+
+/* 아래 단추 */
+.wiz-foot { display: flex; gap: 10px; margin-top: 24px; }
+.wiz-foot .btn { flex: 1; padding: 1.05em; }
+.wiz-prev { flex: 0 0 auto !important; min-width: 96px; }
+.wiz-foot .btn:disabled { opacity: .35; }
+body[data-step="6"] .wiz-go { background: var(--sea-sand); color: var(--sea-abyss); }
+body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
+.submit-note { text-align: center; font-size: .8rem; color: var(--dim); margin: 12px 0 0; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio, .wiz-tick { transition: none; }
+}
 
 /* ------------------------------------------------------------------ 진행 */
 
