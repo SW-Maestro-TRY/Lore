@@ -889,6 +889,7 @@ function wizGo(n, scroll = true) {
   $$(".wiz-step").forEach(p => { p.hidden = Number(p.dataset.step) !== wizStep; });
 
   document.body.dataset.step = String(wizStep);
+  pickWizLou();
 
   // 갈림길에서는 늘 고르게 한다 — 지난번 모드가 기억돼 있어도 마찬가지다.
   // 갈림길에 들어서면 **빠르게**가 이미 골라져 있다. 아무것도 안 고른 채로
@@ -2411,6 +2412,18 @@ function swapLou(el, list) {
 function pickHero() {
   swapLou($("#heroLou"), HERO_LOUS);
   swapLou($("#brandLou"), LOGO_LOUS);
+}
+
+/* 걸음의 제목 옆에 앉은 루. 걸음을 옮길 때마다 바뀐다.
+   방금 걸려 있던 그림과 헤더 로고에 걸린 그림은 후보에서 뺀다 — 안 그러면
+   "안 바뀌었네" 로 보이거나 같은 고래가 화면에 둘 나온다. */
+function pickWizLou() {
+  const el = $("#wizLou");
+  if (!el) return;
+  const now = el.getAttribute("src");
+  const brand = $("#brandLou") ? $("#brandLou").getAttribute("src") : "";
+  const pool = LOGO_LOUS.filter(s => s !== now && s !== brand);
+  el.src = pool[Math.floor(Math.random() * pool.length)];
 }
 function esc(s) {
   return String(s ?? "").replace(/[&<>"]/g,

@@ -407,7 +407,26 @@ body[data-view="nextep"]  .topbar { display: none; }
 /* 캔버스(A_Step*.dc.html) 그대로 — 위저드 자체는 투명하고, 게이지·제목은
    물 위에, 입력은 종이 카드 안에 있다. 폭은 아트보드(390px)에 맞춰 한
    컬럼으로 고정한다. PC 라고 벌리지 않는다. */
-.wizard { display: block; margin: 0; }   /* 프레임 폭을 그대로 쓴다 */
+.wizard { display: block; margin: 0; position: relative; }   /* 프레임 폭을 그대로 쓴다 */
+
+/* 제목 오른쪽에 앉은 루. 걸음마다 늘 비어 있던 자리다.
+   제목과 겨루면 안 되므로 살짝 눕히고 흐리게 둔다 — 읽는 눈이 먼저 가는 곳은
+   제목이고, 루는 곁에 있는 것으로 충분하다. 클릭도 안 받는다(뒤에 있는 것을
+   가리지 않게). */
+.wiz-lou {
+  /* 수심계·건너뛰기 줄(.wiz-head) 아래에서 시작한다 — 위로 올리면 루가
+     「건너뛰기」를 덮어 누를 수 없게 된다. */
+  position: absolute; top: 52px; right: 0; z-index: 1;
+  width: 92px; height: 92px; object-fit: contain;
+  opacity: .92; transform: rotate(-6deg);
+  pointer-events: none; user-select: none;
+  transition: opacity .4s ease;
+}
+/* 좁은 화면에서는 제목이 두 줄로 접히면서 루와 부딪힌다 — 줄여서 비켜 준다. */
+@media (max-width: 400px) { .wiz-lou { width: 68px; height: 68px; } }
+/* 제목이 루 밑으로 흘러들지 않게 그만큼 자리를 비워 둔다. */
+.wiz-eyebrow, .wiz-title, .wiz-sub { padding-right: 100px; }
+@media (max-width: 400px) { .wiz-eyebrow, .wiz-title, .wiz-sub { padding-right: 76px; } }
 /* 걸음을 옮기면 studio-head 로 스크롤한다. 상단 바가 sticky 라 그냥 두면
    제목이 그 아래로 숨는다 — 바 높이만큼 미리 띄운다. */
 
