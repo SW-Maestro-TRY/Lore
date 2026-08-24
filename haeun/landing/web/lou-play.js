@@ -50,8 +50,11 @@ function show(kind, i) {
   }
 }
 
-/* 한 흐름을 처음부터 끝까지 재생한다. */
-function play(kind, step = 520, hold = 1200) {
+/* 한 흐름을 처음부터 끝까지 재생한다.
+   `after` 는 다 재생한 뒤에 할 일 — 기본은 가만히 있는 루로 돌아가기다.
+   잡고 흔드는 중에는 손을 아직 안 뗐으므로 idle 로 가면 안 되고, 끄는 컷으로
+   돌아가야 한다. 그래서 끝을 부르는 쪽이 정하게 열어 뒀다. */
+function play(kind, step = 520, hold = 1200, after = rest) {
   const set = art && art[kind];
   if (!set) return;
   busy = true;
@@ -62,7 +65,7 @@ function play(kind, step = 520, hold = 1200) {
   (function next() {
     show(kind, i);
     if (i < set.frames.length - 1) { i += 1; timer = setTimeout(next, step); return; }
-    timer = setTimeout(rest, hold);
+    timer = setTimeout(after, hold);
   })();
 }
 
@@ -127,22 +130,62 @@ function preloadRest() {
   preload(Object.keys(art).filter(k => k !== "idle" && k !== "sleep"));
 }
 
-/* ---- 흔들기 (모바일) -------------------------------------------------- *
- * iOS 13+ 는 사람이 허락해야 가속도를 알려주고, 그 물어보는 창은 **사람이
- * 무언가를 누른 직후에만** 열 수 있다. 그래서 루를 처음 누를 때 같이 묻고,
- * 아직 안 물어봤거나 거절한 기기를 위해 버튼도 하나 둔다. */
+/* ---- 흔들기 ------------------------------------------------------------ *
+ *
+ * 두 길로 들어온다.
+ *
+ * 1. **폰을 흔든다** (devicemotion). iOS 13+ 는 사람이 허락해야 가속도를
+ *    알려주고, 그 물어보는 창은 사람이 무언가를 누른 직후에만 열 수 있다.
+ *    그래서 루를 처음 누를 때 같이 묻고, 아직 안 물어봤거나 거절한 기기를
+ *    위해 버튼도 하나 둔다.
+ * 2. **잡고 흔든다** (아래 drag 쪽). 권한이 없어도, 가속도계가 없는 PC 에서도
+ *    된다. 폰에서 1번이 안 잡히는 기기가 있어서 이쪽이 사실상 본길이다.
+ *
+ * 1번의 판정을 **가속도 크기가 아니라 변화량(jerk)** 으로 바꿨다. 예전에는
+ * |x|+|y|+|z| > 34 였는데, accelerationIncludingGravity 에는 중력(9.8)이
+ * 섞여 있어서 기기를 어느 쪽으로 들고 있느냐에 따라 가만히 있어도 기준값이
+ * 달라졌다 — 어떤 자세에서는 세게 흔들어야 겨우 넘고, 어떤 자세에서는 걷기만
+ * 해도 넘었다. 앞뒤 표본의 **차이**를 보면 중력이 저절로 빠지고 자세와
+ * 무관해진다. */
+const DRAG_SHAKE_FLIPS = 3;    // 이만큼 방향이 뒤집히면 "흔든다"
+const DRAG_SHAKE_WINDOW = 900; // 그 뒤집힘이 이 시간 안에 몰려 있어야 한다
+                               // (사람이 손목으로 흔들면 한 번 뒤집는 데 150~250ms 다.
+                               //  그냥 끌고 다니다 방향을 바꾸는 것과는 확실히 다르다.)
+const HINT_BASE = "누르기 · 연달아 누르기 · 꾹 누르기 · 끌어당기기 · 잡고 흔들기";
+const SHAKE_JERK = 16;        // 표본 사이 가속도 변화(m/s²). 툭 치는 정도로는 안 넘는다
+const SHAKE_GAP = 2000;       // 한 번 뜬 뒤 이만큼은 다시 안 뜬다
+
 let shakeOn = false;
 let shakeAsked = false;
 let shakeAt = 0;
+let lastAcc = null;
 
-function onShake(e) {
-  const a = e.accelerationIncludingGravity;
-  if (!a || busy) return;
-  const power = Math.abs(a.x || 0) + Math.abs(a.y || 0) + Math.abs(a.z || 0);
-  if (power < 34 || Date.now() - shakeAt < 2600) return;
+/* 지금 흔들기를 띄워도 되는가. 다른 반응이 재생 중이어도 흔들기는 끼어든다 —
+   누르자마자 흔들었는데 아무 일도 안 일어나면 "안 되는 것"으로 읽힌다. */
+function canShake() {
+  return !!(art && art.shake) && Date.now() - shakeAt >= SHAKE_GAP;
+}
+
+function fireShake(hold = 1500, after) {
   shakeAt = Date.now();
   touchedAt = Date.now();
-  play("shake", 380, 1500);
+  play("shake", 380, hold, after || rest);
+}
+
+function onShake(e) {
+  // acceleration 은 중력이 빠진 값이라 있으면 그걸 쓴다. iOS 는 둘 다 주는데
+  // 안드로이드 일부는 acceleration 의 값이 전부 null 로 온다.
+  const g = e.acceleration;
+  const a = (g && g.x !== null) ? g : e.accelerationIncludingGravity;
+  if (!a) return;
+  const now = [a.x || 0, a.y || 0, a.z || 0];
+  if (!lastAcc) { lastAcc = now; return; }
+  const jerk = Math.abs(now[0] - lastAcc[0])
+             + Math.abs(now[1] - lastAcc[1])
+             + Math.abs(now[2] - lastAcc[2]);
+  lastAcc = now;
+  if (jerk < SHAKE_JERK || !canShake()) return;
+  fireShake();
 }
 
 function startShake() {
@@ -152,7 +195,7 @@ function startShake() {
   const btn = $("#shakeAllow");
   if (btn) btn.hidden = true;
   const hint = $("#playHint");
-  if (hint) hint.textContent = "누르기 · 연달아 누르기 · 꾹 누르기 · 끌어당기기 · 폰 흔들기";
+  if (hint) hint.textContent = HINT_BASE + " · 폰 흔들기";
 }
 
 async function askShake() {
@@ -204,6 +247,10 @@ async function setupLou() {
   let down = false, sx = 0, sy = 0, ox = 0, oy = 0, at = 0;
   let far = 0, turns = 0, lastDir = 0, dragging = false;
   let clicks = 0, clickWindow = null, holdTimer = null;
+  // 잡고 흔들기 — 끄는 중에 방향이 바뀐 시각들. 짧은 사이에 여러 번 바뀌면
+  // "흔든다"로 본다. 오래된 것은 버려서, 천천히 왔다 갔다 하는 것과 구분한다.
+  let flips = [];
+  let dragShaking = false;
 
   const home = () => {
     box.dataset.home = "1";
@@ -234,6 +281,7 @@ async function setupLou() {
     box.setPointerCapture(e.pointerId);
     down = true; sx = e.clientX; sy = e.clientY; at = Date.now();
     far = 0; turns = 0; lastDir = 0; dragging = false;
+    flips = []; dragShaking = false;
     touchedAt = Date.now();
     const r = box.getBoundingClientRect();
     ox = e.clientX - (r.left + r.width / 2);
@@ -252,7 +300,9 @@ async function setupLou() {
     const dx = e.clientX - sx, dy = e.clientY - sy;
     far = Math.max(far, Math.hypot(dx, dy));
     const dir = Math.sign(e.movementX || 0);
-    if (dir && lastDir && dir !== lastDir) turns += 1;
+    const prevDir = lastDir;                 // 갱신 **전** 값이라야 뒤집힘을 잡는다
+    const flipped = !!(dir && prevDir && dir !== prevDir);
+    if (flipped) turns += 1;
     if (dir) lastDir = dir;
     touchedAt = Date.now();
 
@@ -269,6 +319,26 @@ async function setupLou() {
       const w = box.offsetWidth / 2, h = box.offsetHeight / 2;
       box.style.left = `${Math.max(w, Math.min(e.clientX - sr.left - ox, sr.width - w))}px`;
       box.style.top = `${Math.max(h, Math.min(e.clientY - sr.top - oy, sr.height - h))}px`;
+      // 잡은 채로 좌우로 마구 흔들면 흔들기. 폰의 가속도 권한이 없어도 되고,
+      // 가속도계가 없는 PC 에서도 된다 — 사실상 이쪽이 본길이다.
+      if (flipped) {
+        const t = e.timeStamp || Date.now();
+        flips.push(t);
+        while (flips.length && t - flips[0] > DRAG_SHAKE_WINDOW) flips.shift();
+        if (flips.length >= DRAG_SHAKE_FLIPS && !dragShaking && canShake()) {
+          flips = [];
+          dragShaking = true;
+          // 흔드는 동안에도 루는 손을 계속 따라온다 — 그림만 흔들기 컷으로
+          // 갈아 끼우고, 자리는 이 아래 pointermove 가 그대로 옮긴다.
+          fireShake(500, () => {
+            dragShaking = false;
+            if (!down || !dragging) return rest();   // 그새 놓았으면 그냥 마무리
+            busy = true;
+            box.dataset.react = "drag";
+            show("drag", Math.min(1, art.drag.frames.length - 1));
+          });
+        }
+      }
     } else if (turns >= 3 && !dragging) {    // 제자리에서 문지르면 쓰다듬기
       turns = 0;
       clearTimeout(holdTimer);
@@ -286,6 +356,7 @@ async function setupLou() {
 
     if (dragging) {                          // 놓아주면 기뻐하고 제자리로
       home();
+      if (dragShaking) return;   // 흔들기 재생 중 — 끝나면 play 의 after 가 마무리한다
       show("drag", art.drag.frames.length - 1);
       clearTimeout(timer);
       timer = setTimeout(rest, 1400);
