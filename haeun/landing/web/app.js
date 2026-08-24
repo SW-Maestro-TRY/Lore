@@ -889,24 +889,10 @@ function setupWizard() {
   };
   const closeCreate = () => {
     $("#create").hidden = true;
-    view("landing");
+    view("landing"); pickHero();
     window.scrollTo(0, 0);
   };
-  // 홈의 루 그림은 들어올 때마다 바뀐다. 헤더 로고와 달리 여기는 크게 나와서
-  // 두 그림이 확실히 달라 보이고, 정체를 나타내는 표식이 아니라 그림이라
-  // 바뀌어도 알아보는 데 지장이 없다.
-  // 새로고침마다가 아니라 한 번 들어온 동안은 같은 그림을 유지한다 — 화면을
-  // 오갈 때마다 고래가 바뀌면 산만하다.
-  const hero = $("#heroLou");
-  if (hero) {
-    const HEROES = ["/static/lou/hero-whale2.png", "/static/lou/hero-whale1.png"];
-    let pick = sessionStorage.getItem("lore_hero");
-    if (!HEROES.includes(pick)) {
-      pick = HEROES[Math.floor(Math.random() * HEROES.length)];
-      sessionStorage.setItem("lore_hero", pick);
-    }
-    if (hero.getAttribute("src") !== pick) hero.src = pick;
-  }
+  pickHero();
   const start = $("#startBtn");
   if (start) start.addEventListener("click", openCreate);
   // 헤더의 LORE 는 어느 화면에서든 홈으로 돌아가는 문이다. 새로고침 없이
@@ -2056,7 +2042,7 @@ async function openExisting(id) {
     startPolling();                       // 아직 도는 중이면 진행 화면으로
   } catch (err) {
     toast(`${err.message} — 먼저 한 편 만들어 주세요.`);
-    view("landing");
+    view("landing"); pickHero();
     window.scrollTo(0, 0);
   }
 }
@@ -2270,6 +2256,20 @@ function workCard(r) {
 /* ------------------------------------------------------------------ 잡동사니 */
 
 function view(name) { document.body.dataset.view = name; }
+
+/* 홈의 루 그림은 홈에 들어설 때마다 새로 뽑는다 — 새로고침도, 편집실이나 내
+   웹툰을 보다 돌아오는 것도 똑같이 새로 뽑힌다. 기억해 두지 않는 것이 곧
+   규칙이라, 저장소를 안 쓴다.
+   헤더 로고에는 같은 방식을 안 쓴다: 32px 에서는 어느 그림인지 분간이 안 돼서
+   로고만 매번 달라 보이는 손해만 남는다. 이쪽은 크게 나와서 두 그림이 확실히
+   다르고, 정체를 나타내는 표식이 아니라 그림이라 바뀌어도 상관없다. */
+const HERO_LOUS = ["/static/lou/hero-whale2.png", "/static/lou/hero-whale1.png"];
+function pickHero() {
+  const hero = $("#heroLou");
+  if (!hero) return;
+  const pick = HERO_LOUS[Math.floor(Math.random() * HERO_LOUS.length)];
+  if (hero.getAttribute("src") !== pick) hero.src = pick;
+}
 function esc(s) {
   return String(s ?? "").replace(/[&<>"]/g,
     ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
@@ -2280,7 +2280,8 @@ function forget() {
   shownCuts = new Set(); $("#cutGrid").innerHTML = ""; $("#cutstrip").hidden = true;
   $("#cancelBtn").textContent = "중단"; $("#cancelBtn").onclick = null;
   $("#clockLabel").textContent = "경과";
-  view("landing"); $("#progress").hidden = true; $("#result").hidden = true;
+  view("landing"); pickHero();
+  $("#progress").hidden = true; $("#result").hidden = true;
   $("#works").hidden = true;
   $("#scriptPanel").hidden = true;
   // 이어 만들기 화면도 같이 닫는다 — 안 닫으면 "새로 만들기" 를 눌러도
