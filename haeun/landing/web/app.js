@@ -20,10 +20,12 @@ const STYLE_INFO = [
 ];
 
 const IDEAS = [
-  "몰락한 문파에 혼자 남아 적 앞으로 걸어 나가는 검객",
-  "데뷔조에서 잘린 연습생에게 다시 무대가 주어진다",
-  "각성 등급 최하위인데 아무도 못 깨는 게이트를 혼자 연다",
-  "악역 영애로 빙의했는데 원작 내용을 하나도 모른다",
+  "장난기 많은데 겁은 많아서 친구 앞에서만 센 척한다",
+  "평범한 회사원인데 로맨스 판타지 소설에 빙의했다",
+  "말수가 적은 새벽 편의점 알바생. 매일 같은 손님이 온다",
+  "몰락한 문파에 혼자 남은 검객. 오늘 적이 쳐들어온다",
+  "각성 등급은 최하위인데 아무도 못 깨는 게이트를 혼자 연다",
+  "남 부탁은 다 들어주면서 정작 자기 얘기는 안 한다",
 ];
 // 장르 단추로 먼저 꺼내 두는 것들. index.html 의 datalist 에는 더 많이 있고,
 // 여기 없는 장르도 칸에 직접 쓰면 그대로 간다.
@@ -570,16 +572,14 @@ function wizPaintSummary() {
     ? (document.querySelector(`.style-opt input[value="${styleEl.value}"]`)
         ?.closest(".style-opt")?.querySelector("b")?.textContent || styleEl.value)
     : "";
-  const fieldsFilled = $$("[data-field]", form).filter(el => el.value.trim()).length;
 
+  // 화면에 있는 것만 적는다. 설명·항목·세계관은 이제 안 묻는 칸이라 뺐다 —
+  // 요약에 "루가 정합니다" 가 줄줄이 뜨면 안 물어본 것을 물어본 것처럼 보인다.
   const rows = [
     ["캐릭터", val(form.name.value)],
-    ["설명", cut(form.character.value, 40)],
-    ["항목", fieldsFilled ? `${fieldsFilled}개 적음` : auto],
     ["사진", photos.length ? `${photos.length}장` : `<i class="wiz-auto">없음</i>`],
-    ["이야기", cut(form.story.value, 40)],
+    ["적은 것", cut(form.story.value, 40)],
     ["장르", val(form.genre.value)],
-    ["세계관", val(form.world.value)],
     ["그림체", styleLabel ? esc(styleLabel) : auto],
     ["연출", layoutMode() === "webtoon" ? "웹툰 · 무게로 묶음" : "빠르게 · 한 장 3컷"],
   ];
@@ -683,7 +683,10 @@ function collect() {
   return {
     uid:        UID,
     name:       form.name.value.trim(),
-    character:  form.character.value.trim(),
+    // 화면에는 자유 입력 칸이 하나뿐이다. 적힌 글을 캐릭터 설명과 이야기
+    // **양쪽에** 보낸다 — 시트를 만들 때도(character) 줄거리를 짤 때도(story)
+    // 같은 글을 봐야, 성격만 적은 사람도 상황만 적은 사람도 둘 다 반영된다.
+    character:  form.story.value.trim(),
     photo_note: form.photo_note.value.trim(),
     fields,
     genre:      form.genre.value.trim(),
