@@ -971,13 +971,11 @@ function setupWizard() {
   // 홈의 시작하기 — 아래로 스크롤이 아니라 **화면 전환**이다. 캔버스에서
   // 홈과 만들기는 다른 아트보드다.
   const openCreate = () => {
-    $("#create").hidden = false;
     view("create");
     wizGo(1, false);
     window.scrollTo(0, 0);
   };
   const closeCreate = () => {
-    $("#create").hidden = true;
     view("landing"); pickHero();
     window.scrollTo(0, 0);
   };
@@ -1137,8 +1135,6 @@ function submit(e) { e.preventDefault(); startRun(); }
 
 function startPolling() {
   view("running");
-  $("#progress").hidden = false;
-  $("#result").hidden = true;
   lastStatus = null;
   tick();
   clearInterval(poll);
@@ -1803,7 +1799,6 @@ function paintResult(r) {
 
   paintClaimBanner();
   view("result");
-  showOnly("#result");
   window.scrollTo(0, 0);
 }
 
@@ -2379,16 +2374,12 @@ function openNextEp() {
   $("#nextEpAsk").hidden = false;
   $("#nextEpRun").hidden = true;
   $("#nextEpNote").value = "";
-  $("#nextEp").hidden = false;
-  $("#result").hidden = true;
   view("nextep");
   window.scrollTo(0, 0);
 }
 
 function closeNextEp() {
   clearInterval(nextEpPoll); nextEpPoll = null; nextEpJob = null;
-  $("#nextEp").hidden = true;
-  $("#result").hidden = false;
   view("result");
 }
 
@@ -2443,7 +2434,6 @@ async function tickNextEp() {
     jobId = nextEpJob;
     sessionStorage.setItem("lore_job", jobId);
     nextEpJob = null;
-    $("#nextEp").hidden = true;
     toast(`${nextEpCtx.next}화가 나왔습니다`);
     showResult();
     return;
@@ -2488,14 +2478,13 @@ async function tickNextEp() {
 /* 큰 화면 조각들. 하나를 보이면 **나머지는 반드시 숨는다** — 예전에는 부르는
    쪽마다 숨길 목록을 따로 들고 있어서, 조각이 하나 늘 때(마이페이지) 어떤
    경로에서는 안 숨겨져 두 화면이 위아래로 이어 붙어 보였다. */
-const SECTIONS = ["#progress", "#result", "#works", "#nextEp", "#mypage"];
+const SECTIONS = ["#create", "#progress", "#result", "#works", "#nextEp", "#mypage"];
 
 function showOnly(id) {
   SECTIONS.forEach(sel => { const el = $(sel); if (el) el.hidden = sel !== id; });
 }
 
 function onlyMyPage() {
-  showOnly("#mypage");
   view("mypage");
   window.scrollTo(0, 0);
 }
@@ -2571,7 +2560,6 @@ function showMockMyPage() {
 
 async function showWorks() {
   view("works");
-  showOnly("#works");
   window.scrollTo(0, 0);
 
   const host = $("#worksGrid");
@@ -2626,7 +2614,33 @@ function workCard(r) {
 
 /* ------------------------------------------------------------------ 잡동사니 */
 
-function view(name) { document.body.dataset.view = name; }
+/* 화면 전환은 여기 한 곳으로만 한다.
+ *
+ * 예전에는 부르는 쪽마다 "이건 보이고 저건 숨기고" 를 손으로 적었다. 그래서
+ * 한 자리라도 빠뜨리면 두 화면이 위아래로 이어 붙었다 — 만들기를 밟다가
+ * 「미리보기 만들기」를 누르면 진행 화면이 만들기 **아래에** 생겼고, 헤더의
+ * LORE 로 홈에 와도 위저드가 홈 위에 남았다. 조각이 하나 늘 때마다(마이페이지,
+ * 이어 만들기) 같은 사고가 되풀이됐다.
+ *
+ * 이제 화면 이름 하나만 넘기면 그 화면의 조각만 남고 나머지는 전부 닫힌다.
+ * 새 화면을 만들면 여기 한 줄만 더하면 된다. */
+const VIEW_SECTION = {
+  landing: null,          // 홈은 CSS 가 보여준다(body[data-view] 참고)
+  create:  "#create",
+  running: "#progress",
+  result:  "#result",
+  works:   "#works",
+  mypage:  "#mypage",
+  nextep:  "#nextEp",
+};
+
+function view(name) {
+  document.body.dataset.view = name;
+  showOnly(VIEW_SECTION[name] ?? null);
+  // 물빛(걸음) 표시는 만들기 화면만의 것이다. 남겨 두면 홈이나 결과 화면까지
+  // 마지막 걸음의 색을 물고 온다.
+  if (name !== "create") delete document.body.dataset.step;
+}
 
 /* 루는 홈에 들어설 때마다 다른 모습으로 맞이한다 — 홈의 큰 그림도, 헤더의
    로고도. 새로고침도, 편집실이나 내 웹툰을 보다 돌아오는 것도 똑같이 새로
@@ -2672,10 +2686,10 @@ function forget() {
   shownCuts = new Set(); $("#cutGrid").innerHTML = ""; $("#cutstrip").hidden = true;
   $("#cancelBtn").textContent = "중단"; $("#cancelBtn").onclick = null;
   $("#clockLabel").textContent = "경과";
+  // view("landing") 하나로 큰 화면 조각이 전부 닫힌다 — 만들기·진행·결과·
+  // 내 웹툰·이어 만들기·마이페이지까지(VIEW_SECTION 참고). 여기서 하나씩
+  // 손으로 닫던 시절에 빠뜨린 조각이 홈 아래에 그대로 이어 붙곤 했다.
   view("landing"); pickHero();
-  // 큰 화면 조각은 전부 닫는다 — 하나라도 남으면 홈 아래에 그대로 이어 붙는다
-  // (마이페이지가 안 닫혀서 홈과 마이페이지가 한 화면에 이어 보였다).
-  showOnly(null);
   // 목업에서 켜 둔 "로그인한 척"도 여기서 푼다 — 안 풀면 홈에 돌아와도 배지가
   // 「마이페이지」로 남아, 로그인도 안 했는데 한 것처럼 보인다.
   mockAccountPill = false;
@@ -2684,16 +2698,11 @@ function forget() {
   // (없는 요소에 hidden 을 쓰면 여기서 죽어서, 홈으로 나가는 길 자체가 막힌다.)
   const script = $("#scriptPanel");
   if (script) script.hidden = true;
-  // 만들기 화면도 닫는다. 안 닫으면 걸음을 밟다가 헤더의 LORE 로 홈에 와도
-  // 위저드가 홈 위에 그대로 겹쳐 있어서, 홈과 4걸음과 바닥글이 한꺼번에
-  // 보인다 — 화면이 깨진 것처럼 읽힌다.
-  $("#create").hidden = true;
-  // 물빛 표시도 같이 지운다 — 홈은 걸음이 없는 자리다.
-  delete document.body.dataset.step;
-  // 이어 만들기 화면도 같이 닫는다 — 안 닫으면 "새로 만들기" 를 눌러도
-  // 앞 작품의 다음 화 화면이 뒤에 남는다.
+  // 이어 만들기는 화면만 닫아서는 안 된다 — 돌던 폴링과 붙잡고 있던 회차
+  // 정보까지 놓아야 "새로 만들기" 가 앞 작품을 물고 오지 않는다.
   clearInterval(nextEpPoll); nextEpPoll = null; nextEpJob = null; nextEpCtx = null;
-  $("#nextEp").hidden = true; $("#nextEpBtn").hidden = true;
+  // 화면 조각이 아니라 그 안의 단추들이다 — view() 가 안 건드린다.
+  $("#nextEpBtn").hidden = true;
   $("#moreCutsBtn").hidden = true;
   // /result 로 들어왔으면 주소도 되돌린다 — 안 그러면 새로고침에 다시 결과가 뜬다.
   if (location.pathname !== "/" || location.search) history.replaceState(null, "", "/");

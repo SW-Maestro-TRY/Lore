@@ -90,8 +90,12 @@ body[data-view="running"] .foot,
 body[data-view="result"]  #landing,
 body[data-view="works"]   #landing,
 body[data-view="mypage"]  #landing,
+/* 이어 만들기는 만드는 중(running)과 같은 성격의 화면이다 — 한 가지 일에만
+   매달리는 자리라 상단 바를 감춘다. 바닥글도 같이 감춘다: 헤더는 없는데
+   바닥글만 남으면 화면이 어중간하게 끊긴 것처럼 보인다. */
 body[data-view="nextep"]  #landing,
-body[data-view="nextep"]  .topbar { display: none; }
+body[data-view="nextep"]  .topbar,
+body[data-view="nextep"]  .foot { display: none; }
 
 /* ------------------------------------------------------------------ 공통 */
 
