@@ -1196,6 +1196,20 @@ scene:
   # 컷마다 다른 캔버스 비율(16:9 / 4:3 / 3:4 / 9:16)에서 나옵니다.
   width_ratio: {}
 
+  # 장(Scene) 사이를 이을 때 gap_after·weight 를 실제로 반영할지 (episode.stitch).
+  #
+  # gap_after(컷 사이 여백 0~3)는 연출이 있는 run 이면 **늘 계산돼 있습니다**
+  # (derive_layout). 그런데 episode.stitch 는 지금까지 이 값을 안 읽고 장을
+  # 무조건 틈 없이 붙였습니다 — 컷 모드(write_strip)는 지키는 여백 리듬이 장
+  # 모드에서만 사라지는 자리였습니다. 켜면 장과 장 사이에도 컷 모드와 같은
+  # 눈금(위 gap_ratio)으로 여백이 생기고, weight: light 인 장은 위 light_width
+  # 로 좁아집니다.
+  #
+  # ⚠️ **기본은 꺼짐입니다.** gap_after 가 이미 모든 run 에 있으므로, 이걸 켜
+  # 두면 예전에 뽑아 둔 화도 다시 이으면 갑자기 여백이 생겨 harness-is-final
+  # 원칙(예전 run 재현)을 어깁니다. landing 의 "웹툰" 연출만 켭니다.
+  stitch_gaps: false
+
   # ---------------------------------------------------------------------------
   # 컷 사이 여백의 크기 (컷 모드 PNG 조립 — strip.stitch_strip)
   #

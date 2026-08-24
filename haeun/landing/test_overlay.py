@@ -17,6 +17,14 @@ import pipeline as P
 fails = []
 
 
+def _raises(fn):
+    try:
+        fn()
+    except P.Failed:
+        return True
+    return False
+
+
 def ok(name, cond, extra=""):
     print(("PASS  " if cond else "FAIL  ") + name + (f"   {extra}" if extra and not cond else ""))
     if not cond:
@@ -83,6 +91,152 @@ ok("저장: 저장한 것이 그대로 다시 읽힌다",
 OV.overlay_path(tmp).write_text("{ 망가진 json", encoding="utf-8")
 ok("저장: 파일이 깨져도 편집실이 열린다 (빈 것으로 본다)",
    OV.load_overlay(tmp) == {"scenes": {}})
+
+# ---- 일반/전문 모드 ---------------------------------------------------------
+
+ok("모드: 값이 없으면 일반 (기본이 안전한 쪽)", not P.expert_mode({}))
+ok("모드: 일반은 시트에서만 멈춘다",
+   P.checkpoints({}) == {"sheet": True, "story": False, "board": False, "artqa": False})
+ok("모드: 전문은 네 곳 모두에서 멈춘다",
+   all(P.checkpoints({"expert": True}).values()))
+ok("모드: 검수 강도는 전문에서만 먹는다 (일반은 늘 기본값)",
+   P.art_qa_regen_max({"art_qa_regen_max": 4}) == P.ART_QA_REGEN_DEFAULT)
+ok("모드: 전문이면 고른 값이 간다",
+   P.art_qa_regen_max({"expert": True, "art_qa_regen_max": 4}) == 4)
+ok("모드: 이상한 값이 와도 기본값으로 (실행이 안 죽는다)",
+   P.art_qa_regen_max({"expert": True, "art_qa_regen_max": "넷"}) == P.ART_QA_REGEN_DEFAULT)
+ok("모드: 상한을 넘겨 보내도 상한까지만",
+   P.art_qa_regen_max({"expert": True, "art_qa_regen_max": 99}) == P.ART_QA_REGEN_MAX)
+
+# ---- 시트 재생성 지시 --------------------------------------------------------
+#
+# 화면의 항목을 늘리면서 지시문을 안 쓰면, 그 항목은 눌러도 아무 일이 안 일어나는
+# 버튼이 된다 — 고른 사람은 반영된 줄 안다. 그 사고를 여기서 막는다.
+_sheet_tag_ids = {t["id"] for t in P.FEEDBACK_TAGS["sheet"]}
+ok("시트 지시: 모든 항목에 지시문이 있다",
+   _sheet_tag_ids <= set(P.SHEET_FIX_BY_TAG),
+   f"빠진 것: {sorted(_sheet_tag_ids - set(P.SHEET_FIX_BY_TAG))}")
+ok("시트 지시: 화면에 없는 지시문이 남아 있지 않다",
+   set(P.SHEET_FIX_BY_TAG) <= _sheet_tag_ids,
+   f"군더더기: {sorted(set(P.SHEET_FIX_BY_TAG) - _sheet_tag_ids)}")
+ok("시트 지시: 아무것도 안 고르면 빈 목록 (프롬프트가 안 바뀐다)",
+   P.sheet_corrections([], "") == [])
+ok("시트 지시: 모르는 항목은 버린다",
+   P.sheet_corrections(["없는항목"], "") == [])
+ok("시트 지시: 적은 말은 요약하지 않고 그대로 싣는다",
+   "망토를 안 그렸어요" in P.sheet_corrections([], "망토를 안 그렸어요")[0])
+ok("시트 지시: 너무 긴 말은 상한까지만",
+   len(P.sheet_corrections([], "가" * 900)[0]) <= P.FEEDBACK_TEXT_MAX + 40)
+
+_fix_dir = Path(tempfile.mkdtemp())
+(_fix_dir / "p1.json").write_text(
+    '{"name": "\\ubbfc\\uc2dc\\ud558", "design_details": ["\\uac00", "\\ub098", "\\ub2e4"]}',
+    encoding="utf-8")
+
+
+def _fixes_now():
+    import json
+    return json.loads((_fix_dir / "p1.json").read_text(encoding="utf-8")).get(
+        "sheet_corrections", [])
+
+
+P._merge_sheet_corrections(_fix_dir, P.sheet_corrections(["hair"], ""))
+P._merge_sheet_corrections(_fix_dir, P.sheet_corrections(["outfit"], ""))
+ok("시트 지시: 판을 거듭해도 앞 지시가 안 사라진다 (덮어쓰지 않고 쌓는다)",
+   len(_fixes_now()) == 2 and any("머리" in c for c in _fixes_now()))
+P._merge_sheet_corrections(_fix_dir, P.sheet_corrections(["hair"], ""))
+ok("시트 지시: 같은 말을 또 하면 중복 없이 맨 뒤로 (끝쪽이 세게 읽힌다)",
+   len(_fixes_now()) == 2 and "머리" in _fixes_now()[-1])
+for _i in range(P.SHEET_FIX_MAX + 4):
+    P._merge_sheet_corrections(_fix_dir, [f"지시 {_i}"])
+ok("시트 지시: 상한을 넘겨 쌓이지 않는다 (서로 부딪히면 앞엣것부터 흘린다)",
+   len(_fixes_now()) == P.SHEET_FIX_MAX)
+ok("시트 지시: design_details 는 안 건드린다 (시트 인셋 개수가 그대로)",
+   __import__("json").loads(
+       (_fix_dir / "p1.json").read_text(encoding="utf-8"))["design_details"]
+   == ["가", "나", "다"])
+P._merge_sheet_corrections(Path(tempfile.mkdtemp()), ["아무 지시"])   # p1.json 없음
+ok("시트 지시: p1.json 이 없어도 안 터진다", True)
+shutil.rmtree(_fix_dir, ignore_errors=True)
+
+# ---- 공유 링크의 미리보기 태그 ----------------------------------------------
+#
+# 여기 들어가는 값(제목·로그라인)은 **모델이 지어낸 글**이고 그대로 HTML 에
+# 박힌다. 따옴표 하나만 새어 나가도 태그가 깨지거나 남의 화면에서 스크립트가
+# 돈다. 그래서 이스케이프를 테스트로 못박는다.
+import serve as S                                              # noqa: E402
+
+_share_meta = {
+    "run_id": "20260823T152601-a6316e", "episode": 1,
+    "title": "약속의 무게", "character": "모모",
+    "genre": "로맨스 판타지", "logline": "한 줄 소개.",
+    "cover_page": 1,
+}
+_og = S.og_tags(_share_meta, "https://lore.test")
+ok("공유: 제목이 '누구 · 무엇' 으로 나온다",
+   'content="모모 · 약속의 무게 — LORE"' in _og)
+ok("공유: 로그라인이 설명으로 실린다", 'content="한 줄 소개."' in _og)
+ok("공유: 그림 주소가 절대 주소다 (크롤러는 상대 주소를 못 푼다)",
+   'content="https://lore.test/api/runs/' in _og)
+ok("공유: 링크가 그 작품·그 회차를 가리킨다",
+   "/works?run=20260823T152601-a6316e&amp;ep=1" in _og)
+ok("공유: <title> 도 같이 바꾼다 (탭과 카드가 따로 놀지 않게)",
+   "<title>모모 · 약속의 무게 — LORE</title>" in _og)
+
+_evil = dict(_share_meta, title="<script>alert(1)</script>",
+             character='"onload="evil()', logline='a & b < c > "q"')
+_og_evil = S.og_tags(_evil, "https://lore.test")
+ok("공유: 꺾쇠가 태그로 살아나지 않는다", "<script>" not in _og_evil)
+ok("공유: 따옴표로 속성을 빠져나가지 못한다", 'onload="evil' not in _og_evil)
+ok("공유: 앰퍼샌드도 실체참조로 바뀐다", "a &amp; b" in _og_evil)
+
+_no_log = dict(_share_meta, logline="")
+ok("공유: 로그라인이 없으면 장르로 대신한다 (빈 설명은 안 내보낸다)",
+   'content="로맨스 판타지 웹툰"' in S.og_tags(_no_log, "https://lore.test"))
+ok("공유: 장르도 없으면 기본 문구가 있다",
+   'og:description" content="캐릭터'
+   in S.og_tags(dict(_no_log, genre=""), "https://lore.test"))
+
+ok("공유: 없는 작품은 미리보기를 안 만든다 (share_meta 가 None)",
+   P.share_meta("없는run", 1) is None)
+
+# ---- 사람이 고친 제목 --------------------------------------------------------
+#
+# 이 값은 결과 화면뿐 아니라 목록·편집실·공유 카드·내려받는 파일 이름까지
+# 따라간다(episode_title 하나를 거친다). 되돌릴 수 있어야 하는 것도 함께 못박는다.
+_trun = Path(tempfile.mkdtemp())
+_trun_id = _trun.name
+
+
+def _fake_run(tmp_root):
+    """runs/<id>/ 하나를 흉내낸다 — titles.json 만 쓰고 읽는 시험이라 이것으로 족하다."""
+    P.STORY = tmp_root                      # 이 시험 동안만 바꿔 끼운다
+    d = tmp_root / "runs" / "t1"
+    (d / "webtoon").mkdir(parents=True, exist_ok=True)
+    (d / "webtoon" / "series.json").write_text(
+        '{"episodes": [{"no": 1, "title": "\\ubaa8\\ub378\\uc774 \\uc9c0\\uc740 \\uc774\\ub984"}]}',
+        encoding="utf-8")
+    return d
+
+
+_story_backup = P.STORY
+_fake_run(_trun)
+ok("제목: 안 고쳤으면 모델이 지은 이름", P.episode_title("t1", 1) == "모델이 지은 이름")
+ok("제목: 고치면 그것이 이긴다",
+   P.set_user_title("t1", 1, "내가 지은 이름") == "내가 지은 이름"
+   and P.episode_title("t1", 1) == "내가 지은 이름")
+ok("제목: 앞뒤 공백과 겹친 칸은 정리한다",
+   P.set_user_title("t1", 1, "  겹친   칸  ") == "겹친 칸")
+ok("제목: 상한을 넘으면 자른다", len(P.set_user_title("t1", 1, "가" * 300)) == P.TITLE_MAX)
+ok("제목: 비우면 모델이 지은 이름으로 되돌아간다",
+   P.set_user_title("t1", 1, "") == "모델이 지은 이름"
+   and P.user_title("t1", 1) == "")
+ok("제목: 회차마다 따로 간다",
+   (P.set_user_title("t1", 1, "1화 이름"), P.user_title("t1", 2))[1] == "")
+ok("제목: 없는 작품에 쓰면 Failed", _raises(lambda: P.set_user_title("없는run", 1, "x")))
+P.STORY = _story_backup
+shutil.rmtree(_trun, ignore_errors=True)
+
 
 # ---------------- 굽기 ----------------
 

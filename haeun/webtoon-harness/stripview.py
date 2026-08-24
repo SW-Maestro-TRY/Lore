@@ -34,6 +34,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
+import report
 import strip
 import vision
 
@@ -277,11 +278,20 @@ def build(ep_dir: Path, meta: dict[str, Any], cuts: list[dict[str, Any]],
 
     layout = {k: v for k, v in vision.load_layout(ep_dir).items()
               if not str(k).startswith("_")}
+    # 채택본을 따라간다. 예전에는 `_c1` 이 박혀 있었는데, 최종본을 만드는
+    # write_strip 은 picks.csv 를 보므로 후보가 2장 이상이면 이 화면과
+    # episode.png 가 **서로 다른 후보**를 보여주게 된다(#113). 지금은 후보가
+    # 1장이라 값이 같지만, 다른 곳이 이미 채택을 따르는 이상 여기도 따라야 한다.
+    picks = report.load_picks(ep_dir)
     blocks, sizes = [], {}
     for i, c in enumerate(cuts):
         n = int(c["cut_number"])
-        rel = f"{cond}/cut{n}_c1.png"
+        k = picks.get((cond, n)) or 1
+        rel = f"{cond}/cut{n}_c{k}.png"
         src = ep_dir / rel
+        if not src.exists() and k != 1:
+            rel = f"{cond}/cut{n}_c1.png"     # 채택 파일이 사라졌으면 c1 로 되돌린다
+            src = ep_dir / rel
         if not src.exists():
             continue
         with Image.open(src) as im:

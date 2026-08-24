@@ -3712,6 +3712,46 @@ ok("작가 규칙: 충돌 시 우선을 머리말이 말한다",
 ok("작가 규칙: 깨진 memory.json 은 빈 구조로 (실행이 안 죽는다)",
    story.load_user_memory("/no/such/file.json") == {"always": [], "keyword": []})
 
+# ---- 시트 재생성 지시(sheet_corrections) — 없으면 예전 그대로, 있으면 끝에만 ----
+#
+# 사람이 승인 화면에서 "머리가 달라요" 를 고르면 그 말이 다음 판 시트 프롬프트까지
+# 가야 한다. 동시에 **이 값이 없는 예전 run 은 한 글자도 안 바뀌어야** 한다 —
+# 이 둘이 같이 지켜지는지가 여기서 걸린다.
+_sheet_p1 = {
+    "name": "민시하",
+    "appearance": {"hair": "흑발"},
+    "appearance_en": "A young woman with long black hair, sharp eyes, a navy coat.",
+    "design_details": ["왼쪽 소매의 노란 반사띠", "목에 건 은색 호루라기", "오른쪽 눈썹의 흉터"],
+    "color_palette": {"hair": "black (#101014)", "eyes": "amber (#d9a441)",
+                      "skin": "ivory (#f0dfd0)", "outfit_main": "navy (#1e2a44)",
+                      "outfit_sub": "grey (#8a8f98)", "accent": "yellow (#e5c34a)"},
+    "expression_set": ["기본 — 무표정", "미소 — 입꼬리만", "분노 — 눈썹 내림",
+                       "놀람 — 눈 크게", "슬픔 — 시선 내림", "결의 — 턱 당김"],
+}
+_STYLE = "clean webtoon lineart"
+_plain = story.charsheet_source(_sheet_p1)
+_fixed = story.charsheet_source(dict(_sheet_p1, sheet_corrections=["머리를 사양대로 맞춰라"]))
+
+ok("시트 지시: 없으면 CORRECTIONS 절 자체가 안 생긴다",
+   "CORRECTIONS" not in story.build_sheet_prompts(_plain, _STYLE, False)["sheet"])
+ok("시트 지시: 있으면 앞은 그대로고 뒤에만 붙는다",
+   story.build_sheet_prompts(_fixed, _STYLE, False)["sheet"].startswith(
+       story.build_sheet_prompts(_plain, _STYLE, False)["sheet"]))
+ok("시트 지시: 한국어 지시가 그대로 실린다",
+   "머리를 사양대로 맞춰라"
+   in story.build_sheet_prompts(_fixed, _STYLE, False)["sheet"])
+ok("시트 지시: 나눠 뽑기(split)에도 똑같이 붙는다",
+   all("머리를 사양대로 맞춰라" in v
+       for v in story.build_sheet_prompts(_fixed, _STYLE, True).values()))
+ok("시트 지시: 게이트를 막지 않는다 (한글은 appearance_en 에서만 걸린다)",
+   story.gate_charsheet_source(_fixed) == [])
+ok("시트 지시: design_details 를 안 건드린다 (region 3 인셋 개수가 그대로)",
+   _fixed["design_details"] == _plain["design_details"])
+ok("시트 지시: 빈 줄·공백만 있는 항목은 버린다",
+   story.charsheet_source(
+       dict(_sheet_p1, sheet_corrections=["", "   ", "진짜 지시"]))["sheet_corrections"]
+   == ["진짜 지시"])
+
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

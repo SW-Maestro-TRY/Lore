@@ -19,12 +19,101 @@ const STYLE_INFO = [
   ["shoujo",    "순정 · BL",      "얼굴과 둘 사이의 거리. 길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃."],
 ];
 
-const IDEAS = [
-  "몰락한 문파에 혼자 남아 적 앞으로 걸어 나가는 검객",
-  "데뷔조에서 잘린 연습생에게 다시 무대가 주어진다",
-  "각성 등급 최하위인데 아무도 못 깨는 게이트를 혼자 연다",
-  "악역 영애로 빙의했는데 원작 내용을 하나도 모른다",
+// 장르 단추로 먼저 꺼내 두는 것들. index.html 의 datalist 에는 더 많이 있고,
+// 여기 없는 장르도 칸에 직접 쓰면 그대로 간다.
+// story-harness 가 **전용 샘플을 가진** 장르만 올린다(samples.py GENRES).
+// 전용 샘플이 없는 장르를 고르면 엉뚱한 장르의 카드를 보고 쓰게 된다 —
+// "일상"을 골랐는데 각성·던전이 나오던 것이 그 사정이다. 여기 없는 장르도
+// 칸에 직접 쓰면 그대로 가고, 하네스가 낱말을 보고 알아서 맞춘다.
+/* 그림체 썸네일. loading="lazy" 는 **안 쓴다** — 걸음이 숨어 있는 동안에는
+   브라우저가 "화면 밖"으로 보고 안 받아 오다가, 걸음이 열려도 한동안 빈
+   칸으로 남는다(실제로 7장 중 2장만 뜨는 것을 봤다).
+   실제로 그 그림체로 뽑아 둔 샘플이 있는 것은 그것을 쓰고,
+   아직 없는 것은 루 그림으로 채운다 — 빈 칸으로 두면 어떤 그림인지 짐작할
+   길이 아예 없다. 샘플이 생기면 여기만 바꾸면 된다. */
+const STYLE_THUMB = {
+  cinematic: "/static/samples/ex-cinematic-1.jpg",
+  lineart:   "/static/samples/ex-lineart-2.jpg",
+  romance:   "/static/samples/ex-romance-1.jpg",
+  webtoon:   "/static/samples/ex-webtoon-1.jpg",
+  pastel:    "/static/lou/world-begins.png",
+  noir:      "/static/lou/world-depth.png",
+  shoujo:    "/static/lou/lou-happy.png",
+};
+
+const GENRE_QUICK = [
+  "로맨스 판타지", "무협", "판타지", "헌터·게이트",
+  "마법학교", "게임 판타지", "센티넬", "오메가버스",
+  "아이돌", "스릴러", "액션", "개그", "일상",
+  "히어로",
 ];
+
+/* 장르 카드 아래에 늘 떠 있는 한 줄. 안 고른 상태에서 아무것도 안 보이면
+   "여기 뭔가 떠야 하는데 안 떴다"로 읽혀서 고장 같아 보인다 — 안 고른 것도
+   **고른 것 중 하나**라는 걸 말해 주는 자리다. 문구는 하네스가 그 장르로
+   무엇을 하는지를 적는다(분위기 형용사 말고). */
+const GENRE_NOTE = {
+  "로맨스 판타지": "드레스와 무도회, 계약 결혼과 회귀. 감정이 사건을 끕니다.",
+  "무협":         "강호와 문파, 내공과 검. 은원이 이야기를 끕니다.",
+  "판타지":       "검과 마법, 다른 세계. 종족과 왕국이 배경이 됩니다.",
+  "헌터·게이트":  "현대 한국에 열린 게이트. 각성자와 길드, 등급이 규칙입니다.",
+  "마법학교":     "입학과 기숙사, 수업과 시험. 학교가 세계의 크기입니다.",
+  "게임 판타지":  "상태창과 레벨, 퀘스트와 스킬. 규칙이 눈에 보입니다.",
+  "센티넬":       "가이드와 센티넬, 감각 폭주와 결합. 관계가 곧 설정입니다.",
+  "오메가버스":   "알파·베타·오메가, 페로몬과 각인. 관계의 규칙이 세계입니다.",
+  "아이돌":       "연습생과 데뷔, 무대와 팬. 성장과 경쟁이 축입니다.",
+  "스릴러":       "쫓고 쫓기는 것. 정보를 언제 주는지가 연출이 됩니다.",
+  "액션":         "몸으로 부딪히는 것. 합과 속도로 컷을 나눕니다.",
+  "개그":         "박자와 배신. 컷의 크기 차이로 웃깁니다.",
+  "일상":         "큰 사건 없이 하루하루. 인물의 결이 곧 이야기입니다.",
+  "히어로":       "능력과 빌런, 등록과 자경단. 누가 구할 자격을 갖느냐가 규칙입니다.",
+};
+const GENRE_NOTE_EMPTY =
+  "비워두면 루가 골라요 — 앞에서 적은 캐릭터 설명을 보고 이야기에 맞는 장르를 정합니다.";
+
+/* ---- 일반 모드 · 전문 모드 ------------------------------------------- *
+ *
+ * 계정이 없으므로 고른 모드는 브라우저(localStorage)에 남는다. sessionStorage
+ * 가 아닌 이유: 창을 닫았다 열 때마다 "어떻게 만들까요?" 를 다시 묻는 것은
+ * 한 번 정한 사람에게는 그냥 방해다.
+ *
+ * 모드가 정하는 것은 두 가지뿐이다 —
+ *   1. 폼에서 [data-expert-only] 를 보여줄 것인가 (안 보여줘도 기본값은 간다)
+ *   2. 시트 검수 화면에서 외형 사양 편집 폼을 열 것인가
+ * 어느 단계에서 멈출지는 **서버가** 정한다(pipeline.checkpoints). 화면이 그
+ * 규칙을 베껴 두면 둘이 갈라져서, 고른 사람이 속은 것이 된다. */
+
+const MODES = {
+  simple: { label: "일반 모드", desc: "세부 설정 없이 자동으로 만듭니다 — 캐릭터 시트만 확인합니다." },
+  expert: { label: "전문 모드", desc: "이야기 · 시트 · 콘티 · 그림 검수, 네 곳에서 멈추고 보여드립니다." },
+};
+
+function currentMode() {
+  const m = localStorage.getItem("lore_mode");
+  return m === "expert" ? "expert" : m === "simple" ? "simple" : null;
+}
+
+function isExpert() { return currentMode() === "expert"; }
+
+/* 폼의 전문 전용 칸을 열고 닫는다. 숨긴 칸의 값은 **안 지운다** — 전문 모드로
+   골라 놓고 일반으로 바꿔도 라디오의 기본값(연출 fast · 등신 기본 · 검수 2번)이
+   그대로 남아서, collect() 가 보내는 값이 일반 모드가 약속한 것과 같다. */
+function applyMode() {
+  const mode = currentMode() || "simple";
+  const expert = mode === "expert";
+  document.body.dataset.mode = mode;
+  $$("[data-expert-only]").forEach(el => { el.hidden = !expert; });
+  const badge = $("#modeBadge");
+  if (badge) badge.textContent = MODES[mode].label;
+  const desc = $("#modeBarDesc");
+  if (desc) desc.textContent = MODES[mode].desc;
+  paintCost();
+}
+
+function setMode(mode) {
+  localStorage.setItem("lore_mode", mode === "expert" ? "expert" : "simple");
+  applyMode();
+}
 
 let jobId    = sessionStorage.getItem("lore_job") || null;
 let poll     = null;
@@ -38,23 +127,51 @@ let lastStatus = null;
 /* ------------------------------------------------------------------ 초기화 */
 
 function buildForm() {
-  $("#fieldsGrid").innerHTML = FIELD_KEYS.map(k => `
+  // 항목 표는 화면에서 뺐다(1걸음은 사진·이름·이야기뿐). 칸이 있으면 채우고
+  // 없으면 지나간다 — collect() 의 fields 는 그때 그냥 빈 채로 간다.
+  const grid = $("#fieldsGrid");
+  if (grid) grid.innerHTML = FIELD_KEYS.map(k => `
     <label><span>${k}</span><input type="text" data-field="${k}" placeholder=""></label>
   `).join("");
 
   $("#styles").innerHTML = STYLE_INFO.map(([key, label, desc], i) => `
     <label class="style-opt">
       <input type="radio" name="style" value="${key}" ${i === 0 ? "checked" : ""}>
-      <span class="style-box"><b>${label}</b><small>${desc}</small></span>
+      <span class="style-box">
+        <img class="style-thumb" src="${STYLE_THUMB[key]}" alt="">
+        <b>${label}</b><small>${desc}</small>
+      </span>
     </label>
   `).join("");
 
-  $("#ideaChips").innerHTML = IDEAS
-    .map(t => `<button type="button" class="chip">${t}</button>`).join("");
-  $$("#ideaChips .chip").forEach(btn => btn.addEventListener("click", () => {
-    $("#storyInput").value = btn.textContent;
-    $("#storyInput").focus();
-  }));
+
+  // 장르 빠른 고르개. datalist 는 폰에서 안 열리는 브라우저가 있어서, 자주
+  // 쓰는 것만 단추로 먼저 꺼내 둔다. 목록에 없는 장르는 그대로 칸에 쓰면 된다.
+  const quick = $("#genreQuick");
+  if (quick) {
+    quick.innerHTML = GENRE_QUICK
+      .map(g => `<button type="button" aria-pressed="false">${g}</button>`).join("");
+    const input = $("#form").genre;
+    const hint = $("#genreNote");
+    const sync = () => {
+      const now = input.value.trim();
+      $$("button", quick).forEach(b =>
+        b.setAttribute("aria-pressed", String(b.textContent === now)));
+      if (!hint) return;
+      // 세 가지 상태 모두 한 줄이 뜬다 — 빈 자리를 남기지 않는다.
+      hint.dataset.state = now ? (GENRE_NOTE[now] ? "known" : "custom") : "empty";
+      hint.textContent = now
+        ? (GENRE_NOTE[now] || `「${now}」 그대로 갑니다 — 목록에 없는 장르도 루가 낱말을 보고 맞춥니다.`)
+        : GENRE_NOTE_EMPTY;
+    };
+    $$("button", quick).forEach(btn => btn.addEventListener("click", () => {
+      // 눌린 것을 다시 누르면 비운다 — 비우면 루가 고른다
+      input.value = (input.value.trim() === btn.textContent) ? "" : btn.textContent;
+      sync();
+    }));
+    input.addEventListener("input", sync);
+    sync();
+  }
 }
 
 /* ---- 사용자 피드백 ---------------------------------------------------- *
@@ -241,19 +358,25 @@ function setupPhoto() {
   const drop = $("#photoDrop"), input = $("#photo");
 
   const paint = () => {
-    $("#photoStrip").innerHTML = photos.map((src, i) => `
+    // 올린 사진 + 남은 빈 칸을 **항상 네 칸**으로 채운다. 빈 칸이 안 보이면
+    // 더 올릴 수 있다는 것을 모른다(시안 capture/design2.png 의 규칙).
+    // UI 는 **타일 한 장**이다. 서버와 photos 배열은 여러 장을 그대로
+    // 받지만(하네스 계약), 화면에서는 한 장만 받는다 — 넣으면 타일이 사진이
+    // 되고, ✕ 로 지우고 다시 넣는다.
+    const shots = photos.map((src, i) => `
       <figure class="shot">
         <img src="${src}" alt="${i + 1}번째 사진">
         <button type="button" class="shot-x" data-i="${i}" aria-label="지우기">✕</button>
-      </figure>`).join("");
+      </figure>`);
+    const slots = photos.length ? []
+      : [`<span class="photo-slot" aria-hidden="true">+</span>`];
+    $("#photoStrip").innerHTML = shots.concat(slots).join("");
     $$("#photoStrip .shot-x").forEach(b => b.addEventListener("click", e => {
       e.preventDefault(); e.stopPropagation();
       photos.splice(Number(b.dataset.i), 1); paint();
     }));
     drop.classList.toggle("has-photo", photos.length > 0);
-    $("#photoCount").textContent = photos.length
-      ? `${photos.length} / ${MAX_PHOTOS}장 · 같은 사람을 여러 각도로`
-      : "";
+    $("#photoCount").textContent = photos.length ? "" : "눌러서 사진을 올려주세요";
     input.value = "";
   };
 
@@ -284,25 +407,632 @@ function setupPhoto() {
 }
 
 
-/* 크레딧은 **목업**입니다 — 실제 과금과 무관하고, 화면에 얼마가 드는지
-   보이게 하려고만 둡니다. 편집실(/editor)의 잔액과 같은 값을 씁니다. */
-const CREDIT = { full: 240, preview: 60 };
-// 컷 모드는 컷 하나가 이미지 한 장이라 그림 호출이 3배다 (지금은 한 장에 3컷).
-// 이야기 단계 비용은 그대로이므로 그림 몫만 늘려 어림한다.
-const WEBTOON_MULT = 3;
+/* ------------------------------------------------------------------ 크레딧
+ *
+ * 실제로 소진되는 잔액이다(credits.py). 계정이 없으므로 브라우저가 만든
+ * uid(localStorage)로 사람을 구분한다 — lore_mode 와 같은 방식이다.
+ * 비용 값 자체는 여기서 안 정한다 — /api/config 가 credits.py 를 그대로
+ * 내려주므로, 화면의 "−N 크레딧" 표시가 실제로 빠지는 값과 늘 같다. */
+
+function getUid() {
+  let uid = localStorage.getItem("lore_uid");
+  if (!uid) {
+    uid = "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem("lore_uid", uid);
+  }
+  return uid;
+}
+const UID = getUid();
+
+let creditCost = { full: 0, preview: 0, webtoon_mult: 1 };   // /api/config 도착 전 임시값
+let creditPackages = [];
+let creditBalance = null;
+
+async function loadCreditConfig() {
+  try {
+    const cfg = await getConfig();
+    creditCost = cfg.credit_cost || creditCost;
+    creditPackages = cfg.credit_packages || [];
+  } catch { /* 못 받아도 화면은 뜬다 — 비용 칩만 0으로 보인다 */ }
+  paintCost();
+  paintMyCreditHint();
+}
+
+async function refreshCreditBalance() {
+  try {
+    const res = await fetch(`/api/credits?uid=${encodeURIComponent(UID)}`);
+    creditBalance = (await res.json()).balance;
+  } catch { creditBalance = null; }
+  paintCreditPill();
+}
+
+function paintCreditPill() {
+  const shown = creditBalance == null ? "…" : creditBalance.toLocaleString("ko-KR");
+  const el = $("#creditPillNum");
+  if (el) el.textContent = shown;
+  const cur = $("#chargeCurBalance");
+  if (cur) cur.textContent = shown;
+  // 마이페이지에도 같은 숫자를 쓴다 — 두 군데가 다른 값을 보이면 어느 쪽이
+  // 참인지 알 수 없다. 잔액을 바꾸는 곳이 여기 하나뿐이라 저절로 맞는다.
+  // 목업(/demo/mypage)만 예외다: 거기 숫자는 화면을 보여주려고 넣은 것이라,
+  // 늦게 도착한 진짜 잔액이 덮어쓰면 목업이 반쯤 진짜가 된다.
+  if (mockAccountPill) return;
+  const my = $("#myCreditNum");
+  if (my) my.textContent = shown;
+  paintMyCreditHint();
+}
+
+/* "1,240" 만 있으면 많은 건지 적은 건지 알 수 없다 — 한 편에 얼마인지를 같이
+   적어서, 몇 편 더 만들 수 있는지가 바로 보이게 한다. */
+function paintMyCreditHint() {
+  const el = $("#myCreditHint");
+  if (!el || mockAccountPill) return;
+  const one = creditCost.full;
+  if (!one) { el.textContent = ""; return; }
+  const left = creditBalance == null ? null : Math.floor(creditBalance / one);
+  el.textContent = left == null
+    ? `한 편 만드는 데 ${one.toLocaleString("ko-KR")} C`
+    : `한 편에 ${one.toLocaleString("ko-KR")} C — 지금 ${left}편 더 만들 수 있어요`;
+}
 
 function layoutMode() {
   const el = document.querySelector('input[name="layout_mode"]:checked');
   return el ? el.value : "fast";
 }
 
+function creationCost() {
+  // 지금은 미리보기만 만든다(previewToggle 은 없어졌다) — collect() 도 항상 preview:true.
+  const base = creditCost.preview;
+  return layoutMode() === "webtoon" ? base * (creditCost.webtoon_mult || 1) : base;
+}
+
 function paintCost() {
-  const preview = $("#previewToggle").checked;
-  const base = preview ? CREDIT.preview : CREDIT.full;
-  const cost = layoutMode() === "webtoon" ? base * WEBTOON_MULT : base;
-  $("#costChip").textContent = `−${cost} 크레딧`;
+  const preview = true;              // 지금은 미리보기만 만든다 — collect() 도 항상 preview:true
+  $("#costChip").textContent = `−${creationCost()} 크레딧`;
   $("#submitBtn").firstChild.textContent =
     preview ? "미리보기 만들기 " : "웹툰 만들기 ";
+}
+
+/* ---- 충전 모달 — 프리토타이핑 결제 ------------------------------------- *
+ *
+ * 걸음: 상품 고르기 → 카드사 고르기 → 완료. 실제 PG 연동이 없고, 카드번호를
+ * 넣는 화면도 아예 없다 — "지불 의사가 있는가" 를 보는 게 목적이라, 카드
+ * 고르기 딱 한 걸음 앞에서 멈추고 그 자리에서 바로 지급한다. */
+
+const CARD_ISSUERS = ["신한카드", "국민카드", "삼성카드", "현대카드", "카카오페이", "토스페이"];
+let chargeSelectedPkg = null;
+
+function chargeStep(name) {
+  $$(".charge-step").forEach(el => { el.hidden = el.dataset.chargeStep !== name; });
+}
+
+function renderChargePackages() {
+  const box = $("#chargePackages");
+  box.innerHTML = "";
+  creditPackages.forEach(pkg => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "charge-pkg";
+    b.innerHTML = `${pkg.badge ? `<span class="charge-pkg-badge">${pkg.badge}</span>` : ""}
+      <span class="charge-pkg-label">${pkg.label}</span>
+      <span class="charge-pkg-credits">${pkg.credits.toLocaleString("ko-KR")} 크레딧</span>
+      <span class="charge-pkg-price">${pkg.price.toLocaleString("ko-KR")}원</span>`;
+    b.addEventListener("click", () => {
+      chargeSelectedPkg = pkg;
+      $("#chargePkgSummary").textContent =
+        `${pkg.label} · ${pkg.credits.toLocaleString("ko-KR")}크레딧 · ${pkg.price.toLocaleString("ko-KR")}원`;
+      chargeStep("card");
+      renderChargeCards();
+    });
+    box.appendChild(b);
+  });
+}
+
+function renderChargeCards() {
+  const box = $("#chargeCards");
+  box.innerHTML = "";
+  CARD_ISSUERS.forEach(name => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "charge-card";
+    b.textContent = name;
+    b.addEventListener("click", finishCharge);
+    box.appendChild(b);
+  });
+}
+
+async function finishCharge() {
+  if (!chargeSelectedPkg) return;
+  chargeStep("done");
+  $("#chargeDoneBody").textContent = "결제 처리 중…";
+  try {
+    const res = await fetch("/api/credits/charge", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: UID, package_id: chargeSelectedPkg.id }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "결제에 실패했습니다");
+    creditBalance = data.balance;
+    paintCreditPill();
+    $("#chargeDoneBody").textContent =
+      `${data.credits_added.toLocaleString("ko-KR")}크레딧이 들어왔어요. `
+      + "(지금은 정식 결제 붙기 전 테스트 기간이라, 이번 결제는 저희가 대신 "
+      + "내드렸어요 — 실제로 카드에서 빠져나간 돈은 없습니다!)";
+  } catch (err) {
+    $("#chargeDoneBody").textContent = err.message;
+  }
+}
+
+function openChargeModal() {
+  chargeSelectedPkg = null;
+  $("#chargeModal").hidden = false;
+  chargeStep("package");
+  paintCreditPill();
+  renderChargePackages();
+  // "충전하기" 를 누른 시점을 기록한다 — 카드사까지 고른 시점(charge_success)과
+  // 비교하면 클릭률(지불 의사)이 나온다. 실패해도 화면은 그대로 쓸 수 있어야
+  // 한다.
+  fetch("/api/credits/charge-click", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid: UID }),
+  }).catch(() => {});
+}
+
+function closeChargeModal() { $("#chargeModal").hidden = true; }
+
+/* ------------------------------------------------------------------ 계정
+ *
+ * 닉네임+비밀번호만 있는 가벼운 계정 — 이메일 인증·비밀번호 찾기 없음.
+ * 로그인 안 해도 웹툰은 그대로 만든다. 계정은 결과 화면의 "계정에
+ * 담아두기" 를 통해서만 필요해지는 선택 기능이다. 세션은 서버가 쿠키
+ * (lore_session, HttpOnly) 로 들고 있어서 여기서는 로그인 응답을 상태에
+ * 반영하는 것만 신경 쓰면 된다. */
+
+let accountState = { logged_in: false };
+let signupPhoto = { kind: "preset", id: "" };   // 회원가입 폼에서 고른 사진
+let pendingClaimRunId = "";                     // 담아두기 → 로그인/가입하면 이걸 담는다
+
+async function refreshAccount() {
+  try {
+    accountState = await (await fetch("/api/account/me")).json();
+  } catch { accountState = { logged_in: false }; }
+  paintAccountPill();
+  paintClaimBanner();
+}
+
+const GUEST_PILL_PHOTO = "/static/lou/react/idle/01.webp";   // 로그인 전 자리 채움 — accounts.DEFAULT_PHOTO_ID 와 같은 그림
+
+/* 상단 바 배지. 로그인 전에는 「로그인」(누르면 계정 창), 로그인 뒤에는
+   프로필 사진 + 「마이페이지」(누르면 마이페이지로 간다).
+   닉네임 대신 「마이페이지」라고 적는 이유: 닉네임만 적혀 있으면 그것이
+   **눌러서 갈 수 있는 자리**라는 것을 아무도 모른다. 닉네임은 마이페이지
+   안에서 크게 보여 준다. */
+let mockAccountPill = false;   // 목업에서만 켠다 — 로그인 뒤 모습을 보여주려고
+
+function paintAccountPill() {
+  const img = $("#accountAvatarImg"), label = $("#accountPillLabel");
+  const btn = $("#accountBtn");
+  if (mockAccountPill) {
+    // /api/account/me 응답이 늦게 와서 배지를 다시 「로그인」으로 되돌리는 것을 막는다
+    img.src = GUEST_PILL_PHOTO;
+    label.textContent = "마이페이지";
+    return;
+  }
+  if (accountState.logged_in) {
+    img.src = accountState.photo_url;
+    label.textContent = "마이페이지";
+    if (btn) btn.title = `${accountState.nickname} · 내 작품 보기`;
+  } else {
+    img.src = GUEST_PILL_PHOTO;
+    label.textContent = "로그인";
+    if (btn) btn.title = "로그인 · 내 계정";
+  }
+}
+
+/* ---- 이 브라우저가 만든 작품 ------------------------------------------- *
+ *
+ * "담아두기" 는 **내가 만든 것**에만 권해야 한다. 공유 링크를 받고 들어온
+ * 사람에게도 뜨면, 남의 작품을 자기 계정에 담으라고 권하는 꼴이다.
+ *
+ * 그런데 결과 화면은 둘을 구분할 수가 없었다 — 내 목록에서 고른 것도, 남이
+ * 보낸 링크도 똑같이 /works?run=… 으로 열리고 showRunResult() 하나가 받는다.
+ * 서버도 못 가른다: 작품에 만든 사람이 안 적혀 있다(계정 기능이 소유자 개념을
+ * 일부러 안 넣었다). 그래서 브라우저가 자기가 만든 것을 적어 둔다.
+ *
+ * localStorage 인 이유: 창을 닫아도 남아야 한다. sessionStorage 는 탭을 닫으면
+ * 사라져서, 어제 만든 내 작품을 오늘 열면 남의 것처럼 보인다. */
+
+const MY_RUNS_KEY = "lore_my_runs";
+const MY_RUNS_MAX = 200;
+
+function myRuns() {
+  try {
+    const v = JSON.parse(localStorage.getItem(MY_RUNS_KEY) || "[]");
+    return Array.isArray(v) ? v.filter(x => typeof x === "string") : [];
+  } catch { return []; }              // 비공개 창이거나 값이 깨졌을 때
+}
+
+function rememberMyRun(runId) {
+  if (!runId) return;
+  const list = myRuns().filter(x => x !== runId);
+  list.push(runId);
+  try {
+    localStorage.setItem(MY_RUNS_KEY,
+                         JSON.stringify(list.slice(-MY_RUNS_MAX)));
+  } catch { /* 저장을 못 해도 만드는 것 자체는 막지 않는다 */ }
+}
+
+/* 내가 만든 것인가. 담아 둔 적이 있으면 그것도 내 것이다 — 폰에서 만들어
+   담아 두고 PC 에서 열면 이 브라우저의 기록에는 없기 때문이다. */
+function isMyRun(runId) {
+  if (!runId) return false;
+  return myRuns().includes(runId)
+      || (accountState.claimed_runs || []).includes(runId);
+}
+
+/* 결과 화면의 "서버에 저장하기".
+ *
+ * 로그인 여부와 상관없이 **늘 보인다.** 로그인 전에 누르면 회원가입 창이 열리고,
+ * 가입이 끝나면 보고 있던 작품이 그대로 담긴다 — 계정을 만들 이유가 처음
+ * 생기는 자리가 여기다. 로그인한 사람에게도 보이는 이유는, 저장을 사용자가
+ * 시켜야 하는 일로 두었기 때문이다(저절로 담으면 안 누른 사람은 자기 작품이
+ * 어디 있는지 알 수 없다).
+ *
+ * 이미 담은 작품이면 감추는 대신 **눌리지 않는 「저장됨」** 으로 바꾼다.
+ * 감춰 버리면 단추가 셋에서 둘로 줄어 자리가 흔들리고, 저장이 됐는지 안 됐는지도
+ * 알 수 없다.
+ *
+ * 담을 작품이 없을 때(목업)와, **남이 보낸 링크로 들어온 작품**일 때는 안
+ * 보인다 — 남의 작품을 자기 계정에 담으라고 권하는 꼴이 되기 때문이다
+ * (위 isMyRun 참고). 목업은 흐름을 보여줘야 해서 showMockResult() 가 따로 켠다. */
+function paintClaimBanner() {
+  const btn = $("#claimBtn");
+  if (!btn) return;
+  btn.hidden = !resultRunId || !isMyRun(resultRunId);
+  const done = accountState.logged_in
+    && (accountState.claimed_runs || []).includes(resultRunId);
+  btn.disabled = done;
+  btn.textContent = done ? "저장됨" : "서버에 저장하기";
+}
+
+async function claimCurrentRun() {
+  if (!accountState.logged_in) {
+    // 로그인 전이면 먼저 계정부터 만들게 하고, 되는 대로 이 작품을 담는다.
+    pendingClaimRunId = resultRunId;
+    openAccountModal("signup");
+    return;
+  }
+  if (!resultRunId) return toast("화면 구경용 목업이라 담을 작품이 없습니다.");
+  try {
+    const res = await fetch("/api/account/claim", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ run_id: resultRunId }),
+    });
+    if (!res.ok) throw new Error();
+    accountState.claimed_runs = [...(accountState.claimed_runs || []), resultRunId];
+    paintClaimBanner();
+    toast("계정에 저장했어요 — 「내 웹툰」에서 다시 열 수 있습니다");
+  } catch { toast("저장하지 못했습니다 — 다시 시도해 주세요"); }
+}
+
+/* ---- 계정 모달 — 로그인/회원가입 탭, 로그인 후엔 프로필로 바뀐다 ------- */
+
+function openAccountModal(tab) {
+  $("#accountModal").hidden = false;
+  if (accountState.logged_in) {
+    showAccountProfile();
+  } else {
+    switchAccountTab(tab || "login");
+    if (!$("#photoGrid").children.length) renderPhotoGrid();
+  }
+}
+function closeAccountModal() { $("#accountModal").hidden = true; }
+
+function switchAccountTab(tab) {
+  $("#accountAuth").hidden = false;
+  $("#accountProfile").hidden = true;
+  $("#tabLogin").classList.toggle("is-active", tab === "login");
+  $("#tabSignup").classList.toggle("is-active", tab === "signup");
+  $("#loginForm").hidden = tab !== "login";
+  $("#signupForm").hidden = tab !== "signup";
+}
+
+async function renderPhotoGrid() {
+  let presets = [];
+  try { presets = (await getConfig()).account_photo_presets || []; }
+  catch { /* 프리셋을 못 받아도 직접 올리기는 된다 */ }
+  const grid = $("#photoGrid");
+  grid.innerHTML = presets.map(p => `
+    <button type="button" class="photo-opt" data-preset="${p.id}">
+      <img src="${p.url}" alt="">
+    </button>`).join("");
+  if (presets[0]) selectPresetPhoto(presets[0].id);
+  $$(".photo-opt", grid).forEach(b =>
+    b.addEventListener("click", () => selectPresetPhoto(b.dataset.preset)));
+}
+
+function selectPresetPhoto(id) {
+  signupPhoto = { kind: "preset", id };
+  $$(".photo-opt", $("#photoGrid")).forEach(b =>
+    b.classList.toggle("is-selected", b.dataset.preset === id));
+  $(".photo-upload-btn").classList.remove("is-selected");
+}
+
+async function onSignup(e) {
+  e.preventDefault();
+  const form = e.target;
+  const err = $("#signupError");
+  err.hidden = true;
+  const body = {
+    nickname: form.nickname.value.trim(),
+    password: form.password.value,
+    photo: signupPhoto,
+    agree_terms: form.agree_terms.checked,
+  };
+  try {
+    const res = await fetch("/api/account/signup", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "회원가입에 실패했습니다");
+    await afterLogin(data);
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+}
+
+async function onLogin(e) {
+  e.preventDefault();
+  const form = e.target;
+  const err = $("#loginError");
+  err.hidden = true;
+  try {
+    const res = await fetch("/api/account/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nickname: form.nickname.value.trim(), password: form.password.value }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "로그인에 실패했습니다");
+    await afterLogin(data);
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+}
+
+async function afterLogin(data) {
+  accountState = data;
+  paintAccountPill();
+  if (pendingClaimRunId) {
+    const runId = pendingClaimRunId;
+    pendingClaimRunId = "";
+    try {
+      await fetch("/api/account/claim", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run_id: runId }),
+      });
+      accountState.claimed_runs = [...(accountState.claimed_runs || []), runId];
+    } catch { /* 로그인 자체는 됐다 — 결과 화면에서 배너를 다시 누르면 된다 */ }
+  }
+  paintClaimBanner();
+  closeAccountModal();
+  toast(`${accountState.nickname}님, 반가워요`);
+}
+
+async function showAccountProfile() {
+  $("#accountAuth").hidden = true;
+  $("#accountProfile").hidden = false;
+  $("#profileAvatarImg").src = accountState.photo_url;
+  $("#profileNickname").textContent = accountState.nickname;
+  const list = $("#accountWorksList");
+  list.innerHTML = `<p class="works-empty">불러오는 중…</p>`;
+  try {
+    const runs = (await (await fetch("/api/account/works")).json()).runs || [];
+    list.innerHTML = runs.length
+      ? runs.map(workCard).join("")
+      : `<p class="works-empty">아직 담아둔 작품이 없습니다 — 결과 화면에서 ` +
+        `"계정에 담아두기" 를 눌러 보세요.</p>`;
+    $$("[data-open]", list).forEach(b => b.addEventListener("click", () => {
+      closeAccountModal();
+      showRunResult(b.dataset.open, Number(b.dataset.ep));
+    }));
+  } catch {
+    list.innerHTML = `<p class="works-empty">목록을 불러오지 못했습니다.</p>`;
+  }
+}
+
+async function logout() {
+  try { await fetch("/api/account/logout", { method: "POST" }); }
+  catch { /* 실패해도 화면은 로그아웃으로 바꾼다 */ }
+  accountState = { logged_in: false };
+  paintAccountPill();
+  paintClaimBanner();
+  switchAccountTab("login");
+}
+
+/* ------------------------------------------------------------- 위저드
+
+   흐름은 사람이 겪는 순서다.
+
+     1걸음  무엇을 만들 건지 — 사진 · 캐릭터 설명 · 이야기 한 줄
+     2걸음  **어떻게** 만들지 — 스토리 모드 / 전문가 모드 (갈림길)
+     3~5걸음  전문가를 고른 사람에게만 이어진다 (세계 · 그림 · 확인)
+
+   그래서 걸음 수가 고정이 아니다 — 스토리 모드는 2걸음에서 끝나고 바로
+   출발하고, 전문가 모드는 5걸음까지 간다. 수심계도 그에 맞춰 늘어난다.
+   늘어나는 것 자체가 "더 물어보는 길을 골랐다"는 신호라서 숨기지 않는다.
+
+   칸은 여전히 하나도 안 지웠다 — 전부 같은 <form> 안에 있고 보이는 걸음만
+   바뀐다. 그래서 collect() 는 어느 걸음에 서 있든 전부 걷는다. */
+
+const WIZ_FORK = 5;                       // 갈림길 = 마지막 걸음
+const WIZ_SIMPLE_LAST = 5;
+// 전문가도 더 안 묻는다 — 다른 것은 도중에 몇 번 멈추느냐뿐이고,
+// 그건 서버(checkpoints)가 정한다. 그래서 두 길의 걸음 수가 같다.
+const WIZ_EXPERT_LAST = 5;
+const WIZ_NAMES = ["수면", "항해", "깊은 바다", "심해", "바닥"];
+let wizStep = 1;
+/* 이번 실행에서 고른 길. localStorage 의 모드와 **일부러 따로 둔다** —
+   지난번에 전문가로 만들었다고 이번에도 말없이 전문가 길로 끌고 가면, 갈림길
+   화면이 있으나 마나가 된다. 고르는 것은 매번 다시 한다. (고른 값은 그때
+   setMode 로 localStorage 에도 남아서 시트 편집 폼 같은 다른 자리에 쓰인다.) */
+let wizChoice = null;
+
+// 지금 길의 마지막 걸음. 아직 안 골랐으면 갈림길까지만 보여준다.
+function wizLast() { return WIZ_SIMPLE_LAST; }   // 두 길의 걸음 수가 같다
+
+function wizPaintGauge() {
+  const gauge = $("#wizGauge");
+  if (!gauge) return;
+  const last = wizLast();
+  gauge.innerHTML = WIZ_NAMES.slice(0, last).map((name, i) => {
+    const n = i + 1;
+    const state = n < wizStep ? "done" : (n === wizStep ? "on" : "");
+    return `<li class="wiz-tick ${state}" title="${n}. ${name}"
+                ${n === wizStep ? 'aria-current="step"' : ""}></li>`;
+  }).join("");
+}
+
+// 요약 — 비운 칸은 "루가 정합니다"로 적는다. 안 적었다는 사실 자체가 결과로
+// 보여야, 마지막 걸음에서 되돌아갈지 말지를 판단할 수 있다.
+function wizPaintSummary() {
+  const box = $("#wizSummary");
+  if (!box) return;
+  const form = $("#form");
+  const auto = `<i class="wiz-auto">루가 정합니다</i>`;
+  const val = v => (v && v.trim()) ? esc(v.trim()) : auto;
+  const cut = (v, n) => {
+    const t = (v || "").trim();
+    return t ? esc(t.slice(0, n)) + (t.length > n ? "…" : "") : auto;
+  };
+
+  const styleEl = form.style;
+  const styleLabel = styleEl
+    ? (document.querySelector(`.style-opt input[value="${styleEl.value}"]`)
+        ?.closest(".style-opt")?.querySelector("b")?.textContent || styleEl.value)
+    : "";
+
+  // 화면에 있는 것만 적는다. 설명·항목·세계관은 이제 안 묻는 칸이라 뺐다 —
+  // 요약에 "루가 정합니다" 가 줄줄이 뜨면 안 물어본 것을 물어본 것처럼 보인다.
+  const rows = [
+    ["캐릭터", val(form.name.value)],
+    ["사진", photos.length ? `${photos.length}장` : `<i class="wiz-auto">없음</i>`],
+    ["설명", cut(form.character.value, 34)],
+    ["이야기", cut(form.story.value, 34)],
+    ["장르", val(form.genre.value)],
+    ["그림체", styleLabel ? esc(styleLabel) : auto],
+    ["보는 방식", wizChoice === "expert" ? "3번만 확인하며" : "빠르게 결과부터"],
+  ];
+  box.innerHTML = rows.map(([k, v]) =>
+    `<div class="wiz-row"><span>${k}</span><b>${v}</b></div>`).join("");
+}
+
+function wizGo(n, scroll = true) {
+  const last = wizLast();
+  // 갈림길을 벗어나면 고른 것을 지운다 — 다시 들어오면 기본값(빠르게)부터다.
+  if (n !== WIZ_FORK) wizChoice = null;
+  wizStep = Math.min(last, Math.max(1, n));
+  $$(".wiz-step").forEach(p => { p.hidden = Number(p.dataset.step) !== wizStep; });
+
+  document.body.dataset.step = String(wizStep);
+  pickWizLou();
+
+  // 갈림길에서는 늘 고르게 한다 — 지난번 모드가 기억돼 있어도 마찬가지다.
+  // 갈림길에 들어서면 **빠르게**가 이미 골라져 있다. 아무것도 안 고른 채로
+  // 요약과 만들기 단추가 안 보이면 화면이 멈춘 것처럼 읽혀서, 기본값을 두고
+  // 바꾸고 싶은 사람만 다른 카드를 누르게 한다.
+  if (wizStep === WIZ_FORK && !wizChoice) {
+    wizChoice = "simple";
+    setMode("simple");
+  }
+  const atFork = false;
+  const atEnd  = wizStep === last;
+
+  // 갈림길에서는 아래 단추를 안 쓴다 — 고르는 것이 곧 넘어가는 것이다.
+  $("#wizNext").hidden = atFork || atEnd;
+  $("#submitBtn").hidden = !(atEnd && !atFork);
+  $("#ipAgreeLine").hidden = !(atEnd && !atFork);
+  $("#wizSkip").hidden = atFork || atEnd;
+  // 1걸음에서도 뒤로 갈 곳이 있다 — 홈. 그래서 안 죽인다.
+  $("#wizPrev").textContent = wizStep === 1 ? "홈으로" : "이전";
+  $("#submitNote").hidden = !(atEnd && !atFork);
+  $(".wiz-foot").hidden = atFork;
+
+  if (wizStep === WIZ_FORK) {
+    $$(".fork-card").forEach(c =>
+      c.setAttribute("aria-pressed", String(c.dataset.mode === wizChoice)));
+  }
+  if (atEnd && !atFork) wizPaintSummary();
+  wizPaintGauge();
+
+  if (!scroll) return;
+  window.scrollTo({ top: 0, behavior: "smooth" });   // 걸음마다 화면 맨 위부터
+}
+
+function setupWizard() {
+  if (!$("#wizGauge")) return;
+  const move = n => wizGo(n);
+  // 홈의 시작하기 — 아래로 스크롤이 아니라 **화면 전환**이다. 캔버스에서
+  // 홈과 만들기는 다른 아트보드다.
+  const openCreate = () => {
+    $("#create").hidden = false;
+    view("create");
+    wizGo(1, false);
+    window.scrollTo(0, 0);
+  };
+  const closeCreate = () => {
+    $("#create").hidden = true;
+    view("landing"); pickHero();
+    window.scrollTo(0, 0);
+  };
+  pickHero();
+  const start = $("#startBtn");
+  if (start) start.addEventListener("click", openCreate);
+  // 헤더의 LORE 는 어느 화면에서든 홈으로 돌아가는 문이다. 새로고침 없이
+  // 되돌리되(입력이 날아가지 않게), 만드는 중일 때는 붙잡는다 — 여기서 나가면
+  // 돌고 있는 작업을 놓치기 때문.
+  const brand = $("#brandHome");
+  if (brand) brand.addEventListener("click", e => {
+    e.preventDefault();
+    if (document.body.dataset.view === "running") {
+      toast("루가 만드는 중이에요 — 끝나면 보여드릴게요");
+      return;
+    }
+    forget();
+  });
+  // 1걸음의 약속: 사진과 이름은 필수다. 없이 넘어가려 하면 그 자리에서 말한다.
+  const step1ok = () => {
+    const form = $("#form");
+    if (!photos.length) { toast("캐릭터 사진을 올려주세요"); return false; }
+    if (!form.name.value.trim()) { toast("이름을 적어주세요"); form.name.focus(); return false; }
+    return true;
+  };
+  $("#wizNext").addEventListener("click", () => {
+    if (wizStep === 1 && !step1ok()) return;
+    move(wizStep + 1);
+  });
+  $("#wizSkip").addEventListener("click", () => {
+    if (wizStep === 1 && !step1ok()) return;
+    move(wizStep + 1);
+  });
+  const back = () => {
+    if (wizStep === 1) { closeCreate(); return; }   // 1걸음의 뒤 = 홈
+    move(wizStep - 1);
+  };
+  $("#wizPrev").addEventListener("click", back);
+  $("#wizBack").addEventListener("click", back);
+
+  // 갈림길 — 고르는 것이 곧 다음 동작이다.
+  //   스토리 모드: 여기서 바로 출발한다(더 물어볼 것이 없다).
+  //   전문가 모드: 길이 3걸음 늘어나고 그 첫 걸음으로 넘어간다.
+  $$(".fork-card").forEach(card => card.addEventListener("click", () => {
+    const mode = card.dataset.mode;
+    wizChoice = mode;
+    setMode(mode);
+    $$(".fork-card").forEach(c =>
+      c.setAttribute("aria-pressed", String(c === card)));
+    // 고른 즉시 출발하지 않는다 — 무엇으로 만드는지 한 번은 보고 눌러야
+    // "이럴 줄 몰랐다"가 안 나온다. 요약만 새로 그린다.
+    wizPaintSummary();
+  }));
+
+  wizGo(1, false);
 }
 
 /* ------------------------------------------------------------------ 제출 */
@@ -314,6 +1044,7 @@ function collect() {
     if (el.value.trim()) fields[el.dataset.field] = el.value.trim();
   });
   return {
+    uid:        UID,
     name:       form.name.value.trim(),
     character:  form.character.value.trim(),
     photo_note: form.photo_note.value.trim(),
@@ -327,16 +1058,41 @@ function collect() {
     head_ratio: form.head_ratio ? form.head_ratio.value : "",
     // fast(한 장에 3컷) | webtoon(컷마다 한 장). 비우면 fast — 지금까지의 방식이다.
     layout_mode: form.layout_mode ? form.layout_mode.value : "fast",
-    preview:    $("#previewToggle").checked,
+    // 지금은 **항상 미리보기**다. 한 화를 통째로 굽기 전에 앞 3컷을 먼저
+    // 보여주고, 마음에 들면 이어서 그린다(/api/runs/<id>/continue).
+    preview:    true,
+    // 전문 모드인가. 서버는 이 한 값으로 어디서 멈출지(checkpoints)와 무엇을
+    // 고를 수 있는지를 정한다. 이번 실행에 박히므로, 도는 도중에 모드를
+    // 바꿔도 이 작업의 검수 지점은 안 바뀐다.
+    expert:     isExpert(),
+    // 전문 모드에서만 읽힌다 — 일반 모드는 서버가 기본값(2)으로 되돌린다.
+    art_qa_regen_max: form.art_qa_regen_max
+      ? Number(form.art_qa_regen_max.value) : 2,
     photos_data: photos,
+    // 만들 때마다 짧게 받는 저작권 확인 — 서버도 이 값을 다시 확인한다.
+    agree_ip: $("#ipAgreeCheck").checked,
   };
 }
 
-async function submit(e) {
-  e.preventDefault();
+/* 실제로 출발시킨다. 갈림길에서 "스토리 모드"를 고른 것과 마지막 걸음에서
+   "웹툰 만들기"를 누른 것이 같은 일을 하므로, 단추 핸들러가 아니라 이 함수를
+   양쪽이 함께 부른다. 실패하면 그 자리에 남아서 이유를 보여준다 — 여기서
+   진행 화면으로 넘어가 버리면 무엇이 잘못됐는지 볼 자리가 없다. */
+async function startRun() {
   const btn = $("#submitBtn"), note = $("#submitNote");
-  btn.disabled = true; btn.firstChild.textContent = "시작하는 중… ";
+  const fork = $$(".fork-card");
+  note.hidden = false;
   note.classList.remove("error");
+  // 저작권 확인 체크는 여기서 먼저 막는다 — 서버도 다시 확인하지만, 여기서
+  // 잡아야 사람이 왜 안 되는지 바로 안다(서버 오류로 보이면 안 된다).
+  if (!$("#ipAgreeCheck").checked) {
+    note.textContent = "저작권 확인에 동의해야 만들 수 있습니다";
+    note.classList.add("error");
+    return;
+  }
+  note.textContent = "루가 바다로 나가는 중…";
+  btn.disabled = true;
+  fork.forEach(c => { c.disabled = true; });
   try {
     const res = await fetch("/api/create", {
       method: "POST",
@@ -344,18 +1100,38 @@ async function submit(e) {
       body: JSON.stringify(collect()),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "시작하지 못했습니다");
+    if (!res.ok) {
+      if (res.status === 402) {
+        // 크레딧이 모자란다 — 그 자리에서 충전 모달로 보낸다.
+        note.textContent = "";
+        note.append(document.createTextNode((data.error || "크레딧이 모자랍니다") + " "));
+        const chargeLink = document.createElement("button");
+        chargeLink.type = "button";
+        chargeLink.className = "inline-link";
+        chargeLink.textContent = "충전하기";
+        chargeLink.addEventListener("click", openChargeModal);
+        note.appendChild(chargeLink);
+        note.classList.add("error");
+        return;
+      }
+      throw new Error(data.error || "시작하지 못했습니다");
+    }
     jobId = data.id;
     sessionStorage.setItem("lore_job", jobId);
+    if (data.credit_balance != null) { creditBalance = data.credit_balance; paintCreditPill(); }
     shownCuts = new Set();
     startPolling();
   } catch (err) {
     note.textContent = err.message;
     note.classList.add("error");
   } finally {
-    btn.disabled = false; paintCost();
+    btn.disabled = false;
+    fork.forEach(c => { c.disabled = false; });
+    paintCost();
   }
 }
+
+function submit(e) { e.preventDefault(); startRun(); }
 
 /* ------------------------------------------------------------------ 진행 */
 
@@ -397,6 +1173,17 @@ function mmss(sec) {
 
 function renderProgress(s) {
   $("#clock").textContent = mmss(s.elapsed);
+
+  // 검수 화면은 **그 작업이 시작될 때의 모드**를 따른다 (localStorage 가 아니라
+  // 서버가 준 s.expert). 도는 중에 모드를 바꾼 사람에게, 시작할 때 약속한 것과
+  // 다른 화면이 뜨면 안 된다.
+  const jobExpert = !!s.expert;
+  const sheetEdit = $(".sheet-approval-edit");
+  if (sheetEdit) sheetEdit.hidden = !jobExpert;
+  // 일반 모드에는 외형 편집 폼이 없으니 "수정 반영해서" 라고 하면 안 맞는다 —
+  // 그 모드의 다시 만들기는 시트를 한 번 더 뽑는 것이다.
+  $("#sheetRetryBtn").textContent =
+    jobExpert ? "수정 반영해서 다시 만들기" : "다시 만들기";
 
   const approvalBox = $("#sheetApproval");
   if (s.status === "awaiting_sheet_approval") {
@@ -451,6 +1238,22 @@ function renderProgress(s) {
     boardApprovalBox.hidden = true;
   }
 
+  const artqaBox = $("#artqaApproval");
+  if (s.status === "awaiting_artqa_approval") {
+    artqaBox.hidden = false;
+    if (lastStatus !== "awaiting_artqa_approval") {
+      renderArtQa(s.art_qa || {});
+      $("#artqaApproveBtn").disabled = false;
+    }
+    // 이 자리에서는 중단할 것이 없다 — 그림은 이미 다 나왔다. 버튼을 남겨 두면
+    // "다 만든 것을 버리는 버튼" 으로 읽힌다(서버는 어느 쪽이든 완성으로
+    // 끝내지만, 누르는 사람은 그걸 모른다).
+    $("#cancelBtn").hidden = true;
+  } else {
+    artqaBox.hidden = true;
+    $("#cancelBtn").hidden = false;
+  }
+
   if (s.status === "queued") {
     $("#progEyebrow").textContent = "대기 중";
     $("#progTitle").textContent = "앞에 만들고 있는 작품이 있습니다";
@@ -463,6 +1266,14 @@ function renderProgress(s) {
     $("#progSub").textContent = art && art.eta_sec
       ? `그림 단계입니다 — 남은 시간 약 ${mmss(art.eta_sec)}.`
       : "지금 무엇을 하고 있는지 아래에 그대로 보여드립니다.";
+  } else if (s.status && s.status.startsWith("awaiting_")) {
+    // 멈춰서 기다리는 중인데 "만들고 있습니다" 가 그대로 떠 있으면, 사용자는
+    // 자기 차례인 줄 모르고 계속 기다린다 — 실제로 아무것도 안 돌아간다.
+    $("#progEyebrow").textContent = "확인이 필요합니다";
+    $("#progTitle").textContent = "잠깐 봐 주세요";
+    $("#progSub").textContent = s.status === "awaiting_artqa_approval"
+      ? "그림은 다 나왔습니다. 검수 결과만 확인하면 끝납니다."
+      : "아래에서 확인하고 넘어가 주세요 — 그동안은 아무것도 안 돌아갑니다.";
   }
 
   paintMascot(s, currentStage);
@@ -535,18 +1346,51 @@ function paintRefusals(list) {
 // ---------------------------------------------------------------- 마스코트
 // 단계 key → 표정 + 한 줄. 사용자는 10분 가까이 이 화면을 본다. rail 은 무엇을
 // 하는지 기계적으로 적고, 마스코트는 그걸 사람 말로 한 번 더 말한다.
+/* 단계 문구는 **지금 실제로 무엇을 하는지**만 말한다. 여기에 "루가 춤추고
+   있어요" 같은 걸 섞으면 진행 표시가 아니라 잡담이 된다 — 노는 것은 아래
+   상호작용 자리에서 따로 한다. 문구는 레퍼런스(design-reference/loading/*)의
+   말을 그대로 따른다. */
 const MASCOT_MOODS = {
-  story: ["write", "이야기를 짜는 중이에요. 결말부터 거꾸로 세워 봅니다."],
-  sheet: ["draw", "얼굴을 잡는 중이에요 — 여기가 흔들리면 뒤가 다 흔들려서요."],
-  board: ["read", "컷을 나누는 중이에요. 어디서 넘길지 세어 봅니다."],
-  art:   ["draw", "그리는 중이에요. 한 장씩 나오는 대로 아래에 올려 둘게요."],
-  bind:  ["read", "한 편으로 잇는 중이에요. 거의 다 왔습니다."],
+  story: ["write", "루가 이야기를 만들고 있어요"],
+  sheet: ["draw", "루가 캐릭터를 디자인하고 있어요"],
+  board: ["read", "루가 콘티를 짜고 있어요"],
+  art:   ["draw", "루가 그림을 그리고 있어요"],
+  bind:  ["read", "루가 완성도를 확인하고 있어요"],
 };
-const MASCOT_WAITING = "확인해 주실 게 있어요 — 아래에서 골라 주세요.";
+const MASCOT_WAITING = "루가 확인을 기다리고 있어요";
+
+/* 전체 진행률. 다섯 단계를 같은 무게로 치고, 그림 단계 안에서는 그린 장
+   수(s.art.done/total)로 더 잘게 나눈다. 정확한 예측이 아니라 "움직이고
+   있다"를 보여주는 숫자다 — 그래서 단계가 뒤로 돌아가도 숫자는 안 줄인다. */
+let louPctShown = 0;
+function louPercent(s) {
+  const stages = (s.stages || []).filter(st => st.state !== "skip");
+  if (!stages.length) return 0;
+  let done = 0, frac = 0;
+  stages.forEach((st, i) => {
+    if (st.state === "done") done += 1;
+    else if (i === s.stage_index) {
+      if (st.key === "art" && s.art && s.art.total) frac = s.art.done / s.art.total;
+      else frac = 0.35;              // 단계 중간쯤이라고 친다
+    }
+  });
+  let pct = Math.round((done + frac) / stages.length * 100);
+  if (s.status === "done") pct = 100;
+  louPctShown = Math.max(louPctShown, Math.min(100, pct));
+  return louPctShown;
+}
+
+function paintLouProgress(s) {
+  const fill = $("#louBarFill"), label = $("#louPct");
+  if (!fill) return;
+  const pct = louPercent(s);
+  fill.style.width = pct + "%";
+  label.textContent = pct + "%";
+  const box = $("#louProgress");
+  if (box) box.setAttribute("aria-valuenow", String(pct));
+}
 
 function paintMascot(s, currentStage) {
-  const box = $("#mascot");
-  if (!box) return;
   let mood = "think";
   let line = "";
 
@@ -555,21 +1399,47 @@ function paintMascot(s, currentStage) {
     line = MASCOT_WAITING;
   } else if (s.status === "done") {
     mood = "done";
-    line = "다 됐어요. 처음부터 한 번 읽어 보세요.";
+    line = "루가 다 그렸어요!";
   } else if (s.status === "error" || s.status === "canceled") {
     mood = "error";
-    line = s.status === "canceled" ? "여기서 멈췄어요." : "여기서 막혔어요.";
+    line = s.status === "canceled" ? "루가 멈췄어요" : "루가 여기서 막혔어요";
   } else if (s.status === "queued") {
     mood = "think";
-    line = "앞 작품이 끝나면 바로 시작할게요.";
+    line = "루가 차례를 기다리고 있어요";
   } else if (currentStage) {
     const hit = MASCOT_MOODS[currentStage.key];
     if (hit) [mood, line] = hit;
   }
 
-  box.dataset.mood = mood;
+  paintLouProgress(s);
+  // 단계 그림은 #stageArt 가 그린다 — 단계 key 를 적으면 style.css 가
+  // web/lou/stage/<key>.webp 로 바꿔 준다 (이야기 → 캐릭터 → 콘티 → 그림 → 검수).
+  // 예전에는 이 값을 #mascot 에 적고 있어서, 실제 화면에서는 단계 그림이
+  // 한 번도 안 바뀌었다 (CSS 는 .stage-art 를 보고 있었다).
+  const art = $("#stageArt");
+  if (art) {
+    art.dataset.mood = mood;
+    // 확인을 기다리는 중이어도 일하던 단계 그림을 그대로 둔다 — 어디서 멈췄는지가
+    // 보여야 한다. 다 됐거나(done) 막혔을 때(error)는 mood 쪽 그림이 이긴다.
+    if (currentStage && currentStage.key) art.dataset.stage = currentStage.key;
+    else delete art.dataset.stage;
+  }
   $("#mascotLine").textContent = line;
 }
+
+/* ---- 루와 놀기 ------------------------------------------------------- *
+ *
+ * 10분 가까이 이 화면을 본다. rail 은 무엇을 하는지 기계적으로 적고,
+ * 마스코트 줄은 그걸 사람 말로 한 번 더 말한다. 여기 있는 것은 세 번째 —
+ * **만질 수 있다**는 것. 기다림이 구경거리가 되면 시간이 덜 길다.
+ *
+ * 반응은 화면에만 있다. 서버로 아무것도 안 보내고, 돌고 있는 작업에도
+ * 영향을 주지 않는다. 반응이 끝나면 원래 단계 그림으로 돌아간다. */
+
+
+/* 루와 노는 자리의 실제 동작은 web/lou-play.js 에 있다 — 기다리는 화면(index)과
+   화면 구경(demo)이 같은 코드를 쓰게 하려고 뺐다. 여기서는 setupLou() 만 부른다.
+   (예전에는 demo.html 이 같은 로직을 통째로 베껴 갖고 있어서 둘이 갈라졌다.) */
 
 function setSheetButtonsBusy(busy) {
   $("#sheetApproveBtn").disabled = busy;
@@ -675,6 +1545,63 @@ async function sendBoardDecision(decision) {
   }
 }
 
+/* ---- 그림 검수 확인 (전문 모드) --------------------------------------- */
+
+function qaItems(list, render) {
+  return list.map(render).join("");
+}
+
+function renderArtQa(qa) {
+  const fixed = qa.fixed || [], unresolved = qa.unresolved || [];
+  const checked = qa.checked || 0;
+
+  const parts = [`장 ${checked}개를 검수했습니다.`];
+  if (fixed.length) parts.push(`${fixed.length}개는 다시 그려서 고쳤습니다.`);
+  if (unresolved.length) parts.push(`${unresolved.length}개는 못 고쳤습니다.`);
+  if (!fixed.length && !unresolved.length) parts.push("걸린 것은 없습니다.");
+  $("#artqaSummary").textContent = parts.join(" ");
+
+  const unresolvedBox = $("#artqaUnresolvedBox");
+  unresolvedBox.hidden = !unresolved.length;
+  $("#artqaUnresolved").innerHTML = qaItems(unresolved, u => `
+    <li>
+      <b>${esc(u.scene)}장</b>
+      <span class="qa-rounds">${u.rounds ? `${esc(u.rounds)}번 다시 그림` : "다시 안 그림"}</span>
+      <ul class="qa-issues">
+        ${(u.issues || []).map(i => `<li>${esc(i.what)}</li>`).join("")}
+      </ul>
+    </li>`);
+
+  const fixedBox = $("#artqaFixedBox");
+  fixedBox.hidden = !fixed.length;
+  $("#artqaFixed").innerHTML = qaItems(fixed, f => `
+    <li><b>${esc(f.scene)}장</b>
+      <span class="qa-rounds">${esc(f.rounds)}번 다시 그려서 통과</span></li>`);
+}
+
+async function sendArtqaDecision() {
+  if (!jobId) return;
+  const btn = $("#artqaApproveBtn");
+  btn.disabled = true;
+  // 이 화면의 상자를 직접 집는다 — data-fb-stage="scene" 은 결과 화면의 장별
+  // 다시 그리기 상자도 쓰므로, fbStageBox("scene") 은 엉뚱한 것을 집을 수 있다.
+  const box = $(".fb-box", $("#artqaApproval"));
+  try {
+    const res = await fetch(`/api/jobs/${jobId}/artqa-decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fbRead(box)),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    fbClear(box);
+    // 다음 tick() 이 done 을 받아 결과 화면으로 넘긴다.
+  } catch (err) {
+    toast(err.message);
+    btn.disabled = false;
+  }
+}
+
 function renderFailure(s) {
   $("#progEyebrow").textContent = s.status === "cancelled" ? "중단됨" : "실패";
   $("#progTitle").textContent = s.status === "cancelled"
@@ -709,6 +1636,45 @@ function runSource(runId, ep) {
   };
 }
 
+/* 결과 화면 **목업** — /demo/result.
+ *
+ * 실제로 만들지 않고 완성본 화면을 그대로 본다. 화면 코드는 진짜와 같은
+ * paintResult() 하나만 쓰고, 데이터만 web/samples/mock.json 에서 온다 —
+ * demo.html 처럼 화면을 통째로 베끼면 본편이 바뀔 때마다 갈라진다.
+ *
+ * "내려받기"는 진짜 파일을 준다. 샘플 장을 한 편으로 이어 붙인 뒤 실제
+ * 내려받기와 **같은 길**(watermark.for_download)로 나가므로, LORE 표시가
+ * 붙은 모습이 목업에서 그대로 보인다. */
+async function showMockResult() {
+  const r = await (await fetch("/static/samples/mock.json")).json();
+  const scenes = r.scenes || [];
+  resultSrc = {
+    page: no => (scenes.find(s => s.no === no) || {}).image || "",
+    download: "/api/demo/episode.png",
+  };
+  const cuts = scenes.reduce((n, s) => n + (s.cuts || []).length, 0);
+  paintResult({
+    ...r,
+    run_id: "",                       // 목업이라 서버에 없는 작품이다 —
+    pages: scenes,                    // 공유·다시 그리기·이어 만들기는 저절로 감춰진다
+    page_count: scenes.length,
+    cut_count: cuts,
+    seconds: 0,
+  });
+  // 목업이라는 것을 화면이 스스로 말해야 한다 — 안 그러면 진짜 결과로 읽힌다
+  const sub = $("#resSub");
+  if (sub) sub.textContent += " · 화면 구경용 목업입니다";
+  // 담을 작품이 없어도 단추는 보여 준다 — 목업의 일은 흐름을 보여주는 것이고,
+  // 눌러 보면 로그인 전 사용자가 실제로 만나는 그 가입 창이 그대로 열린다.
+  const claim = $("#claimBtn");
+  if (claim) claim.hidden = false;
+  // 공유도 같은 이유로 보여 준다 — 목업은 단추가 몇 개인지까지 보여주는
+  // 자리라, 진짜 화면에는 있는 것이 여기서만 빠지면 배치가 달라 보인다.
+  // (눌러도 보낼 작품이 없으므로 "아직 공유할 작품이 없습니다" 가 뜬다.)
+  const share = $("#shareBtn");
+  if (share) share.hidden = false;
+}
+
 async function showResult(attempt = 0) {
   resultSrc = jobSource(jobId);
   const res = await fetch(`/api/jobs/${jobId}/result`);
@@ -735,6 +1701,9 @@ async function showResult(attempt = 0) {
       "click", () => showResult(0));
     return;
   }
+  // 여기까지 온 것은 **이 브라우저가 시킨 작업**의 결과다 (job 으로 열었다).
+  // 그 사실을 남겨 둬야 나중에 목록·링크로 다시 열었을 때 내 것인 줄 안다.
+  rememberMyRun(r.run_id);
   paintResult(r);
 }
 
@@ -784,6 +1753,12 @@ function paintResult(r) {
   // 컷 사이 호흡은 이제 한 장 안에서 모델이 정하므로 여기서 넣을 여백이 없다.
   resultRunId = r.run_id || "";
   resultEpisode = epNo;
+  // 공유는 run_id 로 여는 주소라, 그것이 없으면 보낼 링크가 없다. 눌러도
+  // 아무 일이 안 일어나는 단추를 두느니 감춘다.
+  $("#shareBtn").hidden = !resultRunId;
+  $("#titleEditBtn").hidden = !resultRunId;
+  toggleShareMenu(false);
+  openTitleEdit(false);
   wireMemory(resultRunId);
   $("#reader").innerHTML = r.pages.map(pg => `
     <div class="page" data-scene="${pg.no}">
@@ -797,12 +1772,6 @@ function paintResult(r) {
     r.pages.forEach(pg => paintVersions(pg.no));
     paintArtQA();
   }
-
-  $("#scriptBody").innerHTML = r.pages.map(pg => `
-    <div class="script-page">
-      <div class="script-page-no">${pg.no}번째 장 · 컷 ${pg.cuts.map(c => c.no).join("·")}</div>
-      ${pg.cuts.map(scriptCut).join("")}
-    </div>`).join("");
 
   paintEpisodeTabs(r);
   // 편집실 링크도 지금 보고 있는 작품·회차로 맞춘다. 예전에는 늘 목업으로
@@ -818,10 +1787,23 @@ function paintResult(r) {
   $("#nextEpBtn").hidden = !nextEpCtx;
   if (nextEpCtx) $("#nextEpBtn").textContent = `${nextEpCtx.next}화 만들기`;
 
+  // 이어 그리기 — 콘티에 아직 안 그린 컷이 남아 있을 때만 뜬다.
+  // 한 화를 통째로 굽지 않고 앞부분부터 보여주는 것이 지금의 방식이라,
+  // 대부분의 결과 화면에는 이 단추가 있다.
+  moreCtx = (resultRunId && r.more_cuts)
+    ? { runId: resultRunId, episode: epNo,
+        drawn: r.drawn_units || 0, total: r.planned_cuts || 0 }
+    : null;
+  $("#moreCutsBtn").hidden = !moreCtx;
+  if (moreCtx) {
+    const shown = moreCtx.drawn * Number(r.cuts_per_sheet || 3);
+    $("#moreCutsBtn").textContent =
+      `다음 장면 이어서 보기 (${shown}/${moreCtx.total}컷)`;
+  }
+
+  paintClaimBanner();
   view("result");
-  $("#progress").hidden = true;
-  $("#works").hidden = true;
-  $("#result").hidden = false;
+  showOnly("#result");
   window.scrollTo(0, 0);
 }
 
@@ -899,6 +1881,282 @@ let resultRunId = "";
 // 보내야 한다 — 안 보내면 서버가 1화로 알아듣고 2화 화면을 보면서 **1화
 // 그림을 덮어쓴다** (실제 코드 감사에서 발견).
 let resultEpisode = 1;
+
+/* ---- 공유 --------------------------------------------------------------- *
+ *
+ * 보내는 것은 **링크 하나**다. 그림 파일이 아니라 링크를 보내는 이유:
+ * 한 편이 20MB 라 메신저가 받아 주지 않거나 화질을 깎고, 무엇보다 받은 사람이
+ * 회차를 넘겨 가며 읽을 수가 없다. 링크로 열면 완성본 화면이 그대로 열린다.
+ * 파일이 필요한 사람에게는 옆에 "PNG 내려받기" 가 이미 있다.
+ *
+ * 미리보기(제목·그림)는 서버가 만든다 — serve.py 의 og_tags 참고. 크롤러는
+ * 자바스크립트를 안 돌려서 여기서 무엇을 그리든 카드에는 안 실린다.
+ *
+ * 지금은 링크를 아는 사람이 곧 볼 수 있는 사람이다. 공개 범위·만료는 계정이
+ * 생긴 뒤의 일이라(#66) 화면에서도 그렇게 말한다. */
+
+function shareUrl() {
+  if (!resultRunId) return "";
+  // 배포된 주소가 정해져 있으면 그것을 쓴다. 지금 보고 있는 주소를 그대로
+  // 보내면 개발 중에는 127.0.0.1 이고 사설망에서는 192.168.x 라, 받은 사람이
+  // 아무것도 못 연다. 서버가 LORE_PUBLIC_URL 로 알려 준다(#96).
+  const base = (shareConfig.public_url || "").replace(/\/+$/, "") || location.origin;
+  return `${base}/works?run=${encodeURIComponent(resultRunId)}&ep=${resultEpisode}`;
+}
+
+function shareTitle() {
+  const t = ($("#resTitle")?.textContent || "").trim();
+  return t ? `${t} — LORE` : "LORE 로 만든 웹툰";
+}
+
+/* 폰에는 공유 시트가 있고 PC 에는 없다. 없는 곳에서는 링크를 복사하는 것이
+   할 수 있는 전부라, 단추 글자도 그때그때 맞춘다 — "공유" 라고 써 놓고
+   복사만 되면 눌러 본 사람이 무슨 일이 일어났는지 모른다. */
+function canOpenShareSheet() {
+  return typeof navigator.share === "function";
+}
+
+async function copyLink(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    return true;
+  } catch {
+    // 옛 브라우저이거나 https 가 아니면 clipboard 가 막힌다. 화면 밖에 잠깐
+    // 만들어 두고 실행 명령으로 복사한다 — 이것마저 안 되면 false 다.
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;left:-9999px;top:0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch { return false; }
+  }
+}
+
+async function copyAndTell() {
+  toast(await copyLink(shareUrl())
+    ? "링크를 복사했습니다 — 붙여넣기 하면 미리보기가 뜹니다"
+    : "복사하지 못했습니다. 주소창의 주소를 그대로 보내 주세요.");
+}
+
+/* 공유 시트(폰)로 넘긴다. 여기에는 카톡·인스타가 이미 들어 있어서, 폰에서는
+   이것 하나가 SNS 단추 여럿보다 낫다. */
+async function shareToSheet() {
+  try {
+    await navigator.share({ title: shareTitle(), text: shareText(), url: shareUrl() });
+  } catch (err) {
+    if (err && err.name === "AbortError") return;   // 사용자가 닫은 것뿐이다
+    await copyAndTell();
+  }
+}
+
+/* ---- 어디로 보낼 수 있는가 ---------------------------------------------- *
+ *
+ * 셋의 사정이 다 다르다.
+ *   트위터·페이스북·라인 — 주소 하나로 창을 연다. 등록도 열쇠도 필요 없다.
+ *   카카오톡 — 공식 SDK 를 붙여야 하고, JavaScript 키와 **등록된 도메인**이
+ *              있어야 한다. 키가 없으면 아예 안 그린다(서버의 kakao_js_key).
+ *   인스타그램 — **웹에서 글을 올리는 길이 없다.** 공유 주소가 아예 없고,
+ *              피드에는 링크도 안 걸린다. 인스타에 올리려면 그림 파일이
+ *              가야 해서, 폰이면 공유 시트로 넘기고 PC 면 내려받기로 보낸다.
+ *              단추를 만들어 두고 "안 됩니다" 하는 것보다 그게 정직하다. */
+
+function shareText() {
+  const title = ($("#resTitle")?.textContent || "").trim();
+  const log = ($("#resLogline")?.textContent || "").trim();
+  // 트위터는 280자다. 링크와 해시태그 자리를 빼고 로그라인을 줄인다.
+  const short = log.length > 90 ? log.slice(0, 89) + "…" : log;
+  return [title, short].filter(Boolean).join(" — ");
+}
+
+const SHARE_TARGETS = [
+  {
+    id: "x", label: "X (트위터)",
+    href: () => "https://twitter.com/intent/tweet"
+      + `?text=${encodeURIComponent(shareText() + " #LORE")}`
+      + `&url=${encodeURIComponent(shareUrl())}`,
+  },
+  {
+    id: "facebook", label: "페이스북",
+    // 페이스북은 본문을 안 받는다 — 링크만 주면 og 태그로 카드를 만든다.
+    href: () => "https://www.facebook.com/sharer/sharer.php"
+      + `?u=${encodeURIComponent(shareUrl())}`,
+  },
+  {
+    id: "line", label: "라인",
+    href: () => "https://social-plugins.line.me/lineit/share"
+      + `?url=${encodeURIComponent(shareUrl())}`
+      + `&text=${encodeURIComponent(shareText())}`,
+  },
+];
+
+function openShareWindow(url) {
+  // 새 창으로 연다. 같은 탭에서 열면 만들던 것을 두고 나가게 된다.
+  window.open(url, "_blank", "noopener,noreferrer,width=600,height=560");
+}
+
+function buildShareMenu() {
+  const host = $("#shareMenu");
+  if (!host) return;
+  const rows = [];
+  for (const t of SHARE_TARGETS) {
+    rows.push(`<button type="button" class="share-item" data-share="${t.id}">${t.label}</button>`);
+  }
+  if (shareConfig.kakao_js_key) {
+    rows.push(`<button type="button" class="share-item" data-share="kakao">카카오톡</button>`);
+  }
+  if (canOpenShareSheet()) {
+    rows.push(`<button type="button" class="share-item" data-share="sheet">다른 앱으로…</button>`);
+  }
+  rows.push(`<button type="button" class="share-item" data-share="copy">링크 복사</button>`);
+  // 인스타는 링크로 못 올린다 — 그림을 받아서 올리라고 말해 준다.
+  rows.push(`<a class="share-item" id="shareInstaHint" download>인스타그램 — 그림 내려받기</a>`);
+  host.innerHTML = rows.join("");
+  const a = $("#shareInstaHint");
+  if (a) a.href = resultSrc ? resultSrc.download : "#";
+}
+
+function toggleShareMenu(open) {
+  const host = $("#shareMenu"), btn = $("#shareBtn");
+  if (!host || !btn) return;
+  const show = open === undefined ? host.hidden : open;
+  if (show) buildShareMenu();
+  host.hidden = !show;
+  btn.setAttribute("aria-expanded", show ? "true" : "false");
+}
+
+async function onShareMenuClick(e) {
+  const el = e.target.closest("[data-share]");
+  if (!el) return;
+  const kind = el.dataset.share;
+  toggleShareMenu(false);
+  if (kind === "copy") return copyAndTell();
+  if (kind === "sheet") return shareToSheet();
+  if (kind === "kakao") return shareToKakao();
+  const target = SHARE_TARGETS.find(t => t.id === kind);
+  if (target) openShareWindow(target.href());
+}
+
+/* 카카오는 키가 있을 때만 부른다 — buildShareMenu 가 그때만 단추를 그린다.
+   SDK 는 처음 누를 때 받아 온다(안 쓰는 사람에게 받게 하지 않는다). */
+let kakaoReady = null;
+function loadKakao() {
+  if (kakaoReady) return kakaoReady;
+  kakaoReady = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    // integrity 는 안 건다 — 해시를 손으로 적어 두면 카카오가 판을 올릴 때마다
+    // 조용히 안 뜬다. 붙이려면 카카오 문서의 그 판 해시를 그대로 가져와야 한다.
+    s.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js";
+    s.crossOrigin = "anonymous";
+    s.onload = () => res(window.Kakao);
+    s.onerror = () => rej(new Error("카카오 SDK 를 받지 못했습니다"));
+    document.head.appendChild(s);
+  });
+  return kakaoReady;
+}
+
+async function shareToKakao() {
+  try {
+    const Kakao = await loadKakao();
+    if (!Kakao.isInitialized()) Kakao.init(shareConfig.kakao_js_key);
+    Kakao.Share.sendDefault({
+      objectType: "feed",
+      content: {
+        title: ($("#resTitle")?.textContent || "").trim() || "LORE 웹툰",
+        description: ($("#resLogline")?.textContent || "").trim().slice(0, 100),
+        imageUrl: `${location.origin}${shareImagePath()}`,
+        link: { mobileWebUrl: shareUrl(), webUrl: shareUrl() },
+      },
+      buttons: [{ title: "웹툰 보기",
+                  link: { mobileWebUrl: shareUrl(), webUrl: shareUrl() } }],
+    });
+  } catch (err) {
+    // 도메인을 카카오에 등록하지 않으면 여기서 걸린다 — 가장 흔한 실패다.
+    toast("카카오톡 공유를 열지 못했습니다. 링크 복사를 써 주세요.");
+  }
+}
+
+/* 카톡 카드에 걸 그림. og:image 와 같은 것을 쓴다. */
+function shareImagePath() {
+  return resultSrc ? resultSrc.page(1, 1080) : "";
+}
+
+let shareConfig = {};
+
+/* ---- 제목 고치기 --------------------------------------------------------- *
+ *
+ * 모델이 지은 이름이 늘 맞지는 않고, 공유가 붙은 뒤로는 그 이름이 카톡·트위터
+ * 카드에 실려 남에게 먼저 보인다. 여기서 고친 것은 작품 폴더에 남아서
+ * (titles.json) 목록·편집실·공유 미리보기·내려받는 파일 이름까지 따라온다.
+ * 비우고 저장하면 모델이 지은 이름으로 되돌아간다. */
+
+function openTitleEdit(open) {
+  const box = $("#titleEdit"), row = $("#titleEditBtn");
+  if (!box) return;
+  box.hidden = !open;
+  if (row) row.hidden = open;
+  if (open) {
+    const input = $("#titleInput");
+    input.value = ($("#resTitle").textContent || "").trim();
+    input.focus();
+    input.select();
+  }
+}
+
+async function saveTitle() {
+  if (!resultRunId) return;
+  const btn = $("#titleSaveBtn");
+  btn.disabled = true;
+  try {
+    const res = await fetch(
+      `/api/runs/${encodeURIComponent(resultRunId)}/title`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ episode: resultEpisode,
+                               title: $("#titleInput").value }),
+      });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "저장하지 못했습니다");
+    // 서버가 돌려준 것이 **앞으로 보일 이름**이다 (비웠으면 원래 제목).
+    $("#resTitle").textContent = data.title;
+    openTitleEdit(false);
+    toast("제목을 바꿨습니다");
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function setupTitleEdit() {
+  const edit = $("#titleEditBtn");
+  if (!edit) return;
+  edit.addEventListener("click", () => openTitleEdit(true));
+  $("#titleCancelBtn").addEventListener("click", () => openTitleEdit(false));
+  $("#titleSaveBtn").addEventListener("click", saveTitle);
+  $("#titleInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); saveTitle(); }
+    if (e.key === "Escape") openTitleEdit(false);
+  });
+}
+
+function setupShare() {
+  const btn = $("#shareBtn");
+  if (!btn) return;
+  btn.addEventListener("click", () => toggleShareMenu());
+  $("#shareMenu")?.addEventListener("click", onShareMenuClick);
+  // 바깥을 누르면 닫는다.
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#shareMenu") && !e.target.closest("#shareBtn")) {
+      toggleShareMenu(false);
+    }
+  });
+  getConfig().then(c => { shareConfig = c || {}; }).catch(() => { shareConfig = {}; });
+}
 
 function pageTools(no) {
   return `
@@ -1047,19 +2305,6 @@ async function paintVersions(no, versions) {
   }));
 }
 
-function scriptCut(c) {
-  const lines = [];
-  if (c.narration) lines.push(`<p class="script-line narration">${esc(c.narration)}</p>`);
-  if (c.dialogue)  lines.push(`<p class="script-line"><span class="who">${esc(c.speaker || "?")}</span> ${esc(c.dialogue)}</p>`);
-  if (c.thought)   lines.push(`<p class="script-line thought">(${esc(c.thought)})</p>`);
-  if (c.sfx)       lines.push(`<p class="script-line sfx">${esc(c.sfx)}</p>`);
-  if (!lines.length) lines.push(`<p class="script-line narration">— 대사 없음</p>`);
-  return `<div class="script-cut">
-    <div class="script-no">CUT ${String(c.no).padStart(2, "0")}${c.shot ? " · " + esc(c.shot) : ""}</div>
-    ${lines.join("")}
-    <p class="script-desc">${esc(c.description)}</p>
-  </div>`;
-}
 
 
 /* 이미 끝난 작업을 결과 화면으로 바로 연다 (진행 화면을 거치지 않는다). */
@@ -1079,8 +2324,34 @@ async function openExisting(id) {
     startPolling();                       // 아직 도는 중이면 진행 화면으로
   } catch (err) {
     toast(`${err.message} — 먼저 한 편 만들어 주세요.`);
-    view("landing");
-    document.querySelector("#studio").scrollIntoView();
+    view("landing"); pickHero();
+    window.scrollTo(0, 0);
+  }
+}
+
+/* 이어 그리기 — 같은 화의 다음 3컷. 회차가 안 늘어나므로 다음 화 만들기와
+   다른 자리다. 시작하면 진행 화면으로 넘어가고, 끝나면 결과가 다시 그려진다. */
+async function continueCuts() {
+  if (!moreCtx) return;
+  const btn = $("#moreCutsBtn");
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = "루가 이어 그리는 중…";
+  try {
+    const res = await fetch(
+      `/api/runs/${encodeURIComponent(moreCtx.runId)}/continue`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ episode: moreCtx.episode }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "이어 그리지 못했습니다");
+    jobId = data.id;
+    sessionStorage.setItem("lore_job", jobId);
+    shownCuts = new Set();
+    startPolling();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = label;
   }
 }
 
@@ -1093,7 +2364,8 @@ async function openExisting(id) {
  * 회차 번호는 **서버가 정한다.** 화면이 보낸 번호를 믿으면 창을 두 개 띄워
  * 놓고 눌렀을 때 같은 번호를 두 번 만들려 든다. */
 
-let nextEpCtx = null;      // { runId, next, character, title }
+let nextEpCtx = null;
+let moreCtx = null;      // { runId, next, character, title }
 let nextEpJob = null;      // 도는 중인 작업 id
 let nextEpPoll = null;
 
@@ -1205,12 +2477,101 @@ async function tickNextEp() {
  * 목록은 편집실과 같은 /api/runs 를 쓴다. 작업(job)을 안 거치므로 하네스를
  * 직접 돌린 것도, 이어 만들어 job 기록이 없는 회차도 빠짐없이 나온다. */
 
+/* ---- 마이페이지 --------------------------------------------------------
+ *
+ * 「내 웹툰」(/works)이 이 서버에 있는 작품 전부라면, 여기는 **내 계정에
+ * 저장한 것만** 이다. 둘을 나눈 이유: 계정 없이도 만들 수 있는 서비스라
+ * 서버에는 로그인 전에 만든 것이나 남의 것이 섞여 있다.
+ *
+ * 목록은 /api/runs 를 받아 계정의 claimed_runs 로 거른다 — 서버에 새 API 를
+ * 만들지 않아도 되고, 작품 카드 그리는 코드도 /works 와 그대로 나눠 쓴다. */
+/* 큰 화면 조각들. 하나를 보이면 **나머지는 반드시 숨는다** — 예전에는 부르는
+   쪽마다 숨길 목록을 따로 들고 있어서, 조각이 하나 늘 때(마이페이지) 어떤
+   경로에서는 안 숨겨져 두 화면이 위아래로 이어 붙어 보였다. */
+const SECTIONS = ["#progress", "#result", "#works", "#nextEp", "#mypage"];
+
+function showOnly(id) {
+  SECTIONS.forEach(sel => { const el = $(sel); if (el) el.hidden = sel !== id; });
+}
+
+function onlyMyPage() {
+  showOnly("#mypage");
+  view("mypage");
+  window.scrollTo(0, 0);
+}
+
+async function showMyPage() {
+  if (!accountState.logged_in) return openAccountModal("login");
+  onlyMyPage();
+  if (location.pathname !== "/mypage") history.pushState(null, "", "/mypage");
+
+  $("#myPhoto").src = accountState.photo_url || GUEST_PILL_PHOTO;
+  $("#myNickname").textContent = accountState.nickname || "";
+  refreshCreditBalance();          // 다른 탭에서 썼을 수 있다 — 열 때마다 새로 받는다
+
+  const mine = accountState.claimed_runs || [];
+  const host = $("#myWorksGrid");
+  host.innerHTML = `<p class="works-empty">불러오는 중…</p>`;
+  let runs = null;
+  try { runs = (await (await fetch("/api/runs")).json()).runs || []; }
+  catch { /* 아래에서 */ }
+
+  if (runs === null) {
+    $("#myMeta").textContent = "";
+    host.innerHTML = `<p class="works-empty">목록을 불러오지 못했습니다.` +
+      ` 서버(serve.py)가 떠 있는지 확인해 주세요.</p>`;
+    return;
+  }
+  const kept = runs.filter(r => mine.includes(r.run_id));
+  $("#myMeta").textContent = `저장한 작품 ${kept.length}편`;
+  if (!kept.length) {
+    host.innerHTML = `<p class="works-empty">아직 저장한 작품이 없습니다.` +
+      `<br>완성본 화면에서 <b>서버에 저장하기</b>를 누르면 여기에 쌓입니다.` +
+      `<br><a class="inline-link" href="/#studio">첫 작품 만들러 가기 →</a></p>`;
+    return;
+  }
+  host.innerHTML = kept.map(workCard).join("");
+  $$("#myWorksGrid [data-open]", host).forEach(b => b.addEventListener("click", () =>
+    showRunResult(b.dataset.open, Number(b.dataset.ep))));
+}
+
+/* 마이페이지 **목업** — /demo/mypage. 계정을 안 만들어도 화면을 볼 수 있게
+   가짜 계정과 작품 두 편을 넣는다. */
+function showMockMyPage() {
+  onlyMyPage();
+  $("#myPhoto").src = "/static/lou/react/idle/01.webp";
+  $("#myNickname").textContent = "루를 아는 사람";
+  $("#myMeta").textContent = "저장한 작품 4편 · 화면 구경용 목업입니다";
+  const card = (no, character, sub) => `
+    <article class="works-card">
+      <span class="works-cover">
+        <img src="/static/samples/mock/scene${no}.jpg" alt="" loading="lazy">
+      </span>
+      <div class="works-body">
+        <h3>${esc(character)}</h3>
+        <p class="works-sub">${esc(sub)}</p>
+      </div>
+    </article>`;
+  // 넉 장을 둔다 — 두 장이면 옆으로 밀 것이 없어서 줄이 줄인 줄 모른다.
+  $("#myWorksGrid").innerHTML =
+    card(1, "모모", "로맨스 판타지 · 약속의 무게, 장난의 시작")
+    + card(3, "초롱", "무협 · 강호에 첫발")
+    + card(2, "하람", "헌터·게이트 · 첫 번째 각성")
+    + card(4, "유리", "학원로맨스 · 3학년 3반의 봄");
+  $("#myLogout").hidden = true;
+  // 목업에서도 상단 배지가 로그인 뒤 모습(사진 + 마이페이지)으로 보여야
+  // "로그인하면 여기가 바뀐다"가 화면으로 전달된다. 진짜 로그인은 아니다.
+  mockAccountPill = true;
+  paintAccountPill();
+  // 잔액도 숫자가 있어야 화면이 완성돼 보인다 — 목업이라 서버 값이 아니다.
+  // (mockAccountPill 을 켠 **뒤에** 넣어야 진짜 잔액이 덮어쓰지 않는다.)
+  $("#myCreditNum").textContent = "1,240";
+  $("#myCreditHint").textContent = "한 편에 120 C — 지금 10편 더 만들 수 있어요";
+}
+
 async function showWorks() {
   view("works");
-  $("#progress").hidden = true;
-  $("#result").hidden = true;
-  $("#nextEp").hidden = true;
-  $("#works").hidden = false;
+  showOnly("#works");
   window.scrollTo(0, 0);
 
   const host = $("#worksGrid");
@@ -1266,6 +2627,41 @@ function workCard(r) {
 /* ------------------------------------------------------------------ 잡동사니 */
 
 function view(name) { document.body.dataset.view = name; }
+
+/* 루는 홈에 들어설 때마다 다른 모습으로 맞이한다 — 홈의 큰 그림도, 헤더의
+   로고도. 새로고침도, 편집실이나 내 웹툰을 보다 돌아오는 것도 똑같이 새로
+   뽑힌다. 기억해 두지 않는 것이 곧 규칙이라 저장소를 안 쓴다.
+
+   로고 그림은 표정 원화(whale1·whale2 × 6종)에서 **고래 몸통만** 잘라 둔
+   것이다. 원화에는 말풍선·하트·별이 옆에 붙어 있는데 32px 로 줄이면 얼룩으로
+   뭉개져서, 알파가 이어진 가장 큰 덩어리만 남겨 뗐다. 그래서 12장 모두 작게
+   줄여도 고래로 읽힌다. */
+const HERO_LOUS = ["/static/lou/hero-whale2.png", "/static/lou/hero-whale1.png"];
+const LOGO_LOUS = ["curious", "default", "discover", "happy", "sleepy", "thinking"]
+  .flatMap(e => [`/static/lou/logo-1-${e}.png`, `/static/lou/logo-2-${e}.png`]);
+
+function swapLou(el, list) {
+  if (!el) return;
+  const pick = list[Math.floor(Math.random() * list.length)];
+  if (el.getAttribute("src") !== pick) el.src = pick;
+}
+/* 이름은 그대로 두었다 — 홈으로 돌아가는 네 자리에서 이미 부르고 있다. */
+function pickHero() {
+  swapLou($("#heroLou"), HERO_LOUS);
+  swapLou($("#brandLou"), LOGO_LOUS);
+}
+
+/* 걸음의 제목 옆에 앉은 루. 걸음을 옮길 때마다 바뀐다.
+   방금 걸려 있던 그림과 헤더 로고에 걸린 그림은 후보에서 뺀다 — 안 그러면
+   "안 바뀌었네" 로 보이거나 같은 고래가 화면에 둘 나온다. */
+function pickWizLou() {
+  const el = $("#wizLou");
+  if (!el) return;
+  const now = el.getAttribute("src");
+  const brand = $("#brandLou") ? $("#brandLou").getAttribute("src") : "";
+  const pool = LOGO_LOUS.filter(s => s !== now && s !== brand);
+  el.src = pool[Math.floor(Math.random() * pool.length)];
+}
 function esc(s) {
   return String(s ?? "").replace(/[&<>"]/g,
     ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
@@ -1276,16 +2672,34 @@ function forget() {
   shownCuts = new Set(); $("#cutGrid").innerHTML = ""; $("#cutstrip").hidden = true;
   $("#cancelBtn").textContent = "중단"; $("#cancelBtn").onclick = null;
   $("#clockLabel").textContent = "경과";
-  view("landing"); $("#progress").hidden = true; $("#result").hidden = true;
-  $("#works").hidden = true;
-  $("#scriptPanel").hidden = true;
+  view("landing"); pickHero();
+  // 큰 화면 조각은 전부 닫는다 — 하나라도 남으면 홈 아래에 그대로 이어 붙는다
+  // (마이페이지가 안 닫혀서 홈과 마이페이지가 한 화면에 이어 보였다).
+  showOnly(null);
+  // 목업에서 켜 둔 "로그인한 척"도 여기서 푼다 — 안 풀면 홈에 돌아와도 배지가
+  // 「마이페이지」로 남아, 로그인도 안 했는데 한 것처럼 보인다.
+  mockAccountPill = false;
+  paintAccountPill();
+  // 대사 스크립트 자리는 새 결과 화면에서 없어졌다 — 남아 있을 때만 닫는다.
+  // (없는 요소에 hidden 을 쓰면 여기서 죽어서, 홈으로 나가는 길 자체가 막힌다.)
+  const script = $("#scriptPanel");
+  if (script) script.hidden = true;
+  // 만들기 화면도 닫는다. 안 닫으면 걸음을 밟다가 헤더의 LORE 로 홈에 와도
+  // 위저드가 홈 위에 그대로 겹쳐 있어서, 홈과 4걸음과 바닥글이 한꺼번에
+  // 보인다 — 화면이 깨진 것처럼 읽힌다.
+  $("#create").hidden = true;
+  // 물빛 표시도 같이 지운다 — 홈은 걸음이 없는 자리다.
+  delete document.body.dataset.step;
   // 이어 만들기 화면도 같이 닫는다 — 안 닫으면 "새로 만들기" 를 눌러도
   // 앞 작품의 다음 화 화면이 뒤에 남는다.
   clearInterval(nextEpPoll); nextEpPoll = null; nextEpJob = null; nextEpCtx = null;
   $("#nextEp").hidden = true; $("#nextEpBtn").hidden = true;
+  $("#moreCutsBtn").hidden = true;
   // /result 로 들어왔으면 주소도 되돌린다 — 안 그러면 새로고침에 다시 결과가 뜬다.
   if (location.pathname !== "/" || location.search) history.replaceState(null, "", "/");
-  document.querySelector("#studio").scrollIntoView();
+  // #studio 는 만들기 화면 안에 있다 — 방금 닫았으니 거기로 스크롤할 수 없다.
+  // 홈으로 왔으면 홈 맨 위가 맞다.
+  window.scrollTo(0, 0);
 }
 let toastTimer = null;
 function toast(msg) {
@@ -1301,14 +2715,79 @@ document.addEventListener("DOMContentLoaded", () => {
   loadFeedbackTags();
   setupPhoto();
   $("#form").addEventListener("submit", submit);
-  $("#previewToggle").addEventListener("change", paintCost);
   // 연출(빠르게/웹툰)이 바뀌면 그림 호출 수가 달라져 비용도 달라진다.
   document.querySelectorAll('input[name="layout_mode"]').forEach(
     el => el.addEventListener("change", paintCost));
+
+  // 모드 — 폼을 만든 **뒤에** 적용해야 한다(applyMode 가 폼의 칸을 여닫는다).
+  applyMode();
+  // 위저드도 폼을 만든 뒤에 켠다(그림체·항목 칸이 있어야 요약을 그릴 수 있다).
+  setupWizard();
+  setupLou();
+  setupTips();
+  loadCreditConfig();       // /api/config 가 도착하면 비용 칩을 실제 값으로 다시 그린다
+  refreshCreditBalance();
   paintCost();
 
-  $("#cancelBtn").addEventListener("click", async () => {
-    if (!jobId || !confirm("만드는 것을 중단할까요? 지금까지 그린 컷은 남습니다.")) return;
+  $("#chargeBtn").addEventListener("click", openChargeModal);
+  $("#myChargeBtn")?.addEventListener("click", openChargeModal);
+  $("#chargeModalClose").addEventListener("click", closeChargeModal);
+  $("#chargeBack").addEventListener("click", () => chargeStep("package"));
+  $("#chargeDoneClose").addEventListener("click", closeChargeModal);
+  // 바탕을 눌러도 닫힌다 — 상자 자체를 누른 건 안 닫는다.
+  $("#chargeModal").addEventListener("click", e => {
+    if (e.target.id === "chargeModal") closeChargeModal();
+  });
+
+  refreshAccount();
+  // 로그인 전에는 계정 창을 열고, 로그인 뒤에는 마이페이지로 간다.
+  $("#accountBtn").addEventListener("click", () => {
+    if (accountState.logged_in) showMyPage();
+    else openAccountModal();
+  });
+  $("#myLogout")?.addEventListener("click", async () => {
+    await logout();
+    location.href = "/";
+  });
+  $("#accountModalClose").addEventListener("click", closeAccountModal);
+  $("#accountModal").addEventListener("click", e => {
+    if (e.target.id === "accountModal") closeAccountModal();
+  });
+  $("#tabLogin").addEventListener("click", () => switchAccountTab("login"));
+  $("#tabSignup").addEventListener("click", () => switchAccountTab("signup"));
+  $("#loginForm").addEventListener("submit", onLogin);
+  $("#signupForm").addEventListener("submit", onSignup);
+  $("#logoutBtn").addEventListener("click", logout);
+  $("#claimBtn").addEventListener("click", claimCurrentRun);
+  $("#photoUpload").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast("이미지 파일만 됩니다");
+    if (file.size > 3 * 1024 * 1024) return toast("사진이 너무 큽니다 (3MB 까지)");
+    const fr = new FileReader();
+    fr.onload = () => {
+      signupPhoto = { kind: "upload", data_url: fr.result };
+      $$(".photo-opt", $("#photoGrid")).forEach(b => b.classList.remove("is-selected"));
+      $(".photo-upload-btn").classList.add("is-selected");
+    };
+    fr.readAsDataURL(file);
+  });
+
+  // 중단은 두 걸음이다 — 누르면 확인 창이 뜨고, 거기서 한 번 더 눌러야 실제로
+  // 멈춘다. 되돌릴 수 없고 크레딧도 안 돌아오기 때문이다.
+  $("#cancelBtn").addEventListener("click", () => {
+    if (!jobId) return;
+    $("#cancelModal").hidden = false;
+    // 기본 손가락은 "계속 만들기" 위에 둔다 — 엔터 한 번에 중단되면 안 된다.
+    $("#cancelKeep").focus();
+  });
+  $("#cancelKeep").addEventListener("click", () => { $("#cancelModal").hidden = true; });
+  $("#cancelModal").addEventListener("click", e => {
+    if (e.target.id === "cancelModal") $("#cancelModal").hidden = true;   // 바깥 누르면 닫기
+  });
+  $("#cancelConfirm").addEventListener("click", async () => {
+    $("#cancelModal").hidden = true;
+    if (!jobId) return;
     await fetch(`/api/jobs/${jobId}/cancel`, { method: "POST" });
   });
   $("#sheetApproveBtn").addEventListener("click", () => sendSheetDecision("approve"));
@@ -1317,8 +2796,9 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#storyRetryBtn").addEventListener("click", () => sendStoryDecision("retry"));
   $("#boardApproveBtn").addEventListener("click", () => sendBoardDecision("approve"));
   $("#boardRetryBtn").addEventListener("click", () => sendBoardDecision("retry"));
-  $("#againBtn").addEventListener("click", forget);
+  $("#artqaApproveBtn").addEventListener("click", sendArtqaDecision);
   $("#nextEpBtn").addEventListener("click", openNextEp);
+  $("#moreCutsBtn").addEventListener("click", continueCuts);
   $("#nextEpGo").addEventListener("click", startNextEp);
   $("#nextEpBack").addEventListener("click", closeNextEp);
   $("#nextEpCancel").addEventListener("click", async () => {
@@ -1328,13 +2808,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     closeNextEp();
   });
-  $("#scriptBtn").addEventListener("click", () => {
-    $("#scriptPanel").hidden = !$("#scriptPanel").hidden;
+  setupShare();
+  setupTitleEdit();
+  // 웹툰 한 편은 길다 — 다 읽고 나서 위로 돌아가려면 한참 끌어야 한다.
+  $("#toTopBtn")?.addEventListener("click", () => {
+    document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" });
   });
-  $("#scriptClose").addEventListener("click", () => { $("#scriptPanel").hidden = true; });
-  // 완성본에서 목록으로 되돌아가는 길. 목록을 다시 그리는 이유: 그 사이에
-  // 이어 만든 회차가 생겼을 수 있다.
-  $("#backToWorks").addEventListener("click", () => showWorks());
 
   // 주소로 바로 열기.
   //   /result                이미 만들어 둔 **마지막** 1화를 결과 화면으로
@@ -1346,7 +2825,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const asked = params.get("job");
   const wantResult = location.pathname.startsWith("/result");
   const wantWorks = location.pathname.startsWith("/works");
-  if (wantWorks) {
+  const wantMock = location.pathname.startsWith("/demo/result");
+  if (location.pathname.startsWith("/demo/mypage")) {
+    showMockMyPage();
+  } else if (location.pathname.startsWith("/mypage")) {
+    showMyPage();
+  } else if (wantMock) {
+    showMockResult();
+  } else if (wantWorks) {
     const run = params.get("run");
     if (run) showRunResult(run, Number(params.get("ep")) || 1);
     else showWorks();

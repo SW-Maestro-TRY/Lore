@@ -232,6 +232,238 @@ ok("폭: config 로 값을 바꿀 수 있다",
 ok("폭: 이상한 값이 와도 터지지 않는다",
    ST.width_ratio({"weight": "light"}, None, "반쯤") == ST.LIGHT_WIDTH)
 
+# ---------------- 이슈 #110 — 장 사이 여백·폭이 실제 조립에 안 반영됨 ----------------
+#
+# strip.width_ratio 가 계산한 ratio 가 stitch_strip 에서 그냥 버려지고 있었다
+# (for im, gap, _ratio in items) — 컷 하나하나는 무게를 계산해 둬도 실제
+# PNG 는 전부 꽉 채워 그려졌다. episode.stitch(장 모드 조립)는 여백·폭을 아예
+# 받지도 않았다. 실제 픽셀로 검증한다 — 색을 칠한 이미지를 만들고, 좁아진
+# 자리의 좌우가 배경색인지 직접 확인한다.
+import json, tempfile, shutil
+import episode as EP
+from PIL import Image
+
+_tmp = Path(tempfile.mkdtemp())
+
+
+def _img(w, h, color):
+    p = _tmp / f"{color}_{w}x{h}.png"
+    Image.new("RGB", (w, h), color).save(p)
+    return p
+
+
+# strip.stitch_strip — ratio < 1.0 인 컷이 실제로 좁아지고 가운데 정렬되는가
+items = [(Image.new("RGB", (800, 600), "red"), 0, 1.0),
+        (Image.new("RGB", (800, 400), "green"), 0, 0.5),
+        (Image.new("RGB", (800, 500), "blue"), 0, 1.0)]
+sw, sh = ST.stitch_strip(items, _tmp / "strip.png")
+ok("stitch_strip: 지면 폭은 ratio=1.0 인 컷이 정한다", sw == 800, sw)
+sheet = Image.open(_tmp / "strip.png")
+mid_y = 600 + round(400 * 0.5 * 400 / 800) // 2   # 좁아진 컷의 세로 중앙 어림
+row = [sheet.getpixel((x, 600 + 10)) for x in (0, 5, 795, 799)]
+ok("stitch_strip: 좁아진 컷의 좌우는 배경색(흰)이다",
+   row[0] == row[1] == row[2] == row[3] == (255, 255, 255), row)
+ok("stitch_strip: ratio=1.0 인 컷은 예전처럼 꽉 찬다 (첫 줄이 빨강)",
+   sheet.getpixel((0, 0)) == (255, 0, 0) and sheet.getpixel((799, 0)) == (255, 0, 0))
+
+# episode.stitch — 인자 없이 부르면 예전과 완전히 같다 (회귀 없음)
+p1, p2, p3 = _img(600, 400, "red"), _img(600, 300, "green"), _img(600, 500, "blue")
+w0, h0 = EP.stitch([p1, p2, p3], _tmp / "ep_old.png")
+ok("episode.stitch: 인자 없이 부르면 예전처럼 여백 없이 붙는다",
+   (w0, h0) == (600, 1200), (w0, h0))
+
+# episode.stitch — gaps·ratios 를 주면 실제로 여백이 생기고 폭이 좁아진다
+gap2 = ST.gap_px(600, 2, ST.WEBTOON_GAP_RATIO)
+w1, h1 = EP.stitch([p1, p2, p3], _tmp / "ep_new.png",
+                   gaps=[2, 0, 1], ratios=[1.0, 0.5, 1.0],
+                   gap_table=ST.WEBTOON_GAP_RATIO)
+p2_h = round(300 * 300 / 600)   # 폭이 절반이 되면서 세로도 같은 비율로 준다
+ok("episode.stitch: gap_after=2 만큼 실제 여백이 생긴다",
+   h1 == 400 + gap2 + p2_h + 0 + 500, (h1, 400 + gap2 + p2_h + 500))
+sheet2 = Image.open(_tmp / "ep_new.png")
+y_mid = 400 + gap2 + p2_h // 2
+row2 = [sheet2.getpixel((x, y_mid)) for x in (0, 5, 594, 599)]
+ok("episode.stitch: 좁아진 장의 좌우는 배경색(흰)이다",
+   row2[0] == row2[1] == row2[2] == row2[3] == (255, 255, 255), row2)
+ok("episode.stitch: gap_after=0 인 자리는 정말 안 벌어진다 (경계가 바로 다음 색)",
+   sheet2.getpixel((300, 400 + gap2 + p2_h)) == (0, 0, 255))
+
+shutil.rmtree(_tmp, ignore_errors=True)
+
+# ---------------- 이슈 #111 — max_light_per_scene 캐시 무효화 안 됨 ----------------
+#
+# scenes.json 캐시 재사용 조건이 grouping: weight 일 때 실제로 묶음을 정하는
+# max_light_per_scene 을 안 보고 있었다 — 그 값을 바꿔도 예전 묶음을 그대로
+# 재사용했다.
+#
+# 가짜 텍스트 클라이언트로 실제 generate_scenes() 를 (dry-run 없이) 두 번
+# 부른다 — dry-run 은 캐시를 절대 안 쓰므로(항상 새로 그린다) 이 버그를
+# 재현하지 못한다. 진짜로 캐시 파일을 남기고, 그 파일을 다시 읽는 경로를 본다.
+import types
+import run as RUN
+import yaml as _yaml
+
+
+class _FakeClient:
+    """scene_gen 텍스트 호출을 흉내낸다. 모든 컷 번호에 자리표시자 패널을 준다 —
+    실제 묶음이 어떻게 나뉘든 fill_panels() 가 채울 수 있게."""
+    model = "test-model"
+
+    def describe(self):
+        return "가짜 클라이언트"
+
+    def complete(self, prompt):
+        panels = [{"cut_number": i, "scene": f"패널 {i}"} for i in range(1, 8)]
+        return (json.dumps({"scenes": [{"panels": panels}]}, ensure_ascii=False), {})
+
+
+_ycfg = _yaml.safe_load(Path("config.yaml").read_text(encoding="utf-8"))
+_ycfg["scene"] = dict(_ycfg["scene"])
+_ycfg["scene"]["grouping"] = "weight"
+_ycfg["scene"]["max_light_per_scene"] = 3
+_ycfg["style_suffix"] = RUN.select_style(_ycfg, "webtoon")
+
+_cuts = []
+for i in range(1, 8):
+    _cuts.append(SL.Cut(cut_number=i, description=f"컷 {i}",
+                        render_style="float" if i in (2, 3, 4, 5, 6) else "normal",
+                        weight="light" if i in (2, 3, 4, 5, 6) else "normal",
+                        gap_after=1, beat="build", size="normal"))
+_ep = SL.Episode(run_id="t111", episode=1, arc_order=1, title="시험",
+                 cuts=_cuts, source="w7", has_direction=True,
+                 setting={"place": "시험용 장소"})
+_ep_dir = Path(tempfile.mkdtemp())
+_args = types.SimpleNamespace(dry_run=False, regen_prompts=False)
+
+scenes1 = RUN.generate_scenes(_ycfg, _args, _ep, _ep_dir, lambda: _FakeClient())
+ok("캐시: max_light=3 일 때 묶음이 만들어지고 캐시가 남는다",
+   [len(s.cuts) for s in scenes1] == [1, 3, 2, 1] and (_ep_dir / SG.CACHE_FILE).exists(),
+   [len(s.cuts) for s in scenes1])
+_cache1 = json.loads((_ep_dir / SG.CACHE_FILE).read_text(encoding="utf-8"))
+ok("캐시: max_light_per_scene 값 자체가 캐시 파일에 저장된다",
+   _cache1.get("max_light_per_scene") == 3, _cache1.get("max_light_per_scene"))
+
+
+def _no_client():
+    raise AssertionError("캐시를 재사용해야 하는데 텍스트 클라이언트를 새로 불렀다")
+
+
+scenes_same = RUN.generate_scenes(_ycfg, _args, _ep, _ep_dir, _no_client)
+ok("캐시: 값이 그대로면 재사용한다 (텍스트 클라이언트를 다시 안 부른다)",
+   [len(s.cuts) for s in scenes_same] == [1, 3, 2, 1])
+
+_ycfg2 = dict(_ycfg); _ycfg2["scene"] = dict(_ycfg["scene"])
+_ycfg2["scene"]["max_light_per_scene"] = 2      # 값을 바꿨다 — 묶음이 달라져야 한다
+scenes2 = RUN.generate_scenes(_ycfg2, _args, _ep, _ep_dir, lambda: _FakeClient())
+ok("캐시: max_light_per_scene 을 바꾸면 캐시를 버리고 다시 묶는다",
+   [len(s.cuts) for s in scenes2] == [1, 2, 2, 1, 1], [len(s.cuts) for s in scenes2])
+_cache2 = json.loads((_ep_dir / SG.CACHE_FILE).read_text(encoding="utf-8"))
+ok("캐시: 갱신된 max_light_per_scene 값이 캐시 파일에도 새로 저장된다",
+   _cache2.get("max_light_per_scene") == 2, _cache2.get("max_light_per_scene"))
+
+shutil.rmtree(_ep_dir, ignore_errors=True)
+
+# ---------------- 이슈 #112 — --sheet-only --cuts 가 episode.png 를 부분 컷으로 덮어씀 ----------------
+#
+# 메인 생성 경로는 --cuts 로 몇 컷만 다시 뽑아도 조립(episode.png)에는 화
+# 전체(all_cuts)를 넘긴다 — 컷 하나만 다시 뽑아도 최종본이 그 한 장으로
+# 덮어써지던 예전 버그의 수정이다. 그런데 --sheet-only 분기만 이 원칙이
+# 빠져서, 필터된 cuts 를 write_strip 에 그대로 넘겼다. main() 을 실제로
+# 불러 재현한다(가짜 조건 A 컷 이미지 5장 + --sheet-only --cuts 2-3).
+import contextlib, io, sys as _sys
+import run as RUN2
+
+_repro_run = "__repro112__"
+_story_root = Path("..", "story-harness", "runs", _repro_run).resolve()
+shutil.rmtree(_story_root, ignore_errors=True)
+(_story_root / "webtoon").mkdir(parents=True)
+_repro_cuts = [{"cut_number": i, "description": f"컷 {i} 설명", "dialogue": "",
+               "beat": "build", "size": "normal", "shot": "중간", "angle": "수평",
+               "transition": "장면" if i == 1 else "동작", "render_style": "normal",
+               "gap_after": 1, "scene_break": i % 2 == 0, "gaze": "down", "zone": "z1"}
+              for i in range(1, 6)]
+(_story_root / "webtoon" / "ep01_cuts.json").write_text(
+    json.dumps({"cuts": _repro_cuts}, ensure_ascii=False), encoding="utf-8")
+(_story_root / "p1.json").write_text(json.dumps({
+    "name": "테스트", "appearance_en": "a test character", "gender": "female",
+    "color_palette": {"hair": "black", "eyes": "brown", "skin": "fair",
+                      "outfit_main": "gray", "outfit_sub": "white", "accent": "red"},
+    "design_details": ["a red pin", "round glasses", "a blue scarf"],
+}, ensure_ascii=False), encoding="utf-8")
+
+_repro_ep_dir = Path("outputs", _repro_run, "ep1")
+shutil.rmtree(_repro_ep_dir, ignore_errors=True)
+(_repro_ep_dir / "A").mkdir(parents=True)
+(_repro_ep_dir / "prompts.json").write_text(
+    json.dumps({"cuts": _repro_cuts}, ensure_ascii=False), encoding="utf-8")
+for i in range(1, 6):
+    Image.new("RGB", (600, 400 + i * 10), (10 * i, 100, 200)).save(
+        _repro_ep_dir / "A" / f"cut{i}_c1.png")
+
+_saved_argv = _sys.argv
+_sys.argv = ["run.py", "--run-id", _repro_run, "--episode", "1",
+            "--sheet-only", "--cuts", "2-3", "--style", "webtoon"]
+try:
+    with contextlib.redirect_stdout(io.StringIO()):
+        RUN2.main()
+finally:
+    _sys.argv = _saved_argv
+
+_ep_png = Image.open(_repro_ep_dir / "episode.png")
+# 필터(--cuts 2-3)대로 됐다면 컷 2개(420+430+여백 하나)만 붙어 훨씬 짧다.
+# 고쳤다면 화 전체 5개(410+420+430+440+450 + 여백 4개)가 다 붙는다.
+_expect_h = sum(400 + i * 10 for i in range(1, 6)) + 4 * ST.gap_px(600, 1)
+ok("#112: --sheet-only --cuts 로 걸러도 episode.png 는 화 전체를 다시 잇는다",
+   _ep_png.size == (600, _expect_h),
+   f"실제 {_ep_png.size}, 기대 (600, {_expect_h}) — 컷 2개만 붙었다면 이 값보다 훨씬 작다")
+
+shutil.rmtree(_story_root, ignore_errors=True)
+shutil.rmtree(_repro_ep_dir, ignore_errors=True)
+
+# ---------------- 이슈 #113 — 후보 여러 장을 대비한 하드코딩 정리 ----------------
+#
+# 지금은 후보를 1장만 뽑아서 `_c1` 하드코딩과 채택 로직의 결과가 같다. 후보가
+# 2장 이상이 되는 순간 "사람이 고른 후보"가 아니라 "무조건 1번"이 나가게 되는
+# 자리들을 미리 막는다. picks.csv 를 만들어 두고 c2 를 고른 뒤 확인한다.
+import csv as _csv
+import stripview as SV
+import report as RP
+
+_p113 = Path(tempfile.mkdtemp())
+(_p113 / "A").mkdir()
+for _k in (1, 2):
+    Image.new("RGB", (300, 200), (0, 0, 0) if _k == 1 else (255, 255, 255)).save(
+        _p113 / "A" / f"cut1_c{_k}.png")
+with (_p113 / "picks.csv").open("w", encoding="utf-8", newline="") as _fh:
+    _w = _csv.DictWriter(_fh, fieldnames=["condition", "cut_number", "candidate"])
+    _w.writeheader()
+    _w.writerow({"condition": "A", "cut_number": "1", "candidate": "2"})
+
+ok("#113: picks.csv 가 채택 후보를 정확히 읽힌다",
+   RP.load_picks(_p113).get(("A", 1)) == 2, RP.load_picks(_p113))
+
+_view = SV.build(_p113, {"run_id": "r", "episode": 1, "title": "t"},
+                [{"cut_number": 1, "description": "컷 1", "gap_after": 1}], "A")
+_html = _view.read_text(encoding="utf-8")
+ok("#113: strip.html 이 채택본(c2)을 쓴다 (예전에는 _c1 고정)",
+   "cut1_c2.png" in _html and "cut1_c1.png" not in _html,
+   "c2 있음" if "cut1_c2.png" in _html else "c1 이 그대로 박혀 있음")
+
+# 채택 파일이 사라진 경우엔 조용히 c1 으로 되돌아가야 한다 (화면이 비면 안 된다)
+(_p113 / "A" / "cut1_c2.png").unlink()
+_view2 = SV.build(_p113, {"run_id": "r", "episode": 1, "title": "t"},
+                 [{"cut_number": 1, "description": "컷 1", "gap_after": 1}], "A")
+ok("#113: 채택 파일이 없으면 c1 으로 되돌아간다",
+   "cut1_c1.png" in _view2.read_text(encoding="utf-8"))
+
+shutil.rmtree(_p113, ignore_errors=True)
+
+# 세 번째 항목(`charsheet.Sheet` 에 run_dir 이 없어서 '.' 로 떨어진다)은
+# **사실이 아니었다** — run_dir 은 Sheet 의 필수 필드다. 다시 그 결론이 나지
+# 않게 못 박아 둔다.
+ok("#113: charsheet.Sheet 는 run_dir 을 실제로 갖는다 (이슈의 세 번째 항목은 오진)",
+   C.load(Path("/tmp/__no_such_runs_root__"), "somerun").run_dir.name == "somerun")
+
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

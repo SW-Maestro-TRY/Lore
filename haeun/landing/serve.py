@@ -16,23 +16,83 @@ import base64
 import io
 import json
 import mimetypes
+import os
 import re
 import sys
 import threading
 import webbrowser
+from html import escape as html_escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, quote
 
+import accounts
+import credits
+import overlay
 import pipeline
+import watermark
 
 HERE = Path(__file__).resolve().parent
 WEB = HERE / "web"
+# 화면 구경용으로 만들어 두는 것들. jobs/ 는 gitignore 라 저장소가 안 더러워진다.
+DEMO_DIR = HERE / "jobs" / "_demo"
 MAX_PHOTO_BYTES = 6 * 1024 * 1024
 
 runner = pipeline.Runner()
 _thumb_lock = threading.Lock()
 _warned_no_pillow = False
+
+
+# --------------------------------------------------------------------------- #
+# 공유 링크의 미리보기 (Open Graph)
+# --------------------------------------------------------------------------- #
+#
+# 카톡·트위터·디스코드에 링크를 붙이면 그쪽 크롤러가 주소를 한 번 받아 가서
+# 미리보기 카드를 만든다. **크롤러는 자바스크립트를 안 돌린다** — app.js 가
+# 화면에 그리는 제목·그림은 크롤러에게 안 보이고, 정적 index.html 의 기본
+# <title> 만 읽어서 어느 작품이든 "LORE" 라고만 뜬다.
+#
+# 그래서 ?run= 이 붙은 주소일 때만 서버가 <head> 에 태그를 박아서 내보낸다.
+# 파일을 고치는 것이 아니라 내보낼 때 문자열 하나를 끼우는 것이라, 화면 쪽
+# 코드는 이것을 몰라도 된다.
+
+OG_MARK = "</head>"
+
+
+def og_tags(meta: dict, base: str) -> str:
+    """공유 미리보기 태그. meta 는 pipeline.share_meta() 가 준 것."""
+    ep, rid = meta["episode"], meta["run_id"]
+    who = meta.get("character") or ""
+    title = meta.get("title") or f"{ep}화"
+    # "모모 · 약속의 무게, 장난의 시작" — 누구 이야기인지가 제목 앞에 와야
+    # 카드만 보고도 자기 작품인지 안다.
+    head = f"{who} · {title}" if who else title
+    full = f"{head} — LORE"
+    desc = (meta.get("logline") or "").strip()
+    if not desc:
+        # 로그라인이 없는 옛 run 도 있다. 빈 설명보다는 장르라도 말한다.
+        genre = (meta.get("genre") or "").strip()
+        desc = f"{genre} 웹툰" if genre else "캐릭터 한 명으로 만든 웹툰 한 화."
+    img = (f"{base}/api/runs/{quote(rid, safe='')}/page/{meta['cover_page']}"
+           f"?w=1080&ep={ep}")
+    url = f"{base}/works?run={quote(rid, safe='')}&ep={ep}"
+    e = html_escape
+    return (
+        f'<meta property="og:type" content="article">\n'
+        f'<meta property="og:site_name" content="LORE">\n'
+        f'<meta property="og:title" content="{e(full, quote=True)}">\n'
+        f'<meta property="og:description" content="{e(desc, quote=True)}">\n'
+        f'<meta property="og:image" content="{e(img, quote=True)}">\n'
+        f'<meta property="og:url" content="{e(url, quote=True)}">\n'
+        # 웹툰 한 장은 세로로 아주 길다. summary_large_image 로 주면 트위터가
+        # 가로로 넓게 잘라서 첫 컷만 보이는데, 그게 세로 전체를 우겨넣어
+        # 알아볼 수 없게 줄이는 것보다 낫다.
+        f'<meta name="twitter:card" content="summary_large_image">\n'
+        f'<meta name="twitter:title" content="{e(full, quote=True)}">\n'
+        f'<meta name="twitter:description" content="{e(desc, quote=True)}">\n'
+        f'<meta name="twitter:image" content="{e(img, quote=True)}">\n'
+        f"<title>{e(full)}</title>\n"
+    )
 
 
 def warn_no_pillow() -> None:
@@ -98,12 +158,73 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionAbortedError):
             pass
 
-    def _json(self, obj, code: int = 200) -> None:
+    def _json(self, obj, code: int = 200, headers: dict[str, str] | None = None) -> None:
         self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
-                   "application/json; charset=utf-8")
+                   "application/json; charset=utf-8", headers)
 
-    def _error(self, code: int, message: str) -> None:
-        self._json({"error": message}, code)
+    def _error(self, code: int, message: str, **extra) -> None:
+        self._json({"error": message, **extra}, code)
+
+    def _base_url(self) -> str:
+        """이 요청이 온 주소의 뿌리. og:image·og:url 은 절대 주소여야 한다.
+
+        프록시 뒤에 서면 브라우저가 본 주소와 서버가 들은 주소가 다르다 —
+        앞에서 넘겨주는 값이 있으면 그쪽을 믿는다.
+        """
+        # 공개 주소를 못박아 둔 곳이 있으면 그것이 이긴다. 공유가 실제로
+        # 되려면 남이 열 수 있는 주소여야 하는데, 여기서 들리는 것은 개발 중에
+        # 127.0.0.1 이고 사설망에서는 192.168.x 다 — 그 주소를 카톡에 보내면
+        # 받은 사람은 아무것도 못 연다. 배포하면 LORE_PUBLIC_URL 에 도메인을
+        # 넣는다(#96).
+        fixed = os.environ.get("LORE_PUBLIC_URL", "").strip().rstrip("/")
+        if fixed:
+            return fixed
+        host = (self.headers.get("X-Forwarded-Host")
+                or self.headers.get("Host") or "127.0.0.1")
+        scheme = self.headers.get("X-Forwarded-Proto") or "http"
+        return f"{scheme}://{host.split(',')[0].strip()}"
+
+    def _page(self, path: Path, run_id: str = "", episode: int = 1) -> None:
+        """index.html 을 내보낸다. ?run= 이 있으면 공유 미리보기 태그를 끼워서.
+
+        태그는 파일에 안 남기고 내보낼 때만 끼운다 — 주소마다 값이 다르므로
+        파일 하나에 박을 수가 없다.
+        """
+        meta = pipeline.share_meta(run_id, episode) if run_id else None
+        if not meta:
+            return self._file(path)        # 없는 작품이면 평소 화면 그대로
+        try:
+            html = path.read_text(encoding="utf-8")
+        except OSError:
+            return self._file(path)
+        # 원래 <title> 은 지운다 — 안 지우면 둘이 남고 브라우저는 앞엣것을 쓴다.
+        html = re.sub(r"<title>.*?</title>\s*", "", html, count=1, flags=re.S)
+        block = og_tags(meta, self._base_url())
+        html = html.replace(OG_MARK, block + OG_MARK, 1)
+        self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
+
+    # ---- 계정 세션(쿠키) ---------------------------------------------------- #
+    #
+    # 로그인 안 해도 웹툰은 그대로 만든다 — 계정은 "이 작품 나중에도 찾기"
+    # 용 선택 기능이라, 세션 쿠키가 없어도 대부분의 자리는 그냥 게스트로 본다.
+
+    def _session_cookie(self) -> str | None:
+        raw = self.headers.get("Cookie", "")
+        for part in raw.split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == accounts.SESSION_COOKIE:
+                return v
+        return None
+
+    def _account_key(self) -> str | None:
+        return accounts.session_nickname_key(self._session_cookie())
+
+    def _set_session_header(self, token: str) -> dict[str, str]:
+        return {"Set-Cookie": f"{accounts.SESSION_COOKIE}={token}; Path=/; "
+                              f"Max-Age={accounts.SESSION_MAX_AGE}; SameSite=Lax; HttpOnly"}
+
+    def _clear_session_header(self) -> dict[str, str]:
+        return {"Set-Cookie": f"{accounts.SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly"}
 
     def _file(self, path: Path, download: str = "") -> None:
         if not path.exists() or not path.is_file():
@@ -121,6 +242,23 @@ class Handler(BaseHTTPRequestHandler):
                 f'attachment; filename="{plain}"; '
                 f"filename*=UTF-8''{quote(download, safe='')}")
         self._send(200, path.read_bytes(), ctype, headers)
+
+    def _demo_episode(self) -> None:
+        """샘플 장 -> 한 편 -> 워터마크. 결과 화면 목업의 내려받기가 쓴다."""
+        scenes = sorted((WEB / "samples" / "mock").glob("scene*.jpg"),
+                        key=lambda p: int(re.sub(r"\D", "", p.stem) or 0))
+        if not scenes:
+            return self._error(404, "샘플이 없습니다")
+        DEMO_DIR.mkdir(parents=True, exist_ok=True)
+        out = DEMO_DIR / "episode.png"
+        newest = max(p.stat().st_mtime for p in scenes)
+        if not out.exists() or out.stat().st_mtime < newest:
+            try:
+                overlay._episode.stitch(scenes, out)
+            except Exception as exc:                      # noqa: BLE001
+                return self._error(500, f"샘플을 잇지 못했습니다: {exc}")
+        src = watermark.for_download(out, DEMO_DIR, "모모 · 1화")
+        return self._file(src, download="약속의_무게_1화.png")
 
     def _body(self) -> dict:
         length = int(self.headers.get("Content-Length") or 0)
@@ -182,14 +320,34 @@ class Handler(BaseHTTPRequestHandler):
         # 한 번도 안 돌려 본 사람도 결과물 화면을 그대로 볼 수 있어야 한다.
         if path in ("/editor", "/editor/", "/editor.html"):
             return self._file(WEB / "editor.html")
+        # 화면 구경 — **목업**. 기다리는 화면(루·진행 바·딴짓·만지기)을 실제
+        # 생성 없이 가짜 진행으로 돌려 본다. 과금 없음.
+        if path in ("/demo", "/demo/", "/demo.html"):
+            return self._file(WEB / "demo.html")
+        # 결과 화면 **목업**. 실제 생성 없이 완성본 화면을 그대로 본다 — 같은
+        # index.html·app.js 를 쓰고, 데이터만 web/samples/mock.json 에서 온다.
+        if path in ("/demo/result", "/demo/result/"):
+            return self._file(WEB / "index.html")
+        # 마이페이지 — 로그인한 사람이 저장해 둔 작품. 목업도 같은 파일이다.
+        if path in ("/mypage", "/mypage/", "/demo/mypage", "/demo/mypage/"):
+            return self._file(WEB / "index.html")
+        # 목업의 "내려받기". 샘플 장을 한 편으로 이어 붙인 뒤 **실제 내려받기와
+        # 똑같은 길**로 내보낸다 — 그래야 워터마크가 붙은 모습이 그대로 보인다.
+        if path == "/api/demo/episode.png":
+            return self._demo_episode()
         # 이미 만들어 둔 결과물을 바로 여는 자리. 같은 index.html 인데,
         # app.js 가 주소를 보고 폼 대신 결과 화면부터 띄운다.
         if path in ("/result", "/result/"):
             return self._file(WEB / "index.html")
         # 내가 만든 웹툰 전부 — 완성본을 훑어보는 목록. job 을 거치지 않는다
         # (하네스를 직접 돌렸거나 이어 만든 회차도 여기 나와야 한다).
+        #
+        # **공유 링크가 닿는 자리이기도 하다.** ?run= 이 붙어 있으면 남이 보낸
+        # 링크를 열었다는 뜻이라, 크롤러가 미리보기를 만들 수 있게 태그를 실어
+        # 보낸다(_page). 사람이 열면 app.js 가 그 작품 완성본을 바로 띄운다.
         if path in ("/works", "/works/"):
-            return self._file(WEB / "index.html")
+            return self._page(WEB / "index.html",
+                              (query.get("run") or [""])[0], self._ep(query))
         if path.startswith("/static/"):
             rel = path[len("/static/"):]
             target = (WEB / rel).resolve()
@@ -210,7 +368,79 @@ class Handler(BaseHTTPRequestHandler):
                 # 작가 규칙 글자수 상한 — 화면이 남은 글자수를 보여줄 근거
                 "memory_always_max": pipeline.MEMORY_ALWAYS_MAX,
                 "memory_keyword_max": pipeline.MEMORY_KEYWORD_MAX,
+                # 카카오톡 공유는 카카오 SDK 를 써야 하고, developers.kakao.com
+                # 에서 받은 JavaScript 키 + **등록된 도메인**이 있어야 한다.
+                # 키가 없으면 화면이 그 단추를 아예 안 그린다 — 눌러도 안 되는
+                # 단추를 두면 고장으로 읽힌다.
+                "kakao_js_key": os.environ.get("KAKAO_JS_KEY", "").strip(),
+                # 공유 링크에 쓸 공개 주소. 비어 있으면 화면이 지금 보고 있는
+                # 주소를 쓴다(개발 중에는 그것이 localhost 다).
+                "public_url": os.environ.get("LORE_PUBLIC_URL", "").strip().rstrip("/"),
+                # 일반/전문 모드. 어느 단계에서 사람을 세우는지를 화면이 베껴
+                # 두지 않게 서버가 준다 — 온보딩의 "무엇이 다른가" 설명과 실제
+                # 동작이 갈라지면, 고른 사람이 속은 것이 된다.
+                "modes": {
+                    "simple": pipeline.checkpoints({}),
+                    "expert": pipeline.checkpoints({"expert": True}),
+                },
+                "art_qa_regen_default": pipeline.ART_QA_REGEN_DEFAULT,
+                "art_qa_regen_max": pipeline.ART_QA_REGEN_MAX,
+                # 카카오톡 공유는 카카오 SDK 를 써야 하고, 그러려면
+                # developers.kakao.com 에서 받은 JavaScript 키와 **등록된
+                # 도메인**이 있어야 한다. 키가 없으면 화면이 그 단추를 아예 안
+                # 그린다 — 눌러도 안 되는 단추를 두면 고장으로 읽힌다.
+                # 키가 생기면 KAKAO_JS_KEY 를 넣고 서버를 다시 켜면 된다.
+                "kakao_js_key": os.environ.get("KAKAO_JS_KEY", "").strip(),
+                "title_max": pipeline.TITLE_MAX,
+                # 크레딧 — 값 자체는 credits.py 가 유일한 출처. 화면의 비용
+                # 표시(−N 크레딧)가 실제로 빠지는 값과 어긋나지 않게 여기서 받는다.
+                "credit_cost": {
+                    "full": credits.CREDIT_FULL,
+                    "preview": credits.CREDIT_PREVIEW,
+                    "webtoon_mult": credits.CREDIT_WEBTOON_MULT,
+                },
+                "credit_packages": credits.PACKAGES,
+                "account_photo_presets": accounts.PRESET_PHOTOS,
             })
+
+        # 잔액 — uid 는 브라우저(localStorage)가 만들어 붙인다(계정이 없어서).
+        if path == "/api/credits":
+            uid = (query.get("uid") or [""])[0]
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            return self._json({"balance": credits.balance(uid)})
+
+        # ---- 계정(선택 기능) ------------------------------------------------ #
+        #
+        # 로그인 안 해도(게스트) 웹툰은 그대로 만들 수 있다 — 여기 자리들은
+        # "이 작품 나중에도 찾기" 를 원하는 사람만 쓴다.
+        if path == "/api/account/me":
+            key = self._account_key()
+            if not key:
+                return self._json({"logged_in": False})
+            account = accounts.get_account(key)
+            if not account:
+                return self._json({"logged_in": False})
+            return self._json({"logged_in": True, **accounts.public_info(key, account)})
+
+        m = re.fullmatch(r"/api/account/avatar/([\w-]+)", path)
+        if m:
+            src = accounts.AVATARS_DIR / f"{m.group(1)}.jpg"
+            if not src.exists():
+                return self._error(404, "사진이 없습니다")
+            return self._file(src)
+
+        # 계정에 담아둔 작품 — list_runs() 를 재사용해서 claimed_runs 로 거른다.
+        # run 자체에 소유자 개념을 새로 넣지 않는다(기존 목록·편집기가
+        # run_id 만으로 도는 구조를 그대로 두고, "누구 것" 만 계정 쪽에 얹는다).
+        if path == "/api/account/works":
+            key = self._account_key()
+            if not key:
+                return self._error(401, "로그인이 필요합니다")
+            account = accounts.get_account(key)
+            claimed = set((account or {}).get("claimed_runs", []))
+            runs = [r for r in pipeline.list_runs(limit=200) if r["run_id"] in claimed]
+            return self._json({"runs": runs})
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
         # 작업(Job)을 거치지 않는다 — 하네스를 직접 돌린 run 도 똑같이 열린다.
@@ -238,7 +468,10 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/runs/([\w.-]+)/episode\.png", path)
         if m:
             ep = self._ep(query)
-            src = pipeline.episode_dir(m.group(1), ep) / "episode.png"
+            ep_dir = pipeline.episode_dir(m.group(1), ep)
+            # 나가는 파일에만 LORE 표시를 얹는다 (watermark.py 머리말 참고).
+            src = watermark.for_download(
+                ep_dir / "episode.png", ep_dir, pipeline.episode_caption(m.group(1), ep))
             return self._file(src, download=pipeline.episode_filename(m.group(1), ep))
 
         # 편집실에서 얹은 말풍선·스티커. 브라우저가 아니라 **작품 폴더**에 있어서
@@ -255,6 +488,9 @@ class Handler(BaseHTTPRequestHandler):
             src = pipeline.baked_episode(m.group(1), ep)
             if not src:
                 return self._error(404, "아직 구운 그림이 없습니다")
+            src = watermark.for_download(
+                src, pipeline.episode_dir(m.group(1), ep),
+                pipeline.episode_caption(m.group(1), ep))
             return self._file(src, download=pipeline.episode_filename(
                 m.group(1), ep, baked=True))
 
@@ -427,7 +663,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(404, "아직입니다")
             # 회차를 무시하면 2화 작업이 1화 파일을 내려받는다 — episode_dir 의
             # 기본값이 ep1 이라 조용히 틀린 파일이 나간다.
-            src = pipeline.episode_dir(job.run_id, job.episode) / "episode.png"
+            ep_dir = pipeline.episode_dir(job.run_id, job.episode)
+            src = watermark.for_download(
+                ep_dir / "episode.png", ep_dir,
+                pipeline.episode_caption(job.run_id, job.episode))
             return self._file(src, download=pipeline.episode_filename(
                 job.run_id, job.episode))
 
@@ -435,6 +674,104 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:                                  # noqa: N802
         url = urlparse(self.path)
+
+        # ---- 계정(선택 기능) ------------------------------------------------ #
+        if url.path == "/api/account/signup":
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            account, err = accounts.signup(str(body.get("nickname") or ""),
+                                           str(body.get("password") or ""),
+                                           body.get("photo"),
+                                           bool(body.get("agree_terms")))
+            if err:
+                return self._error(400, err)
+            token = accounts.create_session(account["key"])
+            return self._json({"logged_in": True, **account},
+                              headers=self._set_session_header(token))
+
+        if url.path == "/api/account/login":
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            account, err = accounts.verify_password(str(body.get("nickname") or ""),
+                                                     str(body.get("password") or ""))
+            if err:
+                return self._error(401, err)
+            token = accounts.create_session(account["key"])
+            return self._json({"logged_in": True, **account},
+                              headers=self._set_session_header(token))
+
+        if url.path == "/api/account/logout":
+            accounts.destroy_session(self._session_cookie())
+            return self._json({"ok": True}, headers=self._clear_session_header())
+
+        if url.path == "/api/account/photo":
+            key = self._account_key()
+            if not key:
+                return self._error(401, "로그인이 필요합니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            ok, err = accounts.set_photo(key, body.get("photo") or {})
+            if not ok:
+                return self._error(400, err)
+            account = accounts.get_account(key)
+            return self._json({"logged_in": True, **accounts.public_info(key, account)})
+
+        # 결과 화면의 "계정에 담아두기". 로그인이 안 돼 있으면 여기서 막고,
+        # 화면이 그 응답을 보고 로그인/회원가입 모달을 연다.
+        if url.path == "/api/account/claim":
+            key = self._account_key()
+            if not key:
+                return self._error(401, "로그인이 필요합니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            run_id = str(body.get("run_id") or "")
+            if not re.fullmatch(r"[\w.-]+", run_id):
+                return self._error(400, "run_id 가 없습니다")
+            accounts.claim_run(key, run_id)
+            return self._json({"ok": True})
+
+        # ---- 크레딧 · 프리토타이핑 결제 ----------------------------------- #
+        #
+        # "충전하기" 를 누른 순간(카드 고르기 전)과, 카드사를 골라 결제를
+        # 끝낸 순간을 따로 기록한다 — 이 둘의 차이가 "몇 명이 눌렀는데 몇
+        # 명이 실제로 끝까지 갔는가"(클릭률)다.
+        if url.path == "/api/credits/charge-click":
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            uid = str(body.get("uid") or "")
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            credits.log_event("charge_click", uid)
+            return self._json({"ok": True})
+
+        if url.path == "/api/credits/charge":
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            uid = str(body.get("uid") or "")
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            package_id = str(body.get("package_id") or "")
+            pkg, bal = credits.charge(uid, package_id)
+            if not pkg:
+                return self._error(400, "그런 상품이 없습니다")
+            # 카드사를 고른 것 = 결제를 끝낸 것(가짜 결제라 카드번호 입력은
+            # 없다). 실제 PG 응답이 아니라 여기서 바로 지급하고 로그를 남긴다.
+            credits.log_event("charge_success", uid, package_id=package_id,
+                              credits=pkg["credits"], price=pkg["price"])
+            return self._json({"balance": bal, "credits_added": pkg["credits"],
+                               "package": pkg})
 
         # 작가 규칙 저장. 상한을 넘으면 자르지 않고 거절한다 — 화면이 그 오류를
         # 그대로 보여줘야 작가가 자기 글이 어디까지 실리는지 안다.
@@ -518,8 +855,32 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "캐릭터를 알 수 있는 것이 하나는 필요합니다 — "
                                         "이름 · 설명 · 항목 · 사진 중 아무거나요.")
 
+            # 저작권 확인 — 회원가입 때 약관 동의(accounts.signup)와 별개로,
+            # 만들 때마다 짧게 다시 받는다. 로그인 여부와 무관하게 게스트도
+            # 걸린다(uid 는 있으므로).
+            if not form.pop("agree_ip", False):
+                return self._error(400, "저작권 확인에 동의해야 만들 수 있습니다")
+
+            # 크레딧 소진 — 화면의 비용 표시(costChip)와 같은 계산이다
+            # (credits.creation_cost). 잔액은 미리 확인만 하고, 실제로 떼는
+            # 것은 job 이 만들어진 **뒤**다 — job 생성이 실패했는데 이미
+            # 크레딧부터 떼면(환불 기능은 범위 밖이라) 사용자가 그냥 잃는다.
+            uid = str(form.pop("uid", "") or "")
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            cost = credits.creation_cost(bool(form.get("preview")),
+                                         str(form.get("layout_mode") or "fast"))
+            bal = credits.balance(uid)
+            if bal < cost:
+                return self._error(
+                    402, f"크레딧이 모자랍니다 (필요 {cost} · 보유 {bal})",
+                    reason="insufficient_credit", need=cost, balance=bal)
+
             job = runner.create(form, photo)
-            return self._json({"id": job.id, "queue_position": runner.position(job.id)})
+            _, bal = credits.spend(uid, cost)
+            accounts.log_ip_consent(uid, job.id)
+            return self._json({"id": job.id, "queue_position": runner.position(job.id),
+                               "credit_balance": bal})
 
         # ---- 장(Scene) 다시 그리기 ------------------------------------- #
         #
@@ -622,6 +983,36 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"id": job.id, "episode": job.episode,
                                "queue_position": runner.position(job.id)})
 
+        # 이어 그리기 — 미리보기로 앞 3컷을 본 뒤 "다음 장면도 볼까요?".
+        # 회차는 안 늘어나고 콘티도 안 만든다. 다음 3컷을 그리고 다시 잇는다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/continue", url.path)
+        if m:
+            run_id = m.group(1)
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            episode = int(body.get("episode") or 1)
+            drawn = pipeline.drawn_units(run_id, episode)
+            if not drawn:
+                return self._error(404, "아직 그린 장면이 없습니다")
+            total = pipeline.planned_cuts(run_id, episode)
+            cut_from = drawn * pipeline.CUTS_PER_SHEET + 1
+            if total and cut_from > total:
+                return self._error(409, "더 그릴 장면이 없습니다")
+            busy = [j for j in runner.jobs.values()
+                    if j.run_id == run_id and j.status in
+                    ("queued", "running", "awaiting_board_approval",
+                     "awaiting_story_approval", "awaiting_sheet_approval")]
+            if busy:
+                return self._error(409, "이 작품은 지금 만드는 중입니다")
+            try:
+                job = runner.create_more(run_id, cut_from)
+            except pipeline.Failed as exc:
+                return self._error(409, str(exc))
+            return self._json({"id": job.id, "cut_from": cut_from,
+                               "queue_position": runner.position(job.id)})
+
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/cancel", url.path)
         if m:
             job = runner.get(m.group(1))
@@ -647,10 +1038,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
             fields = body.get("fields")
             fields = fields if isinstance(fields, dict) else None
-            # 시트는 고른 항목·적은 말을 프롬프트로 보내지 않는다 (pipeline 의
-            # 시트 단계 주석 참고) — 기록만 하고, 실제 수정은 fields 가 한다.
             self._record_feedback(job, "sheet", decision, body)
-            job.decide_sheet(decision, fields)
+            # 고른 항목·적은 말을 기록만 하고 끝내지 않는다 — 지시문으로 옮겨
+            # 다음 판 시트 프롬프트에 싣는다(pipeline.sheet_corrections).
+            # 일반 모드에는 사양 수정 폼이 없어서, 이것이 사용자의 말이 그림에
+            # 닿는 유일한 길이다.
+            fixes = pipeline.sheet_corrections(
+                pipeline.clean_tags("sheet", body.get("tags")),
+                str(body.get("feedback") or ""))
+            job.decide_sheet(decision, fields, fixes)
             return self._json({"ok": True})
 
         # 스토리 확인 화면의 "이대로 진행" / "다시 만들기" 버튼 — 스토리 단계
@@ -690,6 +1086,53 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
             job.decide_board(decision, self._record_feedback(job, "board", decision, body))
             return self._json({"ok": True})
+
+        # 그림 검수 확인 화면의 "확인했습니다" 버튼 — 전문 모드에서만 뜬다.
+        #
+        # 앞의 셋과 달리 decision 을 안 받는다. 이 자리에는 되돌아갈 단계가
+        # 없다(그림은 이미 다 나왔다) — 여기서 할 수 있는 일은 "봤다"뿐이고,
+        # 실제로 고치는 것은 결과 화면의 장 단위 다시 그리기다. 고른 항목과
+        # 적은 말은 다음 판을 고칠 근거로 남긴다.
+        m = re.fullmatch(r"/api/jobs/([\w.-]+)/artqa-decision", url.path)
+        if m:
+            job = runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            if job.status != "awaiting_artqa_approval":
+                return self._error(409, "지금은 그림 검수 확인 단계가 아닙니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            self._record_feedback(job, "scene", "approve", body)
+            job.decide_artqa()
+            return self._json({"ok": True})
+
+        # 회차 제목 고치기. 모델이 지은 이름이 늘 맞지는 않고, 공유가 붙은
+        # 뒤로는 그 이름이 카톡·트위터 카드에 그대로 실린다.
+        #
+        # 빈 값을 보내면 지운다 — 모델이 지은 이름으로 되돌아간다. 그래서
+        # DELETE 를 따로 두지 않는다(되돌리기가 곧 빈 제목이다).
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/title", url.path)
+        if m:
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            ep = self._ep({**parse_qs(url.query),
+                           **({"ep": [str(body["episode"])]} if body.get("episode")
+                              else {})})
+            title = str(body.get("title") or "")
+            if len(title) > pipeline.TITLE_MAX * 4:
+                # 화면이 상한을 걸어 두지만 API 를 직접 부를 수도 있다. 자르기
+                # 전에 터무니없이 큰 것은 아예 안 받는다.
+                return self._error(400,
+                                   f"제목은 {pipeline.TITLE_MAX}자까지 적어 주세요")
+            try:
+                return self._json({"title": pipeline.set_user_title(
+                    m.group(1), ep, title)})
+            except pipeline.Failed as exc:
+                return self._error(404, str(exc))
 
         # 편집실에서 얹은 것을 작품 폴더에 저장한다. 그림은 안 건드린다 —
         # 굽는 것은 아래 /bake 이고, 저장은 굽지 않아도 남아야 한다.

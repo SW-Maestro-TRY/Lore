@@ -177,17 +177,53 @@ function paintLedger() {
 
 /* ------------------------------------------------------------------ 장 그리기 */
 
+/* ---- 대사 스크립트 ------------------------------------------------------- *
+ *
+ * 완성본 화면(읽는 자리)에 있던 것을 여기로 옮겼다. 대사를 확인하는 일은
+ * 읽는 일이 아니라 **고치는 일** 옆에 있어야 한다 — 말풍선을 얹으면서 원래
+ * 대사가 무엇이었는지 보는 자리다.
+ *
+ * 편집실의 data 는 완성본과 같은 컷 필드를 갖고 있어서(editor_data 의
+ * speaker·dialogue·narration·thought·sfx) 그리는 코드는 그대로 옮겨 왔다. */
+
+function scriptCut(c) {
+  const lines = [];
+  if (c.narration) lines.push(`<p class="script-line narration">${esc(c.narration)}</p>`);
+  if (c.dialogue)  lines.push(`<p class="script-line"><span class="who">${esc(c.speaker || "?")}</span> ${esc(c.dialogue)}</p>`);
+  if (c.thought)   lines.push(`<p class="script-line thought">(${esc(c.thought)})</p>`);
+  if (c.sfx)       lines.push(`<p class="script-line sfx">${esc(c.sfx)}</p>`);
+  if (!lines.length) lines.push(`<p class="script-line narration">— 대사 없음</p>`);
+  return `<div class="script-cut">
+    <div class="script-no">CUT ${String(c.no).padStart(2, "0")}${c.shot ? " · " + esc(c.shot) : ""}</div>
+    ${lines.join("")}
+    <p class="script-desc">${esc(c.description)}</p>
+  </div>`;
+}
+
+function paintScript() {
+  const body = $("#scriptBody");
+  if (!body || !data) return;
+  body.innerHTML = (data.scenes || []).map(s => `
+    <div class="script-page">
+      <div class="script-page-no">${s.no}번째 장 · 컷 ${s.cuts.map(c => c.no).join("·")}</div>
+      ${s.cuts.map(scriptCut).join("")}
+    </div>`).join("");
+}
+
 function render() {
   const ep = data.episode || EPISODE;
   $("#edTitle").textContent = data.title;
+  // 한 컬럼 머리에 들어가야 해서 한 줄로 줄인다 — 한 장에 몇 컷인지는 그림을
+  // 보면 바로 아는 것이라, 여기서까지 셀 필요가 없다.
   $("#edMeta").textContent =
-    `${data.character} · ${ep}화 · ${data.scenes.length}장 / ` +
-    `${data.scenes.reduce((n, s) => n + s.cuts.length, 0)}컷 · 한 장에 ${data.cuts_per_sheet}컷`;
-  $("#edGenre").textContent = `${data.genre} · ${data.style_label}`;
+    `${data.character} · ${ep}화 · ${data.scenes.length}장 ` +
+    `${data.scenes.reduce((n, s) => n + s.cuts.length, 0)}컷`;
+  // 그림체를 안 적어 둔 run 이 있다 — 빈 값을 그대로 이으면 "로맨스 판타지 · "
+  // 처럼 꼬리만 남는다.
+  $("#edGenre").textContent = [data.genre, data.style_label].filter(Boolean).join(" · ");
   $("#edEpisode").textContent = data.title;
   $("#edLogline").textContent = data.logline;
-  $("#edFootNote").textContent =
-    `여기까지가 ${ep}화입니다. 장 사이는 완성본과 같이 틈 없이 이어집니다.`;
+  $("#edFootNote").textContent = `여기까지가 ${ep}화입니다.`;
   paintEpTabs();
 
   $("#scenes").innerHTML = data.scenes.map(s => sceneCard(s)).join("");
@@ -195,6 +231,7 @@ function render() {
   wireScenes();
   // 지난 판은 서버에만 있다 — 목업에는 없다.
   if (RUN_ID) data.scenes.forEach(s => paintVersions(s.no));
+  paintScript();
 }
 
 /* 회차 고르개. 한 편뿐이면 안 그린다 — 고를 것이 없는 자리에 고르개를 두면
@@ -239,10 +276,6 @@ function sceneCard(s) {
       <button type="button" class="btn btn-quiet btn-sm" data-act="regen">
         다시 그리기${RUN_ID ? "" : ` <span class="cost">−${COST.regen} C</span>`}
       </button>
-      <label class="chk">
-        <input type="checkbox" data-nobubble ${st.noBubble ? "checked" : ""}>
-        글자 없이
-      </label>
       <span class="spacer"></span>
       <button type="button" class="btn btn-quiet btn-sm" data-act="fb">피드백</button>
     </div>
@@ -321,12 +354,6 @@ function wireScenes() {
       sc(no).fb[t.dataset.fbk] = t.value; save();
     }));
 
-    $("[data-nobubble]", el).addEventListener("change", e => {
-      sc(no).noBubble = e.target.checked; save();
-      toast(e.target.checked
-        ? "다음에 다시 그릴 때 말풍선 없이 그립니다. 대사는 오른쪽에서 얹으세요."
-        : "말풍선을 그림 안에 그립니다.");
-    });
   });
   setActive(activeScene);
 }
@@ -399,6 +426,9 @@ function askRegen(no, btn, cost, notes) {
   $("#regenAskSub").textContent = RUN_ID
     ? "이 장만 새로 굽습니다. 지금 그림은 지난 판으로 남아서 언제든 되돌릴 수 있습니다."
     : "샘플이라 실제로 그리지는 않습니다 — 화면만 흉내 냅니다.";
+  // 샘플에서는 굽지 않으니 비용 경고도 띄우지 않는다 — 바로 위 줄에
+  // "실제로 그리지는 않습니다" 라고 써 놓고 밑에서 비용을 경고하면 말이 어긋난다.
+  $(".ask-warn").hidden = !RUN_ID;
   paintAskTags();
   // 장 밑에 이미 적어 둔 것이 있으면 그대로 실어 준다. 여기서 고쳐도 되고,
   // 다 지우고 눌러도 된다.
@@ -425,7 +455,6 @@ function confirmAsk() {
   const st = sc(no);
   st.noBubble = textless; save();
   const el = $(`#scene-${no}`);
-  $("[data-nobubble]", el).checked = textless;
   $("[data-nobub]", el).hidden = !textless;
   closeAsk();
   regen(no, btn, cost, { feedback, textless, tags });
@@ -444,7 +473,7 @@ function regen(no, btn, cost, body) {
   const veil = document.createElement("div");
   veil.className = "regen-veil";
   veil.innerHTML = `<div class="spin"></div><div data-veil-msg>${no}번째 장을 다시 그리는 중…<br>
-    <small style="color:#9a9aa5">${esc(what.join(" · ").slice(0, 90))}</small></div>`;
+    <small class="veil-what">${esc(what.join(" · ").slice(0, 90))}</small></div>`;
   wrap.append(veil);
 
   if (!RUN_ID) {
@@ -486,7 +515,7 @@ async function realRegen(no, btn, body, veil, el) {
     try { s = await (await fetch(`/api/regens/${job.id}`)).json(); }
     catch { continue; }                       // 잠깐 끊겨도 다음 번에 이어진다
     if (msg && s.note) msg.innerHTML =
-      `${no}번째 장을 다시 그리는 중…<br><small style="color:#9a9aa5">${esc(s.note.slice(0, 90))}</small>`;
+      `${no}번째 장을 다시 그리는 중…<br><small class="veil-what">${esc(s.note.slice(0, 90))}</small>`;
     if (s.status === "done") {
       veil.remove();
       bustScene(no);
@@ -690,10 +719,43 @@ function paintDock() {
     addItem(b.dataset.add, b.dataset.variant || "", b.dataset.text)));
 }
 
+/* 도구 서랍 여닫기 — 오른쪽에서 밀려 나온다. 기본은 닫힘이라 그림이 먼저
+   보이고, 오른쪽 ☰ 를 눌러야 열린다. 속성·내역이 열릴 때는 저절로 열어 준다:
+   닫힌 채로 열면 눌러도 아무 일이 안 일어난 것처럼 보인다. */
+function setDock(open) {
+  const dock = $("#edDock"), close = $("#dockFold");
+  const opener = $("#dockOpen"), scrim = $("#dockScrim");
+  if (!dock) return;
+  dock.classList.toggle("is-open", open);
+  document.body.classList.toggle("dock-open-on", open);
+  if (scrim) scrim.hidden = !open;
+  if (opener) opener.setAttribute("aria-expanded", open ? "true" : "false");
+  if (close) close.setAttribute("aria-label", "도구 닫기");
+}
+
+/* 크레딧 내역은 **다른 모드**다 — 그림에 얹는 자리가 아니라 얼마 썼는지
+   보는 자리다. 그런데 예전에는 내역만 펴고 팔레트를 그대로 뒀더니, "내역" 을
+   눌렀는데 말풍선 목록이 같이 나왔다. 심지어 힌트("누르면 1번째 장에
+   올라갑니다")가 내역 위에 남아서 무엇을 누르라는 건지도 어긋났다.
+   여는 동안에는 얹는 도구를 통째로 접는다. */
+function setLedger(open) {
+  $("#dockLedger").hidden = !open;
+  for (const sel of ["#dockTabs", "#dockHint", "#dockGrid"]) {
+    const el = $(sel);
+    if (el) el.hidden = open;
+  }
+  // 속성 칸은 고른 요소가 있을 때만 뜨는 것이라, 닫을 때 무조건 펴면 안 된다.
+  if (open) $("#dockProps").hidden = true;
+  else paintProps();
+  if (open) setDock(true);
+}
+
 function paintProps() {
   const it = findItem();
-  $("#dockProps").hidden = !it;
+  // 내역을 보는 중에는 속성 칸을 끼워 넣지 않는다 (위 setLedger 참고).
+  $("#dockProps").hidden = !it || !$("#dockLedger").hidden;
   if (!it) return;
+  setDock(true);
   $("#propTitle").textContent =
     { bubble: "말풍선", sticker: "스티커", sfx: "효과음" }[it.type] || "요소";
   $("#propTextField").hidden = it.type === "sticker";
@@ -733,6 +795,7 @@ function showBaked(out) {
     <div class="bake-head">
       <b>${out.scenes.length}장을 구웠습니다</b>
       <span>${out.width}×${out.height}px · 얹은 것 ${out.items}개</span>
+      <span class="bake-wm">내려받는 파일에는 아래에 LORE 표시가 붙습니다 — 그만큼 세로가 조금 깁니다.</span>
     </div>
     ${gone}${skip}
     <div class="bake-acts">
@@ -761,8 +824,13 @@ function toast(msg) {
    cover_page 를 같이 준다). 그림이 아직 없으면 자리만 비워 두고 카드는 남긴다. */
 function workCard(r, current) {
   const on = r.run_id === current;
+  // loading="lazy" 를 안 쓴다. 이 목록은 **접힌 채로 시작**하는 서랍 안에 있고
+  // (setupWorksToggle 의 기본값 + .works-off 의 display:none), 브라우저는
+  // display:none 안의 lazy 이미지를 안 받는다 — 서랍을 펴도 그대로 빈 칸이라
+  // 어느 작품인지 그림으로 못 알아본다. 받아 오는 것은 w=160 짜리 축소본
+  // (17KB 안팎)이고 작품 수도 몇 개뿐이라, 미루는 이득보다 안 보이는 손해가 크다.
   const thumb = r.cover_page
-    ? `<img class="work-thumb" loading="lazy" alt=""`
+    ? `<img class="work-thumb" alt=""`
       + ` src="/api/runs/${encodeURIComponent(r.run_id)}/page/${r.cover_page}`
       + `?w=160&ep=${r.cover_episode || 1}">`
     : `<span class="work-thumb is-empty" aria-hidden="true">🖼</span>`;
@@ -799,14 +867,16 @@ async function paintWorks(current) {
   try { runs = (await (await fetch("/api/runs")).json()).runs || []; } catch { /* 아래에서 */ }
 
   if (runs === null) {
-    host.innerHTML = `<p class="ed-works-empty">작품 목록을 불러오지 못했습니다.`
-      + ` 서버(serve.py)가 떠 있는지 확인해 주세요.</p>`;
+    host.innerHTML = `<div class="lou-note">`
+      + `<img src="/static/lou/lou-error.png" alt="" aria-hidden="true">`
+      + `<p>목록을 불러오지 못했습니다.<br>서버가 떠 있는지 봐 주세요.</p></div>`;
     return;
   }
   if (!runs.length) {
     // 목록을 아예 지우지 않는다 — 자리가 사라지면 기능이 없는 것과 구별이 안 된다.
-    host.innerHTML = `<p class="ed-works-empty">아직 만든 웹툰이 없습니다.`
-      + `<br><a href="/">첫 작품 만들러 가기</a></p>`;
+    host.innerHTML = `<div class="lou-note">`
+      + `<img src="/static/lou/lou-empty.png" alt="" aria-hidden="true">`
+      + `<p>아직 만든 웹툰이 없어요.<br><a href="/">첫 작품 만들러 가기</a></p></div>`;
     return;
   }
   host.innerHTML = runs.map(r => workCard(r, current)).join("")
@@ -832,12 +902,17 @@ function setupWorksToggle() {
     body.classList.toggle("works-off", off);
     btn.setAttribute("aria-expanded", off ? "false" : "true");
   };
-  let off = false;
-  try { off = localStorage.getItem("lore_editor_works") === "off"; } catch { /* 비공개 창 */ }
+  // 기본은 **접힘**이다. 한 컬럼이라 목록을 펴 두면 정작 고칠 그림이 화면
+  // 밖으로 밀린다 — 작품은 한 번 고르면 볼 일이 없는 목록이다.
+  let off = true;
+  try { off = localStorage.getItem("lore_editor_works") !== "on"; } catch { /* 비공개 창 */ }
   apply(off);
   btn.addEventListener("click", () => {
     off = !off;
     apply(off);
+    // 목록은 머리 바로 밑에 펴진다 — 아래쪽 장을 보다가 눌렀으면 화면 밖이라
+    // 아무 일도 안 일어난 것처럼 보인다. 펼 때만 위로 데려간다.
+    if (!off) window.scrollTo({ top: 0 });
     try { localStorage.setItem("lore_editor_works", off ? "off" : "on"); } catch { /* 무시 */ }
   });
 }
@@ -870,12 +945,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 왼쪽 목록도 같이 지워져서 다른 작품을 고를 수가 없었다).
     const stage = $("#stageCol");
     const html =
-      `<p style="padding:60px;text-align:center;color:#969aa8">` +
-      (RUN_ID ? `<b>${esc(RUN_ID)}</b> 의 ${EPISODE}화를 열지 못했습니다.<br>`
-              + `그 회차에 콘티와 그려진 장이 있어야 합니다.`
-              : `목업 데이터를 읽지 못했습니다 (web/samples/mock.json).`) +
-      `<br><br>왼쪽 목록에서 다른 작품을 골라 보세요.` +
-      `<br><a href="/editor" style="color:#7aa2ff">샘플로 돌아가기</a></p>`;
+      `<div class="lou-note">` +
+      `<img src="/static/lou/lou-error.png" alt="" aria-hidden="true"><p>` +
+      (RUN_ID ? `${EPISODE}화를 열지 못했어요.<br>그 회차에 그려진 장이 있어야 합니다.`
+              : `목업 데이터를 읽지 못했어요.`) +
+      `<br><br>위 <b>작품</b>에서 다른 작품을 골라 보세요.` +
+      `<br><a href="/editor">샘플로 돌아가기</a></p></div>`;
     if (stage) stage.innerHTML = html;
     else document.body.innerHTML = html;
     return;
@@ -903,8 +978,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   render();
 
   $$(".dock-tab").forEach(b => b.addEventListener("click", () => {
-    tab = b.dataset.tab; paintDock();
+    tab = b.dataset.tab; paintDock(); setDock(true);
+    // 고른 것이 있으면 속성 칸이 위에 깔려 있어서, 갈래를 바꿔도 새 항목이
+    // 서랍 아래에 숨는다 — 서랍만 굴려서 항목이 보이게 한다(페이지는 그대로).
+    const dock = $("#edDock"), grid = $("#dockGrid");
+    if (!dock || !grid) return;
+    const g = grid.getBoundingClientRect(), d = dock.getBoundingClientRect();
+    if (g.top > d.bottom - 60) dock.scrollTop += g.top - d.top - 8;
   }));
+  $("#dockFold")?.addEventListener("click", () => setDock(false));
+  $("#dockOpen")?.addEventListener("click", () => setDock(true));
+  $("#dockScrim")?.addEventListener("click", () => setDock(false));
   $("#showOverlay").addEventListener("change", () =>
     data.scenes.forEach(s => paintItems(s.no)));
 
@@ -955,13 +1039,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     paintProps();
   });
 
-  $("#ledgerBtn")?.addEventListener("click", () =>
-    { $("#dockLedger").hidden = !$("#dockLedger").hidden; });
-  $("#ledgerClose").addEventListener("click", () => { $("#dockLedger").hidden = true; });
+  $("#ledgerBtn")?.addEventListener("click", () => setLedger($("#dockLedger").hidden));
+  $("#ledgerClose").addEventListener("click", () => setLedger(false));
 
   // 저장은 항목을 건드릴 때마다 자동으로 된다(save() → pushSoon()). 이 단추는
   // **지금 당장** 올리고 그 결과를 말해 주는 자리다 — 자동 저장은 조용해서,
   // 창을 닫기 전에 확인하고 싶을 때 누를 곳이 있어야 한다.
+  $("#scriptBtn")?.addEventListener("click", () => {
+    const panel = $("#scriptPanel");
+    panel.hidden = !panel.hidden;
+  });
+  $("#scriptClose")?.addEventListener("click", () => { $("#scriptPanel").hidden = true; });
+
   $("#saveBtn").addEventListener("click", async () => {
     save();
     if (!RUN_ID) return toast("샘플입니다 — 얹은 것은 이 브라우저에만 저장됩니다.");
@@ -1017,6 +1106,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
       e.preventDefault(); $("#propDel").click();
     }
-    if (e.key === "Escape") $("#propClose").click();
+    if (e.key === "Escape") {
+      // 고른 것이 있으면 선택만 풀고, 없으면 서랍을 닫는다
+      if (sel) $("#propClose").click();
+      else setDock(false);
+    }
   });
 });

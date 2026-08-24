@@ -59,6 +59,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import overlay          # 편집실에서 얹은 것을 저장하고 그림에 굽는다
+import report           # picks.csv 읽기 — overlay 의 sys.path 설정 뒤에 와야 한다
 
 HERE = Path(__file__).resolve().parent
 JOBS_DIR = HERE / "jobs"
@@ -103,6 +104,68 @@ def layout_mode(form: dict[str, Any]) -> str:
     """폼의 layout_mode → fast | webtoon. 모르는 값은 fast (지금까지의 방식)."""
     v = str((form or {}).get("layout_mode") or "").strip().lower()
     return v if v in LAYOUT_MODES else "fast"
+
+
+# --------------------------------------------------------------------------- #
+# 일반 모드 · 전문 모드
+# --------------------------------------------------------------------------- #
+#
+# 만드는 사람은 두 부류다. 하나는 "알아서 잘 만들어 줘" 이고, 하나는 "내가
+# 정하겠다" 다. 지금까지는 뒤엣것 하나만 있었다 — 폼에 그림체·연출·등신 비율이
+# 다 펼쳐져 있고, 처음 온 사람은 그중 무엇을 골라야 하는지 알 수가 없다.
+#
+# 그래서 **기능을 두 벌 만들지 않는다.** 만드는 길(캐릭터 → 이야기 → 시트 →
+# 콘티 → 그림)은 하나뿐이고, 모드가 정하는 것은 두 가지뿐이다:
+#
+#   1. 폼에서 무엇을 **보여줄 것인가** — 일반은 안 보여주고 기본값으로 간다.
+#      (안 보여준다고 값이 사라지는 게 아니다. 같은 기본값이 들어간다.)
+#   2. 어느 단계에서 사람을 **세울 것인가** — 아래 checkpoints().
+#
+# 값 자체는 한 벌이라, 일반 모드로 만든 작품을 전문 모드로 이어 만들어도
+# (create_next 가 origin_form 을 물려받는다) 아무것도 안 깨진다.
+
+def expert_mode(form: dict[str, Any]) -> bool:
+    """전문 모드로 만드는 중인가. 모르면 일반 모드 — 기본이 안전한 쪽이다."""
+    return bool((form or {}).get("expert"))
+
+
+# 각 단계에서 "사람이 볼 때까지 멈출 것인가".
+#
+#   True  — 결과가 멀쩡해도 무조건 멈추고 사람에게 보여준다.
+#   False — 하네스 게이트가 소진돼(STATUS_HUMAN) 자동으로는 더 못 고칠 때만
+#           멈춘다. 지금까지의 동작이다.
+#
+# 시트는 두 모드 모두 True 다. "아예 다른 사람이 됐다"는 사고는 뒤 컷 전부를
+# 오염시키므로 일반 모드에서도 여기는 세워야 한다 — 다만 화면이 다르다.
+# 일반 모드는 이유 항목(FEEDBACK_TAGS["sheet"])을 고르고 다시 만들기만,
+# 전문 모드는 지금처럼 외형 사양을 직접 고치는 폼까지 연다.
+def checkpoints(form: dict[str, Any]) -> dict[str, bool]:
+    expert = expert_mode(form)
+    return {
+        "sheet": True,       # 두 모드 공통 — 얼굴이 틀어지면 전부가 틀어진다
+        "story": expert,
+        "board": expert,
+        "artqa": expert,
+    }
+
+
+# 그림 QA 가 한 장을 최대 몇 번까지 다시 그릴 것인가. 전문 모드에서만 고를 수
+# 있고, 그 밖에는 하네스에 맞춘 기본값 2 다. 0 이면 QA 는 돌되 다시 그리지
+# 않는다 — "무엇이 걸렸는지는 보고 싶지만 비용은 더 안 쓰겠다" 는 선택이다.
+ART_QA_REGEN_DEFAULT = 2
+ART_QA_REGEN_MAX = 4
+
+
+def art_qa_regen_max(form: dict[str, Any]) -> int:
+    if not expert_mode(form):
+        return ART_QA_REGEN_DEFAULT
+    try:
+        n = int((form or {}).get("art_qa_regen_max"))
+    except (TypeError, ValueError):
+        return ART_QA_REGEN_DEFAULT
+    return max(0, min(ART_QA_REGEN_MAX, n))
+
+
 # 비용 안내용 환율. webtoon-harness config.yaml 의 pricing.usd_to_krw 와 같은 값.
 USD_TO_KRW = 1400
 
@@ -173,6 +236,8 @@ TODO, ACTIVE, DONE, ERROR, SKIP = "todo", "active", "done", "error", "skip"
 # 목록에서 아예 뺀다 — SKIP 으로 두면 화면에 회색 줄로 남아서 "안 한 것"처럼
 # 보이는데, 실제로는 **할 필요가 없는** 것이다.
 NEXT_STAGE_KEYS = ("board", "art", "bind")
+# 이어 그리기 — 콘티는 이미 있고 **그림만 더 그린다**. 그래서 두 단계뿐이다.
+MORE_STAGE_KEYS = ("art", "bind")
 
 
 # --------------------------------------------------------------------------- #
@@ -191,7 +256,8 @@ def _replace_block(text: str, key: str, value: str) -> str:
 
 
 def build_config(job_dir: Path, style: str, head_ratio: str = "",
-                 genre: str = "", mode: str = "fast") -> Path:
+                 genre: str = "", mode: str = "fast",
+                 qa_regen_max: int = ART_QA_REGEN_DEFAULT) -> Path:
     """이 실행에만 쓸 config.yaml. 원본에서 몇 값만 바꾼다."""
     text = (WEBTOON / "config.yaml").read_text(encoding="utf-8")
 
@@ -242,7 +308,12 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
     #      (사용자 피드백)가 맡는 영역이고, 검수는 QA 지 예술 감독이 아니다.
     #      한도가 차도 그림은 버리지 않고 art_qa.json 에 남겨서, 결과 화면이
     #      "검수에서 잡았지만 못 고친 것"으로 보여준다.
-    text = _replace_block(text, "art_qa", "{enabled: true, regen_max: 2}")
+    #
+    #      다시 그리는 횟수는 전문 모드에서만 고를 수 있다(art_qa_regen_max).
+    #      일반 모드는 늘 2 — 고를 것을 안 주는 것이 이 모드의 뜻이고, 2 는
+    #      하네스가 정한 값이다. 검수 자체는 두 모드 모두 켠다.
+    text = _replace_block(
+        text, "art_qa", f"{{enabled: true, regen_max: {int(qa_regen_max)}}}")
     if head_ratio in ("sd", "md", "ld"):
         text = _replace_block(text, "head_ratio", head_ratio)
     if genre.strip():
@@ -261,14 +332,20 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
     #      좁다. 특히 낙차(3)가 폰 화면 하나를 못 채워서 "조금 넓은 여백"이
     #      된다. 아래 값은 0 / 128 / 256 / 720px 로, 각각 작법이 말하는
     #      빠른 동작(100~150) · 감정(200~300) · 낙차(600~800) 범위에 든다.
+    #    · stitch_gaps — 위 gap_ratio·light_width 를 **장과 장 사이 이어붙이기
+    #      (episode.stitch)에도 실제로 적용**한다. 이게 없으면 config 에 값만
+    #      채워질 뿐 정작 최종 이미지는 장끼리 무조건 틈 없이 붙는다 — 2026-08-23
+    #      감사에서 나온 값이 죽은 채로 있던 자리(이슈 #110).
     #
-    #    "빠르게"(scene 모드)에서는 둘 다 안 켠다 — 컷 사이 여백도 배경 연결도
-    #    한 캔버스 안에서 모델이 정하는 구조라 코드가 넣을 자리가 없다.
+    #    "빠르게"(scene 모드, 개수로 3컷씩 고정)에서는 셋 다 안 켠다 — 컷 사이
+    #    여백도 배경 연결도 한 캔버스 안에서 모델이 정하는 구조라 코드가 넣을
+    #    자리가 없다.
     if mode == "webtoon":
         text = _replace_block(text, "vertical_link", "true")
         text = re.sub(r"(?m)^  gap_ratio:.*$",
                       "  gap_ratio: {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}",
                       text, count=1)
+        text = re.sub(r"(?m)^  stitch_gaps:.*$", "  stitch_gaps: true", text, count=1)
         # 9. 묶기를 **무게**가 정하게 한다 — "한 장에 3컷" 도 "한 컷에 한 장" 도
         #    임의의 규칙이었다. 실제 웹툰은 컷마다 무게가 달라서, 스쳐 가는
         #    리액션과 판이 뒤집히는 컷이 같은 지면을 먹지 않는다.
@@ -390,6 +467,11 @@ class Job:
     # 그게 흔들린다. run_id 도 새로 파지 않고 이 값을 그대로 쓴다.
     episode: int = 1
 
+    # 이어 그리기 — 앞 3컷을 미리보기로 본 뒤 "다음 장면도 볼까요?" 를 누르면
+    # 여기에 다음 시작 컷 번호가 담긴다(4, 7, 10 …). 0 이면 보통 실행이다.
+    # 콘티·이야기·시트는 이미 있으므로 그림과 이어 붙이기만 다시 돈다.
+    cut_from: int = 0
+
     # queued | running | awaiting_story_approval | awaiting_board_approval |
     # awaiting_sheet_approval |
     # done | error | cancelled
@@ -425,18 +507,26 @@ class Job:
     sheet_approval: threading.Event = field(default_factory=threading.Event, repr=False)
     sheet_decision: str = field(default="", repr=False)
     sheet_edit_fields: dict[str, Any] | None = field(default=None, repr=False)
+    sheet_fixes: list[str] = field(default_factory=list, repr=False)
 
-    def decide_sheet(self, decision: str, fields: dict[str, Any] | None = None) -> None:
+    def decide_sheet(self, decision: str, fields: dict[str, Any] | None = None,
+                     fixes: list[str] | None = None) -> None:
         """승인 화면의 '이대로 진행'/'수정 후 다시 만들기' 클릭이 여기로 온다.
 
         fields 는 사람이 approvalSheet 화면에서 고친 p1.json 일부 필드(선택) —
         retry 일 때만 의미가 있다. approve 에 fields 가 오면 무시한다 (이미
         채택한 그림은 텍스트를 나중에 고쳐도 안 바뀌므로, 고친 걸 반영하려면
         다시 그려야 한다 — retry 경로로만 받는다).
+
+        fixes 는 고른 항목·적은 말에서 뽑은 지시문(sheet_corrections)이다.
+        fields 와 함께 오지만 가는 곳이 다르다 — fields 는 사양 자체를 바꾸고,
+        fixes 는 "같은 사양을 어느 쪽으로 다시 읽어라"를 프롬프트 끝에 붙인다.
+        일반 모드에는 fields 폼이 없으므로 그 모드에서는 fixes 만 간다.
         """
         with self._lock:
             self.sheet_decision = decision
             self.sheet_edit_fields = fields or None
+            self.sheet_fixes = list(fixes or [])
         self.sheet_approval.set()
 
     # awaiting_story_approval 용 — sheet_approval 과 같은 이유, 같은 방식.
@@ -465,6 +555,19 @@ class Job:
             self.board_note = note
         self.board_approval.set()
 
+    # awaiting_artqa_approval 용 — 그림이 다 나온 뒤, 끝났다고 하기 전에 한 번.
+    #
+    # 앞의 셋과 성격이 다르다. 여기는 **되돌아갈 단계가 없다** — 그림은 이미
+    # 다 그려졌고 다시 그리기는 장 단위로(결과 화면의 regen) 하는 일이다.
+    # 그래서 결정이 approve 하나뿐이고, 이 자리가 하는 일은 "그림 QA 가 무엇을
+    # 잡았고 무엇을 못 고쳤는지"를 끝나기 전에 반드시 한 번 보게 하는 것이다.
+    # 일반 모드는 이 자리를 안 세우고 결과 화면의 노트로만 알린다.
+    artqa_approval: threading.Event = field(default_factory=threading.Event, repr=False)
+
+    def decide_artqa(self) -> None:
+        """그림 검수 화면의 '확인했습니다' 클릭이 여기로 온다."""
+        self.artqa_approval.set()
+
     # ---- 상태 -------------------------------------------------------------- #
 
     @property
@@ -472,11 +575,20 @@ class Job:
         """이어 만들기인가 (2화 이상)."""
         return int(self.episode) > 1
 
+    @property
+    def is_more(self) -> bool:
+        """이어 그리기인가 (같은 화의 다음 컷들)."""
+        return int(self.cut_from) > 0
+
     def build_stages(self) -> None:
         self.stages = []
         webtoon = layout_mode(self.form) == "webtoon"
-        specs = ([sp for sp in STAGE_SPEC if sp["key"] in NEXT_STAGE_KEYS]
-                 if self.is_next else STAGE_SPEC)
+        if self.is_more:
+            specs = [sp for sp in STAGE_SPEC if sp["key"] in MORE_STAGE_KEYS]
+        elif self.is_next:
+            specs = [sp for sp in STAGE_SPEC if sp["key"] in NEXT_STAGE_KEYS]
+        else:
+            specs = STAGE_SPEC
         for spec in specs:
             steps = []
             for key, label in spec["steps"]:
@@ -586,6 +698,16 @@ class Job:
                              if self.saw_refusal and self.run_id else []),
                 "episode": int(self.episode),
                 "is_next": self.is_next,
+                "is_more": self.is_more,
+                "cut_from": int(self.cut_from),
+                # 화면이 어느 검수 화면을 어떤 깊이로 그릴지 정하는 근거.
+                # 폼(form)에서 다시 읽으므로 새로고침해도 같은 값이 나온다.
+                "expert": expert_mode(self.form),
+                # 그림 검수 확인 화면이 쓸 값. 그 단계에서만 읽는다 —
+                # 매 폴링(0.8초)마다 art_qa.json 을 여는 것은 헛일이다.
+                "art_qa": (art_qa_summary(self.run_id, self.episode)
+                           if self.status == "awaiting_artqa_approval" and self.run_id
+                           else None),
             }
 
     # ---- 저장 · 복원 -------------------------------------------------------- #
@@ -617,6 +739,12 @@ class Job:
             d = json.loads((path / "state.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
+        # 그림 검수 확인만 남은 채로 서버가 꺼졌으면 그것은 실패가 아니다 —
+        # episode.png 는 이미 다 나와 있고 남은 것은 사람이 한 번 보는 일뿐이다.
+        # 이것을 error 로 바꾸면 다 만든 웹툰이 "끊겼습니다"로 사라진다.
+        # 못 본 검수 결과는 결과 화면의 노트(art_qa.json)에 그대로 남는다.
+        if d.get("status") == "awaiting_artqa_approval":
+            d["status"] = "done"
         if d.get("status") in ("running", "awaiting_sheet_approval",
                                "awaiting_story_approval", "awaiting_board_approval"):
             d["status"] = "error"
@@ -654,6 +782,7 @@ class Job:
         self.sheet_approval.set()
         self.story_approval.set()
         self.board_approval.set()
+        self.artqa_approval.set()
 
     def _env(self) -> dict[str, str]:
         env = dict(os.environ)
@@ -920,6 +1049,75 @@ def _apply_sheet_edits(run_dir: Path, fields: dict[str, Any]) -> None:
     p1_path.write_text(json.dumps(p1, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# ---- 고른 항목 → 다음 시트 프롬프트에 실리는 지시 --------------------------- #
+#
+# 항목을 고르게 해 놓고 기록만 하면, 사용자는 자기가 말한 것이 반영된다고
+# 믿는데 실제로는 같은 사양으로 한 번 더 뽑을 뿐이다 — 다시 만들기가 사실상
+# 재추첨이 된다. 일반 모드에는 외형 사양을 고치는 폼이 없으므로, 그 모드에서는
+# 이 항목들이 **유일한** 전달 수단이다.
+#
+# 라벨을 그대로 싣지 않고 지시문으로 옮기는 이유: "얼굴이 원본과 달라요" 는
+# 불만이지 지시가 아니다. 이미지 모델에는 무엇을 어느 쪽으로 고치라는 말이
+# 가야 한다. 아래 문장은 전부 "지난 판이 이랬다 → 이렇게 하라" 꼴이다.
+#
+# story.py 의 charsheet 프롬프트는 design_details·expression_set 을 한국어
+# 그대로 싣는다. 한글이 막히는 곳은 appearance_en 하나뿐이라
+# (gate_charsheet_source), 한국어 지시문이 그대로 나가도 게이트에 안 걸린다.
+SHEET_FIX_BY_TAG = {
+    "face": "지난 시트는 얼굴이 참고와 달랐다. 얼굴형과 이목구비 배치를 "
+            "CHARACTER 설명과 참고 사진 쪽에 더 가깝게 맞춰라.",
+    "outfit": "지난 시트는 옷·장신구가 지정과 달랐다. 위 FIXED DESIGN ELEMENTS 의 "
+              "복장을 글자 그대로 그리고, 거기 없는 옷을 지어내지 마라.",
+    "hair": "지난 시트는 머리 모양이 지정과 달랐다. 머리 길이·묶음 형태·앞머리를 "
+            "CHARACTER 설명대로 맞추고, 네 방향과 표정 전부에서 같게 유지하라.",
+    "prop": "지난 시트는 고정 소품이 빠지거나 달랐다. 위 FIXED DESIGN ELEMENTS 의 "
+            "소품을 하나도 빠뜨리지 말고 전부 그려라.",
+    "age": "지난 시트는 나이대가 안 맞았다. 얼굴 비율과 체형을 CHARACTER 설명의 "
+           "나이대로 맞춰라.",
+    "style": "지난 시트는 화풍이 지정과 달랐다. 맨 아래 STYLE 절의 화풍을 그대로 따르라.",
+    "ratio": "지난 시트는 등신 비율이 안 맞았다. 머리와 몸의 비율을 지정된 등신에 "
+             "맞추고, 네 방향에서 같은 키·같은 비율로 세워라.",
+}
+
+# 프롬프트 꼬리가 무한정 길어지지 않게. 다시 만들기를 여러 번 누르면 지시가
+# 쌓이는데(아래 참고), 너무 많아지면 서로 부딪히고 모델이 앞엣것부터 흘린다.
+SHEET_FIX_MAX = 8
+
+
+def sheet_corrections(tags: list[str] | None, text: str = "") -> list[str]:
+    """고른 항목과 적은 말 → 시트 프롬프트에 실을 지시 목록."""
+    out = [SHEET_FIX_BY_TAG[t] for t in (tags or []) if t in SHEET_FIX_BY_TAG]
+    said = (text or "").strip()[:FEEDBACK_TEXT_MAX]
+    if said:
+        # 사용자가 적은 말은 옮기지 않고 그대로 싣는다 — "망토를 안 그렸어요"
+        # 처럼 항목으로는 못 담는 것이 여기 들어오고, 요약하면 그게 사라진다.
+        out.append(f"작가가 적은 말 — 그대로 반영하라: {said}")
+    return out
+
+
+def _merge_sheet_corrections(run_dir: Path, fixes: list[str]) -> None:
+    """이번에 고른 지시를 p1.json 의 sheet_corrections 에 **쌓는다**.
+
+    덮어쓰지 않고 쌓는 이유: 다시 만들기는 charsheet 폴더를 지우고 p1.json 만
+    보고 처음부터 다시 뽑는다. 1판에서 "머리가 다르다"고 해서 고쳐졌더라도 그
+    사실은 그림에만 있었고 지워졌으므로, 2판에서 "옷이 다르다"만 남기면 머리
+    지시가 사라져 되돌아간다. 같은 문장은 한 번만 남기고(중복 제거) 최근 것을
+    뒤에 둔다 — 프롬프트 끝쪽이 더 세게 읽히므로 방금 한 말이 이긴다.
+    """
+    p1 = _read_json(run_dir, "p1.json")
+    if not p1:
+        return
+    kept = [str(c).strip() for c in (p1.get("sheet_corrections") or [])
+            if str(c or "").strip()]
+    for line in fixes:
+        if line in kept:
+            kept.remove(line)          # 다시 말한 것은 맨 뒤로 옮긴다
+        kept.append(line)
+    p1["sheet_corrections"] = kept[-SHEET_FIX_MAX:]
+    (run_dir / "p1.json").write_text(
+        json.dumps(p1, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 # --------------------------------------------------------------------------- #
 # 이어 만들기 (#72) — 콘티 · 그림 · 잇기만 돈다
 #
@@ -934,6 +1132,40 @@ def _apply_sheet_edits(run_dir: Path, fields: dict[str, Any]) -> None:
 # 되돌리려면 series.json·ledger.json 을 회차 단위로 롤백해야 하는데 그 길이
 # 아직 없다. 그래서 승인 화면은 "이대로 진행" 과 "중단" 만 준다.
 # --------------------------------------------------------------------------- #
+
+def _more_cuts_stages(job: "Job", run_id: str, job_dir: Path) -> None:
+    """같은 화의 다음 컷들을 그리고 다시 이어 붙인다.
+
+    콘티(webtoon)는 건드리지 않는다 — 이미 있는 것을 그대로 읽어서 지정한
+    컷 범위만 run.py 에 넘긴다. 끝나면 episode.png 를 **처음부터 지금까지
+    그린 전부**로 다시 굽는다(--cuts 없이 한 번 더 돌리는 것이 아니라,
+    run.py 가 이미 있는 장을 재사용하고 이어 붙이기만 다시 한다).
+    """
+    first = int(job.cut_from)
+    last = first + CUTS_PER_SHEET - 1
+
+    _enter(job, 0)
+    job.note(f"{first}~{last}컷을 그리는 중")
+    mode = run_mode(run_id, job.episode)
+    art_cmd = ["run.py", "--run-id", run_id, "--episode", str(job.episode),
+               "--mode", mode, "-c", CONDITION, "--style", job.style,
+               "--config", str(job_dir / "config.yaml"), "--yes",
+               "--cuts", f"{first}-{last}"]
+
+    def art_or_bind(line: str) -> None:
+        if job.stage_i == 0 and (line.startswith("episode.png")
+                                 or line.startswith("완료:")):
+            _leave(job)
+            _enter(job, 1)
+            job.note("그린 장을 순서대로 이어 붙이는 중")
+
+    code = job._run(art_cmd, WEBTOON, art_or_bind)
+    if job._cancel:
+        raise Failed("취소됨")
+    if code != 0:
+        raise Failed("다음 장면을 그리지 못했습니다.")
+    _leave(job)
+
 
 def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
     # ---- 1. 콘티 ---------------------------------------------------------- #
@@ -1024,6 +1256,26 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
         raise Failed("그림은 나왔지만 한 편으로 잇지 못했습니다.")
     _leave(job)
 
+    # ---- 4. 그림 검수 확인 (전문 모드) ------------------------------------ #
+    #
+    # 1화와 같은 자리, 같은 조건. 이어 만들기는 form 을 1화에서 물려받으므로
+    # (create_next 의 origin_form) 전문 모드로 시작한 작품은 2화에서도 여기서
+    # 멈춘다 — 회차마다 다르게 굴면 사용자가 규칙을 못 읽는다.
+    #
+    # 앞의 콘티 승인과 달리 여기는 이어 만들기에서도 그대로 쓸 수 있다.
+    # 콘티 쪽은 "다시"가 없어서(위 주석) 전문 모드라고 늘 세우면 승인 아니면
+    # 중단뿐인 갈림길이 되지만, 이 자리는 원래 확인 하나뿐이다.
+    if checkpoints(job.form)["artqa"]:
+        qa = art_qa_summary(run_id, job.episode)
+        if qa.get("fixed") or qa.get("unresolved"):
+            job.status = "awaiting_artqa_approval"
+            job.note("그림 검수 결과를 확인해 주세요")
+            job.save()
+            job.artqa_approval.wait()
+            job.artqa_approval.clear()
+            # 여기서는 _cancel 을 안 본다 — 1화 쪽과 같은 이유(그 주석 참고).
+            job.status = "running"
+
 
 def execute(job: Job) -> None:
     job.status = "running"
@@ -1031,11 +1283,18 @@ def execute(job: Job) -> None:
     job.build_stages()
     job_dir = job.dir
 
+    # 어느 단계에서 사람을 세울지는 **시작할 때 한 번** 정한다. 도는 도중에
+    # 모드를 바꿔도 이번 실행의 검수 지점은 안 바뀐다 — 이야기는 자동으로
+    # 넘어갔는데 콘티에서만 갑자기 멈추는 식이 되면 사용자가 무슨 규칙인지 못
+    # 읽는다.
+    gates = checkpoints(job.form)
+
     try:
         build_config(job_dir, job.style,
                      head_ratio=str(job.form.get("head_ratio") or "").strip().lower(),
                      genre=str(job.form.get("genre") or ""),
-                     mode=layout_mode(job.form))
+                     mode=layout_mode(job.form),
+                     qa_regen_max=art_qa_regen_max(job.form))
 
         # ---- 이어 만들기 — 이야기·시트를 건너뛰고 콘티부터 -------------- #
         #
@@ -1043,6 +1302,21 @@ def execute(job: Job) -> None:
         # 그게 흔들린다(같은 캐릭터가 다른 얼굴이 된다). run_id 도 새로 파지
         # 않고 그대로 쓰므로, 스토리 하네스의 series.json·ledger.json 이
         # 이어져서 앞 화의 인물·설정·미회수 복선이 그대로 따라온다.
+        # ---- 이어 그리기 — 콘티는 그대로 두고 다음 컷만 그린다 ---------- #
+        #
+        # 미리보기로 앞 3컷을 본 사람이 "다음 장면도 볼까요?" 를 누른 자리다.
+        # 이야기·시트·콘티는 이미 run 안에 있으므로 다시 돌지 않는다 — 다시
+        # 돌면 같은 화의 앞뒤가 서로 다른 콘티에서 나오게 된다.
+        if job.is_more:
+            run_id = job.run_id or ""
+            if not run_id:
+                raise Failed("이어 그릴 작품을 찾지 못했습니다.")
+            (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
+            _more_cuts_stages(job, run_id, job_dir)
+            job.status = "done"
+            job.finished_at = time.time()
+            return
+
         if job.is_next:
             run_id = job.run_id or ""
             if not run_id:
@@ -1103,12 +1377,20 @@ def execute(job: Job) -> None:
             # 상태(STATUS_HUMAN)에서도 종료 코드는 항상 0 을 낸다 — 그래서
             # exit code 만으로는 못 잡고 meta.json 을 직접 읽는다.
             status, note = _meta_status(STORY / "runs" / run_id / "meta.json")
-            if status != STATUS_HUMAN:
+            human = status == STATUS_HUMAN
+            # 일반 모드는 게이트가 소진됐을 때만 멈춘다(지금까지의 동작).
+            # 전문 모드는 멀쩡히 통과했어도 멈춘다 — 이야기가 마음에 안 드는
+            # 것은 게이트가 잡는 종류의 문제가 아니고, 여기서 안 잡으면 콘티와
+            # 그림까지 다 나온 뒤에야 알게 된다.
+            if not human and not gates["story"]:
                 break                  # STATUS_OK(또는 알 수 없는 값) — 정상 진행
 
             job.status = "awaiting_story_approval"
-            job.note("구조 검수에서 게이트 재시도가 소진됐습니다 — 확인해 주세요"
-                      + (f" ({note})" if note else ""))
+            if human:
+                job.note("구조 검수에서 게이트 재시도가 소진됐습니다 — 확인해 주세요"
+                         + (f" ({note})" if note else ""))
+            else:
+                job.note("이야기가 나왔습니다 — 확인해 주세요")
             job.save()
             job.story_approval.wait()
             job.story_approval.clear()
@@ -1168,6 +1450,8 @@ def execute(job: Job) -> None:
                 job.sheet_decision = ""
                 edit_fields = job.sheet_edit_fields
                 job.sheet_edit_fields = None
+                fixes = list(job.sheet_fixes)
+                job.sheet_fixes = []
             job.status = "running"
             if job._cancel:
                 raise Failed("취소됨")
@@ -1176,6 +1460,12 @@ def execute(job: Job) -> None:
             if edit_fields:
                 job.note("고친 내용을 저장하는 중")
                 _apply_sheet_edits(STORY / "runs" / run_id, edit_fields)
+            # 고른 항목·적은 말을 다음 판 프롬프트에 싣는다. 사양을 바꾸는
+            # edit_fields 와 달리 이쪽은 지시로 붙는다 — 일반 모드에는 수정
+            # 폼이 없으므로 여기가 사용자의 말이 그림에 닿는 유일한 길이다.
+            if fixes:
+                job.note("고쳐 달라고 한 것을 정리하는 중")
+                _merge_sheet_corrections(STORY / "runs" / run_id, fixes)
             # 다시 만들기 — story.py 는 이 폴더가 있으면 재생성을 건너뛰므로
             # (story.py 의 "다시 뽑고 싶으면 이 폴더를 사람이 직접 지운다"와
             # 동일한 방식) 지우고 같은 루프를 한 번 더 돈다.
@@ -1214,12 +1504,16 @@ def execute(job: Job) -> None:
             human = status == STATUS_HUMAN
             if code != 0 or (not cuts_path.exists() and not human):
                 raise Failed("콘티(컷 설계)를 만들지 못했습니다.")
-            if not human:
+            # 스토리 단계와 같은 규칙 — 일반은 게이트 소진 때만, 전문은 늘.
+            if not human and not gates["board"]:
                 break                  # STATUS_OK(또는 알 수 없는 값) — 정상 진행
 
             job.status = "awaiting_board_approval"
-            job.note("콘티 단계 게이트 재시도가 소진됐습니다 — 확인해 주세요"
-                      + (f" ({note})" if note else ""))
+            if human:
+                job.note("콘티 단계 게이트 재시도가 소진됐습니다 — 확인해 주세요"
+                         + (f" ({note})" if note else ""))
+            else:
+                job.note("콘티가 나왔습니다 — 확인해 주세요")
             job.save()
             job.board_approval.wait()
             job.board_approval.clear()
@@ -1292,6 +1586,32 @@ def execute(job: Job) -> None:
             raise Failed("그림은 나왔지만 한 편으로 잇지 못했습니다.")
         _leave(job)
 
+        # ---- 6. 그림 검수 확인 (전문 모드) -------------------------------- #
+        #
+        # 그림 QA 는 두 모드 모두 돈다. 다른 것은 **결과를 언제 보여주는가**다.
+        # 일반 모드는 끝내고 결과 화면에서 "못 고친 것"만 노트로 알린다 —
+        # 자동으로 고쳐진 것은 아예 안 보인다(알 필요가 없다).
+        # 전문 모드는 끝났다고 하기 전에 여기서 세워서, 잡힌 것 전부를
+        # (다시 그려서 고쳐진 것까지) 보여준다.
+        #
+        # 잡힌 것이 하나도 없으면 안 세운다 — 보여줄 것이 없는 화면을 띄우고
+        # 확인 버튼을 누르게 하는 것은 검수가 아니라 절차다.
+        qa = (art_qa_summary(job.run_id, job.episode)
+              if gates["artqa"] and job.run_id else {})
+        if qa.get("fixed") or qa.get("unresolved"):
+            job.status = "awaiting_artqa_approval"
+            job.note("그림 검수 결과를 확인해 주세요")
+            job.save()
+            job.artqa_approval.wait()
+            job.artqa_approval.clear()
+            # **여기서는 _cancel 을 안 본다.** 앞의 세 승인 자리와 다른 점이다.
+            # 그 자리들은 아직 만들 것이 남아 있어서 취소가 "그만 만든다"는
+            # 뜻이지만, 여기는 episode.png 까지 다 나온 뒤다 — 취소할 대상이
+            # 없다. 그런데도 취소로 처리하면 **다 만든 웹툰이 "중단됨"이 되어**
+            # 결과 화면으로 못 간다. 취소든 확인이든 완성으로 끝낸다.
+            # (cancel() 이 이 Event 를 깨우는 것은 그대로 둔다 — 안 그러면
+            #  중단을 눌렀을 때 아무 반응 없이 화면이 멈춘 것처럼 보인다.)
+
         job.status = "done"
         job.finished_at = time.time()
 
@@ -1350,6 +1670,16 @@ def made_episodes(run_id: str) -> list[int]:
     return sorted(out)
 
 
+def episode_caption(run_id: str, episode: int = 1) -> str:
+    """워터마크 띠 오른쪽에 적을 한 줄 — "초롱 · 1화".
+
+    파일 이름(episode_filename)과 달리 사람이 읽는 자리라 밑줄 대신 가운뎃점을
+    쓰고, "말풍선" 같은 파일 구분은 안 붙인다.
+    """
+    name = str(_read_json(STORY / "runs" / run_id, "p1.json").get("name") or "").strip()
+    return f"{name} · {int(episode)}화" if name else f"{int(episode)}화"
+
+
 def episode_filename(run_id: str, episode: int = 1, baked: bool = False) -> str:
     """내려받을 때 붙는 이름 — 작품(주인공 이름)과 회차를 반영한다.
 
@@ -1384,6 +1714,35 @@ def _scene_numbers(run_id: str, episode: int = 1) -> list[int]:
     cuts = _read_json(STORY / "runs" / run_id / "webtoon",
                       f"ep{int(episode):02d}_cuts.json").get("cuts") or []
     return sorted({int(c.get("cut_number") or 0) for c in cuts} - {0})
+
+
+def _scene_layout(run_id: str, episode: int = 1) -> dict[int, tuple[int, str]]:
+    """장 번호 -> (gap_after, weight). overlay.bake() 가 다시 이어 붙일 때 쓴다.
+
+    scenegen.Scene.gap_after/.weight 와 같은 규칙이다(마지막 컷의 gap_after,
+    첫 컷의 weight) — 여기는 Scene 객체가 없어 원본 컷 dict 에서 직접 뽑는다.
+    scenes.json 이 없는 옛 화(컷 하나 = 장 하나)는 빈 dict 를 돌려주고, 그러면
+    overlay.bake() 가 기본값(여백 1·꽉 채움)으로 잇는다 — 예전과 같다.
+    """
+    ep_dir = episode_dir(run_id, episode)
+    grouping = _read_json(ep_dir, "scenes.json").get("scenes") or []
+    if not grouping:
+        return {}
+    cuts = _read_json(STORY / "runs" / run_id / "webtoon",
+                      f"ep{int(episode):02d}_cuts.json").get("cuts") or []
+    by_no = {int(c.get("cut_number") or 0): c for c in cuts}
+    out: dict[int, tuple[int, str]] = {}
+    for sc in grouping:
+        no = int(sc.get("scene_number") or 0)
+        nums = [int(n) for n in (sc.get("cut_numbers") or [])]
+        if not nums:
+            continue
+        last, first = by_no.get(nums[-1]) or {}, by_no.get(nums[0]) or {}
+        gap = last.get("gap_after")
+        gap = gap if isinstance(gap, int) and 0 <= gap <= 3 else 1
+        weight = str(first.get("weight") or "normal").strip().lower()
+        out[no] = (gap, weight if weight in ("full", "normal", "light") else "normal")
+    return out
 
 
 def read_overlay(run_id: str, episode: int = 1) -> dict[str, Any]:
@@ -1421,7 +1780,8 @@ def bake_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
         raise Failed("이 회차의 장을 찾지 못했습니다.")
     try:
         res = overlay.bake(ep_dir, numbers,
-                           lambda n: unit_image(run_id, n, episode), data)
+                           lambda n: unit_image(run_id, n, episode), data,
+                           _scene_layout(run_id, episode))
     except overlay.OverlayError as exc:
         raise Failed(str(exc)) from exc
     res["url"] = f"/api/runs/{run_id}/baked.png?ep={int(episode)}"
@@ -1436,12 +1796,72 @@ def episode_title(run_id: str, episode: int = 1) -> str:
     5단계가 쓴 회차 카드 그대로라 회차 번호 칸이 없고, 게다가 회차가 쌓이면 2화가
     arc2 로 넘어갈 수 있어서(story-harness 의 arc_for_episode) 파일 하나만 봐서는
     못 찾는다. series.json 은 회차마다 no·title 을 같이 남긴다.
+
+    사람이 고쳐 둔 제목이 있으면 그것이 이긴다 — 아래 titles.json 참고.
     """
+    mine = user_title(run_id, episode)
+    if mine:
+        return mine
     wt = STORY / "runs" / run_id / "webtoon"
     for ep in (_read_json(wt, "series.json").get("episodes") or []):
         if isinstance(ep, dict) and int(ep.get("no") or 0) == int(episode):
             return str(ep.get("title") or "")
     return ""
+
+
+# ---- 사람이 고친 제목 -------------------------------------------------------
+#
+# 모델이 지은 제목이 늘 맞지는 않는다. 특히 공유가 붙은 뒤로는 이 제목이
+# 카톡·트위터 카드에 그대로 실려서, 마음에 안 드는 이름이 남에게 먼저 보인다.
+#
+# **series.json 을 안 고친다.** 그쪽은 하네스가 쓴 것이고 이어 만들기(2화)가
+# 다시 읽는 파일이라, 사람이 손대면 하네스의 기록과 제품의 표시가 섞인다.
+# 대신 옆에 titles.json 을 둔다 — 없으면 예전 그대로 동작하고, 지우면 모델이
+# 지은 이름으로 되돌아간다.
+TITLE_MAX = 60
+
+
+def titles_path(run_id: str) -> Path:
+    return STORY / "runs" / run_id / "titles.json"
+
+
+def user_title(run_id: str, episode: int = 1) -> str:
+    """사람이 고쳐 둔 그 회차 제목. 없으면 빈 문자열."""
+    try:
+        doc = json.loads(titles_path(run_id).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(doc, dict):
+        return ""
+    return str(doc.get(str(int(episode))) or "").strip()[:TITLE_MAX]
+
+
+def set_user_title(run_id: str, episode: int, title: str) -> str:
+    """제목을 고쳐 둔다. 빈 값을 주면 지운다(모델이 지은 이름으로 되돌아간다).
+
+    돌려주는 것은 **이 회차가 앞으로 보일 이름**이다 — 지웠으면 원래 이름.
+    """
+    path = titles_path(run_id)
+    if not path.parent.is_dir():
+        raise Failed("그런 작품이 없습니다.")
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(doc, dict):
+            doc = {}
+    except (OSError, ValueError):
+        doc = {}
+    key = str(int(episode))
+    clean = " ".join(str(title or "").split())[:TITLE_MAX]
+    if clean:
+        doc[key] = clean
+    else:
+        doc.pop(key, None)
+    try:
+        path.write_text(json.dumps(doc, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+    except OSError as exc:
+        raise Failed("제목을 저장하지 못했습니다.") from exc
+    return episode_title(run_id, episode) or f"{int(episode)}화"
 
 
 # 하네스(run.py)의 REFUSAL_HINTS 와 짝이다. 저쪽은 터미널에, 이쪽은 화면에 쓴다.
@@ -1532,6 +1952,34 @@ def read_art_qa(run_id: str, episode: int = 1) -> dict[int, dict[str, Any]]:
                        for i in (rec.get("issues") or []) if isinstance(i, dict)],
         }
     return out
+
+
+def art_qa_summary(run_id: str, episode: int = 1) -> dict[str, Any]:
+    """그림 QA 가 무엇을 했는지 한 눈에. 전문 모드의 검수 확인 화면이 쓴다.
+
+    결과 화면의 노트(read_art_qa)와 보는 각도가 다르다. 노트는 "못 고친 것"만
+    말한다 — 사용자가 손댈 것이 그것뿐이라서다. 여기는 **다시 그려서 고친
+    것까지** 센다. 검수를 켜 둔 사람이 알고 싶은 것은 남은 흠만이 아니라
+    "검수가 실제로 일을 했는가" 이기 때문이다.
+
+    fixed 는 어림이다 — 다시 그린 뒤 이슈가 안 남았으면 고쳐진 것으로 본다.
+    하네스가 판마다의 판정을 안 남기므로 그보다 정확히는 셀 수 없다.
+    """
+    units = read_art_qa(run_id, episode)
+    fixed, unresolved = [], []
+    for no in sorted(units):
+        rec = units[no]
+        if rec.get("issues"):
+            unresolved.append({"scene": no, "issues": rec["issues"],
+                               "rounds": rec.get("rounds") or 0})
+        elif rec.get("rounds"):
+            fixed.append({"scene": no, "rounds": rec["rounds"]})
+    return {
+        "checked": sum(1 for r in units.values() if r.get("checked")),
+        "total": len(units),
+        "fixed": fixed,
+        "unresolved": unresolved,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -1759,14 +2207,105 @@ def unit_image(run_id: str, no: int, episode: int = 1) -> Path | None:
 
     Scene 모드는 `scene_S+/scene3_c1.png`, 컷 모드는 `S+/cut3_c1.png` 다.
     조건은 S+ 가 기본이고, 시트가 없어 A 로 떨어진 옛 실행도 받아 준다.
+
+    **`picks.csv` 에 채택 기록이 있으면 그 후보를 쓴다.** 지금 제품은 후보를
+    1장만 뽑아서 `_c1` 고정과 다를 것이 없지만(#113), 나중에 후보를 여러 장
+    뽑게 되면 이 함수가 "사람이 고른 후보"가 아니라 "무조건 1번 후보"를
+    화면·최종본에 내보내게 된다. `folder` 가 곧 picks.csv 의 condition 값이다
+    (컷 모드는 `cond` 그대로, Scene 모드는 `scene_{cond}` — run.scene_cond 와
+    같은 규칙). 기록이 없거나 그 파일이 없으면 c1 로 떨어진다.
     """
     ep = episode_dir(run_id, episode)
+    picks = report.load_picks(ep)
     for cond in (CONDITION, "S", "A"):
         for folder, stem in ((f"scene_{cond}", "scene"), (cond, "cut")):
-            p = ep / folder / f"{stem}{no}_c1.png"
+            k = picks.get((folder, no)) or 1
+            p = ep / folder / f"{stem}{no}_c{k}.png"
             if p.exists():
                 return p
+            if k != 1:
+                p1 = ep / folder / f"{stem}{no}_c1.png"
+                if p1.exists():
+                    return p1
     return None
+
+
+def drawn_units(run_id: str, episode: int = 1) -> int:
+    """지금까지 그려 둔 장(또는 컷)이 몇 개인가.
+
+    미리보기는 앞 3컷(=한 장)만 그리므로 보통 1 이다. "다음 장면"을 누를
+    때마다 하나씩 는다. 번호는 1부터 이어지므로, 빈 자리가 나오면 거기서
+    센 것을 그대로 쓴다 — 중간이 비어 있으면 그 앞까지만 그린 것이다.
+    """
+    n = 0
+    while unit_image(run_id, n + 1, episode) is not None:
+        n += 1
+        if n > 500:                      # 망가진 폴더에서 무한히 돌지 않게
+            break
+    return n
+
+
+# --------------------------------------------------------------------------- #
+# 공유
+# --------------------------------------------------------------------------- #
+#
+# 공유는 두 갈래로 나간다. 하나는 **링크**(카톡·트위터에 붙이면 미리보기가
+# 뜬다), 하나는 **그림 파일**(폰의 공유 시트로 바로 내보낸다).
+#
+# 링크 쪽이 서버 일이다. SNS 미리보기를 만드는 크롤러는 자바스크립트를 안
+# 돌리므로, 화면이 그리는 제목·그림은 크롤러에게 안 보인다 — 서버가 HTML 을
+# 내보낼 때 <head> 에 미리 박아 줘야 한다(serve.py 의 og_html).
+#
+# 계정이 없어서 "링크를 아는 사람만" 같은 접근 권한은 아직 못 만든다. 지금은
+# run_id 를 아는 사람이 곧 볼 수 있는 사람이다 — 주소에 6자리 무작위가 붙어
+# 있어서 찍어서 맞히기는 어렵지만, **비밀이 아니다.** 권한·만료는 회원 기능이
+# 생긴 뒤의 일이다(#66).
+
+def share_meta(run_id: str, episode: int = 1) -> dict[str, Any] | None:
+    """공유 링크의 미리보기에 실을 것. 그림이 하나도 없으면 None.
+
+    list_runs() 를 안 쓴다 — 그쪽은 runs/ 를 통째로 훑어서 목록을 만드는
+    함수라, 한 편의 미리보기를 그리려고 부르면 남의 폴더를 전부 읽는다.
+    """
+    run_dir = STORY / "runs" / run_id
+    if not run_dir.is_dir():
+        return None
+    ep = int(episode or 1)
+    if ep not in made_episodes(run_id):
+        return None
+    # 표지로 쓸 장. 1번이 있다고 칠 수 없다 — 3·4번만 뽑아 둔 run 이 흔하다.
+    cover = next((n for n in range(1, 13) if unit_image(run_id, n, ep)), None)
+    if cover is None:
+        return None                        # 그릴 것이 없으면 공유할 것도 없다
+    p1 = _read_json(run_dir, "p1.json")
+    p2 = _read_json(run_dir, "p2.json")
+    return {
+        "run_id": run_id,
+        "episode": ep,
+        "title": episode_title(run_id, ep) or f"{ep}화",
+        "character": str(p1.get("name") or ""),
+        "genre": str(_read_json(run_dir, "meta.json").get("input", {}).get("genre") or ""),
+        "logline": str(p2.get("logline") or ""),
+        "cover_page": cover,
+    }
+
+
+def planned_cuts(run_id: str, episode: int = 1) -> int:
+    """콘티가 계획한 컷 수. 못 읽으면 0 — 그때는 상한을 안 건다."""
+    for name in ("scenes.json", "episode.json", "board.json"):
+        data = _read_json(episode_dir(run_id, episode), name)
+        cuts = data.get("cuts") if isinstance(data, dict) else None
+        if isinstance(cuts, list) and cuts:
+            return len(cuts)
+        scenes = data.get("scenes") if isinstance(data, dict) else None
+        if isinstance(scenes, list) and scenes:
+            total = 0
+            for sc in scenes:
+                nums = (sc or {}).get("cut_numbers") or []
+                total += len(nums)
+            if total:
+                return total
+    return 0
 
 
 def run_mode(run_id: str, episode: int = 1) -> str:
@@ -1984,7 +2523,11 @@ def _origin_config(run_id: str) -> Path | None:
     """
     if not JOBS_DIR.is_dir():
         return None
-    for job_dir in JOBS_DIR.iterdir():
+    # **최신 job 부터** 본다. 같은 run_id 를 가리키는 job 폴더가 둘 이상일 수
+    # 있고(1화를 만든 job, 2화를 이어 만든 job), 예전에는 정렬 없이 훑어 첫
+    # 매치를 썼다 — 어느 config 를 물려받을지가 OS 의 디렉터리 순서에 달려
+    # 있었다(#114). job_id 는 `YYYYmmdd-HHMMSS-xxxx` 라 이름 역순이 곧 최신순이다.
+    for job_dir in sorted(JOBS_DIR.iterdir(), reverse=True):
         marker = job_dir / "run_id.txt"
         cfg = job_dir / "config.yaml"
         if not (marker.exists() and cfg.exists()):
@@ -2020,7 +2563,7 @@ def origin_form(run_id: str) -> dict[str, Any]:
     """
     if not JOBS_DIR.is_dir():
         return {}
-    for job_dir in JOBS_DIR.iterdir():
+    for job_dir in sorted(JOBS_DIR.iterdir(), reverse=True):   # 최신 job 부터 (#114)
         marker = job_dir / "run_id.txt"
         if not marker.exists():
             continue
@@ -2172,8 +2715,29 @@ class RegenRunner:
         self._lock = threading.Lock()
         self._gate = threading.Semaphore(1)
 
+    # 끝난 작업을 몇 개까지 들고 있을까. 화면이 끝난 뒤에도 결과를 한 번 더
+    # 물어볼 수 있어야 해서(폴링이 늦게 도착한다) 바로 버리지는 않는다. 다만
+    # 예전에는 **아무것도 안 버렸다** — 서버를 하루 켜 두고 다시 그리기를 계속
+    # 누르면 메모리가 계속 늘었다(#114).
+    KEEP_FINISHED = 50
+
     def get(self, rid: str) -> Regen | None:
         return self.jobs.get(rid)
+
+    def _prune(self) -> None:
+        """끝난 작업 중 오래된 것부터 버린다. 돌고 있는 것은 절대 안 버린다.
+
+        호출자가 _lock 을 잡은 상태로 부른다.
+        """
+        done = [j for j in self.jobs.values()
+                if j.status in ("done", "error", "cancelled")]
+        if len(done) <= self.KEEP_FINISHED:
+            return
+        # finished_at 이 0 인 것(아직 안 찍힌 것)은 가장 최근으로 본다 — 버릴
+        # 후보의 맨 뒤로 밀어서, 애매한 것을 먼저 버리지 않게 한다.
+        done.sort(key=lambda j: j.finished_at or float("inf"))
+        for j in done[:len(done) - self.KEEP_FINISHED]:
+            self.jobs.pop(j.id, None)
 
     def start(self, run_id: str, scene_no: int, feedback: str = "",
               style: str = "", textless: bool = False,
@@ -2188,6 +2752,7 @@ class RegenRunner:
                     textless=textless)
         with self._lock:
             self.jobs[job.id] = job
+            self._prune()
         threading.Thread(target=self._work, args=(job, style), daemon=True).start()
         return job
 
@@ -2401,6 +2966,13 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
         "style_label": "",
         "logline": str(p2.get("logline") or ""),
         "cuts_per_sheet": str(CUTS_PER_SHEET),
+        # 이어 그리기 판단용 — 지금까지 그린 장 수와 콘티가 계획한 컷 수.
+        # more_cuts 가 참이면 화면에 "다음 장면 이어서 보기" 가 뜬다.
+        "drawn_units": drawn_units(run_id, episode),
+        "planned_cuts": planned_cuts(run_id, episode),
+        "more_cuts": bool(planned_cuts(run_id, episode)
+                          and drawn_units(run_id, episode) * CUTS_PER_SHEET
+                          < planned_cuts(run_id, episode)),
         "scenes": scenes,
     }
 
@@ -2642,6 +3214,42 @@ class Runner:
         job.build_stages()
         (job_dir / "input.json").write_text(
             json.dumps(form, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        with self._lock:
+            self.jobs[job_id] = job
+            self.queue.append(job_id)
+            if self._worker is None or not self._worker.is_alive():
+                self._worker = threading.Thread(target=self._drain, daemon=True)
+                self._worker.start()
+        return job
+
+    def create_more(self, run_id: str, cut_from: int) -> Job:
+        """이어 그리기 — 같은 화의 다음 컷들 (미리보기 다음 장면).
+
+        create_next() 와 달리 회차가 안 늘어난다. 콘티도 안 만든다. 하는 일은
+        "이미 있는 콘티의 다음 3컷을 그리고 다시 이어 붙이기" 하나뿐이다.
+        그림 설정(그림체·연출)은 처음 만들 때 쓴 값을 그대로 물려받는다 —
+        여기서 다시 고르게 하면 같은 화의 앞뒤가 다른 그림체가 된다.
+        """
+        form = dict(origin_form(run_id) or {})
+        if not form:
+            raise Failed("이어 그릴 작품을 찾지 못했습니다.")
+        form.pop("preview", None)          # 컷 범위는 cut_from 이 정한다
+
+        job_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4]
+        job_dir = JOBS_DIR / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        style = str(form.get("style") or "webtoon")
+        if style not in STYLES:
+            style = "webtoon"
+        job = Job(id=job_id, form=form, dir=job_dir, style=style,
+                  preview=False, has_photo=False,
+                  cut_from=max(1, int(cut_from)))
+        job.run_id = run_id
+        job.build_stages()
+        (job_dir / "input.json").write_text(
+            json.dumps(form, ensure_ascii=False, indent=2), encoding="utf-8")
+        (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
 
         with self._lock:
             self.jobs[job_id] = job
