@@ -96,9 +96,12 @@
         <button type="button" class="wiz-skip" id="wizSkip">건너뛰기</button>
       </div>
 
-      <!-- 1 · 수면 — 사진 · 이름 · 이야기 한 줄. 이게 전부다.
-           (character·photo_note 는 화면에서 뺐지만 collect()·서버 계약이
-           그대로라 숨은 칸으로 남겨 둔다 — 값은 항상 빈 문자열이다.) -->
+      <!-- 1 · 수면 — 사진 · 이름 · 자유 입력. 이게 전부다.
+           자유 입력 하나가 캐릭터 설명과 이야기를 **겸한다**. "이야기 한 줄"
+           이라고 적어 뒀더니 한 문장만 써야 하는 줄 알고 캐릭터 성격 같은
+           것은 아예 안 적었다. 그래서 칸을 하나로 두고, 적힌 것을 그대로
+           character 와 story 양쪽에 보낸다(app.js collect 참고) — 시트를
+           만들 때도 이야기를 짤 때도 같은 글을 본다. -->
       <section class="wiz-step" data-step="1">
         <p class="wiz-eyebrow">수면 · STEP 1</p>
         <h3 class="wiz-title">누구를 데리고<br>바다로 갈까요?</h3>
@@ -119,13 +122,13 @@
           </label>
 
           <label class="field big">
-            <span>이야기 한 줄</span>
-            <textarea name="story" rows="3" id="storyInput"
-              placeholder="예) 몰락한 문파에 혼자 남은 검객이, 적 앞으로 걸어 나간다."></textarea>
+            <span>어떤 캐릭터인가요? <small>선택</small></span>
+            <textarea name="story" rows="5" id="storyInput"
+              placeholder="성격이든 이야기든 자유롭게 적어주세요.&#10;&#10;예) 장난기 많은데 겁은 많아서 친구 앞에서만 센 척한다&#10;예) 평범한 회사원인데 로맨스 판타지 소설에 빙의했다"></textarea>
           </label>
+          <p class="wiz-hint">막힐 때 눌러 보세요</p>
           <div class="chips" id="ideaChips"></div>
 
-          <input type="hidden" name="character" value="">
           <input type="hidden" name="photo_note" value="">
         </div>
       </section>
