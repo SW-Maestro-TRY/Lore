@@ -577,14 +577,15 @@ async function refreshAccount() {
   paintClaimBanner();
 }
 
+const GUEST_PILL_PHOTO = "/static/lou/react/idle/01.webp";   // 로그인 전 자리 채움 — accounts.DEFAULT_PHOTO_ID 와 같은 그림
+
 function paintAccountPill() {
   const img = $("#accountAvatarImg"), label = $("#accountPillLabel");
   if (accountState.logged_in) {
     img.src = accountState.photo_url;
-    img.hidden = false;
     label.textContent = accountState.nickname;
   } else {
-    img.hidden = true;
+    img.src = GUEST_PILL_PHOTO;
     label.textContent = "로그인";
   }
 }
@@ -893,6 +894,18 @@ function setupWizard() {
   };
   const start = $("#startBtn");
   if (start) start.addEventListener("click", openCreate);
+  // 헤더의 LORE 는 어느 화면에서든 홈으로 돌아가는 문이다. 새로고침 없이
+  // 되돌리되(입력이 날아가지 않게), 만드는 중일 때는 붙잡는다 — 여기서 나가면
+  // 돌고 있는 작업을 놓치기 때문.
+  const brand = $("#brandHome");
+  if (brand) brand.addEventListener("click", e => {
+    e.preventDefault();
+    if (document.body.dataset.view === "running") {
+      toast("루가 만드는 중이에요 — 끝나면 보여드릴게요");
+      return;
+    }
+    forget();
+  });
   // 1걸음의 약속: 사진과 이름은 필수다. 없이 넘어가려 하면 그 자리에서 말한다.
   const step1ok = () => {
     const form = $("#form");
