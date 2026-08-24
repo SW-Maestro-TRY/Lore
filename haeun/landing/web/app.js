@@ -2293,6 +2293,12 @@ function forget() {
   $("#progress").hidden = true; $("#result").hidden = true;
   $("#works").hidden = true;
   $("#scriptPanel").hidden = true;
+  // 만들기 화면도 닫는다. 안 닫으면 걸음을 밟다가 헤더의 LORE 로 홈에 와도
+  // 위저드가 홈 위에 그대로 겹쳐 있어서, 홈과 4걸음과 바닥글이 한꺼번에
+  // 보인다 — 화면이 깨진 것처럼 읽힌다.
+  $("#create").hidden = true;
+  // 물빛 표시도 같이 지운다 — 홈은 걸음이 없는 자리다.
+  delete document.body.dataset.step;
   // 이어 만들기 화면도 같이 닫는다 — 안 닫으면 "새로 만들기" 를 눌러도
   // 앞 작품의 다음 화 화면이 뒤에 남는다.
   clearInterval(nextEpPoll); nextEpPoll = null; nextEpJob = null; nextEpCtx = null;
@@ -2300,7 +2306,9 @@ function forget() {
   $("#moreCutsBtn").hidden = true;
   // /result 로 들어왔으면 주소도 되돌린다 — 안 그러면 새로고침에 다시 결과가 뜬다.
   if (location.pathname !== "/" || location.search) history.replaceState(null, "", "/");
-  document.querySelector("#studio").scrollIntoView();
+  // #studio 는 만들기 화면 안에 있다 — 방금 닫았으니 거기로 스크롤할 수 없다.
+  // 홈으로 왔으면 홈 맨 위가 맞다.
+  window.scrollTo(0, 0);
 }
 let toastTimer = null;
 function toast(msg) {
