@@ -142,12 +142,18 @@ def public_info(nickname_key: str, account: dict) -> dict:
     }
 
 
-def signup(nickname: str, password: str, photo: dict | None) -> tuple[dict | None, str]:
+def signup(nickname: str, password: str, photo: dict | None,
+           agree_terms: bool = False) -> tuple[dict | None, str]:
     nickname = (nickname or "").strip()
     if not valid_nickname(nickname):
         return None, "닉네임은 한글·영문·숫자·밑줄로 2~20자여야 합니다"
     if len(password or "") < MIN_PASSWORD_LEN:
         return None, f"비밀번호는 {MIN_PASSWORD_LEN}자 이상이어야 합니다"
+    # 저작권/이용약관 동의 — 멘토 피드백(2026-08-24): 지금 단계에서 전문적인
+    # IP 대응은 과하다, 가입 때 약관 동의만 받아도 어느 정도 방어가 된다.
+    # 서버에서도 다시 막아야 "체크 안 해도 되던데?" 로 우회가 안 된다.
+    if not agree_terms:
+        return None, "이용약관에 동의해야 가입할 수 있습니다"
     key = _norm(nickname)
     with _lock:
         accounts = _load(ACCOUNTS_FILE)
@@ -163,6 +169,7 @@ def signup(nickname: str, password: str, photo: dict | None) -> tuple[dict | Non
                       if photo.get("kind") != "upload" else {"kind": "upload"}),
             "claimed_runs": [],
             "created_at": time.time(),
+            "terms_agreed_at": time.time(),
         }
         accounts[key] = account
         _save(ACCOUNTS_FILE, accounts)
@@ -224,6 +231,23 @@ def claim_run(nickname_key: str, run_id: str) -> bool:
 
 def get_account(nickname_key: str) -> dict | None:
     return _load(ACCOUNTS_FILE).get(nickname_key)
+
+
+# ---- 저작권 확인 로그 ----------------------------------------------------- #
+#
+# 멘토 피드백(2026-08-24): 지금은 실사용자가 거의 없는 단계라 전문적인 IP
+# 대응까지는 과하다 — 만들 때마다 짧게 확인받는 것으로 어느 정도 방어가
+# 된다. 회원가입(agree_terms)과 별개로, "이 job 은 이 사람이 이 시각에
+# 확인했다" 는 기록을 한 줄씩 남긴다. 조회 화면은 없다(범위 밖).
+IP_CONSENT_FILE = DATA / "ip_consent.jsonl"
+
+
+def log_ip_consent(uid: str, job_id: str) -> None:
+    DATA.mkdir(parents=True, exist_ok=True)
+    row = {"ts": time.time(), "uid": uid, "job_id": job_id}
+    with _lock:
+        with IP_CONSENT_FILE.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 # ---- 세션 --------------------------------------------------------------- #

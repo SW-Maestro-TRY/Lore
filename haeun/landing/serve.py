@@ -28,11 +28,14 @@ from urllib.parse import urlparse, parse_qs, quote
 
 import accounts
 import credits
+import overlay
 import pipeline
 import watermark
 
 HERE = Path(__file__).resolve().parent
 WEB = HERE / "web"
+# 화면 구경용으로 만들어 두는 것들. jobs/ 는 gitignore 라 저장소가 안 더러워진다.
+DEMO_DIR = HERE / "jobs" / "_demo"
 MAX_PHOTO_BYTES = 6 * 1024 * 1024
 
 runner = pipeline.Runner()
@@ -232,6 +235,23 @@ class Handler(BaseHTTPRequestHandler):
                 f"filename*=UTF-8''{quote(download, safe='')}")
         self._send(200, path.read_bytes(), ctype, headers)
 
+    def _demo_episode(self) -> None:
+        """샘플 장 -> 한 편 -> 워터마크. 결과 화면 목업의 내려받기가 쓴다."""
+        scenes = sorted((WEB / "samples" / "mock").glob("scene*.jpg"),
+                        key=lambda p: int(re.sub(r"\D", "", p.stem) or 0))
+        if not scenes:
+            return self._error(404, "샘플이 없습니다")
+        DEMO_DIR.mkdir(parents=True, exist_ok=True)
+        out = DEMO_DIR / "episode.png"
+        newest = max(p.stat().st_mtime for p in scenes)
+        if not out.exists() or out.stat().st_mtime < newest:
+            try:
+                overlay._episode.stitch(scenes, out)
+            except Exception as exc:                      # noqa: BLE001
+                return self._error(500, f"샘플을 잇지 못했습니다: {exc}")
+        src = watermark.for_download(out, DEMO_DIR, "모모 · 1화")
+        return self._file(src, download="약속의_무게_1화.png")
+
     def _body(self) -> dict:
         length = int(self.headers.get("Content-Length") or 0)
         if not length:
@@ -296,6 +316,14 @@ class Handler(BaseHTTPRequestHandler):
         # 생성 없이 가짜 진행으로 돌려 본다. 과금 없음.
         if path in ("/demo", "/demo/", "/demo.html"):
             return self._file(WEB / "demo.html")
+        # 결과 화면 **목업**. 실제 생성 없이 완성본 화면을 그대로 본다 — 같은
+        # index.html·app.js 를 쓰고, 데이터만 web/samples/mock.json 에서 온다.
+        if path in ("/demo/result", "/demo/result/"):
+            return self._file(WEB / "index.html")
+        # 목업의 "내려받기". 샘플 장을 한 편으로 이어 붙인 뒤 **실제 내려받기와
+        # 똑같은 길**로 내보낸다 — 그래야 워터마크가 붙은 모습이 그대로 보인다.
+        if path == "/api/demo/episode.png":
+            return self._demo_episode()
         # 이미 만들어 둔 결과물을 바로 여는 자리. 같은 index.html 인데,
         # app.js 가 주소를 보고 폼 대신 결과 화면부터 띄운다.
         if path in ("/result", "/result/"):
@@ -636,7 +664,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "입력을 읽지 못했습니다")
             account, err = accounts.signup(str(body.get("nickname") or ""),
                                            str(body.get("password") or ""),
-                                           body.get("photo"))
+                                           body.get("photo"),
+                                           bool(body.get("agree_terms")))
             if err:
                 return self._error(400, err)
             token = accounts.create_session(account["key"])
@@ -807,6 +836,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "캐릭터를 알 수 있는 것이 하나는 필요합니다 — "
                                         "이름 · 설명 · 항목 · 사진 중 아무거나요.")
 
+            # 저작권 확인 — 회원가입 때 약관 동의(accounts.signup)와 별개로,
+            # 만들 때마다 짧게 다시 받는다. 로그인 여부와 무관하게 게스트도
+            # 걸린다(uid 는 있으므로).
+            if not form.pop("agree_ip", False):
+                return self._error(400, "저작권 확인에 동의해야 만들 수 있습니다")
+
             # 크레딧 소진 — 화면의 비용 표시(costChip)와 같은 계산이다
             # (credits.creation_cost). 잔액은 미리 확인만 하고, 실제로 떼는
             # 것은 job 이 만들어진 **뒤**다 — job 생성이 실패했는데 이미
@@ -824,6 +859,7 @@ class Handler(BaseHTTPRequestHandler):
 
             job = runner.create(form, photo)
             _, bal = credits.spend(uid, cost)
+            accounts.log_ip_consent(uid, job.id)
             return self._json({"id": job.id, "queue_position": runner.position(job.id),
                                "credit_balance": bal})
 

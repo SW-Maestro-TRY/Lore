@@ -45,6 +45,7 @@ const GENRE_QUICK = [
   "로맨스 판타지", "무협", "판타지", "헌터·게이트",
   "마법학교", "게임 판타지", "센티넬", "오메가버스",
   "아이돌", "스릴러", "액션", "개그", "일상",
+  "히어로",
 ];
 
 /* 장르 카드 아래에 늘 떠 있는 한 줄. 안 고른 상태에서 아무것도 안 보이면
@@ -65,6 +66,7 @@ const GENRE_NOTE = {
   "액션":         "몸으로 부딪히는 것. 합과 속도로 컷을 나눕니다.",
   "개그":         "박자와 배신. 컷의 크기 차이로 웃깁니다.",
   "일상":         "큰 사건 없이 하루하루. 인물의 결이 곧 이야기입니다.",
+  "히어로":       "능력과 빌런, 등록과 자경단. 누가 구할 자격을 갖느냐가 규칙입니다.",
 };
 const GENRE_NOTE_EMPTY =
   "비워두면 루가 골라요 — 앞에서 적은 캐릭터 설명을 보고 이야기에 맞는 장르를 정합니다.";
@@ -575,14 +577,15 @@ async function refreshAccount() {
   paintClaimBanner();
 }
 
+const GUEST_PILL_PHOTO = "/static/lou/react/idle/01.webp";   // 로그인 전 자리 채움 — accounts.DEFAULT_PHOTO_ID 와 같은 그림
+
 function paintAccountPill() {
   const img = $("#accountAvatarImg"), label = $("#accountPillLabel");
   if (accountState.logged_in) {
     img.src = accountState.photo_url;
-    img.hidden = false;
     label.textContent = accountState.nickname;
   } else {
-    img.hidden = true;
+    img.src = GUEST_PILL_PHOTO;
     label.textContent = "로그인";
   }
 }
@@ -719,6 +722,7 @@ async function onSignup(e) {
     nickname: form.nickname.value.trim(),
     password: form.password.value,
     photo: signupPhoto,
+    agree_terms: form.agree_terms.checked,
   };
   try {
     const res = await fetch("/api/account/signup", {
@@ -897,6 +901,7 @@ function wizGo(n, scroll = true) {
   // 갈림길에서는 아래 단추를 안 쓴다 — 고르는 것이 곧 넘어가는 것이다.
   $("#wizNext").hidden = atFork || atEnd;
   $("#submitBtn").hidden = !(atEnd && !atFork);
+  $("#ipAgreeLine").hidden = !(atEnd && !atFork);
   $("#wizSkip").hidden = atFork || atEnd;
   // 1걸음에서도 뒤로 갈 곳이 있다 — 홈. 그래서 안 죽인다.
   $("#wizPrev").textContent = wizStep === 1 ? "홈으로" : "이전";
@@ -932,8 +937,18 @@ function setupWizard() {
   };
   const start = $("#startBtn");
   if (start) start.addEventListener("click", openCreate);
-  const startTop = $("#startBtnTop");
-  if (startTop) startTop.addEventListener("click", openCreate);
+  // 헤더의 LORE 는 어느 화면에서든 홈으로 돌아가는 문이다. 새로고침 없이
+  // 되돌리되(입력이 날아가지 않게), 만드는 중일 때는 붙잡는다 — 여기서 나가면
+  // 돌고 있는 작업을 놓치기 때문.
+  const brand = $("#brandHome");
+  if (brand) brand.addEventListener("click", e => {
+    e.preventDefault();
+    if (document.body.dataset.view === "running") {
+      toast("루가 만드는 중이에요 — 끝나면 보여드릴게요");
+      return;
+    }
+    forget();
+  });
   // 1걸음의 약속: 사진과 이름은 필수다. 없이 넘어가려 하면 그 자리에서 말한다.
   const step1ok = () => {
     const form = $("#form");
@@ -1007,6 +1022,8 @@ function collect() {
     art_qa_regen_max: form.art_qa_regen_max
       ? Number(form.art_qa_regen_max.value) : 2,
     photos_data: photos,
+    // 만들 때마다 짧게 받는 저작권 확인 — 서버도 이 값을 다시 확인한다.
+    agree_ip: $("#ipAgreeCheck").checked,
   };
 }
 
@@ -1019,6 +1036,13 @@ async function startRun() {
   const fork = $$(".fork-card");
   note.hidden = false;
   note.classList.remove("error");
+  // 저작권 확인 체크는 여기서 먼저 막는다 — 서버도 다시 확인하지만, 여기서
+  // 잡아야 사람이 왜 안 되는지 바로 안다(서버 오류로 보이면 안 된다).
+  if (!$("#ipAgreeCheck").checked) {
+    note.textContent = "저작권 확인에 동의해야 만들 수 있습니다";
+    note.classList.add("error");
+    return;
+  }
   note.textContent = "루가 바다로 나가는 중…";
   btn.disabled = true;
   fork.forEach(c => { c.disabled = true; });
@@ -1563,6 +1587,36 @@ function runSource(runId, ep) {
       `/api/runs/${encodeURIComponent(runId)}/page/${no}?w=${w}&${q}`,
     download: `/api/runs/${encodeURIComponent(runId)}/episode.png?${q}`,
   };
+}
+
+/* 결과 화면 **목업** — /demo/result.
+ *
+ * 실제로 만들지 않고 완성본 화면을 그대로 본다. 화면 코드는 진짜와 같은
+ * paintResult() 하나만 쓰고, 데이터만 web/samples/mock.json 에서 온다 —
+ * demo.html 처럼 화면을 통째로 베끼면 본편이 바뀔 때마다 갈라진다.
+ *
+ * "내려받기"는 진짜 파일을 준다. 샘플 장을 한 편으로 이어 붙인 뒤 실제
+ * 내려받기와 **같은 길**(watermark.for_download)로 나가므로, LORE 표시가
+ * 붙은 모습이 목업에서 그대로 보인다. */
+async function showMockResult() {
+  const r = await (await fetch("/static/samples/mock.json")).json();
+  const scenes = r.scenes || [];
+  resultSrc = {
+    page: no => (scenes.find(s => s.no === no) || {}).image || "",
+    download: "/api/demo/episode.png",
+  };
+  const cuts = scenes.reduce((n, s) => n + (s.cuts || []).length, 0);
+  paintResult({
+    ...r,
+    run_id: "",                       // 목업이라 서버에 없는 작품이다 —
+    pages: scenes,                    // 공유·다시 그리기·이어 만들기는 저절로 감춰진다
+    page_count: scenes.length,
+    cut_count: cuts,
+    seconds: 0,
+  });
+  // 목업이라는 것을 화면이 스스로 말해야 한다 — 안 그러면 진짜 결과로 읽힌다
+  const sub = $("#resSub");
+  if (sub) sub.textContent += " · 화면 구경용 목업입니다";
 }
 
 async function showResult(attempt = 0) {
@@ -2574,7 +2628,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const asked = params.get("job");
   const wantResult = location.pathname.startsWith("/result");
   const wantWorks = location.pathname.startsWith("/works");
-  if (wantWorks) {
+  const wantMock = location.pathname.startsWith("/demo/result");
+  if (wantMock) {
+    showMockResult();
+  } else if (wantWorks) {
     const run = params.get("run");
     if (run) showRunResult(run, Number(params.get("ep")) || 1);
     else showWorks();
