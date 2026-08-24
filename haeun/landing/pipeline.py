@@ -493,18 +493,26 @@ class Job:
     sheet_approval: threading.Event = field(default_factory=threading.Event, repr=False)
     sheet_decision: str = field(default="", repr=False)
     sheet_edit_fields: dict[str, Any] | None = field(default=None, repr=False)
+    sheet_fixes: list[str] = field(default_factory=list, repr=False)
 
-    def decide_sheet(self, decision: str, fields: dict[str, Any] | None = None) -> None:
+    def decide_sheet(self, decision: str, fields: dict[str, Any] | None = None,
+                     fixes: list[str] | None = None) -> None:
         """승인 화면의 '이대로 진행'/'수정 후 다시 만들기' 클릭이 여기로 온다.
 
         fields 는 사람이 approvalSheet 화면에서 고친 p1.json 일부 필드(선택) —
         retry 일 때만 의미가 있다. approve 에 fields 가 오면 무시한다 (이미
         채택한 그림은 텍스트를 나중에 고쳐도 안 바뀌므로, 고친 걸 반영하려면
         다시 그려야 한다 — retry 경로로만 받는다).
+
+        fixes 는 고른 항목·적은 말에서 뽑은 지시문(sheet_corrections)이다.
+        fields 와 함께 오지만 가는 곳이 다르다 — fields 는 사양 자체를 바꾸고,
+        fixes 는 "같은 사양을 어느 쪽으로 다시 읽어라"를 프롬프트 끝에 붙인다.
+        일반 모드에는 fields 폼이 없으므로 그 모드에서는 fixes 만 간다.
         """
         with self._lock:
             self.sheet_decision = decision
             self.sheet_edit_fields = fields or None
+            self.sheet_fixes = list(fixes or [])
         self.sheet_approval.set()
 
     # awaiting_story_approval 용 — sheet_approval 과 같은 이유, 같은 방식.
@@ -1016,6 +1024,75 @@ def _apply_sheet_edits(run_dir: Path, fields: dict[str, Any]) -> None:
     p1_path.write_text(json.dumps(p1, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# ---- 고른 항목 → 다음 시트 프롬프트에 실리는 지시 --------------------------- #
+#
+# 항목을 고르게 해 놓고 기록만 하면, 사용자는 자기가 말한 것이 반영된다고
+# 믿는데 실제로는 같은 사양으로 한 번 더 뽑을 뿐이다 — 다시 만들기가 사실상
+# 재추첨이 된다. 일반 모드에는 외형 사양을 고치는 폼이 없으므로, 그 모드에서는
+# 이 항목들이 **유일한** 전달 수단이다.
+#
+# 라벨을 그대로 싣지 않고 지시문으로 옮기는 이유: "얼굴이 원본과 달라요" 는
+# 불만이지 지시가 아니다. 이미지 모델에는 무엇을 어느 쪽으로 고치라는 말이
+# 가야 한다. 아래 문장은 전부 "지난 판이 이랬다 → 이렇게 하라" 꼴이다.
+#
+# story.py 의 charsheet 프롬프트는 design_details·expression_set 을 한국어
+# 그대로 싣는다. 한글이 막히는 곳은 appearance_en 하나뿐이라
+# (gate_charsheet_source), 한국어 지시문이 그대로 나가도 게이트에 안 걸린다.
+SHEET_FIX_BY_TAG = {
+    "face": "지난 시트는 얼굴이 참고와 달랐다. 얼굴형과 이목구비 배치를 "
+            "CHARACTER 설명과 참고 사진 쪽에 더 가깝게 맞춰라.",
+    "outfit": "지난 시트는 옷·장신구가 지정과 달랐다. 위 FIXED DESIGN ELEMENTS 의 "
+              "복장을 글자 그대로 그리고, 거기 없는 옷을 지어내지 마라.",
+    "hair": "지난 시트는 머리 모양이 지정과 달랐다. 머리 길이·묶음 형태·앞머리를 "
+            "CHARACTER 설명대로 맞추고, 네 방향과 표정 전부에서 같게 유지하라.",
+    "prop": "지난 시트는 고정 소품이 빠지거나 달랐다. 위 FIXED DESIGN ELEMENTS 의 "
+            "소품을 하나도 빠뜨리지 말고 전부 그려라.",
+    "age": "지난 시트는 나이대가 안 맞았다. 얼굴 비율과 체형을 CHARACTER 설명의 "
+           "나이대로 맞춰라.",
+    "style": "지난 시트는 화풍이 지정과 달랐다. 맨 아래 STYLE 절의 화풍을 그대로 따르라.",
+    "ratio": "지난 시트는 등신 비율이 안 맞았다. 머리와 몸의 비율을 지정된 등신에 "
+             "맞추고, 네 방향에서 같은 키·같은 비율로 세워라.",
+}
+
+# 프롬프트 꼬리가 무한정 길어지지 않게. 다시 만들기를 여러 번 누르면 지시가
+# 쌓이는데(아래 참고), 너무 많아지면 서로 부딪히고 모델이 앞엣것부터 흘린다.
+SHEET_FIX_MAX = 8
+
+
+def sheet_corrections(tags: list[str] | None, text: str = "") -> list[str]:
+    """고른 항목과 적은 말 → 시트 프롬프트에 실을 지시 목록."""
+    out = [SHEET_FIX_BY_TAG[t] for t in (tags or []) if t in SHEET_FIX_BY_TAG]
+    said = (text or "").strip()[:FEEDBACK_TEXT_MAX]
+    if said:
+        # 사용자가 적은 말은 옮기지 않고 그대로 싣는다 — "망토를 안 그렸어요"
+        # 처럼 항목으로는 못 담는 것이 여기 들어오고, 요약하면 그게 사라진다.
+        out.append(f"작가가 적은 말 — 그대로 반영하라: {said}")
+    return out
+
+
+def _merge_sheet_corrections(run_dir: Path, fixes: list[str]) -> None:
+    """이번에 고른 지시를 p1.json 의 sheet_corrections 에 **쌓는다**.
+
+    덮어쓰지 않고 쌓는 이유: 다시 만들기는 charsheet 폴더를 지우고 p1.json 만
+    보고 처음부터 다시 뽑는다. 1판에서 "머리가 다르다"고 해서 고쳐졌더라도 그
+    사실은 그림에만 있었고 지워졌으므로, 2판에서 "옷이 다르다"만 남기면 머리
+    지시가 사라져 되돌아간다. 같은 문장은 한 번만 남기고(중복 제거) 최근 것을
+    뒤에 둔다 — 프롬프트 끝쪽이 더 세게 읽히므로 방금 한 말이 이긴다.
+    """
+    p1 = _read_json(run_dir, "p1.json")
+    if not p1:
+        return
+    kept = [str(c).strip() for c in (p1.get("sheet_corrections") or [])
+            if str(c or "").strip()]
+    for line in fixes:
+        if line in kept:
+            kept.remove(line)          # 다시 말한 것은 맨 뒤로 옮긴다
+        kept.append(line)
+    p1["sheet_corrections"] = kept[-SHEET_FIX_MAX:]
+    (run_dir / "p1.json").write_text(
+        json.dumps(p1, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 # --------------------------------------------------------------------------- #
 # 이어 만들기 (#72) — 콘티 · 그림 · 잇기만 돈다
 #
@@ -1299,6 +1376,8 @@ def execute(job: Job) -> None:
                 job.sheet_decision = ""
                 edit_fields = job.sheet_edit_fields
                 job.sheet_edit_fields = None
+                fixes = list(job.sheet_fixes)
+                job.sheet_fixes = []
             job.status = "running"
             if job._cancel:
                 raise Failed("취소됨")
@@ -1307,6 +1386,12 @@ def execute(job: Job) -> None:
             if edit_fields:
                 job.note("고친 내용을 저장하는 중")
                 _apply_sheet_edits(STORY / "runs" / run_id, edit_fields)
+            # 고른 항목·적은 말을 다음 판 프롬프트에 싣는다. 사양을 바꾸는
+            # edit_fields 와 달리 이쪽은 지시로 붙는다 — 일반 모드에는 수정
+            # 폼이 없으므로 여기가 사용자의 말이 그림에 닿는 유일한 길이다.
+            if fixes:
+                job.note("고쳐 달라고 한 것을 정리하는 중")
+                _merge_sheet_corrections(STORY / "runs" / run_id, fixes)
             # 다시 만들기 — story.py 는 이 폴더가 있으면 재생성을 건너뛰므로
             # (story.py 의 "다시 뽑고 싶으면 이 폴더를 사람이 직접 지운다"와
             # 동일한 방식) 지우고 같은 루프를 한 번 더 돈다.

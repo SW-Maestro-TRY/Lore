@@ -49,7 +49,8 @@
         <ul class="modecard-list">
           <li><b>물어보는 것</b> 캐릭터 · 이야기 · 그림체</li>
           <li><b>멈추는 곳</b> 캐릭터 시트 한 번
-            <small>얼굴이 틀어지면 뒤 컷 전부가 틀어져서, 여기는 꼭 보셔야 합니다</small></li>
+            <small>틀린 곳을 고르면 그걸 반영해 다시 만듭니다 — 얼굴이 틀어지면
+            뒤 컷 전부가 틀어져서, 여기는 꼭 보셔야 합니다</small></li>
           <li><b>그림 검수</b> AI 가 알아서 — 명백히 망한 컷만 다시 그립니다</li>
         </ul>
         <span class="modecard-go">이걸로 시작 →</span>
@@ -476,12 +477,14 @@
           <textarea id="sheetEditDetails" rows="3"></textarea>
         </label>
       </details>
-      <!-- 고른 항목과 적은 말은 기록만 됩니다 — 시트를 실제로 바꾸는 것은 위
-           "틀린 부분 고치기" 폼입니다. 시트 프롬프트는 영문 사양(appearance_en ·
-           고정 소지품)으로만 만들어져서 한국어 문장을 끼워 넣을 자리가 없습니다. -->
+      <!-- 고른 항목과 적은 말은 지시문으로 옮겨져(pipeline.SHEET_FIX_BY_TAG)
+           다음 판 시트 프롬프트 끝의 CORRECTIONS 절에 실립니다. 한글이 막히는
+           곳은 appearance_en 하나뿐이라(gate_charsheet_source) 한국어 지시가
+           그대로 나갑니다. 위 "틀린 부분 고치기" 폼은 사양 자체를 바꾸는 다른
+           길이고, 둘은 같이 써도 됩니다. -->
       <div class="fb-box" data-fb-stage="sheet">
         <p class="fb-lead">무엇이 마음에 안 드나요?
-          <small>고르면 기록해 둡니다 — 안 골라도 됩니다</small></p>
+          <small>고른 것과 적은 말이 다시 만들 때 반영됩니다 — 안 골라도 됩니다</small></p>
         <div class="fb-tags"></div>
         <label class="field">
           <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
