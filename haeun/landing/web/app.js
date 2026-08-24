@@ -2680,7 +2680,10 @@ function forget() {
   // 「마이페이지」로 남아, 로그인도 안 했는데 한 것처럼 보인다.
   mockAccountPill = false;
   paintAccountPill();
-  $("#scriptPanel").hidden = true;
+  // 대사 스크립트 자리는 새 결과 화면에서 없어졌다 — 남아 있을 때만 닫는다.
+  // (없는 요소에 hidden 을 쓰면 여기서 죽어서, 홈으로 나가는 길 자체가 막힌다.)
+  const script = $("#scriptPanel");
+  if (script) script.hidden = true;
   // 만들기 화면도 닫는다. 안 닫으면 걸음을 밟다가 헤더의 LORE 로 홈에 와도
   // 위저드가 홈 위에 그대로 겹쳐 있어서, 홈과 4걸음과 바닥글이 한꺼번에
   // 보인다 — 화면이 깨진 것처럼 읽힌다.

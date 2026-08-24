@@ -1786,6 +1786,9 @@ button.inline-link:hover { color: #f0d090; }
 .share-menu {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
   min-width: 210px; display: grid; gap: 2px; padding: 6px;
+  background: var(--card); border: 1px solid var(--line-2);
+  border-radius: 12px; box-shadow: var(--shadow);
+}
 
 /* ---- 제목 고치기 ---------------------------------------------------------- */
 /* 제목 옆의 연필. 제목이 길면 줄이 바뀌므로 baseline 이 아니라 위에 맞춘다. */
@@ -1801,9 +1804,6 @@ button.inline-link:hover { color: #f0d090; }
   border: 1px solid var(--line-2); border-radius: 10px; padding: .45em .7em;
 }
 .title-edit input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  background: var(--card); border: 1px solid var(--line-2);
-  border-radius: 12px; box-shadow: var(--shadow);
-}
 .share-item {
   display: block; width: 100%; text-align: left;
   background: none; border: none; border-radius: 8px;
