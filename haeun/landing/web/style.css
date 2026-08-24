@@ -127,12 +127,12 @@ body[data-view="nextep"]  .topbar { display: none; }
   position: sticky; top: 0; z-index: 50;
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 14px 20px;
-  /* 걸음이 깊어지면 지면이 어두워지는데 상단바만 밝으면 떠 보인다.
-     바탕을 투명하게 두고 흐리기만 걸어서, 아래 물빛이 그대로 비치게 한다. */
-  background: transparent; backdrop-filter: blur(10px) saturate(1.1);
-  border-bottom-color: transparent;
-  transition: color .5s ease;
-  border-bottom: 1px solid var(--line);
+  /* 상단바는 물의 맨 윗면이다. 투명하게 두면 뒤에 물이 없어서(물은 상단바
+     아래에서 시작한다) 밝은 지면이 비쳐 흰 글자가 사라졌다. 그래서 바탕을
+     비우지 않고, 그 걸음 물빛의 제일 위 색을 상단바가 직접 입는다. */
+  background: var(--bar-bg, var(--ink));
+  transition: background .5s ease, color .5s ease, border-color .5s ease;
+  border-bottom: 1px solid var(--bar-line, var(--line));
 }
 .brand { display: flex; align-items: baseline; gap: 10px; }
 /* 루 로고. 상자 색과 고래 색이 걸음마다 함께 바뀐다(아래 헤더 절 참고). */
@@ -423,31 +423,37 @@ body[data-step="3"] .wiz-title, body[data-step="4"] .wiz-title, body[data-step="
    아직 밝은 물이라 원래 색을 그대로 둔다. */
 /* ---- 헤더가 물빛을 따라간다 --------------------------------------- *
  *
- * 상단바는 물 위에 얹혀 있다. 걸음이 깊어질수록 지면이 어두워지므로, 로고
- * 상자·고래·글자를 한 벌로 묶어 같이 뒤집는다. 예전에는 글자만 밝게 바꿔서
- * 로고 상자만 혼자 민트로 떠 있었다.
+ * 상단바는 물의 수면이다. 아래 지면이 그 걸음의 물빛으로 칠해지므로, 상단바도
+ * 그 그라디언트의 **맨 위 색**을 그대로 입는다. 그래야 경계가 없이 헤더에서
+ * 지면으로 물이 한 덩어리로 이어진다.
  *
- * 1~2걸음(모래빛·얕은 물)은 밝은 바탕이라 원래 색 그대로,
- * 3~5걸음(민트~심해)은 상자를 밝게, 고래를 짙게 뒤집는다. */
-body[data-view="create"][data-step="3"],
+ * 글자·로고 명암은 바탕 밝기를 따라간다 — 1~3걸음(모래·얕은 물·연둣빛)은
+ * 밝은 바탕이라 짙은 글자, 4~5걸음(민트~심해)만 흰 글자로 뒤집는다.
+ * (예전에는 3걸음부터 흰 글자였는데, 3걸음 바탕이 밝아서 글씨가 사라졌다.) */
+body[data-view="create"][data-step="1"] { --bar-bg: var(--sea-sand); }
+body[data-view="create"][data-step="2"] { --bar-bg: var(--ink); }
+body[data-view="create"][data-step="3"] { --bar-bg: var(--sea-shore); }
+body[data-view="create"][data-step="4"] { --bar-bg: var(--sea-mid); }
+body[data-view="create"][data-step="5"] { --bar-bg: #335c56; }
+
+/* 깊은 물(4~5걸음)에서만 한 벌로 뒤집는다 — 상자는 밝게, 고래는 짙게. */
 body[data-view="create"][data-step="4"],
 body[data-view="create"][data-step="5"] {
   --brand-bg: var(--on-sea);
   --brand-fg: var(--accent-d);
+  --bar-line: rgba(247,243,234,.18);
 }
-body[data-view="create"][data-step="3"] .brand-name,
 body[data-view="create"][data-step="4"] .brand-name,
 body[data-view="create"][data-step="5"] .brand-name { color: var(--on-sea); }
-body[data-view="create"][data-step="3"] .brand-sub,
 body[data-view="create"][data-step="4"] .brand-sub,
 body[data-view="create"][data-step="5"] .brand-sub { color: rgba(247,243,234,.72); }
+body[data-view="create"][data-step="4"] .topnav a:not(.btn),
+body[data-view="create"][data-step="5"] .topnav a:not(.btn) { color: rgba(247,243,234,.78); }
 
-/* 상단바 아래 실선도 물빛에 맞춰 — 밝은 걸음에서는 옅게, 깊은 걸음에서는
-   흰 쪽으로. 선이 늘 같은 색이면 어두운 물 위에서 검은 띠로 보인다. */
-body[data-view="create"][data-step="3"] .topbar,
-body[data-view="create"][data-step="4"] .topbar,
-body[data-view="create"][data-step="5"] .topbar {
-  border-bottom-color: rgba(247,243,234,.18);
+/* 3걸음은 연둣빛 얕은 물 — 바탕이 밝으니 글자는 짙은 쪽 그대로 두고
+   실선만 물빛에 녹인다. */
+body[data-view="create"][data-step="3"] {
+  --bar-line: rgba(47,92,83,.14);
 }
 body[data-step="3"] .wiz-eyebrow, body[data-step="4"] .wiz-eyebrow, body[data-step="5"] .wiz-eyebrow { color: var(--sea-sand); }
 body[data-step="3"] .wiz-sub, body[data-step="4"] .wiz-sub, body[data-step="5"] .wiz-sub { color: rgba(255,255,255,.8); }
@@ -457,6 +463,18 @@ body[data-step="3"] .wiz-tick, body[data-step="4"] .wiz-tick, body[data-step="5"
 body[data-step="3"] .wiz-tick.done, body[data-step="4"] .wiz-tick.done, body[data-step="5"] .wiz-tick.done { background: rgba(255,255,255,.75); }
 body[data-step="3"] .wiz-tick.on, body[data-step="4"] .wiz-tick.on, body[data-step="5"] .wiz-tick.on { background: #fff; }
 body[data-step="3"] .submit-note, body[data-step="4"] .submit-note, body[data-step="5"] .submit-note { color: rgba(255,255,255,.7); }
+
+/* 3걸음은 아직 얕은 연둣빛 물이라 위쪽이 밝다 — 위 규칙의 흰 글자를 되돌려
+   짙은 쪽으로 둔다. 흰 글자는 4걸음부터. */
+body[data-step="3"] .wiz-title { color: var(--accent-d); }
+body[data-step="3"] .wiz-eyebrow { color: var(--accent-d); }
+body[data-step="3"] .wiz-sub { color: rgba(47,92,83,.72); }
+body[data-step="3"] .wiz-back,
+body[data-step="3"] .wiz-skip { color: rgba(47,92,83,.8); }
+body[data-step="3"] .wiz-tick { background: rgba(47,92,83,.25); }
+body[data-step="3"] .wiz-tick.done { background: rgba(47,92,83,.55); }
+body[data-step="3"] .wiz-tick.on { background: var(--accent-d); }
+body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
 
 
 /* 머리 — 뒤로 / 수심계 / 건너뛰기 */
