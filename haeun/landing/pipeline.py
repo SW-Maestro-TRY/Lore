@@ -1663,6 +1663,16 @@ def made_episodes(run_id: str) -> list[int]:
     return sorted(out)
 
 
+def episode_caption(run_id: str, episode: int = 1) -> str:
+    """워터마크 띠 오른쪽에 적을 한 줄 — "초롱 · 1화".
+
+    파일 이름(episode_filename)과 달리 사람이 읽는 자리라 밑줄 대신 가운뎃점을
+    쓰고, "말풍선" 같은 파일 구분은 안 붙인다.
+    """
+    name = str(_read_json(STORY / "runs" / run_id, "p1.json").get("name") or "").strip()
+    return f"{name} · {int(episode)}화" if name else f"{int(episode)}화"
+
+
 def episode_filename(run_id: str, episode: int = 1, baked: bool = False) -> str:
     """내려받을 때 붙는 이름 — 작품(주인공 이름)과 회차를 반영한다.
 
