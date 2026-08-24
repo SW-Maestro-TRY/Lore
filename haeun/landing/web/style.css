@@ -123,340 +123,127 @@ body[data-view="nextep"]  .topbar { display: none; }
 .topnav a:not(.btn) { color: var(--muted); }
 .topnav a:not(.btn):hover { color: var(--text); }
 
-/* ------------------------------------------------------------------ 히어로
+/* ------------------------------------------------------------------ 홈
 
-   모바일이 기본형이다 — 한 칸으로 쌓이고, 루가 글 아래에서 헤엄친다.
-   가로가 900px 을 넘어야 좌우로 나뉜다(맨 아래 반응형 절 참고).
+   작품이 주인공인 화면. 문단이 없고, 스크롤하면 그림이 흐른다.
+   모바일이 기본형이라 피드는 두 칸으로 시작해서 화면이 넓어질수록 칸이 는다. */
 
-   바탕은 위(모래빛)에서 아래(민트)로 내려가는 수면이다. 랜딩 전체가 바다
-   한 장이라 히어로에만 상자를 두르지 않고 지면째로 칠한다. */
+/* ---- 히어로 — 한 줄, 단추 하나, 루 --------------------------------- */
 
-.hero {
-  position: relative;
-  display: grid; grid-template-columns: 1fr;
-  gap: clamp(20px, 5vw, 70px); align-items: center;
-  padding: clamp(28px, 6vw, 96px) clamp(18px, 5vw, 56px) clamp(36px, 6vw, 90px);
-  max-width: 1320px; margin: 0 auto;
-}
-/* 수면 — 히어로 뒤에 깔리고 양옆 여백까지 덮는다 */
-.hero::before {
-  content: ""; position: absolute; inset: 0 calc(50% - 50vw);
+.hero { position: relative; overflow: hidden; }
+.hero-sea {
+  position: absolute; inset: 0;
   background: linear-gradient(180deg,
-    var(--sea-sand) 0%, var(--ink) 34%, var(--sea-shore) 78%, var(--sea-mint) 100%);
-  z-index: -1;
+    var(--sea-sand) 0%, #f2ead9 38%, var(--sea-shore) 74%, var(--sea-mint) 100%);
 }
-.hero > * { position: relative; }
-.hero h1 { font-size: clamp(2.05rem, 5.2vw, 3.9rem); font-weight: 800; color: var(--accent-d); }
-.lede { color: var(--muted); font-size: clamp(1rem, 1.5vw, 1.12rem); max-width: 54ch; margin: 1.1em 0 0; }
-.lede strong { color: var(--text); }
-.hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 2em; }
-.hero-facts {
-  display: flex; flex-wrap: wrap; gap: 10px 28px; list-style: none;
-  margin: 2.2em 0 0; padding: 0; color: var(--dim); font-size: .9rem;
+.hero-inner {
+  position: relative; max-width: 1320px; margin: 0 auto;
+  padding: clamp(28px, 7vw, 64px) clamp(20px, 5vw, 56px) 0;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
 }
-.hero-facts b { color: var(--gold); }
-
-/* 히어로 아트 — 루가 헤엄치고, 그 뒤로 실제 결과물이 흘러간다.
-   모바일에서는 세로 흐름 한 줄만 남긴다(두 줄이면 폭이 모자라 둘 다 잘린다). */
-.hero-art {
-  position: relative; display: grid; grid-template-columns: 1fr; gap: 12px;
-  height: min(420px, 56vh); overflow: hidden;
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255,255,255,.5), rgba(161,198,187,.2));
+.hero-kicker {
+  margin: 0; font-size: .66rem; font-weight: 800; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--sea-mid);
 }
-.marquee { overflow: hidden; }
-.marquee-track {
-  display: flex; flex-direction: column; gap: 14px; padding: 14px;
-  animation: drift 46s linear infinite;
+.hero h1 {
+  font-size: clamp(2rem, 8vw, 3.4rem); font-weight: 800;
+  margin: 14px 0 0; color: var(--accent-d); line-height: 1.18;
 }
-.marquee-slow { display: none; }
-.marquee-slow .marquee-track { animation-duration: 64s; animation-direction: reverse; }
-.marquee-track img {
-  border-radius: 10px; border: 1px solid var(--line);
-  box-shadow: 0 8px 20px rgba(38,64,58,.14);
-}
-@keyframes drift { from { transform: translateY(0); } to { transform: translateY(-50%); } }
-@media (prefers-reduced-motion: reduce) { .marquee-track { animation: none; } }
-.hero-fade {
-  position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(180deg, rgba(250,246,238,.9), transparent 22%,
-              transparent 66%, rgba(214,227,217,.92));
-}
-/* 루 — 아트 위에 겹쳐 떠 있다. 배경을 지우지 않고 원본 그대로 얹으면 흰 사각형이
-   보여서, 곱하기로 깔아 종이에 스며들게 한다(원본은 밝은 바탕 위 그림이다). */
-/* 루 그림은 배경이 투명하지 않고 **밝은 종이 위에 그린 것**이다. 그래서 곱하기로
-   깔면 흰 사각형은 사라지지만, 뒤에 짙은 웹툰 컷이 있으면 루까지 같이 먹혀서
-   안 보인다. 감싸는 상자에 밝은 원을 깔고 isolation 으로 합성을 그 안에 가둔다 —
-   루는 항상 밝은 물 위에서 헤엄치고, 뒤의 컷은 원 바깥에서만 보인다. */
+.hero h1 em { font-style: normal; color: var(--sea-mid); }
+.btn-hero { margin-top: 24px; padding: 1.05em 2.4em; font-size: 1.02rem; }
+.hero-note { margin-top: 12px; color: var(--muted); font-size: .82rem; }
+/* 루는 히어로 아래쪽에 반쯤 잠긴 채로 뜬다 — 다음 화면(피드)으로 이어지는
+   물이라서 잘려도 괜찮다. 그림 배경이 투명이 아니라 가장자리를 지운다. */
 .hero-lou {
-  position: absolute; left: 50%; bottom: -4px; width: min(86%, 340px);
-  transform: translateX(-50%);
-  isolation: isolate; pointer-events: none;
-  display: block; line-height: 0;
-  background: radial-gradient(62% 58% at 50% 52%,
-    rgba(250,246,238,.99) 0%, rgba(250,246,238,.95) 58%, rgba(250,246,238,0) 100%);
-}
-.hero-lou img {
-  width: 100%; mix-blend-mode: multiply;
-  /* 곱하기만으로는 그림 네 귀퉁이의 흰 바탕이 그대로 남아 사각형이 보인다.
-     가장자리를 둥글게 지워서 물에 스미듯 끝나게 한다. */
-  -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000 58%, transparent 100%);
-          mask-image: radial-gradient(closest-side at 50% 50%, #000 58%, transparent 100%);
-}
-.hero-tagline {
-  position: absolute; left: 50%; transform: translateX(-50%);
-  bottom: 10px; z-index: 2;
-  background: var(--accent-d); color: var(--on-sea);
-  border-radius: 999px; padding: .45em 1.1em;
-  font-size: .78rem; font-weight: 700; white-space: nowrap;
-  box-shadow: 0 8px 20px rgba(38,64,58,.22);
+  width: min(84%, 420px); margin: -4px auto -6px;
+  mix-blend-mode: multiply;
+  -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000 60%, transparent 100%);
+          mask-image: radial-gradient(closest-side at 50% 50%, #000 60%, transparent 100%);
 }
 
-/* ------------------------------------------------------- 바다의 깊이 (띠) */
+/* ---- 피드 — 홈의 본문 ---------------------------------------------- */
 
-/* 히어로의 수면에서 그대로 이어져 내려간다 — 민트에서 심해까지.
-   글자는 짙은 물 위에 얹히므로 --on-sea 를 쓴다. */
-.depths {
-  background: linear-gradient(180deg, var(--sea-mint), var(--sea-mid) 55%, var(--sea-deep));
-  padding: clamp(30px, 6vw, 56px) 0;
+.feed {
+  background: linear-gradient(180deg, var(--sea-mint) 0%, var(--ink) 12%, var(--ink) 100%);
+  padding: 8px 0 clamp(30px, 6vw, 56px);
 }
-.depth-list {
-  list-style: none; margin: 0 auto; padding: 0 clamp(18px, 5vw, 56px);
-  max-width: 1320px; display: grid; gap: 12px;
-}
-.depth {
-  display: flex; align-items: center; gap: 14px;
-  padding: 12px 14px; border-radius: 16px;
-  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22);
-  color: var(--on-sea);
-}
-.depth img {
-  width: 60px; height: 60px; flex: none;
-  border-radius: 12px; object-fit: cover;
-}
-.depth b { font-size: .96rem; }
-.depth p { margin: .25em 0 0; font-size: .86rem; color: rgba(247,243,234,.82); }
-
-/* ------------------------------------------------------------------ how */
-
-.how, .gallery, .studio {
+.feed-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
   max-width: 1320px; margin: 0 auto;
-  padding: clamp(46px, 7vw, 92px) clamp(18px, 5vw, 56px);
-  border-top: 1px solid var(--line);
+  padding: clamp(20px, 4vw, 36px) clamp(14px, 4vw, 56px) 0;
 }
-.how h2, .gallery h2, .studio h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 800; }
-.how-grid {
-  list-style: none; padding: 0; margin: 2.6em 0 0;
-  display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  counter-reset: how;
-}
-.how-grid li {
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 22px; display: flex; flex-direction: column; gap: 10px;
-}
-.how-no { color: var(--accent); font-weight: 800; font-size: .85rem; letter-spacing: .1em; }
-.how-grid h3 { font-size: 1.06rem; }
-.how-grid p { margin: 0; color: var(--muted); font-size: .92rem; }
-.how-grid img { margin-top: auto; border-radius: 8px; border: 1px solid var(--line); }
+.feed-head h2 { font-size: clamp(1.15rem, 4vw, 1.6rem); font-weight: 800; color: var(--accent-d); }
+.feed-more { color: var(--sea-mid); font-size: .86rem; font-weight: 700; white-space: nowrap; }
 
-.gallery-grid {
-  margin-top: 2.6em; display: grid; gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+/* 장르 줄 — 폰에서는 옆으로 민다. 줄바꿈으로 두 줄이 되면 그리드가 밀린다. */
+.feed-tabs {
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+  max-width: 1320px; margin: 0 auto;
+  padding: 14px clamp(14px, 4vw, 56px) 2px;
 }
-.gallery-grid figure { margin: 0; }
-/* 컷마다 캔버스 비율이 다르므로(16:9 ~ 9:16) 그대로 두면 줄이 들쭉날쭉해진다.
-   여기서는 예시를 보여주는 자리라 같은 창으로 잘라 보여준다. */
-.gallery-grid img {
-  aspect-ratio: 3 / 4; object-fit: cover; object-position: top center;
-  border-radius: 12px; border: 1px solid var(--line);
-  box-shadow: 0 12px 28px rgba(38,64,58,.14);
+.feed-tabs::-webkit-scrollbar { display: none; }
+.feed-tab {
+  flex: none; border: 1px solid var(--line-2); background: var(--card);
+  border-radius: 999px; padding: .55em 1.1em; font: inherit; font-size: .84rem;
+  color: var(--muted); cursor: pointer; white-space: nowrap; min-height: 40px;
 }
-.gallery-grid figcaption {
-  margin-top: .7em; color: var(--dim); font-size: .85rem; letter-spacing: .04em;
+.feed-tab.is-on {
+  background: var(--accent-d); border-color: var(--accent-d);
+  color: var(--on-sea); font-weight: 700;
 }
 
-/* ------------------------------------------------- 모드 고르기(온보딩) */
-/*
-   처음 온 사람이 보는 첫 화면이라 랜딩·상단바를 통째로 덮는다. 두 카드를
-   나란히 놓아 **같은 무게**로 보이게 한다 — 한쪽을 크게 하거나 색을 주면
-   "이걸 고르라는 것" 이 되고, 그러면 고르는 화면이 아니라 안내 화면이다. */
-
-body[data-view="mode"] #landing,
-body[data-view="mode"] .topbar,
-body[data-view="mode"] .foot { display: none; }
-
-.modegate { min-height: 100vh; display: grid; place-items: center; padding: 5vh 22px; }
-.modegate-inner { max-width: 980px; width: 100%; }
-.modegate h1 { font-size: clamp(1.9rem, 4vw, 2.8rem); font-weight: 800; margin-top: .2em; }
-.modegate-sub { color: var(--muted); max-width: 58ch; margin: 1em 0 0; }
-.modegate-foot { color: var(--dim); font-size: .82rem; max-width: 64ch; margin: 2em auto 0; text-align: center; }
-
-.modegate-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 2.4em; }
-@media (max-width: 760px) { .modegate-cards { grid-template-columns: 1fr; } }
-
-.modecard {
-  position: relative; text-align: left; cursor: pointer; font: inherit; color: inherit;
-  background: var(--card); border: 1px solid var(--line-2); border-radius: var(--radius);
-  padding: 34px 24px 22px; display: flex; flex-direction: column; gap: 10px;
-  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+/* 매소너리 — column-count 를 쓴다. grid 로는 높이가 제각각인 그림을 빈틈없이
+   못 쌓는다(각 줄이 가장 큰 그림에 맞춰져서 아래가 뜬다). */
+.feed-grid {
+  max-width: 1320px; margin: 0 auto;
+  padding: 14px clamp(10px, 3vw, 56px) 0;
+  column-count: 2; column-gap: 10px;
 }
-.modecard:hover { border-color: var(--accent); background: var(--card-2); transform: translateY(-2px); }
-.modecard:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.modecard-tag {
-  position: absolute; top: 0; left: 24px; transform: translateY(-50%);
-  background: var(--gold); color: var(--ink); font-size: .68rem; font-weight: 800;
-  letter-spacing: .18em; padding: .35em .9em; border-radius: 6px;
+.pin { break-inside: avoid; margin: 0 0 18px; }
+.pin a { display: block; border-radius: 12px; overflow: hidden; position: relative; }
+.pin img { width: 100%; display: block; transition: transform .3s ease; }
+.pin a:hover img { transform: scale(1.03); }
+.pin-badge {
+  position: absolute; left: 8px; top: 8px; z-index: 1;
+  background: rgba(31,63,60,.72); color: var(--on-sea);
+  border-radius: 6px; padding: .18em .5em; font-size: .68rem; font-weight: 700;
 }
-.modecard h2 { font-size: 1.3rem; }
-.modecard-lede { color: var(--muted); font-size: .9rem; margin: 0; }
-.modecard-list { list-style: none; padding: 0; margin: .6em 0 0; display: grid; gap: 10px; }
-.modecard-list li { font-size: .86rem; color: var(--text); line-height: 1.5; }
-.modecard-list li b {
-  display: block; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--dim); font-weight: 700; margin-bottom: 2px;
+.pin h3 {
+  font-size: .86rem; font-weight: 700; margin: 8px 0 0;
+  line-height: 1.35; color: var(--text);
 }
-.modecard-list li small { display: block; color: var(--dim); font-size: .76rem; margin-top: 2px; }
-.modecard-go { margin-top: auto; padding-top: 14px; color: var(--accent); font-weight: 700; font-size: .88rem; }
+.pin p { margin: 3px 0 0; font-size: .74rem; color: var(--dim); }
+.pin-genre { color: var(--sea-mid); font-weight: 700; }
+.pin-genre.is-sheet { color: var(--gold); }
 
-/* 폼 위의 현재 모드 표시. 지금 무엇으로 만들고 있는지가 안 보이면, 왜 어떤
-   칸은 있고 어떤 칸은 없는지를 사용자가 설명할 길이 없다. */
-.mode-bar {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 1.4em;
-}
-/* 폰에서는 배지와 단추를 한 줄에 두고 설명을 그 아래로 내린다 — 셋을 한 줄에
-   욱여넣으면 단추가 혼자 다음 줄로 떨어져서 무엇에 딸린 단추인지 흐려진다. */
-.mode-bar .btn { margin-left: auto; }
-@media (max-width: 560px) {
-  .mode-bar-desc { order: 3; flex: 1 0 100%; margin-top: -2px; }
-}
-.mode-badge {
-  background: var(--card-2); border: 1px solid var(--line-2); border-radius: 999px;
-  padding: .35em 1em; font-size: .8rem; font-weight: 700; white-space: nowrap;
-}
-body[data-mode="expert"] .mode-badge { border-color: var(--gold); color: var(--gold); }
-.mode-bar-desc { color: var(--dim); font-size: .82rem; flex: 1 1 20ch; }
+/* ---- 만드는 순서 — 세 칸, 각 한 줄 --------------------------------- */
 
-.checkpoint-list { margin: 10px 0 0; padding-left: 1.3em; display: grid; gap: 8px; }
-.checkpoint-list li { font-size: .86rem; line-height: 1.5; }
-.checkpoint-list li small { display: block; color: var(--dim); font-size: .76rem; }
-
-/* ------------------------------------------------------------------ 폼 */
-
-.studio-head { margin-bottom: 2.4em; }
-.studio-grid {
-  display: grid; grid-template-columns: 1fr;
-  gap: 18px; align-items: start;
+.dive { background: var(--ink-2); border-top: 1px solid var(--line); }
+.dive-row {
+  list-style: none; margin: 0 auto; padding: clamp(22px, 5vw, 40px) clamp(14px, 4vw, 56px);
+  max-width: 1320px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
 }
-.stack { display: grid; gap: 18px; }
+.dive-row li { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.dive-row img { width: 100%; max-width: 132px; border-radius: 14px; }
+.dive-row b { font-size: .84rem; color: var(--accent-d); }
 
-.sheet-card { position: relative; padding-top: 34px; }
-.card-tab {
-  position: absolute; top: 0; left: 22px; transform: translateY(-50%);
-  background: var(--accent); color: #fff; font-size: .68rem; font-weight: 800;
-  letter-spacing: .18em; padding: .35em .9em; border-radius: 6px;
-}
+/* ---- 넓어지면 ------------------------------------------------------- */
 
-.field { display: grid; gap: .5em; margin-bottom: 16px; }
-.field > span, .field-label {
-  font-size: .86rem; font-weight: 700; color: var(--text); letter-spacing: -.01em;
+@media (min-width: 620px) {
+  .feed-grid { column-count: 3; column-gap: 14px; }
+  .pin { margin-bottom: 22px; }
 }
-.field small, .field-label small, legend small { color: var(--dim); font-weight: 500; }
-.field input[type="text"], .field textarea, .fields-grid input {
-  width: 100%; background: var(--ink-2); color: var(--text);
-  border: 1px solid var(--line-2); border-radius: 10px;
-  padding: .8em .95em; font: inherit; font-size: .95rem; resize: vertical;
+@media (min-width: 900px) {
+  .hero-inner { padding-top: clamp(40px, 6vw, 80px); }
+  .feed-grid { column-count: 4; column-gap: 16px; }
+  .dive-row img { max-width: 200px; }
 }
-.field textarea { line-height: 1.6; }
-.field input:focus, .field textarea:focus, .fields-grid input:focus {
-  outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(229,73,60,.16);
+@media (min-width: 1180px) {
+  .feed-grid { column-count: 5; }
 }
-.field input::placeholder, .field textarea::placeholder { color: #a6b2ad; }
-.field.big > span { font-size: 1.02rem; }
-.field.big textarea { font-size: 1.02rem; padding: 1em; }
-.two { display: grid; grid-template-columns: 1fr; gap: 16px; }
-.two .field { margin-bottom: 0; }
-
-.photo-row { display: grid; grid-template-columns: 104px 1fr; gap: 14px; margin-bottom: 18px; }
-.photo-drop {
-  position: relative; display: grid; place-items: center; text-align: center;
-  min-height: 168px; padding: 12px; cursor: pointer; overflow: hidden;
-  border: 1.5px dashed var(--line-2); border-radius: 12px; background: var(--ink-2);
-  transition: border-color .18s ease, background .18s ease;
+@media (prefers-reduced-motion: reduce) {
+  .pin img, .pin a:hover img { transition: none; transform: none; }
 }
-.photo-drop:hover, .photo-drop.drag { border-color: var(--accent); background: #eaf3ef; }
-.photo-drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.photo-hint { display: grid; gap: .3em; color: var(--muted); font-size: .78rem; }
-.photo-hint b { color: var(--text); font-size: .88rem; }
-.photo-hint small { color: var(--dim); line-height: 1.4; }
-.photo-drop.has-photo .photo-hint { display: none; }
-.photo-clear {
-  position: absolute; top: 6px; right: 6px; z-index: 2; width: 26px; height: 26px;
-  border-radius: 50%; border: none; background: rgba(0,0,0,.65); color: #fff;
-  cursor: pointer; font-size: .8rem;
-}
-.photo-side { display: grid; align-content: start; }
-.photo-side .field { margin-bottom: 12px; }
-
-.fields { border: none; padding: 0; margin: 0; }
-.fields legend { font-size: .86rem; font-weight: 700; padding: 0 0 .7em; }
-.fields-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.fields-grid label { display: grid; gap: .35em; }
-.fields-grid label > span { font-size: .78rem; color: var(--dim); font-weight: 600; }
-.fields-grid input { padding: .6em .75em; font-size: .9rem; }
-
-.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
-.chip {
-  border: 1px solid var(--line-2); background: transparent; color: var(--muted);
-  border-radius: 999px; padding: .4em .9em; font: inherit; font-size: .82rem;
-  cursor: pointer; transition: all .16s ease;
-}
-.chip:hover { border-color: var(--accent); color: var(--text); }
-
-.styles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-/* 그림체가 홀수 개면 마지막 카드가 한 줄에 혼자 남아 오른쪽이 비어 보인다.
-   그때만 두 칸을 다 쓰게 해서 줄을 채운다 (7개 → 2·2·2·꽉 찬 1). */
-.style-opt:last-child:nth-child(odd) { grid-column: 1 / -1; }
-.style-opt { position: relative; cursor: pointer; }
-.style-opt input { position: absolute; opacity: 0; pointer-events: none; }
-.style-box {
-  display: grid; gap: .25em; padding: 14px; border-radius: 11px;
-  border: 1px solid var(--line-2); background: var(--ink-2); height: 100%;
-  transition: border-color .16s ease, background .16s ease;
-}
-.style-box b { font-size: .95rem; }
-.style-box small { color: var(--dim); font-size: .78rem; line-height: 1.45; }
-.style-opt:hover .style-box { border-color: var(--accent); background: #eaf3ef; }
-.style-opt input:checked + .style-box {
-  border-color: var(--accent); background: rgba(229,73,60,.1);
-}
-.style-opt input:focus-visible + .style-box { box-shadow: 0 0 0 3px rgba(229,73,60,.25); }
-
-/* 등신 비율 — 그림체 카드와 같은 문법, 네 칸이라 더 좁다. */
-.ratios { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-.ratio { position: relative; cursor: pointer; }
-.ratio input { position: absolute; opacity: 0; pointer-events: none; }
-.ratio span {
-  display: grid; gap: .2em; padding: 11px 9px; border-radius: 10px;
-  border: 1px solid var(--line-2); background: var(--ink-2); height: 100%;
-  text-align: center; transition: border-color .16s ease, background .16s ease;
-}
-.ratio b { font-size: .9rem; }
-.ratio small { color: var(--dim); font-size: .7rem; line-height: 1.35; }
-.ratio:hover span { background: #eaf3ef; }
-.ratio input:checked + span { border-color: var(--accent); background: rgba(229,73,60,.1); }
-.ratio input:focus-visible + span { box-shadow: 0 0 0 3px rgba(229,73,60,.25); }
-@media (min-width: 620px) { .ratios { grid-template-columns: repeat(4, 1fr); } }
-
-.submit-card { display: grid; gap: 16px; }
-.toggle { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
-.toggle input { margin-top: .35em; accent-color: var(--accent); width: 17px; height: 17px; }
-.toggle span { display: grid; gap: .15em; }
-.toggle b { font-size: .93rem; }
-.toggle small { color: var(--dim); font-size: .8rem; }
-.submit-note { margin: 0; color: var(--dim); font-size: .82rem; text-align: center; }
-.submit-note.error { color: #ff8b80; }
-
 
 /* ------------------------------------------------------------- 위저드
 
@@ -467,7 +254,11 @@ body[data-mode="expert"] .mode-badge { border-color: var(--gold); color: var(--g
 .wizard { display: block; max-width: 640px; margin: 0 auto; }
 /* 걸음을 옮기면 studio-head 로 스크롤한다. 상단 바가 sticky 라 그냥 두면
    제목이 그 아래로 숨는다 — 바 높이만큼 미리 띄운다. */
-.studio-head { scroll-margin-top: 76px; }
+.studio-head { scroll-margin-top: 76px; text-align: center; }
+.studio-head h2 { font-size: clamp(1.3rem, 5vw, 1.8rem); font-weight: 800; color: var(--accent-d); }
+.studio-sub { color: var(--muted); font-size: .88rem; margin: .6em 0 0; }
+body[data-step="4"] .studio-sub,
+body[data-step="5"] .studio-sub { color: rgba(247,243,234,.75); }
 
 /* 지면 — body[data-step] 이 물빛을 정한다(app.js 가 적는다) */
 .studio { position: relative; transition: background .5s ease; }
@@ -485,15 +276,9 @@ body[data-step="6"] .studio-head h2,
 body[data-step="4"] .wiz-title,
 body[data-step="5"] .wiz-title,
 body[data-step="6"] .wiz-title { color: var(--on-sea); }
-body[data-step="4"] .studio-head .section-lede,
-body[data-step="5"] .studio-head .section-lede,
-body[data-step="6"] .studio-head .section-lede,
 body[data-step="4"] .wiz-sub,
 body[data-step="5"] .wiz-sub,
 body[data-step="6"] .wiz-sub { color: rgba(247,243,234,.78); }
-body[data-step="4"] .studio-head .section-lede b,
-body[data-step="5"] .studio-head .section-lede b,
-body[data-step="6"] .studio-head .section-lede b { color: var(--on-sea); }
 body[data-step="5"] .wiz-back, body[data-step="6"] .wiz-back,
 body[data-step="4"] .wiz-back { color: var(--on-sea); }
 body[data-step="4"] .mode-bar-desc,
@@ -614,36 +399,51 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 
 /* ------------------------------------------------------------------ 진행 */
 
-.progress { min-height: 100vh; padding: clamp(28px, 5vw, 64px) clamp(16px, 5vw, 40px); }
-.progress-inner { max-width: 900px; margin: 0 auto; }
-.progress-head {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  gap: 24px; flex-wrap: wrap; margin-bottom: 34px;
+/* 기다리는 화면 — 루가 가운데. 물빛은 지금 단계가 얼마나 깊은지에 따라
+   내려가지 않고 한 톤으로 둔다(여기서 물빛을 바꾸면 루 그림이 매번 다른
+   바탕 위에 놓여서 그림끼리 달라 보인다). */
+.progress {
+  min-height: 100vh; padding: clamp(24px, 5vw, 56px) clamp(16px, 5vw, 40px);
+  background: linear-gradient(180deg, var(--sea-shore) 0%, var(--ink) 34%, var(--ink) 100%);
 }
-.progress-head h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); font-weight: 800; }
-.progress-sub { color: var(--muted); margin: .6em 0 0; max-width: 52ch; }
-.progress-clock { text-align: right; display: grid; gap: 6px; justify-items: end; }
+.progress-inner { max-width: 720px; margin: 0 auto; }
+.progress-head {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 0; margin-bottom: 30px;
+}
+.progress-head .eyebrow { margin: 16px 0 0; }
+.progress-head h2 { font-size: clamp(1.35rem, 5vw, 1.9rem); font-weight: 800; margin: 8px 0 0; color: var(--accent-d); }
+.progress-sub { color: var(--muted); margin: .5em 0 0; max-width: 44ch; font-size: .88rem; }
+.progress-clock {
+  display: flex; align-items: center; gap: 12px; margin-top: 22px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 999px; padding: 8px 8px 8px 18px;
+}
 
 /* ------------------------------------------------------------ 마스코트 루
 
-   예전에는 먹 한 방울이 굳어 생긴 블롭을 SVG 로 그렸다. 이제 마스코트가
-   고래 **루** 로 정해졌고, 단계마다 루가 실제로 무엇을 하는 그림이 있어서
-   (design-reference/loading/*) 그 그림을 그대로 쓴다 — 표정만 바뀌는 것보다
-   "지금 콘티를 짜는 중"이 그림으로 보이는 편이 10분을 기다리는 화면에 낫다.
+   10분을 기다리는 화면의 주인공. 단계마다 루가 실제로 무엇을 하는 그림이
+   있어서(design-reference/loading/*) 그걸 쓴다 — 표정만 바뀌는 것보다
+   "지금 콘티를 짜는 중"이 그림으로 보이는 편이 낫다.
 
-   app.js 는 data-mood(감정)와 data-stage(단계 key)를 둘 다 적어 준다.
-   단계 그림이 있으면 그것을 쓰고, 없으면 감정 그림으로 떨어진다. */
+   그림 고르기는 전부 여기서 한다. app.js 는 세 가지만 적어 준다 —
+     data-stage  지금 단계(story·sheet·board·art·bind)
+     data-mood   감정(think·ask·done·error)
+     data-react  방금 만졌을 때의 반응(click·multiclick·longpress·pet)
+   뒤에 오는 규칙이 이기므로 반응 > 단계 > 감정 순으로 덮인다. */
 
-.progress-lead { display: flex; align-items: flex-start; gap: 16px; }
 .mascot {
-  flex: 0 0 auto; width: 108px; height: 108px; margin-top: 2px;
-  border-radius: 18px; overflow: hidden;
+  flex: 0 0 auto; width: min(62vw, 240px); height: min(62vw, 240px);
+  border: 1px solid var(--line); border-radius: 22px; padding: 0;
   background: var(--card) center/cover no-repeat;
   background-image: url("/static/lou/lou-think.png");
-  border: 1px solid var(--line);
-  animation: lou-bob 3.4s ease-in-out infinite;
+  cursor: pointer; overflow: hidden;
+  animation: lou-swim 4.6s ease-in-out infinite;
+  transition: transform .18s ease, box-shadow .18s ease;
 }
-.mascot-svg { display: none; }   /* 옛 SVG 는 마크업에 남아 있어도 안 그린다 */
+.mascot:hover { box-shadow: 0 10px 26px rgba(38,64,58,.18); }
+.mascot:active { transform: scale(.96); }
+.mascot:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
 /* 감정 — 단계 그림이 없을 때의 바탕값 */
 .mascot[data-mood="think"] { background-image: url("/static/lou/lou-think.png"); }
@@ -651,23 +451,42 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 .mascot[data-mood="done"]  { background-image: url("/static/lou/stage-done.png"); }
 .mascot[data-mood="error"] { background-image: url("/static/lou/lou-error.png"); animation: none; }
 
-/* 단계 — 있으면 감정을 덮는다 (뒤에 오므로 우선한다) */
+/* 단계 — 감정을 덮는다 */
 .mascot[data-stage="story"] { background-image: url("/static/lou/stage-story.png"); }
 .mascot[data-stage="sheet"] { background-image: url("/static/lou/stage-sheet.png"); }
 .mascot[data-stage="board"] { background-image: url("/static/lou/stage-board.png"); }
 .mascot[data-stage="art"]   { background-image: url("/static/lou/stage-art.png"); }
 .mascot[data-stage="bind"]  { background-image: url("/static/lou/stage-bind.png"); }
-/* 다 끝났거나 사람 확인을 기다릴 때는 단계 그림보다 감정이 맞다 */
-.mascot[data-mood="done"][data-stage],
-.mascot[data-mood="error"][data-stage] { background-image: url("/static/lou/stage-done.png"); }
+.mascot[data-mood="done"][data-stage]  { background-image: url("/static/lou/stage-done.png"); }
 .mascot[data-mood="error"][data-stage] { background-image: url("/static/lou/lou-error.png"); }
 
-@keyframes lou-bob {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-5px); }
+/* 반응 — 만졌을 때. 단계보다 세다(잠깐이고, 만진 것에 대한 답이라서). */
+.mascot[data-react="click"]      { background-image: url("/static/lou/react-click.png"); }
+.mascot[data-react="pet"]        { background-image: url("/static/lou/react-pet.png"); }
+.mascot[data-react="multiclick"] { background-image: url("/static/lou/react-multiclick.png"); }
+.mascot[data-react="longpress"]  { background-image: url("/static/lou/react-longpress.png"); }
+.mascot[data-react] { animation: lou-wiggle .5s ease-in-out 2; }
+
+/* 헤엄 — 위아래로 뜨면서 아주 조금 기운다. 화면이 멈춘 것처럼 안 보이게
+   하는 것이 목적이라 크게 움직이지 않는다. */
+@keyframes lou-swim {
+  0%, 100% { transform: translateY(0)    rotate(0deg); }
+  30%      { transform: translateY(-7px) rotate(-1.4deg); }
+  65%      { transform: translateY(3px)  rotate(1.1deg); }
 }
-@media (prefers-reduced-motion: reduce) { .mascot { animation: none; } }
-@media (max-width: 560px) { .mascot { width: 84px; height: 84px; } }
+@keyframes lou-wiggle {
+  0%, 100% { transform: rotate(0deg)    scale(1); }
+  25%      { transform: rotate(-5deg)   scale(1.04); }
+  75%      { transform: rotate(5deg)    scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot, .mascot[data-react] { animation: none; }
+}
+
+
+/* 만질 수 있다는 것을 한 번은 말해 준다. 만지고 나면 굳이 안 보여도 된다. */
+.mascot-poke { color: var(--dim); font-size: .76rem; margin: .9em 0 0; }
+.mascot-line.is-react { color: var(--accent-d); font-weight: 700; }
 
 /* 마스코트가 지금 무엇을 하는지 한 줄로 말한다 — 진행 상태 텍스트의 인간적인
    버전이라, 아래 rail 의 기계적인 로그와 역할이 겹치지 않는다. */
@@ -958,23 +777,15 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
   .ratios { grid-template-columns: 1fr; }
   .styles { grid-template-columns: 1fr; }
   .photo-row { grid-template-columns: 1fr; }
-  .hero-facts { gap: 8px 18px; font-size: .84rem; }
 }
 
 /* 큰 폰 · 세로 태블릿 */
 @media (min-width: 620px) {
-  .depth-list { grid-template-columns: repeat(3, 1fr); }
-  .depth { flex-direction: column; align-items: flex-start; text-align: left; }
-  .depth img { width: 100%; height: 120px; }
   .two { grid-template-columns: 1fr 1fr; }
 }
 
 /* 가로 태블릿부터 — 여기서 처음 좌우로 나뉜다 */
 @media (min-width: 900px) {
-  .hero { grid-template-columns: minmax(0,1.05fr) minmax(0,.95fr); }
-  .hero-art { height: min(560px, 70vh); grid-template-columns: 1fr 1fr; }
-  .marquee-slow { display: block; }
-  .hero-lou { width: min(70%, 340px); }
   .studio-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); }
   .photo-row { grid-template-columns: 132px 1fr; }
 }
@@ -1194,3 +1005,58 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 .qa-note small { color: var(--dim); }
 .qa-note ul { margin: .4rem 0 .5rem; padding-left: 1.2em; color: var(--muted); }
 .qa-note li { margin: .15em 0; }
+
+/* ---------------------------------------------------------- 갈림길 카드
+
+   위저드 2걸음. **고르는 것이 곧 다음 동작**이라 아래 단추를 안 쓴다 —
+   카드를 누르면 스토리 모드는 바로 출발하고, 전문가 모드는 길이 늘어난다.
+   그래서 카드마다 무슨 일이 일어나는지를 맨 아래 한 줄로 못박는다. */
+
+.fork { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 20px; }
+.fork-card {
+  position: relative; overflow: hidden;
+  text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  background: var(--card); border: 1.5px solid var(--line-2);
+  border-radius: 20px; padding: 20px;
+  display: flex; flex-direction: column; gap: 8px;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .12s ease;
+}
+.fork-card:hover { border-color: var(--accent); box-shadow: 0 12px 30px rgba(38,64,58,.14); }
+.fork-card:active { transform: translateY(1px); }
+.fork-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.fork-card[aria-pressed="true"] { border-color: var(--accent-d); border-width: 2.5px; }
+.fork-card:disabled { opacity: .55; cursor: progress; }
+
+/* 루가 카드 오른쪽 위에서 살짝 보인다 — 장식이 아니라 "누가 만드는지"의 표시 */
+.fork-art {
+  position: absolute; right: -18px; top: -10px; width: 116px;
+  opacity: .5; pointer-events: none;
+  -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000 55%, transparent 100%);
+          mask-image: radial-gradient(closest-side at 50% 50%, #000 55%, transparent 100%);
+}
+.fork-tag {
+  align-self: flex-start; background: var(--accent); color: #fff;
+  border-radius: 999px; padding: .25em .8em;
+  font-size: .68rem; font-weight: 800; letter-spacing: .1em;
+}
+.fork-card h4 { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--accent-d); }
+.fork-lede { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.55; max-width: 40ch; }
+.fork-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 8px; }
+.fork-list li { font-size: .85rem; color: var(--text); }
+.fork-list b { color: var(--dim); font-weight: 600; margin-right: .5em; font-size: .8rem; }
+.fork-list small { display: block; color: var(--dim); font-size: .76rem; margin-top: .2em; line-height: 1.45; }
+.fork-go { margin-top: 6px; font-size: .88rem; font-weight: 700; color: var(--accent); }
+.fork-foot {
+  margin: 18px 0 0; color: var(--dim); font-size: .78rem;
+  line-height: 1.55; text-align: center;
+}
+
+/* 갈림길에서는 물빛을 안 바꾼다 — 여기는 고르는 자리라, 두 카드가 같은
+   조건에서 보여야 한다. body[data-step="2"] 의 그라데이션을 덮는다. */
+body[data-step="2"] .studio {
+  background: linear-gradient(180deg, var(--ink), var(--sea-shore));
+}
+
+@media (min-width: 820px) {
+  .fork { grid-template-columns: 1fr 1fr; }
+}

@@ -76,18 +76,6 @@ function setMode(mode) {
   applyMode();
 }
 
-/* 아직 안 골랐으면 고르는 화면부터. 고르고 나면 다시 안 뜬다. */
-function openModeGate() {
-  $("#modeGate").hidden = false;
-  view("mode");
-  window.scrollTo(0, 0);
-}
-
-function closeModeGate() {
-  $("#modeGate").hidden = true;
-  view("landing");
-}
-
 let jobId    = sessionStorage.getItem("lore_job") || null;
 let poll     = null;
 /* 사진은 여러 장 받는다 — 한 사람을 여러 각도로 찍은 것이다.
@@ -387,25 +375,38 @@ function paintCost() {
 
 /* ------------------------------------------------------------- 위저드
 
-   묻는 것을 여섯 걸음으로 나눈다. **칸을 지우지는 않았다** — 여섯 개의
-   .wiz-step 이 전부 같은 <form> 안에 그대로 있고, 지금 걸음만 보인다.
-   숨은 칸도 폼에는 남아 있으므로 collect() 는 예전과 똑같이 돈다.
+   흐름은 사람이 겪는 순서다.
 
-   걸음이 깊어질수록 배경이 수면에서 심해로 내려간다(body[data-step]).
-   진행 표시가 곧 수심계라, 지금 어디까지 왔는지를 숫자가 아니라 물빛으로
-   먼저 안다. */
+     1걸음  무엇을 만들 건지 — 사진 · 캐릭터 설명 · 이야기 한 줄
+     2걸음  **어떻게** 만들지 — 스토리 모드 / 전문가 모드 (갈림길)
+     3~5걸음  전문가를 고른 사람에게만 이어진다 (세계 · 그림 · 확인)
 
-const WIZ_LAST = 6;
-// 수심계에 띄우는 이름. 걸음 제목과 같은 말을 써서 둘이 따로 놀지 않게 한다.
-const WIZ_NAMES = ["수면", "얕은 바다", "항해", "깊은 바다", "심해", "바닥"];
+   그래서 걸음 수가 고정이 아니다 — 스토리 모드는 2걸음에서 끝나고 바로
+   출발하고, 전문가 모드는 5걸음까지 간다. 수심계도 그에 맞춰 늘어난다.
+   늘어나는 것 자체가 "더 물어보는 길을 골랐다"는 신호라서 숨기지 않는다.
+
+   칸은 여전히 하나도 안 지웠다 — 전부 같은 <form> 안에 있고 보이는 걸음만
+   바뀐다. 그래서 collect() 는 어느 걸음에 서 있든 전부 걷는다. */
+
+const WIZ_FORK = 2;                       // 갈림길이 있는 걸음
+const WIZ_SIMPLE_LAST = 2;                // 스토리 모드는 여기서 출발한다
+const WIZ_EXPERT_LAST = 5;
+const WIZ_NAMES = ["수면", "갈림길", "깊은 바다", "심해", "바닥"];
 let wizStep = 1;
+/* 이번 실행에서 고른 길. localStorage 의 모드와 **일부러 따로 둔다** —
+   지난번에 전문가로 만들었다고 이번에도 말없이 전문가 길로 끌고 가면, 갈림길
+   화면이 있으나 마나가 된다. 고르는 것은 매번 다시 한다. (고른 값은 그때
+   setMode 로 localStorage 에도 남아서 시트 편집 폼 같은 다른 자리에 쓰인다.) */
+let wizChoice = null;
 
-function wizPanels() { return $$(".wiz-step"); }
+// 지금 길의 마지막 걸음. 아직 안 골랐으면 갈림길까지만 보여준다.
+function wizLast() { return wizChoice === "expert" ? WIZ_EXPERT_LAST : WIZ_SIMPLE_LAST; }
 
 function wizPaintGauge() {
   const gauge = $("#wizGauge");
   if (!gauge) return;
-  gauge.innerHTML = WIZ_NAMES.map((name, i) => {
+  const last = wizLast();
+  gauge.innerHTML = WIZ_NAMES.slice(0, last).map((name, i) => {
     const n = i + 1;
     const state = n < wizStep ? "done" : (n === wizStep ? "on" : "");
     return `<li class="wiz-tick ${state}" title="${n}. ${name}"
@@ -413,68 +414,64 @@ function wizPaintGauge() {
   }).join("");
 }
 
-// 요약 — 비운 칸은 "루가 정합니다"로 적는다. 안 적었다는 사실 자체가
-// 결과로 보여야, 마지막 걸음에서 되돌아갈지 말지를 판단할 수 있다.
+// 요약 — 비운 칸은 "루가 정합니다"로 적는다. 안 적었다는 사실 자체가 결과로
+// 보여야, 마지막 걸음에서 되돌아갈지 말지를 판단할 수 있다.
 function wizPaintSummary() {
   const box = $("#wizSummary");
   if (!box) return;
   const form = $("#form");
   const auto = `<i class="wiz-auto">루가 정합니다</i>`;
   const val = v => (v && v.trim()) ? esc(v.trim()) : auto;
+  const cut = (v, n) => {
+    const t = (v || "").trim();
+    return t ? esc(t.slice(0, n)) + (t.length > n ? "…" : "") : auto;
+  };
 
   const styleEl = form.style;
   const styleLabel = styleEl
     ? (document.querySelector(`.style-opt input[value="${styleEl.value}"]`)
         ?.closest(".style-opt")?.querySelector("b")?.textContent || styleEl.value)
     : "";
-  const fieldsFilled = $$("[data-field]", form)
-    .filter(el => el.value.trim()).length;
+  const fieldsFilled = $$("[data-field]", form).filter(el => el.value.trim()).length;
 
   const rows = [
     ["캐릭터", val(form.name.value)],
-    ["설명", form.character.value.trim()
-      ? esc(form.character.value.trim().slice(0, 40)) +
-        (form.character.value.trim().length > 40 ? "…" : "")
-      : auto],
+    ["설명", cut(form.character.value, 40)],
     ["항목", fieldsFilled ? `${fieldsFilled}개 적음` : auto],
     ["사진", photos.length ? `${photos.length}장` : `<i class="wiz-auto">없음</i>`],
-    ["이야기", form.story.value.trim()
-      ? esc(form.story.value.trim().slice(0, 40)) +
-        (form.story.value.trim().length > 40 ? "…" : "")
-      : auto],
+    ["이야기", cut(form.story.value, 40)],
     ["장르", val(form.genre.value)],
     ["세계관", val(form.world.value)],
     ["그림체", styleLabel ? esc(styleLabel) : auto],
+    ["연출", layoutMode() === "webtoon" ? "웹툰 · 무게로 묶음" : "빠르게 · 한 장 3컷"],
   ];
-  if (isExpert()) {
-    rows.push(["연출", layoutMode() === "webtoon" ? "웹툰 · 무게로 묶음" : "빠르게 · 한 장 3컷"]);
-  }
   box.innerHTML = rows.map(([k, v]) =>
     `<div class="wiz-row"><span>${k}</span><b>${v}</b></div>`).join("");
 }
 
 function wizGo(n, scroll = true) {
-  wizStep = Math.min(WIZ_LAST, Math.max(1, n));
-  wizPanels().forEach(p => { p.hidden = Number(p.dataset.step) !== wizStep; });
+  const last = wizLast();
+  wizStep = Math.min(last, Math.max(1, n));
+  $$(".wiz-step").forEach(p => { p.hidden = Number(p.dataset.step) !== wizStep; });
 
-  // 물빛 — 걸음이 깊어질수록 어두워진다
   document.body.dataset.step = String(wizStep);
 
-  const last = wizStep === WIZ_LAST;
-  $("#wizNext").hidden = last;
-  $("#submitBtn").hidden = !last;
+  // 갈림길에서는 늘 고르게 한다 — 지난번 모드가 기억돼 있어도 마찬가지다.
+  const atFork = wizStep === WIZ_FORK;
+  const atEnd  = wizStep === last;
+
+  // 갈림길에서는 아래 단추를 안 쓴다 — 고르는 것이 곧 넘어가는 것이다.
+  $("#wizNext").hidden = atFork || atEnd;
+  $("#submitBtn").hidden = !(atEnd && !atFork);
+  $("#wizSkip").hidden = atFork || atEnd;
   $("#wizPrev").disabled = wizStep === 1;
   $("#wizBack").disabled = wizStep === 1;
-  // 마지막 걸음에서는 건너뛸 곳이 없다
-  $("#wizSkip").hidden = last;
-  $("#submitNote").hidden = !last;
+  $("#submitNote").hidden = !(atEnd && !atFork);
+  $(".wiz-foot").hidden = atFork;
 
-  if (last) wizPaintSummary();
+  if (atEnd && !atFork) wizPaintSummary();
+  wizPaintGauge();
 
-  // 걸음을 옮기면 그 걸음의 머리가 보이게 한다 — 폰에서는 이게 없으면
-  // 이전 걸음의 중간 높이에 그대로 서 있어서 바뀐 걸 못 알아챈다.
-  // 첫 그리기(scroll=false)에서는 안 한다 — 랜딩으로 들어온 사람을 폼으로
-  // 끌어내리면 히어로를 못 보고 시작하게 된다.
   if (!scroll) return;
   const head = document.querySelector(".studio-head");
   if (head) head.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -482,12 +479,25 @@ function wizGo(n, scroll = true) {
 
 function setupWizard() {
   if (!$("#wizGauge")) return;
-  wizPaintGauge();
-  const move = n => { wizGo(n); wizPaintGauge(); };
+  const move = n => wizGo(n);
   $("#wizNext").addEventListener("click", () => move(wizStep + 1));
   $("#wizSkip").addEventListener("click", () => move(wizStep + 1));
   $("#wizPrev").addEventListener("click", () => move(wizStep - 1));
   $("#wizBack").addEventListener("click", () => move(wizStep - 1));
+
+  // 갈림길 — 고르는 것이 곧 다음 동작이다.
+  //   스토리 모드: 여기서 바로 출발한다(더 물어볼 것이 없다).
+  //   전문가 모드: 길이 3걸음 늘어나고 그 첫 걸음으로 넘어간다.
+  $$(".fork-card").forEach(card => card.addEventListener("click", () => {
+    const mode = card.dataset.mode;
+    wizChoice = mode;
+    setMode(mode);
+    $$(".fork-card").forEach(c =>
+      c.setAttribute("aria-pressed", String(c === card)));
+    if (mode === "expert") { wizGo(WIZ_FORK + 1); return; }
+    startRun();
+  }));
+
   wizGo(1, false);
 }
 
@@ -525,11 +535,18 @@ function collect() {
   };
 }
 
-async function submit(e) {
-  e.preventDefault();
+/* 실제로 출발시킨다. 갈림길에서 "스토리 모드"를 고른 것과 마지막 걸음에서
+   "웹툰 만들기"를 누른 것이 같은 일을 하므로, 단추 핸들러가 아니라 이 함수를
+   양쪽이 함께 부른다. 실패하면 그 자리에 남아서 이유를 보여준다 — 여기서
+   진행 화면으로 넘어가 버리면 무엇이 잘못됐는지 볼 자리가 없다. */
+async function startRun() {
   const btn = $("#submitBtn"), note = $("#submitNote");
-  btn.disabled = true; btn.firstChild.textContent = "시작하는 중… ";
+  const fork = $$(".fork-card");
+  note.hidden = false;
   note.classList.remove("error");
+  note.textContent = "루가 바다로 나가는 중…";
+  btn.disabled = true;
+  fork.forEach(c => { c.disabled = true; });
   try {
     const res = await fetch("/api/create", {
       method: "POST",
@@ -546,9 +563,13 @@ async function submit(e) {
     note.textContent = err.message;
     note.classList.add("error");
   } finally {
-    btn.disabled = false; paintCost();
+    btn.disabled = false;
+    fork.forEach(c => { c.disabled = false; });
+    paintCost();
   }
 }
+
+function submit(e) { e.preventDefault(); startRun(); }
 
 /* ------------------------------------------------------------------ 진행 */
 
@@ -801,6 +822,72 @@ function paintMascot(s, currentStage) {
   if (currentStage && currentStage.key && mood !== "ask") box.dataset.stage = currentStage.key;
   else delete box.dataset.stage;
   $("#mascotLine").textContent = line;
+}
+
+/* ---- 루와 놀기 ------------------------------------------------------- *
+ *
+ * 10분 가까이 이 화면을 본다. rail 은 무엇을 하는지 기계적으로 적고,
+ * 마스코트 줄은 그걸 사람 말로 한 번 더 말한다. 여기 있는 것은 세 번째 —
+ * **만질 수 있다**는 것. 기다림이 구경거리가 되면 시간이 덜 길다.
+ *
+ * 반응은 화면에만 있다. 서버로 아무것도 안 보내고, 돌고 있는 작업에도
+ * 영향을 주지 않는다. 반응이 끝나면 원래 단계 그림으로 돌아간다. */
+
+const LOU_REACT = {
+  click:      "앗! 지금 바빠요!",
+  multiclick: "너무 많이 누르면 화날 거예요!",
+  longpress:  "조금만 더 기다려주세요…",
+  pet:        "헤헤~ 기분이 좋아요!",
+};
+let louReactTimer = null;
+let louClicks = 0;
+let louClickWindow = null;
+let louPressAt = 0;
+
+function louReact(kind) {
+  const box = $("#mascot");
+  if (!box) return;
+  box.dataset.react = kind;
+  const line = $("#mascotLine");
+  if (line) {
+    if (!box.dataset.savedLine) box.dataset.savedLine = line.textContent || "";
+    line.textContent = LOU_REACT[kind] || "";
+    line.classList.add("is-react");
+  }
+  clearTimeout(louReactTimer);
+  louReactTimer = setTimeout(() => {
+    delete box.dataset.react;
+    if (line) {
+      line.textContent = box.dataset.savedLine || "";
+      line.classList.remove("is-react");
+      delete box.dataset.savedLine;
+    }
+  }, kind === "multiclick" ? 2200 : 1800);
+}
+
+function setupLou() {
+  const box = $("#mascot");
+  if (!box) return;
+
+  // 길게 누르기 — 손을 떼는 순간에 무엇이었는지 정한다. 짧으면 클릭,
+  // 길면 "조금만 더 기다려주세요". 연달아 누르면 화낸다.
+  const down = () => { louPressAt = Date.now(); };
+  const up = () => {
+    const held = Date.now() - louPressAt;
+    if (louPressAt && held > 600) { louReact("longpress"); louPressAt = 0; return; }
+    louPressAt = 0;
+    louClicks += 1;
+    clearTimeout(louClickWindow);
+    louClickWindow = setTimeout(() => { louClicks = 0; }, 2000);
+    louReact(louClicks >= 3 ? "multiclick" : (louClicks === 2 ? "pet" : "click"));
+  };
+  box.addEventListener("pointerdown", down);
+  box.addEventListener("pointerup", up);
+  box.addEventListener("pointercancel", () => { louPressAt = 0; });
+  // 키보드로도 만질 수 있어야 한다 — button 이라 Enter/Space 가 click 으로 온다
+  box.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); up(); }
+  });
 }
 
 function setSheetButtonsBusy(busy) {
@@ -1599,13 +1686,7 @@ document.addEventListener("DOMContentLoaded", () => {
   applyMode();
   // 위저드도 폼을 만든 뒤에 켠다(그림체·항목 칸이 있어야 요약을 그릴 수 있다).
   setupWizard();
-  $$("#modeGate .modecard").forEach(card => card.addEventListener("click", () => {
-    setMode(card.dataset.mode);
-    closeModeGate();
-    document.querySelector("#studio").scrollIntoView();
-  }));
-  $("#modeSwitch").addEventListener("click", openModeGate);
-
+  setupLou();
   paintCost();
 
   $("#cancelBtn").addEventListener("click", async () => {
@@ -1656,9 +1737,5 @@ document.addEventListener("DOMContentLoaded", () => {
     openExisting(asked);
   } else if (jobId) {
     startPolling();          // 새로고침해도 돌던 작업으로 돌아온다
-  } else if (!currentMode()) {
-    // 처음 온 사람. 결과·목록·돌던 작업으로 바로 들어온 경우에는 안 띄운다 —
-    // 보러 온 사람에게 만들기 전 질문을 먼저 들이미는 꼴이 된다.
-    openModeGate();
   }
 });
