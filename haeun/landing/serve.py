@@ -16,6 +16,7 @@ import base64
 import io
 import json
 import mimetypes
+import os
 import re
 import sys
 import threading
@@ -170,6 +171,14 @@ class Handler(BaseHTTPRequestHandler):
         프록시 뒤에 서면 브라우저가 본 주소와 서버가 들은 주소가 다르다 —
         앞에서 넘겨주는 값이 있으면 그쪽을 믿는다.
         """
+        # 공개 주소를 못박아 둔 곳이 있으면 그것이 이긴다. 공유가 실제로
+        # 되려면 남이 열 수 있는 주소여야 하는데, 여기서 들리는 것은 개발 중에
+        # 127.0.0.1 이고 사설망에서는 192.168.x 다 — 그 주소를 카톡에 보내면
+        # 받은 사람은 아무것도 못 연다. 배포하면 LORE_PUBLIC_URL 에 도메인을
+        # 넣는다(#96).
+        fixed = os.environ.get("LORE_PUBLIC_URL", "").strip().rstrip("/")
+        if fixed:
+            return fixed
         host = (self.headers.get("X-Forwarded-Host")
                 or self.headers.get("Host") or "127.0.0.1")
         scheme = self.headers.get("X-Forwarded-Proto") or "http"
@@ -359,6 +368,14 @@ class Handler(BaseHTTPRequestHandler):
                 # 작가 규칙 글자수 상한 — 화면이 남은 글자수를 보여줄 근거
                 "memory_always_max": pipeline.MEMORY_ALWAYS_MAX,
                 "memory_keyword_max": pipeline.MEMORY_KEYWORD_MAX,
+                # 카카오톡 공유는 카카오 SDK 를 써야 하고, developers.kakao.com
+                # 에서 받은 JavaScript 키 + **등록된 도메인**이 있어야 한다.
+                # 키가 없으면 화면이 그 단추를 아예 안 그린다 — 눌러도 안 되는
+                # 단추를 두면 고장으로 읽힌다.
+                "kakao_js_key": os.environ.get("KAKAO_JS_KEY", "").strip(),
+                # 공유 링크에 쓸 공개 주소. 비어 있으면 화면이 지금 보고 있는
+                # 주소를 쓴다(개발 중에는 그것이 localhost 다).
+                "public_url": os.environ.get("LORE_PUBLIC_URL", "").strip().rstrip("/"),
                 # 일반/전문 모드. 어느 단계에서 사람을 세우는지를 화면이 베껴
                 # 두지 않게 서버가 준다 — 온보딩의 "무엇이 다른가" 설명과 실제
                 # 동작이 갈라지면, 고른 사람이 속은 것이 된다.

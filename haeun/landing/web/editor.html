@@ -33,6 +33,10 @@
       </div>
     </div>
     <div class="ed-top-right">
+      <!-- 대사 스크립트. 완성본 화면(읽는 자리)에 있던 것을 여기로 옮겼다 —
+           대사를 확인하는 것은 읽는 일이 아니라 **고치는 일** 옆에 있어야 한다.
+           말풍선을 얹으면서 원래 대사가 무엇이었는지 보는 자리다. -->
+      <button type="button" class="btn btn-quiet btn-sm" id="scriptBtn">대사</button>
       <button type="button" class="btn btn-quiet btn-sm" id="saveBtn">저장</button>
       <!-- 얹은 것을 진짜 그림에 굽는다. 여기까지 와야 가져갈 것이 생긴다 —
            이 단추가 없던 동안, 배치한 말풍선은 브라우저 밖으로 나갈 길이 없었다. -->
@@ -191,5 +195,13 @@
 <div class="fly" id="fly" hidden></div>
 
 <script src="/static/editor.js"></script>
+
+<aside class="script-panel" id="scriptPanel" hidden>
+  <div class="script-head">
+    <b>대사 스크립트</b>
+    <button type="button" class="icon-btn" id="scriptClose" aria-label="닫기">✕</button>
+  </div>
+  <div class="script-body" id="scriptBody"></div>
+</aside>
 </body>
 </html>

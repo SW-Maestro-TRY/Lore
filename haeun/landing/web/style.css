@@ -1775,3 +1775,27 @@ button.inline-link:hover { color: #f0d090; }
 .cancel-sub { margin: 0 0 1.4em; color: var(--muted); font-size: .84rem; line-height: 1.6; }
 .cancel-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .cancel-actions .btn { min-height: 44px; }
+
+/* ---- 공유 목록 ------------------------------------------------------------ */
+/* 단추 밑에 붙는다. 480px 틀 안이라 화면 가운데로 띄우지 않고 누른 자리
+   아래에 그대로 편다. .result-actions 가 격자라 wrap 이 칸 하나를 차지한다. */
+.share-wrap { position: relative; }
+.share-wrap > .btn { width: 100%; }
+.share-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;
+  min-width: 210px; display: grid; gap: 2px; padding: 6px;
+  background: var(--card); border: 1px solid var(--line-2);
+  border-radius: 12px; box-shadow: var(--shadow);
+}
+.share-item {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; border-radius: 8px;
+  font: inherit; font-size: .86rem; color: var(--text);
+  padding: .6em .7em; min-height: 44px; cursor: pointer; text-decoration: none;
+}
+.share-item:hover { background: rgba(34,48,44,.06); }
+/* 인스타는 링크로 못 올린다 — 그림을 받아 가는 자리라 위와 갈라 놓는다. */
+#shareInstaHint {
+  border-top: 1px solid var(--line); margin-top: 4px; padding-top: .7em;
+  color: var(--muted); font-size: .8rem;
+}

@@ -177,6 +177,39 @@ function paintLedger() {
 
 /* ------------------------------------------------------------------ 장 그리기 */
 
+/* ---- 대사 스크립트 ------------------------------------------------------- *
+ *
+ * 완성본 화면(읽는 자리)에 있던 것을 여기로 옮겼다. 대사를 확인하는 일은
+ * 읽는 일이 아니라 **고치는 일** 옆에 있어야 한다 — 말풍선을 얹으면서 원래
+ * 대사가 무엇이었는지 보는 자리다.
+ *
+ * 편집실의 data 는 완성본과 같은 컷 필드를 갖고 있어서(editor_data 의
+ * speaker·dialogue·narration·thought·sfx) 그리는 코드는 그대로 옮겨 왔다. */
+
+function scriptCut(c) {
+  const lines = [];
+  if (c.narration) lines.push(`<p class="script-line narration">${esc(c.narration)}</p>`);
+  if (c.dialogue)  lines.push(`<p class="script-line"><span class="who">${esc(c.speaker || "?")}</span> ${esc(c.dialogue)}</p>`);
+  if (c.thought)   lines.push(`<p class="script-line thought">(${esc(c.thought)})</p>`);
+  if (c.sfx)       lines.push(`<p class="script-line sfx">${esc(c.sfx)}</p>`);
+  if (!lines.length) lines.push(`<p class="script-line narration">— 대사 없음</p>`);
+  return `<div class="script-cut">
+    <div class="script-no">CUT ${String(c.no).padStart(2, "0")}${c.shot ? " · " + esc(c.shot) : ""}</div>
+    ${lines.join("")}
+    <p class="script-desc">${esc(c.description)}</p>
+  </div>`;
+}
+
+function paintScript() {
+  const body = $("#scriptBody");
+  if (!body || !data) return;
+  body.innerHTML = (data.scenes || []).map(s => `
+    <div class="script-page">
+      <div class="script-page-no">${s.no}번째 장 · 컷 ${s.cuts.map(c => c.no).join("·")}</div>
+      ${s.cuts.map(scriptCut).join("")}
+    </div>`).join("");
+}
+
 function render() {
   const ep = data.episode || EPISODE;
   $("#edTitle").textContent = data.title;
@@ -198,6 +231,7 @@ function render() {
   wireScenes();
   // 지난 판은 서버에만 있다 — 목업에는 없다.
   if (RUN_ID) data.scenes.forEach(s => paintVersions(s.no));
+  paintScript();
 }
 
 /* 회차 고르개. 한 편뿐이면 안 그린다 — 고를 것이 없는 자리에 고르개를 두면
@@ -1011,6 +1045,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 저장은 항목을 건드릴 때마다 자동으로 된다(save() → pushSoon()). 이 단추는
   // **지금 당장** 올리고 그 결과를 말해 주는 자리다 — 자동 저장은 조용해서,
   // 창을 닫기 전에 확인하고 싶을 때 누를 곳이 있어야 한다.
+  $("#scriptBtn")?.addEventListener("click", () => {
+    const panel = $("#scriptPanel");
+    panel.hidden = !panel.hidden;
+  });
+  $("#scriptClose")?.addEventListener("click", () => { $("#scriptPanel").hidden = true; });
+
   $("#saveBtn").addEventListener("click", async () => {
     save();
     if (!RUN_ID) return toast("샘플입니다 — 얹은 것은 이 브라우저에만 저장됩니다.");

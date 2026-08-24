@@ -771,7 +771,13 @@
       <button type="button" class="btn btn-quiet" id="claimBtn">서버에 저장하기</button>
       <!-- 홈 대신 공유. 다 만든 화면에서 다음에 하고 싶은 일은 "나가기" 가
            아니라 "보여주기" 다 — 홈은 위 로고로 언제든 간다. -->
-      <button type="button" class="btn btn-quiet" id="shareBtn">공유하기</button>
+      <!-- 어디로 보낼지 고르는 자리. 목록은 app.js 가 채운다 — 카카오톡은
+           키가 있을 때만, "다른 앱으로…" 는 공유 시트가 있는 기기에서만. -->
+      <div class="share-wrap">
+        <button type="button" class="btn btn-quiet" id="shareBtn"
+                aria-haspopup="true" aria-expanded="false">공유하기</button>
+        <div class="share-menu" id="shareMenu" hidden></div>
+      </div>
     </div>
     <!-- 단추 셋이 각각 무엇인지 한 줄씩. 「서버에 저장하기」는 눌러야 할 이유가
          화면에 없으면 아무도 안 누른다 — 어디서 다시 보는지를 말해 준다. -->
@@ -818,13 +824,6 @@
     </div>
   </div>
 
-  <aside class="script-panel" id="scriptPanel" hidden>
-    <div class="script-head">
-      <b>대사 스크립트</b>
-      <button type="button" class="icon-btn" id="scriptClose" aria-label="닫기">✕</button>
-    </div>
-    <div class="script-body" id="scriptBody"></div>
-  </aside>
 </section>
 
 <!-- ============================================================ 다음 화 (#72)

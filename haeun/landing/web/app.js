@@ -1725,12 +1725,6 @@ function paintResult(r) {
     paintArtQA();
   }
 
-  $("#scriptBody").innerHTML = r.pages.map(pg => `
-    <div class="script-page">
-      <div class="script-page-no">${pg.no}번째 장 · 컷 ${pg.cuts.map(c => c.no).join("·")}</div>
-      ${pg.cuts.map(scriptCut).join("")}
-    </div>`).join("");
-
   paintEpisodeTabs(r);
   // 편집실 링크도 지금 보고 있는 작품·회차로 맞춘다. 예전에는 늘 목업으로
   // 갔다 — 다 만들어 놓고 "편집실에서 열기"를 누르면 남의 샘플이 떴다.
@@ -1857,8 +1851,11 @@ let resultEpisode = 1;
 
 function shareUrl() {
   if (!resultRunId) return "";
-  return `${location.origin}/works?run=${encodeURIComponent(resultRunId)}`
-       + `&ep=${resultEpisode}`;
+  // 배포된 주소가 정해져 있으면 그것을 쓴다. 지금 보고 있는 주소를 그대로
+  // 보내면 개발 중에는 127.0.0.1 이고 사설망에서는 192.168.x 라, 받은 사람이
+  // 아무것도 못 연다. 서버가 LORE_PUBLIC_URL 로 알려 준다(#96).
+  const base = (shareConfig.public_url || "").replace(/\/+$/, "") || location.origin;
+  return `${base}/works?run=${encodeURIComponent(resultRunId)}&ep=${resultEpisode}`;
 }
 
 function shareTitle() {
@@ -1894,32 +1891,168 @@ async function copyLink(url) {
   }
 }
 
-async function doShare() {
-  const url = shareUrl();
-  if (!url) return toast("아직 공유할 작품이 없습니다");
-  if (canOpenShareSheet()) {
-    try {
-      await navigator.share({ title: shareTitle(), url });
-      return;                     // 시트에서 취소해도 여기로 온다 — 조용히 끝낸다
-    } catch (err) {
-      // 사용자가 시트를 닫은 것은 실패가 아니다. 그 밖의 이유(권한 등)일
-      // 때만 복사로 물러선다.
-      if (err && err.name === "AbortError") return;
-    }
-  }
-  toast(await copyLink(url)
+async function copyAndTell() {
+  toast(await copyLink(shareUrl())
     ? "링크를 복사했습니다 — 붙여넣기 하면 미리보기가 뜹니다"
     : "복사하지 못했습니다. 주소창의 주소를 그대로 보내 주세요.");
 }
 
+/* 공유 시트(폰)로 넘긴다. 여기에는 카톡·인스타가 이미 들어 있어서, 폰에서는
+   이것 하나가 SNS 단추 여럿보다 낫다. */
+async function shareToSheet() {
+  try {
+    await navigator.share({ title: shareTitle(), text: shareText(), url: shareUrl() });
+  } catch (err) {
+    if (err && err.name === "AbortError") return;   // 사용자가 닫은 것뿐이다
+    await copyAndTell();
+  }
+}
+
+/* ---- 어디로 보낼 수 있는가 ---------------------------------------------- *
+ *
+ * 셋의 사정이 다 다르다.
+ *   트위터·페이스북·라인 — 주소 하나로 창을 연다. 등록도 열쇠도 필요 없다.
+ *   카카오톡 — 공식 SDK 를 붙여야 하고, JavaScript 키와 **등록된 도메인**이
+ *              있어야 한다. 키가 없으면 아예 안 그린다(서버의 kakao_js_key).
+ *   인스타그램 — **웹에서 글을 올리는 길이 없다.** 공유 주소가 아예 없고,
+ *              피드에는 링크도 안 걸린다. 인스타에 올리려면 그림 파일이
+ *              가야 해서, 폰이면 공유 시트로 넘기고 PC 면 내려받기로 보낸다.
+ *              단추를 만들어 두고 "안 됩니다" 하는 것보다 그게 정직하다. */
+
+function shareText() {
+  const title = ($("#resTitle")?.textContent || "").trim();
+  const log = ($("#resLogline")?.textContent || "").trim();
+  // 트위터는 280자다. 링크와 해시태그 자리를 빼고 로그라인을 줄인다.
+  const short = log.length > 90 ? log.slice(0, 89) + "…" : log;
+  return [title, short].filter(Boolean).join(" — ");
+}
+
+const SHARE_TARGETS = [
+  {
+    id: "x", label: "X (트위터)",
+    href: () => "https://twitter.com/intent/tweet"
+      + `?text=${encodeURIComponent(shareText() + " #LORE")}`
+      + `&url=${encodeURIComponent(shareUrl())}`,
+  },
+  {
+    id: "facebook", label: "페이스북",
+    // 페이스북은 본문을 안 받는다 — 링크만 주면 og 태그로 카드를 만든다.
+    href: () => "https://www.facebook.com/sharer/sharer.php"
+      + `?u=${encodeURIComponent(shareUrl())}`,
+  },
+  {
+    id: "line", label: "라인",
+    href: () => "https://social-plugins.line.me/lineit/share"
+      + `?url=${encodeURIComponent(shareUrl())}`
+      + `&text=${encodeURIComponent(shareText())}`,
+  },
+];
+
+function openShareWindow(url) {
+  // 새 창으로 연다. 같은 탭에서 열면 만들던 것을 두고 나가게 된다.
+  window.open(url, "_blank", "noopener,noreferrer,width=600,height=560");
+}
+
+function buildShareMenu() {
+  const host = $("#shareMenu");
+  if (!host) return;
+  const rows = [];
+  for (const t of SHARE_TARGETS) {
+    rows.push(`<button type="button" class="share-item" data-share="${t.id}">${t.label}</button>`);
+  }
+  if (shareConfig.kakao_js_key) {
+    rows.push(`<button type="button" class="share-item" data-share="kakao">카카오톡</button>`);
+  }
+  if (canOpenShareSheet()) {
+    rows.push(`<button type="button" class="share-item" data-share="sheet">다른 앱으로…</button>`);
+  }
+  rows.push(`<button type="button" class="share-item" data-share="copy">링크 복사</button>`);
+  // 인스타는 링크로 못 올린다 — 그림을 받아서 올리라고 말해 준다.
+  rows.push(`<a class="share-item" id="shareInstaHint" download>인스타그램 — 그림 내려받기</a>`);
+  host.innerHTML = rows.join("");
+  const a = $("#shareInstaHint");
+  if (a) a.href = resultSrc ? resultSrc.download : "#";
+}
+
+function toggleShareMenu(open) {
+  const host = $("#shareMenu"), btn = $("#shareBtn");
+  if (!host || !btn) return;
+  const show = open === undefined ? host.hidden : open;
+  if (show) buildShareMenu();
+  host.hidden = !show;
+  btn.setAttribute("aria-expanded", show ? "true" : "false");
+}
+
+async function onShareMenuClick(e) {
+  const el = e.target.closest("[data-share]");
+  if (!el) return;
+  const kind = el.dataset.share;
+  toggleShareMenu(false);
+  if (kind === "copy") return copyAndTell();
+  if (kind === "sheet") return shareToSheet();
+  if (kind === "kakao") return shareToKakao();
+  const target = SHARE_TARGETS.find(t => t.id === kind);
+  if (target) openShareWindow(target.href());
+}
+
+/* 카카오는 키가 있을 때만 부른다 — buildShareMenu 가 그때만 단추를 그린다.
+   SDK 는 처음 누를 때 받아 온다(안 쓰는 사람에게 받게 하지 않는다). */
+let kakaoReady = null;
+function loadKakao() {
+  if (kakaoReady) return kakaoReady;
+  kakaoReady = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    // integrity 는 안 건다 — 해시를 손으로 적어 두면 카카오가 판을 올릴 때마다
+    // 조용히 안 뜬다. 붙이려면 카카오 문서의 그 판 해시를 그대로 가져와야 한다.
+    s.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js";
+    s.crossOrigin = "anonymous";
+    s.onload = () => res(window.Kakao);
+    s.onerror = () => rej(new Error("카카오 SDK 를 받지 못했습니다"));
+    document.head.appendChild(s);
+  });
+  return kakaoReady;
+}
+
+async function shareToKakao() {
+  try {
+    const Kakao = await loadKakao();
+    if (!Kakao.isInitialized()) Kakao.init(shareConfig.kakao_js_key);
+    Kakao.Share.sendDefault({
+      objectType: "feed",
+      content: {
+        title: ($("#resTitle")?.textContent || "").trim() || "LORE 웹툰",
+        description: ($("#resLogline")?.textContent || "").trim().slice(0, 100),
+        imageUrl: `${location.origin}${shareImagePath()}`,
+        link: { mobileWebUrl: shareUrl(), webUrl: shareUrl() },
+      },
+      buttons: [{ title: "웹툰 보기",
+                  link: { mobileWebUrl: shareUrl(), webUrl: shareUrl() } }],
+    });
+  } catch (err) {
+    // 도메인을 카카오에 등록하지 않으면 여기서 걸린다 — 가장 흔한 실패다.
+    toast("카카오톡 공유를 열지 못했습니다. 링크 복사를 써 주세요.");
+  }
+}
+
+/* 카톡 카드에 걸 그림. og:image 와 같은 것을 쓴다. */
+function shareImagePath() {
+  return resultSrc ? resultSrc.page(1, 1080) : "";
+}
+
+let shareConfig = {};
+
 function setupShare() {
   const btn = $("#shareBtn");
   if (!btn) return;
-  // 글자는 HTML 에 적힌 "공유하기" 를 그대로 둔다. 예전에는 여기서
-  // "공유"/"링크 복사" 로 갈아 끼웠는데, 그때는 이것이 다 읽은 자리의 작은
-  // 글자 링크였다. 지금은 머리의 단추 넷 중 하나라 옆 단추들과 말투가
-  // 맞아야 하고, 무슨 일이 일어나는지는 눌러 보면 토스트가 말해 준다.
-  btn.addEventListener("click", doShare);
+  btn.addEventListener("click", () => toggleShareMenu());
+  $("#shareMenu")?.addEventListener("click", onShareMenuClick);
+  // 바깥을 누르면 닫는다.
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#shareMenu") && !e.target.closest("#shareBtn")) {
+      toggleShareMenu(false);
+    }
+  });
+  getConfig().then(c => { shareConfig = c || {}; }).catch(() => { shareConfig = {}; });
 }
 
 function pageTools(no) {
@@ -2069,19 +2202,6 @@ async function paintVersions(no, versions) {
   }));
 }
 
-function scriptCut(c) {
-  const lines = [];
-  if (c.narration) lines.push(`<p class="script-line narration">${esc(c.narration)}</p>`);
-  if (c.dialogue)  lines.push(`<p class="script-line"><span class="who">${esc(c.speaker || "?")}</span> ${esc(c.dialogue)}</p>`);
-  if (c.thought)   lines.push(`<p class="script-line thought">(${esc(c.thought)})</p>`);
-  if (c.sfx)       lines.push(`<p class="script-line sfx">${esc(c.sfx)}</p>`);
-  if (!lines.length) lines.push(`<p class="script-line narration">— 대사 없음</p>`);
-  return `<div class="script-cut">
-    <div class="script-no">CUT ${String(c.no).padStart(2, "0")}${c.shot ? " · " + esc(c.shot) : ""}</div>
-    ${lines.join("")}
-    <p class="script-desc">${esc(c.description)}</p>
-  </div>`;
-}
 
 
 /* 이미 끝난 작업을 결과 화면으로 바로 연다 (진행 화면을 거치지 않는다). */
@@ -2446,7 +2566,6 @@ function forget() {
   view("landing"); pickHero();
   $("#progress").hidden = true; $("#result").hidden = true;
   $("#works").hidden = true;
-  $("#scriptPanel").hidden = true;
   // 만들기 화면도 닫는다. 안 닫으면 걸음을 밟다가 헤더의 LORE 로 홈에 와도
   // 위저드가 홈 위에 그대로 겹쳐 있어서, 홈과 4걸음과 바닥글이 한꺼번에
   // 보인다 — 화면이 깨진 것처럼 읽힌다.
@@ -2576,7 +2695,6 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#toTopBtn")?.addEventListener("click", () => {
     document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" });
   });
-  $("#scriptClose")?.addEventListener("click", () => { $("#scriptPanel").hidden = true; });
 
   // 주소로 바로 열기.
   //   /result                이미 만들어 둔 **마지막** 1화를 결과 화면으로
