@@ -1454,3 +1454,41 @@ button.inline-link:hover { color: #f0d090; }
   background: var(--card-2); border: 1px solid var(--line);
   font-size: .88rem; color: var(--text);
 }
+
+/* ---- 제목 고치기 · 공유 -------------------------------------------------- */
+
+/* 제목 옆의 연필. 제목이 길면 줄이 바뀌므로 baseline 이 아니라 위에 맞춘다. */
+.title-row { display: flex; align-items: flex-start; gap: 8px; }
+.title-row h2 { min-width: 0; }
+#titleEditBtn { flex: none; margin-top: .25em; line-height: 1; }
+#titleEditBtn:hover { color: var(--accent-d); }
+
+.title-edit { display: flex; gap: 6px; flex-wrap: wrap; margin: .3em 0 .2em; }
+.title-edit input {
+  flex: 1 1 16ch; min-width: 0;
+  background: var(--card); color: var(--text); font: inherit; font-weight: 700;
+  border: 1px solid var(--line-2); border-radius: 10px; padding: .45em .7em;
+}
+.title-edit input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 공유 — 단추 밑에 붙는 목록. 480px 틀 안이라 화면 가운데로 띄우지 않고
+   누른 자리 아래에 그대로 편다. */
+.share-wrap { position: relative; }
+.share-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  min-width: 200px; display: grid; gap: 2px; padding: 6px;
+  background: var(--card); border: 1px solid var(--line-2);
+  border-radius: 12px; box-shadow: var(--shadow);
+}
+.share-item {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; border-radius: 8px;
+  font: inherit; font-size: .86rem; color: var(--text);
+  padding: .6em .7em; min-height: 40px; cursor: pointer; text-decoration: none;
+}
+.share-item:hover { background: rgba(34,48,44,.06); }
+/* 인스타는 링크로 못 올린다 — 그림을 받아 가는 자리라 위와 갈라 놓는다. */
+#shareInstaHint {
+  border-top: 1px solid var(--line); margin-top: 4px; padding-top: .7em;
+  color: var(--muted); font-size: .8rem;
+}

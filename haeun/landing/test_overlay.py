@@ -17,6 +17,14 @@ import pipeline as P
 fails = []
 
 
+def _raises(fn):
+    try:
+        fn()
+    except P.Failed:
+        return True
+    return False
+
+
 def ok(name, cond, extra=""):
     print(("PASS  " if cond else "FAIL  ") + name + (f"   {extra}" if extra and not cond else ""))
     if not cond:
@@ -191,6 +199,43 @@ ok("공유: 장르도 없으면 기본 문구가 있다",
 
 ok("공유: 없는 작품은 미리보기를 안 만든다 (share_meta 가 None)",
    P.share_meta("없는run", 1) is None)
+
+# ---- 사람이 고친 제목 --------------------------------------------------------
+#
+# 이 값은 결과 화면뿐 아니라 목록·편집실·공유 카드·내려받는 파일 이름까지
+# 따라간다(episode_title 하나를 거친다). 되돌릴 수 있어야 하는 것도 함께 못박는다.
+_trun = Path(tempfile.mkdtemp())
+_trun_id = _trun.name
+
+
+def _fake_run(tmp_root):
+    """runs/<id>/ 하나를 흉내낸다 — titles.json 만 쓰고 읽는 시험이라 이것으로 족하다."""
+    P.STORY = tmp_root                      # 이 시험 동안만 바꿔 끼운다
+    d = tmp_root / "runs" / "t1"
+    (d / "webtoon").mkdir(parents=True, exist_ok=True)
+    (d / "webtoon" / "series.json").write_text(
+        '{"episodes": [{"no": 1, "title": "\\ubaa8\\ub378\\uc774 \\uc9c0\\uc740 \\uc774\\ub984"}]}',
+        encoding="utf-8")
+    return d
+
+
+_story_backup = P.STORY
+_fake_run(_trun)
+ok("제목: 안 고쳤으면 모델이 지은 이름", P.episode_title("t1", 1) == "모델이 지은 이름")
+ok("제목: 고치면 그것이 이긴다",
+   P.set_user_title("t1", 1, "내가 지은 이름") == "내가 지은 이름"
+   and P.episode_title("t1", 1) == "내가 지은 이름")
+ok("제목: 앞뒤 공백과 겹친 칸은 정리한다",
+   P.set_user_title("t1", 1, "  겹친   칸  ") == "겹친 칸")
+ok("제목: 상한을 넘으면 자른다", len(P.set_user_title("t1", 1, "가" * 300)) == P.TITLE_MAX)
+ok("제목: 비우면 모델이 지은 이름으로 되돌아간다",
+   P.set_user_title("t1", 1, "") == "모델이 지은 이름"
+   and P.user_title("t1", 1) == "")
+ok("제목: 회차마다 따로 간다",
+   (P.set_user_title("t1", 1, "1화 이름"), P.user_title("t1", 2))[1] == "")
+ok("제목: 없는 작품에 쓰면 Failed", _raises(lambda: P.set_user_title("없는run", 1, "x")))
+P.STORY = _story_backup
+shutil.rmtree(_trun, ignore_errors=True)
 
 
 # ---------------- 굽기 ----------------

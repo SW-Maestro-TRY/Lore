@@ -1646,6 +1646,9 @@ function paintResult(r) {
   // 공유는 run_id 로 여는 주소라, 그것이 없으면 보낼 링크가 없다. 눌러도
   // 아무 일이 안 일어나는 단추를 두느니 감춘다.
   $("#shareBtn").hidden = !resultRunId;
+  $("#titleEditBtn").hidden = !resultRunId;
+  toggleShareMenu(false);
+  openTitleEdit(false);
   wireMemory(resultRunId);
   $("#reader").innerHTML = r.pages.map(pg => `
     <div class="page" data-scene="${pg.no}">
@@ -1829,29 +1832,225 @@ async function copyLink(url) {
   }
 }
 
-async function doShare() {
-  const url = shareUrl();
-  if (!url) return toast("아직 공유할 작품이 없습니다");
-  if (canOpenShareSheet()) {
-    try {
-      await navigator.share({ title: shareTitle(), url });
-      return;                     // 시트에서 취소해도 여기로 온다 — 조용히 끝낸다
-    } catch (err) {
-      // 사용자가 시트를 닫은 것은 실패가 아니다. 그 밖의 이유(권한 등)일
-      // 때만 복사로 물러선다.
-      if (err && err.name === "AbortError") return;
-    }
-  }
-  toast(await copyLink(url)
+async function copyAndTell() {
+  toast(await copyLink(shareUrl())
     ? "링크를 복사했습니다 — 붙여넣기 하면 미리보기가 뜹니다"
     : "복사하지 못했습니다. 주소창의 주소를 그대로 보내 주세요.");
+}
+
+/* 공유 시트(폰)로 넘긴다. 여기에는 카톡·인스타가 이미 들어 있어서, 폰에서는
+   이것 하나가 SNS 단추 여럿보다 낫다. */
+async function shareToSheet() {
+  try {
+    await navigator.share({ title: shareTitle(), text: shareText(), url: shareUrl() });
+  } catch (err) {
+    if (err && err.name === "AbortError") return;   // 사용자가 닫은 것뿐이다
+    await copyAndTell();
+  }
+}
+
+/* ---- 어디로 보낼 수 있는가 ---------------------------------------------- *
+ *
+ * 셋의 사정이 다 다르다.
+ *   트위터·페이스북·라인 — 주소 하나로 창을 연다. 등록도 열쇠도 필요 없다.
+ *   카카오톡 — 공식 SDK 를 붙여야 하고, JavaScript 키와 **등록된 도메인**이
+ *              있어야 한다. 키가 없으면 아예 안 그린다(서버의 kakao_js_key).
+ *   인스타그램 — **웹에서 글을 올리는 길이 없다.** 공유 주소가 아예 없고,
+ *              피드에는 링크도 안 걸린다. 인스타에 올리려면 그림 파일이
+ *              가야 해서, 폰이면 공유 시트로 넘기고 PC 면 내려받기로 보낸다.
+ *              단추를 만들어 두고 "안 됩니다" 하는 것보다 그게 정직하다. */
+
+function shareText() {
+  const title = ($("#resTitle")?.textContent || "").trim();
+  const log = ($("#resLogline")?.textContent || "").trim();
+  // 트위터는 280자다. 링크와 해시태그 자리를 빼고 로그라인을 줄인다.
+  const short = log.length > 90 ? log.slice(0, 89) + "…" : log;
+  return [title, short].filter(Boolean).join(" — ");
+}
+
+const SHARE_TARGETS = [
+  {
+    id: "x", label: "X (트위터)",
+    href: () => "https://twitter.com/intent/tweet"
+      + `?text=${encodeURIComponent(shareText() + " #LORE")}`
+      + `&url=${encodeURIComponent(shareUrl())}`,
+  },
+  {
+    id: "facebook", label: "페이스북",
+    // 페이스북은 본문을 안 받는다 — 링크만 주면 og 태그로 카드를 만든다.
+    href: () => "https://www.facebook.com/sharer/sharer.php"
+      + `?u=${encodeURIComponent(shareUrl())}`,
+  },
+  {
+    id: "line", label: "라인",
+    href: () => "https://social-plugins.line.me/lineit/share"
+      + `?url=${encodeURIComponent(shareUrl())}`
+      + `&text=${encodeURIComponent(shareText())}`,
+  },
+];
+
+function openShareWindow(url) {
+  // 새 창으로 연다. 같은 탭에서 열면 만들던 것을 두고 나가게 된다.
+  window.open(url, "_blank", "noopener,noreferrer,width=600,height=560");
+}
+
+function buildShareMenu() {
+  const host = $("#shareMenu");
+  if (!host) return;
+  const rows = [];
+  for (const t of SHARE_TARGETS) {
+    rows.push(`<button type="button" class="share-item" data-share="${t.id}">${t.label}</button>`);
+  }
+  if (shareConfig.kakao_js_key) {
+    rows.push(`<button type="button" class="share-item" data-share="kakao">카카오톡</button>`);
+  }
+  if (canOpenShareSheet()) {
+    rows.push(`<button type="button" class="share-item" data-share="sheet">다른 앱으로…</button>`);
+  }
+  rows.push(`<button type="button" class="share-item" data-share="copy">링크 복사</button>`);
+  // 인스타는 링크로 못 올린다 — 그림을 받아서 올리라고 말해 준다.
+  rows.push(`<a class="share-item" id="shareInstaHint" download>인스타그램 — 그림 내려받기</a>`);
+  host.innerHTML = rows.join("");
+  const a = $("#shareInstaHint");
+  if (a) a.href = resultSrc ? resultSrc.download : "#";
+}
+
+function toggleShareMenu(open) {
+  const host = $("#shareMenu"), btn = $("#shareBtn");
+  if (!host || !btn) return;
+  const show = open === undefined ? host.hidden : open;
+  if (show) buildShareMenu();
+  host.hidden = !show;
+  btn.setAttribute("aria-expanded", show ? "true" : "false");
+}
+
+async function onShareMenuClick(e) {
+  const el = e.target.closest("[data-share]");
+  if (!el) return;
+  const kind = el.dataset.share;
+  toggleShareMenu(false);
+  if (kind === "copy") return copyAndTell();
+  if (kind === "sheet") return shareToSheet();
+  if (kind === "kakao") return shareToKakao();
+  const target = SHARE_TARGETS.find(t => t.id === kind);
+  if (target) openShareWindow(target.href());
+}
+
+/* 카카오는 키가 있을 때만 부른다 — buildShareMenu 가 그때만 단추를 그린다.
+   SDK 는 처음 누를 때 받아 온다(안 쓰는 사람에게 받게 하지 않는다). */
+let kakaoReady = null;
+function loadKakao() {
+  if (kakaoReady) return kakaoReady;
+  kakaoReady = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    // integrity 는 안 건다 — 해시를 손으로 적어 두면 카카오가 판을 올릴 때마다
+    // 조용히 안 뜬다. 붙이려면 카카오 문서의 그 판 해시를 그대로 가져와야 한다.
+    s.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js";
+    s.crossOrigin = "anonymous";
+    s.onload = () => res(window.Kakao);
+    s.onerror = () => rej(new Error("카카오 SDK 를 받지 못했습니다"));
+    document.head.appendChild(s);
+  });
+  return kakaoReady;
+}
+
+async function shareToKakao() {
+  try {
+    const Kakao = await loadKakao();
+    if (!Kakao.isInitialized()) Kakao.init(shareConfig.kakao_js_key);
+    Kakao.Share.sendDefault({
+      objectType: "feed",
+      content: {
+        title: ($("#resTitle")?.textContent || "").trim() || "LORE 웹툰",
+        description: ($("#resLogline")?.textContent || "").trim().slice(0, 100),
+        imageUrl: `${location.origin}${shareImagePath()}`,
+        link: { mobileWebUrl: shareUrl(), webUrl: shareUrl() },
+      },
+      buttons: [{ title: "웹툰 보기",
+                  link: { mobileWebUrl: shareUrl(), webUrl: shareUrl() } }],
+    });
+  } catch (err) {
+    // 도메인을 카카오에 등록하지 않으면 여기서 걸린다 — 가장 흔한 실패다.
+    toast("카카오톡 공유를 열지 못했습니다. 링크 복사를 써 주세요.");
+  }
+}
+
+/* 카톡 카드에 걸 그림. og:image 와 같은 것을 쓴다. */
+function shareImagePath() {
+  return resultSrc ? resultSrc.page(1, 1080) : "";
+}
+
+let shareConfig = {};
+
+/* ---- 제목 고치기 --------------------------------------------------------- *
+ *
+ * 모델이 지은 이름이 늘 맞지는 않고, 공유가 붙은 뒤로는 그 이름이 카톡·트위터
+ * 카드에 실려 남에게 먼저 보인다. 여기서 고친 것은 작품 폴더에 남아서
+ * (titles.json) 목록·편집실·공유 미리보기·내려받는 파일 이름까지 따라온다.
+ * 비우고 저장하면 모델이 지은 이름으로 되돌아간다. */
+
+function openTitleEdit(open) {
+  const box = $("#titleEdit"), row = $("#titleEditBtn");
+  if (!box) return;
+  box.hidden = !open;
+  if (row) row.hidden = open;
+  if (open) {
+    const input = $("#titleInput");
+    input.value = ($("#resTitle").textContent || "").trim();
+    input.focus();
+    input.select();
+  }
+}
+
+async function saveTitle() {
+  if (!resultRunId) return;
+  const btn = $("#titleSaveBtn");
+  btn.disabled = true;
+  try {
+    const res = await fetch(
+      `/api/runs/${encodeURIComponent(resultRunId)}/title`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ episode: resultEpisode,
+                               title: $("#titleInput").value }),
+      });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "저장하지 못했습니다");
+    // 서버가 돌려준 것이 **앞으로 보일 이름**이다 (비웠으면 원래 제목).
+    $("#resTitle").textContent = data.title;
+    openTitleEdit(false);
+    toast("제목을 바꿨습니다");
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function setupTitleEdit() {
+  const edit = $("#titleEditBtn");
+  if (!edit) return;
+  edit.addEventListener("click", () => openTitleEdit(true));
+  $("#titleCancelBtn").addEventListener("click", () => openTitleEdit(false));
+  $("#titleSaveBtn").addEventListener("click", saveTitle);
+  $("#titleInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); saveTitle(); }
+    if (e.key === "Escape") openTitleEdit(false);
+  });
 }
 
 function setupShare() {
   const btn = $("#shareBtn");
   if (!btn) return;
-  btn.textContent = canOpenShareSheet() ? "공유" : "링크 복사";
-  btn.addEventListener("click", doShare);
+  btn.addEventListener("click", () => toggleShareMenu());
+  $("#shareMenu")?.addEventListener("click", onShareMenuClick);
+  // 바깥을 누르면 닫는다.
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#shareMenu") && !e.target.closest("#shareBtn")) {
+      toggleShareMenu(false);
+    }
+  });
+  getConfig().then(c => { shareConfig = c || {}; }).catch(() => { shareConfig = {}; });
 }
 
 function pageTools(no) {
@@ -2356,6 +2555,7 @@ document.addEventListener("DOMContentLoaded", () => {
     closeNextEp();
   });
   setupShare();
+  setupTitleEdit();
   $("#scriptBtn").addEventListener("click", () => {
     $("#scriptPanel").hidden = !$("#scriptPanel").hidden;
   });

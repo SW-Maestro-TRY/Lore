@@ -633,7 +633,21 @@
   <header class="result-head">
     <div class="result-meta">
       <p class="eyebrow" id="resGenre"></p>
-      <h2 id="resTitle"></h2>
+      <!-- 제목은 모델이 지은 것이라 늘 맞지는 않는다. 게다가 공유 카드에
+           그대로 실려서 남에게 먼저 보이는 이름이다 — 여기서 고칠 수 있다.
+           고친 것은 작품 폴더에 남아(titles.json) 목록·편집실·공유에 전부
+           따라온다. 비우고 저장하면 모델이 지은 이름으로 되돌아간다. -->
+      <div class="title-row">
+        <h2 id="resTitle"></h2>
+        <button type="button" class="icon-btn" id="titleEditBtn"
+                title="제목 고치기" aria-label="제목 고치기">✎</button>
+      </div>
+      <div class="title-edit" id="titleEdit" hidden>
+        <input type="text" id="titleInput" maxlength="60"
+               placeholder="비우면 원래 제목으로 되돌아갑니다">
+        <button type="button" class="btn btn-primary btn-sm" id="titleSaveBtn">저장</button>
+        <button type="button" class="btn btn-quiet btn-sm" id="titleCancelBtn">취소</button>
+      </div>
       <p class="result-logline" id="resLogline"></p>
       <p class="result-sub" id="resSub"></p>
       <!-- 회차 고르개. 한 편뿐이면 app.js 가 통째로 감춘다. -->
@@ -643,10 +657,14 @@
       <button type="button" class="btn btn-quiet btn-sm" id="backToWorks">목록으로</button>
       <a class="btn btn-quiet btn-sm" id="editorLink" href="/editor">편집실에서 열기</a>
       <button type="button" class="btn btn-quiet btn-sm" id="scriptBtn">대사 스크립트</button>
-      <!-- 폰이면 공유 시트(카톡·인스타…)가 뜨고, PC 면 링크를 복사한다.
-           어느 쪽인지는 app.js 가 navigator.share 를 보고 정하며, 글자도
-           거기서 맞춰 바꾼다. -->
-      <button type="button" class="btn btn-quiet btn-sm" id="shareBtn">공유</button>
+      <!-- 어디로 보낼지 고르는 자리. 목록은 app.js 가 채운다 —
+           카카오톡은 키가 있을 때만, "다른 앱으로…"는 공유 시트가 있는
+           기기에서만 나온다. -->
+      <div class="share-wrap">
+        <button type="button" class="btn btn-quiet btn-sm" id="shareBtn"
+                aria-haspopup="true" aria-expanded="false">공유</button>
+        <div class="share-menu" id="shareMenu" hidden></div>
+      </div>
       <a class="btn btn-quiet btn-sm" id="downloadBtn" download>PNG 내려받기</a>
       <!-- 미리보기로 앞 3컷만 본 뒤, 마음에 들면 여기서 이어 그린다.
            한 화를 통째로 굽기 전에 앞부분을 먼저 보게 하는 것이 목적이다. -->
