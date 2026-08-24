@@ -161,9 +161,6 @@
             <textarea name="story" rows="5" id="storyInput"
               placeholder="성격이든 이야기든 자유롭게 적어주세요.&#10;&#10;예) 장난기 많은데 겁은 많아서 친구 앞에서만 센 척한다&#10;예) 평범한 회사원인데 로맨스 판타지 소설에 빙의했다"></textarea>
           </label>
-          <p class="wiz-hint">막힐 때 눌러 보세요</p>
-          <div class="chips" id="ideaChips"></div>
-
           <input type="hidden" name="photo_note" value="">
         </div>
       </section>
@@ -204,117 +201,36 @@
       </section>
 
       <!-- 3 · 갈림길. 고르는 것이 곧 다음 동작이다. -->
+      <!-- 3 · 갈림길. 고르면 바로 아래에 요약과 만들기 단추가 열린다.
+           예전에는 여기서 연출·등신·검수를 더 물었는데, 셋 다 처음 만드는
+           사람이 판단할 수 없는 것이라(등신 비율이 뭔지부터 모른다) 기본값으로
+           두고 화면에서 뺐다. 값은 아래 숨은 칸이 그대로 보낸다. -->
       <section class="wiz-step wiz-step-fork" data-step="3" hidden>
         <p class="wiz-eyebrow">갈림길</p>
         <h3 class="wiz-title">어떻게 볼까요?</h3>
 
         <div class="fork">
-          <button type="button" class="fork-card" data-mode="simple">
-            <img src="/static/lou/lou-hero.png" alt="" class="fork-art">
+          <button type="button" class="fork-card" data-mode="simple" aria-pressed="false">
             <h4>빠르게 결과부터</h4>
             <p class="fork-lede">루가 알아서 그려 옵니다.</p>
-            <span class="fork-go">바로 시작 →</span>
           </button>
 
-          <button type="button" class="fork-card" data-mode="expert">
-            <img src="/static/lou/lou-think.png" alt="" class="fork-art">
+          <button type="button" class="fork-card" data-mode="expert" aria-pressed="false">
             <h4>단계마다 확인하며</h4>
             <p class="fork-lede">이야기·시트·콘티를 보고 넘어갑니다.</p>
-            <span class="fork-go">한 걸음 더 →</span>
           </button>
         </div>
-      </section>
 
-      <section class="wiz-step" data-step="4" hidden>
-        <p class="wiz-eyebrow">심해 · STEP 4</p>
-        <h3 class="wiz-title">연출을<br>골라 주세요</h3>
-
-
-
-        <div class="wiz-card">
-          <div class="field-label">연출 <small>컷을 어떻게 나눠 그릴지</small></div>
-          <div class="ratios">
-            <label class="ratio">
-              <input type="radio" name="layout_mode" value="fast" checked>
-              <span><b>빠르게</b><small>한 장에 3컷 · 지금 방식</small></span>
-            </label>
-            <label class="ratio">
-              <input type="radio" name="layout_mode" value="webtoon">
-              <span><b>웹툰</b><small>무게가 묶음을 정함 · 비용 약 3배</small></span>
-            </label>
-          </div>
-          <details class="wiz-more">
-            <summary>둘이 어떻게 다른가요</summary>
-            <p class="hint">
-              <b>빠르게</b> 는 한 장에 컷 세 개를 나란히 그립니다 — 싸지만 배치를
-              그림 모델이 정해서 만화 페이지처럼 보일 때가 있습니다.
-              <b>웹툰</b> 은 컷마다 무게를 따져 무거운 컷은 한 장을 혼자 씁니다.
-            </p>
-          </details>
+        <!-- 고르기 전에는 안 보인다 — 고른 것이 무엇인지가 요약 위에 있어야
+             "이대로 만든다"가 말이 된다. -->
+        <div class="wiz-after" id="wizAfter" hidden>
+          <div class="wiz-card wiz-summary" id="wizSummary"></div>
         </div>
 
-        <div class="wiz-card">
-          <div class="field-label">등신 비율 <small>비우면 그림체 기본값</small></div>
-          <div class="ratios">
-            <label class="ratio">
-              <input type="radio" name="head_ratio" value="" checked>
-              <span><b>기본</b><small>그림체가 정한 등신</small></span>
-            </label>
-            <label class="ratio">
-              <input type="radio" name="head_ratio" value="sd">
-              <span><b>SD</b><small>2~3등신</small></span>
-            </label>
-            <label class="ratio">
-              <input type="radio" name="head_ratio" value="md">
-              <span><b>MD</b><small>4~5등신</small></span>
-            </label>
-            <label class="ratio">
-              <input type="radio" name="head_ratio" value="ld">
-              <span><b>LD</b><small>7~8등신</small></span>
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <section class="wiz-step" data-step="5" hidden>
-        <p class="wiz-eyebrow">바닥 · STEP 5</p>
-        <h3 class="wiz-title">이대로<br>떠날까요?</h3>
-
-        <div class="wiz-card">
-          <div class="field-label">그림 검수 <small>망한 컷을 몇 번까지 다시 그릴지</small></div>
-          <div class="ratios">
-            <label class="ratio">
-              <input type="radio" name="art_qa_regen_max" value="0">
-              <span><b>안 함</b><small>잡기만 함</small></span>
-            </label>
-            <label class="ratio">
-              <input type="radio" name="art_qa_regen_max" value="1">
-              <span><b>1번</b><small>가볍게</small></span>
-            </label>
-            <label class="ratio">
-              <input type="radio" name="art_qa_regen_max" value="2" checked>
-              <span><b>2번</b><small>기본</small></span>
-            </label>
-            <label class="ratio">
-              <input type="radio" name="art_qa_regen_max" value="4">
-              <span><b>4번</b><small>끈질기게 · 비쌈</small></span>
-            </label>
-          </div>
-          <details class="wiz-more">
-            <summary>어디서 멈추나요</summary>
-            <ol class="checkpoint-list">
-              <li><b>이야기</b> 줄거리와 장면이 나온 뒤</li>
-              <li><b>캐릭터 시트</b> 얼굴이 나온 뒤</li>
-              <li><b>콘티</b> 컷 나누기와 대사가 나온 뒤</li>
-              <li><b>그림 검수</b> 다 그린 뒤 <small>잡힌 것이 있을 때만</small></li>
-            </ol>
-            <p class="hint">멈춰 있는 동안에는 비용이 들지 않습니다.</p>
-          </details>
-        </div>
-
-        <div class="wiz-card wiz-summary" id="wizSummary"></div>
-
-
+        <!-- 화면에서 뺀 설정들. 기본값 그대로 서버에 간다. -->
+        <input type="hidden" name="layout_mode" value="fast">
+        <input type="hidden" name="head_ratio" value="">
+        <input type="hidden" name="art_qa_regen_max" value="2">
       </section>
 
       <div class="wiz-foot">

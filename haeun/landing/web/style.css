@@ -127,7 +127,11 @@ body[data-view="nextep"]  .topbar { display: none; }
   position: sticky; top: 0; z-index: 50;
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 14px 20px;
-  background: rgba(250,246,238,.86); backdrop-filter: blur(12px);
+  /* 걸음이 깊어지면 지면이 어두워지는데 상단바만 밝으면 떠 보인다.
+     바탕을 투명하게 두고 흐리기만 걸어서, 아래 물빛이 그대로 비치게 한다. */
+  background: transparent; backdrop-filter: blur(10px) saturate(1.1);
+  border-bottom-color: transparent;
+  transition: color .5s ease;
   border-bottom: 1px solid var(--line);
 }
 .brand { display: flex; align-items: baseline; gap: 10px; }
@@ -384,11 +388,21 @@ body[data-view="nextep"]  .topbar { display: none; }
 /* 지면 물빛은 아래 body[data-step] 규칙이 정한다(app.js 가 적는다) */
 body[data-step="1"] .studio { background: linear-gradient(180deg, var(--sea-sand) 0%, var(--paper-2) 40%, var(--ink) 100%); }
 body[data-step="2"] .studio { background: linear-gradient(180deg, var(--ink), var(--sea-shore)); }
-body[data-step="3"] .studio { background: linear-gradient(180deg, var(--sea-mint) 0%, var(--sea-mid) 55%, #4d8578 100%); }
-body[data-step="4"] .studio { background: linear-gradient(180deg, #3f6f66 0%, #335c56 60%, #2b4f4a 100%); }
-body[data-step="5"] .studio { background: linear-gradient(180deg, var(--sea-deep), var(--sea-abyss)); }
+/* 걸음은 셋뿐이다 — 3걸음이 가장 깊은 물이다 */
+body[data-step="3"] .studio { background: linear-gradient(180deg, var(--sea-mid) 0%, #3f6f66 55%, var(--sea-deep) 100%); }
 /* 짙은 물(3~5걸음) 위 글자와 게이지 — 캔버스의 흰 글자 그대로 */
 body[data-step="3"] .wiz-title, body[data-step="4"] .wiz-title, body[data-step="5"] .wiz-title { color: #fff; }
+/* 상단바는 물 위에 얹혀 있다 — 만들기 화면에서는 걸음마다 물빛이 달라지므로
+   어느 깊이에서도 읽히도록 글자를 밝은 쪽으로 고정한다. 1걸음(모래빛)은
+   아직 밝은 물이라 원래 색을 그대로 둔다. */
+body[data-view="create"][data-step="2"] .brand-name,
+body[data-view="create"][data-step="3"] .brand-name { color: var(--on-sea); }
+body[data-view="create"][data-step="2"] .brand-sub,
+body[data-view="create"][data-step="3"] .brand-sub { color: rgba(247,243,234,.72); }
+body[data-view="create"][data-step="2"] .brand-mark,
+body[data-view="create"][data-step="3"] .brand-mark {
+  background: var(--on-sea); color: var(--accent-d);
+}
 body[data-step="3"] .wiz-eyebrow, body[data-step="4"] .wiz-eyebrow, body[data-step="5"] .wiz-eyebrow { color: var(--sea-sand); }
 body[data-step="3"] .wiz-sub, body[data-step="4"] .wiz-sub, body[data-step="5"] .wiz-sub { color: rgba(255,255,255,.8); }
 body[data-step="3"] .wiz-back, body[data-step="4"] .wiz-back, body[data-step="5"] .wiz-back { color: #fff; }
@@ -465,6 +479,9 @@ body[data-step="3"] .submit-note, body[data-step="4"] .submit-note, body[data-st
 .genre-quick button[aria-pressed="true"] {
   background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700;
 }
+
+/* 고른 뒤 그 자리에서 열리는 요약 — 갈림길 카드 바로 아래다 */
+.wiz-after { margin-top: 6px; }
 
 /* 요약 */
 .wiz-summary { padding: 6px 20px; }
@@ -936,6 +953,9 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 
 /* 좁은 화면에서 무너뜨려야 하는 것들 — 이건 max-width 가 맞다 */
 .topnav a:not(.btn) { display: none; }   /* 480px 프레임 — 캔버스처럼 버튼만 */
+/* 만들기 화면에서는 "만들어보기" 단추가 갈 곳이 지금 이 화면이라 숨긴다.
+   깊은 물 위에서 대비를 맞추느라 애쓸 이유도 없다. */
+body[data-view="create"] .topnav { display: none; }
 @media (max-width: 560px) {
   .stage { grid-template-columns: 28px 1fr; }
   .stage-time { grid-column: 2; }
@@ -1139,44 +1159,39 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
    카드를 누르면 스토리 모드는 바로 출발하고, 전문가 모드는 길이 늘어난다.
    그래서 카드마다 무슨 일이 일어나는지를 맨 아래 한 줄로 못박는다. */
 
-.fork { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 20px; }
+.fork { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
 .fork-card {
-  position: relative; overflow: hidden;
   text-align: left; font: inherit; color: var(--text); cursor: pointer;
   background: var(--card); border: 1.5px solid var(--line-2);
-  border-radius: 20px; padding: 20px;
-  display: flex; flex-direction: column; gap: 8px;
+  border-radius: 18px; padding: 16px 14px;
+  display: flex; flex-direction: column; gap: 6px; min-height: 132px;
   transition: border-color .18s ease, box-shadow .18s ease, transform .12s ease;
 }
-.fork-card:hover { border-color: var(--accent); box-shadow: 0 12px 30px rgba(38,64,58,.14); }
+.fork-card:hover { border-color: var(--accent); }
 .fork-card:active { transform: translateY(1px); }
 .fork-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-.fork-card[aria-pressed="true"] { border-color: var(--accent-d); border-width: 2.5px; }
+/* 고른 것은 테두리와 바탕으로 표시한다 — 카드가 둘뿐이라 색만으로 충분하다 */
+/* 고른 카드도 바탕은 종이로 둔다 — 깊은 물 위에서 반투명 민트를 깔면
+   글자가 물빛에 먹혀 안 읽힌다. 구분은 테두리와 체크 표시로 한다. */
+.fork-card[aria-pressed="true"] {
+  border-color: var(--accent-d); border-width: 2.5px;
+  background: var(--card);
+  box-shadow: 0 8px 22px rgba(20,50,45,.22);
+}
+.fork-card[aria-pressed="true"]::after {
+  content: "✓"; position: absolute; right: 12px; top: 10px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent-d); color: var(--on-sea);
+  font-size: .74rem; display: grid; place-items: center;
+}
+.fork-card { position: relative; }
 .fork-card:disabled { opacity: .55; cursor: progress; }
+.fork-card h4 {
+  margin: 0; font-size: 1rem; font-weight: 800; color: var(--accent-d);
+  line-height: 1.3;
+}
+.fork-lede { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.5; }
 
-/* 루가 카드 오른쪽 위에서 살짝 보인다 — 장식이 아니라 "누가 만드는지"의 표시 */
-.fork-art {
-  position: absolute; right: -18px; top: -10px; width: 116px;
-  opacity: .5; pointer-events: none;
-  -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000 55%, transparent 100%);
-          mask-image: radial-gradient(closest-side at 50% 50%, #000 55%, transparent 100%);
-}
-.fork-tag {
-  align-self: flex-start; background: var(--accent); color: #fff;
-  border-radius: 999px; padding: .25em .8em;
-  font-size: .68rem; font-weight: 800; letter-spacing: .1em;
-}
-.fork-card h4 { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--accent-d); }
-.fork-lede { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.55; max-width: 40ch; }
-.fork-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 8px; }
-.fork-list li { font-size: .85rem; color: var(--text); }
-.fork-list b { color: var(--dim); font-weight: 600; margin-right: .5em; font-size: .8rem; }
-.fork-list small { display: block; color: var(--dim); font-size: .76rem; margin-top: .2em; line-height: 1.45; }
-.fork-go { margin-top: 6px; font-size: .88rem; font-weight: 700; color: var(--accent); }
-.fork-foot {
-  margin: 18px 0 0; color: var(--dim); font-size: .78rem;
-  line-height: 1.55; text-align: center;
-}
 
 /* 갈림길에서는 물빛을 안 바꾼다 — 여기는 고르는 자리라, 두 카드가 같은
    조건에서 보여야 한다. body[data-step="2"] 의 그라데이션을 덮는다. */
@@ -1184,9 +1199,6 @@ body[data-step="2"] .studio {
   background: linear-gradient(180deg, var(--ink), var(--sea-shore));
 }
 
-@media (min-width: 820px) {
-  .fork { grid-template-columns: 1fr 1fr; }
-}
 
 /* ------------------------------------------------------- 크레딧 · 충전 ---- *
  * 잔액 배지(topbar) + 프리토타이핑 결제 모달. 계정이 없어 잔액은 이 브라우저

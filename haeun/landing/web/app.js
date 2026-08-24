@@ -19,14 +19,6 @@ const STYLE_INFO = [
   ["shoujo",    "순정 · BL",      "얼굴과 둘 사이의 거리. 길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃."],
 ];
 
-const IDEAS = [
-  "장난기 많은데 겁은 많아서 친구 앞에서만 센 척한다",
-  "평범한 회사원인데 로맨스 판타지 소설에 빙의했다",
-  "말수가 적은 새벽 편의점 알바생. 매일 같은 손님이 온다",
-  "몰락한 문파에 혼자 남은 검객. 오늘 적이 쳐들어온다",
-  "각성 등급은 최하위인데 아무도 못 깨는 게이트를 혼자 연다",
-  "남 부탁은 다 들어주면서 정작 자기 얘기는 안 한다",
-];
 // 장르 단추로 먼저 꺼내 두는 것들. index.html 의 datalist 에는 더 많이 있고,
 // 여기 없는 장르도 칸에 직접 쓰면 그대로 간다.
 const GENRE_QUICK = [
@@ -104,12 +96,6 @@ function buildForm() {
     </label>
   `).join("");
 
-  $("#ideaChips").innerHTML = IDEAS
-    .map(t => `<button type="button" class="chip">${t}</button>`).join("");
-  $$("#ideaChips .chip").forEach(btn => btn.addEventListener("click", () => {
-    $("#storyInput").value = btn.textContent;
-    $("#storyInput").focus();
-  }));
 
   // 장르 빠른 고르개. datalist 는 폰에서 안 열리는 브라우저가 있어서, 자주
   // 쓰는 것만 단추로 먼저 꺼내 둔다. 목록에 없는 장르는 그대로 칸에 쓰면 된다.
@@ -528,10 +514,12 @@ function closeChargeModal() { $("#chargeModal").hidden = true; }
    칸은 여전히 하나도 안 지웠다 — 전부 같은 <form> 안에 있고 보이는 걸음만
    바뀐다. 그래서 collect() 는 어느 걸음에 서 있든 전부 걷는다. */
 
-const WIZ_FORK = 3;                       // 갈림길이 있는 걸음
-const WIZ_SIMPLE_LAST = 3;                // 빠르게 보기는 여기서 출발한다
-const WIZ_EXPERT_LAST = 5;
-const WIZ_NAMES = ["수면", "항해", "갈림길", "심해", "바닥"];
+const WIZ_FORK = 3;                       // 갈림길 = 마지막 걸음
+const WIZ_SIMPLE_LAST = 3;
+// 전문가도 더 안 묻는다 — 다른 것은 도중에 몇 번 멈추느냐뿐이고,
+// 그건 서버(checkpoints)가 정한다. 그래서 두 길의 걸음 수가 같다.
+const WIZ_EXPERT_LAST = 3;
+const WIZ_NAMES = ["수면", "항해", "갈림길"];
 let wizStep = 1;
 /* 이번 실행에서 고른 길. localStorage 의 모드와 **일부러 따로 둔다** —
    지난번에 전문가로 만들었다고 이번에도 말없이 전문가 길로 끌고 가면, 갈림길
@@ -540,7 +528,7 @@ let wizStep = 1;
 let wizChoice = null;
 
 // 지금 길의 마지막 걸음. 아직 안 골랐으면 갈림길까지만 보여준다.
-function wizLast() { return wizChoice === "expert" ? WIZ_EXPERT_LAST : WIZ_SIMPLE_LAST; }
+function wizLast() { return WIZ_SIMPLE_LAST; }   // 두 길의 걸음 수가 같다
 
 function wizPaintGauge() {
   const gauge = $("#wizGauge");
@@ -581,7 +569,7 @@ function wizPaintSummary() {
     ["적은 것", cut(form.story.value, 40)],
     ["장르", val(form.genre.value)],
     ["그림체", styleLabel ? esc(styleLabel) : auto],
-    ["연출", layoutMode() === "webtoon" ? "웹툰 · 무게로 묶음" : "빠르게 · 한 장 3컷"],
+    ["보는 방식", wizChoice === "expert" ? "단계마다 확인하며" : "빠르게 결과부터"],
   ];
   box.innerHTML = rows.map(([k, v]) =>
     `<div class="wiz-row"><span>${k}</span><b>${v}</b></div>`).join("");
@@ -589,13 +577,23 @@ function wizPaintSummary() {
 
 function wizGo(n, scroll = true) {
   const last = wizLast();
+  // 갈림길을 벗어나면 고른 것을 지운다 — 뒤로 갔다 오면 다시 고르게 한다.
+  if (n !== WIZ_FORK) {
+    wizChoice = null;
+    const after = $("#wizAfter");
+    if (after) after.hidden = true;
+    $$(".fork-card").forEach(c => c.setAttribute("aria-pressed", "false"));
+  }
   wizStep = Math.min(last, Math.max(1, n));
   $$(".wiz-step").forEach(p => { p.hidden = Number(p.dataset.step) !== wizStep; });
 
   document.body.dataset.step = String(wizStep);
 
   // 갈림길에서는 늘 고르게 한다 — 지난번 모드가 기억돼 있어도 마찬가지다.
-  const atFork = wizStep === WIZ_FORK;
+  // 갈림길은 마지막 걸음이면서 고르는 걸음이다. 고르기 전에는 아래 단추가
+  // 없고(고른 것이 없으니 "이대로 만들기"가 말이 안 된다), 고르고 나면
+  // 요약과 만들기 단추가 그 자리에서 열린다.
+  const atFork = wizStep === WIZ_FORK && !wizChoice;
   const atEnd  = wizStep === last;
 
   // 갈림길에서는 아래 단추를 안 쓴다 — 고르는 것이 곧 넘어가는 것이다.
@@ -665,8 +663,11 @@ function setupWizard() {
     setMode(mode);
     $$(".fork-card").forEach(c =>
       c.setAttribute("aria-pressed", String(c === card)));
-    if (mode === "expert") { wizGo(WIZ_FORK + 1); return; }
-    startRun();   // 1걸음을 지나야 갈림길에 오므로 필수값은 이미 있다
+    // 고른 즉시 출발하지 않는다 — 무엇으로 만드는지 한 번은 보고 눌러야
+    // "이럴 줄 몰랐다"가 안 나온다. 요약과 만들기 단추를 그 자리에 연다.
+    $("#wizAfter").hidden = false;
+    wizGo(WIZ_FORK);
+    $("#wizAfter").scrollIntoView({ block: "nearest", behavior: "smooth" });
   }));
 
   wizGo(1, false);
