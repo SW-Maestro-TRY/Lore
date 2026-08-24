@@ -446,6 +446,11 @@
 }
 .work-thumb {
   width: 46px; height: 46px; border-radius: 10px; object-fit: cover;
+  /* 세로로 아주 긴 한 장(1536x2752 같은)을 46px 정사각으로 자르는 자리다.
+     기본값(가운데)이면 페이지 한복판 — 컷과 컷 사이 흰 여백 — 이 잡혀서
+     썸네일이 통째로 빈 흰 칸으로 보인다. 위를 잡으면 첫 컷이 들어와서 어느
+     작품인지 알아볼 수 있다. */
+  object-position: 50% 0;
   display: block; background: var(--card);
 }
 .work-thumb.is-empty { display: grid; place-items: center; font-size: 1.1rem; color: var(--dim); }

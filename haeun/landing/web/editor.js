@@ -779,8 +779,13 @@ function toast(msg) {
    cover_page 를 같이 준다). 그림이 아직 없으면 자리만 비워 두고 카드는 남긴다. */
 function workCard(r, current) {
   const on = r.run_id === current;
+  // loading="lazy" 를 안 쓴다. 이 목록은 **접힌 채로 시작**하는 서랍 안에 있고
+  // (setupWorksToggle 의 기본값 + .works-off 의 display:none), 브라우저는
+  // display:none 안의 lazy 이미지를 안 받는다 — 서랍을 펴도 그대로 빈 칸이라
+  // 어느 작품인지 그림으로 못 알아본다. 받아 오는 것은 w=160 짜리 축소본
+  // (17KB 안팎)이고 작품 수도 몇 개뿐이라, 미루는 이득보다 안 보이는 손해가 크다.
   const thumb = r.cover_page
-    ? `<img class="work-thumb" loading="lazy" alt=""`
+    ? `<img class="work-thumb" alt=""`
       + ` src="/api/runs/${encodeURIComponent(r.run_id)}/page/${r.cover_page}`
       + `?w=160&ep=${r.cover_episode || 1}">`
     : `<span class="work-thumb is-empty" aria-hidden="true">🖼</span>`;
