@@ -10,40 +10,51 @@
 </head>
 <body class="ed">
 
+<!-- 머리 · 제목 띠 · 구운 결과를 한 덩어리로 붙박아 둔다. 따로 붙이면 아래
+     줄의 top 값을 위 줄 높이에 손으로 맞춰야 해서 글꼴이 바뀔 때 어긋난다. -->
 <header class="ed-top">
-  <a class="brand" href="/">
-    <span class="brand-mark">L</span>
-    <span class="brand-name">LORE</span>
-    <span class="brand-sub">편집실</span>
-  </a>
-
-  <button type="button" class="ed-works-toggle" id="worksToggle"
-          aria-expanded="true" aria-controls="edWorks">
-    <span aria-hidden="true">☰</span> 작품
-  </button>
-
-  <div class="ed-title">
-    <b id="edTitle">—</b>
-    <span id="edMeta"></span>
-  </div>
-
-  <div class="ed-top-right">
-    <span class="mock-badge" title="작품을 고르기 전까지는 샘플입니다. 크레딧과 다시 그리기는 흉내만 냅니다.">샘플</span>
-    <div class="credit" id="creditBox">
-      <span class="credit-icon">◈</span>
-      <span class="credit-num" id="creditNum">1,240</span>
-      <span class="credit-unit">크레딧</span>
+  <div class="ed-top-row">
+    <a class="brand" href="/">
+      <span class="brand-mark">L</span>
+      <span class="brand-name">LORE</span>
+      <span class="brand-sub">편집실</span>
+    </a>
+    <div class="ed-top-right">
+      <button type="button" class="btn btn-quiet btn-sm" id="saveBtn">저장</button>
+      <!-- 얹은 것을 진짜 그림에 굽는다. 여기까지 와야 가져갈 것이 생긴다 —
+           이 단추가 없던 동안, 배치한 말풍선은 브라우저 밖으로 나갈 길이 없었다. -->
+      <button type="button" class="btn btn-primary btn-sm" id="bakeBtn">이미지로 뽑기</button>
     </div>
-    <button type="button" class="btn btn-quiet btn-sm" id="ledgerBtn">사용 내역</button>
-    <button type="button" class="btn btn-quiet btn-sm" id="saveBtn">저장</button>
-    <!-- 얹은 것을 진짜 그림에 굽는다. 여기까지 와야 가져갈 것이 생긴다 —
-         이 단추가 없던 동안, 배치한 말풍선은 브라우저 밖으로 나갈 길이 없었다. -->
-    <button type="button" class="btn btn-primary btn-sm" id="bakeBtn">이미지로 뽑기</button>
   </div>
-</header>
 
-<!-- 구운 결과. 몇 장을 구웠는지, 무엇이 빠졌는지, 어디서 받는지. -->
-<div class="bake-result" id="bakeResult" hidden></div>
+  <div class="ed-strip">
+    <button type="button" class="ed-works-toggle" id="worksToggle"
+            aria-expanded="false" aria-controls="edWorks">
+      <span aria-hidden="true">☰</span> 작품
+    </button>
+
+    <div class="ed-title">
+      <b id="edTitle">—</b>
+      <span id="edMeta"></span>
+    </div>
+
+    <!-- 샘플 표시와 흉내 크레딧은 한 묶음이다 — 실제 작품을 열면 둘 다
+         사라지므로, 따로 두면 폰에서 빈 줄만 남는다. 사용 내역 단추도 크레딧
+         칩 안에 넣어서 칩째로 지워지게 한다. -->
+    <div class="ed-chips">
+      <span class="mock-badge" title="작품을 고르기 전까지는 샘플입니다. 크레딧과 다시 그리기는 흉내만 냅니다.">샘플</span>
+      <div class="credit" id="creditBox">
+        <span class="credit-icon">◈</span>
+        <span class="credit-num" id="creditNum">1,240</span>
+        <span class="credit-unit">크레딧</span>
+        <button type="button" class="credit-more" id="ledgerBtn">내역</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 구운 결과. 몇 장을 구웠는지, 무엇이 빠졌는지, 어디서 받는지. -->
+  <div class="bake-result" id="bakeResult" hidden></div>
+</header>
 
 <div class="ed-body">
   <!-- ============================================ 작품 목록 ============ -->
@@ -57,11 +68,9 @@
   <!-- ============================================ 웹툰 스크롤 ========== -->
   <main class="ed-stage" id="stageCol">
     <div class="ed-stage-head">
-      <div>
-        <p class="eyebrow" id="edGenre"></p>
-        <h1 id="edEpisode">1화</h1>
-        <p class="ed-logline" id="edLogline"></p>
-      </div>
+      <p class="eyebrow" id="edGenre"></p>
+      <h1 id="edEpisode">1화</h1>
+      <p class="ed-logline" id="edLogline"></p>
       <label class="mini-toggle">
         <input type="checkbox" id="showOverlay" checked>
         <span>내가 얹은 것 보기</span>
@@ -73,57 +82,62 @@
 
     <div id="scenes"></div>
 
-    <p class="ed-foot-note" id="edFootNote">
-      여기까지가 1화입니다. 장 사이는 완성본과 같이 틈 없이 이어집니다.
-    </p>
+    <p class="ed-foot-note" id="edFootNote">여기까지가 1화입니다.</p>
   </main>
 
-  <!-- ============================================ 오른쪽 도구 ========== -->
+  <!-- ============================================ 도구 서랍 ============ -->
+  <!-- 화면 아래에 붙는다(sticky bottom). 480px 한 컬럼에는 오른쪽 기둥을 세울
+       자리가 없고, 그림은 위 · 손은 아래가 폰에서 더 자연스럽다. -->
   <aside class="ed-dock">
-    <div class="dock-tabs" id="dockTabs">
-      <button type="button" class="dock-tab is-on" data-tab="bubble">말풍선</button>
-      <button type="button" class="dock-tab" data-tab="sticker">스티커</button>
-      <button type="button" class="dock-tab" data-tab="sfx">효과음</button>
-    </div>
-
-    <div class="dock-hint" id="dockHint">
-      항목을 누르면 <b id="activeSceneLabel">1번째 장</b> 위에 올라갑니다.
-      끌어서 옮기고, 모서리로 크기를 바꾸고, 두 번 눌러 글자를 고치세요.
-    </div>
-
-    <div class="dock-grid" id="dockGrid"></div>
-
-    <div class="dock-props" id="dockProps" hidden>
-      <div class="dock-props-head">
-        <b id="propTitle">선택한 요소</b>
-        <button type="button" class="icon-btn" id="propClose" aria-label="선택 해제">✕</button>
+    <div class="dock-bar">
+      <div class="dock-tabs" id="dockTabs">
+        <button type="button" class="dock-tab is-on" data-tab="bubble">말풍선</button>
+        <button type="button" class="dock-tab" data-tab="sticker">스티커</button>
+        <button type="button" class="dock-tab" data-tab="sfx">효과음</button>
       </div>
-      <label class="field" id="propTextField">
-        <span>글자</span>
-        <textarea id="propText" rows="2"></textarea>
-      </label>
-      <div class="field" id="propTailField">
-        <span>꼬리</span>
-        <div class="seg" id="propTail">
-          <button type="button" data-tail="left">◀ 왼쪽</button>
-          <button type="button" data-tail="right">오른쪽 ▶</button>
-          <button type="button" data-tail="none">없음</button>
+      <button type="button" class="dock-fold" id="dockFold"
+              aria-expanded="true" aria-controls="dockBody" aria-label="도구 접기"></button>
+    </div>
+
+    <div class="dock-body" id="dockBody">
+      <p class="dock-hint" id="dockHint">
+        누르면 <b id="activeSceneLabel">1번째 장</b>에 올라갑니다 — 끌어서 옮기세요.
+      </p>
+
+      <div class="dock-grid" id="dockGrid"></div>
+
+      <div class="dock-props" id="dockProps" hidden>
+        <div class="dock-props-head">
+          <b id="propTitle">선택한 요소</b>
+          <button type="button" class="icon-btn" id="propClose" aria-label="선택 해제">✕</button>
+        </div>
+        <label class="field" id="propTextField">
+          <span>글자</span>
+          <textarea id="propText" rows="2"></textarea>
+        </label>
+        <div class="field" id="propTailField">
+          <span>꼬리</span>
+          <div class="seg" id="propTail">
+            <button type="button" data-tail="left">◀ 왼쪽</button>
+            <button type="button" data-tail="right">오른쪽 ▶</button>
+            <button type="button" data-tail="none">없음</button>
+          </div>
+        </div>
+        <label class="range"><span>크기</span><input type="range" id="propSize" min="6" max="70" step="1"></label>
+        <label class="range"><span>너비</span><input type="range" id="propWide" min="8" max="96" step="1"></label>
+        <label class="range"><span>기울기</span><input type="range" id="propRot" min="-30" max="30" step="1"></label>
+        <div class="prop-btns">
+          <button type="button" class="btn btn-quiet btn-sm" id="propFront">맨 앞으로</button>
+          <button type="button" class="btn btn-quiet btn-sm" id="propDup">복제</button>
+          <button type="button" class="btn btn-danger btn-sm" id="propDel">삭제</button>
         </div>
       </div>
-      <label class="range"><span>크기</span><input type="range" id="propSize" min="6" max="70" step="1"></label>
-      <label class="range"><span>너비</span><input type="range" id="propWide" min="8" max="96" step="1"></label>
-      <label class="range"><span>기울기</span><input type="range" id="propRot" min="-30" max="30" step="1"></label>
-      <div class="prop-btns">
-        <button type="button" class="btn btn-quiet btn-sm" id="propFront">맨 앞으로</button>
-        <button type="button" class="btn btn-quiet btn-sm" id="propDup">복제</button>
-        <button type="button" class="btn btn-danger btn-sm" id="propDel">삭제</button>
-      </div>
-    </div>
 
-    <div class="dock-ledger" id="dockLedger" hidden>
-      <div class="dock-props-head"><b>크레딧 사용 내역</b>
-        <button type="button" class="icon-btn" id="ledgerClose" aria-label="닫기">✕</button></div>
-      <ul id="ledgerList"><li class="ledger-empty">아직 쓴 크레딧이 없습니다.</li></ul>
+      <div class="dock-ledger" id="dockLedger" hidden>
+        <div class="dock-props-head"><b>크레딧 사용 내역</b>
+          <button type="button" class="icon-btn" id="ledgerClose" aria-label="닫기">✕</button></div>
+        <ul id="ledgerList"><li class="ledger-empty">아직 쓴 크레딧이 없습니다.</li></ul>
+      </div>
     </div>
   </aside>
 </div>
@@ -142,21 +156,21 @@
     <p class="ask-sub" id="regenAskSub"></p>
 
     <p class="fb-lead">무엇이 마음에 안 드나요?
-      <small>고르면 다시 그릴 때 반영됩니다 — 안 골라도 됩니다</small></p>
+      <small>안 골라도 됩니다</small></p>
     <div class="fb-tags" id="regenAskTags"></div>
 
     <label class="field">
-      <span>더 하고 싶은 말 <small>비워도 됩니다 — 그냥 한 번 더 그립니다</small></span>
+      <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
       <textarea id="regenAskText" rows="3" maxlength="500"
-        placeholder="예: 표정을 더 밝게 / 배경을 밤으로 / 인물을 왼쪽에"></textarea>
+        placeholder="예: 표정을 더 밝게 / 배경을 밤으로"></textarea>
     </label>
 
     <label class="check-line">
       <input type="checkbox" id="regenAskTextless">
-      <span>말풍선 없이 그림만 <small>대사는 나중에 여기서 얹으세요</small></span>
+      <span>말풍선 없이 그림만 <small>대사는 나중에 얹으세요</small></span>
     </label>
 
-    <p class="ask-warn">실제로 그림을 다시 그립니다 — 1~2분이 걸리고 생성 비용이 나갑니다.</p>
+    <p class="ask-warn">실제로 다시 그립니다 — 1~2분과 생성 비용이 듭니다.</p>
 
     <div class="ask-actions">
       <button type="button" class="btn btn-quiet" id="regenAskCancel">취소</button>
