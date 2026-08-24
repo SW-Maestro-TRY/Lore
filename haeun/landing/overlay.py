@@ -454,7 +454,10 @@ def bake(ep_dir: Path, numbers: list[int], base_of, data: dict[str, Any] | None 
 
     out = baked_episode_path(ep_dir)
     layout = layout or {}
-    gaps = [layout.get(n, (1, "normal"))[0] for n in made]
+    # 모르는 장은 **여백 0** 이다. 1 로 두면 layout 을 안 넘긴 옛 호출부까지
+    # 갑자기 여백이 생겨서, 예전에 구운 화를 다시 구우면 높이가 달라진다
+    # (config 의 scene.stitch_gaps 가 기본 꺼짐인 것과 같은 이유다).
+    gaps = [layout.get(n, (0, "normal"))[0] for n in made]
     weights = [layout.get(n, (1, "normal"))[1] for n in made]
     # 원본 생성 때 실제로 쓴 config(scene.gap_ratio·light_width)까지는 여기서
     # 모른다 — 기본 눈금(GAP_RATIO·LIGHT_WIDTH)으로 다시 잇는다. 여백 없이 전부

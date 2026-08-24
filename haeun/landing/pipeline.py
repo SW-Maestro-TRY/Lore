@@ -1796,12 +1796,72 @@ def episode_title(run_id: str, episode: int = 1) -> str:
     5단계가 쓴 회차 카드 그대로라 회차 번호 칸이 없고, 게다가 회차가 쌓이면 2화가
     arc2 로 넘어갈 수 있어서(story-harness 의 arc_for_episode) 파일 하나만 봐서는
     못 찾는다. series.json 은 회차마다 no·title 을 같이 남긴다.
+
+    사람이 고쳐 둔 제목이 있으면 그것이 이긴다 — 아래 titles.json 참고.
     """
+    mine = user_title(run_id, episode)
+    if mine:
+        return mine
     wt = STORY / "runs" / run_id / "webtoon"
     for ep in (_read_json(wt, "series.json").get("episodes") or []):
         if isinstance(ep, dict) and int(ep.get("no") or 0) == int(episode):
             return str(ep.get("title") or "")
     return ""
+
+
+# ---- 사람이 고친 제목 -------------------------------------------------------
+#
+# 모델이 지은 제목이 늘 맞지는 않는다. 특히 공유가 붙은 뒤로는 이 제목이
+# 카톡·트위터 카드에 그대로 실려서, 마음에 안 드는 이름이 남에게 먼저 보인다.
+#
+# **series.json 을 안 고친다.** 그쪽은 하네스가 쓴 것이고 이어 만들기(2화)가
+# 다시 읽는 파일이라, 사람이 손대면 하네스의 기록과 제품의 표시가 섞인다.
+# 대신 옆에 titles.json 을 둔다 — 없으면 예전 그대로 동작하고, 지우면 모델이
+# 지은 이름으로 되돌아간다.
+TITLE_MAX = 60
+
+
+def titles_path(run_id: str) -> Path:
+    return STORY / "runs" / run_id / "titles.json"
+
+
+def user_title(run_id: str, episode: int = 1) -> str:
+    """사람이 고쳐 둔 그 회차 제목. 없으면 빈 문자열."""
+    try:
+        doc = json.loads(titles_path(run_id).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(doc, dict):
+        return ""
+    return str(doc.get(str(int(episode))) or "").strip()[:TITLE_MAX]
+
+
+def set_user_title(run_id: str, episode: int, title: str) -> str:
+    """제목을 고쳐 둔다. 빈 값을 주면 지운다(모델이 지은 이름으로 되돌아간다).
+
+    돌려주는 것은 **이 회차가 앞으로 보일 이름**이다 — 지웠으면 원래 이름.
+    """
+    path = titles_path(run_id)
+    if not path.parent.is_dir():
+        raise Failed("그런 작품이 없습니다.")
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(doc, dict):
+            doc = {}
+    except (OSError, ValueError):
+        doc = {}
+    key = str(int(episode))
+    clean = " ".join(str(title or "").split())[:TITLE_MAX]
+    if clean:
+        doc[key] = clean
+    else:
+        doc.pop(key, None)
+    try:
+        path.write_text(json.dumps(doc, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+    except OSError as exc:
+        raise Failed("제목을 저장하지 못했습니다.") from exc
+    return episode_title(run_id, episode) or f"{int(episode)}화"
 
 
 # 하네스(run.py)의 REFUSAL_HINTS 와 짝이다. 저쪽은 터미널에, 이쪽은 화면에 쓴다.

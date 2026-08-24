@@ -385,6 +385,13 @@ class Handler(BaseHTTPRequestHandler):
                 },
                 "art_qa_regen_default": pipeline.ART_QA_REGEN_DEFAULT,
                 "art_qa_regen_max": pipeline.ART_QA_REGEN_MAX,
+                # 카카오톡 공유는 카카오 SDK 를 써야 하고, 그러려면
+                # developers.kakao.com 에서 받은 JavaScript 키와 **등록된
+                # 도메인**이 있어야 한다. 키가 없으면 화면이 그 단추를 아예 안
+                # 그린다 — 눌러도 안 되는 단추를 두면 고장으로 읽힌다.
+                # 키가 생기면 KAKAO_JS_KEY 를 넣고 서버를 다시 켜면 된다.
+                "kakao_js_key": os.environ.get("KAKAO_JS_KEY", "").strip(),
+                "title_max": pipeline.TITLE_MAX,
                 # 크레딧 — 값 자체는 credits.py 가 유일한 출처. 화면의 비용
                 # 표시(−N 크레딧)가 실제로 빠지는 값과 어긋나지 않게 여기서 받는다.
                 "credit_cost": {
@@ -1100,6 +1107,32 @@ class Handler(BaseHTTPRequestHandler):
             self._record_feedback(job, "scene", "approve", body)
             job.decide_artqa()
             return self._json({"ok": True})
+
+        # 회차 제목 고치기. 모델이 지은 이름이 늘 맞지는 않고, 공유가 붙은
+        # 뒤로는 그 이름이 카톡·트위터 카드에 그대로 실린다.
+        #
+        # 빈 값을 보내면 지운다 — 모델이 지은 이름으로 되돌아간다. 그래서
+        # DELETE 를 따로 두지 않는다(되돌리기가 곧 빈 제목이다).
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/title", url.path)
+        if m:
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            ep = self._ep({**parse_qs(url.query),
+                           **({"ep": [str(body["episode"])]} if body.get("episode")
+                              else {})})
+            title = str(body.get("title") or "")
+            if len(title) > pipeline.TITLE_MAX * 4:
+                # 화면이 상한을 걸어 두지만 API 를 직접 부를 수도 있다. 자르기
+                # 전에 터무니없이 큰 것은 아예 안 받는다.
+                return self._error(400,
+                                   f"제목은 {pipeline.TITLE_MAX}자까지 적어 주세요")
+            try:
+                return self._json({"title": pipeline.set_user_title(
+                    m.group(1), ep, title)})
+            except pipeline.Failed as exc:
+                return self._error(404, str(exc))
 
         # 편집실에서 얹은 것을 작품 폴더에 저장한다. 그림은 안 건드린다 —
         # 굽는 것은 아래 /bake 이고, 저장은 굽지 않아도 남아야 한다.

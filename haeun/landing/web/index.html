@@ -757,7 +757,21 @@
       <img class="result-cover-art" src="/static/lou/stage/done.webp" alt="" aria-hidden="true">
       <div class="result-cover-text">
         <p class="eyebrow" id="resGenre"></p>
-        <h2 id="resTitle"></h2>
+        <!-- 제목은 모델이 지은 것이라 늘 맞지는 않는다. 게다가 공유 카드에
+             그대로 실려서 남에게 먼저 보이는 이름이다 — 여기서 고칠 수 있다.
+             고친 것은 작품 폴더에 남아(titles.json) 목록·편집실·공유에 전부
+             따라온다. 비우고 저장하면 모델이 지은 이름으로 되돌아간다. -->
+        <div class="title-row">
+          <h2 id="resTitle"></h2>
+          <button type="button" class="icon-btn" id="titleEditBtn"
+                  title="제목 고치기" aria-label="제목 고치기">✎</button>
+        </div>
+        <div class="title-edit" id="titleEdit" hidden>
+          <input type="text" id="titleInput" maxlength="60"
+                 placeholder="비우면 원래 제목으로 되돌아갑니다">
+          <button type="button" class="btn btn-primary btn-sm" id="titleSaveBtn">저장</button>
+          <button type="button" class="btn btn-quiet btn-sm" id="titleCancelBtn">취소</button>
+        </div>
         <p class="result-sub" id="resSub"></p>
       </div>
     </div>

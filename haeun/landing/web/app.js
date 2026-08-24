@@ -629,6 +629,47 @@ function paintAccountPill() {
   }
 }
 
+/* ---- 이 브라우저가 만든 작품 ------------------------------------------- *
+ *
+ * "담아두기" 는 **내가 만든 것**에만 권해야 한다. 공유 링크를 받고 들어온
+ * 사람에게도 뜨면, 남의 작품을 자기 계정에 담으라고 권하는 꼴이다.
+ *
+ * 그런데 결과 화면은 둘을 구분할 수가 없었다 — 내 목록에서 고른 것도, 남이
+ * 보낸 링크도 똑같이 /works?run=… 으로 열리고 showRunResult() 하나가 받는다.
+ * 서버도 못 가른다: 작품에 만든 사람이 안 적혀 있다(계정 기능이 소유자 개념을
+ * 일부러 안 넣었다). 그래서 브라우저가 자기가 만든 것을 적어 둔다.
+ *
+ * localStorage 인 이유: 창을 닫아도 남아야 한다. sessionStorage 는 탭을 닫으면
+ * 사라져서, 어제 만든 내 작품을 오늘 열면 남의 것처럼 보인다. */
+
+const MY_RUNS_KEY = "lore_my_runs";
+const MY_RUNS_MAX = 200;
+
+function myRuns() {
+  try {
+    const v = JSON.parse(localStorage.getItem(MY_RUNS_KEY) || "[]");
+    return Array.isArray(v) ? v.filter(x => typeof x === "string") : [];
+  } catch { return []; }              // 비공개 창이거나 값이 깨졌을 때
+}
+
+function rememberMyRun(runId) {
+  if (!runId) return;
+  const list = myRuns().filter(x => x !== runId);
+  list.push(runId);
+  try {
+    localStorage.setItem(MY_RUNS_KEY,
+                         JSON.stringify(list.slice(-MY_RUNS_MAX)));
+  } catch { /* 저장을 못 해도 만드는 것 자체는 막지 않는다 */ }
+}
+
+/* 내가 만든 것인가. 담아 둔 적이 있으면 그것도 내 것이다 — 폰에서 만들어
+   담아 두고 PC 에서 열면 이 브라우저의 기록에는 없기 때문이다. */
+function isMyRun(runId) {
+  if (!runId) return false;
+  return myRuns().includes(runId)
+      || (accountState.claimed_runs || []).includes(runId);
+}
+
 /* 결과 화면의 "서버에 저장하기".
  *
  * 로그인 여부와 상관없이 **늘 보인다.** 로그인 전에 누르면 회원가입 창이 열리고,
@@ -641,12 +682,13 @@ function paintAccountPill() {
  * 감춰 버리면 단추가 셋에서 둘로 줄어 자리가 흔들리고, 저장이 됐는지 안 됐는지도
  * 알 수 없다.
  *
- * 담을 작품이 없을 때(목업)만 안 보인다 — 흐름을 보여줘야 하는 목업은
- * showMockResult() 에서 따로 켠다. */
+ * 담을 작품이 없을 때(목업)와, **남이 보낸 링크로 들어온 작품**일 때는 안
+ * 보인다 — 남의 작품을 자기 계정에 담으라고 권하는 꼴이 되기 때문이다
+ * (위 isMyRun 참고). 목업은 흐름을 보여줘야 해서 showMockResult() 가 따로 켠다. */
 function paintClaimBanner() {
   const btn = $("#claimBtn");
   if (!btn) return;
-  btn.hidden = !resultRunId;
+  btn.hidden = !resultRunId || !isMyRun(resultRunId);
   const done = accountState.logged_in
     && (accountState.claimed_runs || []).includes(resultRunId);
   btn.disabled = done;
@@ -1659,6 +1701,9 @@ async function showResult(attempt = 0) {
       "click", () => showResult(0));
     return;
   }
+  // 여기까지 온 것은 **이 브라우저가 시킨 작업**의 결과다 (job 으로 열었다).
+  // 그 사실을 남겨 둬야 나중에 목록·링크로 다시 열었을 때 내 것인 줄 안다.
+  rememberMyRun(r.run_id);
   paintResult(r);
 }
 
@@ -1711,6 +1756,9 @@ function paintResult(r) {
   // 공유는 run_id 로 여는 주소라, 그것이 없으면 보낼 링크가 없다. 눌러도
   // 아무 일이 안 일어나는 단추를 두느니 감춘다.
   $("#shareBtn").hidden = !resultRunId;
+  $("#titleEditBtn").hidden = !resultRunId;
+  toggleShareMenu(false);
+  openTitleEdit(false);
   wireMemory(resultRunId);
   $("#reader").innerHTML = r.pages.map(pg => `
     <div class="page" data-scene="${pg.no}">
@@ -2038,6 +2086,63 @@ function shareImagePath() {
 }
 
 let shareConfig = {};
+
+/* ---- 제목 고치기 --------------------------------------------------------- *
+ *
+ * 모델이 지은 이름이 늘 맞지는 않고, 공유가 붙은 뒤로는 그 이름이 카톡·트위터
+ * 카드에 실려 남에게 먼저 보인다. 여기서 고친 것은 작품 폴더에 남아서
+ * (titles.json) 목록·편집실·공유 미리보기·내려받는 파일 이름까지 따라온다.
+ * 비우고 저장하면 모델이 지은 이름으로 되돌아간다. */
+
+function openTitleEdit(open) {
+  const box = $("#titleEdit"), row = $("#titleEditBtn");
+  if (!box) return;
+  box.hidden = !open;
+  if (row) row.hidden = open;
+  if (open) {
+    const input = $("#titleInput");
+    input.value = ($("#resTitle").textContent || "").trim();
+    input.focus();
+    input.select();
+  }
+}
+
+async function saveTitle() {
+  if (!resultRunId) return;
+  const btn = $("#titleSaveBtn");
+  btn.disabled = true;
+  try {
+    const res = await fetch(
+      `/api/runs/${encodeURIComponent(resultRunId)}/title`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ episode: resultEpisode,
+                               title: $("#titleInput").value }),
+      });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "저장하지 못했습니다");
+    // 서버가 돌려준 것이 **앞으로 보일 이름**이다 (비웠으면 원래 제목).
+    $("#resTitle").textContent = data.title;
+    openTitleEdit(false);
+    toast("제목을 바꿨습니다");
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function setupTitleEdit() {
+  const edit = $("#titleEditBtn");
+  if (!edit) return;
+  edit.addEventListener("click", () => openTitleEdit(true));
+  $("#titleCancelBtn").addEventListener("click", () => openTitleEdit(false));
+  $("#titleSaveBtn").addEventListener("click", saveTitle);
+  $("#titleInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); saveTitle(); }
+    if (e.key === "Escape") openTitleEdit(false);
+  });
+}
 
 function setupShare() {
   const btn = $("#shareBtn");
@@ -2701,6 +2806,7 @@ document.addEventListener("DOMContentLoaded", () => {
     closeNextEp();
   });
   setupShare();
+  setupTitleEdit();
   // 웹툰 한 편은 길다 — 다 읽고 나서 위로 돌아가려면 한참 끌어야 한다.
   $("#toTopBtn")?.addEventListener("click", () => {
     document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" });
