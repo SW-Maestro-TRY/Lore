@@ -135,11 +135,15 @@ body[data-view="nextep"]  .topbar { display: none; }
   border-bottom: 1px solid var(--line);
 }
 .brand { display: flex; align-items: baseline; gap: 10px; }
+/* 루 로고. 상자 색과 고래 색이 걸음마다 함께 바뀐다(아래 헤더 절 참고). */
 .brand-mark {
-  width: 30px; height: 30px; border-radius: 8px; background: var(--accent);
-  color: #fff; font-weight: 800; display: grid; place-items: center;
-  align-self: center; font-size: 1rem;
+  width: 32px; height: 32px; border-radius: 10px;
+  background: var(--brand-bg, var(--accent));
+  color: var(--brand-fg, #fff);
+  display: grid; place-items: center; align-self: center;
+  transition: background .5s ease, color .5s ease;
 }
+.brand-mark svg { display: block; }
 .brand-name { font-weight: 800; letter-spacing: .1em; }
 .brand-sub { color: var(--dim); font-size: .82rem; }
 .topnav { display: flex; align-items: center; gap: 22px; font-size: .92rem; }
@@ -167,7 +171,7 @@ body[data-view="nextep"]  .topbar { display: none; }
 }
 
 .top-intro {
-  position: relative; max-width: 400px; margin: 0 auto;
+  position: relative; margin: 0;
   padding: clamp(28px, 6vw, 48px) 20px 0;
 }
 .hero-kicker {
@@ -192,9 +196,11 @@ body[data-view="nextep"]  .topbar { display: none; }
 .hero-note { display: none; }
 
 /* 깊이 — 짙어지는 물 위 세 줄 (DirA_Sea 하단 그대로) */
+/* 캔버스처럼 프레임 폭을 꽉 쓴다 — max-width 를 걸면 480px 프레임 안에서
+   가운데로 몰려서, 아트보드보다 좁아 보인다. */
 .depths {
   position: relative; list-style: none;
-  max-width: 400px; margin: 0 auto; padding: 34px 20px 30px;
+  margin: 0; padding: 34px 20px 30px;
   color: #fff;
 }
 .depths li {
@@ -400,7 +406,7 @@ body[data-view="nextep"]  .topbar { display: none; }
 /* 캔버스(A_Step*.dc.html) 그대로 — 위저드 자체는 투명하고, 게이지·제목은
    물 위에, 입력은 종이 카드 안에 있다. 폭은 아트보드(390px)에 맞춰 한
    컬럼으로 고정한다. PC 라고 벌리지 않는다. */
-.wizard { display: block; max-width: 400px; margin: 0 auto; }
+.wizard { display: block; margin: 0; }   /* 프레임 폭을 그대로 쓴다 */
 /* 걸음을 옮기면 studio-head 로 스크롤한다. 상단 바가 sticky 라 그냥 두면
    제목이 그 아래로 숨는다 — 바 높이만큼 미리 띄운다. */
 
@@ -415,16 +421,33 @@ body[data-step="3"] .wiz-title, body[data-step="4"] .wiz-title, body[data-step="
 /* 상단바는 물 위에 얹혀 있다 — 만들기 화면에서는 걸음마다 물빛이 달라지므로
    어느 깊이에서도 읽히도록 글자를 밝은 쪽으로 고정한다. 1걸음(모래빛)은
    아직 밝은 물이라 원래 색을 그대로 둔다. */
+/* ---- 헤더가 물빛을 따라간다 --------------------------------------- *
+ *
+ * 상단바는 물 위에 얹혀 있다. 걸음이 깊어질수록 지면이 어두워지므로, 로고
+ * 상자·고래·글자를 한 벌로 묶어 같이 뒤집는다. 예전에는 글자만 밝게 바꿔서
+ * 로고 상자만 혼자 민트로 떠 있었다.
+ *
+ * 1~2걸음(모래빛·얕은 물)은 밝은 바탕이라 원래 색 그대로,
+ * 3~5걸음(민트~심해)은 상자를 밝게, 고래를 짙게 뒤집는다. */
+body[data-view="create"][data-step="3"],
+body[data-view="create"][data-step="4"],
+body[data-view="create"][data-step="5"] {
+  --brand-bg: var(--on-sea);
+  --brand-fg: var(--accent-d);
+}
 body[data-view="create"][data-step="3"] .brand-name,
 body[data-view="create"][data-step="4"] .brand-name,
 body[data-view="create"][data-step="5"] .brand-name { color: var(--on-sea); }
 body[data-view="create"][data-step="3"] .brand-sub,
 body[data-view="create"][data-step="4"] .brand-sub,
 body[data-view="create"][data-step="5"] .brand-sub { color: rgba(247,243,234,.72); }
-body[data-view="create"][data-step="3"] .brand-mark,
-body[data-view="create"][data-step="4"] .brand-mark,
-body[data-view="create"][data-step="5"] .brand-mark {
-  background: var(--on-sea); color: var(--accent-d);
+
+/* 상단바 아래 실선도 물빛에 맞춰 — 밝은 걸음에서는 옅게, 깊은 걸음에서는
+   흰 쪽으로. 선이 늘 같은 색이면 어두운 물 위에서 검은 띠로 보인다. */
+body[data-view="create"][data-step="3"] .topbar,
+body[data-view="create"][data-step="4"] .topbar,
+body[data-view="create"][data-step="5"] .topbar {
+  border-bottom-color: rgba(247,243,234,.18);
 }
 body[data-step="3"] .wiz-eyebrow, body[data-step="4"] .wiz-eyebrow, body[data-step="5"] .wiz-eyebrow { color: var(--sea-sand); }
 body[data-step="3"] .wiz-sub, body[data-step="4"] .wiz-sub, body[data-step="5"] .wiz-sub { color: rgba(255,255,255,.8); }

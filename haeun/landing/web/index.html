@@ -11,7 +11,18 @@
 
 <header class="topbar">
   <a class="brand" href="#top">
-    <span class="brand-mark">L</span>
+    <!-- 로고는 루다. 이미지가 아니라 인라인 SVG 인 이유: 32px 에서도 또렷해야
+         하고, 걸음마다 물빛이 달라지면 색이 따라가야 한다(currentColor). -->
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="22" height="22">
+        <path fill="currentColor" d="M20 16l9.2-6c.7-.5 1.6.1 1.4 1l-1.7 5 1.7 5c.2.9-.7 1.5-1.4 1l-9.2-6z"/>
+        <path fill="currentColor" d="M10.6 9.2c.9-4.4 3-7.1 6.2-8-.9 3.2-.5 6 1.3 8.4-2.5-.6-5-.7-7.5-.4z"/>
+        <ellipse cx="13" cy="16" rx="11" ry="8.4" fill="currentColor"/>
+        <path fill="currentColor" d="M9.6 23.2c-.9 2.5-.3 4.5 1.7 5.4.5-2.2 1.6-3.8 3.1-4.7-1.6 0-3.2-.2-4.8-.7z"/>
+        <!-- 눈은 배지 바탕색으로 뚫는다 — 흰색으로 두면 흰 고래에서 사라진다 -->
+        <circle cx="7.2" cy="14.2" r="1.25" fill="var(--brand-bg, var(--accent))"/>
+      </svg>
+    </span>
     <span class="brand-name">LORE</span>
     <span class="brand-sub">웹툰 스튜디오</span>
   </a>
