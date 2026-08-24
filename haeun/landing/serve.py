@@ -20,6 +20,7 @@ import re
 import sys
 import threading
 import webbrowser
+from html import escape as html_escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, quote
@@ -35,6 +36,58 @@ MAX_PHOTO_BYTES = 6 * 1024 * 1024
 runner = pipeline.Runner()
 _thumb_lock = threading.Lock()
 _warned_no_pillow = False
+
+
+# --------------------------------------------------------------------------- #
+# 공유 링크의 미리보기 (Open Graph)
+# --------------------------------------------------------------------------- #
+#
+# 카톡·트위터·디스코드에 링크를 붙이면 그쪽 크롤러가 주소를 한 번 받아 가서
+# 미리보기 카드를 만든다. **크롤러는 자바스크립트를 안 돌린다** — app.js 가
+# 화면에 그리는 제목·그림은 크롤러에게 안 보이고, 정적 index.html 의 기본
+# <title> 만 읽어서 어느 작품이든 "LORE" 라고만 뜬다.
+#
+# 그래서 ?run= 이 붙은 주소일 때만 서버가 <head> 에 태그를 박아서 내보낸다.
+# 파일을 고치는 것이 아니라 내보낼 때 문자열 하나를 끼우는 것이라, 화면 쪽
+# 코드는 이것을 몰라도 된다.
+
+OG_MARK = "</head>"
+
+
+def og_tags(meta: dict, base: str) -> str:
+    """공유 미리보기 태그. meta 는 pipeline.share_meta() 가 준 것."""
+    ep, rid = meta["episode"], meta["run_id"]
+    who = meta.get("character") or ""
+    title = meta.get("title") or f"{ep}화"
+    # "모모 · 약속의 무게, 장난의 시작" — 누구 이야기인지가 제목 앞에 와야
+    # 카드만 보고도 자기 작품인지 안다.
+    head = f"{who} · {title}" if who else title
+    full = f"{head} — LORE"
+    desc = (meta.get("logline") or "").strip()
+    if not desc:
+        # 로그라인이 없는 옛 run 도 있다. 빈 설명보다는 장르라도 말한다.
+        genre = (meta.get("genre") or "").strip()
+        desc = f"{genre} 웹툰" if genre else "캐릭터 한 명으로 만든 웹툰 한 화."
+    img = (f"{base}/api/runs/{quote(rid, safe='')}/page/{meta['cover_page']}"
+           f"?w=1080&ep={ep}")
+    url = f"{base}/works?run={quote(rid, safe='')}&ep={ep}"
+    e = html_escape
+    return (
+        f'<meta property="og:type" content="article">\n'
+        f'<meta property="og:site_name" content="LORE">\n'
+        f'<meta property="og:title" content="{e(full, quote=True)}">\n'
+        f'<meta property="og:description" content="{e(desc, quote=True)}">\n'
+        f'<meta property="og:image" content="{e(img, quote=True)}">\n'
+        f'<meta property="og:url" content="{e(url, quote=True)}">\n'
+        # 웹툰 한 장은 세로로 아주 길다. summary_large_image 로 주면 트위터가
+        # 가로로 넓게 잘라서 첫 컷만 보이는데, 그게 세로 전체를 우겨넣어
+        # 알아볼 수 없게 줄이는 것보다 낫다.
+        f'<meta name="twitter:card" content="summary_large_image">\n'
+        f'<meta name="twitter:title" content="{e(full, quote=True)}">\n'
+        f'<meta name="twitter:description" content="{e(desc, quote=True)}">\n'
+        f'<meta name="twitter:image" content="{e(img, quote=True)}">\n'
+        f"<title>{e(full)}</title>\n"
+    )
 
 
 def warn_no_pillow() -> None:
@@ -106,6 +159,36 @@ class Handler(BaseHTTPRequestHandler):
 
     def _error(self, code: int, message: str, **extra) -> None:
         self._json({"error": message, **extra}, code)
+
+    def _base_url(self) -> str:
+        """이 요청이 온 주소의 뿌리. og:image·og:url 은 절대 주소여야 한다.
+
+        프록시 뒤에 서면 브라우저가 본 주소와 서버가 들은 주소가 다르다 —
+        앞에서 넘겨주는 값이 있으면 그쪽을 믿는다.
+        """
+        host = (self.headers.get("X-Forwarded-Host")
+                or self.headers.get("Host") or "127.0.0.1")
+        scheme = self.headers.get("X-Forwarded-Proto") or "http"
+        return f"{scheme}://{host.split(',')[0].strip()}"
+
+    def _page(self, path: Path, run_id: str = "", episode: int = 1) -> None:
+        """index.html 을 내보낸다. ?run= 이 있으면 공유 미리보기 태그를 끼워서.
+
+        태그는 파일에 안 남기고 내보낼 때만 끼운다 — 주소마다 값이 다르므로
+        파일 하나에 박을 수가 없다.
+        """
+        meta = pipeline.share_meta(run_id, episode) if run_id else None
+        if not meta:
+            return self._file(path)        # 없는 작품이면 평소 화면 그대로
+        try:
+            html = path.read_text(encoding="utf-8")
+        except OSError:
+            return self._file(path)
+        # 원래 <title> 은 지운다 — 안 지우면 둘이 남고 브라우저는 앞엣것을 쓴다.
+        html = re.sub(r"<title>.*?</title>\s*", "", html, count=1, flags=re.S)
+        block = og_tags(meta, self._base_url())
+        html = html.replace(OG_MARK, block + OG_MARK, 1)
+        self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
 
     def _file(self, path: Path, download: str = "") -> None:
         if not path.exists() or not path.is_file():
@@ -194,8 +277,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._file(WEB / "index.html")
         # 내가 만든 웹툰 전부 — 완성본을 훑어보는 목록. job 을 거치지 않는다
         # (하네스를 직접 돌렸거나 이어 만든 회차도 여기 나와야 한다).
+        #
+        # **공유 링크가 닿는 자리이기도 하다.** ?run= 이 붙어 있으면 남이 보낸
+        # 링크를 열었다는 뜻이라, 크롤러가 미리보기를 만들 수 있게 태그를 실어
+        # 보낸다(_page). 사람이 열면 app.js 가 그 작품 완성본을 바로 띄운다.
         if path in ("/works", "/works/"):
-            return self._file(WEB / "index.html")
+            return self._page(WEB / "index.html",
+                              (query.get("run") or [""])[0], self._ep(query))
         if path.startswith("/static/"):
             rel = path[len("/static/"):]
             target = (WEB / rel).resolve()

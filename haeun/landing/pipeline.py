@@ -2135,6 +2135,51 @@ def drawn_units(run_id: str, episode: int = 1) -> int:
     return n
 
 
+# --------------------------------------------------------------------------- #
+# 공유
+# --------------------------------------------------------------------------- #
+#
+# 공유는 두 갈래로 나간다. 하나는 **링크**(카톡·트위터에 붙이면 미리보기가
+# 뜬다), 하나는 **그림 파일**(폰의 공유 시트로 바로 내보낸다).
+#
+# 링크 쪽이 서버 일이다. SNS 미리보기를 만드는 크롤러는 자바스크립트를 안
+# 돌리므로, 화면이 그리는 제목·그림은 크롤러에게 안 보인다 — 서버가 HTML 을
+# 내보낼 때 <head> 에 미리 박아 줘야 한다(serve.py 의 og_html).
+#
+# 계정이 없어서 "링크를 아는 사람만" 같은 접근 권한은 아직 못 만든다. 지금은
+# run_id 를 아는 사람이 곧 볼 수 있는 사람이다 — 주소에 6자리 무작위가 붙어
+# 있어서 찍어서 맞히기는 어렵지만, **비밀이 아니다.** 권한·만료는 회원 기능이
+# 생긴 뒤의 일이다(#66).
+
+def share_meta(run_id: str, episode: int = 1) -> dict[str, Any] | None:
+    """공유 링크의 미리보기에 실을 것. 그림이 하나도 없으면 None.
+
+    list_runs() 를 안 쓴다 — 그쪽은 runs/ 를 통째로 훑어서 목록을 만드는
+    함수라, 한 편의 미리보기를 그리려고 부르면 남의 폴더를 전부 읽는다.
+    """
+    run_dir = STORY / "runs" / run_id
+    if not run_dir.is_dir():
+        return None
+    ep = int(episode or 1)
+    if ep not in made_episodes(run_id):
+        return None
+    # 표지로 쓸 장. 1번이 있다고 칠 수 없다 — 3·4번만 뽑아 둔 run 이 흔하다.
+    cover = next((n for n in range(1, 13) if unit_image(run_id, n, ep)), None)
+    if cover is None:
+        return None                        # 그릴 것이 없으면 공유할 것도 없다
+    p1 = _read_json(run_dir, "p1.json")
+    p2 = _read_json(run_dir, "p2.json")
+    return {
+        "run_id": run_id,
+        "episode": ep,
+        "title": episode_title(run_id, ep) or f"{ep}화",
+        "character": str(p1.get("name") or ""),
+        "genre": str(_read_json(run_dir, "meta.json").get("input", {}).get("genre") or ""),
+        "logline": str(p2.get("logline") or ""),
+        "cover_page": cover,
+    }
+
+
 def planned_cuts(run_id: str, episode: int = 1) -> int:
     """콘티가 계획한 컷 수. 못 읽으면 0 — 그때는 상한을 안 건다."""
     for name in ("scenes.json", "episode.json", "board.json"):

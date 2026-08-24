@@ -577,6 +577,10 @@
       <button type="button" class="btn btn-quiet btn-sm" id="backToWorks">목록으로</button>
       <a class="btn btn-quiet btn-sm" id="editorLink" href="/editor">편집실에서 열기</a>
       <button type="button" class="btn btn-quiet btn-sm" id="scriptBtn">대사 스크립트</button>
+      <!-- 폰이면 공유 시트(카톡·인스타…)가 뜨고, PC 면 링크를 복사한다.
+           어느 쪽인지는 app.js 가 navigator.share 를 보고 정하며, 글자도
+           거기서 맞춰 바꾼다. -->
+      <button type="button" class="btn btn-quiet btn-sm" id="shareBtn">공유</button>
       <a class="btn btn-quiet btn-sm" id="downloadBtn" download>PNG 내려받기</a>
       <!-- 미리보기로 앞 3컷만 본 뒤, 마음에 들면 여기서 이어 그린다.
            한 화를 통째로 굽기 전에 앞부분을 먼저 보게 하는 것이 목적이다. -->
