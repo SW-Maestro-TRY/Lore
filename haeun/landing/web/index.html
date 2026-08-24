@@ -307,26 +307,32 @@
          루가 지금 무엇을 하는 그림(단계), 그것을 사람 말로 한 줄, 그리고
          만질 수 있다는 것. 시계와 중단은 필요하지만 주인공이 아니라서
          아래로 내렸다. 예전에는 시계가 오른쪽에 붙어 루와 자리를 다퉜다. -->
+    <!-- 위 — 루가 지금 무엇을 하고 있는지. 그림 · 문구 · 바가 같은 것을
+         말한다. 여기에는 잡담이 없다. -->
     <header class="progress-head">
-      <button type="button" class="mascot" id="mascot"
-              data-mood="think" aria-label="루를 쓰다듬기"></button>
-      <p class="eyebrow" id="progEyebrow">만드는 중</p>
-      <h2 id="progTitle">웹툰을 만들고 있습니다</h2>
-      <!-- 전체 진행 — 다섯 단계를 같은 무게로 치고, 그림 단계 안에서는
-           그린 장 수로 더 잘게 나눈다. 숫자는 app.js 의 louPercent 가 적는다. -->
+      <div class="stage-art" id="stageArt" aria-hidden="true"></div>
+      <p class="stage-say" id="mascotLine">루가 이야기를 만들고 있어요</p>
       <div class="lou-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="louProgress">
         <div class="lou-bar"><i id="louBarFill"></i></div>
         <span class="lou-pct" id="louPct">0%</span>
       </div>
-      <p class="mascot-line" id="mascotLine"></p>
-      <p class="progress-sub" id="progSub">잠시만요 — 지금 무엇을 하고 있는지 아래에 그대로 보여드립니다.</p>
-      <p class="mascot-poke">루를 눌러 보세요 — 기다리는 동안 놀아 줍니다</p>
+      <p class="eyebrow" id="progEyebrow" hidden>만드는 중</p>
+      <h2 id="progTitle" hidden>웹툰을 만들고 있습니다</h2>
+      <p class="progress-sub" id="progSub" hidden></p>
       <div class="progress-clock">
         <span class="clock-time" id="clock">0:00</span>
         <span class="clock-label" id="clockLabel">경과</span>
         <button type="button" class="btn btn-quiet btn-sm" id="cancelBtn">중단</button>
       </div>
     </header>
+
+    <!-- 아래 — 기다리는 동안 노는 자리. 여기의 루는 진행과 무관하다.
+         눌러야 반응하고, 반응은 이 안에서만 일어난다. -->
+    <div class="play">
+      <button type="button" class="mascot" id="mascot"
+              data-mood="think" aria-label="루를 쓰다듬기"></button>
+      <p class="play-say" id="playSay">루를 눌러 보세요</p>
+    </div>
 
     <div class="sheet-approval" id="sheetApproval" hidden>
       <div class="sheet-approval-head">

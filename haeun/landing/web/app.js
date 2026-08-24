@@ -826,14 +826,18 @@ function paintRefusals(list) {
 // ---------------------------------------------------------------- 마스코트
 // 단계 key → 표정 + 한 줄. 사용자는 10분 가까이 이 화면을 본다. rail 은 무엇을
 // 하는지 기계적으로 적고, 마스코트는 그걸 사람 말로 한 번 더 말한다.
+/* 단계 문구는 **지금 실제로 무엇을 하는지**만 말한다. 여기에 "루가 춤추고
+   있어요" 같은 걸 섞으면 진행 표시가 아니라 잡담이 된다 — 노는 것은 아래
+   상호작용 자리에서 따로 한다. 문구는 레퍼런스(design-reference/loading/*)의
+   말을 그대로 따른다. */
 const MASCOT_MOODS = {
-  story: ["write", "이야기를 짜는 중이에요. 결말부터 거꾸로 세워 봅니다."],
-  sheet: ["draw", "얼굴을 잡는 중이에요 — 여기가 흔들리면 뒤가 다 흔들려서요."],
-  board: ["read", "컷을 나누는 중이에요. 어디서 넘길지 세어 봅니다."],
-  art:   ["draw", "그리는 중이에요. 한 장씩 나오는 대로 아래에 올려 둘게요."],
-  bind:  ["read", "한 편으로 잇는 중이에요. 거의 다 왔습니다."],
+  story: ["write", "루가 이야기를 만들고 있어요"],
+  sheet: ["draw", "루가 캐릭터를 디자인하고 있어요"],
+  board: ["read", "루가 콘티를 짜고 있어요"],
+  art:   ["draw", "루가 그림을 그리고 있어요"],
+  bind:  ["read", "루가 완성도를 확인하고 있어요"],
 };
-const MASCOT_WAITING = "확인해 주실 게 있어요 — 아래에서 골라 주세요.";
+const MASCOT_WAITING = "루가 확인을 기다리고 있어요";
 
 /* 전체 진행률. 다섯 단계를 같은 무게로 치고, 그림 단계 안에서는 그린 장
    수(s.art.done/total)로 더 잘게 나눈다. 정확한 예측이 아니라 "움직이고
@@ -866,53 +870,6 @@ function paintLouProgress(s) {
   if (box) box.setAttribute("aria-valuenow", String(pct));
 }
 
-/* ---- 심심풀이 — 기다리는 동안 루가 딴짓을 한다 ----------------------- *
- *
- * 10~20초에 한 번, 단계 그림 대신 다른 루가 몇 초 나왔다 돌아간다.
- * 반응(data-react)이나 확인 대기(ask)·완료·오류 중에는 안 끼어든다 —
- * 그때는 화면이 딴짓보다 중요한 것을 말하고 있다. */
-const LOU_IDLE = [
-  ["lou-happy",   "루가 춤추고 있어요!"],
-  ["lou-idle",    "루가 물거품을 구경하고 있어요."],
-  ["lou-loading", "루가 이야기 조각을 주웠어요."],
-  ["lou-sleepy",  "루가 살짝 졸고 있어요… 일은 하고 있대요."],
-  ["lou-think",   "루가 다음 컷을 고민하고 있어요."],
-  ["lou-ask",     "루가 여러분을 흘끔 보고 있어요."],
-];
-let louIdleTimer = null;
-let louIdleBack = null;
-
-function louIdleTick() {
-  const box = $("#mascot");
-  if (!box || document.body.dataset.view !== "running") return;
-  if (box.dataset.react) return;                       // 만지는 중
-  const mood = box.dataset.mood;
-  if (mood === "ask" || mood === "done" || mood === "error") return;
-  const [img, line] = LOU_IDLE[Math.floor(Math.random() * LOU_IDLE.length)];
-  box.dataset.idle = img;
-  box.style.backgroundImage = `url("/static/lou/${img}.png")`;
-  const lineEl = $("#mascotLine");
-  const saved = lineEl.textContent;
-  lineEl.textContent = line;
-  clearTimeout(louIdleBack);
-  louIdleBack = setTimeout(() => {
-    delete box.dataset.idle;
-    box.style.backgroundImage = "";                     // CSS(단계 그림)로 돌아간다
-    if (lineEl.textContent === line) lineEl.textContent = saved;
-  }, 4200);
-}
-
-function louIdleStart() {
-  if (louIdleTimer) return;
-  louIdleTimer = setInterval(louIdleTick, 12000 + Math.floor(Math.random() * 6000));
-}
-function louIdleStop() {
-  clearInterval(louIdleTimer); louIdleTimer = null;
-  clearTimeout(louIdleBack);
-  const box = $("#mascot");
-  if (box) { delete box.dataset.idle; box.style.backgroundImage = ""; }
-}
-
 function paintMascot(s, currentStage) {
   const box = $("#mascot");
   if (!box) return;
@@ -924,13 +881,13 @@ function paintMascot(s, currentStage) {
     line = MASCOT_WAITING;
   } else if (s.status === "done") {
     mood = "done";
-    line = "다 됐어요. 처음부터 한 번 읽어 보세요.";
+    line = "루가 다 그렸어요!";
   } else if (s.status === "error" || s.status === "canceled") {
     mood = "error";
-    line = s.status === "canceled" ? "여기서 멈췄어요." : "여기서 막혔어요.";
+    line = s.status === "canceled" ? "루가 멈췄어요" : "루가 여기서 막혔어요";
   } else if (s.status === "queued") {
     mood = "think";
-    line = "앞 작품이 끝나면 바로 시작할게요.";
+    line = "루가 차례를 기다리고 있어요";
   } else if (currentStage) {
     const hit = MASCOT_MOODS[currentStage.key];
     if (hit) [mood, line] = hit;
@@ -938,8 +895,6 @@ function paintMascot(s, currentStage) {
 
   box.dataset.mood = mood;
   paintLouProgress(s);
-  if (s.status === "running" || s.status === "queued") louIdleStart();
-  else louIdleStop();
   // 단계 key 도 함께 적는다 — 루는 단계마다 다른 그림을 쓴다(style.css 참고).
   // 사람 확인을 기다리는 중이면 단계 그림 대신 "물어보는" 얼굴이 맞으므로 비운다.
   if (currentStage && currentStage.key && mood !== "ask") box.dataset.stage = currentStage.key;
@@ -971,20 +926,14 @@ function louReact(kind) {
   const box = $("#mascot");
   if (!box) return;
   box.dataset.react = kind;
-  const line = $("#mascotLine");
-  if (line) {
-    if (!box.dataset.savedLine) box.dataset.savedLine = line.textContent || "";
-    line.textContent = LOU_REACT[kind] || "";
-    line.classList.add("is-react");
-  }
+  // 반응은 **노는 자리 안에서만** 일어난다. 위쪽 단계 문구는 진행을 말하는
+  // 자리라 절대 안 건드린다.
+  const say = $("#playSay");
+  if (say) say.textContent = LOU_REACT[kind] || "";
   clearTimeout(louReactTimer);
   louReactTimer = setTimeout(() => {
     delete box.dataset.react;
-    if (line) {
-      line.textContent = box.dataset.savedLine || "";
-      line.classList.remove("is-react");
-      delete box.dataset.savedLine;
-    }
+    if (say) say.textContent = "루를 눌러 보세요";
   }, kind === "multiclick" ? 2200 : 1800);
 }
 
