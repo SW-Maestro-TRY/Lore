@@ -325,10 +325,17 @@ body[data-view="nextep"]  .topbar { display: none; }
 .style-opt { position: relative; cursor: pointer; display: block; }
 .style-opt input { position: absolute; opacity: 0; pointer-events: none; }
 .style-box {
-  display: block; padding: 14px; border-radius: 14px; height: 100%;
+  display: block; border-radius: 14px; height: 100%; overflow: hidden;
   border: 1.5px solid var(--line-2); background: #fff;
 }
-.style-box b { display: block; font-size: .92rem; color: var(--accent-d); }
+.style-thumb {
+  width: 100%; height: 104px; object-fit: cover; display: block;
+  background: var(--ink-2);
+}
+.style-box b, .style-box small { padding: 0 12px; }
+.style-box b { padding-top: 10px; }
+.style-box small { padding-bottom: 12px; }
+.style-box b { display: block; font-size: .9rem; color: var(--accent-d); }
 .style-box small { display: block; color: var(--dim); font-size: .78rem; line-height: 1.45; margin-top: 4px; }
 .style-opt:hover .style-box { border-color: var(--accent); }
 .style-opt input:checked + .style-box {
@@ -388,19 +395,23 @@ body[data-view="nextep"]  .topbar { display: none; }
 /* 지면 물빛은 아래 body[data-step] 규칙이 정한다(app.js 가 적는다) */
 body[data-step="1"] .studio { background: linear-gradient(180deg, var(--sea-sand) 0%, var(--paper-2) 40%, var(--ink) 100%); }
 body[data-step="2"] .studio { background: linear-gradient(180deg, var(--ink), var(--sea-shore)); }
-/* 걸음은 셋뿐이다 — 3걸음이 가장 깊은 물이다 */
-body[data-step="3"] .studio { background: linear-gradient(180deg, var(--sea-mid) 0%, #3f6f66 55%, var(--sea-deep) 100%); }
+body[data-step="3"] .studio { background: linear-gradient(180deg, var(--sea-shore) 0%, var(--sea-mint) 60%, var(--sea-mid) 100%); }
+body[data-step="4"] .studio { background: linear-gradient(180deg, var(--sea-mid) 0%, #3f6f66 60%, #335c56 100%); }
+body[data-step="5"] .studio { background: linear-gradient(180deg, #335c56 0%, var(--sea-deep) 55%, var(--sea-abyss) 100%); }
 /* 짙은 물(3~5걸음) 위 글자와 게이지 — 캔버스의 흰 글자 그대로 */
 body[data-step="3"] .wiz-title, body[data-step="4"] .wiz-title, body[data-step="5"] .wiz-title { color: #fff; }
 /* 상단바는 물 위에 얹혀 있다 — 만들기 화면에서는 걸음마다 물빛이 달라지므로
    어느 깊이에서도 읽히도록 글자를 밝은 쪽으로 고정한다. 1걸음(모래빛)은
    아직 밝은 물이라 원래 색을 그대로 둔다. */
-body[data-view="create"][data-step="2"] .brand-name,
-body[data-view="create"][data-step="3"] .brand-name { color: var(--on-sea); }
-body[data-view="create"][data-step="2"] .brand-sub,
-body[data-view="create"][data-step="3"] .brand-sub { color: rgba(247,243,234,.72); }
-body[data-view="create"][data-step="2"] .brand-mark,
-body[data-view="create"][data-step="3"] .brand-mark {
+body[data-view="create"][data-step="3"] .brand-name,
+body[data-view="create"][data-step="4"] .brand-name,
+body[data-view="create"][data-step="5"] .brand-name { color: var(--on-sea); }
+body[data-view="create"][data-step="3"] .brand-sub,
+body[data-view="create"][data-step="4"] .brand-sub,
+body[data-view="create"][data-step="5"] .brand-sub { color: rgba(247,243,234,.72); }
+body[data-view="create"][data-step="3"] .brand-mark,
+body[data-view="create"][data-step="4"] .brand-mark,
+body[data-view="create"][data-step="5"] .brand-mark {
   background: var(--on-sea); color: var(--accent-d);
 }
 body[data-step="3"] .wiz-eyebrow, body[data-step="4"] .wiz-eyebrow, body[data-step="5"] .wiz-eyebrow { color: var(--sea-sand); }

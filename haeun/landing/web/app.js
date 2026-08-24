@@ -25,6 +25,22 @@ const STYLE_INFO = [
 // 전용 샘플이 없는 장르를 고르면 엉뚱한 장르의 카드를 보고 쓰게 된다 —
 // "일상"을 골랐는데 각성·던전이 나오던 것이 그 사정이다. 여기 없는 장르도
 // 칸에 직접 쓰면 그대로 가고, 하네스가 낱말을 보고 알아서 맞춘다.
+/* 그림체 썸네일. loading="lazy" 는 **안 쓴다** — 걸음이 숨어 있는 동안에는
+   브라우저가 "화면 밖"으로 보고 안 받아 오다가, 걸음이 열려도 한동안 빈
+   칸으로 남는다(실제로 7장 중 2장만 뜨는 것을 봤다).
+   실제로 그 그림체로 뽑아 둔 샘플이 있는 것은 그것을 쓰고,
+   아직 없는 것은 루 그림으로 채운다 — 빈 칸으로 두면 어떤 그림인지 짐작할
+   길이 아예 없다. 샘플이 생기면 여기만 바꾸면 된다. */
+const STYLE_THUMB = {
+  cinematic: "/static/samples/ex-cinematic-1.jpg",
+  lineart:   "/static/samples/ex-lineart-2.jpg",
+  romance:   "/static/samples/ex-romance-1.jpg",
+  webtoon:   "/static/lou/lou-idle.png",
+  pastel:    "/static/lou/world-begins.png",
+  noir:      "/static/lou/world-depth.png",
+  shoujo:    "/static/lou/lou-happy.png",
+};
+
 const GENRE_QUICK = [
   "로맨스 판타지", "무협", "판타지", "헌터·게이트",
   "마법학교", "게임 판타지", "센티넬", "오메가버스",
@@ -97,7 +113,10 @@ function buildForm() {
   $("#styles").innerHTML = STYLE_INFO.map(([key, label, desc], i) => `
     <label class="style-opt">
       <input type="radio" name="style" value="${key}" ${i === 0 ? "checked" : ""}>
-      <span class="style-box"><b>${label}</b><small>${desc}</small></span>
+      <span class="style-box">
+        <img class="style-thumb" src="${STYLE_THUMB[key]}" alt="">
+        <b>${label}</b><small>${desc}</small>
+      </span>
     </label>
   `).join("");
 
@@ -519,12 +538,12 @@ function closeChargeModal() { $("#chargeModal").hidden = true; }
    칸은 여전히 하나도 안 지웠다 — 전부 같은 <form> 안에 있고 보이는 걸음만
    바뀐다. 그래서 collect() 는 어느 걸음에 서 있든 전부 걷는다. */
 
-const WIZ_FORK = 3;                       // 갈림길 = 마지막 걸음
-const WIZ_SIMPLE_LAST = 3;
+const WIZ_FORK = 5;                       // 갈림길 = 마지막 걸음
+const WIZ_SIMPLE_LAST = 5;
 // 전문가도 더 안 묻는다 — 다른 것은 도중에 몇 번 멈추느냐뿐이고,
 // 그건 서버(checkpoints)가 정한다. 그래서 두 길의 걸음 수가 같다.
-const WIZ_EXPERT_LAST = 3;
-const WIZ_NAMES = ["수면", "항해", "갈림길"];
+const WIZ_EXPERT_LAST = 5;
+const WIZ_NAMES = ["수면", "항해", "깊은 바다", "심해", "바닥"];
 let wizStep = 1;
 /* 이번 실행에서 고른 길. localStorage 의 모드와 **일부러 따로 둔다** —
    지난번에 전문가로 만들었다고 이번에도 말없이 전문가 길로 끌고 가면, 갈림길
@@ -571,7 +590,8 @@ function wizPaintSummary() {
   const rows = [
     ["캐릭터", val(form.name.value)],
     ["사진", photos.length ? `${photos.length}장` : `<i class="wiz-auto">없음</i>`],
-    ["적은 것", cut(form.story.value, 40)],
+    ["설명", cut(form.character.value, 34)],
+    ["이야기", cut(form.story.value, 34)],
     ["장르", val(form.genre.value)],
     ["그림체", styleLabel ? esc(styleLabel) : auto],
     ["보는 방식", wizChoice === "expert" ? "단계마다 확인하며" : "빠르게 결과부터"],
@@ -689,10 +709,7 @@ function collect() {
   return {
     uid:        UID,
     name:       form.name.value.trim(),
-    // 화면에는 자유 입력 칸이 하나뿐이다. 적힌 글을 캐릭터 설명과 이야기
-    // **양쪽에** 보낸다 — 시트를 만들 때도(character) 줄거리를 짤 때도(story)
-    // 같은 글을 봐야, 성격만 적은 사람도 상황만 적은 사람도 둘 다 반영된다.
-    character:  form.story.value.trim(),
+    character:  form.character.value.trim(),
     photo_note: form.photo_note.value.trim(),
     fields,
     genre:      form.genre.value.trim(),
