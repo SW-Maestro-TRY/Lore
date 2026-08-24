@@ -5,12 +5,30 @@
 버튼을 누릅니다. 조건 · 모드 · 그림체 문구 · 게이트 같은 것은 화면에 없습니다.
 
 ```bash
-cd C:\lore\landing
-python serve.py --open          # http://127.0.0.1:8800
+cd haeun/landing
+../.venv/bin/python serve.py --open      # http://127.0.0.1:8800
 ```
 
-설치할 것은 없습니다 — 표준 라이브러리와 `Pillow` 만 씁니다(하네스가 이미
-쓰고 있는 것). API 키는 두 하네스의 `.env` 를 그대로 씁니다.
+## 처음 한 번
+
+```bash
+cd haeun && ./setup.sh
+```
+
+`.venv` 를 만들고 `landing/requirements.txt` 하나로 하네스 것까지
+(`-r ../story-harness/...`) 전부 깝니다 — `Pillow` · `requests` · `PyYAML` ·
+`openai` · `google-genai`. `anthropic` 은 `PROVIDER=anthropic` 을 쓸 때만
+필요해서 주석 처리돼 있습니다.
+
+시스템 파이썬에 그냥 깔면 안 되는 이유와 윈도우에서 손으로 하는 법은
+`setup.sh` 안에 적혀 있습니다.
+
+**서버는 반드시 이 venv 의 파이썬으로 띄웁니다.** 하네스를 하위 프로세스로
+부를 때 `sys.executable` 을 그대로 쓰기 때문에(pipeline.py 의 `_run`),
+시스템 파이썬으로 띄우면 화면은 뜨지만 **만들기를 누르는 순간** "openai
+패키지가 없습니다" 로 멈춥니다 — 7% 에서 멈춘 것이 이것이었습니다.
+
+API 키는 두 하네스의 `.env` 를 그대로 씁니다.
 
 ---
 
