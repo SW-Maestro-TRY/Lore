@@ -228,18 +228,20 @@
         <h3 class="wiz-title">어떻게 볼까요?</h3>
 
         <div class="fork">
-          <button type="button" class="fork-card" data-mode="simple" aria-pressed="false">
+          <!-- 빠르게가 기본이다 — 처음 만드는 사람에게 맞는 쪽이고, 아무것도
+               안 고른 채로 요약이 안 보이면 화면이 멈춘 것처럼 읽힌다. -->
+          <button type="button" class="fork-card" data-mode="simple" aria-pressed="true">
             <h4>빠르게 결과부터</h4>
-            <p class="fork-lede">루가 알아서 그려 옵니다.</p>
+            <p class="fork-lede">루가 알아서 그려 옵니다.<br>중간에 안 멈춥니다.</p>
           </button>
 
           <button type="button" class="fork-card" data-mode="expert" aria-pressed="false">
-            <h4>단계마다 확인하며</h4>
-            <p class="fork-lede">이야기·시트·콘티를 보고 넘어갑니다.</p>
+            <h4>3번만 확인하며</h4>
+            <p class="fork-lede">이야기 · 콘티 · 그림<br>세 곳에서 보고 넘어갑니다.</p>
           </button>
         </div>
 
-        <div class="wiz-after" id="wizAfter" hidden>
+        <div class="wiz-after" id="wizAfter">
           <div class="wiz-card wiz-summary" id="wizSummary"></div>
         </div>
 

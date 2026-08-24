@@ -626,7 +626,7 @@ function wizPaintSummary() {
     ["이야기", cut(form.story.value, 34)],
     ["장르", val(form.genre.value)],
     ["그림체", styleLabel ? esc(styleLabel) : auto],
-    ["보는 방식", wizChoice === "expert" ? "단계마다 확인하며" : "빠르게 결과부터"],
+    ["보는 방식", wizChoice === "expert" ? "3번만 확인하며" : "빠르게 결과부터"],
   ];
   box.innerHTML = rows.map(([k, v]) =>
     `<div class="wiz-row"><span>${k}</span><b>${v}</b></div>`).join("");
@@ -634,23 +634,22 @@ function wizPaintSummary() {
 
 function wizGo(n, scroll = true) {
   const last = wizLast();
-  // 갈림길을 벗어나면 고른 것을 지운다 — 뒤로 갔다 오면 다시 고르게 한다.
-  if (n !== WIZ_FORK) {
-    wizChoice = null;
-    const after = $("#wizAfter");
-    if (after) after.hidden = true;
-    $$(".fork-card").forEach(c => c.setAttribute("aria-pressed", "false"));
-  }
+  // 갈림길을 벗어나면 고른 것을 지운다 — 다시 들어오면 기본값(빠르게)부터다.
+  if (n !== WIZ_FORK) wizChoice = null;
   wizStep = Math.min(last, Math.max(1, n));
   $$(".wiz-step").forEach(p => { p.hidden = Number(p.dataset.step) !== wizStep; });
 
   document.body.dataset.step = String(wizStep);
 
   // 갈림길에서는 늘 고르게 한다 — 지난번 모드가 기억돼 있어도 마찬가지다.
-  // 갈림길은 마지막 걸음이면서 고르는 걸음이다. 고르기 전에는 아래 단추가
-  // 없고(고른 것이 없으니 "이대로 만들기"가 말이 안 된다), 고르고 나면
-  // 요약과 만들기 단추가 그 자리에서 열린다.
-  const atFork = wizStep === WIZ_FORK && !wizChoice;
+  // 갈림길에 들어서면 **빠르게**가 이미 골라져 있다. 아무것도 안 고른 채로
+  // 요약과 만들기 단추가 안 보이면 화면이 멈춘 것처럼 읽혀서, 기본값을 두고
+  // 바꾸고 싶은 사람만 다른 카드를 누르게 한다.
+  if (wizStep === WIZ_FORK && !wizChoice) {
+    wizChoice = "simple";
+    setMode("simple");
+  }
+  const atFork = false;
   const atEnd  = wizStep === last;
 
   // 갈림길에서는 아래 단추를 안 쓴다 — 고르는 것이 곧 넘어가는 것이다.
@@ -662,6 +661,10 @@ function wizGo(n, scroll = true) {
   $("#submitNote").hidden = !(atEnd && !atFork);
   $(".wiz-foot").hidden = atFork;
 
+  if (wizStep === WIZ_FORK) {
+    $$(".fork-card").forEach(c =>
+      c.setAttribute("aria-pressed", String(c.dataset.mode === wizChoice)));
+  }
   if (atEnd && !atFork) wizPaintSummary();
   wizPaintGauge();
 
@@ -721,10 +724,8 @@ function setupWizard() {
     $$(".fork-card").forEach(c =>
       c.setAttribute("aria-pressed", String(c === card)));
     // 고른 즉시 출발하지 않는다 — 무엇으로 만드는지 한 번은 보고 눌러야
-    // "이럴 줄 몰랐다"가 안 나온다. 요약과 만들기 단추를 그 자리에 연다.
-    $("#wizAfter").hidden = false;
-    wizGo(WIZ_FORK);
-    $("#wizAfter").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    // "이럴 줄 몰랐다"가 안 나온다. 요약만 새로 그린다.
+    wizPaintSummary();
   }));
 
   wizGo(1, false);
