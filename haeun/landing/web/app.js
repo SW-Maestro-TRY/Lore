@@ -454,6 +454,9 @@ function paintCreditPill() {
   if (cur) cur.textContent = shown;
   // 마이페이지에도 같은 숫자를 쓴다 — 두 군데가 다른 값을 보이면 어느 쪽이
   // 참인지 알 수 없다. 잔액을 바꾸는 곳이 여기 하나뿐이라 저절로 맞는다.
+  // 목업(/demo/mypage)만 예외다: 거기 숫자는 화면을 보여주려고 넣은 것이라,
+  // 늦게 도착한 진짜 잔액이 덮어쓰면 목업이 반쯤 진짜가 된다.
+  if (mockAccountPill) return;
   const my = $("#myCreditNum");
   if (my) my.textContent = shown;
   paintMyCreditHint();
@@ -463,7 +466,7 @@ function paintCreditPill() {
    적어서, 몇 편 더 만들 수 있는지가 바로 보이게 한다. */
 function paintMyCreditHint() {
   const el = $("#myCreditHint");
-  if (!el) return;
+  if (!el || mockAccountPill) return;
   const one = creditCost.full;
   if (!one) { el.textContent = ""; return; }
   const left = creditBalance == null ? null : Math.floor(creditBalance / one);
@@ -2315,13 +2318,14 @@ function showMockMyPage() {
     card(1, "모모", "로맨스 판타지 · 약속의 무게, 장난의 시작")
     + card(3, "초롱", "무협 · 강호에 첫발");
   $("#myLogout").hidden = true;
-  // 잔액도 숫자가 있어야 화면이 완성돼 보인다 — 목업이라 서버 값이 아니다.
-  $("#myCreditNum").textContent = "1,240";
-  $("#myCreditHint").textContent = "한 편에 120 C — 지금 10편 더 만들 수 있어요";
   // 목업에서도 상단 배지가 로그인 뒤 모습(사진 + 마이페이지)으로 보여야
   // "로그인하면 여기가 바뀐다"가 화면으로 전달된다. 진짜 로그인은 아니다.
   mockAccountPill = true;
   paintAccountPill();
+  // 잔액도 숫자가 있어야 화면이 완성돼 보인다 — 목업이라 서버 값이 아니다.
+  // (mockAccountPill 을 켠 **뒤에** 넣어야 진짜 잔액이 덮어쓰지 않는다.)
+  $("#myCreditNum").textContent = "1,240";
+  $("#myCreditHint").textContent = "한 편에 120 C — 지금 10편 더 만들 수 있어요";
 }
 
 async function showWorks() {
