@@ -1355,8 +1355,12 @@ def write_strip(cfg, ep_dir, cuts, conditions, sheets,
     # 완성본을 보면서 말풍선을 끌어 고치는 화면. 좌표만 고치고 다시 조립하면
     # 이미지 재생성 없이(0원) 반영된다.
     try:
+        # sheets 는 charsheet.load() 가 돌려주는 Sheet 이고, run_dir 은 그 필수
+        # 필드다(runs_root/run_id) — 폴더가 없어도 경로 자체는 채워진다. 예전에는
+        # getattr(..., Path(".")) 로 방어하고 있었는데, 그 폴백이 "이 값이 없을 수도
+        # 있다"고 읽혀 실제로 오해를 샀다(#113). 없으면 그건 코드 버그이므로 그냥 쓴다.
         view = stripview.build(
-            ep_dir, {"run_id": getattr(sheets, "run_dir", Path(".")).name,
+            ep_dir, {"run_id": sheets.run_dir.name,
                      "episode": ep_dir.name.replace("ep", ""),
                      "title": title}, cuts, cond)
         print(f"{stripview.VIEW_FILE}               -> {rel(view)} "
@@ -1532,6 +1536,50 @@ def grouping_mode(cfg: dict[str, Any], ep: storyload.Episode) -> str:
     return "direction" if (mode == "rhythm" and ep.has_direction) else "fixed"
 
 
+def scene_stitch_layout(
+    cfg: dict[str, Any], scenes: list[scenegen.Scene]
+) -> tuple[list[int] | None, list[float] | None, dict[int, float] | None]:
+    """Scene 목록 -> episode.stitch 에 줄 (gaps, ratios, gap_table).
+
+    **config 의 `scene.stitch_gaps` 로 켠다(기본 꺼짐).** 꺼져 있으면 셋 다
+    None 을 돌려준다 — episode.stitch 의 기본값(여백 없이 꽉 채움, 예전과 동일)
+    그대로 간다는 뜻이다. gap_after 는 연출이 있는 run 이면 늘 채워져 있어서
+    (derive_layout 이 컷마다 계산해 둔다), 이 스위치가 없으면 **모든 옛 run 을
+    다시 이으면 갑자기 여백이 생긴다** — harness-is-final 의 "예전 run 이 그대로
+    재현돼야 한다" 원칙을 어긴다. 그래서 새 config 값이 명시적으로 켜졌을 때만
+    (지금은 landing 의 "웹툰" 모드만) 적용한다.
+
+    켜졌을 때는 컷 모드의 write_strip 과 같은 재료(strip.gap_ratio_table ·
+    width_ratio)를 쓴다 — 같은 gap_after=2 가 컷 모드와 장 모드에서 다른 뜻으로
+    벌어지면 안 된다.
+    """
+    if not (cfg.get("scene") or {}).get("stitch_gaps"):
+        return None, None, None
+    wtab = dict((cfg.get("scene") or {}).get("width_ratio") or {})
+    lw = float((cfg.get("scene") or {}).get("light_width") or strip.LIGHT_WIDTH)
+    gaps = [sc.gap_after for sc in scenes]
+    ratios = [strip.width_ratio({"weight": sc.weight}, wtab, lw) for sc in scenes]
+    return gaps, ratios, strip.gap_ratio_table(cfg)
+
+
+def grouping_label(cfg: dict[str, Any], ep: storyload.Episode) -> str:
+    """묶음 기준을 사람이 읽는 한 마디로. 진행 로그·dry-run 이 같이 쓴다.
+
+    예전에는 이 삼항식이 세 자리에 흩어져 있었고 셋 다 weight 모드를 몰라서,
+    무게로 묶은 화도 "3개씩 고정"이라고 찍혔다 — 실제로는 개수를 안 보는데
+    개수 기준처럼 읽혔다(#114).
+    """
+    mode = grouping_mode(cfg, ep)
+    if mode == "direction":
+        return "연출 기준"
+    if mode == "weight":
+        n = int((cfg.get("scene") or {}).get("max_light_per_scene") or 3)
+        return f"무게 기준 (가벼운 컷만 최대 {n}개씩 묶음)"
+    per = int(cfg["scene"]["cuts_per_scene"])
+    max_per = int(cfg["scene"].get("max_cuts_per_scene") or 0)
+    return f"{min(per, max_per) if max_per else per}개씩 고정"
+
+
 def group_scenes(cfg: dict[str, Any], ep: storyload.Episode,
                  base: list[dict[str, Any]]) -> list[scenegen.Scene]:
     """컷을 Scene 으로 묶는다. 세 곳(본 생성 · verify-all · probe)이 같이 쓴다."""
@@ -1558,17 +1606,25 @@ def generate_scenes(cfg: dict[str, Any], args, ep: storyload.Episode, ep_dir: Pa
     fp = cuts_fingerprint(ep)
     dfp = direction_fingerprint(ep)
 
+    max_light = int(cfg["scene"].get("max_light_per_scene") or 3)
     if cache.exists() and not args.regen_prompts:
         data = json.loads(cache.read_text(encoding="utf-8"))
-        # 묶는 방식이 바뀌면 캐시를 버려야 한다. 상한(max_cuts_per_scene)은 연출이
-        # 있는 run 에도 걸리므로 두 경로 모두에서 본다 — 이걸 빼 두면 config 를
-        # 고쳐도 예전 묶음 그대로 돌아 "고쳤는데 안 바뀌네"가 된다.
+        # 묶는 방식이 바뀌면 캐시를 버려야 한다. **모드마다 실제로 묶음을 좌우하는
+        # 값만** 본다 — 그 모드가 안 쓰는 값을 봐도(예: weight 모드에서
+        # cuts_per_scene) 무의미하고, 반대로 그 모드가 쓰는 값을 안 보면(예:
+        # weight 모드에서 max_light_per_scene 을 빼먹은 예전 버전) config 를
+        # 고쳐도 예전 묶음 그대로 돌아 "고쳤는데 안 바뀌네"가 된다(#111).
         mode = grouping_mode(cfg, ep)
-        same_group = (
-            data.get("grouping", "direction" if ep.has_direction else "fixed") == mode
-            and (data.get("direction_fingerprint") == dfp if mode == "direction"
-                 else int(data.get("cuts_per_scene") or 0) == per)
-            and int(data.get("max_cuts_per_scene") or 0) == max_per)
+        if mode == "direction":
+            same_group = (data.get("direction_fingerprint") == dfp
+                         and int(data.get("max_cuts_per_scene") or 0) == max_per)
+        elif mode == "weight":
+            same_group = int(data.get("max_light_per_scene") or 0) == max_light
+        else:                                     # fixed
+            same_group = (int(data.get("cuts_per_scene") or 0) == per
+                         and int(data.get("max_cuts_per_scene") or 0) == max_per)
+        same_group = same_group and (
+            data.get("grouping", "direction" if ep.has_direction else "fixed") == mode)
         if data.get("cuts_fingerprint") == fp and same_group:
             try:
                 scenes = scenegen.from_json(data.get("scenes") or [], base)
@@ -1591,8 +1647,7 @@ def generate_scenes(cfg: dict[str, Any], args, ep: storyload.Episode, ep_dir: Pa
         die(str(exc))
 
     sizes = ", ".join(str(len(sc.cuts)) for sc in scenes)
-    how = ("연출 기준" if grouping_mode(cfg, ep) == "direction"
-           else f"{min(per, max_per) if max_per else per}개씩 고정")
+    how = grouping_label(cfg, ep)
     print(f"[scene_gen] 컷 {len(base)}개 → Scene {len(scenes)}개 (묶음 {sizes} · {how})")
     if grouping_mode(cfg, ep) == "direction":
         ends = " / ".join(f"S{sc.scene_number}:{sc.beats[-1] or '?'}" for sc in scenes)
@@ -1658,6 +1713,7 @@ def generate_scenes(cfg: dict[str, Any], args, ep: storyload.Episode, ep_dir: Pa
         "cuts_fingerprint": fp, "direction_fingerprint": dfp,
         "grouping": grouping_mode(cfg, ep),
         "cuts_per_scene": per, "max_cuts_per_scene": max_per,
+        "max_light_per_scene": max_light,
         "scenes": scenegen.to_json(scenes),
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -2931,8 +2987,7 @@ def verify_scenes(cfg: dict[str, Any], args, ep: storyload.Episode, ep_dir: Path
             print(f"[verify] {rel(main_cache)} 에서 레이아웃을 읽지 못해 새로 고릅니다.")
 
     sizes = ", ".join(str(len(sc.cuts)) for sc in scenes)
-    how = ("연출 기준" if grouping_mode(cfg, ep) == "direction"
-           else f"{min(per, max_per) if max_per else per}개씩 고정")
+    how = grouping_label(cfg, ep)
     print(f"[verify] 컷 {len(base)}개 → Scene {len(scenes)}개 (묶음 {sizes} · {how})")
 
     if args.dry_run:
@@ -3583,18 +3638,23 @@ def main() -> int:
             if not cache.exists():
                 die(f"prompts.json 이 없습니다: {rel(cache)}\n"
                     f"        먼저 한 번 생성하거나 --dry-run 없이 실행하세요.")
-            cuts = json.loads(cache.read_text(encoding="utf-8"))["cuts"]
+            all_cuts = json.loads(cache.read_text(encoding="utf-8"))["cuts"]
+            cuts = all_cuts
             if args.cuts.strip():
                 spec = args.cuts.strip()
                 lo, hi = ((int(x) for x in spec.split("-")) if "-" in spec
                           else (int(spec), int(spec)))
                 lo, hi = int(lo), int(hi)
-                cuts = [c for c in cuts if lo <= int(c["cut_number"]) <= hi]
+                cuts = [c for c in all_cuts if lo <= int(c["cut_number"]) <= hi]
+            # 시트(HTML 미리보기)는 --cuts 로 좁힌 것만 보여준다 — 방금 만진
+            # 컷만 확인하려는 것이 --sheet-only --cuts 의 목적이다.
             path = sheet(cfg, ep, cuts, ep_dir, image_model, text_model or "(미설정)", appearance)
             print(f"contact_sheet.html       -> {rel(path)}")
-            # 컷 모드는 여기서 세로 조립까지 한다. 말풍선 좌표를 고친 뒤 다시
-            # 붙이는 길이 이것이다 — 이미지 생성 없이(0원) 반영된다.
-            write_strip(cfg, ep_dir, cuts, conditions, sheets, second_lead,
+            # 하지만 episode.png(최종본)는 **화 전체**를 다시 잇는다. --cuts 는
+            # 생성 필터일 뿐 조립까지 좁히면 안 된다 — 안 그러면 컷 하나만 고쳐도
+            # episode.png 가 그 컷 한 장짜리로 통째로 덮어써진다(#112, 예전에
+            # 본 생성 경로에서 났던 것과 같은 버그가 --sheet-only 에만 남아 있었다).
+            write_strip(cfg, ep_dir, all_cuts, conditions, sheets, second_lead,
                         rel, ep.title)
         if want_scene:
             cache = ep_dir / scenegen.CACHE_FILE
@@ -3615,9 +3675,10 @@ def main() -> int:
                 ep_dir, [scene_cond(c) for c in conditions],
                 [sc.scene_number for sc in scenes], picks)
             gone = sum(1 for p in paths if not p.exists())
+            gaps, ratios, gtab = scene_stitch_layout(cfg, scenes)
             try:
                 out = episode.episode_path(ep_dir)
-                w, h = episode.stitch(paths, out)
+                w, h = episode.stitch(paths, out, gaps, ratios, gtab)
                 print(f"{episode.EPISODE_FILE}              -> {rel(out)} "
                       f"({cond} · {len(paths) - gone}장 · {w}x{h}px"
                       f"{f' — {gone}장 빠짐' if gone else ''})")
@@ -3745,7 +3806,7 @@ def main() -> int:
             print(f"[dry-run] Scene {len(scenes)} x 후보 "
                   f"{cfg['scene']['candidates_per_scene']} "
                   f"(묶음 {'+'.join(str(len(sc.cuts)) for sc in scenes)} · "
-                  f"{'연출 기준' if grouping_mode(cfg, ep) == 'direction' else '고정 분할'})")
+                  f"{grouping_label(cfg, ep)})")
         print(f"[dry-run] 이미지 호출 {len(jobs)}회 예정, "
               f"예상 비용 {krw:,.0f}원 (약 ${usd:,.2f})")
         print(f"[dry-run] 조건당 상한 {cfg['limits']['max_calls_per_condition']}회 / "
@@ -3781,8 +3842,10 @@ def main() -> int:
             ep_dir, [scene_cond(c) for c in conditions],
             [sc.scene_number for sc in all_scenes], picks)
         missing = [p for p in paths if not p.exists()]
+        gaps, ratios, gtab = scene_stitch_layout(cfg, all_scenes)
         try:
-            w, h = episode.stitch(paths, episode.episode_path(ep_dir))
+            w, h = episode.stitch(paths, episode.episode_path(ep_dir),
+                                  gaps, ratios, gtab)
             note = f" — {len(missing)}장 빠짐" if missing else ""
             print(f"{episode.EPISODE_FILE}              -> "
                   f"{rel(episode.episode_path(ep_dir))} "

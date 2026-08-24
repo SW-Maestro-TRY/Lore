@@ -59,6 +59,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import overlay          # 편집실에서 얹은 것을 저장하고 그림에 굽는다
+import report           # picks.csv 읽기 — overlay 의 sys.path 설정 뒤에 와야 한다
 
 HERE = Path(__file__).resolve().parent
 JOBS_DIR = HERE / "jobs"
@@ -331,14 +332,20 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
     #      좁다. 특히 낙차(3)가 폰 화면 하나를 못 채워서 "조금 넓은 여백"이
     #      된다. 아래 값은 0 / 128 / 256 / 720px 로, 각각 작법이 말하는
     #      빠른 동작(100~150) · 감정(200~300) · 낙차(600~800) 범위에 든다.
+    #    · stitch_gaps — 위 gap_ratio·light_width 를 **장과 장 사이 이어붙이기
+    #      (episode.stitch)에도 실제로 적용**한다. 이게 없으면 config 에 값만
+    #      채워질 뿐 정작 최종 이미지는 장끼리 무조건 틈 없이 붙는다 — 2026-08-23
+    #      감사에서 나온 값이 죽은 채로 있던 자리(이슈 #110).
     #
-    #    "빠르게"(scene 모드)에서는 둘 다 안 켠다 — 컷 사이 여백도 배경 연결도
-    #    한 캔버스 안에서 모델이 정하는 구조라 코드가 넣을 자리가 없다.
+    #    "빠르게"(scene 모드, 개수로 3컷씩 고정)에서는 셋 다 안 켠다 — 컷 사이
+    #    여백도 배경 연결도 한 캔버스 안에서 모델이 정하는 구조라 코드가 넣을
+    #    자리가 없다.
     if mode == "webtoon":
         text = _replace_block(text, "vertical_link", "true")
         text = re.sub(r"(?m)^  gap_ratio:.*$",
                       "  gap_ratio: {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}",
                       text, count=1)
+        text = re.sub(r"(?m)^  stitch_gaps:.*$", "  stitch_gaps: true", text, count=1)
         # 9. 묶기를 **무게**가 정하게 한다 — "한 장에 3컷" 도 "한 컷에 한 장" 도
         #    임의의 규칙이었다. 실제 웹툰은 컷마다 무게가 달라서, 스쳐 가는
         #    리액션과 판이 뒤집히는 컷이 같은 지면을 먹지 않는다.
@@ -1709,6 +1716,35 @@ def _scene_numbers(run_id: str, episode: int = 1) -> list[int]:
     return sorted({int(c.get("cut_number") or 0) for c in cuts} - {0})
 
 
+def _scene_layout(run_id: str, episode: int = 1) -> dict[int, tuple[int, str]]:
+    """장 번호 -> (gap_after, weight). overlay.bake() 가 다시 이어 붙일 때 쓴다.
+
+    scenegen.Scene.gap_after/.weight 와 같은 규칙이다(마지막 컷의 gap_after,
+    첫 컷의 weight) — 여기는 Scene 객체가 없어 원본 컷 dict 에서 직접 뽑는다.
+    scenes.json 이 없는 옛 화(컷 하나 = 장 하나)는 빈 dict 를 돌려주고, 그러면
+    overlay.bake() 가 기본값(여백 1·꽉 채움)으로 잇는다 — 예전과 같다.
+    """
+    ep_dir = episode_dir(run_id, episode)
+    grouping = _read_json(ep_dir, "scenes.json").get("scenes") or []
+    if not grouping:
+        return {}
+    cuts = _read_json(STORY / "runs" / run_id / "webtoon",
+                      f"ep{int(episode):02d}_cuts.json").get("cuts") or []
+    by_no = {int(c.get("cut_number") or 0): c for c in cuts}
+    out: dict[int, tuple[int, str]] = {}
+    for sc in grouping:
+        no = int(sc.get("scene_number") or 0)
+        nums = [int(n) for n in (sc.get("cut_numbers") or [])]
+        if not nums:
+            continue
+        last, first = by_no.get(nums[-1]) or {}, by_no.get(nums[0]) or {}
+        gap = last.get("gap_after")
+        gap = gap if isinstance(gap, int) and 0 <= gap <= 3 else 1
+        weight = str(first.get("weight") or "normal").strip().lower()
+        out[no] = (gap, weight if weight in ("full", "normal", "light") else "normal")
+    return out
+
+
 def read_overlay(run_id: str, episode: int = 1) -> dict[str, Any]:
     return overlay.load_overlay(episode_dir(run_id, episode))
 
@@ -1744,7 +1780,8 @@ def bake_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
         raise Failed("이 회차의 장을 찾지 못했습니다.")
     try:
         res = overlay.bake(ep_dir, numbers,
-                           lambda n: unit_image(run_id, n, episode), data)
+                           lambda n: unit_image(run_id, n, episode), data,
+                           _scene_layout(run_id, episode))
     except overlay.OverlayError as exc:
         raise Failed(str(exc)) from exc
     res["url"] = f"/api/runs/{run_id}/baked.png?ep={int(episode)}"
@@ -2110,13 +2147,26 @@ def unit_image(run_id: str, no: int, episode: int = 1) -> Path | None:
 
     Scene 모드는 `scene_S+/scene3_c1.png`, 컷 모드는 `S+/cut3_c1.png` 다.
     조건은 S+ 가 기본이고, 시트가 없어 A 로 떨어진 옛 실행도 받아 준다.
+
+    **`picks.csv` 에 채택 기록이 있으면 그 후보를 쓴다.** 지금 제품은 후보를
+    1장만 뽑아서 `_c1` 고정과 다를 것이 없지만(#113), 나중에 후보를 여러 장
+    뽑게 되면 이 함수가 "사람이 고른 후보"가 아니라 "무조건 1번 후보"를
+    화면·최종본에 내보내게 된다. `folder` 가 곧 picks.csv 의 condition 값이다
+    (컷 모드는 `cond` 그대로, Scene 모드는 `scene_{cond}` — run.scene_cond 와
+    같은 규칙). 기록이 없거나 그 파일이 없으면 c1 로 떨어진다.
     """
     ep = episode_dir(run_id, episode)
+    picks = report.load_picks(ep)
     for cond in (CONDITION, "S", "A"):
         for folder, stem in ((f"scene_{cond}", "scene"), (cond, "cut")):
-            p = ep / folder / f"{stem}{no}_c1.png"
+            k = picks.get((folder, no)) or 1
+            p = ep / folder / f"{stem}{no}_c{k}.png"
             if p.exists():
                 return p
+            if k != 1:
+                p1 = ep / folder / f"{stem}{no}_c1.png"
+                if p1.exists():
+                    return p1
     return None
 
 
@@ -2413,7 +2463,11 @@ def _origin_config(run_id: str) -> Path | None:
     """
     if not JOBS_DIR.is_dir():
         return None
-    for job_dir in JOBS_DIR.iterdir():
+    # **최신 job 부터** 본다. 같은 run_id 를 가리키는 job 폴더가 둘 이상일 수
+    # 있고(1화를 만든 job, 2화를 이어 만든 job), 예전에는 정렬 없이 훑어 첫
+    # 매치를 썼다 — 어느 config 를 물려받을지가 OS 의 디렉터리 순서에 달려
+    # 있었다(#114). job_id 는 `YYYYmmdd-HHMMSS-xxxx` 라 이름 역순이 곧 최신순이다.
+    for job_dir in sorted(JOBS_DIR.iterdir(), reverse=True):
         marker = job_dir / "run_id.txt"
         cfg = job_dir / "config.yaml"
         if not (marker.exists() and cfg.exists()):
@@ -2449,7 +2503,7 @@ def origin_form(run_id: str) -> dict[str, Any]:
     """
     if not JOBS_DIR.is_dir():
         return {}
-    for job_dir in JOBS_DIR.iterdir():
+    for job_dir in sorted(JOBS_DIR.iterdir(), reverse=True):   # 최신 job 부터 (#114)
         marker = job_dir / "run_id.txt"
         if not marker.exists():
             continue
@@ -2601,8 +2655,29 @@ class RegenRunner:
         self._lock = threading.Lock()
         self._gate = threading.Semaphore(1)
 
+    # 끝난 작업을 몇 개까지 들고 있을까. 화면이 끝난 뒤에도 결과를 한 번 더
+    # 물어볼 수 있어야 해서(폴링이 늦게 도착한다) 바로 버리지는 않는다. 다만
+    # 예전에는 **아무것도 안 버렸다** — 서버를 하루 켜 두고 다시 그리기를 계속
+    # 누르면 메모리가 계속 늘었다(#114).
+    KEEP_FINISHED = 50
+
     def get(self, rid: str) -> Regen | None:
         return self.jobs.get(rid)
+
+    def _prune(self) -> None:
+        """끝난 작업 중 오래된 것부터 버린다. 돌고 있는 것은 절대 안 버린다.
+
+        호출자가 _lock 을 잡은 상태로 부른다.
+        """
+        done = [j for j in self.jobs.values()
+                if j.status in ("done", "error", "cancelled")]
+        if len(done) <= self.KEEP_FINISHED:
+            return
+        # finished_at 이 0 인 것(아직 안 찍힌 것)은 가장 최근으로 본다 — 버릴
+        # 후보의 맨 뒤로 밀어서, 애매한 것을 먼저 버리지 않게 한다.
+        done.sort(key=lambda j: j.finished_at or float("inf"))
+        for j in done[:len(done) - self.KEEP_FINISHED]:
+            self.jobs.pop(j.id, None)
 
     def start(self, run_id: str, scene_no: int, feedback: str = "",
               style: str = "", textless: bool = False,
@@ -2617,6 +2692,7 @@ class RegenRunner:
                     textless=textless)
         with self._lock:
             self.jobs[job.id] = job
+            self._prune()
         threading.Thread(target=self._work, args=(job, style), daemon=True).start()
         return job
 
