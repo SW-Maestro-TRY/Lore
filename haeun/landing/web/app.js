@@ -36,9 +36,11 @@ const STYLE_THUMB = {
   lineart:   "/static/samples/ex-lineart-2.jpg",
   romance:   "/static/samples/ex-romance-1.jpg",
   webtoon:   "/static/samples/ex-webtoon-1.jpg",
-  pastel:    "/static/lou/world-begins.png",
-  noir:      "/static/lou/world-depth.png",
-  shoujo:    "/static/lou/lou-happy.png",
+  // 아래 셋은 아직 그 그림체로 뽑아 둔 예시가 없어서 루 그림으로 자리만
+  // 채운다. 그림체를 보여주지는 못하니, 예시가 생기면 갈아 끼워야 한다.
+  pastel:    "/static/lou/art/world-begins.png",
+  noir:      "/static/lou/art/world-depth.png",
+  shoujo:    "/static/lou/art/guide-2.png",
 };
 
 const GENRE_QUICK = [
@@ -1470,6 +1472,11 @@ function paintMascot(s, currentStage) {
   const art = $("#stageArt");
   if (art) {
     art.dataset.mood = mood;
+    // 막혔을 때(error)만 그림을 직접 얹는다 — 루가 두 마리라 어느 쪽이
+    // 나올지 뽑아야 하는데, 나머지 단계처럼 CSS 에 적어 두면 뽑을 수가 없다.
+    // 막힌 것이 풀리면 다시 CSS 가 정하도록 얹었던 것을 걷는다.
+    if (mood === "error") art.style.backgroundImage = `url("${louArt("error")}")`;
+    else art.style.removeProperty("background-image");
     // 확인을 기다리는 중이어도 일하던 단계 그림을 그대로 둔다 — 어디서 멈췄는지가
     // 보여야 한다. 다 됐거나(done) 막혔을 때(error)는 mood 쪽 그림이 이긴다.
     if (currentStage && currentStage.key) art.dataset.stage = currentStage.key;
@@ -2706,8 +2713,7 @@ function view(name) {
    뭉개져서, 알파가 이어진 가장 큰 덩어리만 남겨 뗐다. 그래서 12장 모두 작게
    줄여도 고래로 읽힌다. */
 const HERO_LOUS = ["/static/lou/hero-whale2.png", "/static/lou/hero-whale1.png"];
-const LOGO_LOUS = ["curious", "default", "discover", "happy", "sleepy", "thinking"]
-  .flatMap(e => [`/static/lou/logo-1-${e}.png`, `/static/lou/logo-2-${e}.png`]);
+/* 로고 12장 목록은 lou-art.js 가 들고 있다 — 편집실도 같은 로고를 쓴다. */
 
 function swapLou(el, list) {
   if (!el) return;
@@ -2717,7 +2723,7 @@ function swapLou(el, list) {
 /* 이름은 그대로 두었다 — 홈으로 돌아가는 네 자리에서 이미 부르고 있다. */
 function pickHero() {
   swapLou($("#heroLou"), HERO_LOUS);
-  swapLou($("#brandLou"), LOGO_LOUS);
+  swapLou($("#brandLou"), LOU_LOGOS);
 }
 
 /* 걸음의 제목 옆에 앉은 루. 걸음을 옮길 때마다 바뀐다.
@@ -2728,7 +2734,7 @@ function pickWizLou() {
   if (!el) return;
   const now = el.getAttribute("src");
   const brand = $("#brandLou") ? $("#brandLou").getAttribute("src") : "";
-  const pool = LOGO_LOUS.filter(s => s !== now && s !== brand);
+  const pool = LOU_LOGOS.filter(s => s !== now && s !== brand);
   el.src = pool[Math.floor(Math.random() * pool.length)];
 }
 function esc(s) {
