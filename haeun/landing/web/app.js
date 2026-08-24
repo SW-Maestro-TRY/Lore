@@ -666,6 +666,10 @@ function paintMascot(s, currentStage) {
   }
 
   box.dataset.mood = mood;
+  // 단계 key 도 함께 적는다 — 루는 단계마다 다른 그림을 쓴다(style.css 참고).
+  // 사람 확인을 기다리는 중이면 단계 그림 대신 "물어보는" 얼굴이 맞으므로 비운다.
+  if (currentStage && currentStage.key && mood !== "ask") box.dataset.stage = currentStage.key;
+  else delete box.dataset.stage;
   $("#mascotLine").textContent = line;
 }
 
