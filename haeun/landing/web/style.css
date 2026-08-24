@@ -469,7 +469,22 @@ body[data-step="3"] .submit-note, body[data-step="4"] .submit-note, body[data-st
 .wiz-more .hint { margin-top: 8px; }
 
 /* 장르 빠른 고르개 — 칸을 직접 쓰기 전에 눌러서 채운다 */
-.genre-quick { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 16px; }
+.genre-quick { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 12px; }
+
+/* 장르 카드의 마지막 줄. 늘 무언가가 적혀 있어야 한다 — 안 고른 상태에서
+   여기가 비어 있으면 "떠야 할 것이 안 떴다"로 읽힌다. */
+.genre-note {
+  margin: 0; padding: 10px 12px; border-radius: 12px;
+  font-size: .84rem; line-height: 1.55; color: var(--muted);
+  background: rgba(47,143,168,.07);
+  border-left: 3px solid rgba(47,143,168,.35);
+}
+/* 안 골랐을 때는 "루가 고른다"는 안내라 조금 더 조용하게 */
+.genre-note[data-state="empty"] {
+  color: var(--dim);
+  background: rgba(0,0,0,.03);
+  border-left-color: rgba(0,0,0,.12);
+}
 .genre-quick button {
   border: 1px solid var(--line-2); background: var(--ink-2);
   border-radius: 999px; padding: .5em 1em; font: inherit; font-size: .84rem;

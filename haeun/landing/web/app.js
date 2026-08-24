@@ -31,6 +31,28 @@ const GENRE_QUICK = [
   "아이돌", "스릴러", "액션", "개그", "일상",
 ];
 
+/* 장르 카드 아래에 늘 떠 있는 한 줄. 안 고른 상태에서 아무것도 안 보이면
+   "여기 뭔가 떠야 하는데 안 떴다"로 읽혀서 고장 같아 보인다 — 안 고른 것도
+   **고른 것 중 하나**라는 걸 말해 주는 자리다. 문구는 하네스가 그 장르로
+   무엇을 하는지를 적는다(분위기 형용사 말고). */
+const GENRE_NOTE = {
+  "로맨스 판타지": "드레스와 무도회, 계약 결혼과 회귀. 감정이 사건을 끕니다.",
+  "무협":         "강호와 문파, 내공과 검. 은원이 이야기를 끕니다.",
+  "판타지":       "검과 마법, 다른 세계. 종족과 왕국이 배경이 됩니다.",
+  "헌터·게이트":  "현대 한국에 열린 게이트. 각성자와 길드, 등급이 규칙입니다.",
+  "마법학교":     "입학과 기숙사, 수업과 시험. 학교가 세계의 크기입니다.",
+  "게임 판타지":  "상태창과 레벨, 퀘스트와 스킬. 규칙이 눈에 보입니다.",
+  "센티넬":       "가이드와 센티넬, 감각 폭주와 결합. 관계가 곧 설정입니다.",
+  "오메가버스":   "알파·베타·오메가, 페로몬과 각인. 관계의 규칙이 세계입니다.",
+  "아이돌":       "연습생과 데뷔, 무대와 팬. 성장과 경쟁이 축입니다.",
+  "스릴러":       "쫓고 쫓기는 것. 정보를 언제 주는지가 연출이 됩니다.",
+  "액션":         "몸으로 부딪히는 것. 합과 속도로 컷을 나눕니다.",
+  "개그":         "박자와 배신. 컷의 크기 차이로 웃깁니다.",
+  "일상":         "큰 사건 없이 하루하루. 인물의 결이 곧 이야기입니다.",
+};
+const GENRE_NOTE_EMPTY =
+  "비워두면 루가 골라요 — 앞에서 적은 캐릭터 설명을 보고 이야기에 맞는 장르를 정합니다.";
+
 /* ---- 일반 모드 · 전문 모드 ------------------------------------------- *
  *
  * 계정이 없으므로 고른 모드는 브라우저(localStorage)에 남는다. sessionStorage
@@ -109,8 +131,18 @@ function buildForm() {
     quick.innerHTML = GENRE_QUICK
       .map(g => `<button type="button" aria-pressed="false">${g}</button>`).join("");
     const input = $("#form").genre;
-    const sync = () => $$("button", quick).forEach(b =>
-      b.setAttribute("aria-pressed", String(b.textContent === input.value.trim())));
+    const hint = $("#genreNote");
+    const sync = () => {
+      const now = input.value.trim();
+      $$("button", quick).forEach(b =>
+        b.setAttribute("aria-pressed", String(b.textContent === now)));
+      if (!hint) return;
+      // 세 가지 상태 모두 한 줄이 뜬다 — 빈 자리를 남기지 않는다.
+      hint.dataset.state = now ? (GENRE_NOTE[now] ? "known" : "custom") : "empty";
+      hint.textContent = now
+        ? (GENRE_NOTE[now] || `「${now}」 그대로 갑니다 — 목록에 없는 장르도 루가 낱말을 보고 맞춥니다.`)
+        : GENRE_NOTE_EMPTY;
+    };
     $$("button", quick).forEach(btn => btn.addEventListener("click", () => {
       // 눌린 것을 다시 누르면 비운다 — 비우면 루가 고른다
       input.value = (input.value.trim() === btn.textContent) ? "" : btn.textContent;
