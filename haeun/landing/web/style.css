@@ -1843,3 +1843,40 @@ button.inline-link:hover { color: #f0d090; }
 .works-rail::-webkit-scrollbar-thumb {
   background: var(--line); border-radius: 999px;
 }
+
+/* ---- 확인 팝업 ------------------------------------------------------------ */
+/* 진행 화면 아래에 붙어 있던 것을 팝업으로 올렸다 — 기다리는 사람은 화면
+   위를 보고 있어서, 아래로 내려야 보이는 알림은 알림이 아니었다. */
+.approval-veil { align-items: flex-start; padding: 4vh 16px; }
+.approval-box {
+  max-width: 520px; max-height: 92vh; padding: 0;
+  background: transparent; border: none; box-shadow: none;
+}
+.approval-box .sheet-approval { margin: 0; max-height: 92vh; overflow-y: auto; }
+
+/* 무엇을 확인하는지 — 이야기·콘티 본문 */
+.approval-preview:empty { display: none; }
+.approval-preview {
+  margin: 14px 0; padding: 14px 16px;
+  background: var(--ink-2); border: 1px solid var(--line); border-radius: 10px;
+  max-height: 40vh; overflow-y: auto;
+}
+.ap-title { font-size: 1rem; font-weight: 800; margin: 0 0 .2em; }
+.ap-logline { color: var(--muted); font-size: .86rem; margin: 0 0 .9em; line-height: 1.6; }
+.ap-hook { color: var(--accent-d); font-size: .84rem; margin: 0 0 1em; }
+.ap-scene { padding: 10px 0; border-top: 1px solid var(--line); }
+.ap-scene:first-of-type { border-top: none; }
+.ap-no {
+  font-family: var(--mono); font-size: .72rem; color: var(--dim);
+  letter-spacing: .08em;
+}
+.ap-one { font-weight: 700; font-size: .88rem; margin: .25em 0 .3em; }
+.ap-text { color: var(--muted); font-size: .82rem; line-height: 1.65; margin: 0; }
+.ap-changed { color: var(--dim); font-size: .78rem; margin: .45em 0 0; }
+.ap-line { margin: .3em 0 0; font-size: .84rem; }
+.ap-line .who { color: var(--gold); font-weight: 700; }
+.ap-line.narration { color: var(--muted); font-style: italic; }
+.ap-line.sfx { color: var(--accent-d); font-family: var(--mono); font-size: .78rem; }
+
+/* 확인 팝업이 떠 있는 동안 뒤가 안 굴러가게 */
+body.modal-open { overflow: hidden; }

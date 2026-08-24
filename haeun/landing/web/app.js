@@ -1167,6 +1167,49 @@ function mmss(sec) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/* ---- 확인 화면이 보여줄 본문 ------------------------------------------- *
+ *
+ * "이대로 진행할까요?" 를 물으려면 무엇을 진행할지가 보여야 한다. 스토리는
+ * 장면 셋, 콘티는 컷과 대사를 그대로 편다. 값이 없으면(파일이 덜 씌었거나
+ * 옛 run) 자리를 통째로 비운다 — :empty 로 상자까지 사라진다. */
+
+function renderStoryPreview(sp) {
+  const host = $("#storyPreview");
+  if (!host) return;
+  if (!sp || !(sp.scenes || []).length) { host.innerHTML = ""; return; }
+  const head = [
+    sp.title ? `<p class="ap-title">${esc(sp.title)}</p>` : "",
+    sp.logline ? `<p class="ap-logline">${esc(sp.logline)}</p>` : "",
+    sp.hook ? `<p class="ap-hook">${esc(sp.hook)}</p>` : "",
+  ].join("");
+  host.innerHTML = head + sp.scenes.map(s => `
+    <div class="ap-scene">
+      <div class="ap-no">${esc(s.no)}번째 장면</div>
+      ${s.one_line ? `<p class="ap-one">${esc(s.one_line)}</p>` : ""}
+      ${s.text ? `<p class="ap-text">${esc(s.text)}</p>` : ""}
+      ${s.changed ? `<p class="ap-changed">→ ${esc(s.changed)}</p>` : ""}
+    </div>`).join("");
+}
+
+function renderBoardPreview(bp) {
+  const host = $("#boardPreview");
+  if (!host) return;
+  if (!bp || !(bp.cuts || []).length) { host.innerHTML = ""; return; }
+  const head = bp.title ? `<p class="ap-title">${esc(bp.title)}</p>` : "";
+  host.innerHTML = head + bp.cuts.map(c => {
+    const lines = [];
+    if (c.narration) lines.push(`<p class="ap-line narration">${esc(c.narration)}</p>`);
+    if (c.dialogue) lines.push(`<p class="ap-line"><span class="who">${esc(c.speaker || "?")}</span> ${esc(c.dialogue)}</p>`);
+    if (c.thought) lines.push(`<p class="ap-line narration">(${esc(c.thought)})</p>`);
+    if (c.sfx) lines.push(`<p class="ap-line sfx">${esc(c.sfx)}</p>`);
+    return `<div class="ap-scene">
+      <div class="ap-no">CUT ${String(c.no).padStart(2, "0")}${c.shot ? " · " + esc(c.shot) : ""}</div>
+      ${lines.join("")}
+      ${c.description ? `<p class="ap-text">${esc(c.description)}</p>` : ""}
+    </div>`;
+  }).join("");
+}
+
 function renderProgress(s) {
   $("#clock").textContent = mmss(s.elapsed);
 
@@ -1217,6 +1260,7 @@ function renderProgress(s) {
     if (lastStatus !== "awaiting_story_approval") {
       setStoryButtonsBusy(false);
       wireMemory(s.run_id);
+      renderStoryPreview(s.story_preview);
     }
   } else {
     storyApprovalBox.hidden = true;
@@ -1229,6 +1273,7 @@ function renderProgress(s) {
     if (lastStatus !== "awaiting_board_approval") {
       setBoardButtonsBusy(false);
       wireMemory(s.run_id);
+      renderBoardPreview(s.board_preview);
     }
   } else {
     boardApprovalBox.hidden = true;
@@ -1249,6 +1294,16 @@ function renderProgress(s) {
     artqaBox.hidden = true;
     $("#cancelBtn").hidden = false;
   }
+
+  // 확인이 필요한 자리는 팝업으로 띄운다 — 진행 화면 아래에 붙어 있으면
+  // 기다리는 사람이 자기 차례가 온 것을 모른다.
+  const waiting = ["awaiting_sheet_approval", "awaiting_story_approval",
+                   "awaiting_board_approval", "awaiting_artqa_approval"]
+                  .includes(s.status);
+  $("#approvalModal").hidden = !waiting;
+  // 팝업이 떠 있는 동안에는 뒤가 안 굴러가게 — 확인 창 뒤로 웹툰이 스크롤되면
+  // 어디를 보고 있는지 헷갈린다.
+  document.body.classList.toggle("modal-open", waiting);
 
   if (s.status === "queued") {
     $("#progEyebrow").textContent = "대기 중";

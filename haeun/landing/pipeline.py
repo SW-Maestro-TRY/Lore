@@ -708,6 +708,18 @@ class Job:
                 "art_qa": (art_qa_summary(self.run_id, self.episode)
                            if self.status == "awaiting_artqa_approval" and self.run_id
                            else None),
+                # 확인 화면이 **무엇을** 확인할지. 그 단계에서만 읽는다 —
+                # 매 폴링(0.8초)마다 run 폴더를 뒤지는 것은 헛일이다.
+                #
+                # 이것이 없던 동안 스토리·콘티 확인 화면은 "이대로 진행할까요?"
+                # 만 묻고 정작 이야기를 안 보여줬다. 사람은 게이트가 무엇에
+                # 걸렸는지만 읽고 찍어서 눌러야 했다.
+                "story_preview": (story_preview(self.run_id)
+                                  if self.status == "awaiting_story_approval"
+                                  and self.run_id else None),
+                "board_preview": (board_preview(self.run_id, self.episode)
+                                  if self.status == "awaiting_board_approval"
+                                  and self.run_id else None),
             }
 
     # ---- 저장 · 복원 -------------------------------------------------------- #
@@ -1915,6 +1927,71 @@ def read_refusals(run_id: str, episode: int = 1, limit: int = 20) -> list[dict[s
     except OSError:
         return []
     return out[-limit:]
+
+
+# --------------------------------------------------------------------------- #
+# 승인 화면이 보여줄 것
+# --------------------------------------------------------------------------- #
+#
+# 스토리·콘티 확인 화면은 "이대로 진행할까요?" 를 묻는 자리인데, 정작 **무엇을**
+# 진행할지를 안 보여주고 있었다. 사람은 게이트가 무엇에 걸렸는지만 읽고
+# 찍어서 눌러야 했다 — 확인이 아니라 도박이다.
+#
+# 두 함수 모두 없는 값에는 관대하다. 승인 화면은 이미 "뭔가 잘 안 된" 자리라
+# (게이트가 소진돼서 왔다) 파일이 덜 씌어 있을 수 있는데, 여기서 터지면
+# 화면이 아예 안 뜨고 사용자는 진행도 취소도 못 한다.
+
+def story_preview(run_id: str) -> dict[str, Any]:
+    """스토리 단계까지 나온 것 — 제목 · 로그라인 · 훅 · 장면들."""
+    run_dir = STORY / "runs" / run_id
+    scenes_doc = _read_json(run_dir, "scenes.json")
+    p1 = _read_json(run_dir, "p1.json")
+    p2 = _read_json(run_dir, "p2.json")
+    scenes = []
+    for s in (scenes_doc.get("scenes") or []):
+        if not isinstance(s, dict):
+            continue
+        scenes.append({
+            "no": int(s.get("no") or len(scenes) + 1),
+            "one_line": str(s.get("one_line") or "").strip(),
+            "text": str(s.get("text") or "").strip(),
+            # 무엇이 달라졌는가 — 장면이 이야기를 실제로 움직였는지 보는 값이다.
+            "changed": str(s.get("changed") or "").strip(),
+        })
+    return {
+        "title": str(scenes_doc.get("title") or "").strip(),
+        "hook": str(scenes_doc.get("hook") or "").strip(),
+        "logline": str(p2.get("logline") or "").strip(),
+        "character": str(p1.get("name") or "").strip(),
+        "personality": str(p1.get("personality") or "").strip(),
+        "scenes": scenes,
+    }
+
+
+def board_preview(run_id: str, episode: int = 1) -> dict[str, Any]:
+    """콘티 단계까지 나온 것 — 회차 제목과 컷별 대사·연출."""
+    wt = STORY / "runs" / run_id / "webtoon"
+    doc = _read_json(wt, f"ep{int(episode):02d}_cuts.json")
+    cuts = []
+    raw = doc.get("cuts") if isinstance(doc, dict) else doc
+    for c in (raw or []):
+        if not isinstance(c, dict):
+            continue
+        cuts.append({
+            "no": int(c.get("cut_number") or c.get("no") or len(cuts) + 1),
+            "shot": str(c.get("shot") or "").strip(),
+            "speaker": str(c.get("speaker") or "").strip(),
+            "dialogue": str(c.get("dialogue") or "").strip(),
+            "narration": str(c.get("narration") or "").strip(),
+            "thought": str(c.get("thought") or "").strip(),
+            "sfx": str(c.get("sfx") or "").strip(),
+            "description": str(c.get("description") or "").strip(),
+        })
+    return {
+        "title": episode_title(run_id, episode),
+        "episode": int(episode),
+        "cuts": cuts,
+    }
 
 
 def read_art_qa(run_id: str, episode: int = 1) -> dict[int, dict[str, Any]]:
