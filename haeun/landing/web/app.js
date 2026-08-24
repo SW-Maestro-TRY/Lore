@@ -35,7 +35,7 @@ const STYLE_THUMB = {
   cinematic: "/static/samples/ex-cinematic-1.jpg",
   lineart:   "/static/samples/ex-lineart-2.jpg",
   romance:   "/static/samples/ex-romance-1.jpg",
-  webtoon:   "/static/lou/lou-idle.png",
+  webtoon:   "/static/samples/ex-webtoon-1.jpg",
   pastel:    "/static/lou/world-begins.png",
   noir:      "/static/lou/world-depth.png",
   shoujo:    "/static/lou/lou-happy.png",
@@ -1625,6 +1625,11 @@ async function showMockResult() {
   // 눌러 보면 로그인 전 사용자가 실제로 만나는 그 가입 창이 그대로 열린다.
   const claim = $("#claimBtn");
   if (claim) claim.hidden = false;
+  // 공유도 같은 이유로 보여 준다 — 목업은 단추가 몇 개인지까지 보여주는
+  // 자리라, 진짜 화면에는 있는 것이 여기서만 빠지면 배치가 달라 보인다.
+  // (눌러도 보낼 작품이 없으므로 "아직 공유할 작품이 없습니다" 가 뜬다.)
+  const share = $("#shareBtn");
+  if (share) share.hidden = false;
 }
 
 async function showResult(attempt = 0) {
@@ -1909,7 +1914,10 @@ async function doShare() {
 function setupShare() {
   const btn = $("#shareBtn");
   if (!btn) return;
-  btn.textContent = canOpenShareSheet() ? "공유" : "링크 복사";
+  // 글자는 HTML 에 적힌 "공유하기" 를 그대로 둔다. 예전에는 여기서
+  // "공유"/"링크 복사" 로 갈아 끼웠는데, 그때는 이것이 다 읽은 자리의 작은
+  // 글자 링크였다. 지금은 머리의 단추 넷 중 하나라 옆 단추들과 말투가
+  // 맞아야 하고, 무슨 일이 일어나는지는 눌러 보면 토스트가 말해 준다.
   btn.addEventListener("click", doShare);
 }
 
@@ -2515,8 +2523,21 @@ document.addEventListener("DOMContentLoaded", () => {
     fr.readAsDataURL(file);
   });
 
-  $("#cancelBtn").addEventListener("click", async () => {
-    if (!jobId || !confirm("만드는 것을 중단할까요? 지금까지 그린 컷은 남습니다.")) return;
+  // 중단은 두 걸음이다 — 누르면 확인 창이 뜨고, 거기서 한 번 더 눌러야 실제로
+  // 멈춘다. 되돌릴 수 없고 크레딧도 안 돌아오기 때문이다.
+  $("#cancelBtn").addEventListener("click", () => {
+    if (!jobId) return;
+    $("#cancelModal").hidden = false;
+    // 기본 손가락은 "계속 만들기" 위에 둔다 — 엔터 한 번에 중단되면 안 된다.
+    $("#cancelKeep").focus();
+  });
+  $("#cancelKeep").addEventListener("click", () => { $("#cancelModal").hidden = true; });
+  $("#cancelModal").addEventListener("click", e => {
+    if (e.target.id === "cancelModal") $("#cancelModal").hidden = true;   // 바깥 누르면 닫기
+  });
+  $("#cancelConfirm").addEventListener("click", async () => {
+    $("#cancelModal").hidden = true;
+    if (!jobId) return;
     await fetch(`/api/jobs/${jobId}/cancel`, { method: "POST" });
   });
   $("#sheetApproveBtn").addEventListener("click", () => sendSheetDecision("approve"));
@@ -2526,7 +2547,6 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#boardApproveBtn").addEventListener("click", () => sendBoardDecision("approve"));
   $("#boardRetryBtn").addEventListener("click", () => sendBoardDecision("retry"));
   $("#artqaApproveBtn").addEventListener("click", sendArtqaDecision);
-  $("#againBtn").addEventListener("click", forget);
   $("#nextEpBtn").addEventListener("click", openNextEp);
   $("#moreCutsBtn").addEventListener("click", continueCuts);
   $("#nextEpGo").addEventListener("click", startNextEp);
@@ -2539,13 +2559,11 @@ document.addEventListener("DOMContentLoaded", () => {
     closeNextEp();
   });
   setupShare();
-  $("#scriptBtn").addEventListener("click", () => {
-    $("#scriptPanel").hidden = !$("#scriptPanel").hidden;
+  // 웹툰 한 편은 길다 — 다 읽고 나서 위로 돌아가려면 한참 끌어야 한다.
+  $("#toTopBtn")?.addEventListener("click", () => {
+    document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" });
   });
-  $("#scriptClose").addEventListener("click", () => { $("#scriptPanel").hidden = true; });
-  // 완성본에서 목록으로 되돌아가는 길. 목록을 다시 그리는 이유: 그 사이에
-  // 이어 만든 회차가 생겼을 수 있다.
-  $("#backToWorks").addEventListener("click", () => showWorks());
+  $("#scriptClose")?.addEventListener("click", () => { $("#scriptPanel").hidden = true; });
 
   // 주소로 바로 열기.
   //   /result                이미 만들어 둔 **마지막** 1화를 결과 화면으로

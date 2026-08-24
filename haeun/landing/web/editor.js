@@ -699,9 +699,27 @@ function setDock(open) {
   if (close) close.setAttribute("aria-label", "도구 닫기");
 }
 
+/* 크레딧 내역은 **다른 모드**다 — 그림에 얹는 자리가 아니라 얼마 썼는지
+   보는 자리다. 그런데 예전에는 내역만 펴고 팔레트를 그대로 뒀더니, "내역" 을
+   눌렀는데 말풍선 목록이 같이 나왔다. 심지어 힌트("누르면 1번째 장에
+   올라갑니다")가 내역 위에 남아서 무엇을 누르라는 건지도 어긋났다.
+   여는 동안에는 얹는 도구를 통째로 접는다. */
+function setLedger(open) {
+  $("#dockLedger").hidden = !open;
+  for (const sel of ["#dockTabs", "#dockHint", "#dockGrid"]) {
+    const el = $(sel);
+    if (el) el.hidden = open;
+  }
+  // 속성 칸은 고른 요소가 있을 때만 뜨는 것이라, 닫을 때 무조건 펴면 안 된다.
+  if (open) $("#dockProps").hidden = true;
+  else paintProps();
+  if (open) setDock(true);
+}
+
 function paintProps() {
   const it = findItem();
-  $("#dockProps").hidden = !it;
+  // 내역을 보는 중에는 속성 칸을 끼워 넣지 않는다 (위 setLedger 참고).
+  $("#dockProps").hidden = !it || !$("#dockLedger").hidden;
   if (!it) return;
   setDock(true);
   $("#propTitle").textContent =
@@ -987,11 +1005,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     paintProps();
   });
 
-  $("#ledgerBtn")?.addEventListener("click", () => {
-    $("#dockLedger").hidden = !$("#dockLedger").hidden;
-    if (!$("#dockLedger").hidden) setDock(true);
-  });
-  $("#ledgerClose").addEventListener("click", () => { $("#dockLedger").hidden = true; });
+  $("#ledgerBtn")?.addEventListener("click", () => setLedger($("#dockLedger").hidden));
+  $("#ledgerClose").addEventListener("click", () => setLedger(false));
 
   // 저장은 항목을 건드릴 때마다 자동으로 된다(save() → pushSoon()). 이 단추는
   // **지금 당장** 올리고 그 결과를 말해 주는 자리다 — 자동 저장은 조용해서,

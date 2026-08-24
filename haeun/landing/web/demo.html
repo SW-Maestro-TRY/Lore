@@ -32,9 +32,7 @@
           <ol class="rail" id="rail"></ol>
         </details>
       </div>
-      <div class="progress-clock">
-        <button type="button" class="btn btn-quiet btn-sm" onclick="location.href='/'">중단</button>
-      </div>
+
     </header>
 
     <div class="play">
@@ -53,8 +51,48 @@
       <p class="tip-text" id="tipText"></p>
     </div>
 
+    <!-- 본편(index.html)과 같은 자리·같은 모양. 되돌릴 수 없는 일은 화면
+         한가운데가 아니라 찾아가서 눌러야 하는 자리에 둔다. -->
+    <div class="cancel-row">
+      <button type="button" class="btn btn-danger btn-sm" id="cancelBtn">만들기 중단</button>
+    </div>
   </div>
 </section>
+
+<!-- 본편과 같은 확인 창. 목업이라 실제로 멈출 것은 없고 홈으로 나간다. -->
+<div class="modal-veil" id="cancelModal" hidden>
+  <div class="modal-box modal-narrow" role="dialog" aria-modal="true"
+       aria-labelledby="cancelModalTitle">
+    <h3 id="cancelModalTitle">정말로 중단하시겠습니까?</h3>
+    <p class="cancel-warn"><b>크레딧은 환불되지 않습니다.</b></p>
+    <p class="cancel-sub">지금까지 그려 둔 장은 그대로 남습니다 — 편집실에서 볼 수 있습니다.</p>
+    <div class="cancel-actions">
+      <button type="button" class="btn btn-quiet" id="cancelKeep">계속 만들기</button>
+      <button type="button" class="btn btn-danger" id="cancelConfirm">중단하기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // demo 는 app.js 를 안 불러온다 — 여기 없는 요소를 배선하다 죽는다.
+  // 그래서 같은 동작을 작게 다시 쓴다(본편이 바뀌면 여기도 맞춰야 한다).
+  (function () {
+    var modal = document.getElementById("cancelModal");
+    document.getElementById("cancelBtn").addEventListener("click", function () {
+      modal.hidden = false;
+      document.getElementById("cancelKeep").focus();
+    });
+    document.getElementById("cancelKeep").addEventListener("click", function () {
+      modal.hidden = true;
+    });
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal) modal.hidden = true;
+    });
+    document.getElementById("cancelConfirm").addEventListener("click", function () {
+      location.href = "/";
+    });
+  })();
+</script>
 
 <!-- 루와 노는 자리는 본편과 **같은 파일**을 쓴다. 예전에는 여기에 같은 로직을
      베껴 뒀다가 본편이 바뀔 때마다 둘이 갈라졌다. -->
