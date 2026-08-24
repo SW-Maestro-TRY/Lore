@@ -235,6 +235,8 @@ TODO, ACTIVE, DONE, ERROR, SKIP = "todo", "active", "done", "error", "skip"
 # 목록에서 아예 뺀다 — SKIP 으로 두면 화면에 회색 줄로 남아서 "안 한 것"처럼
 # 보이는데, 실제로는 **할 필요가 없는** 것이다.
 NEXT_STAGE_KEYS = ("board", "art", "bind")
+# 이어 그리기 — 콘티는 이미 있고 **그림만 더 그린다**. 그래서 두 단계뿐이다.
+MORE_STAGE_KEYS = ("art", "bind")
 
 
 # --------------------------------------------------------------------------- #
@@ -458,6 +460,11 @@ class Job:
     # 그게 흔들린다. run_id 도 새로 파지 않고 이 값을 그대로 쓴다.
     episode: int = 1
 
+    # 이어 그리기 — 앞 3컷을 미리보기로 본 뒤 "다음 장면도 볼까요?" 를 누르면
+    # 여기에 다음 시작 컷 번호가 담긴다(4, 7, 10 …). 0 이면 보통 실행이다.
+    # 콘티·이야기·시트는 이미 있으므로 그림과 이어 붙이기만 다시 돈다.
+    cut_from: int = 0
+
     # queued | running | awaiting_story_approval | awaiting_board_approval |
     # awaiting_sheet_approval |
     # done | error | cancelled
@@ -561,11 +568,20 @@ class Job:
         """이어 만들기인가 (2화 이상)."""
         return int(self.episode) > 1
 
+    @property
+    def is_more(self) -> bool:
+        """이어 그리기인가 (같은 화의 다음 컷들)."""
+        return int(self.cut_from) > 0
+
     def build_stages(self) -> None:
         self.stages = []
         webtoon = layout_mode(self.form) == "webtoon"
-        specs = ([sp for sp in STAGE_SPEC if sp["key"] in NEXT_STAGE_KEYS]
-                 if self.is_next else STAGE_SPEC)
+        if self.is_more:
+            specs = [sp for sp in STAGE_SPEC if sp["key"] in MORE_STAGE_KEYS]
+        elif self.is_next:
+            specs = [sp for sp in STAGE_SPEC if sp["key"] in NEXT_STAGE_KEYS]
+        else:
+            specs = STAGE_SPEC
         for spec in specs:
             steps = []
             for key, label in spec["steps"]:
@@ -675,6 +691,8 @@ class Job:
                              if self.saw_refusal and self.run_id else []),
                 "episode": int(self.episode),
                 "is_next": self.is_next,
+                "is_more": self.is_more,
+                "cut_from": int(self.cut_from),
                 # 화면이 어느 검수 화면을 어떤 깊이로 그릴지 정하는 근거.
                 # 폼(form)에서 다시 읽으므로 새로고침해도 같은 값이 나온다.
                 "expert": expert_mode(self.form),
@@ -1108,6 +1126,40 @@ def _merge_sheet_corrections(run_dir: Path, fixes: list[str]) -> None:
 # 아직 없다. 그래서 승인 화면은 "이대로 진행" 과 "중단" 만 준다.
 # --------------------------------------------------------------------------- #
 
+def _more_cuts_stages(job: "Job", run_id: str, job_dir: Path) -> None:
+    """같은 화의 다음 컷들을 그리고 다시 이어 붙인다.
+
+    콘티(webtoon)는 건드리지 않는다 — 이미 있는 것을 그대로 읽어서 지정한
+    컷 범위만 run.py 에 넘긴다. 끝나면 episode.png 를 **처음부터 지금까지
+    그린 전부**로 다시 굽는다(--cuts 없이 한 번 더 돌리는 것이 아니라,
+    run.py 가 이미 있는 장을 재사용하고 이어 붙이기만 다시 한다).
+    """
+    first = int(job.cut_from)
+    last = first + CUTS_PER_SHEET - 1
+
+    _enter(job, 0)
+    job.note(f"{first}~{last}컷을 그리는 중")
+    mode = run_mode(run_id, job.episode)
+    art_cmd = ["run.py", "--run-id", run_id, "--episode", str(job.episode),
+               "--mode", mode, "-c", CONDITION, "--style", job.style,
+               "--config", str(job_dir / "config.yaml"), "--yes",
+               "--cuts", f"{first}-{last}"]
+
+    def art_or_bind(line: str) -> None:
+        if job.stage_i == 0 and (line.startswith("episode.png")
+                                 or line.startswith("완료:")):
+            _leave(job)
+            _enter(job, 1)
+            job.note("그린 장을 순서대로 이어 붙이는 중")
+
+    code = job._run(art_cmd, WEBTOON, art_or_bind)
+    if job._cancel:
+        raise Failed("취소됨")
+    if code != 0:
+        raise Failed("다음 장면을 그리지 못했습니다.")
+    _leave(job)
+
+
 def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
     # ---- 1. 콘티 ---------------------------------------------------------- #
     _enter(job, 0)
@@ -1243,6 +1295,21 @@ def execute(job: Job) -> None:
         # 그게 흔들린다(같은 캐릭터가 다른 얼굴이 된다). run_id 도 새로 파지
         # 않고 그대로 쓰므로, 스토리 하네스의 series.json·ledger.json 이
         # 이어져서 앞 화의 인물·설정·미회수 복선이 그대로 따라온다.
+        # ---- 이어 그리기 — 콘티는 그대로 두고 다음 컷만 그린다 ---------- #
+        #
+        # 미리보기로 앞 3컷을 본 사람이 "다음 장면도 볼까요?" 를 누른 자리다.
+        # 이야기·시트·콘티는 이미 run 안에 있으므로 다시 돌지 않는다 — 다시
+        # 돌면 같은 화의 앞뒤가 서로 다른 콘티에서 나오게 된다.
+        if job.is_more:
+            run_id = job.run_id or ""
+            if not run_id:
+                raise Failed("이어 그릴 작품을 찾지 못했습니다.")
+            (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
+            _more_cuts_stages(job, run_id, job_dir)
+            job.status = "done"
+            job.finished_at = time.time()
+            return
+
         if job.is_next:
             run_id = job.run_id or ""
             if not run_id:
@@ -2043,6 +2110,39 @@ def unit_image(run_id: str, no: int, episode: int = 1) -> Path | None:
     return None
 
 
+def drawn_units(run_id: str, episode: int = 1) -> int:
+    """지금까지 그려 둔 장(또는 컷)이 몇 개인가.
+
+    미리보기는 앞 3컷(=한 장)만 그리므로 보통 1 이다. "다음 장면"을 누를
+    때마다 하나씩 는다. 번호는 1부터 이어지므로, 빈 자리가 나오면 거기서
+    센 것을 그대로 쓴다 — 중간이 비어 있으면 그 앞까지만 그린 것이다.
+    """
+    n = 0
+    while unit_image(run_id, n + 1, episode) is not None:
+        n += 1
+        if n > 500:                      # 망가진 폴더에서 무한히 돌지 않게
+            break
+    return n
+
+
+def planned_cuts(run_id: str, episode: int = 1) -> int:
+    """콘티가 계획한 컷 수. 못 읽으면 0 — 그때는 상한을 안 건다."""
+    for name in ("scenes.json", "episode.json", "board.json"):
+        data = _read_json(episode_dir(run_id, episode), name)
+        cuts = data.get("cuts") if isinstance(data, dict) else None
+        if isinstance(cuts, list) and cuts:
+            return len(cuts)
+        scenes = data.get("scenes") if isinstance(data, dict) else None
+        if isinstance(scenes, list) and scenes:
+            total = 0
+            for sc in scenes:
+                nums = (sc or {}).get("cut_numbers") or []
+                total += len(nums)
+            if total:
+                return total
+    return 0
+
+
 def run_mode(run_id: str, episode: int = 1) -> str:
     """이 실행이 어느 모드로 그려졌는가 — "scene" | "cut".
 
@@ -2675,6 +2775,13 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
         "style_label": "",
         "logline": str(p2.get("logline") or ""),
         "cuts_per_sheet": str(CUTS_PER_SHEET),
+        # 이어 그리기 판단용 — 지금까지 그린 장 수와 콘티가 계획한 컷 수.
+        # more_cuts 가 참이면 화면에 "다음 장면 이어서 보기" 가 뜬다.
+        "drawn_units": drawn_units(run_id, episode),
+        "planned_cuts": planned_cuts(run_id, episode),
+        "more_cuts": bool(planned_cuts(run_id, episode)
+                          and drawn_units(run_id, episode) * CUTS_PER_SHEET
+                          < planned_cuts(run_id, episode)),
         "scenes": scenes,
     }
 
@@ -2916,6 +3023,42 @@ class Runner:
         job.build_stages()
         (job_dir / "input.json").write_text(
             json.dumps(form, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        with self._lock:
+            self.jobs[job_id] = job
+            self.queue.append(job_id)
+            if self._worker is None or not self._worker.is_alive():
+                self._worker = threading.Thread(target=self._drain, daemon=True)
+                self._worker.start()
+        return job
+
+    def create_more(self, run_id: str, cut_from: int) -> Job:
+        """이어 그리기 — 같은 화의 다음 컷들 (미리보기 다음 장면).
+
+        create_next() 와 달리 회차가 안 늘어난다. 콘티도 안 만든다. 하는 일은
+        "이미 있는 콘티의 다음 3컷을 그리고 다시 이어 붙이기" 하나뿐이다.
+        그림 설정(그림체·연출)은 처음 만들 때 쓴 값을 그대로 물려받는다 —
+        여기서 다시 고르게 하면 같은 화의 앞뒤가 다른 그림체가 된다.
+        """
+        form = dict(origin_form(run_id) or {})
+        if not form:
+            raise Failed("이어 그릴 작품을 찾지 못했습니다.")
+        form.pop("preview", None)          # 컷 범위는 cut_from 이 정한다
+
+        job_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4]
+        job_dir = JOBS_DIR / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        style = str(form.get("style") or "webtoon")
+        if style not in STYLES:
+            style = "webtoon"
+        job = Job(id=job_id, form=form, dir=job_dir, style=style,
+                  preview=False, has_photo=False,
+                  cut_from=max(1, int(cut_from)))
+        job.run_id = run_id
+        job.build_stages()
+        (job_dir / "input.json").write_text(
+            json.dumps(form, ensure_ascii=False, indent=2), encoding="utf-8")
+        (job_dir / "run_id.txt").write_text(run_id, encoding="utf-8")
 
         with self._lock:
             self.jobs[job_id] = job

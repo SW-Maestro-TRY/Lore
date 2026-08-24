@@ -374,7 +374,7 @@ function layoutMode() {
 }
 
 function paintCost() {
-  const preview = $("#previewToggle").checked;
+  const preview = true;              // 지금은 미리보기만 만든다
   const base = preview ? CREDIT.preview : CREDIT.full;
   const cost = layoutMode() === "webtoon" ? base * WEBTOON_MULT : base;
   $("#costChip").textContent = `−${cost} 크레딧`;
@@ -397,10 +397,10 @@ function paintCost() {
    칸은 여전히 하나도 안 지웠다 — 전부 같은 <form> 안에 있고 보이는 걸음만
    바뀐다. 그래서 collect() 는 어느 걸음에 서 있든 전부 걷는다. */
 
-const WIZ_FORK = 2;                       // 갈림길이 있는 걸음
-const WIZ_SIMPLE_LAST = 2;                // 스토리 모드는 여기서 출발한다
+const WIZ_FORK = 3;                       // 갈림길이 있는 걸음
+const WIZ_SIMPLE_LAST = 3;                // 빠르게 보기는 여기서 출발한다
 const WIZ_EXPERT_LAST = 5;
-const WIZ_NAMES = ["수면", "갈림길", "깊은 바다", "심해", "바닥"];
+const WIZ_NAMES = ["수면", "항해", "갈림길", "심해", "바닥"];
 let wizStep = 1;
 /* 이번 실행에서 고른 길. localStorage 의 모드와 **일부러 따로 둔다** —
    지난번에 전문가로 만들었다고 이번에도 말없이 전문가 길로 끌고 가면, 갈림길
@@ -565,7 +565,9 @@ function collect() {
     head_ratio: form.head_ratio ? form.head_ratio.value : "",
     // fast(한 장에 3컷) | webtoon(컷마다 한 장). 비우면 fast — 지금까지의 방식이다.
     layout_mode: form.layout_mode ? form.layout_mode.value : "fast",
-    preview:    $("#previewToggle").checked,
+    // 지금은 **항상 미리보기**다. 한 화를 통째로 굽기 전에 앞 3컷을 먼저
+    // 보여주고, 마음에 들면 이어서 그린다(/api/runs/<id>/continue).
+    preview:    true,
     // 전문 모드인가. 서버는 이 한 값으로 어디서 멈출지(checkpoints)와 무엇을
     // 고를 수 있는지를 정한다. 이번 실행에 박히므로, 도는 도중에 모드를
     // 바꿔도 이 작업의 검수 지점은 안 바뀐다.
@@ -1266,6 +1268,20 @@ function paintResult(r) {
   $("#nextEpBtn").hidden = !nextEpCtx;
   if (nextEpCtx) $("#nextEpBtn").textContent = `${nextEpCtx.next}화 만들기`;
 
+  // 이어 그리기 — 콘티에 아직 안 그린 컷이 남아 있을 때만 뜬다.
+  // 한 화를 통째로 굽지 않고 앞부분부터 보여주는 것이 지금의 방식이라,
+  // 대부분의 결과 화면에는 이 단추가 있다.
+  moreCtx = (resultRunId && r.more_cuts)
+    ? { runId: resultRunId, episode: epNo,
+        drawn: r.drawn_units || 0, total: r.planned_cuts || 0 }
+    : null;
+  $("#moreCutsBtn").hidden = !moreCtx;
+  if (moreCtx) {
+    const shown = moreCtx.drawn * Number(r.cuts_per_sheet || 3);
+    $("#moreCutsBtn").textContent =
+      `다음 장면 이어서 보기 (${shown}/${moreCtx.total}컷)`;
+  }
+
   view("result");
   $("#progress").hidden = true;
   $("#works").hidden = true;
@@ -1532,6 +1548,32 @@ async function openExisting(id) {
   }
 }
 
+/* 이어 그리기 — 같은 화의 다음 3컷. 회차가 안 늘어나므로 다음 화 만들기와
+   다른 자리다. 시작하면 진행 화면으로 넘어가고, 끝나면 결과가 다시 그려진다. */
+async function continueCuts() {
+  if (!moreCtx) return;
+  const btn = $("#moreCutsBtn");
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = "루가 이어 그리는 중…";
+  try {
+    const res = await fetch(
+      `/api/runs/${encodeURIComponent(moreCtx.runId)}/continue`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ episode: moreCtx.episode }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "이어 그리지 못했습니다");
+    jobId = data.id;
+    sessionStorage.setItem("lore_job", jobId);
+    shownCuts = new Set();
+    startPolling();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = label;
+  }
+}
+
 /* ------------------------------------------------- 다음 화 이어서 만들기 (#72)
  *
  * 1화용 진행 화면(#progress)을 쓰지 않는다. 이어 만들기는 도는 단계가 셋뿐이고
@@ -1541,7 +1583,8 @@ async function openExisting(id) {
  * 회차 번호는 **서버가 정한다.** 화면이 보낸 번호를 믿으면 창을 두 개 띄워
  * 놓고 눌렀을 때 같은 번호를 두 번 만들려 든다. */
 
-let nextEpCtx = null;      // { runId, next, character, title }
+let nextEpCtx = null;
+let moreCtx = null;      // { runId, next, character, title }
 let nextEpJob = null;      // 도는 중인 작업 id
 let nextEpPoll = null;
 
@@ -1731,6 +1774,7 @@ function forget() {
   // 앞 작품의 다음 화 화면이 뒤에 남는다.
   clearInterval(nextEpPoll); nextEpPoll = null; nextEpJob = null; nextEpCtx = null;
   $("#nextEp").hidden = true; $("#nextEpBtn").hidden = true;
+  $("#moreCutsBtn").hidden = true;
   // /result 로 들어왔으면 주소도 되돌린다 — 안 그러면 새로고침에 다시 결과가 뜬다.
   if (location.pathname !== "/" || location.search) history.replaceState(null, "", "/");
   document.querySelector("#studio").scrollIntoView();
@@ -1749,7 +1793,6 @@ document.addEventListener("DOMContentLoaded", () => {
   loadFeedbackTags();
   setupPhoto();
   $("#form").addEventListener("submit", submit);
-  $("#previewToggle").addEventListener("change", paintCost);
   // 연출(빠르게/웹툰)이 바뀌면 그림 호출 수가 달라져 비용도 달라진다.
   document.querySelectorAll('input[name="layout_mode"]').forEach(
     el => el.addEventListener("change", paintCost));
@@ -1774,6 +1817,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#artqaApproveBtn").addEventListener("click", sendArtqaDecision);
   $("#againBtn").addEventListener("click", forget);
   $("#nextEpBtn").addEventListener("click", openNextEp);
+  $("#moreCutsBtn").addEventListener("click", continueCuts);
   $("#nextEpGo").addEventListener("click", startNextEp);
   $("#nextEpBack").addEventListener("click", closeNextEp);
   $("#nextEpCancel").addEventListener("click", async () => {

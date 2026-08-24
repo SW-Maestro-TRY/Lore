@@ -635,6 +635,36 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"id": job.id, "episode": job.episode,
                                "queue_position": runner.position(job.id)})
 
+        # 이어 그리기 — 미리보기로 앞 3컷을 본 뒤 "다음 장면도 볼까요?".
+        # 회차는 안 늘어나고 콘티도 안 만든다. 다음 3컷을 그리고 다시 잇는다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/continue", url.path)
+        if m:
+            run_id = m.group(1)
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            episode = int(body.get("episode") or 1)
+            drawn = pipeline.drawn_units(run_id, episode)
+            if not drawn:
+                return self._error(404, "아직 그린 장면이 없습니다")
+            total = pipeline.planned_cuts(run_id, episode)
+            cut_from = drawn * pipeline.CUTS_PER_SHEET + 1
+            if total and cut_from > total:
+                return self._error(409, "더 그릴 장면이 없습니다")
+            busy = [j for j in runner.jobs.values()
+                    if j.run_id == run_id and j.status in
+                    ("queued", "running", "awaiting_board_approval",
+                     "awaiting_story_approval", "awaiting_sheet_approval")]
+            if busy:
+                return self._error(409, "이 작품은 지금 만드는 중입니다")
+            try:
+                job = runner.create_more(run_id, cut_from)
+            except pipeline.Failed as exc:
+                return self._error(409, str(exc))
+            return self._json({"id": job.id, "cut_from": cut_from,
+                               "queue_position": runner.position(job.id)})
+
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/cancel", url.path)
         if m:
             job = runner.get(m.group(1))
