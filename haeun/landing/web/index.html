@@ -20,9 +20,44 @@
     <a href="#gallery">결과 예시</a>
     <a href="/works">내 웹툰</a>
     <a href="/editor">편집실</a>
+    <!-- 계정이 없어서 잔액은 이 브라우저(uid) 기준이다 — app.js 의 getUid(). -->
+    <button type="button" class="credit-pill" id="chargeBtn" title="크레딧 충전하기">
+      <span class="credit-pill-icon">◈</span>
+      <span id="creditPillNum">…</span>
+      <span class="credit-pill-plus">+</span>
+    </button>
     <button type="button" class="btn btn-ghost" id="startBtnTop">만들어보기</button>
   </nav>
 </header>
+
+<!-- ============================================= 크레딧 충전(프리토타이핑) ===
+     실제 PG 연동이 없다 — 카드사를 고르면 그 자리에서 크레딧을 지급한다.
+     카드번호를 넣는 화면은 아예 없다(카드 고르기 딱 한 걸음 앞에서 멈춘다). -->
+<div class="modal-veil" id="chargeModal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="chargeModalTitle">
+    <button type="button" class="modal-close" id="chargeModalClose" aria-label="닫기">×</button>
+
+    <div class="charge-step" data-charge-step="package">
+      <h3 id="chargeModalTitle">크레딧 충전</h3>
+      <p class="charge-balance">지금 잔액 <b id="chargeCurBalance">0</b> 크레딧</p>
+      <div class="charge-packages" id="chargePackages"></div>
+    </div>
+
+    <div class="charge-step" data-charge-step="card" hidden>
+      <button type="button" class="charge-back" id="chargeBack">‹ 상품 다시 고르기</button>
+      <h3>결제 수단을 골라 주세요</h3>
+      <p class="charge-pkg-summary" id="chargePkgSummary"></p>
+      <div class="charge-cards" id="chargeCards"></div>
+    </div>
+
+    <div class="charge-step" data-charge-step="done" hidden>
+      <div class="charge-done-emoji">🎉</div>
+      <h3>결제가 완료됐어요</h3>
+      <p id="chargeDoneBody"></p>
+      <button type="button" class="btn btn-primary btn-big" id="chargeDoneClose">확인</button>
+    </div>
+  </div>
+</div>
 
 <!-- ================================================= 모드 고르기 ========= -->
 <!--

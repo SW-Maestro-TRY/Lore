@@ -1160,3 +1160,103 @@ body[data-step="2"] .studio {
 @media (min-width: 820px) {
   .fork { grid-template-columns: 1fr 1fr; }
 }
+
+/* ------------------------------------------------------- 크레딧 · 충전 ---- *
+ * 잔액 배지(topbar) + 프리토타이핑 결제 모달. 계정이 없어 잔액은 이 브라우저
+ * (uid) 기준이다 — app.js 의 getUid(). */
+
+.credit-pill {
+  display: inline-flex; align-items: center; gap: .35em;
+  padding: .45em .8em; border-radius: 999px; border: 1px solid var(--line-2);
+  background: var(--card-2); color: var(--text);
+  font-weight: 700; font-size: .85rem; font-variant-numeric: tabular-nums;
+  cursor: pointer; transition: border-color .15s ease, background .15s ease;
+}
+.credit-pill:hover { border-color: var(--gold); background: var(--paper); }
+.credit-pill-icon { color: var(--gold); }
+.credit-pill-plus {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.3em; height: 1.3em; border-radius: 50%;
+  background: var(--gold); color: #fff; font-size: .8em; line-height: 1;
+}
+
+/* 폼 아래 오류 줄(#submitNote)에 끼워 넣는 "충전하기" — <a> 대신 <button> 이라
+   기본 스타일을 지운다. */
+button.inline-link {
+  background: none; border: none; padding: 0; font: inherit; cursor: pointer;
+  color: var(--gold); border-bottom: 1px solid rgba(161,115,46,.4);
+}
+button.inline-link:hover { color: #f0d090; }
+
+.modal-veil {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(24,32,29,.45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-box {
+  position: relative; width: 100%; max-width: 420px; max-height: 86vh;
+  overflow-y: auto;
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 28px 24px 24px;
+}
+.modal-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 32px; height: 32px; border-radius: 50%; border: none;
+  background: var(--card-2); color: var(--muted); font-size: 1.1rem; line-height: 1;
+  cursor: pointer;
+}
+.modal-close:hover { background: var(--line); color: var(--text); }
+
+.charge-step h3 { margin: 0 0 .3em; font-size: 1.15rem; }
+.charge-balance { margin: 0 0 1.1em; color: var(--muted); font-size: .9rem; }
+.charge-balance b { color: var(--gold); }
+
+.charge-packages { display: grid; gap: 10px; }
+.charge-pkg {
+  display: grid; grid-template-columns: 1fr auto; align-items: center;
+  gap: 2px 10px; position: relative;
+  text-align: left; padding: 14px 16px; border-radius: 12px;
+  border: 1px solid var(--line-2); background: var(--card-2); cursor: pointer;
+  font: inherit; transition: border-color .15s ease, background .15s ease;
+}
+.charge-pkg:hover { border-color: var(--accent); background: var(--paper); }
+.charge-pkg-badge {
+  position: absolute; top: -9px; left: 12px;
+  background: var(--gold); color: #fff; font-size: .68rem; font-weight: 800;
+  padding: .15em .55em; border-radius: 999px;
+}
+.charge-pkg-label { font-weight: 700; }
+.charge-pkg-credits { grid-row: 2; color: var(--accent-d); font-weight: 700; font-size: .88rem; }
+.charge-pkg-price {
+  grid-column: 2; grid-row: 1 / span 2; align-self: center;
+  font-family: var(--mono); font-weight: 700; color: var(--muted);
+}
+
+.charge-back {
+  background: none; border: none; padding: 0; margin-bottom: .6em;
+  color: var(--muted); font: inherit; font-size: .85rem; cursor: pointer;
+}
+.charge-back:hover { color: var(--text); }
+.charge-pkg-summary {
+  margin: 0 0 1.1em; padding: .6em .9em; border-radius: 10px;
+  background: var(--card-2); font-size: .88rem; color: var(--text);
+}
+
+/* 카드사 고르기 — 실제 PG 화면을 흉내만 낸다. 카드번호 입력칸은 없다:
+   이 버튼을 누르는 순간이 곧 결제 완료다. */
+.charge-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.charge-card {
+  padding: 1.1em .6em; border-radius: 12px; border: 1px solid var(--line-2);
+  background: var(--card-2); font: inherit; font-weight: 700; font-size: .88rem;
+  cursor: pointer; transition: border-color .15s ease, transform .1s ease;
+}
+.charge-card:hover { border-color: var(--gold); background: var(--paper); }
+.charge-card:active { transform: translateY(1px); }
+
+.charge-done-emoji { font-size: 2.4rem; text-align: center; margin-bottom: .2em; }
+[data-charge-step="done"] h3 { text-align: center; }
+[data-charge-step="done"] p {
+  color: var(--muted); font-size: .92rem; line-height: 1.6; text-align: center;
+  margin: 0 0 1.3em;
+}

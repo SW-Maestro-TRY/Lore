@@ -361,26 +361,155 @@ function setupPhoto() {
 }
 
 
-/* 크레딧은 **목업**입니다 — 실제 과금과 무관하고, 화면에 얼마가 드는지
-   보이게 하려고만 둡니다. 편집실(/editor)의 잔액과 같은 값을 씁니다. */
-const CREDIT = { full: 240, preview: 60 };
-// 컷 모드는 컷 하나가 이미지 한 장이라 그림 호출이 3배다 (지금은 한 장에 3컷).
-// 이야기 단계 비용은 그대로이므로 그림 몫만 늘려 어림한다.
-const WEBTOON_MULT = 3;
+/* ------------------------------------------------------------------ 크레딧
+ *
+ * 실제로 소진되는 잔액이다(credits.py). 계정이 없으므로 브라우저가 만든
+ * uid(localStorage)로 사람을 구분한다 — lore_mode 와 같은 방식이다.
+ * 비용 값 자체는 여기서 안 정한다 — /api/config 가 credits.py 를 그대로
+ * 내려주므로, 화면의 "−N 크레딧" 표시가 실제로 빠지는 값과 늘 같다. */
+
+function getUid() {
+  let uid = localStorage.getItem("lore_uid");
+  if (!uid) {
+    uid = "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem("lore_uid", uid);
+  }
+  return uid;
+}
+const UID = getUid();
+
+let creditCost = { full: 0, preview: 0, webtoon_mult: 1 };   // /api/config 도착 전 임시값
+let creditPackages = [];
+let creditBalance = null;
+
+async function loadCreditConfig() {
+  try {
+    const cfg = await getConfig();
+    creditCost = cfg.credit_cost || creditCost;
+    creditPackages = cfg.credit_packages || [];
+  } catch { /* 못 받아도 화면은 뜬다 — 비용 칩만 0으로 보인다 */ }
+  paintCost();
+}
+
+async function refreshCreditBalance() {
+  try {
+    const res = await fetch(`/api/credits?uid=${encodeURIComponent(UID)}`);
+    creditBalance = (await res.json()).balance;
+  } catch { creditBalance = null; }
+  paintCreditPill();
+}
+
+function paintCreditPill() {
+  const el = $("#creditPillNum");
+  if (el) el.textContent = creditBalance == null ? "…" : creditBalance.toLocaleString("ko-KR");
+  const cur = $("#chargeCurBalance");
+  if (cur) cur.textContent = creditBalance == null ? "…" : creditBalance.toLocaleString("ko-KR");
+}
 
 function layoutMode() {
   const el = document.querySelector('input[name="layout_mode"]:checked');
   return el ? el.value : "fast";
 }
 
+function creationCost() {
+  const preview = $("#previewToggle").checked;
+  const base = preview ? creditCost.preview : creditCost.full;
+  return layoutMode() === "webtoon" ? base * (creditCost.webtoon_mult || 1) : base;
+}
+
 function paintCost() {
   const preview = $("#previewToggle").checked;
-  const base = preview ? CREDIT.preview : CREDIT.full;
-  const cost = layoutMode() === "webtoon" ? base * WEBTOON_MULT : base;
-  $("#costChip").textContent = `−${cost} 크레딧`;
+  $("#costChip").textContent = `−${creationCost()} 크레딧`;
   $("#submitBtn").firstChild.textContent =
     preview ? "미리보기 만들기 " : "웹툰 만들기 ";
 }
+
+/* ---- 충전 모달 — 프리토타이핑 결제 ------------------------------------- *
+ *
+ * 걸음: 상품 고르기 → 카드사 고르기 → 완료. 실제 PG 연동이 없고, 카드번호를
+ * 넣는 화면도 아예 없다 — "지불 의사가 있는가" 를 보는 게 목적이라, 카드
+ * 고르기 딱 한 걸음 앞에서 멈추고 그 자리에서 바로 지급한다. */
+
+const CARD_ISSUERS = ["신한카드", "국민카드", "삼성카드", "현대카드", "카카오페이", "토스페이"];
+let chargeSelectedPkg = null;
+
+function chargeStep(name) {
+  $$(".charge-step").forEach(el => { el.hidden = el.dataset.chargeStep !== name; });
+}
+
+function renderChargePackages() {
+  const box = $("#chargePackages");
+  box.innerHTML = "";
+  creditPackages.forEach(pkg => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "charge-pkg";
+    b.innerHTML = `${pkg.badge ? `<span class="charge-pkg-badge">${pkg.badge}</span>` : ""}
+      <span class="charge-pkg-label">${pkg.label}</span>
+      <span class="charge-pkg-credits">${pkg.credits.toLocaleString("ko-KR")} 크레딧</span>
+      <span class="charge-pkg-price">${pkg.price.toLocaleString("ko-KR")}원</span>`;
+    b.addEventListener("click", () => {
+      chargeSelectedPkg = pkg;
+      $("#chargePkgSummary").textContent =
+        `${pkg.label} · ${pkg.credits.toLocaleString("ko-KR")}크레딧 · ${pkg.price.toLocaleString("ko-KR")}원`;
+      chargeStep("card");
+      renderChargeCards();
+    });
+    box.appendChild(b);
+  });
+}
+
+function renderChargeCards() {
+  const box = $("#chargeCards");
+  box.innerHTML = "";
+  CARD_ISSUERS.forEach(name => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "charge-card";
+    b.textContent = name;
+    b.addEventListener("click", finishCharge);
+    box.appendChild(b);
+  });
+}
+
+async function finishCharge() {
+  if (!chargeSelectedPkg) return;
+  chargeStep("done");
+  $("#chargeDoneBody").textContent = "결제 처리 중…";
+  try {
+    const res = await fetch("/api/credits/charge", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: UID, package_id: chargeSelectedPkg.id }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "결제에 실패했습니다");
+    creditBalance = data.balance;
+    paintCreditPill();
+    $("#chargeDoneBody").textContent =
+      `${data.credits_added.toLocaleString("ko-KR")}크레딧이 들어왔어요. `
+      + "(지금은 정식 결제 붙기 전 테스트 기간이라, 이번 결제는 저희가 대신 "
+      + "내드렸어요 — 실제로 카드에서 빠져나간 돈은 없습니다!)";
+  } catch (err) {
+    $("#chargeDoneBody").textContent = err.message;
+  }
+}
+
+function openChargeModal() {
+  chargeSelectedPkg = null;
+  $("#chargeModal").hidden = false;
+  chargeStep("package");
+  paintCreditPill();
+  renderChargePackages();
+  // "충전하기" 를 누른 시점을 기록한다 — 카드사까지 고른 시점(charge_success)과
+  // 비교하면 클릭률(지불 의사)이 나온다. 실패해도 화면은 그대로 쓸 수 있어야
+  // 한다.
+  fetch("/api/credits/charge-click", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uid: UID }),
+  }).catch(() => {});
+}
+
+function closeChargeModal() { $("#chargeModal").hidden = true; }
 
 /* ------------------------------------------------------------- 위저드
 
@@ -552,6 +681,7 @@ function collect() {
     if (el.value.trim()) fields[el.dataset.field] = el.value.trim();
   });
   return {
+    uid:        UID,
     name:       form.name.value.trim(),
     character:  form.character.value.trim(),
     photo_note: form.photo_note.value.trim(),
@@ -596,9 +726,25 @@ async function startRun() {
       body: JSON.stringify(collect()),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "시작하지 못했습니다");
+    if (!res.ok) {
+      if (res.status === 402) {
+        // 크레딧이 모자란다 — 그 자리에서 충전 모달로 보낸다.
+        note.textContent = "";
+        note.append(document.createTextNode((data.error || "크레딧이 모자랍니다") + " "));
+        const chargeLink = document.createElement("button");
+        chargeLink.type = "button";
+        chargeLink.className = "inline-link";
+        chargeLink.textContent = "충전하기";
+        chargeLink.addEventListener("click", openChargeModal);
+        note.appendChild(chargeLink);
+        note.classList.add("error");
+        return;
+      }
+      throw new Error(data.error || "시작하지 못했습니다");
+    }
     jobId = data.id;
     sessionStorage.setItem("lore_job", jobId);
+    if (data.credit_balance != null) { creditBalance = data.credit_balance; paintCreditPill(); }
     shownCuts = new Set();
     startPolling();
   } catch (err) {
@@ -1759,7 +1905,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // 위저드도 폼을 만든 뒤에 켠다(그림체·항목 칸이 있어야 요약을 그릴 수 있다).
   setupWizard();
   setupLou();
+  loadCreditConfig();       // /api/config 가 도착하면 비용 칩을 실제 값으로 다시 그린다
+  refreshCreditBalance();
   paintCost();
+
+  $("#chargeBtn").addEventListener("click", openChargeModal);
+  $("#chargeModalClose").addEventListener("click", closeChargeModal);
+  $("#chargeBack").addEventListener("click", () => chargeStep("package"));
+  $("#chargeDoneClose").addEventListener("click", closeChargeModal);
+  // 바탕을 눌러도 닫힌다 — 상자 자체를 누른 건 안 닫는다.
+  $("#chargeModal").addEventListener("click", e => {
+    if (e.target.id === "chargeModal") closeChargeModal();
+  });
 
   $("#cancelBtn").addEventListener("click", async () => {
     if (!jobId || !confirm("만드는 것을 중단할까요? 지금까지 그린 컷은 남습니다.")) return;

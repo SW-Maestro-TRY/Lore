@@ -24,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, quote
 
+import credits
 import pipeline
 
 HERE = Path(__file__).resolve().parent
@@ -102,8 +103,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
                    "application/json; charset=utf-8")
 
-    def _error(self, code: int, message: str) -> None:
-        self._json({"error": message}, code)
+    def _error(self, code: int, message: str, **extra) -> None:
+        self._json({"error": message, **extra}, code)
 
     def _file(self, path: Path, download: str = "") -> None:
         if not path.exists() or not path.is_file():
@@ -223,7 +224,22 @@ class Handler(BaseHTTPRequestHandler):
                 },
                 "art_qa_regen_default": pipeline.ART_QA_REGEN_DEFAULT,
                 "art_qa_regen_max": pipeline.ART_QA_REGEN_MAX,
+                # 크레딧 — 값 자체는 credits.py 가 유일한 출처. 화면의 비용
+                # 표시(−N 크레딧)가 실제로 빠지는 값과 어긋나지 않게 여기서 받는다.
+                "credit_cost": {
+                    "full": credits.CREDIT_FULL,
+                    "preview": credits.CREDIT_PREVIEW,
+                    "webtoon_mult": credits.CREDIT_WEBTOON_MULT,
+                },
+                "credit_packages": credits.PACKAGES,
             })
+
+        # 잔액 — uid 는 브라우저(localStorage)가 만들어 붙인다(계정이 없어서).
+        if path == "/api/credits":
+            uid = (query.get("uid") or [""])[0]
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            return self._json({"balance": credits.balance(uid)})
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
         # 작업(Job)을 거치지 않는다 — 하네스를 직접 돌린 run 도 똑같이 열린다.
@@ -449,6 +465,41 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:                                  # noqa: N802
         url = urlparse(self.path)
 
+        # ---- 크레딧 · 프리토타이핑 결제 ----------------------------------- #
+        #
+        # "충전하기" 를 누른 순간(카드 고르기 전)과, 카드사를 골라 결제를
+        # 끝낸 순간을 따로 기록한다 — 이 둘의 차이가 "몇 명이 눌렀는데 몇
+        # 명이 실제로 끝까지 갔는가"(클릭률)다.
+        if url.path == "/api/credits/charge-click":
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            uid = str(body.get("uid") or "")
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            credits.log_event("charge_click", uid)
+            return self._json({"ok": True})
+
+        if url.path == "/api/credits/charge":
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            uid = str(body.get("uid") or "")
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            package_id = str(body.get("package_id") or "")
+            pkg, bal = credits.charge(uid, package_id)
+            if not pkg:
+                return self._error(400, "그런 상품이 없습니다")
+            # 카드사를 고른 것 = 결제를 끝낸 것(가짜 결제라 카드번호 입력은
+            # 없다). 실제 PG 응답이 아니라 여기서 바로 지급하고 로그를 남긴다.
+            credits.log_event("charge_success", uid, package_id=package_id,
+                              credits=pkg["credits"], price=pkg["price"])
+            return self._json({"balance": bal, "credits_added": pkg["credits"],
+                               "package": pkg})
+
         # 작가 규칙 저장. 상한을 넘으면 자르지 않고 거절한다 — 화면이 그 오류를
         # 그대로 보여줘야 작가가 자기 글이 어디까지 실리는지 안다.
         m = re.fullmatch(r"/api/runs/([\w.-]+)/memory", url.path)
@@ -531,8 +582,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "캐릭터를 알 수 있는 것이 하나는 필요합니다 — "
                                         "이름 · 설명 · 항목 · 사진 중 아무거나요.")
 
+            # 크레딧 소진 — 화면의 비용 표시(costChip)와 같은 계산이다
+            # (credits.creation_cost). 잔액은 미리 확인만 하고, 실제로 떼는
+            # 것은 job 이 만들어진 **뒤**다 — job 생성이 실패했는데 이미
+            # 크레딧부터 떼면(환불 기능은 범위 밖이라) 사용자가 그냥 잃는다.
+            uid = str(form.pop("uid", "") or "")
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            cost = credits.creation_cost(bool(form.get("preview")),
+                                         str(form.get("layout_mode") or "fast"))
+            bal = credits.balance(uid)
+            if bal < cost:
+                return self._error(
+                    402, f"크레딧이 모자랍니다 (필요 {cost} · 보유 {bal})",
+                    reason="insufficient_credit", need=cost, balance=bal)
+
             job = runner.create(form, photo)
-            return self._json({"id": job.id, "queue_position": runner.position(job.id)})
+            _, bal = credits.spend(uid, cost)
+            return self._json({"id": job.id, "queue_position": runner.position(job.id),
+                               "credit_balance": bal})
 
         # ---- 장(Scene) 다시 그리기 ------------------------------------- #
         #
