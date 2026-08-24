@@ -412,21 +412,14 @@ function layoutMode() {
 }
 
 function creationCost() {
-  const preview = $("#previewToggle").checked;
-  const base = preview ? creditCost.preview : creditCost.full;
+  // 지금은 미리보기만 만든다(previewToggle 은 없어졌다) — collect() 도 항상 preview:true.
+  const base = creditCost.preview;
   return layoutMode() === "webtoon" ? base * (creditCost.webtoon_mult || 1) : base;
 }
 
 function paintCost() {
-<<<<<<< HEAD
-  const preview = true;              // 지금은 미리보기만 만든다
-  const base = preview ? CREDIT.preview : CREDIT.full;
-  const cost = layoutMode() === "webtoon" ? base * WEBTOON_MULT : base;
-  $("#costChip").textContent = `−${cost} 크레딧`;
-=======
-  const preview = $("#previewToggle").checked;
+  const preview = true;              // 지금은 미리보기만 만든다 — collect() 도 항상 preview:true
   $("#costChip").textContent = `−${creationCost()} 크레딧`;
->>>>>>> agent/credit-payment
   $("#submitBtn").firstChild.textContent =
     preview ? "미리보기 만들기 " : "웹툰 만들기 ";
 }
