@@ -678,6 +678,7 @@ async function onSignup(e) {
     nickname: form.nickname.value.trim(),
     password: form.password.value,
     photo: signupPhoto,
+    agree_terms: form.agree_terms.checked,
   };
   try {
     const res = await fetch("/api/account/signup", {
@@ -856,6 +857,7 @@ function wizGo(n, scroll = true) {
   // 갈림길에서는 아래 단추를 안 쓴다 — 고르는 것이 곧 넘어가는 것이다.
   $("#wizNext").hidden = atFork || atEnd;
   $("#submitBtn").hidden = !(atEnd && !atFork);
+  $("#ipAgreeLine").hidden = !(atEnd && !atFork);
   $("#wizSkip").hidden = atFork || atEnd;
   // 1걸음에서도 뒤로 갈 곳이 있다 — 홈. 그래서 안 죽인다.
   $("#wizPrev").textContent = wizStep === 1 ? "홈으로" : "이전";
@@ -891,8 +893,6 @@ function setupWizard() {
   };
   const start = $("#startBtn");
   if (start) start.addEventListener("click", openCreate);
-  const startTop = $("#startBtnTop");
-  if (startTop) startTop.addEventListener("click", openCreate);
   // 1걸음의 약속: 사진과 이름은 필수다. 없이 넘어가려 하면 그 자리에서 말한다.
   const step1ok = () => {
     const form = $("#form");
@@ -966,6 +966,8 @@ function collect() {
     art_qa_regen_max: form.art_qa_regen_max
       ? Number(form.art_qa_regen_max.value) : 2,
     photos_data: photos,
+    // 만들 때마다 짧게 받는 저작권 확인 — 서버도 이 값을 다시 확인한다.
+    agree_ip: $("#ipAgreeCheck").checked,
   };
 }
 
@@ -978,6 +980,13 @@ async function startRun() {
   const fork = $$(".fork-card");
   note.hidden = false;
   note.classList.remove("error");
+  // 저작권 확인 체크는 여기서 먼저 막는다 — 서버도 다시 확인하지만, 여기서
+  // 잡아야 사람이 왜 안 되는지 바로 안다(서버 오류로 보이면 안 된다).
+  if (!$("#ipAgreeCheck").checked) {
+    note.textContent = "저작권 확인에 동의해야 만들 수 있습니다";
+    note.classList.add("error");
+    return;
+  }
   note.textContent = "루가 바다로 나가는 중…";
   btn.disabled = true;
   fork.forEach(c => { c.disabled = true; });

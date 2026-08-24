@@ -1,6 +1,6 @@
 /* LORE 웹툰 스튜디오 — 랜딩 + 진행 + 결과, 한 장.
 
-   마스코트 고래 **루(LOU)** 의 세계관을 그대로 화면에 씁니다. 이야기는 바다고,
+   마스코트 고래 **루(LOU)** 의 세계관을 그대로 화면에 씁니다. 이야기의 바다고,
    루가 그 바다를 안내합니다. 그래서 바탕은 수면 가까운 밝은 모래빛(beige)이고,
    깊이 들어가는 자리일수록 민트에서 심해로 내려갑니다.
 
@@ -1046,11 +1046,7 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 
 /* 좁은 화면에서 무너뜨려야 하는 것들 — 이건 max-width 가 맞다 */
 .topnav a:not(.btn) { display: none; }   /* 480px 프레임 — 캔버스처럼 버튼만 */
-/* 크레딧·계정 배지가 topnav 에 들어오면서 480px 안에서 자리가 빠듯해졌다.
-   부제("웹툰 스튜디오")는 장식이라 먼저 접는다 — 안 접으면 줄바꿈되며
-   topbar 가 두 줄로 무너진다. */
-.brand-sub { display: none; }
-/* 만들기 화면에서는 "만들어보기" 단추가 갈 곳이 지금 이 화면이라 숨긴다.
+/* 만들기 화면에서는 topnav 가 갈 곳이 지금 이 화면이라 숨긴다.
    깊은 물 위에서 대비를 맞추느라 애쓸 이유도 없다. */
 body[data-view="create"] .topnav { display: none; }
 @media (max-width: 560px) {
@@ -1476,4 +1472,25 @@ button.inline-link:hover { color: #f0d090; }
   margin: 0 0 16px; padding: .8em 1em; border-radius: 14px;
   background: var(--card-2); border: 1px solid var(--line);
   font-size: .88rem; color: var(--text);
+}
+
+/* ----------------------------------------------------------- 저작권 확인 --- *
+ * 회원가입(약관 동의, 한 번)과 웹툰 만들기(매번, 지금 올린 것에 대한 확인)
+ * 둘 다 쓰는 공통 체크 줄. 전문적인 이용약관 문서가 아니라 짧은 요약 —
+ * 지금 단계에서는 이 정도로 충분하다는 멘토 피드백을 따른다. */
+.terms-box {
+  margin: 4px 0 14px; padding: .7em .9em; border-radius: 10px;
+  background: var(--card-2); font-size: .82rem; color: var(--muted);
+}
+.terms-box summary { cursor: pointer; font-weight: 700; color: var(--accent-d); }
+.terms-box ul { margin: .6em 0 0; padding-left: 1.2em; }
+.terms-box li { margin-bottom: .35em; line-height: 1.5; }
+
+.agree-line {
+  display: flex; align-items: flex-start; gap: .5em;
+  font-size: .84rem; color: var(--text); line-height: 1.5;
+  margin: 0 0 14px; cursor: pointer;
+}
+.agree-line input[type="checkbox"] {
+  flex: none; width: 1.15em; height: 1.15em; margin-top: .1em; accent-color: var(--accent);
 }

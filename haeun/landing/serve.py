@@ -628,7 +628,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "입력을 읽지 못했습니다")
             account, err = accounts.signup(str(body.get("nickname") or ""),
                                            str(body.get("password") or ""),
-                                           body.get("photo"))
+                                           body.get("photo"),
+                                           bool(body.get("agree_terms")))
             if err:
                 return self._error(400, err)
             token = accounts.create_session(account["key"])
@@ -799,6 +800,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "캐릭터를 알 수 있는 것이 하나는 필요합니다 — "
                                         "이름 · 설명 · 항목 · 사진 중 아무거나요.")
 
+            # 저작권 확인 — 회원가입 때 약관 동의(accounts.signup)와 별개로,
+            # 만들 때마다 짧게 다시 받는다. 로그인 여부와 무관하게 게스트도
+            # 걸린다(uid 는 있으므로).
+            if not form.pop("agree_ip", False):
+                return self._error(400, "저작권 확인에 동의해야 만들 수 있습니다")
+
             # 크레딧 소진 — 화면의 비용 표시(costChip)와 같은 계산이다
             # (credits.creation_cost). 잔액은 미리 확인만 하고, 실제로 떼는
             # 것은 job 이 만들어진 **뒤**다 — job 생성이 실패했는데 이미
@@ -816,6 +823,7 @@ class Handler(BaseHTTPRequestHandler):
 
             job = runner.create(form, photo)
             _, bal = credits.spend(uid, cost)
+            accounts.log_ip_consent(uid, job.id)
             return self._json({"id": job.id, "queue_position": runner.position(job.id),
                                "credit_balance": bal})
 

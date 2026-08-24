@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LORE — 이야기는 바다, 루가 안내합니다</title>
+<title>LORE — 이야기의 바다, 루가 안내합니다</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐋</text></svg>">
 </head>
@@ -43,7 +43,6 @@
       <img class="account-pill-avatar" id="accountAvatarImg" alt="" hidden>
       <span id="accountPillLabel">로그인</span>
     </button>
-    <button type="button" class="btn btn-ghost" id="startBtnTop">만들어보기</button>
   </nav>
 </header>
 
@@ -90,6 +89,20 @@
             <input type="file" id="photoUpload" accept="image/*" hidden>
           </label>
         </div>
+
+        <details class="terms-box">
+          <summary>이용약관 요약 보기</summary>
+          <ul>
+            <li>업로드한 사진·설정은 본인이 저작권을 가지고 있거나 사용 권한이 있는 것이어야 합니다.</li>
+            <li>다른 사람의 캐릭터·작품을 무단으로 써서 문제가 생기면 책임은 올린 사람에게 있습니다.</li>
+            <li>LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.</li>
+          </ul>
+        </details>
+        <label class="agree-line">
+          <input type="checkbox" name="agree_terms" required>
+          <span>위 내용에 동의합니다</span>
+        </label>
+
         <p class="account-error" id="signupError" hidden></p>
         <button type="submit" class="btn btn-primary btn-big">회원가입</button>
       </form>
@@ -161,7 +174,7 @@
          않는다. 물이 화면 전체에 흐르고, 내용은 가운데 한 줄기로 내려간다. -->
     <div class="top-intro">
       <p class="hero-kicker">Story is the sea</p>
-      <h1>이야기는 바다,<br>루가 안내합니다.</h1>
+      <h1>이야기의 바다,<br>루가 안내합니다.</h1>
       <p class="top-lede">캐릭터 한 명을 띄우면, 고래 루가 이야기 조각을 모아
          웹툰 한 화로 데려옵니다.</p>
       <img class="hero-lou" src="/static/lou/lou-hero.png" alt="LORE의 마스코트 고래 루">
@@ -327,6 +340,13 @@
         <input type="hidden" name="head_ratio" value="">
         <input type="hidden" name="art_qa_regen_max" value="2">
       </section>
+
+      <!-- 만들 때마다 짧게 확인 — 회원가입 때 한 번 동의한 것과 별개로,
+           "지금 올린 이 사진·설정"에 대한 확인을 매번 받는다. -->
+      <label class="agree-line" id="ipAgreeLine" hidden>
+        <input type="checkbox" id="ipAgreeCheck">
+        <span>업로드한 사진·설정에 대한 저작권 문제가 없음을 확인합니다</span>
+      </label>
 
       <div class="wiz-foot">
         <button type="button" class="btn btn-quiet wiz-prev" id="wizPrev">이전</button>
