@@ -11,17 +11,14 @@
 
 <header class="topbar">
   <a class="brand" href="/" id="brandHome">
-    <!-- 로고는 루다. 이미지가 아니라 인라인 SVG 인 이유: 32px 에서도 또렷해야
-         하고, 걸음마다 물빛이 달라지면 색이 따라가야 한다(currentColor). -->
+    <!-- 로고는 루 본인이다. 도형으로 그린 실루엣 대신 실제 그림을 쓴다 —
+         마스코트가 있는데 로고만 다른 고래일 이유가 없다.
+         표정을 갈아 끼우지 않는 이유: 32px 에서는 표정이 안 읽혀서(별·말풍선은
+         얼룩이 된다) 로고만 매번 달라 보이고 얻는 건 없다. 표정은 크게 나오는
+         자리(로딩·빈 화면·결과)에서 쓴다. 도형 로고는 버리지 않고
+         design-reference/logo/lou-logo-mark.svg 에 남겨 뒀다. -->
     <span class="brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 32 32" width="22" height="22">
-        <path fill="currentColor" d="M20 16l9.2-6c.7-.5 1.6.1 1.4 1l-1.7 5 1.7 5c.2.9-.7 1.5-1.4 1l-9.2-6z"/>
-        <path fill="currentColor" d="M10.6 9.2c.9-4.4 3-7.1 6.2-8-.9 3.2-.5 6 1.3 8.4-2.5-.6-5-.7-7.5-.4z"/>
-        <ellipse cx="13" cy="16" rx="11" ry="8.4" fill="currentColor"/>
-        <path fill="currentColor" d="M9.6 23.2c-.9 2.5-.3 4.5 1.7 5.4.5-2.2 1.6-3.8 3.1-4.7-1.6 0-3.2-.2-4.8-.7z"/>
-        <!-- 눈은 배지 바탕색으로 뚫는다 — 흰색으로 두면 흰 고래에서 사라진다 -->
-        <circle cx="7.2" cy="14.2" r="1.25" fill="var(--brand-bg, var(--accent))"/>
-      </svg>
+      <img src="/static/lou/mark.png" alt="" width="30" height="30">
     </span>
     <span class="brand-name">LORE</span>
     <span class="brand-sub">웹툰 스튜디오</span>
@@ -180,7 +177,9 @@
       <h1>이야기의 바다,<br>루가 안내합니다.</h1>
       <p class="top-lede">캐릭터 한 명을 띄우면, 고래 루가 이야기 조각을 모아
          웹툰 한 화로 데려옵니다.</p>
-      <img class="hero-lou" src="/static/lou/lou-hero.png" alt="LORE의 마스코트 고래 루">
+      <!-- 들어올 때마다 루의 그림이 바뀐다(app.js 가 고른다). 여기 적힌 것은
+           자바스크립트가 안 돌 때 나올 기본 그림이다. -->
+      <img class="hero-lou" id="heroLou" src="/static/lou/hero-whale2.png" alt="LORE의 마스코트 고래 루">
       <div class="hero-cta">
         <button type="button" class="btn btn-primary" id="startBtn">내 캐릭터로 시작하기</button>
         <a class="btn btn-shell" href="/works">둘러보기</a>
@@ -345,20 +344,39 @@
       </section>
 
       <!-- 만들 때마다 짧게 확인 — 회원가입 때 한 번 동의한 것과 별개로,
-           "지금 올린 이 사진·설정"에 대한 확인을 매번 받는다. -->
-      <label class="agree-line" id="ipAgreeLine" hidden>
-        <input type="checkbox" id="ipAgreeCheck">
-        <span>업로드한 사진·설정에 대한 저작권 문제가 없음을 확인합니다</span>
-      </label>
-
-      <div class="wiz-foot">
-        <button type="button" class="btn btn-quiet wiz-prev" id="wizPrev">이전</button>
-        <button type="button" class="btn btn-primary wiz-next" id="wizNext">다음</button>
-        <button type="submit" class="btn btn-primary wiz-go" id="submitBtn" hidden>
-          웹툰 만들기 <span class="cost-chip" id="costChip">−240 크레딧</span>
-        </button>
+           "지금 올린 이 사진·설정"에 대한 확인을 매번 받는다.
+           심해 위에 그냥 얹으면 글자도 네모도 물에 묻혀 안 보였다. 그래서
+           마지막 걸음의 다른 것들처럼 종이 위에 올린다. -->
+      <div class="ip-agree" id="ipAgreeLine" hidden>
+        <label class="agree-line">
+          <input type="checkbox" id="ipAgreeCheck" required>
+          <span>업로드한 사진·설정에 대한 저작권 문제가 없음을 확인합니다
+            <em class="req">필수</em></span>
+        </label>
+        <!-- 한 줄 확인만 있으면 무엇에 동의하는지 모른 채 누르게 된다.
+             접어 두고, 궁금한 사람만 펴 보게 한다. -->
+        <details class="terms-box">
+          <summary>이용약관 요약 보기</summary>
+          <ul>
+            <li>업로드한 사진·설정은 본인이 저작권을 가지고 있거나 사용 권한이 있는 것이어야 합니다.</li>
+            <li>다른 사람의 캐릭터·작품을 무단으로 써서 문제가 생기면 책임은 올린 사람에게 있습니다.</li>
+            <li>LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.</li>
+          </ul>
+        </details>
       </div>
-      <p class="submit-note" id="submitNote">사진과 이름만 있으면 시작합니다.</p>
+
+      <!-- 단추 줄과 그 아래 한 줄은 한 덩어리로 화면 바닥에 붙어 있는다.
+           따로 두면 둘 다 바닥에 붙으려다 서로를 가린다. -->
+      <div class="wiz-actions">
+        <div class="wiz-foot">
+          <button type="button" class="btn btn-quiet wiz-prev" id="wizPrev">이전</button>
+          <button type="button" class="btn btn-primary wiz-next" id="wizNext">다음</button>
+          <button type="submit" class="btn btn-primary wiz-go" id="submitBtn" hidden>
+            웹툰 만들기 <span class="cost-chip" id="costChip">−240 크레딧</span>
+          </button>
+        </div>
+        <p class="submit-note" id="submitNote">사진과 이름만 있으면 시작합니다.</p>
+      </div>
     </form>
     </div>
 </section>

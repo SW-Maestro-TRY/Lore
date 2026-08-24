@@ -892,6 +892,21 @@ function setupWizard() {
     view("landing");
     window.scrollTo(0, 0);
   };
+  // 홈의 루 그림은 들어올 때마다 바뀐다. 헤더 로고와 달리 여기는 크게 나와서
+  // 두 그림이 확실히 달라 보이고, 정체를 나타내는 표식이 아니라 그림이라
+  // 바뀌어도 알아보는 데 지장이 없다.
+  // 새로고침마다가 아니라 한 번 들어온 동안은 같은 그림을 유지한다 — 화면을
+  // 오갈 때마다 고래가 바뀌면 산만하다.
+  const hero = $("#heroLou");
+  if (hero) {
+    const HEROES = ["/static/lou/hero-whale2.png", "/static/lou/hero-whale1.png"];
+    let pick = sessionStorage.getItem("lore_hero");
+    if (!HEROES.includes(pick)) {
+      pick = HEROES[Math.floor(Math.random() * HEROES.length)];
+      sessionStorage.setItem("lore_hero", pick);
+    }
+    if (hero.getAttribute("src") !== pick) hero.src = pick;
+  }
   const start = $("#startBtn");
   if (start) start.addEventListener("click", openCreate);
   // 헤더의 LORE 는 어느 화면에서든 홈으로 돌아가는 문이다. 새로고침 없이

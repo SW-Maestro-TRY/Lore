@@ -136,14 +136,16 @@ body[data-view="nextep"]  .topbar { display: none; }
 }
 .brand { display: flex; align-items: baseline; gap: 10px; }
 /* 루 로고. 상자 색과 고래 색이 걸음마다 함께 바뀐다(아래 헤더 절 참고). */
+/* 로고 배지. 루 자신이 옅은 민트라, 뱃지를 걸음마다 물빛으로 칠하면 얕은
+   물에서는 고래가 바탕에 묻힌다. 그래서 뱃지는 물빛을 안 따라가고 늘 흰
+   물웅덩이로 둔다 — 모래빛부터 심해까지 어느 깊이에서도 고래가 뜬다. */
 .brand-mark {
-  width: 32px; height: 32px; border-radius: 10px;
-  background: var(--brand-bg, var(--accent));
-  color: var(--brand-fg, #fff);
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(255,255,255,.78);
   display: grid; place-items: center; align-self: center;
-  transition: background .5s ease, color .5s ease;
+  overflow: hidden;
 }
-.brand-mark svg { display: block; }
+.brand-mark img { display: block; width: 30px; height: 30px; object-fit: contain; }
 .brand-name { font-weight: 800; letter-spacing: .1em; }
 .brand-sub { color: var(--dim); font-size: .82rem; }
 .topnav { display: flex; align-items: center; gap: 22px; font-size: .92rem; }
@@ -183,12 +185,10 @@ body[data-view="nextep"]  .topbar { display: none; }
   color: var(--accent-d); line-height: 1.22;
 }
 .top-lede { color: var(--muted); font-size: .98rem; line-height: 1.6; margin: 16px 0 0; }
-.hero-lou {
-  width: min(86%, 330px); margin: 10px auto 0; display: block;
-  mix-blend-mode: multiply;
-  -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000 60%, transparent 100%);
-          mask-image: radial-gradient(closest-side at 50% 50%, #000 60%, transparent 100%);
-}
+/* 예전 그림은 바탕이 종이색으로 구워져 있어서 곱하기 합성 + 원형 마스크로
+   네모를 지워야 했다. 지금 그림(main/whale2)은 알파가 살아 있고 가장자리가
+   스스로 흐려지므로 둘 다 뺀다 — 마스크를 남기면 물결·별 끝이 잘린다. */
+.hero-lou { width: min(96%, 380px); margin: 4px auto 0; display: block; }
 .hero-cta { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .hero-cta .btn { width: 100%; padding: 1.05em; border-radius: 999px; font-weight: 700; font-size: 1rem; }
 .hero-cta .btn-primary { background: var(--sea-mid); color: #fff; }
@@ -574,9 +574,67 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
 .wiz-auto { font-style: normal; color: var(--dim); font-weight: 500; }
 
 /* 아래 단추 */
-.wiz-foot { display: flex; gap: 10px; margin-top: 24px; }
+/* 걸음의 단추 줄은 화면 바닥에 붙어 있는다.
+   원래는 글의 흐름 그대로 맨 아래 있었는데, 마지막 걸음은 내용이 화면보다
+   길어서 「이전」도 「만들기」도 스크롤해야 나왔다 — 마지막 걸음에서 만들기
+   단추가 안 보이는 건 말이 안 된다.
+   바탕은 종이가 아니라 그 걸음 물빛의 **제일 아랫색**이다. 종이 띠를 깔면
+   물이 바닥에서 끊긴다. 위쪽은 투명하게 흐려서 내용이 그 아래로 잠기듯
+   지나간다. */
+.wiz-actions {
+  position: sticky; bottom: 0; z-index: 30;
+  margin-top: 24px; padding: 10px 0;
+  background: var(--foot-bg, var(--ink));
+  transition: background .5s ease;
+}
+/* 띠 자체는 불투명해야 한다 — 반투명하게 두면 단추가 그 밑 종이 카드에 겹쳐
+   글씨가 묻힌다(3걸음에서 「이전」이 실제로 안 보였다). 대신 띠 바로 위에
+   같은 색이 흐려지는 구간을 얹어, 내용이 띠 아래로 잠기듯 지나가게 한다. */
+.wiz-actions::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 28px;
+  background: linear-gradient(180deg, transparent, var(--foot-bg, var(--ink)));
+  pointer-events: none;
+}
+.wiz-foot { display: flex; gap: 10px; }
 .wiz-foot .btn { flex: 1; padding: 1.05em; }
 .wiz-prev { flex: 0 0 auto !important; min-width: 96px; }
+
+/* 각 걸음의 물빛이 바닥에서 무슨 색인지 — 위 .studio 그라디언트의 끝색이다.
+   여기가 어긋나면 단추 줄만 다른 색 띠로 떠 보인다. */
+body[data-view="create"][data-step="1"] { --foot-bg: var(--ink); }
+body[data-view="create"][data-step="2"] { --foot-bg: var(--sea-shore); }
+body[data-view="create"][data-step="3"] { --foot-bg: var(--sea-mid); }
+body[data-view="create"][data-step="4"] { --foot-bg: #335c56; }
+body[data-view="create"][data-step="5"] { --foot-bg: var(--sea-abyss); }
+
+/* 「이전」은 옅은 먹빛 바탕에 짙은 글씨다 — 밝은 걸음에서는 맞지만 짙은 물
+   위에서는 바탕도 글씨도 물에 잠겨 단추가 있는 줄도 모른다. 바닥이 짙어지는
+   3걸음부터 흰 쪽으로 뒤집는다(제목과 기준이 다른 이유: 제목은 물의 윗색,
+   단추 줄은 아랫색 위에 있다). */
+body[data-step="3"] .wiz-prev,
+body[data-step="4"] .wiz-prev,
+body[data-step="5"] .wiz-prev {
+  background: rgba(247,243,234,.16); color: var(--on-sea);
+}
+body[data-step="3"] .wiz-prev:hover,
+body[data-step="4"] .wiz-prev:hover,
+body[data-step="5"] .wiz-prev:hover { background: rgba(247,243,234,.26); }
+
+/* 주 단추도 같이 뒤집는다. 단추 바탕(--sea-mid)과 띠 바탕이 3걸음에서 정확히
+   같은 색이라, 그냥 두면 「다음」이 띠에 녹아 없어진다(실제로 안 보였다).
+   깊은 물에서는 캔버스처럼 모래빛 단추에 짙은 글씨로 간다. */
+body[data-step="3"] .wiz-next, body[data-step="3"] .wiz-go,
+body[data-step="4"] .wiz-next, body[data-step="4"] .wiz-go,
+body[data-step="5"] .wiz-next, body[data-step="5"] .wiz-go {
+  background: var(--sea-sand); color: var(--sea-abyss);
+}
+body[data-step="3"] .cost-chip,
+body[data-step="4"] .cost-chip,
+body[data-step="5"] .cost-chip { background: rgba(31,63,60,.1); color: var(--sea-abyss); }
+/* 단추 줄 아래 한 줄 안내도 같은 띠 위에 놓인다. */
+body[data-step="3"] .submit-note,
+body[data-step="4"] .submit-note,
+body[data-step="5"] .submit-note { color: rgba(247,243,234,.72); }
 .wiz-foot .btn:disabled { opacity: .35; }
 body[data-step="6"] .wiz-go { background: var(--sea-sand); color: var(--sea-abyss); }
 body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
@@ -1512,6 +1570,28 @@ button.inline-link:hover { color: #f0d090; }
 .agree-line input[type="checkbox"] {
   flex: none; width: 1.15em; height: 1.15em; margin-top: .1em; accent-color: var(--accent);
 }
+
+/* 마지막 걸음의 저작권 확인. 짙은 물 위에 맨몸으로 얹으면 글자도 빈 네모도
+   물에 묻혀서, 필수인 줄도 모르고 지나친다. 종이 위에 올려 물과 분리한다. */
+.ip-agree {
+  background: var(--card); border-radius: 16px;
+  padding: 14px 16px; margin: 0 0 14px;
+  box-shadow: 0 1px 0 rgba(38,64,58,.05), 0 8px 24px rgba(38,64,58,.07);
+}
+.ip-agree .agree-line { margin: 0; font-size: .86rem; align-items: center; }
+/* 빈 네모는 얇은 회색 테두리라 종이 위에서도 흐리다 — 필수 항목이니 눈에
+   먼저 들어와야 한다. */
+.ip-agree .agree-line input[type="checkbox"] {
+  width: 1.3em; height: 1.3em; margin-top: 0;
+  outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px;
+}
+.ip-agree .agree-line:has(:checked) input[type="checkbox"] { outline-color: transparent; }
+.ip-agree .req {
+  font-style: normal; font-size: .72rem; font-weight: 700;
+  color: var(--accent-d); background: var(--sea-shore);
+  padding: .1em .5em; border-radius: 999px; margin-left: .35em; white-space: nowrap;
+}
+.ip-agree .terms-box { margin: 10px 0 0; background: var(--ink-2); }
 
 /* 내려받기 옆 한 줄 — 파일에 LORE 표시가 붙는다는 것을 미리 말한다.
    받아 보고 나서 알면 "왜 붙었지?" 가 되고, 미리 알면 그냥 사실이 된다. */
