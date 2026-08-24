@@ -15,7 +15,11 @@
 <header class="ed-top">
   <div class="ed-top-row">
     <a class="brand" href="/">
-      <span class="brand-mark">L</span>
+      <!-- 홈과 같은 로고다 — 편집실만 옛 "L" 배지로 남아 있었다. 여기도
+           들어올 때마다 루의 표정이 바뀐다(editor.js 가 고른다). -->
+      <span class="brand-mark" aria-hidden="true">
+        <img id="brandLou" src="/static/lou/logo-2-default.png" alt="" width="30" height="30">
+      </span>
       <span class="brand-name">LORE</span>
       <span class="brand-sub">편집실</span>
     </a>
@@ -194,6 +198,7 @@
 <div class="toast" id="toast" hidden></div>
 <div class="fly" id="fly" hidden></div>
 
+<script src="/static/lou-art.js"></script>
 <script src="/static/editor.js"></script>
 
 <aside class="script-panel" id="scriptPanel" hidden>

@@ -728,7 +728,8 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 .stage-art[data-stage="art"]   { background-image: url("/static/lou/stage/art.webp"); }
 .stage-art[data-stage="bind"]  { background-image: url("/static/lou/stage/bind.webp"); }
 .stage-art[data-mood="done"]   { background-image: url("/static/lou/stage/done.webp"); }
-.stage-art[data-mood="error"]  { background-image: url("/static/lou/lou-error.png"); }
+/* 막혔을 때 그림은 여기서 안 정한다 — 두 마리 중 하나가 걸려야 하는데
+   CSS 로는 뽑을 수가 없다. app.js 가 그 자리에서 직접 얹는다. */
 .stage-clock { margin: 8px 0 0; color: var(--dim); font-size: .82rem; }
 .stage-clock .clock-time { font-size: .95rem; color: var(--muted); }
 

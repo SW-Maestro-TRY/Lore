@@ -868,14 +868,14 @@ async function paintWorks(current) {
 
   if (runs === null) {
     host.innerHTML = `<div class="lou-note">`
-      + `<img src="/static/lou/lou-error.png" alt="" aria-hidden="true">`
+      + `<img src="${louArt("error")}" alt="" aria-hidden="true">`
       + `<p>목록을 불러오지 못했습니다.<br>서버가 떠 있는지 봐 주세요.</p></div>`;
     return;
   }
   if (!runs.length) {
     // 목록을 아예 지우지 않는다 — 자리가 사라지면 기능이 없는 것과 구별이 안 된다.
     host.innerHTML = `<div class="lou-note">`
-      + `<img src="/static/lou/lou-empty.png" alt="" aria-hidden="true">`
+      + `<img src="${louArt("empty")}" alt="" aria-hidden="true">`
       + `<p>아직 만든 웹툰이 없어요.<br><a href="/">첫 작품 만들러 가기</a></p></div>`;
     return;
   }
@@ -920,6 +920,9 @@ function setupWorksToggle() {
 /* ------------------------------------------------------------------ 시작 */
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // 헤더 로고는 홈과 같이 들어올 때마다 루의 다른 표정으로 바뀐다.
+  const brand = document.querySelector("#brandLou");
+  if (brand && typeof louLogo === "function") brand.src = louLogo();
   // ?run=<run_id> 가 있으면 그 작품을, ?ep=<N> 이 있으면 그 회차를 연다
   // (없으면 1화). run 이 없으면 목업이다. 편집기는 "이미 그려진 것을 고치는
   // 자리" 라서, 랜딩에서 만든 것이든 하네스를 직접 돌린 것이든 똑같이 열려야 한다.
@@ -946,7 +949,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const stage = $("#stageCol");
     const html =
       `<div class="lou-note">` +
-      `<img src="/static/lou/lou-error.png" alt="" aria-hidden="true"><p>` +
+      `<img src="${louArt("error")}" alt="" aria-hidden="true"><p>` +
       (RUN_ID ? `${EPISODE}화를 열지 못했어요.<br>그 회차에 그려진 장이 있어야 합니다.`
               : `목업 데이터를 읽지 못했어요.`) +
       `<br><br>위 <b>작품</b>에서 다른 작품을 골라 보세요.` +
