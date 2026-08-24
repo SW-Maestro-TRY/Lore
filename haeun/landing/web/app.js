@@ -88,7 +88,10 @@ let lastStatus = null;
 /* ------------------------------------------------------------------ 초기화 */
 
 function buildForm() {
-  $("#fieldsGrid").innerHTML = FIELD_KEYS.map(k => `
+  // 항목 표는 화면에서 뺐다(1걸음은 사진·이름·이야기뿐). 칸이 있으면 채우고
+  // 없으면 지나간다 — collect() 의 fields 는 그때 그냥 빈 채로 간다.
+  const grid = $("#fieldsGrid");
+  if (grid) grid.innerHTML = FIELD_KEYS.map(k => `
     <label><span>${k}</span><input type="text" data-field="${k}" placeholder=""></label>
   `).join("");
 
@@ -311,22 +314,23 @@ function setupPhoto() {
   const paint = () => {
     // 올린 사진 + 남은 빈 칸을 **항상 네 칸**으로 채운다. 빈 칸이 안 보이면
     // 더 올릴 수 있다는 것을 모른다(시안 capture/design2.png 의 규칙).
+    // UI 는 **타일 한 장**이다. 서버와 photos 배열은 여러 장을 그대로
+    // 받지만(하네스 계약), 화면에서는 한 장만 받는다 — 넣으면 타일이 사진이
+    // 되고, ✕ 로 지우고 다시 넣는다.
     const shots = photos.map((src, i) => `
       <figure class="shot">
         <img src="${src}" alt="${i + 1}번째 사진">
         <button type="button" class="shot-x" data-i="${i}" aria-label="지우기">✕</button>
       </figure>`);
-    const slots = Array.from({ length: MAX_PHOTOS - photos.length },
-      () => `<span class="photo-slot" aria-hidden="true">+</span>`);
+    const slots = photos.length ? []
+      : [`<span class="photo-slot" aria-hidden="true">+</span>`];
     $("#photoStrip").innerHTML = shots.concat(slots).join("");
     $$("#photoStrip .shot-x").forEach(b => b.addEventListener("click", e => {
       e.preventDefault(); e.stopPropagation();
       photos.splice(Number(b.dataset.i), 1); paint();
     }));
     drop.classList.toggle("has-photo", photos.length > 0);
-    $("#photoCount").textContent = photos.length
-      ? `${photos.length} / ${MAX_PHOTOS}장 · 같은 사람을 여러 각도로`
-      : "";
+    $("#photoCount").textContent = photos.length ? "" : "눌러서 사진을 올려주세요";
     input.value = "";
   };
 
@@ -485,8 +489,21 @@ function wizGo(n, scroll = true) {
 function setupWizard() {
   if (!$("#wizGauge")) return;
   const move = n => wizGo(n);
-  $("#wizNext").addEventListener("click", () => move(wizStep + 1));
-  $("#wizSkip").addEventListener("click", () => move(wizStep + 1));
+  // 1걸음의 약속: 사진과 이름은 필수다. 없이 넘어가려 하면 그 자리에서 말한다.
+  const step1ok = () => {
+    const form = $("#form");
+    if (!photos.length) { toast("캐릭터 사진을 올려주세요"); return false; }
+    if (!form.name.value.trim()) { toast("이름을 적어주세요"); form.name.focus(); return false; }
+    return true;
+  };
+  $("#wizNext").addEventListener("click", () => {
+    if (wizStep === 1 && !step1ok()) return;
+    move(wizStep + 1);
+  });
+  $("#wizSkip").addEventListener("click", () => {
+    if (wizStep === 1 && !step1ok()) return;
+    move(wizStep + 1);
+  });
   $("#wizPrev").addEventListener("click", () => move(wizStep - 1));
   $("#wizBack").addEventListener("click", () => move(wizStep - 1));
 
@@ -500,7 +517,7 @@ function setupWizard() {
     $$(".fork-card").forEach(c =>
       c.setAttribute("aria-pressed", String(c === card)));
     if (mode === "expert") { wizGo(WIZ_FORK + 1); return; }
-    startRun();
+    startRun();   // 1걸음을 지나야 갈림길에 오므로 필수값은 이미 있다
   }));
 
   wizGo(1, false);

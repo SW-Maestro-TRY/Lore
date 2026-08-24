@@ -182,6 +182,10 @@ class Handler(BaseHTTPRequestHandler):
         # 한 번도 안 돌려 본 사람도 결과물 화면을 그대로 볼 수 있어야 한다.
         if path in ("/editor", "/editor/", "/editor.html"):
             return self._file(WEB / "editor.html")
+        # 화면 구경 — **목업**. 기다리는 화면(루·진행 바·딴짓·만지기)을 실제
+        # 생성 없이 가짜 진행으로 돌려 본다. 과금 없음.
+        if path in ("/demo", "/demo/", "/demo.html"):
+            return self._file(WEB / "demo.html")
         # 이미 만들어 둔 결과물을 바로 여는 자리. 같은 index.html 인데,
         # app.js 가 주소를 보고 폼 대신 결과 화면부터 띄운다.
         if path in ("/result", "/result/"):

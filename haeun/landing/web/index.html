@@ -45,17 +45,35 @@
   <section class="top" id="top">
     <div class="hero-sea" aria-hidden="true"></div>
 
+    <!-- 캔버스 A안(capture/design1) 그대로 — 한 컬럼. PC 라고 좌우로 벌리지
+         않는다. 물이 화면 전체에 흐르고, 내용은 가운데 한 줄기로 내려간다. -->
     <div class="top-intro">
-      <p class="hero-kicker">Story is the sea, whale is the guide</p>
-      <h1>이야기는 바다,<br><em>루</em>가 안내합니다.</h1>
-      <p class="top-lede">캐릭터 한 명을 띄우면 루가 웹툰 한 화로 데려옵니다.</p>
+      <p class="hero-kicker">Story is the sea</p>
+      <h1>이야기는 바다,<br>루가 안내합니다.</h1>
+      <p class="top-lede">캐릭터 한 명을 띄우면, 고래 루가 이야기 조각을 모아
+         웹툰 한 화로 데려옵니다.</p>
       <img class="hero-lou" src="/static/lou/lou-hero.png" alt="LORE의 마스코트 고래 루">
-      <p class="hero-note">캐릭터 한 명 · 10~15분 · 완성본 PNG</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#studio">내 캐릭터로 시작하기</a>
+        <a class="btn btn-shell" href="/works">둘러보기</a>
+      </div>
     </div>
 
-
-
-
+    <!-- 깊이 — 수면에서 심해로. 물이 짙어지는 위에 얹힌 세 줄 -->
+    <ol class="depths">
+      <li>
+        <img src="/static/lou/world-begins.png" alt="">
+        <div><b>수면 — 이야기의 시작</b><small>캐릭터를 만나는 곳</small></div>
+      </li>
+      <li>
+        <img src="/static/lou/world-voyage.png" alt="">
+        <div><b>항해 — 이야기의 전개</b><small>세계와 사건을 탐험</small></div>
+      </li>
+      <li>
+        <img src="/static/lou/world-depth.png" alt="">
+        <div><b>심해 — 이야기의 깊이</b><small>숨겨진 과거와 진실</small></div>
+      </li>
+    </ol>
 
     <div class="studio" id="studio">
     <form id="form" class="wizard" autocomplete="off">
@@ -69,35 +87,26 @@
         <button type="button" class="wiz-skip" id="wizSkip">건너뛰기</button>
       </div>
 
-      <!-- 1 · 수면 — 캐릭터와 이야기 -->
+      <!-- 1 · 수면 — 사진 · 이름 · 이야기 한 줄. 이게 전부다.
+           (character·photo_note 는 화면에서 뺐지만 collect()·서버 계약이
+           그대로라 숨은 칸으로 남겨 둔다 — 값은 항상 빈 문자열이다.) -->
       <section class="wiz-step" data-step="1">
         <p class="wiz-eyebrow">수면 · STEP 1</p>
         <h3 class="wiz-title">누구를 데리고<br>바다로 갈까요?</h3>
-        <p class="wiz-sub">아는 만큼만 적으세요. 빈 칸은 루가 채웁니다.</p>
 
         <div class="wiz-card">
           <div class="photo-row">
             <label class="photo-drop" id="photoDrop">
-              <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" multiple hidden>
-              <span class="photo-hint">사진 <small>선택 · 최대 4장</small></span>
+              <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" hidden>
+              <span class="photo-hint">캐릭터 사진 <em class="req">필수</em></span>
               <div class="photo-strip" id="photoStrip"></div>
-              <span class="photo-foot">같은 사람을 여러 각도로 — 한 장으로 안 보이는 곳을 다른 장이 채웁니다.</span>
               <span class="photo-count" id="photoCount"></span>
             </label>
           </div>
 
           <label class="field">
-            <span>이름</span>
-            <input type="text" name="name" placeholder="예: 민시하" maxlength="40">
-          </label>
-          <label class="field">
-            <span>사진 메모 <small>선택</small></span>
-            <input type="text" name="photo_note" placeholder="예: 오른쪽 사람입니다 / 원래는 은발">
-          </label>
-
-          <label class="field">
-            <span>캐릭터 설명</span>
-            <textarea name="character" rows="4" placeholder="“착하다” 보다 “남 부탁은 다 들어주면서 정작 자기 얘기는 안 한다”."></textarea>
+            <span>이름 <em class="req">필수</em></span>
+            <input type="text" name="name" placeholder="예: 민시하" maxlength="40" required>
           </label>
 
           <label class="field big">
@@ -107,10 +116,8 @@
           </label>
           <div class="chips" id="ideaChips"></div>
 
-          <details class="wiz-more">
-            <summary>항목으로 더 자세히 적기 <small>선택</small></summary>
-            <div class="fields-grid" id="fieldsGrid"></div>
-          </details>
+          <input type="hidden" name="character" value="">
+          <input type="hidden" name="photo_note" value="">
         </div>
       </section>
 
@@ -279,7 +286,7 @@
           웹툰 만들기 <span class="cost-chip" id="costChip">−240 크레딧</span>
         </button>
       </div>
-      <p class="submit-note" id="submitNote">이름 하나만 있어도 시작합니다.</p>
+      <p class="submit-note" id="submitNote">사진과 이름만 있으면 시작합니다.</p>
     </form>
     </div>
   </section>
