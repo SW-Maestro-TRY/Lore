@@ -36,129 +36,28 @@
 <!-- ===================================================== 랜딩 ============ -->
 <main id="landing">
 
-  <!-- ================================================= 홈 =================
-       홈은 **작품이 주인공인 화면**이다. 픽시브·핀터레스트가 그렇듯, 처음
-       들어온 사람이 스크롤하면서 만나는 것은 설명이 아니라 그림이어야 한다.
+  <!-- 홈 = 소개 + 만들기. 둘을 떼어 놓지 않는다.
+       PC 는 왼쪽에 소개, 오른쪽에 만들기를 나란히 둔다. 폰은 소개가 짧게
+       지나가고 바로 만들기가 온다. 들어온 사람이 첫 화면에서 할 수 있는 일이
+       하나뿐이라면 그 일이 화면에 같이 있어야 한다. 예전에는 여기에 웹툰
+       목록을 깔았는데, 아무도 보여 달라고 한 적 없는 것이라 지웠다. -->
 
-       그래서 여기에는 문단이 없다. 히어로는 한 줄과 단추 하나, 그 아래로는
-       바로 실제로 나온 웹툰들이 깔린다. 서비스가 무엇인지는 읽어서가 아니라
-       "이런 게 나오는구나"로 알게 된다.
-
-       예전 홈에는 다섯 칸짜리 공정 설명과 네 칸 예시가 따로 있었는데, 둘 다
-       읽어야 아는 것이라 지웠다. 만드는 순서는 아래 세 칸으로 줄여서 그림으로
-       보여준다. -->
-
-  <section class="hero" id="top">
+  <section class="top" id="top">
     <div class="hero-sea" aria-hidden="true"></div>
-    <div class="hero-inner">
+
+    <div class="top-intro">
       <p class="hero-kicker">Story is the sea, whale is the guide</p>
       <h1>이야기는 바다,<br><em>루</em>가 안내합니다.</h1>
-      <a class="btn btn-primary btn-hero" href="#studio">내 캐릭터로 시작하기</a>
-      <span class="hero-note">캐릭터 한 명 · 10~15분 · 완성본 PNG</span>
+      <p class="top-lede">캐릭터 한 명을 띄우면 루가 웹툰 한 화로 데려옵니다.</p>
       <img class="hero-lou" src="/static/lou/lou-hero.png" alt="LORE의 마스코트 고래 루">
-    </div>
-  </section>
-
-  <!-- 탐색 — 홈의 본문. 실제로 나온 것들이 폭포처럼 흐른다. -->
-  <section class="feed" id="gallery" aria-label="루가 발견한 이야기">
-    <div class="feed-head">
-      <h2>루가 발견한 이야기</h2>
-      <a class="feed-more" href="/works">내 웹툰 →</a>
+      <p class="hero-note">캐릭터 한 명 · 10~15분 · 완성본 PNG</p>
     </div>
 
-    <div class="feed-tabs" role="tablist" aria-label="장르">
-      <button type="button" class="feed-tab is-on" role="tab" aria-selected="true">전체</button>
-      <button type="button" class="feed-tab" role="tab" aria-selected="false">무협</button>
-      <button type="button" class="feed-tab" role="tab" aria-selected="false">로맨스 판타지</button>
-      <button type="button" class="feed-tab" role="tab" aria-selected="false">헌터·게이트</button>
-      <button type="button" class="feed-tab" role="tab" aria-selected="false">선화</button>
-      <button type="button" class="feed-tab" role="tab" aria-selected="false">오컬트</button>
-    </div>
-
-    <div class="feed-grid">
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/ex-cinematic-1.jpg" alt="몰락한 문파의 마지막 검객" loading="lazy"></a>
-        <span class="pin-badge">6화</span>
-        <h3>몰락한 문파의 마지막 검객</h3>
-        <p><span class="pin-genre">무협</span> · 시네마틱 반실사</p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/ex-romance-1.jpg" alt="황실 암투, 숨은 검" loading="lazy"></a>
-        <h3>황실 암투, 숨은 검</h3>
-        <p><span class="pin-genre">로맨스 판타지</span></p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/ex-lineart-2.jpg" alt="각성자의 밤" loading="lazy"></a>
-        <span class="pin-badge">3화</span>
-        <h3>각성자의 밤</h3>
-        <p><span class="pin-genre">헌터·게이트</span> · 선화</p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/ex-cinematic-2.jpg" alt="재회, 십 년 만에" loading="lazy"></a>
-        <h3>재회, 십 년 만에</h3>
-        <p><span class="pin-genre">현대 판타지</span></p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/mock/scene3.jpg" alt="사라진 동생을 찾아서" loading="lazy"></a>
-        <span class="pin-badge">4화</span>
-        <h3>사라진 동생을 찾아서</h3>
-        <p><span class="pin-genre">오컬트</span></p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/ex-lineart-3.jpg" alt="학교 밖으로" loading="lazy"></a>
-        <h3>학교 밖으로</h3>
-        <p><span class="pin-genre">학원로맨스</span></p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/ex-romance-2.jpg" alt="마법학교 첫날" loading="lazy"></a>
-        <h3>마법학교 첫날</h3>
-        <p><span class="pin-genre">마법학교</span></p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/mock/scene1.jpg" alt="복수를 미룬 하루" loading="lazy"></a>
-        <h3>복수를 미룬 하루</h3>
-        <p><span class="pin-genre">무협</span></p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/mock/scene4.jpg" alt="정체를 숨긴 후계자" loading="lazy"></a>
-        <h3>정체를 숨긴 후계자</h3>
-        <p><span class="pin-genre">로맨스 판타지</span></p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/ex-lineart-1.jpg" alt="칼끝의 인사" loading="lazy"></a>
-        <span class="pin-badge">1화</span>
-        <h3>칼끝의 인사</h3>
-        <p><span class="pin-genre">무협</span> · 선화</p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/mock/scene2.jpg" alt="마지막 시험을 앞둔 밤" loading="lazy"></a>
-        <h3>마지막 시험을 앞둔 밤</h3>
-        <p><span class="pin-genre">일상</span></p>
-      </article>
-      <article class="pin">
-        <a href="/works"><img src="/static/samples/sheet.jpg" alt="캐릭터 시트 · 초롱" loading="lazy"></a>
-        <h3>캐릭터 시트 · 초롱</h3>
-        <p><span class="pin-genre is-sheet">완성 시트</span></p>
-      </article>
-    </div>
-  </section>
-
-  <!-- 만드는 순서 — 세 칸, 각 한 줄. 읽는 것이 아니라 스치는 것이다. -->
-  <section class="dive" aria-label="만드는 순서">
-    <ol class="dive-row">
-      <li><img src="/static/lou/world-begins.png" alt="" loading="lazy"><b>캐릭터를 넣고</b></li>
-      <li><img src="/static/lou/world-voyage.png" alt="" loading="lazy"><b>루가 그리고</b></li>
-      <li><img src="/static/lou/world-depth.png" alt="" loading="lazy"><b>웹툰 한 화</b></li>
-    </ol>
-  </section>
 
 
-  <section class="studio" id="studio">
-    <div class="studio-head">
-      <h2>내 캐릭터를 웹툰으로</h2>
-      <p class="studio-sub">아는 만큼만 적으세요. 빈 칸은 루가 채웁니다.</p>
-    </div>
 
+
+    <div class="studio" id="studio">
     <form id="form" class="wizard" autocomplete="off">
 
       <div class="wiz-head">
@@ -172,42 +71,39 @@
 
       <!-- 1 · 수면 — 캐릭터와 이야기 -->
       <section class="wiz-step" data-step="1">
-        <p class="wiz-eyebrow">수면 · 무엇을 만들까요</p>
-        <h3 class="wiz-title">캐릭터 한 명과<br>이야기 한 줄이면 됩니다</h3>
+        <p class="wiz-eyebrow">수면 · STEP 1</p>
+        <h3 class="wiz-title">누구를 데리고<br>바다로 갈까요?</h3>
+        <p class="wiz-sub">아는 만큼만 적으세요. 빈 칸은 루가 채웁니다.</p>
 
         <div class="wiz-card">
           <div class="photo-row">
             <label class="photo-drop" id="photoDrop">
               <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" multiple hidden>
+              <span class="photo-hint">사진 <small>선택 · 최대 4장</small></span>
               <div class="photo-strip" id="photoStrip"></div>
-              <span class="photo-hint">
-                <b>사진 올리기</b>
-                <small>선택 · 최대 4장까지, <b>같은 사람</b>을 여러 각도로</small>
-                <small>한 장으로는 안 보이는 곳(하의·신발·뒤통수)을 다른 장이 채웁니다</small>
-              </span>
+              <span class="photo-foot">같은 사람을 여러 각도로 — 한 장으로 안 보이는 곳을 다른 장이 채웁니다.</span>
               <span class="photo-count" id="photoCount"></span>
             </label>
-            <div class="photo-side">
-              <label class="field">
-                <span>이름</span>
-                <input type="text" name="name" placeholder="예: 민시하" maxlength="40">
-              </label>
-              <label class="field">
-                <span>사진 메모 <small>선택</small></span>
-                <input type="text" name="photo_note" placeholder="예: 오른쪽 사람입니다">
-              </label>
-            </div>
           </div>
 
           <label class="field">
+            <span>이름</span>
+            <input type="text" name="name" placeholder="예: 민시하" maxlength="40">
+          </label>
+          <label class="field">
+            <span>사진 메모 <small>선택</small></span>
+            <input type="text" name="photo_note" placeholder="예: 오른쪽 사람입니다 / 원래는 은발">
+          </label>
+
+          <label class="field">
             <span>캐릭터 설명</span>
-            <textarea name="character" rows="4" placeholder="형식 없이 아는 만큼 적어주세요.&#10;&#10;잘 되는 설명에는 모순이 있습니다 —&#10;“착하다” 보다 “남 부탁은 다 들어주면서 정작 자기 얘기는 안 한다”."></textarea>
+            <textarea name="character" rows="4" placeholder="“착하다” 보다 “남 부탁은 다 들어주면서 정작 자기 얘기는 안 한다”."></textarea>
           </label>
 
           <label class="field big">
-            <span>어떤 이야기를 만들까요?</span>
+            <span>이야기 한 줄</span>
             <textarea name="story" rows="3" id="storyInput"
-              placeholder="예) 몰락한 문파에 혼자 남은 검객이, 습격해 온 적 앞으로 걸어 나간다."></textarea>
+              placeholder="예) 몰락한 문파에 혼자 남은 검객이, 적 앞으로 걸어 나간다."></textarea>
           </label>
           <div class="chips" id="ideaChips"></div>
 
@@ -220,54 +116,31 @@
 
       <!-- 2 · 갈림길 — 어떻게 만들지 -->
       <section class="wiz-step wiz-step-fork" data-step="2" hidden>
-        <p class="wiz-eyebrow">갈림길 · 어떻게 만들까요</p>
-        <h3 class="wiz-title">여기서부터<br>두 갈래입니다</h3>
-        <p class="wiz-sub">
-          만들어지는 웹툰은 같습니다. 다른 것은 <b>얼마나 물어보고, 도중에 어디서
-          멈춰서 보여드리는지</b>입니다.
-        </p>
+        <p class="wiz-eyebrow">갈림길</p>
+        <h3 class="wiz-title">어떻게 만들까요?</h3>
 
         <div class="fork">
           <button type="button" class="fork-card" data-mode="simple">
             <img src="/static/lou/lou-hero.png" alt="" class="fork-art">
-            <div class="fork-tag">스토리 모드</div>
             <h4>루에게 맡기기</h4>
-            <p class="fork-lede">지금 적은 것만으로 바로 출발합니다. 장르·세계관·그림체는 루가 이야기에 맞춰 정합니다.</p>
-            <ul class="fork-list">
-              <li><b>더 묻지 않음</b> 바로 시작</li>
-              <li><b>멈추는 곳</b> 캐릭터 시트 한 번
-                <small>얼굴이 틀어지면 뒤 컷 전부가 틀어져서, 여기는 꼭 보셔야 합니다</small></li>
-              <li><b>그림 검수</b> 루가 알아서 — 명백히 망한 컷만 다시 그립니다</li>
-            </ul>
-            <span class="fork-go">이걸로 바로 시작 →</span>
+            <p class="fork-lede">나머지는 루가 정합니다.</p>
+            <span class="fork-go">바로 시작 →</span>
           </button>
 
           <button type="button" class="fork-card" data-mode="expert">
             <img src="/static/lou/lou-think.png" alt="" class="fork-art">
-            <div class="fork-tag">전문가 모드</div>
             <h4>내가 정하기</h4>
-            <p class="fork-lede">장르·세계관·그림체·연출까지 직접 고르고, 단계마다 결과를 보고 다시 만들 수 있습니다.</p>
-            <ul class="fork-list">
-              <li><b>더 묻는 것</b> 장르 · 세계관 · 그림체 · 연출 · 등신 · 검수 강도</li>
-              <li><b>멈추는 곳</b> 이야기 · 시트 · 콘티 · 그림 검수
-                <small>네 곳 모두에서 보고 넘어갑니다 — 그만큼 오래 걸립니다</small></li>
-              <li><b>캐릭터 시트</b> 외형 사양을 직접 고쳐서 다시 만들 수 있습니다</li>
-            </ul>
+            <p class="fork-lede">그림체·연출까지 고르고, 단계마다 확인합니다.</p>
             <span class="fork-go">세 걸음 더 →</span>
           </button>
         </div>
-
-        <p class="fork-foot">
-          프롬프트 원문을 직접 쓰는 자리는 두 갈래 모두 없습니다 — 적어 주신 말은
-          그대로 프롬프트에 실리지만, 그 문장을 조립하는 것은 하네스가 합니다.
-        </p>
       </section>
 
       <!-- 3 · 깊은 바다 — 장르 · 세계관 (전문가) -->
       <section class="wiz-step" data-step="3" hidden>
-        <p class="wiz-eyebrow">깊은 바다 · 세계</p>
+        <p class="wiz-eyebrow">깊은 바다 · STEP 3</p>
         <h3 class="wiz-title">어떤 세계를<br>그릴까요?</h3>
-        <p class="wiz-sub">비우면 루가 이야기에 맞춰 고릅니다.</p>
+        <p class="wiz-sub">비우면 루가 고릅니다.</p>
 
         <div class="wiz-card">
           <label class="field">
@@ -298,7 +171,7 @@
 
       <!-- 4 · 심해 — 그림 (전문가) -->
       <section class="wiz-step" data-step="4" hidden>
-        <p class="wiz-eyebrow">심해 · 그림</p>
+        <p class="wiz-eyebrow">심해 · STEP 4</p>
         <h3 class="wiz-title">그림은 어떻게<br>그릴까요?</h3>
 
         <div class="wiz-card">
@@ -321,12 +194,9 @@
           <details class="wiz-more">
             <summary>둘이 어떻게 다른가요</summary>
             <p class="hint">
-              <b>빠르게</b> 는 컷 개수로 자릅니다 — 한 이미지 안에 컷 세 개를 나란히
-              그립니다. 호출이 1/3 이라 싸지만, 컷 배치와 그 사이 여백을 그림 모델이
-              정합니다 — 그래서 세로로 잘라 놓은 만화 페이지처럼 보일 때가 있습니다.
-              <b>웹툰</b> 은 개수 규칙을 안 씁니다. 컷마다 <b>무게</b>가 다르다고 보고,
-              무거운 컷은 이미지 한 장을 혼자 쓰고, 스쳐 가는 가벼운 컷은 배경 없이
-              지면 폭의 절반만 쓰며 붙은 것끼리 한 장에 묶입니다.
+              <b>빠르게</b> 는 한 장에 컷 세 개를 나란히 그립니다 — 싸지만 배치를
+              그림 모델이 정해서 만화 페이지처럼 보일 때가 있습니다.
+              <b>웹툰</b> 은 컷마다 무게를 따져 무거운 컷은 한 장을 혼자 씁니다.
             </p>
           </details>
         </div>
@@ -356,7 +226,7 @@
 
       <!-- 5 · 바닥 — 검수 · 확인 (전문가) -->
       <section class="wiz-step" data-step="5" hidden>
-        <p class="wiz-eyebrow">바닥 · 확인</p>
+        <p class="wiz-eyebrow">바닥 · STEP 5</p>
         <h3 class="wiz-title">이대로<br>떠날까요?</h3>
 
         <div class="wiz-card">
@@ -387,10 +257,7 @@
               <li><b>콘티</b> 컷 나누기와 대사가 나온 뒤</li>
               <li><b>그림 검수</b> 다 그린 뒤 <small>잡힌 것이 있을 때만</small></li>
             </ol>
-            <p class="hint">
-              멈춰 있는 동안에는 아무것도 안 돌아가므로 시간이 흐르는 것 말고는
-              비용이 들지 않습니다.
-            </p>
+            <p class="hint">멈춰 있는 동안에는 비용이 들지 않습니다.</p>
           </details>
         </div>
 
@@ -400,7 +267,7 @@
           <input type="checkbox" name="preview" id="previewToggle">
           <span>
             <b>빠른 미리보기</b>
-            <small>첫 한 장(앞 3컷)만 그립니다. 그림체와 인물을 먼저 확인할 때.</small>
+            <small>첫 한 장만 그립니다. 그림체를 먼저 볼 때.</small>
           </span>
         </label>
       </section>
@@ -412,11 +279,9 @@
           웹툰 만들기 <span class="cost-chip" id="costChip">−240 크레딧</span>
         </button>
       </div>
-      <p class="submit-note" id="submitNote">
-        이름 · 설명 · 항목 · 사진 중 하나만 있으면 시작할 수 있습니다.
-      </p>
+      <p class="submit-note" id="submitNote">이름 하나만 있어도 시작합니다.</p>
     </form>
-  </section>
+    </div>
   </section>
 </main>
 
@@ -432,6 +297,12 @@
               data-mood="think" aria-label="루를 쓰다듬기"></button>
       <p class="eyebrow" id="progEyebrow">만드는 중</p>
       <h2 id="progTitle">웹툰을 만들고 있습니다</h2>
+      <!-- 전체 진행 — 다섯 단계를 같은 무게로 치고, 그림 단계 안에서는
+           그린 장 수로 더 잘게 나눈다. 숫자는 app.js 의 louPercent 가 적는다. -->
+      <div class="lou-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="louProgress">
+        <div class="lou-bar"><i id="louBarFill"></i></div>
+        <span class="lou-pct" id="louPct">0%</span>
+      </div>
       <p class="mascot-line" id="mascotLine"></p>
       <p class="progress-sub" id="progSub">잠시만요 — 지금 무엇을 하고 있는지 아래에 그대로 보여드립니다.</p>
       <p class="mascot-poke">루를 눌러 보세요 — 기다리는 동안 놀아 줍니다</p>

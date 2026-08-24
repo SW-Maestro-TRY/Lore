@@ -125,124 +125,221 @@ body[data-view="nextep"]  .topbar { display: none; }
 
 /* ------------------------------------------------------------------ 홈
 
-   작품이 주인공인 화면. 문단이 없고, 스크롤하면 그림이 흐른다.
-   모바일이 기본형이라 피드는 두 칸으로 시작해서 화면이 넓어질수록 칸이 는다. */
+   홈 = 소개 + 만들기, 한 화면. 시안 capture/design1.png 의 톤(위 모래빛에서
+   아래 민트로 내려가는 물, 좌측 정렬 제목, 루가 크게)을 그대로 쓰되,
+   목록·설명 절 없이 만들기 폼이 바로 이어진다.
 
-/* ---- 히어로 — 한 줄, 단추 하나, 루 --------------------------------- */
+   폰: 소개(짧다) → 만들기.  900px+: 왼쪽 소개 고정, 오른쪽 만들기. */
 
-.hero { position: relative; overflow: hidden; }
+.top { position: relative; overflow: hidden; }
 .hero-sea {
   position: absolute; inset: 0;
   background: linear-gradient(180deg,
-    var(--sea-sand) 0%, #f2ead9 38%, var(--sea-shore) 74%, var(--sea-mint) 100%);
+    var(--sea-sand) 0%, #f2ead9 30%, var(--sea-shore) 62%, var(--sea-mint) 100%);
 }
-.hero-inner {
-  position: relative; max-width: 1320px; margin: 0 auto;
-  padding: clamp(28px, 7vw, 64px) clamp(20px, 5vw, 56px) 0;
-  display: flex; flex-direction: column; align-items: center; text-align: center;
+
+.top-intro {
+  position: relative;
+  max-width: 1320px; margin: 0 auto;
+  padding: clamp(24px, 6vw, 56px) clamp(20px, 5vw, 56px) 0;
 }
 .hero-kicker {
-  margin: 0; font-size: .66rem; font-weight: 800; letter-spacing: .2em;
+  margin: 0; font-size: .64rem; font-weight: 800; letter-spacing: .18em;
   text-transform: uppercase; color: var(--sea-mid);
 }
-.hero h1 {
-  font-size: clamp(2rem, 8vw, 3.4rem); font-weight: 800;
-  margin: 14px 0 0; color: var(--accent-d); line-height: 1.18;
+.top-intro h1 {
+  font-size: clamp(1.9rem, 7vw, 3rem); font-weight: 800;
+  margin: 12px 0 0; color: var(--accent-d); line-height: 1.2;
 }
-.hero h1 em { font-style: normal; color: var(--sea-mid); }
-.btn-hero { margin-top: 24px; padding: 1.05em 2.4em; font-size: 1.02rem; }
-.hero-note { margin-top: 12px; color: var(--muted); font-size: .82rem; }
-/* 루는 히어로 아래쪽에 반쯤 잠긴 채로 뜬다 — 다음 화면(피드)으로 이어지는
-   물이라서 잘려도 괜찮다. 그림 배경이 투명이 아니라 가장자리를 지운다. */
+.top-intro h1 em { font-style: normal; color: var(--sea-mid); }
+.top-lede { color: var(--muted); font-size: .95rem; margin: 12px 0 0; max-width: 34ch; }
 .hero-lou {
-  width: min(84%, 420px); margin: -4px auto -6px;
+  width: min(72%, 340px); margin: 6px 0 0;
   mix-blend-mode: multiply;
   -webkit-mask-image: radial-gradient(closest-side at 50% 50%, #000 60%, transparent 100%);
           mask-image: radial-gradient(closest-side at 50% 50%, #000 60%, transparent 100%);
 }
+.hero-note { margin: 0 0 8px; color: var(--muted); font-size: .8rem; }
 
-/* ---- 피드 — 홈의 본문 ---------------------------------------------- */
-
-.feed {
-  background: linear-gradient(180deg, var(--sea-mint) 0%, var(--ink) 12%, var(--ink) 100%);
-  padding: 8px 0 clamp(30px, 6vw, 56px);
-}
-.feed-head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+/* 만들기 — 물 위에 뜬 종이 한 장 */
+.studio {
+  position: relative;
   max-width: 1320px; margin: 0 auto;
-  padding: clamp(20px, 4vw, 36px) clamp(14px, 4vw, 56px) 0;
-}
-.feed-head h2 { font-size: clamp(1.15rem, 4vw, 1.6rem); font-weight: 800; color: var(--accent-d); }
-.feed-more { color: var(--sea-mid); font-size: .86rem; font-weight: 700; white-space: nowrap; }
-
-/* 장르 줄 — 폰에서는 옆으로 민다. 줄바꿈으로 두 줄이 되면 그리드가 밀린다. */
-.feed-tabs {
-  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
-  max-width: 1320px; margin: 0 auto;
-  padding: 14px clamp(14px, 4vw, 56px) 2px;
-}
-.feed-tabs::-webkit-scrollbar { display: none; }
-.feed-tab {
-  flex: none; border: 1px solid var(--line-2); background: var(--card);
-  border-radius: 999px; padding: .55em 1.1em; font: inherit; font-size: .84rem;
-  color: var(--muted); cursor: pointer; white-space: nowrap; min-height: 40px;
-}
-.feed-tab.is-on {
-  background: var(--accent-d); border-color: var(--accent-d);
-  color: var(--on-sea); font-weight: 700;
+  padding: 8px clamp(14px, 4vw, 56px) clamp(36px, 6vw, 64px);
 }
 
-/* 매소너리 — column-count 를 쓴다. grid 로는 높이가 제각각인 그림을 빈틈없이
-   못 쌓는다(각 줄이 가장 큰 그림에 맞춰져서 아래가 뜬다). */
-.feed-grid {
-  max-width: 1320px; margin: 0 auto;
-  padding: 14px clamp(10px, 3vw, 56px) 0;
-  column-count: 2; column-gap: 10px;
-}
-.pin { break-inside: avoid; margin: 0 0 18px; }
-.pin a { display: block; border-radius: 12px; overflow: hidden; position: relative; }
-.pin img { width: 100%; display: block; transition: transform .3s ease; }
-.pin a:hover img { transform: scale(1.03); }
-.pin-badge {
-  position: absolute; left: 8px; top: 8px; z-index: 1;
-  background: rgba(31,63,60,.72); color: var(--on-sea);
-  border-radius: 6px; padding: .18em .5em; font-size: .68rem; font-weight: 700;
-}
-.pin h3 {
-  font-size: .86rem; font-weight: 700; margin: 8px 0 0;
-  line-height: 1.35; color: var(--text);
-}
-.pin p { margin: 3px 0 0; font-size: .74rem; color: var(--dim); }
-.pin-genre { color: var(--sea-mid); font-weight: 700; }
-.pin-genre.is-sheet { color: var(--gold); }
-
-/* ---- 만드는 순서 — 세 칸, 각 한 줄 --------------------------------- */
-
-.dive { background: var(--ink-2); border-top: 1px solid var(--line); }
-.dive-row {
-  list-style: none; margin: 0 auto; padding: clamp(22px, 5vw, 40px) clamp(14px, 4vw, 56px);
-  max-width: 1320px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-}
-.dive-row li { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
-.dive-row img { width: 100%; max-width: 132px; border-radius: 14px; }
-.dive-row b { font-size: .84rem; color: var(--accent-d); }
-
-/* ---- 넓어지면 ------------------------------------------------------- */
-
-@media (min-width: 620px) {
-  .feed-grid { column-count: 3; column-gap: 14px; }
-  .pin { margin-bottom: 22px; }
-}
+/* 900px+ — 좌 소개 / 우 만들기 */
 @media (min-width: 900px) {
-  .hero-inner { padding-top: clamp(40px, 6vw, 80px); }
-  .feed-grid { column-count: 4; column-gap: 16px; }
-  .dive-row img { max-width: 200px; }
+  .top { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+  .hero-sea { grid-column: 1 / -1; grid-row: 1; }
+  .top-intro {
+    grid-column: 1; grid-row: 1; margin: 0; max-width: none;
+    padding: clamp(40px, 5vw, 72px) 20px clamp(40px, 5vw, 72px) clamp(32px, 5vw, 72px);
+    align-self: start; position: sticky; top: 64px;
+  }
+  .studio {
+    grid-column: 2; grid-row: 1; margin: 0; max-width: 720px;
+    padding: clamp(32px, 4vw, 56px) clamp(24px, 4vw, 64px) clamp(40px, 5vw, 72px) 12px;
+  }
 }
-@media (min-width: 1180px) {
-  .feed-grid { column-count: 5; }
+
+/* --------------------------------------------------------- 폼 부품
+
+   위저드 안에서 쓰는 입력 부품 전부. 시안(capture/design2.png)의 규칙은
+   하나다 — **라벨은 위, 입력은 아래, 폭은 꽉.** 예전에는 라벨과 입력이 옆에
+   붙어 있어서 폰에서 줄이 엉켰다. */
+
+.field { display: block; margin-bottom: 18px; }
+.field:last-child { margin-bottom: 0; }
+.field > span, .field-label {
+  display: block; font-size: .88rem; font-weight: 700;
+  color: var(--accent-d); margin-bottom: 8px;
 }
-@media (prefers-reduced-motion: reduce) {
-  .pin img, .pin a:hover img { transition: none; transform: none; }
+.field small, .field-label small, legend small {
+  color: var(--dim); font-weight: 500; margin-left: .35em;
+}
+.field input[type="text"],
+.field textarea,
+.field select,
+.fields-grid input {
+  width: 100%; display: block;
+  background: #fff; color: var(--text);
+  border: 1px solid var(--line-2); border-radius: 12px;
+  padding: .95em 1.1em; font: inherit; font-size: .96rem;
+  line-height: 1.55; resize: vertical;
+}
+.field textarea { min-height: 96px; }
+.field input:focus, .field textarea:focus, .field select:focus,
+.fields-grid input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(111,165,153,.22);
+}
+.field input::placeholder, .field textarea::placeholder { color: #a6b2ad; }
+.field select { appearance: none; margin-bottom: 8px; }
+.field .hint { display: block; color: var(--dim); font-size: .78rem; margin-top: 6px; }
+.field.big > span { font-size: .95rem; }
+
+/* ---- 사진 — 네 칸 타일 ---------------------------------------------- */
+
+/* 시안대로 **정사각 타일 네 개**다. 올린 사진이 앞을 채우고, 남은 자리는
+   점선 + 표시로 남는다. 예전에는 왼쪽에 큰 드롭존 하나 + 오른쪽에 칸들이라
+   폰에서 둘 다 눌렸다. */
+.photo-row { display: block; margin-bottom: 20px; }
+.photo-drop {
+  display: block; cursor: pointer; margin-bottom: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+.photo-hint {
+  display: block; font-size: .88rem; font-weight: 700;
+  color: var(--accent-d); margin-bottom: 8px;
+}
+.photo-hint b { font-weight: 700; }
+.photo-hint small {
+  display: block; font-weight: 500; color: var(--dim);
+  font-size: .78rem; line-height: 1.5; margin-top: 6px;
+}
+/* 각도 설명은 타일 **아래**에 둔다 — 위에 두 줄이 쌓이면 정작 눌러야 할
+   타일이 화면 밖으로 밀린다. */
+.photo-foot {
+  display: block; color: var(--dim); font-size: .78rem;
+  line-height: 1.5; margin-top: 8px;
+}
+
+.photo-strip {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+}
+.shot { position: relative; margin: 0; aspect-ratio: 1; border-radius: 12px; overflow: hidden; }
+.shot img { width: 100%; height: 100%; object-fit: cover; }
+.shot-x {
+  position: absolute; right: 4px; top: 4px; width: 22px; height: 22px;
+  border-radius: 50%; border: none; background: rgba(31,63,60,.72);
+  color: var(--on-sea); cursor: pointer; font-size: .74rem; line-height: 1;
+  display: grid; place-items: center;
+}
+/* 남은 자리 — 점선 + 타일. 개수는 올린 장 수에 따라 CSS 로만 줄인다. */
+.photo-slot {
+  aspect-ratio: 1; border-radius: 12px;
+  border: 1.5px dashed var(--sea-mid); color: var(--sea-mid);
+  display: grid; place-items: center; font-size: 1.4rem; font-weight: 300;
+}
+.photo-drop.drag .photo-slot { border-color: var(--accent); background: rgba(111,165,153,.12); }
+.photo-count { display: block; color: var(--dim); font-size: .76rem; margin-top: 8px; }
+.photo-side { display: block; }
+
+/* ---- 항목 표 -------------------------------------------------------- */
+
+.fields { border: none; padding: 0; margin: 14px 0 0; }
+.fields legend { font-size: .88rem; font-weight: 700; color: var(--accent-d); padding: 0 0 8px; }
+.fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fields-grid label { display: block; }
+.fields-grid label > span {
+  display: block; font-size: .76rem; color: var(--dim);
+  font-weight: 600; margin-bottom: 5px;
+}
+.fields-grid input { padding: .75em .9em; font-size: .9rem; }
+
+/* ---- 아이디어 칩 ---------------------------------------------------- */
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip {
+  border: 1px solid var(--line-2); background: var(--ink-2);
+  border-radius: 999px; padding: .6em 1.05em; font: inherit; font-size: .84rem;
+  color: var(--muted); cursor: pointer; min-height: 40px;
+  text-align: left; line-height: 1.35;
+}
+.chip:hover { border-color: var(--accent); color: var(--accent-d); }
+
+/* ---- 그림체 --------------------------------------------------------- */
+
+.styles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.style-opt { position: relative; cursor: pointer; display: block; }
+.style-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.style-box {
+  display: block; padding: 14px; border-radius: 14px; height: 100%;
+  border: 1.5px solid var(--line-2); background: #fff;
+}
+.style-box b { display: block; font-size: .92rem; color: var(--accent-d); }
+.style-box small { display: block; color: var(--dim); font-size: .78rem; line-height: 1.45; margin-top: 4px; }
+.style-opt:hover .style-box { border-color: var(--accent); }
+.style-opt input:checked + .style-box {
+  border-color: var(--accent-d); border-width: 2.5px;
+  background: rgba(111,165,153,.1);
+}
+.style-opt input:focus-visible + .style-box { box-shadow: 0 0 0 3px rgba(111,165,153,.3); }
+
+/* ---- 라디오 고르개 (연출 · 등신 · 검수) ------------------------------ */
+
+.ratios { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.ratio { position: relative; cursor: pointer; display: block; }
+.ratio input { position: absolute; opacity: 0; pointer-events: none; }
+.ratio span {
+  display: block; padding: 12px 12px; border-radius: 12px; height: 100%;
+  border: 1.5px solid var(--line-2); background: #fff;
+}
+.ratio b { display: block; font-size: .9rem; color: var(--accent-d); }
+.ratio small { display: block; color: var(--dim); font-size: .74rem; line-height: 1.4; margin-top: 3px; }
+.ratio:hover span { border-color: var(--accent); }
+.ratio input:checked + span {
+  border-color: var(--accent-d); border-width: 2.5px;
+  background: rgba(111,165,153,.1);
+}
+.ratio input:focus-visible + span { box-shadow: 0 0 0 3px rgba(111,165,153,.3); }
+
+/* ---- 켬/끔 ---------------------------------------------------------- */
+
+.toggle { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+.toggle input { margin-top: 3px; width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+.toggle b { display: block; font-size: .92rem; color: var(--accent-d); }
+.toggle small { display: block; color: var(--dim); font-size: .8rem; line-height: 1.45; margin-top: 3px; }
+
+.checkpoint-list { margin: 0; padding-left: 1.2em; color: var(--muted); font-size: .84rem; }
+.checkpoint-list li { margin-bottom: .5em; }
+.checkpoint-list b { color: var(--accent-d); }
+.checkpoint-list small { display: block; color: var(--dim); font-size: .76rem; }
+.hint { color: var(--dim); font-size: .8rem; line-height: 1.6; }
+
+@media (max-width: 380px) {
+  .fields-grid { grid-template-columns: 1fr; }
 }
 
 /* ------------------------------------------------------------- 위저드
@@ -254,11 +351,7 @@ body[data-view="nextep"]  .topbar { display: none; }
 .wizard { display: block; max-width: 640px; margin: 0 auto; }
 /* 걸음을 옮기면 studio-head 로 스크롤한다. 상단 바가 sticky 라 그냥 두면
    제목이 그 아래로 숨는다 — 바 높이만큼 미리 띄운다. */
-.studio-head { scroll-margin-top: 76px; text-align: center; }
-.studio-head h2 { font-size: clamp(1.3rem, 5vw, 1.8rem); font-weight: 800; color: var(--accent-d); }
-.studio-sub { color: var(--muted); font-size: .88rem; margin: .6em 0 0; }
-body[data-step="4"] .studio-sub,
-body[data-step="5"] .studio-sub { color: rgba(247,243,234,.75); }
+.studio { scroll-margin-top: 76px; }
 
 /* 지면 — body[data-step] 이 물빛을 정한다(app.js 가 적는다) */
 .studio { position: relative; transition: background .5s ease; }
@@ -270,9 +363,6 @@ body[data-step="5"] .studio { background: linear-gradient(180deg, var(--sea-mid)
 body[data-step="6"] .studio { background: linear-gradient(180deg, var(--sea-deep), var(--sea-abyss)); }
 
 /* 깊은 걸음에서는 제목·설명이 물 위에 얹히므로 밝은 글자로 바꾼다 */
-body[data-step="4"] .studio-head h2,
-body[data-step="5"] .studio-head h2,
-body[data-step="6"] .studio-head h2,
 body[data-step="4"] .wiz-title,
 body[data-step="5"] .wiz-title,
 body[data-step="6"] .wiz-title { color: var(--on-sea); }
@@ -483,6 +573,27 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
   .mascot, .mascot[data-react] { animation: none; }
 }
 
+
+/* 진행 바 — 루 바로 아래. 두껍고(10px) 숫자가 붙는다. */
+.lou-progress {
+  display: flex; align-items: center; gap: 12px;
+  width: min(100%, 380px); margin-top: 18px;
+}
+.lou-bar {
+  flex: 1; height: 10px; border-radius: 999px;
+  background: rgba(34,48,44,.12); overflow: hidden;
+}
+.lou-bar > i {
+  display: block; height: 100%; width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--sea-mint), var(--sea-mid));
+  transition: width .6s ease;
+}
+.lou-pct {
+  font-family: var(--mono); font-size: .88rem; font-weight: 700;
+  color: var(--accent-d); min-width: 3.2em; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 
 /* 만질 수 있다는 것을 한 번은 말해 준다. 만지고 나면 굳이 안 보여도 된다. */
 .mascot-poke { color: var(--dim); font-size: .76rem; margin: .9em 0 0; }
@@ -897,22 +1008,7 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
   color: var(--muted, #8a8a94);
 }
 
-/* ---- 사진 여러 장 (#67) --------------------------------------------- */
-/* 한 사람을 여러 각도로. 한 장으로는 늘 안 보이는 칸이 남는다. */
-.photo-strip { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; }
-.photo-strip:empty { display: none; }
-.photo-strip .shot { position: relative; margin: 0; width: 68px; height: 68px; }
-.photo-strip .shot img {
-  width: 100%; height: 100%; object-fit: cover;
-  border-radius: .4rem; display: block;
-}
-.photo-strip .shot-x {
-  position: absolute; top: -6px; right: -6px;
-  width: 18px; height: 18px; line-height: 1; padding: 0;
-  border-radius: 50%; border: none; cursor: pointer;
-  background: var(--accent-d); color: var(--on-sea); font-size: .68rem;
-}
-.photo-count { font-size: .74rem; color: var(--muted, #8a8a94); margin-top: .35rem; }
+/* (#67 의 사진 스타일은 위 "폼 부품" 절의 네 칸 타일로 합쳐졌다) */
 
 
 /* ---- 다음 화 만들기 (#72) -------------------------------------------- */

@@ -309,11 +309,16 @@ function setupPhoto() {
   const drop = $("#photoDrop"), input = $("#photo");
 
   const paint = () => {
-    $("#photoStrip").innerHTML = photos.map((src, i) => `
+    // 올린 사진 + 남은 빈 칸을 **항상 네 칸**으로 채운다. 빈 칸이 안 보이면
+    // 더 올릴 수 있다는 것을 모른다(시안 capture/design2.png 의 규칙).
+    const shots = photos.map((src, i) => `
       <figure class="shot">
         <img src="${src}" alt="${i + 1}번째 사진">
         <button type="button" class="shot-x" data-i="${i}" aria-label="지우기">✕</button>
-      </figure>`).join("");
+      </figure>`);
+    const slots = Array.from({ length: MAX_PHOTOS - photos.length },
+      () => `<span class="photo-slot" aria-hidden="true">+</span>`);
+    $("#photoStrip").innerHTML = shots.concat(slots).join("");
     $$("#photoStrip .shot-x").forEach(b => b.addEventListener("click", e => {
       e.preventDefault(); e.stopPropagation();
       photos.splice(Number(b.dataset.i), 1); paint();
@@ -473,7 +478,7 @@ function wizGo(n, scroll = true) {
   wizPaintGauge();
 
   if (!scroll) return;
-  const head = document.querySelector(".studio-head");
+  const head = document.querySelector("#studio");
   if (head) head.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
@@ -793,6 +798,84 @@ const MASCOT_MOODS = {
 };
 const MASCOT_WAITING = "확인해 주실 게 있어요 — 아래에서 골라 주세요.";
 
+/* 전체 진행률. 다섯 단계를 같은 무게로 치고, 그림 단계 안에서는 그린 장
+   수(s.art.done/total)로 더 잘게 나눈다. 정확한 예측이 아니라 "움직이고
+   있다"를 보여주는 숫자다 — 그래서 단계가 뒤로 돌아가도 숫자는 안 줄인다. */
+let louPctShown = 0;
+function louPercent(s) {
+  const stages = (s.stages || []).filter(st => st.state !== "skip");
+  if (!stages.length) return 0;
+  let done = 0, frac = 0;
+  stages.forEach((st, i) => {
+    if (st.state === "done") done += 1;
+    else if (i === s.stage_index) {
+      if (st.key === "art" && s.art && s.art.total) frac = s.art.done / s.art.total;
+      else frac = 0.35;              // 단계 중간쯤이라고 친다
+    }
+  });
+  let pct = Math.round((done + frac) / stages.length * 100);
+  if (s.status === "done") pct = 100;
+  louPctShown = Math.max(louPctShown, Math.min(100, pct));
+  return louPctShown;
+}
+
+function paintLouProgress(s) {
+  const fill = $("#louBarFill"), label = $("#louPct");
+  if (!fill) return;
+  const pct = louPercent(s);
+  fill.style.width = pct + "%";
+  label.textContent = pct + "%";
+  const box = $("#louProgress");
+  if (box) box.setAttribute("aria-valuenow", String(pct));
+}
+
+/* ---- 심심풀이 — 기다리는 동안 루가 딴짓을 한다 ----------------------- *
+ *
+ * 10~20초에 한 번, 단계 그림 대신 다른 루가 몇 초 나왔다 돌아간다.
+ * 반응(data-react)이나 확인 대기(ask)·완료·오류 중에는 안 끼어든다 —
+ * 그때는 화면이 딴짓보다 중요한 것을 말하고 있다. */
+const LOU_IDLE = [
+  ["lou-happy",   "루가 춤추고 있어요!"],
+  ["lou-idle",    "루가 물거품을 구경하고 있어요."],
+  ["lou-loading", "루가 이야기 조각을 주웠어요."],
+  ["lou-sleepy",  "루가 살짝 졸고 있어요… 일은 하고 있대요."],
+  ["lou-think",   "루가 다음 컷을 고민하고 있어요."],
+  ["lou-ask",     "루가 여러분을 흘끔 보고 있어요."],
+];
+let louIdleTimer = null;
+let louIdleBack = null;
+
+function louIdleTick() {
+  const box = $("#mascot");
+  if (!box || document.body.dataset.view !== "running") return;
+  if (box.dataset.react) return;                       // 만지는 중
+  const mood = box.dataset.mood;
+  if (mood === "ask" || mood === "done" || mood === "error") return;
+  const [img, line] = LOU_IDLE[Math.floor(Math.random() * LOU_IDLE.length)];
+  box.dataset.idle = img;
+  box.style.backgroundImage = `url("/static/lou/${img}.png")`;
+  const lineEl = $("#mascotLine");
+  const saved = lineEl.textContent;
+  lineEl.textContent = line;
+  clearTimeout(louIdleBack);
+  louIdleBack = setTimeout(() => {
+    delete box.dataset.idle;
+    box.style.backgroundImage = "";                     // CSS(단계 그림)로 돌아간다
+    if (lineEl.textContent === line) lineEl.textContent = saved;
+  }, 4200);
+}
+
+function louIdleStart() {
+  if (louIdleTimer) return;
+  louIdleTimer = setInterval(louIdleTick, 12000 + Math.floor(Math.random() * 6000));
+}
+function louIdleStop() {
+  clearInterval(louIdleTimer); louIdleTimer = null;
+  clearTimeout(louIdleBack);
+  const box = $("#mascot");
+  if (box) { delete box.dataset.idle; box.style.backgroundImage = ""; }
+}
+
 function paintMascot(s, currentStage) {
   const box = $("#mascot");
   if (!box) return;
@@ -817,6 +900,9 @@ function paintMascot(s, currentStage) {
   }
 
   box.dataset.mood = mood;
+  paintLouProgress(s);
+  if (s.status === "running" || s.status === "queued") louIdleStart();
+  else louIdleStop();
   // 단계 key 도 함께 적는다 — 루는 단계마다 다른 그림을 쓴다(style.css 참고).
   // 사람 확인을 기다리는 중이면 단계 그림 대신 "물어보는" 얼굴이 맞으므로 비운다.
   if (currentStage && currentStage.key && mood !== "ask") box.dataset.stage = currentStage.key;
