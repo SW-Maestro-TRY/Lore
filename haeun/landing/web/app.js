@@ -555,6 +555,205 @@ function openChargeModal() {
 
 function closeChargeModal() { $("#chargeModal").hidden = true; }
 
+/* ------------------------------------------------------------------ 계정
+ *
+ * 닉네임+비밀번호만 있는 가벼운 계정 — 이메일 인증·비밀번호 찾기 없음.
+ * 로그인 안 해도 웹툰은 그대로 만든다. 계정은 결과 화면의 "계정에
+ * 담아두기" 를 통해서만 필요해지는 선택 기능이다. 세션은 서버가 쿠키
+ * (lore_session, HttpOnly) 로 들고 있어서 여기서는 로그인 응답을 상태에
+ * 반영하는 것만 신경 쓰면 된다. */
+
+let accountState = { logged_in: false };
+let signupPhoto = { kind: "preset", id: "" };   // 회원가입 폼에서 고른 사진
+let pendingClaimRunId = "";                     // 담아두기 → 로그인/가입하면 이걸 담는다
+
+async function refreshAccount() {
+  try {
+    accountState = await (await fetch("/api/account/me")).json();
+  } catch { accountState = { logged_in: false }; }
+  paintAccountPill();
+  paintClaimBanner();
+}
+
+function paintAccountPill() {
+  const img = $("#accountAvatarImg"), label = $("#accountPillLabel");
+  if (accountState.logged_in) {
+    img.src = accountState.photo_url;
+    img.hidden = false;
+    label.textContent = accountState.nickname;
+  } else {
+    img.hidden = true;
+    label.textContent = "로그인";
+  }
+}
+
+/* 결과 화면에서만 쓴다 — 계정이 없어도 작품은 브라우저에 남으므로, 이미
+   담아 둔 작품이면 다시 권하지 않는다. */
+function paintClaimBanner() {
+  const banner = $("#claimBanner");
+  if (!banner) return;
+  if (!resultRunId) { banner.hidden = true; return; }
+  if (accountState.logged_in && (accountState.claimed_runs || []).includes(resultRunId)) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  $("#claimBannerText").textContent = accountState.logged_in
+    ? "이 작품을 계정에 저장할까요?"
+    : "이 작품을 나중에도 찾으시려면?";
+  $("#claimBtn").textContent = accountState.logged_in ? "저장하기" : "계정에 담아두기";
+}
+
+async function claimCurrentRun() {
+  if (!resultRunId) return;
+  if (!accountState.logged_in) {
+    // 로그인 전이면 먼저 계정부터 만들게 하고, 되는 대로 이 작품을 담는다.
+    pendingClaimRunId = resultRunId;
+    openAccountModal("signup");
+    return;
+  }
+  try {
+    const res = await fetch("/api/account/claim", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ run_id: resultRunId }),
+    });
+    if (!res.ok) throw new Error();
+    accountState.claimed_runs = [...(accountState.claimed_runs || []), resultRunId];
+    paintClaimBanner();
+    toast("계정에 담아뒀어요");
+  } catch { toast("저장하지 못했습니다 — 다시 시도해 주세요"); }
+}
+
+/* ---- 계정 모달 — 로그인/회원가입 탭, 로그인 후엔 프로필로 바뀐다 ------- */
+
+function openAccountModal(tab) {
+  $("#accountModal").hidden = false;
+  if (accountState.logged_in) {
+    showAccountProfile();
+  } else {
+    switchAccountTab(tab || "login");
+    if (!$("#photoGrid").children.length) renderPhotoGrid();
+  }
+}
+function closeAccountModal() { $("#accountModal").hidden = true; }
+
+function switchAccountTab(tab) {
+  $("#accountAuth").hidden = false;
+  $("#accountProfile").hidden = true;
+  $("#tabLogin").classList.toggle("is-active", tab === "login");
+  $("#tabSignup").classList.toggle("is-active", tab === "signup");
+  $("#loginForm").hidden = tab !== "login";
+  $("#signupForm").hidden = tab !== "signup";
+}
+
+async function renderPhotoGrid() {
+  let presets = [];
+  try { presets = (await getConfig()).account_photo_presets || []; }
+  catch { /* 프리셋을 못 받아도 직접 올리기는 된다 */ }
+  const grid = $("#photoGrid");
+  grid.innerHTML = presets.map(p => `
+    <button type="button" class="photo-opt" data-preset="${p.id}">
+      <img src="${p.url}" alt="">
+    </button>`).join("");
+  if (presets[0]) selectPresetPhoto(presets[0].id);
+  $$(".photo-opt", grid).forEach(b =>
+    b.addEventListener("click", () => selectPresetPhoto(b.dataset.preset)));
+}
+
+function selectPresetPhoto(id) {
+  signupPhoto = { kind: "preset", id };
+  $$(".photo-opt", $("#photoGrid")).forEach(b =>
+    b.classList.toggle("is-selected", b.dataset.preset === id));
+  $(".photo-upload-btn").classList.remove("is-selected");
+}
+
+async function onSignup(e) {
+  e.preventDefault();
+  const form = e.target;
+  const err = $("#signupError");
+  err.hidden = true;
+  const body = {
+    nickname: form.nickname.value.trim(),
+    password: form.password.value,
+    photo: signupPhoto,
+  };
+  try {
+    const res = await fetch("/api/account/signup", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "회원가입에 실패했습니다");
+    await afterLogin(data);
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+}
+
+async function onLogin(e) {
+  e.preventDefault();
+  const form = e.target;
+  const err = $("#loginError");
+  err.hidden = true;
+  try {
+    const res = await fetch("/api/account/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nickname: form.nickname.value.trim(), password: form.password.value }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "로그인에 실패했습니다");
+    await afterLogin(data);
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+}
+
+async function afterLogin(data) {
+  accountState = data;
+  paintAccountPill();
+  if (pendingClaimRunId) {
+    const runId = pendingClaimRunId;
+    pendingClaimRunId = "";
+    try {
+      await fetch("/api/account/claim", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run_id: runId }),
+      });
+      accountState.claimed_runs = [...(accountState.claimed_runs || []), runId];
+    } catch { /* 로그인 자체는 됐다 — 결과 화면에서 배너를 다시 누르면 된다 */ }
+  }
+  paintClaimBanner();
+  closeAccountModal();
+  toast(`${accountState.nickname}님, 반가워요`);
+}
+
+async function showAccountProfile() {
+  $("#accountAuth").hidden = true;
+  $("#accountProfile").hidden = false;
+  $("#profileAvatarImg").src = accountState.photo_url;
+  $("#profileNickname").textContent = accountState.nickname;
+  const list = $("#accountWorksList");
+  list.innerHTML = `<p class="works-empty">불러오는 중…</p>`;
+  try {
+    const runs = (await (await fetch("/api/account/works")).json()).runs || [];
+    list.innerHTML = runs.length
+      ? runs.map(workCard).join("")
+      : `<p class="works-empty">아직 담아둔 작품이 없습니다 — 결과 화면에서 ` +
+        `"계정에 담아두기" 를 눌러 보세요.</p>`;
+    $$("[data-open]", list).forEach(b => b.addEventListener("click", () => {
+      closeAccountModal();
+      showRunResult(b.dataset.open, Number(b.dataset.ep));
+    }));
+  } catch {
+    list.innerHTML = `<p class="works-empty">목록을 불러오지 못했습니다.</p>`;
+  }
+}
+
+async function logout() {
+  try { await fetch("/api/account/logout", { method: "POST" }); }
+  catch { /* 실패해도 화면은 로그아웃으로 바꾼다 */ }
+  accountState = { logged_in: false };
+  paintAccountPill();
+  paintClaimBanner();
+  switchAccountTab("login");
+}
+
 /* ------------------------------------------------------------- 위저드
 
    흐름은 사람이 겪는 순서다.
@@ -1449,6 +1648,7 @@ function paintResult(r) {
       `다음 장면 이어서 보기 (${shown}/${moreCtx.total}컷)`;
   }
 
+  paintClaimBanner();
   view("result");
   $("#progress").hidden = true;
   $("#works").hidden = true;
@@ -2058,6 +2258,32 @@ document.addEventListener("DOMContentLoaded", () => {
   // 바탕을 눌러도 닫힌다 — 상자 자체를 누른 건 안 닫는다.
   $("#chargeModal").addEventListener("click", e => {
     if (e.target.id === "chargeModal") closeChargeModal();
+  });
+
+  refreshAccount();
+  $("#accountBtn").addEventListener("click", () => openAccountModal());
+  $("#accountModalClose").addEventListener("click", closeAccountModal);
+  $("#accountModal").addEventListener("click", e => {
+    if (e.target.id === "accountModal") closeAccountModal();
+  });
+  $("#tabLogin").addEventListener("click", () => switchAccountTab("login"));
+  $("#tabSignup").addEventListener("click", () => switchAccountTab("signup"));
+  $("#loginForm").addEventListener("submit", onLogin);
+  $("#signupForm").addEventListener("submit", onSignup);
+  $("#logoutBtn").addEventListener("click", logout);
+  $("#claimBtn").addEventListener("click", claimCurrentRun);
+  $("#photoUpload").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast("이미지 파일만 됩니다");
+    if (file.size > 3 * 1024 * 1024) return toast("사진이 너무 큽니다 (3MB 까지)");
+    const fr = new FileReader();
+    fr.onload = () => {
+      signupPhoto = { kind: "upload", data_url: fr.result };
+      $$(".photo-opt", $("#photoGrid")).forEach(b => b.classList.remove("is-selected"));
+      $(".photo-upload-btn").classList.add("is-selected");
+    };
+    fr.readAsDataURL(file);
   });
 
   $("#cancelBtn").addEventListener("click", async () => {
