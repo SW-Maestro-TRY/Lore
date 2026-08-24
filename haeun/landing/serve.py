@@ -319,6 +319,9 @@ class Handler(BaseHTTPRequestHandler):
         # index.html·app.js 를 쓰고, 데이터만 web/samples/mock.json 에서 온다.
         if path in ("/demo/result", "/demo/result/"):
             return self._file(WEB / "index.html")
+        # 마이페이지 — 로그인한 사람이 저장해 둔 작품. 목업도 같은 파일이다.
+        if path in ("/mypage", "/mypage/", "/demo/mypage", "/demo/mypage/"):
+            return self._file(WEB / "index.html")
         # 목업의 "내려받기". 샘플 장을 한 편으로 이어 붙인 뒤 **실제 내려받기와
         # 똑같은 길**로 내보낸다 — 그래야 워터마크가 붙은 모습이 그대로 보인다.
         if path == "/api/demo/episode.png":

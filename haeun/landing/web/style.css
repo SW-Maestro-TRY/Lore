@@ -84,11 +84,12 @@ body[data-view="create"]  .foot,
 body[data-view="running"] #landing,
 body[data-view="running"] .topbar,
 body[data-view="running"] .foot,
+/* 완성본과 목록에서는 상단 바를 남긴다. 읽거나 고르는 자리라 랜딩·편집실로
+   건너갈 길이 보이는 편이 낫고, 로그인 배지도 거기 있어야 한다 — 완성본 화면은
+   계정을 만들 이유가 처음 생기는 자리다. 만드는 중(running)에만 감춘다. */
 body[data-view="result"]  #landing,
-body[data-view="result"]  .topbar,
-/* 목록에서는 상단 바를 남긴다 — 읽는 자리가 아니라 고르는 자리라, 랜딩·편집실로
-   건너갈 길이 보이는 편이 낫다. */
 body[data-view="works"]   #landing,
+body[data-view="mypage"]  #landing,
 body[data-view="nextep"]  #landing,
 body[data-view="nextep"]  .topbar { display: none; }
 
@@ -1500,3 +1501,115 @@ button.inline-link:hover { color: #f0d090; }
 .result-actions .wm-note {
   flex-basis: 100%; margin: 0; font-size: .76rem; color: var(--dim);
 }
+
+/* ------------------------------------------------------------- 결과 화면 머리
+
+   다 만든 뒤 처음 보는 화면이다. 예전에는 글자만 빽빽하고 단추가 여덟 개라
+   "완성"이 아니라 관리 화면처럼 보였고, 상단 바까지 숨겨서 화면이 어디서
+   시작하는지도 알 수 없었다.
+
+   지금은 (1) 상단 바를 그대로 두고, (2) 루가 완성본을 들고 있는 그림을 표지로
+   깔고, (3) 단추는 여기서 실제로 할 일 셋만 남긴다. */
+
+.result-cover {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px; margin-bottom: 12px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--sea-sand), var(--paper) 62%);
+  border: 1px solid var(--line);
+}
+.result-cover-art {
+  flex: none; width: min(28vw, 104px); aspect-ratio: 1;
+  object-fit: cover; border-radius: 18px;
+}
+.result-cover-text { min-width: 0; }
+.result-cover-text .eyebrow { margin: 0 0 2px; }
+.result-cover-text h2 {
+  margin: 0; font-size: 1.35rem; line-height: 1.25; word-break: keep-all;
+}
+.result-cover-text .result-sub {
+  margin: 6px 0 0; font-size: .78rem; color: var(--dim);
+}
+.result-logline {
+  margin: 0 0 14px; color: var(--muted); font-size: .92rem; line-height: 1.6;
+}
+
+/* 단추 셋 + ⋯. 첫 줄에 「내려받기 · 편집실로 가기 · ⋯」, 「서버에 저장하기」는
+   아래 한 줄을 통째로 쓴다 — 로그인하면 그 줄이 통째로 사라져서, 남은 것들이
+   자리를 어색하게 옮기지 않는다. */
+.result-actions {
+  display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center;
+}
+.result-actions > .btn { min-height: 46px; }
+.result-actions #claimBtn { grid-column: 1 / -1; order: 1; }
+/* 이미 담은 작품 — 감추지 않고 눌리지 않게만 둔다. 감추면 단추가 셋에서 둘로
+   줄어 자리가 흔들리고, 저장이 됐는지도 알 수 없다. */
+.result-actions #claimBtn:disabled {
+  cursor: default; opacity: 1;
+  color: var(--accent-d); background: rgba(47,143,168,.10);
+  border-color: transparent;
+}
+.result-actions #claimBtn:disabled::before { content: "✓ "; }
+.result-actions .btn-icon {
+  width: 46px; min-height: 46px; padding: 0; font-size: 1.1rem; line-height: 1;
+}
+.result-more { position: relative; }
+.more-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20;
+  min-width: 190px; padding: 6px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(38,64,58,.16);
+  display: grid; gap: 2px;
+}
+.more-menu button {
+  text-align: left; background: none; border: none; cursor: pointer;
+  font: inherit; font-size: .88rem; color: var(--text);
+  padding: 10px 12px; border-radius: 10px;
+}
+.more-menu button:hover { background: var(--ink-2); color: var(--accent-d); }
+.more-menu button[hidden] { display: none; }
+
+.result-head .wm-note {
+  margin: 10px 0 0; font-size: .74rem; color: var(--dim);
+}
+
+@media (max-width: 380px) {
+  .result-cover { gap: 10px; padding: 12px; }
+  .result-cover-text h2 { font-size: 1.15rem; }
+}
+
+/* -------------------------------------------------------------- 마이페이지
+
+   「내 웹툰」(/works)이 이 서버에 있는 작품 전부라면, 여기는 내 계정에 저장한
+   것만이다. 작품 카드(.works-*)는 그대로 나눠 쓴다 — 같은 것을 두 번 그리면
+   한쪽만 고쳐지는 날이 온다. */
+.mypage { padding: 22px 0 40px; }
+.mypage-head {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 16px; margin-bottom: 22px;
+  background: linear-gradient(135deg, var(--sea-sand), var(--paper) 62%);
+  border: 1px solid var(--line); border-radius: 22px;
+}
+.mypage-photo {
+  flex: none; width: 64px; height: 64px; border-radius: 50%;
+  object-fit: cover; background: var(--ink-2);
+}
+.mypage-who { flex: 1; min-width: 0; }
+.mypage-who .eyebrow { margin: 0 0 2px; }
+.mypage-who h2 { margin: 0; font-size: 1.3rem; }
+.mypage-meta { margin: 4px 0 0; font-size: .82rem; color: var(--dim); }
+.mypage-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.mypage-section-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin-bottom: 12px;
+}
+.mypage-section-head h3 { margin: 0; font-size: 1.02rem; }
+
+/* 결과 화면의 단추 설명 — 「서버에 저장하기」는 눌러야 할 이유가 화면에 없으면
+   아무도 안 누른다. */
+.result-note {
+  margin: 12px 0 0; padding: 10px 12px; border-radius: 12px;
+  font-size: .8rem; line-height: 1.6; color: var(--muted);
+  background: rgba(47,143,168,.07);
+}
+.result-note b { color: var(--accent-d); }

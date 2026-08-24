@@ -577,43 +577,67 @@ async function refreshAccount() {
   paintClaimBanner();
 }
 
+/* 상단 바 배지. 로그인 전에는 「로그인」(누르면 계정 창), 로그인 뒤에는
+   프로필 사진 + 「마이페이지」(누르면 마이페이지로 간다).
+   닉네임 대신 「마이페이지」라고 적는 이유: 닉네임만 적혀 있으면 그것이
+   **눌러서 갈 수 있는 자리**라는 것을 아무도 모른다. 닉네임은 마이페이지
+   안에서 크게 보여 준다. */
+let mockAccountPill = false;   // 목업에서만 켠다 — 로그인 뒤 모습을 보여주려고
+
 function paintAccountPill() {
   const img = $("#accountAvatarImg"), label = $("#accountPillLabel");
+  const btn = $("#accountBtn");
+  if (mockAccountPill) {
+    // /api/account/me 응답이 늦게 와서 배지를 다시 「로그인」으로 되돌리는 것을 막는다
+    img.src = "/static/lou/react/idle/01.webp";
+    img.hidden = false;
+    label.textContent = "마이페이지";
+    return;
+  }
   if (accountState.logged_in) {
     img.src = accountState.photo_url;
     img.hidden = false;
-    label.textContent = accountState.nickname;
+    label.textContent = "마이페이지";
+    if (btn) btn.title = `${accountState.nickname} · 내 작품 보기`;
   } else {
     img.hidden = true;
     label.textContent = "로그인";
+    if (btn) btn.title = "로그인 · 내 계정";
   }
 }
 
-/* 결과 화면에서만 쓴다 — 계정이 없어도 작품은 브라우저에 남으므로, 이미
-   담아 둔 작품이면 다시 권하지 않는다. */
+/* 결과 화면의 "서버에 저장하기".
+ *
+ * 로그인 여부와 상관없이 **늘 보인다.** 로그인 전에 누르면 회원가입 창이 열리고,
+ * 가입이 끝나면 보고 있던 작품이 그대로 담긴다 — 계정을 만들 이유가 처음
+ * 생기는 자리가 여기다. 로그인한 사람에게도 보이는 이유는, 저장을 사용자가
+ * 시켜야 하는 일로 두었기 때문이다(저절로 담으면 안 누른 사람은 자기 작품이
+ * 어디 있는지 알 수 없다).
+ *
+ * 이미 담은 작품이면 감추는 대신 **눌리지 않는 「저장됨」** 으로 바꾼다.
+ * 감춰 버리면 단추가 셋에서 둘로 줄어 자리가 흔들리고, 저장이 됐는지 안 됐는지도
+ * 알 수 없다.
+ *
+ * 담을 작품이 없을 때(목업)만 안 보인다 — 흐름을 보여줘야 하는 목업은
+ * showMockResult() 에서 따로 켠다. */
 function paintClaimBanner() {
-  const banner = $("#claimBanner");
-  if (!banner) return;
-  if (!resultRunId) { banner.hidden = true; return; }
-  if (accountState.logged_in && (accountState.claimed_runs || []).includes(resultRunId)) {
-    banner.hidden = true;
-    return;
-  }
-  banner.hidden = false;
-  $("#claimBannerText").textContent = accountState.logged_in
-    ? "이 작품을 계정에 저장할까요?"
-    : "이 작품을 나중에도 찾으시려면?";
-  $("#claimBtn").textContent = accountState.logged_in ? "저장하기" : "계정에 담아두기";
+  const btn = $("#claimBtn");
+  if (!btn) return;
+  btn.hidden = !resultRunId;
+  const done = accountState.logged_in
+    && (accountState.claimed_runs || []).includes(resultRunId);
+  btn.disabled = done;
+  btn.textContent = done ? "저장됨" : "서버에 저장하기";
 }
 
 async function claimCurrentRun() {
-  if (!resultRunId) return;
   if (!accountState.logged_in) {
     // 로그인 전이면 먼저 계정부터 만들게 하고, 되는 대로 이 작품을 담는다.
     pendingClaimRunId = resultRunId;
     openAccountModal("signup");
     return;
   }
+  if (!resultRunId) return toast("화면 구경용 목업이라 담을 작품이 없습니다.");
   try {
     const res = await fetch("/api/account/claim", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -622,7 +646,7 @@ async function claimCurrentRun() {
     if (!res.ok) throw new Error();
     accountState.claimed_runs = [...(accountState.claimed_runs || []), resultRunId];
     paintClaimBanner();
-    toast("계정에 담아뒀어요");
+    toast("계정에 저장했어요 — 「내 웹툰」에서 다시 열 수 있습니다");
   } catch { toast("저장하지 못했습니다 — 다시 시도해 주세요"); }
 }
 
@@ -1561,6 +1585,10 @@ async function showMockResult() {
   // 목업이라는 것을 화면이 스스로 말해야 한다 — 안 그러면 진짜 결과로 읽힌다
   const sub = $("#resSub");
   if (sub) sub.textContent += " · 화면 구경용 목업입니다";
+  // 담을 작품이 없어도 단추는 보여 준다 — 목업의 일은 흐름을 보여주는 것이고,
+  // 눌러 보면 로그인 전 사용자가 실제로 만나는 그 가입 창이 그대로 열린다.
+  const claim = $("#claimBtn");
+  if (claim) claim.hidden = false;
 }
 
 async function showResult(attempt = 0) {
@@ -2181,6 +2209,84 @@ async function tickNextEp() {
  * 목록은 편집실과 같은 /api/runs 를 쓴다. 작업(job)을 안 거치므로 하네스를
  * 직접 돌린 것도, 이어 만들어 job 기록이 없는 회차도 빠짐없이 나온다. */
 
+/* ---- 마이페이지 --------------------------------------------------------
+ *
+ * 「내 웹툰」(/works)이 이 서버에 있는 작품 전부라면, 여기는 **내 계정에
+ * 저장한 것만** 이다. 둘을 나눈 이유: 계정 없이도 만들 수 있는 서비스라
+ * 서버에는 로그인 전에 만든 것이나 남의 것이 섞여 있다.
+ *
+ * 목록은 /api/runs 를 받아 계정의 claimed_runs 로 거른다 — 서버에 새 API 를
+ * 만들지 않아도 되고, 작품 카드 그리는 코드도 /works 와 그대로 나눠 쓴다. */
+function onlyMyPage() {
+  ["#progress", "#result", "#nextEp", "#works"].forEach(id => {
+    const el = $(id); if (el) el.hidden = true;
+  });
+  view("mypage");
+  $("#mypage").hidden = false;
+  window.scrollTo(0, 0);
+}
+
+async function showMyPage() {
+  if (!accountState.logged_in) return openAccountModal("login");
+  onlyMyPage();
+  if (location.pathname !== "/mypage") history.pushState(null, "", "/mypage");
+
+  $("#myPhoto").src = accountState.photo_url || GUEST_PILL_PHOTO;
+  $("#myNickname").textContent = accountState.nickname || "";
+
+  const mine = accountState.claimed_runs || [];
+  const host = $("#myWorksGrid");
+  host.innerHTML = `<p class="works-empty">불러오는 중…</p>`;
+  let runs = null;
+  try { runs = (await (await fetch("/api/runs")).json()).runs || []; }
+  catch { /* 아래에서 */ }
+
+  if (runs === null) {
+    $("#myMeta").textContent = "";
+    host.innerHTML = `<p class="works-empty">목록을 불러오지 못했습니다.` +
+      ` 서버(serve.py)가 떠 있는지 확인해 주세요.</p>`;
+    return;
+  }
+  const kept = runs.filter(r => mine.includes(r.run_id));
+  $("#myMeta").textContent = `저장한 작품 ${kept.length}편`;
+  if (!kept.length) {
+    host.innerHTML = `<p class="works-empty">아직 저장한 작품이 없습니다.` +
+      `<br>완성본 화면에서 <b>서버에 저장하기</b>를 누르면 여기에 쌓입니다.` +
+      `<br><a class="inline-link" href="/#studio">첫 작품 만들러 가기 →</a></p>`;
+    return;
+  }
+  host.innerHTML = kept.map(workCard).join("");
+  $$("#myWorksGrid [data-open]", host).forEach(b => b.addEventListener("click", () =>
+    showRunResult(b.dataset.open, Number(b.dataset.ep))));
+}
+
+/* 마이페이지 **목업** — /demo/mypage. 계정을 안 만들어도 화면을 볼 수 있게
+   가짜 계정과 작품 두 편을 넣는다. */
+function showMockMyPage() {
+  onlyMyPage();
+  $("#myPhoto").src = "/static/lou/react/idle/01.webp";
+  $("#myNickname").textContent = "루를 아는 사람";
+  $("#myMeta").textContent = "저장한 작품 2편 · 화면 구경용 목업입니다";
+  const card = (no, character, sub) => `
+    <article class="works-card">
+      <span class="works-cover">
+        <img src="/static/samples/mock/scene${no}.jpg" alt="" loading="lazy">
+      </span>
+      <div class="works-body">
+        <h3>${esc(character)}</h3>
+        <p class="works-sub">${esc(sub)}</p>
+      </div>
+    </article>`;
+  $("#myWorksGrid").innerHTML =
+    card(1, "모모", "로맨스 판타지 · 약속의 무게, 장난의 시작")
+    + card(3, "초롱", "무협 · 강호에 첫발");
+  $("#myLogout").hidden = true;
+  // 목업에서도 상단 배지가 로그인 뒤 모습(사진 + 마이페이지)으로 보여야
+  // "로그인하면 여기가 바뀐다"가 화면으로 전달된다. 진짜 로그인은 아니다.
+  mockAccountPill = true;
+  paintAccountPill();
+}
+
 async function showWorks() {
   view("works");
   $("#progress").hidden = true;
@@ -2241,6 +2347,28 @@ function workCard(r) {
 
 /* ------------------------------------------------------------------ 잡동사니 */
 
+/* 결과 화면의 ⋯ — 첫 화면에 안 둔 것들이 여기 들어 있다. 바깥을 누르거나
+   Esc 를 누르면 닫히고, 안의 단추를 누르면(그 동작을 하고 나서) 같이 닫힌다. */
+function setMoreMenu(open) {
+  const menu = $("#moreMenu"), btn = $("#moreBtn");
+  if (!menu || !btn) return;
+  menu.hidden = !open;
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+function wireMoreMenu() {
+  const menu = $("#moreMenu"), btn = $("#moreBtn");
+  if (!menu || !btn) return;
+  btn.addEventListener("click", e => { e.stopPropagation(); setMoreMenu(menu.hidden); });
+  menu.addEventListener("click", () => setMoreMenu(false));
+  document.addEventListener("click", e => {
+    if (!menu.hidden && !menu.contains(e.target) && e.target !== btn) setMoreMenu(false);
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") setMoreMenu(false);
+  });
+}
+
 function view(name) { document.body.dataset.view = name; }
 function esc(s) {
   return String(s ?? "").replace(/[&<>"]/g,
@@ -2288,6 +2416,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupWizard();
   setupLou();
   setupTips();
+  wireMoreMenu();
   loadCreditConfig();       // /api/config 가 도착하면 비용 칩을 실제 값으로 다시 그린다
   refreshCreditBalance();
   paintCost();
@@ -2302,7 +2431,15 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   refreshAccount();
-  $("#accountBtn").addEventListener("click", () => openAccountModal());
+  // 로그인 전에는 계정 창을 열고, 로그인 뒤에는 마이페이지로 간다.
+  $("#accountBtn").addEventListener("click", () => {
+    if (accountState.logged_in) showMyPage();
+    else openAccountModal();
+  });
+  $("#myLogout")?.addEventListener("click", async () => {
+    await logout();
+    location.href = "/";
+  });
   $("#accountModalClose").addEventListener("click", closeAccountModal);
   $("#accountModal").addEventListener("click", e => {
     if (e.target.id === "accountModal") closeAccountModal();
@@ -2370,7 +2507,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const wantResult = location.pathname.startsWith("/result");
   const wantWorks = location.pathname.startsWith("/works");
   const wantMock = location.pathname.startsWith("/demo/result");
-  if (wantMock) {
+  if (location.pathname.startsWith("/demo/mypage")) {
+    showMockMyPage();
+  } else if (location.pathname.startsWith("/mypage")) {
+    showMyPage();
+  } else if (wantMock) {
     showMockResult();
   } else if (wantWorks) {
     const run = params.get("run");
