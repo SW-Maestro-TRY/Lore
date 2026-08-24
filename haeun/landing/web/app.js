@@ -1023,8 +1023,6 @@ function paintLouProgress(s) {
 }
 
 function paintMascot(s, currentStage) {
-  const box = $("#mascot");
-  if (!box) return;
   let mood = "think";
   let line = "";
 
@@ -1045,12 +1043,19 @@ function paintMascot(s, currentStage) {
     if (hit) [mood, line] = hit;
   }
 
-  box.dataset.mood = mood;
   paintLouProgress(s);
-  // 단계 key 도 함께 적는다 — 루는 단계마다 다른 그림을 쓴다(style.css 참고).
-  // 사람 확인을 기다리는 중이면 단계 그림 대신 "물어보는" 얼굴이 맞으므로 비운다.
-  if (currentStage && currentStage.key && mood !== "ask") box.dataset.stage = currentStage.key;
-  else delete box.dataset.stage;
+  // 단계 그림은 #stageArt 가 그린다 — 단계 key 를 적으면 style.css 가
+  // web/lou/stage/<key>.webp 로 바꿔 준다 (이야기 → 캐릭터 → 콘티 → 그림 → 검수).
+  // 예전에는 이 값을 #mascot 에 적고 있어서, 실제 화면에서는 단계 그림이
+  // 한 번도 안 바뀌었다 (CSS 는 .stage-art 를 보고 있었다).
+  const art = $("#stageArt");
+  if (art) {
+    art.dataset.mood = mood;
+    // 확인을 기다리는 중이어도 일하던 단계 그림을 그대로 둔다 — 어디서 멈췄는지가
+    // 보여야 한다. 다 됐거나(done) 막혔을 때(error)는 mood 쪽 그림이 이긴다.
+    if (currentStage && currentStage.key) art.dataset.stage = currentStage.key;
+    else delete art.dataset.stage;
+  }
   $("#mascotLine").textContent = line;
 }
 
@@ -1906,6 +1911,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 위저드도 폼을 만든 뒤에 켠다(그림체·항목 칸이 있어야 요약을 그릴 수 있다).
   setupWizard();
   setupLou();
+  setupTips();
   loadCreditConfig();       // /api/config 가 도착하면 비용 칩을 실제 값으로 다시 그린다
   refreshCreditBalance();
   paintCost();

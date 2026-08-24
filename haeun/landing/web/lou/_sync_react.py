@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-"""design-reference 의 인터랙션 스프라이트를 랜딩 화면용으로 가져온다.
+"""design-reference 의 그림을 기다리는 화면용으로 가져온다.
+
+두 가지를 만든다.
+
+1. `stage/` — 단계 그림. 지금 루가 무슨 일을 하고 있는지 보여주는 큰 그림
+   여섯 장(이야기 → 캐릭터 → 콘티 → 그림 → 검수 → 완성)을 순서대로 쓴다.
+2. `react/` — 만졌을 때 나오는 반응 컷.
 
 기다리는 화면의 루는 128~180px 로 뜨는데 원본은 한 장에 70KB 쯤 된다.
 그대로 쓰면 로딩 화면이 로딩을 기다리게 되므로, 여기서 **골라서 줄여** 온다.
@@ -26,10 +32,27 @@ SRC = HERE.parents[2] / "design-reference" / "interaction"
 OUT = HERE / "react"
 MAX_SIDE = 320
 
+STAGE_SRC = HERE.parents[2] / "design-reference" / "loading"
+STAGE_OUT = HERE / "stage"
+STAGE_SIDE = 480          # 화면에서 320px 까지 쓰니 2배 화면을 덮는다
+
+# 파이프라인 단계 key -> 단계 그림. 순서가 곧 만드는 순서다.
+STAGE_PICK = {
+    "story": "loading_1_story.png",
+    "sheet": "loading_2_character.png",
+    "board": "loading_3_storyboard.png",
+    "art":   "loading_4_drawing.png",
+    "bind":  "loading_5_qa.png",
+    "done":  "loading_6_complete.png",
+}
+
 # 반응 이름 -> 원본에서 가져올 파일들 (순서가 그대로 재생 순서가 된다)
 PICK = {
     "idle":       [f"idle/seq1/{n:02d}.png" for n in range(1, 6)],
-    "sleep":      [f"idle/seq2/{n:02d}.png" for n in range(1, 6)],
+    # 잠드는 흐름과 깨는 흐름은 나눈다 — 한 덩어리로 두면 가만히 두기만 해도
+    # 루가 혼자 깜짝 놀라며 깬다. 깨는 컷은 자는 루를 눌렀을 때만 쓴다.
+    "sleep":      [f"idle/seq2/{n:02d}.png" for n in (1, 2, 3)],
+    "wake":       [f"idle/seq2/{n:02d}.png" for n in (4, 5)],
     "click": ["click/random/multiclick_seq1_02.png",
               "click/random/idle_seq1_03.png",
               "click/random/pet_seq1_04.png",
@@ -54,11 +77,29 @@ SAY = {
     "drag": ["따라갈게요!", "우와아~ 빨라요!", "재밌어요!"],
     "shake": ["으악! 흔들지 마세요!", "어지러워요…", "빙글빙글…",
               "눈이 핑 돌아요…", "그만…", "머리가 어질…"],
+    "wake": ["앗! 깜짝이야", "어… 있었어요?"],
     "idle": [], "sleep": [],
 }
 
 
+def sync_stages():
+    if STAGE_OUT.exists():
+        shutil.rmtree(STAGE_OUT)
+    STAGE_OUT.mkdir(parents=True)
+    total = 0
+    for key, name in STAGE_PICK.items():
+        im = Image.open(STAGE_SRC / name).convert("RGB")
+        k = min(1.0, STAGE_SIDE / max(im.size))
+        if k < 1:
+            im = im.resize((round(im.width * k), round(im.height * k)), Image.LANCZOS)
+        out = STAGE_OUT / f"{key}.webp"
+        im.save(out, format="WEBP", quality=84, method=6)
+        total += out.stat().st_size
+    print(f"단계 그림 {len(STAGE_PICK)}장 / {total/1024:.0f}KB -> {STAGE_OUT}")
+
+
 def main():
+    sync_stages()
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)

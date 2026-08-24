@@ -27,6 +27,8 @@ let busy = false;       // 반응을 재생하는 중인가
 let timer = null;
 let idleTimer = null;
 let idleFrame = 0;
+let idleKind = "idle";
+let asleep = false;     // 잠들었나 — 자는 루를 누르면 깨는 컷이 나온다
 let touchedAt = 0;      // 마지막으로 사람이 만진 시각
 
 const pick = list => list[Math.floor(Math.random() * list.length)];
@@ -81,22 +83,28 @@ function rest() {
   const box = $("#mascot");
   if (box) delete box.dataset.react;
   say("루를 눌러 보세요");
-  idleFrame = 0;
+  idleFrame = -1;
+  idleKind = "idle";
   idleTick();
 }
 
-/* 가만히 둘 때. 한동안 아무도 안 만지면 잠들고, 누르면 깬다. */
+/* 가만히 둘 때. 한동안 아무도 안 만지면 잠들고, 자는 루를 누르면 깬다.
+   잠드는 흐름(sleep)과 깨는 흐름(wake)이 나뉘어 있는 이유가 이것이다 —
+   한 덩어리로 두면 아무도 안 만졌는데 루가 혼자 깜짝 놀라며 깬다. */
+const IDLE_TO_SLEEP = 20000;
+
 function idleTick() {
   if (busy || !art) return;
   // 기다리는 화면이 아직 안 떴으면(폼을 채우는 중) 그림을 갈아 끼울 이유가 없다
   const box = $("#mascot");
   if (!box || !box.offsetParent) return;
-  const asleep = Date.now() - touchedAt > 20000;
-  const kind = asleep && art.sleep ? "sleep" : "idle";
+  asleep = Date.now() - touchedAt > IDLE_TO_SLEEP && !!art.sleep;
+  const kind = asleep ? "sleep" : "idle";
   const set = art[kind];
   if (!set) return;
+  if (kind !== idleKind) { idleKind = kind; idleFrame = -1; }
   idleFrame = asleep
-    ? Math.min(idleFrame + 1, set.frames.length - 2)   // 잠들면 거기서 멈춘다
+    ? Math.min(idleFrame + 1, set.frames.length - 1)   // 다 잠들면 거기서 멈춘다
     : (idleFrame + 1) % set.frames.length;
   const img = $("#mascotImg");
   if (img) img.src = `${ART}/${kind}/${set.frames[idleFrame]}`;
@@ -204,6 +212,12 @@ async function setupLou() {
   };
 
   const tap = () => {
+    if (asleep) {                    // 자고 있었으면 먼저 깨운다
+      asleep = false;
+      clicks = 0;
+      play("wake", 700, 1300);
+      return;
+    }
     clicks += 1;
     clearTimeout(clickWindow);
     clickWindow = setTimeout(() => { clicks = 0; }, 1500);
@@ -226,7 +240,7 @@ async function setupLou() {
     oy = e.clientY - (r.top + r.height / 2);
     clearTimeout(holdTimer);
     holdTimer = setTimeout(() => {          // 꾹 누르기 — 떼기 전에 시작한다
-      if (!down || far > 14 || dragging) return;
+      if (!down || far > 14 || dragging || asleep) return;
       play("longpress", 900, 900);
     }, 550);
     preloadRest();                          // 처음 만지는 순간 나머지 컷을 받는다
@@ -298,5 +312,71 @@ async function setupLou() {
   setupShake();
 }
 
+/* ---- 팁 · TMI --------------------------------------------------------- *
+ * 10분을 버티게 하는 세 번째 장치. 위쪽은 진행을 말하고, 가운데 루는 만지면
+ * 반응하고, 여기는 그냥 읽을거리다. 한 번 뜨고 끝나면 곧 다시 심심해지니까
+ * 몇 초마다 다음 것으로 넘어간다.
+ *
+ * 내용은 /static/lou/tips.json 에 있다 — 팁을 늘리거나 고칠 때 이 파일은
+ * 안 건드려도 된다. 누르면 다음 것으로 바로 넘어간다. */
+function shuffled(items, avoidFirst) {
+  const a = items.slice();
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  // 방금 보여준 것이 또 첫 장으로 오면 한 칸 밀어 둔다
+  if (avoidFirst && a.length > 1 && a[0] === avoidFirst) { [a[0], a[1]] = [a[1], a[0]]; }
+  return a;
+}
+
+async function setupTips() {
+  const box = $("#tips");
+  const kindEl = $("#tipKind");
+  const textEl = $("#tipText");
+  if (!box || !kindEl || !textEl) return;
+
+  let data;
+  try {
+    const res = await fetch("/static/lou/tips.json");
+    if (!res.ok) throw new Error("no tips");
+    data = await res.json();
+  } catch (err) {
+    return;                      // 팁이 없으면 그 줄 자체를 안 보여 준다
+  }
+  const items = (data.items || []).filter(x => x && x.text);
+  if (!items.length) return;
+
+  let order = shuffled(items);
+  let i = 0;
+  let timer = null;
+
+  const paint = it => {
+    box.dataset.kind = it.kind || "팁";
+    kindEl.textContent = it.kind || "팁";
+    textEl.textContent = it.text;
+  };
+
+  const step = () => {
+    i += 1;
+    if (i >= order.length) { order = shuffled(items, order[order.length - 1]); i = 0; }
+    box.dataset.fade = "1";
+    setTimeout(() => { paint(order[i]); delete box.dataset.fade; }, 300);
+  };
+
+  const restart = () => {
+    clearInterval(timer);
+    timer = setInterval(step, Math.max(3, data.seconds || 9) * 1000);
+  };
+
+  paint(order[0]);
+  box.hidden = false;
+  box.style.cursor = "pointer";
+  box.title = "눌러서 다음 팁 보기";
+  box.addEventListener("click", () => { step(); restart(); });
+  restart();
+}
+
 window.setupLou = setupLou;
+window.setupTips = setupTips;
 })();

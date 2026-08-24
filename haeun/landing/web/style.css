@@ -549,33 +549,44 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
    진행 표시였다. 사람이 10분 동안 볼 것은 진행 바가 아니라 루라서, 진행은
    한 줄짜리 띠로 줄이고 자리를 아래 노는 자리에 넘겼다. */
 .stage-now {
-  display: flex; align-items: center; gap: 14px; text-align: left;
-  max-width: 560px; margin: 0 auto; padding: 12px 16px;
-  background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+  max-width: 560px; margin: 0 auto; padding: 18px 16px 8px;
+  text-align: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 22px;
 }
-.stage-now-text { flex: 1; min-width: 0; }
-.stage-now-clock { text-align: right; line-height: 1.2; }
-.stage-now-clock .clock-time { font-size: 1.05rem; }
-.stage-now-clock .clock-label { display: block; font-size: .7rem; color: var(--dim); }
+/* 단계 그림 — 여섯 장이 만드는 순서 그대로 바뀐다 (web/lou/stage/*.webp).
+   글씨보다 그림이 빨리 읽히는 자리라 작게 두지 않는다. */
 .stage-art {
-  width: 56px; height: 56px; flex: none;
-  border-radius: 14px; border: 1px solid var(--line);
-  background: var(--bg-2, var(--card)) center/cover no-repeat;
-  background-image: url("/static/lou/lou-think.png");
+  width: min(58vw, 240px); aspect-ratio: 1; margin: 0 auto 12px;
+  border-radius: 20px; border: 1px solid var(--line);
+  background: var(--card) center/cover no-repeat;
+  background-image: url("/static/lou/stage/story.webp");
 }
-.stage-art[data-stage="story"] { background-image: url("/static/lou/stage-story.png"); }
-.stage-art[data-stage="sheet"] { background-image: url("/static/lou/stage-sheet.png"); }
-.stage-art[data-stage="board"] { background-image: url("/static/lou/stage-board.png"); }
-.stage-art[data-stage="art"]   { background-image: url("/static/lou/stage-art.png"); }
-.stage-art[data-stage="bind"]  { background-image: url("/static/lou/stage-bind.png"); }
-.stage-art[data-mood="ask"]   { background-image: url("/static/lou/lou-ask.png"); }
-.stage-art[data-mood="done"]  { background-image: url("/static/lou/stage-done.png"); }
-.stage-art[data-mood="error"] { background-image: url("/static/lou/lou-error.png"); }
+.stage-art[data-stage="story"] { background-image: url("/static/lou/stage/story.webp"); }
+.stage-art[data-stage="sheet"] { background-image: url("/static/lou/stage/sheet.webp"); }
+.stage-art[data-stage="board"] { background-image: url("/static/lou/stage/board.webp"); }
+.stage-art[data-stage="art"]   { background-image: url("/static/lou/stage/art.webp"); }
+.stage-art[data-stage="bind"]  { background-image: url("/static/lou/stage/bind.webp"); }
+.stage-art[data-mood="done"]   { background-image: url("/static/lou/stage/done.webp"); }
+.stage-art[data-mood="error"]  { background-image: url("/static/lou/lou-error.png"); }
+.stage-clock { margin: 8px 0 0; color: var(--dim); font-size: .82rem; }
+.stage-clock .clock-time { font-size: .95rem; color: var(--muted); }
+
+/* 더 알고 싶은 사람만 여는 자리. 단계 안쪽(캐릭터 시트 → 시트 그리기 …)까지
+   보여준다 — 기본은 닫혀 있어야 한다. 대부분은 "지금 뭐 하는지" 한 줄이면 된다. */
+.stage-detail { margin-top: 10px; text-align: left; }
+.stage-detail > summary {
+  list-style: none; cursor: pointer; text-align: center;
+  padding: 8px; font-size: .84rem; font-weight: 700; color: var(--accent-d);
+}
+.stage-detail > summary::-webkit-details-marker { display: none; }
+.stage-detail > summary::after { content: " ▾"; }
+.stage-detail[open] > summary::after { content: " ▴"; }
+.stage-detail > summary:hover { text-decoration: underline; }
+.stage-detail .rail { margin: 4px 0 10px; }
 
 /* 지금 무엇을 하는지 — 화면에서 가장 큰 글자다 */
 .stage-say {
-  margin: 0; font-size: .95rem; font-weight: 700; color: var(--accent-d);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin: 0; font-size: 1.05rem; font-weight: 800; color: var(--accent-d);
 }
 
 /* ---- 아래: 노는 자리 ---- */
@@ -610,6 +621,27 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 .mascot[data-react="shake"] { animation: lou-quake .18s linear infinite; }
 .play-say { margin: 6px 0 0; font-size: 1.15rem; font-weight: 800; color: var(--accent-d); min-height: 1.5em; }
 .play-hint { margin: 8px 0 0; font-size: .82rem; color: var(--dim); }
+
+/* ---- 팁 · TMI ----
+   10분을 버티게 하는 세 번째 장치. 진행(위)도 아니고 반응(가운데)도 아닌,
+   그냥 읽을거리다. 몇 초마다 다음 것으로 넘어간다. */
+.tips {
+  display: flex; align-items: flex-start; gap: 10px;
+  max-width: 560px; margin: 14px auto 0; padding: 14px 16px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+  text-align: left;
+}
+.tip-kind {
+  flex: none; padding: 2px 9px; border-radius: 999px;
+  font-size: .72rem; font-weight: 800; letter-spacing: .02em;
+  background: rgba(47,143,168,.12); color: var(--accent-d);
+}
+.tips[data-kind="TMI"] .tip-kind { background: rgba(214,138,60,.14); color: #a5661f; }
+.tip-text {
+  margin: 0; flex: 1; font-size: .9rem; line-height: 1.55; color: var(--muted);
+  transition: opacity .3s ease;
+}
+.tips[data-fade] .tip-text { opacity: 0; }
 #shakeAllow { margin-top: 10px; }
 
 @keyframes lou-quake {
@@ -636,7 +668,7 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 /* 진행 바 — 루 바로 아래. 두껍고(10px) 숫자가 붙는다. */
 .lou-progress {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; margin: 7px 0 0;
+  width: min(100%, 380px); margin: 10px auto 0;
 }
 .lou-bar {
   flex: 1; height: 6px; border-radius: 999px;

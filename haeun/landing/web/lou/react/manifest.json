@@ -13,11 +13,19 @@
     "frames": [
       "01.webp",
       "02.webp",
-      "03.webp",
-      "04.webp",
-      "05.webp"
+      "03.webp"
     ],
     "say": []
+  },
+  "wake": {
+    "frames": [
+      "01.webp",
+      "02.webp"
+    ],
+    "say": [
+      "앗! 깜짝이야",
+      "어… 있었어요?"
+    ]
   },
   "click": {
     "frames": [
