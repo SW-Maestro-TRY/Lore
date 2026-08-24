@@ -13,12 +13,12 @@
   <a class="brand" href="/" id="brandHome">
     <!-- 로고는 루 본인이다. 도형으로 그린 실루엣 대신 실제 그림을 쓴다 —
          마스코트가 있는데 로고만 다른 고래일 이유가 없다.
-         표정을 갈아 끼우지 않는 이유: 32px 에서는 표정이 안 읽혀서(별·말풍선은
-         얼룩이 된다) 로고만 매번 달라 보이고 얻는 건 없다. 표정은 크게 나오는
-         자리(로딩·빈 화면·결과)에서 쓴다. 도형 로고는 버리지 않고
-         design-reference/logo/lou-logo-mark.svg 에 남겨 뒀다. -->
+         홈에 들어설 때마다 표정 12장(whale1·whale2 × 6) 중 하나로 바뀐다.
+         여기 적힌 것은 자바스크립트가 고르기 전에 잠깐 보일 그림이다.
+         도형 로고는 버리지 않고 design-reference/logo/lou-logo-mark.svg 에
+         남겨 뒀다 — 파비콘처럼 아주 작거나 한 색으로만 찍는 자리용. -->
     <span class="brand-mark" aria-hidden="true">
-      <img src="/static/lou/mark.png" alt="" width="30" height="30">
+      <img id="brandLou" src="/static/lou/logo-2-default.png" alt="" width="30" height="30">
     </span>
     <span class="brand-name">LORE</span>
     <span class="brand-sub">웹툰 스튜디오</span>

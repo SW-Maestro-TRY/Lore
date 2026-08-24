@@ -2257,18 +2257,27 @@ function workCard(r) {
 
 function view(name) { document.body.dataset.view = name; }
 
-/* 홈의 루 그림은 홈에 들어설 때마다 새로 뽑는다 — 새로고침도, 편집실이나 내
-   웹툰을 보다 돌아오는 것도 똑같이 새로 뽑힌다. 기억해 두지 않는 것이 곧
-   규칙이라, 저장소를 안 쓴다.
-   헤더 로고에는 같은 방식을 안 쓴다: 32px 에서는 어느 그림인지 분간이 안 돼서
-   로고만 매번 달라 보이는 손해만 남는다. 이쪽은 크게 나와서 두 그림이 확실히
-   다르고, 정체를 나타내는 표식이 아니라 그림이라 바뀌어도 상관없다. */
+/* 루는 홈에 들어설 때마다 다른 모습으로 맞이한다 — 홈의 큰 그림도, 헤더의
+   로고도. 새로고침도, 편집실이나 내 웹툰을 보다 돌아오는 것도 똑같이 새로
+   뽑힌다. 기억해 두지 않는 것이 곧 규칙이라 저장소를 안 쓴다.
+
+   로고 그림은 표정 원화(whale1·whale2 × 6종)에서 **고래 몸통만** 잘라 둔
+   것이다. 원화에는 말풍선·하트·별이 옆에 붙어 있는데 32px 로 줄이면 얼룩으로
+   뭉개져서, 알파가 이어진 가장 큰 덩어리만 남겨 뗐다. 그래서 12장 모두 작게
+   줄여도 고래로 읽힌다. */
 const HERO_LOUS = ["/static/lou/hero-whale2.png", "/static/lou/hero-whale1.png"];
+const LOGO_LOUS = ["curious", "default", "discover", "happy", "sleepy", "thinking"]
+  .flatMap(e => [`/static/lou/logo-1-${e}.png`, `/static/lou/logo-2-${e}.png`]);
+
+function swapLou(el, list) {
+  if (!el) return;
+  const pick = list[Math.floor(Math.random() * list.length)];
+  if (el.getAttribute("src") !== pick) el.src = pick;
+}
+/* 이름은 그대로 두었다 — 홈으로 돌아가는 네 자리에서 이미 부르고 있다. */
 function pickHero() {
-  const hero = $("#heroLou");
-  if (!hero) return;
-  const pick = HERO_LOUS[Math.floor(Math.random() * HERO_LOUS.length)];
-  if (hero.getAttribute("src") !== pick) hero.src = pick;
+  swapLou($("#heroLou"), HERO_LOUS);
+  swapLou($("#brandLou"), LOGO_LOUS);
 }
 function esc(s) {
   return String(s ?? "").replace(/[&<>"]/g,
