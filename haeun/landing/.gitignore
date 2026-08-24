@@ -2,5 +2,8 @@
 # 산출물 자체는 여기 없습니다 (story-harness/runs, webtoon-harness/outputs 에 남습니다).
 jobs/
 
+# 크레딧 잔액·결제 로그 — 서버가 계속 고쳐 쓰는 상태라 jobs/ 와 같은 취급.
+data/
+
 __pycache__/
 *.pyc
