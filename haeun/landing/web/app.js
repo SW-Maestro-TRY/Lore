@@ -1755,9 +1755,7 @@ function paintResult(r) {
 
   paintClaimBanner();
   view("result");
-  $("#progress").hidden = true;
-  $("#works").hidden = true;
-  $("#result").hidden = false;
+  showOnly("#result");
   window.scrollTo(0, 0);
 }
 
@@ -2382,12 +2380,18 @@ async function tickNextEp() {
  *
  * 목록은 /api/runs 를 받아 계정의 claimed_runs 로 거른다 — 서버에 새 API 를
  * 만들지 않아도 되고, 작품 카드 그리는 코드도 /works 와 그대로 나눠 쓴다. */
+/* 큰 화면 조각들. 하나를 보이면 **나머지는 반드시 숨는다** — 예전에는 부르는
+   쪽마다 숨길 목록을 따로 들고 있어서, 조각이 하나 늘 때(마이페이지) 어떤
+   경로에서는 안 숨겨져 두 화면이 위아래로 이어 붙어 보였다. */
+const SECTIONS = ["#progress", "#result", "#works", "#nextEp", "#mypage"];
+
+function showOnly(id) {
+  SECTIONS.forEach(sel => { const el = $(sel); if (el) el.hidden = sel !== id; });
+}
+
 function onlyMyPage() {
-  ["#progress", "#result", "#nextEp", "#works"].forEach(id => {
-    const el = $(id); if (el) el.hidden = true;
-  });
+  showOnly("#mypage");
   view("mypage");
-  $("#mypage").hidden = false;
   window.scrollTo(0, 0);
 }
 
@@ -2432,7 +2436,7 @@ function showMockMyPage() {
   onlyMyPage();
   $("#myPhoto").src = "/static/lou/react/idle/01.webp";
   $("#myNickname").textContent = "루를 아는 사람";
-  $("#myMeta").textContent = "저장한 작품 2편 · 화면 구경용 목업입니다";
+  $("#myMeta").textContent = "저장한 작품 4편 · 화면 구경용 목업입니다";
   const card = (no, character, sub) => `
     <article class="works-card">
       <span class="works-cover">
@@ -2443,9 +2447,12 @@ function showMockMyPage() {
         <p class="works-sub">${esc(sub)}</p>
       </div>
     </article>`;
+  // 넉 장을 둔다 — 두 장이면 옆으로 밀 것이 없어서 줄이 줄인 줄 모른다.
   $("#myWorksGrid").innerHTML =
     card(1, "모모", "로맨스 판타지 · 약속의 무게, 장난의 시작")
-    + card(3, "초롱", "무협 · 강호에 첫발");
+    + card(3, "초롱", "무협 · 강호에 첫발")
+    + card(2, "하람", "헌터·게이트 · 첫 번째 각성")
+    + card(4, "유리", "학원로맨스 · 3학년 3반의 봄");
   $("#myLogout").hidden = true;
   // 목업에서도 상단 배지가 로그인 뒤 모습(사진 + 마이페이지)으로 보여야
   // "로그인하면 여기가 바뀐다"가 화면으로 전달된다. 진짜 로그인은 아니다.
@@ -2459,10 +2466,7 @@ function showMockMyPage() {
 
 async function showWorks() {
   view("works");
-  $("#progress").hidden = true;
-  $("#result").hidden = true;
-  $("#nextEp").hidden = true;
-  $("#works").hidden = false;
+  showOnly("#works");
   window.scrollTo(0, 0);
 
   const host = $("#worksGrid");
@@ -2564,8 +2568,14 @@ function forget() {
   $("#cancelBtn").textContent = "중단"; $("#cancelBtn").onclick = null;
   $("#clockLabel").textContent = "경과";
   view("landing"); pickHero();
-  $("#progress").hidden = true; $("#result").hidden = true;
-  $("#works").hidden = true;
+  // 큰 화면 조각은 전부 닫는다 — 하나라도 남으면 홈 아래에 그대로 이어 붙는다
+  // (마이페이지가 안 닫혀서 홈과 마이페이지가 한 화면에 이어 보였다).
+  showOnly(null);
+  // 목업에서 켜 둔 "로그인한 척"도 여기서 푼다 — 안 풀면 홈에 돌아와도 배지가
+  // 「마이페이지」로 남아, 로그인도 안 했는데 한 것처럼 보인다.
+  mockAccountPill = false;
+  paintAccountPill();
+  $("#scriptPanel").hidden = true;
   // 만들기 화면도 닫는다. 안 닫으면 걸음을 밟다가 헤더의 LORE 로 홈에 와도
   // 위저드가 홈 위에 그대로 겹쳐 있어서, 홈과 4걸음과 바닥글이 한꺼번에
   // 보인다 — 화면이 깨진 것처럼 읽힌다.
