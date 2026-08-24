@@ -242,10 +242,6 @@ function sceneCard(s) {
       <button type="button" class="btn btn-quiet btn-sm" data-act="regen">
         다시 그리기${RUN_ID ? "" : ` <span class="cost">−${COST.regen} C</span>`}
       </button>
-      <label class="chk">
-        <input type="checkbox" data-nobubble ${st.noBubble ? "checked" : ""}>
-        글자 없이
-      </label>
       <span class="spacer"></span>
       <button type="button" class="btn btn-quiet btn-sm" data-act="fb">피드백</button>
     </div>
@@ -324,12 +320,6 @@ function wireScenes() {
       sc(no).fb[t.dataset.fbk] = t.value; save();
     }));
 
-    $("[data-nobubble]", el).addEventListener("change", e => {
-      sc(no).noBubble = e.target.checked; save();
-      toast(e.target.checked
-        ? "다음에 다시 그릴 때 말풍선 없이 그립니다. 대사는 오른쪽에서 얹으세요."
-        : "말풍선을 그림 안에 그립니다.");
-    });
   });
   setActive(activeScene);
 }
@@ -431,7 +421,6 @@ function confirmAsk() {
   const st = sc(no);
   st.noBubble = textless; save();
   const el = $(`#scene-${no}`);
-  $("[data-nobubble]", el).checked = textless;
   $("[data-nobub]", el).hidden = !textless;
   closeAsk();
   regen(no, btn, cost, { feedback, textless, tags });
@@ -696,15 +685,18 @@ function paintDock() {
     addItem(b.dataset.add, b.dataset.variant || "", b.dataset.text)));
 }
 
-/* 도구 서랍 여닫기 — 서랍이 화면 아래에 붙어 있어서, 접을 수 있어야 그림
-   아래쪽을 만질 수 있다. 속성·내역이 열릴 때는 저절로 펴 준다: 접힌 채로
-   열면 눌러도 아무 일이 안 일어난 것처럼 보인다. */
+/* 도구 서랍 여닫기 — 오른쪽에서 밀려 나온다. 기본은 닫힘이라 그림이 먼저
+   보이고, 오른쪽 ☰ 를 눌러야 열린다. 속성·내역이 열릴 때는 저절로 열어 준다:
+   닫힌 채로 열면 눌러도 아무 일이 안 일어난 것처럼 보인다. */
 function setDock(open) {
-  const dock = document.querySelector(".ed-dock"), btn = $("#dockFold");
-  if (!dock || !btn) return;
-  dock.classList.toggle("is-folded", !open);
-  btn.setAttribute("aria-expanded", open ? "true" : "false");
-  btn.setAttribute("aria-label", open ? "도구 접기" : "도구 펴기");
+  const dock = $("#edDock"), close = $("#dockFold");
+  const opener = $("#dockOpen"), scrim = $("#dockScrim");
+  if (!dock) return;
+  dock.classList.toggle("is-open", open);
+  document.body.classList.toggle("dock-open-on", open);
+  if (scrim) scrim.hidden = !open;
+  if (opener) opener.setAttribute("aria-expanded", open ? "true" : "false");
+  if (close) close.setAttribute("aria-label", "도구 닫기");
 }
 
 function paintProps() {
@@ -751,6 +743,7 @@ function showBaked(out) {
     <div class="bake-head">
       <b>${out.scenes.length}장을 구웠습니다</b>
       <span>${out.width}×${out.height}px · 얹은 것 ${out.items}개</span>
+      <span class="bake-wm">내려받는 파일에는 아래에 LORE 표시가 붙습니다 — 그만큼 세로가 조금 깁니다.</span>
     </div>
     ${gone}${skip}
     <div class="bake-acts">
@@ -936,13 +929,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     tab = b.dataset.tab; paintDock(); setDock(true);
     // 고른 것이 있으면 속성 칸이 위에 깔려 있어서, 갈래를 바꿔도 새 항목이
     // 서랍 아래에 숨는다 — 서랍만 굴려서 항목이 보이게 한다(페이지는 그대로).
-    const dock = document.querySelector(".ed-dock"), grid = $("#dockGrid");
+    const dock = $("#edDock"), grid = $("#dockGrid");
     if (!dock || !grid) return;
     const g = grid.getBoundingClientRect(), d = dock.getBoundingClientRect();
     if (g.top > d.bottom - 60) dock.scrollTop += g.top - d.top - 8;
   }));
-  $("#dockFold")?.addEventListener("click", () =>
-    setDock(document.querySelector(".ed-dock").classList.contains("is-folded")));
+  $("#dockFold")?.addEventListener("click", () => setDock(false));
+  $("#dockOpen")?.addEventListener("click", () => setDock(true));
+  $("#dockScrim")?.addEventListener("click", () => setDock(false));
   $("#showOverlay").addEventListener("change", () =>
     data.scenes.forEach(s => paintItems(s.no)));
 
@@ -1057,6 +1051,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
       e.preventDefault(); $("#propDel").click();
     }
-    if (e.key === "Escape") $("#propClose").click();
+    if (e.key === "Escape") {
+      // 고른 것이 있으면 선택만 풀고, 없으면 서랍을 닫는다
+      if (sel) $("#propClose").click();
+      else setDock(false);
+    }
   });
 });

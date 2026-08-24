@@ -23,6 +23,19 @@ python serve.py --open          # http://127.0.0.1:8800
 | **결과** | `/result` | 세로 스크롤 리더 · 대사 스크립트 · `episode.png` 내려받기. **이미 만들어 둔 마지막 1화를 바로 엽니다** (`/?job=<id>` 로 특정 작업도) |
 | **편집실** | `/editor` | **목업.** 한 번도 안 돌려도 열립니다 (아래) |
 
+화면을 그냥 구경만 하고 싶을 때 여는 **목업** 이 셋 있습니다. 셋 다 실제 생성을
+안 하고, 화면 코드는 본편과 **같은 것**을 씁니다 (베끼면 갈라집니다).
+
+| 주소 | 무엇 | 데이터 |
+| --- | --- | --- |
+| `/demo` | 기다리는 화면 (단계·루·팁) | 가짜 진행 |
+| `/demo/result` | 완성본 화면 | `web/samples/mock.json` |
+| `/editor` | 편집실 | `web/samples/mock.json` |
+
+`/demo/result` 의 「PNG 내려받기」는 **진짜 파일을 줍니다** — 샘플 장을 한 편으로
+이어 붙인 뒤 실제 내려받기와 같은 길로 나가므로, LORE 표시가 붙은 모습이
+목업에서 그대로 보입니다.
+
 `/result` 는 `/api/latest`(가장 최근에 끝난 작업)를 보고 폼을 건너뛰고 결과부터
 띄웁니다. 아직 만든 것이 없으면 안내를 띄우고 입력 화면으로 내려줍니다.
 
@@ -253,8 +266,12 @@ cd web/lou && python _sync_react.py
 **표시를 못 붙여도 내려받기는 됩니다.** 그림이 깨졌거나 글꼴이 없으면 원본을
 그대로 내보냅니다 — 워터마크 때문에 파일을 못 주는 것이 제일 나쁩니다.
 
-붙는 자리는 세 곳입니다: `/api/runs/<id>/episode.png` ·
-`/api/runs/<id>/baked.png` · `/api/jobs/<id>/episode.png`.
+붙는 자리는 네 곳입니다: `/api/runs/<id>/episode.png` ·
+`/api/runs/<id>/baked.png` (편집실의 「이미지로 뽑기」가 이것을 씁니다) ·
+`/api/jobs/<id>/episode.png` · `/api/demo/episode.png` (완성본 목업).
+결과 화면과 편집실 양쪽에 "내려받는 파일에는 LORE 표시가 붙습니다" 를 미리
+적어 둡니다 — 받아 보고 나서 알면 "왜 붙었지?" 가 되고, 미리 알면 그냥
+사실이 됩니다.
 끄려면 `watermark.py` 의 `ENABLED = False`. 검사는 `python test_watermark.py`
 (pytest 아님 — 마지막 줄에 `ALL PASS`).
 
@@ -267,6 +284,7 @@ landing/
   web/
     index.html        랜딩 · 진행 · 결과 (한 장)
     demo.html         기다리는 화면만 가짜 진행으로 돌려 보는 목업 (/demo)
+                      (완성본 목업 /demo/result 는 index.html 을 그대로 씁니다)
     style.css
     app.js
     lou-play.js       기다리는 동안 루와 노는 자리 + 팁 돌리기 — index 와 demo 가 같이 쓴다

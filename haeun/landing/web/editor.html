@@ -86,9 +86,17 @@
   </main>
 
   <!-- ============================================ 도구 서랍 ============ -->
-  <!-- 화면 아래에 붙는다(sticky bottom). 480px 한 컬럼에는 오른쪽 기둥을 세울
-       자리가 없고, 그림은 위 · 손은 아래가 폰에서 더 자연스럽다. -->
-  <aside class="ed-dock">
+  <!-- 오른쪽에서 밀려 나오는 서랍. 예전에는 화면 아래에 붙어 있었는데, 그림을
+       보면서 얹는 작업인데 화면 아래 절반을 늘 서랍이 차지하고 있었다. 지금은
+       기본이 닫힘이고 오른쪽 ☰ 를 눌러야 열린다 — 그림이 먼저다. -->
+  <button type="button" class="dock-open" id="dockOpen"
+          aria-controls="edDock" aria-expanded="false">
+    <span class="dock-open-icon" aria-hidden="true">☰</span>
+    <span class="dock-open-label">도구</span>
+  </button>
+  <div class="dock-scrim" id="dockScrim" hidden></div>
+
+  <aside class="ed-dock" id="edDock" aria-label="말풍선 · 스티커 · 효과음">
     <div class="dock-bar">
       <div class="dock-tabs" id="dockTabs">
         <button type="button" class="dock-tab is-on" data-tab="bubble">말풍선</button>
@@ -96,7 +104,7 @@
         <button type="button" class="dock-tab" data-tab="sfx">효과음</button>
       </div>
       <button type="button" class="dock-fold" id="dockFold"
-              aria-expanded="true" aria-controls="dockBody" aria-label="도구 접기"></button>
+              aria-expanded="false" aria-controls="dockBody" aria-label="도구 닫기"></button>
     </div>
 
     <div class="dock-body" id="dockBody">
