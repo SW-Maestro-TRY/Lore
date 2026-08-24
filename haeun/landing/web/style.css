@@ -1659,6 +1659,10 @@ button.inline-link:hover { color: #f0d090; }
 /* 단추 넷을 2×2 로. 여기 있는 것은 지금 할 수 있는 일뿐이고, 읽고 나서 할 일
    (이어 보기 · 공유 · 목록)은 다 읽은 자리(.read-end)로 내렸다. */
 .result-actions {
+  /* 머리(.result-head)가 flex 라 그 안의 격자가 **내용 폭만큼만** 잡혔다 —
+     480px 자리에 271px 만 쓰고 오른쪽이 비었다. 폭을 못박아 두 칸이 실제로
+     반씩 갈라지게 한다. */
+  width: 100%;
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: center;
 }
 .result-actions > .btn { min-height: 42px; font-size: .9rem; }
@@ -1754,3 +1758,20 @@ button.inline-link:hover { color: #f0d090; }
   min-height: 34px; padding-top: 0; padding-bottom: 0;
 }
 .account-pill { padding-left: .3em; }
+
+/* ---- 중단 ---------------------------------------------------------------- */
+
+/* 진행 화면 맨 아래. 가운데 두지 않고 오른쪽에 조용히 둔다 — 찾으면 있지만
+   지나가다 손이 닿지는 않는 자리다. */
+.cancel-row { display: flex; justify-content: flex-end; margin-top: 28px; }
+
+/* 되돌릴 수 없는 동작. 편집실(editor.css)의 같은 이름과 값을 맞춘다 —
+   한쪽에만 있으면 여기서는 그냥 회색 단추로 나온다. */
+.btn-danger { background: rgba(180,69,58,.12); color: #9c3b31; }
+.btn-danger:hover { background: rgba(180,69,58,.22); }
+
+.modal-narrow { max-width: 380px; text-align: center; }
+.cancel-warn { margin: .8em 0 .3em; color: #9c3b31; font-size: .95rem; }
+.cancel-sub { margin: 0 0 1.4em; color: var(--muted); font-size: .84rem; line-height: 1.6; }
+.cancel-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cancel-actions .btn { min-height: 44px; }

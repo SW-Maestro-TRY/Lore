@@ -19,6 +19,19 @@
       <span class="brand-name">LORE</span>
       <span class="brand-sub">편집실</span>
     </a>
+    <!-- 크레딧은 **첫 줄**에 둔다. 아래 제목 띠에 있던 동안에는 제목·작품
+         단추와 폭을 다투다가 폰에서 줄이 접혔고, 무엇보다 "얼마 남았나" 는
+         그리기 전에 보는 값이라 맨 위가 맞다. 샘플 표시와 한 묶음인 것은
+         그대로다 — 실제 작품을 열면 app 이 칩째로 지운다. -->
+    <div class="ed-chips">
+      <span class="mock-badge" title="작품을 고르기 전까지는 샘플입니다. 크레딧과 다시 그리기는 흉내만 냅니다.">샘플</span>
+      <div class="credit" id="creditBox">
+        <span class="credit-icon">◈</span>
+        <span class="credit-num" id="creditNum">1,240</span>
+        <span class="credit-unit">크레딧</span>
+        <button type="button" class="credit-more" id="ledgerBtn">내역</button>
+      </div>
+    </div>
     <div class="ed-top-right">
       <button type="button" class="btn btn-quiet btn-sm" id="saveBtn">저장</button>
       <!-- 얹은 것을 진짜 그림에 굽는다. 여기까지 와야 가져갈 것이 생긴다 —
@@ -36,19 +49,6 @@
     <div class="ed-title">
       <b id="edTitle">—</b>
       <span id="edMeta"></span>
-    </div>
-
-    <!-- 샘플 표시와 흉내 크레딧은 한 묶음이다 — 실제 작품을 열면 둘 다
-         사라지므로, 따로 두면 폰에서 빈 줄만 남는다. 사용 내역 단추도 크레딧
-         칩 안에 넣어서 칩째로 지워지게 한다. -->
-    <div class="ed-chips">
-      <span class="mock-badge" title="작품을 고르기 전까지는 샘플입니다. 크레딧과 다시 그리기는 흉내만 냅니다.">샘플</span>
-      <div class="credit" id="creditBox">
-        <span class="credit-icon">◈</span>
-        <span class="credit-num" id="creditNum">1,240</span>
-        <span class="credit-unit">크레딧</span>
-        <button type="button" class="credit-more" id="ledgerBtn">내역</button>
-      </div>
     </div>
   </div>
 

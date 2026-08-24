@@ -28,10 +28,12 @@
   background: rgba(250,246,238,.92); backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
 }
+/* 로고 | 크레딧 | 저장·뽑기. 가운데를 늘려서 오른쪽 단추를 끝에 붙인다 —
+   space-between 만으로는 셋이 고르게 벌어져서 크레딧이 한가운데 뜬다. */
 .ed-top-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; padding: 8px 14px;
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px;
 }
+.ed-top-row .ed-chips { margin-left: auto; }
 .ed-top .brand { flex: none; }
 .ed-top-right { display: flex; align-items: center; gap: 8px; }
 .ed-top-right .btn { min-height: 44px; }   /* 폰에서 눌리는 크기 */
