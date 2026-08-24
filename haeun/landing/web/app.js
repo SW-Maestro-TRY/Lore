@@ -587,12 +587,55 @@ function paintAccountPill() {
   }
 }
 
+/* ---- 이 브라우저가 만든 작품 ------------------------------------------- *
+ *
+ * "담아두기" 는 **내가 만든 것**에만 권해야 한다. 공유 링크를 받고 들어온
+ * 사람에게도 뜨면, 남의 작품을 자기 계정에 담으라고 권하는 꼴이다.
+ *
+ * 그런데 결과 화면은 둘을 구분할 수가 없었다 — 내 목록에서 고른 것도, 남이
+ * 보낸 링크도 똑같이 /works?run=… 으로 열리고 showRunResult() 하나가 받는다.
+ * 서버도 못 가른다: 작품에 만든 사람이 안 적혀 있다(계정 기능이 소유자 개념을
+ * 일부러 안 넣었다). 그래서 브라우저가 자기가 만든 것을 적어 둔다.
+ *
+ * localStorage 인 이유: 창을 닫아도 남아야 한다. sessionStorage 는 탭을 닫으면
+ * 사라져서, 어제 만든 내 작품을 오늘 열면 남의 것처럼 보인다. */
+
+const MY_RUNS_KEY = "lore_my_runs";
+const MY_RUNS_MAX = 200;
+
+function myRuns() {
+  try {
+    const v = JSON.parse(localStorage.getItem(MY_RUNS_KEY) || "[]");
+    return Array.isArray(v) ? v.filter(x => typeof x === "string") : [];
+  } catch { return []; }              // 비공개 창이거나 값이 깨졌을 때
+}
+
+function rememberMyRun(runId) {
+  if (!runId) return;
+  const list = myRuns().filter(x => x !== runId);
+  list.push(runId);
+  try {
+    localStorage.setItem(MY_RUNS_KEY,
+                         JSON.stringify(list.slice(-MY_RUNS_MAX)));
+  } catch { /* 저장을 못 해도 만드는 것 자체는 막지 않는다 */ }
+}
+
+/* 내가 만든 것인가. 담아 둔 적이 있으면 그것도 내 것이다 — 폰에서 만들어
+   담아 두고 PC 에서 열면 이 브라우저의 기록에는 없기 때문이다. */
+function isMyRun(runId) {
+  if (!runId) return false;
+  return myRuns().includes(runId)
+      || (accountState.claimed_runs || []).includes(runId);
+}
+
 /* 결과 화면에서만 쓴다 — 계정이 없어도 작품은 브라우저에 남으므로, 이미
    담아 둔 작품이면 다시 권하지 않는다. */
 function paintClaimBanner() {
   const banner = $("#claimBanner");
   if (!banner) return;
   if (!resultRunId) { banner.hidden = true; return; }
+  // 남이 보낸 링크로 들어온 작품에는 안 권한다 (위 isMyRun 주석 참고).
+  if (!isMyRun(resultRunId)) { banner.hidden = true; return; }
   if (accountState.logged_in && (accountState.claimed_runs || []).includes(resultRunId)) {
     banner.hidden = true;
     return;
@@ -1548,6 +1591,9 @@ async function showResult(attempt = 0) {
       "click", () => showResult(0));
     return;
   }
+  // 여기까지 온 것은 **이 브라우저가 시킨 작업**의 결과다 (job 으로 열었다).
+  // 그 사실을 남겨 둬야 나중에 목록·링크로 다시 열었을 때 내 것인 줄 안다.
+  rememberMyRun(r.run_id);
   paintResult(r);
 }
 
