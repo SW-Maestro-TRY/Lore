@@ -16,35 +16,48 @@
   <div class="progress-inner">
 
     <header class="progress-head">
-      <div class="stage-art" id="stageArt" data-stage="story" aria-hidden="true"></div>
-      <p class="stage-say" id="mascotLine">루가 이야기를 만들고 있어요</p>
-      <div class="lou-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="louProgress">
-        <div class="lou-bar"><i id="louBarFill"></i></div>
-        <span class="lou-pct" id="louPct">0%</span>
+      <div class="stage-now">
+        <div class="stage-art" id="stageArt" data-stage="story" aria-hidden="true"></div>
+        <div class="stage-now-text">
+          <p class="stage-say" id="mascotLine">루가 이야기를 만들고 있어요</p>
+          <div class="lou-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="louProgress">
+            <div class="lou-bar"><i id="louBarFill"></i></div>
+            <span class="lou-pct" id="louPct">0%</span>
+          </div>
+        </div>
+        <div class="stage-now-clock">
+          <span class="clock-time" id="clock">0:00</span>
+          <span class="clock-label">경과</span>
+        </div>
       </div>
       <div class="progress-clock">
-        <span class="clock-time" id="clock">0:00</span>
-        <span class="clock-label">경과</span>
         <button type="button" class="btn btn-quiet btn-sm" onclick="location.href='/'">중단</button>
       </div>
     </header>
 
     <div class="play">
-      <button type="button" class="mascot" id="mascot" aria-label="루를 쓰다듬기"></button>
+      <div class="mascot-stage" id="mascotStage">
+        <button type="button" class="mascot" id="mascot" aria-label="루를 눌러 보기">
+          <img id="mascotImg" src="/static/lou/react/idle/01.webp" alt="" draggable="false">
+        </button>
+      </div>
       <p class="play-say" id="playSay">루를 눌러 보세요</p>
+      <p class="play-hint" id="playHint">누르기 · 연달아 누르기 · 꾹 누르기 · 끌어당기기</p>
+      <button type="button" class="btn btn-quiet btn-sm" id="shakeAllow" hidden>흔들기 켜기</button>
     </div>
 
   </div>
 </section>
 
+<!-- 루와 노는 자리는 본편과 **같은 파일**을 쓴다. 예전에는 여기에 같은 로직을
+     베껴 뒀다가 본편이 바뀔 때마다 둘이 갈라졌다. -->
+<script src="/static/lou-play.js"></script>
 <script>
-/* 데모 대본. app.js 는 안 부른다(여기 없는 요소를 배선하다 죽는다) —
-   같은 동작을 작게 다시 쓴다. 본편 app.js 의 MASCOT_MOODS · LOU_REACT 와
-   짝이 맞아야 한다. */
+/* 데모 대본 — 진행만 가짜로 돌린다. app.js 는 안 부른다(여기 없는 요소를
+   배선하다 죽는다). 루는 위 lou-play.js 의 setupLou() 가 맡는다. */
 (() => {
   const $ = s => document.querySelector(s);
   const art = $("#stageArt"), say = $("#mascotLine");
-  const mascot = $("#mascot"), playSay = $("#playSay");
 
   const STAGES = ["story", "sheet", "board", "art", "bind"];
   const SAY = {
@@ -54,13 +67,6 @@
     art:   "루가 그림을 그리고 있어요",
     bind:  "루가 완성도를 확인하고 있어요",
   };
-  const REACT = {
-    click:      "앗! 지금 바빠요!",
-    multiclick: "너무 많이 누르면 화날 거예요!",
-    longpress:  "조금만 더 기다려주세요…",
-    pet:        "헤헤~ 기분이 좋아요!",
-  };
-
   let i = 0, pct = 2;
   const started = Date.now();
 
@@ -90,29 +96,8 @@
     $("#clock").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   }, 1000);
 
-  // 노는 자리 — 반응은 여기서만. 위쪽 진행 문구는 안 건드린다.
-  let clicks = 0, win = null, pressAt = 0, back = null;
-  function react(kind) {
-    mascot.dataset.react = kind;
-    playSay.textContent = REACT[kind];
-    clearTimeout(back);
-    back = setTimeout(() => {
-      delete mascot.dataset.react;
-      playSay.textContent = "루를 눌러 보세요";
-    }, kind === "multiclick" ? 2200 : 1800);
-  }
-  mascot.addEventListener("pointerdown", () => { pressAt = Date.now(); });
-  mascot.addEventListener("pointerup", () => {
-    const held = Date.now() - pressAt;
-    if (pressAt && held > 600) { react("longpress"); pressAt = 0; return; }
-    pressAt = 0;
-    clicks += 1;
-    clearTimeout(win);
-    win = setTimeout(() => { clicks = 0; }, 2000);
-    react(clicks >= 3 ? "multiclick" : (clicks === 2 ? "pet" : "click"));
-  });
-
   paint();
+  setupLou();
 })();
 </script>
 </body>

@@ -911,56 +911,10 @@ function paintMascot(s, currentStage) {
  * 반응은 화면에만 있다. 서버로 아무것도 안 보내고, 돌고 있는 작업에도
  * 영향을 주지 않는다. 반응이 끝나면 원래 단계 그림으로 돌아간다. */
 
-const LOU_REACT = {
-  click:      "앗! 지금 바빠요!",
-  multiclick: "너무 많이 누르면 화날 거예요!",
-  longpress:  "조금만 더 기다려주세요…",
-  pet:        "헤헤~ 기분이 좋아요!",
-};
-let louReactTimer = null;
-let louClicks = 0;
-let louClickWindow = null;
-let louPressAt = 0;
 
-function louReact(kind) {
-  const box = $("#mascot");
-  if (!box) return;
-  box.dataset.react = kind;
-  // 반응은 **노는 자리 안에서만** 일어난다. 위쪽 단계 문구는 진행을 말하는
-  // 자리라 절대 안 건드린다.
-  const say = $("#playSay");
-  if (say) say.textContent = LOU_REACT[kind] || "";
-  clearTimeout(louReactTimer);
-  louReactTimer = setTimeout(() => {
-    delete box.dataset.react;
-    if (say) say.textContent = "루를 눌러 보세요";
-  }, kind === "multiclick" ? 2200 : 1800);
-}
-
-function setupLou() {
-  const box = $("#mascot");
-  if (!box) return;
-
-  // 길게 누르기 — 손을 떼는 순간에 무엇이었는지 정한다. 짧으면 클릭,
-  // 길면 "조금만 더 기다려주세요". 연달아 누르면 화낸다.
-  const down = () => { louPressAt = Date.now(); };
-  const up = () => {
-    const held = Date.now() - louPressAt;
-    if (louPressAt && held > 600) { louReact("longpress"); louPressAt = 0; return; }
-    louPressAt = 0;
-    louClicks += 1;
-    clearTimeout(louClickWindow);
-    louClickWindow = setTimeout(() => { louClicks = 0; }, 2000);
-    louReact(louClicks >= 3 ? "multiclick" : (louClicks === 2 ? "pet" : "click"));
-  };
-  box.addEventListener("pointerdown", down);
-  box.addEventListener("pointerup", up);
-  box.addEventListener("pointercancel", () => { louPressAt = 0; });
-  // 키보드로도 만질 수 있어야 한다 — button 이라 Enter/Space 가 click 으로 온다
-  box.addEventListener("keydown", e => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); up(); }
-  });
-}
+/* 루와 노는 자리의 실제 동작은 web/lou-play.js 에 있다 — 기다리는 화면(index)과
+   화면 구경(demo)이 같은 코드를 쓰게 하려고 뺐다. 여기서는 setupLou() 만 부른다.
+   (예전에는 demo.html 이 같은 로직을 통째로 베껴 갖고 있어서 둘이 갈라졌다.) */
 
 function setSheetButtonsBusy(busy) {
   $("#sheetApproveBtn").disabled = busy;

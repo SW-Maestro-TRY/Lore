@@ -513,9 +513,7 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 .progress-head h2 { font-size: clamp(1.35rem, 5vw, 1.9rem); font-weight: 800; margin: 8px 0 0; color: var(--accent-d); }
 .progress-sub { color: var(--muted); margin: .5em 0 0; max-width: 44ch; font-size: .88rem; }
 .progress-clock {
-  display: flex; align-items: center; gap: 12px; margin-top: 22px;
-  background: var(--card); border: 1px solid var(--line);
-  border-radius: 999px; padding: 8px 8px 8px 18px;
+  display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px;
 }
 
 /* --------------------------------------------------- 기다리는 화면
@@ -529,11 +527,23 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
    예전에는 둘이 한 덩어리라, 루가 딴짓하는 문구가 진행 문구 자리를
    빼앗았다("루가 춤추고 있어요"가 진행 표시 자리에 떴다). */
 
-/* ---- 위: 단계 그림 ---- */
+/* ---- 위: 지금 어디쯤인지 ----
+   예전에는 여기가 260px 짜리 그림 + 큰 글씨 + 두꺼운 바여서 화면의 주인공이
+   진행 표시였다. 사람이 10분 동안 볼 것은 진행 바가 아니라 루라서, 진행은
+   한 줄짜리 띠로 줄이고 자리를 아래 노는 자리에 넘겼다. */
+.stage-now {
+  display: flex; align-items: center; gap: 14px; text-align: left;
+  max-width: 560px; margin: 0 auto; padding: 12px 16px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+}
+.stage-now-text { flex: 1; min-width: 0; }
+.stage-now-clock { text-align: right; line-height: 1.2; }
+.stage-now-clock .clock-time { font-size: 1.05rem; }
+.stage-now-clock .clock-label { display: block; font-size: .7rem; color: var(--dim); }
 .stage-art {
-  width: min(66vw, 260px); aspect-ratio: 1; margin: 0 auto;
-  border-radius: 24px; border: 1px solid var(--line);
-  background: var(--card) center/cover no-repeat;
+  width: 56px; height: 56px; flex: none;
+  border-radius: 14px; border: 1px solid var(--line);
+  background: var(--bg-2, var(--card)) center/cover no-repeat;
   background-image: url("/static/lou/lou-think.png");
 }
 .stage-art[data-stage="story"] { background-image: url("/static/lou/stage-story.png"); }
@@ -547,43 +557,60 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 
 /* 지금 무엇을 하는지 — 화면에서 가장 큰 글자다 */
 .stage-say {
-  margin: 18px 0 0; text-align: center;
-  font-size: 1.15rem; font-weight: 800; color: var(--accent-d);
+  margin: 0; font-size: .95rem; font-weight: 700; color: var(--accent-d);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* ---- 아래: 노는 자리 ---- */
 .play {
-  margin: 26px auto 0; padding: 18px;
-  max-width: 400px; text-align: center;
-  background: var(--card); border: 1px solid var(--line); border-radius: 22px;
+  margin: 18px auto 0; padding: 26px 18px 24px;
+  max-width: 560px; text-align: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 26px;
+}
+/* 루가 헤엄쳐 다니는 자리. 끌면 이 안에서 따라오고, 놓으면 가운데로 돌아온다.
+   예전에는 루가 문서 흐름에 그냥 놓여 있어서 끌 자리가 없었다. */
+.mascot-stage {
+  position: relative; width: 100%; height: min(52vh, 340px);
+  touch-action: none;   /* 모바일에서 끌 때 화면이 같이 스크롤되면 안 된다 */
 }
 .mascot {
-  width: 128px; height: 128px; margin: 0 auto; padding: 0; display: block;
-  border: none; border-radius: 20px; overflow: hidden;
-  background: var(--ink-2) center/cover no-repeat;
-  background-image: url("/static/lou/lou-idle.png");
-  cursor: pointer;
+  position: absolute; left: 50%; top: 50%;
+  width: min(58vw, 240px); height: min(58vw, 240px); margin: 0; padding: 0;
+  transform: translate(-50%, -50%);
+  border: none; background: none; cursor: grab; touch-action: none;
   animation: lou-swim 4.6s ease-in-out infinite;
-  transition: transform .18s ease;
 }
-.mascot:active { transform: scale(.95); }
-.mascot:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-.mascot[data-react="click"]      { background-image: url("/static/lou/react-click.png"); }
-.mascot[data-react="pet"]        { background-image: url("/static/lou/react-pet.png"); }
-.mascot[data-react="multiclick"] { background-image: url("/static/lou/react-multiclick.png"); }
-.mascot[data-react="longpress"]  { background-image: url("/static/lou/react-longpress.png"); }
+.mascot img {
+  width: 100%; height: 100%; object-fit: contain;
+  pointer-events: none; user-select: none; -webkit-user-drag: none;
+  filter: drop-shadow(0 8px 12px rgba(20,70,90,.16));
+}
+.mascot[data-grab] { cursor: grabbing; animation: none; }
+/* 끌던 손을 놓으면 제자리로 헤엄쳐 돌아온다 */
+.mascot[data-home] { transition: left .45s cubic-bezier(.3,1.3,.5,1), top .45s cubic-bezier(.3,1.3,.5,1); }
+.mascot:focus-visible { outline: 3px solid var(--accent); outline-offset: 6px; border-radius: 20px; }
 .mascot[data-react] { animation: lou-wiggle .5s ease-in-out 2; }
-.play-say { margin: 12px 0 0; font-size: .9rem; font-weight: 700; color: var(--muted); }
+.mascot[data-react="shake"] { animation: lou-quake .18s linear infinite; }
+.play-say { margin: 6px 0 0; font-size: 1.15rem; font-weight: 800; color: var(--accent-d); min-height: 1.5em; }
+.play-hint { margin: 8px 0 0; font-size: .82rem; color: var(--dim); }
+#shakeAllow { margin-top: 10px; }
 
+@keyframes lou-quake {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+  25%      { transform: translate(calc(-50% - 4px), -50%) rotate(-3deg); }
+  75%      { transform: translate(calc(-50% + 4px), -50%) rotate(3deg); }
+}
+
+/* 루는 절대 위치라 가운데 정렬(-50%)을 애니메이션 안에서도 계속 들고 있어야 한다 */
 @keyframes lou-swim {
-  0%, 100% { transform: translateY(0)    rotate(0deg); }
-  30%      { transform: translateY(-7px) rotate(-1.4deg); }
-  65%      { transform: translateY(3px)  rotate(1.1deg); }
+  0%, 100% { transform: translate(-50%, -50%)                  rotate(0deg); }
+  30%      { transform: translate(-50%, calc(-50% - 7px))       rotate(-1.4deg); }
+  65%      { transform: translate(-50%, calc(-50% + 3px))       rotate(1.1deg); }
 }
 @keyframes lou-wiggle {
-  0%, 100% { transform: rotate(0deg)  scale(1); }
-  25%      { transform: rotate(-5deg) scale(1.04); }
-  75%      { transform: rotate(5deg)  scale(1.04); }
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg)  scale(1); }
+  25%      { transform: translate(-50%, -50%) rotate(-5deg) scale(1.04); }
+  75%      { transform: translate(-50%, -50%) rotate(5deg)  scale(1.04); }
 }
 @media (prefers-reduced-motion: reduce) {
   .mascot, .mascot[data-react] { animation: none; }
@@ -591,11 +618,11 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 
 /* 진행 바 — 루 바로 아래. 두껍고(10px) 숫자가 붙는다. */
 .lou-progress {
-  display: flex; align-items: center; gap: 12px;
-  width: min(100%, 380px); margin: 16px auto 0;
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; margin: 7px 0 0;
 }
 .lou-bar {
-  flex: 1; height: 10px; border-radius: 999px;
+  flex: 1; height: 6px; border-radius: 999px;
   background: rgba(34,48,44,.12); overflow: hidden;
 }
 .lou-bar > i {
@@ -605,7 +632,7 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
   transition: width .6s ease;
 }
 .lou-pct {
-  font-family: var(--mono); font-size: .88rem; font-weight: 700;
+  font-family: var(--mono); font-size: .78rem; font-weight: 700;
   color: var(--accent-d); min-width: 3.2em; text-align: right;
   font-variant-numeric: tabular-nums;
 }

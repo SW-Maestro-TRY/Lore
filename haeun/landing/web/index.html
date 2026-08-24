@@ -310,18 +310,25 @@
     <!-- 위 — 루가 지금 무엇을 하고 있는지. 그림 · 문구 · 바가 같은 것을
          말한다. 여기에는 잡담이 없다. -->
     <header class="progress-head">
-      <div class="stage-art" id="stageArt" aria-hidden="true"></div>
-      <p class="stage-say" id="mascotLine">루가 이야기를 만들고 있어요</p>
-      <div class="lou-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="louProgress">
-        <div class="lou-bar"><i id="louBarFill"></i></div>
-        <span class="lou-pct" id="louPct">0%</span>
+      <!-- 진행은 "지금 어디쯤인지"만 알려주면 된다. 주인공은 아래 루다. -->
+      <div class="stage-now">
+        <div class="stage-art" id="stageArt" aria-hidden="true"></div>
+        <div class="stage-now-text">
+          <p class="stage-say" id="mascotLine">루가 이야기를 만들고 있어요</p>
+          <div class="lou-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="louProgress">
+            <div class="lou-bar"><i id="louBarFill"></i></div>
+            <span class="lou-pct" id="louPct">0%</span>
+          </div>
+        </div>
+        <div class="stage-now-clock">
+          <span class="clock-time" id="clock">0:00</span>
+          <span class="clock-label" id="clockLabel">경과</span>
+        </div>
       </div>
       <p class="eyebrow" id="progEyebrow" hidden>만드는 중</p>
       <h2 id="progTitle" hidden>웹툰을 만들고 있습니다</h2>
       <p class="progress-sub" id="progSub" hidden></p>
       <div class="progress-clock">
-        <span class="clock-time" id="clock">0:00</span>
-        <span class="clock-label" id="clockLabel">경과</span>
         <button type="button" class="btn btn-quiet btn-sm" id="cancelBtn">중단</button>
       </div>
     </header>
@@ -329,9 +336,17 @@
     <!-- 아래 — 기다리는 동안 노는 자리. 여기의 루는 진행과 무관하다.
          눌러야 반응하고, 반응은 이 안에서만 일어난다. -->
     <div class="play">
-      <button type="button" class="mascot" id="mascot"
-              data-mood="think" aria-label="루를 쓰다듬기"></button>
+      <!-- 루가 헤엄쳐 다닐 수 있는 자리. 끌면 이 안에서 따라오고 놓으면 돌아온다. -->
+      <div class="mascot-stage" id="mascotStage">
+        <button type="button" class="mascot" id="mascot"
+                data-mood="think" aria-label="루를 눌러 보기">
+          <img id="mascotImg" src="/static/lou/react/idle/01.webp" alt="" draggable="false">
+        </button>
+      </div>
       <p class="play-say" id="playSay">루를 눌러 보세요</p>
+      <p class="play-hint" id="playHint">눌러 보기 · 연달아 누르기 · 꾹 누르기 · 끌어당기기</p>
+      <!-- iOS 는 사람이 허락해야 흔들기를 알려준다. 필요한 기기에서만 뜬다. -->
+      <button type="button" class="btn btn-quiet btn-sm" id="shakeAllow" hidden>흔들기 켜기</button>
     </div>
 
     <div class="sheet-approval" id="sheetApproval" hidden>
@@ -676,6 +691,7 @@
 
 <div class="toast" id="toast" hidden></div>
 
+<script src="/static/lou-play.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
