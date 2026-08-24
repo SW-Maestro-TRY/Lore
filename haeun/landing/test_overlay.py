@@ -151,6 +151,47 @@ P._merge_sheet_corrections(Path(tempfile.mkdtemp()), ["아무 지시"])   # p1.j
 ok("시트 지시: p1.json 이 없어도 안 터진다", True)
 shutil.rmtree(_fix_dir, ignore_errors=True)
 
+# ---- 공유 링크의 미리보기 태그 ----------------------------------------------
+#
+# 여기 들어가는 값(제목·로그라인)은 **모델이 지어낸 글**이고 그대로 HTML 에
+# 박힌다. 따옴표 하나만 새어 나가도 태그가 깨지거나 남의 화면에서 스크립트가
+# 돈다. 그래서 이스케이프를 테스트로 못박는다.
+import serve as S                                              # noqa: E402
+
+_share_meta = {
+    "run_id": "20260823T152601-a6316e", "episode": 1,
+    "title": "약속의 무게", "character": "모모",
+    "genre": "로맨스 판타지", "logline": "한 줄 소개.",
+    "cover_page": 1,
+}
+_og = S.og_tags(_share_meta, "https://lore.test")
+ok("공유: 제목이 '누구 · 무엇' 으로 나온다",
+   'content="모모 · 약속의 무게 — LORE"' in _og)
+ok("공유: 로그라인이 설명으로 실린다", 'content="한 줄 소개."' in _og)
+ok("공유: 그림 주소가 절대 주소다 (크롤러는 상대 주소를 못 푼다)",
+   'content="https://lore.test/api/runs/' in _og)
+ok("공유: 링크가 그 작품·그 회차를 가리킨다",
+   "/works?run=20260823T152601-a6316e&amp;ep=1" in _og)
+ok("공유: <title> 도 같이 바꾼다 (탭과 카드가 따로 놀지 않게)",
+   "<title>모모 · 약속의 무게 — LORE</title>" in _og)
+
+_evil = dict(_share_meta, title="<script>alert(1)</script>",
+             character='"onload="evil()', logline='a & b < c > "q"')
+_og_evil = S.og_tags(_evil, "https://lore.test")
+ok("공유: 꺾쇠가 태그로 살아나지 않는다", "<script>" not in _og_evil)
+ok("공유: 따옴표로 속성을 빠져나가지 못한다", 'onload="evil' not in _og_evil)
+ok("공유: 앰퍼샌드도 실체참조로 바뀐다", "a &amp; b" in _og_evil)
+
+_no_log = dict(_share_meta, logline="")
+ok("공유: 로그라인이 없으면 장르로 대신한다 (빈 설명은 안 내보낸다)",
+   'content="로맨스 판타지 웹툰"' in S.og_tags(_no_log, "https://lore.test"))
+ok("공유: 장르도 없으면 기본 문구가 있다",
+   'og:description" content="캐릭터'
+   in S.og_tags(dict(_no_log, genre=""), "https://lore.test"))
+
+ok("공유: 없는 작품은 미리보기를 안 만든다 (share_meta 가 None)",
+   P.share_meta("없는run", 1) is None)
+
 
 # ---------------- 굽기 ----------------
 

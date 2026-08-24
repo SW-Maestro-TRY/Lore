@@ -1380,6 +1380,9 @@ function paintResult(r) {
   // 컷 사이 호흡은 이제 한 장 안에서 모델이 정하므로 여기서 넣을 여백이 없다.
   resultRunId = r.run_id || "";
   resultEpisode = epNo;
+  // 공유는 run_id 로 여는 주소라, 그것이 없으면 보낼 링크가 없다. 눌러도
+  // 아무 일이 안 일어나는 단추를 두느니 감춘다.
+  $("#shareBtn").hidden = !resultRunId;
   wireMemory(resultRunId);
   $("#reader").innerHTML = r.pages.map(pg => `
     <div class="page" data-scene="${pg.no}">
@@ -1509,6 +1512,83 @@ let resultRunId = "";
 // 보내야 한다 — 안 보내면 서버가 1화로 알아듣고 2화 화면을 보면서 **1화
 // 그림을 덮어쓴다** (실제 코드 감사에서 발견).
 let resultEpisode = 1;
+
+/* ---- 공유 --------------------------------------------------------------- *
+ *
+ * 보내는 것은 **링크 하나**다. 그림 파일이 아니라 링크를 보내는 이유:
+ * 한 편이 20MB 라 메신저가 받아 주지 않거나 화질을 깎고, 무엇보다 받은 사람이
+ * 회차를 넘겨 가며 읽을 수가 없다. 링크로 열면 완성본 화면이 그대로 열린다.
+ * 파일이 필요한 사람에게는 옆에 "PNG 내려받기" 가 이미 있다.
+ *
+ * 미리보기(제목·그림)는 서버가 만든다 — serve.py 의 og_tags 참고. 크롤러는
+ * 자바스크립트를 안 돌려서 여기서 무엇을 그리든 카드에는 안 실린다.
+ *
+ * 지금은 링크를 아는 사람이 곧 볼 수 있는 사람이다. 공개 범위·만료는 계정이
+ * 생긴 뒤의 일이라(#66) 화면에서도 그렇게 말한다. */
+
+function shareUrl() {
+  if (!resultRunId) return "";
+  return `${location.origin}/works?run=${encodeURIComponent(resultRunId)}`
+       + `&ep=${resultEpisode}`;
+}
+
+function shareTitle() {
+  const t = ($("#resTitle")?.textContent || "").trim();
+  return t ? `${t} — LORE` : "LORE 로 만든 웹툰";
+}
+
+/* 폰에는 공유 시트가 있고 PC 에는 없다. 없는 곳에서는 링크를 복사하는 것이
+   할 수 있는 전부라, 단추 글자도 그때그때 맞춘다 — "공유" 라고 써 놓고
+   복사만 되면 눌러 본 사람이 무슨 일이 일어났는지 모른다. */
+function canOpenShareSheet() {
+  return typeof navigator.share === "function";
+}
+
+async function copyLink(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    return true;
+  } catch {
+    // 옛 브라우저이거나 https 가 아니면 clipboard 가 막힌다. 화면 밖에 잠깐
+    // 만들어 두고 실행 명령으로 복사한다 — 이것마저 안 되면 false 다.
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;left:-9999px;top:0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch { return false; }
+  }
+}
+
+async function doShare() {
+  const url = shareUrl();
+  if (!url) return toast("아직 공유할 작품이 없습니다");
+  if (canOpenShareSheet()) {
+    try {
+      await navigator.share({ title: shareTitle(), url });
+      return;                     // 시트에서 취소해도 여기로 온다 — 조용히 끝낸다
+    } catch (err) {
+      // 사용자가 시트를 닫은 것은 실패가 아니다. 그 밖의 이유(권한 등)일
+      // 때만 복사로 물러선다.
+      if (err && err.name === "AbortError") return;
+    }
+  }
+  toast(await copyLink(url)
+    ? "링크를 복사했습니다 — 붙여넣기 하면 미리보기가 뜹니다"
+    : "복사하지 못했습니다. 주소창의 주소를 그대로 보내 주세요.");
+}
+
+function setupShare() {
+  const btn = $("#shareBtn");
+  if (!btn) return;
+  btn.textContent = canOpenShareSheet() ? "공유" : "링크 복사";
+  btn.addEventListener("click", doShare);
+}
 
 function pageTools(no) {
   return `
@@ -1985,6 +2065,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     closeNextEp();
   });
+  setupShare();
   $("#scriptBtn").addEventListener("click", () => {
     $("#scriptPanel").hidden = !$("#scriptPanel").hidden;
   });
