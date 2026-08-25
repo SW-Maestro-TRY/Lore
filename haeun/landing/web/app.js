@@ -1197,7 +1197,8 @@ function renderBoardPreview(bp) {
   const host = $("#boardPreview");
   if (!host) return;
   if (!bp || !(bp.cuts || []).length) { host.innerHTML = ""; return; }
-  const head = bp.title ? `<p class="ap-title">${esc(bp.title)}</p>` : "";
+  const head = (bp.title ? `<p class="ap-title">${esc(bp.title)}</p>` : "")
+    + (bp.draft ? `<p class="ap-hook">게이트에 걸린 마지막 시도입니다 — 아직 통과한 콘티가 아닙니다.</p>` : "");
   host.innerHTML = head + bp.cuts.map(c => {
     const lines = [];
     if (c.narration) lines.push(`<p class="ap-line narration">${esc(c.narration)}</p>`);

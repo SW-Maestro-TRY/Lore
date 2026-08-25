@@ -2400,9 +2400,17 @@ r = webtoon.gate_camera(*camd(OKAY, trans=["동작"] + ["인물", "분위기", "
 ok("카메라 게이트: 첫 컷이 '장면' 이 아니면 탈락",
    any("첫 컷" in f for f in r), r)
 
+# 4~5연속은 정상이다 — 한 장면은 5컷까지 가고, 장면 안의 전환은 순간·동작
+# 뿐이라 5컷 장면 하나가 곧 같은 전환 4연속이다. 예전 상한(3)은 이 구조와
+# 싸웠고, 실제로 정상 콘티가 "동작 6컷 연속" 으로 막혔다. 상한은 SCENE_MAX
+# 와 같은 5이고, 6연속부터 탈락이다.
 r = webtoon.gate_camera(*camd(OKAY, trans=["장면", "동작", "동작", "동작", "동작",
                                            "인물", "분위기", "동작"]))
-ok("카메라 게이트: 같은 전환 4연속 탈락", any("transition 이" in f and "연속" in f
+ok("카메라 게이트: 같은 전환 4연속은 통과 (한 장면 안에서 정상)",
+   not any("transition 이" in f and "연속" in f for f in r), r)
+r = webtoon.gate_camera(*camd(OKAY, trans=["장면", "동작", "동작", "동작", "동작",
+                                           "동작", "동작", "인물"]))
+ok("카메라 게이트: 같은 전환 6연속 탈락", any("transition 이" in f and "연속" in f
                                               for f in r), r)
 
 r = webtoon.gate_camera(*camd(OKAY, trans=["장면", "동작", "장면", "동작",
@@ -3495,9 +3503,13 @@ _brief = _st.brief(webtoon.Ledger("엔진급 질문"))
 ok("연재 명부: 1화 브리핑에도 조연이 보인다",
    "하연" in _brief and "스토리 단계에서 확정" in _brief and "1화" in _brief, _brief)
 
-# 검출해 놓고 통과시키는 것이 검출 안 하는 것보다 나쁘다.
-ok("장면 점검: '설정 증발'은 사람이 봐야 하는 항목이다",
-   "설정 증발" in story.SCENE_BLOCKING_CHECKS)
+# '설정 증발'은 이제 메모다 — 낱말 보존율 검사는 입력이 길수록 불리해서
+# (3368자 입력에서 낱말 338개를 장면에 요구했다) 정성껏 쓴 사람만 막았다.
+# 작가가 명시한 사실은 gate_gender·gate_name 이 정확히 지킨다.
+ok("장면 점검: '설정 증발'은 메모로만 남긴다 (막지 않는다)",
+   "설정 증발" not in story.SCENE_BLOCKING_CHECKS)
+ok("장면 점검: 앞자리 낱말만 본다 (길게 쓴 사람이 불리하지 않게)",
+   story.IDEA_KEEP_TOKENS <= 20)
 ok("장면 점검: '대사 없음'은 메모로만 남긴다 (막지 않는다)",
    "대사 없음" not in story.SCENE_BLOCKING_CHECKS)
 

@@ -1969,9 +1969,19 @@ def story_preview(run_id: str) -> dict[str, Any]:
 
 
 def board_preview(run_id: str, episode: int = 1) -> dict[str, Any]:
-    """콘티 단계까지 나온 것 — 회차 제목과 컷별 대사·연출."""
+    """콘티 단계까지 나온 것 — 회차 제목과 컷별 대사·연출.
+
+    정식 파일이 없으면 **초안**(epNN_cuts.draft.json)을 읽는다. 게이트 재시도가
+    소진되면 하네스가 정식 파일 대신 마지막 시도를 초안으로 남긴다 — 예전에는
+    그마저 버려져서, 확인 화면이 "콘티를 확인해 주세요" 라고 말하면서 보여줄
+    콘티가 없었다.
+    """
     wt = STORY / "runs" / run_id / "webtoon"
     doc = _read_json(wt, f"ep{int(episode):02d}_cuts.json")
+    draft = False
+    if not doc:
+        doc = _read_json(wt, f"ep{int(episode):02d}_cuts.draft.json")
+        draft = bool(doc)
     cuts = []
     raw = doc.get("cuts") if isinstance(doc, dict) else doc
     for c in (raw or []):
@@ -1991,6 +2001,9 @@ def board_preview(run_id: str, episode: int = 1) -> dict[str, Any]:
         "title": episode_title(run_id, episode),
         "episode": int(episode),
         "cuts": cuts,
+        # 초안이면 화면이 "게이트에 걸린 마지막 시도" 라고 말해 준다 —
+        # 통과한 콘티처럼 보이면 안 된다.
+        "draft": draft,
     }
 
 

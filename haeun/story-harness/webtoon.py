@@ -154,7 +154,13 @@ TRANSITIONS = ("순간", "동작", "인물", "장면", "분위기")
 # 이 둘은 "같은 자리에서 조금 움직였다" 는 뜻이다. 그 사이에 zone 이 바뀌면
 # 한 컷 만에 순간이동한 것이 되므로 서로 모순이다 (zone_warnings).
 SAME_PLACE_TRANSITIONS = ("순간", "동작")
-MAX_SAME_TRANSITION_RUN = 3   # 4연속부터 실패
+# 한 장면은 SCENE_MAX(5)컷까지 갈 수 있고, **한 장면 안에서 쓸 수 있는 전환은
+# 순간·동작 둘뿐이다**(SAME_PLACE_TRANSITIONS — 그 사이에 장소가 바뀌면 순간이동이
+# 된다). 그래서 5컷짜리 장면 하나는 같은 전환을 4번 연달아 쓸 수밖에 없다 —
+# 3으로 두면 **정상적인 장면이 게이트를 위반한다.** 규칙 둘이 서로 싸우고
+# 있었고, 실제로 "컷 7~12 의 transition 이 '동작' 로 6컷 연속" 으로 막혔다.
+# SCENE_MAX 와 같은 값으로 맞춘다.
+MAX_SAME_TRANSITION_RUN = 5   # 6연속부터 실패 (SCENE_MAX 와 같은 값)
 MIN_TRANSITION_KINDS = 3      # 한 화에 최소 3종이 섞여야 한다
 MOOD_TRANSITION = "분위기"    # aspect-to-aspect. 시간이 흐르지 않는 컷
 MIN_MOOD_TRANSITION = 1
@@ -3943,9 +3949,11 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
         for f in failures:
             log(f"      - {f}")
         if spent + regens >= max_retries:
+            # 마지막 시도를 버리지 않는다 — 게이트에 걸린 초안이라도 사람이
+            # 봐야 진행할지 다시 만들지 고를 수 있다.
             raise Stopped(
                 f"{absolute}화 컷 게이트 재시도 소진: " + " / ".join(failures),
-                STATUS_HUMAN)
+                STATUS_HUMAN, draft=payload)
         regens += 1
 
         # 코드가 되돌린 것을 먼저 알린다. 강등은 조용히 일어나므로, 말해 주지
@@ -4643,12 +4651,20 @@ class WebtoonResult:
 
 
 class Stopped(Exception):
-    """엔진급 질문 훼손 등 자동으로 이어갈 수 없는 지점."""
+    """엔진급 질문 훼손 등 자동으로 이어갈 수 없는 지점.
 
-    def __init__(self, reason: str, status: str = STATUS_STOPPED):
+    draft 는 멈추기 직전까지 만들어 둔 마지막 시도(컷 payload)다. 없으면 None.
+    게이트 재시도가 소진돼 멈출 때 이것을 실어 보내면, 부르는 쪽이 초안으로
+    저장해서 **사람이 확인 화면에서 실제 컷을 보고** 진행/재시도를 고를 수 있다.
+    예전에는 여기서 전부 버려져서, 확인 화면이 "콘티를 확인해 주세요" 라고
+    말하면서 보여줄 콘티가 없었다(cut_count=0).
+    """
+
+    def __init__(self, reason: str, status: str = STATUS_STOPPED, draft=None):
         super().__init__(reason)
         self.reason = reason
         self.status = status
+        self.draft = draft
 
 
 class CallLog:
@@ -5245,6 +5261,18 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
             warn(f"  {absolute}화를 만들지 못했습니다: {exc.reason}")
             warn("  같은 자리에서 계속 걸리면 --max-retries 를 올리거나 "
                  "prompts/w7.txt 의 그 항목을 손보세요.")
+            # 마지막 초안이 있으면 남긴다 — 확인 화면이 이것을 보여준다.
+            # 정식 파일(epNN_cuts.json)에는 안 쓴다: 뒷단계(그림)가 그것을
+            # 읽으므로, 게이트에 걸린 것이 통과한 것처럼 흘러가면 안 된다.
+            if getattr(exc, "draft", None):
+                draft_path = wt_dir / f"ep{absolute:02d}_cuts.draft.json"
+                try:
+                    draft_path.write_text(json.dumps(
+                        exc.draft, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+                    warn(f"  마지막 초안을 남겼습니다: {draft_path.name}")
+                except OSError:
+                    pass               # 초안을 못 남겨도 멈춘 사실은 그대로다
             continue
         payload, _, w8_notes = solve_text(
             ps, call, card, episode, payload, ledger.snapshot(absolute),
