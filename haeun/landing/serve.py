@@ -1094,8 +1094,11 @@ class Handler(BaseHTTPRequestHandler):
             uid = str(body.get("uid") or "")
             cost = 0
             if credits.valid_uid(uid):
-                pages_left = pipeline.planned_pages(run_id, episode) - drawn
-                cost = credits.remaining_cost(pages_left)
+                layout = str((pipeline.origin_form(run_id) or {})
+                             .get("layout_mode") or "fast")
+                total_images = pipeline.planned_pages(run_id, episode)
+                paid = credits.creation_cost(True, layout)   # 만들 때 낸 시작가
+                cost = credits.remaining_cost(total_images, paid)
                 bal = credits.balance(uid)
                 if cost and bal < cost:
                     return self._error(

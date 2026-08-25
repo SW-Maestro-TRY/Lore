@@ -42,10 +42,14 @@ START_BALANCE = 12
 # pipeline.py 의 --cuts 1-3 로 4장 중 1장만 그리므로 딱 1/4 — 옛 목업 값
 # (240/60)의 비율과 같다. 화질 등급(스탠다드 0.6배)은 미실측 추정치라 아직
 # 안 넣는다(시트에도 "구조만 잡아둔 상태"라고 적혀 있다).
+# **고정 가격이 아니다 — 기준 예시다.** 한 편의 실제 값은 콘티가 정한
+# 이미지 장 수 × CREDIT_PER_IMAGE 로 그때그때 다르다(컷 수 8~16, 묶음 방식도
+# 모드마다 달라서 장 수가 고정되지 않는다). 이 값은 12컷·4장짜리 기준 화의
+# 예시(4+4=8)로, 충전 카드의 "웹툰 약 N편" 같은 안내 문구에만 쓴다.
 CREDIT_FULL = 8
-# 미리보기 = 앞 6컷(대략 절반). 예전에는 앞 3컷(2C)이었는데 "한 장만 주면
-# 뭐 어쩌라는 건가"가 됐다 — 절반은 보여야 이야기가 어떻게 흘러가는지 읽힌다.
-# 값 구조: 만들기 4C(절반) + 전체 보기 4C(나머지) = 한 편 8C.
+# 만들기(미리보기)의 시작 가격 — 이것 하나는 고정이다. 콘티가 나오기 전에
+# 받아야 해서(만들기 버튼을 누르는 순간) 실제 장 수로 계산할 수가 없다.
+# 그려 주는 분량은 고정이 아니라 **그 화의 절반가량**이다(pipeline 참고).
 CREDIT_PREVIEW = 4
 # 컷 모드(webtoon 레이아웃)는 컷 하나가 이미지 한 장이라 그림 호출이 3배다
 # (4장→12장). 콘티(텍스트) 몫은 그대로인데 화 전체를 3배로 어림하는 건
@@ -186,7 +190,18 @@ def creation_cost(preview: bool, layout_mode: str) -> int:
 CREDIT_PER_IMAGE = 2
 
 
-def remaining_cost(images_left: int) -> int:
-    """미리보기 뒤 남은 장면들을 마저 그리는 값. 모드 배수 없음 —
-    이미지 수 자체가 모드를 이미 반영한다(무게 묶음은 장 수가 많다)."""
-    return max(0, int(images_left)) * CREDIT_PER_IMAGE
+def episode_price(total_images: int) -> int:
+    """이 화의 **총액** — 실제 이미지 장 수 × 장당 값. 모드 배수 없음:
+    장 수 자체가 모드를 반영한다(무게 묶음은 장 수가 많다).
+    4장이면 8C, 10장이면 20C, 6장이면 12C."""
+    return max(0, int(total_images)) * CREDIT_PER_IMAGE
+
+
+def remaining_cost(total_images: int, already_paid: int) -> int:
+    """마저 그리기에서 더 받을 값 = 총액 − 이미 낸 것(시작가).
+
+    시작가(CREDIT_PREVIEW)는 선금이다 — 콘티가 나오기 전이라 실제 장 수를
+    몰라서 고정으로 받고, 총액이 정해진 뒤 여기서 차액만 받는다. 그래야
+    한 편의 최종 값이 언제나 장 수 × 장당(episode_price)과 일치한다.
+    총액이 선금보다 작아도 돌려주지는 않는다(환불 없음)."""
+    return max(0, episode_price(total_images) - max(0, int(already_paid)))

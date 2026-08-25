@@ -1311,7 +1311,8 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
                "--mode", mode, "-c", CONDITION, "--style", job.style,
                "--config", str(job_dir / "config.yaml"), "--yes"]
     if job.preview:
-        art_cmd += ["--cuts", f"1-{CUTS_PER_SHEET}"]
+        half = max(CUTS_PER_SHEET, -(-planned_cuts(run_id, job.episode) // 2))
+        art_cmd += ["--cuts", f"1-{half}"]
 
     def art_or_bind(line: str) -> None:
         if job.stage_i == 1 and (line.startswith("episode.png")
@@ -1640,11 +1641,15 @@ def execute(job: Job) -> None:
                "--mode", mode, "-c", CONDITION, "--style", job.style,
                "--config", str(job_dir / "config.yaml"), "--yes"]
         if job.preview:
-            # 미리보기 = 앞 6컷(이미지 두 장) — 대략 절반. 앞 3컷만 주면
-            # "이게 다야?" 가 됐다. 절반은 보여야 이야기의 흐름이 읽힌다.
-            # Scene 모드에서 --cuts 는 "그 컷이 들어 있는 장"을 고르므로
-            # 1~6 이 앞 두 장이고, 컷 모드에서는 말 그대로 컷 1~6 이다.
-            cmd += ["--cuts", f"1-{CUTS_PER_SHEET * 2}"]
+            # 미리보기 = **전체의 절반가량.** 이 자리는 콘티(webtoon.py)가
+            # 이미 끝난 뒤라 이 화의 실제 컷 수를 안다 — 고정 컷 수(앞 3컷,
+            # 앞 6컷)로 자르면 컷이 많은 화에서는 감질맛만 나고 적은 화에서는
+            # 미리보기가 거의 전부가 된다. 절반은 이야기가 어디로 가는지
+            # 읽히는 최소 분량이다. 컷을 이미지로 어떻게 묶을지는 run.py 가
+            # 정하므로(1컷=1장일 수도, 여러 컷=1장일 수도) 여기서는 컷 기준
+            # 절반만 자르고, 값 계산은 그려진 뒤의 실제 장 수로 한다.
+            half = max(CUTS_PER_SHEET, -(-planned_cuts(run_id, 1) // 2))
+            cmd += ["--cuts", f"1-{half}"]
 
         def art_or_bind(line: str) -> None:
             # episode.png 줄이 보이는 순간 마지막 단계로 넘어간다.
