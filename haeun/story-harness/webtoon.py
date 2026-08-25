@@ -2954,7 +2954,13 @@ def narration_voice_warnings(cuts: list) -> list:
 
 
 def layout_warnings(cuts: list) -> list:
-    """겹침(overlap)이 뜻을 잃은 자리 — 이유 없는 겹침, 남발."""
+    """겹침(overlap)이 뜻을 잃은 자리 — **이유 없는 겹침만** 본다.
+
+    개수는 안 센다. "몇 컷까지"는 장면이 무엇을 하려는지와 무관한 규칙이라,
+    조용히 흐르는 화면에서는 하나도 안 겹치는 것이 맞고 밀고 들어오는 장면에서는
+    연달아 겹치는 것이 맞다. 여기서 잡을 수 있는 것은 개수가 아니라 **의도가
+    적혔는가** 하나뿐이다.
+    """
     out = []
     over = [i for i, c in enumerate(cuts, 1)
             if str(c.get("layout") or "").strip().lower() == "overlap"]
@@ -2966,9 +2972,6 @@ def layout_warnings(cuts: list) -> list:
         out.append(f"컷 {', '.join(str(n) for n in noreason)} 이 overlap 인데 "
                    f"overlap_reason 이 비었습니다. 왜 겹치는지 한 줄로 못 적으면 "
                    f"그 겹침은 연출이 아니라 사고입니다 — normal 로 두세요.")
-    if len(over) > 2:
-        out.append(f"overlap 이 {len(over)}컷입니다 (많아야 2컷). 전부 겹치면 "
-                   f"겹침이 아무것도 강조하지 않고, 독자는 어디부터 읽을지 잃습니다.")
     return out
 
 
