@@ -27,6 +27,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs, quote
 
 import accounts
+import visibility
 import credits
 import overlay
 import pipeline
@@ -440,12 +441,15 @@ class Handler(BaseHTTPRequestHandler):
             account = accounts.get_account(key)
             claimed = set((account or {}).get("claimed_runs", []))
             runs = [r for r in pipeline.list_runs(limit=200) if r["run_id"] in claimed]
-            return self._json({"runs": runs})
+            # 내 것에는 숨긴 것도 그대로 나온다 — 대신 지금 공개 상태를 붙여서
+            # 마이페이지가 껐다 켰다 할 수 있게 한다.
+            return self._json({"runs": visibility.mark(runs)})
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
         # 작업(Job)을 거치지 않는다 — 하네스를 직접 돌린 run 도 똑같이 열린다.
         if path == "/api/runs":
-            return self._json({"runs": pipeline.list_runs()})
+            # 둘러보기에 걸리는 목록이다 — 숨긴 작품은 빼고 준다.
+            return self._json({"runs": visibility.filter_public(pipeline.list_runs())})
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/episode", path)
         if m:
@@ -949,6 +953,29 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(404, "그 판본으로 되돌리지 못했습니다")
             return self._json({"ok": True,
                                "versions": pipeline.scene_versions(run_id, scene_no, ep)})
+
+        # ---- 둘러보기에 걸지 말지 ---------------------------------------- #
+        #
+        # 내 작품만 바꿀 수 있다. "내 것" 의 근거는 계정에 담아둔 목록
+        # (claimed_runs)이다 — 로그인 안 한 채로 만든 작품은 담아 두기 전까지
+        # 주인이 없어서, 아무나 남의 작품을 내릴 수 있게 두지 않으려면 여기서
+        # 막아야 한다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/visibility", url.path)
+        if m:
+            run_id = m.group(1)
+            key = self._account_key()
+            if not key:
+                return self._error(401, "로그인이 필요합니다")
+            account = accounts.get_account(key)
+            if run_id not in set((account or {}).get("claimed_runs", [])):
+                return self._error(403, "내 계정에 담아둔 작품만 바꿀 수 있습니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            public = bool(body.get("public"))
+            visibility.set_public(run_id, public)
+            return self._json({"run_id": run_id, "public": public})
 
         # ---- 다음 화 이어서 만들기 (#72) -------------------------------- #
         #

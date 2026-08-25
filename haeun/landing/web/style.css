@@ -1096,6 +1096,16 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 }
 /* 예전 팔레트(붉은 강조)가 남아 있어서 민트 화면에서 혼자 붉게 떴다. */
 .works-ep:hover { border-color: var(--accent); background: rgba(111,165,153,.14); color: var(--accent-d); }
+/* 공개 스위치 — 내 작품 카드에만 붙는다. 켜고 끄는 것이 바로 보여야 하므로
+   글자도 상태를 따라 바뀐다("둘러보기에 공개" / "나만 보기"). */
+.works-pub {
+  display: flex; align-items: center; gap: .45em; margin-top: .5em;
+  font-size: .74rem; color: var(--accent-d); cursor: pointer;
+}
+.works-pub input { width: 1.05em; height: 1.05em; accent-color: var(--accent); flex: none; }
+.works-pub input:disabled { opacity: .5; }
+.works-pub:has(:not(:checked)) { color: var(--dim); }
+
 .works-edit { display: inline-block; margin-top: .5em; color: var(--dim); font-size: .72rem; }
 .works-edit:hover { color: var(--accent-d); }
 
