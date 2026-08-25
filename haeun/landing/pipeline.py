@@ -455,6 +455,32 @@ def world_presets() -> list[dict[str, str]]:
     return out
 
 
+def _drop_job_photos(job) -> None:
+    """시트가 승인되면 올린 사진을 지운다.
+
+    화면이 "올린 사진은 캐릭터를 만드는 데만 씁니다" 라고 말하는데 지우는
+    코드가 없어서, jobs/<job_id>/photoN.png 가 영영 남아 있었다. 남아 있는
+    동안은 /api/jobs/<id>/photo 로 꺼낼 수도 있었다.
+
+    character.json 의 경로는 그대로 둔다 — 그 파일을 다시 여는 단계가 없고
+    (read_character 는 이야기 단계에서 한 번만 부른다), 지우면 옛 job 을 다시
+    열었을 때 모양이 달라진다. 파일이 없어지는 것으로 충분하다.
+    """
+    gone = 0
+    for path in job_photos(job.dir):
+        try:
+            path.unlink()
+            gone += 1
+        except OSError:
+            pass                        # 못 지워도 만드는 것 자체는 안 막는다
+    if gone:
+        # has_photo 를 같이 내린다 — 파일만 지우고 표시를 남기면 화면이
+        # "사진이 있다" 고 믿고 빈 자리를 그린다.
+        job.has_photo = False
+        job.note(f"올린 사진 {gone}장을 지웠습니다 — 시트가 나왔으니 더 쓰지 않습니다")
+        job.save()
+
+
 def write_character(job_dir: Path, form: dict[str, Any]) -> Path:
     """폼 입력을 story.py 가 읽는 캐릭터 파일로.
 
@@ -1508,6 +1534,13 @@ def execute(job: Job) -> None:
             if job._cancel:
                 raise Failed("취소됨")
             if decision != "retry":
+                # 승인된 순간부터 올린 사진은 쓸 데가 없다. 사진을 여는 곳은
+                # 둘뿐이고(이야기 단계의 LOOK, 시트 그리기) 둘 다 지나왔다 —
+                # 뒤 단계는 시트 그림만 본다. 그래서 여기서 지운다.
+                #
+                # 승인 **전**에는 못 지운다. 「수정 후 다시 만들기」가 같은
+                # 사진으로 시트를 다시 그리기 때문이다.
+                _drop_job_photos(job)
                 break                   # approve (또는 알 수 없는 값 — 진행 쪽이 안전)
             if edit_fields:
                 job.note("고친 내용을 저장하는 중")

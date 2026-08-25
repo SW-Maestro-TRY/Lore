@@ -980,9 +980,26 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 .sheet-approval-head p { color: var(--muted); font-size: .9rem; margin: 0 0 16px; }
 .approval-reason { color: var(--text); font-size: .92rem; margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--gold); background: var(--ink-2); border-radius: 6px; }
 .approval-reason:empty { display: none; }
-.sheet-approval-compare { display: flex; gap: 16px; flex-wrap: wrap; }
-.sheet-approval-compare figure { margin: 0; flex: 1 1 200px; max-width: 320px; }
-.sheet-approval-compare img { width: 100%; border-radius: 10px; border: 1px solid var(--line); background: var(--ink-2); aspect-ratio: 3/4; object-fit: cover; }
+/* 좁은 폰에서도 두 칸을 유지한다. 비교하라고 만든 화면인데 위아래로 쪼개지면
+   한 번에 하나씩만 보여서 비교가 안 된다 — 작아지더라도 나란히가 낫다.
+   (사진이 없어 한 칸만 있을 때는 그 칸이 폭을 다 쓴다.) */
+.sheet-approval-compare {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 10px; align-items: start;
+}
+.sheet-approval-compare figure { margin: 0; min-width: 0; }
+/* 이 화면이 하는 일은 **원본과 시트를 견주는 것** 이다. 그런데 둘 다 3/4 로
+   맞추고 cover 로 잘라내고 있었다 — 가로로 찍은 사진은 머리와 몸이 날아가고,
+   세로로 긴 시트는 위아래가 잘렸다. 잘린 것끼리 비교할 수는 없다.
+   각자 제 비율대로 두고, 너무 길어지지만 않게 높이만 묶는다. */
+.sheet-approval-compare img {
+  /* 액자는 둘이 같고, 그림은 그 안에서 제 비율대로 들어앉는다(contain).
+     비율까지 같게 맞추면(cover) 잘려서 비교가 안 되고, 액자를 각자 크기로
+     두면 두 칸 높이가 달라 한쪽 밑에 빈자리가 크게 남는다. */
+  display: block; width: 100%; aspect-ratio: 3 / 4;
+  object-fit: contain;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--ink-2);
+}
 .sheet-approval-compare figcaption { margin-top: 6px; font-size: .78rem; color: var(--muted); text-align: center; }
 .sheet-approval-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
@@ -1930,7 +1947,9 @@ button.inline-link:hover { color: #f0d090; }
    위를 보고 있어서, 아래로 내려야 보이는 알림은 알림이 아니었다. */
 .approval-veil { align-items: flex-start; padding: 4vh 16px; }
 .approval-box {
-  max-width: 520px; max-height: 92vh; padding: 0;
+  /* 앱은 480px 한 컬럼인데 팝업만 520px 이라, PC 에서 팝업이 앱 밖으로 삐져
+     나와 있었다. 프레임 안쪽(480 - 좌우 여백 16px씩)에 맞춘다. */
+  max-width: 448px; max-height: 92vh; padding: 0;
   background: transparent; border: none; box-shadow: none;
 }
 .approval-box .sheet-approval { margin: 0; max-height: 92vh; overflow-y: auto; }
