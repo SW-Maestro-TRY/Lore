@@ -553,7 +553,8 @@ PROMPT_CONTRACT = {
            "sample_cards", "retry_feedback", "world",
            "genre_template", "variation_axes", "user_memory"},
     "p2": {"genre", "character_sheet", "retry_feedback", "world",
-           "genre_template", "story_template", "story_structure", "user_memory"},
+           "genre_template", "story_template", "story_structure", "user_memory",
+           "author_story"},
     "p3": {"character_sheet", "premise_json", "sample_intros"},
     "scene": {"scene_count", "idea", "character_sheet_json", "premise_json",
               "fix_directive", "user_memory"},
@@ -3218,6 +3219,13 @@ def run_pipeline(caller: Caller, ps: PromptSet, row: dict, iteration: int,
                 render(ps.texts["p2"], {
                     "genre": row["genre"],
                     "world": row.get("world") or "(없음)",
+                    # 작가가 처음 준 글 **원문**. 예전에는 P2 가 P1 카드(증류본)만
+                    # 봐서, 작가가 적은 구체적 전개("첫 장면에서 강아지를 구하고…")
+                    # 가 카드에 안 담기면 구조가 그것을 모른 채 짜였다 — 장면
+                    # 단계가 원문을 다시 받아 그 구조 밑에서 욱여넣는 순서였다.
+                    # 카드는 그대로 준다: 원문은 "작가가 요구한 사건", 카드는
+                    # "정리된 설정" — P2 는 둘 다 보고 구조를 세운다.
+                    "author_story": row.get("one_line") or "(없음)",
                     "genre_template": genre_tpl or "(이 장르의 템플릿이 없습니다)",
                     "story_template": story_tpl or "(스토리 템플릿이 없습니다)",
                     "story_structure": (samples.structure_block(structure)
