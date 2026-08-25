@@ -411,8 +411,39 @@ def baked_episode_path(ep_dir: Path) -> Path:
     return ep_dir / BAKED_EPISODE
 
 
+def scene_spec(data: dict[str, Any], no: int) -> dict[str, Any]:
+    """그 장에 얹은 것. 없으면 빈 dict."""
+    return (data.get("scenes") or {}).get(str(int(no))) or {}
+
+
+def has_items(data: dict[str, Any], no: int) -> bool:
+    """그 장에 얹은 것이 하나라도 있는가."""
+    return bool(scene_spec(data, no).get("items"))
+
+
+def bake_one(ep_dir: Path, no: int, src: Path,
+             data: dict[str, Any] | None = None) -> Path:
+    """장 **하나만** 굽는다. 화면이 최종본을 보여줄 때 그때그때 쓴다.
+
+    bake() 는 한 편을 통째로 굽고 이어 붙인다 — 말풍선 하나 옮길 때마다 그걸
+    다 할 수는 없다. 그래서 필요한 장 하나만 굽는 길을 따로 둔다. 결과는 같은
+    자리(baked/scene{n}.png)에 떨어지므로 나중에 bake() 가 덮어써도 어긋나지
+    않는다.
+    """
+    Image, _, _ = _pil()
+    data = data if data is not None else load_overlay(ep_dir)
+    base = Image.open(src)
+    base.load()
+    img, _gone = render_scene(base, scene_spec(data, no))
+    out = baked_scene_path(ep_dir, no)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out)
+    return out
+
+
 def bake(ep_dir: Path, numbers: list[int], base_of, data: dict[str, Any] | None = None,
-         layout: dict[int, tuple[int, str]] | None = None) -> dict[str, Any]:
+         layout: dict[int, tuple[int, str]] | None = None,
+         gap_table: dict[int, float] | None = None) -> dict[str, Any]:
     """얹은 것을 그림에 굽는다.
 
     numbers : 이 화의 장 번호들 (순서대로)
@@ -421,6 +452,10 @@ def bake(ep_dir: Path, numbers: list[int], base_of, data: dict[str, Any] | None 
               채워 잇는다(예전 동작 그대로). 있으면 원래 생성 때와 같은
               여백·폭으로 다시 잇는다 — 편집실에서 다시 구웠다고 세로 스크롤의
               리듬(#110)이 사라지면 안 된다.
+    gap_table : 여백 눈금(gap_after -> 폭의 몇 배). 없으면 하네스 기본값.
+              **원래 생성 때 쓴 config 의 눈금을 넘겨야 한다** — 기본값으로
+              다시 이으면 같은 gap_after=1 이 0.07 배(기본)와 0.16 배(제품)로
+              갈려서, 구운 한 편이 원본 episode.png 와 높이가 달라진다.
 
     **얹은 것이 없는 장도 굽는다.** 안 그러면 한 편으로 이을 때 어떤 장은
     구운 것, 어떤 장은 원본이 되어 두 폴더를 섞어 읽어야 한다.
@@ -459,14 +494,11 @@ def bake(ep_dir: Path, numbers: list[int], base_of, data: dict[str, Any] | None 
     # (config 의 scene.stitch_gaps 가 기본 꺼짐인 것과 같은 이유다).
     gaps = [layout.get(n, (0, "normal"))[0] for n in made]
     weights = [layout.get(n, (1, "normal"))[1] for n in made]
-    # 원본 생성 때 실제로 쓴 config(scene.gap_ratio·light_width)까지는 여기서
-    # 모른다 — 기본 눈금(GAP_RATIO·LIGHT_WIDTH)으로 다시 잇는다. 여백 없이 전부
-    # 붙던 것보다는 훨씬 낫고, 정확한 눈금이 필요하면 호출부가 gap_table 을
-    # 따로 넘기면 된다(이 함수는 안 바뀐다).
     ratios = [_strip.width_ratio({"weight": w}) for w in weights]
     try:
         w, h = _episode.stitch([baked_scene_path(ep_dir, n) for n in made], out,
-                               gaps, ratios, _strip.gap_ratio_table())
+                               gaps, ratios,
+                               gap_table or _strip.gap_ratio_table())
     except _episode.StitchError as exc:
         raise OverlayError(f"한 편으로 잇지 못했습니다: {exc}") from exc
 

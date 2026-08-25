@@ -1830,6 +1830,127 @@ def _scene_layout(run_id: str, episode: int = 1) -> dict[int, tuple[int, str]]:
     return out
 
 
+def _strip_gap_table() -> dict[int, float]:
+    """하네스 기본 여백 눈금. config 를 못 찾은 옛 run 이 쓴다."""
+    try:
+        import strip as _strip                                  # noqa: PLC0415
+        return _strip.gap_ratio_table()
+    except Exception:                                           # noqa: BLE001
+        return {0: 0.0, 1: 0.07, 2: 0.26, 3: 0.62}
+
+
+def _width_ratio(weight: str) -> float:
+    """그 무게의 컷이 쓰는 지면 폭(배)."""
+    try:
+        import strip as _strip                                  # noqa: PLC0415
+        return float(_strip.width_ratio({"weight": weight}))
+    except Exception:                                           # noqa: BLE001
+        return 0.55 if str(weight).strip().lower() == "light" else 1.0
+
+
+def _run_gap_table(run_id: str) -> dict[int, float] | None:
+    """그 실행이 실제로 쓴 여백 눈금(scene.gap_ratio). 못 찾으면 None.
+
+    하네스 기본은 {0:0, 1:0.07, 2:0.26, 3:0.62} 인데 "웹툰" 연출은 이것을
+    {0:0, 1:0.16, 2:0.32, 3:0.90} 으로 덮어쓴다. 다시 구울 때 기본값으로 이으면
+    같은 화가 원본보다 절반쯤 촘촘해진다 — 세로 스크롤에서 여백은 장식이 아니라
+    호흡이라, 그만큼 다른 작품이 된다.
+    """
+    cfg = _origin_config(run_id)
+    if not cfg:
+        return None
+    try:
+        text = cfg.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r"(?m)^  gap_ratio:\s*\{(.*?)\}\s*$", text)
+    if not m:
+        return None
+    out: dict[int, float] = {}
+    for k, v in re.findall(r"(\d+)\s*:\s*([\d.]+)", m.group(1)):
+        try:
+            out[int(k)] = float(v)
+        except ValueError:
+            continue
+    return out or None
+
+
+def _mtime(p: Path | None) -> float:
+    try:
+        return p.stat().st_mtime if p else 0.0
+    except OSError:
+        return 0.0
+
+
+def final_unit(run_id: str, no: int, episode: int = 1) -> Path | None:
+    """화면과 내려받기가 **실제로 내보내는** 장 그림.
+
+    편집실에서 얹은 말풍선·스티커가 있으면 그것이 구워진 그림을 준다. 없으면
+    원본 그대로다. 전에는 모든 보는 자리가 원본(unit_image)만 봐서, 편집실에서
+    얹고 저장해도 결과 화면·둘러보기·내려받기에는 안 나왔다 — 저장은 되는데
+    아무 데도 안 보이니 저장이 안 된 것과 같았다.
+
+    굽기는 **볼 때** 한다. 저장할 때마다 한 편을 통째로 구우면 말풍선 한 번
+    옮길 때마다 그 일을 다 하게 된다. 대신 밑그림이나 얹은 것이 구운 것보다
+    새로우면(다시 그렸거나 방금 고쳤으면) 그 장만 다시 굽는다.
+    """
+    base = unit_image(run_id, no, episode)
+    if not base:
+        return None
+    ep_dir = episode_dir(run_id, episode)
+    ov = overlay.overlay_path(ep_dir)
+    if not ov.exists():
+        return base
+    try:
+        data = overlay.load_overlay(ep_dir)
+    except Exception:                                           # noqa: BLE001
+        return base
+    if not overlay.has_items(data, no):
+        return base
+    out = overlay.baked_scene_path(ep_dir, no)
+    if _mtime(out) >= max(_mtime(base), _mtime(ov)):
+        return out
+    try:
+        return overlay.bake_one(ep_dir, no, base, data)
+    except Exception:                                           # noqa: BLE001
+        # 구우려다 실패했다고 화면이 비면 안 된다 — 원본이라도 보여 준다.
+        return base
+
+
+def final_episode(run_id: str, episode: int = 1) -> Path:
+    """내려받기가 내보내는 **한 편**. 얹은 것이 있으면 구운 판이다.
+
+    final_unit 과 같은 규칙이되 한 편이라 통째로 굽는다. 얹은 것이 하나도
+    없으면 원본 episode.png 를 그대로 준다 — 굽는 값이 없다.
+    """
+    ep_dir = episode_dir(run_id, episode)
+    plain = ep_dir / "episode.png"
+    ov = overlay.overlay_path(ep_dir)
+    if not ov.exists():
+        return plain
+    try:
+        data = overlay.load_overlay(ep_dir)
+    except Exception:                                           # noqa: BLE001
+        return plain
+    # scenes.json 도 콘티도 없는 화(옛 실행·부분 복구)는 그려 둔 그림을 센다 —
+    # 목록을 못 만들면 얹은 것이 있어도 굽지 못하고 원본이 나간다.
+    numbers = (_scene_numbers(run_id, episode)
+               or list(range(1, drawn_units(run_id, episode) + 1)))
+    if not any(overlay.has_items(data, n) for n in numbers):
+        return plain
+    out = overlay.baked_episode_path(ep_dir)
+    newest = max([_mtime(ov)] + [_mtime(unit_image(run_id, n, episode))
+                                 for n in numbers])
+    if _mtime(out) >= newest:
+        return out
+    try:
+        overlay.bake(ep_dir, numbers, lambda n: unit_image(run_id, n, episode),
+                     data, _scene_layout(run_id, episode), _run_gap_table(run_id))
+    except Exception:                                           # noqa: BLE001
+        return plain
+    return out if out.exists() else plain
+
+
 def read_overlay(run_id: str, episode: int = 1) -> dict[str, Any]:
     return overlay.load_overlay(episode_dir(run_id, episode))
 
@@ -1866,7 +1987,8 @@ def bake_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
     try:
         res = overlay.bake(ep_dir, numbers,
                            lambda n: unit_image(run_id, n, episode), data,
-                           _scene_layout(run_id, episode))
+                           _scene_layout(run_id, episode),
+                           _run_gap_table(run_id))
     except overlay.OverlayError as exc:
         raise Failed(str(exc)) from exc
     res["url"] = f"/api/runs/{run_id}/baked.png?ep={int(episode)}"
@@ -3102,6 +3224,11 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
     if not grouping:
         grouping = [{"scene_number": n, "cut_numbers": [n]} for n in sorted(by_no)]
 
+    # 화면도 파일과 **같은 여백·같은 폭**으로 이어야 한다. 전에는 이 값이
+    # 아예 안 실려서 리더가 장을 딱 붙여 그렸다 — 내려받은 episode.png 에는
+    # 여백이 있는데 화면에는 없어서, 보고 만든 것과 받은 것이 서로 달랐다.
+    layout = _scene_layout(run_id, episode)
+    gaps = _run_gap_table(run_id) or _strip_gap_table()
     scenes = []
     for sc in grouping:
         no = int(sc.get("scene_number") or 0)
@@ -3109,10 +3236,15 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
         if not src:
             continue
         w, h = _image_size(src)
+        gap_after, weight = layout.get(no, (0, "normal"))
         scenes.append({
             "no": no,
             "image": f"/api/runs/{run_id}/page/{no}" + _ep_q(episode),
             "w": w, "h": h,
+            # 아래 여백 — 지면 폭의 몇 배인가 (episode.stitch 와 같은 눈금).
+            "gap": round(float(gaps.get(int(gap_after), 0.0)), 4),
+            # 이 장이 쓰는 지면 폭 — 떠 있는 컷(light)은 좁게 들어간다.
+            "width": round(_width_ratio(weight), 4),
             "cuts": [cut_card(by_no[n]) for n in (sc.get("cut_numbers") or [])
                      if n in by_no],
         })
@@ -3261,6 +3393,11 @@ def _result_body(run_id: str, episode: int, style_label: str) -> dict[str, Any]:
         # 컷 모드로 되돌렸거나 아직 묶기 전 — 컷 하나를 한 장으로 본다.
         grouping = [{"scene_number": n, "cut_numbers": [n]} for n in sorted(by_no)]
 
+    # 결과 화면도 파일과 같은 여백·폭으로 잇는다 (편집실이 쓰는 /episode 와
+    # 같은 값 — 두 화면이 다른 리듬으로 보이면 어느 쪽이 진짜인지 알 수 없다).
+    layout = _scene_layout(run_id, episode)
+    gap_table = _run_gap_table(run_id) or _strip_gap_table()
+
     pages, drawn_cuts = [], 0
     for sc in grouping:
         no = int(sc.get("scene_number") or 0)
@@ -3269,7 +3406,10 @@ def _result_body(run_id: str, episode: int, style_label: str) -> dict[str, Any]:
         cards = [cut_card(by_no[n]) for n in (sc.get("cut_numbers") or [])
                  if n in by_no]
         drawn_cuts += len(cards)
-        pages.append({"no": no, "cuts": cards})
+        gap_after, weight = layout.get(no, (0, "normal"))
+        pages.append({"no": no, "cuts": cards,
+                      "gap": round(float(gap_table.get(int(gap_after), 0.0)), 4),
+                      "width": round(_width_ratio(weight), 4)})
 
     ep_png = ep_dir / "episode.png"
     planned = made_episodes(run_id)
