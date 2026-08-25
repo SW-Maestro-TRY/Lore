@@ -42,19 +42,22 @@ START_BALANCE = 12
 # pipeline.py 의 --cuts 1-3 로 4장 중 1장만 그리므로 딱 1/4 — 옛 목업 값
 # (240/60)의 비율과 같다. 화질 등급(스탠다드 0.6배)은 미실측 추정치라 아직
 # 안 넣는다(시트에도 "구조만 잡아둔 상태"라고 적혀 있다).
-# **고정 가격이 아니다 — 기준 예시다.** 한 편의 실제 값은 콘티가 정한
-# 이미지 장 수 × CREDIT_PER_IMAGE 로 그때그때 다르다(컷 수 8~16, 묶음 방식도
-# 모드마다 달라서 장 수가 고정되지 않는다). 이 값은 12컷·4장짜리 기준 화의
-# 예시(4+4=8)로, 충전 카드의 "웹툰 약 N편" 같은 안내 문구에만 쓴다.
-CREDIT_FULL = 8
-# 만들기(미리보기)의 시작 가격 — 이것 하나는 고정이다. 콘티가 나오기 전에
-# 받아야 해서(만들기 버튼을 누르는 순간) 실제 장 수로 계산할 수가 없다.
-# 그려 주는 분량은 고정이 아니라 **그 화의 절반가량**이다(pipeline 참고).
-CREDIT_PREVIEW = 4
-# 컷 모드(webtoon 레이아웃)는 컷 하나가 이미지 한 장이라 그림 호출이 3배다
-# (4장→12장). 콘티(텍스트) 몫은 그대로인데 화 전체를 3배로 어림하는 건
-# 근사치다 — 정확한 비례 배분은 최소 기능 범위 밖.
-CREDIT_WEBTOON_MULT = 3
+# **한 편 = 12크레딧, 고정. 만들 때 전액을 한 번에 받는다.**
+#
+#   웹툰 만들기(12C) → 일부(절반가량)를 먼저 보여줌 → 「1화 전체 보기」는
+#   추가 결제 없음 — 이미 산 웹툰을 이어서 보는 것이다.
+#
+# 반씩(6+6) 나누는 안도 실험했지만 버렸다: 미리보기가 마음에 든 순간 결제
+# 버튼을 또 눌러야 하면 구매 흐름이 거기서 끊긴다. 장당·컷당·모드별 변동가도
+# 버렸다 — 화마다 값이 달라지면 공정하긴 한데 "얼마 나올지 모른다"가 몇
+# 크레딧 아끼는 것보다 구매를 더 막는다. 예외가 없어야 "한 편 12크레딧"
+# 한 문장이 언제나 참이다.
+#
+# 실비 참고: fast 는 이미지 4장쯤이라 넉넉하고, 웹툰 묶음은 10장+라 밑진다.
+# 프리토타이핑 단계라 단순함을 택했다 — 실측 원가가 쌓이면 다시 본다.
+CREDIT_FULL = 12
+# 연출 모드 배수 — 값에 안 쓴다(위 참고). 부르는 곳 호환용으로만 남긴다.
+CREDIT_WEBTOON_MULT = 1
 
 # 시트의 "이미지 1장 재생성"(1크레딧)·"+피드백"(2크레딧) 행은 여기 안 옮겼다
 # — 장(scene) 다시 그리기는 결과 화면(app.js)과 편집실 샘플(editor.js)이
@@ -176,32 +179,7 @@ def log_event(event: str, uid: str, **extra) -> None:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def creation_cost(preview: bool, layout_mode: str) -> int:
-    base = CREDIT_PREVIEW if preview else CREDIT_FULL
-    return base * CREDIT_WEBTOON_MULT if layout_mode == "webtoon" else base
-
-
-# 실제 비용 단위는 **이미지 한 장**이다. 몇 컷이 한 장에 들어가는지는 모드가
-# 정한다 — fast 는 3컷씩, 웹툰(무게 묶음)은 1컷이 한 장일 수도 여러 컷이 한
-# 장일 수도 있다. 그래서 "나머지 마저 그리기" 값은 편당 고정이 아니라
-# **콘티가 정한 남은 장면(이미지) 수 × 장당 값**이다. 콘티가 나온 뒤라
-# (scenes.json 은 화당 1회, 전체 묶음을 캐시한다) 이 수는 정확히 안다.
-# fast 12컷(4장) 기준: 미리보기 4C(2장) + 남은 2장 4C = 한 편 8C.
-CREDIT_PER_IMAGE = 2
-
-
-def episode_price(total_images: int) -> int:
-    """이 화의 **총액** — 실제 이미지 장 수 × 장당 값. 모드 배수 없음:
-    장 수 자체가 모드를 반영한다(무게 묶음은 장 수가 많다).
-    4장이면 8C, 10장이면 20C, 6장이면 12C."""
-    return max(0, int(total_images)) * CREDIT_PER_IMAGE
-
-
-def remaining_cost(total_images: int, already_paid: int) -> int:
-    """마저 그리기에서 더 받을 값 = 총액 − 이미 낸 것(시작가).
-
-    시작가(CREDIT_PREVIEW)는 선금이다 — 콘티가 나오기 전이라 실제 장 수를
-    몰라서 고정으로 받고, 총액이 정해진 뒤 여기서 차액만 받는다. 그래야
-    한 편의 최종 값이 언제나 장 수 × 장당(episode_price)과 일치한다.
-    총액이 선금보다 작아도 돌려주지는 않는다(환불 없음)."""
-    return max(0, episode_price(total_images) - max(0, int(already_paid)))
+def creation_cost(preview: bool = True, layout_mode: str = "fast") -> int:
+    """만들기 값 — 한 편 전액. preview·layout_mode 는 받되 값을 바꾸지
+    않는다: 미리보기로 시작해도 전액을 먼저 받고, 나머지 생성은 공짜다."""
+    return CREDIT_FULL
