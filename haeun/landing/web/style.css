@@ -1961,3 +1961,21 @@ button.inline-link:hover { color: #f0d090; }
 
 /* 확인 팝업이 떠 있는 동안 뒤가 안 굴러가게 */
 body.modal-open { overflow: hidden; }
+
+/* ---- 결제 방식 · 최종 확인 (프리토타이핑) ------------------------------- */
+.charge-card small { display: block; font-weight: 400; font-size: .74rem; color: var(--dim); margin-top: 2px; }
+.charge-pkg-tag { display: block; font-size: .76rem; color: var(--muted); margin-top: 3px; }
+.charge-confirm-box {
+  margin: 14px 0 8px; border: 1px solid var(--line-2); border-radius: 12px;
+  padding: 4px 14px; background: var(--card-2);
+}
+.charge-confirm-row {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: .65em 0; font-size: .88rem; border-bottom: 1px solid var(--line);
+}
+.charge-confirm-row:last-child { border-bottom: none; }
+.charge-confirm-row span { color: var(--muted); }
+.charge-confirm-total b { color: var(--accent-d); font-size: 1.02rem; }
+.charge-confirm-note { margin: 0 0 14px; font-size: .78rem; color: var(--dim); }
+.charge-confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.charge-confirm-actions .btn { min-height: 44px; }
