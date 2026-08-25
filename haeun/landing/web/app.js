@@ -951,8 +951,12 @@ function wizGo(n, scroll = true) {
   $("#submitBtn").hidden = !(atEnd && !atFork);
   $("#ipAgreeLine").hidden = !(atEnd && !atFork);
   $("#wizSkip").hidden = atFork || atEnd;
-  // 1걸음에서도 뒤로 갈 곳이 있다 — 홈. 그래서 안 죽인다.
-  $("#wizPrev").textContent = wizStep === 1 ? "홈으로" : "이전";
+  // 「이전」은 1걸음에서 갈 곳이 없으니 아예 안 보인다.
+  // 예전에는 이 자리를 「홈으로」로 바꿔 놨었다. 아무도 시키지 않은 단추였고,
+  // 홈으로 가는 문은 이미 헤더의 LORE 하나로 충분하다 — 같은 일을 하는 문이
+  // 화면에 둘이면 어느 쪽이 무엇인지 고민하게 만든다.
+  $("#wizPrev").hidden = wizStep === 1;
+  $("#wizPrev").textContent = "이전";
   $("#submitNote").hidden = !(atEnd && !atFork);
   $(".wiz-foot").hidden = atFork;
 
