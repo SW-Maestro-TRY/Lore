@@ -1,26 +1,33 @@
-# 백엔드 자동 배포 (CI/CD) — SSM 방식
+# 배포 (CI/CD) — SSM 방식
 #
-# develop 에 "백엔드 코드"가 머지되면 자동으로:
-#   1) 빌드   2) jar를 S3에 업로드   3) SSM으로 서버에 "받아서 교체·재시작" 명령
-#   → 서버 포트는 하나도 안 연다 (SSM은 아웃바운드 연결만 씀)
+# develop 에 머지되면 바뀐 곳만 자동 배포한다.
+#   백엔드(**/be, apps/api …) → jar 빌드 → S3 → SSM → lore-api 재시작
+#   프론트(**/fe, apps/web)   → standalone 빌드 → S3 → SSM → lore-web 재시작 → CloudFront 무효화
 #
-# 프론트(**/fe)는 Vercel 이 배포하므로 paths 에서 제외.
+# 서버 포트는 하나도 안 연다. SSM 은 서버가 밖으로 나가서 명령을 받아오는 방식이라
+# 인바운드가 필요 없다.
+#
+# 서버에서 실제로 실행되는 절차는 /opt/lore/deploy-api.sh · deploy-web.sh 에 있다.
+# 워크플로에 인라인으로 박지 않는 이유: 절차를 서버 쪽 파일로 두면 나중에
+# CodeDeploy 로 옮길 때 같은 스크립트를 그대로 부르면 된다.
 
-name: Deploy Backend to EC2
+name: Deploy to EC2
 
 on:
   push:
     branches: [develop]
     paths:
-      - 'common/be/**'
-      - 'comic/be/**'
-      - 'story/be/**'
-      - 'trailer/be/**'
-      - 'apps/api/**'
+      - 'common/**'
+      - 'comic/**'
+      - 'story/**'
+      - 'trailer/**'
+      - 'apps/**'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle/**'
       - 'gradlew'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
@@ -30,16 +37,50 @@ permissions:
 
 env:
   AWS_REGION: ap-northeast-2
-  ROLE_ARN: arn:aws:iam::359463332248:role/lore-github-deploy
-  S3_BUCKET: lore-deploy-artifacts-359463332248
-  INSTANCE_ID: i-06b64088f58bdf24f
+  ROLE_ARN: arn:aws:iam::046797548177:role/lore-github-deploy
+  S3_BUCKET: lore-deploy-046797548177-ap-northeast-2-an
+  INSTANCE_ID: i-0204d071a9c94bc08
+  CF_DISTRIBUTION_ID: E2DQOZKTRM3UGJ
 
 jobs:
-  deploy:
+  # 바뀐 영역을 먼저 판별한다. 프론트만 고쳤는데 백엔드까지 빌드하면
+  # 배포가 2배 느려지고 멀쩡한 서버를 괜히 재시작하게 된다.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'common/be/**'
+              - 'comic/be/**'
+              - 'story/be/**'
+              - 'trailer/be/**'
+              - 'apps/api/**'
+              - 'build.gradle'
+              - 'settings.gradle'
+              - 'gradle/**'
+              - 'gradlew'
+            frontend:
+              - 'common/fe/**'
+              - 'comic/fe/**'
+              - 'story/fe/**'
+              - 'trailer/fe/**'
+              - 'apps/web/**'
+              - 'package.json'
+              - 'package-lock.json'
+
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: 코드 받기
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Java 21 준비 (+ Gradle 캐시)
         uses: actions/setup-java@v4
@@ -65,39 +106,26 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: jar를 S3에 업로드
+      - name: jar 를 S3 에 업로드
         run: |
-          KEY="builds/lore-${GITHUB_SHA}.jar"
+          KEY="builds/api-${GITHUB_SHA}.jar"
           echo "S3_KEY=$KEY" >> "$GITHUB_ENV"
           aws s3 cp build/libs/app.jar "s3://$S3_BUCKET/$KEY" --region "$AWS_REGION"
-          echo "업로드 완료: s3://$S3_BUCKET/$KEY"
 
-      - name: SSM으로 서버에 배포 명령 (포트 안 엶)
+      - name: SSM 으로 배포 (포트 안 엶)
         run: |
-          # 서버가 실행할 스크립트: S3에서 받아 → 백업 → 교체 → 재시작 → 실패 시 롤백
           CMD_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy lore ${GITHUB_SHA}" \
-            --parameters commands="[\
-              \"set -e\",\
-              \"aws s3 cp s3://$S3_BUCKET/$S3_KEY /tmp/app.jar --region $AWS_REGION\",\
-              \"cp /opt/lore/lore.jar /opt/lore/lore.jar.bak 2>/dev/null || true\",\
-              \"mv /tmp/app.jar /opt/lore/lore.jar\",\
-              \"chown ubuntu:ubuntu /opt/lore/lore.jar\",\
-              \"systemctl restart lore\",\
-              \"sleep 5\",\
-              \"if systemctl is-active --quiet lore; then echo DEPLOY_OK; rm -f /opt/lore/lore.jar.bak; else echo DEPLOY_FAIL_ROLLBACK; mv /opt/lore/lore.jar.bak /opt/lore/lore.jar; systemctl restart lore; exit 1; fi\"\
-            ]" \
+            --comment "Deploy api ${GITHUB_SHA}" \
+            --parameters commands="[\"sudo /opt/lore/deploy-api.sh $S3_BUCKET $S3_KEY $AWS_REGION\"]" \
             --query "Command.CommandId" --output text)
           echo "command-id: $CMD_ID"
 
-          # 명령이 끝날 때까지 대기 (실패해도 wait는 non-zero → 아래서 상태 판정)
           aws ssm wait command-executed \
             --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
 
-          # 결과 상태·출력 회수
           STATUS=$(aws ssm get-command-invocation \
             --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
             --query "Status" --output text)
@@ -114,3 +142,87 @@ jobs:
               --query "StandardErrorContent" --output text
             exit 1
           fi
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 22 준비 (+ npm 캐시)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 빌드
+        run: npm run build
+
+      # standalone 산출물은 server.js 와 최소 node_modules 만 담고 있다.
+      # static/public 은 별도로 복사해야 한다 — Next 가 그렇게 나눠 내보낸다.
+      - name: 번들 묶기
+        run: |
+          rm -rf bundle && mkdir -p bundle
+          cp -r apps/web/.next/standalone/. bundle/
+          mkdir -p bundle/apps/web/.next
+          cp -r apps/web/.next/static bundle/apps/web/.next/static
+          [ -d apps/web/public ] && cp -r apps/web/public bundle/apps/web/public || true
+          tar czf web.tar.gz -C bundle .
+          ls -lh web.tar.gz
+
+      - name: AWS 명찰 걸기 (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 번들을 S3 에 업로드
+        run: |
+          KEY="builds/web-${GITHUB_SHA}.tar.gz"
+          echo "S3_KEY=$KEY" >> "$GITHUB_ENV"
+          aws s3 cp web.tar.gz "s3://$S3_BUCKET/$KEY" --region "$AWS_REGION"
+
+      - name: SSM 으로 배포
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy web ${GITHUB_SHA}" \
+            --parameters commands="[\"sudo /opt/lore/deploy-web.sh $S3_BUCKET $S3_KEY $AWS_REGION\"]" \
+            --query "Command.CommandId" --output text)
+          echo "command-id: $CMD_ID"
+
+          aws ssm wait command-executed \
+            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
+
+          STATUS=$(aws ssm get-command-invocation \
+            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query "Status" --output text)
+          echo "===== 서버 출력 ====="
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query "StandardOutputContent" --output text
+          echo "배포 상태: $STATUS"
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "===== 에러 출력 ====="
+            aws ssm get-command-invocation \
+              --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+              --query "StandardErrorContent" --output text
+            exit 1
+          fi
+
+      # SSR 페이지는 캐시하지 않지만 /_next/static/* 은 캐시한다.
+      # 파일명에 해시가 붙어 있어 무효화가 꼭 필요하진 않으나,
+      # 배포 직후 옛 자원이 남는 경우가 있어 한 번 비운다.
+      - name: CloudFront 캐시 무효화
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$CF_DISTRIBUTION_ID" \
+            --paths "/*" \
+            --query "Invalidation.Id" --output text
