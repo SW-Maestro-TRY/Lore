@@ -1067,7 +1067,7 @@ function collect() {
     // "" | sd | md | ld. 빈 값이면 그림체가 정한 등신 그대로 간다.
     head_ratio: form.head_ratio ? form.head_ratio.value : "",
     // fast(한 장에 3컷) | webtoon(컷마다 한 장). 비우면 fast — 지금까지의 방식이다.
-    layout_mode: form.layout_mode ? form.layout_mode.value : "fast",
+    layout_mode: form.layout_mode ? form.layout_mode.value : "webtoon",
     // 지금은 **항상 미리보기**다. 한 화를 통째로 굽기 전에 앞 3컷을 먼저
     // 보여주고, 마음에 들면 이어서 그린다(/api/runs/<id>/continue).
     preview:    true,

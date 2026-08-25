@@ -2173,6 +2173,8 @@ def render_warnings(cuts: list) -> list:
     cuts = [c for c in cuts if isinstance(c, dict)]
     if not cuts:
         return out
+    out.extend(narration_voice_warnings(cuts))
+    out.extend(layout_warnings(cuts))
     got = [str(c.get("render_style") or "").strip().lower() for c in cuts]
     for style, many, why in (
             ("sd", SD_MAX, "데포르메가 잦으면 산만해지고, 정식 작화로 돌아왔을 때의 "
@@ -2907,6 +2909,67 @@ def known_speakers(card: str, episodes: list, cast: list = None) -> set:
                 if name:
                     names.add(name)
     return {n for n in names if n}
+
+
+# 나레이션 어미 — 화 전체에 서술자는 하나다.
+#
+# 대사는 인물마다 말투가 다른 것이 맞지만 나레이션은 아니다. 실제 사고: 한 화에
+# 나레이션이 둘뿐이었는데 "이 세계에는 능력자가 존재합니다." 다음이 "…히어로들이
+# 시민을 지킨다." 였다 — 서술자가 두 사람인 것처럼 읽힌다. w7 프롬프트에 어미를
+# 고정하라는 규칙이 아예 없어서 매번 복불복이었다.
+#
+# 게이트가 아니라 경고인 이유: 어미 판정은 형태소 없이 어말 몇 글자로 보는 것이라
+# 인용문("…라고 했습니다") 같은 데서 틀릴 수 있다. 컷을 통째로 다시 뽑게 할 만큼
+# 확신할 수 있는 판정이 아니다.
+POLITE_ENDINGS = ("습니다", "합니다", "입니다", "됩니다", "습니까", "십시오", "세요", "어요", "아요")
+
+
+def narration_register(text: str) -> str:
+    """나레이션 한 줄의 말투 — "높임" | "평서" | "" (판정 불가)."""
+    t = str(text or "").strip().rstrip('"\'」』)').rstrip(".!?…")
+    if not t:
+        return ""
+    if t.endswith(POLITE_ENDINGS):
+        return "높임"
+    if t.endswith(("다", "다.", "라", "군", "지")):
+        return "평서"
+    return ""
+
+
+def narration_voice_warnings(cuts: list) -> list:
+    seen = {}
+    for i, c in enumerate(cuts, 1):
+        for ln in (c.get("lines") or []):
+            if str((ln or {}).get("kind") or "").strip() != "narration":
+                continue
+            reg = narration_register((ln or {}).get("text"))
+            if reg:
+                seen.setdefault(reg, []).append(i)
+    if len(seen) < 2:
+        return []
+    parts = " / ".join(f"{k}({', '.join(str(n) for n in v[:4])}번 컷)"
+                       for k, v in seen.items())
+    return [f"나레이션 어미가 섞였습니다 — {parts}. 대사는 인물마다 달라도 되지만 "
+            f"나레이션은 화 전체에 서술자가 하나입니다. 한쪽으로 맞추세요."]
+
+
+def layout_warnings(cuts: list) -> list:
+    """겹침(overlap)이 뜻을 잃은 자리 — 이유 없는 겹침, 남발."""
+    out = []
+    over = [i for i, c in enumerate(cuts, 1)
+            if str(c.get("layout") or "").strip().lower() == "overlap"]
+    if not over:
+        return out
+    noreason = [i for i in over
+                if not str(cuts[i - 1].get("overlap_reason") or "").strip()]
+    if noreason:
+        out.append(f"컷 {', '.join(str(n) for n in noreason)} 이 overlap 인데 "
+                   f"overlap_reason 이 비었습니다. 왜 겹치는지 한 줄로 못 적으면 "
+                   f"그 겹침은 연출이 아니라 사고입니다 — normal 로 두세요.")
+    if len(over) > 2:
+        out.append(f"overlap 이 {len(over)}컷입니다 (많아야 2컷). 전부 겹치면 "
+                   f"겹침이 아무것도 강조하지 않고, 독자는 어디부터 읽을지 잃습니다.")
+    return out
 
 
 def prose_warnings(cuts: list, known: set = None) -> list:
