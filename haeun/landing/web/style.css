@@ -225,9 +225,17 @@ body[data-view="nextep"]  .foot { display: none; }
    dvh 를 쓰는 이유: 폰 브라우저는 주소창이 접혔다 펴지면서 vh 가 튄다. */
 .studio {
   min-height: calc(100dvh - 59px);
-  position: relative; padding: 8px 16px clamp(36px, 6vw, 64px);
+  /* 아래 여백은 0 이다 — 바닥 여백의 주인은 단추줄(.wiz-actions)이다.
+     여기에 여백이 있으면 위저드가 그만큼 짧아져서, 바닥에 붙어야 할 단추줄이
+     화면 끝에서 그 여백만큼 떠 버린다. */
+  position: relative; padding: 8px 16px 0;
   transition: background .5s ease;
   scroll-margin-top: 64px;
+  /* 안쪽 위저드가 남은 높이를 다 쓰게 편다. 안 그러면 내용이 짧은 걸음
+     (2걸음처럼 입력칸 하나뿐인 곳)에서 단추줄이 화면 한가운데 뜨고 그 아래가
+     텅 빈 물로 남는다 — PC 는 창이 넓어 티가 덜 나지만 폰에서는 화면 절반이
+     빈 채로 끝나서 안 만들어진 화면처럼 보인다. */
+  display: flex; flex-direction: column;
 }
 
 /* --------------------------------------------------------- 폼 부품
@@ -424,7 +432,10 @@ body[data-view="nextep"]  .foot { display: none; }
 /* 캔버스(A_Step*.dc.html) 그대로 — 위저드 자체는 투명하고, 게이지·제목은
    물 위에, 입력은 종이 카드 안에 있다. 폭은 아트보드(390px)에 맞춰 한
    컬럼으로 고정한다. PC 라고 벌리지 않는다. */
-.wizard { display: block; margin: 0; position: relative; }   /* 프레임 폭을 그대로 쓴다 */
+/* 프레임 폭을 그대로 쓴다. 세로로는 남은 높이를 다 차지하고, 단추줄을 맨
+   아래로 밀어 둔다(.wiz-actions 의 margin-top:auto) — 걸음마다 내용 길이가
+   달라도 단추가 늘 같은 자리, 화면 바닥에 있다. */
+.wizard { display: flex; flex-direction: column; flex: 1; margin: 0; position: relative; }
 
 /* 제목 오른쪽에 앉은 루. 걸음마다 늘 비어 있던 자리다.
    제목과 겨루면 안 되므로 살짝 눕히고 흐리게 둔다 — 읽는 눈이 먼저 가는 곳은
@@ -620,7 +631,9 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
    지나간다. */
 .wiz-actions {
   position: sticky; bottom: 0; z-index: 30;
-  margin-top: 24px; padding: 10px 0;
+  /* auto 로 밀어 올려 늘 화면 바닥에 앉힌다. 내용이 길면 sticky 가, 짧으면
+     이 여백이 같은 자리를 만들어 준다. 24px 은 내용과 붙지 않게 하는 최소 간격. */
+  margin-top: auto; padding: 34px 0 clamp(20px, 4vw, 28px);
   background: var(--foot-bg, var(--ink));
   transition: background .5s ease;
 }
@@ -635,6 +648,18 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
 .wiz-foot { display: flex; gap: 10px; }
 .wiz-foot .btn { flex: 1; padding: 1.05em; }
 .wiz-prev { flex: 0 0 auto !important; min-width: 96px; }
+
+/* 아주 좁은 폰(320px 급)에서는 「미리보기 만들기 −2 크레딧」이 한 줄에 안
+   들어가 단추가 화면 밖으로 삐져나갔다. 단추 글씨는 줄이지 않고, 대신
+   「이전」을 좁히고 값 딱지를 아랫줄로 내려 준다 — 무엇을 누르는지가 먼저고,
+   얼마인지는 그 아래에 있어도 읽힌다. */
+@media (max-width: 360px) {
+  .wiz-prev { min-width: 0; padding-left: 1.1em; padding-right: 1.1em; }
+  .wiz-foot .wiz-go {
+    flex-direction: column; gap: .25em; white-space: normal; padding: .8em 1em;
+  }
+  .wiz-foot .wiz-go .cost-chip { font-size: .72rem; }
+}
 
 /* 각 걸음의 물빛이 바닥에서 무슨 색인지 — 위 .studio 그라디언트의 끝색이다.
    여기가 어긋나면 단추 줄만 다른 색 띠로 떠 보인다. */
