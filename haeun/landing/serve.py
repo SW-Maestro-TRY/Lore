@@ -27,6 +27,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs, quote
 
 import accounts
+import ownership
 import visibility
 import credits
 import overlay
@@ -739,6 +740,15 @@ class Handler(BaseHTTPRequestHandler):
             run_id = str(body.get("run_id") or "")
             if not re.fullmatch(r"[\w.-]+", run_id):
                 return self._error(400, "run_id 가 없습니다")
+            # 주소만 알면 남의 작품도 담을 수 있었다. 담고 나면 그 작품의 공개
+            # 여부까지 바꿀 수 있으므로(visibility 가 claimed_runs 를 믿는다),
+            # 남이 올린 작품을 아무나 둘러보기에서 내릴 수 있다는 뜻이었다.
+            holder = accounts.claimed_by(run_id)
+            if holder == key:
+                return self._json({"ok": True})       # 이미 내 것 — 조용히 넘어간다
+            ok, why = ownership.may_claim(run_id, str(body.get("uid") or ""), holder)
+            if not ok:
+                return self._error(403, why)
             accounts.claim_run(key, run_id)
             return self._json({"ok": True})
 

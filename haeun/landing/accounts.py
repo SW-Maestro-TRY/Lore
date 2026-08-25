@@ -215,6 +215,19 @@ def set_photo(nickname_key: str, photo: dict) -> tuple[bool, str]:
     return True, ""
 
 
+def claimed_by(run_id: str) -> str | None:
+    """이 작품을 이미 담아 둔 계정. 없으면 None.
+
+    먼저 담은 사람이 임자라는 규칙(ownership.may_claim)을 세우려면, 담기 전에
+    이미 임자가 있는지 물어볼 자리가 있어야 한다.
+    """
+    with _lock:
+        for key, account in _load(ACCOUNTS_FILE).items():
+            if run_id in (account.get("claimed_runs") or []):
+                return key
+    return None
+
+
 def claim_run(nickname_key: str, run_id: str) -> bool:
     """이 작품을 계정에 담는다(중복 담기는 조용히 무시)."""
     with _lock:

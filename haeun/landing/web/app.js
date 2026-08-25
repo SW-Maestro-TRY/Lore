@@ -701,9 +701,27 @@ function isMyRun(runId) {
  * 보인다 — 남의 작품을 자기 계정에 담으라고 권하는 꼴이 되기 때문이다
  * (위 isMyRun 참고). 목업은 흐름을 보여줘야 해서 showMockResult() 가 따로 켠다. */
 function paintClaimBanner() {
+  const mine = !!resultRunId && isMyRun(resultRunId);
+
+  /* 남의 작품을 보고 있으면 **내 작품에만 있을 수 있는 단추**를 전부 감춘다.
+     내려받기 · 편집실로 가기 · 공유하기 · 서버에 저장하기가 그렇다 — 남이
+     그린 것을 내려받거나 고치러 들어가거나 내 것처럼 퍼뜨릴 자리가 아니다.
+     읽는 것만 남는다. */
+  ["#downloadBtn", "#editorLink", "#claimBtn"].forEach(sel => {
+    const el = $(sel); if (el) el.hidden = !mine;
+  });
+  const share = $("#shareBtn");
+  if (share && share.closest(".share-wrap")) share.closest(".share-wrap").hidden = !mine;
+  // 감출 때는 열려 있던 공유 목록도 같이 닫는다 — 안 그러면 떠 있던 메뉴만
+  // 남아서 어디에 붙은 것인지 모를 자리에 뜬다.
+  if (!mine) { const menu = $("#shareMenu"); if (menu) menu.hidden = true; }
+  // 단추 밑 한 줄 설명도 그 단추가 있을 때만 뜻이 있다.
+  const note = $("#claimNote"); if (note) note.hidden = !mine;
+  // 「내려받는 파일에는 LORE 표시가 붙습니다」는 내려받기가 있을 때만 뜻이 있다.
+  const wm = $(".wm-note"); if (wm) wm.hidden = !mine;
+
   const btn = $("#claimBtn");
   if (!btn) return;
-  btn.hidden = !resultRunId || !isMyRun(resultRunId);
   const done = accountState.logged_in
     && (accountState.claimed_runs || []).includes(resultRunId);
   btn.disabled = done;
@@ -719,15 +737,21 @@ async function claimCurrentRun() {
   }
   if (!resultRunId) return toast("화면 구경용 목업이라 담을 작품이 없습니다.");
   try {
+    // uid 를 같이 보낸다 — 서버가 "이 작품을 만든 브라우저인가" 를 이것으로 본다.
     const res = await fetch("/api/account/claim", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ run_id: resultRunId }),
+      body: JSON.stringify({ run_id: resultRunId, uid: getUid() }),
     });
-    if (!res.ok) throw new Error();
+    if (!res.ok) {
+      // 서버가 이유를 준다(남의 작품이거나 이미 다른 계정에 담긴 작품).
+      // 그 이유를 그대로 보여야 무엇이 잘못됐는지 안다.
+      const why = (await res.json().catch(() => ({}))).error;
+      throw new Error(why || "저장하지 못했습니다 — 다시 시도해 주세요");
+    }
     accountState.claimed_runs = [...(accountState.claimed_runs || []), resultRunId];
     paintClaimBanner();
-    toast("계정에 저장했어요 — 「내 웹툰」에서 다시 열 수 있습니다");
-  } catch { toast("저장하지 못했습니다 — 다시 시도해 주세요"); }
+    toast("계정에 저장했어요 — 「마이페이지」에서 다시 열 수 있습니다");
+  } catch (err) { toast(err.message || "저장하지 못했습니다 — 다시 시도해 주세요"); }
 }
 
 /* ---- 계정 모달 — 로그인/회원가입 탭, 로그인 후엔 프로필로 바뀐다 ------- */
@@ -1742,13 +1766,13 @@ async function showMockResult() {
   if (sub) sub.textContent += " · 화면 구경용 목업입니다";
   // 담을 작품이 없어도 단추는 보여 준다 — 목업의 일은 흐름을 보여주는 것이고,
   // 눌러 보면 로그인 전 사용자가 실제로 만나는 그 가입 창이 그대로 열린다.
-  const claim = $("#claimBtn");
-  if (claim) claim.hidden = false;
-  // 공유도 같은 이유로 보여 준다 — 목업은 단추가 몇 개인지까지 보여주는
-  // 자리라, 진짜 화면에는 있는 것이 여기서만 빠지면 배치가 달라 보인다.
-  // (눌러도 보낼 작품이 없으므로 "아직 공유할 작품이 없습니다" 가 뜬다.)
-  const share = $("#shareBtn");
-  if (share) share.hidden = false;
+  // 목업은 **내 작품을 보고 있을 때의 화면**을 보여주는 자리다. 단추가 몇 개인지가
+  // 곧 보여줄 내용이라, 남의 작품처럼 감춰 버리면 배치가 달라진다.
+  ["#downloadBtn", "#editorLink", "#claimBtn", "#claimNote"].forEach(sel => {
+    const el = $(sel); if (el) el.hidden = false;
+  });
+  const wrap = $("#shareBtn") && $("#shareBtn").closest(".share-wrap");
+  if (wrap) wrap.hidden = false;
 }
 
 async function showResult(attempt = 0) {
@@ -2234,6 +2258,10 @@ function setupShare() {
 }
 
 function pageTools(no) {
+  // 남의 작품에는 고치는 자리를 아예 안 그린다. 다시 그리기는 그림 모델을
+  // 실제로 부르는 일이라(남의 작품을 내 손으로 바꿔 버린다), 감추는 정도가
+  // 아니라 만들지 않는다.
+  if (!isMyRun(resultRunId)) return "";
   return `
     <div class="page-tools">
       <button type="button" class="btn btn-quiet btn-sm js-regen-open">이 장 다시 그리기</button>
@@ -2358,6 +2386,9 @@ async function paintVersions(no, versions) {
            alt="v${v.version}" loading="lazy">
       <span class="ver-label">v${v.version}</span>
     </button>`).join("");
+  // 지난 판으로 되돌리는 것도 남의 작품에서는 할 일이 아니다 — 판 자체를
+  // 안 보여준다(무엇이 있었는지도 남의 작업 과정이다).
+  if (!isMyRun(resultRunId)) { slot.innerHTML = ""; return; }
   slot.innerHTML = `
     <span class="ver-strip-label">지난 판 — 눌러서 바꿔 보기</span>
     <div class="ver-strip">${cur}${past}</div>`;
