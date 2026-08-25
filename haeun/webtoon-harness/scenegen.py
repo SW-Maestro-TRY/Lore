@@ -215,6 +215,52 @@ def group(cuts: list[dict[str, Any]], per: int) -> list[Scene]:
             for i, s in enumerate(range(0, len(cuts), per), 1)]
 
 
+def group_by_fit(cuts: list[dict[str, Any]], need, limit: float) -> list[Scene]:
+    """**캔버스에 실제로 들어가는 만큼** 묶는다. 개수 규칙이 없다.
+
+    한 장에 몇 컷이라는 규칙은 어느 숫자를 골라도 임의다 — 3컷도 4컷도 장면이
+    무엇을 하려는지와 무관하다. 대신 물리적인 사실 하나만 본다: 이미지 모델이
+    받는 캔버스에는 가장 긴 세로가 있고(9:16, 그보다 길면 400 이 온다), 컷을
+    세로로 쌓으면 필요한 세로가 그만큼 늘어난다.
+
+    그래서 **다음 컷을 더 넣어도 아직 캔버스 안에 들어가면 넣고, 넘치면 거기서
+    끊는다.** 결과는 장마다 다르다 — wide 둘은 한 장에 들어가고, impact 하나는
+    혼자 한 장을 쓴다. 컷의 내용(size)이 정하는 것이지 개수가 정하는 것이 아니다.
+
+    넘치는 채로 두면 모델이 남는 폭에 컷을 나란히 놓는다. 세로 스크롤이 아니라
+    만화 페이지가 되는 자리다.
+
+    need(cut) : 이 컷이 먹는 세로. 폭 1 일 때의 높이(= 1/비율).
+    limit     : 한 장이 쓸 수 있는 세로의 최대치 (= 1/가장_긴_세로_비율).
+
+    scene_break 는 이 함수가 안 본다 — 부르는 쪽이 먼저 이야기 경계로 잘라
+    놓고, 그 안을 이 함수가 다시 나눈다. 이야기가 한 화면이라고 한 자리를
+    캔버스 사정으로 넘어가지 않기 위해서다.
+    """
+    scenes: list[Scene] = []
+    bucket: list[dict[str, Any]] = []
+    used = 0.0
+
+    def flush() -> None:
+        nonlocal used
+        if bucket:
+            scenes.append(Scene(scene_number=len(scenes) + 1, cuts=list(bucket)))
+            bucket.clear()
+        used = 0.0
+
+    for c in cuts:
+        want = max(1e-6, float(need(c)))
+        # 컷 하나가 혼자서도 넘치면(impact 등) 그 컷은 혼자 한 장이다.
+        if bucket and used + want > limit:
+            flush()
+        bucket.append(c)
+        used += want
+    flush()
+    if not scenes:
+        raise SceneError("묶을 컷이 하나도 없습니다.")
+    return scenes
+
+
 def group_by_weight(cuts: list[dict[str, Any]], max_light: int = 3) -> list[Scene]:
     """컷의 **무게**가 묶음을 정한다. 개수 규칙이 아예 없다.
 
@@ -740,6 +786,38 @@ def composition_clause(cut: dict[str, Any]) -> list[str]:
     return [f"{head}. {note}" if note else f"{head}."]
 
 
+# 컷이 고를 수 있는 지면 레이아웃. 콘티(w7)가 컷마다 하나를 고른다.
+#
+# 여기가 생긴 이유: 지금까지 이 자리는 **무조건 겹침**이었다. 가장 큰 컷이
+# 바탕(BASE LAYER)이 되고 나머지가 그 위에 얹혔다(OVER THE BASE). 겹침 자체가
+# 나쁜 것이 아니라 — 실제 웹툰도 강조할 때 겹친다 — 그것을 **모델이 통제 없이
+# 결정**하는 것이 문제였다. 스쳐 가는 리액션도 절정 컷도 똑같이 겹쳤다.
+#
+# 이제 겹침은 콘티가 "여기는 겹쳐라"라고 말한 자리에서만 일어난다. 나머지는
+# 위아래로 분리된 띠가 되어 세로 스크롤이 읽히는 대로 읽힌다.
+LAYOUT_KINDS = ("normal", "tight", "overlap", "full_bleed")
+
+LAYOUT_EN = {
+    "normal": ("a separate horizontal band with a clear gutter above and below "
+               "it — it must NOT overlap or bleed into the neighbouring panels"),
+    "tight":  ("a separate horizontal band that touches the panel above it with "
+               "no gutter between them, but still does not overlap it"),
+    "full_bleed": ("edge to edge with no border and no gutter — the artwork runs "
+                   "off all four sides of its band"),
+}
+
+
+def layout_kind(cut: dict[str, Any]) -> str:
+    """이 컷이 고른 지면 레이아웃. 없으면 "" — 예전 동작(겹침)으로 간다.
+
+    빈 문자열을 돌려주는 것이 중요하다. 옛 run 의 컷에는 이 칸이 없는데, 없을 때
+    "normal"(겹치지 마라)로 읽어 버리면 **예전에 뽑은 화를 다시 그리면 지면이
+    통째로 달라진다** — harness-is-final 이 막는 바로 그 일이다.
+    """
+    v = str(cut.get("layout") or "").strip().lower()
+    return v if v in LAYOUT_KINDS else ""
+
+
 def layout_text(cfg: dict[str, Any], scene: Scene) -> str:
     """{layout} 자리에 들어갈 문구. w7 의 size 를 패널 높이·폭으로 옮긴다.
 
@@ -793,11 +871,23 @@ def layout_text(cfg: dict[str, Any], scene: Scene) -> str:
     for i, (cut, weight) in enumerate(zip(scene.cuts, weights)):
         if i == base_i:
             continue
+        pct = round(weight / total * 100)
+        kind = layout_kind(cut)
+        if kind and kind != "overlap":
+            # 콘티가 "겹치지 마라"고 한 컷 — 바탕 위에 얹지 않고 띠로 세운다.
+            lines.append(
+                f"PANEL {i + 1}: {LAYOUT_EN[kind]}. It takes roughly {pct}% of "
+                f"the sheet height.{render_note(cut)}")
+            continue
+        # overlap 이거나(콘티가 그렇게 고름) 칸이 아예 없는 옛 컷 — 예전대로 얹는다.
         slot = slots[k % len(slots)]
         k += 1
+        why = str(cut.get("overlap_reason") or "").strip()
         lines.append(
             f"OVER THE BASE — Panel {i + 1}: {slot}, covering roughly "
-            f"{round(weight / total * 100)}% of the sheet.{render_note(cut)}")
+            f"{pct}% of the sheet."
+            f"{' It deliberately overlaps the base panel: ' + why + '.' if why else ''}"
+            f"{render_note(cut)}")
 
     rules = str(comp.get("rules") or "").strip()
     return "\n".join(lines) + (f"\n{rules}" if rules else "")

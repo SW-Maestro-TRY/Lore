@@ -63,6 +63,15 @@ PICK = {
     "longpress":  [f"longpress/seq1/{n:02d}.png" for n in range(1, 6)],
     "shake":      [f"shake/seq2/{n:02d}.png" for n in range(1, 7)],
     "drag":       [f"drag/seq1/{n:02d}.png" for n in (3, 4, 5)],     # 01·02 는 손이 나온다
+
+    # _alt — 가끔(낮은 확률로, lou-play.js 의 ALT_CHANCE) 대신 쓰는 다른 판.
+    # 그림체가 같은 시트끼리만 alt 로 묶는다 — 시트3(러프 스케치)은 선이 흐려서
+    # 완성 채색 판과 한 화면에서 번갈아 나오면 튄다(README 알려진 한계 참고).
+    # longpress 는 다른 판 자체가 없어서 alt 없음.
+    "shake_alt":      [f"shake/seq1/{n:02d}.png" for n in range(1, 6)],        # 시트1 — 시트2(shake)와 그림체 같음
+    "drag_alt":       [f"drag/seq2/{n:02d}.png" for n in range(1, 4)],         # 손 나오는 컷도 그대로 둔다
+    "multiclick_alt": [f"multiclick/seq2/{n:02d}.png" for n in range(1, 6)],   # 손 나오는 컷도 그대로 둔다
+    "pet_alt":        [f"pet/seq2/{n:02d}.png" for n in (1, 2, 3, 4, 5)],  # 06 만 뺀다 — 낙서(전화번호로 보이는 글자)가 그림에 그대로 박혀 있어서(품질 문제, 손 때문 아님)
 }
 
 # 반응마다 루가 하는 말. 컷 수와 길이가 같으면 컷을 따라가고,
@@ -80,6 +89,10 @@ SAY = {
     "wake": ["앗! 깜짝이야", "어… 있었어요?"],
     "idle": [], "sleep": [],
 }
+SAY["shake_alt"] = SAY["shake"]
+SAY["drag_alt"] = SAY["drag"]
+SAY["multiclick_alt"] = SAY["multiclick"]
+SAY["pet_alt"] = SAY["pet"]
 
 
 def sync_stages():

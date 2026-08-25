@@ -26,7 +26,7 @@
   <nav class="topnav">
     <a href="#how">어떻게 만드나</a>
     <a href="#gallery">결과 예시</a>
-    <a href="/works">내 웹툰</a>
+    <a href="/works">둘러보기</a>
     <a href="/editor">편집실</a>
     <!-- 계정이 없어서 잔액은 이 브라우저(uid) 기준이다 — app.js 의 getUid(). -->
     <button type="button" class="credit-pill" id="chargeBtn" title="크레딧 충전하기">
@@ -128,7 +128,8 @@
     <button type="button" class="modal-close" id="chargeModalClose" aria-label="닫기">×</button>
 
     <div class="charge-step" data-charge-step="package">
-      <h3 id="chargeModalTitle">크레딧 충전</h3>
+      <h3 id="chargeModalTitle">어디까지 내려가 볼까요?</h3>
+      <p class="charge-lede">깊이 들어갈수록 한 편이 저렴해져요.</p>
       <p class="charge-balance">지금 잔액 <b id="chargeCurBalance">0</b> 크레딧</p>
       <div class="charge-packages" id="chargePackages"></div>
     </div>
@@ -140,9 +141,36 @@
       <div class="charge-cards" id="chargeCards"></div>
     </div>
 
+    <!-- 실제 PG 흐름처럼 카드사 다음에 결제 방식(앱/웹)을 고른다.
+         프리토타이핑: 구매 의사를 마지막 확인까지 측정하는 것이 목적이라
+         걸음을 실제와 같게 두되, **카드번호를 넣는 화면은 여전히 없다.** -->
+    <div class="charge-step" data-charge-step="method" hidden>
+      <button type="button" class="charge-back" id="chargeBackToCard">‹ 결제 수단 다시 고르기</button>
+      <h3 id="chargeMethodTitle">결제 방식을 골라 주세요</h3>
+      <p class="charge-pkg-summary" id="chargeMethodSummary"></p>
+      <div class="charge-cards">
+        <button type="button" class="charge-card" data-method="app">
+          📱 앱 결제<small>카드사 앱으로 이동해 인증</small></button>
+        <button type="button" class="charge-card" data-method="web">
+          💳 웹 결제<small>카드번호 직접 입력</small></button>
+        <button type="button" class="charge-card" data-method="simple">
+          ⚡ 간편 결제<small>등록된 결제 수단으로 바로</small></button>
+      </div>
+    </div>
+
+    <div class="charge-step" data-charge-step="confirm" hidden>
+      <h3>정말 결제하시겠습니까?</h3>
+      <div class="charge-confirm-box" id="chargeConfirmBox"></div>
+      <p class="charge-confirm-note">결제 즉시 크레딧이 충전됩니다.</p>
+      <div class="charge-confirm-actions">
+        <button type="button" class="btn btn-quiet" id="chargeConfirmNo">취소</button>
+        <button type="button" class="btn btn-primary" id="chargeConfirmYes">결제하기</button>
+      </div>
+    </div>
+
     <div class="charge-step" data-charge-step="done" hidden>
-      <div class="charge-done-emoji">🎉</div>
-      <h3>결제가 완료됐어요</h3>
+      <div class="charge-done-emoji" id="chargeDoneEmoji">🎉</div>
+      <h3 id="chargeDoneTitle">결제가 완료됐어요</h3>
       <p id="chargeDoneBody"></p>
       <button type="button" class="btn btn-primary btn-big" id="chargeDoneClose">확인</button>
     </div>
@@ -175,13 +203,19 @@
     <div class="top-intro">
       <p class="hero-kicker">Story is the sea</p>
       <h1>이야기의 바다,<br>루가 안내합니다.</h1>
-      <p class="top-lede">캐릭터 한 명을 띄우면, 고래 루가 이야기 조각을 모아
-         웹툰 한 화로 데려옵니다.</p>
+      <p class="top-lede">캐릭터를 띄우면, 루가 이야기 조각을 모아
+         한 편의 웹툰을 만들어줘요.</p>
       <!-- 들어올 때마다 루의 그림이 바뀐다(app.js 가 고른다). 여기 적힌 것은
            자바스크립트가 안 돌 때 나올 기본 그림이다. -->
       <img class="hero-lou" id="heroLou" src="/static/lou/hero-whale2.png" alt="LORE의 마스코트 고래 루">
       <div class="hero-cta">
-        <button type="button" class="btn btn-primary" id="startBtn">내 캐릭터로 시작하기</button>
+        <!-- "시작하기" 로는 무엇이 시작되는지 알 수가 없었다. 가져올 것(내
+             캐릭터)과 나올 것(웹툰)을 단추 하나에 다 적는다. -->
+        <!-- 값은 app.js 가 채운다(paintCost) — 크레딧 값은 /api/config 에서
+             오므로 여기 숫자를 적어 두면 서버와 어긋난다. -->
+        <button type="button" class="btn btn-primary" id="startBtn">내 캐릭터로 웹툰 만들기
+          <span class="cost-chip" id="startCostChip" hidden></span>
+        </button>
         <a class="btn btn-shell" href="/works">둘러보기</a>
       </div>
     </div>
@@ -189,15 +223,15 @@
     <!-- 깊이 — 수면에서 심해로. 물이 짙어지는 위에 얹힌 세 줄 -->
     <ol class="depths">
       <li>
-        <img src="/static/lou/world-begins.png" alt="">
+        <img src="/static/lou/art/world-begins.png" alt="">
         <div><b>수면 — 이야기의 시작</b><small>캐릭터를 만나는 곳</small></div>
       </li>
       <li>
-        <img src="/static/lou/world-voyage.png" alt="">
+        <img src="/static/lou/art/world-voyage.png" alt="">
         <div><b>항해 — 이야기의 전개</b><small>세계와 사건을 탐험</small></div>
       </li>
       <li>
-        <img src="/static/lou/world-depth.png" alt="">
+        <img src="/static/lou/art/world-depth.png" alt="">
         <div><b>심해 — 이야기의 깊이</b><small>숨겨진 과거와 진실</small></div>
       </li>
     </ol>
@@ -242,11 +276,24 @@
         <div class="wiz-card">
           <div class="photo-row">
             <label class="photo-drop" id="photoDrop">
-              <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" hidden>
+              <!-- multiple 이 있어야 고르는 창에서 여러 장을 한 번에 집을 수 있다.
+                   한 장씩 눌러 더하는 길(+ 칸)과 둘 다 열어 둔다. -->
+              <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" multiple hidden>
               <span class="photo-hint">캐릭터 사진 <em class="req">필수</em></span>
               <div class="photo-strip" id="photoStrip"></div>
               <span class="photo-count" id="photoCount"></span>
             </label>
+            <!-- 올리기 전에 읽어야 하는 것. 마지막 걸음의 동의는 "확인했다"는
+                 도장이고, 여기는 **무엇을 확인해야 하는지** 알려 주는 자리다.
+                 사진을 고르기 전에 봐야 뜻이 있으므로 타일 바로 아래 둔다. -->
+            <!-- 책임 소재는 여기 안 적는다 — 약관(회원가입 · 마지막 걸음의 요약)에
+                 이미 있고, 사진을 고르는 자리에서는 "무엇을 올려야 하는가" 만 말한다. -->
+            <ul class="photo-rules">
+              <li>본인이 찍었거나 직접 그린 사진, 또는 쓸 권한이 있는 사진만 올려주세요.</li>
+              <li>실존 인물은 본인이거나 동의를 받은 경우에만 올려주세요.</li>
+              <li>올린 사진은 캐릭터를 만드는 데만 쓰고, 시트가 나오면 서버에서 지웁니다.</li>
+              <li>완성한 웹툰은 <b>둘러보기</b>에 공개됩니다. 마이페이지에서 언제든 비공개로 바꿀 수 있어요.</li>
+            </ul>
           </div>
 
           <label class="field">
@@ -342,7 +389,12 @@
         </div>
 
         <!-- 화면에서 뺀 설정들. 기본값 그대로 서버에 간다. -->
-        <input type="hidden" name="layout_mode" value="fast">
+        <!-- 연출. 기본은 "웹툰"이다 — 컷 사이 여백·배경 연결·장 경계를 코드가
+             콘티대로 그린다. "빠르게"(fast)는 3컷을 한 캔버스에 몰아넣어
+             배치를 모델에게 통째로 맡기는 모드라, 콘티가 계산해 둔 여백
+             (gap_after)도 통컷(size: impact)도 픽셀에 닿지 못한다. 지금은
+             남겨 두되 기본에서 뺐다 — 고르려면 이 값을 fast 로 준다. -->
+        <input type="hidden" name="layout_mode" value="webtoon">
         <input type="hidden" name="head_ratio" value="">
         <input type="hidden" name="art_qa_regen_max" value="2">
       </section>
@@ -412,6 +464,12 @@
           <summary>지금 하고 있는 일 자세히</summary>
           <ol class="rail" id="rail"></ol>
         </details>
+        <!-- 그림까지 다 나오려면 몇 분이 걸린다. 그동안 이 화면에 묶어 둘 이유가
+             없다 — 만드는 일은 서버에서 도니까, 나가서 남의 작품을 보다 와도
+             된다. 나가면 떠 있는 표시(#miniProg)가 따라붙는다. -->
+        <button type="button" class="btn btn-quiet btn-sm stage-away" id="progBrowse">
+          기다리는 동안 다른 웹툰 둘러보기 →
+        </button>
       </div>
       <p class="eyebrow" id="progEyebrow" hidden>만드는 중</p>
       <h2 id="progTitle" hidden>웹툰을 만들고 있습니다</h2>
@@ -441,199 +499,6 @@
       <p class="tip-text" id="tipText"></p>
     </div>
 
-    <div class="sheet-approval" id="sheetApproval" hidden>
-      <div class="sheet-approval-head">
-        <h3>캐릭터 시트를 확인해 주세요</h3>
-        <p>이제부터 모든 컷이 이 얼굴을 따라갑니다. 원본과 다르면 여기서 다시 만드세요 —
-           진행한 뒤에는 뒤 컷 전부가 이 시트를 기준으로 그려집니다.</p>
-      </div>
-      <div class="sheet-approval-compare">
-        <figure class="sheet-approval-photo" id="approvalPhotoBox" hidden>
-          <img id="approvalPhoto" alt="업로드한 원본 사진">
-          <figcaption>원본</figcaption>
-        </figure>
-        <figure class="sheet-approval-sheet">
-          <img id="approvalSheet" alt="생성된 캐릭터 시트">
-          <figcaption>생성된 시트</figcaption>
-        </figure>
-      </div>
-      <!-- 외형 사양을 직접 고치는 폼은 전문 모드에서만 연다. 일반 모드는 아래
-           항목(무엇이 마음에 안 드나요)을 고르고 다시 만들기만 한다 — 영문
-           appearance_en 을 손으로 쓰는 것은 "간단하게 만들기"가 약속한 것과
-           정반대다. 폼이 없어도 다시 만들기는 그대로 돈다(시트 폴더를 지우고
-           한 번 더 뽑는다). -->
-      <details class="sheet-approval-edit" data-expert-only>
-        <summary>틀린 부분 고치기 (이름 · 외형 · 고정 소지품)</summary>
-        <p class="sheet-approval-edit-hint">
-          여기서 고친 내용은 "수정 반영해서 다시 만들기"를 눌러야 반영됩니다 —
-          글자만 고치고 "이대로 진행"을 누르면 지금 보이는 그림 그대로
-          확정됩니다.
-        </p>
-        <label class="field">
-          <span>이름</span>
-          <input type="text" id="sheetEditName">
-        </label>
-        <label class="field">
-          <span>외형 묘사 (영문 — 이미지 생성에 그대로 들어갑니다)</span>
-          <textarea id="sheetEditAppearance" rows="4"></textarea>
-        </label>
-        <label class="field">
-          <span>고정 소지품·복장 (한 줄에 하나씩 — 지팡이, 모자 등)</span>
-          <textarea id="sheetEditDetails" rows="3"></textarea>
-        </label>
-      </details>
-      <!-- 고른 항목과 적은 말은 지시문으로 옮겨져(pipeline.SHEET_FIX_BY_TAG)
-           다음 판 시트 프롬프트 끝의 CORRECTIONS 절에 실립니다. 한글이 막히는
-           곳은 appearance_en 하나뿐이라(gate_charsheet_source) 한국어 지시가
-           그대로 나갑니다. 위 "틀린 부분 고치기" 폼은 사양 자체를 바꾸는 다른
-           길이고, 둘은 같이 써도 됩니다. -->
-      <div class="fb-box" data-fb-stage="sheet">
-        <p class="fb-lead">무엇이 마음에 안 드나요?
-          <small>고른 것과 적은 말이 다시 만들 때 반영됩니다 — 안 골라도 됩니다</small></p>
-        <div class="fb-tags"></div>
-        <label class="field">
-          <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
-          <textarea class="fb-text" rows="2"
-            placeholder="예: 망토를 안 그렸어요 / 묶은머리인데 풀려 있어요"></textarea>
-        </label>
-      </div>
-      <div class="sheet-approval-actions">
-        <button type="button" class="btn btn-quiet" id="sheetRetryBtn">수정 반영해서 다시 만들기</button>
-        <button type="button" class="btn btn-primary" id="sheetApproveBtn">이대로 진행</button>
-      </div>
-    </div>
-
-    <div class="sheet-approval" id="storyApproval" hidden>
-      <div class="sheet-approval-head">
-        <h3>이야기 구조를 확인해 주세요</h3>
-        <p class="approval-reason" id="storyApprovalReason"></p>
-        <p>
-          자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
-          <b>이대로 진행</b>하면 지금 이 상태 그대로 다음 단계(캐릭터 시트)로
-          넘어갑니다 — <b>다시 만들기</b>를 누르면 같은 캐릭터로 이야기를
-          처음부터 새로 뽑습니다(새 시도이니 다른 결과가 나올 수 있습니다).
-        </p>
-      </div>
-      <div class="fb-box" data-fb-stage="story">
-        <p class="fb-lead">무엇이 마음에 안 드나요?
-          <small>고른 것과 적은 말이 다시 쓸 때 반영됩니다 — 안 골라도 됩니다</small></p>
-        <div class="fb-tags"></div>
-        <label class="field">
-          <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
-          <textarea class="fb-text" rows="2"
-            placeholder="예: 로맨스가 하나도 없어요 / 성격이 갑자기 진지해져요"></textarea>
-        </label>
-      </div>
-      <details class="mem-box">
-        <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
-        <label class="field">
-          <span>항상 적용 <small>한 줄에 하나 · <b class="mem-count" data-kind="always">0</b>자</small></span>
-          <textarea class="mem-always" rows="3"
-            placeholder="예: 초롱은 절대 존댓말을 쓰지 않는다"></textarea>
-        </label>
-        <label class="field">
-          <span>키워드가 나올 때만 <small>「키워드1, 키워드2 :: 내용」 꼴로 한 줄에 하나 · <b class="mem-count" data-kind="keyword">0</b>자</small></span>
-          <textarea class="mem-keyword" rows="3"
-            placeholder="예: 북부대공 :: 북부대공가의 문장은 은빛 늑대다"></textarea>
-        </label>
-        <div class="regen-actions">
-          <button type="button" class="btn btn-quiet btn-sm mem-save">규칙 저장</button>
-          <span class="regen-note mem-status"></span>
-        </div>
-      </details>
-      <div class="sheet-approval-actions">
-        <button type="button" class="btn btn-quiet" id="storyRetryBtn">다시 만들기</button>
-        <button type="button" class="btn btn-primary" id="storyApproveBtn">이대로 진행</button>
-      </div>
-    </div>
-
-    <div class="sheet-approval" id="boardApproval" hidden>
-      <div class="sheet-approval-head">
-        <h3>콘티(컷 설계)를 확인해 주세요</h3>
-        <p class="approval-reason" id="boardApprovalReason"></p>
-        <p>
-          자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
-          <b>이대로 진행</b>하면 지금 이 콘티 그대로 그림 단계로 넘어갑니다 —
-          <b>다시 만들기</b>를 누르면 콘티를 처음부터 다시 짭니다(새 시도이니
-          다른 결과가 나올 수 있습니다).
-        </p>
-      </div>
-      <div class="fb-box" data-fb-stage="board">
-        <p class="fb-lead">무엇이 마음에 안 드나요?
-          <small>고른 것과 적은 말이 다시 짤 때 반영됩니다 — 안 골라도 됩니다</small></p>
-        <div class="fb-tags"></div>
-        <label class="field">
-          <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
-          <textarea class="fb-text" rows="2"
-            placeholder="예: 생쥐를 구하는 장면이 통째로 빠졌어요"></textarea>
-        </label>
-      </div>
-      <details class="mem-box">
-        <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
-        <label class="field">
-          <span>항상 적용 <small>한 줄에 하나 · <b class="mem-count" data-kind="always">0</b>자</small></span>
-          <textarea class="mem-always" rows="3"
-            placeholder="예: 초롱은 절대 존댓말을 쓰지 않는다"></textarea>
-        </label>
-        <label class="field">
-          <span>키워드가 나올 때만 <small>「키워드1, 키워드2 :: 내용」 꼴로 한 줄에 하나 · <b class="mem-count" data-kind="keyword">0</b>자</small></span>
-          <textarea class="mem-keyword" rows="3"
-            placeholder="예: 북부대공 :: 북부대공가의 문장은 은빛 늑대다"></textarea>
-        </label>
-        <div class="regen-actions">
-          <button type="button" class="btn btn-quiet btn-sm mem-save">규칙 저장</button>
-          <span class="regen-note mem-status"></span>
-        </div>
-      </details>
-      <div class="sheet-approval-actions">
-        <button type="button" class="btn btn-quiet" id="boardRetryBtn">다시 만들기</button>
-        <button type="button" class="btn btn-primary" id="boardApproveBtn">이대로 진행</button>
-      </div>
-    </div>
-
-    <!-- 그림 검수 결과 (전문 모드). 앞의 셋과 달리 "다시 만들기" 가 없다 —
-         그림은 이미 다 나왔고, 고치는 것은 결과 화면의 장 단위 다시 그리기다.
-         이 화면이 하는 일은 검수가 무엇을 했는지 끝나기 전에 한 번 보여주는
-         것이다. 일반 모드는 이 자리를 안 세우고, 못 고친 것만 결과 화면의
-         노트로 알린다. -->
-    <div class="sheet-approval" id="artqaApproval" hidden>
-      <div class="sheet-approval-head">
-        <h3>그림 검수 결과를 확인해 주세요</h3>
-        <p id="artqaSummary"></p>
-      </div>
-      <div class="qa-groups">
-        <div class="qa-group" id="artqaUnresolvedBox" hidden>
-          <h4>다시 그려도 못 고친 것</h4>
-          <p class="qa-group-lede">
-            여기 있는 장은 <b>그대로 완성본에 들어갑니다.</b> 마음에 안 들면 다음
-            화면에서 장을 골라 직접 다시 그려 주세요 — 그때는 무엇이 문제인지
-            적을 수 있어서 검수보다 잘 고칩니다.
-          </p>
-          <ul class="qa-list" id="artqaUnresolved"></ul>
-        </div>
-        <div class="qa-group" id="artqaFixedBox" hidden>
-          <h4>검수가 잡아서 다시 그린 것</h4>
-          <p class="qa-group-lede">
-            아래 장은 처음 그린 것이 서술과 달라서 검수가 다시 그리게 했고,
-            지금은 통과한 것입니다. 손대실 것은 없습니다.
-          </p>
-          <ul class="qa-list" id="artqaFixed"></ul>
-        </div>
-      </div>
-      <div class="fb-box" data-fb-stage="scene">
-        <p class="fb-lead">검수가 놓친 것이 있나요?
-          <small>고른 것과 적은 말은 기록만 됩니다 — 안 골라도 됩니다</small></p>
-        <div class="fb-tags"></div>
-        <label class="field">
-          <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
-          <textarea class="fb-text" rows="2"
-            placeholder="예: 3장에 손가락이 여섯 개인데 검수가 못 잡았어요"></textarea>
-        </label>
-      </div>
-      <div class="sheet-approval-actions">
-        <button type="button" class="btn btn-primary" id="artqaApproveBtn">확인했습니다 — 완성하기</button>
-      </div>
-    </div>
 
     <!-- 이미지 모델이 거절한 장. 실패(재시도로 풀림)와 성격이 달라서 자리를
          따로 준다 — 재시도해도 같은 답이 오고, 고칠 곳은 사용자의 입력이다. -->
@@ -684,22 +549,24 @@
   </div>
 </div>
 
-<!-- ================================================== 내 웹툰 목록 ======
+<!-- ================================================== 둘러보기 ==========
      지금까지 만든 것을 **읽으려고** 여는 자리. 편집실은 고치는 자리라 도구가
      늘 곁에 붙어 있어서 읽기에는 맞지 않는다. 여기서 고르면 완성본 화면이
      그대로 열리고, 회차가 여럿이면 회차마다 단추가 붙는다. -->
+<!-- 둘러보기 — 다른 사람들이 만든 웹툰을 구경하는 자리.
+     내가 만든 것만 모아 보는 곳은 마이페이지다(#mypage). 둘이 같은 화면이던
+     때에는 "내 웹툰" 이라고 적혀 있었는데, 남의 작품을 구경할 자리가 따로
+     없어서 이 화면이 두 몫을 하고 있었다. -->
 <section id="works" class="works" hidden>
   <header class="works-head">
-    <div>
-      <p class="eyebrow">완성본</p>
-      <h2>내 웹툰</h2>
-      <p class="section-lede">
-        만든 작품 전부입니다. 표지를 누르면 세로로 이어 붙인 완성본을 그대로 읽습니다.
-      </p>
-    </div>
+    <p class="eyebrow">둘러보기</p>
+    <h2>다른 사람들의 웹툰</h2>
+    <p class="section-lede">
+      루가 데려온 이야기들이에요. 표지를 누르면 그대로 읽을 수 있어요.
+    </p>
     <div class="works-actions">
-      <a class="btn btn-quiet btn-sm" href="/">랜딩으로</a>
-      <a class="btn btn-primary btn-sm" href="/#studio">새 웹툰 만들기</a>
+      <a class="btn btn-quiet btn-sm" href="/">홈으로</a>
+      <a class="btn btn-primary btn-sm" href="/#studio">내 캐릭터로 웹툰 만들기</a>
     </div>
   </header>
   <div class="works-grid" id="worksGrid"></div>
@@ -707,7 +574,7 @@
 
 <!-- ================================================= 마이페이지 ========= -->
 <!-- 로그인한 사람의 자리. 상단 바의 「로그인」이 로그인 뒤 「마이페이지」로
-     바뀌고 여기로 온다. 「내 웹툰」(/works)이 이 서버에 있는 작품 전부라면,
+     바뀌고 여기로 온다. 둘러보기(/works)가 이 서버에 있는 작품 전부라면,
      여기는 **내 계정에 저장한 것만** 이다. -->
 <section id="mypage" class="mypage" hidden>
   <header class="mypage-head">
@@ -889,8 +756,243 @@
   <span class="foot-note">고래 <b>루</b>가 안내합니다 · 말풍선과 대사는 그림 안에 함께 그려집니다</span>
 </footer>
 
+<!-- 확인 팝업은 **진행 화면 밖**에 둔다. 안에 두면 #progress 가 숨는 순간
+     (둘러보기·마이페이지로 나가 있을 때) 같이 숨어서 아예 못 뜬다 — 그런데
+     이 팝업이 뜨는 동안은 서버에서도 아무것도 안 돌아가므로, 어느 화면에
+     있든 반드시 보여야 한다. -->
+    <!-- 확인이 필요한 자리는 **팝업**으로 띄운다. 예전에는 진행 화면 아래에
+         그냥 붙어 있어서, 기다리는 사람은 화면 위(진행 바·루)를 보고 있다가
+         자기 차례가 온 것을 몰랐다 — 아래로 내려야 보이는 알림은 알림이
+         아니다. 바깥을 눌러도 안 닫는다: 여기서 고르지 않으면 아무것도
+         진행되지 않으므로, 실수로 닫아 놓고 멈춘 줄 아는 것이 더 나쁘다. -->
+    <div class="modal-veil approval-veil" id="approvalModal" hidden>
+      <div class="modal-box approval-box" role="dialog" aria-modal="true">
+      <div class="sheet-approval" id="sheetApproval" hidden>
+        <div class="sheet-approval-head">
+          <h3>캐릭터 시트를 확인해 주세요</h3>
+          <p>이제부터 모든 컷이 이 얼굴을 따라갑니다. 원본과 다르면 여기서 다시 만드세요 —
+             진행한 뒤에는 뒤 컷 전부가 이 시트를 기준으로 그려집니다.</p>
+        </div>
+        <div class="sheet-approval-compare">
+          <figure class="sheet-approval-photo" id="approvalPhotoBox" hidden>
+            <img id="approvalPhoto" alt="업로드한 원본 사진">
+            <figcaption>원본</figcaption>
+          </figure>
+          <figure class="sheet-approval-sheet">
+            <img id="approvalSheet" alt="생성된 캐릭터 시트">
+            <figcaption>생성된 시트</figcaption>
+          </figure>
+        </div>
+        <!-- 외형 사양을 직접 고치는 폼은 전문 모드에서만 연다. 일반 모드는 아래
+             항목(무엇이 마음에 안 드나요)을 고르고 다시 만들기만 한다 — 영문
+             appearance_en 을 손으로 쓰는 것은 "간단하게 만들기"가 약속한 것과
+             정반대다. 폼이 없어도 다시 만들기는 그대로 돈다(시트 폴더를 지우고
+             한 번 더 뽑는다). -->
+        <details class="sheet-approval-edit" data-expert-only>
+          <summary>틀린 부분 고치기 (이름 · 외형 · 고정 소지품)</summary>
+          <p class="sheet-approval-edit-hint">
+            여기서 고친 내용은 "수정 반영해서 다시 만들기"를 눌러야 반영됩니다 —
+            글자만 고치고 "이대로 진행"을 누르면 지금 보이는 그림 그대로
+            확정됩니다.
+          </p>
+          <label class="field">
+            <span>이름</span>
+            <input type="text" id="sheetEditName">
+          </label>
+          <label class="field">
+            <span>외형 묘사 (영문 — 이미지 생성에 그대로 들어갑니다)</span>
+            <textarea id="sheetEditAppearance" rows="4"></textarea>
+          </label>
+          <label class="field">
+            <span>고정 소지품·복장 (한 줄에 하나씩 — 지팡이, 모자 등)</span>
+            <textarea id="sheetEditDetails" rows="3"></textarea>
+          </label>
+        </details>
+        <!-- 고른 항목과 적은 말은 지시문으로 옮겨져(pipeline.SHEET_FIX_BY_TAG)
+             다음 판 시트 프롬프트 끝의 CORRECTIONS 절에 실립니다. 한글이 막히는
+             곳은 appearance_en 하나뿐이라(gate_charsheet_source) 한국어 지시가
+             그대로 나갑니다. 위 "틀린 부분 고치기" 폼은 사양 자체를 바꾸는 다른
+             길이고, 둘은 같이 써도 됩니다. -->
+        <div class="fb-box" data-fb-stage="sheet">
+          <p class="fb-lead">무엇이 마음에 안 드나요?
+            <small>고른 것과 적은 말이 다시 만들 때 반영됩니다 — 안 골라도 됩니다</small></p>
+          <div class="fb-tags"></div>
+          <label class="field">
+            <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
+            <textarea class="fb-text" rows="2"
+              placeholder="예: 망토를 안 그렸어요 / 묶은머리인데 풀려 있어요"></textarea>
+          </label>
+        </div>
+        <div class="sheet-approval-actions">
+          <button type="button" class="btn btn-quiet" id="sheetRetryBtn">수정 반영해서 다시 만들기</button>
+          <button type="button" class="btn btn-primary" id="sheetApproveBtn">이대로 진행</button>
+        </div>
+      </div>
+
+      <div class="sheet-approval" id="storyApproval" hidden>
+        <div class="sheet-approval-head">
+          <h3>이야기 구조를 확인해 주세요</h3>
+          <p class="approval-reason" id="storyApprovalReason"></p>
+          <p>
+            자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
+            <b>이대로 진행</b>하면 지금 이 상태 그대로 다음 단계(캐릭터 시트)로
+            넘어갑니다 — <b>다시 만들기</b>를 누르면 같은 캐릭터로 이야기를
+            처음부터 새로 뽑습니다(새 시도이니 다른 결과가 나올 수 있습니다).
+          </p>
+        </div>
+        <!-- **무엇을** 확인할지. 이것이 없던 동안 이 화면은 "이대로 진행할까요?"
+             만 묻고 정작 이야기를 안 보여줬다 — 사람은 찍어서 눌러야 했다. -->
+        <div class="approval-preview" id="storyPreview"></div>
+        <div class="fb-box" data-fb-stage="story">
+          <p class="fb-lead">무엇이 마음에 안 드나요?
+            <small>고른 것과 적은 말이 다시 쓸 때 반영됩니다 — 안 골라도 됩니다</small></p>
+          <div class="fb-tags"></div>
+          <label class="field">
+            <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
+            <textarea class="fb-text" rows="2"
+              placeholder="예: 로맨스가 하나도 없어요 / 성격이 갑자기 진지해져요"></textarea>
+          </label>
+        </div>
+        <details class="mem-box">
+          <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
+          <label class="field">
+            <span>항상 적용 <small>한 줄에 하나 · <b class="mem-count" data-kind="always">0</b>자</small></span>
+            <textarea class="mem-always" rows="3"
+              placeholder="예: 초롱은 절대 존댓말을 쓰지 않는다"></textarea>
+          </label>
+          <label class="field">
+            <span>키워드가 나올 때만 <small>「키워드1, 키워드2 :: 내용」 꼴로 한 줄에 하나 · <b class="mem-count" data-kind="keyword">0</b>자</small></span>
+            <textarea class="mem-keyword" rows="3"
+              placeholder="예: 북부대공 :: 북부대공가의 문장은 은빛 늑대다"></textarea>
+          </label>
+          <div class="regen-actions">
+            <button type="button" class="btn btn-quiet btn-sm mem-save">규칙 저장</button>
+            <span class="regen-note mem-status"></span>
+          </div>
+        </details>
+        <div class="sheet-approval-actions">
+          <button type="button" class="btn btn-quiet" id="storyRetryBtn">다시 만들기</button>
+          <button type="button" class="btn btn-primary" id="storyApproveBtn">이대로 진행</button>
+        </div>
+      </div>
+
+      <div class="sheet-approval" id="boardApproval" hidden>
+        <div class="sheet-approval-head">
+          <h3>콘티(컷 설계)를 확인해 주세요</h3>
+          <p class="approval-reason" id="boardApprovalReason"></p>
+          <p>
+            자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
+            <b>이대로 진행</b>하면 지금 이 콘티 그대로 그림 단계로 넘어갑니다 —
+            <b>다시 만들기</b>를 누르면 콘티를 처음부터 다시 짭니다(새 시도이니
+            다른 결과가 나올 수 있습니다).
+          </p>
+        </div>
+        <!-- 스토리 쪽과 같은 이유 — 컷과 대사를 보여주고 물어본다. -->
+        <div class="approval-preview" id="boardPreview"></div>
+        <div class="fb-box" data-fb-stage="board">
+          <p class="fb-lead">무엇이 마음에 안 드나요?
+            <small>고른 것과 적은 말이 다시 짤 때 반영됩니다 — 안 골라도 됩니다</small></p>
+          <div class="fb-tags"></div>
+          <label class="field">
+            <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
+            <textarea class="fb-text" rows="2"
+              placeholder="예: 생쥐를 구하는 장면이 통째로 빠졌어요"></textarea>
+          </label>
+        </div>
+        <details class="mem-box">
+          <summary>작품 규칙 <small>모든 단계(스토리·콘티·그림)가 지킵니다 — 다른 설정과 충돌하면 이 규칙이 이깁니다</small></summary>
+          <label class="field">
+            <span>항상 적용 <small>한 줄에 하나 · <b class="mem-count" data-kind="always">0</b>자</small></span>
+            <textarea class="mem-always" rows="3"
+              placeholder="예: 초롱은 절대 존댓말을 쓰지 않는다"></textarea>
+          </label>
+          <label class="field">
+            <span>키워드가 나올 때만 <small>「키워드1, 키워드2 :: 내용」 꼴로 한 줄에 하나 · <b class="mem-count" data-kind="keyword">0</b>자</small></span>
+            <textarea class="mem-keyword" rows="3"
+              placeholder="예: 북부대공 :: 북부대공가의 문장은 은빛 늑대다"></textarea>
+          </label>
+          <div class="regen-actions">
+            <button type="button" class="btn btn-quiet btn-sm mem-save">규칙 저장</button>
+            <span class="regen-note mem-status"></span>
+          </div>
+        </details>
+        <div class="sheet-approval-actions">
+          <button type="button" class="btn btn-quiet" id="boardRetryBtn">다시 만들기</button>
+          <button type="button" class="btn btn-primary" id="boardApproveBtn">이대로 진행</button>
+        </div>
+      </div>
+
+      <!-- 그림 검수 결과 (전문 모드). 앞의 셋과 달리 "다시 만들기" 가 없다 —
+           그림은 이미 다 나왔고, 고치는 것은 결과 화면의 장 단위 다시 그리기다.
+           이 화면이 하는 일은 검수가 무엇을 했는지 끝나기 전에 한 번 보여주는
+           것이다. 일반 모드는 이 자리를 안 세우고, 못 고친 것만 결과 화면의
+           노트로 알린다. -->
+      <div class="sheet-approval" id="artqaApproval" hidden>
+        <div class="sheet-approval-head">
+          <h3>그림 검수 결과를 확인해 주세요</h3>
+          <p id="artqaSummary"></p>
+        </div>
+        <div class="qa-groups">
+          <div class="qa-group" id="artqaUnresolvedBox" hidden>
+            <h4>다시 그려도 못 고친 것</h4>
+            <p class="qa-group-lede">
+              여기 있는 장은 <b>그대로 완성본에 들어갑니다.</b> 마음에 안 들면 다음
+              화면에서 장을 골라 직접 다시 그려 주세요 — 그때는 무엇이 문제인지
+              적을 수 있어서 검수보다 잘 고칩니다.
+            </p>
+            <ul class="qa-list" id="artqaUnresolved"></ul>
+          </div>
+          <div class="qa-group" id="artqaFixedBox" hidden>
+            <h4>검수가 잡아서 다시 그린 것</h4>
+            <p class="qa-group-lede">
+              아래 장은 처음 그린 것이 서술과 달라서 검수가 다시 그리게 했고,
+              지금은 통과한 것입니다. 손대실 것은 없습니다.
+            </p>
+            <ul class="qa-list" id="artqaFixed"></ul>
+          </div>
+        </div>
+        <div class="fb-box" data-fb-stage="scene">
+          <p class="fb-lead">검수가 놓친 것이 있나요?
+            <small>고른 것과 적은 말은 기록만 됩니다 — 안 골라도 됩니다</small></p>
+          <div class="fb-tags"></div>
+          <label class="field">
+            <span>더 하고 싶은 말 <small>비워도 됩니다</small></span>
+            <textarea class="fb-text" rows="2"
+              placeholder="예: 3장에 손가락이 여섯 개인데 검수가 못 잡았어요"></textarea>
+          </label>
+        </div>
+        <div class="sheet-approval-actions">
+          <button type="button" class="btn btn-primary" id="artqaApproveBtn">확인했습니다 — 완성하기</button>
+        </div>
+      </div>
+      </div>
+    </div>
+
 <div class="toast" id="toast" hidden></div>
 
+<!-- 떠 있는 진행 표시. 만드는 중에 다른 화면(둘러보기·마이페이지·완성본)으로
+     가면 여기에 붙어 따라다닌다 — 웹툰 한 편은 몇 분이 걸리는데 그동안 화면을
+     붙잡아 두면 기다림이 곱절로 길다. 끌어서 옮기고, 접어서 가장자리로 치울 수
+     있다. 누르면 진행 화면으로 돌아간다.
+     진행 화면(running)에서는 자체가 진행 화면이므로 뜨지 않는다. -->
+<div class="minip" id="miniProg" hidden>
+  <button type="button" class="minip-body" id="miniProgGo"
+          aria-label="만드는 중 — 눌러서 진행 화면으로">
+    <svg class="minip-ring" viewBox="0 0 44 44" aria-hidden="true">
+      <circle class="minip-track" cx="22" cy="22" r="19"></circle>
+      <circle class="minip-fill" cx="22" cy="22" r="19" id="miniProgArc"></circle>
+    </svg>
+    <img class="minip-face" id="miniProgFace" src="/static/lou/react/idle/01.webp" alt="">
+    <span class="minip-pct" id="miniProgPct">0%</span>
+  </button>
+  <button type="button" class="minip-x" id="miniProgHide" aria-label="접기">×</button>
+</div>
+<!-- 접었을 때 남는 손잡이. 완전히 없애지 않는 이유: 도로 펼 길이 사라지면
+     "꺼졌다"와 구분이 안 되고, 확인이 필요해 멈춰 있을 때 알릴 자리도 없어진다. -->
+<button type="button" class="minip-tab" id="miniProgTab" hidden
+        aria-label="진행 표시 펼치기"><span id="miniProgTabPct">0%</span></button>
+
+<script src="/static/lou-art.js"></script>
 <script src="/static/lou-play.js"></script>
 <script src="/static/app.js"></script>
 </body>

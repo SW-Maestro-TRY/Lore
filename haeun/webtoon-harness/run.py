@@ -1255,6 +1255,77 @@ class Job:
 SIZE_ASPECT = {"wide": "16:9", "normal": "4:3", "tall": "3:4", "impact": "9:16"}
 
 
+# 이미지 모델이 받는 캔버스 비율 전부. 이 밖의 값은 400 이 돌아온다
+# (실측 2026-08). 9:16 보다 긴 세로는 없다 — 아래 scene_aspect 가 "눌린다" 고
+# 경고하는 것이 이 한계 때문이다.
+ALLOWED_ASPECTS = ("16:9", "4:3", "1:1", "3:4", "9:16")
+# 그중 가장 긴 세로. 한 장이 쓸 수 있는 세로의 한계이자, 컷을 어디서 끊을지의
+# 기준이다. 이 값은 취향이 아니라 모델이 받는 값의 사실이다.
+TALLEST_ASPECT = "9:16"
+
+
+def _ratio(aspect: str) -> float:
+    w, _, h = str(aspect).partition(":")
+    try:
+        return float(w) / float(h)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return 9 / 16
+
+
+def nearest_aspect(want: float) -> str:
+    """원하는 가로/세로에 가장 가까운 허용 비율. 로그 거리로 고른다 —
+    0.3 과 0.5 의 차이는 1.5 와 1.7 의 차이보다 훨씬 크게 느껴진다."""
+    import math
+    return min(ALLOWED_ASPECTS,
+               key=lambda a: abs(math.log(_ratio(a)) - math.log(max(want, 1e-6))))
+
+
+def base_aspect_of(cfg: dict[str, Any]) -> str:
+    """config 의 전역 캔버스 비율. 컷·장이 제 비율을 못 정할 때의 예비값이다."""
+    return str((cfg["provider"].get("options") or {}).get("aspect_ratio") or "9:16")
+
+
+def scene_aspect(scene, default: str) -> tuple[str, float]:
+    """이 **장**을 어떤 모양의 캔버스에 그릴까. (고른 비율, 원하던 비율).
+
+    예전에는 장 모드가 전역 aspect_ratio(9:16) 하나로 전부 뽑았다. 컷 모드는
+    진작 컷마다 달랐는데(SIZE_ASPECT) 장 모드에만 그 길이 없어서, 컷 하나짜리
+    장이 wide(16:9)여도 세로로 그려졌다.
+
+    계산은 산수다. 폭 W 에 비율 r 인 패널을 놓으면 높이가 W/r 이므로, 세로로
+    쌓은 장의 높이는 Σ(W/rᵢ) 이고 장의 비율은 1 / Σ(1/rᵢ) 다. 컷 하나면 그 컷의
+    비율 그대로가 된다.
+
+    **비율 쿼터는 없다.** "9:16 을 몇 % 써라" 같은 규칙을 두지 않는다 — 어떤 장이
+    어떤 모양인지는 그 장에 든 컷이 정한다.
+    """
+    cuts = list(getattr(scene, "cuts", None) or [])
+    if not cuts:
+        return default, _ratio(default)
+    inv = 0.0
+    for c in cuts:
+        inv += 1.0 / _ratio(cut_aspect(c, default))
+    want = 1.0 / inv if inv else _ratio(default)
+    return nearest_aspect(want), want
+
+
+def scene_aspect_warning(scene, picked: str, want: float) -> str:
+    """원하던 것보다 캔버스가 납작해졌을 때 한 줄. 막지는 않는다.
+
+    9:16 보다 긴 세로가 없어서 생기는 일이다. 컷을 여럿 담은 장은 필요한 세로가
+    허용 범위를 넘어가고, 그러면 모델이 남는 폭에 컷을 나란히 놓는다 — 세로
+    스크롤이 아니라 만화 페이지가 된다. 장을 쪼개면 없어지지만 이미지 호출이
+    늘어나므로, 코드가 정하지 않고 사람에게 알린다.
+    """
+    got = _ratio(picked)
+    if want >= got * 0.8:
+        return ""
+    return (f"Scene {getattr(scene, 'scene_number', '?')} 은 컷 {len(scene.cuts)}개라 "
+            f"세로 1:{1/want:.1f} 가 필요한데 캔버스 최대가 {picked} (1:{1/got:.1f}) "
+            f"입니다 — 남는 폭에 컷이 나란히 놓여 격자가 될 수 있습니다. "
+            f"장을 쪼개면 없어지지만 이미지 호출이 늘어납니다.")
+
+
 def cut_aspect(cut: dict[str, Any], default: str) -> str:
     """이 컷을 어떤 모양의 캔버스에 그릴까. size 가 없으면 전역값."""
     return SIZE_ASPECT.get(str(cut.get("size") or "").strip().lower(), default)
@@ -1571,13 +1642,21 @@ def grouping_label(cfg: dict[str, Any], ep: storyload.Episode) -> str:
     """
     mode = grouping_mode(cfg, ep)
     if mode == "direction":
-        return "연출 기준"
+        max_per = int(cfg["scene"].get("max_cuts_per_scene") or 0)
+        cap = f" · 최대 {max_per}컷" if max_per else ""
+        return f"연출 기준 (캔버스에 들어가는 만큼{cap})"
     if mode == "weight":
         n = int((cfg.get("scene") or {}).get("max_light_per_scene") or 3)
         return f"무게 기준 (가벼운 컷만 최대 {n}개씩 묶음)"
     per = int(cfg["scene"]["cuts_per_scene"])
     max_per = int(cfg["scene"].get("max_cuts_per_scene") or 0)
     return f"{min(per, max_per) if max_per else per}개씩 고정"
+
+
+def env_bool_cfg(cfg: dict[str, Any], key: str) -> bool:
+    """config 의 scene.<key> 를 불리언으로. 없으면 False (= 예전 동작)."""
+    v = (cfg.get("scene") or {}).get(key)
+    return str(v).strip().lower() in ("1", "true", "yes", "on") if v is not None else False
 
 
 def group_scenes(cfg: dict[str, Any], ep: storyload.Episode,
@@ -1592,7 +1671,34 @@ def group_scenes(cfg: dict[str, Any], ep: storyload.Episode,
         return scenegen.group_by_weight(
             base, int(cfg["scene"].get("max_light_per_scene") or 3))
     if mode == "direction":
-        return scenegen.group_by_break(base, max_per)
+        # 이야기 경계(scene_break)로 먼저 자르고, 그 안을 **캔버스가 감당하는
+        # 만큼** 다시 나눈다. 개수 상한(max_cuts_per_scene)은 안 쓴다 — 3컷도
+        # 4컷도 장면이 무엇을 하려는지와 무관한 임의의 숫자다. 대신 물리적인
+        # 사실 하나만 본다: 모델이 받는 가장 긴 세로가 정해져 있고(9:16), 컷을
+        # 쌓으면 필요한 세로가 그만큼 늘어난다. 넘치면 거기서 끊는다.
+        #
+        # 결과는 장마다 다르다 — wide 둘은 한 장, impact 하나는 혼자 한 장.
+        # max_cuts_per_scene 을 명시한 config 는 그 값도 함께 지킨다(예전 쓰임).
+        groups = scenegen.group_by_break(base, max_per)
+        if not env_bool_cfg(cfg, "fit_to_canvas"):
+            return groups
+        if not any(str(c.get("size") or "").strip() for c in base):
+            # size 를 아무 컷도 안 적은 화(옛 콘티)는 재 볼 것이 없다 — 예전
+            # 그대로 리듬 경계만 쓴다. 없는 값을 가장 긴 세로로 쳐 버리면
+            # 컷마다 한 장이 되어 옛 run 이 다르게 재현된다.
+            return groups
+        limit = 1.0 / _ratio(TALLEST_ASPECT)
+        out: list[scenegen.Scene] = []
+        for group in groups:
+            out.extend(scenegen.group_by_fit(
+                group.cuts,
+                # size 가 없는 컷 하나는 그 화의 기본(normal)으로 친다 —
+                # 가장 긴 세로로 치면 그 컷만 혼자 한 장이 되어 버린다.
+                lambda c: 1.0 / _ratio(cut_aspect(c, SIZE_ASPECT["normal"])),
+                limit))
+        for i, sc in enumerate(out, 1):
+            sc.scene_number = i
+        return out
     return scenegen.group(base, min(per, max_per) if max_per else per)
 
 
@@ -1810,6 +1916,7 @@ def build_scene_jobs(cfg: dict[str, Any], appearance: str, scenes: list[scenegen
                     refs=(refs if here else []) + (lead_refs if here_2nd else []),
                     use_previous_cut=bool(cond.get("use_previous_cut")) and here,
                     out_path=ep_dir / scene_cond(cname) / f"scene{sc.scene_number}_c{k}.png",
+                    aspect=scene_aspect(sc, base_aspect_of(cfg))[0],
                     stem="scene",
                     unit="Scene",
                 ))
@@ -3081,6 +3188,7 @@ def run_verify_all(cfg: dict[str, Any], args, ep: storyload.Episode, ep_dir: Pat
                 # "그림체가 유지되는가"의 답이 조건 D 의 힘인지 스타일 문구의 힘인지 섞인다.
                 use_previous_cut=False,
                 out_path=vdir / cond_dir / f"scene{sc.scene_number}_c{k}.png",
+                aspect=scene_aspect(sc, base_aspect_of(cfg))[0],
                 stem="scene", unit="Scene"))
 
     if args.dry_run:
@@ -3311,6 +3419,7 @@ def run_probe(cfg: dict[str, Any], args, ep: storyload.Episode, ep_dir: Path,
                 prompt=prompt, refs=[ref_path(r) for r in (cond.get("refs") or [])],
                 use_previous_cut=False,   # 한 장만 뽑으므로 직전 컷 체인은 의미가 없다
                 out_path=probe / cname / f"scene{scene.scene_number}_c{k}.png",
+                aspect=scene_aspect(scene, base_aspect_of(cfg))[0],
                 stem="scene", unit="Scene"))
 
     print("=" * 78)

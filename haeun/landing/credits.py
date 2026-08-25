@@ -42,12 +42,22 @@ START_BALANCE = 12
 # pipeline.py 의 --cuts 1-3 로 4장 중 1장만 그리므로 딱 1/4 — 옛 목업 값
 # (240/60)의 비율과 같다. 화질 등급(스탠다드 0.6배)은 미실측 추정치라 아직
 # 안 넣는다(시트에도 "구조만 잡아둔 상태"라고 적혀 있다).
-CREDIT_FULL = 8
-CREDIT_PREVIEW = 2
-# 컷 모드(webtoon 레이아웃)는 컷 하나가 이미지 한 장이라 그림 호출이 3배다
-# (4장→12장). 콘티(텍스트) 몫은 그대로인데 화 전체를 3배로 어림하는 건
-# 근사치다 — 정확한 비례 배분은 최소 기능 범위 밖.
-CREDIT_WEBTOON_MULT = 3
+# **한 편 = 12크레딧, 고정. 만들 때 전액을 한 번에 받는다.**
+#
+#   웹툰 만들기(12C) → 일부(절반가량)를 먼저 보여줌 → 「1화 전체 보기」는
+#   추가 결제 없음 — 이미 산 웹툰을 이어서 보는 것이다.
+#
+# 반씩(6+6) 나누는 안도 실험했지만 버렸다: 미리보기가 마음에 든 순간 결제
+# 버튼을 또 눌러야 하면 구매 흐름이 거기서 끊긴다. 장당·컷당·모드별 변동가도
+# 버렸다 — 화마다 값이 달라지면 공정하긴 한데 "얼마 나올지 모른다"가 몇
+# 크레딧 아끼는 것보다 구매를 더 막는다. 예외가 없어야 "한 편 12크레딧"
+# 한 문장이 언제나 참이다.
+#
+# 실비 참고: fast 는 이미지 4장쯤이라 넉넉하고, 웹툰 묶음은 10장+라 밑진다.
+# 프리토타이핑 단계라 단순함을 택했다 — 실측 원가가 쌓이면 다시 본다.
+CREDIT_FULL = 12
+# 연출 모드 배수 — 값에 안 쓴다(위 참고). 부르는 곳 호환용으로만 남긴다.
+CREDIT_WEBTOON_MULT = 1
 
 # 시트의 "이미지 1장 재생성"(1크레딧)·"+피드백"(2크레딧) 행은 여기 안 옮겼다
 # — 장(scene) 다시 그리기는 결과 화면(app.js)과 편집실 샘플(editor.js)이
@@ -64,12 +74,25 @@ CREDIT_WEBTOON_MULT = 3
 # 있어 아직 검증 전이다. 실측·재시도율 반영 후 크레딧 원가가 낮아질 걸
 # 가정하고(200원 → 120원대), 그 경우의 판매가로 바꿔 뒀다 — 정식 가격이
 # 아니라 프리토타이핑용 자리표시자다. 실측이 끝나면 다시 맞춘다.
+# 이름은 홈 화면의 세계관(수면 — 이야기의 시작 / 항해 — 전개 / 심해 — 깊이)을
+# 그대로 잇는다. "스타터·베이직·대용량·대형" 은 어느 AI 서비스에나 있는
+# 용량 말이라 LORE 의 바다가 안 보였다 — 크레딧은 사용량이 아니라 "이야기를
+# 만들 수 있는 자원" 이므로, 충전 화면에서도 같은 바다를 항해하게 한다.
+# 맨 앞에 물결을 더해 물결 → 수면 → 항해 → 심해 네 단계가 됐다.
+# id 는 그대로 둔다 — 이미 저장된 결제 기록(ledger)이 id 로 남아 있다.
 PACKAGES = [
-    {"id": "starter", "label": "스타터", "credits": 20, "price": 3_900},
-    {"id": "basic", "label": "베이직", "credits": 60, "price": 9_900,
-     "badge": "가장 많이 골라요"},
-    {"id": "bulk", "label": "대용량", "credits": 140, "price": 19_900},
-    {"id": "mega", "label": "대형", "credits": 300, "price": 39_900},
+    {"id": "starter", "label": "물결", "emoji": "🌊",
+     "tagline": "가볍게 이야기를 시작해 보세요.",
+     "credits": 20, "price": 3_900},
+    {"id": "basic", "label": "수면", "emoji": "🌊",
+     "tagline": "캐릭터와 함께 이야기를 떠나 보세요.",
+     "credits": 60, "price": 9_900, "badge": "가장 많이 골라요"},
+    {"id": "bulk", "label": "항해", "emoji": "🐋",
+     "tagline": "더 깊고 긴 이야기를 만들어 보세요.",
+     "credits": 140, "price": 19_900},
+    {"id": "mega", "label": "심해", "emoji": "🌌",
+     "tagline": "마음껏 이야기의 바다를 탐험해 보세요.",
+     "credits": 300, "price": 39_900},
 ]
 
 _lock = threading.Lock()
@@ -156,6 +179,7 @@ def log_event(event: str, uid: str, **extra) -> None:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def creation_cost(preview: bool, layout_mode: str) -> int:
-    base = CREDIT_PREVIEW if preview else CREDIT_FULL
-    return base * CREDIT_WEBTOON_MULT if layout_mode == "webtoon" else base
+def creation_cost(preview: bool = True, layout_mode: str = "fast") -> int:
+    """만들기 값 — 한 편 전액. preview·layout_mode 는 받되 값을 바꾸지
+    않는다: 미리보기로 시작해도 전액을 먼저 받고, 나머지 생성은 공짜다."""
+    return CREDIT_FULL

@@ -27,6 +27,8 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs, quote
 
 import accounts
+import ownership
+import visibility
 import credits
 import overlay
 import pipeline
@@ -396,7 +398,8 @@ class Handler(BaseHTTPRequestHandler):
                 # 표시(−N 크레딧)가 실제로 빠지는 값과 어긋나지 않게 여기서 받는다.
                 "credit_cost": {
                     "full": credits.CREDIT_FULL,
-                    "preview": credits.CREDIT_PREVIEW,
+                    # 만들 때 나가는 값 — 전액 선결제라 full 과 같다.
+                    "preview": credits.CREDIT_FULL,
                     "webtoon_mult": credits.CREDIT_WEBTOON_MULT,
                 },
                 "credit_packages": credits.PACKAGES,
@@ -440,12 +443,15 @@ class Handler(BaseHTTPRequestHandler):
             account = accounts.get_account(key)
             claimed = set((account or {}).get("claimed_runs", []))
             runs = [r for r in pipeline.list_runs(limit=200) if r["run_id"] in claimed]
-            return self._json({"runs": runs})
+            # 내 것에는 숨긴 것도 그대로 나온다 — 대신 지금 공개 상태를 붙여서
+            # 마이페이지가 껐다 켰다 할 수 있게 한다.
+            return self._json({"runs": visibility.mark(runs)})
 
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
         # 작업(Job)을 거치지 않는다 — 하네스를 직접 돌린 run 도 똑같이 열린다.
         if path == "/api/runs":
-            return self._json({"runs": pipeline.list_runs()})
+            # 둘러보기에 걸리는 목록이다 — 숨긴 작품은 빼고 준다.
+            return self._json({"runs": visibility.filter_public(pipeline.list_runs())})
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/episode", path)
         if m:
@@ -469,9 +475,13 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             ep = self._ep(query)
             ep_dir = pipeline.episode_dir(m.group(1), ep)
+            # 내려받는 것도 **최종본**이다 — 편집실에서 얹은 것이 있으면 구운
+            # 판, 없으면 원본 그대로. 얹어 놓고 내려받았더니 말풍선이 없더라는
+            # 것이 가장 알아채기 어려운 실패다.
             # 나가는 파일에만 LORE 표시를 얹는다 (watermark.py 머리말 참고).
             src = watermark.for_download(
-                ep_dir / "episode.png", ep_dir, pipeline.episode_caption(m.group(1), ep))
+                pipeline.final_episode(m.group(1), ep), ep_dir,
+                pipeline.episode_caption(m.group(1), ep))
             return self._file(src, download=pipeline.episode_filename(m.group(1), ep))
 
         # 편집실에서 얹은 말풍선·스티커. 브라우저가 아니라 **작품 폴더**에 있어서
@@ -553,12 +563,34 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/runs/([\w.-]+)/page/(\d+)", path)
         if m:
             ep = self._ep(query)
-            src = pipeline.unit_image(m.group(1), int(m.group(2)), ep)
+            # 기본은 **최종본** — 편집실에서 얹은 것이 구워진 그림이다. 결과
+            # 화면·둘러보기·마이페이지가 전부 이 주소를 쓰므로, 여기 하나만
+            # 최종본을 가리키면 보는 자리가 다 같이 맞는다.
+            #
+            # `raw=1` 은 편집실 전용이다. 편집실은 얹은 것을 DOM 으로 따로
+            # 그리므로 밑그림에까지 구워져 있으면 말풍선이 두 겹으로 보인다.
+            raw = (query.get("raw") or [""])[0] == "1"
+            no = int(m.group(2))
+            src = (pipeline.unit_image(m.group(1), no, ep) if raw
+                   else pipeline.final_unit(m.group(1), no, ep))
             if not src:
                 return self._error(404, "그 장의 그림이 없습니다")
             width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
-            dest = (pipeline.episode_dir(m.group(1), ep) / "cache"
-                    / f"page{m.group(2)}_w{width}.jpg")
+            # 줄여 둔 것의 이름에 **밑그림의 시각**을 넣는다. 이름이 고정이면,
+            # 얹은 것을 다 지워 원본으로 돌아갔을 때 캐시가 더 새것이라
+            # 지워진 말풍선이 계속 보인다(thumbnail 이 mtime 만 비교한다).
+            stamp = int(src.stat().st_mtime)
+            head = f"page{m.group(2)}{'_raw' if raw else ''}_w{width}"
+            cache = pipeline.episode_dir(m.group(1), ep) / "cache"
+            dest = cache / f"{head}_{stamp}.jpg"
+            # 같은 장·같은 크기의 지난 캐시는 지운다 — 안 지우면 고칠 때마다
+            # 파일이 하나씩 쌓인다.
+            for old_file in cache.glob(f"{head}_*.jpg"):
+                if old_file != dest:
+                    try:
+                        old_file.unlink()
+                    except OSError:
+                        pass
             try:
                 return self._file(thumbnail(src, dest, width))
             except Exception:                                   # noqa: BLE001
@@ -735,6 +767,15 @@ class Handler(BaseHTTPRequestHandler):
             run_id = str(body.get("run_id") or "")
             if not re.fullmatch(r"[\w.-]+", run_id):
                 return self._error(400, "run_id 가 없습니다")
+            # 주소만 알면 남의 작품도 담을 수 있었다. 담고 나면 그 작품의 공개
+            # 여부까지 바꿀 수 있으므로(visibility 가 claimed_runs 를 믿는다),
+            # 남이 올린 작품을 아무나 둘러보기에서 내릴 수 있다는 뜻이었다.
+            holder = accounts.claimed_by(run_id)
+            if holder == key:
+                return self._json({"ok": True})       # 이미 내 것 — 조용히 넘어간다
+            ok, why = ownership.may_claim(run_id, str(body.get("uid") or ""), holder)
+            if not ok:
+                return self._error(403, why)
             accounts.claim_run(key, run_id)
             return self._json({"ok": True})
 
@@ -950,6 +991,29 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True,
                                "versions": pipeline.scene_versions(run_id, scene_no, ep)})
 
+        # ---- 둘러보기에 걸지 말지 ---------------------------------------- #
+        #
+        # 내 작품만 바꿀 수 있다. "내 것" 의 근거는 계정에 담아둔 목록
+        # (claimed_runs)이다 — 로그인 안 한 채로 만든 작품은 담아 두기 전까지
+        # 주인이 없어서, 아무나 남의 작품을 내릴 수 있게 두지 않으려면 여기서
+        # 막아야 한다.
+        m = re.fullmatch(r"/api/runs/([\w.-]+)/visibility", url.path)
+        if m:
+            run_id = m.group(1)
+            key = self._account_key()
+            if not key:
+                return self._error(401, "로그인이 필요합니다")
+            account = accounts.get_account(key)
+            if run_id not in set((account or {}).get("claimed_runs", [])):
+                return self._error(403, "내 계정에 담아둔 작품만 바꿀 수 있습니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            public = bool(body.get("public"))
+            visibility.set_public(run_id, public)
+            return self._json({"run_id": run_id, "public": public})
+
         # ---- 다음 화 이어서 만들기 (#72) -------------------------------- #
         #
         # 이야기·캐릭터 시트는 안 돈다 — 1화 것을 그대로 쓴다. 콘티부터 시작해서
@@ -976,12 +1040,28 @@ class Handler(BaseHTTPRequestHandler):
             if len(note) > pipeline.FEEDBACK_TEXT_MAX:
                 return self._error(
                     400, f"요청은 {pipeline.FEEDBACK_TEXT_MAX}자까지 적어 주세요")
+            # 다음 화는 한 화를 통째로 그린다(미리보기 없음) — 한 편 값이다.
+            # /continue 와 같은 이유로, 이 자리에 차감이 없어서 2화부터는
+            # 전부 공짜였다. uid 가 없으면 막지 않는 것도 같은 기준이다.
+            uid = str(body.get("uid") or "")
+            cost = 0
+            if credits.valid_uid(uid):
+                layout = str((pipeline.origin_form(run_id) or {})
+                             .get("layout_mode") or "fast")
+                cost = credits.creation_cost(False, layout)
+                bal = credits.balance(uid)
+                if bal < cost:
+                    return self._error(
+                        402, f"크레딧이 모자랍니다 (필요 {cost} · 보유 {bal})",
+                        reason="insufficient_credit", need=cost, balance=bal)
             try:
                 job = runner.create_next(run_id, {"author_note": note} if note else {})
             except pipeline.Failed as exc:
                 return self._error(409, str(exc))
+            bal = credits.spend(uid, cost)[1] if cost else None
             return self._json({"id": job.id, "episode": job.episode,
-                               "queue_position": runner.position(job.id)})
+                               "queue_position": runner.position(job.id),
+                               **({"credit_balance": bal} if bal is not None else {})})
 
         # 이어 그리기 — 미리보기로 앞 3컷을 본 뒤 "다음 장면도 볼까요?".
         # 회차는 안 늘어나고 콘티도 안 만든다. 다음 3컷을 그리고 다시 잇는다.
@@ -1006,6 +1086,10 @@ class Handler(BaseHTTPRequestHandler):
                      "awaiting_story_approval", "awaiting_sheet_approval")]
             if busy:
                 return self._error(409, "이 작품은 지금 만드는 중입니다")
+            # **여기서는 안 받는다.** 한 편 값(12C)은 만들 때 전액 받았고,
+            # 이 자리는 이미 산 웹툰의 나머지를 마저 그리는 것뿐이다 —
+            # 미리보기가 마음에 든 순간 결제 버튼을 또 누르게 하면 구매
+            # 흐름이 거기서 끊긴다.
             try:
                 job = runner.create_more(run_id, cut_from)
             except pipeline.Failed as exc:

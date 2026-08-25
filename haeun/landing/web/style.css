@@ -90,8 +90,12 @@ body[data-view="running"] .foot,
 body[data-view="result"]  #landing,
 body[data-view="works"]   #landing,
 body[data-view="mypage"]  #landing,
+/* 이어 만들기는 만드는 중(running)과 같은 성격의 화면이다 — 한 가지 일에만
+   매달리는 자리라 상단 바를 감춘다. 바닥글도 같이 감춘다: 헤더는 없는데
+   바닥글만 남으면 화면이 어중간하게 끊긴 것처럼 보인다. */
 body[data-view="nextep"]  #landing,
-body[data-view="nextep"]  .topbar { display: none; }
+body[data-view="nextep"]  .topbar,
+body[data-view="nextep"]  .foot { display: none; }
 
 /* ------------------------------------------------------------------ 공통 */
 
@@ -221,9 +225,17 @@ body[data-view="nextep"]  .topbar { display: none; }
    dvh 를 쓰는 이유: 폰 브라우저는 주소창이 접혔다 펴지면서 vh 가 튄다. */
 .studio {
   min-height: calc(100dvh - 59px);
-  position: relative; padding: 8px 16px clamp(36px, 6vw, 64px);
+  /* 아래 여백은 0 이다 — 바닥 여백의 주인은 단추줄(.wiz-actions)이다.
+     여기에 여백이 있으면 위저드가 그만큼 짧아져서, 바닥에 붙어야 할 단추줄이
+     화면 끝에서 그 여백만큼 떠 버린다. */
+  position: relative; padding: 8px 16px 0;
   transition: background .5s ease;
   scroll-margin-top: 64px;
+  /* 안쪽 위저드가 남은 높이를 다 쓰게 편다. 안 그러면 내용이 짧은 걸음
+     (2걸음처럼 입력칸 하나뿐인 곳)에서 단추줄이 화면 한가운데 뜨고 그 아래가
+     텅 빈 물로 남는다 — PC 는 창이 넓어 티가 덜 나지만 폰에서는 화면 절반이
+     빈 채로 끝나서 안 만들어진 화면처럼 보인다. */
+  display: flex; flex-direction: column;
 }
 
 /* --------------------------------------------------------- 폼 부품
@@ -313,6 +325,19 @@ body[data-view="nextep"]  .topbar { display: none; }
 }
 .photo-drop.drag .photo-slot { border-color: var(--accent); background: rgba(111,165,153,.12); }
 .photo-count { display: block; color: var(--dim); font-size: .76rem; margin-top: 8px; }
+
+/* 사진을 올리기 전에 읽어야 하는 것. 경고문이라고 붉게 세우지 않는다 —
+   대부분은 남의 것을 올릴 생각이 없는 사람이고, 겁주는 화면으로 시작하면
+   만들기 전부터 물러선다. 조용히 읽히되 지나칠 수는 없게 왼쪽에 선만 둔다. */
+.photo-rules {
+  margin: 10px 0 0; padding: 10px 0 10px 12px;
+  border-left: 2px solid var(--sea-mint);
+  list-style: none;
+  color: var(--muted); font-size: .78rem; line-height: 1.65;
+}
+.photo-rules li + li { margin-top: 3px; }
+/* 마지막 줄은 약속이지 주의가 아니다 — 앞의 셋과 톤을 나눈다. */
+.photo-rules li:last-child { color: var(--accent-d); font-weight: 600; }
 .photo-side { display: block; }
 
 /* ---- 항목 표 -------------------------------------------------------- */
@@ -407,7 +432,10 @@ body[data-view="nextep"]  .topbar { display: none; }
 /* 캔버스(A_Step*.dc.html) 그대로 — 위저드 자체는 투명하고, 게이지·제목은
    물 위에, 입력은 종이 카드 안에 있다. 폭은 아트보드(390px)에 맞춰 한
    컬럼으로 고정한다. PC 라고 벌리지 않는다. */
-.wizard { display: block; margin: 0; position: relative; }   /* 프레임 폭을 그대로 쓴다 */
+/* 프레임 폭을 그대로 쓴다. 세로로는 남은 높이를 다 차지하고, 단추줄을 맨
+   아래로 밀어 둔다(.wiz-actions 의 margin-top:auto) — 걸음마다 내용 길이가
+   달라도 단추가 늘 같은 자리, 화면 바닥에 있다. */
+.wizard { display: flex; flex-direction: column; flex: 1; margin: 0; position: relative; }
 
 /* 제목 오른쪽에 앉은 루. 걸음마다 늘 비어 있던 자리다.
    제목과 겨루면 안 되므로 살짝 눕히고 흐리게 둔다 — 읽는 눈이 먼저 가는 곳은
@@ -603,7 +631,9 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
    지나간다. */
 .wiz-actions {
   position: sticky; bottom: 0; z-index: 30;
-  margin-top: 24px; padding: 10px 0;
+  /* auto 로 밀어 올려 늘 화면 바닥에 앉힌다. 내용이 길면 sticky 가, 짧으면
+     이 여백이 같은 자리를 만들어 준다. 24px 은 내용과 붙지 않게 하는 최소 간격. */
+  margin-top: auto; padding: 34px 0 clamp(20px, 4vw, 28px);
   background: var(--foot-bg, var(--ink));
   transition: background .5s ease;
 }
@@ -618,6 +648,18 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
 .wiz-foot { display: flex; gap: 10px; }
 .wiz-foot .btn { flex: 1; padding: 1.05em; }
 .wiz-prev { flex: 0 0 auto !important; min-width: 96px; }
+
+/* 아주 좁은 폰(320px 급)에서는 「미리보기 만들기 −2 크레딧」이 한 줄에 안
+   들어가 단추가 화면 밖으로 삐져나갔다. 단추 글씨는 줄이지 않고, 대신
+   「이전」을 좁히고 값 딱지를 아랫줄로 내려 준다 — 무엇을 누르는지가 먼저고,
+   얼마인지는 그 아래에 있어도 읽힌다. */
+@media (max-width: 360px) {
+  .wiz-prev { min-width: 0; padding-left: 1.1em; padding-right: 1.1em; }
+  .wiz-foot .wiz-go {
+    flex-direction: column; gap: .25em; white-space: normal; padding: .8em 1em;
+  }
+  .wiz-foot .wiz-go .cost-chip { font-size: .72rem; }
+}
 
 /* 각 걸음의 물빛이 바닥에서 무슨 색인지 — 위 .studio 그라디언트의 끝색이다.
    여기가 어긋나면 단추 줄만 다른 색 띠로 떠 보인다. */
@@ -724,7 +766,8 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 .stage-art[data-stage="art"]   { background-image: url("/static/lou/stage/art.webp"); }
 .stage-art[data-stage="bind"]  { background-image: url("/static/lou/stage/bind.webp"); }
 .stage-art[data-mood="done"]   { background-image: url("/static/lou/stage/done.webp"); }
-.stage-art[data-mood="error"]  { background-image: url("/static/lou/lou-error.png"); }
+/* 막혔을 때 그림은 여기서 안 정한다 — 두 마리 중 하나가 걸려야 하는데
+   CSS 로는 뽑을 수가 없다. app.js 가 그 자리에서 직접 얹는다. */
 .stage-clock { margin: 8px 0 0; color: var(--dim); font-size: .82rem; }
 .stage-clock .clock-time { font-size: .95rem; color: var(--muted); }
 
@@ -937,9 +980,26 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 .sheet-approval-head p { color: var(--muted); font-size: .9rem; margin: 0 0 16px; }
 .approval-reason { color: var(--text); font-size: .92rem; margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--gold); background: var(--ink-2); border-radius: 6px; }
 .approval-reason:empty { display: none; }
-.sheet-approval-compare { display: flex; gap: 16px; flex-wrap: wrap; }
-.sheet-approval-compare figure { margin: 0; flex: 1 1 200px; max-width: 320px; }
-.sheet-approval-compare img { width: 100%; border-radius: 10px; border: 1px solid var(--line); background: var(--ink-2); aspect-ratio: 3/4; object-fit: cover; }
+/* 좁은 폰에서도 두 칸을 유지한다. 비교하라고 만든 화면인데 위아래로 쪼개지면
+   한 번에 하나씩만 보여서 비교가 안 된다 — 작아지더라도 나란히가 낫다.
+   (사진이 없어 한 칸만 있을 때는 그 칸이 폭을 다 쓴다.) */
+.sheet-approval-compare {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 10px; align-items: start;
+}
+.sheet-approval-compare figure { margin: 0; min-width: 0; }
+/* 이 화면이 하는 일은 **원본과 시트를 견주는 것** 이다. 그런데 둘 다 3/4 로
+   맞추고 cover 로 잘라내고 있었다 — 가로로 찍은 사진은 머리와 몸이 날아가고,
+   세로로 긴 시트는 위아래가 잘렸다. 잘린 것끼리 비교할 수는 없다.
+   각자 제 비율대로 두고, 너무 길어지지만 않게 높이만 묶는다. */
+.sheet-approval-compare img {
+  /* 액자는 둘이 같고, 그림은 그 안에서 제 비율대로 들어앉는다(contain).
+     비율까지 같게 맞추면(cover) 잘려서 비교가 안 되고, 액자를 각자 크기로
+     두면 두 칸 높이가 달라 한쪽 밑에 빈자리가 크게 남는다. */
+  display: block; width: 100%; aspect-ratio: 3 / 4;
+  object-fit: contain;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--ink-2);
+}
 .sheet-approval-compare figcaption { margin-top: 6px; font-size: .78rem; color: var(--muted); text-align: center; }
 .sheet-approval-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
@@ -984,53 +1044,95 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 
 /* --------------------------------------------------------- 내 웹툰 목록 */
 
-.works { min-height: 100vh; padding: clamp(28px, 5vw, 60px) clamp(16px, 5vw, 48px) 90px; }
-.works-head {
-  display: flex; justify-content: space-between; align-items: flex-end;
-  gap: 20px; flex-wrap: wrap; margin-bottom: 2.4em;
-  max-width: 1180px; margin-left: auto; margin-right: auto;
+/* ------------------------------------------------------------- 둘러보기 ---
+ *
+ * 남이 만든 웹툰을 구경하는 자리. 만드는 화면(심해로 내려가는 물)과 달리
+ * 여기는 **수면 가까이** 다 — 얕고 밝은 물에서 표지를 훑는 느낌이라, 홈의
+ * 모래빛에서 시작해 옅은 물빛으로만 내려간다.
+ */
+.works {
+  min-height: 100dvh;
+  padding: 18px 16px 90px;
+  background: linear-gradient(180deg, var(--sea-sand) 0%, var(--paper-2) 30%, var(--ink) 100%);
 }
-.works-head h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 800; }
-.works-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.works-grid {
-  display: grid; gap: 20px; max-width: 1180px; margin: 0 auto;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+.works-head { margin: 0 0 22px; }
+.works-head h2 {
+  font-size: clamp(1.5rem, 6vw, 1.9rem); font-weight: 800;
+  color: var(--accent-d); margin: 0 0 .3em;
 }
+.works-head .section-lede { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.65; }
+.works-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+/* 「내 캐릭터로 웹툰 만들기」가 이 화면에서 할 수 있는 유일한 일이다 —
+   구경하다 만들고 싶어지는 자리라, 남는 폭을 그쪽이 다 갖는다. */
+.works-actions .btn-primary { flex: 1; }
+
+/* 표지를 앞세운 두 칸. 한 칸이면 한 번에 한 작품밖에 안 보여서 구경이 안 되고,
+   석 칸이면 폰에서 표지가 손톱만 해진다. */
+.works-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .works-card {
-  display: flex; flex-direction: column;
-  border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--card); overflow: hidden;
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 16px; background: var(--card);
+  box-shadow: 0 1px 0 rgba(38,64,58,.05), 0 6px 20px rgba(38,64,58,.07);
+  transition: transform .16s ease, box-shadow .16s ease;
 }
+.works-card:hover { transform: translateY(-2px); box-shadow: 0 2px 0 rgba(38,64,58,.06), 0 14px 30px rgba(38,64,58,.12); }
 /* 표지는 작품마다 캔버스 비율이 달라서(세로로 긴 장이 흔하다) 그대로 두면 줄이
-   들쭉날쭉해진다. 목록에서는 같은 창으로 잘라 보여 주고, 위쪽을 남긴다 —
-   웹툰 한 장의 첫 컷이 대개 그 화를 대표한다. */
+   들쭉날쭉해진다. 같은 창으로 잘라 보여 주고 위쪽을 남긴다 — 웹툰 한 장의 첫
+   컷이 대개 그 화를 대표한다. */
 .works-cover {
   display: block; width: 100%; padding: 0; border: none; cursor: pointer;
   background: var(--ink-2); aspect-ratio: 3 / 4;
+  /* 표지를 흐름 밖으로 빼서 절대 위치로 채운다. 그냥 두면 세로로 긴 원본이
+     제 키대로 자라면서 aspect-ratio 를 밀어내, 카드마다 표지 길이가 제각각이
+     된다(실제로 3/4 로 정해 뒀는데 그보다 훨씬 길게 나왔다). */
+  position: relative; overflow: hidden;
 }
-.works-cover img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+.works-cover > * {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; object-position: top center;
+}
 .works-cover-empty {
-  display: grid; place-items: center; width: 100%; height: 100%;
+  display: grid; place-items: center;
   font-size: 1.8rem; color: var(--dim);
 }
-.works-cover:hover img { opacity: .88; }
-.works-body { display: grid; gap: .3em; padding: 14px 16px 16px; }
-.works-body h3 { font-size: 1rem; font-weight: 700; }
-.works-sub { margin: 0; color: var(--muted); font-size: .84rem; }
-.works-count { margin: 0; color: var(--dim); font-size: .78rem; }
-.works-eps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: .5em; }
-.works-ep {
-  border: 1px solid var(--line-2); background: transparent; color: var(--text);
-  border-radius: 999px; padding: .3em .8em; font: inherit; font-size: .8rem;
-  cursor: pointer; transition: background .14s ease, border-color .14s ease;
+.works-cover:hover img { opacity: .9; }
+.works-body { display: grid; gap: .25em; padding: 10px 12px 12px; }
+.works-body h3 { font-size: .95rem; font-weight: 700; color: var(--text); }
+.works-sub {
+  margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.5;
+  /* 제목이 길어도 카드 높이가 안 흔들리게 두 줄에서 끊는다 — 줄이 들쭉날쭉하면
+     격자가 무너져 보인다. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.works-ep:hover { border-color: var(--accent); background: rgba(229,73,60,.12); }
-.works-edit { margin-top: .5em; color: var(--dim); font-size: .78rem; }
-.works-edit:hover { color: var(--accent); }
+.works-count { margin: .1em 0 0; color: var(--dim); font-size: .72rem; }
+.works-eps { display: flex; flex-wrap: wrap; gap: 5px; margin-top: .45em; }
+.works-ep {
+  border: 1px solid var(--line-2); background: transparent; color: var(--muted);
+  border-radius: 999px; padding: .22em .6em; font: inherit; font-size: .72rem;
+  cursor: pointer; transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+/* 예전 팔레트(붉은 강조)가 남아 있어서 민트 화면에서 혼자 붉게 떴다. */
+.works-ep:hover { border-color: var(--accent); background: rgba(111,165,153,.14); color: var(--accent-d); }
+/* 공개 스위치 — 내 작품 카드에만 붙는다. 켜고 끄는 것이 바로 보여야 하므로
+   글자도 상태를 따라 바뀐다("둘러보기에 공개" / "나만 보기"). */
+.works-pub {
+  display: flex; align-items: center; gap: .45em; margin-top: .5em;
+  font-size: .74rem; color: var(--accent-d); cursor: pointer;
+}
+.works-pub input { width: 1.05em; height: 1.05em; accent-color: var(--accent); flex: none; }
+.works-pub input:disabled { opacity: .5; }
+.works-pub:has(:not(:checked)) { color: var(--dim); }
+
+.works-edit { display: inline-block; margin-top: .5em; color: var(--dim); font-size: .72rem; }
+.works-edit:hover { color: var(--accent-d); }
+
+/* 빈 화면 — 글자만 있으면 "고장난 건가" 로 읽힌다. 루가 대신 서 있는다. */
 .works-empty {
   grid-column: 1 / -1; text-align: center; color: var(--muted);
-  padding: 60px 0; line-height: 1.8;
+  padding: 40px 0 60px; line-height: 1.8;
 }
+.works-empty img { width: 148px; height: auto; display: block; margin: 0 auto 14px; }
+.works-empty b { display: block; color: var(--accent-d); font-size: 1.02rem; margin-bottom: .3em; }
 
 /* ------------------------------------------------------------------ 결과 */
 
@@ -1161,6 +1263,14 @@ body[data-view="create"] .topnav { display: none; }
   font-family: var(--mono); font-size: .78rem; font-weight: 700;
   background: rgba(34,48,44,.08); border-radius: 6px; padding: .12em .5em; margin-left: .2em;
 }
+/* 홈의 첫 단추 안 값 딱지. 단추 바탕이 짙은 민트라 기본 딱지(먹빛 반투명)는
+   묻힌다 — 흰 쪽으로 뒤집는다. 값은 알리되 단추 글씨보다 앞서면 안 되므로
+   조금 작고 옅게 둔다. */
+#startCostChip {
+  background: rgba(255,255,255,.2); color: rgba(255,255,255,.92);
+  font-size: .74rem; margin-left: .45em;
+}
+
 .nav-tag {
   font-size: .6rem; font-weight: 800; letter-spacing: .1em; vertical-align: .25em;
   color: var(--ink); background: var(--gold); padding: .1em .35em; border-radius: 4px;
@@ -1446,24 +1556,77 @@ button.inline-link:hover { color: #f0d090; }
 .charge-balance b { color: var(--gold); }
 
 .charge-packages { display: grid; gap: 10px; }
+/* 충전 카드 — 물결에서 심해로 **내려가는** 목록이다.
+   카드마다 왼쪽에 그 깊이의 물빛 띠를 세우고, 마지막(심해)은 카드 전체가
+   짙은 물이 된다 — 홈의 바다(수면→항해→심해)와 같은 눈금이라 충전 화면이
+   세계관 밖으로 튀지 않는다. 파는 것은 크레딧이 아니라 "몇 편"이다. */
 .charge-pkg {
-  display: grid; grid-template-columns: 1fr auto; align-items: center;
-  gap: 2px 10px; position: relative;
-  text-align: left; padding: 14px 16px; border-radius: 12px;
-  border: 1px solid var(--line-2); background: var(--card-2); cursor: pointer;
-  font: inherit; transition: border-color .15s ease, background .15s ease;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "emoji label price"
+    "emoji tag   price"
+    "emoji value per";
+  align-items: center; column-gap: 12px; row-gap: 1px;
+  position: relative; overflow: hidden;
+  text-align: left; padding: 14px 16px 14px 14px; border-radius: 14px;
+  border: 1px solid var(--line-2); background: var(--card); cursor: pointer;
+  font: inherit;
+  transition: border-color .15s ease, transform .12s ease, box-shadow .15s ease;
 }
-.charge-pkg:hover { border-color: var(--accent); background: var(--paper); }
+.charge-pkg::before {           /* 깊이 띠 */
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+  background: var(--pkg-depth, var(--sea-shore));
+}
+.charge-pkg[data-tier="1"] { --pkg-depth: linear-gradient(180deg, var(--sea-sand), var(--sea-shore)); }
+.charge-pkg[data-tier="2"] { --pkg-depth: linear-gradient(180deg, var(--sea-shore), var(--sea-mint)); }
+.charge-pkg[data-tier="3"] { --pkg-depth: linear-gradient(180deg, var(--sea-mint), var(--sea-deep)); }
+.charge-pkg:hover {
+  border-color: var(--accent); transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(38,64,58,.12);
+}
+/* 가장 많이 고르는 것(수면)은 이미 골라진 것처럼 보이게 — 민트 테두리. */
+.charge-pkg[data-tier="2"] { border-color: var(--accent); }
+/* 심해는 카드 전체가 짙은 물이다 — 제일 깊은 곳이 제일 좋아 보여야 한다. */
+.charge-pkg[data-tier="4"] {
+  background: linear-gradient(135deg, var(--sea-deep), var(--sea-abyss));
+  border-color: transparent; color: var(--on-sea);
+}
+.charge-pkg[data-tier="4"]::before { display: none; }
+.charge-pkg[data-tier="4"] .charge-pkg-tag,
+.charge-pkg[data-tier="4"] .charge-pkg-per { color: rgba(247,243,234,.72); }
+.charge-pkg[data-tier="4"] .charge-pkg-value { color: var(--on-sea); }
+.charge-pkg[data-tier="4"] .charge-pkg-price { color: var(--on-sea); }
+
+/* 배지는 카드 안 오른쪽 위 — 테두리에 걸치면 overflow 에 잘린다.
+   가격(align-self:end)이 아래로 내려가 있어 이 자리는 비어 있다. */
 .charge-pkg-badge {
-  position: absolute; top: -9px; left: 12px;
-  background: var(--gold); color: #fff; font-size: .68rem; font-weight: 800;
-  padding: .15em .55em; border-radius: 999px;
+  position: absolute; top: 9px; right: 12px;
+  background: var(--gold); color: #fff; font-size: .64rem; font-weight: 800;
+  padding: .2em .65em; border-radius: 999px; letter-spacing: .02em;
+  white-space: nowrap;
 }
-.charge-pkg-label { font-weight: 700; }
-.charge-pkg-credits { grid-row: 2; color: var(--accent-d); font-weight: 700; font-size: .88rem; }
+/* 배지 있는 카드는 가격이 배지 밑으로 확실히 내려가게 여유를 준다. */
+.charge-pkg:has(.charge-pkg-badge) .charge-pkg-price { margin-top: 14px; }
+.charge-pkg-emoji {
+  grid-area: emoji; font-size: 1.5rem; line-height: 1;
+  width: 44px; height: 44px; display: grid; place-items: center;
+  background: rgba(111,165,153,.10); border-radius: 12px;
+}
+.charge-pkg[data-tier="4"] .charge-pkg-emoji { background: rgba(247,243,234,.12); }
+.charge-pkg-label { grid-area: label; font-weight: 800; font-size: 1.02rem; }
+.charge-pkg-tag { grid-area: tag; font-size: .76rem; color: var(--muted); }
+.charge-pkg-value {
+  grid-area: value; font-size: .8rem; color: var(--accent-d); margin-top: 3px;
+}
+.charge-pkg-value b { font-size: .92rem; }
 .charge-pkg-price {
-  grid-column: 2; grid-row: 1 / span 2; align-self: center;
-  font-family: var(--mono); font-weight: 700; color: var(--muted);
+  grid-area: price; align-self: end; justify-self: end;
+  font-family: var(--mono); font-weight: 800; font-size: 1.05rem; color: var(--text);
+}
+.charge-pkg-per {
+  grid-area: per; justify-self: end; align-self: start;
+  font-size: .72rem; color: var(--dim);
 }
 
 .charge-back {
@@ -1839,3 +2002,144 @@ button.inline-link:hover { color: #f0d090; }
 .works-rail::-webkit-scrollbar-thumb {
   background: var(--line); border-radius: 999px;
 }
+
+/* ---- 확인 팝업 ------------------------------------------------------------ */
+/* 진행 화면 아래에 붙어 있던 것을 팝업으로 올렸다 — 기다리는 사람은 화면
+   위를 보고 있어서, 아래로 내려야 보이는 알림은 알림이 아니었다. */
+.approval-veil { align-items: flex-start; padding: 4vh 16px; }
+.approval-box {
+  /* 앱은 480px 한 컬럼인데 팝업만 520px 이라, PC 에서 팝업이 앱 밖으로 삐져
+     나와 있었다. 프레임 안쪽(480 - 좌우 여백 16px씩)에 맞춘다. */
+  max-width: 448px; max-height: 92vh; padding: 0;
+  background: transparent; border: none; box-shadow: none;
+}
+.approval-box .sheet-approval { margin: 0; max-height: 92vh; overflow-y: auto; }
+
+/* 무엇을 확인하는지 — 이야기·콘티 본문 */
+.approval-preview:empty { display: none; }
+.approval-preview {
+  margin: 14px 0; padding: 14px 16px;
+  background: var(--ink-2); border: 1px solid var(--line); border-radius: 10px;
+  max-height: 40vh; overflow-y: auto;
+}
+.ap-title { font-size: 1rem; font-weight: 800; margin: 0 0 .2em; }
+.ap-logline { color: var(--muted); font-size: .86rem; margin: 0 0 .9em; line-height: 1.6; }
+.ap-hook { color: var(--accent-d); font-size: .84rem; margin: 0 0 1em; }
+.ap-scene { padding: 10px 0; border-top: 1px solid var(--line); }
+.ap-scene:first-of-type { border-top: none; }
+.ap-no {
+  font-family: var(--mono); font-size: .72rem; color: var(--dim);
+  letter-spacing: .08em;
+}
+.ap-one { font-weight: 700; font-size: .88rem; margin: .25em 0 .3em; }
+.ap-text { color: var(--muted); font-size: .82rem; line-height: 1.65; margin: 0; }
+.ap-changed { color: var(--dim); font-size: .78rem; margin: .45em 0 0; }
+.ap-line { margin: .3em 0 0; font-size: .84rem; }
+.ap-line .who { color: var(--gold); font-weight: 700; }
+.ap-line.narration { color: var(--muted); font-style: italic; }
+.ap-line.sfx { color: var(--accent-d); font-family: var(--mono); font-size: .78rem; }
+
+/* 확인 팝업이 떠 있는 동안 뒤가 안 굴러가게 */
+body.modal-open { overflow: hidden; }
+
+/* ---- 결제 방식 · 최종 확인 (프리토타이핑) ------------------------------- */
+.charge-card small { display: block; font-weight: 400; font-size: .74rem; color: var(--dim); margin-top: 2px; }
+.charge-pkg-tag { display: block; font-size: .76rem; color: var(--muted); margin-top: 3px; }
+.charge-confirm-box {
+  margin: 14px 0 8px; border: 1px solid var(--line-2); border-radius: 12px;
+  padding: 4px 14px; background: var(--card-2);
+}
+.charge-confirm-row {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: .65em 0; font-size: .88rem; border-bottom: 1px solid var(--line);
+}
+.charge-confirm-row:last-child { border-bottom: none; }
+.charge-confirm-row span { color: var(--muted); }
+.charge-confirm-total b { color: var(--accent-d); font-size: 1.02rem; }
+.charge-confirm-note { margin: 0 0 14px; font-size: .78rem; color: var(--dim); }
+.charge-confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.charge-confirm-actions .btn { min-height: 44px; }
+.charge-lede { margin: -0.4em 0 .2em; font-size: .84rem; color: var(--muted); }
+.charge-packages { display: grid; gap: 12px; margin-top: 14px; }
+
+/* ------------------------------------------------- 떠 있는 진행 표시(mini)
+
+   만드는 중에 다른 화면으로 가면 따라붙는 동그란 표시. 웹툰 한 편은 몇 분이
+   걸리는데 그동안 진행 화면에 묶어 두면 기다림이 곱절로 길다 — 나가서 남의
+   작품을 보다 와도 되게 하고, 대신 지금 어디까지 왔는지를 이것이 들고 다닌다.
+
+   앱은 480px 한 컬럼이라 fixed 로 두면 넓은 화면에서 컬럼 바깥으로 나간다.
+   자리는 app.js 가 body 의 실제 폭 안으로 가둬서 잡는다(clamp). */
+.minip {
+  position: fixed; z-index: 120; width: 62px; height: 62px;
+  touch-action: none;                    /* 끌 때 화면이 같이 안 밀리게 */
+}
+.minip[data-dragging] { cursor: grabbing; }
+.minip-body {
+  width: 100%; height: 100%; padding: 0; border: none; border-radius: 50%;
+  position: relative; cursor: grab; background: var(--card);
+  box-shadow: 0 6px 20px rgba(38,64,58,.24), 0 0 0 1px rgba(38,64,58,.08);
+  display: grid; place-items: center;
+  transition: transform .14s ease, box-shadow .18s ease;
+}
+.minip-body:active { transform: scale(.96); }
+.minip[data-dragging] .minip-body { transform: scale(1.06); }
+.minip-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.minip-ring circle { fill: none; stroke-width: 3.5; }
+.minip-track { stroke: rgba(34,48,44,.10); }
+.minip-fill {
+  stroke: var(--accent); stroke-linecap: round;
+  /* 2πr = 119.4 — app.js 가 dashoffset 으로 채운다 */
+  stroke-dasharray: 119.4; stroke-dashoffset: 119.4;
+  transition: stroke-dashoffset .4s ease, stroke .25s ease;
+}
+/* 단계 그림(stage/*.webp)은 배경이 안 뚫린 네모다 — 동그라미 안에 그대로 넣으면
+   네모가 그대로 보인다. 둥글게 잘라 얹는다(고리 안쪽의 얼굴 사진처럼). */
+.minip-face {
+  width: 44px; height: 44px; border-radius: 50%;
+  object-fit: cover; pointer-events: none;
+}
+/* 숫자는 그림 위에 그냥 얹으면 안 읽힌다 — 아래쪽에 알약으로 띄운다. */
+.minip-pct {
+  position: absolute; left: 50%; bottom: -3px; transform: translateX(-50%);
+  padding: 0 5px; border-radius: 999px;
+  background: var(--card); box-shadow: 0 1px 4px rgba(38,64,58,.2);
+  font-size: .56rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.7;
+  color: var(--accent-d); pointer-events: none; white-space: nowrap;
+}
+.minip-x {
+  position: absolute; top: -3px; right: -3px; width: 20px; height: 20px;
+  border-radius: 50%; border: 1px solid var(--line-2); background: var(--card);
+  color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer;
+  display: grid; place-items: center; padding: 0;
+}
+.minip-x:hover { color: var(--text); border-color: var(--accent); }
+
+/* 확인이 필요해 멈춰 있는 동안 — 아무것도 안 돌아가므로 눈에 띄어야 한다 */
+.minip[data-state="await"] .minip-fill { stroke: var(--gold); }
+.minip[data-state="await"] .minip-body { animation: minipPulse 1.6s ease-in-out infinite; }
+.minip[data-state="done"]  .minip-fill { stroke: var(--ok); }
+.minip[data-state="done"]  .minip-pct  { color: var(--ok); }
+.minip[data-state="error"] .minip-fill { stroke: #c2603f; }
+.minip[data-state="error"] .minip-pct  { color: #c2603f; }
+@keyframes minipPulse {
+  0%, 100% { box-shadow: 0 6px 20px rgba(38,64,58,.24), 0 0 0 1px rgba(38,64,58,.08); }
+  50%      { box-shadow: 0 6px 20px rgba(38,64,58,.24), 0 0 0 5px rgba(161,115,46,.22); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .minip[data-state="await"] .minip-body { animation: none; }
+  .minip-fill { transition: none; }
+}
+
+/* 접었을 때 남는 손잡이 — 오른쪽 가장자리에 붙는다 */
+.minip-tab {
+  position: fixed; z-index: 120; right: 0; bottom: 96px;
+  padding: .5em .55em .5em .7em; border: 1px solid var(--line-2); border-right: none;
+  border-radius: 999px 0 0 999px; background: var(--card); color: var(--accent-d);
+  font: inherit; font-size: .68rem; font-weight: 800; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(38,64,58,.18);
+}
+.minip-tab:hover { color: var(--text); }
+
+/* 진행 화면의 「둘러보기」 — 단계 그림 아래, 잡담(놀기)보다는 위 */
+.stage-away { margin-top: 14px; }

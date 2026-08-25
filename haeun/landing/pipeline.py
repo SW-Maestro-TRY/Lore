@@ -84,6 +84,18 @@ CONDITION = "S+"
 MODE = "scene"
 CUTS_PER_SHEET = 3
 
+# "웹툰" 연출에는 **컷 수 상한이 없다.** 0 은 개수로 자르지 말라는 뜻이다.
+#
+# 전에는 여기에 4 가 적혀 있었다. 그런데 4 라는 숫자는 어디서도 나온 적이 없다 —
+# 장면이 무엇을 하려는지와 무관하게 고른 값이었고, 컷 하나가 캔버스를 통째로
+# 써야 할 자리(impact)와 둘이 나란히 들어가도 남는 자리(wide 둘)를 똑같이
+# 취급했다. 대신 물리적인 사실 하나로 끊는다: 모델이 받는 캔버스에는 가장 긴
+# 세로가 있고(9:16), 컷을 쌓으면 필요한 세로가 그만큼 늘어난다. 더 넣어도
+# 들어가면 넣고, 넘치면 거기서 끊는다 (webtoon-harness/scenegen.group_by_fit).
+#
+# 그래서 장마다 컷 수가 다르다 — 1개든 2개든 3개든 컷의 size 가 정한다.
+WEBTOON_MAX_CUTS = 0
+
 # 위 두 값은 **기본 경로**다. 사용자가 폼에서 "웹툰"을 고르면 컷 모드로 간다.
 #
 # 컷 모드에서는 컷 하나가 캔버스 하나를 통째로 쓴다. 그러면 위에 적어 둔 대가가
@@ -101,9 +113,20 @@ LAYOUT_MODES = {
 
 
 def layout_mode(form: dict[str, Any]) -> str:
-    """폼의 layout_mode → fast | webtoon. 모르는 값은 fast (지금까지의 방식)."""
+    """폼의 layout_mode → fast | webtoon. **모르는 값은 webtoon 이다.**
+
+    예전에는 fast 가 기본이었다. 그런데 fast 는 3컷을 한 캔버스에 몰아넣어
+    배치를 모델에게 통째로 맡기는 모드라, 콘티가 컷마다 계산해 둔 것들
+    (gap_after 여백 · size: impact 통컷 · vertical_link 배경 연결)이 **픽셀에
+    닿을 자리가 없다.** 실측: 한 화의 컷 9 가 gap_after=3(폰 화면 하나를 비워라)
+    이고 컷 11 이 size=impact/weight=full(한 장을 통째로 써라)인데, fast 로
+    그리면 둘 다 그냥 사라진다.
+
+    fast 를 지우지는 않는다 — 폼이 명시적으로 "fast" 를 주면 그대로 간다.
+    기본에서만 뺐다.
+    """
     v = str((form or {}).get("layout_mode") or "").strip().lower()
-    return v if v in LAYOUT_MODES else "fast"
+    return v if v in LAYOUT_MODES else "webtoon"
 
 
 # --------------------------------------------------------------------------- #
@@ -346,14 +369,31 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
                       "  gap_ratio: {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}",
                       text, count=1)
         text = re.sub(r"(?m)^  stitch_gaps:.*$", "  stitch_gaps: true", text, count=1)
-        # 9. 묶기를 **무게**가 정하게 한다 — "한 장에 3컷" 도 "한 컷에 한 장" 도
-        #    임의의 규칙이었다. 실제 웹툰은 컷마다 무게가 달라서, 스쳐 가는
-        #    리액션과 판이 뒤집히는 컷이 같은 지면을 먹지 않는다.
-        #    무거운 컷은 혼자 한 장, 배경 없는 가벼운 컷(float)만 연달아 붙은
-        #    것끼리 한 장에 묶인다 — 나눌 배경이 없어서 격자가 안 생긴다.
-        #    위의 grouping/cuts_per_scene 을 여기서 덮어쓴다(6번에서 fixed 로
-        #    바꿔 뒀는데, 웹툰 모드에서는 개수 규칙 자체를 안 쓴다).
-        text = re.sub(r"(?m)^  grouping:.*$", "  grouping: weight", text, count=1)
+        # 9. 묶기는 **연출 리듬**이 정한다 (scene.grouping: rhythm).
+        #
+        #    앞에서는 weight 로 묶었는데, 실측해 보니 콘티가 weight 를 거의 안
+        #    쓴다 — 한 화 12컷이 전부 normal 로 나와서 컷마다 한 장, 이미지가
+        #    12번 나갔다. "한 장에 3컷"(fixed)보다 세 배 비싼데 얻는 것은
+        #    "컷이 안 섞인다" 하나뿐이었다.
+        #
+        #    정작 콘티는 경계를 **이미 정해 두고 있었다** — scene_break 다.
+        #    같은 화가 rhythm 으로는 1-4 / 5-8 / 9-11 / 12 넉 장이 된다.
+        #    개수(fixed)와 장 수는 같은데, 경계가 "3개마다"가 아니라 "화면
+        #    하나가 끝나는 자리"에 떨어진다. 품질을 지키면서 호출을 줄이는
+        #    자리가 여기다 — 묶을 수 있어서 묶는 것이 아니라, **콘티가 한
+        #    화면이라고 말한 것끼리** 묶는 것이다.
+        #
+        #    그 안을 다시 나누는 건 **캔버스가 감당하는 만큼**이다. 개수
+        #    상한(max_cuts_per_scene)은 0 — 끄고 간다. 캔버스는 9:16 이
+        #    최대라, 컷을 쌓다가 그 세로를 넘기면 모델이 남는 폭에 컷을
+        #    나란히 놓는다(세로 스크롤이 아니라 만화 페이지). 넘치기 직전에
+        #    끊으면 개수를 정하지 않고도 그 자리를 피한다 — impact 는 혼자
+        #    한 장, wide 둘은 한 장, 이건 컷의 size 가 정한다.
+        text = re.sub(r"(?m)^  grouping:.*$", "  grouping: rhythm", text, count=1)
+        text = re.sub(r"(?m)^  max_cuts_per_scene:.*$",
+                      f"  max_cuts_per_scene: {WEBTOON_MAX_CUTS}", text, count=1)
+        text = re.sub(r"(?m)^  fit_to_canvas:.*$",
+                      "  fit_to_canvas: true", text, count=1)
 
     out = job_dir / "config.yaml"
     out.write_text(text, encoding="utf-8")
@@ -413,6 +453,32 @@ def world_presets() -> list[dict[str, str]]:
             "text": text,
         })
     return out
+
+
+def _drop_job_photos(job) -> None:
+    """시트가 승인되면 올린 사진을 지운다.
+
+    화면이 "올린 사진은 캐릭터를 만드는 데만 씁니다" 라고 말하는데 지우는
+    코드가 없어서, jobs/<job_id>/photoN.png 가 영영 남아 있었다. 남아 있는
+    동안은 /api/jobs/<id>/photo 로 꺼낼 수도 있었다.
+
+    character.json 의 경로는 그대로 둔다 — 그 파일을 다시 여는 단계가 없고
+    (read_character 는 이야기 단계에서 한 번만 부른다), 지우면 옛 job 을 다시
+    열었을 때 모양이 달라진다. 파일이 없어지는 것으로 충분하다.
+    """
+    gone = 0
+    for path in job_photos(job.dir):
+        try:
+            path.unlink()
+            gone += 1
+        except OSError:
+            pass                        # 못 지워도 만드는 것 자체는 안 막는다
+    if gone:
+        # has_photo 를 같이 내린다 — 파일만 지우고 표시를 남기면 화면이
+        # "사진이 있다" 고 믿고 빈 자리를 그린다.
+        job.has_photo = False
+        job.note(f"올린 사진 {gone}장을 지웠습니다 — 시트가 나왔으니 더 쓰지 않습니다")
+        job.save()
 
 
 def write_character(job_dir: Path, form: dict[str, Any]) -> Path:
@@ -708,6 +774,18 @@ class Job:
                 "art_qa": (art_qa_summary(self.run_id, self.episode)
                            if self.status == "awaiting_artqa_approval" and self.run_id
                            else None),
+                # 확인 화면이 **무엇을** 확인할지. 그 단계에서만 읽는다 —
+                # 매 폴링(0.8초)마다 run 폴더를 뒤지는 것은 헛일이다.
+                #
+                # 이것이 없던 동안 스토리·콘티 확인 화면은 "이대로 진행할까요?"
+                # 만 묻고 정작 이야기를 안 보여줬다. 사람은 게이트가 무엇에
+                # 걸렸는지만 읽고 찍어서 눌러야 했다.
+                "story_preview": (story_preview(self.run_id)
+                                  if self.status == "awaiting_story_approval"
+                                  and self.run_id else None),
+                "board_preview": (board_preview(self.run_id, self.episode)
+                                  if self.status == "awaiting_board_approval"
+                                  and self.run_id else None),
             }
 
     # ---- 저장 · 복원 -------------------------------------------------------- #
@@ -1142,7 +1220,11 @@ def _more_cuts_stages(job: "Job", run_id: str, job_dir: Path) -> None:
     run.py 가 이미 있는 장을 재사용하고 이어 붙이기만 다시 한다).
     """
     first = int(job.cut_from)
-    last = first + CUTS_PER_SHEET - 1
+    # 끝까지 그린다. 예전에는 다음 한 장(3컷)만 그려서 "이어서 보기"를 서너 번
+    # 눌러야 했다 — 이제 남은 것 전부를 한 번에 그리고 값도 한 번에 받는다
+    # (serve 의 /continue 가 남은 장면 수 × 장당 값으로 계산).
+    total = planned_cuts(run_id, job.episode)
+    last = total if total >= first else first + CUTS_PER_SHEET - 1
 
     _enter(job, 0)
     job.note(f"{first}~{last}컷을 그리는 중")
@@ -1229,7 +1311,8 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
                "--mode", mode, "-c", CONDITION, "--style", job.style,
                "--config", str(job_dir / "config.yaml"), "--yes"]
     if job.preview:
-        art_cmd += ["--cuts", f"1-{CUTS_PER_SHEET}"]
+        half = max(CUTS_PER_SHEET, -(-planned_cuts(run_id, job.episode) // 2))
+        art_cmd += ["--cuts", f"1-{half}"]
 
     def art_or_bind(line: str) -> None:
         if job.stage_i == 1 and (line.startswith("episode.png")
@@ -1456,6 +1539,13 @@ def execute(job: Job) -> None:
             if job._cancel:
                 raise Failed("취소됨")
             if decision != "retry":
+                # 승인된 순간부터 올린 사진은 쓸 데가 없다. 사진을 여는 곳은
+                # 둘뿐이고(이야기 단계의 LOOK, 시트 그리기) 둘 다 지나왔다 —
+                # 뒤 단계는 시트 그림만 본다. 그래서 여기서 지운다.
+                #
+                # 승인 **전**에는 못 지운다. 「수정 후 다시 만들기」가 같은
+                # 사진으로 시트를 다시 그리기 때문이다.
+                _drop_job_photos(job)
                 break                   # approve (또는 알 수 없는 값 — 진행 쪽이 안전)
             if edit_fields:
                 job.note("고친 내용을 저장하는 중")
@@ -1551,10 +1641,15 @@ def execute(job: Job) -> None:
                "--mode", mode, "-c", CONDITION, "--style", job.style,
                "--config", str(job_dir / "config.yaml"), "--yes"]
         if job.preview:
-            # Scene 모드에서 --cuts 는 "그 컷이 들어 있는 장"을 고르므로 1~3 이
-            # 첫 장 하나(=3컷)다. 컷 모드에서는 말 그대로 컷 1~3 이라, 어느
-            # 쪽이든 "앞 3컷"이 되어 미리보기의 뜻이 같다.
-            cmd += ["--cuts", f"1-{CUTS_PER_SHEET}"]
+            # 미리보기 = **전체의 절반가량.** 이 자리는 콘티(webtoon.py)가
+            # 이미 끝난 뒤라 이 화의 실제 컷 수를 안다 — 고정 컷 수(앞 3컷,
+            # 앞 6컷)로 자르면 컷이 많은 화에서는 감질맛만 나고 적은 화에서는
+            # 미리보기가 거의 전부가 된다. 절반은 이야기가 어디로 가는지
+            # 읽히는 최소 분량이다. 컷을 이미지로 어떻게 묶을지는 run.py 가
+            # 정하므로(1컷=1장일 수도, 여러 컷=1장일 수도) 여기서는 컷 기준
+            # 절반만 자르고, 값 계산은 그려진 뒤의 실제 장 수로 한다.
+            half = max(CUTS_PER_SHEET, -(-planned_cuts(run_id, 1) // 2))
+            cmd += ["--cuts", f"1-{half}"]
 
         def art_or_bind(line: str) -> None:
             # episode.png 줄이 보이는 순간 마지막 단계로 넘어간다.
@@ -1719,6 +1814,10 @@ def _scene_numbers(run_id: str, episode: int = 1) -> list[int]:
 def _scene_layout(run_id: str, episode: int = 1) -> dict[int, tuple[int, str]]:
     """장 번호 -> (gap_after, weight). overlay.bake() 가 다시 이어 붙일 때 쓴다.
 
+    **편집실에서 고친 여백이 있으면 그것이 이긴다.** 콘티가 정한 gap_after 는
+    글로 읽고 계산한 값이라, 그림이 나온 뒤에 보면 너무 붙었거나 너무 벌어져
+    있을 수 있다. 그때 사람이 화면에서 고친 값이 최종본까지 그대로 가야 한다.
+
     scenegen.Scene.gap_after/.weight 와 같은 규칙이다(마지막 컷의 gap_after,
     첫 컷의 weight) — 여기는 Scene 객체가 없어 원본 컷 dict 에서 직접 뽑는다.
     scenes.json 이 없는 옛 화(컷 하나 = 장 하나)는 빈 dict 를 돌려주고, 그러면
@@ -1742,7 +1841,132 @@ def _scene_layout(run_id: str, episode: int = 1) -> dict[int, tuple[int, str]]:
         gap = gap if isinstance(gap, int) and 0 <= gap <= 3 else 1
         weight = str(first.get("weight") or "normal").strip().lower()
         out[no] = (gap, weight if weight in ("full", "normal", "light") else "normal")
+
+    for no, g in overlay.gap_overrides(overlay.load_overlay(ep_dir)).items():
+        if no in out:
+            out[no] = (g, out[no][1])
     return out
+
+
+def _strip_gap_table() -> dict[int, float]:
+    """하네스 기본 여백 눈금. config 를 못 찾은 옛 run 이 쓴다."""
+    try:
+        import strip as _strip                                  # noqa: PLC0415
+        return _strip.gap_ratio_table()
+    except Exception:                                           # noqa: BLE001
+        return {0: 0.0, 1: 0.07, 2: 0.26, 3: 0.62}
+
+
+def _width_ratio(weight: str) -> float:
+    """그 무게의 컷이 쓰는 지면 폭(배)."""
+    try:
+        import strip as _strip                                  # noqa: PLC0415
+        return float(_strip.width_ratio({"weight": weight}))
+    except Exception:                                           # noqa: BLE001
+        return 0.55 if str(weight).strip().lower() == "light" else 1.0
+
+
+def _run_gap_table(run_id: str) -> dict[int, float] | None:
+    """그 실행이 실제로 쓴 여백 눈금(scene.gap_ratio). 못 찾으면 None.
+
+    하네스 기본은 {0:0, 1:0.07, 2:0.26, 3:0.62} 인데 "웹툰" 연출은 이것을
+    {0:0, 1:0.16, 2:0.32, 3:0.90} 으로 덮어쓴다. 다시 구울 때 기본값으로 이으면
+    같은 화가 원본보다 절반쯤 촘촘해진다 — 세로 스크롤에서 여백은 장식이 아니라
+    호흡이라, 그만큼 다른 작품이 된다.
+    """
+    cfg = _origin_config(run_id)
+    if not cfg:
+        return None
+    try:
+        text = cfg.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r"(?m)^  gap_ratio:\s*\{(.*?)\}\s*$", text)
+    if not m:
+        return None
+    out: dict[int, float] = {}
+    for k, v in re.findall(r"(\d+)\s*:\s*([\d.]+)", m.group(1)):
+        try:
+            out[int(k)] = float(v)
+        except ValueError:
+            continue
+    return out or None
+
+
+def _mtime(p: Path | None) -> float:
+    try:
+        return p.stat().st_mtime if p else 0.0
+    except OSError:
+        return 0.0
+
+
+def final_unit(run_id: str, no: int, episode: int = 1) -> Path | None:
+    """화면과 내려받기가 **실제로 내보내는** 장 그림.
+
+    편집실에서 얹은 말풍선·스티커가 있으면 그것이 구워진 그림을 준다. 없으면
+    원본 그대로다. 전에는 모든 보는 자리가 원본(unit_image)만 봐서, 편집실에서
+    얹고 저장해도 결과 화면·둘러보기·내려받기에는 안 나왔다 — 저장은 되는데
+    아무 데도 안 보이니 저장이 안 된 것과 같았다.
+
+    굽기는 **볼 때** 한다. 저장할 때마다 한 편을 통째로 구우면 말풍선 한 번
+    옮길 때마다 그 일을 다 하게 된다. 대신 밑그림이나 얹은 것이 구운 것보다
+    새로우면(다시 그렸거나 방금 고쳤으면) 그 장만 다시 굽는다.
+    """
+    base = unit_image(run_id, no, episode)
+    if not base:
+        return None
+    ep_dir = episode_dir(run_id, episode)
+    ov = overlay.overlay_path(ep_dir)
+    if not ov.exists():
+        return base
+    try:
+        data = overlay.load_overlay(ep_dir)
+    except Exception:                                           # noqa: BLE001
+        return base
+    if not overlay.has_items(data, no):
+        return base
+    out = overlay.baked_scene_path(ep_dir, no)
+    if _mtime(out) >= max(_mtime(base), _mtime(ov)):
+        return out
+    try:
+        return overlay.bake_one(ep_dir, no, base, data)
+    except Exception:                                           # noqa: BLE001
+        # 구우려다 실패했다고 화면이 비면 안 된다 — 원본이라도 보여 준다.
+        return base
+
+
+def final_episode(run_id: str, episode: int = 1) -> Path:
+    """내려받기가 내보내는 **한 편**. 얹은 것이 있으면 구운 판이다.
+
+    final_unit 과 같은 규칙이되 한 편이라 통째로 굽는다. 얹은 것이 하나도
+    없으면 원본 episode.png 를 그대로 준다 — 굽는 값이 없다.
+    """
+    ep_dir = episode_dir(run_id, episode)
+    plain = ep_dir / "episode.png"
+    ov = overlay.overlay_path(ep_dir)
+    if not ov.exists():
+        return plain
+    try:
+        data = overlay.load_overlay(ep_dir)
+    except Exception:                                           # noqa: BLE001
+        return plain
+    # scenes.json 도 콘티도 없는 화(옛 실행·부분 복구)는 그려 둔 그림을 센다 —
+    # 목록을 못 만들면 얹은 것이 있어도 굽지 못하고 원본이 나간다.
+    numbers = (_scene_numbers(run_id, episode)
+               or list(range(1, drawn_units(run_id, episode) + 1)))
+    if not any(overlay.has_items(data, n) for n in numbers):
+        return plain
+    out = overlay.baked_episode_path(ep_dir)
+    newest = max([_mtime(ov)] + [_mtime(unit_image(run_id, n, episode))
+                                 for n in numbers])
+    if _mtime(out) >= newest:
+        return out
+    try:
+        overlay.bake(ep_dir, numbers, lambda n: unit_image(run_id, n, episode),
+                     data, _scene_layout(run_id, episode), _run_gap_table(run_id))
+    except Exception:                                           # noqa: BLE001
+        return plain
+    return out if out.exists() else plain
 
 
 def read_overlay(run_id: str, episode: int = 1) -> dict[str, Any]:
@@ -1781,7 +2005,8 @@ def bake_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
     try:
         res = overlay.bake(ep_dir, numbers,
                            lambda n: unit_image(run_id, n, episode), data,
-                           _scene_layout(run_id, episode))
+                           _scene_layout(run_id, episode),
+                           _run_gap_table(run_id))
     except overlay.OverlayError as exc:
         raise Failed(str(exc)) from exc
     res["url"] = f"/api/runs/{run_id}/baked.png?ep={int(episode)}"
@@ -1915,6 +2140,84 @@ def read_refusals(run_id: str, episode: int = 1, limit: int = 20) -> list[dict[s
     except OSError:
         return []
     return out[-limit:]
+
+
+# --------------------------------------------------------------------------- #
+# 승인 화면이 보여줄 것
+# --------------------------------------------------------------------------- #
+#
+# 스토리·콘티 확인 화면은 "이대로 진행할까요?" 를 묻는 자리인데, 정작 **무엇을**
+# 진행할지를 안 보여주고 있었다. 사람은 게이트가 무엇에 걸렸는지만 읽고
+# 찍어서 눌러야 했다 — 확인이 아니라 도박이다.
+#
+# 두 함수 모두 없는 값에는 관대하다. 승인 화면은 이미 "뭔가 잘 안 된" 자리라
+# (게이트가 소진돼서 왔다) 파일이 덜 씌어 있을 수 있는데, 여기서 터지면
+# 화면이 아예 안 뜨고 사용자는 진행도 취소도 못 한다.
+
+def story_preview(run_id: str) -> dict[str, Any]:
+    """스토리 단계까지 나온 것 — 제목 · 로그라인 · 훅 · 장면들."""
+    run_dir = STORY / "runs" / run_id
+    scenes_doc = _read_json(run_dir, "scenes.json")
+    p1 = _read_json(run_dir, "p1.json")
+    p2 = _read_json(run_dir, "p2.json")
+    scenes = []
+    for s in (scenes_doc.get("scenes") or []):
+        if not isinstance(s, dict):
+            continue
+        scenes.append({
+            "no": int(s.get("no") or len(scenes) + 1),
+            "one_line": str(s.get("one_line") or "").strip(),
+            "text": str(s.get("text") or "").strip(),
+            # 무엇이 달라졌는가 — 장면이 이야기를 실제로 움직였는지 보는 값이다.
+            "changed": str(s.get("changed") or "").strip(),
+        })
+    return {
+        "title": str(scenes_doc.get("title") or "").strip(),
+        "hook": str(scenes_doc.get("hook") or "").strip(),
+        "logline": str(p2.get("logline") or "").strip(),
+        "character": str(p1.get("name") or "").strip(),
+        "personality": str(p1.get("personality") or "").strip(),
+        "scenes": scenes,
+    }
+
+
+def board_preview(run_id: str, episode: int = 1) -> dict[str, Any]:
+    """콘티 단계까지 나온 것 — 회차 제목과 컷별 대사·연출.
+
+    정식 파일이 없으면 **초안**(epNN_cuts.draft.json)을 읽는다. 게이트 재시도가
+    소진되면 하네스가 정식 파일 대신 마지막 시도를 초안으로 남긴다 — 예전에는
+    그마저 버려져서, 확인 화면이 "콘티를 확인해 주세요" 라고 말하면서 보여줄
+    콘티가 없었다.
+    """
+    wt = STORY / "runs" / run_id / "webtoon"
+    doc = _read_json(wt, f"ep{int(episode):02d}_cuts.json")
+    draft = False
+    if not doc:
+        doc = _read_json(wt, f"ep{int(episode):02d}_cuts.draft.json")
+        draft = bool(doc)
+    cuts = []
+    raw = doc.get("cuts") if isinstance(doc, dict) else doc
+    for c in (raw or []):
+        if not isinstance(c, dict):
+            continue
+        cuts.append({
+            "no": int(c.get("cut_number") or c.get("no") or len(cuts) + 1),
+            "shot": str(c.get("shot") or "").strip(),
+            "speaker": str(c.get("speaker") or "").strip(),
+            "dialogue": str(c.get("dialogue") or "").strip(),
+            "narration": str(c.get("narration") or "").strip(),
+            "thought": str(c.get("thought") or "").strip(),
+            "sfx": str(c.get("sfx") or "").strip(),
+            "description": str(c.get("description") or "").strip(),
+        })
+    return {
+        "title": episode_title(run_id, episode),
+        "episode": int(episode),
+        "cuts": cuts,
+        # 초안이면 화면이 "게이트에 걸린 마지막 시도" 라고 말해 준다 —
+        # 통과한 콘티처럼 보이면 안 된다.
+        "draft": draft,
+    }
 
 
 def read_art_qa(run_id: str, episode: int = 1) -> dict[int, dict[str, Any]]:
@@ -2228,6 +2531,17 @@ def unit_image(run_id: str, no: int, episode: int = 1) -> Path | None:
                 if p1.exists():
                     return p1
     return None
+
+
+def planned_pages(run_id: str, episode: int = 1) -> int:
+    """이 회차가 필요로 하는 이미지 장 수 — 콘티 뒤 scenes.json 의 묶음 수.
+
+    scenes.json 은 화당 1회, --cuts 로 일부만 그려도 **전체** 묶음을 캐시한다
+    (run.py generate_scenes). 그래서 미리보기만 그린 시점에도 남은 장 수를
+    정확히 알 수 있다 — "마저 그리기" 값이 여기서 나온다. 없으면 0.
+    """
+    grouping = _read_json(episode_dir(run_id, episode), "scenes.json").get("scenes") or []
+    return len(grouping)
 
 
 def drawn_units(run_id: str, episode: int = 1) -> int:
@@ -2939,6 +3253,11 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
     if not grouping:
         grouping = [{"scene_number": n, "cut_numbers": [n]} for n in sorted(by_no)]
 
+    # 화면도 파일과 **같은 여백·같은 폭**으로 이어야 한다. 전에는 이 값이
+    # 아예 안 실려서 리더가 장을 딱 붙여 그렸다 — 내려받은 episode.png 에는
+    # 여백이 있는데 화면에는 없어서, 보고 만든 것과 받은 것이 서로 달랐다.
+    layout = _scene_layout(run_id, episode)
+    gaps = _run_gap_table(run_id) or _strip_gap_table()
     scenes = []
     for sc in grouping:
         no = int(sc.get("scene_number") or 0)
@@ -2946,10 +3265,20 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
         if not src:
             continue
         w, h = _image_size(src)
+        gap_after, weight = layout.get(no, (0, "normal"))
         scenes.append({
             "no": no,
             "image": f"/api/runs/{run_id}/page/{no}" + _ep_q(episode),
             "w": w, "h": h,
+            # 아래 여백 — 지면 폭의 몇 배인가 (episode.stitch 와 같은 눈금).
+            "gap": round(float(gaps.get(int(gap_after), 0.0)), 4),
+            # 그 여백이 몇 단인가 (0 붙임 · 1 한 박자 · 2 쉼 · 3 크게 쉼).
+            # 편집실이 이 단을 올리고 내려서 여백을 고친다 — 배수를 직접
+            # 만지면 콘티가 쓰는 눈금과 다른 값이 생겨서, 다시 구울 때 맞출
+            # 기준이 없어진다.
+            "gap_step": int(gap_after),
+            # 이 장이 쓰는 지면 폭 — 떠 있는 컷(light)은 좁게 들어간다.
+            "width": round(_width_ratio(weight), 4),
             "cuts": [cut_card(by_no[n]) for n in (sc.get("cut_numbers") or [])
                      if n in by_no],
         })
@@ -2959,6 +3288,9 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
         "run_id": run_id,
         "episode": int(episode),
         "episodes": planned,
+        # 단(0~3) -> 지면 폭의 몇 배. 편집실이 여백을 바꿀 때 이 표로 미리
+        # 그린다 — 서버에 물어보고 기다리면 끌면서 볼 수가 없다.
+        "gap_scale": {str(k): round(float(v), 4) for k, v in sorted(gaps.items())},
         "next_episode": (planned[-1] + 1) if planned else 1,
         "title": episode_title(run_id, episode) or f"{int(episode)}화",
         "character": str(p1.get("name") or ""),
@@ -3098,6 +3430,11 @@ def _result_body(run_id: str, episode: int, style_label: str) -> dict[str, Any]:
         # 컷 모드로 되돌렸거나 아직 묶기 전 — 컷 하나를 한 장으로 본다.
         grouping = [{"scene_number": n, "cut_numbers": [n]} for n in sorted(by_no)]
 
+    # 결과 화면도 파일과 같은 여백·폭으로 잇는다 (편집실이 쓰는 /episode 와
+    # 같은 값 — 두 화면이 다른 리듬으로 보이면 어느 쪽이 진짜인지 알 수 없다).
+    layout = _scene_layout(run_id, episode)
+    gap_table = _run_gap_table(run_id) or _strip_gap_table()
+
     pages, drawn_cuts = [], 0
     for sc in grouping:
         no = int(sc.get("scene_number") or 0)
@@ -3106,7 +3443,10 @@ def _result_body(run_id: str, episode: int, style_label: str) -> dict[str, Any]:
         cards = [cut_card(by_no[n]) for n in (sc.get("cut_numbers") or [])
                  if n in by_no]
         drawn_cuts += len(cards)
-        pages.append({"no": no, "cuts": cards})
+        gap_after, weight = layout.get(no, (0, "normal"))
+        pages.append({"no": no, "cuts": cards,
+                      "gap": round(float(gap_table.get(int(gap_after), 0.0)), 4),
+                      "width": round(_width_ratio(weight), 4)})
 
     ep_png = ep_dir / "episode.png"
     planned = made_episodes(run_id)
@@ -3118,6 +3458,8 @@ def _result_body(run_id: str, episode: int, style_label: str) -> dict[str, Any]:
         "genre": str(load(run_dir, "meta.json").get("input", {}).get("genre") or ""),
         "style_label": style_label,
         "cuts_per_sheet": CUTS_PER_SHEET,
+        # 이어 그리기 값 계산용 — 웹툰 연출이면 장당 값이 3배다(page_cost).
+        "layout_mode": layout_mode(origin_form(run_id) or {}),
         "pages": pages,
         "page_count": len(pages),
         "cut_count": drawn_cuts,

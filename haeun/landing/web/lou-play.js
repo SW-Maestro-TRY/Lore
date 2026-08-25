@@ -33,6 +33,17 @@ let touchedAt = 0;      // 마지막으로 사람이 만진 시각
 
 const pick = list => list[Math.floor(Math.random() * list.length)];
 
+/* 가끔 다른 판(그림체가 같은 시트에서 온 대안 컷)으로 논다 — 매번 똑같으면
+   심심하다. `<kind>_alt` 가 manifest 에 있을 때만 후보가 된다(없으면 그냥
+   kind 그대로). 한 번의 반응(예: 연속 클릭 한 세션, 드래그 한 번) 안에서는
+   같은 판을 끝까지 써야 컷마다 그림체가 튀지 않는다 — 그래서 반응이
+   **시작할 때 한 번만** 고르고, 그 반응이 끝날 때까지 그대로 쓴다. */
+const ALT_CHANCE = 0.15;
+function pickKind(base) {
+  const alt = base + "_alt";
+  return (art && art[alt] && Math.random() < ALT_CHANCE) ? alt : base;
+}
+
 function say(text) {
   const el = $("#playSay");
   if (el) el.textContent = text;
@@ -169,7 +180,7 @@ function canShake() {
 function fireShake(hold = 1500, after) {
   shakeAt = Date.now();
   touchedAt = Date.now();
-  play("shake", 380, hold, after || rest);
+  play(pickKind("shake"), 380, hold, after || rest);
 }
 
 function onShake(e) {
@@ -247,6 +258,10 @@ async function setupLou() {
   let down = false, sx = 0, sy = 0, ox = 0, oy = 0, at = 0;
   let far = 0, turns = 0, lastDir = 0, dragging = false;
   let clicks = 0, clickWindow = null, holdTimer = null;
+  // 연속 클릭 한 세션, 드래그 한 번 안에서는 컷마다 그림체가 안 튀도록
+  // 시작할 때 고른 판을 끝까지 쓴다 (pickKind 주석 참고).
+  let multiclickKind = "multiclick";
+  let dragKind = "drag";
   // 잡고 흔들기 — 끄는 중에 방향이 바뀐 시각들. 짧은 사이에 여러 번 바뀌면
   // "흔든다"로 본다. 오래된 것은 버려서, 천천히 왔다 갔다 하는 것과 구분한다.
   let flips = [];
@@ -267,13 +282,14 @@ async function setupLou() {
     }
     clicks += 1;
     clearTimeout(clickWindow);
-    clickWindow = setTimeout(() => { clicks = 0; }, 1500);
+    clickWindow = setTimeout(() => { clicks = 0; multiclickKind = "multiclick"; }, 1500);
     if (clicks === 1) { one("click"); return; }
+    if (clicks === 2) multiclickKind = pickKind("multiclick");   // 이 세션에서 쓸 판을 한 번만 고른다
     // 연달아 누르면 점점 화난다 — 누른 횟수가 그대로 컷 번호가 된다
     clearTimeout(timer);
     busy = true;
-    box.dataset.react = "multiclick";
-    show("multiclick", Math.min(clicks - 1, art.multiclick.frames.length - 1));
+    box.dataset.react = multiclickKind;
+    show(multiclickKind, Math.min(clicks - 1, art[multiclickKind].frames.length - 1));
     timer = setTimeout(rest, 1800);
   };
 
@@ -309,11 +325,12 @@ async function setupLou() {
     if (far > 60) {                          // 멀리 끌면 따라온다
       if (!dragging) {
         dragging = true;
+        dragKind = pickKind("drag");             // 이 드래그 한 번 동안 쓸 판을 고른다
         clearTimeout(holdTimer); clearTimeout(timer);
         busy = true;
         box.dataset.grab = "1";
-        box.dataset.react = "drag";
-        show("drag", 0);
+        box.dataset.react = dragKind;
+        show(dragKind, 0);
       }
       const sr = stage.getBoundingClientRect();
       const w = box.offsetWidth / 2, h = box.offsetHeight / 2;
@@ -334,15 +351,15 @@ async function setupLou() {
             dragShaking = false;
             if (!down || !dragging) return rest();   // 그새 놓았으면 그냥 마무리
             busy = true;
-            box.dataset.react = "drag";
-            show("drag", Math.min(1, art.drag.frames.length - 1));
+            box.dataset.react = dragKind;
+            show(dragKind, Math.min(1, art[dragKind].frames.length - 1));
           });
         }
       }
     } else if (turns >= 3 && !dragging) {    // 제자리에서 문지르면 쓰다듬기
       turns = 0;
       clearTimeout(holdTimer);
-      play("pet", 620, 1400);
+      play(pickKind("pet"), 620, 1400);
     }
   });
 
@@ -357,7 +374,7 @@ async function setupLou() {
     if (dragging) {                          // 놓아주면 기뻐하고 제자리로
       home();
       if (dragShaking) return;   // 흔들기 재생 중 — 끝나면 play 의 after 가 마무리한다
-      show("drag", art.drag.frames.length - 1);
+      show(dragKind, art[dragKind].frames.length - 1);
       clearTimeout(timer);
       timer = setTimeout(rest, 1400);
       return;
