@@ -140,9 +140,36 @@
       <div class="charge-cards" id="chargeCards"></div>
     </div>
 
+    <!-- 실제 PG 흐름처럼 카드사 다음에 결제 방식(앱/웹)을 고른다.
+         프리토타이핑: 구매 의사를 마지막 확인까지 측정하는 것이 목적이라
+         걸음을 실제와 같게 두되, **카드번호를 넣는 화면은 여전히 없다.** -->
+    <div class="charge-step" data-charge-step="method" hidden>
+      <button type="button" class="charge-back" id="chargeBackToCard">‹ 결제 수단 다시 고르기</button>
+      <h3 id="chargeMethodTitle">결제 방식을 골라 주세요</h3>
+      <p class="charge-pkg-summary" id="chargeMethodSummary"></p>
+      <div class="charge-cards">
+        <button type="button" class="charge-card" data-method="app">
+          📱 앱 결제<small>카드사 앱으로 이동해 인증</small></button>
+        <button type="button" class="charge-card" data-method="web">
+          💳 웹 결제<small>카드번호 직접 입력</small></button>
+        <button type="button" class="charge-card" data-method="simple">
+          ⚡ 간편 결제<small>등록된 결제 수단으로 바로</small></button>
+      </div>
+    </div>
+
+    <div class="charge-step" data-charge-step="confirm" hidden>
+      <h3>정말 결제하시겠습니까?</h3>
+      <div class="charge-confirm-box" id="chargeConfirmBox"></div>
+      <p class="charge-confirm-note">결제 즉시 크레딧이 충전됩니다.</p>
+      <div class="charge-confirm-actions">
+        <button type="button" class="btn btn-quiet" id="chargeConfirmNo">취소</button>
+        <button type="button" class="btn btn-primary" id="chargeConfirmYes">결제하기</button>
+      </div>
+    </div>
+
     <div class="charge-step" data-charge-step="done" hidden>
-      <div class="charge-done-emoji">🎉</div>
-      <h3>결제가 완료됐어요</h3>
+      <div class="charge-done-emoji" id="chargeDoneEmoji">🎉</div>
+      <h3 id="chargeDoneTitle">결제가 완료됐어요</h3>
       <p id="chargeDoneBody"></p>
       <button type="button" class="btn btn-primary btn-big" id="chargeDoneClose">확인</button>
     </div>

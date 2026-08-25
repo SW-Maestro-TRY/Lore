@@ -509,6 +509,20 @@ function paintCost() {
 
 const CARD_ISSUERS = ["신한카드", "국민카드", "삼성카드", "현대카드", "카카오페이", "토스페이"];
 let chargeSelectedPkg = null;
+let chargeSelectedCard = "";
+let chargeSelectedMethod = "";
+
+const CHARGE_METHOD_LABELS = { app: "앱 결제", web: "웹 결제", simple: "간편 결제" };
+
+function showChargeConfirm() {
+  const pkg = chargeSelectedPkg;
+  if (!pkg) return;
+  $("#chargeConfirmBox").innerHTML = `
+    <div class="charge-confirm-row"><span>상품</span><b>${pkg.emoji || ""} ${pkg.label} · ${pkg.credits.toLocaleString("ko-KR")}크레딧</b></div>
+    <div class="charge-confirm-row"><span>결제 수단</span><b>${chargeSelectedCard} · ${CHARGE_METHOD_LABELS[chargeSelectedMethod] || ""}</b></div>
+    <div class="charge-confirm-row charge-confirm-total"><span>결제 금액</span><b>${pkg.price.toLocaleString("ko-KR")}원</b></div>`;
+  chargeStep("confirm");
+}
 
 function chargeStep(name) {
   $$(".charge-step").forEach(el => { el.hidden = el.dataset.chargeStep !== name; });
@@ -522,9 +536,10 @@ function renderChargePackages() {
     b.type = "button";
     b.className = "charge-pkg";
     b.innerHTML = `${pkg.badge ? `<span class="charge-pkg-badge">${pkg.badge}</span>` : ""}
-      <span class="charge-pkg-label">${pkg.label}</span>
+      <span class="charge-pkg-label">${pkg.emoji ? pkg.emoji + " " : ""}${pkg.label}</span>
       <span class="charge-pkg-credits">${pkg.credits.toLocaleString("ko-KR")} 크레딧</span>
-      <span class="charge-pkg-price">${pkg.price.toLocaleString("ko-KR")}원</span>`;
+      <span class="charge-pkg-price">${pkg.price.toLocaleString("ko-KR")}원</span>
+      ${pkg.tagline ? `<span class="charge-pkg-tag">${pkg.tagline}</span>` : ""}`;
     b.addEventListener("click", () => {
       chargeSelectedPkg = pkg;
       $("#chargePkgSummary").textContent =
@@ -544,7 +559,14 @@ function renderChargeCards() {
     b.type = "button";
     b.className = "charge-card";
     b.textContent = name;
-    b.addEventListener("click", finishCharge);
+    // 실제 PG 처럼 카드사 → 결제 방식(앱/웹/간편) → 최종 확인 순서다.
+    // 프리토타이핑: 마지막 확인까지 간 사람 수가 진짜 지불 의사다.
+    b.addEventListener("click", () => {
+      chargeSelectedCard = name;
+      $("#chargeMethodTitle").textContent = `${name} 결제 방식`;
+      $("#chargeMethodSummary").textContent = $("#chargePkgSummary").textContent;
+      chargeStep("method");
+    });
     box.appendChild(b);
   });
 }
@@ -552,7 +574,9 @@ function renderChargeCards() {
 async function finishCharge() {
   if (!chargeSelectedPkg) return;
   chargeStep("done");
-  $("#chargeDoneBody").textContent = "결제 처리 중…";
+  $("#chargeDoneEmoji").textContent = "⏳";
+  $("#chargeDoneTitle").textContent = "결제 처리 중";
+  $("#chargeDoneBody").textContent = "카드사와 통신하고 있어요…";
   try {
     const res = await fetch("/api/credits/charge", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -562,10 +586,15 @@ async function finishCharge() {
     if (!res.ok) throw new Error(data.error || "결제에 실패했습니다");
     creditBalance = data.balance;
     paintCreditPill();
-    $("#chargeDoneBody").textContent =
-      `${data.credits_added.toLocaleString("ko-KR")}크레딧이 들어왔어요. `
-      + "(지금은 정식 결제 붙기 전 테스트 기간이라, 이번 결제는 저희가 대신 "
-      + "내드렸어요 — 실제로 카드에서 빠져나간 돈은 없습니다!)";
+    // 반전 — 끝까지 결제할 마음이었던 사람에게만 보인다. 여기 도달 수가
+    // 프리토타이핑이 재는 진짜 지불 의사이고, 돈은 실제로 안 빠져나간다.
+    $("#chargeDoneEmoji").textContent = "🎁";
+    $("#chargeDoneTitle").textContent = "짜잔 — 이벤트에 당첨되셨어요!";
+    $("#chargeDoneBody").innerHTML =
+      `지금은 오픈 준비 기간이라, <b>이번 충전은 저희가 선물로 드려요.</b><br>`
+      + `${chargeSelectedPkg.emoji || ""} ${chargeSelectedPkg.label} `
+      + `${data.credits_added.toLocaleString("ko-KR")}크레딧이 방금 들어왔고, `
+      + `카드에서 빠져나간 돈은 없습니다.`;
   } catch (err) {
     $("#chargeDoneBody").textContent = err.message;
   }
@@ -2923,6 +2952,14 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#myChargeBtn")?.addEventListener("click", openChargeModal);
   $("#chargeModalClose").addEventListener("click", closeChargeModal);
   $("#chargeBack").addEventListener("click", () => chargeStep("package"));
+  $("#chargeBackToCard").addEventListener("click", () => chargeStep("card"));
+  document.querySelectorAll("[data-method]").forEach(b =>
+    b.addEventListener("click", () => {
+      chargeSelectedMethod = b.dataset.method;
+      showChargeConfirm();
+    }));
+  $("#chargeConfirmNo").addEventListener("click", () => chargeStep("method"));
+  $("#chargeConfirmYes").addEventListener("click", finishCharge);
   $("#chargeDoneClose").addEventListener("click", closeChargeModal);
   // 바탕을 눌러도 닫힌다 — 상자 자체를 누른 건 안 닫는다.
   $("#chargeModal").addEventListener("click", e => {
