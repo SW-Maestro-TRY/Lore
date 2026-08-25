@@ -2061,3 +2061,85 @@ body.modal-open { overflow: hidden; }
 .charge-confirm-actions .btn { min-height: 44px; }
 .charge-lede { margin: -0.4em 0 .2em; font-size: .84rem; color: var(--muted); }
 .charge-packages { display: grid; gap: 12px; margin-top: 14px; }
+
+/* ------------------------------------------------- 떠 있는 진행 표시(mini)
+
+   만드는 중에 다른 화면으로 가면 따라붙는 동그란 표시. 웹툰 한 편은 몇 분이
+   걸리는데 그동안 진행 화면에 묶어 두면 기다림이 곱절로 길다 — 나가서 남의
+   작품을 보다 와도 되게 하고, 대신 지금 어디까지 왔는지를 이것이 들고 다닌다.
+
+   앱은 480px 한 컬럼이라 fixed 로 두면 넓은 화면에서 컬럼 바깥으로 나간다.
+   자리는 app.js 가 body 의 실제 폭 안으로 가둬서 잡는다(clamp). */
+.minip {
+  position: fixed; z-index: 120; width: 62px; height: 62px;
+  touch-action: none;                    /* 끌 때 화면이 같이 안 밀리게 */
+}
+.minip[data-dragging] { cursor: grabbing; }
+.minip-body {
+  width: 100%; height: 100%; padding: 0; border: none; border-radius: 50%;
+  position: relative; cursor: grab; background: var(--card);
+  box-shadow: 0 6px 20px rgba(38,64,58,.24), 0 0 0 1px rgba(38,64,58,.08);
+  display: grid; place-items: center;
+  transition: transform .14s ease, box-shadow .18s ease;
+}
+.minip-body:active { transform: scale(.96); }
+.minip[data-dragging] .minip-body { transform: scale(1.06); }
+.minip-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.minip-ring circle { fill: none; stroke-width: 3.5; }
+.minip-track { stroke: rgba(34,48,44,.10); }
+.minip-fill {
+  stroke: var(--accent); stroke-linecap: round;
+  /* 2πr = 119.4 — app.js 가 dashoffset 으로 채운다 */
+  stroke-dasharray: 119.4; stroke-dashoffset: 119.4;
+  transition: stroke-dashoffset .4s ease, stroke .25s ease;
+}
+/* 단계 그림(stage/*.webp)은 배경이 안 뚫린 네모다 — 동그라미 안에 그대로 넣으면
+   네모가 그대로 보인다. 둥글게 잘라 얹는다(고리 안쪽의 얼굴 사진처럼). */
+.minip-face {
+  width: 44px; height: 44px; border-radius: 50%;
+  object-fit: cover; pointer-events: none;
+}
+/* 숫자는 그림 위에 그냥 얹으면 안 읽힌다 — 아래쪽에 알약으로 띄운다. */
+.minip-pct {
+  position: absolute; left: 50%; bottom: -3px; transform: translateX(-50%);
+  padding: 0 5px; border-radius: 999px;
+  background: var(--card); box-shadow: 0 1px 4px rgba(38,64,58,.2);
+  font-size: .56rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.7;
+  color: var(--accent-d); pointer-events: none; white-space: nowrap;
+}
+.minip-x {
+  position: absolute; top: -3px; right: -3px; width: 20px; height: 20px;
+  border-radius: 50%; border: 1px solid var(--line-2); background: var(--card);
+  color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer;
+  display: grid; place-items: center; padding: 0;
+}
+.minip-x:hover { color: var(--text); border-color: var(--accent); }
+
+/* 확인이 필요해 멈춰 있는 동안 — 아무것도 안 돌아가므로 눈에 띄어야 한다 */
+.minip[data-state="await"] .minip-fill { stroke: var(--gold); }
+.minip[data-state="await"] .minip-body { animation: minipPulse 1.6s ease-in-out infinite; }
+.minip[data-state="done"]  .minip-fill { stroke: var(--ok); }
+.minip[data-state="done"]  .minip-pct  { color: var(--ok); }
+.minip[data-state="error"] .minip-fill { stroke: #c2603f; }
+.minip[data-state="error"] .minip-pct  { color: #c2603f; }
+@keyframes minipPulse {
+  0%, 100% { box-shadow: 0 6px 20px rgba(38,64,58,.24), 0 0 0 1px rgba(38,64,58,.08); }
+  50%      { box-shadow: 0 6px 20px rgba(38,64,58,.24), 0 0 0 5px rgba(161,115,46,.22); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .minip[data-state="await"] .minip-body { animation: none; }
+  .minip-fill { transition: none; }
+}
+
+/* 접었을 때 남는 손잡이 — 오른쪽 가장자리에 붙는다 */
+.minip-tab {
+  position: fixed; z-index: 120; right: 0; bottom: 96px;
+  padding: .5em .55em .5em .7em; border: 1px solid var(--line-2); border-right: none;
+  border-radius: 999px 0 0 999px; background: var(--card); color: var(--accent-d);
+  font: inherit; font-size: .68rem; font-weight: 800; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(38,64,58,.18);
+}
+.minip-tab:hover { color: var(--text); }
+
+/* 진행 화면의 「둘러보기」 — 단계 그림 아래, 잡담(놀기)보다는 위 */
+.stage-away { margin-top: 14px; }

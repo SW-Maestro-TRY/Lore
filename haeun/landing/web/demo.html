@@ -31,6 +31,12 @@
           <summary>지금 하고 있는 일 자세히</summary>
           <ol class="rail" id="rail"></ol>
         </details>
+        <!-- 본편과 같은 자리·같은 모양. 여기서 나가면 본편의 둘러보기로 간다 —
+             떠 있는 진행 표시(#miniProg)는 **실제로 도는 작업이 있을 때만** 뜨는
+             것이라, 진행이 가짜인 이 목업에서는 안 나온다. -->
+        <button type="button" class="btn btn-quiet btn-sm stage-away" id="progBrowse">
+          기다리는 동안 다른 웹툰 둘러보기 →
+        </button>
       </div>
 
     </header>
@@ -90,6 +96,10 @@
     });
     document.getElementById("cancelConfirm").addEventListener("click", function () {
       location.href = "/";
+    });
+    // 목업에는 둘러보기 화면이 없다 — 본편의 둘러보기로 그대로 보낸다.
+    document.getElementById("progBrowse").addEventListener("click", function () {
+      location.href = "/works";
     });
   })();
 </script>

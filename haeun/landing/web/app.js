@@ -1230,8 +1230,14 @@ function submit(e) { e.preventDefault(); startRun(); }
 
 /* ------------------------------------------------------------------ 진행 */
 
-function startPolling() {
-  view("running");
+/* 만드는 일은 **서버에서** 돈다. 그래서 화면이 진행 화면일 필요가 없다 —
+   둘러보기나 마이페이지를 보는 동안에도 폴링은 그대로 돌고, 지금 어디까지
+   왔는지는 떠 있는 표시(#miniProg)가 들고 다닌다.
+
+   `background: true` 면 화면을 진행 화면으로 옮기지 않는다 (둘러보다 새로고침한
+   경우, 또는 진행 화면에서 「둘러보기」로 빠져나간 경우). */
+function startPolling(opts = {}) {
+  if (!opts.background) view("running");
   lastStatus = null;
   tick();
   clearInterval(poll);
@@ -1247,13 +1253,23 @@ async function tick() {
     state = await res.json();
   } catch { return; }             // 잠깐 끊긴 것뿐이면 다음 번에 다시 받는다
 
+  // **어느 화면에 있든** 그린다. 확인 팝업(#approvalModal)이 여기서 뜨는데,
+  // 그 팝업이 떠 있는 동안은 서버에서도 아무것도 안 돌아간다 — 둘러보러 나가
+  // 있다고 안 알리면 사람은 만들어지는 줄 알고 기다리고, 실제로는 자기 차례에서
+  // 멈춰 있다. 그래서 이것만은 보던 화면을 가로채는 쪽이 맞다.
+  // (팝업은 #progress 바깥에 있다 — 안에 두면 그 화면이 숨을 때 같이 숨는다.)
   renderProgress(state);
+  paintMini(state);
 
   if (state.status === "done") {
     clearInterval(poll); poll = null;
+    // 다 됐으면 어디에 있든 완성본으로 데려간다. 기다리다 나간 사람이 바라던
+    // 것이 이것이라, 표시만 바꿔 두고 알아서 누르기를 기다릴 이유가 없다.
     showResult();
   } else if (state.status === "error" || state.status === "cancelled") {
     clearInterval(poll); poll = null;
+    // 실패도 마찬가지로 알린다 — 나가 있는 동안 조용히 멈춰 있으면, 사람은
+    // 계속 만들어지는 줄 알고 기다린다.
     renderFailure(state);
   }
   lastStatus = state.status;
@@ -2768,6 +2784,15 @@ function showMockMyPage() {
   $("#myCreditHint").textContent = "한 편에 8 C — 지금 9편 더 만들 수 있어요";
 }
 
+/* 만드는 도중에 둘러보기로 빠져나가는 길. 주소를 새로 여는 링크(<a href>)와
+   달리 페이지를 다시 안 읽어서, 돌던 폴링과 루의 놀이 상태가 그대로 남는다. */
+function goWorks() {
+  if (location.pathname !== "/works" || location.search) {
+    history.pushState(null, "", "/works");
+  }
+  showWorks();
+}
+
 async function showWorks() {
   view("works");
   window.scrollTo(0, 0);
@@ -2920,6 +2945,174 @@ function view(name) {
   // 물빛(걸음) 표시는 만들기 화면만의 것이다. 남겨 두면 홈이나 결과 화면까지
   // 마지막 걸음의 색을 물고 온다.
   if (name !== "create") delete document.body.dataset.step;
+  syncMini();
+}
+
+/* ---- 떠 있는 진행 표시 --------------------------------------------------- *
+ *
+ * 만드는 일은 서버에서 돈다. 그래서 진행 화면을 떠나도 작업은 안 멈추는데,
+ * 예전에는 떠나는 순간 **어디까지 왔는지 볼 길이 사라졌다** — 그래서 사람들이
+ * 몇 분씩 진행 화면만 붙들고 있었다. 이 동그란 표시가 그 정보를 들고 따라다닌다.
+ *
+ * 진행 화면(running)에서는 안 뜬다 — 그 화면이 곧 진행 표시라 겹친다.
+ *
+ * 끌어서 옮길 수 있다: 읽고 있는 글자를 가리면 치울 수 있어야 한다. 접으면
+ * 오른쪽 가장자리 손잡이만 남는다 — 완전히 없애지 않는 이유는, 도로 펼 길이
+ * 사라지면 "꺼졌다"와 구분이 안 되고 확인이 필요해 멈췄을 때 알릴 자리도
+ * 없어지기 때문이다. */
+const MINI_CIRC = 2 * Math.PI * 19;      // style.css 의 r=19 와 같아야 한다
+const MINI_STAGE_ART = ["story", "sheet", "board", "art", "bind", "done"];
+let miniState = null;                     // 마지막으로 받은 진행 상태
+let miniFolded = sessionStorage.getItem("lore_mini_folded") === "1";
+
+/* 앱은 480px 한 컬럼이라, fixed 로 두면 넓은 화면에서 컬럼 바깥 허공에 뜬다.
+   실제 body 폭 안으로 가둔다. 창 크기가 바뀌어도 다시 가둔다. */
+function miniPlace(x, y) {
+  const el = $("#miniProg");
+  if (!el) return;
+  const b = document.body.getBoundingClientRect();
+  const w = el.offsetWidth || 62, h = el.offsetHeight || 62;
+  const pad = 10;
+  // fixed 의 기준은 스크롤바를 뺀 폭이다 — innerWidth 를 쓰면 스크롤바만큼
+  // 어긋나서 오른쪽 끝에 붙였을 때 컬럼 안으로 파고든다.
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  const minX = Math.max(pad, b.left + pad);
+  const maxX = Math.max(minX, Math.min(vw - w - pad, b.right - w - pad));
+  const maxY = Math.max(pad, vh - h - pad);
+  const cx = Math.min(Math.max(x, minX), maxX);
+  const cy = Math.min(Math.max(y, pad), maxY);
+  el.style.left = `${cx}px`;
+  el.style.top = `${cy}px`;
+  sessionStorage.setItem("lore_mini_at", JSON.stringify([cx, cy]));
+}
+
+function miniRestorePlace() {
+  const el = $("#miniProg");
+  if (!el) return;
+  let at = null;
+  try { at = JSON.parse(sessionStorage.getItem("lore_mini_at") || "null"); } catch { /* 기본자리로 */ }
+  if (Array.isArray(at)) return miniPlace(at[0], at[1]);
+  const b = document.body.getBoundingClientRect();
+  miniPlace(b.right - 72 - 10, document.documentElement.clientHeight - 62 - 96);
+}
+
+/* 지금 이 화면에서 표시를 띄울지 말지. 진행 화면이면 숨고, 도는 작업이 없어도
+   숨는다. 접힌 상태면 손잡이만 남긴다. */
+function syncMini() {
+  const el = $("#miniProg"), tab = $("#miniProgTab");
+  if (!el || !tab) return;
+  const live = !!jobId && document.body.dataset.view !== "running";
+  el.hidden = !live || miniFolded;
+  tab.hidden = !live || !miniFolded;
+  if (live && !miniFolded) miniRestorePlace();
+  // 손잡이도 앱 컬럼(480px)의 오른쪽 가장자리에 붙인다 — fixed 라 그냥 두면
+  // 넓은 화면에서 컬럼 바깥 허공에 혼자 떨어져 붙는다.
+  if (live && miniFolded) {
+    const b = document.body.getBoundingClientRect();
+    tab.style.right = `${Math.max(0, document.documentElement.clientWidth - b.right)}px`;
+  }
+}
+
+function paintMini(s) {
+  miniState = s;
+  syncMini();
+  const el = $("#miniProg");
+  if (!el || el.hidden) {
+    // 접혀 있어도 손잡이의 숫자는 갱신한다 — 접었다고 진행이 멈춘 건 아니다.
+    const t = $("#miniProgTabPct");
+    if (t) t.textContent = (s.status === "done" ? "완성" : `${louPercent(s)}%`);
+    return;
+  }
+
+  const pct = louPercent(s);
+  const arc = $("#miniProgArc");
+  if (arc) arc.style.strokeDashoffset = String(MINI_CIRC * (1 - pct / 100));
+
+  const state = s.status === "done" ? "done"
+    : (s.status === "error" || s.status === "cancelled") ? "error"
+    : (s.status || "").startsWith("awaiting_") ? "await" : "run";
+  el.dataset.state = state;
+
+  const pctEl = $("#miniProgPct");
+  if (pctEl) pctEl.textContent = state === "done" ? "완성"
+    : state === "await" ? "확인!"
+    : state === "error" ? "멈춤" : `${pct}%`;
+
+  // 얼굴은 지금 단계의 그림을 쓴다 — 표시만 보고도 어디쯤인지 짐작이 간다.
+  const key = s.stages && s.stages[s.stage_index] && s.stages[s.stage_index].key;
+  const face = $("#miniProgFace");
+  if (face) {
+    const want = state === "error" ? louArt("error")
+      : state === "done" ? "/static/lou/stage/done.webp"
+      : MINI_STAGE_ART.includes(key) ? `/static/lou/stage/${key}.webp`
+      : "/static/lou/react/idle/01.webp";
+    if (!face.getAttribute("src").endsWith(want)) face.src = want;
+  }
+
+  const go = $("#miniProgGo");
+  if (go) go.setAttribute("aria-label", state === "done"
+    ? "웹툰이 완성됐습니다 — 눌러서 보기"
+    : state === "await" ? "확인이 필요합니다 — 눌러서 보기"
+    : `만드는 중 ${pct}% — 눌러서 진행 화면으로`);
+}
+
+/* 표시를 눌렀을 때. 다 됐으면 완성본으로, 아니면 진행 화면으로 돌아간다. */
+function miniOpen() {
+  if (miniState && miniState.status === "done") { showResult(); return; }
+  view("running");
+  window.scrollTo(0, 0);
+  // 떠나 있는 동안 renderProgress 를 안 그렸다 — 상태가 그대로면 확인 시트
+  // 같은 것을 다시 안 그리므로, 처음 보는 것처럼 한 번 새로 그리게 한다.
+  lastStatus = null;
+  if (!poll) poll = setInterval(tick, 800);
+  tick();
+}
+
+function setupMini() {
+  const el = $("#miniProg"), go = $("#miniProgGo");
+  if (!el || !go) return;
+
+  // 끌기. 조금이라도 움직였으면 누른 것으로 안 친다 — 옮기려다 화면이
+  // 바뀌어 버리면 옮길 수가 없다.
+  let dragging = false, moved = false, dx = 0, dy = 0;
+  go.addEventListener("pointerdown", e => {
+    dragging = true; moved = false;
+    const r = el.getBoundingClientRect();
+    dx = e.clientX - r.left; dy = e.clientY - r.top;
+    go.setPointerCapture(e.pointerId);
+    el.dataset.dragging = "1";
+  });
+  go.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    if (Math.abs(e.movementX) + Math.abs(e.movementY) > 0) moved = true;
+    miniPlace(e.clientX - dx, e.clientY - dy);
+  });
+  const end = () => { dragging = false; delete el.dataset.dragging; };
+  go.addEventListener("pointerup", end);
+  go.addEventListener("pointercancel", end);
+  go.addEventListener("click", e => {
+    if (moved) { e.preventDefault(); moved = false; return; }
+    miniOpen();
+  });
+
+  $("#miniProgHide").addEventListener("click", () => {
+    miniFolded = true;
+    sessionStorage.setItem("lore_mini_folded", "1");
+    syncMini();
+    if (miniState) paintMini(miniState);
+  });
+  $("#miniProgTab").addEventListener("click", () => {
+    miniFolded = false;
+    sessionStorage.removeItem("lore_mini_folded");
+    syncMini();
+    if (miniState) paintMini(miniState);
+  });
+
+  // 창이 좁아지면 표시가 화면 밖에 남을 수 있다 — 다시 가둔다.
+  window.addEventListener("resize", () => {
+    if (!$("#miniProg").hidden) miniRestorePlace();
+  });
 }
 
 /* 루는 홈에 들어설 때마다 다른 모습으로 맞이한다 — 홈의 큰 그림도, 헤더의
@@ -2962,6 +3155,7 @@ function esc(s) {
 function forget() {
   sessionStorage.removeItem("lore_job");
   jobId = null; clearInterval(poll); poll = null;
+  miniState = null;              // 떠 있는 표시는 view() 안의 syncMini() 가 닫는다
   shownCuts = new Set(); $("#cutGrid").innerHTML = ""; $("#cutstrip").hidden = true;
   $("#cancelBtn").textContent = "중단"; $("#cancelBtn").onclick = null;
   $("#clockLabel").textContent = "경과";
@@ -3106,6 +3300,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   setupShare();
   setupTitleEdit();
+  setupMini();
+  // 만드는 동안 다른 웹툰을 보러 나간다. 작업은 서버에서 도니까 안 멈춘다 —
+  // 떠 있는 표시(#miniProg)가 진행을 들고 따라붙는다.
+  $("#progBrowse")?.addEventListener("click", goWorks);
   // 웹툰 한 편은 길다 — 다 읽고 나서 위로 돌아가려면 한참 끌어야 한다.
   $("#toTopBtn")?.addEventListener("click", () => {
     document.querySelector("#result")?.scrollIntoView({ behavior: "smooth" });
@@ -3136,5 +3334,13 @@ document.addEventListener("DOMContentLoaded", () => {
     openExisting(asked);
   } else if (jobId) {
     startPolling();          // 새로고침해도 돌던 작업으로 돌아온다
+  }
+
+  // 둘러보기·마이페이지로 바로 들어왔는데 만들던 작업이 아직 남아 있으면,
+  // 보고 있는 화면은 그대로 두고 뒤에서만 따라간다 — 헤더의 「둘러보기」는
+  // 주소를 새로 여는 링크라 이 길로 온다. 표시는 syncMini() 가 띄운다.
+  if (jobId && !poll && !asked && !wantResult && !wantMock
+      && (wantWorks || location.pathname.startsWith("/mypage"))) {
+    startPolling({ background: true });
   }
 });
