@@ -3196,8 +3196,15 @@ ok("구조: seed 를 주면 재현된다",
 ok("P2: 회차 구조가 P2 에 주입된다",
    "story_structure" in story.declared_vars(_ps.texts["p2"]),
    sorted(story.declared_vars(_ps.texts["p2"])))
+# 작가 원문이 P2 에 실린다 — 구조가 작가의 사건을 모른 채 짜이지 않게 (#59).
+# 예전에는 P1 카드(증류본)만 봐서, 카드에 안 담긴 전개 요구는 구조 설계에서
+# 증발했다.
+ok("P2: 작가 원문이 P2 에 주입된다",
+   "author_story" in story.declared_vars(_ps.texts["p2"]),
+   sorted(story.declared_vars(_ps.texts["p2"])))
 _p2_rendered = story.render(_ps.texts["p2"], {
     "genre": "일상", "world": "(없음)", "character_sheet": "{}",
+    "author_story": "(없음)",
     "genre_template": story.genre_template_block(story.resolve_genre_templates("일상")),
     "story_template": story.story_template_block(),
     "story_structure": samples.structure_block(samples.pick_structure("일상", seed=5)),
