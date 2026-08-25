@@ -242,11 +242,22 @@
         <div class="wiz-card">
           <div class="photo-row">
             <label class="photo-drop" id="photoDrop">
-              <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" hidden>
+              <!-- multiple 이 있어야 고르는 창에서 여러 장을 한 번에 집을 수 있다.
+                   한 장씩 눌러 더하는 길(+ 칸)과 둘 다 열어 둔다. -->
+              <input type="file" id="photo" accept="image/png,image/jpeg,image/webp" multiple hidden>
               <span class="photo-hint">캐릭터 사진 <em class="req">필수</em></span>
               <div class="photo-strip" id="photoStrip"></div>
               <span class="photo-count" id="photoCount"></span>
             </label>
+            <!-- 올리기 전에 읽어야 하는 것. 마지막 걸음의 동의는 "확인했다"는
+                 도장이고, 여기는 **무엇을 확인해야 하는지** 알려 주는 자리다.
+                 사진을 고르기 전에 봐야 뜻이 있으므로 타일 바로 아래 둔다. -->
+            <ul class="photo-rules">
+              <li>본인이 찍었거나 직접 그린 사진, 또는 쓸 권한이 있는 사진만 올려주세요.</li>
+              <li>다른 사람의 캐릭터·그림·사진을 무단으로 올리면 책임은 올린 사람에게 있습니다.</li>
+              <li>실존 인물은 본인이거나 동의를 받은 경우에만 올려주세요.</li>
+              <li>올린 사진은 이 캐릭터를 그리는 데만 씁니다.</li>
+            </ul>
           </div>
 
           <label class="field">

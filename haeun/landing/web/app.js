@@ -360,25 +360,31 @@ function setupPhoto() {
   const drop = $("#photoDrop"), input = $("#photo");
 
   const paint = () => {
-    // 올린 사진 + 남은 빈 칸을 **항상 네 칸**으로 채운다. 빈 칸이 안 보이면
-    // 더 올릴 수 있다는 것을 모른다(시안 capture/design2.png 의 규칙).
-    // UI 는 **타일 한 장**이다. 서버와 photos 배열은 여러 장을 그대로
-    // 받지만(하네스 계약), 화면에서는 한 장만 받는다 — 넣으면 타일이 사진이
-    // 되고, ✕ 로 지우고 다시 넣는다.
+    // 올린 사진 옆에 빈 칸(+)을 하나 남겨 둔다. 빈 칸이 안 보이면 더 올릴 수
+    // 있다는 것을 모른다. 한동안 화면에서 한 장만 받게 막아 뒀었는데, 여러
+    // 각도를 보여줄수록 닮게 그려지므로 다시 연다 — photos 배열과 서버는
+    // 그동안에도 여러 장을 그대로 받고 있었다(하네스 계약).
     const shots = photos.map((src, i) => `
       <figure class="shot">
         <img src="${src}" alt="${i + 1}번째 사진">
         <button type="button" class="shot-x" data-i="${i}" aria-label="지우기">✕</button>
       </figure>`);
-    const slots = photos.length ? []
-      : [`<span class="photo-slot" aria-hidden="true">+</span>`];
+    // 칸을 여러 개 미리 깔지 않는다 — 다음 한 칸만 보이면 충분하고, 빈 칸이
+    // 줄줄이 있으면 다 채워야 하는 것처럼 읽힌다.
+    const slots = photos.length < MAX_PHOTOS
+      ? [`<span class="photo-slot" aria-hidden="true">+</span>`] : [];
     $("#photoStrip").innerHTML = shots.concat(slots).join("");
     $$("#photoStrip .shot-x").forEach(b => b.addEventListener("click", e => {
       e.preventDefault(); e.stopPropagation();
       photos.splice(Number(b.dataset.i), 1); paint();
     }));
     drop.classList.toggle("has-photo", photos.length > 0);
-    $("#photoCount").textContent = photos.length ? "" : "눌러서 사진을 올려주세요";
+    // 각도 이야기는 딱 한 번, 한 장 올렸을 때만 한다 — 그때가 "더 올릴까" 를
+    // 정하는 순간이다. 그 뒤로도 계속 붙어 있으면 잔소리로 읽힌다.
+    $("#photoCount").textContent =
+      photos.length === 0 ? "눌러서 사진을 올려주세요"
+      : photos.length === 1 ? `1 / ${MAX_PHOTOS}장 · 각도를 바꿔 더 올리면 더 닮게 그립니다`
+      : `${photos.length} / ${MAX_PHOTOS}장`;
     input.value = "";
   };
 
