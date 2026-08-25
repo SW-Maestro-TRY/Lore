@@ -600,12 +600,19 @@ let accountState = { logged_in: false };
 let signupPhoto = { kind: "preset", id: "" };   // 회원가입 폼에서 고른 사진
 let pendingClaimRunId = "";                     // 담아두기 → 로그인/가입하면 이걸 담는다
 
+/* 계정 상태를 처음 받아 오는 일은 화면 그리기와 **경주한다.** 주소로 바로
+   /mypage 에 들어오면 이 요청이 끝나기 전에 마이페이지가 그려지고, 그때는
+   아직 로그인 안 한 것으로 보여서 로그인 창이 떴다(로그인해 둔 사람인데도).
+   그래서 이 약속을 들고 있다가, 계정이 필요한 화면이 먼저 기다리게 한다. */
+let accountReady = null;
+
 async function refreshAccount() {
   try {
     accountState = await (await fetch("/api/account/me")).json();
   } catch { accountState = { logged_in: false }; }
   paintAccountPill();
   paintClaimBanner();
+  return accountState;
 }
 
 const GUEST_PILL_PHOTO = "/static/lou/react/idle/01.webp";   // 로그인 전 자리 채움 — accounts.DEFAULT_PHOTO_ID 와 같은 그림
@@ -2563,6 +2570,8 @@ function onlyMyPage() {
 }
 
 async function showMyPage() {
+  // 주소로 바로 들어온 경우 계정 상태가 아직 안 왔을 수 있다 — 기다렸다 본다.
+  if (accountReady) { try { await accountReady; } catch { /* 아래에서 걸린다 */ } }
   if (!accountState.logged_in) return openAccountModal("login");
   onlyMyPage();
   if (location.pathname !== "/mypage") history.pushState(null, "", "/mypage");
@@ -2571,30 +2580,38 @@ async function showMyPage() {
   $("#myNickname").textContent = accountState.nickname || "";
   refreshCreditBalance();          // 다른 탭에서 썼을 수 있다 — 열 때마다 새로 받는다
 
-  const mine = accountState.claimed_runs || [];
   const host = $("#myWorksGrid");
   host.innerHTML = `<p class="works-empty">불러오는 중…</p>`;
+  // 둘러보기 목록(/api/runs)이 아니라 계정 전용 목록을 받는다 — 숨긴 작품은
+  // 둘러보기에서 빠지므로, 그쪽에서 걸러 오면 내가 숨긴 것이 내 목록에서도
+  // 사라진다. 이 주소는 숨긴 것까지 주고 공개 여부를 함께 붙여 준다.
   let runs = null;
-  try { runs = (await (await fetch("/api/runs")).json()).runs || []; }
+  try { runs = (await (await fetch("/api/account/works")).json()).runs || []; }
   catch { /* 아래에서 */ }
 
   if (runs === null) {
     $("#myMeta").textContent = "";
-    host.innerHTML = `<p class="works-empty">목록을 불러오지 못했습니다.` +
-      ` 서버(serve.py)가 떠 있는지 확인해 주세요.</p>`;
+    host.innerHTML = `<div class="works-empty">
+      <img src="${louArt("error")}" alt="" aria-hidden="true">
+      <b>목록을 가져오지 못했어요</b>
+      서버가 떠 있는지 확인해 주세요.</div>`;
     return;
   }
-  const kept = runs.filter(r => mine.includes(r.run_id));
-  $("#myMeta").textContent = `저장한 작품 ${kept.length}편`;
-  if (!kept.length) {
-    host.innerHTML = `<p class="works-empty">아직 저장한 작품이 없습니다.` +
-      `<br>완성본 화면에서 <b>서버에 저장하기</b>를 누르면 여기에 쌓입니다.` +
-      `<br><a class="inline-link" href="/#studio">첫 작품 만들러 가기 →</a></p>`;
+  const hidden = runs.filter(r => r.public === false).length;
+  $("#myMeta").textContent = `저장한 작품 ${runs.length}편`
+    + (hidden ? ` · 그중 ${hidden}편은 나만 보기` : "");
+  if (!runs.length) {
+    host.innerHTML = `<div class="works-empty">
+      <img src="${louArt("empty")}" alt="" aria-hidden="true">
+      <b>아직 담아둔 작품이 없어요</b>
+      완성본 화면에서 <b>계정에 담아두기</b>를 누르면 여기에 쌓입니다.
+      <br><a class="inline-link" href="/#studio">내 캐릭터로 웹툰 만들기 →</a></div>`;
     return;
   }
-  host.innerHTML = kept.map(workCard).join("");
+  host.innerHTML = runs.map(r => workCard(r, true)).join("");
   $$("#myWorksGrid [data-open]", host).forEach(b => b.addEventListener("click", () =>
     showRunResult(b.dataset.open, Number(b.dataset.ep))));
+  bindPubToggles(host);
 }
 
 /* 마이페이지 **목업** — /demo/mypage. 계정을 안 만들어도 화면을 볼 수 있게
@@ -2657,18 +2674,27 @@ async function showWorks() {
       <br><a class="inline-link" href="/#studio">내 캐릭터로 웹툰 만들기 →</a></div>`;
     return;
   }
-  host.innerHTML = runs.map(workCard).join("");
+  // map 은 두 번째 인자로 **번째 수**를 넘긴다 — workCard(r, mine) 에 그대로
+  // 넘기면 두 번째 카드부터 mine 이 참이 돼서, 둘러보기인데 남의 작품에
+  // 공개 스위치와 편집실 링크가 붙는다. 화살표로 감싸 한 개만 넘긴다.
+  host.innerHTML = runs.map(r => workCard(r)).join("");
   // 회차 단추가 카드 안에 있어서, 카드 자체를 누르면 첫 회차를 연다.
   $$("#worksGrid [data-open]", host).forEach(b => b.addEventListener("click", () =>
     showRunResult(b.dataset.open, Number(b.dataset.ep))));
 }
 
-function workCard(r) {
+/* 작품 카드. 둘러보기와 마이페이지가 같은 카드를 쓰되, **내 것일 때만**
+   편집실로 가는 길과 공개 스위치가 붙는다 — 남의 작품에 있을 수 없는 길이다. */
+function workCard(r, mine = false) {
   const eps = r.episodes || [];
   const first = eps[0] || 1;
+  // loading="lazy" 를 안 쓴다. 이 목록은 화면을 바꿔 끼우며 그리는데(hidden 이던
+  // 자리에 innerHTML 로 꽂는다), 그 경로에서는 브라우저가 "화면에 들어왔다" 를
+  // 다시 안 재서 표지가 영영 안 뜬다 — 그림체 썸네일에서 이미 같은 자리를
+  // 겪었다. 표지는 ?w=320 으로 줄여 받으므로 한 장에 60KB 안쪽이다.
   const cover = r.cover_page
     ? `<img src="/api/runs/${encodeURIComponent(r.run_id)}/page/${r.cover_page}` +
-      `?w=320&ep=${r.cover_episode || first}" alt="" loading="lazy">`
+      `?w=320&ep=${r.cover_episode || first}" alt="">`
     : `<span class="works-cover-empty" aria-hidden="true">🖼</span>`;
   // 회차마다 단추를 준다 — "몇 편이 있다"를 세는 것과 "그 편을 연다"가 같은
   // 자리에 있어야, 2화가 있는데 1화만 열리는 일이 안 생긴다.
@@ -2688,9 +2714,47 @@ function workCard(r) {
         <p class="works-sub">${esc([r.genre, r.title].filter(Boolean).join(" · "))}</p>
         <p class="works-count">${eps.length > 1 ? eps.length + "화 · " : ""}${r.page_count}장</p>
         <div class="works-eps">${epBtns}</div>
-        <a class="works-edit" href="/editor?run=${encodeURIComponent(r.run_id)}&ep=${first}">편집실에서 열기 →</a>
+        ${mine ? myTools(r, first) : ""}
       </div>
     </article>`;
+}
+
+/* 내 작품에만 붙는 줄 — 편집실로 가는 길과 공개 스위치.
+   공개가 기본이라 스위치는 대개 켜져 있다. 끄면 둘러보기에서 내려가고
+   마이페이지에서는 그대로 보인다. */
+function myTools(r, first) {
+  const on = r.public !== false;
+  return `
+    <label class="works-pub">
+      <input type="checkbox" class="works-pub-box" data-pub="${esc(r.run_id)}" ${on ? "checked" : ""}>
+      <span>${on ? "둘러보기에 공개" : "나만 보기"}</span>
+    </label>
+    <a class="works-edit" href="/editor?run=${encodeURIComponent(r.run_id)}&ep=${first}">편집실에서 열기 →</a>`;
+}
+
+/* 스위치를 누르면 그 자리에서 서버에 알린다. 실패하면 되돌린다 — 껐다고
+   보이는데 실제로는 걸려 있는 것이 제일 나쁘다. */
+function bindPubToggles(host) {
+  $$(".works-pub-box", host).forEach(box => box.addEventListener("change", async () => {
+    const want = box.checked;
+    const label = box.parentElement.querySelector("span");
+    box.disabled = true;
+    try {
+      const res = await fetch(`/api/runs/${encodeURIComponent(box.dataset.pub)}/visibility`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ public: want }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "바꾸지 못했습니다");
+      label.textContent = want ? "둘러보기에 공개" : "나만 보기";
+      toast(want ? "둘러보기에 걸었어요" : "둘러보기에서 내렸어요");
+    } catch (err) {
+      box.checked = !want;                 // 서버가 안 받았으면 화면도 되돌린다
+      toast(err.message);
+    } finally {
+      box.disabled = false;
+    }
+  }));
 }
 
 /* ------------------------------------------------------------------ 잡동사니 */
@@ -2828,7 +2892,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target.id === "chargeModal") closeChargeModal();
   });
 
-  refreshAccount();
+  accountReady = refreshAccount();
   // 로그인 전에는 계정 창을 열고, 로그인 뒤에는 마이페이지로 간다.
   $("#accountBtn").addEventListener("click", () => {
     if (accountState.logged_in) showMyPage();
