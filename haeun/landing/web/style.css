@@ -317,6 +317,19 @@ body[data-view="nextep"]  .foot { display: none; }
 }
 .photo-drop.drag .photo-slot { border-color: var(--accent); background: rgba(111,165,153,.12); }
 .photo-count { display: block; color: var(--dim); font-size: .76rem; margin-top: 8px; }
+
+/* 사진을 올리기 전에 읽어야 하는 것. 경고문이라고 붉게 세우지 않는다 —
+   대부분은 남의 것을 올릴 생각이 없는 사람이고, 겁주는 화면으로 시작하면
+   만들기 전부터 물러선다. 조용히 읽히되 지나칠 수는 없게 왼쪽에 선만 둔다. */
+.photo-rules {
+  margin: 10px 0 0; padding: 10px 0 10px 12px;
+  border-left: 2px solid var(--sea-mint);
+  list-style: none;
+  color: var(--muted); font-size: .78rem; line-height: 1.65;
+}
+.photo-rules li + li { margin-top: 3px; }
+/* 마지막 줄은 약속이지 주의가 아니다 — 앞의 셋과 톤을 나눈다. */
+.photo-rules li:last-child { color: var(--accent-d); font-weight: 600; }
 .photo-side { display: block; }
 
 /* ---- 항목 표 -------------------------------------------------------- */
