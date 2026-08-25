@@ -126,7 +126,14 @@ def clean_item(raw: Any) -> dict[str, Any] | None:
 
 
 def clean_payload(raw: Any) -> dict[str, Any]:
-    """편집실이 보낸 것 전체 → 저장할 모양. {"scenes": {"1": {...}}}"""
+    """편집실이 보낸 것 전체 → 저장할 모양.
+
+    {"scenes": {"1": {...}}, "gaps": {"1": 2}}
+
+    `gaps` 는 **사람이 편집실에서 고친 여백**이다 (장 뒤의 쉼, 0~3). 콘티가
+    정한 gap_after 를 덮어쓴다 — 없는 장은 콘티 값 그대로다. 옛 파일에는 이
+    칸이 없고, 없으면 아무것도 안 덮어쓰므로 예전과 같이 읽힌다.
+    """
     scenes: dict[str, Any] = {}
     for key, val in ((raw or {}).get("scenes") or {}).items():
         try:
@@ -140,7 +147,27 @@ def clean_payload(raw: Any) -> dict[str, Any]:
         # 빈 장도 남긴다 — "여기 있던 말풍선을 지웠다"와 "한 번도 안 열었다"가
         # 구분돼야 다시 구울 때 옛 말풍선이 되살아나지 않는다.
         scenes[str(no)] = {"ref_w": ref_w, "items": items}
-    return {"scenes": scenes}
+
+    gaps: dict[str, int] = {}
+    for key, val in ((raw or {}).get("gaps") or {}).items():
+        try:
+            no, g = int(key), int(val)
+        except (TypeError, ValueError):
+            continue
+        if no >= 1 and 0 <= g <= 3:
+            gaps[str(no)] = g
+    return {"scenes": scenes, "gaps": gaps}
+
+
+def gap_overrides(data: dict[str, Any]) -> dict[int, int]:
+    """저장된 여백 고침. {장 번호: 0~3}"""
+    out: dict[int, int] = {}
+    for key, val in (data.get("gaps") or {}).items():
+        try:
+            out[int(key)] = int(val)
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def overlay_path(ep_dir: Path) -> Path:
@@ -150,12 +177,12 @@ def overlay_path(ep_dir: Path) -> Path:
 def load_overlay(ep_dir: Path) -> dict[str, Any]:
     p = overlay_path(ep_dir)
     if not p.exists():
-        return {"scenes": {}}
+        return {"scenes": {}, "gaps": {}}
     try:
         return clean_payload(json.loads(p.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         # 파일이 깨졌으면 빈 것으로 본다. 여기서 세우면 편집실이 안 열린다.
-        return {"scenes": {}}
+        return {"scenes": {}, "gaps": {}}
 
 
 def save_overlay(ep_dir: Path, raw: Any) -> dict[str, Any]:
