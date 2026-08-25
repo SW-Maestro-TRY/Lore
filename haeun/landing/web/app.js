@@ -489,27 +489,39 @@ function layoutMode() {
 }
 
 function creationCost() {
-  // 지금은 미리보기만 만든다(previewToggle 은 없어졌다) — collect() 도 항상 preview:true.
-  const base = creditCost.preview;
-  return layoutMode() === "webtoon" ? base * (creditCost.webtoon_mult || 1) : base;
+  // 한 편 전액 — 만들 때 12C 를 한 번에 받고, 나머지 생성(1화 전체 보기)은
+  // 추가 결제가 없다. 연출 모드로도 값이 안 바뀐다.
+  return creditCost.full || 0;
 }
 
 function paintCost() {
   const preview = true;              // 지금은 미리보기만 만든다 — collect() 도 항상 preview:true
-  // 여기서 떼는 것은 첫 장 값이다 — 나머지 장은 결과 화면의 이어 그리기에서
-  // 장당 같은 값을 더 낸다. "−2 크레딧" 이라고만 적으면 한 편이 2C 인 줄 안다.
-  $("#costChip").textContent = `첫 장 −${creationCost()}C`;
+  $("#costChip").textContent = `−${creationCost()} 크레딧`;
+  // 단추에는 지금 나가는 값만 적고, 무슨 일이 일어나는지는 바로 밑 한 줄이
+  // 말한다 — 이야기는 한 편 전체가 만들어지고 그림은 첫 장면(3컷)만 나온다는
+  // 것을 모르고 누르면, 결과 화면에서 "이게 다야?" 가 된다.
+  const noteEl = $("#submitNote");
+  if (noteEl && !noteEl.dataset.costNote) {
+    noteEl.dataset.costNote = "1";
+    const per = creationCost();
+    const full = (creditCost.full || 0)
+      * (layoutMode() === "webtoon" ? (creditCost.webtoon_mult || 1) : 1);
+    noteEl.textContent = noteEl.textContent.replace(/\s*$/, "") +
+      ` 먼저 일부 장면을 보여드려요.` +
+      ` 마음에 들면 추가 결제 없이 전체를 이어서 볼 수 있어요.`;
+  }
   // 홈의 첫 단추에도 값을 적는다 — 다섯 걸음을 다 밟고 마지막에야 얼마인지
   // 아는 것은 늦다. /api/config 가 오기 전에는 값이 0 이라, 그동안은 숨긴다
   // (0 크레딧이라고 적어 두면 공짜인 줄 안다).
   const startChip = $("#startCostChip");
   if (startChip) {
-    const c = creationCost();
-    startChip.hidden = !c;
-    // "2 크레딧" 이라고만 적으면 웹툰 한 편이 2C 인 줄 읽는다 — 실제로는
-    // 첫 장 값이고, 나머지 장은 이어 그리기에서 장당 같은 값을 더 낸다.
-    // 시작 값이라는 것을 같이 적어야 눌렀다가 속았다는 느낌이 안 든다.
-    startChip.textContent = `첫 장 ${c}C부터`;
+    // 홈에서 궁금한 것은 "한 편에 얼마" 다. "첫 장 2C부터" 는 우리끼리 말이라
+    // (장이 뭔지, C 가 뭔지, 부터가 뭔지) 아무것도 전달이 안 됐다.
+    // 전체 가격 하나만 말하고, 나눠 내는 방식은 만들기 단추 밑에서 설명한다.
+    const full = (creditCost.full || 0)
+      * (layoutMode() === "webtoon" ? (creditCost.webtoon_mult || 1) : 1);
+    startChip.hidden = !full;
+    startChip.textContent = `한 편 ${full}크레딧`;
   }
   $("#submitBtn").firstChild.textContent =
     preview ? "미리보기 만들기 " : "웹툰 만들기 ";
@@ -1984,12 +1996,13 @@ function paintResult(r) {
   $("#moreCutsBtn").hidden = !moreCtx;
   if (moreCtx) {
     const shown = moreCtx.drawn * Number(r.cuts_per_sheet || 3);
-    // 값을 버튼에 적는다 — 이제 이어 그리기도 장당 차감이라(서버 /continue),
-    // 눌렀더니 크레딧이 빠지면 안 적어 둔 쪽이 거짓말이 된다.
-    const pageCost = (creditCost.preview || 2)
-      * (resultLayoutMode === "webtoon" ? (creditCost.webtoon_mult || 1) : 1);
+    // 값은 실제 콘티가 정한다 — 남은 장면(이미지) 수 × 장당 값. 서버(/continue)와
+    // 같은 셈이라 눌렀을 때 다른 값이 빠지지 않는다. 이제 한 번 누르면 나머지
+    // 전부를 그린다.
+    // 추가 결제가 없다는 것을 단추가 직접 말한다 — 결제가 또 나올까 봐
+    // 안 누르는 것이 이 자리의 가장 큰 이탈이다.
     $("#moreCutsBtn").textContent =
-      `다음 장면 이어서 보기 (${shown}/${moreCtx.total}컷 · −${pageCost}C)`;
+      `1화 전체 보기 (남은 ${moreCtx.total - shown}컷 · 추가 결제 없음)`;
   }
 
   paintClaimBanner();

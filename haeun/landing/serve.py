@@ -398,7 +398,8 @@ class Handler(BaseHTTPRequestHandler):
                 # 표시(−N 크레딧)가 실제로 빠지는 값과 어긋나지 않게 여기서 받는다.
                 "credit_cost": {
                     "full": credits.CREDIT_FULL,
-                    "preview": credits.CREDIT_PREVIEW,
+                    # 만들 때 나가는 값 — 전액 선결제라 full 과 같다.
+                    "preview": credits.CREDIT_FULL,
                     "webtoon_mult": credits.CREDIT_WEBTOON_MULT,
                 },
                 "credit_packages": credits.PACKAGES,
@@ -1085,30 +1086,16 @@ class Handler(BaseHTTPRequestHandler):
                      "awaiting_story_approval", "awaiting_sheet_approval")]
             if busy:
                 return self._error(409, "이 작품은 지금 만드는 중입니다")
-            # 장당 차감. 위저드가 "항상 첫 장(2C)으로 시작 → 이어 그리기"로
-            # 바뀐 뒤 이 자리에 차감이 없어서 한 편이 실질 2C 였다 — 첫 장과
-            # 같은 장당 값을 여기서 받아야 한 편 합계가 설계값(8C)이 된다.
-            # uid 가 없으면(예전 화면·직접 호출) 막지 않고 공짜로 둔다:
-            # 그리기가 막히는 것이 계산이 어긋나는 것보다 나쁘다.
-            uid = str(body.get("uid") or "")
-            cost = 0
-            if credits.valid_uid(uid):
-                layout = str((pipeline.origin_form(run_id) or {})
-                             .get("layout_mode") or "fast")
-                cost = credits.page_cost(layout)
-                bal = credits.balance(uid)
-                if bal < cost:
-                    return self._error(
-                        402, f"크레딧이 모자랍니다 (필요 {cost} · 보유 {bal})",
-                        reason="insufficient_credit", need=cost, balance=bal)
+            # **여기서는 안 받는다.** 한 편 값(12C)은 만들 때 전액 받았고,
+            # 이 자리는 이미 산 웹툰의 나머지를 마저 그리는 것뿐이다 —
+            # 미리보기가 마음에 든 순간 결제 버튼을 또 누르게 하면 구매
+            # 흐름이 거기서 끊긴다.
             try:
                 job = runner.create_more(run_id, cut_from)
             except pipeline.Failed as exc:
                 return self._error(409, str(exc))
-            bal = credits.spend(uid, cost)[1] if cost else None
             return self._json({"id": job.id, "cut_from": cut_from,
-                               "queue_position": runner.position(job.id),
-                               **({"credit_balance": bal} if bal is not None else {})})
+                               "queue_position": runner.position(job.id)})
 
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/cancel", url.path)
         if m:
