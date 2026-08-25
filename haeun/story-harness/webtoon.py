@@ -745,7 +745,17 @@ def build_engine_card(p1: dict, p2: dict, idea: str, scenes: list,
         "[작가가 처음 준 한 줄]",
         f"  {idea.strip()}",
         "",
+        # ── 승인은 계약이다 ────────────────────────────────────────────────
+        # 사용자는 이 장면들의 **산문 전문**을 읽고 "이대로 진행"을 눌렀다.
+        # 예전에는 여기 요약(one_line·choice)만 실려서, 사용자가 읽고 승인한
+        # 본문 — 구체적 행동·감정·묘사 — 이 콘티 단계에 안 닿았다. 요약이
+        # 사건을 잘 담으면 운 좋게 따라가지만, 승인한 것과 다른 1화가 나와도
+        # 막을 것이 없었다. 승인받은 원문을 그대로 싣고, 1화 컷은 이것의
+        # **번역**이지 재창작이 아니라고 못박는다.
         "[1화 도입부 — 사람이 통과시킨 장면]",
+        "  ★ 작가가 이 장면들을 읽고 승인했다. 1화의 컷은 이 장면을 컷으로",
+        "    옮기는 일이다 — 사건·순서·인물의 행동을 지키고, 다른 사건으로",
+        "    바꾸거나 빼지 않는다. 살은 붙여도 뼈대는 이것이다.",
     ]
     if scenes:
         for i, s in enumerate(scenes, 1):
@@ -754,6 +764,12 @@ def build_engine_card(p1: dict, p2: dict, idea: str, scenes: list,
             lines.append(f"  {i}. {one}")
             if not is_blank(s.get("choice")):
                 lines.append(f"     선택: {_fmt(s.get('choice'))}")
+            # 승인받은 산문 전문. 들여쓰기로 요약과 구분한다.
+            text = str(s.get("text") or "").strip()
+            if text:
+                lines.append("     본문:")
+                for ln in text.splitlines():
+                    lines.append(f"       {ln.strip()}" if ln.strip() else "")
     else:
         lines.append("  (장면 없음)")
     lines.append("=== /엔진 카드 ===")

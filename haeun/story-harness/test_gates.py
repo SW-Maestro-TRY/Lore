@@ -252,6 +252,23 @@ ok("엔진 카드: 표정 어휘가 실린다",
 ok("엔진 카드: 영문 외형이 실린다", "silver" in card or "black hair" in card
    or "short black hair" in card)
 
+# -- 승인은 계약이다: 사용자가 읽고 승인한 장면 **산문 전문**이 카드에 실린다.
+# 예전에는 요약(one_line·choice)만 실려서, 승인한 본문의 행동·감정·대사가
+# 콘티 단계에 안 닿았다 — 승인한 것과 다른 1화가 나와도 막을 것이 없었다.
+_appr = [{"no": 1, "one_line": "한 줄 요약", "choice": "달아나기로 한다",
+          "text": "골목 끝에서 그녀는 강아지를 끌어안고 숨을 죽였다."}]
+_card2 = webtoon.build_engine_card(mock_p1, story.mock_payload("P2", ""), "한 줄", _appr)
+ok("엔진 카드: 승인한 장면 산문 전문이 실린다",
+   "골목 끝에서 그녀는 강아지를 끌어안고 숨을 죽였다." in _card2)
+ok("엔진 카드: 요약(one_line·choice)도 그대로 실린다",
+   "한 줄 요약" in _card2 and "달아나기로 한다" in _card2)
+ok("엔진 카드: 1화 컷은 번역이라는 계약 문구가 실린다",
+   "옮기는 일이다" in _card2 and "다른 사건으로" in _card2)
+ok("엔진 카드: 본문 없는 옛 run 도 안 터진다 (본문 줄만 빠진다)",
+   "본문:" not in webtoon.build_engine_card(
+       mock_p1, story.mock_payload("P2", ""), "한 줄",
+       [{"no": 1, "one_line": "요약만", "choice": ""}]))
+
 # ---------------- 색 팔레트: 영문 이름 + hex (story) ----------------
 #
 # 이 값은 두 곳으로 그대로 나간다 — story-harness 의 시트 프롬프트와,
