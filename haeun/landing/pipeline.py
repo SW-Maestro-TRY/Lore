@@ -1804,6 +1804,10 @@ def _scene_numbers(run_id: str, episode: int = 1) -> list[int]:
 def _scene_layout(run_id: str, episode: int = 1) -> dict[int, tuple[int, str]]:
     """장 번호 -> (gap_after, weight). overlay.bake() 가 다시 이어 붙일 때 쓴다.
 
+    **편집실에서 고친 여백이 있으면 그것이 이긴다.** 콘티가 정한 gap_after 는
+    글로 읽고 계산한 값이라, 그림이 나온 뒤에 보면 너무 붙었거나 너무 벌어져
+    있을 수 있다. 그때 사람이 화면에서 고친 값이 최종본까지 그대로 가야 한다.
+
     scenegen.Scene.gap_after/.weight 와 같은 규칙이다(마지막 컷의 gap_after,
     첫 컷의 weight) — 여기는 Scene 객체가 없어 원본 컷 dict 에서 직접 뽑는다.
     scenes.json 이 없는 옛 화(컷 하나 = 장 하나)는 빈 dict 를 돌려주고, 그러면
@@ -1827,6 +1831,10 @@ def _scene_layout(run_id: str, episode: int = 1) -> dict[int, tuple[int, str]]:
         gap = gap if isinstance(gap, int) and 0 <= gap <= 3 else 1
         weight = str(first.get("weight") or "normal").strip().lower()
         out[no] = (gap, weight if weight in ("full", "normal", "light") else "normal")
+
+    for no, g in overlay.gap_overrides(overlay.load_overlay(ep_dir)).items():
+        if no in out:
+            out[no] = (g, out[no][1])
     return out
 
 
@@ -3243,6 +3251,11 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
             "w": w, "h": h,
             # 아래 여백 — 지면 폭의 몇 배인가 (episode.stitch 와 같은 눈금).
             "gap": round(float(gaps.get(int(gap_after), 0.0)), 4),
+            # 그 여백이 몇 단인가 (0 붙임 · 1 한 박자 · 2 쉼 · 3 크게 쉼).
+            # 편집실이 이 단을 올리고 내려서 여백을 고친다 — 배수를 직접
+            # 만지면 콘티가 쓰는 눈금과 다른 값이 생겨서, 다시 구울 때 맞출
+            # 기준이 없어진다.
+            "gap_step": int(gap_after),
             # 이 장이 쓰는 지면 폭 — 떠 있는 컷(light)은 좁게 들어간다.
             "width": round(_width_ratio(weight), 4),
             "cuts": [cut_card(by_no[n]) for n in (sc.get("cut_numbers") or [])
@@ -3254,6 +3267,9 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
         "run_id": run_id,
         "episode": int(episode),
         "episodes": planned,
+        # 단(0~3) -> 지면 폭의 몇 배. 편집실이 여백을 바꿀 때 이 표로 미리
+        # 그린다 — 서버에 물어보고 기다리면 끌면서 볼 수가 없다.
+        "gap_scale": {str(k): round(float(v), 4) for k, v in sorted(gaps.items())},
         "next_episode": (planned[-1] + 1) if planned else 1,
         "title": episode_title(run_id, episode) or f"{int(episode)}화",
         "character": str(p1.get("name") or ""),

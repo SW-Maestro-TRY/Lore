@@ -63,7 +63,8 @@ const STICKERS = ["💦", "❤️", "✨", "💢", "❗", "❓", "🌟", "🎵",
 const SFX = ["쿵", "우당탕", "스윽", "두근", "촤악", "번쩍", "탁", "위이잉—"];
 
 let data = null;
-let state = { credit: START_CREDIT, scenes: {}, ledger: [] };
+// gaps: 장 뒤의 여백을 사람이 고친 값 {장 번호: 0~3}. 콘티 값을 덮어쓴다.
+let state = { credit: START_CREDIT, scenes: {}, ledger: [], gaps: {} };
 let sel = null;          // 선택한 요소 { sceneNo, id }
 let activeScene = 1;
 let tab = "bubble";
@@ -74,7 +75,7 @@ let uid = Date.now();
 /* 작품이 정해진 **뒤에** 부른다 — 열쇠가 run_id 에 매여 있어서, 먼저 부르면
    앞 작품 칸을 읽는다. */
 function load() {
-  state = { credit: START_CREDIT, scenes: {}, ledger: [] };
+  state = { credit: START_CREDIT, scenes: {}, ledger: [], gaps: {} };
   try {
     const raw = JSON.parse(localStorage.getItem(storeKey()) || "null");
     if (raw && typeof raw === "object") state = { ...state, ...raw };
@@ -109,7 +110,12 @@ function overlayPayload() {
     if (!st || !Array.isArray(st.items)) continue;
     scenes[s.no] = { ref_w: refWidth(s.no), items: st.items };
   }
-  return { scenes };
+  // 여백은 장을 한 번도 안 건드려도 고칠 수 있다 — items 와 따로 싣는다.
+  const gaps = {};
+  for (const [no, v] of Object.entries(state.gaps || {})) {
+    if (Number.isInteger(v)) gaps[no] = v;
+  }
+  return { scenes, gaps };
 }
 
 async function pushNow() {
@@ -247,6 +253,7 @@ function render() {
     .join("");
   data.scenes.forEach(s => { paintItems(s.no); paintFeedback(s.no); });
   wireScenes();
+  wireGaps();
   // 지난 판은 서버에만 있다 — 목업에는 없다.
   if (RUN_ID) data.scenes.forEach(s => paintVersions(s.no));
   paintScript();
@@ -271,15 +278,87 @@ function paintEpTabs() {
   }));
 }
 
-/* 장 사이 여백 — 실제 비율만큼 자리를 차지하고, 얼마인지 말한다.
-   높이를 %로 주면 CSS 는 **가로 폭 기준**으로 읽는다. episode.stitch 가 여백을
-   "지면 폭의 몇 배"로 계산하는 것과 같은 눈금이라 그대로 맞는다. */
+/* 장 사이 여백 — 실제 비율만큼 자리를 차지하고, **끌어서 고칠 수 있다.**
+ *
+ * 높이를 %로 주면 CSS 는 가로 폭 기준으로 읽는다. episode.stitch 가 여백을
+ * "지면 폭의 몇 배"로 계산하는 것과 같은 눈금이라 그대로 맞는다 — 여기서 본
+ * 간격이 곧 내려받는 파일의 간격이다.
+ *
+ * 콘티가 정한 값(gap_after)이 기본이고, 여기서 고치면 그것이 이긴다. 콘티는
+ * 글만 읽고 계산한 값이라 그림이 나온 뒤에 보면 너무 붙었거나 벌어져 있다.
+ *
+ * 고르는 값은 **단(0~3)** 이지 배수가 아니다. 배수를 직접 만지게 하면 콘티가
+ * 쓰는 눈금에 없는 값이 생겨서, 다시 구울 때 맞출 기준이 없어진다.
+ */
+
+const GAP_NAMES = ["붙임", "한 박자", "쉼", "크게 쉼"];
+
+function gapScale(step) {
+  const t = (data && data.gap_scale) || {};
+  const v = t[String(step)];
+  return typeof v === "number" ? v : [0, 0.07, 0.26, 0.62][step] || 0;
+}
+
+/* 지금 이 장 뒤의 여백이 몇 단인가 — 고친 것이 있으면 그것, 없으면 콘티 값. */
+function gapStep(s) {
+  const o = state.gaps || {};
+  const v = o[s.no];
+  return Number.isInteger(v) ? v : (+s.gap_step || 0);
+}
+
 function gapBar(s, last) {
-  const gap = last ? 0 : +s.gap || 0;
-  if (!gap) return "";
-  return `<div class="scene-gap" style="padding-top:${(gap * 100).toFixed(2)}%"` +
-         ` title="이 장 뒤의 여백 — 내려받는 파일에도 이만큼 들어갑니다">` +
-         `<span>여백</span></div>`;
+  if (last) return "";
+  const step = gapStep(s);
+  return `<div class="scene-gap" data-gap="${s.no}"
+      style="padding-top:${(gapScale(step) * 100).toFixed(2)}%"
+      title="끌어서 여백을 고칩니다 — 내려받는 파일도 이만큼 벌어집니다">
+      <span data-gap-label>${GAP_NAMES[step]}</span>
+      <div class="gap-steps">${GAP_NAMES.map((n, i) =>
+        `<button type="button" class="gap-dot${i === step ? " is-on" : ""}"
+                 data-gap-set="${i}" title="${n}"></button>`).join("")}</div>
+    </div>`;
+}
+
+/* 여백을 끌어서 고친다. 위아래로 끌면 단이 오르내리고, 점을 누르면 그 단으로
+   바로 간다 — 끄는 것이 정확히 안 잡히는 자리(0 과 1 사이)가 있어서다. */
+function wireGaps() {
+  $$("[data-gap]").forEach(bar => {
+    const no = Number(bar.dataset.gap);
+    const setStep = v => {
+      const step = Math.max(0, Math.min(3, v));
+      state.gaps = state.gaps || {};
+      state.gaps[no] = step;
+      bar.style.paddingTop = `${(gapScale(step) * 100).toFixed(2)}%`;
+      const label = $("[data-gap-label]", bar);
+      if (label) label.textContent = GAP_NAMES[step];
+      $$(".gap-dot", bar).forEach((d, i) =>
+        d.classList.toggle("is-on", i === Number(d.dataset.gapSet) && i === step));
+      return step;
+    };
+
+    $$(".gap-dot", bar).forEach(d => d.addEventListener("click", ev => {
+      ev.stopPropagation();
+      setStep(Number(d.dataset.gapSet)); save();
+    }));
+
+    bar.addEventListener("pointerdown", ev => {
+      if (ev.target.closest(".gap-dot")) return;
+      ev.preventDefault();
+      const start = ev.clientY;
+      const from = gapStep({ no, gap_step: 0 });
+      const unit = Math.max(24, bar.getBoundingClientRect().width * 0.10);
+      bar.setPointerCapture(ev.pointerId);
+      bar.classList.add("is-dragging");
+      const move = e => setStep(from + Math.round((e.clientY - start) / unit));
+      const up = () => {
+        bar.classList.remove("is-dragging"); save();
+        bar.removeEventListener("pointermove", move);
+        bar.removeEventListener("pointerup", up);
+      };
+      bar.addEventListener("pointermove", move);
+      bar.addEventListener("pointerup", up);
+    });
+  });
 }
 
 function sceneCard(s) {
@@ -623,17 +702,25 @@ function tailOf(it) {
   return it.tail || "left";
 }
 
+/* 글은 **그 자리에서** 고친다.
+   따로 칸을 두면 그림에서 눈을 떼야 하고, 고친 글이 말풍선 안에 들어가는지는
+   칸을 닫고 나서야 알 수 있었다. 이제 글을 누르면 거기 바로 커서가 선다. */
 function itemHTML(it) {
+  // contenteditable 은 **켤 때만** 붙인다. 늘 켜 두면 브라우저가 그 위의 누름을
+  // 글자 고르기로 먹어서, 말풍선을 잡아 끌 수도 고를 수도 없다(실제로 그랬다).
+  const ed = it.type !== "sticker" ? ` data-edit spellcheck="false"` : "";
   const inner =
     it.type === "bubble"
-      ? `<div class="bub bub-${it.variant} tail-${tailOf(it)}" style="font-size:${it.size}px">${esc(it.text)}</div>`
+      ? `<div class="bub bub-${it.variant} tail-${tailOf(it)}" style="font-size:${it.size}px"${ed}>${esc(it.text)}</div>`
       : it.type === "sticker"
         ? `<div class="stk" style="font-size:${it.size * 2.2}px">${it.text}</div>`
-        : `<div class="sfx" style="font-size:${it.size * 2}px">${esc(it.text)}</div>`;
+        : `<div class="sfx" style="font-size:${it.size * 2}px"${ed}>${esc(it.text)}</div>`;
   return `<div class="item ${sel && sel.id === it.id ? "sel" : ""}" data-id="${it.id}"
+    data-type="${it.type}"
     style="left:${it.x}%; top:${it.y}%; width:${it.w}%; transform:rotate(${it.rot}deg)">
-    ${inner}<button type="button" class="kill" aria-label="삭제">✕</button>
-    <div class="handle"></div></div>`;
+    ${inner}
+    <div class="handle handle-rot" data-rot title="돌리기"></div>
+    <div class="handle handle-size" title="폭"></div></div>`;
 }
 
 function paintItems(no) {
@@ -642,6 +729,7 @@ function paintItems(no) {
   layer.innerHTML = sc(no).items.map(itemHTML).join("");
   layer.classList.toggle("is-hidden", !$("#showOverlay").checked);
   $$(".item", layer).forEach(el => wireItem(no, el));
+  paintProps();
 }
 
 function paintFeedback(no) {
@@ -688,25 +776,72 @@ function wireItem(no, el) {
     paintProps();
   };
 
+  const text = $("[data-edit]", el);
+
+  /* ---- 글을 그 자리에서 고친다 ----
+     고른 것을 **다시 한 번** 누르면 커서가 선다. 한 번에 바로 서게 하면 옮기려고
+     짚었을 뿐인데 글쓰기로 들어가서, 그때부터 끄는 것이 글자 고르기가 된다.
+     두 번 누르는 것은 파일 이름을 고칠 때와 같은 규칙이라 배울 것이 없다. */
+  function enterEdit() {
+    if (!text || el.classList.contains("editing")) return;
+    el.classList.add("editing");
+    text.contentEditable = "plaintext-only";
+    text.focus();
+    const r = document.createRange();
+    r.selectNodeContents(text);
+    r.collapse(false);                         // 커서를 글 끝에
+    const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r);
+  }
+  el.addEventListener("dblclick", () => { pick(); enterEdit(); });
+
   el.addEventListener("pointerdown", ev => {
-    if (ev.target.classList.contains("kill")) return;
+    // 글을 고치는 중에는 그 안에서 커서를 끌 수 있어야 한다 — 여기서 잡아채면
+    // 글자를 짚거나 골라 지울 수가 없다.
+    if (el.classList.contains("editing") && ev.target === text) return;
+    // 이미 골라 둔 것을 **다시** 눌렀는가. 방금 고른 것은 아니다 — 놓을 자리를
+    // 잡으려고 처음 짚었을 뿐인데 글쓰기로 들어가면 안 된다.
+    const again = !!(sel && sel.id === id) && !ev.target.classList.contains("handle");
+    let moved = false;
     ev.preventDefault(); pick();
     const it = sc(no).items.find(i => i.id === id);
     const box = wrap.getBoundingClientRect();
-    const resizing = ev.target.classList.contains("handle");
-    const sx = ev.clientX, sy = ev.clientY, ox = it.x, oy = it.y, ow = it.w;
+    const rot = ev.target.dataset.rot !== undefined;
+    const resizing = !rot && ev.target.classList.contains("handle");
+    const sx = ev.clientX, sy = ev.clientY;
+    const ox = it.x, oy = it.y, ow = it.w, orot = it.rot;
+    // 돌리기는 요소의 **가운데를 축으로** 잰다 — 끄는 점과 가운데가 이루는
+    // 각이 곧 기울기다. 손이 가는 대로 돌아간다.
+    const r0 = el.getBoundingClientRect();
+    const cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2;
+    const a0 = Math.atan2(sy - cy, sx - cx);
     el.classList.add("dragging");
-    el.setPointerCapture(ev.pointerId);
+    // 붙잡기가 안 되는 경우가 있다(다른 손가락이 이미 잡고 있거나, 브라우저가
+    // 거절하거나). 그때 여기서 예외가 나면 **아래 move/up 이 아예 안 걸려서**
+    // 끌기·크기·돌리기가 통째로 죽는다. 못 붙잡아도 끌기는 되게 둔다.
+    try { el.setPointerCapture(ev.pointerId); } catch { /* 안 잡혀도 끈다 */ }
 
     const move = e => {
       const dx = (e.clientX - sx) / box.width * 100;
       const dy = (e.clientY - sy) / box.height * 100;
+      if (rot) {
+        const deg = (Math.atan2(e.clientY - cy, e.clientX - cx) - a0) * 180 / Math.PI;
+        let v = orot + deg;
+        // Shift 를 누르고 있으면 15도 눈금에 붙인다 — 반듯하게 세우려고
+        // 손으로 0 을 맞추는 건 사실상 안 된다.
+        if (e.shiftKey) v = Math.round(v / 15) * 15;
+        it.rot = Math.max(-180, Math.min(180, Math.round(v)));
+        el.style.transform = `rotate(${it.rot}deg)`;
+        return;
+      }
+      if (Math.abs(dx) > 0.4 || Math.abs(dy) > 0.4) moved = true;
       if (resizing) it.w = Math.max(5, Math.min(96, ow + dx));
       else { it.x = Math.max(-6, Math.min(98, ox + dx)); it.y = Math.max(-4, Math.min(97, oy + dy)); }
       el.style.left = `${it.x}%`; el.style.top = `${it.y}%`; el.style.width = `${it.w}%`;
     };
     const up = () => {
-      el.classList.remove("dragging"); save();
+      el.classList.remove("dragging"); save(); paintProps();
+      // 끌지 않고 그냥 누른 것이면 글을 고치러 들어간다.
+      if (again && !moved) enterEdit();
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", up);
     };
@@ -714,14 +849,32 @@ function wireItem(no, el) {
     el.addEventListener("pointerup", up);
   });
 
-  el.addEventListener("dblclick", () => { pick(); $("#propText")?.focus(); });
-  $(".kill", el).addEventListener("click", ev => {
-    ev.stopPropagation();
-    const st = sc(no);
-    st.items = st.items.filter(i => i.id !== id);
-    if (sel && sel.id === id) sel = null;
-    save(); paintItems(no); paintProps();
-  });
+  if (text) {
+    text.addEventListener("input", () => {
+      const it = sc(no).items.find(i => i.id === id);
+      if (it) { it.text = text.innerText; save(); }
+    });
+    text.addEventListener("keydown", e => {
+      // Enter 는 줄바꿈이다 (말풍선은 두세 줄이 예사다). 끝내는 것은 Esc.
+      if (e.key === "Escape") { e.preventDefault(); text.blur(); }
+      e.stopPropagation();                     // 아래 단축키(삭제 등)와 안 겹치게
+    });
+    text.addEventListener("blur", () => {
+      el.classList.remove("editing");
+      text.contentEditable = "false";
+      const it = sc(no).items.find(i => i.id === id);
+      // 글을 다 지우면 그 요소는 굽는 쪽에서 버려진다(clean_item). 화면에서만
+      // 남아 있으면 구운 뒤에 사라져서 놀란다 — 여기서 같이 지운다.
+      if (it && !text.innerText.trim()) {
+        const st = sc(no);
+        st.items = st.items.filter(i => i.id !== id);
+        if (sel && sel.id === id) sel = null;
+        save(); paintItems(no);
+        return;
+      }
+      save(); paintItems(no);
+    });
+  }
 }
 
 /* ------------------------------------------------------------------ 도구 패널 */
@@ -776,34 +929,196 @@ function setLedger(open) {
     const el = $(sel);
     if (el) el.hidden = open;
   }
-  // 속성 칸은 고른 요소가 있을 때만 뜨는 것이라, 닫을 때 무조건 펴면 안 된다.
-  if (open) $("#dockProps").hidden = true;
-  else paintProps();
+  // 고치는 손잡이는 이제 서랍이 아니라 그림 위에 있다. 내역을 보는 동안에는
+  // 그림을 만질 일이 없으니 선택도 같이 푼다 — 안 그러면 내역 위로 손잡이 줄이
+  // 계속 떠 있다.
+  if (open) clearSel();
   if (open) setDock(true);
 }
 
+/* 고른 요소를 고치는 손잡이 — **그림 위에** 뜬다.
+ *
+ * 전에는 오른쪽 서랍에 글자칸과 슬라이더가 있었다. 고치려면 그림에서 눈을
+ * 떼야 했고, 말풍선이 인물 얼굴을 가리는지는 서랍을 닫고 나서야 보였다.
+ * 이제 고른 것 바로 옆에 필요한 것만 뜬다 — 글은 그 자리에서 치고, 크기·
+ * 기울기는 모서리 손잡이를 끌고, 나머지는 이 작은 줄에서 누른다.
+ *
+ * 서랍은 **넣는 자리**만 한다 (말풍선·스티커·효과음 팔레트).
+ */
+
+const BAR_ID = "itemBar";
+
+function killBar() {
+  document.getElementById(BAR_ID)?.remove();
+}
+
+function barHTML(it) {
+  const b = (act, label, title, cls = "") =>
+    `<button type="button" class="ib ${cls}" data-act="${act}" title="${title}">${label}</button>`;
+  const tailed = it.type === "bubble" && TAILED.has(it.variant);
+  const cur = tailOf(it);
+  const tailBtn = (v, label) =>
+    `<button type="button" class="ib${cur === v ? " is-on" : ""}" data-tail="${v}"` +
+    ` title="꼬리 ${label}">${label}</button>`;
+  return [
+    b("smaller", "ᴀ⁻", "글자 작게"),
+    b("bigger", "ᴀ⁺", "글자 크게"),
+    tailed ? `<span class="ib-sep"></span>` +
+             tailBtn("left", "◀") + tailBtn("right", "▶") + tailBtn("none", "✕") : "",
+    `<span class="ib-sep"></span>`,
+    b("front", "⬆", "맨 앞으로"),
+    b("dup", "⧉", "복제"),
+    b("del", "🗑", "삭제", "is-danger"),
+  ].join("");
+}
+
+/* 손잡이 줄을 고른 것 **위**에 붙인다. 위가 좁으면 아래로 내린다 — 첫 줄에
+   얹은 말풍선에서 줄이 그림 밖으로 나가 안 보이던 자리다. */
 function paintProps() {
   const it = findItem();
-  // 내역을 보는 중에는 속성 칸을 끼워 넣지 않는다 (위 setLedger 참고).
-  $("#dockProps").hidden = !it || !$("#dockLedger").hidden;
+  killBar();
   if (!it) return;
-  setDock(true);
-  $("#propTitle").textContent =
-    { bubble: "말풍선", sticker: "스티커", sfx: "효과음" }[it.type] || "요소";
-  $("#propTextField").hidden = it.type === "sticker";
-  $("#propText").value = it.text;
-  $("#propSize").value = it.size;
-  $("#propRot").value = it.rot;
-  $("#propWide").value = Math.round(it.w);
-  // 꼬리 칸은 꼬리를 가질 수 있는 말풍선에만 보인다 — 나레이션 상자와 스티커·
-  // 효과음에 "꼬리 왼쪽" 을 물어보면 안 되는 것을 물어보는 것이다.
-  const tailed = it.type === "bubble" && TAILED.has(it.variant);
-  $("#propTailField").hidden = !tailed;
-  if (tailed) {
-    const cur = tailOf(it);
-    $$("#propTail button").forEach(b =>
-      b.classList.toggle("is-on", b.dataset.tail === cur));
-  }
+  const el = document.querySelector(
+    `#scene-${sel.sceneNo} .item[data-id="${sel.id}"]`);
+  const layer = el && el.parentElement;
+  if (!layer) return;
+
+  const bar = document.createElement("div");
+  bar.id = BAR_ID;
+  bar.className = "item-bar";
+  bar.innerHTML = barHTML(it);
+  layer.appendChild(bar);
+
+  const box = layer.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  const above = r.top - box.top > 46;
+  bar.style.left = `${((r.left + r.width / 2 - box.left) / box.width) * 100}%`;
+  bar.style.top = above
+    ? `${((r.top - box.top) / box.height) * 100}%`
+    : `${((r.bottom - box.top) / box.height) * 100}%`;
+  bar.classList.toggle("is-below", !above);
+
+  bar.addEventListener("pointerdown", e => e.stopPropagation());
+  bar.addEventListener("click", e => {
+    const t = e.target.closest("[data-tail]");
+    if (t) return setTail(t.dataset.tail);
+    const b = e.target.closest("[data-act]");
+    if (b) ACTS[b.dataset.act]?.();
+  });
+}
+
+/* 손잡이 줄이 하는 일들. 키보드 단축키도 같은 것을 부른다 — 두 길이 갈리면
+   눌러서 되는 것과 눌러서 안 되는 것이 생긴다. */
+const ACTS = {
+  bigger: () => bumpSize(+2),
+  smaller: () => bumpSize(-2),
+  front: () => {
+    const it = findItem(); if (!it) return;
+    const st = sc(sel.sceneNo);
+    st.items = [...st.items.filter(i => i.id !== it.id), it];
+    save(); paintItems(sel.sceneNo);
+  },
+  dup: () => {
+    const it = findItem(); if (!it) return;
+    const copy = { ...it, id: `i${++uid}`,
+                   x: Math.min(90, it.x + 5), y: Math.min(92, it.y + 5) };
+    sc(sel.sceneNo).items.push(copy);
+    sel = { sceneNo: sel.sceneNo, id: copy.id };
+    save(); paintItems(sel.sceneNo);
+  },
+  del: () => {
+    const it = findItem(); if (!it) return;
+    const st = sc(sel.sceneNo);
+    st.items = st.items.filter(i => i.id !== it.id);
+    const no = sel.sceneNo; sel = null;
+    save(); paintItems(no);
+  },
+};
+
+function bumpSize(d) {
+  const it = findItem(); if (!it) return;
+  it.size = Math.max(6, Math.min(70, it.size + d));
+  save(); paintItems(sel.sceneNo);
+}
+
+function setTail(v) {
+  const it = findItem(); if (!it) return;
+  it.tail = v; save(); paintItems(sel.sceneNo);
+}
+
+function clearSel() {
+  const no = sel && sel.sceneNo;
+  sel = null;
+  if (no) paintItems(no);
+  else paintProps();
+}
+
+/* ---- 제목 고치기 -------------------------------------------------------
+ *
+ * 전에는 결과 화면에서만 고칠 수 있었다. 편집실에서 제목이 마음에 안 들면
+ * 나갔다 들어와야 했는데, 정작 제목을 다시 보게 되는 자리는 편집실이다.
+ * 같은 주소(/api/runs/{run}/title)를 쓰므로 어느 쪽에서 고쳐도 같은 곳에
+ * 저장된다 — 목록·공유 미리보기·내려받는 파일 이름까지 따라온다.
+ *
+ * 비우고 끝내면 모델이 지은 이름으로 되돌아간다 (서버가 그렇게 읽는다).
+ */
+function setupTitleEdit() {
+  const h = $("[data-title-edit]");
+  if (!h) return;
+  let saving = false;
+
+  const commit = async () => {
+    h.contentEditable = "false";
+    h.classList.remove("is-editing");
+    const want = h.innerText.trim();
+    if (!data) return;
+    if (!RUN_ID) {                          // 목업은 저장할 곳이 없다
+      h.textContent = data ? data.title : want;
+      return toast("샘플입니다 — 제목은 실제 작품에서만 바뀝니다.");
+    }
+    if (want === (data.title || "") || saving) { h.textContent = data.title; return; }
+    saving = true;
+    try {
+      const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/title`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ episode: EPISODE, title: want }),
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || "저장하지 못했습니다");
+      // 서버가 돌려준 것이 **앞으로 보일 이름**이다 (비웠으면 원래 제목).
+      data.title = out.title;
+      h.textContent = out.title;
+      $("#edTitle").textContent = out.title;
+      toast("제목을 바꿨습니다");
+    } catch (err) {
+      h.textContent = data.title;           // 못 바꿨으면 화면도 되돌린다
+      toast(err.message);
+    }
+    saving = false;
+  };
+
+  const enter = () => {
+    // 아직 안 열린 화면에서는 되돌릴 원래 제목이 없다 — 열릴 때까지 기다린다.
+    if (!data || h.isContentEditable) return;
+    h.contentEditable = "plaintext-only";
+    h.classList.add("is-editing");
+    h.focus();
+    const r = document.createRange();
+    r.selectNodeContents(h);
+    const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r);
+  };
+
+  h.addEventListener("click", enter);
+  h.addEventListener("keydown", e => {
+    e.stopPropagation();
+    if (!h.isContentEditable) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); enter(); }
+      return;
+    }
+    if (e.key === "Enter") { e.preventDefault(); h.blur(); }
+    if (e.key === "Escape") { e.preventDefault(); h.textContent = data.title; h.blur(); }
+  });
+  h.addEventListener("blur", commit);
 }
 
 /* ------------------------------------------------------------------ 잡동사니 */
@@ -964,6 +1279,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // load() 는 RUN_ID·EPISODE 가 정해진 **뒤에** 부른다 — 열쇠가 거기 매여 있다.
   load(); paintCredit(); paintLedger(); paintDock();
   loadSceneTags();
+  setupTitleEdit();
   // 작품 목록은 **여는 데 실패해도** 남아 있어야 한다. 한 작품이 안 열린다고
   // 목록까지 사라지면 다른 작품으로 건너갈 길이 없어서 주소를 직접 고쳐야 한다.
   paintWorks(RUN_ID);
@@ -1007,6 +1323,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (Array.isArray(sp.items)) sc(Number(no)).items = sp.items.map(
           (it, i) => ({ ...it, id: it.id || `s${no}_${i}_${++uid}` }));
       }
+      state.gaps = state.gaps || {};
+      for (const [no, v] of Object.entries(got.gaps || {})) {
+        const g = Number(v);
+        if (Number.isInteger(g)) state.gaps[Number(no)] = g;
+      }
     } catch { /* localStorage 것을 쓴다 */ }
   }
 
@@ -1024,55 +1345,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#dockFold")?.addEventListener("click", () => setDock(false));
   $("#dockOpen")?.addEventListener("click", () => setDock(true));
   $("#dockScrim")?.addEventListener("click", () => setDock(false));
+  // 그림 바깥을 누르면 선택이 풀린다. 손잡이 줄이 그림 위에 떠 있어서, 풀
+  // 길이 없으면 다 끝낸 뒤에도 줄이 계속 그림을 가린다.
+  document.addEventListener("pointerdown", e => {
+    if (!sel) return;
+    if (e.target.closest(".item, .item-bar, .dock-item, #edDock")) return;
+    clearSel();
+  });
   $("#showOverlay").addEventListener("change", () =>
     data.scenes.forEach(s => paintItems(s.no)));
-
-  $("#propText").addEventListener("input", e => {
-    const it = findItem(); if (!it) return;
-    it.text = e.target.value; save(); paintItems(sel.sceneNo);
-  });
-  $("#propSize").addEventListener("input", e => {
-    const it = findItem(); if (!it) return;
-    it.size = +e.target.value; save(); paintItems(sel.sceneNo);
-  });
-  $("#propWide").addEventListener("input", e => {
-    const it = findItem(); if (!it) return;
-    it.w = +e.target.value; save(); paintItems(sel.sceneNo); paintProps();
-  });
-  $("#propTail").addEventListener("click", e => {
-    const b = e.target.closest("button[data-tail]");
-    const it = findItem(); if (!b || !it) return;
-    it.tail = b.dataset.tail; save(); paintItems(sel.sceneNo); paintProps();
-  });
-  $("#propRot").addEventListener("input", e => {
-    const it = findItem(); if (!it) return;
-    it.rot = +e.target.value; save(); paintItems(sel.sceneNo);
-  });
-  $("#propFront").addEventListener("click", () => {
-    const it = findItem(); if (!it) return;
-    const st = sc(sel.sceneNo);
-    st.items = [...st.items.filter(i => i.id !== it.id), it];
-    save(); paintItems(sel.sceneNo);
-  });
-  $("#propDup").addEventListener("click", () => {
-    const it = findItem(); if (!it) return;
-    const copy = { ...it, id: `i${++uid}`, x: Math.min(90, it.x + 5), y: Math.min(92, it.y + 5) };
-    sc(sel.sceneNo).items.push(copy);
-    sel = { sceneNo: sel.sceneNo, id: copy.id };
-    save(); paintItems(sel.sceneNo); paintProps();
-  });
-  $("#propDel").addEventListener("click", () => {
-    const it = findItem(); if (!it) return;
-    const st = sc(sel.sceneNo);
-    st.items = st.items.filter(i => i.id !== it.id);
-    const no = sel.sceneNo; sel = null;
-    save(); paintItems(no); paintProps();
-  });
-  $("#propClose").addEventListener("click", () => {
-    const no = sel && sel.sceneNo; sel = null;
-    if (no) paintItems(no);
-    paintProps();
-  });
 
   $("#ledgerBtn")?.addEventListener("click", () => setLedger($("#dockLedger").hidden));
   $("#ledgerClose").addEventListener("click", () => setLedger(false));
@@ -1139,11 +1420,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     if ((e.key === "Delete" || e.key === "Backspace") && sel &&
         !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
-      e.preventDefault(); $("#propDel").click();
+      e.preventDefault(); ACTS.del();
     }
     if (e.key === "Escape") {
       // 고른 것이 있으면 선택만 풀고, 없으면 서랍을 닫는다
-      if (sel) $("#propClose").click();
+      if (sel) clearSel();
       else setDock(false);
     }
   });

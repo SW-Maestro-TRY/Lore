@@ -84,13 +84,22 @@ ok("세기: 얹은 것 개수를 센다", OV.count_items(payload) == 1)
 
 tmp = Path(tempfile.mkdtemp())
 ok("저장: 파일이 없으면 빈 것으로 읽는다",
-   OV.load_overlay(tmp) == {"scenes": {}})
+   OV.load_overlay(tmp) == {"scenes": {}, "gaps": {}})
 OV.save_overlay(tmp, {"scenes": {"1": {"ref_w": 700, "items": [BUBBLE]}}})
 ok("저장: 저장한 것이 그대로 다시 읽힌다",
    OV.load_overlay(tmp)["scenes"]["1"]["items"][0]["text"] == BUBBLE["text"])
 OV.overlay_path(tmp).write_text("{ 망가진 json", encoding="utf-8")
 ok("저장: 파일이 깨져도 편집실이 열린다 (빈 것으로 본다)",
-   OV.load_overlay(tmp) == {"scenes": {}})
+   OV.load_overlay(tmp) == {"scenes": {}, "gaps": {}})
+
+# ---- 여백 고침 — 편집실에서 장 뒤의 쉼을 바꾼다 -----------------------------
+OV.save_overlay(tmp, {"scenes": {}, "gaps": {"1": 3, "2": 0, "9": 7, "x": 1}})
+_g = OV.gap_overrides(OV.load_overlay(tmp))
+ok("여백: 0~3 만 남고 나머지는 버린다", _g == {1: 3, 2: 0}, _g)
+
+OV.save_overlay(tmp, {"scenes": {}})
+ok("여백: 옛 파일처럼 gaps 가 없으면 아무것도 안 덮어쓴다",
+   OV.gap_overrides(OV.load_overlay(tmp)) == {})
 
 # ---- 일반/전문 모드 ---------------------------------------------------------
 
