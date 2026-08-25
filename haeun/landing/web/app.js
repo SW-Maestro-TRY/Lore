@@ -1879,8 +1879,9 @@ function paintResult(r) {
   $("#editorLink").href = resultRunId
     ? `/editor?run=${encodeURIComponent(resultRunId)}&ep=${epNo}` : "/editor";
 
-  // 이어 만들기 단추 — 그린 작품이 있어야 뜻이 있다.
-  nextEpCtx = resultRunId
+  // 이어 만들기 단추 — 그린 작품이 있어야 뜻이 있고, **내 작품이어야** 한다.
+  // 남의 연재를 내가 이어 그릴 자리가 아니다(크레딧도 내 것이 나간다).
+  nextEpCtx = (resultRunId && isMyRun(resultRunId))
     ? { runId: resultRunId, next: r.next_episode || (epNo + 1),
         character: r.character || "", title: r.title || "" }
     : null;
@@ -1890,7 +1891,8 @@ function paintResult(r) {
   // 이어 그리기 — 콘티에 아직 안 그린 컷이 남아 있을 때만 뜬다.
   // 한 화를 통째로 굽지 않고 앞부분부터 보여주는 것이 지금의 방식이라,
   // 대부분의 결과 화면에는 이 단추가 있다.
-  moreCtx = (resultRunId && r.more_cuts)
+  // 이어 그리기도 같다 — 남의 작품에 컷을 더 그려 붙일 수는 없다.
+  moreCtx = (resultRunId && r.more_cuts && isMyRun(resultRunId))
     ? { runId: resultRunId, episode: epNo,
         drawn: r.drawn_units || 0, total: r.planned_cuts || 0 }
     : null;
@@ -2292,6 +2294,10 @@ function wireRegen() {
   $$("#reader .page").forEach(page => {
     const no  = Number(page.dataset.scene);
     const box = $(".regen-box", page);
+    // 남의 작품에는 고치는 자리를 아예 안 그린다(pageTools 참고). 그래서 상자가
+    // 없을 수 있다 — 예전에는 늘 있다고 믿고 바로 파고들다가, 남의 작품을 열면
+    // 여기서 죽어 화면 전환 자체가 멈췄다(둘러보기에서 눌러도 안 넘어갔다).
+    if (!box) return;
     // 장마다 상자가 하나씩이라 항목도 장마다 새로 그린다.
     fbChips("scene", $(".fb-tags", box), $(".fb-text", box));
     $(".js-regen-open", page).addEventListener("click", () => {
