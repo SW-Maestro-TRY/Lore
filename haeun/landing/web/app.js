@@ -496,7 +496,7 @@ function creationCost() {
 
 function paintCost() {
   const preview = true;              // 지금은 미리보기만 만든다 — collect() 도 항상 preview:true
-  $("#costChip").textContent = `−${creationCost()} 크레딧`;
+  $("#costChip").textContent = `−${creationCost()}크레딧`;
   // 단추에는 지금 나가는 값만 적고, 무슨 일이 일어나는지는 바로 밑 한 줄이
   // 말한다 — 이야기는 한 편 전체가 만들어지고 그림은 첫 장면(3컷)만 나온다는
   // 것을 모르고 누르면, 결과 화면에서 "이게 다야?" 가 된다.
@@ -521,7 +521,7 @@ function paintCost() {
     const full = (creditCost.full || 0)
       * (layoutMode() === "webtoon" ? (creditCost.webtoon_mult || 1) : 1);
     startChip.hidden = !full;
-    startChip.textContent = `한 편 ${full}크레딧`;
+    startChip.textContent = `−${full}크레딧`;
   }
   $("#submitBtn").firstChild.textContent =
     preview ? "미리보기 만들기 " : "웹툰 만들기 ";
