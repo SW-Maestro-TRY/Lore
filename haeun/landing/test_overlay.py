@@ -360,6 +360,70 @@ shutil.rmtree(ep.parent, ignore_errors=True)
 shutil.rmtree(tmp, ignore_errors=True)
 shutil.rmtree(work, ignore_errors=True)
 
+# ---------------- 최종본 — 얹은 것이 보는 자리마다 따라오는가 ----------------
+#
+# 편집실에서 말풍선을 얹고 저장하면 작품 폴더에는 남았다. 그런데 결과 화면·
+# 둘러보기·내려받기는 전부 원본 그림(unit_image)만 봐서 아무 데도 안 나왔다 —
+# 저장은 되는데 보이지 않으니, 사용자 입장에서는 저장이 안 된 것과 같았다.
+
+FRUN = "__final_test__"
+fep = P.episode_dir(FRUN)
+shutil.rmtree(fep.parent, ignore_errors=True)
+(fep / "scene_S+").mkdir(parents=True)
+for n in (1, 2):
+    img(300, 400, (200, 200 - 40 * n, 180)).save(fep / "scene_S+" / f"scene{n}_c1.png")
+img(300, 800, (222, 222, 222)).save(fep / "episode.png")
+
+ok("최종본: 얹은 것이 없으면 원본 그대로다",
+   P.final_unit(FRUN, 1) == P.unit_image(FRUN, 1))
+ok("최종본: 얹은 것이 없으면 한 편도 원본 그대로다",
+   P.final_episode(FRUN) == fep / "episode.png")
+
+P.write_overlay(FRUN, {"scenes": {"1": {"ref_w": 300, "items": [BUBBLE]}}})
+_f1 = P.final_unit(FRUN, 1)
+ok("최종본: 얹은 장은 구운 그림이 나온다",
+   _f1 == OV.baked_scene_path(fep, 1) and _f1.exists(), str(_f1))
+ok("최종본: 안 얹은 장은 그대로 원본이다",
+   P.final_unit(FRUN, 2) == P.unit_image(FRUN, 2))
+
+# 두 번째로 물으면 다시 굽지 않는다 (볼 때마다 굽는 자리가 아니다).
+_was = _f1.stat().st_mtime_ns
+P.final_unit(FRUN, 1)
+ok("최종본: 이미 구워져 있으면 다시 굽지 않는다",
+   _f1.stat().st_mtime_ns == _was)
+
+# 다시 그린(밑그림이 새로워진) 장은 다시 굽는다 — 옛 말풍선이 옛 그림 위에
+# 남아 있으면 되돌린 것이 화면에 안 나타난다.
+import os, time
+os.utime(P.unit_image(FRUN, 1), (time.time() + 5, time.time() + 5))
+P.final_unit(FRUN, 1)
+ok("최종본: 밑그림이 새로우면 다시 굽는다",
+   _f1.stat().st_mtime_ns != _was)
+
+_fe = P.final_episode(FRUN)
+ok("최종본: 얹은 것이 있으면 한 편도 구운 판이 나온다",
+   _fe == OV.baked_episode_path(fep) and _fe.exists(), str(_fe))
+
+# 여백 눈금 — 그 실행이 쓴 config 를 못 찾으면 하네스 기본값이어야 한다.
+ok("여백: config 를 못 찾으면 None (기본 눈금으로 떨어진다)",
+   P._run_gap_table(FRUN) is None)
+ok("여백: 기본 눈금은 하네스 것과 같다",
+   P._strip_gap_table()[1] == 0.07, P._strip_gap_table())
+
+# 같은 gap_after 라도 눈금이 다르면 한 편의 높이가 달라져야 한다 — 이것이
+# 기본 눈금으로 다시 구우면 원본과 어긋나던 자리다.
+def _bake_h(table):
+    r = OV.bake(fep, [1, 2], lambda n: P.unit_image(FRUN, n),
+                {"scenes": {}}, {1: (1, "normal"), 2: (0, "normal")}, table)
+    return r["height"]
+
+_h_default = _bake_h({0: 0.0, 1: 0.07, 2: 0.26, 3: 0.62})
+_h_webtoon = _bake_h({0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90})
+ok("여백: 눈금이 다르면 구운 한 편의 높이가 다르다",
+   _h_webtoon > _h_default, (_h_default, _h_webtoon))
+
+shutil.rmtree(fep.parent, ignore_errors=True)
+
 print()
 print(f"{'ALL PASS' if not fails else 'FAILED: ' + ', '.join(fails)}")
 sys.exit(1 if fails else 0)

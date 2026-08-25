@@ -1878,8 +1878,15 @@ function paintResult(r) {
     .map(s => `${s.title} ${mmss(s.seconds)}`).join("  ·  ");
   $("#downloadBtn").href = resultSrc.download;
 
-  // 장은 틈 없이 이어 붙인다 — episode.png 를 만드는 방식과 같게(episode.stitch).
-  // 컷 사이 호흡은 이제 한 장 안에서 모델이 정하므로 여기서 넣을 여백이 없다.
+  // 장 사이 여백과 지면 폭은 **파일과 같은 눈금**으로 그린다.
+  //
+  // 전에는 여기서 장을 딱 붙여 그렸다. 그런데 내려받은 episode.png 에는
+  // 콘티의 gap_after 대로 여백이 들어가 있어서(episode.stitch), 화면에서 보고
+  // 만든 것과 손에 쥔 파일이 다른 작품이 됐다 — 세로 스크롤에서 여백은
+  // 장식이 아니라 호흡이라 그만큼 크게 달라진다.
+  //
+  // 서버가 장마다 gap(지면 폭의 몇 배)·width(지면 폭의 몇 배)를 실어 준다.
+  // 그 값이 없는 옛 응답은 예전처럼 붙여 그린다.
   resultRunId = r.run_id || "";
   resultEpisode = epNo;
   // 공유는 run_id 로 여는 주소라, 그것이 없으면 보낼 링크가 없다. 눌러도
@@ -1889,13 +1896,20 @@ function paintResult(r) {
   toggleShareMenu(false);
   openTitleEdit(false);
   wireMemory(resultRunId);
-  $("#reader").innerHTML = r.pages.map(pg => `
-    <div class="page" data-scene="${pg.no}">
+  $("#reader").innerHTML = r.pages.map((pg, i) => {
+    // 마지막 장 뒤의 여백은 안 넣는다 — 그 아래는 이미 화면 끝이다.
+    const gap = i === r.pages.length - 1 ? 0 : +pg.gap || 0;
+    const w = +pg.width || 1;
+    const style = [gap ? `margin-bottom:${(gap * 100).toFixed(2)}%` : "",
+                   w < 1 ? `width:${(w * 100).toFixed(2)}%;margin-left:auto;` +
+                           "margin-right:auto" : ""].filter(Boolean).join(";");
+    return `
+    <div class="page" data-scene="${pg.no}"${style ? ` style="${style}"` : ""}>
       <img class="cut-img" src="${resultSrc.page(pg.no)}"
            alt="${pg.no}번째 장" loading="lazy">
       ${resultRunId ? pageTools(pg.no) : ""}
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
   if (resultRunId) {
     wireRegen();
     r.pages.forEach(pg => paintVersions(pg.no));
@@ -2675,8 +2689,7 @@ async function showMyPage() {
     return;
   }
   host.innerHTML = runs.map(r => workCard(r, true)).join("");
-  $$("#myWorksGrid [data-open]", host).forEach(b => b.addEventListener("click", () =>
-    showRunResult(b.dataset.open, Number(b.dataset.ep))));
+  bindOpen(host);
   bindPubToggles(host);
 }
 
@@ -2687,11 +2700,16 @@ function showMockMyPage() {
   $("#myPhoto").src = "/static/lou/react/idle/01.webp";
   $("#myNickname").textContent = "루를 아는 사람";
   $("#myMeta").textContent = "저장한 작품 4편 · 화면 구경용 목업입니다";
+  // 표지는 **단추**여야 한다. 목업이라고 눌리지 않는 것을 두면, 화면을 보러 온
+  // 사람은 그것이 목업이라서인지 고장이라서인지 알 수 없다 — 실제로 "저장한
+  // 작품 클릭이 안 된다"로 돌아왔다. 눌리면 완성본 목업이 열린다(진짜 마이
+  // 페이지에서 카드를 눌렀을 때와 같은 자리).
   const card = (no, character, sub) => `
     <article class="works-card">
-      <span class="works-cover">
+      <button type="button" class="works-cover" data-mock-open
+              aria-label="${esc(character)} 열기">
         <img src="/static/samples/mock/scene${no}.jpg" alt="" loading="lazy">
-      </span>
+      </button>
       <div class="works-body">
         <h3>${esc(character)}</h3>
         <p class="works-sub">${esc(sub)}</p>
@@ -2703,6 +2721,8 @@ function showMockMyPage() {
     + card(3, "초롱", "무협 · 강호에 첫발")
     + card(2, "하람", "헌터·게이트 · 첫 번째 각성")
     + card(4, "유리", "학원로맨스 · 3학년 3반의 봄");
+  $$("#myWorksGrid [data-mock-open]").forEach(b =>
+    b.addEventListener("click", () => showMockResult()));
   $("#myLogout").hidden = true;
   // 목업에서도 상단 배지가 로그인 뒤 모습(사진 + 마이페이지)으로 보여야
   // "로그인하면 여기가 바뀐다"가 화면으로 전달된다. 진짜 로그인은 아니다.
@@ -2744,9 +2764,24 @@ async function showWorks() {
   // 넘기면 두 번째 카드부터 mine 이 참이 돼서, 둘러보기인데 남의 작품에
   // 공개 스위치와 편집실 링크가 붙는다. 화살표로 감싸 한 개만 넘긴다.
   host.innerHTML = runs.map(r => workCard(r)).join("");
-  // 회차 단추가 카드 안에 있어서, 카드 자체를 누르면 첫 회차를 연다.
-  $$("#worksGrid [data-open]", host).forEach(b => b.addEventListener("click", () =>
-    showRunResult(b.dataset.open, Number(b.dataset.ep))));
+  bindOpen(host);
+}
+
+/* 작품 목록에서 카드를 눌러 여는 길. **목록에 한 번** 매단다.
+
+   전에는 카드마다 따로 매달았다. 목록을 다시 그리면(공개 스위치를 켜거나
+   회차가 늘면 그린다) 새로 꽂힌 카드에는 아무도 안 매달려서, 보기에는 멀쩡한
+   카드가 눌러도 안 열렸다. 목록 자체에 매달면 다시 그려도 살아 있다.
+
+   `closest` 로 찾으므로 표지 안의 <img> 를 눌러도 표지를 누른 것이 된다. */
+function bindOpen(host) {
+  if (!host || host.dataset.openBound) return;
+  host.dataset.openBound = "1";
+  host.addEventListener("click", e => {
+    const b = e.target.closest("[data-open]");
+    if (!b || !host.contains(b)) return;
+    showRunResult(b.dataset.open, Number(b.dataset.ep) || 1);
+  });
 }
 
 /* 작품 카드. 둘러보기와 마이페이지가 같은 카드를 쓰되, **내 것일 때만**

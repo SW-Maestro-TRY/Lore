@@ -200,6 +200,16 @@ function scriptCut(c) {
   </div>`;
 }
 
+/* 편집실은 **밑그림**을 본다 (raw=1).
+   보는 자리(결과·둘러보기)의 같은 주소는 얹은 것이 구워진 최종본을 주는데,
+   편집실은 얹은 것을 DOM 으로 따로 그리므로 밑그림에까지 구워져 있으면
+   말풍선이 두 겹으로 보인다. 목업(mock.json)은 정적 파일이라 그대로 쓴다. */
+function rawImg(s) {
+  const u = s.image || "";
+  if (!RUN_ID || !u.includes("/api/runs/")) return u;
+  return u + (u.includes("?") ? "&" : "?") + "raw=1";
+}
+
 function paintScript() {
   const body = $("#scriptBody");
   if (!body || !data) return;
@@ -226,7 +236,15 @@ function render() {
   $("#edFootNote").textContent = `여기까지가 ${ep}화입니다.`;
   paintEpTabs();
 
-  $("#scenes").innerHTML = data.scenes.map(s => sceneCard(s)).join("");
+  // 장과 장 사이의 **진짜 여백**을 여기서도 보여 준다.
+  //
+  // 전에는 편집실이 카드를 일정한 간격으로 늘어놓기만 했다 — 콘티가 "여기서
+  // 크게 쉰다"(gap_after=3)고 적어 둔 자리와 "바로 이어진다"(0)는 자리가
+  // 화면에서 똑같이 보였다. 그래서 편집실에서 보기 좋게 맞춰 놓아도 내려받은
+  // 파일은 다른 리듬이었다. 서버가 주는 gap 을 그대로 그린다.
+  $("#scenes").innerHTML = data.scenes
+    .map((s, i) => sceneCard(s) + gapBar(s, i === data.scenes.length - 1))
+    .join("");
   data.scenes.forEach(s => { paintItems(s.no); paintFeedback(s.no); });
   wireScenes();
   // 지난 판은 서버에만 있다 — 목업에는 없다.
@@ -253,11 +271,25 @@ function paintEpTabs() {
   }));
 }
 
+/* 장 사이 여백 — 실제 비율만큼 자리를 차지하고, 얼마인지 말한다.
+   높이를 %로 주면 CSS 는 **가로 폭 기준**으로 읽는다. episode.stitch 가 여백을
+   "지면 폭의 몇 배"로 계산하는 것과 같은 눈금이라 그대로 맞는다. */
+function gapBar(s, last) {
+  const gap = last ? 0 : +s.gap || 0;
+  if (!gap) return "";
+  return `<div class="scene-gap" style="padding-top:${(gap * 100).toFixed(2)}%"` +
+         ` title="이 장 뒤의 여백 — 내려받는 파일에도 이만큼 들어갑니다">` +
+         `<span>여백</span></div>`;
+}
+
 function sceneCard(s) {
   const st = sc(s.no);
   const cuts = s.cuts.map(c => c.no).join("·");
   return `
-  <section class="scene" data-scene="${s.no}" id="scene-${s.no}">
+  <section class="scene" data-scene="${s.no}" id="scene-${s.no}"${
+    (+s.width || 1) < 1
+      ? ` style="width:${((+s.width) * 100).toFixed(2)}%;margin-left:auto;margin-right:auto"`
+      : ""}>
     <div class="scene-head">
       <span class="scene-no">${s.no}번째 장</span>
       <span>컷 ${cuts}</span>
@@ -268,7 +300,7 @@ function sceneCard(s) {
     <div class="stage-wrap" data-wrap style="aspect-ratio:${s.w}/${s.h}">
       <!-- width/height 를 박아 자리를 미리 잡는다. 안 그러면 lazy 이미지가
            뜨기 전까지 높이가 0 이라 카드가 납작해졌다가 튄다. -->
-      <img src="${s.image}" alt="${s.no}번째 장" width="${s.w}" height="${s.h}" loading="lazy">
+      <img src="${rawImg(s)}" alt="${s.no}번째 장" width="${s.w}" height="${s.h}" loading="lazy">
       <div class="overlay" data-overlay></div>
     </div>
 
@@ -538,7 +570,7 @@ const sceneBust = {};
 function bustScene(no) {
   sceneBust[no] = Date.now();
   const img = $(`#scene-${no} [data-wrap] img`);
-  if (img) img.src = `/api/runs/${encodeURIComponent(RUN_ID)}/page/${no}?w=1080${epq("&")}&t=${sceneBust[no]}`;
+  if (img) img.src = `/api/runs/${encodeURIComponent(RUN_ID)}/page/${no}?raw=1&w=1080${epq("&")}&t=${sceneBust[no]}`;
 }
 
 /* 지난 판 — 결과 화면과 같이 작은 그림으로 늘어놓고, 눌러서 그때그때 바꾼다. */
@@ -554,7 +586,7 @@ async function paintVersions(no, versions) {
   if (!versions || !versions.length) { slot.innerHTML = ""; return; }
   const cur = `
     <span class="ver-thumb is-current" title="지금 걸린 그림">
-      <img src="/api/runs/${encodeURIComponent(RUN_ID)}/page/${no}?w=160${epq('&')}&t=${sceneBust[no] || 0}"
+      <img src="/api/runs/${encodeURIComponent(RUN_ID)}/page/${no}?raw=1&w=160${epq('&')}&t=${sceneBust[no] || 0}"
            alt="지금 그림" loading="lazy">
       <span class="ver-label">지금</span>
     </span>`;

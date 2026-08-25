@@ -562,3 +562,20 @@ body.dock-open-on .dock-open { display: none; }
 /* 구운 결과 창의 워터마크 안내. 창에 적힌 크기는 **작품**의 크기라, 실제로
    받는 파일은 표시 띠만큼 더 길다 — 그 차이를 여기서 말해 둔다. */
 .bake-wm { display: block; margin-top: 4px; font-size: .74rem; color: var(--dim); }
+
+/* 장 사이 여백 — 콘티가 정한 호흡을 편집실에서도 눈으로 본다.
+   자리만 차지하는 것이 아니라 얼마인지 말해 준다. 빈 자리를 그냥 두면
+   "왜 여기만 벌어졌지" 로 읽혀서 실수처럼 보인다. */
+.scene-gap {
+  position: relative; width: 100%;
+  border-left: 1px dashed var(--line, #d8d8de);
+  border-right: 1px dashed var(--line, #d8d8de);
+}
+.scene-gap span {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-size: .72rem; letter-spacing: .08em;
+  color: var(--muted, #8a8a93); white-space: nowrap;
+}
+/* 여백 막대가 뒤따르면 카드 자체의 아래 여백은 줄인다 — 카드 사이 간격과
+   콘티가 정한 여백이 겹쳐 보이면 어느 쪽이 진짜인지 알 수 없다. */
+.scene:has(+ .scene-gap) { margin-bottom: 6px; }

@@ -474,9 +474,13 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             ep = self._ep(query)
             ep_dir = pipeline.episode_dir(m.group(1), ep)
+            # 내려받는 것도 **최종본**이다 — 편집실에서 얹은 것이 있으면 구운
+            # 판, 없으면 원본 그대로. 얹어 놓고 내려받았더니 말풍선이 없더라는
+            # 것이 가장 알아채기 어려운 실패다.
             # 나가는 파일에만 LORE 표시를 얹는다 (watermark.py 머리말 참고).
             src = watermark.for_download(
-                ep_dir / "episode.png", ep_dir, pipeline.episode_caption(m.group(1), ep))
+                pipeline.final_episode(m.group(1), ep), ep_dir,
+                pipeline.episode_caption(m.group(1), ep))
             return self._file(src, download=pipeline.episode_filename(m.group(1), ep))
 
         # 편집실에서 얹은 말풍선·스티커. 브라우저가 아니라 **작품 폴더**에 있어서
@@ -558,12 +562,34 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/runs/([\w.-]+)/page/(\d+)", path)
         if m:
             ep = self._ep(query)
-            src = pipeline.unit_image(m.group(1), int(m.group(2)), ep)
+            # 기본은 **최종본** — 편집실에서 얹은 것이 구워진 그림이다. 결과
+            # 화면·둘러보기·마이페이지가 전부 이 주소를 쓰므로, 여기 하나만
+            # 최종본을 가리키면 보는 자리가 다 같이 맞는다.
+            #
+            # `raw=1` 은 편집실 전용이다. 편집실은 얹은 것을 DOM 으로 따로
+            # 그리므로 밑그림에까지 구워져 있으면 말풍선이 두 겹으로 보인다.
+            raw = (query.get("raw") or [""])[0] == "1"
+            no = int(m.group(2))
+            src = (pipeline.unit_image(m.group(1), no, ep) if raw
+                   else pipeline.final_unit(m.group(1), no, ep))
             if not src:
                 return self._error(404, "그 장의 그림이 없습니다")
             width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
-            dest = (pipeline.episode_dir(m.group(1), ep) / "cache"
-                    / f"page{m.group(2)}_w{width}.jpg")
+            # 줄여 둔 것의 이름에 **밑그림의 시각**을 넣는다. 이름이 고정이면,
+            # 얹은 것을 다 지워 원본으로 돌아갔을 때 캐시가 더 새것이라
+            # 지워진 말풍선이 계속 보인다(thumbnail 이 mtime 만 비교한다).
+            stamp = int(src.stat().st_mtime)
+            head = f"page{m.group(2)}{'_raw' if raw else ''}_w{width}"
+            cache = pipeline.episode_dir(m.group(1), ep) / "cache"
+            dest = cache / f"{head}_{stamp}.jpg"
+            # 같은 장·같은 크기의 지난 캐시는 지운다 — 안 지우면 고칠 때마다
+            # 파일이 하나씩 쌓인다.
+            for old_file in cache.glob(f"{head}_*.jpg"):
+                if old_file != dest:
+                    try:
+                        old_file.unlink()
+                    except OSError:
+                        pass
             try:
                 return self._file(thumbnail(src, dest, width))
             except Exception:                                   # noqa: BLE001
