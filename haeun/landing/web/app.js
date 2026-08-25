@@ -497,6 +497,15 @@ function creationCost() {
 function paintCost() {
   const preview = true;              // 지금은 미리보기만 만든다 — collect() 도 항상 preview:true
   $("#costChip").textContent = `−${creationCost()} 크레딧`;
+  // 홈의 첫 단추에도 값을 적는다 — 다섯 걸음을 다 밟고 마지막에야 얼마인지
+  // 아는 것은 늦다. /api/config 가 오기 전에는 값이 0 이라, 그동안은 숨긴다
+  // (0 크레딧이라고 적어 두면 공짜인 줄 안다).
+  const startChip = $("#startCostChip");
+  if (startChip) {
+    const c = creationCost();
+    startChip.hidden = !c;
+    startChip.textContent = `${c} 크레딧`;
+  }
   $("#submitBtn").firstChild.textContent =
     preview ? "미리보기 만들기 " : "웹툰 만들기 ";
 }

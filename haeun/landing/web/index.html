@@ -210,7 +210,11 @@
       <div class="hero-cta">
         <!-- "시작하기" 로는 무엇이 시작되는지 알 수가 없었다. 가져올 것(내
              캐릭터)과 나올 것(웹툰)을 단추 하나에 다 적는다. -->
-        <button type="button" class="btn btn-primary" id="startBtn">내 캐릭터로 웹툰 만들기</button>
+        <!-- 값은 app.js 가 채운다(paintCost) — 크레딧 값은 /api/config 에서
+             오므로 여기 숫자를 적어 두면 서버와 어긋난다. -->
+        <button type="button" class="btn btn-primary" id="startBtn">내 캐릭터로 웹툰 만들기
+          <span class="cost-chip" id="startCostChip" hidden></span>
+        </button>
         <a class="btn btn-shell" href="/works">둘러보기</a>
       </div>
     </div>

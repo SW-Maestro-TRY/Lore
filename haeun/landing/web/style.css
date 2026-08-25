@@ -1263,6 +1263,14 @@ body[data-view="create"] .topnav { display: none; }
   font-family: var(--mono); font-size: .78rem; font-weight: 700;
   background: rgba(34,48,44,.08); border-radius: 6px; padding: .12em .5em; margin-left: .2em;
 }
+/* 홈의 첫 단추 안 값 딱지. 단추 바탕이 짙은 민트라 기본 딱지(먹빛 반투명)는
+   묻힌다 — 흰 쪽으로 뒤집는다. 값은 알리되 단추 글씨보다 앞서면 안 되므로
+   조금 작고 옅게 둔다. */
+#startCostChip {
+  background: rgba(255,255,255,.2); color: rgba(255,255,255,.92);
+  font-size: .74rem; margin-left: .45em;
+}
+
 .nav-tag {
   font-size: .6rem; font-weight: 800; letter-spacing: .1em; vertical-align: .25em;
   color: var(--ink); background: var(--gold); padding: .1em .35em; border-radius: 4px;
