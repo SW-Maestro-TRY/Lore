@@ -531,15 +531,26 @@ function chargeStep(name) {
 function renderChargePackages() {
   const box = $("#chargePackages");
   box.innerHTML = "";
-  creditPackages.forEach(pkg => {
+  creditPackages.forEach((pkg, ti) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "charge-pkg";
+    // 깊이 — 물결(1)에서 심해(4)로 내려갈수록 카드의 물빛이 짙어진다.
+    // 홈의 바다(수면→항해→심해)와 같은 눈금이라, 충전 화면이 따로 놀지 않는다.
+    b.dataset.tier = String(ti + 1);
+    // 크레딧보다 "몇 편"이 먼저다. 크레딧은 이 서비스가 만든 단위라 60이
+    // 많은지 적은지 알 수 없지만, "웹툰 7편"은 바로 읽힌다. 편당 가격이
+    // 깊이 들어갈수록 싸지는 것도 여기서 저절로 보인다.
+    const full = creditCost.full || 8;
+    const eps = Math.floor(pkg.credits / full);
+    const perEp = Math.round(pkg.price / (pkg.credits / full));
     b.innerHTML = `${pkg.badge ? `<span class="charge-pkg-badge">${pkg.badge}</span>` : ""}
-      <span class="charge-pkg-label">${pkg.emoji ? pkg.emoji + " " : ""}${pkg.label}</span>
-      <span class="charge-pkg-credits">${pkg.credits.toLocaleString("ko-KR")} 크레딧</span>
+      <span class="charge-pkg-emoji">${pkg.emoji || ""}</span>
+      <span class="charge-pkg-label">${pkg.label}</span>
+      <span class="charge-pkg-tag">${pkg.tagline || ""}</span>
+      <span class="charge-pkg-value">웹툰 <b>${eps}편</b> · ${pkg.credits.toLocaleString("ko-KR")}C</span>
       <span class="charge-pkg-price">${pkg.price.toLocaleString("ko-KR")}원</span>
-      ${pkg.tagline ? `<span class="charge-pkg-tag">${pkg.tagline}</span>` : ""}`;
+      <span class="charge-pkg-per">한 편에 ${perEp.toLocaleString("ko-KR")}원</span>`;
     b.addEventListener("click", () => {
       chargeSelectedPkg = pkg;
       $("#chargePkgSummary").textContent =
