@@ -172,3 +172,19 @@ def log_event(event: str, uid: str, **extra) -> None:
 def creation_cost(preview: bool, layout_mode: str) -> int:
     base = CREDIT_PREVIEW if preview else CREDIT_FULL
     return base * CREDIT_WEBTOON_MULT if layout_mode == "webtoon" else base
+
+
+# 장당 값 — "이어 그리기" 한 번(한 장)의 값이다.
+#
+# 위저드가 미리보기 토글을 없애고 **항상 첫 장(2C)으로 시작**하게 바뀐 뒤로,
+# 나머지 장을 그리는 /continue 와 /next-episode 에는 차감이 없어서 한 편이
+# 실질 2C 였다 — CREDIT_FULL(8)은 아무도 안 내는 값이 됐다. 한 화가 4장이고
+# 미리보기가 그중 1장이므로, 장당 2C 로 통일하면 첫 장 2C + 나머지 3장 6C
+# = 한 편 8C 로 설계값과 정확히 맞는다.
+CREDIT_PER_PAGE = CREDIT_FULL // 4          # = 2
+
+
+def page_cost(layout_mode: str = "fast") -> int:
+    """장 하나를 더 그리는 값 (이어 그리기 · 다음 화의 장당 차감)."""
+    return (CREDIT_PER_PAGE * CREDIT_WEBTOON_MULT
+            if layout_mode == "webtoon" else CREDIT_PER_PAGE)

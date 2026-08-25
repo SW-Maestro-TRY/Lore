@@ -496,7 +496,9 @@ function creationCost() {
 
 function paintCost() {
   const preview = true;              // 지금은 미리보기만 만든다 — collect() 도 항상 preview:true
-  $("#costChip").textContent = `−${creationCost()} 크레딧`;
+  // 여기서 떼는 것은 첫 장 값이다 — 나머지 장은 결과 화면의 이어 그리기에서
+  // 장당 같은 값을 더 낸다. "−2 크레딧" 이라고만 적으면 한 편이 2C 인 줄 안다.
+  $("#costChip").textContent = `첫 장 −${creationCost()}C`;
   // 홈의 첫 단추에도 값을 적는다 — 다섯 걸음을 다 밟고 마지막에야 얼마인지
   // 아는 것은 늦다. /api/config 가 오기 전에는 값이 0 이라, 그동안은 숨긴다
   // (0 크레딧이라고 적어 두면 공짜인 줄 안다).
@@ -504,7 +506,10 @@ function paintCost() {
   if (startChip) {
     const c = creationCost();
     startChip.hidden = !c;
-    startChip.textContent = `${c} 크레딧`;
+    // "2 크레딧" 이라고만 적으면 웹툰 한 편이 2C 인 줄 읽는다 — 실제로는
+    // 첫 장 값이고, 나머지 장은 이어 그리기에서 장당 같은 값을 더 낸다.
+    // 시작 값이라는 것을 같이 적어야 눌렀다가 속았다는 느낌이 안 든다.
+    startChip.textContent = `첫 장 ${c}C부터`;
   }
   $("#submitBtn").firstChild.textContent =
     preview ? "미리보기 만들기 " : "웹툰 만들기 ";
@@ -1909,6 +1914,7 @@ function paintResult(r) {
   // 그 값이 없는 옛 응답은 예전처럼 붙여 그린다.
   resultRunId = r.run_id || "";
   resultEpisode = epNo;
+  resultLayoutMode = r.layout_mode || "fast";
   // 공유는 run_id 로 여는 주소라, 그것이 없으면 보낼 링크가 없다. 눌러도
   // 아무 일이 안 일어나는 단추를 두느니 감춘다.
   $("#shareBtn").hidden = !resultRunId;
@@ -1962,8 +1968,12 @@ function paintResult(r) {
   $("#moreCutsBtn").hidden = !moreCtx;
   if (moreCtx) {
     const shown = moreCtx.drawn * Number(r.cuts_per_sheet || 3);
+    // 값을 버튼에 적는다 — 이제 이어 그리기도 장당 차감이라(서버 /continue),
+    // 눌렀더니 크레딧이 빠지면 안 적어 둔 쪽이 거짓말이 된다.
+    const pageCost = (creditCost.preview || 2)
+      * (resultLayoutMode === "webtoon" ? (creditCost.webtoon_mult || 1) : 1);
     $("#moreCutsBtn").textContent =
-      `다음 장면 이어서 보기 (${shown}/${moreCtx.total}컷)`;
+      `다음 장면 이어서 보기 (${shown}/${moreCtx.total}컷 · −${pageCost}C)`;
   }
 
   paintClaimBanner();
@@ -2045,6 +2055,7 @@ let resultRunId = "";
 // 보내야 한다 — 안 보내면 서버가 1화로 알아듣고 2화 화면을 보면서 **1화
 // 그림을 덮어쓴다** (실제 코드 감사에서 발견).
 let resultEpisode = 1;
+let resultLayoutMode = "fast";   // 이어 그리기 값 계산용
 
 /* ---- 공유 --------------------------------------------------------------- *
  *
@@ -2516,9 +2527,10 @@ async function continueCuts() {
     const res = await fetch(
       `/api/runs/${encodeURIComponent(moreCtx.runId)}/continue`,
       { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ episode: moreCtx.episode }) });
+        body: JSON.stringify({ episode: moreCtx.episode, uid: UID }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "이어 그리지 못했습니다");
+    if (data.credit_balance != null) { creditBalance = data.credit_balance; paintCreditPill(); }
     jobId = data.id;
     sessionStorage.setItem("lore_job", jobId);
     shownCuts = new Set();
@@ -2571,7 +2583,7 @@ async function startNextEp() {
     const res = await fetch(
       `/api/runs/${encodeURIComponent(nextEpCtx.runId)}/next-episode`,
       { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ author_note: $("#nextEpNote").value.trim() }) });
+        body: JSON.stringify({ author_note: $("#nextEpNote").value.trim(), uid: UID }) });
     const out = await res.json();
     if (!res.ok) throw new Error(out.error || "시작하지 못했습니다");
     nextEpJob = out.id;
@@ -2750,8 +2762,10 @@ function showMockMyPage() {
   paintAccountPill();
   // 잔액도 숫자가 있어야 화면이 완성돼 보인다 — 목업이라 서버 값이 아니다.
   // (mockAccountPill 을 켠 **뒤에** 넣어야 진짜 잔액이 덮어쓰지 않는다.)
-  $("#myCreditNum").textContent = "1,240";
-  $("#myCreditHint").textContent = "한 편에 120 C — 지금 10편 더 만들 수 있어요";
+  // 목업 숫자도 실제 값 체계(한 편 8C)와 같은 눈금을 쓴다 — 화면마다 단위가
+  // 다르면(120C vs 8C) 어느 쪽이 진짜인지 알 수 없게 된다.
+  $("#myCreditNum").textContent = "72";
+  $("#myCreditHint").textContent = "한 편에 8 C — 지금 9편 더 만들 수 있어요";
 }
 
 async function showWorks() {

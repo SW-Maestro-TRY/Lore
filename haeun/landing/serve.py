@@ -1039,12 +1039,28 @@ class Handler(BaseHTTPRequestHandler):
             if len(note) > pipeline.FEEDBACK_TEXT_MAX:
                 return self._error(
                     400, f"요청은 {pipeline.FEEDBACK_TEXT_MAX}자까지 적어 주세요")
+            # 다음 화는 한 화를 통째로 그린다(미리보기 없음) — 한 편 값이다.
+            # /continue 와 같은 이유로, 이 자리에 차감이 없어서 2화부터는
+            # 전부 공짜였다. uid 가 없으면 막지 않는 것도 같은 기준이다.
+            uid = str(body.get("uid") or "")
+            cost = 0
+            if credits.valid_uid(uid):
+                layout = str((pipeline.origin_form(run_id) or {})
+                             .get("layout_mode") or "fast")
+                cost = credits.creation_cost(False, layout)
+                bal = credits.balance(uid)
+                if bal < cost:
+                    return self._error(
+                        402, f"크레딧이 모자랍니다 (필요 {cost} · 보유 {bal})",
+                        reason="insufficient_credit", need=cost, balance=bal)
             try:
                 job = runner.create_next(run_id, {"author_note": note} if note else {})
             except pipeline.Failed as exc:
                 return self._error(409, str(exc))
+            bal = credits.spend(uid, cost)[1] if cost else None
             return self._json({"id": job.id, "episode": job.episode,
-                               "queue_position": runner.position(job.id)})
+                               "queue_position": runner.position(job.id),
+                               **({"credit_balance": bal} if bal is not None else {})})
 
         # 이어 그리기 — 미리보기로 앞 3컷을 본 뒤 "다음 장면도 볼까요?".
         # 회차는 안 늘어나고 콘티도 안 만든다. 다음 3컷을 그리고 다시 잇는다.
@@ -1069,12 +1085,30 @@ class Handler(BaseHTTPRequestHandler):
                      "awaiting_story_approval", "awaiting_sheet_approval")]
             if busy:
                 return self._error(409, "이 작품은 지금 만드는 중입니다")
+            # 장당 차감. 위저드가 "항상 첫 장(2C)으로 시작 → 이어 그리기"로
+            # 바뀐 뒤 이 자리에 차감이 없어서 한 편이 실질 2C 였다 — 첫 장과
+            # 같은 장당 값을 여기서 받아야 한 편 합계가 설계값(8C)이 된다.
+            # uid 가 없으면(예전 화면·직접 호출) 막지 않고 공짜로 둔다:
+            # 그리기가 막히는 것이 계산이 어긋나는 것보다 나쁘다.
+            uid = str(body.get("uid") or "")
+            cost = 0
+            if credits.valid_uid(uid):
+                layout = str((pipeline.origin_form(run_id) or {})
+                             .get("layout_mode") or "fast")
+                cost = credits.page_cost(layout)
+                bal = credits.balance(uid)
+                if bal < cost:
+                    return self._error(
+                        402, f"크레딧이 모자랍니다 (필요 {cost} · 보유 {bal})",
+                        reason="insufficient_credit", need=cost, balance=bal)
             try:
                 job = runner.create_more(run_id, cut_from)
             except pipeline.Failed as exc:
                 return self._error(409, str(exc))
+            bal = credits.spend(uid, cost)[1] if cost else None
             return self._json({"id": job.id, "cut_from": cut_from,
-                               "queue_position": runner.position(job.id)})
+                               "queue_position": runner.position(job.id),
+                               **({"credit_balance": bal} if bal is not None else {})})
 
         m = re.fullmatch(r"/api/jobs/([\w.-]+)/cancel", url.path)
         if m:

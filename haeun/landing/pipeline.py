@@ -3421,6 +3421,8 @@ def _result_body(run_id: str, episode: int, style_label: str) -> dict[str, Any]:
         "genre": str(load(run_dir, "meta.json").get("input", {}).get("genre") or ""),
         "style_label": style_label,
         "cuts_per_sheet": CUTS_PER_SHEET,
+        # 이어 그리기 값 계산용 — 웹툰 연출이면 장당 값이 3배다(page_cost).
+        "layout_mode": layout_mode(origin_form(run_id) or {}),
         "pages": pages,
         "page_count": len(pages),
         "cut_count": drawn_cuts,
