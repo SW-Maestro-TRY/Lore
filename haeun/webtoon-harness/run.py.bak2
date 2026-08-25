@@ -1259,9 +1259,6 @@ SIZE_ASPECT = {"wide": "16:9", "normal": "4:3", "tall": "3:4", "impact": "9:16"}
 # (실측 2026-08). 9:16 보다 긴 세로는 없다 — 아래 scene_aspect 가 "눌린다" 고
 # 경고하는 것이 이 한계 때문이다.
 ALLOWED_ASPECTS = ("16:9", "4:3", "1:1", "3:4", "9:16")
-# 그중 가장 긴 세로. 한 장이 쓸 수 있는 세로의 한계이자, 컷을 어디서 끊을지의
-# 기준이다. 이 값은 취향이 아니라 모델이 받는 값의 사실이다.
-TALLEST_ASPECT = "9:16"
 
 
 def _ratio(aspect: str) -> float:
@@ -1642,21 +1639,13 @@ def grouping_label(cfg: dict[str, Any], ep: storyload.Episode) -> str:
     """
     mode = grouping_mode(cfg, ep)
     if mode == "direction":
-        max_per = int(cfg["scene"].get("max_cuts_per_scene") or 0)
-        cap = f" · 최대 {max_per}컷" if max_per else ""
-        return f"연출 기준 (캔버스에 들어가는 만큼{cap})"
+        return "연출 기준"
     if mode == "weight":
         n = int((cfg.get("scene") or {}).get("max_light_per_scene") or 3)
         return f"무게 기준 (가벼운 컷만 최대 {n}개씩 묶음)"
     per = int(cfg["scene"]["cuts_per_scene"])
     max_per = int(cfg["scene"].get("max_cuts_per_scene") or 0)
     return f"{min(per, max_per) if max_per else per}개씩 고정"
-
-
-def env_bool_cfg(cfg: dict[str, Any], key: str) -> bool:
-    """config 의 scene.<key> 를 불리언으로. 없으면 False (= 예전 동작)."""
-    v = (cfg.get("scene") or {}).get(key)
-    return str(v).strip().lower() in ("1", "true", "yes", "on") if v is not None else False
 
 
 def group_scenes(cfg: dict[str, Any], ep: storyload.Episode,
@@ -1671,34 +1660,7 @@ def group_scenes(cfg: dict[str, Any], ep: storyload.Episode,
         return scenegen.group_by_weight(
             base, int(cfg["scene"].get("max_light_per_scene") or 3))
     if mode == "direction":
-        # 이야기 경계(scene_break)로 먼저 자르고, 그 안을 **캔버스가 감당하는
-        # 만큼** 다시 나눈다. 개수 상한(max_cuts_per_scene)은 안 쓴다 — 3컷도
-        # 4컷도 장면이 무엇을 하려는지와 무관한 임의의 숫자다. 대신 물리적인
-        # 사실 하나만 본다: 모델이 받는 가장 긴 세로가 정해져 있고(9:16), 컷을
-        # 쌓으면 필요한 세로가 그만큼 늘어난다. 넘치면 거기서 끊는다.
-        #
-        # 결과는 장마다 다르다 — wide 둘은 한 장, impact 하나는 혼자 한 장.
-        # max_cuts_per_scene 을 명시한 config 는 그 값도 함께 지킨다(예전 쓰임).
-        groups = scenegen.group_by_break(base, max_per)
-        if not env_bool_cfg(cfg, "fit_to_canvas"):
-            return groups
-        if not any(str(c.get("size") or "").strip() for c in base):
-            # size 를 아무 컷도 안 적은 화(옛 콘티)는 재 볼 것이 없다 — 예전
-            # 그대로 리듬 경계만 쓴다. 없는 값을 가장 긴 세로로 쳐 버리면
-            # 컷마다 한 장이 되어 옛 run 이 다르게 재현된다.
-            return groups
-        limit = 1.0 / _ratio(TALLEST_ASPECT)
-        out: list[scenegen.Scene] = []
-        for group in groups:
-            out.extend(scenegen.group_by_fit(
-                group.cuts,
-                # size 가 없는 컷 하나는 그 화의 기본(normal)으로 친다 —
-                # 가장 긴 세로로 치면 그 컷만 혼자 한 장이 되어 버린다.
-                lambda c: 1.0 / _ratio(cut_aspect(c, SIZE_ASPECT["normal"])),
-                limit))
-        for i, sc in enumerate(out, 1):
-            sc.scene_number = i
-        return out
+        return scenegen.group_by_break(base, max_per)
     return scenegen.group(base, min(per, max_per) if max_per else per)
 
 

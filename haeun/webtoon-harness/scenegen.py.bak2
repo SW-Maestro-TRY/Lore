@@ -215,52 +215,6 @@ def group(cuts: list[dict[str, Any]], per: int) -> list[Scene]:
             for i, s in enumerate(range(0, len(cuts), per), 1)]
 
 
-def group_by_fit(cuts: list[dict[str, Any]], need, limit: float) -> list[Scene]:
-    """**캔버스에 실제로 들어가는 만큼** 묶는다. 개수 규칙이 없다.
-
-    한 장에 몇 컷이라는 규칙은 어느 숫자를 골라도 임의다 — 3컷도 4컷도 장면이
-    무엇을 하려는지와 무관하다. 대신 물리적인 사실 하나만 본다: 이미지 모델이
-    받는 캔버스에는 가장 긴 세로가 있고(9:16, 그보다 길면 400 이 온다), 컷을
-    세로로 쌓으면 필요한 세로가 그만큼 늘어난다.
-
-    그래서 **다음 컷을 더 넣어도 아직 캔버스 안에 들어가면 넣고, 넘치면 거기서
-    끊는다.** 결과는 장마다 다르다 — wide 둘은 한 장에 들어가고, impact 하나는
-    혼자 한 장을 쓴다. 컷의 내용(size)이 정하는 것이지 개수가 정하는 것이 아니다.
-
-    넘치는 채로 두면 모델이 남는 폭에 컷을 나란히 놓는다. 세로 스크롤이 아니라
-    만화 페이지가 되는 자리다.
-
-    need(cut) : 이 컷이 먹는 세로. 폭 1 일 때의 높이(= 1/비율).
-    limit     : 한 장이 쓸 수 있는 세로의 최대치 (= 1/가장_긴_세로_비율).
-
-    scene_break 는 이 함수가 안 본다 — 부르는 쪽이 먼저 이야기 경계로 잘라
-    놓고, 그 안을 이 함수가 다시 나눈다. 이야기가 한 화면이라고 한 자리를
-    캔버스 사정으로 넘어가지 않기 위해서다.
-    """
-    scenes: list[Scene] = []
-    bucket: list[dict[str, Any]] = []
-    used = 0.0
-
-    def flush() -> None:
-        nonlocal used
-        if bucket:
-            scenes.append(Scene(scene_number=len(scenes) + 1, cuts=list(bucket)))
-            bucket.clear()
-        used = 0.0
-
-    for c in cuts:
-        want = max(1e-6, float(need(c)))
-        # 컷 하나가 혼자서도 넘치면(impact 등) 그 컷은 혼자 한 장이다.
-        if bucket and used + want > limit:
-            flush()
-        bucket.append(c)
-        used += want
-    flush()
-    if not scenes:
-        raise SceneError("묶을 컷이 하나도 없습니다.")
-    return scenes
-
-
 def group_by_weight(cuts: list[dict[str, Any]], max_light: int = 3) -> list[Scene]:
     """컷의 **무게**가 묶음을 정한다. 개수 규칙이 아예 없다.
 
