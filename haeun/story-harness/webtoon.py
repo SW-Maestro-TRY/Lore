@@ -55,6 +55,7 @@ import argparse
 import csv
 import difflib
 import html
+import copy
 import json
 import re
 import sys
@@ -221,7 +222,6 @@ MAX_SAME_SHOT_RUN = 3   # 같은 거리 연속 상한 (4연속부터 실패)
 # 정식 작화 연속 상한 — 게이트가 아니라 경고다. 화 전체의 sd 개수는 이야기가
 # 정하지만, normal 만 길게 이어지면 그 구간에 눈이 쉴 자리가 없다.
 MAX_NORMAL_RUN = 5
-MAX_AWAY = 2            # away 시선의 화당 상한
 END_SIZES = ("impact", "tall")   # 마지막 컷(스팅어)에 허용되는 크기
 SCENE_MIN, SCENE_MAX = 2, 5      # 한 장면(화면 하나)에 들어가는 컷 수
 SCENE_COUNT_MIN, SCENE_COUNT_MAX = 2, 5   # 한 화가 몇 장면인가
@@ -379,8 +379,6 @@ def speakers_in(cut: dict) -> list:
         out.append(who)
     return out
 
-MIN_SPEECH_RATIO = 0.5   # 말 있는 컷의 화당 하한
-MAX_MUTE_RUN = 2         # 말 없는 컷 연속 상한 (3연속부터 실패)
 
 # ---- 대화는 주고받는 것이다 ---------------------------------------------
 #
@@ -2189,6 +2187,8 @@ def render_warnings(cuts: list) -> list:
     cuts = [c for c in cuts if isinstance(c, dict)]
     if not cuts:
         return out
+    out.extend(narration_voice_warnings(cuts))
+    out.extend(layout_warnings(cuts))
     got = [str(c.get("render_style") or "").strip().lower() for c in cuts]
     for style, many, why in (
             ("sd", SD_MAX, "데포르메가 잦으면 산만해지고, 정식 작화로 돌아왔을 때의 "
@@ -2592,8 +2592,20 @@ def gate_zone(payload: dict, known_zones: set = None, known: set = None) -> list
     return failures
 
 
-def gate_camera(num: list, shots: list, angles: list, trans: list) -> list:
-    """카메라 세 축이 실제로 갈렸는지 — 단조로움을 여기서 끊는다.
+def camera_warnings(num: list, shots: list, angles: list, trans: list) -> list:
+    """카메라 세 축이 갈렸는지 — **경고만 한다. 생성을 막지 않는다.**
+
+    예전에는 게이트였다(gate_camera). 여기 있는 것은 전부 **경험적 휴리스틱**이지
+    결과물을 성립시키는 조건이 아니다 — 얼굴이 60%인 화도, 계속 눈높이인 화도
+    이야기에 따라 맞을 수 있다. 그런데 막아 버리면 그런 연출은 아예 못 나온다.
+
+    실제로 사고가 났다: 한 장면은 5컷까지 갈 수 있고 그 안에서 쓸 수 있는 전환은
+    순간·동작 둘뿐이라, 5컷짜리 장면 하나는 같은 전환을 4번 연달아 쓸 수밖에 없다.
+    그런데 연속 상한이 3이어서 **정상적인 장면이 게이트를 위반했다.** 규칙 둘이
+    서로 싸운 것이고, 값을 올려 막긴 했지만 같은 종류의 충돌은 언제든 다시 난다.
+    숫자로 연출을 강제하는 한 그렇다.
+
+    그래서 판정은 그대로 두되 **결과를 보존한다.** 사람이 보고 판단할 몫이다.
 
     이 게이트가 없던 시절의 실측(완성 run 3개·643컷)이 이 함수의 존재 이유다.
       · 클로즈업+바스트 60%          → 말하는 얼굴과 듣는 얼굴의 반복
@@ -2607,11 +2619,8 @@ def gate_camera(num: list, shots: list, angles: list, trans: list) -> list:
     size 처럼 숫자만 바꿔 놓으면 서술과 정면으로 어긋난다. 대신 되돌릴 때 어느 컷을
     무엇으로 바꾸라고 지목한다 — 그게 없으면 모델은 아무 데나 고치고 다른 걸 깨뜨린다.
 
-    여기서 막는 것은 **상한과 편중**뿐이다 ("얼굴이 절반을 넘지 마라", "같은 값이
-    4연속이면 안 된다"). "인서트를 최소 하나 넣어라" 같은 **특정 수단의 하한**은
-    게이트에서 뺐다 — 그건 화마다 맞는 답이 다르고, 강제하면 모델이 자리를 만들어
-    끼워 넣는다. 개수는 맞고 장면은 어색해진다. 그런 것은 prose_warnings 가
-    경고로 남긴다.
+    아래 문구가 "~여야 합니다" 로 남아 있는 것은 그대로 둔다 — 다시 뽑을 때 모델이
+    읽는 말이라 지시형이 맞다. 다만 이제 그것이 **중단 사유는 아니다.**
     """
     failures = []
     n = len(shots)
@@ -2671,7 +2680,22 @@ def gate_camera(num: list, shots: list, angles: list, trans: list) -> list:
 
 
 def gate_layout(cuts: list) -> list:
-    """세로 스크롤 문법 중 **모델이 판단할 것**만 본다 — beat 와 size.
+    """**무결성만** 본다 — 값이 목록에 있는가, 컷이 있는가.
+
+    여기서 걸리면 그림 단계가 그 컷을 못 읽는다. 결과물이 성립하지 않으므로
+    되돌리는 것이 맞다. 연출 휴리스틱(비율·개수·연속)은 directing_warnings 로
+    옮겼다 — 그쪽은 경고만 하고 결과를 보존한다.
+    """
+    return _layout_check(cuts)[0]
+
+
+def directing_warnings(cuts: list) -> list:
+    """연출 휴리스틱 — 경고만 한다. 얼굴 비율·앵글·impact·연속 길이 따위."""
+    return _layout_check(cuts)[1]
+
+
+def _layout_check(cuts: list) -> tuple[list, list]:
+    """(무결성 실패, 연출 경고). 세로 스크롤 문법 중 모델이 판단할 것 — beat 와 size.
 
     여백·시선·화면 경계는 게이트에 없다. 그건 beat 시퀀스에서 나오는 산수라서
     derive_layout() 이 계산한다. 유령 id 때와 같은 이유다: 온도 0.9 에서 서로 얽힌
@@ -2682,7 +2706,7 @@ def gate_layout(cuts: list) -> list:
     failures = []
     cuts = [c for c in cuts if isinstance(c, dict)]
     if not cuts:
-        return ["컷이 하나도 없어 연출을 판정할 수 없습니다."]
+        return ["컷이 하나도 없어 연출을 판정할 수 없습니다."], []
     num = [c.get("cut_number") for c in cuts]
     sizes, beats, renders, shots, angles, trans = [], [], [], [], [], []
     for c in cuts:
@@ -2719,9 +2743,16 @@ def gate_layout(cuts: list) -> list:
         trans.append(tran)
 
     if failures:      # 값이 깨져 있으면 리듬 판정은 의미가 없다
-        return failures
+        return failures, []          # 값이 깨졌으면 연출 판정은 의미가 없다
 
-    failures.extend(gate_camera(num, shots, angles, trans))
+    # ---- 여기서부터는 **경고**다 (생성을 막지 않는다) ---------------------
+    #
+    # 위까지가 무결성이다 — 값이 목록에 없으면 그림 단계가 그 컷을 못 읽으므로
+    # 결과물이 성립하지 않는다. 아래는 전부 경험적 연출 휴리스틱이고, 이야기에
+    # 따라 어겨야 맞는 경우가 있다. 막으면 그런 연출이 아예 못 나온다.
+    warn = []
+    warn.extend(camera_warnings(num, shots, angles, trans))
+    failures = warn
 
     # ---- 크기 ----------------------------------------------------------
     n_impact = sizes.count("impact")
@@ -2814,7 +2845,7 @@ def gate_layout(cuts: list) -> list:
             f"컷 {long_sfx} 의 sfx 가 너무 깁니다 ({SFX_MAX_LEN}자 이내). "
             "효과음은 그림에 얹는 레터링이지 문장이 아닙니다.")
 
-    return failures
+    return [], failures          # 무결성은 위에서 끝났다 — 여기 남은 것은 전부 경고다
 
 
 # ------------------------------------------------------- 컷 서술 경고
@@ -2923,6 +2954,70 @@ def known_speakers(card: str, episodes: list, cast: list = None) -> set:
                 if name:
                     names.add(name)
     return {n for n in names if n}
+
+
+# 나레이션 어미 — 화 전체에 서술자는 하나다.
+#
+# 대사는 인물마다 말투가 다른 것이 맞지만 나레이션은 아니다. 실제 사고: 한 화에
+# 나레이션이 둘뿐이었는데 "이 세계에는 능력자가 존재합니다." 다음이 "…히어로들이
+# 시민을 지킨다." 였다 — 서술자가 두 사람인 것처럼 읽힌다. w7 프롬프트에 어미를
+# 고정하라는 규칙이 아예 없어서 매번 복불복이었다.
+#
+# 게이트가 아니라 경고인 이유: 어미 판정은 형태소 없이 어말 몇 글자로 보는 것이라
+# 인용문("…라고 했습니다") 같은 데서 틀릴 수 있다. 컷을 통째로 다시 뽑게 할 만큼
+# 확신할 수 있는 판정이 아니다.
+POLITE_ENDINGS = ("습니다", "합니다", "입니다", "됩니다", "습니까", "십시오", "세요", "어요", "아요")
+
+
+def narration_register(text: str) -> str:
+    """나레이션 한 줄의 말투 — "높임" | "평서" | "" (판정 불가)."""
+    t = str(text or "").strip().rstrip('"\'」』)').rstrip(".!?…")
+    if not t:
+        return ""
+    if t.endswith(POLITE_ENDINGS):
+        return "높임"
+    if t.endswith(("다", "다.", "라", "군", "지")):
+        return "평서"
+    return ""
+
+
+def narration_voice_warnings(cuts: list) -> list:
+    seen = {}
+    for i, c in enumerate(cuts, 1):
+        for ln in (c.get("lines") or []):
+            if str((ln or {}).get("kind") or "").strip() != "narration":
+                continue
+            reg = narration_register((ln or {}).get("text"))
+            if reg:
+                seen.setdefault(reg, []).append(i)
+    if len(seen) < 2:
+        return []
+    parts = " / ".join(f"{k}({', '.join(str(n) for n in v[:4])}번 컷)"
+                       for k, v in seen.items())
+    return [f"나레이션 어미가 섞였습니다 — {parts}. 대사는 인물마다 달라도 되지만 "
+            f"나레이션은 화 전체에 서술자가 하나입니다. 한쪽으로 맞추세요."]
+
+
+def layout_warnings(cuts: list) -> list:
+    """겹침(overlap)이 뜻을 잃은 자리 — **이유 없는 겹침만** 본다.
+
+    개수는 안 센다. "몇 컷까지"는 장면이 무엇을 하려는지와 무관한 규칙이라,
+    조용히 흐르는 화면에서는 하나도 안 겹치는 것이 맞고 밀고 들어오는 장면에서는
+    연달아 겹치는 것이 맞다. 여기서 잡을 수 있는 것은 개수가 아니라 **의도가
+    적혔는가** 하나뿐이다.
+    """
+    out = []
+    over = [i for i, c in enumerate(cuts, 1)
+            if str(c.get("layout") or "").strip().lower() == "overlap"]
+    if not over:
+        return out
+    noreason = [i for i in over
+                if not str(cuts[i - 1].get("overlap_reason") or "").strip()]
+    if noreason:
+        out.append(f"컷 {', '.join(str(n) for n in noreason)} 이 overlap 인데 "
+                   f"overlap_reason 이 비었습니다. 왜 겹치는지 한 줄로 못 적으면 "
+                   f"그 겹침은 연출이 아니라 사고입니다 — normal 로 두세요.")
+    return out
 
 
 def prose_warnings(cuts: list, known: set = None) -> list:
@@ -3138,6 +3233,32 @@ def _shot_of(cut: dict) -> str:
     """
     shot = str(cut.get("shot") or "").strip()
     return shot if shot in SHOTS else ""
+
+
+# ---- 안 고치고 보기만 하는 판 ------------------------------------------------
+#
+# repair_* 는 컷을 **그 자리에서 고친다.** 기본 동작을 "안 고침"으로 바꾸면서도
+# 무엇이 걸렸는지는 알려야 해서, 컷을 깊은 복사해 수리를 돌려 보고 그 보고만
+# 가져온다. 원본은 한 글자도 안 바뀐다.
+#
+# 이렇게 감싸는 이유(수리 함수를 둘로 쪼개지 않는 이유): 저 함수들은 서로 순서가
+# 얽혀 있고(tone 강등은 render_style 강등 뒤에 와야 한다) 안에서 여러 값을 같이
+# 본다. 판정만 떼어내면 그 순서가 두 군데로 갈라져 언젠가 어긋난다.
+def _dry(fn, cuts, *rest):
+    shadow = copy.deepcopy(cuts)
+    return [f"{x} (그대로 두었습니다)" for x in fn(shadow, *rest)]
+
+
+def dry_repair_sizes(cuts: list) -> list:
+    return _dry(repair_sizes, cuts)
+
+
+def dry_repair_render_styles(cuts: list) -> list:
+    return _dry(repair_render_styles, cuts)
+
+
+def dry_repair_tone_lock(cuts: list, scenes: list) -> list:
+    return _dry(repair_tone_lock, cuts, scenes)
 
 
 def repair_sizes(cuts: list) -> list:
@@ -3943,17 +4064,30 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
         # 옛 칸을 함께 맞춰 두지 않으면 lines 를 쓴 화에서 옛 칸만 보는 코드가
         # 빈 대사를 본다.
         repaired = repair_speech(cuts)
-        repaired += repair_sizes(cuts) + repair_render_styles(cuts)
-        # tone 강등은 render_style 강등 **뒤에** 온다. 앞의 것은 beat 자리를,
-        # 이건 장면 성격을 본다 — 순서를 바꾸면 이미 normal 이 된 컷을 또 본다.
-        repaired += repair_tone_lock(cuts, payload.get("scenes"))
         repaired += repair_stinger_number(payload)
+        # size · render_style · tone 을 코드가 덮어쓰던 자리다. 지금은 **안
+        # 덮어쓰고 경고만 한다** (REPAIR_DIRECTING=1 로 예전 동작을 되살릴 수 있다).
+        #
+        # 덮어쓰기를 끈 이유: 저것들은 모델이 컷 내용을 보고 정한 값인데, 코드는
+        # 내용을 모르고 숫자만 본다. "마지막 컷 size 를 normal -> tall 로 바꿨습니다"
+        # 같은 수리는 스팅어를 세로로 늘려 놓지만, 그 컷이 왜 납작해야 하는지는
+        # 모델만 안다. 결과를 보존하고 사람이 판단하게 둔다.
+        if env_bool("REPAIR_DIRECTING", False):
+            repaired += repair_sizes(cuts) + repair_render_styles(cuts)
+            repaired += repair_tone_lock(cuts, payload.get("scenes"))
+        else:
+            directing_notes = (dry_repair_sizes(cuts) + dry_repair_render_styles(cuts)
+                               + dry_repair_tone_lock(cuts, payload.get("scenes")))
 
         failures = gate_cuts(payload, episode, irony_present, known_zones, known)
         if not failures:
             notes = [f"코드 수리: {x}" for x in repaired]
+            if not env_bool("REPAIR_DIRECTING", False):
+                notes += [f"연출 경고: {x}" for x in directing_notes]
             notes += [f"연출 메모: {x}" for x in apply_layout(
                 cuts, payload.get("scenes"))]
+            # 얼굴 비율·앵글·impact·연속 길이 — 예전에는 여기서 생성을 막았다.
+            notes += [f"연출 경고: {x}" for x in directing_warnings(cuts)]
             notes += [f"서술 경고: {x}" for x in prose_warnings(cuts, known)]
             notes += [f"이름 경고: {x}" for x in prop_text_name_check(cuts, known)]
             notes += [f"톤 메모: {x}" for x in tone_warnings(

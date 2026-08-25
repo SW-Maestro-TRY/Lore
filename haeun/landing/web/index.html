@@ -356,7 +356,12 @@
         </div>
 
         <!-- 화면에서 뺀 설정들. 기본값 그대로 서버에 간다. -->
-        <input type="hidden" name="layout_mode" value="fast">
+        <!-- 연출. 기본은 "웹툰"이다 — 컷 사이 여백·배경 연결·장 경계를 코드가
+             콘티대로 그린다. "빠르게"(fast)는 3컷을 한 캔버스에 몰아넣어
+             배치를 모델에게 통째로 맡기는 모드라, 콘티가 계산해 둔 여백
+             (gap_after)도 통컷(size: impact)도 픽셀에 닿지 못한다. 지금은
+             남겨 두되 기본에서 뺐다 — 고르려면 이 값을 fast 로 준다. -->
+        <input type="hidden" name="layout_mode" value="webtoon">
         <input type="hidden" name="head_ratio" value="">
         <input type="hidden" name="art_qa_regen_max" value="2">
       </section>

@@ -6,6 +6,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import json
 import story, webtoon, samples
 
+
+def gate_layout_all(cuts):
+    """예전 gate_layout 과 같은 목록 — 무결성 + 연출 경고를 합친 것.
+
+    아래 검사들이 보는 것은 "이 상황을 **잡아내는가**" 이지 "막는가" 가 아니다.
+    연출 휴리스틱이 게이트에서 경고로 내려갔어도 판정 로직은 그대로 살아 있어야
+    하므로, 둘을 합쳐서 예전과 같은 목록으로 본다. 막느냐 경고하느냐는 아래
+    "무결성만 막는다" 절에서 따로 검사한다.
+    """
+    return webtoon.gate_layout(cuts) + webtoon.directing_warnings(cuts)
+
+
 fails = []
 
 
@@ -1105,7 +1117,14 @@ CUT_EPI = {"engine_fired": []}
 
 
 def lay(payload):
-    return webtoon.gate_cuts(payload, CUT_EPI, False)
+    """7단계가 **잡아내는 것 전부** — 무결성 실패 + 연출 경고.
+
+    아래 "탈락" 이라고 적힌 검사들이 보는 것은 판정 로직이 그 상황을 잡느냐이지
+    생성을 막느냐가 아니다. 연출 휴리스틱(impact 개수·연속 길이·스팅어 크기)은
+    이제 경고라서 gate_cuts 에 안 들어온다. 막느냐는 바로 아래 절에서 따로 본다.
+    """
+    return (webtoon.gate_cuts(payload, CUT_EPI, False)
+            + webtoon.directing_warnings(payload.get("cuts") or []))
 
 
 ok("7단계 게이트: 정상 통과", lay(cuts(engine=(2, 6))) == [], lay(cuts(engine=(2, 6))))
@@ -1116,6 +1135,24 @@ ok("7단계 게이트: 모르는 size 탈락", any("size" in f for f in r))
 
 r = lay(cuts(c3={"beat": "쌓기"}))
 ok("7단계 게이트: 모르는 beat 탈락", any("beat" in f for f in r))
+
+# -- 새 계약: **무결성만 막는다.** 연출 휴리스틱은 경고로 내려갔다.
+#
+# 왜 내렸나: 저것들은 전부 경험적이지 결과물을 성립시키는 조건이 아니다. 실제로
+# 규칙끼리 싸운 적이 있다 — 한 장면은 5컷까지 갈 수 있고 그 안의 전환은 순간·동작
+# 둘뿐이라 4연속이 정상인데, 연속 상한이 3이어서 정상적인 장면이 막혔다.
+_blocked = webtoon.gate_cuts(cuts(c1={"size": "impact"}), CUT_EPI, False)
+ok("무결성만 막는다: impact 가 많아도 생성을 안 막는다",
+   not any("impact" in f for f in _blocked), _blocked)
+ok("무결성만 막는다: 그래도 경고로는 잡는다",
+   any("impact 인 컷이 3개" in f for f in
+       webtoon.directing_warnings(cuts(c1={"size": "impact"})["cuts"])))
+_broken = webtoon.gate_cuts(cuts(c3={"size": "해괴한값"}), CUT_EPI, False)
+ok("무결성만 막는다: 값이 목록에 없으면 여전히 막는다",
+   any("size" in f and "모릅니다" in f for f in _broken), _broken)
+ok("무결성만 막는다: 얼굴 비율·앵글도 안 막는다",
+   not any(("얼굴 컷" in f) or ("수평인 컷" in f)
+           for f in webtoon.gate_cuts(cuts(), CUT_EPI, False)))
 
 # -- 게이트 1. 한 화에 turn 최소 1개
 flat = cuts()
@@ -1481,16 +1518,16 @@ def texted(**over):
     return c
 
 
-ok("텍스트: 모의 컷이 통과한다", webtoon.gate_layout(texted()) == [])
+ok("텍스트: 모의 컷이 통과한다", gate_layout_all(texted()) == [])
 
-r = webtoon.gate_layout(texted(c3={"sfx": "BOOM"}))
+r = gate_layout_all(texted(c3={"sfx": "BOOM"}))
 ok("텍스트 게이트: 로마자 sfx 탈락", any("로마자" in f for f in r), r)
 ok("텍스트 게이트: 한글 sfx 통과",
-   not any("로마자" in f for f in webtoon.gate_layout(texted(c3={"sfx": "콰앙"}))))
+   not any("로마자" in f for f in gate_layout_all(texted(c3={"sfx": "콰앙"}))))
 ok("텍스트 게이트: 침묵 표현도 통과",
-   not any("sfx" in f for f in webtoon.gate_layout(texted(c3={"sfx": "…"}))))
+   not any("sfx" in f for f in gate_layout_all(texted(c3={"sfx": "…"}))))
 
-r = webtoon.gate_layout(texted(c3={"sfx": "쿵쿵쿵쿵쿵쿵쿵쿵쿵"}))
+r = gate_layout_all(texted(c3={"sfx": "쿵쿵쿵쿵쿵쿵쿵쿵쿵"}))
 ok("텍스트 게이트: 너무 긴 sfx 탈락", any("너무 깁니다" in f for f in r))
 
 # -- 침묵 컷은 네 칸이 전부 비어야 한다
@@ -1520,7 +1557,7 @@ ok("텍스트 경고: SD 컷에 sfx 가 없으면 경고",
    any("SD 인데 sfx" in w for w in webtoon.prose_warnings(nosfx)))
 
 ok("텍스트: 나레이션 개수에는 상한이 없다",
-   webtoon.gate_layout(texted(**{f"c{i}": {"narration": f"{i}일 뒤"}
+   gate_layout_all(texted(**{f"c{i}": {"narration": f"{i}일 뒤"}
                                  for i in range(1, 9)})) == [])
 
 # ---------------- 7단계 그림체 (render_style) ----------------
@@ -1554,28 +1591,28 @@ def styled(beats, renders):
 RB = ["setup", "build", "hold", "build", "turn", "release", "build", "hold"]
 
 PASS_R = ["normal", "sd", "sd", "normal", "emphasis", "sd", "normal", "normal"]
-ok("그림체 게이트: 정상 통과", webtoon.gate_layout(styled(RB, PASS_R)) == [],
-   webtoon.gate_layout(styled(RB, PASS_R)))
+ok("그림체 게이트: 정상 통과", gate_layout_all(styled(RB, PASS_R)) == [],
+   gate_layout_all(styled(RB, PASS_R)))
 
 # 하한은 없다. 진지한 장면이 이어지는 화는 sd 가 0개인 것이 맞는 답이고,
 # 개수를 맞추려고 올린 SD 는 그 장면을 가볍게 만들 뿐이다.
-r = webtoon.gate_layout(styled(RB, ["normal"] * 8))
+r = gate_layout_all(styled(RB, ["normal"] * 8))
 ok("그림체 게이트: sd 가 0개여도 통과 (하한 없음)", r == [], r)
 
-r = webtoon.gate_layout(styled(RB, ["normal", "sd", "normal", "normal",
+r = gate_layout_all(styled(RB, ["normal", "sd", "normal", "normal",
                                     "emphasis", "normal", "normal", "normal"]))
 ok("그림체 게이트: sd 가 1개여도 통과", r == [], r)
 
-r = webtoon.gate_layout(styled(RB, ["normal", "sd", "sd", "sd", "normal", "sd",
+r = gate_layout_all(styled(RB, ["normal", "sd", "sd", "sd", "normal", "sd",
                                     "normal", "normal"]))
 ok("그림체 게이트: sd 4개는 통과 (상한 5개)", r == [], r)
 
 # build 도 SD 자리다. 쌓는 중에 한 컷 가볍게 빠지는 것은 흔한 리듬이다.
-r = webtoon.gate_layout(styled(RB, ["normal", "sd", "normal", "sd", "normal", "sd",
+r = gate_layout_all(styled(RB, ["normal", "sd", "normal", "sd", "normal", "sd",
                                     "sd", "normal"]))
 ok("그림체 게이트: build 컷의 sd 통과", r == [], r)
 
-r = webtoon.gate_layout(styled(RB, ["normal", "sd", "sd", "sd", "normal", "sd",
+r = gate_layout_all(styled(RB, ["normal", "sd", "sd", "sd", "normal", "sd",
                                     "sd", "normal"]))
 ok("그림체 게이트: sd 가 5개면 통과 (상한 경계)", r == [], r)
 
@@ -1586,7 +1623,7 @@ RB10 = ["setup", "build", "hold", "build", "turn",
 c6 = styled(RB10, ["normal", "sd", "sd", "sd", "emphasis",
                    "sd", "sd", "normal", "sd", "normal"])
 ok("그림체 게이트: sd 가 6개여도 되돌리지 않는다",
-   not any("sd" in f and "개입니다" in f for f in webtoon.gate_layout(c6)))
+   not any("sd" in f and "개입니다" in f for f in gate_layout_all(c6)))
 ok("그림체 경고: sd 가 잦으면 경고는 남긴다",
    any("sd" in x and "보통" in x for x in webtoon.render_warnings(c6)),
    webtoon.render_warnings(c6))
@@ -1594,21 +1631,21 @@ ok("그림체 경고: sd 가 잦으면 경고는 남긴다",
 for i, beat in ((4, "turn"), (0, "setup")):
     rs = list(PASS_R)
     rs[i] = "sd"
-    r = webtoon.gate_layout(styled(RB, rs))
+    r = gate_layout_all(styled(RB, rs))
     ok(f"그림체 게이트: {beat} 컷의 sd 탈락",
        any("beat 가" in f and "sd" in f for f in r), r)
 
 rs = list(PASS_R)
 rs[-1] = "sd"
-r = webtoon.gate_layout(styled(RB, rs))
+r = gate_layout_all(styled(RB, rs))
 ok("그림체 게이트: 마지막 컷의 sd 탈락", any("스팅어" in f for f in r), r)
 
-r = webtoon.gate_layout(styled(RB, ["normal", "sd", "chibi", "normal",
+r = gate_layout_all(styled(RB, ["normal", "sd", "chibi", "normal",
                                     "normal", "sd", "sd", "normal"]))
 ok("그림체 게이트: 모르는 값 탈락", any("render_style" in f for f in r))
 
 ok("그림체 게이트: emphasis 는 개수 제한이 없다",
-   webtoon.gate_layout(styled(RB, ["emphasis", "sd", "sd", "emphasis",
+   gate_layout_all(styled(RB, ["emphasis", "sd", "sd", "emphasis",
                                    "emphasis", "sd", "emphasis",
                                    "emphasis"])) == [])
 
@@ -1639,20 +1676,20 @@ ok("그림체 수리: sd 가 0개여도 승격하지 않는다 (위반이 아니
 RB_B = ["setup", "build", "hold", "build", "turn", "release", "build", "hold"]
 base_b = ["normal"] * 8
 
-r = webtoon.gate_layout(styled(RB_B, ["normal", "normal", "normal", "breakout",
+r = gate_layout_all(styled(RB_B, ["normal", "normal", "normal", "breakout",
                                       "bleed", "normal", "normal", "normal"]))
 ok("칸 게이트: 통컷 1개 + 칸밖 1개는 통과", r == [], r)
 
 rs = list(base_b)
 rs[4], rs[5] = "bleed", "bleed"      # turn, release — 자리는 맞다
 ok("칸 게이트: 통컷이 2개여도 되돌리지 않는다",
-   not any("bleed" in f and "개입니다" in f for f in webtoon.gate_layout(styled(RB_B, rs))))
+   not any("bleed" in f and "개입니다" in f for f in gate_layout_all(styled(RB_B, rs))))
 ok("칸 경고: 통컷이 잦으면 경고는 남긴다",
    any("bleed" in x for x in webtoon.render_warnings(styled(RB_B, rs))))
 
 rs = list(base_b)
 rs[0] = "bleed"          # setup 자리
-r = webtoon.gate_layout(styled(RB_B, rs))
+r = gate_layout_all(styled(RB_B, rs))
 ok("칸 게이트: 통컷이 turn·release 가 아닌 자리면 탈락",
    any("bleed" in f and "beat" in f for f in r), r)
 
@@ -1660,13 +1697,13 @@ rs = list(base_b)
 rs[1] = rs[3] = rs[6] = "breakout"   # 전부 build — 자리는 맞다
 ok("칸 게이트: 칸밖이 3개여도 되돌리지 않는다",
    not any("breakout" in f and "개입니다" in f
-           for f in webtoon.gate_layout(styled(RB_B, rs))))
+           for f in gate_layout_all(styled(RB_B, rs))))
 ok("칸 경고: 칸밖이 잦으면 경고는 남긴다",
    any("breakout" in x for x in webtoon.render_warnings(styled(RB_B, rs))))
 
 rs = list(base_b)
 rs[2] = "breakout"       # hold 자리
-r = webtoon.gate_layout(styled(RB_B, rs))
+r = gate_layout_all(styled(RB_B, rs))
 ok("칸 게이트: 칸밖이 힘 없는 자리면 탈락",
    any("breakout" in f and "beat" in f for f in r), r)
 
@@ -2381,13 +2418,13 @@ def camd(shots, angles=None, trans=None):
 
 
 OKAY = ["원경", "중간", "바스트", "인서트", "전신", "클로즈업", "익스트림", "중간"]
-ok("카메라 게이트: 정상 통과", webtoon.gate_camera(*camd(OKAY)) == [],
-   webtoon.gate_camera(*camd(OKAY)))
+ok("카메라 게이트: 정상 통과", webtoon.camera_warnings(*camd(OKAY)) == [],
+   webtoon.camera_warnings(*camd(OKAY)))
 
 # 얼굴만으로 채운 화 — 실제 산출물이 이 모양이었다
 faces = ["원경", "바스트", "클로즈업", "바스트", "인서트", "클로즈업",
          "바스트", "클로즈업"]
-r = webtoon.gate_camera(*camd(faces))
+r = webtoon.camera_warnings(*camd(faces))
 ok("카메라 게이트: 얼굴 컷이 절반을 넘으면 탈락",
    any("얼굴 컷" in f for f in r), r)
 ok("카메라 게이트: 되돌릴 때 바꿀 컷을 지목한다",
@@ -2396,24 +2433,24 @@ ok("카메라 게이트: 되돌릴 때 바꿀 컷을 지목한다",
 # 수단의 하한(인서트·원경·분위기 최소 1개)은 게이트에서 뺐다. 화마다 맞는 답이
 # 다르고, 강제하면 모델이 자리를 만들어 끼워 넣는다 — 개수는 맞고 장면은 어색해진다.
 ok("카메라 게이트: 인서트가 없어도 되돌리지 않는다",
-   webtoon.gate_camera(*camd(["원경", "중간", "바스트", "전신", "중간",
+   webtoon.camera_warnings(*camd(["원경", "중간", "바스트", "전신", "중간",
                               "클로즈업", "전신", "중간"])) == [])
 ok("카메라 게이트: 원경이 없어도 되돌리지 않는다",
-   webtoon.gate_camera(*camd(["중간", "전신", "바스트", "인서트", "전신",
+   webtoon.camera_warnings(*camd(["중간", "전신", "바스트", "인서트", "전신",
                               "클로즈업", "중간", "중간"])) == [])
 
-r = webtoon.gate_camera(*camd(["원경", "중간", "중간", "중간", "중간",
+r = webtoon.camera_warnings(*camd(["원경", "중간", "중간", "중간", "중간",
                                "인서트", "전신", "클로즈업"]))
 ok("카메라 게이트: 같은 거리 4연속 탈락", any("4컷 연속" in f for f in r), r)
 
-r = webtoon.gate_camera(*camd(OKAY, angles=["수평"] * 8))
+r = webtoon.camera_warnings(*camd(OKAY, angles=["수평"] * 8))
 ok("카메라 게이트: 전부 눈높이면 탈락", any("수평인 컷이" in f for f in r), r)
 
-r = webtoon.gate_camera(*camd(OKAY, angles=["기울임", "수평", "기울임", "부감",
+r = webtoon.camera_warnings(*camd(OKAY, angles=["기울임", "수평", "기울임", "부감",
                                             "기울임", "수평", "앙각", "수평"]))
 ok("카메라 게이트: 기울임 3개면 탈락", any("기울임인 컷이" in f for f in r), r)
 
-r = webtoon.gate_camera(*camd(OKAY, trans=["동작"] + ["인물", "분위기", "장면"] * 8))
+r = webtoon.camera_warnings(*camd(OKAY, trans=["동작"] + ["인물", "분위기", "장면"] * 8))
 ok("카메라 게이트: 첫 컷이 '장면' 이 아니면 탈락",
    any("첫 컷" in f for f in r), r)
 
@@ -2421,21 +2458,21 @@ ok("카메라 게이트: 첫 컷이 '장면' 이 아니면 탈락",
 # 뿐이라 5컷 장면 하나가 곧 같은 전환 4연속이다. 예전 상한(3)은 이 구조와
 # 싸웠고, 실제로 정상 콘티가 "동작 6컷 연속" 으로 막혔다. 상한은 SCENE_MAX
 # 와 같은 5이고, 6연속부터 탈락이다.
-r = webtoon.gate_camera(*camd(OKAY, trans=["장면", "동작", "동작", "동작", "동작",
+r = webtoon.camera_warnings(*camd(OKAY, trans=["장면", "동작", "동작", "동작", "동작",
                                            "인물", "분위기", "동작"]))
 ok("카메라 게이트: 같은 전환 4연속은 통과 (한 장면 안에서 정상)",
    not any("transition 이" in f and "연속" in f for f in r), r)
-r = webtoon.gate_camera(*camd(OKAY, trans=["장면", "동작", "동작", "동작", "동작",
+r = webtoon.camera_warnings(*camd(OKAY, trans=["장면", "동작", "동작", "동작", "동작",
                                            "동작", "동작", "인물"]))
 ok("카메라 게이트: 같은 전환 6연속 탈락", any("transition 이" in f and "연속" in f
                                               for f in r), r)
 
-r = webtoon.gate_camera(*camd(OKAY, trans=["장면", "동작", "장면", "동작",
+r = webtoon.camera_warnings(*camd(OKAY, trans=["장면", "동작", "장면", "동작",
                                            "장면", "동작", "장면", "동작"]))
 ok("카메라 게이트: 전환이 2종뿐이면 탈락", any("2종뿐" in f for f in r), r)
 ok("카메라 게이트: '분위기' 가 없어도 되돌리지 않는다 (경고로 남긴다)",
    not any("'분위기'" in f for f in
-           webtoon.gate_camera(*camd(OKAY, trans=["장면", "동작", "인물", "순간",
+           webtoon.camera_warnings(*camd(OKAY, trans=["장면", "동작", "인물", "순간",
                                                   "동작", "인물", "장면", "동작"]))))
 
 # 대신 경고로 남는다 — 사람이 보고 판단할 몫이다
@@ -2449,15 +2486,15 @@ ok("서술 경고: 인서트가 없으면 경고", any("인물 없는 컷(인서
 ok("서술 경고: 원경이 없으면 경고", any("원경 컷이 하나도" in x for x in w), w)
 ok("서술 경고: '분위기' 전환이 없으면 경고", any("'분위기'" in x for x in w), w)
 
-r = webtoon.gate_layout([{"cut_number": 1, "size": "wide", "beat": "setup",
+r = gate_layout_all([{"cut_number": 1, "size": "wide", "beat": "setup",
                           "render_style": "normal", "shot": "부감",
                           "angle": "수평", "transition": "장면"}])
 ok("카메라 게이트: 모르는 거리 값 탈락", any("shot" in f for f in r), r)
-r = webtoon.gate_layout([{"cut_number": 1, "size": "wide", "beat": "setup",
+r = gate_layout_all([{"cut_number": 1, "size": "wide", "beat": "setup",
                           "render_style": "normal", "shot": "원경",
                           "angle": "로우앵글", "transition": "장면"}])
 ok("카메라 게이트: 모르는 앵글 값 탈락", any("angle" in f for f in r), r)
-r = webtoon.gate_layout([{"cut_number": 1, "size": "wide", "beat": "setup",
+r = gate_layout_all([{"cut_number": 1, "size": "wide", "beat": "setup",
                           "render_style": "normal", "shot": "원경",
                           "angle": "수평", "transition": "aspect"}])
 ok("카메라 게이트: 모르는 전환 값 탈락", any("transition" in f for f in r), r)

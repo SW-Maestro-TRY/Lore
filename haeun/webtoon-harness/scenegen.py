@@ -740,6 +740,38 @@ def composition_clause(cut: dict[str, Any]) -> list[str]:
     return [f"{head}. {note}" if note else f"{head}."]
 
 
+# 컷이 고를 수 있는 지면 레이아웃. 콘티(w7)가 컷마다 하나를 고른다.
+#
+# 여기가 생긴 이유: 지금까지 이 자리는 **무조건 겹침**이었다. 가장 큰 컷이
+# 바탕(BASE LAYER)이 되고 나머지가 그 위에 얹혔다(OVER THE BASE). 겹침 자체가
+# 나쁜 것이 아니라 — 실제 웹툰도 강조할 때 겹친다 — 그것을 **모델이 통제 없이
+# 결정**하는 것이 문제였다. 스쳐 가는 리액션도 절정 컷도 똑같이 겹쳤다.
+#
+# 이제 겹침은 콘티가 "여기는 겹쳐라"라고 말한 자리에서만 일어난다. 나머지는
+# 위아래로 분리된 띠가 되어 세로 스크롤이 읽히는 대로 읽힌다.
+LAYOUT_KINDS = ("normal", "tight", "overlap", "full_bleed")
+
+LAYOUT_EN = {
+    "normal": ("a separate horizontal band with a clear gutter above and below "
+               "it — it must NOT overlap or bleed into the neighbouring panels"),
+    "tight":  ("a separate horizontal band that touches the panel above it with "
+               "no gutter between them, but still does not overlap it"),
+    "full_bleed": ("edge to edge with no border and no gutter — the artwork runs "
+                   "off all four sides of its band"),
+}
+
+
+def layout_kind(cut: dict[str, Any]) -> str:
+    """이 컷이 고른 지면 레이아웃. 없으면 "" — 예전 동작(겹침)으로 간다.
+
+    빈 문자열을 돌려주는 것이 중요하다. 옛 run 의 컷에는 이 칸이 없는데, 없을 때
+    "normal"(겹치지 마라)로 읽어 버리면 **예전에 뽑은 화를 다시 그리면 지면이
+    통째로 달라진다** — harness-is-final 이 막는 바로 그 일이다.
+    """
+    v = str(cut.get("layout") or "").strip().lower()
+    return v if v in LAYOUT_KINDS else ""
+
+
 def layout_text(cfg: dict[str, Any], scene: Scene) -> str:
     """{layout} 자리에 들어갈 문구. w7 의 size 를 패널 높이·폭으로 옮긴다.
 
@@ -793,11 +825,23 @@ def layout_text(cfg: dict[str, Any], scene: Scene) -> str:
     for i, (cut, weight) in enumerate(zip(scene.cuts, weights)):
         if i == base_i:
             continue
+        pct = round(weight / total * 100)
+        kind = layout_kind(cut)
+        if kind and kind != "overlap":
+            # 콘티가 "겹치지 마라"고 한 컷 — 바탕 위에 얹지 않고 띠로 세운다.
+            lines.append(
+                f"PANEL {i + 1}: {LAYOUT_EN[kind]}. It takes roughly {pct}% of "
+                f"the sheet height.{render_note(cut)}")
+            continue
+        # overlap 이거나(콘티가 그렇게 고름) 칸이 아예 없는 옛 컷 — 예전대로 얹는다.
         slot = slots[k % len(slots)]
         k += 1
+        why = str(cut.get("overlap_reason") or "").strip()
         lines.append(
             f"OVER THE BASE — Panel {i + 1}: {slot}, covering roughly "
-            f"{round(weight / total * 100)}% of the sheet.{render_note(cut)}")
+            f"{pct}% of the sheet."
+            f"{' It deliberately overlaps the base panel: ' + why + '.' if why else ''}"
+            f"{render_note(cut)}")
 
     rules = str(comp.get("rules") or "").strip()
     return "\n".join(lines) + (f"\n{rules}" if rules else "")

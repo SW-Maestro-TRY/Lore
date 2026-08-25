@@ -84,6 +84,11 @@ CONDITION = "S+"
 MODE = "scene"
 CUTS_PER_SHEET = 3
 
+# "웹툰" 연출에서 한 장에 들어갈 수 있는 컷 수의 상한. 경계는 콘티(scene_break)가
+# 정하고 이 값은 넘치는 묶음만 자른다 — 캔버스가 9:16 이라 다섯을 넘기면 모델이
+# 격자를 만든다.
+WEBTOON_MAX_CUTS = 4
+
 # 위 두 값은 **기본 경로**다. 사용자가 폼에서 "웹툰"을 고르면 컷 모드로 간다.
 #
 # 컷 모드에서는 컷 하나가 캔버스 하나를 통째로 쓴다. 그러면 위에 적어 둔 대가가
@@ -101,9 +106,20 @@ LAYOUT_MODES = {
 
 
 def layout_mode(form: dict[str, Any]) -> str:
-    """폼의 layout_mode → fast | webtoon. 모르는 값은 fast (지금까지의 방식)."""
+    """폼의 layout_mode → fast | webtoon. **모르는 값은 webtoon 이다.**
+
+    예전에는 fast 가 기본이었다. 그런데 fast 는 3컷을 한 캔버스에 몰아넣어
+    배치를 모델에게 통째로 맡기는 모드라, 콘티가 컷마다 계산해 둔 것들
+    (gap_after 여백 · size: impact 통컷 · vertical_link 배경 연결)이 **픽셀에
+    닿을 자리가 없다.** 실측: 한 화의 컷 9 가 gap_after=3(폰 화면 하나를 비워라)
+    이고 컷 11 이 size=impact/weight=full(한 장을 통째로 써라)인데, fast 로
+    그리면 둘 다 그냥 사라진다.
+
+    fast 를 지우지는 않는다 — 폼이 명시적으로 "fast" 를 주면 그대로 간다.
+    기본에서만 뺐다.
+    """
     v = str((form or {}).get("layout_mode") or "").strip().lower()
-    return v if v in LAYOUT_MODES else "fast"
+    return v if v in LAYOUT_MODES else "webtoon"
 
 
 # --------------------------------------------------------------------------- #
@@ -346,14 +362,26 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
                       "  gap_ratio: {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}",
                       text, count=1)
         text = re.sub(r"(?m)^  stitch_gaps:.*$", "  stitch_gaps: true", text, count=1)
-        # 9. 묶기를 **무게**가 정하게 한다 — "한 장에 3컷" 도 "한 컷에 한 장" 도
-        #    임의의 규칙이었다. 실제 웹툰은 컷마다 무게가 달라서, 스쳐 가는
-        #    리액션과 판이 뒤집히는 컷이 같은 지면을 먹지 않는다.
-        #    무거운 컷은 혼자 한 장, 배경 없는 가벼운 컷(float)만 연달아 붙은
-        #    것끼리 한 장에 묶인다 — 나눌 배경이 없어서 격자가 안 생긴다.
-        #    위의 grouping/cuts_per_scene 을 여기서 덮어쓴다(6번에서 fixed 로
-        #    바꿔 뒀는데, 웹툰 모드에서는 개수 규칙 자체를 안 쓴다).
-        text = re.sub(r"(?m)^  grouping:.*$", "  grouping: weight", text, count=1)
+        # 9. 묶기는 **연출 리듬**이 정한다 (scene.grouping: rhythm).
+        #
+        #    앞에서는 weight 로 묶었는데, 실측해 보니 콘티가 weight 를 거의 안
+        #    쓴다 — 한 화 12컷이 전부 normal 로 나와서 컷마다 한 장, 이미지가
+        #    12번 나갔다. "한 장에 3컷"(fixed)보다 세 배 비싼데 얻는 것은
+        #    "컷이 안 섞인다" 하나뿐이었다.
+        #
+        #    정작 콘티는 경계를 **이미 정해 두고 있었다** — scene_break 다.
+        #    같은 화가 rhythm 으로는 1-4 / 5-8 / 9-11 / 12 넉 장이 된다.
+        #    개수(fixed)와 장 수는 같은데, 경계가 "3개마다"가 아니라 "화면
+        #    하나가 끝나는 자리"에 떨어진다. 품질을 지키면서 호출을 줄이는
+        #    자리가 여기다 — 묶을 수 있어서 묶는 것이 아니라, **콘티가 한
+        #    화면이라고 말한 것끼리** 묶는 것이다.
+        #
+        #    상한(max_cuts_per_scene)은 남겨 둔다. 캔버스는 9:16 이 최대라
+        #    거기에 컷을 다섯씩 넣으면 모델이 격자를 만든다 — 세로 스크롤이
+        #    아니라 만화 페이지가 된다. 넘치는 묶음만 고르게 쪼갠다.
+        text = re.sub(r"(?m)^  grouping:.*$", "  grouping: rhythm", text, count=1)
+        text = re.sub(r"(?m)^  max_cuts_per_scene:.*$",
+                      f"  max_cuts_per_scene: {WEBTOON_MAX_CUTS}", text, count=1)
 
     out = job_dir / "config.yaml"
     out.write_text(text, encoding="utf-8")
