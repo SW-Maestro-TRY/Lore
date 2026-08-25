@@ -1220,7 +1220,11 @@ def _more_cuts_stages(job: "Job", run_id: str, job_dir: Path) -> None:
     run.py 가 이미 있는 장을 재사용하고 이어 붙이기만 다시 한다).
     """
     first = int(job.cut_from)
-    last = first + CUTS_PER_SHEET - 1
+    # 끝까지 그린다. 예전에는 다음 한 장(3컷)만 그려서 "이어서 보기"를 서너 번
+    # 눌러야 했다 — 이제 남은 것 전부를 한 번에 그리고 값도 한 번에 받는다
+    # (serve 의 /continue 가 남은 장면 수 × 장당 값으로 계산).
+    total = planned_cuts(run_id, job.episode)
+    last = total if total >= first else first + CUTS_PER_SHEET - 1
 
     _enter(job, 0)
     job.note(f"{first}~{last}컷을 그리는 중")
@@ -1636,10 +1640,11 @@ def execute(job: Job) -> None:
                "--mode", mode, "-c", CONDITION, "--style", job.style,
                "--config", str(job_dir / "config.yaml"), "--yes"]
         if job.preview:
-            # Scene 모드에서 --cuts 는 "그 컷이 들어 있는 장"을 고르므로 1~3 이
-            # 첫 장 하나(=3컷)다. 컷 모드에서는 말 그대로 컷 1~3 이라, 어느
-            # 쪽이든 "앞 3컷"이 되어 미리보기의 뜻이 같다.
-            cmd += ["--cuts", f"1-{CUTS_PER_SHEET}"]
+            # 미리보기 = 앞 6컷(이미지 두 장) — 대략 절반. 앞 3컷만 주면
+            # "이게 다야?" 가 됐다. 절반은 보여야 이야기의 흐름이 읽힌다.
+            # Scene 모드에서 --cuts 는 "그 컷이 들어 있는 장"을 고르므로
+            # 1~6 이 앞 두 장이고, 컷 모드에서는 말 그대로 컷 1~6 이다.
+            cmd += ["--cuts", f"1-{CUTS_PER_SHEET * 2}"]
 
         def art_or_bind(line: str) -> None:
             # episode.png 줄이 보이는 순간 마지막 단계로 넘어간다.
@@ -2513,6 +2518,17 @@ def unit_image(run_id: str, no: int, episode: int = 1) -> Path | None:
                 if p1.exists():
                     return p1
     return None
+
+
+def planned_pages(run_id: str, episode: int = 1) -> int:
+    """이 회차가 필요로 하는 이미지 장 수 — 콘티 뒤 scenes.json 의 묶음 수.
+
+    scenes.json 은 화당 1회, --cuts 로 일부만 그려도 **전체** 묶음을 캐시한다
+    (run.py generate_scenes). 그래서 미리보기만 그린 시점에도 남은 장 수를
+    정확히 알 수 있다 — "마저 그리기" 값이 여기서 나온다. 없으면 0.
+    """
+    grouping = _read_json(episode_dir(run_id, episode), "scenes.json").get("scenes") or []
+    return len(grouping)
 
 
 def drawn_units(run_id: str, episode: int = 1) -> int:

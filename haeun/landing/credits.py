@@ -43,7 +43,10 @@ START_BALANCE = 12
 # (240/60)의 비율과 같다. 화질 등급(스탠다드 0.6배)은 미실측 추정치라 아직
 # 안 넣는다(시트에도 "구조만 잡아둔 상태"라고 적혀 있다).
 CREDIT_FULL = 8
-CREDIT_PREVIEW = 2
+# 미리보기 = 앞 6컷(대략 절반). 예전에는 앞 3컷(2C)이었는데 "한 장만 주면
+# 뭐 어쩌라는 건가"가 됐다 — 절반은 보여야 이야기가 어떻게 흘러가는지 읽힌다.
+# 값 구조: 만들기 4C(절반) + 전체 보기 4C(나머지) = 한 편 8C.
+CREDIT_PREVIEW = 4
 # 컷 모드(webtoon 레이아웃)는 컷 하나가 이미지 한 장이라 그림 호출이 3배다
 # (4장→12장). 콘티(텍스트) 몫은 그대로인데 화 전체를 3배로 어림하는 건
 # 근사치다 — 정확한 비례 배분은 최소 기능 범위 밖.
@@ -174,17 +177,16 @@ def creation_cost(preview: bool, layout_mode: str) -> int:
     return base * CREDIT_WEBTOON_MULT if layout_mode == "webtoon" else base
 
 
-# 장당 값 — "이어 그리기" 한 번(한 장)의 값이다.
-#
-# 위저드가 미리보기 토글을 없애고 **항상 첫 장(2C)으로 시작**하게 바뀐 뒤로,
-# 나머지 장을 그리는 /continue 와 /next-episode 에는 차감이 없어서 한 편이
-# 실질 2C 였다 — CREDIT_FULL(8)은 아무도 안 내는 값이 됐다. 한 화가 4장이고
-# 미리보기가 그중 1장이므로, 장당 2C 로 통일하면 첫 장 2C + 나머지 3장 6C
-# = 한 편 8C 로 설계값과 정확히 맞는다.
-CREDIT_PER_PAGE = CREDIT_FULL // 4          # = 2
+# 실제 비용 단위는 **이미지 한 장**이다. 몇 컷이 한 장에 들어가는지는 모드가
+# 정한다 — fast 는 3컷씩, 웹툰(무게 묶음)은 1컷이 한 장일 수도 여러 컷이 한
+# 장일 수도 있다. 그래서 "나머지 마저 그리기" 값은 편당 고정이 아니라
+# **콘티가 정한 남은 장면(이미지) 수 × 장당 값**이다. 콘티가 나온 뒤라
+# (scenes.json 은 화당 1회, 전체 묶음을 캐시한다) 이 수는 정확히 안다.
+# fast 12컷(4장) 기준: 미리보기 4C(2장) + 남은 2장 4C = 한 편 8C.
+CREDIT_PER_IMAGE = 2
 
 
-def page_cost(layout_mode: str = "fast") -> int:
-    """장 하나를 더 그리는 값 (이어 그리기 · 다음 화의 장당 차감)."""
-    return (CREDIT_PER_PAGE * CREDIT_WEBTOON_MULT
-            if layout_mode == "webtoon" else CREDIT_PER_PAGE)
+def remaining_cost(images_left: int) -> int:
+    """미리보기 뒤 남은 장면들을 마저 그리는 값. 모드 배수 없음 —
+    이미지 수 자체가 모드를 이미 반영한다(무게 묶음은 장 수가 많다)."""
+    return max(0, int(images_left)) * CREDIT_PER_IMAGE

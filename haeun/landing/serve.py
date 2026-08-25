@@ -399,6 +399,7 @@ class Handler(BaseHTTPRequestHandler):
                 "credit_cost": {
                     "full": credits.CREDIT_FULL,
                     "preview": credits.CREDIT_PREVIEW,
+                    "per_image": credits.CREDIT_PER_IMAGE,
                     "webtoon_mult": credits.CREDIT_WEBTOON_MULT,
                 },
                 "credit_packages": credits.PACKAGES,
@@ -1085,19 +1086,18 @@ class Handler(BaseHTTPRequestHandler):
                      "awaiting_story_approval", "awaiting_sheet_approval")]
             if busy:
                 return self._error(409, "이 작품은 지금 만드는 중입니다")
-            # 장당 차감. 위저드가 "항상 첫 장(2C)으로 시작 → 이어 그리기"로
-            # 바뀐 뒤 이 자리에 차감이 없어서 한 편이 실질 2C 였다 — 첫 장과
-            # 같은 장당 값을 여기서 받아야 한 편 합계가 설계값(8C)이 된다.
-            # uid 가 없으면(예전 화면·직접 호출) 막지 않고 공짜로 둔다:
-            # 그리기가 막히는 것이 계산이 어긋나는 것보다 나쁘다.
+            # "마저 그리기" 값 — 남은 장면(이미지) 수 × 장당 값. 컷이 이미지로
+            # 어떻게 묶이는지는 콘티가 정하므로(scenes.json, 화당 1회 전체 캐시)
+            # 값은 실제 콘티를 따라간다. fast 12컷(4장)이면 미리보기 뒤 남은
+            # 2장 = 4C. uid 가 없으면(예전 화면·직접 호출) 막지 않고 공짜로
+            # 둔다: 그리기가 막히는 것이 계산이 어긋나는 것보다 나쁘다.
             uid = str(body.get("uid") or "")
             cost = 0
             if credits.valid_uid(uid):
-                layout = str((pipeline.origin_form(run_id) or {})
-                             .get("layout_mode") or "fast")
-                cost = credits.page_cost(layout)
+                pages_left = pipeline.planned_pages(run_id, episode) - drawn
+                cost = credits.remaining_cost(pages_left)
                 bal = credits.balance(uid)
-                if bal < cost:
+                if cost and bal < cost:
                     return self._error(
                         402, f"크레딧이 모자랍니다 (필요 {cost} · 보유 {bal})",
                         reason="insufficient_credit", need=cost, balance=bal)
