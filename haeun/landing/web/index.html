@@ -26,7 +26,7 @@
   <nav class="topnav">
     <a href="#how">어떻게 만드나</a>
     <a href="#gallery">결과 예시</a>
-    <a href="/works">내 웹툰</a>
+    <a href="/works">둘러보기</a>
     <a href="/editor">편집실</a>
     <!-- 계정이 없어서 잔액은 이 브라우저(uid) 기준이다 — app.js 의 getUid(). -->
     <button type="button" class="credit-pill" id="chargeBtn" title="크레딧 충전하기">
@@ -711,22 +711,24 @@
   </div>
 </div>
 
-<!-- ================================================== 내 웹툰 목록 ======
+<!-- ================================================== 둘러보기 ==========
      지금까지 만든 것을 **읽으려고** 여는 자리. 편집실은 고치는 자리라 도구가
      늘 곁에 붙어 있어서 읽기에는 맞지 않는다. 여기서 고르면 완성본 화면이
      그대로 열리고, 회차가 여럿이면 회차마다 단추가 붙는다. -->
+<!-- 둘러보기 — 다른 사람들이 만든 웹툰을 구경하는 자리.
+     내가 만든 것만 모아 보는 곳은 마이페이지다(#mypage). 둘이 같은 화면이던
+     때에는 "내 웹툰" 이라고 적혀 있었는데, 남의 작품을 구경할 자리가 따로
+     없어서 이 화면이 두 몫을 하고 있었다. -->
 <section id="works" class="works" hidden>
   <header class="works-head">
-    <div>
-      <p class="eyebrow">완성본</p>
-      <h2>내 웹툰</h2>
-      <p class="section-lede">
-        만든 작품 전부입니다. 표지를 누르면 세로로 이어 붙인 완성본을 그대로 읽습니다.
-      </p>
-    </div>
+    <p class="eyebrow">둘러보기</p>
+    <h2>다른 사람들의 웹툰</h2>
+    <p class="section-lede">
+      루가 데려온 이야기들이에요. 표지를 누르면 그대로 읽을 수 있어요.
+    </p>
     <div class="works-actions">
-      <a class="btn btn-quiet btn-sm" href="/">랜딩으로</a>
-      <a class="btn btn-primary btn-sm" href="/#studio">새 웹툰 만들기</a>
+      <a class="btn btn-quiet btn-sm" href="/">홈으로</a>
+      <a class="btn btn-primary btn-sm" href="/#studio">내 캐릭터로 웹툰 만들기</a>
     </div>
   </header>
   <div class="works-grid" id="worksGrid"></div>
@@ -734,7 +736,7 @@
 
 <!-- ================================================= 마이페이지 ========= -->
 <!-- 로그인한 사람의 자리. 상단 바의 「로그인」이 로그인 뒤 「마이페이지」로
-     바뀌고 여기로 온다. 「내 웹툰」(/works)이 이 서버에 있는 작품 전부라면,
+     바뀌고 여기로 온다. 둘러보기(/works)가 이 서버에 있는 작품 전부라면,
      여기는 **내 계정에 저장한 것만** 이다. -->
 <section id="mypage" class="mypage" hidden>
   <header class="mypage-head">

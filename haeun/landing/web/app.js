@@ -2641,14 +2641,20 @@ async function showWorks() {
   try { runs = (await (await fetch("/api/runs")).json()).runs || []; }
   catch { /* 아래에서 */ }
 
+  // 빈 화면·오류 화면에도 루를 세운다 — 글자만 있으면 고장난 것처럼 읽힌다.
   if (runs === null) {
-    host.innerHTML = `<p class="works-empty">목록을 불러오지 못했습니다.` +
-      ` 서버(serve.py)가 떠 있는지 확인해 주세요.</p>`;
+    host.innerHTML = `<div class="works-empty">
+      <img src="${louArt("error")}" alt="" aria-hidden="true">
+      <b>목록을 가져오지 못했어요</b>
+      서버가 떠 있는지 확인해 주세요.</div>`;
     return;
   }
   if (!runs.length) {
-    host.innerHTML = `<p class="works-empty">아직 만든 웹툰이 없습니다.` +
-      `<br><a class="inline-link" href="/#studio">첫 작품 만들러 가기 →</a></p>`;
+    host.innerHTML = `<div class="works-empty">
+      <img src="${louArt("empty")}" alt="" aria-hidden="true">
+      <b>아직 구경할 웹툰이 없어요</b>
+      첫 작품이 이 자리에 걸립니다.
+      <br><a class="inline-link" href="/#studio">내 캐릭터로 웹툰 만들기 →</a></div>`;
     return;
   }
   host.innerHTML = runs.map(workCard).join("");
@@ -2666,9 +2672,11 @@ function workCard(r) {
     : `<span class="works-cover-empty" aria-hidden="true">🖼</span>`;
   // 회차마다 단추를 준다 — "몇 편이 있다"를 세는 것과 "그 편을 연다"가 같은
   // 자리에 있어야, 2화가 있는데 1화만 열리는 일이 안 생긴다.
-  const epBtns = eps.map(n =>
+  // 회차가 하나뿐이면 「1화」 딱지는 표지를 누르는 것과 똑같은 일을 한다 —
+  // 좁은 카드에서 자리만 먹으므로 여러 화가 있을 때만 낸다.
+  const epBtns = eps.length > 1 ? eps.map(n =>
     `<button type="button" class="works-ep" data-open="${esc(r.run_id)}" data-ep="${n}">`
-    + `${n}화</button>`).join("");
+    + `${n}화</button>`).join("") : "";
   return `
     <article class="works-card">
       <button type="button" class="works-cover" data-open="${esc(r.run_id)}"
@@ -2678,7 +2686,7 @@ function workCard(r) {
       <div class="works-body">
         <h3>${esc(r.character || "이름 없음")}</h3>
         <p class="works-sub">${esc([r.genre, r.title].filter(Boolean).join(" · "))}</p>
-        <p class="works-count">${eps.length}편 · ${r.page_count}장</p>
+        <p class="works-count">${eps.length > 1 ? eps.length + "화 · " : ""}${r.page_count}장</p>
         <div class="works-eps">${epBtns}</div>
         <a class="works-edit" href="/editor?run=${encodeURIComponent(r.run_id)}&ep=${first}">편집실에서 열기 →</a>
       </div>

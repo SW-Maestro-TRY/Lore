@@ -1027,53 +1027,85 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 
 /* --------------------------------------------------------- 내 웹툰 목록 */
 
-.works { min-height: 100vh; padding: clamp(28px, 5vw, 60px) clamp(16px, 5vw, 48px) 90px; }
-.works-head {
-  display: flex; justify-content: space-between; align-items: flex-end;
-  gap: 20px; flex-wrap: wrap; margin-bottom: 2.4em;
-  max-width: 1180px; margin-left: auto; margin-right: auto;
+/* ------------------------------------------------------------- 둘러보기 ---
+ *
+ * 남이 만든 웹툰을 구경하는 자리. 만드는 화면(심해로 내려가는 물)과 달리
+ * 여기는 **수면 가까이** 다 — 얕고 밝은 물에서 표지를 훑는 느낌이라, 홈의
+ * 모래빛에서 시작해 옅은 물빛으로만 내려간다.
+ */
+.works {
+  min-height: 100dvh;
+  padding: 18px 16px 90px;
+  background: linear-gradient(180deg, var(--sea-sand) 0%, var(--paper-2) 30%, var(--ink) 100%);
 }
-.works-head h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 800; }
-.works-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.works-grid {
-  display: grid; gap: 20px; max-width: 1180px; margin: 0 auto;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+.works-head { margin: 0 0 22px; }
+.works-head h2 {
+  font-size: clamp(1.5rem, 6vw, 1.9rem); font-weight: 800;
+  color: var(--accent-d); margin: 0 0 .3em;
 }
+.works-head .section-lede { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.65; }
+.works-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+/* 「내 캐릭터로 웹툰 만들기」가 이 화면에서 할 수 있는 유일한 일이다 —
+   구경하다 만들고 싶어지는 자리라, 남는 폭을 그쪽이 다 갖는다. */
+.works-actions .btn-primary { flex: 1; }
+
+/* 표지를 앞세운 두 칸. 한 칸이면 한 번에 한 작품밖에 안 보여서 구경이 안 되고,
+   석 칸이면 폰에서 표지가 손톱만 해진다. */
+.works-grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .works-card {
-  display: flex; flex-direction: column;
-  border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--card); overflow: hidden;
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 16px; background: var(--card);
+  box-shadow: 0 1px 0 rgba(38,64,58,.05), 0 6px 20px rgba(38,64,58,.07);
+  transition: transform .16s ease, box-shadow .16s ease;
 }
+.works-card:hover { transform: translateY(-2px); box-shadow: 0 2px 0 rgba(38,64,58,.06), 0 14px 30px rgba(38,64,58,.12); }
 /* 표지는 작품마다 캔버스 비율이 달라서(세로로 긴 장이 흔하다) 그대로 두면 줄이
-   들쭉날쭉해진다. 목록에서는 같은 창으로 잘라 보여 주고, 위쪽을 남긴다 —
-   웹툰 한 장의 첫 컷이 대개 그 화를 대표한다. */
+   들쭉날쭉해진다. 같은 창으로 잘라 보여 주고 위쪽을 남긴다 — 웹툰 한 장의 첫
+   컷이 대개 그 화를 대표한다. */
 .works-cover {
   display: block; width: 100%; padding: 0; border: none; cursor: pointer;
   background: var(--ink-2); aspect-ratio: 3 / 4;
+  /* 표지를 흐름 밖으로 빼서 절대 위치로 채운다. 그냥 두면 세로로 긴 원본이
+     제 키대로 자라면서 aspect-ratio 를 밀어내, 카드마다 표지 길이가 제각각이
+     된다(실제로 3/4 로 정해 뒀는데 그보다 훨씬 길게 나왔다). */
+  position: relative; overflow: hidden;
 }
-.works-cover img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+.works-cover > * {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; object-position: top center;
+}
 .works-cover-empty {
-  display: grid; place-items: center; width: 100%; height: 100%;
+  display: grid; place-items: center;
   font-size: 1.8rem; color: var(--dim);
 }
-.works-cover:hover img { opacity: .88; }
-.works-body { display: grid; gap: .3em; padding: 14px 16px 16px; }
-.works-body h3 { font-size: 1rem; font-weight: 700; }
-.works-sub { margin: 0; color: var(--muted); font-size: .84rem; }
-.works-count { margin: 0; color: var(--dim); font-size: .78rem; }
-.works-eps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: .5em; }
-.works-ep {
-  border: 1px solid var(--line-2); background: transparent; color: var(--text);
-  border-radius: 999px; padding: .3em .8em; font: inherit; font-size: .8rem;
-  cursor: pointer; transition: background .14s ease, border-color .14s ease;
+.works-cover:hover img { opacity: .9; }
+.works-body { display: grid; gap: .25em; padding: 10px 12px 12px; }
+.works-body h3 { font-size: .95rem; font-weight: 700; color: var(--text); }
+.works-sub {
+  margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.5;
+  /* 제목이 길어도 카드 높이가 안 흔들리게 두 줄에서 끊는다 — 줄이 들쭉날쭉하면
+     격자가 무너져 보인다. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.works-ep:hover { border-color: var(--accent); background: rgba(229,73,60,.12); }
-.works-edit { margin-top: .5em; color: var(--dim); font-size: .78rem; }
-.works-edit:hover { color: var(--accent); }
+.works-count { margin: .1em 0 0; color: var(--dim); font-size: .72rem; }
+.works-eps { display: flex; flex-wrap: wrap; gap: 5px; margin-top: .45em; }
+.works-ep {
+  border: 1px solid var(--line-2); background: transparent; color: var(--muted);
+  border-radius: 999px; padding: .22em .6em; font: inherit; font-size: .72rem;
+  cursor: pointer; transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+/* 예전 팔레트(붉은 강조)가 남아 있어서 민트 화면에서 혼자 붉게 떴다. */
+.works-ep:hover { border-color: var(--accent); background: rgba(111,165,153,.14); color: var(--accent-d); }
+.works-edit { display: inline-block; margin-top: .5em; color: var(--dim); font-size: .72rem; }
+.works-edit:hover { color: var(--accent-d); }
+
+/* 빈 화면 — 글자만 있으면 "고장난 건가" 로 읽힌다. 루가 대신 서 있는다. */
 .works-empty {
   grid-column: 1 / -1; text-align: center; color: var(--muted);
-  padding: 60px 0; line-height: 1.8;
+  padding: 40px 0 60px; line-height: 1.8;
 }
+.works-empty img { width: 148px; height: auto; display: block; margin: 0 auto 14px; }
+.works-empty b { display: block; color: var(--accent-d); font-size: 1.02rem; margin-bottom: .3em; }
 
 /* ------------------------------------------------------------------ 결과 */
 
