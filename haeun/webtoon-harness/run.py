@@ -145,18 +145,44 @@ def load_config(path: Path) -> dict[str, Any]:
     prov.setdefault("cost_per_image_usd", 0.0)
     prov.setdefault("options", {})
     # 컷을 그리는 provider 도 .env 로 바꿀 수 있다 — config.yaml 을 안 고치고
-    # mock 으로 돌려 보거나(과금 없음) 다른 provider 로 갈아탈 때 쓴다.
+    # openai 로 갈아타거나 mock 으로 돌려 볼(과금 없음) 때 쓴다.
     # 안 적으면 config.yaml 의 값 그대로라 예전 run 은 안 바뀐다.
-    # 모델 이름은 이미 model_env(기본 GEMINI_IMAGE_MODEL)로 .env 에서 온다.
     # 시트 쪽은 SHEET_IMAGE_PROVIDER 로 따로 고른다(story.py) — 한 이름이 두
     # 단계를 다 뜻하면 어느 쪽을 바꾼 것인지 알 수 없다.
+    #
+    # provider 를 바꾸면 **키와 모델을 읽어 올 .env 이름도 같이 바뀐다.**
+    # 그러지 않으면 openai 로 바꿔 놓고도 GEMINI_API_KEY 를 찾아서 "키가 없다"고
+    # 죽는다 — config.yaml 을 안 건드리고 .env 한 줄로 갈아타게 하는 것이
+    # 이 표의 목적이라, config 에 적힌 (그 전 provider 용) 이름을 덮어쓴다.
+    # 직접 이름을 정하고 싶으면 .env 에서 아래 둘로 다시 덮을 수 있다:
+    #   WEBTOON_IMAGE_KEY_ENV=... · WEBTOON_IMAGE_MODEL_ENV=...
     from providers import REGISTRY as _PROVIDER_REGISTRY
-    _want = str(load_dotenv(ROOT / ".env").get("WEBTOON_IMAGE_PROVIDER") or "").strip().lower()
+    _PROVIDER_ENV_DEFAULTS = {
+        "gemini": ("GEMINI_API_KEY", "GEMINI_IMAGE_MODEL", 0.134),
+        # 1024x1536 medium 기준. 품질을 올리면 요금표가 달라진다.
+        "openai": ("OPENAI_API_KEY", "OPENAI_IMAGE_MODEL", 0.041),
+    }
+    _dotfile = load_dotenv(ROOT / ".env")
+    _want = str(_dotfile.get("WEBTOON_IMAGE_PROVIDER") or "").strip().lower()
     if _want and _want != str(prov["name"]).strip().lower():
         if _want in _PROVIDER_REGISTRY:
             print(f"[provider] WEBTOON_IMAGE_PROVIDER={_want} — config.yaml 의 "
                   f"{prov['name']} 대신 이것으로 그립니다.")
             prov["name"] = _want
+            swap = _PROVIDER_ENV_DEFAULTS.get(_want)
+            if swap:
+                key_env, model_env, unit = swap
+                prov["api_key_env"] = key_env
+                prov["model_env"] = model_env
+                prov["cost_per_image_usd"] = unit
+            # mock 은 키도 모델도 안 쓰므로 위 표에 없다 — 그대로 둔다.
+            # 사람이 이름을 직접 정했으면 그것이 마지막에 이긴다.
+            for _k, _var in (("api_key_env", "WEBTOON_IMAGE_KEY_ENV"),
+                             ("model_env", "WEBTOON_IMAGE_MODEL_ENV")):
+                _custom = str(_dotfile.get(_var) or "").strip()
+                if _custom:
+                    prov[_k] = _custom
+            print(f"           키={prov['api_key_env']} · 모델={prov['model_env']}")
         else:
             # 조용히 무시하면 ".env 를 고쳤는데 왜 그대로지" 로 헤맨다.
             print(f"[경고] WEBTOON_IMAGE_PROVIDER='{_want}' 는 등록되지 않은 "
@@ -169,6 +195,31 @@ def load_config(path: Path) -> dict[str, Any]:
     txt.setdefault("max_output_tokens", 8000)
     txt.setdefault("timeout_sec", 180)
     txt.setdefault("cost_per_call_usd", 0.0)
+    # 텍스트 LLM(콘티 옮기기·컷 나누기)도 같은 방식으로 .env 에서 고른다.
+    # 이미지와 **따로** 고르는 것이 요점이다 — 그림은 Gemini 로, 글은 OpenAI 로
+    # 같은 조합이 실제로 쓰인다. 안 적으면 config.yaml 의 text.provider
+    # (기본 gemini) 그대로다.
+    _txt_want = str(_dotfile.get("WEBTOON_TEXT_PROVIDER") or "").strip().lower()
+    if _txt_want and _txt_want != str(txt.get("provider") or "gemini").strip().lower():
+        if _txt_want in textgen.PROVIDERS:
+            print(f"[text] WEBTOON_TEXT_PROVIDER={_txt_want} — 글은 이것으로 씁니다.")
+            txt["provider"] = _txt_want
+            _txt_swap = {
+                "gemini": ("GEMINI_API_KEY", "GEMINI_TEXT_MODEL"),
+                "openai": ("OPENAI_API_KEY", "OPENAI_TEXT_MODEL"),
+            }.get(_txt_want)
+            if _txt_swap:
+                txt["api_key_env"], txt["model_env"] = _txt_swap
+            for _k, _var in (("api_key_env", "WEBTOON_TEXT_KEY_ENV"),
+                             ("model_env", "WEBTOON_TEXT_MODEL_ENV")):
+                _custom = str(_dotfile.get(_var) or "").strip()
+                if _custom:
+                    txt[_k] = _custom
+            print(f"       키={txt['api_key_env']} · 모델={txt['model_env']}")
+        else:
+            print(f"[경고] WEBTOON_TEXT_PROVIDER='{_txt_want}' 를 모릅니다 "
+                  f"({'/'.join(sorted(textgen.PROVIDERS))} 중 하나). "
+                  f"config.yaml 의 값을 그대로 씁니다.")
     cfg.setdefault("prompt_gen", {}).setdefault("banned_terms", [])
     # 검증용 후보 수는 채택용보다 적다 — 여기서 고를 것이 아니라 잴 것이기 때문이다.
     cfg.setdefault("scene", {}).setdefault("verify_candidates_per_scene", 2)

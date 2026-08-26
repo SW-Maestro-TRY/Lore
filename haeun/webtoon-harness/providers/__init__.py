@@ -7,9 +7,13 @@ from typing import Any
 from .base import GenRequest, GenResult, ImageProvider, ProviderError
 from .gemini import GeminiProvider
 from .mock import MockProvider
+# 파일 이름이 openai.py 가 아니라 openai_images.py 인 이유: 그 안에서 SDK 를
+# `import openai` 로 부르는데, 같은 이름이면 자기 자신을 가리킬 위험이 있다.
+from .openai_images import OpenAIProvider
 
 REGISTRY: dict[str, type[ImageProvider]] = {
     "gemini": GeminiProvider,
+    "openai": OpenAIProvider,
     "mock": MockProvider,
 }
 

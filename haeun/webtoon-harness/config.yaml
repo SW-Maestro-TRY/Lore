@@ -1604,13 +1604,29 @@ scene:
 # 이미지 생성 provider
 # -----------------------------------------------------------------------------
 provider:
-  name: gemini              # providers/ 에 등록된 이름 (gemini | mock)
+  name: gemini              # providers/ 에 등록된 이름 (gemini | openai | mock)
   api_key_env: GEMINI_API_KEY
   model_env: GEMINI_IMAGE_MODEL       # .env 에서 읽을 이미지 모델 이름
   cost_per_image_usd: 0.134           # 이미지 1장당 추정 단가. 요금표 바뀌면 여기만 수정
+  #
+  # ★ 여기를 안 고치고 **.env 한 줄로** 갈아탈 수 있습니다:
+  #     WEBTOON_IMAGE_PROVIDER=openai
+  #   그러면 api_key_env·model_env·cost_per_image_usd 도 그 provider 것으로
+  #   함께 바뀝니다 (OPENAI_API_KEY · OPENAI_IMAGE_MODEL · 0.041).
+  #   이름을 직접 정하려면 WEBTOON_IMAGE_KEY_ENV / WEBTOON_IMAGE_MODEL_ENV.
+  #
+  # ★ 아래 options 는 **Gemini 기준**입니다. openai 로 갈아타면:
+  #     · aspect_ratio → 가장 가까운 크기로 바뀝니다 (9:16 → 1024x1536).
+  #       정확히 그 비율이 아니라서 캔버스 모양이 미묘하게 달라집니다.
+  #     · image_size(1K/2K/4K) · response_modalities → 없는 개념이라 무시됩니다.
+  #       대신 quality: low|medium|high 가 그 자리입니다 (기본 medium).
+  #     · seed → OpenAI 이미지 API 에는 없습니다. 시드 재현은 Gemini 전용이고,
+  #       값이 있으면 무시하면서 경고를 한 번 찍습니다.
   options:
     # generationConfig 로 그대로 전달됨. 모델이 지원 안 하는 값은 지우세요.
     response_modalities: ["TEXT", "IMAGE"]
+    # openai 전용 — gemini 는 이 값을 안 봅니다. low | medium | high
+    quality: "medium"
     # 세로 스크롤 웹툰의 모양은 **캔버스가 정합니다.** 문구로는 안 됩니다.
     #
     # 3:4 는 만화책 페이지 비율입니다. 그 캔버스에 컷을 3~4개 넣으라고 하면
