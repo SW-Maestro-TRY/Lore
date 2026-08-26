@@ -2,7 +2,7 @@
   "name": "lore",
   "version": "0.1.0",
   "private": true,
-  "description": "Lore 모노레포 루트. 도메인(common/webtoon/comic/trailer)별로 be/fe/docs 를 갖는다.",
+  "description": "Lore 모노레포 루트. 도메인(common/webtoon/zzal/trailer)별로 be/fe/docs 를 갖는다.",
   "//": "npm workspaces 를 쓰는 이유: 각 도메인의 fe/ 코드가 apps/web 바깥에 있어서, node_modules 가 루트에 모여 있어야 react/next 를 정상적으로 찾는다.",
   "workspaces": [
     "apps/web"

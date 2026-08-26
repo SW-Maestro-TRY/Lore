@@ -1,6 +1,6 @@
-// 도메인 탭(/webtoon, /comic, /trailer) 공용 레이아웃.
+// 도메인 탭(/webtoon, /zzal, /trailer) 공용 레이아웃.
 //
-// (domains) 는 괄호로 감싼 라우트 그룹이라 URL 에 영향을 주지 않는다. /comic 은 그대로 /comic 이다.
+// (domains) 는 괄호로 감싼 라우트 그룹이라 URL 에 영향을 주지 않는다. /zzal 은 그대로 /zzal 이다.
 // 이 그룹을 둔 이유: 랜딩(/)은 LandingPage 안에서 헤더를 직접 렌더링하기 때문에,
 // 도메인 탭에만 헤더를 붙일 자리가 필요해서다.
 //

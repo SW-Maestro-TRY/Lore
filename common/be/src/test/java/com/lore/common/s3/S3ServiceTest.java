@@ -41,7 +41,7 @@ class S3ServiceTest {
     void keyStartsWithImagesPrefix() {
         S3Service service = serviceReturningUrl("bucket-a");
 
-        String key = service.createUploadUrl("comic", "image/png").key();
+        String key = service.createUploadUrl("zzal", "image/png").key();
 
         assertThat(key).startsWith("images/");
     }
@@ -61,7 +61,7 @@ class S3ServiceTest {
     void prefixIsIndependentOfDomain() {
         S3Service service = serviceReturningUrl("bucket-a");
 
-        assertThat(service.createUploadUrl("comic", "image/png").key()).startsWith("images/comic/");
+        assertThat(service.createUploadUrl("zzal", "image/png").key()).startsWith("images/zzal/");
         assertThat(service.createUploadUrl("trailer", "image/png").key()).startsWith("images/trailer/");
     }
 
@@ -70,8 +70,8 @@ class S3ServiceTest {
     void keysDoNotCollide() {
         S3Service service = serviceReturningUrl("bucket-a");
 
-        String first = service.createUploadUrl("comic", "image/png").key();
-        String second = service.createUploadUrl("comic", "image/png").key();
+        String first = service.createUploadUrl("zzal", "image/png").key();
+        String second = service.createUploadUrl("zzal", "image/png").key();
 
         assertThat(first).isNotEqualTo(second);
     }
@@ -81,7 +81,7 @@ class S3ServiceTest {
     void failsLoudlyWhenBucketMissing() {
         S3Service service = new S3Service(presigner, "", 10);
 
-        assertThatThrownBy(() -> service.createUploadUrl("comic", "image/png"))
+        assertThatThrownBy(() -> service.createUploadUrl("zzal", "image/png"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CONTENT_S3_BUCKET");
     }

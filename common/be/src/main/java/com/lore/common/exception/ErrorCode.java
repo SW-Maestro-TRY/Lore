@@ -8,7 +8,7 @@ import org.springframework.http.HttpStatus;
  * 프론트는 사람이 읽는 문구(message)가 아니라 이 코드(name)로 분기한다.
  * 문구는 나중에 바뀌지만 코드는 안 바뀌기 때문이다.
  *
- * 도메인이 늘면 접두어로 구분한다. (COMMON_* / COMIC_* / WEBTOON_* / TRAILER_*)
+ * 도메인이 늘면 접두어로 구분한다. (COMMON_* / ZZAL_* / WEBTOON_* / TRAILER_*)
  */
 public enum ErrorCode {
 
@@ -17,7 +17,7 @@ public enum ErrorCode {
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다");
 
     // 도메인별 코드는 각 담당자가 아래에 추가한다.
-    // 예) COMIC_NOT_FOUND(HttpStatus.NOT_FOUND, "만화를 찾을 수 없습니다"),
+    // 예) ZZAL_NOT_FOUND(HttpStatus.NOT_FOUND, "만화를 찾을 수 없습니다"),
     //     WEBTOON_NOT_FOUND(HttpStatus.NOT_FOUND, "스토리를 찾을 수 없습니다"),
 
     private final HttpStatus status;

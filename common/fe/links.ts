@@ -1,6 +1,6 @@
 // 사이트 공통 링크 목록.
 //
-// 순서는 반드시 Comic → Trailer → Webtoon. 사용자 여정(가볍게 시작 → 선택적 티저 → 본편)을
+// 순서는 반드시 Zzal → Trailer → Webtoon. 사용자 여정(가볍게 시작 → 선택적 티저 → 본편)을
 // 표현한 것이라 알파벳순이나 도메인 폴더 순서로 바꾸면 안 된다.
 // 헤더·푸터가 같은 배열을 보므로 여기만 고치면 전부 따라간다.
 export type Tab = {
@@ -18,7 +18,7 @@ export type Tab = {
 };
 
 export const TABS: readonly Tab[] = [
-  { href: "/comic", label: "Comic" },
+  { href: "/zzal", label: "Zzal" },
   { href: "/trailer", label: "Trailer" },
   // 화면이 haeun/landing 프로토타입이다 — webtoon/fe/README.md 참고.
   { href: "/webtoon", label: "Webtoon", hardNav: true },
