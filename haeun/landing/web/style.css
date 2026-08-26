@@ -1556,10 +1556,10 @@ button.inline-link:hover { color: #f0d090; }
 .charge-balance b { color: var(--gold); }
 
 .charge-packages { display: grid; gap: 10px; }
-/* 충전 카드 — 물결에서 심해로 **내려가는** 목록이다.
-   카드마다 왼쪽에 그 깊이의 물빛 띠를 세우고, 마지막(심해)은 카드 전체가
-   짙은 물이 된다 — 홈의 바다(수면→항해→심해)와 같은 눈금이라 충전 화면이
-   세계관 밖으로 튀지 않는다. 파는 것은 크레딧이 아니라 "몇 편"이다. */
+/* 충전 카드 — 출항에서 탐험으로 **멀어지는** 목록이다(맨 위 무료 카드는
+   따로, .charge-pkg-free 아래 참고). 카드마다 왼쪽에 그 단계의 물빛 띠를
+   세우고, 마지막(탐험)은 카드 전체가 짙은 물이 된다. 파는 것은 크레딧이
+   아니라 "몇 편"이다. */
 .charge-pkg {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -1585,18 +1585,18 @@ button.inline-link:hover { color: #f0d090; }
   border-color: var(--accent); transform: translateY(-1px);
   box-shadow: 0 8px 22px rgba(38,64,58,.12);
 }
-/* 가장 많이 고르는 것(수면)은 이미 골라진 것처럼 보이게 — 민트 테두리. */
-.charge-pkg[data-tier="2"] { border-color: var(--accent); }
-/* 심해는 카드 전체가 짙은 물이다 — 제일 깊은 곳이 제일 좋아 보여야 한다. */
-.charge-pkg[data-tier="4"] {
+/* 가장 많이 고르는 것(출항)은 이미 골라진 것처럼 보이게 — 민트 테두리. */
+.charge-pkg[data-tier="1"] { border-color: var(--accent); }
+/* 탐험은 카드 전체가 짙은 물이다 — 제일 멀리 가는 것이 제일 좋아 보여야 한다. */
+.charge-pkg[data-tier="3"] {
   background: linear-gradient(135deg, var(--sea-deep), var(--sea-abyss));
   border-color: transparent; color: var(--on-sea);
 }
-.charge-pkg[data-tier="4"]::before { display: none; }
-.charge-pkg[data-tier="4"] .charge-pkg-tag,
-.charge-pkg[data-tier="4"] .charge-pkg-per { color: rgba(247,243,234,.72); }
-.charge-pkg[data-tier="4"] .charge-pkg-value { color: var(--on-sea); }
-.charge-pkg[data-tier="4"] .charge-pkg-price { color: var(--on-sea); }
+.charge-pkg[data-tier="3"]::before { display: none; }
+.charge-pkg[data-tier="3"] .charge-pkg-tag,
+.charge-pkg[data-tier="3"] .charge-pkg-per { color: rgba(247,243,234,.72); }
+.charge-pkg[data-tier="3"] .charge-pkg-value { color: var(--on-sea); }
+.charge-pkg[data-tier="3"] .charge-pkg-price { color: var(--on-sea); }
 
 /* 배지는 카드 안 오른쪽 위 — 테두리에 걸치면 overflow 에 잘린다.
    가격(align-self:end)이 아래로 내려가 있어 이 자리는 비어 있다. */
@@ -1608,12 +1608,28 @@ button.inline-link:hover { color: #f0d090; }
 }
 /* 배지 있는 카드는 가격이 배지 밑으로 확실히 내려가게 여유를 준다. */
 .charge-pkg:has(.charge-pkg-badge) .charge-pkg-price { margin-top: 14px; }
+
+/* 승선(무료) 카드 — 항해 눈금(물빛 띠) 밖이다. 파는 것이 아니라 그냥 주는
+   것이라는 게 한눈에 보이게 금색 테두리로 뺐다. 오늘 이미 받았으면
+   버튼을 잠그고(disabled) 옅게 가라앉힌다. */
+.charge-pkg-free {
+  border-color: var(--gold); background: var(--paper-2);
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "emoji label" "emoji tag" "emoji value";
+}
+.charge-pkg-free::before { background: var(--gold); }
+.charge-pkg-free .charge-pkg-badge { background: var(--gold); }
+.charge-pkg-free:disabled {
+  cursor: default; opacity: .58; border-color: var(--line-2);
+}
+.charge-pkg-free:disabled::before { background: var(--line-2); }
+.charge-pkg-free:disabled:hover { transform: none; box-shadow: none; }
 .charge-pkg-emoji {
   grid-area: emoji; font-size: 1.5rem; line-height: 1;
   width: 44px; height: 44px; display: grid; place-items: center;
   background: rgba(111,165,153,.10); border-radius: 12px;
 }
-.charge-pkg[data-tier="4"] .charge-pkg-emoji { background: rgba(247,243,234,.12); }
+.charge-pkg[data-tier="3"] .charge-pkg-emoji { background: rgba(247,243,234,.12); }
 .charge-pkg-label { grid-area: label; font-weight: 800; font-size: 1.02rem; }
 .charge-pkg-tag { grid-area: tag; font-size: .76rem; color: var(--muted); }
 .charge-pkg-value {

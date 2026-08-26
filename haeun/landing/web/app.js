@@ -454,6 +454,7 @@ const UID = getUid();
 
 let creditCost = { full: 0, preview: 0, webtoon_mult: 1 };   // /api/config 도착 전 임시값
 let creditPackages = [];
+let dailyFreeCredits = 20;
 let creditBalance = null;
 
 async function loadCreditConfig() {
@@ -461,6 +462,7 @@ async function loadCreditConfig() {
     const cfg = await getConfig();
     creditCost = cfg.credit_cost || creditCost;
     creditPackages = cfg.credit_packages || [];
+    dailyFreeCredits = cfg.daily_free_credits || dailyFreeCredits;
   } catch { /* 못 받아도 화면은 뜬다 — 비용 칩만 0으로 보인다 */ }
   paintCost();
   paintMyCreditHint();
@@ -574,15 +576,72 @@ function chargeStep(name) {
   $$(".charge-step").forEach(el => { el.hidden = el.dataset.chargeStep !== name; });
 }
 
+/* 승선 — 하루 1회 무료 카드. 예전엔 이 자리가 유료 상품("물결")이었다.
+   이름은 뒤의 출항 → 항해 → 탐험 앞에 놓이는 첫 걸음이다(배에 오르는 것).
+   오늘 이미 받았는지는 서버(credits.json 의 날짜)만 알므로, 열 때마다
+   물어보고 그린다 — 잘못 안내해서 "받았다고 나왔는데 안 받아짐" 이 되면
+   안 되니, 상태를 모르면(요청 실패) 아예 카드를 숨긴다. */
+async function renderFreeClaimCard(box) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "charge-pkg charge-pkg-free";
+  b.disabled = true;
+  b.innerHTML = `
+    <span class="charge-pkg-badge">하루 1회 무료</span>
+    <span class="charge-pkg-emoji">⛵</span>
+    <span class="charge-pkg-label">승선</span>
+    <span class="charge-pkg-tag">확인하는 중…</span>
+    <span class="charge-pkg-value">${dailyFreeCredits.toLocaleString("ko-KR")}C</span>`;
+  box.appendChild(b);
+  try {
+    const res = await fetch(`/api/credits/daily?uid=${encodeURIComponent(UID)}`);
+    const st = await res.json();
+    if (!res.ok) throw new Error();
+    if (st.claimed) {
+      b.querySelector(".charge-pkg-tag").textContent = "오늘은 이미 받았어요 — 내일 또!";
+    } else {
+      b.disabled = false;
+      b.querySelector(".charge-pkg-tag").textContent = "눌러서 바로 받기";
+      b.addEventListener("click", () => claimDailyFree(b));
+    }
+  } catch {
+    b.remove();
+  }
+}
+
+async function claimDailyFree(btn) {
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/credits/daily", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: UID }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "지급에 실패했습니다");
+    if (data.granted) {
+      creditBalance = data.balance;
+      paintCreditPill();
+      toast(`오늘의 무료 크레딧 ${data.credits_added}개가 들어왔어요! ✨`);
+      btn.querySelector(".charge-pkg-tag").textContent = "오늘은 이미 받았어요 — 내일 또!";
+    } else {
+      btn.querySelector(".charge-pkg-tag").textContent = "오늘은 이미 받았어요 — 내일 또!";
+      toast("오늘은 이미 받았어요 — 내일 다시 와 주세요!");
+    }
+  } catch (err) {
+    btn.disabled = false;
+    toast(err.message || "지급에 실패했습니다");
+  }
+}
+
 function renderChargePackages() {
   const box = $("#chargePackages");
   box.innerHTML = "";
+  renderFreeClaimCard(box);
   creditPackages.forEach((pkg, ti) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "charge-pkg";
-    // 깊이 — 물결(1)에서 심해(4)로 내려갈수록 카드의 물빛이 짙어진다.
-    // 홈의 바다(수면→항해→심해)와 같은 눈금이라, 충전 화면이 따로 놀지 않는다.
+    // 단계 — 출항(1)에서 탐험(3)으로 멀어질수록 카드의 물빛이 짙어진다.
     b.dataset.tier = String(ti + 1);
     // 크레딧보다 "몇 편"이 먼저다. 크레딧은 이 서비스가 만든 단위라 60이
     // 많은지 적은지 알 수 없지만, "웹툰 7편"은 바로 읽힌다. 편당 가격이

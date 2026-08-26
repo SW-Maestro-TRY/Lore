@@ -403,6 +403,7 @@ class Handler(BaseHTTPRequestHandler):
                     "webtoon_mult": credits.CREDIT_WEBTOON_MULT,
                 },
                 "credit_packages": credits.PACKAGES,
+                "daily_free_credits": credits.DAILY_FREE_CREDITS,
                 "account_photo_presets": accounts.PRESET_PHOTOS,
             })
 
@@ -412,6 +413,14 @@ class Handler(BaseHTTPRequestHandler):
             if not credits.valid_uid(uid):
                 return self._error(400, "uid 가 없습니다")
             return self._json({"balance": credits.balance(uid)})
+
+        # 하루 1회 무료 크레딧 — 오늘 이미 받았는지만 본다(지급은 POST).
+        # 충전 모달을 열 때마다 물어서 단추를 "오늘 받기/내일 다시" 로 바꾼다.
+        if path == "/api/credits/daily":
+            uid = (query.get("uid") or [""])[0]
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            return self._json(credits.daily_claim_state(uid))
 
         # ---- 계정(선택 기능) ------------------------------------------------ #
         #
@@ -813,6 +822,23 @@ class Handler(BaseHTTPRequestHandler):
                               credits=pkg["credits"], price=pkg["price"])
             return self._json({"balance": bal, "credits_added": pkg["credits"],
                                "package": pkg})
+
+        # 하루 1회 무료 크레딧 지급. 오늘 이미 받았으면 granted:false 로
+        # 답한다 — 그것도 정상 응답이라 400 이 아니다(화면이 "내일 다시" 로
+        # 바꿔 보여주면 된다).
+        if url.path == "/api/credits/daily":
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            uid = str(body.get("uid") or "")
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            result = credits.claim_daily(uid)
+            if result["granted"]:
+                credits.log_event("daily_claim", uid,
+                                  credits=result["credits_added"])
+            return self._json(result)
 
         # 작가 규칙 저장. 상한을 넘으면 자르지 않고 거절한다 — 화면이 그 오류를
         # 그대로 보여줘야 작가가 자기 글이 어디까지 실리는지 안다.
