@@ -138,13 +138,8 @@ function buildForm() {
 
   // 기본은 아무 것도 안 고른 상태다("건너뛰기" = 루가 정합니다). 라디오는
   // 한 번 고르면 같은 것을 다시 눌러도 브라우저가 저절로 풀어주지 않으므로,
-  // 이미 고른 것을 또 누르면 비우는 동작만 직접 얹는다(장르 빠른 고르개와
-  // 같은 "다시 누르면 비운다" 패턴). click 에서 preventDefault 를 쓰면 라디오는
-  // "취소된 활성화 단계"가 클릭 이전 상태로 되돌려 버려서 — 우리가 스크립트로
-  // 정한 checked 값이 이벤트가 끝나자마자 그대로 지워진다(직접 겪음). 그래서
-  // 기본 동작은 그대로 두고, 클릭이 checked 를 바꾸기 **전** 상태만
-  // (mousedown/keydown 시점에) 따로 기억해 뒀다가, 그게 "이미 켜져 있었다"일
-  // 때만 클릭이 끝난 뒤 스크립트로 끈다.
+  // 클릭의 기본 동작을 막고 선택/해제를 직접 관리한다(장르 빠른 고르개와 같은
+  // "다시 누르면 비운다" 패턴 — 이번엔 라디오라 change 이벤트로는 못 잡는다).
   $("#styles").innerHTML = STYLE_INFO.map(([key, label, desc]) => `
     <label class="style-opt">
       <input type="radio" name="style" value="${key}">
@@ -154,15 +149,18 @@ function buildForm() {
       </span>
     </label>
   `).join("");
-  $$('#styles .style-opt').forEach(opt => {
-    const inp = opt.querySelector('input[name="style"]');
-    const rememberBeforeState = () => { inp.dataset.wasChecked = String(inp.checked); };
-    opt.addEventListener("pointerdown", rememberBeforeState);   // 마우스·터치
-    inp.addEventListener("keydown", e => {                      // 키보드(Space)
-      if (e.key === " " || e.key === "Spacebar") rememberBeforeState();
-    });
-    inp.addEventListener("click", () => {
-      if (inp.dataset.wasChecked === "true") inp.checked = false;
+  // 클릭 시점엔 브라우저가 이미 checked 를 먼저 바꿔 둔 뒤라(라디오의 활성화
+  // 단계가 click 이벤트보다 먼저 실행된다) inp.checked 만 보고는 "새로 고른 것"과
+  // "이미 고른 것을 또 누른 것"을 구분할 수 없다 — 그래서 상태를 별도 변수로
+  // 직접 들고, 매번 preventDefault 로 브라우저 기본 동작을 취소한 뒤 그 변수
+  // 기준으로만 checked 를 세팅한다.
+  const styleInputs = $$('#styles input[name="style"]');
+  let currentStyle = "";
+  styleInputs.forEach(inp => {
+    inp.addEventListener("click", e => {
+      e.preventDefault();
+      currentStyle = currentStyle === inp.value ? "" : inp.value;
+      styleInputs.forEach(o => { o.checked = o.value === currentStyle; });
     });
   });
 

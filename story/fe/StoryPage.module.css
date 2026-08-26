@@ -1,0 +1,43 @@
+/* /story 가 랜딩 프로토타입을 띄우는 자리.
+ *
+ * 프로토타입은 제 헤더를 들고 있는 **완성된 한 페이지**라, 팀 헤더 밑에 넣으면
+ * 헤더가 둘로 겹친다. 그래서 화면을 통째로 덮는다(팀 헤더의 z-index 는 60).
+ * 대신 갇히지 않게 돌아가는 길(.back)을 위에 하나 띄운다. */
+
+.frame {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  z-index: 70;
+  background: #fff;
+}
+
+.back {
+  position: fixed;
+  left: 16px;
+  /* 16px 이 아니라 64px 인 이유: 개발 중에는 Next 의 개발 표시가
+   * 왼쪽 아래에 뜬다. 그 위로 비켜 둔다. */
+  bottom: 64px;
+  z-index: 71;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 15px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  /* 프로토타입 배경이 밝기도 어둡기도 해서, 토큰 대신 어디서나 읽히는 값을 쓴다.
+   * 이 단추는 프로토타입 위에 뜨는 것이지 팀 화면의 일부가 아니다. */
+  background: rgba(20, 16, 30, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: background-color 150ms ease;
+}
+
+.back:hover {
+  background: rgba(20, 16, 30, 0.95);
+}
