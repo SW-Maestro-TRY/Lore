@@ -208,20 +208,36 @@ function buildForm() {
 let fbTagsByStage = {};
 let fbTextMax = 500;
 
-function fbChips(stage, wrap, max) {
-  wrap.replaceChildren(...(fbTagsByStage[stage] || []).map(t => {
+/* "기타"는 다른 태그와 달리 골랐을 때 적는 칸(.fb-etc-note)을 열어 준다 —
+   "더 하고 싶은 말"을 늘 펼쳐 두지 않고 기타 선택지 하나로 합친 것.
+   태그를 못 받아 "기타" 버튼 자체가 없으면(아래 loadFeedbackTags 참고) 적는
+   칸은 마크업 기본값(안 숨김)대로 계속 열려 있다 — 그래야 자유 입력만이라도
+   남는다. */
+function fbChips(stage, box) {
+  const wrap = $(".fb-tags", box);
+  const text = $(".fb-text", box);
+  const note = $(".fb-etc-note", box);
+  const tags = fbTagsByStage[stage] || [];
+  const hasEtc = tags.some(t => t.id === "etc");
+  wrap.replaceChildren(...tags.map(t => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "fb-tag";
     b.dataset.tagId = t.id;
     b.textContent = t.label;
     b.setAttribute("aria-pressed", "false");
-    b.addEventListener("click", () =>
-      b.setAttribute("aria-pressed",
-                     b.getAttribute("aria-pressed") === "true" ? "false" : "true"));
+    b.addEventListener("click", () => {
+      const nowPressed = b.getAttribute("aria-pressed") !== "true";
+      b.setAttribute("aria-pressed", nowPressed ? "true" : "false");
+      if (t.id === "etc" && note) {
+        note.hidden = !nowPressed;
+        if (nowPressed) $(".fb-text", note)?.focus();
+      }
+    });
     return b;
   }));
-  if (max) max.maxLength = fbTextMax;
+  if (text) text.maxLength = fbTextMax;
+  if (note) note.hidden = hasEtc;
 }
 
 async function loadFeedbackTags() {
@@ -230,8 +246,7 @@ async function loadFeedbackTags() {
     fbTagsByStage = cfg.feedback_tags || {};
     fbTextMax = cfg.feedback_text_max || fbTextMax;
   } catch { return; }      // 못 받으면 자유 입력만 남는다 — 승인 자체는 안 막는다
-  document.querySelectorAll(".fb-box").forEach(box =>
-    fbChips(box.dataset.fbStage, $(".fb-tags", box), $(".fb-text", box)));
+  document.querySelectorAll(".fb-box").forEach(box => fbChips(box.dataset.fbStage, box));
 }
 
 /* 그 단계에서 고른 항목과 적은 말. 상자가 없거나 아무것도 안 했으면 빈 값이다. */
@@ -251,6 +266,10 @@ function fbClear(box) {
   box.querySelectorAll(".fb-tag").forEach(b => b.setAttribute("aria-pressed", "false"));
   const text = $(".fb-text", box);
   if (text) text.value = "";
+  // "기타" 버튼이 실제로 있을 때만 다시 접는다 — 없으면(태그를 못 받은 경우)
+  // 적는 칸이 유일한 입력 수단이라 계속 열어 둬야 한다.
+  const note = $(".fb-etc-note", box);
+  if (note && box.querySelector('.fb-tag[data-tag-id="etc"]')) note.hidden = true;
 }
 
 /* ---- 작품 규칙 (user memory) ------------------------------------------ *
@@ -2452,10 +2471,10 @@ function pageTools(no) {
     </div>
     <div class="regen-box fb-box" data-fb-stage="scene" hidden>
       <p class="fb-lead">무엇이 마음에 안 드나요?
-        <small>고르면 다시 그릴 때 반영됩니다 — 안 골라도 됩니다</small></p>
+        <small>체크하면 루가 다시 그릴 때 훨씬 쉬워요! 비워두면 그냥 한 번 더 그립니다</small></p>
       <div class="fb-tags"></div>
-      <label class="field">
-        <span>무엇을 고칠까요? <small>비워도 됩니다 — 그냥 한 번 더 그립니다</small></span>
+      <label class="field fb-etc-note">
+        <span>기타</span>
         <textarea rows="2" class="js-regen-note fb-text" maxlength="500"
           placeholder="예: 표정을 더 밝게 / 배경을 밤으로 / 인물을 왼쪽에"></textarea>
       </label>
@@ -2481,7 +2500,7 @@ function wireRegen() {
     // 여기서 죽어 화면 전환 자체가 멈췄다(둘러보기에서 눌러도 안 넘어갔다).
     if (!box) return;
     // 장마다 상자가 하나씩이라 항목도 장마다 새로 그린다.
-    fbChips("scene", $(".fb-tags", box), $(".fb-text", box));
+    fbChips("scene", box);
     $(".js-regen-open", page).addEventListener("click", () => {
       box.hidden = !box.hidden;
       if (!box.hidden) $(".js-regen-note", box).focus();
