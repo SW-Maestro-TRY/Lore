@@ -41,3 +41,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+
+# ===== 빌드가 만드는 것 =====
+# Webtoon 탭 화면(haeun/landing 프로토타입)의 복사본.
+# Next 가 public 밖을 서빙하지 않아 여기로 떠 오는 것이고, 원본이 아니다.
+# webtoon/fe/sync-landing.sh 가 만들며 predev·prebuild 가 그걸 부른다.
+apps/web/public/static/

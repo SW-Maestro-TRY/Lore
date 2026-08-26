@@ -22,6 +22,9 @@ on:
       - 'webtoon/**'
       - 'trailer/**'
       - 'apps/**'
+      # Webtoon 탭 화면의 원본. 여기만 고쳐도 프론트가 바뀐다
+      # (빌드가 apps/web/public 으로 떠 온다 — webtoon/fe/sync-landing.sh).
+      - 'haeun/landing/web/**'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle/**'
@@ -72,6 +75,7 @@ jobs:
               - 'webtoon/fe/**'
               - 'trailer/fe/**'
               - 'apps/web/**'
+              - 'haeun/landing/web/**'
               - 'package.json'
               - 'package-lock.json'
 
