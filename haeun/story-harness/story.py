@@ -2141,12 +2141,40 @@ UNIFIED_HANDOFF_NOTE = (
 # 시트는 **컷과 같은 모델**로 뽑는다. 다른 모델로 뽑으면 같은 스타일 문구를 넣어도
 # 그림체가 어긋나서, 그 시트를 레퍼런스로 쓰는 의미가 없어진다.
 # (실제로 gpt-image-1 은 얼굴 비율이 크고 이목구비가 웹툰 양식이 아니었다.)
-DEFAULT_IMAGE_PROVIDER = "gemini"
-DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image"
-DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-2"      # gpt-image-1 은 2026-10-23 종료
 IMAGE_PROVIDERS = ("gemini", "openai")
 OPENAI_IMAGE_QUALITIES = ("low", "medium", "high")
-DEFAULT_OPENAI_IMAGE_QUALITY = "medium"
+
+
+def _env_choice(key: str, default: str, allowed: tuple) -> str:
+    """.env 로 고를 수 있는 값 — 목록에 없는 값이면 경고하고 기본값으로 둔다.
+
+    조용히 기본값으로 되돌리면 ".env 를 고쳤는데 왜 그대로지" 로 헤매고,
+    죽여 버리면 오타 하나에 파이프라인 전체가 안 돈다. 그래서 경고만 하고
+    간다 — 어느 쪽이 쓰였는지는 화면에 남는다."""
+    value = env(key, default).strip().lower()
+    if value not in allowed:
+        warn(f"{key}='{value}' 는 모르는 값입니다. {'/'.join(allowed)} 중 하나여야 "
+             f"합니다 — 기본값 {default} 으로 갑니다.")
+        return default
+    return value
+
+
+# 시트 이미지의 기본 provider·모델. **넷 다 .env 로 바꿀 수 있고**, 기본값은
+# 예전과 같다(안 적으면 결과가 안 바뀐다):
+#   SHEET_IMAGE_PROVIDER=gemini|openai   시트를 어느 쪽으로 그릴지
+#   GEMINI_IMAGE_MODEL=...               gemini 를 골랐을 때의 모델
+#   OPENAI_IMAGE_MODEL=...               openai 를 골랐을 때의 모델
+#   OPENAI_IMAGE_QUALITY=low|medium|high
+# 컷(webtoon-harness) 쪽은 WEBTOON_IMAGE_PROVIDER 로 따로 고른다 — 한 이름이
+# 두 단계를 다 뜻하면 어느 쪽을 바꾼 것인지 알 수 없다.
+# 시트는 **컷과 같은 모델**로 뽑는 것이 기본이다. 다른 모델로 뽑으면 같은 스타일
+# 문구를 넣어도 그림체가 어긋나서, 그 시트를 레퍼런스로 쓰는 의미가 없어진다.
+# (실제로 gpt-image-1 은 얼굴 비율이 크고 이목구비가 웹툰 양식이 아니었다.)
+DEFAULT_IMAGE_PROVIDER = _env_choice("SHEET_IMAGE_PROVIDER", "gemini", IMAGE_PROVIDERS)
+DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image"
+DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-2"      # gpt-image-1 은 2026-10-23 종료
+DEFAULT_OPENAI_IMAGE_QUALITY = _env_choice(
+    "OPENAI_IMAGE_QUALITY", "medium", OPENAI_IMAGE_QUALITIES)
 # 1536x1024 medium 기준 장당 단가. 다른 품질은 요금표가 달라서 적지 않는다 —
 # 모르는 숫자를 적어 두면 비용 표시가 거짓말이 된다. .env 로 덮어쓸 수 있다.
 OPENAI_IMAGE_COST_USD = {"medium": 0.041}
