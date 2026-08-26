@@ -16,6 +16,16 @@
 const nextConfig = {
   output: 'standalone',
 
+  // redirects — 옛 주소와 다른 로마자 표기를 살려 둔다.
+  //   /comic 은 2026-08-26 에 /zzal 로 바뀌었다. 그 전에 공유된 링크가 죽지 않게 한다.
+  //   /jjal 은 '짤'의 다른 로마자 표기다. 둘 다 실제로 쓰이므로 한쪽으로 모은다.
+  async redirects() {
+    return [
+      { source: '/comic', destination: '/zzal', permanent: true },
+      { source: '/jjal',  destination: '/zzal', permanent: true },
+    ];
+  },
+
   async rewrites() {
     // 프로토타입은 제 주소를 스스로 읽어 첫 화면을 고른다(web/app.js).
     // 그래서 화면마다 진짜 주소가 하나씩 있어야 한다 — 주소창에 그대로 뜨고,

@@ -7,7 +7,7 @@
 | 도메인 | 내용 | 담당 |
 | --- | --- | --- |
 | **Webtoon** | 세로 스크롤 웹툰 | 하은 |
-| **Comic** | 만화 캐릭터 치환 / 짤 | 상훈 |
+| **Zzal** | 만화 캐릭터 치환 / 짤 | 상훈 |
 | **Trailer** | 웹툰 예고편 | 병연 |
 
 ## 폴더 구조
@@ -21,7 +21,7 @@ repo/
 │   ├── be/                  # config(Swagger/Security), ApiResponse, 회원가입/로그인
 │   ├── fe/                  # 공용 UI
 │   │   ├── SiteHeader.tsx   # 랜딩 · 도메인 탭이 함께 쓰는 상단 헤더
-│   │   ├── links.ts         # 탭 순서 (Comic → Trailer → Webtoon) 단일 출처
+│   │   ├── links.ts         # 탭 순서 (Zzal → Trailer → Webtoon) 단일 출처
 │   │   ├── landing/         # 랜딩페이지 화면 (특정 도메인 소유가 아님)
 │   │   ├── theme/           # 라이트/다크 테마 토글 + 초기화 스크립트
 │   │   └── styles/          # 디자인 토큰 (tokens.css)
@@ -31,7 +31,7 @@ repo/
 │   ├── be/                  # 백엔드 (com.lore.webtoon 패키지)
 │   ├── fe/                  # 실제 화면 컴포넌트
 │   └── docs/
-├── comic/                   # 담당: 상훈  (구조 동일)
+├── zzal/                   # 담당: 상훈  (구조 동일)
 ├── trailer/                 # 담당: 병연  (구조 동일)
 │
 ├── apps/                    # 나뉜 코드를 하나로 합쳐 실행하는 자리 (로직 없음)
@@ -42,7 +42,7 @@ repo/
 │   │       └── (domains)/         # URL 에 영향 없는 라우트 그룹
 │   │           ├── layout.tsx         # common/fe 의 SiteHeader 렌더링
 │   │           ├── webtoon/page.tsx   # webtoon/fe 에서 import 만 → /webtoon
-│   │           ├── comic/page.tsx     # comic/fe 에서 import 만   → /comic
+│   │           ├── zzal/page.tsx     # zzal/fe 에서 import 만   → /zzal
 │   │           └── trailer/page.tsx   # trailer/fe 에서 import 만 → /trailer
 │   └── api/                 # Spring Boot 실행 셸 (main 클래스 + application.yml)
 │
@@ -64,11 +64,11 @@ repo/
 
 `apps/` 는 프레임워크가 "이 위치에 파일이 있어야 한다"고 강제해서 생긴 자리다.
 
-- **FE**: Next.js App Router 는 URL 이 파일 위치로 결정된다. `/comic` 이 존재하려면
-  `apps/web/app/comic/page.tsx` 가 반드시 있어야 하므로, 이 파일은 `comic/fe` 를 import 만 하는
-  한 줄짜리로 두고 실제 화면은 `comic/fe/` 에 둔다. 담당자는 `comic/fe/` 안에서만 작업하면 된다.
+- **FE**: Next.js App Router 는 URL 이 파일 위치로 결정된다. `/zzal` 이 존재하려면
+  `apps/web/app/zzal/page.tsx` 가 반드시 있어야 하므로, 이 파일은 `zzal/fe` 를 import 만 하는
+  한 줄짜리로 두고 실제 화면은 `zzal/fe/` 에 둔다. 담당자는 `zzal/fe/` 안에서만 작업하면 된다.
   세 도메인 라우트를 `(domains)` 라우트 그룹으로 묶은 이유는 공용 `SiteHeader` 를 붙일 위치가
-  필요해서다. 괄호 폴더는 URL 에 나타나지 않으므로 `/comic` 은 그대로 `/comic` 이다.
+  필요해서다. 괄호 폴더는 URL 에 나타나지 않으므로 `/zzal` 은 그대로 `/zzal` 이다.
   (랜딩은 헤더 아래 자체 푸터까지 갖는 한 장짜리 화면이라 헤더를 직접 렌더링한다.
   헤더 컴포넌트 자체는 랜딩과 도메인 탭이 같은 것을 쓴다.)
 - **BE**: `@SpringBootApplication` main 클래스는 특정 도메인 소유가 아니라 공용 실행 지점이다.
@@ -82,7 +82,7 @@ repo/
 
 그래서 도메인 담당자는:
 
-- 자기 폴더(예: `comic/be/src/main/java`) 안에서만 작업하면 되고
+- 자기 폴더(예: `zzal/be/src/main/java`) 안에서만 작업하면 되고
 - 공통 기능은 그냥 import 해서 쓰면 된다 — `import com.lore.common.response.ApiResponse;`
 - Gradle 모듈이나 의존성 선언 개념을 몰라도 된다. 의존성은 루트 `build.gradle` 한 곳에만 적는다.
 
@@ -122,6 +122,6 @@ npm run dev        # http://localhost:3000
 
 ## 작업 규칙 요약
 
-- 자기 도메인 폴더 안(`webtoon/`, `comic/`, `trailer/`)은 담당자가 판단해서 자유롭게.
+- 자기 도메인 폴더 안(`webtoon/`, `zzal/`, `trailer/`)은 담당자가 판단해서 자유롭게.
 - `common/`, `apps/`, 루트 설정은 공유 영역이라 변경 시 PR 에 이유를 남기고 공유한다.
 - 도메인끼리 서로 의존하지 않는다. 공유가 필요하면 `common` 으로 올린다.

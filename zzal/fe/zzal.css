@@ -1,13 +1,13 @@
-/* comic 탭 전용 스타일 — jakae 자캐툰 랜딩에서 이식.
+/* zzal 탭 전용 스타일 — jakae 자캐툰 랜딩에서 이식.
  *
  * 원본(jakae)은 body/:root 에 전역으로 뿌렸지만, 여기서는 webtoon·trailer 탭까지
- * 오염되지 않도록 .comic-page 스코프로 감쌌다.
+ * 오염되지 않도록 .zzal-page 스코프로 감쌌다.
  * (Lore 랜딩과 톤 통합은 나중 리팩터. 지금은 jakae 룩 그대로 이식.) */
 
-/* 손글씨 폰트 — comic 탭에서만 로드(전역 layout 을 안 건드린다) */
+/* 손글씨 폰트 — zzal 탭에서만 로드(전역 layout 을 안 건드린다) */
 @import url("https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gothic+A1:wght@400;500;700;900&family=Gaegu:wght@400;700&family=Nanum+Pen+Script&family=Jua&display=swap");
 
-.comic-page {
+.zzal-page {
   /* 자캐툰 팔레트 (스크랩북/콜라주 룩) */
   --accent: #c14a4a;
   --tape: #f7d94e;
@@ -27,7 +27,7 @@
 }
 
 /* 전체 도트 텍스처 */
-.comic-page::before {
+.zzal-page::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -38,9 +38,9 @@
   z-index: 0;
 }
 
-.comic-page > * { position: relative; z-index: 1; }
+.zzal-page > * { position: relative; z-index: 1; }
 
-.comic-page ::selection { background: #c14a4a; color: #fff7ec; }
+.zzal-page ::selection { background: #c14a4a; color: #fff7ec; }
 
 /* 손글씨 애니메이션 */
 @keyframes ztPulse { 0%,100%{ transform: scale(1) rotate(-6deg); } 50%{ transform: scale(1.1) rotate(-6deg); } }

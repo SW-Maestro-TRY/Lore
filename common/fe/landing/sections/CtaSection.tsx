@@ -16,7 +16,7 @@ export default function CtaSection() {
           사진 한 장이면 됩니다. 그림 실력도, 설정집도 미리 준비할 필요 없어요.
         </p>
         <div className={styles.ctaActions}>
-          <Link href="/comic" className={styles.btnComic}>
+          <Link href="/zzal" className={styles.btnZzal}>
             사진 올리기
           </Link>
           <a href={TABS_ANCHOR} className={styles.btnGhost}>

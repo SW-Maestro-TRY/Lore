@@ -18,7 +18,7 @@ on:
     branches: [develop]
     paths:
       - 'common/**'
-      - 'comic/**'
+      - 'zzal/**'
       - 'webtoon/**'
       - 'trailer/**'
       - 'apps/**'
@@ -61,7 +61,7 @@ jobs:
           filters: |
             backend:
               - 'common/be/**'
-              - 'comic/be/**'
+              - 'zzal/be/**'
               - 'webtoon/be/**'
               - 'trailer/be/**'
               - 'apps/api/**'
@@ -71,7 +71,7 @@ jobs:
               - 'gradlew'
             frontend:
               - 'common/fe/**'
-              - 'comic/fe/**'
+              - 'zzal/fe/**'
               - 'webtoon/fe/**'
               - 'trailer/fe/**'
               - 'apps/web/**'

@@ -51,7 +51,7 @@ public class S3Service {
     /**
      * 업로드용 presigned PUT URL 을 발급한다.
      *
-     * @param domain      키 경로 구분용 폴더(comic/webtoon/trailer 등)
+     * @param domain      키 경로 구분용 폴더(zzal/webtoon/trailer 등)
      * @param contentType 업로드할 파일의 MIME 타입(image/png 등)
      * @return 발급된 S3 key 와 presigned URL
      */

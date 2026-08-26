@@ -81,7 +81,7 @@
   height: 7px;
   flex: none;
   border-radius: 50%;
-  background: var(--accent-comic);
+  background: var(--accent-zzal);
 }
 
 /* vw 계수 4.6 은 의도값. 올리면 900~1250px 구간에서 컬럼보다 글자가 커져 줄이 깨진다. */
@@ -140,8 +140,8 @@
 
 .slotCut {
   aspect-ratio: 1 / 1;
-  background-color: var(--tint-comic-strong);
-  background-image: repeating-linear-gradient(135deg, var(--hatch-comic) 0 7px, transparent 7px 16px);
+  background-color: var(--tint-zzal-strong);
+  background-image: repeating-linear-gradient(135deg, var(--hatch-zzal) 0 7px, transparent 7px 16px);
 }
 
 .slotTeaser {
@@ -160,8 +160,8 @@
   color: var(--accent-webtoon);
 }
 
-.labelComic {
-  color: var(--accent-comic-deep);
+.labelZzal {
+  color: var(--accent-zzal-deep);
 }
 
 .labelTrailer {
@@ -212,8 +212,8 @@
   color: var(--accent-webtoon);
 }
 
-.eyebrowComic {
-  color: var(--accent-comic);
+.eyebrowZzal {
+  color: var(--accent-zzal);
 }
 
 .introTitle {
@@ -235,7 +235,7 @@
   text-wrap: pretty;
 }
 
-/* ── 4. 탭 카드 (Comic → Trailer → Webtoon) ───────────── */
+/* ── 4. 탭 카드 (Zzal → Trailer → Webtoon) ───────────── */
 
 .tabs {
   /* sticky 헤더에 제목이 가리지 않도록 앵커 도착 지점을 내린다. */
@@ -258,14 +258,14 @@
   transition: background-color 150ms ease;
 }
 
-.cardComic {
-  background: var(--tint-comic);
-  border-color: var(--border-comic);
+.cardZzal {
+  background: var(--tint-zzal);
+  border-color: var(--border-zzal);
   color: var(--text);
 }
 
-.cardComic:hover {
-  background: var(--tint-comic-strong);
+.cardZzal:hover {
+  background: var(--tint-zzal-strong);
 }
 
 .cardTrailer {
@@ -302,8 +302,8 @@
   color: #fff;
 }
 
-.badgeComic {
-  background: var(--accent-comic);
+.badgeZzal {
+  background: var(--accent-zzal);
 }
 
 .badgeTrailer {
@@ -322,8 +322,8 @@
   color: inherit;
 }
 
-.arrowComic {
-  color: var(--accent-comic);
+.arrowZzal {
+  color: var(--accent-zzal);
 }
 
 .arrowTrailer {
@@ -356,25 +356,25 @@
   padding-top: 22px;
 }
 
-/* Comic 프리뷰: 2×2, 마지막 칸이 펀치라인 */
-.comicGrid {
+/* Zzal 프리뷰: 2×2, 마지막 칸이 펀치라인 */
+.zzalGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.comicCell {
+.zzalCell {
   aspect-ratio: 1 / 1;
   border-radius: 14px;
   background: var(--card);
-  border: 1px solid var(--border-comic);
+  border: 1px solid var(--border-zzal);
   display: flex;
   align-items: flex-start;
   padding: 9px;
 }
 
-.comicCellPunch {
-  background: var(--accent-comic);
+.zzalCellPunch {
+  background: var(--accent-zzal);
   border-color: transparent;
   align-items: center;
   justify-content: center;
@@ -383,7 +383,7 @@
 .cellNum {
   font-family: var(--font-mono);
   font-size: 9.5px;
-  color: var(--accent-comic-deep);
+  color: var(--accent-zzal-deep);
 }
 
 /* Trailer 프리뷰: 16:9 와이드 + 1:1 3컷 */
@@ -542,8 +542,8 @@
   background: var(--accent-webtoon);
 }
 
-.stepNumComic {
-  background: var(--accent-comic);
+.stepNumZzal {
+  background: var(--accent-zzal);
 }
 
 .stepNumTrailer {
@@ -599,9 +599,9 @@
   margin-top: 26px;
 }
 
-.btnComic {
+.btnZzal {
   padding: 16px 28px;
-  background: var(--accent-comic);
+  background: var(--accent-zzal);
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -609,8 +609,8 @@
   transition: background-color 150ms ease;
 }
 
-.btnComic:hover {
-  background: var(--accent-comic-hover);
+.btnZzal:hover {
+  background: var(--accent-zzal-hover);
 }
 
 .btnGhost {
@@ -653,9 +653,9 @@
   color: var(--text);
 }
 
-/* 워드마크 마침표만 Comic 액센트 */
+/* 워드마크 마침표만 Zzal 액센트 */
 .markDot {
-  color: var(--accent-comic);
+  color: var(--accent-zzal);
 }
 
 .footerLinks {

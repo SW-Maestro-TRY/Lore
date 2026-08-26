@@ -20,20 +20,20 @@
 
   /* 탭 액센트 */
   --accent-webtoon: #5b2be8;
-  --accent-comic: #ff6b45;
+  --accent-zzal: #ff6b45;
   --accent-trailer: #1c7866;
-  --accent-comic-hover: #ff835f;
+  --accent-zzal-hover: #ff835f;
   /* 연한 면 위에서 액센트 글자를 읽히게 하는 진한 변형 */
-  --accent-comic-deep: #c2451f;
+  --accent-zzal-deep: #c2451f;
   /* 같은 채도의 보더 (탭 카드 / 프리뷰 셀) */
-  --border-comic: rgba(255, 107, 69, 0.22);
+  --border-zzal: rgba(255, 107, 69, 0.22);
   --border-trailer: rgba(28, 120, 102, 0.2);
 
   /* 연한 색면 (탭 카드 배경). -strong 은 hover 와 콜라주 슬롯에 쓴다. */
   --tint-webtoon: #ede6ff;
-  --tint-comic: #fff2e4;
+  --tint-zzal: #fff2e4;
   --tint-trailer: #eaf6f3;
-  --tint-comic-strong: #ffe2ce;
+  --tint-zzal-strong: #ffe2ce;
   --tint-trailer-strong: #dcefea;
 
   /* 카드 안쪽 흰 면. 다크에서는 흰색 대신 surface-2 를 쓰고 보더 대비를 올린다. */
@@ -46,7 +46,7 @@
 
   /* 이미지 플레이스홀더 사선 패턴. 다크에서 투명도 2배. */
   --hatch-webtoon: rgba(91, 43, 232, 0.1);
-  --hatch-comic: rgba(255, 107, 69, 0.14);
+  --hatch-zzal: rgba(255, 107, 69, 0.14);
   --hatch-trailer: rgba(28, 120, 102, 0.12);
 
   /* primary 버튼: 라이트 = ink 배경/흰 글자, 다크 = 밝은 배경/잉크 글자로 반전 */
@@ -86,17 +86,17 @@
   --border-strong: rgba(243, 240, 250, 0.18);
 
   --accent-webtoon: #7b54ff;
-  --accent-comic: #ff7e5c;
+  --accent-zzal: #ff7e5c;
   --accent-trailer: #3fa792;
-  --accent-comic-hover: #ff9578;
-  --accent-comic-deep: #ff7e5c;
-  --border-comic: rgba(255, 126, 92, 0.28);
+  --accent-zzal-hover: #ff9578;
+  --accent-zzal-deep: #ff7e5c;
+  --border-zzal: rgba(255, 126, 92, 0.28);
   --border-trailer: rgba(63, 167, 146, 0.26);
 
   --tint-webtoon: rgba(123, 84, 255, 0.14);
-  --tint-comic: rgba(255, 126, 92, 0.12);
+  --tint-zzal: rgba(255, 126, 92, 0.12);
   --tint-trailer: rgba(63, 167, 146, 0.12);
-  --tint-comic-strong: rgba(255, 126, 92, 0.2);
+  --tint-zzal-strong: rgba(255, 126, 92, 0.2);
   --tint-trailer-strong: rgba(63, 167, 146, 0.2);
 
   --card: #171325;
@@ -106,7 +106,7 @@
   --webtoon-card-hover: #5b2be8;
 
   --hatch-webtoon: rgba(123, 84, 255, 0.2);
-  --hatch-comic: rgba(255, 126, 92, 0.28);
+  --hatch-zzal: rgba(255, 126, 92, 0.28);
   --hatch-trailer: rgba(63, 167, 146, 0.24);
 
   --btn-primary-bg: #f3f0fa;

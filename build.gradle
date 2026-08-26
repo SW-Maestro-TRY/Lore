@@ -4,7 +4,7 @@
 // 아래 srcDirs 가 흩어진 도메인 폴더를 하나의 컴파일 단위로 묶어주는 부분.
 //
 // 그래서 각 도메인 담당자는:
-//   - 자기 폴더(예: comic/be/src/main/java) 안에서만 작업하면 되고
+//   - 자기 폴더(예: zzal/be/src/main/java) 안에서만 작업하면 되고
 //   - 공통 기능은 그냥 import 해서 쓰면 된다 (예: import com.lore.common.response.ApiResponse;)
 //   - Gradle 모듈 / 의존성 선언을 몰라도 된다. 의존성은 아래 dependencies 한 곳에만 적는다.
 
@@ -34,7 +34,7 @@ sourceSets {
             srcDirs = [
                 'common/be/src/main/java',   // 공통: config, 인증, 공통 응답
                 'webtoon/be/src/main/java',  // 하은
-                'comic/be/src/main/java',    // 상훈
+                'zzal/be/src/main/java',     // 상훈
                 'trailer/be/src/main/java',  // 병연
                 'apps/api/src/main/java'     // 서버 실행 진입점(main 클래스)
             ]
@@ -48,7 +48,7 @@ sourceSets {
             srcDirs = [
                 'common/be/src/test/java',
                 'webtoon/be/src/test/java',
-                'comic/be/src/test/java',
+                'zzal/be/src/test/java',
                 'trailer/be/src/test/java'
             ]
         }
