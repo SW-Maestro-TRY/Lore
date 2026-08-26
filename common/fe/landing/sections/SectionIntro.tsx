@@ -4,7 +4,7 @@ import styles from "../landing.module.css";
 export default function SectionIntro() {
   return (
     <section className={`${styles.container} ${styles.intro}`}>
-      <div className={styles.eyebrow}>Comic → Trailer → Story</div>
+      <div className={styles.eyebrow}>Comic → Trailer → Webtoon</div>
       <h2 className={styles.introTitle}>
         4컷에서 시작해
         <br />웹툰 한 화까지

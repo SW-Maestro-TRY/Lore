@@ -138,8 +138,13 @@ function buildForm() {
 
   // 기본은 아무 것도 안 고른 상태다("건너뛰기" = 루가 정합니다). 라디오는
   // 한 번 고르면 같은 것을 다시 눌러도 브라우저가 저절로 풀어주지 않으므로,
-  // 클릭의 기본 동작을 막고 선택/해제를 직접 관리한다(장르 빠른 고르개와 같은
-  // "다시 누르면 비운다" 패턴 — 이번엔 라디오라 change 이벤트로는 못 잡는다).
+  // 이미 고른 것을 또 누르면 비우는 동작만 직접 얹는다(장르 빠른 고르개와
+  // 같은 "다시 누르면 비운다" 패턴). click 에서 preventDefault 를 쓰면 라디오는
+  // "취소된 활성화 단계"가 클릭 이전 상태로 되돌려 버려서 — 우리가 스크립트로
+  // 정한 checked 값이 이벤트가 끝나자마자 그대로 지워진다(직접 겪음). 그래서
+  // 기본 동작은 그대로 두고, 클릭이 checked 를 바꾸기 **전** 상태만
+  // (mousedown/keydown 시점에) 따로 기억해 뒀다가, 그게 "이미 켜져 있었다"일
+  // 때만 클릭이 끝난 뒤 스크립트로 끈다.
   $("#styles").innerHTML = STYLE_INFO.map(([key, label, desc]) => `
     <label class="style-opt">
       <input type="radio" name="style" value="${key}">
@@ -149,18 +154,15 @@ function buildForm() {
       </span>
     </label>
   `).join("");
-  // 클릭 시점엔 브라우저가 이미 checked 를 먼저 바꿔 둔 뒤라(라디오의 활성화
-  // 단계가 click 이벤트보다 먼저 실행된다) inp.checked 만 보고는 "새로 고른 것"과
-  // "이미 고른 것을 또 누른 것"을 구분할 수 없다 — 그래서 상태를 별도 변수로
-  // 직접 들고, 매번 preventDefault 로 브라우저 기본 동작을 취소한 뒤 그 변수
-  // 기준으로만 checked 를 세팅한다.
-  const styleInputs = $$('#styles input[name="style"]');
-  let currentStyle = "";
-  styleInputs.forEach(inp => {
-    inp.addEventListener("click", e => {
-      e.preventDefault();
-      currentStyle = currentStyle === inp.value ? "" : inp.value;
-      styleInputs.forEach(o => { o.checked = o.value === currentStyle; });
+  $$('#styles .style-opt').forEach(opt => {
+    const inp = opt.querySelector('input[name="style"]');
+    const rememberBeforeState = () => { inp.dataset.wasChecked = String(inp.checked); };
+    opt.addEventListener("pointerdown", rememberBeforeState);   // 마우스·터치
+    inp.addEventListener("keydown", e => {                      // 키보드(Space)
+      if (e.key === " " || e.key === "Spacebar") rememberBeforeState();
+    });
+    inp.addEventListener("click", () => {
+      if (inp.dataset.wasChecked === "true") inp.checked = false;
     });
   });
 
@@ -452,6 +454,7 @@ const UID = getUid();
 
 let creditCost = { full: 0, preview: 0, webtoon_mult: 1 };   // /api/config 도착 전 임시값
 let creditPackages = [];
+let dailyFreeCredits = 20;
 let creditBalance = null;
 
 async function loadCreditConfig() {
@@ -459,6 +462,7 @@ async function loadCreditConfig() {
     const cfg = await getConfig();
     creditCost = cfg.credit_cost || creditCost;
     creditPackages = cfg.credit_packages || [];
+    dailyFreeCredits = cfg.daily_free_credits || dailyFreeCredits;
   } catch { /* 못 받아도 화면은 뜬다 — 비용 칩만 0으로 보인다 */ }
   paintCost();
   paintMyCreditHint();
@@ -572,15 +576,72 @@ function chargeStep(name) {
   $$(".charge-step").forEach(el => { el.hidden = el.dataset.chargeStep !== name; });
 }
 
+/* 승선 — 하루 1회 무료 카드. 예전엔 이 자리가 유료 상품("물결")이었다.
+   이름은 뒤의 출항 → 항해 → 탐험 앞에 놓이는 첫 걸음이다(배에 오르는 것).
+   오늘 이미 받았는지는 서버(credits.json 의 날짜)만 알므로, 열 때마다
+   물어보고 그린다 — 잘못 안내해서 "받았다고 나왔는데 안 받아짐" 이 되면
+   안 되니, 상태를 모르면(요청 실패) 아예 카드를 숨긴다. */
+async function renderFreeClaimCard(box) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "charge-pkg charge-pkg-free";
+  b.disabled = true;
+  b.innerHTML = `
+    <span class="charge-pkg-badge">하루 1회 무료</span>
+    <span class="charge-pkg-emoji">⛵</span>
+    <span class="charge-pkg-label">승선</span>
+    <span class="charge-pkg-tag">확인하는 중…</span>
+    <span class="charge-pkg-value">${dailyFreeCredits.toLocaleString("ko-KR")}C</span>`;
+  box.appendChild(b);
+  try {
+    const res = await fetch(`/api/credits/daily?uid=${encodeURIComponent(UID)}`);
+    const st = await res.json();
+    if (!res.ok) throw new Error();
+    if (st.claimed) {
+      b.querySelector(".charge-pkg-tag").textContent = "오늘은 이미 받았어요 — 내일 또!";
+    } else {
+      b.disabled = false;
+      b.querySelector(".charge-pkg-tag").textContent = "눌러서 바로 받기";
+      b.addEventListener("click", () => claimDailyFree(b));
+    }
+  } catch {
+    b.remove();
+  }
+}
+
+async function claimDailyFree(btn) {
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/credits/daily", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: UID }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "지급에 실패했습니다");
+    if (data.granted) {
+      creditBalance = data.balance;
+      paintCreditPill();
+      toast(`오늘의 무료 크레딧 ${data.credits_added}개가 들어왔어요! ✨`);
+      btn.querySelector(".charge-pkg-tag").textContent = "오늘은 이미 받았어요 — 내일 또!";
+    } else {
+      btn.querySelector(".charge-pkg-tag").textContent = "오늘은 이미 받았어요 — 내일 또!";
+      toast("오늘은 이미 받았어요 — 내일 다시 와 주세요!");
+    }
+  } catch (err) {
+    btn.disabled = false;
+    toast(err.message || "지급에 실패했습니다");
+  }
+}
+
 function renderChargePackages() {
   const box = $("#chargePackages");
   box.innerHTML = "";
+  renderFreeClaimCard(box);
   creditPackages.forEach((pkg, ti) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "charge-pkg";
-    // 깊이 — 물결(1)에서 심해(4)로 내려갈수록 카드의 물빛이 짙어진다.
-    // 홈의 바다(수면→항해→심해)와 같은 눈금이라, 충전 화면이 따로 놀지 않는다.
+    // 단계 — 출항(1)에서 탐험(3)으로 멀어질수록 카드의 물빛이 짙어진다.
     b.dataset.tier = String(ti + 1);
     // 크레딧보다 "몇 편"이 먼저다. 크레딧은 이 서비스가 만든 단위라 60이
     // 많은지 적은지 알 수 없지만, "웹툰 7편"은 바로 읽힌다. 편당 가격이
@@ -1929,7 +1990,7 @@ async function showRunResult(runId, ep) {
   sessionStorage.removeItem("lore_job");
   paintResult(r);
   history.replaceState(null, "",
-    `/works?run=${encodeURIComponent(runId)}&ep=${ep}`);
+    LORE.at(`/works?run=${encodeURIComponent(runId)}&ep=${ep}`));
 }
 
 function paintResult(r) {
@@ -2733,7 +2794,7 @@ async function showMyPage() {
   if (accountReady) { try { await accountReady; } catch { /* 아래에서 걸린다 */ } }
   if (!accountState.logged_in) return openAccountModal("login");
   onlyMyPage();
-  if (location.pathname !== "/mypage") history.pushState(null, "", "/mypage");
+  if (!LORE.isAt("/mypage")) history.pushState(null, "", LORE.at("/mypage"));
 
   $("#myPhoto").src = accountState.photo_url || GUEST_PILL_PHOTO;
   $("#myNickname").textContent = accountState.nickname || "";
@@ -2818,8 +2879,8 @@ function showMockMyPage() {
 /* 만드는 도중에 둘러보기로 빠져나가는 길. 주소를 새로 여는 링크(<a href>)와
    달리 페이지를 다시 안 읽어서, 돌던 폴링과 루의 놀이 상태가 그대로 남는다. */
 function goWorks() {
-  if (location.pathname !== "/works" || location.search) {
-    history.pushState(null, "", "/works");
+  if (!LORE.isAt("/works") || location.search) {
+    history.pushState(null, "", LORE.at("/works"));
   }
   showWorks();
 }
@@ -3209,7 +3270,8 @@ function forget() {
   $("#nextEpBtn").hidden = true;
   $("#moreCutsBtn").hidden = true;
   // /result 로 들어왔으면 주소도 되돌린다 — 안 그러면 새로고침에 다시 결과가 뜬다.
-  if (location.pathname !== "/" || location.search) history.replaceState(null, "", "/");
+  if (location.pathname !== LORE.HOME || location.search)
+    history.replaceState(null, "", LORE.HOME);
   // #studio 는 만들기 화면 안에 있다 — 방금 닫았으니 거기로 스크롤할 수 없다.
   // 홈으로 왔으면 홈 맨 위가 맞다.
   window.scrollTo(0, 0);
@@ -3268,7 +3330,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("#myLogout")?.addEventListener("click", async () => {
     await logout();
-    location.href = "/";
+    location.href = LORE.HOME;
   });
   $("#accountModalClose").addEventListener("click", closeAccountModal);
   $("#accountModal").addEventListener("click", e => {
@@ -3348,12 +3410,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // 폼을 거치지 않고 결과부터 보고 싶을 때가 있어서 둔 길이다.
   const params = new URLSearchParams(location.search);
   const asked = params.get("job");
-  const wantResult = location.pathname.startsWith("/result");
-  const wantWorks = location.pathname.startsWith("/works");
-  const wantMock = location.pathname.startsWith("/demo/result");
-  if (location.pathname.startsWith("/demo/mypage")) {
+  const wantResult = LORE.isAt("/result");
+  const wantWorks = LORE.isAt("/works");
+  const wantMock = LORE.isAt("/demo/result");
+  if (LORE.isAt("/demo/mypage")) {
     showMockMyPage();
-  } else if (location.pathname.startsWith("/mypage")) {
+  } else if (LORE.isAt("/mypage")) {
     showMyPage();
   } else if (wantMock) {
     showMockResult();
@@ -3371,7 +3433,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 보고 있는 화면은 그대로 두고 뒤에서만 따라간다 — 헤더의 「둘러보기」는
   // 주소를 새로 여는 링크라 이 길로 온다. 표시는 syncMini() 가 띄운다.
   if (jobId && !poll && !asked && !wantResult && !wantMock
-      && (wantWorks || location.pathname.startsWith("/mypage"))) {
+      && (wantWorks || LORE.isAt("/mypage"))) {
     startPolling({ background: true });
   }
 });

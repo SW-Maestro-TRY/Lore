@@ -6,7 +6,7 @@
 
 | 도메인 | 내용 | 담당 |
 | --- | --- | --- |
-| **Story** | 세계관 / 스토리 카드 | 하은 |
+| **Webtoon** | 세로 스크롤 웹툰 | 하은 |
 | **Comic** | 만화 캐릭터 치환 / 짤 | 상훈 |
 | **Trailer** | 웹툰 예고편 | 병연 |
 
@@ -21,14 +21,14 @@ repo/
 │   ├── be/                  # config(Swagger/Security), ApiResponse, 회원가입/로그인
 │   ├── fe/                  # 공용 UI
 │   │   ├── SiteHeader.tsx   # 랜딩 · 도메인 탭이 함께 쓰는 상단 헤더
-│   │   ├── links.ts         # 탭 순서 (Comic → Trailer → Story) 단일 출처
+│   │   ├── links.ts         # 탭 순서 (Comic → Trailer → Webtoon) 단일 출처
 │   │   ├── landing/         # 랜딩페이지 화면 (특정 도메인 소유가 아님)
 │   │   ├── theme/           # 라이트/다크 테마 토글 + 초기화 스크립트
 │   │   └── styles/          # 디자인 토큰 (tokens.css)
 │   └── docs/                # 아키텍처 / API 명세 / 깃 컨벤션 / 디자인 핸드오프
 │
-├── story/                   # 담당: 하은
-│   ├── be/                  # 백엔드 (com.lore.story 패키지)
+├── webtoon/                 # 담당: 하은
+│   ├── be/                  # 백엔드 (com.lore.webtoon 패키지)
 │   ├── fe/                  # 실제 화면 컴포넌트
 │   └── docs/
 ├── comic/                   # 담당: 상훈  (구조 동일)
@@ -41,7 +41,7 @@ repo/
 │   │       ├── page.tsx           # 랜딩 — common/fe/landing 에서 import 만
 │   │       └── (domains)/         # URL 에 영향 없는 라우트 그룹
 │   │           ├── layout.tsx         # common/fe 의 SiteHeader 렌더링
-│   │           ├── story/page.tsx     # story/fe 에서 import 만   → /story
+│   │           ├── webtoon/page.tsx   # webtoon/fe 에서 import 만 → /webtoon
 │   │           ├── comic/page.tsx     # comic/fe 에서 import 만   → /comic
 │   │           └── trailer/page.tsx   # trailer/fe 에서 import 만 → /trailer
 │   └── api/                 # Spring Boot 실행 셸 (main 클래스 + application.yml)
@@ -122,6 +122,6 @@ npm run dev        # http://localhost:3000
 
 ## 작업 규칙 요약
 
-- 자기 도메인 폴더 안(`story/`, `comic/`, `trailer/`)은 담당자가 판단해서 자유롭게.
+- 자기 도메인 폴더 안(`webtoon/`, `comic/`, `trailer/`)은 담당자가 판단해서 자유롭게.
 - `common/`, `apps/`, 루트 설정은 공유 영역이라 변경 시 PR 에 이유를 남기고 공유한다.
 - 도메인끼리 서로 의존하지 않는다. 공유가 필요하면 `common` 으로 올린다.

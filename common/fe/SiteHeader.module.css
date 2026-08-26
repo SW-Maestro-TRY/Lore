@@ -78,13 +78,13 @@
 }
 
 .headerCta:hover {
-  background: var(--accent-story);
+  background: var(--accent-webtoon);
   color: #fff;
 }
 
 /* 원 디자인에는 테마 토글이 없었다. 토글이 추가되면서 좁은 화면에서 헤더 한 줄이
  * 넘치기 때문에, 여기서만 미디어쿼리로 내비를 숨긴다.
- * (Comic/Trailer/Story 진입점은 랜딩 탭 카드와 푸터에도 있어 잃는 게 없다.) */
+ * (Comic/Trailer/Webtoon 진입점은 랜딩 탭 카드와 푸터에도 있어 잃는 게 없다.) */
 @media (max-width: 640px) {
   .nav {
     display: none;

@@ -1,6 +1,6 @@
 // 백엔드 빌드 스크립트. 레포 전체에서 이 파일 하나뿐이다.
 //
-// 폴더는 도메인별로 나뉘어 있지만(common/be, story/be, ...) 빌드는 하나로 합친다.
+// 폴더는 도메인별로 나뉘어 있지만(common/be, webtoon/be, ...) 빌드는 하나로 합친다.
 // 아래 srcDirs 가 흩어진 도메인 폴더를 하나의 컴파일 단위로 묶어주는 부분.
 //
 // 그래서 각 도메인 담당자는:
@@ -33,7 +33,7 @@ sourceSets {
         java {
             srcDirs = [
                 'common/be/src/main/java',   // 공통: config, 인증, 공통 응답
-                'story/be/src/main/java',    // 하은
+                'webtoon/be/src/main/java',  // 하은
                 'comic/be/src/main/java',    // 상훈
                 'trailer/be/src/main/java',  // 병연
                 'apps/api/src/main/java'     // 서버 실행 진입점(main 클래스)
@@ -47,7 +47,7 @@ sourceSets {
         java {
             srcDirs = [
                 'common/be/src/test/java',
-                'story/be/src/test/java',
+                'webtoon/be/src/test/java',
                 'comic/be/src/test/java',
                 'trailer/be/src/test/java'
             ]

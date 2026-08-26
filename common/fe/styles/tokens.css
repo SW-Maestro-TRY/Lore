@@ -19,7 +19,7 @@
   --border-strong: rgba(23, 18, 31, 0.12);
 
   /* 탭 액센트 */
-  --accent-story: #5b2be8;
+  --accent-webtoon: #5b2be8;
   --accent-comic: #ff6b45;
   --accent-trailer: #1c7866;
   --accent-comic-hover: #ff835f;
@@ -30,7 +30,7 @@
   --border-trailer: rgba(28, 120, 102, 0.2);
 
   /* 연한 색면 (탭 카드 배경). -strong 은 hover 와 콜라주 슬롯에 쓴다. */
-  --tint-story: #ede6ff;
+  --tint-webtoon: #ede6ff;
   --tint-comic: #fff2e4;
   --tint-trailer: #eaf6f3;
   --tint-comic-strong: #ffe2ce;
@@ -40,12 +40,12 @@
   --card: #ffffff;
   --card-border: rgba(23, 18, 31, 0.07);
 
-  /* Story 탭 카드는 풀 색면. 다크에서는 한 단계 내려 눈부심을 막는다. */
-  --story-card: #5b2be8;
-  --story-card-hover: #6c3eff;
+  /* Webtoon 탭 카드는 풀 색면. 다크에서는 한 단계 내려 눈부심을 막는다. */
+  --webtoon-card: #5b2be8;
+  --webtoon-card-hover: #6c3eff;
 
   /* 이미지 플레이스홀더 사선 패턴. 다크에서 투명도 2배. */
-  --hatch-story: rgba(91, 43, 232, 0.1);
+  --hatch-webtoon: rgba(91, 43, 232, 0.1);
   --hatch-comic: rgba(255, 107, 69, 0.14);
   --hatch-trailer: rgba(28, 120, 102, 0.12);
 
@@ -85,7 +85,7 @@
   --border: rgba(243, 240, 250, 0.1);
   --border-strong: rgba(243, 240, 250, 0.18);
 
-  --accent-story: #7b54ff;
+  --accent-webtoon: #7b54ff;
   --accent-comic: #ff7e5c;
   --accent-trailer: #3fa792;
   --accent-comic-hover: #ff9578;
@@ -93,7 +93,7 @@
   --border-comic: rgba(255, 126, 92, 0.28);
   --border-trailer: rgba(63, 167, 146, 0.26);
 
-  --tint-story: rgba(123, 84, 255, 0.14);
+  --tint-webtoon: rgba(123, 84, 255, 0.14);
   --tint-comic: rgba(255, 126, 92, 0.12);
   --tint-trailer: rgba(63, 167, 146, 0.12);
   --tint-comic-strong: rgba(255, 126, 92, 0.2);
@@ -102,10 +102,10 @@
   --card: #171325;
   --card-border: rgba(243, 240, 250, 0.14);
 
-  --story-card: #4b22c8;
-  --story-card-hover: #5b2be8;
+  --webtoon-card: #4b22c8;
+  --webtoon-card-hover: #5b2be8;
 
-  --hatch-story: rgba(123, 84, 255, 0.2);
+  --hatch-webtoon: rgba(123, 84, 255, 0.2);
   --hatch-comic: rgba(255, 126, 92, 0.28);
   --hatch-trailer: rgba(63, 167, 146, 0.24);
 
@@ -157,7 +157,7 @@ a {
 
 /* 포커스 링은 테마와 무관하게 반드시 유지한다. */
 :focus-visible {
-  outline: 2px solid var(--accent-story);
+  outline: 2px solid var(--accent-webtoon);
   outline-offset: 2px;
   border-radius: 4px;
 }

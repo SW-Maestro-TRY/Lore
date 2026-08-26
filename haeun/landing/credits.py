@@ -74,26 +74,35 @@ CREDIT_WEBTOON_MULT = 1
 # 있어 아직 검증 전이다. 실측·재시도율 반영 후 크레딧 원가가 낮아질 걸
 # 가정하고(200원 → 120원대), 그 경우의 판매가로 바꿔 뒀다 — 정식 가격이
 # 아니라 프리토타이핑용 자리표시자다. 실측이 끝나면 다시 맞춘다.
-# 이름은 홈 화면의 세계관(수면 — 이야기의 시작 / 항해 — 전개 / 심해 — 깊이)을
-# 그대로 잇는다. "스타터·베이직·대용량·대형" 은 어느 AI 서비스에나 있는
-# 용량 말이라 LORE 의 바다가 안 보였다 — 크레딧은 사용량이 아니라 "이야기를
-# 만들 수 있는 자원" 이므로, 충전 화면에서도 같은 바다를 항해하게 한다.
-# 맨 앞에 물결을 더해 물결 → 수면 → 항해 → 심해 네 단계가 됐다.
+# 이름은 항해 여정을 잇는다 — (승선: 무료) → 출항(막 떠남) → 항해(가는 중)
+# → 탐험(가장 멀리). "승선" 은 파는 것이 아니라 하루 1회 무료로 주는 것이라
+# PACKAGES 에 없다(DAILY_FREE_CREDITS 참고).
+# "스타터·베이직·대용량·대형" 은 어느 AI 서비스에나 있는 용량 말이라 LORE 의
+# 바다가 안 보였다 — 크레딧은 사용량이 아니라 "이야기를 만들 수 있는 자원"
+# 이므로, 충전 화면에서도 같은 바다를 항해하게 한다.
+# 예전엔 맨 앞에 "물결"(20C·3,900원)이 있었는데, "수면"과 물빛 이미지가
+# 겹쳐 두 단계가 한 단계처럼 읽혔다 — 그 자리는 DAILY_FREE_CREDITS(아래)의
+# 무료 지급으로 대체했고, 그 결과 "출항" 이 유료 첫 단계가 됐다.
 # id 는 그대로 둔다 — 이미 저장된 결제 기록(ledger)이 id 로 남아 있다.
+# ("starter"/물결 id 는 더 안 판다 — 지난 결제 기록에는 남아 있지만
+# package() 로는 더 안 찾힌다.)
 PACKAGES = [
-    {"id": "starter", "label": "물결", "emoji": "🌊",
-     "tagline": "가볍게 이야기를 시작해 보세요.",
-     "credits": 20, "price": 3_900},
-    {"id": "basic", "label": "수면", "emoji": "🌊",
+    {"id": "basic", "label": "출항", "emoji": "🌊",
      "tagline": "캐릭터와 함께 이야기를 떠나 보세요.",
      "credits": 60, "price": 9_900, "badge": "가장 많이 골라요"},
     {"id": "bulk", "label": "항해", "emoji": "🐋",
      "tagline": "더 깊고 긴 이야기를 만들어 보세요.",
      "credits": 140, "price": 19_900},
-    {"id": "mega", "label": "심해", "emoji": "🌌",
+    {"id": "mega", "label": "탐험", "emoji": "🌌",
      "tagline": "마음껏 이야기의 바다를 탐험해 보세요.",
      "credits": 300, "price": 39_900},
 ]
+
+# 하루 1회 무료 지급("승선") — 예전 "물결"(3,900원에 20크레딧) 자리를 대신한다.
+# 스케줄러 없이 "요청 시점에 오늘치를 이미 받았는지 확인" 만으로 충분해서
+# (반복 지급 스케줄러가 필요했던 옛 "월 무료 리필" 안과 달리) 최소 기능
+# 범위 안에 들어온다 — claim_daily() 가 그 확인·지급을 한 번에 한다.
+DAILY_FREE_CREDITS = 20
 
 _lock = threading.Lock()
 _UID_RE = re.compile(r"[\w-]{1,64}")
@@ -165,6 +174,37 @@ def charge(uid: str, package_id: str) -> tuple[dict | None, int]:
         row["balance"] = bal
         _save(data)
         return pkg, bal
+
+
+def daily_claim_state(uid: str) -> dict:
+    """오늘 하루 무료 지급을 이미 받았는지만 본다 — 지급은 안 한다."""
+    if not valid_uid(uid):
+        return {"claimed": False, "balance": 0}
+    data = _load()
+    row = data.get(uid) or {}
+    today = time.strftime("%Y-%m-%d")
+    return {"claimed": row.get("daily_claim_date") == today,
+            "balance": int(row.get("balance", START_BALANCE))}
+
+
+def claim_daily(uid: str) -> dict:
+    """하루 1회 무료 크레딧 지급 — 날짜만 보고 하루에 한 번으로 막는다.
+
+    스케줄러 없이 요청이 들어온 시점에 "오늘치를 이미 받았는가" 만 확인하면
+    되므로, 반복 지급마다 서버가 깨어 있어야 하는 방식보다 단순하다."""
+    if not valid_uid(uid):
+        return {"granted": False, "balance": 0}
+    today = time.strftime("%Y-%m-%d")
+    with _lock:
+        data = _load()
+        row = data.setdefault(uid, {"balance": START_BALANCE})
+        if row.get("daily_claim_date") == today:
+            return {"granted": False, "balance": int(row.get("balance", 0))}
+        bal = int(row.get("balance", 0)) + DAILY_FREE_CREDITS
+        row["balance"] = bal
+        row["daily_claim_date"] = today
+        _save(data)
+        return {"granted": True, "balance": bal, "credits_added": DAILY_FREE_CREDITS}
 
 
 def log_event(event: str, uid: str, **extra) -> None:

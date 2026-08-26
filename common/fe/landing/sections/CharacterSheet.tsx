@@ -5,7 +5,7 @@ import styles from "../landing.module.css";
 const STEPS = [
   {
     num: "01",
-    accent: "stepNumStory",
+    accent: "stepNumWebtoon",
     title: "우리 애 만들기",
     desc: "사진 한 장에서 뽑고, 얼굴·표정·설정은 마음에 들 때까지 직접 고칩니다.",
   },

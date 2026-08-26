@@ -1,5 +1,5 @@
 // 8. 푸터.
-import Link from "next/link";
+import TabLink from "../../TabLink";
 import styles from "../landing.module.css";
 import { TABS } from "../../links";
 
@@ -13,9 +13,14 @@ export default function SiteFooter() {
 
         <div className={styles.footerLinks}>
           {TABS.map((tab) => (
-            <Link key={tab.href} href={tab.href} className={styles.footerLink}>
+            <TabLink
+              key={tab.href}
+              href={tab.href}
+              hardNav={tab.hardNav}
+              className={styles.footerLink}
+            >
               {tab.label}
-            </Link>
+            </TabLink>
           ))}
         </div>
 

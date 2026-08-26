@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 /**
  * API 서버 진입점.
  *
- * 도메인 폴더(common / story / comic / trailer)의 소스는 루트 build.gradle 의 sourceSets 로
+ * 도메인 폴더(common / webtoon / comic / trailer)의 소스는 루트 build.gradle 의 sourceSets 로
  * 하나로 묶여 컴파일되고, 이 클래스가 그걸 서버 하나로 띄운다.
  * 이 클래스 외에 여기에 비즈니스 로직을 추가하지 않는다 — 로직은 각 도메인의 be/ 안에.
  *

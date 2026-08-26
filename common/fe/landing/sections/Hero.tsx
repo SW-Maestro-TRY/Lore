@@ -39,7 +39,7 @@ export default function Hero() {
 
         <div className={styles.collage} aria-hidden="true">
           <div className={`${styles.slot} ${styles.slotSheet}`}>
-            <span className={`${styles.slotLabel} ${styles.labelStory}`}>
+            <span className={`${styles.slotLabel} ${styles.labelWebtoon}`}>
               CHARACTER SHEET
             </span>
           </div>

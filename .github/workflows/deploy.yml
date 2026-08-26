@@ -19,7 +19,7 @@ on:
     paths:
       - 'common/**'
       - 'comic/**'
-      - 'story/**'
+      - 'webtoon/**'
       - 'trailer/**'
       - 'apps/**'
       - 'build.gradle'
@@ -59,7 +59,7 @@ jobs:
             backend:
               - 'common/be/**'
               - 'comic/be/**'
-              - 'story/be/**'
+              - 'webtoon/be/**'
               - 'trailer/be/**'
               - 'apps/api/**'
               - 'build.gradle'
@@ -69,7 +69,7 @@ jobs:
             frontend:
               - 'common/fe/**'
               - 'comic/fe/**'
-              - 'story/fe/**'
+              - 'webtoon/fe/**'
               - 'trailer/fe/**'
               - 'apps/web/**'
               - 'package.json'

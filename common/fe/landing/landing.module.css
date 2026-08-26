@@ -1,5 +1,5 @@
 /* 랜딩페이지 스타일. 색·간격 값은 전부 common/fe/styles/tokens.css 의 변수를 참조한다.
- * (여기에 hex 를 직접 적으면 다크 모드가 깨진다. 예외는 Story 카드 / CTA 처럼
+ * (여기에 hex 를 직접 적으면 다크 모드가 깨진다. 예외는 Webtoon 카드 / CTA 처럼
  *  두 테마 모두 진한 색면 위라서 항상 흰 글자인 자리뿐이다.)
  *
  * 반응형은 clamp() 와 repeat(auto-fit, minmax()) 로 처리하고 미디어쿼리는 쓰지 않는다.
@@ -27,7 +27,7 @@
 }
 
 .btnPrimary:hover {
-  background: var(--accent-story);
+  background: var(--accent-webtoon);
   color: #fff;
 }
 
@@ -134,8 +134,8 @@
 .slotSheet {
   aspect-ratio: 3 / 4;
   padding: 14px;
-  background-color: var(--tint-story);
-  background-image: repeating-linear-gradient(135deg, var(--hatch-story) 0 7px, transparent 7px 16px);
+  background-color: var(--tint-webtoon);
+  background-image: repeating-linear-gradient(135deg, var(--hatch-webtoon) 0 7px, transparent 7px 16px);
 }
 
 .slotCut {
@@ -156,8 +156,8 @@
   letter-spacing: 0.1em;
 }
 
-.labelStory {
-  color: var(--accent-story);
+.labelWebtoon {
+  color: var(--accent-webtoon);
 }
 
 .labelComic {
@@ -209,7 +209,7 @@
   font-size: 11.5px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--accent-story);
+  color: var(--accent-webtoon);
 }
 
 .eyebrowComic {
@@ -235,7 +235,7 @@
   text-wrap: pretty;
 }
 
-/* ── 4. 탭 카드 (Comic → Trailer → Story) ───────────── */
+/* ── 4. 탭 카드 (Comic → Trailer → Webtoon) ───────────── */
 
 .tabs {
   /* sticky 헤더에 제목이 가리지 않도록 앵커 도착 지점을 내린다. */
@@ -278,13 +278,13 @@
   background: var(--tint-trailer-strong);
 }
 
-.cardStory {
-  background: var(--story-card);
+.cardWebtoon {
+  background: var(--webtoon-card);
   color: #fff;
 }
 
-.cardStory:hover {
-  background: var(--story-card-hover);
+.cardWebtoon:hover {
+  background: var(--webtoon-card-hover);
 }
 
 .cardTop {
@@ -310,7 +310,7 @@
   background: var(--accent-trailer);
 }
 
-.badgeStory {
+.badgeWebtoon {
   background: rgba(255, 255, 255, 0.18);
 }
 
@@ -318,7 +318,7 @@
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 18px;
-  /* Story 카드에서는 상속받은 흰색을 그대로 쓴다. */
+  /* Webtoon 카드에서는 상속받은 흰색을 그대로 쓴다. */
   color: inherit;
 }
 
@@ -346,7 +346,7 @@
   max-width: 32ch;
 }
 
-/* Story 카드는 두 테마 모두 진한 색면 위라 흰 글자로 고정한다. */
+/* Webtoon 카드는 두 테마 모두 진한 색면 위라 흰 글자로 고정한다. */
 .cardBodyOnInk {
   color: rgba(255, 255, 255, 0.86);
 }
@@ -419,26 +419,26 @@
   justify-content: center;
 }
 
-/* Story 프리뷰: 세로 스택 + 3/4 */
-.storyPreview {
+/* Webtoon 프리뷰: 세로 스택 + 3/4 */
+.webtoonPreview {
   display: flex;
   gap: 10px;
   align-items: flex-end;
 }
 
-.storyStack {
+.webtoonStack {
   flex: 1.3;
   display: grid;
   gap: 6px;
 }
 
-.storyWide {
+.webtoonWide {
   aspect-ratio: 16 / 9;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.18);
 }
 
-.storyScroll {
+.webtoonScroll {
   aspect-ratio: 16 / 11;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.18);
@@ -447,7 +447,7 @@
   padding: 9px;
 }
 
-.storySide {
+.webtoonSide {
   flex: 1;
   aspect-ratio: 3 / 4;
   border-radius: 12px;
@@ -538,8 +538,8 @@
   justify-content: center;
 }
 
-.stepNumStory {
-  background: var(--accent-story);
+.stepNumWebtoon {
+  background: var(--accent-webtoon);
 }
 
 .stepNumComic {
