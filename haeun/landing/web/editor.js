@@ -1223,7 +1223,7 @@ async function paintWorks(current) {
     // 목록을 아예 지우지 않는다 — 자리가 사라지면 기능이 없는 것과 구별이 안 된다.
     host.innerHTML = `<div class="lou-note">`
       + `<img src="${louArt("empty")}" alt="" aria-hidden="true">`
-      + `<p>아직 만든 웹툰이 없어요.<br><a href="/">첫 작품 만들러 가기</a></p></div>`;
+      + `<p>아직 만든 웹툰이 없어요.<br><a href="${LORE.HOME}">첫 작품 만들러 가기</a></p></div>`;
     return;
   }
   host.innerHTML = runs.map(r => workCard(r, current)).join("")
@@ -1301,7 +1301,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       (RUN_ID ? `${EPISODE}화를 열지 못했어요.<br>그 회차에 그려진 장이 있어야 합니다.`
               : `목업 데이터를 읽지 못했어요.`) +
       `<br><br>위 <b>작품</b>에서 다른 작품을 골라 보세요.` +
-      `<br><a href="/editor">샘플로 돌아가기</a></p></div>`;
+      `<br><a href="${LORE.at("/editor")}">샘플로 돌아가기</a></p></div>`;
     if (stage) stage.innerHTML = html;
     else document.body.innerHTML = html;
     return;

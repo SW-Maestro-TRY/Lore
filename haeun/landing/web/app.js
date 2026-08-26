@@ -1990,7 +1990,7 @@ async function showRunResult(runId, ep) {
   sessionStorage.removeItem("lore_job");
   paintResult(r);
   history.replaceState(null, "",
-    `/works?run=${encodeURIComponent(runId)}&ep=${ep}`);
+    LORE.at(`/works?run=${encodeURIComponent(runId)}&ep=${ep}`));
 }
 
 function paintResult(r) {
@@ -2794,7 +2794,7 @@ async function showMyPage() {
   if (accountReady) { try { await accountReady; } catch { /* 아래에서 걸린다 */ } }
   if (!accountState.logged_in) return openAccountModal("login");
   onlyMyPage();
-  if (location.pathname !== "/mypage") history.pushState(null, "", "/mypage");
+  if (!LORE.isAt("/mypage")) history.pushState(null, "", LORE.at("/mypage"));
 
   $("#myPhoto").src = accountState.photo_url || GUEST_PILL_PHOTO;
   $("#myNickname").textContent = accountState.nickname || "";
@@ -2879,8 +2879,8 @@ function showMockMyPage() {
 /* 만드는 도중에 둘러보기로 빠져나가는 길. 주소를 새로 여는 링크(<a href>)와
    달리 페이지를 다시 안 읽어서, 돌던 폴링과 루의 놀이 상태가 그대로 남는다. */
 function goWorks() {
-  if (location.pathname !== "/works" || location.search) {
-    history.pushState(null, "", "/works");
+  if (!LORE.isAt("/works") || location.search) {
+    history.pushState(null, "", LORE.at("/works"));
   }
   showWorks();
 }
@@ -3270,7 +3270,8 @@ function forget() {
   $("#nextEpBtn").hidden = true;
   $("#moreCutsBtn").hidden = true;
   // /result 로 들어왔으면 주소도 되돌린다 — 안 그러면 새로고침에 다시 결과가 뜬다.
-  if (location.pathname !== "/" || location.search) history.replaceState(null, "", "/");
+  if (location.pathname !== LORE.HOME || location.search)
+    history.replaceState(null, "", LORE.HOME);
   // #studio 는 만들기 화면 안에 있다 — 방금 닫았으니 거기로 스크롤할 수 없다.
   // 홈으로 왔으면 홈 맨 위가 맞다.
   window.scrollTo(0, 0);
@@ -3329,7 +3330,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("#myLogout")?.addEventListener("click", async () => {
     await logout();
-    location.href = "/";
+    location.href = LORE.HOME;
   });
   $("#accountModalClose").addEventListener("click", closeAccountModal);
   $("#accountModal").addEventListener("click", e => {
@@ -3409,12 +3410,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // 폼을 거치지 않고 결과부터 보고 싶을 때가 있어서 둔 길이다.
   const params = new URLSearchParams(location.search);
   const asked = params.get("job");
-  const wantResult = location.pathname.startsWith("/result");
-  const wantWorks = location.pathname.startsWith("/works");
-  const wantMock = location.pathname.startsWith("/demo/result");
-  if (location.pathname.startsWith("/demo/mypage")) {
+  const wantResult = LORE.isAt("/result");
+  const wantWorks = LORE.isAt("/works");
+  const wantMock = LORE.isAt("/demo/result");
+  if (LORE.isAt("/demo/mypage")) {
     showMockMyPage();
-  } else if (location.pathname.startsWith("/mypage")) {
+  } else if (LORE.isAt("/mypage")) {
     showMyPage();
   } else if (wantMock) {
     showMockResult();
@@ -3432,7 +3433,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 보고 있는 화면은 그대로 두고 뒤에서만 따라간다 — 헤더의 「둘러보기」는
   // 주소를 새로 여는 링크라 이 길로 온다. 표시는 syncMini() 가 띄운다.
   if (jobId && !poll && !asked && !wantResult && !wantMock
-      && (wantWorks || location.pathname.startsWith("/mypage"))) {
+      && (wantWorks || LORE.isAt("/mypage"))) {
     startPolling({ background: true });
   }
 });

@@ -9,13 +9,18 @@
 #   bash webtoon/fe/sync-landing.sh
 #
 # 원본의 에셋 경로가 전부 /static/... 절대경로라, public/static 에 그대로
-# 얹으면 경로를 한 줄도 안 고쳐도 맞는다. 딱 한 가지만 더 한다 —
-# 데모 모드 셰임(demo-api.js)을 app.js 보다 먼저 실리게 끼워 넣는 일.
+# 얹으면 경로를 한 줄도 안 고쳐도 맞는다. 복사본에만 두 가지를 더 심는다.
+#
+#   1) data-lore-base="/webtoon"  — 이 화면이 어느 주소 아래에 얹혔는지.
+#      web/base.js 가 이걸 읽어서 화면 안의 주소를 전부 그 아래로 옮긴다.
+#      원본에는 안 심는다 — serve.py 는 뿌리에 얹으므로 표시가 없어야 맞다.
+#   2) demo-api.js  — 서버가 있어야 도는 호출을 막는 데모 모드 셰임.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SRC="$ROOT/haeun/landing/web"
 DST="$ROOT/apps/web/public/static"
+BASE="/webtoon"
 
 [ -d "$SRC" ] || { echo "원본이 없습니다: $SRC" >&2; exit 1; }
 
@@ -27,19 +32,25 @@ rsync -a --delete \
   --exclude='demo-api/' \
   "$SRC/" "$DST/"
 
-# 셰임을 첫 스크립트(lou-art.js) 앞에 끼운다. app.js·editor.js 가 뜨기 전에
-# window.fetch 가 바뀌어 있어야 한다.
-TAG='<script src="/static/demo-api.js"></script>'
 for f in index.html demo.html editor.html; do
   p="$DST/$f"
   [ -f "$p" ] || continue
-  grep -q 'demo-api.js' "$p" && continue
+
+  # base 를 <html> 에 심는다. base.js 가 여기서 읽는다.
   # BSD/GNU sed 양쪽에서 도는 형태로 쓴다 (맥에서 개발, 리눅스에서 빌드).
-  awk -v tag="$TAG" '
-    !done && /<script src="\/static\/lou-art\.js"><\/script>/ { print tag; done=1 }
+  awk -v base="$BASE" '
+    !done && /^<html / { sub(/^<html /, "<html data-lore-base=\"" base "\" "); done=1 }
+    { print }
+  ' "$p" > "$p.tmp" && mv "$p.tmp" "$p"
+
+  # 데모 모드 셰임을 base.js 바로 뒤에 끼운다 — app.js 가 뜨기 전에
+  # window.fetch 가 바뀌어 있어야 한다.
+  grep -q 'demo-api.js' "$p" && continue
+  awk '
+    !done && /<script src="\/static\/base\.js"><\/script>/ { print; print "<script src=\"/static/demo-api.js\"></script>"; done=1; next }
     { print }
   ' "$p" > "$p.tmp" && mv "$p.tmp" "$p"
 done
 
-echo "동기화 완료: $DST"
+echo "동기화 완료: $DST  (base=$BASE)"
 du -sh "$DST"

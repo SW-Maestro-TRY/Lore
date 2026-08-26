@@ -79,6 +79,7 @@
   </div>
 </div>
 
+<script src="/static/base.js"></script>
 <script>
   // demo 는 app.js 를 안 불러온다 — 여기 없는 요소를 배선하다 죽는다.
   // 그래서 같은 동작을 작게 다시 쓴다(본편이 바뀌면 여기도 맞춰야 한다).
@@ -95,11 +96,11 @@
       if (e.target === modal) modal.hidden = true;
     });
     document.getElementById("cancelConfirm").addEventListener("click", function () {
-      location.href = "/";
+      location.href = LORE.HOME;
     });
     // 목업에는 둘러보기 화면이 없다 — 본편의 둘러보기로 그대로 보낸다.
     document.getElementById("progBrowse").addEventListener("click", function () {
-      location.href = "/works";
+      location.href = LORE.at("/works");
     });
   })();
 </script>

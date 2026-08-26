@@ -10,6 +10,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "./theme/ThemeToggle";
+import TabLink from "./TabLink";
 import { TABS } from "./links";
 import styles from "./SiteHeader.module.css";
 
@@ -27,14 +28,15 @@ export default function SiteHeader() {
           {TABS.map((tab) => {
             const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
             return (
-              <Link
+              <TabLink
                 key={tab.href}
                 href={tab.href}
+                hardNav={tab.hardNav}
                 aria-current={active ? "page" : undefined}
                 className={`${styles.navLink} ${active ? styles.navLinkActive : ""}`}
               >
                 {tab.label}
-              </Link>
+              </TabLink>
             );
           })}
         </nav>

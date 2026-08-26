@@ -76,7 +76,9 @@ export default function TabCards() {
         </Link>
 
         {/* 03 Webtoon — 본편 */}
-        <Link href="/webtoon" className={`${styles.card} ${styles.cardWebtoon}`}>
+        {/* next/link 가 아니다 — 이 탭 화면은 rewrites 가 이어 준 정적 HTML 이라
+            React 라우터가 못 간다. common/fe/links.ts 의 hardNav 주석 참고. */}
+        <a href="/webtoon" className={`${styles.card} ${styles.cardWebtoon}`}>
           <div className={styles.cardTop}>
             <span className={`${styles.cardBadge} ${styles.badgeWebtoon}`}>
               03 Webtoon · 본편
@@ -102,7 +104,7 @@ export default function TabCards() {
             </div>
             <div className={styles.webtoonSide} />
           </div>
-        </Link>
+        </a>
       </div>
     </section>
   );
