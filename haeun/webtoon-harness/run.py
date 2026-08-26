@@ -144,6 +144,24 @@ def load_config(path: Path) -> dict[str, Any]:
     prov.setdefault("model_env", "GEMINI_IMAGE_MODEL")
     prov.setdefault("cost_per_image_usd", 0.0)
     prov.setdefault("options", {})
+    # 컷을 그리는 provider 도 .env 로 바꿀 수 있다 — config.yaml 을 안 고치고
+    # mock 으로 돌려 보거나(과금 없음) 다른 provider 로 갈아탈 때 쓴다.
+    # 안 적으면 config.yaml 의 값 그대로라 예전 run 은 안 바뀐다.
+    # 모델 이름은 이미 model_env(기본 GEMINI_IMAGE_MODEL)로 .env 에서 온다.
+    # 시트 쪽은 SHEET_IMAGE_PROVIDER 로 따로 고른다(story.py) — 한 이름이 두
+    # 단계를 다 뜻하면 어느 쪽을 바꾼 것인지 알 수 없다.
+    from providers import REGISTRY as _PROVIDER_REGISTRY
+    _want = str(load_dotenv(ROOT / ".env").get("WEBTOON_IMAGE_PROVIDER") or "").strip().lower()
+    if _want and _want != str(prov["name"]).strip().lower():
+        if _want in _PROVIDER_REGISTRY:
+            print(f"[provider] WEBTOON_IMAGE_PROVIDER={_want} — config.yaml 의 "
+                  f"{prov['name']} 대신 이것으로 그립니다.")
+            prov["name"] = _want
+        else:
+            # 조용히 무시하면 ".env 를 고쳤는데 왜 그대로지" 로 헤맨다.
+            print(f"[경고] WEBTOON_IMAGE_PROVIDER='{_want}' 는 등록되지 않은 "
+                  f"provider 입니다 ({'/'.join(sorted(_PROVIDER_REGISTRY))} 중 하나). "
+                  f"config.yaml 의 {prov['name']} 을 그대로 씁니다.")
     txt = cfg.setdefault("text", {})
     txt.setdefault("api_key_env", "GEMINI_API_KEY")
     txt.setdefault("model_env", "GEMINI_TEXT_MODEL")

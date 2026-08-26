@@ -66,6 +66,38 @@ JOBS_DIR = HERE / "jobs"
 STORY = HERE.parent / "story-harness"
 WEBTOON = HERE.parent / "webtoon-harness"
 
+
+def _dotenv(path: Path) -> dict[str, str]:
+    """의존성 없는 최소 .env 파서 (story.py·run.py 의 것과 같은 규칙).
+
+    이미 설정된 환경변수가 .env 파일보다 우선한다 — 배포에서 환경변수로
+    준 값을 파일이 덮어써 버리면 안 된다."""
+    values: dict[str, str] = {}
+    if path.exists():
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.removeprefix("export ").partition("=")
+            key, val = key.strip(), val.strip()
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
+                val = val[1:-1]
+            values[key] = val
+    return {**values, **{k: v for k, v in os.environ.items() if v}}
+
+
+# 캐릭터 시트를 어느 쪽으로 그릴지. **제품의 기본은 openai** 다 — 하네스
+# 자체 기본(story.py 의 gemini, "시트는 컷과 같은 모델로")과 일부러 다르게
+# 골라 둔 값이라, 여기서 명시로 주지 않으면 하네스 기본으로 되돌아간다.
+# .env 의 SHEET_IMAGE_PROVIDER 로 바꿀 수 있다(gemini | openai).
+# 모델 이름은 story.py 가 .env 에서 읽는다 — openai 면 OPENAI_IMAGE_MODEL
+# (기본 gpt-image-2), gemini 면 GEMINI_IMAGE_MODEL.
+# 컷 쪽은 webtoon-harness 의 WEBTOON_IMAGE_PROVIDER 가 따로 정한다.
+_ENV = _dotenv(STORY / ".env")
+SHEET_IMAGE_PROVIDER = (_ENV.get("SHEET_IMAGE_PROVIDER") or "openai").strip().lower()
+# 빈 값이면 --quality 를 아예 안 붙인다 — story.py 의 기본(medium)에 맡긴다.
+SHEET_IMAGE_QUALITY = (_ENV.get("OPENAI_IMAGE_QUALITY") or "").strip().lower()
+
 # 그림 조건. 합격본이 S+ 다 — 통합 시트 + 직전 컷을 붙여서, 조연이 같은
 # 사람으로 이어지고 채색이 컷마다 갈리지 않는다. config.yaml 자체가
 # "한 화를 통째로 뽑을 때는 S 가 아니라 S+" 라고 못박고 있다.
@@ -1499,20 +1531,23 @@ def execute(job: Job) -> None:
         sheet_dir = STORY / "runs" / run_id / "charsheet"
         picks = sheet_dir / "charsheet_picks.json"
         while True:
-            code = job._run(
-                # 시트 이미지 기본값은 story.py 안에서 gemini 다 — 텍스트 단계용
-                # --provider(.env PROVIDER=openai)는 여기 안 먹는다. 캐릭터 시트는
-                # OpenAI(gpt-image-2)로 고정한다고 정했으므로 여기서 명시로 준다.
-                #
-                # --author-note 는 여기 안 붙인다. 시트 프롬프트는 p1.json 의
-                # appearance_en·design_details 로만 만들어지고 그 두 값은 게이트가
-                # (개수·추상어) 지키고 있어서, 사람이 쓴 한국어 문장을 끼워 넣으면
-                # gate_charsheet_source 에서 걸린다. 시트를 실제로 바꾸는 길은
-                # 승인 화면의 수정 폼(_apply_sheet_edits)이다 — 고른 항목과 적은
-                # 말은 기록만 하고, 무엇을 어떻게 바꿀지는 그 폼이 받는다.
-                ["story.py", "--charsheet", "--run-id", run_id,
-                 "--provider", "openai", "--yes"],
-                STORY, lambda ln: _sheet_line(job, ln))
+            # 시트 이미지 기본값은 story.py 안에서 gemini 다 — 텍스트 단계용
+            # --provider(.env PROVIDER=openai)는 여기 안 먹는다. 제품은 시트를
+            # OpenAI(gpt-image-2)로 뽑기로 정했으므로 여기서 명시로 준다.
+            # 바꾸려면 .env 의 SHEET_IMAGE_PROVIDER (위 상수 참고).
+            #
+            # --author-note 는 여기 안 붙인다. 시트 프롬프트는 p1.json 의
+            # appearance_en·design_details 로만 만들어지고 그 두 값은 게이트가
+            # (개수·추상어) 지키고 있어서, 사람이 쓴 한국어 문장을 끼워 넣으면
+            # gate_charsheet_source 에서 걸린다. 시트를 실제로 바꾸는 길은
+            # 승인 화면의 수정 폼(_apply_sheet_edits)이다 — 고른 항목과 적은
+            # 말은 기록만 하고, 무엇을 어떻게 바꿀지는 그 폼이 받는다.
+            sheet_cmd = ["story.py", "--charsheet", "--run-id", run_id,
+                         "--provider", SHEET_IMAGE_PROVIDER, "--yes"]
+            # 품질은 openai 쪽 인자다 — gemini 로 그릴 때 붙이면 뜻이 없다.
+            if SHEET_IMAGE_QUALITY and SHEET_IMAGE_PROVIDER == "openai":
+                sheet_cmd += ["--quality", SHEET_IMAGE_QUALITY]
+            code = job._run(sheet_cmd, STORY, lambda ln: _sheet_line(job, ln))
             if job._cancel:
                 raise Failed("취소됨")
             if code != 0 or not picks.exists():
