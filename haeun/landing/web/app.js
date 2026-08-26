@@ -136,15 +136,33 @@ function buildForm() {
     <label><span>${k}</span><input type="text" data-field="${k}" placeholder=""></label>
   `).join("");
 
-  $("#styles").innerHTML = STYLE_INFO.map(([key, label, desc], i) => `
+  // 기본은 아무 것도 안 고른 상태다("건너뛰기" = 루가 정합니다). 라디오는
+  // 한 번 고르면 같은 것을 다시 눌러도 브라우저가 저절로 풀어주지 않으므로,
+  // 클릭의 기본 동작을 막고 선택/해제를 직접 관리한다(장르 빠른 고르개와 같은
+  // "다시 누르면 비운다" 패턴 — 이번엔 라디오라 change 이벤트로는 못 잡는다).
+  $("#styles").innerHTML = STYLE_INFO.map(([key, label, desc]) => `
     <label class="style-opt">
-      <input type="radio" name="style" value="${key}" ${i === 0 ? "checked" : ""}>
+      <input type="radio" name="style" value="${key}">
       <span class="style-box">
         <img class="style-thumb" src="${STYLE_THUMB[key]}" alt="">
         <b>${label}</b><small>${desc}</small>
       </span>
     </label>
   `).join("");
+  // 클릭 시점엔 브라우저가 이미 checked 를 먼저 바꿔 둔 뒤라(라디오의 활성화
+  // 단계가 click 이벤트보다 먼저 실행된다) inp.checked 만 보고는 "새로 고른 것"과
+  // "이미 고른 것을 또 누른 것"을 구분할 수 없다 — 그래서 상태를 별도 변수로
+  // 직접 들고, 매번 preventDefault 로 브라우저 기본 동작을 취소한 뒤 그 변수
+  // 기준으로만 checked 를 세팅한다.
+  const styleInputs = $$('#styles input[name="style"]');
+  let currentStyle = "";
+  styleInputs.forEach(inp => {
+    inp.addEventListener("click", e => {
+      e.preventDefault();
+      currentStyle = currentStyle === inp.value ? "" : inp.value;
+      styleInputs.forEach(o => { o.checked = o.value === currentStyle; });
+    });
+  });
 
 
   // 장르 빠른 고르개. datalist 는 폰에서 안 열리는 브라우저가 있어서, 자주
