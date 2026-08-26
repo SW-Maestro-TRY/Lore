@@ -15,11 +15,11 @@
     "incremental": true,
     "plugins": [{ "name": "next" }],
     // 도메인 폴더를 import 할 때 쓰는 별칭.
-    // 이 설정 덕분에 라우팅 파일에서 상대경로(../../../story/fe) 없이 @story/... 로 부를 수 있다.
+    // 이 설정 덕분에 라우팅 파일에서 상대경로(../../../webtoon/fe) 없이 @webtoon/... 로 부를 수 있다.
     "paths": {
       "@/*": ["./*"],
       "@common/*": ["../../common/fe/*"],
-      "@story/*": ["../../story/fe/*"],
+      "@webtoon/*": ["../../webtoon/fe/*"],
       "@comic/*": ["../../comic/fe/*"],
       "@trailer/*": ["../../trailer/fe/*"]
     }
@@ -32,8 +32,8 @@
     ".next/types/**/*.ts",
     "../../common/fe/**/*.ts",
     "../../common/fe/**/*.tsx",
-    "../../story/fe/**/*.ts",
-    "../../story/fe/**/*.tsx",
+    "../../webtoon/fe/**/*.ts",
+    "../../webtoon/fe/**/*.tsx",
     "../../comic/fe/**/*.ts",
     "../../comic/fe/**/*.tsx",
     "../../trailer/fe/**/*.ts",

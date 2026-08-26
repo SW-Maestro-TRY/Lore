@@ -1,6 +1,6 @@
 /* comic 탭 전용 스타일 — jakae 자캐툰 랜딩에서 이식.
  *
- * 원본(jakae)은 body/:root 에 전역으로 뿌렸지만, 여기서는 story·trailer 탭까지
+ * 원본(jakae)은 body/:root 에 전역으로 뿌렸지만, 여기서는 webtoon·trailer 탭까지
  * 오염되지 않도록 .comic-page 스코프로 감쌌다.
  * (Lore 랜딩과 톤 통합은 나중 리팩터. 지금은 jakae 룩 그대로 이식.) */
 

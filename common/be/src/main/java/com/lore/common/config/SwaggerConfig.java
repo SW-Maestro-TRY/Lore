@@ -20,7 +20,7 @@ public class SwaggerConfig {
     public OpenAPI loreOpenAPI() {
         return new OpenAPI().info(new Info()
                 .title("Lore API")
-                .description("Lore 창작 플랫폼 API 문서 (comic / story / trailer)")
+                .description("Lore 창작 플랫폼 API 문서 (comic / webtoon / trailer)")
                 .version("v0.0.1"));
     }
 }

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# 랜딩 프로토타입(haeun/landing/web)을 /story 가 띄울 수 있는 자리로 옮긴다.
+# 랜딩 프로토타입(haeun/landing/web)을 /webtoon 이 띄울 수 있는 자리로 옮긴다.
 #
 # 왜 복사인가 — Next 는 apps/web/public 밖의 파일을 서빙하지 않는다.
 # 프로토타입 원본은 haeun/landing/web 에 그대로 두고(파이썬 서버가 그걸 쓴다),
 # 여기서 public 으로 떠 온다. 손으로 복사하면 둘이 갈라지므로 스크립트로 둔다.
 #
-#   bash story/fe/sync-landing.sh
+#   bash webtoon/fe/sync-landing.sh
 #
 # 원본의 에셋 경로가 전부 /static/... 절대경로라, public/static 에 그대로
 # 얹으면 경로를 한 줄도 안 고쳐도 맞는다. 딱 한 가지만 더 한다 —

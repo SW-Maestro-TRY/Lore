@@ -2,9 +2,9 @@
 
 // 사이트 공통 상단 헤더.
 //
-// 랜딩(/)과 도메인 탭(/comic, /trailer, /story)이 같은 헤더를 쓴다.
+// 랜딩(/)과 도메인 탭(/comic, /trailer, /webtoon)이 같은 헤더를 쓴다.
 // 헤더가 두 벌이면 탭을 넘나들 때 로고 위치·순서가 바뀌어 보이므로 컴포넌트 하나로 둔다.
-// 탭 순서는 common/fe/links.ts 의 TABS 하나만 보면 된다 (Comic → Trailer → Story).
+// 탭 순서는 common/fe/links.ts 의 TABS 하나만 보면 된다 (Comic → Trailer → Webtoon).
 //
 // "use client" 인 이유: 현재 경로를 알아야 열려 있는 탭을 표시할 수 있어서다.
 import Link from "next/link";

@@ -1,6 +1,6 @@
 // 4. 3개 탭 카드 (핵심 섹션).
 //
-// 순서는 반드시 Comic → Trailer → Story. 사용자 여정을 표현한 것이라 바꾸면 안 된다.
+// 순서는 반드시 Comic → Trailer → Webtoon. 사용자 여정을 표현한 것이라 바꾸면 안 된다.
 // 카드 세 장의 프리뷰 구조가 서로 달라서 공통 컴포넌트로 묶지 않고 그대로 펼쳐 쓴다.
 import Link from "next/link";
 import styles from "../landing.module.css";
@@ -75,11 +75,11 @@ export default function TabCards() {
           </div>
         </Link>
 
-        {/* 03 Story — 본편 */}
-        <Link href="/story" className={`${styles.card} ${styles.cardStory}`}>
+        {/* 03 Webtoon — 본편 */}
+        <Link href="/webtoon" className={`${styles.card} ${styles.cardWebtoon}`}>
           <div className={styles.cardTop}>
-            <span className={`${styles.cardBadge} ${styles.badgeStory}`}>
-              03 Story · 본편
+            <span className={`${styles.cardBadge} ${styles.badgeWebtoon}`}>
+              03 Webtoon · 본편
             </span>
             <span className={styles.cardArrow} aria-hidden="true">
               ↗
@@ -93,14 +93,14 @@ export default function TabCards() {
             세계관을 고르면 그 안에서 내 캐릭터가 어떤 존재였는지부터 시작합니다.
             쌓인 컷에 스토리를 붙여 한 화 완성.
           </p>
-          <div className={`${styles.preview} ${styles.storyPreview}`} aria-hidden="true">
-            <div className={styles.storyStack}>
-              <div className={styles.storyWide} />
-              <div className={styles.storyScroll}>
+          <div className={`${styles.preview} ${styles.webtoonPreview}`} aria-hidden="true">
+            <div className={styles.webtoonStack}>
+              <div className={styles.webtoonWide} />
+              <div className={styles.webtoonScroll}>
                 <span className={styles.previewLabelOnInk}>EP.01 SCROLL</span>
               </div>
             </div>
-            <div className={styles.storySide} />
+            <div className={styles.webtoonSide} />
           </div>
         </Link>
       </div>

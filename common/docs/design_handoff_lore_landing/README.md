@@ -1,5 +1,15 @@
 # Handoff: Lore 랜딩페이지 (라이트 / 다크)
 
+> **읽기 전에 — Story 탭은 Webtoon 으로 이름이 바뀌었습니다.**
+> 이 번들은 납품 시점의 스냅샷이라 본문을 고치지 않았습니다. 아래 이름들은
+> 지금 코드에서 이렇게 대응합니다.
+>
+> | 이 문서 | 지금 코드 |
+> | --- | --- |
+> | Story 탭 · `/story` | Webtoon 탭 · `/webtoon` |
+> | `--accent-story` `--tint-story` | `--accent-webtoon` `--tint-webtoon` |
+> | `--story-card` `--hatch-story` | `--webtoon-card` `--hatch-webtoon` |
+
 ## Overview
 Lore는 "우리만의 캐릭터로 노는 만화 플랫폼"입니다. 사진 한 장에서 캐릭터 시트를 만들고, 그 시트로 **4컷 만화(Comic) → 예고편 만화(Trailer) → 스크롤 웹툰(Story)** 순서로 이어가는 서비스입니다.
 
