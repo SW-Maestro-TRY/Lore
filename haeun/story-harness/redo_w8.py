@@ -1,4 +1,4 @@
-"""이미 만든 화의 **8단계만** 다시 돌린다. 7단계는 건드리지 않는다.
+"""이미 만든 화의 **8·9단계만** 다시 돌린다. 7단계는 건드리지 않는다.
 
 8단계는 컷이 확정된 뒤에 글자와 서사적 중요도만 정하는 자리라, 앞 단계를 다시
 돌릴 이유가 없다. 프롬프트(prompts/w8.txt)를 고치고 그 효과만 보려고 화를 통째로
@@ -32,6 +32,7 @@ def main() -> None:
     ap.add_argument("--provider", default=None)
     ap.add_argument("--model", default=None)
     ap.add_argument("--max-retries", type=int, default=2)
+    ap.add_argument("--no-w9", action="store_true", help="8단계만 돌린다")
     ap.add_argument("--dry-run", action="store_true",
                     help="프롬프트만 조립해 보고 호출은 안 한다")
     args = ap.parse_args()
@@ -81,6 +82,15 @@ def main() -> None:
         ps, call, card, episode, payload, ledger_snapshot,
         no, args.max_retries, facts=[], author_note="", memory_text="")
 
+    # 9단계 — 확정된 컷을 화면 단위로 묶는다.
+    if not args.no_w9:
+        pages, w9_notes = WT.solve_pages(
+            ps, call, card, episode, payload.get("cuts") or [],
+            no, args.max_retries)
+        if pages:
+            payload["pages"] = pages
+        notes += w9_notes
+
     for n in notes:
         warn(f"  {n}")
 
@@ -99,6 +109,14 @@ def main() -> None:
     print("\n중요도 분포:", dict(collections.Counter(
         c.get("narrative_weight") or "(없음)" for c in cuts)))
     print("무게 분포  :", dict(collections.Counter(c.get("weight") for c in cuts)))
+    pages = payload.get("pages") or []
+    if pages:
+        print(f"\n화면 묶기: {len(pages)}장")
+        for i, pg in enumerate(pages, 1):
+            print(f"  {i}장  컷 {'·'.join(str(x) for x in pg.get('cuts') or [])}"
+                  f"  바탕={pg.get('base')}")
+            if pg.get("why"):
+                print(f"        {pg['why']}")
     print(f"비용: {usage.total_krw():,}원" if hasattr(usage, "total_krw") else "")
 
 

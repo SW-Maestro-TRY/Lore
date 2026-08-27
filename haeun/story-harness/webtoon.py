@@ -4420,6 +4420,32 @@ def gate_pages(pages: list, cuts: list) -> list:
     return failures
 
 
+def undrawable_notes(out: dict, cuts: list) -> list:
+    """9단계가 신고한 "그릴 수 없는 컷" 을 사람이 읽을 메모로. **막지 않는다.**
+
+    이 신고는 콘티(7단계)를 고쳐야 하는 것이지 이 화를 세울 이유가 아니다.
+    컷과 대사가 다 나와 있는데 "서술이 부족하다" 로 되돌리면 잃는 것이 더 크다.
+    """
+    rows = (out or {}).get("undrawable")
+    if not isinstance(rows, list) or not rows:
+        return []
+    nums = {c.get("cut_number") for c in cuts if isinstance(c, dict)}
+    notes = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        n = row.get("cut_number")
+        if n not in nums:
+            continue                       # 없는 컷을 가리킨 신고는 버린다
+        what = str(row.get("what") or "").strip()
+        fix = str(row.get("fix") or "").strip()
+        if not what:
+            continue
+        notes.append(f"그리기 어려운 컷 {n}: {what}"
+                     + (f" → {fix}" if fix else ""))
+    return notes
+
+
 def solve_pages(ps: PromptSet, call, card: str, episode: dict, cuts: list,
                 absolute: int, max_retries: int, author_note: str = "") -> tuple:
     """9단계 — 확정된 컷을 화면 단위로 묶는다. (pages, 메모)
@@ -4448,6 +4474,10 @@ def solve_pages(ps: PromptSet, call, card: str, episode: dict, cuts: list,
             sizes = [len(p["cuts"]) for p in pages]
             notes.append(f"화면 {len(pages)}장 ({'+'.join(str(s) for s in sizes)}컷), "
                          f"바탕 컷 {[p.get('base') for p in pages]}")
+            # 그릴 수 없는 컷 신고 — **경고만 한다.** 화를 세우지 않는다:
+            # 9단계의 일은 화면 묶기이고 이것은 곁일이라, 신고 때문에 묶음이
+            # 되돌려지면 책임이 섞인다. 사람이 보고 콘티를 고칠 자리다.
+            notes += undrawable_notes(out, cuts)
             return pages, notes
         log(f"  {absolute}화 9단계 게이트 실패 {len(failures)}건")
         for f in failures:
