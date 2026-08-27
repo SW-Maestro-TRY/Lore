@@ -2012,6 +2012,36 @@ async function showRunResult(runId, ep) {
     LORE.at(`/works?run=${encodeURIComponent(runId)}&ep=${ep}`));
 }
 
+/* 결과 화면 부제가 쓸 값. 스크롤을 따라 "몇 컷째" 가 바뀌므로 paintResult 가
+   한 번 적고 끝내지 못한다 — 여기 담아 두고 스크롤할 때마다 다시 그린다. */
+let resultPos = null;
+
+/* 지금 화면 위쪽에 걸쳐 있는 장 → 그 장의 첫 컷 번호.
+   장 하나에 perSheet 컷이 함께 구워지므로(pipeline 의 CUTS_PER_SHEET) n번째
+   장의 첫 컷은 (n-1)*perSheet+1 이다. 어림이 아니라 굽는 규칙 그대로다. */
+function currentCutNo() {
+  const pages = $$("#reader .page");
+  if (!pages.length || !resultPos?.total) return 0;
+  let cur = pages[0];
+  for (const p of pages) {
+    // 상단바(59px) 아래로 내려온 장 중 마지막 것이 지금 읽는 장이다
+    if (p.getBoundingClientRect().top <= 140) cur = p; else break;
+  }
+  const no = Number(cur.dataset.scene) || 1;
+  return Math.min(resultPos.total, (no - 1) * resultPos.perSheet + 1);
+}
+
+function paintResultPos() {
+  const el = $("#resSub");
+  if (!el || !resultPos) return;
+  const { prefix, total, tail } = resultPos;
+  const at = currentCutNo();
+  const body = !total ? ""
+    : at ? ` · ${total}컷 중 ${at}컷째`
+         : ` · 총 ${total}컷`;
+  el.textContent = prefix + body + tail;
+}
+
 function paintResult(r) {
   $("#resGenre").textContent  = [r.genre, r.style_label].filter(Boolean).join(" · ");
   $("#resTitle").textContent  = r.title;
@@ -2022,9 +2052,17 @@ function paintResult(r) {
   // 가늠하는 유일한 근거다. 단계별 내역은 title 로 붙여 둔다.
   const took = r.seconds ? ` · ${mmss(r.seconds)} 걸림` : "";
   const epNo = r.episode || 1;
-  $("#resSub").textContent =
-    `${r.character ? r.character + " · " : ""}${epNo}화 · ${r.page_count}장 / ${r.cut_count}컷` +
-    ` · 한 장에 ${r.cuts_per_sheet}컷${short}${took}`;
+  // 예전에는 "3장 / 4컷 · 한 장에 3컷" 이라고 적었다. 장·컷은 그림을 굽는 쪽의
+  // 단위(한 장에 몇 컷을 함께 그리는가)이지 읽는 사람의 단위가 아니다 — 보는
+  // 사람은 자기가 지금 어디쯤 읽고 있는지가 궁금하다. 그래서 굽는 단위는 빼고
+  // 읽는 자리(resultPos)로 바꾼다.
+  resultPos = {
+    prefix: `${r.character ? r.character + " · " : ""}${epNo}화`,
+    total: Number(r.cut_count) || 0,
+    perSheet: Number(r.cuts_per_sheet) || 1,
+    tail: `${short}${took}`,
+  };
+  paintResultPos();
   $("#resSub").title = (r.stage_times || [])
     .map(s => `${s.title} ${mmss(s.seconds)}`).join("  ·  ");
   $("#downloadBtn").href = resultSrc.download;
@@ -3308,6 +3346,9 @@ document.addEventListener("DOMContentLoaded", () => {
   loadWorlds();
   loadFeedbackTags();
   setupPhoto();
+  // 결과 화면 부제의 "몇 컷째". 한 번만 걸어 두고, 결과 화면이 아닐 때는
+  // paintResultPos 가 알아서 아무것도 안 한다(resultPos 가 비어 있다).
+  addEventListener("scroll", paintResultPos, { passive: true });
   $("#form").addEventListener("submit", submit);
   // 연출(빠르게/웹툰)이 바뀌면 그림 호출 수가 달라져 비용도 달라진다.
   document.querySelectorAll('input[name="layout_mode"]').forEach(
