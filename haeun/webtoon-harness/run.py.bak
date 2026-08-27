@@ -769,23 +769,43 @@ def _modality_tokens(details: Any, want: str) -> int | None:
 
 
 def token_fields(meta: dict[str, Any] | None) -> dict[str, int | None]:
-    """provider meta -> 로그에 펴서 넣을 토큰 필드."""
+    """provider meta -> 로그에 펴서 넣을 토큰 필드.
+
+    provider 마다 usage 모양이 다르다 — Gemini 는 PascalCase(usageMetadata),
+    OpenAI 이미지 API(gpt-image-*)는 snake_case(input_tokens/output_tokens)다.
+    있는 키로 어느 쪽인지 가른다(두 스키마가 이름을 공유하지 않는다).
+    """
     usage = (meta or {}).get("usage")
     if not isinstance(usage, dict):
         return {k: None for k in TOKEN_KEYS}
 
-    def num(key: str) -> int | None:
-        v = usage.get(key)
+    def num(d: dict[str, Any], key: str) -> int | None:
+        v = d.get(key)
         return int(v) if isinstance(v, (int, float)) else None
+
+    if "input_tokens" in usage or "output_tokens" in usage:
+        # OpenAI 이미지 API. 이 엔드포인트의 출력은 전부 이미지 토큰이다 —
+        # 텍스트 출력이 없어서 tokens_out_image 에 output_tokens 를 그대로 쓴다.
+        details = usage.get("input_tokens_details") or {}
+        return {
+            "tokens_in": num(usage, "input_tokens"),
+            "tokens_out": num(usage, "output_tokens"),
+            "tokens_thought": None,
+            "tokens_cached": num(details, "cached_tokens"),
+            "tokens_total": num(usage, "total_tokens"),
+            "tokens_in_text": num(details, "text_tokens"),
+            "tokens_in_image": num(details, "image_tokens"),
+            "tokens_out_image": num(usage, "output_tokens"),
+        }
 
     prompt_d = usage.get("promptTokensDetails")
     cand_d = usage.get("candidatesTokensDetails")
     return {
-        "tokens_in": num("promptTokenCount"),
-        "tokens_out": num("candidatesTokenCount"),
-        "tokens_thought": num("thoughtsTokenCount"),
-        "tokens_cached": num("cachedContentTokenCount"),
-        "tokens_total": num("totalTokenCount"),
+        "tokens_in": num(usage, "promptTokenCount"),
+        "tokens_out": num(usage, "candidatesTokenCount"),
+        "tokens_thought": num(usage, "thoughtsTokenCount"),
+        "tokens_cached": num(usage, "cachedContentTokenCount"),
+        "tokens_total": num(usage, "totalTokenCount"),
         "tokens_in_text": _modality_tokens(prompt_d, "TEXT"),
         "tokens_in_image": _modality_tokens(prompt_d, "IMAGE"),
         "tokens_out_image": _modality_tokens(cand_d, "IMAGE"),
@@ -820,12 +840,19 @@ def call_cost(cfg: dict[str, Any], model: str, kind: str,
     """
     rate = rate_for(cfg, model)
     if rate and tokens.get("tokens_total") is not None:
-        # 출력 이미지 토큰 단가가 따로 있는 모델은 그만큼 일반 출력에서 뺀다.
+        # 입력/출력 각각, 이미지 토큰 단가가 따로 있는 모델은 그만큼 일반
+        # 텍스트 쪽에서 뺀다. Gemini 는 입력 단가가 텍스트·이미지 공통이라
+        # input_image 를 안 쓰지만, OpenAI 이미지 API 는 입력 이미지(레퍼런스
+        # 첨부)가 텍스트보다 비싸서 따로 갈라야 한다.
+        in_img = tokens.get("tokens_in_image") or 0
+        in_total = tokens.get("tokens_in") or 0
+        in_text = max(in_total - in_img, 0) if "input_image" in rate else in_total
         out_img = tokens.get("tokens_out_image") or 0
         out = tokens.get("tokens_out") or 0
         out_text = max(out - out_img, 0) if "output_image" in rate else out
         usd = (
-            (tokens.get("tokens_in") or 0) * rate.get("input", 0.0)
+            in_text * rate.get("input", 0.0)
+            + (in_img * rate["input_image"] if "input_image" in rate else 0.0)
             + out_text * rate.get("output", 0.0)
             + (out_img * rate["output_image"] if "output_image" in rate else 0.0)
             + (tokens.get("tokens_thought") or 0)

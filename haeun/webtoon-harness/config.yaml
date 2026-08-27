@@ -1186,6 +1186,14 @@ scene:
   # 같은 결과가 됩니다.
   max_light_per_scene: 3    # 한 장에 묶을 light 컷 상한. 넷을 넘기면 인물이 작아집니다
 
+  # 꺼져 있으면(기본, 예전과 동일) light 컷만 서로 묶이고 normal 은 혼자 한
+  # 장입니다. 켜면 normal 도 light 와 똑같이 묶입니다 — 실측해 보니 콘티가
+  # float(=light)를 거의 안 써서 컷 대부분이 normal 로 남고, 그러면 위
+  # grouping: weight 가 사실상 컷 모드(한 컷 = 한 장)와 같아져 버렸습니다
+  # (2026-08-27). "무거운(full) 컷만 혼자, 나머지는 합쳐서"가 원래 의도였던
+  # 화면은 이 값을 켭니다.
+  weight_combine_normal: false
+
   # 떠 있는 컷이 쓰는 지면 폭 (0~1). 가벼운 컷은 지면을 덜 먹는 것이 곧 가볍다는
   # 뜻이라 좁힙니다. light 가 아닌 컷은 아래 width_ratio 를 따릅니다.
   light_width: 0.55
