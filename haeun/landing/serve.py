@@ -949,6 +949,8 @@ class Handler(BaseHTTPRequestHandler):
 
             job = runner.create(form, photo)
             _, bal = credits.spend(uid, cost)
+            credits.log_event("spend", uid, amount=cost, balance=bal,
+                              job_id=job.id, reason="create")
             accounts.log_ip_consent(uid, job.id)
             return self._json({"id": job.id, "queue_position": runner.position(job.id),
                                "credit_balance": bal})
@@ -1088,7 +1090,11 @@ class Handler(BaseHTTPRequestHandler):
                 job = runner.create_next(run_id, {"author_note": note} if note else {})
             except pipeline.Failed as exc:
                 return self._error(409, str(exc))
-            bal = credits.spend(uid, cost)[1] if cost else None
+            bal = None
+            if cost:
+                bal = credits.spend(uid, cost)[1]
+                credits.log_event("spend", uid, amount=cost, balance=bal,
+                                  job_id=job.id, reason="next_episode")
             return self._json({"id": job.id, "episode": job.episode,
                                "queue_position": runner.position(job.id),
                                **({"credit_balance": bal} if bal is not None else {})})
