@@ -129,12 +129,83 @@ def test_caption_too_long_is_dropped(tmp: Path) -> None:
     check("그래도 그려진다", Image.open(out).width == 420)
 
 
+def test_cut_layout_matches_stitch_rules(tmp: Path) -> None:
+    print("cut_layout() 은 episode.py.stitch() 와 같은 자리에 컷을 놓는다")
+    # 800폭 꽉채움 두 장 + 가벼운(0.55배) 한 장. 세 번째는 원본이 더 넓어서
+    # (1000px) 줄어드는 경우까지 같이 본다.
+    a = make(tmp / "a.png", 800, 400)
+    b = make(tmp / "b.png", 800, 300)
+    c = make(tmp / "c.png", 1000, 200)
+    # gaps[i] 는 그 컷 "뒤"(다음 컷과의 사이)의 gap_after 다 — episode.py.stitch()
+    # 와 같은 규칙. 그래서 컷0·1 사이를 벌리려면 gaps[0] 을 준다.
+    bounds = watermark.cut_layout(
+        [a, b, c], gaps=[2, 0, 0], ratios=[1.0, 1.0, 0.55],
+        gap_table={0: 0.0, 1: 0.07, 2: 0.26, 3: 0.62})
+    check("컷 3개 다 나온다", bounds is not None and len(bounds) == 3, str(bounds))
+    (x0, y0, w0, h0), (x1, y1, w1, h1), (x2, y2, w2, h2) = bounds
+    check("첫 컷은 맨 위, 왼쪽 끝", (x0, y0) == (0, 0), str((x0, y0)))
+    check("꽉채움 컷은 지면 폭 그대로", (w0, h0) == (800, 400), str((w0, h0)))
+    gap = watermark._strip.gap_px(800, 2, {0: 0.0, 1: 0.07, 2: 0.26, 3: 0.62})
+    check("둘째 컷은 첫 컷 높이 + gap_after 만큼 내려간다",
+          y1 == 400 + gap, f"{y1} != {400 + gap}")
+    check("가벼운 컷은 0.55배로 줄고 가운데 정렬", w2 == 440 and x2 == (800 - 440) // 2,
+          str((x2, w2)))
+    check("더 넓은 원본은 지면 폭까지만 줄지 늘지 않는다", w0 <= 800 and w1 <= 800)
+
+
+def test_percut_marks_land_inside_each_cut(tmp: Path) -> None:
+    print("cut_bounds 를 주면 컷마다 표시가 찍힌다 (한 장 전체에 하나가 아니라)")
+    src = make(tmp / "ep.png", 800, 1000)
+    # 위 500 / 아래 500 두 컷으로 가정하고 각각 자리를 준다.
+    bounds = [(0, 0, 800, 500), (0, 500, 800, 500)]
+    out = watermark.stamp(src, tmp / "out" / "ep_wm.png", "초롱 · 1화",
+                           cut_bounds=bounds)
+    got = Image.open(out).convert("RGB")
+    bg = (120, 170, 200)
+
+    def has_mark(x0: int, y0: int, x1: int, y1: int) -> bool:
+        # 글자는 빈틈이 있어 한 점만 찍으면 운이 나쁘면 그 사이를 짚는다 —
+        # 모서리 상자를 훑어서 배경과 다른 픽셀이 하나라도 있는지 본다.
+        return any(got.getpixel((x, y)) != bg
+                   for x in range(x0, x1, 3) for y in range(y0, y1, 3))
+
+    check("첫 컷 자기 자리 안(오른쪽 아래)에 표시가 찍힌다",
+          has_mark(650, 420, 800, 500))
+    check("둘째 컷 자기 자리 안에도 따로 찍힌다",
+          has_mark(650, 920, 800, 1000))
+    check("표시가 컷 경계를 넘어가진 않는다 (첫 컷 아래쪽엔 없다)",
+          not has_mark(650, 500, 800, 560))
+
+
+def test_percut_cache_file_differs_from_whole_mark(tmp: Path) -> None:
+    print("컷별 표시는 예전(한 장짜리) 캐시와 다른 파일로 떨어진다")
+    root = tmp / "ep"
+    src = make(root / "episode.png", 800, 1000)
+    whole = watermark.for_download(src, root, "초롱 · 1화")
+    percut = watermark.for_download(
+        src, root, "초롱 · 1화", cut_bounds=[(0, 0, 800, 500), (0, 500, 800, 500)])
+    check("서로 다른 캐시 파일에 떨어진다", whole != percut, f"{whole} == {percut}")
+
+
+def test_percut_bad_bounds_falls_back(tmp: Path) -> None:
+    print("컷 자리가 이상하면(캔버스 밖 등) 한 장짜리 마크로 돌아간다")
+    src = make(tmp / "e.png", 400, 400)
+    out = watermark.stamp(src, tmp / "out" / "e_wm.png",
+                           cut_bounds=[(0, 0, 9999, 9999)])
+    check("그래도 그려진다", Image.open(out).size == (400, 400 + watermark._fit(
+        400 * watermark.BAND_RATIO, watermark.BAND_MIN, watermark.BAND_MAX)))
+
+
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="wm-test-"))
     try:
         for fn in (test_stamp_grows_and_keeps_width, test_source_untouched,
                    test_cache_follows_source, test_falls_back_to_source,
-                   test_tall_strip, test_caption_too_long_is_dropped):
+                   test_tall_strip, test_caption_too_long_is_dropped,
+                   test_cut_layout_matches_stitch_rules,
+                   test_percut_marks_land_inside_each_cut,
+                   test_percut_cache_file_differs_from_whole_mark,
+                   test_percut_bad_bounds_falls_back):
             fn(tmp / fn.__name__)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
