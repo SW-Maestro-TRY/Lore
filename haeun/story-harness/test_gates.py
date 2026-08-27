@@ -94,6 +94,9 @@ VISUAL_OK = {
     # gender 는 카드의 필수 칸이다. 여기서 빠지면 뒷단계가 성별을 짐작한다
     # (실제로 그렇게 여자 주인공이 이미지에서 남자로 그려졌다).
     "gender": "남성",
+    # species 도 필수 칸이다 — 기본값은 "사람" (gender 와 반대로, 안 적으면
+    # 사람으로 본다).
+    "species": "사람",
     "visual_hook": "은발이 눈을 반쯤 덮은, 웃지 않는데 입꼬리가 비대칭으로 올라간 남자",
     "appearance": {"hair": "은발 반묶음", "eyes": "회색 · 서늘한 눈매",
                    "build": "185 언저리, 마르고 어깨가 넓다",
@@ -2931,6 +2934,18 @@ ok("사진→재료: 이야기 실마리를 근거와 함께 넘긴다",
 ok("사진→재료: 사진이 준 것임을 표시한다", "사진에서 읽은 것" in _mat)
 ok("사진→재료: LOOK 이 없으면 빈 문자열", story.look_to_material(None) == "")
 
+# species — 사람이 아니면 종과 겉모습을 재료에 넣는다. 사람이면 (기본값이라)
+# 굳이 "종: 사람" 줄을 만들지 않는다 — 옛 LOOK 결과(species 키가 아예 없는
+# 것)와 같은 문장이 나와야 한다.
+_look_whale = dict(_look, species="고래", species_features="옅은 청록색 몸통")
+_mat_whale = story.look_to_material(_look_whale)
+ok("사진→재료: 사람이 아니면 종을 적는다", "종: 고래" in _mat_whale, _mat_whale)
+ok("사진→재료: 종의 겉모습도 함께 적는다", "옅은 청록색 몸통" in _mat_whale, _mat_whale)
+ok("사진→재료: 사람이면 종 줄을 안 만든다 (기본값)",
+   "종:" not in story.look_to_material(dict(_look, species="사람")))
+ok("사진→재료: species 키가 아예 없어도(옛 LOOK 결과) 그대로 동작한다",
+   "종:" not in _mat and "검은 단발" in _mat, _mat)
+
 # 세계관 프리셋 파일
 _w = story.load_worlds()
 ok("세계관 프리셋: worlds.json 이 읽힌다", bool(_w.get("presets")), list(_w)[:3])
@@ -3458,6 +3473,57 @@ ok("모의 P1 카드에 gender 가 있다",
 ok("모의 P1 카드가 성별 게이트를 통과한다",
    story.gate_gender(story.mock_payload("P1", ""), "여성") == [],
    story.gate_gender(story.mock_payload("P1", ""), "여성"))
+
+# ---- 종(species) ------------------------------------------------------------
+# gender 와 같은 이유로 존재한다: 강아지를 넣었는데 species 칸이 비거나
+# appearance_en 이 "A young woman/man…" 으로 남으면, 뒷단계는 그냥 사람을
+# 그린다. gender 와 반대 방향 기본값이 하나 있다 — 안 적으면 사람이 기본이다.
+
+ok("종 판정: 빈 값은 사람", story.is_human_species("") is True)
+ok("종 판정: '사람'은 사람", story.is_human_species("사람") is True)
+ok("종 판정: '인간'도 사람", story.is_human_species("인간") is True)
+ok("종 판정: '강아지'는 사람이 아니다", story.is_human_species("강아지") is False)
+ok("종 판정: '고래'는 사람이 아니다", story.is_human_species("고래") is False)
+
+_good_whale = {"gender": "여성", "species": "고래", "species_en": "whale",
+               "appearance_en": "A pale teal whale with a white belly, wears nothing"}
+
+ok("종 게이트: species 가 비면 탈락",
+   any("species 가 비어" in f for f in story.gate_species({})))
+
+ok("종 게이트: 사람이면 그 이상 요구하지 않는다",
+   story.gate_species({"species": "사람"}) == [])
+ok("종 게이트: '인간'도 사람으로 통과",
+   story.gate_species({"species": "인간"}) == [])
+
+ok("종 게이트: 강아지·고래처럼 사람이 아니고 제대로 적혀 있으면 통과",
+   story.gate_species(_good_whale) == [], story.gate_species(_good_whale))
+
+ok("종 게이트: species_en 이 비면 탈락",
+   any("species_en 이 비어" in f for f in story.gate_species(
+       dict(_good_whale, species_en=""))))
+
+ok("종 게이트: appearance_en 에 species_en 낱말이 없으면 탈락",
+   any("species_en" in f and "없습니다" in f for f in story.gate_species(
+       dict(_good_whale, appearance_en="A pale teal creature with a white belly"))))
+
+ok("종 게이트: species 를 적어 놓고도 appearance_en 이 사람으로 시작하면 탈락",
+   any("사람으로 시작" in f for f in story.gate_species(
+       dict(_good_whale, appearance_en="A young woman with pale teal skin"))))
+
+ok("성별 게이트: species 가 사람이 아니면 appearance_en 에 성별 낱말을 요구하지 않는다",
+   story.gate_gender(_good_whale, "") == [], story.gate_gender(_good_whale, ""))
+
+ok("종 게이트: gate_p1 에 연결돼 있다",
+   any("species" in f for f in story.gate_p1({}, "")))
+
+ok("모의 P1 카드에 species 가 '사람' 이다",
+   story.mock_payload("P1", "").get("species") == "사람")
+ok("모의 P1 카드가 종 게이트를 통과한다",
+   story.gate_species(story.mock_payload("P1", "")) == [],
+   story.gate_species(story.mock_payload("P1", "")))
+ok("모의 LOOK 결과에 species 가 '사람' 이다",
+   story.mock_payload("LOOK", "").get("species") == "사람")
 
 # ---- 조연 고정 -------------------------------------------------------------
 # 같은 캐릭터 파일을 두 번 돌렸더니 후배 이름이 '하윤재' → '장지운' 으로 바뀌고,

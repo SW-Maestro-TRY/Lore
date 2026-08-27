@@ -1188,6 +1188,8 @@ def mock_payload(stage: str, prompt: str) -> dict:
     if stage == "LOOK":
         # 사진을 실제로 본 것이 아니다. 경로만 점검한다.
         return {
+            "species": "사람",
+            "species_features": "",
             "appearance": {"hair": "검은색, 어깨 아래, 낮게 묶음",
                            "eyes": "짙은 갈색, 끝이 처진 눈",
                            "build": "170 언저리, 어깨가 좁다",
@@ -1222,6 +1224,8 @@ def mock_payload(stage: str, prompt: str) -> dict:
         return {
             "name": "모의인물 (활동명: 모의)",
             "gender": "여성",
+            "species": "사람",
+            "species_en": "",
             "intro": "잔업하던 말단 사원, 눈 떠보니 폐기 예정 기록보관소의 마지막 사서",
             "rank": "제3기록보관소 사서 (폐기 D-30)",
             "rank_irony": "폐기 D-30",
@@ -1759,6 +1763,7 @@ def gate_p1(p1: dict, character_input: str = "", given_name: str = "") -> list:
     # 성별·조연 명부는 저격 구조와 무관하다. 아래 조기 반환보다 먼저 본다 —
     # 저격이 깨졌다고 이것들을 안 보면, 재생성 한 번에 하나씩만 고치게 된다.
     failures += gate_gender(p1, character_input)
+    failures += gate_species(p1)
     failures += gate_supporting_cast(p1)
     failures += gate_name(p1, given_name)
 
@@ -1823,6 +1828,19 @@ GENDER_PATTERNS = {
 # appearance_en 은 이미지 생성기가 그대로 받는다. 여기 성별이 없으면 모델이
 # 옷과 머리 길이로 짐작하고, 짧은 머리에 바지면 남자로 그린다.
 EN_GENDER_WORDS = ("woman", "female", "girl", "lady", "man", "male", "boy", "guy")
+
+# species 가 "사람"으로 읽히는 표현들. gender 와 반대 방향 기본값이다 —
+# gender 는 안 적으면 카드가 정해야 하지만(기본값이 없다), species 는 안
+# 적으면 사람이 기본값이다(대부분의 캐릭터는 사람이라서).
+HUMAN_SPECIES_WORDS = ("사람", "인간", "인간형", "휴먼", "human")
+
+
+def is_human_species(species) -> bool:
+    """species 칸이 사람을 가리키는지. 비어 있으면 사람으로 본다(기본값)."""
+    s = str(species or "").strip()
+    if not s:
+        return True
+    return any(w in s for w in HUMAN_SPECIES_WORDS)
 
 
 def gender_of(text: str) -> str:
@@ -1973,15 +1991,66 @@ def gate_gender(p1: dict, character_input: str = "") -> list:
                 f"작가는 이 인물을 '{want}'으로 적었는데 카드의 gender 가 "
                 f"'{gender}' 입니다. 작가가 정한 사실은 바꾸지 않습니다.")
 
-    # 이미지로 그대로 나가는 문장에 성별이 있어야 한다.
+    # 이미지로 그대로 나가는 문장에 성별이 있어야 한다 — species 가 사람일
+    # 때만. species 가 사람이 아니면(강아지·고래 등) gate_species 가 대신
+    # appearance_en 을 검사한다 — 사람이 아닌데 성별 낱말을 요구하면 안 된다.
+    if is_human_species(p1.get("species")):
+        en = str(p1.get("appearance_en") or "")
+        low = re.sub(r"[^a-z ]", " ", en.lower())
+        words = set(low.split())
+        if en and not (words & set(EN_GENDER_WORDS)):
+            failures.append(
+                "appearance_en 에 성별이 없습니다. 이 문장은 이미지 생성기가 그대로 "
+                "받는 자리라, 성별이 없으면 모델이 옷차림으로 짐작합니다. "
+                "'A young woman with …' 처럼 성별로 시작하세요.")
+    return failures
+
+
+def gate_species(p1: dict) -> list:
+    """캐릭터의 종이 카드에서 사라지거나 조용히 사람으로 바뀌지 않게 한다.
+
+    gate_gender 와 같은 이유로 존재한다: 작가가(또는 사진이) "강아지"라고
+    줬는데 species 칸이 비거나 appearance_en 이 여전히 "A young woman/man…"
+    으로 시작하면, 뒷단계(그림)는 그냥 사람을 그린다.
+
+    species 가 사람일 때는 이 게이트가 추가로 요구하는 것이 없다 — gate_gender
+    가 이미 다 본다. 사람이 아닐 때만 species_en·appearance_en 을 본다.
+    """
+    failures = []
+    species = str(p1.get("species") or "").strip()
+
+    if not species:
+        failures.append(
+            "species 가 비어 있습니다. 사람이면 '사람', 아니면 그 종을 쓰세요. "
+            "비워 두면 뒷단계가 사람으로 짐작합니다.")
+        return failures
+
+    if is_human_species(species):
+        return failures
+
+    species_en = str(p1.get("species_en") or "").strip()
     en = str(p1.get("appearance_en") or "")
+    if not species_en:
+        failures.append(
+            f"species 가 '{species}' 인데 species_en 이 비어 있습니다. "
+            "appearance_en(이미지 생성기로 들어가는 영문 문장)에 넣을 종의 "
+            "영문 한 단어가 있어야 합니다. (예: whale, dog)")
+
     low = re.sub(r"[^a-z ]", " ", en.lower())
     words = set(low.split())
-    if en and not (words & set(EN_GENDER_WORDS)):
+    if species_en and en and species_en.lower() not in words:
         failures.append(
-            "appearance_en 에 성별이 없습니다. 이 문장은 이미지 생성기가 그대로 "
-            "받는 자리라, 성별이 없으면 모델이 옷차림으로 짐작합니다. "
-            "'A young woman with …' 처럼 성별로 시작하세요.")
+            f"appearance_en 에 species_en '{species_en}' 이 없습니다. 이 문장은 "
+            "이미지 생성기가 그대로 받는 자리라, 종이 없으면 모델이 사람으로 "
+            "그립니다.")
+
+    # 사람이 아니라고 해 놓고 여전히 "A young woman/man…" 으로 시작하면,
+    # species 를 적어 놓고도 그 순간 뒷단계가 다시 사람을 그리게 된다.
+    if en and re.match(r"^\s*a\s+(young\s+)?(woman|man|girl|boy|lady|guy|female|male)\b",
+                        en.lower()):
+        failures.append(
+            f"species 가 '{species}' 인데 appearance_en 이 사람으로 시작합니다 "
+            "('A young woman/man…'). species_en 으로 다시 시작하세요.")
     return failures
 
 
@@ -5938,6 +6007,12 @@ def look_to_material(look: dict) -> str:
     if not look:
         return ""
     out = ["[사진에서 읽은 것 — 작가가 준 외형이므로 바꾸지 않는다]"]
+    species = _clean(look.get("species"))
+    if species and species != "사람":
+        out.append(f"- 종: {species}")
+        features = _clean(look.get("species_features"))
+        if features:
+            out.append(f"- {species}의 겉모습: {features}")
     app = look.get("appearance") or {}
     labels = {"hair": "머리", "eyes": "눈", "build": "체형",
               "clothing": "복장", "impression": "첫인상", "element": "상징"}

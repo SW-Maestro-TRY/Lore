@@ -1249,7 +1249,7 @@ def mock_payload(stage: str, prompt: str) -> dict:
                 {"name": "하연", "gender": "여성",
                  "relation": "폐기 명령서에 서명한 감사관",
                  "appearance": "짧게 친 검은 머리, 큰 키에 각진 어깨, "
-                               "감사관 제복에 은테 안경",
+                               "짙은 회색 감사관 제복에 은테 안경",
                  "role": "주인공의 보관소를 닫으러 온다"},
             ],
             "wish_fulfillment": "아무도 몰랐던 내 자리가 마지막에 가장 중요해지는 것",
@@ -1836,6 +1836,52 @@ def gender_of(text: str) -> str:
     return hit.pop() if len(hit) == 1 else ""
 
 
+# 그리는 사람이 못 그리는 낱말 — **이름표이지 묘사가 아닌 것**.
+#
+# 실측(20260826T202930): 서도윤의 외형이 "히어로 전용 슈트 위에 푸른 전기가
+# 번지는 연출" 이었다. 그림 모델은 "히어로 슈트" 가 어떻게 생겼는지 모르므로
+# 매번 지어냈고, 나온 것이 사람이 보기에 이상했다. 이런 낱말은 **무엇을 그릴지
+# 정해 주는 대신 그리는 쪽에 떠넘긴다.**
+#
+# 낱말 자체를 금지하는 것이 아니다. "히어로 슈트(무릎까지 오는 짙은 남색 코트,
+# 은색 어깨 보호대, 가슴에 육각형 문양)" 처럼 **옆에 실제 묘사가 붙어 있으면**
+# 통과한다 — 아래 검사는 묘사 없이 이름표만 있을 때만 걸린다.
+LABEL_ONLY_WORDS = (
+    "히어로 슈트", "히어로복", "전투복", "제복", "교복", "정장", "드레스",
+    "갑옷", "로브", "망토", "마법사 복장", "기사단복", "군복", "수트", "슈트",
+    "코스튬", "유니폼", "캐주얼", "평상복", "사복",
+)
+
+# 묘사로 쳐 주는 낱말. 이 중 하나라도 있으면 "이름표만" 이 아니다.
+_DESCRIPTIVE_HINTS = (
+    "색", "빨간", "파란", "검은", "흰", "회색", "남색", "갈색", "금색", "은색",
+    "짙은", "옅은", "무늬", "문양", "줄무늬", "체크", "소매", "깃", "단추",
+    "지퍼", "벨트", "허리", "무릎", "발목", "어깨", "가슴", "목", "길이",
+    "긴", "짧은", "품이", "달린", "장식", "자수", "레이스", "주머니",
+)
+
+
+def label_only_hits(text: str) -> list:
+    """이름표만 있고 묘사가 없는 낱말 목록. 없으면 빈 목록.
+
+    **그 낱말이 속한 절(clause)만** 본다. 쉼표로 끊어 그 조각 안에 묘사가 있는지
+    보는 것이다. 문장 전체를 보면 엉뚱한 데서 묘사를 찾아 통과시킨다 — 실제로
+    "히어로 전용 슈트 위에 푸른 전기가 번지는 연출, 금색 눈동자" 가 뒤쪽의
+    '금색' 때문에 통과했다. 눈동자 색은 슈트가 어떻게 생겼는지 말해 주지 않는다.
+    """
+    t = str(text or "")
+    hits = []
+    for clause in re.split(r"[,·/\n]", t):
+        clause = clause.strip()
+        if not clause:
+            continue
+        described = any(h in clause for h in _DESCRIPTIVE_HINTS)
+        for word in LABEL_ONLY_WORDS:
+            if word in clause and not described and word not in hits:
+                hits.append(word)
+    return hits
+
+
 def gate_supporting_cast(p1: dict) -> list:
     """조연이 매번 새로 만들어지지 않게 명부를 강제한다.
 
@@ -1872,6 +1918,18 @@ def gate_supporting_cast(p1: dict) -> list:
             failures.append(
                 f"supporting_cast 의 '{c.get('name')}' 의 gender 가 "
                 f"'{c.get('gender')}' 입니다. 남성 또는 여성으로 쓰세요.")
+
+        # 그릴 수 있는 묘사인가. 이름표만 적으면 그리는 쪽이 매번 지어낸다.
+        who = c.get("name") or f"{i}번째"
+        hits = label_only_hits(c.get("appearance"))
+        if hits:
+            failures.append(
+                f"supporting_cast 의 '{who}' 외형에 「{', '.join(hits)}」 라고만 "
+                "적혀 있습니다. 그것은 이름표이지 묘사가 아니라, 그리는 쪽이 "
+                "매번 다르게 지어냅니다 — 색·길이·문양·소매처럼 **눈에 보이는 "
+                "것**을 적으세요. "
+                "예) 「히어로 슈트」 → 「무릎까지 오는 짙은 남색 코트, 은색 어깨 "
+                "보호대, 가슴에 육각형 문양」")
 
     # anchor 로 지목한 사람이 명부에 없으면, 가장 중요한 조연이 빠진 것이다.
     anchor = str(rg.get("anchor") or "").strip()
@@ -2316,6 +2374,16 @@ def gate_visual(p1: dict, b_word: str) -> list:
         empty = [k for k in APPEARANCE_KEYS if is_blank(ap.get(k))]
         if empty:
             failures.append(f"appearance 의 {empty} 칸이 비어있습니다.")
+        # 주인공 복장도 이름표만 적으면 안 된다. 조연과 같은 이유이고, 주인공
+        # 쪽은 **모든 컷에 반복해서 들어가므로** 틀리면 화 전체가 틀린다.
+        hits = label_only_hits(ap.get("clothing"))
+        if hits:
+            failures.append(
+                f"appearance.clothing 에 「{', '.join(hits)}」 라고만 적혀 "
+                "있습니다. 그것은 이름표이지 묘사가 아니라, 그리는 쪽이 컷마다 "
+                "다르게 지어냅니다 — 색·길이·문양·소매처럼 **눈에 보이는 것**을 "
+                "적으세요. 예) 「교복」 → 「남색 재킷에 흰 셔츠, 무릎길이 회색 "
+                "체크 치마, 붉은 리본」")
 
     # ---- design_details : 매 컷에 유지될 고정 요소
     details = p1.get("design_details")

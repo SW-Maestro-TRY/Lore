@@ -9,10 +9,13 @@
 //     같은 도메인 아래에서 /api/* 만 백엔드로 보내주므로 CORS 가 없다.
 //     로컬 개발에서 백엔드가 8080 이면 그때만 rewrites 를 켜면 된다.
 //
-// rewrites — /webtoon 은 React 화면이 아니다.
-//   그 탭의 화면은 haeun/landing 의 프로토타입(순수 HTML/CSS/JS)이고,
-//   webtoon/fe/sync-landing.sh 가 public/static 으로 떠 온다.
-//   주소만 여기서 그 파일로 이어 준다.
+// rewrites — /webtoon 은 화면마다 다르다.
+//   홈(`/webtoon` 그 자체)은 webtoon/fe/WebtoonPage.tsx 로 옮겨진 React
+//   화면이다(2026-08-27, 담당: 하은) — 그래서 그 한 자리만 아래 목록에서
+//   뺐다. 나머지(둘러보기·마이페이지·결과·편집실 등)는 아직 haeun/landing
+//   의 프로토타입(순수 HTML/CSS/JS)이고, webtoon/fe/sync-landing.sh 가
+//   public/static 으로 떠 온다. 화면을 하나씩 React 로 옮길 때마다 그
+//   자리를 여기서도 빼면 된다.
 const nextConfig = {
   output: 'standalone',
 
@@ -30,7 +33,7 @@ const nextConfig = {
       // beforeFiles — 라우트가 있든 없든 이쪽이 먼저 잡는다.
       // 나중에 /webtoon 아래에 React 화면이 생겨도 이 규칙이 계속 유효하도록.
       beforeFiles: [
-        page('',              'index.html'),   // 랜딩
+        // page('', 'index.html') — 홈은 뺐다. React 화면(app/(domains)/webtoon)이 대신 잡는다.
         page('/works',        'index.html'),   // 둘러보기 (?run= 이 붙으면 그 작품)
         page('/mypage',       'index.html'),   // 마이페이지
         page('/result',       'index.html'),   // 마지막 결과
