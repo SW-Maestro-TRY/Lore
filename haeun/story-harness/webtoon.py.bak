@@ -5237,6 +5237,21 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
         result.status = e.status
         stopped_note = e.reason
         warn(f"  중단: {e.reason}")
+        # 마지막 초안이 있으면 남긴다 — 확인 화면이 이것을 보여준다.
+        # solve_cuts 는 실제로 컷을 뽑아 놓고도(gate 만 못 넘겨도) 이 바깥
+        # 핸들러까지 오면 그 payload 가 그냥 버려졌다 — 그래서 컷이 진짜로는
+        # 나왔는데(예: 12개) 확인 화면은 컷이 0개인 것처럼 보였다 (2026-08-26
+        # 실사용에서 확인: ep01_cuts.draft.json 이 아예 안 생김). solve_cuts
+        # 안쪽의 --replan 재시도 경로(다른 곳)는 이미 이걸 하고 있었다 — 여기도
+        # 같은 것을 한다.
+        if getattr(e, "draft", None):
+            try:
+                draft_path = wt_dir / f"ep{no:02d}_cuts.draft.json"
+                draft_path.write_text(json.dumps(
+                    e.draft, ensure_ascii=False, indent=1), encoding="utf-8")
+                warn(f"  마지막 초안을 남겼습니다: {draft_path.name}")
+            except (OSError, NameError):
+                pass               # 초안을 못 남겨도 멈춘 사실은 그대로다
     except ParseFailure as e:
         result.status = STATUS_PARSE_FAIL
         stopped_note = f"{e.stage} JSON 파싱 2회 실패"

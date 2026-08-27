@@ -235,7 +235,7 @@
 8. 당신이 바꿀 수 있는 것과 없는 것
 
   바꿀 수 있다 : speaker · dialogue · narration · thought · sfx ·
-                 screen_text · bubble_zone
+                 screen_text · bubble_zone · lines
   바꿀 수 없다 : description · shot · angle · size · beat · zone ·
                  characters_in_frame · composition · render_style
 
@@ -256,13 +256,33 @@
     한 컷 총합    : **110자 이내**
 
   넘을 것 같으면 셋 중 하나를 한다:
-    1. 두 말풍선으로 나눈다 (lines 에 줄을 하나 더 넣는다). 주고받는 리듬이
-       생겨서 대개 이쪽이 낫다.
+    1. 두 말풍선으로 나눈다 — 그 컷에만 lines 를 적는다(아래 꼴). 주고받는
+       리듬이 생겨서 대개 이쪽이 낫다.
     2. 그림이 이미 말하는 부분을 덜어낸다. "그는 화가 났다"는 표정이 한다.
     3. 다음 컷으로 넘긴다. 한 컷이 다 설명할 필요가 없다.
 
   ★ 숫자를 맞추려고 문장을 자르지는 마라. 잘린 문장은 짧아진 것이지 좋아진
     것이 아니다. 독백 한 편이 통째로 들어가야 하는 컷이라면 긴 것이 맞다.
+
+★ **lines — 한 컷에 말이 두 줄 이상일 때만.**
+
+  평소에는 적지 마라. 위의 speaker·dialogue·narration·thought 만 적으면 코드가
+  알아서 한 줄짜리 lines 로 만든다. lines 를 적는 것은 **한 컷에서 둘이
+  주고받거나, 한 사람이 두 말풍선으로 나눠 말할 때**뿐이다.
+
+  적을 때는 그 컷의 말을 **전부** 적는다 — 여기 없는 줄은 사라진다.
+
+    "lines": [
+      {"kind": "dialogue", "text": "그래서 어쩌라고.", "speaker": "운학", "side": "right"},
+      {"kind": "dialogue", "text": "…미안.",           "speaker": "청명", "side": "left"}
+    ]
+
+    kind    : narration | dialogue | thought
+    speaker : 나레이션은 빈 문자열
+    side    : left | right | center | offscreen (나레이션은 빈 문자열)
+
+  lines 를 적어도 위의 dialogue·narration·thought 칸은 그대로 채워라 —
+  코드가 종류별 첫 줄로 맞춰 두지만, 둘이 어긋나면 lines 가 이긴다.
 
 {user_memory}
 
@@ -302,7 +322,8 @@
       "thought": "속마음 또는 빈 문자열. POV 인물만",
       "sfx": "한글 효과음 또는 빈 문자열",
       "screen_text": "화면 안 글자 또는 빈 문자열. 여러 줄은 \\n 으로",
-      "bubble_zone": "<top | bottom | left | right | center | none>"
+      "bubble_zone": "<top | bottom | left | right | center | none>",
+      "lines": "선택. 한 컷에 말이 **두 줄 이상**일 때만 적는다 (아래 참고)"
     }
   ]
 }
