@@ -2579,6 +2579,38 @@ ok("상태 카드: 사람별로 꺼낼 수 있다",
 ok("상태 카드: 바뀐 게 없으면 안 쌓는다",
    len(webtoon.SeriesState().status) == 0)
 
+# ---- Story State — 사람 사이와 사람 속 --------------------------------------
+# 몸의 자국(status)처럼 관계·인지도 화를 넘어 이어진다. 이것이 없던 동안 W5 는
+# "1화에 나왔으니 아는 사이겠지"를 추론했고, 초면인 인물이 이름을 부르는 화가
+# 나왔다. 시나리오: 1화 마주침(비대칭) → 2화 안 만남 → 3화 통성명(리아는 기억 못 함).
+_rs = webtoon.SeriesState(run_id="t")
+_rs.add(1, 1, dict(episode(), setting=setting(), relation_changes=[
+    {"who": "도윤", "about": "리아", "change": "폭주 현장에서 처음 목격. 이름 모름"}],
+    mind_changes=[{"who": "도윤", "change": "빌런의 죽음을 목격"}]))
+ok("관계: 방향 있는 항목으로 쌓인다",
+   _rs.relations and _rs.relations[0]["who"] == "도윤"
+   and _rs.relations[0]["about"] == "리아"
+   and _rs.relations[0]["since_episode"] == 1, _rs.relations)
+ok("관계: 비대칭 — 반대 방향은 없다",
+   not [r for r in _rs.relations if r["who"] == "리아"])
+_rs.add(2, 1, dict(episode(), setting=setting()))
+ok("관계: 안 만난 화에서는 그대로 유지된다", len(_rs.relations) == 1)
+_rs.add(3, 1, dict(episode(), setting=setting(), relation_changes=[
+    {"who": "도윤", "about": "리아", "change": "통성명 — 이름을 알게 됨"},
+    {"who": "리아", "about": "도윤", "change": "통성명. 1화의 일은 기억 못 함"}]))
+ok("관계: 이력이 쌓인다 (나중 것이 앞을 지우지 않는다)",
+   len([r for r in _rs.relations if r["who"] == "도윤"]) == 2)
+ok("속: mind_changes 가 쌓인다",
+   _rs.minds and _rs.minds[0]["who"] == "도윤")
+_rb = _rs.brief(webtoon.Ledger("q", cap=7))
+ok("brief: 인물 사이 절이 실린다", "[인물 사이" in _rb and "1화: 폭주 현장에서" in _rb)
+ok("brief: 없는 관계는 없는 관계라는 규칙이 실린다", "여기 없는 관계는" in _rb)
+ok("brief: 회수 재료 지시가 실린다", "아 맞아" in _rb)
+ok("brief: 각자의 속 절이 실린다", "[각자의 속" in _rb)
+_rempty = webtoon.SeriesState(run_id="t")
+ok("brief: 관계가 없으면 (옛 run) 속 절이 안 나온다",
+   "[각자의 속" not in _rempty.brief(webtoon.Ledger("q", cap=7)))
+
 # 그림 단계에는 명부의 고정 외형밖에 없다. 카드에 안 실으면 반창고를 못 그린다.
 _sb = webtoon.status_block(_ss.status)
 ok("상태 카드: 엔진 카드에 실린다",
