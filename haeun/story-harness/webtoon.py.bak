@@ -91,6 +91,9 @@ WEBTOON_CONTRACT = {
            "retry_feedback", "user_memory"},
     "w8": {"engine_card", "episode_json", "ledger_snapshot", "cuts_json",
            "pov", "banned_words", "retry_feedback", "user_memory"},
+    # 9단계 — 페이지 편집. 컷을 만들지도 고치지도 않고, 확정된 컷을 **화면
+    # 단위로 묶고 각 화면의 바탕 컷을 고르는 것**만 한다.
+    "w9": {"engine_card", "episode_json", "cuts_json", "retry_feedback"},
 }
 
 # ---- 8단계 — 글자를 다시 쓴다 -------------------------------------------
@@ -210,6 +213,36 @@ BREAKOUT_BEATS = ("build", "turn", "release")
 FLOAT_MAX = 3
 FLOAT_BEATS = ("release", "hold", "build")
 BEATS = ("setup", "build", "turn", "release", "hold")
+
+# ---- 서사적 중요도 — 시각 축과 완전히 분리된 하나의 축 ---------------------
+#
+# size 는 **틀의 비율**이고 render_style 은 **칸을 어떻게 쓰는가**다. 둘 다
+# 화면 이야기이지 이야기의 무게가 아니다. 그런데 무게(weight)를 그 둘에서
+# 파생시키고 있었다:
+#
+#     bleed 또는 impact -> full,  float -> light,  나머지 -> normal
+#
+# 그래서 "화면은 평범하지만 서사적으로 중요한 컷"(각성·이별·깨달음)을 표현할
+# 자리가 없었다. tall 이라 큰 것이 아니라 중요해서 커야 하는데, 지금 구조에서는
+# 크게 보이려면 impact 를 골라야 하고 그러면 화면 비율까지 따라 바뀐다.
+#
+# 그래서 축을 하나 새로 세운다. **W8 이 판정한다** — 8단계는 이미 1화 컷 전부와
+# 엔진 카드·회차 설계·질문 장부를 한 번에 받아 읽고 있어서(대사를 고치려면
+# 흐름을 알아야 한다) 판정에 필요한 재료를 그대로 들고 있고, 호출도 안 늘어난다.
+# 7단계에 12번째 축으로 얹지 않은 이유는 그쪽이 이미 과부하이기 때문이다
+# (실측: 한 화에서 bleed·float·sd 가 각 0개 — 뒤쪽 축을 놓치고 있다).
+#
+# 7.5단계를 새로 만들지 않은 이유는 파일 머리말에 적힌 이력 때문이다 — 확정된
+# 컷에 size·render_style 을 사후로 얹는 7.5단계가 예전에 있었고 폐기됐다.
+# 다만 그 실패는 **라벨이 내용을 바꿔야 하는데 못 바꿔서** 난 것이고, 중요도는
+# 이미 쓰인 내용을 읽고 판정만 하므로 사후가 오히려 맞다.
+NARRATIVE_WEIGHTS = ("major", "normal", "minor")
+
+# 중요도 -> 지면 무게. 이 매핑은 **묶기 단계의 내부 규칙**이다. major 가
+# "크게 그려라" 라는 뜻이 아니라, 중요한 컷이 결과적으로 한 장을 차지하게 되는
+# 것이다 — W8 프롬프트에는 full·light 라는 말이 한 번도 안 나온다.
+WEIGHT_BY_NARRATIVE = {"major": "full", "normal": "normal", "minor": "light"}
+
 GAZES = ("down", "toward-next", "at-viewer", "away")
 MAX_GAP = 3
 MIN_LONG_GAPS = 1       # gap_after 3 의 화당 하한 — 낙차 없는 화는 없다
@@ -3914,8 +3947,18 @@ def derive_layout(cuts: list, scenes=None) -> list:
     #
     # 이 값을 실제로 쓸지는 웹툰 하네스가 config 로 켠다(기본 꺼짐). 그래서 값이
     # 생겨도 예전 run 의 묶기와 그림은 그대로다.
+    # 2026-08-27: **narrative_weight 가 있으면 그것이 정한다.** 위 세 줄은
+    # 화면(size·render_style)에서 무게를 유추하던 것이라, 화면이 평범하면서
+    # 서사적으로 중요한 컷을 표현할 수 없었다(NARRATIVE_WEIGHTS 주석 참고).
+    #
+    # 8단계가 아직 안 돈 시점(7단계 직후)이나 그 필드가 없는 옛 콘티는 예전
+    # 규칙 그대로 간다 — 옛 run 을 다시 돌려도 무게가 안 바뀐다. 8단계가 값을
+    # 채우면 apply_narrative_weights() 가 이 값을 덮어쓴다.
     for i in range(n):
-        if renders[i] == "bleed" or sizes[i] == "impact":
+        narrative = str(cuts[i].get("narrative_weight") or "").strip().lower()
+        if narrative in WEIGHT_BY_NARRATIVE:
+            weight = WEIGHT_BY_NARRATIVE[narrative]
+        elif renders[i] == "bleed" or sizes[i] == "impact":
             weight = "full"
         elif renders[i] == "float":
             weight = "light"
@@ -4261,6 +4304,192 @@ def apply_text_patch(cuts: list, patch: list) -> list:
     return notes
 
 
+def apply_narrative_weights(cuts: list, rows: list) -> list:
+    """8단계가 판정한 서사적 중요도를 컷에 얹는다. 돌려주는 것은 메모다.
+
+    **text_patch 와 따로 받는다.** 같은 배열에 섞으면 대사 한 줄이 잘못 왔을 때
+    중요도까지 같이 떨어지고, 무엇이 왜 바뀌었는지도 안 보인다 — 실제로 lines 를
+    text_patch 에 섞어 두었다가 8단계 결과가 통째로 버려진 적이 있다.
+
+    적힌 컷만 바꾼다. 빠진 컷은 derive_layout 이 계산해 둔 무게를 그대로 쓴다 —
+    조용히 normal 로 미는 것보다 낫다. 값이 이상하면 그 컷만 버린다: 여기서
+    화를 세우면 8단계가 실패해도 화는 성립한다는 이 단계의 전제가 깨진다.
+    """
+    notes = []
+    by_num = {c.get("cut_number"): c for c in cuts if isinstance(c, dict)}
+    seen = set()
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        num = row.get("cut_number")
+        cut = by_num.get(num)
+        if cut is None:
+            notes.append(f"8단계가 없는 컷 {num} 의 중요도를 적었습니다 — 건너뜁니다.")
+            continue
+        value = str(row.get("weight") or row.get("narrative_weight") or "").strip().lower()
+        if value not in NARRATIVE_WEIGHTS:
+            notes.append(f"컷 {num} 의 중요도 '{row.get('weight')}' 를 모릅니다 "
+                         f"({' | '.join(NARRATIVE_WEIGHTS)} 중 하나여야 합니다) — "
+                         "그 컷은 7단계가 계산한 무게를 그대로 씁니다.")
+            continue
+        cut["narrative_weight"] = value
+        cut["weight"] = WEIGHT_BY_NARRATIVE[value]
+        seen.add(num)
+    missing = [n for n in by_num if n not in seen]
+    if missing:
+        notes.append(f"8단계가 컷 {sorted(missing)} 의 중요도를 안 적었습니다 — "
+                     "그 컷은 7단계가 계산한 무게를 그대로 둡니다.")
+    # 남발 감시. 막지는 않는다(개수 상한을 두지 않기로 했다) — 절반을 넘으면
+    # "전부 중요하면 아무것도 중요하지 않다" 이므로 사람이 볼 수 있게 남긴다.
+    majors = [n for n, c in by_num.items()
+              if str(c.get("narrative_weight") or "").lower() == "major"]
+    if by_num and len(majors) * 2 > len(by_num):
+        notes.append(f"중요(major) 컷이 {len(majors)}/{len(by_num)} 개입니다 — "
+                     "절반을 넘었습니다. 전부 중요하면 아무것도 중요하지 않습니다.")
+    return notes
+
+
+def gate_pages(pages: list, cuts: list) -> list:
+    """9단계가 낸 화면 묶음이 **성립하는가**. 무결성과 물리 제약만 본다.
+
+    "이 묶음이 좋은 편집인가" 는 여기서 안 본다 — 그건 사람이 읽어야 아는 것이고,
+    9단계가 있는 이유가 바로 그 판단이다. 여기서 막는 것은 **틀리면 그림이 안
+    나오는 것**과, 연출 취향이 아니라 물리적 사실인 둘뿐이다:
+
+      · bleed 는 테두리 없이 지면 끝까지 흘러넘치는 컷이라 같은 화면의 다른 컷을
+        덮는다.
+      · minor 만으로 된 화면은 스쳐 갈 컷이 화면 하나를 통째로 먹는다.
+
+    개수·순서·중요도 분포는 안 본다. 그런 규칙을 여기 넣는 순간 9단계가 그
+    규칙의 대리인이 되고, "A 이면 무조건 B" 를 없애려고 만든 단계가 다시 그것이
+    된다.
+    """
+    failures = []
+    if not isinstance(pages, list) or not pages:
+        return ["9단계가 화면 묶음(pages)을 내지 않았습니다."]
+
+    by_num = {c.get("cut_number"): c for c in cuts if isinstance(c, dict)}
+    want = sorted(by_num)
+    seen: list = []
+
+    for i, page in enumerate(pages, 1):
+        if not isinstance(page, dict):
+            failures.append(f"{i}번째 화면이 객체가 아닙니다.")
+            continue
+        nums = page.get("cuts")
+        if not isinstance(nums, list) or not nums:
+            failures.append(f"{i}번째 화면에 컷이 없습니다.")
+            continue
+        nums = [n for n in nums if isinstance(n, int)]
+        seen += nums
+        if nums != sorted(nums):
+            failures.append(f"{i}번째 화면의 컷 순서가 뒤바뀌었습니다: {nums} — "
+                            "읽는 순서가 곧 컷 번호 순서입니다.")
+        base = page.get("base")
+        if base not in nums:
+            failures.append(f"{i}번째 화면의 base 가 {base} 인데 그 화면의 컷"
+                            f"{nums} 에 없습니다.")
+
+        rows = [by_num[n] for n in nums if n in by_num]
+        bleeds = [n for n, c in zip(nums, rows)
+                  if str(c.get("render_style") or "").strip().lower() == "bleed"]
+        if bleeds and len(nums) > 1:
+            failures.append(
+                f"{i}번째 화면에 통컷(bleed) 컷 {bleeds} 이 다른 컷과 같이 있습니다 "
+                f"({nums}). 통컷은 테두리 없이 지면 끝까지 흘러넘쳐서 같은 화면의 "
+                "다른 컷을 덮습니다 — 혼자 두세요.")
+        if rows and all(str(c.get("narrative_weight") or "").strip().lower() == "minor"
+                        for c in rows):
+            failures.append(
+                f"{i}번째 화면이 가벼운(minor) 컷 {nums} 만으로 되어 있습니다. "
+                "스쳐 갈 컷이 화면 하나를 통째로 먹습니다 — 앞뒤 화면에 붙이세요.")
+
+    if sorted(seen) != want:
+        missing = [n for n in want if n not in seen]
+        dup = sorted({n for n in seen if seen.count(n) > 1})
+        detail = []
+        if missing:
+            detail.append(f"빠진 컷 {missing}")
+        if dup:
+            detail.append(f"두 번 넣은 컷 {dup}")
+        failures.append("모든 컷이 정확히 한 번씩 들어가야 합니다 — "
+                        + ", ".join(detail or ["번호가 컷 목록과 다릅니다"]) + ".")
+    if seen != sorted(seen):
+        failures.append("화면 사이에서 컷 번호가 오름차순이 아닙니다 — "
+                        "독자가 읽는 순서를 바꿀 수 없습니다.")
+    return failures
+
+
+def undrawable_notes(out: dict, cuts: list) -> list:
+    """9단계가 신고한 "그릴 수 없는 컷" 을 사람이 읽을 메모로. **막지 않는다.**
+
+    이 신고는 콘티(7단계)를 고쳐야 하는 것이지 이 화를 세울 이유가 아니다.
+    컷과 대사가 다 나와 있는데 "서술이 부족하다" 로 되돌리면 잃는 것이 더 크다.
+    """
+    rows = (out or {}).get("undrawable")
+    if not isinstance(rows, list) or not rows:
+        return []
+    nums = {c.get("cut_number") for c in cuts if isinstance(c, dict)}
+    notes = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        n = row.get("cut_number")
+        if n not in nums:
+            continue                       # 없는 컷을 가리킨 신고는 버린다
+        what = str(row.get("what") or "").strip()
+        fix = str(row.get("fix") or "").strip()
+        if not what:
+            continue
+        notes.append(f"그리기 어려운 컷 {n}: {what}"
+                     + (f" → {fix}" if fix else ""))
+    return notes
+
+
+def solve_pages(ps: PromptSet, call, card: str, episode: dict, cuts: list,
+                absolute: int, max_retries: int, author_note: str = "") -> tuple:
+    """9단계 — 확정된 컷을 화면 단위로 묶는다. (pages, 메모)
+
+    8단계와 같은 태도다: **막히면 중단하지 않는다.** 여기서 세우면 컷과 대사가
+    다 나와 있는데 화가 통째로 버려진다. 재시도를 다 쓰면 pages 를 비워 돌려주고,
+    받는 쪽(웹툰 하네스)은 예전처럼 자기 규칙으로 묶는다 — 9단계는 더 나은 묶음을
+    주는 자리이지, 없으면 안 되는 자리가 아니다.
+    """
+    feedback, notes = "", []
+    for attempt in range(max_retries + 1):
+        out = call(
+            "W9", f"{absolute}화 화면 묶기",
+            render(ps.texts["w9"], {
+                "engine_card": card,
+                "episode_json": json.dumps(episode, ensure_ascii=False,
+                                           separators=(",", ":")),
+                "cuts_json": json.dumps(cuts, ensure_ascii=False,
+                                        separators=(",", ":")),
+                "retry_feedback": feedback_slot(author_note, feedback),
+            }),
+            TEMP_CREATIVE)
+        pages = (out or {}).get("pages")
+        failures = gate_pages(pages, cuts)
+        if not failures:
+            sizes = [len(p["cuts"]) for p in pages]
+            notes.append(f"화면 {len(pages)}장 ({'+'.join(str(s) for s in sizes)}컷), "
+                         f"바탕 컷 {[p.get('base') for p in pages]}")
+            # 그릴 수 없는 컷 신고 — **경고만 한다.** 화를 세우지 않는다:
+            # 9단계의 일은 화면 묶기이고 이것은 곁일이라, 신고 때문에 묶음이
+            # 되돌려지면 책임이 섞인다. 사람이 보고 콘티를 고칠 자리다.
+            notes += undrawable_notes(out, cuts)
+            return pages, notes
+        log(f"  {absolute}화 9단계 게이트 실패 {len(failures)}건")
+        for f in failures:
+            log(f"      - {f}")
+        if attempt >= max_retries:
+            warn(f"  {absolute}화 9단계 재시도 소진 — 화면 묶기는 하네스 규칙으로 "
+                 "돌아갑니다.")
+            return [], [f"화면 묶기 실패: {f}" for f in failures]
+        feedback = "\n".join(f"- {f}" for f in failures)
+    return [], notes
+
+
 def repair_bubble_zone(cuts: list) -> list:
     """글자와 자리가 어긋난 것만 맞춘다. 8단계가 빠뜨렸을 때의 안전망이다.
 
@@ -4310,6 +4539,31 @@ def gate_text_pass(cuts: list, pov: str) -> list:
                 f"\"{line}\" — 인물이 설정을 소리 내어 말하면 독자에게 하는 "
                 "설명이 됩니다. 나레이션이나 화면 글자로 옮기고, 대사는 그 사람이 "
                 "실제로 할 말로 바꾸세요.")
+
+        # 화면에 없는 사람이 말하고 있는가. 화면 밖 목소리(offscreen)는 웹툰의
+        # 정상 문법이라 막지 않는다 — 막는 것은 **그렇게 표시하지 않은 것**이다.
+        # side 가 left/right/center 면 그리는 쪽은 화면 안에서 화자를 찾고,
+        # 그 컷에 그 사람이 없으면 아무에게나 꼬리를 붙이거나 인물을 만들어낸다.
+        # 실측(20260826T202930 컷2): characters_in_frame 이 [한리아, 빌런] 인데
+        # 서도윤이 side=left 로 말해서, 화면에 없는 인물의 대사가 엉뚱한 사람에게
+        # 붙었다.
+        here = {str(x or "").strip() for x in (c.get("characters_in_frame") or [])
+                if str(x or "").strip()}
+        if here:
+            legacy_side = str(c.get("speaker_side") or "").strip().lower()
+            for row in speech_lines(c):
+                if row["kind"] == "narration":
+                    continue          # 나레이션은 화자가 없다
+                talker = row["speaker"]
+                side = (row["side"] or legacy_side)
+                if not talker or talker in here or side == "offscreen":
+                    continue
+                failures.append(
+                    f"컷 {n} 에서 「{talker}」 가 말하는데 그 컷의 화면에는 "
+                    f"{sorted(here)} 만 있습니다. 화면에 없는 사람이 화면 안에서 "
+                    "말할 수는 없습니다 — 그 컷에 있는 사람에게 대사를 주거나, "
+                    "나레이션으로 옮기거나, 화면 밖 목소리라면 그 줄의 side 를 "
+                    "offscreen 으로 적으세요.")
 
         if is_blank(c.get("thought")):
             continue
@@ -4567,6 +4821,10 @@ def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
         if not failures:
             payload["cuts"] = trial
             notes += repair_bubble_zone(trial)
+            # 서사적 중요도는 글자 게이트를 통과한 뒤에 얹는다. 글자 때문에
+            # 되돌릴 때 중요도까지 같이 날아갈 이유가 없고, 반대로 중요도가
+            # 이상해도 대사는 살아야 한다 — 둘은 독립된 판단이다.
+            notes += apply_narrative_weights(trial, out.get("narrative_weights"))
             notes += text_pass_warnings(trial, payload.get("scenes"), facts)
             return payload, regens, [f"글자: {x}" for x in notes]
 
@@ -5249,6 +5507,13 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                         user_mem, card,
                         json.dumps(payload, ensure_ascii=False)))
                 notes += w8_notes
+                # ---- 9단계: 확정된 컷을 화면 단위로 묶는다 ----------
+                pages, w9_notes = solve_pages(
+                    ps, call, card, episode, payload.get("cuts") or [],
+                    no, max_retries, author_note=author_note)
+                if pages:
+                    payload["pages"] = pages
+                notes += w9_notes
                 for note in notes:
                     warn(f"    {note}")
 
@@ -5515,6 +5780,14 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
             memory_text=resolve_user_memory(
                 cuts_mem, card, json.dumps(payload, ensure_ascii=False)))
         notes += w8_notes
+        # ---- 9단계: 확정된 컷을 화면 단위로 묶는다 ------------------
+        # 컷도 대사도 손대지 않는다. 실패해도 화는 성립한다(solve_pages 참고).
+        pages, w9_notes = solve_pages(
+            ps, call, card, episode, payload.get("cuts") or [],
+            absolute, max_retries, author_note=author_note)
+        if pages:
+            payload["pages"] = pages
+        notes += w9_notes
         for note in notes:
             warn(f"    {note}")
         cuts = payload.get("cuts") or []
@@ -5643,6 +5916,22 @@ def direction_cell(c: dict) -> str:
     gap = gap if isinstance(gap, int) and 0 <= gap <= MAX_GAP else 1
     return (f"{c.get('beat') or '?'} {GAP_BAR[gap]}{gap} {c.get('gaze') or ''}"
             + (" ⏎" if c.get("scene_break") else ""))
+
+
+# 서사적 중요도를 표에서 한눈에 보이게. 8단계가 판정한 값이고(NARRATIVE_WEIGHTS),
+# 지면 무게(full/light)는 그것에서 나온 결과다 — 그래서 둘을 같이 보여 준다.
+# 판정이 맞는지는 사람이 컷 서술과 나란히 놓고 봐야 안다.
+NARRATIVE_MARK = {"major": "●●● 중요", "normal": "●● 보통", "minor": "● 가벼움"}
+
+
+def narrative_cell(c: dict) -> str:
+    """컷 표에 넣을 중요도 한 칸: 중요도 · 그것이 만든 지면 무게."""
+    if not c:
+        return ""
+    nw = str(c.get("narrative_weight") or "").strip().lower()
+    label = NARRATIVE_MARK.get(nw, "—")
+    weight = str(c.get("weight") or "").strip()
+    return f"{label}" + (f" · {weight}" if weight else "")
 
 
 def build_webtoon_output(run_dir: Path) -> None:
@@ -5925,7 +6214,7 @@ def _write_webtoon_html(wt: Path, data: dict) -> None:
                         f'<span class="meta">분위기 · {_esc(sc.get("mood"))}</span></p>')
                 parts.append("".join(rows))
             parts.append('<div class="scroll"><table><thead><tr>'
-                         '<th>#</th><th>크기</th><th>카메라</th>'
+                         '<th>#</th><th>중요도</th><th>크기</th><th>카메라</th>'
                          '<th>화면에 보이는 것</th><th>대사</th>'
                          '<th>연출</th><th></th></tr></thead><tbody>')
             for c in cut_list:
@@ -5940,6 +6229,8 @@ def _write_webtoon_html(wt: Path, data: dict) -> None:
                 gap = gap if isinstance(gap, int) and 0 <= gap <= MAX_GAP else 1
                 parts.append(
                     f'<tr class="{" ".join(cls)}"><td>{_esc(n)}</td>'
+                    f'<td class="nw nw-{_esc(str(c.get("narrative_weight") or "none"))}">'
+                    f'{_esc(narrative_cell(c))}</td>'
                     f'<td>{_size_box(c)}</td>'
                     f'<td class="meta">{_esc(camera_cell(c))}</td>'
                     f'<td>{_esc(c.get("description"))}</td>'
@@ -5948,8 +6239,26 @@ def _write_webtoon_html(wt: Path, data: dict) -> None:
                     f'<td>{eye}</td></tr>')
                 # 여백은 표에서도 여백으로 보여야 한다 — 숫자만으로는 리듬이 안 보인다.
                 if gap and n != stinger_cut:
-                    parts.append(f'<tr class="gap g{gap}"><td colspan="6"></td></tr>')
+                    parts.append(f'<tr class="gap g{gap}"><td colspan="7"></td></tr>')
             parts.append("</tbody></table></div>")
+            # 9단계가 정한 화면 묶음. 표만 보면 컷이 어디서 끊겨 한 장이 되는지
+            # 안 보인다 — 판정이 맞는지는 묶음과 바탕 컷을 같이 봐야 안다.
+            pages = payload.get("pages") or []
+            if pages:
+                rows = []
+                for i, pg in enumerate(pages, 1):
+                    nums = pg.get("cuts") or []
+                    base = pg.get("base")
+                    rows.append(
+                        f'<li><b>{i}장</b> 컷 '
+                        + _esc("·".join(str(x) for x in nums))
+                        + f' <span class="nw-major">바탕 {_esc(base)}</span>'
+                        + (f'<br><span class="meta">{_esc(pg.get("why"))}</span>'
+                           if pg.get("why") else "")
+                        + "</li>")
+                parts.append('<p class="meta"><b>화면 묶기 (9단계)</b> — '
+                             f'{len(pages)}장</p><ul class="pages">'
+                             + "".join(rows) + "</ul>")
             hist = size_histogram(cut_list)
             parts.append(
                 '<p class="meta">크기 '
@@ -6081,6 +6390,14 @@ WEBTOON_TEMPLATE = """<!doctype html>
   .sizebox { display:inline-block; vertical-align:middle; border:1.5px solid var(--muted);
              border-radius:2px; background:var(--line); }
   td:nth-child(2) { width:7.5rem; white-space:nowrap; }
+  /* 서사적 중요도 — 8단계가 판정한 값. 지면 무게(full/light)는 여기서 나온다. */
+  td.nw { white-space:nowrap; font-size:.82rem; font-weight:600; }
+  td.nw-major  { color:#b3261e; background:rgba(179,38,30,.07); }
+  td.nw-minor  { color:#7a8a94; }
+  td.nw-normal { color:#3a4a55; }
+  td.nw-none   { color:#c0c8cd; }
+  ul.pages { margin:.3rem 0 .8rem; padding-left:1.2rem; font-size:.86rem; }
+  ul.pages li { margin:.25rem 0; }
   tr.gap td { border-bottom:none; padding:0; }
   tr.gap.g1 td { height:.5rem; }
   tr.gap.g2 td { height:1.6rem; }
