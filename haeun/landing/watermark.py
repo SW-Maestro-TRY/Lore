@@ -131,29 +131,101 @@ def _draw_band(img, caption: str):
     return out
 
 
-def _draw_mark(img):
-    """그림 오른쪽 아래 반투명 워드마크. 띠만 잘라내도 이건 남는다."""
+def cut_layout(paths: list[Path], gaps: list[int], ratios: list[float],
+                gap_table: dict[int, float] | None = None
+                ) -> list[tuple[int, int, int, int]] | None:
+    """최종본 안에서 각 컷이 차지하는 자리 — (x, y, 폭, 높이) 목록.
+
+    webtoon-harness/episode.py 의 stitch() 와 **같은 규칙**(가장 좁은 꽉채움
+    컷이 지면 폭을 정하고, 그보다 넓은 컷은 줄이되 늘리지 않는다, 가운데 정렬)
+    으로 다시 계산한다. 실제 이어붙이기는 그대로 하네스가 하고, 여기서는
+    컷마다 표시를 찍을 자리만 구한다 — 소스 그림의 크기만 읽으면 되므로
+    stitch() 처럼 무겁게 로드하지 않는다.
+
+    소스 그림을 못 읽으면 None — 호출부가 예전처럼 한 장짜리 마크로 돌아간다.
+    """
+    Image, _ = _pil()
+    if not paths or len(paths) != len(gaps) or len(paths) != len(ratios):
+        return None
+    sizes = []
+    try:
+        for p in paths:
+            with Image.open(p) as im:
+                sizes.append(im.size)
+    except OSError:
+        return None
+    full = [w for (w, _h), r in zip(sizes, ratios) if r >= 0.999]
+    if not full:
+        full = [sizes[0][0]] if sizes else []
+    if not full:
+        return None
+    width = min(full)
+    table = gap_table or _strip.gap_ratio_table()
+
+    bounds = []
+    y = 0
+    for (iw, ih), gap, ratio in zip(sizes, gaps, ratios):
+        target = width if ratio >= 0.999 else max(1, round(width * ratio))
+        w = min(iw, target)                                # 늘리지 않는다
+        h = ih if w == iw else max(1, round(ih * w / iw))
+        x = (width - w) // 2
+        bounds.append((x, y, w, h))
+        y += h + _strip.gap_px(width, gap, table)
+    return bounds
+
+
+def _mark_layer(canvas_size: tuple[int, int],
+                 boxes: list[tuple[int, int, int, int]]):
+    """`boxes` 마다 그 자리 오른쪽 아래에 반투명 워드마크를 찍은 레이어."""
     Image, ImageDraw = _pil()
-    w, h = img.size
-    size = _fit(w * MARK_RATIO, MARK_MIN, MARK_MAX)
-    font = _strip._font(size, bold=True)
-
-    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    layer = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    box = d.textbbox((0, 0), WORDMARK, font=font)
-    tw, th = box[2] - box[0], box[3] - box[1]
-    pad = max(10, size // 2)
-    x, y = w - pad - tw - box[0], h - pad - th - box[1]
+    for x0, y0, bw, bh in boxes:
+        size = _fit(bw * MARK_RATIO, MARK_MIN, MARK_MAX)
+        font = _strip._font(size, bold=True)
+        box = d.textbbox((0, 0), WORDMARK, font=font)
+        tw, th = box[2] - box[0], box[3] - box[1]
+        pad = max(10, size // 2)
+        x, y = x0 + bw - pad - tw - box[0], y0 + bh - pad - th - box[1]
 
-    # 밝은 그림에서도 어두운 그림에서도 읽히게 옅은 그림자를 깐다
-    off = max(1, size // 20)
-    d.text((x + off, y + off), WORDMARK, font=font, fill=(0, 0, 0, MARK_ALPHA // 3))
-    d.text((x, y), WORDMARK, font=font, fill=(*PAPER, MARK_ALPHA))
+        # 밝은 그림에서도 어두운 그림에서도 읽히게 옅은 그림자를 깐다
+        off = max(1, size // 20)
+        d.text((x + off, y + off), WORDMARK, font=font, fill=(0, 0, 0, MARK_ALPHA // 3))
+        d.text((x, y), WORDMARK, font=font, fill=(*PAPER, MARK_ALPHA))
+    return layer
+
+
+def _draw_mark(img):
+    """그림 오른쪽 아래 반투명 워드마크 하나. 컷 경계를 모를 때 쓰는 예전 동작."""
+    Image, _ = _pil()
+    w, h = img.size
+    layer = _mark_layer((w, h), [(0, 0, w, h)])
     return Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
 
 
-def stamp(src: Path, out: Path, caption: str = "") -> Path:
-    """`src` 에 표시를 얹어 `out` 으로 쓴다. 원본은 안 건드린다."""
+def _draw_percut_marks(img, bounds: list[tuple[int, int, int, int]]):
+    """컷마다 **자기 자리**의 오른쪽 아래에 표시를 찍는다.
+
+    한 장 전체에 하나만 찍으면, 그 컷 하나만 잘라(스크린샷·크롭) 퍼뜨렸을 때
+    표시가 안 딸려 간다. `bounds` 는 cut_layout() 의 결과.
+    """
+    Image, _ = _pil()
+    w, h = img.size
+    safe = [(x, y, bw, bh) for x, y, bw, bh in bounds
+            if bw > 0 and bh > 0 and 0 <= x and 0 <= y and x + bw <= w and y + bh <= h]
+    if not safe:
+        return _draw_mark(img)
+    layer = _mark_layer((w, h), safe)
+    return Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
+
+
+def stamp(src: Path, out: Path, caption: str = "",
+          cut_bounds: list[tuple[int, int, int, int]] | None = None) -> Path:
+    """`src` 에 표시를 얹어 `out` 으로 쓴다. 원본은 안 건드린다.
+
+    `cut_bounds` 를 주면 컷마다(cut_layout() 참고) 찍고, 없으면 예전처럼
+    그림 전체에 하나만 찍는다.
+    """
     Image, _ = _pil()
     try:
         img = Image.open(src)
@@ -161,7 +233,8 @@ def stamp(src: Path, out: Path, caption: str = "") -> Path:
     except OSError as exc:
         raise WatermarkError(f"그림을 읽지 못했습니다: {exc}") from exc
 
-    marked = _draw_band(_draw_mark(img), caption)
+    marked_img = _draw_percut_marks(img, cut_bounds) if cut_bounds else _draw_mark(img)
+    marked = _draw_band(marked_img, caption)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(out.suffix + ".part")     # 반쯤 쓰다 만 파일을 안 남긴다
     try:
@@ -174,20 +247,25 @@ def stamp(src: Path, out: Path, caption: str = "") -> Path:
     return out
 
 
-def for_download(src: Path, cache_root: Path, caption: str = "") -> Path:
+def for_download(src: Path, cache_root: Path, caption: str = "",
+                  cut_bounds: list[tuple[int, int, int, int]] | None = None) -> Path:
     """내려받기용 경로. 캐시가 원본보다 새것이면 그대로 쓴다.
 
     표시를 못 붙이면 **원본 경로를 그대로 돌려준다** — 워터마크 때문에
     내려받기 자체가 막히는 것이 제일 나쁘다. 표시는 있으면 좋은 것이지
     없으면 파일을 못 주는 것이 아니다.
+
+    `cut_bounds` 가 있으면 컷마다 찍은 판을 캐시한다 — 파일 이름을 다르게
+    둬서(`_wmc`), 컷 경계를 몰라 한 장짜리로 찍었던 예전 캐시와 안 섞인다.
     """
     src = Path(src)
     if not ENABLED or not src.exists():
         return src
-    out = Path(cache_root) / CACHE_DIR / f"{src.stem}_wm.png"
+    suffix = "_wmc" if cut_bounds else "_wm"
+    out = Path(cache_root) / CACHE_DIR / f"{src.stem}{suffix}.png"
     try:
         if out.exists() and out.stat().st_mtime >= src.stat().st_mtime:
             return out
-        return stamp(src, out, caption)
+        return stamp(src, out, caption, cut_bounds=cut_bounds)
     except (WatermarkError, OSError, ValueError):
         return src

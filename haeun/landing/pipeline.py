@@ -60,6 +60,7 @@ from typing import Any, Callable
 
 import overlay          # 편집실에서 얹은 것을 저장하고 그림에 굽는다
 import report           # picks.csv 읽기 — overlay 의 sys.path 설정 뒤에 와야 한다
+import watermark        # 내려받기 표시 — cut_bounds() 가 컷 자리 계산을 넘긴다
 
 HERE = Path(__file__).resolve().parent
 JOBS_DIR = HERE / "jobs"
@@ -2019,6 +2020,33 @@ def write_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
 def baked_episode(run_id: str, episode: int = 1) -> Path | None:
     p = overlay.baked_episode_path(episode_dir(run_id, episode))
     return p if p.exists() else None
+
+
+def cut_bounds(run_id: str, episode: int = 1, baked: bool = False
+                ) -> list[tuple[int, int, int, int]] | None:
+    """내려받는 최종본 안에서 컷마다 자리 — watermark.for_download() 에 넘겨서
+    컷마다 표시를 찍게 한다. baked=True 면 편집실에서 구운 컷 그림을 우선
+    쓴다(없으면 원본으로 대체). 못 구하면 None — 호출부가 한 장짜리 마크로
+    돌아간다.
+    """
+    ep_dir = episode_dir(run_id, episode)
+    numbers = (_scene_numbers(run_id, episode)
+               or list(range(1, drawn_units(run_id, episode) + 1)))
+    if not numbers:
+        return None
+    paths: list[Path] = []
+    for n in numbers:
+        p = overlay.baked_scene_path(ep_dir, n) if baked else None
+        if not p or not p.exists():
+            p = unit_image(run_id, n, episode)
+        if not p or not Path(p).exists():
+            return None
+        paths.append(Path(p))
+    layout = _scene_layout(run_id, episode)
+    gaps = [layout.get(n, (0, "normal"))[0] for n in numbers]
+    ratios = [_width_ratio(layout.get(n, (0, "normal"))[1]) for n in numbers]
+    table = _run_gap_table(run_id) or _strip_gap_table()
+    return watermark.cut_layout(paths, gaps, ratios, table)
 
 
 def bake_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
