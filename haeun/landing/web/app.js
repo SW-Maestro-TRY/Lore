@@ -1398,7 +1398,12 @@ function renderStoryPreview(sp) {
 function renderBoardPreview(bp) {
   const host = $("#boardPreview");
   if (!host) return;
-  if (!bp || !(bp.cuts || []).length) { host.innerHTML = ""; return; }
+  if (!bp || !(bp.cuts || []).length) {
+    // 컷이 하나도 안 나온 게이트 소진 — 보여줄 콘티가 없다는 것 자체가
+    // 정보다. 빈 칸으로 두면 "왜 아무것도 안 보이지" 로 헷갈린다.
+    host.innerHTML = `<p class="ap-hook">이번 시도는 컷이 하나도 안 나왔습니다 — 보여드릴 콘티가 없어요.</p>`;
+    return;
+  }
   const head = (bp.title ? `<p class="ap-title">${esc(bp.title)}</p>` : "")
     + (bp.draft ? `<p class="ap-hook">게이트에 걸린 마지막 시도입니다 — 아직 통과한 콘티가 아닙니다.</p>` : "");
   host.innerHTML = head + bp.cuts.map(c => {
@@ -1475,6 +1480,20 @@ function renderProgress(s) {
   if (s.status === "awaiting_board_approval") {
     boardApprovalBox.hidden = false;
     $("#boardApprovalReason").textContent = stageReason;
+    // 컷이 하나도 안 나온 판이면 "이대로 진행" 은 고를 것이 없는데도 버튼은
+    // 늘 떠 있었다 — 눌러도 그 자리에서 실패로 끝났다(2026-08-26 실사용
+    // 확인). 진행할 콘티가 있을 때만 그 버튼을 보여준다.
+    const hasCuts = !!(s.board_preview && (s.board_preview.cuts || []).length);
+    $("#boardApproveBtn").hidden = !hasCuts;
+    $("#boardApprovalExplain").innerHTML = hasCuts
+      ? `자동으로 다시 쓰는 시도(게이트 재시도)를 다 써서 더 못 고쳤습니다.
+         <b>이대로 진행</b>하면 지금 이 콘티 그대로 그림 단계로 넘어갑니다 —
+         <b>다시 만들기</b>를 누르면 콘티를 처음부터 다시 짭니다(새 시도이니
+         다른 결과가 나올 수 있습니다).`
+      : `자동으로 다시 쓰는 시도(게이트 재시도)를 다 썼는데 컷이 하나도 안
+         나왔습니다 — 넘어갈 콘티 자체가 없어서 <b>다시 만들기</b>만
+         가능합니다. 무엇이 빠졌는지 아래에 적어 주시면 다음 시도에
+         반영됩니다.`;
     if (lastStatus !== "awaiting_board_approval") {
       setBoardButtonsBusy(false);
       wireMemory(s.run_id);

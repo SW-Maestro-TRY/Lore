@@ -103,6 +103,25 @@ SHEET_IMAGE_QUALITY = (_ENV.get("OPENAI_IMAGE_QUALITY") or "").strip().lower()
 # "한 화를 통째로 뽑을 때는 S 가 아니라 S+" 라고 못박고 있다.
 CONDITION = "S+"
 
+# 확인 화면(시트·이야기·콘티·그림 검수)에서 사람 응답을 기다리는 최대 시간.
+# 2026-08-26: 실사용에서 화면을 못 찾아 승인을 놓쳤더니 작업이 무한정 멈춰
+# 있었다 — 그 사고 이후로 넣음. 시간이 차면 응답이 온 것처럼 취급하지 않고
+# **그냥 진행(승인)** 한 것으로 치고 넘어간다 — decision 이 끝까지 비어
+# 있으면(=retry 가 아니면) 각 단계 코드가 이미 "승인"으로 읽으므로, 여기서는
+# wait() 에 timeout 만 주면 된다.
+APPROVAL_TIMEOUT_SEC = 30
+
+
+def _await_approval(job: "Job", event: threading.Event, stage: str) -> None:
+    """승인 대기를 최대 APPROVAL_TIMEOUT_SEC초로 막는다. 시간이 차면 이유를
+    남기고 그냥 진행 — 응답을 기다리는 동안 UI를 못 찾거나 자리를 비워도
+    작업이 영영 멈춰 있지 않는다."""
+    answered = event.wait(timeout=APPROVAL_TIMEOUT_SEC)
+    event.clear()
+    if not answered:
+        job.note(f"{APPROVAL_TIMEOUT_SEC}초 동안 응답이 없어 승인으로 넘어갑니다 ({stage})")
+        job.add_log(f"[승인 시간초과] {stage} — 응답 없이 {APPROVAL_TIMEOUT_SEC}초 지나 자동 승인")
+
 # 한 장에 3컷. Gemini 는 호출당 이미지 1장이라 "3컷씩 생성"은 곧 "한 장에
 # 3칸"이다 — 12컷짜리 한 화가 이미지 4장이 되고 호출도 비용도 1/3 이 된다.
 #
@@ -1322,8 +1341,7 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
         job.note("콘티 단계 게이트 재시도가 소진됐습니다 — 확인해 주세요"
                  + (f" ({why})" if why else ""))
         job.save()
-        job.board_approval.wait()
-        job.board_approval.clear()
+        _await_approval(job, job.board_approval, "콘티(이어 만들기)")
         with job._lock:
             decision = job.board_decision
             job.board_decision = ""
@@ -1386,8 +1404,7 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
             job.status = "awaiting_artqa_approval"
             job.note("그림 검수 결과를 확인해 주세요")
             job.save()
-            job.artqa_approval.wait()
-            job.artqa_approval.clear()
+            _await_approval(job, job.artqa_approval, "그림 검수(이어 만들기)")
             # 여기서는 _cancel 을 안 본다 — 1화 쪽과 같은 이유(그 주석 참고).
             job.status = "running"
 
@@ -1507,8 +1524,7 @@ def execute(job: Job) -> None:
             else:
                 job.note("이야기가 나왔습니다 — 확인해 주세요")
             job.save()
-            job.story_approval.wait()
-            job.story_approval.clear()
+            _await_approval(job, job.story_approval, "이야기 구조")
             with job._lock:
                 decision = job.story_decision
                 job.story_decision = ""
@@ -1561,8 +1577,7 @@ def execute(job: Job) -> None:
             job.status = "awaiting_sheet_approval"
             job.note("캐릭터 시트가 나왔습니다 — 확인해 주세요")
             job.save()
-            job.sheet_approval.wait()
-            job.sheet_approval.clear()
+            _await_approval(job, job.sheet_approval, "캐릭터 시트")
             with job._lock:
                 decision = job.sheet_decision
                 job.sheet_decision = ""
@@ -1640,8 +1655,7 @@ def execute(job: Job) -> None:
             else:
                 job.note("콘티가 나왔습니다 — 확인해 주세요")
             job.save()
-            job.board_approval.wait()
-            job.board_approval.clear()
+            _await_approval(job, job.board_approval, "콘티")
             with job._lock:
                 decision = job.board_decision
                 job.board_decision = ""
@@ -1657,11 +1671,24 @@ def execute(job: Job) -> None:
                 # 대상이 없으므로, 그리기로 넘어가 봐야 거기서 다시 죽는다.
                 # 그때 나오는 말("컷 서술을 옮기지 못했습니다")은 원인에서
                 # 멀어져서 더 알아보기 어렵다 — 여기서 멈추고 이유를 말한다.
+                #
+                # 정식 파일이 없어도 **초안**(게이트에 걸린 마지막 시도)이
+                # 있으면 그걸 정식 파일로 승격해서 그대로 쓴다 — 사람이
+                # "이대로 진행"을 눌렀다는 것은 그 초안을 보고 괜찮다고 한
+                # 것이니, 뒷단계(그림)가 읽을 자리에 실제로 놓아 줘야 진짜
+                # "이대로 진행"이 된다. 초안조차 없을 때만 막는다.
                 if not cuts_path.exists():
-                    raise Failed(
-                        "콘티가 한 컷도 나오지 않아 이대로는 진행할 수 없습니다. "
-                        "무엇이 걸렸는지 적어서 '다시 만들기'를 눌러 주세요."
-                        + (f" ({note})" if note else ""))
+                    draft_path = cuts_path.with_name("ep01_cuts.draft.json")
+                    if draft_path.exists():
+                        cuts_path.write_text(
+                            draft_path.read_text(encoding="utf-8"),
+                            encoding="utf-8")
+                        job.add_log("  초안을 정식 콘티로 승격했습니다 — 이대로 그립니다")
+                    else:
+                        raise Failed(
+                            "콘티가 한 컷도 나오지 않아 이대로는 진행할 수 없습니다. "
+                            "무엇이 걸렸는지 적어서 '다시 만들기'를 눌러 주세요."
+                            + (f" ({note})" if note else ""))
                 break                   # approve — 이 콘티 그대로 진행
             replan = True
         _leave(job)
@@ -1732,8 +1759,7 @@ def execute(job: Job) -> None:
             job.status = "awaiting_artqa_approval"
             job.note("그림 검수 결과를 확인해 주세요")
             job.save()
-            job.artqa_approval.wait()
-            job.artqa_approval.clear()
+            _await_approval(job, job.artqa_approval, "그림 검수")
             # **여기서는 _cancel 을 안 본다.** 앞의 세 승인 자리와 다른 점이다.
             # 그 자리들은 아직 만들 것이 남아 있어서 취소가 "그만 만든다"는
             # 뜻이지만, 여기는 episode.png 까지 다 나온 뒤다 — 취소할 대상이

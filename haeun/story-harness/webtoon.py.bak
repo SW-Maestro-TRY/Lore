@@ -55,6 +55,7 @@ import argparse
 import csv
 import difflib
 import html
+import copy
 import json
 import re
 import sys
@@ -69,24 +70,27 @@ from story import (
     STATUS_OK, STATUS_HUMAN, STATUS_PARSE_FAIL, STATUS_API_FAIL,
     Caller, MockBackend, make_backend, resolve_provider, describe_setup,
     ParseFailure, ApiFailure, Usage, PromptSet, cost_text, append_csv_row,
-    load_prompts, render, feedback_block, write_json, log, warn,
+    load_prompts, render, feedback_block, feedback_slot, write_json, log, warn,
     is_blank, normalize_source, log_prompt_hashes, normalize_palette,
+    resolve_directing_notes, env_bool,
+    load_user_memory, resolve_user_memory, MEMORY_FILE,
 )
 
 
 STATUS_STOPPED = "중단(엔진급훼손)"
 
 WEBTOON_CONTRACT = {
-    "w4": {"engine_card", "character_sheet", "retry_feedback"},
+    "w4": {"engine_card", "character_sheet", "retry_feedback", "user_memory"},
     "w5": {"engine_card", "series_arc", "arc_json", "series_state",
-           "retry_feedback"},
+           "retry_feedback", "user_memory"},
     "w6": {"engine_card", "arc_json", "ledger_snapshot", "episodes_json"},
     "w7": {"engine_card", "series_arc", "arc_json", "episode_json",
            "ledger_snapshot",
            "engine_fired_list", "setting_block", "zones_block",
-           "retry_feedback"},
+           "directing_notes",
+           "retry_feedback", "user_memory"},
     "w8": {"engine_card", "episode_json", "ledger_snapshot", "cuts_json",
-           "pov", "banned_words", "retry_feedback"},
+           "pov", "banned_words", "retry_feedback", "user_memory"},
 }
 
 # ---- 8단계 — 글자를 다시 쓴다 -------------------------------------------
@@ -151,7 +155,13 @@ TRANSITIONS = ("순간", "동작", "인물", "장면", "분위기")
 # 이 둘은 "같은 자리에서 조금 움직였다" 는 뜻이다. 그 사이에 zone 이 바뀌면
 # 한 컷 만에 순간이동한 것이 되므로 서로 모순이다 (zone_warnings).
 SAME_PLACE_TRANSITIONS = ("순간", "동작")
-MAX_SAME_TRANSITION_RUN = 3   # 4연속부터 실패
+# 한 장면은 SCENE_MAX(5)컷까지 갈 수 있고, **한 장면 안에서 쓸 수 있는 전환은
+# 순간·동작 둘뿐이다**(SAME_PLACE_TRANSITIONS — 그 사이에 장소가 바뀌면 순간이동이
+# 된다). 그래서 5컷짜리 장면 하나는 같은 전환을 4번 연달아 쓸 수밖에 없다 —
+# 3으로 두면 **정상적인 장면이 게이트를 위반한다.** 규칙 둘이 서로 싸우고
+# 있었고, 실제로 "컷 7~12 의 transition 이 '동작' 로 6컷 연속" 으로 막혔다.
+# SCENE_MAX 와 같은 값으로 맞춘다.
+MAX_SAME_TRANSITION_RUN = 5   # 6연속부터 실패 (SCENE_MAX 와 같은 값)
 MIN_TRANSITION_KINDS = 3      # 한 화에 최소 3종이 섞여야 한다
 MOOD_TRANSITION = "분위기"    # aspect-to-aspect. 시간이 흐르지 않는 컷
 MIN_MOOD_TRANSITION = 1
@@ -162,7 +172,7 @@ SCENE_TRANSITION = "장면"     # 시간·장소가 건너뛴다. 첫 컷은 언
 # bleed·breakout 은 그림체가 아니라 **칸을 어떻게 쓰는가**인데, 컷 하나에 붙는
 # 배타적 선택이라는 점이 같아서 같은 필드에 둔다. 축을 더 늘리면 온도 0.9 에서
 # 서로 얽힌 조건이 다시 폭발한다 (아래 gate_layout 주석의 실패 이력을 볼 것).
-RENDER_STYLES = ("normal", "sd", "emphasis", "bleed", "breakout")
+RENDER_STYLES = ("normal", "sd", "emphasis", "bleed", "breakout", "float")
 # 하한은 두지 않는다. 최소 개수를 강제하면 모델은 자리를 채우려고 진지한 컷을
 # 데포르메로 올린다 — 개수는 맞지만 그 장면이 가벼워진다. SD 는 장면이 부를 때
 # 나와야 하는 것이라(긴장이 풀리는 리액션 컷, 개그·당황, 분위기 전환) 진지한
@@ -182,6 +192,23 @@ BLEED_BEATS = ("turn", "release")
 # 매 컷이 튀어나오면 칸이 없는 것과 같아진다.
 BREAKOUT_MAX = 2
 BREAKOUT_BEATS = ("build", "turn", "release")
+# 떠 있는 컷 — **칸도 배경도 없다.** 인물만 단색(또는 톤·별 몇 개) 위에 떠 있고,
+# 지면 폭도 절반쯤만 쓴다.
+#
+# 왜 필요했나: 실제 웹툰은 컷마다 무게가 다르다. 스쳐 가는 리액션 한 컷과 판이
+# 뒤집히는 컷이 같은 지면을 먹을 이유가 없는데, 지금까지 이 하네스의 컷은 전부
+# 캔버스 하나를 통째로 썼다 — "한 컷 한 컷이 다 의미 있는 컷"이라는 전제가
+# size 표에 박혀 있었다.
+#
+# emphasis 와 다른 점: emphasis 는 배경을 지우고 집중선을 넣는 **극적인** 카드라
+# 한 방을 세게 칠 때 쓴다. float 은 그 반대로 **힘을 빼는** 자리다 — 배경을 안
+# 그리는 이유가 강조가 아니라 "여기는 굳이 그릴 것이 없어서"다.
+# sd 와 다른 점: sd 는 그림체(2~3등신)만 바꾸고 배경은 파스텔로라도 남는다.
+#
+# 자리는 sd 와 같다(가벼워지는 자리). 상한이 sd 보다 낮은 것은, 배경 없는 컷이
+# 이어지면 이야기가 어디서 벌어지는지가 통째로 사라지기 때문이다.
+FLOAT_MAX = 3
+FLOAT_BEATS = ("release", "hold", "build")
 BEATS = ("setup", "build", "turn", "release", "hold")
 GAZES = ("down", "toward-next", "at-viewer", "away")
 MAX_GAP = 3
@@ -195,7 +222,6 @@ MAX_SAME_SHOT_RUN = 3   # 같은 거리 연속 상한 (4연속부터 실패)
 # 정식 작화 연속 상한 — 게이트가 아니라 경고다. 화 전체의 sd 개수는 이야기가
 # 정하지만, normal 만 길게 이어지면 그 구간에 눈이 쉴 자리가 없다.
 MAX_NORMAL_RUN = 5
-MAX_AWAY = 2            # away 시선의 화당 상한
 END_SIZES = ("impact", "tall")   # 마지막 컷(스팅어)에 허용되는 크기
 SCENE_MIN, SCENE_MAX = 2, 5      # 한 장면(화면 하나)에 들어가는 컷 수
 SCENE_COUNT_MIN, SCENE_COUNT_MAX = 2, 5   # 한 화가 몇 장면인가
@@ -353,8 +379,6 @@ def speakers_in(cut: dict) -> list:
         out.append(who)
     return out
 
-MIN_SPEECH_RATIO = 0.5   # 말 있는 컷의 화당 하한
-MAX_MUTE_RUN = 2         # 말 없는 컷 연속 상한 (3연속부터 실패)
 
 # ---- 대화는 주고받는 것이다 ---------------------------------------------
 #
@@ -439,6 +463,13 @@ QUESTION_TYPES = ("mystery", "suspense", "dramatic_irony")
 
 # 문서 4장: 떡밥 상한은 코드가 8, 기준 문서가 5. 작업기억 근거를 따라 5 를 기본으로 둔다.
 DEFAULT_LEDGER_CAP = 5
+
+# 몇 화가 지나도록 안 갚으면 "오래 묵었다"고 볼 것인가.
+#
+# 상환 일정을 미리 짜지 않는 대신 나이로 본다. 4로 잡은 이유: Arc 하나가
+# 2~5화(gate_arcs)라, 4화가 지났다는 것은 그 질문을 연 Arc 가 사실상 끝났는데
+# 아직 안 갚았다는 뜻이다.
+STALE_AFTER = 4
 
 WEBTOON_SUMMARY_COLUMNS = [
     "run_id", "character", "genre",
@@ -554,6 +585,10 @@ def normalize_cast_row(c: dict, first_episode: int = 0) -> dict:
            "first_episode": c.get("first_episode", first_episode)}
     for key in CAST_FIELDS:
         row[key] = str(c.get(key) or "").strip()
+    # 말투는 CAST_FIELDS 에 넣지 않는다 — 그 목록은 gate_arc_cast 가 **비어 있으면
+    # 반려하는** 필수 항목이라, 넣는 순간 이 칸이 없는 예전 회차가 전부 막힌다.
+    # 여기서는 있으면 싣고 없으면 빈 문자열로 둔다.
+    row["voice_notes"] = str(c.get("voice_notes") or "").strip()
     # P1 의 role 은 '이 사람이 이야기에서 하는 일' 이라 note 와 다를 때만 남긴다.
     role = str(c.get("role") or "").strip()
     row["role"] = role if role and role != note else ""
@@ -591,7 +626,8 @@ def cast_block(roster) -> list:
         head = f"    · {_fmt(r['name'])} ({_fmt(r['gender'])}{when})"
         lines.append(f"{head} — {r['note']}" if r["note"] else head)
         for key, label in (("appearance", "외형"), ("outfit", "옷차림"),
-                           ("personality", "성격"), ("role", "역할")):
+                           ("personality", "성격"), ("voice_notes", "말투"),
+                           ("role", "역할")):
             if not is_blank(r.get(key)):
                 lines.append(f"        {label}: {_fmt(r[key])}")
     return lines
@@ -665,7 +701,16 @@ def build_engine_card(p1: dict, p2: dict, idea: str, scenes: list,
         f"[금지된 뒤집기] {_fmt(p2.get('forbidden_subversion'))}",
         "",
         f"[주인공] {_fmt(p1.get('name'))}",
+        "  편지·쪽지 등 소품 텍스트에 등장하는 인물 이름도 항상 이 이름을 "
+        "그대로 쓴다. 새 이름을 짓지 않는다.",
         f"  성격: {_fmt(p1.get('personality'))}",
+    ] + ([
+        # 말투는 P1 이 정해 놓고도 여기서 잘려 나가고 있었다. 그래서 1화 도입부
+        # (scene.txt)까지만 이 인물의 말투가 들렸고, 연재 회차의 대사는 인물이
+        # 누구든 같은 목소리로 나왔다. 대사를 쓰는 단계가 이걸 봐야 한다.
+        f"  말투 — 이 사람의 대사는 이렇게 들려야 한다: "
+        f"{_fmt(p1.get('voice_notes'))}",
+    ] if not is_blank(p1.get("voice_notes")) else []) + [
         f"  카드 한 줄(intro): {_fmt(p1.get('intro'))}",
         f"  직함: {_fmt(p1.get('rank'))}",
         f"  want: {_fmt(p1.get('want'))}",
@@ -698,7 +743,17 @@ def build_engine_card(p1: dict, p2: dict, idea: str, scenes: list,
         "[작가가 처음 준 한 줄]",
         f"  {idea.strip()}",
         "",
+        # ── 승인은 계약이다 ────────────────────────────────────────────────
+        # 사용자는 이 장면들의 **산문 전문**을 읽고 "이대로 진행"을 눌렀다.
+        # 예전에는 여기 요약(one_line·choice)만 실려서, 사용자가 읽고 승인한
+        # 본문 — 구체적 행동·감정·묘사 — 이 콘티 단계에 안 닿았다. 요약이
+        # 사건을 잘 담으면 운 좋게 따라가지만, 승인한 것과 다른 1화가 나와도
+        # 막을 것이 없었다. 승인받은 원문을 그대로 싣고, 1화 컷은 이것의
+        # **번역**이지 재창작이 아니라고 못박는다.
         "[1화 도입부 — 사람이 통과시킨 장면]",
+        "  ★ 작가가 이 장면들을 읽고 승인했다. 1화의 컷은 이 장면을 컷으로",
+        "    옮기는 일이다 — 사건·순서·인물의 행동을 지키고, 다른 사건으로",
+        "    바꾸거나 빼지 않는다. 살은 붙여도 뼈대는 이것이다.",
     ]
     if scenes:
         for i, s in enumerate(scenes, 1):
@@ -707,6 +762,12 @@ def build_engine_card(p1: dict, p2: dict, idea: str, scenes: list,
             lines.append(f"  {i}. {one}")
             if not is_blank(s.get("choice")):
                 lines.append(f"     선택: {_fmt(s.get('choice'))}")
+            # 승인받은 산문 전문. 들여쓰기로 요약과 구분한다.
+            text = str(s.get("text") or "").strip()
+            if text:
+                lines.append("     본문:")
+                for ln in text.splitlines():
+                    lines.append(f"       {ln.strip()}" if ln.strip() else "")
     else:
         lines.append("  (장면 없음)")
     lines.append("=== /엔진 카드 ===")
@@ -744,17 +805,67 @@ class Question:
         }
 
 
+@dataclass
+class Fact:
+    """열린/닫힌 질문과는 다른 것 — 답이 정해질 질문이 아니라 이미 확정된 사실.
+
+    "3화에서 왼손에 흉터가 생겼다" 같은 것. Question 은 "언젠가 닫힐 궁금증"을
+    추적하고, Fact 는 "이후 화들이 잊으면 안 되는 확정된 사실"을 추적한다 —
+    둘을 같은 목록에 섞으면 열림/닫힘 상태가 없는 Fact 가 open_items/
+    closed_items 계산을 흐린다.
+    """
+    id: str
+    text: str
+    established_episode: int      # 통산 화 번호
+
+    def as_dict(self) -> dict:
+        return {"id": self.id, "text": self.text,
+                "establishedEpisode": self.established_episode}
+
+
 class Ledger:
-    """열린 질문·닫힌 질문을 코드가 추적한다. 검사자가 인정한 것만 들어온다."""
+    """열린 질문·닫힌 질문·확정된 사실을 코드가 추적한다. 검사자가 인정한 것만 들어온다."""
 
     def __init__(self, engine_question: str, cap: int = DEFAULT_LEDGER_CAP):
         self.items: list = []
+        self.facts: list = []
+        self.fact_seq = 0
         self.cap = cap
         self.seq = 0
         self.engine = Question(
             id="EQ", text=engine_question or "(엔진급 질문 미지정)",
             type="engine", opened_arc=0, opened_episode=0, is_engine=True)
         self.items.append(self.engine)
+
+    def add_fact(self, text: str, episode: int) -> Fact:
+        """확정된 사실을 하나 기록한다. sync_facts 가 회차 명부에서 끌어온다."""
+        self.fact_seq += 1
+        f = Fact(id=f"F-{self.fact_seq}", text=text, established_episode=episode)
+        self.facts.append(f)
+        return f
+
+    def sync_facts(self, rows) -> int:
+        """SeriesState.facts 를 장부로 옮긴다. 이미 있는 문장은 건너뛴다.
+
+        이 통로가 없어서 **확정된 설정이 대사를 쓰는 단계에 한 번도 도달하지
+        않았다.** snapshot() 은 established_facts 를 싣고 7·8단계가 그걸 받지만,
+        여기 담기는 Ledger.facts 는 아무도 채우지 않아 언제나 빈 목록이었다.
+        설정을 쌓는 곳(SeriesState)과 설정을 봐야 하는 곳(장부 스냅샷)이 끊겨
+        있었던 것이라, 글자를 쓰는 모델은 앞 화에서 무엇이 정해졌는지 모른 채
+        썼다 — 앞뒤가 어긋나는 대사·나레이션의 기계적인 원인이다.
+        """
+        seen = {f.text for f in self.facts}
+        added = 0
+        for row in rows or []:
+            if not isinstance(row, dict):
+                continue
+            text = str(row.get("fact") or "").strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            self.add_fact(text, row.get("first_episode") or 0)
+            added += 1
+        return added
 
     # -- 조회
     def get(self, qid: str):
@@ -806,8 +917,21 @@ class Ledger:
 
         # 연체 경고는 없앴다. 몇 화에 갚겠다는 계획을 미리 세우지 않기 때문이다 —
         # 연재는 앞 화를 보고 다음 화를 정하는 것이지, 17화치 상환 일정을 1화에서
-        # 짜는 것이 아니다. 남은 신호는 "지금 몇 개가 열려 있나" 하나뿐이고,
-        # 그건 위의 과부하 경고가 본다.
+        # 짜는 것이 아니다.
+        #
+        # 그렇다고 "언제 갚나"를 아예 안 볼 수는 없다. 개수 상한(과부하)과 최근
+        # 상환 여부(미스터리 박스)만으로는 **오래 묵은 질문 하나**가 안 잡힌다 —
+        # 개수가 상한 안이고 매 화 뭔가 갚고 있어도, 3화에 연 질문이 12화까지
+        # 열려 있으면 독자는 그것을 잊는다. 일정 대신 **나이**로 본다.
+        stale = [q for q in self.open_items
+                 if current_episode - q.opened_episode >= STALE_AFTER]
+        if stale:
+            oldest = min(stale, key=lambda q: q.opened_episode)
+            out.append(
+                f"장기 미상환: {len(stale)}개가 {STALE_AFTER}화 넘게 열려 있습니다 "
+                f"(가장 오래된 것은 {oldest.opened_episode}화에 연 "
+                f"\"{str(oldest.text)[:40]}\"). 갚거나, 지금 다시 꺼내 살려 두세요 "
+                "— 오래 묵으면 독자는 그것을 궁금해하지 않고 잊습니다.")
 
         if not self.engine.is_open:
             out.append("엔진급 훼손: 엔진급 질문이 닫혔습니다 — 치명, 즉시 중단.")
@@ -824,6 +948,15 @@ class Ledger:
             d = q.as_dict()
             if hide_ids:
                 d.pop("id", None)
+            # 열린 질문에는 **몇 화째 열려 있는지**를 같이 준다. 작가가 목록만
+            # 보면 다섯 개가 다 똑같이 급해 보이는데, 실제로 급한 것은 오래
+            # 묵은 쪽이다. 상환 순서를 정하는 유일한 단서가 이 숫자다.
+            if q.is_open and not q.is_engine:
+                age = current_episode - q.opened_episode
+                if age >= 0:
+                    d["openFor"] = age
+                    if age >= STALE_AFTER:
+                        d["stale"] = True
             return d
 
         engine = {"text": self.engine.text,
@@ -836,11 +969,13 @@ class Ledger:
             "closed": [view(q) for q in self.closed_items],
             "open_count": len(self.open_items),
             "open_cap": self.cap,
+            "established_facts": [f.as_dict() for f in self.facts],
             "warnings": self.warnings(current_episode),
-        }, ensure_ascii=False, indent=2)
+        }, ensure_ascii=False, separators=(",", ":"))
 
     def as_dict(self) -> dict:
-        return {"cap": self.cap, "questions": [q.as_dict() for q in self.items]}
+        return {"cap": self.cap, "questions": [q.as_dict() for q in self.items],
+                "facts": [f.as_dict() for f in self.facts]}
 
     @classmethod
     def from_dict(cls, data: dict) -> "Ledger":
@@ -870,6 +1005,13 @@ class Ledger:
         if not any(q.is_engine for q in led.items):
             led.items.insert(0, led.engine)
         led.seq = len([q for q in led.items if not q.is_engine])
+        # "facts" 키가 없는 예전 ledger.json 도 그대로 읽는다 — 순수 추가라
+        # 없으면 그냥 빈 목록.
+        for d in data.get("facts") or []:
+            led.facts.append(Fact(
+                id=str(d.get("id") or ""), text=str(d.get("text") or ""),
+                established_episode=d.get("establishedEpisode") or 0))
+        led.fact_seq = len(led.facts)
         return led
 
 
@@ -1023,6 +1165,9 @@ class SeriesState:
                     value = str(c.get(key) or "").strip()
                     if value:
                         out.append(f"      {CAST_FIELD_LABEL[key]}(고정): {value}")
+                voice = str(c.get("voice_notes") or "").strip()
+                if voice:
+                    out.append(f"      말투(고정): {voice}")
 
         if self.status:
             out.append("")
@@ -1057,6 +1202,15 @@ class SeriesState:
             out.append("[확정된 설정 — 이미 독자가 본 것이라 뒤집을 수 없습니다]")
             for f in self.facts:
                 out.append(f"  - {f['fact']} ({f['first_episode']}화)")
+            # 쌓기만 하고 서로 부딪히는지 안 보면, 3화에서 "창이 없다"고 정해 놓고
+            # 7화에서 창밖을 그리는 일이 그대로 통과한다.
+            clashes = fact_conflicts(self.facts)
+            if clashes:
+                out.append("")
+                out.append("  ★ 아래 설정끼리 어긋나 보입니다. 이번 화를 쓰기 전에 "
+                           "어느 쪽이 맞는지 정하고, 맞는 쪽만 지키세요:")
+                for c in clashes:
+                    out.append("  " + c.replace("\n", "\n  "))
 
         open_qs = ledger.open_items
         out.append("")
@@ -1064,7 +1218,13 @@ class SeriesState:
             out.append(f"[열려 있는 질문 {len(open_qs)}개 — 닫을 것이 있으면 "
                        f"문장을 그대로 옮겨 적으세요]")
             for q in open_qs:
-                out.append(f'  - "{q.text}" ({q.opened_episode}화에 열림, {q.type})')
+                # 몇 화째 열려 있는지를 같이 준다. 목록만 보면 다섯 개가 다
+                # 똑같이 급해 보이는데, 실제로 급한 것은 오래 묵은 쪽이다.
+                age = self.made - q.opened_episode
+                aged = f", {age}화째" if age >= 1 else ""
+                mark = "  ← 오래 묵음" if age >= STALE_AFTER else ""
+                out.append(f'  - "{q.text}" ({q.opened_episode}화에 열림, '
+                           f'{q.type}{aged}){mark}')
             if len(open_qs) > ledger.cap:
                 out.append("")
                 out.append(f"  ★ 열린 질문이 {len(open_qs)}개로 많습니다(권장 "
@@ -1116,6 +1276,12 @@ def series_arc_block(arcs: list, current: dict = None) -> str:
     if not arcs:
         return "(아직 큰 줄거리가 없습니다)"
     now = (current or {}).get("order")
+    # 전 Arc 를 관통하는 인물 = 주인공. 그 사람의 change 를 Arc 순서대로 이어
+    # 보여주면 W5 가 **변화 곡선** 위에서 이번 화를 쓴다. 사건 줄거리만 주면
+    # 인물이 매 화 같은 자리로 돌아온다.
+    #
+    # 여기서도 한 줄씩만이다 — 줄거리 한 줄, 인물 한 줄. 전문은 arc_json 으로 간다.
+    through = _through_line(arcs)
     lines = []
     for a in arcs:
         if not isinstance(a, dict):
@@ -1130,7 +1296,38 @@ def series_arc_block(arcs: list, current: dict = None) -> str:
         one = a.get("summary") or a.get("one_line")
         if not is_blank(one):
             lines.append(f"      {str(one).strip().splitlines()[0][:90]}")
+        if through:
+            change = _arc_change(a, through)
+            if change:
+                lines.append(f"      {through}: {change[:80]}")
     return "\n".join(lines)
+
+
+def _through_line(arcs: list) -> str:
+    """전 Arc 의 cast_roles 에 모두 나오는 인물. 없으면 빈 문자열.
+
+    cast_roles 가 없는 옛 run 은 언제나 빈 문자열이라 예전 출력이 그대로 나온다.
+    """
+    sets = []
+    for a in arcs:
+        if not isinstance(a, dict):
+            continue
+        rows = a.get("cast_roles")
+        if not isinstance(rows, list) or not rows:
+            return ""
+        sets.append({str(r.get("name") or "").strip()
+                     for r in rows if isinstance(r, dict) and r.get("name")})
+    if not sets:
+        return ""
+    both = set.intersection(*sets)
+    return sorted(both)[0] if both else ""
+
+
+def _arc_change(arc: dict, name: str) -> str:
+    for r in (arc.get("cast_roles") or []):
+        if isinstance(r, dict) and str(r.get("name") or "").strip() == name:
+            return " ".join(str(r.get("change") or "").split())
+    return ""
 
 
 def arc_for_episode(arcs: list, no: int) -> dict:
@@ -1362,6 +1559,57 @@ def gate_arcs(payload: dict) -> list:
             f"반전 Arc 가 {reversal}/{len(arcs)} 로 1/3 미만입니다. "
             "전개·상승만 이어지면 설정집 비대증에 빠집니다.")
 
+    failures.extend(gate_arc_cast(arcs))
+    return failures
+
+
+def gate_arc_cast(arcs: list) -> list:
+    """Arc 마다 그 Arc 를 움직이는 인물과 그 인물의 자리가 적혀 있는가.
+
+    Arc 요약은 "무슨 일이 벌어지는가"만 말한다. 누가 그 일을 밀고 누가 막는지가
+    없으면 화 단위 설계(W5)가 매번 인물을 새로 배치하고, 그러면 주인공이 Arc
+    마다 다른 사람처럼 움직인다.
+
+    **cast_roles 가 한 Arc 에도 없으면 아무것도 검사하지 않는다.** 이 칸이
+    생기기 전에 돌린 run 을 다시 돌려도 결과가 그대로여야 한다.
+    """
+    arcs = [a for a in arcs if isinstance(a, dict)]
+    if not any(a.get("cast_roles") for a in arcs):
+        return []
+
+    failures = []
+    per_arc = []
+    for a in arcs:
+        label = f"Arc {a.get('order')}"
+        rows = a.get("cast_roles")
+        if not isinstance(rows, list) or not rows:
+            failures.append(f"{label}: cast_roles 가 비어 있습니다. "
+                            "그 Arc 를 움직이는 인물을 최소 한 명 적습니다.")
+            per_arc.append(set())
+            continue
+        names = set()
+        for r in rows:
+            if not isinstance(r, dict):
+                failures.append(f"{label}: cast_roles 안에 객체가 아닌 항목이 있습니다.")
+                continue
+            name = str(r.get("name") or "").strip()
+            if not name:
+                failures.append(f"{label}: cast_roles 에 이름 없는 항목이 있습니다.")
+                continue
+            names.add(name)
+            for key, why in (("role", "그 인물이 이 Arc 에서 하는 일"),
+                             ("change", "이 Arc 를 지나며 그 인물에게서 달라지는 것")):
+                if not str(r.get(key) or "").strip():
+                    failures.append(f"{label} · {name}: {key} 가 비어 있습니다 ({why}).")
+        per_arc.append(names)
+
+    # 모든 Arc 에 걸쳐 있는 인물이 하나도 없으면 연재를 관통하는 사람이 없다.
+    # 주인공 이름을 여기서 알 수 없으므로(캐릭터 시트는 이 게이트에 안 온다)
+    # "전 Arc 에 나오는 사람이 있는가" 로 대신 본다.
+    if per_arc and not set.intersection(*per_arc):
+        failures.append(
+            "모든 Arc 에 나오는 인물이 없습니다. 주인공은 전 Arc 의 cast_roles 에 "
+            "들어가야 합니다 — 주인공이 빠진 Arc 는 주인공의 이야기가 아닙니다.")
     return failures
 
 
@@ -1521,7 +1769,159 @@ def gate_episodes_shape(payload: dict, ledger: Ledger, arc: dict = None,
             "합니다. 닫는 화의 questions_closed[].question_text 에 아래 본문을 "
             "그대로 옮겨 적으세요:\n" + listed)
 
+    failures.extend(gate_why_now(eps))
     return failures
+
+
+# 화면에 없는 이유를 "있다"고 우기는 답. shown_by 가 이것들로 때워지면
+# 독자에게는 아무것도 안 보인다 — 독자는 설정집을 안 읽는다.
+_WHY_DODGE = ("설정상", "앞에서 설명", "앞 화에서 설명", "이미 설명", "기존 설정",
+              "독자는 안다", "말할 필요", "당연", "자명")
+
+
+def gate_why_now(eps: list) -> list:
+    """인물이 그 행동을 하는 이유가 **이 화의 화면에** 있는가.
+
+    머릿속 설정으로만 성립하는 행동은 독자에게 개연성이 없다. 실제로 그렇게
+    나왔다 — 인물이 갑자기 노래를 부르는데 왜 불러야 하는지가 어디에도 없어서
+    독자가 납득하지 못했다. 설정집에는 이유가 있었고 화면에는 없었다.
+
+    **why_now 가 한 화에도 없으면 아무것도 검사하지 않는다.** 이 칸이 생기기
+    전에 돌린 run 을 다시 돌려도 결과가 그대로여야 한다.
+    """
+    eps = [e for e in eps if isinstance(e, dict)]
+    if not any(e.get("why_now") for e in eps):
+        return []
+
+    failures = []
+    for e in eps:
+        label = f"{e.get('order') or e.get('episode') or '?'}화"
+        w = e.get("why_now")
+        if not isinstance(w, dict) or not w:
+            failures.append(f"{label}: why_now 가 없습니다 — 이 화의 중심 행동과 "
+                            "그 이유, 그 이유가 화면에 어떻게 보이는지를 적습니다.")
+            continue
+        for key, why in (("action", "이 화의 중심 행동"),
+                         ("reason", "그 행동을 하는 이유"),
+                         ("shown_by", "그 이유가 화면에 보이는 방식")):
+            if not str(w.get(key) or "").strip():
+                failures.append(f"{label}: why_now.{key} 가 비어 있습니다 ({why}).")
+        shown = str(w.get("shown_by") or "").strip()
+        if shown and any(d in shown for d in _WHY_DODGE):
+            failures.append(
+                f"{label}: why_now.shown_by 가 \"{shown[:40]}\" 입니다. "
+                "화면 밖을 가리키는 답은 답이 아닙니다 — 이 화의 대사 한 줄, "
+                "나레이션 한 줄, 또는 눈에 보이는 사건으로 적으세요.")
+    return failures
+
+
+# beat 문장에서 핵심 명사/동사만 남기는 거친 토큰화 — story.py 의 _stem 과
+# 같은 정신이다: 정교한 형태소 분석 없이, 조사·어미만 떼면 충분히 걸린다.
+_BEAT_PARTICLE = re.compile(
+    r"(을|를|이|가|은|는|에게|한테|에서|으로|로|과|와|도|만|의)$")
+# 마지막 토큰(대개 동사)의 활용형 차이를 흡수한다. "구출한다"/"구출했다"/
+# "구출할게" 가 다 다른 문자열이라 그대로 대조하면 대사에서 다른 활용형으로
+# 같은 행동을 말해도 놓친 것으로 잡힌다 — 어간만 남겨 부분일치로 본다.
+_VERB_ENDING = re.compile(
+    r"(한다면|했었다|하는데|하고서|한다|했다|할게|할까|하는|해서|하며|"
+    r"았다|었다|인다|된다|됐다|는다|ㄴ다)$")
+
+
+def _beat_tokens(beat: str) -> list:
+    words = re.split(r"[\s,.·]+", str(beat or "").strip())
+    out = []
+    for w in words:
+        w = _BEAT_PARTICLE.sub("", w).strip()
+        if len(w) >= 2:
+            out.append(w)
+    return out
+
+
+def _verb_stem(token: str) -> str:
+    stemmed = _VERB_ENDING.sub("", token)
+    return stemmed if len(stemmed) >= 2 else token
+
+
+# 느슨한 판정에서 동사 대신 인정할 명사 개수. 1 로 두면 결과만 그린 컷
+# ("생쥐를 안고 있다")이 '생쥐' 하나로 통과해 버려서, 이 게이트가 원래 잡으려던
+# 사고를 놓친다. 2 면 "덫" 과 "생쥐" 처럼 그 장면을 이루는 요소가 둘은 나와야 한다.
+BEAT_LOOSE_MIN_NOUNS = 2
+
+
+def gate_beat_coverage(cuts: list, beats: list, loose: bool = None) -> list:
+    """beats 에 적힌 핵심 행동이 컷에서 통째로 빠지지 않았는지 본다.
+
+    실제 사고: 생쥐를 구출하는 핵심 장면(그림+말풍선)이 통째로 빠지고 결과
+    (생쥐를 안고 있는 모습)만 남아서, 독자가 상황 파악에 시간이 걸렸다.
+    W5(에피소드 플랜)의 beats 를 컷의 description·대사와 대조해, 어느 컷에도
+    흔적이 없는 행동을 잡는다.
+
+    판정은 두 가지다.
+
+    **엄격(기본)** — beat 의 마지막 토큰(대개 동사)을 어간으로 줄여 그 문자열이
+    컷 어딘가에 있는지만 본다. 앞쪽 명사만으로 통과시키면 그 명사가 결과 컷에도
+    나오기 때문에 "행동 자체가 빠졌다"를 못 잡는다는 판단이었다.
+
+    **느슨(BEAT_GATE_LOOSE=1)** — 동사가 그대로 안 나와도, 그 beat 의 다른
+    토큰이 BEAT_LOOSE_MIN_NOUNS 개 이상 나오면 통과시킨다.
+
+    느슨한 쪽을 연 이유(2026-08-23): 엄격 판정은 **낱말이 다르면 뜻이 같아도
+    실패한다.** "발견한다" 는 컷이 "보고 눈이 커진다" 로 그려도 '발견' 이 없어서
+    걸리고, "푼다" 는 어간이 한 글자라 원형으로 되돌아가 "풀어 준다" 조차 못
+    맞춘다. 실제 실행에서 이 게이트가 재시도를 다 태우고 멈췄고, 그러면 컷이
+    한 개도 저장되지 않아 사람이 승인으로도 넘어갈 수 없다 — 생성이 끝까지
+    가지 못한다.
+
+    (엄격 판정에는 반대 방향의 허점도 있다. 컷 전체를 한 덩이 문자열로 합쳐
+    찾으므로, 다른 컷에 우연히 같은 글자가 있으면 통과한다 — "주의를 준다" 가
+    옆 컷의 "풀어 준다" 에 걸리는 식이다. 그래서 엄격 = 정확이 아니다.)
+
+    기본값은 엄격 그대로다. 예전 run 을 다시 돌려도 결과가 안 바뀐다.
+
+    beats 가 없는(과거 run, 또는 이 필드를 아직 안 채우는 옛 ep_plan) 경우는
+    빈 배열로 취급해 항상 통과한다 — 과거 데이터를 다시 돌려도 동작이
+    바뀌지 않아야 한다.
+    """
+    if not isinstance(beats, list) or not beats:
+        return []
+    cuts = [c for c in cuts if isinstance(c, dict)]
+    if not cuts:
+        return []
+    if loose is None:
+        # 호출 시점에 읽는다 — 모듈을 불러오는 시점에는 아직 load_dotenv 가
+        # 안 돌았을 수 있어서, 그때 읽으면 .env 의 값을 못 본다.
+        loose = env_bool("BEAT_GATE_LOOSE", False)
+    haystack_parts = []
+    for c in cuts:
+        haystack_parts.append(str(c.get("description") or ""))
+        for ln in (c.get("lines") if isinstance(c.get("lines"), list) else []):
+            if isinstance(ln, dict):
+                haystack_parts.append(str(ln.get("text") or ""))
+    haystack = " ".join(haystack_parts)
+
+    out = []
+    for beat in beats:
+        text = str(beat or "").strip()
+        if not text:
+            continue
+        tokens = _beat_tokens(text)
+        if not tokens:
+            continue
+        # 마지막 토큰만 본다 — 한국어 beat 문장은 "목적어를 동사한다" 꼴이라
+        # 끝 토큰이 대개 동사(행동 그 자체)다.
+        if _verb_stem(tokens[-1]) in haystack:
+            continue
+        # 동사가 안 보인다. 느슨한 판정이면 그 장면을 이루는 다른 낱말이
+        # 충분히 나왔는지로 한 번 더 본다 — 낱말만 다를 뿐 그린 경우를 살린다.
+        if loose:
+            hits = sum(1 for t in tokens[:-1] if t in haystack)
+            if hits >= BEAT_LOOSE_MIN_NOUNS:
+                continue
+        out.append(
+            f"beats 의 '{text}' 이 어느 컷의 description·대사에도 나타나지 "
+            "않습니다. 결과만 그리고 그 행동 자체가 통째로 빠진 것일 수 "
+            "있습니다 — 이 행동이 실제로 벌어지는 컷을 추가하세요.")
+    return out
 
 
 def gate_cuts(payload: dict, episode: dict, irony_present: bool,
@@ -1592,6 +1992,7 @@ def gate_cuts(payload: dict, episode: dict, irony_present: bool,
                 "이 화에 dramatic_irony 질문이 있는데 reader_only 컷이 없습니다. "
                 "독자만 알고 인물은 모르는 컷이 그 질문의 물리적 구현입니다.")
 
+    failures.extend(gate_beat_coverage(cuts, episode.get("beats")))
     failures.extend(gate_scenes(payload, len(cuts)))
     failures.extend(gate_layout(cuts))
     # 대사에 화자가 있는가만 막는다. 말의 밀도·비율은 text_warnings 로 내려갔다 —
@@ -1786,6 +2187,8 @@ def render_warnings(cuts: list) -> list:
     cuts = [c for c in cuts if isinstance(c, dict)]
     if not cuts:
         return out
+    out.extend(narration_voice_warnings(cuts))
+    out.extend(layout_warnings(cuts))
     got = [str(c.get("render_style") or "").strip().lower() for c in cuts]
     for style, many, why in (
             ("sd", SD_MAX, "데포르메가 잦으면 산만해지고, 정식 작화로 돌아왔을 때의 "
@@ -1793,7 +2196,9 @@ def render_warnings(cuts: list) -> list:
             ("bleed", BLEED_MAX, "통컷이 여러 번 나오면 두 번째부터는 그냥 큰 "
                                  "그림입니다"),
             ("breakout", BREAKOUT_MAX, "매 컷이 칸을 넘으면 칸이 없는 것과 "
-                                       "같습니다")):
+                                       "같습니다"),
+            ("float", FLOAT_MAX, "배경 없는 컷이 이어지면 이야기가 어디서 "
+                                 "벌어지는지가 사라집니다")):
         spots = [c.get("cut_number") for c, g in zip(cuts, got) if g == style]
         if len(spots) > many:
             out.append(
@@ -1842,6 +2247,147 @@ def zone_warnings(cuts: list) -> list:
     return out
 
 
+# ---- 설정끼리 어긋나는가 --------------------------------------------------
+#
+# 확정된 설정(new_facts)은 "다음 화가 지켜야 할 것"으로 쌓인다. 그런데 쌓기만
+# 하고 **서로 부딪히는지는 아무도 안 봤다.** 3화에서 "그 방에는 창이 없다"고
+# 정해 놓고 7화에서 "창밖으로 비가 보였다"고 쓰면, 둘 다 목록에 나란히 남는다.
+#
+# 의미 충돌을 기계가 다 잡을 수는 없다. 그래서 **오탐이 적은 두 패턴만** 본다:
+#   1. 같은 것을 말하는데 한쪽에만 부정어가 있다 ("창이 있다" / "창이 없다")
+#   2. 같은 단위의 숫자가 다르다 ("3층" / "5층")
+# 나머지는 사람이 본다. 못 잡는 것이 많아도, 잡는 것이 진짜이면 쓸모가 있다.
+
+_NEG_MARKS = ("없다", "없었", "없는", "아니다", "아니었", "아닌", "않다", "않았",
+              "않는", "못한", "못했", " 안 ", "못 ")
+_NUM_UNIT = re.compile(r"(\d+)\s*(층|명|화|년|살|개|번|시|분|주|달|권|회)")
+# 조사·흔한 낱말은 겹쳐도 같은 주제라는 신호가 아니다.
+_STOP = {"그", "그녀", "그것", "이", "가", "은", "는", "을", "를", "의", "에", "에서",
+         "으로", "로", "와", "과", "도", "만", "하다", "한다", "있다", "없다", "된다",
+         "것", "수", "때", "더", "안", "못", "이다", "였다", "했다"}
+
+
+def _content_words(text: str) -> set:
+    """조사·흔한 낱말을 뺀 알맹이. 사람에게 보여 줄 주제 낱말을 고르는 데 쓴다."""
+    words = re.findall(r"[가-힣A-Za-z]{2,}", str(text or ""))
+    return {w for w in words if w not in _STOP}
+
+
+def _bigrams(text: str) -> set:
+    """글자 두 개씩. 한국어는 조사가 붙어서 낱말 단위로 비교하면 안 맞는다 —
+    '동아리방에는' 과 '동아리방' 은 다른 낱말이지만 같은 것을 말한다."""
+    s = re.sub(r"[^가-힣A-Za-z0-9]", "", str(text or ""))
+    return {s[i:i + 2] for i in range(len(s) - 1)}
+
+
+def _same_topic(a: str, b: str) -> bool:
+    """두 문장이 같은 것을 말하는가. 짧은 쪽 기준으로 얼마나 겹치는지 본다.
+
+    자카드(합집합 기준)를 쓰면 한쪽이 길 때 값이 눌린다 — "창이 없다" 처럼
+    짧은 설정이 긴 설정과 부딪히는 경우가 정확히 그 모양이라, 짧은 쪽을 분모로
+    둔다.
+    """
+    ga, gb = _bigrams(a), _bigrams(b)
+    if not ga or not gb:
+        return False
+    return len(ga & gb) / min(len(ga), len(gb)) >= 0.30
+
+
+def _negated(text: str) -> bool:
+    return any(m in str(text or "") for m in _NEG_MARKS)
+
+
+def fact_conflicts(facts: list) -> list:
+    """확정된 설정끼리 부딪히는 자리. **되돌리지 않고 경고만 한다.**
+
+    facts 는 [{"fact": 문장, "first_episode": n}, …] (SeriesState.facts).
+    같은 주제를 말하는 두 문장만 비교한다 — 알맹이 낱말이 2개 이상 겹칠 때.
+    """
+    rows = [f for f in (facts or []) if isinstance(f, dict) and str(f.get("fact") or "").strip()]
+    out = []
+    for i in range(len(rows)):
+        for j in range(i + 1, len(rows)):
+            a, b = rows[i], rows[j]
+            ta, tb = str(a["fact"]), str(b["fact"])
+            if not _same_topic(ta, tb):
+                continue                      # 다른 이야기다
+            shared = _content_words(ta) & _content_words(tb)
+            topic = ", ".join(sorted(shared)[:3]) or "같은 대상"
+            where = (f"{a.get('first_episode', '?')}화 ↔ "
+                     f"{b.get('first_episode', '?')}화")
+
+            if _negated(ta) != _negated(tb):
+                out.append(
+                    f"설정 충돌 의심 ({where}) — 같은 것({topic})을 말하는데 "
+                    f"한쪽만 부정입니다.\n    · \"{ta[:60]}\"\n    · \"{tb[:60]}\"")
+                continue
+
+            na = dict((u, n) for n, u in _NUM_UNIT.findall(ta))
+            nb = dict((u, n) for n, u in _NUM_UNIT.findall(tb))
+            clash = [u for u in na if u in nb and na[u] != nb[u]]
+            if clash:
+                u = clash[0]
+                out.append(
+                    f"설정 충돌 의심 ({where}) — 같은 것({topic})에 "
+                    f"{na[u]}{u} 과(와) {nb[u]}{u} 이(가) 함께 있습니다.\n"
+                    f"    · \"{ta[:60]}\"\n    · \"{tb[:60]}\"")
+    return out
+
+
+# ---- 글자 길이 -----------------------------------------------------------
+#
+# 지금까지 길이는 **하한만** 봤다(말 있는 컷 비율, 무음 연속). 상한이 없으니
+# 반대쪽으로 넘어가는 것을 아무도 안 막았다.
+#
+# 말풍선은 그림 위에 얹힌다. 길어지면 그림을 가리고, 세로 스크롤에서는 그
+# 컷에서 눈이 멈춘다 — 체류 시간이 텍스트 길이에 비례한다는 것은 침묵을
+# 경계하는 근거이자 **장문을 경계하는 근거**이기도 하다.
+#
+# 종류마다 다르게 잡는다. 말풍선(대사·속마음)은 인물 옆에 떠서 그림을 직접
+# 가리지만, 나레이션은 보통 여백의 띠로 들어가 덜 가린다.
+MAX_DIALOGUE_CHARS = 40       # 한 말풍선. 넘으면 두 개로 나누는 편이 낫다
+MAX_NARRATION_CHARS = 70      # 나레이션 상자
+MAX_CUT_CHARS = 110           # 한 컷의 글자 총합. 말풍선이 여러 개일 때
+_LEN_CAP = {"dialogue": MAX_DIALOGUE_CHARS, "thought": MAX_DIALOGUE_CHARS,
+            "narration": MAX_NARRATION_CHARS}
+
+
+def length_warnings(cuts: list) -> list:
+    """말풍선이 그림을 가릴 만큼 길지 않은가. **되돌리지 않고 경고만 한다.**
+
+    길이는 판단이 필요한 자리다 — 독백 한 편이 통째로 들어가야 하는 컷도 있고,
+    그때는 긴 것이 맞다. 숫자로 막으면 모델이 숫자를 맞추느라 문장을 자르고,
+    잘린 문장은 짧아진 것이지 좋아진 것이 아니다.
+    """
+    out = []
+    for c in cuts:
+        if not isinstance(c, dict):
+            continue
+        no = c.get("cut_number")
+        total = 0
+        for ln in speech_lines(c):
+            text = " ".join(str(ln.get("text") or "").split())
+            if not text:
+                continue
+            total += len(text)
+            cap = _LEN_CAP.get(str(ln.get("kind") or "dialogue"))
+            if cap and len(text) > cap:
+                # 조사까지 같이 적어 둔다 — 받침이 있고 없고가 낱말마다 달라서
+                # "나레이션가" 같은 문장이 사람 눈에 걸린다.
+                kind_ko = {"dialogue": "대사가", "thought": "속마음이",
+                           "narration": "나레이션이"}.get(ln.get("kind"), "글자가")
+                out.append(
+                    f"컷 {no} {kind_ko} {len(text)}자입니다(권장 {cap}자 이내): "
+                    f"\"{text[:28]}…\". 말풍선이 길면 그림을 가리고 그 컷에서 "
+                    "눈이 멈춥니다 — 두 개로 나누거나, 그림이 이미 말하는 부분을 "
+                    "덜어내세요.")
+        if total > MAX_CUT_CHARS:
+            out.append(
+                f"컷 {no} 의 글자가 모두 {total}자입니다(권장 {MAX_CUT_CHARS}자 이내). "
+                "한 컷에 말풍선이 여러 개면 그림이 설 자리가 없습니다.")
+    return out
+
+
 def text_warnings(cuts: list) -> list:
     """말의 밀도와 자리 — **되돌리지 않고 경고만 한다.**
 
@@ -1882,6 +2428,8 @@ def text_warnings(cuts: list) -> list:
         out.append(
             f"컷 {num[at]}~{num[at + best - 1]} 이 말 없이 {best}컷 연속입니다. "
             "그 구간에서 이야기가 멈춘 것처럼 읽힐 수 있습니다.")
+
+    out += length_warnings(cuts)
 
     # ---- 종류 편중 ----------------------------------------------------
     # 밀도와 따로 센다. 말이 충분해도 **전부 대사**면 화면이 납작해진다 —
@@ -2044,8 +2592,20 @@ def gate_zone(payload: dict, known_zones: set = None, known: set = None) -> list
     return failures
 
 
-def gate_camera(num: list, shots: list, angles: list, trans: list) -> list:
-    """카메라 세 축이 실제로 갈렸는지 — 단조로움을 여기서 끊는다.
+def camera_warnings(num: list, shots: list, angles: list, trans: list) -> list:
+    """카메라 세 축이 갈렸는지 — **경고만 한다. 생성을 막지 않는다.**
+
+    예전에는 게이트였다(gate_camera). 여기 있는 것은 전부 **경험적 휴리스틱**이지
+    결과물을 성립시키는 조건이 아니다 — 얼굴이 60%인 화도, 계속 눈높이인 화도
+    이야기에 따라 맞을 수 있다. 그런데 막아 버리면 그런 연출은 아예 못 나온다.
+
+    실제로 사고가 났다: 한 장면은 5컷까지 갈 수 있고 그 안에서 쓸 수 있는 전환은
+    순간·동작 둘뿐이라, 5컷짜리 장면 하나는 같은 전환을 4번 연달아 쓸 수밖에 없다.
+    그런데 연속 상한이 3이어서 **정상적인 장면이 게이트를 위반했다.** 규칙 둘이
+    서로 싸운 것이고, 값을 올려 막긴 했지만 같은 종류의 충돌은 언제든 다시 난다.
+    숫자로 연출을 강제하는 한 그렇다.
+
+    그래서 판정은 그대로 두되 **결과를 보존한다.** 사람이 보고 판단할 몫이다.
 
     이 게이트가 없던 시절의 실측(완성 run 3개·643컷)이 이 함수의 존재 이유다.
       · 클로즈업+바스트 60%          → 말하는 얼굴과 듣는 얼굴의 반복
@@ -2059,11 +2619,8 @@ def gate_camera(num: list, shots: list, angles: list, trans: list) -> list:
     size 처럼 숫자만 바꿔 놓으면 서술과 정면으로 어긋난다. 대신 되돌릴 때 어느 컷을
     무엇으로 바꾸라고 지목한다 — 그게 없으면 모델은 아무 데나 고치고 다른 걸 깨뜨린다.
 
-    여기서 막는 것은 **상한과 편중**뿐이다 ("얼굴이 절반을 넘지 마라", "같은 값이
-    4연속이면 안 된다"). "인서트를 최소 하나 넣어라" 같은 **특정 수단의 하한**은
-    게이트에서 뺐다 — 그건 화마다 맞는 답이 다르고, 강제하면 모델이 자리를 만들어
-    끼워 넣는다. 개수는 맞고 장면은 어색해진다. 그런 것은 prose_warnings 가
-    경고로 남긴다.
+    아래 문구가 "~여야 합니다" 로 남아 있는 것은 그대로 둔다 — 다시 뽑을 때 모델이
+    읽는 말이라 지시형이 맞다. 다만 이제 그것이 **중단 사유는 아니다.**
     """
     failures = []
     n = len(shots)
@@ -2123,7 +2680,22 @@ def gate_camera(num: list, shots: list, angles: list, trans: list) -> list:
 
 
 def gate_layout(cuts: list) -> list:
-    """세로 스크롤 문법 중 **모델이 판단할 것**만 본다 — beat 와 size.
+    """**무결성만** 본다 — 값이 목록에 있는가, 컷이 있는가.
+
+    여기서 걸리면 그림 단계가 그 컷을 못 읽는다. 결과물이 성립하지 않으므로
+    되돌리는 것이 맞다. 연출 휴리스틱(비율·개수·연속)은 directing_warnings 로
+    옮겼다 — 그쪽은 경고만 하고 결과를 보존한다.
+    """
+    return _layout_check(cuts)[0]
+
+
+def directing_warnings(cuts: list) -> list:
+    """연출 휴리스틱 — 경고만 한다. 얼굴 비율·앵글·impact·연속 길이 따위."""
+    return _layout_check(cuts)[1]
+
+
+def _layout_check(cuts: list) -> tuple[list, list]:
+    """(무결성 실패, 연출 경고). 세로 스크롤 문법 중 모델이 판단할 것 — beat 와 size.
 
     여백·시선·화면 경계는 게이트에 없다. 그건 beat 시퀀스에서 나오는 산수라서
     derive_layout() 이 계산한다. 유령 id 때와 같은 이유다: 온도 0.9 에서 서로 얽힌
@@ -2134,7 +2706,7 @@ def gate_layout(cuts: list) -> list:
     failures = []
     cuts = [c for c in cuts if isinstance(c, dict)]
     if not cuts:
-        return ["컷이 하나도 없어 연출을 판정할 수 없습니다."]
+        return ["컷이 하나도 없어 연출을 판정할 수 없습니다."], []
     num = [c.get("cut_number") for c in cuts]
     sizes, beats, renders, shots, angles, trans = [], [], [], [], [], []
     for c in cuts:
@@ -2171,9 +2743,16 @@ def gate_layout(cuts: list) -> list:
         trans.append(tran)
 
     if failures:      # 값이 깨져 있으면 리듬 판정은 의미가 없다
-        return failures
+        return failures, []          # 값이 깨졌으면 연출 판정은 의미가 없다
 
-    failures.extend(gate_camera(num, shots, angles, trans))
+    # ---- 여기서부터는 **경고**다 (생성을 막지 않는다) ---------------------
+    #
+    # 위까지가 무결성이다 — 값이 목록에 없으면 그림 단계가 그 컷을 못 읽으므로
+    # 결과물이 성립하지 않는다. 아래는 전부 경험적 연출 휴리스틱이고, 이야기에
+    # 따라 어겨야 맞는 경우가 있다. 막으면 그런 연출이 아예 못 나온다.
+    warn = []
+    warn.extend(camera_warnings(num, shots, angles, trans))
+    failures = warn
 
     # ---- 크기 ----------------------------------------------------------
     n_impact = sizes.count("impact")
@@ -2266,7 +2845,7 @@ def gate_layout(cuts: list) -> list:
             f"컷 {long_sfx} 의 sfx 가 너무 깁니다 ({SFX_MAX_LEN}자 이내). "
             "효과음은 그림에 얹는 레터링이지 문장이 아닙니다.")
 
-    return failures
+    return [], failures          # 무결성은 위에서 끝났다 — 여기 남은 것은 전부 경고다
 
 
 # ------------------------------------------------------- 컷 서술 경고
@@ -2375,6 +2954,70 @@ def known_speakers(card: str, episodes: list, cast: list = None) -> set:
                 if name:
                     names.add(name)
     return {n for n in names if n}
+
+
+# 나레이션 어미 — 화 전체에 서술자는 하나다.
+#
+# 대사는 인물마다 말투가 다른 것이 맞지만 나레이션은 아니다. 실제 사고: 한 화에
+# 나레이션이 둘뿐이었는데 "이 세계에는 능력자가 존재합니다." 다음이 "…히어로들이
+# 시민을 지킨다." 였다 — 서술자가 두 사람인 것처럼 읽힌다. w7 프롬프트에 어미를
+# 고정하라는 규칙이 아예 없어서 매번 복불복이었다.
+#
+# 게이트가 아니라 경고인 이유: 어미 판정은 형태소 없이 어말 몇 글자로 보는 것이라
+# 인용문("…라고 했습니다") 같은 데서 틀릴 수 있다. 컷을 통째로 다시 뽑게 할 만큼
+# 확신할 수 있는 판정이 아니다.
+POLITE_ENDINGS = ("습니다", "합니다", "입니다", "됩니다", "습니까", "십시오", "세요", "어요", "아요")
+
+
+def narration_register(text: str) -> str:
+    """나레이션 한 줄의 말투 — "높임" | "평서" | "" (판정 불가)."""
+    t = str(text or "").strip().rstrip('"\'」』)').rstrip(".!?…")
+    if not t:
+        return ""
+    if t.endswith(POLITE_ENDINGS):
+        return "높임"
+    if t.endswith(("다", "다.", "라", "군", "지")):
+        return "평서"
+    return ""
+
+
+def narration_voice_warnings(cuts: list) -> list:
+    seen = {}
+    for i, c in enumerate(cuts, 1):
+        for ln in (c.get("lines") or []):
+            if str((ln or {}).get("kind") or "").strip() != "narration":
+                continue
+            reg = narration_register((ln or {}).get("text"))
+            if reg:
+                seen.setdefault(reg, []).append(i)
+    if len(seen) < 2:
+        return []
+    parts = " / ".join(f"{k}({', '.join(str(n) for n in v[:4])}번 컷)"
+                       for k, v in seen.items())
+    return [f"나레이션 어미가 섞였습니다 — {parts}. 대사는 인물마다 달라도 되지만 "
+            f"나레이션은 화 전체에 서술자가 하나입니다. 한쪽으로 맞추세요."]
+
+
+def layout_warnings(cuts: list) -> list:
+    """겹침(overlap)이 뜻을 잃은 자리 — **이유 없는 겹침만** 본다.
+
+    개수는 안 센다. "몇 컷까지"는 장면이 무엇을 하려는지와 무관한 규칙이라,
+    조용히 흐르는 화면에서는 하나도 안 겹치는 것이 맞고 밀고 들어오는 장면에서는
+    연달아 겹치는 것이 맞다. 여기서 잡을 수 있는 것은 개수가 아니라 **의도가
+    적혔는가** 하나뿐이다.
+    """
+    out = []
+    over = [i for i, c in enumerate(cuts, 1)
+            if str(c.get("layout") or "").strip().lower() == "overlap"]
+    if not over:
+        return out
+    noreason = [i for i in over
+                if not str(cuts[i - 1].get("overlap_reason") or "").strip()]
+    if noreason:
+        out.append(f"컷 {', '.join(str(n) for n in noreason)} 이 overlap 인데 "
+                   f"overlap_reason 이 비었습니다. 왜 겹치는지 한 줄로 못 적으면 "
+                   f"그 겹침은 연출이 아니라 사고입니다 — normal 로 두세요.")
+    return out
 
 
 def prose_warnings(cuts: list, known: set = None) -> list:
@@ -2542,6 +3185,44 @@ def prose_warnings(cuts: list, known: set = None) -> list:
     return out
 
 
+# 소품 텍스트(편지·쪽지 등) 속 인명 — advisory-only.
+#
+# 실제 사고: 편지지 속 캐릭터 이름이 작가가 입력한 이름과 다르게 나왔다.
+# 대사 화자는 known_speakers() 로 이미 검증되지만(위 "명부에 없는 사람이
+# 말하고 있는가"), screen_text 는 검증 대상이 아니었다 — W7 이 description
+# 처럼 자유 생성하고 그대로 scenegen 프롬프트로 흘러간다.
+#
+# 한국어에는 대문자가 없어 고유명사를 정확히 가려낼 수 없다 — 그래서
+# 호격 조사(-에게/-한테/-아/-야) 앞, 또는 편지 서명 낱말(-올림/-드림/-씀)
+# 앞의 낱말만 이름 후보로 본다. 오탐 위험이
+# 있는 휴리스틱이라 하드 블록이 아니라 advisory 로만 남긴다(tone_warnings 와
+# 같은 급).
+_PROP_NAME_TOKEN = re.compile(
+    r"[가-힣]{2,4}(?=(?:에게|한테|아|야|보고\s*싶)\b)"
+    r"|[가-힣]{2,4}(?=\s*(?:올림|드림|씀)\b)")
+
+
+def prop_text_name_check(cuts: list, known: set = None) -> list:
+    """screen_text(편지·쪽지·화면 글자)에 명부에 없는 이름이 나오는지 본다."""
+    out = []
+    known = {str(n).strip() for n in (known or set()) if str(n).strip()}
+    for c in cuts:
+        if not isinstance(c, dict):
+            continue
+        text = str(c.get("screen_text") or "")
+        if not text:
+            continue
+        hits = {m.group(0) for m in _PROP_NAME_TOKEN.finditer(text)}
+        strangers = sorted(h for h in hits if h not in known)
+        if strangers:
+            out.append(
+                f"컷 {c.get('cut_number')} 의 screen_text에 {strangers} 로 보이는 "
+                "이름이 있는데 명부(주인공·조연)에 없습니다. 작가가 정한 이름과 "
+                "다르게 새로 지어낸 것일 수 있습니다 (오탐일 수 있습니다 — 실제 "
+                "인물이 아니면 무시해도 됩니다).")
+    return out
+
+
 # ------------------------------------------------------- 코드 수리 (안전망)
 
 def _shot_of(cut: dict) -> str:
@@ -2552,6 +3233,32 @@ def _shot_of(cut: dict) -> str:
     """
     shot = str(cut.get("shot") or "").strip()
     return shot if shot in SHOTS else ""
+
+
+# ---- 안 고치고 보기만 하는 판 ------------------------------------------------
+#
+# repair_* 는 컷을 **그 자리에서 고친다.** 기본 동작을 "안 고침"으로 바꾸면서도
+# 무엇이 걸렸는지는 알려야 해서, 컷을 깊은 복사해 수리를 돌려 보고 그 보고만
+# 가져온다. 원본은 한 글자도 안 바뀐다.
+#
+# 이렇게 감싸는 이유(수리 함수를 둘로 쪼개지 않는 이유): 저 함수들은 서로 순서가
+# 얽혀 있고(tone 강등은 render_style 강등 뒤에 와야 한다) 안에서 여러 값을 같이
+# 본다. 판정만 떼어내면 그 순서가 두 군데로 갈라져 언젠가 어긋난다.
+def _dry(fn, cuts, *rest):
+    shadow = copy.deepcopy(cuts)
+    return [f"{x} (그대로 두었습니다)" for x in fn(shadow, *rest)]
+
+
+def dry_repair_sizes(cuts: list) -> list:
+    return _dry(repair_sizes, cuts)
+
+
+def dry_repair_render_styles(cuts: list) -> list:
+    return _dry(repair_render_styles, cuts)
+
+
+def dry_repair_tone_lock(cuts: list, scenes: list) -> list:
+    return _dry(repair_tone_lock, cuts, scenes)
 
 
 def repair_sizes(cuts: list) -> list:
@@ -2744,8 +3451,11 @@ def repair_render_styles(cuts: list) -> list:
             demote(i, f"beat 가 '{beats[i]}' 라 통컷 자리가 아닙니다")
         elif r == "breakout" and beats[i] not in BREAKOUT_BEATS:
             demote(i, f"beat 가 '{beats[i]}' 라 칸 밖으로 나갈 자리가 아닙니다")
-    if renders[-1] == "sd":
-        demote(len(renders) - 1, "스팅어는 데포르메로 끝내지 않습니다")
+        elif r == "float" and beats[i] not in FLOAT_BEATS:
+            demote(i, f"beat 가 '{beats[i]}' 라 힘을 빼는 자리가 아닙니다")
+    if renders[-1] in ("sd", "float"):
+        demote(len(renders) - 1,
+               "스팅어는 데포르메나 배경 없는 컷으로 끝내지 않습니다")
 
     # 개수로는 강등하지 않는다. 몇 개가 맞는지는 이야기가 정한다 — 코드가 여섯
     # 번째 sd 를 조용히 normal 로 내리면, 그 화가 왜 심심해졌는지 아무도 모른다.
@@ -2808,7 +3518,17 @@ def repair_tone_lock(cuts: list, scenes: list) -> list:
     return notes
 
 
-def tone_warnings(cuts: list, scenes: list) -> list:
+# 성격에 없는 진지함이 갑자기 튀어나오는 사고 — 실제 사고: "장난스럽다"만
+# 적었는데 후반부가 급격히 진지해졌고, 빌드업 없이 "모든 선택을 바꿔놓았다"
+# 류 단정적 전환 문장이 뜬금없이 들어갔다. hard block 이 아니라 다른 tone
+# 경고와 같은 급의 advisory — 오탐이 있어도 실행을 막지 않는다.
+_SERIOUS_PERSONALITY_WORDS = ("진지", "무겁", "심각", "냉철", "비장", "우울")
+_ABRUPT_SHIFT_PATTERN = re.compile(
+    r"모든.{0,10}?(바꾸|바꿔|바꿨|바뀌|바뀐|달라지|달라진|달라졌|"
+    r"뒤바뀌|뒤바뀐|무너지|무너진|무너졌|무너뜨리)")
+
+
+def tone_warnings(cuts: list, scenes: list, personality: str = "") -> list:
     """tone 을 적어 놓고 살리지 않은 자리 — **세기만 하고 막지 않는다.**
 
     개그 장면을 전부 normal 로 그리는 것은 위반이 아니다. 정식 작화로 웃기는
@@ -2819,6 +3539,35 @@ def tone_warnings(cuts: list, scenes: list) -> list:
     대개는 장면을 나눠 놓고 성격을 안 준 것이다.
     """
     out = []
+    personality_text = str(personality or "")
+    if not any(w in personality_text for w in _SERIOUS_PERSONALITY_WORDS):
+        cuts_list = [c for c in cuts if isinstance(c, dict)]
+        for i, c in enumerate(cuts_list):
+            lines = c.get("lines") if isinstance(c.get("lines"), list) else []
+            texts = [str(ln.get("text") or "") for ln in lines
+                     if isinstance(ln, dict) and ln.get("kind") in ("narration", "dialogue")]
+            hit = next((t for t in texts if _ABRUPT_SHIFT_PATTERN.search(t)), None)
+            if hit:
+                out.append(
+                    f"컷 {c.get('cut_number')}에 '{hit.strip()}' 처럼 단정적인 전환 "
+                    "문장이 있는데, personality 에는 진지함을 가리키는 말이 없습니다. "
+                    "지정 안 한 성격 이탈(설정 붕괴)일 수 있습니다 — 빌드업 없이 "
+                    "톤이 급전환된 것이 아닌지 보세요.")
+                # 실제 사고에서 "빌드업 없이" 가 핵심이었다 — 급전환 문장 자체보다,
+                # 그 앞에 조짐이 한 비트도 없이 바로 꺾이는 것이 문제였다. beat 가
+                # build/turn 인 컷이 하나라도 앞에 있으면 이미 조여지고 있었던
+                # 것으로 보고, 없으면 별도로 한 번 더 짚는다.
+                lead = cuts_list[max(0, i - 2):i]
+                has_buildup = any(
+                    str(p.get("beat") or "").strip().lower() in ("build", "turn")
+                    for p in lead)
+                if not has_buildup:
+                    out.append(
+                        f"컷 {c.get('cut_number')} 앞 두 컷 모두 beat 가 build/turn 이 "
+                        "아닙니다 — 전환 직전에 조짐(빌드업)이 없다는 뜻일 수 있습니다. "
+                        "장난스러운 흐름이 예고 없이 바로 진지하게 꺾이는 것이 아닌지 "
+                        "보세요.")
+                break
     cuts = [c for c in cuts if isinstance(c, dict)]
     scenes = [s for s in (scenes or []) if isinstance(s, dict)]
     if not cuts or not scenes:
@@ -2852,6 +3601,35 @@ def tone_warnings(cuts: list, scenes: list) -> list:
                 f"tone 이 '개그' 인데 컷이 전부 normal 입니다. 의도한 것이면 그대로 "
                 "두세요 — 다만 개그로 잡아 놓고 정식 작화로만 그리면 그 장면을 "
                 "살리지 않은 것입니다 (sd·emphasis 가 이 자리의 카드입니다).")
+    return out
+
+
+# 인접 컷에서 얼굴 방향이 예고 없이 뒤집히는 사고 — 실제 사고: "1·3컷은 정면인데
+# 2컷만 갑자기 뒷모습이라 독자가 읽는 흐름에 불편감을 느낀다"는 피드백. shot·angle
+# 필드에는 얼굴 방향(정면/뒷모습)이 없다 — 카메라의 거리·높이일 뿐, 인물이 카메라를
+# 보고 있는지는 서술(description)의 자연어로만 존재해서 게이트가 못 본다. 그래서
+# advisory 로, 인접한 두 컷의 서술에서 정면류/뒷모습류 낱말이 그대로 부딪힐 때만
+# 짚는다 — 오탐을 피하려고 낱말을 좁게 잡았다(넓게 잡으면 "돌아서서 걷는다"류의
+# 흔한 동작 서술까지 다 걸린다).
+_FRONT_FACING = re.compile(r"(정면|마주\s*보|마주본|얼굴을\s*보)")
+_BACK_FACING = re.compile(r"(뒷모습|뒤통수|등을\s*보이|등을\s*돌리)")
+
+
+def facing_warnings(cuts: list) -> list:
+    """인접 컷 사이 얼굴 방향(정면 ↔ 뒷모습)이 완충 없이 뒤집히는 자리 — advisory."""
+    out = []
+    cuts = [c for c in cuts if isinstance(c, dict)]
+    for prev, cur in zip(cuts, cuts[1:]):
+        prev_desc = str(prev.get("description") or "")
+        cur_desc = str(cur.get("description") or "")
+        flipped = ((_FRONT_FACING.search(prev_desc) and _BACK_FACING.search(cur_desc))
+                   or (_BACK_FACING.search(prev_desc) and _FRONT_FACING.search(cur_desc)))
+        if flipped:
+            out.append(
+                f"컷 {prev.get('cut_number')}→{cur.get('cut_number')} 사이 얼굴 방향이 "
+                "정면↔뒷모습으로 바로 뒤집힙니다. 독자가 읽는 흐름이 끊길 수 있습니다 — "
+                "옆모습·반측면처럼 완충이 되는 각도를 사이에 넣거나, 한쪽 방향을 "
+                "맞추는 것을 검토하세요.")
     return out
 
 
@@ -3047,6 +3825,57 @@ def derive_layout(cuts: list, scenes=None) -> list:
         cuts[i]["scene_break"] = bool(breaks[i])
         cuts[i]["gaze"] = gaze
 
+    # ---- vertical_link — 배경이 컷을 넘어 이어지는 자리 ---------------------
+    # 세로 스크롤을 만화와 가르는 것이 여백만은 아니다. 붙여 놓은 두 컷이 서로
+    # 무관한 그림이면 붙여도 나열이고, 독자는 "칸 여덟 개짜리 만화 페이지를 세로로
+    # 잘라 놓은 것"으로 읽는다. 웹툰에서만 되는 연출은 그 반대다 — **무대는
+    # 그대로 두고 카메라만 아래로 내리는 것.** 탑을 올려다보다 내려오고, 떨어지는
+    # 인물을 따라가고, 방 안을 위에서 아래로 훑는 컷들이 그것이다.
+    #
+    # 어디가 그 자리인지는 이미 계산해 둔 값에 다 들어 있다:
+    #   · 앞 컷의 여백이 0        같은 동작의 다음 찰나라 시간이 거의 안 흘렀다
+    #   · zone 이 같다            무대가 바뀌지 않았다
+    #   · 둘 다 sd 가 아니다      데포르메 컷은 배경이 파스텔로 빠져 이어질 것이 없다
+    #   · 뒤 컷이 bleed 가 아니다 통컷은 혼자 화면을 먹는 카드다
+    #
+    # 값은 **뒤 컷**에 붙는다 — "이 컷은 앞 컷에서 이어진다"는 뜻이다.
+    # 여기서 정하는 것은 자리뿐이고, 그 자리를 실제로 이어 그릴지는 웹툰 하네스가
+    # config 로 켠다(기본 꺼짐). 그래서 이 값이 생겨도 예전 run 의 그림은 그대로다.
+    zones = [str(c.get("zone") or "").strip() for c in cuts]
+    for i in range(n):
+        cuts[i]["vertical_link"] = bool(
+            i > 0
+            and gaps[i - 1] == 0
+            and zones[i] and zones[i] == zones[i - 1]
+            and renders[i] != "sd" and renders[i - 1] != "sd"
+            and renders[i] not in ("bleed", "float"))
+
+    # ---- weight — 이 컷이 지면을 얼마나 먹는가 -----------------------------
+    # 지금까지 컷은 전부 캔버스 하나를 통째로 썼다. 그런데 실제 웹툰에서 컷의
+    # 무게는 균일하지 않다 — 스쳐 가는 리액션과 판이 뒤집히는 컷이 같은 지면을
+    # 먹을 이유가 없다. "한 컷 한 컷이 다 의미 있는 컷"은 만화 페이지의 전제이지
+    # 세로 스크롤의 전제가 아니다.
+    #
+    # 무게는 **모델이 정하지 않는다.** 축을 하나 더 주면 온도 0.9 에서 조건이
+    # 서로 얽힌다(위 gate_layout 주석의 실패 이력). 모델은 "이 컷이 무엇인가"
+    # (render_style·size)만 정하고, 무게는 거기서 나오는 산수다:
+    #
+    #   full   통컷이거나 화면을 꽉 채우는 컷. 캔버스 하나를 혼자 쓴다.
+    #   light  떠 있는 컷. 배경이 없어서 옆 컷과 나눌 배경도 없다 —
+    #          그래서 여럿이 한 캔버스를 나눠 써도 격자가 생기지 않는다.
+    #   normal 나머지.
+    #
+    # 이 값을 실제로 쓸지는 웹툰 하네스가 config 로 켠다(기본 꺼짐). 그래서 값이
+    # 생겨도 예전 run 의 묶기와 그림은 그대로다.
+    for i in range(n):
+        if renders[i] == "bleed" or sizes[i] == "impact":
+            weight = "full"
+        elif renders[i] == "float":
+            weight = "light"
+        else:
+            weight = "normal"
+        cuts[i]["weight"] = weight
+
     return notes
 
 
@@ -3190,7 +4019,8 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                ledger_snapshot: str, irony_present: bool, absolute: int,
                max_retries: int, spent: int = 0, known: set = None,
                series_arc: str = "", zones_txt: str = "",
-               known_zones: set = None) -> tuple:
+               known_zones: set = None, personality: str = "",
+               author_note: str = "", memory_text: str = "") -> tuple:
     """(게이트를 통과하고 연출이 계산된 payload, 재시도 횟수, 메모). 못 하면 Stopped.
 
     run_webtoon 의 7단계와 --cuts-only 가 같은 것을 쓰게 하려고 밖에 둔다.
@@ -3203,6 +4033,10 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
     코드가 여백·경계·시선을 계산해 붙인다. 계산 결과로 모델을 되돌리지 않는다.
     """
     feedback, regens = "", 0
+    # 이번 화 서술에 등장하는 태그와 겹치는 연출 지식만 골라 붙인다 — 액션 장면이
+    # 아니면 액션 연출 지식은 안 붙는다 (resolve_directing_notes 문서 참고).
+    directing_notes = resolve_directing_notes(
+        card, json.dumps(episode, ensure_ascii=False))
     while True:
         payload = call(
             "W7", f"{absolute}화 컷 분해",
@@ -3210,12 +4044,14 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
                 "engine_card": card,
                 "series_arc": series_arc or "(큰 줄거리가 넘어오지 않았습니다)",
                 "arc_json": arc_json,
-                "episode_json": json.dumps(episode, ensure_ascii=False, indent=2),
+                "episode_json": json.dumps(episode, ensure_ascii=False, separators=(",", ":")),
                 "ledger_snapshot": ledger_snapshot,
                 "engine_fired_list": fired_list(episode),
                 "setting_block": setting_block(episode),
                 "zones_block": zones_txt or "(등록된 존이 없습니다)",
-                "retry_feedback": feedback_block(feedback),
+                "directing_notes": directing_notes or "(해당 없음)",
+                "user_memory": memory_text,
+                "retry_feedback": feedback_slot(author_note, feedback),
             }),
             TEMP_CREATIVE,
             lambda o: cuts_brief(o.get("cuts") or []))
@@ -3228,29 +4064,46 @@ def solve_cuts(ps: PromptSet, call, card: str, arc_json: str, episode: dict,
         # 옛 칸을 함께 맞춰 두지 않으면 lines 를 쓴 화에서 옛 칸만 보는 코드가
         # 빈 대사를 본다.
         repaired = repair_speech(cuts)
-        repaired += repair_sizes(cuts) + repair_render_styles(cuts)
-        # tone 강등은 render_style 강등 **뒤에** 온다. 앞의 것은 beat 자리를,
-        # 이건 장면 성격을 본다 — 순서를 바꾸면 이미 normal 이 된 컷을 또 본다.
-        repaired += repair_tone_lock(cuts, payload.get("scenes"))
         repaired += repair_stinger_number(payload)
+        # size · render_style · tone 을 코드가 덮어쓰던 자리다. 지금은 **안
+        # 덮어쓰고 경고만 한다** (REPAIR_DIRECTING=1 로 예전 동작을 되살릴 수 있다).
+        #
+        # 덮어쓰기를 끈 이유: 저것들은 모델이 컷 내용을 보고 정한 값인데, 코드는
+        # 내용을 모르고 숫자만 본다. "마지막 컷 size 를 normal -> tall 로 바꿨습니다"
+        # 같은 수리는 스팅어를 세로로 늘려 놓지만, 그 컷이 왜 납작해야 하는지는
+        # 모델만 안다. 결과를 보존하고 사람이 판단하게 둔다.
+        if env_bool("REPAIR_DIRECTING", False):
+            repaired += repair_sizes(cuts) + repair_render_styles(cuts)
+            repaired += repair_tone_lock(cuts, payload.get("scenes"))
+        else:
+            directing_notes = (dry_repair_sizes(cuts) + dry_repair_render_styles(cuts)
+                               + dry_repair_tone_lock(cuts, payload.get("scenes")))
 
         failures = gate_cuts(payload, episode, irony_present, known_zones, known)
         if not failures:
             notes = [f"코드 수리: {x}" for x in repaired]
+            if not env_bool("REPAIR_DIRECTING", False):
+                notes += [f"연출 경고: {x}" for x in directing_notes]
             notes += [f"연출 메모: {x}" for x in apply_layout(
                 cuts, payload.get("scenes"))]
+            # 얼굴 비율·앵글·impact·연속 길이 — 예전에는 여기서 생성을 막았다.
+            notes += [f"연출 경고: {x}" for x in directing_warnings(cuts)]
             notes += [f"서술 경고: {x}" for x in prose_warnings(cuts, known)]
+            notes += [f"이름 경고: {x}" for x in prop_text_name_check(cuts, known)]
             notes += [f"톤 메모: {x}" for x in tone_warnings(
-                cuts, payload.get("scenes"))]
+                cuts, payload.get("scenes"), personality)]
+            notes += [f"각도 메모: {x}" for x in facing_warnings(cuts)]
             notes += [f"공간 메모: {x}" for x in zone_warnings(cuts)]
             return payload, regens, notes
         log(f"  {absolute}화 7단계 게이트 실패 {len(failures)}건")
         for f in failures:
             log(f"      - {f}")
         if spent + regens >= max_retries:
+            # 마지막 시도를 버리지 않는다 — 게이트에 걸린 초안이라도 사람이
+            # 봐야 진행할지 다시 만들지 고를 수 있다.
             raise Stopped(
                 f"{absolute}화 컷 게이트 재시도 소진: " + " / ".join(failures),
-                STATUS_HUMAN)
+                STATUS_HUMAN, draft=payload)
         regens += 1
 
         # 코드가 되돌린 것을 먼저 알린다. 강등은 조용히 일어나므로, 말해 주지
@@ -3407,7 +4260,163 @@ def gate_text_pass(cuts: list, pov: str) -> list:
     return failures
 
 
-def text_pass_warnings(cuts: list, scenes: list) -> list:
+# ---- 나레이션이 한 가지 일만 하고 있는가 --------------------------------
+#
+# 나레이션은 이 화가 세계를 설명할 수 있는 **유일한 칸**이다. 고유명사·제도·역사·
+# 인물의 처지는 그림으로 못 그리고, 대사로 말하면 인물이 독자에게 설정을 읽어
+# 주는 꼴이 된다(그래서 gate_text_pass 가 대사에서 그걸 막는다). 막기만 하고
+# 갈 곳을 안 열어 주면 세계관은 어디에도 안 나온다.
+#
+# 실측된 실패는 "나레이션이 없다"보다 "나레이션이 전부 같은 일을 한다"였다 —
+# 나온 셋이 전부 "늦은 오후, 라운지 한켠" 꼴의 시간·장소 표시였다. 그래서 여기서
+# 세는 것은 개수가 아니라 **종류**다.
+_NARR_TIME = re.compile(
+    r"(아침|점심|낮|오후|저녁|밤|새벽|정오|자정|해질녘|땅거미|어스름|노을"
+    r"|다음\s*날|이튿날|며칠|사흘|이틀|하루|한참|잠시|그날|그때쯤|늦은|이른"
+    r"|\d+\s*(시|분|초|교시|일|주|주일|달|개월|년|시간)(\s*(뒤|후|째|만에))?)")
+_NARR_PLACE = re.compile(
+    r"(에서|에는|한켠|한편|모퉁이|뒤편|근처|골목|복도|교실|강의실|운동장"
+    r"|옥상|정문|계단|로비|라운지|동아리방|기숙사|사무실|주차장|\d+\s*층)")
+# ① 은 **문장이 아니라 표찰**이다. "늦은 오후, 라운지 한켠." · "사흘 뒤" ·
+# "학생회관 3층" — 전부 명사로 끝난다. 반대로 ②~⑤ 는 서술이라 '다' 로 끝난다:
+#   "엘젠하르트 제국. 황후는 열여섯에 정해진다."   ← ②
+#   "나는 그때 이미 알고 있었다."                  ← ③
+#   "윤재는 1학년 때부터 시하를 따라다녔다."        ← ⑤
+# 그래서 낱말 목록으로 뜻을 맞히려 하지 않고 **끝맺음**으로 가른다. 낱말로
+# 가르려던 첫 판은 "게이트가 열린 지 20년. 등급은 국가가 매긴다."(②) 를 '20년'
+# 때문에 ① 로 세었다 — 세계관을 알려 주는 줄을 시간 표시로 오해한 것이다.
+_NARR_SENTENCE_END = re.compile(r"다[.!?…\s\"'”’)]*$")
+
+
+def narration_kinds(cuts: list) -> dict:
+    """나레이션을 ①(시간·장소 표찰) 과 그 밖(②~⑤ 서술)으로 나눈 목록."""
+    stamp, beyond = [], []
+    for c in cuts:
+        if not isinstance(c, dict):
+            continue
+        for row in speech_lines(c):
+            if row["kind"] != "narration":
+                continue
+            text = row["text"]
+            is_stamp = (bool(_NARR_TIME.search(text) or _NARR_PLACE.search(text))
+                        and not _NARR_SENTENCE_END.search(text))
+            (stamp if is_stamp else beyond).append((c.get("cut_number"), text))
+    return {"stamp": stamp, "beyond": beyond}
+
+
+def narration_warnings(cuts: list) -> list:
+    """세계관을 설명할 칸이 비었거나 한 가지 일만 하고 있는 자리 — 경고만 한다.
+
+    되돌리지 않는 이유는 이 파일의 다른 advisory 들과 같다: "나레이션이 적다"는
+    위반이 아니라 **선택**이고, 조용한 화가 맞는 경우가 있다. 다만 그 선택을
+    했는지 실수인지는 사람이 봐야 알므로 찍어 둔다.
+    """
+    out = []
+    cuts = [c for c in cuts if isinstance(c, dict)]
+    if not cuts:
+        return out
+    kinds = narration_kinds(cuts)
+    stamp, beyond = kinds["stamp"], kinds["beyond"]
+    total = len(stamp) + len(beyond)
+
+    if total == 0:
+        out.append(
+            "이 화에 나레이션이 하나도 없습니다. 세계관·인물의 처지·지나고 나서 "
+            "하는 말은 그림으로도 대사로도 갈 곳이 없어서, 이 칸이 비면 독자는 "
+            "여기가 어떤 세계인지 모른 채 읽습니다 — 의도한 것이 아니면 "
+            "w8.txt 5번의 ②~⑤ 중 하나를 넣으세요.")
+        return out
+
+    if total >= 2 and not beyond:
+        listed = " / ".join(f'컷 {n} "{t[:24]}"' for n, t in stamp[:3])
+        out.append(
+            f"나레이션 {total}개가 전부 시간·장소 표시입니다 ({listed}). "
+            "그 칸을 안 쓴 것과 같습니다 — 세계를 알려 주거나(②), 지나고 나서 "
+            "하는 말(③)이나, 인물의 처지(⑤) 중 하나는 섞으세요.")
+    return out
+
+
+# ---- 말과 말이 어긋나는 자리 --------------------------------------------
+#
+# fact_conflicts 는 회차가 선언한 new_facts 끼리만 비교한다. 정작 독자가 읽는
+# **대사·나레이션 본문**은 아무도 설정과 대조하지 않았다. 여기서 같은 두 패턴을
+# 말에도 적용한다 (같은 주제인데 한쪽만 부정 / 같은 단위의 숫자가 다름).
+#
+# 의미 모순을 기계가 다 잡을 수는 없고, 여기는 오탐이 특히 위험하다 — 인물이
+# 거짓말하거나 모르고 틀리게 말하는 것은 **모순이 아니라 연출**이기 때문이다.
+# 그래서 되돌리지 않고, 문구도 "확인하세요"로 남긴다.
+#
+# 단위는 _NUM_UNIT 을 그대로 쓰지 않고 여기서 넓힌다. 사람을 가리키는 말에는
+# 학년·기·급처럼 _NUM_UNIT 에 없는 단위가 자주 나오는데("윤재는 3학년이다"),
+# 공용 _NUM_UNIT 을 고치면 fact_conflicts 가 만드는 5단계 프롬프트까지 같이
+# 바뀌어 예전 회차의 입력이 달라진다. 새 검사에만 쓰는 목록을 따로 둔다.
+_LINE_NUM_UNIT = re.compile(
+    r"(\d+)\s*(학년|학기|기수|등급|급|층|명|화|년|살|개|번|시|분|주|달|권|회)")
+
+
+def contradiction_warnings(cuts: list, facts: list = None) -> list:
+    """대사·나레이션이 확정된 설정과, 또는 이 화 안에서 서로 어긋나는 자리."""
+    out = []
+    cuts = [c for c in cuts if isinstance(c, dict)]
+    rows = []
+    for c in cuts:
+        for row in speech_lines(c):
+            rows.append((c.get("cut_number"), row["kind"], row["text"]))
+
+    def clash(a: str, b: str):
+        """부딪히면 (사유, 주제) 를, 아니면 None."""
+        if not _same_topic(a, b):
+            return None
+        shared = _content_words(a) & _content_words(b)
+        topic = ", ".join(sorted(shared)[:3]) or "같은 대상"
+        if _negated(a) != _negated(b):
+            return ("한쪽만 부정입니다", topic)
+        na = dict((u, n) for n, u in _LINE_NUM_UNIT.findall(a))
+        nb = dict((u, n) for n, u in _LINE_NUM_UNIT.findall(b))
+        hit = [u for u in na if u in nb and na[u] != nb[u]]
+        if hit:
+            u = hit[0]
+            return (f"{na[u]}{u} 과(와) {nb[u]}{u} 이(가) 함께 있습니다", topic)
+        return None
+
+    # ① 확정된 설정과 대조. 설정은 앞 화에서 독자가 이미 본 것이라 이쪽이 기준이다.
+    for fact in (facts or []):
+        if not isinstance(fact, dict):
+            continue
+        ftext = str(fact.get("fact") or "").strip()
+        if not ftext:
+            continue
+        for n, kind, text in rows:
+            hit = clash(ftext, text)
+            if not hit:
+                continue
+            why, topic = hit
+            out.append(
+                f"컷 {n} 의 {kind} 가 확정된 설정과 어긋나 보입니다 "
+                f"({topic}) — {why}.\n"
+                f"    · 설정({fact.get('first_episode', '?')}화): \"{ftext[:60]}\"\n"
+                f"    · 이 화: \"{text[:60]}\"\n"
+                "    설정이 기준입니다. 인물이 일부러 틀리게 말하는 것이 아니면 "
+                "말을 고치세요.")
+
+    # ② 이 화 안에서 말끼리. 8단계는 화 전체를 한꺼번에 보므로 여기서 잡을 수 있다.
+    for i in range(len(rows)):
+        for j in range(i + 1, len(rows)):
+            n_a, kind_a, ta = rows[i]
+            n_b, kind_b, tb = rows[j]
+            hit = clash(ta, tb)
+            if not hit:
+                continue
+            why, topic = hit
+            out.append(
+                f"컷 {n_a} 의 {kind_a} 와 컷 {n_b} 의 {kind_b} 가 어긋나 보입니다 "
+                f"({topic}) — {why}.\n"
+                f"    · \"{ta[:60]}\"\n    · \"{tb[:60]}\"\n"
+                "    인물이 거짓말하거나 아직 모르는 상황이면 그대로 두세요.")
+    return out
+
+
+def text_pass_warnings(cuts: list, scenes: list, facts: list = None) -> list:
     """8.5단계에서 **막지 않고 적어만 두는 것.** 위반이 아니라 놓치기 쉬운 자리다."""
     out = []
     cuts = [c for c in cuts if isinstance(c, dict)]
@@ -3447,11 +4456,16 @@ def text_pass_warnings(cuts: list, scenes: list) -> list:
                 f"{i}번째 장면이 시작되는 컷 {first.get('cut_number')} 에 말이 "
                 "없습니다. 장면이 바뀌는 자리라, 여기가 어디이고 무슨 상황인지 "
                 "세워 주면 나머지가 읽힙니다.")
+
+    out += narration_warnings(cuts)
+    out += contradiction_warnings(cuts, facts)
     return out
 
 
 def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
-               ledger_snapshot: str, absolute: int, max_retries: int) -> tuple:
+               ledger_snapshot: str, absolute: int, max_retries: int,
+               facts: list = None, author_note: str = "",
+               memory_text: str = "") -> tuple:
     """(글자를 다시 쓴 payload, 재시도 횟수, 메모). 못 하면 원본을 그대로 돌려준다.
 
     7단계와 달리 **막히면 중단하지 않는다.** 여기서 세우면 이미 통과한 컷
@@ -3466,12 +4480,13 @@ def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
             "W8", f"{absolute}화 글자 다시 쓰기",
             render(ps.texts["w8"], {
                 "engine_card": card,
-                "episode_json": json.dumps(episode, ensure_ascii=False, indent=2),
+                "episode_json": json.dumps(episode, ensure_ascii=False, separators=(",", ":")),
                 "ledger_snapshot": ledger_snapshot,
-                "cuts_json": json.dumps(cuts, ensure_ascii=False, indent=2),
+                "cuts_json": json.dumps(cuts, ensure_ascii=False, separators=(",", ":")),
                 "pov": pov or "(엔진 카드에서 주인공을 찾지 못했습니다)",
                 "banned_words": " · ".join(BANNED_IN_DIALOGUE),
-                "retry_feedback": feedback_block(feedback),
+                "user_memory": memory_text,
+                "retry_feedback": feedback_slot(author_note, feedback),
             }),
             TEMP_CREATIVE)
 
@@ -3482,7 +4497,7 @@ def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
         if not failures:
             payload["cuts"] = trial
             notes += repair_bubble_zone(trial)
-            notes += text_pass_warnings(trial, payload.get("scenes"))
+            notes += text_pass_warnings(trial, payload.get("scenes"), facts)
             return payload, regens, [f"글자: {x}" for x in notes]
 
         log(f"  {absolute}화 8단계 게이트 실패 {len(failures)}건")
@@ -3786,12 +4801,20 @@ class WebtoonResult:
 
 
 class Stopped(Exception):
-    """엔진급 질문 훼손 등 자동으로 이어갈 수 없는 지점."""
+    """엔진급 질문 훼손 등 자동으로 이어갈 수 없는 지점.
 
-    def __init__(self, reason: str, status: str = STATUS_STOPPED):
+    draft 는 멈추기 직전까지 만들어 둔 마지막 시도(컷 payload)다. 없으면 None.
+    게이트 재시도가 소진돼 멈출 때 이것을 실어 보내면, 부르는 쪽이 초안으로
+    저장해서 **사람이 확인 화면에서 실제 컷을 보고** 진행/재시도를 고를 수 있다.
+    예전에는 여기서 전부 버려져서, 확인 화면이 "콘티를 확인해 주세요" 라고
+    말하면서 보여줄 콘티가 없었다(cut_count=0).
+    """
+
+    def __init__(self, reason: str, status: str = STATUS_STOPPED, draft=None):
         super().__init__(reason)
         self.reason = reason
         self.status = status
+        self.draft = draft
 
 
 class CallLog:
@@ -3872,7 +4895,8 @@ def load_story_run(run_dir: Path) -> dict:
 
 def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                 max_retries: int, ledger_cap: int, resume: bool,
-                episode_target: int = 1, replan: bool = False) -> WebtoonResult:
+                episode_target: int = 1, replan: bool = False,
+                author_note: str = "") -> WebtoonResult:
     """Arc 큰 줄거리를 잡고, **다음 화부터 episode_target 편**을 만든다.
 
     기본이 1편인 이유: 지금 보고 싶은 것은 1화다. 1화가 재미있으면 그때 2화를
@@ -3900,7 +4924,10 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
     (wt_dir / "engine_card.txt").write_text(card, encoding="utf-8")
 
     ledger = Ledger(str(p2.get("engine_question") or ""), cap=ledger_cap)
-    sheet = json.dumps(p1, ensure_ascii=False, indent=2)
+    sheet = json.dumps(p1, ensure_ascii=False, separators=(",", ":"))
+    # 작가 규칙 — run 폴더에 memory.json 이 있으면 매 단계 프롬프트에 실린다.
+    # 없으면 빈 구조라 resolve 가 늘 "" 를 주고, 프롬프트는 예전 그대로다.
+    user_mem = load_user_memory(run_dir / MEMORY_FILE)
 
     def call(stage: str, label: str, prompt: str, temp: float, verdict_of=None):
         start = len(usage.records)
@@ -3942,7 +4969,8 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                     "W4", "큰 줄거리 분할",
                     render(ps.texts["w4"], {
                         "engine_card": card, "character_sheet": sheet,
-                        "retry_feedback": feedback_block(feedback),
+                        "user_memory": resolve_user_memory(user_mem, card, sheet),
+                        "retry_feedback": feedback_slot(author_note, feedback),
                     }),
                     TEMP_CREATIVE,
                     lambda o: f"Arc {len(o.get('arcs') or [])}개")
@@ -4003,7 +5031,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
             (wt_dir / "engine_card.txt").write_text(card, encoding="utf-8")
             arc = arc_for_episode(arcs, no)
             arc_order = arc.get("order")
-            arc_json = json.dumps(arc, ensure_ascii=False, indent=2)
+            arc_json = json.dumps(arc, ensure_ascii=False, separators=(",", ":"))
             ep_path = wt_dir / f"arc{arc_order}_episodes.json"
             rv_path = wt_dir / f"ep{no:02d}_review.json"
             cut_path = wt_dir / f"ep{no:02d}_cuts.json"
@@ -4019,7 +5047,9 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                         # 앞 화 요약만이 아니라 **인물·설정 명부까지** 넘긴다.
                         # 요약만 주면 3화가 1화의 인물 이름을 잊는다.
                         "series_state": state.brief(ledger),
-                        "retry_feedback": feedback_block(feedback),
+                        "user_memory": resolve_user_memory(
+                            user_mem, card, arc_json, state.brief(ledger)),
+                        "retry_feedback": feedback_slot(author_note, feedback),
                     }),
                     TEMP_CREATIVE,
                     lambda o: str(o.get("title") or "")[:20])
@@ -4053,7 +5083,7 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                         "engine_card": card, "arc_json": arc_json,
                         "ledger_snapshot": ledger.snapshot(no),
                         "episodes_json": json.dumps(
-                            {"episodes": episodes}, ensure_ascii=False, indent=2),
+                            {"episodes": episodes}, ensure_ascii=False, separators=(",", ":")),
                     }),
                     TEMP_JUDGE,
                     lambda o: "검사 완료")
@@ -4123,6 +5153,9 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                 # 재생성 0~2회), 얼굴 비율·말 밀도까지 세기 시작하면 그 구조로는
                 # 2화를 못 넘긴다. --cuts-only 는 원래 화마다 주고 있었다 —
                 # 두 경로가 어긋나 있던 것을 맞춘다.
+                # 앞 화들이 확정한 설정을 장부에 옮긴 뒤 스냅샷을 뜬다 — 이걸
+                # 안 하면 7·8단계가 established_facts 를 빈 목록으로 받는다.
+                ledger.sync_facts(state.facts)
                 payload, regens, notes = solve_cuts(
                     ps, call, card, arc_json, episode, ledger.snapshot(no),
                     irony_present, no, max_retries,
@@ -4130,13 +5163,21 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                                          state.cast),
                     series_arc=series_arc_block(arcs, arc),
                     zones_txt=zones_block(state, episode),
-                    known_zones={z["zone_id"] for z in state.zones})
+                    known_zones={z["zone_id"] for z in state.zones},
+                    personality=p1.get("personality"),
+                    author_note=author_note,
+                    memory_text=resolve_user_memory(
+                        user_mem, card,
+                        json.dumps(episode, ensure_ascii=False)))
                 result.regen_stage7 += regens
 
                 # ---- 8단계: 컷이 확정된 뒤에 글자만 다시 쓴다 ----------
                 payload, w8_regens, w8_notes = solve_text(
                     ps, call, card, episode, payload, ledger.snapshot(no),
-                    no, max_retries)
+                    no, max_retries, facts=state.facts, author_note=author_note,
+                    memory_text=resolve_user_memory(
+                        user_mem, card,
+                        json.dumps(payload, ensure_ascii=False)))
                 notes += w8_notes
                 for note in notes:
                     warn(f"    {note}")
@@ -4257,13 +5298,15 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
 # ---------------------------------------------------------------- 기록
 
 def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
-                  max_retries: int, resume: bool, only: list = None) -> int:
+                  max_retries: int, resume: bool, only: list = None,
+                  author_note: str = "") -> int:
     """이미 회차까지 나온 run 의 컷만 다시 뽑는다 (화당 호출 1회).
 
     4~6단계를 다시 돌지 않는 것이 요점이다. 같은 회차 설계에 컷 분해만 바꿔 보고
     "크기와 여백이 실제로 갈리는가"를 앞 단계 재생성 없이 확인한다.
     """
     story = load_story_run(run_dir)
+    cuts_mem = load_user_memory(run_dir / MEMORY_FILE)   # 작가 규칙 (없으면 빈 구조)
     wt_dir = run_dir / "webtoon"
     ep_paths = sorted(wt_dir.glob("arc*_episodes.json"))
     if not ep_paths:
@@ -4345,7 +5388,10 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
                 break
 
         arc_json = json.dumps(arcs.get(arc_order) or {"order": arc_order},
-                              ensure_ascii=False, indent=2)
+                              ensure_ascii=False, separators=(",", ":"))
+        # 앞 화들이 확정한 설정을 장부에 옮긴 뒤 스냅샷을 뜬다 — 이걸 안 하면
+        # 7·8단계가 established_facts 를 빈 목록으로 받는다.
+        ledger.sync_facts(state.facts)
         try:
             payload, _, notes = solve_cuts(
                 ps, call, card, arc_json, episode,
@@ -4354,17 +5400,35 @@ def run_cuts_only(caller: Caller, ps: PromptSet, run_dir: Path,
                 series_arc=series_arc_block([arcs[k] for k in sorted(arcs)],
                                             arcs.get(arc_order)),
                 zones_txt=zones_block(state, episode),
-                known_zones={z["zone_id"] for z in state.zones})
+                known_zones={z["zone_id"] for z in state.zones},
+                personality=story["p1"].get("personality"),
+                author_note=author_note,
+                memory_text=resolve_user_memory(
+                    cuts_mem, card, json.dumps(episode, ensure_ascii=False)))
         except Stopped as exc:
             # 게이트를 못 넘겼다. 트레이스백으로 죽지 않고 무엇이 걸렸는지만
             # 보여 준다 — 사람이 고칠 것은 프롬프트지 파이썬 스택이 아니다.
             warn(f"  {absolute}화를 만들지 못했습니다: {exc.reason}")
             warn("  같은 자리에서 계속 걸리면 --max-retries 를 올리거나 "
                  "prompts/w7.txt 의 그 항목을 손보세요.")
+            # 마지막 초안이 있으면 남긴다 — 확인 화면이 이것을 보여준다.
+            # 정식 파일(epNN_cuts.json)에는 안 쓴다: 뒷단계(그림)가 그것을
+            # 읽으므로, 게이트에 걸린 것이 통과한 것처럼 흘러가면 안 된다.
+            if getattr(exc, "draft", None):
+                draft_path = wt_dir / f"ep{absolute:02d}_cuts.draft.json"
+                try:
+                    draft_path.write_text(json.dumps(
+                        exc.draft, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+                    warn(f"  마지막 초안을 남겼습니다: {draft_path.name}")
+                except OSError:
+                    pass               # 초안을 못 남겨도 멈춘 사실은 그대로다
             continue
         payload, _, w8_notes = solve_text(
             ps, call, card, episode, payload, ledger.snapshot(absolute),
-            absolute, max_retries)
+            absolute, max_retries, facts=state.facts, author_note=author_note,
+            memory_text=resolve_user_memory(
+                cuts_mem, card, json.dumps(payload, ensure_ascii=False)))
         notes += w8_notes
         for note in notes:
             warn(f"    {note}")
@@ -5024,6 +6088,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", default=str(RUNS_DIR), help="runs 디렉터리")
     p.add_argument("--check", action="store_true", help="API 없이 프롬프트 변수만 점검")
     p.add_argument("--mock", action="store_true", help="API 없이 게이트·장부만 점검")
+    # 작가가 콘티를 보고 "이걸 고쳐 달라"고 적은 말. W4·W5·W7·W8 프롬프트의
+    # {retry_feedback} 자리에 [작가 요청] 블록으로 들어간다. 안 주면 예전과 똑같다.
+    p.add_argument("--author-note", default="",
+                   help="작가가 다시 만들며 요청한 것 (W4·W5·W7·W8 프롬프트에 실림)")
     return p
 
 
@@ -5143,7 +6211,7 @@ def main(argv=None) -> int:
         for run_dir in targets:
             log(f"컷만 다시 뽑기 · {run_dir.name}")
             run_cuts_only(caller, ps, run_dir, args.max_retries, args.resume,
-                          only=args.episode)
+                          only=args.episode, author_note=args.author_note)
             build_webtoon_output(run_dir)
         return 0
 
@@ -5154,7 +6222,7 @@ def main(argv=None) -> int:
         res = run_webtoon(caller, ps, run_dir, out_dir,
                           args.max_retries, args.ledger_cap, args.resume,
                           episode_target=max(1, args.episodes),
-                          replan=args.replan)
+                          replan=args.replan, author_note=args.author_note)
         tally[res.status] = tally.get(res.status, 0) + 1
         made = (f"{res.episode_count}화"
                 + (f"(누적 {res.series_total}화)"
