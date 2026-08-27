@@ -1,45 +1,51 @@
 /* LORE 웹툰 스튜디오 — 랜딩 + 진행 + 결과, 한 장.
 
    마스코트 고래 **루(LOU)** 의 세계관을 그대로 화면에 씁니다. 이야기의 바다고,
-   루가 그 바다를 안내합니다. 그래서 바탕은 수면 가까운 밝은 모래빛(beige)이고,
-   깊이 들어가는 자리일수록 민트에서 심해로 내려갑니다.
+   루가 그 바다를 안내합니다. 바탕은 수면에 가까운 밝은 물빛이고, 깊이 들어가는
+   자리일수록 하늘빛에서 심해로 내려갑니다.
 
-   색 값은 루의 디자인 시트(design-reference/LOU.png) 팔레트에서 그대로
-   뽑았습니다 — 민트 #a1c6bb, 베이지 #f5e7d3, 세이지 #d6e3d9.
+   2026-08-27: 바탕을 모래빛(베이지)에서 **물빛(라이트 모드)** 으로 바꿨습니다.
+   베이지 + 채도 낮은 세이지 조합이 "AI가 뽑은 화면" 처럼 읽힌다는 피드백이
+   있었고, 무엇보다 바다를 이야기하면서 바탕이 모래인 것이 앞뒤가 안 맞았습니다.
+   이제 팔레트 전체가 한 갈래(시안–하늘–심해)로 흐릅니다.
+
+   다크(야간) 모드 안도 같이 그려봤지만 채택하지 않았습니다 — 완성된 웹툰 컷이
+   밝은 그림이라, 어두운 액자에 넣으면 눈이 부시고 작품 색이 탁해 보였습니다.
+   나중에 붙이더라도 결과·편집실 화면은 밝은 쪽으로 남겨야 합니다.
 
    토큰 이름은 예전 다크 판과 **그대로** 둡니다(--ink 가 바탕, --text 가 글자).
-   이름만 보면 거꾸로지만, 900줄짜리 규칙을 전부 고쳐 쓰는 것보다 값만 뒤집는
+   이름만 보면 거꾸로지만, 2000줄짜리 규칙을 전부 고쳐 쓰는 것보다 값만 뒤집는
    쪽이 훨씬 안전해서 그렇게 했습니다. 새 색이 필요하면 아래 --sea-* 를 씁니다. */
 
 :root {
   /* 바탕/글자 — 이름은 옛 다크 판 그대로, 값만 밝은 쪽으로 뒤집었다 */
-  --ink:      #faf6ee;   /* 페이지 바탕 (모래빛) */
-  --ink-2:    #f3ece0;   /* 한 단 눌린 바탕 — 입력칸·안쪽 상자 */
-  --card:     #fffdf7;
-  --card-2:   #f7f2e8;
-  --line:     rgba(34,48,44,.10);
-  --line-2:   rgba(34,48,44,.20);
-  --text:     #22302c;
-  --muted:    #6b7d78;
-  --dim:      #94a29d;
-  --accent:   #6fa599;   /* 루의 민트 — 주 동작 */
-  --accent-d: #2f5c53;
-  --gold:     #a1732e;
-  --ok:       #4d9c7a;
-  --paper:    #fffdf7;
-  --paper-2:  #f3ece0;
+  --ink:      #f6fdfe;   /* 페이지 바탕 (수면 물빛) */
+  --ink-2:    #e7f6fa;   /* 한 단 눌린 바탕 — 입력칸·안쪽 상자 */
+  --card:     #ffffff;
+  --card-2:   #eef8fb;
+  --line:     rgba(15,51,63,.10);
+  --line-2:   rgba(15,51,63,.20);
+  --text:     #0f333f;
+  --muted:    #567e8b;
+  --dim:      #7194a0;
+  --accent:   #0e8fb5;   /* 하늘빛 시안 — 주 동작 */
+  --accent-d: #0a5f7a;
+  --gold:     #a1732e;   /* 유일한 따뜻한 색 — 크레딧·주의 표시에만 쓴다 */
+  --ok:       #0f9e8a;
+  --paper:    #ffffff;
+  --paper-2:  #e7f6fa;
 
   /* 바다 — 수면에서 심해로. 깊이를 쓰는 자리(히어로·진행 화면)에서만 쓴다 */
-  --sea-sand:  #f5e7d3;
-  --sea-shore: #d6e3d9;
-  --sea-mint:  #a1c6bb;
-  --sea-mid:   #6fa599;
-  --sea-deep:  #3f6f66;
-  --sea-abyss: #1f3f3c;
-  --on-sea:    #f7f3ea;  /* 짙은 바다 위에 얹는 글자 */
+  --sea-sand:  #f2fbfd;  /* 이름은 옛것 그대로 — 값은 모래가 아니라 수면이다 */
+  --sea-shore: #d9f2f8;
+  --sea-mint:  #a4d9ea;
+  --sea-mid:   #45a8c8;
+  --sea-deep:  #1a6d8e;
+  --sea-abyss: #0b3a52;
+  --on-sea:    #f2fafd;  /* 짙은 바다 위에 얹는 글자 */
 
   --radius:   14px;
-  --shadow:   0 14px 36px rgba(38,64,58,.13);
+  --shadow:   0 14px 36px rgba(15,51,63,.13);
   --font: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI",
           "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   --mono: "Cascadia Mono", "D2Coding", Consolas, "Courier New", monospace;
@@ -55,7 +61,7 @@
    벌리는 순간 아트보드와 다른 화면이 되기 때문이다. */
 html {
   background:
-    radial-gradient(120% 90% at 50% 0%, #f6efe2 0%, #ece2cf 60%, #e5d9c3 100%)
+    radial-gradient(120% 90% at 50% 0%, #f4fcfe 0%, #e3f4fa 60%, #d2ecf4 100%)
     fixed;
 }
 /* (본체 규칙은 아래 body 정의에 합쳐져 있다 — 여기서 따로 margin 을 주면
@@ -67,7 +73,7 @@ html {
 html { scroll-behavior: smooth; }
 body {
   margin: 0 auto; max-width: 480px; min-height: 100dvh;
-  box-shadow: 0 0 0 1px rgba(38,64,58,.06), 0 24px 80px rgba(38,64,58,.16);
+  box-shadow: 0 0 0 1px rgba(15,51,63,.06), 0 24px 80px rgba(15,51,63,.16);
   background: var(--ink); color: var(--text);
   font-family: var(--font); font-size: 16px; line-height: 1.65;
   -webkit-font-smoothing: antialiased;
@@ -108,11 +114,11 @@ body[data-view="nextep"]  .foot { display: none; }
 .btn:active { transform: translateY(1px); }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover { background: #5f9488; }
-.btn-primary:disabled { background: #cfdcd7; color: #8fa39d; cursor: not-allowed; }
+.btn-primary:disabled { background: #d3e6ee; color: #8ba7b3; cursor: not-allowed; }
 .btn-ghost { border-color: var(--line-2); color: var(--text); }
 .btn-ghost:hover { border-color: var(--accent); color: var(--accent-d); }
-.btn-quiet { background: rgba(34,48,44,.055); color: var(--text); }
-.btn-quiet:hover { background: rgba(34,48,44,.1); }
+.btn-quiet { background: rgba(15,51,63,.055); color: var(--text); }
+.btn-quiet:hover { background: rgba(15,51,63,.1); }
 .btn-big { padding: 1.05em 2em; font-size: 1.05rem; width: 100%; }
 .btn-sm { padding: .55em 1em; font-size: .88rem; }
 
@@ -172,9 +178,12 @@ body[data-view="nextep"]  .foot { display: none; }
 .depths { flex: 1; }
 .hero-sea {
   position: absolute; inset: 0;
+  /* 2026-08-27: 예전에는 맨 아래가 --sea-mid(짙은 물)였다. 그 위에 흰 글자를
+     얹던 시절의 값이다 — 지금은 깊이 목록이 흰 카드라 물이 짙으면 카드만 둥둥
+     뜬다. 한 단 얕게 끝내서 수면에서 살짝 내려간 정도로만 둔다. */
   background: linear-gradient(180deg,
-    var(--sea-sand) 0%, var(--ink) 24%, var(--sea-shore) 52%,
-    #aeccc6 74%, var(--sea-mint) 88%, var(--sea-mid) 100%);
+    var(--sea-sand) 0%, var(--ink) 26%, var(--sea-shore) 60%,
+    #bfe4f0 82%, var(--sea-mint) 100%);
 }
 
 .top-intro {
@@ -196,26 +205,35 @@ body[data-view="nextep"]  .foot { display: none; }
 .hero-lou { width: min(96%, 380px); margin: 4px auto 0; display: block; }
 .hero-cta { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .hero-cta .btn { width: 100%; padding: 1.05em; border-radius: 999px; font-weight: 700; font-size: 1rem; }
-.hero-cta .btn-primary { background: var(--sea-mid); color: #fff; }
+/* 물빛(--sea-mid)이 아니라 강조색을 쓴다 — 물이 얕아지면서 --sea-mid 단추가
+   바탕에 묻혔다. 화면에서 제일 센 것이 이 단추여야 한다. */
+.hero-cta .btn-primary { background: var(--accent); color: #fff; }
 .btn-shell { background: rgba(255,255,255,.6); color: var(--accent-d); border: none; }
 .hero-note { display: none; }
 
-/* 깊이 — 짙어지는 물 위 세 줄 (DirA_Sea 하단 그대로) */
-/* 캔버스처럼 프레임 폭을 꽉 쓴다 — max-width 를 걸면 480px 프레임 안에서
-   가운데로 몰려서, 아트보드보다 좁아 보인다. */
+/* 깊이 — 물 위 세 줄. 캔버스처럼 프레임 폭을 꽉 쓴다 — max-width 를 걸면
+   480px 프레임 안에서 가운데로 몰려서, 아트보드보다 좁아 보인다.
+
+   2026-08-27: 예전에는 짙어지는 물 위에 **흰 글자**를 얹었다. 바탕이 베이지에서
+   민트로 내려가던 시절에는 그게 맞았지만, 라이트 모드는 물이 끝까지 밝아서 흰
+   글자가 사라진다. 그래서 흰 카드 위 짙은 글자로 뒤집었다 — 물은 카드 뒤로
+   계속 흐르고, 카드가 그 위에 뜬다. */
 .depths {
   position: relative; list-style: none;
-  margin: 0; padding: 34px 20px 30px;
-  color: #fff;
+  margin: 0; padding: 26px 20px 30px;
+  color: var(--text);
+  display: flex; flex-direction: column; gap: 9px;
 }
 .depths li {
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,.3);
+  display: flex; align-items: center; gap: 13px;
+  padding: 13px 15px;
+  background: rgba(255,255,255,.82);
+  border: 1px solid var(--line);
+  border-radius: 15px;
 }
-.depths li:last-child { border-bottom: none; }
-.depths img { width: 46px; height: 46px; border-radius: 12px; object-fit: cover; flex: none; }
-.depths b { display: block; font-size: .9rem; }
-.depths small { display: block; font-size: .78rem; opacity: .8; margin-top: 2px; }
+.depths img { width: 40px; height: 40px; border-radius: 12px; object-fit: cover; flex: none; }
+.depths b { display: block; font-size: .88rem; font-weight: 700; }
+.depths small { display: block; font-size: .77rem; color: var(--dim); margin-top: 2px; }
 
 /* 만들기 — 물빛은 body[data-step] 이 정한다(위저드 절 참고).
 
@@ -267,9 +285,9 @@ body[data-view="nextep"]  .foot { display: none; }
 .field input:focus, .field textarea:focus, .field select:focus,
 .fields-grid input:focus {
   outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(111,165,153,.22);
+  box-shadow: 0 0 0 3px rgba(14,143,181,.22);
 }
-.field input::placeholder, .field textarea::placeholder { color: #a6b2ad; }
+.field input::placeholder, .field textarea::placeholder { color: #9db6c0; }
 .field select { appearance: none; margin-bottom: 8px; }
 .field .hint { display: block; color: var(--dim); font-size: .78rem; margin-top: 6px; }
 .field.big > span { font-size: .95rem; }
@@ -297,7 +315,7 @@ body[data-view="nextep"]  .foot { display: none; }
    타일이 화면 밖으로 밀린다. */
 .req {
   font-style: normal; font-size: .68rem; font-weight: 800;
-  color: var(--accent-d); background: rgba(111,165,153,.18);
+  color: var(--accent-d); background: rgba(14,143,181,.18);
   border-radius: 6px; padding: .15em .5em; margin-left: .4em;
   vertical-align: .1em;
 }
@@ -323,7 +341,7 @@ body[data-view="nextep"]  .foot { display: none; }
   border: 1.5px dashed var(--sea-mid); color: var(--sea-mid);
   display: grid; place-items: center; font-size: 1.4rem; font-weight: 300;
 }
-.photo-drop.drag .photo-slot { border-color: var(--accent); background: rgba(111,165,153,.12); }
+.photo-drop.drag .photo-slot { border-color: var(--accent); background: rgba(14,143,181,.12); }
 .photo-count { display: block; color: var(--dim); font-size: .76rem; margin-top: 8px; }
 
 /* 사진을 올리기 전에 읽어야 하는 것. 경고문이라고 붉게 세우지 않는다 —
@@ -384,9 +402,9 @@ body[data-view="nextep"]  .foot { display: none; }
 .style-opt:hover .style-box { border-color: var(--accent); }
 .style-opt input:checked + .style-box {
   border-color: var(--accent-d); border-width: 2.5px;
-  background: rgba(111,165,153,.1);
+  background: rgba(14,143,181,.1);
 }
-.style-opt input:focus-visible + .style-box { box-shadow: 0 0 0 3px rgba(111,165,153,.3); }
+.style-opt input:focus-visible + .style-box { box-shadow: 0 0 0 3px rgba(14,143,181,.3); }
 
 /* ---- 라디오 고르개 (연출 · 등신 · 검수) ------------------------------ */
 
@@ -402,9 +420,9 @@ body[data-view="nextep"]  .foot { display: none; }
 .ratio:hover span { border-color: var(--accent); }
 .ratio input:checked + span {
   border-color: var(--accent-d); border-width: 2.5px;
-  background: rgba(111,165,153,.1);
+  background: rgba(14,143,181,.1);
 }
-.ratio input:focus-visible + span { box-shadow: 0 0 0 3px rgba(111,165,153,.3); }
+.ratio input:focus-visible + span { box-shadow: 0 0 0 3px rgba(14,143,181,.3); }
 
 /* ---- 켬/끔 ---------------------------------------------------------- */
 
@@ -462,8 +480,8 @@ body[data-view="nextep"]  .foot { display: none; }
 body[data-step="1"] .studio { background: linear-gradient(180deg, var(--sea-sand) 0%, var(--paper-2) 40%, var(--ink) 100%); }
 body[data-step="2"] .studio { background: linear-gradient(180deg, var(--ink), var(--sea-shore)); }
 body[data-step="3"] .studio { background: linear-gradient(180deg, var(--sea-shore) 0%, var(--sea-mint) 60%, var(--sea-mid) 100%); }
-body[data-step="4"] .studio { background: linear-gradient(180deg, var(--sea-mid) 0%, #3f6f66 60%, #335c56 100%); }
-body[data-step="5"] .studio { background: linear-gradient(180deg, #335c56 0%, var(--sea-deep) 55%, var(--sea-abyss) 100%); }
+body[data-step="4"] .studio { background: linear-gradient(180deg, var(--sea-mid) 0%, #2b8aad 60%, #145774 100%); }
+body[data-step="5"] .studio { background: linear-gradient(180deg, #145774 0%, var(--sea-deep) 55%, var(--sea-abyss) 100%); }
 /* 짙은 물(3~5걸음) 위 글자와 게이지 — 캔버스의 흰 글자 그대로 */
 body[data-step="3"] .wiz-title, body[data-step="4"] .wiz-title, body[data-step="5"] .wiz-title { color: #fff; }
 /* 상단바는 물 위에 얹혀 있다 — 만들기 화면에서는 걸음마다 물빛이 달라지므로
@@ -482,14 +500,14 @@ body[data-view="create"][data-step="1"] { --bar-bg: var(--sea-sand); }
 body[data-view="create"][data-step="2"] { --bar-bg: var(--ink); }
 body[data-view="create"][data-step="3"] { --bar-bg: var(--sea-shore); }
 body[data-view="create"][data-step="4"] { --bar-bg: var(--sea-mid); }
-body[data-view="create"][data-step="5"] { --bar-bg: #335c56; }
+body[data-view="create"][data-step="5"] { --bar-bg: #145774; }
 
 /* 깊은 물(4~5걸음)에서만 한 벌로 뒤집는다 — 상자는 밝게, 고래는 짙게. */
 body[data-view="create"][data-step="4"],
 body[data-view="create"][data-step="5"] {
   --brand-bg: var(--on-sea);
   --brand-fg: var(--accent-d);
-  --bar-line: rgba(247,243,234,.18);
+  --bar-line: rgba(242,250,253,.18);
 }
 body[data-view="create"][data-step="4"] .brand-name,
 body[data-view="create"][data-step="5"] .brand-name { color: var(--on-sea); }
@@ -547,7 +565,7 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
 }
 .wiz-tick {
   width: 16px; height: 4px; border-radius: 999px;
-  background: rgba(34,48,44,.18); transition: all .3s ease;
+  background: rgba(15,51,63,.18); transition: all .3s ease;
 }
 .wiz-tick.done { background: var(--sea-mid); }
 .wiz-tick.on   { background: var(--accent-d); width: 24px; }
@@ -666,7 +684,7 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
 body[data-view="create"][data-step="1"] { --foot-bg: var(--ink); }
 body[data-view="create"][data-step="2"] { --foot-bg: var(--sea-shore); }
 body[data-view="create"][data-step="3"] { --foot-bg: var(--sea-mid); }
-body[data-view="create"][data-step="4"] { --foot-bg: #335c56; }
+body[data-view="create"][data-step="4"] { --foot-bg: #145774; }
 body[data-view="create"][data-step="5"] { --foot-bg: var(--sea-abyss); }
 
 /* 「이전」은 옅은 먹빛 바탕에 짙은 글씨다 — 밝은 걸음에서는 맞지만 짙은 물
@@ -872,7 +890,7 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 }
 .lou-bar {
   flex: 1; height: 6px; border-radius: 999px;
-  background: rgba(34,48,44,.12); overflow: hidden;
+  background: rgba(15,51,63,.12); overflow: hidden;
 }
 .lou-bar > i {
   display: block; height: 100%; width: 0;
@@ -972,7 +990,7 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.bar { height: 6px; border-radius: 4px; background: rgba(34,48,44,.1); margin-top: .9em; overflow: hidden; }
+.bar { height: 6px; border-radius: 4px; background: rgba(15,51,63,.1); margin-top: .9em; overflow: hidden; }
 .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .5s ease; }
 
 .sheet-approval { margin: 22px 0; border: 1px solid var(--line-2); border-radius: var(--radius); padding: 20px 22px; background: var(--card-2); }
@@ -1072,10 +1090,10 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
 .works-card {
   display: flex; flex-direction: column; overflow: hidden;
   border-radius: 16px; background: var(--card);
-  box-shadow: 0 1px 0 rgba(38,64,58,.05), 0 6px 20px rgba(38,64,58,.07);
+  box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 6px 20px rgba(15,51,63,.07);
   transition: transform .16s ease, box-shadow .16s ease;
 }
-.works-card:hover { transform: translateY(-2px); box-shadow: 0 2px 0 rgba(38,64,58,.06), 0 14px 30px rgba(38,64,58,.12); }
+.works-card:hover { transform: translateY(-2px); box-shadow: 0 2px 0 rgba(15,51,63,.06), 0 14px 30px rgba(15,51,63,.12); }
 /* 표지는 작품마다 캔버스 비율이 달라서(세로로 긴 장이 흔하다) 그대로 두면 줄이
    들쭉날쭉해진다. 같은 창으로 잘라 보여 주고 위쪽을 남긴다 — 웹툰 한 장의 첫
    컷이 대개 그 화를 대표한다. */
@@ -1112,7 +1130,7 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
   cursor: pointer; transition: background .14s ease, border-color .14s ease, color .14s ease;
 }
 /* 예전 팔레트(붉은 강조)가 남아 있어서 민트 화면에서 혼자 붉게 떴다. */
-.works-ep:hover { border-color: var(--accent); background: rgba(111,165,153,.14); color: var(--accent-d); }
+.works-ep:hover { border-color: var(--accent); background: rgba(14,143,181,.14); color: var(--accent-d); }
 /* 공개 스위치 — 내 작품 카드에만 붙는다. 켜고 끄는 것이 바로 보여야 하므로
    글자도 상태를 따라 바뀐다("둘러보기에 공개" / "나만 보기"). */
 .works-pub {
@@ -1261,7 +1279,7 @@ body[data-view="create"] .topnav { display: none; }
 /* 목업 크레딧 — 실제 과금이 아니라 화면에 보이는 숫자입니다. */
 .cost-chip {
   font-family: var(--mono); font-size: .78rem; font-weight: 700;
-  background: rgba(34,48,44,.08); border-radius: 6px; padding: .12em .5em; margin-left: .2em;
+  background: rgba(15,51,63,.08); border-radius: 6px; padding: .12em .5em; margin-left: .2em;
 }
 /* 홈의 첫 단추 안 값 딱지. 단추 바탕이 짙은 민트라 기본 딱지(먹빛 반투명)는
    묻힌다 — 흰 쪽으로 뒤집는다. 값은 알리되 단추 글씨보다 앞서면 안 되므로
@@ -1275,7 +1293,7 @@ body[data-view="create"] .topnav { display: none; }
   font-size: .6rem; font-weight: 800; letter-spacing: .1em; vertical-align: .25em;
   color: var(--ink); background: var(--gold); padding: .1em .35em; border-radius: 4px;
 }
-.inline-link { color: var(--gold); border-bottom: 1px solid rgba(161,115,46,.4); }
+.inline-link { color: var(--gold); border-bottom: 1px solid rgba(161,115,46,.45); }
 .inline-link:hover { color: #f0d090; }
 
 /* ---- 장 다시 그리기 (#59) ------------------------------------------- */
@@ -1347,7 +1365,7 @@ body[data-view="create"] .topnav { display: none; }
   background: transparent; color: var(--text);
   cursor: pointer; transition: background .12s ease, border-color .12s ease;
 }
-.fb-tag:hover { background: rgba(111,165,153,.12); }
+.fb-tag:hover { background: rgba(14,143,181,.12); }
 /* 고른 것은 색으로만 구분하지 않는다 — aria-pressed 가 상태의 근거이고,
    테두리 굵기가 색을 못 보는 경우의 두 번째 단서다. */
 .fb-tag[aria-pressed="true"] {
@@ -1527,7 +1545,7 @@ body[data-step="2"] .studio {
    기본 스타일을 지운다. */
 button.inline-link {
   background: none; border: none; padding: 0; font: inherit; cursor: pointer;
-  color: var(--gold); border-bottom: 1px solid rgba(161,115,46,.4);
+  color: var(--gold); border-bottom: 1px solid rgba(161,115,46,.45);
 }
 button.inline-link:hover { color: #f0d090; }
 
@@ -1583,7 +1601,7 @@ button.inline-link:hover { color: #f0d090; }
 .charge-pkg[data-tier="3"] { --pkg-depth: linear-gradient(180deg, var(--sea-mint), var(--sea-deep)); }
 .charge-pkg:hover {
   border-color: var(--accent); transform: translateY(-1px);
-  box-shadow: 0 8px 22px rgba(38,64,58,.12);
+  box-shadow: 0 8px 22px rgba(15,51,63,.12);
 }
 /* 가장 많이 고르는 것(출항)은 이미 골라진 것처럼 보이게 — 민트 테두리. */
 .charge-pkg[data-tier="1"] { border-color: var(--accent); }
@@ -1627,7 +1645,7 @@ button.inline-link:hover { color: #f0d090; }
 .charge-pkg-emoji {
   grid-area: emoji; font-size: 1.5rem; line-height: 1;
   width: 44px; height: 44px; display: grid; place-items: center;
-  background: rgba(111,165,153,.10); border-radius: 12px;
+  background: rgba(14,143,181,.10); border-radius: 12px;
 }
 .charge-pkg[data-tier="3"] .charge-pkg-emoji { background: rgba(247,243,234,.12); }
 .charge-pkg-label { grid-area: label; font-weight: 800; font-size: 1.02rem; }
@@ -1780,7 +1798,7 @@ button.inline-link:hover { color: #f0d090; }
 .ip-agree {
   background: var(--card); border-radius: 16px;
   padding: 14px 16px; margin: 0 0 14px;
-  box-shadow: 0 1px 0 rgba(38,64,58,.05), 0 8px 24px rgba(38,64,58,.07);
+  box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 8px 24px rgba(15,51,63,.07);
 }
 .ip-agree .agree-line { margin: 0; font-size: .86rem; align-items: center; }
 /* 빈 네모는 얇은 회색 테두리라 종이 위에서도 흐리다 — 필수 항목이니 눈에
@@ -1989,7 +2007,7 @@ button.inline-link:hover { color: #f0d090; }
   font: inherit; font-size: .86rem; color: var(--text);
   padding: .6em .7em; min-height: 44px; cursor: pointer; text-decoration: none;
 }
-.share-item:hover { background: rgba(34,48,44,.06); }
+.share-item:hover { background: rgba(15,51,63,.06); }
 /* 인스타는 링크로 못 올린다 — 그림을 받아 가는 자리라 위와 갈라 놓는다. */
 #shareInstaHint {
   border-top: 1px solid var(--line); margin-top: 4px; padding-top: .7em;
@@ -2094,7 +2112,7 @@ body.modal-open { overflow: hidden; }
 .minip-body {
   width: 100%; height: 100%; padding: 0; border: none; border-radius: 50%;
   position: relative; cursor: grab; background: var(--card);
-  box-shadow: 0 6px 20px rgba(38,64,58,.24), 0 0 0 1px rgba(38,64,58,.08);
+  box-shadow: 0 6px 20px rgba(15,51,63,.24), 0 0 0 1px rgba(15,51,63,.08);
   display: grid; place-items: center;
   transition: transform .14s ease, box-shadow .18s ease;
 }
@@ -2102,7 +2120,7 @@ body.modal-open { overflow: hidden; }
 .minip[data-dragging] .minip-body { transform: scale(1.06); }
 .minip-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
 .minip-ring circle { fill: none; stroke-width: 3.5; }
-.minip-track { stroke: rgba(34,48,44,.10); }
+.minip-track { stroke: rgba(15,51,63,.10); }
 .minip-fill {
   stroke: var(--accent); stroke-linecap: round;
   /* 2πr = 119.4 — app.js 가 dashoffset 으로 채운다 */
@@ -2119,7 +2137,7 @@ body.modal-open { overflow: hidden; }
 .minip-pct {
   position: absolute; left: 50%; bottom: -3px; transform: translateX(-50%);
   padding: 0 5px; border-radius: 999px;
-  background: var(--card); box-shadow: 0 1px 4px rgba(38,64,58,.2);
+  background: var(--card); box-shadow: 0 1px 4px rgba(15,51,63,.2);
   font-size: .56rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.7;
   color: var(--accent-d); pointer-events: none; white-space: nowrap;
 }
@@ -2139,8 +2157,8 @@ body.modal-open { overflow: hidden; }
 .minip[data-state="error"] .minip-fill { stroke: #c2603f; }
 .minip[data-state="error"] .minip-pct  { color: #c2603f; }
 @keyframes minipPulse {
-  0%, 100% { box-shadow: 0 6px 20px rgba(38,64,58,.24), 0 0 0 1px rgba(38,64,58,.08); }
-  50%      { box-shadow: 0 6px 20px rgba(38,64,58,.24), 0 0 0 5px rgba(161,115,46,.22); }
+  0%, 100% { box-shadow: 0 6px 20px rgba(15,51,63,.24), 0 0 0 1px rgba(15,51,63,.08); }
+  50%      { box-shadow: 0 6px 20px rgba(15,51,63,.24), 0 0 0 5px rgba(161,115,46,.22); }
 }
 @media (prefers-reduced-motion: reduce) {
   .minip[data-state="await"] .minip-body { animation: none; }
@@ -2153,7 +2171,7 @@ body.modal-open { overflow: hidden; }
   padding: .5em .55em .5em .7em; border: 1px solid var(--line-2); border-right: none;
   border-radius: 999px 0 0 999px; background: var(--card); color: var(--accent-d);
   font: inherit; font-size: .68rem; font-weight: 800; cursor: pointer;
-  box-shadow: 0 4px 14px rgba(38,64,58,.18);
+  box-shadow: 0 4px 14px rgba(15,51,63,.18);
 }
 .minip-tab:hover { color: var(--text); }
 

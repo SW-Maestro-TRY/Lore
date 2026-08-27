@@ -218,6 +218,17 @@ ok("묶기: weight 가 없는 옛 화는 컷 하나당 한 장",
    [s.cut_numbers for s in gold] == [[1], [2], [3], [4]],
    [s.cut_numbers for s in gold])
 
+# weight_combine_normal — 켜면 normal 도 light 처럼 묶인다 (2026-08-27)
+gwc = SG.group_by_weight([_c(1), _c(2, "light"), _c(3), _c(4, "full"),
+                          _c(5), _c(6)], 3, combine_normal=True)
+ok("묶기(normal 합침): full 만 혼자, 나머지는 묶인다",
+   [s.cut_numbers for s in gwc] == [[1, 2, 3], [4], [5, 6]],
+   [s.cut_numbers for s in gwc])
+ok("묶기(normal 합침): 꺼져 있으면(기본) 예전과 똑같다",
+   [s.cut_numbers for s in SG.group_by_weight(
+       [_c(1), _c(2, "light"), _c(3), _c(4, "full"), _c(5), _c(6)], 3)]
+   == [[1], [2], [3], [4], [5], [6]])
+
 # 지면 폭 — 가벼운 컷만 좁아진다
 ok("폭: 가벼운 컷은 지면을 덜 먹는다",
    ST.width_ratio({"weight": "light"}) == ST.LIGHT_WIDTH)

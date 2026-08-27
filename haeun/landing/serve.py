@@ -488,9 +488,12 @@ class Handler(BaseHTTPRequestHandler):
             # 판, 없으면 원본 그대로. 얹어 놓고 내려받았더니 말풍선이 없더라는
             # 것이 가장 알아채기 어려운 실패다.
             # 나가는 파일에만 LORE 표시를 얹는다 (watermark.py 머리말 참고).
+            final = pipeline.final_episode(m.group(1), ep)
+            bounds = pipeline.cut_bounds(
+                m.group(1), ep, baked=(final == overlay.baked_episode_path(ep_dir)))
             src = watermark.for_download(
-                pipeline.final_episode(m.group(1), ep), ep_dir,
-                pipeline.episode_caption(m.group(1), ep))
+                final, ep_dir, pipeline.episode_caption(m.group(1), ep),
+                cut_bounds=bounds)
             return self._file(src, download=pipeline.episode_filename(m.group(1), ep))
 
         # 편집실에서 얹은 말풍선·스티커. 브라우저가 아니라 **작품 폴더**에 있어서
@@ -507,9 +510,10 @@ class Handler(BaseHTTPRequestHandler):
             src = pipeline.baked_episode(m.group(1), ep)
             if not src:
                 return self._error(404, "아직 구운 그림이 없습니다")
+            bounds = pipeline.cut_bounds(m.group(1), ep, baked=True)
             src = watermark.for_download(
                 src, pipeline.episode_dir(m.group(1), ep),
-                pipeline.episode_caption(m.group(1), ep))
+                pipeline.episode_caption(m.group(1), ep), cut_bounds=bounds)
             return self._file(src, download=pipeline.episode_filename(
                 m.group(1), ep, baked=True))
 
@@ -945,6 +949,8 @@ class Handler(BaseHTTPRequestHandler):
 
             job = runner.create(form, photo)
             _, bal = credits.spend(uid, cost)
+            credits.log_event("spend", uid, amount=cost, balance=bal,
+                              job_id=job.id, reason="create")
             accounts.log_ip_consent(uid, job.id)
             return self._json({"id": job.id, "queue_position": runner.position(job.id),
                                "credit_balance": bal})
@@ -1084,7 +1090,11 @@ class Handler(BaseHTTPRequestHandler):
                 job = runner.create_next(run_id, {"author_note": note} if note else {})
             except pipeline.Failed as exc:
                 return self._error(409, str(exc))
-            bal = credits.spend(uid, cost)[1] if cost else None
+            bal = None
+            if cost:
+                bal = credits.spend(uid, cost)[1]
+                credits.log_event("spend", uid, amount=cost, balance=bal,
+                                  job_id=job.id, reason="next_episode")
             return self._json({"id": job.id, "episode": job.episode,
                                "queue_position": runner.position(job.id),
                                **({"credit_balance": bal} if bal is not None else {})})

@@ -60,6 +60,7 @@ from typing import Any, Callable
 
 import overlay          # 편집실에서 얹은 것을 저장하고 그림에 굽는다
 import report           # picks.csv 읽기 — overlay 의 sys.path 설정 뒤에 와야 한다
+import watermark        # 내려받기 표시 — cut_bounds() 가 컷 자리 계산을 넘긴다
 
 HERE = Path(__file__).resolve().parent
 JOBS_DIR = HERE / "jobs"
@@ -103,6 +104,25 @@ SHEET_IMAGE_QUALITY = (_ENV.get("OPENAI_IMAGE_QUALITY") or "").strip().lower()
 # "한 화를 통째로 뽑을 때는 S 가 아니라 S+" 라고 못박고 있다.
 CONDITION = "S+"
 
+# 확인 화면(시트·이야기·콘티·그림 검수)에서 사람 응답을 기다리는 최대 시간.
+# 2026-08-26: 실사용에서 화면을 못 찾아 승인을 놓쳤더니 작업이 무한정 멈춰
+# 있었다 — 그 사고 이후로 넣음. 시간이 차면 응답이 온 것처럼 취급하지 않고
+# **그냥 진행(승인)** 한 것으로 치고 넘어간다 — decision 이 끝까지 비어
+# 있으면(=retry 가 아니면) 각 단계 코드가 이미 "승인"으로 읽으므로, 여기서는
+# wait() 에 timeout 만 주면 된다.
+APPROVAL_TIMEOUT_SEC = 30
+
+
+def _await_approval(job: "Job", event: threading.Event, stage: str) -> None:
+    """승인 대기를 최대 APPROVAL_TIMEOUT_SEC초로 막는다. 시간이 차면 이유를
+    남기고 그냥 진행 — 응답을 기다리는 동안 UI를 못 찾거나 자리를 비워도
+    작업이 영영 멈춰 있지 않는다."""
+    answered = event.wait(timeout=APPROVAL_TIMEOUT_SEC)
+    event.clear()
+    if not answered:
+        job.note(f"{APPROVAL_TIMEOUT_SEC}초 동안 응답이 없어 승인으로 넘어갑니다 ({stage})")
+        job.add_log(f"[승인 시간초과] {stage} — 응답 없이 {APPROVAL_TIMEOUT_SEC}초 지나 자동 승인")
+
 # 한 장에 3컷. Gemini 는 호출당 이미지 1장이라 "3컷씩 생성"은 곧 "한 장에
 # 3칸"이다 — 12컷짜리 한 화가 이미지 4장이 되고 호출도 비용도 1/3 이 된다.
 #
@@ -115,18 +135,6 @@ CONDITION = "S+"
 # 코드가 정했다. 되돌리려면 MODE 를 "cut" 으로 바꾸면 그 경로가 그대로 산다.
 MODE = "scene"
 CUTS_PER_SHEET = 3
-
-# "웹툰" 연출에는 **컷 수 상한이 없다.** 0 은 개수로 자르지 말라는 뜻이다.
-#
-# 전에는 여기에 4 가 적혀 있었다. 그런데 4 라는 숫자는 어디서도 나온 적이 없다 —
-# 장면이 무엇을 하려는지와 무관하게 고른 값이었고, 컷 하나가 캔버스를 통째로
-# 써야 할 자리(impact)와 둘이 나란히 들어가도 남는 자리(wide 둘)를 똑같이
-# 취급했다. 대신 물리적인 사실 하나로 끊는다: 모델이 받는 캔버스에는 가장 긴
-# 세로가 있고(9:16), 컷을 쌓으면 필요한 세로가 그만큼 늘어난다. 더 넣어도
-# 들어가면 넣고, 넘치면 거기서 끊는다 (webtoon-harness/scenegen.group_by_fit).
-#
-# 그래서 장마다 컷 수가 다르다 — 1개든 2개든 3개든 컷의 size 가 정한다.
-WEBTOON_MAX_CUTS = 0
 
 # 위 두 값은 **기본 경로**다. 사용자가 폼에서 "웹툰"을 고르면 컷 모드로 간다.
 #
@@ -401,31 +409,29 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
                       "  gap_ratio: {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}",
                       text, count=1)
         text = re.sub(r"(?m)^  stitch_gaps:.*$", "  stitch_gaps: true", text, count=1)
-        # 9. 묶기는 **연출 리듬**이 정한다 (scene.grouping: rhythm).
+        # 9. 묶기는 **컷의 무게**가 정한다 (scene.grouping: weight).
         #
-        #    앞에서는 weight 로 묶었는데, 실측해 보니 콘티가 weight 를 거의 안
-        #    쓴다 — 한 화 12컷이 전부 normal 로 나와서 컷마다 한 장, 이미지가
-        #    12번 나갔다. "한 장에 3컷"(fixed)보다 세 배 비싼데 얻는 것은
-        #    "컷이 안 섞인다" 하나뿐이었다.
+        #    한 번은 이걸 썼다가 rhythm 으로 되돌린 적이 있다 — 실측해 보니
+        #    콘티가 weight 를 거의 안 써서 한 화 12컷이 전부 normal 로 나오고,
+        #    weight 모드는 원래 normal 도 "혼자 한 장"으로 다뤄서 결과가 컷
+        #    모드와 같아졌다(이미지 12번, "한 장에 3컷"(fixed)보다 세 배 비쌈).
         #
-        #    정작 콘티는 경계를 **이미 정해 두고 있었다** — scene_break 다.
-        #    같은 화가 rhythm 으로는 1-4 / 5-8 / 9-11 / 12 넉 장이 된다.
-        #    개수(fixed)와 장 수는 같은데, 경계가 "3개마다"가 아니라 "화면
-        #    하나가 끝나는 자리"에 떨어진다. 품질을 지키면서 호출을 줄이는
-        #    자리가 여기다 — 묶을 수 있어서 묶는 것이 아니라, **콘티가 한
-        #    화면이라고 말한 것끼리** 묶는 것이다.
+        #    그런데 rhythm(+fit_to_canvas)도 실측해 보니 같은 증상이었다 —
+        #    콘티가 scene_break 로 4/4/4 를 나눠 줘도, 캔버스 세로 예산(9:16)이
+        #    tall·impact 컷 **하나만으로 거의 다 차서** 옆에 아무것도 못
+        #    붙였다(2026-08-27 실측: 12컷 중 11장이 1컷). "무거운 컷만 혼자,
+        #    나머지는 합쳐서"가 원래 바라던 결과인데, 리듬+캔버스 예산은 그걸
+        #    흉내만 내고 실제로는 못 만들고 있었다.
         #
-        #    그 안을 다시 나누는 건 **캔버스가 감당하는 만큼**이다. 개수
-        #    상한(max_cuts_per_scene)은 0 — 끄고 간다. 캔버스는 9:16 이
-        #    최대라, 컷을 쌓다가 그 세로를 넘기면 모델이 남는 폭에 컷을
-        #    나란히 놓는다(세로 스크롤이 아니라 만화 페이지). 넘치기 직전에
-        #    끊으면 개수를 정하지 않고도 그 자리를 피한다 — impact 는 혼자
-        #    한 장, wide 둘은 한 장, 이건 컷의 size 가 정한다.
-        text = re.sub(r"(?m)^  grouping:.*$", "  grouping: rhythm", text, count=1)
-        text = re.sub(r"(?m)^  max_cuts_per_scene:.*$",
-                      f"  max_cuts_per_scene: {WEBTOON_MAX_CUTS}", text, count=1)
-        text = re.sub(r"(?m)^  fit_to_canvas:.*$",
-                      "  fit_to_canvas: true", text, count=1)
+        #    그래서 weight 로 돌아오되, 문제였던 지점(normal 도 혼자 한 장)만
+        #    새 하네스 옵션으로 끈다 — weight_combine_normal(2026-08-27 추가,
+        #    scenegen.group_by_weight). full(통컷·bleed·impact)만 그대로 혼자
+        #    한 장이고, 나머지는(light 는 물론 normal 도) 붙는다. 한 장에
+        #    묶는 상한(max_light_per_scene)은 하네스 기본(3)을 그대로 쓴다 —
+        #    넷을 넘기면 인물이 작아진다는 이유가 여기서도 똑같이 적용된다.
+        text = re.sub(r"(?m)^  grouping:.*$", "  grouping: weight", text, count=1)
+        text = re.sub(r"(?m)^  weight_combine_normal:.*$",
+                      "  weight_combine_normal: true", text, count=1)
 
     out = job_dir / "config.yaml"
     out.write_text(text, encoding="utf-8")
@@ -1322,8 +1328,7 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
         job.note("콘티 단계 게이트 재시도가 소진됐습니다 — 확인해 주세요"
                  + (f" ({why})" if why else ""))
         job.save()
-        job.board_approval.wait()
-        job.board_approval.clear()
+        _await_approval(job, job.board_approval, "콘티(이어 만들기)")
         with job._lock:
             decision = job.board_decision
             job.board_decision = ""
@@ -1386,8 +1391,7 @@ def _next_episode_stages(job: "Job", run_id: str, job_dir: Path) -> None:
             job.status = "awaiting_artqa_approval"
             job.note("그림 검수 결과를 확인해 주세요")
             job.save()
-            job.artqa_approval.wait()
-            job.artqa_approval.clear()
+            _await_approval(job, job.artqa_approval, "그림 검수(이어 만들기)")
             # 여기서는 _cancel 을 안 본다 — 1화 쪽과 같은 이유(그 주석 참고).
             job.status = "running"
 
@@ -1507,8 +1511,7 @@ def execute(job: Job) -> None:
             else:
                 job.note("이야기가 나왔습니다 — 확인해 주세요")
             job.save()
-            job.story_approval.wait()
-            job.story_approval.clear()
+            _await_approval(job, job.story_approval, "이야기 구조")
             with job._lock:
                 decision = job.story_decision
                 job.story_decision = ""
@@ -1561,8 +1564,7 @@ def execute(job: Job) -> None:
             job.status = "awaiting_sheet_approval"
             job.note("캐릭터 시트가 나왔습니다 — 확인해 주세요")
             job.save()
-            job.sheet_approval.wait()
-            job.sheet_approval.clear()
+            _await_approval(job, job.sheet_approval, "캐릭터 시트")
             with job._lock:
                 decision = job.sheet_decision
                 job.sheet_decision = ""
@@ -1640,8 +1642,7 @@ def execute(job: Job) -> None:
             else:
                 job.note("콘티가 나왔습니다 — 확인해 주세요")
             job.save()
-            job.board_approval.wait()
-            job.board_approval.clear()
+            _await_approval(job, job.board_approval, "콘티")
             with job._lock:
                 decision = job.board_decision
                 job.board_decision = ""
@@ -1657,11 +1658,24 @@ def execute(job: Job) -> None:
                 # 대상이 없으므로, 그리기로 넘어가 봐야 거기서 다시 죽는다.
                 # 그때 나오는 말("컷 서술을 옮기지 못했습니다")은 원인에서
                 # 멀어져서 더 알아보기 어렵다 — 여기서 멈추고 이유를 말한다.
+                #
+                # 정식 파일이 없어도 **초안**(게이트에 걸린 마지막 시도)이
+                # 있으면 그걸 정식 파일로 승격해서 그대로 쓴다 — 사람이
+                # "이대로 진행"을 눌렀다는 것은 그 초안을 보고 괜찮다고 한
+                # 것이니, 뒷단계(그림)가 읽을 자리에 실제로 놓아 줘야 진짜
+                # "이대로 진행"이 된다. 초안조차 없을 때만 막는다.
                 if not cuts_path.exists():
-                    raise Failed(
-                        "콘티가 한 컷도 나오지 않아 이대로는 진행할 수 없습니다. "
-                        "무엇이 걸렸는지 적어서 '다시 만들기'를 눌러 주세요."
-                        + (f" ({note})" if note else ""))
+                    draft_path = cuts_path.with_name("ep01_cuts.draft.json")
+                    if draft_path.exists():
+                        cuts_path.write_text(
+                            draft_path.read_text(encoding="utf-8"),
+                            encoding="utf-8")
+                        job.add_log("  초안을 정식 콘티로 승격했습니다 — 이대로 그립니다")
+                    else:
+                        raise Failed(
+                            "콘티가 한 컷도 나오지 않아 이대로는 진행할 수 없습니다. "
+                            "무엇이 걸렸는지 적어서 '다시 만들기'를 눌러 주세요."
+                            + (f" ({note})" if note else ""))
                 break                   # approve — 이 콘티 그대로 진행
             replan = True
         _leave(job)
@@ -1732,8 +1746,7 @@ def execute(job: Job) -> None:
             job.status = "awaiting_artqa_approval"
             job.note("그림 검수 결과를 확인해 주세요")
             job.save()
-            job.artqa_approval.wait()
-            job.artqa_approval.clear()
+            _await_approval(job, job.artqa_approval, "그림 검수")
             # **여기서는 _cancel 을 안 본다.** 앞의 세 승인 자리와 다른 점이다.
             # 그 자리들은 아직 만들 것이 남아 있어서 취소가 "그만 만든다"는
             # 뜻이지만, 여기는 episode.png 까지 다 나온 뒤다 — 취소할 대상이
@@ -2019,6 +2032,33 @@ def write_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
 def baked_episode(run_id: str, episode: int = 1) -> Path | None:
     p = overlay.baked_episode_path(episode_dir(run_id, episode))
     return p if p.exists() else None
+
+
+def cut_bounds(run_id: str, episode: int = 1, baked: bool = False
+                ) -> list[tuple[int, int, int, int]] | None:
+    """내려받는 최종본 안에서 컷마다 자리 — watermark.for_download() 에 넘겨서
+    컷마다 표시를 찍게 한다. baked=True 면 편집실에서 구운 컷 그림을 우선
+    쓴다(없으면 원본으로 대체). 못 구하면 None — 호출부가 한 장짜리 마크로
+    돌아간다.
+    """
+    ep_dir = episode_dir(run_id, episode)
+    numbers = (_scene_numbers(run_id, episode)
+               or list(range(1, drawn_units(run_id, episode) + 1)))
+    if not numbers:
+        return None
+    paths: list[Path] = []
+    for n in numbers:
+        p = overlay.baked_scene_path(ep_dir, n) if baked else None
+        if not p or not p.exists():
+            p = unit_image(run_id, n, episode)
+        if not p or not Path(p).exists():
+            return None
+        paths.append(Path(p))
+    layout = _scene_layout(run_id, episode)
+    gaps = [layout.get(n, (0, "normal"))[0] for n in numbers]
+    ratios = [_width_ratio(layout.get(n, (0, "normal"))[1]) for n in numbers]
+    table = _run_gap_table(run_id) or _strip_gap_table()
+    return watermark.cut_layout(paths, gaps, ratios, table)
 
 
 def bake_overlay(run_id: str, body: Any, episode: int = 1) -> dict[str, Any]:
@@ -2344,6 +2384,7 @@ FEEDBACK_TAGS: dict[str, list[dict[str, str]]] = {
         {"id": "age", "label": "나이대가 안 맞아요"},
         {"id": "style", "label": "그림체가 생각과 달라요"},
         {"id": "ratio", "label": "등신 비율이 안 맞아요"},
+        {"id": "etc", "label": "기타"},
     ],
     "story": [
         {"id": "genre", "label": "고른 장르 느낌이 안 나요"},
@@ -2352,6 +2393,7 @@ FEEDBACK_TAGS: dict[str, list[dict[str, str]]] = {
         {"id": "line", "label": "대사가 어색해요"},
         {"id": "name", "label": "이름이 잘못 나와요"},
         {"id": "pace", "label": "전개가 급하거나 지루해요"},
+        {"id": "etc", "label": "기타"},
     ],
     "board": [
         {"id": "flow", "label": "컷 흐름이 끊겨요"},
@@ -2359,6 +2401,7 @@ FEEDBACK_TAGS: dict[str, list[dict[str, str]]] = {
         {"id": "angle", "label": "컷 앵글이 어색해요"},
         {"id": "balance", "label": "컷 분량 배분이 이상해요"},
         {"id": "line", "label": "대사 배치가 어색해요"},
+        {"id": "etc", "label": "기타"},
     ],
     "scene": [
         {"id": "character", "label": "캐릭터가 이상해요"},
@@ -2368,6 +2411,7 @@ FEEDBACK_TAGS: dict[str, list[dict[str, str]]] = {
         {"id": "text", "label": "글자가 깨져요"},
         {"id": "light", "label": "색·조명이 별로예요"},
         {"id": "artifact", "label": "이상한 게 그려졌어요"},
+        {"id": "etc", "label": "기타"},
     ],
 }
 
