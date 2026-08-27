@@ -2384,6 +2384,7 @@ FEEDBACK_TAGS: dict[str, list[dict[str, str]]] = {
         {"id": "age", "label": "나이대가 안 맞아요"},
         {"id": "style", "label": "그림체가 생각과 달라요"},
         {"id": "ratio", "label": "등신 비율이 안 맞아요"},
+        {"id": "etc", "label": "기타"},
     ],
     "story": [
         {"id": "genre", "label": "고른 장르 느낌이 안 나요"},
@@ -2392,6 +2393,7 @@ FEEDBACK_TAGS: dict[str, list[dict[str, str]]] = {
         {"id": "line", "label": "대사가 어색해요"},
         {"id": "name", "label": "이름이 잘못 나와요"},
         {"id": "pace", "label": "전개가 급하거나 지루해요"},
+        {"id": "etc", "label": "기타"},
     ],
     "board": [
         {"id": "flow", "label": "컷 흐름이 끊겨요"},
@@ -2399,6 +2401,7 @@ FEEDBACK_TAGS: dict[str, list[dict[str, str]]] = {
         {"id": "angle", "label": "컷 앵글이 어색해요"},
         {"id": "balance", "label": "컷 분량 배분이 이상해요"},
         {"id": "line", "label": "대사 배치가 어색해요"},
+        {"id": "etc", "label": "기타"},
     ],
     "scene": [
         {"id": "character", "label": "캐릭터가 이상해요"},
@@ -2408,6 +2411,7 @@ FEEDBACK_TAGS: dict[str, list[dict[str, str]]] = {
         {"id": "text", "label": "글자가 깨져요"},
         {"id": "light", "label": "색·조명이 별로예요"},
         {"id": "artifact", "label": "이상한 게 그려졌어요"},
+        {"id": "etc", "label": "기타"},
     ],
 }
 
