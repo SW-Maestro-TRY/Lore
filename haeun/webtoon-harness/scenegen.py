@@ -166,6 +166,10 @@ class Scene:
     panels: list[str] = field(default_factory=list)   # 패널별 영어 장면 서술 (LLM)
     layout: str = ""                    # config layout_templates 중 하나
     warnings: list[str] = field(default_factory=list)  # 금지어 lint 결과
+    # 9단계(페이지 편집)가 고른 **바탕 컷 번호**. 이 화면에서 지면을 깔고 다른
+    # 컷이 그 위에 얹히는 컷이다. None 이면 layout_text 가 예전처럼 크기로
+    # 고른다 — 9단계가 없던 옛 run 이 그대로 재현된다.
+    base_cut: int | None = None
 
     @property
     def gap_after(self) -> int:
@@ -869,8 +873,19 @@ def layout_text(cfg: dict[str, Any], scene: Scene) -> str:
 
     weights = [weight_of(c) for c in scene.cuts]
     total = sum(weights) or 1.0
-    # 가장 큰 컷이 바탕이 된다. 같으면 뒤쪽 — 감정의 정점은 대개 뒤에 온다.
-    base_i = max(range(len(weights)), key=lambda i: (weights[i], i))
+    # 바탕 컷 — **9단계가 골랐으면 그것을 쓴다.** 크기로 고르면 tall 이라서
+    # 바탕이 되고 wide 라서 안 되는 일이 벌어진다. 어느 컷에서 독자가 멈춰야
+    # 하는가는 크기가 아니라 이야기가 정한다(9단계 프롬프트 참고).
+    base_i = None
+    if scene.base_cut is not None:
+        for i, c in enumerate(scene.cuts):
+            if c.get("cut_number") == scene.base_cut:
+                base_i = i
+                break
+    if base_i is None:
+        # 9단계가 없거나 그 번호를 못 찾았다 — 예전대로 가장 큰 컷.
+        # 같으면 뒤쪽: 감정의 정점은 대개 뒤에 온다.
+        base_i = max(range(len(weights)), key=lambda i: (weights[i], i))
 
     slots = [str(s).strip() for s in (comp.get("slots") or []) if str(s).strip()]
     renders = dict((cfg.get("scene") or {}).get("panel_render") or {})
@@ -1449,6 +1464,9 @@ def to_json(scenes: list[Scene]) -> list[dict[str, Any]]:
              "gazes": [str(c.get("gaze") or "") for c in sc.cuts],
              # 대사는 이미지에 그리지 않는다. 말풍선으로 얹으려면 컷별로 남아 있어야 한다.
              "dialogues": overlay_lines(sc.cuts),
+             # 9단계가 고른 바탕 컷. 캐시에서 다시 읽을 때 이게 없으면 크기로
+             # 다시 골라 버려서, 같은 run 을 재실행하면 배치가 달라진다.
+             "base_cut": sc.base_cut,
              "warnings": sc.warnings} for sc in scenes]
 
 
@@ -1465,5 +1483,7 @@ def from_json(data: list[dict[str, Any]], cuts: list[dict[str, Any]]) -> list[Sc
         out.append(Scene(scene_number=int(item["scene_number"]), cuts=picked,
                          panels=[str(p) for p in item.get("panels") or []],
                          layout=str(item.get("layout") or ""),
+                         base_cut=(int(item["base_cut"])
+                                   if item.get("base_cut") is not None else None),
                          warnings=[str(w) for w in item.get("warnings") or []]))
     return out

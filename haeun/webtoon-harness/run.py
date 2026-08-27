@@ -1789,6 +1789,31 @@ def group_scenes(cfg: dict[str, Any], ep: storyload.Episode,
     """컷을 Scene 으로 묶는다. 세 곳(본 생성 · verify-all · probe)이 같이 쓴다."""
     per = int(cfg["scene"]["cuts_per_scene"])
     max_per = int(cfg["scene"].get("max_cuts_per_scene") or 0)
+
+    # 9단계(페이지 편집)가 화면 묶음을 정해 줬으면 **그것을 그대로 쓴다.**
+    # 아래 세 모드는 전부 규칙 하나가 기계적으로 정하는 것이다 — scene_break 가
+    # 정하거나(direction), 무게가 정하거나(weight), 개수가 정한다(fixed).
+    # 9단계는 그 값들을 **같이 보고** 판단하라고 만든 자리라, 있으면 그쪽이 낫다.
+    # 없으면(9단계가 없던 옛 run, 또는 게이트를 못 넘겨 비워 온 화) 예전 규칙으로
+    # 돌아간다 — 그래서 옛 run 은 한 장도 안 바뀐다.
+    if getattr(ep, "pages", None):
+        by_num = {c.get("cut_number"): c for c in base if isinstance(c, dict)}
+        out: list[scenegen.Scene] = []
+        for i, page in enumerate(ep.pages, 1):
+            rows = [by_num[n] for n in (page.get("cuts") or []) if n in by_num]
+            if not rows:
+                continue
+            sc = scenegen.Scene(scene_number=len(out) + 1, cuts=rows)
+            # 바탕 컷은 9단계가 골랐다. layout_text 가 크기로 다시 고르지 않게
+            # 여기서 실어 보낸다(scenegen.base_index 참고).
+            sc.base_cut = page.get("base")
+            out.append(sc)
+        if out:
+            print(f"[scene_gen] 9단계 화면 묶음 사용 — {len(out)}장 "
+                  + " | ".join("+".join(str(n) for n in s.cut_numbers) for s in out))
+            return out
+        print("[scene_gen] 9단계 화면 묶음이 비어 하네스 규칙으로 묶습니다.")
+
     mode = grouping_mode(cfg, ep)
     if mode == "weight":
         # 개수가 아니라 무게가 정한다 — 무거운(full) 컷은 혼자 한 장.

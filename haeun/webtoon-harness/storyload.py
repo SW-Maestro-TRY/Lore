@@ -175,6 +175,9 @@ class Episode:
     # 컷 서술은 "무엇이 보이는가" 만 말하고, "어떤 공기로 그릴 것인가" 는 여기에만
     # 있다. 안 넘기면 그림 쪽은 컷마다 톤을 새로 정한다.
     scenes: list = field(default_factory=list)
+    # 화면 묶음 — 9단계(페이지 편집)가 정한 것. [{"cuts":[1,2,3],"base":3,"why":…}]
+    # 비어 있으면(9단계가 없거나 실패한 옛 run) 하네스가 자기 규칙으로 묶는다.
+    pages: list = field(default_factory=list)
 
 
 class LoadError(RuntimeError):
@@ -283,6 +286,7 @@ def load_w7_episode(runs_root: Path, run_id: str, episode: int) -> Episode:
         has_direction=has_direction,
         setting=(entry or {}).get("setting") or {},
         scenes=[sc for sc in (data.get("scenes") or []) if isinstance(sc, dict)],
+        pages=[pg for pg in (data.get("pages") or []) if isinstance(pg, dict)],
     )
 
 
