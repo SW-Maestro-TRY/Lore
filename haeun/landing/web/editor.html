@@ -36,7 +36,21 @@
         <button type="button" class="credit-more" id="ledgerBtn">내역</button>
       </div>
     </div>
+    <!-- 폰에서는 이 줄이 통째로 **화면 아래 단추줄**이 된다 (editor.css 의
+         .ed-top-right 참고). 머리줄 하나에 로고·크레딧·단추 셋을 다 넣으면
+         590px 가 필요한데 컬럼은 480px 이라, 「저장」과 「이미지로 뽑기」가
+         화면 밖으로 밀려나 아예 안 보였다(실측). 넓은 화면에서만 머리에
+         남는다. 도구 손잡이도 같은 줄에 들어와서, 폰에서는 네 단추가 엄지
+         닿는 자리에 나란히 선다. -->
     <div class="ed-top-right">
+      <!-- 도구 서랍 손잡이. position 이 화면 폭에 따라 바뀌므로(폰=이 줄의
+           한 칸, PC=컬럼 오른쪽 가장자리에 붙는 fixed) DOM 위치는 여기 하나로
+           둔다 — fixed 는 부모와 무관하게 뜬다. -->
+      <button type="button" class="dock-open" id="dockOpen"
+              aria-controls="edDock" aria-expanded="false">
+        <span class="dock-open-icon" aria-hidden="true">☰</span>
+        <span class="dock-open-label">도구</span>
+      </button>
       <!-- 대사 스크립트. 완성본 화면(읽는 자리)에 있던 것을 여기로 옮겼다 —
            대사를 확인하는 것은 읽는 일이 아니라 **고치는 일** 옆에 있어야 한다.
            말풍선을 얹으면서 원래 대사가 무엇이었는지 보는 자리다. -->
@@ -100,11 +114,7 @@
   <!-- 오른쪽에서 밀려 나오는 서랍. 예전에는 화면 아래에 붙어 있었는데, 그림을
        보면서 얹는 작업인데 화면 아래 절반을 늘 서랍이 차지하고 있었다. 지금은
        기본이 닫힘이고 오른쪽 ☰ 를 눌러야 열린다 — 그림이 먼저다. -->
-  <button type="button" class="dock-open" id="dockOpen"
-          aria-controls="edDock" aria-expanded="false">
-    <span class="dock-open-icon" aria-hidden="true">☰</span>
-    <span class="dock-open-label">도구</span>
-  </button>
+  <!-- (손잡이는 머리줄의 .ed-top-right 안으로 옮겼다 — 위 주석 참고) -->
   <div class="dock-scrim" id="dockScrim" hidden></div>
 
   <aside class="ed-dock" id="edDock" aria-label="말풍선 · 스티커 · 효과음">
