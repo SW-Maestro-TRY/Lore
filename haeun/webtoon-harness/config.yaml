@@ -225,10 +225,11 @@ style_common: >-
   LINEWORK IS VISIBLE. Figures and significant objects carry a drawn outline and
   stay closed and readable. Never let a form be defined purely by photographic
   light and texture with no drawing underneath.
-  SURFACES ARE FLAT, NOT PHOTOGRAPHED. Rubble, asphalt, water, foliage, cloth,
-  rusted metal: a few large drawn shapes with hard-edged tones. Never a
-  photographic texture, never per-pebble or per-leaf detail, never scanned grain,
-  never procedural noise.
+  SURFACES ARE PAINTED OR DRAWN, NEVER PHOTOGRAPHED. No photographic texture, no
+  scanned grain, no procedural noise, no 3D-rendered material. HOW MUCH detail a
+  surface carries is decided by the style below — some styles paint the world in
+  freely, others flatten it to colour fields — but in every one of them the
+  surface was made by a hand, not a camera.
   NO CAMERA ARTEFACTS. No lens flare, no bloom, no depth-of-field blur, no bokeh,
   no chromatic aberration, no film grain, no HDR glare, no volumetric dust or
   haze hanging in the air. Distance is shown by flattening far shapes to a paler
@@ -287,34 +288,41 @@ styles_v2:
       from drawn marks — speed lines, focus lines, impact bursts, sweat drops.
       Everyday commercial webtoon quality. Readable at a glance, never precious.
 
-  # 같은 평면 채색인데 **카메라가 시끄럽습니다.** 실사가 아니라 연출이 다릅니다.
+  # 배경을 **그리되 뒤로 민다.** 웹툰처럼 평면으로 눌러 버리는 것이 아니라,
+  # 채도와 선명도를 낮춰 인물만 앞으로 튀어나오게 하는 쪽입니다.
   cinematic:
     normal: >-
-      Korean webtoon panel staged like a film frame. The rendering is exactly as
-      flat and drawn as any other panel — what changes is WHERE THE CAMERA IS and
-      HOW THE SPACE IS BUILT.
-      STAGING: this is the loud one. Push the perspective hard — strong vanishing
-      points, a low angle that makes something tower, or a high angle that makes
-      the character small. Put the figure DEEP in the frame and let the space
-      dominate; a long shot where the character is tiny against the setting is
-      correct here and would be wrong in a plain webtoon panel. Frame through
-      something in the foreground — a doorway, rubble, a shoulder, a railing —
-      so the panel has a near, a middle and a far.
-      LIGHT AS DRAMA, DRAWN FLAT: one strong directional key light. Backlight
-      becomes a hard-edged silhouette against one flat bright shape. A sunset is
-      two or three flat bands of colour. Cast shadows are long flat drawn shapes
-      with clean edges. The drama comes from the SHAPE of the light, never from
-      simulating a lens.
-      CONTRAST: push the value range. Large dark flat masses against a few bright
-      flat shapes. A near-silhouette figure is a legitimate panel here.
-      COLOUR: still cel shading — flat base, one shadow tone, one light tone,
-      hard edges — but the palette may lean hard into a single colour (amber,
-      teal, blood red) across the whole panel.
-      DETAIL BUDGET: distant and peripheral areas get FEWER drawn elements, not
-      softer ones. Choose a few strong silhouettes and leave the rest plain.
-      COMIC FURNITURE still applies: bordered caption boxes, outlined speech
-      bubbles with tails, drawn sound effects, drawn effect marks.
-      Dramatic in staging, flat and drawn in execution.
+      Korean webtoon page staged like a film frame — the look of a premium
+      illustrated series. The background is genuinely PAINTED here, not flattened
+      to colour fields; what keeps it from reading as a photograph or as concept
+      art is that it is pushed BACK behind the character.
+      THE ONE RULE THAT MATTERS — SEPARATION. The character is sharp, clearly
+      outlined, cel-shaded and the most SATURATED thing on the page. The
+      background is softer, hazier and noticeably DESATURATED, drifting toward a
+      muted single-hue wash (amber-brown, dusk blue, cold grey). A reader's eye
+      must land on the character instantly, even though the background is richly
+      painted. If the background is as sharp and as colourful as the character,
+      the panel has failed and reads as concept art.
+      BACKGROUND: painted with real depth and atmosphere — layered trees, mist
+      between the trunks, drifting leaves, shafts of light. Detail is allowed and
+      wanted, but it stays low-contrast and low-saturation, and the farther back
+      it sits the softer and paler it gets.
+      CHARACTER: drawn, never painted into the scenery. Clean outline, flat base
+      tone plus a soft shadow tone, expressive eyes with clear highlights. The
+      character keeps webtoon linework even while standing in a painted world —
+      that contrast IS this style.
+      STAGING: push the camera. Strong perspective, a low angle that makes
+      something tower or a high angle that makes the character small, the figure
+      set deep in the frame, foreground branches or rubble framing the shot so
+      the page has a near, a middle and a far.
+      LIGHT AS DRAMA: one strong directional key. Backlight, long shadows, a
+      bright haze behind a silhouette. Warm and cold can sit in one page (a cold
+      blue inset against a warm amber page) to mark a change of beat.
+      COMIC FURNITURE still applies, and it is what keeps this a webtoon:
+      bordered caption boxes, outlined speech bubbles with tails, soft cloud
+      thought bubbles, hand-drawn Korean sound effects placed into the scene,
+      small drawn motion strokes.
+      Painted world, drawn character, cinematic camera.
 
 styles:
   # ---------------------------------------------------------------------------
@@ -1443,6 +1451,38 @@ scene:
     ONE continuous vertical webtoon illustration built from {panel_count} overlapping
     elements, read top to bottom as the reader scrolls. Not a comic book page, not a
     row of framed panels.
+    {panels}
+
+    Panel layout:
+    {layout}
+
+    {style}
+    {extra}
+
+  # style_contract 가 v2 일 때만 쓰는 템플릿 (v1 이면 위엣것 그대로).
+  #
+  # 왜 갈랐나 — 위 템플릿의 "Not a comic book page, not a row of framed panels"
+  # 이 **컷 분할 자체를 죽이고 있었습니다.** 바로 아래 {layout} 에는 콘티가 정한
+  # "three horizontal panels stacked with thin white gutters" · "a full-bleed
+  # background panel with a circular inset overlapping" 같은 지시가 들어가는데,
+  # 그 위에서 "테두리 있는 컷 만들지 마라" 고 하니 모순입니다. 모델은 뒤에 읽은
+  # 금지를 따르고, 결과가 컷 구분 없는 통짜 한 장이 됩니다 — 아무리 잘 그려도
+  # 웹툰이 아니라 일러스트 한 장으로 읽힙니다.
+  #
+  # 원래 의도(세로 스크롤은 종이 만화책 격자가 아니다)는 맞습니다. 너무 세게
+  # 말한 것이 문제라, 여기서는 **격자 강제**와 **통짜 병합**을 둘 다 막고
+  # 레이아웃을 따르라고만 합니다. full-bleed 컷은 그대로 허용됩니다.
+  prompt_template_v2: |
+    {appearance}
+
+    ONE vertical webtoon page: {panel_count} moments read top to bottom as the
+    reader scrolls.
+    FOLLOW THE PANEL LAYOUT BELOW EXACTLY. It decides how many framed panels
+    there are, how they sit, and where they overlap. A panel the layout frames
+    gets a clean drawn border with a white gutter beside it; a panel the layout
+    calls full-bleed fills the width edge to edge with no border at all.
+    Do NOT impose a uniform paper-comic grid, and do NOT merge everything into
+    one single undivided illustration — either one throws away the layout.
     {panels}
 
     Panel layout:

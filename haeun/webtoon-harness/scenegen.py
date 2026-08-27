@@ -1105,7 +1105,12 @@ def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
         rows.append(f"Panel {i}: {text.strip()}"
                     + (f" {extra_clauses}" if extra_clauses else ""))
     panels = "\n".join(rows)
-    text = str(cfg["scene"]["prompt_template"])
+    # v2 는 컷 분할을 살리는 템플릿을 쓴다(config 의 prompt_template_v2 주석 참고).
+    # 없거나 v1 이면 예전 템플릿 그대로라, 옛 run 은 한 글자도 안 바뀐다.
+    template = str(cfg["scene"]["prompt_template"])
+    if str(cfg.get("style_contract") or "v1").strip().lower() == "v2":
+        template = str(cfg["scene"].get("prompt_template_v2") or template)
+    text = template
     for token, value in (
         ("{appearance}", appearance.strip()),
         ("{panel_count}", str(len(scene.panels))),
