@@ -368,6 +368,53 @@ def sync_legacy_speech(cut: dict) -> None:
     cut["speaker_side"] = talker["side"] if talker else ""
 
 
+def sync_lines_from_legacy(cut: dict) -> None:
+    """옛 칸의 글자를 lines 에 되쓴다. sync_legacy_speech 의 **반대 방향**이다.
+
+    이것이 없던 동안 8단계(글자 다시 쓰기)가 통째로 헛돌았다. 8단계는 옛 세 칸
+    (narration·dialogue·thought)에만 적는데, 읽는 쪽은 전부 speech_lines() 를
+    거치고 그것은 lines 가 있으면 lines 만 본다 — 그래서 8단계가 다듬은 대사는
+    저장은 되면서 화면에도 그림 프롬프트에도 닿지 못했고, 7단계 초안이 그대로
+    나갔다. 실측: 말이 있는 컷 71개 중 18개(25%)가 8단계 결과를 버리고 있었다
+    (예: 7단계 "여기, 시민! 저쪽은 위험합니다!" 가 나가고, 8단계가 고쳐 둔
+    "거기, 강아지 안고 있는 분! 멈추세요, 위험합니다!" 는 버려짐).
+
+    갈아 끼우는 것은 **종류별 첫 줄**이다 — 옛 칸이 종류당 하나뿐이라 그 이상은
+    대응할 자리가 없다. 둘째 줄부터는 8단계가 가리킬 방법이 없으므로 그대로
+    둔다(지우지 않는다. 한 컷에서 둘이 주고받는 연출이 통째로 사라진다).
+    """
+    if not isinstance(cut, dict) or not isinstance(cut.get("lines"), list):
+        return                      # lines 가 없으면 옛 칸이 이미 유일한 원본이다
+    rows = [r for r in cut["lines"] if isinstance(r, dict)]
+    speaker = str(cut.get("speaker") or "").strip()
+    side = str(cut.get("speaker_side") or "").strip().lower()
+    for kind in SPEECH_KINDS:
+        text = str(cut.get(kind) or "").strip()
+        first = next((r for r in rows
+                      if str(r.get("kind") or "dialogue").strip().lower() == kind), None)
+        if text and first is not None:
+            first["text"] = text
+        elif text:
+            # 무음이던 자리에 8단계가 글자를 넣었다 — 그것이 이 단계 일의 절반이다.
+            rows.append({"kind": kind, "text": text,
+                         "speaker": "" if kind == "narration" else speaker,
+                         "side": "" if kind == "narration" else side})
+        elif first is not None:
+            rows.remove(first)      # 8단계가 지운 것은 지운 것이다
+    # 나레이션이 아닌 줄의 화자·자리도 8단계 값을 따른다 (옛 칸은 하나뿐이라
+    # 첫 줄에만 적용한다 — 둘째 줄의 화자를 첫 줄 화자로 덮으면 주고받음이
+    # 한 사람 독백이 된다).
+    talker = next((r for r in rows
+                   if str(r.get("kind") or "dialogue").strip().lower()
+                   in ("dialogue", "thought")), None)
+    if talker is not None:
+        if speaker:
+            talker["speaker"] = speaker
+        if side:
+            talker["side"] = side
+    cut["lines"] = rows
+
+
 def speakers_in(cut: dict) -> list:
     """이 컷에서 실제로 말하는 사람들 (나레이션 제외, 중복 제거·순서 유지)."""
     seen, out = set(), []
@@ -4168,6 +4215,11 @@ def apply_text_patch(cuts: list, patch: list) -> list:
     적힌 컷만 바꾼다. 빠진 컷은 7단계의 글자가 그대로 남는다 — 프롬프트는
     전부 적으라고 하지만, 빠졌다고 그 컷의 글자를 지우면 모델의 실수 하나가
     화의 일부를 통째로 무음으로 만든다. 조용히 지우는 것보다 남기는 편이 낫다.
+
+    **lines 는 문자열이 아니다.** 예전에는 TEXT_PATCH_FIELDS 를 통째로 돌면서
+    str() 로 찍어 넣어서, 모델이 lines 를 배열로 주면 "[{'kind': ...}]" 라는
+    문자열이 저장됐다 — speech_lines() 가 list 가 아닌 것을 무시해서 화면은
+    멀쩡했지만 컷 파일에는 쓰레기가 남았다. 여기서 종류를 갈라 받는다.
     """
     notes = []
     by_num = {c.get("cut_number"): c for c in cuts if isinstance(c, dict)}
@@ -4181,9 +4233,27 @@ def apply_text_patch(cuts: list, patch: list) -> list:
             notes.append(f"8단계가 없는 컷 {num} 을 가리켰습니다 — 건너뜁니다.")
             continue
         touched.add(num)
+        gave_lines = False
         for key in TEXT_PATCH_FIELDS:
-            if key in item:
-                cut[key] = str(item.get(key) or "").strip()
+            if key not in item:
+                continue
+            if key == "lines":
+                # 모델이 직접 줄 구조를 다시 짠 경우(말풍선 나누기)만 여기 온다.
+                if isinstance(item[key], list):
+                    cut[key] = item[key]
+                    gave_lines = True
+                else:
+                    notes.append(f"컷 {num} 의 lines 가 배열이 아니라 "
+                                 "무시했습니다 — 옛 칸의 글자를 씁니다.")
+                continue
+            cut[key] = str(item.get(key) or "").strip()
+        # 모델이 lines 를 안 줬으면(지금까지의 전부) 옛 칸의 글자를 lines 에
+        # 되쓴다. 이걸 안 하면 8단계 결과가 저장만 되고 화면·그림에는 7단계
+        # 초안이 나간다 — sync_lines_from_legacy 의 설명 참고.
+        if gave_lines:
+            sync_legacy_speech(cut)     # 반대로 옛 칸을 새 lines 에 맞춘다
+        else:
+            sync_lines_from_legacy(cut)
     missing = [n for n in by_num if n not in touched]
     if missing:
         notes.append(f"8단계가 컷 {sorted(missing)} 을 적지 않았습니다 — "

@@ -210,6 +210,36 @@ BREAKOUT_BEATS = ("build", "turn", "release")
 FLOAT_MAX = 3
 FLOAT_BEATS = ("release", "hold", "build")
 BEATS = ("setup", "build", "turn", "release", "hold")
+
+# ---- 서사적 중요도 — 시각 축과 완전히 분리된 하나의 축 ---------------------
+#
+# size 는 **틀의 비율**이고 render_style 은 **칸을 어떻게 쓰는가**다. 둘 다
+# 화면 이야기이지 이야기의 무게가 아니다. 그런데 무게(weight)를 그 둘에서
+# 파생시키고 있었다:
+#
+#     bleed 또는 impact -> full,  float -> light,  나머지 -> normal
+#
+# 그래서 "화면은 평범하지만 서사적으로 중요한 컷"(각성·이별·깨달음)을 표현할
+# 자리가 없었다. tall 이라 큰 것이 아니라 중요해서 커야 하는데, 지금 구조에서는
+# 크게 보이려면 impact 를 골라야 하고 그러면 화면 비율까지 따라 바뀐다.
+#
+# 그래서 축을 하나 새로 세운다. **W8 이 판정한다** — 8단계는 이미 1화 컷 전부와
+# 엔진 카드·회차 설계·질문 장부를 한 번에 받아 읽고 있어서(대사를 고치려면
+# 흐름을 알아야 한다) 판정에 필요한 재료를 그대로 들고 있고, 호출도 안 늘어난다.
+# 7단계에 12번째 축으로 얹지 않은 이유는 그쪽이 이미 과부하이기 때문이다
+# (실측: 한 화에서 bleed·float·sd 가 각 0개 — 뒤쪽 축을 놓치고 있다).
+#
+# 7.5단계를 새로 만들지 않은 이유는 파일 머리말에 적힌 이력 때문이다 — 확정된
+# 컷에 size·render_style 을 사후로 얹는 7.5단계가 예전에 있었고 폐기됐다.
+# 다만 그 실패는 **라벨이 내용을 바꿔야 하는데 못 바꿔서** 난 것이고, 중요도는
+# 이미 쓰인 내용을 읽고 판정만 하므로 사후가 오히려 맞다.
+NARRATIVE_WEIGHTS = ("major", "normal", "minor")
+
+# 중요도 -> 지면 무게. 이 매핑은 **묶기 단계의 내부 규칙**이다. major 가
+# "크게 그려라" 라는 뜻이 아니라, 중요한 컷이 결과적으로 한 장을 차지하게 되는
+# 것이다 — W8 프롬프트에는 full·light 라는 말이 한 번도 안 나온다.
+WEIGHT_BY_NARRATIVE = {"major": "full", "normal": "normal", "minor": "light"}
+
 GAZES = ("down", "toward-next", "at-viewer", "away")
 MAX_GAP = 3
 MIN_LONG_GAPS = 1       # gap_after 3 의 화당 하한 — 낙차 없는 화는 없다
@@ -3914,8 +3944,18 @@ def derive_layout(cuts: list, scenes=None) -> list:
     #
     # 이 값을 실제로 쓸지는 웹툰 하네스가 config 로 켠다(기본 꺼짐). 그래서 값이
     # 생겨도 예전 run 의 묶기와 그림은 그대로다.
+    # 2026-08-27: **narrative_weight 가 있으면 그것이 정한다.** 위 세 줄은
+    # 화면(size·render_style)에서 무게를 유추하던 것이라, 화면이 평범하면서
+    # 서사적으로 중요한 컷을 표현할 수 없었다(NARRATIVE_WEIGHTS 주석 참고).
+    #
+    # 8단계가 아직 안 돈 시점(7단계 직후)이나 그 필드가 없는 옛 콘티는 예전
+    # 규칙 그대로 간다 — 옛 run 을 다시 돌려도 무게가 안 바뀐다. 8단계가 값을
+    # 채우면 apply_narrative_weights() 가 이 값을 덮어쓴다.
     for i in range(n):
-        if renders[i] == "bleed" or sizes[i] == "impact":
+        narrative = str(cuts[i].get("narrative_weight") or "").strip().lower()
+        if narrative in WEIGHT_BY_NARRATIVE:
+            weight = WEIGHT_BY_NARRATIVE[narrative]
+        elif renders[i] == "bleed" or sizes[i] == "impact":
             weight = "full"
         elif renders[i] == "float":
             weight = "light"
@@ -4261,6 +4301,51 @@ def apply_text_patch(cuts: list, patch: list) -> list:
     return notes
 
 
+def apply_narrative_weights(cuts: list, rows: list) -> list:
+    """8단계가 판정한 서사적 중요도를 컷에 얹는다. 돌려주는 것은 메모다.
+
+    **text_patch 와 따로 받는다.** 같은 배열에 섞으면 대사 한 줄이 잘못 왔을 때
+    중요도까지 같이 떨어지고, 무엇이 왜 바뀌었는지도 안 보인다 — 실제로 lines 를
+    text_patch 에 섞어 두었다가 8단계 결과가 통째로 버려진 적이 있다.
+
+    적힌 컷만 바꾼다. 빠진 컷은 derive_layout 이 계산해 둔 무게를 그대로 쓴다 —
+    조용히 normal 로 미는 것보다 낫다. 값이 이상하면 그 컷만 버린다: 여기서
+    화를 세우면 8단계가 실패해도 화는 성립한다는 이 단계의 전제가 깨진다.
+    """
+    notes = []
+    by_num = {c.get("cut_number"): c for c in cuts if isinstance(c, dict)}
+    seen = set()
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        num = row.get("cut_number")
+        cut = by_num.get(num)
+        if cut is None:
+            notes.append(f"8단계가 없는 컷 {num} 의 중요도를 적었습니다 — 건너뜁니다.")
+            continue
+        value = str(row.get("weight") or row.get("narrative_weight") or "").strip().lower()
+        if value not in NARRATIVE_WEIGHTS:
+            notes.append(f"컷 {num} 의 중요도 '{row.get('weight')}' 를 모릅니다 "
+                         f"({' | '.join(NARRATIVE_WEIGHTS)} 중 하나여야 합니다) — "
+                         "그 컷은 7단계가 계산한 무게를 그대로 씁니다.")
+            continue
+        cut["narrative_weight"] = value
+        cut["weight"] = WEIGHT_BY_NARRATIVE[value]
+        seen.add(num)
+    missing = [n for n in by_num if n not in seen]
+    if missing:
+        notes.append(f"8단계가 컷 {sorted(missing)} 의 중요도를 안 적었습니다 — "
+                     "그 컷은 7단계가 계산한 무게를 그대로 둡니다.")
+    # 남발 감시. 막지는 않는다(개수 상한을 두지 않기로 했다) — 절반을 넘으면
+    # "전부 중요하면 아무것도 중요하지 않다" 이므로 사람이 볼 수 있게 남긴다.
+    majors = [n for n, c in by_num.items()
+              if str(c.get("narrative_weight") or "").lower() == "major"]
+    if by_num and len(majors) * 2 > len(by_num):
+        notes.append(f"중요(major) 컷이 {len(majors)}/{len(by_num)} 개입니다 — "
+                     "절반을 넘었습니다. 전부 중요하면 아무것도 중요하지 않습니다.")
+    return notes
+
+
 def repair_bubble_zone(cuts: list) -> list:
     """글자와 자리가 어긋난 것만 맞춘다. 8단계가 빠뜨렸을 때의 안전망이다.
 
@@ -4567,6 +4652,10 @@ def solve_text(ps: PromptSet, call, card: str, episode: dict, payload: dict,
         if not failures:
             payload["cuts"] = trial
             notes += repair_bubble_zone(trial)
+            # 서사적 중요도는 글자 게이트를 통과한 뒤에 얹는다. 글자 때문에
+            # 되돌릴 때 중요도까지 같이 날아갈 이유가 없고, 반대로 중요도가
+            # 이상해도 대사는 살아야 한다 — 둘은 독립된 판단이다.
+            notes += apply_narrative_weights(trial, out.get("narrative_weights"))
             notes += text_pass_warnings(trial, payload.get("scenes"), facts)
             return payload, regens, [f"글자: {x}" for x in notes]
 
