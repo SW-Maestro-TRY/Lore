@@ -116,6 +116,24 @@ SPOT_TAIL = (
     "one spot colour.")
 
 
+def style_common_tail(cfg: dict[str, Any]) -> str:
+    """모든 그림체가 지키는 공통 계약(비실사·배경 예산). **프롬프트 맨 끝**이다.
+
+    style_contract 가 v2 일 때만 나온다. v1 이면 빈 문자열이라 예전 프롬프트와
+    한 글자도 안 다르다.
+
+    왜 끝인가 — 2026-08-27 에 그림체 문구 **앞**에 붙여서 한 컷 뽑아 봤다가
+    되돌린 자리다. 앞에 두면 뒤따르는 장면 서술(영화 언어로 쓰여 있다: "먼지가
+    깔린 폐허", "석양이 잔해를 비춘다")에 그대로 덮여서, 안 붙인 것보다 배경이
+    **더** 빽빽해졌다. 같은 문구를 맨 끝에 붙였을 때는 하늘이 색면 하나로
+    떨어졌다. 이 파일이 이미 같은 말을 두 번 하고 있다 — 이음매도 head_ratio 도
+    "뒤에 온 것이 앞을 덮는다" 는 이유로 끝에 있다.
+    """
+    if str(cfg.get("style_contract") or "v1").strip().lower() != "v2":
+        return ""
+    return str(cfg.get("style_common") or "").strip()
+
+
 def monochrome(cfg: dict[str, Any]) -> bool:
     """지금 그림체가 흑백인가. run.py 가 style_monochrome 에 넣어 둔다."""
     return bool(cfg.get("style_monochrome"))
@@ -1117,6 +1135,11 @@ def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
     text = f"{text.rstrip()}\n{lettering_tail(cfg)}"
     if monochrome(cfg):
         text = f"{text.rstrip()}\n{mono_tail(cfg)}"
+    # 공통 계약은 **제일 마지막**이다 — 그림체 문구도 장면 서술도 다 덮어야
+    # 한다(style_common_tail 주석 참고). v1 이면 빈 문자열이라 안 바뀐다.
+    common = style_common_tail(cfg)
+    if common:
+        text = f"{text.rstrip()}\n{common}"
     text = text.replace("1 panels", "1 panel")  # 마지막 묶음이 1컷일 때
     text = "\n".join(line.rstrip() for line in text.splitlines())
     return re.sub(r"\n{3,}", "\n\n", text).strip()

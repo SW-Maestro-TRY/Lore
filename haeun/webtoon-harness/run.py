@@ -339,19 +339,13 @@ def select_style(cfg: dict[str, Any], wanted: str | None) -> str:
             f"        등록된 그림체: {', '.join(styles)}")
     # 컷의 render_style 마다 통째로 다른 문구를 쓴다. 접미사를 덧붙이는 구조로는
     # 셋이 결국 같은 그림체로 보였다.
-    picked = variants.get(name, {})
-
-    # v2 의 공통 계약은 **앞에** 붙인다. 뒤에 붙이면 그림체 문구가 먼저 읽히고
-    # 공통 규칙이 예외처럼 보인다 — 실제로 실험에서 뒤에 붙인 블록은 앞의
-    # 그림체 지시(특히 cinematic 의 실사 요구)에 밀렸다. 비실사는 예외가 아니라
-    # 전제이므로 맨 앞이 맞다. sd 같은 변형에도 똑같이 붙는다.
-    common = str(cfg.get("style_common") or "").strip() if contract == "v2" else ""
-    if common:
-        picked = {k: f"{common}\n{v}" for k, v in picked.items()}
-        cfg["style_variants"] = picked
-        return f"{common}\n{styles[name]}"
-
-    cfg["style_variants"] = picked
+    # 공통 계약(style_common)은 여기서 안 붙인다. 프롬프트 **맨 끝**에 붙는다
+    # (scenegen.style_common_tail). 2026-08-27 에 여기서 앞에 붙여 봤다가 되돌린
+    # 자리다 — 앞에 두면 뒤따르는 장면 서술(영화 언어: "먼지가 깔린 폐허",
+    # "석양이 잔해를 비춘다")에 그대로 덮여서, 오히려 안 붙인 것보다 배경이
+    # 빽빽해졌다. 이 파일의 head_ratio_tail 주석이 이미 같은 말을 하고 있다:
+    # 뒤에 온 것이 앞의 그림체 문구를 덮는다.
+    cfg["style_variants"] = variants.get(name, {})
     return styles[name]
 
 
@@ -362,12 +356,7 @@ def style_name_of(cfg: dict[str, Any], suffix: str) -> str:
     돌려주는 것도 그 값이므로 여기서도 normal 과 맞춰 본다. 표 전체를 문자열로
     바꿔 비교하면 어떤 이름과도 맞지 않아 "(styles 표에 없음)" 이 뜬다.
     """
-    # v2 는 앞에 공통 계약이 붙어 있다(select_style 참고). 그것을 떼고 대조한다 —
-    # 안 떼면 어떤 이름과도 안 맞아 화면에 "(styles 표에 없음)" 이 뜬다.
     text = suffix.strip()
-    common = str(cfg.get("style_common") or "").strip()
-    if common and text.startswith(common):
-        text = text[len(common):].strip()
     # v2 로 덮은 그림체가 먼저다 — 지금 실제로 쓰인 문구가 그쪽이기 때문이다.
     for table_key in ("styles_v2", "styles"):
         for k, v in (cfg.get(table_key) or {}).items():
