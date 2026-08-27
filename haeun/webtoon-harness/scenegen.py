@@ -524,7 +524,18 @@ def bubble_clause(cfg: dict[str, Any], cut: dict[str, Any]) -> list[str]:
             tail += " (the same person in every panel where they appear)."
             # 한 컷에 풍선이 둘 이상이면 좌우를 못박아야 꼬리가 갈라지고 읽는
             # 순서가 선다. 하나뿐이면 배치는 그리는 쪽에 맡긴다.
-            if multi and side in ("left", "right", "center"):
+            if side == "offscreen":
+                # 화면 밖 목소리. 이 값이 있는데 프롬프트가 몰라서, 그리는 쪽은
+                # 늘 화면 안에서 화자를 찾았다 — 그 컷에 없는 인물의 대사가
+                # 엉뚱한 사람에게 붙었다. 웹툰의 정상 문법이므로 막지 않고,
+                # **어떻게 그릴지**를 말해 준다.
+                tail = (" This line is spoken by someone who is NOT VISIBLE in "
+                        "this panel — an off-panel voice. The bubble sits at the "
+                        "very edge of the panel with its tail pointing off the "
+                        "edge, out of frame, toward the unseen speaker. Do NOT "
+                        "attach the tail to anyone who is drawn here, and do NOT "
+                        "add a new character to be the speaker.")
+            elif multi and side in ("left", "right", "center"):
                 tail += (f" This bubble sits on the {side} side of the panel."
                          if side != "center" else
                          " This bubble sits in the middle of the panel.")

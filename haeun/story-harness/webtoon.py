@@ -4510,6 +4510,31 @@ def gate_text_pass(cuts: list, pov: str) -> list:
                 "설명이 됩니다. 나레이션이나 화면 글자로 옮기고, 대사는 그 사람이 "
                 "실제로 할 말로 바꾸세요.")
 
+        # 화면에 없는 사람이 말하고 있는가. 화면 밖 목소리(offscreen)는 웹툰의
+        # 정상 문법이라 막지 않는다 — 막는 것은 **그렇게 표시하지 않은 것**이다.
+        # side 가 left/right/center 면 그리는 쪽은 화면 안에서 화자를 찾고,
+        # 그 컷에 그 사람이 없으면 아무에게나 꼬리를 붙이거나 인물을 만들어낸다.
+        # 실측(20260826T202930 컷2): characters_in_frame 이 [한리아, 빌런] 인데
+        # 서도윤이 side=left 로 말해서, 화면에 없는 인물의 대사가 엉뚱한 사람에게
+        # 붙었다.
+        here = {str(x or "").strip() for x in (c.get("characters_in_frame") or [])
+                if str(x or "").strip()}
+        if here:
+            legacy_side = str(c.get("speaker_side") or "").strip().lower()
+            for row in speech_lines(c):
+                if row["kind"] == "narration":
+                    continue          # 나레이션은 화자가 없다
+                talker = row["speaker"]
+                side = (row["side"] or legacy_side)
+                if not talker or talker in here or side == "offscreen":
+                    continue
+                failures.append(
+                    f"컷 {n} 에서 「{talker}」 가 말하는데 그 컷의 화면에는 "
+                    f"{sorted(here)} 만 있습니다. 화면에 없는 사람이 화면 안에서 "
+                    "말할 수는 없습니다 — 그 컷에 있는 사람에게 대사를 주거나, "
+                    "나레이션으로 옮기거나, 화면 밖 목소리라면 그 줄의 side 를 "
+                    "offscreen 으로 적으세요.")
+
         if is_blank(c.get("thought")):
             continue
         who = str(c.get("speaker") or "").strip()
@@ -6186,6 +6211,24 @@ def _write_webtoon_html(wt: Path, data: dict) -> None:
                 if gap and n != stinger_cut:
                     parts.append(f'<tr class="gap g{gap}"><td colspan="7"></td></tr>')
             parts.append("</tbody></table></div>")
+            # 9단계가 정한 화면 묶음. 표만 보면 컷이 어디서 끊겨 한 장이 되는지
+            # 안 보인다 — 판정이 맞는지는 묶음과 바탕 컷을 같이 봐야 안다.
+            pages = payload.get("pages") or []
+            if pages:
+                rows = []
+                for i, pg in enumerate(pages, 1):
+                    nums = pg.get("cuts") or []
+                    base = pg.get("base")
+                    rows.append(
+                        f'<li><b>{i}장</b> 컷 '
+                        + _esc("·".join(str(x) for x in nums))
+                        + f' <span class="nw-major">바탕 {_esc(base)}</span>'
+                        + (f'<br><span class="meta">{_esc(pg.get("why"))}</span>'
+                           if pg.get("why") else "")
+                        + "</li>")
+                parts.append('<p class="meta"><b>화면 묶기 (9단계)</b> — '
+                             f'{len(pages)}장</p><ul class="pages">'
+                             + "".join(rows) + "</ul>")
             hist = size_histogram(cut_list)
             parts.append(
                 '<p class="meta">크기 '
@@ -6323,6 +6366,8 @@ WEBTOON_TEMPLATE = """<!doctype html>
   td.nw-minor  { color:#7a8a94; }
   td.nw-normal { color:#3a4a55; }
   td.nw-none   { color:#c0c8cd; }
+  ul.pages { margin:.3rem 0 .8rem; padding-left:1.2rem; font-size:.86rem; }
+  ul.pages li { margin:.25rem 0; }
   tr.gap td { border-bottom:none; padding:0; }
   tr.gap.g1 td { height:.5rem; }
   tr.gap.g2 td { height:1.6rem; }
