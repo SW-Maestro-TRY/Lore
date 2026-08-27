@@ -1762,10 +1762,12 @@ def group_scenes(cfg: dict[str, Any], ep: storyload.Episode,
     max_per = int(cfg["scene"].get("max_cuts_per_scene") or 0)
     mode = grouping_mode(cfg, ep)
     if mode == "weight":
-        # 개수가 아니라 무게가 정한다 — 무거운 컷은 혼자 한 장, 배경 없는
-        # 가벼운 컷만 연달아 붙은 것끼리 묶인다.
+        # 개수가 아니라 무게가 정한다 — 무거운(full) 컷은 혼자 한 장.
+        # weight_combine_normal 이 꺼져 있으면(기본) light 컷만 서로 묶이고,
+        # 켜져 있으면 normal 컷도 같이 묶인다(scenegen.group_by_weight 참고).
         return scenegen.group_by_weight(
-            base, int(cfg["scene"].get("max_light_per_scene") or 3))
+            base, int(cfg["scene"].get("max_light_per_scene") or 3),
+            env_bool_cfg(cfg, "weight_combine_normal"))
     if mode == "direction":
         # 이야기 경계(scene_break)로 먼저 자르고, 그 안을 **캔버스가 감당하는
         # 만큼** 다시 나눈다. 개수 상한(max_cuts_per_scene)은 안 쓴다 — 3컷도

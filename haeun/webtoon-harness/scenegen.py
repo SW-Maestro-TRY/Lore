@@ -261,7 +261,8 @@ def group_by_fit(cuts: list[dict[str, Any]], need, limit: float) -> list[Scene]:
     return scenes
 
 
-def group_by_weight(cuts: list[dict[str, Any]], max_light: int = 3) -> list[Scene]:
+def group_by_weight(cuts: list[dict[str, Any]], max_light: int = 3,
+                    combine_normal: bool = False) -> list[Scene]:
     """컷의 **무게**가 묶음을 정한다. 개수 규칙이 아예 없다.
 
     "한 장에 3컷" 도 "한 컷에 한 장" 도 둘 다 임의의 규칙이었다. 3컷씩 묶으면
@@ -272,19 +273,26 @@ def group_by_weight(cuts: list[dict[str, Any]], max_light: int = 3) -> list[Scen
     콘티가 계산해 둔 weight 를 그대로 따른다:
 
       full   통컷이거나 화면을 꽉 채우는 컷. **혼자 한 장.**
-      normal 보통 컷. **혼자 한 장.** (컷 모드와 같다)
+      normal 보통 컷. combine_normal 이 꺼져 있으면(예전 동작) **혼자 한 장**
+             (컷 모드와 같다). 켜져 있으면 light 와 똑같이 묶인다 — 실측해
+             보니 콘티가 float(=light)를 거의 안 써서 컷 대부분이 normal 로
+             남았고, 그러면 이 함수가 사실상 컷 모드와 같아져 버렸다
+             (2026-08-27). "무거운 컷만 혼자, 나머지는 합쳐서"가 원래
+             의도였으므로 normal 도 묶는 쪽이 그 의도에 맞다 — 다만 예전 run
+             을 다시 돌려도 그대로 나오게, 켜는 것은 새 옵션으로만 한다.
       light  떠 있는 컷(float). 배경이 없다 — 그래서 **연달아 붙은 것끼리
              한 장에 묶어도 격자가 안 생긴다.** 나눌 배경 자체가 없기 때문이다.
-             이것이 이 함수의 전부다.
 
-    max_light 는 한 장에 들어갈 light 컷의 상한이다. 배경이 없어도 넷을 넘기면
-    캔버스가 세로로 길어져 인물이 작아지기 시작한다.
+    max_light 는 한 장에 들어갈 묶는 컷(light, combine_normal 이면 normal 도)의
+    상한이다. 배경이 없어도 넷을 넘기면 캔버스가 세로로 길어져 인물이 작아지기
+    시작한다.
 
-    weight 가 없는 옛 컷은 전부 normal 로 읽히므로, 결과가 컷 하나당 한 장 —
-    즉 컷 모드와 같아진다.
+    weight 가 없는 옛 컷은 전부 normal 로 읽힌다 — combine_normal 이 꺼져
+    있으면(기본) 결과가 컷 하나당 한 장, 즉 컷 모드와 같아진다(예전과 동일).
     """
     if max_light < 1:
         raise SceneError("한 장에 묶을 light 컷 수는 1 이상이어야 합니다.")
+    solo_weights = {"full"} if combine_normal else {"full", "normal"}
     scenes: list[Scene] = []
     bucket: list[dict[str, Any]] = []
 
@@ -294,7 +302,8 @@ def group_by_weight(cuts: list[dict[str, Any]], max_light: int = 3) -> list[Scen
             bucket.clear()
 
     for c in cuts:
-        if str(c.get("weight") or "normal").strip().lower() == "light":
+        w = str(c.get("weight") or "normal").strip().lower()
+        if w not in solo_weights:
             bucket.append(c)
             if len(bucket) >= max_light:
                 flush()

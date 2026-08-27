@@ -136,18 +136,6 @@ def _await_approval(job: "Job", event: threading.Event, stage: str) -> None:
 MODE = "scene"
 CUTS_PER_SHEET = 3
 
-# "웹툰" 연출에는 **컷 수 상한이 없다.** 0 은 개수로 자르지 말라는 뜻이다.
-#
-# 전에는 여기에 4 가 적혀 있었다. 그런데 4 라는 숫자는 어디서도 나온 적이 없다 —
-# 장면이 무엇을 하려는지와 무관하게 고른 값이었고, 컷 하나가 캔버스를 통째로
-# 써야 할 자리(impact)와 둘이 나란히 들어가도 남는 자리(wide 둘)를 똑같이
-# 취급했다. 대신 물리적인 사실 하나로 끊는다: 모델이 받는 캔버스에는 가장 긴
-# 세로가 있고(9:16), 컷을 쌓으면 필요한 세로가 그만큼 늘어난다. 더 넣어도
-# 들어가면 넣고, 넘치면 거기서 끊는다 (webtoon-harness/scenegen.group_by_fit).
-#
-# 그래서 장마다 컷 수가 다르다 — 1개든 2개든 3개든 컷의 size 가 정한다.
-WEBTOON_MAX_CUTS = 0
-
 # 위 두 값은 **기본 경로**다. 사용자가 폼에서 "웹툰"을 고르면 컷 모드로 간다.
 #
 # 컷 모드에서는 컷 하나가 캔버스 하나를 통째로 쓴다. 그러면 위에 적어 둔 대가가
@@ -421,31 +409,29 @@ def build_config(job_dir: Path, style: str, head_ratio: str = "",
                       "  gap_ratio: {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}",
                       text, count=1)
         text = re.sub(r"(?m)^  stitch_gaps:.*$", "  stitch_gaps: true", text, count=1)
-        # 9. 묶기는 **연출 리듬**이 정한다 (scene.grouping: rhythm).
+        # 9. 묶기는 **컷의 무게**가 정한다 (scene.grouping: weight).
         #
-        #    앞에서는 weight 로 묶었는데, 실측해 보니 콘티가 weight 를 거의 안
-        #    쓴다 — 한 화 12컷이 전부 normal 로 나와서 컷마다 한 장, 이미지가
-        #    12번 나갔다. "한 장에 3컷"(fixed)보다 세 배 비싼데 얻는 것은
-        #    "컷이 안 섞인다" 하나뿐이었다.
+        #    한 번은 이걸 썼다가 rhythm 으로 되돌린 적이 있다 — 실측해 보니
+        #    콘티가 weight 를 거의 안 써서 한 화 12컷이 전부 normal 로 나오고,
+        #    weight 모드는 원래 normal 도 "혼자 한 장"으로 다뤄서 결과가 컷
+        #    모드와 같아졌다(이미지 12번, "한 장에 3컷"(fixed)보다 세 배 비쌈).
         #
-        #    정작 콘티는 경계를 **이미 정해 두고 있었다** — scene_break 다.
-        #    같은 화가 rhythm 으로는 1-4 / 5-8 / 9-11 / 12 넉 장이 된다.
-        #    개수(fixed)와 장 수는 같은데, 경계가 "3개마다"가 아니라 "화면
-        #    하나가 끝나는 자리"에 떨어진다. 품질을 지키면서 호출을 줄이는
-        #    자리가 여기다 — 묶을 수 있어서 묶는 것이 아니라, **콘티가 한
-        #    화면이라고 말한 것끼리** 묶는 것이다.
+        #    그런데 rhythm(+fit_to_canvas)도 실측해 보니 같은 증상이었다 —
+        #    콘티가 scene_break 로 4/4/4 를 나눠 줘도, 캔버스 세로 예산(9:16)이
+        #    tall·impact 컷 **하나만으로 거의 다 차서** 옆에 아무것도 못
+        #    붙였다(2026-08-27 실측: 12컷 중 11장이 1컷). "무거운 컷만 혼자,
+        #    나머지는 합쳐서"가 원래 바라던 결과인데, 리듬+캔버스 예산은 그걸
+        #    흉내만 내고 실제로는 못 만들고 있었다.
         #
-        #    그 안을 다시 나누는 건 **캔버스가 감당하는 만큼**이다. 개수
-        #    상한(max_cuts_per_scene)은 0 — 끄고 간다. 캔버스는 9:16 이
-        #    최대라, 컷을 쌓다가 그 세로를 넘기면 모델이 남는 폭에 컷을
-        #    나란히 놓는다(세로 스크롤이 아니라 만화 페이지). 넘치기 직전에
-        #    끊으면 개수를 정하지 않고도 그 자리를 피한다 — impact 는 혼자
-        #    한 장, wide 둘은 한 장, 이건 컷의 size 가 정한다.
-        text = re.sub(r"(?m)^  grouping:.*$", "  grouping: rhythm", text, count=1)
-        text = re.sub(r"(?m)^  max_cuts_per_scene:.*$",
-                      f"  max_cuts_per_scene: {WEBTOON_MAX_CUTS}", text, count=1)
-        text = re.sub(r"(?m)^  fit_to_canvas:.*$",
-                      "  fit_to_canvas: true", text, count=1)
+        #    그래서 weight 로 돌아오되, 문제였던 지점(normal 도 혼자 한 장)만
+        #    새 하네스 옵션으로 끈다 — weight_combine_normal(2026-08-27 추가,
+        #    scenegen.group_by_weight). full(통컷·bleed·impact)만 그대로 혼자
+        #    한 장이고, 나머지는(light 는 물론 normal 도) 붙는다. 한 장에
+        #    묶는 상한(max_light_per_scene)은 하네스 기본(3)을 그대로 쓴다 —
+        #    넷을 넘기면 인물이 작아진다는 이유가 여기서도 똑같이 적용된다.
+        text = re.sub(r"(?m)^  grouping:.*$", "  grouping: weight", text, count=1)
+        text = re.sub(r"(?m)^  weight_combine_normal:.*$",
+                      "  weight_combine_normal: true", text, count=1)
 
     out = job_dir / "config.yaml"
     out.write_text(text, encoding="utf-8")
