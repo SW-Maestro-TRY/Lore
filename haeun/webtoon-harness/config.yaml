@@ -193,6 +193,109 @@ monochrome_styles:
   #     · shoujo  — 남겨 둔 한 자리의 강조색까지 먹으로 바뀝니다
   #   셋 다 채도를 죽이는 일은 각자의 style 문구가 직접 합니다.
 
+# ---------------------------------------------------------------------------
+# 그림체 계약 (2026-08-27 신설, 기본은 v1 = 예전 그대로)
+#
+# 문제: 그림체들이 **"실사냐 아니냐"를 축으로 갈려 있었습니다.** cinematic 은
+# 정의부터 "semi-realistic rendering / photographed on a real set / depth of
+# field / film grain" 이라 실사를 요구했고, webtoon 은 평면을 요구했습니다.
+# 그래서 사용자가 "웹툰인데 왜 실사냐" 고 물으면 답이 "그건 cinematic 이라
+# 원래 실사입니다" 가 되어 버렸습니다 — 제품에서 두 그림체를 나란히 파는데
+# 고르는 사람 눈에는 "하나는 평면, 하나는 덜 평면" 으로만 보입니다.
+#
+# 고친 축:
+#   **비실사는 모든 그림체의 전제**입니다 (style_common). 그림체를 가르는 것은
+#   렌더링이 아니라 **연출**입니다 — webtoon 은 가독성, cinematic 은 카메라.
+#
+# v1 을 지우지 않는 이유: 예전 run 을 다시 돌리면 프롬프트가 그대로여야 합니다
+# (harness-is-final). style_contract 가 v1 이면 styles 만 읽고 아래 두 값은
+# 통째로 무시되므로, 옛 run 은 한 글자도 안 바뀝니다.
+style_contract: v1        # v1 = 예전 그대로 | v2 = style_common + styles_v2
+
+# v2 에서 **모든** 그림체 앞에 붙는 공통 계약. 그림체별 문구가 이것과 부딪히면
+# 그림체 쪽이 이깁니다(뒤에 오므로) — 그래서 v2 로 쓸 그림체 문구에서는 실사를
+# 부르는 낱말을 빼 두어야 합니다.
+style_common: >-
+  THIS IS A DRAWN COMIC PANEL. Every style below differs in STAGING — where the
+  camera is, how the panel is composed, how loud it is — and never in whether it
+  is drawn. Drawn is the floor, not a style choice.
+  NOT PHOTOREALISTIC. Not a photograph, not a film still, not a 3D render, not a
+  matte painting, not concept art. If the result could be mistaken for a
+  photograph of a real place, it is wrong regardless of how good it looks.
+  LINEWORK IS VISIBLE. Figures and significant objects carry a drawn outline and
+  stay closed and readable. Never let a form be defined purely by photographic
+  light and texture with no drawing underneath.
+  SURFACES ARE FLAT, NOT PHOTOGRAPHED. Rubble, asphalt, water, foliage, cloth,
+  rusted metal: a few large drawn shapes with hard-edged tones. Never a
+  photographic texture, never per-pebble or per-leaf detail, never scanned grain,
+  never procedural noise.
+  NO CAMERA ARTEFACTS. No lens flare, no bloom, no depth-of-field blur, no bokeh,
+  no chromatic aberration, no film grain, no HDR glare, no volumetric dust or
+  haze hanging in the air. Distance is shown by flattening far shapes to a paler
+  flat tone in one step, never by a continuous photographic fade.
+  THE SHOT DESCRIPTION IS MOOD, NOT A RENDER ORDER. It is written in film
+  language ("golden hour", "dust hangs in the air", "shimmering water",
+  "atmospheric"). Those say how the moment should FEEL. Translate them into flat
+  shapes, hard-edged tones and strong silhouettes — never render them literally.
+
+# v2 에서 그림체 문구를 덮어씁니다. 여기 없는 그림체는 styles 의 것을 그대로
+# 씁니다 — 한 번에 일곱 개를 다시 쓰지 않아도 되게 한 자리입니다.
+styles_v2:
+  # 읽는 속도가 전부입니다. 카메라는 조용하고 인물이 큽니다.
+  webtoon:
+    normal: >-
+      Korean webtoon (네이버 웹툰) — an ordinary weekly serialised panel, built to
+      be read in one second while scrolling on a phone.
+      STAGING: the character is LARGE in frame and unmistakably the subject.
+      Ordinary eye-level framing, straight-on or gently angled. One clear action
+      or one clear expression per panel — if a reader cannot say what happened
+      here in three words, the staging is wrong. No extreme perspective, no
+      dramatic tilt, no showy camera.
+      BACKGROUND: simple and quiet — a plain colour field, a flat tone, a
+      screen-tone dot or line pattern, or a sparsely drawn setting holding only
+      the objects the scene actually needs. It never competes with the figure.
+      COLOUR: cel shading. One flat base tone per area, one shadow tone, at most
+      one light tone, meeting at hard edges. Large areas of a single flat colour
+      are correct and expected.
+      FACE: stylised and simple. Large plainly drawn eyes, a flat iris with one
+      darker band, ONE main catchlight, a solid lash line. Nose a short stroke,
+      mouth a simple line. The eyebrows carry most of the expression.
+      COMIC FURNITURE: speech sits in a drawn bubble with an outline and a tail;
+      a shout gets a spiky burst, a thought gets a soft cloud with trailing
+      circles. Narration sits in a bordered caption box or on a clean flat band.
+      Korean sound effects are drawn display lettering. Motion and feeling come
+      from drawn marks — speed lines, focus lines, impact bursts, sweat drops.
+      Everyday commercial webtoon quality. Readable at a glance, never precious.
+
+  # 같은 평면 채색인데 **카메라가 시끄럽습니다.** 실사가 아니라 연출이 다릅니다.
+  cinematic:
+    normal: >-
+      Korean webtoon panel staged like a film frame. The rendering is exactly as
+      flat and drawn as any other panel — what changes is WHERE THE CAMERA IS and
+      HOW THE SPACE IS BUILT.
+      STAGING: this is the loud one. Push the perspective hard — strong vanishing
+      points, a low angle that makes something tower, or a high angle that makes
+      the character small. Put the figure DEEP in the frame and let the space
+      dominate; a long shot where the character is tiny against the setting is
+      correct here and would be wrong in a plain webtoon panel. Frame through
+      something in the foreground — a doorway, rubble, a shoulder, a railing —
+      so the panel has a near, a middle and a far.
+      LIGHT AS DRAMA, DRAWN FLAT: one strong directional key light. Backlight
+      becomes a hard-edged silhouette against one flat bright shape. A sunset is
+      two or three flat bands of colour. Cast shadows are long flat drawn shapes
+      with clean edges. The drama comes from the SHAPE of the light, never from
+      simulating a lens.
+      CONTRAST: push the value range. Large dark flat masses against a few bright
+      flat shapes. A near-silhouette figure is a legitimate panel here.
+      COLOUR: still cel shading — flat base, one shadow tone, one light tone,
+      hard edges — but the palette may lean hard into a single colour (amber,
+      teal, blood red) across the whole panel.
+      DETAIL BUDGET: distant and peripheral areas get FEWER drawn elements, not
+      softer ones. Choose a few strong silhouettes and leave the rest plain.
+      COMIC FURNITURE still applies: bordered caption boxes, outlined speech
+      bubbles with tails, drawn sound effects, drawn effect marks.
+      Dramatic in staging, flat and drawn in execution.
+
 styles:
   # ---------------------------------------------------------------------------
   # render_style 별로 **독립된 문구**입니다. 공통 문구 + 접미사 구조로는 셋이
