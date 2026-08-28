@@ -1905,6 +1905,45 @@ def gate_setting(setting, label: str) -> list:
     return failures
 
 
+# 엔진급 질문을 화 질문으로 베낀 것을 잡는 문턱. 프롬프트가 "옮겨 적지 마라" 라고
+# 말하므로, 걸리는 것은 거의 그대로 베낀 경우다. 낮추면 정당한 화 질문(엔진과 소재가
+# 겹치는 것은 당연하다)까지 잡는다.
+ENGINE_ECHO_THRESHOLD = 0.85
+
+
+def gate_question_echo(eps: list, ledger: Ledger) -> list:
+    """이 화가 연 질문이 엔진급 질문을 베낀 것인가.
+
+    엔진급 질문은 시즌 내내 열려 있다. 그것을 화 질문으로 다시 여는 것은 아무것도
+    여는 것이 아니다. 실측(1화): questions_opened 의 첫 줄이 engine_question 문장
+    거의 그대로였고, 스팅어까지 그 질문에 연결됐다 — 1화를 막 본 독자가 품을 질문이
+    아니라 작품 전체의 질문이다.
+
+    **엔진급 질문이 비어 있으면 아무것도 검사하지 않는다.** 그 문장이 없으면
+    비교 대상이 없다.
+    """
+    engine = getattr(getattr(ledger, "engine", None), "text", "")
+    base = _norm_q(engine)
+    if not base or base.startswith("("):        # "(엔진급 질문 미지정)"
+        return []
+
+    failures = []
+    for i, e in enumerate(eps, 1):
+        if not isinstance(e, dict):
+            continue
+        for q in e.get("questions_opened") or []:
+            text = q.get("text") if isinstance(q, dict) else q
+            if _similarity(_norm_q(text), base) < ENGINE_ECHO_THRESHOLD:
+                continue
+            failures.append(
+                f"{i}번째 화: 이 화가 연 질문이 엔진급 질문과 거의 같습니다 "
+                f"(\"{str(text)[:40]}…\"). 엔진급 질문은 이미 열려 있으므로 다시 "
+                "열 수 없습니다. 이 화에서 방금 벌어진 일에서 나오는 질문을 "
+                "적으세요 — 이 화를 안 보고도 물을 수 있는 질문이면 이 화의 "
+                "질문이 아닙니다.")
+    return failures
+
+
 def gate_episodes_shape(payload: dict, ledger: Ledger, arc: dict = None,
                         resolution: Resolution = None) -> list:
     """5단계 게이트. **내용**만 본다 — id 정합성은 assign_ids 가 이미 보장했다.
@@ -1920,6 +1959,8 @@ def gate_episodes_shape(payload: dict, ledger: Ledger, arc: dict = None,
     eps = payload.get("episodes")
     if not isinstance(eps, list) or not eps:
         return ["episodes 가 배열이 아니거나 비어 있습니다."]
+
+    failures.extend(gate_question_echo(eps, ledger))
 
     # 화 수. 재생성 지시를 받으면 모델이 불합격 화만 남기고 나머지를 버리는 일이
     # 실제로 있었다(제출 [2,3]). order 를 배열 순서로 부여하는 이상 그건 조용한

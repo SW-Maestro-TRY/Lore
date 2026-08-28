@@ -634,6 +634,32 @@ ok("4단계: summary 가 여러 문장이면 탈락 (줄거리 요약으로 돌�
 ok("4단계: 압력 세 칸이 없으면 보고서 줄도 안 생긴다",
    not any(x.get("starts_with") for x in good_arcs["arcs"]))
 
+# ---- 엔진급 질문을 화 질문으로 베끼지 않는가 (#29) ----
+#
+# 실측(1화): questions_opened 첫 줄이 engine_question 문장 거의 그대로였다.
+# 엔진급 질문은 시즌 내내 열려 있으므로 다시 여는 것은 아무것도 여는 것이 아니다.
+_EQ = "박하은이 자신의 얼굴과 이름, 그리고 SS급 힘이 모두 드러나는 순간에도 진짜 자신으로 살아갈 수 있을까?"
+_led = webtoon.Ledger(_EQ)
+
+ok("5단계: 엔진급 질문을 그대로 베끼면 탈락",
+   any("엔진급 질문과 거의 같" in f for f in webtoon.gate_question_echo(
+       [{"questions_opened": [{"text": _EQ, "type": "suspense"}]}], _led)))
+
+ok("5단계: 이 화에서 나온 질문은 통과",
+   webtoon.gate_question_echo(
+       [{"questions_opened": [{"text": "출동을 거부하면 신분이 드러나고 출동하면 "
+                                       "얼굴을 못 숨긴다. 하은은 어느 쪽을 택할까?",
+                               "type": "suspense"}]}], _led) == [])
+
+ok("5단계: 엔진급 질문이 없으면 검사하지 않는다 (옛 run 회귀)",
+   webtoon.gate_question_echo(
+       [{"questions_opened": [{"text": _EQ}]}], webtoon.Ledger("")) == []
+   and webtoon.gate_question_echo([{"questions_opened": [{"text": _EQ}]}],
+                                  webtoon.Ledger(None)) == [])
+
+ok("5단계: 질문 칸이 없는 화는 그냥 지나간다",
+   webtoon.gate_question_echo([{"title": "1화"}, "문자열"], _led) == [])
+
 # ---- 행동의 이유가 화면에 있는가 (#29) ----
 #
 # 머릿속 설정으로만 성립하는 행동은 독자에게 개연성이 없다. 실제로 그렇게 나왔다
