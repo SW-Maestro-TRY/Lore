@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -103,6 +104,11 @@ def card_with_core_event(card: str, c: dict) -> str:
         "    ★ 이 화는 여기서 끝난다. 더 가지도, 그 앞에서 멈추지도 마라.",
         f"  이 화가 남기는 미스터리: {c.get('new_mystery')}",
         "    ★ 이것이 독자가 다음 화를 누르는 이유다. 이 화 안에서 답하지 마라.",
+        f"  대가를 받는 사람(한 명이다): {c.get('witness')}",
+        f"  마지막에 쫓기 시작하는 사람: {c.get('pursuer')}",
+        "    ★ 이 사람은 결정적인 것을 못 봤다. 열쇠는 위의 목격자가 쥐고 있다.",
+        f"  주인공만 모르는 것: {c.get('hero_doesnt_know')}",
+        "    ★ 이 화 안에서 주인공이 이것을 알게 하지 마라. 독자만 안다.",
         f"  예상 밖의 것: {c.get('surprise')}",
         f"  이 화가 끝난 뒤 독자에게 남아야 하는 질문: {c.get('question_after')}",
     ]
@@ -114,6 +120,9 @@ CANDIDATE_FIELDS = (
     ("core_event", "1화의 핵심사건"),
     ("payoff", "독자가 짜릿해하는 순간 — 하은이 왜 SS급인지 체감되는 자리"),
     ("last_beat", "마지막 순간을 장면으로. 상태 서술이 아니라 화면"),
+    ("witness", "대가를 받는 한 사람 — 집합이 아니라 얼굴이 있는 사람"),
+    ("pursuer", "마지막에 쫓기 시작하는 사람 — 열쇠는 못 가진 쪽"),
+    ("hero_doesnt_know", "이 화가 끝날 때 주인공만 모르는 것"),
     ("new_mystery", "이 화가 끝나며 새로 생긴 미스터리"),
     ("surprise", "예상 밖의 정보 하나"),
     ("payoff_is_the_price", "그 짜릿한 행동이 어떻게 그대로 대가가 되는가"),
@@ -137,6 +146,21 @@ _RISK_WORDS = ("들킬", "들키", "노출", "추적", "발각", "위험", "위�
                "밝혀질", "탄로")
 # 미스터리에는 대상이 있어야 한다 — 누가·무엇이·왜.
 _MYSTERY_WORDS = ("누구", "누가", "왜", "무엇", "뭐", "어디서 온", "정체가 뭐")
+
+# 대가를 받는 쪽이 집합이면 독자는 무서워하지 않는다. "시선과 기록에 노출됐다" 는
+# 아무도 아니다 — 실측에서 후보 넷이 전부 이 꼴이었다.
+_CROWD_WORDS = ("목격자들", "사람들", "시민들", "대중", "여론", "세상", "기록",
+                "데이터", "CCTV", "영상", "온라인", "언론", "다수", "무리")
+# 한 사람으로 특정됐다는 표시. 이게 있으면 위 낱말이 섞여 있어도 통과시킨다 —
+# "협회 데이터팀 직원(20대 남성)" 은 협회가 아니라 사람이다. 실측에서 이걸 안
+# 두었다가 정상 후보를 세 번 되돌리고 $0.13 을 태웠다.
+_ONE_PERSON = ("대 남", "대 여", "대 초", "대 중", "대 후", "살", "한 명", "아이",
+               "학생", "소년", "소녀", "씨", "군", "양", "선배", "동기", "점장",
+               # 직함·성별도 한 사람을 가리킨다. "데이터 분석관" 은 데이터가
+               # 아니라 사람이다 — 이걸 안 넣었다가 정상 후보를 또 되돌렸다.
+               "관", "원", "기자", "직원", "남성", "여성", "남자", "여자", "명")
+# 마지막 컷에 두 가지 일이 동시에 들어갔다는 표시.
+_TWO_SHOT = ("사이에", "사이,", "동시에", "한편", "그러는 동안", "그사이")
 
 # 엔진급 질문을 화 질문으로 베꼈다고 볼 문턱 (webtoon 게이트와 같은 값).
 ENGINE_ECHO = webtoon.ENGINE_ECHO_THRESHOLD
@@ -186,6 +210,38 @@ def gate_candidates(payload: dict, want: int, triggers: list, engine_q: str,
                     f"그대로 옮긴 것입니다 (\"{str(raw)[:30]}…\"). 그 상황이 말하는 "
                     "모순을 가져오되, 그것이 터질 다른 자리를 찾으세요.")
                 break
+
+        wit = " ".join(str(c.get("witness") or "").split())
+        if wit and any(w in wit for w in _CROWD_WORDS) \
+                and not any(w in wit for w in _ONE_PERSON):
+            failures.append(
+                f"후보 {label}: witness 가 \"{wit[:30]}…\" 입니다 — 집합은 대가를 받는 "
+                "사람이 아닙니다. 독자는 「사람들」을 무서워하지 않습니다. 나이·역할로 "
+                "특정되는 한 사람을 적으세요.")
+
+        pur = " ".join(str(c.get("pursuer") or "").split())
+        if pur and wit and webtoon._similarity(webtoon._norm_q(pur),
+                                               webtoon._norm_q(wit)) >= 0.7:
+            failures.append(
+                f"후보 {label}: pursuer 와 witness 가 같은 사람입니다. 쫓는 쪽이 이미 "
+                "열쇠를 쥐고 있으면 그냥 추적이 시작될 뿐입니다 — 못 본 사람이 본 "
+                "사람에게 다가가는 것으로 끊어야 다음 화가 궁금해집니다.")
+
+        last = " ".join(str(c.get("last_beat") or "").split())
+        # 마지막 컷에 쫓는 사람이 없으면 ⑥ 이 칸만 채우고 화면에는 안 들어온 것이다.
+        # 실측: pursuer 를 넷 다 적어 놓고, 마지막 컷은 넷 다 목격자가 직접 묻는
+        # 장면이었다 — 그러면 이야기가 그 둘 사이에서 닫힌다.
+        toks = [t for t in re.split(r"[^\w]+", pur) if len(t) >= 2][:4]
+        if last and toks and not any(t in last for t in toks):
+            failures.append(
+                f"후보 {label}: 마지막 컷에 pursuer(\"{pur[:20]}…\")가 없습니다. "
+                "못 본 사람이 본 사람에게 다가가는 장면으로 끊어야 이야기가 밖으로 "
+                "열립니다.")
+        if last and any(w in last for w in _TWO_SHOT):
+            failures.append(
+                f"후보 {label}: last_beat 에 두 가지 일이 동시에 들어 있습니다 "
+                f"(\"{last[:34]}…\"). 마지막은 한 컷입니다 — 한 사람이 한 동작을 "
+                "합니다.")
 
         myst = " ".join(str(c.get("new_mystery") or "").split())
         if myst and any(w in myst for w in _RISK_WORDS) \
@@ -367,6 +423,9 @@ def candidates_md(arc: dict, rows: list) -> str:
     for c in rows:
         out += [f"## {c.get('label')}. {c.get('core_event')}", "",
                 f"- **마지막 장면**: {c.get('last_beat')}",
+                f"- **대가를 받는 한 사람**: {c.get('witness')}",
+                f"- **쫓기 시작하는 사람**: {c.get('pursuer')}",
+                f"- **주인공만 모르는 것**: {c.get('hero_doesnt_know')}",
                 f"- **새로 생긴 미스터리**: {c.get('new_mystery')}",
                 f"- **예상 밖의 것**: {c.get('surprise')}",
                 "",
