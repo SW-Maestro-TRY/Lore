@@ -107,6 +107,8 @@ def card_with_core_event(card: str, c: dict) -> str:
         f"  대가를 받는 사람(한 명이다): {c.get('witness')}",
         f"  마지막에 쫓기 시작하는 사람: {c.get('pursuer')}",
         "    ★ 이 사람은 결정적인 것을 못 봤다. 열쇠는 위의 목격자가 쥐고 있다.",
+        f"  마지막 컷에서 독자가 처음 아는 것: {c.get('reader_learns_last')}",
+        "    ★ 이것을 마지막 컷에 넣고 끊는다. 인물이 질문으로 대신 말하게 하지 마라.",
         f"  주인공만 모르는 것: {c.get('hero_doesnt_know')}",
         "    ★ 이 화 안에서 주인공이 이것을 알게 하지 마라. 독자만 안다.",
         f"  예상 밖의 것: {c.get('surprise')}",
@@ -121,7 +123,8 @@ CANDIDATE_FIELDS = (
     ("payoff", "독자가 짜릿해하는 순간 — 하은이 왜 SS급인지 체감되는 자리"),
     ("last_beat", "마지막 순간을 장면으로. 상태 서술이 아니라 화면"),
     ("witness", "대가를 받는 한 사람 — 집합이 아니라 얼굴이 있는 사람"),
-    ("pursuer", "마지막에 쫓기 시작하는 사람 — 열쇠는 못 가진 쪽"),
+    ("pursuer", "쫓기 시작하는 사람 — 열쇠는 못 가진 쪽"),
+    ("reader_learns_last", "마지막 컷에서 독자가 처음 알게 되는 것"), 
     ("hero_doesnt_know", "이 화가 끝날 때 주인공만 모르는 것"),
     ("new_mystery", "이 화가 끝나며 새로 생긴 미스터리"),
     ("surprise", "예상 밖의 정보 하나"),
@@ -231,12 +234,12 @@ def gate_candidates(payload: dict, want: int, triggers: list, engine_q: str,
         # 마지막 컷에 쫓는 사람이 없으면 ⑥ 이 칸만 채우고 화면에는 안 들어온 것이다.
         # 실측: pursuer 를 넷 다 적어 놓고, 마지막 컷은 넷 다 목격자가 직접 묻는
         # 장면이었다 — 그러면 이야기가 그 둘 사이에서 닫힌다.
-        toks = [t for t in re.split(r"[^\w]+", pur) if len(t) >= 2][:4]
-        if last and toks and not any(t in last for t in toks):
+        if last.rstrip().endswith("?") or last.rstrip().endswith("?\""):
             failures.append(
-                f"후보 {label}: 마지막 컷에 pursuer(\"{pur[:20]}…\")가 없습니다. "
-                "못 본 사람이 본 사람에게 다가가는 장면으로 끊어야 이야기가 밖으로 "
-                "열립니다.")
+                f"후보 {label}: 마지막 컷이 질문 대사로 끝납니다 "
+                f"(\"{last[-24:]}\"). 인물이 대신 궁금해해 주면 독자 머릿속에 "
+                "남는 것이 없습니다 — 독자가 처음 아는 사실 하나를 화면에 던지고 "
+                "끊으세요.")
         if last and any(w in last for w in _TWO_SHOT):
             failures.append(
                 f"후보 {label}: last_beat 에 두 가지 일이 동시에 들어 있습니다 "
@@ -277,6 +280,77 @@ def gate_candidates(payload: dict, want: int, triggers: list, engine_q: str,
                         f"거의 같습니다. 후보는 서로 다른 축이어야 고를 의미가 "
                         "있습니다.")
     return failures
+
+
+# ---------------------------------------------------- 후보 검사 두 패스
+#
+# 후보를 만든 **다음에** 두 번 본다. 만드는 쪽에게 "설정 지켜라" · "처음 보는
+# 독자도 알게 하라" 를 아무리 적어도 안 지켜졌다 — 만드는 쪽은 자기가 아는 것을
+# 독자도 안다고 착각하기 때문이다. 그래서 보는 쪽을 따로 둔다.
+def check_contradictions(caller, ps_dir: Path, card: str, payload: dict, usage):
+    """엔진 카드의 확정 사실과 어긋나는 후보를 잡는다.
+
+    실측 사고: 카드에 "장서우는 하은의 신분을 아는 유일한 인물" 이라고 적혀 있는데
+    후보가 "장서우가 하은의 실명과 얼굴을 확인하려 든다" 라고 썼다. 재미 이전에
+    말이 안 되는 것이고, 회차 단계에는 이 검사(W6)가 있는데 후보 단계에는 없었다.
+    """
+    tmpl = (ps_dir / "candidate_check.txt").read_text(encoding="utf-8")
+    obj, _ = caller.json_call(
+        "W6",
+        story.render(tmpl, {
+            "engine_card": card,
+            "candidates_json": json.dumps(payload, ensure_ascii=False, indent=1),
+        }),
+        story.TEMP_JUDGE, usage)
+    rows = [r for r in (obj.get("contradictions") or []) if isinstance(r, dict)]
+    return [f"후보 {r.get('label')}: 카드는 \"{r.get('card_says')}\" 인데 후보는 "
+            f"\"{r.get('candidate_says')}\" 입니다 — {r.get('why')}" for r in rows]
+
+
+def blind_read(caller, ps_dir: Path, payload: dict, usage):
+    """카드를 **안 보여주고** 장면만 읽힌다. 처음 보는 독자에게 닿는가.
+
+    P3 가 프리미스를 블라인드로 심사하는 것과 같은 원리다. 만든 쪽은 엔진 카드를
+    다 알고 있어서, 장면에 안 적힌 것까지 읽어 버린다 — 그래서 "우리는 아니까
+    잘 읽히는" 후보가 나온다. 여기에는 엔진 카드도 캐릭터 카드도 넣지 않는다.
+    """
+    rows = [c for c in (payload.get("candidates") or []) if isinstance(c, dict)]
+    scenes = "\n\n".join(
+        f"[{c.get('label')}]\n{c.get('core_event')}\n"
+        f"(마지막 장면) {c.get('last_beat')}" for c in rows)
+    tmpl = (ps_dir / "blind_reader.txt").read_text(encoding="utf-8")
+    obj, _ = caller.json_call("W6", story.render(tmpl, {"scenes_text": scenes}),
+                              story.TEMP_JUDGE, usage)
+
+    failures, report = [], []
+    for r in (obj.get("reads") or []):
+        if not isinstance(r, dict):
+            continue
+        label = r.get("label")
+        report.append(r)
+        if r.get("needs_prior_setup"):
+            failures.append(
+                f"후보 {label}: 처음 보는 독자가 이해하려면 앞선 설정이 필요합니다 "
+                f"— \"{r.get('needs_what')}\". 그 사실이 장면 안에서 행동으로 "
+                "드러나게 고치세요.")
+        if not r.get("hides"):
+            failures.append(
+                f"후보 {label}: 처음 보는 독자가 주인공이 무언가를 숨긴다는 것을 "
+                "알아차리지 못했습니다. 숨긴다는 것이 장면의 행동으로 보여야 합니다.")
+        elif not r.get("why_it_matters"):
+            failures.append(
+                f"후보 {label}: 숨긴다는 것은 읽혔지만 **들키면 무슨 일이 나는지**가 "
+                "안 읽혔습니다. 그게 없으면 마지막이 위협으로 안 읽힙니다.")
+        if r.get("unmotivated"):
+            failures.append(
+                f"후보 {label}: 처음 보는 독자에게 어떤 인물이 왜 그러는지 안 "
+                f"보입니다 — \"{r.get('unmotivated')}\". 그 행동의 이유가 장면 "
+                "안에 있어야 합니다. 설정을 아는 사람에게만 그럴듯한 장면입니다.")
+        if not r.get("oh_no"):
+            failures.append(
+                f"후보 {label}: 마지막에 \"큰일 났다\" 가 안 느껴졌습니다 "
+                f"({r.get('oh_no_reason')}).")
+    return failures, report
 
 
 # ---------------------------------------------------------------- 공용
@@ -377,8 +451,18 @@ def cmd_candidates(args) -> int:
             story.TEMP_CREATIVE, usage)
         fails = gate_candidates(payload, args.n, triggers, engine_q,
                                 fixed_material=bool(str(args.material or "").strip()))
+        blind_report = []
+        if not fails and not args.no_check:
+            fails = check_contradictions(caller, HERE / "prompts", card, payload, usage)
+            if fails:
+                story.log(f"  모순 검사 {len(fails)}건")
+        if not fails and not args.no_check:
+            fails, blind_report = blind_read(caller, HERE / "prompts", payload, usage)
+            webtoon.write_json(outdir / "blind_read.json", {"reads": blind_report})
+            if fails:
+                story.log(f"  블라인드 독자 검사 {len(fails)}건")
         if not fails:
-            story.log(f"  후보 {args.n}개 통과")
+            story.log(f"  후보 {args.n}개 통과 (형식 · 모순 · 블라인드 독자)")
             break
         story.log(f"  후보 게이트 실패 {len(fails)}건 (시도 {attempt + 1})")
         for f in fails:
@@ -425,6 +509,7 @@ def candidates_md(arc: dict, rows: list) -> str:
                 f"- **마지막 장면**: {c.get('last_beat')}",
                 f"- **대가를 받는 한 사람**: {c.get('witness')}",
                 f"- **쫓기 시작하는 사람**: {c.get('pursuer')}",
+                f"- **마지막에 독자가 처음 아는 것**: {c.get('reader_learns_last')}",
                 f"- **주인공만 모르는 것**: {c.get('hero_doesnt_know')}",
                 f"- **새로 생긴 미스터리**: {c.get('new_mystery')}",
                 f"- **예상 밖의 것**: {c.get('surprise')}",
@@ -575,6 +660,8 @@ def main() -> int:
     c.add_argument("--run", required=True, help="바탕이 되는 story run_id")
     c.add_argument("--arcs", help="이미 잡아 둔 arcs.json (있으면 W4 를 안 돈다)")
     c.add_argument("-n", type=int, default=4, help="후보 개수 (기본 4)")
+    c.add_argument("--no-check", action="store_true",
+                   help="모순 검사·블라인드 독자 검사를 건너뛴다 (호출 2회 절약)")
     c.add_argument("--material", default="",
                    help="후보를 낼 소재를 고정한다 (예: \"긴급 게이트 출동\"). "
                         "재료를 고정하고 선택·결과의 해상도만 볼 때 쓴다")
