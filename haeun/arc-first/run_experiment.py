@@ -93,6 +93,17 @@ def card_with_core_event(card: str, c: dict) -> str:
         f"    안 하면: {c.get('cost_if_refuses')}",
         f"  터뜨리는 모순: {c.get('contradiction')}",
         f"  되돌릴 수 없게 되는 것: {c.get('irreversible')}",
+    ]
+    # 독자 쪽 칸. 이걸 안 실으면 후보를 좋게 만든 것이 정작 집필 단계에 안 닿는다 —
+    # 짜릿한 자리도, 끊는 자리도, 다음 화를 만드는 미스터리도 여기서 정해졌다.
+    block += [
+        f"  독자가 짜릿해하는 자리: {c.get('payoff')}",
+        f"    ★ 그 행동이 그대로 대가가 된다: {c.get('payoff_is_the_price')}",
+        f"  이 화를 끊는 마지막 장면: {c.get('last_beat')}",
+        "    ★ 이 화는 여기서 끝난다. 더 가지도, 그 앞에서 멈추지도 마라.",
+        f"  이 화가 남기는 미스터리: {c.get('new_mystery')}",
+        "    ★ 이것이 독자가 다음 화를 누르는 이유다. 이 화 안에서 답하지 마라.",
+        f"  예상 밖의 것: {c.get('surprise')}",
         f"  이 화가 끝난 뒤 독자에게 남아야 하는 질문: {c.get('question_after')}",
     ]
     return head + "\n\n" + "\n".join(block) + "\n" + (tail or _CARD_END)
