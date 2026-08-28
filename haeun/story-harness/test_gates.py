@@ -582,6 +582,58 @@ ok("4단계: cast_roles 없으면 지도 출력이 예전 그대로",
 ok("4단계: 관통 인물을 찾는다", webtoon._through_line(_curve) == "서지한"
    and webtoon._through_line(good_arcs["arcs"]) == "")
 
+# ---- Arc 는 사건이 아니라 압력이다 (#21) ----
+#
+# W4 가 Arc 요약에 사건을 적으면 W5 가 그대로 받아쓴다. 실제로 그랬다 — Arc 1
+# 요약의 "기자회견장에서 얼굴 공개를 거부한다" 가 그대로 1화가 되었다.
+#
+# ★ 여기서도 가장 중요한 것은 **옛 run 회귀**다. 압력 세 칸이 없는 arcs.json 은
+#   아무것도 검사하지 않는다.
+ok("4단계: 압력 세 칸이 없으면 검사하지 않는다 (옛 run 회귀)",
+   webtoon.gate_arc_pressure(good_arcs["arcs"]) == []
+   and webtoon.gate_arcs(good_arcs) == [])
+
+def _press(a, **kw):
+    row = dict(a, starts_with="숨기면 예전 생활이 유지된다고 믿는다",
+               pressure="하은을 개인으로 아는 사람이 하나씩 늘어난다",
+               ends_with="숨기는 것만으로는 안 된다는 것을 안다",
+               not_yet=["얼굴이 대중에게 공개되는 것"],
+               summary="숨기던 사람이 그것만으로는 안 된다는 것을 알게 되는 구간.")
+    row.update(kw)
+    return row
+
+_ok_press = {"arcs": [_press(a) for a in _ok_cast["arcs"]]}
+ok("4단계: 압력 세 칸을 채우면 통과",
+   webtoon.gate_arcs(_ok_press) == [], webtoon.gate_arcs(_ok_press))
+
+_no_pressure = {"arcs": [_press(a, pressure="") if a["order"] == 1 else _press(a)
+                         for a in _ok_cast["arcs"]]}
+ok("4단계: pressure 가 비면 탈락 (조이는 힘이 없으면 Arc 가 아니다)",
+   any("pressure" in f for f in webtoon.gate_arcs(_no_pressure)))
+
+_same = {"arcs": [_press(a, ends_with="숨기면 예전 생활이 유지된다고 믿는다")
+                  if a["order"] == 1 else _press(a) for a in _ok_cast["arcs"]]}
+ok("4단계: 시작 상태와 끝 상태가 같으면 탈락 (안 바뀌는 구간)",
+   any("starts_with" in f for f in webtoon.gate_arcs(_same)))
+
+_no_yet = {"arcs": [_press(a, not_yet=[]) if a["order"] == 1 else _press(a)
+                    for a in _ok_cast["arcs"]]}
+ok("4단계: not_yet 이 비면 탈락 (뒤 Arc 사건을 당겨오는 것을 막는 울타리)",
+   any("not_yet" in f for f in webtoon.gate_arcs(_no_yet)))
+
+# 실제로 나왔던 Arc 1 요약. 세 문장으로 3화치 사건을 나열했다.
+_real = ("박하은이 등급 사회에서 SS급 판정을 받고 신분이 공식화된다. "
+         "공식 기자회견장에서 실명과 얼굴 공개를 단호히 거부한다. "
+         "협회와 언론은 끝없이 정체 공개를 요구한다.")
+_long = {"arcs": [_press(a, summary=_real) if a["order"] == 1 else _press(a)
+                  for a in _ok_cast["arcs"]]}
+ok("4단계: summary 가 여러 문장이면 탈락 (줄거리 요약으로 돌아간 것)",
+   any("문장입니다" in f for f in webtoon.gate_arcs(_long)))
+
+# 새 칸은 보고서에도 나와야 한다 — 없던 시절 run 은 줄 자체가 안 생긴다.
+ok("4단계: 압력 세 칸이 없으면 보고서 줄도 안 생긴다",
+   not any(x.get("starts_with") for x in good_arcs["arcs"]))
+
 # ---- 행동의 이유가 화면에 있는가 (#29) ----
 #
 # 머릿속 설정으로만 성립하는 행동은 독자에게 개연성이 없다. 실제로 그렇게 나왔다

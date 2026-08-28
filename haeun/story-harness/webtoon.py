@@ -1726,6 +1726,7 @@ def gate_arcs(payload: dict) -> list:
             "전개·상승만 이어지면 설정집 비대증에 빠집니다.")
 
     failures.extend(gate_arc_cast(arcs))
+    failures.extend(gate_arc_pressure(arcs))
     return failures
 
 
@@ -1776,6 +1777,67 @@ def gate_arc_cast(arcs: list) -> list:
         failures.append(
             "모든 Arc 에 나오는 인물이 없습니다. 주인공은 전 Arc 의 cast_roles 에 "
             "들어가야 합니다 — 주인공이 빠진 Arc 는 주인공의 이야기가 아닙니다.")
+    return failures
+
+
+# Arc 의 압력 세 칸. 이 셋이 다 있어야 "사건이 아니라 압력" 설계가 성립한다.
+ARC_PRESSURE_FIELDS = (
+    ("starts_with", "이 Arc 가 시작할 때 주인공이 할 수 있다고 믿는 것"),
+    ("pressure", "그 믿음을 조이는 힘 (누가 · 무엇으로)"),
+    ("ends_with", "이 Arc 끝에서 더는 가능하지 않게 된 것"),
+)
+
+# summary 를 몇 문장까지 허용하는가. 넘으면 Arc 가 줄거리 요약으로 돌아간 것이다.
+ARC_SUMMARY_MAX_SENTENCES = 2
+_SENT_END = re.compile(r"[.!?…]+(?:\s|$)")
+
+
+def gate_arc_pressure(arcs: list) -> list:
+    """Arc 가 **사건**이 아니라 **압력**으로 적혀 있는가.
+
+    W4 가 Arc 요약에 사건을 적어 버리면 W5 는 그것을 받아쓴다. 실제로 그랬다 —
+    Arc 1 요약의 "기자회견장에서 얼굴 공개를 거부한다" 가 그대로 1화가 되었고,
+    W5 가 고를 수 있었던 다른 1화는 시도조차 되지 않았다. W5 프롬프트에는 이미
+    "Arc 는 방향이지 일정표가 아니다" 라고 적혀 있지만, 지시와 데이터가 부딪히면
+    데이터가 이긴다 — arc_json 안에 사건이 문장으로 박혀 있으면 그것이 이긴다.
+
+    그래서 Arc 의 몸통을 상태 세 칸(starts_with · pressure · ends_with)으로 옮기고,
+    summary 는 그 셋을 줄인 한 문장으로 제한한다.
+
+    **세 칸이 한 Arc 에도 없으면 아무것도 검사하지 않는다.** 이 칸이 생기기 전에
+    돌린 run 의 arcs.json 을 다시 읽어도 결과가 그대로여야 한다.
+    """
+    arcs = [a for a in arcs if isinstance(a, dict)]
+    if not any(any(a.get(k) for k, _ in ARC_PRESSURE_FIELDS) for a in arcs):
+        return []
+
+    failures = []
+    for a in arcs:
+        label = f"Arc {a.get('order')}"
+        for key, why in ARC_PRESSURE_FIELDS:
+            if not str(a.get(key) or "").strip():
+                failures.append(f"{label}: {key} 가 비어 있습니다 ({why}).")
+
+        start, end = (" ".join(str(a.get(k) or "").split())
+                      for k in ("starts_with", "ends_with"))
+        if start and start == end:
+            failures.append(
+                f"{label}: starts_with 와 ends_with 가 같습니다. "
+                "지나가도 아무것도 안 바뀌는 구간은 Arc 가 아닙니다.")
+
+        nots = a.get("not_yet")
+        if not isinstance(nots, list) or not [x for x in nots if str(x or "").strip()]:
+            failures.append(
+                f"{label}: not_yet 이 비어 있습니다. 이 Arc 에서 아직 일어나지 않는 "
+                "일을 적어야 W5 가 뒤 Arc 의 사건을 당겨오지 않습니다.")
+
+        summary = " ".join(str(a.get("summary") or "").split())
+        n = len([x for x in _SENT_END.split(summary) if x.strip()])
+        if n > ARC_SUMMARY_MAX_SENTENCES:
+            failures.append(
+                f"{label}: summary 가 {n}문장입니다. "
+                f"{ARC_SUMMARY_MAX_SENTENCES}문장 이하로 줄입니다 — 사건을 나열하는 "
+                "자리가 아니라 압력 세 칸을 한 줄로 줄이는 자리입니다.")
     return failures
 
 
@@ -6184,6 +6246,13 @@ def _write_webtoon_md(wt: Path, data: dict) -> None:
         out.append(f"- 주 동력: {', '.join(a.get('premise_element_used') or [])}"
                    f" · 예상 {a.get('estimated_episode_count')}화")
         out.append(f"- {a.get('summary')}")
+        # 압력 세 칸은 이 칸이 생기기 전 run 에는 없다 — 없으면 줄 자체가 안 나온다.
+        for key, label in (("starts_with", "시작 상태"), ("pressure", "조이는 힘"),
+                           ("ends_with", "끝 상태")):
+            if not is_blank(a.get(key)):
+                out.append(f"  - {label}: {a.get(key)}")
+        for x in a.get("not_yet") or []:
+            out.append(f"  - 아직 아님: {x}")
         for q in a.get("opens") or []:
             out.append(f"  - 여는 질문: {q}")
         for q in a.get("closes") or []:
@@ -6299,6 +6368,12 @@ def _write_webtoon_html(wt: Path, data: dict) -> None:
             f'<span class="tag t-{_esc(a.get("arc_type"))}">{_esc(a.get("arc_type"))}</span></h3>'
             f'<p class="meta">주 동력 {_esc(elems)} · 예상 {_esc(a.get("estimated_episode_count"))}화</p>'
             f'<p>{_esc(a.get("summary"))}</p>')
+        for key, label in (("starts_with", "시작 상태"), ("pressure", "조이는 힘"),
+                           ("ends_with", "끝 상태")):
+            if not is_blank(a.get(key)):
+                parts.append(f'<p class="meta">{label} · {_esc(a.get(key))}</p>')
+        for x in a.get("not_yet") or []:
+            parts.append(f'<p class="meta">아직 아님 · {_esc(x)}</p>')
         for q in a.get("opens") or []:
             parts.append(f'<p class="q open">여는 질문 · {_esc(q)}</p>')
         for q in a.get("closes") or []:
