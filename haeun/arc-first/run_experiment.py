@@ -291,7 +291,10 @@ def main() -> int:
     (outdir / "report.md").write_text(
         md_report(args.run, arcs, scene_obj, scenes, episode, old_scenes, old_arcs),
         encoding="utf-8")
-    webtoon.write_json(outdir / "usage.json", usage.as_dict())
+    # as_dict() 는 합계만 준다. "어느 단계가 몇 번 돌았나" 를 나중에 못 보면
+    # 이 실험이 무엇을 다시 돌렸는지 증명할 수가 없다 — records 를 같이 남긴다.
+    webtoon.write_json(outdir / "usage.json",
+                       {**usage.as_dict(), "records": usage.records})
     cost = usage.cost()
     story.log(f"완료 · 호출 {usage.calls}회 · {usage.total:,}토큰 · "
               f"{story.cost_text(cost['usd'])}")
