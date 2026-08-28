@@ -83,7 +83,8 @@ WEBTOON_CONTRACT = {
     "w4": {"engine_card", "character_sheet", "retry_feedback", "user_memory"},
     "w5": {"engine_card", "series_arc", "arc_json", "series_state",
            "retry_feedback", "user_memory"},
-    "w6": {"engine_card", "arc_json", "ledger_snapshot", "episodes_json"},
+    "w6": {"engine_card", "arc_json", "ledger_snapshot", "episodes_json",
+           "series_state"},
     "w7": {"engine_card", "series_arc", "arc_json", "episode_json",
            "ledger_snapshot",
            "engine_fired_list", "setting_block", "zones_block",
@@ -1128,6 +1129,21 @@ class SeriesState:
     # z-hallway-vending 배경에 한 번 그려지면 그 뒤 그 존의 컷은 전부 그
     # 배경을 참조하므로 머그컵이 새로 생길 경로 자체가 없다.
     zones: list = field(default_factory=list)      # {zone_id, place, label, first_episode}
+    # ---- Story State — 이야기의 현재 ------------------------------------
+    # status 가 몸에 남는 자국이라면, 아래 둘은 **사람 사이와 사람 속**에 남는
+    # 자국이다. 이것이 없던 동안 W5 는 "1화에 서도윤이 나왔으니 아는 사이겠지"
+    # 를 매번 추론했고, 초면인 인물이 이름을 부르는 화가 나왔다(실측, 2화).
+    #
+    # 둘 다 append-only 다. 나중 것이 앞을 지우지 않는다 — "1화: 처음 마주침"
+    # 위에 "3화: 통성명"이 쌓이면 그 이력 자체가 관계의 현재이고, 다음 화가
+    # "아 맞아 얘네 이랬지"를 만들 재료다.
+    #
+    # relations 는 **방향이 있다** (who → about). 그래서 "도윤은 기억하는데
+    # 리아는 기억 못 한다" 같은 비대칭이 자연스럽게 표현된다 — 도윤→리아
+    # 항목만 있고 리아→도윤 항목이 없으면 그것이 곧 비대칭이다.
+    relations: list = field(default_factory=list)  # {who, about, state, since_episode}
+    # minds — 한 사람의 속. 새로 알게 된 것·기억·오해·감정·목표.
+    minds: list = field(default_factory=list)      # {who, state, since_episode}
 
     @property
     def made(self) -> int:
@@ -1184,6 +1200,32 @@ class SeriesState:
                 "who": who, "state": what,
                 "until": str(s.get("until") or "계속").strip(),
                 "since_episode": no})
+
+        # 사람 사이 — 이 화가 두 사람 관계에 남긴 것. status 와 같은 append-only.
+        held_r = {(r["who"], r["about"], r["state"]) for r in self.relations}
+        for r in episode.get("relation_changes") or []:
+            if not isinstance(r, dict):
+                continue
+            who = str(r.get("who") or "").strip()
+            about = str(r.get("about") or "").strip()
+            what = str(r.get("change") or r.get("state") or "").strip()
+            if not who or not about or not what or (who, about, what) in held_r:
+                continue
+            held_r.add((who, about, what))
+            self.relations.append({"who": who, "about": about,
+                                   "state": what, "since_episode": no})
+
+        # 사람 속 — 이 화가 한 사람의 인지·감정·목표에 남긴 것.
+        held_m = {(m["who"], m["state"]) for m in self.minds}
+        for m in episode.get("mind_changes") or []:
+            if not isinstance(m, dict):
+                continue
+            who = str(m.get("who") or "").strip()
+            what = str(m.get("change") or m.get("state") or "").strip()
+            if not who or not what or (who, what) in held_m:
+                continue
+            held_m.add((who, what))
+            self.minds.append({"who": who, "state": what, "since_episode": no})
 
     def seed_cast(self, supporting_cast) -> int:
         """P1 이 확정한 조연을 0화 명부로 깔아 둔다.
@@ -1261,6 +1303,47 @@ class SeriesState:
             out.append("  나은 것이 있으면 그 사실을 이번 화 안에서 보여 주세요 — "
                        "말없이 사라지면 독자에게는 앞 화가 취소된 것입니다.")
 
+        # ---- 사람 사이와 사람 속 — 이 화가 딛고 서는 것 -------------------
+        # 제약 목록이 아니라 **집필 재료**다. "1화에서 마주쳤지만 대화가 없었다"
+        # 가 눈앞에 있으면 다음 수(인사·경계·"당신 누구야")가 거기서 나온다.
+        # 그리고 앞 화를 본 독자가 "아 맞아 얘네 이랬지" 하게 되는 회수의 재료도
+        # 이것이다.
+        if self.relations or self.cast:
+            out.append("")
+            out.append("[인물 사이 — 지금까지. 이 화는 여기서 이어집니다]")
+            if self.relations:
+                by_pair: dict = {}
+                for r in self.relations:
+                    by_pair.setdefault((r["who"], r["about"]), []).append(r)
+                for (who, about), rows in by_pair.items():
+                    out.append(f"  {who} → {about}:")
+                    for r in rows:
+                        out.append(f"      {r['since_episode']}화: {r['state']}")
+                out.append("")
+            out.append("  ★ **여기 없는 관계는 아직 없는 관계입니다.** 두 인물이 "
+                       "서로 이름을 부르려면 이름을 알게 되는 장면이 먼저 있어야 "
+                       "합니다 — 그 장면을 이 화에 쓰거나, 모르는 사람으로 "
+                       "대하게 하세요.")
+            out.append("  ★ 관계가 반드시 이번 화에 진행될 필요는 없습니다. 두 "
+                       "사람이 안 만나면 위 상태가 그대로 유지됩니다.")
+            out.append("  ★ 위의 구체적인 순간을 **재료로 쓰세요.** 다시 만나는 "
+                       "장면이라면 그때의 일이 지금 행동의 이유가 되게 — 그래야 "
+                       "앞 화를 본 독자가 '아 맞아' 하고 알아봅니다.")
+
+        if self.minds:
+            out.append("")
+            out.append("[각자의 속 — 지금 무엇을 알고, 느끼고, 원하는가]")
+            by_who: dict = {}
+            for m in self.minds:
+                by_who.setdefault(m["who"], []).append(m)
+            for who, rows in by_who.items():
+                out.append(f"  {who}:")
+                for m in rows:
+                    out.append(f"      {m['since_episode']}화: {m['state']}")
+            out.append("  ★ 인물은 **여기 적힌 것만** 압니다. 여기 없는 정보를 "
+                       "아는 것처럼 말하거나 행동하게 하지 마세요 — 독자는 그 "
+                       "인물이 어떻게 알았는지 본 적이 없습니다.")
+
         if self.places:
             out.append("")
             out.append("[이미 나온 장소 — 다시 써도 됩니다]")
@@ -1322,7 +1405,8 @@ class SeriesState:
         return {"run_id": self.run_id, "episodes_made": self.made,
                 "episodes": self.episodes, "cast": self.cast,
                 "facts": self.facts, "places": self.places,
-                "status": self.status, "zones": self.zones}
+                "status": self.status, "zones": self.zones,
+                "relations": self.relations, "minds": self.minds}
 
     def save(self, path: Path) -> None:
         write_json(path, self.as_dict())
@@ -1338,7 +1422,9 @@ class SeriesState:
                    facts=d.get("facts") or [],
                    places=d.get("places") or [],
                    status=d.get("status") or [],
-                   zones=d.get("zones") or [])
+                   zones=d.get("zones") or [],
+                   relations=d.get("relations") or [],
+                   minds=d.get("minds") or [])
 
 
 def series_arc_block(arcs: list, current: dict = None) -> str:
@@ -5410,6 +5496,9 @@ def run_webtoon(caller: Caller, ps: PromptSet, run_dir: Path, out_dir: Path,
                     render(ps.texts["w6"], {
                         "engine_card": card, "arc_json": arc_json,
                         "ledger_snapshot": ledger.snapshot(no),
+                        # Story State — 3자 대조의 한 축. 이것 없이는 "이름을
+                        # 아는 게 맞는가"를 판정할 근거가 없다.
+                        "series_state": state.brief(ledger),
                         "episodes_json": json.dumps(
                             {"episodes": episodes}, ensure_ascii=False, separators=(",", ":")),
                     }),

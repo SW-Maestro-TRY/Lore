@@ -4826,12 +4826,59 @@ def contradiction_warnings(cuts: list, facts: list = None) -> list:
     return out
 
 
+# 예고편 문체 — 나레이션이 "AI 가 쓴 것 같다"고 읽히는 패턴들. 문체라 게이트로
+# 막으면 오탐이 이야기를 세우므로 **경고만** 한다. 실측(2026-08-27, 한 화의
+# 나레이션 다섯이 전부 이 문체): "서도윤. 세계에서 가장 강한 히어로." ·
+# "오늘, 도시의 숨은 균열이 드러나기 시작했다." · "감정이 세상을 뒤덮는다."
+# 한국어 문장의 종결어미로 끝나는가 — 명사로 끝나면("~한 힘.") 안 걸린다.
+_KO_SENT_END = re.compile("[다까요네지라야만]$")
+_TRAILER_OPEN = re.compile(r"^(오늘|이제|지금),")
+_TRAILER_VERB = re.compile(r"(시작된다|시작한다|드러난다|드러나기 시작|뒤덮는다|"
+                           r"깨어난다|열리기 시작|무너지기 시작)")
+_ABSTRACT_SUBJ = re.compile(r"(감정|운명|침묵|어둠|긴장|공포|슬픔)(이|가)\s*[^,.]{0,14}"
+                            r"(뒤덮|삼키|휘감|무너뜨|덮쳐|찢|짓누르|파고들)")
+_SENT_TAIL = ".!?\u2026\u201d\u2019)\u300d\u300f]"   # 떼고 볼 문장 끝 장식
+
+
+def narration_style_warnings(cuts: list) -> list:
+    """나레이션의 예고편 문체를 적어만 둔다. 막지 않는다 — 문체는 오탐이 있다."""
+    out = []
+    for c in cuts:
+        if not isinstance(c, dict):
+            continue
+        n = c.get("cut_number")
+        for row in speech_lines(c):
+            if row["kind"] != "narration":
+                continue
+            text = row["text"]
+            sents = [t.strip() for t in re.split(r"(?<=[.!?])\s+", text) if t.strip()]
+            nounish = [t for t in sents if len(t) >= 4
+                       and not _KO_SENT_END.search(t.rstrip(_SENT_TAIL))]
+            if len(nounish) >= 2:
+                head = nounish[0][:24]
+                out.append(f"컷 {n} 나레이션이 명사로 끝나는 문장을 나열합니다 "
+                           f"({head}...) — 영화 예고편 문체입니다. "
+                           "문장으로 풀어 쓰는 쪽이 이야기답습니다.")
+            if any(_TRAILER_OPEN.search(t) and _TRAILER_VERB.search(t)
+                   for t in sents):
+                out.append(f"컷 {n} 나레이션이 이 화에서 벌어질 일을 미리 선언합니다 "
+                           f"({text[:30]}...) — 그림이 보여줄 것을 나레이션이 "
+                           "먼저 팔아버리는 예고편 문체입니다.")
+            m = _ABSTRACT_SUBJ.search(text)
+            if m:
+                out.append(f"컷 {n} 나레이션에서 추상어가 물리 행동을 합니다 "
+                           f"({m.group(0)}) — 감정은 뒤덮지도 삼키지도 못합니다. "
+                           "실제로 움직이는 것(덩굴·물·사람)을 주어로 쓰세요.")
+    return out
+
+
 def text_pass_warnings(cuts: list, scenes: list, facts: list = None) -> list:
     """8.5단계에서 **막지 않고 적어만 두는 것.** 위반이 아니라 놓치기 쉬운 자리다."""
     out = []
     cuts = [c for c in cuts if isinstance(c, dict)]
     if not cuts:
         return out
+    out += narration_style_warnings(cuts)
 
     silent = [all(is_blank(c.get(k)) for k in TEXT_FIELDS) for c in cuts]
     num = [c.get("cut_number") for c in cuts]
