@@ -361,6 +361,15 @@ def cmd_episode(args) -> int:
         ep_payload = {"arc_order": arc1.get("order"), "episodes": [one]}
         webtoon.assign_ids(ep_payload, ledger)
         fails = webtoon.gate_episodes_shape(ep_payload, ledger, None, None)
+        # 고른 후보에는 언제나 딜레마가 있다. 그러니 이 실험에서는 price_paid 가
+        # **비어 있는 것 자체가 실패**다 — 하네스 게이트는 옛 run 을 위해 빈 칸을
+        # 통과시키지만, 여기서는 값을 안 치른 화가 그 경로로 빠져나가면 안 된다.
+        paid = one.get("price_paid") if isinstance(one, dict) else None
+        if not (isinstance(paid, dict) and str(paid.get("what") or "").strip()):
+            fails = fails + [
+                "price_paid 가 비어 있습니다. 이 화에는 「~하면 …을 잃고, "
+                "~하지 않으면 …을 잃는다」가 걸려 있으므로, 둘 중 하나를 이 화 "
+                "안에서 실제로 치러야 합니다."]
         episode = one
         if not fails:
             story.log(f"  1화 형식 게이트 통과 · 「{one.get('title')}」")
@@ -370,10 +379,12 @@ def cmd_episode(args) -> int:
             story.log(f"      - {f}")
         feedback = story.feedback_block("\n".join(f"- {f}" for f in fails))
 
-    webtoon.write_json(outdir / "episode1.json", episode)
-    (outdir / "episode1.md").write_text(episode_md(picked, episode), encoding="utf-8")
+    tag = f"_{args.tag}" if args.tag else ""
+    webtoon.write_json(outdir / f"episode1{tag}.json", episode)
+    (outdir / f"episode1{tag}.md").write_text(
+        episode_md(picked, episode), encoding="utf-8")
     save_usage(outdir, usage)
-    story.log(f"읽을 것: {outdir / 'episode1.md'}")
+    story.log(f"읽을 것: {outdir / ('episode1' + tag + '.md')}")
     return 0
 
 
@@ -387,6 +398,12 @@ def episode_md(picked: dict, e: dict) -> str:
                 f"- 행동: {why.get('action')}",
                 f"- 이유: {why.get('reason')}",
                 f"- 화면에 보이는 근거: {why.get('shown_by')}", ""]
+    paid = e.get("price_paid") or {}
+    if any(str(paid.get(k) or "").strip() for k in ("what", "shown_by", "instead_of")):
+        out += ["## 이 화가 치른 값", "",
+                f"- 잃은 것: {paid.get('what')}",
+                f"- 화면에 보이는 것: {paid.get('shown_by')}",
+                f"- 대신 피한 것: {paid.get('instead_of')}", ""]
     st = e.get("setting") or {}
     if st:
         out += ["## 무대", "", "| | |", "| --- | --- |"]
@@ -432,7 +449,9 @@ def main() -> int:
     e = sub.add_parser("episode", help="고른 후보로 1화를 쓴다")
     e.add_argument("--dir", required=True, help="candidates 가 만든 결과 폴더")
     e.add_argument("--pick", required=True, help="후보 label (A/B/C/D)")
-    e.add_argument("--run", help="바탕 run_id (기본: 결과 폴더 이름에서)")
+    e.add_argument("--run", help="바탕 run_id (기본: candidates.json 에 적힌 것)")
+    e.add_argument("--tag", default="", help="결과 파일 이름 뒤에 붙일 꼬리표 "
+                                            "(앞 판을 안 덮어쓰려면)")
     e.set_defaults(func=cmd_episode)
 
     args = ap.parse_args()

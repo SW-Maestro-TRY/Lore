@@ -1944,6 +1944,47 @@ def gate_question_echo(eps: list, ledger: Ledger) -> list:
     return failures
 
 
+# 값이 아닌 것. 위험과 감정은 아직 아무것도 잃지 않은 상태다.
+_NOT_A_PRICE = ("위험", "불안", "초조", "긴장", "우려", "걱정", "예감", "느낌")
+
+
+def gate_price_paid(eps: list) -> list:
+    """이 화가 무엇을 치렀다고 적었는가 — 그리고 그게 화면에 보이는가.
+
+    선택이 걸린 화에서 인물이 양쪽을 다 피해 가는 것이 이 단계의 가장 쉬운 길이다.
+    값은 다음 화에 치르면 되기 때문이다. 실측: 「드러내면 일상을 잃고 안 들어가면
+    시민이 죽는다」는 사건을 받고서, 인물이 마스크를 고쳐 쓰고 출동하는 화가 나왔다.
+    아무것도 안 잃었고 화는 출동 버튼을 누르는 데서 끝났다.
+
+    **price_paid 칸이 없으면 아무것도 검사하지 않는다.** 이 칸이 생기기 전 run 과,
+    값을 치를 선택이 없는 화(빈 칸이 정답이다)를 둘 다 그대로 통과시킨다.
+    """
+    failures = []
+    for i, e in enumerate(eps, 1):
+        if not isinstance(e, dict):
+            continue
+        paid = e.get("price_paid")
+        if not isinstance(paid, dict) or not any(
+                str(paid.get(k) or "").strip() for k in ("what", "shown_by", "instead_of")):
+            continue                    # 칸이 없거나 통째로 비었으면 보지 않는다
+
+        label = f"{i}번째 화"
+        what = " ".join(str(paid.get("what") or "").split())
+        if not what:
+            failures.append(f"{label}: price_paid.what 이 비어 있습니다. "
+                            "이 화에서 실제로 치른 값을 적거나, 치를 것이 없으면 "
+                            "price_paid 를 통째로 비우세요.")
+        elif any(w in what for w in _NOT_A_PRICE):
+            failures.append(
+                f"{label}: 치른 값이 \"{what[:30]}…\" 입니다 — 위험과 감정은 값이 "
+                "아닙니다. 아직 아무것도 잃지 않았다는 뜻입니다. 이 화에서 실제로 "
+                "잃은 것을 적으세요.")
+        if what and not str(paid.get("shown_by") or "").strip():
+            failures.append(f"{label}: price_paid.shown_by 가 비어 있습니다. "
+                            "치른 값이 화면에 안 보이면 독자에게는 안 일어난 일입니다.")
+    return failures
+
+
 def gate_episodes_shape(payload: dict, ledger: Ledger, arc: dict = None,
                         resolution: Resolution = None) -> list:
     """5단계 게이트. **내용**만 본다 — id 정합성은 assign_ids 가 이미 보장했다.
@@ -1961,6 +2002,7 @@ def gate_episodes_shape(payload: dict, ledger: Ledger, arc: dict = None,
         return ["episodes 가 배열이 아니거나 비어 있습니다."]
 
     failures.extend(gate_question_echo(eps, ledger))
+    failures.extend(gate_price_paid(eps))
 
     # 화 수. 재생성 지시를 받으면 모델이 불합격 화만 남기고 나머지를 버리는 일이
     # 실제로 있었다(제출 [2,3]). order 를 배열 순서로 부여하는 이상 그건 조용한

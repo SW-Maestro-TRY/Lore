@@ -660,6 +660,41 @@ ok("5단계: 엔진급 질문이 없으면 검사하지 않는다 (옛 run 회�
 ok("5단계: 질문 칸이 없는 화는 그냥 지나간다",
    webtoon.gate_question_echo([{"title": "1화"}, "문자열"], _led) == [])
 
+# ---- 값은 이 화 안에서 치르는가 (#29) ----
+#
+# 선택이 걸린 화에서 양쪽을 다 피해 가는 것이 이 단계의 가장 쉬운 길이다.
+# 실측: 「드러내면 일상을 잃고 안 들어가면 시민이 죽는다」를 받고서 마스크를
+# 고쳐 쓰고 출동하는 화가 나왔다 — 아무것도 안 잃었다.
+def _paid(what, shown="점장이 빈자리를 본다", instead="시민이 죽는 것"):
+    return {"price_paid": {"what": what, "shown_by": shown, "instead_of": instead}}
+
+ok("5단계: price_paid 칸이 없으면 검사하지 않는다 (옛 run 회귀)",
+   webtoon.gate_price_paid([{"title": "1화"}, {"price_paid": {}}, "문자열"]) == [])
+
+ok("5단계: 실제로 잃은 것을 적으면 통과",
+   webtoon.gate_price_paid([_paid("알바 자리를 잃는다")]) == [])
+
+ok("5단계: 위험은 값이 아니다 — 탈락",
+   any("위험과 감정은 값이" in f
+       for f in webtoon.gate_price_paid([_paid("정체가 드러날 위험이 커졌다")])))
+
+ok("5단계: 감정은 값이 아니다 — 탈락",
+   any("위험과 감정은 값이" in f
+       for f in webtoon.gate_price_paid([_paid("하은이 불안해졌다")])))
+
+ok("5단계: 치른 값이 화면에 안 보이면 탈락",
+   any("shown_by" in f
+       for f in webtoon.gate_price_paid([_paid("알바 자리를 잃는다", shown="")])))
+
+ok("5단계: what 만 비면 탈락 (칸은 채웠는데 값이 없다)",
+   any("what" in f for f in webtoon.gate_price_paid([_paid("", shown="보인다")])))
+
+ok("5단계: gate_episodes_shape 에 실려 돈다",
+   any("위험과 감정은 값이" in f for f in webtoon.gate_episodes_shape(
+       {"episodes": [dict(_paid("정체가 드러날 위험이 커졌다"),
+                          engine_fired=["rule"], summary="s", title="t")]},
+       webtoon.Ledger(""))))
+
 # ---- 행동의 이유가 화면에 있는가 (#29) ----
 #
 # 머릿속 설정으로만 성립하는 행동은 독자에게 개연성이 없다. 실제로 그렇게 나왔다
