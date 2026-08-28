@@ -102,6 +102,9 @@ def card_with_core_event(card: str, c: dict) -> str:
 CANDIDATE_FIELDS = (
     ("core_event", "1화의 핵심사건"),
     ("payoff", "독자가 짜릿해하는 순간 — 하은이 왜 SS급인지 체감되는 자리"),
+    ("last_beat", "마지막 순간을 장면으로. 상태 서술이 아니라 화면"),
+    ("new_mystery", "이 화가 끝나며 새로 생긴 미스터리"),
+    ("surprise", "예상 밖의 정보 하나"),
     ("payoff_is_the_price", "그 짜릿한 행동이 어떻게 그대로 대가가 되는가"),
     ("dilemma", "하은이 놓이는 양자택일"),
     ("cost_if_acts", "행동했을 때 치르는 값"),
@@ -117,6 +120,13 @@ CANDIDATE_FIELDS = (
 SAME_CANDIDATE = 0.72
 # p1 의 trigger_situations 를 그대로 베꼈다고 볼 문턱.
 COPIED_TRIGGER = 0.55
+# 미스터리가 아니라 이미 아는 위험을 적었을 때 걸리는 말. 「정체가 들킬까」는
+# 1화를 안 봐도 물을 수 있는 것이라 다음 화를 누르게 하지 못한다.
+_RISK_WORDS = ("들킬", "들키", "노출", "추적", "발각", "위험", "위기", "지킬 수 있을까",
+               "밝혀질", "탄로")
+# 미스터리에는 대상이 있어야 한다 — 누가·무엇이·왜.
+_MYSTERY_WORDS = ("누구", "누가", "왜", "무엇", "뭐", "어디서 온", "정체가 뭐")
+
 # 엔진급 질문을 화 질문으로 베꼈다고 볼 문턱 (webtoon 게이트와 같은 값).
 ENGINE_ECHO = webtoon.ENGINE_ECHO_THRESHOLD
 
@@ -165,6 +175,14 @@ def gate_candidates(payload: dict, want: int, triggers: list, engine_q: str,
                     f"그대로 옮긴 것입니다 (\"{str(raw)[:30]}…\"). 그 상황이 말하는 "
                     "모순을 가져오되, 그것이 터질 다른 자리를 찾으세요.")
                 break
+
+        myst = " ".join(str(c.get("new_mystery") or "").split())
+        if myst and any(w in myst for w in _RISK_WORDS) \
+                and not any(w in myst for w in _MYSTERY_WORDS):
+            failures.append(
+                f"후보 {label}: new_mystery 가 \"{myst[:30]}…\" 입니다 — 이건 독자가 "
+                "이미 아는 위험이지 새로 생긴 미스터리가 아닙니다. 독자가 모르는 "
+                "구체적인 것(저 사람은 누구인지 · 왜 그러는지)을 적으세요.")
 
         if base_q and webtoon._similarity(
                 webtoon._norm_q(c.get("question_after")), base_q) >= ENGINE_ECHO:
@@ -337,6 +355,10 @@ def candidates_md(arc: dict, rows: list) -> str:
            f"- 끝 상태: {arc.get('ends_with')}", ""]
     for c in rows:
         out += [f"## {c.get('label')}. {c.get('core_event')}", "",
+                f"- **마지막 장면**: {c.get('last_beat')}",
+                f"- **새로 생긴 미스터리**: {c.get('new_mystery')}",
+                f"- **예상 밖의 것**: {c.get('surprise')}",
+                "",
                 f"- **짜릿한 자리**: {c.get('payoff')}",
                 f"- **그게 그대로 대가가 되는 방식**: {c.get('payoff_is_the_price')}",
                 f"- **선택**: {c.get('dilemma')}",
