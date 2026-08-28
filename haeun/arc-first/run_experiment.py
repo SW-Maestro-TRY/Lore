@@ -101,6 +101,8 @@ def card_with_core_event(card: str, c: dict) -> str:
 # ---------------------------------------------------------------- 후보 게이트
 CANDIDATE_FIELDS = (
     ("core_event", "1화의 핵심사건"),
+    ("payoff", "독자가 짜릿해하는 순간 — 하은이 왜 SS급인지 체감되는 자리"),
+    ("payoff_is_the_price", "그 짜릿한 행동이 어떻게 그대로 대가가 되는가"),
     ("dilemma", "하은이 놓이는 양자택일"),
     ("cost_if_acts", "행동했을 때 치르는 값"),
     ("cost_if_refuses", "안 했을 때 치르는 값"),
@@ -119,7 +121,13 @@ COPIED_TRIGGER = 0.55
 ENGINE_ECHO = webtoon.ENGINE_ECHO_THRESHOLD
 
 
-def gate_candidates(payload: dict, want: int, triggers: list, engine_q: str) -> list:
+# core_event 가 ①사건 ②선택 ③되돌릴 수 없는 결과 를 다 담으면 짧을 수가 없다.
+# 사건 이름만 적은 후보를 여기서 되돌린다.
+CORE_EVENT_MIN = 90
+
+
+def gate_candidates(payload: dict, want: int, triggers: list, engine_q: str,
+                    fixed_material: bool = False) -> list:
     """후보가 **고를 만한 것들**인가. 내용의 재미는 사람이 본다 — 여기서는 형식만."""
     rows = payload.get("candidates")
     if not isinstance(rows, list) or not rows:
@@ -140,6 +148,13 @@ def gate_candidates(payload: dict, want: int, triggers: list, engine_q: str) -> 
         for key, why in CANDIDATE_FIELDS:
             if not str(c.get(key) or "").strip():
                 failures.append(f"후보 {label}: {key} 가 비어 있습니다 ({why}).")
+
+        raw_event = " ".join(str(c.get("core_event") or "").split())
+        if raw_event and len(raw_event) < CORE_EVENT_MIN:
+            failures.append(
+                f"후보 {label}: core_event 가 {len(raw_event)}자로 사건 이름에 "
+                "가깝습니다. ①무슨 일이 벌어지는가 ②하은이 그 자리에서 실제로 하는 "
+                "선택 ③그 선택 때문에 되돌릴 수 없게 되는 것 — 셋을 다 적으세요.")
 
         # p1 의 상황을 그대로 옮겨 적은 후보. 1차 실험에서 1화 전체가 이렇게 나왔다.
         ev = webtoon._norm_q(c.get("core_event"))
@@ -163,7 +178,12 @@ def gate_candidates(payload: dict, want: int, triggers: list, engine_q: str) -> 
             a, b = rows[i], rows[j]
             if not (isinstance(a, dict) and isinstance(b, dict)):
                 continue
-            for key, what in (("pressure_axis", "미는 힘"), ("core_event", "핵심사건")):
+            # 소재를 고정했으면 미는 힘은 당연히 겹친다 — 그때 달라야 하는 것은
+            # 하은이 하는 선택과 그 선택이 없애는 것이다.
+            keys = ((("dilemma", "선택"), ("irreversible", "되돌릴 수 없게 되는 것"))
+                    if fixed_material
+                    else (("pressure_axis", "미는 힘"), ("core_event", "핵심사건")))
+            for key, what in keys:
                 r = webtoon._similarity(webtoon._norm_q(a.get(key)),
                                         webtoon._norm_q(b.get(key)))
                 if r >= SAME_CANDIDATE:
@@ -262,6 +282,7 @@ def cmd_candidates(args) -> int:
             "SCENE",
             story.render(template, {
                 "candidate_count": args.n,
+                "material": material_block(args.material),
                 "engine_card": card,
                 "character_sheet": sheet,
                 "arc_json": json.dumps(arc1, ensure_ascii=False, separators=(",", ":")),
@@ -269,7 +290,8 @@ def cmd_candidates(args) -> int:
                 "fix_directive": fix,
             }),
             story.TEMP_CREATIVE, usage)
-        fails = gate_candidates(payload, args.n, triggers, engine_q)
+        fails = gate_candidates(payload, args.n, triggers, engine_q,
+                                fixed_material=bool(str(args.material or "").strip()))
         if not fails:
             story.log(f"  후보 {args.n}개 통과")
             break
@@ -292,6 +314,21 @@ def cmd_candidates(args) -> int:
     return 0
 
 
+def material_block(material: str) -> str:
+    """이번 후보를 특정 소재 안에서만 내게 한다.
+
+    소재를 고정하면 "SCENE 이 약한 재료를 줘서 화가 약한 것인가, 재료가 세도
+    집필이 물러나는 것인가" 를 가를 수 있다 — 소재를 그대로 두고 선택과 결과의
+    해상도만 올려서 다시 뽑는다. 안 주면 예전 그대로 자유롭게 낸다.
+    """
+    if not str(material or "").strip():
+        return ""
+    return ("[이번 후보의 소재 — 여기 안에서만 낸다]\n"
+            f"  {material.strip()}\n"
+            "  ★ 소재는 고정이다. 후보끼리 달라야 하는 것은 소재가 아니라\n"
+            "    **하은이 하는 선택과 그 선택이 없애는 것**이다.\n")
+
+
 def candidates_md(arc: dict, rows: list) -> str:
     out = ["# 1화 핵심사건 후보", "",
            f"놓이는 자리 — Arc 1. {arc.get('title')}", "",
@@ -300,6 +337,8 @@ def candidates_md(arc: dict, rows: list) -> str:
            f"- 끝 상태: {arc.get('ends_with')}", ""]
     for c in rows:
         out += [f"## {c.get('label')}. {c.get('core_event')}", "",
+                f"- **짜릿한 자리**: {c.get('payoff')}",
+                f"- **그게 그대로 대가가 되는 방식**: {c.get('payoff_is_the_price')}",
                 f"- **선택**: {c.get('dilemma')}",
                 f"  - 행동하면: {c.get('cost_if_acts')}",
                 f"  - 안 하면: {c.get('cost_if_refuses')}",
@@ -444,6 +483,9 @@ def main() -> int:
     c.add_argument("--run", required=True, help="바탕이 되는 story run_id")
     c.add_argument("--arcs", help="이미 잡아 둔 arcs.json (있으면 W4 를 안 돈다)")
     c.add_argument("-n", type=int, default=4, help="후보 개수 (기본 4)")
+    c.add_argument("--material", default="",
+                   help="후보를 낼 소재를 고정한다 (예: \"긴급 게이트 출동\"). "
+                        "재료를 고정하고 선택·결과의 해상도만 볼 때 쓴다")
     c.set_defaults(func=cmd_candidates)
 
     e = sub.add_parser("episode", help="고른 후보로 1화를 쓴다")
