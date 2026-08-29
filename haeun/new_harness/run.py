@@ -36,6 +36,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
+import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
 import pageart                                # noqa: E402
 import pages as pagemod                       # noqa: E402
@@ -303,22 +304,31 @@ def gate_board(board: dict) -> list[str]:
         if not scene["cuts"]:
             bad.append(f"{where}: 컷이 없습니다.")
 
-        seats = {}          # 이름 -> 좌우. 한 장면 안에서 안 바뀌어야 한다
+        # 이름 -> 좌우. **둘 이상 나온 컷에서만** 센다.
+        #
+        # 콘티 프롬프트의 규칙이 "한 컷에 두 명 이상 나오면 각자 position 을
+        # 적는다. 한 번 정한 좌우는 그 장면이 끝날 때까지 바꾸지 않는다" 다.
+        # 좌우를 고정하는 이유가 **둘의 자리가 서로 바뀌면 독자가 누가 누군지
+        # 놓치기 때문**이라, 혼자 나오는 컷에는 걸 이유가 없다. 혼자 복도를
+        # 걸어가는 인물이 가운데에서 오른쪽으로 옮겨 가는 것은 정상적인
+        # 연출이고, 그것까지 잡으면 게이트가 매번 울려서 아무도 안 보게 된다.
+        seats = {}
         for cut in scene["cuts"]:
             spot = f"{where} 컷 {cut['id']}"
             if cut["size"] not in SIZES:
                 bad.append(f"{spot}: size 가 '{cut['size']}' 입니다 "
                            f"({' / '.join(SIZES)}).")
             people = cut["characters"]
+            crowded = len(people) > 1
             for who in people:
                 name = _text(who.get("name"))
                 if not who.get("moment"):
                     bad.append(f"{spot}: {name or '이름 없음'} 에 moment 가 없습니다.")
                 pos = _text(who.get("position"))
-                if len(people) > 1 and not pos:
+                if crowded and not pos:
                     bad.append(f"{spot}: 인물이 둘 이상인데 {name} 에 position 이 "
                                "없습니다.")
-                if pos and name:
+                if crowded and pos and name:
                     if seats.setdefault(name, pos) != pos:
                         bad.append(f"{spot}: {name} 의 좌우가 장면 안에서 바뀝니다 "
                                    f"({seats[name]} -> {pos}).")
@@ -447,7 +457,36 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def stage_board(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> None:
+def page_ratio_cap(given: int | None) -> int:
+    """페이지 높이 상한. 안 주면 **지금 그림을 그릴 캔버스**에서 뽑는다.
+
+    프로바이더마다 캔버스 모양이 달라서(Gemini 1.78 · OpenAI 1.50) 같은 컷
+    묶음이 다른 두께로 나온다. 손으로 맞추게 두면 프로바이더를 바꿀 때마다
+    이 값을 같이 바꿔야 하는 것을 잊는다.
+    """
+    if given is not None:
+        return given
+    aspect = imagegen.page_aspect(llm.provider_for("PAGE_IMAGE"))
+    return pagemod.max_ratio_for(aspect)
+
+
+def repage(run_dir: Path, max_ratio: int | None = None) -> list:
+    """board.json -> pages.json. 호출 0회 — 묶는 방식만 바꿔 다시 짤 때 쓴다."""
+    max_ratio = page_ratio_cap(max_ratio)
+    path = run_dir / "board.json"
+    if not path.exists():
+        raise SystemExit(f"{path} 가 없습니다. 콘티 단계를 먼저 돌리세요.")
+    board = json.loads(path.read_text(encoding="utf-8"))
+    flat = pagemod.flatten_cuts(board["scenes"])
+    pages = pagemod.group_pages(flat, max_ratio=max_ratio)
+    write_json(run_dir / "pages.json", pages)
+    tall = [sum(pagemod.HEIGHT_RATIO[pagemod.cut_size(c)] for c in pg) for pg in pages]
+    log(f"  페이지 {len(pages)}장 · 높이합계 {tall} -> {run_dir / 'pages.json'}")
+    return pages
+
+
+def stage_board(run_dir: Path, char: dict, direction: dict, dry_run: bool,
+                max_ratio: int | None = None) -> None:
     write_json(run_dir / "pick.json", {"n": direction["n"], "title": direction["title"],
                                        "genre": direction["genre"]})
     prompt = compose("storyboard_prompt", board_block(char, direction, run_dir))
@@ -479,9 +518,7 @@ def stage_board(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> No
             warn(f"  - {one}")
         write_json(run_dir / "board_issues.json", bad)
 
-    pages = pagemod.group_pages(pagemod.flatten_cuts(scenes))
-    write_json(run_dir / "pages.json", pages)
-    log(f"  페이지 {len(pages)}장 -> {run_dir / 'pages.json'}")
+    repage(run_dir, max_ratio)
 
 
 def stage_sheet(run_dir: Path, char: dict, dry_run: bool) -> None:
@@ -559,6 +596,11 @@ def main(argv=None) -> int:
                    help="그 번호 페이지만 다시 (여러 번 가능)")
     p.add_argument("--all", action="store_true",
                    help="이야기 -> 콘티 -> 시트 -> 페이지 그림까지 한 번에")
+    p.add_argument("--max-ratio", type=int, default=None,
+                   help="한 페이지의 높이 비율 합계 상한 (tiny1 small2 normal3 "
+                        "large5). 안 주면 그림 프로바이더의 캔버스에서 뽑는다")
+    p.add_argument("--repage", action="store_true",
+                   help="콘티는 그대로 두고 페이지 묶기만 다시 한다 (호출 0회)")
     p.add_argument("--dry-run", action="store_true", help="프롬프트만 쓰고 호출하지 않는다")
     p.add_argument("--plan", action="store_true", help="단계별 모델만 보여준다")
     args = p.parse_args(argv)
@@ -602,6 +644,10 @@ def main(argv=None) -> int:
 
     # 시트 가져오기는 어느 흐름이든 **가장 먼저** 한다 — 뒤의 단계가 이 시트를
     # 참조로 쓰고, 이미 있으면 시트 단계가 새로 그리지 않는다.
+    if args.repage:
+        repage(run_dir, args.max_ratio)
+        return 0
+
     if args.sheet_from:
         got = sheetmod.import_sheet(run_dir, args.sheet_from)
         who = f" ({got['name']})" if got.get("name") else ""
@@ -635,7 +681,7 @@ def main(argv=None) -> int:
         raise SystemExit("고를 방향이 없습니다. story.md 를 보고 프롬프트를 확인하세요.")
 
     direction = choose(directions, args.pick)
-    stage_board(run_dir, char, direction, args.dry_run)
+    stage_board(run_dir, char, direction, args.dry_run, args.max_ratio)
 
     if args.all or args.sheet:
         # 시트가 페이지보다 **먼저** 나와야 한다. 페이지를 그릴 때 참조로

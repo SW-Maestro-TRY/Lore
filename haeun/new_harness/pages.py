@@ -26,6 +26,37 @@ DEFAULT_MAX_PER_PAGE = 5
 # large/full 은 어차피 혼자 한 장이므로 합계에 안 들어간다.
 HEIGHT_RATIO = {"tiny": 1, "small": 2, "normal": 3, "large": 5, "full": 99}
 
+# 한 페이지의 높이 비율 합계 상한.
+#
+# 개수만으로 끊으면 normal 다섯 개(합계 15)가 한 장에 들어간다. 페이지는 이미지
+# **한 장**이고 그 장의 모양은 정해져 있으므로, 컷을 많이 넣을수록 각 컷이 그
+# 안에서 납작해진다. 페이지의 세로/가로를 A, 합계를 R 이라 하면 normal 한 컷의
+# 가로:세로는
+#
+#     R / (3 x A)
+#
+#     A=1.78, R=15  ->  2.8 : 1   (띠. 인물 상반신도 답답하다)
+#     A=1.78, R= 9  ->  1.7 : 1
+#     A=1.78, R= 6  ->  1.1 : 1   (거의 정사각. 페이지가 늘어 호출이 더 나간다)
+#
+# 그래서 상한은 **캔버스 모양에서 나온다.** 목표 컷 모양을 1.7:1 로 두면
+# R = 3 x A x 1.7 = 5.1 x A 다. 캔버스가 프로바이더마다 다르므로(imagegen 참고)
+# 이 값도 따라 움직여야 한다:
+#
+#     Gemini  9:16      A=1.78  ->  9
+#     OpenAI  1024x1536 A=1.50  ->  8
+TARGET_PANEL_ASPECT = 1.7      # normal 컷의 가로:세로. 웹툰 보통 컷은 조금 가로로 길다
+DEFAULT_PAGE_ASPECT = 1.78     # 안 알려주면 Gemini 9:16 으로 본다
+
+
+def max_ratio_for(page_aspect: float = DEFAULT_PAGE_ASPECT) -> int:
+    """캔버스 세로/가로 -> 한 페이지의 높이 비율 합계 상한."""
+    return max(HEIGHT_RATIO["normal"],
+               round(HEIGHT_RATIO["normal"] * page_aspect * TARGET_PANEL_ASPECT))
+
+
+DEFAULT_MAX_RATIO = max_ratio_for()
+
 # 콘티 파서는 한글 키로 저장하고(run.parse_board), 손으로 만든 입력은 보통
 # size 로 쓴다. 둘 다 받는다 — 키 이름 때문에 묶기가 실패하면 원인을 찾기가
 # 그림이 이상한 것보다 어렵다.
@@ -49,13 +80,13 @@ def cut_size(cut) -> str:
 
 
 def group_pages(cuts, max_per_page: int = DEFAULT_MAX_PER_PAGE,
-                max_ratio: int | None = None) -> list[list]:
+                max_ratio: int | None = DEFAULT_MAX_RATIO) -> list[list]:
     """컷 배열 -> 페이지 배열. 각 페이지는 컷 배열이다.
 
-    max_ratio 를 주면 높이 비율(HEIGHT_RATIO) 합계로도 끊는다. **기본은
-    None(끔)** 이다 — 얼마를 넘겨야 한 페이지가 너무 길어지는지는 아직 붙여
-    보지 않았고, 정하지 않은 값을 기본값으로 박으면 그게 곧 기준이 된다.
-    개수 상한과 함께 쓰면 둘 중 **먼저 걸리는 쪽**에서 끊는다.
+    개수(max_per_page)와 높이 비율 합계(max_ratio) 둘 중 **먼저 걸리는 쪽**에서
+    끊는다. max_ratio=None 이면 개수로만 끊는다 — 그러면 normal 다섯 개가 한
+    장에 들어가고, 9:16 캔버스에서 각 컷이 2.8:1 띠가 된다(DEFAULT_MAX_RATIO
+    주석의 산수 참고).
     """
     if max_per_page < 1:
         raise ValueError(f"max_per_page 는 1 이상이어야 합니다 (받은 값: {max_per_page})")

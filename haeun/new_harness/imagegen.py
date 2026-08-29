@@ -35,13 +35,46 @@ PAGE_KIND = "page"          # 세로로 읽는 웹툰 페이지 — 여기서 �
 #   image_size 를 올려도 픽셀만 늘고 캔버스 모양은 같다).
 #
 #   그래서 한 페이지에 컷을 많이 모을수록 각 컷이 납작해지고, 그 정도가
-#   프로바이더마다 다르다. pages.max_ratio 를 만들어 두고 기본을 꺼 놓은 이유가
-#   이것이다 — 쓰는 모델을 정한 뒤에 그 캔버스로 붙여 보고 정해야 한다.
-PAGE_SIZE = "1024x1536"     # OpenAI
-PAGE_RATIO = "9:16"         # Gemini
+#   프로바이더마다 다르다. 페이지에 컷을 몇 개까지 모을지(pages.max_ratio)는
+#   그래서 이 표에서 뽑는다 — 손으로 맞추게 두면 프로바이더를 바꿀 때마다
+#   같이 바꿔야 하는 것을 잊는다.
+# 프로바이더별 페이지 캔버스. **값은 .env 로 바꾼다** — 모델을 갈아 끼울 때마다
+# 코드를 뜯어고치게 두지 않는다.
+#
+#     PAGE_CANVAS_OPENAI=1024x1536      OpenAI 는 픽셀 (받는 값이 셋뿐이다)
+#     PAGE_CANVAS_GEMINI=9:16           Gemini 는 비율
+#
+# 세로/가로는 이 값에서 뽑는다. 따로 적어 두면 두 곳이 갈라진다.
+PAGE_CANVAS = {"openai": "1024x1536", "gemini": "9:16"}
+DEFAULT_ASPECT = 16 / 9
 
-story.CHARSHEET_SIZES.setdefault(PAGE_KIND, PAGE_SIZE)
-story.CHARSHEET_RATIOS.setdefault(PAGE_KIND, PAGE_RATIO)
+
+def canvas_for(provider: str) -> str:
+    name = (provider or "").strip().lower()
+    return (llm.env(f"PAGE_CANVAS_{name.upper()}")
+            or PAGE_CANVAS.get(name) or "9:16")
+
+
+def page_aspect(provider: str) -> float:
+    """캔버스 문자열 -> 세로/가로. `1024x1536` 도 `9:16` 도 읽는다."""
+    text = canvas_for(provider)
+    for sep in ("x", "X", ":"):
+        if sep in text:
+            a, _, b = text.partition(sep)
+            try:
+                w, h = float(a), float(b)
+            except ValueError:
+                break
+            if w > 0:
+                return h / w
+    story.warn(f"캔버스 '{text}' 를 읽지 못했습니다. {DEFAULT_ASPECT:.2f} 로 봅니다.")
+    return DEFAULT_ASPECT
+
+
+# story.py 의 시트 크기표에 페이지 칸을 단다. 프로바이더마다 다른 값이라
+# 둘 다 넣는다 — make_sheet_painter 는 provider 에 맞는 쪽만 읽는다.
+story.CHARSHEET_SIZES.setdefault(PAGE_KIND, canvas_for("openai"))
+story.CHARSHEET_RATIOS.setdefault(PAGE_KIND, canvas_for("gemini"))
 
 
 def backend_for(stage: str) -> tuple[str, str, str]:

@@ -23,6 +23,7 @@ from pathlib import Path
 
 import imagegen
 import imageprompt
+import llm
 from llm import story
 
 log, warn = story.log, story.warn
@@ -63,8 +64,9 @@ def build_prompts(run_dir: Path, continuous: bool = False) -> tuple[list, list[s
     if board_path.exists():
         cast = (json.loads(board_path.read_text(encoding="utf-8")) or {}).get("cast") or []
 
+    provider = llm.provider_for(STAGE)
     return pages, imageprompt.page_prompts(pages, sheets=sheets, cast=cast,
-                                           continuous=continuous)
+                                           continuous=continuous, provider=provider)
 
 
 def draw(run_dir: Path, dry_run: bool = False, only: list[int] | None = None,

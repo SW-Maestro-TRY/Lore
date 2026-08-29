@@ -227,14 +227,26 @@ def cast_lines(cast, page=None) -> list[str]:
     return out
 
 
-def load_fixed_block() -> str:
-    path = PROMPT_DIR / "image_prompt"
-    if not path.exists():
-        raise SystemExit(f"프롬프트가 없습니다: {path}")
-    text = path.read_text(encoding="utf-8").strip()
-    if not text:
-        raise SystemExit(f"프롬프트가 비어 있습니다: {path}")
-    return text
+def load_fixed_block(provider: str = "") -> str:
+    """고정 블록. 프로바이더 전용 파일이 있으면 그것을 쓴다.
+
+        prompt/image_prompt.openai   GPT 로 그릴 때
+        prompt/image_prompt.gemini   Gemini 로 그릴 때
+        prompt/image_prompt          없을 때 쓰는 공통
+
+    나누는 이유는 캔버스 모양과 참조 이미지를 부르는 방식이 다르기 때문이다.
+    OpenAI 는 참조가 붙으면 편집 쪽으로 가서 "이 그림을 고쳐라" 에 가깝게
+    읽으므로, "새로 그린다" 를 더 세게 말해 줘야 한다.
+    """
+    name = (provider or "").strip().lower()
+    for cand in ([PROMPT_DIR / f"image_prompt.{name}"] if name else []) + \
+                [PROMPT_DIR / "image_prompt"]:
+        if cand.exists():
+            text = cand.read_text(encoding="utf-8").strip()
+            if text:
+                return text
+            raise SystemExit(f"프롬프트가 비어 있습니다: {cand}")
+    raise SystemExit(f"프롬프트가 없습니다: {PROMPT_DIR / 'image_prompt'}")
 
 
 def place_block(page) -> str:
@@ -256,7 +268,8 @@ def place_block(page) -> str:
     return "\n".join(lines)
 
 
-def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1) -> str:
+def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
+                      provider: str = "") -> str:
     """페이지(컷 배열) 하나 -> 호출 한 번에 보낼 프롬프트.
 
     컷 번호는 **페이지 안에서 1부터** 센다. 화면에 그려 넣는 번호라 페이지
@@ -264,7 +277,7 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1) -> st
     다른 컷이 한 페이지에 모였을 때 "컷 1" 이 두 개가 된다. 화 전체로 이어
     세고 싶으면 start_number 를 넘긴다.
     """
-    blocks = [load_fixed_block()]
+    blocks = [load_fixed_block(provider)]
 
     who = [s for s in (sheets or []) if _t(s)] + cast_lines(cast, page)
     if who:
@@ -279,11 +292,13 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1) -> st
     return "\n\n".join(blocks) + "\n"
 
 
-def page_prompts(pages_, sheets=None, cast=None, continuous: bool = False) -> list[str]:
+def page_prompts(pages_, sheets=None, cast=None, continuous: bool = False,
+                 provider: str = "") -> list[str]:
     """페이지 배열 -> 프롬프트 배열. continuous 면 컷 번호를 화 전체로 이어 센다."""
     out, n = [], 1
     for page in pages_ or []:
         out.append(build_page_prompt(page, sheets, cast,
-                                     start_number=n if continuous else 1))
+                                     start_number=n if continuous else 1,
+                                     provider=provider))
         n += len(page)
     return out

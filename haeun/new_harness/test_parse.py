@@ -286,13 +286,27 @@ def test_gate_board() -> None:
        not any("position" in x for x in issues({"scenes": [{"id": 1, "location": "홀",
            "cuts": [{"size": "normal", "characters": [
                {"name": "하일", "moment": "도중"}]}]}]})))
-    # 좌우가 장면 안에서 바뀌는 것 — 다 그린 뒤에 발견하면 다시 그리는 값이 비싸다
-    ok("좌우가 바뀌면 잡는다",
-       any("좌우" in x for x in issues({"scenes": [{"id": 1, "location": "홀", "cuts": [
+    # 좌우가 장면 안에서 바뀌는 것 — 다 그린 뒤에 발견하면 다시 그리는 값이 비싸다.
+    # 단, 콘티 프롬프트의 규칙이 "한 컷에 두 명 이상" 이라 그 경우에만 본다.
+    def two(pos_a: str, pos_b: str) -> list:
+        return issues({"scenes": [{"id": 1, "location": "홀", "cuts": [
+            {"size": "normal", "characters": [
+                {"name": "교수", "moment": "도중", "position": pos_a},
+                {"name": "하일", "moment": "도중", "position": "왼쪽"}]},
+            {"size": "normal", "characters": [
+                {"name": "교수", "moment": "도중", "position": pos_b},
+                {"name": "하일", "moment": "도중", "position": "왼쪽"}]}]}]})
+
+    ok("둘 이상인 컷에서 좌우가 바뀌면 잡는다", any("좌우" in x for x in two("오른쪽", "가운데")))
+    ok("안 바뀌면 안 잡는다", not any("좌우" in x for x in two("오른쪽", "오른쪽")))
+    # 혼자 나오는 컷은 안 잡는다 — 복도를 걸어가며 화면 안에서 옮겨 가는 것은
+    # 정상적인 연출이고, 그것까지 잡으면 게이트가 매번 울려 아무도 안 본다
+    ok("혼자면 좌우가 바뀌어도 안 잡는다",
+       not any("좌우" in x for x in issues({"scenes": [{"id": 1, "location": "복도", "cuts": [
            {"size": "normal", "characters": [
-               {"name": "교수", "moment": "도중", "position": "오른쪽"}]},
+               {"name": "박하은", "moment": "도중", "position": "가운데"}]},
            {"size": "normal", "characters": [
-               {"name": "교수", "moment": "도중", "position": "왼쪽"}]}]}]})))
+               {"name": "박하은", "moment": "도중", "position": "오른쪽"}]}]}]})))
     ok("대사 text 가 비면 잡는다",
        any("text" in x for x in issues({"scenes": [{"id": 1, "location": "홀", "cuts": [
            {"size": "normal", "dialogue": [{"order": 1, "text": ""}]}]}]})))
@@ -438,13 +452,22 @@ def test_pages() -> None:
           shape(P.group_pages(cuts("normal", "large"))), [[1], [2]])
 
     # 최대 개수
-    check("기본 5개에서 넘어간다",
-          shape(P.group_pages(cuts(*["normal"] * 7))), [[1, 2, 3, 4, 5], [6, 7]])
+    # 개수 축만 보려면 높이 축을 끈다. 둘 다 켜져 있고 먼저 걸리는 쪽에서 끊는다
+    check("개수 5개에서 넘어간다",
+          shape(P.group_pages(cuts(*["normal"] * 7), max_ratio=None)),
+          [[1, 2, 3, 4, 5], [6, 7]])
     check("정확히 5개면 한 장",
-          shape(P.group_pages(cuts(*["normal"] * 5))), [[1, 2, 3, 4, 5]])
+          shape(P.group_pages(cuts(*["normal"] * 5), max_ratio=None)),
+          [[1, 2, 3, 4, 5]])
     check("max_per_page=2",
-          shape(P.group_pages(cuts(*["small"] * 5), max_per_page=2)),
+          shape(P.group_pages(cuts(*["small"] * 5), max_per_page=2, max_ratio=None)),
           [[1, 2], [3, 4], [5]])
+    # tiny 만 있으면 높이(5)보다 개수(5)가 먼저 걸린다
+    check("자잘한 컷은 개수가 먼저 막는다",
+          shape(P.group_pages(cuts(*["tiny"] * 7))), [[1, 2, 3, 4, 5], [6, 7]])
+    # normal 만 있으면 개수(3<5)보다 높이(9)가 먼저 걸린다
+    check("보통 컷은 높이가 먼저 막는다",
+          shape(P.group_pages(cuts(*["normal"] * 7))), [[1, 2, 3], [4, 5, 6], [7]])
     check("max_per_page=1 이면 전부 한 장씩",
           shape(P.group_pages(cuts("tiny", "small", "normal"), max_per_page=1)),
           [[1], [2], [3]])
@@ -637,8 +660,11 @@ def test_sheet_line() -> None:
 
 
 def test_ratio_break() -> None:
-    check("기본은 비율로 안 끊는다",
-          shape(P.group_pages(cuts(*["normal"] * 5))), [[1, 2, 3, 4, 5]])
+    check("기본은 9 — normal 셋에서 끊는다",
+          shape(P.group_pages(cuts(*["normal"] * 5))), [[1, 2, 3], [4, 5]])
+    check("None 이면 높이로 안 끊는다",
+          shape(P.group_pages(cuts(*["normal"] * 5), max_ratio=None)),
+          [[1, 2, 3, 4, 5]])
     check("max_ratio=9 면 normal 3개",
           shape(P.group_pages(cuts(*["normal"] * 7), max_ratio=9)),
           [[1, 2, 3], [4, 5, 6], [7]])
