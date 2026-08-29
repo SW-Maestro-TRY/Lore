@@ -106,11 +106,20 @@ def provider_for(stage: str) -> str:
     return name
 
 
+def image_default(provider: str) -> str:
+    """provider 가 쓸 이미지 모델 이름. 키가 없어도 이름은 알려준다.
+
+    image_backend_ready 는 (쓸 수 있는가, 모델, 사유) 를 돌려주는데, 여기서는
+    모델 이름만 본다 — --plan 은 키가 없어도 돌아야 하기 때문이다.
+    """
+    return story.image_backend_ready(provider)[1]
+
+
 def model_for(stage: str, provider: str) -> str:
-    """이 단계가 쓸 모델 이름. 비면 provider 의 기본값을 쓴다는 뜻이다."""
+    """이 단계가 쓸 모델 이름."""
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
-        return model                    # 빈 값이면 story.image_backend_ready 가 정한다
+        return model or image_default(provider)
     model, _ = _pick(stage, "MODEL", ("NH_MODEL",))
     return model or story.default_model_for(provider)
 
@@ -182,7 +191,7 @@ def plan() -> list[dict]:
             "label": STAGE_LABEL.get(stage, stage),
             "image": stage in IMAGE_STAGES,
             "provider": provider,
-            "model": model_for(stage, provider) or "(provider 기본값)",
+            "model": model_for(stage, provider),
             "from": mfrom or pfrom or "기본값",
         })
     return out
