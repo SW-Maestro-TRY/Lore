@@ -810,8 +810,49 @@ def test_import_sheet() -> None:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_gate_readable() -> None:
+    """읽히는가 — 형식은 맞는데 무슨 내용인지 모르는 콘티를 잡는다."""
+    def board(scenes) -> dict:
+        return {"cast": [], "scenes": [
+            {"id": i, "summary": "", "location": "홀", "time": "낮",
+             "cuts": [dict({"id": j, "size": "normal", "camera": {}, "background": {},
+                            "characters": [], "sfx": [], "forbid": [], "note": ""}, **c)
+                      for j, c in enumerate(cuts, 1)]}
+            for i, cuts in enumerate(scenes, 1)]}
+
+    def say(kind: str, text: str = "말") -> dict:
+        return {"order": 1, "type": kind, "text": text}
+
+    # 컷마다 말·나레이션이 섞여 있고 장면이 여러 컷이면 조용하다
+    healthy = board([
+        [{"dialogue": [say("말")]}, {"dialogue": [say("나레이션")]}],
+        [{"dialogue": [say("생각")]}, {"dialogue": [say("말")]}],
+    ])
+    check("멀쩡하면 조용하다", R.gate_readable(healthy), [])
+
+    quiet = board([[{"dialogue": []}, {"dialogue": []}],
+                   [{"dialogue": []}, {"dialogue": []}]])
+    ok("대사가 없으면 잡는다", any("대사가" in x for x in R.gate_readable(quiet)))
+
+    same = board([[{"dialogue": [say("생각")]}, {"dialogue": [say("생각")]}],
+                  [{"dialogue": [say("생각")]}, {"dialogue": [say("생각")]}]])
+    hits = R.gate_readable(same)
+    ok("한 종류뿐이면 잡는다", any("한 종류" in x for x in hits))
+    ok("나레이션이 없으면 잡는다", any("나레이션" in x for x in hits))
+
+    solo = board([[{"dialogue": [say("말")]}],
+                  [{"dialogue": [say("나레이션")]}],
+                  [{"dialogue": [say("생각")]}]])
+    ok("1컷 장면이 많으면 잡는다", any("1컷" in x for x in R.gate_readable(solo)))
+    ok("장면이 여러 컷이면 그건 안 잡는다",
+       not any("1컷" in x for x in R.gate_readable(healthy)))
+
+    check("컷이 없으면 아무 말 안 한다", R.gate_readable({"scenes": []}), [])
+
+
 def main() -> int:
-    for fn in (test_directions, test_board, test_gate_board, test_spec,
+    for fn in (test_directions, test_board, test_gate_board, test_gate_readable,
+               test_spec,
                test_sheet_prompt, test_input, test_pages, test_scene_head,
                test_image_prompt_pieces, test_image_prompt_page, test_sheet_line,
                test_ratio_break, test_pageart, test_import_sheet):

@@ -338,6 +338,46 @@ def gate_board(board: dict) -> list[str]:
             for one in cut["sfx"]:
                 if not _text(one.get("text")):
                     bad.append(f"{spot}: 효과음에 text 가 비어 있습니다.")
+    return bad + gate_readable(board)
+
+
+# 화 하나가 읽히는지 보는 눈금. 전부 **셀 수 있는 것**만 본다.
+#
+# 이 절이 생긴 이유: 형식은 다 맞는데 읽으면 무슨 내용인지 모르는 콘티가
+# 그대로 그림까지 갔다. 7컷에 대사 3줄, 전부 혼잣말, 나레이션 0 — 무성영화가
+# 나왔다. 셋 다 세면 알 수 있는 것이었는데 안 세고 있었다.
+MIN_LINES_PER_CUT = 0.5      # 컷 두 개당 대사 한 줄
+SOLO_SCENE_SHARE = 0.5       # 1컷짜리 장면이 이 비율을 넘으면 흐름이 안 나온다
+
+
+def gate_readable(board: dict) -> list[str]:
+    """읽히는가. 형식이 아니라 **화 전체의 모양**을 본다."""
+    scenes = board.get("scenes") or []
+    cuts = [c for s in scenes for c in s["cuts"]]
+    if not cuts:
+        return []
+
+    lines = [l for c in cuts for l in c["dialogue"] if _text(l.get("text"))]
+    kinds = {_text(l.get("type")) for l in lines}
+    bad = []
+
+    if len(lines) < len(cuts) * MIN_LINES_PER_CUT:
+        bad.append(f"컷 {len(cuts)}개에 대사가 {len(lines)}줄뿐입니다. "
+                   "그림만으로 상황을 다 말하게 되어 읽는 사람이 따라오기 "
+                   "어렵습니다.")
+    if lines and len(kinds) == 1:
+        bad.append(f"대사가 전부 '{kinds.pop()}' 한 종류입니다. "
+                   "말·생각·나레이션이 섞여야 화면에 리듬이 생깁니다.")
+    if "나레이션" not in kinds:
+        bad.append("나레이션이 한 줄도 없습니다. 콘티 프롬프트 12번이 "
+                   "'시간이나 장소를 잡아줄 때 / 그림만으로 상황이 잘 안 읽힐 때' "
+                   "쓰라고 한 자리입니다 — 첫 장면이 특히 뜬금없어집니다.")
+
+    solo = [s["id"] for s in scenes if len(s["cuts"]) == 1]
+    if len(solo) > len(scenes) * SOLO_SCENE_SHARE:
+        bad.append(f"장면 {len(scenes)}개 중 {len(solo)}개가 1컷입니다 "
+                   f"(장면 {solo}). '인물이 한다 → 상황이 바뀐다 → 알아챈다' "
+                   "가 한 컷에 안 들어갑니다.")
     return bad
 
 
@@ -655,7 +695,11 @@ def main(argv=None) -> int:
         log(f"  사양도 함께: {'예' if got['spec'] else '아니오 (그림만)'}")
 
     # 한 단계만 다시 돌리는 길. --all 이면 아래 전체 흐름을 탄다.
-    if not args.all and (args.sheet or args.pages or args.page):
+    #
+    # --sheet-from 만 준 것도 여기서 끝난다 — 시트를 가져다 놓는 것이 그
+    # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
+    # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
+    if not args.all and (args.sheet or args.pages or args.page or args.sheet_from):
         if args.sheet:
             stage_sheet(run_dir, char, args.dry_run)
         if args.pages or args.page:

@@ -65,8 +65,10 @@ def build_prompts(run_dir: Path, continuous: bool = False) -> tuple[list, list[s
         cast = (json.loads(board_path.read_text(encoding="utf-8")) or {}).get("cast") or []
 
     provider = llm.provider_for(STAGE)
+    style = llm.env("PAGE_STYLE") or imageprompt.DEFAULT_STYLE
     return pages, imageprompt.page_prompts(pages, sheets=sheets, cast=cast,
-                                           continuous=continuous, provider=provider)
+                                           continuous=continuous, provider=provider,
+                                           style=style)
 
 
 def draw(run_dir: Path, dry_run: bool = False, only: list[int] | None = None,

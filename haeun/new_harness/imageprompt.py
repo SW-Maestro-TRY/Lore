@@ -227,7 +227,30 @@ def cast_lines(cast, page=None) -> list[str]:
     return out
 
 
-def load_fixed_block(provider: str = "") -> str:
+DEFAULT_STYLE = "frost"
+
+
+def load_style(name: str = "") -> str:
+    """그림체 문구. prompt/style/<이름> 에 있다.
+
+    **코드가 아니라 데이터다.** 그림체를 바꾸는 것은 .env 의 PAGE_STYLE 한
+    줄이고, 새 그림체를 만드는 것은 prompt/style/ 에 파일 하나를 더 놓는
+    일이다. 여기가 비어 있으면 매번 다른 그림이 나온다 — 선 굵기·채색·명암·
+    색조가 안 적힌 프롬프트는 모델에게 아무 말도 안 한 것과 같다.
+    """
+    name = (name or "").strip() or DEFAULT_STYLE
+    path = PROMPT_DIR / "style" / name
+    if not path.exists():
+        have = sorted(p.name for p in (PROMPT_DIR / "style").glob("*")) or ["(없음)"]
+        raise SystemExit(f"그림체가 없습니다: {path}\n"
+                         f"        있는 것: {', '.join(have)}")
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        raise SystemExit(f"그림체가 비어 있습니다: {path}")
+    return "\n".join("  " + ln if ln.strip() else ln for ln in text.splitlines())
+
+
+def load_fixed_block(provider: str = "", style: str = "") -> str:
     """고정 블록. 프로바이더 전용 파일이 있으면 그것을 쓴다.
 
         prompt/image_prompt.openai   GPT 로 그릴 때
@@ -244,7 +267,7 @@ def load_fixed_block(provider: str = "") -> str:
         if cand.exists():
             text = cand.read_text(encoding="utf-8").strip()
             if text:
-                return text
+                return text.replace("{style}", load_style(style))
             raise SystemExit(f"프롬프트가 비어 있습니다: {cand}")
     raise SystemExit(f"프롬프트가 없습니다: {PROMPT_DIR / 'image_prompt'}")
 
@@ -269,7 +292,7 @@ def place_block(page) -> str:
 
 
 def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
-                      provider: str = "") -> str:
+                      provider: str = "", style: str = "") -> str:
     """페이지(컷 배열) 하나 -> 호출 한 번에 보낼 프롬프트.
 
     컷 번호는 **페이지 안에서 1부터** 센다. 화면에 그려 넣는 번호라 페이지
@@ -277,7 +300,7 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
     다른 컷이 한 페이지에 모였을 때 "컷 1" 이 두 개가 된다. 화 전체로 이어
     세고 싶으면 start_number 를 넘긴다.
     """
-    blocks = [load_fixed_block(provider)]
+    blocks = [load_fixed_block(provider, style)]
 
     who = [s for s in (sheets or []) if _t(s)] + cast_lines(cast, page)
     if who:
@@ -293,12 +316,12 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
 
 
 def page_prompts(pages_, sheets=None, cast=None, continuous: bool = False,
-                 provider: str = "") -> list[str]:
+                 provider: str = "", style: str = "") -> list[str]:
     """페이지 배열 -> 프롬프트 배열. continuous 면 컷 번호를 화 전체로 이어 센다."""
     out, n = [], 1
     for page in pages_ or []:
         out.append(build_page_prompt(page, sheets, cast,
                                      start_number=n if continuous else 1,
-                                     provider=provider))
+                                     provider=provider, style=style))
         n += len(page)
     return out
