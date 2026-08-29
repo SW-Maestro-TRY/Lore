@@ -381,6 +381,16 @@ def parse_review(text: str) -> dict:
     if not isinstance(obj, dict):
         raise story.ParseFailure("검수 결과가 JSON 객체가 아닙니다.")
 
+    scenes = []
+    for one in _dicts(obj.get("scenes")):
+        scenes.append({
+            "id": _num(one.get("id"), 0),
+            "actions": _dicts(one.get("actions")),
+            "knows": _dicts(one.get("knows")),
+            "new": _dicts(one.get("new")),
+            "conflicts": [_text(x) for x in (one.get("conflicts") or []) if _text(x)],
+        })
+
     issues = []
     for one in _dicts(obj.get("issues")):
         sev = _text(one.get("severity")).lower()
@@ -393,7 +403,37 @@ def parse_review(text: str) -> dict:
         })
     issues.sort(key=lambda i: (SEVERITY.index(i["severity"]), i["scene"]))
     fail = any(i["severity"] == "critical" for i in issues)
-    return {"verdict": "FAIL" if fail else "PASS", "issues": issues}
+    return {"verdict": "FAIL" if fail else "PASS",
+            "scenes": scenes, "issues": issues}
+
+
+def review_unanswered(review: dict) -> list[str]:
+    """검수가 스스로 적어 놓고 issues 로 안 옮긴 것.
+
+    답을 쓰게 한 이유가 이것이다 — "없음" · enough:false · "처음" 을 적어
+    놓고도 문제로 안 올리면, 그 자리는 코드가 짚을 수 있다.
+    """
+    flagged = {(i["scene"], i["what"]) for i in review.get("issues") or []}
+    out = []
+    for s in review.get("scenes") or []:
+        n = s["id"]
+        for a in s["actions"]:
+            if _text(a.get("why")) in ("없음", "모름", ""):
+                out.append(f"장면 {n}: \"{_text(a.get('what'))[:30]}\" 의 이유가 "
+                           "없다고 적어 놓고 문제로 안 올렸습니다.")
+        for k in s["knows"]:
+            if k.get("enough") is False:
+                out.append(f"장면 {n}: \"{_text(k.get('what'))[:30]}\" 를 그 근거로 "
+                           "알 수 없다고 적어 놓고 문제로 안 올렸습니다.")
+        for w in s["new"]:
+            if _text(w.get("from")) in ("처음", "없음", ""):
+                out.append(f"장면 {n}: \"{_text(w.get('what'))[:30]}\" 가 여기서 "
+                           "처음 나온다고 적어 놓고 문제로 안 올렸습니다.")
+        for c in s["conflicts"]:
+            out.append(f"장면 {n}: 부딪힘을 적어 놓고 문제로 안 올렸습니다 — {c[:40]}")
+    # 이미 issues 에 같은 장면이 올라가 있으면 굳이 다시 말하지 않는다
+    scenes_flagged = {sc for sc, _ in flagged}
+    return [x for x in out if not any(f"장면 {sc}:" in x for sc in scenes_flagged)]
 
 
 def review_counts(review: dict) -> dict:
@@ -714,6 +754,8 @@ def stage_review(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> d
     for one in review["issues"]:
         log(f"    [{one['severity']:8}] 장면 {one['scene']} ({one['kind']}) "
             f"{one['what']}")
+    for one in review_unanswered(review):
+        warn(f"  {one}")
     return review
 
 
@@ -912,7 +954,8 @@ def stage_board(run_dir: Path, char: dict, direction: dict, dry_run: bool,
     repage(run_dir, max_ratio)
 
 
-def stage_sheet(run_dir: Path, char: dict, dry_run: bool) -> None:
+def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
+                spec_only: bool = False) -> None:
     photos = char["photos"]
     prompt = compose("sheet_prompt", input_block(char))
     write_text(run_dir / "sheet_spec_prompt.txt", prompt)
@@ -939,6 +982,9 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool) -> None:
 
     image_prompt = sheetmod.build_prompt(spec)
     write_text(run_dir / "sheet_prompt.txt", image_prompt)
+    if spec_only:
+        log(f"[시트] 사양까지만 했습니다. 그림은 안 그렸습니다 -> {spec_path}")
+        return
     if dry_run:
         log(f"[시트] 이미지 프롬프트만 썼습니다 -> {run_dir / 'sheet_prompt.txt'}")
         return
@@ -947,15 +993,23 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool) -> None:
     if out.exists():
         log(f"[시트] {out} 가 이미 있습니다. 다시 뽑으려면 지우세요.")
         return
-    log("[시트] 그리는 중…")
-    meta = sheetmod.paint(image_prompt, out, photos=[Path(p) for p in photos])
+    # 사진은 **안 붙인다.** 사양(appearance_en)이 기준이다.
+    #
+    # OpenAI 는 참조 이미지가 붙으면 편집 쪽으로 가서 "이 그림을 고쳐라" 에
+    # 가깝게 읽는다. 올린 사진이 낙서나 다른 화풍이면 그것을 따라가느라
+    # 사양대로 안 그린다. 사양은 이미 사진을 보고 쓴 것이라(SHEET 단계에서
+    # 사진을 첨부해 읽는다) 여기서 사진을 또 붙일 이유가 없다.
+    log("[시트] 그리는 중… (사진 없이 사양만)")
+    meta = sheetmod.paint(image_prompt, out)
     record(run_dir, dict(meta, cost=None))
     log(f"  -> {out}")
 
 
-def stage_pages(run_dir: Path, dry_run: bool, only=None) -> None:
+def stage_pages(run_dir: Path, dry_run: bool, only=None,
+                allow_no_sheet: bool = False) -> None:
     """페이지를 그린다 — **컷 하나에 한 번이 아니라 페이지 하나에 한 번.**"""
-    made = pageart.draw(run_dir, dry_run=dry_run, only=only)
+    made = pageart.draw(run_dir, dry_run=dry_run, only=only,
+                        allow_no_sheet=allow_no_sheet)
     for meta in made:
         record(run_dir, dict(meta, cost=None))
     if made:
@@ -984,6 +1038,8 @@ def main(argv=None) -> int:
     p.add_argument("--fix", action="store_true",
                    help="검수 지적을 반영한다 (지적된 장면만 고친다)")
     p.add_argument("--sheet", action="store_true", help="캐릭터 시트만")
+    p.add_argument("--sheet-spec", action="store_true",
+                   help="시트 사양(글)만. 그림은 안 그린다")
     p.add_argument("--sheet-from", type=Path,
                    help="이미 뽑아 둔 시트를 가져온다 (story-harness run 폴더 · "
                         "new_harness run 폴더 · png 하나). 호출 0회")
@@ -991,6 +1047,8 @@ def main(argv=None) -> int:
                    help="페이지 그림만 (페이지 하나당 호출 한 번)")
     p.add_argument("--page", type=int, action="append", default=[],
                    help="그 번호 페이지만 다시 (여러 번 가능)")
+    p.add_argument("--no-sheet", action="store_true",
+                   help="캐릭터 시트 없이 페이지를 그린다 (인물이 장마다 달라진다)")
     p.add_argument("--all", action="store_true",
                    help="이야기 -> 콘티 -> 시트 -> 페이지 그림까지 한 번에")
     p.add_argument("--max-ratio", type=int, default=None,
@@ -1057,7 +1115,8 @@ def main(argv=None) -> int:
     # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
     if not args.all and (args.detail or args.review or args.fix or args.sheet
-                         or args.pages or args.page or args.sheet_from):
+                         or args.sheet_spec or args.pages or args.page
+                         or args.sheet_from):
         if args.detail:
             chosen = picked_direction(run_dir, args.pick)
             write_json(run_dir / "pick.json", {"n": chosen["n"], "title": chosen["title"],
@@ -1072,10 +1131,11 @@ def main(argv=None) -> int:
                 raise SystemExit(f"{path} 가 없습니다. 검수를 먼저 돌리세요.")
             stage_fix(run_dir, char, picked_direction(run_dir, args.pick),
                       json.loads(path.read_text(encoding="utf-8")), args.dry_run)
-        if args.sheet:
-            stage_sheet(run_dir, char, args.dry_run)
+        if args.sheet or args.sheet_spec:
+            stage_sheet(run_dir, char, args.dry_run, spec_only=args.sheet_spec)
         if args.pages or args.page:
-            stage_pages(run_dir, args.dry_run, only=args.page or None)
+            stage_pages(run_dir, args.dry_run, only=args.page or None,
+                        allow_no_sheet=args.no_sheet)
         return 0
 
     directions = []
@@ -1098,8 +1158,9 @@ def main(argv=None) -> int:
 
     direction = choose(directions, args.pick)
     stage_detail(run_dir, char, direction, args.dry_run)
-    review = stage_review(run_dir, char, direction, args.dry_run)
-    stage_fix(run_dir, char, direction, review, args.dry_run)
+    # 검수·보강은 흐름에서 뺐다. 검수가 실제로 무엇을 잡는지 아직 확인이
+    # 안 됐고(한 번 돌렸을 때 0개였다), 아무것도 못 잡은 결과로 고치면 고칠
+    # 것이 없다. --review · --fix 로 따로 부른다.
     stage_board(run_dir, char, direction, args.dry_run, args.max_ratio)
 
     if args.all or args.sheet:
@@ -1107,7 +1168,8 @@ def main(argv=None) -> int:
         # 붙는 것이 이 시트다.
         stage_sheet(run_dir, char, args.dry_run)
     if args.all or args.pages:
-        stage_pages(run_dir, args.dry_run)
+        stage_pages(run_dir, args.dry_run,
+                    allow_no_sheet=args.no_sheet)
 
     log(f"끝났습니다 -> {run_dir}")
     return 0

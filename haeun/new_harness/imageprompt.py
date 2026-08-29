@@ -206,22 +206,28 @@ def sheet_line(spec: dict) -> str:
     return "\n".join(parts)
 
 
-def cast_lines(cast, page=None) -> list[str]:
+def cast_lines(cast, page=None, skip=()) -> list[str]:
     """board.json 의 cast -> 시트 줄. page 를 주면 **그 페이지에 나오는 사람만.**
 
     안 나오는 사람까지 적으면 모델이 그 사람을 화면에 넣는다 — 고정 블록의
     "지정되지 않은 인물을 추가하지 않는다" 와 정면으로 부딪힌다.
+
+    skip 에 든 이름은 뺀다. **시트 사양이 있는 인물이 여기 해당한다** —
+    콘티의 cast 에도 주인공이 들어 있어서, 안 빼면 같은 인물의 외형이 두 번
+    나가고 둘이 어긋난다(시트는 "분홍 망토 + 흰 옷", cast 는 "하얀 옷").
+    자세하고 그림까지 있는 시트 쪽이 기준이다.
     """
     here = None
     if page is not None:
         here = {_t(p.get("name")) for cut in page
                 for p in (cut.get("characters") or []) if isinstance(p, dict)}
+    skip = {_t(s) for s in skip if _t(s)}
     out = []
     for one in cast or []:
         if not isinstance(one, dict):
             continue
         name, look = _t(one.get("name")), _t(one.get("appearance"))
-        if not name or (here is not None and name not in here):
+        if not name or name in skip or (here is not None and name not in here):
             continue
         out.append(f"{name} — {look}" if look else name)
     return out
@@ -292,7 +298,7 @@ def place_block(page) -> str:
 
 
 def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
-                      provider: str = "", style: str = "") -> str:
+                      provider: str = "", style: str = "", sheet_names=()) -> str:
     """페이지(컷 배열) 하나 -> 호출 한 번에 보낼 프롬프트.
 
     컷 번호는 **페이지 안에서 1부터** 센다. 화면에 그려 넣는 번호라 페이지
@@ -302,7 +308,8 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
     """
     blocks = [load_fixed_block(provider, style)]
 
-    who = [s for s in (sheets or []) if _t(s)] + cast_lines(cast, page)
+    who = ([s for s in (sheets or []) if _t(s)]
+           + cast_lines(cast, page, skip=sheet_names))
     if who:
         blocks.append("## 캐릭터 시트\n" + "\n".join(who))
 
@@ -316,12 +323,13 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
 
 
 def page_prompts(pages_, sheets=None, cast=None, continuous: bool = False,
-                 provider: str = "", style: str = "") -> list[str]:
+                 provider: str = "", style: str = "", sheet_names=()) -> list[str]:
     """페이지 배열 -> 프롬프트 배열. continuous 면 컷 번호를 화 전체로 이어 센다."""
     out, n = [], 1
     for page in pages_ or []:
         out.append(build_page_prompt(page, sheets, cast,
                                      start_number=n if continuous else 1,
-                                     provider=provider, style=style))
+                                     provider=provider, style=style,
+                                     sheet_names=sheet_names))
         n += len(page)
     return out

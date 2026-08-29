@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 import imagegen
+import imageprompt
 import llm
 from llm import story
 
@@ -185,7 +186,14 @@ def build_prompt(spec: dict, style: str = None) -> str:
         _numbered(spec["expression_set"]),
     ]
 
-    style = style if style is not None else story.read_style_suffix()[0]
+    # **페이지와 같은 그림체 파일을 읽는다.** 여기가 갈라져 있으면 시트가
+    # 다른 그림체로 그려지고, 그 시트가 매 페이지에 참조로 붙어서 페이지
+    # 프롬프트의 그림체를 이긴다 (OpenAI 는 참조가 붙으면 편집 쪽으로 가서
+    # 눈앞의 그림을 더 세게 따른다). 실제로 그래서 frost 를 넣고도 시트의
+    # webtoon 그림체가 8장 내내 나왔다.
+    if style is None:
+        style = imageprompt.load_style(
+            llm.env("NH_STYLE") or llm.env("PAGE_STYLE") or "")
     return "\n".join(parts) + f"\n\nSTYLE\n{style}\n"
 
 

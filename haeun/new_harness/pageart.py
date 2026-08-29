@@ -53,11 +53,12 @@ def build_prompts(run_dir: Path, continuous: bool = False) -> tuple[list, list[s
         raise SystemExit(f"{pages_path} 가 없습니다. 콘티 단계를 먼저 돌리세요.")
     pages = json.loads(pages_path.read_text(encoding="utf-8"))
 
-    sheets = []
+    sheets, sheet_names = [], []
     spec_path = run_dir / "sheet_spec.json"
     if spec_path.exists():
-        sheets.append(imageprompt.sheet_line(
-            json.loads(spec_path.read_text(encoding="utf-8"))))
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        sheets.append(imageprompt.sheet_line(spec))
+        sheet_names.append(spec.get("name") or "")
 
     cast = []
     board_path = run_dir / "board.json"
@@ -65,14 +66,15 @@ def build_prompts(run_dir: Path, continuous: bool = False) -> tuple[list, list[s
         cast = (json.loads(board_path.read_text(encoding="utf-8")) or {}).get("cast") or []
 
     provider = llm.provider_for(STAGE)
-    style = llm.env("PAGE_STYLE") or imageprompt.DEFAULT_STYLE
+    style = (llm.env("NH_STYLE") or llm.env("PAGE_STYLE")
+             or imageprompt.DEFAULT_STYLE)
     return pages, imageprompt.page_prompts(pages, sheets=sheets, cast=cast,
                                            continuous=continuous, provider=provider,
-                                           style=style)
+                                           style=style, sheet_names=sheet_names)
 
 
 def draw(run_dir: Path, dry_run: bool = False, only: list[int] | None = None,
-         continuous: bool = False) -> list[dict]:
+         continuous: bool = False, allow_no_sheet: bool = False) -> list[dict]:
     """페이지를 순서대로 그린다. 이미 있는 페이지는 다시 안 그린다.
 
     **순서대로 그리는 것이 요점이다.** 직전 페이지를 참조로 붙이려면 그것이
@@ -83,9 +85,16 @@ def draw(run_dir: Path, dry_run: bool = False, only: list[int] | None = None,
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sheets = sheet_refs(run_dir)
-    if not sheets and not dry_run:
-        warn("캐릭터 시트(sheet.png)가 없습니다. 시트 없이 그리면 페이지마다 "
-             "다른 사람이 나옵니다 — 먼저 --sheet 를 돌리세요.")
+    if not sheets and not dry_run and not allow_no_sheet:
+        # **경고가 아니라 멈춘다.** 시트는 인물의 기준점이고, 없으면 페이지가
+        # 직전 페이지만 보고 이어 그려서 그림체와 색이 장마다 흘러간다.
+        # 그렇게 나온 것은 다시 그려야 하므로 그 호출값이 통째로 낭비된다.
+        # 실제로 11장을 시트 없이 그려 $0.45 를 날린 자리다.
+        raise SystemExit(
+            f"캐릭터 시트가 없습니다: {run_dir / 'sheet.png'}\n"
+            "        시트 없이 그리면 페이지마다 다른 사람이 나옵니다.\n"
+            "        먼저 --sheet 를 돌리거나, --sheet-from 으로 가져오세요.\n"
+            "        정말 시트 없이 그리려면 --no-sheet 를 붙이세요.")
 
     made = []
     for i, (page, prompt) in enumerate(zip(pages, prompts), 1):
