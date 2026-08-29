@@ -863,9 +863,74 @@ def test_gate_readable() -> None:
     check("컷이 없으면 아무 말 안 한다", R.gate_readable({"scenes": []}), [])
 
 
+def test_detail() -> None:
+    """구체화 — 아는 것과 추측을 가르고, 근거가 붙어 있는지 본다."""
+    def learn(what: str, how: str = "화면에서 읽었다") -> dict:
+        return {"what": what, "how": how}
+
+    def detail(scenes) -> dict:
+        return R.parse_detail(json.dumps({"scenes": scenes, "hidden": ["정체"]},
+                                         ensure_ascii=False))
+
+    good = [
+        {"id": 1, "source": "기록을 대조한다",
+         "detail": "명부에는 여섯 명이 적혀 있는데 열화상 화면에는 일곱 번째 실루엣이 "
+                   "찍혀 있다. 하은은 두 기록의 시각이 같은 구간을 가리키는지 다시 "
+                   "확인한다. 같은 시각이다. 하은은 통제선을 넘어 안으로 들어간다.",
+         "learns": [learn("명부에 없는 사람이 먼저 들어왔다",
+                          "명부 6명과 열화상 7명을 나란히 놓고 셌다")],
+         "guesses": ["장비 오류일 수도 있다"],
+         "leads_to": "직접 확인하러 안으로 들어간다"},
+        {"id": 2, "source": "흔적을 발견한다",
+         "detail": "바닥에 떨어진 뱃지를 줍는다. 뱃지 앞면에 찍힌 등급 표시가 명부에 "
+                   "적힌 어느 등급과도 맞지 않는다. 하은은 뱃지를 주머니에 넣고 "
+                   "흔적이 이어진 통로 안쪽으로 걸음을 옮긴다.",
+         "learns": [learn("명부에 없는 등급의 사람이 있다", "뱃지에 등급이 적혀 있었다")],
+         "guesses": [],
+         "leads_to": "뱃지를 흘린 사람을 찾아 통로로 들어간다"},
+    ]
+    d = detail(good)
+    check("장면 2개", len(d["scenes"]), 2)
+    check("learns 는 what/how", d["scenes"][0]["learns"][0]["how"],
+          "명부 6명과 열화상 7명을 나란히 놓고 셌다")
+    check("guesses 도 읽는다", d["scenes"][0]["guesses"], ["장비 오류일 수도 있다"])
+    check("멀쩡하면 조용하다",
+          R.gate_detail(d, {"scenes": ["a", "b"]}), [])
+
+    # how 가 없으면 근거 없는 앎이다 — "자국을 보고 신발 패턴을 안다" 가 이것
+    import copy
+    noref = copy.deepcopy(good)
+    noref[0]["learns"] = [{"what": "이 발자국은 명부에 없는 사람 것이다"}]
+    ok("근거가 없으면 잡는다",
+       any("어떻게 알았는지" in x for x in R.gate_detail(detail(noref),
+                                                         {"scenes": ["a", "b"]})))
+    # 문자열로만 와도 근거 없음으로 본다
+    plain = copy.deepcopy(good)
+    plain[0]["learns"] = ["그냥 안다"]
+    ok("문자열 learns 도 근거 없음",
+       any("어떻게 알았는지" in x for x in R.gate_detail(detail(plain),
+                                                         {"scenes": ["a", "b"]})))
+
+    # 마지막이 감정으로 끝나면 다음 화를 안 부른다
+    feel = copy.deepcopy(good)
+    feel[-1]["leads_to"] = "하은은 더욱 깊은 경계와 긴장 상태로 상황을 관망하게 된다"
+    ok("감정으로 끝나면 잡는다",
+       any("감정으로" in x for x in R.gate_detail(detail(feel), {"scenes": ["a", "b"]})))
+
+    # 장면이 빠지면
+    ok("빠진 장면을 잡는다",
+       any("빠진 장면" in x for x in R.gate_detail(d, {"scenes": ["a", "b", "c"]})))
+
+    # 구체화가 안 된 것
+    thin = copy.deepcopy(good)
+    thin[0]["detail"] = "기록을 대조한다."   # 짧으면 옮겨 적은 것이다
+    ok("옮겨 적기만 하면 잡는다",
+       any("구체화가 안" in x for x in R.gate_detail(detail(thin), {"scenes": ["a", "b"]})))
+
+
 def main() -> int:
-    for fn in (test_directions, test_board, test_gate_board, test_gate_readable,
-               test_spec,
+    for fn in (test_directions, test_detail, test_board, test_gate_board,
+               test_gate_readable, test_spec,
                test_sheet_prompt, test_input, test_pages, test_scene_head,
                test_image_prompt_pieces, test_image_prompt_page, test_sheet_line,
                test_ratio_break, test_pageart, test_import_sheet):

@@ -285,6 +285,78 @@ def parse_board(text: str) -> dict:
     return {"cast": cast, "scenes": scenes}
 
 
+def parse_detail(text: str) -> dict:
+    """detail_prompt 의 응답(JSON) -> {"scenes": [...], "hidden": [...]}."""
+    obj = story.extract_json(text)
+    if not isinstance(obj, dict):
+        raise story.ParseFailure("구체화 결과가 JSON 객체가 아닙니다.")
+    scenes = []
+    for i, s in enumerate(_dicts(obj.get("scenes")), 1):
+        scenes.append({
+            "id": _num(s.get("id"), i),
+            "source": _text(s.get("source")),
+            "detail": _text(s.get("detail")),
+            # learns 는 {what, how} 다. how 가 곧 "그걸 어떻게 알았나" 라,
+            # 문자열로만 오면 근거가 없는 것으로 본다.
+            "learns": [{"what": _text(x.get("what")), "how": _text(x.get("how"))}
+                       if isinstance(x, dict) else {"what": _text(x), "how": ""}
+                       for x in (s.get("learns") or [])
+                       if _text(x.get("what") if isinstance(x, dict) else x)],
+            "guesses": [_text(x) for x in (s.get("guesses") or []) if _text(x)],
+            "leads_to": _text(s.get("leads_to")),
+        })
+    return {"scenes": scenes,
+            "hidden": [_text(x) for x in (obj.get("hidden") or []) if _text(x)]}
+
+
+def gate_detail(detail: dict, direction: dict) -> list[str]:
+    """구체화가 제 일을 했는지. **인과는 여기서 본다** — 콘티가 아니라.
+
+    콘티에서 "밖에 있다가 갑자기 안에 있다" 를 잡으려던 것은 증상을 쫓는
+    것이었다. 원인은 그 앞에서 이유가 지워진 채 넘어온 것이라, 지워졌는지를
+    지워지는 자리에서 본다.
+    """
+    bad = []
+    scenes = detail.get("scenes") or []
+    if not scenes:
+        return ["장면이 하나도 없습니다."]
+
+    want = len(direction.get("scenes") or [])
+    if want and len(scenes) < want:
+        bad.append(f"장면 목록은 {want}개인데 {len(scenes)}개만 구체화됐습니다. "
+                   "빠진 장면이 있습니다.")
+
+    for s in scenes:
+        where = f"장면 {s['id']}"
+        if not s["detail"]:
+            bad.append(f"{where}: detail 이 비어 있습니다.")
+        elif len(s["detail"]) < DETAIL_MIN_LEN:
+            bad.append(f"{where}: detail 이 {len(s['detail'])}자뿐입니다. "
+                       "장면 목록 한 줄과 다를 바가 없습니다 — 구체화가 안 됐습니다.")
+        if not s["leads_to"]:
+            bad.append(f"{where}: leads_to 가 없습니다. 이 장면이 다음에 무엇을 "
+                       "부르는지가 비어 있습니다.")
+
+        # 근거 없는 앎. 이것 하나가 "자국을 보고 신발 패턴을 안다" 를 만든다.
+        for one in s["learns"]:
+            if not one["how"]:
+                bad.append(f"{where}: \"{one['what'][:30]}\" 를 어떻게 알았는지가 "
+                           "없습니다. 근거가 없으면 learns 가 아니라 guesses 입니다.")
+
+    if not any(s["learns"] for s in scenes):
+        bad.append("인물이 새로 알게 되는 것이 한 장면에도 없습니다. "
+                   "알아낸 것이 없으면 다음 행동의 근거가 생기지 않습니다.")
+
+    # 마지막 장면이 감정으로 끝나면 다음 화를 안 부른다.
+    last = _text(scenes[-1]["leads_to"])
+    if last and not any(ch.isdigit() for ch in last) and \
+            any(w in last for w in FEELING_WORDS):
+        bad.append(f"마지막 장면이 감정으로 끝납니다 (\"{last[:40]}\"). "
+                   "다음에 무엇을 할 수밖에 없게 되는 발견이나, 독자만 알게 되는 "
+                   "것이 필요합니다.")
+    return bad
+
+
 def gate_board(board: dict) -> list[str]:
     """그림으로 넘기기 전에 비면 안 되는 칸만 본다.
 
@@ -349,6 +421,10 @@ def gate_board(board: dict) -> list[str]:
 MIN_LINES_PER_CUT = 0.5      # 컷 두 개당 대사 한 줄
 SOLO_SCENE_SHARE = 0.5       # 1컷짜리 장면이 이 비율을 넘으면 흐름이 안 나온다
 OPENING_HINT_LEN = 25        # 첫 대사가 이보다 짧으면 상황을 못 잡아준 것으로 본다
+DETAIL_MIN_LEN = 80          # 이보다 짧으면 장면 목록 한 줄을 옮겨 적은 것이다
+# 마지막 장면이 이런 말로 끝나면 사건이 아니라 감정으로 끝난 것이다.
+FEELING_WORDS = ("긴장", "경계", "관망", "불안", "초조", "두려", "느낀다",
+                 "느끼게", "다짐", "각오", "생각하게")
 
 
 def gate_readable(board: dict) -> list[str]:
@@ -472,10 +548,88 @@ def choose(directions: list[dict], pick: int | None) -> dict:
         print("목록에 있는 번호를 넣으세요.")
 
 
-def board_block(char: dict, direction: dict, run_dir: Path) -> str:
-    """콘티 단계의 입력 — 장면 목록 · 캐릭터 정보 · 장르."""
-    lines = ["# 이번 입력", "", "## 장면 목록", ""]
+def detail_block(char: dict, direction: dict, run_dir: Path) -> str:
+    """구체화 단계의 입력 — 줄거리 · 장면 목록 · 캐릭터 · 장르 · 밝히지 않을 것."""
+    lines = ["# 이번 입력", "", "## 줄거리", "", direction["plot"],
+             "", "## 장면 목록", ""]
     lines += [f"{i}. {s}" for i, s in enumerate(direction["scenes"], 1)]
+
+    lines += ["", "## 캐릭터 정보", "", f"이름: {char['name']}"]
+    if char["description"]:
+        lines.append(f"설명: {char['description']}")
+    for k, v in char["fields"].items():
+        lines.append(f"- {k}: {v}")
+
+    spec_path = run_dir / "sheet_spec.json"
+    if spec_path.exists():
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        lines.append(f"외관: {spec['appearance_en']}")
+        for d in spec.get("design_details") or []:
+            lines.append(f"- 고정 요소: {d}")
+
+    lines += ["", "## 장르", "", direction["genre"] or char["genre"] or "(정해진 것 없음)"]
+    lines += ["", "## 밝히지 않을 것", ""]
+    lines += [f"- {h}" for h in direction["hidden"]] or ["(없음)"]
+    return "\n".join(lines) + "\n"
+
+
+def stage_detail(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> dict:
+    """장면 목록 -> 실제 이야기. 콘티가 창작하지 않아도 되게 만드는 단계다."""
+    prompt = compose("detail_prompt", detail_block(char, direction, run_dir))
+    write_text(run_dir / "detail_prompt.txt", prompt)
+    if dry_run:
+        log(f"[구체화] 프롬프트만 썼습니다 -> {run_dir / 'detail_prompt.txt'}")
+        return {}
+
+    call = llm.Call("DETAIL")
+    log(f"[구체화] {call.describe()} 로 장면을 이야기로 폅니다…")
+    text, meta = call(prompt)
+    write_text(run_dir / "detail_raw.txt", text)
+    record(run_dir, meta)
+
+    detail = parse_detail(text)
+    write_json(run_dir / "detail.json", detail)
+    log(f"  장면 {len(detail['scenes'])}개 · 숨길 것 {len(detail['hidden'])}개 "
+        f"-> {run_dir / 'detail.json'}")
+
+    bad = gate_detail(detail, direction)
+    if bad:
+        warn(f"구체화에 손볼 곳이 {len(bad)}개 있습니다:")
+        for one in bad:
+            warn(f"  - {one}")
+        write_json(run_dir / "detail_issues.json", bad)
+    return detail
+
+
+def board_block(char: dict, direction: dict, run_dir: Path) -> str:
+    """콘티 단계의 입력 — 구체화된 이야기 · 캐릭터 정보 · 장르.
+
+    구체화(detail.json)가 있으면 **그것을 준다.** 장면 목록 한 줄이 아니라
+    실제로 무슨 일이 벌어지고 인물이 무엇을 알게 되는지가 적힌 것이라,
+    콘티는 창작하지 않고 그것을 컷으로 펼치기만 하면 된다.
+    """
+    detail_path = run_dir / "detail.json"
+    detail = (json.loads(detail_path.read_text(encoding="utf-8"))
+              if detail_path.exists() else None)
+
+    lines = ["# 이번 입력", "", "## 장면", ""]
+    if detail and detail.get("scenes"):
+        for s in detail["scenes"]:
+            lines.append(f"### 장면 {s['id']} — {s['source']}")
+            lines.append("")
+            lines.append(s["detail"])
+            if s.get("learns"):
+                lines.append("")
+                for x in s["learns"]:
+                    how = f" ({x['how']})" if x.get("how") else ""
+                    lines.append(f"- 인물이 알게 되는 것: {x['what']}{how}")
+            for g in s.get("guesses") or []:
+                lines.append(f"- 인물의 추측 (아직 사실이 아니다): {g}")
+            if s["leads_to"]:
+                lines.append(f"- 그래서 다음: {s['leads_to']}")
+            lines.append("")
+    else:
+        lines += [f"{i}. {s}" for i, s in enumerate(direction["scenes"], 1)]
 
     lines += ["", "## 캐릭터 정보", "", f"이름: {char['name']}"]
     if char["photos"]:
@@ -498,11 +652,13 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
         lines.append(f"- {k}: {v}")
 
     lines += ["", "## 장르", "", direction["genre"] or char["genre"] or "(정해진 것 없음)"]
-    lines += ["", "## 줄거리 (배경 이해용 — 이대로 나누라는 뜻은 아니다)", "",
-              direction["plot"]]
-    if direction["hidden"]:
+    if not detail:
+        lines += ["", "## 줄거리 (배경 이해용 — 이대로 나누라는 뜻은 아니다)", "",
+                  direction["plot"]]
+    hidden = (detail or {}).get("hidden") or direction["hidden"]
+    if hidden:
         lines += ["", "## 밝히지 않을 것 — 컷에서 답을 보여주지 마라", ""]
-        lines += [f"- {h}" for h in direction["hidden"]]
+        lines += [f"- {h}" for h in hidden]
     return "\n".join(lines) + "\n"
 
 
@@ -635,6 +791,8 @@ def main(argv=None) -> int:
 
     p.add_argument("--run-id", help="이어서 할 run")
     p.add_argument("--pick", type=int, help="고를 방향 번호 (없으면 물어본다)")
+    p.add_argument("--detail", action="store_true",
+                   help="스토리 구체화만 (콘티로 이어가지 않는다)")
     p.add_argument("--sheet", action="store_true", help="캐릭터 시트만")
     p.add_argument("--sheet-from", type=Path,
                    help="이미 뽑아 둔 시트를 가져온다 (story-harness run 폴더 · "
@@ -708,7 +866,21 @@ def main(argv=None) -> int:
     # --sheet-from 만 준 것도 여기서 끝난다 — 시트를 가져다 놓는 것이 그
     # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
-    if not args.all and (args.sheet or args.pages or args.page or args.sheet_from):
+    if not args.all and (args.detail or args.sheet or args.pages or args.page
+                         or args.sheet_from):
+        if args.detail:
+            path = run_dir / "directions.json"
+            if not path.exists():
+                raise SystemExit(f"{path} 가 없습니다. 이야기 단계를 먼저 돌리세요.")
+            picked = run_dir / "pick.json"
+            n = args.pick or (json.loads(picked.read_text(encoding="utf-8"))["n"]
+                              if picked.exists() else None)
+            if n is None:
+                raise SystemExit("--pick <번호> 로 어느 방향인지 알려주세요.")
+            chosen = choose(json.loads(path.read_text(encoding="utf-8")), n)
+            write_json(run_dir / "pick.json", {"n": chosen["n"], "title": chosen["title"],
+                                               "genre": chosen["genre"]})
+            stage_detail(run_dir, char, chosen, args.dry_run)
         if args.sheet:
             stage_sheet(run_dir, char, args.dry_run)
         if args.pages or args.page:
@@ -734,6 +906,7 @@ def main(argv=None) -> int:
         raise SystemExit("고를 방향이 없습니다. story.md 를 보고 프롬프트를 확인하세요.")
 
     direction = choose(directions, args.pick)
+    stage_detail(run_dir, char, direction, args.dry_run)
     stage_board(run_dir, char, direction, args.dry_run, args.max_ratio)
 
     if args.all or args.sheet:
