@@ -203,7 +203,13 @@ def parse_directions(md: str) -> list[dict]:
 
 SCENE_RE = re.compile(rf"^##{S}장면{S}(\d+){S}[—–\-:]?{S}(.*)$", re.M)
 CUT_RE = re.compile(rf"^###{S}컷{S}(\d+){S}$", re.M)
-FIELD_RE = re.compile(rf"^{S}(크기|카메라|배경|인물|대사|지시){S}[:：]{S}(.*)$", re.M)
+CUT_FIELDS = ("크기", "카메라", "배경", "인물", "대사", "그리지 않을 것", "지시")
+FIELD_RE = re.compile(rf"^{S}({'|'.join(CUT_FIELDS)}){S}[:：]{S}(.*)$", re.M)
+# 장면 머리에 붙는 값. 컷이 아니라 **장면 전체**에 걸린다.
+SCENE_FIELDS = ("장소", "시간대")
+SCENE_FIELD_RE = re.compile(rf"^{S}({'|'.join(SCENE_FIELDS)}){S}[:：]{S}(.*)$", re.M)
+# 목록으로 이어지는 칸 — 값이 다음 줄부터 - 로 나열된다.
+LISTED_FIELDS = ("인물", "대사")
 
 
 def parse_board(md: str) -> list[dict]:
@@ -211,20 +217,30 @@ def parse_board(md: str) -> list[dict]:
 
     ``` 펜스는 벗겨서 본다 — 프롬프트가 형식 예시를 펜스로 보여 줘서 응답도
     자주 펜스에 담겨 온다.
+
+    장소·시간대는 컷이 아니라 장면에 붙는다. 첫 컷 앞에서만 찾는다 — 뒤까지
+    보면 컷 안의 배경 설명을 장면의 장소로 잘못 집어간다.
     """
     text = re.sub(r"^```[a-zA-Z]*\s*$", "", md, flags=re.M)
     scenes, marks = [], list(SCENE_RE.finditer(text))
     for i, m in enumerate(marks):
         end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
         body = text[m.end():end]
-        cuts, cmarks = [], list(CUT_RE.finditer(body))
+        cmarks = list(CUT_RE.finditer(body))
+
+        head = body[:cmarks[0].start()] if cmarks else body
+        scene = {"n": int(m.group(1)), "title": m.group(2).strip()}
+        for f in SCENE_FIELD_RE.finditer(head):
+            scene[f.group(1)] = f.group(2).strip()
+
+        cuts = []
         for j, c in enumerate(cmarks):
             cend = cmarks[j + 1].start() if j + 1 < len(cmarks) else len(body)
             chunk = body[c.end():cend]
             cut = {"n": int(c.group(1)), "raw": chunk.strip()}
             for f in FIELD_RE.finditer(chunk):
                 key, value = f.group(1), f.group(2).strip()
-                if key in ("인물", "대사"):
+                if key in LISTED_FIELDS:
                     tail = chunk[f.end():]
                     stop = FIELD_RE.search(tail)
                     listed = _bullets(tail[:stop.start()] if stop else tail)
@@ -232,7 +248,8 @@ def parse_board(md: str) -> list[dict]:
                 else:
                     cut[key] = value
             cuts.append(cut)
-        scenes.append({"n": int(m.group(1)), "title": m.group(2).strip(), "cuts": cuts})
+        scene["cuts"] = cuts
+        scenes.append(scene)
     return scenes
 
 

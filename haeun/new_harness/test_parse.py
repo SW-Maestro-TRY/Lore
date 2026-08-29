@@ -15,6 +15,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
+import imageprompt as IP  # noqa: E402
 import pages as P        # noqa: E402
 import run as R          # noqa: E402
 import sheet as S        # noqa: E402
@@ -371,6 +372,23 @@ def test_pages() -> None:
     check("입력 배열이 그대로", original, cuts("normal", "large"))
 
 
+def test_scene_head() -> None:
+    scenes = R.parse_board(HAIL_MD)
+    check("장소를 장면에서 읽는다", scenes[0]["장소"], "마법학교 입학식 홀, 단상 앞")
+    check("시간대도", scenes[0]["시간대"], "실내조명")
+    check("그리지 않을 것도 컷 칸이다",
+          scenes[0]["cuts"][1]["그리지 않을 것"], "교수의 얼굴")
+    check("인물이 두 명", len(scenes[0]["cuts"][0]["인물"]), 2)
+
+    flat = P.flatten_cuts(scenes)
+    check("장소가 컷까지 내려온다",
+          [c["장소"] for c in flat],
+          ["마법학교 입학식 홀, 단상 앞"] * 2)
+    # 컷이 스스로 적었으면 장면 값으로 안 덮는다
+    own = P.flatten_cuts([{"n": 1, "장소": "홀", "cuts": [{"n": 1, "장소": "복도"}]}])
+    check("컷이 적은 장소가 이긴다", own[0]["장소"], "복도")
+
+
 def test_flatten() -> None:
     scenes = R.parse_board(BOARD_MD)
     flat = P.flatten_cuts(scenes)
@@ -386,9 +404,206 @@ def test_flatten() -> None:
     check("장면이 없으면 빈 배열", P.flatten_cuts([]), [])
 
 
+# ------------------------------------------------- 이미지 생성 프롬프트
+
+# 스펙의 예시 그대로 — 하일 장면 2, 컷 1·2 (normal + tiny)
+HAIL_MD = """\
+## 장면 2 — 하일이 자기 차례에 주문을 외운다.
+
+장소: 마법학교 입학식 홀, 단상 앞
+시간대: 실내조명
+
+### 컷 1
+크기: normal
+카메라: 상반신 / 정면 / 앞모습
+배경: 효과 — 지팡이 끝에서 불안정하게 흔들리는 마력
+인물:
+  - 하일 / LD / 왼쪽 / 초조한 표정 / 주문을 이어가다 말이 꼬임 / 도중 / 상반신
+  - 교수 / LD / 오른쪽 / 무표정 / 지켜본다 / 도중 / 상반신
+대사:
+  - 하일 (말): "……그리고, 어둠을—"
+  - 하일 (말): "아니, 빛을……?"
+
+### 컷 2
+크기: tiny
+카메라: 극클로즈업 / 정면 / 앞모습
+배경: 효과 — 지팡이 끝의 빛이 갑자기 갈라짐
+인물:
+  - 하일 / LD / 눈이 커지는 표정 / 지팡이를 붙잡은 손이 굳음 / 직후 / 손과 눈 일부
+대사:
+  - 하일 (생각): "어……?"
+그리지 않을 것: 교수의 얼굴
+"""
+
+
+def test_image_prompt_pieces() -> None:
+    check("카메라를 문장으로 편다",
+          IP.camera_line("상반신 / 정면 / 옆모습"), "상반신, 정면 앵글, 인물은 옆모습")
+    check("카메라 칸이 모자라도 있는 것까지",
+          IP.camera_line("극클로즈업"), "극클로즈업")
+
+    # 인물 — 일곱 칸이 다 온 경우
+    check("인물을 문장으로 편다",
+          IP.person_line("하일 / LD / 왼쪽 / 초조한 표정 / 말이 꼬임 / 도중 / 상반신"),
+          "하일 (LD): 화면 왼쪽, 초조한 표정, 말이 꼬임. 동작의 도중을 그린다. "
+          "화면에는 상반신까지 나온다.")
+    # 콘티 프롬프트가 "한 명뿐이면 위치를 안 적어도 된다" 고 허용한다 —
+    # 자리로 세면 여기서 표정이 위치로 읽힌다
+    check("위치가 빠져도 표정을 위치로 안 읽는다",
+          IP.person_line("하일 / LD / 초조한 표정 / 말이 꼬임 / 도중 / 상반신"),
+          "하일 (LD): 초조한 표정, 말이 꼬임. 동작의 도중을 그린다. "
+          "화면에는 상반신까지 나온다.")
+    check("순간이 빠져도 된다",
+          IP.person_line("하일 / LD / 오른쪽 / 웃는다 / 손을 든다 / 전신"),
+          "하일 (LD): 화면 오른쪽, 웃는다, 손을 든다. 화면에는 전신까지 나온다.")
+    check("옛 다섯 칸도 그대로 읽힌다",
+          IP.person_line("하일 / LD / 초조한 표정 / 말이 꼬임 / 상반신"),
+          "하일 (LD): 초조한 표정, 말이 꼬임. 화면에는 상반신까지 나온다.")
+    check("범위가 없으면 그 문장을 안 붙인다",
+          IP.person_line("하일 / SD / 웃는다"), "하일 (SD): 웃는다.")
+    check("이름이 '오른쪽' 이어도 이름으로 남는다",
+          IP.person_line("오른쪽 / LD / 웃는다"), "오른쪽 (LD): 웃는다.")
+    # 조사를 하나로 박으면 "직후을" 이 프롬프트로 나간다
+    check("받침 없는 순간은 를", IP._eul("직후"), "를")
+    check("받침 있는 순간은 을", IP._eul("직전"), "을")
+    ok("직후를", "동작의 직후를 그린다" in
+       IP.person_line("하일 / LD / 웃는다 / 손을 든다 / 직후 / 전신"))
+
+    # 대사 종류가 곧 말풍선 모양이다
+    check("말", IP.bubble_line('하일 (말): "안녕"'),
+          ["  - 둥근 타원 / 꼬리는 하일을 향함", '    "안녕"'])
+    check("생각", IP.bubble_line('하일 (생각): "어……?"')[0],
+          "  - 구름 모양 / 꼬리는 하일을 향함")
+    check("외침", IP.bubble_line('하일 (외침): "야!"')[0],
+          "  - 뾰족한 형태 / 꼬리는 하일을 향함")
+    ok("화면밖은 꼬리를 안 단다",
+       "꼬리는" not in IP.bubble_line('??? (화면밖): "들어와."')[0])
+    ok("나레이션은 네모 상자",
+       "네모 상자" in IP.bubble_line('(나레이션): "921년, 제국"')[0])
+    ok("나레이션에 꼬리가 없다",
+       "꼬리는" not in IP.bubble_line('(나레이션): "921년, 제국"')[0])
+    ok("효과음은 말풍선이 없다",
+       "말풍선 없이" in IP.bubble_line('(효과음): "쾅"')[0])
+    ok("전화는 각진 형태", "각진" in IP.bubble_line('엄마 (전화): "어디야"')[0])
+    check("글은 말풍선이 아니라 적힌 것을 그린다",
+          IP.bubble_line('(글 / 노트북 화면): "파일은 삭제해 주세요."')[0],
+          "  - 말풍선 아님 — 노트북 화면에 적힌 글로 그린다")
+    check("형식이 안 맞으면 원문을 남긴다 (글자는 못 지운다)",
+          IP.bubble_line("하일: 안녕"), ["  - 하일: 안녕"])
+    check("대사 글자는 한 글자도 안 바뀐다",
+          IP.bubble_line('하일 (말): "……그리고, 어둠을—"')[1],
+          '    "……그리고, 어둠을—"')
+
+
+def test_image_prompt_page() -> None:
+    scenes = R.parse_board(HAIL_MD)
+    flat = P.flatten_cuts(scenes)
+    pages = P.group_pages(flat)
+    check("normal + tiny 는 한 페이지", len(pages), 1)
+
+    text = IP.build_page_prompt(pages[0], sheets=["하일 — 마른 체격의 소년."])
+
+    ok("고정 블록이 앞에 있다", text.startswith("세로로 읽는 웹툰 페이지를 그린다."))
+    ok("캐릭터 시트가 들어간다", "## 캐릭터 시트\n하일 — 마른 체격의 소년." in text)
+    ok("컷 1 은 높이 비율 3", "### 컷 1 (높이 비율 3)" in text)
+    ok("컷 2 는 높이 비율 1", "### 컷 2 (높이 비율 1)" in text)
+    ok("카메라가 펴져 있다", "카메라: 상반신, 정면 앵글, 인물은 앞모습" in text)
+    ok("배경이 그대로", "배경: 효과 — 지팡이 끝에서 불안정하게 흔들리는 마력" in text)
+    ok("인물이 펴져 있다",
+       "- 하일 (LD): 화면 왼쪽, 초조한 표정, 주문을 이어가다 말이 꼬임. "
+       "동작의 도중을 그린다. 화면에는 상반신까지 나온다." in text)
+    ok("두 인물의 좌우가 같이 나간다", "교수 (LD): 화면 오른쪽" in text)
+    ok("말풍선 두 개가 순서대로", text.index('"……그리고, 어둠을—"') <
+       text.index('"아니, 빛을……?"'))
+    ok("생각은 구름", "구름 모양 / 꼬리는 하일을 향함" in text)
+    ok("그리지 않을 것이 실린다", "그리지 않을 것: 교수의 얼굴" in text)
+
+    # 장소는 페이지 앞에 한 번. 페이지마다 따로 호출하므로 이게 없으면
+    # 같은 홀이 페이지마다 다른 홀이 된다
+    ok("장소가 앞에 한 번", "## 장소\n마법학교 입학식 홀, 단상 앞" in text)
+    ok("시간대도 같이", "시간대: 실내조명" in text)
+    check("장소를 컷마다 되풀이하지 않는다", text.count("마법학교 입학식 홀"), 1)
+
+    # 컷 번호는 페이지 안에서 1부터 — 장면이 달라도 한 페이지에 컷 1 이 둘일 수 없다
+    two = R.parse_board(BOARD_MD)
+    page = P.group_pages(P.flatten_cuts(two))[1]     # 장면1 컷2 + 장면2 컷1
+    numbered = IP.build_page_prompt(page)
+    ok("페이지 안에서 1 부터 센다", "### 컷 1 (" in numbered and "### 컷 2 (" in numbered)
+    check("컷 번호가 겹치지 않는다", numbered.count("### 컷 1 ("), 1)
+
+    ok("이어 세기도 된다",
+       "### 컷 3 (" in IP.build_page_prompt(page, start_number=3))
+    prompts = IP.page_prompts(P.group_pages(P.flatten_cuts(two)), continuous=True)
+    check("페이지 수만큼 프롬프트", len(prompts), 2)
+    ok("두 번째 페이지는 컷 2 부터", "### 컷 2 (" in prompts[1])
+
+    # full 은 숫자가 아니라 페이지 전체
+    full = IP.build_page_prompt([{"size": "full", "카메라": "광각 / 부감 / 앞모습"}])
+    ok("full 은 페이지 전체", "### 컷 1 (페이지 전체)" in full)
+    ok("large 는 비율 5",
+       "(높이 비율 5)" in IP.build_page_prompt([{"size": "large"}]))
+
+    ok("지시가 실린다",
+       "지시: 말풍선 꼬리를 컷 바깥으로" in IP.build_page_prompt(
+           [{"size": "normal", "지시": "말풍선 꼬리를 컷 바깥으로"}]))
+
+    # 시트가 없으면 그 절을 안 만든다
+    ok("시트가 없으면 절도 없다", "## 캐릭터 시트" not in IP.build_page_prompt(page))
+
+    # 한 페이지에 장소가 둘이면 앞에 뭉뚱그리지 않고 컷마다 적는다
+    mixed = IP.build_page_prompt([
+        {"size": "normal", "장소": "입학식 홀", "시간대": "실내조명"},
+        {"size": "normal", "장소": "복도", "시간대": "밤"},
+    ])
+    ok("장소가 갈리면 앞에 안 적는다", "## 장소" not in mixed)
+    ok("대신 컷마다 적는다", "장소: 입학식 홀" in mixed and "장소: 복도" in mixed)
+    ok("시간대도 컷마다", "시간대: 밤" in mixed)
+    ok("장소가 아예 없으면 그 줄도 없다",
+       "장소:" not in IP.build_page_prompt([{"size": "normal"}]))
+
+
+def test_sheet_line() -> None:
+    spec = S.parse_spec(GOOD_SPEC)
+    line = IP.sheet_line(spec)
+    ok("이름으로 시작", line.startswith("이하은 — "))
+    ok("외형이 들어간다", "shoulder-length black hair" in line)
+    ok("고정 요소가 들어간다", "왼쪽 손목에만 감은 검정 헤어끈 두 겹" in line)
+    ok("소지품이 들어간다", "낡은 캔버스 에코백" in line)
+    spec["props"] = []
+    ok("소지품이 없으면 그 줄도 없다", "소지품:" not in IP.sheet_line(spec))
+
+
+def test_ratio_break() -> None:
+    # 기본은 꺼져 있다 — 개수로만 끊는다
+    check("기본은 비율로 안 끊는다",
+          shape(P.group_pages(cuts(*["normal"] * 5))), [[1, 2, 3, 4, 5]])
+    # normal 은 3 이므로 합계 9 면 3개까지
+    check("max_ratio=9 면 normal 3개",
+          shape(P.group_pages(cuts(*["normal"] * 7), max_ratio=9)),
+          [[1, 2, 3], [4, 5, 6], [7]])
+    # tiny(1) small(2) normal(3) = 6, 여기에 normal 을 더하면 9 > 8 이라 끊는다
+    check("얹기 전에 본다 — 상한을 넘긴 페이지가 안 나간다",
+          shape(P.group_pages(cuts("tiny", "small", "normal", "normal"), max_ratio=8)),
+          [[1, 2, 3], [4]])
+    check("개수와 비율 중 먼저 걸리는 쪽",
+          shape(P.group_pages(cuts(*["tiny"] * 6), max_per_page=4, max_ratio=99)),
+          [[1, 2, 3, 4], [5, 6]])
+    check("large 는 비율과 무관하게 혼자",
+          shape(P.group_pages(cuts("normal", "large", "normal"), max_ratio=99)),
+          [[1], [2], [3]])
+    try:
+        P.group_pages(cuts("normal"), max_ratio=0)
+    except ValueError:
+        pass
+    else:
+        FAILED.append("max_ratio=0 인데 안 막았다")
+
+
 def main() -> int:
     for fn in (test_directions, test_board, test_spec, test_sheet_prompt, test_input,
-               test_pages, test_flatten):
+               test_pages, test_scene_head, test_flatten, test_image_prompt_pieces,
+               test_image_prompt_page,
+               test_sheet_line, test_ratio_break):
         fn()
     if FAILED:
         print("FAILED:")
