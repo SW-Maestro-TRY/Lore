@@ -941,8 +941,57 @@ def test_detail() -> None:
        any("구체화가 안" in x for x in R.gate_detail(detail(thin), {"scenes": ["a", "b"]})))
 
 
+def test_review_and_fix() -> None:
+    """검수는 잡기만 하고, 보강은 지적받은 장면만 고친다."""
+    r = R.parse_review(json.dumps({"verdict": "PASS", "issues": [
+        {"scene": 3, "kind": "인과", "severity": "major",
+         "what": "통신을 왜 했는지 없음", "where": "신호 없음 표시가 뜬다"},
+        {"scene": 5, "kind": "신규", "severity": "critical",
+         "what": "없던 과거를 만듦", "where": "이전에 겪었던 것과 비슷하다"},
+        {"scene": 1, "kind": "추측", "severity": "minor", "what": "약함", "where": ""},
+    ]}, ensure_ascii=False))
+    # critical 이 있으면 모델이 PASS 라고 해도 FAIL 이다 — 세어서 다시 정한다
+    check("verdict 를 다시 센다", r["verdict"], "FAIL")
+    check("무거운 것부터", [i["severity"] for i in r["issues"]],
+          ["critical", "major", "minor"])
+    check("개수", R.review_counts(r), {"critical": 1, "major": 1, "minor": 1})
+
+    clean = R.parse_review('{"verdict": "FAIL", "issues": []}')
+    check("지적이 없으면 PASS", clean["verdict"], "PASS")
+    # 모르는 severity 는 major 로 본다 — 조용히 흘려보내지 않는다
+    odd = R.parse_review('{"issues": [{"scene": 1, "severity": "심각", "what": "x"}]}')
+    check("모르는 무게는 major", odd["issues"][0]["severity"], "major")
+
+    # 보강 — 안 나온 장면은 글자 하나 안 바뀐다
+    detail = {"scenes": [{"id": i, "source": f"s{i}", "function": "",
+                          "learns": [], "guesses": [],
+                          "detail": f"원래 {i}", "leads_to": f"다음 {i}"}
+                         for i in (1, 2, 3)],
+              "hidden": ["정체"]}
+    patch = {"scenes": [dict(detail["scenes"][1], detail="고친 2")]}
+    merged, changed = R.apply_fix(detail, patch)
+    check("고친 장면만", changed, [2])
+    check("2번은 바뀜", merged["scenes"][1]["detail"], "고친 2")
+    check("1번은 그대로", merged["scenes"][0], detail["scenes"][0])
+    check("3번도 그대로", merged["scenes"][2], detail["scenes"][2])
+    check("hidden 은 유지", merged["hidden"], ["정체"])
+    check("장면 수가 안 늘어난다", len(merged["scenes"]), 3)
+
+    # 없는 id 를 보내도 장면이 안 생긴다
+    ghost, ch = R.apply_fix(detail, {"scenes": [dict(detail["scenes"][0], id=9)]})
+    check("모르는 id 는 버린다", len(ghost["scenes"]), 3)
+    check("바뀐 것 없음", ch, [])
+
+    # 같은 내용을 보내면 바뀐 것으로 안 센다
+    same, ch2 = R.apply_fix(detail, {"scenes": [dict(detail["scenes"][0])]})
+    check("같으면 안 센다", ch2, [])
+
+    check("빈 패치", R.apply_fix(detail, {"scenes": []})[1], [])
+
+
 def main() -> int:
-    for fn in (test_directions, test_detail, test_board, test_gate_board,
+    for fn in (test_directions, test_detail, test_review_and_fix,
+               test_board, test_gate_board,
                test_gate_readable, test_spec,
                test_sheet_prompt, test_input, test_pages, test_scene_head,
                test_image_prompt_pieces, test_image_prompt_page, test_sheet_line,

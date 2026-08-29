@@ -367,6 +367,42 @@ def gate_detail(detail: dict, direction: dict) -> list[str]:
     return bad
 
 
+SEVERITY = ("critical", "major", "minor")
+ISSUE_KINDS = ("인과", "지식", "출처", "신규", "연속성", "인물", "추측", "연결")
+
+
+def parse_review(text: str) -> dict:
+    """review_prompt 의 응답(JSON) -> {"verdict": ..., "issues": [...]}.
+
+    verdict 는 **믿지 않고 다시 센다.** critical 이 하나라도 있으면 FAIL 이라는
+    규칙을 모델이 지켰는지는 여기서 확인할 수 있고, 어긋나면 센 쪽이 맞다.
+    """
+    obj = story.extract_json(text)
+    if not isinstance(obj, dict):
+        raise story.ParseFailure("검수 결과가 JSON 객체가 아닙니다.")
+
+    issues = []
+    for one in _dicts(obj.get("issues")):
+        sev = _text(one.get("severity")).lower()
+        issues.append({
+            "scene": _num(one.get("scene"), 0),
+            "kind": _text(one.get("kind")),
+            "severity": sev if sev in SEVERITY else "major",
+            "what": _text(one.get("what")),
+            "where": _text(one.get("where")),
+        })
+    issues.sort(key=lambda i: (SEVERITY.index(i["severity"]), i["scene"]))
+    fail = any(i["severity"] == "critical" for i in issues)
+    return {"verdict": "FAIL" if fail else "PASS", "issues": issues}
+
+
+def review_counts(review: dict) -> dict:
+    out = {s: 0 for s in SEVERITY}
+    for one in review.get("issues") or []:
+        out[one["severity"]] += 1
+    return out
+
+
 def gate_board(board: dict) -> list[str]:
     """그림으로 넘기기 전에 비면 안 되는 칸만 본다.
 
@@ -583,6 +619,19 @@ def detail_block(char: dict, direction: dict, run_dir: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+def picked_direction(run_dir: Path, pick: int | None) -> dict:
+    """이 run 에서 고른 방향. --pick 을 안 줘도 pick.json 에서 찾는다."""
+    path = run_dir / "directions.json"
+    if not path.exists():
+        raise SystemExit(f"{path} 가 없습니다. 이야기 단계를 먼저 돌리세요.")
+    picked = run_dir / "pick.json"
+    n = pick or (json.loads(picked.read_text(encoding="utf-8"))["n"]
+                 if picked.exists() else None)
+    if n is None:
+        raise SystemExit("--pick <번호> 로 어느 방향인지 알려주세요.")
+    return choose(json.loads(path.read_text(encoding="utf-8")), n)
+
+
 def stage_detail(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> dict:
     """장면 목록 -> 실제 이야기. 콘티가 창작하지 않아도 되게 만드는 단계다."""
     prompt = compose("detail_prompt", detail_block(char, direction, run_dir))
@@ -609,6 +658,132 @@ def stage_detail(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> d
             warn(f"  - {one}")
         write_json(run_dir / "detail_issues.json", bad)
     return detail
+
+
+def review_block(char: dict, direction: dict, run_dir: Path) -> str:
+    """검수 단계의 입력 — 구체화가 받은 것 전부 + 구체화 결과.
+
+    구체화가 받은 것을 그대로 줘야 "입력에 없던 것을 만들었는가" 를 볼 수 있다.
+    """
+    path = run_dir / "detail.json"
+    if not path.exists():
+        raise SystemExit(f"{path} 가 없습니다. 구체화를 먼저 돌리세요.")
+    detail = json.loads(path.read_text(encoding="utf-8"))
+
+    lines = [detail_block(char, direction, run_dir).rstrip(), "",
+             "## 상세 스토리 (검수할 것)", ""]
+    for s in detail["scenes"]:
+        lines.append(f"### 장면 {s['id']} — {s['source']}")
+        if s.get("function"):
+            lines.append(f"이 장면이 하는 일: {s['function']}")
+        lines += ["", s["detail"], ""]
+        for x in s["learns"]:
+            lines.append(f"- 안다: {x['what']}  ← {x['how']}")
+        for g in s["guesses"]:
+            lines.append(f"- 짐작: {g['what']}  ← {g['from']}")
+        lines += [f"- 그래서 다음: {s['leads_to']}", ""]
+    return "\n".join(lines) + "\n"
+
+
+def stage_review(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> dict:
+    """구체화 결과를 처음 읽는 독자의 눈으로 본다. **고치지 않는다.**
+
+    만드는 쪽과 보는 쪽을 나누는 것이 요점이다. 구체화는 빈칸을 채우려고
+    없던 것을 만들어내는데, 같은 호출에 "그러지 마라" 를 아무리 넣어도 자기가
+    만든 것은 그럴듯해 보인다. 읽는 역할을 따로 준다.
+    """
+    prompt = compose("review_prompt", review_block(char, direction, run_dir))
+    write_text(run_dir / "review_prompt.txt", prompt)
+    if dry_run:
+        log(f"[검수] 프롬프트만 썼습니다 -> {run_dir / 'review_prompt.txt'}")
+        return {}
+
+    call = llm.Call("REVIEW")
+    log(f"[검수] {call.describe()} 로 독자의 눈으로 읽습니다…")
+    # 검수는 발상이 아니라 대조다. 온도를 낮춘다.
+    text, meta = call(prompt, temperature=0.2)
+    write_text(run_dir / "review_raw.txt", text)
+    record(run_dir, meta)
+
+    review = parse_review(text)
+    write_json(run_dir / "review.json", review)
+
+    n = review_counts(review)
+    log(f"  {review['verdict']} — critical {n['critical']} · major {n['major']} "
+        f"· minor {n['minor']}")
+    for one in review["issues"]:
+        log(f"    [{one['severity']:8}] 장면 {one['scene']} ({one['kind']}) "
+            f"{one['what']}")
+    return review
+
+
+def fix_block(char: dict, direction: dict, run_dir: Path, review: dict) -> str:
+    """보강 단계의 입력 — 검수가 본 것 전부 + 지적 목록."""
+    lines = [review_block(char, direction, run_dir).rstrip(), "",
+             "## 검수 지적 (이번에 고칠 것)", ""]
+    for one in review["issues"]:
+        lines.append(f"### 장면 {one['scene']} · {one['kind']} · {one['severity']}")
+        lines.append(one["what"])
+        if one["where"]:
+            lines.append(f"> {one['where']}")
+        lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def apply_fix(detail: dict, patch: dict) -> tuple[dict, list[int]]:
+    """고친 장면만 갈아 끼운다. 나머지는 **글자 하나 안 바뀐다.**
+
+    보강 모델이 지적받은 장면만 출력하므로, 안 나온 장면은 손댈 방법이 없다.
+    전체를 다시 내게 하고 "나머지는 그대로 두라" 고 부탁하는 것보다 확실하다.
+    """
+    by_id = {s["id"]: s for s in patch.get("scenes") or []}
+    scenes, changed = [], []
+    for one in detail["scenes"]:
+        new = by_id.get(one["id"])
+        if new and new != one:
+            scenes.append(new)
+            changed.append(one["id"])
+        else:
+            scenes.append(one)
+    return {"scenes": scenes, "hidden": detail.get("hidden") or []}, changed
+
+
+def stage_fix(run_dir: Path, char: dict, direction: dict, review: dict,
+              dry_run: bool) -> dict:
+    """지적받은 장면만 고친다. 이야기를 다시 쓰지 않는다."""
+    if not review or not review.get("issues"):
+        log("[보강] 지적이 없습니다. 그대로 갑니다.")
+        return {}
+
+    prompt = compose("fix_prompt", fix_block(char, direction, run_dir, review))
+    write_text(run_dir / "fix_prompt.txt", prompt)
+    if dry_run:
+        log(f"[보강] 프롬프트만 썼습니다 -> {run_dir / 'fix_prompt.txt'}")
+        return {}
+
+    call = llm.Call("FIX")
+    log(f"[보강] {call.describe()} 로 지적 {len(review['issues'])}건을 봅니다…")
+    text, meta = call(prompt, temperature=0.3)
+    write_text(run_dir / "fix_raw.txt", text)
+    record(run_dir, meta)
+
+    patch = parse_detail(text)
+    obj = story.extract_json(text)
+    notes = [_text(x) for x in ((obj or {}).get("notes") or []) if _text(x)]
+
+    path = run_dir / "detail.json"
+    detail = json.loads(path.read_text(encoding="utf-8"))
+    # 고치기 전 것을 남긴다 — 무엇이 달라졌는지 나중에 볼 수 있어야 한다.
+    write_json(run_dir / "detail_before_fix.json", detail)
+
+    merged, changed = apply_fix(detail, patch)
+    write_json(path, merged)
+    write_json(run_dir / "fix_notes.json", {"changed": changed, "notes": notes})
+
+    log(f"  장면 {changed or '없음'} 을 고쳤습니다 -> {path}")
+    for one in notes:
+        warn(f"  못 고침: {one}")
+    return merged
 
 
 def board_block(char: dict, direction: dict, run_dir: Path) -> str:
@@ -804,6 +979,10 @@ def main(argv=None) -> int:
     p.add_argument("--pick", type=int, help="고를 방향 번호 (없으면 물어본다)")
     p.add_argument("--detail", action="store_true",
                    help="스토리 구체화만 (콘티로 이어가지 않는다)")
+    p.add_argument("--review", action="store_true",
+                   help="구체화 결과를 검수만 한다 (고치지 않는다)")
+    p.add_argument("--fix", action="store_true",
+                   help="검수 지적을 반영한다 (지적된 장면만 고친다)")
     p.add_argument("--sheet", action="store_true", help="캐릭터 시트만")
     p.add_argument("--sheet-from", type=Path,
                    help="이미 뽑아 둔 시트를 가져온다 (story-harness run 폴더 · "
@@ -877,21 +1056,22 @@ def main(argv=None) -> int:
     # --sheet-from 만 준 것도 여기서 끝난다 — 시트를 가져다 놓는 것이 그
     # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
-    if not args.all and (args.detail or args.sheet or args.pages or args.page
-                         or args.sheet_from):
+    if not args.all and (args.detail or args.review or args.fix or args.sheet
+                         or args.pages or args.page or args.sheet_from):
         if args.detail:
-            path = run_dir / "directions.json"
-            if not path.exists():
-                raise SystemExit(f"{path} 가 없습니다. 이야기 단계를 먼저 돌리세요.")
-            picked = run_dir / "pick.json"
-            n = args.pick or (json.loads(picked.read_text(encoding="utf-8"))["n"]
-                              if picked.exists() else None)
-            if n is None:
-                raise SystemExit("--pick <번호> 로 어느 방향인지 알려주세요.")
-            chosen = choose(json.loads(path.read_text(encoding="utf-8")), n)
+            chosen = picked_direction(run_dir, args.pick)
             write_json(run_dir / "pick.json", {"n": chosen["n"], "title": chosen["title"],
                                                "genre": chosen["genre"]})
             stage_detail(run_dir, char, chosen, args.dry_run)
+        if args.review:
+            stage_review(run_dir, char, picked_direction(run_dir, args.pick),
+                         args.dry_run)
+        if args.fix:
+            path = run_dir / "review.json"
+            if not path.exists():
+                raise SystemExit(f"{path} 가 없습니다. 검수를 먼저 돌리세요.")
+            stage_fix(run_dir, char, picked_direction(run_dir, args.pick),
+                      json.loads(path.read_text(encoding="utf-8")), args.dry_run)
         if args.sheet:
             stage_sheet(run_dir, char, args.dry_run)
         if args.pages or args.page:
@@ -918,6 +1098,8 @@ def main(argv=None) -> int:
 
     direction = choose(directions, args.pick)
     stage_detail(run_dir, char, direction, args.dry_run)
+    review = stage_review(run_dir, char, direction, args.dry_run)
+    stage_fix(run_dir, char, direction, review, args.dry_run)
     stage_board(run_dir, char, direction, args.dry_run, args.max_ratio)
 
     if args.all or args.sheet:
