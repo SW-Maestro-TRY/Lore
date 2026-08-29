@@ -348,6 +348,7 @@ def gate_board(board: dict) -> list[str]:
 # 나왔다. 셋 다 세면 알 수 있는 것이었는데 안 세고 있었다.
 MIN_LINES_PER_CUT = 0.5      # 컷 두 개당 대사 한 줄
 SOLO_SCENE_SHARE = 0.5       # 1컷짜리 장면이 이 비율을 넘으면 흐름이 안 나온다
+OPENING_HINT_LEN = 25        # 첫 대사가 이보다 짧으면 상황을 못 잡아준 것으로 본다
 
 
 def gate_readable(board: dict) -> list[str]:
@@ -365,13 +366,21 @@ def gate_readable(board: dict) -> list[str]:
         bad.append(f"컷 {len(cuts)}개에 대사가 {len(lines)}줄뿐입니다. "
                    "그림만으로 상황을 다 말하게 되어 읽는 사람이 따라오기 "
                    "어렵습니다.")
-    if lines and len(kinds) == 1:
-        bad.append(f"대사가 전부 '{kinds.pop()}' 한 종류입니다. "
-                   "말·생각·나레이션이 섞여야 화면에 리듬이 생깁니다.")
-    if "나레이션" not in kinds:
-        bad.append("나레이션이 한 줄도 없습니다. 콘티 프롬프트 12번이 "
-                   "'시간이나 장소를 잡아줄 때 / 그림만으로 상황이 잘 안 읽힐 때' "
-                   "쓰라고 한 자리입니다 — 첫 장면이 특히 뜬금없어집니다.")
+    # 대사가 전부 "생각" 인 것 자체는 문제가 아니다. 혼잣말만으로도 잘
+    # 읽히는 화가 있다 — 문제는 그 혼잣말이 **그림을 따라 말할 때** 인데,
+    # 그건 세어서 알 수 없다. 그래서 여기서 안 잡고 프롬프트 14번에 맡긴다.
+
+    # 첫 장면만 본다. 독자가 이 세계도 인물도 모르는 자리라, 여기서 헤매면
+    # 뒤를 안 읽는다 (프롬프트 13번).
+    opening = scenes[0]["cuts"]
+    lead = [l for c in opening for l in c["dialogue"] if _text(l.get("text"))]
+    if lead and not any(_text(l.get("type")) == "나레이션" for l in lead):
+        short = min((_text(l.get("text")) for l in lead), key=len, default="")
+        if len(short) <= OPENING_HINT_LEN:
+            bad.append(
+                f"첫 장면에 나레이션이 없고 첫 대사가 짧습니다 (\"{short}\"). "
+                "독자는 아직 여기가 어디인지 모릅니다 — 장소나 상황을 잡아주는 "
+                "한 줄이 필요합니다.")
 
     solo = [s["id"] for s in scenes if len(s["cuts"]) == 1]
     if len(solo) > len(scenes) * SOLO_SCENE_SHARE:

@@ -825,7 +825,7 @@ def test_gate_readable() -> None:
 
     # 컷마다 말·나레이션이 섞여 있고 장면이 여러 컷이면 조용하다
     healthy = board([
-        [{"dialogue": [say("말")]}, {"dialogue": [say("나레이션")]}],
+        [{"dialogue": [say("나레이션", "카페, 오후 3시")]}, {"dialogue": [say("말")]}],
         [{"dialogue": [say("생각")]}, {"dialogue": [say("말")]}],
     ])
     check("멀쩡하면 조용하다", R.gate_readable(healthy), [])
@@ -834,11 +834,24 @@ def test_gate_readable() -> None:
                    [{"dialogue": []}, {"dialogue": []}]])
     ok("대사가 없으면 잡는다", any("대사가" in x for x in R.gate_readable(quiet)))
 
-    same = board([[{"dialogue": [say("생각")]}, {"dialogue": [say("생각")]}],
-                  [{"dialogue": [say("생각")]}, {"dialogue": [say("생각")]}]])
-    hits = R.gate_readable(same)
-    ok("한 종류뿐이면 잡는다", any("한 종류" in x for x in hits))
-    ok("나레이션이 없으면 잡는다", any("나레이션" in x for x in hits))
+    # 전부 "생각" 인 것 자체는 문제가 아니다 — 혼잣말만으로 잘 읽히는 화가 있다.
+    long = "여기 들어올 수 있는 건 나뿐이어야 하는데, 명부엔 다섯 명이 적혀 있어."
+    thinky = board([[{"dialogue": [say("생각", long)]}, {"dialogue": [say("생각", long)]}],
+                    [{"dialogue": [say("생각", long)]}, {"dialogue": [say("생각", long)]}]])
+    ok("전부 생각이어도 안 잡는다",
+       not any("한 종류" in x for x in R.gate_readable(thinky)))
+
+    # 첫 장면이 짧은 반응으로 시작하면 잡는다 — 독자가 여기가 어딘지 모른다
+    blunt = board([[{"dialogue": [say("생각", "뭐지…?")]},
+                    {"dialogue": [say("생각", long)]}],
+                   [{"dialogue": [say("생각", long)]}, {"dialogue": [say("생각", long)]}]])
+    ok("첫 대사가 짧고 나레이션이 없으면 잡는다",
+       any("첫 장면" in x for x in R.gate_readable(blunt)))
+    ok("첫 장면에 나레이션이 있으면 안 잡는다",
+       not any("첫 장면" in x for x in R.gate_readable(board([
+           [{"dialogue": [say("나레이션", "카페, 오후 3시")]},
+            {"dialogue": [say("생각", "뭐지…?")]}],
+           [{"dialogue": [say("생각", long)]}, {"dialogue": [say("생각", long)]}]]))))
 
     solo = board([[{"dialogue": [say("말")]}],
                   [{"dialogue": [say("나레이션")]}],
