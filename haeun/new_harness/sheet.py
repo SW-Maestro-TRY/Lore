@@ -15,6 +15,7 @@ import json
 import re
 from pathlib import Path
 
+import imagegen
 import llm
 from llm import story
 
@@ -25,10 +26,6 @@ HANGUL_RE = story.HANGUL_RE
 HEX_RE = story.HEX_RE
 
 MAX_PROPS = 4
-
-SHEET_KIND = "sheet"
-SHEET_SIZE = "1536x1024"
-SHEET_RATIO = "16:9"
 
 COMMON_EN = (
     "Character reference sheet for a Korean webtoon production. "
@@ -195,19 +192,10 @@ def paint(prompt: str, out_path: Path, photos=None,
           provider: str = None, model: str = None, quality: str = None) -> dict:
     """시트 한 장을 그려 저장한다. (meta)
 
-    provider/model 을 안 주면 .env 의 SHEET_IMAGE_PROVIDER / SHEET_IMAGE_MODEL 을
-    본다 — 다른 단계와 같은 규칙이다 (llm.py 참고).
+    모델은 .env 의 SHEET_IMAGE_PROVIDER / SHEET_IMAGE_MODEL 을 본다 — 다른
+    단계와 같은 규칙이다 (llm.py 참고). 올린 사진을 참조로 같이 붙인다:
+    글로 못 옮기는 인상은 사진이, "왼쪽 소매에만 노란 반사띠 두 줄" 같은
+    정밀한 디테일은 사양이 맡는다.
     """
-    provider = (provider or llm.provider_for("SHEET_IMAGE")).strip().lower()
-    ok, default_model, why = story.image_backend_ready(provider)
-    if not ok:
-        raise SystemExit(why)
-    model = model or llm.model_for("SHEET_IMAGE", provider) or default_model
-    quality = (quality or llm.env("OPENAI_IMAGE_QUALITY") or "high").strip().lower()
-
-    painter, label = story.make_sheet_painter(provider, model, quality, list(photos or []))
-    data, meta = painter(prompt, SHEET_KIND)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(data)
-    return {"provider": provider, "model": model, "backend": label,
-            "quality": quality, "bytes": len(data), "meta": meta or {}}
+    return imagegen.paint("SHEET_IMAGE", prompt, out_path, refs=photos,
+                          kind=imagegen.SHEET_KIND)

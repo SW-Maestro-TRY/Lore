@@ -659,11 +659,74 @@ def test_ratio_break() -> None:
         FAILED.append("max_ratio=0 인데 안 막았다")
 
 
+# ------------------------------------------------------------- 페이지 그리기
+
+def test_pageart() -> None:
+    import shutil
+    import tempfile
+
+    import imagegen
+    import pageart
+
+    # 페이지는 세로로 길어야 한다. 시트 칸은 안 건드렸는지 같이 본다
+    check("페이지 칸이 생겼다", imagegen.story.CHARSHEET_SIZES["page"], "1024x1536")
+    check("페이지 비율", imagegen.story.CHARSHEET_RATIOS["page"], "9:16")
+    check("시트 칸은 그대로", imagegen.story.CHARSHEET_SIZES["sheet"], "1536x1024")
+
+    root = Path(tempfile.mkdtemp(prefix="nh-pageart-"))
+    try:
+        run_dir = root / "run"
+        run_dir.mkdir()
+        board = R.parse_board(BOARD_JSON)
+        R.write_json(run_dir / "board.json", board)
+        R.write_json(run_dir / "pages.json",
+                     P.group_pages(P.flatten_cuts(board["scenes"])))
+        R.write_json(run_dir / "sheet_spec.json", S.parse_spec(GOOD_SPEC))
+
+        pgs, prompts = pageart.build_prompts(run_dir)
+        check("페이지 2장", len(pgs), 2)
+        check("프롬프트도 2장", len(prompts), 2)
+        ok("시트 사양이 프롬프트에", "이하은 — A young Korean woman" in prompts[0])
+        ok("조연도", "담당 교수 — 40대 초반" in prompts[0])
+
+        # 시트가 없으면 참조도 없다
+        check("시트가 없으면 빈 목록", pageart.sheet_refs(run_dir), [])
+        (run_dir / "sheet.png").write_bytes(b"x")
+        check("시트가 있으면 그것 하나",
+              [p.name for p in pageart.sheet_refs(run_dir)], ["sheet.png"])
+
+        # --dry-run 은 프롬프트만 쓰고 그림은 안 만든다
+        quiet, pageart.log = pageart.log, lambda *_: None
+        try:
+            made = pageart.draw(run_dir, dry_run=True)
+        finally:
+            pageart.log = quiet
+        check("dry-run 은 아무것도 안 그린다", made, [])
+        ok("프롬프트는 남는다", (run_dir / "pages" / "page01.txt").exists())
+        ok("그림은 없다", not (run_dir / "pages" / "page01.png").exists())
+
+        # 참조 사슬 — 첫 장은 시트만, 그다음부터 직전 페이지가 붙는다
+        pageart.page_path(run_dir, 1).parent.mkdir(exist_ok=True)
+        check("1페이지 자리", pageart.page_path(run_dir, 1).name, "page01.png")
+        check("2페이지 자리", pageart.page_path(run_dir, 2).name, "page02.png")
+
+        # pages.json 이 없으면 콘티부터 하라고 멈춘다
+        (run_dir / "pages.json").unlink()
+        try:
+            pageart.build_prompts(run_dir)
+        except SystemExit:
+            pass
+        else:
+            FAILED.append("pages.json 이 없는데 안 멈췄다")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main() -> int:
     for fn in (test_directions, test_board, test_gate_board, test_spec,
                test_sheet_prompt, test_input, test_pages, test_scene_head,
                test_image_prompt_pieces, test_image_prompt_page, test_sheet_line,
-               test_ratio_break):
+               test_ratio_break, test_pageart):
         fn()
     if FAILED:
         print("FAILED:")

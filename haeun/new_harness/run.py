@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """new_harness — 사진·설명·장르로 1화 이야기와 콘티, 그리고 캐릭터 시트를 만든다.
 
-    입력  ->  이야기 후보 4개  ->  (사람이 하나 고름)  ->  콘티  ->  캐릭터 시트
-            prompt/story_prompt              prompt/storyboard_prompt
-                                                          prompt/sheet_prompt
+    입력 -> 이야기 후보 4개 -> (사람이 고름) -> 콘티 -> 캐릭터 시트 -> 페이지 그림
+          story_prompt                storyboard_prompt   sheet_prompt   image_prompt
+
+컷은 **한 장씩 그리지 않는다.** pages.py 가 붙일 수 있는 컷을 한 페이지로 묶고,
+페이지 하나당 이미지 호출을 한 번 한다 (pageart.py).
 
 이야기는 story-harness 를 거치지 않는다. prompt/ 안의 프롬프트가 전부다.
-캐릭터 시트의 이미지 호출만 story-harness 것을 빌려 쓴다 (sheet.py 참고).
+이미지 호출만 story-harness 것을 빌려 쓴다 (imagegen.py 참고).
 
 사용법
   python run.py --plan                                 # 어느 단계가 어느 모델인지
@@ -14,6 +16,8 @@
   python run.py --name 이하은 --photo a.png --desc "..." --genre 판타지
   python run.py --run-id <id> --pick 2                 # 후보 고르고 콘티까지
   python run.py --run-id <id> --sheet                  # 캐릭터 시트
+  python run.py --run-id <id> --pages                  # 페이지 그림 (페이지당 1회 호출)
+  python run.py --run-id <id> --page 3                 # 3페이지만 다시
   python run.py --name ... --photo a.png --all --pick 2   # 한 번에
   아무 명령에나 --dry-run 을 붙이면 프롬프트만 쓰고 호출은 안 한다 (0원).
 """
@@ -32,6 +36,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import llm                                    # noqa: E402
+import pageart                                # noqa: E402
 import pages as pagemod                       # noqa: E402
 import sheet as sheetmod                      # noqa: E402
 from llm import story                         # noqa: E402
@@ -515,8 +520,17 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool) -> None:
         return
     log("[시트] 그리는 중…")
     meta = sheetmod.paint(image_prompt, out, photos=[Path(p) for p in photos])
-    record(run_dir, dict(meta, stage="SHEET_IMAGE", cost=None))
+    record(run_dir, dict(meta, cost=None))
     log(f"  -> {out}")
+
+
+def stage_pages(run_dir: Path, dry_run: bool, only=None) -> None:
+    """페이지를 그린다 — **컷 하나에 한 번이 아니라 페이지 하나에 한 번.**"""
+    made = pageart.draw(run_dir, dry_run=dry_run, only=only)
+    for meta in made:
+        record(run_dir, dict(meta, cost=None))
+    if made:
+        log(f"[페이지] {len(made)}장 그렸습니다 -> {run_dir / pageart.PAGE_DIR}")
 
 
 # --------------------------------------------------------------------- CLI
@@ -535,7 +549,12 @@ def main(argv=None) -> int:
     p.add_argument("--run-id", help="이어서 할 run")
     p.add_argument("--pick", type=int, help="고를 방향 번호 (없으면 물어본다)")
     p.add_argument("--sheet", action="store_true", help="캐릭터 시트만")
-    p.add_argument("--all", action="store_true", help="이야기 -> 콘티 -> 시트를 한 번에")
+    p.add_argument("--pages", action="store_true",
+                   help="페이지 그림만 (페이지 하나당 호출 한 번)")
+    p.add_argument("--page", type=int, action="append", default=[],
+                   help="그 번호 페이지만 다시 (여러 번 가능)")
+    p.add_argument("--all", action="store_true",
+                   help="이야기 -> 콘티 -> 시트 -> 페이지 그림까지 한 번에")
     p.add_argument("--dry-run", action="store_true", help="프롬프트만 쓰고 호출하지 않는다")
     p.add_argument("--plan", action="store_true", help="단계별 모델만 보여준다")
     args = p.parse_args(argv)
@@ -577,8 +596,12 @@ def main(argv=None) -> int:
         new_run = True
         log(f"run: {run_dir}")
 
-    if args.sheet and not args.all:
-        stage_sheet(run_dir, char, args.dry_run)
+    # 한 단계만 다시 돌리는 길. --all 이면 아래 전체 흐름을 탄다.
+    if not args.all and (args.sheet or args.pages or args.page):
+        if args.sheet:
+            stage_sheet(run_dir, char, args.dry_run)
+        if args.pages or args.page:
+            stage_pages(run_dir, args.dry_run, only=args.page or None)
         return 0
 
     directions = []
@@ -603,7 +626,11 @@ def main(argv=None) -> int:
     stage_board(run_dir, char, direction, args.dry_run)
 
     if args.all or args.sheet:
+        # 시트가 페이지보다 **먼저** 나와야 한다. 페이지를 그릴 때 참조로
+        # 붙는 것이 이 시트다.
         stage_sheet(run_dir, char, args.dry_run)
+    if args.all or args.pages:
+        stage_pages(run_dir, args.dry_run)
 
     log(f"끝났습니다 -> {run_dir}")
     return 0

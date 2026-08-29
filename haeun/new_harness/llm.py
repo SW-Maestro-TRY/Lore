@@ -65,7 +65,7 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 # 글을 쓰는 단계 / 그림을 그리는 단계. 이름이 곧 .env 의 앞자리다
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
 TEXT_STAGES = ("STORY", "BOARD", "SHEET")
-IMAGE_STAGES = ("SHEET_IMAGE",)
+IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
 DEFAULT_MAX_TOKENS = story.env_int("NH_MAX_TOKENS", 16000)
@@ -165,6 +165,7 @@ STAGE_LABEL = {
     "BOARD": "콘티",
     "SHEET": "시트 사양",
     "SHEET_IMAGE": "시트 그림",
+    "PAGE_IMAGE": "페이지 그림",
 }
 
 
