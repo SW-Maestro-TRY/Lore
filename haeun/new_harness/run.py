@@ -16,6 +16,7 @@
   python run.py --name 이하은 --photo a.png --desc "..." --genre 판타지
   python run.py --run-id <id> --pick 2                 # 후보 고르고 콘티까지
   python run.py --run-id <id> --sheet                  # 캐릭터 시트
+  python run.py --run-id <id> --sheet-from ../story-harness/runs/<run>  # 시트 재사용
   python run.py --run-id <id> --pages                  # 페이지 그림 (페이지당 1회 호출)
   python run.py --run-id <id> --page 3                 # 3페이지만 다시
   python run.py --name ... --photo a.png --all --pick 2   # 한 번에
@@ -549,6 +550,9 @@ def main(argv=None) -> int:
     p.add_argument("--run-id", help="이어서 할 run")
     p.add_argument("--pick", type=int, help="고를 방향 번호 (없으면 물어본다)")
     p.add_argument("--sheet", action="store_true", help="캐릭터 시트만")
+    p.add_argument("--sheet-from", type=Path,
+                   help="이미 뽑아 둔 시트를 가져온다 (story-harness run 폴더 · "
+                        "new_harness run 폴더 · png 하나). 호출 0회")
     p.add_argument("--pages", action="store_true",
                    help="페이지 그림만 (페이지 하나당 호출 한 번)")
     p.add_argument("--page", type=int, action="append", default=[],
@@ -595,6 +599,14 @@ def main(argv=None) -> int:
         write_json(run_dir / "input.json", char)
         new_run = True
         log(f"run: {run_dir}")
+
+    # 시트 가져오기는 어느 흐름이든 **가장 먼저** 한다 — 뒤의 단계가 이 시트를
+    # 참조로 쓰고, 이미 있으면 시트 단계가 새로 그리지 않는다.
+    if args.sheet_from:
+        got = sheetmod.import_sheet(run_dir, args.sheet_from)
+        who = f" ({got['name']})" if got.get("name") else ""
+        log(f"[시트] 가져왔습니다{who} <- {got['from']}")
+        log(f"  사양도 함께: {'예' if got['spec'] else '아니오 (그림만)'}")
 
     # 한 단계만 다시 돌리는 길. --all 이면 아래 전체 흐름을 탄다.
     if not args.all and (args.sheet or args.pages or args.page):

@@ -12,6 +12,7 @@ story.py 의 시트와 다른 점은 하나, 소지품(props) 영역이 있다�
 from __future__ import annotations
 
 import json
+import shutil
 import re
 from pathlib import Path
 
@@ -186,6 +187,92 @@ def build_prompt(spec: dict, style: str = None) -> str:
 
     style = style if style is not None else story.read_style_suffix()[0]
     return "\n".join(parts) + f"\n\nSTYLE\n{style}\n"
+
+
+def import_sheet(run_dir: Path, source: Path) -> dict:
+    """이미 뽑아 둔 캐릭터 시트를 이 run 으로 가져온다. 호출 0회, 0원.
+
+    시트 한 장이 제일 비싼 호출인데, 같은 인물로 다시 뽑을 때마다 새로 그리면
+    돈도 쓰고 **인물도 조금씩 달라진다.** 이미 사람이 보고 채택한 시트가 있으면
+    그것을 그대로 쓰는 쪽이 싸고 정확하다.
+
+    source 로 받는 것:
+      - story-harness 의 run 폴더  (p1.json + charsheet/sheet_c1.png)
+      - new_harness 의 run 폴더    (sheet_spec.json + sheet.png)
+      - 시트 png 하나              (사양 없이 그림만)
+    """
+    source = Path(source)
+    if not source.exists():
+        raise SystemExit(f"가져올 시트가 없습니다: {source}")
+
+    png, spec = None, None
+    if source.is_file():
+        png = source
+    else:
+        # new_harness 쪽이 먼저다 — 우리 형식이라 그대로 쓴다.
+        here = source / "sheet.png"
+        spec_path = source / "sheet_spec.json"
+        if here.exists():
+            png = here
+        if spec_path.exists():
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+
+        if png is None:
+            # story-harness 쪽. 사람이 채택한 후보를 따라간다.
+            sheet_dir = source / "charsheet"
+            picks = sheet_dir / "charsheet_picks.json"
+            name = "sheet_c1.png"
+            if picks.exists():
+                chosen = (json.loads(picks.read_text(encoding="utf-8"))
+                          .get("picks") or {}).get("sheet")
+                name = chosen or name
+            cand = sheet_dir / name
+            if cand.exists():
+                png = cand
+        if spec is None:
+            p1 = source / "p1.json"
+            if p1.exists():
+                spec = from_p1(json.loads(p1.read_text(encoding="utf-8")))
+
+    if png is None:
+        raise SystemExit(
+            f"{source} 에서 시트 그림을 찾지 못했습니다.\n"
+            "        story-harness run 이면 charsheet/sheet_c1.png 가, "
+            "new_harness run 이면 sheet.png 가 있어야 합니다.")
+
+    run_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(png, run_dir / "sheet.png")
+    out = {"from": str(png), "spec": False}
+
+    if spec is not None:
+        bad = gate_spec(spec)
+        if bad:
+            # 그림은 이미 있으니 멈추지 않는다. 사양만 안 쓴다 — 모자란 사양을
+            # 프롬프트에 실으면 그 빈칸을 모델이 지어낸다.
+            story.warn(f"가져온 사양이 모자라 사양은 안 씁니다 ({'; '.join(bad)})")
+        else:
+            (run_dir / "sheet_spec.json").write_text(
+                json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+            out["spec"] = True
+            out["name"] = spec["name"]
+    return out
+
+
+def from_p1(p1: dict) -> dict:
+    """story-harness 의 p1.json -> 우리 사양.
+
+    story.charsheet_source 가 이미 같은 칸을 뽑아 준다. props 만 우리 쪽에
+    새로 생긴 칸이라 비워 둔다 — 없는 것을 지어내지 않는다.
+    """
+    src = story.charsheet_source(p1)
+    return {
+        "name": src["name"],
+        "appearance_en": src["appearance_en"],
+        "design_details": src["design_details"],
+        "props": [],
+        "color_palette": dict(src["color_palette"]),
+        "expression_set": src["expression_set"],
+    }
 
 
 def paint(prompt: str, out_path: Path, photos=None,

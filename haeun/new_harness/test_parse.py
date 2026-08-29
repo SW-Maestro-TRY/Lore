@@ -722,11 +722,73 @@ def test_pageart() -> None:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_import_sheet() -> None:
+    """이미 뽑아 둔 시트 가져오기 — 시트가 제일 비싼 호출이라 재사용이 중요하다."""
+    import shutil
+    import tempfile
+
+    root = Path(tempfile.mkdtemp(prefix="nh-import-"))
+    try:
+        # story-harness 모양의 원본을 만든다
+        src = root / "src"
+        (src / "charsheet").mkdir(parents=True)
+        (src / "charsheet" / "sheet_c2.png").write_bytes(b"PNG-2")
+        (src / "charsheet" / "sheet_c1.png").write_bytes(b"PNG-1")
+        (src / "charsheet" / "charsheet_picks.json").write_text(
+            json.dumps({"picks": {"sheet": "sheet_c2.png"}}), encoding="utf-8")
+        spec = S.parse_spec(GOOD_SPEC)
+        (src / "p1.json").write_text(json.dumps({
+            "name": spec["name"],
+            "appearance_en": spec["appearance_en"],
+            "design_details": spec["design_details"],
+            "color_palette": spec["color_palette"],
+            "expression_set": spec["expression_set"],
+        }, ensure_ascii=False), encoding="utf-8")
+
+        run_dir = root / "run"
+        got = S.import_sheet(run_dir, src)
+        check("사람이 채택한 후보를 따라간다", Path(got["from"]).name, "sheet_c2.png")
+        check("그림이 복사됐다", (run_dir / "sheet.png").read_bytes(), b"PNG-2")
+        ok("사양도 가져왔다", got["spec"])
+        check("이름", got["name"], "이하은")
+
+        out = json.loads((run_dir / "sheet_spec.json").read_text(encoding="utf-8"))
+        check("고정 요소가 그대로", out["design_details"], spec["design_details"])
+        check("표정도", len(out["expression_set"]), 6)
+        # props 는 우리 쪽에 새로 생긴 칸이라 p1 에 없다 — 지어내지 않는다
+        check("소지품은 빈 채로", out["props"], [])
+
+        # 채택 기록이 없으면 c1
+        (src / "charsheet" / "charsheet_picks.json").unlink()
+        check("기록이 없으면 c1",
+              Path(S.import_sheet(root / "run2", src)["from"]).name, "sheet_c1.png")
+
+        # png 하나만 줘도 된다 (사양 없이 그림만)
+        only = S.import_sheet(root / "run3", src / "charsheet" / "sheet_c1.png")
+        ok("사양 없이 그림만", not only["spec"])
+        ok("그림은 왔다", (root / "run3" / "sheet.png").exists())
+
+        # new_harness run 폴더를 주면 우리 형식을 그대로 읽는다
+        again = S.import_sheet(root / "run4", run_dir)
+        ok("우리 형식도 읽는다", again["spec"])
+        check("우리 쪽 sheet.png 를 집는다", Path(again["from"]).name, "sheet.png")
+
+        # 시트가 없으면 어디를 봐야 하는지 말하고 멈춘다
+        try:
+            S.import_sheet(root / "run5", root / "없는폴더")
+        except SystemExit:
+            pass
+        else:
+            FAILED.append("없는 경로인데 안 멈췄다")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main() -> int:
     for fn in (test_directions, test_board, test_gate_board, test_spec,
                test_sheet_prompt, test_input, test_pages, test_scene_head,
                test_image_prompt_pieces, test_image_prompt_page, test_sheet_line,
-               test_ratio_break, test_pageart):
+               test_ratio_break, test_pageart, test_import_sheet):
         fn()
     if FAILED:
         print("FAILED:")
