@@ -92,11 +92,11 @@ def group_pages(cuts, max_per_page: int = DEFAULT_MAX_PER_PAGE,
 # 장면에 붙는 값 중 컷까지 따라 내려가야 하는 것.
 # 페이지는 장면 경계를 안 지키므로(가벼운 컷은 장면을 넘어 모인다), 여기서
 # 안 내려보내면 페이지를 만든 뒤에는 그 컷이 어디서 벌어지는지 알 수 없다.
-CARRY_DOWN = ("장소", "시간대")
+CARRY_DOWN = ("location", "time")
 
 
 def flatten_cuts(scenes) -> list:
-    """cuts.json (장면 -> 컷) 을 컷 하나짜리 배열로 편다.
+    """board.json 의 장면 배열 -> 컷 하나짜리 배열.
 
     어느 장면의 몇 번째 컷이었는지를 scene·cut 에 남긴다 — 편 뒤에는 그
     자리를 다시 알 길이 없고, 페이지를 만든 뒤에도 "장면 2 의 1컷" 을 짚을
@@ -107,5 +107,6 @@ def flatten_cuts(scenes) -> list:
         carried = {k: scene[k] for k in CARRY_DOWN if str(scene.get(k) or "").strip()}
         for cut in scene.get("cuts") or []:
             # 컷이 스스로 적은 값이 있으면 그것을 남긴다 — 장면 값으로 덮지 않는다.
-            out.append(dict(carried, **cut, scene=scene.get("n"), cut=cut.get("n")))
+            out.append(dict(carried, **cut,
+                            scene=scene.get("id"), cut=cut.get("id")))
     return out

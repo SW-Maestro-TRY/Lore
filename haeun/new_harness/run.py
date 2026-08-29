@@ -31,8 +31,10 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import llm                                    # noqa: E402
+import pages as pagemod                       # noqa: E402
 import sheet as sheetmod                      # noqa: E402
 from llm import story                         # noqa: E402
+from pages import SIZES                       # noqa: E402
 
 PROMPT_DIR = HERE / "prompt"
 RUNS_DIR = HERE / "runs"
@@ -201,56 +203,113 @@ def parse_directions(md: str) -> list[dict]:
     return out
 
 
-SCENE_RE = re.compile(rf"^##{S}장면{S}(\d+){S}[—–\-:]?{S}(.*)$", re.M)
-CUT_RE = re.compile(rf"^###{S}컷{S}(\d+){S}$", re.M)
-CUT_FIELDS = ("크기", "카메라", "배경", "인물", "대사", "그리지 않을 것", "지시")
-FIELD_RE = re.compile(rf"^{S}({'|'.join(CUT_FIELDS)}){S}[:：]{S}(.*)$", re.M)
-# 장면 머리에 붙는 값. 컷이 아니라 **장면 전체**에 걸린다.
-SCENE_FIELDS = ("장소", "시간대")
-SCENE_FIELD_RE = re.compile(rf"^{S}({'|'.join(SCENE_FIELDS)}){S}[:：]{S}(.*)$", re.M)
-# 목록으로 이어지는 칸 — 값이 다음 줄부터 - 로 나열된다.
-LISTED_FIELDS = ("인물", "대사")
+def _num(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
-def parse_board(md: str) -> list[dict]:
-    """storyboard_prompt 의 응답을 장면 -> 컷으로 잘라 읽는다.
+def _text(value) -> str:
+    return str(value).strip() if value not in (None, "") else ""
 
-    ``` 펜스는 벗겨서 본다 — 프롬프트가 형식 예시를 펜스로 보여 줘서 응답도
-    자주 펜스에 담겨 온다.
 
-    장소·시간대는 컷이 아니라 장면에 붙는다. 첫 컷 앞에서만 찾는다 — 뒤까지
-    보면 컷 안의 배경 설명을 장면의 장소로 잘못 집어간다.
+def _dicts(value) -> list[dict]:
+    return [v for v in (value or []) if isinstance(v, dict)]
+
+
+def parse_board(text: str) -> dict:
+    """storyboard_prompt 의 응답(JSON) -> {"cast": [...], "scenes": [...]}.
+
+    모양만 맞추고 값은 안 고친다. 여기서 빈칸을 채우면 모델이 안 적은 것과
+    코드가 지어낸 것이 섞이고, 그건 다음 단계(이미지 프롬프트)가 구별할 수
+    없다. 없는 것은 없는 채로 내려보낸다.
+
+    번호가 없으면 나온 순서로 매긴다 — 컷 순서는 이 뒤로 계속 쓰이는 값이라
+    비워 두면 페이지 묶기부터 어긋난다.
     """
-    text = re.sub(r"^```[a-zA-Z]*\s*$", "", md, flags=re.M)
-    scenes, marks = [], list(SCENE_RE.finditer(text))
-    for i, m in enumerate(marks):
-        end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
-        body = text[m.end():end]
-        cmarks = list(CUT_RE.finditer(body))
+    obj = story.extract_json(text)
+    if not isinstance(obj, dict):
+        raise story.ParseFailure("콘티가 JSON 객체가 아닙니다.")
 
-        head = body[:cmarks[0].start()] if cmarks else body
-        scene = {"n": int(m.group(1)), "title": m.group(2).strip()}
-        for f in SCENE_FIELD_RE.finditer(head):
-            scene[f.group(1)] = f.group(2).strip()
+    cast = [{"name": _text(c.get("name")), "appearance": _text(c.get("appearance"))}
+            for c in _dicts(obj.get("cast"))]
 
+    scenes = []
+    for si, scene in enumerate(_dicts(obj.get("scenes")), 1):
         cuts = []
-        for j, c in enumerate(cmarks):
-            cend = cmarks[j + 1].start() if j + 1 < len(cmarks) else len(body)
-            chunk = body[c.end():cend]
-            cut = {"n": int(c.group(1)), "raw": chunk.strip()}
-            for f in FIELD_RE.finditer(chunk):
-                key, value = f.group(1), f.group(2).strip()
-                if key in LISTED_FIELDS:
-                    tail = chunk[f.end():]
-                    stop = FIELD_RE.search(tail)
-                    listed = _bullets(tail[:stop.start()] if stop else tail)
-                    cut[key] = ([value] if value else []) + listed
-                else:
-                    cut[key] = value
-            cuts.append(cut)
-        scene["cuts"] = cuts
-        scenes.append(scene)
-    return scenes
+        for ci, cut in enumerate(_dicts(scene.get("cuts")), 1):
+            camera = cut.get("camera") if isinstance(cut.get("camera"), dict) else {}
+            background = (cut.get("background")
+                          if isinstance(cut.get("background"), dict) else {})
+            cuts.append({
+                "id": _num(cut.get("id"), ci),
+                "size": _text(cut.get("size")).lower(),
+                "camera": {k: _text(camera.get(k)) for k in ("shot", "angle", "facing")},
+                "background": {k: _text(background.get(k)) for k in ("type", "desc")},
+                "characters": _dicts(cut.get("characters")),
+                # order 가 곧 읽는 순서다. 빠진 것은 나온 자리로 채워 뒤로 민다.
+                "dialogue": sorted(_dicts(cut.get("dialogue")),
+                                   key=lambda d: _num(d.get("order"), 10_000)),
+                "sfx": _dicts(cut.get("sfx")),
+                "forbid": [_text(f) for f in (cut.get("forbid") or []) if _text(f)],
+                "note": _text(cut.get("note")),
+            })
+        scenes.append({
+            "id": _num(scene.get("id"), si),
+            "summary": _text(scene.get("summary")),
+            "location": _text(scene.get("location")),
+            "time": _text(scene.get("time")),
+            "cuts": cuts,
+        })
+    return {"cast": cast, "scenes": scenes}
+
+
+def gate_board(board: dict) -> list[str]:
+    """그림으로 넘기기 전에 비면 안 되는 칸만 본다.
+
+    콘티 프롬프트의 "내보내기 전에 확인" 중 **코드가 판정할 수 있는 것**만
+    옮겼다. 좌우가 장면 안에서 유지됐는지 같은 것은 여기서 본다 — 사람이
+    페이지를 다 그린 뒤에 발견하면 다시 그리는 값이 비싸다.
+    """
+    bad = []
+    scenes = board.get("scenes") or []
+    if not scenes:
+        return ["장면이 하나도 없습니다."]
+
+    for scene in scenes:
+        where = f"장면 {scene['id']}"
+        if not scene["location"]:
+            bad.append(f"{where}: location 이 없습니다.")
+        if not scene["cuts"]:
+            bad.append(f"{where}: 컷이 없습니다.")
+
+        seats = {}          # 이름 -> 좌우. 한 장면 안에서 안 바뀌어야 한다
+        for cut in scene["cuts"]:
+            spot = f"{where} 컷 {cut['id']}"
+            if cut["size"] not in SIZES:
+                bad.append(f"{spot}: size 가 '{cut['size']}' 입니다 "
+                           f"({' / '.join(SIZES)}).")
+            people = cut["characters"]
+            for who in people:
+                name = _text(who.get("name"))
+                if not who.get("moment"):
+                    bad.append(f"{spot}: {name or '이름 없음'} 에 moment 가 없습니다.")
+                pos = _text(who.get("position"))
+                if len(people) > 1 and not pos:
+                    bad.append(f"{spot}: 인물이 둘 이상인데 {name} 에 position 이 "
+                               "없습니다.")
+                if pos and name:
+                    if seats.setdefault(name, pos) != pos:
+                        bad.append(f"{spot}: {name} 의 좌우가 장면 안에서 바뀝니다 "
+                                   f"({seats[name]} -> {pos}).")
+            for line in cut["dialogue"]:
+                if not _text(line.get("text")):
+                    bad.append(f"{spot}: 대사에 text 가 비어 있습니다.")
+            for one in cut["sfx"]:
+                if not _text(one.get("text")):
+                    bad.append(f"{spot}: 효과음에 text 가 비어 있습니다.")
+    return bad
 
 
 # --------------------------------------------------------------------- run
@@ -381,13 +440,29 @@ def stage_board(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> No
     call = llm.Call("BOARD")
     log(f"[콘티] {call.describe()} 로 방향 {direction['n']} 을 컷으로 나눕니다…")
     text, meta = call(prompt, images=llm.load_images(char["photos"]))
-    write_text(run_dir / "board.md", text)
+    # 원문을 먼저 남긴다. 아래에서 파싱이 죽어도 응답은 안 사라진다.
+    write_text(run_dir / "board_raw.txt", text)
     record(run_dir, meta)
 
-    scenes = parse_board(text)
-    write_json(run_dir / "cuts.json", scenes)
+    board = parse_board(text)
+    write_json(run_dir / "board.json", board)
+
+    scenes = board["scenes"]
     total = sum(len(s["cuts"]) for s in scenes)
-    log(f"  장면 {len(scenes)}개 · 컷 {total}개 -> {run_dir / 'board.md'}")
+    log(f"  장면 {len(scenes)}개 · 컷 {total}개 -> {run_dir / 'board.json'}")
+
+    # 게이트는 **멈추지 않고 알린다.** 좌우가 한 번 어긋난 것 때문에 콘티
+    # 전체를 버리게 하면, 고쳐 쓰면 될 것을 다시 뽑느라 또 돈을 쓴다.
+    bad = gate_board(board)
+    if bad:
+        warn(f"콘티에 손볼 곳이 {len(bad)}개 있습니다 (그리기 전에 보세요):")
+        for one in bad:
+            warn(f"  - {one}")
+        write_json(run_dir / "board_issues.json", bad)
+
+    pages = pagemod.group_pages(pagemod.flatten_cuts(scenes))
+    write_json(run_dir / "pages.json", pages)
+    log(f"  페이지 {len(pages)}장 -> {run_dir / 'pages.json'}")
 
 
 def stage_sheet(run_dir: Path, char: dict, dry_run: bool) -> None:

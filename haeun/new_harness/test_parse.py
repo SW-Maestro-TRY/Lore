@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -130,59 +131,171 @@ def test_directions() -> None:
 
 # ------------------------------------------------------------------- 콘티
 
-BOARD_MD = """\
-## 장면 1 — 하은이 야간 자습을 마치고 나오다 3층 복도의 불빛을 본다.
+BOARD_JSON = """설명을 붙여 드립니다.
 
-### 컷 1
-크기: large
-카메라: 전신 / 로우앵글 / 앞모습
-배경: 그라데이션 — 남색에서 검정으로
-인물:
-  - 이하은 / LD / 무표정 / 가방을 고쳐 멘다 / 전신
-대사:
-  - (나레이션): "10시 반, 3층."
-
-### 컷 2
-크기: normal
-카메라: 상반신 / 정면 / 옆모습
-배경: 실제공간 — 형광등이 하나만 켜진 복도
-인물:
-  - 이하은 / LD / 눈이 커진다 / 걸음을 멈춘다 / 상반신
-대사:
-  - 이하은 (생각): "저기 불이 왜 켜져 있지."
-  - ??? (화면밖): "들어와."
-지시: 말풍선 꼬리를 컷 바깥으로
-
-## 장면 2 — 문을 두 번 지나쳤다가 결국 손잡이를 돌린다.
-
-### 컷 1
-크기: tiny
-카메라: 부분(손) / 정면 / 앞모습
-배경: 없음
-인물:
-  - 이하은 / LD / (얼굴 없음) / 손잡이 위에서 손이 멈춘다 / 손만
+```json
+{
+  "cast": [
+    {"name": "담당 교수",
+     "appearance": "40대 초반, 큰 키에 마른 체격. 짧은 은회색 머리, 짙은 청색 눈."},
+    {"name": "관리인", "appearance": "60대, 굽은 등, 회색 작업복."}
+  ],
+  "scenes": [
+    {
+      "id": 1,
+      "summary": "하일은 입학식에서 이름이 불리자 지팡이를 들고 주문을 외운다",
+      "location": "마법학교 중앙 대강당의 입학식장",
+      "time": "실내조명",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "large",
+          "camera": {"shot": "광각", "angle": "정면", "facing": "앞모습"},
+          "background": {"type": "실제공간", "desc": "높은 천장과 늘어선 마법등"},
+          "characters": [
+            {"name": "하일", "style": "LD", "position": "왼쪽",
+             "expression": "긴장한 표정", "action": "이름이 불려 고개를 든다",
+             "moment": "직후", "framing": "무릎 위"},
+            {"name": "담당 교수", "style": "LD", "position": "오른쪽",
+             "expression": "무표정", "action": "명단을 본다",
+             "moment": "도중", "framing": "상반신"}
+          ],
+          "dialogue": [
+            {"order": 2, "speaker": null, "type": "나레이션", "text": "입학식 사흘째.",
+             "bubble": {"shape": "네모 상자", "tail": null, "position": "왼쪽 위"}},
+            {"order": 1, "speaker": "담당 교수", "type": "화면밖", "text": "하일.",
+             "bubble": {"shape": "둥근 타원", "tail": "컷 바깥", "position": "오른쪽 위"}}
+          ],
+          "sfx": [
+            {"text": "웅성…", "source": "학생들", "position": "오른쪽 아래",
+             "reason": "이름이 불린 뒤 이는 술렁임"}
+          ],
+          "forbid": [],
+          "note": "시선이 하일에게 모이는 흐름을 만든다"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {"shot": "상반신", "angle": "정면", "facing": "앞모습"},
+          "background": {"type": "효과", "desc": "지팡이 끝에서 흔들리는 마력"},
+          "characters": [
+            {"name": "하일", "style": "LD", "position": "왼쪽",
+             "expression": "초조한 표정", "action": "주문을 외우다 말이 꼬임",
+             "moment": "도중", "framing": "상반신"}
+          ],
+          "dialogue": [
+            {"order": 1, "speaker": "하일", "type": "말", "text": "……그리고, 어둠을—",
+             "bubble": {"shape": "둥근 타원", "tail": "하일", "position": "왼쪽 위"}},
+            {"order": 2, "speaker": "하일", "type": "생각", "text": "아니, 빛을……?",
+             "bubble": {"shape": "구름", "tail": "하일", "position": "오른쪽 아래"}}
+          ],
+          "sfx": [],
+          "forbid": ["교수의 얼굴"],
+          "note": "메모는 그림에 안 나가야 한다"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "summary": "관리인이 하일을 부른다",
+      "location": "기숙사 복도",
+      "time": "밤",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "tiny",
+          "camera": {"shot": "부분", "angle": "정면", "facing": "앞모습"},
+          "background": {"type": "없음", "desc": ""},
+          "characters": [
+            {"name": "하일", "style": "LD", "expression": "(얼굴 없음)",
+             "action": "손이 멈춘다", "moment": "직전", "framing": "손만"}
+          ],
+          "dialogue": [
+            {"order": 1, "speaker": null, "type": "글", "text": "파일은 삭제해 주세요.",
+             "bubble": {"shape": null, "tail": null, "position": "노트북 화면 안"}}
+          ],
+          "sfx": [{"text": "사아…", "source": "복도", "position": "화면 전체",
+                   "reason": "정적"}],
+          "forbid": [],
+          "note": ""
+        }
+      ]
+    }
+  ]
+}
+```
 """
 
 
 def test_board() -> None:
-    scenes = R.parse_board(BOARD_MD)
-    check("장면 개수", len(scenes), 2)
-    check("장면 1 제목", scenes[0]["title"],
-          "하은이 야간 자습을 마치고 나오다 3층 복도의 불빛을 본다.")
+    board = R.parse_board(BOARD_JSON)
+    check("cast 2명", [c["name"] for c in board["cast"]], ["담당 교수", "관리인"])
+    scenes = board["scenes"]
+    check("장면 2개", len(scenes), 2)
+    check("장소", scenes[0]["location"], "마법학교 중앙 대강당의 입학식장")
+    check("시간대", scenes[1]["time"], "밤")
     check("장면 1 컷 수", len(scenes[0]["cuts"]), 2)
-    check("장면 2 컷 수", len(scenes[1]["cuts"]), 1)
 
-    cut = scenes[0]["cuts"][1]
-    check("크기", cut["크기"], "normal")
-    check("카메라", cut["카메라"], "상반신 / 정면 / 옆모습")
-    check("배경", cut["배경"], "실제공간 — 형광등이 하나만 켜진 복도")
-    check("인물", cut["인물"], ["이하은 / LD / 눈이 커진다 / 걸음을 멈춘다 / 상반신"])
-    check("대사 2줄", cut["대사"],
-          ['이하은 (생각): "저기 불이 왜 켜져 있지."', '??? (화면밖): "들어와."'])
-    check("지시", cut["지시"], "말풍선 꼬리를 컷 바깥으로")
+    cut = scenes[0]["cuts"][0]
+    check("size", cut["size"], "large")
+    check("카메라", cut["camera"], {"shot": "광각", "angle": "정면", "facing": "앞모습"})
+    check("배경", cut["background"]["type"], "실제공간")
+    check("인물 2명", len(cut["characters"]), 2)
+    # order 가 뒤집혀 온 것을 바로 세운다 — 읽는 순서가 곧 배치 순서다
+    check("order 대로 정렬", [d["order"] for d in cut["dialogue"]], [1, 2])
+    check("정렬된 첫 대사", cut["dialogue"][0]["text"], "하일.")
+    check("forbid 는 배열", scenes[0]["cuts"][1]["forbid"], ["교수의 얼굴"])
 
-    fenced = "```\n" + BOARD_MD + "```\n"
-    check("펜스에 담겨 와도 같다", len(R.parse_board(fenced)), 2)
+    check("JSON 만 와도 같다", len(R.parse_board(
+        BOARD_JSON[BOARD_JSON.index("{"):BOARD_JSON.rindex("}") + 1])["scenes"]), 2)
+    try:
+        R.parse_board("JSON 이 아닙니다")
+    except Exception:
+        pass
+    else:
+        FAILED.append("JSON 이 아닌데 안 멈췄다")
+
+    # 번호가 없으면 나온 순서로 매긴다
+    guessed = R.parse_board('{"scenes":[{"cuts":[{"size":"normal"},{"size":"tiny"}]}]}')
+    check("장면 번호를 매긴다", guessed["scenes"][0]["id"], 1)
+    check("컷 번호를 매긴다", [c["id"] for c in guessed["scenes"][0]["cuts"]], [1, 2])
+
+
+def test_gate_board() -> None:
+    check("멀쩡한 콘티는 통과", R.gate_board(R.parse_board(BOARD_JSON)), [])
+
+    def issues(obj) -> list:
+        return R.gate_board(R.parse_board(json.dumps(obj, ensure_ascii=False)))
+
+    ok("장면이 없으면 잡는다", issues({"scenes": []}))
+    ok("location 이 없으면 잡는다",
+       any("location" in x for x in issues(
+           {"scenes": [{"id": 1, "cuts": [{"size": "normal"}]}]})))
+    ok("size 가 이상하면 잡는다",
+       any("size" in x for x in issues(
+           {"scenes": [{"id": 1, "location": "홀", "cuts": [{"size": "거대"}]}]})))
+    ok("moment 가 없으면 잡는다",
+       any("moment" in x for x in issues({"scenes": [{"id": 1, "location": "홀", "cuts": [
+           {"size": "normal", "characters": [{"name": "하일"}]}]}]})))
+    ok("둘 이상인데 position 이 없으면 잡는다",
+       any("position" in x for x in issues({"scenes": [{"id": 1, "location": "홀", "cuts": [
+           {"size": "normal", "characters": [
+               {"name": "하일", "moment": "도중"},
+               {"name": "교수", "moment": "도중"}]}]}]})))
+    ok("한 명뿐이면 position 이 없어도 된다",
+       not any("position" in x for x in issues({"scenes": [{"id": 1, "location": "홀",
+           "cuts": [{"size": "normal", "characters": [
+               {"name": "하일", "moment": "도중"}]}]}]})))
+    # 좌우가 장면 안에서 바뀌는 것 — 다 그린 뒤에 발견하면 다시 그리는 값이 비싸다
+    ok("좌우가 바뀌면 잡는다",
+       any("좌우" in x for x in issues({"scenes": [{"id": 1, "location": "홀", "cuts": [
+           {"size": "normal", "characters": [
+               {"name": "교수", "moment": "도중", "position": "오른쪽"}]},
+           {"size": "normal", "characters": [
+               {"name": "교수", "moment": "도중", "position": "왼쪽"}]}]}]})))
+    ok("대사 text 가 비면 잡는다",
+       any("text" in x for x in issues({"scenes": [{"id": 1, "location": "홀", "cuts": [
+           {"size": "normal", "dialogue": [{"order": 1, "text": ""}]}]}]})))
 
 
 # --------------------------------------------------------------- 시트 사양
@@ -373,215 +486,162 @@ def test_pages() -> None:
 
 
 def test_scene_head() -> None:
-    scenes = R.parse_board(HAIL_MD)
-    check("장소를 장면에서 읽는다", scenes[0]["장소"], "마법학교 입학식 홀, 단상 앞")
-    check("시간대도", scenes[0]["시간대"], "실내조명")
-    check("그리지 않을 것도 컷 칸이다",
-          scenes[0]["cuts"][1]["그리지 않을 것"], "교수의 얼굴")
-    check("인물이 두 명", len(scenes[0]["cuts"][0]["인물"]), 2)
-
-    flat = P.flatten_cuts(scenes)
-    check("장소가 컷까지 내려온다",
-          [c["장소"] for c in flat],
-          ["마법학교 입학식 홀, 단상 앞"] * 2)
-    # 컷이 스스로 적었으면 장면 값으로 안 덮는다
-    own = P.flatten_cuts([{"n": 1, "장소": "홀", "cuts": [{"n": 1, "장소": "복도"}]}])
-    check("컷이 적은 장소가 이긴다", own[0]["장소"], "복도")
-
-
-def test_flatten() -> None:
-    scenes = R.parse_board(BOARD_MD)
-    flat = P.flatten_cuts(scenes)
+    board = R.parse_board(BOARD_JSON)
+    flat = P.flatten_cuts(board["scenes"])
     check("컷 3개로 펴진다", len(flat), 3)
     check("어느 장면의 몇 컷인지 남는다",
           [(c["scene"], c["cut"]) for c in flat], [(1, 1), (1, 2), (2, 1)])
+    check("장소가 컷까지 내려온다",
+          [c["location"] for c in flat],
+          ["마법학교 중앙 대강당의 입학식장"] * 2 + ["기숙사 복도"])
+    check("시간대도", [c["time"] for c in flat], ["실내조명"] * 2 + ["밤"])
     check("크기는 콘티에서 온 그대로",
           [P.cut_size(c) for c in flat], ["large", "normal", "tiny"])
-    # large 한 장 + (normal, tiny) 한 장
+    # large 는 혼자, normal+tiny 가 한 장
     check("펴서 바로 묶인다",
           [[(c["scene"], c["cut"]) for c in page] for page in P.group_pages(flat)],
           [[(1, 1)], [(1, 2), (2, 1)]])
     check("장면이 없으면 빈 배열", P.flatten_cuts([]), [])
 
+    # 컷이 스스로 적었으면 장면 값으로 안 덮는다
+    own = P.flatten_cuts([{"id": 1, "location": "홀",
+                           "cuts": [{"id": 1, "location": "복도"}]}])
+    check("컷이 적은 장소가 이긴다", own[0]["location"], "복도")
+
 
 # ------------------------------------------------- 이미지 생성 프롬프트
 
-# 스펙의 예시 그대로 — 하일 장면 2, 컷 1·2 (normal + tiny)
-HAIL_MD = """\
-## 장면 2 — 하일이 자기 차례에 주문을 외운다.
-
-장소: 마법학교 입학식 홀, 단상 앞
-시간대: 실내조명
-
-### 컷 1
-크기: normal
-카메라: 상반신 / 정면 / 앞모습
-배경: 효과 — 지팡이 끝에서 불안정하게 흔들리는 마력
-인물:
-  - 하일 / LD / 왼쪽 / 초조한 표정 / 주문을 이어가다 말이 꼬임 / 도중 / 상반신
-  - 교수 / LD / 오른쪽 / 무표정 / 지켜본다 / 도중 / 상반신
-대사:
-  - 하일 (말): "……그리고, 어둠을—"
-  - 하일 (말): "아니, 빛을……?"
-
-### 컷 2
-크기: tiny
-카메라: 극클로즈업 / 정면 / 앞모습
-배경: 효과 — 지팡이 끝의 빛이 갑자기 갈라짐
-인물:
-  - 하일 / LD / 눈이 커지는 표정 / 지팡이를 붙잡은 손이 굳음 / 직후 / 손과 눈 일부
-대사:
-  - 하일 (생각): "어……?"
-그리지 않을 것: 교수의 얼굴
-"""
-
-
 def test_image_prompt_pieces() -> None:
     check("카메라를 문장으로 편다",
-          IP.camera_line("상반신 / 정면 / 옆모습"), "상반신, 정면 앵글, 인물은 옆모습")
-    check("카메라 칸이 모자라도 있는 것까지",
-          IP.camera_line("극클로즈업"), "극클로즈업")
+          IP.camera_line({"shot": "상반신", "angle": "정면", "facing": "옆모습"}),
+          "상반신, 정면 앵글, 인물은 옆모습")
+    check("칸이 모자라도 있는 것까지",
+          IP.camera_line({"shot": "극클로즈업"}), "극클로즈업")
+    check("배경", IP.background_line({"type": "실제공간", "desc": "복도"}),
+          "실제공간 — 복도")
+    check("설명이 없으면 종류만", IP.background_line({"type": "없음"}), "없음")
 
-    # 인물 — 일곱 칸이 다 온 경우
     check("인물을 문장으로 편다",
-          IP.person_line("하일 / LD / 왼쪽 / 초조한 표정 / 말이 꼬임 / 도중 / 상반신"),
-          "하일 (LD): 화면 왼쪽, 초조한 표정, 말이 꼬임. 동작의 도중을 그린다. "
-          "화면에는 상반신까지 나온다.")
-    # 콘티 프롬프트가 "한 명뿐이면 위치를 안 적어도 된다" 고 허용한다 —
-    # 자리로 세면 여기서 표정이 위치로 읽힌다
-    check("위치가 빠져도 표정을 위치로 안 읽는다",
-          IP.person_line("하일 / LD / 초조한 표정 / 말이 꼬임 / 도중 / 상반신"),
-          "하일 (LD): 초조한 표정, 말이 꼬임. 동작의 도중을 그린다. "
-          "화면에는 상반신까지 나온다.")
-    check("순간이 빠져도 된다",
-          IP.person_line("하일 / LD / 오른쪽 / 웃는다 / 손을 든다 / 전신"),
-          "하일 (LD): 화면 오른쪽, 웃는다, 손을 든다. 화면에는 전신까지 나온다.")
-    check("옛 다섯 칸도 그대로 읽힌다",
-          IP.person_line("하일 / LD / 초조한 표정 / 말이 꼬임 / 상반신"),
-          "하일 (LD): 초조한 표정, 말이 꼬임. 화면에는 상반신까지 나온다.")
-    check("범위가 없으면 그 문장을 안 붙인다",
-          IP.person_line("하일 / SD / 웃는다"), "하일 (SD): 웃는다.")
-    check("이름이 '오른쪽' 이어도 이름으로 남는다",
-          IP.person_line("오른쪽 / LD / 웃는다"), "오른쪽 (LD): 웃는다.")
+          IP.person_line({"name": "하일", "style": "LD", "position": "왼쪽",
+                          "expression": "긴장한 표정", "action": "고개를 든다",
+                          "moment": "직후", "framing": "무릎 위"}),
+          "하일 (LD): 화면 왼쪽, 긴장한 표정, 고개를 든다. 동작의 직후를 그린다. "
+          "화면에는 무릎 위까지 나온다.")
+    check("위치가 없으면 그 조각만 빠진다",
+          IP.person_line({"name": "하일", "style": "LD", "expression": "웃는다",
+                          "moment": "직전", "framing": "전신"}),
+          "하일 (LD): 웃는다. 동작의 직전을 그린다. 화면에는 전신까지 나온다.")
     # 조사를 하나로 박으면 "직후을" 이 프롬프트로 나간다
     check("받침 없는 순간은 를", IP._eul("직후"), "를")
     check("받침 있는 순간은 을", IP._eul("직전"), "을")
-    ok("직후를", "동작의 직후를 그린다" in
-       IP.person_line("하일 / LD / 웃는다 / 손을 든다 / 직후 / 전신"))
+
+    # framing 은 값 목록이 없는 자유 텍스트다 — "손만까지 나온다" 가 안 나와야 한다
+    def frame(value: str) -> str:
+        return IP.person_line({"name": "하일", "framing": value})
+
+    ok("상반신까지", frame("상반신").endswith("화면에는 상반신까지 나온다."))
+    ok("무릎 위까지", frame("무릎 위").endswith("화면에는 무릎 위까지 나온다."))
+    ok("손만 나온다", frame("손만").endswith("화면에는 손만 나온다."))
+    ok("일부 나온다", frame("손과 눈 일부").endswith("화면에는 손과 눈 일부 나온다."))
 
     # 대사 종류가 곧 말풍선 모양이다
-    check("말", IP.bubble_line('하일 (말): "안녕"'),
-          ["  - 둥근 타원 / 꼬리는 하일을 향함", '    "안녕"'])
-    check("생각", IP.bubble_line('하일 (생각): "어……?"')[0],
-          "  - 구름 모양 / 꼬리는 하일을 향함")
-    check("외침", IP.bubble_line('하일 (외침): "야!"')[0],
-          "  - 뾰족한 형태 / 꼬리는 하일을 향함")
-    ok("화면밖은 꼬리를 안 단다",
-       "꼬리는" not in IP.bubble_line('??? (화면밖): "들어와."')[0])
-    ok("나레이션은 네모 상자",
-       "네모 상자" in IP.bubble_line('(나레이션): "921년, 제국"')[0])
-    ok("나레이션에 꼬리가 없다",
-       "꼬리는" not in IP.bubble_line('(나레이션): "921년, 제국"')[0])
-    ok("효과음은 말풍선이 없다",
-       "말풍선 없이" in IP.bubble_line('(효과음): "쾅"')[0])
-    ok("전화는 각진 형태", "각진" in IP.bubble_line('엄마 (전화): "어디야"')[0])
+    check("말",
+          IP.bubble_line({"speaker": "하일", "type": "말", "text": "안녕",
+                          "bubble": {"shape": "둥근 타원", "tail": "하일",
+                                     "position": "왼쪽 위"}}),
+          ["  - 둥근 타원 / 꼬리는 하일을 향함 / 위치 왼쪽 위", '    "안녕"'])
+    ok("화면밖은 꼬리가 컷 바깥으로",
+       "꼬리는 컷 바깥으로" in IP.bubble_line(
+           {"speaker": "???", "type": "화면밖", "text": "들어와.",
+            "bubble": {"shape": "둥근 타원", "tail": "컷 바깥"}})[0])
+    ok("꼬리 없음도 그대로",
+       "꼬리 없음" in IP.bubble_line(
+           {"type": "화면밖", "text": "x", "bubble": {"tail": "없음"}})[0])
+    ok("나레이션은 꼬리를 안 단다",
+       "꼬리" not in IP.bubble_line(
+           {"type": "나레이션", "text": "921년",
+            "bubble": {"shape": "네모 상자"}})[0])
+    ok("shape 가 비면 종류로 채운다",
+       "구름" in IP.bubble_line({"speaker": "하일", "type": "생각", "text": "어?"})[0])
     check("글은 말풍선이 아니라 적힌 것을 그린다",
-          IP.bubble_line('(글 / 노트북 화면): "파일은 삭제해 주세요."')[0],
-          "  - 말풍선 아님 — 노트북 화면에 적힌 글로 그린다")
-    check("형식이 안 맞으면 원문을 남긴다 (글자는 못 지운다)",
-          IP.bubble_line("하일: 안녕"), ["  - 하일: 안녕"])
+          IP.bubble_line({"type": "글", "text": "파일은 삭제해 주세요.",
+                          "bubble": {"position": "노트북 화면 안"}})[0],
+          "  - 말풍선 아님 — 노트북 화면 안에 적힌 글로 그린다")
     check("대사 글자는 한 글자도 안 바뀐다",
-          IP.bubble_line('하일 (말): "……그리고, 어둠을—"')[1],
+          IP.bubble_line({"speaker": "하일", "type": "말",
+                          "text": "……그리고, 어둠을—"})[1],
           '    "……그리고, 어둠을—"')
+
+    check("효과음은 글자와 위치만",
+          IP.sfx_line({"text": "웅성…", "source": "학생들", "position": "오른쪽 아래",
+                       "reason": "술렁임"}),
+          '  - "웅성…" / 위치 오른쪽 아래')
 
 
 def test_image_prompt_page() -> None:
-    scenes = R.parse_board(HAIL_MD)
-    flat = P.flatten_cuts(scenes)
-    pages = P.group_pages(flat)
-    check("normal + tiny 는 한 페이지", len(pages), 1)
+    board = R.parse_board(BOARD_JSON)
+    pages = P.group_pages(P.flatten_cuts(board["scenes"]))
+    text = IP.build_page_prompt(pages[0], sheets=["하일 — 마른 체격의 소년."],
+                                cast=board["cast"])
 
-    text = IP.build_page_prompt(pages[0], sheets=["하일 — 마른 체격의 소년."])
+    ok("고정 블록이 앞에", text.startswith("세로로 읽는 웹툰 페이지를 그린다."))
+    ok("주인공 시트", "하일 — 마른 체격의 소년." in text)
+    ok("이 페이지에 나오는 조연만", "담당 교수 — 40대 초반" in text)
+    ok("안 나오는 조연은 안 적는다", "관리인" not in text)
+    ok("장소가 앞에 한 번", "## 장소\n마법학교 중앙 대강당의 입학식장" in text)
+    ok("시간대도", "시간대: 실내조명" in text)
+    ok("컷 1 은 높이 비율 5", "### 컷 1 (높이 비율 5)" in text)
+    ok("카메라", "카메라: 광각, 정면 앵글, 인물은 앞모습" in text)
+    ok("배경", "배경: 실제공간 — 높은 천장과 늘어선 마법등" in text)
+    ok("인물", "하일 (LD): 화면 왼쪽, 긴장한 표정" in text)
+    ok("좌우가 둘 다", "담당 교수 (LD): 화면 오른쪽" in text)
+    ok("나레이션이 먼저 오지 않는다 (order 대로)",
+       text.index('"하일."') < text.index('"입학식 사흘째."'))
+    ok("효과음 절", "효과음 (말풍선 없이 글자만 그린다):" in text)
+    ok("효과음 글자", '"웅성…" / 위치 오른쪽 아래' in text)
 
-    ok("고정 블록이 앞에 있다", text.startswith("세로로 읽는 웹툰 페이지를 그린다."))
-    ok("캐릭터 시트가 들어간다", "## 캐릭터 시트\n하일 — 마른 체격의 소년." in text)
-    ok("컷 1 은 높이 비율 3", "### 컷 1 (높이 비율 3)" in text)
-    ok("컷 2 는 높이 비율 1", "### 컷 2 (높이 비율 1)" in text)
-    ok("카메라가 펴져 있다", "카메라: 상반신, 정면 앵글, 인물은 앞모습" in text)
-    ok("배경이 그대로", "배경: 효과 — 지팡이 끝에서 불안정하게 흔들리는 마력" in text)
-    ok("인물이 펴져 있다",
-       "- 하일 (LD): 화면 왼쪽, 초조한 표정, 주문을 이어가다 말이 꼬임. "
-       "동작의 도중을 그린다. 화면에는 상반신까지 나온다." in text)
-    ok("두 인물의 좌우가 같이 나간다", "교수 (LD): 화면 오른쪽" in text)
-    ok("말풍선 두 개가 순서대로", text.index('"……그리고, 어둠을—"') <
-       text.index('"아니, 빛을……?"'))
-    ok("생각은 구름", "구름 모양 / 꼬리는 하일을 향함" in text)
-    ok("그리지 않을 것이 실린다", "그리지 않을 것: 교수의 얼굴" in text)
+    # 그림에 안 그려지는 칸은 프롬프트에 없어야 한다
+    ok("note 가 안 나간다", "시선이 하일에게 모이는" not in text)
+    ok("sfx reason 이 안 나간다", "술렁임" not in text)
+    ok("summary 가 안 나간다", "하일은 입학식에서" not in text)
 
-    # 장소는 페이지 앞에 한 번. 페이지마다 따로 호출하므로 이게 없으면
-    # 같은 홀이 페이지마다 다른 홀이 된다
-    ok("장소가 앞에 한 번", "## 장소\n마법학교 입학식 홀, 단상 앞" in text)
-    ok("시간대도 같이", "시간대: 실내조명" in text)
-    check("장소를 컷마다 되풀이하지 않는다", text.count("마법학교 입학식 홀"), 1)
+    page2 = pages[1]
+    text2 = IP.build_page_prompt(page2, cast=board["cast"])
+    ok("장소가 갈리면 앞에 안 적는다", "## 장소" not in text2)
+    ok("대신 컷마다", "장소: 마법학교 중앙 대강당의 입학식장" in text2
+       and "장소: 기숙사 복도" in text2)
+    ok("forbid", "그리지 않을 것: 교수의 얼굴" in text2)
+    ok("글 대사", "말풍선 아님 — 노트북 화면 안에 적힌 글로 그린다" in text2)
 
-    # 컷 번호는 페이지 안에서 1부터 — 장면이 달라도 한 페이지에 컷 1 이 둘일 수 없다
-    two = R.parse_board(BOARD_MD)
-    page = P.group_pages(P.flatten_cuts(two))[1]     # 장면1 컷2 + 장면2 컷1
-    numbered = IP.build_page_prompt(page)
-    ok("페이지 안에서 1 부터 센다", "### 컷 1 (" in numbered and "### 컷 2 (" in numbered)
-    check("컷 번호가 겹치지 않는다", numbered.count("### 컷 1 ("), 1)
+    # 컷 번호는 페이지 안에서 1부터
+    check("컷 번호가 안 겹친다", text2.count("### 컷 1 ("), 1)
+    ok("1, 2 로 센다", "### 컷 1 (" in text2 and "### 컷 2 (" in text2)
+    prompts = IP.page_prompts(pages, cast=board["cast"], continuous=True)
+    check("페이지 수만큼", len(prompts), 2)
+    ok("이어 세면 두 번째는 컷 2 부터", "### 컷 2 (" in prompts[1])
 
-    ok("이어 세기도 된다",
-       "### 컷 3 (" in IP.build_page_prompt(page, start_number=3))
-    prompts = IP.page_prompts(P.group_pages(P.flatten_cuts(two)), continuous=True)
-    check("페이지 수만큼 프롬프트", len(prompts), 2)
-    ok("두 번째 페이지는 컷 2 부터", "### 컷 2 (" in prompts[1])
-
-    # full 은 숫자가 아니라 페이지 전체
-    full = IP.build_page_prompt([{"size": "full", "카메라": "광각 / 부감 / 앞모습"}])
+    full = IP.build_page_prompt([{"size": "full"}])
     ok("full 은 페이지 전체", "### 컷 1 (페이지 전체)" in full)
-    ok("large 는 비율 5",
-       "(높이 비율 5)" in IP.build_page_prompt([{"size": "large"}]))
-
-    ok("지시가 실린다",
-       "지시: 말풍선 꼬리를 컷 바깥으로" in IP.build_page_prompt(
-           [{"size": "normal", "지시": "말풍선 꼬리를 컷 바깥으로"}]))
-
-    # 시트가 없으면 그 절을 안 만든다
-    ok("시트가 없으면 절도 없다", "## 캐릭터 시트" not in IP.build_page_prompt(page))
-
-    # 한 페이지에 장소가 둘이면 앞에 뭉뚱그리지 않고 컷마다 적는다
-    mixed = IP.build_page_prompt([
-        {"size": "normal", "장소": "입학식 홀", "시간대": "실내조명"},
-        {"size": "normal", "장소": "복도", "시간대": "밤"},
-    ])
-    ok("장소가 갈리면 앞에 안 적는다", "## 장소" not in mixed)
-    ok("대신 컷마다 적는다", "장소: 입학식 홀" in mixed and "장소: 복도" in mixed)
-    ok("시간대도 컷마다", "시간대: 밤" in mixed)
-    ok("장소가 아예 없으면 그 줄도 없다",
-       "장소:" not in IP.build_page_prompt([{"size": "normal"}]))
+    ok("시트가 없으면 절도 없다", "## 캐릭터 시트" not in full)
 
 
 def test_sheet_line() -> None:
     spec = S.parse_spec(GOOD_SPEC)
     line = IP.sheet_line(spec)
     ok("이름으로 시작", line.startswith("이하은 — "))
-    ok("외형이 들어간다", "shoulder-length black hair" in line)
-    ok("고정 요소가 들어간다", "왼쪽 손목에만 감은 검정 헤어끈 두 겹" in line)
-    ok("소지품이 들어간다", "낡은 캔버스 에코백" in line)
+    ok("외형", "shoulder-length black hair" in line)
+    ok("고정 요소", "왼쪽 손목에만 감은 검정 헤어끈 두 겹" in line)
+    ok("소지품", "낡은 캔버스 에코백" in line)
     spec["props"] = []
     ok("소지품이 없으면 그 줄도 없다", "소지품:" not in IP.sheet_line(spec))
 
 
 def test_ratio_break() -> None:
-    # 기본은 꺼져 있다 — 개수로만 끊는다
     check("기본은 비율로 안 끊는다",
           shape(P.group_pages(cuts(*["normal"] * 5))), [[1, 2, 3, 4, 5]])
-    # normal 은 3 이므로 합계 9 면 3개까지
     check("max_ratio=9 면 normal 3개",
           shape(P.group_pages(cuts(*["normal"] * 7), max_ratio=9)),
           [[1, 2, 3], [4, 5, 6], [7]])
-    # tiny(1) small(2) normal(3) = 6, 여기에 normal 을 더하면 9 > 8 이라 끊는다
     check("얹기 전에 본다 — 상한을 넘긴 페이지가 안 나간다",
           shape(P.group_pages(cuts("tiny", "small", "normal", "normal"), max_ratio=8)),
           [[1, 2, 3], [4]])
@@ -600,10 +660,10 @@ def test_ratio_break() -> None:
 
 
 def main() -> int:
-    for fn in (test_directions, test_board, test_spec, test_sheet_prompt, test_input,
-               test_pages, test_scene_head, test_flatten, test_image_prompt_pieces,
-               test_image_prompt_page,
-               test_sheet_line, test_ratio_break):
+    for fn in (test_directions, test_board, test_gate_board, test_spec,
+               test_sheet_prompt, test_input, test_pages, test_scene_head,
+               test_image_prompt_pieces, test_image_prompt_page, test_sheet_line,
+               test_ratio_break):
         fn()
     if FAILED:
         print("FAILED:")
