@@ -15,6 +15,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
+import pages as P        # noqa: E402
 import run as R          # noqa: E402
 import sheet as S        # noqa: E402
 
@@ -288,8 +289,106 @@ def test_input() -> None:
     ok("필드가 줄로 들어간다", "- 성격: 겁이 많다" in block)
 
 
+# --------------------------------------------------------------- 페이지 묶기
+
+def cuts(*sizes) -> list:
+    """크기 목록 -> 컷 배열. 순서를 확인할 수 있게 번호를 붙인다."""
+    return [{"n": i, "size": s} for i, s in enumerate(sizes, 1)]
+
+
+def shape(pages) -> list:
+    """페이지마다 컷 번호. 순서가 지켜졌는지 한눈에 보려고."""
+    return [[c["n"] for c in page] for page in pages]
+
+
+def test_pages() -> None:
+    check("빈 입력", P.group_pages([]), [])
+    check("None 도 빈 페이지", P.group_pages(None), [])
+
+    check("가벼운 컷은 모인다",
+          shape(P.group_pages(cuts("normal", "small", "tiny"))), [[1, 2, 3]])
+    check("large 는 혼자",
+          shape(P.group_pages(cuts("large"))), [[1]])
+    check("full 도 혼자",
+          shape(P.group_pages(cuts("full"))), [[1]])
+
+    # 모으는 도중 large 를 만나면 거기서 끊는다
+    check("도중에 large 를 만나면 끊는다",
+          shape(P.group_pages(cuts("normal", "small", "large", "tiny", "normal"))),
+          [[1, 2], [3], [4, 5]])
+    check("large 가 연달아 오면 각자 한 장",
+          shape(P.group_pages(cuts("large", "full", "large"))), [[1], [2], [3]])
+    check("large 로 시작해도 빈 페이지가 안 생긴다",
+          shape(P.group_pages(cuts("large", "normal"))), [[1], [2]])
+    check("large 로 끝나도 빈 페이지가 안 생긴다",
+          shape(P.group_pages(cuts("normal", "large"))), [[1], [2]])
+
+    # 최대 개수
+    check("기본 5개에서 넘어간다",
+          shape(P.group_pages(cuts(*["normal"] * 7))), [[1, 2, 3, 4, 5], [6, 7]])
+    check("정확히 5개면 한 장",
+          shape(P.group_pages(cuts(*["normal"] * 5))), [[1, 2, 3, 4, 5]])
+    check("max_per_page=2",
+          shape(P.group_pages(cuts(*["small"] * 5), max_per_page=2)),
+          [[1, 2], [3, 4], [5]])
+    check("max_per_page=1 이면 전부 한 장씩",
+          shape(P.group_pages(cuts("tiny", "small", "normal"), max_per_page=1)),
+          [[1], [2], [3]])
+    check("max_per_page 는 large 를 안 건드린다",
+          shape(P.group_pages(cuts("normal", "large", "normal"), max_per_page=1)),
+          [[1], [2], [3]])
+    try:
+        P.group_pages(cuts("normal"), max_per_page=0)
+    except ValueError:
+        pass
+    else:
+        FAILED.append("max_per_page=0 인데 안 막았다")
+
+    # 순서는 어떤 경우에도 안 바뀐다 — 페이지를 이어 붙이면 원래 배열이다
+    mixed = cuts("normal", "large", "tiny", "small", "full", "normal", "normal",
+                 "normal", "normal", "small", "large")
+    for limit in (1, 2, 3, 5, 99):
+        flat = [c for page in P.group_pages(mixed, max_per_page=limit) for c in page]
+        check(f"순서가 그대로 (max={limit})", flat, mixed)
+
+    # 크기 읽기
+    check("한글 키도 읽는다",
+          shape(P.group_pages([{"n": 1, "크기": "large"}, {"n": 2, "크기": "normal"}])),
+          [[1], [2]])
+    check("대문자도 읽는다", P.cut_size({"size": "FULL"}), "full")
+    check("앞뒤 공백도 읽는다", P.cut_size({"size": "  large  "}), "large")
+    check("모르는 값은 normal", P.cut_size({"size": "거대"}), "normal")
+    check("빈 값은 normal", P.cut_size({"size": ""}), "normal")
+    check("크기 칸이 없으면 normal", P.cut_size({"n": 1}), "normal")
+    check("dict 가 아니어도 안 죽는다", P.cut_size("large"), "normal")
+    check("모르는 크기는 모이는 쪽으로",
+          shape(P.group_pages([{"n": 1, "size": "거대"}, {"n": 2, "size": "normal"}])),
+          [[1, 2]])
+
+    # 원본을 건드리지 않는다
+    original = cuts("normal", "large")
+    P.group_pages(original)
+    check("입력 배열이 그대로", original, cuts("normal", "large"))
+
+
+def test_flatten() -> None:
+    scenes = R.parse_board(BOARD_MD)
+    flat = P.flatten_cuts(scenes)
+    check("컷 3개로 펴진다", len(flat), 3)
+    check("어느 장면의 몇 컷인지 남는다",
+          [(c["scene"], c["cut"]) for c in flat], [(1, 1), (1, 2), (2, 1)])
+    check("크기는 콘티에서 온 그대로",
+          [P.cut_size(c) for c in flat], ["large", "normal", "tiny"])
+    # large 한 장 + (normal, tiny) 한 장
+    check("펴서 바로 묶인다",
+          [[(c["scene"], c["cut"]) for c in page] for page in P.group_pages(flat)],
+          [[(1, 1)], [(1, 2), (2, 1)]])
+    check("장면이 없으면 빈 배열", P.flatten_cuts([]), [])
+
+
 def main() -> int:
-    for fn in (test_directions, test_board, test_spec, test_sheet_prompt, test_input):
+    for fn in (test_directions, test_board, test_spec, test_sheet_prompt, test_input,
+               test_pages, test_flatten):
         fn()
     if FAILED:
         print("FAILED:")

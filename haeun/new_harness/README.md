@@ -125,6 +125,27 @@ SHEET_IMAGE_PROVIDER=openai
 `sheet_spec.json` 과 `sheet.png` 는 이미 있으면 다시 안 만든다. 다시 뽑으려면
 지운다.
 
+## 컷을 페이지로 묶기
+
+그림은 컷 단위로 부르지 않는다. `pages.py` 가 콘티의 컷 배열을 이미지 생성
+단위로 묶는다.
+
+```python
+import pages
+pages.group_pages(cuts, max_per_page=5)      # -> [[컷, 컷], [컷], ...]
+pages.flatten_cuts(scenes)                   # cuts.json (장면 -> 컷) 을 편다
+```
+
+- `large` · `full` 은 혼자 한 페이지를 쓴다
+- `tiny` · `small` · `normal` 은 순서대로 모으고, 도중에 `large`/`full` 을
+  만나면 거기서 끊는다
+- 한 페이지의 최대 컷 수는 `max_per_page` (기본 5)
+- **컷 순서는 안 바뀐다.** 페이지를 이어 붙이면 원래 컷 배열이 그대로 나온다
+
+크기 칸은 `size` 와 `크기` 를 둘 다 읽는다(콘티 파서가 한글 키로 저장한다).
+모르는 값은 `normal` 로 본다 — 모델이 낸 것을 읽는 자리라 오타 하나로 멈추지
+않고, 혼자 한 장을 차지하는 쪽보다 되돌리기 쉬운 실수다.
+
 ## 검사
 
 ```
