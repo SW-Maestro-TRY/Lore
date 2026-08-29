@@ -24,6 +24,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -150,10 +151,12 @@ def compose(prompt_name: str, block: str) -> str:
 
 # --------------------------------------------------------------------- 파싱
 #
-# 두 프롬프트는 사람이 읽는 마크다운을 낸다. JSON 으로 바꿔 달라고 덧붙이지
-# 않는 이유: 프롬프트마다 형식과 최종 확인 목록이 이미 마크다운으로 못 박혀
-# 있어서, 뒤에서 형식을 뒤집으면 그 목록 전체가 프롬프트와 어긋난다.
-# 그래서 원문(.md)을 그대로 남기고, 골라야 하는 만큼만 여기서 잘라 읽는다.
+# 이야기 후보는 마크다운, 콘티는 JSON 이다. 형식이 다른 것은 읽는 사람이
+# 다르기 때문이다 — 후보는 사람이 읽고 하나를 고르는 것이라 형식이 느슨해도
+# 되고, 콘티는 컷마다 칸이 정해져 있어서 JSON 이 맞다.
+#
+# 후보 쪽은 원문(story.md)을 그대로 남기고 골라야 하는 만큼만 잘라 읽는다.
+# 잘라 읽기가 실패해도 원문은 남는다.
 
 # 줄 안의 공백만 허용한다 — \s 를 쓰면 줄바꿈까지 먹어서, 값이 빈 줄
 # ("인물:" 처럼 뒤가 비는 줄)에서 **다음 줄을 값으로 집어간다.**
@@ -216,6 +219,16 @@ def _text(value) -> str:
 
 def _dicts(value) -> list[dict]:
     return [v for v in (value or []) if isinstance(v, dict)]
+
+
+def _wide(text: str) -> int:
+    """터미널에서 차지하는 칸 수. 한글은 두 칸인데 len() 은 하나로 센다."""
+    return sum(2 if unicodedata.east_asian_width(c) in ("W", "F") else 1
+               for c in str(text))
+
+
+def _pad(text: str, width: int) -> str:
+    return str(text) + " " * max(0, width - _wide(text))
 
 
 def parse_board(text: str) -> dict:
@@ -528,12 +541,22 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     if args.plan:
-        for row in llm.plan():
-            print(f"  {row['stage']:<6} {row['provider']}:{row['model']}")
-        image_provider = (llm.env("SHEET_IMAGE_PROVIDER")
-                          or llm.env("NH_IMAGE_PROVIDER") or "gemini")
-        print(f"  {'SHEET 이미지':<6} {image_provider}:"
-              f"{llm.env('SHEET_IMAGE_MODEL') or '(provider 기본값)'}")
+        rows = llm.plan()
+        cols = [
+            ("단계", lambda r: r["stage"]),
+            ("", lambda r: r["label"]),
+            ("모델", lambda r: f"{r['provider']}:{r['model']}"),
+            ("어디서", lambda r: r["from"]),
+        ]
+        table = [[head for head, _ in cols]] + [[get(r) for _, get in cols]
+                                                for r in rows]
+        widths = [max(_wide(row[i]) for row in table) for i in range(len(cols))]
+        for i, row in enumerate(table):
+            print("  " + "  ".join(_pad(cell, w) for cell, w in zip(row, widths)).rstrip())
+            if i == 0:
+                print("  " + "  ".join("─" * w for w in widths))
+        print("\n  바꾸려면 .env 에 <단계>_PROVIDER / <단계>_MODEL 을 적으세요 "
+              "(.env.example 참고).")
         return 0
 
     if args.run_id:

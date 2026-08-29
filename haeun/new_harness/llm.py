@@ -60,7 +60,13 @@ import story  # noqa: E402  (sys.path 를 세운 뒤에야 import 할 수 있다
 
 
 PROVIDERS = tuple(story.PROVIDERS)          # gemini / openai / anthropic
-STAGES = ("STORY", "BOARD", "SHEET")
+IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
+
+# 글을 쓰는 단계 / 그림을 그리는 단계. 이름이 곧 .env 의 앞자리다
+# (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
+TEXT_STAGES = ("STORY", "BOARD", "SHEET")
+IMAGE_STAGES = ("SHEET_IMAGE",)
+STAGES = TEXT_STAGES + IMAGE_STAGES
 
 DEFAULT_MAX_TOKENS = story.env_int("NH_MAX_TOKENS", 16000)
 DEFAULT_TEMPERATURE = story.env_float("NH_TEMPERATURE", 0.9)
@@ -70,23 +76,43 @@ def env(key: str, default=None):
     return story.env(key, default)
 
 
+def _pick(stage: str, suffix: str, fallbacks: tuple) -> tuple[str, str]:
+    """(값, 어디서 왔는지). 어디서 왔는지는 --plan 이 보여 준다.
+
+    ".env 를 고쳤는데 왜 그대로지" 를 혼자 알아내게 두지 않으려는 것이다 —
+    단계별 값이 있으면 전체 기본은 안 쓰이는데, 화면에 이름만 찍히면 어느
+    줄이 이겼는지 알 수 없다.
+    """
+    key = f"{stage.upper()}_{suffix}"
+    value = env(key)
+    if value:
+        return value.strip(), key
+    for other in fallbacks:
+        value = env(other)
+        if value:
+            return value.strip(), other
+    return "", ""
+
+
 def provider_for(stage: str) -> str:
     """이 단계가 쓸 프로바이더. 모르는 이름이면 거기서 멈춘다."""
-    name = (env(f"{stage.upper()}_PROVIDER")
-            or env("NH_PROVIDER")
-            or env("PROVIDER", "gemini")).strip().lower()
-    if name not in PROVIDERS:
+    name, where = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
+    name = (name or "gemini").lower()
+    allowed = IMAGE_PROVIDERS if stage.upper() in IMAGE_STAGES else PROVIDERS
+    if name not in allowed:
         raise SystemExit(
-            f"{stage.upper()}_PROVIDER='{name}' 를 모릅니다. "
-            f"{' / '.join(sorted(PROVIDERS))} 중 하나여야 합니다.")
+            f"{where or stage.upper() + '_PROVIDER'}='{name}' 를 모릅니다. "
+            f"{' / '.join(sorted(allowed))} 중 하나여야 합니다.")
     return name
 
 
 def model_for(stage: str, provider: str) -> str:
-    """이 단계가 쓸 모델 이름."""
-    return (env(f"{stage.upper()}_MODEL")
-            or env("NH_MODEL")
-            or story.default_model_for(provider))
+    """이 단계가 쓸 모델 이름. 비면 provider 의 기본값을 쓴다는 뜻이다."""
+    if stage.upper() in IMAGE_STAGES:
+        model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
+        return model                    # 빈 값이면 story.image_backend_ready 가 정한다
+    model, _ = _pick(stage, "MODEL", ("NH_MODEL",))
+    return model or story.default_model_for(provider)
 
 
 def load_images(paths) -> list:
@@ -134,11 +160,28 @@ class Call:
         return text, meta
 
 
+STAGE_LABEL = {
+    "STORY": "이야기 후보",
+    "BOARD": "콘티",
+    "SHEET": "시트 사양",
+    "SHEET_IMAGE": "시트 그림",
+}
+
+
 def plan() -> list[dict]:
     """지금 .env 로 각 단계가 어느 모델을 쓰는지. 실행 전에 보여 준다."""
     out = []
     for stage in STAGES:
         provider = provider_for(stage)
-        out.append({"stage": stage, "provider": provider,
-                    "model": model_for(stage, provider)})
+        _, pfrom = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
+        _, mfrom = _pick(stage, "MODEL",
+                         ("NH_IMAGE_MODEL",) if stage in IMAGE_STAGES else ("NH_MODEL",))
+        out.append({
+            "stage": stage,
+            "label": STAGE_LABEL.get(stage, stage),
+            "image": stage in IMAGE_STAGES,
+            "provider": provider,
+            "model": model_for(stage, provider) or "(provider 기본값)",
+            "from": mfrom or pfrom or "기본값",
+        })
     return out

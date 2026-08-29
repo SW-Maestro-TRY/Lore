@@ -85,18 +85,43 @@ python3 run.py --name ... --photo a.png --all --pick 2   # 한 번에
 <단계>_PROVIDER / <단계>_MODEL   >   NH_PROVIDER / NH_MODEL   >   PROVIDER
 ```
 
-단계 이름은 `STORY`(이야기 후보) · `BOARD`(콘티) · `SHEET`(시트 사양) 이고,
-시트 이미지는 `SHEET_IMAGE_PROVIDER` / `SHEET_IMAGE_MODEL` 로 따로 고른다.
+| 단계 | 하는 일 | 프로바이더 |
+| --- | --- | --- |
+| `STORY` | 이야기 후보 4개 | gemini · openai · anthropic |
+| `BOARD` | 콘티 | gemini · openai · anthropic |
+| `SHEET` | 시트 사양 | gemini · openai · anthropic |
+| `SHEET_IMAGE` | 시트 그림 | gemini · openai |
 
 ```
 NH_PROVIDER=gemini
+
 STORY_PROVIDER=openai
 STORY_MODEL=gpt-5.1
+
+SHEET_PROVIDER=anthropic
+SHEET_MODEL=claude-opus-5
+
 SHEET_IMAGE_PROVIDER=openai
 ```
 
-프로바이더는 `gemini` · `openai` · `anthropic`. 지금 무엇으로 도는지는
-`python3 run.py --plan` 이 보여준다.
+지금 무엇으로 도는지, 그리고 **어느 줄이 이겼는지**는 `--plan` 이 보여준다.
+
+```
+$ python3 run.py --plan
+  단계                      모델                       어디서
+  ───────────  ───────────  ─────────────────────────  ─────────────────
+  STORY        이야기 후보  openai:gpt-5.1             STORY_MODEL
+  BOARD        콘티         gemini:gemini-3.5-flash    NH_PROVIDER
+  SHEET        시트 사양    anthropic:claude-opus-4-6  SHEET_PROVIDER
+  SHEET_IMAGE  시트 그림    openai:gpt-image-2         SHEET_IMAGE_MODEL
+```
+
+"어디서" 를 같이 찍는 이유는 ".env 를 고쳤는데 왜 그대로지" 를 혼자 알아내게
+두지 않으려는 것이다 — 단계별 값이 있으면 전체 기본은 안 쓰이는데, 이름만
+찍히면 어느 줄이 이겼는지 알 수 없다.
+
+그림 단계는 `NH_MODEL` 대신 `NH_IMAGE_MODEL` 을 본다. 글 모델 이름을 그림
+단계가 물려받으면 그대로 죽는다.
 
 **API 키는 여기 안 적어도 된다.** `new_harness/.env` 를 먼저 읽고 그다음
 `story-harness/.env` 를 읽는데 둘 다 "이미 있는 값은 안 덮어쓴다" 라서,

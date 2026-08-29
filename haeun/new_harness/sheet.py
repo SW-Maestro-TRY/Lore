@@ -198,16 +198,11 @@ def paint(prompt: str, out_path: Path, photos=None,
     provider/model 을 안 주면 .env 의 SHEET_IMAGE_PROVIDER / SHEET_IMAGE_MODEL 을
     본다 — 다른 단계와 같은 규칙이다 (llm.py 참고).
     """
-    provider = (provider or llm.env("SHEET_IMAGE_PROVIDER")
-                or llm.env("NH_IMAGE_PROVIDER") or "gemini").strip().lower()
-    if provider not in story.IMAGE_PROVIDERS:
-        raise SystemExit(f"SHEET_IMAGE_PROVIDER='{provider}' 는 "
-                         f"{' / '.join(story.IMAGE_PROVIDERS)} 중 하나여야 합니다.")
-
+    provider = (provider or llm.provider_for("SHEET_IMAGE")).strip().lower()
     ok, default_model, why = story.image_backend_ready(provider)
     if not ok:
         raise SystemExit(why)
-    model = model or llm.env("SHEET_IMAGE_MODEL") or default_model
+    model = model or llm.model_for("SHEET_IMAGE", provider) or default_model
     quality = (quality or llm.env("OPENAI_IMAGE_QUALITY") or "high").strip().lower()
 
     painter, label = story.make_sheet_painter(provider, model, quality, list(photos or []))
