@@ -295,6 +295,7 @@ def parse_detail(text: str) -> dict:
         scenes.append({
             "id": _num(s.get("id"), i),
             "source": _text(s.get("source")),
+            "function": _text(s.get("function")),
             "detail": _text(s.get("detail")),
             # learns 는 {what, how} 다. how 가 곧 "그걸 어떻게 알았나" 라,
             # 문자열로만 오면 근거가 없는 것으로 본다.
@@ -302,7 +303,12 @@ def parse_detail(text: str) -> dict:
                        if isinstance(x, dict) else {"what": _text(x), "how": ""}
                        for x in (s.get("learns") or [])
                        if _text(x.get("what") if isinstance(x, dict) else x)],
-            "guesses": [_text(x) for x in (s.get("guesses") or []) if _text(x)],
+            # guesses 도 근거가 붙는다. 근거를 못 대면 그 짐작을 버려야지
+            # 지어내면 안 되므로, from 이 비어 있는지 게이트가 본다.
+            "guesses": [{"what": _text(x.get("what")), "from": _text(x.get("from"))}
+                        if isinstance(x, dict) else {"what": _text(x), "from": ""}
+                        for x in (s.get("guesses") or [])
+                        if _text(x.get("what") if isinstance(x, dict) else x)],
             "leads_to": _text(s.get("leads_to")),
         })
     return {"scenes": scenes,
@@ -342,6 +348,10 @@ def gate_detail(detail: dict, direction: dict) -> list[str]:
             if not one["how"]:
                 bad.append(f"{where}: \"{one['what'][:30]}\" 를 어떻게 알았는지가 "
                            "없습니다. 근거가 없으면 learns 가 아니라 guesses 입니다.")
+        for one in s["guesses"]:
+            if not one["from"]:
+                bad.append(f"{where}: \"{one['what'][:30]}\" 를 무엇을 보고 짐작했는지가 "
+                           "없습니다. 근거를 못 대면 그 짐작을 빼야 합니다.")
 
     if not any(s["learns"] for s in scenes):
         bad.append("인물이 새로 알게 되는 것이 한 장면에도 없습니다. "
@@ -624,7 +634,8 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
                     how = f" ({x['how']})" if x.get("how") else ""
                     lines.append(f"- 인물이 알게 되는 것: {x['what']}{how}")
             for g in s.get("guesses") or []:
-                lines.append(f"- 인물의 추측 (아직 사실이 아니다): {g}")
+                src = f" ({g['from']})" if g.get("from") else ""
+                lines.append(f"- 인물의 추측 (아직 사실이 아니다): {g['what']}{src}")
             if s["leads_to"]:
                 lines.append(f"- 그래서 다음: {s['leads_to']}")
             lines.append("")
