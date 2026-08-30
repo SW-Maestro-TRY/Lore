@@ -4672,6 +4672,18 @@ def generate_sheet_image_gemini(client, model: str, prompt: str,
         kwargs.pop("config", None)
         resp = client.models.generate_content(**kwargs)
 
+    # 순수 추가 — 기존에는 usage_metadata 를 아예 안 읽었다. 비용 계산용으로만
+    # 옆에 더하고, 못 읽으면 None 으로 둔다(기존 동작에 영향 없음).
+    usage_dict = None
+    usage_meta = getattr(resp, "usage_metadata", None)
+    if usage_meta is not None:
+        for kwargs in ({"by_alias": True}, {}):
+            try:
+                usage_dict = usage_meta.model_dump(**kwargs)
+                break
+            except Exception:
+                continue
+
     texts: list[str] = []
     finish = None
     for cand in getattr(resp, "candidates", None) or []:
@@ -4683,6 +4695,7 @@ def generate_sheet_image_gemini(client, model: str, prompt: str,
                 return blob.data, {
                     "finish_reason": finish,
                     "text": " ".join(texts)[:500] or None,
+                    "usage_dict": usage_dict,
                 }
             text = getattr(part, "text", None)
             if text:
@@ -4759,9 +4772,20 @@ def generate_sheet_image_openai(client, model: str, prompt: str, size: str,
     if item is None:
         raw = str(resp)[:500]
         raise RuntimeError(f"응답에 이미지가 없습니다: {raw}")
+    usage_obj = getattr(resp, "usage", None)
+    usage_dict = None
+    if usage_obj is not None:
+        try:
+            usage_dict = usage_obj.model_dump()
+        except Exception:
+            usage_dict = None
     meta = {
         "revised_prompt": getattr(item, "revised_prompt", None),
-        "usage": getattr(resp, "usage", None) and str(getattr(resp, "usage")),
+        "usage": usage_obj and str(usage_obj),
+        # 순수 추가 필드. 기존 "usage"(문자열)는 그대로 두고, 비용 계산에
+        # 쓸 구조화된 값만 옆에 더한다 — 예전 run 의 meta.json 을 다시 읽는
+        # 코드가 있어도 깨지지 않는다.
+        "usage_dict": usage_dict,
     }
     b64 = getattr(item, "b64_json", None)
     if b64:

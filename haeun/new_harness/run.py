@@ -1001,7 +1001,7 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
     # 사진을 첨부해 읽는다) 여기서 사진을 또 붙일 이유가 없다.
     log("[시트] 그리는 중… (사진 없이 사양만)")
     meta = sheetmod.paint(image_prompt, out)
-    record(run_dir, dict(meta, cost=None))
+    record(run_dir, meta)
     log(f"  -> {out}")
 
 
@@ -1011,7 +1011,7 @@ def stage_pages(run_dir: Path, dry_run: bool, only=None,
     made = pageart.draw(run_dir, dry_run=dry_run, only=only,
                         allow_no_sheet=allow_no_sheet)
     for meta in made:
-        record(run_dir, dict(meta, cost=None))
+        record(run_dir, meta)
     if made:
         log(f"[페이지] {len(made)}장 그렸습니다 -> {run_dir / pageart.PAGE_DIR}")
 

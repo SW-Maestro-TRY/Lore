@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import cost
 import llm
 from llm import story
 
@@ -102,6 +103,8 @@ def paint(stage: str, prompt: str, out_path: Path, refs=None,
     data, meta = painter(prompt, kind)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(data)
+    cost_info = cost.cost_fields(provider, model, quality, (meta or {}).get("usage_dict"))
     return {"stage": stage, "provider": provider, "model": model, "backend": label,
             "quality": quality, "bytes": len(data),
-            "refs": [r.name for r in refs], "meta": meta or {}}
+            "refs": [r.name for r in refs], "meta": meta or {}, "cost": cost_info,
+            "output_path": str(out_path)}
