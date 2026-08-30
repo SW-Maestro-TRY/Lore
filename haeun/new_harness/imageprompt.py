@@ -143,14 +143,19 @@ def cut_size(cut) -> str:
     return pages.cut_size(cut)
 
 
-def cut_block(cut, number: int, with_place: bool = False) -> str:
+def cut_block(cut, number: int, with_place: bool = False, linked: bool = False) -> str:
     """컷 하나 -> 프롬프트 조각.
 
     with_place 면 장소·시간대를 이 컷에 붙인다. 페이지 전체가 한 장소일 때는
     앞에서 한 번만 적으므로(place_block) 여기서는 끈다.
+
+    linked 면 이 컷이 앞 컷과 배경이 그대로 이어진다는 문구를 붙인다
+    (pages.linked 로 판정한 값을 그대로 받는다 — 여기서 다시 안 잰다).
     """
+    import pages
     cut = cut if isinstance(cut, dict) else {}
-    ratio = HEIGHT_RATIO.get(cut_size(cut))
+    size = cut_size(cut)
+    ratio = HEIGHT_RATIO.get(size)
     lines = [f"### 컷 {number} (높이 비율 {ratio})" if ratio
              else f"### 컷 {number} (페이지 전체)"]
 
@@ -167,6 +172,13 @@ def cut_block(cut, number: int, with_place: bool = False) -> str:
     background = background_line(cut.get("background"))
     if background:
         lines.append(f"배경: {background}")
+    if linked:
+        lines.append("이 배경은 앞 컷에서 그대로 이어진다 — 새로 그리지 않고 "
+                     "카메라만 움직인 것처럼 그린다.")
+
+    if pages.cut_weight(cut) == "light":
+        lines.append("무게: 배경 없이 인물만 그린다 — 페이지 안에서 이 컷은 "
+                     "폭을 좁게 잡는다.")
 
     people = [p for p in (cut.get("characters") or []) if isinstance(p, dict)]
     if people:
@@ -327,6 +339,10 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
     안에서 겹치지 않는 것이 전부고, 콘티의 원래 번호를 그대로 쓰면 장면이
     다른 컷이 한 페이지에 모였을 때 "컷 1" 이 두 개가 된다. 화 전체로 이어
     세고 싶으면 start_number 를 넘긴다.
+
+    페이지 안에서 바로 앞 컷과 배경이 이어지는 컷(pages.linked)에는 그
+    문구를 붙인다 — 페이지 경계를 넘는 이어짐은 안 본다(다른 호출이라
+    앞 페이지가 뭘 그렸는지 이 프롬프트만으로는 모른다).
     """
     blocks = [load_fixed_block(provider, style)]
     if page_has_sd(page):
@@ -341,8 +357,11 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
     if place:
         blocks.append(place)
 
+    import pages
     for i, cut in enumerate(page or []):
-        blocks.append(cut_block(cut, start_number + i, with_place=not place))
+        prev = page[i - 1] if i > 0 else None
+        blocks.append(cut_block(cut, start_number + i, with_place=not place,
+                                linked=pages.linked(prev, cut)))
     return "\n\n".join(blocks) + "\n"
 
 

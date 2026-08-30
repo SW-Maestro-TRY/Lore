@@ -280,6 +280,9 @@ def parse_board(text: str) -> dict:
             "summary": _text(scene.get("summary")),
             "location": _text(scene.get("location")),
             "time": _text(scene.get("time")),
+            # 컷을 쓰기 전에 모델이 스스로 적어 두는 샷 계획. 없어도 된다 —
+            # 옛 응답이나 이 필드를 안 쓰는 프롬프트도 그대로 읽힌다.
+            "camera_plan": _text(scene.get("camera_plan")),
             "cuts": cuts,
         })
     return {"cast": cast, "scenes": scenes}
@@ -444,11 +447,17 @@ def review_counts(review: dict) -> dict:
 
 
 def gate_board(board: dict) -> list[str]:
-    """그림으로 넘기기 전에 비면 안 되는 칸만 본다.
+    """그림으로 넘기기 전에 비면 안 되는 칸만 본다 — **무결성만**.
 
     콘티 프롬프트의 "내보내기 전에 확인" 중 **코드가 판정할 수 있는 것**만
     옮겼다. 좌우가 장면 안에서 유지됐는지 같은 것은 여기서 본다 — 사람이
     페이지를 다 그린 뒤에 발견하면 다시 그리는 값이 비싸다.
+
+    여기서 보는 것은 전부 "칸이 비었다 · 값이 목록에 없다 · 장면 안에서
+    모순된다" 같은 **구조** 문제다. "재미있게 읽히는가" 처럼 판단이 섞이는
+    것은 `directing_warnings` 로 뺐다 — 구조 문제는 고치면 그림이 맞게
+    나오지만, 연출 판단은 사람이 보고 그대로 둘 수도 있는 것이라 한 목록에
+    섞으면 어느 쪽인지 못 가른다.
     """
     bad = []
     scenes = board.get("scenes") or []
@@ -496,7 +505,7 @@ def gate_board(board: dict) -> list[str]:
             for one in cut["sfx"]:
                 if not _text(one.get("text")):
                     bad.append(f"{spot}: 효과음에 text 가 비어 있습니다.")
-    return bad + gate_readable(board)
+    return bad
 
 
 # 화 하나가 읽히는지 보는 눈금. 전부 **셀 수 있는 것**만 본다.
@@ -549,6 +558,79 @@ def gate_readable(board: dict) -> list[str]:
         bad.append(f"장면 {len(scenes)}개 중 {len(solo)}개가 1컷입니다 "
                    f"(장면 {solo}). '인물이 한다 → 상황이 바뀐다 → 알아챈다' "
                    "가 한 컷에 안 들어갑니다.")
+    return bad
+
+
+# 카메라가 단조로워지는 눈금. 이 절도 gate_readable 처럼 **셀 수 있는 것**만 본다.
+CLOSEUP_SHOTS = ("클로즈업", "극클로즈업")
+FRONT_ANGLE = "정면"
+CONSEC_SHOT_MAX = 3       # 같은 shot 이 이 개수를 넘겨 연달아 나오면 잡는다
+CLOSEUP_MAX_SHARE = 0.5   # 클로즈업 계열이 전체 컷의 이 비율을 넘으면 단조롭다
+FRONT_ANGLE_MAX_SHARE = 0.8
+SHOT_VARIETY_MIN_CUTS = 6  # 컷이 이보다 적으면 비율이 우연히 쏠릴 수 있어 안 본다
+
+
+def directing_warnings(board: dict) -> list[str]:
+    """연출 참고 — 이대로도 그림은 나온다. 판단은 사람 몫이다.
+
+    `gate_board` 와 갈라놓은 이유: 여기서 잡히는 것은 "의도한 연출일 수도
+    있다" 는 값이라, 콘티를 버리거나 다시 뽑을 근거가 아니다. 형식이 깨진
+    `gate_board` 의 결과와 한 목록에 섞이면 어느 쪽이 반드시 고쳐야 하는
+    것이고 어느 쪽이 그냥 참고인지 구별이 안 된다.
+
+    `gate_readable`(대사 밀도·오프닝·1컷 장면)에 카메라 쏠림 눈금을 더했다.
+    """
+    bad = list(gate_readable(board))
+    scenes = board.get("scenes") or []
+    seq = [(s.get("id"), c.get("id"), c)
+           for s in scenes for c in (s.get("cuts") or [])]
+    if not seq:
+        return bad
+
+    def shot_of(c):
+        return _text((c.get("camera") or {}).get("shot"))
+
+    def angle_of(c):
+        return _text((c.get("camera") or {}).get("angle"))
+
+    # 같은 shot 이 너무 오래 이어지면 화면이 단조롭다.
+    run_shot, run_len, run_start = None, 0, None
+    for sid, cid, c in seq:
+        shot = shot_of(c)
+        if shot and shot == run_shot:
+            run_len += 1
+        else:
+            run_shot, run_len, run_start = shot, 1, (sid, cid)
+        if run_len == CONSEC_SHOT_MAX + 1:
+            bad.append(f"장면 {run_start[0]} 컷 {run_start[1]} 부터 '{shot}' 이 "
+                       f"{run_len}컷 연속입니다. 화면이 단조로워질 수 있습니다.")
+
+    # 클로즈업 계열·정면 앵글이 전체를 뒤덮으면 리듬이 안 산다. 컷이 적으면
+    # 비율이 우연히도 쏠릴 수 있어 SHOT_VARIETY_MIN_CUTS 미만은 안 본다.
+    total = len(seq)
+    if total >= SHOT_VARIETY_MIN_CUTS:
+        closeups = sum(1 for _, _, c in seq if shot_of(c) in CLOSEUP_SHOTS)
+        if closeups / total > CLOSEUP_MAX_SHARE:
+            bad.append(f"컷 {total}개 중 {closeups}개가 클로즈업 계열입니다 "
+                       f"({closeups / total:.0%}). 거리감 있는 샷을 섞는 것을 "
+                       "고려하세요.")
+        fronts = sum(1 for _, _, c in seq if angle_of(c) == FRONT_ANGLE)
+        if fronts / total > FRONT_ANGLE_MAX_SHARE:
+            bad.append(f"컷 {total}개 중 {fronts}개가 정면 앵글입니다 "
+                       f"({fronts / total:.0%}). 하이앵글·로우앵글·부감을 섞는 "
+                       "것을 고려하세요.")
+
+    # 장면이 스스로 적어 둔 카메라 계획(camera_plan)과 실제 컷이 다르면
+    # 알린다 — 계획을 안 쓴 장면(옛 응답 포함)은 그냥 건너뛴다.
+    for s in scenes:
+        plan = _text(s.get("camera_plan"))
+        if not plan:
+            continue
+        planned = [p.strip() for p in plan.split(",") if p.strip()]
+        actual = [shot_of(c) for c in (s.get("cuts") or [])]
+        if planned != actual:
+            bad.append(f"장면 {s.get('id')}: 카메라 계획({', '.join(planned)})과 "
+                       f"실제 컷의 shot({', '.join(actual)})이 다릅니다.")
     return bad
 
 
@@ -1013,12 +1095,22 @@ def stage_board(run_dir: Path, char: dict, direction: dict, dry_run: bool,
 
     # 게이트는 **멈추지 않고 알린다.** 좌우가 한 번 어긋난 것 때문에 콘티
     # 전체를 버리게 하면, 고쳐 쓰면 될 것을 다시 뽑느라 또 돈을 쓴다.
+    #
+    # 무결성(bad)과 연출 경고(warns)는 따로 적는다 — 하나는 "구조가 깨져서
+    # 반드시 고쳐야 하는 것", 하나는 "이대로도 그림은 나오지만 참고할 것"
+    # 이라, 섞어 두면 어느 쪽인지 못 가른다.
     bad = gate_board(board)
+    warns = directing_warnings(board)
     if bad:
-        warn(f"콘티에 손볼 곳이 {len(bad)}개 있습니다 (그리기 전에 보세요):")
+        warn(f"콘티에 반드시 손볼 곳이 {len(bad)}개 있습니다 (구조가 깨졌습니다):")
         for one in bad:
             warn(f"  - {one}")
-        write_json(run_dir / "board_issues.json", bad)
+    if warns:
+        warn(f"연출 참고할 점이 {len(warns)}개 있습니다 (그림은 이대로도 나옵니다):")
+        for one in warns:
+            warn(f"  - {one}")
+    if bad or warns:
+        write_json(run_dir / "board_issues.json", {"integrity": bad, "directing": warns})
 
     repage(run_dir, max_ratio)
 

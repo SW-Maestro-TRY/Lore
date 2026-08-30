@@ -63,7 +63,7 @@ python3 run.py --name ... --photo a.png --all --pick 2   # 한 번에
 | `pick.json` | 고른 방향 |
 | `board_prompt.txt` `board_raw.txt` | 콘티 단계에 보낸 것과 받은 원문 |
 | `board.json` | 콘티 — `{cast, scenes[].cuts[]}` |
-| `board_issues.json` | 콘티 게이트가 잡은 것 (있을 때만) |
+| `board_issues.json` | `{integrity, directing}` — 구조가 깨진 것과 연출 참고사항을 나눠 담는다 (있을 때만) |
 | `pages.json` | 컷을 이미지 생성 단위로 묶은 것 |
 | `sheet_spec_prompt.txt` `sheet_spec.json` | 시트 사양 |
 | `sheet_prompt.txt` `sheet.png` | 시트 이미지 프롬프트와 결과 |
@@ -221,6 +221,16 @@ texts = imageprompt.page_prompts(pgs,
 컷 번호는 **페이지 안에서 1부터** 센다. 화면에 그려 넣는 번호라 페이지 안에서
 겹치지 않는 것이 전부고, 콘티의 원래 번호를 쓰면 장면이 다른 컷이 한 페이지에
 모였을 때 "컷 1" 이 두 개가 된다. 화 전체로 이어 세려면 `continuous=True`.
+
+**컷의 무게와 이어짐**은 새 필드를 안 늘리고 `size`·`background`·`location`·
+`time` 에서 그대로 끌어낸다(`pages.cut_weight` · `pages.linked`).
+
+- `light` — `tiny`/`small` 이면서 배경이 없다시피 한(`없음`/`단색`/
+  `그라데이션`) 컷. 프롬프트에 "폭을 좁게 잡는다" 힌트가 붙는다.
+- `linked` — 페이지 안에서 **바로 앞 컷**과 장소·시간대·배경 종류(둘 다
+  `실제공간`)가 같은 컷. "배경을 새로 그리지 않고 카메라만 움직인다" 힌트가
+  붙는다. 페이지 경계는 안 넘는다 — 다른 호출이라 앞 페이지가 뭘 그렸는지
+  이 프롬프트만으로는 모르기 때문이다.
 
 ### 그리기
 

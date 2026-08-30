@@ -120,6 +120,58 @@ def group_pages(cuts, max_per_page: int = DEFAULT_MAX_PER_PAGE,
     return pages
 
 
+# 배경이 없다시피 한 컷 — 무게(cut_weight)와 이어짐(linked) 판정에 같이 쓴다.
+NO_BG = ("없음", "단색", "그라데이션")
+
+
+def _t(value) -> str:
+    return str(value).strip() if value not in (None, "") else ""
+
+
+def cut_weight(cut) -> str:
+    """컷의 무게: full(혼자 한 페이지) · light(배경 없이 가벼움) · normal.
+
+    새 필드를 만들지 않는다 — size 는 이미 ALONE/GROUPED 를 가르고,
+    background.type 은 이미 컷마다 있는 값이다. light 는 그 둘에서 그대로
+    끌어낸다: tiny·small 이면서 배경이 없다시피 한(NO_BG) 컷은 페이지 안에서
+    폭을 좁게 잡아도 되는 컷이라는 뜻이다 — 인물만 그리면 되므로.
+
+    large·full 은 애초에 혼자 한 페이지를 쓰므로(ALONE) light 로 안 내려간다.
+    """
+    size = cut_size(cut)
+    if size in ALONE:
+        return "full"
+    background = cut.get("background") if isinstance(cut, dict) else None
+    kind = _t((background or {}).get("type")) if isinstance(background, dict) else ""
+    if size in ("tiny", "small") and kind in NO_BG:
+        return "light"
+    return "normal"
+
+
+def linked(prev_cut, cut) -> bool:
+    """`cut` 이 `prev_cut` 과 배경이 그대로 이어지는가 (카메라만 움직인다).
+
+    같은 장소·시간대에 둘 다 실제공간 배경일 때만 참이다. large·full 은
+    장면 전환이나 인물의 첫 등장(원칙 6)에 쓰이는 크기라 이어 붙이면 안
+    되므로 뺀다. `prev_cut` 이 없으면(페이지의 첫 컷) 항상 거짓이다.
+
+    flatten_cuts 가 내려보낸 location·time 을 그대로 쓴다 — 이 함수는 편
+    구성이 끝난 뒤(페이지로 묶은 뒤) 컷 순서대로만 불린다.
+    """
+    if not isinstance(prev_cut, dict) or not isinstance(cut, dict):
+        return False
+    if cut_size(prev_cut) in ALONE or cut_size(cut) in ALONE:
+        return False
+    place = _t(cut.get("location"))
+    if not place or _t(prev_cut.get("location")) != place:
+        return False
+    if _t(prev_cut.get("time")) != _t(cut.get("time")):
+        return False
+    prev_bg = _t((prev_cut.get("background") or {}).get("type"))
+    bg = _t((cut.get("background") or {}).get("type"))
+    return prev_bg == "실제공간" and bg == "실제공간"
+
+
 # 장면에 붙는 값 중 컷까지 따라 내려가야 하는 것.
 # 페이지는 장면 경계를 안 지키므로(가벼운 컷은 장면을 넘어 모인다), 여기서
 # 안 내려보내면 페이지를 만든 뒤에는 그 컷이 어디서 벌어지는지 알 수 없다.
