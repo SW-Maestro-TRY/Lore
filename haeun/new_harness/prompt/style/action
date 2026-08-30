@@ -4,107 +4,85 @@
 임팩트가 필요한 장면에 어울리는 결이다. 화사한 컬러가 필요한 평소 장면엔
 다른 그림체를 고르면 된다 — 이 파일이 그것들을 대체하지 않는다.
 
-Create a high-end Korean webtoon illustration with extremely detailed
+MASTER STYLE:
+
+Premium Korean webtoon artwork drawn with exceptionally refined
 professional ink linework.
 
+This is NOT a line-art conversion.
+This is NOT a grayscale version of a colored illustration.
+
+The image must look like an actual Korean webtoon artist originally drew
+the scene directly with ink.
+
 The uploaded character sheet is the ABSOLUTE CHARACTER DESIGN REFERENCE for
-SHAPE, not for color. Preserve the character's identity, hairstyle, hair
-length, hair shape, facial structure, eye shape, body proportions, clothing
-design, accessories, weapons, and distinctive details from the character
-sheet.
+SHAPE, not for rendering style. Preserve the character's identity,
+hairstyle, hair length, hair shape, facial structure, eye shape, body
+proportions, clothing design, accessories, weapons, and distinctive
+details from the character sheet.
 Do not redesign the character.
 Do not simplify the costume.
 Do not invent unrelated accessories.
+Do not copy the character sheet's own rendering, coloring, or finish — how
+this panel is drawn is decided entirely by this MASTER STYLE, not by the
+sheet.
 
 The sheet's colors (hair color, eye color, outfit color) describe the
 character's design ONLY. They are not an instruction to render the
 character in full color. Actual color placement in the final image is
-governed entirely by the COLOR section below — most of the character must
+governed entirely by the COLOR rules below — most of the character must
 still end up as black-and-white ink line art, with color appearing only at
 the few selective accent points chosen for this scene. Rendering the
 character's hair or outfit in their full sheet color throughout the panel
 is treated the same as "coloring the entire character" and is wrong here.
 
-ART STYLE:
-Premium Korean webtoon line art with an exceptionally skilled professional
-comic artist's finish.
-Extremely dense, deliberate, confident ink drawing.
-The image should look hand-inked rather than digitally traced or filtered.
+Prioritize, in this order:
+1. character drawing quality
+2. facial expression
+3. anatomy
+4. hair rendering
+5. clothing construction
+6. important props
+7. cinematic composition
 
-Use:
-- highly controlled black ink lines
-- varied line weight
-- sharp, expressive contour lines
-- delicate secondary lines
-- intricate interior linework
-- detailed hair strands
-- detailed fabric folds
-- detailed facial features
-- detailed eyes
-- elaborate costume construction
-- precise ornaments and accessories
-- complex environmental linework
-- perspective-aware background drawing
-- dramatic action lines when appropriate
-- speed lines and impact lines when appropriate
-- selective cross-hatching and fine hatching
-- controlled areas of black
-- layered foreground, middle-ground and background details
-- dynamic composition
-- strong silhouette
-- cinematic framing
-- convincing foreshortening when appropriate
+Line density must be controlled by visual importance, not applied evenly.
 
-LINEWORK:
-The line art must be the dominant visual language.
-Do NOT simply apply an outline filter to a colored illustration.
-Instead, construct the entire image as intentional professional
-manga/webtoon ink drawing.
+Characters and important foreground objects: highly refined, intricate
+linework. Secondary background: simpler and lighter linework.
 
-Use different line weights: thicker lines for important silhouettes and
-foreground forms, medium lines for major structural details, thin delicate
-lines for hair, fabric, ornaments and background details.
+Do NOT fill every surface with unnecessary hatching.
+Do NOT make the entire image equally detailed.
+Do NOT turn architecture into technical drawings.
 
-The drawing should contain MANY intentional lines and small details. Do not
-make large areas visually empty unless the composition specifically
-requires negative space.
+Use a line-weight hierarchy: heavy confident contours, medium structural
+lines, fine delicate detail lines.
 
-LIGHTING AND SHADING:
-Primarily black-and-white line art.
-Use hatching, cross-hatching, contour hatching, shadow shapes, and dense ink
-accents to create depth instead of conventional digital painting.
+Use selective hatching only where it improves form, depth, lighting, or
+material — not as a uniform texture laid over everything.
 
-COLOR:
-Use ONLY VERY LIMITED SELECTIVE COLOR ACCENTS.
+The image should have clear areas of visual rest.
 
-Most of the entire image must remain black-and-white.
+The result should feel like a skilled webtoon artist spent a long time
+drawing ONE finished panel, not like an AI generated an extremely detailed
+coloring page.
 
-Color should appear only in a few strategically chosen areas that are
-visually important to the scene. Possible selective color targets include:
-the character's eyes, blood, magical energy, flowers, falling petals, a
-weapon's gemstone, fire, glowing symbols, one important prop, a small
-portion of the character's clothing.
+COLOR — BLACK AND WHITE DOMINANT:
 
-Choose only 1-3 important color elements unless the scene explicitly
-requires otherwise. The selected colors should be vivid and visually
-striking against the monochrome line art.
+Only 1-3 small areas may contain vivid color accents. Examples: red eyes,
+blood, a few flower petals, a magical glow, one gemstone, a small portion
+of clothing. Everything else remains monochrome.
+
+Color accents must be isolated and intentional, like an artistic emphasis
+placed on an otherwise black-and-white webtoon panel — not a wash or
+gradient, and never the character's full hair, full outfit, or the whole
+background.
 
 DO NOT color the entire character.
 DO NOT color the entire background.
 DO NOT use soft full-image gradients.
 DO NOT turn the image into a full-color anime illustration.
 
-The overall impression must remain: BLACK-AND-WHITE HIGH-DENSITY INK ART +
-SMALL STRATEGIC COLOR ACCENTS.
-
-DETAIL LEVEL:
-Extremely high detail. Professional serialized Korean webtoon quality.
-Dense but readable. Intricate rather than noisy. Every line should have a
-visual purpose.
-
 CHARACTER EMPHASIS:
-The character is the primary visual focus. Give the face, eyes, hair,
-hands, costume details, and important props especially refined linework.
 
 For emotional scenes, prioritize facial expression and eyes. For action
 scenes, prioritize anatomy, gesture, foreshortening, motion, hair movement,
@@ -113,44 +91,50 @@ perspective. For quiet scenes, prioritize atmosphere, composition,
 environmental details, subtle expressions, and controlled line density.
 
 BACKGROUND:
-Do not use a generic or empty background. Draw the environment with
-detailed professional webtoon linework appropriate to the described
-location. Background detail should support the scene while remaining
-subordinate to the character.
+
+Background exists to place the character, not to compete with them. Use
+simpler, lighter linework than the character — a few confident lines
+establishing the space, not an equally-detailed drawing. Do not turn
+buildings or architecture into technical line drawings.
 
 COMPOSITION:
-Treat the image as an actual webtoon panel or premium illustration rather
-than a character sheet. Use an intentional camera angle and strong
-composition. Avoid static centered character posing unless explicitly
-requested. The composition should communicate the scene and emotion
-immediately.
+
+Treat the image as an actual webtoon panel, not a character sheet. Use an
+intentional camera angle and strong composition. Avoid static centered
+character posing unless explicitly requested. The composition should
+communicate the scene and emotion immediately.
 
 IMPORTANT:
+
 The uploaded character sheet determines WHAT the character looks like. The
-scene description determines WHAT the character is doing. This style
-prompt determines HOW the scene is drawn.
+scene description determines WHAT the character is doing. This MASTER
+STYLE determines HOW the scene is drawn — including the linework, the
+density, and the color placement.
 
 Never sacrifice character consistency for artistic variation.
 Never replace the character with a generic anime character.
 Never convert the image into a full-color illustration.
 
-Final visual target: An exceptionally detailed Korean webtoon panel drawn
-by a master ink artist, with dramatic professional linework, dense
-intricate details, strong blacks and fine hatching, cinematic composition,
-and only a few carefully selected vivid color accents.
+Final visual target: one exceptionally well-drawn Korean webtoon panel,
+predominantly black-and-white ink, with controlled line density (detailed
+character, lighter background) and only a few carefully chosen vivid color
+accents.
 
 ## 하지 마라
 
 - full color illustration, fully colored character, fully colored
   background, colorful anime illustration, anime key visual, light novel
   cover
+- line-art conversion, grayscale version of a colored illustration
 - character sheet, character reference sheet, generic anime illustration
 - simple line art, basic line art, rough sketch, rough drawing, unfinished
   sketch, lazy linework
 - flat outlines, outline filter, auto traced appearance, vector-like line
   art, uniform line thickness, clean vector lines, minimal linework, low
   detail, low density
-- empty background, simplified background, flat background
+- uniform hatching across the whole image, equally detailed background,
+  technical architectural drawing, empty background, simplified background,
+  flat background
 - flat shading, soft digital painting, airbrushed shading, watercolor,
   pastel illustration, soft pastel colors, milky colors, glossy full-color
   rendering
