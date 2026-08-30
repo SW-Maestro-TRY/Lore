@@ -141,6 +141,30 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
     return "\n".join(lines) + "\n"
 
 
+def story_input_block(char: dict) -> str:
+    """이야기 단계의 입력 — 장르가 주어졌을 때만 장르 참고 자료를 더한다.
+
+    장르가 없으면 story_prompt 가 4개 방향마다 서로 다른 장르를 스스로
+    고르므로, 어느 장르의 세계관을 붙일지 미리 알 수 없다 — 그때는 지금까지
+    처럼 붙이지 않는다. detail_block 과 같은 자료를 쓴다(genre_lore_for·
+    world_text_for) — 구체화 단계에서만 장르 세계관을 주면, 장면 목록 자체가
+    이미 장르 색이 없는 소재(출입증·CCTV 등)로 굳어 있어서 구체화가 소재를
+    바꿔치기하는 식으로만 손볼 수 있었다(2026-08-31, 사용자 지적).
+    """
+    block = input_block(char).rstrip("\n")
+    genre = char["genre"]
+    if not genre:
+        return block + "\n"
+    lines = [block]
+    lore = genre_lore_for(genre)
+    if lore:
+        lines += ["", "## 이 장르의 모티프·캐릭터유형·전개패턴 (참고 자료)", "", lore]
+    world = world_text_for(genre)
+    if world:
+        lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
+    return "\n".join(lines) + "\n"
+
+
 def load_prompt(name: str) -> str:
     path = PROMPT_DIR / name
     if not path.exists():
@@ -588,7 +612,7 @@ def read_input(run_dir: Path) -> dict:
 
 
 def stage_story(run_dir: Path, char: dict, dry_run: bool) -> list[dict]:
-    prompt = compose("story_prompt", input_block(char))
+    prompt = compose("story_prompt", story_input_block(char))
     write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
         log(f"[이야기] 프롬프트만 썼습니다 -> {run_dir / 'story_prompt.txt'}")
