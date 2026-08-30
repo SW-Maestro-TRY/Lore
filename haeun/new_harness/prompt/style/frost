@@ -2,115 +2,104 @@
 흑백 잉크+포인트 컬러 실험은 `action`(특수 컷 전용)으로 따로 남겼고, 이
 파일은 평소 로판 장면에 쓰는 기본값이다.
 
-**핵심(5차 재작성).** 4차에서 색 구분(피부/옷/배경)까지는 맞았고, 이제
-**채도를 전체적으로 15~20% 정도 한 단계 더 낮춘다** — 명도와 대비는
-그대로 두고 채도만 더 죽인다. 목표는 "차분한 저채도"가 아니라 "색은
-거의 빠졌는데 선화와 명암 때문에 그림이 또렷한" 상태다. 그래서 **명도
-차이·빛과 그림자·톤 대비는 반드시 유지**해야 하고, 그러지 않으면 그냥
-무채색 그림이 된다.
+**핵심(6차 재작성 — 축을 색에서 그림 자체로 옮긴다).** 5차까지 채도를
+계속 낮췄는데도 "예쁜 AI 일러스트"에서 못 벗어났다 — 채도는 이미 충분히
+낮았고, 문제는 색이 아니라 **그림 자체의 성격**이었다. 매끈한 디지털
+일러스트 외곽선, 부드러운 베이지/핑크 그라데이션 그림자, 정면 중앙에
+얌전히 선 포즈, 둥글고 반짝이는 로맨스 일러스트풍 눈 — 이 넷이 저채도와
+무관하게 "따뜻하고 말랑한" 인상을 계속 만들고 있었다. **그래서 이번엔
+저채도를 메인에서 내리고, 손그림 느낌 잉크 선화 + 그래픽한 경질 그림자
++ 날카로운 성인 얼굴 + 역동적인 구도를 메인으로 올린다. 저채도는 그 위에
+얹는 것이다.**
 
-mature Korean webtoon illustration,
-hand-drawn Korean webtoon aesthetic,
-adult character proportions,
-natural elongated anatomy.
-
-## 구도 — 정면 캐릭터 시트처럼 서 있지 않는다
-
-expressive and dynamic composition,
-natural asymmetrical pose,
-slightly dynamic camera angle,
-natural body movement,
-avoid stiff front-facing character pose.
-
-## 선화
-
-beautiful refined ink linework,
-organic hand-drawn outlines,
+mature Korean webtoon art,
+hand-drawn ink illustration,
+expressive organic linework,
+slightly rough and imperfect ink lines,
 variable line weight,
-delicate but confident black ink lines,
-subtle sketch texture,
-selective hatching and ink shading,
-visible linework integrated into the coloring.
+thin sharp ink outlines,
+visible internal ink lines,
+sketch-like construction lines,
+fine hatching and cross-hatching used selectively.
 
-해칭은 **선택적으로만** — 화면 전체에 빗금을 까는 것이 아니라, 필요한
-그림자 자리에만 절제해서 넣는다.
+## 그림자 — 부드러운 그라데이션이 아니라 그래픽하게
 
-## 피부 — 거의 무채색에 가깝게
+graphic webtoon shading,
+clearly defined shadow shapes,
+hard-edged selective shadows,
+cool gray and muted violet shadows,
+ink-based shadow texture,
+minimal smooth gradients,
+flat-to-painterly webtoon coloring.
 
-very pale cool ivory skin,
-almost colorless pale complexion,
-subtle gray undertones in the skin,
-minimal pink and peach undertones,
-cool gray shadows on skin.
+## 얼굴 — 둥글고 반짝이는 로맨스 일러스트 눈이 아니다
 
-## 채색 — 전체를 한 단계 더, 그래도 색은 남는다
+sharp mature facial features,
+narrow expressive eyes,
+defined eyelids,
+subtle angular facial structure,
+strong eyebrows,
+natural asymmetry,
+slightly sharp and tired-looking gaze.
 
-strongly desaturated color palette,
-very low chroma,
-heavily muted colors,
-subdued color intensity,
-grayish undertones throughout the palette,
-cool neutral color grading,
-softly faded colors,
-restrained color saturation,
-pale and dusty colors,
-colors are present but noticeably desaturated,
+## 구도 — 얌전하게 정면·중앙에 서 있지 않는다
 
-dark charcoal and blue-black hair,
-muted gray-olive clothing,
-dusty gray-blue tones,
-subdued navy,
-faded muted colors,
+dynamic cinematic composition,
+asymmetrical body posture,
+natural weight distribution,
+slightly tilted shoulders,
+dynamic camera perspective,
+dramatic foreshortening when appropriate,
+character interacting naturally with the environment.
 
-pale skin contrasted against darker clothing,
-clear separation between skin, hair, clothing and background,
-clear value separation despite low saturation,
-preserve light and shadow,
-preserve tonal contrast,
-do not make the image monochromatic.
+## 색 — 여기서부터는 메인이 아니라 위에 얹는 것
 
-## 조명·마감
+pale cool ivory skin,
+desaturated skin,
+subtle gray undertones,
+muted cool color palette,
+low chroma,
+restrained saturation,
 
-soft natural lighting,
-cool neutral ambient light,
-subtle atmospheric shading,
-restrained highlights,
-matte rather than glossy rendering,
+strong separation between light and shadow,
+clear graphic values,
+dark hair and clothing contrasted against pale skin,
 
-detailed hair with individually drawn strands,
-natural fabric folds,
-expressive hands and gestures,
-cinematic webtoon composition,
-polished hand-drawn webtoon panel,
-sophisticated mature atmosphere.
+quiet cold atmosphere,
+tense understated mood,
+slightly detached emotional tone,
+sophisticated mature webtoon aesthetic.
 
-**차가운 색온도 ≠ 파란 조명.** 화면 전체를 파란빛으로 물들이라는 말이
-아니다 — `cool-neutral` 이지 `blue lighting` 을 강제하는 게 아니다.
+**주의: 파란 조명으로 서늘함을 표현하지 않는다.** 조명 색이 아니라
+선화·그림자·구도·얼굴로 서늘함을 만든다 — 화면을 파랗게 물들이면
+"서늘함=파란 조명"으로 얕게 풀린 것이다.
 
 ## 하지 마라
 
-- completely gray color palette, colorless image (전체 이미지 기준 —
-  피부 자체가 거의 무채색인 것은 의도된 것이니 헷갈리지 말 것),
-  monochromatic image, milky colors, low color separation — 옷·배경까지
-  색이 사라지는 것을 막는다. ("washed out image" 는 일부러 안 넣는다 —
-  모델이 원하는 저채도와 "색이 빠져서 망가진 이미지"를 구분 못 할 수
-  있다.)
-- stiff pose, symmetrical pose, front-facing character portrait, passport
-  photo composition, character sheet composition
+- beautiful delicate illustration, polished digital painting, smooth
+  rendering, cinematic glow — 매끈하고 예쁜 AI 일러스트로 돌아가게 만드는
+  표현들
+- soft directional lighting, gentle tonal transitions, soft ambient
+  lighting, natural soft skin — 그림자를 부드러운 그라데이션으로 되돌리는
+  표현들. 위 "그래픽 그림자" 절과 정면충돌한다
+- round sparkly romance-illustration eyes, large glossy anime eyes,
+  excessive eye highlights, cute soft gaze
+- stiff pose, symmetrical pose, front-facing character portrait, centered
+  static standing pose, passport photo composition, character sheet
+  composition
+- clean uniform digital outlines, perfectly smooth linework, vector-clean
+  lines
 - vivid colors, bright colors, high saturation, strong color intensity,
   warm color palette, colorful clothing, vibrant background,
   oversaturated highlights, oversaturated shadows, strongly colored
   lighting, neon colors
-- warm skin tones, warm peach skin, peachy skin, orange skin, orange
-  undertones, rosy skin, pink skin, golden skin, golden undertones,
-  healthy warm complexion, warm beige skin, saturated skin
-- plastic skin, airbrushed skin, smooth digital painting, 3D render,
-  photorealistic
+- warm skin tones, warm peach skin, peachy skin, orange skin, rosy skin,
+  pink skin, golden skin, healthy warm complexion, warm beige skin
+- plastic skin, airbrushed skin, 3D render, photorealistic
 - anime key visual, anime illustration, kawaii, moe, chibi, childlike
   proportions, oversized eyes
-- excessive cross-hatching, excessive texture, excessive line clutter,
-  overly detailed background, background competing with character
-- excessive blue lighting (화면 전체를 파란빛으로 물들이는 것)
+- excessive blue lighting, tinting the whole scene blue (파란 조명으로
+  서늘함을 대신하는 것)
 - 일본 가챠 게임 일러스트의 얼굴 — 얼굴 절반을 덮는 둥근 눈, 없는 코,
   선 하나짜리 입, 바늘 턱
 - 손가락 개수, 두 눈의 높이, 좌우 장신구를 눈으로 확인하지 않는 것
