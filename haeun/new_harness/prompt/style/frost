@@ -2,117 +2,105 @@
 흑백 잉크+포인트 컬러 실험은 `action`(특수 컷 전용)으로 따로 남겼고, 이
 파일은 평소 로판 장면에 쓰는 기본값이다.
 
-**핵심(3차 재작성).** 앞선 버전은 "저채도 디지털 일러스트"에 가까웠는데,
-사용자가 원하는 건 그보다 **선화가 살아 있는 저채도 웹툰 채색** —
-거칠면서도 섬세한 펜선/해칭이 먼저 있고, 그 위에 아주 얇고 반투명한
-색이 한 겹 올라간 것. 색을 진하게 꽉 채우는 게 아니라 색이 있어도
-전체적으로 가볍게 느껴져야 한다. 피부는 더 하얗게가 아니라 **창백한
-아이보리 + 아주 약한 회색기** (완전한 백색은 아님). 색온도가 차가운
-것이지 화면이 무조건 파란 조명인 것은 아니다 — 자연광이어도 색 자체가
-탈색되어 있으면 된다.
+**핵심(4차 재작성).** 직전 버전은 피부뿐 아니라 옷·배경·그림자까지 전부
+탈색돼서 "그냥 회색 웹툰"이 됐다 — **저채도로 둘 곳은 피부뿐이다.** 옷과
+배경은 충분히 색이 있어야 하고, 피부/머리/옷/배경이 서로 명도·색상으로
+또렷하게 구분돼야 한다. 그리고 지금까지 색 얘기만 했지 **포즈/구도**를
+안 건드려서, 결과가 정면을 보고 선 캐릭터 시트처럼 나왔다 — 몸이 기울고
+카메라 각도가 있고 포즈가 살아 있어야 웹툰 한 컷처럼 보인다. 해칭도
+너무 강조하면 화면 전체에 빗금이 깔리니 정도를 낮췄다.
 
-Korean webtoon illustration with a refined hand-drawn appearance,
+mature Korean webtoon illustration,
+hand-drawn Korean webtoon aesthetic,
+adult character proportions,
+natural elongated anatomy.
 
-mature adult character proportions,
-slender elongated anatomy,
-elegant facial structure,
-expressive eyes,
-natural anatomy.
+## 구도 — 정면 캐릭터 시트처럼 서 있지 않는다
 
-## 선화 — 색보다 먼저 있어야 하는 것
+expressive and dynamic composition,
+natural asymmetrical pose,
+slightly dynamic camera angle,
+natural body movement,
+avoid stiff front-facing character pose.
 
-delicate but slightly rough ink linework,
-fine dark ink outlines,
-organic hand-drawn lines,
-subtle line variation,
-visible sketch-like hatching,
-fine cross-hatching and textured shading,
-detailed fabric folds drawn with ink lines,
-hair rendered with numerous fine flowing strands.
+## 선화
 
-ink linework remains visually prominent over the coloring — 색을 지운
-자리가 아니라 선 위에 색이 살짝 얹힌 상태로 보여야 한다.
+beautiful refined ink linework,
+organic hand-drawn outlines,
+variable line weight,
+delicate but confident black ink lines,
+subtle sketch texture,
+selective hatching and ink shading,
+visible linework integrated into the coloring.
 
-## 피부 — 하얗게가 아니라 창백하고 회색기 있게
+해칭은 **선택적으로만** — 화면 전체에 빗금을 까는 것이 아니라, 필요한
+그림자 자리에만 절제해서 넣는다.
 
-`pale` 하나만 세게 넣으면 시체처럼 하얘진다. 아래 조합으로 함께 쓴다.
+## 피부 — 저채도는 여기까지만
 
-very pale desaturated ivory skin,
-cool neutral complexion,
-subtle gray undertones,
-slightly porcelain-like skin,
-minimal pink and orange undertones,
-soft cool-gray shadows on the skin.
+very pale ivory skin,
+cool neutral skin tone,
+subtle gray undertones in the skin,
+soft pale complexion,
+minimal warm peach tones,
+cool muted shadows on skin.
 
-## 채색 — 진하게 채우지 않는다
+**저채도를 적용할 곳은 피부뿐이다.** 옷과 배경까지 같이 탈색시키지
+않는다.
 
-muted low-chroma colors,
-desaturated color palette,
-restrained saturation,
-washed but sophisticated colors,
-soft gray undertones throughout the palette,
+## 채색 — 옷과 배경은 색이 있어야 한다
+
+muted but clearly distinguishable colors,
+softly desaturated color palette,
+moderate saturation,
 cool-neutral color harmony,
-dusty blue,
-smoky gray,
-muted lavender,
-desaturated beige,
-muted olive,
-deep subdued navy,
+colors remain clearly visible,
+deep navy,
+charcoal black,
+dusty olive,
+muted blue,
+soft gray,
+subtle muted accent colors,
 
-thin restrained coloring,
-soft translucent-looking color layers,
-subtle cel shading,
-gentle tonal transitions,
-limited color intensity.
+pale skin contrasted against darker clothing,
+clear separation between skin, hair, clothing and background,
+strong enough value contrast to maintain readability.
 
-## 분위기
+## 조명·마감
 
-cool quiet atmosphere,
-slightly melancholic mood,
-understated cinematic lighting,
-soft ambient shadows,
-moderate contrast.
+soft natural lighting,
+cool neutral ambient light,
+subtle atmospheric shading,
+restrained highlights,
+matte rather than glossy rendering,
+
+detailed hair with individually drawn strands,
+natural fabric folds,
+expressive hands and gestures,
+cinematic webtoon composition,
+polished hand-drawn webtoon panel,
+sophisticated mature atmosphere.
 
 **차가운 색온도 ≠ 파란 조명.** 화면 전체를 파란빛으로 물들이라는 말이
-아니다. 자연광 장면이어도 색 자체가 저채도·회색기·창백함으로 가면
-된다 — `cool-neutral, desaturated, pale, grayish` 가 핵심이지 `blue
-lighting`을 강제로 넣으라는 뜻이 아니다.
-
-## 마무리
-
-detailed character rendering,
-textured hand-drawn webtoon finish,
-polished Korean webtoon panel,
-sophisticated and mature visual style,
-natural rather than glossy rendering,
-background colors kept muted and subordinate to the characters,
-the characters are the primary visual focus.
+아니다 — `cool-neutral` 이지 `blue lighting` 을 강제하는 게 아니다.
 
 ## 하지 마라
 
-- bright saturated colors, vivid colors, high saturation, warm color
-  palette
+- extreme desaturation, completely gray color palette, washed out image,
+  colorless image, monochromatic image, milky colors, overly pale
+  clothing, low color separation — 피부만 탈색해야 하는데 옷·배경까지
+  같이 죽는 것을 막는다
+- stiff pose, symmetrical pose, front-facing character portrait, passport
+  photo composition, character sheet composition
 - warm peach skin, orange skin, rosy skin, pink skin, golden skin,
-  healthy warm complexion, warm beige skin, saturated skin — 피부만
-  따뜻하게 튀는 것을 막는다
-- glossy skin, plastic skin, airbrushed skin, 3D rendering, photorealistic
-  rendering
-- smooth digital painting, overly polished rendering, hyper-rendered
-  skin, thick gradient shading, strong bloom, excessive highlights —
-  선화가 색 아래로 사라지고 매끈한 디지털 페인팅처럼 되는 것
+  healthy warm complexion, warm beige skin, saturated skin
+- plastic skin, airbrushed skin, smooth digital painting, 3D render,
+  photorealistic
 - anime key visual, anime illustration, kawaii, moe, chibi, childlike
   proportions, oversized eyes
-- pastel cute aesthetic, milky pastel colors, excessive pink, excessive
-  blue lighting (화면 전체를 파란빛으로 물들이는 것)
-- overdecorated background, highly saturated background, background
-  competing with character
-- dark, gloomy, moody, murky, dim overall lighting, muddy image (저채도를
-  어둡게 해석한 결과 — 원하는 건 어두운 그림이 아니라 채도만 낮은
-  그림이다)
-- 화면 전체에 고르게 깔린 빛번짐, 블룸, 안개, 렌즈 플레어, 초점 흐림,
-  아무 데나 흩뿌린 별가루
+- excessive cross-hatching, excessive texture, excessive line clutter,
+  overly detailed background, background competing with character
+- excessive blue lighting (화면 전체를 파란빛으로 물들이는 것)
 - 일본 가챠 게임 일러스트의 얼굴 — 얼굴 절반을 덮는 둥근 눈, 없는 코,
   선 하나짜리 입, 바늘 턱
-- 좌우대칭에 흠 없는 얼굴 — 비대칭 하나(눈 크기 차이, 앞머리 쏠림, 점)를
-  남긴다
 - 손가락 개수, 두 눈의 높이, 좌우 장신구를 눈으로 확인하지 않는 것
