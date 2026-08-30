@@ -95,14 +95,7 @@ character interacting naturally with the environment.
 
 ## 색 — 여기서부터는 메인이 아니라 위에 얹는 것
 
-skin rendered with very minimal color,
-nearly neutral pale skin,
 ink-defined skin shadows,
-little to no warm skin coloration,
-cool gray and cool violet-gray shadows on the skin — NOT beige, tan, or
-brown skin shadows. This applies everywhere skin is shaded: neck,
-collarbone, chest, under the jaw. A warm beige/brown shadow on skin is
-the single most common way this style quietly turns warm again,
 muted cool color palette,
 low chroma,
 restrained saturation,
@@ -140,28 +133,45 @@ sophisticated mature webtoon aesthetic.
 층층이 나뉜다 — **파란색은 화면 전체에 균일하게 칠하는 게 아니라, 빛과
 그림자의 색온도로 배치한다.**
 
-strong cool blue-gray color grading,
-cool blue-gray ambient atmosphere,
+**2026-08-30 네 번째 정정 — 피부도 예외가 아니다.** 위 절의 "피부는
+거의 무채색/아이보리를 유지"·"원래 색을 보존한다" 류 문구가 오히려
+피부에 살구색이 다시 살아나는 원인이었다. **피부를 포함해 예외 없이**
+전체가 블루그레이로 보여야 한다 — "살색이 없는 피부"까지 가는 것이
+맞다.
 
-pale highlights remain nearly neutral and ivory,
-midtones carry a muted blue-gray tint,
-shadows are distinctly cool blue-gray,
-deep shadows remain dark charcoal and near-black,
+strong overall blue-gray color cast,
+strong cool blue filter over the entire illustration,
+the entire image is heavily tinted blue-gray,
+deep cool blue-gray atmospheric grading,
+cool blue-gray tint dominates the entire color palette,
+all colors are visibly affected by the blue-gray color grade,
+skin is also strongly blue-gray tinted,
+skin has almost no natural flesh color,
+skin appears pale gray with cool blue undertones,
+shadows are distinctly blue-gray,
+midtones are blue-gray,
+highlights are cool pale blue-gray,
+white areas are tinted blue-gray rather than neutral white,
+dark areas remain deep blue-black,
 
-blue-gray tint is strongest in the ambient shadows and background,
-cool blue-violet tones appear naturally within the shadows,
-subtle cool color separation between highlights, midtones and shadows,
+very low saturation,
+strongly desaturated,
+low chroma,
+muted colors,
+faded colors,
+cold monochromatic color harmony,
+cool blue-gray color unity,
 
-cold blue-gray atmospheric depth,
-cool reflected light,
-blue-gray ambient bounce light.
+the blue-gray color cast must be clearly visible at first glance,
+do not reduce or weaken the blue tint,
+do not restore natural skin coloration,
+do not neutralize the blue-gray grading.
 
-옷 자체를 다시 칠하는 것과는 구분한다:
+옷을 개별적으로 파란 옷으로 다시 칠하는 것과는 여전히 구분한다:
 
-preserve the original local colors of each object,
-do not recolor individual objects,
-apply the blue-gray effect as a global color grade concentrated in the
-shadows and ambient light, not a flat overlay across every tone.
+do not recolor individual objects into blue clothing or blue hair,
+apply the blue-gray effect as a global color grade over the whole
+finished illustration, including the skin.
 
 ## 명암 — 블루 필터로 검정까지 회색이 되면 안 된다
 
@@ -208,10 +218,19 @@ high value contrast.
   oversaturated highlights, oversaturated shadows, strongly colored
   lighting, neon colors
 - warm skin tones, warm peach skin, peachy skin, orange skin, rosy skin,
-  pink skin, golden skin, healthy warm complexion, warm beige skin
+  pink skin, golden skin, healthy warm complexion, warm beige skin,
+  natural skin color, warm flesh tones, orange undertones
+- warm highlights, neutral white highlights, warm color grading, natural
+  color balance, bright colorful palette, warm ambient light, yellow
+  cast, brown cast
 - plastic skin, airbrushed skin, 3D render, photorealistic
 - anime key visual, anime illustration, kawaii, moe, chibi, childlike
   proportions, oversized eyes
+- eerie, dread, ominous, unsettling, horror atmosphere, gloomy horror,
+  scary mood, dramatic blue lighting as a mood/lighting effect — 원하는
+  "서늘함"은 분위기·감정 연출이 아니라 색 자체의 성질이다. 무서운 표정,
+  불안한 분위기, 음침한 배경, 공포 연출을 넣지 않는다. 인물과 장면은
+  평범해도 된다 — 그림의 색과 질감만 차갑다
 - neon blue, blue clothing, blue hair, intense cyan, localized blue
   lighting — 특정 물체를 파란색으로 다시 칠하거나 특정 광원이 파랗게
   비추는 효과는 여전히 안 된다. 위 "전체 색보정" 절의 화면 전체
