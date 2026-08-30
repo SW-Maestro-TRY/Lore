@@ -2,13 +2,12 @@
 흑백 잉크+포인트 컬러 실험은 `action`(특수 컷 전용)으로 따로 남겼고, 이
 파일은 평소 로판 장면에 쓰는 기본값이다.
 
-**핵심(4차 재작성).** 직전 버전은 피부뿐 아니라 옷·배경·그림자까지 전부
-탈색돼서 "그냥 회색 웹툰"이 됐다 — **저채도로 둘 곳은 피부뿐이다.** 옷과
-배경은 충분히 색이 있어야 하고, 피부/머리/옷/배경이 서로 명도·색상으로
-또렷하게 구분돼야 한다. 그리고 지금까지 색 얘기만 했지 **포즈/구도**를
-안 건드려서, 결과가 정면을 보고 선 캐릭터 시트처럼 나왔다 — 몸이 기울고
-카메라 각도가 있고 포즈가 살아 있어야 웹툰 한 컷처럼 보인다. 해칭도
-너무 강조하면 화면 전체에 빗금이 깔리니 정도를 낮췄다.
+**핵심(5차 재작성).** 4차에서 색 구분(피부/옷/배경)까지는 맞았고, 이제
+**채도를 전체적으로 15~20% 정도 한 단계 더 낮춘다** — 명도와 대비는
+그대로 두고 채도만 더 죽인다. 목표는 "차분한 저채도"가 아니라 "색은
+거의 빠졌는데 선화와 명암 때문에 그림이 또렷한" 상태다. 그래서 **명도
+차이·빛과 그림자·톤 대비는 반드시 유지**해야 하고, 그러지 않으면 그냥
+무채색 그림이 된다.
 
 mature Korean webtoon illustration,
 hand-drawn Korean webtoon aesthetic,
@@ -36,35 +35,39 @@ visible linework integrated into the coloring.
 해칭은 **선택적으로만** — 화면 전체에 빗금을 까는 것이 아니라, 필요한
 그림자 자리에만 절제해서 넣는다.
 
-## 피부 — 저채도는 여기까지만
+## 피부 — 거의 무채색에 가깝게
 
-very pale ivory skin,
-cool neutral skin tone,
+very pale cool ivory skin,
+almost colorless pale complexion,
 subtle gray undertones in the skin,
-soft pale complexion,
-minimal warm peach tones,
-cool muted shadows on skin.
+minimal pink and peach undertones,
+cool gray shadows on skin.
 
-**저채도를 적용할 곳은 피부뿐이다.** 옷과 배경까지 같이 탈색시키지
-않는다.
+## 채색 — 전체를 한 단계 더, 그래도 색은 남는다
 
-## 채색 — 옷과 배경은 색이 있어야 한다
+strongly desaturated color palette,
+very low chroma,
+heavily muted colors,
+subdued color intensity,
+grayish undertones throughout the palette,
+cool neutral color grading,
+softly faded colors,
+restrained color saturation,
+pale and dusty colors,
+colors are present but noticeably desaturated,
 
-muted but clearly distinguishable colors,
-softly desaturated color palette,
-moderate saturation,
-cool-neutral color harmony,
-colors remain clearly visible,
-deep navy,
-charcoal black,
-dusty olive,
-muted blue,
-soft gray,
-subtle muted accent colors,
+dark charcoal and blue-black hair,
+muted gray-olive clothing,
+dusty gray-blue tones,
+subdued navy,
+faded muted colors,
 
 pale skin contrasted against darker clothing,
 clear separation between skin, hair, clothing and background,
-strong enough value contrast to maintain readability.
+clear value separation despite low saturation,
+preserve light and shadow,
+preserve tonal contrast,
+do not make the image monochromatic.
 
 ## 조명·마감
 
@@ -86,13 +89,20 @@ sophisticated mature atmosphere.
 
 ## 하지 마라
 
-- extreme desaturation, completely gray color palette, washed out image,
-  colorless image, monochromatic image, milky colors, overly pale
-  clothing, low color separation — 피부만 탈색해야 하는데 옷·배경까지
-  같이 죽는 것을 막는다
+- completely gray color palette, colorless image (전체 이미지 기준 —
+  피부 자체가 거의 무채색인 것은 의도된 것이니 헷갈리지 말 것),
+  monochromatic image, milky colors, low color separation — 옷·배경까지
+  색이 사라지는 것을 막는다. ("washed out image" 는 일부러 안 넣는다 —
+  모델이 원하는 저채도와 "색이 빠져서 망가진 이미지"를 구분 못 할 수
+  있다.)
 - stiff pose, symmetrical pose, front-facing character portrait, passport
   photo composition, character sheet composition
-- warm peach skin, orange skin, rosy skin, pink skin, golden skin,
+- vivid colors, bright colors, high saturation, strong color intensity,
+  warm color palette, colorful clothing, vibrant background,
+  oversaturated highlights, oversaturated shadows, strongly colored
+  lighting, neon colors
+- warm skin tones, warm peach skin, peachy skin, orange skin, orange
+  undertones, rosy skin, pink skin, golden skin, golden undertones,
   healthy warm complexion, warm beige skin, saturated skin
 - plastic skin, airbrushed skin, smooth digital painting, 3D render,
   photorealistic
