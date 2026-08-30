@@ -32,6 +32,7 @@ import visibility
 import credits
 import overlay
 import pipeline
+import newharness_pipeline as nh
 import watermark
 
 HERE = Path(__file__).resolve().parent
@@ -41,6 +42,7 @@ DEMO_DIR = HERE / "jobs" / "_demo"
 MAX_PHOTO_BYTES = 6 * 1024 * 1024
 
 runner = pipeline.Runner()
+nh_runner = nh.NHRunner()
 _thumb_lock = threading.Lock()
 _warned_no_pillow = False
 
@@ -326,6 +328,11 @@ class Handler(BaseHTTPRequestHandler):
         # 생성 없이 가짜 진행으로 돌려 본다. 과금 없음.
         if path in ("/demo", "/demo/", "/demo.html"):
             return self._file(WEB / "demo.html")
+        # new_harness 연결 실험 화면. index.html/app.js 와 완전히 별개다 —
+        # 제품 화면(index.html)은 아직 story-harness/webtoon-harness 를 쓰고,
+        # 여기서만 new_harness 로 만든다 (newharness_pipeline.py 참고).
+        if path in ("/nh", "/nh/", "/newharness", "/newharness.html"):
+            return self._file(WEB / "newharness.html")
         # 결과 화면 **목업**. 실제 생성 없이 완성본 화면을 그대로 본다 — 같은
         # index.html·app.js 를 쓰고, 데이터만 web/samples/mock.json 에서 온다.
         if path in ("/demo/result", "/demo/result/"):
@@ -714,6 +721,45 @@ class Handler(BaseHTTPRequestHandler):
                 pipeline.episode_caption(job.run_id, job.episode))
             return self._file(src, download=pipeline.episode_filename(
                 job.run_id, job.episode))
+
+        # ---- new_harness 실험 경로 ------------------------------------------ #
+
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)", path)
+        if m:
+            job = nh_runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            return self._json(job.snapshot())
+
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/episode\.png", path)
+        if m:
+            job = nh_runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            src = nh.episode_path(job)
+            if not src:
+                return self._error(404, "아직입니다")
+            return self._file(src)
+
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/sheet\.png", path)
+        if m:
+            job = nh_runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            src = nh.sheet_path(job)
+            if not src:
+                return self._error(404, "아직입니다")
+            return self._file(src)
+
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/page/(\d+)\.png", path)
+        if m:
+            job = nh_runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            src = nh.page_path(job, int(m.group(2)))
+            if not src:
+                return self._error(404, "아직입니다")
+            return self._file(src)
 
         return self._error(404, "없는 주소입니다")
 
@@ -1281,6 +1327,91 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(pipeline.bake_overlay(m.group(1), body, ep))
             except pipeline.Failed as exc:
                 return self._error(400, str(exc))
+
+        # ---- new_harness 실험 경로 ------------------------------------------ #
+        #
+        # /api/create 와 사진 처리 로직이 겹치지만 일부러 안 합친다 —
+        # /api/create 는 실제 서비스 화면(lorecomic.com/webtoon)이 매 요청마다
+        # 타는 자리라, 실험 경로를 고치다 실수로 거길 건드리는 위험을 아예
+        # 없애는 쪽을 골랐다.
+
+        if url.path == "/api/nh/create":
+            try:
+                form = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+
+            urls = form.pop("photos_data", None)
+            urls = [u for u in urls if str(u or "").startswith("data:")] \
+                if isinstance(urls, list) else []
+            if len(urls) > pipeline.MAX_PHOTOS:
+                return self._error(400,
+                                   f"사진은 {pipeline.MAX_PHOTOS}장까지 올릴 수 있습니다")
+
+            photos = []
+            for i, data_url in enumerate(urls, 1):
+                try:
+                    raw = base64.b64decode(data_url.split(",", 1)[1])
+                except (ValueError, IndexError):
+                    return self._error(400, f"{i}번째 사진을 읽지 못했습니다")
+                if len(raw) > MAX_PHOTO_BYTES:
+                    return self._error(400, f"{i}번째 사진이 너무 큽니다 (6MB 까지)")
+                try:
+                    from PIL import Image
+                except ImportError:
+                    return self._error(
+                        500, "서버에 Pillow 가 없어 사진을 처리하지 못합니다. "
+                             "pip install Pillow 로 설치한 뒤 서버를 다시 켜 주세요.")
+                try:
+                    im = Image.open(io.BytesIO(raw))
+                    im.load()
+                    if im.width > 1400:
+                        h = round(im.height * 1400 / im.width)
+                        im = im.resize((1400, h), Image.LANCZOS)
+                    buf = io.BytesIO()
+                    im.convert("RGB").save(buf, "PNG")
+                    photos.append(buf.getvalue())
+                except Exception:                               # noqa: BLE001
+                    return self._error(
+                        400, f"{i}번째 사진을 열지 못했습니다. 아이폰 사진(HEIC)이면 "
+                             "JPG 나 PNG 로 바꿔서 올려 주세요.")
+
+            known = any(str(form.get(k) or "").strip() for k in ("name", "character")) \
+                or any(str(v or "").strip() for v in (form.get("fields") or {}).values()) \
+                or bool(photos)
+            if not known:
+                return self._error(400, "캐릭터를 알 수 있는 것이 하나는 필요합니다 — "
+                                        "이름 · 설명 · 항목 · 사진 중 아무거나요.")
+
+            job = nh_runner.create(form, photos)
+            return self._json({"id": job.id})
+
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/pick", url.path)
+        if m:
+            job = nh_runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            try:
+                n = int(body.get("n"))
+            except (TypeError, ValueError):
+                return self._error(400, "n(방향 번호)이 필요합니다")
+            try:
+                nh_runner.pick(job.id, n)
+            except ValueError as exc:
+                return self._error(409, str(exc))
+            return self._json({"ok": True})
+
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/cancel", url.path)
+        if m:
+            job = nh_runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            job.cancel()
+            return self._json({"ok": True})
 
         return self._error(404, "없는 주소입니다")
 
