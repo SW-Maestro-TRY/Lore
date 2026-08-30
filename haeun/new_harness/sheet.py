@@ -50,6 +50,8 @@ def parse_spec(text: str) -> dict:
     palette = obj.get("color_palette") if isinstance(obj.get("color_palette"), dict) else {}
     return {
         "name": str(obj.get("name") or "").strip(),
+        "species": str(obj.get("species") or "").strip(),
+        "species_en": str(obj.get("species_en") or "").strip(),
         "appearance_en": str(obj.get("appearance_en") or "").strip(),
         "design_details": [str(d).strip() for d in (obj.get("design_details") or [])
                            if str(d or "").strip()],
@@ -74,6 +76,20 @@ def gate_spec(spec: dict) -> list[str]:
         bad.append("appearance_en 이 없습니다. 이미지 프롬프트의 본문입니다.")
     elif HANGUL_RE.search(spec["appearance_en"]):
         bad.append("appearance_en 에 한글이 섞여 있습니다. 이미지 모델에 그대로 들어갑니다.")
+
+    # species 가 비어 있으면 통과시킨다 — 새 입력 필드라, 이 칸이 없던 예전
+    # 사양(및 이 필드를 안 채운 모델 응답)까지 여기서 막으면 예전처럼 돌던
+    # 것이 갑자기 멈춘다. species 를 채웠을 때만 사람으로 뭉개지지 않았는지
+    # 검사한다.
+    species = spec.get("species", "")
+    species_en = spec.get("species_en", "")
+    if species and species != "사람":
+        if not species_en:
+            bad.append(f"species가 '{species}'인데 species_en이 없습니다. "
+                       "appearance_en 을 종으로 시작하게 할 근거가 없습니다.")
+        elif spec["appearance_en"] and species_en.lower() not in spec["appearance_en"].lower():
+            bad.append(f"species가 '{species}'({species_en})인데 appearance_en 에 "
+                       f"'{species_en}'이 없습니다 — 사람으로 뭉개졌을 수 있습니다.")
 
     n = len(spec["design_details"])
     if not DETAIL_MIN <= n <= DETAIL_MAX:
