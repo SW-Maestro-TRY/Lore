@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LORE — new_harness 실험</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "Pretendard", "Noto Sans KR", sans-serif;
+    background: #f6f5f2; color: #222; padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub {
+    color: #857; background: #fff3e0; border: 1px solid #f0d9b5; border-radius: 8px;
+    padding: 10px 12px; font-size: 13px; line-height: 1.5; margin: 12px 0 24px;
+  }
+  fieldset { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 0 0 16px; }
+  legend { font-size: 13px; color: #666; padding: 0 6px; }
+  label { display: block; font-size: 13px; color: #444; margin: 10px 0 4px; }
+  input[type=text], textarea, select {
+    width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 14px; font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .photos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .photos img {
+    width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd;
+  }
+  button {
+    font-family: inherit; font-size: 15px; border: none; border-radius: 8px;
+    padding: 12px 16px; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .primary { background: #222; color: #fff; width: 100%; }
+  .card {
+    border: 1px solid #ddd; border-radius: 10px; padding: 14px; margin-bottom: 10px;
+    cursor: pointer; background: #fff;
+  }
+  .card.picked { border-color: #222; box-shadow: 0 0 0 2px #222 inset; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; }
+  .card p { margin: 4px 0; font-size: 13px; color: #555; line-height: 1.5; }
+  .card ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: #555; }
+  #log {
+    background: #111; color: #b6ffb6; font-family: ui-monospace, monospace; font-size: 12px;
+    padding: 10px; border-radius: 8px; height: 180px; overflow-y: auto; white-space: pre-wrap;
+    margin-top: 12px;
+  }
+  .progress { font-size: 13px; color: #555; margin: 8px 0; }
+  .hidden { display: none !important; }
+  #result img { width: 100%; border-radius: 8px; display: block; margin-top: 12px; }
+  .err {
+    background: #fee; border: 1px solid #f3b; color: #900; border-radius: 8px;
+    padding: 10px 12px; font-size: 13px; margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>new_harness 실험 화면</h1>
+  <div class="sub">
+    제품 화면(index.html)과 완전히 별개인 연결 실험입니다. 실제 이미지 생성
+    호출이 나갑니다(과금) — 대사는 그림에 바로 그려지고, 편집실(overlay)
+    기능은 여기 없습니다.
+  </div>
+
+  <form id="form">
+    <fieldset>
+      <legend>캐릭터</legend>
+      <label>이름 *</label>
+      <input type="text" name="name" required>
+      <label>설명</label>
+      <textarea name="character" placeholder="어떤 사람인지 자유롭게"></textarea>
+      <label>장르</label>
+      <input type="text" name="genre" placeholder="예: 로맨스 판타지">
+      <div class="grid2" id="fields"></div>
+      <label>사진 (최대 4장, 선택)</label>
+      <input type="file" id="photoInput" accept="image/*" multiple>
+      <div class="photos" id="photoPreview"></div>
+    </fieldset>
+    <button class="primary" type="submit" id="submitBtn">이야기 후보 만들기</button>
+  </form>
+
+  <div id="picker" class="hidden">
+    <h2 style="font-size:16px;">어느 방향으로 갈까요?</h2>
+    <div id="cards"></div>
+    <button class="primary" id="pickBtn" disabled>이 방향으로 계속하기</button>
+  </div>
+
+  <div id="progress" class="hidden">
+    <div class="progress" id="progressText">진행 중…</div>
+    <div id="log"></div>
+  </div>
+
+  <div id="result" class="hidden">
+    <h2 style="font-size:16px;">완성</h2>
+    <img id="episodeImg" alt="완성된 한 편">
+  </div>
+
+  <div id="errorBox" class="hidden err"></div>
+</div>
+
+<script>
+const FIELD_KEYS = ["나이", "성별", "직업", "성격", "말투", "과거", "관계", "약점"];
+const fieldsBox = document.getElementById("fields");
+for (const k of FIELD_KEYS) {
+  const label = document.createElement("label");
+  label.textContent = k;
+  const input = document.createElement("input");
+  input.type = "text"; input.name = "field_" + k;
+  fieldsBox.appendChild(label);
+  fieldsBox.appendChild(input);
+}
+
+let photoDataUrls = [];
+document.getElementById("photoInput").addEventListener("change", async (e) => {
+  const files = Array.from(e.target.files).slice(0, 4);
+  photoDataUrls = await Promise.all(files.map(f => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(f);
+  })));
+  const preview = document.getElementById("photoPreview");
+  preview.innerHTML = "";
+  for (const url of photoDataUrls) {
+    const img = document.createElement("img");
+    img.src = url;
+    preview.appendChild(img);
+  }
+});
+
+function showError(msg) {
+  const box = document.getElementById("errorBox");
+  box.textContent = msg;
+  box.classList.remove("hidden");
+}
+function clearError() {
+  document.getElementById("errorBox").classList.add("hidden");
+}
+
+let jobId = null;
+let pollTimer = null;
+let pickedN = null;
+
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  clearError();
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  btn.textContent = "이야기 후보를 만드는 중…";
+
+  const data = new FormData(e.target);
+  const fields = {};
+  for (const k of FIELD_KEYS) fields[k] = data.get("field_" + k) || "";
+  const form = {
+    name: data.get("name") || "",
+    character: data.get("character") || "",
+    genre: data.get("genre") || "",
+    fields,
+    photos_data: photoDataUrls,
+  };
+
+  try {
+    const res = await fetch("/api/nh/create", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || "요청이 실패했습니다");
+    jobId = body.id;
+    document.getElementById("form").classList.add("hidden");
+    document.getElementById("progress").classList.remove("hidden");
+    document.getElementById("progressText").textContent = "이야기 후보 4개를 만드는 중…";
+    startPolling();
+  } catch (err) {
+    showError(err.message);
+    btn.disabled = false;
+    btn.textContent = "이야기 후보 만들기";
+  }
+});
+
+function renderCards(directions) {
+  const cards = document.getElementById("cards");
+  cards.innerHTML = "";
+  for (const d of directions) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.n = d.n;
+    const scenes = (d.scenes || []).map(s => `<li>${s}</li>`).join("");
+    card.innerHTML = `
+      <h3>${d.n}. ${d.title || ""} ${d.genre ? `[${d.genre}]` : ""}</h3>
+      <p>${(d.plot || "").split("\n")[0]}</p>
+      <ul>${scenes}</ul>`;
+    card.addEventListener("click", () => {
+      document.querySelectorAll(".card").forEach(c => c.classList.remove("picked"));
+      card.classList.add("picked");
+      pickedN = d.n;
+      document.getElementById("pickBtn").disabled = false;
+    });
+    cards.appendChild(card);
+  }
+}
+
+document.getElementById("pickBtn").addEventListener("click", async () => {
+  if (pickedN === null) return;
+  const btn = document.getElementById("pickBtn");
+  btn.disabled = true;
+  btn.textContent = "만드는 중…";
+  try {
+    const res = await fetch(`/api/nh/jobs/${jobId}/pick`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ n: pickedN }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || "요청이 실패했습니다");
+    document.getElementById("picker").classList.add("hidden");
+    document.getElementById("progress").classList.remove("hidden");
+    document.getElementById("progressText").textContent = "콘티·시트·그림을 만드는 중…";
+  } catch (err) {
+    showError(err.message);
+    btn.disabled = false;
+    btn.textContent = "이 방향으로 계속하기";
+  }
+});
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(tick, 800);
+  tick();
+}
+
+async function tick() {
+  if (!jobId) return;
+  let snap;
+  try {
+    const res = await fetch(`/api/nh/jobs/${jobId}`);
+    snap = await res.json();
+    if (!res.ok) throw new Error(snap.error || "상태를 읽지 못했습니다");
+  } catch (err) {
+    showError(err.message);
+    return;
+  }
+
+  const logBox = document.getElementById("log");
+  logBox.textContent = (snap.log || []).join("\n");
+  logBox.scrollTop = logBox.scrollHeight;
+
+  if (snap.art && snap.art.total) {
+    document.getElementById("progressText").textContent =
+      `페이지 그리는 중 (${snap.art.done}/${snap.art.total})`;
+  }
+
+  if (snap.status === "awaiting_pick") {
+    clearInterval(pollTimer); pollTimer = null;
+    document.getElementById("progress").classList.add("hidden");
+    document.getElementById("picker").classList.remove("hidden");
+    renderCards(snap.directions || []);
+  } else if (snap.status === "done") {
+    clearInterval(pollTimer); pollTimer = null;
+    document.getElementById("progress").classList.add("hidden");
+    document.getElementById("result").classList.remove("hidden");
+    document.getElementById("episodeImg").src = `/api/nh/jobs/${jobId}/episode.png`;
+  } else if (snap.status === "error") {
+    clearInterval(pollTimer); pollTimer = null;
+    showError(snap.error || "실패했습니다");
+  }
+}
+</script>
+</body>
+</html>
