@@ -110,9 +110,36 @@ tense understated mood,
 slightly detached emotional tone,
 sophisticated mature webtoon aesthetic.
 
-**주의: 파란 조명으로 서늘함을 표현하지 않는다.** 조명 색이 아니라
-선화·그림자·구도·얼굴로 서늘함을 만든다 — 화면을 파랗게 물들이면
-"서늘함=파란 조명"으로 얕게 풀린 것이다.
+## 전체 색보정 — 블루그레이 필터 (2026-08-30 정정)
+
+**정정.** 앞서 "파란 조명 금지"라고 못박았던 것은 틀린 지점을 짚은
+것이었다 — 사용자가 싫어한 것은 **특정 광원이 파랗게 비추는 효과**
+(blue lighting)였지, 완성된 그림 전체에 얇게 얹는 **색보정(color
+grading)**이 아니었다. 원하는 것은 정확히 이거다: 옷은 원래 색(올리브·
+회색·검정 등)을 그대로 두고, **완성된 그림 위에 아주 얇은 청회색 필터를
+한 겹 씌운 것처럼** 전체 채도와 색온도를 통일감 있게 눌러준다.
+
+a subtle cool blue-gray color cast over the entire illustration,
+a soft translucent blue filter across the whole image,
+overall cool blue-toned grading,
+uniform cool blue-gray atmospheric tint,
+all colors retain their original hue but are gently shifted toward cool
+blue,
+cool blue undertones across skin, hair, clothing, shadows and background,
+soft monochromatic blue-gray color grading,
+subtle icy blue veil over the entire image,
+cool overall color temperature,
+desaturated and slightly bluish.
+
+강도는 약하게 — 옷의 원래 색(올리브·회색·검정)이 파란 옷으로 바뀌면
+안 된다.
+
+very subtle blue tint,
+faint blue-gray overlay,
+restrained blue color cast,
+not strongly blue,
+not monochromatic blue,
+original colors remain recognizable.
 
 ## 하지 마라
 
@@ -148,8 +175,10 @@ sophisticated mature webtoon aesthetic.
 - plastic skin, airbrushed skin, 3D render, photorealistic
 - anime key visual, anime illustration, kawaii, moe, chibi, childlike
   proportions, oversized eyes
-- excessive blue lighting, tinting the whole scene blue (파란 조명으로
-  서늘함을 대신하는 것)
+- strong blue lighting, neon blue, bright blue colors, blue clothing, blue
+  hair, monochromatic blue, heavy blue filter, intense cyan, oversaturated
+  blue, localized blue lighting — 특정 광원이 파랗게 비추는 효과는 여전히
+  안 된다. 위 "전체 색보정" 절의 얇은 블루그레이 필터와는 다른 것이다
 - 일본 가챠 게임 일러스트의 얼굴 — 얼굴 절반을 덮는 둥근 눈, 없는 코,
   선 하나짜리 입, 바늘 턱
 - 손가락 개수, 두 눈의 높이, 좌우 장신구를 눈으로 확인하지 않는 것
