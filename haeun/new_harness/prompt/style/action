@@ -1,153 +1,143 @@
 **`romance_fantasy`·`frost`·`webtoon_lock`과 나란한 그림체 중 하나다.**
 `NH_STYLE=action`으로 고른다. 저것들은 전부 컬러 웹툰/일러스트고, 이건
-**고밀도 흑백 잉크 선화 + 특정 포인트만 컬러** — 검투·추격·마법 발동처럼
-임팩트가 필요한 장면에 어울리는 결이다. 화사한 컬러가 필요한 평소 장면엔
-다른 그림체를 고르면 된다 — 이 파일이 그것들을 대체하지 않는다.
+**흑백 잉크 웹툰 원고 + 특정 포인트만 실제 컬러**다. 검투·추격·마법
+발동처럼 임팩트가 필요한 장면에 어울리는 결이다. 화사한 컬러가 필요한
+평소 장면엔 다른 그림체를 고르면 된다 — 이 파일이 그것들을 대체하지
+않는다.
 
-MASTER STYLE:
+**레퍼런스: `new_harness/runs/action-page6-frost/sample/sample_action.png`**
+(사용자 제공, 2026-08-30). 백지에 검은 선화 위주이고, 색은 눈·장미·검
+손잡이 보석 몇 곳에만 꽉 찬 원색으로 들어가 있다. 아래 문구와 이 샘플이
+어긋나면 샘플이 맞다.
 
-Premium Korean webtoon artwork drawn with exceptionally refined
-professional ink linework.
+COLOR INFORMATION IS NOT THE RENDERING TARGET. VALUE INFORMATION IS.
 
-This is NOT a line-art conversion.
-This is NOT a grayscale version of a colored illustration.
+Discard hue and saturation from the character design and reconstruct every
+non-accent color using monochrome value relationships: white, light gray,
+mid gray, dark gray, and solid black ink.
 
-The image must look like an actual Korean webtoon artist originally drew
-the scene directly with ink.
+MASTER VISUAL STYLE:
 
-The uploaded character sheet is the ABSOLUTE CHARACTER DESIGN REFERENCE for
-SHAPE, not for rendering style. Preserve the character's identity,
-hairstyle, hair length, hair shape, facial structure, eye shape, body
-proportions, clothing design, accessories, weapons, and distinctive
-details from the character sheet.
-Do not redesign the character.
-Do not simplify the costume.
-Do not invent unrelated accessories.
-Do not copy the character sheet's own rendering, coloring, or finish — how
-this panel is drawn is decided entirely by this MASTER STYLE, not by the
-sheet.
+Create a premium Korean webtoon illustration drawn as finished professional
+black-and-white ink artwork.
 
-The sheet's colors (hair color, eye color, outfit color) describe the
-character's design ONLY. They are not an instruction to render the
-character in full color. Actual color placement in the final image is
-governed entirely by the COLOR rules below — most of the character must
-still end up as black-and-white ink line art, with color appearing only at
-the few selective accent points chosen for this scene. Rendering the
-character's hair or outfit in their full sheet color throughout the panel
-is treated the same as "coloring the entire character" and is wrong here.
+The uploaded character sheet is the ABSOLUTE REFERENCE for the character's
+identity and design. Preserve the character's hairstyle, hair length,
+facial features, eye shape, body proportions, costume, accessories,
+weapons, and distinctive design elements.
 
-Prioritize, in this order:
-1. character drawing quality
-2. facial expression
-3. anatomy
-4. hair rendering
-5. clothing construction
-6. important props
-7. cinematic composition
+However, DO NOT preserve the original character sheet's colors.
 
-Line density must be controlled by visual importance, not applied evenly.
+The character sheet determines WHAT the character looks like. This style
+determines HOW the character is rendered.
 
-Characters and important foreground objects: highly refined, intricate
-linework. Secondary background: simpler and lighter linework.
+BLACK-AND-WHITE VALUE RENDERING:
 
-Do NOT fill every surface with unnecessary hatching.
-Do NOT make the entire image equally detailed.
-Do NOT turn architecture into technical drawings.
+Treat the entire illustration as a monochrome Korean webtoon page. Ignore
+the original hue and saturation of the character's colors.
 
-Use a line-weight hierarchy: heavy confident contours, medium structural
-lines, fine delicate detail lines.
+Convert the character's original colors into monochrome according to
+their relative VALUE / LIGHTNESS. Dark original colors become darker
+grayscale values. Mid-value colors become medium gray values. Light colors
+become white or very light gray values.
 
-Use selective hatching only where it improves form, depth, lighting, or
-material — not as a uniform texture laid over everything.
+Do NOT simply desaturate the original colors into flat gray. Do NOT
+preserve the original hue as a pastel or tinted gray. Instead, completely
+reinterpret the colors as black, white, gray, ink shadows, and linework.
 
-The image should have clear areas of visual rest.
+For example:
+- pink hair -> white/light gray hair with dark ink shadows
+- dark blue clothing -> dark gray or black
+- pale skin -> mostly white with subtle gray shadows
+- gold ornaments -> white/light gray with selective dark outlines and
+  shadows
+- red fabric -> medium/dark gray according to its original value
 
-The result should feel like a skilled webtoon artist spent a long time
-drawing ONE finished panel, not like an AI generated an extremely detailed
-coloring page.
+Dark materials may contain solid black ink areas. Light materials should
+remain predominantly white. The result must read clearly as a
+professionally inked black-and-white manga/webtoon page.
 
-COLOR — BLACK AND WHITE DOMINANT:
+INK AND LINEWORK:
 
-Only 1-3 small areas may contain vivid color accents. Examples: red eyes,
-blood, a few flower petals, a magical glow, one gemstone, a small portion
-of clothing. Everything else remains monochrome.
+This is NOT a color illustration with a black-and-white filter. Draw the
+scene as if a professional webtoon artist originally created it directly
+in monochrome ink.
 
-Color accents must be isolated and intentional, like an artistic emphasis
-placed on an otherwise black-and-white webtoon panel — not a wash or
-gradient, and never the character's full hair, full outfit, or the whole
-background.
+Use: confident expressive ink lines, varied line weight, clean strong
+contours, delicate interior lines, detailed hair strands, detailed fabric
+folds, precise facial features, intricate costume details, carefully
+constructed hands, controlled solid black areas, selective hatching,
+cross-hatching where appropriate, form-following shadows, atmospheric
+linework.
+
+Line density must follow visual importance. The main character and
+important objects receive the highest level of rendering. Secondary
+background elements receive less dense and lighter linework.
+
+Do NOT make every surface equally detailed.
+Do NOT cover the entire image with random hatching.
+Do NOT make the background look like an architectural technical drawing.
+Leave intentional areas of visual breathing room.
+
+The result should look like an artist carefully drew one finished webtoon
+panel, not like an AI converted a colored image into line art.
+
+SELECTIVE COLOR ACCENTS:
+
+Although the overall artwork is monochrome, a very small number of
+visually important elements may retain actual color. Use color ONLY when
+it creates deliberate visual emphasis. Choose approximately 1-3 small
+color accents. Possible examples: the character's eyes, blood, a few
+flower petals, magical energy, fire, a gemstone, an important symbol.
+
+These selected elements should remain genuinely colored and vivid.
+Everything else must remain monochrome.
 
 DO NOT color the entire character.
-DO NOT color the entire background.
-DO NOT use soft full-image gradients.
-DO NOT turn the image into a full-color anime illustration.
+DO NOT color the character's hair simply because the character sheet has
+colored hair.
 
-CHARACTER EMPHASIS:
+If the character has pink hair, the hair must still be rendered as
+monochrome grayscale unless the scene explicitly designates the hair as a
+selective color accent.
 
-For emotional scenes, prioritize facial expression and eyes. For action
-scenes, prioritize anatomy, gesture, foreshortening, motion, hair movement,
-clothing movement, weapon trajectory, impact effects, and dynamic
-perspective. For quiet scenes, prioritize atmosphere, composition,
-environmental details, subtle expressions, and controlled line density.
+If the scene/cut description does not specify which element should carry
+color, default to the character's eyes as the single accent and keep
+everything else monochrome — do not guess a different accent and do not
+add more than one by default.
 
-BACKGROUND:
-
-Background exists to place the character, not to compete with them. Use
-simpler, lighter linework than the character — a few confident lines
-establishing the space, not an equally-detailed drawing. Do not turn
-buildings or architecture into technical line drawings.
-
-COMPOSITION:
-
-Treat the image as an actual webtoon panel, not a character sheet. Use an
-intentional camera angle and strong composition. Avoid static centered
-character posing unless explicitly requested. The composition should
-communicate the scene and emotion immediately.
-
-IMPORTANT:
-
-The uploaded character sheet determines WHAT the character looks like. The
-scene description determines WHAT the character is doing. This MASTER
-STYLE determines HOW the scene is drawn — including the linework, the
-density, and the color placement.
-
-Never sacrifice character consistency for artistic variation.
-Never replace the character with a generic anime character.
-Never convert the image into a full-color illustration.
-
-Final visual target: one exceptionally well-drawn Korean webtoon panel,
-predominantly black-and-white ink, with controlled line density (detailed
-character, lighter background) and only a few carefully chosen vivid color
-accents.
+Color accents should feel like small areas of color placed on top of a
+finished black-and-white webtoon page.
 
 ## 하지 마라
 
-- full color illustration, fully colored character, fully colored
-  background, colorful anime illustration, anime key visual, light novel
-  cover
-- line-art conversion, grayscale version of a colored illustration
+- coloring the entire character, coloring the entire background, coloring
+  hair/clothing simply because the character sheet shows them in color
+- desaturating the original color into flat gray while keeping its hue as
+  a visible tint, pastel version of the original color, gray-pink /
+  gray-blue / tinted gray (any hue tint at all counts as color — only true
+  neutral gray/black/white is allowed outside the chosen accents)
+- full color illustration, fully colored character, colorful anime
+  illustration, anime key visual, light novel cover
 - character sheet, character reference sheet, generic anime illustration
-- simple line art, basic line art, rough sketch, rough drawing, unfinished
-  sketch, lazy linework
 - flat outlines, outline filter, auto traced appearance, vector-like line
-  art, uniform line thickness, clean vector lines, minimal linework, low
-  detail, low density
+  art, uniform line thickness with no weight variation, low detail, low
+  density, lazy linework, unfinished scribble
 - uniform hatching across the whole image, equally detailed background,
-  technical architectural drawing, empty background, simplified background,
-  flat background
-- flat shading, soft digital painting, airbrushed shading, watercolor,
-  pastel illustration, soft pastel colors, milky colors, glossy full-color
-  rendering
+  technical architectural drawing, empty background
+- soft digital painting, airbrushed shading, watercolor, milky colors,
+  glossy full-color rendering, sepia wash, single-hue tint over the whole
+  image
 - 3D render, CGI, plastic appearance, photorealistic
 - chibi, kawaii, moe, childlike proportions, oversized eyes, extremely
   large eyes, generic facial features
-- simplified costume, simplified hair, missing accessories, incorrect
-  costume, redesigned character, different hairstyle, different clothing,
-  different weapon, extra accessories, random ornaments
+- simplified costume, missing accessories, incorrect costume, redesigned
+  character, different hairstyle, different clothing, different weapon,
+  extra accessories, random ornaments
 - anatomical distortion, bad hands, extra fingers, missing fingers,
   deformed hands, duplicate limbs, extra limbs
 - stiff pose, static pose, front-facing character pose, passport
   composition, symmetrical character portrait
 - low quality, blurry, muddy lines, messy unreadable linework
-- excessive color, too many colored areas, coloring the entire character,
-  coloring the entire background, large color blocks, heavy gradients
+- excessive color, too many colored areas, large color blocks, heavy
+  gradients
