@@ -1,92 +1,114 @@
-**이 하네스의 기본(default) 그림체다.** 2026-08-30 하루 열 번 다시 썼다.
+**이 하네스의 기본(default) 그림체다.** 2026-08-30 하루 열한 번 다시 썼다.
 흑백 잉크+포인트 컬러 실험은 `action`(특수 컷 전용)으로 따로 남겼고, 이
-파일은 평소 로판 장면에 쓰는 기본값이다. **10차 — 그림체 절을 통째로
-정리.** 8~9차에서 "잉크 선화를 강하게" 요구하는 문구와 "디테일을
-절제하라"는 문구가 동시에 들어가 있어서, 모델이 그 둘을 타협해
-"AI 일러스트를 거칠게 후처리한 것 같은 그림"을 냈다. 이번엔 그 충돌을
-없애고 하나의 방향(깔끔한 웹툰 선 + 절제된 디테일)으로만 말한다.
+파일은 평소 로판 장면에 쓰는 기본값이다.
 
-## 그림체
+**11차 — 핵심을 "저채도/블루그레이"에서 "웹툰 작가의 선"으로 옮긴다.**
+10차까지 채도·블루필터를 계속 만졌는데, 레퍼런스 여러 장을 다시 보고
+나서 방향이 바뀌었다 — 이 그림체의 정체는 색이 아니라 **선**이다.
+"잉크 질감(거친 텍스처)"도 아니고 "웹툰 작가가 그리는 간결하고 선택적인
+선"이다. 그리고 색은 화면 전체를 파랗게 미는 게 아니라, **여러 색(피부의
+핑크/보라, 옷의 파랑/회색, 배경의 초록/하늘색)이 각자 있으면서 전체
+색온도가 차갑게 통일된** 것이다 — "블루그레이 필터"가 아니라 "차가운
+색들의 조화".
+
+## 선 — 거칠게가 아니라 간결하게, 그리고 선택적으로
 
 mature Korean webtoon artwork,
-refined contemporary Korean webtoon style,
-clean expressive linework,
-natural hand-drawn line quality,
+expressive hand-drawn linework,
+natural organic lines,
+confident simplified strokes,
 subtle variation in line weight,
-controlled and confident strokes,
 
-beautiful mature character design,
-elegant but understated facial features,
-natural anatomy and proportions,
+clean but slightly rough hand-drawn contours,
+restrained line density,
+selective internal lines,
+simple intentional linework.
 
-restrained visual detail,
-selective detail hierarchy,
-not every surface needs to be rendered,
-simple intentional shapes,
-clean large shapes with only a few meaningful internal lines,
+**살아있어야 하는 선(작화 디테일) vs 없어야 하는 것(텍스처 디테일):**
 
-hair is drawn in a few large flowing masses,
-with only a small number of delicate strand lines,
-no excessive individual hair strands,
-
-clothing is defined by silhouette and a few essential folds,
-not every wrinkle is rendered,
-
-skin is mostly clean and smooth,
-with only minimal facial and anatomical lines,
-
-background objects are simplified,
-background details are subordinate to the character,
-background has less line density and less visual sharpness than the
-character,
-
-flat and controlled webtoon coloring,
-simple graphic shadow shapes,
-limited number of shadow areas,
-minimal rendering,
-no excessive surface texture,
-
-the image should feel carefully drawn rather than heavily rendered,
-the beauty comes from line quality, composition, anatomy and expression,
-not from excessive detail or texture.
-
-- 머리카락: ❌ 한 올 한 올 + 반짝이는 하이라이트 여러 개 → ⭕ 큰 덩어리
-  몇 개 + 얇은 선 몇 가닥 + 부분적인 명암 하나
-- 옷: ❌ 주름 하나하나 묘사 → ⭕ 큰 실루엣과 핵심 주름 몇 개만
-- 피부: ❌ 모공·잔주름 등 표면 질감 → ⭕ 매끈한 면에 최소한의 그림자
-- 배경: ❌ 모든 사물이 선명하고 질감이 있음 → ⭕ 형태만 알아볼 정도로
-  단순화, 흐릿한 명암
-
-## 명암
-
-graphic webtoon shading,
-clear controlled shadow shapes,
-simple cool-toned shadows,
-limited shadow areas,
-strong separation between light and shadow,
-minimal gradients,
-no excessive rendering,
-no realistic surface shading.
+- 살려라: 눈매, 코 선, 턱선, 목 근육, 손가락, 옷의 큰 주름 몇 개, 머리카락의
+  흐름, 얼굴 주변의 잔선 — 그림을 잘 그리는 사람이 선택해서 넣는 선들
+- 없애라: 피부 질감(모공·잔주름), 옷감 질감, 머리카락 수백 가닥, 광택,
+  사실적인 재질감, 모든 주름마다 들어간 명암 — 이건 "디테일"이 아니라
+  "렌더링"이다
 
 ## 얼굴
 
-**단순하게 유지한다.** 조건을 많이 걸수록 모델이 "캐릭터 얼굴 생성
-프롬프트"처럼 받아들여 얼굴을 의식적으로 만든다. 아래로 충분하다 —
-`closely spaced eyes`·`short interocular distance`(눈 간격)는 실제
-결과에서 그 문제가 다시 보일 때만 추가한다.
-
-mature attractive Korean webtoon face,
-slightly elongated almond-shaped eyes,
-natural eye size,
-defined eyelids,
-subtle sharpness around the eyes,
-natural facial proportions,
-slightly narrow gaze,
-calm and detached expression,
-restrained eye highlights,
+mature attractive facial features,
+expressive eyes,
+natural anatomy,
+elegant character proportions,
+calm and emotionally distant expression,
 natural asymmetry.
 
-## 구도 — 얌전하게 정면·중앙에 서 있지 않는다
+## 피부 — 렌더링된 피부가 아니라 평평한 피부
+
+flat matte skin,
+skin defined by a few cool shadow shapes rather than soft 3D shading,
+selective facial and anatomical linework on the skin,
+no soft airbrushed gradient across the skin.
+
+## 색 — 블루 필터가 아니라 차가운 색들의 조화
+
+flat matte colors,
+limited color palette,
+cool muted colors,
+soft blue, blue-gray and muted violet tones,
+
+여러 색이 각자 존재해도 된다 — 피부는 옅은 핑크/보라 기운, 옷은 파랑·
+회색, 배경은 초록이나 하늘색이 섞여도 된다. **전체를 하나의 파란
+필터로 미는 것이 아니라, 그 색들의 전체 색온도가 차갑게 통일되는
+것이다.**
+
+cool color harmony across multiple hues,
+each element keeps its own distinguishable color,
+the unifying element is a shared cool color temperature, not a single
+blue tint,
+do not apply a uniform blue-gray overlay across the entire image.
+
+## 명암 — 단순하지만 정확한 자리에
+
+simple graphic shadows,
+flat cel shading,
+cool-toned shadow shapes,
+one or two shadow steps at most,
+minimal gradients,
+minimal rendering,
+
+정확한 자리에 놓인 단순한 그림자가, 여러 단계로 그라데이션한 그림자보다
+더 입체적으로 읽힌다 — 그림자 개수를 늘리는 게 아니라 위치를 정확히
+잡는다.
+
+## 머리카락·옷·배경
+
+hair drawn with large flowing shapes and a few expressive strands,
+clothing defined by silhouette and a few meaningful folds,
+background simplified and less detailed than the character.
+
+## 명암 대비 — 검정까지 회색이 되면 안 된다
+
+strong value contrast,
+deep charcoal shadows,
+deep blacks,
+darkest areas remain nearly black,
+rich near-black ink lines,
+strong dark linework against pale skin,
+pale highlights remain light,
+clear separation between highlights, midtones and shadows.
+
+## 분위기 — 서늘함은 공포가 아니다
+
+quiet, cool, slightly eerie atmosphere,
+calm and emotionally distant mood,
+beautiful without being glossy or luxurious,
+the charm comes from expressive linework, anatomy, composition and color
+harmony, not from excessive rendering or surface detail.
+
+무서운 표정·불안한 연출·음침한 배경을 넣으라는 말이 아니다 — 인물과
+장면은 평범해도 되고, 오히려 평범할수록 좋다. 호러도 우울함도 아니고,
+그냥 색과 선이 차가운 것이다.
+
+## 구도
 
 dynamic cinematic composition,
 asymmetrical body posture,
@@ -96,74 +118,25 @@ dynamic camera perspective,
 dramatic foreshortening when appropriate,
 character interacting naturally with the environment.
 
-## 분위기 — 서늘함은 공포가 아니다
-
-quietly eerie, cool and restrained atmosphere,
-subtle sense of unease,
-emotionally distant,
-cold ambient lighting,
-beautiful and elegant rather than horror-like,
-sophisticated mature webtoon aesthetic.
-
-무서운 표정·불안한 연출·음침한 배경을 넣으라는 말이 아니다 — 인물과
-장면은 평범해도 되고, 오히려 평범할수록 좋다. "약간의 거리감·고요함·
-서늘한 아름다움" 쪽이지 귀신이나 스릴러 쪽이 아니다.
-
-## 전체 색보정 — 블루그레이 필터 (건드리지 않는다)
-
-이 절은 여러 번의 실측 끝에 맞춰진 상태다. 옷 색은 그대로 두고,
-완성된 그림 전체(피부 포함, 예외 없이)에 뚜렷한 블루그레이 색보정을
-건다 — 개별 물체를 파란색으로 다시 칠하는 것과는 다르다.
-
-strong overall blue-gray color cast,
-strong cool blue filter over the entire illustration,
-the entire image is heavily tinted blue-gray,
-deep cool blue-gray atmospheric grading,
-cool blue-gray tint dominates the entire color palette,
-all colors are visibly affected by the blue-gray color grade,
-skin is also strongly blue-gray tinted,
-skin has almost no natural flesh color,
-skin appears pale gray with cool blue undertones,
-shadows are distinctly blue-gray,
-midtones are blue-gray,
-highlights are cool pale blue-gray,
-white areas are tinted blue-gray rather than neutral white,
-dark areas remain deep blue-black,
-
-very low saturation,
-strongly desaturated,
-low chroma,
-muted colors,
-faded colors,
-cold monochromatic color harmony,
-cool blue-gray color unity,
-
-the blue-gray color cast must be clearly visible at first glance,
-do not reduce or weaken the blue tint,
-do not restore natural skin coloration,
-do not neutralize the blue-gray grading,
-
-do not recolor individual objects into blue clothing or blue hair,
-apply the blue-gray effect as a global color grade over the whole
-finished illustration, including the skin.
-
-## 명암 대비 — 블루 필터로 검정까지 회색이 되면 안 된다
-
-블루 톤을 세게 넣으면서 검은색·짙은 그림자까지 같이 물러나면 안 된다.
-가장 어두운 곳은 여전히 진짜 검정에 가까워야 한다.
-
-strong value contrast,
-deep charcoal shadows,
-deep blacks,
-darkest areas remain nearly black,
-rich near-black ink lines,
-strong dark linework against pale skin,
-pale highlights remain light,
-clear separation between highlights, midtones and shadows,
-high value contrast.
+(포즈가 어정쩡하게 나오는 문제는 그림체가 아니라 공용 프롬프트
+`image_prompt.openai`/`.gemini` 의 "## 지키기" 절에서 다룬다 — 여기서는
+안 건드린다.)
 
 ## 하지 마라
 
+- traditional ink drawing, raw line drawing, rough ink texture, dry brush
+  ink texture, rough hatching, visible paper-like texture,
+  unfinished-looking brush texture — "잉크 질감"이 핵심이 아니다. 웹툰
+  작가의 간결한 선이 핵심이다
+- excessive individual hair strands, excessive hair highlights, glossy
+  hair
+- realistic skin texture, skin pores, fine skin wrinkles, fabric texture,
+  photorealistic material rendering, shading on every single fold
+- soft airbrushed skin gradient, smooth 3D-rendered skin
+- the entire image heavily tinted a single blue-gray, uniform blue-gray
+  overlay across everything including skin, monochromatic blue filter —
+  색은 여러 색이 각자 있으면서 색온도로만 통일된다. 화면 전체를 한
+  가지 파란색으로 미는 것이 아니다
 - beautiful delicate illustration, polished digital painting, smooth
   rendering, cinematic glow, cinematic lighting, high-end illustration,
   premium illustration, beautiful rendering, hyper-detailed, realistic
@@ -183,36 +156,24 @@ high value contrast.
   static standing pose, passport photo composition, character sheet
   composition
 - vector-clean outlines, mechanically uniform linework, perfectly uniform
-  stroke weight, excessive rough ink texture, excessive hatching, dense
-  surface texture, over-rendered details — 완벽하게 매끈한 벡터선도,
-  거칠고 지저분한 잉크선도 아니다. "깔끔하지만 기계적으로 완벽하지는
-  않은 선" 이 목표다
+  stroke weight, dense surface texture, over-rendered details
 - vivid colors, bright colors, high saturation, strong color intensity,
-  warm color palette, colorful clothing, vibrant background,
-  oversaturated highlights, oversaturated shadows, strongly colored
-  lighting, neon colors
+  warm color palette, vibrant background, oversaturated highlights,
+  oversaturated shadows, strongly colored lighting, neon colors
 - warm skin tones, warm peach skin, peachy skin, orange skin, rosy skin,
-  pink skin, golden skin, healthy warm complexion, warm beige skin,
-  natural skin color, warm flesh tones, orange undertones
-- warm highlights, neutral white highlights, warm color grading, natural
-  color balance, bright colorful palette, warm ambient light, yellow
-  cast, brown cast
+  pink skin (as the dominant overall skin color), golden skin, healthy
+  warm complexion, warm beige skin, warm flesh tones, orange undertones
+- warm highlights, warm color grading, warm ambient tones, yellow cast,
+  brown cast
 - plastic skin, airbrushed skin, 3D render, photorealistic
 - anime key visual, anime illustration, kawaii, moe, chibi, childlike
   proportions, oversized eyes
 - dread, ominous, unsettling scary imagery, horror atmosphere, gloomy
-  horror, scary mood, ghost or monster imagery, dramatic blue lighting as
-  a mood/lighting effect — "quietly eerie" 정도의 옅은 뉘앙스는 허용하되
-  진짜 공포·귀신·스릴러 쪽으로 가면 안 된다
-- neon blue, blue clothing, blue hair, intense cyan, localized blue
-  lighting
-- warm neutral color grading, beige color cast, brownish color cast,
-  yellowish color cast, warm ambient tones, neutral gray color grading,
-  the image appears neutral gray or beige instead of blue-toned
+  horror, scary mood, ghost or monster imagery — "quietly eerie" 정도의
+  옅은 뉘앙스는 허용하되 진짜 공포·귀신·스릴러 쪽으로 가면 안 된다
+- neon blue, intense cyan, localized blue lighting as a mood effect
 - wide-set eyes, far apart eyes, large interocular distance, oversized
   eyes, round eyes, large irises
-- uniform blue monochrome, flat blue filter, everything tinted the same
-  blue, washed out shadows, gray washed-out blacks
 - 일본 가챠 게임 일러스트의 얼굴 — 얼굴 절반을 덮는 둥근 눈, 없는 코,
   선 하나짜리 입, 바늘 턱
 - 손가락 개수, 두 눈의 높이, 좌우 장신구를 눈으로 확인하지 않는 것
