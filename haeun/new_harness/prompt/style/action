@@ -49,6 +49,38 @@ the shadow lines between strands/folds/forms. Mid-value original colors
 get selective hatching or small localized dark shapes, never a flat gray
 wash over the whole surface.
 
+IMPORTANT MONOCHROME INKING RULE (this is the part that fails most often):
+
+DO NOT use grayscale fill as a substitute for color. The artwork must NOT
+look like a grayscale colored illustration. For every character —
+regardless of whether their original hair, skin, or clothing color was
+light or dark — render the material primarily through BLACK INK AND WHITE
+PAPER.
+
+A medium or dark original color does NOT mean the entire surface should
+become a gray fill. Do not uniformly fill shirts, capes, hoods, hair,
+pants, or skin with gray, no matter how dark the original color was.
+
+Instead:
+- LIGHT AREAS: leave as clean white paper.
+- MID-VALUE AREAS: use linework, sparse hatching, and localized shadow
+  shapes — not a wash.
+- DARK AREAS: use solid black ink selectively and structurally, following
+  the actual form and folds of the object.
+- VERY DARK MATERIALS (black pants, dark hoods, dark hair): may contain
+  larger solid-black areas, but must preserve enough white linework,
+  highlights, fold lines, and silhouette separation to clearly show the
+  material, its folds, and the anatomy underneath. A dark garment is
+  built from black ink shapes with white gaps for form, not a single gray
+  or black rectangle.
+
+GRAY MUST NEVER BECOME THE DOMINANT FILL COLOR. The viewer should perceive
+WHITE PAPER + BLACK INK first, with any gray only as a rare, secondary,
+localized technique — never a full-surface tone. A character with dark
+clothing should look INKED, not COLORED GRAY. Think like a traditional
+manga/webtoon ink artist working in pure line and black ink, not a
+grayscale painter softly shading a form.
+
 The uploaded character sheet is the ABSOLUTE REFERENCE for the character's
 identity and design (hairstyle, hair length, facial features, eye shape,
 body proportions, costume, accessories, weapons, distinctive elements) —
@@ -64,11 +96,36 @@ dress, gold trim, black pants, pale skin, and pink eyes:
 - white dress -> stays almost entirely white, line only
 - gold trim -> the lit face of the metal stays white/paper, the metal's
   own shadow is black
-- black pants -> mostly solid black fill, since the original color is
-  dark
+- black pants -> built mostly from solid black ink shapes since the
+  original color is dark, but with white fold lines and highlight gaps
+  left in so the legs, folds, and silhouette still read clearly — never
+  one flat black rectangle
 - pale skin -> white, with only minimal black linework for shadow (under
   chin, hair shadow on face)
 - pink eyes -> this is the one part that stays actual color (see below)
+
+Worked example — a secondary character with a brown hood, a dark scarf, a
+brown/beige shirt, dark pants, and tan skin (no color sheet attached, but
+the same rule applies to every character in the panel, not only the one
+with a reference sheet):
+- brown hood -> mostly white/paper base, built from black contour lines
+  and fold lines, with solid black only in the deepest folds/interior
+  shadow — NOT a gray or brown-toned fill over the whole hood
+- dark scarf -> denser black ink than the hood (it's a darker original
+  color), but still built as ink shapes with white gaps at folds and
+  edges, not a single dark block
+- brown/beige shirt -> mostly white paper with black contour and fold
+  lines, black ink concentrated only at armpit creases, overlaps, and
+  where fabric bunches
+- dark pants -> same rule as the black pants above: solid black ink
+  shapes with white fold lines kept visible
+- tan skin -> white/paper, with only minimal black linework for shadow
+  (this does not change just because the character is secondary)
+
+A secondary or "less important" character gets simpler, sparser linework
+than the protagonist — fewer lines overall — but is never rendered with a
+gray fill as a shortcut. Less important still means white paper + black
+ink, just with less of it.
 
 INK AND LINEWORK:
 
