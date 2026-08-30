@@ -233,7 +233,7 @@ def cast_lines(cast, page=None, skip=()) -> list[str]:
     return out
 
 
-DEFAULT_STYLE = "frost"
+DEFAULT_STYLE = "webtoon_lock"
 
 
 def load_style(name: str = "") -> str:
