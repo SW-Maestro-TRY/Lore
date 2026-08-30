@@ -16,21 +16,40 @@
 따뜻하게 남아 있고 (2) 선이 외곽선 위주라 여전히 매끈한 디지털
 일러스트에 가깝고 (3) 눈이 크고 둥글어 로맨스 일러스트 여주인공처럼
 보인다는 지적을 받았다. 채도는 이제 그만 — 더 빼면 그냥 창백한 AI
-캐릭터가 된다. 아래 세 군데만 보강한다.
+캐릭터가 된다.
+
+**8차 재작성 — 방향을 뒤집는다.** 지금까지는 "AI 일러스트에 저채도를
+얹는" 프롬프트였다. 채도를 아무리 낮춰도 모델이 "회색빛 AI 일러스트"로
+푸는 이유는, 이 프롬프트 자체가 여전히 **일러스트(매끈한 디지털 채색)를
+그리라고 말하고 있었기 때문**이다. 이제는 반대로 간다 — **잉크 선화가
+그림을 끌고 가고, 색은 그 위에 아주 얇고 드문드문 얹히는** 것이 목표다.
+"하얀 피부"가 아니라 "선화 위에 색을 거의 안 칠한 피부"다.
+
+traditional ink drawing,
+hand-inked webtoon artwork,
+raw line drawing,
+visible pen strokes,
+organic imperfect lines,
+rough ink texture,
+uneven line weight,
+dry brush ink texture,
+sparse flat coloring,
+minimal color rendering,
+ink lines dominate the image,
+color is secondary to linework,
+limited flat color areas,
+graphic ink shadows,
+rough hatching,
+visible paper-like texture,
+restrained rendering,
+unfinished-looking brush texture,
+editorial comic illustration,
 
 mature Korean webtoon art,
-hand-drawn ink illustration,
 expressive organic linework,
-slightly rough and imperfect ink lines,
-rougher natural line quality,
-variable line weight,
-thin sharp ink outlines,
 visible internal ink lines drawn actively on the nose bridge, under the
 eyes, the neck, and fabric folds — not just clean outer contours,
-sketch-like construction lines,
-subtle ink hatching,
-sketch-like line texture,
-fine hatching and cross-hatching used selectively.
+sketch-like construction lines.
 
 ## 그림자 — 부드러운 그라데이션이 아니라 그래픽하게
 
@@ -67,9 +86,10 @@ character interacting naturally with the environment.
 
 ## 색 — 여기서부터는 메인이 아니라 위에 얹는 것
 
-pale cool ivory skin,
-desaturated skin,
-subtle gray undertones,
+skin rendered with very minimal color,
+nearly neutral pale skin,
+ink-defined skin shadows,
+little to no warm skin coloration,
 cool gray and cool violet-gray shadows on the skin — NOT beige, tan, or
 brown skin shadows. This applies everywhere skin is shaded: neck,
 collarbone, chest, under the jaw. A warm beige/brown shadow on skin is
@@ -77,6 +97,9 @@ the single most common way this style quietly turns warm again,
 muted cool color palette,
 low chroma,
 restrained saturation,
+
+**채도는 더 낮추지 않는다.** 지금 문제는 색의 양이 아니라 채색 방식이다
+— 매끈하게 디지털로 칠하는 대신 위 "ink lines dominate" 방향을 따른다.
 
 strong separation between light and shadow,
 clear graphic values,
@@ -94,8 +117,10 @@ sophisticated mature webtoon aesthetic.
 ## 하지 마라
 
 - beautiful delicate illustration, polished digital painting, smooth
-  rendering, cinematic glow — 매끈하고 예쁜 AI 일러스트로 돌아가게 만드는
-  표현들
+  rendering, cinematic glow, cinematic lighting, high-end illustration,
+  premium illustration, beautiful rendering, detailed rendering,
+  hyper-detailed, realistic skin — 매끈하고 예쁜 AI 일러스트로 돌아가게
+  만드는 표현들. 지금은 채색이 아니라 선화가 그림을 끌고 가야 한다
 - soft directional lighting, gentle tonal transitions, soft ambient
   lighting, natural soft skin — 그림자를 부드러운 그라데이션으로 되돌리는
   표현들. 위 "그래픽 그림자" 절과 정면충돌한다
