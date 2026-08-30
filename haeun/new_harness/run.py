@@ -648,6 +648,29 @@ _WORLD_KEYWORDS = {
 }
 
 
+def genre_lore_for(genre: str) -> str:
+    """장르에 맞는 story-harness 의 장르 템플릿(모티프·캐릭터유형·전개패턴·
+    체크리스트)을 그대로 빌린다. 없으면 빈 문자열.
+
+    story-harness/samples/genre_template.json 의 `_preset_map` 이 "헌터·게이트"
+    같은 한글 장르명을 이미 판타지·액션·스릴러 같은 실제 템플릿 조합으로
+    라우팅해 둔 상태다(story.resolve_genre_templates). world_text_for 보다
+    훨씬 구체적이라 — 던전·이세계 전이·용/드래곤 같은 실제 소재 목록과
+    캐릭터 유형·클리셰까지 들어 있다. 이걸 못 찾고 있다가 사용자가 다시
+    짚어서 뒤늦게 붙였다.
+    """
+    genre = (genre or "").strip()
+    if not genre:
+        return ""
+    try:
+        names = story.resolve_genre_templates(genre)
+        if not names:
+            return ""
+        return story.genre_template_block(names)
+    except Exception:
+        return ""
+
+
 def world_text_for(genre: str) -> str:
     """장르에 맞는 story-harness/worlds.json 세계관 한 문단. 없으면 빈 문자열.
 
@@ -694,6 +717,9 @@ def detail_block(char: dict, direction: dict, run_dir: Path) -> str:
 
     genre = direction["genre"] or char["genre"] or ""
     lines += ["", "## 장르", "", genre or "(정해진 것 없음)"]
+    lore = genre_lore_for(genre)
+    if lore:
+        lines += ["", "## 이 장르의 모티프·캐릭터유형·전개패턴 (참고 자료)", "", lore]
     world = world_text_for(genre)
     if world:
         lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
