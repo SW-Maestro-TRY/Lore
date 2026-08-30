@@ -634,6 +634,45 @@ def choose(directions: list[dict], pick: int | None) -> dict:
         print("목록에 있는 번호를 넣으세요.")
 
 
+# 장르 문자열(자유 텍스트, 예: "헌터·게이트") -> story-harness/worlds.json
+# 프리셋 라벨의 키워드. 여러 개 걸리면 첫 번째로 매칭된 것을 쓴다. 장르가
+# 이 목록에 없으면(오컬트 미스터리·좀비 아포칼립스 등) 조용히 건너뛴다 —
+# 세계관 문장 없이도 지금까지처럼 돌아간다.
+_WORLD_KEYWORDS = {
+    "hunter_gate": ("헌터", "게이트"),
+    "academy_magic": ("마법학교", "마법", "학원"),
+    "idol_agency": ("아이돌", "연습생"),
+    "hero_city": ("히어로", "능력자", "빌런"),
+    "post_disaster": ("재난", "좀비", "아포칼립스"),
+    "royal_court": ("궁정", "왕궁", "무협"),
+}
+
+
+def world_text_for(genre: str) -> str:
+    """장르에 맞는 story-harness/worlds.json 세계관 한 문단. 없으면 빈 문자열.
+
+    detail_prompt 가 "장르"만 받고 구체적인 세계 규칙을 못 받아서, 구체화
+    단계가 장르 특유의 소재(마나·몬스터·게이트 현상 등) 없이 아무 장르에나
+    쓸 수 있는 일반적인 소재(출입증·CCTV·무전기)로 채우는 문제가 있었다
+    (2026-08-30, 사용자 지적). story-harness 가 이미 갖고 있는 프리셋
+    문장을 그대로 빌려 온다 — 새 문장을 짓지 않는다.
+    """
+    genre = (genre or "").strip()
+    if not genre:
+        return ""
+    path = llm.STORY_HARNESS / "worlds.json"
+    if not path.exists():
+        return ""
+    try:
+        presets = json.loads(path.read_text(encoding="utf-8")).get("presets") or {}
+    except Exception:
+        return ""
+    for key, keywords in _WORLD_KEYWORDS.items():
+        if any(kw in genre for kw in keywords):
+            return (presets.get(key) or {}).get("text") or ""
+    return ""
+
+
 def detail_block(char: dict, direction: dict, run_dir: Path) -> str:
     """구체화 단계의 입력 — 줄거리 · 장면 목록 · 캐릭터 · 장르 · 밝히지 않을 것."""
     lines = ["# 이번 입력", "", "## 줄거리", "", direction["plot"],
@@ -653,7 +692,11 @@ def detail_block(char: dict, direction: dict, run_dir: Path) -> str:
         for d in spec.get("design_details") or []:
             lines.append(f"- 고정 요소: {d}")
 
-    lines += ["", "## 장르", "", direction["genre"] or char["genre"] or "(정해진 것 없음)"]
+    genre = direction["genre"] or char["genre"] or ""
+    lines += ["", "## 장르", "", genre or "(정해진 것 없음)"]
+    world = world_text_for(genre)
+    if world:
+        lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
     lines += ["", "## 밝히지 않을 것", ""]
     lines += [f"- {h}" for h in direction["hidden"]] or ["(없음)"]
     return "\n".join(lines) + "\n"
