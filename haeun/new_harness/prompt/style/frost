@@ -12,14 +12,24 @@
 + 날카로운 성인 얼굴 + 역동적인 구도를 메인으로 올린다. 저채도는 그 위에
 얹는 것이다.**
 
+**7차 보강.** 6차로 방향은 맞았지만 아직 (1) 피부 그림자가 살구/갈색으로
+따뜻하게 남아 있고 (2) 선이 외곽선 위주라 여전히 매끈한 디지털
+일러스트에 가깝고 (3) 눈이 크고 둥글어 로맨스 일러스트 여주인공처럼
+보인다는 지적을 받았다. 채도는 이제 그만 — 더 빼면 그냥 창백한 AI
+캐릭터가 된다. 아래 세 군데만 보강한다.
+
 mature Korean webtoon art,
 hand-drawn ink illustration,
 expressive organic linework,
 slightly rough and imperfect ink lines,
+rougher natural line quality,
 variable line weight,
 thin sharp ink outlines,
-visible internal ink lines,
+visible internal ink lines drawn actively on the nose bridge, under the
+eyes, the neck, and fabric folds — not just clean outer contours,
 sketch-like construction lines,
+subtle ink hatching,
+sketch-like line texture,
 fine hatching and cross-hatching used selectively.
 
 ## 그림자 — 부드러운 그라데이션이 아니라 그래픽하게
@@ -35,12 +45,15 @@ flat-to-painterly webtoon coloring.
 ## 얼굴 — 둥글고 반짝이는 로맨스 일러스트 눈이 아니다
 
 sharp mature facial features,
-narrow expressive eyes,
-defined eyelids,
+narrow elongated eyes,
+less rounded eyes,
+defined heavy eyelids,
+restrained eye highlights,
 subtle angular facial structure,
 strong eyebrows,
 natural asymmetry,
-slightly sharp and tired-looking gaze.
+slightly sharp and tired-looking gaze,
+calm detached expression.
 
 ## 구도 — 얌전하게 정면·중앙에 서 있지 않는다
 
@@ -57,6 +70,10 @@ character interacting naturally with the environment.
 pale cool ivory skin,
 desaturated skin,
 subtle gray undertones,
+cool gray and cool violet-gray shadows on the skin — NOT beige, tan, or
+brown skin shadows. This applies everywhere skin is shaded: neck,
+collarbone, chest, under the jaw. A warm beige/brown shadow on skin is
+the single most common way this style quietly turns warm again,
 muted cool color palette,
 low chroma,
 restrained saturation,
@@ -83,7 +100,15 @@ sophisticated mature webtoon aesthetic.
   lighting, natural soft skin — 그림자를 부드러운 그라데이션으로 되돌리는
   표현들. 위 "그래픽 그림자" 절과 정면충돌한다
 - round sparkly romance-illustration eyes, large glossy anime eyes,
-  excessive eye highlights, cute soft gaze
+  excessive eye highlights, excessive eye sparkle, cute soft gaze
+- cute, kawaii, soft pretty girl, round eyes, large sparkling eyes, sweet
+  expression, delicate princess aesthetic
+- soft dreamy lighting, romantic lighting, warm lighting, excessive glow
+- beige skin shadow, brown skin shadow, tan skin shadow, warm shadow on
+  skin — 그림자 온도가 따뜻하게 새는 것을 막는다 (피부 밑색이 아니라
+  그림자 색이 문제인 경우가 많다)
+- extreme desaturation, monochrome, completely gray image, washed out
+  image — 채도는 이미 충분하다. 더 빼는 방향으로 가지 않는다
 - stiff pose, symmetrical pose, front-facing character portrait, centered
   static standing pose, passport photo composition, character sheet
   composition
