@@ -67,7 +67,35 @@ preserve only the details that contribute to the character's expression,
 silhouette and mood,
 restrained rendering,
 simplified yet beautiful character rendering,
-soft cel shading with soft transitions.
+soft cel shading with soft transitions,
+
+restrained webtoon rendering,
+simple selective linework,
+deliberate simplification,
+uneven detail density,
+large areas of clean negative space,
+only essential lines are drawn,
+
+simplified facial rendering,
+minimal facial lines,
+simple irises,
+restrained eyelashes,
+clean pale skin with very little surface detail,
+
+simplified hair masses with only a few loose strand lines,
+irregular sparse hair strokes,
+
+selective clothing folds,
+hatching only in deeper shadows and important folds,
+large untextured color areas,
+
+background detail is significantly reduced compared to the character,
+soft simplified background shapes,
+no uniform texture across the image,
+
+natural hand-drawn imperfections,
+casual production-webtoon finish,
+not every surface is fully rendered.
 
 - 머리카락: ❌ 한 올 한 올 + 반짝이는 하이라이트 여러 개 → ⭕ 큰 덩어리
   몇 개 + 얇은 선 몇 가닥 + 부분적인 명암 하나
@@ -222,6 +250,11 @@ high value contrast.
 
 ## 하지 마라
 
+- hyper-detailed, over-rendered, excessive micro-detail, uniform detail
+  density, intricate facial details, intricate hair strands, perfectly
+  rendered eyes, detailed skin texture, detailed pores, excessive
+  eyelashes, excessive clothing folds, dense background details, uniform
+  hatching, decorative linework
 - beautiful delicate illustration, polished digital painting, smooth
   rendering, cinematic glow, cinematic lighting, high-end illustration,
   premium illustration, beautiful rendering, detailed rendering,
