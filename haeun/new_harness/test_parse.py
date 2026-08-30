@@ -508,6 +508,34 @@ def test_pages() -> None:
     check("입력 배열이 그대로", original, cuts("normal", "large"))
 
 
+def test_cut_weight() -> None:
+    check("large 는 full", P.cut_weight({"size": "large"}), "full")
+    check("full 은 full", P.cut_weight({"size": "full"}), "full")
+    check("배경 없는 tiny 는 light",
+          P.cut_weight({"size": "tiny", "background": {"type": "없음"}}), "light")
+    check("배경 있는 tiny 는 normal",
+          P.cut_weight({"size": "tiny", "background": {"type": "실제공간"}}), "normal")
+    check("배경 없는 small 도 light",
+          P.cut_weight({"size": "small", "background": {"type": "단색"}}), "light")
+    check("normal 크기는 배경이 없어도 normal(무게)",
+          P.cut_weight({"size": "normal", "background": {"type": "없음"}}), "normal")
+    check("배경 칸이 없으면 normal", P.cut_weight({"size": "tiny"}), "normal")
+
+
+def test_linked() -> None:
+    a = {"size": "normal", "location": "복도", "time": "밤",
+         "background": {"type": "실제공간"}}
+    b = dict(a)
+    ok("같은 장소·시간·실제공간이면 이어진다", P.linked(a, b))
+    ok("장소가 다르면 안 이어진다", not P.linked(a, dict(b, location="다른 곳")))
+    ok("시간대가 다르면 안 이어진다", not P.linked(a, dict(b, time="낮")))
+    ok("배경 종류가 다르면 안 이어진다",
+       not P.linked(a, dict(b, background={"type": "단색"})))
+    ok("large 컷 자신은 안 이어진다", not P.linked(dict(a, size="large"), b))
+    ok("large 컷으로도 안 이어진다", not P.linked(a, dict(b, size="full")))
+    ok("앞 컷이 없으면 거짓", not P.linked(None, b))
+
+
 def test_scene_head() -> None:
     board = R.parse_board(BOARD_JSON)
     flat = P.flatten_cuts(board["scenes"])
@@ -646,6 +674,44 @@ def test_image_prompt_page() -> None:
     full = IP.build_page_prompt([{"size": "full"}])
     ok("full 은 페이지 전체", "### 컷 1 (페이지 전체)" in full)
     ok("시트가 없으면 절도 없다", "## 캐릭터 시트" not in full)
+
+
+def blank_cut(**over) -> dict:
+    base = {"size": "normal", "camera": {}, "background": {},
+            "characters": [], "dialogue": [], "sfx": []}
+    base.update(over)
+    return base
+
+
+def test_directing_hints() -> None:
+    """무게(light)·이어짐(linked) 힌트가 이미지 프롬프트에 붙는지."""
+    light_page = [blank_cut(size="tiny", background={"type": "없음"})]
+    ok("가벼운 컷엔 폭 힌트가 붙는다",
+       "폭을 좁게" in IP.build_page_prompt(light_page))
+
+    normal_page = [blank_cut(background={"type": "실제공간", "desc": "복도"})]
+    ok("보통 컷엔 무게 힌트가 없다",
+       "폭을 좁게" not in IP.build_page_prompt(normal_page))
+
+    linked_page = [
+        blank_cut(location="복도", time="밤",
+                  background={"type": "실제공간", "desc": "입구"}),
+        blank_cut(location="복도", time="밤",
+                  background={"type": "실제공간", "desc": "안쪽"}),
+    ]
+    text = IP.build_page_prompt(linked_page)
+    first, second = text.split("### 컷 2")
+    ok("첫 컷엔 이어짐 힌트가 없다", "그대로 이어진다" not in first)
+    ok("둘째 컷엔 이어짐 힌트가 있다", "그대로 이어진다" in second)
+
+    apart_page = [
+        blank_cut(location="복도", time="밤",
+                  background={"type": "실제공간", "desc": "입구"}),
+        blank_cut(location="옥상", time="밤",
+                  background={"type": "실제공간", "desc": "난간"}),
+    ]
+    ok("장소가 바뀌면 이어짐 힌트가 없다",
+       "그대로 이어진다" not in IP.build_page_prompt(apart_page))
 
 
 def test_sheet_line() -> None:
@@ -808,6 +874,69 @@ def test_import_sheet() -> None:
             FAILED.append("없는 경로인데 안 멈췄다")
     finally:
         shutil.rmtree(root, ignore_errors=True)
+
+
+def scene_cuts(shots, angles=None, location="홀", time="낮", camera_plan="") -> dict:
+    """shot 값 목록 -> 장면 하나 (컷마다 shot·angle 만 갈아 끼운다)."""
+    angles = angles or ["정면"] * len(shots)
+    cuts = []
+    for i, (sh, an) in enumerate(zip(shots, angles), 1):
+        cuts.append({
+            "id": i, "size": "normal",
+            "camera": {"shot": sh, "angle": an, "facing": "앞모습"},
+            "background": {"type": "실제공간", "desc": "x"},
+            "characters": [{"name": "하일", "moment": "도중"}],
+            "dialogue": [{"order": 1, "type": "말", "text": "대사"}] if i % 2 == 0 else [],
+            "sfx": [], "forbid": [], "note": "",
+        })
+    return {"id": 1, "location": location, "time": time,
+            "camera_plan": camera_plan, "cuts": cuts}
+
+
+def dboard(shots, angles=None, camera_plan="") -> dict:
+    return R.parse_board(json.dumps(
+        {"cast": [], "scenes": [scene_cuts(shots, angles, camera_plan=camera_plan)]},
+        ensure_ascii=False))
+
+
+def test_directing_warnings() -> None:
+    """연출 경고 — 그림은 나오지만 사람이 보고 판단할 것들."""
+    # 같은 shot 이 4컷 연속되면 잡는다
+    consec = dboard(["클로즈업"] * 4 + ["상반신"] * 2)
+    ok("연속 shot 을 잡는다", any("연속" in w for w in R.directing_warnings(consec)))
+    ok("gate_board 는 연출(연속)을 안 본다 — 그건 directing_warnings 몫",
+       not any("연속" in w for w in R.gate_board(consec)))
+
+    # 컷이 적으면(3개) 4연속이 안 생기니 안 잡는다, 비율 눈금도 안 본다
+    few = dboard(["클로즈업"] * 3)
+    ok("컷이 적으면 연속도 비율도 안 본다",
+       not any("연속" in w or "계열" in w or "정면 앵글" in w
+               for w in R.directing_warnings(few)))
+
+    # 클로즈업 계열이 절반을 넘으면 잡는다 (연속은 안 되게 섞는다)
+    closeup_heavy = dboard(
+        ["클로즈업", "상반신", "극클로즈업", "상반신", "클로즈업", "극클로즈업"])
+    warns = R.directing_warnings(closeup_heavy)
+    ok("클로즈업 비율을 잡는다", any("클로즈업 계열" in w for w in warns))
+    ok("섞여 있으면 연속은 안 잡는다", not any("연속" in w for w in warns))
+
+    # 정면 앵글이 80% 를 넘으면 잡는다
+    front_heavy = dboard(
+        ["상반신", "무릎", "클로즈업", "전신", "상반신", "무릎"],
+        angles=["정면"] * 5 + ["하이앵글"])
+    ok("정면 앵글 비율을 잡는다",
+       any("정면 앵글" in w for w in R.directing_warnings(front_heavy)))
+
+    # camera_plan 이 실제 shot 과 다르면 잡는다. 안 쓴 장면은 조용하다.
+    match = dboard(["광각", "상반신"], camera_plan="광각, 상반신")
+    ok("계획과 실제가 같으면 안 잡는다",
+       not any("카메라 계획" in w for w in R.directing_warnings(match)))
+    mismatch = dboard(["광각", "상반신"], camera_plan="광각, 클로즈업")
+    ok("계획과 실제가 다르면 잡는다",
+       any("카메라 계획" in w for w in R.directing_warnings(mismatch)))
+    nofield = dboard(["광각", "상반신"])
+    ok("camera_plan 을 안 쓰면 그냥 넘어간다",
+       not any("카메라 계획" in w for w in R.directing_warnings(nofield)))
 
 
 def test_gate_readable() -> None:
@@ -991,10 +1120,12 @@ def test_review_and_fix() -> None:
 
 def main() -> int:
     for fn in (test_directions, test_detail, test_review_and_fix,
-               test_board, test_gate_board,
+               test_board, test_gate_board, test_directing_warnings,
                test_gate_readable, test_spec,
-               test_sheet_prompt, test_input, test_pages, test_scene_head,
-               test_image_prompt_pieces, test_image_prompt_page, test_sheet_line,
+               test_sheet_prompt, test_input, test_pages, test_cut_weight,
+               test_linked, test_scene_head,
+               test_image_prompt_pieces, test_image_prompt_page,
+               test_directing_hints, test_sheet_line,
                test_ratio_break, test_pageart, test_import_sheet):
         fn()
     if FAILED:
