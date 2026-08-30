@@ -64,15 +64,24 @@ flat-to-painterly webtoon coloring.
 ## 얼굴 — 둥글고 반짝이는 로맨스 일러스트 눈이 아니다
 
 sharp mature facial features,
-narrow elongated eyes,
-less rounded eyes,
+long narrow almond-shaped eyes,
+slightly elongated eyes,
+smaller irises,
+closely spaced eyes,
+short interocular distance,
+compact eye placement,
 defined heavy eyelids,
 restrained eye highlights,
 subtle angular facial structure,
+natural facial proportions,
 strong eyebrows,
 natural asymmetry,
 slightly sharp and tired-looking gaze,
 calm detached expression.
+
+**눈 간격은 별개 문제다.** `narrow eyes`(눈의 세로 폭)만으로는 안 풀린다
+— 실측해 보니 눈이 양옆으로 멀리 떨어져 배치됐다. `closely spaced eyes`
+· `short interocular distance` 를 따로 못박는다.
 
 ## 구도 — 얌전하게 정면·중앙에 서 있지 않는다
 
@@ -125,30 +134,49 @@ sophisticated mature webtoon aesthetic.
 옷으로 다시 칠하는 것과는 다르다 — 개별 물체를 파랗게 재색칠하는 게
 아니라 완성된 그림 전체에 통일된 색보정을 거는 것이다.
 
+**2026-08-30 세 번째 정정 — 균일하게 파랗게 칠하지 않는다.** 화면 전체를
+똑같이 파랗게 밀면 입체감이 사라지고 "블루 모노톤 필터"가 된다.
+레퍼런스는 밝은 곳·중간톤·그림자·가장 어두운 곳이 색온도와 명도로
+층층이 나뉜다 — **파란색은 화면 전체에 균일하게 칠하는 게 아니라, 빛과
+그림자의 색온도로 배치한다.**
+
 strong cool blue-gray color grading,
-a clearly visible blue-gray color cast across the entire illustration,
-a pronounced translucent blue-gray overlay over the whole image,
-strong overall cool-blue atmospheric tint,
-the entire image is visibly shifted toward blue-gray,
-cool blue tones across skin, hair, clothing, shadows, highlights and
-background,
-uniform blue-gray color grading across all elements,
-cool bluish-gray shadows,
-cool bluish-gray highlights,
-strongly lowered color temperature,
-distinctly cold visual atmosphere,
-desaturated colors under a strong cool-blue color grade,
-noticeably blue overall image,
-blue-gray cast immediately apparent at first glance,
-cool blue atmosphere dominates the overall color impression,
-strong blue-gray tonal unity.
+cool blue-gray ambient atmosphere,
+
+pale highlights remain nearly neutral and ivory,
+midtones carry a muted blue-gray tint,
+shadows are distinctly cool blue-gray,
+deep shadows remain dark charcoal and near-black,
+
+blue-gray tint is strongest in the ambient shadows and background,
+cool blue-violet tones appear naturally within the shadows,
+subtle cool color separation between highlights, midtones and shadows,
+
+cold blue-gray atmospheric depth,
+cool reflected light,
+blue-gray ambient bounce light.
 
 옷 자체를 다시 칠하는 것과는 구분한다:
 
 preserve the original local colors of each object,
 do not recolor individual objects,
-apply the blue-gray effect as a global color grade,
-the blue-gray tint affects the entire finished illustration uniformly.
+apply the blue-gray effect as a global color grade concentrated in the
+shadows and ambient light, not a flat overlay across every tone.
+
+## 명암 — 블루 필터로 검정까지 회색이 되면 안 된다
+
+블루 톤을 세게 넣으면서 검은색·짙은 그림자까지 같이 물러났다. 가장
+어두운 곳은 여전히 진짜 검정에 가까워야 한다.
+
+strong value contrast,
+deep charcoal shadows,
+deep blacks,
+darkest areas remain nearly black,
+rich near-black ink lines,
+strong dark linework against pale skin,
+pale highlights remain light,
+clear separation between highlights, midtones and shadows,
+high value contrast.
 
 ## 하지 마라
 
@@ -192,6 +220,11 @@ the blue-gray tint affects the entire finished illustration uniformly.
   yellowish color cast, warm ambient tones, neutral gray color grading —
   전체 색보정이 걸리지 않은 상태로 되돌아가는 것을 막는다
 - the image appears neutral gray or beige instead of blue-toned
+- wide-set eyes, far apart eyes, large interocular distance, oversized
+  eyes, round eyes, large irises
+- uniform blue monochrome, flat blue filter, everything tinted the same
+  blue, washed out shadows, gray washed-out blacks — 명암 층 구분 없이
+  화면 전체가 똑같이 파래지는 것을 막는다
 - 일본 가챠 게임 일러스트의 얼굴 — 얼굴 절반을 덮는 둥근 눈, 없는 코,
   선 하나짜리 입, 바늘 턱
 - 손가락 개수, 두 눈의 높이, 좌우 장신구를 눈으로 확인하지 않는 것
