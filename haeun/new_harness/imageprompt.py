@@ -297,6 +297,28 @@ def place_block(page) -> str:
     return "\n".join(lines)
 
 
+SD_BLOCK = (
+    "## 그림체 (SD)\n"
+    "- SD: 2~3등신으로 축약된 형태. 얼굴이 크고 몸이 작다.\n"
+    "  선은 단순하게, 표정은 과장되게.\n"
+    "  SD여도 그 인물의 머리색, 눈색, 옷의 주요 색은 유지한다.\n"
+    "- 한 컷 안에서 인물마다 다른 그림체가 지정될 수 있다. 지정된 대로 그린다."
+)
+
+
+def page_has_sd(page) -> bool:
+    """이 페이지의 컷 중 하나라도 SD 인물이 있는가.
+
+    없으면 SD_BLOCK 을 아예 안 붙인다 — LD 인물만 있는 페이지에 "2~3등신"
+    문구가 같이 있으면 모델이 비율을 흔들 수 있다.
+    """
+    for cut in page or []:
+        for who in cut.get("characters") or []:
+            if _t(who.get("style")).upper() == "SD":
+                return True
+    return False
+
+
 def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
                       provider: str = "", style: str = "", sheet_names=()) -> str:
     """페이지(컷 배열) 하나 -> 호출 한 번에 보낼 프롬프트.
@@ -307,6 +329,8 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
     세고 싶으면 start_number 를 넘긴다.
     """
     blocks = [load_fixed_block(provider, style)]
+    if page_has_sd(page):
+        blocks.append(SD_BLOCK)
 
     who = ([s for s in (sheets or []) if _t(s)]
            + cast_lines(cast, page, skip=sheet_names))
