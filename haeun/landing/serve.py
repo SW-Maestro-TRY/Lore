@@ -731,12 +731,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(404, "그런 작업이 없습니다")
             return self._json(job.snapshot())
 
+        # 완성본 — 편집실에서 얹은 것이 있으면 구운 판(final_episode)이 나간다.
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/episode\.png", path)
         if m:
             job = nh_runner.get(m.group(1))
-            if not job:
+            if not job or not job.run_id:
                 return self._error(404, "그런 작업이 없습니다")
-            src = nh.episode_path(job)
+            src = nh.final_episode(job.run_id)
             if not src:
                 return self._error(404, "아직입니다")
             return self._file(src)
@@ -751,15 +752,63 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(404, "아직입니다")
             return self._file(src)
 
+        # job 기준 페이지 한 장. `raw=1` 이면 편집실 전용(원본, 안 구움).
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/page/(\d+)\.png", path)
         if m:
             job = nh_runner.get(m.group(1))
-            if not job:
+            if not job or not job.run_id:
                 return self._error(404, "그런 작업이 없습니다")
-            src = nh.page_path(job, int(m.group(2)))
+            raw = (query.get("raw") or [""])[0] == "1"
+            no = int(m.group(2))
+            src = (nh.unit_image(job.run_id, no) if raw
+                   else nh.final_unit(job.run_id, no))
+            if not src:
+                return self._error(404, "아직입니다")
+            width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
+            dest = job.dir / "cache" / f"page{no}{'_raw' if raw else ''}_w{width}.jpg"
+            try:
+                return self._file(thumbnail(src, dest, width))
+            except Exception:                                   # noqa: BLE001
+                return self._file(src)
+
+        # ---- run_id 로 직접 여는 편집실 (job 없이도, 완성된 뒤에도) --------- #
+
+        m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/pages", path)
+        if m:
+            return self._json({"pages": nh.page_numbers(m.group(1))})
+
+        m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/overlay", path)
+        if m:
+            return self._json(nh.read_overlay(m.group(1)))
+
+        m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/episode\.png", path)
+        if m:
+            src = nh.final_episode(m.group(1))
             if not src:
                 return self._error(404, "아직입니다")
             return self._file(src)
+
+        m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/page/(\d+)", path)
+        if m:
+            raw = (query.get("raw") or [""])[0] == "1"
+            run_id, no = m.group(1), int(m.group(2))
+            src = nh.unit_image(run_id, no) if raw else nh.final_unit(run_id, no)
+            if not src:
+                return self._error(404, "그 페이지가 없습니다")
+            width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
+            stamp = int(src.stat().st_mtime)
+            cache = nh.run_dir(run_id) / "cache"
+            dest = cache / f"page{no}{'_raw' if raw else ''}_w{width}_{stamp}.jpg"
+            for old_file in cache.glob(f"page{no}{'_raw' if raw else ''}_w{width}_*.jpg"):
+                if old_file != dest:
+                    try:
+                        old_file.unlink()
+                    except OSError:
+                        pass
+            try:
+                return self._file(thumbnail(src, dest, width))
+            except Exception:                                   # noqa: BLE001
+                return self._file(src)
 
         return self._error(404, "없는 주소입니다")
 
@@ -1412,6 +1461,34 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(404, "그런 작업이 없습니다")
             job.cancel()
             return self._json({"ok": True})
+
+        # 편집실 — 얹은 것을 작품 폴더(new_harness/runs/<id>/overlay.json)에 저장.
+        m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/overlay", url.path)
+        if m:
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            try:
+                return self._json(nh.write_overlay(m.group(1), body))
+            except ValueError as exc:
+                return self._error(400, str(exc))
+
+        # 얹은 것을 그림에 굽는다. body 에 얹은 것이 실려 오면 먼저 저장한다.
+        m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/bake", url.path)
+        if m:
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                body = {}
+            try:
+                res = nh.bake_run(m.group(1), body)
+            except ValueError as exc:
+                return self._error(400, str(exc))
+            except overlay.OverlayError as exc:
+                return self._error(400, str(exc))
+            res["url"] = f"/api/nh/runs/{m.group(1)}/episode.png"
+            return self._json(res)
 
         return self._error(404, "없는 주소입니다")
 
