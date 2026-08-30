@@ -1,315 +1,81 @@
-**이 하네스의 기본(default) 그림체다.** 2026-08-30 하루 여러 번 다시 썼다.
-흑백 잉크+포인트 컬러 실험은 `action`(특수 컷 전용)으로 따로 남겼고, 이
-파일은 평소 로판 장면에 쓰는 기본값이다.
+**이 하네스의 기본(default) 그림체다.** 흑백 잉크+포인트 컬러 실험은
+`action`(특수 컷 전용)으로 따로 남겼고, 이 파일은 평소 로판 장면에
+쓰는 기본값이다. 2026-08-30, 그날 있었던 여러 회차의 실험을 사용자가
+직접 하나로 합쳐 최종 정리한 버전이다 (경위는 `STYLE_FINDINGS.md` 참고).
 
-**핵심(6차 재작성 — 축을 색에서 그림 자체로 옮긴다).** 5차까지 채도를
-계속 낮췄는데도 "예쁜 AI 일러스트"에서 못 벗어났다 — 채도는 이미 충분히
-낮았고, 문제는 색이 아니라 **그림 자체의 성격**이었다. 매끈한 디지털
-일러스트 외곽선, 부드러운 베이지/핑크 그라데이션 그림자, 정면 중앙에
-얌전히 선 포즈, 둥글고 반짝이는 로맨스 일러스트풍 눈 — 이 넷이 저채도와
-무관하게 "따뜻하고 말랑한" 인상을 계속 만들고 있었다. **그래서 이번엔
-저채도를 메인에서 내리고, 손그림 느낌 잉크 선화 + 그래픽한 경질 그림자
-+ 날카로운 성인 얼굴 + 역동적인 구도를 메인으로 올린다. 저채도는 그 위에
-얹는 것이다.**
+restrained semi-realistic webtoon rendering,
+mature adult anatomy with elegant stylization,
+editorial and fashion-illustration sensibility,
 
-**7차 보강.** 6차로 방향은 맞았지만 아직 (1) 피부 그림자가 살구/갈색으로
-따뜻하게 남아 있고 (2) 선이 외곽선 위주라 여전히 매끈한 디지털
-일러스트에 가깝고 (3) 눈이 크고 둥글어 로맨스 일러스트 여주인공처럼
-보인다는 지적을 받았다. 채도는 이제 그만 — 더 빼면 그냥 창백한 AI
-캐릭터가 된다.
-
-**8차 재작성 — 방향을 뒤집는다.** 지금까지는 "AI 일러스트에 저채도를
-얹는" 프롬프트였다. 채도를 아무리 낮춰도 모델이 "회색빛 AI 일러스트"로
-푸는 이유는, 이 프롬프트 자체가 여전히 **일러스트(매끈한 디지털 채색)를
-그리라고 말하고 있었기 때문**이다. 이제는 반대로 간다 — **잉크 선화가
-그림을 끌고 가고, 색은 그 위에 아주 얇고 드문드문 얹히는** 것이 목표다.
-"하얀 피부"가 아니라 "선화 위에 색을 거의 안 칠한 피부"다.
-
-traditional ink drawing,
-hand-inked webtoon artwork,
-raw line drawing,
-visible pen strokes,
-organic imperfect lines,
-rough ink texture,
-uneven line weight,
-dry brush ink texture,
-sparse flat coloring,
-minimal color rendering,
-ink lines dominate the image,
-color is secondary to linework,
-limited flat color areas,
-graphic ink shadows,
-rough hatching,
-visible paper-like texture,
-restrained rendering,
-unfinished-looking brush texture,
-editorial comic illustration,
-
-mature Korean webtoon art,
-expressive organic linework,
-visible internal ink lines on the face (nose bridge, under the eyes,
-jawline) — not just clean outer contours,
-sketch-like construction lines.
-
-## 디테일 — 과시하지 않는다 (2026-08-30, 9차)
-
-**9차 재작성.** 8~9차를 거치며 잉크선·해칭을 계속 강조한 결과, 이번엔
-반대로 **모든 표면을 열심히 렌더링해서 "AI가 극한까지 디테일을 채운
-일러스트"처럼 됐다** — 피부의 잔주름·모공, 옷의 모든 주름, 머리카락의
-지나치게 많은 하이라이트, 배경 물체 하나하나의 선명한 질감까지. AI티를
-줄이는 건 디테일을 더 넣는 게 아니라 **중요한 곳만 선명하고 나머지는
-과감히 생략**하는 것이다.
-
-selective detail rather than rendering every surface,
-simplify hair, clothing, skin and background textures into clean,
-intentional shapes,
-preserve only the details that contribute to the character's expression,
-silhouette and mood,
-restrained rendering,
-simplified yet beautiful character rendering,
-soft cel shading with soft transitions,
-
-restrained webtoon rendering,
 simple selective linework,
+thin delicate slightly irregular ink lines,
+variable line density,
 deliberate simplification,
 uneven detail density,
 large areas of clean negative space,
 only essential lines are drawn,
 
+broken and incomplete contours in low-detail areas,
+minimal interior linework,
+natural hand-drawn imperfections,
+casual but controlled webtoon finish,
+not every surface is fully rendered,
+
 simplified facial rendering,
-minimal facial lines,
-simple irises,
+natural mature facial proportions,
+moderately narrow almond-shaped eyes,
+simple controlled irises,
 restrained eyelashes,
+minimal facial lines,
+subtle eyebrows,
+minimal nose and mouth definition,
 clean pale skin with very little surface detail,
 
-simplified hair masses with only a few loose strand lines,
+simplified hair masses,
+large coherent hair shapes,
+only a few loose directional strand lines,
 irregular sparse hair strokes,
+no individual strand rendering,
 
 selective clothing folds,
+clothing defined primarily by silhouette and construction,
+essential folds only,
 hatching only in deeper shadows and important folds,
 large untextured color areas,
 
-background detail is significantly reduced compared to the character,
+broad flat muted color shapes,
+limited tonal hierarchy,
+simple shadow planes,
+restrained cel-shaded planes,
+minimal gradients,
+minimal highlights,
+minimal reflected light,
+clean restrained color transitions,
+
+background detail significantly reduced compared to the character,
 soft simplified background shapes,
+large quiet areas,
 no uniform texture across the image,
+background rendered with less detail and contrast than the character,
 
-natural hand-drawn imperfections,
-casual production-webtoon finish,
-not every surface is fully rendered.
-
-- 머리카락: ❌ 한 올 한 올 + 반짝이는 하이라이트 여러 개 → ⭕ 큰 덩어리
-  몇 개 + 얇은 선 몇 가닥 + 부분적인 명암 하나
-- 옷: ❌ 주름 하나하나 묘사 → ⭕ 큰 실루엣과 핵심 주름 몇 개만
-- 피부: ❌ 모공·잔주름 등 표면 질감 → ⭕ 매끈한 면에 최소한의 그림자
-- 배경: ❌ 모든 사물이 선명하고 질감이 있음 → ⭕ 형태만 알아볼 정도로
-  단순화, 흐릿한 명암
-
-## 그림자 — 부드러운 그라데이션이 아니라 그래픽하게
-
-graphic webtoon shading,
-clearly defined shadow shapes,
-hard-edged selective shadows,
-cool gray and muted violet shadows,
-ink-based shadow texture,
-minimal smooth gradients,
-flat-to-painterly webtoon coloring.
-
-## 얼굴 — 둥글고 반짝이는 로맨스 일러스트 눈이 아니다
-
-sharp mature facial features,
-long narrow almond-shaped eyes,
-slightly elongated eyes,
-smaller irises,
-closely spaced eyes,
-short interocular distance,
-compact eye placement,
-defined heavy eyelids,
-restrained eye highlights,
-subtle angular facial structure,
-natural facial proportions,
-strong eyebrows,
-natural asymmetry,
-slightly sharp and tired-looking gaze,
-calm detached expression.
-
-**눈 간격은 별개 문제다.** `narrow eyes`(눈의 세로 폭)만으로는 안 풀린다
-— 실측해 보니 눈이 양옆으로 멀리 떨어져 배치됐다. `closely spaced eyes`
-· `short interocular distance` 를 따로 못박는다.
-
-## 구도 — 얌전하게 정면·중앙에 서 있지 않는다
-
-dynamic cinematic composition,
-asymmetrical body posture,
-natural weight distribution,
-slightly tilted shoulders,
-dynamic camera perspective,
-dramatic foreshortening when appropriate,
-character interacting naturally with the environment.
-
-## 색 — 여기서부터는 메인이 아니라 위에 얹는 것
-
-ink-defined skin shadows,
-muted cool color palette,
-low chroma,
-restrained saturation,
-
-**채도는 더 낮추지 않는다.** 지금 문제는 색의 양이 아니라 채색 방식이다
-— 매끈하게 디지털로 칠하는 대신 위 "ink lines dominate" 방향을 따른다.
-
-strong separation between light and shadow,
-clear graphic values,
-dark hair and clothing contrasted against pale skin,
-
-quietly eerie, cool and restrained atmosphere,
-subtle sense of unease,
-emotionally distant,
-cold ambient lighting,
-beautiful and elegant rather than horror-like,
-sophisticated mature webtoon aesthetic.
-
-**서늘함은 공포가 아니다.** 무서운 표정·불안한 연출·음침한 배경을
-넣으라는 말이 아니다 — 인물과 장면은 평범해도 되고, 오히려 평범할수록
-좋다. "약간의 거리감·고요함·서늘한 아름다움" 쪽이지 귀신이나 스릴러
-쪽이 아니다.
-
-## 전체 색보정 — 블루그레이 필터 (2026-08-30 정정)
-
-**정정.** 앞서 "파란 조명 금지"라고 못박았던 것은 틀린 지점을 짚은
-것이었다 — 사용자가 싫어한 것은 **특정 광원이 파랗게 비추는 효과**
-(blue lighting)였지, 완성된 그림 전체에 얹는 **색보정(color grading)**이
-아니었다.
-
-**2026-08-30 두 번째 정정 — 세게.** 처음엔 "아주 얇게"로 넣었는데
-실측해 보니 모델이 정말 찔끔만 넣었다. `subtle`·`faint`·`slightly`
-같은 완화어를 쓰면 모델이 소극적으로 반응한다 — 그래서 강도어를 전부
-뺐다. 원하는 건 "자세히 보면 살짝 파랗다"가 아니라 **"딱 보면 이 그림
-전체에 차가운 블루 필터가 걸려 있다"** 는 수준이다. 옷 자체를 파란
-옷으로 다시 칠하는 것과는 다르다 — 개별 물체를 파랗게 재색칠하는 게
-아니라 완성된 그림 전체에 통일된 색보정을 거는 것이다.
-
-**2026-08-30 세 번째 정정 — 균일하게 파랗게 칠하지 않는다.** 화면 전체를
-똑같이 파랗게 밀면 입체감이 사라지고 "블루 모노톤 필터"가 된다.
-레퍼런스는 밝은 곳·중간톤·그림자·가장 어두운 곳이 색온도와 명도로
-층층이 나뉜다 — **파란색은 화면 전체에 균일하게 칠하는 게 아니라, 빛과
-그림자의 색온도로 배치한다.**
-
-**2026-08-30 네 번째 정정 — 피부도 예외가 아니다.** 위 절의 "피부는
-거의 무채색/아이보리를 유지"·"원래 색을 보존한다" 류 문구가 오히려
-피부에 살구색이 다시 살아나는 원인이었다. **피부를 포함해 예외 없이**
-전체가 블루그레이로 보여야 한다 — "살색이 없는 피부"까지 가는 것이
-맞다.
-
-strong overall blue-gray color cast,
-strong cool blue filter over the entire illustration,
-the entire image is heavily tinted blue-gray,
-deep cool blue-gray atmospheric grading,
-cool blue-gray tint dominates the entire color palette,
-all colors are visibly affected by the blue-gray color grade,
-skin is also strongly blue-gray tinted,
-skin has almost no natural flesh color,
-skin appears pale gray with cool blue undertones,
-shadows are distinctly blue-gray,
-midtones are blue-gray,
-highlights are cool pale blue-gray,
-white areas are tinted blue-gray rather than neutral white,
-dark areas remain deep blue-black,
-
-very low saturation,
-strongly desaturated,
-low chroma,
-muted colors,
-faded colors,
-cold monochromatic color harmony,
-cool blue-gray color unity,
-
-the blue-gray color cast must be clearly visible at first glance,
-do not reduce or weaken the blue tint,
-do not restore natural skin coloration,
-do not neutralize the blue-gray grading.
-
-옷을 개별적으로 파란 옷으로 다시 칠하는 것과는 여전히 구분한다:
-
-do not recolor individual objects into blue clothing or blue hair,
-apply the blue-gray effect as a global color grade over the whole
-finished illustration, including the skin.
-
-## 명암 — 블루 필터로 검정까지 회색이 되면 안 된다
-
-블루 톤을 세게 넣으면서 검은색·짙은 그림자까지 같이 물러났다. 가장
-어두운 곳은 여전히 진짜 검정에 가까워야 한다.
-
-strong value contrast,
-deep charcoal shadows,
-deep blacks,
-darkest areas remain nearly black,
-rich near-black ink lines,
-strong dark linework against pale skin,
-pale highlights remain light,
-clear separation between highlights, midtones and shadows,
-high value contrast.
+quiet sophisticated visual hierarchy,
+mature understated aesthetic,
+beautiful through simplification rather than detail.
 
 ## 하지 마라
 
 - hyper-detailed, over-rendered, excessive micro-detail, uniform detail
-  density, intricate facial details, intricate hair strands, perfectly
-  rendered eyes, detailed skin texture, detailed pores, excessive
-  eyelashes, excessive clothing folds, dense background details, uniform
-  hatching, decorative linework
-- beautiful delicate illustration, polished digital painting, smooth
-  rendering, cinematic glow, cinematic lighting, high-end illustration,
-  premium illustration, beautiful rendering, detailed rendering,
-  hyper-detailed, realistic skin — 매끈하고 예쁜 AI 일러스트로 돌아가게
-  만드는 표현들. 지금은 채색이 아니라 선화가 그림을 끌고 가야 한다
-- soft directional lighting, gentle tonal transitions, soft ambient
-  lighting, natural soft skin — 그림자를 부드러운 그라데이션으로 되돌리는
-  표현들. 위 "그래픽 그림자" 절과 정면충돌한다
-- round sparkly romance-illustration eyes, large glossy anime eyes,
-  excessive eye highlights, excessive eye sparkle, cute soft gaze
-- cute, kawaii, soft pretty girl, round eyes, large sparkling eyes, sweet
-  expression, delicate princess aesthetic
-- soft dreamy lighting, romantic lighting, warm lighting, excessive glow
-- beige skin shadow, brown skin shadow, tan skin shadow, warm shadow on
-  skin — 그림자 온도가 따뜻하게 새는 것을 막는다 (피부 밑색이 아니라
-  그림자 색이 문제인 경우가 많다)
-- extreme desaturation, monochrome, completely gray image, washed out
-  image — 채도는 이미 충분하다. 더 빼는 방향으로 가지 않는다
-- stiff pose, symmetrical pose, front-facing character portrait, centered
-  static standing pose, passport photo composition, character sheet
-  composition
-- clean uniform digital outlines, perfectly smooth linework, vector-clean
-  lines
-- vivid colors, bright colors, high saturation, strong color intensity,
-  warm color palette, colorful clothing, vibrant background,
-  oversaturated highlights, oversaturated shadows, strongly colored
-  lighting, neon colors
-- warm skin tones, warm peach skin, peachy skin, orange skin, rosy skin,
-  pink skin, golden skin, healthy warm complexion, warm beige skin,
-  natural skin color, warm flesh tones, orange undertones
-- warm highlights, neutral white highlights, warm color grading, natural
-  color balance, bright colorful palette, warm ambient light, yellow
-  cast, brown cast
-- plastic skin, airbrushed skin, 3D render, photorealistic
-- anime key visual, anime illustration, kawaii, moe, chibi, childlike
-  proportions, oversized eyes
-- dread, ominous, unsettling scary imagery, horror atmosphere, gloomy
-  horror, scary mood, ghost or monster imagery, dramatic blue lighting as
-  a mood/lighting effect — "quietly eerie" 정도의 옅은 뉘앙스는 허용하되
-  진짜 공포·귀신·스릴러 쪽으로 가면 안 된다. 무서운 표정, 불안한 연출,
-  음침한 배경을 적극적으로 넣지 않는다. 인물과 장면은 평범해도 된다 —
-  그림의 색과 질감만 차갑다
-- neon blue, blue clothing, blue hair, intense cyan, localized blue
-  lighting — 특정 물체를 파란색으로 다시 칠하거나 특정 광원이 파랗게
-  비추는 효과는 여전히 안 된다. 위 "전체 색보정" 절의 화면 전체
-  색그레이딩과는 다른 것이다
-- warm neutral color grading, beige color cast, brownish color cast,
-  yellowish color cast, warm ambient tones, neutral gray color grading —
-  전체 색보정이 걸리지 않은 상태로 되돌아가는 것을 막는다
-- the image appears neutral gray or beige instead of blue-toned
-- wide-set eyes, far apart eyes, large interocular distance, oversized
-  eyes, round eyes, large irises
-- uniform blue monochrome, flat blue filter, everything tinted the same
-  blue, washed out shadows, gray washed-out blacks — 명암 층 구분 없이
-  화면 전체가 똑같이 파래지는 것을 막는다
-- 일본 가챠 게임 일러스트의 얼굴 — 얼굴 절반을 덮는 둥근 눈, 없는 코,
-  선 하나짜리 입, 바늘 턱
-- 손가락 개수, 두 눈의 높이, 좌우 장신구를 눈으로 확인하지 않는 것
+  density, intricate facial details, intricate hair strands, individual
+  hair rendering, perfectly rendered eyes, sparkling eyes, gemstone eyes,
+  oversized eyes
+- detailed skin texture, skin pores, photorealistic skin, 3D skin
+  rendering, airbrushed skin, excessive facial shading
+- excessive eyelashes, glossy lips, excessive highlights, excessive
+  gradients, volumetric rendering, photorealistic lighting
+- excessive clothing folds, detailed fabric texture, dense fabric
+  rendering, decorative linework, dense linework, uniform hatching,
+  heavy outlines, perfect vector linework
+- dense background details, uniform background texture, background
+  competing with character, overdecorated background
+- anime key visual, light novel illustration, moe, kawaii, childlike
+  proportions, milky pastel colors, oversaturated colors, neon colors
