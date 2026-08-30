@@ -1,136 +1,116 @@
-**이 하네스의 기본(default) 그림체다.** 오늘 하루 여러 방향(웹툰 economy,
-흑백 잉크+포인트 컬러 등)을 실험했는데, 결론은 원래 이 파일의 역할로
-돌아가는 것이었다 — **고급 일러스트 밀도 + 저채도 쿨톤 색감.** 흑백
-잉크·선택적 컬러 실험은 `action`(특수 컷 전용)으로 따로 남겼고, 이
-파일은 평소 로판 장면에 쓰는 기본값이다. 2026-08-30 전면 재작성
-(사용자 설계).
+**이 하네스의 기본(default) 그림체다.** 2026-08-30 하루 여러 번 다시 썼다.
+흑백 잉크+포인트 컬러 실험은 `action`(특수 컷 전용)으로 따로 남겼고, 이
+파일은 평소 로판 장면에 쓰는 기본값이다.
 
-high-end Korean romance fantasy webtoon illustration,
+**핵심(3차 재작성).** 앞선 버전은 "저채도 디지털 일러스트"에 가까웠는데,
+사용자가 원하는 건 그보다 **선화가 살아 있는 저채도 웹툰 채색** —
+거칠면서도 섬세한 펜선/해칭이 먼저 있고, 그 위에 아주 얇고 반투명한
+색이 한 겹 올라간 것. 색을 진하게 꽉 채우는 게 아니라 색이 있어도
+전체적으로 가볍게 느껴져야 한다. 피부는 더 하얗게가 아니라 **창백한
+아이보리 + 아주 약한 회색기** (완전한 백색은 아님). 색온도가 차가운
+것이지 화면이 무조건 파란 조명인 것은 아니다 — 자연광이어도 색 자체가
+탈색되어 있으면 된다.
 
-mature Korean webtoon art style,
-adult character proportions, 8-9 heads tall,
+Korean webtoon illustration with a refined hand-drawn appearance,
+
+mature adult character proportions,
 slender elongated anatomy,
-small head, long limbs,
-elegant and sophisticated character design,
+elegant facial structure,
+expressive eyes,
+natural anatomy.
 
-clean and refined linework,
-delicate line art,
-precise facial features,
-beautiful detailed eyes,
-long elegant eyelashes,
-natural facial proportions,
-detailed flowing hair,
-carefully rendered hair strands,
+## 선화 — 색보다 먼저 있어야 하는 것
 
-desaturated cool-toned color palette,
-muted colors,
-restrained saturation,
-subtle gray undertones,
-cool color grading,
-slightly desaturated skin tones,
-softly muted hair and clothing colors,
-deep but muted accent colors,
-low chroma rather than bright colors,
+delicate but slightly rough ink linework,
+fine dark ink outlines,
+organic hand-drawn lines,
+subtle line variation,
+visible sketch-like hatching,
+fine cross-hatching and textured shading,
+detailed fabric folds drawn with ink lines,
+hair rendered with numerous fine flowing strands.
 
-cool, sophisticated, slightly melancholic atmosphere,
-quiet and cold visual mood,
-subtle cinematic lighting,
-controlled contrast,
-soft directional shadows,
-delicate ambient lighting,
+ink linework remains visually prominent over the coloring — 색을 지운
+자리가 아니라 선 위에 색이 살짝 얹힌 상태로 보여야 한다.
 
-detailed but restrained rendering,
-polished illustration quality,
-rich visual details without excessive decoration,
-elegant background,
-background colors kept muted and subordinate to the characters,
+## 피부 — 하얗게가 아니라 창백하고 회색기 있게
 
-premium Korean webtoon illustration,
-high-end published webtoon quality,
-beautiful finished illustration,
-consistent character rendering.
-
-## 배경이 캐릭터를 이기지 않게
-
-the characters are the primary visual focus,
-background remains visually subordinate,
-background uses lower saturation and lower contrast than the characters,
-restrained environmental details,
-no competing focal points,
-clean visual hierarchy,
-ample negative space where appropriate.
-
-## 피부 — 따뜻한 살구색이 제일 먼저 튄다
-
-실측해 보니 옷·머리·배경은 저채도로 잘 가는데 **피부만 따뜻한 베이지/
-살구색으로 혼자 튄다.** 원하는 것은 더 하얀 피부가 아니라 **하얗고 회색
-기가 도는 피부**다. `pale` 하나만 세게 넣으면 시체처럼 하얘지니, 아래
-조합으로 함께 쓴다.
+`pale` 하나만 세게 넣으면 시체처럼 하얘진다. 아래 조합으로 함께 쓴다.
 
 very pale desaturated ivory skin,
-cool neutral skin tone,
-subtle gray undertones in the skin,
-muted porcelain-like complexion,
-low-saturation skin colors,
-cool gray ambient shadows on the skin,
+cool neutral complexion,
+subtle gray undertones,
+slightly porcelain-like skin,
 minimal pink and orange undertones,
-no warm peachy skin tones.
+soft cool-gray shadows on the skin.
 
-그림자 색 전체도 따뜻한 갈색 대신 청회색·보랏빛 회색으로:
+## 채색 — 진하게 채우지 않는다
 
-soft cool-gray shadows,
-cool violet-gray shadow tones instead of warm brown shadows.
-
-## 서늘한 색감을 더 강하게
-
-icy muted palette,
-cool gray undertones,
+muted low-chroma colors,
+desaturated color palette,
+restrained saturation,
+washed but sophisticated colors,
+soft gray undertones throughout the palette,
+cool-neutral color harmony,
 dusty blue,
-smoky lavender,
-muted burgundy,
-ash beige,
-desaturated ivory,
-cold neutral shadows,
-subtle blue-gray ambient light,
-quiet aristocratic atmosphere.
+smoky gray,
+muted lavender,
+desaturated beige,
+muted olive,
+deep subdued navy,
 
-색은 이런 식으로 바뀐다 — 원색을 죽이는 게 아니라 같은 색상을 저채도·
-쿨톤 버전으로 바꿔 입힌다:
+thin restrained coloring,
+soft translucent-looking color layers,
+subtle cel shading,
+gentle tonal transitions,
+limited color intensity.
 
-| 원색 | 이 그림체에서 |
-| --- | --- |
-| 쨍한 빨강 | 탁한 버건디 |
-| 노랑 | 애쉬 골드 |
-| 핑크 | 더스티 로즈 |
-| 파랑 | 스모키 블루 |
-| 초록 | 그레이시 세이지 |
+## 분위기
 
-## 주의 — "저채도" ≠ "어두운 그림"
+cool quiet atmosphere,
+slightly melancholic mood,
+understated cinematic lighting,
+soft ambient shadows,
+moderate contrast.
 
-**`dark`, `gloomy`, `moody` 같은 표현을 세게 넣지 않는다.** 이걸 넣으면
-모델이 "저채도 = 어두운 그림"으로 읽어서 화면 전체가 칙칙해진다. 원하는
-것은 어두운 그림이 아니라 **채도만 낮은 고급스러운 그림**이다 — 화면
-밝기 자체는 평소와 비슷하게 두고, 색의 쨍함만 죽인다.
+**차가운 색온도 ≠ 파란 조명.** 화면 전체를 파란빛으로 물들이라는 말이
+아니다. 자연광 장면이어도 색 자체가 저채도·회색기·창백함으로 가면
+된다 — `cool-neutral, desaturated, pale, grayish` 가 핵심이지 `blue
+lighting`을 강제로 넣으라는 뜻이 아니다.
 
-핵심 다섯 단어만 기억하면 된다: **desaturated · cool-toned · muted ·
-restrained saturation · gray undertones.**
+## 마무리
+
+detailed character rendering,
+textured hand-drawn webtoon finish,
+polished Korean webtoon panel,
+sophisticated and mature visual style,
+natural rather than glossy rendering,
+background colors kept muted and subordinate to the characters,
+the characters are the primary visual focus.
 
 ## 하지 마라
 
-- warm skin tone, peach skin, orange skin, rosy skin, pink skin, warm
-  beige skin, saturated skin, golden skin, healthy warm complexion, warm
-  color grading on skin — 피부만 따뜻하게 튀는 것을 막는다
+- bright saturated colors, vivid colors, high saturation, warm color
+  palette
+- warm peach skin, orange skin, rosy skin, pink skin, golden skin,
+  healthy warm complexion, warm beige skin, saturated skin — 피부만
+  따뜻하게 튀는 것을 막는다
+- glossy skin, plastic skin, airbrushed skin, 3D rendering, photorealistic
+  rendering
+- smooth digital painting, overly polished rendering, hyper-rendered
+  skin, thick gradient shading, strong bloom, excessive highlights —
+  선화가 색 아래로 사라지고 매끈한 디지털 페인팅처럼 되는 것
+- anime key visual, anime illustration, kawaii, moe, chibi, childlike
+  proportions, oversized eyes
+- pastel cute aesthetic, milky pastel colors, excessive pink, excessive
+  blue lighting (화면 전체를 파란빛으로 물들이는 것)
+- overdecorated background, highly saturated background, background
+  competing with character
 - dark, gloomy, moody, murky, dim overall lighting, muddy image (저채도를
-  어둡게 해석한 결과)
-- oversaturated colors, candy-bright colors, neon colors, high-key pastel
+  어둡게 해석한 결과 — 원하는 건 어두운 그림이 아니라 채도만 낮은
+  그림이다)
 - 화면 전체에 고르게 깔린 빛번짐, 블룸, 안개, 렌즈 플레어, 초점 흐림,
-  아무 데나 흩뿌린 별가루 — 반짝임을 빼라는 말이 아니라 자리와 모양이
-  있게 넣으라는 말이다
-- 하이라이트 주변이 하얗게 날아가고 번지는 것 — 하이라이트는 모양이
-  있는 도형이어야 한다
-- 명도가 전부 중간톤에 몰려 있는 것 — 흑백으로 바꿔 봤을 때 인물이
-  배경에서 또렷하게 떨어져 나와야 한다
-- 모든 표면이 같은 재질로 보이는 것
+  아무 데나 흩뿌린 별가루
 - 일본 가챠 게임 일러스트의 얼굴 — 얼굴 절반을 덮는 둥근 눈, 없는 코,
   선 하나짜리 입, 바늘 턱
 - 좌우대칭에 흠 없는 얼굴 — 비대칭 하나(눈 크기 차이, 앞머리 쏠림, 점)를
