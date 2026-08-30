@@ -6,10 +6,45 @@
 ## 첨부한 이미지
 - 첨부한 이미지는 **참고 자료다. 그 그림을 고쳐 그리는 것이 아니다.**
   새 페이지를 처음부터 그린다.
-- 순서: (1) 캐릭터 시트 — 인물의 얼굴·머리·옷을 여기서 가져온다.
+- 순서: (1) 캐릭터 시트 — 캐릭터의 고유한 외형 정보(머리색·헤어스타일·눈색·
+        눈매·얼굴 구조·의상 디자인과 색·장신구·고유 특징)만 참조한다. 시트
+        자체의 선화·채색·명암·하이라이트·색보정·렌더링 밀도·마감은 절대
+        모방하지 않는다. 캐릭터 시트는 그림체 참고 자료가 아니다 — 외형
+        정보를 아래 "그림체" 절에 지정된 그림체로 완전히 재작화한다. 결과는
+        같은 한국 웹툰 작가가 이 캐릭터를 처음부터 새로 그린 것처럼 보여야
+        한다.
         (2) 직전 페이지 — 선 굵기·채색·명암을 여기에 맞춘다. 내용은 가져오지 않는다.
 - 시트의 배치(4면도·표정·색상칩)를 페이지에 옮기지 마라. 시트는 인물이
   어떻게 생겼는지만 알려준다.
+
+CHARACTER SHEET PRIORITY:
+
+Use the character sheet ONLY as a design reference for:
+- hair color and hairstyle
+- eye color and eye shape
+- facial structure
+- clothing design and colors
+- accessories
+- distinctive character features
+
+DO NOT copy the character sheet's rendering style.
+
+Ignore the character sheet's:
+- lineart style
+- shading style
+- lighting
+- highlights
+- color grading
+- rendering density
+- illustration finish
+
+The character sheet is NOT a style reference.
+
+Re-draw the character completely using the art style specified below (see
+그림체 section).
+
+The final character must look as if the same Korean webtoon artist designed
+and drew this character from scratch.
 
 ## 페이지 구성
 - 컷을 위에서 아래로 배치한다. 컷 사이에는 얇은 검은 테두리와 흰 여백을 둔다.
