@@ -1,7 +1,9 @@
-**실험용 그림체다.** `romance`/`frost`를 대체하지 않는다 — 저 둘은 진한 채도 ·
-높은 대비 · 짙은 그림자가 AI티를 지운다는 오늘(2026-08-30)의 실측 결론을
-따르고, 이 파일은 정반대 방향(저채도 · 저대비 · 파스텔)을 사용자가 직접
-설계한 프롬프트로 시험해 보기 위한 것이다. `STYLE_FINDINGS.md` 참고.
+**실험용 그림체다. 이름은 `romance_fantasy` 지만 `romance` 파일과 다른
+별개 파일이다** — 헷갈리지 않게 이름으로 바로 구분한다. `romance`/`frost`는
+진한 채도 · 높은 대비 · 짙은 그림자가 AI티를 지운다는 오늘(2026-08-30)의
+실측 결론을 따르고, 이 파일(`romance_fantasy`)은 정반대 방향(저채도 ·
+저대비 · 파스텔)을 사용자가 직접 설계한 프롬프트로 시험해 보기 위한 것이다.
+`romance`/`frost`를 대체하지 않는다. `STYLE_FINDINGS.md` 참고.
 
 high-end Korean romance fantasy webtoon illustration,
 
