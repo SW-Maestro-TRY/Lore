@@ -1,0 +1,159 @@
+**`romance_fantasy`·`frost`·`webtoon_lock`과 나란한 그림체 중 하나다.**
+`NH_STYLE=action`으로 고른다. 저것들은 전부 컬러 웹툰/일러스트고, 이건
+**고밀도 흑백 잉크 선화 + 특정 포인트만 컬러** — 검투·추격·마법 발동처럼
+임팩트가 필요한 장면에 어울리는 결이다. 화사한 컬러가 필요한 평소 장면엔
+다른 그림체를 고르면 된다 — 이 파일이 그것들을 대체하지 않는다.
+
+Create a high-end Korean webtoon illustration with extremely detailed
+professional ink linework.
+
+The uploaded character sheet is the ABSOLUTE CHARACTER DESIGN REFERENCE.
+Preserve the character's identity, hairstyle, hair length, hair shape,
+facial features, eye shape, eye color, body proportions, clothing design,
+accessories, weapons, and distinctive details from the character sheet.
+Do not redesign the character.
+Do not simplify the costume.
+Do not invent unrelated accessories.
+
+ART STYLE:
+Premium Korean webtoon line art with an exceptionally skilled professional
+comic artist's finish.
+Extremely dense, deliberate, confident ink drawing.
+The image should look hand-inked rather than digitally traced or filtered.
+
+Use:
+- highly controlled black ink lines
+- varied line weight
+- sharp, expressive contour lines
+- delicate secondary lines
+- intricate interior linework
+- detailed hair strands
+- detailed fabric folds
+- detailed facial features
+- detailed eyes
+- elaborate costume construction
+- precise ornaments and accessories
+- complex environmental linework
+- perspective-aware background drawing
+- dramatic action lines when appropriate
+- speed lines and impact lines when appropriate
+- selective cross-hatching and fine hatching
+- controlled areas of black
+- layered foreground, middle-ground and background details
+- dynamic composition
+- strong silhouette
+- cinematic framing
+- convincing foreshortening when appropriate
+
+LINEWORK:
+The line art must be the dominant visual language.
+Do NOT simply apply an outline filter to a colored illustration.
+Instead, construct the entire image as intentional professional
+manga/webtoon ink drawing.
+
+Use different line weights: thicker lines for important silhouettes and
+foreground forms, medium lines for major structural details, thin delicate
+lines for hair, fabric, ornaments and background details.
+
+The drawing should contain MANY intentional lines and small details. Do not
+make large areas visually empty unless the composition specifically
+requires negative space.
+
+LIGHTING AND SHADING:
+Primarily black-and-white line art.
+Use hatching, cross-hatching, contour hatching, shadow shapes, and dense ink
+accents to create depth instead of conventional digital painting.
+
+COLOR:
+Use ONLY VERY LIMITED SELECTIVE COLOR ACCENTS.
+
+Most of the entire image must remain black-and-white.
+
+Color should appear only in a few strategically chosen areas that are
+visually important to the scene. Possible selective color targets include:
+the character's eyes, blood, magical energy, flowers, falling petals, a
+weapon's gemstone, fire, glowing symbols, one important prop, a small
+portion of the character's clothing.
+
+Choose only 1-3 important color elements unless the scene explicitly
+requires otherwise. The selected colors should be vivid and visually
+striking against the monochrome line art.
+
+DO NOT color the entire character.
+DO NOT color the entire background.
+DO NOT use soft full-image gradients.
+DO NOT turn the image into a full-color anime illustration.
+
+The overall impression must remain: BLACK-AND-WHITE HIGH-DENSITY INK ART +
+SMALL STRATEGIC COLOR ACCENTS.
+
+DETAIL LEVEL:
+Extremely high detail. Professional serialized Korean webtoon quality.
+Dense but readable. Intricate rather than noisy. Every line should have a
+visual purpose.
+
+CHARACTER EMPHASIS:
+The character is the primary visual focus. Give the face, eyes, hair,
+hands, costume details, and important props especially refined linework.
+
+For emotional scenes, prioritize facial expression and eyes. For action
+scenes, prioritize anatomy, gesture, foreshortening, motion, hair movement,
+clothing movement, weapon trajectory, impact effects, and dynamic
+perspective. For quiet scenes, prioritize atmosphere, composition,
+environmental details, subtle expressions, and controlled line density.
+
+BACKGROUND:
+Do not use a generic or empty background. Draw the environment with
+detailed professional webtoon linework appropriate to the described
+location. Background detail should support the scene while remaining
+subordinate to the character.
+
+COMPOSITION:
+Treat the image as an actual webtoon panel or premium illustration rather
+than a character sheet. Use an intentional camera angle and strong
+composition. Avoid static centered character posing unless explicitly
+requested. The composition should communicate the scene and emotion
+immediately.
+
+IMPORTANT:
+The uploaded character sheet determines WHAT the character looks like. The
+scene description determines WHAT the character is doing. This style
+prompt determines HOW the scene is drawn.
+
+Never sacrifice character consistency for artistic variation.
+Never replace the character with a generic anime character.
+Never convert the image into a full-color illustration.
+
+Final visual target: An exceptionally detailed Korean webtoon panel drawn
+by a master ink artist, with dramatic professional linework, dense
+intricate details, strong blacks and fine hatching, cinematic composition,
+and only a few carefully selected vivid color accents.
+
+## 하지 마라
+
+- full color illustration, fully colored character, fully colored
+  background, colorful anime illustration, anime key visual, light novel
+  cover
+- character sheet, character reference sheet, generic anime illustration
+- simple line art, basic line art, rough sketch, rough drawing, unfinished
+  sketch, lazy linework
+- flat outlines, outline filter, auto traced appearance, vector-like line
+  art, uniform line thickness, clean vector lines, minimal linework, low
+  detail, low density
+- empty background, simplified background, flat background
+- flat shading, soft digital painting, airbrushed shading, watercolor,
+  pastel illustration, soft pastel colors, milky colors, glossy full-color
+  rendering
+- 3D render, CGI, plastic appearance, photorealistic
+- chibi, kawaii, moe, childlike proportions, oversized eyes, extremely
+  large eyes, generic facial features
+- simplified costume, simplified hair, missing accessories, incorrect
+  costume, redesigned character, different hairstyle, different clothing,
+  different weapon, extra accessories, random ornaments
+- anatomical distortion, bad hands, extra fingers, missing fingers,
+  deformed hands, duplicate limbs, extra limbs
+- stiff pose, static pose, front-facing character pose, passport
+  composition, symmetrical character portrait
+- low quality, blurry, muddy lines, messy unreadable linework
+- excessive color, too many colored areas, coloring the entire character,
+  coloring the entire background, large color blocks, heavy gradients
