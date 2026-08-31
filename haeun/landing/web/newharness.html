@@ -38,11 +38,10 @@
   }
   /* ---- 결과: 페이지 목록 ---- */
   .nh-pages { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
-  .nh-page { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line-2, #ddd); }
+  .nh-page { border-radius: 8px; overflow: hidden; border: 1px solid var(--line-2, #ddd); }
   .nh-page img { width: 100%; display: block; }
-  .nh-page .nh-edit-btn {
-    position: absolute; right: 8px; bottom: 8px; z-index: 2;
-  }
+  .nh-page-tools { display: flex; gap: 6px; padding: 8px; }
+  .nh-regen-msg { font-size: 12px; color: #777; margin: 0 8px 8px; min-height: 1em; }
   .nh-episode img { width: 100%; border-radius: 8px; display: block; margin-top: 12px; }
   /* ---- 편집실 ---- */
   .nh-editor-veil {
@@ -569,10 +568,56 @@ async function showResult() {
   list.innerHTML = pages.map(n => `
     <div class="nh-page" data-page="${n}">
       <img src="/api/nh/runs/${runId}/page/${n}?w=800&t=${Date.now()}" alt="페이지 ${n}">
-      <button type="button" class="btn btn-primary btn-sm nh-edit-btn" data-page="${n}">편집</button>
+      <div class="nh-page-tools">
+        <button type="button" class="btn btn-primary btn-sm nh-edit-btn" data-page="${n}">편집</button>
+        <button type="button" class="btn btn-quiet btn-sm nh-regen-btn" data-page="${n}">다시 그리기</button>
+      </div>
+      <p class="nh-regen-msg" id="regenMsg${n}"></p>
     </div>`).join("");
   list.querySelectorAll(".nh-edit-btn").forEach(b =>
     b.addEventListener("click", () => openEditor(Number(b.dataset.page))));
+  list.querySelectorAll(".nh-regen-btn").forEach(b =>
+    b.addEventListener("click", () => regenPage(Number(b.dataset.page))));
+}
+
+// 페이지 하나만 다시 그린다 — 실제 이미지 호출이 또 나간다(과금). 끝나면
+// episode.png 도 새로 이어졌으므로 그것도 같이 새로고침한다.
+async function regenPage(no) {
+  const btn = document.querySelector(`.nh-regen-btn[data-page="${no}"]`);
+  const msg = document.getElementById(`regenMsg${no}`);
+  btn.disabled = true;
+  msg.textContent = "다시 그리는 중…";
+  let regenId;
+  try {
+    const res = await fetch(`/api/nh/runs/${runId}/page/${no}/regen`, { method: "POST" });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || "요청이 실패했습니다");
+    regenId = body.id;
+  } catch (err) {
+    msg.textContent = err.message;
+    btn.disabled = false;
+    return;
+  }
+  const poll = setInterval(async () => {
+    let snap;
+    try {
+      snap = await (await fetch(`/api/nh/regens/${regenId}`)).json();
+    } catch {
+      return;                              // 한 번 실패해도 다음 폴링에서 재시도
+    }
+    if (snap.status === "queued") { msg.textContent = "차례를 기다리는 중…"; return; }
+    if (snap.status === "running") { msg.textContent = "다시 그리는 중…"; return; }
+    clearInterval(poll);
+    btn.disabled = false;
+    if (snap.status === "done") {
+      msg.textContent = snap.error ? snap.error : "다시 그렸습니다.";
+      const card = document.querySelector(`.nh-page[data-page="${no}"] img`);
+      if (card) card.src = `/api/nh/runs/${runId}/page/${no}?w=800&t=${Date.now()}`;
+      $("#episodeImg").src = `/api/nh/jobs/${jobId}/episode.png?t=${Date.now()}`;
+    } else {
+      msg.textContent = snap.error || "실패했습니다";
+    }
+  }, 1500);
 }
 
 // --------------------------------------------------------------------- 편집실

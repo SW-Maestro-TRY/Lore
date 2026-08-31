@@ -499,11 +499,12 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             run_id = m.group(1)
             if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
-                # new_harness 는 컷 단위 워터마크(cut_bounds)가 없다 — 페이지
-                # 전체에 하나만 찍는 것도 아직 없다. 지금은 원본을 그대로 낸다.
-                src = nh.final_episode(run_id)
-                if not src:
+                final = nh.final_episode(run_id)
+                if not final:
                     return self._error(404, "아직입니다")
+                src = watermark.for_download(
+                    final, nh.run_dir(run_id), nh.episode_caption(run_id),
+                    cut_bounds=nh.page_bounds(run_id))
                 return self._file(src, download=f"{run_id}.png")
             ep = self._ep(query)
             ep_dir = pipeline.episode_dir(m.group(1), ep)
@@ -774,14 +775,19 @@ class Handler(BaseHTTPRequestHandler):
                                "queue_position": nh_runner.position(job.id)})
 
         # 완성본 — 편집실에서 얹은 것이 있으면 구운 판(final_episode)이 나간다.
+        # /nh 는 컷 단위 읽기 화면이 없이 이 그림 하나가 곧 "가져가는 것"이라
+        # (classic 의 낱장 읽기와 다르게), 여기도 워터마크를 찍는다.
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/episode\.png", path)
         if m:
             job = nh_runner.get(m.group(1))
             if not job or not job.run_id:
                 return self._error(404, "그런 작업이 없습니다")
-            src = nh.final_episode(job.run_id)
-            if not src:
+            final = nh.final_episode(job.run_id)
+            if not final:
                 return self._error(404, "아직입니다")
+            src = watermark.for_download(
+                final, nh.run_dir(job.run_id), nh.episode_caption(job.run_id),
+                cut_bounds=nh.page_bounds(job.run_id))
             return self._file(src)
 
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/sheet\.png", path)
@@ -825,9 +831,13 @@ class Handler(BaseHTTPRequestHandler):
 
         m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/episode\.png", path)
         if m:
-            src = nh.final_episode(m.group(1))
-            if not src:
+            run_id = m.group(1)
+            final = nh.final_episode(run_id)
+            if not final:
                 return self._error(404, "아직입니다")
+            src = watermark.for_download(
+                final, nh.run_dir(run_id), nh.episode_caption(run_id),
+                cut_bounds=nh.page_bounds(run_id))
             return self._file(src)
 
         m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/page/(\d+)", path)
@@ -851,6 +861,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(thumbnail(src, dest, width))
             except Exception:                                   # noqa: BLE001
                 return self._file(src)
+
+        m = re.fullmatch(r"/api/nh/regens/([\w.-]+)", path)
+        if m:
+            try:
+                return self._json(nh_runner.regen_status(m.group(1)))
+            except KeyError:
+                return self._error(404, "그런 작업이 없습니다")
 
         return self._error(404, "없는 주소입니다")
 
@@ -1585,6 +1602,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, str(exc))
             res["url"] = f"/api/nh/runs/{m.group(1)}/episode.png"
             return self._json(res)
+
+        # 다시 그리기 — 페이지 하나만. 편집실이 아니라 결과 화면(페이지 목록)
+        # 에서 부른다. 도는 동안은 /api/nh/regens/<id> 로 진행을 본다.
+        m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/page/(\d+)/regen", url.path)
+        if m:
+            try:
+                regen_id = nh_runner.regen(m.group(1), int(m.group(2)))
+            except ValueError as exc:
+                return self._error(400, str(exc))
+            return self._json({"id": regen_id})
 
         return self._error(404, "없는 주소입니다")
 

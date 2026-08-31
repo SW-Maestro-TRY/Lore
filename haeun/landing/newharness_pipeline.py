@@ -102,6 +102,13 @@ RE_PAGE = re.compile(r"^\[페이지 (\d+)/(\d+)\]")
 RE_RUN_ID = re.compile(r"^run: .*[/\\]([^/\\]+)\s*$")
 
 
+def _subprocess_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    return env
+
+
 @dataclass
 class NHJob:
     id: str
@@ -175,10 +182,7 @@ class NHJob:
     # ---- 실행 ---------------------------------------------------------------- #
 
     def _env(self) -> dict[str, str]:
-        env = dict(os.environ)
-        env["PYTHONIOENCODING"] = "utf-8"
-        env["PYTHONUTF8"] = "1"
-        return env
+        return _subprocess_env()
 
     def _run(self, args: list[str], on_line: Callable[[str], None]) -> int:
         display = " ".join(["python", "run.py", *args])
@@ -394,6 +398,42 @@ def board_summary(run_id: str) -> dict[str, Any] | None:
     return {"cast": board.get("cast") or [], "scenes": scenes}
 
 
+def _run_regen(entry: dict[str, Any]) -> None:
+    """페이지 하나만 다시 그린다. run.py --page 는 파일이 이미 있으면 그냥
+    넘어가므로(pageart.draw 의 "이미 있습니다"), 먼저 지워야 한다.
+
+    다 그린 뒤에는 episode.png 도 다시 잇는다 — 안 그러면 완성본에는 옛
+    페이지가 그대로 남아서, 다시 그린 게 화면에 안 보인다(stitch 는 호출
+    비용이 없다, 그냥 이어붙이기만 하는 것이라 매번 다시 해도 된다).
+    """
+    entry["status"] = STATUS_RUNNING
+    run_id, no = entry["run_id"], entry["page"]
+    try:
+        img = unit_image(run_id, no)
+        if img:
+            img.unlink()
+        proc = subprocess.run(
+            [sys.executable, "-u", "run.py", "--run-id", run_id, "--page", str(no)],
+            cwd=str(NEW_HARNESS), env=_subprocess_env(), capture_output=True,
+            text=True, encoding="utf-8", errors="replace")
+        entry["log"] = ((proc.stdout or "") + (proc.stderr or "")).strip()
+        if proc.returncode != 0 or not unit_image(run_id, no):
+            entry["status"] = STATUS_ERROR
+            entry["error"] = "다시 그리지 못했습니다 — 로그를 확인하세요"
+            return
+        stitch = subprocess.run(
+            [sys.executable, "-u", "stitch.py", "--run-id", run_id],
+            cwd=str(NEW_HARNESS), env=_subprocess_env(), capture_output=True,
+            text=True, encoding="utf-8", errors="replace")
+        if stitch.returncode != 0:
+            # 페이지 자체는 새로 나왔으니 실패로 안 본다 — 완성본만 못 갱신됐다.
+            entry["error"] = "새 페이지는 나왔지만 한 편으로 다시 잇지 못했습니다"
+        entry["status"] = STATUS_DONE
+    except Exception as exc:                            # noqa: BLE001
+        entry["status"] = STATUS_ERROR
+        entry["error"] = f"{type(exc).__name__}: {exc}"
+
+
 class NHRunner:
     """job 저장소. 클래식 Runner 와 같은 방식으로 줄을 세운다 — 이미지 호출이
     여러 번 나가는 작업이라 동시에 여러 개를 돌리면 요금과 rate limit 이
@@ -410,6 +450,7 @@ class NHRunner:
 
     def __init__(self) -> None:
         self.jobs: dict[str, NHJob] = {}
+        self.regens: dict[str, dict[str, Any]] = {}
         self.queue: list[Callable[[], None]] = []
         self._lock = threading.Lock()
         self._worker: threading.Thread | None = None
@@ -519,6 +560,26 @@ class NHRunner:
         _clear_sheet(job.run_id)
         self._requeue(job, _run_sheet_phase)
         return job
+
+    # ---- 다시 그리기(페이지 재생성) — job 과 무관하다, 완성된 뒤 둘러보기·
+    # 편집실에서도 부를 수 있어야 한다 ------------------------------------- #
+
+    def regen(self, run_id: str, page_no: int) -> str:
+        if not unit_image(run_id, page_no):
+            raise ValueError("그 페이지가 없습니다")
+        regen_id = uuid.uuid4().hex[:12]
+        entry = {"id": regen_id, "run_id": run_id, "page": page_no,
+                 "status": STATUS_QUEUED, "error": None, "log": ""}
+        self.regens[regen_id] = entry
+        # 같은 큐를 탄다 — 이미지 호출이라 다른 job 과 동시에 돌면 안 된다.
+        self._enqueue(f"regen:{regen_id}", lambda: _run_regen(entry))
+        return regen_id
+
+    def regen_status(self, regen_id: str) -> dict[str, Any]:
+        entry = self.regens.get(regen_id)
+        if not entry:
+            raise KeyError(regen_id)
+        return {k: entry[k] for k in ("id", "run_id", "page", "status", "error")}
 
 
 # --------------------------------------------------------------------------- #
@@ -719,6 +780,43 @@ def bake_run(run_id: str, body: Any = None) -> dict[str, Any]:
     res = overlay.bake(d, numbers, lambda n: unit_image(run_id, n), data)
     res["items"] = overlay.count_items(data)
     return res
+
+
+def page_bounds(run_id: str) -> list[tuple[int, int, int, int]] | None:
+    """이어붙인 episode.png 안에서 페이지마다 차지하는 자리 —
+    watermark.stamp() 의 cut_bounds 로 넘겨서 페이지마다 표시를 찍게 한다.
+
+    stitch.py 의 규칙과 똑같이 계산한다: 가장 넓은 페이지 폭에 맞춰 나머지는
+    가운데 정렬, 늘리거나 줄이지 않고, 사이 여백도 없다(stitch.py:36-55).
+    """
+    numbers = [n for n in page_numbers(run_id) if unit_image(run_id, n)]
+    if not numbers:
+        return None
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    sizes = []
+    try:
+        for n in numbers:
+            with Image.open(unit_image(run_id, n)) as im:
+                sizes.append(im.size)
+    except OSError:
+        return None
+    width = max(w for w, _h in sizes)
+    bounds: list[tuple[int, int, int, int]] = []
+    y = 0
+    for w, h in sizes:
+        bounds.append(((width - w) // 2, y, w, h))
+        y += h
+    return bounds
+
+
+def episode_caption(run_id: str) -> str:
+    """워터마크 띠 오른쪽에 적을 한 줄 — pipeline.episode_caption() 과 같은
+    자리, new_harness 는 회차 개념이 없어 늘 1화다."""
+    name = str(_read_json_safe(run_dir(run_id), "input.json").get("name") or "").strip()
+    return f"{name} · 1화" if name else "1화"
 
 
 def final_episode(run_id: str) -> Path | None:
