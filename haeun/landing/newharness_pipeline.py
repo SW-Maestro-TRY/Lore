@@ -33,11 +33,28 @@ overlay.py 는애초에 밑그림에 빈 자리가 있어야 한다는 가정이
 번호 매겨진 밑그림 한 장으로만— 취급하면 overlay.py 를 그대로 재사용할 수
 있다. new_harness 코드는 한 줄도 안 고쳤다.
 
+## 검수(승인) 단계 — 2026-08-31 추가
+
+처음엔 콘티(구체화+콘티)와 시트를 한 번에 이어서 돌렸는데, 그러면 사람이
+볼 자리가 없다 — 시트 얼굴이 틀어지거나 콘티가 이상해도 페이지를 다 그린
+뒤에야 안다. 그래서 세 번을 **네 번**으로 다시 나눴다:
+
+    1. `--character <path>`        이야기 후보 4개 (사람이 고름)
+    2. `--run-id <id> --pick <n>`  구체화+콘티        [여기서 멈춤 — 콘티 검수]
+    3. `--run-id <id> --sheet`     시트만              [여기서 멈춤 — 시트 검수]
+    4. `--run-id <id> --pages`     페이지 그림
+
+"다시 만들기"는 그 단계 명령을 **한 번 더 그대로 부르는 것**이다 — 콘티는
+`--pick n`을 다시 부르면 detail_prompt/storyboard_prompt 가 새로 돈다(값을
+덮어씀, 실측 확인). 시트는 `run.py` 자체가 "사양·그림이 이미 있으면 다시
+안 그린다"고 정해 놨으므로(`stage_sheet`), 다시 만들려면 `sheet.png`·
+`sheet_spec.json` 을 먼저 지우고 같은 명령을 다시 부른다.
+
 ## 지금 안 하는 것
 
-전문/일반 모드, 이어 그리기·이어 만들기(다음 화)는 없다. 다시 그리기(regen,
-장 하나만 다른 프롬프트로 다시 그리는 것)도 없다 — new_harness 는 페이지
-단위 호출이라 그 컷만 다시 그리는 개념이 없고, 페이지 전체를 다시 그리려면
+전문/일반 모드, 이어 그리기·이어 만들기(다음 화)는 없다. 그림 검수
+(art QA — 그려진 페이지 개별 재생성)도 없다 — new_harness 는 페이지 단위
+호출이라 컷 하나만 다시 그리는 개념이 없고, 페이지 전체를 다시 그리려면
 비용이 pipeline.py 의 regen보다 크다.
 """
 
@@ -65,8 +82,11 @@ NEW_HARNESS = HERE.parent / "new_harness"
 STATUS_QUEUED = "queued"
 STATUS_RUNNING = "running"
 STATUS_AWAITING_PICK = "awaiting_pick"
+STATUS_AWAITING_BOARD = "awaiting_board"
+STATUS_AWAITING_SHEET = "awaiting_sheet"
 STATUS_DONE = "done"
 STATUS_ERROR = "error"
+AWAITING = (STATUS_AWAITING_PICK, STATUS_AWAITING_BOARD, STATUS_AWAITING_SHEET)
 
 # 화면에 보여줄 단계. new_harness 내부 단계 이름과 같다 — 세부 스텝(예:
 # pipeline.py 의 look/seed/card...)까지는 안 쪼갠다, 신호가 그만큼 없다.
@@ -118,7 +138,7 @@ class NHJob:
             stage_i = STAGES.index(self.stage) if self.stage in STAGES else 0
             frac = (self.art_done / self.art_total) if self.art_total else 0.0
             pct = round((stage_i + frac) / len(STAGES) * 100) if self.status != "done" else 100
-            return {
+            out = {
                 "id": self.id,
                 "status": self.status,
                 "run_id": self.run_id,
@@ -135,6 +155,12 @@ class NHJob:
                 "elapsed": round((self.finished_at or time.time())
                                  - self.started_at, 1) if self.started_at else 0,
             }
+            # 그 검수 단계일 때만 읽는다 — 매 폴링(0.8초)마다 board.json 을
+            # 여는 것은 대부분 헛일이다(pipeline.py 의 story_preview/
+            # board_preview 와 같은 절약 규칙).
+            if self.status == STATUS_AWAITING_BOARD and self.run_id:
+                out["board_summary"] = board_summary(self.run_id)
+            return out
 
     def save(self) -> None:
         try:
@@ -197,6 +223,11 @@ class NHJob:
                 proc.terminate()
             except OSError:
                 pass
+        # 검수 대기 중이면 도는 프로세스가 없다 — 여기서 바로 끝낸다.
+        if self.status in AWAITING:
+            self.status = STATUS_ERROR
+            self.error = "사용자가 취소했습니다"
+            self.save()
 
 
 def _on_rest_line(job: NHJob, line: str) -> None:
@@ -259,25 +290,62 @@ def _run_story_phase(job: NHJob) -> None:
         _fail(job, f"{type(exc).__name__}: {exc}")
 
 
-def _run_rest_phase(job: NHJob) -> None:
-    """2·3단계 — 고른 방향으로 구체화+콘티, 그다음 시트+페이지, 그리고 이어붙이기."""
+def _run_board_phase(job: NHJob) -> None:
+    """2단계 — 고른 방향으로 구체화+콘티. 끝나면 사람이 볼 때까지 멈춘다.
+
+    다시 만들기도 이 함수를 그대로 다시 부른다 — `--pick n` 을 다시 주면
+    detail_prompt·storyboard_prompt 가 새로 돈다(run.py 가 값을 덮어씀).
+    """
     job.status = STATUS_RUNNING
+    job.stage = "board"
     job.save()
     try:
-        job.stage = "board"
         code = job._run(["--run-id", job.run_id, "--pick", str(job.pick)],
                         lambda line: _on_rest_line(job, line))
         if job._cancel:
             return _fail(job, "취소되었습니다")
         if code != 0:
             return _fail(job, "콘티를 만들지 못했습니다 — 로그를 확인하세요")
+        job.status = STATUS_AWAITING_BOARD
+        job.save()
+    except Exception as exc:                            # noqa: BLE001
+        _fail(job, f"{type(exc).__name__}: {exc}")
 
-        code = job._run(["--run-id", job.run_id, "--sheet", "--pages"],
+
+def _run_sheet_phase(job: NHJob) -> None:
+    """3단계 — 캐릭터 시트. 끝나면 사람이 볼 때까지 멈춘다.
+
+    다시 만들기는 호출 전에 sheet.png·sheet_spec.json 을 지운다 — run.py 의
+    stage_sheet 는 그 둘이 있으면 "이미 있습니다"로 그냥 넘어가기 때문이다.
+    """
+    job.status = STATUS_RUNNING
+    job.stage = "sheet"
+    job.save()
+    try:
+        code = job._run(["--run-id", job.run_id, "--sheet"],
                         lambda line: _on_rest_line(job, line))
         if job._cancel:
             return _fail(job, "취소되었습니다")
         if code != 0:
-            return _fail(job, "시트나 그림을 만들지 못했습니다 — 로그를 확인하세요")
+            return _fail(job, "시트를 만들지 못했습니다 — 로그를 확인하세요")
+        job.status = STATUS_AWAITING_SHEET
+        job.save()
+    except Exception as exc:                            # noqa: BLE001
+        _fail(job, f"{type(exc).__name__}: {exc}")
+
+
+def _run_pages_phase(job: NHJob) -> None:
+    """4단계 — 페이지 그림, 그리고 이어붙이기. 끝나면 완성이다."""
+    job.status = STATUS_RUNNING
+    job.stage = "pages"
+    job.save()
+    try:
+        code = job._run(["--run-id", job.run_id, "--pages"],
+                        lambda line: _on_rest_line(job, line))
+        if job._cancel:
+            return _fail(job, "취소되었습니다")
+        if code != 0:
+            return _fail(job, "그림을 만들지 못했습니다 — 로그를 확인하세요")
 
         ok, err = job._stitch()
         if not ok:
@@ -291,17 +359,53 @@ def _run_rest_phase(job: NHJob) -> None:
         _fail(job, f"{type(exc).__name__}: {exc}")
 
 
+def _clear_sheet(run_id: str) -> None:
+    d = run_dir(run_id)
+    for name in ("sheet.png", "sheet_spec.json", "sheet_prompt.txt", "sheet_spec_prompt.txt"):
+        try:
+            (d / name).unlink()
+        except OSError:
+            pass
+
+
+def board_summary(run_id: str) -> dict[str, Any] | None:
+    """콘티 검수 화면이 보여줄 것 — cast·장면·컷을 사람이 읽을 모양으로.
+
+    board.json 의 원래 모양(run.parse_board 참고)을 그대로 옮기되, 컷마다
+    대사만 뽑아서 짧게 — 화면은 "무슨 내용인지"만 보면 되고, camera·background
+    같은 프롬프트용 값까지 볼 필요는 없다.
+    """
+    path = run_dir(run_id) / "board.json"
+    try:
+        board = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    scenes = []
+    for s in board.get("scenes") or []:
+        cuts = []
+        for c in s.get("cuts") or []:
+            lines = [f"{d.get('speaker') or d.get('type') or ''}: {d.get('text') or ''}".strip(": ")
+                     for d in (c.get("dialogue") or []) if (d.get("text") or "").strip()]
+            cuts.append({"id": c.get("id"), "size": c.get("size"), "dialogue": lines})
+        scenes.append({
+            "id": s.get("id"), "location": s.get("location"),
+            "time": s.get("time"), "summary": s.get("summary"), "cuts": cuts,
+        })
+    return {"cast": board.get("cast") or [], "scenes": scenes}
+
+
 class NHRunner:
     """job 저장소. 클래식 Runner 와 같은 방식으로 줄을 세운다 — 이미지 호출이
     여러 번 나가는 작업이라 동시에 여러 개를 돌리면 요금과 rate limit 이
     같이 터진다(landing/pipeline.py 의 Runner 와 같은 이유, 3599번 줄 근처
     주석 참고). 뒤에 온 요청은 줄을 선다.
 
-    NHJob 은 실행이 두 자리에서 걸린다 — 만들 때(story) 와 방향을 고를
-    때(구체화+콘티+시트+그림), 사람이 방향을 고르기까지는 시간이 얼마나
-    걸릴지 알 수 없다. 그래서 Runner 처럼 job_id 를 줄에 넣는 게 아니라,
-    **이번에 돌릴 일 하나**(callable)를 줄에 넣는다 — 같은 job 이 두 번
-    줄을 설 수 있다는 뜻이다.
+    NHJob 은 실행이 여러 자리에서 걸린다 — 만들 때(story), 방향을 고를 때
+    (board), 콘티/시트를 검수하고 승인·재시도를 누를 때마다(sheet·pages).
+    각 자리 사이는 **사람이 볼 때까지** 멈춰 있어서 얼마나 걸릴지 알 수
+    없다. 그래서 Runner 처럼 job_id 를 줄에 넣는 게 아니라, **이번에 돌릴
+    일 하나**(callable)를 줄에 넣는다(`_enqueue`/`_requeue`) — 같은 job 이
+    여러 번 줄을 설 수 있다는 뜻이다.
     """
 
     def __init__(self) -> None:
@@ -373,12 +477,47 @@ class NHRunner:
         if not any(d.get("n") == n for d in job.directions):
             raise ValueError(f"방향 {n} 이 없습니다")
         job.pick = n
-        # 줄을 서는 동안에도 상태를 바꿔 둔다 — AWAITING_PICK 그대로 두면
-        # 줄에 있는 동안 pick() 이 또 불렸을 때 위 가드가 다시 통과해
-        # 같은 job 이 두 번 줄을 선다.
+        self._requeue(job, _run_board_phase)
+        return job
+
+    def _require(self, job_id: str, status: str) -> NHJob:
+        job = self.jobs.get(job_id)
+        if not job:
+            raise KeyError(job_id)
+        if job.status != status:
+            raise ValueError("지금은 그 조작을 할 수 없습니다")
+        return job
+
+    def _requeue(self, job: NHJob, fn: Callable[[NHJob], None]) -> None:
+        """검수 단계에서 다음 단계로 넘어가거나 다시 만들 때 공통으로 쓴다.
+
+        줄을 서는 동안에도 상태를 바꿔 둔다 — AWAITING_* 그대로 두면 줄에
+        있는 동안 같은 조작(승인·재시도 버튼 연타 등)이 `_require` 를 또
+        통과해 같은 job 이 두 번 줄을 선다.
+        """
         job.status = STATUS_QUEUED
         job.save()
-        self._enqueue(job_id, lambda: _run_rest_phase(job))
+        self._enqueue(job.id, lambda: fn(job))
+
+    def approve_board(self, job_id: str) -> NHJob:
+        job = self._require(job_id, STATUS_AWAITING_BOARD)
+        self._requeue(job, _run_sheet_phase)
+        return job
+
+    def retry_board(self, job_id: str) -> NHJob:
+        job = self._require(job_id, STATUS_AWAITING_BOARD)
+        self._requeue(job, _run_board_phase)
+        return job
+
+    def approve_sheet(self, job_id: str) -> NHJob:
+        job = self._require(job_id, STATUS_AWAITING_SHEET)
+        self._requeue(job, _run_pages_phase)
+        return job
+
+    def retry_sheet(self, job_id: str) -> NHJob:
+        job = self._require(job_id, STATUS_AWAITING_SHEET)
+        _clear_sheet(job.run_id)
+        self._requeue(job, _run_sheet_phase)
         return job
 
 
@@ -389,6 +528,88 @@ class NHRunner:
 
 def run_dir(run_id: str) -> Path:
     return NEW_HARNESS / "runs" / run_id
+
+
+def is_run(run_id: str) -> bool:
+    """이 run_id 가 new_harness 것인가. serve.py 가 classic(story-harness)
+    라우트와 갈림길에서 쓴다 — story-harness/runs 에 없을 때만 여기로 온다."""
+    return run_dir(run_id).is_dir()
+
+
+def _read_json_safe(base: Path, name: str) -> dict[str, Any]:
+    try:
+        return json.loads((base / name).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def list_runs(limit: int = 60) -> list[dict[str, Any]]:
+    """둘러보기 목록에 얹을 new_harness run — pipeline.list_runs() 와 같은
+    모양으로 돌려준다(화면이 두 출처를 구분 안 해도 되게). 회차 개념이
+    없으므로 늘 1화 하나뿐이다.
+    """
+    out: list[dict[str, Any]] = []
+    root = NEW_HARNESS / "runs"
+    if not root.is_dir():
+        return out
+    for d in sorted(root.glob("2026*"), reverse=True):
+        if not d.is_dir():
+            continue
+        rid = d.name
+        drawn = [n for n in page_numbers(rid) if unit_image(rid, n)]
+        if not drawn:
+            continue                       # 그림이 하나도 없으면 목록에 안 걸린다
+        input_doc = _read_json_safe(d, "input.json")
+        pick = _read_json_safe(d, "pick.json")
+        out.append({
+            "run_id": rid,
+            "character": str(input_doc.get("name") or ""),
+            "title": str(pick.get("title") or "1화"),
+            "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
+            "episodes": [1],
+            "planned_episodes": [1],
+            "next_episode": 2,             # new_harness 는 이어 만들기가 없다
+            "cover_episode": 1,
+            "cover_page": drawn[0],
+            "page_count": len(drawn),
+            "engine": "new_harness",       # 화면이 굳이 안 봐도 되지만, 구분은 남긴다
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
+def result_by_run(run_id: str) -> dict[str, Any]:
+    """완성본 화면(app.js 의 paintResult)이 그대로 먹는 모양.
+
+    classic 의 _result_body() 와 같은 자리인데, new_harness 는 콘티 스키마가
+    달라서(장·컷 그룹핑 대신 페이지 한 장 = 카드 한 장) 훨씬 단순하다 — 여백/폭
+    개념이 없으니(stitch.py 가 그냥 이어붙임) 전부 gap 0 · width 1 이다.
+    """
+    d = run_dir(run_id)
+    numbers = [n for n in page_numbers(run_id) if unit_image(run_id, n)]
+    if not numbers:
+        return {}
+    input_doc = _read_json_safe(d, "input.json")
+    pick = _read_json_safe(d, "pick.json")
+    return {
+        "run_id": run_id,
+        "character": str(input_doc.get("name") or ""),
+        "title": str(pick.get("title") or "1화"),
+        "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
+        "style_label": "",
+        "logline": "",
+        "episode": 1,
+        "pages": [{"no": n, "gap": 0, "width": 1} for n in numbers],
+        "page_count": len(numbers),
+        "planned_pages": len(page_numbers(run_id)),
+        "preview": False,
+        "cut_count": 0,
+        "cuts_per_sheet": 1,
+        "stage_times": [],
+        "seconds": None,
+        "layout_mode": "fast",
+    }
 
 
 def page_numbers(run_id: str) -> list[int]:

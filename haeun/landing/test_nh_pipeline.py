@@ -149,12 +149,12 @@ def test_pick_guards_against_double_queue() -> None:
         gate = threading.Event()
         calls = []
 
-        def slow_rest(job=job):
+        def slow_board(job=job):
             calls.append(1)
             gate.wait(timeout=5)
 
-        orig = NP._run_rest_phase
-        NP._run_rest_phase = slow_rest
+        orig = NP._run_board_phase
+        NP._run_board_phase = slow_board
         try:
             runner.pick(job.id, 1)
             ok("두 번째 pick 은 막힌다", _raises_value_error(lambda: runner.pick(job.id, 1)))
@@ -165,7 +165,7 @@ def test_pick_guards_against_double_queue() -> None:
                 time.sleep(0.01)
             check("실제로는 한 번만 돌았다", len(calls), 1)
         finally:
-            NP._run_rest_phase = orig
+            NP._run_board_phase = orig
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
