@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import re
 import sys
 import unicodedata
@@ -700,43 +701,155 @@ def read_input(run_dir: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def story_variety_block(run_dir: Path, char: dict) -> str:
-    """이번 이야기 변수 · 회차 구조 — story-harness/samples.py 를 그대로 빌린다.
+DIRECTIONS_PER_RUN = 4
 
-    같은 장르로 여러 번 만들면 매번 비슷한 이야기가 나오던 문제(호출마다
-    독립적이라 이전 결과를 기억하지 못함)를 story-harness 가 이미 풀어
-    둔 방식(samples.pick_fresh)으로 막는다 — 최근 new_harness run 들이 쓴
-    조합은 피해서 뽑고, 그 조합을 축·구조 참고 자료로 story_prompt 에
-    같이 넣는다. 뽑힌 값은 이 run 의 axes.json 에 남는다(story-harness와
-    같은 파일명 · 같은 스키마).
+
+def _distinct_structures(genre: str, first: dict, n: int = DIRECTIONS_PER_RUN) -> list[dict]:
+    """회차 구조를 서로 다른 것으로 n개. 첫 번째는 pick_fresh 가 뽑아 준 것을 쓴다.
+
+    장르 제약이 세서 n개를 못 채우면 있는 만큼만 준다 — 겹치는 구조를
+    억지로 채워 넣느니 그 방향은 구조 없이 가는 편이 낫다.
+    """
+    out, seen = [], set()
+    for cand in [first] + [samples.pick_structure(genre) for _ in range(n * 6)]:
+        if len(out) >= n:
+            break
+        key = str((cand or {}).get("구조", {}).get("이름") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(cand)
+    return out
+
+
+def _pick_engines(n: int = DIRECTIONS_PER_RUN) -> list[dict]:
+    """서사 엔진 — "이 인물이 무엇을 하는 이야기인가". 방향마다 서로 다르게.
+
+    축(어디에 서 있는가)·구조(어떤 순서로 보여주는가)와 다른 층이다. 축과
+    구조를 방향별로 갈라도 4개가 전부 "상대에게 숨겨진 감정이 있고
+    주인공은 모른다"로 수렴하는 것을 실측하고 넣었다(2026-08-31) — 소재는
+    달라도 그 위에 얹히는 갈등 공식이 같으면 읽는 경험이 같다.
+
+    story_prompt 에 목록만 주고 "서로 다르게 하라"고 했을 때는 장르가
+    끌어당기는 쪽으로 다시 수렴했다. 축·구조처럼 값을 박아야 갈린다.
+    "비밀과 추적"이 하나를 넘지 않는 것은 서로 다른 것을 뽑는 것만으로
+    저절로 지켜진다.
+    """
+    try:
+        doc = json.loads((PROMPT_DIR / "story_engines.json").read_text(encoding="utf-8"))
+        values = [v for v in (doc.get("엔진") or {}).get("값") or []
+                  if isinstance(v, dict) and v.get("이름")]
+    except (OSError, json.JSONDecodeError):
+        return []                       # 없으면 엔진 없이 간다 — 예전과 같다
+    if not values:
+        return []
+    pool = list(values)
+    random.shuffle(pool)
+    return [pool[i % len(pool)] for i in range(n)]
+
+
+def _engine_block(engine: dict) -> str:
+    if not engine:
+        return ""
+    lines = [f"[서사 엔진] {engine.get('이름', '')} — 핵심 동사: "
+             f"{engine.get('핵심동사', '')}"]
+    for key in ("설명", "전개"):
+        if str(engine.get(key) or "").strip():
+            lines.append(f"  {engine[key]}")
+    return "\n".join(lines)
+
+
+def _distinct_axes(genre: str, first: dict, n: int = DIRECTIONS_PER_RUN) -> list[dict]:
+    """이야기 변수를 방향마다 하나씩. **축 하나하나가 방향끼리 안 겹치게** 뽑는다.
+
+    조합 단위로만 다르게 뽑으면 축 하나가 4개 방향에 똑같이 걸릴 수 있고,
+    그러면 소재가 달라도 넷이 같은 이야기로 읽힌다 — 2026-08-31 실측에서
+    관계_구도(삼각관계)가 4개 전부에 나왔다. 그래서 축별로 값을 갈라 준다.
+
+    1번 방향은 pick_fresh 가 뽑아 준 것을 그대로 쓴다. 최근 run 들과 겹치지
+    않게 고른 값이라 이것을 버리면 run 사이 반복 회피가 사라진다.
+    값이 n개보다 적은 축(장르 제약)은 있는 만큼만 돌려 쓴다.
+    """
+    table = samples.load_axes()
+    if not table:
+        return []
+    gkey = samples._override_key(table, genre)
+    picked: list[dict] = [{} for _ in range(n)]
+    for axis in samples.axis_names():
+        values = samples._axis_values(table, axis, gkey)
+        if not values:
+            continue
+        head = (first or {}).get(axis)
+        rest = [v for v in values
+                if not head or v.get("이름") != head.get("이름")]
+        random.shuffle(rest)
+        chosen = ([head] if head else []) + rest
+        for i in range(n):
+            picked[i][axis] = chosen[i % len(chosen)]
+    return picked
+
+
+def story_variety_block(run_dir: Path, char: dict) -> str:
+    """방향별 이야기 변수 · 회차 구조 — story-harness/samples.py 를 빌린다.
+
+    **방향마다 하나씩** 뽑는다. story-harness 는 run 하나가 이야기 하나라
+    "run 당 한 벌"이 곧 "이야기 당 한 벌"이었는데, new_harness 는 run
+    하나가 이야기 4개다 — 그래서 원래 의도대로 옮기면 방향 단위가 맞다.
+    (한 벌을 4개가 나눠 쓰게 했다가 관계_구도가 4개 전부에 같이 걸리는
+    것을 실측으로 확인하고 고쳤다. 2026-08-31.)
+
+    run 과 run 사이의 반복 회피(samples.pick_fresh 가 최근 run 들의
+    axes.json 을 보고 겹치는 조합을 피하는 것)는 그대로 살아 있다 —
+    1번 방향이 pick_fresh 가 고른 값을 그대로 받고, axes.json 의
+    "축"·"구조" 키(story-harness 와 같은 스키마)에 그 값이 남는다.
+    방향별 전체는 "방향별_축"·"방향별_구조" 에 따로 남긴다.
     """
     axes, structure, fresh = samples.pick_fresh(char["genre"], runs_dir=RUNS_DIR)
-    if axes or structure:
-        write_json(run_dir / "axes.json", {"축": axes, "구조": structure})
-    if axes:
-        log(f"  이야기 변수: {samples.axes_summary(axes)}")
-    if structure:
-        log(f"  회차 구조: {samples.structure_summary(structure)}")
+    axes_list = _distinct_axes(char["genre"], axes) if axes else []
+    structures = _distinct_structures(char["genre"], structure) if structure else []
+    engines = _pick_engines()
+
+    if axes or structure or engines:
+        write_json(run_dir / "axes.json",
+                   {"축": axes, "구조": structure,
+                    "방향별_축": axes_list, "방향별_구조": structures,
+                    "방향별_엔진": engines})
+    for i in range(max(len(axes_list), len(structures), len(engines))):
+        bits = []
+        if i < len(engines):
+            bits.append(str(engines[i].get("이름") or ""))
+        if i < len(axes_list):
+            bits.append(samples.axes_summary(axes_list[i]))
+        if i < len(structures):
+            bits.append(samples.structure_summary(structures[i]))
+        if bits:
+            log(f"  방향 {i + 1}: {' | '.join(b for b in bits if b)}")
     if (axes or structure) and not fresh:
         log("  (최근 생성물과 조합이 겹칩니다 — 고를 수 있는 폭이 좁습니다)")
 
-    parts = []
-    axes_txt = samples.axes_block(axes)
-    if axes_txt:
-        parts += [
-            "", "## 이번 이야기의 변수 (참고 — 매번 다르게 뽑힌다)", "",
-            "아래 값은 이번 생성에서만 적용된다. 4개 방향 전부가 이 값을 그대로 "
-            "따라야 하는 것은 아니고, 인물의 자리·태도·소재가 막힐 때 여기서 "
-            "고른다. 다만 이 값을 무시하고 이 장르에서 가장 흔한 설정으로 "
-            "돌아가면, 이번 4개가 지난 생성들과 비슷해진다 — 그것이 피해야 "
-            "할 실패다.", "", axes_txt,
-        ]
-    structure_txt = samples.structure_block(structure)
-    if structure_txt:
-        parts += [
-            "", "## 이번에 참고할 회차 구조 (참고 — 매번 다르게 뽑힌다)", "",
-            structure_txt,
-        ]
+    count = max(len(axes_list), len(structures), len(engines))
+    if not count:
+        return ""
+    parts = [
+        "", "## 방향별 서사 엔진 · 이야기 변수 · 회차 구조 — 참고가 아니라 지시다", "",
+        "아래 값은 방향 번호에 그대로 대응한다. **방향 N 은 N 번 값으로 쓴다.** "
+        "4개가 서로 다른 이야기가 되게 하는 장치가 이것이다 — 값을 무시하고 그 "
+        "장르에서 가장 흔한 설정으로 돌아가면 넷이 비슷해지고, 지난 생성들과도 "
+        "비슷해진다.", "",
+        "**서사 엔진이 가장 세다.** 소재와 무대가 달라도 엔진이 같으면 넷이 같은 "
+        "이야기로 읽힌다 — 실제로 그렇게 나온 적이 있다(소재는 다 달랐는데 넷 다 "
+        "'상대에게 숨겨진 감정이 있고 주인공은 모른다'였다). 장르가 익숙한 공식으로 "
+        "끌어당겨도 배정된 엔진 쪽으로 간다. 엔진은 이야기가 무엇을 하는지를, "
+        "이야기 변수는 인물이 어디에 서서 무엇과 부딪히는지를, 회차 구조는 그것을 "
+        "어떤 순서로 보여줄지를 정한다. 소재는 장르에서 고르고 이 위에 얹는다.",
+    ]
+    for i in range(count):
+        parts += ["", f"### 방향 {i + 1}", ""]
+        for txt in (_engine_block(engines[i]) if i < len(engines) else "",
+                    samples.axes_block(axes_list[i]) if i < len(axes_list) else "",
+                    samples.structure_block(structures[i]) if i < len(structures) else ""):
+            if txt:
+                parts += [txt, ""]
     return "\n".join(parts)
 
 
