@@ -350,6 +350,99 @@ def parse_detail(text: str) -> dict:
             "hidden": [_text(x) for x in (obj.get("hidden") or []) if _text(x)]}
 
 
+def parse_cutscript(text: str) -> dict:
+    """cutscript_prompt 의 응답(JSON) -> {"scenes": [{id, cuts: [...]}]}.
+
+    컷 대본이다 — 컷을 어디서 나누고 무슨 말을 할지까지만 정해져 있고,
+    카메라·배경·표정은 아직 없다. 그것은 콘티(storyboard) 단계가 채운다.
+    """
+    obj = story.extract_json(text)
+    if not isinstance(obj, dict):
+        raise story.ParseFailure("컷 대본 결과가 JSON 객체가 아닙니다.")
+    scenes = []
+    for i, s in enumerate(_dicts(obj.get("scenes")), 1):
+        cuts = []
+        for j, c in enumerate(_dicts(s.get("cuts")), 1):
+            lines = []
+            for k, d in enumerate(_dicts(c.get("lines")), 1):
+                txt = _text(d.get("text"))
+                if not txt:
+                    continue
+                lines.append({"order": _num(d.get("order"), k),
+                              "type": _text(d.get("type")) or "말",
+                              "speaker": _text(d.get("speaker")),
+                              "text": txt})
+            cuts.append({
+                "id": _num(c.get("id"), j),
+                "purpose": _text(c.get("purpose")),
+                "event": _text(c.get("event")),
+                "reader_learns": [_text(x) for x in (c.get("reader_learns") or [])
+                                  if _text(x)],
+                "lines": lines,
+                "sfx": [_text(x) for x in (c.get("sfx") or []) if _text(x)],
+                "must_show": [_text(x) for x in (c.get("must_show") or []) if _text(x)],
+            })
+        scenes.append({"id": _num(s.get("id"), i), "cuts": cuts})
+    return {"scenes": scenes}
+
+
+def gate_cutscript(script: dict, detail: dict | None) -> list[str]:
+    """컷 대본이 장면의 정보를 흘렸는지 본다. 멈추지 않고 알린다.
+
+    이 단계를 따로 둔 이유가 "정보가 사라지지 않게" 이므로, 그것만 본다 —
+    문장이 좋은지는 사람이 판단할 몫이다.
+    """
+    bad = []
+    detail_by_id = {s.get("id"): s for s in (detail or {}).get("scenes") or []}
+    for s in script.get("scenes") or []:
+        cuts = s.get("cuts") or []
+        if not cuts:
+            bad.append(f"장면 {s.get('id')}: 컷이 없습니다.")
+            continue
+        for c in cuts:
+            if not c.get("purpose"):
+                bad.append(f"장면 {s.get('id')} 컷 {c.get('id')}: purpose 가 없습니다 "
+                           "— 하는 일을 못 적으면 컷이 아닙니다.")
+            if not c.get("event"):
+                bad.append(f"장면 {s.get('id')} 컷 {c.get('id')}: event 가 없습니다.")
+            for d in c.get("lines") or []:
+                if d.get("type") not in LINE_TYPES:
+                    bad.append(f"장면 {s.get('id')} 컷 {c.get('id')}: "
+                               f"lines 의 type=\"{d.get('type')}\" 은 목록에 "
+                               f"없습니다 ({' · '.join(LINE_TYPES)}). 소리는 "
+                               "sfx 에 적습니다.")
+        # 알게 되는 것·추측이 여럿인데 컷이 하나면 장면을 나눈 것이 아니라
+        # 줄인 것이다 — 합치라는 말을 요약하라는 말로 읽은 자리다.
+        src = detail_by_id.get(s.get("id")) or {}
+        beats = len(src.get("learns") or []) + len(src.get("guesses") or [])
+        if beats >= 2 and len(cuts) < 2:
+            bad.append(f"장면 {s.get('id')}: 독자가 알아야 하는 것·추측이 "
+                       f"{beats}개인데 컷이 {len(cuts)}개뿐입니다 — 뭉갠 것 "
+                       "아닌지 보세요.")
+
+    # 구체화의 `learns` 가 대본 어딘가에 실렸는지. 낱말이 겹치는지로만 본다 —
+    # 뜻이 같은지는 코드가 못 가리므로, 아예 흔적도 없는 것만 잡는다.
+    if detail:
+        by_id = {s.get("id"): s for s in script.get("scenes") or []}
+        for s in detail.get("scenes") or []:
+            target = by_id.get(s.get("id"))
+            if not target:
+                bad.append(f"장면 {s.get('id')}: 대본에 이 장면이 없습니다.")
+                continue
+            blob = " ".join(
+                " ".join([c.get("purpose", ""), c.get("event", "")]
+                         + c.get("reader_learns", []) + c.get("must_show", [])
+                         + [d.get("text", "") for d in c.get("lines", [])])
+                for c in target.get("cuts") or [])
+            for x in s.get("learns") or []:
+                what = x.get("what") or ""
+                words = [w for w in re.findall(r"[가-힣]{2,}", what) if len(w) >= 2]
+                if words and not any(w in blob for w in words):
+                    bad.append(f"장면 {s.get('id')}: 독자가 알아야 하는 것이 대본에 "
+                               f"안 실렸습니다 — \"{what}\"")
+    return bad
+
+
 def gate_detail(detail: dict, direction: dict) -> list[str]:
     """구체화가 제 일을 했는지. **인과는 여기서 본다** — 콘티가 아니라.
 
@@ -578,7 +671,12 @@ def gate_readable(board: dict) -> list[str]:
     opening = scenes[0]["cuts"]
     lead = [l for c in opening for l in c["dialogue"] if _text(l.get("text"))]
     if lead and not any(_text(l.get("type")) == "나레이션" for l in lead):
-        short = min((_text(l.get("text")) for l in lead), key=len, default="")
+        # **첫 줄**을 본다. 잡으려는 것은 "독자가 아직 아무것도 모르는데
+        # 인물이 짧게 반응부터 하고 시작하는 것" 이다. 예전에는 첫 장면에서
+        # 가장 짧은 줄로 봤는데(min), 그러면 첫 컷에서 상황을 다 세워 놓고도
+        # 뒤에 짧은 물음 한 줄이 있으면 걸렸다 — 컷 대본 단계를 붙인 뒤
+        # 실제로 그 오탐이 났다.
+        short = _text(lead[0].get("text"))
         if len(short) <= OPENING_HINT_LEN:
             bad.append(
                 f"첫 장면에 나레이션이 없고 첫 대사가 짧습니다 (\"{short}\"). "
@@ -599,6 +697,12 @@ FRONT_ANGLE = "정면"
 CONSEC_SHOT_MAX = 3       # 같은 shot 이 이 개수를 넘겨 연달아 나오면 잡는다
 CLOSEUP_MAX_SHARE = 0.5   # 클로즈업 계열이 전체 컷의 이 비율을 넘으면 단조롭다
 FRONT_ANGLE_MAX_SHARE = 0.8
+# storyboard_prompt 의 `## 값 목록` 과 같아야 한다. 그림 프롬프트가 이 값을
+# 그대로 쓰므로, 목록 밖 낱말이 들어오면 그 컷은 지시가 흐려진 채 그려진다.
+ANGLES = ("정면", "하이앵글", "로우앵글", "부감")
+FACINGS = ("앞모습", "옆모습", "뒷모습", "뒤통수만")
+# 컷 대본의 lines[].type. storyboard_prompt 의 dialogue[].type 과 같은 목록이다.
+LINE_TYPES = ("말", "생각", "외침", "화면밖", "나레이션", "글")
 SHOT_VARIETY_MIN_CUTS = 6  # 컷이 이보다 적으면 비율이 우연히 쏠릴 수 있어 안 본다
 
 
@@ -654,15 +758,42 @@ def directing_warnings(board: dict) -> list[str]:
 
     # 장면이 스스로 적어 둔 카메라 계획(camera_plan)과 실제 컷이 다르면
     # 알린다 — 계획을 안 쓴 장면(옛 응답 포함)은 그냥 건너뛴다.
+    #
+    # 계획은 "shot/angle, shot/angle" 로 적게 돼 있지만, 앵글까지 계획하게
+    # 하기 전의 옛 응답은 "shot, shot" 이다. 어느 쪽이든 읽는다 — 형식을
+    # 바꿨다고 옛 run 이 전부 어긋난 것으로 보이면 안 된다.
     for s in scenes:
         plan = _text(s.get("camera_plan"))
         if not plan:
             continue
         planned = [p.strip() for p in plan.split(",") if p.strip()]
-        actual = [shot_of(c) for c in (s.get("cuts") or [])]
+        cuts = s.get("cuts") or []
+        with_angle = any("/" in p for p in planned)
+        if with_angle:
+            actual = [f"{shot_of(c)}/{_text((c.get('camera') or {}).get('angle'))}"
+                      for c in cuts]
+        else:
+            actual = [shot_of(c) for c in cuts]
         if planned != actual:
+            label = "shot/angle" if with_angle else "shot"
             bad.append(f"장면 {s.get('id')}: 카메라 계획({', '.join(planned)})과 "
-                       f"실제 컷의 shot({', '.join(actual)})이 다릅니다.")
+                       f"실제 컷의 {label}({', '.join(actual)})이 다릅니다.")
+
+    # 값 목록에 없는 카메라 값. 앵글을 계획하게 한 뒤로 모델이 "아이레벨"
+    # 처럼 목록 밖 낱말을 만들어 내는 것을 실측했다 — 그림 프롬프트가 이
+    # 값을 그대로 쓰므로 조용히 흘리면 안 된다.
+    off = []
+    for s in scenes:
+        for c in s.get("cuts") or []:
+            cam = c.get("camera") or {}
+            for key, allowed in (("angle", ANGLES), ("facing", FACINGS)):
+                v = _text(cam.get(key))
+                if v and v not in allowed:
+                    off.append(f"장면 {s.get('id')} 컷 {c.get('id')}: {key}=\"{v}\"")
+    if off:
+        bad.append("값 목록에 없는 카메라 값입니다 (그림 프롬프트가 이 값을 "
+                   f"그대로 씁니다): {', '.join(off[:6])}"
+                   + (f" 외 {len(off) - 6}개" if len(off) > 6 else ""))
     return bad
 
 
@@ -1036,6 +1167,99 @@ def stage_detail(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> d
     return detail
 
 
+def _scene_lines(detail: dict) -> list[str]:
+    """구체화된 장면을 프롬프트에 실을 줄로. 컷 대본과 콘티가 같이 쓴다."""
+    lines = []
+    for s in detail.get("scenes") or []:
+        lines.append(f"### 장면 {s['id']} — {s['source']}")
+        lines.append("")
+        lines.append(s["detail"])
+        if s.get("learns"):
+            lines.append("")
+            for x in s["learns"]:
+                how = f" ({x['how']})" if x.get("how") else ""
+                lines.append(f"- 인물이 알게 되는 것: {x['what']}{how}")
+        for g in s.get("guesses") or []:
+            src = f" ({g['from']})" if g.get("from") else ""
+            lines.append(f"- 인물의 추측 (아직 사실이 아니다): {g['what']}{src}")
+        if s.get("leads_to"):
+            lines.append(f"- 그래서 다음: {s['leads_to']}")
+        lines.append("")
+    return lines
+
+
+def cutscript_block(char: dict, direction: dict, run_dir: Path) -> str:
+    """컷 대본 단계의 입력 — 구체화된 장면 · 캐릭터 · 장르 · 숨길 것."""
+    detail_path = run_dir / "detail.json"
+    detail = (json.loads(detail_path.read_text(encoding="utf-8"))
+              if detail_path.exists() else None)
+
+    # 줄거리를 같이 준다. 구체화된 장면에는 "지금 무슨 일이 벌어지는가" 는
+    # 있어도 "이 인물이 여기서 무엇을 하는 사람인가" 는 없을 때가 많은데,
+    # 첫 컷에서 독자를 앉혀 놓으려면 그것이 필요하다 — 안 줬더니 첫 컷이
+    # 배경 설명 없이 인물의 반응부터 시작했다.
+    lines = ["# 이번 입력", "", "## 줄거리", "", direction["plot"], "", "## 장면", ""]
+    if detail and detail.get("scenes"):
+        lines += _scene_lines(detail)
+    else:
+        lines += [f"{i}. {s}" for i, s in enumerate(direction["scenes"], 1)]
+
+    lines += ["", "## 캐릭터 정보", "", f"이름: {char['name']}"]
+    if char["description"]:
+        lines.append(f"설명: {char['description']}")
+    for k, v in char["fields"].items():
+        lines.append(f"- {k}: {v}")
+
+    lines += ["", "## 장르", "",
+              direction["genre"] or char["genre"] or "(정해진 것 없음)"]
+
+    hidden = (detail or {}).get("hidden") or direction["hidden"]
+    lines += ["", "## 밝히지 않을 것", ""]
+    lines += [f"- {h}" for h in hidden] or ["(없음)"]
+    return "\n".join(lines) + "\n"
+
+
+def stage_cutscript(run_dir: Path, char: dict, direction: dict,
+                    dry_run: bool) -> dict:
+    """장면 -> 컷 대본. **연출 전에 이야기를 확정하는 단계다.**
+
+    콘티 한 번에 컷 분할·대사·카메라를 다 시키면, 그림을 어떻게 보여줄지에
+    끌려가면서 장면에 적힌 서사 정보가 사라진다(실측 — 인물이 여기서 무엇을
+    하는 사람인지, 얼마나 그래 왔는지가 통째로 빠지고 분위기만 읊는 나레이션
+    한 줄이 남았다. 콘티 프롬프트에 "정보를 잃지 마라" 를 넣고 다시 돌려도
+    같았다). 그래서 컷을 어디서 나누고 무슨 말을 할지를 **먼저** 확정하고,
+    콘티는 그것을 화면으로 옮기기만 하게 나눴다.
+    """
+    prompt = compose("cutscript_prompt", cutscript_block(char, direction, run_dir))
+    write_text(run_dir / "cutscript_prompt.txt", prompt)
+    if dry_run:
+        log(f"[컷 대본] 프롬프트만 썼습니다 -> {run_dir / 'cutscript_prompt.txt'}")
+        return {}
+
+    call = llm.Call("CUTSCRIPT")
+    log(f"[컷 대본] {call.describe()} 로 장면을 컷으로 나눕니다…")
+    text, meta = call(prompt)
+    write_text(run_dir / "cutscript_raw.txt", text)
+    record(run_dir, meta)
+
+    script = parse_cutscript(text)
+    write_json(run_dir / "cutscript.json", script)
+    total = sum(len(s["cuts"]) for s in script["scenes"])
+    log(f"  장면 {len(script['scenes'])}개 · 컷 {total}개 "
+        f"-> {run_dir / 'cutscript.json'}")
+
+    detail_path = run_dir / "detail.json"
+    detail = (json.loads(detail_path.read_text(encoding="utf-8"))
+              if detail_path.exists() else None)
+    bad = gate_cutscript(script, detail)
+    if bad:
+        warn(f"컷 대본에 손볼 곳이 {len(bad)}개 있습니다:")
+        for one in bad:
+            warn(f"  - {one}")
+        write_json(run_dir / "cutscript_issues.json", bad)
+    return script
+
+
 def review_block(char: dict, direction: dict, run_dir: Path) -> str:
     """검수 단계의 입력 — 구체화가 받은 것 전부 + 구체화 결과.
 
@@ -1178,25 +1402,47 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
     lines = ["# 이번 입력", "", "## 장면", ""]
     haystack = []          # 연출 지식을 태그로 골라 붙일 때 검색할 서술
     if detail and detail.get("scenes"):
-        for s in detail["scenes"]:
-            lines.append(f"### 장면 {s['id']} — {s['source']}")
-            lines.append("")
-            lines.append(s["detail"])
-            haystack.append(s["detail"])
-            if s.get("learns"):
-                lines.append("")
-                for x in s["learns"]:
-                    how = f" ({x['how']})" if x.get("how") else ""
-                    lines.append(f"- 인물이 알게 되는 것: {x['what']}{how}")
-            for g in s.get("guesses") or []:
-                src = f" ({g['from']})" if g.get("from") else ""
-                lines.append(f"- 인물의 추측 (아직 사실이 아니다): {g['what']}{src}")
-            if s["leads_to"]:
-                lines.append(f"- 그래서 다음: {s['leads_to']}")
-            lines.append("")
+        lines += _scene_lines(detail)
+        haystack += [s["detail"] for s in detail["scenes"]]
     else:
         lines += [f"{i}. {s}" for i, s in enumerate(direction["scenes"], 1)]
         haystack += direction["scenes"]
+
+    # 컷 대본이 있으면 **컷 분할과 대사는 이미 끝난 것이다.** 콘티는 그것을
+    # 화면으로 옮기기만 한다 — 대본 없이 한 번에 시켰을 때 서사 정보가
+    # 연출에 잡아먹히던 것을 막으려고 나눈 단계다(stage_cutscript 참고).
+    script_path = run_dir / "cutscript.json"
+    script = (json.loads(script_path.read_text(encoding="utf-8"))
+              if script_path.exists() else None)
+    if script and script.get("scenes"):
+        lines += ["", "## 컷 대본 — 이대로 컷을 만든다", "",
+                  "컷을 나누는 일과 무슨 말을 할지는 이미 끝났다. 컷을 더 나누거나 "
+                  "합치지 말고, 이 순서 그대로 만든다.", "",
+                  "`대사`는 **글자 그대로** `dialogue[].text` 에 옮긴다 — 줄이거나 "
+                  "다듬거나 합치지 마라. 여기 있는 줄이 사라지면 독자가 상황을 "
+                  "못 따라온다. `보여야 하는 것`은 그 컷 그림에 반드시 있어야 "
+                  "한다.", "",
+                  "네가 정하는 것은 **어떻게 보여줄 것인가** 뿐이다 — 카메라·배경·"
+                  "인물 위치·표정·동작·말풍선 모양과 자리.", ""]
+        for s in script["scenes"]:
+            lines.append(f"### 장면 {s['id']}")
+            lines.append("")
+            for c in s.get("cuts") or []:
+                lines.append(f"**컷 {c['id']}** — {c.get('event') or ''}")
+                if c.get("purpose"):
+                    lines.append(f"- 이 컷이 하는 일: {c['purpose']}")
+                for x in c.get("reader_learns") or []:
+                    lines.append(f"- 독자가 알게 되는 것: {x}")
+                for x in c.get("must_show") or []:
+                    lines.append(f"- 보여야 하는 것: {x}")
+                for d in c.get("lines") or []:
+                    who = d.get("speaker") or ""
+                    kind = d.get("type") or "말"
+                    lines.append(f"- 대사({kind}{' · ' + who if who else ''}): "
+                                 f"{d.get('text')}")
+                for x in c.get("sfx") or []:
+                    lines.append(f"- 효과음: {x}")
+                lines.append("")
 
     lines += ["", "## 캐릭터 정보", "", f"이름: {char['name']}"]
     if char["photos"]:
@@ -1394,8 +1640,10 @@ def main(argv=None) -> int:
     p.add_argument("--pick", type=int, help="고를 방향 번호 (없으면 물어본다)")
     p.add_argument("--detail", action="store_true",
                    help="스토리 구체화만 (콘티로 이어가지 않는다)")
+    p.add_argument("--cutscript", action="store_true",
+                   help="컷 대본만 (컷 분할과 대사까지. 연출은 안 한다)")
     p.add_argument("--board", action="store_true",
-                   help="콘티만 (구체화를 다시 돌리지 않는다)")
+                   help="콘티만 (앞 단계를 다시 돌리지 않는다)")
     p.add_argument("--review", action="store_true",
                    help="구체화 결과를 검수만 한다 (고치지 않는다)")
     p.add_argument("--fix", action="store_true",
@@ -1477,7 +1725,8 @@ def main(argv=None) -> int:
     # --sheet-from 만 준 것도 여기서 끝난다 — 시트를 가져다 놓는 것이 그
     # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
-    if not args.all and (args.detail or args.board or args.review or args.fix
+    if not args.all and (args.detail or args.cutscript or args.board
+                         or args.review or args.fix
                          or args.sheet or args.sheet_spec or args.pages
                          or args.page or args.sheet_from):
         if args.detail:
@@ -1485,8 +1734,11 @@ def main(argv=None) -> int:
             write_json(run_dir / "pick.json", {"n": chosen["n"], "title": chosen["title"],
                                                "genre": chosen["genre"]})
             stage_detail(run_dir, char, chosen, args.dry_run)
+        if args.cutscript:
+            stage_cutscript(run_dir, char, picked_direction(run_dir, args.pick),
+                            args.dry_run)
         if args.board:
-            # 구체화를 다시 돌리지 않고 콘티만 — 구체화가 이미 끝난 run 에서
+            # 앞 단계를 다시 돌리지 않고 콘티만 — 구체화가 이미 끝난 run 에서
             # 콘티만 다시 뽑을 때(검수에서 되돌아온 경우) 쓴다. 없으면
             # `--pick N` 으로 둘 다 돌려야 해서 구체화 호출값이 그대로 버려진다.
             stage_board(run_dir, char, picked_direction(run_dir, args.pick),
@@ -1527,6 +1779,9 @@ def main(argv=None) -> int:
 
     direction = choose(directions, args.pick)
     stage_detail(run_dir, char, direction, args.dry_run)
+    # 컷 대본이 콘티보다 먼저다 — 컷 분할과 대사를 확정한 뒤에야 연출로
+    # 넘어간다 (stage_cutscript 의 주석 참고).
+    stage_cutscript(run_dir, char, direction, args.dry_run)
     # 검수·보강은 흐름에서 뺐다. 검수가 실제로 무엇을 잡는지 아직 확인이
     # 안 됐고(한 번 돌렸을 때 0개였다), 아무것도 못 잡은 결과로 고치면 고칠
     # 것이 없다. --review · --fix 로 따로 부른다.
