@@ -1394,6 +1394,8 @@ def main(argv=None) -> int:
     p.add_argument("--pick", type=int, help="고를 방향 번호 (없으면 물어본다)")
     p.add_argument("--detail", action="store_true",
                    help="스토리 구체화만 (콘티로 이어가지 않는다)")
+    p.add_argument("--board", action="store_true",
+                   help="콘티만 (구체화를 다시 돌리지 않는다)")
     p.add_argument("--review", action="store_true",
                    help="구체화 결과를 검수만 한다 (고치지 않는다)")
     p.add_argument("--fix", action="store_true",
@@ -1475,14 +1477,20 @@ def main(argv=None) -> int:
     # --sheet-from 만 준 것도 여기서 끝난다 — 시트를 가져다 놓는 것이 그
     # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
-    if not args.all and (args.detail or args.review or args.fix or args.sheet
-                         or args.sheet_spec or args.pages or args.page
-                         or args.sheet_from):
+    if not args.all and (args.detail or args.board or args.review or args.fix
+                         or args.sheet or args.sheet_spec or args.pages
+                         or args.page or args.sheet_from):
         if args.detail:
             chosen = picked_direction(run_dir, args.pick)
             write_json(run_dir / "pick.json", {"n": chosen["n"], "title": chosen["title"],
                                                "genre": chosen["genre"]})
             stage_detail(run_dir, char, chosen, args.dry_run)
+        if args.board:
+            # 구체화를 다시 돌리지 않고 콘티만 — 구체화가 이미 끝난 run 에서
+            # 콘티만 다시 뽑을 때(검수에서 되돌아온 경우) 쓴다. 없으면
+            # `--pick N` 으로 둘 다 돌려야 해서 구체화 호출값이 그대로 버려진다.
+            stage_board(run_dir, char, picked_direction(run_dir, args.pick),
+                        args.dry_run, args.max_ratio)
         if args.review:
             stage_review(run_dir, char, picked_direction(run_dir, args.pick),
                          args.dry_run)

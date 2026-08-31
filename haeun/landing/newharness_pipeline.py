@@ -404,9 +404,14 @@ def _clear_sheet(run_id: str) -> None:
 def board_summary(run_id: str) -> dict[str, Any] | None:
     """콘티 검수 화면이 보여줄 것 — cast·장면·컷을 사람이 읽을 모양으로.
 
-    board.json 의 원래 모양(run.parse_board 참고)을 그대로 옮기되, 컷마다
-    대사만 뽑아서 짧게 — 화면은 "무슨 내용인지"만 보면 되고, camera·background
-    같은 프롬프트용 값까지 볼 필요는 없다.
+    board.json 의 원래 모양(run.parse_board 참고)을 옮긴다. 예전에는 컷마다
+    대사만 뽑았는데, 그러면 검수하는 사람이 **그림에 무엇이 그려지는지를
+    못 본다** — 콘티에서 확인해야 하는 것은 대사보다 "이 컷이 어떤 그림이
+    되는가"(카메라·배경·누가 어떤 표정으로 무엇을 하는가)다. 그래서 그
+    칸들을 같이 올린다.
+
+    프롬프트에만 쓰이는 값(forbid·moment·framing·bubble 위치 등)은 여전히
+    올리지 않는다 — 사람이 판단할 것이 아니라 그림 생성이 쓰는 값이다.
     """
     path = run_dir(run_id) / "board.json"
     try:
@@ -417,14 +422,33 @@ def board_summary(run_id: str) -> dict[str, Any] | None:
     for s in board.get("scenes") or []:
         cuts = []
         for c in s.get("cuts") or []:
-            lines = [f"{d.get('speaker') or d.get('type') or ''}: {d.get('text') or ''}".strip(": ")
+            lines = [{"speaker": (d.get("speaker") or d.get("type") or "").strip(),
+                      "text": (d.get("text") or "").strip()}
                      for d in (c.get("dialogue") or []) if (d.get("text") or "").strip()]
-            cuts.append({"id": c.get("id"), "size": c.get("size"), "dialogue": lines})
+            cam = c.get("camera") or {}
+            bg = c.get("background") or {}
+            people = [{"name": (p.get("name") or "").strip(),
+                       "expression": (p.get("expression") or "").strip(),
+                       "action": (p.get("action") or "").strip()}
+                      for p in (c.get("characters") or []) if (p.get("name") or "").strip()]
+            sfx = [(x.get("text") or "").strip()
+                   for x in (c.get("sfx") or []) if (x.get("text") or "").strip()]
+            cuts.append({
+                "id": c.get("id"), "size": c.get("size"),
+                "shot": (cam.get("shot") or "").strip(),
+                "angle": (cam.get("angle") or "").strip(),
+                "background": (bg.get("desc") or "").strip(),
+                "characters": people, "dialogue": lines, "sfx": sfx,
+            })
         scenes.append({
             "id": s.get("id"), "location": s.get("location"),
             "time": s.get("time"), "summary": s.get("summary"), "cuts": cuts,
         })
-    return {"cast": board.get("cast") or [], "scenes": scenes}
+    cast = [{"name": (c.get("name") or "").strip(),
+             "appearance": (c.get("appearance") or "").strip()}
+            for c in board.get("cast") or [] if (c.get("name") or "").strip()]
+    total = sum(len(s["cuts"]) for s in scenes)
+    return {"cast": cast, "scenes": scenes, "cut_count": total}
 
 
 def _run_regen(entry: dict[str, Any]) -> None:

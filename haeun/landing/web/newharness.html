@@ -5,7 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LORE — new_harness 실험</title>
 <link rel="stylesheet" href="/static/style.css">
+<!-- 검수 화면(방향 고르기·콘티·시트) 스타일. demo.html 의 목업이 같은
+     파일을 읽어서, 여기만 고쳐도 둘이 같이 바뀐다. -->
+<link rel="stylesheet" href="/static/nh-review.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐋</text></svg>">
+<!-- 검수 화면을 그리는 함수들. demo.html 의 목업이 같은 함수를 쓴다. -->
+<script src="/static/nh-review.js"></script>
 <style>
   .nh-wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 80px; }
   .nh-sub {
@@ -23,14 +28,6 @@
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
   .photos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
   .photos img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
-  .nh-card {
-    border: 1px solid var(--line-2, #ddd); border-radius: 10px; padding: 14px;
-    margin-bottom: 10px; cursor: pointer; background: var(--card, #fff);
-  }
-  .nh-card.picked { border-color: #222; box-shadow: 0 0 0 2px #222 inset; }
-  .nh-card h3 { margin: 0 0 6px; font-size: 15px; }
-  .nh-card p { margin: 4px 0; font-size: 13px; color: #555; line-height: 1.5; }
-  .nh-card ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: #555; }
   .hidden { display: none !important; }
   .nh-err {
     background: #fee; border: 1px solid #f3b; color: #900; border-radius: 8px;
@@ -77,26 +74,6 @@
   .nh-item-list li.sel { background: #ffe9df; }
   .nh-item-list button { border: none; background: none; color: #900; cursor: pointer; font-size: 12px; }
   .nh-editor-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .nh-hint { font-size: 12px; color: #777; margin: 6px 0; }
-  /* ---- 검수(콘티·시트) ---- */
-  .nh-approval {
-    border: 1px solid var(--line-2, #ddd); border-radius: 10px; padding: 16px;
-    background: var(--card, #fff); margin-top: 12px;
-  }
-  .nh-approval h2 { font-size: 16px; margin: 0 0 10px; }
-  .nh-cast { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-  .nh-cast span {
-    background: var(--ink-2, #f2f2f2); border-radius: 999px; padding: 4px 10px; font-size: 12px;
-  }
-  .nh-scene { border-top: 1px solid var(--line-2, #eee); padding: 10px 0; }
-  .nh-scene:first-child { border-top: none; }
-  .nh-scene .nh-scene-head { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-  .nh-scene .nh-scene-sum { font-size: 12px; color: #666; margin: 0 0 6px; }
-  .nh-cut { font-size: 12px; color: #444; margin: 3px 0 3px 10px; }
-  .nh-cut b { color: #888; font-weight: 500; }
-  .nh-approval-actions { display: flex; gap: 8px; margin-top: 14px; }
-  .nh-approval-actions .btn { flex: 1; }
-  .nh-sheet-img { width: 100%; border-radius: 8px; display: block; margin-bottom: 12px; }
   /* ---- 진행 중 실시간 페이지 미리보기 ---- */
   .nh-live-pages { margin-top: 12px; }
   .nh-live-pages h3 { font-size: 13px; color: #666; margin: 0 0 8px; }
@@ -201,6 +178,7 @@
   <!-- 콘티 검수 -->
   <div id="boardApproval" class="nh-approval hidden">
     <h2>콘티를 확인해 주세요</h2>
+    <p class="nh-hint">여기서 정한 대로 그림이 나옵니다. <span id="boardCount"></span></p>
     <div class="nh-cast" id="boardCast"></div>
     <div id="boardScenes"></div>
     <div class="nh-approval-actions">
@@ -387,11 +365,11 @@ function renderCards(directions) {
     const card = document.createElement("div");
     card.className = "nh-card";
     card.dataset.n = d.n;
-    const scenes = (d.scenes || []).map(s => `<li>${s}</li>`).join("");
-    card.innerHTML = `
-      <h3>${d.n}. ${d.title || ""} ${d.genre ? `[${d.genre}]` : ""}</h3>
-      <p>${(d.plot || "").split("\n")[0]}</p>
-      <ul>${scenes}</ul>`;
+    card.innerHTML = NHReview.directionCardHtml(d);
+    // 장면을 펴 보는 것과 이 방향을 고르는 것은 다른 행동이다 — 토글을
+    // 눌렀을 뿐인데 선택까지 되면, 보려던 사람이 고른 것이 된다.
+    const toggle = card.querySelector("details");
+    if (toggle) toggle.addEventListener("click", e => e.stopPropagation());
     card.addEventListener("click", () => {
       document.querySelectorAll(".nh-card").forEach(c => c.classList.remove("picked"));
       card.classList.add("picked");
@@ -542,17 +520,7 @@ function renderLivePages(done) {
 // --------------------------------------------------------------------- 검수
 
 function renderBoard(summary) {
-  if (!summary) return;
-  $("#boardCast").innerHTML = (summary.cast || [])
-    .map(c => `<span>${c.name || ""}</span>`).join("");
-  $("#boardScenes").innerHTML = (summary.scenes || []).map(s => `
-    <div class="nh-scene">
-      <div class="nh-scene-head">장면 ${s.id} — ${s.location || ""} ${s.time ? `· ${s.time}` : ""}</div>
-      <p class="nh-scene-sum">${s.summary || ""}</p>
-      ${(s.cuts || []).map(c => `
-        <div class="nh-cut"><b>컷 ${c.id} (${c.size || "normal"})</b>
-          ${(c.dialogue || []).map(d => ` "${d}"`).join(" ")}</div>`).join("")}
-    </div>`).join("");
+  NHReview.fillBoard(summary);
 }
 
 async function decide(kind, decision) {
