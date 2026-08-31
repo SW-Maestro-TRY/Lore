@@ -96,6 +96,27 @@ STAGE_LABEL = {
     "sheet": "캐릭터 시트", "pages": "페이지 그림",
 }
 
+# 그림체 선택 -> new_harness 의 NH_STYLE 값(prompt/style/<이름> 파일).
+# pastel·noir·shoujo 는 webtoon-harness/config.yaml 의 styles.<이름>.normal
+# 을 그대로 옮겨 왔다(2026-08-31, cinematic 을 옮긴 것과 같은 방식 — 문구는
+# 안 고치고 그대로). 선화·액션(lineart/action)은 랜딩 카드 자체를 없애기로
+# 해서 여기도 뺐다.
+STYLE_CHOICES = {
+    "romance":   "romance_fantasy",
+    "webtoon":   "webtoon_lock",
+    "frost":     "frost",
+    "cinematic": "cinematic",
+    "pastel":    "pastel",
+    "noir":      "noir",
+    "shoujo":    "shoujo",
+}
+STYLE_LABEL = {
+    "romance": "로맨스 판타지", "webtoon": "일반 웹툰", "frost": "세미리얼 · 성인향",
+    "cinematic": "시네마틱 반실사", "pastel": "일상툰 감성", "noir": "다크 느와르",
+    "shoujo": "순정 · BL",
+}
+DEFAULT_STYLE = "webtoon"                # new_harness 자체 기본(NH_STYLE)과 맞춘다
+
 # "[페이지 3/7] 컷 2개 · 참조 2장 …" — pageart.draw() 가 찍는 줄 (pageart.py:116).
 RE_PAGE = re.compile(r"^\[페이지 (\d+)/(\d+)\]")
 # "run: /.../runs/20260831T000249-10322f" — run.py:1141.
@@ -119,6 +140,7 @@ class NHJob:
     error: str | None = None
     directions: list[dict] = field(default_factory=list)
     pick: int | None = None
+    style: str = DEFAULT_STYLE
     stage: str = "story"
     art_done: int = 0
     art_total: int = 0
@@ -152,6 +174,8 @@ class NHJob:
                 "error": self.error,
                 "directions": self.directions,
                 "pick": self.pick,
+                "style": self.style,
+                "style_label": STYLE_LABEL.get(self.style, self.style),
                 "stage": self.stage,
                 "stage_index": stage_i,
                 "stages": list(STAGES),
@@ -182,7 +206,12 @@ class NHJob:
     # ---- 실행 ---------------------------------------------------------------- #
 
     def _env(self) -> dict[str, str]:
-        return _subprocess_env()
+        env = _subprocess_env()
+        # sheet.py·pageart.py 둘 다 NH_STYLE 을 같은 규칙으로 읽는다
+        # (llm.env("NH_STYLE") or llm.env("PAGE_STYLE") or 기본값) — 하나만
+        # 넣으면 시트와 페이지가 같은 그림체로 나온다.
+        env["NH_STYLE"] = STYLE_CHOICES.get(self.style, self.style)
+        return env
 
     def _run(self, args: list[str], on_line: Callable[[str], None]) -> int:
         display = " ".join(["python", "run.py", *args])
@@ -503,7 +532,10 @@ class NHRunner:
             (job_dir / f"photo{i}.png").write_bytes(raw)
         classic.write_character(job_dir, form)
 
-        job = NHJob(id=job_id, form=form, dir=job_dir)
+        style = str(form.get("style") or "").strip()
+        if style not in STYLE_CHOICES:
+            style = DEFAULT_STYLE
+        job = NHJob(id=job_id, form=form, dir=job_dir, style=style)
         self.jobs[job_id] = job
         job.save()
         self._enqueue(job_id, lambda: _run_story_phase(job))
