@@ -101,6 +101,17 @@
   .nh-live-pages { margin-top: 12px; }
   .nh-live-pages h3 { font-size: 13px; color: #666; margin: 0 0 8px; }
   .nh-browse-row { text-align: center; margin-top: 10px; }
+  /* ---- 그림체 고르기 ---- */
+  .nh-style-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin: 4px 0 10px; }
+  .nh-style-opt { position: relative; }
+  .nh-style-opt input { position: absolute; opacity: 0; pointer-events: none; }
+  .nh-style-box {
+    display: block; text-align: center; padding: 10px 6px; border-radius: 10px;
+    border: 1.5px solid var(--line-2, #ddd); font-size: 12px; cursor: pointer; background: var(--card, #fff);
+  }
+  .nh-style-opt input:checked + .nh-style-box {
+    border-color: #222; border-width: 2px; background: rgba(0,0,0,.04); font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -122,6 +133,8 @@
       <textarea name="character" placeholder="어떤 사람인지 자유롭게"></textarea>
       <label>장르</label>
       <input type="text" name="genre" placeholder="예: 로맨스 판타지">
+      <label>그림체</label>
+      <div class="nh-style-picker" id="stylePicker"></div>
       <div class="grid2" id="fields"></div>
       <label>사진 (최대 4장, 선택)</label>
       <input type="file" id="photoInput" accept="image/*" multiple>
@@ -291,6 +304,20 @@ for (const k of FIELD_KEYS) {
   fieldsBox.appendChild(input);
 }
 
+// newharness_pipeline.STYLE_CHOICES/STYLE_LABEL 과 같은 키 — 서버가 이
+// 키만 알아듣는다(모르는 값은 서버가 기본값 webtoon 으로 떨어뜨린다).
+const STYLE_LABEL = {
+  webtoon: "일반 웹툰", romance: "로맨스 판타지", frost: "세미리얼 · 성인향",
+  cinematic: "시네마틱 반실사", pastel: "일상툰 감성", noir: "다크 느와르",
+  shoujo: "순정 · BL",
+};
+const stylePicker = $("#stylePicker");
+stylePicker.innerHTML = Object.entries(STYLE_LABEL).map(([key, label], i) => `
+  <label class="nh-style-opt">
+    <input type="radio" name="style" value="${key}" ${i === 0 ? "checked" : ""}>
+    <span class="nh-style-box">${label}</span>
+  </label>`).join("");
+
 let photoDataUrls = [];
 $("#photoInput").addEventListener("change", async (e) => {
   const files = Array.from(e.target.files).slice(0, 4);
@@ -331,6 +358,7 @@ $("#form").addEventListener("submit", async (e) => {
   const form = {
     name: data.get("name") || "", character: data.get("character") || "",
     genre: data.get("genre") || "", fields, photos_data: photoDataUrls,
+    style: data.get("style") || "webtoon",
   };
 
   try {
