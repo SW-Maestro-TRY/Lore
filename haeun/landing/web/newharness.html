@@ -79,6 +79,29 @@
   .nh-item-list button { border: none; background: none; color: #900; cursor: pointer; font-size: 12px; }
   .nh-editor-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   .nh-hint { font-size: 12px; color: #777; margin: 6px 0; }
+  /* ---- 검수(콘티·시트) ---- */
+  .nh-approval {
+    border: 1px solid var(--line-2, #ddd); border-radius: 10px; padding: 16px;
+    background: var(--card, #fff); margin-top: 12px;
+  }
+  .nh-approval h2 { font-size: 16px; margin: 0 0 10px; }
+  .nh-cast { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .nh-cast span {
+    background: var(--ink-2, #f2f2f2); border-radius: 999px; padding: 4px 10px; font-size: 12px;
+  }
+  .nh-scene { border-top: 1px solid var(--line-2, #eee); padding: 10px 0; }
+  .nh-scene:first-child { border-top: none; }
+  .nh-scene .nh-scene-head { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .nh-scene .nh-scene-sum { font-size: 12px; color: #666; margin: 0 0 6px; }
+  .nh-cut { font-size: 12px; color: #444; margin: 3px 0 3px 10px; }
+  .nh-cut b { color: #888; font-weight: 500; }
+  .nh-approval-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .nh-approval-actions .btn { flex: 1; }
+  .nh-sheet-img { width: 100%; border-radius: 8px; display: block; margin-bottom: 12px; }
+  /* ---- 진행 중 실시간 페이지 미리보기 ---- */
+  .nh-live-pages { margin-top: 12px; }
+  .nh-live-pages h3 { font-size: 13px; color: #666; margin: 0 0 8px; }
+  .nh-browse-row { text-align: center; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -144,8 +167,46 @@
         </div>
         <p class="play-say" id="playSay">루를 눌러 보세요</p>
       </div>
+
+      <!-- 그림 그리는 동안 지금까지 나온 페이지를 바로 보여준다. 완성 전
+           결과 화면(#result)과 마크업이 겹치지 않게 별도 자리를 쓴다. -->
+      <div class="nh-live-pages hidden" id="livePages">
+        <h3 id="livePagesLabel">지금까지 그린 페이지</h3>
+        <div class="nh-pages" id="livePagesList"></div>
+      </div>
+
+      <!-- 본편 demo.html 의 progBrowse 와 같은 자리 — 기다리는 동안 다른
+           웹툰을 보러 가도 이 작업은 서버에서 계속 돈다(job 이 프로세스로
+           살아 있음, 브라우저 탭과 무관). -->
+      <div class="nh-browse-row">
+        <button type="button" class="btn btn-quiet btn-sm" id="progBrowse">
+          기다리는 동안 다른 웹툰 둘러보기 →
+        </button>
+      </div>
     </div>
   </section>
+
+  <!-- 콘티 검수 -->
+  <div id="boardApproval" class="nh-approval hidden">
+    <h2>콘티를 확인해 주세요</h2>
+    <div class="nh-cast" id="boardCast"></div>
+    <div id="boardScenes"></div>
+    <div class="nh-approval-actions">
+      <button type="button" class="btn btn-quiet" id="boardRetry">다시 만들기</button>
+      <button type="button" class="btn btn-primary" id="boardApprove">이대로 진행</button>
+    </div>
+  </div>
+
+  <!-- 시트 검수 -->
+  <div id="sheetApproval" class="nh-approval hidden">
+    <h2>캐릭터 시트를 확인해 주세요</h2>
+    <p class="nh-hint">이제부터 모든 페이지가 이 얼굴을 따라갑니다.</p>
+    <img class="nh-sheet-img" id="sheetImg" alt="캐릭터 시트">
+    <div class="nh-approval-actions">
+      <button type="button" class="btn btn-quiet" id="sheetRetry">다시 만들기</button>
+      <button type="button" class="btn btn-primary" id="sheetApprove">이대로 진행</button>
+    </div>
+  </div>
 
   <div id="result" class="hidden">
     <h2 style="font-size:16px;">완성</h2>
@@ -256,7 +317,7 @@ function showError(msg) {
 }
 function clearError() { $("#errorBox").classList.add("hidden"); }
 
-let jobId = null, runId = null, pollTimer = null, pickedN = null, clockTimer = null, startedAt = 0;
+let jobId = null, runId = null, pollTimer = null, pickedN = null;
 
 $("#form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -282,12 +343,7 @@ $("#form").addEventListener("submit", async (e) => {
     if (!res.ok) throw new Error(body.error || "요청이 실패했습니다");
     jobId = body.id;
     $("#form").classList.add("hidden");
-    startedAt = Date.now();
     $("#progress").classList.remove("hidden");
-    clockTimer = setInterval(() => {
-      const s = Math.floor((Date.now() - startedAt) / 1000);
-      $("#clock").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-    }, 1000);
     setupLou();
     startPolling();
   } catch (err) {
@@ -332,7 +388,6 @@ $("#pickBtn").addEventListener("click", async () => {
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || "요청이 실패했습니다");
     $("#picker").classList.add("hidden");
-    startedAt = Date.now();
     $("#progress").classList.remove("hidden");
     startPolling();
   } catch (err) {
@@ -383,6 +438,14 @@ async function tick() {
   }
   if (snap.run_id) runId = snap.run_id;
 
+  // 시계는 서버가 준 elapsed(작업 시작부터 총 경과)를 그대로 찍는다 — 프론트
+  // 자체 타이머로 따로 재면 검수 통과마다 다시 만들어야 해서 놓치기 쉽다
+  // (실제로 놓쳤었다: 검수 통과 후 0:00 에 멈추는 버그, 2026-08-31).
+  if (typeof snap.elapsed === "number") {
+    const s = Math.floor(snap.elapsed);
+    $("#clock").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+
   if (snap.stage) {
     $("#stageArt").dataset.stage = STAGE_ART[snap.stage] || snap.stage;
     let say = STAGE_SAY[snap.stage] || snap.stage_label;
@@ -396,20 +459,100 @@ async function tick() {
     paintRail(snap.stages || [], snap.stage_index || 0, say);
   }
 
+  // 그림 그리는 동안 지금까지 나온 페이지를 실시간으로 보여준다 — 몇 장
+  // 나왔는지(숫자)뿐 아니라 실제로 어떤 그림이 나왔는지도 바로 보인다.
+  if (snap.status === "running" && snap.stage === "pages" && snap.art) {
+    renderLivePages(snap.art.done);
+  } else {
+    $("#livePages").classList.add("hidden");
+  }
+
   if (snap.status === "awaiting_pick") {
-    clearInterval(pollTimer); pollTimer = null; clearInterval(clockTimer);
+    stopPolling();
     $("#progress").classList.add("hidden");
     $("#picker").classList.remove("hidden");
     renderCards(snap.directions || []);
+  } else if (snap.status === "awaiting_board") {
+    stopPolling();
+    $("#progress").classList.add("hidden");
+    renderBoard(snap.board_summary);
+    $("#boardApproval").classList.remove("hidden");
+  } else if (snap.status === "awaiting_sheet") {
+    stopPolling();
+    $("#progress").classList.add("hidden");
+    $("#sheetImg").src = `/api/nh/jobs/${jobId}/sheet.png?t=${Date.now()}`;
+    $("#sheetApproval").classList.remove("hidden");
   } else if (snap.status === "done") {
-    clearInterval(pollTimer); pollTimer = null; clearInterval(clockTimer);
+    stopPolling();
     $("#progress").classList.add("hidden");
     await showResult();
   } else if (snap.status === "error") {
-    clearInterval(pollTimer); pollTimer = null; clearInterval(clockTimer);
+    stopPolling();
     showError(snap.error || "실패했습니다");
   }
 }
+
+function stopPolling() {
+  clearInterval(pollTimer); pollTimer = null;
+}
+
+// 그림 그리는 동안 실시간 페이지 갤러리. done 장만 실제로 존재하므로
+// 그만큼만 그린다 — 아직 없는 장을 요청하면 404 라 아예 안 부른다.
+let liveShown = 0;
+function renderLivePages(done) {
+  if (!done || !runId) { $("#livePages").classList.add("hidden"); return; }
+  $("#livePages").classList.remove("hidden");
+  $("#livePagesLabel").textContent = `지금까지 그린 페이지 (${done}장)`;
+  if (done === liveShown) return;               // 새로 나온 게 없으면 안 다시 그림
+  liveShown = done;
+  const list = $("#livePagesList");
+  list.innerHTML = Array.from({ length: done }, (_, i) => i + 1).reverse().map(n => `
+    <div class="nh-page">
+      <img src="/api/nh/runs/${runId}/page/${n}?raw=1&w=600&t=${Date.now()}" alt="페이지 ${n}">
+    </div>`).join("");
+}
+
+// --------------------------------------------------------------------- 검수
+
+function renderBoard(summary) {
+  if (!summary) return;
+  $("#boardCast").innerHTML = (summary.cast || [])
+    .map(c => `<span>${c.name || ""}</span>`).join("");
+  $("#boardScenes").innerHTML = (summary.scenes || []).map(s => `
+    <div class="nh-scene">
+      <div class="nh-scene-head">장면 ${s.id} — ${s.location || ""} ${s.time ? `· ${s.time}` : ""}</div>
+      <p class="nh-scene-sum">${s.summary || ""}</p>
+      ${(s.cuts || []).map(c => `
+        <div class="nh-cut"><b>컷 ${c.id} (${c.size || "normal"})</b>
+          ${(c.dialogue || []).map(d => ` "${d}"`).join(" ")}</div>`).join("")}
+    </div>`).join("");
+}
+
+async function decide(kind, decision) {
+  try {
+    const res = await fetch(`/api/nh/jobs/${jobId}/${kind}-decision`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || "요청이 실패했습니다");
+    $(`#${kind === "board" ? "boardApproval" : "sheetApproval"}`).classList.add("hidden");
+    liveShown = 0;
+    $("#progress").classList.remove("hidden");
+    startPolling();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+$("#boardApprove").addEventListener("click", () => decide("board", "approve"));
+$("#boardRetry").addEventListener("click", () => decide("board", "retry"));
+$("#sheetApprove").addEventListener("click", () => decide("sheet", "approve"));
+$("#sheetRetry").addEventListener("click", () => decide("sheet", "retry"));
+
+$("#progBrowse").addEventListener("click", () => {
+  location.href = (window.LORE ? window.LORE.at("/works") : "/works");
+});
 
 // --------------------------------------------------------------------- 결과
 

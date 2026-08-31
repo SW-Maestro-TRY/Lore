@@ -33,11 +33,28 @@ overlay.py 는애초에 밑그림에 빈 자리가 있어야 한다는 가정이
 번호 매겨진 밑그림 한 장으로만— 취급하면 overlay.py 를 그대로 재사용할 수
 있다. new_harness 코드는 한 줄도 안 고쳤다.
 
+## 검수(승인) 단계 — 2026-08-31 추가
+
+처음엔 콘티(구체화+콘티)와 시트를 한 번에 이어서 돌렸는데, 그러면 사람이
+볼 자리가 없다 — 시트 얼굴이 틀어지거나 콘티가 이상해도 페이지를 다 그린
+뒤에야 안다. 그래서 세 번을 **네 번**으로 다시 나눴다:
+
+    1. `--character <path>`        이야기 후보 4개 (사람이 고름)
+    2. `--run-id <id> --pick <n>`  구체화+콘티        [여기서 멈춤 — 콘티 검수]
+    3. `--run-id <id> --sheet`     시트만              [여기서 멈춤 — 시트 검수]
+    4. `--run-id <id> --pages`     페이지 그림
+
+"다시 만들기"는 그 단계 명령을 **한 번 더 그대로 부르는 것**이다 — 콘티는
+`--pick n`을 다시 부르면 detail_prompt/storyboard_prompt 가 새로 돈다(값을
+덮어씀, 실측 확인). 시트는 `run.py` 자체가 "사양·그림이 이미 있으면 다시
+안 그린다"고 정해 놨으므로(`stage_sheet`), 다시 만들려면 `sheet.png`·
+`sheet_spec.json` 을 먼저 지우고 같은 명령을 다시 부른다.
+
 ## 지금 안 하는 것
 
-전문/일반 모드, 이어 그리기·이어 만들기(다음 화)는 없다. 다시 그리기(regen,
-장 하나만 다른 프롬프트로 다시 그리는 것)도 없다 — new_harness 는 페이지
-단위 호출이라 그 컷만 다시 그리는 개념이 없고, 페이지 전체를 다시 그리려면
+전문/일반 모드, 이어 그리기·이어 만들기(다음 화)는 없다. 그림 검수
+(art QA — 그려진 페이지 개별 재생성)도 없다 — new_harness 는 페이지 단위
+호출이라 컷 하나만 다시 그리는 개념이 없고, 페이지 전체를 다시 그리려면
 비용이 pipeline.py 의 regen보다 크다.
 """
 
@@ -65,8 +82,11 @@ NEW_HARNESS = HERE.parent / "new_harness"
 STATUS_QUEUED = "queued"
 STATUS_RUNNING = "running"
 STATUS_AWAITING_PICK = "awaiting_pick"
+STATUS_AWAITING_BOARD = "awaiting_board"
+STATUS_AWAITING_SHEET = "awaiting_sheet"
 STATUS_DONE = "done"
 STATUS_ERROR = "error"
+AWAITING = (STATUS_AWAITING_PICK, STATUS_AWAITING_BOARD, STATUS_AWAITING_SHEET)
 
 # 화면에 보여줄 단계. new_harness 내부 단계 이름과 같다 — 세부 스텝(예:
 # pipeline.py 의 look/seed/card...)까지는 안 쪼갠다, 신호가 그만큼 없다.
@@ -118,7 +138,7 @@ class NHJob:
             stage_i = STAGES.index(self.stage) if self.stage in STAGES else 0
             frac = (self.art_done / self.art_total) if self.art_total else 0.0
             pct = round((stage_i + frac) / len(STAGES) * 100) if self.status != "done" else 100
-            return {
+            out = {
                 "id": self.id,
                 "status": self.status,
                 "run_id": self.run_id,
@@ -135,6 +155,12 @@ class NHJob:
                 "elapsed": round((self.finished_at or time.time())
                                  - self.started_at, 1) if self.started_at else 0,
             }
+            # 그 검수 단계일 때만 읽는다 — 매 폴링(0.8초)마다 board.json 을
+            # 여는 것은 대부분 헛일이다(pipeline.py 의 story_preview/
+            # board_preview 와 같은 절약 규칙).
+            if self.status == STATUS_AWAITING_BOARD and self.run_id:
+                out["board_summary"] = board_summary(self.run_id)
+            return out
 
     def save(self) -> None:
         try:
@@ -197,6 +223,11 @@ class NHJob:
                 proc.terminate()
             except OSError:
                 pass
+        # 검수 대기 중이면 도는 프로세스가 없다 — 여기서 바로 끝낸다.
+        if self.status in AWAITING:
+            self.status = STATUS_ERROR
+            self.error = "사용자가 취소했습니다"
+            self.save()
 
 
 def _on_rest_line(job: NHJob, line: str) -> None:
@@ -259,25 +290,62 @@ def _run_story_phase(job: NHJob) -> None:
         _fail(job, f"{type(exc).__name__}: {exc}")
 
 
-def _run_rest_phase(job: NHJob) -> None:
-    """2·3단계 — 고른 방향으로 구체화+콘티, 그다음 시트+페이지, 그리고 이어붙이기."""
+def _run_board_phase(job: NHJob) -> None:
+    """2단계 — 고른 방향으로 구체화+콘티. 끝나면 사람이 볼 때까지 멈춘다.
+
+    다시 만들기도 이 함수를 그대로 다시 부른다 — `--pick n` 을 다시 주면
+    detail_prompt·storyboard_prompt 가 새로 돈다(run.py 가 값을 덮어씀).
+    """
     job.status = STATUS_RUNNING
+    job.stage = "board"
     job.save()
     try:
-        job.stage = "board"
         code = job._run(["--run-id", job.run_id, "--pick", str(job.pick)],
                         lambda line: _on_rest_line(job, line))
         if job._cancel:
             return _fail(job, "취소되었습니다")
         if code != 0:
             return _fail(job, "콘티를 만들지 못했습니다 — 로그를 확인하세요")
+        job.status = STATUS_AWAITING_BOARD
+        job.save()
+    except Exception as exc:                            # noqa: BLE001
+        _fail(job, f"{type(exc).__name__}: {exc}")
 
-        code = job._run(["--run-id", job.run_id, "--sheet", "--pages"],
+
+def _run_sheet_phase(job: NHJob) -> None:
+    """3단계 — 캐릭터 시트. 끝나면 사람이 볼 때까지 멈춘다.
+
+    다시 만들기는 호출 전에 sheet.png·sheet_spec.json 을 지운다 — run.py 의
+    stage_sheet 는 그 둘이 있으면 "이미 있습니다"로 그냥 넘어가기 때문이다.
+    """
+    job.status = STATUS_RUNNING
+    job.stage = "sheet"
+    job.save()
+    try:
+        code = job._run(["--run-id", job.run_id, "--sheet"],
                         lambda line: _on_rest_line(job, line))
         if job._cancel:
             return _fail(job, "취소되었습니다")
         if code != 0:
-            return _fail(job, "시트나 그림을 만들지 못했습니다 — 로그를 확인하세요")
+            return _fail(job, "시트를 만들지 못했습니다 — 로그를 확인하세요")
+        job.status = STATUS_AWAITING_SHEET
+        job.save()
+    except Exception as exc:                            # noqa: BLE001
+        _fail(job, f"{type(exc).__name__}: {exc}")
+
+
+def _run_pages_phase(job: NHJob) -> None:
+    """4단계 — 페이지 그림, 그리고 이어붙이기. 끝나면 완성이다."""
+    job.status = STATUS_RUNNING
+    job.stage = "pages"
+    job.save()
+    try:
+        code = job._run(["--run-id", job.run_id, "--pages"],
+                        lambda line: _on_rest_line(job, line))
+        if job._cancel:
+            return _fail(job, "취소되었습니다")
+        if code != 0:
+            return _fail(job, "그림을 만들지 못했습니다 — 로그를 확인하세요")
 
         ok, err = job._stitch()
         if not ok:
@@ -289,6 +357,41 @@ def _run_rest_phase(job: NHJob) -> None:
         job.save()
     except Exception as exc:                            # noqa: BLE001
         _fail(job, f"{type(exc).__name__}: {exc}")
+
+
+def _clear_sheet(run_id: str) -> None:
+    d = run_dir(run_id)
+    for name in ("sheet.png", "sheet_spec.json", "sheet_prompt.txt", "sheet_spec_prompt.txt"):
+        try:
+            (d / name).unlink()
+        except OSError:
+            pass
+
+
+def board_summary(run_id: str) -> dict[str, Any] | None:
+    """콘티 검수 화면이 보여줄 것 — cast·장면·컷을 사람이 읽을 모양으로.
+
+    board.json 의 원래 모양(run.parse_board 참고)을 그대로 옮기되, 컷마다
+    대사만 뽑아서 짧게 — 화면은 "무슨 내용인지"만 보면 되고, camera·background
+    같은 프롬프트용 값까지 볼 필요는 없다.
+    """
+    path = run_dir(run_id) / "board.json"
+    try:
+        board = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    scenes = []
+    for s in board.get("scenes") or []:
+        cuts = []
+        for c in s.get("cuts") or []:
+            lines = [f"{d.get('speaker') or d.get('type') or ''}: {d.get('text') or ''}".strip(": ")
+                     for d in (c.get("dialogue") or []) if (d.get("text") or "").strip()]
+            cuts.append({"id": c.get("id"), "size": c.get("size"), "dialogue": lines})
+        scenes.append({
+            "id": s.get("id"), "location": s.get("location"),
+            "time": s.get("time"), "summary": s.get("summary"), "cuts": cuts,
+        })
+    return {"cast": board.get("cast") or [], "scenes": scenes}
 
 
 class NHRunner:
@@ -326,7 +429,36 @@ class NHRunner:
             raise ValueError(f"방향 {n} 이 없습니다")
         job.pick = n
         job.save()
-        threading.Thread(target=_run_rest_phase, args=(job,), daemon=True).start()
+        threading.Thread(target=_run_board_phase, args=(job,), daemon=True).start()
+        return job
+
+    def _require(self, job_id: str, status: str) -> NHJob:
+        job = self.jobs.get(job_id)
+        if not job:
+            raise KeyError(job_id)
+        if job.status != status:
+            raise ValueError("지금은 그 조작을 할 수 없습니다")
+        return job
+
+    def approve_board(self, job_id: str) -> NHJob:
+        job = self._require(job_id, STATUS_AWAITING_BOARD)
+        threading.Thread(target=_run_sheet_phase, args=(job,), daemon=True).start()
+        return job
+
+    def retry_board(self, job_id: str) -> NHJob:
+        job = self._require(job_id, STATUS_AWAITING_BOARD)
+        threading.Thread(target=_run_board_phase, args=(job,), daemon=True).start()
+        return job
+
+    def approve_sheet(self, job_id: str) -> NHJob:
+        job = self._require(job_id, STATUS_AWAITING_SHEET)
+        threading.Thread(target=_run_pages_phase, args=(job,), daemon=True).start()
+        return job
+
+    def retry_sheet(self, job_id: str) -> NHJob:
+        job = self._require(job_id, STATUS_AWAITING_SHEET)
+        _clear_sheet(job.run_id)
+        threading.Thread(target=_run_sheet_phase, args=(job,), daemon=True).start()
         return job
 
 

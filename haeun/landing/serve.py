@@ -1454,6 +1454,44 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(409, str(exc))
             return self._json({"ok": True})
 
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/board-decision", url.path)
+        if m:
+            job = nh_runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            decision = str(body.get("decision") or "")
+            if decision not in ("approve", "retry"):
+                return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
+            try:
+                (nh_runner.approve_board if decision == "approve"
+                 else nh_runner.retry_board)(job.id)
+            except ValueError as exc:
+                return self._error(409, str(exc))
+            return self._json({"ok": True})
+
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/sheet-decision", url.path)
+        if m:
+            job = nh_runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            decision = str(body.get("decision") or "")
+            if decision not in ("approve", "retry"):
+                return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
+            try:
+                (nh_runner.approve_sheet if decision == "approve"
+                 else nh_runner.retry_sheet)(job.id)
+            except ValueError as exc:
+                return self._error(409, str(exc))
+            return self._json({"ok": True})
+
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/cancel", url.path)
         if m:
             job = nh_runner.get(m.group(1))
