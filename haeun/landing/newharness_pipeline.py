@@ -471,6 +471,88 @@ def run_dir(run_id: str) -> Path:
     return NEW_HARNESS / "runs" / run_id
 
 
+def is_run(run_id: str) -> bool:
+    """이 run_id 가 new_harness 것인가. serve.py 가 classic(story-harness)
+    라우트와 갈림길에서 쓴다 — story-harness/runs 에 없을 때만 여기로 온다."""
+    return run_dir(run_id).is_dir()
+
+
+def _read_json_safe(base: Path, name: str) -> dict[str, Any]:
+    try:
+        return json.loads((base / name).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def list_runs(limit: int = 60) -> list[dict[str, Any]]:
+    """둘러보기 목록에 얹을 new_harness run — pipeline.list_runs() 와 같은
+    모양으로 돌려준다(화면이 두 출처를 구분 안 해도 되게). 회차 개념이
+    없으므로 늘 1화 하나뿐이다.
+    """
+    out: list[dict[str, Any]] = []
+    root = NEW_HARNESS / "runs"
+    if not root.is_dir():
+        return out
+    for d in sorted(root.glob("2026*"), reverse=True):
+        if not d.is_dir():
+            continue
+        rid = d.name
+        drawn = [n for n in page_numbers(rid) if unit_image(rid, n)]
+        if not drawn:
+            continue                       # 그림이 하나도 없으면 목록에 안 걸린다
+        input_doc = _read_json_safe(d, "input.json")
+        pick = _read_json_safe(d, "pick.json")
+        out.append({
+            "run_id": rid,
+            "character": str(input_doc.get("name") or ""),
+            "title": str(pick.get("title") or "1화"),
+            "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
+            "episodes": [1],
+            "planned_episodes": [1],
+            "next_episode": 2,             # new_harness 는 이어 만들기가 없다
+            "cover_episode": 1,
+            "cover_page": drawn[0],
+            "page_count": len(drawn),
+            "engine": "new_harness",       # 화면이 굳이 안 봐도 되지만, 구분은 남긴다
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
+def result_by_run(run_id: str) -> dict[str, Any]:
+    """완성본 화면(app.js 의 paintResult)이 그대로 먹는 모양.
+
+    classic 의 _result_body() 와 같은 자리인데, new_harness 는 콘티 스키마가
+    달라서(장·컷 그룹핑 대신 페이지 한 장 = 카드 한 장) 훨씬 단순하다 — 여백/폭
+    개념이 없으니(stitch.py 가 그냥 이어붙임) 전부 gap 0 · width 1 이다.
+    """
+    d = run_dir(run_id)
+    numbers = [n for n in page_numbers(run_id) if unit_image(run_id, n)]
+    if not numbers:
+        return {}
+    input_doc = _read_json_safe(d, "input.json")
+    pick = _read_json_safe(d, "pick.json")
+    return {
+        "run_id": run_id,
+        "character": str(input_doc.get("name") or ""),
+        "title": str(pick.get("title") or "1화"),
+        "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
+        "style_label": "",
+        "logline": "",
+        "episode": 1,
+        "pages": [{"no": n, "gap": 0, "width": 1} for n in numbers],
+        "page_count": len(numbers),
+        "planned_pages": len(page_numbers(run_id)),
+        "preview": False,
+        "cut_count": 0,
+        "cuts_per_sheet": 1,
+        "stage_times": [],
+        "seconds": None,
+        "layout_mode": "fast",
+    }
+
+
 def page_numbers(run_id: str) -> list[int]:
     """이 run 의 페이지 번호(1..N). pages.json 을 우선 보고, 없으면 실제로
     그려진 파일 수로 판단한다(진행 중에 편집실을 미리 열어도 개수가 맞게)."""

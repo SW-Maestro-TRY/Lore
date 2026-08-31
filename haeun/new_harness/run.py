@@ -1192,11 +1192,15 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
 
 def stage_pages(run_dir: Path, dry_run: bool, only=None,
                 allow_no_sheet: bool = False) -> None:
-    """페이지를 그린다 — **컷 하나에 한 번이 아니라 페이지 하나에 한 번.**"""
+    """페이지를 그린다 — **컷 하나에 한 번이 아니라 페이지 하나에 한 번.**
+
+    비용은 페이지 하나가 끝날 때마다 바로 기록한다(on_page) — 다 그린 뒤
+    한꺼번에 기록하면, 중간에 취소되거나 죽었을 때 이미 돈이 나간 앞쪽
+    페이지들의 기록이 통째로 사라진다.
+    """
     made = pageart.draw(run_dir, dry_run=dry_run, only=only,
-                        allow_no_sheet=allow_no_sheet)
-    for meta in made:
-        record(run_dir, meta)
+                        allow_no_sheet=allow_no_sheet,
+                        on_page=lambda meta: record(run_dir, meta))
     if made:
         log(f"[페이지] {len(made)}장 그렸습니다 -> {run_dir / pageart.PAGE_DIR}")
 
