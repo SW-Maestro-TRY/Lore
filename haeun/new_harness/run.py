@@ -368,13 +368,21 @@ def parse_cutscript(text: str) -> dict:
                 txt = _text(d.get("text"))
                 if not txt:
                     continue
+                pri = _text(d.get("priority")).lower()
                 lines.append({"order": _num(d.get("order"), k),
                               "type": _text(d.get("type")) or "말",
                               "speaker": _text(d.get("speaker")),
-                              "text": txt})
+                              "text": txt,
+                              # 안 적혀 있으면 지켜야 하는 줄로 본다 — 잃는
+                              # 쪽보다 남기는 쪽이 안전하다.
+                              "priority": pri if pri in ("required", "optional")
+                                          else "required"})
             cuts.append({
                 "id": _num(c.get("id"), j),
                 "purpose": _text(c.get("purpose")),
+                "source_information": [_text(x) for x in
+                                       (c.get("source_information") or [])
+                                       if _text(x)],
                 "event": _text(c.get("event")),
                 "reader_learns": [_text(x) for x in (c.get("reader_learns") or [])
                                   if _text(x)],
@@ -384,6 +392,66 @@ def parse_cutscript(text: str) -> dict:
             })
         scenes.append({"id": _num(s.get("id"), i), "cuts": cuts})
     return {"scenes": scenes}
+
+
+def warn_script_kept(board: dict, script: dict | None) -> list[str]:
+    """콘티가 컷 대본을 지켰는가. 대본이 없으면 볼 것이 없다.
+
+    대본 단계를 따로 둔 이유가 "사람이 승인한 이야기가 연출에서 안 바뀌게"
+    이므로, 실제로 안 바뀌었는지는 코드가 확인해야 한다 — 프롬프트에 적어
+    두는 것만으로는 실측에서 한 줄씩 빠졌다.
+    """
+    if not script or not script.get("scenes"):
+        return []
+    out = []
+    got = [_text(d.get("text"))
+           for s in board.get("scenes") or []
+           for c in s.get("cuts") or []
+           for d in c.get("dialogue") or []]
+    for s in script["scenes"]:
+        for c in s.get("cuts") or []:
+            for d in c.get("lines") or []:
+                if d.get("priority", "required") != "required":
+                    continue
+                if d.get("text") not in got:
+                    out.append(f"장면 {s.get('id')} 컷 {c.get('id')}: 대본의 필수 "
+                               f"대사가 콘티에 그대로 없습니다 — "
+                               f"\"{d.get('text')}\"")
+    n_script = sum(len(s.get("cuts") or []) for s in script["scenes"])
+    n_board = sum(len(s.get("cuts") or []) for s in board.get("scenes") or [])
+    if n_script != n_board:
+        out.append(f"컷 수가 대본과 다릅니다 (대본 {n_script}개 · 콘티 "
+                   f"{n_board}개). 콘티는 컷을 더 나누거나 합치지 않습니다.")
+    return out
+
+
+def _keywords(text: str) -> list[str]:
+    """이 문장을 대표하는 낱말들. "실렸는지" 를 낱말 겹침으로만 보기 위한 것.
+
+    뜻이 같은지는 코드가 못 가린다 — 그래서 흔한 낱말을 빼고, 남은 것이
+    하나도 안 보일 때만 "안 실렸다" 고 본다. 오탐보다 놓치는 쪽으로 기운다.
+    """
+    common = {"그것", "이것", "자신", "사람", "생각", "모습", "장면", "때문",
+              "이라는", "라는", "하는", "되는", "있는", "없는", "것을", "것이"}
+    return [w for w in re.findall(r"[가-힣]{2,}", text or "")
+            if len(w) >= 2 and w not in common]
+
+
+def _mentions(fact: str, carrier: str) -> bool:
+    """`fact` 의 낱말이 `carrier` 에 하나라도 나오는가.
+
+    조사가 붙어서 그대로는 안 겹친다("자명종은" vs "자명종"). 그래서 낱말의
+    앞부분(2글자 이상)이 겹치면 실린 것으로 본다 — 어간이 대개 앞에 온다.
+    이걸 안 하면 실제로 실린 것을 "안 실렸다" 고 잡는다(실측).
+    """
+    words = _keywords(fact)
+    if not words:
+        return True                      # 볼 것이 없으면 트집 잡지 않는다
+    for w in words:
+        for end in range(len(w), 1, -1):
+            if w[:end] in carrier:
+                return True
+    return False
 
 
 def gate_cutscript(script: dict, detail: dict | None) -> list[str]:
@@ -411,6 +479,16 @@ def gate_cutscript(script: dict, detail: dict | None) -> list[str]:
                                f"lines 의 type=\"{d.get('type')}\" 은 목록에 "
                                f"없습니다 ({' · '.join(LINE_TYPES)}). 소리는 "
                                "sfx 에 적습니다.")
+            # 잠가 놓고 아무 데도 안 실으면 잠근 것이 아니다. 낱말이 겹치는지로만
+            # 본다 — 뜻이 같은지는 코드가 못 가린다.
+            carrier = " ".join(
+                [d.get("text", "") for d in c.get("lines") or []]
+                + (c.get("must_show") or []) + (c.get("reader_learns") or []))
+            for fact in c.get("source_information") or []:
+                if not _mentions(fact, carrier):
+                    bad.append(f"장면 {s.get('id')} 컷 {c.get('id')}: 지켜야 할 "
+                               f"사실이 대사에도 그림에도 안 실렸습니다 — "
+                               f"\"{fact}\"")
         # 알게 되는 것·추측이 여럿인데 컷이 하나면 장면을 나눈 것이 아니라
         # 줄인 것이다 — 합치라는 말을 요약하라는 말로 읽은 자리다.
         src = detail_by_id.get(s.get("id")) or {}
@@ -436,8 +514,7 @@ def gate_cutscript(script: dict, detail: dict | None) -> list[str]:
                 for c in target.get("cuts") or [])
             for x in s.get("learns") or []:
                 what = x.get("what") or ""
-                words = [w for w in re.findall(r"[가-힣]{2,}", what) if len(w) >= 2]
-                if words and not any(w in blob for w in words):
+                if not _mentions(what, blob):
                     bad.append(f"장면 {s.get('id')}: 독자가 알아야 하는 것이 대본에 "
                                f"안 실렸습니다 — \"{what}\"")
     return bad
@@ -696,7 +773,10 @@ CLOSEUP_SHOTS = ("클로즈업", "극클로즈업")
 FRONT_ANGLE = "정면"
 CONSEC_SHOT_MAX = 3       # 같은 shot 이 이 개수를 넘겨 연달아 나오면 잡는다
 CLOSEUP_MAX_SHARE = 0.5   # 클로즈업 계열이 전체 컷의 이 비율을 넘으면 단조롭다
-FRONT_ANGLE_MAX_SHARE = 0.8
+# 프롬프트는 "한 장면에서 정면이 절반을 넘지 않는다" 고 한다. 여기는 화
+# 전체 기준이라 조금 느슨하게 두되, 예전 0.8 은 너무 헐거웠다 — 정면이
+# 64% 여도 안 걸렸다.
+FRONT_ANGLE_MAX_SHARE = 0.6
 # storyboard_prompt 의 `## 값 목록` 과 같아야 한다. 그림 프롬프트가 이 값을
 # 그대로 쓰므로, 목록 밖 낱말이 들어오면 그 컷은 지시가 흐려진 채 그려진다.
 ANGLES = ("정면", "하이앵글", "로우앵글", "부감")
@@ -1431,6 +1511,8 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
                 lines.append(f"**컷 {c['id']}** — {c.get('event') or ''}")
                 if c.get("purpose"):
                     lines.append(f"- 이 컷이 하는 일: {c['purpose']}")
+                for x in c.get("source_information") or []:
+                    lines.append(f"- 지켜야 할 사실 (고치지 마라): {x}")
                 for x in c.get("reader_learns") or []:
                     lines.append(f"- 독자가 알게 되는 것: {x}")
                 for x in c.get("must_show") or []:
@@ -1438,8 +1520,11 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
                 for d in c.get("lines") or []:
                     who = d.get("speaker") or ""
                     kind = d.get("type") or "말"
-                    lines.append(f"- 대사({kind}{' · ' + who if who else ''}): "
-                                 f"{d.get('text')}")
+                    lock = ("[필수 — 글자 그대로]"
+                            if d.get("priority", "required") == "required"
+                            else "[빼도 됨]")
+                    lines.append(f"- 대사({kind}{' · ' + who if who else ''}) "
+                                 f"{lock}: {d.get('text')}")
                 for x in c.get("sfx") or []:
                     lines.append(f"- 효과음: {x}")
                 lines.append("")
@@ -1542,7 +1627,10 @@ def stage_board(run_dir: Path, char: dict, direction: dict, dry_run: bool,
     # 반드시 고쳐야 하는 것", 하나는 "이대로도 그림은 나오지만 참고할 것"
     # 이라, 섞어 두면 어느 쪽인지 못 가른다.
     bad = gate_board(board)
-    warns = directing_warnings(board)
+    script_path = run_dir / "cutscript.json"
+    script = (json.loads(script_path.read_text(encoding="utf-8"))
+              if script_path.exists() else None)
+    warns = directing_warnings(board) + warn_script_kept(board, script)
     if bad:
         warn(f"콘티에 반드시 손볼 곳이 {len(bad)}개 있습니다 (구조가 깨졌습니다):")
         for one in bad:

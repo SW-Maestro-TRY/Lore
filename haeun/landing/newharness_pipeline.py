@@ -265,7 +265,11 @@ class NHJob:
 
 def _on_rest_line(job: NHJob, line: str) -> None:
     """2·3단계 진행 중 stdout 한 줄 -> 화면에 보여줄 단계(job.stage) 갱신."""
-    if line.startswith("[콘티]") or line.startswith("[구체화]"):
+    # 구체화·컷 대본·콘티는 화면에서 한 걸음("콘티")으로 묶어 보여준다 —
+    # 셋 다 사람이 보는 것은 마지막 콘티 하나뿐이라, 걸음을 셋으로 쪼개면
+    # 기다리는 사람에게 진행이 세 번 되돌아가는 것처럼 보인다.
+    if (line.startswith("[콘티]") or line.startswith("[구체화]")
+            or line.startswith("[컷 대본]")):
         job.stage = "board"
     elif line.startswith("[시트]"):
         job.stage = "sheet"
