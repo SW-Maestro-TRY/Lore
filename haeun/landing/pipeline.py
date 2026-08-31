@@ -233,7 +233,6 @@ def art_qa_regen_max(form: dict[str, Any]) -> int:
 USD_TO_KRW = 1400
 
 STYLES = {
-    "lineart":   "선화 · 액션",
     "webtoon":   "일반 웹툰",
     "romance":   "로맨스 판타지",
     "cinematic": "시네마틱 반실사",

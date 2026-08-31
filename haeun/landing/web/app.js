@@ -13,11 +13,10 @@ const STYLE_INFO = [
   ["webtoon",   "일반 웹툰",      "깔끔한 선과 셀 채색. 매주 연재하는 그 그림 — 읽히는 속도가 기준입니다."],
   ["romance",   "로맨스 판타지",  "표지 일러스트급 밀도. 보석 같은 눈, 장미와 금박, 레이스까지 하나하나."],
   ["cinematic", "시네마틱 반실사","빛으로 화려해집니다. 역광·공기·얕은 심도·필름 색보정. 얼굴은 웹툰 그대로."],
-  ["lineart",   "선화 · 액션",    "선과 여백이 다 합니다. 톤을 거의 안 쓰고 포즈와 실루엣으로 읽힙니다."],
+  ["frost",     "세미리얼 · 성인향","사실적인 인체에 선은 얇고 듬성듬성, 진한 디테일은 얼굴·손에만. 넓은 면은 비워 두고 저채도로 차분하게."],
   ["pastel",    "일상툰 감성",    "일부러 덜 완성한 그림. 흔들리는 연필선, 종이 결, 바랜 파스텔 몇 색."],
   ["noir",      "다크 느와르",    "어둠이 주인공입니다. 화면 대부분이 먹으로 덮이고 빛은 얇게 남습니다."],
   ["shoujo",    "순정 · BL",      "얼굴과 둘 사이의 거리. 길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃."],
-  ["frost",     "세미리얼 · 성인향","사실적인 인체에 선은 얇고 듬성듬성, 진한 디테일은 얼굴·손에만. 넓은 면은 비워 두고 저채도로 차분하게."],
 ];
 
 // 장르 단추로 먼저 꺼내 두는 것들. index.html 의 datalist 에는 더 많이 있고,
@@ -34,7 +33,6 @@ const STYLE_INFO = [
    길이 아예 없다. 샘플이 생기면 여기만 바꾸면 된다. */
 const STYLE_THUMB = {
   cinematic: "/static/samples/ex-cinematic-1.jpg",
-  lineart:   "/static/samples/ex-lineart-2.jpg",
   romance:   "/static/samples/ex-romance-1.jpg",
   webtoon:   "/static/samples/ex-webtoon-1.jpg",
   frost:     "/static/samples/ex-frost-1.jpg",
