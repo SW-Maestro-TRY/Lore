@@ -48,6 +48,7 @@ import pageart                                # noqa: E402
 import pages as pagemod                       # noqa: E402
 import sheet as sheetmod                      # noqa: E402
 from llm import story                         # noqa: E402
+import samples                                # noqa: E402  (story-harness 것을 그대로 빌린다)
 from pages import SIZES                       # noqa: E402
 
 PROMPT_DIR = HERE / "prompt"
@@ -699,8 +700,49 @@ def read_input(run_dir: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def story_variety_block(run_dir: Path, char: dict) -> str:
+    """이번 이야기 변수 · 회차 구조 — story-harness/samples.py 를 그대로 빌린다.
+
+    같은 장르로 여러 번 만들면 매번 비슷한 이야기가 나오던 문제(호출마다
+    독립적이라 이전 결과를 기억하지 못함)를 story-harness 가 이미 풀어
+    둔 방식(samples.pick_fresh)으로 막는다 — 최근 new_harness run 들이 쓴
+    조합은 피해서 뽑고, 그 조합을 축·구조 참고 자료로 story_prompt 에
+    같이 넣는다. 뽑힌 값은 이 run 의 axes.json 에 남는다(story-harness와
+    같은 파일명 · 같은 스키마).
+    """
+    axes, structure, fresh = samples.pick_fresh(char["genre"], runs_dir=RUNS_DIR)
+    if axes or structure:
+        write_json(run_dir / "axes.json", {"축": axes, "구조": structure})
+    if axes:
+        log(f"  이야기 변수: {samples.axes_summary(axes)}")
+    if structure:
+        log(f"  회차 구조: {samples.structure_summary(structure)}")
+    if (axes or structure) and not fresh:
+        log("  (최근 생성물과 조합이 겹칩니다 — 고를 수 있는 폭이 좁습니다)")
+
+    parts = []
+    axes_txt = samples.axes_block(axes)
+    if axes_txt:
+        parts += [
+            "", "## 이번 이야기의 변수 (참고 — 매번 다르게 뽑힌다)", "",
+            "아래 값은 이번 생성에서만 적용된다. 4개 방향 전부가 이 값을 그대로 "
+            "따라야 하는 것은 아니고, 인물의 자리·태도·소재가 막힐 때 여기서 "
+            "고른다. 다만 이 값을 무시하고 이 장르에서 가장 흔한 설정으로 "
+            "돌아가면, 이번 4개가 지난 생성들과 비슷해진다 — 그것이 피해야 "
+            "할 실패다.", "", axes_txt,
+        ]
+    structure_txt = samples.structure_block(structure)
+    if structure_txt:
+        parts += [
+            "", "## 이번에 참고할 회차 구조 (참고 — 매번 다르게 뽑힌다)", "",
+            structure_txt,
+        ]
+    return "\n".join(parts)
+
+
 def stage_story(run_dir: Path, char: dict, dry_run: bool) -> list[dict]:
-    prompt = compose("story_prompt", story_input_block(char))
+    block = story_input_block(char).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
+    prompt = compose("story_prompt", block)
     write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
         log(f"[이야기] 프롬프트만 썼습니다 -> {run_dir / 'story_prompt.txt'}")
