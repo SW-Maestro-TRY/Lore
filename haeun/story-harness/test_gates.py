@@ -94,6 +94,9 @@ VISUAL_OK = {
     # gender 는 카드의 필수 칸이다. 여기서 빠지면 뒷단계가 성별을 짐작한다
     # (실제로 그렇게 여자 주인공이 이미지에서 남자로 그려졌다).
     "gender": "남성",
+    # species 도 필수 칸이다 — 기본값은 "사람" (gender 와 반대로, 안 적으면
+    # 사람으로 본다).
+    "species": "사람",
     "visual_hook": "은발이 눈을 반쯤 덮은, 웃지 않는데 입꼬리가 비대칭으로 올라간 남자",
     "appearance": {"hair": "은발 반묶음", "eyes": "회색 · 서늘한 눈매",
                    "build": "185 언저리, 마르고 어깨가 넓다",
@@ -137,7 +140,7 @@ CARD_OK = {
     # 없어서 여기 적힌 것이 그림 단계가 가진 전부다.
     "supporting_cast": [
         {"name": "하연", "gender": "여성", "relation": "폐기 명령서에 서명한 감사관",
-         "appearance": "짧게 친 검은 머리, 큰 키에 각진 어깨, 감사관 제복에 은테 안경",
+         "appearance": "짧게 친 검은 머리, 큰 키에 각진 어깨, 짙은 회색 감사관 제복에 은테 안경",
          "role": "보관소를 닫으러 오지만 십 년 전 일을 혼자 기억하고 있다"},
     ],
     "fate_beats": [
@@ -578,6 +581,119 @@ ok("4단계: cast_roles 없으면 지도 출력이 예전 그대로",
    "서지한" not in webtoon.series_arc_block(good_arcs["arcs"], good_arcs["arcs"][1]))
 ok("4단계: 관통 인물을 찾는다", webtoon._through_line(_curve) == "서지한"
    and webtoon._through_line(good_arcs["arcs"]) == "")
+
+# ---- Arc 는 사건이 아니라 압력이다 (#21) ----
+#
+# W4 가 Arc 요약에 사건을 적으면 W5 가 그대로 받아쓴다. 실제로 그랬다 — Arc 1
+# 요약의 "기자회견장에서 얼굴 공개를 거부한다" 가 그대로 1화가 되었다.
+#
+# ★ 여기서도 가장 중요한 것은 **옛 run 회귀**다. 압력 세 칸이 없는 arcs.json 은
+#   아무것도 검사하지 않는다.
+ok("4단계: 압력 세 칸이 없으면 검사하지 않는다 (옛 run 회귀)",
+   webtoon.gate_arc_pressure(good_arcs["arcs"]) == []
+   and webtoon.gate_arcs(good_arcs) == [])
+
+def _press(a, **kw):
+    row = dict(a, starts_with="숨기면 예전 생활이 유지된다고 믿는다",
+               pressure="하은을 개인으로 아는 사람이 하나씩 늘어난다",
+               ends_with="숨기는 것만으로는 안 된다는 것을 안다",
+               not_yet=["얼굴이 대중에게 공개되는 것"],
+               summary="숨기던 사람이 그것만으로는 안 된다는 것을 알게 되는 구간.")
+    row.update(kw)
+    return row
+
+_ok_press = {"arcs": [_press(a) for a in _ok_cast["arcs"]]}
+ok("4단계: 압력 세 칸을 채우면 통과",
+   webtoon.gate_arcs(_ok_press) == [], webtoon.gate_arcs(_ok_press))
+
+_no_pressure = {"arcs": [_press(a, pressure="") if a["order"] == 1 else _press(a)
+                         for a in _ok_cast["arcs"]]}
+ok("4단계: pressure 가 비면 탈락 (조이는 힘이 없으면 Arc 가 아니다)",
+   any("pressure" in f for f in webtoon.gate_arcs(_no_pressure)))
+
+_same = {"arcs": [_press(a, ends_with="숨기면 예전 생활이 유지된다고 믿는다")
+                  if a["order"] == 1 else _press(a) for a in _ok_cast["arcs"]]}
+ok("4단계: 시작 상태와 끝 상태가 같으면 탈락 (안 바뀌는 구간)",
+   any("starts_with" in f for f in webtoon.gate_arcs(_same)))
+
+_no_yet = {"arcs": [_press(a, not_yet=[]) if a["order"] == 1 else _press(a)
+                    for a in _ok_cast["arcs"]]}
+ok("4단계: not_yet 이 비면 탈락 (뒤 Arc 사건을 당겨오는 것을 막는 울타리)",
+   any("not_yet" in f for f in webtoon.gate_arcs(_no_yet)))
+
+# 실제로 나왔던 Arc 1 요약. 세 문장으로 3화치 사건을 나열했다.
+_real = ("박하은이 등급 사회에서 SS급 판정을 받고 신분이 공식화된다. "
+         "공식 기자회견장에서 실명과 얼굴 공개를 단호히 거부한다. "
+         "협회와 언론은 끝없이 정체 공개를 요구한다.")
+_long = {"arcs": [_press(a, summary=_real) if a["order"] == 1 else _press(a)
+                  for a in _ok_cast["arcs"]]}
+ok("4단계: summary 가 여러 문장이면 탈락 (줄거리 요약으로 돌아간 것)",
+   any("문장입니다" in f for f in webtoon.gate_arcs(_long)))
+
+# 새 칸은 보고서에도 나와야 한다 — 없던 시절 run 은 줄 자체가 안 생긴다.
+ok("4단계: 압력 세 칸이 없으면 보고서 줄도 안 생긴다",
+   not any(x.get("starts_with") for x in good_arcs["arcs"]))
+
+# ---- 엔진급 질문을 화 질문으로 베끼지 않는가 (#29) ----
+#
+# 실측(1화): questions_opened 첫 줄이 engine_question 문장 거의 그대로였다.
+# 엔진급 질문은 시즌 내내 열려 있으므로 다시 여는 것은 아무것도 여는 것이 아니다.
+_EQ = "박하은이 자신의 얼굴과 이름, 그리고 SS급 힘이 모두 드러나는 순간에도 진짜 자신으로 살아갈 수 있을까?"
+_led = webtoon.Ledger(_EQ)
+
+ok("5단계: 엔진급 질문을 그대로 베끼면 탈락",
+   any("엔진급 질문과 거의 같" in f for f in webtoon.gate_question_echo(
+       [{"questions_opened": [{"text": _EQ, "type": "suspense"}]}], _led)))
+
+ok("5단계: 이 화에서 나온 질문은 통과",
+   webtoon.gate_question_echo(
+       [{"questions_opened": [{"text": "출동을 거부하면 신분이 드러나고 출동하면 "
+                                       "얼굴을 못 숨긴다. 하은은 어느 쪽을 택할까?",
+                               "type": "suspense"}]}], _led) == [])
+
+ok("5단계: 엔진급 질문이 없으면 검사하지 않는다 (옛 run 회귀)",
+   webtoon.gate_question_echo(
+       [{"questions_opened": [{"text": _EQ}]}], webtoon.Ledger("")) == []
+   and webtoon.gate_question_echo([{"questions_opened": [{"text": _EQ}]}],
+                                  webtoon.Ledger(None)) == [])
+
+ok("5단계: 질문 칸이 없는 화는 그냥 지나간다",
+   webtoon.gate_question_echo([{"title": "1화"}, "문자열"], _led) == [])
+
+# ---- 값은 이 화 안에서 치르는가 (#29) ----
+#
+# 선택이 걸린 화에서 양쪽을 다 피해 가는 것이 이 단계의 가장 쉬운 길이다.
+# 실측: 「드러내면 일상을 잃고 안 들어가면 시민이 죽는다」를 받고서 마스크를
+# 고쳐 쓰고 출동하는 화가 나왔다 — 아무것도 안 잃었다.
+def _paid(what, shown="점장이 빈자리를 본다", instead="시민이 죽는 것"):
+    return {"price_paid": {"what": what, "shown_by": shown, "instead_of": instead}}
+
+ok("5단계: price_paid 칸이 없으면 검사하지 않는다 (옛 run 회귀)",
+   webtoon.gate_price_paid([{"title": "1화"}, {"price_paid": {}}, "문자열"]) == [])
+
+ok("5단계: 실제로 잃은 것을 적으면 통과",
+   webtoon.gate_price_paid([_paid("알바 자리를 잃는다")]) == [])
+
+ok("5단계: 위험은 값이 아니다 — 탈락",
+   any("위험과 감정은 값이" in f
+       for f in webtoon.gate_price_paid([_paid("정체가 드러날 위험이 커졌다")])))
+
+ok("5단계: 감정은 값이 아니다 — 탈락",
+   any("위험과 감정은 값이" in f
+       for f in webtoon.gate_price_paid([_paid("하은이 불안해졌다")])))
+
+ok("5단계: 치른 값이 화면에 안 보이면 탈락",
+   any("shown_by" in f
+       for f in webtoon.gate_price_paid([_paid("알바 자리를 잃는다", shown="")])))
+
+ok("5단계: what 만 비면 탈락 (칸은 채웠는데 값이 없다)",
+   any("what" in f for f in webtoon.gate_price_paid([_paid("", shown="보인다")])))
+
+ok("5단계: gate_episodes_shape 에 실려 돈다",
+   any("위험과 감정은 값이" in f for f in webtoon.gate_episodes_shape(
+       {"episodes": [dict(_paid("정체가 드러날 위험이 커졌다"),
+                          engine_fired=["rule"], summary="s", title="t")]},
+       webtoon.Ledger(""))))
 
 # ---- 행동의 이유가 화면에 있는가 (#29) ----
 #
@@ -2576,6 +2692,38 @@ ok("상태 카드: 사람별로 꺼낼 수 있다",
 ok("상태 카드: 바뀐 게 없으면 안 쌓는다",
    len(webtoon.SeriesState().status) == 0)
 
+# ---- Story State — 사람 사이와 사람 속 --------------------------------------
+# 몸의 자국(status)처럼 관계·인지도 화를 넘어 이어진다. 이것이 없던 동안 W5 는
+# "1화에 나왔으니 아는 사이겠지"를 추론했고, 초면인 인물이 이름을 부르는 화가
+# 나왔다. 시나리오: 1화 마주침(비대칭) → 2화 안 만남 → 3화 통성명(리아는 기억 못 함).
+_rs = webtoon.SeriesState(run_id="t")
+_rs.add(1, 1, dict(episode(), setting=setting(), relation_changes=[
+    {"who": "도윤", "about": "리아", "change": "폭주 현장에서 처음 목격. 이름 모름"}],
+    mind_changes=[{"who": "도윤", "change": "빌런의 죽음을 목격"}]))
+ok("관계: 방향 있는 항목으로 쌓인다",
+   _rs.relations and _rs.relations[0]["who"] == "도윤"
+   and _rs.relations[0]["about"] == "리아"
+   and _rs.relations[0]["since_episode"] == 1, _rs.relations)
+ok("관계: 비대칭 — 반대 방향은 없다",
+   not [r for r in _rs.relations if r["who"] == "리아"])
+_rs.add(2, 1, dict(episode(), setting=setting()))
+ok("관계: 안 만난 화에서는 그대로 유지된다", len(_rs.relations) == 1)
+_rs.add(3, 1, dict(episode(), setting=setting(), relation_changes=[
+    {"who": "도윤", "about": "리아", "change": "통성명 — 이름을 알게 됨"},
+    {"who": "리아", "about": "도윤", "change": "통성명. 1화의 일은 기억 못 함"}]))
+ok("관계: 이력이 쌓인다 (나중 것이 앞을 지우지 않는다)",
+   len([r for r in _rs.relations if r["who"] == "도윤"]) == 2)
+ok("속: mind_changes 가 쌓인다",
+   _rs.minds and _rs.minds[0]["who"] == "도윤")
+_rb = _rs.brief(webtoon.Ledger("q", cap=7))
+ok("brief: 인물 사이 절이 실린다", "[인물 사이" in _rb and "1화: 폭주 현장에서" in _rb)
+ok("brief: 없는 관계는 없는 관계라는 규칙이 실린다", "여기 없는 관계는" in _rb)
+ok("brief: 회수 재료 지시가 실린다", "아 맞아" in _rb)
+ok("brief: 각자의 속 절이 실린다", "[각자의 속" in _rb)
+_rempty = webtoon.SeriesState(run_id="t")
+ok("brief: 관계가 없으면 (옛 run) 속 절이 안 나온다",
+   "[각자의 속" not in _rempty.brief(webtoon.Ledger("q", cap=7)))
+
 # 그림 단계에는 명부의 고정 외형밖에 없다. 카드에 안 실으면 반창고를 못 그린다.
 _sb = webtoon.status_block(_ss.status)
 ok("상태 카드: 엔진 카드에 실린다",
@@ -2930,6 +3078,18 @@ ok("사진→재료: 이야기 실마리를 근거와 함께 넘긴다",
    "소매가 그을렸다" in _mat and "왼쪽 소매 끝" in _mat, _mat)
 ok("사진→재료: 사진이 준 것임을 표시한다", "사진에서 읽은 것" in _mat)
 ok("사진→재료: LOOK 이 없으면 빈 문자열", story.look_to_material(None) == "")
+
+# species — 사람이 아니면 종과 겉모습을 재료에 넣는다. 사람이면 (기본값이라)
+# 굳이 "종: 사람" 줄을 만들지 않는다 — 옛 LOOK 결과(species 키가 아예 없는
+# 것)와 같은 문장이 나와야 한다.
+_look_whale = dict(_look, species="고래", species_features="옅은 청록색 몸통")
+_mat_whale = story.look_to_material(_look_whale)
+ok("사진→재료: 사람이 아니면 종을 적는다", "종: 고래" in _mat_whale, _mat_whale)
+ok("사진→재료: 종의 겉모습도 함께 적는다", "옅은 청록색 몸통" in _mat_whale, _mat_whale)
+ok("사진→재료: 사람이면 종 줄을 안 만든다 (기본값)",
+   "종:" not in story.look_to_material(dict(_look, species="사람")))
+ok("사진→재료: species 키가 아예 없어도(옛 LOOK 결과) 그대로 동작한다",
+   "종:" not in _mat and "검은 단발" in _mat, _mat)
 
 # 세계관 프리셋 파일
 _w = story.load_worlds()
@@ -3458,6 +3618,57 @@ ok("모의 P1 카드에 gender 가 있다",
 ok("모의 P1 카드가 성별 게이트를 통과한다",
    story.gate_gender(story.mock_payload("P1", ""), "여성") == [],
    story.gate_gender(story.mock_payload("P1", ""), "여성"))
+
+# ---- 종(species) ------------------------------------------------------------
+# gender 와 같은 이유로 존재한다: 강아지를 넣었는데 species 칸이 비거나
+# appearance_en 이 "A young woman/man…" 으로 남으면, 뒷단계는 그냥 사람을
+# 그린다. gender 와 반대 방향 기본값이 하나 있다 — 안 적으면 사람이 기본이다.
+
+ok("종 판정: 빈 값은 사람", story.is_human_species("") is True)
+ok("종 판정: '사람'은 사람", story.is_human_species("사람") is True)
+ok("종 판정: '인간'도 사람", story.is_human_species("인간") is True)
+ok("종 판정: '강아지'는 사람이 아니다", story.is_human_species("강아지") is False)
+ok("종 판정: '고래'는 사람이 아니다", story.is_human_species("고래") is False)
+
+_good_whale = {"gender": "여성", "species": "고래", "species_en": "whale",
+               "appearance_en": "A pale teal whale with a white belly, wears nothing"}
+
+ok("종 게이트: species 가 비면 탈락",
+   any("species 가 비어" in f for f in story.gate_species({})))
+
+ok("종 게이트: 사람이면 그 이상 요구하지 않는다",
+   story.gate_species({"species": "사람"}) == [])
+ok("종 게이트: '인간'도 사람으로 통과",
+   story.gate_species({"species": "인간"}) == [])
+
+ok("종 게이트: 강아지·고래처럼 사람이 아니고 제대로 적혀 있으면 통과",
+   story.gate_species(_good_whale) == [], story.gate_species(_good_whale))
+
+ok("종 게이트: species_en 이 비면 탈락",
+   any("species_en 이 비어" in f for f in story.gate_species(
+       dict(_good_whale, species_en=""))))
+
+ok("종 게이트: appearance_en 에 species_en 낱말이 없으면 탈락",
+   any("species_en" in f and "없습니다" in f for f in story.gate_species(
+       dict(_good_whale, appearance_en="A pale teal creature with a white belly"))))
+
+ok("종 게이트: species 를 적어 놓고도 appearance_en 이 사람으로 시작하면 탈락",
+   any("사람으로 시작" in f for f in story.gate_species(
+       dict(_good_whale, appearance_en="A young woman with pale teal skin"))))
+
+ok("성별 게이트: species 가 사람이 아니면 appearance_en 에 성별 낱말을 요구하지 않는다",
+   story.gate_gender(_good_whale, "") == [], story.gate_gender(_good_whale, ""))
+
+ok("종 게이트: gate_p1 에 연결돼 있다",
+   any("species" in f for f in story.gate_p1({}, "")))
+
+ok("모의 P1 카드에 species 가 '사람' 이다",
+   story.mock_payload("P1", "").get("species") == "사람")
+ok("모의 P1 카드가 종 게이트를 통과한다",
+   story.gate_species(story.mock_payload("P1", "")) == [],
+   story.gate_species(story.mock_payload("P1", "")))
+ok("모의 LOOK 결과에 species 가 '사람' 이다",
+   story.mock_payload("LOOK", "").get("species") == "사람")
 
 # ---- 조연 고정 -------------------------------------------------------------
 # 같은 캐릭터 파일을 두 번 돌렸더니 후배 이름이 '하윤재' → '장지운' 으로 바뀌고,

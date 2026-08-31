@@ -116,6 +116,24 @@ SPOT_TAIL = (
     "one spot colour.")
 
 
+def style_common_tail(cfg: dict[str, Any]) -> str:
+    """모든 그림체가 지키는 공통 계약(비실사·배경 예산). **프롬프트 맨 끝**이다.
+
+    style_contract 가 v2 일 때만 나온다. v1 이면 빈 문자열이라 예전 프롬프트와
+    한 글자도 안 다르다.
+
+    왜 끝인가 — 2026-08-27 에 그림체 문구 **앞**에 붙여서 한 컷 뽑아 봤다가
+    되돌린 자리다. 앞에 두면 뒤따르는 장면 서술(영화 언어로 쓰여 있다: "먼지가
+    깔린 폐허", "석양이 잔해를 비춘다")에 그대로 덮여서, 안 붙인 것보다 배경이
+    **더** 빽빽해졌다. 같은 문구를 맨 끝에 붙였을 때는 하늘이 색면 하나로
+    떨어졌다. 이 파일이 이미 같은 말을 두 번 하고 있다 — 이음매도 head_ratio 도
+    "뒤에 온 것이 앞을 덮는다" 는 이유로 끝에 있다.
+    """
+    if str(cfg.get("style_contract") or "v1").strip().lower() != "v2":
+        return ""
+    return str(cfg.get("style_common") or "").strip()
+
+
 def monochrome(cfg: dict[str, Any]) -> bool:
     """지금 그림체가 흑백인가. run.py 가 style_monochrome 에 넣어 둔다."""
     return bool(cfg.get("style_monochrome"))
@@ -148,6 +166,10 @@ class Scene:
     panels: list[str] = field(default_factory=list)   # 패널별 영어 장면 서술 (LLM)
     layout: str = ""                    # config layout_templates 중 하나
     warnings: list[str] = field(default_factory=list)  # 금지어 lint 결과
+    # 9단계(페이지 편집)가 고른 **바탕 컷 번호**. 이 화면에서 지면을 깔고 다른
+    # 컷이 그 위에 얹히는 컷이다. None 이면 layout_text 가 예전처럼 크기로
+    # 고른다 — 9단계가 없던 옛 run 이 그대로 재현된다.
+    base_cut: int | None = None
 
     @property
     def gap_after(self) -> int:
@@ -502,7 +524,18 @@ def bubble_clause(cfg: dict[str, Any], cut: dict[str, Any]) -> list[str]:
             tail += " (the same person in every panel where they appear)."
             # 한 컷에 풍선이 둘 이상이면 좌우를 못박아야 꼬리가 갈라지고 읽는
             # 순서가 선다. 하나뿐이면 배치는 그리는 쪽에 맡긴다.
-            if multi and side in ("left", "right", "center"):
+            if side == "offscreen":
+                # 화면 밖 목소리. 이 값이 있는데 프롬프트가 몰라서, 그리는 쪽은
+                # 늘 화면 안에서 화자를 찾았다 — 그 컷에 없는 인물의 대사가
+                # 엉뚱한 사람에게 붙었다. 웹툰의 정상 문법이므로 막지 않고,
+                # **어떻게 그릴지**를 말해 준다.
+                tail = (" This line is spoken by someone who is NOT VISIBLE in "
+                        "this panel — an off-panel voice. The bubble sits at the "
+                        "very edge of the panel with its tail pointing off the "
+                        "edge, out of frame, toward the unseen speaker. Do NOT "
+                        "attach the tail to anyone who is drawn here, and do NOT "
+                        "add a new character to be the speaker.")
+            elif multi and side in ("left", "right", "center"):
                 tail += (f" This bubble sits on the {side} side of the panel."
                          if side != "center" else
                          " This bubble sits in the middle of the panel.")
@@ -851,8 +884,19 @@ def layout_text(cfg: dict[str, Any], scene: Scene) -> str:
 
     weights = [weight_of(c) for c in scene.cuts]
     total = sum(weights) or 1.0
-    # 가장 큰 컷이 바탕이 된다. 같으면 뒤쪽 — 감정의 정점은 대개 뒤에 온다.
-    base_i = max(range(len(weights)), key=lambda i: (weights[i], i))
+    # 바탕 컷 — **9단계가 골랐으면 그것을 쓴다.** 크기로 고르면 tall 이라서
+    # 바탕이 되고 wide 라서 안 되는 일이 벌어진다. 어느 컷에서 독자가 멈춰야
+    # 하는가는 크기가 아니라 이야기가 정한다(9단계 프롬프트 참고).
+    base_i = None
+    if scene.base_cut is not None:
+        for i, c in enumerate(scene.cuts):
+            if c.get("cut_number") == scene.base_cut:
+                base_i = i
+                break
+    if base_i is None:
+        # 9단계가 없거나 그 번호를 못 찾았다 — 예전대로 가장 큰 컷.
+        # 같으면 뒤쪽: 감정의 정점은 대개 뒤에 온다.
+        base_i = max(range(len(weights)), key=lambda i: (weights[i], i))
 
     slots = [str(s).strip() for s in (comp.get("slots") or []) if str(s).strip()]
     renders = dict((cfg.get("scene") or {}).get("panel_render") or {})
@@ -1087,7 +1131,12 @@ def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
         rows.append(f"Panel {i}: {text.strip()}"
                     + (f" {extra_clauses}" if extra_clauses else ""))
     panels = "\n".join(rows)
-    text = str(cfg["scene"]["prompt_template"])
+    # v2 는 컷 분할을 살리는 템플릿을 쓴다(config 의 prompt_template_v2 주석 참고).
+    # 없거나 v1 이면 예전 템플릿 그대로라, 옛 run 은 한 글자도 안 바뀐다.
+    template = str(cfg["scene"]["prompt_template"])
+    if str(cfg.get("style_contract") or "v1").strip().lower() == "v2":
+        template = str(cfg["scene"].get("prompt_template_v2") or template)
+    text = template
     for token, value in (
         ("{appearance}", appearance.strip()),
         ("{panel_count}", str(len(scene.panels))),
@@ -1117,6 +1166,11 @@ def assemble(cfg: dict[str, Any], appearance: str, scene: Scene, extra: str,
     text = f"{text.rstrip()}\n{lettering_tail(cfg)}"
     if monochrome(cfg):
         text = f"{text.rstrip()}\n{mono_tail(cfg)}"
+    # 공통 계약은 **제일 마지막**이다 — 그림체 문구도 장면 서술도 다 덮어야
+    # 한다(style_common_tail 주석 참고). v1 이면 빈 문자열이라 안 바뀐다.
+    common = style_common_tail(cfg)
+    if common:
+        text = f"{text.rstrip()}\n{common}"
     text = text.replace("1 panels", "1 panel")  # 마지막 묶음이 1컷일 때
     text = "\n".join(line.rstrip() for line in text.splitlines())
     return re.sub(r"\n{3,}", "\n\n", text).strip()
@@ -1421,6 +1475,9 @@ def to_json(scenes: list[Scene]) -> list[dict[str, Any]]:
              "gazes": [str(c.get("gaze") or "") for c in sc.cuts],
              # 대사는 이미지에 그리지 않는다. 말풍선으로 얹으려면 컷별로 남아 있어야 한다.
              "dialogues": overlay_lines(sc.cuts),
+             # 9단계가 고른 바탕 컷. 캐시에서 다시 읽을 때 이게 없으면 크기로
+             # 다시 골라 버려서, 같은 run 을 재실행하면 배치가 달라진다.
+             "base_cut": sc.base_cut,
              "warnings": sc.warnings} for sc in scenes]
 
 
@@ -1437,5 +1494,7 @@ def from_json(data: list[dict[str, Any]], cuts: list[dict[str, Any]]) -> list[Sc
         out.append(Scene(scene_number=int(item["scene_number"]), cuts=picked,
                          panels=[str(p) for p in item.get("panels") or []],
                          layout=str(item.get("layout") or ""),
+                         base_cut=(int(item["base_cut"])
+                                   if item.get("base_cut") is not None else None),
                          warnings=[str(w) for w in item.get("warnings") or []]))
     return out

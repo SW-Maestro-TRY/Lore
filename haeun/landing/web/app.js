@@ -17,6 +17,7 @@ const STYLE_INFO = [
   ["pastel",    "일상툰 감성",    "일부러 덜 완성한 그림. 흔들리는 연필선, 종이 결, 바랜 파스텔 몇 색."],
   ["noir",      "다크 느와르",    "어둠이 주인공입니다. 화면 대부분이 먹으로 덮이고 빛은 얇게 남습니다."],
   ["shoujo",    "순정 · BL",      "얼굴과 둘 사이의 거리. 길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃."],
+  ["frost",     "세미리얼 · 성인향","사실적인 인체에 선은 얇고 듬성듬성, 진한 디테일은 얼굴·손에만. 넓은 면은 비워 두고 저채도로 차분하게."],
 ];
 
 // 장르 단추로 먼저 꺼내 두는 것들. index.html 의 datalist 에는 더 많이 있고,
@@ -36,7 +37,8 @@ const STYLE_THUMB = {
   lineart:   "/static/samples/ex-lineart-2.jpg",
   romance:   "/static/samples/ex-romance-1.jpg",
   webtoon:   "/static/samples/ex-webtoon-1.jpg",
-  // 아래 셋은 아직 그 그림체로 뽑아 둔 예시가 없어서 루 그림으로 자리만
+  frost:     "/static/samples/ex-frost-1.jpg",
+  // 아래 둘은 아직 그 그림체로 뽑아 둔 예시가 없어서 루 그림으로 자리만
   // 채운다. 그림체를 보여주지는 못하니, 예시가 생기면 갈아 끼워야 한다.
   pastel:    "/static/lou/art/world-begins.png",
   noir:      "/static/lou/art/world-depth.png",

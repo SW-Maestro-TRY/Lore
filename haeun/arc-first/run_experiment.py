@@ -1,0 +1,683 @@
+#!/usr/bin/env python3
+"""순서 실험 — P1(재료) → P2(엔진) → W4(방향) → SCENE(선택) → W5(집필).
+
+## 왜 이걸 만들었나
+
+지금 파이프라인의 순서는 `P2 → 씬 → W4 → W5` 이고, 씬이 쓴 1화 도입부가 엔진
+카드에 산문 전문으로 실린다("1화의 컷은 이 장면을 컷으로 옮기는 일이다").
+그래서 1화를 정하는 것은 사실상 씬이고 W4·W5 는 그것을 받아쓴다.
+
+1차 실험(2026-08-29)에서 순서를 `W4 → 씬` 으로 바꿔 봤더니 Arc 는 압력 설계로
+바뀌었는데 **1화는 거의 그대로였다.** 원인이 더 앞에 있었다 — `p1.json` 의
+`trigger_situations` 세 줄("기자회견장에 섰을 때" / "공개하라는 압박" / "복도에서
+마스크를 벗었는데 누군가 목격한다")이 그대로 1화의 세 장면이었다. 씬도 W4 도
+p1 전문을 받으므로, 구체적인 상황 세 개가 눈앞에 있으면 그게 1화가 된다.
+
+## 그래서 이번에 바꾼 것
+
+**씬을 「1화 도입부 집필기」에서 「핵심사건 후보 생성기」로 바꾼다.**
+씬은 후보 4개를 내고, 사람이 그중 하나를 고르고, W5 가 그것으로 1화를 쓴다.
+
+  P1    재료 창고 (A/B · want/need · 관계 · trigger_situations)
+  P2    이야기 엔진
+  W4    방향 — 이 Arc 가 어떤 압력으로 상태를 어디까지 바꾸는가
+  SCENE 선택 — 모순을 가장 잔인하게 터뜨릴 사건 후보들
+  W5    집필 — 고른 사건으로 실제 1화
+
+씬이 물어야 하는 것은 "설정에 맞는 사건" 이 아니라 "독자가 가장 궁금해할
+선택" 이다. 그 기준을 prompts/scene_candidates.txt 가 들고 있다.
+
+## 쓰는 법
+
+    python run_experiment.py candidates --run <run_id>       # 후보 4개
+    python run_experiment.py episode  --dir <out/...> --pick B   # 고른 것으로 1화
+
+story-harness 는 손대지 않는다. 여기서 그 모듈을 불러다 쓰기만 한다.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+import time
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+STORY = HERE.parent / "story-harness"
+sys.path.insert(0, str(STORY))
+
+import story          # noqa: E402
+import webtoon        # noqa: E402
+
+
+# ---------------------------------------------------------------- 엔진 카드
+#
+# 엔진 카드는 "[1화 도입부 — 사람이 통과시킨 장면]" 블록에 씬이 쓴 산문을 통째로
+# 싣고 "이 장면을 컷으로 옮기는 일이다" 라고 못박는다. 씬이 후보 생성기가 되면
+# 그 블록에 들어갈 것이 달라진다 — W4 에게는 아무것도, W5 에게는 사람이 고른
+# 핵심사건 하나.
+_SCENE_BLOCK = "[1화 도입부 — 사람이 통과시킨 장면]"
+_CARD_END = "=== /엔진 카드 ==="
+
+
+def _split_card(card: str):
+    start = card.find(_SCENE_BLOCK)
+    if start < 0:
+        return card.rstrip("\n"), ""
+    tail = card.find(_CARD_END, start)
+    return card[:start].rstrip("\n"), (card[tail:] if tail >= 0 else _CARD_END)
+
+
+def strip_scene_block(card: str) -> str:
+    """장면을 아예 안 보여준다. W4 와 후보 생성이 쓰는 카드."""
+    head, tail = _split_card(card)
+    return head + "\n" + (tail or _CARD_END)
+
+
+def card_with_core_event(card: str, c: dict) -> str:
+    """사람이 고른 핵심사건 하나를 실은 카드. W5 가 이걸로 1화를 쓴다.
+
+    승인된 산문을 옮겨 적게 하던 자리에 **씨앗 하나**를 놓는다. 사건은 못 바꾸되
+    장면·대사·순서·주변 인물은 W5 가 만든다 — 그게 이 단계의 일이다.
+    """
+    head, tail = _split_card(card)
+    block = [
+        "[1화 핵심사건 — 사람이 고른 것]",
+        "  ★ 이 사건으로 1화를 쓴다. 사건 자체를 다른 것으로 바꾸지 마라.",
+        "  ★ 다만 이건 줄거리가 아니라 **씨앗**이다. 장면·대사·순서·주변 인물은",
+        "    당신이 만든다 — 그게 이 단계의 일이다. 아래 문장을 옮겨 적지 마라.",
+        f"  사건: {c.get('core_event')}",
+        f"  하은이 놓이는 선택: {c.get('dilemma')}",
+        f"    행동하면: {c.get('cost_if_acts')}",
+        f"    안 하면: {c.get('cost_if_refuses')}",
+        f"  터뜨리는 모순: {c.get('contradiction')}",
+        f"  되돌릴 수 없게 되는 것: {c.get('irreversible')}",
+    ]
+    # 독자 쪽 칸. 이걸 안 실으면 후보를 좋게 만든 것이 정작 집필 단계에 안 닿는다 —
+    # 짜릿한 자리도, 끊는 자리도, 다음 화를 만드는 미스터리도 여기서 정해졌다.
+    block += [
+        f"  독자가 짜릿해하는 자리: {c.get('payoff')}",
+        f"    ★ 그 행동이 그대로 대가가 된다: {c.get('payoff_is_the_price')}",
+        f"  이 화를 끊는 마지막 장면: {c.get('last_beat')}",
+        "    ★ 이 화는 여기서 끝난다. 더 가지도, 그 앞에서 멈추지도 마라.",
+        f"  이 화가 남기는 미스터리: {c.get('new_mystery')}",
+        "    ★ 이것이 독자가 다음 화를 누르는 이유다. 이 화 안에서 답하지 마라.",
+        f"  대가를 받는 사람(한 명이다): {c.get('witness')}",
+        f"  마지막에 쫓기 시작하는 사람: {c.get('pursuer')}",
+        "    ★ 이 사람은 결정적인 것을 못 봤다. 열쇠는 위의 목격자가 쥐고 있다.",
+        f"  마지막 컷에서 독자가 처음 아는 것: {c.get('reader_learns_last')}",
+        "    ★ 이것을 마지막 컷에 넣고 끊는다. 인물이 질문으로 대신 말하게 하지 마라.",
+        f"  주인공만 모르는 것: {c.get('hero_doesnt_know')}",
+        "    ★ 이 화 안에서 주인공이 이것을 알게 하지 마라. 독자만 안다.",
+        f"  예상 밖의 것: {c.get('surprise')}",
+        f"  이 화가 끝난 뒤 독자에게 남아야 하는 질문: {c.get('question_after')}",
+    ]
+    return head + "\n\n" + "\n".join(block) + "\n" + (tail or _CARD_END)
+
+
+# ---------------------------------------------------------------- 후보 게이트
+CANDIDATE_FIELDS = (
+    ("core_event", "1화의 핵심사건"),
+    ("payoff", "독자가 짜릿해하는 순간 — 하은이 왜 SS급인지 체감되는 자리"),
+    ("last_beat", "마지막 순간을 장면으로. 상태 서술이 아니라 화면"),
+    ("witness", "대가를 받는 한 사람 — 집합이 아니라 얼굴이 있는 사람"),
+    ("pursuer", "쫓기 시작하는 사람 — 열쇠는 못 가진 쪽"),
+    ("reader_learns_last", "마지막 컷에서 독자가 처음 알게 되는 것"), 
+    ("hero_doesnt_know", "이 화가 끝날 때 주인공만 모르는 것"),
+    ("new_mystery", "이 화가 끝나며 새로 생긴 미스터리"),
+    ("surprise", "예상 밖의 정보 하나"),
+    ("payoff_is_the_price", "그 짜릿한 행동이 어떻게 그대로 대가가 되는가"),
+    ("dilemma", "하은이 놓이는 양자택일"),
+    ("cost_if_acts", "행동했을 때 치르는 값"),
+    ("cost_if_refuses", "안 했을 때 치르는 값"),
+    ("contradiction", "이 사건이 터뜨리는 모순"),
+    ("pressure_axis", "무엇이 미는가"),
+    ("irreversible", "되돌릴 수 없게 되는 것"),
+    ("question_after", "직후 독자에게 남는 질문"),
+    ("why_not_safe", "왜 뻔한 사건이 아닌가"),
+)
+
+# 후보끼리 겹쳤다고 볼 문턱. 넘으면 사실상 같은 후보다.
+SAME_CANDIDATE = 0.72
+# p1 의 trigger_situations 를 그대로 베꼈다고 볼 문턱.
+COPIED_TRIGGER = 0.55
+# 미스터리가 아니라 이미 아는 위험을 적었을 때 걸리는 말. 「정체가 들킬까」는
+# 1화를 안 봐도 물을 수 있는 것이라 다음 화를 누르게 하지 못한다.
+_RISK_WORDS = ("들킬", "들키", "노출", "추적", "발각", "위험", "위기", "지킬 수 있을까",
+               "밝혀질", "탄로")
+# 미스터리에는 대상이 있어야 한다 — 누가·무엇이·왜.
+_MYSTERY_WORDS = ("누구", "누가", "왜", "무엇", "뭐", "어디서 온", "정체가 뭐")
+
+# 대가를 받는 쪽이 집합이면 독자는 무서워하지 않는다. "시선과 기록에 노출됐다" 는
+# 아무도 아니다 — 실측에서 후보 넷이 전부 이 꼴이었다.
+_CROWD_WORDS = ("목격자들", "사람들", "시민들", "대중", "여론", "세상", "기록",
+                "데이터", "CCTV", "영상", "온라인", "언론", "다수", "무리")
+# 한 사람으로 특정됐다는 표시. 이게 있으면 위 낱말이 섞여 있어도 통과시킨다 —
+# "협회 데이터팀 직원(20대 남성)" 은 협회가 아니라 사람이다. 실측에서 이걸 안
+# 두었다가 정상 후보를 세 번 되돌리고 $0.13 을 태웠다.
+_ONE_PERSON = ("대 남", "대 여", "대 초", "대 중", "대 후", "살", "한 명", "아이",
+               "학생", "소년", "소녀", "씨", "군", "양", "선배", "동기", "점장",
+               # 직함·성별도 한 사람을 가리킨다. "데이터 분석관" 은 데이터가
+               # 아니라 사람이다 — 이걸 안 넣었다가 정상 후보를 또 되돌렸다.
+               "관", "원", "기자", "직원", "남성", "여성", "남자", "여자", "명")
+# 마지막 컷에 두 가지 일이 동시에 들어갔다는 표시.
+_TWO_SHOT = ("사이에", "사이,", "동시에", "한편", "그러는 동안", "그사이")
+
+# 엔진급 질문을 화 질문으로 베꼈다고 볼 문턱 (webtoon 게이트와 같은 값).
+ENGINE_ECHO = webtoon.ENGINE_ECHO_THRESHOLD
+
+
+# core_event 가 ①사건 ②선택 ③되돌릴 수 없는 결과 를 다 담으면 짧을 수가 없다.
+# 사건 이름만 적은 후보를 여기서 되돌린다.
+CORE_EVENT_MIN = 90
+
+
+def gate_candidates(payload: dict, want: int, triggers: list, engine_q: str,
+                    fixed_material: bool = False) -> list:
+    """후보가 **고를 만한 것들**인가. 내용의 재미는 사람이 본다 — 여기서는 형식만."""
+    rows = payload.get("candidates")
+    if not isinstance(rows, list) or not rows:
+        return ["candidates 가 배열이 아니거나 비어 있습니다."]
+
+    failures = []
+    if len(rows) != want:
+        failures.append(f"후보가 {len(rows)}개입니다. {want}개여야 합니다.")
+
+    norm_trig = [webtoon._norm_q(t) for t in (triggers or []) if str(t or "").strip()]
+    base_q = webtoon._norm_q(engine_q)
+
+    for i, c in enumerate(rows):
+        if not isinstance(c, dict):
+            failures.append(f"{i + 1}번째 후보가 객체가 아닙니다.")
+            continue
+        label = c.get("label") or f"{i + 1}번째"
+        for key, why in CANDIDATE_FIELDS:
+            if not str(c.get(key) or "").strip():
+                failures.append(f"후보 {label}: {key} 가 비어 있습니다 ({why}).")
+
+        raw_event = " ".join(str(c.get("core_event") or "").split())
+        if raw_event and len(raw_event) < CORE_EVENT_MIN:
+            failures.append(
+                f"후보 {label}: core_event 가 {len(raw_event)}자로 사건 이름에 "
+                "가깝습니다. ①무슨 일이 벌어지는가 ②하은이 그 자리에서 실제로 하는 "
+                "선택 ③그 선택 때문에 되돌릴 수 없게 되는 것 — 셋을 다 적으세요.")
+
+        # p1 의 상황을 그대로 옮겨 적은 후보. 1차 실험에서 1화 전체가 이렇게 나왔다.
+        ev = webtoon._norm_q(c.get("core_event"))
+        for t, raw in zip(norm_trig, triggers):
+            if webtoon._similarity(ev, t) >= COPIED_TRIGGER:
+                failures.append(
+                    f"후보 {label}: 핵심사건이 캐릭터 카드의 trigger_situations 를 "
+                    f"그대로 옮긴 것입니다 (\"{str(raw)[:30]}…\"). 그 상황이 말하는 "
+                    "모순을 가져오되, 그것이 터질 다른 자리를 찾으세요.")
+                break
+
+        wit = " ".join(str(c.get("witness") or "").split())
+        if wit and any(w in wit for w in _CROWD_WORDS) \
+                and not any(w in wit for w in _ONE_PERSON):
+            failures.append(
+                f"후보 {label}: witness 가 \"{wit[:30]}…\" 입니다 — 집합은 대가를 받는 "
+                "사람이 아닙니다. 독자는 「사람들」을 무서워하지 않습니다. 나이·역할로 "
+                "특정되는 한 사람을 적으세요.")
+
+        pur = " ".join(str(c.get("pursuer") or "").split())
+        if pur and wit and webtoon._similarity(webtoon._norm_q(pur),
+                                               webtoon._norm_q(wit)) >= 0.7:
+            failures.append(
+                f"후보 {label}: pursuer 와 witness 가 같은 사람입니다. 쫓는 쪽이 이미 "
+                "열쇠를 쥐고 있으면 그냥 추적이 시작될 뿐입니다 — 못 본 사람이 본 "
+                "사람에게 다가가는 것으로 끊어야 다음 화가 궁금해집니다.")
+
+        last = " ".join(str(c.get("last_beat") or "").split())
+        # 마지막 컷에 쫓는 사람이 없으면 ⑥ 이 칸만 채우고 화면에는 안 들어온 것이다.
+        # 실측: pursuer 를 넷 다 적어 놓고, 마지막 컷은 넷 다 목격자가 직접 묻는
+        # 장면이었다 — 그러면 이야기가 그 둘 사이에서 닫힌다.
+        if last.rstrip().endswith("?") or last.rstrip().endswith("?\""):
+            failures.append(
+                f"후보 {label}: 마지막 컷이 질문 대사로 끝납니다 "
+                f"(\"{last[-24:]}\"). 인물이 대신 궁금해해 주면 독자 머릿속에 "
+                "남는 것이 없습니다 — 독자가 처음 아는 사실 하나를 화면에 던지고 "
+                "끊으세요.")
+        if last and any(w in last for w in _TWO_SHOT):
+            failures.append(
+                f"후보 {label}: last_beat 에 두 가지 일이 동시에 들어 있습니다 "
+                f"(\"{last[:34]}…\"). 마지막은 한 컷입니다 — 한 사람이 한 동작을 "
+                "합니다.")
+
+        myst = " ".join(str(c.get("new_mystery") or "").split())
+        if myst and any(w in myst for w in _RISK_WORDS) \
+                and not any(w in myst for w in _MYSTERY_WORDS):
+            failures.append(
+                f"후보 {label}: new_mystery 가 \"{myst[:30]}…\" 입니다 — 이건 독자가 "
+                "이미 아는 위험이지 새로 생긴 미스터리가 아닙니다. 독자가 모르는 "
+                "구체적인 것(저 사람은 누구인지 · 왜 그러는지)을 적으세요.")
+
+        if base_q and webtoon._similarity(
+                webtoon._norm_q(c.get("question_after")), base_q) >= ENGINE_ECHO:
+            failures.append(
+                f"후보 {label}: question_after 가 작품 전체의 질문(엔진급)과 거의 "
+                "같습니다. 방금 벌어진 일에서 나오는 질문을 적으세요.")
+
+    # 후보끼리 달라야 한다. 넷이 다 같은 압박이면 후보가 하나인 것과 같다.
+    for i in range(len(rows)):
+        for j in range(i + 1, len(rows)):
+            a, b = rows[i], rows[j]
+            if not (isinstance(a, dict) and isinstance(b, dict)):
+                continue
+            # 소재를 고정했으면 미는 힘은 당연히 겹친다 — 그때 달라야 하는 것은
+            # 하은이 하는 선택과 그 선택이 없애는 것이다.
+            keys = ((("dilemma", "선택"), ("irreversible", "되돌릴 수 없게 되는 것"))
+                    if fixed_material
+                    else (("pressure_axis", "미는 힘"), ("core_event", "핵심사건")))
+            for key, what in keys:
+                r = webtoon._similarity(webtoon._norm_q(a.get(key)),
+                                        webtoon._norm_q(b.get(key)))
+                if r >= SAME_CANDIDATE:
+                    failures.append(
+                        f"후보 {a.get('label')} 와 {b.get('label')} 의 {what}가 "
+                        f"거의 같습니다. 후보는 서로 다른 축이어야 고를 의미가 "
+                        "있습니다.")
+    return failures
+
+
+# ---------------------------------------------------- 후보 검사 두 패스
+#
+# 후보를 만든 **다음에** 두 번 본다. 만드는 쪽에게 "설정 지켜라" · "처음 보는
+# 독자도 알게 하라" 를 아무리 적어도 안 지켜졌다 — 만드는 쪽은 자기가 아는 것을
+# 독자도 안다고 착각하기 때문이다. 그래서 보는 쪽을 따로 둔다.
+def check_contradictions(caller, ps_dir: Path, card: str, payload: dict, usage):
+    """엔진 카드의 확정 사실과 어긋나는 후보를 잡는다.
+
+    실측 사고: 카드에 "장서우는 하은의 신분을 아는 유일한 인물" 이라고 적혀 있는데
+    후보가 "장서우가 하은의 실명과 얼굴을 확인하려 든다" 라고 썼다. 재미 이전에
+    말이 안 되는 것이고, 회차 단계에는 이 검사(W6)가 있는데 후보 단계에는 없었다.
+    """
+    tmpl = (ps_dir / "candidate_check.txt").read_text(encoding="utf-8")
+    obj, _ = caller.json_call(
+        "W6",
+        story.render(tmpl, {
+            "engine_card": card,
+            "candidates_json": json.dumps(payload, ensure_ascii=False, indent=1),
+        }),
+        story.TEMP_JUDGE, usage)
+    rows = [r for r in (obj.get("contradictions") or []) if isinstance(r, dict)]
+    return [f"후보 {r.get('label')}: 카드는 \"{r.get('card_says')}\" 인데 후보는 "
+            f"\"{r.get('candidate_says')}\" 입니다 — {r.get('why')}" for r in rows]
+
+
+def blind_read(caller, ps_dir: Path, payload: dict, usage):
+    """카드를 **안 보여주고** 장면만 읽힌다. 처음 보는 독자에게 닿는가.
+
+    P3 가 프리미스를 블라인드로 심사하는 것과 같은 원리다. 만든 쪽은 엔진 카드를
+    다 알고 있어서, 장면에 안 적힌 것까지 읽어 버린다 — 그래서 "우리는 아니까
+    잘 읽히는" 후보가 나온다. 여기에는 엔진 카드도 캐릭터 카드도 넣지 않는다.
+    """
+    rows = [c for c in (payload.get("candidates") or []) if isinstance(c, dict)]
+    scenes = "\n\n".join(
+        f"[{c.get('label')}]\n{c.get('core_event')}\n"
+        f"(마지막 장면) {c.get('last_beat')}" for c in rows)
+    tmpl = (ps_dir / "blind_reader.txt").read_text(encoding="utf-8")
+    obj, _ = caller.json_call("W6", story.render(tmpl, {"scenes_text": scenes}),
+                              story.TEMP_JUDGE, usage)
+
+    failures, report = [], []
+    for r in (obj.get("reads") or []):
+        if not isinstance(r, dict):
+            continue
+        label = r.get("label")
+        report.append(r)
+        if r.get("needs_prior_setup"):
+            failures.append(
+                f"후보 {label}: 처음 보는 독자가 이해하려면 앞선 설정이 필요합니다 "
+                f"— \"{r.get('needs_what')}\". 그 사실이 장면 안에서 행동으로 "
+                "드러나게 고치세요.")
+        if not r.get("hides"):
+            failures.append(
+                f"후보 {label}: 처음 보는 독자가 주인공이 무언가를 숨긴다는 것을 "
+                "알아차리지 못했습니다. 숨긴다는 것이 장면의 행동으로 보여야 합니다.")
+        elif not r.get("why_it_matters"):
+            failures.append(
+                f"후보 {label}: 숨긴다는 것은 읽혔지만 **들키면 무슨 일이 나는지**가 "
+                "안 읽혔습니다. 그게 없으면 마지막이 위협으로 안 읽힙니다.")
+        if r.get("unmotivated"):
+            failures.append(
+                f"후보 {label}: 처음 보는 독자에게 어떤 인물이 왜 그러는지 안 "
+                f"보입니다 — \"{r.get('unmotivated')}\". 그 행동의 이유가 장면 "
+                "안에 있어야 합니다. 설정을 아는 사람에게만 그럴듯한 장면입니다.")
+        if not r.get("oh_no"):
+            failures.append(
+                f"후보 {label}: 마지막에 \"큰일 났다\" 가 안 느껴졌습니다 "
+                f"({r.get('oh_no_reason')}).")
+    return failures, report
+
+
+# ---------------------------------------------------------------- 공용
+def load_base(out_root: str, run_id: str) -> dict:
+    base = Path(out_root) / run_id
+    if not base.exists():
+        raise SystemExit(f"run 폴더가 없습니다: {base}")
+    read = lambda n: json.loads((base / n).read_text(encoding="utf-8"))
+    seed = read("seed.json") if (base / "seed.json").exists() else {}
+    meta = read("meta.json")
+    return {
+        "dir": base, "p1": read("p1.json"), "p2": read("p2.json"),
+        "meta": meta, "seed": seed,
+        "idea": meta.get("input", {}).get("one_line", "") or seed.get("one_line", ""),
+    }
+
+
+def make_caller(args):
+    provider, model, judge_model = story.resolve_provider(args)
+    backend = story.MockBackend(provider) if args.mock else story.make_backend(provider)
+    story.describe_setup(provider, model, judge_model, args.mock)
+    return story.Caller(backend, model, judge_model, args.max_tokens), story.Usage()
+
+
+def save_usage(outdir: Path, usage) -> None:
+    # 합계만 남기면 "어느 단계를 몇 번 돌렸나" 를 나중에 증명할 수 없다.
+    prev = {}
+    path = outdir / "usage.json"
+    if path.exists():
+        prev = json.loads(path.read_text(encoding="utf-8"))
+    webtoon.write_json(path, {**usage.as_dict(),
+                             "records": (prev.get("records") or []) + usage.records})
+    c = usage.cost()
+    story.log(f"  호출 {usage.calls}회 · {usage.total:,}토큰 · "
+              f"{story.cost_text(c['usd'])}")
+
+
+# ---------------------------------------------------------------- 1) 후보
+def cmd_candidates(args) -> int:
+    b = load_base(args.out, args.run)
+    caller, usage = make_caller(args)
+    ps_wt = story.load_prompts(contract=webtoon.WEBTOON_CONTRACT)
+
+    outdir = Path(args.result_dir) / f"{time.strftime('%Y%m%dT%H%M%S')}-{args.run[-6:]}"
+    outdir.mkdir(parents=True, exist_ok=True)
+    story.log(f"결과: {outdir}")
+
+    card = strip_scene_block(
+        webtoon.build_engine_card(b["p1"], b["p2"], b["idea"], [], seed=b["seed"]))
+    (outdir / "engine_card.txt").write_text(card, encoding="utf-8")
+    sheet = json.dumps(b["p1"], ensure_ascii=False, separators=(",", ":"))
+
+    # ---- W4 (방향) — 이미 잡아 둔 것이 있으면 다시 안 돈다. 큰 줄거리는 작품에
+    #      한 번 정하는 것이고, 화마다 다시 잡으면 앞 화와 방향이 어긋난다.
+    if args.arcs:
+        arcs_payload = json.loads(Path(args.arcs).read_text(encoding="utf-8"))
+        story.log(f"  W4: 기존 것을 재사용 ({args.arcs})")
+    else:
+        feedback = ""
+        for attempt in range(args.max_retries + 1):
+            arcs_payload, _ = caller.json_call(
+                "W4",
+                story.render(ps_wt.texts["w4"], {
+                    "engine_card": card, "character_sheet": sheet,
+                    "user_memory": "", "retry_feedback": feedback}),
+                story.TEMP_CREATIVE, usage)
+            fails = webtoon.gate_arcs(arcs_payload)
+            if not fails:
+                break
+            story.log(f"  W4 게이트 실패 {len(fails)}건 (시도 {attempt + 1})")
+            for f in fails:
+                story.log(f"      - {f}")
+            feedback = story.feedback_block("\n".join(f"- {f}" for f in fails))
+        else:
+            raise SystemExit("W4 게이트 재시도 소진")
+        story.log(f"  W4 통과: Arc {len(arcs_payload['arcs'])}개")
+    webtoon.write_json(outdir / "arcs.json", arcs_payload)
+    arc1 = arcs_payload["arcs"][0]
+
+    # ---- SCENE (선택) — 1화를 쓰지 않는다. 고를 거리를 만든다.
+    template = (HERE / "prompts" / "scene_candidates.txt").read_text(encoding="utf-8")
+    triggers = [t for t in (b["p1"].get("trigger_situations") or []) if str(t or "").strip()]
+    engine_q = str(b["p2"].get("engine_question") or "")
+
+    fix = ""
+    for attempt in range(args.max_retries + 1):
+        payload, _ = caller.json_call(
+            "SCENE",
+            story.render(template, {
+                "candidate_count": args.n,
+                "material": material_block(args.material),
+                "engine_card": card,
+                "character_sheet": sheet,
+                "arc_json": json.dumps(arc1, ensure_ascii=False, separators=(",", ":")),
+                "user_memory": "",
+                "fix_directive": fix,
+            }),
+            story.TEMP_CREATIVE, usage)
+        fails = gate_candidates(payload, args.n, triggers, engine_q,
+                                fixed_material=bool(str(args.material or "").strip()))
+        blind_report = []
+        if not fails and not args.no_check:
+            fails = check_contradictions(caller, HERE / "prompts", card, payload, usage)
+            if fails:
+                story.log(f"  모순 검사 {len(fails)}건")
+        if not fails and not args.no_check:
+            fails, blind_report = blind_read(caller, HERE / "prompts", payload, usage)
+            webtoon.write_json(outdir / "blind_read.json", {"reads": blind_report})
+            if fails:
+                story.log(f"  블라인드 독자 검사 {len(fails)}건")
+        if not fails:
+            story.log(f"  후보 {args.n}개 통과 (형식 · 모순 · 블라인드 독자)")
+            break
+        story.log(f"  후보 게이트 실패 {len(fails)}건 (시도 {attempt + 1})")
+        for f in fails:
+            story.log(f"      - {f}")
+        fix = story.feedback_block("\n".join(f"- {f}" for f in fails))
+    else:
+        story.log("  ! 게이트를 통과하지 못했지만 마지막 후보를 남깁니다 — 사람이 봅니다.")
+
+    # 어느 run 을 바탕으로 만든 후보인지 같이 남긴다 — 다음 단계가 이걸 보고
+    # p1·p2 를 찾는다. 폴더 이름만으로는 run_id 를 복원할 수 없다.
+    payload["run_id"] = args.run
+    webtoon.write_json(outdir / "candidates.json", payload)
+    (outdir / "candidates.md").write_text(
+        candidates_md(arc1, payload.get("candidates") or []), encoding="utf-8")
+    save_usage(outdir, usage)
+    story.log(f"읽을 것: {outdir / 'candidates.md'}")
+    story.log(f"고른 뒤: python run_experiment.py episode --dir {outdir} --pick A")
+    return 0
+
+
+def material_block(material: str) -> str:
+    """이번 후보를 특정 소재 안에서만 내게 한다.
+
+    소재를 고정하면 "SCENE 이 약한 재료를 줘서 화가 약한 것인가, 재료가 세도
+    집필이 물러나는 것인가" 를 가를 수 있다 — 소재를 그대로 두고 선택과 결과의
+    해상도만 올려서 다시 뽑는다. 안 주면 예전 그대로 자유롭게 낸다.
+    """
+    if not str(material or "").strip():
+        return ""
+    return ("[이번 후보의 소재 — 여기 안에서만 낸다]\n"
+            f"  {material.strip()}\n"
+            "  ★ 소재는 고정이다. 후보끼리 달라야 하는 것은 소재가 아니라\n"
+            "    **하은이 하는 선택과 그 선택이 없애는 것**이다.\n")
+
+
+def candidates_md(arc: dict, rows: list) -> str:
+    out = ["# 1화 핵심사건 후보", "",
+           f"놓이는 자리 — Arc 1. {arc.get('title')}", "",
+           f"- 시작 상태: {arc.get('starts_with')}",
+           f"- 조이는 힘: {arc.get('pressure')}",
+           f"- 끝 상태: {arc.get('ends_with')}", ""]
+    for c in rows:
+        out += [f"## {c.get('label')}. {c.get('core_event')}", "",
+                f"- **마지막 장면**: {c.get('last_beat')}",
+                f"- **대가를 받는 한 사람**: {c.get('witness')}",
+                f"- **쫓기 시작하는 사람**: {c.get('pursuer')}",
+                f"- **마지막에 독자가 처음 아는 것**: {c.get('reader_learns_last')}",
+                f"- **주인공만 모르는 것**: {c.get('hero_doesnt_know')}",
+                f"- **새로 생긴 미스터리**: {c.get('new_mystery')}",
+                f"- **예상 밖의 것**: {c.get('surprise')}",
+                "",
+                f"- **짜릿한 자리**: {c.get('payoff')}",
+                f"- **그게 그대로 대가가 되는 방식**: {c.get('payoff_is_the_price')}",
+                f"- **선택**: {c.get('dilemma')}",
+                f"  - 행동하면: {c.get('cost_if_acts')}",
+                f"  - 안 하면: {c.get('cost_if_refuses')}",
+                f"- 터뜨리는 모순: {c.get('contradiction')}",
+                f"- 미는 힘: {c.get('pressure_axis')}",
+                f"- 되돌릴 수 없게 되는 것: {c.get('irreversible')}",
+                f"- 직후 질문: {c.get('question_after')}",
+                f"- 왜 뻔하지 않은가: {c.get('why_not_safe')}", ""]
+    return "\n".join(out) + "\n"
+
+
+# ---------------------------------------------------------------- 2) 1화
+def cmd_episode(args) -> int:
+    outdir = Path(args.dir)
+    cands = json.loads((outdir / "candidates.json").read_text(encoding="utf-8"))
+    arcs_payload = json.loads((outdir / "arcs.json").read_text(encoding="utf-8"))
+    arcs = arcs_payload["arcs"]
+    arc1 = arcs[0]
+
+    picked = next((c for c in cands["candidates"]
+                   if str(c.get("label")).strip().upper() == args.pick.strip().upper()),
+                  None)
+    if picked is None:
+        raise SystemExit(f"후보 {args.pick} 를 못 찾았습니다: "
+                         f"{[c.get('label') for c in cands['candidates']]}")
+    story.log(f"고른 후보 {picked.get('label')}: {str(picked.get('core_event'))[:50]}…")
+
+    run_id = args.run or cands.get("run_id")
+    if not run_id:
+        raise SystemExit("바탕 run_id 를 모릅니다. --run 으로 주세요.")
+    b = load_base(args.out, run_id)
+    caller, usage = make_caller(args)
+    ps_wt = story.load_prompts(contract=webtoon.WEBTOON_CONTRACT)
+
+    card = card_with_core_event(
+        webtoon.build_engine_card(b["p1"], b["p2"], b["idea"], [], seed=b["seed"]),
+        picked)
+    (outdir / "engine_card_w5.txt").write_text(card, encoding="utf-8")
+
+    ledger = webtoon.Ledger(str(b["p2"].get("engine_question") or ""))
+    state = webtoon.SeriesState(run_id=b["meta"]["run_id"])
+    state.seed_cast(b["p1"].get("supporting_cast"))
+
+    feedback = ""
+    episode = None
+    for attempt in range(args.max_retries + 1):
+        one, _ = caller.json_call(
+            "W5",
+            story.render(ps_wt.texts["w5"], {
+                "engine_card": card,
+                "series_arc": webtoon.series_arc_block(arcs, arc1),
+                "arc_json": json.dumps(arc1, ensure_ascii=False, separators=(",", ":")),
+                "series_state": state.brief(ledger),
+                "user_memory": "",
+                "retry_feedback": feedback,
+            }),
+            story.TEMP_CREATIVE, usage)
+        # 코드로 볼 수 있는 것만 본다. 내용 판정(W6)은 이 실험의 범위가 아니다.
+        ep_payload = {"arc_order": arc1.get("order"), "episodes": [one]}
+        webtoon.assign_ids(ep_payload, ledger)
+        fails = webtoon.gate_episodes_shape(ep_payload, ledger, None, None)
+        # 고른 후보에는 언제나 딜레마가 있다. 그러니 이 실험에서는 price_paid 가
+        # **비어 있는 것 자체가 실패**다 — 하네스 게이트는 옛 run 을 위해 빈 칸을
+        # 통과시키지만, 여기서는 값을 안 치른 화가 그 경로로 빠져나가면 안 된다.
+        paid = one.get("price_paid") if isinstance(one, dict) else None
+        if not (isinstance(paid, dict) and str(paid.get("what") or "").strip()):
+            fails = fails + [
+                "price_paid 가 비어 있습니다. 이 화에는 「~하면 …을 잃고, "
+                "~하지 않으면 …을 잃는다」가 걸려 있으므로, 둘 중 하나를 이 화 "
+                "안에서 실제로 치러야 합니다."]
+        episode = one
+        if not fails:
+            story.log(f"  1화 형식 게이트 통과 · 「{one.get('title')}」")
+            break
+        story.log(f"  1화 형식 게이트 실패 {len(fails)}건 (시도 {attempt + 1})")
+        for f in fails:
+            story.log(f"      - {f}")
+        feedback = story.feedback_block("\n".join(f"- {f}" for f in fails))
+
+    tag = f"_{args.tag}" if args.tag else ""
+    webtoon.write_json(outdir / f"episode1{tag}.json", episode)
+    (outdir / f"episode1{tag}.md").write_text(
+        episode_md(picked, episode), encoding="utf-8")
+    save_usage(outdir, usage)
+    story.log(f"읽을 것: {outdir / ('episode1' + tag + '.md')}")
+    return 0
+
+
+def episode_md(picked: dict, e: dict) -> str:
+    out = [f"# 1화 — {e.get('title')}", "",
+           f"고른 핵심사건 ({picked.get('label')}): {picked.get('core_event')}", "",
+           "## 줄거리", "", str(e.get("summary") or ""), ""]
+    why = e.get("why_now") or {}
+    if why:
+        out += ["## 왜 지금 이 행동인가", "",
+                f"- 행동: {why.get('action')}",
+                f"- 이유: {why.get('reason')}",
+                f"- 화면에 보이는 근거: {why.get('shown_by')}", ""]
+    paid = e.get("price_paid") or {}
+    if any(str(paid.get(k) or "").strip() for k in ("what", "shown_by", "instead_of")):
+        out += ["## 이 화가 치른 값", "",
+                f"- 잃은 것: {paid.get('what')}",
+                f"- 화면에 보이는 것: {paid.get('shown_by')}",
+                f"- 대신 피한 것: {paid.get('instead_of')}", ""]
+    st = e.get("setting") or {}
+    if st:
+        out += ["## 무대", "", "| | |", "| --- | --- |"]
+        for k, label in (("place", "장소"), ("time", "시간"), ("weather", "날씨"),
+                         ("light", "빛"), ("props", "소품"), ("movement", "동선")):
+            v = st.get(k)
+            if v:
+                out.append(f"| {label} | "
+                           f"{', '.join(map(str, v)) if isinstance(v, list) else v} |")
+        out.append("")
+    if e.get("beats"):
+        out += ["## 핵심 행동", ""] + [f"{i}. {x}" for i, x in enumerate(e["beats"], 1)] + [""]
+    out += ["## 이 화가 연 질문", ""]
+    for q in e.get("questions_opened") or []:
+        out.append(f"- {q.get('text') if isinstance(q, dict) else q}"
+                   f"{' · ' + q.get('type') if isinstance(q, dict) and q.get('type') else ''}")
+    stg = e.get("stinger") or {}
+    if stg:
+        out += ["", "## 스팅어", "",
+                str(stg.get("text") if isinstance(stg, dict) else stg)]
+    return "\n".join(out) + "\n"
+
+
+# ---------------------------------------------------------------- CLI
+def main() -> int:
+    ap = argparse.ArgumentParser(description="P1 → P2 → W4 → SCENE(후보) → W5")
+    ap.add_argument("--out", default=str(STORY / "runs"), help="story runs 폴더")
+    ap.add_argument("--result-dir", default=str(HERE / "out"))
+    ap.add_argument("--provider", choices=("anthropic", "gemini", "openai"))
+    ap.add_argument("--model")
+    ap.add_argument("--judge-model")
+    ap.add_argument("--max-tokens", type=int, default=8000)
+    ap.add_argument("--max-retries", type=int, default=2)
+    ap.add_argument("--mock", action="store_true")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    c = sub.add_parser("candidates", help="1화 핵심사건 후보를 만든다")
+    c.add_argument("--run", required=True, help="바탕이 되는 story run_id")
+    c.add_argument("--arcs", help="이미 잡아 둔 arcs.json (있으면 W4 를 안 돈다)")
+    c.add_argument("-n", type=int, default=4, help="후보 개수 (기본 4)")
+    c.add_argument("--no-check", action="store_true",
+                   help="모순 검사·블라인드 독자 검사를 건너뛴다 (호출 2회 절약)")
+    c.add_argument("--material", default="",
+                   help="후보를 낼 소재를 고정한다 (예: \"긴급 게이트 출동\"). "
+                        "재료를 고정하고 선택·결과의 해상도만 볼 때 쓴다")
+    c.set_defaults(func=cmd_candidates)
+
+    e = sub.add_parser("episode", help="고른 후보로 1화를 쓴다")
+    e.add_argument("--dir", required=True, help="candidates 가 만든 결과 폴더")
+    e.add_argument("--pick", required=True, help="후보 label (A/B/C/D)")
+    e.add_argument("--run", help="바탕 run_id (기본: candidates.json 에 적힌 것)")
+    e.add_argument("--tag", default="", help="결과 파일 이름 뒤에 붙일 꼬리표 "
+                                            "(앞 판을 안 덮어쓰려면)")
+    e.set_defaults(func=cmd_episode)
+
+    args = ap.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

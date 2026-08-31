@@ -281,10 +281,30 @@ def select_style(cfg: dict[str, Any], wanted: str | None) -> str:
     읽어 간다. 그래서 문구를 직접 적게 두지 않고 이름으로만 고르게 한다 —
     두 하네스가 "romance" 라는 같은 말을 쓸 수 있어야 대조가 성립한다.
     """
+    # v2 계약이면 styles_v2 가 styles 를 덮는다. 덮지 않은 그림체는 그대로 쓴다 —
+    # 일곱 개를 한 번에 다시 쓰지 않아도 되게 한 자리다(config 주석 참고).
+    # v1 이면 아래 두 값을 통째로 안 본다: 옛 run 은 한 글자도 안 바뀐다.
+    contract = str(cfg.get("style_contract") or "v1").strip().lower()
+    table_in = dict(cfg.get("styles") or {})
+    if contract == "v2":
+        for key, value in (cfg.get("styles_v2") or {}).items():
+            if not value:
+                continue
+            base = table_in.get(str(key))
+            # **변형은 키 단위로 덮는다.** 표를 통째로 갈면 v2 가 안 적은 변형이
+            # 사라진다 — webtoon/cinematic 은 sd(개그컷)·emphasis(강조컷)를 갖고
+            # 있어서, normal 하나만 적은 v2 로 갈아치우면 그 두 연출이 죽는다.
+            if isinstance(base, dict) and isinstance(value, dict):
+                merged = dict(base)
+                merged.update(value)
+                table_in[str(key)] = merged
+            else:
+                table_in[str(key)] = value
+
     # 값은 문자열 하나이거나 {render_style: 문구} 표다. 표일 때는 normal 이 대표값.
     styles: dict[str, str] = {}
     variants: dict[str, dict[str, str]] = {}
-    for key, value in (cfg.get("styles") or {}).items():
+    for key, value in table_in.items():
         if isinstance(value, dict):
             table = {str(k).strip().lower(): str(v or "").strip()
                      for k, v in value.items() if str(v or "").strip()}
@@ -319,6 +339,12 @@ def select_style(cfg: dict[str, Any], wanted: str | None) -> str:
             f"        등록된 그림체: {', '.join(styles)}")
     # 컷의 render_style 마다 통째로 다른 문구를 쓴다. 접미사를 덧붙이는 구조로는
     # 셋이 결국 같은 그림체로 보였다.
+    # 공통 계약(style_common)은 여기서 안 붙인다. 프롬프트 **맨 끝**에 붙는다
+    # (scenegen.style_common_tail). 2026-08-27 에 여기서 앞에 붙여 봤다가 되돌린
+    # 자리다 — 앞에 두면 뒤따르는 장면 서술(영화 언어: "먼지가 깔린 폐허",
+    # "석양이 잔해를 비춘다")에 그대로 덮여서, 오히려 안 붙인 것보다 배경이
+    # 빽빽해졌다. 이 파일의 head_ratio_tail 주석이 이미 같은 말을 하고 있다:
+    # 뒤에 온 것이 앞의 그림체 문구를 덮는다.
     cfg["style_variants"] = variants.get(name, {})
     return styles[name]
 
@@ -330,11 +356,14 @@ def style_name_of(cfg: dict[str, Any], suffix: str) -> str:
     돌려주는 것도 그 값이므로 여기서도 normal 과 맞춰 본다. 표 전체를 문자열로
     바꿔 비교하면 어떤 이름과도 맞지 않아 "(styles 표에 없음)" 이 뜬다.
     """
-    for k, v in (cfg.get("styles") or {}).items():
-        if isinstance(v, dict):
-            v = (v.get("normal") or "")
-        if str(v or "").strip() == suffix.strip():
-            return str(k)
+    text = suffix.strip()
+    # v2 로 덮은 그림체가 먼저다 — 지금 실제로 쓰인 문구가 그쪽이기 때문이다.
+    for table_key in ("styles_v2", "styles"):
+        for k, v in (cfg.get(table_key) or {}).items():
+            if isinstance(v, dict):
+                v = (v.get("normal") or "")
+            if str(v or "").strip() == text:
+                return str(k)
     return "(styles 표에 없음)"
 
 
@@ -1760,6 +1789,31 @@ def group_scenes(cfg: dict[str, Any], ep: storyload.Episode,
     """컷을 Scene 으로 묶는다. 세 곳(본 생성 · verify-all · probe)이 같이 쓴다."""
     per = int(cfg["scene"]["cuts_per_scene"])
     max_per = int(cfg["scene"].get("max_cuts_per_scene") or 0)
+
+    # 9단계(페이지 편집)가 화면 묶음을 정해 줬으면 **그것을 그대로 쓴다.**
+    # 아래 세 모드는 전부 규칙 하나가 기계적으로 정하는 것이다 — scene_break 가
+    # 정하거나(direction), 무게가 정하거나(weight), 개수가 정한다(fixed).
+    # 9단계는 그 값들을 **같이 보고** 판단하라고 만든 자리라, 있으면 그쪽이 낫다.
+    # 없으면(9단계가 없던 옛 run, 또는 게이트를 못 넘겨 비워 온 화) 예전 규칙으로
+    # 돌아간다 — 그래서 옛 run 은 한 장도 안 바뀐다.
+    if getattr(ep, "pages", None):
+        by_num = {c.get("cut_number"): c for c in base if isinstance(c, dict)}
+        out: list[scenegen.Scene] = []
+        for i, page in enumerate(ep.pages, 1):
+            rows = [by_num[n] for n in (page.get("cuts") or []) if n in by_num]
+            if not rows:
+                continue
+            sc = scenegen.Scene(scene_number=len(out) + 1, cuts=rows)
+            # 바탕 컷은 9단계가 골랐다. layout_text 가 크기로 다시 고르지 않게
+            # 여기서 실어 보낸다(scenegen.base_index 참고).
+            sc.base_cut = page.get("base")
+            out.append(sc)
+        if out:
+            print(f"[scene_gen] 9단계 화면 묶음 사용 — {len(out)}장 "
+                  + " | ".join("+".join(str(n) for n in s.cut_numbers) for s in out))
+            return out
+        print("[scene_gen] 9단계 화면 묶음이 비어 하네스 규칙으로 묶습니다.")
+
     mode = grouping_mode(cfg, ep)
     if mode == "weight":
         # 개수가 아니라 무게가 정한다 — 무거운(full) 컷은 혼자 한 장.

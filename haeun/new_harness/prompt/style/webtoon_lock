@@ -1,0 +1,182 @@
+**실험용 그림체다.** `romance`/`frost`/`romance_fantasy`를 대체하지 않는다 — 사용자가
+ChatGPT로 따로 설계한 "CLEAN WEBTOON STYLE LOCK" 프롬프트를 그대로 옮긴 것.
+핵심은 파스텔 색감이 아니라 **깔끔한 선화 + 평면적인 색면 + 얕은 셀 명암 +
+웹툰식 생략**이다. 색은 장면에 따라 달라져도(로맨스는 파스텔, 공포는
+어두운 색, 액션은 강한 대비) 선화·채색법·명암법·디테일 밀도는 고정으로
+유지하는 것이 이 그림체의 목적이다.
+
+주의: 컷마다 붙는 장면 설명 프롬프트 쪽에 "beautiful detailed illustration",
+"high-end fantasy artwork", "cinematic", "highly detailed" 같은 화려한 수식어를
+따로 덧붙이지 않는다 — 이 한 마디가 아래 그림체를 다시 일러스트 쪽으로
+되돌릴 수 있다. (`prompt/image_prompt*`, `prompt/detail_prompt` 확인 결과
+2026-08-30 기준 이런 문구는 없다.)
+
+Korean webtoon comic artwork, consistent serialized webtoon art style.
+
+CLEAN WEBTOON STYLE LOCK:
+
+The image must look like a finished panel from a professionally serialized
+Korean webtoon, not like an anime illustration, concept art, game artwork, or
+fantasy key visual.
+
+Use clean, controlled 2D digital lineart as the foundation of the artwork.
+Thin to medium-weight outlines with smooth, confident, deliberate strokes.
+Clear silhouettes and readable shapes.
+Lineart should remain visible and important throughout the image.
+
+Use clean flat colors with clearly separated color areas.
+Use simple cel shading with only a small number of shadow shapes.
+Keep shading shallow and economical.
+Use soft gradients only when absolutely necessary.
+Avoid complex multi-layer rendering.
+
+Characters should have attractive but natural Korean webtoon facial features.
+Expressive eyes and eyebrows.
+Delicate eyelashes.
+Simple, readable noses and lips.
+Facial expressions should communicate emotion clearly.
+Allow natural webtoon-style exaggeration of facial expressions when appropriate.
+
+Hair should be drawn as large coherent masses with a limited number of
+intentional strand lines.
+Do not render individual hairs.
+Hair should have simple color separation and restrained highlights.
+
+Clothing should use clear silhouettes and simplified folds.
+Show only the folds necessary to communicate the material, pose, and movement.
+Avoid excessive fabric texture or microscopic detail.
+
+Use simplified but convincing anatomy and natural proportions.
+Hands, faces, body poses, and gestures should remain readable and expressive.
+
+BACKGROUND STYLE:
+
+Backgrounds should support the scene rather than compete with the characters.
+Use simplified environmental shapes, clean perspective, and selective detail.
+Include enough environmental information to establish the location and
+atmosphere, but intentionally omit unnecessary details.
+
+Do not make every background object highly detailed.
+Distant people and objects may be simplified.
+Backgrounds should have lower visual complexity than the main characters.
+
+COLOR STYLE:
+
+Clean harmonious colors.
+Soft pastel-leaning colors when appropriate to the scene.
+Moderate saturation.
+Clear color separation.
+Limited color variation within each object.
+Avoid excessive gradients and color noise.
+
+LIGHTING:
+
+Simple, natural 2D webtoon lighting.
+One clear primary lighting direction.
+Simple shadow shapes.
+Subtle ambient light.
+No dramatic cinematic lighting.
+No excessive glow or volumetric effects.
+
+OVERALL VISUAL PRIORITY:
+
+1. Character acting and facial expression
+2. Clear lineart
+3. Character silhouette and pose
+4. Clean color blocks
+5. Simple cel shading
+6. Composition
+7. Background information
+
+The artwork should feel intentionally simplified and confident, not sloppy —
+but "confident" means economical drawing, not uniform polish. See "WEBTOON
+DRAWING ECONOMY" below.
+
+Beauty should come from character design, facial expression, line quality,
+composition, and color harmony, not from excessive rendering or visual
+effects.
+
+Maintain the same drawing language, line quality, shading method, color
+treatment, facial rendering, hair rendering, and background simplification
+throughout the entire image.
+
+The final result should feel like: "a real panel taken directly from a
+Korean webtoon episode." NOT: "an anime illustration made to look like a
+webtoon."
+
+WEBTOON DRAWING ECONOMY:
+
+The artwork must NOT look uniformly polished.
+
+Use intentional visual simplification throughout the panel.
+Not every object needs complete rendering.
+
+Prioritize the main character and the current action.
+Reduce detail progressively in secondary characters, background objects,
+architecture, decorations, and distant elements.
+
+Some areas should contain only simple shapes and a few lines.
+Do not fully render every visible object.
+
+Faces should use economical drawing.
+Do not perfect facial symmetry.
+Do not over-render the eyes.
+Do not add excessive eyelashes, iris details, highlights, or skin rendering.
+
+Hair should be drawn in broad masses with a few structural lines.
+Avoid individually describing every strand.
+
+Clothing should be communicated through silhouette and a small number of
+meaningful folds rather than complete fabric rendering.
+
+Backgrounds should feel like backgrounds in an actual comic panel:
+recognizable and atmospheric, but selectively unfinished and simplified.
+
+Allow subtle variation in line weight.
+Some contour lines may be lighter or disappear where appropriate.
+Do not make every contour equally crisp.
+
+The goal is not maximum visual polish.
+The goal is efficient visual storytelling.
+
+IMPORTANT: Do not make every part of the image equally beautiful or equally
+detailed.
+
+The viewer's eye should naturally move: main character → expression/action
+→ supporting elements → background.
+
+The panel should feel drawn for sequential storytelling, not designed as a
+standalone illustration.
+
+## 하지 마라
+
+- perfect facial symmetry, perfectly polished character rendering, uniform
+  detail density, uniform line precision, uniform sharpness
+- every object fully rendered, decorative over-rendering
+- illustration-like composition, poster-like composition, showcase artwork,
+  splash-art composition
+
+- anime illustration, anime key visual, character illustration, character
+  splash art, fantasy key visual, game artwork, concept art, artbook
+  illustration, poster illustration
+- highly rendered, over-rendered, hyper detailed, ultra detailed,
+  photorealistic, semi-photorealistic, 3D render, painterly, oil painting,
+  watercolor
+- excessive rendering, complex rendering, multiple layers of shading,
+  realistic shading, dramatic shading, deep shadows, strong gradients,
+  airbrush rendering
+- glossy skin, plastic skin, wet skin, excessive skin highlights, excessive
+  blush, excessive eye shine, jewel-like eyes, glass-like eyes
+- individual hair strands, hyper-detailed hair, excessive hair highlights,
+  glossy hair
+- intricate clothing details, excessive fabric folds, fabric texture,
+  microscopic details
+- overly detailed background, intricate background, background full of
+  details, hyper-detailed architecture, excessive decorations, excessive
+  particles, excessive flowers
+- cinematic lighting, dramatic lighting, volumetric lighting, god rays, rim
+  lighting, lens flare, bloom, glow effects, sparkles everywhere
+- AI art aesthetic, generic anime aesthetic, AI-generated illustration look,
+  mobile game illustration, fantasy promotional artwork
+- thick black outlines, messy lineart, rough sketch, unfinished sketch,
+  lineless painting

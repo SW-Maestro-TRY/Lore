@@ -1,0 +1,481 @@
+"""new_harness 연결 — 최소 실험 경로.
+
+pipeline.py 의 5단계(story-harness+webtoon-harness) 흐름과는 **별도 경로**다.
+new_harness 는 이야기·콘티·시트·그림을 run.py 하나 안에서 끝내는 단일
+파이프라인이라 pipeline.py 의 STAGE_SPEC(look/seed/card/...)이 안 맞고,
+산출물 단위(컷/장면이 아니라 페이지)도 달라서 같은 Job 을 못 쓴다.
+
+## 왜 run.py 를 세 번 나눠 부르는가
+
+`run.py --run-id <id> --pick <n> --all` 을 그대로 쓰면 안 된다 — run.py 의
+main() 은 `new_run or args.all` 이면 무조건 이야기 단계(stage_story)부터 다시
+돈다. run_id 로 이어 하는 중이라도 `--all` 을 주는 순간 이미 고른 방향과
+무관하게 새 이야기 후보 4개를 다시 뽑는다(실제로 읽어서 확인함, 2026-08-31).
+그래서 이어할 때는 `--all` 을 아예 안 쓰고, 세 번으로 나눈다:
+
+    1. `--character <path>`           이야기 후보 4개 (사람이 고를 것)
+    2. `--run-id <id> --pick <n>`      (--all 없이) 구체화 + 콘티만
+    3. `--run-id <id> --sheet --pages` 시트 + 페이지 그림 (한 호출 안에서
+                                       시트가 먼저 돌아 pages 가 참조로 쓴다)
+
+이렇게 나누면 1번에서 보여준 후보 그대로 2번이 고르고, 이야기가 두 번
+불리지 않는다.
+
+## 편집실(overlay) 연동에 대해
+
+처음엔 new_harness 가 대사를 이미지에 직접 그려 넣는 것(README 의 미해결
+경고)을 이유로 편집실 연동을 미뤘는데, 확인해 보니 전제가 틀렸다 —
+overlay.py 는애초에 밑그림에 빈 자리가 있어야 한다는 가정이 없다. 편집실이
+얹는 말풍선·스티커는 **밑그림과 무관하게 화면 퍼센트 좌표(x·y·w)로 그
+위에 그냥 올라간다** (`overlay.render_scene`) — 지금 webtoon-harness 화도
+대사를 그림에 그대로 생성하고 그 위에 편집실로 덧대는 것과 같은 방식이다.
+그래서 new_harness 의 "페이지"를 pipeline.py 의 "장(scene)"과 똑같이 —
+번호 매겨진 밑그림 한 장으로만— 취급하면 overlay.py 를 그대로 재사용할 수
+있다. new_harness 코드는 한 줄도 안 고쳤다.
+
+## 지금 안 하는 것
+
+전문/일반 모드, 이어 그리기·이어 만들기(다음 화)는 없다. 다시 그리기(regen,
+장 하나만 다른 프롬프트로 다시 그리는 것)도 없다 — new_harness 는 페이지
+단위 호출이라 그 컷만 다시 그리는 개념이 없고, 페이지 전체를 다시 그리려면
+비용이 pipeline.py 의 regen보다 크다.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable
+
+import overlay                      # 편집실 렌더링·굽기 재사용 (그대로, 안 고침)
+import pipeline as classic          # write_character() 재사용 — 폼 -> character.json
+
+HERE = Path(__file__).resolve().parent
+JOBS_DIR = HERE / "jobs_nh"
+NEW_HARNESS = HERE.parent / "new_harness"
+
+STATUS_QUEUED = "queued"
+STATUS_RUNNING = "running"
+STATUS_AWAITING_PICK = "awaiting_pick"
+STATUS_DONE = "done"
+STATUS_ERROR = "error"
+
+# 화면에 보여줄 단계. new_harness 내부 단계 이름과 같다 — 세부 스텝(예:
+# pipeline.py 의 look/seed/card...)까지는 안 쪼갠다, 신호가 그만큼 없다.
+STAGES = ("story", "board", "sheet", "pages")
+STAGE_LABEL = {
+    "story": "이야기 설계", "board": "콘티 · 구체화",
+    "sheet": "캐릭터 시트", "pages": "페이지 그림",
+}
+
+# "[페이지 3/7] 컷 2개 · 참조 2장 …" — pageart.draw() 가 찍는 줄 (pageart.py:116).
+RE_PAGE = re.compile(r"^\[페이지 (\d+)/(\d+)\]")
+# "run: /.../runs/20260831T000249-10322f" — run.py:1141.
+RE_RUN_ID = re.compile(r"^run: .*[/\\]([^/\\]+)\s*$")
+
+
+@dataclass
+class NHJob:
+    id: str
+    form: dict[str, Any]
+    dir: Path
+    status: str = STATUS_QUEUED
+    run_id: str | None = None
+    error: str | None = None
+    directions: list[dict] = field(default_factory=list)
+    pick: int | None = None
+    stage: str = "story"
+    art_done: int = 0
+    art_total: int = 0
+    log: list[str] = field(default_factory=list)
+    started_at: float | None = None
+    finished_at: float | None = None
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
+    _proc: subprocess.Popen | None = field(default=None, repr=False, compare=False)
+    _cancel: bool = field(default=False, repr=False, compare=False)
+
+    # ---- 로그·상태 ---------------------------------------------------------- #
+
+    def add_log(self, line: str) -> None:
+        with self._lock:
+            self.log.append(line)
+            if len(self.log) > 400:
+                del self.log[:100]
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            art = None
+            if self.art_total:
+                art = {"done": self.art_done, "total": self.art_total}
+            stage_i = STAGES.index(self.stage) if self.stage in STAGES else 0
+            frac = (self.art_done / self.art_total) if self.art_total else 0.0
+            pct = round((stage_i + frac) / len(STAGES) * 100) if self.status != "done" else 100
+            return {
+                "id": self.id,
+                "status": self.status,
+                "run_id": self.run_id,
+                "error": self.error,
+                "directions": self.directions,
+                "pick": self.pick,
+                "stage": self.stage,
+                "stage_index": stage_i,
+                "stages": list(STAGES),
+                "stage_label": STAGE_LABEL.get(self.stage, self.stage),
+                "pct": max(0, min(100, pct)),
+                "art": art,
+                "log": self.log[-60:],
+                "elapsed": round((self.finished_at or time.time())
+                                 - self.started_at, 1) if self.started_at else 0,
+            }
+
+    def save(self) -> None:
+        try:
+            (self.dir / "state.json").write_text(json.dumps({
+                "id": self.id, "status": self.status, "run_id": self.run_id,
+                "error": self.error, "form": self.form,
+                "directions": self.directions, "pick": self.pick,
+            }, ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+
+    # ---- 실행 ---------------------------------------------------------------- #
+
+    def _env(self) -> dict[str, str]:
+        env = dict(os.environ)
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
+        return env
+
+    def _run(self, args: list[str], on_line: Callable[[str], None]) -> int:
+        display = " ".join(["python", "run.py", *args])
+        self.add_log(f"$ {display}")
+        with (self.dir / "log.txt").open("a", encoding="utf-8") as fh:
+            fh.write(f"\n$ {display}\n")
+        proc = subprocess.Popen(
+            [sys.executable, "-u", "run.py", *args], cwd=str(NEW_HARNESS),
+            env=self._env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace", bufsize=1)
+        self._proc = proc
+        with (self.dir / "log.txt").open("a", encoding="utf-8") as fh:
+            for raw in proc.stdout:                    # type: ignore[union-attr]
+                line = raw.rstrip("\n")
+                fh.write(line + "\n")
+                if line.strip():
+                    self.add_log(line)
+                    on_line(line)
+        self._proc = None
+        return proc.wait()
+
+    def _stitch(self) -> tuple[bool, str]:
+        result = subprocess.run(
+            [sys.executable, "-u", "stitch.py", "--run-id", self.run_id],
+            cwd=str(NEW_HARNESS), env=self._env(), capture_output=True,
+            text=True, encoding="utf-8", errors="replace")
+        out = (result.stdout or "").strip()
+        if out:
+            self.add_log(out)
+        if result.returncode != 0:
+            err = (result.stderr or "").strip()
+            if err:
+                self.add_log(err)
+            return False, err or "이어 붙이기가 실패했습니다"
+        return True, ""
+
+    def cancel(self) -> None:
+        self._cancel = True
+        proc = self._proc
+        if proc and proc.poll() is None:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
+
+
+def _on_rest_line(job: NHJob, line: str) -> None:
+    """2·3단계 진행 중 stdout 한 줄 -> 화면에 보여줄 단계(job.stage) 갱신."""
+    if line.startswith("[콘티]") or line.startswith("[구체화]"):
+        job.stage = "board"
+    elif line.startswith("[시트]"):
+        job.stage = "sheet"
+    elif line.startswith("[페이지"):
+        job.stage = "pages"
+    m = RE_PAGE.match(line)
+    if m:
+        job.art_done = int(m.group(1)) - 1
+        job.art_total = int(m.group(2))
+
+
+def _extract_run_id(job: NHJob) -> str | None:
+    for line in job.log:
+        m = RE_RUN_ID.match(line)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _fail(job: NHJob, message: str) -> None:
+    job.status = STATUS_ERROR
+    job.error = message
+    job.save()
+
+
+def _run_story_phase(job: NHJob) -> None:
+    """1단계 — 이야기 후보 4개. 사람이 고를 때까지 여기서 멈춘다."""
+    job.status = STATUS_RUNNING
+    job.started_at = time.time()
+    job.save()
+    try:
+        char_path = job.dir / "character.json"
+        code = job._run(["--character", str(char_path)], lambda _line: None)
+        if job._cancel:
+            return _fail(job, "취소되었습니다")
+        if code != 0:
+            return _fail(job, "이야기 후보를 만들지 못했습니다 — 로그를 확인하세요")
+
+        run_id = _extract_run_id(job)
+        if not run_id:
+            return _fail(job, "run_id 를 읽지 못했습니다")
+        job.run_id = run_id
+
+        directions_path = NEW_HARNESS / "runs" / run_id / "directions.json"
+        if not directions_path.exists():
+            return _fail(job, "이야기 후보 파일이 없습니다")
+        directions = json.loads(directions_path.read_text(encoding="utf-8"))
+        if not directions:
+            return _fail(job, "이야기 후보를 하나도 못 읽었습니다 — story.md 를 확인하세요")
+
+        job.directions = directions
+        job.status = STATUS_AWAITING_PICK
+        job.save()
+    except Exception as exc:                            # noqa: BLE001
+        _fail(job, f"{type(exc).__name__}: {exc}")
+
+
+def _run_rest_phase(job: NHJob) -> None:
+    """2·3단계 — 고른 방향으로 구체화+콘티, 그다음 시트+페이지, 그리고 이어붙이기."""
+    job.status = STATUS_RUNNING
+    job.save()
+    try:
+        job.stage = "board"
+        code = job._run(["--run-id", job.run_id, "--pick", str(job.pick)],
+                        lambda line: _on_rest_line(job, line))
+        if job._cancel:
+            return _fail(job, "취소되었습니다")
+        if code != 0:
+            return _fail(job, "콘티를 만들지 못했습니다 — 로그를 확인하세요")
+
+        code = job._run(["--run-id", job.run_id, "--sheet", "--pages"],
+                        lambda line: _on_rest_line(job, line))
+        if job._cancel:
+            return _fail(job, "취소되었습니다")
+        if code != 0:
+            return _fail(job, "시트나 그림을 만들지 못했습니다 — 로그를 확인하세요")
+
+        ok, err = job._stitch()
+        if not ok:
+            return _fail(job, err)
+
+        job.art_done = job.art_total
+        job.status = STATUS_DONE
+        job.finished_at = time.time()
+        job.save()
+    except Exception as exc:                            # noqa: BLE001
+        _fail(job, f"{type(exc).__name__}: {exc}")
+
+
+class NHRunner:
+    """job 저장소. 클래식 Runner 와 달리 큐를 안 둔다 — 실험 단계라 동시 실행
+    제한(비용 폭주 방지)은 나중에 트래픽이 생기면 그때 넣는다."""
+
+    def __init__(self) -> None:
+        self.jobs: dict[str, NHJob] = {}
+        JOBS_DIR.mkdir(parents=True, exist_ok=True)
+
+    def get(self, job_id: str) -> NHJob | None:
+        return self.jobs.get(job_id)
+
+    def create(self, form: dict[str, Any], photos: list[bytes]) -> NHJob:
+        job_id = uuid.uuid4().hex[:12]
+        job_dir = JOBS_DIR / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        for i, raw in enumerate(photos, 1):
+            (job_dir / f"photo{i}.png").write_bytes(raw)
+        classic.write_character(job_dir, form)
+
+        job = NHJob(id=job_id, form=form, dir=job_dir)
+        self.jobs[job_id] = job
+        job.save()
+        threading.Thread(target=_run_story_phase, args=(job,), daemon=True).start()
+        return job
+
+    def pick(self, job_id: str, n: int) -> NHJob:
+        job = self.jobs.get(job_id)
+        if not job:
+            raise KeyError(job_id)
+        if job.status != STATUS_AWAITING_PICK:
+            raise ValueError("지금은 방향을 고를 수 없습니다")
+        if not any(d.get("n") == n for d in job.directions):
+            raise ValueError(f"방향 {n} 이 없습니다")
+        job.pick = n
+        job.save()
+        threading.Thread(target=_run_rest_phase, args=(job,), daemon=True).start()
+        return job
+
+
+# --------------------------------------------------------------------------- #
+# run_id 로 산출물 찾기 — job 없이도(완성된 뒤 다시 열 때) 쓸 수 있게 job 을
+# 안 받는다. 편집실(overlay)이 이 함수들로 밑그림을 찾는다.
+# --------------------------------------------------------------------------- #
+
+def run_dir(run_id: str) -> Path:
+    return NEW_HARNESS / "runs" / run_id
+
+
+def page_numbers(run_id: str) -> list[int]:
+    """이 run 의 페이지 번호(1..N). pages.json 을 우선 보고, 없으면 실제로
+    그려진 파일 수로 판단한다(진행 중에 편집실을 미리 열어도 개수가 맞게)."""
+    d = run_dir(run_id)
+    try:
+        pages = json.loads((d / "pages.json").read_text(encoding="utf-8"))
+        if pages:
+            return list(range(1, len(pages) + 1))
+    except (OSError, ValueError):
+        pass
+    files = sorted((d / "pages").glob("page*.png")) if (d / "pages").exists() else []
+    return list(range(1, len(files) + 1))
+
+
+def unit_image(run_id: str, no: int) -> Path | None:
+    p = run_dir(run_id) / "pages" / f"page{int(no):02d}.png"
+    return p if p.exists() else None
+
+
+def episode_path(job: NHJob) -> Path | None:
+    if not job.run_id:
+        return None
+    return episode_image(job.run_id)
+
+
+def episode_image(run_id: str) -> Path | None:
+    p = run_dir(run_id) / "episode.png"
+    return p if p.exists() else None
+
+
+def sheet_path(job: NHJob) -> Path | None:
+    if not job.run_id:
+        return None
+    p = run_dir(job.run_id) / "sheet.png"
+    return p if p.exists() else None
+
+
+def page_path(job: NHJob, n: int) -> Path | None:
+    if not job.run_id:
+        return None
+    return unit_image(job.run_id, n)
+
+
+# --------------------------------------------------------------------------- #
+# 편집실(overlay) — overlay.py 를 그대로 재사용한다. "장(scene)"을 그대로
+# "페이지"로 읽는 것뿐이라 overlay.py 는 한 줄도 고치지 않았다.
+# --------------------------------------------------------------------------- #
+
+def read_overlay(run_id: str) -> dict[str, Any]:
+    return overlay.load_overlay(run_dir(run_id))
+
+
+def write_overlay(run_id: str, body: Any) -> dict[str, Any]:
+    d = run_dir(run_id)
+    if not d.exists():
+        raise ValueError("그 작품을 찾지 못했습니다.")
+    data = overlay.save_overlay(d, body)
+    return {"ok": True, "items": overlay.count_items(data)}
+
+
+def _mtime(p: Path | None) -> float:
+    try:
+        return p.stat().st_mtime if p else 0.0
+    except OSError:
+        return 0.0
+
+
+def final_unit(run_id: str, no: int) -> Path | None:
+    """편집실에서 얹은 것이 있으면 구운 판, 없으면 원본. pipeline.final_unit
+    과 같은 규칙이다(볼 때 굽고, 밑그림·얹은 것보다 새 구운 판이 있으면 재사용)."""
+    base = unit_image(run_id, no)
+    if not base:
+        return None
+    d = run_dir(run_id)
+    ov = overlay.overlay_path(d)
+    if not ov.exists():
+        return base
+    try:
+        data = overlay.load_overlay(d)
+    except Exception:                                           # noqa: BLE001
+        return base
+    if not overlay.has_items(data, no):
+        return base
+    out = overlay.baked_scene_path(d, no)
+    if _mtime(out) >= max(_mtime(base), _mtime(ov)):
+        return out
+    try:
+        return overlay.bake_one(d, no, base, data)
+    except Exception:                                           # noqa: BLE001
+        return base
+
+
+def bake_run(run_id: str, body: Any = None) -> dict[str, Any]:
+    """얹은 것을 전 페이지에 굽고 한 편으로 다시 잇는다. body 에 얹은 것이
+    같이 오면(편집실의 "저장하고 굽기") 먼저 저장한다."""
+    d = run_dir(run_id)
+    if not d.exists():
+        raise ValueError("그 작품을 찾지 못했습니다.")
+    data = (overlay.save_overlay(d, body)
+            if isinstance(body, dict) and body.get("scenes") is not None
+            else overlay.load_overlay(d))
+    numbers = page_numbers(run_id)
+    if not numbers:
+        raise ValueError("페이지를 찾지 못했습니다.")
+    res = overlay.bake(d, numbers, lambda n: unit_image(run_id, n), data)
+    res["items"] = overlay.count_items(data)
+    return res
+
+
+def final_episode(run_id: str) -> Path | None:
+    """내려받기·결과 화면이 보여줄 최종본. 얹은 것이 있으면 구운 한 편.
+
+    이미 구워 둔 판(episode_baked.png)이 있으면 원본(episode.png)이 없어도
+    그것을 준다 — stitch.py 를 안 돌린 run(예: 페이지 하나만 있는 실험 run)
+    이라도 편집실에서 구운 결과는 보여야 한다.
+    """
+    d = run_dir(run_id)
+    plain = episode_image(run_id)
+    baked = overlay.baked_episode_path(d)
+    if not plain:
+        return baked if baked.exists() else None
+    ov = overlay.overlay_path(d)
+    if not ov.exists():
+        return plain
+    try:
+        data = overlay.load_overlay(d)
+    except Exception:                                           # noqa: BLE001
+        return plain
+    numbers = page_numbers(run_id)
+    if not any(overlay.has_items(data, n) for n in numbers):
+        return plain
+    out = overlay.baked_episode_path(d)
+    newest = max([_mtime(ov)] + [_mtime(unit_image(run_id, n)) for n in numbers])
+    if _mtime(out) >= newest:
+        return out
+    try:
+        bake_run(run_id)
+    except Exception:                                           # noqa: BLE001
+        return plain
+    return out if out.exists() else plain

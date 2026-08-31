@@ -1,0 +1,101 @@
+**이 하네스의 기본(default) 그림체다.** 흑백 잉크+포인트 컬러 실험은
+`action`(특수 컷 전용)으로 따로 남겼고, 이 파일은 평소 로판 장면에
+쓰는 기본값이다. 2026-08-30, 그날 있었던 여러 회차의 실험을 사용자가
+직접 하나로 합쳐 최종 정리한 버전이다 (경위는 `STYLE_FINDINGS.md` 참고).
+
+**2026-08-30 추가 — 실측해 보니 장면(장소·소품·조명)이 복잡한 컷에서는
+FROST의 절제가 밀리고 일반적인 고퀄 반실사 웹툰 쪽으로 갔다.** 원인은
+장면 설명 자체의 정보량(예: "그라데이션 — 흐릿한 조명과 게이트 단말기,
+벽에 부착된 안내판")과 이 그림체의 "배경을 단순하게" 지시가 동시에
+들어가면, 모델이 장면을 "정확히 구현해야 할 설계도"로 읽고 디테일을
+더해서 타협한다는 것. 그래서 아래 절을 맨 앞에 못박는다.
+
+## GLOBAL RENDERING RULE — FROST
+
+모든 컷과 모든 요소는 아래 FROST 렌더링을 최우선으로 따른다. 장면의
+정보량이 많더라도(복잡한 장소·소품·조명이 컷 설명에 있어도) 디테일을
+추가해서 설명하지 않는다 — 장소·소품·의상이 복잡할수록 오히려 FROST의
+단순화 수준을 그대로 유지해야 한다.
+
+The image must remain restrained even when the scene contains detailed
+environments, props, clothing, or lighting. FROST is defined by
+simplification, not by reduced image quality. Do not compensate for scene
+complexity by adding detail, line density, hair strands, fabric texture,
+or lighting effects.
+
+restrained semi-realistic webtoon rendering,
+mature adult anatomy with elegant stylization,
+editorial and fashion-illustration sensibility,
+
+simple selective linework,
+thin delicate slightly irregular ink lines,
+variable line density,
+deliberate simplification,
+uneven detail density,
+large areas of clean negative space,
+only essential lines are drawn,
+
+broken and incomplete contours in low-detail areas,
+minimal interior linework,
+natural hand-drawn imperfections,
+casual but controlled webtoon finish,
+not every surface is fully rendered,
+
+simplified facial rendering,
+natural mature facial proportions,
+moderately narrow almond-shaped eyes,
+simple controlled irises,
+restrained eyelashes,
+minimal facial lines,
+subtle eyebrows,
+minimal nose and mouth definition,
+clean pale skin with very little surface detail,
+
+simplified hair masses,
+large coherent hair shapes,
+only a few loose directional strand lines,
+irregular sparse hair strokes,
+no individual strand rendering,
+
+selective clothing folds,
+clothing defined primarily by silhouette and construction,
+essential folds only,
+hatching only in deeper shadows and important folds,
+large untextured color areas,
+
+broad flat muted color shapes,
+limited tonal hierarchy,
+simple shadow planes,
+restrained cel-shaded planes,
+minimal gradients,
+minimal highlights,
+minimal reflected light,
+clean restrained color transitions,
+
+background detail significantly reduced compared to the character,
+soft simplified background shapes,
+large quiet areas,
+no uniform texture across the image,
+background rendered with less detail and contrast than the character,
+
+quiet sophisticated visual hierarchy,
+mature understated aesthetic,
+beautiful through simplification rather than detail.
+
+## 하지 마라
+
+- hyper-detailed, over-rendered, excessive micro-detail, uniform detail
+  density, intricate facial details, intricate hair strands, individual
+  hair rendering, hair strand accumulation, perfectly rendered eyes,
+  sparkling eyes, gemstone eyes, oversized eyes
+- detailed skin texture, skin pores, photorealistic skin, 3D skin
+  rendering, airbrushed skin, excessive facial shading
+- excessive eyelashes, glossy lips, excessive highlights, excessive
+  gradients, volumetric lighting, photorealistic lighting
+- excessive clothing folds, detailed fabric texture, dense fabric
+  rendering, decorative linework, dense linework, uniform hatching,
+  heavy outlines, perfect vector linework
+- dense background details, uniform background texture, background
+  competing with character, overdecorated background
+- anime key visual, light novel illustration, moe, kawaii, childlike
+  proportions, milky pastel colors, oversaturated colors, neon colors

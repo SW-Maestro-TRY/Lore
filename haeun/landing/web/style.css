@@ -391,8 +391,11 @@ body[data-view="nextep"]  .foot { display: none; }
   border: 1.5px solid var(--line-2); background: #fff;
 }
 .style-thumb {
-  width: 100%; height: 104px; object-fit: cover; display: block;
-  background: var(--ink-2);
+  /* 세로로 그린 인물 예시라, 짧고 넓은 칸에 채우면(예전 104px) 얼굴 대부분이
+     잘려 나가 무슨 그림체인지 안 보였다(하은 피드백, 2026-08-31). 칸을 세로로
+     키우고, 얼굴이 보통 위쪽에 있으니 object-position 도 위로 둔다. */
+  width: 100%; height: 260px; object-fit: cover; object-position: 50% 15%;
+  display: block; background: var(--ink-2);
 }
 .style-box b, .style-box small { padding: 0 12px; }
 .style-box b { padding-top: 10px; }
