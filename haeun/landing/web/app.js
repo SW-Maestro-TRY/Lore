@@ -2110,8 +2110,8 @@ function paintResult(r) {
     const gap = i === r.pages.length - 1 ? 0 : +pg.gap || 0;
     const w = +pg.width || 1;
     const style = [gap ? `margin-bottom:${(gap * 100).toFixed(2)}%` : "",
-                   w < 1 ? `width:${(w * 100).toFixed(2)}%;margin-left:auto;` +
-                           "margin-right:auto" : ""].filter(Boolean).join(";");
+                   w !== 1 ? `width:${(w * 100).toFixed(2)}%;margin-left:auto;` +
+                             "margin-right:auto" : ""].filter(Boolean).join(";");
     return `
     <div class="page" data-scene="${pg.no}"${style ? ` style="${style}"` : ""}>
       <img class="cut-img" src="${resultSrc.page(pg.no)}"

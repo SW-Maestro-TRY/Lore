@@ -481,16 +481,27 @@ WEBTOON_GAP_RATIO = {0: 0.0, 1: 0.16, 2: 0.32, 3: 0.90}
 #
 # weight 가 없는 옛 컷은 전부 "normal" 로 읽히므로 예전처럼 1.0 이다.
 LIGHT_WIDTH = 0.55        # 떠 있는 컷이 쓰는 지면 폭
+# "wide" 는 사람이 결과보기에서 특정 장을 눈에 띄게 키우고 싶을 때 쓰는
+# 수동 표시다 — 콘티(W7~W9)가 정하는 값이 아니라 실측 원가/작화 데이터도
+# 없다. weight 가 없거나 "wide" 가 아닌 옛 컷은 이 경로를 안 타므로 결과가
+# 안 바뀐다.
+WIDE_WIDTH = 1.15         # 눈에 띄게 키운 장이 쓰는 지면 폭
 
 
 def width_ratio(cut: dict[str, Any], table: dict[str, Any] | None = None,
-                light: float = LIGHT_WIDTH) -> float:
-    """이 컷이 지면 폭을 얼마나 쓸까 (0~1). 기본 1.0 = 꽉 채움."""
-    if str(cut.get("weight") or "normal").strip().lower() == "light":
+                light: float = LIGHT_WIDTH, wide: float = WIDE_WIDTH) -> float:
+    """이 컷이 지면 폭을 얼마나 쓸까 (0~1, wide 는 1 초과). 기본 1.0 = 꽉 채움."""
+    weight = str(cut.get("weight") or "normal").strip().lower()
+    if weight == "light":
         try:
             return max(0.3, min(1.0, float(light)))
         except (TypeError, ValueError):
             return LIGHT_WIDTH
+    if weight == "wide":
+        try:
+            return max(1.0, min(1.6, float(wide)))
+        except (TypeError, ValueError):
+            return WIDE_WIDTH
     if not table:
         return 1.0
     try:
