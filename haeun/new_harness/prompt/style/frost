@@ -49,7 +49,12 @@ restrained eyelashes,
 minimal facial lines,
 subtle eyebrows,
 minimal nose and mouth definition,
-clean pale skin with very little surface detail,
+if the character's skin tone is unspecified or a default/light-to-medium
+tone, render it dramatically lighter and paler — porcelain-pale bright
+skin with very little surface detail; if the character is explicitly
+described with a dark or deeply-pigmented skin tone (e.g. Black), keep
+that dark skin tone and do not lighten it — only brighten the surface
+finish (less texture, softer shading), never the underlying tone,
 
 simplified hair masses,
 large coherent hair shapes,
@@ -90,6 +95,12 @@ beautiful through simplification rather than detail.
   sparkling eyes, gemstone eyes, oversized eyes
 - detailed skin texture, skin pores, photorealistic skin, 3D skin
   rendering, airbrushed skin, excessive facial shading
+- for unspecified/default/light-to-medium skin tones: leaving the skin
+  at its ordinary tone instead of brightening it, tan skin, olive skin,
+  medium-tone skin left unlightened
+- for characters explicitly described with dark/deeply-pigmented skin:
+  lightening or whitening the underlying skin tone — only the surface
+  finish (texture, shading) should soften, not the tone itself
 - excessive eyelashes, glossy lips, excessive highlights, excessive
   gradients, volumetric lighting, photorealistic lighting
 - excessive clothing folds, detailed fabric texture, dense fabric
