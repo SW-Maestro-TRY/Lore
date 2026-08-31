@@ -172,6 +172,49 @@ def linked(prev_cut, cut) -> bool:
     return prev_bg == "실제공간" and bg == "실제공간"
 
 
+def page_weight(page) -> str:
+    """페이지 전체의 무게 — 이어 붙일 때(stitch.py) 폭을 얼마나 쓸지 결정한다.
+
+    group_pages 가 이미 ALONE(large/full)은 혼자 한 페이지로 떼어 두므로,
+    여기서 다시 나눌 건 없다. **모아 묶인 컷이 전부** light(배경 없는
+    tiny/small)이면 그 페이지 전체가 떠 있는 것으로 본다 — 인물만 있고
+    배경이 없는 컷들만 모인 페이지라, 지면을 꽉 채울 이유가 없다.
+    """
+    if not page:
+        return "normal"
+    if all(cut_weight(c) == "light" for c in page):
+        return "light"
+    return "normal"
+
+
+def page_gap_after(page, next_page) -> int:
+    """`page` 뒤, `next_page` 앞에 얼마나 벌릴지 (0~3).
+
+    story-harness 의 `derive_layout`은 beat·transition·render_style 로
+    이걸 정하는데, new_harness 콘티에는 그 필드가 없다. 대신 있는 것 —
+    이어지는가(linked) · 앞 페이지 마지막 컷이 large/full 인가(전환점을
+    막 지났는가) · 장소가 바뀌었는가 — 로 같은 취지를 낸다:
+
+        이어짐(linked)              -> 0  (동작이 그대로 계속된다, 안 벌린다)
+        직전 컷이 large/full        -> 3  (전환점 뒤. 숨 돌릴 자리를 준다)
+        장소가 바뀜                 -> 2  (장면이 넘어간다)
+        나머지                      -> 1  (기본)
+
+    반환값은 그대로 `strip.gap_px(width, level, table)`에 먹인다 — 픽셀
+    변환은 새로 안 만들고 webtoon-harness 것을 그대로 쓴다.
+    """
+    if not page or not next_page:
+        return 1
+    last, first = page[-1], next_page[0]
+    if linked(last, first):
+        return 0
+    if cut_size(last) in ALONE:
+        return 3
+    if _t(last.get("location")) != _t(first.get("location")):
+        return 2
+    return 1
+
+
 # 장면에 붙는 값 중 컷까지 따라 내려가야 하는 것.
 # 페이지는 장면 경계를 안 지키므로(가벼운 컷은 장면을 넘어 모인다), 여기서
 # 안 내려보내면 페이지를 만든 뒤에는 그 컷이 어디서 벌어지는지 알 수 없다.

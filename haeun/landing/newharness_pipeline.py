@@ -292,15 +292,63 @@ def _run_rest_phase(job: NHJob) -> None:
 
 
 class NHRunner:
-    """job 저장소. 클래식 Runner 와 달리 큐를 안 둔다 — 실험 단계라 동시 실행
-    제한(비용 폭주 방지)은 나중에 트래픽이 생기면 그때 넣는다."""
+    """job 저장소. 클래식 Runner 와 같은 방식으로 줄을 세운다 — 이미지 호출이
+    여러 번 나가는 작업이라 동시에 여러 개를 돌리면 요금과 rate limit 이
+    같이 터진다(landing/pipeline.py 의 Runner 와 같은 이유, 3599번 줄 근처
+    주석 참고). 뒤에 온 요청은 줄을 선다.
+
+    NHJob 은 실행이 두 자리에서 걸린다 — 만들 때(story) 와 방향을 고를
+    때(구체화+콘티+시트+그림), 사람이 방향을 고르기까지는 시간이 얼마나
+    걸릴지 알 수 없다. 그래서 Runner 처럼 job_id 를 줄에 넣는 게 아니라,
+    **이번에 돌릴 일 하나**(callable)를 줄에 넣는다 — 같은 job 이 두 번
+    줄을 설 수 있다는 뜻이다.
+    """
 
     def __init__(self) -> None:
         self.jobs: dict[str, NHJob] = {}
+        self.queue: list[Callable[[], None]] = []
+        self._lock = threading.Lock()
+        self._worker: threading.Thread | None = None
         JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
     def get(self, job_id: str) -> NHJob | None:
         return self.jobs.get(job_id)
+
+    def position(self, job_id: str) -> int:
+        """이 job 이 지금 줄의 몇 번째인가 (0 = 대기 없음, 곧 돈다).
+
+        job 이 한 번에 최대 하나의 일만 줄에 서므로(story 아니면 rest,
+        둘이 겹칠 일이 없다) 이름으로 찾아도 안전하다.
+        """
+        with self._lock:
+            for i, fn in enumerate(self.queue):
+                if getattr(fn, "job_id", None) == job_id:
+                    return i
+            return 0
+
+    def _enqueue(self, job_id: str, fn: Callable[[], None]) -> None:
+        fn.job_id = job_id                  # position() 이 찾을 수 있게 이름표를 단다
+        with self._lock:
+            self.queue.append(fn)
+            if self._worker is None or not self._worker.is_alive():
+                self._worker = threading.Thread(target=self._drain, daemon=True)
+                self._worker.start()
+
+    def _drain(self) -> None:
+        while True:
+            with self._lock:
+                if not self.queue:
+                    self._worker = None
+                    return
+                fn = self.queue.pop(0)
+            job = self.jobs.get(getattr(fn, "job_id", None))
+            if job is not None and job._cancel:
+                # 줄을 서서 기다리는 동안 취소됐다 — 아직 subprocess 를 안
+                # 띄웠으니 그대로 건너뛴다. 돌리고 나서 취소로 처리하면
+                # 이미 돈은 나간 뒤다.
+                _fail(job, "취소되었습니다")
+                continue
+            fn()
 
     def create(self, form: dict[str, Any], photos: list[bytes]) -> NHJob:
         job_id = uuid.uuid4().hex[:12]
@@ -313,7 +361,7 @@ class NHRunner:
         job = NHJob(id=job_id, form=form, dir=job_dir)
         self.jobs[job_id] = job
         job.save()
-        threading.Thread(target=_run_story_phase, args=(job,), daemon=True).start()
+        self._enqueue(job_id, lambda: _run_story_phase(job))
         return job
 
     def pick(self, job_id: str, n: int) -> NHJob:
@@ -325,8 +373,12 @@ class NHRunner:
         if not any(d.get("n") == n for d in job.directions):
             raise ValueError(f"방향 {n} 이 없습니다")
         job.pick = n
+        # 줄을 서는 동안에도 상태를 바꿔 둔다 — AWAITING_PICK 그대로 두면
+        # 줄에 있는 동안 pick() 이 또 불렸을 때 위 가드가 다시 통과해
+        # 같은 job 이 두 번 줄을 선다.
+        job.status = STATUS_QUEUED
         job.save()
-        threading.Thread(target=_run_rest_phase, args=(job,), daemon=True).start()
+        self._enqueue(job_id, lambda: _run_rest_phase(job))
         return job
 
 

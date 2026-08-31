@@ -232,6 +232,21 @@ texts = imageprompt.page_prompts(pgs,
   붙는다. 페이지 경계는 안 넘는다 — 다른 호출이라 앞 페이지가 뭘 그렸는지
   이 프롬프트만으로는 모르기 때문이다.
 
+**연출 지식(RAG)** 은 새로 안 만들고 story-harness/webtoon-harness 가 쓰는
+저장소(`story-harness/knowledge/directing/`, 109개 청크)를 `webtoon-harness/
+directing.py`(`resolve_notes`)로 그대로 빌린다 — 정확 태그 매칭이라 벡터
+검색은 아니다. 콘티 단계(장면 서술)와 페이지 그림 단계(그 페이지 컷의
+배경·행동·대사) 각각 자기 서술에 등장하는 태그와 겹치는 조각만 "## 연출
+참고" 절로 붙는다. 하나도 안 걸리면 그 절 자체가 안 생긴다.
+
+**페이지 사이 여백·폭**도 `webtoon-harness/strip.py`의 픽셀 계산
+(`gap_px`·`width_ratio`)을 그대로 쓴다(`stitch.py`). 다만 여백 **단계**
+(0~3)를 매기는 기준은 다르다 — story-harness 의 `derive_layout`은 컷의
+beat·transition·render_style 로 매기는데 new_harness 콘티에는 그 필드가
+없다. 대신 있는 것(이어짐·직전 페이지의 마지막 컷 크기·장소가 바뀌었는가)
+으로 같은 취지를 낸다(`pages.page_gap_after`). `pages.json`이 없거나 페이지
+수가 안 맞으면(옛 run 등) 예전처럼 여백 없이 가운데 정렬만 한다.
+
 ### 그리기
 
 ```
@@ -305,5 +320,8 @@ python3 test_parse.py
 ## 아직 안 한 것
 
 - 콘티(`cuts.json`)를 `webtoon-harness` 로 넘겨 컷 이미지를 그리는 연결
-- `landing` 화면에서 이 하네스를 고르는 길 (지금은 명령줄만)
-- 후보를 고르는 화면 (지금은 터미널에서 번호 입력)
+- `landing`의 **메인 화면**(story-harness+webtoon-harness) 연결 — `landing/
+  newharness_pipeline.py` + `web/newharness.html` 로 별도 실험 화면에는
+  이미 연결돼 있다. 메인 라우트로 바꾸는 건 아직이다.
+- 후보를 고르는 화면은 실험 화면 쪽엔 있다(`newharness.html`). 명령줄
+  전용이던 것은 이제 옛말이다.

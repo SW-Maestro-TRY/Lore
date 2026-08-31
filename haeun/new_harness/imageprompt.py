@@ -14,10 +14,18 @@ scenes[].summary(원본 장면 문장). 그대로 넘기면 모델이 메모를 
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PROMPT_DIR = HERE / "prompt"
+WEBTOON_HARNESS = HERE.parent / "webtoon-harness"
+if str(WEBTOON_HARNESS) not in sys.path:
+    sys.path.append(str(WEBTOON_HARNESS))     # append, 안 insert(0,...) — new_harness
+                                               # 자신의 모듈(run.py 등 이름이 겹치는
+                                               # 것)을 가리면 안 된다
+
+import directing  # noqa: E402  (webtoon-harness 것을 그대로 빌린다)
 
 # 컷 높이 비율. full 은 숫자가 아니라 페이지 전체다.
 HEIGHT_RATIO = {"tiny": 1, "small": 2, "normal": 3, "large": 5, "full": None}
@@ -309,6 +317,29 @@ def place_block(page) -> str:
     return "\n".join(lines)
 
 
+def page_haystack(page) -> str:
+    """이 페이지의 컷들에서 연출 지식을 태그로 골라 붙일 때 검색할 서술.
+
+    webtoon-harness 의 scenegen.build_prompt 와 같은 방식(설명+대사를
+    이어 붙인 문자열, 정확 태그 매칭)이다. note·sfx.reason 같은 안 그려지는
+    칸은 안 섞는다 — 태그 매칭이 그림에 없는 내용으로 걸릴 이유가 없다.
+    """
+    parts = []
+    for cut in page or []:
+        parts.append(background_line(cut.get("background")))
+        for p in cut.get("characters") or []:
+            if isinstance(p, dict):
+                parts.append(_t(p.get("action")))
+                parts.append(_t(p.get("expression")))
+        for d in cut.get("dialogue") or []:
+            if isinstance(d, dict):
+                parts.append(_t(d.get("text")))
+        for s in cut.get("sfx") or []:
+            if isinstance(s, dict):
+                parts.append(_t(s.get("text")))
+    return " ".join(p for p in parts if p)
+
+
 SD_BLOCK = (
     "## 그림체 (SD)\n"
     "- SD: 2~3등신으로 축약된 형태. 얼굴이 크고 몸이 작다.\n"
@@ -356,6 +387,10 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
     place = place_block(page)
     if place:
         blocks.append(place)
+
+    notes = directing.resolve_notes(directing.DEFAULT_ROOT, page_haystack(page))
+    if notes:
+        blocks.append("## 연출 참고\n" + notes)
 
     import pages
     for i, cut in enumerate(page or []):

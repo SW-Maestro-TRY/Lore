@@ -729,7 +729,8 @@ class Handler(BaseHTTPRequestHandler):
             job = nh_runner.get(m.group(1))
             if not job:
                 return self._error(404, "그런 작업이 없습니다")
-            return self._json(job.snapshot())
+            return self._json({**job.snapshot(),
+                               "queue_position": nh_runner.position(job.id)})
 
         # 완성본 — 편집실에서 얹은 것이 있으면 구운 판(final_episode)이 나간다.
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/episode\.png", path)

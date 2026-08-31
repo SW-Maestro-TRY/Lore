@@ -20,6 +20,7 @@ import imageprompt as IP  # noqa: E402
 import pages as P        # noqa: E402
 import run as R          # noqa: E402
 import sheet as S        # noqa: E402
+import stitch as ST      # noqa: E402
 
 FAILED = []
 
@@ -536,6 +537,37 @@ def test_linked() -> None:
     ok("앞 컷이 없으면 거짓", not P.linked(None, b))
 
 
+def test_page_weight() -> None:
+    light_cut = {"size": "tiny", "background": {"type": "없음"}}
+    normal_cut = {"size": "small", "background": {"type": "실제공간"}}
+    check("전부 light 면 페이지도 light", P.page_weight([light_cut, dict(light_cut)]), "light")
+    check("하나라도 normal 이면 페이지도 normal",
+          P.page_weight([light_cut, normal_cut]), "normal")
+    check("large 혼자인 페이지는 normal(그대로 꽉 채운다)",
+          P.page_weight([{"size": "large"}]), "normal")
+    check("빈 페이지는 normal", P.page_weight([]), "normal")
+
+
+def test_page_gap_after() -> None:
+    a = {"size": "normal", "location": "복도", "time": "밤",
+         "background": {"type": "실제공간"}}
+    linked_next = [dict(a)]
+    check("이어지면 0", P.page_gap_after([a], linked_next), 0)
+
+    big = [dict(a, size="large")]
+    check("직전이 large/full 이면 3", P.page_gap_after(big, [dict(a, location="옥상")]), 3)
+
+    apart = [dict(a, location="옥상")]
+    check("장소가 바뀌면 2", P.page_gap_after([a], apart), 2)
+
+    same_place_diff_time = [dict(a, time="아침")]
+    check("이어짐 조건은 아닌데 장소도 안 바뀌면 1",
+          P.page_gap_after([a], same_place_diff_time), 1)
+
+    check("앞뒤 페이지가 없으면 1", P.page_gap_after([], [a]), 1)
+    check("앞뒤 페이지가 없으면 1 (뒤)", P.page_gap_after([a], []), 1)
+
+
 def test_scene_head() -> None:
     board = R.parse_board(BOARD_JSON)
     flat = P.flatten_cuts(board["scenes"])
@@ -810,6 +842,62 @@ def test_pageart() -> None:
             pass
         else:
             FAILED.append("pages.json 이 없는데 안 멈췄다")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_stitch_rhythm() -> None:
+    """페이지 사이 여백·폭 — pages.json 이 있을 때/없을 때."""
+    import shutil
+    import tempfile
+
+    from PIL import Image
+
+    root = Path(tempfile.mkdtemp(prefix="nh-stitch-"))
+    try:
+        run_dir = root / "run"
+        (run_dir / "pages").mkdir(parents=True)
+        # 페이지 셋: 1(보통) -> 2(장소가 바뀜, 여백 2단계) -> 3(light, 좁게)
+        sizes = [(100, 200), (100, 150), (100, 80)]
+        for i, (w, h) in enumerate(sizes, 1):
+            Image.new("RGB", (w, h), "black").save(run_dir / "pages" / f"page{i:02d}.png")
+
+        pages_data = [
+            [{"size": "normal", "location": "복도", "time": "밤",
+              "background": {"type": "실제공간"}}],
+            [{"size": "normal", "location": "옥상", "time": "밤",
+              "background": {"type": "실제공간"}}],
+            [{"size": "tiny", "location": "옥상", "time": "밤",
+              "background": {"type": "없음"}}],
+        ]
+        (run_dir / "pages.json").write_text(json.dumps(pages_data), encoding="utf-8")
+
+        gaps, ratios = ST.page_rhythm(pages_data, 3)
+        check("첫 페이지 앞엔 여백 없음", gaps[0], 0)
+        check("2번째는 장소가 바뀌어 2단계", gaps[1], 2)
+        # 3번째는 2번째와 장소·시간대는 같지만 배경이 없다시피 한(light) 컷이라
+        # linked() 조건(둘 다 실제공간)을 안 넘는다 — 기본값 1단계로 떨어진다.
+        check("3번째는 이어짐 조건은 아니라 기본 1단계", gaps[2], 1)
+        check("1·2번은 꽉 채움", ratios[0:2], [1.0, 1.0])
+        ok("3번은 light 라 좁다", ratios[2] < 1.0)
+
+        out = ST.stitch(run_dir)
+        with Image.open(out) as im:
+            w, h = im.size
+        gtab = ST.strip.gap_ratio_table()
+        gap1 = ST.strip.gap_px(100, gaps[1], gtab)
+        gap2 = ST.strip.gap_px(100, gaps[2], gtab)
+        expect_h = 200 + gap1 + 150 + gap2 + 80 * ratios[2]
+        check("세로 길이가 여백만큼 늘어난다", h, round(expect_h))
+        check("폭은 그대로(가장 넓은 페이지 기준)", w, 100)
+
+        # pages.json 없이도(옛 run) 예전처럼 여백 없이 이어 붙는다
+        (run_dir / "pages.json").unlink()
+        out2 = ST.stitch(run_dir, out_path=root / "run" / "no_rhythm.png")
+        with Image.open(out2) as im2:
+            _, h2 = im2.size
+        check("pages.json 이 없으면 여백 없이 그대로 합친 높이",
+              h2, sum(h for _, h in sizes))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -1123,10 +1211,10 @@ def main() -> int:
                test_board, test_gate_board, test_directing_warnings,
                test_gate_readable, test_spec,
                test_sheet_prompt, test_input, test_pages, test_cut_weight,
-               test_linked, test_scene_head,
+               test_linked, test_page_weight, test_page_gap_after, test_scene_head,
                test_image_prompt_pieces, test_image_prompt_page,
                test_directing_hints, test_sheet_line,
-               test_ratio_break, test_pageart, test_import_sheet):
+               test_ratio_break, test_pageart, test_stitch_rhythm, test_import_sheet):
         fn()
     if FAILED:
         print("FAILED:")

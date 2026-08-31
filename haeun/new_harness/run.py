@@ -33,9 +33,15 @@ import unicodedata
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+WEBTOON_HARNESS = HERE.parent / "webtoon-harness"
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+if str(WEBTOON_HARNESS) not in sys.path:
+    sys.path.append(str(WEBTOON_HARNESS))     # append, 안 insert(0,...) — new_harness
+                                               # 자신의 모듈(run.py 등 이름이 겹치는
+                                               # 것)을 가리면 안 된다
 
+import directing                              # noqa: E402  (webtoon-harness 것을 그대로 빌린다)
 import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
 import pageart                                # noqa: E402
@@ -1015,11 +1021,13 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
               if detail_path.exists() else None)
 
     lines = ["# 이번 입력", "", "## 장면", ""]
+    haystack = []          # 연출 지식을 태그로 골라 붙일 때 검색할 서술
     if detail and detail.get("scenes"):
         for s in detail["scenes"]:
             lines.append(f"### 장면 {s['id']} — {s['source']}")
             lines.append("")
             lines.append(s["detail"])
+            haystack.append(s["detail"])
             if s.get("learns"):
                 lines.append("")
                 for x in s["learns"]:
@@ -1033,6 +1041,7 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
             lines.append("")
     else:
         lines += [f"{i}. {s}" for i, s in enumerate(direction["scenes"], 1)]
+        haystack += direction["scenes"]
 
     lines += ["", "## 캐릭터 정보", "", f"이름: {char['name']}"]
     if char["photos"]:
@@ -1062,6 +1071,14 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
     if hidden:
         lines += ["", "## 밝히지 않을 것 — 컷에서 답을 보여주지 마라", ""]
         lines += [f"- {h}" for h in hidden]
+
+    # 이번 화 서술에 등장하는 태그와 겹치는 연출 지식만 골라 붙인다 —
+    # story-harness/webtoon-harness 가 쓰는 것과 같은 저장소, 같은 방식
+    # (directing.resolve_notes, 정확 태그 매칭). 하나도 안 걸리면 아무것도
+    # 안 붙는다 — 안 맞는 연출 지식을 우기는 것보다 낫다.
+    notes = directing.resolve_notes(directing.DEFAULT_ROOT, *haystack)
+    if notes:
+        lines += ["", "## 연출 참고", "", notes]
     return "\n".join(lines) + "\n"
 
 
