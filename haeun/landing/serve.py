@@ -1559,8 +1559,10 @@ class Handler(BaseHTTPRequestHandler):
             if decision not in ("approve", "retry"):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
             try:
-                (nh_runner.approve_board if decision == "approve"
-                 else nh_runner.retry_board)(job.id)
+                if decision == "approve":
+                    nh_runner.approve_board(job.id)
+                else:
+                    nh_runner.retry_board(job.id, note=str(body.get("note") or ""))
             except ValueError as exc:
                 return self._error(409, str(exc))
             return self._json({"ok": True})
@@ -1578,8 +1580,10 @@ class Handler(BaseHTTPRequestHandler):
             if decision not in ("approve", "retry"):
                 return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
             try:
-                (nh_runner.approve_sheet if decision == "approve"
-                 else nh_runner.retry_sheet)(job.id)
+                if decision == "approve":
+                    nh_runner.approve_sheet(job.id)
+                else:
+                    nh_runner.retry_sheet(job.id, note=str(body.get("note") or ""))
             except ValueError as exc:
                 return self._error(409, str(exc))
             return self._json({"ok": True})
