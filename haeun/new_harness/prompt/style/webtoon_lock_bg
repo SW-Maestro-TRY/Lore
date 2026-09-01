@@ -328,6 +328,53 @@ Do not add excessive wrinkles.
 
 Keep clothing secondary to the face and character design.
 
+## BACKGROUND AND ENVIRONMENT
+
+The background exists to tell the reader where they are. It is not a
+painting of that place.
+
+The character is always the most detailed, most saturated, most rendered
+thing on screen. If the reader's eye lands on the background before the
+character, the background has been over-rendered.
+
+Detail in the background must be visibly less than detail on the
+character — roughly a quarter of the rendering effort, not an equal or
+greater amount.
+
+Draw environmental objects as simplified masses, not as an inventory of
+individually rendered items. Architecture reads as flat silhouette plus a
+few large shapes. Surfaces (floors, walls, large furniture) read as broad
+flat color fields plus a few bold lines, not as individually rendered
+materials or textures. Anything far from the camera collapses into a
+single flat, lighter-toned silhouette with no internal detail at all.
+
+When a scene description lists more environmental objects than the story
+actually needs, drop the ones that are not load-bearing for the story and
+leave the rest as plain, undetailed color. Large empty, under-rendered
+areas of background are correct, not a sign of an unfinished image.
+
+Detail density must fall off from the character outward: foreground near
+the character gets moderate detail, the middle ground is simplified, and
+the far background is minimal. Never give every object in the frame the
+same level of finish, and never let the background out-render the
+character.
+
+Do not individually render surface textures such as wood grain, fabric
+weave, stone texture, or metallic reflection on background objects.
+
+## LIGHTING
+
+Lighting is simple and graphic: a small number of large light and shadow
+shapes with clean edges, not a fully rendered light simulation.
+
+Do not use cinematic volumetric lighting, strong backlight halos, lens
+flare, bloom, atmospheric haze, or photographic depth-of-field blur. Do
+not use realistic global illumination.
+
+Line and flat color shape read before lighting does. If the lighting is
+the first thing the reader notices about a panel, it is too heavy for
+this style.
+
 ## OVERALL FINISH
 
 The final artwork should be:
@@ -393,6 +440,10 @@ ALWAYS prioritize bright pale webtoon skin.
 When realistic rendering conflicts with polished 2D rendering,
 ALWAYS prioritize polished 2D rendering.
 
+When a detailed, cinematically lit background conflicts with a simplified
+background that keeps the character as the most detailed thing on screen,
+ALWAYS prioritize the simplified background and the character's priority.
+
 ## FINAL VISUAL TARGET
 
 The intended visual result is:
@@ -426,6 +477,11 @@ clean harmonious colors
 polished restrained cel shading
 +
 strong fictional character design
++
+a simplified, graphic background that stays visibly less detailed than
+the character
++
+simple graphic lighting with no cinematic volumetric light or lens flare
 +
 professional modern Korean webtoon finish.
 
