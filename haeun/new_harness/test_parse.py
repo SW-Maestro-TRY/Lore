@@ -151,13 +151,13 @@ BOARD_JSON = """설명을 붙여 드립니다.
         {
           "id": 1,
           "size": "large",
-          "camera": {"shot": "광각", "angle": "정면", "facing": "앞모습"},
+          "camera": {"shot": "광각", "angle": "정면"},
           "background": {"type": "실제공간", "desc": "높은 천장과 늘어선 마법등"},
           "characters": [
-            {"name": "하일", "style": "LD", "position": "왼쪽",
+            {"name": "하일", "style": "LD", "position": "왼쪽", "facing": "앞모습",
              "expression": "긴장한 표정", "action": "이름이 불려 고개를 든다",
              "moment": "직후", "framing": "무릎 위"},
-            {"name": "담당 교수", "style": "LD", "position": "오른쪽",
+            {"name": "담당 교수", "style": "LD", "position": "오른쪽", "facing": "옆모습",
              "expression": "무표정", "action": "명단을 본다",
              "moment": "도중", "framing": "상반신"}
           ],
@@ -177,7 +177,7 @@ BOARD_JSON = """설명을 붙여 드립니다.
         {
           "id": 2,
           "size": "normal",
-          "camera": {"shot": "상반신", "angle": "정면", "facing": "앞모습"},
+          "camera": {"shot": "상반신", "angle": "정면"},
           "background": {"type": "효과", "desc": "지팡이 끝에서 흔들리는 마력"},
           "characters": [
             {"name": "하일", "style": "LD", "position": "왼쪽",
@@ -205,7 +205,7 @@ BOARD_JSON = """설명을 붙여 드립니다.
         {
           "id": 1,
           "size": "tiny",
-          "camera": {"shot": "부분", "angle": "정면", "facing": "앞모습"},
+          "camera": {"shot": "부분", "angle": "정면"},
           "background": {"type": "없음", "desc": ""},
           "characters": [
             {"name": "하일", "style": "LD", "expression": "(얼굴 없음)",
@@ -239,9 +239,12 @@ def test_board() -> None:
 
     cut = scenes[0]["cuts"][0]
     check("size", cut["size"], "large")
-    check("카메라", cut["camera"], {"shot": "광각", "angle": "정면", "facing": "앞모습"})
+    check("카메라", cut["camera"], {"shot": "광각", "angle": "정면"})
     check("배경", cut["background"]["type"], "실제공간")
     check("인물 2명", len(cut["characters"]), 2)
+    # facing 은 camera 가 아니라 인물마다 하나씩이다 — 마주 보는 두 인물이
+    # 서로 다른 facing 을 가질 수 있어야 한다(storyboard_prompt 참고).
+    check("인물별 facing", [c["facing"] for c in cut["characters"]], ["앞모습", "옆모습"])
     # order 가 뒤집혀 온 것을 바로 세운다 — 읽는 순서가 곧 배치 순서다
     check("order 대로 정렬", [d["order"] for d in cut["dialogue"]], [1, 2])
     check("정렬된 첫 대사", cut["dialogue"][0]["text"], "하일.")
@@ -596,20 +599,21 @@ def test_scene_head() -> None:
 
 def test_image_prompt_pieces() -> None:
     check("카메라를 문장으로 편다",
-          IP.camera_line({"shot": "상반신", "angle": "정면", "facing": "옆모습"}),
-          "상반신, 정면 앵글, 인물은 옆모습")
+          IP.camera_line({"shot": "상반신", "angle": "정면"}),
+          "상반신, 정면 앵글")
     check("칸이 모자라도 있는 것까지",
           IP.camera_line({"shot": "극클로즈업"}), "극클로즈업")
     check("배경", IP.background_line({"type": "실제공간", "desc": "복도"}),
           "실제공간 — 복도")
     check("설명이 없으면 종류만", IP.background_line({"type": "없음"}), "없음")
 
-    check("인물을 문장으로 편다",
+    check("인물을 문장으로 편다 (facing 포함)",
           IP.person_line({"name": "하일", "style": "LD", "position": "왼쪽",
+                          "facing": "옆모습",
                           "expression": "긴장한 표정", "action": "고개를 든다",
                           "moment": "직후", "framing": "무릎 위"}),
-          "하일 (LD): 화면 왼쪽, 긴장한 표정, 고개를 든다. 동작의 직후를 그린다. "
-          "화면에는 무릎 위까지 나온다.")
+          "하일 (LD): 화면 왼쪽, 옆모습, 긴장한 표정, 고개를 든다. 동작의 직후를 "
+          "그린다. 화면에는 무릎 위까지 나온다.")
     check("위치가 없으면 그 조각만 빠진다",
           IP.person_line({"name": "하일", "style": "LD", "expression": "웃는다",
                           "moment": "직전", "framing": "전신"}),
@@ -674,9 +678,9 @@ def test_image_prompt_page() -> None:
     ok("장소가 앞에 한 번", "## 장소\n마법학교 중앙 대강당의 입학식장" in text)
     ok("시간대도", "시간대: 실내조명" in text)
     ok("컷 1 은 높이 비율 5", "### 컷 1 (높이 비율 5)" in text)
-    ok("카메라", "카메라: 광각, 정면 앵글, 인물은 앞모습" in text)
+    ok("카메라", "카메라: 광각, 정면 앵글" in text)
     ok("배경", "배경: 실제공간 — 높은 천장과 늘어선 마법등" in text)
-    ok("인물", "하일 (LD): 화면 왼쪽, 긴장한 표정" in text)
+    ok("인물 (facing 포함)", "하일 (LD): 화면 왼쪽, 앞모습, 긴장한 표정" in text)
     ok("좌우가 둘 다", "담당 교수 (LD): 화면 오른쪽" in text)
     ok("나레이션이 먼저 오지 않는다 (order 대로)",
        text.index('"하일."') < text.index('"입학식 사흘째."'))
@@ -971,7 +975,7 @@ def scene_cuts(shots, angles=None, location="홀", time="낮", camera_plan="") -
     for i, (sh, an) in enumerate(zip(shots, angles), 1):
         cuts.append({
             "id": i, "size": "normal",
-            "camera": {"shot": sh, "angle": an, "facing": "앞모습"},
+            "camera": {"shot": sh, "angle": an},
             "background": {"type": "실제공간", "desc": "x"},
             "characters": [{"name": "하일", "moment": "도중"}],
             "dialogue": [{"order": 1, "type": "말", "text": "대사"}] if i % 2 == 0 else [],

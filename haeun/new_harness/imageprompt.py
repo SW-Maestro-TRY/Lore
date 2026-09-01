@@ -65,13 +65,16 @@ def _eul(word: str) -> str:
 
 
 def camera_line(camera) -> str:
-    """{shot, angle, facing} -> `상반신, 정면 앵글, 인물은 옆모습`."""
+    """{shot, angle} -> `상반신, 정면 앵글`.
+
+    facing(인물이 카메라 쪽으로 어느 면을 보이는가)은 여기 없다 — 인물마다
+    다를 수 있어서 person_line 에서 인물별로 적는다.
+    """
     camera = camera if isinstance(camera, dict) else {}
-    shot, angle, facing = (_t(camera.get(k)) for k in ("shot", "angle", "facing"))
+    shot, angle = (_t(camera.get(k)) for k in ("shot", "angle"))
     return ", ".join(p for p in (
         shot,
-        f"{angle} 앵글" if angle else "",
-        f"인물은 {facing}" if facing else "") if p)
+        f"{angle} 앵글" if angle else "") if p)
 
 
 def background_line(background) -> str:
@@ -92,10 +95,12 @@ def person_line(who) -> str:
     who = who if isinstance(who, dict) else {}
     name, style = _t(who.get("name")), _t(who.get("style"))
     where, moment = _t(who.get("position")), _t(who.get("moment"))
-    face, act, frame = (_t(who.get(k)) for k in ("expression", "action", "framing"))
+    facing, face, act, frame = (_t(who.get(k))
+                                 for k in ("facing", "expression", "action", "framing"))
 
     head = f"{name} ({style})" if style else name
-    body = ", ".join(p for p in (f"화면 {where}" if where else "", face, act) if p)
+    body = ", ".join(p for p in (f"화면 {where}" if where else "",
+                                  f"{facing}" if facing else "", face, act) if p)
     out = f"{head}: {body}" if body else head
     if moment:
         out += f". 동작의 {moment}{_eul(moment)} 그린다"

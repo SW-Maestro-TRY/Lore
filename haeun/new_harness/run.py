@@ -45,6 +45,7 @@ if str(WEBTOON_HARNESS) not in sys.path:
 import directing                              # noqa: E402  (webtoon-harness 것을 그대로 빌린다)
 import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
+import detailart                              # noqa: E402
 import pageart                                # noqa: E402
 import pages as pagemod                       # noqa: E402
 import sheet as sheetmod                      # noqa: E402
@@ -297,7 +298,7 @@ def parse_board(text: str) -> dict:
             cuts.append({
                 "id": _num(cut.get("id"), ci),
                 "size": _text(cut.get("size")).lower(),
-                "camera": {k: _text(camera.get(k)) for k in ("shot", "angle", "facing")},
+                "camera": {k: _text(camera.get(k)) for k in ("shot", "angle")},
                 "background": {k: _text(background.get(k)) for k in ("type", "desc")},
                 "characters": _dicts(cut.get("characters")),
                 # order 가 곧 읽는 순서다. 빠진 것은 나온 자리로 채워 뒤로 민다.
@@ -344,10 +345,69 @@ def parse_detail(text: str) -> dict:
                         if isinstance(x, dict) else {"what": _text(x), "from": ""}
                         for x in (s.get("guesses") or [])
                         if _text(x.get("what") if isinstance(x, dict) else x)],
+            # 이어짐 — 장면마다 따로 그림이 될 때 앞뒤가 안 끊기게 하는 칸이다
+            # (detail_prompt 6-2 참고). 안 온 칸은 빈 채로 둔다 — 여기서
+            # 채우면 모델이 안 적은 것과 코드가 지어낸 것이 섞인다. 옛 응답은
+            # 통째로 비어 있고, 그때는 이어짐 없이 예전처럼 동작한다.
+            "continuity": _continuity(s.get("continuity")),
             "leads_to": _text(s.get("leads_to")),
         })
-    return {"scenes": scenes,
+    # cast — 조연 외모를 화 전체에 걸쳐 고정한다. 주인공은 시트가 하지만
+    # 조연은 이것이 없으면 장면마다 다른 사람이 그려진다.
+    cast = [{"name": _text(c.get("name")), "appearance": _text(c.get("appearance"))}
+            for c in _dicts(obj.get("cast")) if _text(c.get("name"))]
+    return {"scenes": scenes, "cast": cast,
             "hidden": [_text(x) for x in (obj.get("hidden") or []) if _text(x)]}
+
+
+def _continuity(raw) -> dict:
+    """장면의 이어짐 칸. 없으면 전부 빈 값 — 옛 run 과 모양이 같아진다."""
+    raw = raw if isinstance(raw, dict) else {}
+    return {
+        "previous_ending": _text(raw.get("previous_ending")),
+        "transition": _text(raw.get("transition")),
+        "opening_state": _text(raw.get("opening_state")),
+        "ending_state": _text(raw.get("ending_state")),
+        "persistent_elements": [_text(x) for x in (raw.get("persistent_elements") or [])
+                                if _text(x)],
+        "visual_anchors": [_text(x) for x in (raw.get("visual_anchors") or [])
+                           if _text(x)],
+    }
+
+
+def _parse_cuts(raw_cuts) -> list[dict]:
+    """컷 목록(JSON) -> 정규화된 컷 목록. parse_cutscript 와 컷 대본 검수·보강
+    (parse_cutscript_fix) 이 같은 컷 스키마를 쓰므로 여기서 하나로 모은다."""
+    cuts = []
+    for j, c in enumerate(_dicts(raw_cuts), 1):
+        lines = []
+        for k, d in enumerate(_dicts(c.get("lines")), 1):
+            txt = _text(d.get("text"))
+            if not txt:
+                continue
+            pri = _text(d.get("priority")).lower()
+            lines.append({"order": _num(d.get("order"), k),
+                          "type": _text(d.get("type")) or "말",
+                          "speaker": _text(d.get("speaker")),
+                          "text": txt,
+                          # 안 적혀 있으면 지켜야 하는 줄로 본다 — 잃는
+                          # 쪽보다 남기는 쪽이 안전하다.
+                          "priority": pri if pri in ("required", "optional")
+                                      else "required"})
+        cuts.append({
+            "id": _num(c.get("id"), j),
+            "purpose": _text(c.get("purpose")),
+            "source_information": [_text(x) for x in
+                                   (c.get("source_information") or [])
+                                   if _text(x)],
+            "event": _text(c.get("event")),
+            "reader_learns": [_text(x) for x in (c.get("reader_learns") or [])
+                              if _text(x)],
+            "lines": lines,
+            "sfx": [_text(x) for x in (c.get("sfx") or []) if _text(x)],
+            "must_show": [_text(x) for x in (c.get("must_show") or []) if _text(x)],
+        })
+    return cuts
 
 
 def parse_cutscript(text: str) -> dict:
@@ -361,45 +421,20 @@ def parse_cutscript(text: str) -> dict:
         raise story.ParseFailure("컷 대본 결과가 JSON 객체가 아닙니다.")
     scenes = []
     for i, s in enumerate(_dicts(obj.get("scenes")), 1):
-        cuts = []
-        for j, c in enumerate(_dicts(s.get("cuts")), 1):
-            lines = []
-            for k, d in enumerate(_dicts(c.get("lines")), 1):
-                txt = _text(d.get("text"))
-                if not txt:
-                    continue
-                pri = _text(d.get("priority")).lower()
-                lines.append({"order": _num(d.get("order"), k),
-                              "type": _text(d.get("type")) or "말",
-                              "speaker": _text(d.get("speaker")),
-                              "text": txt,
-                              # 안 적혀 있으면 지켜야 하는 줄로 본다 — 잃는
-                              # 쪽보다 남기는 쪽이 안전하다.
-                              "priority": pri if pri in ("required", "optional")
-                                          else "required"})
-            cuts.append({
-                "id": _num(c.get("id"), j),
-                "purpose": _text(c.get("purpose")),
-                "source_information": [_text(x) for x in
-                                       (c.get("source_information") or [])
-                                       if _text(x)],
-                "event": _text(c.get("event")),
-                "reader_learns": [_text(x) for x in (c.get("reader_learns") or [])
-                                  if _text(x)],
-                "lines": lines,
-                "sfx": [_text(x) for x in (c.get("sfx") or []) if _text(x)],
-                "must_show": [_text(x) for x in (c.get("must_show") or []) if _text(x)],
-            })
-        scenes.append({"id": _num(s.get("id"), i), "cuts": cuts})
+        scenes.append({"id": _num(s.get("id"), i), "cuts": _parse_cuts(s.get("cuts"))})
     return {"scenes": scenes}
 
 
 def warn_script_kept(board: dict, script: dict | None) -> list[str]:
-    """콘티가 컷 대본을 지켰는가. 대본이 없으면 볼 것이 없다.
+    """콘티가 컷 대본의 내용을 지켰는가. 대본이 없으면 볼 것이 없다.
 
-    대본 단계를 따로 둔 이유가 "사람이 승인한 이야기가 연출에서 안 바뀌게"
-    이므로, 실제로 안 바뀌었는지는 코드가 확인해야 한다 — 프롬프트에 적어
-    두는 것만으로는 실측에서 한 줄씩 빠졌다.
+    **컷 경계 자체는 보지 않는다.** 대본의 컷 하나를 리액션·발견·화자
+    전환 같은 이유로 여러 컷으로 넓히거나, 같은 시간·공간에서 자연스러운
+    것을 한 컷에 묶는 것은 정상적인 연출 선택이다 — 컷 수가 다르다는
+    것만으로는 아무것도 말해주지 않는다(실측: 이런 정상적인 확장에도
+    매번 "컷 수가 다르다" 경고가 떴다). 그래서 여기서는 **내용이
+    보존됐는가**만 본다 — 필수 대사가 글자 그대로 있는가, 그리고 대본의
+    순서가 뒤바뀌지 않았는가.
     """
     if not script or not script.get("scenes"):
         return []
@@ -408,20 +443,25 @@ def warn_script_kept(board: dict, script: dict | None) -> list[str]:
            for s in board.get("scenes") or []
            for c in s.get("cuts") or []
            for d in c.get("dialogue") or []]
+    cursor = 0
     for s in script["scenes"]:
         for c in s.get("cuts") or []:
             for d in c.get("lines") or []:
                 if d.get("priority", "required") != "required":
                     continue
-                if d.get("text") not in got:
-                    out.append(f"장면 {s.get('id')} 컷 {c.get('id')}: 대본의 필수 "
-                               f"대사가 콘티에 그대로 없습니다 — "
-                               f"\"{d.get('text')}\"")
-    n_script = sum(len(s.get("cuts") or []) for s in script["scenes"])
-    n_board = sum(len(s.get("cuts") or []) for s in board.get("scenes") or [])
-    if n_script != n_board:
-        out.append(f"컷 수가 대본과 다릅니다 (대본 {n_script}개 · 콘티 "
-                   f"{n_board}개). 콘티는 컷을 더 나누거나 합치지 않습니다.")
+                text = d.get("text")
+                where = f"장면 {s.get('id')} 컷 {c.get('id')}"
+                if text not in got:
+                    out.append(f"{where}: 대본의 필수 대사가 콘티에 그대로 "
+                               f"없습니다 — \"{text}\"")
+                    continue
+                try:
+                    idx = got.index(text, cursor)
+                except ValueError:
+                    out.append(f"{where}: 필수 대사 순서가 대본과 다릅니다 "
+                               f"— \"{text}\" 가 대본보다 앞선 자리에 있습니다")
+                    continue
+                cursor = idx + 1
     return out
 
 
@@ -866,10 +906,16 @@ def directing_warnings(board: dict) -> list[str]:
     for s in scenes:
         for c in s.get("cuts") or []:
             cam = c.get("camera") or {}
-            for key, allowed in (("angle", ANGLES), ("facing", FACINGS)):
-                v = _text(cam.get(key))
-                if v and v not in allowed:
-                    off.append(f"장면 {s.get('id')} 컷 {c.get('id')}: {key}=\"{v}\"")
+            v = _text(cam.get("angle"))
+            if v and v not in ANGLES:
+                off.append(f"장면 {s.get('id')} 컷 {c.get('id')}: angle=\"{v}\"")
+            # facing 은 인물마다 하나씩이다(camera 가 아니라 characters[]) —
+            # 한 컷에 인물이 둘 이상이면 서로 달라도 정상이다.
+            for ch in c.get("characters") or []:
+                fv = _text(ch.get("facing")) if isinstance(ch, dict) else ""
+                if fv and fv not in FACINGS:
+                    off.append(f"장면 {s.get('id')} 컷 {c.get('id')} "
+                               f"{_text(ch.get('name'))}: facing=\"{fv}\"")
     if off:
         bad.append("값 목록에 없는 카메라 값입니다 (그림 프롬프트가 이 값을 "
                    f"그대로 씁니다): {', '.join(off[:6])}"
@@ -1340,6 +1386,138 @@ def stage_cutscript(run_dir: Path, char: dict, direction: dict,
     return script
 
 
+# ------------------------------------------------------- 컷 대본 검수·자기수정
+#
+# story/detail 단계의 review_prompt·fix_prompt 와는 다른 층이다 — 저건 "상세
+# 스토리가 논리적으로 앞뒤가 맞는가" 를 본다. 여기는 "이 컷스크립트가 그대로
+# 웹툰이 됐을 때, 사전 정보가 전혀 없는 독자가 화면만 보고 이해하는가" 를
+# 본다. 그래서 입력도 상세 스토리가 아니라 컷(purpose·lines·must_show)이고,
+# 장면을 하나씩 순서대로(그 앞 장면까지 읽은 것을 전제로) 처리한다.
+#
+# **호출은 장면당 한 번이다.** 검수와 수정을 따로 부르지 않는다 — 같은
+# 호출 안에서 독자로서 읽고, 문제가 있으면 스스로 진단하고 고치고, 고친
+# 것을 스스로 다시 확인해서 최종본을 낸다(모델이 직접 하지, 다른 단계로
+# 안 넘긴다). 검수와 수정을 별도 호출로 나눴을 때는 "빠진 낱말을 찾아
+# 그 자리에 문장 하나 끼워 넣는" 손쉬운 길로 흘러갔다(실측) — 그렇다고
+# 한 프롬프트에서 진단과 처방을 동시에 자유롭게 하게 두면 같은 문제가
+# 재현될 수 있어서, 프롬프트 안에서 "컷마다 순서대로 읽기 -> 진단 ->
+# 처방 순서(순서 변경 -> 문장 재작성 -> 컷 분리 -> must_show 보강 ->
+# 나레이션 최소 -> 새 줄 최후수단) -> 스스로 재확인" 을 강제한다.
+#
+# `cutscript.json`(원본)은 그대로 두고, 결과는 전부 `cutscript_fix/`
+# 아래에만 쓴다 — 원본과 최종본을 나란히 남겨서 무엇이 왜 바뀌었는지
+# 나중에도 비교할 수 있게 한다. 하지만 **콘티(board_block)가 실제로
+# 따르는 것은 원본이 아니라 이 최종본(`cutscript_fix/cutscript_final.json`)
+# 이다** — `load_cutscript` 참고. 기본 흐름(story → detail → 컷 대본 →
+# 컷 대본 픽스 → 콘티)에서 항상 자동으로 돈다. 컷 대본만 다시 돌리고
+# 콘티는 아직 안 갈 때(`--cutscript-fix` 단독 호출)를 위해 별도 함수로
+# 남겨 둔다.
+
+def _fmt_cuts_json(cuts: list[dict]) -> str:
+    return json.dumps(cuts, ensure_ascii=False, indent=2)
+
+
+def cutscript_fix_header(char: dict, direction: dict) -> list[str]:
+    """컷 대본 검수·자기수정의 입력 머리말 — 줄거리·캐릭터·장르·밝히지 않을 것."""
+    lines = ["## 줄거리", "", direction["plot"], "",
+             "## 캐릭터 정보", "", f"이름: {char['name']}"]
+    if char["description"]:
+        lines.append(f"설명: {char['description']}")
+    for k, v in char["fields"].items():
+        lines.append(f"- {k}: {v}")
+    lines += ["", "## 장르", "",
+              direction["genre"] or char["genre"] or "(정해진 것 없음)"]
+    lines += ["", "## 밝히지 않을 것", ""]
+    lines += [f"- {h}" for h in direction["hidden"]] or ["(없음)"]
+    return lines
+
+
+def cutscript_fix_block(char: dict, direction: dict, script: dict) -> str:
+    """컷 대본 검수·자기수정 단계의 입력 — 이 화 전체의 컷스크립트 한 번에."""
+    lines = cutscript_fix_header(char, direction)
+    lines += ["", "## 이 화 전체의 컷스크립트 (장면 순서대로, 각 장면 안에서는 컷 순서대로)", "",
+              "```json", json.dumps(script["scenes"], ensure_ascii=False, indent=2), "```"]
+    return "\n".join(lines) + "\n"
+
+
+def parse_cutscript_fix(text: str) -> dict:
+    """cutscript_fix_prompt 의 응답(JSON) -> 검수+자기수정 결과 한 번의 것."""
+    obj = story.extract_json(text)
+    if not isinstance(obj, dict):
+        raise story.ParseFailure("컷 대본 검수 결과가 JSON 객체가 아닙니다.")
+    exp = obj.get("reader_experience") or {}
+    diagnosis = []
+    for d in _dicts(obj.get("diagnosis")):
+        diagnosis.append({
+            "scene": _num(d.get("scene"), 0),
+            "cuts": [_num(x, 0) for x in (d.get("cuts") or []) if _num(x, 0)],
+            "type": _text(d.get("type")),
+            "severity": _text(d.get("severity")).lower() or "high",
+            "problem": _text(d.get("problem")),
+            "why_it_matters": _text(d.get("why_it_matters")),
+        })
+    scenes = []
+    for i, s in enumerate(_dicts(obj.get("scenes")), 1):
+        scenes.append({"id": _num(s.get("id"), i), "cuts": _parse_cuts(s.get("cuts"))})
+    verdict = _text(obj.get("verdict")).upper()
+    if verdict not in ("PASS", "FAIL"):
+        # 모델이 verdict 를 안 지켰을 때의 안전망 — 진단이 있으면 FAIL.
+        verdict = "FAIL" if diagnosis else "PASS"
+    return {
+        "verdict": verdict,
+        "changes_made": verdict == "FAIL",
+        "reader_experience": {
+            "understands": [_text(x) for x in (exp.get("understands") or []) if _text(x)],
+            "confused": [_text(x) for x in (exp.get("confused") or []) if _text(x)],
+        },
+        "diagnosis": diagnosis,
+        "scenes": scenes,
+    }
+
+
+def stage_cutscript_fix(run_dir: Path, char: dict, direction: dict,
+                         dry_run: bool) -> dict:
+    """컷 대본을 **고치지 않고** 그대로 둔 채, 이 화 전체를 검수 에이전트에게
+    한 번에 준다 — 호출 딱 한 번으로 처음부터 끝까지 독자로서 읽고, 필요하면
+    스스로 고치고, 고친 것을 스스로 다시 확인까지 마친 최종본을 받는다.
+    장면별로 나눠 부르지 않는다.
+    """
+    path = run_dir / "cutscript.json"
+    if not path.exists():
+        raise SystemExit(f"{path} 가 없습니다. 컷 대본을 먼저 돌리세요.")
+    script = json.loads(path.read_text(encoding="utf-8"))
+    out_dir = run_dir / "cutscript_fix"
+
+    prompt = compose("cutscript_fix_prompt", cutscript_fix_block(char, direction, script))
+    write_text(out_dir / "reader_prompt.txt", prompt)
+    if dry_run:
+        log(f"[컷 검수·자기수정] 프롬프트만 썼습니다 -> {out_dir / 'reader_prompt.txt'}")
+        return {}
+
+    call = llm.Call("CUTSCRIPT_FIX")
+    n_cuts = sum(len(s["cuts"]) for s in script["scenes"])
+    log(f"[컷 검수·자기수정] {call.describe()} 로 장면 {len(script['scenes'])}개 · "
+        f"컷 {n_cuts}개를 한 번에 읽고, 필요하면 스스로 고칩니다…")
+    # 판단이 흔들리지 않게 온도를 0으로 — 같은 컷을 두고 어제는 잡고
+    # 오늘은 놓치는 것을 실측으로 봤다.
+    text, meta = call(prompt, temperature=0.0)
+    write_text(out_dir / "reader_raw.txt", text)
+    record(run_dir, meta)
+
+    result = parse_cutscript_fix(text)
+    write_json(out_dir / "reader_result.json", result)
+    log(f"  {result['verdict']} — changes_made={result['changes_made']}")
+    for one in result["reader_experience"]["confused"]:
+        log(f"    독자가 못 잡음: {one}")
+    for d in result["diagnosis"]:
+        log(f"    [{d['severity']:6}] 장면 {d['scene']} 컷 {d['cuts']} ({d['type']}) {d['problem']}")
+
+    scenes = result["scenes"] or script["scenes"]
+    write_json(out_dir / "cutscript_final.json", {"scenes": scenes})
+    log(f"  -> {out_dir / 'cutscript_final.json'}")
+    return result
+
+
 def review_block(char: dict, direction: dict, run_dir: Path) -> str:
     """검수 단계의 입력 — 구체화가 받은 것 전부 + 구체화 결과.
 
@@ -1468,6 +1646,23 @@ def stage_fix(run_dir: Path, char: dict, direction: dict, review: dict,
     return merged
 
 
+def load_cutscript(run_dir: Path) -> dict | None:
+    """콘티가 실제로 따라야 할 컷 대본.
+
+    `cutscript_fix/cutscript_final.json`(컷 대본 검수·자기수정의 최종본)이
+    있으면 그것을 쓴다 — 자기수정까지 마친 것이 실제 최종본이라는 뜻이다.
+    없으면(아직 픽스를 안 돌린 옛 run, 또는 `--board` 만 단독으로 다시
+    부르는 경우) `cutscript.json`(원본)으로 그대로 돌아간다.
+    """
+    final_path = run_dir / "cutscript_fix" / "cutscript_final.json"
+    if final_path.exists():
+        return json.loads(final_path.read_text(encoding="utf-8"))
+    script_path = run_dir / "cutscript.json"
+    if script_path.exists():
+        return json.loads(script_path.read_text(encoding="utf-8"))
+    return None
+
+
 def board_block(char: dict, direction: dict, run_dir: Path) -> str:
     """콘티 단계의 입력 — 구체화된 이야기 · 캐릭터 정보 · 장르.
 
@@ -1491,9 +1686,7 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
     # 컷 대본이 있으면 **컷 분할과 대사는 이미 끝난 것이다.** 콘티는 그것을
     # 화면으로 옮기기만 한다 — 대본 없이 한 번에 시켰을 때 서사 정보가
     # 연출에 잡아먹히던 것을 막으려고 나눈 단계다(stage_cutscript 참고).
-    script_path = run_dir / "cutscript.json"
-    script = (json.loads(script_path.read_text(encoding="utf-8"))
-              if script_path.exists() else None)
+    script = load_cutscript(run_dir)
     if script and script.get("scenes"):
         lines += ["", "## 컷 대본 — 이대로 컷을 만든다", "",
                   "컷을 나누는 일과 무슨 말을 할지는 이미 끝났다. 컷을 더 나누거나 "
@@ -1598,13 +1791,19 @@ def repage(run_dir: Path, max_ratio: int | None = None) -> list:
 
 def stage_board(run_dir: Path, char: dict, direction: dict, dry_run: bool,
                 max_ratio: int | None = None) -> None:
-    write_json(run_dir / "pick.json", {"n": direction["n"], "title": direction["title"],
-                                       "genre": direction["genre"]})
     prompt = compose("storyboard_prompt", board_block(char, direction, run_dir))
     write_text(run_dir / "board_prompt.txt", prompt)
     if dry_run:
         log(f"[콘티] 프롬프트만 썼습니다 -> {run_dir / 'board_prompt.txt'}")
         return
+
+    # pick.json 은 "실제로 확정된 선택"의 기록이라, 호출이 실제로 일어나는
+    # 경우에만(dry-run 이 아닐 때만) 갱신한다 — dry-run 으로 다른 방향을
+    # 훑어보기만 해도 이 값이 덮어써지면, 나중에 --pick 없이 이어할 때
+    # 엉뚱한 방향으로 이어진다(실측: 2026-09-01, 테스트용 dry-run 이 실제
+    # 진행 중이던 run 의 pick.json 을 조용히 바꿔치기했다).
+    write_json(run_dir / "pick.json", {"n": direction["n"], "title": direction["title"],
+                                       "genre": direction["genre"]})
 
     call = llm.Call("BOARD")
     log(f"[콘티] {call.describe()} 로 방향 {direction['n']} 을 컷으로 나눕니다…")
@@ -1627,9 +1826,7 @@ def stage_board(run_dir: Path, char: dict, direction: dict, dry_run: bool,
     # 반드시 고쳐야 하는 것", 하나는 "이대로도 그림은 나오지만 참고할 것"
     # 이라, 섞어 두면 어느 쪽인지 못 가른다.
     bad = gate_board(board)
-    script_path = run_dir / "cutscript.json"
-    script = (json.loads(script_path.read_text(encoding="utf-8"))
-              if script_path.exists() else None)
+    script = load_cutscript(run_dir)
     warns = directing_warnings(board) + warn_script_kept(board, script)
     if bad:
         warn(f"콘티에 반드시 손볼 곳이 {len(bad)}개 있습니다 (구조가 깨졌습니다):")
@@ -1711,6 +1908,24 @@ def stage_pages(run_dir: Path, dry_run: bool, only=None,
         log(f"[페이지] {len(made)}장 그렸습니다 -> {run_dir / pageart.PAGE_DIR}")
 
 
+def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
+                       allow_no_sheet: bool = False) -> None:
+    """**컷 대본·콘티를 건너뛰고** 디테일에서 바로 페이지를 그린다.
+
+    장면 하나가 페이지 하나가 되고, 컷을 어떻게 나눌지는 그림 모델이 정한다
+    (detailart.py 참고). 컷 대본에서 대사·컷·카메라를 다 못박으면 그림이
+    그것을 옮기기만 해서 결과가 평평해지던 것을 피하려는 흐름이다.
+
+    쓰는 자리가 `pages/` 로 같아서 둘러보기·편집실은 어느 흐름으로 만든
+    것인지 몰라도 된다.
+    """
+    made = detailart.draw(run_dir, dry_run=dry_run, only=only,
+                          allow_no_sheet=allow_no_sheet,
+                          on_page=lambda meta: record(run_dir, meta))
+    if made:
+        log(f"[디테일 직행] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
+
+
 # --------------------------------------------------------------------- CLI
 
 def main(argv=None) -> int:
@@ -1736,6 +1951,11 @@ def main(argv=None) -> int:
                    help="구체화 결과를 검수만 한다 (고치지 않는다)")
     p.add_argument("--fix", action="store_true",
                    help="검수 지적을 반영한다 (지적된 장면만 고친다)")
+    p.add_argument("--cutscript-fix", action="store_true",
+                   help="컷 대본만 다시 검수·자기수정한다 (기본 흐름에서 이미 "
+                        "자동으로 도는 단계 — 컷 대본을 손으로 고친 뒤 다시 "
+                        "돌리는 등 단독 재실행용. cutscript.json 은 안 건드리고 "
+                        "결과는 cutscript_fix/ 아래에만 쓴다)")
     p.add_argument("--sheet", action="store_true", help="캐릭터 시트만")
     p.add_argument("--sheet-spec", action="store_true",
                    help="시트 사양(글)만. 그림은 안 그린다")
@@ -1744,6 +1964,9 @@ def main(argv=None) -> int:
                         "new_harness run 폴더 · png 하나). 호출 0회")
     p.add_argument("--pages", action="store_true",
                    help="페이지 그림만 (페이지 하나당 호출 한 번)")
+    p.add_argument("--detail-pages", action="store_true",
+                   help="컷 대본·콘티를 건너뛰고 디테일에서 바로 페이지를 그린다 "
+                        "(1페이지가 표지, 장면 하나가 페이지 하나)")
     p.add_argument("--page", type=int, action="append", default=[],
                    help="그 번호 페이지만 다시 (여러 번 가능)")
     p.add_argument("--no-sheet", action="store_true",
@@ -1814,8 +2037,8 @@ def main(argv=None) -> int:
     # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
     if not args.all and (args.detail or args.cutscript or args.board
-                         or args.review or args.fix
-                         or args.sheet or args.sheet_spec or args.pages
+                         or args.review or args.fix or args.cutscript_fix
+                         or args.sheet or args.sheet_spec or args.pages or args.detail_pages
                          or args.page or args.sheet_from):
         if args.detail:
             chosen = picked_direction(run_dir, args.pick)
@@ -1840,9 +2063,15 @@ def main(argv=None) -> int:
                 raise SystemExit(f"{path} 가 없습니다. 검수를 먼저 돌리세요.")
             stage_fix(run_dir, char, picked_direction(run_dir, args.pick),
                       json.loads(path.read_text(encoding="utf-8")), args.dry_run)
+        if args.cutscript_fix:
+            stage_cutscript_fix(run_dir, char, picked_direction(run_dir, args.pick),
+                                 args.dry_run)
         if args.sheet or args.sheet_spec:
             stage_sheet(run_dir, char, args.dry_run, spec_only=args.sheet_spec)
-        if args.pages or args.page:
+        if args.detail_pages:
+            stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
+                               allow_no_sheet=args.no_sheet)
+        elif args.pages or args.page:
             stage_pages(run_dir, args.dry_run, only=args.page or None,
                         allow_no_sheet=args.no_sheet)
         return 0
@@ -1870,6 +2099,10 @@ def main(argv=None) -> int:
     # 컷 대본이 콘티보다 먼저다 — 컷 분할과 대사를 확정한 뒤에야 연출로
     # 넘어간다 (stage_cutscript 의 주석 참고).
     stage_cutscript(run_dir, char, direction, args.dry_run)
+    # 컷 대본을 독자로서 읽고 스스로 고친다 (stage_cutscript_fix 의 주석
+    # 참고) — 이 결과(cutscript_final.json)를 콘티가 실제로 따른다
+    # (board_block 의 load_cutscript 참고).
+    stage_cutscript_fix(run_dir, char, direction, args.dry_run)
     # 검수·보강은 흐름에서 뺐다. 검수가 실제로 무엇을 잡는지 아직 확인이
     # 안 됐고(한 번 돌렸을 때 0개였다), 아무것도 못 잡은 결과로 고치면 고칠
     # 것이 없다. --review · --fix 로 따로 부른다.
