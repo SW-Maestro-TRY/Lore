@@ -225,6 +225,25 @@ def _bullets(text: str) -> list[str]:
     return [ln.strip() for ln in text.splitlines() if ln.strip()]
 
 
+def _cast_bullets(text: str) -> list[dict]:
+    """"이름 — 외모" 한 줄씩 -> [{"name", "appearance"}]. 구분자가 없는 줄은 버린다.
+
+    board.json·detail.json 이 만들던 cast(조연 외모 고정)를 story 단계에서
+    바로 만든다 — 콘티·구체화를 건너뛰는 이어그리기 흐름은 그 둘이 없어서,
+    여기서 안 만들면 조연 외모를 고정할 데가 없다.
+    """
+    out = []
+    for line in _bullets(text):
+        for sep in ("—", "–", "-"):
+            if sep in line:
+                name, _, appearance = line.partition(sep)
+                name, appearance = name.strip(), appearance.strip()
+                if name and appearance:
+                    out.append({"name": name, "appearance": appearance})
+                break
+    return out
+
+
 def parse_directions(md: str) -> list[dict]:
     """story_prompt 의 응답에서 방향 4개를 잘라 읽는다."""
     marks = list(DIRECTION_RE.finditer(md))
@@ -240,6 +259,7 @@ def parse_directions(md: str) -> list[dict]:
             "genre": genre.group(1).strip() if genre else "",
             "plot": sec.get("줄거리", "").strip(),
             "scenes": _bullets(sec.get("장면 목록", "")),
+            "cast": _cast_bullets(sec.get("등장인물", "")),
             "hidden": _bullets(sec.get("밝히지 않은 것", "")),
             "raw": (m.group(0) + body).strip(),
         })
@@ -947,8 +967,23 @@ def record(run_dir: Path, call_meta: dict) -> None:
     meta["calls"].append(call_meta)
     write_json(run_dir / "meta.json", meta)
     cost = call_meta.get("cost") or {}
-    log(f"  {call_meta['stage']}  {call_meta['provider']}:{call_meta['model']}  "
-        f"{story.cost_text(cost.get('total'))}")
+    tag = "실패" if call_meta.get("error") else ""
+    log(f"  {tag}{call_meta['stage']}  {call_meta['provider']}:{call_meta['model']}  "
+        f"{story.cost_text(cost.get('total'))}"
+        + (f"  — {call_meta['error']}" if call_meta.get("error") else ""))
+
+
+def record_error(run_dir: Path, stage: str, provider: str, model: str, exc: Exception) -> None:
+    """호출이 실패했을 때도 meta.json 에 흔적을 남긴다 — 성공 때(record)와 같은
+    자리, 비용은 0으로. 실패 사유가 로그에서만 스쳐 지나가면 나중에 이 run이
+    왜 멈췄는지, 어디까지 돈이 나갔는지 다시 알아낼 수 없다."""
+    record(run_dir, {
+        "stage": stage, "provider": provider, "model": model,
+        "usage": None, "stop": None,
+        "cost": {"input": 0.0, "output": 0.0, "cache_read": 0.0,
+                 "cache_write": 0.0, "total": 0.0},
+        "error": f"{type(exc).__name__}: {exc}",
+    })
 
 
 def read_input(run_dir: Path) -> dict:
@@ -1110,8 +1145,15 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     return "\n".join(parts)
 
 
-def stage_story(run_dir: Path, char: dict, dry_run: bool) -> list[dict]:
+def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "") -> list[dict]:
     block = story_input_block(char).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
+    note = (note or "").strip()
+    if note:
+        # 다시 만들기에서 사람이 남긴 요청 — 캐릭터 설정 자체가 아니라 "이번엔
+        # 이렇게 더 반영해 달라"는 한 번짜리 지시라, story_input_block 이 아니라
+        # 여기서 따로 붙인다(캐릭터 파일을 고치면 다음 시도에도 계속 남는다).
+        block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 " \
+                 f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
     prompt = compose("story_prompt", block)
     write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
@@ -1120,7 +1162,11 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool) -> list[dict]:
 
     call = llm.Call("STORY")
     log(f"[이야기] {call.describe()} 로 후보 4개를 만듭니다…")
-    text, meta = call(prompt, images=llm.load_images(char["photos"]))
+    try:
+        text, meta = call(prompt, images=llm.load_images(char["photos"]))
+    except Exception as exc:                                          # noqa: BLE001
+        record_error(run_dir, "STORY", call.provider, call.model, exc)
+        raise
     write_text(run_dir / "story.md", text)
     record(run_dir, meta)
 
@@ -1843,9 +1889,16 @@ def stage_board(run_dir: Path, char: dict, direction: dict, dry_run: bool,
 
 
 def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
-                spec_only: bool = False) -> None:
+                spec_only: bool = False, note: str = "") -> None:
     photos = char["photos"]
-    prompt = compose("sheet_prompt", input_block(char))
+    block = input_block(char)
+    note = (note or "").strip()
+    if note:
+        # 다시 만들기에서 남긴 한 번짜리 요청 — character.json 을 고치지 않고
+        # 여기서만 붙인다(stage_story 의 note 와 같은 이유).
+        block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 " \
+                 f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
+    prompt = compose("sheet_prompt", block)
     write_text(run_dir / "sheet_spec_prompt.txt", prompt)
 
     spec_path = run_dir / "sheet_spec.json"
@@ -1858,7 +1911,11 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
     else:
         call = llm.Call("SHEET")
         log(f"[시트] {call.describe()} 로 사양을 적습니다…")
-        text, meta = call(prompt, images=llm.load_images(photos), temperature=0.4)
+        try:
+            text, meta = call(prompt, images=llm.load_images(photos), temperature=0.4)
+        except Exception as exc:                                      # noqa: BLE001
+            record_error(run_dir, "SHEET", call.provider, call.model, exc)
+            raise
         record(run_dir, meta)
         spec = sheetmod.parse_spec(text)
         bad = sheetmod.gate_spec(spec)
@@ -1888,7 +1945,12 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
     # 사양대로 안 그린다. 사양은 이미 사진을 보고 쓴 것이라(SHEET 단계에서
     # 사진을 첨부해 읽는다) 여기서 사진을 또 붙일 이유가 없다.
     log("[시트] 그리는 중… (사진 없이 사양만)")
-    meta = sheetmod.paint(image_prompt, out)
+    sheet_provider, sheet_model, _q = imagegen.backend_for("SHEET_IMAGE")
+    try:
+        meta = sheetmod.paint(image_prompt, out)
+    except Exception as exc:                                          # noqa: BLE001
+        record_error(run_dir, "SHEET_IMAGE", sheet_provider, sheet_model, exc)
+        raise
     record(run_dir, meta)
     log(f"  -> {out}")
 
@@ -1910,20 +1972,24 @@ def stage_pages(run_dir: Path, dry_run: bool, only=None,
 
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False) -> None:
-    """**컷 대본·콘티를 건너뛰고** 디테일에서 바로 페이지를 그린다.
+    """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
+    story 단계(방향 후보) 산출물만으로 표지+전체 씬을 그린다.
 
-    장면 하나가 페이지 하나가 되고, 컷을 어떻게 나눌지는 그림 모델이 정한다
-    (detailart.py 참고). 컷 대본에서 대사·컷·카메라를 다 못박으면 그림이
-    그것을 옮기기만 해서 결과가 평평해지던 것을 피하려는 흐름이다.
+    2026-09-02 이전에는 이 함수가 `detailart.draw()`(구체화 후 씬 단위)를
+    불렀다 — 이제는 `detailart.draw_continue()`를 부른다. 씬 하나가 페이지
+    하나가 되는 것은 같지만, 무엇을 그릴지 결정하는 재료가 detail.json이
+    아니라 directions.json(+pick.json)이다. `detailart.draw()`·`build_prompt()`
+    등 구체화 버전 코드는 지우지 않고 그대로 남겨 뒀다 — 나중에 다시 비교할
+    수 있게.
 
     쓰는 자리가 `pages/` 로 같아서 둘러보기·편집실은 어느 흐름으로 만든
     것인지 몰라도 된다.
     """
-    made = detailart.draw(run_dir, dry_run=dry_run, only=only,
-                          allow_no_sheet=allow_no_sheet,
-                          on_page=lambda meta: record(run_dir, meta))
+    made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
+                                   allow_no_sheet=allow_no_sheet,
+                                   on_page=lambda meta: record(run_dir, meta))
     if made:
-        log(f"[디테일 직행] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
+        log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
 
 
 # --------------------------------------------------------------------- CLI
@@ -1965,8 +2031,16 @@ def main(argv=None) -> int:
     p.add_argument("--pages", action="store_true",
                    help="페이지 그림만 (페이지 하나당 호출 한 번)")
     p.add_argument("--detail-pages", action="store_true",
-                   help="컷 대본·콘티를 건너뛰고 디테일에서 바로 페이지를 그린다 "
+                   help="이어그리기(최종 방식) — 구체화·콘티·컷 대본을 전부 "
+                        "건너뛰고 방향 후보로 바로 페이지를 그린다 "
                         "(1페이지가 표지, 장면 하나가 페이지 하나)")
+    p.add_argument("--pick-save", action="store_true",
+                   help="다른 단계를 안 돌리고 pick.json 만 남긴다 — 이어그리기 "
+                        "흐름은 구체화가 없어서, 방향을 고른 뒤 검수 화면으로 "
+                        "가기 전에 이걸로 pick 만 기록한다 (호출 0회)")
+    p.add_argument("--restory", action="store_true",
+                   help="기존 run 에서 이야기 후보 4개를 다시 만든다 (방향 고르기 "
+                        "화면에서 '다시 만들기' — --note 와 같이 쓸 수 있다)")
     p.add_argument("--page", type=int, action="append", default=[],
                    help="그 번호 페이지만 다시 (여러 번 가능)")
     p.add_argument("--no-sheet", action="store_true",
@@ -1979,6 +2053,8 @@ def main(argv=None) -> int:
     p.add_argument("--repage", action="store_true",
                    help="콘티는 그대로 두고 페이지 묶기만 다시 한다 (호출 0회)")
     p.add_argument("--dry-run", action="store_true", help="프롬프트만 쓰고 호출하지 않는다")
+    p.add_argument("--note", default="", help="다시 만들기에서 이번 시도에만 추가로 "
+                                              "반영할 요청 (이야기·시트 단계에서 씀)")
     p.add_argument("--plan", action="store_true", help="단계별 모델만 보여준다")
     args = p.parse_args(argv)
 
@@ -2039,7 +2115,17 @@ def main(argv=None) -> int:
     if not args.all and (args.detail or args.cutscript or args.board
                          or args.review or args.fix or args.cutscript_fix
                          or args.sheet or args.sheet_spec or args.pages or args.detail_pages
-                         or args.page or args.sheet_from):
+                         or args.page or args.sheet_from or args.pick_save or args.restory):
+        if args.restory:
+            # 방향 후보를 다시 만든다 — 이전 pick.json 은 더 이상 유효하지
+            # 않다(방향 번호가 새로 나온 4개와 안 맞을 수 있다), 지운다.
+            (run_dir / "pick.json").unlink(missing_ok=True)
+            stage_story(run_dir, char, args.dry_run, note=args.note)
+        if args.pick_save:
+            chosen = picked_direction(run_dir, args.pick)
+            write_json(run_dir / "pick.json", {"n": chosen["n"], "title": chosen["title"],
+                                               "genre": chosen["genre"]})
+            log(f"[방향 선택] {chosen['n']}번 저장했습니다 -> {run_dir / 'pick.json'}")
         if args.detail:
             chosen = picked_direction(run_dir, args.pick)
             write_json(run_dir / "pick.json", {"n": chosen["n"], "title": chosen["title"],
@@ -2067,7 +2153,7 @@ def main(argv=None) -> int:
             stage_cutscript_fix(run_dir, char, picked_direction(run_dir, args.pick),
                                  args.dry_run)
         if args.sheet or args.sheet_spec:
-            stage_sheet(run_dir, char, args.dry_run, spec_only=args.sheet_spec)
+            stage_sheet(run_dir, char, args.dry_run, spec_only=args.sheet_spec, note=args.note)
         if args.detail_pages:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
                                allow_no_sheet=args.no_sheet)
@@ -2078,7 +2164,7 @@ def main(argv=None) -> int:
 
     directions = []
     if new_run or args.all:
-        directions = stage_story(run_dir, char, args.dry_run)
+        directions = stage_story(run_dir, char, args.dry_run, note=args.note)
         if args.dry_run:
             return 0
         if not args.all and args.pick is None:
