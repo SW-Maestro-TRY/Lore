@@ -26,6 +26,9 @@ const nextConfig = {
     return [
       { source: '/comic', destination: '/zzal', permanent: true },
       { source: '/jjal',  destination: '/zzal', permanent: true },
+      // 시안 비교 때 쓰던 주소들. 먼저 공유된 링크가 죽지 않게 받아 준다.
+      { source: '/zzal/scrapbook', destination: '/zzal', permanent: false },
+      { source: '/zzal/cartridge', destination: '/zzal', permanent: false },
     ];
   },
 

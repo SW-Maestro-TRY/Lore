@@ -1,0 +1,60 @@
+/* 다마고치 화면에서 공용 헤더가 이 화면의 옷을 입는다.
+ *
+ * 헤더 컴포넌트를 고치지 않고 토큰만 덮어쓴다 — 헤더는 색을 전부 CSS 변수로 읽으므로
+ * 여기서 변수만 바꾸면 같은 헤더가 종이도 된다.
+ * data-skin 은 화면이 마운트될 때 <html> 에 심고 나갈 때 지운다. */
+
+/* ── 스크랩북 : 모눈 종이 위 ───────────────────────────────── */
+:root[data-skin="scrapbook"] {
+  --header-bg: rgba(243, 238, 224, 0.92);
+  --surface-2: rgba(255, 253, 246, 0.9);
+  --surface-hover: rgba(255, 249, 228, 0.9);
+  --text: #3a352b;
+  --text-muted: #6e6357;
+  --text-subtle: #8e8375;
+  --border: rgba(58, 53, 43, 0.12);
+  --border-strong: rgba(58, 53, 43, 0.2);
+  --accent-zzal: #b4614c;
+  --btn-primary-bg: #3a352b;
+  --btn-primary-fg: #fff8ec;
+}
+
+/* 헤더 아래로 앱이 들어간다. 헤더는 sticky 라 스크롤해도 계속 보이고,
+ * 앱은 남은 높이를 정확히 채운다(헤더 높이는 실측해 --tama-header-h 로 들어온다).
+ *
+ * main 의 폭·여백은 (domains)/layout.tsx 가 인라인 style 로 준다. 인라인은 CSS 로 못 이기므로
+ * 그쪽이 변수를 읽게 열어 두고 여기서 그 변수를 덮는다. */
+:root[data-skin] {
+  --main-max: none;
+  --main-pad-y: 0px;
+  --main-pad-x: 0px;
+}
+
+/* 헤더가 폰에서도 탭을 보여준다 — 여기서 webtoon·trailer 로 건너가는 게 이 화면의 몫이다.
+ * (공용 헤더는 좁은 화면에서 탭을 숨긴다. 그 자리는 '시작하기' 를 접어 만든다 —
+ *  접는 일은 SiteHeader 가 한다. zzal 에 있으면 그 버튼이 가리킬 곳이 자기 자신이다.) */
+@media (max-width: 640px) {
+  :root[data-skin] header nav {
+    display: flex;
+  }
+
+  /* 폰 한 줄에 워드마크 + 탭 3개 + 테마 토글을 다 넣어야 한다.
+   * 기본 여백 그대로면 390px 에서 12px 넘쳐 가로 스크롤이 생기므로 여기만 조인다.
+   * (zzal 스킨이 켜져 있을 때만 적용된다 — 다른 탭 헤더는 그대로) */
+  :root[data-skin] header > div {
+    gap: 8px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  :root[data-skin] header nav {
+    gap: 2px;
+    font-size: 13px;
+  }
+  :root[data-skin] header nav a {
+    padding: 8px 6px;
+  }
+  :root[data-skin] header button {
+    gap: 5px;
+    padding: 7px 9px;
+  }
+}

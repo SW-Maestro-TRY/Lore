@@ -16,6 +16,7 @@ import styles from "./SiteHeader.module.css";
 
 export default function SiteHeader() {
   const pathname = usePathname();
+  const onZzal = pathname.startsWith("/zzal");
 
   return (
     <header className={styles.header}>
@@ -43,10 +44,14 @@ export default function SiteHeader() {
 
         <div className={styles.headerActions}>
           <ThemeToggle />
-          {/* 시작점은 Zzal 탭 (사용자 여정상 가장 가벼운 진입) */}
-          <Link href="/zzal" className={styles.headerCta}>
-            시작하기
-          </Link>
+          {/* 시작점은 Zzal 탭 (사용자 여정상 가장 가벼운 진입).
+              이미 zzal 에 들어와 있으면 가리킬 곳이 자기 자신이라 접는다 —
+              좁은 화면에서 그 자리를 탭(Trailer·Webtoon)에 내준다. */}
+          {!onZzal && (
+            <Link href="/zzal" className={styles.headerCta}>
+              시작하기
+            </Link>
+          )}
         </div>
       </div>
     </header>
