@@ -2243,8 +2243,8 @@ body.ed .ed-top-row { min-height: 0; height: 0; padding: 0; }
      홈·둘러보기는 **화면을 꽉 채운다** — 표지를 늘어놓는 자리라 넓을수록
      한눈에 더 많이 들어온다. 반대로 읽기·만들기는 아래에서 따로 폭을
      묶는다(글과 만화는 넓힌다고 잘 읽히지 않는다). */
-  #landing, #works, #mypage { max-width: none; width: 100%; }
-  #create, #progress, #result, #nextEp {
+  #landing, #works, #mypage, #create { max-width: none; width: 100%; }
+  #progress, #result, #nextEp {
     max-width: 1180px; margin-inline: auto; width: 100%;
   }
 
@@ -2306,17 +2306,115 @@ body.ed .ed-top-row { min-height: 0; height: 0; padding: 0; }
     max-width: 760px; margin-inline: auto; width: 100%;
   }
 
-  /* ── 만들기 · 진행 ───────────────────────────────────────────────────
-     입력하는 화면은 넓힐수록 나빠진다(눈이 좌우로 오래 움직인다).
-     가운데 카드 하나로 두되, 폰보다는 여유 있게. */
-  .create, .progress { padding: 40px 32px 80px; }
-  .studio, .progress-inner {
+  /* ── 진행 ────────────────────────────────────────────────────────────
+     기다리는 화면은 읽을 것이 몇 줄뿐이다. 가운데 카드 하나로 둔다. */
+  .progress { padding: 40px 32px 80px; }
+  .progress-inner {
     max-width: 720px; margin-inline: auto;
     background: var(--ink); border-radius: 22px;
     box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 18px 50px rgba(15,51,63,.10);
     padding: 8px 28px 28px;
   }
   .nextep { max-width: 720px; }
+
+  /* ── 만들기(위저드) ──────────────────────────────────────────────────
+     여기만 폰 화면 그대로 남아 있었다 — 화면 한가운데 좁은 카드 하나가
+     떠 있고, 「다음」이 화면 폭을 다 쓰는 막대로 바닥에 붙어 있었다.
+     엄지로 누르는 화면의 모양이라 PC 에서는 남의 화면처럼 읽힌다.
+
+     PC 구성은 **왼쪽은 말, 오른쪽은 손이 닿는 것** 이다. 걸음 이름과 물음은
+     왼쪽에 세워 두고(스크롤해도 따라온다), 실제로 채우는 카드와 단추는
+     오른쪽 한 기둥에 모은다. 물빛은 카드 뒤가 아니라 **화면 전체**를
+     칠한다 — 걸음이 깊어질수록 어두워지는 것이 이 화면의 뼈대다.
+
+     .wiz-step 을 display:contents 로 푸는 이유: 말과 카드가 같은 격자의
+     이웃이어야 두 칸이 같은 줄에서 시작한다. 걸음 껍데기가 격자 칸 하나를
+     차지하면 그 안에서 다시 위아래로 흐를 뿐이다.
+     display 를 덮었으므로 [hidden] 의 기본 display:none 이 더 이상 안
+     먹는다 — 숨은 걸음을 직접 눌러 준다(안 하면 다섯 걸음이 한꺼번에
+     쏟아진다). */
+  .create { padding: 0; }
+  .studio {
+    max-width: none; width: 100%;
+    padding: 0; border-radius: 0; box-shadow: none;
+  }
+  .wizard {
+    display: grid;
+    grid-template-columns: minmax(240px, 320px) minmax(0, 620px);
+    column-gap: clamp(40px, 5vw, 88px);
+    align-content: start;
+    width: 100%; max-width: 1100px; margin-inline: auto;
+    padding: 28px clamp(32px, 5vw, 72px) 56px;
+  }
+  .wiz-step { display: contents; }
+  .wiz-step[hidden] { display: none; }
+
+  /* 걸음이 한 화면에 들어가야 「다음」을 찾으러 스크롤하지 않는다 — 폰에서는
+     단추줄이 바닥에 붙어 있어서 그럴 일이 없었지만 PC 에서는 카드 아래에
+     그냥 놓이므로, 위쪽 여백을 아낀다. */
+  .wiz-head { grid-column: 1 / -1; margin-bottom: 28px; }
+  .wiz-tick { width: 26px; height: 5px; }
+  .wiz-tick.on { width: 40px; }
+
+  /* 왼쪽 칸. 오른쪽 카드가 길어도 물음은 눈에 남아 있어야 한다. */
+  .wiz-say { grid-column: 1; align-self: start; position: sticky; top: 32px; }
+  /* 폰에서는 제목 오른쪽에 루가 앉아 있어 그만큼 비워 뒀다. PC 에서는 루가
+     왼쪽 아래로 내려가므로 그 여백이 필요 없다. */
+  .wiz-eyebrow, .wiz-title, .wiz-sub { padding-right: 0; }
+  .wiz-title { font-size: 2.4rem; line-height: 1.22; margin-top: 14px; }
+  .wiz-sub { font-size: 1rem; margin-top: 14px; }
+
+  /* 오른쪽 기둥 — 채우는 것과 누르는 것만 여기 있다. */
+  .wiz-card, .fork, .wiz-after, .ip-agree, .wiz-actions { grid-column: 2; }
+  .wiz-card { padding: 24px 28px; margin-top: 0; }
+  .wiz-after .wiz-card { padding: 6px 24px; }
+  /* 카드가 넓어진 만큼 칸을 늘린다 — 사진 타일 옆이 폰에서는 없던 자리다. */
+  .photo-row { display: grid; grid-template-columns: 150px 1fr; gap: 20px; align-items: start; }
+  .styles { grid-template-columns: repeat(3, 1fr); }
+
+  /* 루는 왼쪽 칸 아래, 물속에 잠겨 있다. 폰에서는 제목 옆 빈자리를 메우는
+     역할이었는데 PC 에서는 그 자리가 안 비므로 깊이를 보여주는 쪽으로 옮긴다.
+     fixed 인 이유: 오른쪽 카드가 화면보다 길면 절대위치는 화면 밖 바닥으로
+     내려가 잘려 보인다. 왼쪽 칸은 제목 아래가 통째로 비어 있으므로 화면에
+     붙여 둬도 아무것도 가리지 않는다. */
+  .wiz-lou {
+    position: fixed; top: auto; right: auto;
+    left: clamp(32px, 5vw, 72px); bottom: 44px;
+    width: 190px; height: 190px;
+  }
+
+  /* 단추줄. 화면 폭을 통째로 가로지르는 막대는 그만둔다 — PC 에서 그건
+     "누르는 것"으로 안 읽힌다. 대신 오른쪽 기둥 안에서만 떠 있는 알약으로
+     두고, 붙어 있는 것은 그대로 둔다: 그림체 걸음처럼 카드가 화면보다 길면
+     스크롤 끝까지 가야 「다음」이 나오기 때문이다. */
+  .wiz-actions {
+    position: sticky; bottom: 16px; z-index: 30;
+    margin-top: 26px; padding: 0; background: none;
+  }
+  .wiz-actions::before { display: none; }
+  .wiz-foot {
+    /* 알약은 단추만큼만 넓다 — 기둥 폭을 다 차지하면 왼쪽 절반이 빈 쟁반처럼
+       보인다(내용이 짧은 걸음에서 실제로 그랬다). */
+    width: fit-content; margin-left: auto;
+    padding: 10px; border-radius: 999px;
+    background: rgba(247,243,234,.74);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(15,51,63,.14);
+  }
+  .wiz-foot .btn { flex: none; min-width: 132px; padding: .95em 1.7em; }
+  .wiz-foot .wiz-go { min-width: 220px; }
+  .submit-note { text-align: right; padding-right: 16px; }
+  /* 폰에서는 「이전」이 물빛 띠 위에 앉아 있어서 깊은 걸음에서 흰 쪽으로
+     뒤집어 뒀다. PC 는 그 자리가 밝은 알약이라 도로 짙은 글씨여야 읽힌다. */
+  body[data-step="3"] .wiz-prev,
+  body[data-step="4"] .wiz-prev,
+  body[data-step="5"] .wiz-prev {
+    background: rgba(15,51,63,.055); color: var(--text);
+  }
+  /* 안내 한 줄은 알약 밖, 물 위에 그냥 앉는다 — 깊은 걸음에서는 밝은 쪽으로. */
+  body[data-step="3"] .submit-note,
+  body[data-step="4"] .submit-note,
+  body[data-step="5"] .submit-note { color: rgba(247,243,234,.82); }
 }
 
 /* 아주 넓은 화면 — 목록만 더 벌린다. 읽기·만들기는 위 폭을 그대로 둔다. */

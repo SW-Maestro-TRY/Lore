@@ -269,9 +269,14 @@
            만들 때도 이야기를 짤 때도 같은 글을 본다. -->
       <!-- 1 · 수면 — 누구를 데리고 갈까요 (사진 · 이름 · 캐릭터 설명) -->
       <section class="wiz-step" data-step="1">
-        <p class="wiz-eyebrow">수면 · STEP 1 / 5</p>
-        <h3 class="wiz-title">누구를 데리고<br>바다로 갈까요?</h3>
-        <p class="wiz-sub">아는 만큼만 적으세요. 빈 칸은 루가 채웁니다.</p>
+        <!-- 걸음마다 "말"(눈금·제목·안내)과 "손이 닿는 것"(입력 카드)을 한
+             겹으로 묶어 둔다. 폰에서는 위아래로 그냥 흐르고, PC 에서는 이
+             덩어리가 왼쪽 칸으로 간다(style.css 의 PC 절). -->
+        <div class="wiz-say">
+          <p class="wiz-eyebrow">수면 · STEP 1 / 5</p>
+          <h3 class="wiz-title">누구를 데리고<br>바다로 갈까요?</h3>
+          <p class="wiz-sub">아는 만큼만 적으세요. 빈 칸은 루가 채웁니다.</p>
+        </div>
 
         <div class="wiz-card">
           <div class="photo-row">
@@ -313,9 +318,11 @@
 
       <!-- 2 · 항해 — 어떤 이야기를 만들까요 -->
       <section class="wiz-step" data-step="2" hidden>
-        <p class="wiz-eyebrow">항해 · STEP 2 / 5</p>
-        <h3 class="wiz-title">어떤 이야기를<br>만들까요?</h3>
-        <p class="wiz-sub">비우면 루가 캐릭터를 보고 짭니다.</p>
+        <div class="wiz-say">
+          <p class="wiz-eyebrow">항해 · STEP 2 / 5</p>
+          <h3 class="wiz-title">어떤 이야기를<br>만들까요?</h3>
+          <p class="wiz-sub">비우면 루가 캐릭터를 보고 짭니다.</p>
+        </div>
 
         <div class="wiz-card">
           <label class="field big">
@@ -328,9 +335,11 @@
 
       <!-- 3 · 깊은 바다 — 장르. 안 골라도 되고, 고른 것을 다시 누르면 풀린다. -->
       <section class="wiz-step" data-step="3" hidden>
-        <p class="wiz-eyebrow">깊은 바다 · STEP 3 / 5</p>
-        <h3 class="wiz-title">어떤 장르로<br>그릴까요?</h3>
-        <p class="wiz-sub">안 고르면 루가 이야기에 맞춰 정합니다.</p>
+        <div class="wiz-say">
+          <p class="wiz-eyebrow">깊은 바다 · STEP 3 / 5</p>
+          <h3 class="wiz-title">어떤 장르로<br>그릴까요?</h3>
+          <p class="wiz-sub">안 고르면 루가 이야기에 맞춰 정합니다.</p>
+        </div>
 
         <div class="wiz-card">
           <div class="genre-quick" id="genreQuick"></div>
@@ -357,8 +366,10 @@
 
       <!-- 4 · 심해 — 그림체 -->
       <section class="wiz-step" data-step="4" hidden>
-        <p class="wiz-eyebrow">심해 · STEP 4 / 5</p>
-        <h3 class="wiz-title">어떤 그림체로<br>그릴까요?</h3>
+        <div class="wiz-say">
+          <p class="wiz-eyebrow">심해 · STEP 4 / 5</p>
+          <h3 class="wiz-title">어떤 그림체로<br>그릴까요?</h3>
+        </div>
 
         <div class="wiz-card">
           <div class="styles" id="styles"></div>
@@ -367,8 +378,10 @@
 
       <!-- 5 · 바닥 — 갈림길. 고르면 그 자리에서 요약과 만들기 단추가 열린다. -->
       <section class="wiz-step wiz-step-fork" data-step="5" hidden>
-        <p class="wiz-eyebrow">바닥 · STEP 5 / 5</p>
-        <h3 class="wiz-title">어떻게 볼까요?</h3>
+        <div class="wiz-say">
+          <p class="wiz-eyebrow">바닥 · STEP 5 / 5</p>
+          <h3 class="wiz-title">어떻게 볼까요?</h3>
+        </div>
 
         <div class="fork">
           <!-- 빠르게가 기본이다 — 처음 만드는 사람에게 맞는 쪽이고, 아무것도
