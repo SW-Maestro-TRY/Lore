@@ -322,42 +322,61 @@ def parse_board(text: str) -> dict:
 
 
 def parse_detail(text: str) -> dict:
-    """detail_prompt 의 응답(JSON) -> {"scenes": [...], "hidden": [...]}."""
+    """detail_prompt 의 응답(JSON) -> {"scenes": [...], "hidden": [...]}.
+
+    장면은 **사건(`events`)으로 나뉘어 온다** — 사건 하나가 그림 한 장이다.
+    사건 칸이 없는 옛 응답은 장면 자체를 사건 하나로 읽는다
+    (`pages.detail_events`) — 그래서 옛 run 은 결과가 안 바뀐다.
+    """
     obj = story.extract_json(text)
     if not isinstance(obj, dict):
         raise story.ParseFailure("구체화 결과가 JSON 객체가 아닙니다.")
     scenes = []
     for i, s in enumerate(_dicts(obj.get("scenes")), 1):
-        scenes.append({
-            "id": _num(s.get("id"), i),
-            "source": _text(s.get("source")),
-            "function": _text(s.get("function")),
-            "detail": _text(s.get("detail")),
-            # learns 는 {what, how} 다. how 가 곧 "그걸 어떻게 알았나" 라,
-            # 문자열로만 오면 근거가 없는 것으로 본다.
-            "learns": [{"what": _text(x.get("what")), "how": _text(x.get("how"))}
-                       if isinstance(x, dict) else {"what": _text(x), "how": ""}
-                       for x in (s.get("learns") or [])
-                       if _text(x.get("what") if isinstance(x, dict) else x)],
-            # guesses 도 근거가 붙는다. 근거를 못 대면 그 짐작을 버려야지
-            # 지어내면 안 되므로, from 이 비어 있는지 게이트가 본다.
-            "guesses": [{"what": _text(x.get("what")), "from": _text(x.get("from"))}
-                        if isinstance(x, dict) else {"what": _text(x), "from": ""}
-                        for x in (s.get("guesses") or [])
-                        if _text(x.get("what") if isinstance(x, dict) else x)],
-            # 이어짐 — 장면마다 따로 그림이 될 때 앞뒤가 안 끊기게 하는 칸이다
-            # (detail_prompt 6-2 참고). 안 온 칸은 빈 채로 둔다 — 여기서
-            # 채우면 모델이 안 적은 것과 코드가 지어낸 것이 섞인다. 옛 응답은
-            # 통째로 비어 있고, 그때는 이어짐 없이 예전처럼 동작한다.
-            "continuity": _continuity(s.get("continuity")),
-            "leads_to": _text(s.get("leads_to")),
-        })
+        one = {"id": _num(s.get("id"), i)}
+        one.update(_parse_beat(s))
+        # 사건. 장면과 **같은 칸**을 쓴다 — 읽는 쪽이 둘을 구별할 필요가 없다.
+        one["events"] = [dict(_parse_beat(e), id=_num(e.get("id"), j))
+                         for j, e in enumerate(_dicts(s.get("events")), 1)]
+        scenes.append(one)
     # cast — 조연 외모를 화 전체에 걸쳐 고정한다. 주인공은 시트가 하지만
     # 조연은 이것이 없으면 장면마다 다른 사람이 그려진다.
     cast = [{"name": _text(c.get("name")), "appearance": _text(c.get("appearance"))}
             for c in _dicts(obj.get("cast")) if _text(c.get("name"))]
     return {"scenes": scenes, "cast": cast,
             "hidden": [_text(x) for x in (obj.get("hidden") or []) if _text(x)]}
+
+
+def _parse_beat(raw: dict) -> dict:
+    """한 덩어리(장면 또는 사건) — 무엇이 벌어지고, 무엇을 알게 되고,
+    앞뒤로 어떻게 이어지는가.
+
+    장면과 사건이 같은 칸을 쓴다. 사건으로 나누기 전에는 이것이 장면에 직접
+    적혀 있었고, 지금은 사건마다 적힌다 — 같은 함수로 읽으면 옛 응답과 새
+    응답이 저절로 같은 모양이 된다.
+    """
+    return {
+        "source": _text(raw.get("source")),
+        "function": _text(raw.get("function")),
+        "detail": _text(raw.get("detail")),
+        # learns 는 {what, how} 다. how 가 곧 "그걸 어떻게 알았나" 라,
+        # 문자열로만 오면 근거가 없는 것으로 본다.
+        "learns": [{"what": _text(x.get("what")), "how": _text(x.get("how"))}
+                   if isinstance(x, dict) else {"what": _text(x), "how": ""}
+                   for x in (raw.get("learns") or [])
+                   if _text(x.get("what") if isinstance(x, dict) else x)],
+        # guesses 도 근거가 붙는다. 근거를 못 대면 그 짐작을 버려야지
+        # 지어내면 안 되므로, from 이 비어 있는지 게이트가 본다.
+        "guesses": [{"what": _text(x.get("what")), "from": _text(x.get("from"))}
+                    if isinstance(x, dict) else {"what": _text(x), "from": ""}
+                    for x in (raw.get("guesses") or [])
+                    if _text(x.get("what") if isinstance(x, dict) else x)],
+        # 이어짐 — 사건마다 따로 그림이 될 때 앞뒤가 안 끊기게 하는 칸이다
+        # (detail_prompt 6-2 참고). 안 온 칸은 빈 채로 둔다 — 여기서
+        # 채우면 모델이 안 적은 것과 코드가 지어낸 것이 섞인다.
+        "continuity": _continuity(raw.get("continuity")),
+        "leads_to": _text(raw.get("leads_to")),
+    }
 
 
 def _continuity(raw) -> dict:
@@ -494,6 +513,19 @@ def _mentions(fact: str, carrier: str) -> bool:
     return False
 
 
+def _knowledge(scene: dict) -> tuple[list, list]:
+    """장면 하나가 담고 있는 앎·추측 전부.
+
+    사건으로 나뉘면 이것들이 사건마다 적히므로 장면 칸은 비어 있다. 장면
+    단위로 보는 검사(컷 대본)는 그 둘을 합쳐서 봐야 나뉘기 전과 같은 것을 본다.
+    """
+    learns, guesses = [], []
+    for e in pagemod.detail_events(scene):
+        learns += list(e.get("learns") or [])
+        guesses += list(e.get("guesses") or [])
+    return learns, guesses
+
+
 def gate_cutscript(script: dict, detail: dict | None) -> list[str]:
     """컷 대본이 장면의 정보를 흘렸는지 본다. 멈추지 않고 알린다.
 
@@ -532,7 +564,8 @@ def gate_cutscript(script: dict, detail: dict | None) -> list[str]:
         # 알게 되는 것·추측이 여럿인데 컷이 하나면 장면을 나눈 것이 아니라
         # 줄인 것이다 — 합치라는 말을 요약하라는 말로 읽은 자리다.
         src = detail_by_id.get(s.get("id")) or {}
-        beats = len(src.get("learns") or []) + len(src.get("guesses") or [])
+        learns, guesses = _knowledge(src)
+        beats = len(learns) + len(guesses)
         if beats >= 2 and len(cuts) < 2:
             bad.append(f"장면 {s.get('id')}: 독자가 알아야 하는 것·추측이 "
                        f"{beats}개인데 컷이 {len(cuts)}개뿐입니다 — 뭉갠 것 "
@@ -552,7 +585,7 @@ def gate_cutscript(script: dict, detail: dict | None) -> list[str]:
                          + c.get("reader_learns", []) + c.get("must_show", [])
                          + [d.get("text", "") for d in c.get("lines", [])])
                 for c in target.get("cuts") or [])
-            for x in s.get("learns") or []:
+            for x in _knowledge(s)[0]:
                 what = x.get("what") or ""
                 if not _mentions(what, blob):
                     bad.append(f"장면 {s.get('id')}: 독자가 알아야 하는 것이 대본에 "
@@ -577,33 +610,62 @@ def gate_detail(detail: dict, direction: dict) -> list[str]:
         bad.append(f"장면 목록은 {want}개인데 {len(scenes)}개만 구체화됐습니다. "
                    "빠진 장면이 있습니다.")
 
-    for s in scenes:
-        where = f"장면 {s['id']}"
-        if not s["detail"]:
+    # 비어 있는지·근거가 붙었는지는 **사건 단위**로 본다 — 그림 한 장이 되는
+    # 단위가 사건이라, 비어 있으면 그 한 장이 통째로 비는 자리다. 사건 칸이
+    # 없는 옛 run 은 장면이 곧 사건 하나로 접혀서(pages.detail_events) 예전과
+    # 글자까지 같은 문장이 나온다.
+    units = pagemod.flatten_events(scenes)
+    split = any(s.get("events") for s in scenes)
+    for u in units:
+        where = f"장면 {u['scene']}" + (f" 사건 {u['event']}" if split else "")
+        if not _text(u.get("detail")):
             bad.append(f"{where}: detail 이 비어 있습니다.")
-        elif len(s["detail"]) < DETAIL_MIN_LEN:
-            bad.append(f"{where}: detail 이 {len(s['detail'])}자뿐입니다. "
-                       "장면 목록 한 줄과 다를 바가 없습니다 — 구체화가 안 됐습니다.")
-        if not s["leads_to"]:
+        if not _text(u.get("leads_to")):
             bad.append(f"{where}: leads_to 가 없습니다. 이 장면이 다음에 무엇을 "
                        "부르는지가 비어 있습니다.")
 
         # 근거 없는 앎. 이것 하나가 "자국을 보고 신발 패턴을 안다" 를 만든다.
-        for one in s["learns"]:
+        for one in u.get("learns") or []:
             if not one["how"]:
                 bad.append(f"{where}: \"{one['what'][:30]}\" 를 어떻게 알았는지가 "
                            "없습니다. 근거가 없으면 learns 가 아니라 guesses 입니다.")
-        for one in s["guesses"]:
+        for one in u.get("guesses") or []:
             if not one["from"]:
                 bad.append(f"{where}: \"{one['what'][:30]}\" 를 무엇을 보고 짐작했는지가 "
                            "없습니다. 근거를 못 대면 그 짐작을 빼야 합니다.")
 
-    if not any(s["learns"] for s in scenes):
+    # 길이는 **장면 단위**로 본다. 묻는 것이 "장면 목록 한 줄이 그 이상으로
+    # 풀렸는가" 라서 사건으로 나눈다고 기준이 달라지지 않는다 — 사건마다
+    # 이 길이를 요구하면 잘게 나눌수록 걸리게 되어, 나누라고 해 놓고 나누면
+    # 벌하는 꼴이 된다.
+    for s in scenes:
+        body = " ".join(_text(e.get("detail"))
+                        for e in pagemod.detail_events(s)).strip()
+        if body and len(body) < DETAIL_MIN_LEN:
+            bad.append(f"장면 {s['id']}: detail 이 {len(body)}자뿐입니다. "
+                       "장면 목록 한 줄과 다를 바가 없습니다 — 구체화가 안 됐습니다.")
+
+    # 사건 사이가 비면 그림이 순간이동한다 — 앞 사건은 식탁에서 끝났는데
+    # 다음 사건이 책상 청소부터 시작하면, 사람은 알아서 메우지만 그림 모델은
+    # 전혀 다른 공간으로 건너뛴다(실측). **사건으로 나눈 것만 본다** — 옛
+    # run 에는 이 칸 자체가 없어서 다시 돌리면 전부 걸린다.
+    if split:
+        for u in units[1:]:
+            con = u.get("continuity") or {}
+            if not _text(con.get("transition")):
+                bad.append(f"장면 {u['scene']} 사건 {u['event']}: 앞 사건과 이 사건 "
+                           "사이에 무슨 일이 있었는지(transition)가 비어 있습니다. "
+                           "이 칸이 비면 그림이 건너뜁니다.")
+            if not _text(con.get("previous_ending")):
+                bad.append(f"장면 {u['scene']} 사건 {u['event']}: 앞 사건이 끝난 "
+                           "자리(previous_ending)가 비어 있습니다.")
+
+    if not any(u.get("learns") for u in units):
         bad.append("인물이 새로 알게 되는 것이 한 장면에도 없습니다. "
                    "알아낸 것이 없으면 다음 행동의 근거가 생기지 않습니다.")
 
-    # 마지막 장면이 감정으로 끝나면 다음 화를 안 부른다.
-    last = _text(scenes[-1]["leads_to"])
+    # 마지막 사건이 감정으로 끝나면 다음 화를 안 부른다.
+    last = _text(units[-1].get("leads_to"))
     if last and not any(ch.isdigit() for ch in last) and \
             any(w in last for w in FEELING_WORDS):
         bad.append(f"마지막 장면이 감정으로 끝납니다 (\"{last[:40]}\"). "
@@ -1281,8 +1343,9 @@ def stage_detail(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> d
 
     detail = parse_detail(text)
     write_json(run_dir / "detail.json", detail)
-    log(f"  장면 {len(detail['scenes'])}개 · 숨길 것 {len(detail['hidden'])}개 "
-        f"-> {run_dir / 'detail.json'}")
+    events = sum(len(pagemod.detail_events(s)) for s in detail["scenes"])
+    log(f"  장면 {len(detail['scenes'])}개 · 사건 {events}개(그림 {events}장) · "
+        f"숨길 것 {len(detail['hidden'])}개 -> {run_dir / 'detail.json'}")
 
     bad = gate_detail(detail, direction)
     if bad:
@@ -1294,23 +1357,34 @@ def stage_detail(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> d
 
 
 def _scene_lines(detail: dict) -> list[str]:
-    """구체화된 장면을 프롬프트에 실을 줄로. 컷 대본과 콘티가 같이 쓴다."""
+    """구체화된 장면을 프롬프트에 실을 줄로. 컷 대본과 콘티가 같이 쓴다.
+
+    장면이 사건으로 나뉘어 있으면 사건마다 소제목을 단다. 사건 칸이 없는 옛
+    run 은 장면 하나가 사건 하나라 예전과 **글자까지 같은 줄**이 나온다.
+    """
     lines = []
     for s in detail.get("scenes") or []:
         lines.append(f"### 장면 {s['id']} — {s['source']}")
         lines.append("")
-        lines.append(s["detail"])
-        if s.get("learns"):
+        events = pagemod.detail_events(s)
+        for e in events:
+            if s.get("events"):
+                head = f"#### 사건 {e.get('id')}"
+                if e.get("source"):
+                    head += f" — {e['source']}"
+                lines += [head, ""]
+            lines.append(e.get("detail") or "")
+            if e.get("learns"):
+                lines.append("")
+                for x in e["learns"]:
+                    how = f" ({x['how']})" if x.get("how") else ""
+                    lines.append(f"- 인물이 알게 되는 것: {x['what']}{how}")
+            for g in e.get("guesses") or []:
+                src = f" ({g['from']})" if g.get("from") else ""
+                lines.append(f"- 인물의 추측 (아직 사실이 아니다): {g['what']}{src}")
+            if e.get("leads_to"):
+                lines.append(f"- 그래서 다음: {e['leads_to']}")
             lines.append("")
-            for x in s["learns"]:
-                how = f" ({x['how']})" if x.get("how") else ""
-                lines.append(f"- 인물이 알게 되는 것: {x['what']}{how}")
-        for g in s.get("guesses") or []:
-            src = f" ({g['from']})" if g.get("from") else ""
-            lines.append(f"- 인물의 추측 (아직 사실이 아니다): {g['what']}{src}")
-        if s.get("leads_to"):
-            lines.append(f"- 그래서 다음: {s['leads_to']}")
-        lines.append("")
     return lines
 
 
@@ -1534,12 +1608,20 @@ def review_block(char: dict, direction: dict, run_dir: Path) -> str:
         lines.append(f"### 장면 {s['id']} — {s['source']}")
         if s.get("function"):
             lines.append(f"이 장면이 하는 일: {s['function']}")
-        lines += ["", s["detail"], ""]
-        for x in s["learns"]:
-            lines.append(f"- 안다: {x['what']}  ← {x['how']}")
-        for g in s["guesses"]:
-            lines.append(f"- 짐작: {g['what']}  ← {g['from']}")
-        lines += [f"- 그래서 다음: {s['leads_to']}", ""]
+        for e in pagemod.detail_events(s):
+            if s.get("events"):
+                head = f"#### 사건 {e.get('id')}"
+                if e.get("source"):
+                    head += f" — {e['source']}"
+                lines.append(head)
+                if e.get("function"):
+                    lines.append(f"이 사건이 하는 일: {e['function']}")
+            lines += ["", e.get("detail") or "", ""]
+            for x in e.get("learns") or []:
+                lines.append(f"- 안다: {x['what']}  ← {x['how']}")
+            for g in e.get("guesses") or []:
+                lines.append(f"- 짐작: {g['what']}  ← {g['from']}")
+            lines += [f"- 그래서 다음: {e.get('leads_to') or ''}", ""]
     return "\n".join(lines) + "\n"
 
 
@@ -1605,7 +1687,10 @@ def apply_fix(detail: dict, patch: dict) -> tuple[dict, list[int]]:
             changed.append(one["id"])
         else:
             scenes.append(one)
-    return {"scenes": scenes, "hidden": detail.get("hidden") or []}, changed
+    # cast(조연 외모)·hidden 은 보강이 안 내는 칸이라 그대로 들고 간다. 예전엔
+    # cast 를 빠뜨려서, 보강을 한 번 돌리면 조연 외모가 통째로 사라졌다.
+    return {"scenes": scenes, "cast": detail.get("cast") or [],
+            "hidden": detail.get("hidden") or []}, changed
 
 
 def stage_fix(run_dir: Path, char: dict, direction: dict, review: dict,
@@ -1678,7 +1763,8 @@ def board_block(char: dict, direction: dict, run_dir: Path) -> str:
     haystack = []          # 연출 지식을 태그로 골라 붙일 때 검색할 서술
     if detail and detail.get("scenes"):
         lines += _scene_lines(detail)
-        haystack += [s["detail"] for s in detail["scenes"]]
+        haystack += [e.get("detail") or "" for s in detail["scenes"]
+                     for e in pagemod.detail_events(s)]
     else:
         lines += [f"{i}. {s}" for i, s in enumerate(direction["scenes"], 1)]
         haystack += direction["scenes"]

@@ -416,11 +416,28 @@ def _clear_sheet(run_id: str) -> None:
             pass
 
 
+def scene_events(scene: dict) -> list[dict]:
+    """장면 하나 -> 사건 배열. **사건 하나가 그림 한 장이다.**
+
+    new_harness/pages.py 의 `detail_events` 와 같은 규칙이다. landing 은
+    new_harness 를 import 하지 않고 run.py 를 따로 불러 쓰므로(이 파일 머리말
+    참고) 읽는 쪽 규칙만 여기에 다시 적는다.
+
+    사건 칸이 없는 옛 run 은 장면 자체가 사건 하나다 — 그때는 예전처럼
+    장면당 한 장으로 보인다.
+    """
+    got = [e for e in (scene.get("events") or []) if isinstance(e, dict)]
+    if got:
+        return got
+    return [dict(scene, id=1)]
+
+
 def detail_summary(run_id: str) -> dict[str, Any] | None:
     """디테일 직행 흐름의 검수 화면 — 컷 대본·콘티가 없으므로 장면을 그대로 보여준다.
 
-    화면(newharness.html)은 board_summary 와 같은 모양만 받으면 되므로 장면
-    하나를 "컷 하나"로 접어 넣는다 — 어느 흐름으로 만든 것인지 몰라도 되게.
+    화면(newharness.html)은 board_summary 와 같은 모양만 받으면 되므로 **사건
+    하나를 "컷 하나"로** 접어 넣는다 — 어느 흐름으로 만든 것인지 몰라도 되게.
+    사건 하나가 그림 한 장이 되므로, 검수 화면의 컷 개수가 곧 그릴 장 수다.
     """
     try:
         detail = json.loads((run_dir(run_id) / "detail.json").read_text(encoding="utf-8"))
@@ -428,23 +445,26 @@ def detail_summary(run_id: str) -> dict[str, Any] | None:
         return None
     scenes = []
     for s in detail.get("scenes") or []:
-        body = (s.get("detail") or "").strip()
-        learns = [(x.get("what") or "").strip()
-                  for x in (s.get("learns") or []) if isinstance(x, dict)]
+        cuts = []
+        for i, e in enumerate(scene_events(s), 1):
+            learns = [(x.get("what") or "").strip()
+                      for x in (e.get("learns") or []) if isinstance(x, dict)]
+            cuts.append({
+                "id": e.get("id") or i, "size": "full", "shot": "", "angle": "",
+                "background": (e.get("detail") or "").strip(),
+                "characters": [], "dialogue": [], "sfx": [],
+                "learns": [x for x in learns if x],
+            })
         scenes.append({
             "id": s.get("id"), "location": "", "time": "",
             "summary": (s.get("source") or "").strip(),
-            "cuts": [{
-                "id": 1, "size": "full", "shot": "", "angle": "",
-                "background": body,
-                "characters": [], "dialogue": [], "sfx": [],
-                "learns": [x for x in learns if x],
-            }],
+            "cuts": cuts,
         })
     cast = [{"name": (c.get("name") or "").strip(),
              "appearance": (c.get("appearance") or "").strip()}
             for c in detail.get("cast") or [] if (c.get("name") or "").strip()]
-    return {"cast": cast, "scenes": scenes, "cut_count": len(scenes),
+    return {"cast": cast, "scenes": scenes,
+            "cut_count": sum(len(s["cuts"]) for s in scenes),
             "engine": "detail"}
 
 
@@ -846,8 +866,9 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
     input_doc = _read_json_safe(d, "input.json")
     pick = _read_json_safe(d, "pick.json")
     detail = _read_json_safe(d, "detail.json")
-    # 1페이지는 표지다(detailart.draw 참고) — 장면은 2페이지부터 이어진다.
-    scenes_doc = detail.get("scenes") or []
+    # 1페이지는 표지다(detailart.draw 참고) — 사건이 2페이지부터 이어진다.
+    # 그림 한 장 = 사건 하나라, 장면 경계를 넘어 편 순서가 곧 페이지 순서다.
+    units = [e for s in (detail.get("scenes") or []) for e in scene_events(s)]
 
     try:
         from PIL import Image
@@ -864,7 +885,7 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
                     w, h = im.size
             except OSError:
                 pass
-        one = scenes_doc[n - 2] if 1 < n <= len(scenes_doc) + 1 else {}
+        one = units[n - 2] if 1 < n <= len(units) + 1 else {}
         note = (one.get("source") or "").strip() if isinstance(one, dict) else ""
         scenes.append({
             "no": n,

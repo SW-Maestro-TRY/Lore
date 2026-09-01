@@ -26,9 +26,16 @@ window.NHReview = (function () {
       </details>` : ""}`;
   }
 
-  /* 컷 하나 = 그림 한 칸. 검수하는 사람이 봐야 하는 것은 대사가 아니라
-     "이 칸이 어떤 그림이 되는가" 라서 카메라·배경·인물을 같이 보여준다. */
-  function cutHtml(c) {
+  /* 한 칸이 무엇인지는 흐름마다 다르다 — 콘티 흐름은 "컷"(한 장에 여럿이
+     들어간다), 디테일 직행 흐름은 "사건"(하나가 그림 한 장이 된다). 세는
+     것과 부르는 말이 어긋나면 검수하는 사람이 몇 장을 그리는지 못 센다. */
+  function unitWord(summary) {
+    return summary && summary.engine === "detail" ? "사건" : "컷";
+  }
+
+  /* 검수하는 사람이 봐야 하는 것은 대사가 아니라 "이 칸이 어떤 그림이
+     되는가" 라서 카메라·배경·인물을 같이 보여준다. */
+  function cutHtml(c, word) {
     const tags = [c.shot, c.angle, c.size].filter(Boolean)
       .map(t => `<span class="nh-tag">${esc(t)}</span>`).join("");
     const who = (c.characters || []).map(p => `
@@ -40,7 +47,7 @@ window.NHReview = (function () {
       ? `<p class="nh-line nh-sfx">효과음 ${(c.sfx || []).map(esc).join(" · ")}</p>` : "";
     return `
       <div class="nh-cut">
-        <div class="nh-cut-head"><span class="nh-cut-no">컷 ${esc(c.id)}</span>${tags}</div>
+        <div class="nh-cut-head"><span class="nh-cut-no">${word || "컷"} ${esc(c.id)}</span>${tags}</div>
         ${c.background ? `<p class="nh-cut-bg">${esc(c.background)}</p>` : ""}
         ${who}${lines}${sfx}
       </div>`;
@@ -52,21 +59,23 @@ window.NHReview = (function () {
   }
 
   function countLabel(summary) {
-    return summary && summary.cut_count
-      ? `장면 ${(summary.scenes || []).length}개 · 컷 ${summary.cut_count}개` : "";
+    if (!summary || !summary.cut_count) return "";
+    const word = unitWord(summary);
+    const tail = word === "사건" ? ` (그림 ${summary.cut_count}장)` : "";
+    return `장면 ${(summary.scenes || []).length}개 · ${word} ${summary.cut_count}개${tail}`;
   }
 
-  /* 첫 장면만 펴 둔다 — 컷이 20개를 넘는 일이 흔해서, 다 펴 두면
+  /* 첫 장면만 펴 둔다 — 칸이 20개를 넘는 일이 흔해서, 다 펴 두면
      "이대로 진행" 단추까지 한참 스크롤해야 한다. */
-  function scenesHtml(scenes) {
+  function scenesHtml(scenes, word) {
     return (scenes || []).map((s, i) => `
       <div class="nh-scene">
         <div class="nh-scene-head">장면 ${esc(s.id)}</div>
         <p class="nh-scene-where">${[s.location, s.time].filter(Boolean).map(esc).join(" · ")}</p>
         <p class="nh-scene-sum">${esc(s.summary)}</p>
         <details ${i === 0 ? "open" : ""}>
-          <summary>컷 ${(s.cuts || []).length}개 보기</summary>
-          <div>${(s.cuts || []).map(cutHtml).join("")}</div>
+          <summary>${word || "컷"} ${(s.cuts || []).length}개 보기</summary>
+          <div>${(s.cuts || []).map(c => cutHtml(c, word)).join("")}</div>
         </details>
       </div>`).join("");
   }
@@ -82,7 +91,7 @@ window.NHReview = (function () {
     const scenes = document.querySelector(ids.scenes);
     if (cast) cast.innerHTML = castHtml(summary.cast);
     if (count) count.textContent = countLabel(summary);
-    if (scenes) scenes.innerHTML = scenesHtml(summary.scenes);
+    if (scenes) scenes.innerHTML = scenesHtml(summary.scenes, unitWord(summary));
   }
 
   return { directionCardHtml, cutHtml, castHtml, countLabel, scenesHtml, fillBoard };

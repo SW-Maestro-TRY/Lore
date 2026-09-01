@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""디테일 -> 장면 그림 직행 실험 (컷 대본·콘티를 건너뛴다).
+"""디테일 -> 사건 그림 직행 실험 (컷 대본·콘티를 건너뛴다).
 
 ## 왜 있는가
 
@@ -9,6 +9,17 @@
 "이 장면을 웹툰으로 그려라" 하면 훨씬 살아 있는 화면이 나온다** — 대신
 장면 하나에 내용이 다 몰려 산만해지거나, 장면별로 따로 그리면 앞뒤 그림이
 안 이어진다.
+
+**그래서 한 장이 되는 단위는 장면이 아니라 사건이다.** 장면 하나에는 사건이
+여러 개 들어 있다 — "일어난다 / 시계를 본다 / 방을 나간다 / 마주친다 /
+인사한다 / 아침을 차린다 / 질문을 받는다" 가 한 장면이었다. 이것을 한 장에
+다 그리게 하면 산만해지고, 그렇다고 컷을 하나씩 지정하면 연출을 사람이 다
+짜는 것이 된다. 사건에서 끊으면 그림 모델이 사건 하나를 받아 **컷 수·구도·
+여백·대사를 스스로 정한다.** 사건을 어떻게 나누고 사건 사이를 어떻게 잇는지는
+구체화 단계가 정한다(prompt/detail_prompt, `scenes[].events[]`).
+
+사건 칸이 없는 옛 run 은 장면 하나가 사건 하나로 읽혀(`pages.detail_events`)
+예전처럼 장면당 한 장이 나온다.
 
 그 둘을 같이 잡아 보려는 실험이다. 이어짐은 **글로 다 넣는 대신** 세 가지로
 붙든다.
@@ -40,6 +51,7 @@ from pathlib import Path
 import imagegen
 import imageprompt
 import llm
+import pages
 
 HERE = Path(__file__).resolve().parent
 RUNS_DIR = HERE / "runs"
@@ -101,7 +113,7 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
 
 
 def scene_text(scene: dict) -> str:
-    """그릴 내용 — 디테일 항목을 **빠짐없이** 편다.
+    """그릴 내용 — 사건 하나의 디테일 항목을 **빠짐없이** 편다.
 
     본문만 주면 그림이 '무슨 장면인지'는 알아도 '무엇이 보여야 하는지'를
     모른다. learns.how·guesses.from 은 눈에 보이는 근거가 적힌 칸이라
@@ -133,7 +145,7 @@ def scene_text(scene: dict) -> str:
 
 
 def continuity_block(scene: dict, prev: dict | None) -> str:
-    """이어짐 — 앞 장면과 이 장면 **사이**를 메운다.
+    """이어짐 — 앞 사건과 이 사건 **사이**를 메운다.
 
     앞 장면을 통째로 다시 주면 이 그림에 앞 내용까지 그려 넣어 산만해진다.
     그래서 이어지는 데 필요한 것만 준다. 특히 `transition`(두 장면 사이에
@@ -275,7 +287,7 @@ def page_path(run_dir: Path, page_no: int) -> Path:
 
 def draw(run_dir: Path, dry_run: bool = False, only=None,
          allow_no_sheet: bool = False, on_page=None) -> list[dict]:
-    """디테일 -> 페이지 그림. **표지가 1페이지, 장면이 2페이지부터다.**
+    """디테일 -> 페이지 그림. **표지가 1페이지, 사건이 2페이지부터다.**
 
     결과를 기존 콘티 흐름과 같은 자리(`pages/pageNN.png` · `pages.json`)에
     쓴다 — 둘러보기·편집실·굽기가 그대로 읽는다.
@@ -318,10 +330,13 @@ def draw(run_dir: Path, dry_run: bool = False, only=None,
     style = (llm.env("NH_STYLE") or llm.env("PAGE_STYLE")
              or imageprompt.DEFAULT_STYLE)
 
-    scenes = detail["scenes"]
+    # 그림 한 장 = 사건 하나. 장면 경계를 넘어 이어 편다 — 이어짐도 그림
+    # 참조도 "바로 앞 사건" 이 기준이라, 장면이 바뀌는 자리에서 끊으면 안 된다.
+    units = pages.flatten_events(detail["scenes"])
     dest = run_dir / PAGE_DIR
     dest.mkdir(parents=True, exist_ok=True)
-    log(f"[디테일 직행] 표지 1장 + 장면 {len(scenes)}개 · 그림체 {style} · {provider}")
+    log(f"[디테일 직행] 표지 1장 + 사건 {len(units)}개"
+        f"(장면 {len(detail['scenes'])}개) · 그림체 {style} · {provider}")
 
     # pages.json — 둘러보기가 페이지 수를 여기서 읽는다. 컷 대본을 안 거치는
     # 흐름이라 컷 목록이 없으므로, 페이지마다 무엇이 들어갔는지만 적는다.
@@ -332,26 +347,26 @@ def draw(run_dir: Path, dry_run: bool = False, only=None,
     # 갈아치웠다 — `--repage` 로 되돌릴 수 있었지만 알아채기 어려웠다).
     if not dry_run:
         pages_doc = [[{"source": "표지", "size": "full"}]]
-        for s in scenes:
-            pages_doc.append([{"scene": s.get("id"), "source": s.get("source", ""),
-                               "size": "full"}])
+        for u in units:
+            pages_doc.append([{"scene": u.get("scene"), "event": u.get("event"),
+                               "source": u.get("source", ""), "size": "full"}])
         write_json(run_dir / "pages.json", pages_doc)
 
-    # 0 = 표지, 1..N = 장면. 표지를 따로 두는 이유: 표지는 컷을 안 나누는
-    # 한 장짜리 그림이라 지시가 다르고, 첫 장면이 표지를 겸하면 둘 다
+    # 0 = 표지, 1..N = 사건. 표지를 따로 두는 이유: 표지는 컷을 안 나누는
+    # 한 장짜리 그림이라 지시가 다르고, 첫 사건이 표지를 겸하면 둘 다
     # 어중간해진다. 페이지 번호는 여기에 1 을 더한 값이다.
-    jobs = [(0, None, None)] + [(i, s, (scenes[i - 2] if i > 1 else None))
-                                for i, s in enumerate(scenes, 1)]
+    jobs = [(0, None, None)] + [(i, u, (units[i - 2] if i > 1 else None))
+                                for i, u in enumerate(units, 1)]
 
     made = []
-    for n, scene, prev_scene in jobs:
+    for n, unit, prev_unit in jobs:
         page_no = n + 1
         if n == 0:
             prompt = build_cover_prompt(title=title, genre=genre, plot=plot,
-                                        first=scenes[0], char=char, spec=spec,
+                                        first=units[0], char=char, spec=spec,
                                         cast=cast, provider=provider, style=style)
         else:
-            prompt = build_prompt(scene, prev_scene, n=n, total=len(scenes),
+            prompt = build_prompt(unit, prev_unit, n=n, total=len(units),
                                   title=title, genre=genre, plot=plot,
                                   char=char, spec=spec, cast=cast,
                                   provider=provider, style=style)
@@ -362,7 +377,7 @@ def draw(run_dir: Path, dry_run: bool = False, only=None,
             continue
 
         out = page_path(run_dir, page_no)
-        label = "표지" if n == 0 else f"장면 {n}/{len(scenes)}"
+        label = "표지" if n == 0 else f"사건 {n}/{len(units)}"
         if out.exists():
             log(f"  {label}: 이미 있습니다 (다시 그리려면 지우세요)")
             continue
@@ -374,7 +389,9 @@ def draw(run_dir: Path, dry_run: bool = False, only=None,
         log(f"[{label}] 참조 {len(refs)}장 …")
         meta = imagegen.paint(STAGE, prompt, out, refs=refs, kind=imagegen.PAGE_KIND)
         meta["page"] = page_no
-        meta["scene"] = n
+        # 어느 장면의 몇 번째 사건이었는지. 표지는 둘 다 없다.
+        meta["scene"] = unit.get("scene") if unit else None
+        meta["event"] = unit.get("event") if unit else None
         made.append(meta)
         if on_page:
             on_page(meta)

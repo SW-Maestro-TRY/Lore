@@ -1162,6 +1162,174 @@ def test_detail() -> None:
        any("구체화가 안" in x for x in R.gate_detail(detail(thin), {"scenes": ["a", "b"]})))
 
 
+# --------------------------------------------------------------- 사건 나누기
+
+def _con(prev: str = "앞이 끝난 자리", trans: str = "그 사이에 자리를 옮긴다") -> dict:
+    return {"previous_ending": prev, "transition": trans,
+            "opening_state": "시작 상태", "ending_state": "끝 상태",
+            "persistent_elements": ["옷"], "visual_anchors": ["창"]}
+
+
+def _event(n: int, body: str, **over) -> dict:
+    one = {"id": n, "source": f"사건 {n}", "detail": body,
+           "learns": [{"what": f"{n}번에서 알게 되는 것", "how": "직접 봤다"}],
+           "guesses": [], "leads_to": f"{n}번 다음에 벌어지는 일",
+           "continuity": _con("", "") if n == 1 else _con()}
+    one.update(over)
+    return one
+
+
+BODY_A = ("문 앞에 선 채로 손잡이를 잡았다가 놓는다. 안에서 나는 소리가 멎기를 "
+          "기다렸다가 다시 잡는다. 세 번째에 문을 밀고 들어가, 등 뒤로 문이 "
+          "닫히는 소리를 끝까지 듣고 나서야 손을 뗀다.")
+BODY_B = ("책상 위에 놓인 것을 하나씩 제자리로 돌려놓다가, 어제와 같은 자리에 "
+          "같은 방향으로 놓인 것을 보고 손을 멈춘다. 일부러 반대로 돌려놓고, "
+          "한 걸음 물러서서 그 자리를 다시 본다.")
+
+
+def test_detail_events() -> None:
+    """장면은 사건으로 나뉘고, **사건 하나가 그림 한 장**이 된다."""
+    raw = {"scenes": [
+        {"id": 1, "source": "안으로 들어간다", "function": "이야기를 연다",
+         "events": [_event(1, BODY_A), _event(2, BODY_B)]},
+        {"id": 2, "source": "다시 확인한다", "function": "의심을 굳힌다",
+         "events": [_event(3, BODY_A)]},
+    ], "cast": [{"name": "관리인", "appearance": "50대, 회색 작업복"}],
+        "hidden": ["정체"]}
+    d = R.parse_detail(json.dumps(raw, ensure_ascii=False))
+
+    check("장면 2개", len(d["scenes"]), 2)
+    check("1장면에 사건 2개", len(d["scenes"][0]["events"]), 2)
+    check("사건에 detail 이 있다", d["scenes"][0]["events"][1]["detail"], BODY_B)
+    check("사건에 이어짐이 있다",
+          d["scenes"][0]["events"][1]["continuity"]["transition"],
+          "그 사이에 자리를 옮긴다")
+    check("장면 칸은 id·source·function 만 찬다", d["scenes"][0]["detail"], "")
+    check("cast 는 그대로", d["cast"][0]["name"], "관리인")
+
+    # 편면 = 그림 순서. 장면 경계를 넘어 이어진다
+    units = P.flatten_events(d["scenes"])
+    check("사건 3개", len(units), 3)
+    check("장면 경계를 넘어 잇는다", [(u["scene"], u["event"]) for u in units],
+          [(1, 1), (1, 2), (2, 3)])
+
+    # 옛 run — 사건 칸이 없으면 장면 자체가 사건 하나다
+    old = R.parse_detail(json.dumps({"scenes": [
+        {"id": 1, "source": "s", "detail": BODY_A, "leads_to": "다음",
+         "learns": [{"what": "a", "how": "b"}]}]}, ensure_ascii=False))
+    check("옛 응답은 events 가 빈다", old["scenes"][0]["events"], [])
+    folded = P.detail_events(old["scenes"][0])
+    check("장면 하나가 사건 하나로 접힌다", len(folded), 1)
+    check("접은 사건이 장면 본문을 갖는다", folded[0]["detail"], BODY_A)
+
+    # 게이트 — 사건 단위로 본다
+    check("멀쩡하면 조용하다", R.gate_detail(d, {"scenes": ["a", "b"]}), [])
+
+    hole = json.loads(json.dumps(raw))
+    hole["scenes"][0]["events"][1]["detail"] = ""
+    bad = R.gate_detail(R.parse_detail(json.dumps(hole, ensure_ascii=False)),
+                        {"scenes": ["a", "b"]})
+    ok("어느 사건이 비었는지 짚어 준다",
+       any("장면 1 사건 2: detail 이 비어" in x for x in bad))
+
+    # 길이는 장면 단위로 본다 — 사건마다 요구하면 잘게 나눌수록 걸린다
+    split_thin = json.loads(json.dumps(raw))
+    for e in split_thin["scenes"][0]["events"]:
+        e["detail"] = "짧게 적는다."
+    bad = R.gate_detail(R.parse_detail(json.dumps(split_thin, ensure_ascii=False)),
+                        {"scenes": ["a", "b"]})
+    ok("장면 전체가 짧으면 잡는다",
+       any(x.startswith("장면 1: detail 이") and "구체화가 안" in x for x in bad))
+    ok("사건 하나씩은 안 잰다",
+       not any("사건 1: detail 이 " in x for x in bad))
+
+    # 사건 사이가 비면 그림이 순간이동한다
+    jump = json.loads(json.dumps(raw))
+    jump["scenes"][1]["events"][0]["continuity"]["transition"] = ""
+    bad = R.gate_detail(R.parse_detail(json.dumps(jump, ensure_ascii=False)),
+                        {"scenes": ["a", "b"]})
+    ok("사이가 비면 잡는다",
+       any("장면 2 사건 3" in x and "transition" in x for x in bad))
+
+    # 첫 사건은 이어받을 앞이 없다 — 비어 있어도 안 잡는다
+    ok("첫 사건은 비어도 된다",
+       not any("사건 1: 앞 사건" in x for x in R.gate_detail(d, {"scenes": ["a"]})))
+
+    # 옛 run 에는 이 칸 자체가 없다. 다시 돌려도 안 걸려야 한다
+    ok("옛 run 은 이어짐으로 안 걸린다",
+       not any("transition" in x for x in R.gate_detail(old, {"scenes": ["a"]})))
+
+    # 프롬프트에 실을 줄 — 사건마다 소제목이 붙는다
+    lines = "\n".join(R._scene_lines(d))
+    ok("사건 소제목", "#### 사건 2 — 사건 2" in lines)
+    ok("사건 본문", BODY_B in lines)
+    old_lines = "\n".join(R._scene_lines(old))
+    ok("옛 run 은 소제목이 없다", "#### 사건" not in old_lines)
+
+
+def test_detail_pages() -> None:
+    """디테일 직행 — 표지 한 장 + **사건마다 한 장.**"""
+    import shutil
+    import tempfile
+
+    import detailart
+
+    raw = {"scenes": [
+        {"id": 1, "source": "안으로 들어간다", "function": "연다",
+         "events": [_event(1, BODY_A), _event(2, BODY_B)]},
+        {"id": 2, "source": "다시 확인한다", "function": "굳힌다",
+         "events": [_event(3, BODY_A)]},
+    ], "cast": [{"name": "관리인", "appearance": "50대, 회색 작업복"}],
+        "hidden": []}
+
+    root = Path(tempfile.mkdtemp(prefix="nh-detailart-"))
+    try:
+        run_dir = root / "run"
+        run_dir.mkdir()
+        R.write_json(run_dir / "detail.json",
+                     R.parse_detail(json.dumps(raw, ensure_ascii=False)))
+        R.write_json(run_dir / "input.json", {"name": "이하은"})
+        R.write_json(run_dir / "pick.json", {"n": 1, "title": "제목", "genre": "판타지"})
+
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            made = detailart.draw(run_dir, dry_run=True)
+        finally:
+            detailart.log = quiet
+        check("dry-run 은 아무것도 안 그린다", made, [])
+
+        texts = sorted(p.name for p in (run_dir / "pages").glob("*.txt"))
+        check("표지 1 + 사건 3 = 4장", texts,
+              ["page01.txt", "page02.txt", "page03.txt", "page04.txt"])
+        ok("표지는 표지라고 말한다",
+           "이 그림은 표지다" in (run_dir / "pages" / "page01.txt").read_text(encoding="utf-8"))
+        two = (run_dir / "pages" / "page03.txt").read_text(encoding="utf-8")
+        ok("2페이지 뒤는 사건 본문", BODY_B in two)
+        ok("앞 사건과 이어 붙인다", "그 사이에 자리를 옮긴다" in two)
+        ok("조연 외모가 매 장에 붙는다", "관리인 — 50대, 회색 작업복" in two)
+
+        # 옛 run — 장면 하나가 한 장이다(사건 칸이 없다)
+        old_dir = root / "old"
+        old_dir.mkdir()
+        R.write_json(old_dir / "detail.json", R.parse_detail(json.dumps(
+            {"scenes": [{"id": 1, "source": "s", "detail": BODY_A,
+                         "leads_to": "다음"},
+                        {"id": 2, "source": "t", "detail": BODY_B,
+                         "leads_to": "다음"}]}, ensure_ascii=False)))
+        R.write_json(old_dir / "input.json", {"name": "이하은"})
+        R.write_json(old_dir / "pick.json", {"n": 1, "title": "제목", "genre": ""})
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            detailart.draw(old_dir, dry_run=True)
+        finally:
+            detailart.log = quiet
+        check("옛 run 은 표지 1 + 장면 2 = 3장",
+              sorted(p.name for p in (old_dir / "pages").glob("*.txt")),
+              ["page01.txt", "page02.txt", "page03.txt"])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_review_and_fix() -> None:
     """검수는 잡기만 하고, 보강은 지적받은 장면만 고친다."""
     r = R.parse_review(json.dumps({"verdict": "PASS", "issues": [
@@ -1211,7 +1379,8 @@ def test_review_and_fix() -> None:
 
 
 def main() -> int:
-    for fn in (test_directions, test_detail, test_review_and_fix,
+    for fn in (test_directions, test_detail, test_detail_events,
+               test_detail_pages, test_review_and_fix,
                test_board, test_gate_board, test_directing_warnings,
                test_gate_readable, test_spec,
                test_sheet_prompt, test_input, test_pages, test_cut_weight,
