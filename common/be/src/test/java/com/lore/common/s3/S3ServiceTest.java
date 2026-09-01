@@ -1,5 +1,6 @@
 package com.lore.common.s3;
 
+import com.lore.common.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,9 +52,9 @@ class S3ServiceTest {
     void keyFollowsExpectedShape() {
         S3Service service = serviceReturningUrl("bucket-a");
 
-        String key = service.createUploadUrl("story", "image/png").key();
+        String key = service.createUploadUrl("webtoon", "image/png").key();
 
-        assertThat(key).matches("^images/story/[0-9a-f-]{36}$");
+        assertThat(key).matches("^images/webtoon/[0-9a-f-]{36}$");
     }
 
     @Test
@@ -100,5 +101,15 @@ class S3ServiceTest {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    @Test
+    @DisplayName("허용 목록에 없는 도메인은 거부한다 — 오타로 엉뚱한 경로에 파일이 쌓이는 것을 막는다")
+    void rejectsUnknownDomain() {
+        S3Service service = serviceReturningUrl("bucket-a");
+
+        assertThatThrownBy(() -> service.createUploadUrl("zzl", "image/png"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("zzl");
     }
 }
