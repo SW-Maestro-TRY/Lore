@@ -2356,8 +2356,7 @@ body.ed .ed-top-row { min-height: 0; height: 0; padding: 0; }
   .wiz-tick { width: 26px; height: 5px; }
   .wiz-tick.on { width: 40px; }
 
-  /* 왼쪽 칸. 오른쪽 카드가 길어도 물음은 눈에 남아 있어야 한다. */
-  .wiz-say { grid-column: 1; align-self: start; position: sticky; top: 32px; }
+  .wiz-say { grid-column: 1; align-self: start; }
   /* 폰에서는 제목 오른쪽에 루가 앉아 있어 그만큼 비워 뒀다. PC 에서는 루가
      왼쪽 아래로 내려가므로 그 여백이 필요 없다. */
   .wiz-eyebrow, .wiz-title, .wiz-sub { padding-right: 0; }
@@ -2368,25 +2367,30 @@ body.ed .ed-top-row { min-height: 0; height: 0; padding: 0; }
   .wiz-card, .fork, .wiz-after, .ip-agree, .wiz-actions { grid-column: 2; }
   .wiz-card { padding: 24px 28px; margin-top: 0; }
   .wiz-after .wiz-card { padding: 6px 24px; }
-  /* 카드가 넓어진 만큼 칸을 늘린다 — 사진 타일 옆이 폰에서는 없던 자리다. */
-  .photo-row { display: grid; grid-template-columns: 150px 1fr; gap: 20px; align-items: start; }
+  /* 1걸음의 주의사항은 카드 **맨 아래** 로 내린다. 사진 타일 옆에 세워
+     봤더니 눌러야 할 타일과 나란히 서서 둘 중 어느 쪽을 먼저 보라는 건지
+     알 수 없었다(하은 피드백). 읽어야 하는 글이지 먼저 하는 일이 아니다.
+     .photo-row 를 display:contents 로 풀어 타일과 주의사항을 카드의 직접
+     자식으로 만든 다음 순서만 바꾼다 — 마크업은 그대로라 폰은 안 바뀐다. */
+  .wiz-card { display: flex; flex-direction: column; }
+  .photo-row { display: contents; }
+  .photo-drop { order: 0; margin-bottom: 20px; }
+  .photo-rules { order: 9; margin-top: 22px; }
   .styles { grid-template-columns: repeat(3, 1fr); }
 
-  /* 루는 왼쪽 칸 아래, 물속에 잠겨 있다. 폰에서는 제목 옆 빈자리를 메우는
-     역할이었는데 PC 에서는 그 자리가 안 비므로 깊이를 보여주는 쪽으로 옮긴다.
-     fixed 인 이유: 오른쪽 카드가 화면보다 길면 절대위치는 화면 밖 바닥으로
-     내려가 잘려 보인다. 왼쪽 칸은 제목 아래가 통째로 비어 있으므로 화면에
-     붙여 둬도 아무것도 가리지 않는다.
+  /* 루는 **물음 바로 아래** 다. 폰에서는 제목 옆 빈자리를 메우는 역할이었고,
+     PC 에서는 그 자리가 안 비므로 왼쪽 칸에서 물음을 받치는 자리로 옮긴다.
 
-     가로 자리는 **화면 끝이 아니라 왼쪽 칸의 왼쪽 끝** 이다. fixed 라 %·vw 가
-     화면 기준으로 풀리므로, 가운데 정렬된 기둥(max-width 1100px)의 왼쪽
-     모서리를 직접 계산한다 — 그냥 `left: 72px` 로 두면 창이 넓어질수록 루만
-     화면 구석에 혼자 떨어져 앉는다(실측, 1568px). 창이 기둥보다 좁으면
-     계산값이 음수로 가므로 원래 여백을 바닥으로 깐다. */
+     화면 바닥이 아니라 기둥 안이다 — 화면에 붙여 두면(fixed) 창을 키울수록
+     루만 구석에 혼자 떨어져 앉는다. 기둥(.wizard)이 기준이므로 여백도 그냥
+     기둥의 안쪽 여백을 그대로 쓴다.
+
+     top 은 걸음 중 가장 긴 물음(1~3걸음: 눈금 + 두 줄 제목 + 안내)의 아래를
+     기준으로 고정한다. 제목이 짧은 걸음(4~5)에서는 그만큼 더 떨어지는데,
+     걸음을 옮길 때마다 루가 위아래로 뛰는 것보다 한자리에 있는 편이 낫다. */
   .wiz-lou {
-    position: fixed; top: auto; right: auto;
-    left: max(clamp(32px, 5vw, 72px), calc(50vw - 550px + clamp(32px, 5vw, 72px)));
-    bottom: 44px;
+    position: absolute; right: auto; bottom: auto;
+    left: clamp(32px, 5vw, 72px); top: 300px;
     width: 190px; height: 190px;
   }
 
@@ -2411,12 +2415,20 @@ body.ed .ed-top-row { min-height: 0; height: 0; padding: 0; }
   .wiz-foot .btn { flex: none; min-width: 132px; padding: .95em 1.7em; }
   .wiz-foot .wiz-go { min-width: 220px; }
   .submit-note { text-align: right; padding-right: 16px; }
-  /* 폰에서는 「이전」이 물빛 띠 위에 앉아 있어서 깊은 걸음에서 흰 쪽으로
-     뒤집어 뒀다. PC 는 그 자리가 밝은 알약이라 도로 짙은 글씨여야 읽힌다. */
+  /* 폰에서는 단추줄이 물빛 띠 위에 앉아 있어서, 깊은 걸음(3~5)에서는 「이전」을
+     흰 쪽으로, 「다음」을 모래빛으로 뒤집어 뒀다 — 안 그러면 물에 녹아 없어졌다.
+     PC 는 그 자리가 밝은 알약이라 사정이 반대다. 알약 위에서는 모래빛 단추가
+     바탕과 겹쳐 어느 쪽이 주 단추인지 안 보인다. 얕은 걸음과 같은 색으로
+     되돌린다. */
   body[data-step="3"] .wiz-prev,
   body[data-step="4"] .wiz-prev,
   body[data-step="5"] .wiz-prev {
     background: rgba(15,51,63,.055); color: var(--text);
+  }
+  body[data-step="3"] .wiz-next, body[data-step="3"] .wiz-go,
+  body[data-step="4"] .wiz-next, body[data-step="4"] .wiz-go,
+  body[data-step="5"] .wiz-next, body[data-step="5"] .wiz-go {
+    background: var(--accent); color: #fff;
   }
   /* 안내 한 줄은 알약 밖, 물 위에 그냥 앉는다 — 깊은 걸음에서는 밝은 쪽으로. */
   body[data-step="3"] .submit-note,
