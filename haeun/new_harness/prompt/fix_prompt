@@ -64,18 +64,32 @@ JSON만 출력한다. 설명이나 머리말을 붙이지 마라.
       "id": 3,
       "source": "그대로",
       "function": "그대로",
-      "learns": [{ "what": "...", "how": "..." }],
-      "guesses": [{ "what": "...", "from": "..." }],
-      "detail": "고친 장면 전문",
-      "leads_to": "..."
+      "events": [
+        {
+          "id": 1,
+          "source": "그대로",
+          "function": "그대로",
+          "learns": [{ "what": "...", "how": "..." }],
+          "guesses": [{ "what": "...", "from": "..." }],
+          "detail": "고친 사건 전문",
+          "continuity": {
+            "previous_ending": "...", "transition": "...",
+            "opening_state": "...", "ending_state": "...",
+            "persistent_elements": ["..."], "visual_anchors": ["..."]
+          },
+          "leads_to": "..."
+        }
+      ]
     }
   ],
   "notes": ["고치지 못한 지적과 그 이유"]
 }
 ```
 
-`scenes` 에는 **고친 장면만** 넣는다. 장면 하나를 넣을 때는 그 장면의 모든
-칸을 다 적는다(고치지 않은 칸도 원래 값 그대로).
+`scenes` 에는 **고친 장면만** 넣는다. 장면 하나를 넣을 때는 **그 장면의
+사건을 하나도 빠뜨리지 말고 전부** 적는다 — 안 고친 사건과 안 고친 칸도
+원래 값 그대로 적는다. 넣은 장면은 통째로 갈아 끼워지므로, 빠뜨린 사건은
+사라진다.
 
 고칠 것이 하나도 없으면 `scenes` 를 빈 배열로 둔다.
 

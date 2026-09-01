@@ -236,3 +236,47 @@ def flatten_cuts(scenes) -> list:
             out.append(dict(carried, **cut,
                             scene=scene.get("id"), cut=cut.get("id")))
     return out
+
+
+# ------------------------------------------------------------------- 사건
+
+# 구체화(detail.json)에서 그림 한 장이 되는 단위의 칸. 장면과 사건이 같은
+# 칸을 쓴다 — 옛 run 은 장면 자체가 사건 하나이기 때문이다(아래 참고).
+EVENT_FIELDS = ("source", "function", "detail", "learns", "guesses",
+                "continuity", "leads_to")
+
+
+def detail_events(scene) -> list:
+    """장면 하나 -> 사건 배열. **사건 하나가 그림 한 장이다.**
+
+    장면 하나에는 사건이 여러 개 들어 있다 — "일어난다 / 시계를 본다 /
+    나간다 / 마주친다 / 인사한다 / 아침을 차린다 / 질문을 받는다" 가 한
+    장면이었다. 이것을 한 장에 다 그리게 하면 그림이 산만해지고, 그렇다고
+    컷을 하나씩 지정하면 연출을 사람이 다 짜는 것이 된다. 그래서 **사건**
+    에서 끊는다 — 그림 모델은 사건 하나를 받아 컷 수·구도·여백을 스스로
+    정한다.
+
+    **사건 칸이 없는 옛 detail.json 은 장면 자체를 사건 하나로 읽는다.**
+    그러면 옛 run 은 예전처럼 장면당 그림 한 장이라 결과가 안 바뀐다.
+    """
+    got = [e for e in (scene.get("events") or []) if isinstance(e, dict)]
+    if got:
+        return got
+    one = {k: scene[k] for k in EVENT_FIELDS if k in scene}
+    one["id"] = 1
+    return [one]
+
+
+def flatten_events(scenes) -> list:
+    """detail.json 의 장면 배열 -> 사건 하나짜리 배열.
+
+    어느 장면의 몇 번째 사건이었는지를 scene·event 에 남긴다 — 편 뒤에는 그
+    자리를 다시 알 길이 없다. **장면 경계를 넘어 이어 편다**: 사건 사이의
+    이어짐(continuity)은 장면이 바뀌는 자리에서도 끊기면 안 되고, 그림도
+    바로 앞 사건의 그림을 참조로 받는다.
+    """
+    out = []
+    for scene in scenes or []:
+        for i, ev in enumerate(detail_events(scene), 1):
+            out.append(dict(ev, scene=scene.get("id"), event=ev.get("id", i)))
+    return out
