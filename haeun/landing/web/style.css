@@ -2376,10 +2376,17 @@ body.ed .ed-top-row { min-height: 0; height: 0; padding: 0; }
      역할이었는데 PC 에서는 그 자리가 안 비므로 깊이를 보여주는 쪽으로 옮긴다.
      fixed 인 이유: 오른쪽 카드가 화면보다 길면 절대위치는 화면 밖 바닥으로
      내려가 잘려 보인다. 왼쪽 칸은 제목 아래가 통째로 비어 있으므로 화면에
-     붙여 둬도 아무것도 가리지 않는다. */
+     붙여 둬도 아무것도 가리지 않는다.
+
+     가로 자리는 **화면 끝이 아니라 왼쪽 칸의 왼쪽 끝** 이다. fixed 라 %·vw 가
+     화면 기준으로 풀리므로, 가운데 정렬된 기둥(max-width 1100px)의 왼쪽
+     모서리를 직접 계산한다 — 그냥 `left: 72px` 로 두면 창이 넓어질수록 루만
+     화면 구석에 혼자 떨어져 앉는다(실측, 1568px). 창이 기둥보다 좁으면
+     계산값이 음수로 가므로 원래 여백을 바닥으로 깐다. */
   .wiz-lou {
     position: fixed; top: auto; right: auto;
-    left: clamp(32px, 5vw, 72px); bottom: 44px;
+    left: max(clamp(32px, 5vw, 72px), calc(50vw - 550px + clamp(32px, 5vw, 72px)));
+    bottom: 44px;
     width: 190px; height: 190px;
   }
 
