@@ -1109,6 +1109,8 @@ function setupTitleEdit() {
   };
 
   h.addEventListener("click", enter);
+  // 연필도 같은 자리로 들어간다 — 결과 화면과 같은 손잡이를 편집실에도 둔다.
+  $("#edTitleEditBtn")?.addEventListener("click", e => { e.preventDefault(); enter(); });
   h.addEventListener("keydown", e => {
     e.stopPropagation();
     if (!h.isContentEditable) {
@@ -1342,6 +1344,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const g = grid.getBoundingClientRect(), d = dock.getBoundingClientRect();
     if (g.top > d.bottom - 60) dock.scrollTop += g.top - d.top - 8;
   }));
+  /* 넓은 화면에서는 도구가 캔버스 **옆에** 붙으므로 처음부터 열어 둔다 —
+     그림을 가리지 않으니 닫아 둘 이유가 없다. 폰에서는 서랍이 그림을 덮어서
+     기본이 닫힘인 것이 맞다(setDock 주석 참고). 사람이 ✕ 로 닫으면 오른쪽
+     아래 손잡이가 나타난다. */
+  if (matchMedia("(min-width: 880px)").matches) setDock(true);
+
   $("#dockFold")?.addEventListener("click", () => setDock(false));
   $("#dockOpen")?.addEventListener("click", () => setDock(true));
   $("#dockScrim")?.addEventListener("click", () => setDock(false));

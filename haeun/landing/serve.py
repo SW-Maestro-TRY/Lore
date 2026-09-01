@@ -474,7 +474,14 @@ class Handler(BaseHTTPRequestHandler):
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/episode", path)
         if m:
-            data = pipeline.editor_data(m.group(1), self._ep(query))
+            run_id = m.group(1)
+            # story-harness 에 없고 new_harness 에 있으면 그쪽을 연다 — 위
+            # /result·/page 와 같은 규칙이다. 이 자리에만 그 분기가 없어서
+            # new_harness 로 만든 작품은 편집실이 안 열렸다.
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                data = nh.editor_data(run_id)
+            else:
+                data = pipeline.editor_data(run_id, self._ep(query))
             if not data:
                 return self._error(404, "그 run 의 1화 컷을 찾지 못했습니다")
             return self._json(data)
@@ -1402,9 +1409,19 @@ class Handler(BaseHTTPRequestHandler):
                 # 전에 터무니없이 큰 것은 아예 안 받는다.
                 return self._error(400,
                                    f"제목은 {pipeline.TITLE_MAX}자까지 적어 주세요")
+            run_id = m.group(1)
+            # story-harness 에 없고 new_harness 에 있으면 그쪽에 저장한다 —
+            # classic 의 set_user_title 은 story-harness/runs 아래에만 쓰므로
+            # new_harness 작품은 제목을 고치면 404 가 났다(위 /episode·/result
+            # 와 같은 누락이다).
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                try:
+                    return self._json({"title": nh.set_user_title(run_id, title)})
+                except (OSError, FileNotFoundError) as exc:
+                    return self._error(404, str(exc))
             try:
                 return self._json({"title": pipeline.set_user_title(
-                    m.group(1), ep, title)})
+                    run_id, ep, title)})
             except pipeline.Failed as exc:
                 return self._error(404, str(exc))
 
