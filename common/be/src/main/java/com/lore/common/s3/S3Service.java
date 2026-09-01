@@ -1,5 +1,7 @@
 package com.lore.common.s3;
 
+import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +13,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.time.Duration;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -26,6 +29,17 @@ public class S3Service {
 
     /** CloudFront 의 `/images/*` 동작과 맞춰야 하는 키 접두사. 바꾸려면 CloudFront 도 같이 바꾼다. */
     static final String KEY_PREFIX = "images";
+
+    /**
+     * 올릴 수 있는 도메인 폴더. 여기 없는 값은 거부한다.
+     *
+     * ★ 검증이 필요한 이유 — 이 값이 그대로 S3 키가 되므로, 오타 하나(`zzl`)면 아무도 모르는
+     *   경로에 파일이 쌓이고 나중에 찾을 수도 지울 수도 없다. 게다가 캐시 정책과 접근 권한을
+     *   이 경로를 기준으로 나눌 것이라, 규칙 밖의 경로가 생기는 순간 그 규칙이 무의미해진다.
+     *
+     * 새 도메인이 생기면 여기에 추가한다(팀 공용이므로 변경 시 공유 필요).
+     */
+    static final Set<String> ALLOWED_DOMAINS = Set.of("zzal", "webtoon", "trailer", "common");
 
     private final S3Presigner presigner;
     private final String bucket;
@@ -61,6 +75,11 @@ public class S3Service {
         if (!StringUtils.hasText(bucket)) {
             throw new IllegalStateException(
                     "CONTENT_S3_BUCKET 환경변수가 설정되지 않아 업로드 URL 을 발급할 수 없습니다.");
+        }
+
+        if (!ALLOWED_DOMAINS.contains(domain)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "지원하지 않는 도메인입니다: %s (가능한 값: %s)".formatted(domain, ALLOWED_DOMAINS));
         }
 
         // 키 = images/ + 도메인 폴더 + 랜덤 UUID. UUID 는 파일명 충돌·추측을 막는다.

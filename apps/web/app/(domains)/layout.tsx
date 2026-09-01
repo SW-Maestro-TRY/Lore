@@ -15,11 +15,14 @@ export default function DomainsLayout({
   return (
     <>
       <SiteHeader />
+      {/* 폭·여백을 변수로 열어 둔다. 화면 전체를 쓰는 페이지(zzal 다마고치)가
+          이 변수를 0/none 으로 덮어 껍데기를 벗을 수 있게 하기 위함이다.
+          변수를 안 덮으면 기본값 그대로라 다른 탭은 달라지는 게 없다. */}
       <main
         style={{
-          maxWidth: "var(--container)",
+          maxWidth: "var(--main-max, var(--container))",
           margin: "0 auto",
-          padding: "clamp(28px, 5vw, 56px) var(--gutter)",
+          padding: "var(--main-pad-y, clamp(28px, 5vw, 56px)) var(--main-pad-x, var(--gutter))",
         }}
       >
         {children}
