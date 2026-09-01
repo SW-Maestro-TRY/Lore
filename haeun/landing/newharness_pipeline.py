@@ -39,10 +39,16 @@ overlay.py 는애초에 밑그림에 빈 자리가 있어야 한다는 가정이
 볼 자리가 없다 — 시트 얼굴이 틀어지거나 콘티가 이상해도 페이지를 다 그린
 뒤에야 안다. 그래서 세 번을 **네 번**으로 다시 나눴다:
 
-    1. `--character <path>`        이야기 후보 4개 (사람이 고름)
-    2. `--run-id <id> --pick <n>`  구체화+콘티        [여기서 멈춤 — 콘티 검수]
-    3. `--run-id <id> --sheet`     시트만              [여기서 멈춤 — 시트 검수]
-    4. `--run-id <id> --pages`     페이지 그림
+    1. `--character <path>`             이야기 후보 4개 (사람이 고름)
+    2. `--run-id <id> --pick <n> --detail`  구체화만  [멈춤 — 이야기 검수]
+    3. `--run-id <id> --sheet`          시트만        [멈춤 — 시트 검수]
+    4. `--run-id <id> --detail-pages`   페이지 그림
+
+**2026-09-01부터 컷 대본·콘티를 건너뛴다.** 컷 대본에서 대사·컷·카메라를 다
+못박으면 그림이 그것을 옮기기만 해서 결과가 평평해졌다(실측). 지금은 구체화된
+장면을 그림 모델에게 그대로 주고 컷 분할까지 맡긴다(new_harness/detailart.py).
+장면 하나가 페이지 하나이고, **1페이지는 표지다.** 쓰는 자리는 예전과 같은
+`pages/pageNN.png` 라 둘러보기·편집실은 어느 흐름으로 만든 것인지 몰라도 된다.
 
 "다시 만들기"는 그 단계 명령을 **한 번 더 그대로 부르는 것**이다 — 콘티는
 `--pick n`을 다시 부르면 detail_prompt/storyboard_prompt 가 새로 돈다(값을
@@ -92,7 +98,7 @@ AWAITING = (STATUS_AWAITING_PICK, STATUS_AWAITING_BOARD, STATUS_AWAITING_SHEET)
 # pipeline.py 의 look/seed/card...)까지는 안 쪼갠다, 신호가 그만큼 없다.
 STAGES = ("story", "board", "sheet", "pages")
 STAGE_LABEL = {
-    "story": "이야기 설계", "board": "콘티 · 구체화",
+    "story": "이야기 설계", "board": "이야기 구체화",
     "sheet": "캐릭터 시트", "pages": "페이지 그림",
 }
 
@@ -118,7 +124,8 @@ STYLE_LABEL = {
 DEFAULT_STYLE = "webtoon"                # new_harness 자체 기본(NH_STYLE)과 맞춘다
 
 # "[페이지 3/7] 컷 2개 · 참조 2장 …" — pageart.draw() 가 찍는 줄 (pageart.py:116).
-RE_PAGE = re.compile(r"^\[페이지 (\d+)/(\d+)\]")
+# "[장면 2/5] 참조 2장 …"          — detailart.draw() 가 찍는 줄 (디테일 직행).
+RE_PAGE = re.compile(r"^\[(?:페이지|장면) (\d+)/(\d+)\]")
 # "run: /.../runs/20260831T000249-10322f" — run.py:1141.
 RE_RUN_ID = re.compile(r"^run: .*[/\\]([^/\\]+)\s*$")
 
@@ -265,12 +272,16 @@ class NHJob:
 
 def _on_rest_line(job: NHJob, line: str) -> None:
     """2·3단계 진행 중 stdout 한 줄 -> 화면에 보여줄 단계(job.stage) 갱신."""
-    # 구체화·컷 대본·콘티는 화면에서 한 걸음("콘티")으로 묶어 보여준다 —
-    # 셋 다 사람이 보는 것은 마지막 콘티 하나뿐이라, 걸음을 셋으로 쪼개면
-    # 기다리는 사람에게 진행이 세 번 되돌아가는 것처럼 보인다.
+    # 구체화·컷 대본·컷 대본 픽스·콘티는 화면에서 한 걸음("콘티")으로 묶어
+    # 보여준다 — 넷 다 사람이 보는 것은 마지막 콘티 하나뿐이라, 걸음을
+    # 넷으로 쪼개면 기다리는 사람에게 진행이 여러 번 되돌아가는 것처럼
+    # 보인다.
     if (line.startswith("[콘티]") or line.startswith("[구체화]")
-            or line.startswith("[컷 대본]")):
+            or line.startswith("[컷 대본]") or line.startswith("[컷 검수")):
         job.stage = "board"
+    elif line.startswith("[디테일 직행]") or line.startswith("[표지]") \
+            or line.startswith("[장면 "):
+        job.stage = "pages"
     elif line.startswith("[시트]"):
         job.stage = "sheet"
     elif line.startswith("[페이지"):
@@ -337,12 +348,12 @@ def _run_board_phase(job: NHJob) -> None:
     job.stage = "board"
     job.save()
     try:
-        code = job._run(["--run-id", job.run_id, "--pick", str(job.pick)],
+        code = job._run(["--run-id", job.run_id, "--pick", str(job.pick), "--detail"],
                         lambda line: _on_rest_line(job, line))
         if job._cancel:
             return _fail(job, "취소되었습니다")
         if code != 0:
-            return _fail(job, "콘티를 만들지 못했습니다 — 로그를 확인하세요")
+            return _fail(job, "이야기를 구체화하지 못했습니다 — 로그를 확인하세요")
         job.status = STATUS_AWAITING_BOARD
         job.save()
     except Exception as exc:                            # noqa: BLE001
@@ -377,7 +388,7 @@ def _run_pages_phase(job: NHJob) -> None:
     job.stage = "pages"
     job.save()
     try:
-        code = job._run(["--run-id", job.run_id, "--pages"],
+        code = job._run(["--run-id", job.run_id, "--detail-pages"],
                         lambda line: _on_rest_line(job, line))
         if job._cancel:
             return _fail(job, "취소되었습니다")
@@ -405,6 +416,38 @@ def _clear_sheet(run_id: str) -> None:
             pass
 
 
+def detail_summary(run_id: str) -> dict[str, Any] | None:
+    """디테일 직행 흐름의 검수 화면 — 컷 대본·콘티가 없으므로 장면을 그대로 보여준다.
+
+    화면(newharness.html)은 board_summary 와 같은 모양만 받으면 되므로 장면
+    하나를 "컷 하나"로 접어 넣는다 — 어느 흐름으로 만든 것인지 몰라도 되게.
+    """
+    try:
+        detail = json.loads((run_dir(run_id) / "detail.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    scenes = []
+    for s in detail.get("scenes") or []:
+        body = (s.get("detail") or "").strip()
+        learns = [(x.get("what") or "").strip()
+                  for x in (s.get("learns") or []) if isinstance(x, dict)]
+        scenes.append({
+            "id": s.get("id"), "location": "", "time": "",
+            "summary": (s.get("source") or "").strip(),
+            "cuts": [{
+                "id": 1, "size": "full", "shot": "", "angle": "",
+                "background": body,
+                "characters": [], "dialogue": [], "sfx": [],
+                "learns": [x for x in learns if x],
+            }],
+        })
+    cast = [{"name": (c.get("name") or "").strip(),
+             "appearance": (c.get("appearance") or "").strip()}
+            for c in detail.get("cast") or [] if (c.get("name") or "").strip()]
+    return {"cast": cast, "scenes": scenes, "cut_count": len(scenes),
+            "engine": "detail"}
+
+
 def board_summary(run_id: str) -> dict[str, Any] | None:
     """콘티 검수 화면이 보여줄 것 — cast·장면·컷을 사람이 읽을 모양으로.
 
@@ -421,7 +464,8 @@ def board_summary(run_id: str) -> dict[str, Any] | None:
     try:
         board = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return None
+        # 디테일 직행 흐름에는 콘티가 없다 — 그때는 구체화된 이야기를 보여준다.
+        return detail_summary(run_id)
     scenes = []
     for s in board.get("scenes") or []:
         cuts = []
@@ -685,7 +729,7 @@ def list_runs(limit: int = 60) -> list[dict[str, Any]]:
         out.append({
             "run_id": rid,
             "character": str(input_doc.get("name") or ""),
-            "title": str(pick.get("title") or "1화"),
+            "title": title_of(rid, pick),
             "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
             "episodes": [1],
             "planned_episodes": [1],
@@ -716,7 +760,7 @@ def result_by_run(run_id: str) -> dict[str, Any]:
     return {
         "run_id": run_id,
         "character": str(input_doc.get("name") or ""),
-        "title": str(pick.get("title") or "1화"),
+        "title": title_of(run_id, pick),
         "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
         "style_label": "",
         "logline": "",
@@ -730,6 +774,115 @@ def result_by_run(run_id: str) -> dict[str, Any]:
         "stage_times": [],
         "seconds": None,
         "layout_mode": "fast",
+    }
+
+
+TITLE_MAX = 60
+
+
+def titles_path(run_id: str) -> Path:
+    return run_dir(run_id) / "titles.json"
+
+
+def user_title(run_id: str) -> str:
+    """사람이 고쳐 둔 제목. 없으면 빈 문자열.
+
+    classic 의 pipeline.user_title 과 같은 규칙인데, 저장 위치가 다르다 —
+    저쪽은 story-harness/runs 아래를 본다. new_harness run 에는 그 폴더가
+    없어서 제목을 고치면 404 가 났다(실측).
+    """
+    try:
+        doc = json.loads(titles_path(run_id).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    return str(doc.get("1") or "") if isinstance(doc, dict) else ""
+
+
+def set_user_title(run_id: str, title: str) -> str:
+    """제목을 고쳐 둔다. 빈 값이면 지운다(모델이 지은 이름으로 되돌아간다).
+
+    돌려주는 것은 **앞으로 보일 이름**이다 — 지웠으면 원래 이름.
+    """
+    d = run_dir(run_id)
+    if not d.is_dir():
+        raise FileNotFoundError("그런 작품이 없습니다.")
+    doc: dict[str, Any] = {}
+    try:
+        got = json.loads(titles_path(run_id).read_text(encoding="utf-8"))
+        if isinstance(got, dict):
+            doc = got
+    except (OSError, ValueError):
+        pass
+    clean = " ".join(str(title or "").split())[:TITLE_MAX]
+    if clean:
+        doc["1"] = clean
+    else:
+        doc.pop("1", None)
+    titles_path(run_id).write_text(json.dumps(doc, ensure_ascii=False, indent=1),
+                                   encoding="utf-8")
+    return clean or str(_read_json_safe(d, "pick.json").get("title") or "1화")
+
+
+def title_of(run_id: str, pick: dict[str, Any]) -> str:
+    """화면에 보일 제목 — 사람이 고친 것이 있으면 그것이 이긴다."""
+    return user_title(run_id) or str(pick.get("title") or "1화")
+
+
+def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
+    """편집실 화면이 그대로 먹는 모양 — classic 의 pipeline.editor_data 와 같은 자리.
+
+    편집실은 **밑그림 한 장 + 그 위에 얹는 것**만 다루므로, new_harness 의
+    페이지 하나를 classic 의 "장(scene)" 하나로 그대로 넘긴다. 컷 목록은
+    대사 패널이 비지 않게 장면 한 줄을 실어 주는 정도다 — 디테일 직행
+    흐름은 대사를 그림 안에 그려 넣으므로 따로 얹을 대사 데이터가 없다.
+
+    그림 크기(w·h)를 같이 주는 이유: 편집실이 얹는 것의 좌표를 퍼센트로
+    다루려면 원본 크기를 알아야 한다.
+    """
+    numbers = [n for n in page_numbers(run_id) if unit_image(run_id, n)]
+    if not numbers:
+        return {}
+    d = run_dir(run_id)
+    input_doc = _read_json_safe(d, "input.json")
+    pick = _read_json_safe(d, "pick.json")
+    detail = _read_json_safe(d, "detail.json")
+    # 1페이지는 표지다(detailart.draw 참고) — 장면은 2페이지부터 이어진다.
+    scenes_doc = detail.get("scenes") or []
+
+    try:
+        from PIL import Image
+    except ImportError:
+        Image = None
+
+    scenes = []
+    for n in numbers:
+        w = h = 0
+        src = unit_image(run_id, n)
+        if Image and src:
+            try:
+                with Image.open(src) as im:
+                    w, h = im.size
+            except OSError:
+                pass
+        one = scenes_doc[n - 2] if 1 < n <= len(scenes_doc) + 1 else {}
+        note = (one.get("source") or "").strip() if isinstance(one, dict) else ""
+        scenes.append({
+            "no": n,
+            "image": f"/api/runs/{run_id}/page/{n}?w=1080",
+            "w": w, "h": h,
+            "cuts": [{"no": 1, "shot": "", "beat": "", "speaker": "",
+                      "dialogue": "", "narration": "", "thought": "", "sfx": "",
+                      "description": note or ("표지" if n == 1 else ""),
+                      "lines": []}],
+        })
+    return {
+        "run_id": run_id,
+        "character": str(input_doc.get("name") or ""),
+        "title": title_of(run_id, pick),
+        "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
+        "episode": 1,
+        "scenes": scenes,
+        "page_count": len(numbers),
     }
 
 
