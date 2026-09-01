@@ -109,7 +109,7 @@ STAGE_LABEL = {
 # 해서 여기도 뺐다.
 STYLE_CHOICES = {
     "romance":   "romance_fantasy",
-    "webtoon":   "webtoon_lock",
+    "webtoon":   "webtoon_lock_bg",
     "frost":     "frost",
     "cinematic": "cinematic",
     "pastel":    "pastel",

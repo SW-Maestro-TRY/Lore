@@ -258,7 +258,7 @@ def cast_lines(cast, page=None, skip=()) -> list[str]:
     return out
 
 
-DEFAULT_STYLE = "webtoon_lock"
+DEFAULT_STYLE = "webtoon_lock_bg"
 
 
 def load_style(name: str = "") -> str:
