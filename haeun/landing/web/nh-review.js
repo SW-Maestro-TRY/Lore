@@ -59,10 +59,25 @@ window.NHReview = (function () {
   }
 
   function countLabel(summary) {
-    if (!summary || !summary.cut_count) return "";
+    if (!summary) return "";
+    if (summary.engine === "direction") {
+      return `장면 ${(summary.scenes || []).length}개`;
+    }
+    if (!summary.cut_count) return "";
     const word = unitWord(summary);
     const tail = word === "사건" ? ` (그림 ${summary.cut_count}장)` : "";
     return `장면 ${(summary.scenes || []).length}개 · ${word} ${summary.cut_count}개${tail}`;
+  }
+
+  /* engine이 "direction"이면(이어그리기 — 콘티·컷 대본이 없다) 컷 토글을
+     안 그린다. 어차피 컷 칸이 전부 빈 채로 와서(background·characters·
+     dialogue 없음), 펼쳐도 요약 문장만 되풀이해 보여주고 정보가 없다. */
+  function simpleScenesHtml(scenes) {
+    return (scenes || []).map(s => `
+      <div class="nh-scene">
+        <div class="nh-scene-head">장면 ${esc(s.id)}</div>
+        <p class="nh-scene-sum">${esc(s.summary)}</p>
+      </div>`).join("");
   }
 
   /* 첫 장면만 펴 둔다 — 칸이 20개를 넘는 일이 흔해서, 다 펴 두면
@@ -91,8 +106,51 @@ window.NHReview = (function () {
     const scenes = document.querySelector(ids.scenes);
     if (cast) cast.innerHTML = castHtml(summary.cast);
     if (count) count.textContent = countLabel(summary);
-    if (scenes) scenes.innerHTML = scenesHtml(summary.scenes, unitWord(summary));
+    if (scenes) {
+      scenes.innerHTML = summary.engine === "direction"
+        ? simpleScenesHtml(summary.scenes)
+        : scenesHtml(summary.scenes, unitWord(summary));
+    }
   }
 
-  return { directionCardHtml, cutHtml, castHtml, countLabel, scenesHtml, fillBoard };
+  /* "다시 만들기" 버튼을 누르면 바로 요청을 보내지 않고, 요청 사항을 적을
+     수 있는 칸을 편다 — 비워 두고 확인해도 된다(placeholder 로 안내). 이
+     버튼은 다른 클릭 리스너를 따로 달지 않는다 — 요청은 항상 이 칸의
+     "다시 만들기" 확인 버튼으로만 나간다.
+     retryBtn 은 `.nh-approval-actions` 안에 있어야 한다(패널을 그 바로
+     뒤에 붙인다). onSubmit(note) 이 실제 요청을 보내는 자리다 — 이
+     함수는 UI만 맡고 네트워크 호출은 모른다(목업 페이지는 onSubmit 에서
+     아무 것도 안 하면 그만이다). */
+  function wireRetryNote(retryBtnId, onSubmit) {
+    const btn = document.getElementById(retryBtnId);
+    if (!btn) return;
+    const actions = btn.closest(".nh-approval-actions") || btn.parentElement;
+    const panel = document.createElement("div");
+    panel.className = "nh-retry-note";
+    panel.hidden = true;
+    panel.innerHTML = `
+      <textarea placeholder="다시 만들 때 반영할 것이 있으면 적어 주세요 (비워 두고 다시 만들기를 눌러도 됩니다)"></textarea>
+      <div class="nh-retry-note-actions">
+        <button type="button" class="btn btn-quiet btn-sm" data-act="cancel">취소</button>
+        <button type="button" class="btn btn-primary btn-sm" data-act="confirm">다시 만들기</button>
+      </div>`;
+    actions.insertAdjacentElement("afterend", panel);
+    const textarea = panel.querySelector("textarea");
+    btn.addEventListener("click", () => {
+      panel.hidden = false;
+      textarea.focus();
+    });
+    panel.querySelector('[data-act="cancel"]').addEventListener("click", () => {
+      panel.hidden = true;
+    });
+    panel.querySelector('[data-act="confirm"]').addEventListener("click", () => {
+      const note = textarea.value;
+      panel.hidden = true;
+      textarea.value = "";
+      onSubmit(note);
+    });
+  }
+
+  return { directionCardHtml, cutHtml, castHtml, countLabel, scenesHtml,
+          simpleScenesHtml, fillBoard, wireRetryNote };
 })();

@@ -10,12 +10,31 @@
  * newharness.html 은 style.css 를 안 읽는 독립 페이지다. */
 
 /* ---- 방향 고르기 ---- */
+.nh-picker-head { text-align: center; margin: 4px 0 20px; }
+.nh-picker-head h2 { font-size: 20px; margin: 0 0 6px; }
+.nh-picker-head .nh-hint { font-size: 13px; margin: 0; }
+
 .nh-card {
-  border: 1px solid var(--line-2, #ddd); border-radius: 10px; padding: 14px;
+  border: 2px solid var(--line-2, #e2e2e2); border-radius: 14px; padding: 16px 18px;
   margin-bottom: 10px; cursor: pointer; background: var(--card, #fff);
+  position: relative; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
 }
-.nh-card.picked { border-color: #222; box-shadow: 0 0 0 2px #222 inset; }
-.nh-card h3 { margin: 0 0 6px; font-size: 15px; }
+.nh-card:hover {
+  border-color: var(--accent, #0e8fb5);
+  box-shadow: 0 4px 14px rgba(14, 143, 181, .12);
+  transform: translateY(-1px);
+}
+.nh-card.picked {
+  border-color: var(--accent, #0e8fb5);
+  box-shadow: 0 0 0 2px var(--accent, #0e8fb5) inset, 0 6px 18px rgba(14, 143, 181, .18);
+  background: rgba(14, 143, 181, .05);
+}
+.nh-card.picked::after {
+  content: "✓ 선택됨"; position: absolute; top: 12px; right: 14px;
+  font-size: 11px; font-weight: 700; color: var(--accent-d, #0a5f7a);
+  background: rgba(14, 143, 181, .14); padding: 2px 9px; border-radius: 999px;
+}
+.nh-card h3 { margin: 0 22px 6px 0; font-size: 16px; }
 .nh-card p { margin: 4px 0; font-size: 13px; color: #555; line-height: 1.5; }
 .nh-card ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: #555; }
 
@@ -85,3 +104,33 @@
 .nh-approval-actions { display: flex; gap: 8px; margin-top: 14px; }
 .nh-approval-actions .btn { flex: 1; }
 .nh-sheet-img { width: 100%; border-radius: 8px; display: block; margin-bottom: 12px; }
+
+/* ---- 다시 만들기 요청 칸 ---- */
+.nh-retry-note {
+  margin-top: 10px; padding: 12px; border: 1px dashed var(--line-2, #ccc);
+  border-radius: 8px; background: var(--ink-2, #fafafa);
+}
+.nh-retry-note textarea {
+  width: 100%; min-height: 64px; padding: 8px 10px; border: 1px solid #ccc;
+  border-radius: 6px; font: inherit; font-size: 13px; box-sizing: border-box; resize: vertical;
+}
+.nh-retry-note-actions { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+.nh-retry-note-actions .btn { flex: 0 0 auto; }
+
+/* ---- 반응형: PC 화면에서 크게, 모바일에서 안 깨지게 ----
+   방향 카드·시트는 좁은 모바일 폭(.nh-wrap 640px)에 맞춰 만들어졌던 것을,
+   넓은 화면에서는 카드를 2열로 펼치고 글자를 키워 화면을 더 채운다. 모바일
+   (480px 이하)은 padding·글자만 살짝 줄여 잘리지 않게 한다. */
+@media (min-width: 720px) {
+  #cards, #nhCards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; align-items: start; }
+  .nh-card { margin-bottom: 0; padding: 18px 20px; }
+  .nh-card h3 { font-size: 17px; }
+  .nh-card p { font-size: 14px; }
+  .nh-card ul { font-size: 14px; }
+  .nh-sheet-img { max-width: 520px; margin-left: auto; margin-right: auto; }
+}
+@media (max-width: 480px) {
+  .nh-card { padding: 12px; }
+  .nh-card h3 { font-size: 14px; }
+  .nh-approval { padding: 12px; }
+}

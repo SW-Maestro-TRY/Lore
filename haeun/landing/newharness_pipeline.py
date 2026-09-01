@@ -98,7 +98,7 @@ AWAITING = (STATUS_AWAITING_PICK, STATUS_AWAITING_BOARD, STATUS_AWAITING_SHEET)
 # pipeline.py 의 look/seed/card...)까지는 안 쪼갠다, 신호가 그만큼 없다.
 STAGES = ("story", "board", "sheet", "pages")
 STAGE_LABEL = {
-    "story": "이야기 설계", "board": "이야기 구체화",
+    "story": "이야기 설계", "board": "방향 확정",
     "sheet": "캐릭터 시트", "pages": "페이지 그림",
 }
 
@@ -147,6 +147,7 @@ class NHJob:
     error: str | None = None
     directions: list[dict] = field(default_factory=list)
     pick: int | None = None
+    note: str = ""
     style: str = DEFAULT_STYLE
     stage: str = "story"
     art_done: int = 0
@@ -279,8 +280,8 @@ def _on_rest_line(job: NHJob, line: str) -> None:
     if (line.startswith("[콘티]") or line.startswith("[구체화]")
             or line.startswith("[컷 대본]") or line.startswith("[컷 검수")):
         job.stage = "board"
-    elif line.startswith("[디테일 직행]") or line.startswith("[표지]") \
-            or line.startswith("[장면 "):
+    elif line.startswith("[이어그리기]") or line.startswith("[디테일 직행]") \
+            or line.startswith("[표지]") or line.startswith("[장면 "):
         job.stage = "pages"
     elif line.startswith("[시트]"):
         job.stage = "sheet"
@@ -338,22 +339,66 @@ def _run_story_phase(job: NHJob) -> None:
         _fail(job, f"{type(exc).__name__}: {exc}")
 
 
-def _run_board_phase(job: NHJob) -> None:
-    """2단계 — 고른 방향으로 구체화+콘티. 끝나면 사람이 볼 때까지 멈춘다.
+def _run_restory_phase(job: NHJob) -> None:
+    """방향 고르기 화면의 "다시 만들기" — 기존 run 에서 이야기 후보 4개를
+    다시 만든다. job.note 가 있으면 이번 시도에만 반영할 요청으로 같이 준다.
 
-    다시 만들기도 이 함수를 그대로 다시 부른다 — `--pick n` 을 다시 주면
-    detail_prompt·storyboard_prompt 가 새로 돈다(run.py 가 값을 덮어씀).
+    구체화·콘티가 없어진 뒤로는 "다시 만들기"가 갈 곳이 여기(1단계)밖에
+    없다 — 그 아래(2단계, board)는 pick.json 을 저장만 할 뿐 아무것도
+    새로 만들지 않는다.
+    """
+    job.status = STATUS_RUNNING
+    job.stage = "story"
+    job.save()
+    try:
+        args = ["--run-id", job.run_id, "--restory"]
+        if job.note.strip():
+            args += ["--note", job.note.strip()]
+        code = job._run(args, lambda _line: None)
+        if job._cancel:
+            return _fail(job, "취소되었습니다")
+        if code != 0:
+            return _fail(job, "이야기 후보를 다시 만들지 못했습니다 — 로그를 확인하세요")
+
+        directions_path = NEW_HARNESS / "runs" / job.run_id / "directions.json"
+        if not directions_path.exists():
+            return _fail(job, "이야기 후보 파일이 없습니다")
+        directions = json.loads(directions_path.read_text(encoding="utf-8"))
+        if not directions:
+            return _fail(job, "이야기 후보를 하나도 못 읽었습니다 — story.md 를 확인하세요")
+
+        job.directions = directions
+        job.pick = None
+        job.status = STATUS_AWAITING_PICK
+        job.save()
+    except Exception as exc:                            # noqa: BLE001
+        _fail(job, f"{type(exc).__name__}: {exc}")
+
+
+def _run_board_phase(job: NHJob) -> None:
+    """2단계 — 고른 방향을 pick.json 에 남기고 바로 검수로 넘어간다.
+
+    2026-09-02부터 구체화(`--detail`)·콘티를 안 돈다 — 이어그리기 흐름은
+    story 단계(방향 후보)가 이미 장면 목록·등장인물 외모까지 다 뽑아 두므로,
+    여기서 더 만들 것이 없다. 호출 0회(`--pick-save`)라 이 단계는 사실상
+    바로 끝난다. 함수·상태 이름(board)은 옛 흐름과 그대로 맞춰 뒀다 — 화면
+    (newharness.html)이 `STATUS_AWAITING_BOARD`를 보고 검수 UI를 띄우는
+    지점이 바뀌면 프론트도 같이 고쳐야 해서다.
+
+    "다시 만들기"도 이 함수를 그대로 다시 부르지만, 다시 뽑을 것이 없어
+    pick.json 을 같은 값으로 다시 쓸 뿐이다 — 이야기 자체를 바꾸려면
+    방향 선택(1단계)으로 돌아가야 한다.
     """
     job.status = STATUS_RUNNING
     job.stage = "board"
     job.save()
     try:
-        code = job._run(["--run-id", job.run_id, "--pick", str(job.pick), "--detail"],
+        code = job._run(["--run-id", job.run_id, "--pick", str(job.pick), "--pick-save"],
                         lambda line: _on_rest_line(job, line))
         if job._cancel:
             return _fail(job, "취소되었습니다")
         if code != 0:
-            return _fail(job, "이야기를 구체화하지 못했습니다 — 로그를 확인하세요")
+            return _fail(job, "방향을 저장하지 못했습니다 — 로그를 확인하세요")
         job.status = STATUS_AWAITING_BOARD
         job.save()
     except Exception as exc:                            # noqa: BLE001
@@ -370,8 +415,10 @@ def _run_sheet_phase(job: NHJob) -> None:
     job.stage = "sheet"
     job.save()
     try:
-        code = job._run(["--run-id", job.run_id, "--sheet"],
-                        lambda line: _on_rest_line(job, line))
+        args = ["--run-id", job.run_id, "--sheet"]
+        if job.note.strip():
+            args += ["--note", job.note.strip()]
+        code = job._run(args, lambda line: _on_rest_line(job, line))
         if job._cancel:
             return _fail(job, "취소되었습니다")
         if code != 0:
@@ -432,6 +479,40 @@ def scene_events(scene: dict) -> list[dict]:
     return [dict(scene, id=1)]
 
 
+def direction_summary(run_id: str) -> dict[str, Any] | None:
+    """이어그리기 흐름의 검수 화면 — 구체화조차 없으므로 방향 후보 원본을 그대로 보여준다.
+
+    2026-09-02부터 기본 흐름이다: story 단계(방향 후보) 산출물만으로 그리므로
+    detail.json·board.json 이 아예 안 생긴다. 화면(newharness.html)은
+    board_summary 와 같은 모양만 받으면 되니, 장면 한 줄을 "컷 하나"로
+    접어 넣는다.
+    """
+    d = run_dir(run_id)
+    try:
+        pick = json.loads((d / "pick.json").read_text(encoding="utf-8"))
+        directions = json.loads((d / "directions.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    direction = next((x for x in directions if x.get("n") == pick.get("n")), None)
+    if not direction:
+        return None
+    scenes = []
+    for i, s in enumerate(direction.get("scenes") or [], 1):
+        text = str(s).strip()
+        if not text:
+            continue
+        scenes.append({
+            "id": i, "location": "", "time": "", "summary": text,
+            "cuts": [{"id": 1, "size": "full", "shot": "", "angle": "",
+                      "background": "", "characters": [], "dialogue": [], "sfx": []}],
+        })
+    cast = [{"name": (c.get("name") or "").strip(),
+             "appearance": (c.get("appearance") or "").strip()}
+            for c in direction.get("cast") or [] if (c.get("name") or "").strip()]
+    return {"cast": cast, "scenes": scenes, "cut_count": len(scenes),
+            "engine": "direction", "plot": direction.get("plot") or ""}
+
+
 def detail_summary(run_id: str) -> dict[str, Any] | None:
     """디테일 직행 흐름의 검수 화면 — 컷 대본·콘티가 없으므로 장면을 그대로 보여준다.
 
@@ -485,7 +566,9 @@ def board_summary(run_id: str) -> dict[str, Any] | None:
         board = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         # 디테일 직행 흐름에는 콘티가 없다 — 그때는 구체화된 이야기를 보여준다.
-        return detail_summary(run_id)
+        # 이어그리기 흐름(2026-09-02~)은 구체화조차 없다 — 그때는 방향 후보를
+        # 그대로 보여준다.
+        return detail_summary(run_id) or direction_summary(run_id)
     scenes = []
     for s in board.get("scenes") or []:
         cuts = []
@@ -669,9 +752,12 @@ class NHRunner:
         self._requeue(job, _run_sheet_phase)
         return job
 
-    def retry_board(self, job_id: str) -> NHJob:
+    def retry_board(self, job_id: str, note: str = "") -> NHJob:
+        # 다시 만들 게 없어진 board 단계 대신, 이야기 후보(1단계)를 다시
+        # 만든다 — _run_restory_phase 의 docstring 참고.
         job = self._require(job_id, STATUS_AWAITING_BOARD)
-        self._requeue(job, _run_board_phase)
+        job.note = note or ""
+        self._requeue(job, _run_restory_phase)
         return job
 
     def approve_sheet(self, job_id: str) -> NHJob:
@@ -679,8 +765,9 @@ class NHRunner:
         self._requeue(job, _run_pages_phase)
         return job
 
-    def retry_sheet(self, job_id: str) -> NHJob:
+    def retry_sheet(self, job_id: str, note: str = "") -> NHJob:
         job = self._require(job_id, STATUS_AWAITING_SHEET)
+        job.note = note or ""
         _clear_sheet(job.run_id)
         self._requeue(job, _run_sheet_phase)
         return job
@@ -869,6 +956,14 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
     # 1페이지는 표지다(detailart.draw 참고) — 사건이 2페이지부터 이어진다.
     # 그림 한 장 = 사건 하나라, 장면 경계를 넘어 편 순서가 곧 페이지 순서다.
     units = [e for s in (detail.get("scenes") or []) for e in scene_events(s)]
+    if not units:
+        # 이어그리기 흐름(2026-09-02~)은 detail.json 이 없다 — 방향 후보의
+        # 장면 한 줄을 그대로 note 로 쓴다(있는 것만이라도 보여준다).
+        directions = _read_json_safe(d, "directions.json") or []
+        if isinstance(directions, list):
+            direction = next((x for x in directions if x.get("n") == pick.get("n")), None)
+            if direction:
+                units = [{"source": s} for s in direction.get("scenes") or []]
 
     try:
         from PIL import Image
