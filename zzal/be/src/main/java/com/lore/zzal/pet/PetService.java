@@ -8,6 +8,10 @@ import com.lore.common.user.UserRepository;
 import com.lore.zzal.generation.GenJob;
 import com.lore.zzal.generation.GenJobRepository;
 import com.lore.zzal.generation.GenKind;
+import com.lore.zzal.generation.GenStatus;
+import com.lore.zzal.generation.GenStepRecordRepository;
+import com.lore.zzal.generation.StepLabels;
+import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -22,19 +26,28 @@ public class PetService {
 
     private final ZzalPetRepository petRepository;
     private final GenJobRepository jobRepository;
+    private final GenStepRecordRepository stepRepository;
+    private final StepLabels labels;
     private final UserRepository userRepository;
     private final S3Service s3Service;
+    private final HatchService hatchService;
     private final ApplicationEventPublisher events;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
+                      GenStepRecordRepository stepRepository,
+                      StepLabels labels,
                       UserRepository userRepository,
                       S3Service s3Service,
+                      HatchService hatchService,
                       ApplicationEventPublisher events) {
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
+        this.stepRepository = stepRepository;
+        this.labels = labels;
         this.userRepository = userRepository;
         this.s3Service = s3Service;
+        this.hatchService = hatchService;
         this.events = events;
     }
 
@@ -67,10 +80,14 @@ public class PetService {
         s3Service.consume(userId, imageKey, now);
 
         ZzalPet pet = petRepository.save(ZzalPet.hatch(userId, name, note, imageKey, now));
-        jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, now));
+
+        // 어느 파이프라인 버전으로 구울지 여기서 정해 기록에 남긴다. 나중에 결과가
+        // 이상할 때 "어떤 조합으로 만들어졌나" 를 답할 수 있어야 한다.
+        String version = hatchService.currentVersion();
+        GenJob job = jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, version, now));
 
         // 저장이 확정된 뒤에 부화가 시작되도록 알림만 띄운다(PetHatchListener 참고).
-        events.publishEvent(new PetHatchRequested(pet.getId()));
+        events.publishEvent(new PetHatchRequested(job.getId(), pet.getId(), version));
         return pet;
     }
 
@@ -92,9 +109,19 @@ public class PetService {
         return petRepository.findByUserIdOrderByIdDesc(userId);
     }
 
-    /** 지금 어느 단계까지 왔는가. 부화가 끝났으면 비어 있다. */
+    /**
+     * 지금 하는 일을 사람 말로. 부화 중이 아니면 비어 있다.
+     *
+     * 단계 이름("grid")이 아니라 화면에 그대로 쓸 문구를 준다 — 프론트가 단계 이름을
+     * 문구로 바꾸는 표를 따로 갖게 되면, 단계가 바뀔 때마다 양쪽을 고쳐야 한다.
+     */
     @Transactional(readOnly = true)
-    public GenJob currentJob(Long petId) {
-        return jobRepository.findFirstByPetIdOrderByIdDesc(petId).orElse(null);
+    public String currentStepLabel(Long petId) {
+        return jobRepository.findFirstByPetIdOrderByIdDesc(petId)
+                .flatMap(job -> stepRepository.findByJobIdOrderBySeqAsc(job.getId()).stream()
+                        .filter(s -> s.getStatus() == GenStatus.RUNNING)
+                        .findFirst())
+                .map(s -> labels.label(s.getName()))
+                .orElse(null);
     }
 }

@@ -1,6 +1,6 @@
 package com.lore.zzal.pet.dto;
 
-import com.lore.zzal.generation.GenJob;
+import com.lore.zzal.generation.GenStepRecord;
 import com.lore.zzal.pet.ZzalPet;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -56,12 +56,12 @@ public final class PetResponses {
             Integer food,
             Integer unlockedCount) {
 
-        public static Detail from(ZzalPet pet, GenJob job, Instant now) {
+        public static Detail from(ZzalPet pet, String stepLabel, Instant now) {
             boolean hatching = pet.isHatching();
             return new Detail(
                     pet.getId(), pet.getName(), pet.getNote(), pet.getPhase().name(),
                     !hatching && pet.getHatchedAt() != null,
-                    hatching && job != null ? job.getStep().getLabel() : null,
+                    hatching ? stepLabel : null,
                     hatching ? pet.elapsedSeconds(now) : null,
                     pet.getDeathReason() != null ? pet.getDeathReason().name() : null,
                     pet.getHatchStartedAt(), pet.getHatchedAt(),
