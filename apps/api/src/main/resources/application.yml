@@ -82,6 +82,12 @@ app:
     pipeline-version: ${ZZAL_PIPELINE_VERSION:v1}
     max-hatch-attempts: 2
 
+    recovery:
+      # 서버가 뜰 때 "멈춘 알" 로 볼 기준(분). 한 번의 부화가 걸릴 수 있는 최대 시간
+      # (10분)보다 넉넉히 잡는다 — 정상적으로 돌고 있는 부화를 집으면 두 번 굽게 되고
+      # 돈이 두 배로 나간다.
+      grace-minutes: 12
+
     generation:
       # OpenAI 실제 호출. 켜면 돈이 나간다
       real: ${ZZAL_GENERATION_REAL:false}

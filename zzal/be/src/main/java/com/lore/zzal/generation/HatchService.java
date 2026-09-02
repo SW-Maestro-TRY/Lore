@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.generation.steps.IdentityStep;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -51,11 +52,15 @@ public class HatchService {
             return;
         }
 
-        // 다시 한 번. 성공한 단계는 그대로 이어받으므로 실패한 지점부터 시작된다.
-        //
-        // ★ 거부(MODERATION_BLOCKED)면 문단부터 다시 해야 한다 — 같은 문단을 또 보내면
-        //   또 막히기 때문이다. 그 처리는 재시도 작업을 만들 때 문단 단계 기록을 비우는
-        //   방식으로 붙인다(#132 5번 걸음).
+        // ★ 거부(MODERATION_BLOCKED)면 문단부터 다시 만든다.
+        //   거부는 입력이 막힌 것이라 같은 문단을 또 보내면 또 막힌다. 성공 기록을 지워야
+        //   재시도가 그 단계를 건너뛰지 않는다.
+        if (job.getErrorCode() == GenErrorCode.MODERATION_BLOCKED) {
+            int discarded = recorder.discardSucceeded(petId, GenKind.HATCH, IdentityStep.NAME);
+            log.info("거부로 실패 — 정체성 문단 {}건을 폐기하고 다시 만든다 (petId={})", discarded, petId);
+        }
+
+        // 다시 한 번. 나머지 성공한 단계는 그대로 이어받으므로 실패한 지점부터 시작된다.
         GenJob retry = jobRepository.save(
                 GenJob.start(petId, GenKind.HATCH, (int) attempts + 1, version, Instant.now()));
         log.info("재시도 — petId={} attempt={}", petId, attempts + 1);

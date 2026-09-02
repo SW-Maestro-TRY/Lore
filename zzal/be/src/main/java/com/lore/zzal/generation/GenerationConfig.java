@@ -2,6 +2,7 @@ package com.lore.zzal.generation;
 
 import com.lore.common.s3.S3Storage;
 import com.lore.zzal.generation.client.FakeImageClient;
+import com.lore.zzal.generation.client.FlakyImageClient;
 import com.lore.zzal.generation.client.FakePostProcessor;
 import com.lore.zzal.generation.client.FakeTextClient;
 import com.lore.zzal.generation.client.ImageClient;
@@ -31,6 +32,15 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class GenerationConfig {
 
+    @Value("${app.zzal.generation.flaky.fail-step:}")
+    private String flakyStep;
+
+    @Value("${app.zzal.generation.flaky.fail-times:1}")
+    private int flakyTimes;
+
+    @Value("${app.zzal.generation.flaky.mode:moderation}")
+    private String flakyMode;
+
     @Bean
     public ImageClient imageClient(@Value("${app.zzal.generation.real:false}") boolean real,
                                    @Value("${app.zzal.generation.fake-delay-ms:4000}") int delay,
@@ -41,7 +51,19 @@ public class GenerationConfig {
             requireKey(apiKey);
             return new OpenAiImageClient(storage, apiKey, 180);
         }
-        return new FakeImageClient(delay, fakeGridKey);
+        ImageClient base = new FakeImageClient(delay, fakeGridKey);
+        return wrapFlaky(base);
+    }
+
+    /**
+     * 검증용 — 설정이 있으면 일부러 실패시키는 껍데기를 씌운다.
+     * 기본은 비어 있어 아무 일도 하지 않는다.
+     */
+    private ImageClient wrapFlaky(ImageClient base) {
+        if (flakyStep == null || flakyStep.isBlank()) {
+            return base;
+        }
+        return new FlakyImageClient(base, flakyStep, flakyTimes, flakyMode);
     }
 
     @Bean

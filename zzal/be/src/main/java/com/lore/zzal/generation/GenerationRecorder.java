@@ -36,11 +36,13 @@ public class GenerationRecorder {
         this.petRepository = petRepository;
     }
 
+    /**
+     * 이 펫이 지금까지 성공시킨 단계들. **시도(job)가 아니라 펫 단위로 본다.**
+     * 재시도가 앞 단계를 다시 굽지 않게 하는 핵심이다.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
-    public List<GenStepRecord> loadSucceeded(Long jobId) {
-        return stepRepository.findByJobIdOrderBySeqAsc(jobId).stream()
-                .filter(GenStepRecord::isSucceeded)
-                .toList();
+    public List<GenStepRecord> loadSucceeded(Long petId, GenKind kind) {
+        return stepRepository.findSucceededByPet(petId, kind);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -80,6 +82,27 @@ public class GenerationRecorder {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void failJob(Long jobId, GenErrorCode code, BigDecimal total) {
         jobRepository.findById(jobId).ifPresent(j -> j.fail(code, total, Instant.now()));
+    }
+
+
+    /**
+     * 거부(moderation)로 실패했을 때, 원인이 된 단계의 성공 기록을 지운다.
+     *
+     * ★★ 왜 필요한가 — 거부는 **입력 자체가 막힌 것**이라 같은 걸 다시 보내면 또 막힌다.
+     *   그런데 우리 재시도는 "성공한 단계는 건너뛴다". 그래서 문단이 원인인데 문단을
+     *   건너뛰면 **똑같은 문단으로 격자를 또 시도하고 또 거부당한다** — 시간만 쓰고
+     *   결과는 같다("재시도 3번 하고 실패" 라는 최악).
+     *
+     *   2026-08-26 실측에서 실제로 있었다. 고양이 시트를 보고 엉뚱한 캐릭터를 묘사한
+     *   문단이 나왔고 그 때문에 격자가 차단됐다. 문단을 새로 만들어야 풀린다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int discardSucceeded(Long petId, GenKind kind, String stepName) {
+        List<GenStepRecord> targets = stepRepository.findSucceededByPet(petId, kind).stream()
+                .filter(s -> s.getName().equals(stepName))
+                .toList();
+        targets.forEach(stepRepository::delete);
+        return targets.size();
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

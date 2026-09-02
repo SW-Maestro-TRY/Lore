@@ -37,6 +37,10 @@ public class GenerationRunner {
     /** 단계에 시간 제한을 걸기 위한 일회용 스레드. 제한을 넘기면 이 스레드를 끊는다. */
     private final ExecutorService timeoutExecutor = Executors.newCachedThreadPool();
 
+    /** 검증용 제한 시간(초). 0 이면 단계가 정한 값을 쓴다. 운영에서는 절대 켜지 않는다. */
+    @org.springframework.beans.factory.annotation.Value("${app.zzal.generation.limit-override-seconds:0}")
+    private int limitOverrideSeconds;
+
     public GenerationRunner(PipelineRegistry registry, GenerationRecorder recorder,
                             ZzalPetRepository petRepository) {
         this.registry = registry;
@@ -59,8 +63,8 @@ public class GenerationRunner {
         ctx.putImage("source", pet.getSourceImageKey());
         recorder.markJobRunning(jobId);
 
-        // 앞선 시도에서 성공한 단계의 결과를 그대로 이어받는다.
-        recorder.loadSucceeded(jobId).forEach(rec -> {
+        // 앞선 시도에서 성공한 단계의 결과를 그대로 이어받는다(펫 단위 — 재시도는 새 job 이다).
+        recorder.loadSucceeded(petId, GenKind.HATCH).forEach(rec -> {
             if (rec.getOutputKey() != null) {
                 ctx.putImage(rec.getName(), rec.getOutputKey());
             }
@@ -92,7 +96,8 @@ public class GenerationRunner {
                 }
                 total = total.add(r.costUsd());
             } catch (TimeoutException e) {
-                log.warn("시간 초과 — jobId={} step={} ({}초)", jobId, step.name(), step.limitSeconds());
+                log.warn("시간 초과 — jobId={} step={} ({}초)", jobId, step.name(),
+                        limitOverrideSeconds > 0 ? limitOverrideSeconds : step.limitSeconds());
                 recorder.failStep(stepId, GenErrorCode.TIMEOUT);
                 recorder.failJob(jobId, GenErrorCode.TIMEOUT, total);
                 return;
@@ -119,8 +124,10 @@ public class GenerationRunner {
     private StepResult runWithLimit(GenerationStep step, StepContext ctx) throws Exception {
         Callable<StepResult> task = () -> step.run(ctx);
         Future<StepResult> future = timeoutExecutor.submit(task);
+        // 검증용으로 제한을 줄일 수 있게 한다. 0 이하면 단계가 정한 값을 그대로 쓴다.
+        int limit = limitOverrideSeconds > 0 ? limitOverrideSeconds : step.limitSeconds();
         try {
-            return future.get(step.limitSeconds(), TimeUnit.SECONDS);
+            return future.get(limit, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
             throw e;
