@@ -45,7 +45,7 @@ public class GenerationRecorder {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markJobRunning(Long jobId) {
-        jobRepository.findById(jobId).ifPresent(GenJob::markRunning);
+        jobRepository.findById(jobId).ifPresent(j -> j.markRunning(Instant.now()));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -60,7 +60,7 @@ public class GenerationRecorder {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void succeedStep(Long stepId, StepResult r) {
         stepRepository.findById(stepId)
-                .ifPresent(s -> s.succeed(r.imageKey(), r.text(), r.costUsd(), Instant.now()));
+                .ifPresent(s -> s.succeed(r.imageKey(), r.text(), r.model(), r.costUsd(), Instant.now()));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

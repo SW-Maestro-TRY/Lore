@@ -79,8 +79,19 @@ public class GenJob {
     @Column(precision = 10, scale = 4)
     private BigDecimal totalCostUsd;
 
+    /** 작업이 만들어진 시각(줄 서기 시작). */
     @Column(nullable = false)
     private Instant startedAt;
+
+    /**
+     * 실제로 굽기 시작한 시각.
+     *
+     * ★ startedAt 과 나누는 이유 — 동시 생성이 3개로 제한돼 있어 몰리면 줄을 선다.
+     *   사용자가 체감하는 시간은 **대기 + 생성**인데, 이 칸이 없으면 생성 시간만 보게 되어
+     *   "왜 오래 걸렸지" 를 설명할 수 없다. (runningAt - startedAt) 이 대기 시간이다.
+     */
+    @Column
+    private Instant runningAt;
 
     @Column
     private Instant finishedAt;
@@ -99,8 +110,11 @@ public class GenJob {
         return job;
     }
 
-    public void markRunning() {
+    public void markRunning(Instant now) {
         this.status = GenStatus.RUNNING;
+        if (this.runningAt == null) {
+            this.runningAt = now;
+        }
     }
 
     public void succeed(BigDecimal totalCostUsd, Instant now) {
@@ -159,6 +173,10 @@ public class GenJob {
 
     public Instant getStartedAt() {
         return startedAt;
+    }
+
+    public Instant getRunningAt() {
+        return runningAt;
     }
 
     public Instant getFinishedAt() {

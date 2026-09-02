@@ -4,6 +4,7 @@ import com.lore.zzal.generation.GenerationStep;
 import com.lore.zzal.generation.PromptLoader;
 import com.lore.zzal.generation.StepContext;
 import com.lore.zzal.generation.StepResult;
+import com.lore.zzal.generation.client.ModelSpec;
 import com.lore.zzal.generation.client.ImageClient;
 import org.springframework.stereotype.Component;
 
@@ -60,11 +61,12 @@ public class GridStep implements GenerationStep {
         List<String> refs = new ArrayList<>();
         refs.add(ctx.image(SheetStep.NAME));
 
+        ModelSpec spec = prompts.model(ctx.version(), NAME);
         ImageClient.Result r = imageClient.generate(
                 prompt, refs,
                 "images/zzal/pets/%d/grid.png".formatted(ctx.petId()),
-                prompts.model(ctx.version(), NAME));
+                spec);
 
-        return StepResult.image(NAME, r.imageKey(), r.costUsd());
+        return StepResult.image(NAME, r.imageKey(), spec.model(), r.costUsd());
     }
 }

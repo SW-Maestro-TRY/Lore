@@ -4,6 +4,7 @@ import com.lore.zzal.generation.GenerationStep;
 import com.lore.zzal.generation.PromptLoader;
 import com.lore.zzal.generation.StepContext;
 import com.lore.zzal.generation.StepResult;
+import com.lore.zzal.generation.client.ModelSpec;
 import com.lore.zzal.generation.client.TextClient;
 import org.springframework.stereotype.Component;
 
@@ -61,9 +62,9 @@ public class IdentityStep implements GenerationStep {
             prompt = prompt + "\n\n[주인이 알려준 것]\n" + ctx.note();
         }
 
-        TextClient.Result r = textClient.generate(
-                prompt, List.of(ctx.image(SheetStep.NAME)), prompts.model(ctx.version(), NAME));
+        ModelSpec spec = prompts.model(ctx.version(), NAME);
+        TextClient.Result r = textClient.generate(prompt, List.of(ctx.image(SheetStep.NAME)), spec);
 
-        return StepResult.text(NAME, r.text(), r.costUsd());
+        return StepResult.text(NAME, r.text(), spec.model(), r.costUsd());
     }
 }

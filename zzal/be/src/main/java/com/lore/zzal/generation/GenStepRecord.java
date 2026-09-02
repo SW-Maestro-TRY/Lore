@@ -59,6 +59,16 @@ public class GenStepRecord {
     @Column(precision = 10, scale = 4)
     private BigDecimal costUsd;
 
+    /**
+     * 실제로 부른 모델 이름.
+     *
+     * ★ 버전(v1)만으로는 부족하다 — 같은 버전 안에서 모델만 바꾸는 일이 생기고,
+     *   그때 버전을 올리는 걸 잊으면 기록상 구분이 안 된다. 실제로 부른 이름을 남기면
+     *   나중에 "이 결과는 어떤 모델이 만든 것인가" 가 언제나 답이 된다.
+     */
+    @Column(length = 60)
+    private String model;
+
     /** 만들어 낸 이미지의 S3 키. 텍스트 단계면 비어 있다. */
     @Column(length = 300)
     private String outputKey;
@@ -90,10 +100,12 @@ public class GenStepRecord {
         return s;
     }
 
-    public void succeed(String outputKey, String outputText, BigDecimal costUsd, Instant now) {
+    public void succeed(String outputKey, String outputText, String model,
+                        BigDecimal costUsd, Instant now) {
         this.status = GenStatus.SUCCEEDED;
         this.outputKey = outputKey;
         this.outputText = outputText;
+        this.model = model;
         this.costUsd = costUsd;
         this.finishedAt = now;
     }
@@ -132,6 +144,10 @@ public class GenStepRecord {
 
     public BigDecimal getCostUsd() {
         return costUsd;
+    }
+
+    public String getModel() {
+        return model;
     }
 
     public String getOutputKey() {
