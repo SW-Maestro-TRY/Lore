@@ -116,6 +116,16 @@ jobs:
           echo "S3_KEY=$KEY" >> "$GITHUB_ENV"
           aws s3 cp build/libs/app.jar "s3://$S3_BUCKET/$KEY" --region "$AWS_REGION"
 
+      # 후처리(격자 → 8종 움짤)가 파이썬을 쓴다. jar 만 올리면 서버에 numpy·scipy·pillow 가
+      # 없어 부화 마지막 단계에서만 터진다 — 배포도 기동도 성공한 채로.
+      # 목록과 설치 스크립트를 함께 올려 두고, deploy-api.sh 가 필요할 때만 설치한다.
+      - name: 파이썬 준비물 업로드
+        run: |
+          aws s3 cp zzal/be/src/main/resources/zzal/pipeline/v1/requirements.txt \
+            "s3://$S3_BUCKET/builds/requirements-${GITHUB_SHA}.txt" --region "$AWS_REGION"
+          aws s3 cp infra/setup-python.sh \
+            "s3://$S3_BUCKET/builds/setup-python-${GITHUB_SHA}.sh" --region "$AWS_REGION"
+
       - name: SSM 으로 배포 (포트 안 엶)
         run: |
           CMD_ID=$(aws ssm send-command \
@@ -123,7 +133,7 @@ jobs:
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy api ${GITHUB_SHA}" \
-            --parameters commands="[\"sudo /opt/lore/deploy-api.sh $S3_BUCKET $S3_KEY $AWS_REGION\"]" \
+            --parameters commands="[\"sudo /opt/lore/deploy-api.sh $S3_BUCKET $S3_KEY $AWS_REGION ${GITHUB_SHA}\"]" \
             --query "Command.CommandId" --output text)
           echo "command-id: $CMD_ID"
 

@@ -19,9 +19,12 @@ public class FakeImageClient implements ImageClient {
 
     /** 실제 걸리는 시간의 비율만 흉내낸다. 전체 길이는 설정으로 줄인다. */
     private final int delayMillis;
+    /** 격자 자리에 내놓을 실제 이미지. 후처리를 과금 없이 검증하려면 진짜 격자가 필요하다. */
+    private final String fakeGridKey;
 
-    public FakeImageClient(int delayMillis) {
+    public FakeImageClient(int delayMillis, String fakeGridKey) {
         this.delayMillis = delayMillis;
+        this.fakeGridKey = fakeGridKey;
     }
 
     @Override
@@ -29,7 +32,9 @@ public class FakeImageClient implements ImageClient {
             throws InterruptedException {
         log.info("[가짜] 이미지 생성 — out={} refs={} model={}", outputKey, refImageKeys.size(), spec.model());
         Thread.sleep(delayMillis);
-        // 실제 파일은 만들지 않는다. 화면이 빈 그림을 그리지 않도록 여울 것을 가리킨다.
-        return new Result("images/zzal/demo/idle.webp", BigDecimal.ZERO);
+        // 실제 파일은 만들지 않는다. 다만 격자를 달라고 하면 **진짜 격자**를 준다 —
+        // 그래야 뒤의 후처리가 실제로 자를 것이 생기고, 과금 없이 검증할 수 있다.
+        boolean wantsGrid = outputKey != null && outputKey.endsWith("grid.png");
+        return new Result(wantsGrid ? fakeGridKey : "images/zzal/demo/idle.webp", BigDecimal.ZERO);
     }
 }
