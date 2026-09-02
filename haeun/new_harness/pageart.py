@@ -74,11 +74,18 @@ def build_prompts(run_dir: Path, continuous: bool = False) -> tuple[list, list[s
 
 
 def draw(run_dir: Path, dry_run: bool = False, only: list[int] | None = None,
-         continuous: bool = False, allow_no_sheet: bool = False) -> list[dict]:
+         continuous: bool = False, allow_no_sheet: bool = False,
+         on_page=None) -> list[dict]:
     """페이지를 순서대로 그린다. 이미 있는 페이지는 다시 안 그린다.
 
     **순서대로 그리는 것이 요점이다.** 직전 페이지를 참조로 붙이려면 그것이
     이미 있어야 한다. 병렬로 돌리면 그 사슬이 끊긴다 — 그래서 안 한다.
+
+    on_page(meta) : 페이지 하나가 끝날 때마다 바로 부른다(선택). run.py 의
+    record() 를 여기서 걸 수 있게 하는 자리다 — 예전에는 이 함수가 다 그린
+    뒤 리스트를 통째로 돌려줘야만 비용이 기록됐는데, 그러면 중간에 취소되거나
+    죽었을 때 이미 돈이 나간 앞쪽 페이지들의 기록이 통째로 사라졌다(실제로
+    겪음, 2026-08-31 — 3장을 그리고 취소했는데 meta.json 에 0장으로 남음).
     """
     pages, prompts = build_prompts(run_dir, continuous=continuous)
     out_dir = run_dir / PAGE_DIR
@@ -118,6 +125,8 @@ def draw(run_dir: Path, dry_run: bool = False, only: list[int] | None = None,
         meta["page"] = i
         meta["cuts"] = len(page)
         made.append(meta)
+        if on_page:
+            on_page(meta)
         log(f"  -> {out}")
 
     if dry_run:

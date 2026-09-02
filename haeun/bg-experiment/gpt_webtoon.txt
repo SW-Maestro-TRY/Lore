@@ -1,0 +1,64 @@
+THIS IS A WEBTOON PANEL, NOT AN ILLUSTRATION.
+
+This overrides every other rendering instruction above, including anything the
+shot description implies. It describes HOW the panel is drawn, not what is in it.
+
+The single most common failure here is drawing a beautiful cover illustration
+instead of a comic panel. This is one ordinary panel of a weekly serialised
+Korean webtoon, drawn on a schedule, read while scrolling on a phone. It is not
+a poster, not key art, not concept art, not a book cover, not a wallpaper.
+
+LINEWORK — THE PANEL MUST HAVE VISIBLE LINES. Every object, every figure, every
+piece of background architecture is enclosed by a drawn outline of nearly uniform
+weight, with a slightly heavier contour around the main character. Shapes are
+fully closed. NEVER define a form by colour alone, by a soft edge, or by a value
+change with no line — that is painting, and it is the single thing that makes
+these panels read as illustration instead of comic. If you can remove the colour
+and still read the drawing, the linework is right.
+
+COLOUR — CEL SHADING ONLY. Each area gets ONE flat base tone, plus ONE shadow
+tone, plus at most ONE light tone. The tones meet at a HARD boundary — a crisp
+edge, not a blend. Forbidden everywhere in the panel: gradient fills, airbrushed
+transitions, soft blended shading, glow layers, texture overlays, painterly
+brushwork, colour that fades out toward an edge. A large area of one flat colour
+is correct and expected.
+
+NO PHOTOGRAPHIC OR CINEMATIC LIGHT. No sparkle particles, no glitter, no bokeh,
+no light bloom, no lens flare, no god rays, no rim light, no specular glints on
+water or metal, no depth-of-field blur, no atmospheric haze or mist, no soft
+vignette. Light is drawn as one flat lighter shape with a hard edge, or it is
+not drawn at all.
+
+BACKGROUND. Simple and flat: a plain colour field, a flat gradient-free tone, a
+screen-tone dot or line pattern, or a sparsely drawn setting containing only the
+objects the scene actually needs — each of those objects outlined like everything
+else. Water is flat shapes with a few drawn wave lines, never a rendered
+reflective surface. Sky is a flat tone, never a photographic gradient. The
+background is always quieter than the character and never competes with them.
+
+WEBTOON GRAMMAR — DRAW THE COMIC FURNITURE. This is a comic, so it has the parts
+a comic has, and they are DRAWN OBJECTS with outlines, not text floating on art:
+  · Speech is inside a speech bubble: a closed drawn shape with a visible outline
+    and a tail pointing at the speaker. A shout gets a spiky burst bubble; an
+    inner thought gets a soft cloud bubble with small trailing circles.
+  · A narration caption sits in its own rectangular box with a visible border,
+    or on a clean flat band — not set loose on top of the artwork.
+  · An inset or close-up detail sits inside its own panel frame with a drawn
+    border, overlapping the main image.
+  · Korean sound effects are hand-drawn display lettering integrated into the
+    scene, with an outline or a contrasting edge so they stay readable.
+  · Motion and emotion are drawn marks: speed lines behind a moving limb,
+    radiating focus lines, small impact bursts, sweat drops, vertical shadow
+    lines down a face. Use them — that is how this medium shows feeling. They sit
+    on top of the drawing and never cover the figure or fill the panel.
+
+TREAT THE SHOT DESCRIPTION AS MOOD, NOT AS A RENDER ORDER. The description above
+is written in film language and will say things like "dawn light on high waves",
+"shimmering", "atmospheric", "the water glitters". Those words say how the moment
+should FEEL. Do not render them literally: no actual shimmer, no actual glitter,
+no cinematic haze. Translate the feeling into flat shapes, hard-edged tones and
+drawn effect marks.
+
+Everyday commercial webtoon quality — clean, flat, instantly readable at a glance
+on a phone. Not a painted illustration, not photorealistic, not a 3D render, not
+ornately detailed.

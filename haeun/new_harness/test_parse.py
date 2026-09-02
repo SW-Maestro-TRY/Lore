@@ -20,6 +20,7 @@ import imageprompt as IP  # noqa: E402
 import pages as P        # noqa: E402
 import run as R          # noqa: E402
 import sheet as S        # noqa: E402
+import stitch as ST      # noqa: E402
 
 FAILED = []
 
@@ -150,13 +151,13 @@ BOARD_JSON = """설명을 붙여 드립니다.
         {
           "id": 1,
           "size": "large",
-          "camera": {"shot": "광각", "angle": "정면", "facing": "앞모습"},
+          "camera": {"shot": "광각", "angle": "정면"},
           "background": {"type": "실제공간", "desc": "높은 천장과 늘어선 마법등"},
           "characters": [
-            {"name": "하일", "style": "LD", "position": "왼쪽",
+            {"name": "하일", "style": "LD", "position": "왼쪽", "facing": "앞모습",
              "expression": "긴장한 표정", "action": "이름이 불려 고개를 든다",
              "moment": "직후", "framing": "무릎 위"},
-            {"name": "담당 교수", "style": "LD", "position": "오른쪽",
+            {"name": "담당 교수", "style": "LD", "position": "오른쪽", "facing": "옆모습",
              "expression": "무표정", "action": "명단을 본다",
              "moment": "도중", "framing": "상반신"}
           ],
@@ -176,7 +177,7 @@ BOARD_JSON = """설명을 붙여 드립니다.
         {
           "id": 2,
           "size": "normal",
-          "camera": {"shot": "상반신", "angle": "정면", "facing": "앞모습"},
+          "camera": {"shot": "상반신", "angle": "정면"},
           "background": {"type": "효과", "desc": "지팡이 끝에서 흔들리는 마력"},
           "characters": [
             {"name": "하일", "style": "LD", "position": "왼쪽",
@@ -204,7 +205,7 @@ BOARD_JSON = """설명을 붙여 드립니다.
         {
           "id": 1,
           "size": "tiny",
-          "camera": {"shot": "부분", "angle": "정면", "facing": "앞모습"},
+          "camera": {"shot": "부분", "angle": "정면"},
           "background": {"type": "없음", "desc": ""},
           "characters": [
             {"name": "하일", "style": "LD", "expression": "(얼굴 없음)",
@@ -238,9 +239,12 @@ def test_board() -> None:
 
     cut = scenes[0]["cuts"][0]
     check("size", cut["size"], "large")
-    check("카메라", cut["camera"], {"shot": "광각", "angle": "정면", "facing": "앞모습"})
+    check("카메라", cut["camera"], {"shot": "광각", "angle": "정면"})
     check("배경", cut["background"]["type"], "실제공간")
     check("인물 2명", len(cut["characters"]), 2)
+    # facing 은 camera 가 아니라 인물마다 하나씩이다 — 마주 보는 두 인물이
+    # 서로 다른 facing 을 가질 수 있어야 한다(storyboard_prompt 참고).
+    check("인물별 facing", [c["facing"] for c in cut["characters"]], ["앞모습", "옆모습"])
     # order 가 뒤집혀 온 것을 바로 세운다 — 읽는 순서가 곧 배치 순서다
     check("order 대로 정렬", [d["order"] for d in cut["dialogue"]], [1, 2])
     check("정렬된 첫 대사", cut["dialogue"][0]["text"], "하일.")
@@ -536,6 +540,37 @@ def test_linked() -> None:
     ok("앞 컷이 없으면 거짓", not P.linked(None, b))
 
 
+def test_page_weight() -> None:
+    light_cut = {"size": "tiny", "background": {"type": "없음"}}
+    normal_cut = {"size": "small", "background": {"type": "실제공간"}}
+    check("전부 light 면 페이지도 light", P.page_weight([light_cut, dict(light_cut)]), "light")
+    check("하나라도 normal 이면 페이지도 normal",
+          P.page_weight([light_cut, normal_cut]), "normal")
+    check("large 혼자인 페이지는 normal(그대로 꽉 채운다)",
+          P.page_weight([{"size": "large"}]), "normal")
+    check("빈 페이지는 normal", P.page_weight([]), "normal")
+
+
+def test_page_gap_after() -> None:
+    a = {"size": "normal", "location": "복도", "time": "밤",
+         "background": {"type": "실제공간"}}
+    linked_next = [dict(a)]
+    check("이어지면 0", P.page_gap_after([a], linked_next), 0)
+
+    big = [dict(a, size="large")]
+    check("직전이 large/full 이면 3", P.page_gap_after(big, [dict(a, location="옥상")]), 3)
+
+    apart = [dict(a, location="옥상")]
+    check("장소가 바뀌면 2", P.page_gap_after([a], apart), 2)
+
+    same_place_diff_time = [dict(a, time="아침")]
+    check("이어짐 조건은 아닌데 장소도 안 바뀌면 1",
+          P.page_gap_after([a], same_place_diff_time), 1)
+
+    check("앞뒤 페이지가 없으면 1", P.page_gap_after([], [a]), 1)
+    check("앞뒤 페이지가 없으면 1 (뒤)", P.page_gap_after([a], []), 1)
+
+
 def test_scene_head() -> None:
     board = R.parse_board(BOARD_JSON)
     flat = P.flatten_cuts(board["scenes"])
@@ -564,20 +599,21 @@ def test_scene_head() -> None:
 
 def test_image_prompt_pieces() -> None:
     check("카메라를 문장으로 편다",
-          IP.camera_line({"shot": "상반신", "angle": "정면", "facing": "옆모습"}),
-          "상반신, 정면 앵글, 인물은 옆모습")
+          IP.camera_line({"shot": "상반신", "angle": "정면"}),
+          "상반신, 정면 앵글")
     check("칸이 모자라도 있는 것까지",
           IP.camera_line({"shot": "극클로즈업"}), "극클로즈업")
     check("배경", IP.background_line({"type": "실제공간", "desc": "복도"}),
           "실제공간 — 복도")
     check("설명이 없으면 종류만", IP.background_line({"type": "없음"}), "없음")
 
-    check("인물을 문장으로 편다",
+    check("인물을 문장으로 편다 (facing 포함)",
           IP.person_line({"name": "하일", "style": "LD", "position": "왼쪽",
+                          "facing": "옆모습",
                           "expression": "긴장한 표정", "action": "고개를 든다",
                           "moment": "직후", "framing": "무릎 위"}),
-          "하일 (LD): 화면 왼쪽, 긴장한 표정, 고개를 든다. 동작의 직후를 그린다. "
-          "화면에는 무릎 위까지 나온다.")
+          "하일 (LD): 화면 왼쪽, 옆모습, 긴장한 표정, 고개를 든다. 동작의 직후를 "
+          "그린다. 화면에는 무릎 위까지 나온다.")
     check("위치가 없으면 그 조각만 빠진다",
           IP.person_line({"name": "하일", "style": "LD", "expression": "웃는다",
                           "moment": "직전", "framing": "전신"}),
@@ -642,9 +678,9 @@ def test_image_prompt_page() -> None:
     ok("장소가 앞에 한 번", "## 장소\n마법학교 중앙 대강당의 입학식장" in text)
     ok("시간대도", "시간대: 실내조명" in text)
     ok("컷 1 은 높이 비율 5", "### 컷 1 (높이 비율 5)" in text)
-    ok("카메라", "카메라: 광각, 정면 앵글, 인물은 앞모습" in text)
+    ok("카메라", "카메라: 광각, 정면 앵글" in text)
     ok("배경", "배경: 실제공간 — 높은 천장과 늘어선 마법등" in text)
-    ok("인물", "하일 (LD): 화면 왼쪽, 긴장한 표정" in text)
+    ok("인물 (facing 포함)", "하일 (LD): 화면 왼쪽, 앞모습, 긴장한 표정" in text)
     ok("좌우가 둘 다", "담당 교수 (LD): 화면 오른쪽" in text)
     ok("나레이션이 먼저 오지 않는다 (order 대로)",
        text.index('"하일."') < text.index('"입학식 사흘째."'))
@@ -814,6 +850,62 @@ def test_pageart() -> None:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_stitch_rhythm() -> None:
+    """페이지 사이 여백·폭 — pages.json 이 있을 때/없을 때."""
+    import shutil
+    import tempfile
+
+    from PIL import Image
+
+    root = Path(tempfile.mkdtemp(prefix="nh-stitch-"))
+    try:
+        run_dir = root / "run"
+        (run_dir / "pages").mkdir(parents=True)
+        # 페이지 셋: 1(보통) -> 2(장소가 바뀜, 여백 2단계) -> 3(light, 좁게)
+        sizes = [(100, 200), (100, 150), (100, 80)]
+        for i, (w, h) in enumerate(sizes, 1):
+            Image.new("RGB", (w, h), "black").save(run_dir / "pages" / f"page{i:02d}.png")
+
+        pages_data = [
+            [{"size": "normal", "location": "복도", "time": "밤",
+              "background": {"type": "실제공간"}}],
+            [{"size": "normal", "location": "옥상", "time": "밤",
+              "background": {"type": "실제공간"}}],
+            [{"size": "tiny", "location": "옥상", "time": "밤",
+              "background": {"type": "없음"}}],
+        ]
+        (run_dir / "pages.json").write_text(json.dumps(pages_data), encoding="utf-8")
+
+        gaps, ratios = ST.page_rhythm(pages_data, 3)
+        check("첫 페이지 앞엔 여백 없음", gaps[0], 0)
+        check("2번째는 장소가 바뀌어 2단계", gaps[1], 2)
+        # 3번째는 2번째와 장소·시간대는 같지만 배경이 없다시피 한(light) 컷이라
+        # linked() 조건(둘 다 실제공간)을 안 넘는다 — 기본값 1단계로 떨어진다.
+        check("3번째는 이어짐 조건은 아니라 기본 1단계", gaps[2], 1)
+        check("1·2번은 꽉 채움", ratios[0:2], [1.0, 1.0])
+        ok("3번은 light 라 좁다", ratios[2] < 1.0)
+
+        out = ST.stitch(run_dir)
+        with Image.open(out) as im:
+            w, h = im.size
+        gtab = ST.strip.gap_ratio_table()
+        gap1 = ST.strip.gap_px(100, gaps[1], gtab)
+        gap2 = ST.strip.gap_px(100, gaps[2], gtab)
+        expect_h = 200 + gap1 + 150 + gap2 + 80 * ratios[2]
+        check("세로 길이가 여백만큼 늘어난다", h, round(expect_h))
+        check("폭은 그대로(가장 넓은 페이지 기준)", w, 100)
+
+        # pages.json 없이도(옛 run) 예전처럼 여백 없이 이어 붙는다
+        (run_dir / "pages.json").unlink()
+        out2 = ST.stitch(run_dir, out_path=root / "run" / "no_rhythm.png")
+        with Image.open(out2) as im2:
+            _, h2 = im2.size
+        check("pages.json 이 없으면 여백 없이 그대로 합친 높이",
+              h2, sum(h for _, h in sizes))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_import_sheet() -> None:
     """이미 뽑아 둔 시트 가져오기 — 시트가 제일 비싼 호출이라 재사용이 중요하다."""
     import shutil
@@ -883,7 +975,7 @@ def scene_cuts(shots, angles=None, location="홀", time="낮", camera_plan="") -
     for i, (sh, an) in enumerate(zip(shots, angles), 1):
         cuts.append({
             "id": i, "size": "normal",
-            "camera": {"shot": sh, "angle": an, "facing": "앞모습"},
+            "camera": {"shot": sh, "angle": an},
             "background": {"type": "실제공간", "desc": "x"},
             "characters": [{"name": "하일", "moment": "도중"}],
             "dialogue": [{"order": 1, "type": "말", "text": "대사"}] if i % 2 == 0 else [],
@@ -1070,6 +1162,174 @@ def test_detail() -> None:
        any("구체화가 안" in x for x in R.gate_detail(detail(thin), {"scenes": ["a", "b"]})))
 
 
+# --------------------------------------------------------------- 사건 나누기
+
+def _con(prev: str = "앞이 끝난 자리", trans: str = "그 사이에 자리를 옮긴다") -> dict:
+    return {"previous_ending": prev, "transition": trans,
+            "opening_state": "시작 상태", "ending_state": "끝 상태",
+            "persistent_elements": ["옷"], "visual_anchors": ["창"]}
+
+
+def _event(n: int, body: str, **over) -> dict:
+    one = {"id": n, "source": f"사건 {n}", "detail": body,
+           "learns": [{"what": f"{n}번에서 알게 되는 것", "how": "직접 봤다"}],
+           "guesses": [], "leads_to": f"{n}번 다음에 벌어지는 일",
+           "continuity": _con("", "") if n == 1 else _con()}
+    one.update(over)
+    return one
+
+
+BODY_A = ("문 앞에 선 채로 손잡이를 잡았다가 놓는다. 안에서 나는 소리가 멎기를 "
+          "기다렸다가 다시 잡는다. 세 번째에 문을 밀고 들어가, 등 뒤로 문이 "
+          "닫히는 소리를 끝까지 듣고 나서야 손을 뗀다.")
+BODY_B = ("책상 위에 놓인 것을 하나씩 제자리로 돌려놓다가, 어제와 같은 자리에 "
+          "같은 방향으로 놓인 것을 보고 손을 멈춘다. 일부러 반대로 돌려놓고, "
+          "한 걸음 물러서서 그 자리를 다시 본다.")
+
+
+def test_detail_events() -> None:
+    """장면은 사건으로 나뉘고, **사건 하나가 그림 한 장**이 된다."""
+    raw = {"scenes": [
+        {"id": 1, "source": "안으로 들어간다", "function": "이야기를 연다",
+         "events": [_event(1, BODY_A), _event(2, BODY_B)]},
+        {"id": 2, "source": "다시 확인한다", "function": "의심을 굳힌다",
+         "events": [_event(3, BODY_A)]},
+    ], "cast": [{"name": "관리인", "appearance": "50대, 회색 작업복"}],
+        "hidden": ["정체"]}
+    d = R.parse_detail(json.dumps(raw, ensure_ascii=False))
+
+    check("장면 2개", len(d["scenes"]), 2)
+    check("1장면에 사건 2개", len(d["scenes"][0]["events"]), 2)
+    check("사건에 detail 이 있다", d["scenes"][0]["events"][1]["detail"], BODY_B)
+    check("사건에 이어짐이 있다",
+          d["scenes"][0]["events"][1]["continuity"]["transition"],
+          "그 사이에 자리를 옮긴다")
+    check("장면 칸은 id·source·function 만 찬다", d["scenes"][0]["detail"], "")
+    check("cast 는 그대로", d["cast"][0]["name"], "관리인")
+
+    # 편면 = 그림 순서. 장면 경계를 넘어 이어진다
+    units = P.flatten_events(d["scenes"])
+    check("사건 3개", len(units), 3)
+    check("장면 경계를 넘어 잇는다", [(u["scene"], u["event"]) for u in units],
+          [(1, 1), (1, 2), (2, 3)])
+
+    # 옛 run — 사건 칸이 없으면 장면 자체가 사건 하나다
+    old = R.parse_detail(json.dumps({"scenes": [
+        {"id": 1, "source": "s", "detail": BODY_A, "leads_to": "다음",
+         "learns": [{"what": "a", "how": "b"}]}]}, ensure_ascii=False))
+    check("옛 응답은 events 가 빈다", old["scenes"][0]["events"], [])
+    folded = P.detail_events(old["scenes"][0])
+    check("장면 하나가 사건 하나로 접힌다", len(folded), 1)
+    check("접은 사건이 장면 본문을 갖는다", folded[0]["detail"], BODY_A)
+
+    # 게이트 — 사건 단위로 본다
+    check("멀쩡하면 조용하다", R.gate_detail(d, {"scenes": ["a", "b"]}), [])
+
+    hole = json.loads(json.dumps(raw))
+    hole["scenes"][0]["events"][1]["detail"] = ""
+    bad = R.gate_detail(R.parse_detail(json.dumps(hole, ensure_ascii=False)),
+                        {"scenes": ["a", "b"]})
+    ok("어느 사건이 비었는지 짚어 준다",
+       any("장면 1 사건 2: detail 이 비어" in x for x in bad))
+
+    # 길이는 장면 단위로 본다 — 사건마다 요구하면 잘게 나눌수록 걸린다
+    split_thin = json.loads(json.dumps(raw))
+    for e in split_thin["scenes"][0]["events"]:
+        e["detail"] = "짧게 적는다."
+    bad = R.gate_detail(R.parse_detail(json.dumps(split_thin, ensure_ascii=False)),
+                        {"scenes": ["a", "b"]})
+    ok("장면 전체가 짧으면 잡는다",
+       any(x.startswith("장면 1: detail 이") and "구체화가 안" in x for x in bad))
+    ok("사건 하나씩은 안 잰다",
+       not any("사건 1: detail 이 " in x for x in bad))
+
+    # 사건 사이가 비면 그림이 순간이동한다
+    jump = json.loads(json.dumps(raw))
+    jump["scenes"][1]["events"][0]["continuity"]["transition"] = ""
+    bad = R.gate_detail(R.parse_detail(json.dumps(jump, ensure_ascii=False)),
+                        {"scenes": ["a", "b"]})
+    ok("사이가 비면 잡는다",
+       any("장면 2 사건 3" in x and "transition" in x for x in bad))
+
+    # 첫 사건은 이어받을 앞이 없다 — 비어 있어도 안 잡는다
+    ok("첫 사건은 비어도 된다",
+       not any("사건 1: 앞 사건" in x for x in R.gate_detail(d, {"scenes": ["a"]})))
+
+    # 옛 run 에는 이 칸 자체가 없다. 다시 돌려도 안 걸려야 한다
+    ok("옛 run 은 이어짐으로 안 걸린다",
+       not any("transition" in x for x in R.gate_detail(old, {"scenes": ["a"]})))
+
+    # 프롬프트에 실을 줄 — 사건마다 소제목이 붙는다
+    lines = "\n".join(R._scene_lines(d))
+    ok("사건 소제목", "#### 사건 2 — 사건 2" in lines)
+    ok("사건 본문", BODY_B in lines)
+    old_lines = "\n".join(R._scene_lines(old))
+    ok("옛 run 은 소제목이 없다", "#### 사건" not in old_lines)
+
+
+def test_detail_pages() -> None:
+    """디테일 직행 — 표지 한 장 + **사건마다 한 장.**"""
+    import shutil
+    import tempfile
+
+    import detailart
+
+    raw = {"scenes": [
+        {"id": 1, "source": "안으로 들어간다", "function": "연다",
+         "events": [_event(1, BODY_A), _event(2, BODY_B)]},
+        {"id": 2, "source": "다시 확인한다", "function": "굳힌다",
+         "events": [_event(3, BODY_A)]},
+    ], "cast": [{"name": "관리인", "appearance": "50대, 회색 작업복"}],
+        "hidden": []}
+
+    root = Path(tempfile.mkdtemp(prefix="nh-detailart-"))
+    try:
+        run_dir = root / "run"
+        run_dir.mkdir()
+        R.write_json(run_dir / "detail.json",
+                     R.parse_detail(json.dumps(raw, ensure_ascii=False)))
+        R.write_json(run_dir / "input.json", {"name": "이하은"})
+        R.write_json(run_dir / "pick.json", {"n": 1, "title": "제목", "genre": "판타지"})
+
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            made = detailart.draw(run_dir, dry_run=True)
+        finally:
+            detailart.log = quiet
+        check("dry-run 은 아무것도 안 그린다", made, [])
+
+        texts = sorted(p.name for p in (run_dir / "pages").glob("*.txt"))
+        check("표지 1 + 사건 3 = 4장", texts,
+              ["page01.txt", "page02.txt", "page03.txt", "page04.txt"])
+        ok("표지는 표지라고 말한다",
+           "이 그림은 표지다" in (run_dir / "pages" / "page01.txt").read_text(encoding="utf-8"))
+        two = (run_dir / "pages" / "page03.txt").read_text(encoding="utf-8")
+        ok("2페이지 뒤는 사건 본문", BODY_B in two)
+        ok("앞 사건과 이어 붙인다", "그 사이에 자리를 옮긴다" in two)
+        ok("조연 외모가 매 장에 붙는다", "관리인 — 50대, 회색 작업복" in two)
+
+        # 옛 run — 장면 하나가 한 장이다(사건 칸이 없다)
+        old_dir = root / "old"
+        old_dir.mkdir()
+        R.write_json(old_dir / "detail.json", R.parse_detail(json.dumps(
+            {"scenes": [{"id": 1, "source": "s", "detail": BODY_A,
+                         "leads_to": "다음"},
+                        {"id": 2, "source": "t", "detail": BODY_B,
+                         "leads_to": "다음"}]}, ensure_ascii=False)))
+        R.write_json(old_dir / "input.json", {"name": "이하은"})
+        R.write_json(old_dir / "pick.json", {"n": 1, "title": "제목", "genre": ""})
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            detailart.draw(old_dir, dry_run=True)
+        finally:
+            detailart.log = quiet
+        check("옛 run 은 표지 1 + 장면 2 = 3장",
+              sorted(p.name for p in (old_dir / "pages").glob("*.txt")),
+              ["page01.txt", "page02.txt", "page03.txt"])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_review_and_fix() -> None:
     """검수는 잡기만 하고, 보강은 지적받은 장면만 고친다."""
     r = R.parse_review(json.dumps({"verdict": "PASS", "issues": [
@@ -1119,14 +1379,15 @@ def test_review_and_fix() -> None:
 
 
 def main() -> int:
-    for fn in (test_directions, test_detail, test_review_and_fix,
+    for fn in (test_directions, test_detail, test_detail_events,
+               test_detail_pages, test_review_and_fix,
                test_board, test_gate_board, test_directing_warnings,
                test_gate_readable, test_spec,
                test_sheet_prompt, test_input, test_pages, test_cut_weight,
-               test_linked, test_scene_head,
+               test_linked, test_page_weight, test_page_gap_after, test_scene_head,
                test_image_prompt_pieces, test_image_prompt_page,
                test_directing_hints, test_sheet_line,
-               test_ratio_break, test_pageart, test_import_sheet):
+               test_ratio_break, test_pageart, test_stitch_rhythm, test_import_sheet):
         fn()
     if FAILED:
         print("FAILED:")
