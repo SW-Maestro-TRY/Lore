@@ -115,11 +115,12 @@ STYLE_CHOICES = {
     "pastel":    "pastel",
     "noir":      "noir",
     "shoujo":    "shoujo",
+    "game":      "game",
 }
 STYLE_LABEL = {
     "romance": "로맨스 판타지", "webtoon": "일반 웹툰", "frost": "세미리얼 · 성인향",
     "cinematic": "시네마틱 반실사", "pastel": "일상툰 감성", "noir": "다크 느와르",
-    "shoujo": "순정 · BL",
+    "shoujo": "순정 · BL", "game": "게임 원화",
 }
 DEFAULT_STYLE = "webtoon"                # new_harness 자체 기본(NH_STYLE)과 맞춘다
 

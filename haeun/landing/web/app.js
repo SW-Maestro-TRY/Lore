@@ -17,6 +17,7 @@ const STYLE_INFO = [
   ["pastel",    "일상툰 감성",    "일부러 덜 완성한 그림. 흔들리는 연필선, 종이 결, 바랜 파스텔 몇 색."],
   ["noir",      "다크 느와르",    "어둠이 주인공입니다. 화면 대부분이 먹으로 덮이고 빛은 얇게 남습니다."],
   ["cinematic", "시네마틱 반실사","빛으로 화려해집니다. 역광·공기·얕은 심도·필름 색보정. 얼굴은 웹툰 그대로."],
+  ["game",      "게임 원화",      "고급 모바일 게임 캐릭터 CG. 섬세한 선화에 은은하게 빛나는 채색과 정제된 조명까지."],
 ];
 
 // 장르 단추로 먼저 꺼내 두는 것들. index.html 의 datalist 에는 더 많이 있고,
@@ -28,7 +29,7 @@ const STYLE_INFO = [
 /* 그림체 썸네일. loading="lazy" 는 **안 쓴다** — 걸음이 숨어 있는 동안에는
    브라우저가 "화면 밖"으로 보고 안 받아 오다가, 걸음이 열려도 한동안 빈
    칸으로 남는다(실제로 7장 중 2장만 뜨는 것을 봤다).
-   일곱 그림체 모두 **실제로 그 그림체로 뽑아 둔 샘플**을 쓴다. 파스텔·
+   여덟 그림체 모두 **실제로 그 그림체로 뽑아 둔 샘플**을 쓴다. 파스텔·
    느와르·순정은 예시가 없던 동안 루 그림으로 자리만 채웠는데, 그러면 카드를
    봐도 어떤 그림이 나오는지 알 수가 없었다. 원본은 design-reference/picture
    에 있고, 여기에는 기존 샘플과 같은 규격(가로 1080 안, JPEG)으로 줄여
@@ -41,6 +42,7 @@ const STYLE_THUMB = {
   pastel:    "/static/samples/ex-pastel-1.jpg",
   noir:      "/static/samples/ex-noir-1.jpg",
   shoujo:    "/static/samples/ex-shoujo-1.jpg",
+  game:      "/static/samples/ex-game-1.jpg",
 };
 
 const GENRE_QUICK = [
