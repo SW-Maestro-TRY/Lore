@@ -2,6 +2,7 @@ package com.lore.common.s3;
 
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +14,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
@@ -42,14 +44,17 @@ public class S3Service {
     static final Set<String> ALLOWED_DOMAINS = Set.of("zzal", "webtoon", "trailer", "common");
 
     private final S3Presigner presigner;
+    private final UploadTicketRepository ticketRepository;
     private final String bucket;
     private final Duration expiry;
 
     public S3Service(
             S3Presigner presigner,
+            UploadTicketRepository ticketRepository,
             @Value("${app.s3.content-bucket}") String bucket,
             @Value("${app.s3.presign-expiry-minutes}") long expiryMinutes) {
         this.presigner = presigner;
+        this.ticketRepository = ticketRepository;
         this.bucket = bucket;
         this.expiry = Duration.ofMinutes(expiryMinutes);
 
@@ -65,11 +70,16 @@ public class S3Service {
     /**
      * 업로드용 presigned PUT URL 을 발급한다.
      *
+     * 발급 기록을 {@link UploadTicket} 에 남긴다 — 업로드는 브라우저가 S3 로 직접 하므로
+     * 서버가 그 순간을 못 본다. 나중에 "이 키로 만들어 주세요" 가 왔을 때 대조할 근거가 필요하다.
+     *
+     * @param userId      발급받는 사람
      * @param domain      키 경로 구분용 폴더(zzal/webtoon/trailer 등)
      * @param contentType 업로드할 파일의 MIME 타입(image/png 등)
      * @return 발급된 S3 key 와 presigned URL
      */
-    public PresignedUpload createUploadUrl(String domain, String contentType) {
+    @Transactional
+    public PresignedUpload createUploadUrl(Long userId, String domain, String contentType) {
         // AWS SDK 가 내는 "Bucket cannot be empty" 는 어디를 고쳐야 할지 안 알려준다.
         // 설정이 원인일 때는 설정 이름을 그대로 말해준다.
         if (!StringUtils.hasText(bucket)) {
@@ -104,7 +114,30 @@ public class S3Service {
 
         PresignedPutObjectRequest presigned = presigner.presignPutObject(presignRequest);
 
+        ticketRepository.save(UploadTicket.issue(userId, key, domain, contentType, Instant.now()));
+
         return new PresignedUpload(key, presigned.url().toString());
+    }
+
+    /**
+     * 키가 이 사람이 발급받은 것이고 아직 안 쓴 것인지 확인하고, 썼다고 표시한다.
+     *
+     * 도메인(zzal 등)이 "이 키로 만들어 주세요" 를 받으면 반드시 이걸 먼저 통과해야 한다.
+     * 통과 못 하는 경우 셋 — 표에 없는 키 · 남의 키 · 이미 쓴 키.
+     */
+    @Transactional
+    public void consume(Long userId, String s3Key, Instant now) {
+        UploadTicket ticket = ticketRepository.findByS3Key(s3Key)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_UPLOAD_KEY));
+        if (!ticket.isOwnedBy(userId)) {
+            // 남의 키를 넣은 것이지만, 그렇다고 알려주지 않는다 — 알려주면 남의 키가
+            // 존재한다는 사실 자체가 확인된다. 없는 키와 같은 응답을 준다.
+            throw new BusinessException(ErrorCode.INVALID_UPLOAD_KEY);
+        }
+        if (ticket.isUsed()) {
+            throw new BusinessException(ErrorCode.UPLOAD_KEY_ALREADY_USED);
+        }
+        ticket.markUsed(now);
     }
 
     /**

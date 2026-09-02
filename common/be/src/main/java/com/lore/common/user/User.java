@@ -32,6 +32,9 @@ import java.time.Instant;
 @EntityListeners(AuditingEntityListener.class)
 public class User {
 
+    /** 가입 시 기본으로 주는 펫 칸 수. */
+    public static final int DEFAULT_PET_SLOTS = 1;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -46,6 +49,21 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserRole role;
+
+    /**
+     * 키울 수 있는 펫 수. 기본 1 마리.
+     *
+     * ★ 상수로 박지 않고 칸으로 둔 이유 — 나중에 유료로 칸을 늘려 팔 예정이라
+     *   사람마다 값이 달라진다(2026-09-02 결정). 판정은 이 값과 비교하는 한 줄이면 된다.
+     *   혜택이 여러 개(워터마크 제거·투명배경 등)로 늘면 그때 별도 표로 옮긴다.
+     *
+     * ★ columnDefinition 으로 기본값을 함께 준 이유 — 이미 계정이 있는 표에
+     *   "비어 있으면 안 되는 칸" 을 그냥 추가하면 **기존 행을 어떻게 채울지 몰라 DB 가 거부한다.**
+     *   (2026-09-02 실제로 이 에러가 났고, 서버는 정상적으로 떴는데 칼럼만 안 만들어져 있었다)
+     *   운영에서 사용자가 있는 상태로 칼럼을 늘릴 때 항상 겪는 일이라, 기본값을 같이 준다.
+     */
+    @Column(nullable = false, columnDefinition = "integer default 1")
+    private int petSlots;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
@@ -71,6 +89,7 @@ public class User {
         this.email = email;
         this.status = UserStatus.ACTIVE;
         this.role = UserRole.USER;
+        this.petSlots = DEFAULT_PET_SLOTS;
     }
 
     public static User signUp(String email) {
@@ -117,5 +136,9 @@ public class User {
 
     public Instant getDeletedAt() {
         return deletedAt;
+    }
+
+    public int getPetSlots() {
+        return petSlots;
     }
 }
