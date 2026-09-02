@@ -58,3 +58,18 @@ app:
     region: ${AWS_REGION:ap-northeast-2}
     content-bucket: ${CONTENT_S3_BUCKET:}
     presign-expiry-minutes: ${S3_PRESIGN_EXPIRY:10}
+
+  # 인증 (2026-09-01)
+  #
+  # ★ JWT_SECRET 이 유출되면 아무 사용자로든 토큰을 위조할 수 있다. 운영은 /etc/lore/lore.env
+  #   에서 주입하고 절대 커밋하지 않는다. 아래 기본값은 로컬 개발 전용이며, 그 값이 그대로
+  #   운영에 올라가면 부팅 시점에 경고가 남는다.
+  # ★ HS256 은 최소 32바이트 키를 요구한다. 짧으면 서버가 뜨지 않는다.
+  jwt:
+    secret: ${JWT_SECRET:local-dev-only-secret-change-me-in-production-32bytes}
+    access-expiry: 30m
+    refresh-expiry: 14d
+
+  cookie:
+    # 로컬은 http 라 Secure 쿠키가 브라우저에 저장되지 않는다 → 개발 시 false
+    secure: ${COOKIE_SECURE:true}
