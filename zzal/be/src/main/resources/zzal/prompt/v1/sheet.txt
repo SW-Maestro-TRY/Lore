@@ -1,6 +1,319 @@
-(v1 시트 프롬프트 자리)
+# 캐릭터 시트 생성 프롬프트 — 파이프라인 0단계 (정본)
+#
+# 작성 = 위대한 상훈님, 2026-08-07
+# 역할 = 캐릭터 사진 한 장 → 움짤 제작용 SD 캐릭터 시트
+#
+# ★캐릭터 묘사가 한 줄도 없는 범용 템플릿이다. 소스 이미지에서 정체성을 모델이 스스로 읽어낸다.
+#   어떤 캐릭터가 들어와도 이 파일을 고치지 않는다. 고쳐야 한다면 그건 템플릿의 결함이다.
+#
+# 실행 = 00_시트생성/make_sheet.sh <소스이미지> <캐릭터이름>
+#
+# 검증된 사례 = 흑연(화산귀환 청명 상반신 1컷 → 04_입력/흑연-캐릭터시트-SD설정자료.png)
+#   턴어라운드 5면 · 표정 10종 · 액션 포즈 10종 · 팔레트 8항목 · 디테일 6컷 · 무기
+#
+# ─────────────────────────────────────────────────────────────────────
 
-실제 프롬프트는 실험에서 확립한 것을 옮겨 온다.
-지금은 가짜 클라이언트라 이 내용이 쓰이지 않는다 — 실제 호출을 붙이는 시점에 채운다.
+TASK: Create a comprehensive SD / chibi CHARACTER REFERENCE SHEET based on the character shown in the uploaded reference image.
 
-원본 = ~/work/jakae-lab/01_움짤/03_프롬프트/
+The uploaded image is the CHARACTER SOURCE.
+Study the character carefully, identify the features that define their identity, and translate them into a consistent, animation-friendly SD/chibi character design.
+
+This is NOT simply a small copy of the source image.
+Redesign the character as a clean and expressive SD character while preserving the character's recognizable identity.
+
+The final result should be a SINGLE LARGE CHARACTER SHEET containing multiple organized views, expressions, poses, and visual references of the SAME character.
+
+=====================================================================
+1. CHARACTER IDENTITY — HIGHEST PRIORITY
+=====================================================================
+
+First determine which visual characteristics make this character recognizable.
+
+Preserve and consistently reproduce important identity features such as:
+
+- overall face shape
+- eyes and eye shape
+- eyebrows
+- hairstyle, bangs, side hair, back hair, and distinctive hair silhouette
+- hair color
+- eye color
+- skin tone
+- characteristic facial features
+- body type and proportions
+- clothing design
+- clothing colors
+- accessories
+- jewelry
+- glasses, hats, hair ornaments, weapons, tools, bags, or other relevant items
+- distinctive symbols, patterns, scars, markings, or decorative elements
+- any unusual or iconic feature visible in the source
+
+Do NOT invent major identity-changing features.
+
+If some part of the character is not clearly visible in the source image, infer it conservatively and design it in a way that naturally fits the visible character.
+
+All drawings on the sheet MUST clearly depict the SAME character.
+
+=====================================================================
+2. SD / CHIBI ADAPTATION
+=====================================================================
+
+Translate the original character into an appealing SD/chibi design suitable for animation, stickers, emotes, GIFs, and short character animations.
+
+Use approximately 2.5–3.5 head-tall proportions.
+
+Simplify complex details enough that the character can be repeatedly drawn and animated, while preserving the important visual features that make the character recognizable.
+
+Prioritize:
+
+- a strong recognizable silhouette
+- readable facial expressions
+- clear limbs and hands
+- consistent proportions
+- clean clothing shapes
+- animation-friendly hair
+- simplified but recognizable accessories
+
+Do NOT make the character generic.
+
+The SD version should still immediately feel like a miniature stylized version of the source character.
+
+=====================================================================
+3. CHARACTER TURNAROUND
+=====================================================================
+
+Include a clean full-body turnaround section.
+
+Show the SAME character standing neutrally from multiple angles:
+
+- front view
+- 3/4 front view
+- side/profile view
+- back view
+- opposite 3/4 view if space allows
+
+Keep:
+
+- body proportions identical
+- head size identical
+- hairstyle construction consistent
+- clothing construction consistent
+- accessory placement consistent
+
+These views should function as practical model references for future animation.
+
+=====================================================================
+4. FACIAL EXPRESSION SHEET
+=====================================================================
+
+Include several head-and-shoulders expression references.
+
+Show a useful range of clearly different emotions, for example:
+
+- neutral
+- gentle smile
+- big happy smile
+- excited
+- surprised
+- embarrassed / shy
+- worried
+- sad
+- annoyed
+- angry
+- confused / thinking
+- playful
+
+Adapt the exact expressions naturally to the character.
+
+Expressions should feel like different emotional states of the SAME person, not different characters.
+
+Maintain identical:
+
+- face structure
+- eye design
+- hairstyle
+- hair length
+- accessories
+- facial proportions
+
+=====================================================================
+5. FULL-BODY ACTION / POSE LIBRARY
+=====================================================================
+
+Include several small full-body SD drawings showing natural poses useful for future GIF or animation creation.
+
+Use a varied selection such as:
+
+- standing naturally
+- waving
+- walking
+- running
+- turning around
+- looking back
+- pointing
+- hands on hips
+- sitting
+- crouching
+- jumping
+- celebrating
+- surprised reaction
+- shy gesture
+- thinking pose
+- interacting with an important character-specific item
+
+Choose poses that fit the character rather than mechanically including every example.
+
+The poses should clearly demonstrate how the character's:
+
+- hair moves
+- clothing folds
+- sleeves move
+- accessories behave
+- body proportions remain consistent
+
+=====================================================================
+6. CHARACTER DETAIL REFERENCES
+=====================================================================
+
+Create several enlarged detail boxes for visually important elements.
+
+Choose details based on the actual source character, such as:
+
+- eye design
+- hairstyle construction
+- bangs
+- hair ornament
+- clothing collar
+- clothing pattern
+- sleeve
+- belt
+- shoes
+- jewelry
+- weapon
+- bag
+- accessory
+- symbol or emblem
+
+Do NOT force irrelevant categories.
+
+Only show details that are actually useful for reproducing this specific character.
+
+=====================================================================
+7. COLOR PALETTE
+=====================================================================
+
+Include a compact color palette based on the character.
+
+Show the main colors used for:
+
+- hair
+- eyes
+- skin
+- clothing
+- accessories
+- important accent colors
+
+Keep the colors faithful to the source image.
+
+=====================================================================
+8. ANIMATION CONSISTENCY
+=====================================================================
+
+Design the sheet specifically so it can later serve as a visual reference for generating animated GIFs and short animations.
+
+Therefore the character must have a highly stable design.
+
+Across EVERY drawing:
+
+DO NOT randomly change:
+
+- hairstyle
+- hair length
+- bangs
+- face shape
+- eye design
+- clothing
+- clothing colors
+- accessories
+- body proportions
+- character age
+- apparent identity
+
+Only pose, camera angle, facial expression, and natural secondary motion should change.
+
+Treat this as a professional MODEL SHEET for one animation character.
+
+=====================================================================
+9. PAGE COMPOSITION
+=====================================================================
+
+Create ONE wide, high-resolution character-sheet image.
+
+Organize the page into clearly separated visual sections.
+
+Suggested structure:
+
+LEFT / UPPER LEFT:
+large full-body turnaround
+
+UPPER RIGHT:
+facial expression library
+
+LOWER LEFT:
+color palette and important accessories/details
+
+CENTER / LOWER CENTER:
+close-up design details
+
+LOWER RIGHT:
+multiple full-body action poses
+
+Use clean thin dividers or subtle boxes to organize the sections.
+
+Keep generous whitespace.
+
+The sheet should feel carefully designed rather than crowded.
+
+The CHARACTER should remain the main focus.
+
+=====================================================================
+10. VISUAL STYLE
+=====================================================================
+
+Use a polished 2D character-design-sheet presentation.
+
+Clean linework.
+Soft, appealing rendering.
+Readable shapes.
+Consistent anatomy.
+Consistent character proportions.
+Simple light neutral background.
+Minimal visual clutter.
+
+The SD character should be cute and expressive while retaining the original character's personality and visual identity.
+
+IMPORTANT:
+Do not imitate unrelated example characters.
+Do not automatically give the character generic cute clothing, brown hair, oversized hoodies, bags, coffee cups, or other stereotypical character-sheet elements.
+
+All character-specific visual information must come primarily from the uploaded CHARACTER SOURCE.
+
+The examples listed in this prompt describe FUNCTION and STRUCTURE, not mandatory appearance.
+
+=====================================================================
+FINAL GOAL
+=====================================================================
+
+The final image should look like a professional SD CHARACTER MODEL SHEET that another illustrator or animation model could use to consistently reproduce this exact character in:
+
+- animated GIFs
+- reaction animations
+- short looping animations
+- stickers
+- emotes
+- short character videos
+- additional illustrations
+
+The most important goal is CHARACTER CONSISTENCY.
+
+Every figure, face, pose, and detail on the page must unmistakably belong to the same character derived from the uploaded reference.

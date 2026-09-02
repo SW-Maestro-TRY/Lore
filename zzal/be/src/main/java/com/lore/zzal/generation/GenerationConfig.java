@@ -5,6 +5,8 @@ import com.lore.zzal.generation.client.FakeImageClient;
 import com.lore.zzal.generation.client.FakePostProcessor;
 import com.lore.zzal.generation.client.FakeTextClient;
 import com.lore.zzal.generation.client.ImageClient;
+import com.lore.zzal.generation.client.OpenAiImageClient;
+import com.lore.zzal.generation.client.OpenAiTextClient;
 import com.lore.zzal.generation.client.PostProcessor;
 import com.lore.zzal.generation.client.PythonPostProcessor;
 import com.lore.zzal.generation.client.TextClient;
@@ -32,22 +34,39 @@ public class GenerationConfig {
     @Bean
     public ImageClient imageClient(@Value("${app.zzal.generation.real:false}") boolean real,
                                    @Value("${app.zzal.generation.fake-delay-ms:4000}") int delay,
-                                   @Value("${app.zzal.generation.fake-grid-key:}") String fakeGridKey) {
+                                   @Value("${app.zzal.generation.fake-grid-key:}") String fakeGridKey,
+                                   @Value("${app.zzal.openai.api-key:}") String apiKey,
+                                   S3Storage storage) {
         if (real) {
-            throw new IllegalStateException(
-                    "실제 이미지 클라이언트는 아직 없습니다. #132 4번 걸음에서 붙입니다.");
+            requireKey(apiKey);
+            return new OpenAiImageClient(storage, apiKey, 180);
         }
         return new FakeImageClient(delay, fakeGridKey);
     }
 
     @Bean
     public TextClient textClient(@Value("${app.zzal.generation.real:false}") boolean real,
-                                 @Value("${app.zzal.generation.fake-delay-ms:4000}") int delay) {
+                                 @Value("${app.zzal.generation.fake-delay-ms:4000}") int delay,
+                                 @Value("${app.zzal.openai.api-key:}") String apiKey,
+                                 S3Storage storage) {
         if (real) {
-            throw new IllegalStateException(
-                    "실제 텍스트 클라이언트는 아직 없습니다. #132 4번 걸음에서 붙입니다.");
+            requireKey(apiKey);
+            return new OpenAiTextClient(storage, apiKey);
         }
         return new FakeTextClient(delay / 3);
+    }
+
+    /**
+     * 키가 없으면 부팅을 막는다.
+     *
+     * ★ 조용히 넘어가면 "실제 호출을 켰다고 생각했는데 실은 안 켜진" 상태가 되고,
+     *   그 사실이 실제 호출 때까지 안 드러난다. 설정이 원인일 때는 설정 이름을 그대로 말한다.
+     */
+    private void requireKey(String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "실제 생성을 켰는데 API 키가 없습니다. ZZAL_OPENAI_API_KEY 를 설정하세요.");
+        }
     }
 
     @Bean

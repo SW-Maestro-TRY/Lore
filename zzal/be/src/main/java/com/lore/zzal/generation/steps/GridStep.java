@@ -25,6 +25,9 @@ public class GridStep implements GenerationStep {
 
     public static final String NAME = "grid";
 
+    /** 격자 프롬프트에서 정체성 문단이 들어갈 자리. 프롬프트 파일과 짝이다. */
+    private static final String IDENT_SLOT = "{IDENT}";
+
     private final ImageClient imageClient;
     private final PromptLoader prompts;
 
@@ -50,12 +53,18 @@ public class GridStep implements GenerationStep {
 
     @Override
     public StepResult run(StepContext ctx) throws Exception {
+        // ★ 격자 프롬프트에는 {IDENT} 자리가 있다. 그 자리에 정체성 문단이 그대로 들어간다
+        //   — 뒤에 덧붙이는 게 아니다. 실험에서 확립한 시드가 정확히 이 구조다
+        //   (템플릿 6,195자 + 문단 530자 → 시드 6,047자).
         String prompt = prompts.prompt(ctx.version(), NAME);
-
-        // 정체성 문단이 있으면 붙인다. 그 단계가 빠진 버전에서는 없이 간다.
         String identity = ctx.text(IdentityStep.NAME);
+
         if (identity != null && !identity.isBlank()) {
-            prompt = prompt + "\n\n[이 캐릭터]\n" + identity;
+            prompt = prompt.replace(IDENT_SLOT, identity.trim());
+        } else if (prompt.contains(IDENT_SLOT)) {
+            // 문단 단계가 빠진 버전인데 자리가 남아 있으면, 그대로 보내면 모델이
+            // "{IDENT}" 라는 글자를 그리려 든다. 자리만 지운다.
+            prompt = prompt.replace(IDENT_SLOT, "").trim();
         }
 
         List<String> refs = new ArrayList<>();

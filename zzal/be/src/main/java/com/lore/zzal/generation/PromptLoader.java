@@ -39,12 +39,19 @@ public class PromptLoader {
     /**
      * 어떤 모델을 쓸지.
      *
-     * ⚠️ 지금은 코드에 기본값을 두었다. 실제 호출을 붙이는 시점(#132 4번 걸음)에
-     *    버전별 models.yml 로 옮긴다 — 그 전에는 가짜 클라이언트라 값이 쓰이지 않는다.
+     * 값은 실험의 api_limits.json·run_e2e_api.zsh 와 같게 맞췄다(2026-09-02).
+     * 실측 기준 medium 1장 $0.0985 — 시트 $0.063 + 격자 $0.086 이 여기서 나온다.
+     *
+     * ⚠️ 아직 코드에 있다. 버전별로 달라지기 시작하면 models.yml 로 옮긴다.
      */
     public ModelSpec model(String version, String step) {
         return switch (step) {
-            case "sheet", "grid" -> new ModelSpec("gpt-image-2", "1536x1024", "medium");
+            // 시트는 가로로 넓다 — 턴어라운드·표정·팔레트가 한 장에 들어간다.
+            case "sheet" -> new ModelSpec("gpt-image-2", "1536x1024", "medium");
+            // ★ 격자는 반드시 정사각이다(프롬프트가 "ONE square 1:1 image" 를 요구한다).
+            //   그리고 gpt-image-2 는 가로·세로가 16의 배수여야 한다 — 1248 = 78x16.
+            //   실험이 쓰던 값과 같게 맞춘다. 크기가 달라지면 후처리 절단이 어긋난다.
+            case "grid" -> new ModelSpec("gpt-image-2", "1248x1248", "medium");
             case "identity" -> ModelSpec.of("gpt-5");
             default -> ModelSpec.of("none");
         };

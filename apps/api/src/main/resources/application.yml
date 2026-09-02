@@ -92,6 +92,11 @@ app:
       # 후처리를 과금 없이 검증하려면 진짜 격자가 필요하다.
       fake-grid-key: ${ZZAL_FAKE_GRID_KEY:}
 
+    openai:
+      # ★ 절대 커밋하지 않는다. 로컬은 ~/.claude/.env, 서버는 /etc/lore/lore.env 에서 주입.
+      #   환경별로 다른 키를 쓴다 — 섞으면 dev 가 실험 한도를 먹고 원가 산정이 흐려진다.
+      api-key: ${ZZAL_OPENAI_API_KEY:}
+
     python:
       # 후처리가 numpy·scipy·pillow 를 쓰므로 그것들이 깔린 파이썬이어야 한다.
       # 서버는 배포 때 만들어지는 가상환경(/opt/lore/venv/bin/python)을 가리킨다.
