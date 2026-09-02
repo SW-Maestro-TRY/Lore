@@ -34,15 +34,21 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class S3ServiceTest {
 
+    private static final Long USER_ID = 1L;
+
     @Mock
     S3Presigner presigner;
+
+    /** 발급 기록 저장은 이 테스트의 관심사가 아니다 — 키 규칙만 본다. */
+    @Mock
+    UploadTicketRepository ticketRepository;
 
     @Test
     @DisplayName("업로드 키는 images/ 로 시작한다 — CloudFront 의 /images/* 규칙과 맞추기 위해")
     void keyStartsWithImagesPrefix() {
         S3Service service = serviceReturningUrl("bucket-a");
 
-        String key = service.createUploadUrl("zzal", "image/png").key();
+        String key = service.createUploadUrl(USER_ID, "zzal", "image/png").key();
 
         assertThat(key).startsWith("images/");
     }
@@ -52,7 +58,7 @@ class S3ServiceTest {
     void keyFollowsExpectedShape() {
         S3Service service = serviceReturningUrl("bucket-a");
 
-        String key = service.createUploadUrl("webtoon", "image/png").key();
+        String key = service.createUploadUrl(USER_ID, "webtoon", "image/png").key();
 
         assertThat(key).matches("^images/webtoon/[0-9a-f-]{36}$");
     }
@@ -62,8 +68,8 @@ class S3ServiceTest {
     void prefixIsIndependentOfDomain() {
         S3Service service = serviceReturningUrl("bucket-a");
 
-        assertThat(service.createUploadUrl("zzal", "image/png").key()).startsWith("images/zzal/");
-        assertThat(service.createUploadUrl("trailer", "image/png").key()).startsWith("images/trailer/");
+        assertThat(service.createUploadUrl(USER_ID, "zzal", "image/png").key()).startsWith("images/zzal/");
+        assertThat(service.createUploadUrl(USER_ID, "trailer", "image/png").key()).startsWith("images/trailer/");
     }
 
     @Test
@@ -71,8 +77,8 @@ class S3ServiceTest {
     void keysDoNotCollide() {
         S3Service service = serviceReturningUrl("bucket-a");
 
-        String first = service.createUploadUrl("zzal", "image/png").key();
-        String second = service.createUploadUrl("zzal", "image/png").key();
+        String first = service.createUploadUrl(USER_ID, "zzal", "image/png").key();
+        String second = service.createUploadUrl(USER_ID, "zzal", "image/png").key();
 
         assertThat(first).isNotEqualTo(second);
     }
@@ -80,9 +86,9 @@ class S3ServiceTest {
     @Test
     @DisplayName("버킷 설정이 비면 설정 이름을 알려주며 실패한다 — SDK 의 모호한 메시지 대신")
     void failsLoudlyWhenBucketMissing() {
-        S3Service service = new S3Service(presigner, "", 10);
+        S3Service service = new S3Service(presigner, ticketRepository, "", 10);
 
-        assertThatThrownBy(() -> service.createUploadUrl("zzal", "image/png"))
+        assertThatThrownBy(() -> service.createUploadUrl(USER_ID, "zzal", "image/png"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CONTENT_S3_BUCKET");
     }
@@ -92,7 +98,7 @@ class S3ServiceTest {
         when(presigner.presignPutObject(any(software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest.class)))
                 .thenReturn(presigned);
         when(presigned.url()).thenReturn(urlOf("https://example.s3.ap-northeast-2.amazonaws.com/x"));
-        return new S3Service(presigner, bucket, 10);
+        return new S3Service(presigner, ticketRepository, bucket, 10);
     }
 
     private static java.net.URL urlOf(String s) {
@@ -108,7 +114,7 @@ class S3ServiceTest {
     void rejectsUnknownDomain() {
         S3Service service = serviceReturningUrl("bucket-a");
 
-        assertThatThrownBy(() -> service.createUploadUrl("zzl", "image/png"))
+        assertThatThrownBy(() -> service.createUploadUrl(USER_ID, "zzl", "image/png"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("zzl");
     }

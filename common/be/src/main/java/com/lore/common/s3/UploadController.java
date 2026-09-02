@@ -1,5 +1,6 @@
 package com.lore.common.s3;
 
+import com.lore.common.auth.jwt.LoginUser;
 import com.lore.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -41,8 +42,9 @@ public class UploadController {
 
             발급된 주소는 10분간 유효하다.""")
     @PostMapping("/presign")
-    public ApiResponse<S3Service.PresignedUpload> presign(@Valid @RequestBody PresignRequest request) {
-        return ApiResponse.ok(s3Service.createUploadUrl(request.domain(), request.contentType()));
+    public ApiResponse<S3Service.PresignedUpload> presign(@LoginUser Long userId,
+                                                         @Valid @RequestBody PresignRequest request) {
+        return ApiResponse.ok(s3Service.createUploadUrl(userId, request.domain(), request.contentType()));
     }
 
     /** 발급 요청 본문. domain = 키 폴더(zzal/webtoon/trailer), contentType = image/png 등. */

@@ -25,7 +25,18 @@ public enum ErrorCode {
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "권한이 없습니다"),
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "다시 로그인해 주세요"),
-    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다");
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다"),
+
+    // 업로드 (common)
+    INVALID_UPLOAD_KEY(HttpStatus.BAD_REQUEST, "올바르지 않은 이미지입니다"),
+    UPLOAD_KEY_ALREADY_USED(HttpStatus.BAD_REQUEST, "이미 사용한 이미지입니다"),
+
+    // 펫 (zzal)
+    ZZAL_PET_NOT_FOUND(HttpStatus.NOT_FOUND, "펫을 찾을 수 없습니다"),
+    // 남의 펫에 접근하면 403 이 아니라 404 를 준다 — 403 은 "그 번호의 펫이 존재한다" 는
+    // 사실을 알려주는 셈이라, 번호를 훑어 남의 펫 수를 셀 수 있게 된다.
+    ZZAL_PET_ALREADY_HATCHING(HttpStatus.CONFLICT, "아직 부화 중이에요"),
+    ZZAL_PET_LIMIT_REACHED(HttpStatus.CONFLICT, "더 키울 수 있는 자리가 없어요");
 
     // 도메인별 코드는 각 담당자가 아래에 추가한다.
     // 예) ZZAL_PET_NOT_FOUND(HttpStatus.NOT_FOUND, "펫을 찾을 수 없습니다"),
