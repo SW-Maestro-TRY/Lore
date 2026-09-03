@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -41,6 +42,23 @@ public class GlobalExceptionHandler {
                 .orElse(ErrorCode.INVALID_INPUT.getDefaultMessage());
         return ResponseEntity.status(ErrorCode.INVALID_INPUT.getStatus())
                 .body(ApiResponse.fail(ErrorCode.INVALID_INPUT, message));
+    }
+
+    /**
+     * 본문을 못 읽은 경우 — 깨진 JSON, enum 에 없는 값, 타입이 안 맞는 값.
+     *
+     * ★ 안 잡으면 아래 "그 밖의 모든 예외" 로 떨어져 <b>500 + "서버 오류가 발생했습니다"</b> 가 된다.
+     *   보낸 쪽이 잘못한 것인데 서버가 터진 것처럼 보이고, 화면은 둘을 구분할 수 없다.
+     *   {@code {"action":"DANCE"}} 처럼 없는 값을 보내면 실제로 그랬다(2026-09-04 발견).
+     *
+     * ★ 원인을 그대로 내보내지 않는다 — 예외 메시지에 클래스 이름·패키지·필드 구조가 들어 있어
+     *   그대로 주면 서버 내부가 드러난다. 자세한 것은 로그에만 남긴다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnreadable(HttpMessageNotReadableException e) {
+        log.debug("본문을 읽지 못함", e);
+        return ResponseEntity.status(ErrorCode.INVALID_INPUT.getStatus())
+                .body(ApiResponse.fail(ErrorCode.INVALID_INPUT));
     }
 
     /**

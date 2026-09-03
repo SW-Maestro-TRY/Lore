@@ -12,8 +12,10 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { track } from '@common/analytics';
 import AuthModal from '@common/auth/AuthModal';
-import { ASSET, BACKGROUNDS, FRIENDS, MOVES, MOVE_IMG, YEOUL, YEOUL_LOOP, YEOUL_MOOD, bgUrl, josa } from '../constants';
+import GameSection from '../GameSection';
+import { ASSET, BACKGROUNDS, FRIENDS, MOVE_IMG, YEOUL, YEOUL_LOOP, YEOUL_MOOD, bgUrl, josa } from '../constants';
 import { MAX_GAUGE } from '../rules';
+import { useDex } from '../useDex';
 import { useTamagotchi, type ActionKey } from '../useTamagotchi';
 import { useWander } from '../useWander';
 import { useZzalSession } from '../useZzalSession';
@@ -380,29 +382,11 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
     } as CSSProperties,
   }));
 
-  const DEXROT = [-1.4, .9, -.6, 1.3, -1.1, .7, -1.6, 1.1, -.8, 1.5, -1, .6];
-  // 잠긴 칸에는 자물쇠 대신 여울이가 대신 서 있다. 무엇을 배울 수 있는지는 보여주되
-  // '다음은 이것' 이라고는 말하지 않는다 — 그래야 생성이 실패해도 갈아끼울 수 있다.
-  const dex = MOVES.map((name, i) => {
-    const open = i < s.unlocked;
-    return {
-      name, open, locked: !open, img: open ? (s.imgUrl || YEOUL) : YEOUL,
-      cardStyle: {
-        position: 'relative', background: open ? '#FFFEFA' : 'rgba(252,249,238,.75)',
-        border: '1px solid ' + (open ? '#EDE6D4' : '#E2DAC4'), borderRadius: 2,
-        overflow: 'hidden', padding: 4,
-        boxShadow: open ? '3px 4px 0 rgba(58,53,43,.1)' : 'none',
-        transform: `rotate(${(DEXROT[i] * (pc ? 1 : .45)).toFixed(2)}deg)`,
-      } as CSSProperties,
-      mediaStyle: { position: 'relative', aspectRatio: '313 / 350', background: '#F2EDDD', overflow: 'hidden' } as CSSProperties,
-      imgStyle: {
-        width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-        filter: open ? 'none' : 'grayscale(.75) opacity(.42)',
-      } as CSSProperties,
-      nameStyle: { fontFamily: GAEGU, fontWeight: 700, fontSize: 15, color: open ? INK : '#A79C82' } as CSSProperties,
-      save: () => ui.say(name + ' 저장했어요'),
-      share: () => ui.say(name + ' 공유 링크를 만들었어요'),
-    };
+  // 도감은 서버가 정본이다 — 칸 수도 이름도 useDex 가 만든다(프론트 MOVES 13개가 아니다).
+  // 잠긴 칸에는 자물쇠 대신 여울이가 대신 서 있고, 그 칸에는 **이름이 없다**.
+  const dex = useDex({
+    petId: session.server?.pet?.petId ?? null,
+    unlocked: s.unlocked, pc, fallbackImg: YEOUL, say: ui.say,
   });
 
   // 하단 바는 탭이 아니라 섹션 점프다. 앱으로 낼 때 그대로 탭이 된다.
@@ -825,6 +809,8 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
           </div>
         </section>
 
+        <GameSection petId={session.server?.pet?.phase === 'ALIVE' ? session.server.pet.petId : null} />
+
         {/* 섹션 4 — 도감. 사진 코너로 고정된 앨범 시트. */}
         <section data-sec="dex" style={L.sec}>
           <div style={L.wrap}>
@@ -833,10 +819,17 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
                 <span style={{ fontFamily: PEN, fontSize: 22, color: RED, lineHeight: 1 }}>모은 것들</span>
                 <h2 style={L.h2}>도감</h2>
               </div>
-              <span style={L.countTag}>{s.unlocked} / {MOVES.length}</span>
+              <span style={L.countTag}>{s.unlocked} / {dex.length}</span>
             </div>
 
             <div style={L.albumSheet}>
+              {/* 한 칸도 없는 것은 고장이 아니다 — 아직 아무것도 안 열린 상태다.
+                  빈 판만 두면 안 그려진 것처럼 보이므로, 어떻게 하면 늘어나는지 말해 준다. */}
+              {dex.length === 0 && (
+                <p style={{ fontFamily: PEN, fontSize: 20, color: SUB, textAlign: 'center', margin: '26px 0 22px' }}>
+                  아직 모은 게 없어요. 재우면 하나씩 늘어나요
+                </p>
+              )}
               <div style={L.dexGrid}>
                 {dex.map((d, i) => (
                   <div key={i} style={d.cardStyle}>

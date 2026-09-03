@@ -136,6 +136,13 @@ public class MotionService {
         if (v.verdict() == GateVerdict.FAIL) {
             // 게이트가 실패라 하면 다시 굽는다. 판정은 기록에 남겨 두 판정을 비교할 수 있게 한다.
             motionRecorder.recordGate(motionId, imageKey, v);
+
+            // ★★ 성공 기록을 지워야 다음 시도가 실제로 다시 굽는다.
+            //   재시도는 성공한 단계를 건너뛰는데, 격자도 후처리도 "성공" 으로 남아 있으면
+            //   실행기가 둘 다 건너뛰고 <b>방금 퇴짜 맞은 그 그림을 또 판정한다.</b>
+            //   그러면 세 번을 시도해도 같은 결과가 세 번 나오고 시간만 쓴다.
+            int discarded = recorder.discardMotionSteps(motionId);
+            log.info("게이트 실패 — 성공 기록 {}건을 지우고 다시 굽는다 (motionId={})", discarded, motionId);
             return false;
         }
 

@@ -114,6 +114,24 @@ public class GenerationRecorder {
         return targets.size();
     }
 
+    /**
+     * 이 모션이 지금까지 성공시킨 단계를 전부 폐기한다.
+     *
+     * ★★ 왜 필요한가 — 게이트가 "이 그림은 안 된다" 고 했는데 재시도가
+     *   <b>바로 그 그림을 다시 판정한다.</b> 재시도는 성공한 단계를 건너뛰는데,
+     *   격자도 후처리도 "성공" 으로 남아 있어 실행기가 둘 다 건너뛰기 때문이다.
+     *   그러면 세 번을 시도해도 같은 결과가 세 번 나오고, 시간만 쓰고 실패로 끝난다.
+     *
+     *   부화에서 이미 겪은 것과 같은 종류다 — 거부당한 문단을 폐기하지 않으면
+     *   같은 문단으로 또 거부당한다(discardSucceeded 주석 참고).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int discardMotionSteps(Long motionId) {
+        List<GenStepRecord> targets = stepRepository.findSucceededByMotion(motionId);
+        targets.forEach(stepRepository::delete);
+        return targets.size();
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markPetFailed(Long petId) {
         petRepository.findById(petId).ifPresent(p -> p.markHatchFailed());
