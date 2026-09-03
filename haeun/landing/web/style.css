@@ -2051,6 +2051,9 @@ button.inline-link:hover { color: #f0d090; }
   background: transparent; border: none; box-shadow: none;
 }
 .approval-box .sheet-approval { margin: 0; max-height: 92vh; overflow-y: auto; }
+/* new_harness 의 이야기 고르기(.nh-approval)도 같은 팝업에 든다 — 카드가
+   넷이라 화면보다 길어지므로, 위 시트 상자와 같은 규칙으로 안에서 굴린다. */
+.approval-box .nh-approval { margin: 0; max-height: 92vh; overflow-y: auto; }
 
 /* 무엇을 확인하는지 — 이야기·콘티 본문 */
 .approval-preview:empty { display: none; }

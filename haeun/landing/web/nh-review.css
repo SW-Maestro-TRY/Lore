@@ -122,6 +122,9 @@
    넓은 화면에서는 카드를 2열로 펼치고 글자를 키워 화면을 더 채운다. 모바일
    (480px 이하)은 padding·글자만 살짝 줄여 잘리지 않게 한다. */
 @media (min-width: 720px) {
+  /* 메인 화면(index.html)의 #nhPickCards 는 일부러 뺐다 — 그쪽 검수는 앱
+     컬럼(480px) 안의 팝업이라, 넓은 창이어도 카드가 놓일 폭은 448px 뿐이다.
+     2열로 쪼개면 카드 하나가 210px 로 눌린다. */
   #cards, #nhCards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; align-items: start; }
   .nh-card { margin-bottom: 0; padding: 18px 20px; }
   .nh-card h3 { font-size: 17px; }

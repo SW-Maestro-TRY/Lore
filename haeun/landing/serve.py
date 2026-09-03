@@ -667,7 +667,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/latest":
             # 가장 최근에 **끝난** 작업. /result 가 이걸 보고 결과를 띄운다.
-            done = [j for j in runner.jobs.values() if j.status == "done" and j.run_id]
+            # 두 하네스를 같이 본다 — 메인 화면이 new_harness 로 만들기
+            # 시작한 뒤로(2026-09-03), classic 만 보면 방금 만든 것이 안 뜬다.
+            done = [j for j in (*runner.jobs.values(), *nh_runner.jobs.values())
+                    if j.status == "done" and j.run_id]
             if not done:
                 return self._error(404, "아직 완성된 작품이 없습니다")
             newest = max(done, key=lambda j: j.finished_at or 0)
@@ -1469,13 +1472,14 @@ class Handler(BaseHTTPRequestHandler):
             except pipeline.Failed as exc:
                 return self._error(400, str(exc))
 
-        # ---- new_harness 실험 경로 ------------------------------------------ #
+        # ---- new_harness 경로 ------------------------------------------------ #
         #
-        # /api/create 와 사진 처리 로직이 겹치지만 일부러 안 합친다 —
-        # /api/create 는 실제 서비스 화면(lorecomic.com/webtoon)이 매 요청마다
-        # 타는 자리라, 실험 경로를 고치다 실수로 거길 건드리는 위험을 아예
-        # 없애는 쪽을 골랐다.
-
+        # /api/create 와 사진 처리 로직이 겹치지만 일부러 안 합친다 — 하네스가
+        # 다르면(story-harness+webtoon-harness vs new_harness) job 저장소도
+        # 검수 단계도 달라서, 공통 함수 하나로 묶으면 그 차이를 매번 if 로
+        # 갈라야 한다. 2026-09-03부터 메인 화면(index.html)도 이 경로를
+        # 탄다 — 더는 "실험 전용이라 안전"이 아니고, /api/create 와 똑같이
+        # 크레딧·저작권 확인을 거친다(아래).
         if url.path == "/api/nh/create":
             try:
                 form = self._body()
@@ -1524,8 +1528,31 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "캐릭터를 알 수 있는 것이 하나는 필요합니다 — "
                                         "이름 · 설명 · 항목 · 사진 중 아무거나요.")
 
+            # 저작권 확인 — /api/create 와 같은 확인, 같은 문구.
+            if not form.pop("agree_ip", False):
+                return self._error(400, "저작권 확인에 동의해야 만들 수 있습니다")
+
+            # 크레딧 소진 — /api/create 와 같은 계산(credits.creation_cost).
+            # new_harness 는 layout_mode·preview 개념이 없으므로 항상 기본값
+            # (fast · 미리보기 아님)으로 계산한다 — 페이지 전체를 한 번에
+            # 그리는 만큼, 컷별 미리보기를 나눠 부를 자리가 없다.
+            uid = str(form.pop("uid", "") or "")
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            cost = credits.creation_cost(False, "fast")
+            bal = credits.balance(uid)
+            if bal < cost:
+                return self._error(
+                    402, f"크레딧이 모자랍니다 (필요 {cost} · 보유 {bal})",
+                    reason="insufficient_credit", need=cost, balance=bal)
+
             job = nh_runner.create(form, photos)
-            return self._json({"id": job.id})
+            _, bal = credits.spend(uid, cost)
+            credits.log_event("spend", uid, amount=cost, balance=bal,
+                              job_id=job.id, reason="create")
+            accounts.log_ip_consent(uid, job.id)
+            return self._json({"id": job.id, "queue_position": nh_runner.position(job.id),
+                               "credit_balance": bal})
 
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/pick", url.path)
         if m:
@@ -1546,7 +1573,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(409, str(exc))
             return self._json({"ok": True})
 
-        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/board-decision", url.path)
+        # 방향 고르기 화면의 "다시 만들기" — 콘티 검수가 없어진 뒤로 이
+        # 화면이 유일한 재시도 자리다(2026-09-03, board-decision 대체).
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/pick-retry", url.path)
         if m:
             job = nh_runner.get(m.group(1))
             if not job:
@@ -1554,15 +1583,9 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 body = self._body()
             except (json.JSONDecodeError, UnicodeDecodeError):
-                return self._error(400, "입력을 읽지 못했습니다")
-            decision = str(body.get("decision") or "")
-            if decision not in ("approve", "retry"):
-                return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
+                body = {}
             try:
-                if decision == "approve":
-                    nh_runner.approve_board(job.id)
-                else:
-                    nh_runner.retry_board(job.id, note=str(body.get("note") or ""))
+                nh_runner.retry_pick(job.id, note=str(body.get("note") or ""))
             except ValueError as exc:
                 return self._error(409, str(exc))
             return self._json({"ok": True})
