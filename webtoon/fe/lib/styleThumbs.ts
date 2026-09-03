@@ -1,6 +1,6 @@
 import cinematic from "../assets/ex-cinematic-1.jpg";
 import lineart from "../assets/ex-lineart-2.jpg";
-import romance from "../assets/ex-romance-1.jpg";
+import romance from "../assets/ex-romance-1.png";
 import webtoon from "../assets/ex-webtoon-1.jpg";
 import pastel from "../assets/world-begins.png";
 import noir from "../assets/world-depth.png";

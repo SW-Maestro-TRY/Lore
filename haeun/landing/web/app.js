@@ -36,7 +36,7 @@ const STYLE_INFO = [
    넣는다 — 원본 PNG 는 장당 2~3MB 라 썸네일로 그대로 쓰면 안 된다. */
 const STYLE_THUMB = {
   cinematic: "/static/samples/ex-cinematic-1.jpg",
-  romance:   "/static/samples/ex-romance-1.jpg",
+  romance:   "/static/samples/ex-romance-1.png",
   webtoon:   "/static/samples/ex-webtoon-1.jpg",
   frost:     "/static/samples/ex-frost-1.jpg",
   pastel:    "/static/samples/ex-pastel-1.jpg",
