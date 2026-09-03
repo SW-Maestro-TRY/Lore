@@ -2,6 +2,7 @@ package com.lore.common.config;
 
 import com.lore.common.auth.jwt.JwtAuthenticationFilter;
 import com.lore.common.auth.jwt.JwtProperties;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -62,12 +63,30 @@ public class WebSecurityConfig {
                 // 인증이 없으면 403 이 아니라 401 을 준다. 프론트는 401 을 보고 로그인 창을 띄우므로
                 // 이 구분이 화면 흐름을 가른다(403 은 "로그인은 했는데 권한이 없다"는 뜻이다).
                 .exceptionHandling(e -> e
-                        .authenticationEntryPoint((req, res, ex) ->
-                                res.sendError(HttpServletResponse.SC_UNAUTHORIZED)))
+                        .authenticationEntryPoint(this::unauthorized))
 
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * 로그인이 필요한데 안 한 경우.
+     *
+     * ★ {@code sendError} 로 던지면 톰캣이 자기 형식으로 답해서, 우리 API 중 <b>이 응답만</b>
+     *   {@code {success, data, error}} 봉투를 벗어난다. 화면은 그걸 모르고 error.code 를 읽다가
+     *   빈손이 되고, 그 차이는 로그인이 풀린 실제 상황에서만 드러난다.
+     *   그래서 다른 오류와 같은 모양으로 맞춘다.
+     */
+    private void unauthorized(HttpServletRequest req, HttpServletResponse res,
+                              org.springframework.security.core.AuthenticationException ex)
+            throws java.io.IOException {
+        res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        res.setContentType("application/json;charset=UTF-8");
+        res.getWriter().write("""
+                {"success":false,"data":null,\
+                "error":{"code":"UNAUTHORIZED","message":"로그인이 필요합니다"},\
+                "message":"로그인이 필요합니다"}""");
     }
 
     /**

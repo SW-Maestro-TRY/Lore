@@ -1,0 +1,269 @@
+/* 로그인 · 회원가입 모달.
+ *
+ * 색은 전부 common/fe/styles/tokens.css 의 변수만 쓴다 — 이 창은 라이트/다크 양쪽에서
+ * 그대로 떠야 하고, hex 를 한 번이라도 박으면 한쪽 테마에서만 안 보이는 글자가 생긴다.
+ * 위계는 그림자가 아니라 보더 + 배경으로 준다(랜딩 디자인 규칙과 같음). */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200; /* 헤더(60)보다 확실히 위. */
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 화면이 낮거나(가로 모드) 가입 탭처럼 내용이 길면 모달 자체가 넘친다.
+   * 오버레이가 스크롤을 맡아 위아래 여백을 남긴 채 굴러가게 한다. */
+  overflow-y: auto;
+  padding: clamp(16px, 5vh, 48px) 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 420px;
+  margin: auto;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  padding: clamp(20px, 4vw, 28px);
+  color: var(--text);
+  font-family: var(--font-ko);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* 탭 — 두 칸을 반씩 나눠 갖는다. 어느 쪽에 있는지가 한눈에 보여야 해서
+ * 밑줄이 아니라 배경으로 표시한다(다크에서 밑줄은 잘 안 보인다). */
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 18px 0 20px;
+  padding: 4px;
+  background: var(--surface-2);
+  border-radius: 999px;
+}
+
+.tab {
+  padding: 9px 12px;
+  /* 투명 보더로 자리를 미리 잡아 둔다. 선택된 탭에만 보더를 주면 누를 때마다
+   * 버튼이 2px 씩 커졌다 작아져 글자가 흔들린다. */
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tabActive {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.input {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px; /* 16px 미만이면 iOS 사파리가 입력할 때 화면을 확대해 버린다 — 15는 그 경계 위. */
+  transition: border-color 150ms ease;
+}
+
+.input:focus {
+  border-color: var(--accent-webtoon);
+}
+
+/* 크롬 자동완성은 입력 칸을 제 마음대로 연노란색으로 칠한다. 다크 테마에서는
+ * 흰 바탕에 흰 글자가 되어 아무것도 안 보인다 — 배경을 다시 우리 것으로 덮는다. */
+.input:-webkit-autofill,
+.input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  -webkit-box-shadow: 0 0 0 1000px var(--bg) inset;
+  caret-color: var(--text);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.agreements {
+  /* fieldset 기본 min-width 가 min-content 라, 긴 문구가 들어오면 창 밖으로 밀린다. */
+  min-width: 0;
+  margin: 2px 0 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.agreeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agreeLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  /* 줄이 길어져도 "보기" 링크를 밀어내지 않게. */
+  min-width: 0;
+}
+
+.agreeLabel input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-webtoon);
+  cursor: pointer;
+}
+
+/* 전체 동의는 나머지를 대표하므로 한 단계 굵게 두고 구분선을 깐다. */
+.agreeAll {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tagRequired {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-zzal-deep);
+}
+
+.tagOptional {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-subtle);
+}
+
+.agreeLink {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-subtle);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.agreeLink:hover {
+  color: var(--text);
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.submit {
+  margin-top: 4px;
+  padding: 13px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+
+.submit:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+/* 눈에는 안 보이지만 화면 낭독기는 읽는 것. fieldset 의 legend 에 쓴다. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
