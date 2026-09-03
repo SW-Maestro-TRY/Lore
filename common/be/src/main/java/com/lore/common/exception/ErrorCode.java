@@ -24,6 +24,7 @@ public enum ErrorCode {
     LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "권한이 없습니다"),
+    NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 주소를 찾을 수 없습니다"),
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "다시 로그인해 주세요"),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다"),
 
@@ -49,7 +50,11 @@ public enum ErrorCode {
     ZZAL_TRAIN_ENOUGH(HttpStatus.CONFLICT, "오늘 연습은 충분해요"),
     ZZAL_TRAIN_NOT_ENOUGH(HttpStatus.CONFLICT, "연습이 더 필요해요"),
     ZZAL_ALL_UNLOCKED(HttpStatus.CONFLICT, "이미 다 배웠어요"),
-    ZZAL_MOTION_NOT_READY(HttpStatus.CONFLICT, "아직 꿈을 꾸고 있어요");
+    ZZAL_MOTION_NOT_READY(HttpStatus.CONFLICT, "아직 꿈을 꾸고 있어요"),
+
+    // 놓아주기 (zzal) — 부화 중에는 보낼 수 없다. 알을 보내면 뒤에서 굽고 있는 생성이
+    // 주인 없는 일이 되어, 돈은 나가는데 받을 펫이 없는 상태로 끝난다.
+    ZZAL_PET_RELEASE_NOT_ALLOWED(HttpStatus.CONFLICT, "부화가 끝난 뒤에 보낼 수 있어요");
 
     // 도메인별 코드는 각 담당자가 아래에 추가한다.
     // 예) ZZAL_PET_NOT_FOUND(HttpStatus.NOT_FOUND, "펫을 찾을 수 없습니다"),

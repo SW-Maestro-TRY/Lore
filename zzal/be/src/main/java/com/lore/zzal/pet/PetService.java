@@ -24,6 +24,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -87,8 +88,11 @@ public class PetService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        long alive = petRepository.countByUserIdAndPhaseNot(userId, PetPhase.FAILED);
-        if (alive >= user.getPetSlots()) {
+        // ★ 자리를 차지하는 것은 HATCHING·ALIVE 뿐이다. 떠난 아이(DEAD)와 태어나지 못한
+        //   알(FAILED)의 행은 남겨 두되 자리는 비워 준다 — 안 그러면 펫을 보내고도
+        //   "자리 없음" 으로 막혀 다른 그림으로 다시 시작할 방법이 사라진다.
+        long occupied = petRepository.countByUserIdAndPhaseIn(userId, PetPhase.OCCUPYING_SLOT);
+        if (occupied >= user.getPetSlots()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_LIMIT_REACHED);
         }
 
@@ -161,6 +165,55 @@ public class PetService {
     }
 
     /**
+     * 다 모으면 몇 개인가. <b>이 판정의 정본은 설정(app.zzal.motions)뿐이다.</b>
+     *
+     * 화면이 쓰는 총 개수와 서버가 쓰는 완주 판정이 같은 곳에서 나와야 한다. 예전에는
+     * {@code ZzalRules.TOTAL_MOTIONS = 13} 이 따로 있어서, 목록에 2개만 넣어도 완주가
+     * 13개를 요구했다 — 예외도 로그도 없이 "다 모았다" 만 영영 안 뜨는 종류의 버그다.
+     */
+    public int totalMotions() {
+        return catalog.total();
+    }
+
+    /**
+     * 첫날 순서(튜토리얼)를 끝냈다고 알린다. <b>이 순간부터 수치가 흐르기 시작한다.</b>
+     *
+     * ★ 이미 끝난 상태면 에러 대신 지금 상태를 그대로 돌려준다 — 마지막 칸에서 두 번 눌렀거나
+     *   새로고침 뒤 다시 알리는 것은 정상적인 화면 동작이다. 여기서 409 를 던지면 화면은
+     *   "실패" 를 띄우는데 서버 상태는 이미 원하던 그대로라, 사용자가 무엇을 더 해야 하는지 알 수 없다.
+     *   (도메인의 {@code completeTutorial} 도 두 번째 호출에 아무 일도 하지 않아 앵커가 안 밀린다)
+     */
+    @Transactional
+    public ZzalPet completeTutorial(Long userId, Long petId, Instant now) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        pet.completeTutorial(now);
+        pet.applyElapsed(now);
+        return pet;
+    }
+
+    /**
+     * 시연·확인용으로 그 펫의 시계를 {@code by} 만큼 당긴다(= 그만큼 시간이 흐른 것으로 만든다).
+     *
+     * ★★ 이 메서드를 부를 수 있는 입구는 {@code app.zzal.dev-tools} 가 켜졌을 때만 뜨는
+     *    {@code DevClockController} 하나뿐이다(꺼져 있으면 그 컨트롤러가 빈으로 올라오지 않는다).
+     *    주소에 {@code /dev/} 가 들어가는 것은 방어가 아니라 이름일 뿐이다.
+     *
+     * ★ 남의 펫은 못 건드린다 — 돌봄 API 와 <b>같은</b> {@link #findMine} 을 탄다.
+     *   판정을 따로 쓰면 한쪽만 고쳐질 수 있고, 그러면 개발 도구가 남의 데이터를 여는 구멍이 된다.
+     */
+    @Transactional
+    public ZzalPet advanceClock(Long userId, Long petId, Duration by, Instant now) {
+        ZzalPet pet = findMine(userId, petId);
+        pet.rewindClock(by);
+        // 앵커만 밀고 수치는 평소 경로로 센다 — 그래야 확인하려는 계산이 실제로 돈다.
+        pet.applyElapsed(now);
+        return pet;
+    }
+
+    /**
      * 돌본다. 밥·쓰다듬·청소.
      *
      * ★ 서버는 "무엇을 눌렀다" 만 받고 결과는 서버가 정한다. 브라우저가 보낸 수치를 그대로
@@ -203,7 +256,7 @@ public class PetService {
     @Transactional
     public ZzalPet train(Long userId, Long petId, Instant now) {
         ZzalPet pet = awake(userId, petId, now);
-        if (pet.isComplete()) {
+        if (pet.isComplete(catalog.total())) {
             throw new BusinessException(ErrorCode.ZZAL_ALL_UNLOCKED);
         }
         if (pet.isTraining()) {
@@ -222,7 +275,7 @@ public class PetService {
     @Transactional
     public ZzalPet sleep(Long userId, Long petId, Instant now) {
         ZzalPet pet = awake(userId, petId, now);
-        if (pet.isComplete()) {
+        if (pet.isComplete(catalog.total())) {
             throw new BusinessException(ErrorCode.ZZAL_ALL_UNLOCKED);
         }
         if (pet.isTraining()) {
@@ -301,6 +354,40 @@ public class PetService {
         return new WakeResult(pet, motion.getStatus() == MotionStatus.FAILED
                 ? MotionOutcome.tooHard()
                 : MotionOutcome.stillLearning());
+    }
+
+    /**
+     * 보낸다(놓아주기). 자리가 비어 다른 그림으로 새로 시작할 수 있게 된다.
+     *
+     * <h3>왜 필요한가</h3>
+     * 지금은 한 사람이 한 마리만 키운다. 되돌릴 방법이 없으면 처음 올린 그림이 마음에 안 들었을 때
+     * <b>계정을 새로 파는 것 말고는 길이 없다.</b> 그게 첫 사용자가 가장 먼저 부딪히는 벽이다.
+     *
+     * <h3>★ 부화 중에는 막는다</h3>
+     * 알을 보내 버리면 뒤에서 굽고 있는 생성 작업이 주인 없는 일이 된다 — 돈은 그대로 나가고
+     * 결과를 받을 펫은 사라진다. 몇 분만 기다리면 되는 일이라 여기서는 거절하고 이유를 말해 준다.
+     *
+     * <h3>이미 떠난 아이면 조용히 넘어간다</h3>
+     * 두 번 눌렀거나 다른 창에서 먼저 보낸 경우다. 에러를 던지면 화면은 "실패" 를 보여 주는데
+     * 실제로는 원하던 상태(떠남)라, 사용자가 무엇을 더 해야 하는지 알 수 없게 된다.
+     * 도메인의 {@code release} 가 ALIVE 가 아니면 아무 일도 하지 않으므로 상태도 안 망가진다.
+     *
+     * <h3>★★ 지우지 않는다</h3>
+     * 만들어 둔 움짤·모션 기록은 그대로 둔다. 이미 돈을 쓴 결과물이고, 나중에 "떠난 아이와
+     * 재회" 가 붙을 자리다. 단계만 DEAD 로 바뀌고 행은 남는다.
+     */
+    @Transactional
+    public ZzalPet release(Long userId, Long petId, Instant now) {
+        ZzalPet pet = findMine(userId, petId);
+        if (pet.isHatching()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_RELEASE_NOT_ALLOWED,
+                    "%s이가 아직 부화 중이에요".formatted(pet.getName()));
+        }
+        // 흐른 시간을 먼저 반영한다 — 응답이 다른 API 와 같은 모양이라, 여기서만
+        // 계산이 빠지면 화면이 마지막으로 보는 수치가 옛날 값이 된다.
+        pet.applyElapsed(now);
+        pet.release(now);
+        return pet;
     }
 
     /** 깨운 결과 — 펫의 새 상태와, 이번에 무엇을 배웠는지. */

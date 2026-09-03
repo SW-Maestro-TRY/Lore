@@ -102,7 +102,12 @@ public class MotionService {
             return false;
         }
 
-        String version = motion.getPipelineVersion();
+        // ★ 버전이 비어 있으면 지금 버전으로 채운다. 옛 데이터나 손으로 넣은 행이 섞이면
+        //   여기서 null 이 그대로 흘러가 job 저장이 터지는데, 굽기는 비동기라
+        //   **로그만 남고 아무도 모른 채** 그 모션이 영영 PENDING 으로 남는다.
+        String version = motion.getPipelineVersion() != null
+                ? motion.getPipelineVersion()
+                : registry.currentVersion(GenKind.MOTION);
         GenJob job = jobRepository.save(
                 GenJob.startMotion(pet.getId(), motionId, attempt, version, Instant.now()));
         motionRecorder.beginAttempt(motionId);

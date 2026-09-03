@@ -157,14 +157,35 @@ public class ZzalPet {
     private Instant hatchedAt;
 
     /**
-     * ★ 수치 시계가 켜진 시각 = 첫 돌봄.
+     * ★ 수치 시계가 켜진 시각 = <b>튜토리얼을 끝낸 순간</b>.
      *
-     * 부화가 끝나도 시계는 안 켜진다. 완료 알림을 보고 창을 닫았다가 사흘 뒤에 들어와도
-     * 펫이 굶어 있으면 안 되기 때문이다. 첫 밥·쓰다듬·청소 중 하나를 누르는 순간 시작된다.
-     * 비어 있으면 = 만들어 놓고 한 번도 안 만진 펫(지표로도 그대로 쓰인다).
+     * 부화가 끝나도, 첫 밥을 줘도 시계는 안 켜진다. 켜지는 조건은 {@link #tutorialDoneAt} 하나다
+     * (이유는 그 칸의 주석에).
+     * 비어 있으면 = 아직 첫날 순서를 끝내지 않은 펫(지표로도 그대로 쓰인다).
      */
     @Column
     private Instant careStartedAt;
+
+    /**
+     * ★ 첫날 순서(튜토리얼)를 끝낸 시각. 이 순간에 수치 시계가 켜진다.
+     *
+     * <h3>왜 튜토리얼 중에는 수치가 안 줄어야 하는가</h3>
+     * 첫날 순서는 "쓰다듬 → 행복 4칸 → 훈련이 2회분" 처럼 <b>숫자가 정확히 맞아떨어지는 것</b>으로
+     * 규칙을 설명 없이 가르친다. 안내를 읽는 사이에 행복이 한 칸 떨어지면 그 계산이 어긋나
+     * 튜토리얼이 자기 규칙을 못 보여준다. 프론트에서 이 문제로 실제로 막힌 적이 있어
+     * ({@code zzal/fe/tamagotchi/useTamagotchi.ts} 의 {@code inTutorial}) 서버에도 같은 개념을 둔다.
+     * 서버가 수치의 정본이 된 이상, 여기에 없으면 화면을 붙이는 순간 그 문제가 그대로 재발한다.
+     *
+     * <h3>★ 튜토리얼을 안 끝내고 떠난 펫은 영영 안 굶는다 — 의도한 동작이다</h3>
+     * 안내를 따라가다 창을 닫고 사흘 뒤에 돌아온 사람의 펫이 굶어 죽어 있으면, 그 사람은
+     * 이 서비스가 무엇인지 알기도 전에 떠난다. 방치를 벌하는 것은 규칙을 이미 배운 사람에게만
+     * 의미가 있다. 그래서 시계를 켜는 열쇠를 <b>"첫 돌봄" 이 아니라 "규칙을 다 배웠다"</b> 로 옮겼다.
+     *
+     * ⚠️ 이미 행이 있는 표에 더하는 칸이라 <b>nullable</b> 이어야 한다. NOT NULL 로 만들면
+     *    DB 가 조용히 거부하고 서버는 정상 기동한 채 실제 호출 때만 터진다(2026-09-02 에 겪음).
+     */
+    @Column
+    private Instant tutorialDoneAt;
 
     /** 마지막으로 돌본 시각. 수치 시각 칸은 시간이 지나면 저절로 움직이므로 이것과 구분된다. */
     @Column
@@ -217,6 +238,39 @@ public class ZzalPet {
         this.deathReason = DeathReason.HATCH_FAILED;
     }
 
+    /**
+     * 주인이 직접 보낸다(놓아주기). 슬롯이 비어 다른 그림으로 새로 시작할 수 있게 된다.
+     *
+     * <h3>★ ALIVE 가 아니면 아무 일도 하지 않는다</h3>
+     * 특히 <b>부화 중</b>이 위험하다. 알을 보내 버리면 뒤에서 굽고 있는 생성 작업이 주인
+     * 없는 일이 되어, 돈은 나가는데 결과를 받을 펫이 없는 상태로 끝난다. 그래서 여기서도
+     * 막고, 서비스에서도 사용자에게 이유를 말해 준다(같은 것을 두 번 막는 것이 아니라,
+     * 도메인은 상태를 지키고 서비스는 말을 하는 역할 분담이다).
+     * 이미 DEAD·FAILED 인 아이를 다시 보내도 조용히 넘어간다 — 두 번 눌러도 안전하다.
+     *
+     * <h3>★★ 데이터를 지우지 않는다</h3>
+     * 만들어진 움짤과 모션 기록을 그대로 남긴다. 이유가 둘이다.
+     * <ul>
+     *   <li>이미 <b>돈을 써서</b> 구운 결과물이다. 지우면 그 비용이 그대로 증발한다</li>
+     *   <li>나중에 "떠난 아이와 재회" 가 붙을 자리다. 그때 기록이 없으면 붙일 수가 없다</li>
+     * </ul>
+     * 그래서 행을 지우는 대신 단계만 DEAD 로 바꾼다. 슬롯 계산이 HATCHING·ALIVE 만 세므로
+     * 남겨 두어도 새로 시작하는 데 걸리지 않는다.
+     *
+     * <p>{@code now} 를 받아 두는 이유 — 이 클래스는 시각을 안에서 만들지 않고 <b>항상 밖에서
+     * 받는다</b>(그래야 테스트가 "6시간 뒤" 를 만들 수 있다). 떠난 시각 자체는 감사 칸
+     * {@code updatedAt} 에 남으므로 지금은 따로 적지 않고, 나중에 재회 기능에 {@code releasedAt}
+     * 이 필요해지면 여기서 채운다. <b>{@code lastCaredAt} 에 적지 않는다</b> — 보내는 것은
+     * 돌보는 것이 아니라서, 거기 적으면 방치 지표가 조용히 어긋난다.
+     */
+    public void release(Instant now) {
+        if (phase != PetPhase.ALIVE) {
+            return;
+        }
+        this.phase = PetPhase.DEAD;
+        this.deathReason = DeathReason.RELEASED;
+    }
+
     public boolean isHatching() {
         return phase == PetPhase.HATCHING;
     }
@@ -253,11 +307,25 @@ public class ZzalPet {
      * 값을 말하게 된다. 그래서 조회도 이 메서드를 부르고, 트랜잭션도 읽기 전용이 아니다.
      */
     public void applyElapsed(Instant now) {
-        // 시계가 아직 안 켜졌다 = 부화만 해 놓고 한 번도 안 만진 펫. 굶지 않는다.
-        if (phase != PetPhase.ALIVE || careStartedAt == null) {
+        if (phase != PetPhase.ALIVE) {
             return;
         }
         Instant at = frozenNow(now);
+
+        // ★★ 훈련 거두기는 시계와 <b>무관하게</b> 먼저 돈다.
+        //   이것까지 시계 뒤에 두면 튜토리얼("연습 → 재우기") 이 그 자리에서 멈춘다 —
+        //   연습이 영원히 안 끝나 값을 못 치르고, 재우기가 계속 거절된다.
+        //   시계가 막는 것은 <b>줄어드는 것</b>이지 사용자가 벌어들인 진행이 아니다.
+        if (trainStartedAt != null && !at.isBefore(trainStartedAt.plus(ZzalRules.TRAIN_DURATION))) {
+            trainStack += trainGain;
+            trainStartedAt = null;
+            trainGain = 0;
+        }
+
+        // 시계가 아직 안 켜졌다 = 첫날 순서를 안 끝낸 펫. 굶지 않는다(tutorialDoneAt 주석 참고).
+        if (careStartedAt == null) {
+            return;
+        }
 
         long dropped = stepsPassed(fullnessAt, ZzalRules.FULLNESS_DROP, at);
         if (dropped > 0) {
@@ -282,14 +350,6 @@ public class ZzalPet {
             food = (int) Math.min(ZzalRules.MAX_FOOD, food + charged);
             // 가득 찼으면 시계를 멈춘다. 안 그러면 하나 먹자마자 쌓인 시간만큼 한꺼번에 들어온다.
             foodAt = food >= ZzalRules.MAX_FOOD ? null : advance(foodAt, ZzalRules.FOOD_CHARGE, charged);
-        }
-
-        // 훈련이 끝났으면 거둔다. 사용자가 화면을 안 보고 있어도 시간은 지나므로,
-        // 다시 들어왔을 때 이미 끝나 있는 것이 정상이다.
-        if (trainStartedAt != null && !at.isBefore(trainStartedAt.plus(ZzalRules.TRAIN_DURATION))) {
-            trainStack += trainGain;
-            trainStartedAt = null;
-            trainGain = 0;
         }
     }
 
@@ -318,20 +378,52 @@ public class ZzalPet {
     // ── 돌봄 ──────────────────────────────────────────────────────────────
 
     /**
-     * 첫 돌봄에 수치 시계를 켠다.
+     * 첫날 순서를 끝냈다. <b>이 순간 수치 시계가 켜진다.</b>
      *
-     * ★ 부화가 끝나는 순간이 아니다 — 완료 알림을 보고 창을 닫았다가 사흘 뒤에 들어온
-     *   사람의 펫이 이미 굶어 죽기 직전이면, 첫인상이 거기서 죽는다.
+     * ★ 두 번 불러도 안전하다 — 두 번째는 아무 일도 하지 않는다. 화면이 마지막 칸에서
+     *   버튼을 두 번 누르거나 새로고침 뒤 다시 알릴 수 있는데, 그때마다 앵커가 지금으로
+     *   밀리면 튜토리얼을 끝낸 사람이 <b>누를 때마다 배가 다시 불러진다.</b>
+     */
+    public void completeTutorial(Instant now) {
+        if (tutorialDoneAt != null) {
+            return;
+        }
+        tutorialDoneAt = now;
+        startClock(now);
+    }
+
+    public boolean isTutorialDone() {
+        return tutorialDoneAt != null;
+    }
+
+    /**
+     * 돌봄이 들어왔을 때 수치 시계를 켠다 — 단, <b>튜토리얼을 끝낸 뒤에만</b>.
+     *
+     * ★ 예전에는 첫 돌봄이 열쇠였다. 그러면 튜토리얼 첫 칸("배가 고픈가 봐요 → 밥")을
+     *   누르는 순간 시계가 켜져, 안내를 따라가는 동안 행복이 떨어지고 첫날 순서의 숫자가
+     *   어긋난다. 그래서 열쇠를 {@link #tutorialDoneAt} 으로 옮겼다.
+     *
+     * ★ 그래도 이 메서드를 남겨 둔 이유 — 튜토리얼 완료 알림이 어떤 사정으로 유실돼
+     *   {@code tutorialDoneAt} 만 찍히고 시계가 안 켜진 행이 생겨도, 다음 돌봄에서 스스로 복구된다.
+     *   {@code lastCaredAt}(방치 지표)은 튜토리얼 중에도 그대로 찍어야 한다.
      */
     private void startClockIfNeeded(Instant now) {
-        if (careStartedAt == null) {
-            careStartedAt = now;
-            fullnessAt = now;
-            happinessAt = now;
-            trashAt = now;
-            foodAt = food >= ZzalRules.MAX_FOOD ? null : now;
+        if (tutorialDoneAt != null) {
+            startClock(now);
         }
         lastCaredAt = now;
+    }
+
+    /** 지금을 모든 수치의 출발점으로 삼는다. 이미 켜져 있으면 건드리지 않는다. */
+    private void startClock(Instant now) {
+        if (careStartedAt != null) {
+            return;
+        }
+        careStartedAt = now;
+        fullnessAt = now;
+        happinessAt = now;
+        trashAt = now;
+        foodAt = food >= ZzalRules.MAX_FOOD ? null : now;
     }
 
     /**
@@ -376,7 +468,12 @@ public class ZzalPet {
         trainGain = ZzalRules.trainGain(happiness);
     }
 
-    /** 재운다. 자는 동안 다음에 배울 것이 구워진다(#22 에서 연결). */
+    /**
+     * 재운다. 자는 동안 다음에 배울 것이 구워진다.
+     *
+     * ★ 자는 시간은 <b>몇 개를 열었느냐</b>에 따라 다르다 — 첫 잠은 5분이고 뒤로 갈수록 길어진다.
+     *   그래서 재우는 시점의 {@code unlockedCount} 가 그 잠의 길이를 정한다.
+     */
     public void goToSleep(Instant now) {
         sleepStartedAt = now;
         lastCaredAt = now;
@@ -415,6 +512,36 @@ public class ZzalPet {
         return anchor == null ? null : anchor.plus(by);
     }
 
+    // ── 시연·확인용 (dev 전용) ────────────────────────────────────────────
+
+    /**
+     * 모든 시각 앵커를 {@code by} 만큼 <b>과거로</b> 민다 = 그만큼 시간이 흐른 것으로 만든다.
+     *
+     * <h3>★★ 왜 규칙(잠 5분·훈련 1분)을 짧게 바꾸지 않고 시계만 당기는가</h3>
+     * 확인하려고 {@link ZzalRules} 의 값을 줄이면, 테스트와 실제가 <b>다른 규칙</b>으로 돌게 된다.
+     * 그러면 확인한 것이 실제로 확인한 게 아니다 — 짧은 값에서만 맞고 진짜 값에서 어긋나는
+     * 종류의 버그(칸 계산의 나머지, 앵커 밀기)는 바로 그 차이에 숨는다.
+     * 시계만 당기면 <b>돌아가는 규칙은 운영과 한 글자도 다르지 않고</b> 기다림만 사라진다.
+     *
+     * <h3>앵커만 미는 이유</h3>
+     * 수치를 직접 깎아 주면 "그 사이 몇 칸이 지났나" 를 세는 실제 경로가 안 돌아, 정작
+     * 확인하고 싶은 계산이 통째로 건너뛰어진다. 여기서는 앵커만 밀고, 수치는 평소처럼
+     * {@link #applyElapsed} 가 센다.
+     *
+     * <p>{@code careStartedAt} 이 비어 있으면(첫날 순서를 안 끝낸 펫) 밀 것이 없어 그대로 둔다 —
+     * 그 상태에서 시간을 당겨도 수치가 안 줄어드는 것이 정상 동작이다.
+     */
+    public void rewindClock(Duration by) {
+        Duration back = by.negated();
+        fullnessAt = shift(fullnessAt, back);
+        happinessAt = shift(happinessAt, back);
+        trashAt = shift(trashAt, back);
+        foodAt = shift(foodAt, back);
+        careStartedAt = shift(careStartedAt, back);
+        trainStartedAt = shift(trainStartedAt, back);
+        sleepStartedAt = shift(sleepStartedAt, back);
+    }
+
     // ── 지금 무엇을 할 수 있는가 ──────────────────────────────────────────
 
     public boolean isAlive() {
@@ -439,14 +566,25 @@ public class ZzalPet {
         return trainStack >= trainPrice();
     }
 
-    /** 다 모았는가. */
-    public boolean isComplete() {
-        return unlockedCount >= ZzalRules.TOTAL_MOTIONS;
+    /**
+     * 다 모았는가.
+     *
+     * ★ 총 개수를 <b>인자로 받는다</b> — 정본은 {@code MotionCatalog}(설정 {@code app.zzal.motions})
+     *   하나뿐인데, 엔티티는 스프링 빈을 볼 수 없다. 예전에는 {@code ZzalRules.TOTAL_MOTIONS = 13}
+     *   이 여기 박혀 있어서, 목록에 2개만 넣어도 완주가 13개를 요구했다. 정본이 둘이면
+     *   "다 모았다" 가 거짓말을 하고, 그건 예외도 로그도 없이 화면에서만 드러난다.
+     *
+     * ★ 목록이 비어 있으면(아직 무엇을 열지 안 정한 상태) 완주로 치지 않는다.
+     *   0개를 다 모았다고 하면 갓 태어난 펫이 전부 완주 처리돼 연습·재우기가 통째로 막힌다.
+     */
+    public boolean isComplete(int totalMotions) {
+        return totalMotions > 0 && unlockedCount >= totalMotions;
     }
 
     /** 깨울 수 있는가. 덜 잤으면 아직이다. */
     public boolean canWake(Instant now) {
-        return sleepStartedAt != null && !now.isBefore(sleepStartedAt.plus(ZzalRules.SLEEP_DURATION));
+        return sleepStartedAt != null
+                && !now.isBefore(sleepStartedAt.plus(ZzalRules.sleepDuration(unlockedCount)));
     }
 
     /** 남은 시간(초). 아직 시작 안 했으면 null — 화면이 "없음" 과 "0초 남음" 을 구분해야 한다. */
@@ -455,11 +593,19 @@ public class ZzalPet {
     }
 
     public Long sleepRemainingSeconds(Instant now) {
-        return remaining(sleepStartedAt, ZzalRules.SLEEP_DURATION, now);
+        return remaining(sleepStartedAt, ZzalRules.sleepDuration(unlockedCount), now);
     }
 
-    /** 다음 밥이 찰 때까지. 재고가 가득이면 null. */
+    /**
+     * 다음 밥이 찰 때까지. 재고가 가득이면 null.
+     *
+     * ★ 시계가 안 켜졌으면(첫날 순서를 안 끝냈으면) null 이다. 그때는 충전도 안 도는데
+     *   남은 시간만 줄어들면, 화면이 "0초 남음" 을 띄운 채 영영 안 차는 상태가 된다.
+     */
     public Long foodRemainingSeconds(Instant now) {
+        if (careStartedAt == null) {
+            return null;
+        }
         return remaining(foodAt, ZzalRules.FOOD_CHARGE, frozenNow(now));
     }
 
@@ -553,6 +699,10 @@ public class ZzalPet {
 
     public Instant getCareStartedAt() {
         return careStartedAt;
+    }
+
+    public Instant getTutorialDoneAt() {
+        return tutorialDoneAt;
     }
 
     public Instant getLastCaredAt() {

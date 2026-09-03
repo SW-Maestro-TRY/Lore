@@ -61,7 +61,8 @@ public final class PetResponses {
             Long foodInSeconds,
 
             @Schema(description = "지금까지 배운 움직임 수") Integer unlockedCount,
-            @Schema(description = "다 모으면 몇 개인가", example = "13") Integer totalMotions,
+            @Schema(description = "다 모으면 몇 개인가. 설정(app.zzal.motions)에 적힌 개수가 그대로 나온다. "
+                    + "아직 무엇을 열지 안 정했으면 0 이다", example = "2") Integer totalMotions,
 
             @Schema(description = "연습 중인가") Boolean training,
             @Schema(description = "연습이 끝날 때까지(초). 연습 중이 아니면 null") Long trainInSeconds,
@@ -78,15 +79,27 @@ public final class PetResponses {
             @Schema(description = "다 모았는가") Boolean complete,
 
             @Schema(description = """
+                    첫날 순서(튜토리얼)를 끝냈는가. false 면 화면이 안내를 띄운다.
+                    **끝내기 전에는 수치가 줄지 않는다** — 안내를 따라가는 사이에 값이 어긋나면
+                    첫날 순서가 자기 규칙을 못 보여주기 때문이다""")
+            Boolean tutorialDone,
+
+            @Schema(description = """
                     이번 깨우기에서 무엇을 배웠나. **깨우기 응답에만** 담긴다.
                     못 배웠어도 깨어나기는 하며, 그때는 learned 가 false 이고 message 에 이유가 들어온다""")
             Learned learned) {
 
-        public static Detail from(ZzalPet pet, String stepLabel, Instant now) {
-            return from(pet, stepLabel, now, null);
+        public static Detail from(ZzalPet pet, String stepLabel, Instant now, int totalMotions) {
+            return from(pet, stepLabel, now, totalMotions, null);
         }
 
-        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionOutcome outcome) {
+        /**
+         * ★ 총 개수를 밖에서 받는다 — 정본은 {@code MotionCatalog}(설정 app.zzal.motions) 하나뿐이고,
+         *   DTO 는 스프링 빈을 볼 수 없다. 예전에는 여기서 {@code ZzalRules.TOTAL_MOTIONS} 를 읽어
+         *   목록과 다른 숫자가 화면으로 나갔다.
+         */
+        public static Detail from(ZzalPet pet, String stepLabel, Instant now,
+                                  int totalMotions, MotionOutcome outcome) {
             boolean hatching = pet.isHatching();
             boolean alive = pet.isAlive();
             return new Detail(
@@ -96,10 +109,15 @@ public final class PetResponses {
                     hatching ? pet.elapsedSeconds(now) : null,
                     pet.getDeathReason() != null ? pet.getDeathReason().name() : null,
                     pet.getHatchStartedAt(), pet.getHatchedAt(),
-                    pet.getFullness(), pet.getHappiness(), pet.getTrash(), pet.getFood(),
+                    // ★ 부화 중에는 수치를 비워 보낸다. 값을 채워 보내면 알이 깨기도 전에
+                    //   화면이 "포만감 0" 을 굶주림으로 그린다 — 아직 시계가 안 켜졌을 뿐인데.
+                    alive ? pet.getFullness() : null,
+                    alive ? pet.getHappiness() : null,
+                    alive ? pet.getTrash() : null,
+                    alive ? pet.getFood() : null,
                     alive ? pet.foodRemainingSeconds(now) : null,
-                    pet.getUnlockedCount(),
-                    alive ? ZzalRules.TOTAL_MOTIONS : null,
+                    alive ? pet.getUnlockedCount() : null,
+                    alive ? totalMotions : null,
                     alive ? pet.isTraining() : null,
                     alive ? pet.trainRemainingSeconds(now) : null,
                     alive ? pet.getTrainStack() : null,
@@ -109,7 +127,8 @@ public final class PetResponses {
                     alive ? pet.sleepRemainingSeconds(now) : null,
                     alive ? pet.canWake(now) : null,
                     alive ? (pet.isTrainPaid() && !pet.isTraining() && !pet.isSleeping()) : null,
-                    alive ? pet.isComplete() : null,
+                    alive ? pet.isComplete(totalMotions) : null,
+                    alive ? pet.isTutorialDone() : null,
                     outcome == null ? null : new Learned(
                             outcome.learned(), outcome.name(), outcome.message()));
         }

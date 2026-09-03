@@ -9,11 +9,12 @@ import java.time.Duration;
  *   그쪽은 버튼에 "2회분" 같은 미리보기를 그리기 위한 사본이고 판정은 하지 않는다.
  *   브라우저가 보낸 수치를 그대로 믿으면 개발자도구로 게이지를 채울 수 있기 때문이다.
  *
- * ⚠️ <b>아래 시간 값은 아직 확정되지 않았다</b>(2026-09-03).
- *    지금 값은 문서 `수치설계-3안-0824.md` 의 2026-08-25 확정본을 그대로 옮긴 것인데,
- *    현대 다마고치(Paradise 2025)가 배고픔 30분에 1칸인 것과 견주면 우리는 8배 느슨하다.
- *    <b>구조는 값과 무관하게 돌아가므로</b> 확정되면 이 파일의 숫자만 고치면 된다.
- *    바꿀 때는 문서를 먼저 고치고 여기를 맞춘다(반대로 하면 근거가 사라진다).
+ * 확정 상태(2026-09-03)
+ *   ✔ 잠 시간표 — 5분 → 15분 → 1시간 → 3시간, 마지막 값 고정
+ *   ⚠️ 나머지 시간 값은 아직 미확정이다. 지금은 `수치설계-3안-0824.md` 의 2026-08-25 확정본을
+ *      그대로 옮겨 뒀는데, 현대 다마고치(Paradise 2025)가 배고픔 30분에 1칸인 것과 견주면
+ *      우리는 8배 느슨하다. <b>구조는 값과 무관하게 돌아가므로</b> 이 파일의 숫자만 고치면 된다.
+ *      바꿀 때는 문서를 먼저 고치고 여기를 맞춘다(반대로 하면 근거가 사라진다).
  */
 public final class ZzalRules {
 
@@ -81,11 +82,37 @@ public final class ZzalRules {
     /** 훈련 한 번이 도는 시간. 도는 동안 다른 돌봄은 계속 된다. */
     public static final Duration TRAIN_DURATION = Duration.ofMinutes(1);
 
-    /** 한 번 자는 시간. 자고 일어나면 하나를 배운다. */
-    public static final Duration SLEEP_DURATION = Duration.ofHours(6);
+    /**
+     * n번째 잠의 길이. 자고 일어나면 하나를 배운다.
+     *
+     * ★ 첫 잠이 짧아야 하는 이유 — 가입한 사람이 <b>그날 안에 한 바퀴를 끝까지</b> 봐야 한다.
+     *   6시간으로 두면 첫날에 해금을 한 번도 못 보고, 그러면 이 게임이 무엇인지 모른 채 떠난다.
+     *   첫 세션의 마찰은 그대로 이탈이다.
+     *
+     * ★ 뒤로 갈수록 벌어지는 것은 원조 다마고치의 골격이다(5분 → 1시간 → 하루).
+     *   조작을 익히는 구간과 기다리는 구간을 분리한다.
+     *
+     * ★ <b>마지막 값에서 고정</b>한다. 계속 늘리면 12번째 해금에 며칠이 걸려 사실상 멈춘다
+     *   (훈련 가격을 4에서 멈추는 것과 같은 이유).
+     *
+     * 근거 = `수치설계-3안-0824.md` 2026-08-25 확정본, 2026-09-03 상훈님 재확인.
+     */
+    private static final Duration[] SLEEP_DURATIONS = {
+            Duration.ofMinutes(5),
+            Duration.ofMinutes(15),
+            Duration.ofHours(1),
+            Duration.ofHours(3)
+    };
 
-    /** 모을 수 있는 움직임의 총 수. 다 모으면 완주다. */
-    public static final int TOTAL_MOTIONS = 13;
+    /** 지금 몇 개를 열었을 때, 다음 잠이 얼마나 긴가. */
+    public static Duration sleepDuration(int unlockedCount) {
+        int i = Math.min(Math.max(unlockedCount, 0), SLEEP_DURATIONS.length - 1);
+        return SLEEP_DURATIONS[i];
+    }
+
+    // ★ 모을 수 있는 움직임의 총 수는 여기 없다. 정본은 설정(app.zzal.motions)을 읽는
+    //   MotionCatalog.total() 하나다. 예전에는 여기 13이 박혀 있었는데, 목록에 2개만 넣어도
+    //   완주가 13개를 요구해 "다 모았다" 가 거짓말을 했다. 같은 사실의 정본은 하나여야 한다.
 
     /** 지금 몇 개를 열었을 때, 다음 하나에 훈련 몇 번이 드는가. */
     public static int priceOf(int unlockedCount) {
