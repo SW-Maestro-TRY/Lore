@@ -1674,6 +1674,23 @@ def main() -> int:
             print(f"[중단] {name} 을 찾지 못했습니다: {path}")
             return 1
 
+    # 하네스는 이 서버와 **같은 파이썬**으로 돈다(subprocess 가 sys.executable
+    # 을 쓴다). 그 파이썬에 하네스가 쓰는 꾸러미가 없으면, 서버는 멀쩡히 뜨고
+    # 요청도 받다가 **크레딧을 뗀 뒤에** 첫 호출에서 죽는다 — 실제로 겪었다
+    # (2026-09-03, pyyaml 없는 python3 로 띄워서 만들기가 통째로 실패).
+    # 그래서 켤 때 미리 확인하고, 어느 파이썬으로 켜야 하는지까지 알린다.
+    missing = [m for m in ("yaml", "PIL")
+               if __import__("importlib.util", fromlist=["util"]).find_spec(m) is None]
+    if missing:
+        venv = HERE.parent / ".venv" / "bin" / "python"
+        print(f"[경고] 지금 파이썬({sys.executable})에 {' · '.join(missing)} 가 없습니다.")
+        print("       이대로 두면 만들기가 크레딧만 떼고 첫 호출에서 실패합니다.")
+        if venv.exists():
+            print(f"       이렇게 켜세요:  {venv} serve.py --port {args.port}")
+        else:
+            print("       pip install pyyaml Pillow 로 설치한 뒤 다시 켜 주세요.")
+        print()
+
     restored = runner.restore()
     if restored:
         print(f"지난 작업 {restored}건을 다시 읽었습니다 (결과 화면은 그대로 열립니다).")
