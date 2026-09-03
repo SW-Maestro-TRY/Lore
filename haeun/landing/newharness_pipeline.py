@@ -87,16 +87,22 @@ NEW_HARNESS = HERE.parent / "new_harness"
 
 STATUS_QUEUED = "queued"
 STATUS_RUNNING = "running"
-STATUS_AWAITING_PICK = "awaiting_pick"
-STATUS_AWAITING_BOARD = "awaiting_board"
 STATUS_AWAITING_SHEET = "awaiting_sheet"
+STATUS_AWAITING_PICK = "awaiting_pick"
 STATUS_DONE = "done"
 STATUS_ERROR = "error"
-AWAITING = (STATUS_AWAITING_PICK, STATUS_AWAITING_BOARD, STATUS_AWAITING_SHEET)
+AWAITING = (STATUS_AWAITING_SHEET, STATUS_AWAITING_PICK)
 
 # 화면에 보여줄 단계. new_harness 내부 단계 이름과 같다 — 세부 스텝(예:
 # pipeline.py 의 look/seed/card...)까지는 안 쪼갠다, 신호가 그만큼 없다.
-STAGES = ("story", "board", "sheet", "pages")
+#
+# 2026-09-03부터 시트가 이야기보다 먼저다 — 메인 화면(index.html)이 "캐릭터
+# 시트를 먼저 확인하고, 그 다음 이야기 방향을 고른다" 순서로 보여주기로
+# 하면서 실행 순서도 그에 맞췄다(시트는 애초에 사진·설명만으로 그려지고
+# 고른 방향과 무관하므로, 방향을 고르기 전에 그려도 아무것도 안 달라진다).
+# "board"(방향 저장)는 검수 화면이 없어진 뒤로 순간에 끝나는 걸음이라
+# pages 바로 앞에 붙여 둔다 — _run_pick_then_pages_phase 참고.
+STAGES = ("story", "sheet", "board", "pages")
 STAGE_LABEL = {
     "story": "이야기 설계", "board": "방향 확정",
     "sheet": "캐릭터 시트", "pages": "페이지 그림",
@@ -195,11 +201,6 @@ class NHJob:
                 "elapsed": round((self.finished_at or time.time())
                                  - self.started_at, 1) if self.started_at else 0,
             }
-            # 그 검수 단계일 때만 읽는다 — 매 폴링(0.8초)마다 board.json 을
-            # 여는 것은 대부분 헛일이다(pipeline.py 의 story_preview/
-            # board_preview 와 같은 절약 규칙).
-            if self.status == STATUS_AWAITING_BOARD and self.run_id:
-                out["board_summary"] = board_summary(self.run_id)
             return out
 
     def save(self) -> None:
@@ -309,7 +310,14 @@ def _fail(job: NHJob, message: str) -> None:
 
 
 def _run_story_phase(job: NHJob) -> None:
-    """1단계 — 이야기 후보 4개. 사람이 고를 때까지 여기서 멈춘다."""
+    """1단계 — 이야기 후보 4개를 만들고, 곧바로 캐릭터 시트로 이어간다.
+
+    2026-09-03부터 여기서 멈추지 않는다 — 메인 화면(index.html)이 "캐릭터
+    시트를 먼저 확인하고, 그 다음 이야기 방향을 고른다" 순서로 바뀌면서,
+    사람이 볼 첫 자리는 방향 후보가 아니라 시트가 됐다. 후보 4개는 이미
+    받아 뒀다가(`job.directions`) 시트를 승인한 뒤 그대로 보여준다
+    (`NHRunner.approve_sheet`) — 다시 부를 필요가 없다.
+    """
     job.status = STATUS_RUNNING
     job.started_at = time.time()
     job.save()
@@ -334,10 +342,10 @@ def _run_story_phase(job: NHJob) -> None:
             return _fail(job, "이야기 후보를 하나도 못 읽었습니다 — story.md 를 확인하세요")
 
         job.directions = directions
-        job.status = STATUS_AWAITING_PICK
         job.save()
     except Exception as exc:                            # noqa: BLE001
-        _fail(job, f"{type(exc).__name__}: {exc}")
+        return _fail(job, f"{type(exc).__name__}: {exc}")
+    _run_sheet_phase(job)
 
 
 def _run_restory_phase(job: NHJob) -> None:
@@ -376,19 +384,19 @@ def _run_restory_phase(job: NHJob) -> None:
         _fail(job, f"{type(exc).__name__}: {exc}")
 
 
-def _run_board_phase(job: NHJob) -> None:
-    """2단계 — 고른 방향을 pick.json 에 남기고 바로 검수로 넘어간다.
+def _run_pick_then_pages_phase(job: NHJob) -> None:
+    """2단계 — 고른 방향을 pick.json 에 남기고, 멈추지 않고 그림까지 잇는다.
 
     2026-09-02부터 구체화(`--detail`)·콘티를 안 돈다 — 이어그리기 흐름은
     story 단계(방향 후보)가 이미 장면 목록·등장인물 외모까지 다 뽑아 두므로,
     여기서 더 만들 것이 없다. 호출 0회(`--pick-save`)라 이 단계는 사실상
-    바로 끝난다. 함수·상태 이름(board)은 옛 흐름과 그대로 맞춰 뒀다 — 화면
-    (newharness.html)이 `STATUS_AWAITING_BOARD`를 보고 검수 UI를 띄우는
-    지점이 바뀌면 프론트도 같이 고쳐야 해서다.
+    바로 끝난다.
 
-    "다시 만들기"도 이 함수를 그대로 다시 부르지만, 다시 뽑을 것이 없어
-    pick.json 을 같은 값으로 다시 쓸 뿐이다 — 이야기 자체를 바꾸려면
-    방향 선택(1단계)으로 돌아가야 한다.
+    2026-09-03부터 그 뒤에 멈추지도 않는다 — 예전에는 여기서 멈춰 콘티
+    검수(`STATUS_AWAITING_BOARD`)를 띄웠는데, 검수할 콘티 자체가 없어진
+    (위 문단) 마당에 빈 화면을 하나 더 거치게 할 이유가 없었다. 메인
+    화면이 보여주는 검수는 이제 시트·방향 둘뿐이다 — 방향을 고른 다음은
+    곧장 그림이다.
     """
     job.status = STATUS_RUNNING
     job.stage = "board"
@@ -400,10 +408,9 @@ def _run_board_phase(job: NHJob) -> None:
             return _fail(job, "취소되었습니다")
         if code != 0:
             return _fail(job, "방향을 저장하지 못했습니다 — 로그를 확인하세요")
-        job.status = STATUS_AWAITING_BOARD
-        job.save()
     except Exception as exc:                            # noqa: BLE001
-        _fail(job, f"{type(exc).__name__}: {exc}")
+        return _fail(job, f"{type(exc).__name__}: {exc}")
+    _run_pages_phase(job)
 
 
 def _run_sheet_phase(job: NHJob) -> None:
@@ -726,7 +733,14 @@ class NHRunner:
         if not any(d.get("n") == n for d in job.directions):
             raise ValueError(f"방향 {n} 이 없습니다")
         job.pick = n
-        self._requeue(job, _run_board_phase)
+        self._requeue(job, _run_pick_then_pages_phase)
+        return job
+
+    def retry_pick(self, job_id: str, note: str = "") -> NHJob:
+        """방향 고르기 화면의 "다시 만들기" — 이야기 후보 4개를 다시 뽑는다."""
+        job = self._require(job_id, STATUS_AWAITING_PICK)
+        job.note = note or ""
+        self._requeue(job, _run_restory_phase)
         return job
 
     def _require(self, job_id: str, status: str) -> NHJob:
@@ -748,22 +762,17 @@ class NHRunner:
         job.save()
         self._enqueue(job.id, lambda: fn(job))
 
-    def approve_board(self, job_id: str) -> NHJob:
-        job = self._require(job_id, STATUS_AWAITING_BOARD)
-        self._requeue(job, _run_sheet_phase)
-        return job
-
-    def retry_board(self, job_id: str, note: str = "") -> NHJob:
-        # 다시 만들 게 없어진 board 단계 대신, 이야기 후보(1단계)를 다시
-        # 만든다 — _run_restory_phase 의 docstring 참고.
-        job = self._require(job_id, STATUS_AWAITING_BOARD)
-        job.note = note or ""
-        self._requeue(job, _run_restory_phase)
-        return job
-
     def approve_sheet(self, job_id: str) -> NHJob:
+        """시트 확인 — 다음은 그림이 아니라 이야기 방향 고르기다.
+
+        후보 4개는 story 단계에서 이미 받아 뒀다(`job.directions`) — 여기서
+        다시 부를 것이 없으므로 줄을 서지 않고 그 자리에서 바로 다음 화면
+        (방향 고르기)으로 넘긴다.
+        """
         job = self._require(job_id, STATUS_AWAITING_SHEET)
-        self._requeue(job, _run_pages_phase)
+        job.status = STATUS_AWAITING_PICK
+        job.stage = "story"
+        job.save()
         return job
 
     def retry_sheet(self, job_id: str, note: str = "") -> NHJob:

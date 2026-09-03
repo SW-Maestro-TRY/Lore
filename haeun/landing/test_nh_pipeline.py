@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 import tempfile
@@ -153,8 +154,8 @@ def test_pick_guards_against_double_queue() -> None:
             calls.append(1)
             gate.wait(timeout=5)
 
-        orig = NP._run_board_phase
-        NP._run_board_phase = slow_board
+        orig = NP._run_pick_then_pages_phase
+        NP._run_pick_then_pages_phase = slow_board
         try:
             runner.pick(job.id, 1)
             ok("두 번째 pick 은 막힌다", _raises_value_error(lambda: runner.pick(job.id, 1)))
@@ -165,9 +166,76 @@ def test_pick_guards_against_double_queue() -> None:
                 time.sleep(0.01)
             check("실제로는 한 번만 돌았다", len(calls), 1)
         finally:
-            NP._run_board_phase = orig
+            NP._run_pick_then_pages_phase = orig
     finally:
         shutil.rmtree(root, ignore_errors=True)
+
+
+def test_review_order() -> None:
+    """검수 순서 — **시트가 먼저, 이야기 고르기가 나중이다.**
+
+    run.py 는 안 부른다(NHJob._run 을 가짜로 갈아 끼운다) — 각 단계가 남겨야
+    할 파일만 흉내 내고, 상태가 어떤 순서로 넘어가는지만 본다. 호출이 없으니
+    돈도 안 나간다.
+    """
+    root = Path(tempfile.mkdtemp(prefix="nh-test-"))
+    orig_new_harness, orig_run, orig_stitch = NP.NEW_HARNESS, NP.NHJob._run, NP.NHJob._stitch
+    try:
+        runner = make_runner(root)
+        NP.NEW_HARNESS = root / "new_harness"
+        run_id = "20260903T000000-test"
+        run_dir = NP.NEW_HARNESS / "runs" / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        directions = [{"n": i, "title": f"방향 {i}", "genre": "로맨스 판타지",
+                       "plot": "줄거리", "scenes": ["장면1"]} for i in range(1, 5)]
+
+        seen = []
+
+        def fake_run(self, args, on_line):
+            seen.append(" ".join(args))
+            if "--character" in args:
+                (run_dir / "directions.json").write_text(
+                    json.dumps(directions, ensure_ascii=False), encoding="utf-8")
+                self.add_log(f"run: {run_dir}")
+            elif "--sheet" in args:
+                (run_dir / "sheet.png").write_bytes(b"fake")
+            elif "--pick-save" in args:
+                (run_dir / "pick.json").write_text('{"n": 2}', encoding="utf-8")
+            return 0
+
+        NP.NHJob._run = fake_run
+        NP.NHJob._stitch = lambda self: (True, "")
+
+        job = runner.create({"name": "하은", "style": "webtoon"}, [])
+        _settle(runner)
+
+        check("첫 멈춤은 시트 확인이다", job.status, NP.STATUS_AWAITING_SHEET)
+        check("이야기 -> 시트 순서로 불렀다",
+              [a.split()[0] for a in seen], ["--character", "--run-id"])
+        check("후보 4개는 고르기 전에 이미 받아 뒀다", len(job.directions), 4)
+        ok("시트를 확인할 때는 아직 방향을 안 골랐다",
+           not (run_dir / "pick.json").exists())
+
+        runner.approve_sheet(job.id)
+        check("시트 승인 다음은 이야기 고르기", job.status, NP.STATUS_AWAITING_PICK)
+        check("승인만으로는 아무것도 다시 안 부른다", len(seen), 2)
+
+        runner.pick(job.id, 2)
+        _settle(runner)
+        check("방향을 고른 다음은 완성까지 안 멈춘다", job.status, NP.STATUS_DONE)
+        ok("마지막에 부른 것은 페이지 그림이다", "--detail-pages" in seen[-1])
+        check("화면에 보여줄 단계도 시트가 먼저다",
+              job.snapshot()["stages"], ["story", "sheet", "board", "pages"])
+    finally:
+        NP.NEW_HARNESS, NP.NHJob._run, NP.NHJob._stitch = \
+            orig_new_harness, orig_run, orig_stitch
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def _settle(runner: NP.NHRunner, timeout: float = 5.0) -> None:
+    end = time.time() + timeout
+    while runner._worker is not None and time.time() < end:
+        time.sleep(0.01)
 
 
 def _raises_value_error(fn) -> bool:
@@ -180,7 +248,7 @@ def _raises_value_error(fn) -> bool:
 
 def main() -> int:
     for fn in (test_serial_execution, test_position, test_cancel_while_queued,
-               test_pick_guards_against_double_queue):
+               test_pick_guards_against_double_queue, test_review_order):
         fn()
     if fails:
         print("FAILED:")
