@@ -60,17 +60,21 @@ export interface PetDetail {
   hatchStartedAt: string | null;
   hatchedAt: string | null;
 
-  // ── 수치. ALIVE 일 때만 의미가 있다(서버에서 int 라 값 자체는 항상 온다) ──
-  fullness: number;
-  happiness: number;
-  trash: number;
-  food: number;
+  // ── 수치. ALIVE 일 때만 채워진다 ──
+  //
+  // ★ nullable 인 것이 실수가 아니다. 서버는 부화 중에 수치를 **비워서** 보낸다 —
+  //   0 을 채워 보내면 알이 깨기도 전에 화면이 "포만감 0" 을 굶주림으로 그리기 때문이다
+  //   (PetResponses.Detail 의 같은 자리 주석). 화면은 phase 를 먼저 보고 이 값을 읽는다.
+  fullness: number | null;
+  happiness: number | null;
+  trash: number | null;
+  food: number | null;
 
   /** 다음 밥이 찰 때까지(초). 재고가 가득이거나 ALIVE 가 아니면 null. */
   foodInSeconds: number | null;
 
-  /** 지금까지 배운 움직임 수. */
-  unlockedCount: number;
+  /** 지금까지 배운 움직임 수. ALIVE 일 때만. */
+  unlockedCount: number | null;
   /** 다 모으면 몇 개인가(13). ALIVE 일 때만. */
   totalMotions: number | null;
 
@@ -93,6 +97,18 @@ export interface PetDetail {
   canSleep: boolean | null;
   /** 다 모았는가. */
   complete: boolean | null;
+
+  /**
+   * 첫날 순서(튜토리얼)를 끝냈는가.
+   *
+   * ★ 이 값이 false 인 동안에는 **수치가 아예 줄지 않는다**(서버가 시계를 멈춰 둔다).
+   *   안내를 따라가는 사이에 행복이 줄면 '쓰다듬 → 훈련 2회분' 이라는 첫날 순서의 숫자가
+   *   어긋나기 때문이다. 그래서 화면이 완료를 알려 주기 전까지는 며칠이 지나도 그대로다.
+   */
+  tutorialDone: boolean | null;
+
+  /** 이 아이의 그림이 사는 곳. `{CDN}/{imageBase}/idle.webp` 처럼 조립한다. 부화 전에는 null. */
+  imageBase: string | null;
 
   /** 이번 깨우기에서 무엇을 배웠나. 깨우기 응답에만 담긴다. */
   learned: Learned | null;
@@ -137,6 +153,16 @@ export function listPets(signal?: AbortSignal): Promise<PetDetail[]> {
 /** 펫 상태. 부화 중에는 이걸 몇 초마다 부른다(ready 가 true 가 되면 완료). */
 export function getPet(petId: number, signal?: AbortSignal): Promise<PetDetail> {
   return request<PetDetail>(`${BASE}/${petId}`, { signal });
+}
+
+/**
+ * 첫날 순서를 끝냈다고 알린다. **이 순간부터 수치가 흐르기 시작한다.**
+ *
+ * 두 번 불러도 안전하다(이미 끝난 상태면 에러 대신 지금 상태를 그대로 준다). 그래서
+ * 화면은 "이미 보냈던가?" 를 기억하지 않아도 되고, 새로고침 뒤 다시 보내도 문제가 없다.
+ */
+export function tutorialDone(petId: number): Promise<PetDetail> {
+  return request<PetDetail>(`${BASE}/${petId}/tutorial-done`, { method: 'POST' });
 }
 
 /**

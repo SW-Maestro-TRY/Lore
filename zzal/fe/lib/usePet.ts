@@ -19,6 +19,7 @@ import {
   getPet,
   sleep as sleepApi,
   train as trainApi,
+  tutorialDone as tutorialDoneApi,
   wake as wakeApi,
   type CareAction,
   type Learned,
@@ -68,6 +69,11 @@ export interface UsePetResult {
   train: () => Promise<PetDetail | null>;
   sleep: () => Promise<PetDetail | null>;
   wake: () => Promise<PetDetail | null>;
+  /**
+   * 첫날 순서를 끝냈다고 알린다. 응답이 곧 최신 상태라 다른 행동과 같은 길을 지나간다.
+   * 두 번 불러도 안전하므로 화면이 중복을 막으려 애쓰지 않아도 된다.
+   */
+  tutorialDone: () => Promise<PetDetail | null>;
 }
 
 /**
@@ -142,6 +148,7 @@ export function usePet(petId: number | null): UsePetResult {
   );
   const train = useCallback(() => act(trainApi), [act]);
   const sleep = useCallback(() => act(sleepApi), [act]);
+  const tutorialDone = useCallback(() => act(tutorialDoneApi), [act]);
 
   const wake = useCallback(async () => {
     const next = await act(wakeApi);
@@ -248,5 +255,6 @@ export function usePet(petId: number | null): UsePetResult {
     train,
     sleep,
     wake,
+    tutorialDone,
   };
 }

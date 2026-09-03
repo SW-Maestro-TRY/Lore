@@ -96,9 +96,19 @@ public class AuthService {
         return issueTokens(user, userAgent, now);
     }
 
-    /** access 재발급. refresh 는 회전되어 새 것으로 바뀐다. */
+    /**
+     * access 재발급. refresh 는 회전되어 새 것으로 바뀐다.
+     *
+     * ★ 쿠키가 아예 없는 경우를 먼저 막는다 — 비로그인 상태에서 화면이 401 을 받고
+     *   갱신을 시도하면 여기로 들어오는데, 그대로 두면 해시 계산에서 NPE 가 나
+     *   <b>401 이어야 할 것이 500</b> 이 된다. 그러면 화면은 "로그인이 풀렸다" 와
+     *   "서버가 터졌다" 를 구분할 수 없다.
+     */
     @Transactional
     public Tokens refresh(String rawRefreshToken, String userAgent, Instant now) {
+        if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
         RefreshTokenService.Rotated rotated = refreshTokenService.rotate(rawRefreshToken, userAgent, now);
         return new Tokens(
                 jwtProvider.createAccessToken(rotated.user().getId(), now),

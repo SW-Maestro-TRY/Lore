@@ -79,6 +79,16 @@ public final class PetResponses {
             @Schema(description = "다 모았는가") Boolean complete,
 
             @Schema(description = """
+                    이 아이의 그림이 사는 곳. 화면은 여기에 `/idle.webp` `/eat.webp` 처럼 붙여 쓴다
+                    (idle · eat · hungry · clean · happy · sad · pet · train 여덟 가지).
+
+                    ★ 전체 주소가 아니라 뒷부분만 준다 — 앞에 붙는 CDN 주소는 배포처마다 다르고
+                    (dev · 운영 · 로컬), 서버가 그것까지 정하면 화면이 어느 배포에서 도는지를
+                    서버가 알아야 한다. 화면이 자기 CDN 을 앞에 붙인다.""",
+                    example = "images/zzal/pets/17")
+            String imageBase,
+
+            @Schema(description = """
                     첫날 순서(튜토리얼)를 끝냈는가. false 면 화면이 안내를 띄운다.
                     **끝내기 전에는 수치가 줄지 않는다** — 안내를 따라가는 사이에 값이 어긋나면
                     첫날 순서가 자기 규칙을 못 보여주기 때문이다""")
@@ -128,6 +138,8 @@ public final class PetResponses {
                     alive ? pet.canWake(now) : null,
                     alive ? (pet.isTrainPaid() && !pet.isTraining() && !pet.isSleeping()) : null,
                     alive ? pet.isComplete(totalMotions) : null,
+                    // 다 구워지기 전에는 그림이 아직 없다. 경로를 주면 화면이 빈 그림을 그린다.
+                    alive ? "images/zzal/pets/%d".formatted(pet.getId()) : null,
                     alive ? pet.isTutorialDone() : null,
                     outcome == null ? null : new Learned(
                             outcome.learned(), outcome.name(), outcome.message()));
