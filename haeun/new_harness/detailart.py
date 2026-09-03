@@ -588,9 +588,14 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             if on_page:
                 on_page(meta)
             log(f"  -> {out}  (${meta['cost'].get('total', 0):.4f})")
-        # 다음 장이 어디서부터 이어 그릴지. 검수를 못 했으면 비운다 —
-        # 앞 장 것을 그대로 물려주면 두 장 전 이야기를 가리키게 된다.
-        resume_from = (last or {}).get("next_from", "") if last else ""
+        # 다음 장이 어디서부터 이어 그릴지. **통과한 장의 것만 물려준다.**
+        # 검수를 못 했거나(판정 없음) 다시 그릴 횟수를 다 쓰고 어긋난 채로
+        # 남았으면 비운다 — 어긋난 그림의 "여기서부터" 를 그대로 넘기면 그
+        # 다음 장도 거기에 맞춰 그려져서, 한 장의 실수가 남은 화 전체로
+        # 번진다(실측: 뒤 장면으로 건너뛴 그림은 "5번 장면의 마지막에서
+        # 이어 그리면 된다" 를 돌려준다). 비우면 다음 장은 원래 제 장면
+        # 지시로 돌아간다.
+        resume_from = last["next_from"] if (last and last["verdict"] == "통과") else ""
 
     if dry_run:
         log(f"[이어그리기] 프롬프트만 썼습니다 -> {dest}")
@@ -747,8 +752,14 @@ def main(argv=None) -> int:
                      review=False if args.no_review else None,
                      on_page=lambda meta: record(run_dir, meta))
         return 0
-    draw(RUNS_DIR / args.run_id, dry_run=args.dry_run, only=args.only or None,
-         allow_no_sheet=args.no_sheet, episode_context=args.episode_context)
+    # on_page 를 안 넘기면 이 스크립트로 그린 판은 meta.json 에 한 줄도 안
+    # 남는다 — 실제로 그렇게 그려져 png 만 있고 비용 기록이 통째로 빠진 run
+    # 이 있다(20260831T121734-c17371 · 20260831T194100-c6c00b). 같은 그림을
+    # 어느 명령으로 그렸느냐에 따라 정산이 달라지면 안 된다.
+    run_dir = RUNS_DIR / args.run_id
+    draw(run_dir, dry_run=args.dry_run, only=args.only or None,
+         allow_no_sheet=args.no_sheet, episode_context=args.episode_context,
+         on_page=lambda meta: record(run_dir, meta))
     return 0
 
 

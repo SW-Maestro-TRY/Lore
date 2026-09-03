@@ -1537,6 +1537,31 @@ def test_page_review() -> None:
         ok("다음 장에 넘어간다", "2장 끝에서" in drawn[2])
         check("다시 그린 뒤의 자리가 넘어간다",
               [nf for pg, _, nf in seen if pg == 4], ["3장 끝에서"])
+
+        # 어긋난 채로 남은 장의 자리는 안 물려준다 — 한 장의 실수가 남은
+        # 화 전체로 번지지 않게.
+        seen.clear(); drawn.clear()
+        PC.review_page = lambda rd, page_no, **kw: (
+            seen.append((page_no, kw["scene_no"], kw.get("next_from", ""))) or
+            ({"verdict": "재생성", "flow": "건너뜀", "drawn": "", "why": "",
+              "next_from": f"{page_no}장 끝에서", "issues": [], "redraw": ""},
+             {"stage": "PAGE_REVIEW", "cost": {"total": 0.0}}))
+        run3 = root / "run3"
+        run3.mkdir()
+        R.write_json(run3 / "directions.json", [direction])
+        R.write_json(run3 / "pick.json", {"n": 1})
+        R.write_json(run3 / "input.json", {"name": "이하은"})
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            imagegen.paint = fake_paint
+            imagegen.backend_for = lambda stage: ("openai", "test", "high")
+            detailart.draw_continue(run3, allow_no_sheet=True, review=True)
+        finally:
+            imagegen.paint, PC.review_page = keep_paint, keep_review
+            imagegen.backend_for = keep_backend
+            detailart.log = quiet
+        check("계속 어긋나면 자리를 안 물려준다",
+              [nf for pg, _, nf in seen if pg == 3], ["", ""])
     finally:
         shutil.rmtree(root, ignore_errors=True)
 

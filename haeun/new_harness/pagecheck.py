@@ -81,6 +81,18 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def record(run_dir: Path, call_meta: dict) -> None:
+    """호출 하나를 run.py 의 meta.json 에 남긴다 — 그림 호출과 같은 자리.
+
+    검수도 돈이 나가는 호출이다. 단독으로 돌렸을 때만 기록이 빠지면, 나중에
+    이 run 에 얼마가 들었는지가 어디서 돌렸느냐에 따라 달라진다.
+    """
+    path = run_dir / "meta.json"
+    meta = read_json(path) or {"run_id": run_dir.name, "calls": []}
+    meta["calls"].append(call_meta)
+    write_json(path, meta)
+
+
 def _text(x) -> str:
     return x.strip() if isinstance(x, str) else ""
 
@@ -408,7 +420,8 @@ def main(argv=None) -> int:
     run_dir = RUNS_DIR / args.run_id
     if not run_dir.exists():
         raise SystemExit(f"run 이 없습니다: {run_dir}")
-    review_run(run_dir, only=args.page or None, dry_run=args.dry_run)
+    review_run(run_dir, only=args.page or None, dry_run=args.dry_run,
+               on_call=lambda meta: record(run_dir, meta))
     return 0
 
 

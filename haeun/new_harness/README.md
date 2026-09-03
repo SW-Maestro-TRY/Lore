@@ -68,7 +68,7 @@ python3 run.py --name ... --photo a.png --all --pick 2   # 한 번에
 | `sheet_spec_prompt.txt` `sheet_spec.json` | 시트 사양 |
 | `sheet_prompt.txt` `sheet.png` | 시트 이미지 프롬프트와 결과 |
 | `pages/pageNN.review.json` | 그 장이 앞 장에서 이어지는지 (그린 뒤 검수) |
-| `meta.json` | 호출마다 어느 모델이 얼마나 썼는지 |
+| `meta.json` | 호출마다 — 모델 · 언제(`at`) · 몇 초(`seconds`) · 토큰 · USD · 원화 |
 
 **콘티는 JSON 으로 받는다.** 이야기 후보(`story.md`)만 마크다운이다 — 사람이
 읽고 고르는 것이라 형식이 느슨해도 되고, 그 프롬프트의 형식·최종 확인 목록이
@@ -77,6 +77,34 @@ python3 run.py --name ... --photo a.png --all --pick 2   # 한 번에
 
 응답 원문은 파싱 **전에** 먼저 저장한다(`board_raw.txt`). 파싱이 죽어도
 그 호출에 쓴 돈이 사라지지 않는다.
+
+## 호출 기록 — 무엇이 남는가
+
+호출 하나가 끝날 때마다 `meta.json` 의 `calls[]` 에 한 줄이 쌓인다. **실패한
+호출도 같은 자리에 남는다** — 중간에 죽어도 이미 나간 돈과 그 사유가 남게
+하려는 것이다.
+
+| 칸 | 글 호출 | 그림 호출 |
+| --- | --- | --- |
+| `stage` `provider` `model` | ✓ | ✓ (+ `backend` `quality`) |
+| `at` · `seconds` | ✓ | ✓ |
+| 토큰 | `usage` (입력·출력·캐시) | `cost.tokens_*` (글·그림 나눠서) |
+| 비용 | `cost.total` · `total_krw` | 〃 (+ `cost_basis`) |
+| 결과 | `stop` | `bytes` `output_path` `refs` |
+
+**시간을 박아 두는 이유는 나중에 잴 방법이 없어서다.** 한 편에 몇 분이
+걸리는지, 어느 단계가 오래 끄는지는 로그로 스쳐 가면 run 이 끝난 뒤에
+알아낼 수 없다. 비용도 같은 이유로 호출 시점 환율까지 **박아서** 남긴다
+(나중에 다시 계산하지 않는다).
+
+보낸 것과 받은 것 **원문**은 `meta.json` 이 아니라 파일로 남는다 —
+`story_prompt.txt` · `board_raw.txt` · `pages/pageNN.txt` ·
+`pages/pageNN.review_prompt.txt` · `pages/pageNN.review.txt`. 받은 것은
+파싱 **전에** 먼저 쓴다.
+
+**어느 명령으로 돌렸든 같은 자리에 남는다.** `run.py` 든 `detailart.py` 든
+`pagecheck.py` 든 마찬가지다 — 단독 실행만 기록이 빠지면 같은 그림인데
+정산이 달라진다.
 
 ## 모델 — 단계마다 다르게
 
@@ -358,6 +386,11 @@ python3 run.py --run-id <id> --page 3     # 3페이지만 다시
 **검수가 다음 장에 넘기는 것이 하나 있다** — `next_from`("다음은 여기서부터").
 한 장면이 두 장에 걸치는 것을 허용한 순간부터, 다음 호출은 앞 장이 이야기를
 어디까지 밀고 갔는지 그림만 보고는 알 수 없다. 그 빈칸을 이 한 줄로 메운다.
+
+**통과한 장의 것만 넘긴다.** 어긋난 채로 남은 장(다시 그릴 횟수를 다 씀)의
+`next_from` 은 버린다 — 뒤 장면으로 건너뛴 그림은 "그 뒤에서 이어 그리면
+된다" 를 돌려주기 때문에, 그대로 넘기면 한 장의 실수가 남은 화 전체로
+번진다. 비우면 다음 장은 원래 제 장면 지시로 돌아간다.
 
 ```
 python3 run.py --run-id <id> --detail-pages                 # 검수 켜짐 (기본)
