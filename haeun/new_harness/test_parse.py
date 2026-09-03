@@ -1378,9 +1378,197 @@ def test_review_and_fix() -> None:
     check("빈 패치", R.apply_fix(detail, {"scenes": []})[1], [])
 
 
+def test_page_review() -> None:
+    """그린 뒤 검수 — 판정은 모델 말이 아니라 코드가 센다."""
+    import os
+    import shutil
+    import tempfile
+
+    import detailart
+    import pagecheck as PC
+
+    # --- 판정 -------------------------------------------------------------
+    clean = PC.parse(json.dumps({
+        "drawn": "책상 앞에 앉아 있다", "covers": "2번 장면 앞부분",
+        "scenes": [2], "flow": "이어짐", "why": "앞 장에서 자리를 옮겼다",
+        "next_from": "책을 펴는 순간부터", "issues": [], "redraw": ""},
+        ensure_ascii=False))
+    check("문제가 없으면 통과", clean["verdict"], "통과")
+    check("다음 자리를 넘겨준다", clean["next_from"], "책을 펴는 순간부터")
+
+    hard = PC.parse(json.dumps({"flow": "이어짐", "issues": [
+        {"kind": "인물", "severity": "critical", "what": "다른 사람이 되었다"},
+        {"kind": "공간", "severity": "minor", "what": "창이 하나 늘었다"}]},
+        ensure_ascii=False))
+    check("critical 이면 다시 그린다", hard["verdict"], "재생성")
+    check("무거운 것부터", [i["severity"] for i in hard["issues"]],
+          ["critical", "minor"])
+
+    # 흐름만으로도 잡는다 — 무게를 낮게 적어 놓고 넘어가는 것을 막는다
+    jump = PC.parse('{"flow": "건너뜀", "issues": [{"severity": "minor", "what": "x"}]}')
+    check("건너뛰면 무게와 상관없이 재생성", jump["verdict"], "재생성")
+    same = PC.parse('{"flow": "제자리", "issues": []}')
+    check("제자리도 재생성", same["verdict"], "재생성")
+    odd = PC.parse('{"flow": "이어짐", "issues": [{"severity": "심각", "what": "x"}]}')
+    check("모르는 무게는 major", odd["issues"][0]["severity"], "major")
+    check("major 하나로는 안 다시 그린다", odd["verdict"], "통과")
+
+    # --- 프롬프트 ---------------------------------------------------------
+    direction = {"n": 1, "title": "제목", "genre": "판타지", "plot": "줄거리다",
+                 "scenes": ["첫 장면이다", "둘째 장면이다", "셋째 장면이다"],
+                 "cast": [{"name": "관리인", "appearance": "50대, 회색 작업복"}]}
+    text = PC.build_prompt(direction, scene_no=2, char={"name": "이하은", "description": "대학생"},
+                           cast=direction["cast"], has_prev=True,
+                           next_from="문을 여는 순간부터")
+    ok("전체 이야기를 준다", "셋째 장면이다" in text)
+    ok("지금 자리를 짚는다", "← 이 장을 그릴 때 준 장면" in text)
+    ok("앞은 그려진 자리로", "(앞 장들에서 이미 그려진 자리)" in text)
+    ok("뒤는 안 그려진 자리로", "(아직 안 그려진 자리)" in text)
+    ok("앞 장 검수가 적어 둔 것을 준다", "문을 여는 순간부터" in text)
+    ok("조연도 준다", "관리인 — 50대, 회색 작업복" in text)
+    ok("연출은 안 본다고 말한다", "연출." in text)
+
+    first = PC.build_prompt(direction, scene_no=1, has_prev=False)
+    ok("첫 장은 직전 그림이 없다고 말한다", "이 화의 첫 장이다" in first)
+    cover = PC.build_prompt(direction, scene_no=1, has_prev=True, prev_is_cover=True)
+    ok("표지는 이어질 필요가 없다고 말한다", "표지다" in cover)
+
+    note = PC.redraw_block(hard)
+    ok("지적을 그대로 넘긴다", "다른 사람이 되었다" in note)
+    ok("가벼운 것까지 넘기지는 않는다", "창이 하나 늘었다" not in note)
+    ok("연출은 건드리지 않는다", "연출은 그대로 네가 정한다" in note)
+
+    # --- 켜고 끄기 --------------------------------------------------------
+    keep = {k: os.environ.get(k) for k in ("NH_PAGE_REVIEW", "NH_PAGE_REVIEW_RETRY")}
+    try:
+        os.environ.pop("NH_PAGE_REVIEW", None)
+        os.environ.pop("NH_PAGE_REVIEW_RETRY", None)
+        ok("기본은 켜짐", PC.enabled())
+        check("기본 재생성 횟수", PC.max_redraw(), 1)
+        os.environ["NH_PAGE_REVIEW"] = "0"
+        ok("0 이면 꺼진다", not PC.enabled())
+        os.environ["NH_PAGE_REVIEW_RETRY"] = "0"
+        check("0 이면 검수만 하고 안 다시 그린다", PC.max_redraw(), 0)
+        os.environ["NH_PAGE_REVIEW_RETRY"] = "많이"
+        check("못 읽는 값은 기본으로", PC.max_redraw(), 1)
+    finally:
+        for k, v in keep.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # --- 이어그리기 프롬프트 ----------------------------------------------
+    plain = detailart.build_continue_prompt(direction, None, None, [], scene_no=2,
+                                            has_prev=True)
+    ok("장면을 한 장에 못 박지 않는다", "이 장면만 그린다" not in plain)
+    ok("순서는 못 박는다", "순서는 건너뛰지 않는다" in plain)
+    ok("앞 장 자리는 안 주면 안 붙는다", "여기서부터 이어 그린다" not in plain)
+    resumed = detailart.build_continue_prompt(direction, None, None, [], scene_no=2,
+                                              has_prev=True,
+                                              resume_from="문을 여는 순간부터")
+    ok("주면 붙는다", "여기서부터 이어 그린다" in resumed)
+
+    # --- dry-run 은 호출도 검수도 안 한다 ---------------------------------
+    root = Path(tempfile.mkdtemp(prefix="nh-review-"))
+    try:
+        run_dir = root / "run"
+        run_dir.mkdir()
+        R.write_json(run_dir / "directions.json", [direction])
+        R.write_json(run_dir / "pick.json", {"n": 1})
+        R.write_json(run_dir / "input.json", {"name": "이하은"})
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            made = detailart.draw_continue(run_dir, dry_run=True)
+        finally:
+            detailart.log = quiet
+        check("dry-run 은 아무것도 안 그린다", made, [])
+        check("표지 1 + 장면 3 = 4장",
+              sorted(p.name for p in (run_dir / "pages").glob("*.txt")),
+              ["page01.txt", "page02.txt", "page03.txt", "page04.txt"])
+        ok("검수 결과가 안 생긴다",
+           not list((run_dir / "pages").glob("*.review.json")))
+
+        # --- 다시 그리기 — 호출은 가짜로 두고 **되돌리는 흐름만** 본다
+        import imagegen
+        drawn, seen = [], []
+
+        def fake_paint(stage, prompt, out, refs=None, kind=None):
+            drawn.append(prompt)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(b"png")
+            return {"cost": {"total": 0.0}}
+
+        def fake_review(rd, page_no, **kw):
+            seen.append((page_no, kw["scene_no"], kw.get("next_from", "")))
+            bad = page_no == 3 and len([1 for p, _, _ in seen if p == 3]) == 1
+            got = {"verdict": "재생성" if bad else "통과", "flow": "건너뜀" if bad else "이어짐",
+                   "drawn": "뒤 이야기를 그렸다", "why": "결말이 보인다",
+                   "next_from": f"{page_no}장 끝에서", "issues": [], "redraw": "앞으로 돌아와라"}
+            return got, {"stage": "PAGE_REVIEW", "cost": {"total": 0.0}}
+
+        run2 = root / "run2"
+        run2.mkdir()
+        R.write_json(run2 / "directions.json", [direction])
+        R.write_json(run2 / "pick.json", {"n": 1})
+        R.write_json(run2 / "input.json", {"name": "이하은"})
+        keep_paint, keep_review = imagegen.paint, PC.review_page
+        keep_backend = imagegen.backend_for
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            imagegen.paint = fake_paint
+            imagegen.backend_for = lambda stage: ("openai", "test", "high")
+            PC.review_page = fake_review
+            made = detailart.draw_continue(run2, allow_no_sheet=True, review=True)
+        finally:
+            imagegen.paint, PC.review_page = keep_paint, keep_review
+            imagegen.backend_for = keep_backend
+            detailart.log = quiet
+
+        check("표지 1 + 장면 3 + 다시 그린 1 = 5번 그렸다", len(drawn), 5)
+        # 표지 · 2 · 3 · 3(다시) · 4 순서로 쌓인다 — 다시 그린 것도 기록에 남는다
+        check("다시 그린 장이 기록에 남는다", [m.get("redraw") for m in made],
+              [None, None, None, 1, None])
+        check("어느 장을 다시 그렸는지", [m.get("page") for m in made], [1, 2, 3, 3, 4])
+        ok("다시 그릴 때 지적을 붙인다", "앞으로 돌아와라" in drawn[2 + 1])
+        check("3페이지는 두 번 검수한다", len([1 for p, _, _ in seen if p == 3]), 2)
+        check("표지는 검수하지 않는다", [p for p, _, _ in seen if p == 1], [])
+        # 앞 장 검수가 적어 준 자리가 다음 장 프롬프트로 넘어간다
+        ok("다음 장에 넘어간다", "2장 끝에서" in drawn[2])
+        check("다시 그린 뒤의 자리가 넘어간다",
+              [nf for pg, _, nf in seen if pg == 4], ["3장 끝에서"])
+
+        # 어긋난 채로 남은 장의 자리는 안 물려준다 — 한 장의 실수가 남은
+        # 화 전체로 번지지 않게.
+        seen.clear(); drawn.clear()
+        PC.review_page = lambda rd, page_no, **kw: (
+            seen.append((page_no, kw["scene_no"], kw.get("next_from", ""))) or
+            ({"verdict": "재생성", "flow": "건너뜀", "drawn": "", "why": "",
+              "next_from": f"{page_no}장 끝에서", "issues": [], "redraw": ""},
+             {"stage": "PAGE_REVIEW", "cost": {"total": 0.0}}))
+        run3 = root / "run3"
+        run3.mkdir()
+        R.write_json(run3 / "directions.json", [direction])
+        R.write_json(run3 / "pick.json", {"n": 1})
+        R.write_json(run3 / "input.json", {"name": "이하은"})
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            imagegen.paint = fake_paint
+            imagegen.backend_for = lambda stage: ("openai", "test", "high")
+            detailart.draw_continue(run3, allow_no_sheet=True, review=True)
+        finally:
+            imagegen.paint, PC.review_page = keep_paint, keep_review
+            imagegen.backend_for = keep_backend
+            detailart.log = quiet
+        check("계속 어긋나면 자리를 안 물려준다",
+              [nf for pg, _, nf in seen if pg == 3], ["", ""])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main() -> int:
     for fn in (test_directions, test_detail, test_detail_events,
-               test_detail_pages, test_review_and_fix,
+               test_detail_pages, test_review_and_fix, test_page_review,
                test_board, test_gate_board, test_directing_warnings,
                test_gate_readable, test_spec,
                test_sheet_prompt, test_input, test_pages, test_cut_weight,

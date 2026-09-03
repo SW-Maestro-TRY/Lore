@@ -13,6 +13,8 @@ story.py 는 한 글자도 안 고친다(harness-is-final). 대신 그 쪽 크�
 
 from __future__ import annotations
 
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import cost
@@ -100,11 +102,18 @@ def paint(stage: str, prompt: str, out_path: Path, refs=None,
     refs = [Path(r) for r in (refs or []) if Path(r).exists()]
 
     painter, label = story.make_sheet_painter(provider, model, quality, refs)
+    started = time.monotonic()
+    at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
     data, meta = painter(prompt, kind)
+    seconds = round(time.monotonic() - started, 2)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(data)
     cost_info = cost.cost_fields(provider, model, quality, (meta or {}).get("usage_dict"))
+    # `at`·`seconds` — 그림 한 장에 몇 초가 걸리는지는 재시도·모델 교체를
+    # 판단할 때 비용만큼 자주 쓰는 값인데, 남기지 않으면 run 이 끝난 뒤에는
+    # 알아낼 방법이 없다. `chars` 는 이 호출에 실제로 들어간 프롬프트 길이다.
     return {"stage": stage, "provider": provider, "model": model, "backend": label,
-            "quality": quality, "bytes": len(data),
-            "refs": [r.name for r in refs], "meta": meta or {}, "cost": cost_info,
+            "quality": quality, "bytes": len(data), "at": at, "seconds": seconds,
+            "chars": len(prompt), "refs": [r.name for r in refs],
+            "meta": meta or {}, "cost": cost_info,
             "output_path": str(out_path)}
