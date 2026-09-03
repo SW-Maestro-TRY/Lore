@@ -2,6 +2,7 @@ package com.lore.zzal.pet.dto;
 
 import com.lore.zzal.generation.GenStepRecord;
 import com.lore.zzal.pet.ZzalPet;
+import com.lore.zzal.pet.ZzalRules;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
@@ -54,10 +55,30 @@ public final class PetResponses {
             Integer happiness,
             Integer trash,
             Integer food,
-            Integer unlockedCount) {
+
+            @Schema(description = "다음 밥이 찰 때까지(초). 재고가 가득이면 null")
+            Long foodInSeconds,
+
+            @Schema(description = "지금까지 배운 움직임 수") Integer unlockedCount,
+            @Schema(description = "다 모으면 몇 개인가", example = "13") Integer totalMotions,
+
+            @Schema(description = "연습 중인가") Boolean training,
+            @Schema(description = "연습이 끝날 때까지(초). 연습 중이 아니면 null") Long trainInSeconds,
+            @Schema(description = "이번 해금에 치른 연습 횟수") Integer trainStack,
+            @Schema(description = "다음 하나를 열려면 몇 번 필요한가") Integer trainPrice,
+            @Schema(description = "지금 연습하면 몇 회분이 쌓이는가(1 또는 2). "
+                    + "행복이 높으면 2회분이라는 것을 버튼에 미리 보여주기 위한 값이다")
+            Integer trainGain,
+
+            @Schema(description = "자고 있는가") Boolean sleeping,
+            @Schema(description = "깨어날 때까지(초). 자고 있지 않으면 null") Long sleepInSeconds,
+            @Schema(description = "지금 깨울 수 있는가. true 면 깨우기가 곧 해금이다") Boolean canWake,
+            @Schema(description = "지금 재울 수 있는가(연습 값을 다 치렀는가)") Boolean canSleep,
+            @Schema(description = "다 모았는가") Boolean complete) {
 
         public static Detail from(ZzalPet pet, String stepLabel, Instant now) {
             boolean hatching = pet.isHatching();
+            boolean alive = pet.isAlive();
             return new Detail(
                     pet.getId(), pet.getName(), pet.getNote(), pet.getPhase().name(),
                     !hatching && pet.getHatchedAt() != null,
@@ -66,7 +87,19 @@ public final class PetResponses {
                     pet.getDeathReason() != null ? pet.getDeathReason().name() : null,
                     pet.getHatchStartedAt(), pet.getHatchedAt(),
                     pet.getFullness(), pet.getHappiness(), pet.getTrash(), pet.getFood(),
-                    pet.getUnlockedCount());
+                    alive ? pet.foodRemainingSeconds(now) : null,
+                    pet.getUnlockedCount(),
+                    alive ? ZzalRules.TOTAL_MOTIONS : null,
+                    alive ? pet.isTraining() : null,
+                    alive ? pet.trainRemainingSeconds(now) : null,
+                    alive ? pet.getTrainStack() : null,
+                    alive ? pet.trainPrice() : null,
+                    alive ? ZzalRules.trainGain(pet.getHappiness()) : null,
+                    alive ? pet.isSleeping() : null,
+                    alive ? pet.sleepRemainingSeconds(now) : null,
+                    alive ? pet.canWake(now) : null,
+                    alive ? (pet.isTrainPaid() && !pet.isTraining() && !pet.isSleeping()) : null,
+                    alive ? pet.isComplete() : null);
         }
     }
 }

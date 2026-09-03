@@ -36,7 +36,19 @@ public enum ErrorCode {
     // 남의 펫에 접근하면 403 이 아니라 404 를 준다 — 403 은 "그 번호의 펫이 존재한다" 는
     // 사실을 알려주는 셈이라, 번호를 훑어 남의 펫 수를 셀 수 있게 된다.
     ZZAL_PET_ALREADY_HATCHING(HttpStatus.CONFLICT, "아직 부화 중이에요"),
-    ZZAL_PET_LIMIT_REACHED(HttpStatus.CONFLICT, "더 키울 수 있는 자리가 없어요");
+    ZZAL_PET_LIMIT_REACHED(HttpStatus.CONFLICT, "더 키울 수 있는 자리가 없어요"),
+
+    // 돌보기 (zzal) — 왜 안 되는지를 사용자 말로 답한다. 화면은 이 문구를 그대로 띄워도 된다.
+    ZZAL_PET_NOT_ALIVE(HttpStatus.CONFLICT, "아직 함께 지낼 수 없어요"),
+    ZZAL_PET_SLEEPING(HttpStatus.CONFLICT, "자고 있어요"),
+    ZZAL_PET_NOT_SLEEPING(HttpStatus.CONFLICT, "자고 있지 않아요"),
+    ZZAL_PET_STILL_SLEEPING(HttpStatus.CONFLICT, "아직 자고 있어요"),
+    ZZAL_CARE_NOT_NEEDED(HttpStatus.CONFLICT, "지금은 필요하지 않아요"),
+    ZZAL_NO_FOOD(HttpStatus.CONFLICT, "밥이 다 떨어졌어요"),
+    ZZAL_TRAIN_IN_PROGRESS(HttpStatus.CONFLICT, "연습하고 있어요"),
+    ZZAL_TRAIN_ENOUGH(HttpStatus.CONFLICT, "오늘 연습은 충분해요"),
+    ZZAL_TRAIN_NOT_ENOUGH(HttpStatus.CONFLICT, "연습이 더 필요해요"),
+    ZZAL_ALL_UNLOCKED(HttpStatus.CONFLICT, "이미 다 배웠어요");
 
     // 도메인별 코드는 각 담당자가 아래에 추가한다.
     // 예) ZZAL_PET_NOT_FOUND(HttpStatus.NOT_FOUND, "펫을 찾을 수 없습니다"),

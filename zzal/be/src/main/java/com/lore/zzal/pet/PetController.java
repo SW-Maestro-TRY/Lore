@@ -59,7 +59,7 @@ public class PetController {
     @GetMapping
     public ApiResponse<List<PetResponses.Detail>> list(@LoginUser Long userId) {
         Instant now = Instant.now();
-        List<PetResponses.Detail> pets = petService.list(userId).stream()
+        List<PetResponses.Detail> pets = petService.refreshAll(userId, now).stream()
                 .map(p -> PetResponses.Detail.from(p, petService.currentStepLabel(p.getId()), now))
                 .toList();
         return ApiResponse.ok(pets);
@@ -75,7 +75,76 @@ public class PetController {
     @GetMapping("/{petId}")
     public ApiResponse<PetResponses.Detail> detail(@LoginUser Long userId, @PathVariable Long petId) {
         Instant now = Instant.now();
-        ZzalPet pet = petService.get(userId, petId);
+        ZzalPet pet = petService.refresh(userId, petId, now);
         return ApiResponse.ok(PetResponses.Detail.from(pet, petService.currentStepLabel(petId), now));
+    }
+
+    // ── 돌보기와 성장 (#133) ──────────────────────────────────────────────
+
+    @Operation(summary = "돌보기", description = """
+            밥·쓰다듬·청소. **무엇을 눌렀는지만** 보내면 결과는 서버가 정한다.
+
+            응답은 상태 조회와 같은 모양이다 — 누른 뒤 다시 조회할 필요가 없다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "돌봄 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "함께 지낼 수 없음(ZZAL_PET_NOT_ALIVE) · 자는 중(ZZAL_PET_SLEEPING) "
+                            + "· 밥 없음(ZZAL_NO_FOOD) · 지금은 필요 없음(ZZAL_CARE_NOT_NEEDED)")})
+    @PostMapping("/{petId}/care")
+    public ApiResponse<PetResponses.Detail> care(@LoginUser Long userId,
+                                                 @PathVariable Long petId,
+                                                 @Valid @RequestBody PetRequests.Care request) {
+        Instant now = Instant.now();
+        ZzalPet pet = petService.care(userId, petId, request.action(), now);
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, now));
+    }
+
+    @Operation(summary = "연습 시작", description = """
+            연습은 즉시 끝나지 않고 시간이 걸린다. 도는 동안 밥·쓰다듬·청소는 계속 된다.
+
+            몇 회분이 쌓일지는 **누른 순간의 행복**으로 정해진다(끝날 때 다시 재지 않는다).""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "연습 시작"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "이미 연습 중(ZZAL_TRAIN_IN_PROGRESS) · 재우면 됨(ZZAL_TRAIN_ENOUGH) "
+                            + "· 다 배움(ZZAL_ALL_UNLOCKED)")})
+    @PostMapping("/{petId}/train")
+    public ApiResponse<PetResponses.Detail> train(@LoginUser Long userId, @PathVariable Long petId) {
+        Instant now = Instant.now();
+        ZzalPet pet = petService.train(userId, petId, now);
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, now));
+    }
+
+    @Operation(summary = "재우기", description = """
+            연습 값을 다 치렀을 때만 재울 수 있다. 자는 동안 수치는 멈춘다.
+
+            자는 시간이 곧 다음 움직임을 굽는 시간이다(#22 에서 연결).""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "재움"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "연습이 부족(ZZAL_TRAIN_NOT_ENOUGH) · 연습 중(ZZAL_TRAIN_IN_PROGRESS) "
+                            + "· 이미 자는 중(ZZAL_PET_SLEEPING)")})
+    @PostMapping("/{petId}/sleep")
+    public ApiResponse<PetResponses.Detail> sleep(@LoginUser Long userId, @PathVariable Long petId) {
+        Instant now = Instant.now();
+        ZzalPet pet = petService.sleep(userId, petId, now);
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, now));
+    }
+
+    @Operation(summary = "깨우기", description = """
+            다 자고 나서 깨우면 **새로운 움직임 하나가 열린다**.
+
+            자동으로 깨우지 않는다 — 여는 순간을 사용자가 보게 하기 위해서다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "깨어남 · 해금"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "자고 있지 않음(ZZAL_PET_NOT_SLEEPING) · 아직 덜 잠(ZZAL_PET_STILL_SLEEPING)")})
+    @PostMapping("/{petId}/wake")
+    public ApiResponse<PetResponses.Detail> wake(@LoginUser Long userId, @PathVariable Long petId) {
+        Instant now = Instant.now();
+        ZzalPet pet = petService.wake(userId, petId, now);
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, now));
     }
 }

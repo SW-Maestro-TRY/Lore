@@ -1,7 +1,9 @@
 package com.lore.zzal.pet.dto;
 
+import com.lore.zzal.pet.CareAction;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /** 펫 API 가 받는 것들. */
@@ -22,5 +24,12 @@ public final class PetRequests {
             @Schema(description = "업로드한 그림의 S3 key. presign 으로 발급받은 것이어야 한다",
                     example = "images/zzal/a1b2c3d4-e5f6-7890-abcd-ef1234567890")
             @NotBlank @Size(max = 300) String imageKey) {
+    }
+
+    @Schema(description = "돌봄 요청 — 무엇을 눌렀는지만 보낸다. 수치가 얼마나 오르는지는 서버가 정한다")
+    public record Care(
+
+            @Schema(description = "FEED(밥) · PET(쓰다듬) · CLEAN(청소)", example = "FEED")
+            @NotNull CareAction action) {
     }
 }

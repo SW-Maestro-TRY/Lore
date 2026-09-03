@@ -14,6 +14,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.time.Duration;
 import java.time.Instant;
 
 /**
@@ -123,6 +124,18 @@ public class ZzalPet {
     @Column(nullable = false)
     private int trainStack;
 
+    /**
+     * 지금 도는 훈련이 끝나면 몇 회분이 쌓이는가. 훈련을 <b>시작할 때</b> 정해 여기 넣는다.
+     *
+     * ★ 끝날 때 다시 계산하지 않는 이유 — 버튼에 "2회분" 이라고 보여주고 눌렀는데
+     *   1분 사이에 행복이 한 칸 떨어졌다고 1회분이 되면, 화면이 한 약속을 서버가 어기는 것이 된다.
+     *
+     * ⚠️ 이미 행이 있는 표에 칸을 더하므로 기본값을 함께 준다. 없으면 DB 가 조용히 거부하고
+     *    서버는 정상 기동한 채 실제 호출 때만 터진다(2026-09-02 pet_slots 에서 겪음).
+     */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int trainGain;
+
     /** 지금까지 연 모션 수. 목록 자체는 zzal_motion 에 있다. */
     @Column(nullable = false)
     private int unlockedCount;
@@ -214,7 +227,238 @@ public class ZzalPet {
 
     /** 부화 시작부터 지금까지 몇 초 지났는가. 화면의 진행 표시에 쓴다. */
     public long elapsedSeconds(Instant now) {
-        return java.time.Duration.between(hatchStartedAt, now).toSeconds();
+        return Duration.between(hatchStartedAt, now).toSeconds();
+    }
+
+    // ── 시간이 하는 일 ────────────────────────────────────────────────────
+
+    /**
+     * 흐른 시간을 수치에 반영한다. <b>조회든 행동이든 가장 먼저 부른다.</b>
+     *
+     * <h3>왜 이렇게 하는가 — 깎으러 다니지 않고 계산한다</h3>
+     * 서버가 주기적으로 모든 펫을 훑어 1씩 깎는 방법도 있다. 그러면 펫이 1만 마리일 때
+     * 1시간마다 1만 줄을 고쳐야 하고, 서버가 잠깐 죽으면 그 시간만큼 안 깎여 펫마다 상태가 어긋난다.
+     * <p>
+     * 여기서는 아무것도 깎지 않는다. 대신 <b>그 수치가 마지막으로 바뀐 시각</b>을 같이 들고 있다가,
+     * 물어볼 때 "그 사이 몇 칸이 지났나" 를 계산한다. 서버가 죽어 있었든 사용자가 사흘을
+     * 안 왔든 결과가 같다.
+     *
+     * <h3>★ 앵커를 now 로 밀지 않는다</h3>
+     * 4시간에 1칸인데 3시간 59분이 지난 시점에 조회했다고 앵커를 지금으로 옮기면, 그 59분이
+     * 버려진다. 자주 들여다보는 사람의 펫은 <b>영영 배가 안 고파진다.</b>
+     * 그래서 지나간 칸 수만큼만 정확히 민다(나머지 시간은 앵커에 남는다).
+     *
+     * <h3>계산과 반영을 한 벌로 둔 이유</h3>
+     * 조회용 계산 함수를 따로 두면 언젠가 두 식이 어긋나고, 그때는 화면과 판정이 다른
+     * 값을 말하게 된다. 그래서 조회도 이 메서드를 부르고, 트랜잭션도 읽기 전용이 아니다.
+     */
+    public void applyElapsed(Instant now) {
+        // 시계가 아직 안 켜졌다 = 부화만 해 놓고 한 번도 안 만진 펫. 굶지 않는다.
+        if (phase != PetPhase.ALIVE || careStartedAt == null) {
+            return;
+        }
+        Instant at = frozenNow(now);
+
+        long dropped = stepsPassed(fullnessAt, ZzalRules.FULLNESS_DROP, at);
+        if (dropped > 0) {
+            fullness = (int) Math.max(0, fullness - dropped);
+            fullnessAt = advance(fullnessAt, ZzalRules.FULLNESS_DROP, dropped);
+        }
+
+        long sad = stepsPassed(happinessAt, ZzalRules.HAPPINESS_DROP, at);
+        if (sad > 0) {
+            happiness = (int) Math.max(0, happiness - sad);
+            happinessAt = advance(happinessAt, ZzalRules.HAPPINESS_DROP, sad);
+        }
+
+        long dirtied = stepsPassed(trashAt, ZzalRules.TRASH_RISE, at);
+        if (dirtied > 0) {
+            trash = (int) Math.min(ZzalRules.MAX_TRASH, trash + dirtied);
+            trashAt = advance(trashAt, ZzalRules.TRASH_RISE, dirtied);
+        }
+
+        long charged = stepsPassed(foodAt, ZzalRules.FOOD_CHARGE, at);
+        if (charged > 0) {
+            food = (int) Math.min(ZzalRules.MAX_FOOD, food + charged);
+            // 가득 찼으면 시계를 멈춘다. 안 그러면 하나 먹자마자 쌓인 시간만큼 한꺼번에 들어온다.
+            foodAt = food >= ZzalRules.MAX_FOOD ? null : advance(foodAt, ZzalRules.FOOD_CHARGE, charged);
+        }
+
+        // 훈련이 끝났으면 거둔다. 사용자가 화면을 안 보고 있어도 시간은 지나므로,
+        // 다시 들어왔을 때 이미 끝나 있는 것이 정상이다.
+        if (trainStartedAt != null && !at.isBefore(trainStartedAt.plus(ZzalRules.TRAIN_DURATION))) {
+            trainStack += trainGain;
+            trainStartedAt = null;
+            trainGain = 0;
+        }
+    }
+
+    /**
+     * 자는 동안은 시간이 멈춘다. 계산에 쓸 시각.
+     *
+     * 자고 일어났더니 굶어 있으면 재우는 것이 손해가 된다. 그러면 해금이 수면에 묶여 있는
+     * 이 게임의 구조 자체가 사용자에게 벌처럼 읽힌다.
+     */
+    private Instant frozenNow(Instant now) {
+        return sleepStartedAt != null && now.isAfter(sleepStartedAt) ? sleepStartedAt : now;
+    }
+
+    /** anchor 이후로 interval 이 몇 번 지났는가. */
+    private static long stepsPassed(Instant anchor, Duration interval, Instant now) {
+        if (anchor == null || !now.isAfter(anchor)) {
+            return 0;
+        }
+        return Duration.between(anchor, now).getSeconds() / interval.getSeconds();
+    }
+
+    private static Instant advance(Instant anchor, Duration interval, long steps) {
+        return anchor.plusSeconds(interval.getSeconds() * steps);
+    }
+
+    // ── 돌봄 ──────────────────────────────────────────────────────────────
+
+    /**
+     * 첫 돌봄에 수치 시계를 켠다.
+     *
+     * ★ 부화가 끝나는 순간이 아니다 — 완료 알림을 보고 창을 닫았다가 사흘 뒤에 들어온
+     *   사람의 펫이 이미 굶어 죽기 직전이면, 첫인상이 거기서 죽는다.
+     */
+    private void startClockIfNeeded(Instant now) {
+        if (careStartedAt == null) {
+            careStartedAt = now;
+            fullnessAt = now;
+            happinessAt = now;
+            trashAt = now;
+            foodAt = food >= ZzalRules.MAX_FOOD ? null : now;
+        }
+        lastCaredAt = now;
+    }
+
+    /**
+     * 밥. 포만감이 오르고 쓰레기가 하나 는다.
+     *
+     * ★ 앵커를 now 로 되돌리는 이유 — 되돌리지 않으면 오래 방치돼 앵커가 과거에 머물러 있을 때,
+     *   먹이자마자 그 사이 시간이 한꺼번에 계산돼 도로 0이 된다.
+     */
+    public void feed(Instant now) {
+        startClockIfNeeded(now);
+        boolean wasFull = food >= ZzalRules.MAX_FOOD;
+        fullness = Math.min(ZzalRules.MAX_GAUGE, fullness + ZzalRules.FEED_FULLNESS);
+        fullnessAt = now;
+        trash = Math.min(ZzalRules.MAX_TRASH, trash + ZzalRules.FEED_TRASH);
+        food -= 1;
+        // 가득 차 있어서 멈춰 있던 충전 시계를 여기서 다시 켠다.
+        if (wasFull) {
+            foodAt = now;
+        }
+    }
+
+    /** 쓰다듬. 행복이 오른다. */
+    public void pet(Instant now) {
+        startClockIfNeeded(now);
+        happiness = Math.min(ZzalRules.MAX_GAUGE, happiness + ZzalRules.PET_HAPPINESS);
+        happinessAt = now;
+    }
+
+    /** 청소. 쌓인 것을 한 번에 치운다. 낮을수록 이득이 커서 "몰아서 치우기" 가 저절로 생긴다. */
+    public void clean(Instant now) {
+        startClockIfNeeded(now);
+        trash = 0;
+        trashAt = now;
+    }
+
+    // ── 훈련과 잠 ─────────────────────────────────────────────────────────
+
+    /** 훈련을 시작한다. 지금 행복으로 몇 회분인지 확정해 둔다(끝날 때 다시 재지 않는다). */
+    public void startTrain(Instant now) {
+        startClockIfNeeded(now);
+        trainStartedAt = now;
+        trainGain = ZzalRules.trainGain(happiness);
+    }
+
+    /** 재운다. 자는 동안 다음에 배울 것이 구워진다(#22 에서 연결). */
+    public void goToSleep(Instant now) {
+        sleepStartedAt = now;
+        lastCaredAt = now;
+    }
+
+    /**
+     * 깨운다. 하나를 배우고 훈련 값이 비워진다.
+     *
+     * ★ 잔 시간만큼 모든 앵커를 뒤로 민다 — 이 한 줄이 "수면 중 수치 정지" 의 전부다.
+     *   오후 2시에 재웠으면 앵커가 오후 8시가 되고, 잔 6시간은 계산에서 저절로 빠진다.
+     */
+    public void wakeUp(Instant now) {
+        Duration slept = Duration.between(sleepStartedAt, now);
+        fullnessAt = shift(fullnessAt, slept);
+        happinessAt = shift(happinessAt, slept);
+        trashAt = shift(trashAt, slept);
+        foodAt = shift(foodAt, slept);
+
+        trainStack = Math.max(0, trainStack - ZzalRules.priceOf(unlockedCount));
+        unlockedCount += 1;
+        sleepStartedAt = null;
+        lastCaredAt = now;
+    }
+
+    private static Instant shift(Instant anchor, Duration by) {
+        return anchor == null ? null : anchor.plus(by);
+    }
+
+    // ── 지금 무엇을 할 수 있는가 ──────────────────────────────────────────
+
+    public boolean isAlive() {
+        return phase == PetPhase.ALIVE;
+    }
+
+    public boolean isSleeping() {
+        return sleepStartedAt != null;
+    }
+
+    public boolean isTraining() {
+        return trainStartedAt != null;
+    }
+
+    /** 다음 하나를 열려면 훈련이 몇 번 필요한가. */
+    public int trainPrice() {
+        return ZzalRules.priceOf(unlockedCount);
+    }
+
+    /** 훈련 값을 다 치렀는가 = 재울 수 있는가. */
+    public boolean isTrainPaid() {
+        return trainStack >= trainPrice();
+    }
+
+    /** 다 모았는가. */
+    public boolean isComplete() {
+        return unlockedCount >= ZzalRules.TOTAL_MOTIONS;
+    }
+
+    /** 깨울 수 있는가. 덜 잤으면 아직이다. */
+    public boolean canWake(Instant now) {
+        return sleepStartedAt != null && !now.isBefore(sleepStartedAt.plus(ZzalRules.SLEEP_DURATION));
+    }
+
+    /** 남은 시간(초). 아직 시작 안 했으면 null — 화면이 "없음" 과 "0초 남음" 을 구분해야 한다. */
+    public Long trainRemainingSeconds(Instant now) {
+        return remaining(trainStartedAt, ZzalRules.TRAIN_DURATION, now);
+    }
+
+    public Long sleepRemainingSeconds(Instant now) {
+        return remaining(sleepStartedAt, ZzalRules.SLEEP_DURATION, now);
+    }
+
+    /** 다음 밥이 찰 때까지. 재고가 가득이면 null. */
+    public Long foodRemainingSeconds(Instant now) {
+        return remaining(foodAt, ZzalRules.FOOD_CHARGE, frozenNow(now));
+    }
+
+    private static Long remaining(Instant startedAt, Duration duration, Instant now) {
+        if (startedAt == null) {
+            return null;
+        }
+        long left = Duration.between(now, startedAt.plus(duration)).getSeconds();
+        return Math.max(0, left);
     }
 
     public Long getId() {
@@ -271,6 +515,18 @@ public class ZzalPet {
 
     public int getTrainStack() {
         return trainStack;
+    }
+
+    public int getTrainGain() {
+        return trainGain;
+    }
+
+    public Instant getTrainStartedAt() {
+        return trainStartedAt;
+    }
+
+    public Instant getSleepStartedAt() {
+        return sleepStartedAt;
     }
 
     public int getUnlockedCount() {

@@ -99,6 +99,19 @@ public class PetService {
      */
     @Transactional(readOnly = true)
     public ZzalPet get(Long userId, Long petId) {
+        return findMine(userId, petId);
+    }
+
+    /**
+     * 내 펫을 꺼낸다. 트랜잭션을 열지 않는다.
+     *
+     * ★ 아래 돌봄 메서드들이 {@link #get} 을 부르지 않고 이것을 부르는 이유 —
+     *   같은 클래스 안에서 자기 메서드를 부르면 프록시를 안 거쳐 {@code @Transactional} 이
+     *   통째로 무시된다. get 의 readOnly 가 안 먹는 것에 <b>기대어</b> 저장이 되는 코드는,
+     *   나중에 누가 get 을 별도 빈으로 옮기는 순간 조용히 저장이 멈춘다.
+     *   (2026-09-02 에 이 함정으로 "부화 완료" 로그가 찍히는데 DB 는 QUEUED 인 일이 있었다)
+     */
+    private ZzalPet findMine(Long userId, Long petId) {
         return petRepository.findById(petId)
                 .filter(p -> p.isOwnedBy(userId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
@@ -107,6 +120,140 @@ public class PetService {
     @Transactional(readOnly = true)
     public List<ZzalPet> list(Long userId) {
         return petRepository.findByUserIdOrderByIdDesc(userId);
+    }
+
+    // ── 돌보기 (#133) ─────────────────────────────────────────────────────
+
+    /**
+     * 조회하면서 흐른 시간을 반영한다.
+     *
+     * ★ 읽기 전용이 아닌 이유 — 조회용 계산과 행동용 반영을 따로 두면 언젠가 두 식이
+     *   어긋나고, 그때는 화면이 말하는 값과 서버가 판정하는 값이 달라진다. 한 벌로 둔다.
+     */
+    @Transactional
+    public ZzalPet refresh(Long userId, Long petId, Instant now) {
+        ZzalPet pet = findMine(userId, petId);
+        pet.applyElapsed(now);
+        return pet;
+    }
+
+    @Transactional
+    public List<ZzalPet> refreshAll(Long userId, Instant now) {
+        List<ZzalPet> pets = petRepository.findByUserIdOrderByIdDesc(userId);
+        pets.forEach(p -> p.applyElapsed(now));
+        return pets;
+    }
+
+    /**
+     * 돌본다. 밥·쓰다듬·청소.
+     *
+     * ★ 서버는 "무엇을 눌렀다" 만 받고 결과는 서버가 정한다. 브라우저가 보낸 수치를 그대로
+     *   믿으면 개발자도구로 게이지를 채울 수 있다.
+     */
+    @Transactional
+    public ZzalPet care(Long userId, Long petId, CareAction action, Instant now) {
+        ZzalPet pet = awake(userId, petId, now);
+        switch (action) {
+            case FEED -> {
+                if (pet.getFood() <= 0) {
+                    throw new BusinessException(ErrorCode.ZZAL_NO_FOOD);
+                }
+                if (pet.getFullness() >= ZzalRules.MAX_GAUGE) {
+                    throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED,
+                            "%s이는 배가 불러요".formatted(pet.getName()));
+                }
+                pet.feed(now);
+            }
+            case PET -> {
+                if (pet.getHappiness() >= ZzalRules.MAX_GAUGE) {
+                    throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED,
+                            "%s이는 지금 아주 기분이 좋아요".formatted(pet.getName()));
+                }
+                pet.pet(now);
+            }
+            case CLEAN -> {
+                if (pet.getTrash() <= 0) {
+                    throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED, "바닥이 이미 깨끗해요");
+                }
+                pet.clean(now);
+            }
+        }
+        return pet;
+    }
+
+    /**
+     * 훈련을 시작한다. 즉시 쌓이지 않고 시간이 걸린다 — 도는 동안 밥·쓰다듬·청소는 계속 된다.
+     */
+    @Transactional
+    public ZzalPet train(Long userId, Long petId, Instant now) {
+        ZzalPet pet = awake(userId, petId, now);
+        if (pet.isComplete()) {
+            throw new BusinessException(ErrorCode.ZZAL_ALL_UNLOCKED);
+        }
+        if (pet.isTraining()) {
+            throw new BusinessException(ErrorCode.ZZAL_TRAIN_IN_PROGRESS);
+        }
+        // 값을 다 치렀는데 또 훈련하면 그만큼이 버려진다. 재우라고 말해 준다.
+        if (pet.isTrainPaid()) {
+            throw new BusinessException(ErrorCode.ZZAL_TRAIN_ENOUGH,
+                    "%s이를 재우면 새로운 걸 배워요".formatted(pet.getName()));
+        }
+        pet.startTrain(now);
+        return pet;
+    }
+
+    /** 재운다. 훈련 값을 다 치렀을 때만. */
+    @Transactional
+    public ZzalPet sleep(Long userId, Long petId, Instant now) {
+        ZzalPet pet = awake(userId, petId, now);
+        if (pet.isComplete()) {
+            throw new BusinessException(ErrorCode.ZZAL_ALL_UNLOCKED);
+        }
+        if (pet.isTraining()) {
+            throw new BusinessException(ErrorCode.ZZAL_TRAIN_IN_PROGRESS);
+        }
+        if (!pet.isTrainPaid()) {
+            throw new BusinessException(ErrorCode.ZZAL_TRAIN_NOT_ENOUGH,
+                    "연습이 %d번 더 필요해요".formatted(pet.trainPrice() - pet.getTrainStack()));
+        }
+        pet.goToSleep(now);
+        return pet;
+    }
+
+    /** 깨운다. 하나를 배운다. */
+    @Transactional
+    public ZzalPet wake(Long userId, Long petId, Instant now) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        if (!pet.isSleeping()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_SLEEPING);
+        }
+        if (!pet.canWake(now)) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_STILL_SLEEPING);
+        }
+        // 자는 동안 시간이 멈춰 있었으므로, 깨워서 앵커를 민 다음에 흐른 시간을 센다.
+        pet.wakeUp(now);
+        pet.applyElapsed(now);
+        return pet;
+    }
+
+    /**
+     * 지금 뭔가를 할 수 있는 상태인지 확인하고, 흐른 시간을 반영해 돌려준다.
+     * 돌봄·훈련·재우기가 공통으로 거치는 문이다.
+     */
+    private ZzalPet awake(Long userId, Long petId, Instant now) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        if (pet.isSleeping()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_SLEEPING,
+                    "%s이가 자고 있어요".formatted(pet.getName()));
+        }
+        pet.applyElapsed(now);
+        return pet;
     }
 
     /**
