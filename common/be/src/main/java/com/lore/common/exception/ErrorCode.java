@@ -54,7 +54,25 @@ public enum ErrorCode {
 
     // 놓아주기 (zzal) — 부화 중에는 보낼 수 없다. 알을 보내면 뒤에서 굽고 있는 생성이
     // 주인 없는 일이 되어, 돈은 나가는데 받을 펫이 없는 상태로 끝난다.
-    ZZAL_PET_RELEASE_NOT_ALLOWED(HttpStatus.CONFLICT, "부화가 끝난 뒤에 보낼 수 있어요");
+    ZZAL_PET_RELEASE_NOT_ALLOWED(HttpStatus.CONFLICT, "부화가 끝난 뒤에 보낼 수 있어요"),
+
+    // ── 아래는 아직 안 만든 기능들이 쓸 코드다(2026-09-04 미리 확정) ──────────
+    //
+    // ★ 여섯 갈래를 동시에 만들 예정이라, 각자 여기에 코드를 추가하면 반드시 충돌한다.
+    //   쓸 코드를 먼저 다 적어 두고 이 파일을 얼린다.
+
+    // 후기 (zzal)
+    ZZAL_FEEDBACK_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 후기를 남겼어요"),
+
+    // 미니게임 (zzal)
+    ZZAL_GAME_NOT_FOUND(HttpStatus.NOT_FOUND, "진행 중인 놀이가 없어요"),
+    ZZAL_GAME_FINISHED(HttpStatus.CONFLICT, "이미 끝난 놀이예요"),
+    ZZAL_GAME_DAILY_LIMIT(HttpStatus.CONFLICT, "오늘은 충분히 놀았어요"),
+
+    // 관리자
+    // ★ 404 가 아니라 403 을 준다 — 관리자 화면의 존재 자체는 비밀이 아니고,
+    //   404 로 감추면 권한 설정을 빠뜨렸을 때 "주소가 틀렸나" 로 헤매게 된다.
+    ADMIN_ONLY(HttpStatus.FORBIDDEN, "관리자만 볼 수 있어요");
 
     // 도메인별 코드는 각 담당자가 아래에 추가한다.
     // 예) ZZAL_PET_NOT_FOUND(HttpStatus.NOT_FOUND, "펫을 찾을 수 없습니다"),

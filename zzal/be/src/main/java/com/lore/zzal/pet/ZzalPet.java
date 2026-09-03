@@ -459,6 +459,31 @@ public class ZzalPet {
         trashAt = now;
     }
 
+    // ── 보상 (후기·미니게임이 함께 쓴다) ──────────────────────────────────
+
+    /**
+     * 밥 하나를 더 준다.
+     *
+     * ★ 상한을 넘지 않는다. 넘겨서 주면 충전 시계가 꼬여 "가득인데 계속 차는" 상태가 된다.
+     */
+    public void grantFood(Instant now) {
+        if (food >= ZzalRules.MAX_FOOD) {
+            return;
+        }
+        boolean wasEmptyClock = foodAt == null;
+        food += 1;
+        if (food >= ZzalRules.MAX_FOOD) {
+            foodAt = null;
+        } else if (wasEmptyClock) {
+            foodAt = now;
+        }
+    }
+
+    /** 연습 한 번 분량을 그냥 준다. 시간을 안 들이고 값이 쌓인다. */
+    public void grantTrain() {
+        trainStack += 1;
+    }
+
     // ── 훈련과 잠 ─────────────────────────────────────────────────────────
 
     /** 훈련을 시작한다. 지금 행복으로 몇 회분인지 확정해 둔다(끝날 때 다시 재지 않는다). */

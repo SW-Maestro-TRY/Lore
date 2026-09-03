@@ -54,6 +54,15 @@ management:
 # 실제 업로드는 브라우저 → S3 직접(presigned PUT)이라 서버(t3.micro)를 안 거친다.
 # 버킷 이름은 환경변수로 주입한다(로컬은 미설정 가능, EC2 는 배포 시 주입).
 app:
+  # 사용자 행동 기록 (2026-09-04)
+  #
+  # ★ 화면에는 이미 41곳에 기록 지점이 심어져 있고, 받아 줄 곳이 없었을 뿐이다.
+  # ★ 지인 규모에서는 숫자가 아니라 "각자가 어디서 멈췄는지" 가 유일한 정보다.
+  analytics:
+    enabled: ${ANALYTICS_ENABLED:true}
+    # 한 번에 받을 수 있는 이벤트 수. 누구나 부를 수 있는 주소라 상한이 필요하다.
+    max-batch: ${ANALYTICS_MAX_BATCH:50}
+
   s3:
     region: ${AWS_REGION:ap-northeast-2}
     content-bucket: ${CONTENT_S3_BUCKET:}
@@ -99,6 +108,37 @@ app:
     #
     # 예) ZZAL_MOTIONS=교감1_머리쓰다듬,청소1_먼지떨이
     motions: ${ZZAL_MOTIONS:}
+
+    # ── 아직 안 만든 기능들의 자리(2026-09-04 미리 뚫음) ──────────────────
+    #
+    # ★ 여섯 갈래를 동시에 만들 예정이라, 각자 이 파일에 설정을 추가하면 충돌한다.
+    #   쓸 자리를 먼저 다 만들어 두고 이 파일을 얼린다.
+
+    # 관리자 화면(/api/zzal/v1/admin/**).
+    #
+    # ★★ dev-tools 와 같은 방식으로 막는다 — 꺼져 있으면 빈이 안 올라와 주소가 없다.
+    #    여기에 더해 (1) 관리자 계정인지 DB 로 확인하고 (2) 화면에 noindex 를 건다.
+    #    셋 중 하나만으로는 부족하다. 검색에 걸려 발견되는 것이 실제로 가장 흔한 경로다.
+    admin:
+      enabled: ${ZZAL_ADMIN:false}
+
+    # 무언가 하면 무엇을 줄 것인가.
+    #
+    # ★ 후기와 미니게임이 같은 자리를 쓴다. 둘 다 "하면 뭘 준다" 는 같은 문제이고,
+    #   무엇을 줄지는 아직 정해지지 않았다(2026-09-03 상훈님: "지표는 나중에 확정").
+    # ★ NONE 이면 기록만 남고 아무 일도 일어나지 않는다. 정해지면 이 값만 바꾸면 붙는다.
+    #   고를 수 있는 것 — NONE · FOOD · TRAIN · HAPPINESS
+    reward:
+      feedback: ${ZZAL_REWARD_FEEDBACK:NONE}
+      game-win: ${ZZAL_REWARD_GAME_WIN:NONE}
+
+    # 좌·우 맞히기.
+    #
+    # ★ 하루 횟수를 지금 제한하는 이유 — 보상이 NONE 인 지금은 필요 없어 보이지만,
+    #   나중에 보상만 켜는 순간 그게 곧 무제한 이득이 된다. 그때 넣으려면 코드를 고쳐야 하고,
+    #   그 사이에 이미 무제한으로 받아 간 사람이 생긴다.
+    game:
+      daily-limit: ${ZZAL_GAME_DAILY_LIMIT:5}
 
     recovery:
       # 서버가 뜰 때 "멈춘 알" 로 볼 기준(분). 한 번의 부화가 걸릴 수 있는 최대 시간

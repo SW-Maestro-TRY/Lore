@@ -354,14 +354,14 @@ class ZzalPetTest {
             Instant bed = T0.plus(Duration.ofMinutes(1));
             pet.goToSleep(bed);
 
-            assertThat(pet.canWake(bed.plus(Duration.ofMinutes(4)))).isFalse();
+            assertThat(pet.canWake(bed.plus(Duration.ofMinutes(2)))).isFalse();
         }
 
         @Test
-        @DisplayName("★ 첫 잠은 5분이고 뒤로 갈수록 길어진다 — 첫날에 한 바퀴가 끝나야 한다")
+        @DisplayName("★ 첫 두 잠이 짧고 뒤로 갈수록 길어진다 — 첫날에 두 바퀴가 끝나야 한다")
         void sleepGrowsWithProgress() {
-            assertThat(ZzalRules.sleepDuration(0)).isEqualTo(Duration.ofMinutes(5));
-            assertThat(ZzalRules.sleepDuration(1)).isEqualTo(Duration.ofMinutes(15));
+            assertThat(ZzalRules.sleepDuration(0)).isEqualTo(Duration.ofMinutes(3));
+            assertThat(ZzalRules.sleepDuration(1)).isEqualTo(Duration.ofMinutes(5));
             assertThat(ZzalRules.sleepDuration(2)).isEqualTo(Duration.ofHours(1));
             assertThat(ZzalRules.sleepDuration(3)).isEqualTo(Duration.ofHours(3));
             // 마지막 값에서 고정 — 계속 늘리면 뒤쪽 해금이 사실상 멈춘다

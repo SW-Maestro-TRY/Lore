@@ -43,15 +43,25 @@ export async function uploadImage(file: File, domain: UploadDomain = 'zzal'): Pr
 
   const { key, url } = await presign(domain, contentType);
 
-  const res = await fetch(url, {
-    method: 'PUT',
-    // ★ 여기에 credentials 를 넣지 않는다. 이 요청은 우리 서버가 아니라 S3 로 간다.
-    //   쿠키·인증 헤더가 붙으면 서명에 없던 값이 섞여 SignatureDoesNotMatch 로 거부된다.
-    //   fetch 기본값이 same-origin 이라 '안 쓴 것' 이 곧 맞는 설정이지만,
-    //   나중에 누가 습관적으로 include 를 넣는 걸 막으려고 이유를 적어 둔다.
-    headers: { 'Content-Type': contentType },
-    body: file,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'PUT',
+      // ★ 여기에 credentials 를 넣지 않는다. 이 요청은 우리 서버가 아니라 S3 로 간다.
+      //   쿠키·인증 헤더가 붙으면 서명에 없던 값이 섞여 SignatureDoesNotMatch 로 거부된다.
+      //   fetch 기본값이 same-origin 이라 '안 쓴 것' 이 곧 맞는 설정이지만,
+      //   나중에 누가 습관적으로 include 를 넣는 걸 막으려고 이유를 적어 둔다.
+      headers: { 'Content-Type': contentType },
+      body: file,
+    });
+  } catch (e) {
+    // ★ fetch 가 **던지는** 경우 = 응답을 아예 못 받았다(네트워크 끊김, 버킷 CORS 미설정).
+    //   이때 브라우저가 넣는 문구는 영어다("Failed to fetch"). 부르는 쪽(useZzalSession)은
+    //   "S3 쪽 문구는 이미 한국어" 라는 전제로 e.message 를 그대로 화면에 띄우므로,
+    //   여기서 우리 말로 바꾸지 않으면 사용자가 영어 오류를 보게 된다(실제로 그랬다).
+    //   원인은 cause 로 남겨 콘솔에서 추적할 수 있게 둔다.
+    throw new Error('이미지를 올리지 못했습니다. 잠시 후 다시 시도해 주세요', { cause: e });
+  }
 
   if (!res.ok) {
     // S3 는 우리 봉투를 모른다. 본문은 XML 이라 사용자에게 보여줄 수 없으므로 상태만 남긴다.
