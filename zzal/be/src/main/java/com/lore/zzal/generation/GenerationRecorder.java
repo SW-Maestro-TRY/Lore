@@ -72,9 +72,18 @@ public class GenerationRecorder {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void succeedJob(Long jobId, Long petId, String sheetKey, String identityText,
-                           BigDecimal total, Instant now) {
+    public void succeedJob(Long jobId, BigDecimal total, Instant now) {
         jobRepository.findById(jobId).ifPresent(j -> j.succeed(total, now));
+    }
+
+    /**
+     * 부화가 끝나 펫을 살린다.
+     *
+     * ★ job 성공 처리와 갈라 둔 이유 — 모션도 같은 실행기를 쓰는데, 모션이 끝났다고
+     *   펫이 다시 태어나면 안 된다. "작업이 성공했다" 와 "그래서 무엇이 되었나" 는 다른 일이다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markPetAlive(Long petId, String sheetKey, String identityText, Instant now) {
         petRepository.findById(petId).ifPresent(p -> p.markAlive(sheetKey, identityText, now));
     }
 

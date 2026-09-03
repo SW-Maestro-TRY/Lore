@@ -395,10 +395,20 @@ public class ZzalPet {
         trashAt = shift(trashAt, slept);
         foodAt = shift(foodAt, slept);
 
-        trainStack = Math.max(0, trainStack - ZzalRules.priceOf(unlockedCount));
-        unlockedCount += 1;
         sleepStartedAt = null;
         lastCaredAt = now;
+    }
+
+    /**
+     * 하나를 배웠다. 치른 연습이 빠진다.
+     *
+     * ★ 깨우기와 갈라 둔 이유 — 자는 동안 굽던 것이 끝내 실패할 수 있다. 그때도 깨어나기는
+     *   해야 하지만 <b>배운 것이 없으니 연습을 빼앗으면 안 된다.</b> 묶어 두면 생성이 실패한
+     *   사용자가 연습만 날리게 된다.
+     */
+    public void unlockOne() {
+        trainStack = Math.max(0, trainStack - ZzalRules.priceOf(unlockedCount));
+        unlockedCount += 1;
     }
 
     private static Instant shift(Instant anchor, Duration by) {

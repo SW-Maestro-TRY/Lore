@@ -48,7 +48,8 @@ public enum ErrorCode {
     ZZAL_TRAIN_IN_PROGRESS(HttpStatus.CONFLICT, "연습하고 있어요"),
     ZZAL_TRAIN_ENOUGH(HttpStatus.CONFLICT, "오늘 연습은 충분해요"),
     ZZAL_TRAIN_NOT_ENOUGH(HttpStatus.CONFLICT, "연습이 더 필요해요"),
-    ZZAL_ALL_UNLOCKED(HttpStatus.CONFLICT, "이미 다 배웠어요");
+    ZZAL_ALL_UNLOCKED(HttpStatus.CONFLICT, "이미 다 배웠어요"),
+    ZZAL_MOTION_NOT_READY(HttpStatus.CONFLICT, "아직 꿈을 꾸고 있어요");
 
     // 도메인별 코드는 각 담당자가 아래에 추가한다.
     // 예) ZZAL_PET_NOT_FOUND(HttpStatus.NOT_FOUND, "펫을 찾을 수 없습니다"),

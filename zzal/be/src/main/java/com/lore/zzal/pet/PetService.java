@@ -13,6 +13,12 @@ import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
+import com.lore.zzal.generation.PipelineRegistry;
+import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionStatus;
+import com.lore.zzal.motion.MotionStartRequested;
+import com.lore.zzal.motion.ZzalMotion;
+import com.lore.zzal.motion.ZzalMotionRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +37,9 @@ public class PetService {
     private final UserRepository userRepository;
     private final S3Service s3Service;
     private final HatchService hatchService;
+    private final ZzalMotionRepository motionRepository;
+    private final MotionCatalog catalog;
+    private final PipelineRegistry registry;
     private final ApplicationEventPublisher events;
 
     public PetService(ZzalPetRepository petRepository,
@@ -40,6 +49,9 @@ public class PetService {
                       UserRepository userRepository,
                       S3Service s3Service,
                       HatchService hatchService,
+                      ZzalMotionRepository motionRepository,
+                      MotionCatalog catalog,
+                      PipelineRegistry registry,
                       ApplicationEventPublisher events) {
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
@@ -48,6 +60,9 @@ public class PetService {
         this.userRepository = userRepository;
         this.s3Service = s3Service;
         this.hatchService = hatchService;
+        this.motionRepository = motionRepository;
+        this.catalog = catalog;
+        this.registry = registry;
         this.events = events;
     }
 
@@ -217,6 +232,24 @@ public class PetService {
                     "연습이 %d번 더 필요해요".formatted(pet.trainPrice() - pet.getTrainStack()));
         }
         pet.goToSleep(now);
+
+        // ★ 자는 동안 다음 동작을 굽는다. 이 6시간이 곧 생성·재시도·검수 시간이다.
+        //   목록이 비어 있으면(아직 무엇을 열지 안 정했으면) 굽지 않고 잠만 잔다.
+        String name = catalog.nameAt(pet.getUnlockedCount());
+        if (name != null) {
+            String version = registry.currentVersion(GenKind.MOTION);
+            // 앞서 실패한 자리면 그 행을 다시 쓴다. 새로 만들면 (펫, 순서) 유니크에 걸리고,
+            // 무엇보다 "이 자리에서 몇 번 실패했나" 라는 이력이 끊긴다.
+            ZzalMotion motion = motionRepository
+                    .findByPetIdAndSeq(pet.getId(), pet.getUnlockedCount())
+                    .map(existing -> {
+                        existing.retry(version);
+                        return existing;
+                    })
+                    .orElseGet(() -> motionRepository.save(ZzalMotion.start(
+                            pet.getId(), pet.getUnlockedCount(), name, version)));
+            events.publishEvent(new MotionStartRequested(motion.getId()));
+        }
         return pet;
     }
 
@@ -233,9 +266,24 @@ public class PetService {
         if (!pet.canWake(now)) {
             throw new BusinessException(ErrorCode.ZZAL_PET_STILL_SLEEPING);
         }
+        // ★ 자는 동안 굽던 것이 끝났는지 본다. 아직이면 깨우지 않는다 —
+        //   깨워 놓고 "배운 게 없다" 고 하면 6시간을 기다린 사람에게 줄 것이 없어진다.
+        ZzalMotion motion = motionRepository
+                .findByPetIdAndSeq(pet.getId(), pet.getUnlockedCount())
+                .orElse(null);
+        if (motion != null && motion.getStatus() == MotionStatus.PENDING) {
+            throw new BusinessException(ErrorCode.ZZAL_MOTION_NOT_READY,
+                    "%s이가 아직 꿈을 꾸고 있어요".formatted(pet.getName()));
+        }
+
         // 자는 동안 시간이 멈춰 있었으므로, 깨워서 앵커를 민 다음에 흐른 시간을 센다.
         pet.wakeUp(now);
         pet.applyElapsed(now);
+
+        // 끝내 못 구운 경우(FAILED)에는 연습을 빼앗지 않는다. 다음에 다시 재우면 또 시도한다.
+        if (motion != null && motion.isOpen()) {
+            pet.unlockOne();
+        }
         return pet;
     }
 

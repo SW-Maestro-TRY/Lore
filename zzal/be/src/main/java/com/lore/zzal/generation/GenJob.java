@@ -110,6 +110,20 @@ public class GenJob {
         return job;
     }
 
+    /**
+     * 모션 굽기 한 번.
+     *
+     * ★ motionId 를 채워야 한다 — 재시도 때 "앞 단계 이어받기" 를 이 번호로 찾는다.
+     *   비워 두면 펫 단위로 묶여, 다른 동작의 격자를 물려받아 <b>배운 동작이 다른데
+     *   그림은 같아진다.</b>
+     */
+    public static GenJob startMotion(Long petId, Long motionId, int attempt,
+                                     String pipelineVersion, Instant now) {
+        GenJob job = start(petId, GenKind.MOTION, attempt, pipelineVersion, now);
+        job.motionId = motionId;
+        return job;
+    }
+
     public void markRunning(Instant now) {
         this.status = GenStatus.RUNNING;
         if (this.runningAt == null) {

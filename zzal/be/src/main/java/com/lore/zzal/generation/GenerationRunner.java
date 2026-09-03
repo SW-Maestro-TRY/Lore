@@ -1,7 +1,5 @@
 package com.lore.zzal.generation;
 
-import com.lore.zzal.pet.ZzalPet;
-import com.lore.zzal.pet.ZzalPetRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,9 +28,7 @@ public class GenerationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(GenerationRunner.class);
 
-    private final PipelineRegistry registry;
     private final GenerationRecorder recorder;
-    private final ZzalPetRepository petRepository;
 
     /** 단계에 시간 제한을 걸기 위한 일회용 스레드. 제한을 넘기면 이 스레드를 끊는다. */
     private final ExecutorService timeoutExecutor = Executors.newCachedThreadPool();
@@ -41,30 +37,28 @@ public class GenerationRunner {
     @org.springframework.beans.factory.annotation.Value("${app.zzal.generation.limit-override-seconds:0}")
     private int limitOverrideSeconds;
 
-    public GenerationRunner(PipelineRegistry registry, GenerationRecorder recorder,
-                            ZzalPetRepository petRepository) {
-        this.registry = registry;
+    public GenerationRunner(GenerationRecorder recorder) {
         this.recorder = recorder;
-        this.petRepository = petRepository;
     }
 
     /**
-     * 한 번의 시도. 성공하면 펫이 ALIVE 가 되고, 실패하면 이 시도만 실패로 남는다
-     * (다시 할지는 부르는 쪽이 정한다).
+     * 단계 목록을 순서대로 돌린다.
+     *
+     * ★ 이 메서드는 <b>무엇을 굽는지 모른다</b>. 부화인지 모션인지, 끝나면 무엇이 되어야 하는지
+     *   모두 부르는 쪽의 일이다. 여기서는 돌리고, 시간을 재고, 기록하고, 결과를 돌려준다.
+     *
+     * @param ctx    무엇으로 굽는지가 담긴 재료(부르는 쪽이 채워서 준다)
+     * @param steps  돌릴 단계 목록
+     * @param resume 앞선 시도에서 성공한 단계들. 이어받아 건너뛴다
      */
-    public void run(Long jobId, Long petId, String version) {
-        ZzalPet pet = petRepository.findById(petId).orElse(null);
-        if (pet == null) {
-            log.warn("펫이 없습니다 — petId={}", petId);
-            return;
-        }
-
-        StepContext ctx = new StepContext(petId, pet.getName(), pet.getNote(), version);
-        ctx.putImage("source", pet.getSourceImageKey());
+    public RunResult run(Long jobId, StepContext ctx, List<GenerationStep> steps,
+                         List<GenStepRecord> resume) {
+        String version = ctx.version();
         recorder.markJobRunning(jobId);
 
-        // 앞선 시도에서 성공한 단계의 결과를 그대로 이어받는다(펫 단위 — 재시도는 새 job 이다).
-        recorder.loadSucceeded(petId, GenKind.HATCH).forEach(rec -> {
+        // 앞선 시도에서 성공한 단계의 결과를 그대로 이어받는다(재시도는 새 job 이므로
+        // 그 job 의 기록만 보면 항상 비어 있다).
+        resume.forEach(rec -> {
             if (rec.getOutputKey() != null) {
                 ctx.putImage(rec.getName(), rec.getOutputKey());
             }
@@ -74,7 +68,6 @@ public class GenerationRunner {
         });
 
         BigDecimal total = BigDecimal.ZERO;
-        List<GenerationStep> steps = registry.steps(version);
 
         for (int i = 0; i < steps.size(); i++) {
             GenerationStep step = steps.get(i);
@@ -100,19 +93,19 @@ public class GenerationRunner {
                         limitOverrideSeconds > 0 ? limitOverrideSeconds : step.limitSeconds());
                 recorder.failStep(stepId, GenErrorCode.TIMEOUT);
                 recorder.failJob(jobId, GenErrorCode.TIMEOUT, total);
-                return;
+                return RunResult.failed(ctx, total, GenErrorCode.TIMEOUT);
             } catch (Exception e) {
                 GenErrorCode code = classify(e);
                 log.warn("단계 실패 — jobId={} step={} code={} : {}", jobId, step.name(), code, e.toString());
                 recorder.failStep(stepId, code);
                 recorder.failJob(jobId, code, total);
-                return;
+                return RunResult.failed(ctx, total, code);
             }
         }
 
-        recorder.succeedJob(jobId, petId,
-                ctx.image("sheet"), ctx.text("identity"), total, Instant.now());
-        log.info("부화 완료 — petId={} version={} 비용=${}", petId, version, total);
+        recorder.succeedJob(jobId, total, Instant.now());
+        log.info("생성 완료 — petId={} version={} 비용=${}", ctx.petId(), version, total);
+        return RunResult.ok(ctx, total);
     }
 
     /**

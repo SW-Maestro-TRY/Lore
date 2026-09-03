@@ -205,7 +205,7 @@ class ZzalPetTest {
         }
 
         @Test
-        @DisplayName("깨우면 하나를 배우고 치른 값이 빠진다")
+        @DisplayName("깨우고 하나를 배우면 치른 값이 빠진다")
         void wakingUnlocks() {
             ZzalPet pet = readyToSleep();
             Instant bed = T0.plus(Duration.ofMinutes(1));
@@ -214,11 +214,28 @@ class ZzalPetTest {
             Instant morning = bed.plus(ZzalRules.SLEEP_DURATION);
             assertThat(pet.canWake(morning)).isTrue();
             pet.wakeUp(morning);
+            pet.unlockOne();
 
             assertThat(pet.getUnlockedCount()).isEqualTo(1);
             assertThat(pet.getTrainStack()).isZero();
             assertThat(pet.isSleeping()).isFalse();
             assertThat(pet.trainPrice()).isEqualTo(2);       // 다음은 2번
+        }
+
+        @Test
+        @DisplayName("★ 굽는 데 실패해 못 배웠으면 연습을 빼앗지 않는다")
+        void failedBakeKeepsTrainStack() {
+            ZzalPet pet = readyToSleep();
+            int paid = pet.getTrainStack();
+            Instant bed = T0.plus(Duration.ofMinutes(1));
+            pet.goToSleep(bed);
+
+            // 깨어나기는 하지만 배운 것이 없다 → unlockOne() 을 부르지 않는다
+            pet.wakeUp(bed.plus(ZzalRules.SLEEP_DURATION));
+
+            assertThat(pet.getUnlockedCount()).isZero();
+            assertThat(pet.getTrainStack()).isEqualTo(paid);
+            assertThat(pet.isSleeping()).isFalse();
         }
 
         @Test
@@ -242,6 +259,7 @@ class ZzalPetTest {
 
             Instant morning = bed.plus(ZzalRules.SLEEP_DURATION);
             pet.wakeUp(morning);
+            pet.unlockOne();
             pet.applyElapsed(morning);
 
             assertThat(pet.getFullness()).isEqualTo(before);
