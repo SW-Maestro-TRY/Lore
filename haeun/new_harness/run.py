@@ -2057,7 +2057,8 @@ def stage_pages(run_dir: Path, dry_run: bool, only=None,
 
 
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
-                       allow_no_sheet: bool = False) -> None:
+                       allow_no_sheet: bool = False,
+                       review: bool | None = None) -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     story 단계(방향 후보) 산출물만으로 표지+전체 씬을 그린다.
 
@@ -2072,7 +2073,7 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
     것인지 몰라도 된다.
     """
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
-                                   allow_no_sheet=allow_no_sheet,
+                                   allow_no_sheet=allow_no_sheet, review=review,
                                    on_page=lambda meta: record(run_dir, meta))
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
@@ -2131,6 +2132,9 @@ def main(argv=None) -> int:
                    help="그 번호 페이지만 다시 (여러 번 가능)")
     p.add_argument("--no-sheet", action="store_true",
                    help="캐릭터 시트 없이 페이지를 그린다 (인물이 장마다 달라진다)")
+    p.add_argument("--no-page-review", action="store_true",
+                   help="이어그리기에서 그린 뒤 검수를 하지 않는다 (기본은 켜짐 — "
+                        ".env 의 NH_PAGE_REVIEW=0 과 같다)")
     p.add_argument("--all", action="store_true",
                    help="이야기 -> 콘티 -> 시트 -> 페이지 그림까지 한 번에")
     p.add_argument("--max-ratio", type=int, default=None,
@@ -2242,7 +2246,8 @@ def main(argv=None) -> int:
             stage_sheet(run_dir, char, args.dry_run, spec_only=args.sheet_spec, note=args.note)
         if args.detail_pages:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
-                               allow_no_sheet=args.no_sheet)
+                               allow_no_sheet=args.no_sheet,
+                               review=False if args.no_page_review else None)
         elif args.pages or args.page:
             stage_pages(run_dir, args.dry_run, only=args.page or None,
                         allow_no_sheet=args.no_sheet)
