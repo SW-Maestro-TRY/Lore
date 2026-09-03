@@ -134,17 +134,19 @@ public class PetController {
     }
 
     @Operation(summary = "깨우기", description = """
-            다 자고 나서 깨우면 **새로운 움직임 하나가 열린다**.
+            다 자고 나서 깨우면 **자는 동안 익힌 움직임이 열린다**.
 
-            자동으로 깨우지 않는다 — 여는 순간을 사용자가 보게 하기 위해서다.""")
+            - 자동으로 깨우지 않는다 — 여는 순간을 사용자가 보게 하기 위해서다
+            - **못 배웠어도 깨어나기는 한다.** 그때는 `learned.learned` 가 false 이고
+              `learned.message` 에 화면에 띄울 말이 담긴다. 치른 연습은 그대로 남아 다음에 다시 시도한다""")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "깨어남 · 해금"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "깨어남"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "자고 있지 않음(ZZAL_PET_NOT_SLEEPING) · 아직 덜 잠(ZZAL_PET_STILL_SLEEPING)")})
     @PostMapping("/{petId}/wake")
     public ApiResponse<PetResponses.Detail> wake(@LoginUser Long userId, @PathVariable Long petId) {
         Instant now = Instant.now();
-        ZzalPet pet = petService.wake(userId, petId, now);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, now));
+        PetService.WakeResult r = petService.wake(userId, petId, now);
+        return ApiResponse.ok(PetResponses.Detail.from(r.pet(), null, now, r.outcome()));
     }
 }

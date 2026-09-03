@@ -15,6 +15,7 @@ import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
 import com.lore.zzal.generation.PipelineRegistry;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionOutcome;
 import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.MotionStartRequested;
 import com.lore.zzal.motion.ZzalMotion;
@@ -240,22 +241,35 @@ public class PetService {
             String version = registry.currentVersion(GenKind.MOTION);
             // 앞서 실패한 자리면 그 행을 다시 쓴다. 새로 만들면 (펫, 순서) 유니크에 걸리고,
             // 무엇보다 "이 자리에서 몇 번 실패했나" 라는 이력이 끊긴다.
-            ZzalMotion motion = motionRepository
+            ZzalMotion existing = motionRepository
                     .findByPetIdAndSeq(pet.getId(), pet.getUnlockedCount())
-                    .map(existing -> {
-                        existing.retry(version);
-                        return existing;
-                    })
-                    .orElseGet(() -> motionRepository.save(ZzalMotion.start(
-                            pet.getId(), pet.getUnlockedCount(), name, version)));
-            events.publishEvent(new MotionStartRequested(motion.getId()));
+                    .orElse(null);
+
+            if (existing == null) {
+                ZzalMotion created = motionRepository.save(ZzalMotion.start(
+                        pet.getId(), pet.getUnlockedCount(), name, version));
+                events.publishEvent(new MotionStartRequested(created.getId()));
+            } else if (!existing.isOpen()) {
+                // 앞서 실패했거나 굽다 만 자리다. 그 행을 다시 쓴다 — 새로 만들면
+                // (펫, 순서) 유니크에 걸리고, "이 자리에서 몇 번 실패했나" 라는 이력도 끊긴다.
+                existing.retry(version);
+                events.publishEvent(new MotionStartRequested(existing.getId()));
+            }
+            // 이미 다 구워져 있으면(OPEN) 다시 굽지 않는다 — 굽는 데 성공했는데 사용자가
+            // 깨우지 않고 다시 재운 경우다. 또 구우면 돈만 두 번 나간다.
         }
         return pet;
     }
 
-    /** 깨운다. 하나를 배운다. */
+    /**
+     * 깨운다. 다 구워졌으면 하나를 배운다.
+     *
+     * ★★ <b>깨우기는 언제나 된다.</b> 다 못 구웠다고 막으면, 굽기가 실패했거나 서버가
+     *    재시작돼 굽던 것이 사라진 사용자는 <b>영영 못 깨우고 갇힌다.</b>
+     *    못 배운 것은 말로 알리고, 치른 연습은 그대로 둬서 다음에 다시 시도한다.
+     */
     @Transactional
-    public ZzalPet wake(Long userId, Long petId, Instant now) {
+    public WakeResult wake(Long userId, Long petId, Instant now) {
         ZzalPet pet = findMine(userId, petId);
         if (!pet.isAlive()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
@@ -266,25 +280,31 @@ public class PetService {
         if (!pet.canWake(now)) {
             throw new BusinessException(ErrorCode.ZZAL_PET_STILL_SLEEPING);
         }
-        // ★ 자는 동안 굽던 것이 끝났는지 본다. 아직이면 깨우지 않는다 —
-        //   깨워 놓고 "배운 게 없다" 고 하면 6시간을 기다린 사람에게 줄 것이 없어진다.
-        ZzalMotion motion = motionRepository
-                .findByPetIdAndSeq(pet.getId(), pet.getUnlockedCount())
-                .orElse(null);
-        if (motion != null && motion.getStatus() == MotionStatus.PENDING) {
-            throw new BusinessException(ErrorCode.ZZAL_MOTION_NOT_READY,
-                    "%s이가 아직 꿈을 꾸고 있어요".formatted(pet.getName()));
-        }
 
         // 자는 동안 시간이 멈춰 있었으므로, 깨워서 앵커를 민 다음에 흐른 시간을 센다.
         pet.wakeUp(now);
         pet.applyElapsed(now);
 
-        // 끝내 못 구운 경우(FAILED)에는 연습을 빼앗지 않는다. 다음에 다시 재우면 또 시도한다.
-        if (motion != null && motion.isOpen()) {
-            pet.unlockOne();
+        ZzalMotion motion = motionRepository
+                .findByPetIdAndSeq(pet.getId(), pet.getUnlockedCount())
+                .orElse(null);
+
+        if (motion == null) {
+            // 배울 것이 없었다(아직 무엇을 열지 안 정한 상태). 화면에 아무 말도 하지 않는다.
+            return new WakeResult(pet, MotionOutcome.nothing());
         }
-        return pet;
+        if (motion.isOpen()) {
+            pet.unlockOne();
+            return new WakeResult(pet, MotionOutcome.learned(motion.getName()));
+        }
+        // 못 배웠으니 연습을 빼앗지 않는다. 다음에 다시 재우면 그 자리를 이어서 굽는다.
+        return new WakeResult(pet, motion.getStatus() == MotionStatus.FAILED
+                ? MotionOutcome.tooHard()
+                : MotionOutcome.stillLearning());
+    }
+
+    /** 깨운 결과 — 펫의 새 상태와, 이번에 무엇을 배웠는지. */
+    public record WakeResult(ZzalPet pet, MotionOutcome outcome) {
     }
 
     /**

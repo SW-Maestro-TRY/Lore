@@ -1,6 +1,7 @@
 package com.lore.zzal.pet.dto;
 
 import com.lore.zzal.generation.GenStepRecord;
+import com.lore.zzal.motion.MotionOutcome;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -74,9 +75,18 @@ public final class PetResponses {
             @Schema(description = "깨어날 때까지(초). 자고 있지 않으면 null") Long sleepInSeconds,
             @Schema(description = "지금 깨울 수 있는가. true 면 깨우기가 곧 해금이다") Boolean canWake,
             @Schema(description = "지금 재울 수 있는가(연습 값을 다 치렀는가)") Boolean canSleep,
-            @Schema(description = "다 모았는가") Boolean complete) {
+            @Schema(description = "다 모았는가") Boolean complete,
+
+            @Schema(description = """
+                    이번 깨우기에서 무엇을 배웠나. **깨우기 응답에만** 담긴다.
+                    못 배웠어도 깨어나기는 하며, 그때는 learned 가 false 이고 message 에 이유가 들어온다""")
+            Learned learned) {
 
         public static Detail from(ZzalPet pet, String stepLabel, Instant now) {
+            return from(pet, stepLabel, now, null);
+        }
+
+        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionOutcome outcome) {
             boolean hatching = pet.isHatching();
             boolean alive = pet.isAlive();
             return new Detail(
@@ -99,7 +109,19 @@ public final class PetResponses {
                     alive ? pet.sleepRemainingSeconds(now) : null,
                     alive ? pet.canWake(now) : null,
                     alive ? (pet.isTrainPaid() && !pet.isTraining() && !pet.isSleeping()) : null,
-                    alive ? pet.isComplete() : null);
+                    alive ? pet.isComplete() : null,
+                    outcome == null ? null : new Learned(
+                            outcome.learned(), outcome.name(), outcome.message()));
         }
+    }
+
+    @Schema(description = "깨어나면서 배운 것")
+    public record Learned(
+            @Schema(description = "배웠는가") boolean learned,
+            @Schema(description = "배운 동작 이름. 못 배웠으면 비어 있다", example = "교감1_머리쓰다듬")
+            String name,
+            @Schema(description = "못 배웠을 때 화면에 띄울 말. 배웠으면 비어 있다",
+                    example = "너무 어려운 동작이라 배우는 데 실패했어요")
+            String message) {
     }
 }

@@ -19,6 +19,9 @@ public interface ZzalMotionRepository extends JpaRepository<ZzalMotion, Long> {
 
     long countByPetIdAndStatus(Long petId, MotionStatus status);
 
+    /** 굽다 만 채로 오래 남은 것들. 서버가 뜰 때 이어서 굽는다. */
+    List<ZzalMotion> findByStatusAndUpdatedAtBefore(MotionStatus status, java.time.Instant before);
+
     /** 아직 상훈님이 안 보신 것들. 관리자 화면이 이걸 쓴다. */
     List<ZzalMotion> findByHumanVerdictIsNullOrderByIdAsc();
 }
