@@ -1,0 +1,33 @@
+TASK: Draw the character being HEAD-PATTED by a human hand that reaches in from above, as a 16-frame loop. The hand strokes back and forth across the top of the head and the character melts into it.
+
+THE HAND (identical object in all 16 cells): one bare human hand and wrist only, entering from the top edge of the cell, palm down, fingers relaxed and slightly apart, drawn in the same flat cel style and linework as the character. No arm, no sleeve, no second hand, no other person, no face. The hand is small enough that it never touches a cell boundary or a grid mark.
+
+MUST CHANGE from frame to frame:
+- the hand's horizontal position above the head — this is the whole motion
+- the tips of the hair directly under the hand, which follow the stroke and settle back
+- the eyes and mouth, going from alert to blissfully closed
+- a small heart symbol beside the head, appearing only where named below
+
+NEVER CHANGE:
+- ★the character's head, body, arms and feet stay exactly where they are in all 16 cells. The character never ducks, shrinks, tilts, leans or gets shorter. Nothing about the character is squashed or compressed.
+- ★character height, width, head size and proportions are identical in every cell
+- the shoes stay flat on the ground at exactly the same x and y in all 16 cells
+- the hand keeps the same size, shape and drawing angle; only its horizontal position and its height above the head change
+
+POSE OF EACH FRAME
+Frame 1 — The hand hovers a small gap above the centre of the head. The character looks up with open eyes and a small expectant closed-mouth smile.
+Frame 2 — The hand lowers slightly, almost touching. Eyes still open, smile a little wider.
+Frame 3 — The hand rests on top of the head, centred. Eyes narrow to happy crescents.
+Frame 4 — The hand begins sliding toward the viewer's left. Hair tips under it lean the same way.
+Frame 5 — The hand continues left, hair tips leaning further.
+Frame 6 — The hand reaches its leftmost point. Eyes close fully, mouth a soft contented smile.
+Frame 7 — The hand starts back toward the centre; hair tips begin to settle.
+Frame 8 — The hand passes over the centre of the head; hair tips upright again.
+Frame 9 — The hand slides toward the viewer's right, hair tips leaning that way.
+Frame 10 — The hand continues right, hair tips leaning further.
+Frame 11 — The hand reaches its rightmost point. A small heart symbol appears beside the head.
+Frame 12 — The hand starts back to the centre; the heart is slightly larger.
+Frame 13 — The hand is back over the centre, still resting. Eyes closed, blissful smile, heart at its largest.
+Frame 14 — The hand lifts a little off the head. The heart begins to fade smaller.
+Frame 15 — The hand hovers higher; the heart is gone. Eyes open again, happy and warm.
+Frame 16 — The hand hovers at its starting height, expression settling back to the expectant smile, leading straight into frame 1.

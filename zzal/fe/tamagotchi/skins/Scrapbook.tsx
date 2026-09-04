@@ -9,12 +9,26 @@
 // 임의로 정리하지 않았다.
 'use client';
 
-import { useCallback, useRef, type CSSProperties } from 'react';
-import { ASSET, BACKGROUNDS, FRIENDS, MOVES, MOVE_IMG, YEOUL, YEOUL_LOOP, YEOUL_MOOD, bgUrl, josa } from '../constants';
+import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { track } from '@common/analytics';
+import AuthModal from '@common/auth/AuthModal';
+import FeedbackSheet from '../FeedbackSheet';
+import GameSection from '../GameSection';
+import { ASSET, BACKGROUNDS, FRIENDS, MOVE_IMG, YEOUL, YEOUL_LOOP, YEOUL_MOOD, bgUrl, josa } from '../constants';
 import { MAX_GAUGE } from '../rules';
+import { useDex } from '../useDex';
 import { useTamagotchi, type ActionKey } from '../useTamagotchi';
 import { useWander } from '../useWander';
+import { useZzalSession } from '../useZzalSession';
 import '../tamagotchi.css';
+
+/** 남은 시간 한마디. 잠은 5분부터 3시간까지라 초로만 적으면 "10800초" 가 된다. */
+function leftLabel(sec: number): string {
+  const s = Math.max(0, Math.ceil(sec));
+  if (s < 60) return `${s}초`;
+  if (s < 3600) return `${Math.ceil(s / 60)}분`;
+  return `${Math.floor(s / 3600)}시간 ${Math.round((s % 3600) / 60)}분`;
+}
 
 const PEN = "'Nanum Pen Script',cursive";
 const GAEGU = "'Gaegu',cursive";
@@ -36,8 +50,15 @@ export interface SkinProps {
 }
 
 export default function Scrapbook({ mode = 'phone', startWithChar = false, fastTime = true }: SkinProps) {
-  const { state: s, can, derived, actions, sample, form, ui, chat } = useTamagotchi({ startWithChar, fastTime });
+  // ★ 화면이 서버를 직접 부르지 않는다. 세션이 "누구의 어떤 아이인가" 를 정해 손잡이를
+  //   만들어 주고, useTamagotchi 가 그 손잡이로 돈다. 스킨은 그리기만 한다.
+  //   startWithChar 는 없는 아이를 그리는 디자인 확인용이라 서버를 아예 안 붙인다.
+  const session = useZzalSession({ demo: startWithChar });
+  const { state: s, can, derived, actions, sample, form, ui, chat } =
+    useTamagotchi({ startWithChar, fastTime, server: session.server });
   const scroller = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { track('zzal_landing_viewed'); }, []);
 
   // 무대 배경. 지금은 캐릭터마다 하나씩 정해 준다(이름으로 고르므로 늘 같은 방이 나온다).
   // 나중에 사용자가 고르게 하면 이 값만 서버에서 받아 오면 된다.
@@ -55,8 +76,8 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
     const el = scroller.current?.querySelector<HTMLElement>(`[data-sec="${key}"]`);
     if (el) scroller.current?.scrollTo({ top: el.offsetTop, behavior: 'smooth' });
   }, []);
-  const goUpload = () => go('upload');
-  const submit = () => form.submit(() => go('dama'));
+  const goUpload = () => { ui.openUpload(); go('upload'); };
+  const submit = () => { void form.submit(() => go('dama')); };
 
   const pc = mode === 'pc';
   // 캐릭터 그림은 원본이 가로 313px 이다. 그보다 키우면 흐려지므로
@@ -269,7 +290,8 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
 
   // 게이지를 보기 전에 캐릭터가 먼저 말한다. 게이지는 확인용이다.
   const status = !s.hasChar ? '기다리는 중'
-    : s.sleeping ? '자는 중' : s.training ? '훈련 중'
+    : derived.failed ? '태어나지 못했어요'
+    : s.sleeping ? (derived.canWake ? '깨워도 돼요' : '자는 중') : s.training ? '훈련 중'
     : s.phase === 'egg' ? '품는 중' : s.phase === 'hatching' ? '지금 나오려 해요'
     : s.trash >= 3 ? '바닥이 어질러졌어요' : s.fullness <= 1 ? '배고파해요'
     : s.happiness <= 1 ? '시무룩해요' : derived.ready ? '재울 수 있어요' : '평상시';
@@ -298,7 +320,8 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
   // 못 누를 때만 aria-disabled 를 붙인다 — aria-disabled="false" 를 비활성으로
   // 읽어 버리는 도구가 있어서(자동 검증이 실제로 그렇게 읽었다) 눌릴 때는 속성을 뺀다.
   const ARIA: Record<ActionKey, string> = {
-    feed: '밥 주기', pet: '쓰다듬기', clean: '청소하기', train: '훈련하기', sleep: '불 끄고 재우기',
+    feed: '밥 주기', pet: '쓰다듬기', clean: '청소하기', train: '훈련하기',
+    sleep: s.sleeping ? '깨우기' : '불 끄고 재우기',
   };
   const btn = (key: ActionKey, label: string, sub: string, i: number, hint?: string) => {
     const on = can(key);
@@ -334,12 +357,18 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
     ? `${Math.ceil(s.trainLeft)}초`
     : derived.ready ? '다 됐어요' : derived.bonus ? '한 번에 2회분' : `${s.paid} / ${derived.price}회`;
 
+  // 자는 동안에는 같은 자리가 깨우기가 된다(useTamagotchi 의 sleep 주석 참고).
+  const sleepLabel = s.sleeping ? '깨우기' : '불 끄기';
+  const sleepSub = s.sleeping
+    ? (derived.canWake ? '푹 잤어요' : leftLabel(s.sleepLeft))
+    : derived.ready ? '준비됐어요' : '훈련 먼저';
+
   const buttons = [
     btn('feed', '밥', foodSub, 0),
     btn('pet', '쓰다듬', s.happiness >= MAX_GAUGE ? '가득' : '', 1),
     btn('clean', '청소', s.trash > 0 ? `${s.trash}칸` : '깨끗', 2),
     btn('train', '훈련', trainSub, 3, derived.bonus && !s.training && !derived.ready ? '×2' : undefined),
-    btn('sleep', '불 끄기', derived.ready ? '준비됐어요' : '훈련 먼저', 4),
+    btn('sleep', sleepLabel, sleepSub, 4),
   ];
 
   const chars = s.chars.length ? s.chars : [{ name: '빈 자리', note: '' }];
@@ -354,33 +383,16 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
     } as CSSProperties,
   }));
 
-  const DEXROT = [-1.4, .9, -.6, 1.3, -1.1, .7, -1.6, 1.1, -.8, 1.5, -1, .6];
-  // 잠긴 칸에는 자물쇠 대신 여울이가 대신 서 있다. 무엇을 배울 수 있는지는 보여주되
-  // '다음은 이것' 이라고는 말하지 않는다 — 그래야 생성이 실패해도 갈아끼울 수 있다.
-  const dex = MOVES.map((name, i) => {
-    const open = i < s.unlocked;
-    return {
-      name, open, locked: !open, img: open ? (s.imgUrl || YEOUL) : YEOUL,
-      cardStyle: {
-        position: 'relative', background: open ? '#FFFEFA' : 'rgba(252,249,238,.75)',
-        border: '1px solid ' + (open ? '#EDE6D4' : '#E2DAC4'), borderRadius: 2,
-        overflow: 'hidden', padding: 4,
-        boxShadow: open ? '3px 4px 0 rgba(58,53,43,.1)' : 'none',
-        transform: `rotate(${(DEXROT[i] * (pc ? 1 : .45)).toFixed(2)}deg)`,
-      } as CSSProperties,
-      mediaStyle: { position: 'relative', aspectRatio: '313 / 350', background: '#F2EDDD', overflow: 'hidden' } as CSSProperties,
-      imgStyle: {
-        width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-        filter: open ? 'none' : 'grayscale(.75) opacity(.42)',
-      } as CSSProperties,
-      nameStyle: { fontFamily: GAEGU, fontWeight: 700, fontSize: 15, color: open ? INK : '#A79C82' } as CSSProperties,
-      save: () => ui.say(name + ' 저장했어요'),
-      share: () => ui.say(name + ' 공유 링크를 만들었어요'),
-    };
+  // 도감은 서버가 정본이다 — 칸 수도 이름도 useDex 가 만든다(프론트 MOVES 13개가 아니다).
+  // 잠긴 칸에는 자물쇠 대신 여울이가 대신 서 있고, 그 칸에는 **이름이 없다**.
+  const dex = useDex({
+    petId: session.server?.pet?.petId ?? null,
+    unlocked: s.unlocked, pc, fallbackImg: YEOUL, say: ui.say,
+    petName: session.server?.pet?.name,
   });
 
   // 하단 바는 탭이 아니라 섹션 점프다. 앱으로 낼 때 그대로 탭이 된다.
-  const tabDefs: [string, string][] = s.hasChar
+  const tabDefs: [string, string][] = (s.hasChar || derived.booting)
     ? [['dama', '다마고치'], ['dex', '도감'], ['friend', '친구']]
     : [['try', '여울'], ['upload', '올리기'], ['dama', '다마고치'], ['dex', '도감']];
   const TABC = ['#FBEFA8', '#E6EFC9', '#F6DFC9', '#DFE7F1'];
@@ -395,14 +407,16 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
     dot: { width: 7, height: 7, borderRadius: 4, background: t[0] === 'dama' && s.hasChar ? RED : '#BFB49A' } as CSSProperties,
   }));
 
-  const ready = !!s.form.name && s.form.agree;
+  // 서버 모드에서는 그림도 필수다(이름·그림 필수, 세부사항은 선택).
+  const canSubmit = derived.canSubmit && !derived.creating;
   const submitStyle: CSSProperties = {
-    minHeight: 58, border: '1px solid ' + (ready ? '#2F2A22' : '#DCD2B8'), borderRadius: 3,
-    background: ready ? INK : 'rgba(230,224,206,.8)', color: ready ? '#FFF8EC' : '#A79C82',
+    minHeight: 58, border: '1px solid ' + (canSubmit ? '#2F2A22' : '#DCD2B8'), borderRadius: 3,
+    background: canSubmit ? INK : 'rgba(230,224,206,.8)', color: canSubmit ? '#FFF8EC' : '#A79C82',
     fontFamily: GAEGU, fontWeight: 700, fontSize: 17,
-    cursor: ready ? 'pointer' : 'default',
-    boxShadow: ready ? '2px 3px 0 rgba(58,53,43,.2)' : 'none', transition: 'all .22s ease',
+    cursor: canSubmit ? 'pointer' : 'default',
+    boxShadow: canSubmit ? '2px 3px 0 rgba(58,53,43,.2)' : 'none', transition: 'all .22s ease',
   };
+  const submitLabel = derived.creating ? '데려오는 중…' : '알로 데려오기';
   const FROT = [-.8, .6, -.5, .9];
   const imgUrl = s.imgUrl || YEOUL;
   // ★ 상태에 따라 그림이 바뀐다. 게이지를 읽기 전에 이걸 먼저 본다.
@@ -449,7 +463,7 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
         <input type="checkbox" checked={s.form.agree} onChange={e => form.patchForm({ agree: e.target.checked })} style={{ width: 20, height: 20, accentColor: RED, flex: '0 0 auto' }} />
         <span style={{ fontSize: 14, color: '#4A4438' }}>제가 그린 그림이 맞습니다</span>
       </label>
-      <button onClick={submit} disabled={!ready} style={submitStyle}>알로 데려오기</button>
+      <button onClick={submit} disabled={!canSubmit} style={submitStyle}>{submitLabel}</button>
     </>
   );
 
@@ -467,8 +481,10 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
         ref={scroller}
         style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', scrollSnapType: 'y proximity', paddingBottom: 98 }}
       >
-        {/* 섹션 1 — 여울 체험. 다 자란 여울을 직접 만져보는 자리. */}
-        {!s.hasChar && (
+        {/* 섹션 1 — 여울 체험. 다 자란 여울을 직접 만져보는 자리.
+            ★ booting 동안에는 안 그린다 — 이미 키우는 사람에게 이 장이 스치면
+              "내 아이가 사라졌나" 로 읽힌다. */}
+        {!s.hasChar && !derived.booting && (
           <section data-sec="try" style={L.sec}>
             <div style={L.wrap}>
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
@@ -516,7 +532,7 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
         )}
 
         {/* 섹션 2 — 올리기. 여기서 누르면 아래 섹션으로 알이 떨어진다. */}
-        {!s.hasChar && (
+        {!s.hasChar && !derived.booting && (
           <section data-sec="upload" style={L.sec}>
             <div style={L.wrap}>
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
@@ -563,7 +579,7 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
                       <input type="checkbox" checked={s.form.agree} onChange={e => form.patchForm({ agree: e.target.checked })} style={{ width: 20, height: 20, accentColor: RED, flex: '0 0 auto' }} />
                       <span style={{ fontSize: 14, color: '#4A4438' }}>제가 그린 그림이 맞습니다</span>
                     </label>
-                    <button onClick={submit} disabled={!ready} style={submitStyle}>알로 데려오기</button>
+                    <button onClick={submit} disabled={!canSubmit} style={submitStyle}>{submitLabel}</button>
                     <p style={L.smallHand}>올린 그림은 그대로 씁니다. 손대지 않아요.</p>
                   </div>
                 </div>
@@ -602,10 +618,12 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
               <div style={L.room}>
                 <img src={bgUrl(bg)} alt="" style={L.roomBg} />
 
-                {!s.hasChar && (
+                {(!s.hasChar || derived.failed) && (
                   <div style={L.roomEmpty}>
                     <div style={L.eggGhost} />
-                    <span style={{ fontFamily: PEN, fontSize: 20, color: '#8E8375' }}>알이 놓일 자리</span>
+                    <span style={{ fontFamily: PEN, fontSize: 20, color: '#8E8375' }}>
+                      {derived.failed ? '아직 비어 있어요' : '알이 놓일 자리'}
+                    </span>
                   </div>
                 )}
 
@@ -686,7 +704,7 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
                 </div>
               )}
 
-              {/* 품는 중 안내 */}
+              {/* 품는 중 안내. 문구는 서버가 지금 하는 일을 사람 말로 준 것 그대로다. */}
               {s.phase === 'egg' && (
                 <div style={L.notePaper}>
                   <span style={L.h3}>품는 중</span>
@@ -694,11 +712,30 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
                   <span style={{ fontFamily: MONO, fontSize: 11, color: '#A79C82' }}>
                     {Math.floor(s.t / 60)}분 {s.t % 60}초 지남
                   </span>
-                  <button onClick={ui.skipEgg} style={L.smallTag}>시연용으로 넘기기</button>
+                  {/* 시간을 앞당기는 건 시연에서만 된다 — 서버가 굽는 중이라 넘길 수 없다. */}
+                  {!derived.online && <button onClick={ui.skipEgg} style={L.smallTag}>시연용으로 넘기기</button>}
                 </div>
               )}
 
-              {!s.hasChar && (
+              {/* 태어나지 못한 알. 자리를 먹지 않으므로 내려놓으면 곧바로 다시 올릴 수 있다.
+                  ★ 사용자 잘못이 아니라는 것이 먼저 읽혀야 한다 — 그림을 탓하면 다시 안 온다. */}
+              {derived.failed && (
+                <div style={L.notePaper}>
+                  <span style={L.h3}>이 그림은 좀 어렵네요</span>
+                  <p style={L.body}>
+                    이번엔 아이를 깨우지 못했어요. 다른 그림으로 다시 해 보면 잘 되는 경우가 많아요.
+                  </p>
+                  {/* 알을 내려놓아야 올리는 자리가 다시 그려지므로, 한 박자 뒤에 옮긴다. */}
+                  <button
+                    onClick={() => { ui.retryHatch(); window.setTimeout(goUpload, 80); }}
+                    style={L.tagBtnA}
+                  >
+                    다시 해보기
+                  </button>
+                </div>
+              )}
+
+              {!s.hasChar && !derived.booting && (
                 <div style={L.notePaper}>
                   <span style={L.h3}>아직 비어 있어요</span>
                   <p style={L.body}>위에서 아이를 소개해 주면, 여기로 알이 떨어져 부화가 시작됩니다.</p>
@@ -774,6 +811,8 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
           </div>
         </section>
 
+        <GameSection petId={session.server?.pet?.phase === 'ALIVE' ? session.server.pet.petId : null} />
+
         {/* 섹션 4 — 도감. 사진 코너로 고정된 앨범 시트. */}
         <section data-sec="dex" style={L.sec}>
           <div style={L.wrap}>
@@ -782,10 +821,24 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
                 <span style={{ fontFamily: PEN, fontSize: 22, color: RED, lineHeight: 1 }}>모은 것들</span>
                 <h2 style={L.h2}>도감</h2>
               </div>
-              <span style={L.countTag}>{s.unlocked} / {MOVES.length}</span>
+              {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가·첫 동작을 얻었는가)는
+                  FeedbackSheet 이 서버에 직접 물어 정한다. 여기서 판정하면 스킨이 그 규칙을
+                  알아야 하고, 규칙이 바뀔 때마다 스킨이 같이 바뀐다.
+                  hold 는 해금 축하 판 위에 겹쳐 뜨는 것을 막는다(축하가 닫힌 뒤에 올라온다). */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 0 auto' }}>
+                <FeedbackSheet petId={session.server?.pet?.petId ?? null} unlocked={s.unlocked} hold={!!s.justUnlocked} />
+                <span style={L.countTag}>{s.unlocked} / {dex.length}</span>
+              </div>
             </div>
 
             <div style={L.albumSheet}>
+              {/* 한 칸도 없는 것은 고장이 아니다 — 아직 아무것도 안 열린 상태다.
+                  빈 판만 두면 안 그려진 것처럼 보이므로, 어떻게 하면 늘어나는지 말해 준다. */}
+              {dex.length === 0 && (
+                <p style={{ fontFamily: PEN, fontSize: 20, color: SUB, textAlign: 'center', margin: '26px 0 22px' }}>
+                  아직 모은 게 없어요. 재우면 하나씩 늘어나요
+                </p>
+              )}
               <div style={L.dexGrid}>
                 {dex.map((d, i) => (
                   <div key={i} style={d.cardStyle}>
@@ -816,7 +869,7 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
         </section>
 
         {/* 섹션 5 — 친구. 내 아이가 생기기 전에는 보이지 않는다. */}
-        {s.hasChar && (
+        {(s.hasChar || derived.booting) && (
           <section data-sec="friend" style={L.sec}>
             <div style={L.wrap}>
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
@@ -929,6 +982,10 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
       )}
 
       {!!s.toast && <div style={L.toast}>{s.toast}</div>}
+
+      {/* 이 화면의 유일한 로그인 벽. 보고 만지는 것은 전부 열려 있고,
+          "내 아이를 만든다" 는 순간에만 계정을 묻는다(useZzalSession.create). */}
+      <AuthModal open={session.authOpen} onClose={session.closeAuth} />
     </div>
   );
 }

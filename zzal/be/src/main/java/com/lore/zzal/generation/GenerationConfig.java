@@ -3,14 +3,19 @@ package com.lore.zzal.generation;
 import com.lore.common.s3.S3Storage;
 import com.lore.zzal.generation.client.FakeImageClient;
 import com.lore.zzal.generation.client.FlakyImageClient;
+import com.lore.zzal.generation.client.FakeMotionPostProcessor;
 import com.lore.zzal.generation.client.FakePostProcessor;
 import com.lore.zzal.generation.client.FakeTextClient;
 import com.lore.zzal.generation.client.ImageClient;
 import com.lore.zzal.generation.client.OpenAiImageClient;
 import com.lore.zzal.generation.client.OpenAiTextClient;
+import com.lore.zzal.generation.client.MotionPostProcessor;
 import com.lore.zzal.generation.client.PostProcessor;
+import com.lore.zzal.generation.client.PythonMotionPostProcessor;
 import com.lore.zzal.generation.client.PythonPostProcessor;
 import com.lore.zzal.generation.client.TextClient;
+import com.lore.zzal.generation.steps.MotionGridStep;
+import com.lore.zzal.generation.steps.MotionPostStep;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -89,6 +94,29 @@ public class GenerationConfig {
             throw new IllegalStateException(
                     "실제 생성을 켰는데 API 키가 없습니다. ZZAL_OPENAI_API_KEY 를 설정하세요.");
         }
+    }
+
+    @Bean
+    public MotionPostProcessor motionPostProcessor(
+            @Value("${app.zzal.generation.real-postprocess:false}") boolean real,
+            S3Storage storage, PipelineScripts scripts,
+            @Value("${app.zzal.python.bin:python3}") String pythonBin,
+            @Value("${app.zzal.motion-pipeline-version:v1}") String version,
+            @Value("${app.zzal.python.timeout-seconds:60}") int timeout) {
+        if (real) {
+            return new PythonMotionPostProcessor(storage, scripts, pythonBin, version, timeout);
+        }
+        return new FakeMotionPostProcessor(500);
+    }
+
+    @Bean
+    public MotionGridStep motionGridStep(ImageClient imageClient, PromptLoader prompts) {
+        return new MotionGridStep(imageClient, prompts);
+    }
+
+    @Bean
+    public MotionPostStep motionPostStep(MotionPostProcessor motionPostProcessor) {
+        return new MotionPostStep(motionPostProcessor);
     }
 
     @Bean

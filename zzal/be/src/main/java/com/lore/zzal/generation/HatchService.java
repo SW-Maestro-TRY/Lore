@@ -1,6 +1,8 @@
 package com.lore.zzal.generation;
 
 import com.lore.zzal.generation.steps.IdentityStep;
+import com.lore.zzal.pet.ZzalPet;
+import com.lore.zzal.pet.ZzalPetRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,21 +26,26 @@ public class HatchService {
     private final GenerationRecorder recorder;
     private final GenJobRepository jobRepository;
     private final PipelineRegistry registry;
+    private final ZzalPetRepository petRepository;
     private final int maxAttempts;
 
     public HatchService(GenerationRunner runner, GenerationRecorder recorder,
                         GenJobRepository jobRepository, PipelineRegistry registry,
+                        ZzalPetRepository petRepository,
                         @Value("${app.zzal.max-hatch-attempts:2}") int maxAttempts) {
         this.runner = runner;
         this.recorder = recorder;
         this.jobRepository = jobRepository;
         this.registry = registry;
+        this.petRepository = petRepository;
         this.maxAttempts = maxAttempts;
     }
 
     @Async("hatchExecutor")
     public void hatch(Long jobId, Long petId, String version) {
-        runner.run(jobId, petId, version);
+        if (runAttempt(jobId, petId, version)) {
+            return;
+        }
 
         GenJob job = jobRepository.findById(jobId).orElse(null);
         if (job == null || job.getStatus() != GenStatus.FAILED) {
@@ -64,15 +71,39 @@ public class HatchService {
         GenJob retry = jobRepository.save(
                 GenJob.start(petId, GenKind.HATCH, (int) attempts + 1, version, Instant.now()));
         log.info("재시도 — petId={} attempt={}", petId, attempts + 1);
-        runner.run(retry.getId(), petId, version);
-
-        GenJob after = jobRepository.findById(retry.getId()).orElse(null);
-        if (after != null && after.getStatus() == GenStatus.FAILED) {
+        if (!runAttempt(retry.getId(), petId, version)) {
             recorder.markPetFailed(petId);
         }
     }
 
+    /**
+     * 한 번 굽는다. 성공하면 펫을 살린다.
+     *
+     * ★ 재료를 여기서 채워 넘긴다 — 실행기는 무엇을 굽는지 모르고, 부화가 무엇으로
+     *   시작하는지(원본 그림)와 무엇으로 끝나는지(살아난 펫)는 부화의 일이다.
+     */
+    private boolean runAttempt(Long jobId, Long petId, String version) {
+        ZzalPet pet = petRepository.findById(petId).orElse(null);
+        if (pet == null) {
+            log.warn("펫이 없습니다 — petId={}", petId);
+            return false;
+        }
+
+        StepContext ctx = new StepContext(petId, pet.getName(), pet.getNote(), version);
+        ctx.putImage("source", pet.getSourceImageKey());
+
+        RunResult r = runner.run(jobId, ctx,
+                registry.steps(GenKind.HATCH, version),
+                recorder.loadSucceeded(petId, GenKind.HATCH));
+        if (!r.success()) {
+            return false;
+        }
+        recorder.markPetAlive(petId, ctx.image("sheet"), ctx.text("identity"), Instant.now());
+        log.info("부화 완료 — petId={} version={} 비용=${}", petId, version, r.costUsd());
+        return true;
+    }
+
     public String currentVersion() {
-        return registry.currentVersion();
+        return registry.currentVersion(GenKind.HATCH);
     }
 }

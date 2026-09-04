@@ -61,3 +61,23 @@ export function stepAllows(step: Step | undefined, key: string): boolean {
   if (step.gate) return false;         // 해금이 넘겨 줄 때까지 기다린다
   return step.want === key;
 }
+
+/**
+ * 이미 n개를 배운 사람이 첫날 순서의 어디에 서 있어야 하는가.
+ *
+ * ★ 새로고침 때문에 필요하다. 진행 위치는 브라우저에만 있어서(서버는 끝났는지 여부만 안다)
+ *   저장된 값이 없거나 지워졌을 때 0 으로 되돌리면, 이미 밥이 가득한 아이에게 "배가 고픈가
+ *   봐요" 를 띄우고 밥 버튼은 서버가 막아 **그 자리에서 진행이 멈춘다**.
+ *   해금 수는 서버가 들고 있는 사실이므로, 그것만으로 최소 위치를 되찾을 수 있다.
+ */
+export function stepFloor(unlockedCount: number): number {
+  if (unlockedCount <= 0) return 0;
+  let passed = 0;
+  for (let i = 0; i < STEPS.length; i++) {
+    if (!STEPS[i].gate) continue;
+    passed += 1;
+    if (passed === unlockedCount) return i + 1;
+  }
+  // 첫날에 여는 것보다 많이 열었다 = 첫날은 이미 지났다.
+  return STEPS.length;
+}

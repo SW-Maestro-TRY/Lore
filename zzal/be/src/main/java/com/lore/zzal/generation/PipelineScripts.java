@@ -30,6 +30,12 @@ public class PipelineScripts {
 
     private Path root;
 
+    /**
+     * ★ 서버가 뜰 때마다 <b>빈 폴더에</b> 새로 푼다.
+     *
+     * 고정 경로에 덮어쓰면 옛 버전의 파일 중 새 버전에 없는 것이 남아, 스크립트끼리
+     * 섞인 상태로 돌 수 있다. 매번 새 폴더면 그 상태가 원리적으로 생기지 않는다.
+     */
     @PostConstruct
     public void extract() throws IOException {
         root = Files.createTempDirectory("zzal-pipeline-");
@@ -47,6 +53,12 @@ public class PipelineScripts {
             }
             String rel = uri.substring(at + "zzal/pipeline/".length());
             if (rel.isBlank() || rel.endsWith("/")) {
+                continue;
+            }
+            // ★ 파이썬이 만들어 둔 캐시(.pyc)는 풀지 않는다. 새 버전을 올렸을 때 옛 캐시가
+            //   섞여 들어가면, 스크립트는 v2 인데 실행은 v1 로 되는 상황이 생길 수 있다.
+            //   캐시는 파이썬이 실행 시 알아서 다시 만든다.
+            if (rel.contains("__pycache__") || rel.endsWith(".pyc")) {
                 continue;
             }
             Path dst = root.resolve(rel);

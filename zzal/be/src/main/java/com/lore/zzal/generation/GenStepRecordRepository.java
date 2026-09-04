@@ -25,4 +25,17 @@ public interface GenStepRecordRepository extends JpaRepository<GenStepRecord, Lo
             + "(select j.id from GenJob j where j.petId = :petId and j.kind = :kind) "
             + "and s.status = com.lore.zzal.generation.GenStatus.SUCCEEDED order by s.id asc")
     List<GenStepRecord> findSucceededByPet(@Param("petId") Long petId, @Param("kind") GenKind kind);
+
+    /**
+     * 이 <b>모션</b>이 지금까지 어느 시도에서든 성공시킨 단계들.
+     *
+     * ★★ 모션에는 위의 펫 단위 조회를 쓰면 안 된다. 한 펫이 모션을 12개 배우는데
+     *    전부 kind = MOTION 이라, 펫으로 묶으면 <b>첫 번째 모션의 격자를 두 번째 모션이
+     *    이어받는다.</b> 그러면 배우는 동작이 다른데 그림은 같아지고, 예외도 안 나서
+     *    사용자 화면에서만 드러난다.
+     */
+    @Query("select s from GenStepRecord s where s.jobId in "
+            + "(select j.id from GenJob j where j.motionId = :motionId) "
+            + "and s.status = com.lore.zzal.generation.GenStatus.SUCCEEDED order by s.id asc")
+    List<GenStepRecord> findSucceededByMotion(@Param("motionId") Long motionId);
 }

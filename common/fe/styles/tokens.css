@@ -53,6 +53,15 @@
   --btn-primary-bg: #17121f;
   --btn-primary-fg: #ffffff;
 
+  /* 모달 뒤를 덮는 막. 뒤 화면을 "꺼진 것" 이 아니라 "잠깐 물러난 것" 으로 보이게
+   * 완전 검정 대신 잉크색을 옅게 깐다. */
+  --scrim: rgba(23, 18, 31, 0.42);
+
+  /* 오류 문구. 액센트(주황)와 색이 비슷해 보이지만 역할이 달라 따로 둔다 —
+   * 나중에 브랜드 색이 바뀌어도 오류는 오류색으로 남아야 한다. */
+  --danger: #b3311a;
+  --danger-tint: #fdeeea;
+
   /* 섹션 */
   --ink-section: #17121f;
   --header-bg: rgba(255, 255, 255, 0.82);
@@ -111,6 +120,10 @@
 
   --btn-primary-bg: #f3f0fa;
   --btn-primary-fg: #0e0b16;
+
+  --scrim: rgba(4, 2, 10, 0.66);
+  --danger: #ff8f77;
+  --danger-tint: rgba(255, 143, 119, 0.12);
 
   --ink-section: #08060f;
   --header-bg: rgba(14, 11, 22, 0.82);

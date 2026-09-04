@@ -72,9 +72,18 @@ public class GenerationRecorder {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void succeedJob(Long jobId, Long petId, String sheetKey, String identityText,
-                           BigDecimal total, Instant now) {
+    public void succeedJob(Long jobId, BigDecimal total, Instant now) {
         jobRepository.findById(jobId).ifPresent(j -> j.succeed(total, now));
+    }
+
+    /**
+     * 부화가 끝나 펫을 살린다.
+     *
+     * ★ job 성공 처리와 갈라 둔 이유 — 모션도 같은 실행기를 쓰는데, 모션이 끝났다고
+     *   펫이 다시 태어나면 안 된다. "작업이 성공했다" 와 "그래서 무엇이 되었나" 는 다른 일이다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markPetAlive(Long petId, String sheetKey, String identityText, Instant now) {
         petRepository.findById(petId).ifPresent(p -> p.markAlive(sheetKey, identityText, now));
     }
 
@@ -101,6 +110,24 @@ public class GenerationRecorder {
         List<GenStepRecord> targets = stepRepository.findSucceededByPet(petId, kind).stream()
                 .filter(s -> s.getName().equals(stepName))
                 .toList();
+        targets.forEach(stepRepository::delete);
+        return targets.size();
+    }
+
+    /**
+     * 이 모션이 지금까지 성공시킨 단계를 전부 폐기한다.
+     *
+     * ★★ 왜 필요한가 — 게이트가 "이 그림은 안 된다" 고 했는데 재시도가
+     *   <b>바로 그 그림을 다시 판정한다.</b> 재시도는 성공한 단계를 건너뛰는데,
+     *   격자도 후처리도 "성공" 으로 남아 있어 실행기가 둘 다 건너뛰기 때문이다.
+     *   그러면 세 번을 시도해도 같은 결과가 세 번 나오고, 시간만 쓰고 실패로 끝난다.
+     *
+     *   부화에서 이미 겪은 것과 같은 종류다 — 거부당한 문단을 폐기하지 않으면
+     *   같은 문단으로 또 거부당한다(discardSucceeded 주석 참고).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int discardMotionSteps(Long motionId) {
+        List<GenStepRecord> targets = stepRepository.findSucceededByMotion(motionId);
         targets.forEach(stepRepository::delete);
         return targets.size();
     }

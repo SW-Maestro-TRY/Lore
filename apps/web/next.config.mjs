@@ -42,10 +42,20 @@ const nextConfig = {
     // app.js 가 주소를 보고 그중 하나를 띄운다.
     const page = (path, file) => ({ source: `/webtoon${path}`, destination: `/static/${file}` });
 
+    // 로컬에서 백엔드를 따로 띄울 때만 켠다(예: API_PROXY=http://localhost:8080).
+    //
+    // ★ 브라우저에서 8080 을 직접 부르면 안 된다 — 인증이 HttpOnly 쿠키라
+    //   출처가 다르면 쿠키가 안 붙고 모든 요청이 401 이 된다. 배포에서는 CloudFront 가
+    //   같은 도메인으로 묶어 주므로 이 규칙이 필요 없다.
+    const apiProxy = process.env.API_PROXY
+      ? [{ source: '/api/:path*', destination: `${process.env.API_PROXY}/api/:path*` }]
+      : [];
+
     return {
       // beforeFiles — 라우트가 있든 없든 이쪽이 먼저 잡는다.
       // 나중에 /webtoon 아래에 React 화면이 생겨도 이 규칙이 계속 유효하도록.
       beforeFiles: [
+        ...apiProxy,
         // page('', 'index.html') — 홈은 뺐다. React 화면(app/(domains)/webtoon)이 대신 잡는다.
         page('/works',        'index.html'),   // 둘러보기 (?run= 이 붙으면 그 작품)
         page('/mypage',       'index.html'),   // 마이페이지
