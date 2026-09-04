@@ -34,9 +34,14 @@ public class PythonPostProcessor implements PostProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(PythonPostProcessor.class);
 
-    /** 화면이 쓰는 이름. 스크립트가 이 이름으로 파일을 만든다. */
-    private static final List<String> STATES =
-            List.of("idle", "eat", "hungry", "clean", "happy", "sad", "pet", "train");
+    /**
+     * 스크립트가 만들어야 하는 파일 이름들. 화면이 이 이름으로 그림을 찾는다.
+     *
+     * ★ 코드에 박지 않고 설정({@code app.zzal.hatch.states.{버전}})에서 받는다 — v1 은 8종
+     *   (idle·eat·…·train), v2 는 카탈로그 key 16종(base·eat·…·sit)으로 <b>버전마다 다르고</b>,
+     *   출력 이름은 생성 세션(파이썬)과 백엔드가 같이 지켜야 하는 약속이라 한 곳(yml)에 둔다.
+     */
+    private final List<String> states;
 
     private final S3Storage storage;
     private final String pythonPath;
@@ -44,11 +49,24 @@ public class PythonPostProcessor implements PostProcessor {
     private final int timeoutSeconds;
 
     public PythonPostProcessor(S3Storage storage, PipelineScripts scripts,
-                               String pythonPath, String version, int timeoutSeconds) {
+                               String pythonPath, String version, int timeoutSeconds,
+                               List<String> states) {
+        if (states == null || states.isEmpty()) {
+            // 비어 있으면 "0종 중 0종 완료" 로 조용히 성공한다. 그 펫은 그림이 하나도 없는데
+            // 부화는 끝난 것이 되고, 그건 화면을 봐야만 드러난다.
+            throw new IllegalStateException(
+                    "후처리 출력 목록이 비었습니다. app.zzal.hatch.states.%s 를 설정하세요".formatted(version));
+        }
         this.storage = storage;
         this.pythonPath = pythonPath;
         this.scriptPath = scripts.script(version, "service_post.py");
         this.timeoutSeconds = timeoutSeconds;
+        this.states = List.copyOf(states);
+    }
+
+    /** 설정된 출력 이름들(테스트·점검용). */
+    public List<String> states() {
+        return states;
     }
 
     @Override
@@ -62,10 +80,10 @@ public class PythonPostProcessor implements PostProcessor {
             run(grid, out);
 
             List<String> uploaded = new ArrayList<>();
-            for (String state : STATES) {
+            for (String state : states) {
                 Path file = out.resolve(state + ".webp");
                 if (!Files.exists(file)) {
-                    // 8종 중 하나라도 없으면 실패로 본다. 빠진 채로 지급하면 화면이
+                    // 목록 중 하나라도 없으면 실패로 본다. 빠진 채로 지급하면 화면이
                     // 그 상태에서 빈 그림을 그리고, 그건 실제로 써 봐야만 드러난다.
                     throw new IllegalStateException("후처리 결과가 없습니다: " + state + ".webp");
                 }

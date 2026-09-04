@@ -19,6 +19,10 @@ import com.lore.zzal.generation.steps.MotionPostStep;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * 진짜로 부를지, 흉내만 낼지 고른다.
@@ -125,10 +129,32 @@ public class GenerationConfig {
             S3Storage storage, PipelineScripts scripts,
             @Value("${app.zzal.python.bin:python3}") String pythonBin,
             @Value("${app.zzal.pipeline-version:v1}") String version,
-            @Value("${app.zzal.python.timeout-seconds:60}") int timeout) {
+            @Value("${app.zzal.python.timeout-seconds:60}") int timeout,
+            Environment env) {
+        // ★ 가짜일 때도 목록을 읽는다 — 설정이 빠졌다는 사실을 실제 후처리를 켜는 날까지
+        //   숨기지 않기 위해서다. 빠졌으면 여기서 설정 이름을 말하며 부팅이 막힌다.
+        List<String> states = hatchStates(env, version);
         if (real) {
-            return new PythonPostProcessor(storage, scripts, pythonBin, version, timeout);
+            return new PythonPostProcessor(storage, scripts, pythonBin, version, timeout, states);
         }
         return new FakePostProcessor(500);
+    }
+
+    /**
+     * 부화 후처리가 만들어야 하는 파일 이름 — {@code app.zzal.hatch.states.{버전}}.
+     *
+     * v1 은 8종(idle…train), v2 는 카탈로그 key 16종. 버전마다 다르므로 키를 버전으로 고른다.
+     */
+    static List<String> hatchStates(Environment env, String version) {
+        String property = "app.zzal.hatch.states." + version;
+        String configured = env.getProperty(property, "");
+        List<String> states = Arrays.stream(configured.split("\\s*,\\s*"))
+                .filter(s -> !s.isBlank())
+                .toList();
+        if (states.isEmpty()) {
+            throw new IllegalStateException(
+                    "부화 후처리 출력 목록이 없습니다. application.yml 의 %s 를 설정하세요".formatted(property));
+        }
+        return states;
     }
 }
