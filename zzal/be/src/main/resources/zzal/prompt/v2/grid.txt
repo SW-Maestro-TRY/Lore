@@ -1,0 +1,32 @@
+# GRID_SPEC: marks=25 layout=lattice_5x5
+
+Use case: stylized-concept
+Asset type: final virtual-pet state sheet, one square PNG.
+
+Input image 1: {IDENT}
+
+Create ONE square 1:1 image, a precise grid of 16 equal invisible cells arranged as 4 columns x 4 rows, read left-to-right then top-to-bottom. Entire backdrop perfectly uniform pure chroma green #00FF00, no variation, texture, gradient, floor, ground line, horizon, shadow, separators, gutters, or lines.
+
+GRID POINTS ARE CRITICAL: exactly 25 small thin plus crosses in a perfectly regular 5x5 lattice at all cell corners, behind all art. 5 identical x coordinates and 5 identical y coordinates; outer rows/columns centered on image edges, inner points exactly on the cell divisions. Each cross has equal short horizontal/vertical strokes, about 1/16 cell width. Columns 1, 3, 5 pure magenta #FF00FF; columns 2, 4 pure cyan #00FFFF. Flat solid. No magenta or cyan anywhere else. Only crosses, never connect them, none nudged or missing.
+
+Place one full-body front-view copy of the same character in each cell, same scale and baseline. Each cell is TALLER THAN IT IS WIDE, so keep the character narrow and upright. Character small enough for a clearly visible green band roughly one cross-width above the complete head including every hair strand, ahoge, ear, horn or hat, below complete shoes, and on both sides, with all symbols and raised arms also inside the cell. Nothing touches/crosses any cell boundary or grid mark, nothing cropped. Feet share identical local x/y across all cells. Fixed frontal eye-level camera; no body/head yaw, no walking, no drift, no crop. No cast/contact shadows. If it does not fit, draw SMALLER — generous clearance beats character size.
+
+The 16 cells form 8 independent adjacent 2-frame A-B loops. Inside each pair preserve identity, scale, body placement and foot position, changing only the specified tiny motion. State mapping and exact content:
+
+1-2 NEUTRAL: no symbol. Upright, arms relaxed, eyes open, calm closed smile, nothing held. 1 shoulders/chest lowest exhale; 2 shoulders/chest/head rise only slightly inhale.
+
+3-4 EATING: one ring doughnut held with BOTH hands directly before mouth, elbows tucked, feet/body fixed. 3 whole round doughnut, mouth wide open, happy open eyes. 4 clear bite missing, mouth closed, one cheek rounded chewing, eyes squeezed into happy curves; hands unmoved.
+
+5-6 HAPPY: arms bent/lifted before chest, loose fists, big open smile, eyes happy arcs. Exactly two opaque four-point sparkles, one at each side of head at ear height. 5 sparkles small, soles low; 6 sparkles larger at same centers, character rises slightly onto toes, same foot x.
+
+7-8 UNHAPPY: absolutely no airborne symbol and plain green above head; gloom carried entirely by body and face. Shoulders strongly dropped/rounded, limp arms slightly behind body, head down, half-lidded downward eyes, brows outer ends down, clear frown. Vertical grey gloom shading lines only ON upper half of face. Feet fixed, never crouch/sit/kneel. 7 lowest shoulders, head most down; 8 shoulders/head lift only tiny amount, same expression, no arm relocated.
+
+9-10 SICK: no symbol; illness carried entirely by body and face. One hand pressed flat against the forehead, the other arm hanging limp; shoulders slumped, knees slightly bent but feet planted; eyes half-closed and unfocused, brows raised toward the center, small wavy unhappy mouth, face a little paler with two short faint grey shading lines under the eyes. 9 slumped; 10 sags a little further — knees bend slightly more and the head drops lower, hand still on the forehead. Feet unmoved.
+
+11-12 TRAINING: frontal fixed body, feet planted, open determined eyes and closed mouth. Exactly one dumbbell held ONLY by character's RIGHT arm, appearing on VIEWER'S LEFT in BOTH cells. Other arm hangs relaxed on viewer's right, never lifts. Exactly one sweat drop by temple. Dumbbell never above shoulder; only the forearm moves, torso/head/legs still. 11 dumbbell arm straight down, dumbbell near hip. 12 same upper arm against body, only forearm curls so dumbbell reaches chest height; sweat drop slightly larger same center. Never switch arms, never two dumbbells.
+
+13-14 SHY: bashful, no airborne symbol. Both hands brought together in front of the belly with the index fingertips touching, shoulders raised, head tipped slightly down and to one side, eyes glancing sideways, small wobbly closed-mouth smile, clear pink blush ovals on both cheeks; feet planted. 13 fingertips touching, blush; 14 head tips a tiny amount further and the blush ovals grow slightly at the same place; hands unmoved.
+
+15-16 CALLING: calling the viewer over. Character's RIGHT arm (VIEWER'S LEFT) raised straight up above the head with an open hand; other arm relaxed at the side; mouth open wide as if shouting happily, eyes open and bright. No speech bubble, no symbol. 15 raised arm angled outward, away from the head; 16 raised arm swung inward past the top of the head, the whole arm pivoting at the shoulder in a big wave. Head, torso, other arm and feet unchanged.
+
+Symbols are small, opaque, flat style in the sheet's own look, never larger than head, never touching cell bounds, and keep the same position within a pair while only size changes. Neutral, unhappy, sick, shy and calling have no symbols. Character keeps the sheet's flat cel colouring, soft dark outlines, chibi/SD proportions and limited palette, instantly identical in every cell. No other effects, text, letters, digits, labels, captions, watermark, speech bubble, motion lines, gradients, texture, vignette, lighting change, random blink, floor, or shadow. Prioritize generous cell clearance over character size.
