@@ -19,14 +19,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { track } from '@common/analytics';
 import type { ApiError } from '../lib/api';
-import type { CareAction, Learned, PetDetail } from '../lib/pet';
-import { answerFor } from './chat';
-import { MOVES, NAMES } from './constants';
+import type { CareAction, Learned, PetDetail } from '../lib/_v1/pet';
+import { answerFor } from './_v1/chat';
+import { MOVES, NAMES } from './_v1/constants';
 import {
   DEMO, MAX_FOOD, MAX_GAUGE, MAX_TRASH, REACTION_MS, REAL, WAKE_HAPPINESS,
   moodOf, priceOf, trainGain, type Mood,
-} from './rules';
-import { DONE_LINE, STEPS, stepAllows, stepFloor, type Step } from './tutorial';
+} from './_v1/rules';
+import { DONE_LINE, STEPS, stepAllows, stepFloor, type Step } from './_v1/tutorial';
 
 /** 'failed' 는 서버 모드에만 있다 — 태어나지 못한 알(PetPhase.FAILED). */
 export type Phase = 'none' | 'egg' | 'hatching' | 'live' | 'failed';

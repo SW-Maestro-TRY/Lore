@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { track } from '@common/analytics';
 import { useAuth } from '@common/auth/useAuth';
 import { ApiError } from '../lib/api';
-import { createPet, listPets } from '../lib/pet';
+import { createPet, listPets } from '../lib/_v1/pet';
 import { uploadImage } from '../lib/upload';
 import { usePet } from '../lib/usePet';
 import type { CreateInput, TamagotchiServer } from './useTamagotchi';

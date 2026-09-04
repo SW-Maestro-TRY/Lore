@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { ApiError } from '../lib/api';
 import { getCurrentGame, guess as guessApi, startGame, type GameState, type GuessResult, type Side } from '../lib/game';
-import { YEOUL_MOOD } from './constants';
+import { YEOUL_MOOD } from './_v1/constants';
 
 const PEN = "'Nanum Pen Script',cursive";
 const GAEGU = "'Gaegu',cursive";
@@ -85,13 +85,13 @@ export default function GameSection({ petId }: GameSectionProps) {
         setLast(r);
         // ★ 응답이 곧 최신 상태다. 친 뒤에 다시 조회하지 않는다 — 왕복이 두 번이 되고
         //   그 사이에 값이 어긋난다(usePet 이 지키는 규칙과 같다).
-        setState(
-          r.finished
-            ? { playing: false, gameId: null, round: null, hits: null,
-                rounds: r.rounds, winAt: r.winAt, remainingToday: r.remainingToday }
-            : { playing: true, gameId: r.gameId, round: r.nextRound, hits: r.hits,
-                rounds: r.rounds, winAt: r.winAt, remainingToday: r.remainingToday },
-        );
+        setState({
+          kind: 'LEFT_RIGHT', finished: r.finished, win: r.win,
+          rounds: r.rounds, winAt: r.winAt, remainingToday: r.remainingToday,
+          ...(r.finished
+            ? { playing: false, gameId: null, round: null, hits: null }
+            : { playing: true, gameId: r.gameId, round: r.nextRound, hits: r.hits }),
+        });
       } catch (e) {
         setError(messageOf(e));
       } finally {

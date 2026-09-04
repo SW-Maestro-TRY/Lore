@@ -18,7 +18,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { assetUrl } from '../lib/assets';
 import { copyImageLink, downloadImage, imageFileName } from '../lib/download';
-import { getDex, type OpenedMotion } from '../lib/motion';
+import { getDex, type OpenedMotion } from '../lib/_v1/motion';
 
 /** 스크랩북의 종이 결. 카드가 한 장씩 삐뚤게 붙어 있는 각도(도). */
 const DEXROT = [-1.4, .9, -.6, 1.3, -1.1, .7, -1.6, 1.1, -.8, 1.5, -1, .6];

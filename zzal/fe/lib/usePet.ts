@@ -24,7 +24,7 @@ import {
   type CareAction,
   type Learned,
   type PetDetail,
-} from './pet';
+} from './_v1/pet';
 
 /** 부화 중 다시 묻는 간격. 서버가 "몇 초마다 불러 보라" 고 안내하는 값. */
 const POLL_MS = 3000;

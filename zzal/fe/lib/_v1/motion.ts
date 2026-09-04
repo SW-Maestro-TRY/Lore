@@ -3,7 +3,7 @@
 // ★ pet.ts 와 같은 약속 — 여기 타입은 서버의 MotionResponses 를 그대로 옮긴 것이고,
 //   화면이 쓰기 편하게 이름을 바꾸거나 값을 계산해 넣지 않는다. 서버가 정본이다.
 
-import { request } from './api';
+import { request } from '../api';
 
 /** 이미 연 동작 하나. */
 export interface OpenedMotion {
