@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 도감 API — 그 펫이 지금까지 연 동작들.
  *
+ * ⚠️ v1. PR-3 에서 `GET /{id}/album`(18칸, 잠긴 칸도 이름+조건)으로 교체된다.
+ *
  * <h3>왜 펫 상태 조회에 얹지 않았나</h3>
  * 펫 상태(PetResponses.Detail)는 3초마다 폴링하는 응답이다. 거기에 목록을 얹으면
  * 부화를 기다리는 동안에도 매번 같은 목록이 실려 나간다. 도감은 사용자가 그 자리로
@@ -33,10 +35,12 @@ public class MotionController {
 
     private final PetService petService;
     private final MotionService motionService;
+    private final MotionCatalog catalog;
 
-    public MotionController(PetService petService, MotionService motionService) {
+    public MotionController(PetService petService, MotionService motionService, MotionCatalog catalog) {
         this.petService = petService;
         this.motionService = motionService;
+        this.catalog = catalog;
     }
 
     @Operation(summary = "도감 조회", description = """
@@ -58,6 +62,6 @@ public class MotionController {
         // 소유권 판정이 먼저다. 통과하지 못하면 목록을 읽지도 않는다.
         petService.get(userId, petId);
         return ApiResponse.ok(MotionResponses.Dex.of(
-                motionService.opened(petId), petService.totalMotions()));
+                motionService.opened(petId), catalog.total()));
     }
 }
