@@ -60,7 +60,7 @@ public class PetController {
     public ApiResponse<List<PetResponses.Detail>> list(@LoginUser Long userId) {
         Instant now = Instant.now();
         List<PetResponses.Detail> pets = petService.list(userId).stream()
-                .map(p -> PetResponses.Detail.from(p, petService.currentJob(p.getId()), now))
+                .map(p -> PetResponses.Detail.from(p, petService.currentStepLabel(p.getId()), now))
                 .toList();
         return ApiResponse.ok(pets);
     }
@@ -76,6 +76,6 @@ public class PetController {
     public ApiResponse<PetResponses.Detail> detail(@LoginUser Long userId, @PathVariable Long petId) {
         Instant now = Instant.now();
         ZzalPet pet = petService.get(userId, petId);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, petService.currentJob(petId), now));
+        return ApiResponse.ok(PetResponses.Detail.from(pet, petService.currentStepLabel(petId), now));
     }
 }

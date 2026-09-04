@@ -20,10 +20,16 @@ public interface GenJobRepository extends JpaRepository<GenJob, Long> {
     long countByPetIdAndKind(Long petId, GenKind kind);
 
     /**
+     * 진행 중인 채로 멈춘 작업. 서버가 재시작되면 메모리에서 돌던 부화가 사라지므로,
+     * 다시 뜰 때 이걸로 찾아 **성공한 단계는 건너뛰고** 이어서 굽는다.
+     */
+    List<GenJob> findByStatusInAndStartedAtBefore(List<GenStatus> statuses, Instant before);
+
+    /**
      * 기간 내 총 비용. 성공·실패를 가리지 않는다 — 실패해도 돈은 나갔기 때문이다.
      *
      * 비용 알림(임계 초과·일일 요약)이 이 값을 읽는다.
      */
-    @Query("select coalesce(sum(j.costUsd), 0) from GenJob j where j.startedAt >= :from")
+    @Query("select coalesce(sum(j.totalCostUsd), 0) from GenJob j where j.startedAt >= :from")
     BigDecimal sumCostSince(@Param("from") Instant from);
 }

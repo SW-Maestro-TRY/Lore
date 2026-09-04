@@ -51,9 +51,15 @@ public class GenJob {
     @Column(nullable = false)
     private int attempt;
 
-    @Enumerated(EnumType.STRING)
+    /**
+     * 어느 파이프라인 버전으로 구웠는가. "v1" · "v2" …
+     *
+     * ★ 이게 없으면 나중에 "이 펫은 왜 다른 펫보다 어색하지" 를 답할 수 없다.
+     *   프롬프트·모델·단계 구성이 계속 바뀔 예정이라, 결과물마다 어떤 조합으로 만들어졌는지
+     *   남겨야 좋아진 건지 나빠진 건지 비교가 된다(실험에서 판정본을 동결하는 것과 같은 이유).
+     */
     @Column(nullable = false, length = 20)
-    private GenStep step;
+    private String pipelineVersion;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -64,17 +70,28 @@ public class GenJob {
     private GenErrorCode errorCode;
 
     /**
-     * 이번 시도에 든 비용(달러).
+     * 이번 시도에 든 **총** 비용(달러). 단계별 내역은 zzal_gen_step 에 있다.
      *
      * 소수점 계산에 double 을 쓰지 않는다 — 0.1 + 0.2 가 0.30000000000000004 가 되는 식으로
      * 오차가 쌓인다. 돈을 다룰 때는 BigDecimal 을 쓴다.
      * 실측 기준 부화 1회 = $0.19 (시트 0.063 + 문단 0.018 + 격자 0.086)
      */
     @Column(precision = 10, scale = 4)
-    private BigDecimal costUsd;
+    private BigDecimal totalCostUsd;
 
+    /** 작업이 만들어진 시각(줄 서기 시작). */
     @Column(nullable = false)
     private Instant startedAt;
+
+    /**
+     * 실제로 굽기 시작한 시각.
+     *
+     * ★ startedAt 과 나누는 이유 — 동시 생성이 3개로 제한돼 있어 몰리면 줄을 선다.
+     *   사용자가 체감하는 시간은 **대기 + 생성**인데, 이 칸이 없으면 생성 시간만 보게 되어
+     *   "왜 오래 걸렸지" 를 설명할 수 없다. (runningAt - startedAt) 이 대기 시간이다.
+     */
+    @Column
+    private Instant runningAt;
 
     @Column
     private Instant finishedAt;
@@ -82,34 +99,35 @@ public class GenJob {
     protected GenJob() {
     }
 
-    public static GenJob start(Long petId, GenKind kind, int attempt, Instant now) {
+    public static GenJob start(Long petId, GenKind kind, int attempt, String pipelineVersion, Instant now) {
         GenJob job = new GenJob();
         job.petId = petId;
         job.kind = kind;
         job.attempt = attempt;
-        job.step = GenStep.QUEUED;
+        job.pipelineVersion = pipelineVersion;
         job.status = GenStatus.QUEUED;
         job.startedAt = now;
         return job;
     }
 
-    /** 단계가 넘어갈 때마다 부른다. 화면의 "부화 중" 표시가 이 값을 읽는다. */
-    public void moveTo(GenStep step) {
-        this.step = step;
+    public void markRunning(Instant now) {
         this.status = GenStatus.RUNNING;
+        if (this.runningAt == null) {
+            this.runningAt = now;
+        }
     }
 
-    public void succeed(BigDecimal costUsd, Instant now) {
+    public void succeed(BigDecimal totalCostUsd, Instant now) {
         this.status = GenStatus.SUCCEEDED;
-        this.costUsd = costUsd;
+        this.totalCostUsd = totalCostUsd;
         this.finishedAt = now;
     }
 
     /** 실패해도 그때까지 쓴 돈은 나갔으므로 함께 기록한다. */
-    public void fail(GenErrorCode errorCode, BigDecimal costUsd, Instant now) {
+    public void fail(GenErrorCode errorCode, BigDecimal totalCostUsd, Instant now) {
         this.status = GenStatus.FAILED;
         this.errorCode = errorCode;
-        this.costUsd = costUsd;
+        this.totalCostUsd = totalCostUsd;
         this.finishedAt = now;
     }
 
@@ -137,10 +155,6 @@ public class GenJob {
         return attempt;
     }
 
-    public GenStep getStep() {
-        return step;
-    }
-
     public GenStatus getStatus() {
         return status;
     }
@@ -149,12 +163,20 @@ public class GenJob {
         return errorCode;
     }
 
-    public BigDecimal getCostUsd() {
-        return costUsd;
+    public String getPipelineVersion() {
+        return pipelineVersion;
+    }
+
+    public BigDecimal getTotalCostUsd() {
+        return totalCostUsd;
     }
 
     public Instant getStartedAt() {
         return startedAt;
+    }
+
+    public Instant getRunningAt() {
+        return runningAt;
     }
 
     public Instant getFinishedAt() {
