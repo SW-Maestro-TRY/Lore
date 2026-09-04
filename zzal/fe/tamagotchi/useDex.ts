@@ -17,6 +17,7 @@
 
 import { useEffect, useState, type CSSProperties } from 'react';
 import { assetUrl } from '../lib/assets';
+import { copyImageLink, downloadImage, imageFileName } from '../lib/download';
 import { getDex, type OpenedMotion } from '../lib/motion';
 
 /** 스크랩북의 종이 결. 카드가 한 장씩 삐뚤게 붙어 있는 각도(도). */
@@ -56,6 +57,13 @@ export interface UseDexOptions {
   fallbackImg: string;
   /** 한마디 띄우기. 저장·공유가 쓴다. */
   say: (message: string) => void;
+  /**
+   * 펫 이름. 받은 파일 이름에 들어간다.
+   *
+   * ★ 여러 아이를 키우게 되면(유료 슬롯) 받은 파일이 전부 같은 이름이 되어
+   *   어느 아이 것인지 구분이 안 된다. 지금은 한 마리지만 이름을 넣어 둔다.
+   */
+  petName?: string | null;
 }
 
 /**
@@ -63,7 +71,7 @@ export interface UseDexOptions {
  *
  * 아직 못 물어봤거나 펫이 없으면 빈 배열이다 — 스킨은 그때 "재우면 하나씩 늘어나요" 를 띄운다.
  */
-export function useDex({ petId, unlocked, pc, fallbackImg, say }: UseDexOptions): DexCard[] {
+export function useDex({ petId, unlocked, pc, fallbackImg, say, petName }: UseDexOptions): DexCard[] {
   const [opened, setOpened] = useState<OpenedMotion[]>([]);
   const [total, setTotal] = useState(0);
 
@@ -129,8 +137,33 @@ export function useDex({ petId, unlocked, pc, fallbackImg, say }: UseDexOptions)
       nameStyle: {
         fontFamily: GAEGU, fontWeight: 700, fontSize: 15, color: open ? INK : '#A79C82',
       } as CSSProperties,
-      save: () => say(name + ' 저장했어요'),
-      share: () => say(name + ' 공유 링크를 만들었어요'),
+      // ★ 어느 갈래로 끝나든 반드시 한마디를 띄운다. 아무 일도 안 일어나는 버튼이 가장 나쁘다 —
+      //   사용자는 자기 손이 빗나간 줄 알고 계속 누르고, 우리는 아무것도 모른다.
+      //   되는 경우·아이폰이라 새 탭으로 연 경우·아직 그림이 없는 경우가 전부 다른 말이어야 한다.
+      save: () => {
+        if (!motion) return;
+        // ★ await 없이 곧바로 부른다. downloadImage 안의 iOS 갈래가 새 탭을 여는데,
+        //   여기서 한 번이라도 기다렸다 부르면 "사용자가 누른 것" 자격을 잃어 팝업으로 막힌다.
+        void downloadImage(assetUrl(motion.imageKey), imageFileName(petName || 'lore', name)).then((r) => {
+          if (r.outcome === 'saved') say(name + ' 저장했어요');
+          else if (r.outcome === 'opened') say('새 탭에서 열었어요. 그림을 꾹 눌러 저장해 주세요');
+          // 가짜 생성이거나 만들다 실패하면 S3 에 파일이 없다. 고장이 아니라 아직인 것이라 말이 다르다.
+          else if (r.code === 'http_404') say('아직 그림이 준비되지 않았어요');
+          else if (r.code === 'popup_blocked') say('새 탭이 막혀 있어요. 팝업을 허용해 주세요');
+          else say('저장하지 못했어요. 잠시 뒤 다시 눌러 주세요');
+        });
+      },
+      // ★ 지금은 그림 주소를 복사하는 데까지다. X 공유·OG 카드는 **인증 없이 남의 펫이 보이는
+      //   새 표면**을 만드는 일이라 따로 정해야 한다. 그 페이지가 생기면 복사할 주소만 바뀐다.
+      share: () => {
+        if (!motion) return;
+        void copyImageLink(assetUrl(motion.imageKey)).then((r) => {
+          // 클립보드가 막힌 브라우저에서는 주소창을 띄워 직접 복사하게 했다. 말이 달라야 한다.
+          if (r.manual) say('주소를 직접 복사해 주세요');
+          else if (r.ok) say('링크를 복사했어요');
+          else say('링크를 복사하지 못했어요');
+        });
+      },
     };
   });
 }

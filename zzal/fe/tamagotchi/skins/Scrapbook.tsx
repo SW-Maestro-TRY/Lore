@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { track } from '@common/analytics';
 import AuthModal from '@common/auth/AuthModal';
+import FeedbackSheet from '../FeedbackSheet';
 import GameSection from '../GameSection';
 import { ASSET, BACKGROUNDS, FRIENDS, MOVE_IMG, YEOUL, YEOUL_LOOP, YEOUL_MOOD, bgUrl, josa } from '../constants';
 import { MAX_GAUGE } from '../rules';
@@ -387,6 +388,7 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
   const dex = useDex({
     petId: session.server?.pet?.petId ?? null,
     unlocked: s.unlocked, pc, fallbackImg: YEOUL, say: ui.say,
+    petName: session.server?.pet?.name,
   });
 
   // 하단 바는 탭이 아니라 섹션 점프다. 앱으로 낼 때 그대로 탭이 된다.
@@ -819,7 +821,14 @@ export default function Scrapbook({ mode = 'phone', startWithChar = false, fastT
                 <span style={{ fontFamily: PEN, fontSize: 22, color: RED, lineHeight: 1 }}>모은 것들</span>
                 <h2 style={L.h2}>도감</h2>
               </div>
-              <span style={L.countTag}>{s.unlocked} / {dex.length}</span>
+              {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가·첫 동작을 얻었는가)는
+                  FeedbackSheet 이 서버에 직접 물어 정한다. 여기서 판정하면 스킨이 그 규칙을
+                  알아야 하고, 규칙이 바뀔 때마다 스킨이 같이 바뀐다.
+                  hold 는 해금 축하 판 위에 겹쳐 뜨는 것을 막는다(축하가 닫힌 뒤에 올라온다). */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 0 auto' }}>
+                <FeedbackSheet petId={session.server?.pet?.petId ?? null} unlocked={s.unlocked} hold={!!s.justUnlocked} />
+                <span style={L.countTag}>{s.unlocked} / {dex.length}</span>
+              </div>
             </div>
 
             <div style={L.albumSheet}>
