@@ -14,10 +14,18 @@ scenes[].summary(원본 장면 문장). 그대로 넘기면 모델이 메모를 
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PROMPT_DIR = HERE / "prompt"
+WEBTOON_HARNESS = HERE.parent / "webtoon-harness"
+if str(WEBTOON_HARNESS) not in sys.path:
+    sys.path.append(str(WEBTOON_HARNESS))     # append, 안 insert(0,...) — new_harness
+                                               # 자신의 모듈(run.py 등 이름이 겹치는
+                                               # 것)을 가리면 안 된다
+
+import directing  # noqa: E402  (webtoon-harness 것을 그대로 빌린다)
 
 # 컷 높이 비율. full 은 숫자가 아니라 페이지 전체다.
 HEIGHT_RATIO = {"tiny": 1, "small": 2, "normal": 3, "large": 5, "full": None}
@@ -57,13 +65,16 @@ def _eul(word: str) -> str:
 
 
 def camera_line(camera) -> str:
-    """{shot, angle, facing} -> `상반신, 정면 앵글, 인물은 옆모습`."""
+    """{shot, angle} -> `상반신, 정면 앵글`.
+
+    facing(인물이 카메라 쪽으로 어느 면을 보이는가)은 여기 없다 — 인물마다
+    다를 수 있어서 person_line 에서 인물별로 적는다.
+    """
     camera = camera if isinstance(camera, dict) else {}
-    shot, angle, facing = (_t(camera.get(k)) for k in ("shot", "angle", "facing"))
+    shot, angle = (_t(camera.get(k)) for k in ("shot", "angle"))
     return ", ".join(p for p in (
         shot,
-        f"{angle} 앵글" if angle else "",
-        f"인물은 {facing}" if facing else "") if p)
+        f"{angle} 앵글" if angle else "") if p)
 
 
 def background_line(background) -> str:
@@ -84,10 +95,12 @@ def person_line(who) -> str:
     who = who if isinstance(who, dict) else {}
     name, style = _t(who.get("name")), _t(who.get("style"))
     where, moment = _t(who.get("position")), _t(who.get("moment"))
-    face, act, frame = (_t(who.get(k)) for k in ("expression", "action", "framing"))
+    facing, face, act, frame = (_t(who.get(k))
+                                 for k in ("facing", "expression", "action", "framing"))
 
     head = f"{name} ({style})" if style else name
-    body = ", ".join(p for p in (f"화면 {where}" if where else "", face, act) if p)
+    body = ", ".join(p for p in (f"화면 {where}" if where else "",
+                                  f"{facing}" if facing else "", face, act) if p)
     out = f"{head}: {body}" if body else head
     if moment:
         out += f". 동작의 {moment}{_eul(moment)} 그린다"
@@ -245,7 +258,7 @@ def cast_lines(cast, page=None, skip=()) -> list[str]:
     return out
 
 
-DEFAULT_STYLE = "webtoon_lock"
+DEFAULT_STYLE = "webtoon_lock_bg"
 
 
 def load_style(name: str = "") -> str:
@@ -309,6 +322,29 @@ def place_block(page) -> str:
     return "\n".join(lines)
 
 
+def page_haystack(page) -> str:
+    """이 페이지의 컷들에서 연출 지식을 태그로 골라 붙일 때 검색할 서술.
+
+    webtoon-harness 의 scenegen.build_prompt 와 같은 방식(설명+대사를
+    이어 붙인 문자열, 정확 태그 매칭)이다. note·sfx.reason 같은 안 그려지는
+    칸은 안 섞는다 — 태그 매칭이 그림에 없는 내용으로 걸릴 이유가 없다.
+    """
+    parts = []
+    for cut in page or []:
+        parts.append(background_line(cut.get("background")))
+        for p in cut.get("characters") or []:
+            if isinstance(p, dict):
+                parts.append(_t(p.get("action")))
+                parts.append(_t(p.get("expression")))
+        for d in cut.get("dialogue") or []:
+            if isinstance(d, dict):
+                parts.append(_t(d.get("text")))
+        for s in cut.get("sfx") or []:
+            if isinstance(s, dict):
+                parts.append(_t(s.get("text")))
+    return " ".join(p for p in parts if p)
+
+
 SD_BLOCK = (
     "## 그림체 (SD)\n"
     "- SD: 2~3등신으로 축약된 형태. 얼굴이 크고 몸이 작다.\n"
@@ -356,6 +392,10 @@ def build_page_prompt(page, sheets=None, cast=None, start_number: int = 1,
     place = place_block(page)
     if place:
         blocks.append(place)
+
+    notes = directing.resolve_notes(directing.DEFAULT_ROOT, page_haystack(page))
+    if notes:
+        blocks.append("## 연출 참고\n" + notes)
 
     import pages
     for i, cut in enumerate(page or []):

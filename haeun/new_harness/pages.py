@@ -172,6 +172,49 @@ def linked(prev_cut, cut) -> bool:
     return prev_bg == "실제공간" and bg == "실제공간"
 
 
+def page_weight(page) -> str:
+    """페이지 전체의 무게 — 이어 붙일 때(stitch.py) 폭을 얼마나 쓸지 결정한다.
+
+    group_pages 가 이미 ALONE(large/full)은 혼자 한 페이지로 떼어 두므로,
+    여기서 다시 나눌 건 없다. **모아 묶인 컷이 전부** light(배경 없는
+    tiny/small)이면 그 페이지 전체가 떠 있는 것으로 본다 — 인물만 있고
+    배경이 없는 컷들만 모인 페이지라, 지면을 꽉 채울 이유가 없다.
+    """
+    if not page:
+        return "normal"
+    if all(cut_weight(c) == "light" for c in page):
+        return "light"
+    return "normal"
+
+
+def page_gap_after(page, next_page) -> int:
+    """`page` 뒤, `next_page` 앞에 얼마나 벌릴지 (0~3).
+
+    story-harness 의 `derive_layout`은 beat·transition·render_style 로
+    이걸 정하는데, new_harness 콘티에는 그 필드가 없다. 대신 있는 것 —
+    이어지는가(linked) · 앞 페이지 마지막 컷이 large/full 인가(전환점을
+    막 지났는가) · 장소가 바뀌었는가 — 로 같은 취지를 낸다:
+
+        이어짐(linked)              -> 0  (동작이 그대로 계속된다, 안 벌린다)
+        직전 컷이 large/full        -> 3  (전환점 뒤. 숨 돌릴 자리를 준다)
+        장소가 바뀜                 -> 2  (장면이 넘어간다)
+        나머지                      -> 1  (기본)
+
+    반환값은 그대로 `strip.gap_px(width, level, table)`에 먹인다 — 픽셀
+    변환은 새로 안 만들고 webtoon-harness 것을 그대로 쓴다.
+    """
+    if not page or not next_page:
+        return 1
+    last, first = page[-1], next_page[0]
+    if linked(last, first):
+        return 0
+    if cut_size(last) in ALONE:
+        return 3
+    if _t(last.get("location")) != _t(first.get("location")):
+        return 2
+    return 1
+
+
 # 장면에 붙는 값 중 컷까지 따라 내려가야 하는 것.
 # 페이지는 장면 경계를 안 지키므로(가벼운 컷은 장면을 넘어 모인다), 여기서
 # 안 내려보내면 페이지를 만든 뒤에는 그 컷이 어디서 벌어지는지 알 수 없다.
@@ -192,4 +235,48 @@ def flatten_cuts(scenes) -> list:
             # 컷이 스스로 적은 값이 있으면 그것을 남긴다 — 장면 값으로 덮지 않는다.
             out.append(dict(carried, **cut,
                             scene=scene.get("id"), cut=cut.get("id")))
+    return out
+
+
+# ------------------------------------------------------------------- 사건
+
+# 구체화(detail.json)에서 그림 한 장이 되는 단위의 칸. 장면과 사건이 같은
+# 칸을 쓴다 — 옛 run 은 장면 자체가 사건 하나이기 때문이다(아래 참고).
+EVENT_FIELDS = ("source", "function", "detail", "learns", "guesses",
+                "continuity", "leads_to")
+
+
+def detail_events(scene) -> list:
+    """장면 하나 -> 사건 배열. **사건 하나가 그림 한 장이다.**
+
+    장면 하나에는 사건이 여러 개 들어 있다 — "일어난다 / 시계를 본다 /
+    나간다 / 마주친다 / 인사한다 / 아침을 차린다 / 질문을 받는다" 가 한
+    장면이었다. 이것을 한 장에 다 그리게 하면 그림이 산만해지고, 그렇다고
+    컷을 하나씩 지정하면 연출을 사람이 다 짜는 것이 된다. 그래서 **사건**
+    에서 끊는다 — 그림 모델은 사건 하나를 받아 컷 수·구도·여백을 스스로
+    정한다.
+
+    **사건 칸이 없는 옛 detail.json 은 장면 자체를 사건 하나로 읽는다.**
+    그러면 옛 run 은 예전처럼 장면당 그림 한 장이라 결과가 안 바뀐다.
+    """
+    got = [e for e in (scene.get("events") or []) if isinstance(e, dict)]
+    if got:
+        return got
+    one = {k: scene[k] for k in EVENT_FIELDS if k in scene}
+    one["id"] = 1
+    return [one]
+
+
+def flatten_events(scenes) -> list:
+    """detail.json 의 장면 배열 -> 사건 하나짜리 배열.
+
+    어느 장면의 몇 번째 사건이었는지를 scene·event 에 남긴다 — 편 뒤에는 그
+    자리를 다시 알 길이 없다. **장면 경계를 넘어 이어 편다**: 사건 사이의
+    이어짐(continuity)은 장면이 바뀌는 자리에서도 끊기면 안 되고, 그림도
+    바로 앞 사건의 그림을 참조로 받는다.
+    """
+    out = []
+    for scene in scenes or []:
+        for i, ev in enumerate(detail_events(scene), 1):
+            out.append(dict(ev, scene=scene.get("id"), event=ev.get("id", i)))
     return out

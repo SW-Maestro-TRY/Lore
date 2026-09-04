@@ -1,101 +1,715 @@
-**이 하네스의 기본(default) 그림체다.** 흑백 잉크+포인트 컬러 실험은
-`action`(특수 컷 전용)으로 따로 남겼고, 이 파일은 평소 로판 장면에
-쓰는 기본값이다. 2026-08-30, 그날 있었던 여러 회차의 실험을 사용자가
-직접 하나로 합쳐 최종 정리한 버전이다 (경위는 `STYLE_FINDINGS.md` 참고).
+STYLE GLOBAL RENDERING RULE — FROST
 
-**2026-08-30 추가 — 실측해 보니 장면(장소·소품·조명)이 복잡한 컷에서는
-FROST의 절제가 밀리고 일반적인 고퀄 반실사 웹툰 쪽으로 갔다.** 원인은
-장면 설명 자체의 정보량(예: "그라데이션 — 흐릿한 조명과 게이트 단말기,
-벽에 부착된 안내판")과 이 그림체의 "배경을 단순하게" 지시가 동시에
-들어가면, 모델이 장면을 "정확히 구현해야 할 설계도"로 읽고 디테일을
-더해서 타협한다는 것. 그래서 아래 절을 맨 앞에 못박는다.
+All panels, characters, objects, clothing, environments, and visual elements must follow the FROST rendering style as the highest-priority visual rule.
 
-## GLOBAL RENDERING RULE — FROST
+FROST is a premium Korean webtoon illustration style characterized by beautiful mature characters, delicate hand-drawn linework, cool muted color harmony, very pale desaturated ivory skin, richly abundant flowing hair, and selective high-detail rendering.
 
-모든 컷과 모든 요소는 아래 FROST 렌더링을 최우선으로 따른다. 장면의
-정보량이 많더라도(복잡한 장소·소품·조명이 컷 설명에 있어도) 디테일을
-추가해서 설명하지 않는다 — 장소·소품·의상이 복잡할수록 오히려 FROST의
-단순화 수준을 그대로 유지해야 한다.
+The character should be beautiful, elegant, mature, cool, slightly distant, sophisticated, and emotionally restrained.
 
-The image must remain restrained even when the scene contains detailed
-environments, props, clothing, or lighting. FROST is defined by
-simplification, not by reduced image quality. Do not compensate for scene
-complexity by adding detail, line density, hair strands, fabric texture,
-or lighting effects.
+The character receives substantially more detail than the background.
 
-restrained semi-realistic webtoon rendering,
-mature adult anatomy with elegant stylization,
-editorial and fashion-illustration sensibility,
+The image should feel like a refined Korean webtoon illustration, never like photorealistic artwork, 3D rendering, a generic anime image, or a simplified character design sheet.
 
-simple selective linework,
-thin delicate slightly irregular ink lines,
-variable line density,
-deliberate simplification,
-uneven detail density,
-large areas of clean negative space,
-only essential lines are drawn,
 
-broken and incomplete contours in low-detail areas,
-minimal interior linework,
+--------------------------------------------------
+CORE AESTHETIC
+--------------------------------------------------
+
+premium Korean webtoon illustration,
+high-end Korean webtoon rendering,
+elegant semi-realistic anime character art,
+refined mature character proportions,
+slender elegant anatomy,
+beautiful adult character,
+sophisticated facial structure,
+refined feminine beauty,
+cool elegant beauty,
+cold sophisticated atmosphere,
+quiet distant beauty,
+slightly aloof presence,
+subtle melancholic atmosphere,
+calm restrained expression,
+emotionally restrained appearance,
+beautiful rather than cute,
+mature rather than childish,
+elegant rather than kawaii,
+refined rather than flashy,
+visually cold,
+quiet,
+pale,
+desaturated,
+subdued,
+sophisticated,
+pale muted ivory complexion,
+subtle natural ivory coloration,
+low-saturation skin,
+no excessive skin warmth,
+
+
+--------------------------------------------------
+LINEART
+--------------------------------------------------
+
+very delicate fine lineart,
+thin elegant hand-drawn ink lines,
+organic hand-drawn line quality,
+slightly irregular linework,
+variable line weight,
+fine expressive linework,
+delicate interior linework,
+refined facial linework,
+fine silhouette-defining lines,
+subtle overlapping strokes,
+softly broken contours,
 natural hand-drawn imperfections,
-casual but controlled webtoon finish,
-not every surface is fully rendered,
+thin detailed lines around the face and hair,
+fine secondary strokes,
+controlled variation in line density,
+never thick,
+never bold,
+never mechanical,
+never vector-like,
 
-simplified facial rendering,
-natural mature facial proportions,
-moderately narrow almond-shaped eyes,
-simple controlled irises,
-restrained eyelashes,
-minimal facial lines,
-subtle eyebrows,
-minimal nose and mouth definition,
-clean pale skin with very little surface detail,
 
-simplified hair masses,
-large coherent hair shapes,
-only a few loose directional strand lines,
-irregular sparse hair strokes,
-no individual strand rendering,
+--------------------------------------------------
+FACE
+--------------------------------------------------
 
-selective clothing folds,
-clothing defined primarily by silhouette and construction,
-essential folds only,
-hatching only in deeper shadows and important folds,
-large untextured color areas,
+exceptionally beautiful mature facial features,
+elegant adult face,
+refined slender facial structure,
+slightly elongated face,
+graceful jawline,
+delicate chin,
+refined cheek structure,
+narrow elegant almond-shaped eyes,
+slightly elongated eyes,
+calm half-lidded gaze,
+cool distant gaze,
+subtle restrained expression,
+natural adult eye proportions,
+detailed but restrained irises,
+fine eyelashes,
+delicate eyelid lines,
+subtle lower eyelid definition,
+refined eyebrows,
+delicate nose bridge,
+subtle nose tip,
+minimal elegant nose rendering,
+softly defined lips,
+natural elegant mouth shape,
+harmonious facial proportions,
+balanced facial features,
+subtle natural asymmetry,
+beautiful refined face,
+cool neutral facial coloration,
+uniform pale facial coloration,
+even pale ivory complexion,
 
-broad flat muted color shapes,
-limited tonal hierarchy,
-simple shadow planes,
-restrained cel-shaded planes,
-minimal gradients,
-minimal highlights,
+
+--------------------------------------------------
+HAIR — RICH, FULL AND ABUNDANT
+--------------------------------------------------
+
+very full, abundant, voluminous flowing hair,
+noticeably thick and rich hair volume,
+dense natural hair mass,
+full-bodied hair with substantial volume,
+large flowing primary hair masses,
+multiple overlapping layers of hair,
+many layered sections with varied lengths,
+abundant secondary hair layers,
+rich layered hair structure,
+multiple overlapping locks,
+numerous flowing hair locks,
+many long layered strands,
+dense clusters of fine strands,
+many delicate individual hair strands,
+numerous fine secondary strands,
+rich overlapping hair strokes,
+many thin flowing strands,
+fine strand intersections,
+numerous wispy loose strands,
+many natural flyaway hairs,
+many loose strands around the face,
+multiple fine strands framing the forehead and cheeks,
+fine strands falling naturally beside the neck,
+loose strands falling naturally over the shoulders,
+multiple strands extending beyond the main silhouette,
+multiple layers cascading over the shoulders and down the back,
+overlapping locks with noticeably different lengths,
+natural irregular hair silhouette,
+full layered silhouette,
+rich hair roots,
+visible separation between major hair layers,
+clear separation between overlapping locks,
+rich internal hair linework,
+fine directional hair strokes,
+curved strands following the shape of the head,
+natural variation in strand direction,
+natural variation in strand thickness,
+natural variation in strand length,
+abundant hair volume without looking artificial,
+lush flowing hair,
+full dense hair around the head,
+softly layered hair framing the face,
+rich hair framing both sides of the face,
+substantial hair volume around the back of the head,
+hair extending naturally beyond the shoulders,
+softly tangled natural hair,
+organic hair movement,
+high-density fine hair detail,
+fine strand-level rendering,
+rich hair texture created through delicate hand-drawn lines,
+substantially more visible hair volume and strand detail than a normal simplified webtoon character,
+hair is one of the highest-detail areas of the image,
+complex but elegant hair,
+rich but controlled hair rendering,
+detailed but clean hair structure,
+dense but readable hair layers,
+natural irregularity between individual strands,
+subtle matte highlights,
+soft restrained hair highlights,
+delicate tonal variation between overlapping hair layers,
+soft tonal separation between major hair masses,
+never a flat solid hair mass,
+never sparse hair,
+never simplified hair,
+never overly smooth hair,
+never perfectly uniform hair,
+
+
+--------------------------------------------------
+SKIN — VERY PALE MUTED IVORY
+--------------------------------------------------
+
+very pale bright ivory skin,
+soft light ivory complexion,
+extremely pale low-saturation skin,
+desaturated ivory skin,
+cool-neutral ivory undertone,
+subtle neutral beige undertone,
+soft muted ivory coloration,
+bright but naturally colored pale skin,
+clean pale complexion,
+slightly lifeless subdued complexion,
+very low skin saturation,
+very low skin warmth,
+minimal visible red or pink pigment,
+minimal visible warm pigmentation,
+cool-neutral rather than warm,
+muted rather than vivid,
+pale ivory rather than gray,
+
+the skin should look pale, quiet, subdued, and slightly lifeless,
+but it must still clearly read as pale ivory skin,
+the skin must retain a subtle ivory base color,
+the skin must remain bright and lightly colored,
+the skin must NOT become gray,
+the skin must NOT become ashy,
+the skin must NOT become colorless,
+the skin must NOT look like a gray filter has been placed over it,
+
+skin should resemble very pale muted ivory rather than gray,
+skin should remain visibly distinct from gray clothing,
+skin should be brighter and slightly more ivory than gray clothing,
+preserve the pale ivory base color while keeping saturation very low,
+
+bright but NOT pure white,
+not paper-white,
+not pure white skin,
+not porcelain white skin,
+
+soft matte skin surface,
+minimal skin texture,
+subtle neutral tonal variation,
+delicate soft shading,
+face and body share the same pale ivory skin tone,
+uniform pale ivory complexion,
+consistent neutral pale skin coloration,
+
+NO REDNESS IN THE SKIN,
+NO PINKNESS IN THE SKIN,
+NO ROSY COLORATION,
+NO EXCESSIVE WARMTH,
+NO HEALTHY GLOW,
+NO HEALTHY COMPLEXION,
+
+
+--------------------------------------------------
+ABSOLUTELY NO BLUSH — HIGHEST PRIORITY
+--------------------------------------------------
+
+the face must remain completely neutral in color,
+
+the cheeks must remain the same pale ivory tone as the surrounding face,
+
+the cheeks must NEVER become pinker than the forehead,
+the cheeks must NEVER become redder than the nose,
+the cheeks must NEVER become warmer than the surrounding skin,
+
+no blush,
+no rosy cheeks,
+no pink cheeks,
+no cheek coloration,
+no facial redness,
+no flushed skin,
+no warm cheek coloration,
+no healthy cheek color,
+no natural rosy coloration,
+no subtle rosy tint,
+no faint pink tint,
+no soft pink tint,
+no peach tint,
+no peachy undertone,
+no coral tint,
+no red undertone,
+
+do not add beauty blush,
+do not add makeup blush,
+do not add healthy complexion,
+do not add healthy glow,
+do not add natural cheek coloration,
+do not add warm facial coloration,
+
+cheeks remain pale,
+neutral,
+desaturated,
+pale ivory,
+even-toned,
+colorless-looking,
+
+ZERO VISIBLE BLUSH,
+ZERO ROSY CHEEK COLOR,
+ZERO PINK CHEEK COLOR,
+ZERO FACIAL FLUSH,
+ZERO REDNESS,
+ZERO WARM CHEEK TONE,
+
+
+--------------------------------------------------
+COLOR PALETTE
+--------------------------------------------------
+
+cool muted color palette,
+very low-saturation colors,
+desaturated sophisticated color harmony,
+cool gray,
+muted blue,
+soft charcoal,
+muted brown,
+pale ivory,
+soft neutral beige,
+cold restrained color atmosphere,
+subtle cool tonal hierarchy,
+quiet sophisticated palette,
+minimal warm colors,
+minimal skin warmth,
+no cheerful warm atmosphere,
+no warm color cast,
+
+
+--------------------------------------------------
+SHADING
+--------------------------------------------------
+
+soft layered shading,
+delicate dimensional rendering,
+subtle multi-level tonal transitions,
+soft restrained cel shading,
+gentle painterly variation,
+cool shadow tones,
+soft cool ambient shading,
+subtle gray-blue shadows,
+very restrained contrast,
+cool neutral facial shadows,
+neutral muted facial shading,
+desaturated skin shadows,
+no warm facial shadows,
+soft diffused illumination,
+quiet cool lighting,
+gentle directional light,
+minimal hard shadows,
+minimal glossy highlights,
 minimal reflected light,
-clean restrained color transitions,
 
-background detail significantly reduced compared to the character,
-soft simplified background shapes,
-large quiet areas,
-no uniform texture across the image,
-background rendered with less detail and contrast than the character,
 
-quiet sophisticated visual hierarchy,
-mature understated aesthetic,
-beautiful through simplification rather than detail.
+--------------------------------------------------
+CLOTHING
+--------------------------------------------------
 
-## 하지 마라
+natural clothing construction,
+clean silhouette,
+selective realistic folds,
+essential fold linework,
+subtle material indication,
+restrained fabric rendering,
+clothing is less detailed than the face and hair,
 
-- hyper-detailed, over-rendered, excessive micro-detail, uniform detail
-  density, intricate facial details, intricate hair strands, individual
-  hair rendering, hair strand accumulation, perfectly rendered eyes,
-  sparkling eyes, gemstone eyes, oversized eyes
-- detailed skin texture, skin pores, photorealistic skin, 3D skin
-  rendering, airbrushed skin, excessive facial shading
-- excessive eyelashes, glossy lips, excessive highlights, excessive
-  gradients, volumetric lighting, photorealistic lighting
-- excessive clothing folds, detailed fabric texture, dense fabric
-  rendering, decorative linework, dense linework, uniform hatching,
-  heavy outlines, perfect vector linework
-- dense background details, uniform background texture, background
-  competing with character, overdecorated background
-- anime key visual, light novel illustration, moe, kawaii, childlike
-  proportions, milky pastel colors, oversaturated colors, neon colors
+
+--------------------------------------------------
+BACKGROUND
+--------------------------------------------------
+
+soft simplified background,
+low-detail environmental shapes,
+large quiet negative spaces,
+subtle atmospheric background,
+low contrast background,
+background significantly less detailed than the character,
+background never competes with the character,
+
+
+--------------------------------------------------
+DETAIL HIERARCHY
+--------------------------------------------------
+
+highest detail:
+hair,
+face,
+eyes,
+character silhouette,
+
+medium detail:
+skin,
+hands,
+clothing construction,
+
+low detail:
+background,
+secondary objects,
+distant environment,
+
+detail is concentrated around the character,
+especially the hair and face,
+hair should receive exceptionally rich but controlled detail,
+
+
+--------------------------------------------------
+FINAL IMPRESSION
+--------------------------------------------------
+
+beautiful,
+elegant,
+cool,
+cold,
+very pale,
+strongly desaturated,
+pale muted ivory rather than gray,
+mature,
+quiet,
+slightly distant,
+sophisticated,
+emotionally restrained,
+rich and abundant flowing hair,
+full-bodied layered hair,
+dense but elegant hair volume,
+many delicate flowing hair strands,
+beautiful refined face,
+very pale muted ivory skin,
+slightly lifeless complexion,
+subdued complexion,
+extremely low skin saturation,
+very low skin warmth,
+completely neutral cheeks,
+zero blush,
+zero rosy coloration,
+zero pink coloration,
+zero facial redness,
+premium Korean webtoon finish,
+delicate hand-drawn lineart,
+soft restrained shading,
+cool muted colors,
+rich selective detail,
+beautiful through refined facial features,
+abundant flowing hair,
+delicate linework,
+and a cold sophisticated atmosphere.
+
+
+==================================================
+NEGATIVE PROMPT
+==================================================
+
+hyperrealistic,
+photorealistic,
+realistic human photography,
+live action,
+3d render,
+3d character,
+CGI,
+plastic skin,
+chibi,
+super deformed,
+childlike,
+childish proportions,
+kawaii,
+moe,
+cute childish anime,
+baby face,
+round childish face,
+oversized eyes,
+huge eyes,
+oversized irises,
+sparkling gemstone eyes,
+thick outlines,
+heavy outlines,
+bold lineart,
+uniform line weight,
+mechanical vector lineart,
+perfect vector lines,
+
+
+--------------------------------------------------
+HAIR NEGATIVE
+--------------------------------------------------
+
+simplified hair,
+sparse hair,
+thin hair volume,
+flat hair,
+flat hair masses,
+solid hair mass,
+helmet hair,
+blocky hair,
+few hair strands,
+minimal hair strands,
+minimal hair detail,
+low-density hair,
+short sparse strands,
+stiff hair,
+mechanical hair,
+repetitive hair strands,
+uniform hair strands,
+artificial hair silhouette,
+overly smooth hair,
+perfectly symmetrical hair,
+perfectly uniform hair,
+plastic-looking hair,
+artificially clumped hair,
+excessively chaotic hair,
+messy unreadable hair,
+
+
+--------------------------------------------------
+SKIN NEGATIVE
+--------------------------------------------------
+
+tan skin,
+olive skin,
+warm skin,
+warm beige skin,
+peach skin,
+peach undertone,
+peachy skin,
+orange skin,
+yellow skin,
+golden skin,
+warm skin tone,
+warm undertone,
+warm skin undertone,
+warm complexion,
+warm facial tone,
+warm facial coloration,
+vivid skin color,
+saturated skin,
+healthy warm complexion,
+healthy complexion,
+healthy skin glow,
+warm skin glow,
+sun-kissed skin,
+tanned complexion,
+
+gray skin,
+grey skin,
+gray complexion,
+grey complexion,
+gray face,
+grey face,
+gray skin tone,
+grey skin tone,
+gray cast on skin,
+grey cast on skin,
+gray filter on skin,
+grey filter on skin,
+ashy skin,
+ashen skin,
+dull gray skin,
+dull grey skin,
+gray-beige skin,
+gray undertone,
+grey undertone,
+excessive gray undertone,
+excessive grey undertone,
+gray facial coloration,
+grey facial coloration,
+gray cheeks,
+grey cheeks,
+gray hands,
+grey hands,
+gray neck,
+grey neck,
+colorless gray skin,
+colorless grey skin,
+
+
+--------------------------------------------------
+ABSOLUTELY NO BLUSH — EXTREME NEGATIVE
+--------------------------------------------------
+
+blush,
+facial blush,
+cheek blush,
+visible blush,
+strong blush,
+heavy blush,
+subtle blush,
+soft blush,
+natural blush,
+beauty blush,
+makeup blush,
+rosy cheeks,
+rosy cheek,
+pink cheeks,
+pink cheek,
+pink cheek tint,
+pink cheek color,
+pink cheek shading,
+pink cheek glow,
+red cheeks,
+red cheek,
+red cheek tint,
+red cheek color,
+red cheek shading,
+red cheek glow,
+facial redness,
+facial red tint,
+facial pink tint,
+facial rosy tint,
+skin redness,
+skin red tint,
+skin pink tint,
+skin rosy tint,
+flushed cheeks,
+flushed face,
+flushed skin,
+facial flush,
+red face,
+pink face,
+rosy face,
+rosy complexion,
+pink complexion,
+rosy skin,
+pink skin,
+reddish skin,
+pinkish skin,
+warm cheeks,
+warm cheek color,
+warm cheek tint,
+warm cheek shading,
+warm cheek glow,
+warm facial coloration,
+warm facial shading,
+warm facial tones,
+healthy rosy skin,
+healthy pink skin,
+healthy cheek color,
+healthy facial color,
+natural rosy complexion,
+natural cheek color,
+soft pink cheeks,
+subtle pink cheeks,
+faint pink cheeks,
+light pink cheeks,
+pale pink cheeks,
+peach cheeks,
+peachy cheeks,
+coral cheeks,
+coral cheek tint,
+pink nose,
+red nose,
+rosy nose,
+pink ears,
+red ears,
+rosy ears,
+pink lips,
+bright red lips,
+red lips,
+coral lips,
+peach lips,
+rosy lips,
+pink makeup,
+rosy makeup,
+warm makeup,
+red makeup,
+peach makeup,
+
+
+--------------------------------------------------
+FACE COLOR NEGATIVE
+--------------------------------------------------
+
+excessive facial shading,
+warm facial shading,
+pink facial shading,
+red facial shading,
+rosy facial shading,
+peach facial shading,
+warm facial gradient,
+pink facial gradient,
+red facial gradient,
+warm light on face,
+pink light on face,
+red light on face,
+peach light on face,
+warm color cast on face,
+healthy facial glow,
+warm facial glow,
+rosy facial glow,
+pink facial glow,
+heavy makeup,
+pink makeup,
+rosy makeup,
+warm makeup,
+glossy lips,
+excessive eyelashes,
+excessive eye highlights,
+
+
+--------------------------------------------------
+RENDERING NEGATIVE
+--------------------------------------------------
+
+photorealistic skin,
+skin pores,
+skin texture,
+realistic skin texture,
+airbrushed skin,
+3d skin rendering,
+excessive micro-detail,
+chaotic line accumulation,
+uniform detail density,
+over-rendered background,
+excessive gradients,
+strong volumetric lighting,
+dramatic lighting,
+strong rim lighting,
+photorealistic lighting,
+excessive clothing folds,
+dense fabric texture,
+decorative linework,
+dense hatching,
+oversaturated colors,
+neon colors,
+vivid colors,
+warm colorful palette,
+milky pastel colors,
+flat vector illustration,
+generic anime,
+generic character design,
+character sheet aesthetic,
+model sheet aesthetic,
+reference sheet aesthetic,
+turnaround sheet,
+light novel illustration,
+anime key visual

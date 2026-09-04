@@ -12,12 +12,11 @@ const FIELD_KEYS = ["나이", "성별", "직업", "성격", "말투", "과거", 
 const STYLE_INFO = [
   ["webtoon",   "일반 웹툰",      "깔끔한 선과 셀 채색. 매주 연재하는 그 그림 — 읽히는 속도가 기준입니다."],
   ["romance",   "로맨스 판타지",  "표지 일러스트급 밀도. 보석 같은 눈, 장미와 금박, 레이스까지 하나하나."],
-  ["cinematic", "시네마틱 반실사","빛으로 화려해집니다. 역광·공기·얕은 심도·필름 색보정. 얼굴은 웹툰 그대로."],
-  ["lineart",   "선화 · 액션",    "선과 여백이 다 합니다. 톤을 거의 안 쓰고 포즈와 실루엣으로 읽힙니다."],
-  ["pastel",    "일상툰 감성",    "일부러 덜 완성한 그림. 흔들리는 연필선, 종이 결, 바랜 파스텔 몇 색."],
-  ["noir",      "다크 느와르",    "어둠이 주인공입니다. 화면 대부분이 먹으로 덮이고 빛은 얇게 남습니다."],
   ["shoujo",    "순정 · BL",      "얼굴과 둘 사이의 거리. 길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃."],
   ["frost",     "세미리얼 · 성인향","사실적인 인체에 선은 얇고 듬성듬성, 진한 디테일은 얼굴·손에만. 넓은 면은 비워 두고 저채도로 차분하게."],
+  ["pastel",    "일상툰 감성",    "일부러 덜 완성한 그림. 흔들리는 연필선, 종이 결, 바랜 파스텔 몇 색."],
+  ["noir",      "다크 느와르",    "어둠이 주인공입니다. 화면 대부분이 먹으로 덮이고 빛은 얇게 남습니다."],
+  ["cinematic", "시네마틱 반실사","빛으로 화려해집니다. 역광·공기·얕은 심도·필름 색보정. 얼굴은 웹툰 그대로."],
 ];
 
 // 장르 단추로 먼저 꺼내 두는 것들. index.html 의 datalist 에는 더 많이 있고,
@@ -29,20 +28,19 @@ const STYLE_INFO = [
 /* 그림체 썸네일. loading="lazy" 는 **안 쓴다** — 걸음이 숨어 있는 동안에는
    브라우저가 "화면 밖"으로 보고 안 받아 오다가, 걸음이 열려도 한동안 빈
    칸으로 남는다(실제로 7장 중 2장만 뜨는 것을 봤다).
-   실제로 그 그림체로 뽑아 둔 샘플이 있는 것은 그것을 쓰고,
-   아직 없는 것은 루 그림으로 채운다 — 빈 칸으로 두면 어떤 그림인지 짐작할
-   길이 아예 없다. 샘플이 생기면 여기만 바꾸면 된다. */
+   일곱 그림체 모두 **실제로 그 그림체로 뽑아 둔 샘플**을 쓴다. 파스텔·
+   느와르·순정은 예시가 없던 동안 루 그림으로 자리만 채웠는데, 그러면 카드를
+   봐도 어떤 그림이 나오는지 알 수가 없었다. 원본은 design-reference/picture
+   에 있고, 여기에는 기존 샘플과 같은 규격(가로 1080 안, JPEG)으로 줄여
+   넣는다 — 원본 PNG 는 장당 2~3MB 라 썸네일로 그대로 쓰면 안 된다. */
 const STYLE_THUMB = {
   cinematic: "/static/samples/ex-cinematic-1.jpg",
-  lineart:   "/static/samples/ex-lineart-2.jpg",
   romance:   "/static/samples/ex-romance-1.jpg",
   webtoon:   "/static/samples/ex-webtoon-1.jpg",
   frost:     "/static/samples/ex-frost-1.jpg",
-  // 아래 둘은 아직 그 그림체로 뽑아 둔 예시가 없어서 루 그림으로 자리만
-  // 채운다. 그림체를 보여주지는 못하니, 예시가 생기면 갈아 끼워야 한다.
-  pastel:    "/static/lou/art/world-begins.png",
-  noir:      "/static/lou/art/world-depth.png",
-  shoujo:    "/static/lou/art/guide-2.png",
+  pastel:    "/static/samples/ex-pastel-1.jpg",
+  noir:      "/static/samples/ex-noir-1.jpg",
+  shoujo:    "/static/samples/ex-shoujo-1.jpg",
 };
 
 const GENRE_QUICK = [
@@ -2112,8 +2110,8 @@ function paintResult(r) {
     const gap = i === r.pages.length - 1 ? 0 : +pg.gap || 0;
     const w = +pg.width || 1;
     const style = [gap ? `margin-bottom:${(gap * 100).toFixed(2)}%` : "",
-                   w < 1 ? `width:${(w * 100).toFixed(2)}%;margin-left:auto;` +
-                           "margin-right:auto" : ""].filter(Boolean).join(";");
+                   w !== 1 ? `width:${(w * 100).toFixed(2)}%;margin-left:auto;` +
+                             "margin-right:auto" : ""].filter(Boolean).join(";");
     return `
     <div class="page" data-scene="${pg.no}"${style ? ` style="${style}"` : ""}>
       <img class="cut-img" src="${resultSrc.page(pg.no)}"

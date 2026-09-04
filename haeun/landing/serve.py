@@ -466,12 +466,22 @@ class Handler(BaseHTTPRequestHandler):
         # 편집기가 아무 run 이나 열 수 있게 하는 두 자리.
         # 작업(Job)을 거치지 않는다 — 하네스를 직접 돌린 run 도 똑같이 열린다.
         if path == "/api/runs":
-            # 둘러보기에 걸리는 목록이다 — 숨긴 작품은 빼고 준다.
-            return self._json({"runs": visibility.filter_public(pipeline.list_runs())})
+            # 둘러보기에 걸리는 목록이다 — 숨긴 작품은 빼고 준다. new_harness
+            # run 도 같은 모양으로 섞어 준다(nh.list_runs 가 classic 과 같은
+            # 필드를 돌려준다) — 화면(app.js)은 어느 쪽에서 왔는지 몰라도 된다.
+            runs = pipeline.list_runs() + nh.list_runs()
+            return self._json({"runs": visibility.filter_public(runs)})
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/episode", path)
         if m:
-            data = pipeline.editor_data(m.group(1), self._ep(query))
+            run_id = m.group(1)
+            # story-harness 에 없고 new_harness 에 있으면 그쪽을 연다 — 위
+            # /result·/page 와 같은 규칙이다. 이 자리에만 그 분기가 없어서
+            # new_harness 로 만든 작품은 편집실이 안 열렸다.
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                data = nh.editor_data(run_id)
+            else:
+                data = pipeline.editor_data(run_id, self._ep(query))
             if not data:
                 return self._error(404, "그 run 의 1화 컷을 찾지 못했습니다")
             return self._json(data)
@@ -482,13 +492,27 @@ class Handler(BaseHTTPRequestHandler):
         # 으로는 못 열었다 (초롱 2화가 그랬다).
         m = re.fullmatch(r"/api/runs/([\w.-]+)/result", path)
         if m:
-            out = pipeline.result_by_run(m.group(1), self._ep(query))
+            run_id = m.group(1)
+            # story-harness 에 없고 new_harness 에 있으면 그쪽 결과를 준다.
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                out = nh.result_by_run(run_id)
+            else:
+                out = pipeline.result_by_run(run_id, self._ep(query))
             if not out:
                 return self._error(404, "그 회차의 결과물을 찾지 못했습니다")
             return self._json(out)
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/episode\.png", path)
         if m:
+            run_id = m.group(1)
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                final = nh.final_episode(run_id)
+                if not final:
+                    return self._error(404, "아직입니다")
+                src = watermark.for_download(
+                    final, nh.run_dir(run_id), nh.episode_caption(run_id),
+                    cut_bounds=nh.page_bounds(run_id))
+                return self._file(src, download=f"{run_id}.png")
             ep = self._ep(query)
             ep_dir = pipeline.episode_dir(m.group(1), ep)
             # 내려받는 것도 **최종본**이다 — 편집실에서 얹은 것이 있으면 구운
@@ -507,7 +531,10 @@ class Handler(BaseHTTPRequestHandler):
         # 다른 기기에서 열어도 그대로다.
         m = re.fullmatch(r"/api/runs/([\w.-]+)/overlay", path)
         if m:
-            return self._json(pipeline.read_overlay(m.group(1), self._ep(query)))
+            run_id = m.group(1)
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                return self._json(nh.read_overlay(run_id))
+            return self._json(pipeline.read_overlay(run_id, self._ep(query)))
 
         # 구워 놓은 한 편 내려받기. 아직 안 구웠으면 404 — 화면이 "먼저 구우세요"
         # 라고 말할 수 있어야 하므로 원본으로 슬쩍 바꿔치지 않는다.
@@ -581,6 +608,28 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(job.snapshot())
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/page/(\d+)", path)
+        if m and not pipeline.episode_dir(m.group(1), 1).exists() and nh.is_run(m.group(1)):
+            run_id = m.group(1)
+            raw = (query.get("raw") or [""])[0] == "1"
+            no = int(m.group(2))
+            src = nh.unit_image(run_id, no) if raw else nh.final_unit(run_id, no)
+            if not src:
+                return self._error(404, "그 장의 그림이 없습니다")
+            width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
+            stamp = int(src.stat().st_mtime)
+            head = f"page{no}{'_raw' if raw else ''}_w{width}"
+            cache = nh.run_dir(run_id) / "cache"
+            dest = cache / f"{head}_{stamp}.jpg"
+            for old_file in cache.glob(f"{head}_*.jpg"):
+                if old_file != dest:
+                    try:
+                        old_file.unlink()
+                    except OSError:
+                        pass
+            try:
+                return self._file(thumbnail(src, dest, width))
+            except Exception:                                   # noqa: BLE001
+                return self._file(src)
         if m:
             ep = self._ep(query)
             # 기본은 **최종본** — 편집실에서 얹은 것이 구워진 그림이다. 결과
@@ -729,17 +778,23 @@ class Handler(BaseHTTPRequestHandler):
             job = nh_runner.get(m.group(1))
             if not job:
                 return self._error(404, "그런 작업이 없습니다")
-            return self._json(job.snapshot())
+            return self._json({**job.snapshot(),
+                               "queue_position": nh_runner.position(job.id)})
 
         # 완성본 — 편집실에서 얹은 것이 있으면 구운 판(final_episode)이 나간다.
+        # /nh 는 컷 단위 읽기 화면이 없이 이 그림 하나가 곧 "가져가는 것"이라
+        # (classic 의 낱장 읽기와 다르게), 여기도 워터마크를 찍는다.
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/episode\.png", path)
         if m:
             job = nh_runner.get(m.group(1))
             if not job or not job.run_id:
                 return self._error(404, "그런 작업이 없습니다")
-            src = nh.final_episode(job.run_id)
-            if not src:
+            final = nh.final_episode(job.run_id)
+            if not final:
                 return self._error(404, "아직입니다")
+            src = watermark.for_download(
+                final, nh.run_dir(job.run_id), nh.episode_caption(job.run_id),
+                cut_bounds=nh.page_bounds(job.run_id))
             return self._file(src)
 
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/sheet\.png", path)
@@ -783,9 +838,13 @@ class Handler(BaseHTTPRequestHandler):
 
         m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/episode\.png", path)
         if m:
-            src = nh.final_episode(m.group(1))
-            if not src:
+            run_id = m.group(1)
+            final = nh.final_episode(run_id)
+            if not final:
                 return self._error(404, "아직입니다")
+            src = watermark.for_download(
+                final, nh.run_dir(run_id), nh.episode_caption(run_id),
+                cut_bounds=nh.page_bounds(run_id))
             return self._file(src)
 
         m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/page/(\d+)", path)
@@ -809,6 +868,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(thumbnail(src, dest, width))
             except Exception:                                   # noqa: BLE001
                 return self._file(src)
+
+        m = re.fullmatch(r"/api/nh/regens/([\w.-]+)", path)
+        if m:
+            try:
+                return self._json(nh_runner.regen_status(m.group(1)))
+            except KeyError:
+                return self._error(404, "그런 작업이 없습니다")
 
         return self._error(404, "없는 주소입니다")
 
@@ -1343,9 +1409,19 @@ class Handler(BaseHTTPRequestHandler):
                 # 전에 터무니없이 큰 것은 아예 안 받는다.
                 return self._error(400,
                                    f"제목은 {pipeline.TITLE_MAX}자까지 적어 주세요")
+            run_id = m.group(1)
+            # story-harness 에 없고 new_harness 에 있으면 그쪽에 저장한다 —
+            # classic 의 set_user_title 은 story-harness/runs 아래에만 쓰므로
+            # new_harness 작품은 제목을 고치면 404 가 났다(위 /episode·/result
+            # 와 같은 누락이다).
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                try:
+                    return self._json({"title": nh.set_user_title(run_id, title)})
+                except (OSError, FileNotFoundError) as exc:
+                    return self._error(404, str(exc))
             try:
                 return self._json({"title": pipeline.set_user_title(
-                    m.group(1), ep, title)})
+                    run_id, ep, title)})
             except pipeline.Failed as exc:
                 return self._error(404, str(exc))
 
@@ -1353,13 +1429,19 @@ class Handler(BaseHTTPRequestHandler):
         # 굽는 것은 아래 /bake 이고, 저장은 굽지 않아도 남아야 한다.
         m = re.fullmatch(r"/api/runs/([\w.-]+)/overlay", url.path)
         if m:
+            run_id = m.group(1)
             try:
                 body = self._body()
             except (json.JSONDecodeError, UnicodeDecodeError):
                 return self._error(400, "입력을 읽지 못했습니다")
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                try:
+                    return self._json(nh.write_overlay(run_id, body))
+                except ValueError as exc:
+                    return self._error(400, str(exc))
             ep = self._ep(parse_qs(url.query))
             try:
-                return self._json(pipeline.write_overlay(m.group(1), body, ep))
+                return self._json(pipeline.write_overlay(run_id, body, ep))
             except pipeline.Failed as exc:
                 return self._error(400, str(exc))
 
@@ -1367,13 +1449,23 @@ class Handler(BaseHTTPRequestHandler):
         # 말풍선을 옮긴 뒤 다시 구우려면 밑그림이 깨끗해야 한다.
         m = re.fullmatch(r"/api/runs/([\w.-]+)/bake", url.path)
         if m:
+            run_id = m.group(1)
             try:
                 body = self._body()
             except (json.JSONDecodeError, UnicodeDecodeError):
                 body = {}
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                try:
+                    res = nh.bake_run(run_id, body)
+                except ValueError as exc:
+                    return self._error(400, str(exc))
+                except overlay.OverlayError as exc:
+                    return self._error(400, str(exc))
+                res["url"] = f"/api/runs/{run_id}/episode.png"
+                return self._json(res)
             ep = self._ep(parse_qs(url.query))
             try:
-                return self._json(pipeline.bake_overlay(m.group(1), body, ep))
+                return self._json(pipeline.bake_overlay(run_id, body, ep))
             except pipeline.Failed as exc:
                 return self._error(400, str(exc))
 
@@ -1454,6 +1546,48 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(409, str(exc))
             return self._json({"ok": True})
 
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/board-decision", url.path)
+        if m:
+            job = nh_runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            decision = str(body.get("decision") or "")
+            if decision not in ("approve", "retry"):
+                return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
+            try:
+                if decision == "approve":
+                    nh_runner.approve_board(job.id)
+                else:
+                    nh_runner.retry_board(job.id, note=str(body.get("note") or ""))
+            except ValueError as exc:
+                return self._error(409, str(exc))
+            return self._json({"ok": True})
+
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/sheet-decision", url.path)
+        if m:
+            job = nh_runner.get(m.group(1))
+            if not job:
+                return self._error(404, "그런 작업이 없습니다")
+            try:
+                body = self._body()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return self._error(400, "입력을 읽지 못했습니다")
+            decision = str(body.get("decision") or "")
+            if decision not in ("approve", "retry"):
+                return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
+            try:
+                if decision == "approve":
+                    nh_runner.approve_sheet(job.id)
+                else:
+                    nh_runner.retry_sheet(job.id, note=str(body.get("note") or ""))
+            except ValueError as exc:
+                return self._error(409, str(exc))
+            return self._json({"ok": True})
+
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/cancel", url.path)
         if m:
             job = nh_runner.get(m.group(1))
@@ -1489,6 +1623,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, str(exc))
             res["url"] = f"/api/nh/runs/{m.group(1)}/episode.png"
             return self._json(res)
+
+        # 다시 그리기 — 페이지 하나만. 편집실이 아니라 결과 화면(페이지 목록)
+        # 에서 부른다. 도는 동안은 /api/nh/regens/<id> 로 진행을 본다.
+        m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/page/(\d+)/regen", url.path)
+        if m:
+            try:
+                regen_id = nh_runner.regen(m.group(1), int(m.group(2)))
+            except ValueError as exc:
+                return self._error(400, str(exc))
+            return self._json({"id": regen_id})
 
         return self._error(404, "없는 주소입니다")
 

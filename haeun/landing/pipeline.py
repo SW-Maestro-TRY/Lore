@@ -233,7 +233,6 @@ def art_qa_regen_max(form: dict[str, Any]) -> int:
 USD_TO_KRW = 1400
 
 STYLES = {
-    "lineart":   "선화 · 액션",
     "webtoon":   "일반 웹툰",
     "romance":   "로맨스 판타지",
     "cinematic": "시네마틱 반실사",
@@ -1889,7 +1888,7 @@ def _scene_layout(run_id: str, episode: int = 1) -> dict[int, tuple[int, str]]:
         gap = last.get("gap_after")
         gap = gap if isinstance(gap, int) and 0 <= gap <= 3 else 1
         weight = str(first.get("weight") or "normal").strip().lower()
-        out[no] = (gap, weight if weight in ("full", "normal", "light") else "normal")
+        out[no] = (gap, weight if weight in ("full", "normal", "light", "wide") else "normal")
 
     for no, g in overlay.gap_overrides(overlay.load_overlay(ep_dir)).items():
         if no in out:
@@ -1912,7 +1911,8 @@ def _width_ratio(weight: str) -> float:
         import strip as _strip                                  # noqa: PLC0415
         return float(_strip.width_ratio({"weight": weight}))
     except Exception:                                           # noqa: BLE001
-        return 0.55 if str(weight).strip().lower() == "light" else 1.0
+        w = str(weight).strip().lower()
+        return 0.55 if w == "light" else (1.15 if w == "wide" else 1.0)
 
 
 def _run_gap_table(run_id: str) -> dict[int, float] | None:

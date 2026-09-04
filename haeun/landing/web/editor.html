@@ -42,24 +42,6 @@
          화면 밖으로 밀려나 아예 안 보였다(실측). 넓은 화면에서만 머리에
          남는다. 도구 손잡이도 같은 줄에 들어와서, 폰에서는 네 단추가 엄지
          닿는 자리에 나란히 선다. -->
-    <div class="ed-top-right">
-      <!-- 도구 서랍 손잡이. position 이 화면 폭에 따라 바뀌므로(폰=이 줄의
-           한 칸, PC=컬럼 오른쪽 가장자리에 붙는 fixed) DOM 위치는 여기 하나로
-           둔다 — fixed 는 부모와 무관하게 뜬다. -->
-      <button type="button" class="dock-open" id="dockOpen"
-              aria-controls="edDock" aria-expanded="false">
-        <span class="dock-open-icon" aria-hidden="true">☰</span>
-        <span class="dock-open-label">도구</span>
-      </button>
-      <!-- 대사 스크립트. 완성본 화면(읽는 자리)에 있던 것을 여기로 옮겼다 —
-           대사를 확인하는 것은 읽는 일이 아니라 **고치는 일** 옆에 있어야 한다.
-           말풍선을 얹으면서 원래 대사가 무엇이었는지 보는 자리다. -->
-      <button type="button" class="btn btn-quiet btn-sm" id="scriptBtn">대사</button>
-      <button type="button" class="btn btn-quiet btn-sm" id="saveBtn">저장</button>
-      <!-- 얹은 것을 진짜 그림에 굽는다. 여기까지 와야 가져갈 것이 생긴다 —
-           이 단추가 없던 동안, 배치한 말풍선은 브라우저 밖으로 나갈 길이 없었다. -->
-      <button type="button" class="btn btn-primary btn-sm" id="bakeBtn">이미지로 뽑기</button>
-    </div>
   </div>
 
   <div class="ed-strip">
@@ -92,14 +74,45 @@
     <div class="ed-stage-head">
       <p class="eyebrow" id="edGenre"></p>
       <!-- 제목은 여기서 바로 고친다. 전에는 결과 화면에서만 고칠 수 있어서,
-           편집실에서 제목이 마음에 안 들면 나갔다 들어와야 했다. -->
-      <h1 id="edEpisode" data-title-edit tabindex="0"
-          title="눌러서 제목을 고칩니다">1화</h1>
+           편집실에서 제목이 마음에 안 들면 나갔다 들어와야 했다.
+
+           연필(✎)은 결과 화면과 **같은 모양·같은 자리**다. 글자만 눌러도
+           고쳐지지만, 그것만으로는 고칠 수 있다는 것을 아무도 몰랐다. -->
+      <div class="title-row">
+        <h1 id="edEpisode" data-title-edit tabindex="0"
+            title="눌러서 제목을 고칩니다">1화</h1>
+        <button type="button" class="icon-btn" id="edTitleEditBtn"
+                title="제목 고치기" aria-label="제목 고치기">✎</button>
+      </div>
       <p class="ed-logline" id="edLogline"></p>
       <label class="mini-toggle">
         <input type="checkbox" id="showOverlay" checked>
         <span>내가 얹은 것 보기</span>
       </label>
+
+        <!-- 단추줄은 **제목·설명 아래**다. 머리줄에 있던 것을 여기로 옮겼다 —
+             결과 화면이 제목 밑에 단추를 두는 것과 같은 자리이고, 폰에서는
+             이 줄이 그대로 화면 아래 고정 바가 된다(editor.css 의
+             .ed-top-right). position:fixed 는 부모와 무관해서 옮겨도 그대로
+             동작한다. -->
+        <div class="ed-top-right">
+        <!-- 도구 서랍 손잡이. position 이 화면 폭에 따라 바뀌므로(폰=이 줄의
+             한 칸, PC=컬럼 오른쪽 가장자리에 붙는 fixed) DOM 위치는 여기 하나로
+             둔다 — fixed 는 부모와 무관하게 뜬다. -->
+        <button type="button" class="dock-open" id="dockOpen"
+                aria-controls="edDock" aria-expanded="false">
+          <span class="dock-open-icon" aria-hidden="true">☰</span>
+          <span class="dock-open-label">도구</span>
+        </button>
+        <!-- 대사 스크립트. 완성본 화면(읽는 자리)에 있던 것을 여기로 옮겼다 —
+             대사를 확인하는 것은 읽는 일이 아니라 **고치는 일** 옆에 있어야 한다.
+             말풍선을 얹으면서 원래 대사가 무엇이었는지 보는 자리다. -->
+        <button type="button" class="btn btn-quiet btn-sm" id="scriptBtn">대사</button>
+        <button type="button" class="btn btn-quiet btn-sm" id="saveBtn">저장</button>
+        <!-- 얹은 것을 진짜 그림에 굽는다. 여기까지 와야 가져갈 것이 생긴다 —
+             이 단추가 없던 동안, 배치한 말풍선은 브라우저 밖으로 나갈 길이 없었다. -->
+        <button type="button" class="btn btn-primary btn-sm" id="bakeBtn">이미지로 뽑기</button>
+      </div>
     </div>
 
     <!-- 회차 고르개. 한 편뿐인 작품에서는 editor.js 가 통째로 감춘다. -->

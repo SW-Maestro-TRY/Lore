@@ -2180,3 +2180,339 @@ body.modal-open { overflow: hidden; }
 
 /* 진행 화면의 「둘러보기」 — 단계 그림 아래, 잡담(놀기)보다는 위 */
 .stage-away { margin-top: 14px; }
+
+/* 상단바를 없앤다 — **폰·PC 둘 다.**
+
+   로그인·크레딧·홈으로 가는 길이 이 바에만 있었다. 그 입구가 통째로
+   사라진다는 뜻이고, 화면을 그림으로 꽉 채우기로 한 결정이라 일부러 그렇게
+   둔 것이다. 되돌리려면 이 절만 지우면 된다.
+
+   크레딧 칩(−12크레딧)도 같이 뺀다 — 잔액을 볼 자리가 없는데 단추에만
+   빠지는 값이 남으면 무엇에서 빠지는지 알 수가 없다.
+
+   높이 계산도 같이 되돌린다: 홈과 만들기는 바 높이(59px)를 빼고 화면을
+   채우게 돼 있었다. 안 고치면 물이 화면 아래에서 그만큼 모자라게 끝난다. */
+.topbar { display: none; }
+.cost-chip { display: none; }
+.top, .studio { min-height: 100dvh; }
+
+/* 편집실 머리줄도 같이 없앤다.
+
+   **`.ed-top-row` 자체를 display:none 하면 안 된다.** 화면 아래 단추줄
+   (도구·대사·저장·이미지로 뽑기)이 그 안의 `.ed-top-right` 이고, 떠 있을
+   뿐 DOM 상으로는 여전히 이 줄의 자식이다. 부모를 지우면 단추도 같이
+   사라져서 편집을 아예 못 하게 된다. 그래서 보이는 것만 하나씩 끄고,
+   줄은 높이 0 으로 남긴다.
+
+   특정도를 body.ed 로 올려 둔 이유: editor.css 가 style.css 보다 뒤에
+   실려서, 같은 특정도로 쓰면 그쪽 규칙이 순서로 이긴다(실측). */
+body.ed .ed-top {
+  background: transparent; border: none; box-shadow: none; position: static;
+}
+body.ed .ed-top .brand,
+body.ed .ed-top .ed-chips,
+body.ed .ed-strip { display: none; }
+body.ed .ed-top-row { min-height: 0; height: 0; padding: 0; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PC 레이아웃 (2026-09-01)
+
+   여기 위쪽은 전부 폰 기준이고, 이 절만 넓은 화면에서 덮어쓴다. 그래서
+   **폰 화면은 이 절을 추가해도 한 픽셀도 안 바뀐다** — 운영 중인 화면이라
+   되돌릴 구석을 남겨 두는 것이 이 구조의 이유다.
+
+   전에는 "PC 용으로 따로 벌린 레이아웃은 없다"가 방침이었고, 큰 화면에서는
+   480px 아트보드를 통째로 확대했다. 그런데 그건 결국 폰 화면을 크게 띄운
+   것이라 PC 에서 어색했다(실측). 그래서 화면마다 PC 구성을 따로 짠다.
+
+   폭의 기준:
+     본문 읽는 글    ~72ch 를 안 넘긴다 (길면 눈이 줄을 놓친다)
+     웹툰 읽기       760px — 세로 스크롤 만화는 넓힌다고 잘 읽히지 않는다
+     목록·격자       1180px 안에서 열 수를 늘린다
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media (min-width: 880px) {
+  /* 아트보드를 걷어내고 화면 전체를 쓴다. 물빛 바탕(html)이 그대로 드러난다. */
+  body {
+    max-width: none; box-shadow: none; background: transparent;
+    font-size: 17px;
+  }
+
+  /* 화면마다 자기 폭.
+
+     홈·둘러보기는 **화면을 꽉 채운다** — 표지를 늘어놓는 자리라 넓을수록
+     한눈에 더 많이 들어온다. 반대로 읽기·만들기는 아래에서 따로 폭을
+     묶는다(글과 만화는 넓힌다고 잘 읽히지 않는다). */
+  #landing, #works, #mypage, #create { max-width: none; width: 100%; }
+  #progress, #result, #nextEp {
+    max-width: 1180px; margin-inline: auto; width: 100%;
+  }
+
+  /* ── 홈 ─────────────────────────────────────────────────────────────
+     폰에서는 소개가 세로로 흐르지만, PC 는 첫 화면에서 "무엇을 하는
+     곳인지 + 무엇을 누르면 되는지"가 한눈에 들어와야 한다. 왼쪽에 말,
+     오른쪽에 루 그림을 두고 깊이 세 줄은 아래에 가로로 편다. */
+  .top { padding-bottom: 56px; }
+  .top-intro {
+    display: grid; grid-template-columns: 1.05fr .95fr;
+    align-items: center; gap: 40px;
+    max-width: none; padding: 56px clamp(32px, 6vw, 96px) 0;
+    text-align: left;
+  }
+  .top-intro h1 { font-size: 3.1rem; line-height: 1.18; grid-column: 1; }
+  .hero-kicker { grid-column: 1; }
+  .top-lede { grid-column: 1; font-size: 1.05rem; max-width: 30ch; }
+  /* 폰에서는 세로로 쌓아 엄지로 누르게 하지만, PC 는 나란히 둔다 —
+     화면 폭을 다 쓰는 단추는 PC 에서 "누르는 것"으로 안 읽힌다. */
+  .hero-cta { grid-column: 1; flex-direction: row; gap: 12px; margin-top: 18px; }
+  .hero-cta .btn { width: auto; padding: 1em 2em; }
+  .hero-lou {
+    grid-column: 2; grid-row: 1 / span 4;
+    width: min(420px, 100%); height: auto; margin: 0; justify-self: center;
+  }
+  /* .top 이 세로 flex 라 .depths 에 flex:1 이 걸려 있다 — PC 에서는 그
+     늘어남을 끄고 폭을 꽉 쓴 3열로 편다. */
+  .depths {
+    flex: none; display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 16px; width: 100%;
+    max-width: none; padding: 48px clamp(32px, 6vw, 96px) 0;
+  }
+  .depths li { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .depths img { width: 56px; height: 56px; }
+
+  /* ── 둘러보기 ────────────────────────────────────────────────────────
+     표지를 늘어놓는 자리다. 폰의 2열을 그대로 늘리면 카드가 거대해지므로
+     최소 폭을 정해 두고 열 수가 알아서 늘게 한다. */
+  .works, .mypage { padding: 40px clamp(32px, 6vw, 96px) 80px; }
+  .works-grid, .mypage-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+  }
+  .works-head, .mypage-head { margin-bottom: 28px; }
+  .works-head h2, .mypage-head h2 { font-size: 2.1rem; }
+  .works-actions .btn-primary { flex: none; }
+
+  /* ── 읽기 ────────────────────────────────────────────────────────────
+     세로 스크롤 웹툰은 넓힌다고 잘 읽히지 않는다. 그림 기둥은 760px 로
+     묶고, 남는 자리는 물빛 바탕으로 둔다(만화 앱이 하는 방식). */
+  .result { background: transparent; padding: 0 32px 80px; }
+  .result-head { max-width: 760px; margin-inline: auto; padding-top: 40px; }
+  .result-head h2 { font-size: 2.1rem; }
+  /* 읽는 자리의 모든 블록을 그림 기둥과 같은 폭으로 맞춘다 — 폭이
+     제각각이면 읽는 눈이 좌우로 흔들린다. .mem-box(작품 규칙)처럼 화면
+     폭을 그대로 쓰던 것들이 여기 걸린다. */
+  .result-pages, .result-strip, .result-body, #resultPages,
+  .result > .mem-box, .result-note, .wm-note, .ep-tabs {
+    max-width: 760px; margin-inline: auto; width: 100%;
+  }
+
+  /* ── 진행 ────────────────────────────────────────────────────────────
+     기다리는 화면은 읽을 것이 몇 줄뿐이다. 가운데 카드 하나로 둔다. */
+  .progress { padding: 40px 32px 80px; }
+  .progress-inner {
+    max-width: 720px; margin-inline: auto;
+    background: var(--ink); border-radius: 22px;
+    box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 18px 50px rgba(15,51,63,.10);
+    padding: 8px 28px 28px;
+  }
+  .nextep { max-width: 720px; }
+
+  /* ── 만들기(위저드) ──────────────────────────────────────────────────
+     여기만 폰 화면 그대로 남아 있었다 — 화면 한가운데 좁은 카드 하나가
+     떠 있고, 「다음」이 화면 폭을 다 쓰는 막대로 바닥에 붙어 있었다.
+     엄지로 누르는 화면의 모양이라 PC 에서는 남의 화면처럼 읽힌다.
+
+     PC 구성은 **왼쪽은 말, 오른쪽은 손이 닿는 것** 이다. 걸음 이름과 물음은
+     왼쪽에 세워 두고(스크롤해도 따라온다), 실제로 채우는 카드와 단추는
+     오른쪽 한 기둥에 모은다. 물빛은 카드 뒤가 아니라 **화면 전체**를
+     칠한다 — 걸음이 깊어질수록 어두워지는 것이 이 화면의 뼈대다.
+
+     .wiz-step 을 display:contents 로 푸는 이유: 말과 카드가 같은 격자의
+     이웃이어야 두 칸이 같은 줄에서 시작한다. 걸음 껍데기가 격자 칸 하나를
+     차지하면 그 안에서 다시 위아래로 흐를 뿐이다.
+     display 를 덮었으므로 [hidden] 의 기본 display:none 이 더 이상 안
+     먹는다 — 숨은 걸음을 직접 눌러 준다(안 하면 다섯 걸음이 한꺼번에
+     쏟아진다). */
+  .create { padding: 0; }
+  .studio {
+    max-width: none; width: 100%;
+    padding: 0; border-radius: 0; box-shadow: none;
+  }
+  .wizard {
+    display: grid;
+    grid-template-columns: minmax(240px, 320px) minmax(0, 620px);
+    column-gap: clamp(40px, 5vw, 88px);
+    align-content: start;
+    width: 100%; max-width: 1100px; margin-inline: auto;
+    padding: 28px clamp(32px, 5vw, 72px) 56px;
+  }
+  .wiz-step { display: contents; }
+  .wiz-step[hidden] { display: none; }
+
+  /* 걸음이 한 화면에 들어가야 「다음」을 찾으러 스크롤하지 않는다 — 폰에서는
+     단추줄이 바닥에 붙어 있어서 그럴 일이 없었지만 PC 에서는 카드 아래에
+     그냥 놓이므로, 위쪽 여백을 아낀다. */
+  .wiz-head { grid-column: 1 / -1; margin-bottom: 28px; }
+  .wiz-tick { width: 26px; height: 5px; }
+  .wiz-tick.on { width: 40px; }
+
+  .wiz-say { grid-column: 1; align-self: start; }
+  /* 폰에서는 제목 오른쪽에 루가 앉아 있어 그만큼 비워 뒀다. PC 에서는 루가
+     왼쪽 아래로 내려가므로 그 여백이 필요 없다. */
+  .wiz-eyebrow, .wiz-title, .wiz-sub { padding-right: 0; }
+  .wiz-title { font-size: 2.4rem; line-height: 1.22; margin-top: 14px; }
+  .wiz-sub { font-size: 1rem; margin-top: 14px; }
+
+  /* 오른쪽 기둥 — 채우는 것과 누르는 것만 여기 있다. */
+  .wiz-card, .fork, .wiz-after, .ip-agree, .wiz-actions { grid-column: 2; }
+  .wiz-card { padding: 24px 28px; margin-top: 0; }
+  .wiz-after .wiz-card { padding: 6px 24px; }
+  /* 1걸음의 주의사항은 카드 **맨 아래** 로 내린다. 사진 타일 옆에 세워
+     봤더니 눌러야 할 타일과 나란히 서서 둘 중 어느 쪽을 먼저 보라는 건지
+     알 수 없었다(하은 피드백). 읽어야 하는 글이지 먼저 하는 일이 아니다.
+     .photo-row 를 display:contents 로 풀어 타일과 주의사항을 카드의 직접
+     자식으로 만든 다음 순서만 바꾼다 — 마크업은 그대로라 폰은 안 바뀐다. */
+  .wiz-card { display: flex; flex-direction: column; }
+  .photo-row { display: contents; }
+  .photo-drop { order: 0; margin-bottom: 20px; }
+  .photo-rules { order: 9; margin-top: 22px; }
+  .styles { grid-template-columns: repeat(3, 1fr); }
+
+  /* 루는 **물음 바로 아래** 다. 폰에서는 제목 옆 빈자리를 메우는 역할이었고,
+     PC 에서는 그 자리가 안 비므로 왼쪽 칸에서 물음을 받치는 자리로 옮긴다.
+
+     화면 바닥이 아니라 기둥 안이다 — 화면에 붙여 두면(fixed) 창을 키울수록
+     루만 구석에 혼자 떨어져 앉는다. 기둥(.wizard)이 기준이므로 여백도 그냥
+     기둥의 안쪽 여백을 그대로 쓴다.
+
+     top 은 걸음 중 가장 긴 물음(1~3걸음: 눈금 + 두 줄 제목 + 안내)의 아래를
+     기준으로 고정한다. 제목이 짧은 걸음(4~5)에서는 그만큼 더 떨어지는데,
+     걸음을 옮길 때마다 루가 위아래로 뛰는 것보다 한자리에 있는 편이 낫다. */
+  .wiz-lou {
+    position: absolute; right: auto; bottom: auto;
+    left: clamp(32px, 5vw, 72px); top: 300px;
+    width: 190px; height: 190px;
+  }
+
+  /* 단추줄. 화면 폭을 통째로 가로지르는 막대는 그만둔다 — PC 에서 그건
+     "누르는 것"으로 안 읽힌다. 대신 오른쪽 기둥 안에서만 떠 있는 알약으로
+     두고, 붙어 있는 것은 그대로 둔다: 그림체 걸음처럼 카드가 화면보다 길면
+     스크롤 끝까지 가야 「다음」이 나오기 때문이다. */
+  .wiz-actions {
+    position: sticky; bottom: 16px; z-index: 30;
+    margin-top: 26px; padding: 0; background: none;
+  }
+  .wiz-actions::before { display: none; }
+  .wiz-foot {
+    /* 알약은 단추만큼만 넓다 — 기둥 폭을 다 차지하면 왼쪽 절반이 빈 쟁반처럼
+       보인다(내용이 짧은 걸음에서 실제로 그랬다). */
+    width: fit-content; margin-left: auto;
+    padding: 10px; border-radius: 999px;
+    background: rgba(247,243,234,.74);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(15,51,63,.14);
+  }
+  .wiz-foot .btn { flex: none; min-width: 132px; padding: .95em 1.7em; }
+  .wiz-foot .wiz-go { min-width: 220px; }
+  .submit-note { text-align: right; padding-right: 16px; }
+  /* 폰에서는 단추줄이 물빛 띠 위에 앉아 있어서, 깊은 걸음(3~5)에서는 「이전」을
+     흰 쪽으로, 「다음」을 모래빛으로 뒤집어 뒀다 — 안 그러면 물에 녹아 없어졌다.
+     PC 는 그 자리가 밝은 알약이라 사정이 반대다. 알약 위에서는 모래빛 단추가
+     바탕과 겹쳐 어느 쪽이 주 단추인지 안 보인다. 얕은 걸음과 같은 색으로
+     되돌린다. */
+  body[data-step="3"] .wiz-prev,
+  body[data-step="4"] .wiz-prev,
+  body[data-step="5"] .wiz-prev {
+    background: rgba(15,51,63,.055); color: var(--text);
+  }
+  body[data-step="3"] .wiz-next, body[data-step="3"] .wiz-go,
+  body[data-step="4"] .wiz-next, body[data-step="4"] .wiz-go,
+  body[data-step="5"] .wiz-next, body[data-step="5"] .wiz-go {
+    background: var(--accent); color: #fff;
+  }
+  /* 안내 한 줄은 알약 밖, 물 위에 그냥 앉는다 — 깊은 걸음에서는 밝은 쪽으로. */
+  body[data-step="3"] .submit-note,
+  body[data-step="4"] .submit-note,
+  body[data-step="5"] .submit-note { color: rgba(247,243,234,.82); }
+}
+
+/* 아주 넓은 화면 — 목록만 더 벌린다. 읽기·만들기는 위 폭을 그대로 둔다. */
+@media (min-width: 1600px) {
+  .works-grid, .mypage-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+}
+
+/* 편집실 — PC.
+
+   그림 위에 말풍선을 얹는 자리라 **원본보다 크게 늘리면 안 된다.** 페이지
+   그림이 1024px 인데 화면을 꽉 채우면 1500px 로 확대돼 흐려지고, 그 위에
+   얹은 것의 자리도 실제와 달라 보인다. 읽기 화면과 같은 폭으로 묶는다. */
+@media (min-width: 880px) {
+  /* 단추줄을 화면 아래 고정 바에서 **제목·설명 아래**로 되돌린다.
+
+     폰에서는 엄지가 닿는 화면 아래가 맞지만, PC 에서 바닥에 뜬 알약 막대는
+     그림 위에 얹혀 거슬린다(실측). 결과 화면이 제목 밑에 단추를 두는 것과
+     같은 자리로 옮겼다 — 마크업에서도 그 자리로 옮겨 뒀다(editor.html 의
+     .ed-stage-head). */
+  body.ed .ed-top-right {
+    position: static; transform: none;
+    left: auto; right: auto; bottom: auto; width: auto;
+    margin: 14px 0 0; padding: 0; gap: 8px; justify-content: flex-start;
+    background: none; border: none; box-shadow: none; backdrop-filter: none;
+  }
+  body.ed .ed-top-right .btn {
+    flex: none; min-height: 40px; padding-inline: 18px;
+  }
+
+  /* 도구 손잡이는 단추줄에서 빼낸다 — 자리는 아래 편집실 절에서 정한다.
+     「이미지로 뽑기」 옆에 붙어 있으면 무엇을 여는 것인지 안 읽힌다. */
+
+  body.ed .ed-body { padding-top: 8px; }
+
+  .ed-stage { max-width: 820px; margin-inline: auto; width: 100%; }
+  .ed-body { padding-inline: 32px; }
+  /* 아래 단추줄은 폰에서 화면 바닥에 붙는 막대다. PC 에서는 그림 기둥
+     너비에 맞춰 가운데로 모은다. */
+  .ed-dock, .dock-bar { max-width: 820px; margin-inline: auto; }
+}
+
+/* 편집실 — 넓은 화면에서는 도구를 **상시 오른쪽 패널**로 둔다.
+
+   editor.css 에 이미 1200px 이상에서 오른쪽 서랍이 되는 규칙이 있는데, 그
+   계산은 캔버스가 480px 이던 시절 것이다("컬럼 오른쪽 끝이 (vw+480)/2").
+   지금 캔버스는 820px 이라 같은 폭에서 서랍이 그림을 덮는다.
+
+   그래서 덮는 대신 **자리를 나눈다** — 본문에 패널 폭만큼 오른쪽 여백을 주고
+   패널은 늘 열어 둔다. 열고 닫을 것이 없으니 손잡이도 지운다. 데스크톱
+   편집기가 캔버스 옆에 도구를 붙여 두는 것과 같은 모양이다.
+
+   PC 기준(880px)부터 바로 적용한다. 좁으면 패널이 캔버스를 덮을까 걱정할
+   수 있는데, 캔버스는 max-width 820px 이라 남은 폭에 맞춰 알아서 줄어든다
+   (880px 화면이면 캔버스 ~520px). 폰에서만 바텀시트로 올라온다. */
+@media (min-width: 880px) {
+  body.ed .ed-dock {
+    position: fixed; top: 0; right: 0; bottom: 0; left: auto;
+    width: 340px; max-height: none; margin: 0;
+    border: none; border-left: 1px solid var(--line); border-radius: 0;
+    box-shadow: -14px 0 34px rgba(15,51,63,.10);
+    overflow-y: auto;
+    transform: translateX(100%);           /* 닫으면 오른쪽으로 밀려난다 */
+  }
+  body.ed .ed-dock.is-open { transform: none; }
+  body.ed .ed-dock::before { display: none; }
+  body.ed .dock-scrim { display: none; }   /* 옆에 붙어 있어 뒤를 가리지 않는다 */
+
+  /* 손잡이는 **닫혔을 때만** 나온다 — 열려 있으면 패널 안의 ✕ 가 그 일을
+     한다. 둘 다 떠 있으면 무엇을 눌러야 할지 알 수 없다. */
+  body.ed #dockOpen {
+    position: fixed; right: 24px; bottom: 24px; top: auto; left: auto;
+    transform: none; z-index: 62;
+    width: 60px; height: 60px; padding: 0; border-radius: 50%; flex: none;
+    background: var(--accent); color: #fff;
+    box-shadow: 0 8px 24px rgba(15,51,63,.24);
+  }
+  body.ed.dock-open-on #dockOpen { display: none; }
+
+  /* 패널이 열린 만큼만 본문 자리를 비운다. 닫으면 그림이 가운데로 돌아온다. */
+  body.ed.dock-open-on .ed-body,
+  body.ed.dock-open-on .ed-top { padding-right: 356px; }
+}

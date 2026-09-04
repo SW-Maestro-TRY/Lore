@@ -64,7 +64,8 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 
 # 글을 쓰는 단계 / 그림을 그리는 단계. 이름이 곧 .env 의 앞자리다
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
-TEXT_STAGES = ("STORY", "DETAIL", "REVIEW", "FIX", "BOARD", "SHEET")
+TEXT_STAGES = ("STORY", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
+               "REVIEW", "FIX", "BOARD", "SHEET")
 IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
@@ -172,8 +173,10 @@ class Call:
 STAGE_LABEL = {
     "STORY": "이야기 후보",
     "DETAIL": "스토리 구체화",
+    "CUTSCRIPT": "컷 대본",
     "REVIEW": "스토리 검수",
     "FIX": "지적 반영",
+    "CUTSCRIPT_FIX": "컷 대본 픽스 (독자 검수·자기수정)",
     "BOARD": "콘티",
     "SHEET": "시트 사양",
     "SHEET_IMAGE": "시트 그림",
