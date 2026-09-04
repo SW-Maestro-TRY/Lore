@@ -659,6 +659,10 @@
       </div>
     </div>
     <p class="result-logline" id="resLogline"></p>
+    <!-- 다 그린 뒤 한 번 읽어 본 판정(new_harness 의 episodecheck). 판정이
+         없는 작품(검수를 껐거나, 그 단계가 없던 때 만든 작품)에서는 app.js 가
+         통째로 감춘다 — "검수했는데 문제 없음"과 "검수를 안 했음"은 다르다. -->
+    <div class="nh-review-episode" id="resReview" hidden></div>
     <!-- 회차 고르개. 한 편뿐이면 app.js 가 통째로 감춘다. -->
     <div class="ep-tabs" id="resEpisodes" hidden></div>
 

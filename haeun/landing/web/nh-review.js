@@ -13,6 +13,50 @@ window.NHReview = (function () {
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
+  /* 후보 하나에 붙는 자가검수 판정(storycheck). 카드 아래에 접어 둔다.
+
+     **줄 세우지 않는다.** 어느 후보가 나은지는 사람이 고르는 자리라, 여기
+     보이는 것은 "이 후보를 그대로 그리면 독자가 어디서 걸리는가" 뿐이다.
+     문제가 하나도 없으면 접는 줄도 안 그린다 — 넷 다 「0건」이 붙어 있으면
+     읽을 것이 없는데 카드만 길어진다.
+
+     판정이 아예 없을 때(검수를 껐거나 옛 run 이거나 호출이 실패했을 때)는
+     자리를 통째로 비운다. "검수했는데 문제 없음"과 "검수를 안 했음"은
+     다르고, 그 둘이 화면에서 같아 보이면 안 된다. */
+  /* opt.readAs === false 면 「읽은 대로」를 안 그린다 — 부르는 쪽이 그것을
+     이미 더 눈에 띄는 자리에 그렸을 때 쓴다(완성본 화면). 안 나누면 같은
+     문장이 상자 안에서 두 번 나온다. */
+  function reviewHtml(r, opt) {
+    if (!r) return "";
+    const issues = r.issues || [];
+    const n = r.counts || {};
+    if (!issues.length) {
+      return `<p class="nh-review nh-review-ok">읽어 봤습니다 — 걸리는 곳 없음</p>`;
+    }
+    const heavy = (n.critical || 0) + (n.major || 0);
+    const label = heavy
+      ? `읽다 걸리는 곳 ${heavy}군데`
+      : `사소한 것 ${issues.length}건`;
+    // 어디를 가리키는지가 판정마다 다르다 — 후보 검수는 아직 그림이
+    // 없으니 장면 번호로, 화 전체 검수는 이미 그려진 페이지 번호로 짚는다.
+    // 화 전체에 걸린 것은 page 가 0 이라 자리 표시가 안 붙는다.
+    const rows = issues.map(i => {
+      const at = i.scene ? `장면 ${esc(i.scene)}`
+               : i.page ? `${esc(i.page)}페이지` : "";
+      return `
+      <li class="nh-review-i" data-sev="${esc(i.severity)}">
+        ${at ? `<b>${at}</b> ` : ""}${esc(i.what)}
+      </li>`;
+    }).join("");
+    return `
+      <details class="nh-review" data-verdict="${esc(r.verdict)}">
+        <summary>${esc(label)}</summary>
+        ${r.read_as && (!opt || opt.readAs !== false)
+          ? `<p class="nh-review-read">읽은 대로: ${esc(r.read_as)}</p>` : ""}
+        <ul class="nh-review-list">${rows}</ul>
+      </details>`;
+  }
+
   /* 방향 카드 하나. 장면은 접어 둔다 — 고르는 데 필요한 것은 제목·장르·
      줄거리이고, 넷을 견줄 때 장면까지 펼쳐져 있으면 한 화면에 안 들어온다. */
   function directionCardHtml(d) {
@@ -23,7 +67,8 @@ window.NHReview = (function () {
       ${scenes ? `<details>
         <summary>장면 ${(d.scenes || []).length}개 보기</summary>
         <ul>${scenes}</ul>
-      </details>` : ""}`;
+      </details>` : ""}
+      ${reviewHtml(d.review)}`;
   }
 
   /* 한 칸이 무엇인지는 흐름마다 다르다 — 콘티 흐름은 "컷"(한 장에 여럿이
@@ -151,6 +196,6 @@ window.NHReview = (function () {
     });
   }
 
-  return { directionCardHtml, cutHtml, castHtml, countLabel, scenesHtml,
-          simpleScenesHtml, fillBoard, wireRetryNote };
+  return { directionCardHtml, reviewHtml, cutHtml, castHtml, countLabel,
+          scenesHtml, simpleScenesHtml, fillBoard, wireRetryNote };
 })();

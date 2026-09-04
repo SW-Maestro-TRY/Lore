@@ -246,9 +246,61 @@ def _raises_value_error(fn) -> bool:
     return False
 
 
+def test_self_review_attach() -> None:
+    """자가검수 판정이 화면 쪽으로 넘어가는 자리.
+
+    두 판정 모두 **아무것도 막지 않는다** — 없으면 없는 채로 흘러가고,
+    있으면 후보 카드와 완성본 화면에 붙는다. 그 둘이 화면에서 같아
+    보이면 안 되므로(「검수했는데 문제 없음」 ≠ 「검수를 안 했음」),
+    없을 때 정말 아무것도 안 붙는지까지 본다.
+    """
+    root = Path(tempfile.mkdtemp())
+    try:
+        NP.NEW_HARNESS = root
+        d = root / "runs" / "r1"
+        d.mkdir(parents=True)
+        directions = [{"n": 1, "title": "가"}, {"n": 2, "title": "나"},
+                      {"n": 3, "title": "다"}]
+
+        # 판정 파일이 없으면 후보를 그대로 흘려보낸다 (옛 run · 검수 껐을 때)
+        check("판정이 없으면 그대로", NP.attach_story_review("r1", directions), directions)
+        check("판정이 없으면 완성본에도 안 붙는다", NP.episode_review("r1"), {})
+
+        (d / "story_review.json").write_text(json.dumps({"candidates": [
+            {"n": 1, "verdict": "주의", "read_as": "읽은 대로",
+             "counts": {"critical": 1, "major": 0, "minor": 0},
+             "issues": [{"scene": 2, "kind": "지식", "severity": "critical",
+                         "what": "알 길이 없다"}]},
+            {"n": 2, "verdict": "통과", "read_as": "", "counts": {}, "issues": []},
+            # 모델이 빼먹은 후보. 빈 판정을 붙이면 화면이 "검수했는데 문제
+            # 없음" 처럼 보여 준다 — 그래서 안 붙인다.
+            {"n": 3, "verdict": "없음", "issues": []}]},
+            ensure_ascii=False), encoding="utf-8")
+
+        got = NP.attach_story_review("r1", directions)
+        check("판정이 있는 후보에 붙는다", got[0]["review"]["verdict"], "주의")
+        check("문제가 없어도 붙는다", got[1]["review"]["verdict"], "통과")
+        ok("판정 없음은 안 붙는다", "review" not in got[2])
+        ok("원본은 안 건드린다", "review" not in directions[0])
+
+        (d / "episode_review.json").write_text(json.dumps({
+            "verdict": "주의", "read_as": "이렇게 읽힌다",
+            "counts": {"critical": 1, "major": 0, "minor": 0},
+            "issues": [{"page": 4, "kind": "글자", "severity": "critical",
+                        "what": "글자가 뭉개졌다"}]}, ensure_ascii=False), encoding="utf-8")
+        check("완성본 판정을 읽는다", NP.episode_review("r1")["verdict"], "주의")
+
+        # 깨진 파일은 없는 것과 같이 다룬다 — 화면에 반쪽 판정을 띄우느니 안 띄운다
+        (d / "episode_review.json").write_text("{ 부서짐", encoding="utf-8")
+        check("깨진 판정은 없는 것으로", NP.episode_review("r1"), {})
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main() -> int:
     for fn in (test_serial_execution, test_position, test_cancel_while_queued,
-               test_pick_guards_against_double_queue, test_review_order):
+               test_pick_guards_against_double_queue, test_review_order,
+               test_self_review_attach):
         fn()
     if fails:
         print("FAILED:")

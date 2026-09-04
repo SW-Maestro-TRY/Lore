@@ -341,7 +341,7 @@ def _run_story_phase(job: NHJob) -> None:
         if not directions:
             return _fail(job, "이야기 후보를 하나도 못 읽었습니다 — story.md 를 확인하세요")
 
-        job.directions = directions
+        job.directions = attach_story_review(run_id, directions)
         job.save()
     except Exception as exc:                            # noqa: BLE001
         return _fail(job, f"{type(exc).__name__}: {exc}")
@@ -376,7 +376,7 @@ def _run_restory_phase(job: NHJob) -> None:
         if not directions:
             return _fail(job, "이야기 후보를 하나도 못 읽었습니다 — story.md 를 확인하세요")
 
-        job.directions = directions
+        job.directions = attach_story_review(job.run_id, directions)
         job.pick = None
         job.status = STATUS_AWAITING_PICK
         job.save()
@@ -460,6 +460,60 @@ def _run_pages_phase(job: NHJob) -> None:
         job.save()
     except Exception as exc:                            # noqa: BLE001
         _fail(job, f"{type(exc).__name__}: {exc}")
+
+
+# --------------------------------------------------------------------------- #
+# 하네스가 남긴 자가검수 판정을 화면 쪽으로 옮기는 자리
+# --------------------------------------------------------------------------- #
+#
+# 두 판정 모두 **아무것도 막지 않는다.** 이야기 후보 검수는 사람이 고르는
+# 카드 옆에 붙고, 화 전체 검수는 완성본 화면에 붙는다 — 읽고 판단하는 것은
+# 사람이다. 파일이 없으면(검수를 껐거나, 옛 run 이거나, 호출이 실패했거나)
+# 조용히 비운다: 화면은 판정 칸이 통째로 안 뜬다.
+
+def story_review(run_id: str) -> dict[str, Any]:
+    """`story_review.json` -> {후보번호: 판정}. 없으면 빈 dict."""
+    doc = _read_json_safe(run_dir(run_id), "story_review.json")
+    out: dict[int, Any] = {}
+    for one in (doc.get("candidates") or []):
+        if isinstance(one, dict):
+            try:
+                out[int(one.get("n"))] = one
+            except (TypeError, ValueError):
+                continue
+    return out
+
+
+def attach_story_review(run_id: str, directions: list[dict]) -> list[dict]:
+    """후보 목록에 판정을 하나씩 얹는다 — 화면은 `d.review` 하나만 보면 된다.
+
+    후보를 **복사해서** 얹는다. directions.json 을 그대로 들고 있는 곳이
+    여럿이라(job.directions·state.json), 원본에 섞어 두면 다음에 그 파일을
+    다시 읽었을 때 판정이 있는 판과 없는 판이 갈린다.
+    """
+    if not run_id:
+        return directions
+    got = story_review(run_id)
+    if not got:
+        return directions
+    out = []
+    for d in directions:
+        if not isinstance(d, dict):
+            continue
+        one = dict(d)
+        review = got.get(d.get("n"))
+        # `없음`(모델이 그 후보를 빼먹은 것)은 안 붙인다 — 빈 판정을 붙이면
+        # 화면이 "검수했는데 문제 없음" 처럼 보여 준다. 그 둘은 다르다.
+        if review and review.get("verdict") in ("통과", "주의"):
+            one["review"] = review
+        out.append(one)
+    return out
+
+
+def episode_review(run_id: str) -> dict[str, Any]:
+    """`episode_review.json`. 없으면 빈 dict."""
+    doc = _read_json_safe(run_dir(run_id), "episode_review.json")
+    return doc if doc.get("verdict") in ("통과", "주의") else {}
 
 
 def _clear_sheet(run_id: str) -> None:
@@ -891,6 +945,9 @@ def result_by_run(run_id: str) -> dict[str, Any]:
         "stage_times": [],
         "seconds": None,
         "layout_mode": "fast",
+        # 다 그린 뒤 한 번 읽어 본 판정(episodecheck). 없으면 빈 dict 이고,
+        # 화면은 그 자리를 통째로 안 그린다.
+        "review": episode_review(run_id),
     }
 
 

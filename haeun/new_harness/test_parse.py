@@ -1566,9 +1566,127 @@ def test_page_review() -> None:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_story_review() -> None:
+    """이야기 후보 검수 — 판정은 모델 말이 아니라 코드가 센다."""
+    import storycheck as SC
+
+    clean = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "read_as": "숨은 직업의 비밀을 좇는 이야기", "issues": []}]},
+        ensure_ascii=False), expect=[1])
+    check("문제가 없으면 통과", clean["candidates"][0]["verdict"], "통과")
+    check("읽은 대로를 넘겨준다", clean["candidates"][0]["read_as"],
+          "숨은 직업의 비밀을 좇는 이야기")
+
+    hard = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "issues": [
+            {"scene": 3, "kind": "지식", "severity": "critical", "what": "알 길이 없다"},
+            {"scene": 1, "kind": "한장", "severity": "minor", "what": "사건이 둘이다"}]},
+        {"n": 2, "issues": [
+            {"scene": 2, "kind": "인과", "severity": "major", "what": "왜 그러는지 모른다"}]}]},
+        ensure_ascii=False), expect=[1, 2])
+    check("critical 이면 주의", hard["candidates"][0]["verdict"], "주의")
+    check("major 하나로는 통과", hard["candidates"][1]["verdict"], "통과")
+    check("무거운 것부터", [i["severity"] for i in hard["candidates"][0]["issues"]],
+          ["critical", "minor"])
+    check("무게를 센다", hard["candidates"][0]["counts"],
+          {"critical": 1, "major": 0, "minor": 1})
+
+    odd = SC.parse('{"candidates": [{"n": 1, "issues": [{"severity": "심각", "what": "x"}]}]}',
+                   expect=[1])
+    check("모르는 무게는 major", odd["candidates"][0]["issues"][0]["severity"], "major")
+    check("모르는 종류는 인과", odd["candidates"][0]["issues"][0]["kind"], "인과")
+
+    # 안 온 후보를 조용히 통과로 두지 않는다 — 검수가 있는 것과 없는 것이 같아진다
+    part = SC.parse('{"candidates": [{"n": 1, "issues": []}]}', expect=[1, 2, 3, 4])
+    check("빠진 후보도 자리를 남긴다", [c["n"] for c in part["candidates"]], [1, 2, 3, 4])
+    check("빠진 후보는 판정 없음", part["candidates"][3]["verdict"], "없음")
+
+    # --- 프롬프트 ---------------------------------------------------------
+    directions = [{"n": 1, "title": "제목", "genre": "판타지", "plot": "줄거리다",
+                   "scenes": ["첫 장면이다", "둘째 장면이다"],
+                   "cast": [{"name": "관리인", "appearance": "50대"}],
+                   "hidden": ["아직 안 밝힌 것"]}]
+    text = SC.build_prompt({"name": "이하은", "description": "대학생",
+                            "fields": {"성격": "조용하다"}}, directions)
+    ok("캐릭터를 준다", "이하은" in text and "조용하다" in text)
+    ok("장면을 번호로 준다", "1. 첫 장면이다" in text)
+    ok("한 줄이 한 장이라고 알려준다", "한 줄이 그림 한 장이 된다" in text)
+    ok("안 밝힌 것은 문제가 아니라고 알려준다", "밝히지 않은 것" in text)
+    ok("자리표시자가 안 남는다", "{character}" not in text and "{directions}" not in text)
+
+    # 후보가 없으면 호출까지 안 간다 (값이 안 나간다)
+    import tempfile, shutil
+    root = Path(tempfile.mkdtemp())
+    try:
+        got, meta = SC.review_directions(root, {"name": "이하은"}, [])
+        check("후보가 없으면 호출 안 한다", (got, meta), (None, None))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_episode_review() -> None:
+    """화 전체 검수 — 다시 그리지 않고 판정만 한다."""
+    import shutil
+    import tempfile
+
+    import episodecheck as EC
+
+    clean = EC.parse(json.dumps({
+        "read_as": "숨은 직업을 알아채는 이야기", "who": "게임 속 은신술사",
+        "where": "게임 안", "ending": "경고창이 뜬다", "matched": "",
+        "issues": []}, ensure_ascii=False))
+    check("문제가 없으면 통과", clean["verdict"], "통과")
+    check("읽은 대로를 남긴다", clean["read_as"], "숨은 직업을 알아채는 이야기")
+
+    hard = EC.parse(json.dumps({"issues": [
+        {"page": 0, "kind": "이해", "severity": "critical", "what": "무슨 일인지 모르겠다"},
+        {"page": 4, "kind": "글자", "severity": "major", "what": "말풍선 글자가 깨졌다"}]},
+        ensure_ascii=False))
+    check("critical 이면 주의", hard["verdict"], "주의")
+    check("무거운 것부터", [i["severity"] for i in hard["issues"]], ["critical", "major"])
+    check("화 전체는 0페이지", hard["issues"][0]["page"], 0)
+    check("무게를 센다", hard["counts"], {"critical": 1, "major": 1, "minor": 0})
+
+    odd = EC.parse('{"issues": [{"page": "셋", "kind": "취향", "severity": "심각", "what": "x"}]}')
+    check("모르는 무게는 major", odd["issues"][0]["severity"], "major")
+    # 모르는 종류는 그대로 둔다 — 목록에 없다고 지우면 모델이 적어 준 것이
+    # 사라진다 (pagecheck.parse 와 같은 규칙). 비었을 때만 기본값을 넣는다.
+    check("모르는 종류는 그대로", odd["issues"][0]["kind"], "취향")
+    check("빈 종류만 기본값", EC.parse('{"issues": [{"what": "x"}]}')["issues"][0]["kind"], "이해")
+    check("숫자가 아니면 0페이지", odd["issues"][0]["page"], 0)
+    check("major 하나로는 통과", odd["verdict"], "통과")
+
+    # --- 프롬프트 ---------------------------------------------------------
+    direction = {"n": 1, "title": "제목", "genre": "판타지", "plot": "줄거리다",
+                 "scenes": ["첫 장면이다", "둘째 장면이다"],
+                 "hidden": ["아직 안 밝힌 것"]}
+    text = EC.build_prompt(direction, {"name": "이하은", "description": "대학생"},
+                           [{"name": "관리인", "appearance": "50대"}])
+    ok("장면과 페이지 번호를 맞춰 준다", "1. 첫 장면이다  (→ 2페이지)" in text)
+    ok("인물을 준다", "이하은 (주인공)" in text and "관리인" in text)
+    ok("장마다 보는 검수가 안 보는 것을 본다", "글자가 읽히는가" in text)
+    ok("자리표시자가 안 남는다", "{story}" not in text)
+
+    # --- 페이지 모으기 ----------------------------------------------------
+    root = Path(tempfile.mkdtemp())
+    try:
+        pages = root / "pages"
+        pages.mkdir(parents=True)
+        for name in ("page10.png", "page02.png", "page01.png", "page02.review.json"):
+            (pages / name).write_bytes(b"x")
+        check("번호 순서대로 (10 이 2 뒤)",
+              [p.name for p in EC.pages_of(root)],
+              ["page01.png", "page02.png", "page10.png"])
+        check("그림이 없으면 호출 안 한다",
+              EC.review_episode(root / "없다", direction=direction), (None, None))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main() -> int:
     for fn in (test_directions, test_detail, test_detail_events,
                test_detail_pages, test_review_and_fix, test_page_review,
+               test_story_review, test_episode_review,
                test_board, test_gate_board, test_directing_warnings,
                test_gate_readable, test_spec,
                test_sheet_prompt, test_input, test_pages, test_cut_weight,
