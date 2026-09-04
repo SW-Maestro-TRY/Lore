@@ -408,6 +408,22 @@
 
 ---
 
+## 9. 구현 진행 (어디까지 붙었나 — 프론트가 실서버에 연결할 때 확인)
+
+| 절 | 상태 | 어느 PR |
+|---|---|---|
+| 1.1 펫 · 1.2 돌봄 6종 · 1.3 잠 · 1.4 성격/배경/공유 · `PetDetail` v2 전체 모양 | **v2 경로 동작** | PR-3 (#192) |
+| 2 `motions[].advanced` | 전부 `NONE`(부화 18행·밤 굽기 전) | PR-5·7 |
+| 2 `justUnlocked` | 행동 응답에 실림(카운터 비교) | PR-3 |
+| 2 `sick`·`pieces`·`leaving`·`trip`·`learnedToday`·`scenes.latest` | 항상 null·빈 목록 | PR-8·10·11·7·9 |
+| 2 `chatSummary.openSlot` · 1.5 채팅 | null / 미구현 | PR-4 |
+| 1.7 미니게임 | **아직 v1 경로** `/api/zzal/v1/me/pets/{id}/games`(kind 없음, 달력일 5판) | PR-4 |
+| 1.6 앨범·seen | 미구현 | PR-5·7 |
+| 5 관리자 | **아직 v1 경로** `/api/zzal/v1/admin/motions` | PR-7 |
+| 6 개발 도구 | v2 경로 동작(`advance-clock`·`set-clock`). `night-sweep`·`force-open`은 PR-6·7 | PR-2 |
+| 후기 | v1 경로 `/api/zzal/v1/me/pets/{id}/feedback` 유지 | (변경 없음) |
+
 ## 변경 기록
 
 - **2026-09-05** — 최초(PR-1, #192). 정본 v1.2 + 플랜 API v2 계약을 전문으로.
+- **2026-09-05** — PR-3: 9절 구현 진행 표 추가. `settings.leaveEnabled` 는 v2 판까지 항상 true.

@@ -13,6 +13,7 @@ import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
 import com.lore.zzal.generation.StepLabels;
+import com.lore.zzal.motion.MotionCatalog;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 펫 생성·조회·돌봄·잠.
@@ -44,6 +46,7 @@ public class PetService {
     private final S3Service s3Service;
     private final HatchService hatchService;
     private final ApplicationEventPublisher events;
+    private final MotionCatalog catalog;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -52,7 +55,9 @@ public class PetService {
                       UserRepository userRepository,
                       S3Service s3Service,
                       HatchService hatchService,
-                      ApplicationEventPublisher events) {
+                      ApplicationEventPublisher events,
+                      MotionCatalog catalog) {
+        this.catalog = catalog;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -123,28 +128,58 @@ public class PetService {
     /**
      * 조회하면서 흐른 시간을 반영한다. 읽기 전용이 아니다 — 조회용 계산과 행동용 반영을 따로 두면
      * 언젠가 두 식이 어긋나고, 그때는 화면과 판정이 다른 값을 말한다.
-     * (함께한 날 +1·떠남 예고 취소는 PR-3 에서 여기에 붙는다)
+     * 그날 처음 열었으면 함께한 날 +1(정본 3장). 떠남 예고 취소는 PR-11.
      */
     @Transactional
     public ZzalPet refresh(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
-        pet.settle(pet.now(realNow));
+        touch(pet, realNow);
         return pet;
     }
 
     @Transactional
     public List<ZzalPet> refreshAll(Long userId, Instant realNow) {
         List<ZzalPet> pets = petRepository.findByUserIdOrderByIdDesc(userId);
-        pets.forEach(p -> p.settle(p.now(realNow)));
+        pets.forEach(p -> touch(p, realNow));
         return pets;
+    }
+
+    /** 정산 + 방문(그날 처음이면 함께한 날 +1). 조회든 행동이든 펫을 만지는 모든 길이 여기를 지난다. */
+    private void touch(ZzalPet pet, Instant realNow) {
+        if (!pet.isAlive()) {
+            return;
+        }
+        Instant now = pet.now(realNow);
+        pet.settle(now);
+        pet.visit(now);
+    }
+
+    /** 행동 결과 — 펫의 새 상태와, 이번 행동으로 열린 2층 동작(seq). */
+    public record Action(ZzalPet pet, List<Integer> justUnlocked) {
+    }
+
+    /** 행동 전후의 열린 동작을 비교해 새로 열린 seq 를 얻는다(폭죽). 저장하지 않고 계산한다(UnlockRules). */
+    private Action withUnlockDiff(ZzalPet pet, Runnable action) {
+        Set<String> before = Set.copyOf(UnlockRules.unlockedKeys(pet, catalog));
+        action.run();
+        List<Integer> opened = UnlockRules.unlockedKeys(pet, catalog).stream()
+                .filter(k -> !before.contains(k))
+                .map(k -> catalog.byKey(k).orElseThrow().seq())
+                .sorted()
+                .toList();
+        return new Action(pet, opened);
     }
 
     // ── 돌봄 6종 (정본 4·5장) ─────────────────────────────────────────────
 
     @Transactional
-    public ZzalPet care(Long userId, Long petId, CareAction action, Instant realNow) {
+    public Action care(Long userId, Long petId, CareAction action, Instant realNow) {
         ZzalPet pet = awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
+        return withUnlockDiff(pet, () -> doCare(pet, action, now));
+    }
+
+    private void doCare(ZzalPet pet, CareAction action, Instant now) {
         switch (action) {
             case FEED -> {
                 if (pet.getFood() <= 0) {
@@ -188,7 +223,6 @@ public class PetService {
                 pet.medicine(now);
             }
         }
-        return pet;
     }
 
     // ── 잠 (정본 2·12장) ──────────────────────────────────────────────────
@@ -198,14 +232,13 @@ public class PetService {
      * 창 밖이면 {@code ZZAL_NOT_SLEEP_TIME} — 화면은 "저녁 7시가 되면 재워 주세요" 를 띄운다.
      */
     @Transactional
-    public ZzalPet sleep(Long userId, Long petId, Instant realNow) {
+    public Action sleep(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
         if (pet.sleepKindAvailable(now) == null) {
             throw new BusinessException(ErrorCode.ZZAL_NOT_SLEEP_TIME, "저녁 7시가 되면 재워 주세요");
         }
-        pet.sleep(now);
-        return pet;
+        return withUnlockDiff(pet, () -> pet.sleep(now));
     }
 
     /**
@@ -215,13 +248,13 @@ public class PetService {
      *   그게 맞다. "깨웠다" 는 보상(친밀도 +10)은 창 안에서 사용자가 눌렀을 때만.
      */
     @Transactional
-    public ZzalPet wake(Long userId, Long petId, Instant realNow) {
+    public Action wake(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
         if (!pet.isAlive()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
         }
         Instant now = pet.now(realNow);
-        pet.settle(now);
+        touch(pet, realNow);
         if (!pet.isSleeping()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_SLEEPING);
         }
@@ -229,8 +262,44 @@ public class PetService {
             throw new BusinessException(ErrorCode.ZZAL_NOT_WAKE_TIME,
                     pet.getSleepKind() == SleepKind.NAP ? "조금만 더 재워 주세요" : "아침 7시에 깨워 주세요");
         }
-        pet.wake(now);
-        return pet;
+        return withUnlockDiff(pet, () -> pet.wake(now));
+    }
+
+    // ── 성격·배경·공유 (정본 6·10·15장) ───────────────────────────────────
+
+    /** 성격·세계관. 언제든, 자는 중에도(정본 10장 "언제든 변경"). */
+    @Transactional
+    public Action choosePersonality(Long userId, Long petId, Personality personality, String world, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        return withUnlockDiff(pet, () -> pet.choosePersonality(personality, world));
+    }
+
+    /** 배경 바꾸기 — 2층 4종이 열린 뒤(정본 6장). 값은 검증하지 않는다(해석 6). */
+    @Transactional
+    public Action changeBackground(Long userId, Long petId, String background, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        if (UnlockRules.openedLayerTwo(pet, catalog) < ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN) {
+            throw new BusinessException(ErrorCode.ZZAL_FEATURE_LOCKED,
+                    "동작을 %d개 더 배우면 배경을 바꿀 수 있어요".formatted(
+                            ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN - UnlockRules.openedLayerTwo(pet, catalog)));
+        }
+        return withUnlockDiff(pet, () -> pet.changeBackground(background));
+    }
+
+    /**
+     * 다운로드·공유 기록. 대상 = 지금 열린 동작 어느 것이든(16장). 심화 행동(OPEN)은 PR-7 에서 여기에 더한다.
+     * 모르는 key 도 "안 열린 동작" 으로 답한다 — 카탈로그 밖 이름을 구분해 주면 key 목록을 훑는 수단이 된다.
+     */
+    @Transactional
+    public Action share(Long userId, Long petId, String motionKey, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        boolean open = catalog.byKey(motionKey)
+                .map(spec -> UnlockRules.isUnlocked(pet, spec, catalog))
+                .orElse(false);
+        if (!open) {
+            throw new BusinessException(ErrorCode.ZZAL_MOTION_NOT_OPEN);
+        }
+        return withUnlockDiff(pet, pet::share);
     }
 
     // ── 개발용 시계 (DevClockController 만 부른다) ─────────────────────────
@@ -243,7 +312,7 @@ public class PetService {
     public ZzalPet advanceClock(Long userId, Long petId, Duration by, Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
         pet.advanceDevClock(by);
-        pet.settle(pet.now(realNow));
+        touch(pet, realNow);
         return pet;
     }
 
@@ -252,7 +321,7 @@ public class PetService {
     public ZzalPet setClock(Long userId, Long petId, Instant target, Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
         pet.setDevClock(target, realNow);
-        pet.settle(pet.now(realNow));
+        touch(pet, realNow);
         return pet;
     }
 
@@ -269,9 +338,8 @@ public class PetService {
             throw new BusinessException(ErrorCode.ZZAL_PET_RELEASE_NOT_ALLOWED,
                     "%s이가 아직 부화 중이에요".formatted(pet.getName()));
         }
-        Instant now = pet.now(realNow);
-        pet.settle(now);
-        pet.release(now);
+        touch(pet, realNow);
+        pet.release(pet.now(realNow));
         return pet;
     }
 
@@ -280,15 +348,21 @@ public class PetService {
      * 돌봄·재우기가 공통으로 거치는 문. (여행 중 거절은 PR-11)
      */
     private ZzalPet awake(Long userId, Long petId, Instant realNow) {
-        ZzalPet pet = findMine(userId, petId);
-        if (!pet.isAlive()) {
-            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
-        }
-        pet.settle(pet.now(realNow));
+        ZzalPet pet = alive(userId, petId, realNow);
         if (pet.isSleeping()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_SLEEPING,
                     "%s이가 자고 있어요".formatted(pet.getName()));
         }
+        return pet;
+    }
+
+    /** ALIVE 인지 확인하고 정산·방문한다. 자는 중에도 되는 것(성격·배경·공유)이 거치는 문. */
+    private ZzalPet alive(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        touch(pet, realNow);
         return pet;
     }
 

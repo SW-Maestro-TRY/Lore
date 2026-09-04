@@ -162,16 +162,16 @@ public class MotionCatalog {
     }
 
     /**
-     * 그 동작의 16프레임 지시문 블록.
-     *
-     * <p>카탈로그 key 면 {@code promptFile} 로 찾는다. 카탈로그에 없는 이름이면 v1 행(예: "교감1_머리쓰다듬")으로
-     * 보고 그 이름의 파일을 그대로 찾는다 — v1 컨트롤러가 사라지는 PR-3 까지 dev 의 옛 모션 행이 굽히도록.
+     * 그 동작의 16프레임 지시문 블록. 카탈로그 key 로만 찾는다 — 모르는 key 는 설정 이름을 말하며 막는다.
      */
-    public String block(String keyOrLegacyName) {
-        return blocks.computeIfAbsent(keyOrLegacyName, k -> {
+    public String block(String key) {
+        return blocks.computeIfAbsent(key, k -> {
             MotionSpec spec = BY_KEY.get(k);
-            String file = spec != null ? spec.promptFile() : k;
-            String path = "zzal/prompt/%s/motions/%s.txt".formatted(version, file);
+            if (spec == null) {
+                throw new IllegalArgumentException(
+                        "카탈로그에 없는 동작입니다: %s (가능한 값: %s)".formatted(k, BY_KEY.keySet()));
+            }
+            String path = "zzal/prompt/%s/motions/%s.txt".formatted(version, spec.promptFile());
             try {
                 ClassPathResource r = new ClassPathResource(path);
                 return new String(r.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
@@ -183,17 +183,4 @@ public class MotionCatalog {
         });
     }
 
-    // ── v1 잔재 (PR-3 에서 v1 PetService.sleep/wake 와 함께 삭제) ─────────
-
-    /** @deprecated v1 "다 모으면 몇 개". v2 는 완주 개념이 없다. 굽기 가능한 3층 동작 수를 돌려준다. */
-    @Deprecated
-    public int total() {
-        return advancedKeys.size();
-    }
-
-    /** @deprecated v1 "몇 번째로 배울 동작". v2 순서는 {@link #basic()} 의 seq 다. */
-    @Deprecated
-    public String nameAt(int seq) {
-        return seq >= 0 && seq < advancedKeys.size() ? advancedKeys.get(seq) : null;
-    }
 }

@@ -1,0 +1,140 @@
+package com.lore.zzal.pet;
+
+import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.pet.dto.PetResponses;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+import static com.lore.zzal.pet.AwakeClockTest.kst;
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * `PetDetail` v2 — api-v2.md 2절과의 대조.
+ *
+ * ★ 프론트 `lib/pet.ts` 가 이 모양과 필드명 단위로 맞물린다. 여기서 깨지면 계약이 깨진 것이다.
+ */
+@DisplayName("PetDetail v2 — 계약 대조")
+class PetDetailTest {
+
+    private static final Instant T0 = kst("2026-09-05 12:00");
+    private static final MotionCatalog CATALOG = new MotionCatalog("", "", "v1");
+
+    private static ZzalPet baby() {
+        ZzalPet pet = ZzalPet.hatch(1L, "여울", "메모", "k", T0);
+        pet.markAlive("s", "i", T0);
+        return pet;
+    }
+
+    @Test
+    @DisplayName("부화 중이면 ALIVE 블록은 전부 null, serverNow 는 있다")
+    void hatchingHasNoAliveBlocks() {
+        ZzalPet egg = ZzalPet.hatch(1L, "알", null, "k", T0);
+        PetResponses.Detail d = PetResponses.Detail.from(egg, "그리는 중", T0.plusSeconds(30), CATALOG);
+        assertThat(d.phase()).isEqualTo("HATCHING");
+        assertThat(d.ready()).isFalse();
+        assertThat(d.step()).isEqualTo("그리는 중");
+        assertThat(d.elapsedSeconds()).isEqualTo(30);
+        assertThat(d.serverNow()).isEqualTo(T0.plusSeconds(30));
+        assertThat(d.clock()).isNull();
+        assertThat(d.motions()).isNull();
+        assertThat(d.tutorial()).isNull();
+    }
+
+    @Test
+    @DisplayName("motions 18칸 — 1층 열림·2층 잠김(이름+조건+진행)·선물 2")
+    void eighteenMotions() {
+        PetResponses.Detail d = PetResponses.Detail.from(baby(), null, T0, CATALOG);
+        List<PetResponses.Motion> m = d.motions();
+        assertThat(m).hasSize(18);
+        assertThat(m.get(0)).satisfies(x -> {
+            assertThat(x.seq()).isEqualTo(1);
+            assertThat(x.key()).isEqualTo("base");
+            assertThat(x.layer()).isEqualTo("BASIC_1");
+            assertThat(x.unlocked()).isTrue();
+            assertThat(x.basicImageKey()).endsWith("/idle.webp");      // v1 부화 → 8상태 파일명 폴백
+            assertThat(x.hint()).isNull();
+            assertThat(x.progress()).isNull();
+            assertThat(x.advanced().status()).isEqualTo("NONE");
+        });
+        assertThat(m.get(4).key()).isEqualTo("sick");
+        assertThat(m.get(4).basicImageKey()).isNull();                   // v1 에 없는 자세 → 화면 폴백
+        assertThat(m.get(8)).satisfies(x -> {
+            assertThat(x.seq()).isEqualTo(9);
+            assertThat(x.key()).isEqualTo("tilt");
+            assertThat(x.unlocked()).isFalse();
+            assertThat(x.basicImageKey()).isNull();
+            assertThat(x.hint()).isEqualTo("채팅 응답 1회");
+            assertThat(x.progress()).isEqualTo(new PetResponses.Progress(0, 1));
+        });
+        assertThat(m.get(16).seq()).isEqualTo(101);
+        assertThat(m.get(16).layer()).isEqualTo("GIFT");
+        assertThat(m.get(16).hint()).isEqualTo("3일이나 함께해서…");
+        assertThat(m.get(17).seq()).isEqualTo(102);
+    }
+
+    @Test
+    @DisplayName("v2 부화 펫은 basic/{key}.webp 규약")
+    void v2ImageKeys() {
+        ZzalPet pet = baby();
+        pet.setHatchPipelineVersion("v2");
+        PetResponses.Detail d = PetResponses.Detail.from(pet, null, T0, CATALOG);
+        assertThat(d.motions().get(0).basicImageKey()).endsWith("/basic/base.webp");
+        assertThat(d.motions().get(4).basicImageKey()).endsWith("/basic/sick.webp");
+    }
+
+    @Test
+    @DisplayName("친밀도 percent 는 10 단위 내림, tier 는 LOW ≤30 · MID 40~70 · HIGH ≥80 (해석 10)")
+    void intimacyTiers() {
+        assertThat(PetResponses.Intimacy.of(0)).isEqualTo(new PetResponses.Intimacy(0, 0, "LOW"));
+        assertThat(PetResponses.Intimacy.of(120)).isEqualTo(new PetResponses.Intimacy(120, 10, "LOW"));
+        assertThat(PetResponses.Intimacy.of(399)).isEqualTo(new PetResponses.Intimacy(399, 30, "LOW"));
+        assertThat(PetResponses.Intimacy.of(400)).isEqualTo(new PetResponses.Intimacy(400, 40, "MID"));
+        assertThat(PetResponses.Intimacy.of(799)).isEqualTo(new PetResponses.Intimacy(799, 70, "MID"));
+        assertThat(PetResponses.Intimacy.of(800)).isEqualTo(new PetResponses.Intimacy(800, 80, "HIGH"));
+        assertThat(PetResponses.Intimacy.of(999)).isEqualTo(new PetResponses.Intimacy(999, 100, "HIGH"));
+    }
+
+    @Test
+    @DisplayName("clock·features·tutorial·firstGift·chatSummary 블록")
+    void blocks() {
+        ZzalPet pet = baby();
+        PetResponses.Detail d = PetResponses.Detail.from(pet, null, T0.plus(Duration.ofMinutes(1)), CATALOG);
+        assertThat(d.clock().babyUntil()).isEqualTo(T0.plus(Duration.ofMinutes(60)));
+        assertThat(d.clock().sleeping()).isFalse();
+        assertThat(d.clock().canSleep()).isTrue();                              // 아기 낮잠
+        assertThat(d.clock().autoSleepAt()).isEqualTo(kst("2026-09-05 23:00"));
+        assertThat(d.clock().sleepWindowOpensAt()).isEqualTo(kst("2026-09-05 19:00"));
+        assertThat(d.daysTogether()).isEqualTo(1);
+        assertThat(d.gauges()).isEqualTo(new PetResponses.Gauges(1, 3, 4, 0));
+        assertThat(d.food()).isEqualTo(new PetResponses.Food(3, null));
+        assertThat(d.mood()).isEqualTo("NORMAL");
+        assertThat(d.features()).isEqualTo(new PetResponses.Features(true, true, false, false, false, false, false));
+        assertThat(d.firstGift()).isEqualTo(new PetResponses.FirstGift("LOCKED", 2));
+        assertThat(d.chatSummary().nextAt()).isEqualTo(T0.plus(Duration.ofHours(1)));   // 기상(부화)+1h
+        assertThat(d.tutorial().active()).isTrue();
+        assertThat(d.tutorial().steps().get(0).current()).isTrue();
+        assertThat(d.justUnlocked()).isEmpty();
+        assertThat(d.settings().leaveEnabled()).isTrue();
+        assertThat(d.sick()).isNull();
+        assertThat(d.pieces()).isNull();
+    }
+
+    @Test
+    @DisplayName("자는 중엔 wakeWindowOpensAt·autoWakeAt 이 채워지고 sleepWindowOpensAt 은 비운다")
+    void sleepingClock() {
+        ZzalPet pet = baby();
+        Instant t = kst("2026-09-06 00:00");
+        pet.settle(t);
+        PetResponses.Detail d = PetResponses.Detail.from(pet, null, t, CATALOG);
+        assertThat(d.clock().sleeping()).isTrue();
+        assertThat(d.clock().sleepKind()).isEqualTo("NIGHT");
+        assertThat(d.clock().wakeWindowOpensAt()).isEqualTo(kst("2026-09-06 07:00"));
+        assertThat(d.clock().autoWakeAt()).isEqualTo(kst("2026-09-06 10:00"));
+        assertThat(d.clock().sleepWindowOpensAt()).isNull();
+        assertThat(d.clock().canWake()).isFalse();
+    }
+}

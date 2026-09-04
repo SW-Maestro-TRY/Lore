@@ -4,6 +4,7 @@ import com.lore.common.auth.jwt.LoginUser;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.common.response.ApiResponse;
+import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.pet.AwakeClock;
 import com.lore.zzal.pet.PetService;
 import com.lore.zzal.pet.ZzalPet;
@@ -48,9 +49,11 @@ public class DevClockController {
     private static final Duration MAX_ADVANCE = Duration.ofDays(30);
 
     private final PetService petService;
+    private final MotionCatalog catalog;
 
-    public DevClockController(PetService petService) {
+    public DevClockController(PetService petService, MotionCatalog catalog) {
         this.petService = petService;
+        this.catalog = catalog;
     }
 
     @Operation(summary = "시간 당기기", description = """
@@ -79,7 +82,7 @@ public class DevClockController {
         }
         Instant real = Instant.now();
         ZzalPet pet = petService.advanceClock(userId, petId, by, real);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real)));
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog));
     }
 
     @Operation(summary = "시계 맞추기", description = """
@@ -117,6 +120,6 @@ public class DevClockController {
             }
         }
         ZzalPet pet = petService.setClock(userId, petId, target, real);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real)));
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog));
     }
 }
