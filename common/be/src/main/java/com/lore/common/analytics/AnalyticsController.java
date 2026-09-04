@@ -46,15 +46,6 @@ public class AnalyticsController {
 
     private static final Logger log = LoggerFactory.getLogger(AnalyticsController.class);
 
-    /**
-     * 본문 크기 상한 64KB.
-     *
-     * ★ 이벤트 하나가 넉넉히 잡아 300바이트라, 최대 묶음(50건)이라도 15KB 를 안 넘는다.
-     *   넉넉한 값이지만 상한이 <b>있다는 것</b> 자체가 방어다 — 없으면 톰캣이 수십 MB 짜리
-     *   본문을 메모리에 올려 파싱하다 서버가 넘어간다(t3.micro 다).
-     * ★ 브라우저의 keepalive fetch·sendBeacon 도 64KB 언저리가 상한이라 숫자도 맞아떨어진다.
-     */
-    private static final long MAX_BODY_BYTES = 64 * 1024L;
 
     private final AnalyticsService analyticsService;
     private final AnonIdResolver anonIdResolver;
@@ -85,10 +76,8 @@ public class AnalyticsController {
             return ResponseEntity.accepted().body(ApiResponse.ok());
         }
 
-        long length = request.getContentLengthLong();
-        if (length > MAX_BODY_BYTES) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "요청이 너무 큽니다");
-        }
+        // ★ 본문 크기는 여기서 재지 않는다 — @RequestBody 가 이미 다 읽은 뒤라 늦다.
+        //   RequestSizeLimitFilter 가 읽기 전에 막는다.
         if (batch.events().size() > analyticsService.getMaxBatch()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "한 번에 보낼 수 있는 이벤트는 %d건까지입니다".formatted(analyticsService.getMaxBatch()));

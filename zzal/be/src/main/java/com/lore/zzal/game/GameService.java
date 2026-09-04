@@ -73,7 +73,10 @@ public class GameService {
      */
     @Transactional
     public ZzalGame start(Long userId, Long petId, Instant now) {
-        ZzalPet pet = findMyPet(userId, petId);
+        // ★ 펫을 잠그고 시작한다 — 안 잠그면 버튼을 빠르게 두 번 눌렀을 때 두 요청이
+        //   <b>둘 다</b> "진행 중인 판 없음" 과 "하루 제한 미만" 을 통과해, 판이 둘 생기고
+        //   하루 횟수도 두 번 먹는다. 검사와 저장 사이의 틈을 없앤다.
+        ZzalPet pet = findMyPetForUpdate(userId, petId);
 
         Optional<ZzalGame> playing = gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(pet.getId());
         if (playing.isPresent()) {
@@ -148,6 +151,13 @@ public class GameService {
      * ★ 남의 펫이면 403 이 아니라 404 다 — 펫 API 와 같은 판정이다. 403 은 "그 번호의 펫이
      *   있다" 는 사실을 알려주는 셈이라 번호를 훑어 남의 펫을 셀 수 있게 된다.
      */
+    /** 잠그고 꺼낸다. 한 펫에 대해 "동시에 하나만" 이어야 하는 일을 시작할 때. */
+    private ZzalPet findMyPetForUpdate(Long userId, Long petId) {
+        return petRepository.findByIdForUpdate(petId)
+                .filter(p -> p.isOwnedBy(userId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
+    }
+
     private ZzalPet findMyPet(Long userId, Long petId) {
         return petRepository.findById(petId)
                 .filter(p -> p.isOwnedBy(userId))

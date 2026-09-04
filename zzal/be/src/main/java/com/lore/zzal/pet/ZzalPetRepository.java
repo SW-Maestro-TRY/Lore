@@ -1,6 +1,10 @@
 package com.lore.zzal.pet;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 
 import java.util.Collection;
 import java.util.List;
@@ -34,4 +38,16 @@ public interface ZzalPetRepository extends JpaRepository<ZzalPet, Long> {
      * 다시 뜰 때 이걸로 찾아 이어서 굽는다(StuckHatchRecovery).
      */
     List<ZzalPet> findByPhaseAndHatchStartedAtBefore(PetPhase phase, java.time.Instant before);
+
+    /**
+     * 이 펫을 <b>잠그고</b> 꺼낸다.
+     *
+     * ★ 한 펫에 대해 "동시에 하나만" 이어야 하는 일을 시작할 때 쓴다. 검사와 저장 사이에
+     *   다른 요청이 끼어들면 두 요청이 <b>둘 다 검사를 통과</b>해 두 개가 만들어진다
+     *   (예: 놀이 시작 버튼을 빠르게 두 번 누르면 판이 둘 생기고 하루 횟수도 두 번 먹는다).
+     *   펫을 잠그면 그 사이가 없어진다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from ZzalPet p where p.id = :id")
+    Optional<ZzalPet> findByIdForUpdate(@Param("id") Long id);
 }
