@@ -1,42 +1,37 @@
-// 펫 하나의 서버 상태를 담고, 행동 5종을 부르는 훅. 화면 생김새는 전혀 모른다.
+// 펫 하나의 서버 상태를 담고, 행동을 부르는 훅. 화면 생김새는 전혀 모른다.
 //
 // 지키는 규칙 셋 — 셋 다 "클라이언트가 서버보다 앞서 나가지 않는다" 는 한 문장이다.
 //
-//  1. 낙관적 업데이트를 하지 않는다. 수치 판정(밥이 몇 칸 오르는지, 연습이 1회분인지
-//     2회분인지)은 전부 서버 규칙이라, 프론트가 미리 그리면 응답이 왔을 때 값이 튄다.
-//     누르고 나서 잠깐 기다리는 쪽이, 올랐다가 도로 내려가는 것보다 훨씬 낫다.
-//  2. 행동 응답이 곧 최신 상태다(care/train/sleep/wake 가 상태 조회와 같은 모양을 준다).
-//     행동 뒤에 다시 조회하지 않는다 — 왕복이 두 번이 되고 그 사이 값이 어긋난다.
-//  3. 카운트다운은 그려도 되지만 그걸로 상태를 바꾸지 않는다. 클라이언트 시계는
-//     느려지기도(백그라운드 탭) 조작되기도 한다. 0 이 되면 서버에 다시 물어 확정한다.
+//  1. 낙관적 업데이트를 하지 않는다. 수치 판정(밥이 몇 칸 오르는지, 재울 수 있는지)은 전부 서버 규칙이라,
+//     프론트가 미리 그리면 응답이 왔을 때 값이 튄다. 누르고 나서 잠깐 기다리는 쪽이, 올랐다가 도로 내려가는 것보다 낫다.
+//  2. 행동 응답이 곧 최신 상태다(care/sleep/wake/… 가 상태 조회와 같은 모양을 준다). 행동 뒤에 다시 조회하지 않는다.
+//  3. 카운트다운은 그려도 되지만 그걸로 상태를 바꾸지 않는다. 경계 시각에 서버에 다시 물어 확정한다.
+//
+// v2 에서 달라진 것 — **경계 폴링**(플랜 T2). 1초마다 두드리지 않고, 서버가 준 "다음에 규칙이 바뀌는 시각"
+// (자동 취침·기상·창 열림·아기 60분 끝·다음 부름·다음 튜토리얼 칸·밥 충전) 중 가장 가까운 것 +1초에 다시 묻는다.
+// 아무 경계가 없어도 ALIVE 면 60초에 한 번은 묻는다(게이지가 시간으로 깎이므로). 탭이 다시 보이면 즉시 묻는다.
+//
+// 출처가 `PetSource` 인터페이스라 실서버·목 서버가 같은 길을 지난다(결정기록 C7).
 
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from './api';
-import {
-  care as careApi,
-  getPet,
-  sleep as sleepApi,
-  train as trainApi,
-  tutorialDone as tutorialDoneApi,
-  wake as wakeApi,
-  type CareAction,
-  type Learned,
-  type PetDetail,
-} from './_v1/pet';
+import { ms } from './kst';
+import type { CareAction, ChatSlot, ChatState, PetDetail, Personality, ShareKind } from './pet';
+import type { PetSource } from './petSource';
 
 /** 부화 중 다시 묻는 간격. 서버가 "몇 초마다 불러 보라" 고 안내하는 값. */
-const POLL_MS = 3000;
+const HATCH_POLL_MS = 3000;
+
+/** ALIVE 일 때 아무 경계가 없어도 이 안엔 한 번 묻는다(게이지는 시간으로 깎인다). */
+const ALIVE_POLL_MS = 60_000;
 
 /**
- * 카운트다운이 0 에 닿은 뒤 서버에 다시 묻기까지 기다리는 시간.
- *
- * 0 이 아니라 1초를 두는 이유 — 시계가 조금 빠르면 서버는 아직 "연습 중, 남은 0초" 로
- * 답한다. 그대로 다시 물으면 응답마다 즉시 재요청이 되어 초당 수십 번을 두드리게 된다.
- * 최악의 경우에도 1초에 한 번으로 묶어 둔다.
+ * 경계 시각 뒤에 두는 여유. 0 이 아니라 1초인 이유 — 시계가 조금 빠르면 서버는 아직 "창 안 열림" 으로 답한다.
+ * 그대로 다시 물으면 응답마다 즉시 재요청이 되어 초당 수십 번을 두드리게 된다.
  */
-const ZERO_RECHECK_MS = 1000;
+const BOUNDARY_SLACK_MS = 1000;
 
 export interface UsePetResult {
   /** 서버가 준 마지막 상태. 아직 안 불렀거나 펫이 없으면 null. */
@@ -45,56 +40,68 @@ export interface UsePetResult {
   loading: boolean;
   /** 마지막 실패. 화면은 error.code 로 분기한다. */
   error: ApiError | null;
-  /** 행동(돌봄·연습·재우기·깨우기)이 도는 중. 버튼을 잠그는 데 쓴다. */
+  /** 행동이 도는 중. 버튼을 잠그는 데 쓴다. */
   acting: boolean;
 
-  /** 연습이 끝날 때까지 남은 초. 서버 값에서 1초씩 줄여 그린 것. 연습 중이 아니면 null. */
-  trainLeft: number | null;
-  /** 깨어날 때까지 남은 초. 위와 같다. 자고 있지 않으면 null. */
-  sleepLeft: number | null;
-
   /**
-   * 방금 깨우면서 배운 것. 화면이 해금 창을 닫을 때 clearLearned() 로 지운다.
-   *
-   * pet.learned 를 그냥 보면 안 된다 — 그건 깨우기 응답에만 담겨 있어서
-   * 다음 조회나 다음 행동 한 번이면 사라진다. 사용자가 창을 닫기도 전에 없어진다.
+   * 방금 행동으로 열린 2층 동작 seq. 화면이 폭죽을 다 보여준 뒤 clearJustUnlocked() 로 지운다.
+   * pet.justUnlocked 를 그냥 보면 안 된다 — 다음 조회 한 번이면 [] 로 덮인다.
    */
-  learned: Learned | null;
-  clearLearned: () => void;
+  justUnlocked: number[];
+  clearJustUnlocked: () => void;
+
+  /** 열린 부름의 대사·목록. openSlot 이 있을 때만 서버에 물어 채운다. */
+  chat: ChatState | null;
+  /** 방금 답에 대한 대사. 화면이 말풍선을 내린 뒤 clearChatReply() 로 지운다. */
+  chatReply: PetDetail['chatReply'];
+  clearChatReply: () => void;
 
   /** 서버에 다시 묻는다. 보통은 훅이 알아서 하므로 화면이 부를 일은 드물다. */
   reload: () => Promise<PetDetail | null>;
 
   care: (action: CareAction) => Promise<PetDetail | null>;
-  train: () => Promise<PetDetail | null>;
   sleep: () => Promise<PetDetail | null>;
   wake: () => Promise<PetDetail | null>;
-  /**
-   * 첫날 순서를 끝냈다고 알린다. 응답이 곧 최신 상태라 다른 행동과 같은 길을 지나간다.
-   * 두 번 불러도 안전하므로 화면이 중복을 막으려 애쓰지 않아도 된다.
-   */
-  tutorialDone: () => Promise<PetDetail | null>;
+  setPersonality: (personality: Personality, world?: string) => Promise<PetDetail | null>;
+  setBackground: (background: string) => Promise<PetDetail | null>;
+  share: (motionKey: string, kind: ShareKind) => Promise<PetDetail | null>;
+  answerChat: (slot: ChatSlot, text: string) => Promise<PetDetail | null>;
+  markSeen: (seq: number) => Promise<PetDetail | null>;
+}
+
+/** 다음에 서버에 다시 물을 시각(ms). 경계 중 가장 가까운 것. 없으면 null. */
+export function nextBoundaryAt(pet: PetDetail, nowMs: number): number | null {
+  if (pet.phase !== 'ALIVE' || !pet.clock) return null;
+  const c = pet.clock;
+  const candidates: (number | null)[] = [
+    ms(c.babyUntil), ms(c.autoSleepAt), ms(c.autoWakeAt), ms(c.sleepWindowOpensAt), ms(c.wakeWindowOpensAt),
+    ms(pet.chatSummary?.nextAt),
+    pet.food?.nextInSeconds != null ? nowMs + pet.food.nextInSeconds * 1000 : null,
+    ...(pet.tutorial?.steps.filter((s) => !s.done).map((s) => ms(s.dueAt)) ?? []),
+  ];
+  const future = candidates.filter((t): t is number => t !== null && t > nowMs);
+  return future.length ? Math.min(...future) : null;
 }
 
 /**
- * @param petId 볼 펫. 아직 없으면 null 을 넘긴다(아무것도 안 부른다).
- *              번호는 listPets() 나 createPet() 이 돌려준 것을 쓴다.
+ * @param source 실서버 또는 목. null 이면 아무것도 안 부른다.
+ * @param petId  볼 펫. 아직 없으면 null.
+ * @param now    서버 기준 "지금" 을 내는 함수(useClock.now). 경계까지 남은 시간을 잴 때 쓴다.
  */
-export function usePet(petId: number | null): UsePetResult {
+export function usePet(source: PetSource | null, petId: number | null, now: () => number): UsePetResult {
   const [pet, setPet] = useState<PetDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
-  const [learned, setLearned] = useState<Learned | null>(null);
+  const [justUnlocked, setJustUnlocked] = useState<number[]>([]);
+  const [chat, setChat] = useState<ChatState | null>(null);
+  const [chatReply, setChatReply] = useState<PetDetail['chatReply']>(null);
 
-  const [trainLeft, setTrainLeft] = useState<number | null>(null);
-  const [sleepLeft, setSleepLeft] = useState<number | null>(null);
+  const src = useRef(source);
+  src.current = source;
 
-  // 응답이 뒤바뀌어 도착하는 걸 막는 표.
-  //
-  // 폴링과 행동이 겹칠 수 있다 — 3초 폴링이 날아간 직후에 밥을 누르면, 늦게 출발한
-  // 돌봄 응답이 먼저 오고 폴링 응답이 나중에 와서 **낡은 상태로 덮어쓴다**.
-  // 발행 순서보다 오래된 응답은 버린다.
+  // 응답이 뒤바뀌어 도착하는 걸 막는 표. 폴링과 행동이 겹치면 늦게 출발한 돌봄 응답이 먼저 오고
+  // 폴링 응답이 나중에 와서 **낡은 상태로 덮어쓴다**. 발행 순서보다 오래된 응답은 버린다.
   const issued = useRef(0);
   const applied = useRef(0);
 
@@ -103,18 +110,20 @@ export function usePet(petId: number | null): UsePetResult {
     applied.current = seq;
     setPet(next);
     setError(null);
+    if (next.justUnlocked.length) setJustUnlocked((prev) => [...prev, ...next.justUnlocked.filter((s) => !prev.includes(s))]);
+    if (next.chatReply) setChatReply(next.chatReply);
   }, []);
 
-  /** 공통 실행부. 조회든 행동이든 순서 표와 에러 처리를 똑같이 지나간다. */
   const run = useCallback(
-    async (call: () => Promise<PetDetail>): Promise<PetDetail | null> => {
+    async (call: (s: PetSource) => Promise<PetDetail>): Promise<PetDetail | null> => {
+      const s = src.current;
+      if (!s) return null;
       const seq = ++issued.current;
       try {
-        const next = await call();
+        const next = await call(s);
         apply(seq, next);
         return next;
       } catch (e) {
-        // 언마운트로 끊은 것은 실패가 아니다. 화면에 에러를 띄우면 안 된다.
         if (e instanceof DOMException && e.name === 'AbortError') return null;
         if (e instanceof ApiError) setError(e);
         else setError(new ApiError(0, null, '연결하지 못했습니다'));
@@ -124,17 +133,17 @@ export function usePet(petId: number | null): UsePetResult {
     [apply],
   );
 
-  const reload = useCallback(async (): Promise<PetDetail | null> => {
+  const reload = useCallback(async () => {
     if (petId === null) return null;
-    return run(() => getPet(petId));
+    return run((s) => s.getPet(petId));
   }, [petId, run]);
 
   const act = useCallback(
-    async (call: (id: number) => Promise<PetDetail>): Promise<PetDetail | null> => {
+    async (call: (s: PetSource, id: number) => Promise<PetDetail>) => {
       if (petId === null) return null;
       setActing(true);
       try {
-        return await run(() => call(petId));
+        return await run((s) => call(s, petId));
       } finally {
         setActing(false);
       }
@@ -142,38 +151,46 @@ export function usePet(petId: number | null): UsePetResult {
     [petId, run],
   );
 
-  const care = useCallback(
-    (action: CareAction) => act((id) => careApi(id, action)),
+  const care = useCallback((action: CareAction) => act((s, id) => s.care(id, action)), [act]);
+  const sleep = useCallback(() => act((s, id) => s.sleep(id)), [act]);
+  const wake = useCallback(() => act((s, id) => s.wake(id)), [act]);
+  const setPersonality = useCallback(
+    (p: Personality, world?: string) => act((s, id) => s.setPersonality(id, p, world)),
     [act],
   );
-  const train = useCallback(() => act(trainApi), [act]);
-  const sleep = useCallback(() => act(sleepApi), [act]);
-  const tutorialDone = useCallback(() => act(tutorialDoneApi), [act]);
+  const setBackground = useCallback((bg: string) => act((s, id) => s.setBackground(id, bg)), [act]);
+  const share = useCallback((key: string, kind: ShareKind) => act((s, id) => s.share(id, key, kind)), [act]);
+  const answerChat = useCallback(
+    async (slot: ChatSlot, text: string) => {
+      const next = await act((s, id) => s.answerChat(id, slot, text));
+      // 답한 뒤 부름 목록은 바뀐다(answered). 다시 묻는다.
+      if (next) setChat(null);
+      return next;
+    },
+    [act],
+  );
+  const markSeen = useCallback((seq: number) => act((s, id) => s.markMotionSeen(id, seq)), [act]);
 
-  const wake = useCallback(async () => {
-    const next = await act(wakeApi);
-    // 깨우기 응답에만 담기는 값이라, 사라지기 전에 여기서 따로 붙잡아 둔다.
-    if (next?.learned) setLearned(next.learned);
-    return next;
-  }, [act]);
-
-  const clearLearned = useCallback(() => setLearned(null), []);
+  const clearJustUnlocked = useCallback(() => setJustUnlocked([]), []);
+  const clearChatReply = useCallback(() => setChatReply(null), []);
 
   // 펫이 바뀌면(또는 처음 붙으면) 상태를 비우고 다시 읽는다.
   useEffect(() => {
     setPet(null);
     setError(null);
-    setLearned(null);
+    setJustUnlocked([]);
+    setChat(null);
+    setChatReply(null);
     applied.current = 0;
     issued.current = 0;
 
-    if (petId === null) return;
+    const s = src.current;
+    if (petId === null || !s) return;
 
     let alive = true;
     const controller = new AbortController();
     setLoading(true);
-
-    getPet(petId, controller.signal)
+    s.getPet(petId, controller.signal)
       .then((next) => {
         if (!alive) return;
         applied.current = ++issued.current;
@@ -187,74 +204,77 @@ export function usePet(petId: number | null): UsePetResult {
       .finally(() => {
         if (alive) setLoading(false);
       });
-
     return () => {
       alive = false;
       controller.abort();
     };
-  }, [petId]);
+  }, [petId, source]);
 
-  // 부화 중에만 폴링. ready 가 true 가 되면 멈춘다.
+  // ── 경계 폴링 ────────────────────────────────────────────────────────
   //
-  // setInterval 이 아니라 "응답이 올 때마다 다시 거는 setTimeout" 인 이유 —
-  // 서버가 느릴 때 interval 은 앞 요청이 안 끝났는데 다음 요청을 쏴서 겹친다.
-  // deps 에 pet 이 들어 있어, 상태가 새로 오면 타이머가 다시 걸린다.
-  const hatching = pet !== null && pet.phase === 'HATCHING' && !pet.ready;
+  // setInterval 이 아니라 "응답이 올 때마다 다시 거는 setTimeout" 인 이유 — 서버가 느릴 때 interval 은
+  // 앞 요청이 안 끝났는데 다음 요청을 쏴서 겹친다. deps 에 pet 이 들어 있어, 상태가 새로 오면 타이머가 다시 걸린다.
+  const phase = pet?.phase ?? null;
+  const hatching = phase === 'HATCHING' && pet?.ready !== true;
+  const delay = useMemo(() => {
+    if (!pet) return null;
+    if (hatching) return HATCH_POLL_MS;
+    if (pet.phase !== 'ALIVE') return null;
+    const at = nextBoundaryAt(pet, now());
+    const untilBoundary = at === null ? Infinity : at - now() + BOUNDARY_SLACK_MS;
+    return Math.max(BOUNDARY_SLACK_MS, Math.min(ALIVE_POLL_MS, untilBoundary));
+  }, [pet, hatching, now]);
+
   useEffect(() => {
-    if (!hatching) return;
-    const t = setTimeout(() => {
-      void reload();
-    }, POLL_MS);
+    if (delay === null) return;
+    // 안 보이는 탭에서는 두드리지 않는다. 다시 보이면 아래 visibilitychange 가 즉시 묻는다.
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    const t = setTimeout(() => { void reload(); }, delay);
     return () => clearTimeout(t);
-  }, [hatching, pet, reload]);
+  }, [delay, pet, reload]);
 
-  // 서버가 준 남은 시간을 카운트다운의 시작값으로 삼는다.
-  // 상태가 새로 올 때마다 다시 맞추므로, 클라이언트 시계가 흘러도 매 응답마다 교정된다.
   useEffect(() => {
-    setTrainLeft(pet?.trainInSeconds ?? null);
-    setSleepLeft(pet?.sleepInSeconds ?? null);
-  }, [pet]);
+    if (typeof document === 'undefined' || petId === null) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void reload();
+    };
+    // 목 서버가 시간을 밀었을 때도 즉시 다시 묻는다(테스트·디자인 확인). 실서버에서는 이 이벤트가 없다.
+    const onAdvanced = () => { void reload(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('zzal:mock-advanced', onAdvanced);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('zzal:mock-advanced', onAdvanced);
+    };
+  }, [petId, reload]);
 
-  // 1초씩 줄인다. 둘 다 멈춰 있으면 타이머 자체를 안 만든다.
-  const ticking = (trainLeft ?? 0) > 0 || (sleepLeft ?? 0) > 0;
+  // ── 부름 대사 ─────────────────────────────────────────────────────────
+  // 열린 슬롯이 있을 때만 묻는다. 슬롯이 바뀌거나 답한 뒤(chat=null) 다시 묻는다.
+  const openSlot = pet?.chatSummary?.openSlot ?? null;
   useEffect(() => {
-    if (!ticking) return;
-    const id = setInterval(() => {
-      setTrainLeft((v) => (v === null ? null : Math.max(0, v - 1)));
-      setSleepLeft((v) => (v === null ? null : Math.max(0, v - 1)));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [ticking]);
-
-  // 0 에 닿으면 서버에 확정을 받는다.
-  //
-  // ★ 여기서 training/sleeping 을 직접 false 로 바꾸지 않는 것이 핵심이다.
-  //   그렇게 하면 시계를 앞으로 돌린 사람이 연습을 즉시 끝낼 수 있고, 백그라운드 탭에서
-  //   타이머가 느려진 사람은 다 끝났는데도 못 깨운다. 판정은 서버만 한다.
-  const trainHitZero = trainLeft === 0 && pet?.training === true;
-  const sleepHitZero = sleepLeft === 0 && pet?.sleeping === true;
-  useEffect(() => {
-    if (!trainHitZero && !sleepHitZero) return;
-    const t = setTimeout(() => {
-      void reload();
-    }, ZERO_RECHECK_MS);
-    return () => clearTimeout(t);
-  }, [trainHitZero, sleepHitZero, pet, reload]);
+    const s = src.current;
+    if (!s || petId === null || !openSlot) {
+      setChat(null);
+      return;
+    }
+    if (chat && chat.openSlot === openSlot) return;
+    let alive = true;
+    const controller = new AbortController();
+    s.getChat(petId, controller.signal)
+      .then((c) => { if (alive) setChat(c); })
+      .catch(() => {
+        // 부름 대사는 곁다리다. 못 읽었다고 화면 전체에 경고를 올리지 않는다.
+      });
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+  }, [petId, openSlot, chat]);
 
   return {
-    pet,
-    loading,
-    error,
-    acting,
-    trainLeft,
-    sleepLeft,
-    learned,
-    clearLearned,
-    reload,
-    care,
-    train,
-    sleep,
-    wake,
-    tutorialDone,
+    pet, loading, error, acting,
+    justUnlocked, clearJustUnlocked,
+    chat, chatReply, clearChatReply,
+    reload, care, sleep, wake, setPersonality, setBackground, share, answerChat, markSeen,
   };
 }
