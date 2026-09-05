@@ -7,6 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
@@ -20,6 +21,12 @@ import java.util.concurrent.ThreadPoolExecutor;
  * {@code hatchExecutor}(3·큐 50·CallerRuns)에 200건을 넣으면 스케줄러 스레드가 굽기를 떠안고 부화와 자리를 다툰다.
  * 밤 굽기는 2스레드·큐 = K 로 따로 돈다. K 를 넘길 일이 없어 거절 정책은 CallerRuns 로 두되, 그 경우도 스케줄러 스레드가
  * 한 건 굽고 돌아올 뿐 잃지 않는다.
+ *
+ * <h3>★★ 종료 중일 때는 조용히 버리지 않고 예외를 던진다</h3>
+ * JDK 의 {@code CallerRunsPolicy} 는 실행기가 <b>종료 중이면 호출자 실행도 하지 않고 작업을 버린다.</b>
+ * {@code execute()} 는 정상적으로 돌아오므로 부르는 쪽은 "넘겼다" 로 알고, 그 모션은 아무도 굽지 않는 채
+ * {@code BAKING} 으로 남는다(2026-09-05 리뷰 Codex 4). 그래서 종료 중이면 예외를 던져
+ * {@code NightSweep.claimOne} 이 집기를 되돌리게 한다 — <b>실패가 보여야 되돌릴 수 있다.</b>
  */
 @Configuration
 @EnableScheduling
@@ -32,7 +39,13 @@ public class ZzalSchedulingConfig {
         executor.setMaxPoolSize(2);
         executor.setQueueCapacity(Math.max(maxBakes, 10));
         executor.setThreadNamePrefix("night-");
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        ThreadPoolExecutor.CallerRunsPolicy callerRuns = new ThreadPoolExecutor.CallerRunsPolicy();
+        executor.setRejectedExecutionHandler((task, pool) -> {
+            if (pool.isShutdown()) {
+                throw new RejectedExecutionException("nightExecutor 가 종료 중이라 밤 굽기를 받지 못했습니다");
+            }
+            callerRuns.rejectedExecution(task, pool);
+        });
         executor.initialize();
         return executor;
     }

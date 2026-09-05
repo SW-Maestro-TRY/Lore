@@ -91,6 +91,17 @@ class NightSweepTest {
                 return 1;
             }
         });
+        // releaseClaim — 되돌리기(BAKING → QUEUED)를 흉내 낸다
+        when(motionRepo.releaseClaim(anyLong())).thenAnswer(inv -> {
+            ZzalMotion m = motions.get(inv.<Long>getArgument(0));
+            synchronized (m) {
+                if (m.getStatus() != MotionStatus.BAKING) {
+                    return 0;
+                }
+                ReflectionTestUtils.setField(m, "status", MotionStatus.QUEUED);
+                return 1;
+            }
+        });
         when(planner.queued()).thenAnswer(inv -> motions.values().stream().filter(m -> m.getStatus() == MotionStatus.QUEUED).toList());
         when(petRepo.findByPhase(PetPhase.ALIVE)).thenReturn(List.of());
         when(petRepo.findAllById(any())).thenReturn(List.of());
@@ -110,8 +121,12 @@ class NightSweepTest {
     }
 
     private ZzalMotion queued(long id, int seq, long petId) {
+        return queued(id, seq, petId, NIGHT);
+    }
+
+    private ZzalMotion queued(long id, int seq, long petId, LocalDate nightOf) {
         ZzalMotion m = ZzalMotion.forCatalog(petId, catalog.bySeq(seq).orElseThrow(), T23);
-        m.queue(NIGHT);
+        m.queue(nightOf);
         ReflectionTestUtils.setField(m, "id", id);
         motions.put(id, m);
         return m;
@@ -173,7 +188,7 @@ class NightSweepTest {
     }
 
     @Test
-    @DisplayName("★ 스위프 도중 재기동 — 끝나지 않은 run 이면 계획은 다시 안 하고 남은 QUEUED 만 잇는다(BAKING 은 안 건드림)")
+    @DisplayName("★ 스위프 도중 재기동 — 계획을 다시 돌리고(plan 은 멱등) 남은 QUEUED 를 잇는다(BAKING 은 안 건드림)")
     void resumesUnfinishedRun() {
         runs.put(NIGHT, ZzalNightRun.start(NIGHT, T23, "died"));    // 죽은 서버가 남긴 흔적
         ZzalMotion alreadyBaking = queued(1L, 1, 7L);
@@ -181,13 +196,73 @@ class NightSweepTest {
         queued(2L, 1, 8L);
         ZzalPet alive = pet(9L, 0, 0);
         when(petRepo.findByPhase(PetPhase.ALIVE)).thenReturn(List.of(alive));
+        when(petRepo.findByIdForUpdate(9L)).thenReturn(Optional.of(alive));
 
         NightSweep.Result r = sweep(true, 200).run(NIGHT, T23.plusSeconds(120), "boot-recovery");
         assertThat(r.ran()).isTrue();
-        assertThat(r.queued()).isZero();                 // 계획 안 함
-        verify(planner, never()).plan(any(), any());
+        // ★ 계획 도중에 죽었을 수 있다 — 건너뛰면 뒤쪽 펫이 그 밤을 통째로 빠진다(리뷰 중-2)
+        verify(planner, times(1)).plan(alive, NIGHT);
         assertThat(baked).containsExactly(2L);           // BAKING(1) 은 안 잡고 QUEUED(2) 만
         assertThat(runs.get(NIGHT).isFinished()).isTrue();
+    }
+
+    @Test
+    @DisplayName("★ 이월분이 다음 밤 우선권을 갖는다 — 어제 밤 것이 오늘 등록된 높은 우선순위보다 먼저")
+    void carriedOverGoesFirst() {
+        ZzalPet plainPet = pet(1L, 0, 0);
+        ZzalPet goodPet = pet(2L, 5, 500);
+        when(petRepo.findAllById(any())).thenReturn(List.of(plainPet, goodPet));
+        queued(50L, 1, 2L, NIGHT);                       // 오늘 등록 · 케어 미스 0인 날 5 · 친밀도 500
+        queued(51L, 1, 1L, NIGHT.minusDays(1));          // 어제 이월 · 아무 점수 없음
+
+        sweep(true, 200).run(NIGHT, T23, "test");
+
+        // 굶주림 방지 — 어제 밀린 것이 먼저다(리뷰 중-1)
+        assertThat(baked).containsExactly(51L, 50L);
+    }
+
+    @Test
+    @DisplayName("★ 선물은 이월보다도 먼저 — 우선순위 1순위는 그대로 선물")
+    void giftBeatsCarriedOver() {
+        when(petRepo.findAllById(any())).thenReturn(List.of(pet(1L, 0, 0), pet(2L, 0, 0)));
+        queued(60L, 1, 1L, NIGHT.minusDays(3));          // 사흘 묵은 이월
+        queued(61L, 101, 2L, NIGHT);                     // 오늘 오른 선물
+        sweep(true, 200).run(NIGHT, T23, "test");
+        assertThat(baked).containsExactly(61L, 60L);
+    }
+
+    @Test
+    @DisplayName("★ 실행기가 안 받으면 집기를 되돌린다 — BAKING 으로 남기지 않는다(종료 중 조용한 폐기)")
+    void rejectedExecutionReleasesClaim() {
+        executor = task -> {
+            throw new java.util.concurrent.RejectedExecutionException("종료 중");
+        };
+        ZzalMotion m = queued(70L, 1, 1L);
+
+        NightSweep.Result r = sweep(true, 200).run(NIGHT, T23, "test");
+
+        assertThat(baked).isEmpty();
+        assertThat(r.claimed()).isZero();
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.QUEUED);   // 되돌아왔다 — 다음 밤에 다시 집힌다
+        verify(motionRepo).releaseClaim(70L);
+    }
+
+    @Test
+    @DisplayName("★ 끝난 밤이라도 회수된 자리가 있으면 집는다 — 없으면 그대로 건너뛴다")
+    void finishedNightStillClaimsRecoveredRows() {
+        ZzalNightRun done = ZzalNightRun.start(NIGHT, T23, "me");
+        done.finish(T23.plusSeconds(60), 1, 1, 0);
+        runs.put(NIGHT, done);
+
+        NightSweep s = sweep(true, 200);
+        assertThat(s.run(NIGHT, T23.plusSeconds(120), "boot-recovery").ran()).isFalse();   // 남은 큐 없음
+
+        queued(80L, 1, 1L);                              // StuckMotionRecovery 가 회수해 QUEUED 로 돌려놓은 자리
+        NightSweep.Result again = s.run(NIGHT, T23.plusSeconds(180), "boot-recovery");
+        assertThat(again.ran()).isTrue();
+        assertThat(again.queued()).isZero();             // 계획은 다시 안 한다
+        assertThat(baked).containsExactly(80L);
+        assertThat(runs.get(NIGHT).getClaimed()).isEqualTo(2);   // 1(원래) + 1(회수분)
     }
 
     @Test

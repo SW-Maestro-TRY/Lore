@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -50,8 +52,16 @@ import java.util.stream.Collectors;
  * 켜도 PK 와 claim 이 이중 굽기를 막지만, 애초에 한 대가 맞다.
  *
  * <h3>기동 복구</h3>
- * 서버가 23:00~10:00 사이에 뜨면 그 밤의 run 을 본다. 없으면 스위프를 돈다(23:00 에 죽어 있었던 경우).
- * 있는데 안 끝났으면(스위프 도중 죽음) <b>계획은 다시 하지 않고</b> 남은 QUEUED 만 이어서 집는다.
+ * 서버가 23:00~10:00 사이에 뜨면 그 밤의 run 을 본다.
+ * <ul>
+ *   <li>run 이 <b>없으면</b> 스위프를 돈다(23:00 에 죽어 있었던 경우)</li>
+ *   <li>run 이 있고 <b>안 끝났으면</b>(계획 도중 죽음) 계획을 다시 돌린 뒤 남은 QUEUED 를 집는다.
+ *       {@link NightPlanner#plan} 은 멱등이라 두 번 돌아도 같은 행이 두 번 오르지 않는다 —
+ *       계획 도중에 죽었을 때 <b>나머지 펫이 그 밤을 통째로 빠지는 것</b>을 막는다(2026-09-05 리뷰 중-2)</li>
+ *   <li>run 이 <b>이미 끝났으면</b> 계획·기록은 다시 하지 않고, 남아 있는 QUEUED 만 집는다 —
+ *       {@code StuckMotionRecovery} 가 회수한 자리가 여기로 온다</li>
+ * </ul>
+ * {@code BAKING} 인 채 죽은 자리는 {@code StuckMotionRecovery} 가 <b>QUEUED 로 되돌려</b> 이 길에 태운다.
  *
  * <h3>실행기</h3>
  * {@code hatchExecutor} 는 3스레드·큐 50·CallerRuns 라 200건을 넣으면 스케줄러 스레드가 굽기를 떠안고 부화와 자리를
@@ -61,6 +71,12 @@ import java.util.stream.Collectors;
 public class NightSweep {
 
     private static final Logger log = LoggerFactory.getLogger(NightSweep.class);
+
+    /**
+     * 기동 복구 순서 — {@code StuckMotionRecovery}({@value com.lore.zzal.motion.StuckMotionRecovery#RECOVERY_ORDER})
+     * 가 멈춘 자리를 큐로 되돌린 <b>뒤에</b> 돈다. 그래야 회수한 것이 그 자리에서 다시 집힌다.
+     */
+    static final int RECOVERY_ORDER = com.lore.zzal.motion.StuckMotionRecovery.RECOVERY_ORDER + 10;
 
     private final ZzalPetRepository petRepository;
     private final ZzalMotionRepository motionRepository;
@@ -117,6 +133,7 @@ public class NightSweep {
      * 스위프가 꺼진 서버는 아무것도 하지 않는다(다른 서버가 돈다).
      */
     @EventListener(ApplicationReadyEvent.class)
+    @Order(RECOVERY_ORDER)
     public void recoverOnBoot() {
         if (!enabled) {
             return;
@@ -136,27 +153,55 @@ public class NightSweep {
      */
     public Result run(LocalDate nightOf, Instant now, String trigger) {
         ZzalNightRun run = runRepository.findById(nightOf).orElse(null);
-        int queued = 0;
-        if (run == null) {
-            if (!startRun(nightOf, now)) {
-                log.info("밤 스위프 건너뜀 — nightOf={} 이미 다른 곳이 돌렸다(run PK). trigger={}", nightOf, trigger);
-                return Result.skipped(nightOf);
-            }
-            queued = planAll(nightOf, now);
-        } else if (run.isFinished()) {
-            log.info("밤 스위프 건너뜀 — nightOf={} 이미 끝난 밤. trigger={}", nightOf, trigger);
+        if (run != null && run.isFinished()) {
+            return claimLeftovers(nightOf, now, trigger);
+        }
+        if (run == null && !startRun(nightOf, now)) {
+            log.info("밤 스위프 건너뜀 — nightOf={} 이미 다른 곳이 돌렸다(run PK). trigger={}", nightOf, trigger);
             return Result.skipped(nightOf);
-        } else {
-            log.warn("밤 스위프 이어서 — nightOf={} 도중에 멈춘 run 이 있다(계획은 다시 안 한다). trigger={}", nightOf, trigger);
+        }
+        if (run != null) {
+            log.warn("밤 스위프 이어서 — nightOf={} 도중에 멈춘 run 이 있다(계획을 다시 돌린다 — plan 은 멱등). trigger={}",
+                    nightOf, trigger);
         }
 
+        // ★ 이어받기에서도 계획을 돈다. 계획 도중에 죽었으면 뒤쪽 펫들은 아직 큐에 오르지 못했고,
+        //   건너뛰면 그 펫들은 그 밤을 통째로 빠진다(리뷰 중-2). plan 은 이미 오른 행을 다시 올리지 않는다.
+        int queued = planAll(nightOf, now);
         int[] counts = claimAndBake(now, maxBakes);
         finishRun(nightOf, now, queued, counts[0], counts[1]);
-        log.info("밤 스위프 끝 — nightOf={} 등록={} 굽기={} 이월={} trigger={}", nightOf, queued, counts[0], counts[1], trigger);
+        log.info("밤 스위프 끝 — nightOf={} 등록={} 집기={} 이월={} trigger={}", nightOf, queued, counts[0], counts[1], trigger);
         return new Result(nightOf, true, queued, counts[0], counts[1]);
     }
 
-    /** dev — 이 펫만 지금 계획·굽기. run 기록은 남기지 않는다(진짜 밤이 아니다). */
+    /**
+     * 이미 끝난 밤에 남아 있는 QUEUED 만 집는다 — 계획도 run 기록도 다시 하지 않는다.
+     *
+     * ★ 왜 그냥 건너뛰지 않나 — {@code finishedAt} 은 "굽기가 다 끝났다" 가 아니라 <b>"집어서 실행기에 넘기는 일이 끝났다"</b>
+     *   이다(굽기는 밤새 돈다). 그래서 끝난 run 뒤에도 회수된 자리({@code StuckMotionRecovery} 가 되돌린 것)가 생길 수 있고,
+     *   그때 아무도 안 집으면 그 행은 다음 밤까지 그대로 기다린다(리뷰 중-3).
+     */
+    private Result claimLeftovers(LocalDate nightOf, Instant now, String trigger) {
+        int[] counts = claimAndBake(now, maxBakes);
+        if (counts[0] == 0) {
+            log.info("밤 스위프 건너뜀 — nightOf={} 이미 끝난 밤이고 남은 큐도 없다. trigger={}", nightOf, trigger);
+            return Result.skipped(nightOf);
+        }
+        tx.execute(status -> {
+            runRepository.findById(nightOf).ifPresent(r -> r.addClaimed(counts[0]));
+            return null;
+        });
+        log.warn("끝난 밤의 남은 큐를 집었다 — nightOf={} 집기={} 이월={} trigger={}", nightOf, counts[0], counts[1], trigger);
+        return new Result(nightOf, true, 0, counts[0], counts[1]);
+    }
+
+    /**
+     * dev — 이 펫만 지금 계획·굽기. run 기록은 남기지 않는다(진짜 밤이 아니다).
+     *
+     * ⚠️ <b>개발 확인 전용이다</b>({@code app.zzal.dev-tools} 가 켜져야 부를 수 있고, 운영에서는 주소 자체가 없다).
+     *    K 상한·우선순위를 보지 않고 이 펫의 QUEUED 를 전부 집는다 — 한 펫의 큐는 많아야 몇 건이라 그게 편하지만,
+     *    이월분까지 집어 가므로 <b>진짜 밤의 통계·상한과는 별개</b>다. 운영 판정은 언제나 {@link #run} 쪽이다.
+     */
     public Result sweepPet(ZzalPet pet, Instant petNow) {
         LocalDate nightOf = AwakeClock.dateOf(petNow);
         int queued = planner.plan(pet, nightOf);
@@ -219,35 +264,60 @@ public class NightSweep {
                 .sorted(priority(pets))
                 .toList();
         int claimed = 0;
+        int carried = 0;
         for (ZzalMotion m : ordered) {
+            // ★ 이월 = "상한에 걸려 손도 안 댄 것" 만 센다. 집기에 진 것(다른 서버가 먼저 가져감)은
+            //   우리 이월이 아니다 — 그것까지 세면 두 대가 돌 때 run 통계가 실제 큐와 어긋난다(리뷰 하).
             if (claimed >= cap) {
-                break;
+                carried++;
+                continue;
             }
             if (claimOne(m.getId(), now)) {
                 claimed++;
             }
         }
-        return new int[]{claimed, Math.max(0, ordered.size() - claimed)};
+        return new int[]{claimed, carried};
     }
 
-    /** 집기 — UPDATE … WHERE status='QUEUED' 가 1 을 돌려줄 때만 굽는다. 0 이면 다른 서버가 먼저 집었다. */
+    /**
+     * 집기 — UPDATE … WHERE status='QUEUED' 가 1 을 돌려줄 때만 굽는다. 0 이면 다른 서버가 먼저 집었다.
+     *
+     * ★ 실행기가 안 받으면 집기를 <b>되돌린다.</b> 종료 중인 실행기는 작업을 받지 않는데, 그때 되돌리지 않으면
+     *   그 행은 아무도 굽지 않는 채 {@code BAKING} 으로 남는다(리뷰 Codex 4 — JDK 기본 CallerRunsPolicy 는
+     *   종료 중이면 <b>조용히 버린다</b>. 그래서 {@code ZzalSchedulingConfig} 가 그 경우 예외를 던지게 바꿨다).
+     */
     boolean claimOne(Long motionId, Instant now) {
         int won = motionRepository.claim(motionId, now, server);
         if (won != 1) {
             return false;
         }
-        nightExecutor.execute(() -> motionService.bakeNow(motionId));
+        try {
+            nightExecutor.execute(() -> motionService.bakeNow(motionId));
+        } catch (RejectedExecutionException e) {
+            int back = motionRepository.releaseClaim(motionId);
+            log.error("실행기가 굽기를 받지 못했다 — motionId={} 집기를 되돌린다(되돌림={})", motionId, back, e);
+            return false;
+        }
         return true;
     }
 
-    /** 선물 > 케어 미스 0인 날 수(3층 streak 의 자리) > 친밀도 > id. 펫이 없으면 맨 뒤. */
+    /**
+     * 선물 > <b>오래된 밤 먼저</b> > 케어 미스 0인 날 수(3층 streak 의 자리) > 친밀도 > id. 펫이 없으면 맨 뒤.
+     *
+     * ★ {@code nightOf} 오름차순이 없으면 <b>이월분이 영영 안 구워진다</b>(리뷰 중-1 — 굶주림).
+     *   매일 새로 오르는 건이 K 를 넘기면, 어제 밀린 낮은 우선순위는 오늘도 뒤로 밀리고 그게 반복된다.
+     *   "어제 못 받은 사람 먼저" 가 사용자에게도 맞다.
+     */
     static Comparator<ZzalMotion> priority(Map<Long, ZzalPet> pets) {
         Comparator<ZzalMotion> gift = Comparator.comparing((ZzalMotion m) -> m.getSeq() >= 101 ? 0 : 1);
+        // nightOf 가 비어 있는 행(손으로 넣은 것)은 맨 뒤로.
+        Comparator<ZzalMotion> oldestNight = Comparator.comparing(
+                (ZzalMotion m) -> m.getNightOf() == null ? LocalDate.MAX : m.getNightOf());
         Comparator<ZzalMotion> streak = Comparator.comparing((ZzalMotion m) ->
                 pets.containsKey(m.getPetId()) ? -pets.get(m.getPetId()).getZeroMissDays() : Integer.MAX_VALUE);
         Comparator<ZzalMotion> intimacy = Comparator.comparing((ZzalMotion m) ->
                 pets.containsKey(m.getPetId()) ? -pets.get(m.getPetId()).getIntimacy() : Integer.MAX_VALUE);
-        return gift.thenComparing(streak).thenComparing(intimacy).thenComparing(ZzalMotion::getId);
+        return gift.thenComparing(oldestNight).thenComparing(streak).thenComparing(intimacy).thenComparing(ZzalMotion::getId);
     }
 
     // ── 시각 ──────────────────────────────────────────────────────────────

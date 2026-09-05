@@ -214,9 +214,16 @@ public class ZzalMotion {
         this.status = MotionStatus.FAILED;
     }
 
-    /** 밤 큐에 올릴 수 있나 — 아직 안 굽거나(NONE) 지난 밤에 실패한 것. */
-    public boolean isQueueable() {
-        return status == MotionStatus.NONE || status == MotionStatus.FAILED;
+    /**
+     * 집어 갔는데 굽지 못한 채 멈춘 것을 큐로 되돌린다(밤은 그대로 둔다).
+     *
+     * ★ 왜 곧바로 다시 굽지 않고 큐로 되돌리나 — 굽기 순서·상한(K)·집기 경쟁은 전부 스위프가 쥐고 있다.
+     *   회수한 자리에서 바로 구우면 그 세 가지를 우회해 밤 상한이 조용히 넘는다.
+     */
+    public void releaseClaim() {
+        this.status = MotionStatus.QUEUED;
+        this.claimedAt = null;
+        this.claimedBy = null;
     }
 
     public void markSeen(Instant at) {

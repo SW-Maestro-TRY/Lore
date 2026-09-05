@@ -45,4 +45,16 @@ public interface ZzalMotionRepository extends JpaRepository<ZzalMotion, Long> {
     @Query("update ZzalMotion m set m.status = com.lore.zzal.motion.MotionStatus.BAKING, m.claimedAt = :now, m.claimedBy = :by "
             + "where m.id = :id and m.status = com.lore.zzal.motion.MotionStatus.QUEUED")
     int claim(@Param("id") Long id, @Param("now") java.time.Instant now, @Param("by") String by);
+
+    /**
+     * 집었는데 굽기를 시작하지 못한 자리를 큐로 되돌린다 — {@link #claim} 의 반대.
+     *
+     * ★ 실행기가 종료 중이라 작업을 못 받는 경우가 이 길로 온다. 되돌리지 않으면 그 행은 아무도 굽지 않는 채
+     *   {@code BAKING} 으로 남는다(다음 밤 계획은 NONE·FAILED 만, claim 은 QUEUED 만 본다).
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query("update ZzalMotion m set m.status = com.lore.zzal.motion.MotionStatus.QUEUED, m.claimedAt = null, m.claimedBy = null "
+            + "where m.id = :id and m.status = com.lore.zzal.motion.MotionStatus.BAKING")
+    int releaseClaim(@Param("id") Long id);
 }

@@ -17,8 +17,15 @@ import java.time.LocalDate;
  * 두 번째 INSERT 는 실패하고, 실패한 쪽은 "이미 돌았다" 로 읽고 물러난다.
  *
  * <h3>끝나지 않은 run(finishedAt null)</h3>
- * 스위프 중 서버가 죽은 흔적. 기동 복구는 이 밤을 <b>새로 계획하지 않고</b> 남은 QUEUED 만 이어서 집는다
- * (계획은 이미 됐고, BAKING 은 굽다 죽은 것이라 StuckMotionRecovery 가 따로 잇는다).
+ * 스위프 중 서버가 죽은 흔적. 기동 복구는 이 밤의 계획을 <b>다시 돌린 뒤</b>(계획 도중에 죽었으면 뒤쪽 펫이 통째로
+ * 빠지므로 — {@code NightPlanner.plan} 은 멱등이다) 남은 QUEUED 를 집는다. {@code BAKING} 인 채 죽은 자리는
+ * {@code StuckMotionRecovery} 가 <b>QUEUED 로 되돌려</b> 같은 길에 태운다.
+ *
+ * <h3>★ {@code finishedAt} 의 뜻 — "굽기 완료" 가 아니라 "집기 완료"</h3>
+ * 굽기는 실행기에서 밤새 돈다. 이 시각은 <b>그 밤에 집어서 실행기에 넘기는 일이 끝난 순간</b>이고,
+ * {@code claimed} 도 "집은 수" 다(굽기 성공 수가 아니다). 그 밤이 실제로 어떻게 됐는지는
+ * 관리자 {@code GET /night/summary}(모션 행을 직접 센다)로 본다. 끝난 run 뒤에 회수된 자리가 생기면
+ * 다음 기동 복구가 집고 {@link #addClaimed(int)} 로 더한다.
  */
 @Entity
 @Table(name = "zzal_night_run")
@@ -43,11 +50,11 @@ public class ZzalNightRun {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int queued;
 
-    /** 이 밤에 집어서 굽기 시작한 수(K 캡 안). */
+    /** 이 밤에 집어서 실행기에 넘긴 수(K 캡 안). 굽기 성공 수가 아니다. */
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int claimed;
 
-    /** K 를 넘어 다음 밤으로 넘긴 수. */
+    /** K 에 걸려 손도 안 대고 다음 밤으로 넘긴 수(집기에 진 것은 안 센다). */
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int carried;
 
@@ -67,6 +74,11 @@ public class ZzalNightRun {
         this.queued = queued;
         this.claimed = claimed;
         this.carried = carried;
+    }
+
+    /** 끝난 밤 뒤에 회수된 자리를 더 집었을 때(기동 복구). 통계가 실제와 어긋나지 않게 더해만 준다. */
+    public void addClaimed(int more) {
+        this.claimed += more;
     }
 
     public boolean isFinished() {
