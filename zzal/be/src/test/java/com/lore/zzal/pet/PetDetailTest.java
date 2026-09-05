@@ -1,6 +1,8 @@
 package com.lore.zzal.pet;
 
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionStatus;
+import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.pet.dto.PetResponses;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static com.lore.zzal.pet.AwakeClockTest.kst;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -143,5 +146,23 @@ class PetDetailTest {
         assertThat(d.clock().autoWakeAt()).isEqualTo(kst("2026-09-06 10:00"));
         assertThat(d.clock().sleepWindowOpensAt()).isNull();
         assertThat(d.clock().canWake()).isFalse();
+    }
+
+    @Test
+    @DisplayName("심화 상태는 zzal_motion 행에서 — 행이 있으면 그 status, 없으면 NONE. OPEN 일 때만 imageKey")
+    void advancedFromRows() {
+        ZzalPet pet = baby();
+        ZzalMotion base = ZzalMotion.forCatalog(7L, CATALOG.bySeq(1).orElseThrow(), T0);
+        ZzalMotion roll = ZzalMotion.forCatalog(7L, CATALOG.bySeq(101).orElseThrow(), T0);
+        roll.done("images/zzal/pets/7/motions/101/motion.webp", com.lore.zzal.motion.MotionSource.API,
+                com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
+        roll.open(T0);
+        PetResponses.Detail d = PetResponses.Detail.from(pet, null, T0, CATALOG, Map.of(1, base, 101, roll), List.of());
+        assertThat(d.motions().get(0).advanced().status()).isEqualTo("NONE");
+        assertThat(d.motions().get(0).advanced().imageKey()).isNull();
+        assertThat(d.motions().get(16).advanced().status()).isEqualTo(MotionStatus.OPEN.name());
+        assertThat(d.motions().get(16).advanced().imageKey()).endsWith("/motions/101/motion.webp");
+        assertThat(d.motions().get(16).advanced().seen()).isFalse();
+        assertThat(d.motions().get(2).advanced().status()).isEqualTo("NONE");   // 행이 없는 칸
     }
 }

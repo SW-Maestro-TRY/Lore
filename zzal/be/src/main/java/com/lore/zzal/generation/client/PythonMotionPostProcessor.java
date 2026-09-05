@@ -68,10 +68,14 @@ public class PythonMotionPostProcessor implements MotionPostProcessor {
         ProcessBuilder pb = new ProcessBuilder(
                 pythonPath, scriptPath, grid.toString(), out.toString());
         pb.redirectErrorStream(true);
+        // ★ readAllBytes 로 먼저 읽으면 프로세스가 끝날 때까지 막혀 waitFor(timeout) 이 무력해진다(Codex 리뷰 6).
+        java.nio.file.Path logFile = java.nio.file.Files.createTempFile("zzal-motion-post-", ".log");
+        pb.redirectOutput(logFile.toFile());
         Process p = pb.start();
 
-        String output = new String(p.getInputStream().readAllBytes());
         boolean done = p.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+        String output = java.nio.file.Files.exists(logFile) ? java.nio.file.Files.readString(logFile) : "";
+        java.nio.file.Files.deleteIfExists(logFile);
         if (!done) {
             p.destroyForcibly();
             throw new IllegalStateException("모션 후처리 시간 초과(%d초)".formatted(timeoutSeconds));

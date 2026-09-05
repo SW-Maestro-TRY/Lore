@@ -1,6 +1,9 @@
 package com.lore.zzal.game.dto;
 
+import com.lore.zzal.game.GameKind;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
 /** 좌·우 맞히기 API 가 받는 것들. */
@@ -41,5 +44,16 @@ public final class GameRequests {
 
             @Schema(description = "LEFT(왼쪽) · RIGHT(오른쪽)", example = "LEFT")
             @NotNull Side pick) {
+    }
+
+    @Schema(description = "판 시작 — 어느 게임인가")
+    public record Start(
+            @Schema(description = "LEFT_RIGHT(좌우 맞히기) · RUN(달리기, 좌우 5승 뒤)", example = "LEFT_RIGHT")
+            @NotNull GameKind kind) {
+    }
+
+    @Schema(description = "달리기 끝 — 살아남은 ms. 30,000 이상이면 승리. 서버는 상한(60,000)만 검증")
+    public record Finish(
+            @Schema(example = "31200") @NotNull @Min(0) @Max(60_000) Long survivedMs) {
     }
 }

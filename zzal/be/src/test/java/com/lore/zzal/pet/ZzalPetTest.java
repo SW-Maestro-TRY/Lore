@@ -362,6 +362,65 @@ class ZzalPetTest {
         }
 
         @Test
+        @DisplayName("★ 새벽 1시 부화 — 60분은 그대로 진행, 02:00 에 즉시 밤잠, 07:00 깨우기 가능, 10:00 자동 기상 (상훈님 9/5 결정 6)")
+        void hatchedAtOneAm() {
+            Instant hatched = at("2026-09-06 01:00");
+            ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", hatched);
+            pet.markAlive("s", "i", hatched);
+            pet.settle(at("2026-09-06 01:59"));
+            assertThat(pet.isSleeping()).isFalse();                 // 밤이지만 아기 60분은 시계 논외
+            assertThat(pet.sleepKindAvailable(at("2026-09-06 01:59"))).isEqualTo(SleepKind.NAP);
+            pet.settle(at("2026-09-06 02:00"));
+            assertThat(pet.isSleeping()).isTrue();                  // 60분 끝 = 밤 → 그 순간 밤잠
+            assertThat(pet.getSleepKind()).isEqualTo(SleepKind.NIGHT);
+            assertThat(pet.getSleptAt()).isEqualTo(at("2026-09-06 02:00"));
+            assertThat(pet.canWake(at("2026-09-06 06:59"))).isFalse();
+            assertThat(pet.canWake(at("2026-09-06 07:00"))).isTrue();
+            ZzalPet other = ZzalPet.hatch(1L, "여울", null, "k", hatched);
+            other.markAlive("s", "i", hatched);
+            other.settle(at("2026-09-06 10:30"));                   // 안 깨움
+            assertThat(other.isSleeping()).isFalse();
+            assertThat(other.isOverslept()).isTrue();
+            assertThat(other.getWokeAt()).isEqualTo(at("2026-09-06 10:00"));
+        }
+
+        @Test
+        @DisplayName("★ 아기 60분 안에는 재우기 = 낮잠만. 낮잠을 썼으면 19~23시라도 재우기 불가, 23시 자동 취침도 없다")
+        void babyHasNoNightSleep() {
+            Instant hatched = at("2026-09-05 22:30");
+            ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", hatched);
+            pet.markAlive("s", "i", hatched);
+            pet.sleep(at("2026-09-05 22:35"));                     // 낮잠
+            pet.settle(at("2026-09-05 22:46"));
+            assertThat(pet.getNapCount()).isEqualTo(1);
+            assertThat(pet.sleepKindAvailable(at("2026-09-05 22:50"))).isNull();   // 창 안이지만 아기 → 밤잠 없음
+            pet.settle(at("2026-09-05 23:20"));
+            assertThat(pet.isSleeping()).isFalse();                  // 23:00 자동 취침 없음
+            pet.settle(at("2026-09-05 23:30"));
+            assertThat(pet.getSleepKind()).isEqualTo(SleepKind.NIGHT); // 60분 끝(23:30) = 밤 → 즉시
+        }
+
+        @Test
+        @DisplayName("★ 아기 60분이 끝나는 정각(0ms)·+1초 둘 다 같은 호출에서 밤잠 전이 — 부화 시각에 밀리초가 있어도")
+        void exactBabyEndTransitions() {
+            Instant hatchedWithMillis = at("2026-09-06 01:00").plusMillis(257);
+            ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", hatchedWithMillis);
+            pet.markAlive("s", "i", hatchedWithMillis);
+            assertThat(pet.babyUntil()).isEqualTo(at("2026-09-06 02:00"));          // hatchedAt 은 초 단위
+            pet.settle(at("2026-09-06 01:59").plusMillis(900));
+            assertThat(pet.isSleeping()).isFalse();
+            pet.settle(pet.babyUntil());                                             // 정각
+            assertThat(pet.isSleeping()).isTrue();
+            assertThat(pet.getSleptAt()).isEqualTo(at("2026-09-06 02:00"));
+
+            ZzalPet other = ZzalPet.hatch(1L, "여울", null, "k", hatchedWithMillis);
+            other.markAlive("s", "i", hatchedWithMillis);
+            other.settle(other.babyUntil().plusSeconds(1));                          // +1초
+            assertThat(other.isSleeping()).isTrue();
+            assertThat(other.getSleptAt()).isEqualTo(at("2026-09-06 02:00"));
+        }
+
+        @Test
         @DisplayName("낮잠 동안 게이지 정지")
         void napFreezes() {
             ZzalPet pet = baby();

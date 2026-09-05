@@ -14,6 +14,10 @@ import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionSeeder;
+import com.lore.zzal.motion.ZzalMotion;
+import com.lore.zzal.motion.ZzalMotionRepository;
+import com.lore.zzal.night.NightPlanner;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 펫 생성·조회·돌봄·잠.
@@ -47,6 +53,9 @@ public class PetService {
     private final HatchService hatchService;
     private final ApplicationEventPublisher events;
     private final MotionCatalog catalog;
+    private final ZzalMotionRepository motionRepository;
+    private final MotionSeeder motionSeeder;
+    private final NightPlanner nightPlanner;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -56,8 +65,14 @@ public class PetService {
                       S3Service s3Service,
                       HatchService hatchService,
                       ApplicationEventPublisher events,
-                      MotionCatalog catalog) {
+                      MotionCatalog catalog,
+                      ZzalMotionRepository motionRepository,
+                      MotionSeeder motionSeeder,
+                      NightPlanner nightPlanner) {
         this.catalog = catalog;
+        this.motionRepository = motionRepository;
+        this.motionSeeder = motionSeeder;
+        this.nightPlanner = nightPlanner;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -131,6 +146,36 @@ public class PetService {
         return petRepository.findByUserIdOrderByIdDesc(userId);
     }
 
+    /**
+     * 그 펫의 동작 행(seq → 행). v2 부화 펫은 18행, v1 펫은 옛 seq(0부터) 행이라 카탈로그 seq 와 안 겹쳐 비어 보인다.
+     * 심화 행동 상태(`motions[].advanced`)의 재료. 읽기만 한다.
+     */
+    @Transactional
+    public Map<Integer, ZzalMotion> motionRows(Long petId) {
+        Map<Integer, ZzalMotion> rows = rowsOf(petId);
+        // ★ 자가 치유(#218 리뷰) — markPetAlive 는 커밋됐는데 18행 저장이 실패하면 "ALIVE 인데 행 0개" 로 영구 고착된다
+        //   (CHECK 제약 사고가 그 모양). ALIVE 펫의 행이 18 미만이면 멱등 seed 로 채운다(PR-5 전 부화한 펫도 여기서 따라온다).
+        if (rows.size() < catalog.all().size()) {
+            petRepository.findById(petId)
+                    .filter(p -> p.isAlive() && p.getHatchedAt() != null)
+                    .ifPresent(p -> {
+                        int made = motionSeeder.seed(petId, p.getHatchedAt());
+                        if (made > 0) {
+                            org.slf4j.LoggerFactory.getLogger(PetService.class)
+                                    .warn("동작 행 자가 치유 — petId={} {}행 채움(부화 완료 때 빠졌던 것)", petId, made);
+                        }
+                    });
+            return rowsOf(petId);
+        }
+        return rows;
+    }
+
+    private Map<Integer, ZzalMotion> rowsOf(Long petId) {
+        return motionRepository.findByPetIdOrderBySeqAsc(petId).stream()
+                .filter(m -> m.getLayer() != null)
+                .collect(Collectors.toMap(ZzalMotion::getSeq, m -> m, (a, b) -> a));
+    }
+
     // ── 조회 = 정산 ───────────────────────────────────────────────────────
 
     /**
@@ -166,8 +211,8 @@ public class PetService {
     public record Action(ZzalPet pet, List<Integer> justUnlocked) {
     }
 
-    /** 행동 전후의 열린 동작을 비교해 새로 열린 seq 를 얻는다(폭죽). 저장하지 않고 계산한다(UnlockRules). */
-    private Action withUnlockDiff(ZzalPet pet, Runnable action) {
+    /** 행동 전후의 열린 동작을 비교해 새로 열린 seq 를 얻는다(폭죽). 저장하지 않고 계산한다(UnlockRules). 채팅·게임도 이걸 쓴다. */
+    public Action withUnlockDiff(ZzalPet pet, Runnable action) {
         Set<String> before = Set.copyOf(UnlockRules.unlockedKeys(pet, catalog));
         action.run();
         List<Integer> opened = UnlockRules.unlockedKeys(pet, catalog).stream()
@@ -199,13 +244,11 @@ public class PetService {
                 }
                 pet.feed(now);
             }
+            // ★ 간식은 행복이 가득이어도 받는다(상훈님 2026-09-05 결정 — 원조도 간식은 항상 먹고 과다 시 병).
+            //   밥만 가득이면 거절. 연속 5개 배탈은 PR-8.
             case SNACK -> {
                 if (pet.isSick()) {
                     throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
-                }
-                if (pet.getHappiness() >= ZzalRules.GAUGE_MAX) {
-                    throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED,
-                            "%s이는 지금 아주 기분이 좋아요".formatted(pet.getName()));
                 }
                 pet.snack(now);
             }
@@ -246,7 +289,12 @@ public class PetService {
         if (pet.sleepKindAvailable(now) == null) {
             throw new BusinessException(ErrorCode.ZZAL_NOT_SLEEP_TIME, "저녁 7시가 되면 재워 주세요");
         }
-        return withUnlockDiff(pet, () -> pet.sleep(now));
+        Action a = withUnlockDiff(pet, () -> pet.sleep(now));
+        // ★ 밤잠에 든 순간 = 굽기 큐 등록(정본 2장 "잠드는 순간 하는 일"). 23:00 자동 취침은 스위프가 같은 일을 한다.
+        if (pet.getSleepKind() == SleepKind.NIGHT) {
+            nightPlanner.plan(pet, AwakeClock.dateOf(now));
+        }
+        return a;
     }
 
     /**
@@ -355,7 +403,8 @@ public class PetService {
      * 지금 뭔가를 할 수 있는 상태인지 확인하고, 흐른 시간을 반영해 돌려준다.
      * 돌봄·재우기가 공통으로 거치는 문. (여행 중 거절은 PR-11)
      */
-    private ZzalPet awake(Long userId, Long petId, Instant realNow) {
+    /** 잠그고·정산하고·방문하고·깨어 있는지 확인. 채팅 답·게임 시작이 같은 문을 쓴다(트랜잭션 안에서 부를 것). */
+    public ZzalPet awake(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
         if (pet.isSleeping()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_SLEEPING,
@@ -364,8 +413,8 @@ public class PetService {
         return pet;
     }
 
-    /** ALIVE 인지 확인하고 정산·방문한다. 자는 중에도 되는 것(성격·배경·공유)이 거치는 문. */
-    private ZzalPet alive(Long userId, Long petId, Instant realNow) {
+    /** ALIVE 인지 확인하고 잠그고 정산·방문한다. 자는 중에도 되는 것(성격·배경·공유·채팅 조회)이 거치는 문. */
+    public ZzalPet alive(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
         if (!pet.isAlive()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);

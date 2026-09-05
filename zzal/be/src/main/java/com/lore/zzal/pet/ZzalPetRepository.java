@@ -14,6 +14,9 @@ public interface ZzalPetRepository extends JpaRepository<ZzalPet, Long> {
 
     List<ZzalPet> findByUserIdOrderByIdDesc(Long userId);
 
+    /** 밤 스위프 — 함께 지내는 펫 전부(안 연 사람 것도 23:00 에 정산·큐 등록). */
+    List<ZzalPet> findByPhase(PetPhase phase);
+
     /** 지금 부화 중인 펫이 있는가. 있으면 새로 만들지 못한다("○○이가 부화 중이에요"). */
     Optional<ZzalPet> findFirstByUserIdAndPhase(Long userId, PetPhase phase);
 

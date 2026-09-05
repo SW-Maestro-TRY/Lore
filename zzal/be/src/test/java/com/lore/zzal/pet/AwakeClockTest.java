@@ -18,10 +18,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   재현되는가다. 서버가 죽어 있던 사이도 같은 결과여야 한다(정본 16장·플랜 T1 핵심 판단 2).
  */
 @DisplayName("시계 — KST 경계 걷기")
-class AwakeClockTest {
+public class AwakeClockTest {
 
     /** "2026-09-05 12:00" 같은 KST 벽시계를 Instant 로. */
-    static Instant kst(String dateTime) {
+    public static Instant kst(String dateTime) {
         return LocalDateTime.parse(dateTime.replace(' ', 'T')).atZone(ZzalRules.ZONE).toInstant();
     }
 

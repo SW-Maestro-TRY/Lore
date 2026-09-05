@@ -27,6 +27,16 @@ public interface GenStepRecordRepository extends JpaRepository<GenStepRecord, Lo
     List<GenStepRecord> findSucceededByPet(@Param("petId") Long petId, @Param("kind") GenKind kind);
 
     /**
+     * ★ 같은 <b>파이프라인 버전</b>의 성공 단계만. v1 시도의 격자(8상태)를 v2 시도가 이어받으면 후처리가 v2 이름으로
+     * 자르려다 어긋난다(#218 리뷰). 버전이 바뀌면 처음부터 다시 굽는 것이 맞다.
+     */
+    @Query("select s from GenStepRecord s where s.jobId in "
+            + "(select j.id from GenJob j where j.petId = :petId and j.kind = :kind and j.pipelineVersion = :version) "
+            + "and s.status = com.lore.zzal.generation.GenStatus.SUCCEEDED order by s.id asc")
+    List<GenStepRecord> findSucceededByPetAndVersion(@Param("petId") Long petId, @Param("kind") GenKind kind,
+                                                     @Param("version") String version);
+
+    /**
      * 이 <b>모션</b>이 지금까지 어느 시도에서든 성공시킨 단계들.
      *
      * ★★ 모션에는 위의 펫 단위 조회를 쓰면 안 된다. 한 펫이 모션을 12개 배우는데

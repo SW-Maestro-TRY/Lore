@@ -51,7 +51,7 @@ public class PromptLoader {
             // ★ 격자는 반드시 정사각이다(프롬프트가 "ONE square 1:1 image" 를 요구한다).
             //   그리고 gpt-image-2 는 가로·세로가 16의 배수여야 한다 — 1248 = 78x16.
             //   실험이 쓰던 값과 같게 맞춘다. 크기가 달라지면 후처리 절단이 어긋난다.
-            case "grid" -> new ModelSpec("gpt-image-2", "1248x1248", "medium");
+            case "grid", "grid2" -> new ModelSpec("gpt-image-2", "1248x1248", "medium");
             // 16프레임 격자도 같은 규격이다 — 격자 골격(4x4·25점·초록)이 부화와 같고,
             // 다른 것은 칸의 의미(독립 8쌍 vs 이어지는 한 동작)뿐이다.
             case "grid16" -> new ModelSpec("gpt-image-2", "1248x1248", "medium");

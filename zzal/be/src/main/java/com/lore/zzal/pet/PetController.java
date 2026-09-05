@@ -40,11 +40,12 @@ public class PetController {
     }
 
     private PetResponses.Detail detail(ZzalPet pet, String stepLabel, Instant real) {
-        return PetResponses.Detail.from(pet, stepLabel, pet.now(real), catalog);
+        return PetResponses.Detail.from(pet, stepLabel, pet.now(real), catalog, petService.motionRows(pet.getId()), List.of());
     }
 
     private PetResponses.Detail detail(PetService.Action action, Instant real) {
-        return PetResponses.Detail.from(action.pet(), null, action.pet().now(real), catalog, action.justUnlocked());
+        ZzalPet pet = action.pet();
+        return PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(pet.getId()), action.justUnlocked());
     }
 
     @Operation(summary = "펫 생성", description = """
@@ -172,6 +173,20 @@ public class PetController {
                                                   @Valid @RequestBody PetRequests.Share request) {
         Instant real = Instant.now();
         return ApiResponse.ok(detail(petService.share(userId, petId, request.motionKey(), real), real));
+    }
+
+    // ── 앨범 (정본 16장) ─────────────────────────────────────────────────
+
+    @Operation(summary = "앨범", description = """
+            도감 18칸(기본/심화 표시, 잠긴 칸도 이름+조건) + 여행 엽서 + 혼자 논 장면 + 첫 심화 기념.
+            엽서·장면·첫 심화는 뒤 PR 에서 채워진다(지금은 빈 목록·LOCKED). v0 에서는 앨범 조회가 항상 된다(해석 25).""")
+    @GetMapping("/{petId}/album")
+    public ApiResponse<PetResponses.Album> album(@LoginUser Long userId, @PathVariable Long petId) {
+        Instant real = Instant.now();
+        ZzalPet pet = petService.refresh(userId, petId, real);
+        PetResponses.Detail d = detail(pet, null, real);
+        return ApiResponse.ok(new PetResponses.Album(
+                d.motions() == null ? List.of() : d.motions(), List.of(), List.of(), d.firstGift()));
     }
 
     // ── 보내기 ────────────────────────────────────────────────────────────
