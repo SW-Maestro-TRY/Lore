@@ -235,6 +235,90 @@ body[data-view="nextep"]  .foot { display: none; }
 .depths b { display: block; font-size: .88rem; font-weight: 700; }
 .depths small { display: block; font-size: .77rem; color: var(--dim); margin-top: 2px; }
 
+/* ------------------------------------------------------ 어떻게 만드나 · 결과 예시 · FAQ
+
+   셋 다 홈(#landing) 안, 물 위(.top) 다음에 오는 조용한 흰 종이 자리다.
+   물빛 배경은 히어로 한 번으로 충분하고, 여기부터는 읽는 자리라 --card 위에
+   --text 로 앉힌다. 2026-09-05: 상단 바의 "어떻게 만드나"·"결과 예시" 가
+   가리키던 #how·#gallery 가 실제로는 없어서 눌러도 아무 데도 안 갔다 —
+   신뢰가 안 간다는 피드백의 원인 중 하나였다. */
+.how, .gallery, .faq {
+  max-width: 560px; margin: 0 auto; padding: 40px 20px;
+}
+.how-head, .gallery-head, .faq-head { text-align: center; margin-bottom: 22px; }
+.how-head h2, .gallery-head h2, .faq-head h2 {
+  font-size: clamp(1.25rem, 4.5vw, 1.6rem); font-weight: 800; margin: 6px 0 0;
+}
+.how .section-lede, .gallery .section-lede { margin: 10px auto 0; text-align: left; }
+.how-audience {
+  list-style: none; margin: 14px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 6px; text-align: left;
+}
+.how-audience li {
+  font-size: .86rem; color: var(--text); padding-left: 1.3em; position: relative;
+}
+.how-audience li::before { content: "·"; position: absolute; left: .3em; color: var(--accent); font-weight: 800; }
+
+/* position:relative + ::before 로 썸네일 사이를 잇는 세로줄 — 글로만
+   나열하면 "그냥 목록"으로 읽히지만, 줄로 이으면 "루가 순서대로 하는
+   이야기"로 읽힌다(2026-09-05). 줄의 left 값은 li 의 padding(16px) +
+   썸네일 반지름(44px, 2026-09-05 확대). */
+.how-steps { list-style: none; margin: 26px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; position: relative; }
+.how-steps::before {
+  content: ""; position: absolute; left: 60px; top: 30px; bottom: 30px;
+  width: 2px; background: var(--line-2); z-index: 0;
+}
+.how-steps li {
+  display: flex; gap: 16px; align-items: center; position: relative; z-index: 1;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px;
+}
+/* 진행 화면과 같은 그림(web/lou/stage/*.webp) — 기능 아이콘이 아니라
+   루가 실제로 그 일을 하는 삽화라서, 목록이 아니라 "장면"으로 읽힌다.
+   2026-09-05: 처음엔 56px 로 작게 뒀는데 "그림 좀 크게" 피드백으로 88px 로
+   키웠다 — 글씨보다 그림이 먼저 읽히는 자리로 만든다는 게 진행 화면
+   (.stage-art)의 원래 방침이기도 하다. */
+.how-thumb { position: relative; flex: none; }
+.how-stage-art {
+  width: 88px; height: 88px; border-radius: 18px; object-fit: cover;
+  border: 1px solid var(--line); background: var(--card-2); display: block;
+}
+.how-no {
+  position: absolute; left: -8px; top: -8px; width: 26px; height: 26px;
+  border-radius: 50%; background: var(--accent); color: #fff;
+  font-weight: 800; font-size: .8rem; display: grid; place-items: center;
+  box-shadow: 0 0 0 2px var(--card);
+}
+.how-steps b { display: block; font-size: 1rem; }
+.how-steps small { display: block; margin-top: 3px; font-size: .84rem; color: var(--muted); line-height: 1.55; }
+
+.gallery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+.gallery-grid figure { margin: 0; }
+.gallery-grid img {
+  width: 100%; aspect-ratio: 3/4; object-fit: cover;
+  border-radius: 12px; border: 1px solid var(--line);
+}
+.gallery-grid figcaption { text-align: center; font-size: .78rem; color: var(--muted); margin-top: 6px; }
+.gallery-full { display: flex; width: 100%; margin-top: 18px; }
+
+.faq-item {
+  border: 1px solid var(--line); border-radius: 12px; padding: 4px 16px;
+  margin-bottom: 8px; background: var(--card);
+}
+.faq-item summary {
+  padding: 12px 0; font-size: .9rem; font-weight: 700; cursor: pointer;
+  list-style: none;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after { content: "+"; float: right; color: var(--accent); font-weight: 800; }
+.faq-item[open] summary::after { content: "−"; }
+.faq-item p { margin: 0 0 14px; font-size: .84rem; color: var(--muted); line-height: 1.65; }
+
+@media (min-width: 880px) {
+  .how, .gallery, .faq { max-width: 720px; padding: 56px 32px; }
+  .gallery-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
 /* 만들기 — 물빛은 body[data-step] 이 정한다(위저드 절 참고).
 
    **바닥까지 채운다.** 걸음마다 내용 길이가 다른데, 짧은 걸음에서는 물이
@@ -820,7 +904,12 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
    예전에는 루가 문서 흐름에 그냥 놓여 있어서 끌 자리가 없었다. */
 .mascot-stage {
   position: relative; width: 100%; height: min(52vh, 340px);
-  touch-action: none;   /* 모바일에서 끌 때 화면이 같이 스크롤되면 안 된다 */
+  /* touch-action: none 은 여기(화면 절반 가까운 넓이)가 아니라 밑의 .mascot
+     자신에게만 건다 — 손가락이 루가 아니라 이 칸의 빈 자리에서 시작해도
+     막히면, 그 넓이 때문에 사실상 화면 전체가 안 스크롤되는 것처럼 느껴진다
+     (2026-09-05, 모바일 스크롤 안 됨 리포트로 확인). 드래그가 시작된
+     지점(.mascot)의 touch-action 이 제스처 내내 적용되므로, 루를 잡고
+     칸 밖으로 끌어도 화면은 여전히 안 딸려온다. */
 }
 .mascot {
   position: absolute; left: 50%; top: 50%;
@@ -1235,7 +1324,23 @@ body[data-view="result"] .topbar { position: static; }
   padding: 26px clamp(18px, 5vw, 56px); border-top: 1px solid var(--line);
   color: var(--dim); font-size: .82rem;
 }
+.foot-brand { display: flex; flex-direction: column; gap: 4px; }
 .foot-note b { color: var(--muted); }
+/* 만든 곳 표시 — 본문보다 한 단 조용하게(오른쪽, 더 옅은 글자) 둔다.
+   신뢰를 주려고 넣는 것이지 브랜드 대신 앞세우려는 것이 아니다. */
+.foot-org { text-align: right; }
+.foot-org-badges {
+  display: flex; align-items: center; justify-content: flex-end;
+  flex-wrap: wrap; gap: 16px;
+}
+/* 로고마다 원래 가로세로 비율이 달라서(ASM 은 정사각에 가깝고 IITP 는
+   가로로 아주 길다) 높이만 맞추고 폭은 그대로 둔다 — 억지로 같은 폭에
+   맞추면 좁은 로고만 확대돼 흐려진다. */
+.foot-org-badges img { height: 18px; width: auto; display: block; }
+@media (max-width: 480px) {
+  .foot-org { text-align: left; }
+  .foot-org-badges { justify-content: flex-start; }
+}
 
 .toast {
   position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 90;
