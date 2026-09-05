@@ -2,7 +2,8 @@
 // 뽑기가 아니라 '내가 키워서 받았다' 가 되게 결과보다 원인을 먼저 띄운다. 닫으면 다음 축하가 뜬다(useCelebrations).
 'use client';
 
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
+import { track } from '@common/analytics';
 import { ASSET, josa } from '../constants';
 import type { Tamagotchi } from '../useTamagotchi';
 import { EDGE, GAEGU, INK, PAPER, PEN, SUB, tagBtnA, tagBtnB } from './theme';
@@ -18,6 +19,8 @@ export interface CelebrationModalProps {
 export default function CelebrationModal({ tama, pc, name, onSave }: CelebrationModalProps) {
   const { state: s, derived, ui } = tama;
   const c = derived.celebration;
+  /** "이런 동작도 원해요?" 를 눌렀는가. 판 하나 동안만 기억한다. */
+  const [wanted, setWanted] = useState(false);
   if (!c) return null;
 
   const polaroid: CSSProperties = { position: 'relative', background: '#FFFEFA', padding: pc ? '13px 13px 0' : '8px 8px 0', border: '1px solid #EDE6D4', boxShadow: '4px 6px 0 rgba(58,53,43,.1)', transform: 'rotate(-1.5deg)', display: 'inline-block' };
@@ -53,6 +56,31 @@ export default function CelebrationModal({ tama, pc, name, onSave }: Celebration
           <button onClick={() => { onSave(c.seq); ui.closeUnlock(); }} data-action="celebration-save" style={tagBtnB}>저장</button>
           <button onClick={ui.closeUnlock} data-action="celebration-close" style={tagBtnA}>보러 가기</button>
         </div>
+
+        {/*
+          수요조사 — 아침 도착 판에서만. **다음에 무엇을 구울지**를 정하는 유일한 단서다.
+          ★ 지금은 서버에 받을 칸이 없어 기록만 남긴다(analytics). 없는 약속을 화면에 쓰지 않으려고
+            "만들어 드릴게요" 가 아니라 "적어 둘게요" 라고 말한다.
+        */}
+        {c.kind === 'arrival' && (
+          <button
+            data-action="celebration-want-more"
+            data-wanted={wanted ? '1' : '0'}
+            onClick={() => {
+              if (wanted) return;
+              setWanted(true);
+              track('zzal_motion_wanted', { seq: c.seq, key: c.key });
+              ui.say('적어 둘게요. 다음 밤에 참고할게요');
+            }}
+            style={{
+              marginTop: 10, width: '100%', border: 'none', background: 'none', padding: '4px 0', cursor: wanted ? 'default' : 'pointer',
+              fontFamily: PEN, fontSize: 17, color: SUB, textDecoration: wanted ? 'none' : 'underline',
+              textUnderlineOffset: 3, textDecorationStyle: 'dotted',
+            }}
+          >
+            {wanted ? '적어 뒀어요' : '이런 동작도 보고 싶어요'}
+          </button>
+        )}
       </div>
     </div>
   );
