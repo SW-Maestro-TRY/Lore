@@ -134,6 +134,37 @@ class AdminServiceTest {
     }
 
     @Test
+    @DisplayName("★★ 지난 밤에 재생성을 다 쓴 행도 다음 밤에는 기회가 돌아온다 — 안 그러면 그 동작은 영영 못 배운다")
+    void regenChanceComesBackNextNight() {
+        ZzalMotion m = reviewing(16L, 101);
+
+        // 첫째 밤 — 재생성 두 번을 다 쓰고 실패로 끝난다
+        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "1");
+        service.upload(ADMIN, 16L, "images/zzal/tmp/n1.webp");
+        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "2");
+        service.upload(ADMIN, 16L, "images/zzal/tmp/n2.webp");
+        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "3");
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.FAILED);
+        assertThat(m.getRegenRound()).isEqualTo(2);
+
+        // 둘째 밤 — 계획이 FAILED 를 다시 큐에 올린다(정본 16장 "조각을 소모하지 않는다")
+        m.queue(NIGHT.plusDays(1));
+        assertThat(m.getRegenRound()).isZero();
+        assertThat(m.getNightOf()).isEqualTo(NIGHT.plusDays(1));
+
+        // ★ 숫자만 0 이 아니라 실제로 두 번을 다시 쓸 수 있어야 한다
+        m.toReview("images/zzal/pets/7/motions/16/motion.webp",
+                MotionSource.API, GateVerdict.REVIEW, "게이트 미적용", "g0");
+        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "다음 밤 1");
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.LOCAL_REQUESTED);
+        assertThat(m.getRegenRound()).isEqualTo(1);
+        service.upload(ADMIN, 16L, "images/zzal/tmp/n3.webp");
+        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "다음 밤 2");
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.LOCAL_REQUESTED);
+        assertThat(m.getRegenRound()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("★★ 반려해 둔 자리(LOCAL_REQUESTED)에 OK → 409 — 퇴짜 맞은 옛 그림이 공개되면 안 된다")
     void okOnRejectedRowIsRefused() {
         ZzalMotion m = reviewing(12L, 101);
