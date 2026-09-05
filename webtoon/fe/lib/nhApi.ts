@@ -187,3 +187,79 @@ export function sheetImageUrl(jobId: string, v: number | string = ""): string {
 export function jobPageUrl(jobId: string, no: number, width = 260): string {
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/page/${no}.png?w=${width}`;
 }
+
+/* ---- 작품 목록 -------------------------------------------------------------
+ *
+ * 둘러보기·마이페이지가 같은 목록을 쓴다. `mine=1` 이면 내가 만든 것만
+ * 골라 오는데, 서버는 uid 로 가르므로 그 값을 같이 보낸다. */
+
+export interface RunCard {
+  run_id: string;
+  character: string;
+  title: string;
+  genre: string;
+  /** 실제로 그려진 회차들. 하나뿐이면 카드에 회차 딱지를 안 낸다. */
+  episodes: number[];
+  next_episode?: number;
+  cover_episode?: number;
+  /** 표지로 쓸 장 번호. 없으면 아직 그림이 없는 작품이다. */
+  cover_page?: number;
+  page_count: number;
+  /** 내 작품 목록에서만 온다 — 둘러보기에 걸려 있는가. */
+  public?: boolean;
+}
+
+export function listRuns(mine = false): Promise<{ runs: RunCard[] }> {
+  const q = mine ? `?mine=1&uid=${encodeURIComponent(getUid())}` : "";
+  return call<{ runs: RunCard[] }>(`/runs${q}`);
+}
+
+/** 카드 표지. 목록은 화면을 바꿔 끼우며 그리므로 loading="lazy" 를 안 쓴다 —
+ *  그 경로에서는 브라우저가 "화면에 들어왔다" 를 다시 안 재서 표지가 영영 안
+ *  뜬다. ?w=320 으로 줄여 받아 한 장에 60KB 안쪽이다. */
+export function coverUrl(runId: string, page: number, episode = 1): string {
+  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`;
+}
+
+/** 둘러보기에 거는가 내리는가. 실패하면 화면도 되돌려야 한다 — 껐다고
+ *  보이는데 실제로는 걸려 있는 것이 제일 나쁘다. */
+export function setVisibility(runId: string, isPublic: boolean) {
+  return post(`/runs/${encodeURIComponent(runId)}/visibility`, { public: isPublic });
+}
+
+/* ---- 완성본 --------------------------------------------------------------- */
+
+/** `/api/runs/{id}/result` 가 주는 것. 원본 app.js 의 paintResult 가 읽는 것과 같다. */
+export interface RunResult {
+  run_id: string;
+  character: string;
+  title: string;
+  genre: string;
+  style_label: string;
+  logline: string;
+  episode: number;
+  /** 장마다 아래 여백(gap)과 지면 폭(width) — 파일과 같은 눈금으로 그리려고 준다. */
+  pages: { no: number; gap: number; width: number }[];
+  page_count: number;
+  planned_pages: number;
+  preview: boolean;
+}
+
+export function readResult(runId: string): Promise<RunResult> {
+  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`);
+}
+
+/** 완성본의 한 장. `raw` 는 얹은 것(말풍선) 없이 밑그림만 — 편집실이 쓴다. */
+export function pageUrl(runId: string, no: number, width = 1080, raw = false): string {
+  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`;
+}
+
+/** 한 편을 통째로 내려받는 주소. 이 길로 나가는 파일에만 LORE 표시가 붙는다. */
+export function episodeDownloadUrl(runId: string): string {
+  return `${BASE}/runs/${encodeURIComponent(runId)}/episode.png`;
+}
+
+/** 이 브라우저가 만든 작품인가. 아니면 내려받기·편집실·저장·공유를 감춘다. */
+export function isMyRun(runId: string): boolean {
+  return !!runId && myRuns().includes(runId);
+}

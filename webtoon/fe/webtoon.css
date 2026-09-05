@@ -643,14 +643,15 @@
 
 .webtoon-page .result { min-height: calc(100dvh - 59px); background: var(--ink); }
 .webtoon-page .result-head {
-  display: flex; flex-direction: column; gap: 4px;
-  padding: 16px clamp(16px, 5vw, 24px) 18px;
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 20px;
+  flex-wrap: wrap; padding: 16px clamp(16px, 5vw, 48px) 18px;
   background: var(--ink);
   border-bottom: 1px solid var(--line);
 }
+.webtoon-page .result-head h2 { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 800; }
 .webtoon-page .result-cover {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px; margin-bottom: 4px;
+  padding: 10px; margin-bottom: 10px;
   border-radius: 22px;
   background: linear-gradient(135deg, var(--sea-sand), var(--paper) 62%);
   border: 1px solid var(--line);
@@ -664,8 +665,11 @@
 .webtoon-page .result-cover-text h2 {
   margin: 0; font-size: 1.1rem; line-height: 1.3; word-break: keep-all;
 }
-.webtoon-page .result-sub { margin: 4px 0 0; font-size: .74rem; color: var(--dim); }
-.webtoon-page .result-logline { margin: 0 0 8px; color: var(--muted); font-size: .84rem; line-height: 1.55; }
+.webtoon-page .result-sub { color: var(--dim); margin: .4em 0 0; font-size: .82rem; }
+.webtoon-page .result-cover-text .result-sub { margin: 4px 0 0; font-size: .74rem; }
+.webtoon-page .result-logline {
+  margin: 0 0 12px; color: var(--muted); font-size: .84rem; line-height: 1.55;
+}
 
 .webtoon-page .result-actions {
   width: 100%;
@@ -678,17 +682,31 @@
   background: rgba(47,143,168,.07);
 }
 .webtoon-page .result-note b { color: var(--accent-d); }
-.webtoon-page .wm-note { margin: 8px 0 0; font-size: .72rem; color: var(--dim); }
+/* 내려받기 옆 한 줄 — 파일에 LORE 표시가 붙는다는 것을 미리 말한다.
+   받아 보고 나서 알면 "왜 붙었지?" 가 되고, 미리 알면 그냥 사실이 된다. */
+.webtoon-page .result-actions .wm-note {
+  flex-basis: 100%; margin: 0; font-size: .76rem; color: var(--dim);
+}
+.webtoon-page .result-head .wm-note { margin: 8px 0 0; font-size: .72rem; color: var(--dim); }
 
-.webtoon-page .reader { padding: 24px 0 40px; background: var(--paper); }
+.webtoon-page .title-row { display: flex; align-items: flex-start; gap: 8px; }
+.webtoon-page .title-row h2 { min-width: 0; }
+/* 장은 틈 없이 붙는다 — episode.png 를 만드는 방식과 같다(stitch).
+   컷 사이 호흡은 한 장 안에서 그림이 정한다. */
+.webtoon-page .reader {
+  max-width: 720px; margin: 0 auto; padding: 32px 0 90px;
+  background: var(--paper);
+}
 .webtoon-page .reader .page { display: block; width: 100%; font-size: 0; }
 .webtoon-page .reader .cut-img { width: 100%; height: auto; display: block; }
 
+/* 다 읽은 자리. "이어서 볼래?" 와 "남에게 보여줄래?" 는 읽기 전이 아니라 읽고
+   난 뒤에 생기는 마음이라, 머리에 두지 않고 여기에 둔다. */
 .webtoon-page .read-end {
   display: grid; gap: 10px; justify-items: center;
-  padding: 24px clamp(16px, 5vw, 24px) 40px;
-  background: var(--paper);
+  padding: 28px clamp(16px, 5vw, 48px) 44px;
 }
+.webtoon-page .read-end > .btn { width: min(100%, 340px); min-height: 46px; }
 .webtoon-page .read-end-links {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px;
   margin-top: 4px;
@@ -1492,8 +1510,15 @@ body.nh-zoom-on { overflow: hidden; }.webtoon-page .nh-zoom-close {
       radial-gradient(120% 90% at 50% 0%, #f4fcfe 0%, #e3f4fa 60%, #d2ecf4 100%)
       fixed;
   }
-  .webtoon-page #landing, .webtoon-page #works, .webtoon-page #mypage, .webtoon-page #create { max-width: none; width: 100%; }
-  .webtoon-page #progress, .webtoon-page #result, .webtoon-page #nextEp { max-width: 1180px; margin-inline: auto; width: 100%; }
+  /* 화면마다 자기 폭. 홈·둘러보기는 화면을 꽉 채우고(표지를 늘어놓는 자리라
+     넓을수록 한눈에 더 많이 들어온다), 읽기·만들기는 폭을 묶는다(글과 만화는
+     넓힌다고 잘 읽히지 않는다).
+     원본은 id 로 잡지만 여기서는 화면이 React 컴포넌트라 클래스로 잡는다. */
+  .webtoon-page .landing, .webtoon-page .works, .webtoon-page .mypage,
+  .webtoon-page .create { max-width: none; width: 100%; }
+  .webtoon-page .progress, .webtoon-page .result, .webtoon-page .nextep {
+    max-width: 1180px; margin-inline: auto; width: 100%;
+  }
   .webtoon-page .top { padding-bottom: 56px; }
   .webtoon-page .top-intro { display: grid; grid-template-columns: 1.05fr .95fr;
     align-items: center; gap: 40px;
@@ -1668,3 +1693,110 @@ body.nh-zoom-on { overflow: hidden; }.webtoon-page .nh-zoom-close {
 .webtoon-page .result-cover-text .eyebrow { margin: 0 0 2px; }
 .webtoon-page .mypage-who .eyebrow { margin: 0 0 2px; }
 .webtoon-page .mypage-credit-main .eyebrow { margin: 0 0 2px; }
+
+/* ---- 그림을 그냥 저장해 가지 못하게 ----------------------------------- *
+ *
+ * 가져가는 길은 「내려받기」 하나로 모은다 — 그 길로 나가는 파일에만 LORE
+ * 표시가 붙는다. 화면에 뜬 그림을 오른쪽 눌러 바로 저장하면 표시 없이 나간다.
+ *
+ * ⚠ **막는 것이 아니라 문턱이다.** 주소를 알면 그대로 받을 수 있다. 여기서
+ * 없애는 것은 실수로 새어 나가는 길이고, 오른쪽 누르기·끌어 놓기는
+ * WebtoonPage 가 같이 막는다. 화면 찍기는 그대로 둔다.
+ *
+ * `-webkit-touch-callout` 이 폰에서 길게 누르면 뜨는 「이미지 저장」 메뉴를
+ * 없앤다 — 폰에서는 이 길이 오른쪽 누르기를 대신한다.
+ *
+ * 글자는 그대로 고를 수 있어야 한다(제목·대사를 복사하는 것은 막을 일이
+ * 아니다). 그래서 user-select 는 **그림에만** 건다. */
+.webtoon-page img {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---- 편집실: 원본 editor.css 에서 아직 안 옮겨져 있던 자리 -------------
+ * (샘플만 열리던 시절에는 안 쓰이던 것들 — 저장 상태 줄, 그림 위 손잡이,
+ *  다시 그리기 창의 장면 인용, 빈 화면의 루.) */
+
+/* 저절로 저장되고 있다는 것. 평소에는 조용하고(=빈 줄), 올라가는 중이거나
+   실패했을 때만 말한다 — 잘 되고 있을 때까지 떠들면 그게 곧 소음이다. */
+.webtoon-page .ed-saved {
+  margin: 6px 2px 0; min-height: 1.1em;
+  font-size: .74rem; color: var(--dim);
+}
+.webtoon-page .ed-saved[data-state="fail"] { color: #b5453c; font-weight: 600; }
+
+.webtoon-page .chk {
+  display: flex; align-items: center; gap: 7px; min-height: 40px;
+  color: var(--muted); font-size: .84rem; cursor: pointer;
+}
+.webtoon-page .chk input { accent-color: var(--accent); width: 18px; height: 18px; }
+
+/* 고른 것을 고치는 칸은 **넣는 칸보다 위**에 온다(order). 아래에 두면 말풍선을
+   하나 얹을 때마다 서랍을 스크롤해야 크기·꼬리를 만질 수 있었다. */
+.webtoon-page .dock-props {
+  order: -1; display: grid; gap: 10px;
+  border-bottom: 1px solid var(--line); padding-bottom: 12px;
+}
+/* 속성 칸은 앱의 .field 보다 촘촘하다 — 서랍 안이라 한 화면에 여러 칸이
+   같이 보여야 한다. */
+.webtoon-page .dock-props .field, .webtoon-page .range { display: grid; gap: .3em; margin: 0; }
+.webtoon-page .dock-props .field > span, .webtoon-page .range > span {
+  font-size: .76rem; font-weight: 700; color: var(--muted); margin: 0;
+}
+.webtoon-page .dock-props textarea {
+  width: 100%; min-height: 0; background: #fff; color: var(--text);
+  font: inherit; font-size: .88rem;
+  border: 1px solid var(--line-2); border-radius: 10px; padding: .55em .7em; resize: vertical;
+}
+.webtoon-page .dock-props textarea:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(14,143,181,.22);
+}
+
+/* 꼬리 방향 — 셋 중 하나를 고르는 토글 묶음 */
+.webtoon-page .seg { display: flex; gap: 5px; }
+.webtoon-page .seg button {
+  flex: 1; min-height: 40px; padding: 0 .3em; font: inherit;
+  font-size: .76rem; font-weight: 600;
+  color: var(--muted); background: transparent; cursor: pointer;
+  border: 1px solid var(--line-2); border-radius: 999px;
+}
+.webtoon-page .seg button:hover { border-color: var(--accent); color: var(--accent-d); }
+.webtoon-page .seg button.is-on { color: #fff; background: var(--accent); border-color: var(--accent); }
+.webtoon-page .range input { width: 100%; accent-color: var(--accent); height: 28px; }
+.webtoon-page .prop-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.webtoon-page .prop-btns .btn { flex: 1; min-height: 40px; }
+
+.webtoon-page .ed-works-empty {
+  font-size: .82rem; line-height: 1.6; color: var(--muted); text-align: center;
+}
+.webtoon-page .ed-works-empty a {
+  color: var(--accent-d); font-weight: 700; border-bottom: 1px solid var(--line-2);
+}
+
+/* 루 — 비었을 때·못 열었을 때만 나온다. 잘 되고 있을 때 굳이 끼어들지 않는다. */
+.webtoon-page .lou-note {
+  display: grid; gap: 8px; place-items: center; padding: 18px 0; text-align: center;
+}
+.webtoon-page .lou-note img { width: 108px; mix-blend-mode: multiply; }
+.webtoon-page .lou-note p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.6; }
+.webtoon-page .lou-note a {
+  color: var(--accent-d); font-weight: 700; border-bottom: 1px solid var(--line-2);
+}
+
+/* 이 장을 그릴 때 준 장면 — 다시 그리기 창에서 그림 문제인지 이야기
+   문제인지를 사람이 먼저 가릴 수 있게 한다. */
+.webtoon-page .ask-scene {
+  margin: 0 0 12px; padding: 10px 12px;
+  background: rgba(14,143,181,.06); border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  font-size: .84rem; line-height: 1.55; color: var(--text);
+}
+
+/* 편집실의 제목 띠는 화면 위에 붙어 따라온다. 원본은 혼자 뜨는 페이지라 그
+   자리가 곧 맨 위였지만, 여기서는 위에 Lore 앱 헤더가 붙어 있다 — 그 아래에
+   서고, 겹칠 때는 앱 헤더가 이긴다(z-index). 높이는 Editor 가 실제 헤더를
+   재서 --lore-header-h 로 넣는다. */
+.webtoon-page .ed-top { top: var(--lore-header-h, 0px); z-index: 59; }
