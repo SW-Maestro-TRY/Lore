@@ -98,7 +98,7 @@ public class HatchService {
 
         RunResult r = runner.run(jobId, ctx,
                 registry.steps(GenKind.HATCH, version),
-                recorder.loadSucceeded(petId, GenKind.HATCH));
+                recorder.loadSucceeded(petId, GenKind.HATCH, version));
         if (!r.success()) {
             return false;
         }

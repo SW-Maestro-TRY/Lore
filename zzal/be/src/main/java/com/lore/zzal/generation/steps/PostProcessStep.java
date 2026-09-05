@@ -52,13 +52,13 @@ public class PostProcessStep implements GenerationStep {
         String grid2 = ctx.image(GRID2);
         if (grid2 == null) {
             // v1 — 격자 1장 → 8상태(idle·eat·…). 출력 이름은 설정 hatch.states.v1.
-            postProcessor.split(ctx.image(GridStep.NAME), "images/zzal/pets/%d".formatted(ctx.petId()));
+            postProcessor.split(ctx.image(GridStep.NAME), "images/zzal/pets/%d".formatted(ctx.petId()), ctx.version());
             return StepResult.free(NAME);
         }
         // v2 — 격자 2장 → 기본 행동 16종. 출력 = basic/{key}.webp (api-v2.md 2절 규약), 이름은 카탈로그 key.
         String prefix = "images/zzal/pets/%d/basic".formatted(ctx.petId());
-        postProcessor.split(ctx.image(GridStep.NAME), prefix, keysOf(MotionLayer.BASIC_1));
-        postProcessor.split(grid2, prefix, keysOf(MotionLayer.BASIC_2));
+        postProcessor.split(ctx.image(GridStep.NAME), prefix, ctx.version(), keysOf(MotionLayer.BASIC_1));
+        postProcessor.split(grid2, prefix, ctx.version(), keysOf(MotionLayer.BASIC_2));
         return StepResult.free(NAME);
     }
 

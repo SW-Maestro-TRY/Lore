@@ -71,16 +71,16 @@ class PipelineV2Test {
         v2.putImage(PostProcessStep.GRID2, "images/zzal/pets/7/grid2.png");
         step.run(v2);
         InOrder order = inOrder(post);
-        order.verify(post).split("images/zzal/pets/7/grid.png", "images/zzal/pets/7/basic",
+        order.verify(post).split("images/zzal/pets/7/grid.png", "images/zzal/pets/7/basic", "v2",
                 List.of("base", "eat", "joy", "sad", "sick", "practice", "shy", "call"));
-        order.verify(post).split("images/zzal/pets/7/grid2.png", "images/zzal/pets/7/basic",
+        order.verify(post).split("images/zzal/pets/7/grid2.png", "images/zzal/pets/7/basic", "v2",
                 List.of("tilt", "wave", "sleep", "wash", "startle", "nod", "smile_idle", "sit"));
 
         PostProcessor postV1 = mock(PostProcessor.class);
         StepContext v1 = new StepContext(7L, "여울", null, "v1");
         v1.putImage(GridStep.NAME, "images/zzal/pets/7/grid.png");
         new PostProcessStep(postV1, catalog).run(v1);
-        verify(postV1).split("images/zzal/pets/7/grid.png", "images/zzal/pets/7");
-        verify(postV1, never()).split(anyString(), anyString(), anyList());
+        verify(postV1).split("images/zzal/pets/7/grid.png", "images/zzal/pets/7", "v1");   // ★ job 의 버전을 넘긴다(폴백 안전)
+        verify(postV1, never()).split(anyString(), anyString(), anyString(), anyList());
     }
 }

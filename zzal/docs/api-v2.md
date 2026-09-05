@@ -438,6 +438,7 @@
 | 1.5 채팅 | **v2 동작** — `GET /chat` · `POST /chat/{slot}/answer`(해석 22~24). `chatSummary.openSlot`은 null | PR-4 |
 | 1.7 미니게임 | **v2 동작** — `POST /games {kind}` · `guess` · `finish` · `current`. 합산 3판·잠들 때 리셋·RUN 5승 해금 | PR-4 |
 | 1.6 앨범 | **`GET /album` 동작** — 도감 18칸(잠긴 칸 hint/progress). 엽서·장면 빈 목록, firstGift LOCKED. v0에선 항상 조회 가능(해석 25). `seen`은 PR-7 | PR-5 |
+| 배포 절차 | `ZZAL_PIPELINE_VERSION` 전환은 **`HATCHING` 0건일 때**(굽는 도중 버전이 바뀌면 복구가 다른 버전 산출물을 이어받을 수 있음). 복구 job은 원래 job의 버전을 잇고 단계 재사용도 같은 버전만 | PR-5 |
 | 부화 파이프라인 v2 | `PipelineRegistry` HATCH v2 = sheet→identity→grid→grid2→post(`basic/{key}.webp`, `--keys`). `prompt/v2/*.txt`가 없으면 **v1로 기동하고 부팅 로그에 경고**, 기록도 v1 | PR-5 |
 | 5 관리자 | **아직 v1 경로** `/api/zzal/v1/admin/motions` | PR-7 |
 | 6 개발 도구 | v2 경로 동작(`advance-clock`·`set-clock`). `night-sweep`·`force-open`은 PR-6·7 | PR-2 |

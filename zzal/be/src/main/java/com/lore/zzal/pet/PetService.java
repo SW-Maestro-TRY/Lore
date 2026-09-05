@@ -14,6 +14,7 @@ import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionSeeder;
 import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.motion.ZzalMotionRepository;
 import org.springframework.context.ApplicationEventPublisher;
@@ -52,6 +53,7 @@ public class PetService {
     private final ApplicationEventPublisher events;
     private final MotionCatalog catalog;
     private final ZzalMotionRepository motionRepository;
+    private final MotionSeeder motionSeeder;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -62,9 +64,11 @@ public class PetService {
                       HatchService hatchService,
                       ApplicationEventPublisher events,
                       MotionCatalog catalog,
-                      ZzalMotionRepository motionRepository) {
+                      ZzalMotionRepository motionRepository,
+                      MotionSeeder motionSeeder) {
         this.catalog = catalog;
         this.motionRepository = motionRepository;
+        this.motionSeeder = motionSeeder;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -142,8 +146,27 @@ public class PetService {
      * 그 펫의 동작 행(seq → 행). v2 부화 펫은 18행, v1 펫은 옛 seq(0부터) 행이라 카탈로그 seq 와 안 겹쳐 비어 보인다.
      * 심화 행동 상태(`motions[].advanced`)의 재료. 읽기만 한다.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public Map<Integer, ZzalMotion> motionRows(Long petId) {
+        Map<Integer, ZzalMotion> rows = rowsOf(petId);
+        // ★ 자가 치유(#218 리뷰) — markPetAlive 는 커밋됐는데 18행 저장이 실패하면 "ALIVE 인데 행 0개" 로 영구 고착된다
+        //   (CHECK 제약 사고가 그 모양). ALIVE 펫의 행이 18 미만이면 멱등 seed 로 채운다(PR-5 전 부화한 펫도 여기서 따라온다).
+        if (rows.size() < catalog.all().size()) {
+            petRepository.findById(petId)
+                    .filter(p -> p.isAlive() && p.getHatchedAt() != null)
+                    .ifPresent(p -> {
+                        int made = motionSeeder.seed(petId, p.getHatchedAt());
+                        if (made > 0) {
+                            org.slf4j.LoggerFactory.getLogger(PetService.class)
+                                    .warn("동작 행 자가 치유 — petId={} {}행 채움(부화 완료 때 빠졌던 것)", petId, made);
+                        }
+                    });
+            return rowsOf(petId);
+        }
+        return rows;
+    }
+
+    private Map<Integer, ZzalMotion> rowsOf(Long petId) {
         return motionRepository.findByPetIdOrderBySeqAsc(petId).stream()
                 .filter(m -> m.getLayer() != null)
                 .collect(Collectors.toMap(ZzalMotion::getSeq, m -> m, (a, b) -> a));
