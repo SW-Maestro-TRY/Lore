@@ -936,17 +936,25 @@
   </div>
   <!-- 만든 곳 표시 — "이게 뭐지, 믿어도 되나" 피드백에 대응(2026-09-05).
        실제 사업자등록번호는 없다(AI SW 마에스트로 과정의 프로젝트라 별도
-       법인이 아니다) — 있지도 않은 번호를 지어 넣지 않는다. 로고 원본은
-       design-reference/{somalogo.jpeg, logo.png, itplogo.png} 로 받아
-       배경을 다듬어(magick -trim) web/badges/ 에 옮겨 뒀다 — 색은 원본
-       기관 색 그대로 두고 흑백 처리하지 않는다(공식 로고는 임의로 톤을
-       바꾸지 않는 것이 원칙이다). -->
+       법인이 아니다) — 있지도 않은 번호를 지어 넣지 않는다. 로고는 배경을
+       투명하게 뺀 원본(design-reference/*-removebg-preview.png)에서
+       아이콘 마크만 잘라(magick -trim, 각자 icon.png) web/badges/ 에 옮겨
+       뒀다 — 로고 이미지 안의 작은 글자 대신 화면 글꼴로 직접 적어서
+       옆 텍스트와 굵기·크기가 맞게 했다(2026-09-05, "이미지 크기가 아니라
+       글자 크기를 맞춰서" 피드백). 아이콘 색은 원본 기관 색 그대로 둔다. -->
   <div class="foot-org">
-    <div class="foot-org-badges">
-      <img src="/static/badges/asm.png" alt="AI·SW 마에스트로">
-      <img src="/static/badges/msit.png" alt="과학기술정보통신부">
-      <img src="/static/badges/iitp.png" alt="정보통신기획평가원(IITP)">
-    </div>
+    <p class="foot-org-line foot-org-brand">
+      <img src="/static/badges/asm-icon.png" alt="" class="foot-org-icon">
+      <span>AI SW MAESTRO</span>
+    </p>
+    <p class="foot-org-line">
+      <img src="/static/badges/msit-icon.png" alt="" class="foot-org-icon">
+      <span>과학기술정보통신부</span>
+    </p>
+    <p class="foot-org-line">
+      <img src="/static/badges/iitp-icon.png" alt="" class="foot-org-icon">
+      <span>정보통신기획평가원(IITP)</span>
+    </p>
   </div>
 </footer>
 

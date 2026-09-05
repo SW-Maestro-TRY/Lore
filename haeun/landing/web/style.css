@@ -1329,17 +1329,22 @@ body[data-view="result"] .topbar { position: static; }
 /* 만든 곳 표시 — 본문보다 한 단 조용하게(오른쪽, 더 옅은 글자) 둔다.
    신뢰를 주려고 넣는 것이지 브랜드 대신 앞세우려는 것이 아니다. */
 .foot-org { text-align: right; }
-.foot-org-badges {
+/* 아이콘만 잘라 쓰고(마크 안의 작은 글자 대신) 화면 글꼴로 기관명을 직접
+   적는다 — 아이콘 높이를 px 로 고정하면 글줄이 바뀔 때마다(반응형 폰트)
+   로고만 어긋난다. em 으로 둬서 옆 글자 크기를 그대로 따라가게 한다. */
+.foot-org-line {
   display: flex; align-items: center; justify-content: flex-end;
-  flex-wrap: wrap; gap: 16px;
+  gap: 6px; margin: 0 0 4px;
 }
-/* 로고마다 원래 가로세로 비율이 달라서(ASM 은 정사각에 가깝고 IITP 는
-   가로로 아주 길다) 높이만 맞추고 폭은 그대로 둔다 — 억지로 같은 폭에
-   맞추면 좁은 로고만 확대돼 흐려진다. */
-.foot-org-badges img { height: 18px; width: auto; display: block; }
+.foot-org-line:last-child { margin-bottom: 0; }
+.foot-org-icon { height: 1.3em; width: auto; display: block; flex: none; }
+.foot-org-brand span {
+  font-weight: 800; font-size: .92rem; letter-spacing: .02em; color: var(--muted);
+}
+.foot-org-line:not(.foot-org-brand) span { font-size: .78rem; opacity: .85; }
 @media (max-width: 480px) {
   .foot-org { text-align: left; }
-  .foot-org-badges { justify-content: flex-start; }
+  .foot-org-line { justify-content: flex-start; }
 }
 
 .toast {
