@@ -340,38 +340,6 @@
 .veil-what { color: var(--muted); }
 
 /* 피드백 — 어디를 고쳐야 하는지가 칸으로 갈려 있어야 나중에 분류를 다시 안 한다 */
-.fb { padding: 12px 2px 8px; display: none; }
-.fb.is-open { display: block; }
-/* 한 컬럼이라 세 칸을 나란히 못 둔다 — 위아래로 쌓는다. 이름표 색이 갈래를
-   대신한다. */
-.fb-grid { display: grid; gap: 10px; }
-.fb-cell { display: grid; gap: .4em; }
-.fb-cell > span { font-size: .82rem; font-weight: 700; color: var(--accent-d); }
-.fb-cell small { display: block; color: var(--dim); font-weight: 500; font-size: .72rem; margin-top: .2em; }
-.fb-cell textarea {
-  width: 100%; min-height: 62px; resize: vertical;
-  background: #fff; color: var(--text); font: inherit; font-size: .88rem;
-  border: 1px solid var(--line-2); border-radius: 12px; padding: .65em .8em;
-}
-.fb-cell textarea:focus {
-  outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(14,143,181,.22);
-}
-.fb-story > span  { color: var(--sea-deep); }
-.fb-direct > span { color: var(--gold); }
-.fb-art > span    { color: var(--accent); }
-/* 전체는 갈래가 아니라 "나머지 전부" 라서 세 칸 밑에 둔다 — 같은 층위의
-   갈래로 읽히면 안 된다. */
-.fb-all { margin-top: 10px; }
-.fb-all > span { color: var(--muted); }
-.fb-cuts {
-  margin-top: 12px; display: grid; gap: 6px;
-  border-top: 1px solid var(--line); padding-top: 12px;
-}
-.fb-cut { font-size: .8rem; color: var(--muted); }
-.fb-cut b { color: var(--gold); font-weight: 700; }
-.fb-cut i { color: var(--dim); font-style: normal; font-family: var(--mono); font-size: .72rem; }
-.fb-send { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 
 /* ------------------------------------------------------------------ 도구 서랍
 
@@ -641,6 +609,13 @@ body.dock-open-on .dock-open { background: var(--accent-d); box-shadow: none; }
 .ask-box .field { margin-bottom: 12px; }
 .ask-box .check-line { min-height: 44px; }
 .ask-box .check-line input { width: 20px; height: 20px; accent-color: var(--accent); }
+.ask-scene {
+  margin: 0 0 12px; padding: 10px 12px;
+  background: rgba(14,143,181,.06); border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  font-size: .84rem; line-height: 1.55; color: var(--text);
+}
+
 .ask-warn { margin: .2em 0 1.2em; font-size: .78rem; color: var(--gold); }
 .ask-actions { display: flex; gap: 8px; }
 .ask-actions .btn { flex: 1; min-height: 46px; }

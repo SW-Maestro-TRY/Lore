@@ -44,7 +44,7 @@ function storeKey() { return `lore_editor_v2:${RUN_ID || "__mock__"}:ep${EPISODE
 function epq(sep = "?") { return `${sep}ep=${EPISODE}`; }
 
 /* 크레딧은 아직 안 붙었습니다 (#16). 목업에서만 흉내로 셉니다. */
-const COST = { regen: 40, regenFeedback: 60, nobubble: 0 };
+const COST = { regen: 40, nobubble: 0 };
 const START_CREDIT = 1240;
 
 const BUBBLES = [
@@ -270,7 +270,7 @@ function render() {
   $("#scenes").innerHTML = data.scenes
     .map((s, i) => sceneCard(s) + gapBar(s, i === data.scenes.length - 1))
     .join("");
-  data.scenes.forEach(s => { paintItems(s.no); paintFeedback(s.no); });
+  data.scenes.forEach(s => paintItems(s.no));
   wireScenes();
   wireGaps();
   // 지난 판은 서버에만 있다 — 목업에는 없다.
@@ -406,55 +406,10 @@ function sceneCard(s) {
       <button type="button" class="btn btn-quiet btn-sm" data-act="regen">
         다시 그리기${RUN_ID ? "" : ` <span class="cost">−${COST.regen} C</span>`}
       </button>
-      <span class="spacer"></span>
-      <button type="button" class="btn btn-quiet btn-sm" data-act="fb">피드백</button>
     </div>
 
     <div class="page-versions" data-versions></div>
 
-    <div class="fb" data-fb>
-      <div class="fb-grid">
-        <label class="fb-cell fb-story">
-          <span>📖 스토리<small>대사가 어색하다 / 이 장면 필요 없다 / 훅이 약하다</small></span>
-          <textarea maxlength="160" data-fbk="story" placeholder="이야기 자체에 대한 말"></textarea>
-        </label>
-        <label class="fb-cell fb-direct">
-          <span>🎬 연출<small>컷을 더 붙여라 / 여기서 끊어라 / 클로즈업으로</small></span>
-          <textarea maxlength="160" data-fbk="direct" placeholder="컷 나누기·카메라·리듬에 대한 말"></textarea>
-        </label>
-        <label class="fb-cell fb-art">
-          <span>🎨 그림<small>옷이 다르다 / 얼굴이 작다 / 서술과 다르게 그려졌다</small></span>
-          <textarea maxlength="160" data-fbk="art" placeholder="그림에 대한 말"></textarea>
-        </label>
-      </div>
-
-      <!-- 세 칸에 나눠 담기 어려운 말을 받는 자리. 셋으로만 물으면 "그냥 이
-           장이 통째로 별로다" 같은 말을 적을 곳이 없어서 아무 데나 끼워 넣게
-           되고, 그러면 프롬프트에 엉뚱한 이름표(스토리:/연출:)가 붙는다. -->
-      <label class="fb-cell fb-all">
-        <span>💬 전체<small>어디에 넣을지 애매한 말 · 이 장 전체에 대한 말</small></span>
-        <textarea maxlength="320" data-fbk="all"
-          placeholder="예: 이 장은 통째로 다시 갔으면 좋겠어요 / 앞 장이랑 분위기가 안 이어져요"></textarea>
-      </label>
-
-      <div class="fb-cuts">
-        ${s.cuts.map(c => `
-          <div class="fb-cut">
-            <i>CUT ${String(c.no).padStart(2, "0")}${c.shot ? " · " + esc(c.shot) : ""}</i>
-            ${c.narration ? ` ${esc(c.narration)}` : ""}
-            ${c.dialogue ? ` <b>${esc(c.speaker || "?")}</b> ${esc(c.dialogue)}` : ""}
-            ${c.thought ? ` (${esc(c.thought)})` : ""}
-            ${c.sfx ? ` <b>${esc(c.sfx)}</b>` : ""}
-          </div>`).join("")}
-      </div>
-
-      <div class="fb-send">
-        <button type="button" class="btn btn-quiet btn-sm" data-act="fbclear">비우기</button>
-        <button type="button" class="btn btn-primary btn-sm" data-act="fbregen">
-          피드백 반영해 다시 그리기${RUN_ID ? "" : ` <span class="cost">−${COST.regenFeedback} C</span>`}
-        </button>
-      </div>
-    </div>
   </section>`;
 }
 
@@ -464,25 +419,10 @@ function wireScenes() {
 
     el.addEventListener("pointerdown", () => setActive(no), true);
 
-    $("[data-act='fb']", el).addEventListener("click", () =>
-      $("[data-fb]", el).classList.toggle("is-open"));
-
     // 두 단추 다 확인 창을 거친다 — 굽는 데 1~2분과 실제 비용이 들어서, 잘못
     // 누른 것을 되돌릴 길이 없다. 다른 점은 창을 열 때 무엇이 채워져 있느냐뿐이다.
     $("[data-act='regen']", el).addEventListener("click", e =>
-      askRegen(no, e.currentTarget, COST.regen, []));
-
-    $("[data-act='fbregen']", el).addEventListener("click", e =>
-      askRegen(no, e.currentTarget, COST.regenFeedback, readNotes(el)));
-
-    $("[data-act='fbclear']", el).addEventListener("click", () => {
-      FB_KEYS.forEach(k => { $(`[data-fbk='${k}']`, el).value = ""; });
-      sc(no).fb = {}; save();
-    });
-
-    $$("[data-fbk]", el).forEach(t => t.addEventListener("input", () => {
-      sc(no).fb[t.dataset.fbk] = t.value; save();
-    }));
+      askRegen(no, e.currentTarget, COST.regen));
 
   });
   setActive(activeScene);
@@ -500,27 +440,11 @@ function setActive(no) {
  * 굽기 전에 지금 그림을 판본으로 뜨고, 실패하면 서버가 되돌려 놓는다.
  * 목업일 때만 기다리는 모습만 흉내낸다. */
 
-/* 장 밑 피드백 칸에 적힌 것. 사람에게는 갈래로 나눠 물었지만 프롬프트에는 한
-   줄로 간다 — run.py 의 {extra} 자리는 문장 하나를 받는다. "전체" 는 갈래가
-   아니라서 이름표 없이 그대로 싣는다. */
-const FB_KEYS = ["story", "direct", "art", "all"];
-const FB_LABEL = { story: "스토리", direct: "연출", art: "그림", all: "" };
-
-function readNotes(el) {
-  return FB_KEYS
-    .map(k => [k, ($(`[data-fbk='${k}']`, el)?.value || "").trim()])
-    .filter(([, v]) => v);
-}
-
-function notesToText(notes) {
-  return notes.map(([k, v]) => (FB_LABEL[k] ? `${FB_LABEL[k]}: ${v}` : v)).join(" / ");
-}
-
 /* ---- 다시 그리기 확인 창 -----------------------------------------------
  *
  * 예전에는 단추를 누른 순간 바로 구웠다. 한 장에 1~2분과 실제 생성 비용이 드는
  * 일이라 잘못 누른 것을 되돌릴 길이 없었고, **왜** 다시 그리는지를 적을 자리도
- * 그 흐름에는 없었다(장 밑 피드백 칸을 미리 펴 두는 사람은 드물다). 여기서 한
+ * 그 흐름에는 없었다. 여기서 한
  * 번 멈춰서 항목·말·글자 여부를 받고, 취소할 길을 준다. 다 비워 둔 채 눌러도
  * 된다 — 그러면 같은 조건으로 한 번 더 그린다. */
 
@@ -549,7 +473,20 @@ function paintAskTags() {
   }));
 }
 
-function askRegen(no, btn, cost, notes) {
+/* 이 장이 **어떤 장면을 받아서** 그려진 것인가.
+
+   다시 그리기 창에서 이걸 같이 보여준다. 마음에 안 드는 장을 앞에 두고
+   사람이 먼저 가려야 하는 것은 "이야기가 이런데 그림이 못 따라간 것"인지
+   "이야기 자체가 이런 것"인지다 — 그걸 모르면 그림에다 대고 이야기를
+   고쳐 달라고 적게 된다. 서버는 이 글을 이미 실어 보내고 있었는데
+   (editor_data 의 cuts[0].description) 화면이 안 쓰고 있었다. */
+function sceneSource(no) {
+  const s = (data?.scenes || []).find(x => x.no === no);
+  const c = (s?.cuts || [])[0] || {};
+  return String(c.description || "").trim();
+}
+
+function askRegen(no, btn, cost) {
   askCtx = { no, btn, cost };
   const st = sc(no);
   $("#regenAskTitle").textContent = `${no}번째 장 다시 그리기`;
@@ -562,7 +499,15 @@ function askRegen(no, btn, cost, notes) {
   paintAskTags();
   // 장 밑에 이미 적어 둔 것이 있으면 그대로 실어 준다. 여기서 고쳐도 되고,
   // 다 지우고 눌러도 된다.
-  $("#regenAskText").value = notesToText(notes);
+  // 무엇을 그리라고 준 장면이었는지. 없으면(표지·옛 작품) 자리를 통째로
+  // 비운다 — 빈 상자만 남으면 뭘 못 읽은 것처럼 보인다.
+  const src = sceneSource(no);
+  const box = $("#regenAskScene");
+  if (box) {
+    box.hidden = !src;
+    box.textContent = src;
+  }
+  $("#regenAskText").value = "";
   $("#regenAskTextless").checked = !!st.noBubble;
   $("#regenAsk").hidden = false;
   $("#regenAskText").focus();
@@ -749,14 +694,6 @@ function paintItems(no) {
   layer.classList.toggle("is-hidden", !$("#showOverlay").checked);
   $$(".item", layer).forEach(el => wireItem(no, el));
   paintProps();
-}
-
-function paintFeedback(no) {
-  const el = $(`#scene-${no}`), fb = sc(no).fb || {};
-  FB_KEYS.forEach(k => {
-    const t = $(`[data-fbk='${k}']`, el);
-    if (t && fb[k]) { t.value = fb[k]; $("[data-fb]", el).classList.add("is-open"); }
-  });
 }
 
 function addItem(type, variant, text) {
@@ -1205,7 +1142,7 @@ function toast(msg) {
 
 /* ---- 작품 고르개 — 어떤 웹툰을 편집할지 -------------------------------
  *
- * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것·피드백이
+ * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것이
  * 작품마다 다른 칸에 저장돼 있어서(storeKey), 화면만 갈아 끼우면 앞 작품의
  * state 가 남는다. 새로 열면 load() 가 그 작품 칸을 처음부터 읽는다. */
 /* 한 작품 = 카드 한 장. 표지 그림은 그 작품에 **실제로 그려진** 장에서 가져온다
@@ -1246,7 +1183,7 @@ function workCard(r, current) {
 
 /* ---- 작품 목록 — 어떤 웹툰을 편집할지 ---------------------------------
  *
- * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것·피드백이
+ * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것이
  * 작품마다 다른 칸에 저장돼 있어서(storeKey), 화면만 갈아 끼우면 앞 작품의
  * state 가 남는다. 새로 열면 load() 가 그 작품 칸을 처음부터 읽는다. */
 async function paintWorks(current) {
