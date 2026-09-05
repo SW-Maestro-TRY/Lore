@@ -69,7 +69,11 @@ export function parseClockParam(raw: string | null): number | null {
 
 // ── 상태 ─────────────────────────────────────────────────────────────────
 
-export type MockPreset = 'new' | 'baby' | 'child';
+// `failed` = 아이가 없는 상태로 시작하되, **올린 그림이 끝내 부화하지 않는다**(FAILED).
+// 화면이 ALIVE 블록(clock·gauges·motions…)이 전부 null 인 응답으로도 안 죽는지 보는 자리다
+// (사라진 리뷰 하네스 C0~C2 자리 — 계약 2절). 목록은 FAILED 를 걸러내므로(useZzalSession),
+// 실패한 알은 "만든 뒤 폴링으로 실패가 도착"하는 실제 경로로만 화면에 뜬다 — 그래서 씨앗이 아니라 스위치다.
+export type MockPreset = 'new' | 'baby' | 'child' | 'failed';
 
 interface MotionRow {
   seq: number;
@@ -173,13 +177,16 @@ export class MockPetServer implements PetSource {
   private nextGameId = 1;
   private readonly latency: number;
   private seed: number;
+  /** `?mock=failed` — 부화가 끝나는 순간 ALIVE 가 아니라 FAILED 로 간다. */
+  private hatchFails = false;
 
   constructor(opts: MockOptions = {}) {
     this.clock = new MockClock(opts.clockStartMs ?? null);
     this.latency = opts.latencyMs ?? 30;
     this.seed = opts.seed ?? 7;
     const preset = opts.preset ?? 'baby';
-    if (preset !== 'new') this.seedPreset(preset);
+    this.hatchFails = preset === 'failed';
+    if (preset !== 'new' && preset !== 'failed') this.seedPreset(preset);
   }
 
   // ── 디버그 손잡이(window.__zzalMock) ──────────────────────────────────
@@ -201,7 +208,8 @@ export class MockPetServer implements PetSource {
 
   reset(preset: MockPreset = 'baby'): void {
     this.row = null;
-    if (preset !== 'new') this.seedPreset(preset);
+    this.hatchFails = preset === 'failed';
+    if (preset !== 'new' && preset !== 'failed') this.seedPreset(preset);
   }
 
   // ── PetSource ─────────────────────────────────────────────────────────
@@ -499,7 +507,8 @@ export class MockPetServer implements PetSource {
   /** settledAt ~ now 를 경계마다 잘라 걷는다. 돌려주는 값은 now(편의). */
   private settle(r: Row, now: number): number {
     if (r.phase === 'HATCHING' && r.hatchedAt === null && now - r.hatchStartedAt >= HATCH_MS) {
-      this.hatch(r, r.hatchStartedAt + HATCH_MS);
+      if (this.hatchFails) r.phase = 'FAILED';
+      else this.hatch(r, r.hatchStartedAt + HATCH_MS);
     }
     if (r.phase !== 'ALIVE') return now;
 
@@ -891,7 +900,7 @@ export class MockPetServer implements PetSource {
     r.lastVisitDay = dayIndex(t);
   }
 
-  private seedPreset(preset: Exclude<MockPreset, 'new'>): void {
+  private seedPreset(preset: 'baby' | 'child'): void {
     const now = this.now();
     if (preset === 'baby') {
       this.row = this.newRow('여울', '조용하지만 고집이 세요', now - HATCH_MS, now);

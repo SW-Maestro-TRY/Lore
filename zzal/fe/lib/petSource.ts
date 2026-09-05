@@ -6,6 +6,7 @@
 //   ?mock=1 | baby   부화 직후(아기 0분)
 //   ?mock=child      두 시간 전에 태어나 튜토리얼을 지난 아이
 //   ?mock=new        아이 없음(올리기부터)
+//   ?mock=failed     부화 실패(ALIVE 블록이 전부 null 인 응답 — 화면이 안 죽는지 보는 자리)
 //   &clock=2026-09-05T10:30   시작 시각을 KST 로 못 박음(그 뒤로는 실시간)
 //
 // ★ 목은 페이지당 하나(모듈 싱글턴). 훅이 여러 번 만들면 각자 다른 시계를 갖게 된다.
@@ -69,7 +70,7 @@ export async function resolvePetSource(search: string): Promise<PetSource> {
   if (!mock) return httpPetSource;
   if (mockSingleton) return mockSingleton;
   const { MockPetServer, installMockHandle, parseClockParam } = await import('./mock/mockPetServer');
-  const preset = mock === 'child' ? 'child' : mock === 'new' ? 'new' : 'baby';
+  const preset = mock === 'child' ? 'child' : mock === 'new' ? 'new' : mock === 'failed' ? 'failed' : 'baby';
   const server = new MockPetServer({ preset, clockStartMs: parseClockParam(params.get('clock')) });
   installMockHandle(server);
   mockSingleton = server;
