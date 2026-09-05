@@ -524,6 +524,12 @@ export class MockPetServer implements PetSource {
       r.settledAt = end;
       if (!baby && end === boundary) this.doSleep(r, end, 'NIGHT', true);
     }
+    // 경계 정각(now === babyUntil 그 밀리초)엔 위 루프가 "아기 끝" 만 처리하고 끝난다 — 끝난 시각이 밤 구간(23~07시)이면
+    // 그 자리에서 밤잠에 든다(상훈님 9/5 결정: 튜토리얼은 시계와 논외, 끝나면 즉시 밤잠). 1ms 뒤엔 루프가 알아서 하지만
+    // Playwright 처럼 정각으로 시간을 밀면 이 한 호출이 어긋났다.
+    if (!r.sleeping && r.settledAt >= r.babyUntil && this.autoSleepAt(r.settledAt) === r.settledAt) {
+      this.doSleep(r, r.settledAt, 'NIGHT', true);
+    }
     return now;
   }
 
