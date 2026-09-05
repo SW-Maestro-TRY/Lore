@@ -6,7 +6,10 @@
 // 규칙은 전부 useTamagotchi 에 있다. 이 파일은 그리기만 한다.
 // 시안의 인라인 스타일을 그대로 옮겼다 — 픽셀이 어긋나면 비교가 무의미해지므로 임의로 정리하지 않았다.
 //
-// 2026-09-05 v2(PR2): 훈련·친구·시연 갈래를 걷어내고 v2 훅에 맞췄다. 부품 분리(parts/)는 PR3.
+// 2026-09-05 v2(PR2): 훈련·친구·시연 갈래를 걷어내고 v2 훅에 맞췄다.
+// 2026-09-05 PR3: 다마고치 섹션을 부품(parts/RoomStage·CallBanner·GaugePanel·ActionBar·CelebrationModal)으로 갈랐다.
+//   ★ 이후 로직 세션은 이 파일을 편집하지 않는다 — 새 UI 는 parts 에 새 파일 + 여기 한 줄 삽입을 요청한다.
+//     상훈님은 이 파일·parts 의 style 을 자유롭게 다듬으신다(플랜 T2 결정 3).
 'use client';
 
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
@@ -14,21 +17,18 @@ import { track } from '@common/analytics';
 import AuthModal from '@common/auth/AuthModal';
 import FeedbackSheet from '../FeedbackSheet';
 import GameSection from '../GameSection';
-import { PERSONALITY_GROUPS } from '../chat';
-import { ASSET, BACKGROUNDS, YEOUL, YEOUL_LOOP, bgUrl, josa } from '../constants';
+import { BACKGROUNDS, YEOUL, YEOUL_LOOP } from '../constants';
 import { MAX_GAUGE } from '../rules';
 import { useDex } from '../useDex';
-import { useTamagotchi, type ActionKey } from '../useTamagotchi';
+import { useTamagotchi } from '../useTamagotchi';
 import { useZzalSession } from '../useZzalSession';
+import ActionBar from '../parts/ActionBar';
+import CallBanner from '../parts/CallBanner';
+import CelebrationModal from '../parts/CelebrationModal';
+import GaugePanel from '../parts/GaugePanel';
+import RoomStage from '../parts/RoomStage';
 import '../tamagotchi.css';
 
-/** 남은 시간 한마디. 밤잠은 몇 시간이라 초로만 적으면 "10800초" 가 된다. */
-function leftLabel(sec: number): string {
-  const s = Math.max(0, Math.ceil(sec));
-  if (s < 60) return `${s}초`;
-  if (s < 3600) return `${Math.ceil(s / 60)}분`;
-  return `${Math.floor(s / 3600)}시간 ${Math.round((s % 3600) / 60)}분`;
-}
 
 const PEN = "'Nanum Pen Script',cursive";
 const GAEGU = "'Gaegu',cursive";
@@ -50,17 +50,14 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
   //   만들어 주고, useTamagotchi 가 그 손잡이로 돈다. 스킨은 그리기만 한다.
   //   디자인 확인은 주소창 `?mock=1`(목 서버)로 한다 — 시연 갈래는 없다.
   const session = useZzalSession();
-  const { state: s, can, derived, actions, sample, form, ui, chat } =
-    useTamagotchi({ server: session.server });
+  const tama = useTamagotchi({ server: session.server });
+  const { state: s, derived, sample, form, ui } = tama;
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => { track('zzal_landing_viewed'); }, []);
 
   // 무대 배경 — 서버가 준 값(기본 'room'). 바꾸기는 2층 4종 뒤(features.background).
   const bg = BACKGROUNDS.some((b) => b.key === s.background) ? s.background : BACKGROUNDS[0].key;
-
-  /** 무대를 탭하면 쓰다듬는다(시안에서 가져온 것). 조건이 안 되면 아무 일도 없다. */
-  const petIfPossible = () => { if (can('pet')) actions.pet(); };
 
   const go = useCallback((key: string) => {
     const el = scroller.current?.querySelector<HTMLElement>(`[data-sec="${key}"]`);
@@ -263,21 +260,6 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
     toast: { pointerEvents: 'none', position: 'absolute', left: '50%', bottom: 96, transform: 'translateX(-50%) rotate(-1.5deg)', zIndex: 60, padding: '10px 18px 11px', background: '#FBEFA8', color: '#4A4438', fontFamily: PEN, fontSize: 20, whiteSpace: 'nowrap', boxShadow: '2px 3px 0 rgba(58,53,43,.18)', animation: 'tamaRiseIn .24s ease-out both' } as CSSProperties,
   };
 
-  // 게이지 한 칸. 채운 칸은 색이 아니라 도장 모양으로도 구분된다(색만으로 가르지 않는다).
-  const cell = (on: boolean, c: string, mark: string) => ({
-    mark: on ? mark : '',
-    style: {
-      height: 26, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      borderRadius: 3, border: on ? '1px solid ' + c : '1px dashed #D2C6A8',
-      background: on ? c : 'rgba(255,255,255,.4)', color: '#FFF8EC', fontSize: 13,
-      fontFamily: GAEGU, fontWeight: 700, lineHeight: 1,
-      transform: on ? `rotate(${(mark === '♥' ? -1 : 1) * 2}deg)` : 'none',
-      transition: 'background .3s ease, border-color .3s ease',
-    } as CSSProperties,
-  });
-  const cells = (v: number, c: string, mark: string) =>
-    Array.from({ length: MAX_GAUGE }, (_, i) => cell(i < v, c, mark));
-
   // 게이지를 보기 전에 캐릭터가 먼저 말한다. 게이지는 확인용이다.
   const status = !s.hasChar ? '기다리는 중'
     : derived.failed ? '태어나지 못했어요'
@@ -286,68 +268,30 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
     : s.sick ? '아파요' : s.fullness <= 0 ? '배고파해요' : s.happiness <= 0 ? '시무룩해요'
     : s.trash >= 3 ? '바닥이 어질러졌어요' : s.canSleep ? '재울 수 있어요' : '평상시';
 
-  // 캐릭터는 CSS 로 흔들지 않는다 — 그림 자체가 이미 2프레임으로 움직인다(v1 주석 그대로).
-  // 배부름 0 이면 0.7배(정본 §4)만 idleBehavior 가 scale 로 준다.
-
-  // 쓰레기는 캐릭터 **앞**에 겹치는 한 장이다(자캐 자체는 더러워지지 않는다).
-  // 단계가 오를수록 더 많이 가리고, 5단계면 거의 안 보인다.
-  const trashImg = s.trash > 0 ? ASSET.trash[Math.min(s.trash, ASSET.trash.length) - 1].src : null;
-
+  // 여울 체험(섹션 1)에서만 쓰는 작은 도장·떠오르는 글자. 내 아이 쪽은 parts/GaugePanel·RoomStage 가 그린다.
+  const cells = (v: number, c: string, mark: string) =>
+    Array.from({ length: MAX_GAUGE }, (_, i) => ({
+      mark: i < v ? mark : '',
+      style: {
+        height: 26, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        borderRadius: 3, border: i < v ? '1px solid ' + c : '1px dashed #D2C6A8',
+        background: i < v ? c : 'rgba(255,255,255,.4)', color: '#FFF8EC', fontSize: 13,
+        fontFamily: GAEGU, fontWeight: 700, lineHeight: 1,
+        transform: i < v ? `rotate(${(mark === '♥' ? -1 : 1) * 2}deg)` : 'none',
+      } as CSSProperties,
+    }));
+  const gaugeRow = (label: string, list: ReturnType<typeof cells>) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={L.gLabel}>{label}</span>
+      <div style={{ display: 'flex', gap: 5, flex: 1 }}>
+        {list.map((c, i) => <div key={i} style={c.style}>{c.mark}</div>)}
+      </div>
+    </div>
+  );
   const fxStyle = (o: { x: number }): CSSProperties => ({
     position: 'absolute', left: o.x + '%', bottom: '30%', fontFamily: PEN, fontSize: 24, color: RED,
     animation: 'tamaFloatUp 1.5s ease-out both', pointerEvents: 'none',
   });
-
-  const ROT = [-1.5, 1, -.7, 1.6, -1.2, .8, -1];
-  // 스크린리더가 "밥 3개" 대신 "밥 주기" 로 읽게 한다.
-  // 못 누를 때만 aria-disabled 를 붙인다 — aria-disabled="false" 를 비활성으로
-  // 읽어 버리는 도구가 있어서(자동 검증이 실제로 그렇게 읽었다) 눌릴 때는 속성을 뺀다.
-  const ARIA: Record<ActionKey, string> = {
-    feed: '밥 주기', snack: '간식 주기', pet: '쓰다듬기', clean: '청소하기', bath: '목욕시키기', medicine: '약 주기',
-    sleep: s.sleeping ? '깨우기' : '불 끄고 재우기',
-  };
-  const btn = (key: ActionKey, label: string, sub: string, i: number, hint?: string) => {
-    const on = can(key);
-    // 부름이 지금 기다리는 버튼은 눈에 띄게 둔다(잠그지 않는다) — 헤매지 않는 게 첫날의 전부다.
-    const want = derived.call?.want === key;
-    return {
-      key, label, sub, hint, act: actions[key],
-      style: {
-        minHeight: pc ? 70 : 64, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
-        border: '1px solid ' + (want ? RED : on ? EDGE : '#E8E1CD'), borderRadius: 3,
-        background: want ? '#FFF4E2' : on ? PAPER : 'rgba(240,235,220,.7)',
-        color: on ? INK : '#B0A68C',
-        opacity: on ? 1 : .62, cursor: on ? 'pointer' : 'default', padding: '6px 2px',
-        boxShadow: want ? '0 0 0 2px rgba(180,97,76,.18), 2px 3px 0 rgba(58,53,43,.11)'
-          : on ? '2px 3px 0 rgba(58,53,43,.11)' : 'none',
-        transform: on ? `rotate(${ROT[i]}deg)` : 'none',
-        transition: 'all .22s ease',
-      } as CSSProperties,
-      pinStyle: { width: 9, height: 9, borderRadius: 5, background: on ? RED : '#D2C6A8', boxShadow: on ? '0 1px 0 rgba(0,0,0,.15)' : 'none' } as CSSProperties,
-    };
-  };
-
-  // 밥은 시간이 지나면 찬다. 남은 시간은 재고가 덜 찼을 때만 말한다 —
-  // 가득인데 카운트다운이 보이면 "못 논다"는 신호가 된다.
-  const foodSub = s.food > 0
-    ? `${s.food}개`
-    : s.foodLeft > 0 ? `${leftLabel(s.foodLeft)} 뒤` : '없음';
-
-  // 자는 동안에는 같은 자리가 깨우기가 된다(useTamagotchi 의 sleep 주석 참고).
-  const sleepLabel = s.sleeping ? '깨우기' : '재우기';
-  const sleepSub = s.sleeping
-    ? (s.canWake ? '깨워도 돼요' : leftLabel(s.sleepLeft))
-    : s.canSleep ? (derived.tutorial ? '낮잠' : '준비됐어요') : '저녁 7시부터';
-
-  const buttons = [
-    btn('feed', '밥', foodSub, 0),
-    btn('snack', '간식', s.sick ? '아파요' : '', 1),
-    btn('pet', '쓰다듬', '', 2),
-    btn('clean', '청소', s.trash > 0 ? `${s.trash}개` : '깨끗', 3),
-    btn('bath', '목욕', can('bath') || s.sleeping ? '' : '오늘 했어요', 4),
-    btn('medicine', '약', s.sick ? '필요해요' : '', 5),
-    btn('sleep', sleepLabel, sleepSub, 6),
-  ];
 
   const chars = s.chars.length ? s.chars : [{ name: '빈 자리', note: '' }];
   const cur = chars[Math.min(s.active, chars.length - 1)];
@@ -365,7 +309,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
   const dex = useDex({
     motions: s.motions, pc, say: ui.say,
     petName: session.server?.pet?.name,
-    onShared: (key, kind) => { void actions.share(key, kind); },
+    onShared: (key, kind) => { void tama.actions.share(key, kind); },
   });
 
   // 하단 바는 탭이 아니라 섹션 점프다. 앱으로 낼 때 그대로 탭이 된다.
@@ -395,31 +339,6 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
   };
   const submitLabel = derived.creating ? '데려오는 중…' : '알로 데려오기';
   const imgUrl = s.imgUrl || YEOUL;
-  // ★ 상태에 따라 그림이 바뀐다. 게이지를 읽기 전에 이걸 먼저 본다.
-  //   서버가 준 동작 그림(basicImageKey)이 정본이고, 아직 없으면 여울 폴백(useTamagotchi.derived.imageFor).
-  const moodImg = derived.motionImg;
-
-  /** 가로 막대 게이지. 시안대로 아래에 모아 둔다. 오른쪽에 상태를 한마디로 덧댈 수 있다. */
-  const bar = (label: string, v: number, max: number, color: string, note?: string) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={L.gLabel}>{label}</span>
-        {note && <span style={{ fontFamily: GAEGU, fontSize: 12.5, color: GRN }}>{note}</span>}
-      </div>
-      <div style={{ height: 6, borderRadius: 4, background: '#ECE3D6', overflow: 'hidden' }}>
-        <div style={{ width: `${(v / max) * 100}%`, height: '100%', borderRadius: 4, background: color, transition: 'width .35s ease' }} />
-      </div>
-    </div>
-  );
-
-  const gaugeRow = (label: string, list: ReturnType<typeof cells>) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span style={L.gLabel}>{label}</span>
-      <div style={{ display: 'flex', gap: 5, flex: 1 }}>
-        {list.map((c, i) => <div key={i} style={c.style}>{c.mark}</div>)}
-      </div>
-    </div>
-  );
 
   const uploadFields = (compact: boolean) => (
     <>
@@ -589,113 +508,11 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                 </div>
               </div>
 
-              {/* 무대 — 배경 위에 캐릭터가 서고, 그 앞에 쓰레기·커튼이 얹힌다 */}
-              <div style={L.room}>
-                <img src={bgUrl(bg)} alt="" style={L.roomBg} />
+              {/* 무대 — 배경·캐릭터·쓰레기·커튼·말풍선(parts/RoomStage) */}
+              <RoomStage tama={tama} bg={bg} name={cur.name} />
 
-                {(!s.hasChar || derived.failed) && (
-                  <div style={L.roomEmpty}>
-                    <div style={L.eggGhost} />
-                    <span style={{ fontFamily: PEN, fontSize: 20, color: '#8E8375' }}>
-                      {derived.failed ? '아직 비어 있어요' : '알이 놓일 자리'}
-                    </span>
-                  </div>
-                )}
-
-                {s.phase === 'egg' && (
-                  <div style={{
-                    position: 'absolute', inset: 0,
-                    animation: s.dropping ? 'tamaEggDrop 1.5s cubic-bezier(.3,.9,.3,1) both' : undefined,
-                  }}>
-                    <img src={s.eggT > 0.6 ? ASSET.eggCrack.src : ASSET.eggIdle.src} alt="알" style={L.layer} />
-                  </div>
-                )}
-
-                {s.phase === 'hatching' && <img src={ASSET.eggHatch.src} alt="부화" style={L.layer} />}
-
-                {s.phase === 'live' && (
-                  <>
-                    {/* 발밑 그림자 — 이게 있어야 바닥을 딛고 선 것처럼 보인다.
-                        캐릭터를 따라 같이 움직인다. */}
-                    <div style={L.shadow} />
-                    <div
-                      onClick={petIfPossible}
-                      data-stage="char"
-                      style={{
-                        ...L.charBox,
-                        transform: `scale(${derived.idle.scale})`,
-                        cursor: can('pet') ? 'pointer' : 'default',
-                      }}
-                      role="button"
-                      aria-label="쓰다듬기"
-                    >
-                      <img src={moodImg} alt={`${cur.name} · ${derived.motionKey}`} style={L.charImg} />
-                    </div>
-                  </>
-                )}
-
-                {/* 쓰레기는 바닥에 쌓여 캐릭터 앞을 가린다 — 캐릭터와 같은 자리·같은 크기로 겹친다. */}
-                {trashImg && (
-                  <img src={trashImg} alt={`쓰레기 ${s.trash}단계`}
-                    style={{ ...L.charBox, transform: 'none', pointerEvents: 'none', objectFit: 'contain' }} />
-                )}
-
-                {s.sleeping && (
-                  <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', animation: 'tamaVeilIn .6s ease-out both' }}>
-                    <img src={ASSET.curtainClosed.src} alt="자는 중" style={L.layer} />
-                    <img src={ASSET.moon.src} alt="" style={L.layer} />
-                  </div>
-                )}
-
-                {s.fx.map(f => <span key={f.id} style={fxStyle(f)}>{f.text}</span>)}
-
-                {/* 말풍선 — 아이가 방금 한 일을 스스로 말하거나, 말 건 것에 답한다.
-                    말 건 답이 있으면 그쪽이 이긴다(사람이 방금 물어본 것이 더 급하다). */}
-                {s.phase === 'live' && !s.sleeping && s.chatTyping && (
-                  <div style={L.typing}>
-                    <span style={{ ...L.dot, animation: 'tamaDot 1s ease-in-out infinite' }} />
-                    <span style={{ ...L.dot, animation: 'tamaDot 1s ease-in-out .15s infinite' }} />
-                    <span style={{ ...L.dot, animation: 'tamaDot 1s ease-in-out .3s infinite' }} />
-                  </div>
-                )}
-                {s.phase === 'live' && !s.sleeping && !s.chatTyping && (s.chatReply || s.standLine) && (
-                  <div style={{ ...L.bubble, whiteSpace: s.chatReply ? 'normal' : 'nowrap', maxWidth: s.chatReply ? '78%' : undefined }}>
-                    {s.chatReply || s.standLine}
-                  </div>
-                )}
-
-                {/* 내가 방금 한 말 */}
-                {!!s.chatUser && <div style={L.myBubble}>{s.chatUser}</div>}
-              </div>
-
-              {/* 부름 — 무대 바로 아래 한 줄. 아기 시간표·하루 3회 부름이 한 줄로 온다(useCalls). */}
-              {derived.call && s.phase === 'live' && (
-                <div style={L.guide} data-call={derived.call.key}>
-                  {derived.calls.length > 1 && (
-                    <span style={{ fontFamily: MONO, fontSize: 10.5, color: '#8E8375', flex: '0 0 auto' }}>
-                      +{derived.calls.length - 1}
-                    </span>
-                  )}
-                  <span style={{ fontFamily: PEN, fontSize: 19, color: '#4A4438', lineHeight: 1.15 }}>
-                    {derived.call.line}
-                  </span>
-                </div>
-              )}
-
-              {/* 성격 고르기 — 12분 부름 "어떤 아이인가요". 언제든 다시 고를 수 있다(정본 §0 원칙 6). */}
-              {derived.call?.want === 'personality' && s.phase === 'live' && (
-                <div style={L.notePaper} data-sec="personality">
-                  <span style={L.h3}>어떤 아이인가요</span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {PERSONALITY_GROUPS.map((g) => (
-                      <button key={g.key} data-personality={g.key} onClick={() => void actions.choosePersonality(g.key)}
-                        style={{ ...L.smallTag, border: '1px solid ' + (s.personality === g.key ? RED : EDGE) }} title={g.hint}>
-                        {g.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* 부름 한 줄 + 성격 고르기(parts/CallBanner) */}
+              <CallBanner tama={tama} pc={pc} />
 
               {/* 품는 중 안내. 문구는 서버가 지금 하는 일을 사람 말로 준 것 그대로다. */}
               {s.phase === 'egg' && (
@@ -734,54 +551,11 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                 </div>
               )}
 
-              {/* 게이지 — 시안대로 가로 막대로 아래에 모았다. */}
+              {/* 게이지 3×4칸 · 말 걸기 · 돌봄 7행동(parts/GaugePanel·ActionBar) */}
               {s.phase === 'live' && (
-                <div style={L.panel}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} data-gauges={`${s.fullness}/${s.happiness}/${s.clean}`}>
-                    {gaugeRow('배부름', cells(s.fullness, RED, '●'))}
-                    {gaugeRow('행복', cells(s.happiness, GRN, '♥'))}
-                    {gaugeRow('청결', cells(s.clean, '#6F8FB0', '✦'))}
-                    <div style={L.infoRow}>
-                      <span>{s.daysTogether}일째 함께</span>
-                      <span>친밀도 {s.intimacyPercent}%</span>
-                      {s.untilAutoSleep !== null && !s.sleeping && <span>{leftLabel(s.untilAutoSleep)} 뒤 자동 취침</span>}
-                    </div>
-                  </div>
-
-                  {/* 말 걸기 — 캐릭터가 먼저 부를 때(하루 3회 + 아기 8분)만 열린다(정본 §10). */}
-                  {derived.chatOpen && !s.sleeping && (
-                    <div style={L.chatBar}>
-                      <input
-                        value={s.chatDraft}
-                        onChange={e => chat.setDraft(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void chat.send(); } }}
-                        placeholder={`${cur.name}에게 답하기 (40자)`}
-                        aria-label={`${cur.name}에게 답하기`}
-                        maxLength={40}
-                        data-action="chat-input"
-                        style={L.chatInput}
-                      />
-                      <button onClick={() => void chat.send()} data-action="chat-send" style={L.sendBtn} aria-label="보내기">▸</button>
-                    </div>
-                  )}
-
-                  <div style={L.btnGrid}>
-                    {buttons.map(b => (
-                      <button
-                        key={b.key}
-                        onClick={b.act}
-                        data-action={b.key}
-                        aria-label={ARIA[b.key]}
-                        aria-disabled={can(b.key) ? undefined : true}
-                        style={{ ...b.style, position: 'relative' }}
-                      >
-                        {b.hint && <span style={L.badge}>{b.hint}</span>}
-                        <span style={b.pinStyle} />
-                        <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 14 }}>{b.label}</span>
-                        <span style={{ fontSize: 10, color: '#A79C82', minHeight: 12, lineHeight: 1.2 }}>{b.sub}</span>
-                      </button>
-                    ))}
-                  </div>
+                <div style={L.panel} data-part="panel">
+                  <GaugePanel tama={tama} pc={pc} name={cur.name} />
+                  <ActionBar tama={tama} pc={pc} />
                 </div>
               )}
             </div>
@@ -884,54 +658,8 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
         </div>
       )}
 
-      {/* ★ 축하 — 즉시 해금(2층, 조건 충족 순간 폭죽)과 아침 도착(심화 행동 "배워왔어요"). 이 서비스의 두 번째 심장이다.
-          뽑기가 아니라 '내가 키워서 받았다'가 되게 결과보다 원인을 먼저 띄운다. 닫으면 다음 축하가 뜬다(useCelebrations). */}
-      {derived.celebration && (
-        <div data-celebration={derived.celebration.kind} style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div onClick={ui.closeUnlock} style={{ position: 'absolute', inset: 0, background: 'rgba(58,53,43,.5)' }} />
-          <div style={{
-            position: 'relative', width: '100%', maxWidth: 340,
-            background: PAPER, border: '1px solid ' + EDGE, borderRadius: 4,
-            padding: '20px 18px 18px', boxShadow: '4px 6px 0 rgba(58,53,43,.22)',
-            animation: 'tamaRiseIn .3s ease-out both', textAlign: 'center',
-          }}>
-            <span style={L.tapeTop} />
-            <p style={{ margin: '0 0 12px', fontFamily: PEN, fontSize: 19, color: SUB, lineHeight: 1.5 }}>
-              {derived.celebration.kind === 'arrival' ? `어젯밤 ${cur.name}이(가) 연습해서` : `${cur.name}와 함께해서`}
-            </p>
-            <div style={{ ...L.polaroid, transform: 'rotate(-1.5deg)', display: 'inline-block' }}>
-              <div style={{ ...L.photo, width: pc ? 240 : 190, position: 'relative' }}>
-                <div style={L.floorLine} />
-                <img src={derived.celebration.imageUrl} alt={derived.celebration.label}
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-                {/* 폭죽은 캐릭터 앞에 겹치는 공통 에셋이다. */}
-                <img src={ASSET.firework.src} alt="" aria-hidden
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} />
-              </div>
-              <div style={L.polaroidCaption}>
-                <span style={{ fontFamily: PEN, fontSize: 20, lineHeight: 1 }}>{derived.celebration.label}</span>
-              </div>
-            </div>
-            <p style={{ margin: '12px 0 4px', fontFamily: GAEGU, fontWeight: 700, fontSize: 19, color: INK }}>
-              {derived.celebration.kind === 'arrival'
-                ? `오늘 ${derived.celebration.label}${josa(derived.celebration.label, '을', '를')} 배워왔어요`
-                : `${derived.celebration.label}${josa(derived.celebration.label, '을', '를')} 배웠어요`}
-            </p>
-            <p style={{ margin: '0 0 15px', fontSize: 13, color: SUB }}>
-              도감 {s.unlocked} / {derived.total}
-            </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => { dex.find((d) => d.seq === derived.celebration?.seq)?.save(); ui.closeUnlock(); }}
-                style={L.tagBtnB}
-              >
-                저장
-              </button>
-              <button onClick={ui.closeUnlock} data-action="celebration-close" style={L.tagBtnA}>보러 가기</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ★ 축하(parts/CelebrationModal) — 즉시 해금 폭죽·아침 도착 "배워왔어요". */}
+      <CelebrationModal tama={tama} pc={pc} name={cur.name} onSave={(seq) => dex.find((d) => d.seq === seq)?.save()} />
 
       {!!s.toast && <div style={L.toast}>{s.toast}</div>}
 
