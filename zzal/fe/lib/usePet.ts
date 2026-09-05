@@ -55,6 +55,11 @@ export interface UsePetResult {
    *   조회 응답의 `justUnlocked` 는 늘 비어 있기 때문(계약 2절 "행동 응답에만").
    */
   noteUnlocked: (seqs: number[]) => void;
+  /**
+   * 펫 경로 밖에서 받아 온 최신 상태를 그대로 얹는다(개발용 시계 도구).
+   * ★ 다시 조회하지 않는다 — 그 응답이 이미 최신 상태다("행동 응답 = 상태").
+   */
+  applyExternal: (next: PetDetail) => void;
 
   /** 오늘의 부름 목록과 열린 슬롯(GET /chat). ALIVE 응답마다 갱신된다 — chatSummary.openSlot 은 v0 에서 null. */
   chat: ChatState | null;
@@ -182,6 +187,10 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
   );
   const markSeen = useCallback((seq: number) => act((s, id) => s.markMotionSeen(id, seq)), [act]);
 
+  const applyExternal = useCallback((next: PetDetail) => {
+    apply(++issued.current, next);
+  }, [apply]);
+
   const noteUnlocked = useCallback((seqs: number[]) => {
     if (!seqs.length) return;
     setJustUnlocked((prev) => [...prev, ...seqs.filter((x) => !prev.includes(x))]);
@@ -291,7 +300,7 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
 
   return {
     pet, loading, error, acting,
-    justUnlocked, clearJustUnlocked, noteUnlocked,
+    justUnlocked, clearJustUnlocked, noteUnlocked, applyExternal,
     chat, chatReply, clearChatReply,
     reload, care, sleep, wake, setPersonality, setBackground, share, answerChat, markSeen,
   };
