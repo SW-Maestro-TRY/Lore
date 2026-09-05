@@ -1,6 +1,8 @@
 package com.lore.webtoon;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.common.exception.BusinessException;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,9 +16,12 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -105,6 +110,38 @@ class MyWebtoonServiceTest {
         // 안 받은 값은 저장도 안 된다 — 로그인 자체를 막지는 않는다
         assertThat(service.link(7L, "../secret")).isFalse();
         assertThat(links.rows).isEmpty();
+    }
+
+    @Test
+    @DisplayName("공개 전환은 내 작품만 — 그리고 만든 uid 를 실어 보낸다")
+    void 공개_전환은_내_것만() {
+        service.link(7L, "uidA");
+        harnessReturns("uidA", "{\"runs\":[{\"run_id\":\"r1\"}]}");
+        when(gateway.forward(eq(HttpMethod.POST), eq("/api/runs/r1/visibility"),
+                             any(), any(), any(HttpHeaders.class)))
+                .thenReturn(ResponseEntity.ok("{\"public\":false}".getBytes(StandardCharsets.UTF_8)));
+
+        ResponseEntity<byte[]> res = service.setVisibility(7L, "r1", false);
+        assertThat(res.getStatusCode().value()).isEqualTo(200);
+
+        // 하네스가 주인을 확인할 수 있게 **만든 브라우저의 uid** 가 실려야 한다.
+        ArgumentCaptor<byte[]> body = ArgumentCaptor.forClass(byte[].class);
+        verify(gateway).forward(eq(HttpMethod.POST), eq("/api/runs/r1/visibility"),
+                                any(), body.capture(), any(HttpHeaders.class));
+        assertThat(new String(body.getValue(), StandardCharsets.UTF_8))
+                .contains("\"uid\":\"uidA\"").contains("\"public\":false");
+    }
+
+    @Test
+    @DisplayName("내 것이 아니면 못 바꾼다 — 하네스를 부르지도 않는다")
+    void 남의_작품은_못_바꾼다() {
+        service.link(7L, "uidA");
+        harnessReturns("uidA", "{\"runs\":[{\"run_id\":\"r1\"}]}");
+
+        assertThatThrownBy(() -> service.setVisibility(7L, "남의것", true))
+                .isInstanceOf(BusinessException.class);
+        verify(gateway, never()).forward(eq(HttpMethod.POST), any(), any(), any(),
+                                         any(HttpHeaders.class));
     }
 
     /** JPA 없이 도는 가짜 저장소. 이 서비스가 쓰는 세 가지만 진짜처럼 군다. */

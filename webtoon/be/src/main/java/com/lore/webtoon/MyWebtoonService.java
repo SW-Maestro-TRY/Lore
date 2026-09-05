@@ -1,10 +1,13 @@
 package com.lore.webtoon;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -84,6 +87,48 @@ public class MyWebtoonService {
             }
         }
         return new ArrayList<>(merged.values());
+    }
+
+    /**
+     * 이 작품을 둘러보기에 걸거나 내린다.
+     *
+     * <h2>왜 프록시로 안 넘기고 여기서 하는가</h2>
+     *
+     * 하네스의 같은 주소는 <b>하네스 자기 계정 세션</b>을 본다. 웹툰 탭은 앱
+     * 계정(JWT)으로 로그인하므로 그 세션이 없다 — 그대로 넘기면 눌러도 늘
+     * 401 이었다(실제로 그랬다).
+     *
+     * 그래서 여기서 <b>내 계정에 이어진 브라우저가 만든 것인지</b> 먼저 보고,
+     * 맞으면 그 uid 를 실어 하네스에 넘긴다. 하네스도 uid 가 만든 이의 것인지
+     * 한 번 더 본다 — 그 주소를 직접 부를 수도 있어서 양쪽이 다 본다.
+     *
+     * @return 하네스가 준 응답을 그대로 (상태 · 본문 모두)
+     * @throws BusinessException 내 작품이 아닐 때
+     */
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> setVisibility(Long userId, String runId, boolean isPublic) {
+        String owner = ownerUidOf(userId, runId);
+        if (owner == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 바꿀 수 있습니다");
+        }
+        byte[] body = ("{\"public\":" + isPublic + ",\"uid\":\"" + owner + "\"}")
+                .getBytes(StandardCharsets.UTF_8);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return gateway.forward(HttpMethod.POST,
+                "/api/runs/" + runId + "/visibility", null, body, headers);
+    }
+
+    /** 내 계정에 이어진 브라우저 중 이 작품을 만든 uid. 내 것이 아니면 null. */
+    private String ownerUidOf(Long userId, String runId) {
+        for (BrowserLink one : links.findByUserId(userId)) {
+            for (Map<String, Object> run : runsOf(one.getBrowserUid())) {
+                if (runId.equals(String.valueOf(run.get("run_id")))) {
+                    return one.getBrowserUid();
+                }
+            }
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

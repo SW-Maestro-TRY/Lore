@@ -6,7 +6,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -63,6 +65,23 @@ public class MyWebtoonController {
     @GetMapping("/runs")
     public ApiResponse<List<Map<String, Object>>> runs(@LoginUser Long userId) {
         return ApiResponse.ok(service.myRuns(userId));
+    }
+
+    @Operation(summary = "둘러보기에 걸기 / 내리기", description = """
+            내 계정에 이어진 브라우저가 만든 작품만 바꿀 수 있다.
+
+            응답은 하네스가 준 것을 그대로 돌려준다 — 이 한 자리만 봉투를 안
+            씌운다(프론트가 프록시 쪽 응답과 같은 모양으로 읽고 있어서다).""")
+    @PostMapping("/runs/{runId}/visibility")
+    public ResponseEntity<byte[]> visibility(@LoginUser Long userId,
+                                             @PathVariable String runId,
+                                             @RequestBody VisibilityRequest request) {
+        return service.setVisibility(userId, runId, request.isPublic());
+    }
+
+    /** @param isPublic 둘러보기에 거는가. JSON 키는 {@code public} 이다(자바 예약어라 이름만 다름). */
+    public record VisibilityRequest(
+            @com.fasterxml.jackson.annotation.JsonProperty("public") boolean isPublic) {
     }
 
     public record LinkRequest(

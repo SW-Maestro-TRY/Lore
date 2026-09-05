@@ -256,9 +256,16 @@ export function creditBalance(): Promise<{ balance: number }> {
 }
 
 /** 둘러보기에 거는가 내리는가. 실패하면 화면도 되돌려야 한다 — 껐다고
- *  보이는데 실제로는 걸려 있는 것이 제일 나쁘다. */
+ *  보이는데 실제로는 걸려 있는 것이 제일 나쁘다.
+ *
+ *  하네스로 바로 넘기지 않고 **자바를 거친다**(`/my/...`). 하네스의 같은
+ *  주소는 하네스 자기 계정 세션을 보는데 웹툰 탭은 앱 계정으로 로그인하므로
+ *  그 세션이 없다 — 그대로 부르면 눌러도 늘 401 이었다. 자바가 내 계정에
+ *  이어진 브라우저의 작품인지 보고 넘긴다. */
 export function setVisibility(runId: string, isPublic: boolean) {
-  return post(`/runs/${encodeURIComponent(runId)}/visibility`, { public: isPublic });
+  return appRequest<unknown>(
+    `/api/webtoon/my/runs/${encodeURIComponent(runId)}/visibility`,
+    { method: "POST", body: { public: isPublic } });
 }
 
 /* ---- 완성본 --------------------------------------------------------------- */
