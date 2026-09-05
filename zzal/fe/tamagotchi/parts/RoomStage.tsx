@@ -151,7 +151,7 @@ export default function RoomStage({ tama, bg, name }: RoomStageProps) {
         </div>
       )}
       {s.phase === 'live' && !s.sleeping && !s.chatTyping && (s.chatReply || s.standLine) && (
-        <div data-bubble style={{ ...L.bubble, whiteSpace: s.chatReply ? 'normal' : 'nowrap', maxWidth: s.chatReply ? '78%' : undefined }}>
+        <div data-bubble={s.chatReply ? 'reply' : 'stand'} style={{ ...L.bubble, whiteSpace: s.chatReply ? 'normal' : 'nowrap', maxWidth: s.chatReply ? '78%' : undefined }}>
           {s.chatReply || s.standLine}
         </div>
       )}

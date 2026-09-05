@@ -9,6 +9,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 const PORT = Number(process.env.E2E_PORT ?? 3177);
 const BASE = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
+/** 서버 모드(E2E_SERVER=1)에서 /api/* 를 넘길 백엔드. 읽기 전용 사본을 8091 로 띄워 둔다. */
+const API_PROXY = process.env.E2E_SERVER ? (process.env.E2E_API_PROXY ?? 'http://localhost:8091') : '';
 
 export default defineConfig({
   testDir: './e2e',
@@ -33,7 +35,9 @@ export default defineConfig({
   ],
   webServer: {
     // 로컬 그림(public/zzal 심볼릭 링크)이 있으면 쓰고, 없으면 이미지 404 는 실패로 안 센다(helpers.ts).
-    command: `NEXT_PUBLIC_CDN_BASE= npx next dev -p ${PORT}`,
+    // 서버 모드에서는 `API_PROXY` 를 켜서 /api/* 를 읽기 전용 사본 백엔드로 넘긴다
+    // (next.config.mjs 의 rewrites — 이게 없으면 브라우저가 3177 포트로 API 를 찾아 404 를 받는다).
+    command: `NEXT_PUBLIC_CDN_BASE= ${API_PROXY ? `API_PROXY=${API_PROXY} ` : ''}npx next dev -p ${PORT}`,
     url: `${BASE}/zzal?mock=1`,
     reuseExistingServer: true,
     timeout: 120_000,

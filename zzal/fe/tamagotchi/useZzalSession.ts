@@ -211,6 +211,7 @@ export function useZzalSession(): ZzalSession {
       clearNotice,
       justUnlocked: pet.justUnlocked,
       clearJustUnlocked: pet.clearJustUnlocked,
+      noteUnlocked: pet.noteUnlocked,
       chat: pet.chat,
       chatReply: pet.chatReply,
       clearChatReply: pet.clearChatReply,
@@ -222,7 +223,7 @@ export function useZzalSession(): ZzalSession {
       create, dismissFailed, markUploadOpened, markImagePicked, markNameEntered,
     };
   }, [
-    source, mock, pet.pet, pet.loading, pet.acting, pet.error, pet.reload, pet.justUnlocked, pet.clearJustUnlocked, pet.chat, pet.chatReply,
+    source, mock, pet.pet, pet.loading, pet.acting, pet.error, pet.reload, pet.justUnlocked, pet.clearJustUnlocked, pet.noteUnlocked, pet.chat, pet.chatReply,
     pet.clearChatReply, pet.care, pet.sleep, pet.wake, pet.setPersonality, pet.setBackground, pet.share, pet.answerChat, pet.markSeen,
     auth.isLoading, authenticated, listed, creating, notice, clearNotice, estimateSec, create, dismissFailed,
     markUploadOpened, markImagePicked, markNameEntered,

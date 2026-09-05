@@ -29,8 +29,14 @@ export interface GameSectionProps {
   petId: number | null;
   /** 실서버 또는 목. 훅과 같은 출처를 써야 목 모드에서 실서버를 두드리지 않는다. */
   source: PetSource;
-  /** 게임이 끝나면 부른다 — 응답이 펫 상태가 아니라서 해금·게이지는 다시 물어야 보인다(결정기록 C17). */
+  /** 게임이 끝나면 부른다 — 응답이 펫 상태가 아니라서 게이지는 다시 물어야 보인다(결정기록 C17). */
   onFinished?: () => void;
+  /**
+   * 게임 응답으로 동작이 열렸을 때 그 seq 를 넘긴다(놀라기 = 3판째 시작).
+   * ★ 다시 물어서는 폭죽을 못 띄운다 — 조회 응답의 `justUnlocked` 는 늘 비어 있고,
+   *   "방금 열렸다" 는 사실은 행동 응답에만 실려 있다.
+   */
+  onUnlocked?: (seqs: number[]) => void;
 }
 
 function messageOf(e: unknown): string {
@@ -38,7 +44,7 @@ function messageOf(e: unknown): string {
   return '연결하지 못했습니다';
 }
 
-export default function GameSection({ petId, source, onFinished }: GameSectionProps) {
+export default function GameSection({ petId, source, onFinished, onUnlocked }: GameSectionProps) {
   /** 서버가 준 마지막 상태. 시작 전에도 remainingToday 를 보려고 들고 있는다. */
   const [state, setState] = useState<GameState | null>(null);
   /** 방금 친 판의 결과. 한 판마다 갈아 끼운다. */
@@ -74,13 +80,15 @@ export default function GameSection({ petId, source, onFinished }: GameSectionPr
     setError(null);
     setLast(null);
     try {
-      setState(await source.startGame(petId, 'LEFT_RIGHT'));
+      const s = await source.startGame(petId, 'LEFT_RIGHT');
+      setState(s);
+      if (s.justUnlocked.length) onUnlocked?.(s.justUnlocked);
     } catch (e) {
       setError(messageOf(e));
     } finally {
       setBusy(false);
     }
-  }, [petId, busy, source]);
+  }, [petId, busy, source, onUnlocked]);
 
   const pick = useCallback(
     async (side: Side) => {
@@ -92,10 +100,13 @@ export default function GameSection({ petId, source, onFinished }: GameSectionPr
         setLast(r);
         // ★ 응답이 곧 최신 상태다. 친 뒤에 다시 조회하지 않는다 — 왕복이 두 번이 되고
         //   그 사이에 값이 어긋난다(usePet 이 지키는 규칙과 같다).
+        if (r.justUnlocked.length) onUnlocked?.(r.justUnlocked);
         if (r.finished) onFinished?.();
+        // ★ 끝났는가·이겼는가는 여기 담지 않는다 — 서버의 시작·잇기 응답에 그 칸이 없어서,
+        //   담아 두면 "새로고침하면 사라지는 값" 이 생긴다. 화면은 아래에서 last(친 결과)로 판정한다.
         setState({
-          kind: 'LEFT_RIGHT', finished: r.finished, win: r.win,
-          rounds: r.rounds, winAt: r.winAt, remainingToday: r.remainingToday,
+          kind: 'LEFT_RIGHT', rounds: r.rounds, winAt: r.winAt, remainingToday: r.remainingToday,
+          justUnlocked: r.justUnlocked, runUnlocked: r.runUnlocked,
           ...(r.finished
             ? { playing: false, gameId: null, round: null, hits: null }
             : { playing: true, gameId: r.gameId, round: r.nextRound, hits: r.hits }),
@@ -106,7 +117,7 @@ export default function GameSection({ petId, source, onFinished }: GameSectionPr
         setBusy(false);
       }
     },
-    [petId, busy, state, source, onFinished],
+    [petId, busy, state, source, onFinished, onUnlocked],
   );
 
   // 아이가 없으면 놀 상대가 없다. 아무것도 그리지 않는다.

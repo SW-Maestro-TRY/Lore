@@ -74,6 +74,8 @@ export interface TamagotchiServer {
 
   justUnlocked: number[];
   clearJustUnlocked: () => void;
+  /** 미니게임 응답으로 열린 동작을 폭죽 줄에 얹는다(게임 응답은 PetDetail 이 아니다). */
+  noteUnlocked: (seqs: number[]) => void;
   chat: ChatState | null;
   chatReply: PetDetail['chatReply'];
   clearChatReply: () => void;
