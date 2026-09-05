@@ -56,6 +56,42 @@ class ChanceTest {
     }
 
     @Test
+    @DisplayName("★★ 서버 비밀이 다르면 답이 다르다 — 씨앗 재료가 응답에 있어도 밖에서 계산할 수 없다")
+    void serverSecretChangesEverything() {
+        int differ = 0;
+        for (long seed = 0; seed < 60; seed++) {
+            Chance.useServerSecret("secret-A");
+            int a = Chance.percent("sick-neglect", seed, 1);
+            Chance.useServerSecret("secret-B");
+            int b = Chance.percent("sick-neglect", seed, 1);
+            if (a != b) {
+                differ++;
+            }
+        }
+        Chance.useServerSecret("");                      // 뒷정리 — 다른 테스트가 기대하는 상태로
+        assertThat(differ).isGreaterThan(50);
+    }
+
+    @Test
+    @DisplayName("★ 같은 비밀이면 다시 걸어도 답이 같다 — 재기동해도 그 펫의 운명이 안 바뀐다")
+    void sameSecretSameAnswer() {
+        Chance.useServerSecret("secret-A");
+        int first = Chance.percent("sick-natural", 42L, 3);
+        Chance.useServerSecret("secret-A");
+        assertThat(Chance.percent("sick-natural", 42L, 3)).isEqualTo(first);
+        Chance.useServerSecret("");
+    }
+
+    @Test
+    @DisplayName("비밀이 비어 있어도(테스트·부팅 전) 그냥 돈다 — 여기서 터지면 부팅이 막힌다")
+    void blankSecretIsFine() {
+        Chance.useServerSecret(null);
+        assertThat(Chance.percent("x", 1L)).isBetween(0, 99);
+        Chance.useServerSecret("   ");
+        assertThat(Chance.percent("x", 1L)).isBetween(0, 99);
+    }
+
+    @Test
     @DisplayName("경계 — 0%는 절대, 100%는 언제나. bound 1 이하는 0")
     void bounds() {
         for (long seed = 0; seed < 50; seed++) {

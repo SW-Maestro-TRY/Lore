@@ -386,7 +386,11 @@ public final class PetResponses {
             return catalog.all().stream().map(spec -> {
                 boolean unlocked = UnlockRules.isUnlocked(pet, spec, catalog);
                 UnlockRule rule = spec.unlockRule();
-                Progress progress = !unlocked && rule.hasProgress()
+                // ★★ "케어 미스 0인 날" 진행도는 안 내려간다(15번 웃는 대기). 그 숫자는 곧 <b>케어 미스</b>를
+                //   되짚게 해 주는데, 케어 미스는 정본 4장이 "숨은 수치" 로 못 박은 값이다(#225 리뷰 결정).
+                //   힌트 문구("잘 돌본 날 3번")만 주고 몇 번째인지는 말하지 않는다.
+                boolean hidden = rule.kind() == UnlockRule.Kind.ZERO_MISS_DAYS;
+                Progress progress = !unlocked && rule.hasProgress() && !hidden
                         ? new Progress(Math.min(UnlockRules.current(pet, rule.kind(), catalog), rule.target()), rule.target())
                         : null;
                 ZzalMotion row = rows.get(spec.seq());

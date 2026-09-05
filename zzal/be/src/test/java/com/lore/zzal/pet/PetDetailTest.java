@@ -195,6 +195,24 @@ class PetDetailTest {
     }
 
     @Test
+    @DisplayName("★★ \"케어 미스 0인 날\" 진행도는 안 내려간다 — 힌트만(숨은 수치를 되짚게 하면 안 된다)")
+    void zeroMissProgressIsHidden() {
+        ZzalPet pet = baby();
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "zeroMissDays", 2);
+
+        PetResponses.Detail d = PetResponses.Detail.from(pet, null, T0, CATALOG);
+        PetResponses.Motion smileIdle = d.motions().stream().filter(m -> m.seq() == 15).findFirst().orElseThrow();
+
+        assertThat(smileIdle.unlocked()).isFalse();
+        assertThat(smileIdle.hint()).isNotBlank();      // 무엇을 해야 열리는지는 알려준다
+        assertThat(smileIdle.progress()).isNull();      // ★ 몇 번째인지는 말하지 않는다
+
+        // 다른 잠긴 칸은 그대로 진행도를 준다(비교군)
+        PetResponses.Motion tilt = d.motions().stream().filter(m -> m.seq() == 9).findFirst().orElseThrow();
+        assertThat(tilt.progress()).isNotNull();
+    }
+
+    @Test
     @DisplayName("baking — 밤 큐에 오르면 QUEUED, 아무 일도 없으면 NONE")
     void bakingSummary() {
         ZzalPet pet = baby();

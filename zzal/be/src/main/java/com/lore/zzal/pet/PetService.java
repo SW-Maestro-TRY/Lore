@@ -242,7 +242,7 @@ public class PetService {
      * ★ 도착하지 않은 동작에는 못 찍는다({@code ZZAL_MOTION_NOT_OPEN}) — 안 그러면 화면이
      *   아직 오지도 않은 것을 미리 지워 버릴 수 있다.
      */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Action markSeen(Long userId, Long petId, int seq, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
         Instant now = pet.now(realNow);
@@ -254,6 +254,12 @@ public class PetService {
 
     /**
      * 행동 결과 — 펫의 새 상태, 이번 행동으로 열린 2층 동작(seq), 그리고 <b>방금 나았나</b>.
+     *
+     * ★★ 거절({@link BusinessException})이 나도 <b>정산은 되돌리지 않는다</b>(위 메서드들의 {@code noRollbackFor}).
+     *   모든 행동은 먼저 흐른 시간을 반영하고(settle) 그다음에 "할 수 있나" 를 묻는다. 기본값대로 롤백하면
+     *   거절 한 번에 그 정산이 통째로 사라져 <b>화면이 말하는 상태와 DB 가 한 요청 동안 어긋난다</b>
+     *   (영구 손실은 아니지만 다음 조회에서 시간이 되감긴 것처럼 보인다 — #225 리뷰 하-1).
+     *   거절은 검사 단계에서 나므로 중간까지 바뀐 값이 남을 자리가 없다.
      *
      * ★ {@code justHealed} 를 응답에 싣는 이유 — 정본 5장의 "나은 동작(기쁜 자세 + 반짝) 1회" 는
      *   <b>한 번만</b> 나와야 한다. 상태(안 아픔)로는 "방금 나은 것" 과 "원래 안 아팠던 것" 을 못 가른다.
@@ -283,7 +289,7 @@ public class PetService {
 
     // ── 돌봄 6종 (정본 4·5장) ─────────────────────────────────────────────
 
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Action care(Long userId, Long petId, CareAction action, Instant realNow) {
         ZzalPet pet = awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
@@ -343,7 +349,7 @@ public class PetService {
      * 재운다. 19:00~23:00 밤잠, 아기 60분 안에는 낮잠 한 번.
      * 창 밖이면 {@code ZZAL_NOT_SLEEP_TIME} — 화면은 "저녁 7시가 되면 재워 주세요" 를 띄운다.
      */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Action sleep(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
@@ -364,7 +370,7 @@ public class PetService {
      * ★ 먼저 정산한다 — 10:00 이 지났으면 정산 중에 저절로 깨어 있어 {@code ZZAL_PET_NOT_SLEEPING} 이 된다.
      *   그게 맞다. "깨웠다" 는 보상(친밀도 +10)은 창 안에서 사용자가 눌렀을 때만.
      */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Action wake(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
         if (!pet.isAlive()) {
@@ -390,14 +396,14 @@ public class PetService {
     // ── 성격·배경·공유 (정본 6·10·15장) ───────────────────────────────────
 
     /** 성격·세계관. 언제든, 자는 중에도(정본 10장 "언제든 변경"). */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Action choosePersonality(Long userId, Long petId, Personality personality, String world, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
         return withUnlockDiff(pet, () -> pet.choosePersonality(personality, world));
     }
 
     /** 배경 바꾸기 — 2층 4종이 열린 뒤(정본 6장). 값은 검증하지 않는다(해석 6). */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Action changeBackground(Long userId, Long petId, String background, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
         if (UnlockRules.openedLayerTwo(pet, catalog) < ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN) {
@@ -412,7 +418,7 @@ public class PetService {
      * 다운로드·공유 기록. 대상 = 지금 열린 동작 어느 것이든 — 기본 행동(해금)과 <b>도착한 심화 행동</b> 둘 다(16장).
      * 모르는 key 도 "안 열린 동작" 으로 답한다 — 카탈로그 밖 이름을 구분해 주면 key 목록을 훑는 수단이 된다.
      */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Action share(Long userId, Long petId, String motionKey, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
         Map<Integer, ZzalMotion> rows = rowsOf(petId);

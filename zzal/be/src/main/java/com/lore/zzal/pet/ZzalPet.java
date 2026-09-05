@@ -556,6 +556,12 @@ public class ZzalPet {
             long step = Math.min(remaining, fullnessEvery - fullnessAwakeSec);
             step = Math.min(step, happinessEvery - happinessAwakeSec);
             step = Math.min(step, trashEvery - trashAwakeSec);
+            if (!baby) {
+                // ★★ 병·케어 미스도 게이지와 같은 대접을 받아야 한다 — "다음 사건까지만" 걷는다.
+                //   안 그러면 사건이 구간 한가운데서 일어나도 <b>구간 끝</b>에 일어난 것으로 적히고,
+                //   같은 하루라도 몇 번 조회했느냐에 따라 발병 시각이 최대 3시간 달라진다(#225 리뷰 중-1).
+                step = Math.min(step, nextSicknessEvent());
+            }
             step = Math.max(step, 1);
 
             at = at.plusSeconds(step);
@@ -652,6 +658,35 @@ public class ZzalPet {
      *
      * ★ 짝수엔 안 굴린다 — 정본이 "1·3·5…" 라고 못 박았다. 매번 굴리면 방치가 길어질수록 병이 두 배로 잦아진다.
      */
+    /**
+     * 다음 병·케어 미스 사건까지 남은 초. 없으면 아주 큰 값.
+     *
+     * ★ 여기 빠진 타이머가 있으면 그 사건만 "구간 끝" 으로 밀린다 — 조용히 어긋나는 종류라
+     *   타이머를 새로 만들 때는 이 목록에도 넣어야 한다.
+     */
+    private long nextSicknessEvent() {
+        long next = Long.MAX_VALUE;
+        long missLimit = ZzalRules.CARE_MISS_ZERO_AFTER.getSeconds();
+        if (fullnessMissArmed && fullness == 0) {
+            next = Math.min(next, missLimit - fullnessZeroSec);
+        }
+        if (happinessMissArmed && happiness == 0) {
+            next = Math.min(next, missLimit - happinessZeroSec);
+        }
+        if (cleanMissArmed && trash >= ZzalRules.TRASH_MAX) {
+            next = Math.min(next, missLimit - cleanZeroSec);
+            if (!isSick()) {
+                next = Math.min(next, ZzalRules.SICK_DIRTY_AFTER.getSeconds() - cleanZeroSec);
+            }
+        }
+        if (isSick()) {
+            next = Math.min(next, ZzalRules.CARE_MISS_SICK_EVERY.getSeconds() - sickAwakeSec);
+        } else if (naturalSickDueAwakeSec != null) {
+            next = Math.min(next, naturalSickDueAwakeSec);
+        }
+        return Math.max(next, 1);
+    }
+
     private void addCareMiss(Instant at) {
         careMiss += 1;
         todayCareMiss += 1;
@@ -867,8 +902,13 @@ public class ZzalPet {
         snackStreak += 1;
         lastCaredAt = now;
         if (snackStreak >= ZzalRules.SNACK_STREAK_SICK_AT) {
-            fallSick(SickKind.UPSET, now);
-            snackStreak = 0;        // 배탈이 났으면 연속은 거기서 끝난다(한 번 더 주면 또 아프면 안 된다)
+            // ★★ 아기 60분 동안에는 병이 없다(정본 12장 "케어 미스·병·감점 없음" · 16장).
+            //   튜토리얼에서 시키는 대로 눌러 보다가 아프면, 배우는 자리가 벌 받는 자리가 된다.
+            //   연속은 그래도 0 으로 끊는다 — 안 끊으면 60분이 끝나자마자 여섯 개째에 곧바로 아프다.
+            if (!isBaby(now)) {
+                fallSick(SickKind.UPSET, now);
+            }
+            snackStreak = 0;
         }
     }
 

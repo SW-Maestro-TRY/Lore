@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 import static com.lore.zzal.pet.AwakeClockTest.kst;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -597,12 +598,14 @@ class ZzalPetTest {
             pet.pet(T0);
             assertThat(pet.getSnackStreak()).isZero();
             // ★ 5개째에 배탈(정본 5장 100%). 연속은 거기서 끊긴다 — 한 개 더 준다고 또 아프면 안 된다
+            //   (아기는 병이 없으므로 어린이로 확인한다 — 아기 판은 Sickness.noSicknessWhileBaby)
+            ZzalPet grown = child();
             for (int i = 0; i < 5; i++) {
-                pet.snack(T0);
+                grown.snack(T0);
             }
-            assertThat(pet.isSick()).isTrue();
-            assertThat(pet.getSickKind()).isEqualTo(com.lore.zzal.pet.SickKind.UPSET);
-            assertThat(pet.getSnackStreak()).isZero();
+            assertThat(grown.isSick()).isTrue();
+            assertThat(grown.getSickKind()).isEqualTo(com.lore.zzal.pet.SickKind.UPSET);
+            assertThat(grown.getSnackStreak()).isZero();
         }
 
         @Test
@@ -859,6 +862,65 @@ class ZzalPetTest {
                 pet.snack(at("2026-09-06 21:00"));
             }
             assertThat(pet.getSickKind()).isEqualTo(SickKind.DIRTY);
+        }
+
+        @Test
+        @DisplayName("★★ 아기 60분 안에는 간식 5개를 줘도 안 아프다(정본 12·16장 \"아기 동안 병 없음\")")
+        void noSicknessWhileBaby() {
+            ZzalPet baby = baby();                       // 3분 전 부화 — 아직 아기
+            for (int i = 0; i < 5; i++) {
+                baby.snack(T0);
+            }
+            assertThat(baby.isSick()).isFalse();
+            assertThat(baby.getSnackStreak()).isZero();  // ★ 연속은 끊는다 — 60분이 끝나자마자 6개째로 아프면 안 된다
+
+            // 60분이 지난 뒤에는 규칙대로 아프다
+            ZzalPet grown = child();
+            for (int i = 0; i < 5; i++) {
+                grown.snack(T0);
+            }
+            assertThat(grown.isSick()).isTrue();
+            assertThat(grown.getSickKind()).isEqualTo(SickKind.UPSET);
+        }
+
+        @Test
+        @DisplayName("★★ 한 번에 정산하든 1초씩 정산하든 결과가 같다 — 발병 시각·병 시간이 조회 패턴에 안 묶인다")
+        void settleGranularityDoesNotMatter() {
+            ZzalPet once = child();
+            ZzalPet stepwise = child();
+            Instant from = at("2026-09-05 12:00");
+            Instant to = at("2026-09-05 22:00");
+
+            once.settle(to);
+            for (long sec = 60; sec <= Duration.between(from, to).getSeconds(); sec += 60) {
+                stepwise.settle(from.plusSeconds(sec));
+            }
+
+            assertThat(once.getCareMiss()).isEqualTo(stepwise.getCareMiss());
+            assertThat(once.isSick()).isEqualTo(stepwise.isSick());
+            assertThat(once.getSickKind()).isEqualTo(stepwise.getSickKind());
+            assertThat(once.getSickSince()).isEqualTo(stepwise.getSickSince());
+            assertThat(once.getFullness()).isEqualTo(stepwise.getFullness());
+            assertThat(once.getTrash()).isEqualTo(stepwise.getTrash());
+        }
+
+        @Test
+        @DisplayName("★ 자연 발병도 정산 간격에 안 묶인다 — 예약한 초에 정확히 아프다")
+        void naturalFiresExactly() {
+            ZzalPet once = child();
+            ZzalPet stepwise = child();
+            for (ZzalPet p : List.of(once, stepwise)) {
+                org.springframework.test.util.ReflectionTestUtils.setField(p, "naturalSickDueAwakeSec", 5000L);
+            }
+            Instant from = at("2026-09-05 12:00");
+
+            once.settle(at("2026-09-05 20:00"));
+            for (long sec = 60; sec <= 8 * 3600; sec += 60) {
+                stepwise.settle(from.plusSeconds(sec));
+            }
+
+            assertThat(once.getSickSince()).isEqualTo(from.plusSeconds(5000));
+            assertThat(once.getSickSince()).isEqualTo(stepwise.getSickSince());
         }
 
         @Test
