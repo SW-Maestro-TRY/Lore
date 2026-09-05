@@ -76,12 +76,16 @@ export default function SiteHeader() {
           {status === "loading" ? (
             <span className={styles.authPlaceholder} aria-hidden="true" />
           ) : isAuthenticated ? (
-            /* 웹툰 탭에서는 이메일도 로그아웃도 헤더에 안 둔다 — 둘 다
-               마이페이지 안에 있다. 헤더에 셋을 늘어놓으면 만들던 사람
-               앞에 나가는 길만 늘어난다. */
+            /* 웹툰 탭에서는 **이름 하나**다. 눌러서 마이페이지로 가고,
+               로그아웃은 그 안에 있다.
+
+               이름이 곧 그 문인 이유: 헤더에 이름·마이페이지·로그아웃을
+               늘어놓으면 만들던 사람 앞에 나가는 길만 셋이 된다. 그리고
+               로그인한 사람이 자기 이름을 누르는 것은 어디서나 "내 자리로"
+               라는 뜻이라, 라벨을 따로 달지 않아도 읽힌다. */
             onWebtoon ? (
-              <Link href={MY_PAGE} className={styles.authButton}>
-                마이페이지
+              <Link href={MY_PAGE} className={styles.authButton} title={user?.email}>
+                {displayName}
               </Link>
             ) : (
               <>
