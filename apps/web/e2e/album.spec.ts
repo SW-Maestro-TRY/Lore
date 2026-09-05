@@ -62,6 +62,14 @@ test('잠긴 칸도 이름과 조건이 보인다(정본 §6)', async ({ page })
   await expect(locked).toContainText('끄덕이기');
   await expect(locked).toContainText('채팅 응답 12회');
   await expect(locked).toContainText('/12');
+
+  // ★ 15번(웃는 대기)만 다르다 — 이름과 조건은 보여 주되 **진행도는 안 준다**(계약 해석 40).
+  //   그 숫자는 곧 케어 미스를 되짚게 해 주는데, 케어 미스는 숨은 수치다(정본 §4).
+  const hidden = page.locator('[data-dex="smile_idle"]');
+  await expect(hidden).toContainText('웃는 대기');
+  await expect(hidden).toContainText('잘 돌본 날 3번');
+  await expect(hidden, '진행도(n/3)가 보이면 안 된다').not.toContainText('/3');
+  await expect(hidden, '내부 용어가 새면 안 된다').not.toContainText('케어 미스');
 });
 
 test('배경 바꾸기는 2층 4종 뒤에 열린다', async ({ page }) => {

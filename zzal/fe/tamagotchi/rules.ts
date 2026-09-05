@@ -153,7 +153,9 @@ export const UNLOCK_CONDITIONS: ReadonlyArray<{
   { seq: 12, key: 'wash', counter: 'bathCount', target: 3, hint: '목욕 3회' },
   { seq: 13, key: 'startle', counter: 'gameStarts', target: 3, hint: '미니게임 3판' },
   { seq: 14, key: 'nod', counter: 'chatAnswers', target: 12, hint: '채팅 응답 12회' },
-  { seq: 15, key: 'smile_idle', counter: 'zeroMissDays', target: 3, hint: '케어 미스 0인 날 3번' },
+  // ★ 문구가 "케어 미스" 가 아니다. 케어 미스는 **숨은 수치**라(정본 §4) 이름을 화면에 내면
+  //   사람이 그 수치를 되짚게 된다. 실서버도 "잘 돌본 날 3번" 으로 준다.
+  { seq: 15, key: 'smile_idle', counter: 'zeroMissDays', target: 3, hint: '잘 돌본 날 3번' },
   { seq: 16, key: 'sit', counter: 'layer2Unlocked', target: 6, hint: '2층 6종 열림' },
 ];
 
@@ -169,6 +171,12 @@ export const FEATURE_UNLOCK = {
 
 /** 첫 심화 행동(선물 1 · 구르기)의 seq. 정본 §6 선물 둘은 카탈로그 순서 밖이다. */
 export const GIFT_SEQ = 101;
+
+/**
+ * 진행도를 **안 보여 주는** 잠긴 칸(계약 해석 40) — 15번 웃는 대기.
+ * 그 진행도(`잘 돌본 날 n/3`)는 곧 케어 미스를 되짚게 해 주는데, 케어 미스는 숨은 수치다(정본 §4).
+ */
+export const HIDDEN_PROGRESS_SEQ = 15;
 
 // ── §4·§11 게이지 → 대기 동작 ─────────────────────────────────────────────
 
