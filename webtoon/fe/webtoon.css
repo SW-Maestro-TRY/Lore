@@ -1469,8 +1469,29 @@ body.nh-zoom-on { overflow: hidden; }.webtoon-page .nh-zoom-close {
 }
 
 @media (min-width: 880px) {
-  .webtoon-page { max-width: none; box-shadow: none; background: transparent;
-    font-size: 17px; }
+  .webtoon-page {
+    max-width: none;
+    box-shadow: none;
+    font-size: 17px;
+
+    /* 앱 레이아웃(main)이 1240px + 좌우 여백으로 묶는다. 이 화면은 물이
+       화면 끝까지 흘러야 해서 그 틀을 뚫고 나온다 — 원본에서 880px 부터
+       아트보드를 걷어내는 것과 같은 뜻이다. 세로 스크롤바 때문에 100vw 가
+       실제 폭보다 넓어 가로 스크롤이 생길 수 있으므로 넘치는 것은 자른다. */
+    width: 100vw;
+    /* 좌우는 틀을 뚫고, 위아래는 앱이 준 여백을 되돌린다 — 안 되돌리면
+       앱 헤더와 물빛 사이에 흰 띠가 남는다. */
+    margin-inline: calc(50% - 50vw);
+    margin-block: calc(-1 * var(--lore-main-pad, 40px));
+    overflow-x: clip;
+
+    /* 원본은 이 물빛을 html 에 깔고 body 를 투명하게 둔다. 여기서는 html 이
+       Lore 앱 것이라 못 건드리므로, 이 화면의 바깥 틀이 직접 깐다 —
+       투명하게 두면 앱의 흰 바탕이 그대로 비쳐서 히어로 아래가 하얘진다. */
+    background:
+      radial-gradient(120% 90% at 50% 0%, #f4fcfe 0%, #e3f4fa 60%, #d2ecf4 100%)
+      fixed;
+  }
   .webtoon-page #landing, .webtoon-page #works, .webtoon-page #mypage, .webtoon-page #create { max-width: none; width: 100%; }
   .webtoon-page #progress, .webtoon-page #result, .webtoon-page #nextEp { max-width: 1180px; margin-inline: auto; width: 100%; }
   .webtoon-page .top { padding-bottom: 56px; }
