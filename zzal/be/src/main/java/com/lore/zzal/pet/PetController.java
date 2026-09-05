@@ -40,13 +40,15 @@ public class PetController {
     }
 
     private PetResponses.Detail detail(ZzalPet pet, String stepLabel, Instant real) {
-        return PetResponses.Detail.from(pet, stepLabel, pet.now(real), catalog, petService.motionRows(pet.getId()), List.of());
+        return PetResponses.Detail.from(pet, stepLabel, pet.now(real), catalog,
+                petService.motionRows(pet.getId()), List.of(), false, petService.scenes(pet.getId()));
     }
 
     private PetResponses.Detail detail(PetService.Action action, Instant real) {
         ZzalPet pet = action.pet();
         return PetResponses.Detail.from(pet, null, pet.now(real), catalog,
-                petService.motionRows(pet.getId()), action.justUnlocked(), action.justHealed());
+                petService.motionRows(pet.getId()), action.justUnlocked(), action.justHealed(),
+                petService.scenes(pet.getId()));
     }
 
     @Operation(summary = "펫 생성", description = """
@@ -208,7 +210,11 @@ public class PetController {
         ZzalPet pet = petService.refresh(userId, petId, real);
         PetResponses.Detail d = detail(pet, null, real);
         return ApiResponse.ok(new PetResponses.Album(
-                d.motions() == null ? List.of() : d.motions(), List.of(), List.of(), d.firstGift()));
+                d.motions() == null ? List.of() : d.motions(),
+                List.of(),
+                // 혼자 논 장면 보관 3개(정본 16장). 최근 것부터
+                petService.scenes(petId).stream().map(PetResponses.Scene::of).toList(),
+                d.firstGift()));
     }
 
     // ── 보내기 ────────────────────────────────────────────────────────────

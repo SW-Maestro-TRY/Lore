@@ -69,7 +69,7 @@ public class DevClockController {
         NightSweep.Result r = nightSweep.sweepPet(pet, pet.now(real));
         org.slf4j.LoggerFactory.getLogger(DevClockController.class)
                 .info("dev 밤 스위프 — petId={} nightOf={} 등록={} 굽기={}", petId, r.nightOf(), r.queued(), r.claimed());
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of()));
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of(), false, petService.scenes(petId)));
     }
 
     @Operation(summary = "심화 행동 즉시 공개(가짜 그림)", description = """
@@ -87,7 +87,7 @@ public class DevClockController {
         }
         Instant real = Instant.now();
         ZzalPet pet = petService.forceOpen(userId, petId, seq, real);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of()));
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of(), false, petService.scenes(petId)));
     }
 
     @Operation(summary = "시간 당기기", description = """
@@ -121,7 +121,7 @@ public class DevClockController {
         }
         Instant real = Instant.now();
         ZzalPet pet = petService.advanceClock(userId, petId, by, real);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of()));
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of(), false, petService.scenes(petId)));
     }
 
     @Operation(summary = "시계 맞추기", description = """
@@ -169,6 +169,6 @@ public class DevClockController {
                     "지금부터 %d일 안으로만 맞출 수 있어요".formatted(MAX_ADVANCE.toDays()));
         }
         ZzalPet pet = petService.setClock(userId, petId, target, real);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of()));
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of(), false, petService.scenes(petId)));
     }
 }

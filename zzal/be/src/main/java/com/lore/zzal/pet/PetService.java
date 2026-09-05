@@ -58,6 +58,7 @@ public class PetService {
     private final ZzalMotionRepository motionRepository;
     private final MotionSeeder motionSeeder;
     private final NightPlanner nightPlanner;
+    private final com.lore.zzal.scene.SceneService sceneService;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -70,11 +71,13 @@ public class PetService {
                       MotionCatalog catalog,
                       ZzalMotionRepository motionRepository,
                       MotionSeeder motionSeeder,
-                      NightPlanner nightPlanner) {
+                      NightPlanner nightPlanner,
+                      com.lore.zzal.scene.SceneService sceneService) {
         this.catalog = catalog;
         this.motionRepository = motionRepository;
         this.motionSeeder = motionSeeder;
         this.nightPlanner = nightPlanner;
+        this.sceneService = sceneService;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -206,8 +209,21 @@ public class PetService {
         }
         Instant now = pet.now(realNow);
         pet.settle(now);
+        // ★★ 순서가 중요하다 — 부재 장면은 <b>방문 기록 전에</b> 정산해야 한다.
+        //   {@code visit} 이 "부재는 여기서 끝" 이라며 부재 시계를 0으로 끊기 때문에,
+        //   뒤로 미루면 방금 비운 시간이 통째로 사라진다.
+        int made = sceneService.recordAbsence(pet, now) + sceneService.recordNight(pet);
+        if (made > 0) {
+            pet.markSceneMade();
+        }
         pet.visit(now);
         reveal(pet, now);
+    }
+
+    /** 그 펫의 혼자 논 장면(최근 것부터, 최대 3). */
+    @Transactional(readOnly = true)
+    public List<com.lore.zzal.scene.ZzalScene> scenes(Long petId) {
+        return sceneService.recent(petId);
     }
 
     /**
@@ -274,6 +290,7 @@ public class PetService {
             return new Action(pet, justUnlocked, true);
         }
     }
+
 
     /** 행동 전후의 열린 동작을 비교해 새로 열린 seq 를 얻는다(폭죽). 저장하지 않고 계산한다(UnlockRules). 채팅·게임도 이걸 쓴다. */
     public Action withUnlockDiff(ZzalPet pet, Runnable action) {
@@ -357,6 +374,10 @@ public class PetService {
             throw new BusinessException(ErrorCode.ZZAL_NOT_SLEEP_TIME, "저녁 7시가 되면 재워 주세요");
         }
         Action a = withUnlockDiff(pet, () -> pet.sleep(now));
+        // ★ 재우는 그 응답에 밤 연습 장면이 실리게 한다(touch 는 잠들기 전에 돌았다).
+        if (sceneService.recordNight(pet) > 0) {
+            pet.markSceneMade();
+        }
         // ★ 밤잠에 든 순간 = 굽기 큐 등록(정본 2장 "잠드는 순간 하는 일"). 23:00 자동 취침은 스위프가 같은 일을 한다.
         if (pet.getSleepKind() == SleepKind.NIGHT) {
             nightPlanner.plan(pet, AwakeClock.dateOf(now));
