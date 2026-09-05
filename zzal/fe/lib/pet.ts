@@ -1,45 +1,282 @@
-// 펫 API. zzal/be 의 PetController 와 짝이다.
+// 펫 API v2. zzal/be 의 v2 PetController(`/api/zzal/v2/me/pets`)와 짝이다.
 //
-// ★ 이 파일의 타입은 서버의 PetResponses 를 그대로 옮긴 것이다. 화면이 쓰기 편하게
+// ★ 이 파일의 타입은 서버의 PetResponses.Detail(v2)을 그대로 옮긴 것이다. 화면이 쓰기 편하게
 //   이름을 바꾸거나 값을 계산해 넣지 않는다 — 서버가 정본이고, 중간에서 손대는 순간
 //   "서버는 맞는데 화면만 틀린" 버그가 생기고 원인이 안 보인다.
+//
+// ★ 계약의 정본은 `zzal/docs/api-v2.md`(백엔드 PR-1). 이 파일은 그 문서와 **필드명 단위로 대조**하는
+//   자리다 — 문서와 다르면 문서가 이기고, 이 파일을 고친다.
+//
+// ★ 시각은 전부 ISO-8601 문자열이고 **`serverNow` 가 반드시 함께 온다.** 프론트는 기기 시계·시간대를
+//   쓰지 않는다(useClock 이 serverNow 와 기기 시계의 차이만 든다). 케어 미스는 어디에도 안 내려온다.
+//
+// v1 과 달라진 것(정본 v1.2 · 플랜 "API v2 계약"):
+//   - 훈련·tutorial-done·v1 motions 삭제. 시계는 부화 순간 켜진다.
+//   - 게이지 4칸 · 밥 3개 · 돌봄 6종 · 재우기/깨우기 창 · 낮잠 · 함께한 날 · 친밀도 · 채팅 3슬롯 ·
+//     2층 즉시 해금(`justUnlocked`) · 아침 도착(`learnedToday`) · 기능 열림(`features`).
 
 import { request } from './api';
 
 /** 지금 어느 단계인가. 프론트의 'none'(아직 아무도 없음)은 서버에 없다 — 그건 행이 없는 것. */
 export type PetPhase = 'HATCHING' | 'ALIVE' | 'FAILED' | 'DEAD';
 
-/** 왜 태어나지 못했나 / 왜 죽었나. */
+/** 왜 태어나지 못했나 / 왜 떠났나. */
 export type DeathReason = 'HATCH_FAILED' | 'NEGLECTED' | 'RELEASED';
 
 /**
- * 돌봄 버튼.
- *
- * 경로가 셋(/feed·/pet·/clean)이 아니라 이 값을 받는 /care 하나인 것은 서버 설계다.
+ * 돌봄 버튼 6종(정본 4·5장). 경로가 하나(/care)인 것은 서버 설계다 —
  * 무엇을 눌렀는지만 보내고 수치가 얼마나 오르는지는 서버가 정한다.
  */
-export type CareAction = 'FEED' | 'PET' | 'CLEAN';
+export type CareAction = 'FEED' | 'SNACK' | 'PET' | 'CLEAN' | 'BATH' | 'MEDICINE';
 
-/** 깨어나면서 배운 것. 깨우기 응답에만 담긴다. */
-export interface Learned {
-  learned: boolean;
-  /** 배운 동작 이름. 못 배웠으면 비어 있다. */
-  name: string | null;
-  /** 못 배웠을 때 화면에 띄울 말. 배웠으면 비어 있다. */
-  message: string | null;
+/** 성격 그룹 5개(정본 10·16장 기본값 온순·활발·수줍음·응석·시크). 표시명은 tamagotchi/chat.ts. */
+export type Personality = 'GENTLE' | 'LIVELY' | 'SHY' | 'CLINGY' | 'COOL';
+
+/** 밤잠인가 낮잠인가(정본 2장·12장 40분). */
+export type SleepKind = 'NIGHT' | 'NAP';
+
+/** 게이지가 고른 대기 동작의 우선순위 결과(정본 4장: 병 > 배부름 > 행복 > 청결). */
+export type Mood = 'SICK' | 'HUNGRY' | 'SAD' | 'DIRTY' | 'NORMAL';
+
+/** 채팅 부름 슬롯. BABY 는 아기 8분 부름이고 하루 3회에 안 든다(정본 12장·16장). */
+export type ChatSlot = 'BABY' | 'MORNING' | 'NOON' | 'EVENING';
+
+/** 동작이 어느 층인가. GIFT 는 카탈로그 밖 선물(구르기·뒤로 넘어짐, seq 101·102). */
+export type MotionLayer = 'BASIC_1' | 'BASIC_2' | 'GIFT';
+
+/** 심화 행동(16프레임)의 굽기·검수·공개 상태. 기본 행동(2프레임)과는 별개다. */
+export type AdvancedStatus = 'NONE' | 'QUEUED' | 'BAKING' | 'REVIEW' | 'LOCAL_REQUESTED' | 'OPEN' | 'FAILED';
+
+/** 친밀도 구간(정본 8장: 0~30 / 40~70 / 80~100). */
+export type IntimacyTier = 'LOW' | 'MID' | 'HIGH';
+
+/** 첫 심화 행동(3일 선물)의 진행. */
+export type FirstGiftStatus = 'LOCKED' | 'WAITING' | 'BAKING' | 'OPEN';
+
+/** 아기 시간표(정본 12장) 9칸의 키. 순서가 곧 부름 순서다. */
+export type TutorialStepKey =
+  | 'FEED' | 'PET' | 'CHAT' | 'PERSONALITY' | 'CLEAN' | 'GAME' | 'SHARE' | 'NAP' | 'DONE';
+
+/** 앱 밖으로 나간 방식. 튜토리얼 25분 "이 모습 가져가실래요" 의 서버 사실이 된다. */
+export type ShareKind = 'DOWNLOAD' | 'SHARE';
+
+/**
+ * 시계 — 서버가 계산해 준 "지금 할 수 있는가" 와 다음 경계 시각.
+ *
+ * ★ canSleep·canWake 가 정본이다. 프론트는 창(19~23시·07~10시)을 다시 계산하지 않는다.
+ *   `*At` 값은 카운트다운·경계 폴링(usePet)에만 쓴다.
+ */
+export interface Clock {
+  /** 아기 60분이 끝나는 시각. 지났으면 과거 시각이 그대로 온다. */
+  babyUntil: string;
+  sleeping: boolean;
+  /** 자고 있을 때만. */
+  sleepKind: SleepKind | null;
+  /** 잠든 시각. 깨어 있으면 null. */
+  sleptAt: string | null;
+  /** 오늘 기상 시각(부화 당일은 부화 시각). */
+  wokeAt: string;
+  canSleep: boolean;
+  canWake: boolean;
+  /** 다음 재우기 창(19:00)이 열리는 시각. 낮잠 가능이면 serverNow. 자는 중이면 null. */
+  sleepWindowOpensAt: string | null;
+  /** 자동 취침(23:00, 아기 중이면 60분 끝) 시각. 자는 중이면 null. */
+  autoSleepAt: string | null;
+  /** 깨우기 창(07:00 / 낮잠 5분)이 열리는 시각. 깨어 있으면 null. */
+  wakeWindowOpensAt: string | null;
+  /** 자동 기상(10:00 / 낮잠 10분) 시각. 깨어 있으면 null. */
+  autoWakeAt: string | null;
+  /** 마지막 기상이 자동(늦잠)이었는가. */
+  overslept: boolean;
+}
+
+/** 게이지 4칸(정본 4장). clean 은 흔적의 반대(4 - trash)라 둘 다 준다. */
+export interface Gauges {
+  fullness: number;
+  happiness: number;
+  clean: number;
+  trash: number;
+}
+
+export interface Food {
+  /** 보관 0~3. */
+  count: number;
+  /** 다음 1개가 찰 때까지(초). 가득이면 null. 자는 동안에도 돈다(정본 16장). */
+  nextInSeconds: number | null;
+}
+
+export interface Sick {
+  since: string;
+  /** NATURAL · NEGLECT · DIRTY · SNACK(배탈). */
+  kind: string;
+}
+
+export interface Intimacy {
+  /** 내부 점수 0~999. */
+  score: number;
+  /** 10% 단위 표시값 = floor(score / 999 * 10) * 10. */
+  percent: number;
+  tier: IntimacyTier;
+}
+
+/** 오늘(기상~취침 한 구간) 카운터. 잠드는 순간 리셋된다(정본 16장). */
+export interface Today {
+  /** 두 게임 합산 시작한 판 수(상한 3). */
+  games: number;
+  /** 쓰다듬 인정 횟수(상한 3). */
+  pets: number;
+  /** 돌봄 친밀도 합산(상한 30). */
+  careIntimacy: number;
+  /** 다른 행동 없이 연달아 준 간식 수(5면 배탈). */
+  snackStreak: number;
+  bathDone: boolean;
+}
+
+/** 3층 조각 4칸. 3층 전에는 null. */
+export interface Pieces {
+  food: boolean;
+  play: boolean;
+  clean: boolean;
+  bond: boolean;
+  /** 이틀 연속 카운트(0~2). */
+  streak: number;
+}
+
+export interface MotionProgress {
+  current: number;
+  target: number;
+}
+
+export interface AdvancedMotion {
+  status: AdvancedStatus;
+  imageKey: string | null;
+  revealedAt: string | null;
+  seen: boolean;
 }
 
 /**
- * 펫 상태 — 부화 중이든 함께 지내는 중이든 이 하나로 답한다(서버 PetResponses.Detail).
+ * 동작 한 칸. 16종 + 선물 2 = 18행이 부화 완료 때 만들어진다.
  *
- * ★ 상당수가 nullable 인데 그게 실수가 아니라 규칙이다. 단계에 따라 채워지는 칸이 다르다:
+ * ★ 잠긴 칸도 이름·조건이 온다(정본 6장 조건표 "갸웃 · 채팅 응답 1/1"). v1 의
+ *   "안 연 것의 이름은 쓰지 않는다" 는 정본에 밀려 폐기됐다.
+ */
+export interface Motion {
+  /** 1..16 · 101(구르기) · 102(뒤로 넘어짐). */
+  seq: number;
+  /** base eat joy sad sick practice shy call / tilt wave sleep wash startle nod smile_idle sit / roll fall_back */
+  key: string;
+  label: string;
+  layer: MotionLayer;
+  unlocked: boolean;
+  /** 기본 행동(2프레임) 그림 키. 열리기 전엔 null. assetUrl() 로 조립한다. */
+  basicImageKey: string | null;
+  /** 잠긴 칸의 조건 한 줄(예: "채팅 응답 4회"). 1층은 null. */
+  hint: string | null;
+  /** 조건 진행(예: 채팅 응답 2/4). 1층·선물은 null. */
+  progress: MotionProgress | null;
+  advanced: AdvancedMotion;
+}
+
+export interface FirstGift {
+  status: FirstGiftStatus;
+  /** 3일째까지 남은 날. 지났으면 0. */
+  daysLeft: number;
+}
+
+export interface ChatSummary {
+  /** 지금 열려 있는 부름. 없으면 null. */
+  openSlot: ChatSlot | null;
+  /** 다음 부름 시각. 오늘 더 없으면 null. */
+  nextAt: string | null;
+}
+
+/** 혼자 논 장면의 레시피(정본 11장). 클라이언트가 조립한다. */
+export interface SceneRecipe {
+  motionKey: string;
+  background: string;
+  prop: string | null;
+  at: string;
+  line: string;
+}
+
+export interface Scenes {
+  enabled: boolean;
+  /** 최근 장면. 없으면 null. */
+  latest: SceneRecipe | null;
+}
+
+/** 밤에 합격해 아침에 도착한 심화 행동 한 건. seen 전까지 learnedToday 에 남는다. */
+export interface LearnedMotion {
+  seq: number;
+  key: string;
+  label: string;
+  imageKey: string;
+  revealedAt: string;
+}
+
+/** 채팅 답에 대한 대사 1줄 + 반응 동작. 답 응답(PetDetail)에만 실린다. */
+export interface ChatReply {
+  line: string;
+  /** 반응 동작 키(Motion.key). */
+  reactionKey: string;
+}
+
+/** 기능 열림(정본 6장 "기능 해금"). 프론트는 이 값만 보고 버튼을 켠다. */
+export interface Features {
+  download: boolean;
+  leftRight: boolean;
+  run: boolean;
+  scenes: boolean;
+  background: boolean;
+  album: boolean;
+  pieces: boolean;
+}
+
+export interface Leaving {
+  noticedAt: string;
+  departsAt: string;
+}
+
+export interface Trip {
+  startedAt: string;
+  postcards: number;
+}
+
+export interface Settings {
+  leaveEnabled: boolean;
+}
+
+export interface TutorialStep {
+  key: TutorialStepKey;
+  /** 부름이 도래하는 시각(부화 + N분). */
+  dueAt: string;
+  /** 서버 카운터로 판정한 완료 여부. 브라우저에 저장하지 않는다. */
+  done: boolean;
+  /** 지금 강조할 칸인가(도래했고 아직 안 한 첫 칸). */
+  current: boolean;
+}
+
+/**
+ * 아기 시간표(튜토리얼). 전부 서버 카운터에서 파생된다.
+ * 60분이 지나도 남은 부름은 큐에 남아 순서대로 나온다(정본 16장) — 그때 active 는 false 다.
+ * 9단계가 모두 done 이면 블록 자체가 null.
+ */
+export interface Tutorial {
+  /** babyUntil 전인가. */
+  active: boolean;
+  minutesSince: number;
+  steps: TutorialStep[];
+}
+
+/**
+ * 펫 상태 — 부화 중이든 함께 지내는 중이든 이 하나로 답한다(서버 PetResponses.Detail v2).
+ *
+ * ★ 블록 단위로 nullable 이다. 단계에 따라 채워지는 것이 다르다:
  *   - HATCHING 일 때만: step · elapsedSeconds
- *   - ALIVE 일 때만: foodInSeconds · totalMotions · training 이하 전부
+ *   - ALIVE 일 때만: clock 이하 전부 — **motions·justUnlocked·learnedToday 도 null** 이다(빈 배열이 아니다).
+ *     화면·훅은 `pet.motions ?? []` 로 읽는다. 목 서버도 같은 모양을 낸다(리뷰 H1 — 부화 중 첫 렌더가 죽었다).
  *   - FAILED/DEAD 일 때만: deathReason
- *   - 깨우기 응답일 때만: learned
- *   그래서 화면은 "어느 API 를 불러야 하지" 를 판단할 필요가 없고, phase 만 보면 된다.
- *
- * 시각은 전부 ISO-8601 문자열이다(서버 Instant → Jackson 기본 직렬화).
+ *   - 행동 응답에만: justUnlocked 가 비어 있지 않을 수 있다
  */
 export interface PetDetail {
   petId: number;
@@ -53,65 +290,46 @@ export interface PetDetail {
   step: string | null;
   /** 부화 시작 후 지난 시간(초). 부화 중일 때만. */
   elapsedSeconds: number | null;
-
-  /** FAILED 일 때만. */
+  /** FAILED/DEAD 일 때만. */
   deathReason: DeathReason | null;
-
   hatchStartedAt: string | null;
+  /** 시계가 켜진 순간이자 튜토리얼 0분. */
   hatchedAt: string | null;
 
-  // ── 수치. ALIVE 일 때만 채워진다 ──
-  //
-  // ★ nullable 인 것이 실수가 아니다. 서버는 부화 중에 수치를 **비워서** 보낸다 —
-  //   0 을 채워 보내면 알이 깨기도 전에 화면이 "포만감 0" 을 굶주림으로 그리기 때문이다
-  //   (PetResponses.Detail 의 같은 자리 주석). 화면은 phase 를 먼저 보고 이 값을 읽는다.
-  fullness: number | null;
-  happiness: number | null;
-  trash: number | null;
-  food: number | null;
+  /** ★ 항상 온다. 프론트 시계의 유일한 기준. */
+  serverNow: string;
 
-  /** 다음 밥이 찰 때까지(초). 재고가 가득이거나 ALIVE 가 아니면 null. */
-  foodInSeconds: number | null;
-
-  /** 지금까지 배운 움직임 수. ALIVE 일 때만. */
-  unlockedCount: number | null;
-  /** 다 모으면 몇 개인가(13). ALIVE 일 때만. */
-  totalMotions: number | null;
-
-  training: boolean | null;
-  /** 연습이 끝날 때까지(초). 연습 중이 아니면 null. */
-  trainInSeconds: number | null;
-  /** 이번 해금에 치른 연습 횟수. */
-  trainStack: number | null;
-  /** 다음 하나를 열려면 몇 번 필요한가. */
-  trainPrice: number | null;
-  /** 지금 연습하면 몇 회분이 쌓이는가(1 또는 2). 행복이 높으면 2 — 버튼에 미리 보여주는 값. */
-  trainGain: number | null;
-
-  sleeping: boolean | null;
-  /** 깨어날 때까지(초). 자고 있지 않으면 null. */
-  sleepInSeconds: number | null;
-  /** 지금 깨울 수 있는가. true 면 깨우기가 곧 해금이다. */
-  canWake: boolean | null;
-  /** 지금 재울 수 있는가(연습 값을 다 치렀는가). */
-  canSleep: boolean | null;
-  /** 다 모았는가. */
-  complete: boolean | null;
-
-  /**
-   * 첫날 순서(튜토리얼)를 끝냈는가.
-   *
-   * ★ 이 값이 false 인 동안에는 **수치가 아예 줄지 않는다**(서버가 시계를 멈춰 둔다).
-   *   안내를 따라가는 사이에 행복이 줄면 '쓰다듬 → 훈련 2회분' 이라는 첫날 순서의 숫자가
-   *   어긋나기 때문이다. 그래서 화면이 완료를 알려 주기 전까지는 며칠이 지나도 그대로다.
-   */
-  tutorialDone: boolean | null;
-
-  /** 이 아이의 그림이 사는 곳. `{CDN}/{imageBase}/idle.webp` 처럼 조립한다. 부화 전에는 null. */
-  imageBase: string | null;
-
-  /** 이번 깨우기에서 무엇을 배웠나. 깨우기 응답에만 담긴다. */
-  learned: Learned | null;
+  clock: Clock | null;
+  /** "N일째 함께". 앱을 연 날만 +1. */
+  daysTogether: number | null;
+  gauges: Gauges | null;
+  food: Food | null;
+  mood: Mood | null;
+  sick: Sick | null;
+  intimacy: Intimacy | null;
+  today: Today | null;
+  pieces: Pieces | null;
+  /** 18칸 고정. ALIVE 가 아니면 null. */
+  motions: Motion[] | null;
+  /** 이 행동으로 방금 열린 2층 동작의 seq(폭죽). 행동 응답에만, 조회에는 []. ALIVE 가 아니면 null. */
+  justUnlocked: number[] | null;
+  /** 밤에 합격해 아침에 도착한 심화 행동(아직 seen 이 아닌 것). ALIVE 가 아니면 null. */
+  learnedToday: LearnedMotion[] | null;
+  /** 채팅 답 응답에만. 그 밖엔 null. */
+  chatReply: ChatReply | null;
+  firstGift: FirstGift | null;
+  chatSummary: ChatSummary | null;
+  scenes: Scenes | null;
+  personality: Personality | null;
+  /** 세계관 한 줄(40자). */
+  world: string | null;
+  /** 배경 키(constants.BACKGROUNDS). 기본 'room'. */
+  background: string | null;
+  features: Features | null;
+  leaving: Leaving | null;
+  trip: Trip | null;
+  settings: Settings | null;
+  tutorial: Tutorial | null;
 }
 
 /** 펫 생성 결과. 부화는 뒤에서 계속 돌고, 진행 상황은 상태 조회로 본다. */
@@ -125,15 +343,51 @@ export interface PetCreated {
 }
 
 export interface CreatePetInput {
-  /** 20자 이하. */
+  /** 12자 이하(정본 15장). */
   name: string;
-  /** 세부사항(성격·말버릇·설정). 200자 이하. 대사에 쓰인다. */
+  /** 세부사항(설정). 200자 이하. 선택. */
   note?: string;
   /** upload.ts 의 uploadImage() 가 돌려준 key. 내 것이고 아직 안 쓴 키여야 한다. */
   imageKey: string;
 }
 
-const BASE = '/api/zzal/v1/me/pets';
+/** 오늘의 부름 하나. */
+export interface ChatCall {
+  slot: ChatSlot;
+  /** 캐릭터가 먼저 건넨 한 줄(서버 템플릿, 원망 필터 통과본). */
+  line: string;
+  calledAt: string;
+  /** 만료 시각(다음 부름 시각 · 저녁은 잠들 때 = null). */
+  expiresAt: string | null;
+  answered: boolean;
+}
+
+/** GET /chat 의 응답. */
+export interface ChatState {
+  /** 지금 답할 수 있는 슬롯. 없으면 null. */
+  openSlot: ChatSlot | null;
+  /** 오늘 도래한 부름들(BABY 포함). */
+  calls: ChatCall[];
+  /** 기억(최근 답 5개, 오래된 것부터). */
+  memories: string[];
+}
+
+export interface Postcard {
+  seq: number;
+  imageKey: string | null;
+  line: string;
+  createdAt: string;
+}
+
+/** 앨범. 첫 심화 행동이 열리기 전엔 ZZAL_FEATURE_LOCKED. */
+export interface Album {
+  motions: Motion[];
+  postcards: Postcard[];
+  scenes: SceneRecipe[];
+  firstGift: FirstGift | null;
+}
+
+export const PET_BASE = '/api/zzal/v2/me/pets';
 
 /**
  * 펫 생성 = 부화 시작. 기다리지 않고 즉시 돌아온다.
@@ -142,55 +396,89 @@ const BASE = '/api/zzal/v1/me/pets';
  * ZZAL_PET_ALREADY_HATCHING · ZZAL_PET_LIMIT_REACHED(409).
  */
 export function createPet(input: CreatePetInput): Promise<PetCreated> {
-  return request<PetCreated>(BASE, { method: 'POST', body: input });
+  return request<PetCreated>(PET_BASE, { method: 'POST', body: input });
 }
 
-/** 내 펫 목록. 지금은 한 사람이 한 마리라 사실상 0개 아니면 1개다. */
+/** 내 펫 목록. 한 사람이 한 마리라 사실상 0개 아니면 1개다. */
 export function listPets(signal?: AbortSignal): Promise<PetDetail[]> {
-  return request<PetDetail[]>(BASE, { signal });
+  return request<PetDetail[]>(PET_BASE, { signal });
 }
 
-/** 펫 상태. 부화 중에는 이걸 몇 초마다 부른다(ready 가 true 가 되면 완료). */
+/** 펫 상태. 조회 = settle + 그날 첫 조회면 함께한 날 +1 + 떠남 예고 취소. */
 export function getPet(petId: number, signal?: AbortSignal): Promise<PetDetail> {
-  return request<PetDetail>(`${BASE}/${petId}`, { signal });
+  return request<PetDetail>(`${PET_BASE}/${petId}`, { signal });
 }
 
 /**
- * 첫날 순서를 끝냈다고 알린다. **이 순간부터 수치가 흐르기 시작한다.**
+ * 돌보기 6종. ★ 응답이 곧 최신 상태다. 누른 뒤 다시 조회하지 말 것.
  *
- * 두 번 불러도 안전하다(이미 끝난 상태면 에러 대신 지금 상태를 그대로 준다). 그래서
- * 화면은 "이미 보냈던가?" 를 기억하지 않아도 되고, 새로고침 뒤 다시 보내도 문제가 없다.
- */
-export function tutorialDone(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${BASE}/${petId}/tutorial-done`, { method: 'POST' });
-}
-
-/**
- * 돌보기(밥·쓰다듬·청소).
- *
- * ★ 응답이 상태 조회와 같은 모양이다 = 이게 곧 최신 상태다. 누른 뒤 다시 조회하지 말 것.
+ * 실패 코드 — ZZAL_CARE_NOT_NEEDED · ZZAL_NO_FOOD · ZZAL_BATH_DONE_TODAY · ZZAL_SICK_REFUSES ·
+ * ZZAL_PET_SLEEPING · ZZAL_TRAVELING(409).
  */
 export function care(petId: number, action: CareAction): Promise<PetDetail> {
-  return request<PetDetail>(`${BASE}/${petId}/care`, { method: 'POST', body: { action } });
+  return request<PetDetail>(`${PET_BASE}/${petId}/care`, { method: 'POST', body: { action } });
 }
 
-/** 연습 시작. 즉시 끝나지 않고 trainInSeconds 만큼 걸린다. */
-export function train(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${BASE}/${petId}/train`, { method: 'POST' });
-}
-
-/** 재우기. 연습 값을 다 치렀을 때만(canSleep) 가능하다. */
+/** 재우기(19~23시, 아기 중엔 낮잠). 창 밖이면 ZZAL_NOT_SLEEP_TIME. */
 export function sleep(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${BASE}/${petId}/sleep`, { method: 'POST' });
+  return request<PetDetail>(`${PET_BASE}/${petId}/sleep`, { method: 'POST' });
 }
 
-/**
- * 깨우기. 다 자고 나서 깨우면 자는 동안 익힌 움직임이 열린다.
- *
- * ★ 못 배웠어도 깨어나기는 한다 — 그때는 응답의 learned.learned 가 false 이고
- *   learned.message 에 화면에 띄울 말이 담긴다. 성공/실패를 HTTP 로 가르지 않으므로
- *   호출한 쪽이 learned 를 반드시 확인해야 한다.
- */
+/** 깨우기(07~10시, 낮잠은 5분 뒤). 창 밖이면 ZZAL_NOT_WAKE_TIME. */
 export function wake(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${BASE}/${petId}/wake`, { method: 'POST' });
+  return request<PetDetail>(`${PET_BASE}/${petId}/wake`, { method: 'POST' });
+}
+
+/** 성격·세계관. 언제든 바꿀 수 있다(정본 0장 6). */
+export function setPersonality(petId: number, personality: Personality, world?: string): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/personality`, {
+    method: 'POST',
+    body: { personality, world: world ?? undefined },
+  });
+}
+
+/** 배경 바꾸기. 2층 4종 전에는 ZZAL_FEATURE_LOCKED. */
+export function setBackground(petId: number, background: string): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/background`, { method: 'POST', body: { background } });
+}
+
+/** 다운로드·공유했다는 사실을 남긴다(튜토리얼 25분의 서버 사실). 실제 파일 받기는 download.ts. */
+export function share(petId: number, motionKey: string, kind: ShareKind): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/share`, { method: 'POST', body: { motionKey, kind } });
+}
+
+export function getChat(petId: number, signal?: AbortSignal): Promise<ChatState> {
+  return request<ChatState>(`${PET_BASE}/${petId}/chat`, { signal });
+}
+
+/** 부름에 답한다. 40자. 응답은 PetDetail + chatReply. 닫힌 슬롯이면 ZZAL_CHAT_SLOT_CLOSED. */
+export function answerChat(petId: number, slot: ChatSlot, text: string): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/chat/${slot}/answer`, {
+    method: 'POST',
+    body: { text },
+  });
+}
+
+/** "배워왔어요" 확인. learnedToday 에서 빠진다. */
+export function markMotionSeen(petId: number, seq: number): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/motions/${seq}/seen`, { method: 'POST' });
+}
+
+/** 앨범. features.album 전에는 ZZAL_FEATURE_LOCKED. 16칸 도감은 PetDetail.motions 로도 그릴 수 있다. */
+export function getAlbum(petId: number, signal?: AbortSignal): Promise<Album> {
+  return request<Album>(`${PET_BASE}/${petId}/album`, { signal });
+}
+
+/** 여행 간 아이를 부른다(재회). 여행 중이 아니면 ZZAL_NOT_TRAVELING. */
+export function callBack(petId: number): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/call-back`, { method: 'POST' });
+}
+
+export function updateSettings(petId: number, settings: Settings): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/settings`, { method: 'POST', body: settings });
+}
+
+/** 보내기. 되돌릴 수 없다 — 화면이 두 번 물어야 한다. 응답은 phase DEAD 인 PetDetail. */
+export function release(petId: number): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/release`, { method: 'POST' });
 }
