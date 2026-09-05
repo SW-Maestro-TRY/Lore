@@ -132,6 +132,13 @@ public class ZzalGame {
         return survivedMs;
     }
 
+    /** 밤잠을 넘긴 미완료 판을 접는다(패). 익일 새 판을 열기 위해 — 어제 판은 잇지 않는다(리뷰 반영). */
+    public void abandon(Instant now) {
+        if (finishedAt == null) {
+            finishedAt = now;
+        }
+    }
+
     public boolean isFinished() {
         return finishedAt != null;
     }

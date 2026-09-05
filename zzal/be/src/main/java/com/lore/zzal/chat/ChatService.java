@@ -81,10 +81,14 @@ public class ChatService {
         Instant babyAt = pet.getHatchedAt().plusSeconds(8 * 60);
         if (!now.isBefore(babyAt)) {
             LocalDate babyDay = AwakeClock.dateOf(pet.getHatchedAt());
-            out.add(callRepository.findByPetIdAndDayOfAndSlot(pet.getId(), babyDay, ChatSlot.BABY)
+            ZzalChatCall baby = callRepository.findByPetIdAndDayOfAndSlot(pet.getId(), babyDay, ChatSlot.BABY)
                     .orElseGet(() -> callRepository.save(ZzalChatCall.call(pet.getId(), babyDay, ChatSlot.BABY,
                             BanFilter.clean(ChatTemplates.call(pet.getPersonality(), ChatSlot.BABY, pet.getName())),
-                            babyAt, AwakeClock.nextAutoSleep(pet.babyUntil(), pet.babyUntil())))));
+                            babyAt, AwakeClock.nextAutoSleep(pet.babyUntil(), pet.babyUntil()))));
+            // 답했거나 만료된 BABY 는 부화 당일에만 보인다 — 이후 날의 "오늘의 부름" 에 영구히 끼지 않게(리뷰 반영).
+            if (baby.isOpen(now) || AwakeClock.dateOf(now).equals(babyDay)) {
+                out.add(baby);
+            }
         }
         // 하루 3회 — 기상 시각 기준. 아기 60분 안에서는 안 부른다(튜토리얼 부름이 따로 있다).
         Instant woke = pet.getWokeAt() == null ? pet.getHatchedAt() : pet.getWokeAt();
@@ -95,7 +99,8 @@ public class ChatService {
         Instant nightEnd = day.atTime(ZzalRules.AUTO_SLEEP_AT).atZone(ZzalRules.ZONE).toInstant();
         record Due(ChatSlot slot, Instant at, Instant until) {
         }
-        // 만료 = 다음 부름 시각(16장). 기상이 늦어 NOON(기상+7h)이 19:00 을 넘기면 그 부름은 없다 — 한 시각에 둘을 부르지 않는다.
+        // 만료 = 다음 부름 시각(16장). 시작 ≥ 만료인 슬롯은 건너뛴다 — 기상(부화)이 늦어 MORNING·NOON 이 19:00 뒤로
+        // 떨어지면 그 부름은 없다(해석 23). 평일은 10:00 자동 기상이라 NOON 이 17:00 을 넘지 않고, 부화 당일은 BABY 부름이 따로 있다.
         for (Due d : List.of(new Due(ChatSlot.MORNING, morning, min(noon, evening)), new Due(ChatSlot.NOON, noon, evening),
                 new Due(ChatSlot.EVENING, evening, nightEnd))) {
             if (!d.at().isBefore(d.until()) || now.isBefore(d.at()) || now.isBefore(pet.babyUntil())) {

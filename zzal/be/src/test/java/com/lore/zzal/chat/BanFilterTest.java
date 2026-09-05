@@ -22,6 +22,15 @@ class BanFilterTest {
     }
 
     @Test
+    @DisplayName("★ 리뷰 8문장 — 존댓말 변형·전각 공백·점으로 자른 것까지 잡는다")
+    void reviewSentences() {
+        for (String bad : List.of("왜 안 오셨어요?", "저를 잊으신 거예요", "많이 기다렸는데", "오늘도 안 오는 줄 알았어요",
+                "외로웠어요… 어디 갔었어요?", "왜.안.왔.어", "왜\u3000안\u3000왔어요", "저 버리신 거 아니죠?")) {
+            assertThat(BanFilter.isBanned(bad)).as(bad).isTrue();
+        }
+    }
+
+    @Test
     @DisplayName("보통 말은 그대로")
     void passesNormal() {
         for (String ok : List.of("좋은 아침이에요!", "오늘 뭐 했어요?", "…응, 나도요.", "기억해 둘게요.")) {

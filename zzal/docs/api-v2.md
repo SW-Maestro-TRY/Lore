@@ -95,7 +95,7 @@
 | 호출 | 요청 | 응답 |
 |---|---|---|
 | `GET /{id}/chat` | | `Chat{openSlot, calls[{slot, line, calledAt, expiresAt, answered}], memories[≤5]}` |
-| `POST /{id}/chat/{slot}/answer` | `{text ≤40}` | `{pet: PetDetail, chatReply{line, reactionKey}}` — **「해석」22**: `PetDetail`을 감싸는 모양(봉투 안에 두 블록) |
+| `POST /{id}/chat/{slot}/answer` | `{text ≤40}` — 40자 = **UTF-16 길이**(프론트 `length`와 동일, 서버 `@Size`) | `{pet: PetDetail, chatReply{line, reactionKey}}` — **「해석」22**: `PetDetail`을 감싸는 모양(봉투 안에 두 블록) |
 
 - slot = `BABY`(아기 8분) · `MORNING`(기상+1h) · `NOON`(기상+7h) · `EVENING`(**19:00 고정**).
 - 부름은 다음 부름 시각에 만료(`ZZAL_CHAT_SLOT_CLOSED`). `EVENING`은 잠들 때 만료. 만료는 패널티 0.
@@ -104,7 +104,7 @@
 - **「해석」** 기상 시각이 없는 날(부화 당일)은 `MORNING`=부화+1h, `NOON`=부화+7h.
 - 대사는 v0 템플릿(5그룹×슬롯 4 + 답 3벌 + 재언급 1). 원망 문장 금지 필터는 출력 단계에 강제(`BanFilter`, 프론트와 같은 목록으로 두 겹).
 - **「해석」23** 부름 행은 타이머가 아니라 조회·답 때 "도래한 슬롯"으로 만들어진다(시계와 같은 이유). `MORNING`은 `NOON` 시각에, `NOON`은 19:00에, `EVENING`은 23:00에 만료하고 그 전에 잠들면 "자는 중"으로 닫힌다. 아기 60분 안에는 하루 부름이 오지 않는다(BABY만). `PetDetail.chatSummary.openSlot`은 v0에서 항상 null — 열린 슬롯은 `GET /chat`으로 본다.
-- **「해석」24** 재언급은 답이 3의 배수 번째일 때(기억이 있으면) 최근 답 하나를 끼운다.
+- **「해석」24** 재언급은 **답 3개마다 그다음 답에서**(4·7·10번째 답, 기억이 있으면) 최근 답 하나를 끼운다.
 
 ### 1.6 동작·앨범
 
@@ -126,7 +126,9 @@
 
 - 두 게임 합쳐 **하루 3판**, 시작한 판 기준, 잠들 때 리셋. `RUN`은 좌우 맞히기 **5승** 뒤.
 - 승리 = 행복 +1(설정 `app.zzal.reward.game-win: HAPPINESS`).
-- 응답 `GameState{playing, gameId, kind, round, hits, finished, win, remainingToday}` — v1 모양 유지 + `kind`.
+- 응답 `GameState{playing, gameId, kind, round, hits, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}` · `Guess{…, justUnlocked[], runUnlocked}` · `RunResult{gameId, survivedMs, win, remainingToday, justUnlocked[], runUnlocked}` — **행동 응답 = 상태**: 게임 경로 해금(13번 놀라기 = 3판 시작, 달리기 = 5승)이 그 응답에 실린다(`runUnlocked`는 동작이 아니라 기능이라 별도 불리언).
+- **「해석」27** 밤잠을 넘긴 미완료 판은 잇지 않는다 — 익일 첫 `start`가 어제 판(오늘 기상 전 시작)을 접고(패) 새 판을 연다.
+- 달리기 서버 검증은 정본대로 상한(60,000ms)만. "시작 뒤 경과 시간 + 2초" 검사는 보류(결정기록).
 
 ### 1.8 떠남·설정(v2 판, 9/14)
 
@@ -418,8 +420,8 @@
 | 20 | 2 | 비-ALIVE 펫도 `motions`·`justUnlocked`·`learnedToday`는 null이 아니라 **빈 목록 `[]`**(프론트가 길이만 보도록) |
 | 21 | 1.2 | 간식은 행복 가득이어도 받는다(밥만 가득 거절) — **확정(9/5 결정 4)** |
 | 22 | 1.5 | 답 응답은 `{pet, chatReply}` 봉투 |
-| 23 | 1.5 | 부름 행은 조회·답 때 도래한 슬롯으로 생성, 만료 시각 규칙, 아기 60분 안엔 하루 부름 없음, `chatSummary.openSlot`은 v0에서 null |
-| 24 | 1.5 | 재언급은 답 3의 배수 번째 |
+| 23 | 1.5 | 부름 행은 조회·답 때 도래한 슬롯으로 생성, 만료 시각 규칙, 아기 60분 안엔 하루 부름 없음, `chatSummary.openSlot`은 v0에서 null. **시작 ≥ 만료인 슬롯은 없다** — 정오 이후 기상의 NOON, 18:00 이후 부화의 MORNING·NOON(부화 당일은 BABY가 있고 평일은 10:00 자동 기상이라 NOON이 17:00을 넘지 않음). 답한·만료된 BABY는 부화 당일에만 목록에 |
+| 24 | 1.5 | 재언급은 답 3개마다 그다음 답에서(4·7·10번째) |
 
 ---
 

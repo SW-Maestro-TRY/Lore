@@ -116,6 +116,30 @@ class ChatServiceTest {
     }
 
     @Test
+    @DisplayName("답한 BABY 는 부화 당일에만 보이고 이후 날의 부름 목록에 끼지 않는다 (리뷰 하-3)")
+    void answeredBabyNotCarriedOver() {
+        service.answer(USER, PET, ChatSlot.BABY, "이름", T0.plus(Duration.ofMinutes(9)));
+        assertThat(service.calls(USER, PET, kst("2026-09-05 15:00")).calls()).extracting(ZzalChatCall::getSlot)
+                .contains(ChatSlot.BABY);
+        pet.settle(kst("2026-09-06 07:00"));
+        pet.wake(kst("2026-09-06 07:00"));
+        assertThat(service.calls(USER, PET, kst("2026-09-06 08:30")).calls()).extracting(ZzalChatCall::getSlot)
+                .doesNotContain(ChatSlot.BABY);
+    }
+
+    @Test
+    @DisplayName("18:30 부화 — MORNING(19:30)·NOON 은 19:00 뒤라 없고 EVENING 만(해석 23 확장, 리뷰 하-5)")
+    void lateHatchSkipsMorningAndNoon() {
+        Instant hatched = kst("2026-09-05 18:30");
+        pet = ZzalPet.hatch(USER, "여울", null, "k", hatched);
+        pet.markAlive("s", "i", hatched);
+        ReflectionTestUtils.setField(pet, "id", PET);
+        // 아기 60분(19:30)이 끝나야 하루 부름이 온다. 19:30 은 밤이 아니라 깨어 있다.
+        ChatService.View v = service.calls(USER, PET, kst("2026-09-05 19:35"));
+        assertThat(v.calls()).extracting(ZzalChatCall::getSlot).containsExactly(ChatSlot.BABY, ChatSlot.EVENING);
+    }
+
+    @Test
     @DisplayName("★ 부름은 다음 부름 시각에 만료 — 19:00 에 MORNING 에 답하면 ZZAL_CHAT_SLOT_CLOSED, 패널티 0")
     void expiresAtNextCall() {
         service.calls(USER, PET, kst("2026-09-05 13:00"));

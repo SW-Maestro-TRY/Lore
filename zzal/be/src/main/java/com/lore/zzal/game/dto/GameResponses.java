@@ -5,6 +5,8 @@ import com.lore.zzal.game.ZzalGame;
 import com.lore.zzal.game.dto.GameRequests.Side;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.List;
+
 /**
  * 좌·우 맞히기 API 가 돌려주는 것들.
  *
@@ -44,17 +46,24 @@ public final class GameResponses {
             @Schema(description = "몇 번 이상 맞히면 이기나", example = "3") int winAt,
 
             @Schema(description = "오늘 더 할 수 있는 판 수(지금 치고 있는 판은 뺀 값)", example = "4")
-            int remainingToday) {
+            int remainingToday,
 
-        public static State of(ZzalGame game, int remainingToday) {
+            @Schema(description = "이번 시작으로 열린 2층 동작 seq(13번 놀라기 = 3판). 행동 응답 = 상태") List<Integer> justUnlocked,
+            @Schema(description = "달리기가 열려 있는가(좌우 5승)") boolean runUnlocked) {
+
+        public static State of(GameService.Started s, int remainingToday) {
+            return of(s.game(), remainingToday, s.justUnlocked(), s.runUnlocked());
+        }
+
+        public static State of(ZzalGame game, int remainingToday, List<Integer> justUnlocked, boolean runUnlocked) {
             return new State(true, game.getId(), game.getKind().name(), game.round(), game.getHits(),
-                    ZzalGame.ROUNDS, ZzalGame.WIN_AT, remainingToday);
+                    ZzalGame.ROUNDS, ZzalGame.WIN_AT, remainingToday, justUnlocked, runUnlocked);
         }
 
         /** 치던 판이 없을 때. 화면은 이걸 보고 "시작" 을 그린다. */
-        public static State idle(int remainingToday) {
+        public static State idle(int remainingToday, boolean runUnlocked) {
             return new State(false, null, null, null, null,
-                    ZzalGame.ROUNDS, ZzalGame.WIN_AT, remainingToday);
+                    ZzalGame.ROUNDS, ZzalGame.WIN_AT, remainingToday, List.of(), runUnlocked);
         }
     }
 
@@ -85,7 +94,10 @@ public final class GameResponses {
             @Schema(description = "한 판에 몇 번 겨루나", example = "5") int rounds,
             @Schema(description = "몇 번 이상 맞히면 이기나", example = "3") int winAt,
 
-            @Schema(description = "오늘 더 할 수 있는 판 수", example = "4") int remainingToday) {
+            @Schema(description = "오늘 더 할 수 있는 판 수", example = "4") int remainingToday,
+
+            @Schema(description = "이번 판으로 열린 2층 동작 seq") List<Integer> justUnlocked,
+            @Schema(description = "달리기가 열려 있는가(이 판의 승리로 5승이 됐으면 여기서 true 로 바뀐다)") boolean runUnlocked) {
 
         public static Guess of(GameService.GuessResult r, int remainingToday) {
             ZzalGame game = r.game();
@@ -102,7 +114,9 @@ public final class GameResponses {
                     finished ? null : game.round(),
                     ZzalGame.ROUNDS,
                     ZzalGame.WIN_AT,
-                    remainingToday);
+                    remainingToday,
+                    r.justUnlocked(),
+                    r.runUnlocked());
         }
     }
 
@@ -111,6 +125,8 @@ public final class GameResponses {
             @Schema(example = "12") Long gameId,
             @Schema(description = "살아남은 ms(상한 60,000 으로 잘림)", example = "31200") long survivedMs,
             @Schema(description = "30,000 이상이면 승리") boolean win,
-            @Schema(description = "오늘 더 할 수 있는 판 수") int remainingToday) {
+            @Schema(description = "오늘 더 할 수 있는 판 수") int remainingToday,
+            @Schema(description = "이번 판으로 열린 2층 동작 seq") List<Integer> justUnlocked,
+            @Schema(description = "달리기가 열려 있는가") boolean runUnlocked) {
     }
 }

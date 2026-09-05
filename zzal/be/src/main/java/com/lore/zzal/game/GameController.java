@@ -49,8 +49,8 @@ public class GameController {
     @PostMapping
     public ApiResponse<GameResponses.State> start(@LoginUser Long userId, @PathVariable Long petId,
                                                   @Valid @RequestBody GameRequests.Start request) {
-        ZzalGame game = gameService.start(userId, petId, request.kind(), Instant.now());
-        return ApiResponse.ok(GameResponses.State.of(game, remaining(userId, petId)));
+        GameService.Started s = gameService.start(userId, petId, request.kind(), Instant.now());
+        return ApiResponse.ok(GameResponses.State.of(s, remaining(userId, petId)));
     }
 
     @Operation(summary = "좌우 한 판 치기", description = "응답에 방금 친 판의 답만 담긴다. 다섯 판을 다 치면 finished·win.")
@@ -77,15 +77,19 @@ public class GameController {
                                                        @Valid @RequestBody GameRequests.Finish request) {
         GameService.RunResult r = gameService.finish(userId, petId, gameId, request.survivedMs(), Instant.now());
         return ApiResponse.ok(new GameResponses.RunResult(r.game().getId(), r.game().getSurvivedMs(), r.win(),
-                remaining(userId, petId)));
+                remaining(userId, petId), r.justUnlocked(), r.runUnlocked()));
     }
 
     @Operation(summary = "치던 판 잇기", description = "새로고침 복구용. 치던 판이 없으면 playing=false.")
     @GetMapping("/current")
     public ApiResponse<GameResponses.State> current(@LoginUser Long userId, @PathVariable Long petId) {
-        int remaining = remaining(userId, petId);
-        return ApiResponse.ok(gameService.current(userId, petId, Instant.now())
-                .map(g -> GameResponses.State.of(g, remaining))
-                .orElseGet(() -> GameResponses.State.idle(remaining)));
+        // current() 가 정산을 먼저 하므로 남은 판수는 그 뒤에 읽는다(정산 전 값 방지 — 리뷰 반영).
+        java.util.Optional<ZzalGame> playing = gameService.current(userId, petId, Instant.now());
+        ZzalPet pet = petService.get(userId, petId);
+        int remaining = gameService.remainingToday(pet);
+        boolean run = pet.getLeftRightWins() >= com.lore.zzal.pet.ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS;
+        return ApiResponse.ok(playing
+                .map(g -> GameResponses.State.of(g, remaining, java.util.List.of(), run))
+                .orElseGet(() -> GameResponses.State.idle(remaining, run)));
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.random.RandomGenerator;
 
@@ -48,10 +49,15 @@ public class GameService {
         this.dailyLimit = dailyLimit;
     }
 
-    public record GuessResult(ZzalGame game, int round, char pick, char answer, boolean hit) {
+    /** 시작 결과 — 판 + 이번 행동으로 열린 2층(13번 놀라기) + 달리기 해금 여부. 행동 응답 = 상태(리뷰 반영). */
+    public record Started(ZzalGame game, List<Integer> justUnlocked, boolean runUnlocked) {
     }
 
-    public record RunResult(ZzalGame game, boolean win) {
+    public record GuessResult(ZzalGame game, int round, char pick, char answer, boolean hit,
+                              List<Integer> justUnlocked, boolean runUnlocked) {
+    }
+
+    public record RunResult(ZzalGame game, boolean win, List<Integer> justUnlocked, boolean runUnlocked) {
     }
 
     /**
@@ -59,13 +65,20 @@ public class GameService {
      * 펫은 {@link PetService#awake} 로 잠근다 — 검사와 저장 사이에 다른 요청이 끼면 판이 둘 생긴다.
      */
     @Transactional
-    public ZzalGame start(Long userId, Long petId, GameKind kind, Instant realNow) {
+    public Started start(Long userId, Long petId, GameKind kind, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
 
         Optional<ZzalGame> playing = gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(pet.getId());
         if (playing.isPresent()) {
-            return playing.get();
+            ZzalGame old = playing.get();
+            // ★ 어제 판은 잇지 않는다 — 밤잠을 넘긴 미완료 판을 그대로 돌려주면 익일 첫 시작이 어제 좌우 판이 되고
+            //   달리기도 못 연다(리뷰 실측). 오늘 기상 전에 시작한 판은 접고(패) 새로 시작한다.
+            Instant woke = pet.getWokeAt() == null ? pet.getHatchedAt() : pet.getWokeAt();
+            if (!old.getStartedAt().isBefore(woke)) {
+                return new Started(old, List.of(), runUnlocked(pet));
+            }
+            old.abandon(now);
         }
         if (pet.isSick()) {
             throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
@@ -77,9 +90,14 @@ public class GameService {
         if (pet.getTodayGames() >= dailyLimit) {
             throw new BusinessException(ErrorCode.ZZAL_GAME_DAILY_LIMIT);
         }
-        pet.startGame();
+        PetService.Action a = petService.withUnlockDiff(pet, pet::startGame);   // 13번 놀라기(3판)가 여기서 열린다
         String answers = kind == GameKind.LEFT_RIGHT ? drawAnswers() : "";
-        return gameRepository.save(ZzalGame.start(userId, pet.getId(), kind, answers, now));
+        ZzalGame game = gameRepository.save(ZzalGame.start(userId, pet.getId(), kind, answers, now));
+        return new Started(game, a.justUnlocked(), runUnlocked(pet));
+    }
+
+    private static boolean runUnlocked(ZzalPet pet) {
+        return pet.getLeftRightWins() >= ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS;
     }
 
     /** 좌우 한 판. 화면이 보낸 gameId 를 믿지 않고 펫과 사람이 모두 맞는지 확인한다. */
@@ -96,11 +114,14 @@ public class GameService {
         }
         int round = game.round();
         boolean hit = game.guess(pick, now);
-        if (game.isFinished() && game.isWin()) {
-            pet.winLeftRight();
-            rewardService.forGameWin(pet, now);
-        }
-        return new GuessResult(game, round, pick, revealed(pick, hit), hit);
+        PetService.Action a = petService.withUnlockDiff(pet, () -> {
+            if (game.isFinished() && game.isWin()) {
+                pet.winLeftRight();
+                rewardService.forGameWin(pet, now);
+            }
+        });
+        // 달리기 해금(5승)은 동작이 아니라 기능이라 justUnlocked 에 안 실린다 → runUnlocked 로 "이번에 열렸다" 를 알린다
+        return new GuessResult(game, round, pick, revealed(pick, hit), hit, a.justUnlocked(), runUnlocked(pet));
     }
 
     /** 달리기 끝. 30초 이상이면 승리. */
@@ -116,10 +137,12 @@ public class GameService {
             throw new BusinessException(ErrorCode.ZZAL_GAME_FINISHED);
         }
         game.finishRun(survivedMs, now);
-        if (game.isWin()) {
-            rewardService.forGameWin(pet, now);
-        }
-        return new RunResult(game, game.isWin());
+        PetService.Action a = petService.withUnlockDiff(pet, () -> {
+            if (game.isWin()) {
+                rewardService.forGameWin(pet, now);
+            }
+        });
+        return new RunResult(game, game.isWin(), a.justUnlocked(), runUnlocked(pet));
     }
 
     /** 치던 판. 새로고침 복구용. 자는 중이어도 조회는 된다. */
