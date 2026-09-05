@@ -28,6 +28,12 @@ public enum ErrorCode {
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "다시 로그인해 주세요"),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다"),
 
+    // 크레딧 (common)
+    // 402 를 쓴다 — 400(입력이 틀림)도 403(권한 없음)도 아니고, 값을 더 내면
+    // 되는 상태다. 화면이 "충전하러 가기" 를 띄울지 "다시 해 보세요" 를
+    // 띄울지가 이 코드에서 갈린다.
+    CREDIT_NOT_ENOUGH(HttpStatus.PAYMENT_REQUIRED, "크레딧이 모자랍니다"),
+
     // 업로드 (common)
     INVALID_UPLOAD_KEY(HttpStatus.BAD_REQUEST, "올바르지 않은 이미지입니다"),
     UPLOAD_KEY_ALREADY_USED(HttpStatus.BAD_REQUEST, "이미 사용한 이미지입니다"),
