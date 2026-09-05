@@ -175,14 +175,23 @@ window.NHReview = (function () {
     });
   }
 
+  /* 배율 단계. 꽉 채움(1) 다음은 2·3·4배, 그 다음엔 다시 꽉 채움으로
+     돌아온다 — 계속 눌러도 막다른 곳이 없다. 화면 폭 기준이라 원래 크기가
+     작은 그림도 똑같이 커진다. */
+  const ZOOM_STEPS = [2, 3, 4];
+
   function openZoom(src, alt) {
     const box = document.createElement("div");
     box.className = "nh-zoom";
     box.innerHTML = `
-      <img src="${esc(src)}" alt="${esc(alt)}">
+      <img src="${esc(src)}" alt="${esc(alt)}" draggable="false">
+      <p class="nh-zoom-scale" hidden></p>
       <button type="button" class="nh-zoom-close" aria-label="닫기">✕</button>
       <p class="nh-zoom-hint">눌러서 더 크게 · 바깥을 누르면 닫힙니다</p>`;
     const img = box.querySelector("img");
+    const scaleTag = box.querySelector(".nh-zoom-scale");
+    const hint = box.querySelector(".nh-zoom-hint");
+    let step = -1;                                  // -1 = 꽉 채움
 
     const close = () => {
       box.remove();
@@ -191,9 +200,75 @@ window.NHReview = (function () {
     };
     const onKey = e => { if (e.key === "Escape") close(); };
 
+    /* 배율을 한 칸 올린다. 누른 자리가 화면 가운데로 오게 스크롤을 맞춘다 —
+       안 맞추면 확대할 때마다 그림 왼쪽 위로 튀어서, 보고 있던 곳을 매번
+       다시 찾아야 한다. */
+    function zoomTo(next, atX, atY) {
+      // 지금 보고 있는 지점이 그림 전체에서 어디쯤인가 (0~1)
+      const before = img.getBoundingClientRect();
+      const fx = before.width ? (atX - before.left) / before.width : 0.5;
+      const fy = before.height ? (atY - before.top) / before.height : 0.5;
+
+      step = next;
+      if (step < 0) {
+        box.classList.remove("is-big");
+        box.style.removeProperty("--nh-zoom");
+        scaleTag.hidden = true;
+        hint.textContent = "눌러서 더 크게 · 바깥을 누르면 닫힙니다";
+        box.scrollTo(0, 0);
+        return;
+      }
+      box.classList.add("is-big");
+      box.style.setProperty("--nh-zoom", String(ZOOM_STEPS[step]));
+      scaleTag.hidden = false;
+      scaleTag.textContent = `${ZOOM_STEPS[step]}배`;
+      hint.textContent = step === ZOOM_STEPS.length - 1
+        ? "끌어서 옮기기 · 누르면 처음 크기로"
+        : "끌어서 옮기기 · 눌러서 더 크게";
+
+      const after = img.getBoundingClientRect();
+      const w = after.width || img.scrollWidth;
+      const h = after.height || img.scrollHeight;
+      box.scrollTo(Math.max(0, fx * w + box.scrollLeft - box.clientWidth / 2),
+                   Math.max(0, fy * h + box.scrollTop - box.clientHeight / 2));
+    }
+
+    /* 끌어서 옮기기. transform 대신 **스크롤**을 움직인다 — 스크롤이면
+       휠·터치·키보드가 원래 하던 대로 같이 동작한다.
+
+       움직인 거리가 몇 px 안 되면 "누른 것"으로 본다. 안 그러면 손이
+       살짝 흔들린 것만으로 배율이 바뀐다. */
+    let drag = null;
+    let movedPx = 0;                 // 이번 누름에서 손이 움직인 거리
+
+    img.addEventListener("pointerdown", e => {
+      movedPx = 0;
+      if (!box.classList.contains("is-big")) return;
+      drag = { x: e.clientX, y: e.clientY, sl: box.scrollLeft, st: box.scrollTop };
+      box.classList.add("is-panning");
+      try { img.setPointerCapture(e.pointerId); } catch { /* 못 잡아도 끈다 */ }
+      e.preventDefault();
+    });
+    img.addEventListener("pointermove", e => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      movedPx = Math.max(movedPx, Math.abs(dx) + Math.abs(dy));
+      box.scrollTo(drag.sl - dx, drag.st - dy);
+    });
+    const endDrag = () => { drag = null; box.classList.remove("is-panning"); };
+    img.addEventListener("pointerup", endDrag);
+    img.addEventListener("pointercancel", endDrag);
+
+    img.addEventListener("click", e => {
+      // 끌고 나서 손을 뗀 것은 누른 것이 아니다 — 안 그러면 손이 살짝
+      // 흔들린 것만으로 배율이 바뀐다.
+      if (movedPx > 6) { movedPx = 0; return; }
+      zoomTo(step + 1 >= ZOOM_STEPS.length ? -1 : step + 1, e.clientX, e.clientY);
+    });
+
     box.addEventListener("click", e => {
-      // 그림을 누르면 크게/작게, 바깥이나 ✕ 를 누르면 닫는다.
-      if (e.target === img) { box.classList.toggle("is-big"); return; }
+      // 바깥이나 ✕ 를 누르면 닫는다. 그림 위 누르기는 위에서 처리한다.
+      if (e.target === img) return;
       close();
     });
     document.addEventListener("keydown", onKey);

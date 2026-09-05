@@ -113,6 +113,20 @@ def test_sheet_zoom_everywhere() -> None:
     ok("확대가 검수 팝업 위에 뜬다", bool(m) and int(m.group(1)) > 200,
        f"z-index={m.group(1) if m else '없음'}")
 
+    # 열자마자 화면을 채워야 한다 — max-width 만 걸면 원래 크기가 작은 그림은
+    # 큰 화면일수록 더 작아 보인다(크게 보려고 눌렀는데 안 커진다).
+    fit = _re.search(r"\.nh-zoom img \{([^}]*)\}", css, _re.S)
+    ok("열자마자 화면을 채운다",
+       bool(fit) and "width: 100%" in fit.group(1) and "object-fit: contain" in fit.group(1))
+
+    # **플렉스 항목은 기본으로 줄어든다.** 이게 빠지면 배율을 올려도 상자에
+    # 맞게 도로 줄어서 눌러도 아무 일이 안 일어난다(실측으로 겪은 것).
+    big = _re.search(r"\.nh-zoom\.is-big img \{([^}]*)\}", css, _re.S)
+    ok("확대한 그림이 도로 안 줄어든다", bool(big) and "flex: none" in big.group(1))
+    ok("배율을 단계로 올린다", bool(big) and "var(--nh-zoom" in big.group(1))
+    ok("확대하면 끌어서 옮긴다", bool(big) and "cursor: grab" in big.group(1)
+       and "pointermove" in js and "scrollTo" in js)
+
 
 def main() -> int:
     test_syntax()

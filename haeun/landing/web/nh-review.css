@@ -157,27 +157,34 @@
   overflow: auto;                       /* 크게 벌렸을 때 끌어서 본다 */
   overscroll-behavior: contain;
 }
+/* 열자마자 **화면을 꽉 채운다.** `max-width` 만 걸면 원래 크기가 화면보다
+   작은 그림은 그 크기 그대로 남아서, 큰 화면일수록 더 작아 보인다 —
+   크게 보려고 눌렀는데 안 커진다. width/height 를 100% 로 주고
+   object-fit 으로 비율을 지킨다. */
 .nh-zoom img {
-  max-width: 100%; max-height: 100%;
+  width: 100%; height: 100%;
   object-fit: contain;
   cursor: zoom-in;
   border-radius: 8px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
 }
-/* 한 번 더 누르면 원래 크기로 — 시트는 가로로 길어서 꽉 채워도 디테일
-   칸이 작다. 이때부터는 스크롤해서 본다.
+/* 한 번 더 누르면 더 크게. 시트는 가로로 길어서 꽉 채워도 디테일 칸이
+   작다 — 이때부터는 **끌어서** 본다(스크롤 막대를 찾을 필요가 없다).
 
-   `min-width` 로 바닥을 깐다: 원래 크기가 화면보다 **작은** 그림(목업의
-   560px 짜리 샘플이 그렇다)은 그냥 두면 눌러도 아무 일이 안 일어난다 —
-   「눌러서 더 크게」라고 적어 놓고 안 커지면 고장으로 읽힌다. 실제 시트는
-   1536px 라 원래 크기가 이미 이보다 크고, 그때는 이 값이 아무것도 안 한다. */
+   배율은 자바스크립트가 `--nh-zoom` 으로 넣는다(누를 때마다 2배·3배·4배,
+   그 다음엔 다시 꽉 채움). 화면 폭 기준이라 원래 크기가 작은 그림도
+   똑같이 커진다. */
 .nh-zoom.is-big { align-items: flex-start; justify-content: flex-start; }
 .nh-zoom.is-big img {
   max-width: none; max-height: none;
-  width: auto; height: auto;
-  min-width: 180%;
-  cursor: zoom-out;
+  width: calc(100% * var(--nh-zoom, 2)); height: auto;
+  /* **플렉스 항목은 기본으로 줄어든다.** 이게 없으면 폭을 300% 로 줘도
+     상자에 맞게 도로 줄어서, 눌러도 아무 일이 안 일어난다(실측 — 배율
+     표시만 3배로 바뀌고 그림은 그대로였다). */
+  flex: none;
+  cursor: grab;
 }
+.nh-zoom.is-big.is-panning img { cursor: grabbing; }
 /* 뒤 화면이 같이 굴러다니지 않게. */
 body.nh-zoom-on { overflow: hidden; }
 
@@ -188,6 +195,11 @@ body.nh-zoom-on { overflow: hidden; }
   font: inherit; font-size: 1rem; cursor: pointer;
 }
 .nh-zoom-close:hover { background: rgba(255, 255, 255, .28); }
+.nh-zoom-scale {
+  position: fixed; top: 14px; left: 16px; z-index: 301; margin: 0;
+  color: rgba(255, 255, 255, .8); font-size: .78rem;
+  font-variant-numeric: tabular-nums;
+}
 .nh-zoom-hint {
   position: fixed; left: 0; right: 0; bottom: 14px; margin: 0; z-index: 301;
   text-align: center; color: rgba(255, 255, 255, .72); font-size: .78rem;
