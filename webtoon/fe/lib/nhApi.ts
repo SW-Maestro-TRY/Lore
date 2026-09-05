@@ -143,6 +143,38 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+/* ---- 하네스가 없을 때 ------------------------------------------------------
+ *
+ * 실제 서버(lorecomic.com)에는 생성 하네스가 없다 — 올리는 순간 API 키와
+ * 무한 생성이 따라오므로 일부러 안 올렸다. 그래서 위 주소들은 배포에서 전부
+ * 502 로 죽는다. 그대로 두면 웹툰 탭에 걸린 작품이 하나도 안 보인다.
+ *
+ * 그 자리를 **미리 구워 둔 공개본 한 벌**로 메운다(haeun/landing/export_demo.py
+ * 가 뽑고, 빌드가 /static/gallery 로 떠 온다). 만들기·편집실은 여전히 안 된다 —
+ * 그건 하네스가 있어야 하는 일이고, 없는 것을 있는 척하지 않는다.
+ *
+ * **먼저 진짜 서버를 부르고, 실패했을 때만** 이리 온다. 로컬에서 하네스를
+ * 띄워 두면 이 길로 아예 안 들어오므로, 개발 중에 옛 스냅샷을 보고 있을 일이
+ * 없다. */
+
+const DEMO = "/static/gallery";
+
+/** 지금 화면이 스냅샷을 보고 있는가.
+ *
+ *  그림 주소(coverUrl·pageUrl)는 그냥 문자열을 만드는 함수라 스스로 실패를
+ *  알아챌 수가 없다 — <img src> 에 박히면 끝이다. 그래서 목록·완성본을 받는
+ *  쪽이 실패를 겪으면 여기에 표시를 남기고, 그림 주소는 그 표시를 본다.
+ *  둘 중 하나는 그림보다 반드시 먼저 도므로(목록이 있어야 카드를 그리고,
+ *  완성본이 있어야 장을 그린다) 순서가 어긋나지 않는다. */
+let onSnapshot = false;
+
+async function snapshot<T>(path: string): Promise<T> {
+  const res = await fetch(`${DEMO}${path}`);
+  if (!res.ok) throw new Error("작품을 불러오지 못했습니다");
+  onSnapshot = true;
+  return (await res.json()) as T;
+}
+
 function post<T>(path: string, body?: unknown): Promise<T> {
   return call<T>(path, {
     method: "POST",
@@ -217,13 +249,19 @@ export interface RunCard {
 
 export function listRuns(mine = false): Promise<{ runs: RunCard[] }> {
   const q = mine ? `?mine=1&uid=${encodeURIComponent(getUid())}` : "";
-  return call<{ runs: RunCard[] }>(`/runs${q}`);
+  return call<{ runs: RunCard[] }>(`/runs${q}`).catch((e) => {
+    // 「내가 만든 것」은 스냅샷으로 메우지 않는다 — 구워 둔 것은 남의 작품이라,
+    // 내 목록에 끼워 넣으면 만든 적 없는 작품이 내 것으로 보인다.
+    if (mine) throw e;
+    return snapshot<{ runs: RunCard[] }>("/runs.json");
+  });
 }
 
 /** 카드 표지. 목록은 화면을 바꿔 끼우며 그리므로 loading="lazy" 를 안 쓴다 —
  *  그 경로에서는 브라우저가 "화면에 들어왔다" 를 다시 안 재서 표지가 영영 안
  *  뜬다. ?w=320 으로 줄여 받아 한 장에 60KB 안쪽이다. */
 export function coverUrl(runId: string, page: number, episode = 1): string {
+  if (onSnapshot) return `${DEMO}/${encodeURIComponent(runId)}/cover.jpg`;
   return `${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`;
 }
 
@@ -287,11 +325,15 @@ export interface RunResult {
 }
 
 export function readResult(runId: string): Promise<RunResult> {
-  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`);
+  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`)
+    .catch(() => snapshot<RunResult>(`/${encodeURIComponent(runId)}/result.json`));
 }
 
 /** 완성본의 한 장. `raw` 는 얹은 것(말풍선) 없이 밑그림만 — 편집실이 쓴다. */
 export function pageUrl(runId: string, no: number, width = 1080, raw = false): string {
+  if (onSnapshot && !raw) {
+    return `${DEMO}/${encodeURIComponent(runId)}/p${String(no).padStart(2, "0")}.jpg`;
+  }
   return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`;
 }
 
