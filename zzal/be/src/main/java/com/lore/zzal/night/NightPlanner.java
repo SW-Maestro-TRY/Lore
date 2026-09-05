@@ -106,7 +106,10 @@ public class NightPlanner {
         }
 
         // 4) 두 번째 선물(뒤로 넘어짐) — 3층 심화가 8종 열린 뒤(정본 6·16장)
-        if (openedAdvanced(rows) >= ZzalRules.SECOND_GIFT_AFTER_ADVANCED && catalog.gifts().size() > 1) {
+        // ★ 3층 블록과 같은 가드 안에 둔다 — 3층이 열리지 않았거나 이 밤에 잠들지 않은 펫에게는
+        //   어떤 심화도 오르면 안 된다(#234 리뷰 하).
+        if (pet.isPiecesEnabled() && nightOf.equals(pet.getLastNightOf())
+                && openedAdvanced(rows) >= ZzalRules.SECOND_GIFT_AFTER_ADVANCED && catalog.gifts().size() > 1) {
             ZzalMotion gift2 = rows.get(catalog.gifts().get(1).seq());
             if (gift2 != null && gift2.getStatus() == MotionStatus.NONE && catalog.isBakeable(gift2.getName())) {
                 gift2.queue(nightOf);

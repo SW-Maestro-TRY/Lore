@@ -15,6 +15,7 @@ import com.lore.zzal.generation.PetHatchRequested;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSeeder;
+import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.motion.ZzalMotionRepository;
@@ -208,6 +209,9 @@ public class PetService {
             return;
         }
         Instant now = pet.now(realNow);
+        // ★ 정산 전의 시각을 잡아 둔다 — 이번 정산 안에서 열린 칸은 "그 사이 어딘가" 에 열린 것이고,
+        //   그 시각을 <b>구간의 시작</b>으로 잡아야 그 사이에 있었던 기상을 놓치지 않는다(#234 리뷰 중-1).
+        Instant windowStart = pet.getSettledAt() == null ? now : pet.getSettledAt();
         pet.settle(now);
         // ★★ 순서가 중요하다 — 부재 장면은 <b>방문 기록 전에</b> 정산해야 한다.
         //   {@code visit} 이 "부재는 여기서 끝" 이라며 부재 시계를 0으로 끊기 때문에,
@@ -218,7 +222,7 @@ public class PetService {
         }
         pet.visit(now);
         reveal(pet, now);
-        openPieces(pet, now);
+        openPieces(pet, windowStart, now);
     }
 
     /**
@@ -227,14 +231,37 @@ public class PetService {
      * ★ 여기(서비스)에서 판정하는 이유 — "2층 8종이 다 열렸나" 는 카탈로그와 해금 규칙을 알아야 답할 수 있고,
      *   엔티티는 그 둘을 모른다. 엔티티는 "언제 다 열렸는지" 와 "언제 열어 줬는지" 만 기억한다.
      */
-    private void openPieces(ZzalPet pet, Instant now) {
+    private void openPieces(ZzalPet pet, Instant unlockedAt, Instant now) {
         if (pet.isPiecesEnabled()) {
             return;
         }
-        int layerTwoTotal = (int) catalog.basic().stream()
-                .filter(spec -> spec.layer() == com.lore.zzal.motion.MotionLayer.BASIC_2).count();
-        if (UnlockRules.openedLayerTwo(pet, catalog) >= layerTwoTotal) {
-            pet.markLayerTwoDone(now);
+        Map<Integer, ZzalMotion> rows = rowsOf(pet.getId());
+        int opened = 0;
+        int layerTwoTotal = 0;
+        Instant lastUnlock = null;
+        for (MotionSpec spec : catalog.basic()) {
+            if (spec.layer() != com.lore.zzal.motion.MotionLayer.BASIC_2) {
+                continue;
+            }
+            layerTwoTotal++;
+            if (!UnlockRules.isUnlocked(pet, spec, catalog)) {
+                continue;
+            }
+            opened++;
+            ZzalMotion row = rows.get(spec.seq());
+            if (row != null) {
+                // ★ 열린 시각을 그 자리에서 적어 둔다. 그러지 않으면 "언제 열렸나" 를 나중에 알 길이 없어
+                //   완성 시각을 관측 시각으로 쓰게 되고, 그러면 조각이 한 기상 늦게 등장한다(#234 리뷰 중-1).
+                row.markUnlocked(unlockedAt);
+                lastUnlock = row.getUnlockedAt() == null || lastUnlock == null
+                        || row.getUnlockedAt().isAfter(lastUnlock) ? row.getUnlockedAt() : lastUnlock;
+            }
+        }
+        if (opened >= layerTwoTotal) {
+            // ★★ 완성 시각 = <b>마지막 칸이 열린 시각</b>(관측 시각이 아니다). 23:00 자동 취침 판정으로
+            //   마지막 칸이 열리고 다음 날 아침에 조회하는 정상 흐름에서, 관측 시각을 쓰면 완성이 그 아침으로
+            //   적혀 <b>바로 그 기상을 놓친다</b> — 조각이 하루 늦게 등장한다.
+            pet.markLayerTwoDone(lastUnlock != null ? lastUnlock : unlockedAt);
         }
         if (pet.readyForPieces(now)) {
             pet.enablePieces(now);
@@ -317,6 +344,10 @@ public class PetService {
     public Action withUnlockDiff(ZzalPet pet, Runnable action) {
         Set<String> before = Set.copyOf(UnlockRules.unlockedKeys(pet, catalog));
         action.run();
+        // ★ 행동으로 마지막 2층 칸이 열렸을 수 있다 — touch 의 판정은 행동 <b>전</b>에 돌았다(#234 리뷰 중-1).
+        //   행동으로 열린 것은 "지금" 열린 것이라 구간 시작도 지금이다.
+        Instant actedAt = pet.getSettledAt() == null ? Instant.now() : pet.getSettledAt();
+        openPieces(pet, actedAt, actedAt);
         List<Integer> opened = UnlockRules.unlockedKeys(pet, catalog).stream()
                 .filter(k -> !before.contains(k))
                 .map(k -> catalog.byKey(k).orElseThrow().seq())

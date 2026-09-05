@@ -583,6 +583,62 @@ class PetServiceTest {
     }
 
     /**
+     * 조각 등장 시점 — 실패 주입(verify-failure-paths).
+     *
+     * ★ 여기서 지키는 것은 <b>"하루 늦지 않는다"</b> 하나다. 정상 흐름(23:00 자동 취침 판정으로 마지막 칸이
+     *   열리고 다음 날 아침에 조회)에서 하루가 밀려도 예외도 로그도 안 나고, 사용자만 하루를 더 기다린다.
+     */
+    @Nested
+    @DisplayName("조각 등장 — 관측 시각이 아니라 해금 시각으로")
+    class PiecesGate {
+
+        /** 2층 8종이 다 열린 상태의 어린이(카운터를 채워 해금 규칙을 만족시킨다). */
+        private ZzalPet layerTwoDone() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
+            for (String f : List.of("chatAnswers", "bathCount", "gameStarts", "sleepWakeCount", "zeroMissDays")) {
+                org.springframework.test.util.ReflectionTestUtils.setField(pet, f, 12);
+            }
+            return pet;
+        }
+
+        private void rowsFor(ZzalPet pet) {
+            MotionCatalog cat = new MotionCatalog("", "", "v1");
+            List<com.lore.zzal.motion.ZzalMotion> rows = cat.all().stream()
+                    .map(spec -> com.lore.zzal.motion.ZzalMotion.forCatalog(PET_ID, spec, T0)).toList();
+            when(motionRepository.findByPetIdOrderBySeqAsc(PET_ID)).thenReturn(rows);
+        }
+
+        @Test
+        @DisplayName("★★ 밤에 완성되면 다음 날 아침 첫 조회에 조각이 등장한다 — 하루 더 기다리지 않는다")
+        void appearsOnTheVeryNextMorning() {
+            ZzalPet pet = layerTwoDone();
+            rowsFor(pet);
+
+            // 09-05 낮에 이미 8종이 다 열린 상태로 한 번 정산(완성 시각이 그때로 적힌다)
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 14:00"));
+            assertThat(pet.isPiecesEnabled()).as("같은 날 낮에는 아직").isFalse();
+
+            // 그 뒤 앱을 안 열다가 다음 날 12:00 에 연다 — 그 사이 23:00 취침·10:00 기상이 지나갔다
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 12:00"));
+
+            assertThat(pet.isPiecesEnabled()).as("그 기상을 놓치면 하루 늦는다").isTrue();
+        }
+
+        @Test
+        @DisplayName("★ 완성된 그 자리에서는 안 열린다 — 기상을 한 번 지나야 한다")
+        void notOnTheSameDay() {
+            ZzalPet pet = layerTwoDone();
+            rowsFor(pet);
+
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 14:00"));
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 20:00"));
+
+            assertThat(pet.isPiecesEnabled()).isFalse();
+        }
+    }
+
+    /**
      * 병 — 실패 주입(verify-failure-paths).
      *
      * ★ 여기서 지키는 것 셋 — (1) <b>케어 미스는 어디에도 안 내려간다</b>(정본 4장 "숨은 수치"),

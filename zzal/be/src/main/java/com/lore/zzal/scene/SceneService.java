@@ -103,11 +103,15 @@ public class SceneService {
         // ★ "지금 자고 있나" 가 아니라 <b>잠들 때 남긴 쪽지</b>를 쓴다 — 밤새 앱을 안 열고 아침에 열면
         //   그 한 번의 정산이 잠들기와 깨어나기를 한꺼번에 처리해 "지금 자고 있나" 는 이미 거짓이다.
         Instant at = pet.getPendingNightSceneAt();
+        // ★★ 판정도 기록도 <b>잠들 때의 상태</b>로 한다(#234 리뷰 중-2). 소비 시점(아침)의 상태를 쓰면
+        //   밤새 병이 난 경우 그 밤 장면이 통째로 버려지고, 아침에 약을 먹었으면 아팠던 밤에 연습 장면이 생긴다.
+        boolean wasSick = pet.wasSickWhenSleeping();
+        String mood = pet.nightSceneMood();
         pet.markNightScene(at);         // 아파서 안 남기더라도 쪽지는 지운다(같은 잠을 매번 다시 보지 않게)
-        if (pet.isSick()) {
+        if (wasSick) {
             return 0;
         }
-        save(pet, at, true);
+        save(pet, at, true, mood);
         trim(pet.getId());
         return 1;
     }
@@ -162,9 +166,13 @@ public class SceneService {
      * 컷마다 부르면 세 컷을 남길 때 표를 세 번 통째로 다시 읽는다.
      */
     private void save(ZzalPet pet, Instant at, boolean night) {
+        save(pet, at, night, pet.mood().name());
+    }
+
+    private void save(ZzalPet pet, Instant at, boolean night, String mood) {
         String motionKey = night ? "practice" : idleMotion(pet, at);
         sceneRepository.save(ZzalScene.of(pet.getId(), motionKey, pet.getBackground(),
-                prop(pet, at), at, pet.mood().name(), night));
+                prop(pet, at), at, mood, night));
     }
 
     /**

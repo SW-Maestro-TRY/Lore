@@ -271,6 +271,20 @@ public class ZzalPet {
     @Column
     private Instant pendingNightSceneAt;
 
+    /**
+     * 그 밤에 <b>잠들 때</b> 아팠나 — 밤 장면을 만들지 말지의 판정 재료(정본 16장).
+     *
+     * ★★ 소비 시점(아침)의 상태로 판정하면 안 된다 — 밤새 병이 나면 그 밤 장면이 통째로 버려지고,
+     *   반대로 아침에 약을 먹었으면 아팠던 밤에 연습 장면이 생긴다(#234 리뷰 중-2).
+     *   케어 미스 스냅샷({@code lastNightCareMiss})과 같은 방식이다.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean pendingNightSick;
+
+    /** 그 밤에 잠들 때의 기분(장면의 {@code mood}). 아침 것을 쓰면 그날의 이야기가 아니다. */
+    @Column(length = 20)
+    private String pendingNightMood;
+
     // ── 3층 (정본 6·16장) ─────────────────────────────────────────────────
 
     /** 2층 8종이 모두 열린 것을 처음 본 시각. "다음 날 아침" 을 세는 기준. */
@@ -1005,6 +1019,18 @@ public class ZzalPet {
     public void markNightScene(Instant at) {
         this.nightSceneAt = at;
         this.pendingNightSceneAt = null;
+        this.pendingNightSick = false;
+        this.pendingNightMood = null;
+    }
+
+    /** 그 밤에 잠들 때 아팠나(밤 장면 판정 재료). */
+    public boolean wasSickWhenSleeping() {
+        return pendingNightSick;
+    }
+
+    /** 그 밤에 잠들 때의 기분(밤 장면에 적힐 값). 기록이 없으면 지금 기분. */
+    public String nightSceneMood() {
+        return pendingNightMood != null ? pendingNightMood : mood().name();
     }
 
     /** 아직 처리 안 한 밤잠이 있나. */
@@ -1122,6 +1148,8 @@ public class ZzalPet {
             // 밤 장면(연습 장면) 쪽지 — 실제로 만드는 것은 서비스가 다음 정산에서(엔티티는 표를 모른다)
             if (!at.equals(nightSceneAt)) {
                 pendingNightSceneAt = at;
+                pendingNightSick = isSick();        // ★ 잠들 때의 상태를 함께 적는다(아침 것이 아니라)
+                pendingNightMood = mood().name();
             }
             if (todayCareMiss == 0) {
                 zeroMissDays += 1;

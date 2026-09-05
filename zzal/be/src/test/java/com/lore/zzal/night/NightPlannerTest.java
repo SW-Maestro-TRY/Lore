@@ -115,6 +115,20 @@ class NightPlannerTest {
     }
 
     @Test
+    @DisplayName("★ 3층이 안 열린 펫에게는 두 번째 선물도 안 오른다(같은 가드 안)")
+    void secondGiftNeedsTierThree() {
+        when(catalog.isBakeable(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        ReflectionTestUtils.setField(pet, "lastNightOf", NIGHT);
+        for (int seq = 1; seq <= 8; seq++) {
+            ReflectionTestUtils.setField(row(seq), "status", MotionStatus.OPEN);
+        }
+        assertThat(pet.isPiecesEnabled()).isFalse();
+
+        assertThat(planner.plan(pet, NIGHT)).isZero();
+        assertThat(row(102).getStatus()).isEqualTo(MotionStatus.NONE);
+    }
+
+    @Test
     @DisplayName("★ 두 번째 선물은 3층 8종이 열린 뒤에 오른다")
     void secondGiftAfterEightAdvanced() {
         tierThreeReady(0);

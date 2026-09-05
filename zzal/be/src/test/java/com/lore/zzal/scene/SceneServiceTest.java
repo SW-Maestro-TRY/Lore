@@ -197,6 +197,34 @@ class SceneServiceTest {
     }
 
     @Test
+    @DisplayName("★★ 밤 장면 판정은 <b>잠들 때</b>의 상태로 — 밤새 병이 나도 그 밤 장면은 남는다")
+    void nightSceneUsesSleepTimeState() {
+        ZzalPet pet = child();
+        ReflectionTestUtils.setField(pet, "scenesEnabledAt", T0);
+        pet.sleep(kst("2026-09-05 20:00"));           // 건강한 채로 잠들었다
+        ReflectionTestUtils.setField(pet, "sickSince", kst("2026-09-06 02:00"));   // 밤새 병이 났다(주입)
+
+        assertThat(service.recordNight(pet)).as("아침 상태로 판정하면 여기서 버려진다").isEqualTo(1);
+        assertThat(stored).singleElement().satisfies(sc -> {
+            assertThat(sc.isNight()).isTrue();
+            assertThat(sc.getMood()).as("기분도 잠들 때 것이어야 한다").isNotEqualTo("SICK");
+        });
+    }
+
+    @Test
+    @DisplayName("★★ 반대도 마찬가지 — 아픈 채로 잠들었으면 아침에 나아 있어도 그 밤 장면은 없다")
+    void sickAtSleepMeansNoScene() {
+        ZzalPet pet = child();
+        ReflectionTestUtils.setField(pet, "scenesEnabledAt", T0);
+        ReflectionTestUtils.setField(pet, "sickSince", T0);
+        pet.sleep(kst("2026-09-05 20:00"));           // 아픈 채로 잠들었다
+        pet.medicine(kst("2026-09-06 08:00"));        // 아침에 나았다(주입)
+
+        assertThat(service.recordNight(pet)).isZero();
+        assertThat(stored).isEmpty();
+    }
+
+    @Test
     @DisplayName("★ 기능이 열리기 전(첫 부재 4시간 전)에는 밤 장면도 안 남는다")
     void noNightSceneBeforeEnabled() {
         ZzalPet pet = child();
