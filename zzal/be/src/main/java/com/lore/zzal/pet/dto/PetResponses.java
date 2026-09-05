@@ -13,6 +13,7 @@ import com.lore.zzal.pet.ZzalRules;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -77,8 +78,37 @@ public final class PetResponses {
     public record Progress(int current, int target) {
     }
 
+    /**
+     * 심화 행동(16프레임) 한 칸이 사용자 눈에 어떻게 보이나.
+     *
+     * ★★ {@code status} 는 <b>DB 상태 그대로가 아니다.</b> 검수 대기(REVIEW)·맥미니 재생성(LOCAL_REQUESTED)은
+     *   운영 사정이고, 사용자에게는 셋 다 "아직 연습 중" 이다(정본 16장 "사용자 화면은 '아직 연습 중이에요' 한 줄").
+     *   내부 상태를 그대로 내려보내면 화면이 운영 사정을 알게 되고, 나중에 상태를 하나 더 만들 때마다 화면이 깨진다.
+     *
+     * <pre>
+     *   NONE  · FAILED                        → NONE        아직 아무 일도 없다
+     *   QUEUED                                → QUEUED      오늘 밤에 굽는다
+     *   BAKING · REVIEW · LOCAL_REQUESTED     → PRACTICING  아직 연습 중이에요
+     *   OPEN(도착 전)                          → PRACTICING  판정은 끝났지만 아직 안 왔다
+     *   OPEN(도착)                             → OPEN        배웠다
+     * </pre>
+     */
     public record Advanced(String status, String imageKey, Instant revealedAt, boolean seen) {
         static final Advanced NONE = new Advanced("NONE", null, null, false);
+
+        static Advanced of(ZzalMotion row) {
+            return new Advanced(userStatus(row), row.advancedImageKey(), row.getRevealedAt(), row.getSeenAt() != null);
+        }
+
+        /** 사용자 말로 옮긴 상태 — 위 표. */
+        static String userStatus(ZzalMotion row) {
+            return switch (row.getStatus()) {
+                case QUEUED -> "QUEUED";
+                case BAKING, REVIEW, LOCAL_REQUESTED, PENDING -> "PRACTICING";
+                case OPEN -> row.isRevealed() ? "OPEN" : "PRACTICING";
+                case NONE, FAILED -> "NONE";
+            };
+        }
     }
 
     @Schema(description = "동작 한 칸 — 18개 고정, seq 오름차순")
@@ -150,6 +180,11 @@ public final class PetResponses {
             Intimacy intimacy,
             Today today,
             @Schema(description = "3층 전엔 null") Pieces pieces,
+            @Schema(description = """
+                    지금 뭔가 굽고 있나 — NONE(없음) · QUEUED(오늘 밤에 굽는다) · PRACTICING(연습 중).
+                    화면은 PRACTICING 일 때 "아직 연습 중이에요" 한 줄을 띄운다(정본 16장)""",
+                    example = "NONE")
+            String baking,
             List<Motion> motions,
             @Schema(description = "행동 응답에만. 이번 행동으로 열린 2층 seq") List<Integer> justUnlocked,
             List<Learned> learnedToday,
@@ -193,7 +228,7 @@ public final class PetResponses {
                         pet.getDeathReason() != null ? pet.getDeathReason().name() : null,
                         pet.getHatchStartedAt(), pet.getHatchedAt(), now,
                         // ★ 리스트는 null 이 아니라 빈 목록(해석 20) — 화면이 길이만 보고 그리게. null 이 프론트를 깨뜨렸다.
-                        null, null, null, null, null, null, null, null, null,
+                        null, null, null, null, null, null, null, null, null, null,
                         List.of(), List.of(), List.of(),
                         null, null, null, null, null, null, null, null, null, null, null);
             }
@@ -211,12 +246,13 @@ public final class PetResponses {
                     pet.isOverslept());
 
             int layerTwoOpen = UnlockRules.openedLayerTwo(pet, catalog);
+            FirstGift firstGift = firstGift(pet, catalog, rows);
             Features features = new Features(
                     true, true,
                     pet.getLeftRightWins() >= ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS,
                     false,                                                  // 장면 — PR-9
                     layerTwoOpen >= ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN,
-                    false,                                                  // 앨범 — 첫 심화(PR-7)
+                    "OPEN".equals(firstGift.status()),                       // 앨범 = 첫 심화가 도착하면 같이 열린다(정본 6장)
                     false);                                                 // 조각 — PR-10
 
             TutorialSchedule.State t = TutorialSchedule.of(pet, now);
@@ -237,10 +273,11 @@ public final class PetResponses {
                     new Today(pet.getTodayGames(), pet.getTodayPetCount(), pet.getTodayCareIntimacy(),
                             pet.getSnackStreak(), pet.isTodayBathDone()),
                     null,                                                   // 조각 — PR-10
+                    baking(rows),
                     motions(pet, catalog, rows),
                     justUnlocked,
-                    List.of(),                                              // 아침 도착 — PR-7
-                    new FirstGift("LOCKED", Math.max(0, ZzalRules.FIRST_GIFT_DAYS - pet.getDaysTogether())),
+                    learnedToday(catalog, rows),
+                    firstGift,
                     new ChatSummary(null, nextChatAt(pet, now)),           // 부름 — PR-4
                     new Scenes(false, null),
                     pet.getPersonality() == null ? null : pet.getPersonality().name(),
@@ -250,6 +287,57 @@ public final class PetResponses {
                     null, null,                                             // 떠남·여행 — PR-11
                     new Settings(true),
                     tutorial);
+        }
+
+        /**
+         * 아침에 도착했는데 아직 "확인" 을 안 누른 것들. 화면이 폴라로이드로 띄우고,
+         * {@code POST /motions/{seq}/seen} 을 부르면 여기서 빠진다.
+         */
+        static List<Learned> learnedToday(MotionCatalog catalog, Map<Integer, ZzalMotion> rows) {
+            return rows.values().stream()
+                    .filter(ZzalMotion::isUnseenArrival)
+                    .sorted(Comparator.comparingInt(ZzalMotion::getSeq))
+                    .map(m -> {
+                        MotionSpec spec = catalog.bySeq(m.getSeq()).orElse(null);
+                        return new Learned(m.getSeq(), m.getName(),
+                                spec == null ? m.getName() : spec.label(),
+                                m.advancedImageKey(), m.getRevealedAt());
+                    })
+                    .toList();
+        }
+
+        /**
+         * 첫 심화 행동(선물 1 = 구르기)이 어디까지 왔나.
+         *
+         * <pre>
+         *   LOCKED   함께한 날 3일이 아직 안 됐다
+         *   WAITING  3일째다 — 오늘 케어 미스가 0이면 오늘 밤에 굽는다(정본 16장)
+         *   BAKING   큐에 올랐거나 굽는 중이거나 검수 중
+         *   OPEN     도착했다(앨범도 이때 같이 열린다)
+         * </pre>
+         */
+        static FirstGift firstGift(ZzalPet pet, MotionCatalog catalog, Map<Integer, ZzalMotion> rows) {
+            int daysLeft = Math.max(0, ZzalRules.FIRST_GIFT_DAYS - pet.getDaysTogether());
+            ZzalMotion gift = catalog.gifts().isEmpty() ? null : rows.get(catalog.gifts().get(0).seq());
+            if (gift == null) {
+                return new FirstGift(daysLeft == 0 ? "WAITING" : "LOCKED", daysLeft);
+            }
+            String status = switch (Advanced.userStatus(gift)) {
+                case "OPEN" -> "OPEN";
+                case "QUEUED", "PRACTICING" -> "BAKING";
+                default -> daysLeft == 0 ? "WAITING" : "LOCKED";
+            };
+            return new FirstGift(status, daysLeft);
+        }
+
+        /** 이 펫이 지금 뭔가 굽고 있나 — 가장 앞선 상태 하나로 줄인다(PRACTICING > QUEUED > NONE). */
+        static String baking(Map<Integer, ZzalMotion> rows) {
+            boolean practicing = rows.values().stream().anyMatch(m -> "PRACTICING".equals(Advanced.userStatus(m)));
+            if (practicing) {
+                return "PRACTICING";
+            }
+            boolean queued = rows.values().stream().anyMatch(m -> "QUEUED".equals(Advanced.userStatus(m)));
+            return queued ? "QUEUED" : "NONE";
         }
 
         /** 18칸. 잠긴 칸도 이름+조건(플랜 T2 결정 4). 심화 행동 상태는 zzal_motion 행에서(없으면 NONE). */
@@ -262,8 +350,7 @@ public final class PetResponses {
                         ? new Progress(Math.min(UnlockRules.current(pet, rule.kind(), catalog), rule.target()), rule.target())
                         : null;
                 ZzalMotion row = rows.get(spec.seq());
-                Advanced advanced = row == null ? Advanced.NONE
-                        : new Advanced(row.getStatus().name(), row.advancedImageKey(), row.getRevealedAt(), row.getSeenAt() != null);
+                Advanced advanced = row == null ? Advanced.NONE : Advanced.of(row);
                 return new Motion(spec.seq(), spec.key(), spec.label(), spec.layer().name(), unlocked,
                         basicImageKey(pet, spec, unlocked, v2),
                         unlocked ? null : rule.hint(),

@@ -112,7 +112,13 @@ public class ZzalMotion {
     @Column
     private Instant reviewedAt;
 
-    /** 몇 번 구웠나. 실패해서 다시 구우면 올라간다. */
+    /**
+     * 몇 번 구웠나 — API 는 <b>굽기를 시작할 때</b>, 맥미니는 <b>결과를 올릴 때</b> 하나 오른다.
+     *
+     * ★ 두 시점이 다른 이유 — API 는 우리가 호출하니 시작을 알지만, 맥미니가 몇 번 실패했는지는 서버가 못 본다.
+     *   그래서 이 값은 "돈·시간이 든 횟수" 가 아니라 <b>서버가 아는 굽기 횟수</b>다. 맥미니가 몇 번 헛돌았는지는
+     *   러너 로그에만 남는다. 재생성 횟수는 {@code regenRound} 가 따로 센다.
+     */
     @Column(nullable = false)
     private int attempts;
 
@@ -201,12 +207,21 @@ public class ZzalMotion {
         }
     }
 
-    /** 밤 큐에 올린다(정본 6장). */
+    /**
+     * 밤 큐에 올린다(정본 6장).
+     *
+     * ★★ {@code regenRound} 를 <b>0 으로 되돌린다.</b> 그 값은 "이번 밤에 맥미니를 몇 번 썼나" 이지
+     *   그 동작의 평생 횟수가 아니다. 안 돌리면 지난 밤에 두 번 쓴 자리는 다음 밤에 API 한 판이 실패하는 순간
+     *   곧바로 {@code FAILED} 가 돼, <b>재생성 기회가 영구히 사라진다</b>(#224 리뷰 중-1).
+     *   정본 16장은 "굽기 실패는 조각을 소모하지 않는다 — 다음 밤에 같은 동작을 다시 굽는다" 이므로
+     *   다음 밤은 처음과 같은 조건이어야 한다. 평생 누적이 필요해지면 별도 칸을 만든다.
+     */
     public void queue(LocalDate nightOf) {
         this.status = MotionStatus.QUEUED;
         this.nightOf = nightOf;
         this.claimedAt = null;
         this.claimedBy = null;
+        this.regenRound = 0;
     }
 
     /** 그 밤 실패 — 조각은 소모하지 않고 다음 밤에 다시 오른다(16장). */
@@ -253,15 +268,63 @@ public class ZzalMotion {
     }
 
     /**
-     * 사용자에게 보이기 시작한다.
+     * 다 구워졌다 → <b>검수 대기</b>. 사용자에게는 아직 안 보인다.
      *
-     * ★ 상훈님 확인 전에도 보여준다(2026-09-03 확정). 밤에 재운 사용자가 아침에 깼을 때
-     *   상훈님이 주무시는 동안 갇히면 안 되기 때문이다. 확인은 사후에 하고,
-     *   반려되면 다시 구워 바꿔 끼운다.
+     * ★★ v1 은 여기서 바로 열었다("검수 전 지급"). PR-7 에서 <b>없앴다</b> — 정본 6장·2장은
+     *   "밤에 굽고 → 판정하고 → <b>아침에</b> 배워 온다" 이고, 그 순서가 지켜지려면 검수를 통과하기 전의 그림이
+     *   사용자 화면에 뜨면 안 된다. 밤에 재운 사용자가 갇히는 문제는 "아침 공개" 로 이미 풀린다 —
+     *   판정 창이 23:00~10:00 이고, 10:00 을 넘겨 판정되면 낮에 도착한다(정본 16장).
+     *
+     * ★ 다시 구운 것이면 사람 판정을 지운다. 안 지우면 새 그림이 옛 판정을 달고 검수 목록에서 사라진다.
      */
-    public void open(Instant now) {
+    public void toReview(String imageKey, MotionSource source,
+                         GateVerdict verdict, String note, String gateVersion) {
+        done(imageKey, source, verdict, note, gateVersion);
+        this.status = MotionStatus.REVIEW;
+        this.humanVerdict = null;
+        this.humanNote = null;
+        this.reviewedAt = null;
+    }
+
+    /**
+     * 맥미니(codex)에게 다시 만들어 달라고 건다. {@code regenRound} 가 하나 오른다.
+     *
+     * ★ API 로 다시 굽지 않는다(정본 6장) — 한 판이 $0.10 이고, 로컬 재생성은 돈이 안 든다.
+     */
+    public void requestLocalRegen() {
+        this.status = MotionStatus.LOCAL_REQUESTED;
+        this.regenRound += 1;
+    }
+
+    /** 맥미니가 올린 그림으로 갈아 끼우고 다시 검수 대기로. */
+    public void uploadedLocal(String imageKey) {
+        this.imageKey = imageKey;
+        this.source = MotionSource.LOCAL;
+        this.status = MotionStatus.REVIEW;
+        this.attempts += 1;
+        this.humanVerdict = null;
+        this.humanNote = null;
+        this.reviewedAt = null;
+    }
+
+    /**
+     * 검수 통과 — 공개해도 된다.
+     *
+     * ★ 이게 곧 "사용자 화면에 떴다" 는 아니다. 실제 도착은 {@link #reveal(Instant)} 이고,
+     *   그건 <b>펫이 깨어 있는 첫 정산</b>에서 일어난다(정본 2장 "기상 첫 화면").
+     */
+    public void approve(Instant now) {
         this.status = MotionStatus.OPEN;
-        this.openedAt = now;
+        if (this.openedAt == null) {
+            this.openedAt = now;
+        }
+    }
+
+    /** 아침(또는 깨어 있는 첫 정산)에 사용자에게 도착했다. 한 번만 찍힌다. */
+    public void reveal(Instant now) {
+        if (revealedAt == null) {
+            revealedAt = now;
+        }
     }
 
     public void markFailed() {
@@ -273,16 +336,6 @@ public class ZzalMotion {
         this.humanVerdict = verdict;
         this.humanNote = note;
         this.reviewedAt = now;
-    }
-
-    /** 다시 구운 것으로 갈아 끼운다. */
-    public void replaceImage(String imageKey, MotionSource source, Instant now) {
-        this.imageKey = imageKey;
-        this.source = source;
-        this.status = MotionStatus.OPEN;
-        if (this.openedAt == null) {
-            this.openedAt = now;
-        }
     }
 
     public boolean isOpen() {
@@ -377,9 +430,23 @@ public class ZzalMotion {
         return seenAt;
     }
 
-    /** 심화 행동 그림 키 규약(api-v2.md 2절). OPEN 일 때만. */
+    /**
+     * 심화 행동 그림 키(api-v2.md 2절) — <b>사용자에게 도착한 뒤에만</b> 준다.
+     *
+     * ★ 검수 대기·재생성 요청 중인 그림은 절대 안 내려간다. 그게 "검수 후 공개" 의 실제 잠금이다.
+     */
     public String advancedImageKey() {
-        return status == MotionStatus.OPEN ? imageKey : null;
+        return status == MotionStatus.OPEN && revealedAt != null ? imageKey : null;
+    }
+
+    /** 사용자에게 도착했나(아침 공개). */
+    public boolean isRevealed() {
+        return status == MotionStatus.OPEN && revealedAt != null;
+    }
+
+    /** 도착했는데 아직 "확인" 을 안 눌렀나 — {@code learnedToday} 에 실린다. */
+    public boolean isUnseenArrival() {
+        return isRevealed() && seenAt == null;
     }
 
     public Instant getCreatedAt() {

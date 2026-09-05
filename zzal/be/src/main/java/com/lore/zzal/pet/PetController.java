@@ -175,6 +175,27 @@ public class PetController {
         return ApiResponse.ok(detail(petService.share(userId, petId, request.motionKey(), real), real));
     }
 
+    // ── 동작 (정본 2·16장) ───────────────────────────────────────────────
+
+    @Operation(summary = "\"배워왔어요\" 확인", description = """
+            아침에 도착한 심화 행동을 봤다고 표시한다. `learnedToday` 에서 빠진다.
+
+            - 아직 **도착하지 않은** 동작이면 409(ZZAL_MOTION_NOT_OPEN) — 검수 중인 것을 미리 지울 수 없다
+            - 자는 중에도 된다(확인은 돌보기가 아니다)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "확인함"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "아직 도착하지 않은 동작(ZZAL_MOTION_NOT_OPEN)")})
+    @PostMapping("/{petId}/motions/{seq}/seen")
+    public ApiResponse<PetResponses.Detail> seen(@LoginUser Long userId,
+                                                 @PathVariable Long petId,
+                                                 @PathVariable int seq) {
+        Instant real = Instant.now();
+        return ApiResponse.ok(detail(petService.markSeen(userId, petId, seq, real), real));
+    }
+
     // ── 앨범 (정본 16장) ─────────────────────────────────────────────────
 
     @Operation(summary = "앨범", description = """

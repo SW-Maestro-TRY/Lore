@@ -149,20 +149,60 @@ class PetDetailTest {
     }
 
     @Test
-    @DisplayName("심화 상태는 zzal_motion 행에서 — 행이 있으면 그 status, 없으면 NONE. OPEN 일 때만 imageKey")
+    @DisplayName("★ 검수 중인 그림은 절대 안 내려간다 — 도착(revealedAt) 뒤에만 imageKey")
     void advancedFromRows() {
         ZzalPet pet = baby();
         ZzalMotion base = ZzalMotion.forCatalog(7L, CATALOG.bySeq(1).orElseThrow(), T0);
         ZzalMotion roll = ZzalMotion.forCatalog(7L, CATALOG.bySeq(101).orElseThrow(), T0);
-        roll.done("images/zzal/pets/7/motions/101/motion.webp", com.lore.zzal.motion.MotionSource.API,
+        roll.toReview("images/zzal/pets/7/motions/101/motion.webp", com.lore.zzal.motion.MotionSource.API,
                 com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
-        roll.open(T0);
-        PetResponses.Detail d = PetResponses.Detail.from(pet, null, T0, CATALOG, Map.of(1, base, 101, roll), List.of());
-        assertThat(d.motions().get(0).advanced().status()).isEqualTo("NONE");
-        assertThat(d.motions().get(0).advanced().imageKey()).isNull();
-        assertThat(d.motions().get(16).advanced().status()).isEqualTo(MotionStatus.OPEN.name());
-        assertThat(d.motions().get(16).advanced().imageKey()).endsWith("/motions/101/motion.webp");
-        assertThat(d.motions().get(16).advanced().seen()).isFalse();
-        assertThat(d.motions().get(2).advanced().status()).isEqualTo("NONE");   // 행이 없는 칸
+
+        // 1) 검수 대기 — 사용자에게는 "연습 중", 그림 없음
+        PetResponses.Detail waiting = PetResponses.Detail.from(pet, null, T0, CATALOG, Map.of(1, base, 101, roll), List.of());
+        assertThat(waiting.motions().get(16).advanced().status()).isEqualTo("PRACTICING");
+        assertThat(waiting.motions().get(16).advanced().imageKey()).isNull();
+        assertThat(waiting.learnedToday()).isEmpty();
+        assertThat(waiting.baking()).isEqualTo("PRACTICING");
+        assertThat(waiting.firstGift().status()).isEqualTo("BAKING");
+        assertThat(waiting.features().album()).isFalse();
+
+        // 2) 검수 통과했지만 아직 도착 전 — 여전히 안 보인다
+        roll.approve(T0);
+        PetResponses.Detail approved = PetResponses.Detail.from(pet, null, T0, CATALOG, Map.of(1, base, 101, roll), List.of());
+        assertThat(approved.motions().get(16).advanced().status()).isEqualTo("PRACTICING");
+        assertThat(approved.motions().get(16).advanced().imageKey()).isNull();
+
+        // 3) 도착 — 그때 보이고, learnedToday 에 실리고, 앨범이 열린다
+        roll.reveal(T0);
+        PetResponses.Detail arrived = PetResponses.Detail.from(pet, null, T0, CATALOG, Map.of(1, base, 101, roll), List.of());
+        assertThat(arrived.motions().get(0).advanced().status()).isEqualTo("NONE");
+        assertThat(arrived.motions().get(0).advanced().imageKey()).isNull();
+        assertThat(arrived.motions().get(16).advanced().status()).isEqualTo(MotionStatus.OPEN.name());
+        assertThat(arrived.motions().get(16).advanced().imageKey()).endsWith("/motions/101/motion.webp");
+        assertThat(arrived.motions().get(16).advanced().seen()).isFalse();
+        assertThat(arrived.motions().get(2).advanced().status()).isEqualTo("NONE");   // 행이 없는 칸
+        assertThat(arrived.learnedToday()).singleElement()
+                .satisfies(l -> assertThat(l.seq()).isEqualTo(101));
+        assertThat(arrived.firstGift().status()).isEqualTo("OPEN");
+        assertThat(arrived.features().album()).isTrue();
+        assertThat(arrived.baking()).isEqualTo("NONE");
+
+        // 4) 확인을 누르면 learnedToday 에서 빠진다(도감에는 그대로 남는다)
+        roll.markSeen(T0);
+        PetResponses.Detail seen = PetResponses.Detail.from(pet, null, T0, CATALOG, Map.of(1, base, 101, roll), List.of());
+        assertThat(seen.learnedToday()).isEmpty();
+        assertThat(seen.motions().get(16).advanced().seen()).isTrue();
+    }
+
+    @Test
+    @DisplayName("baking — 밤 큐에 오르면 QUEUED, 아무 일도 없으면 NONE")
+    void bakingSummary() {
+        ZzalPet pet = baby();
+        ZzalMotion roll = ZzalMotion.forCatalog(7L, CATALOG.bySeq(101).orElseThrow(), T0);
+        assertThat(PetResponses.Detail.from(pet, null, T0, CATALOG, Map.of(101, roll), List.of()).baking())
+                .isEqualTo("NONE");
+        roll.queue(java.time.LocalDate.of(2026, 9, 5));
+        assertThat(PetResponses.Detail.from(pet, null, T0, CATALOG, Map.of(101, roll), List.of()).baking())
+                .isEqualTo("QUEUED");
     }
 }

@@ -72,6 +72,24 @@ public class DevClockController {
         return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of()));
     }
 
+    @Operation(summary = "심화 행동 즉시 공개(가짜 그림)", description = """
+            그 자리의 심화 행동을 **가짜 imageKey 로 즉시 검수 통과** 시킨다. 아침 도착 화면을 확인하려고 쓴다.
+
+            - 진짜로 굽지 않는다(돈 0). 그림 자리에는 기본 행동 그림 키가 들어간다
+            - 도착(`revealedAt`)은 여전히 규칙대로 — 펫이 깨어 있는 첫 정산이다. 자는 중이면 안 뜬다
+            - 없는 seq 면 400""")
+    @PostMapping("/{petId}/force-open/{seq}")
+    public ApiResponse<PetResponses.Detail> forceOpen(@LoginUser Long userId,
+                                                      @PathVariable Long petId,
+                                                      @PathVariable int seq) {
+        if (catalog.bySeq(seq).isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "카탈로그에 없는 동작 번호예요");
+        }
+        Instant real = Instant.now();
+        ZzalPet pet = petService.forceOpen(userId, petId, seq, real);
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of()));
+    }
+
     @Operation(summary = "시간 당기기", description = """
             이 펫의 시계를 준 만큼 **앞으로** 민다. 게이지·잠·창·자동 취침이 그 시각 기준으로 정산된다.
 

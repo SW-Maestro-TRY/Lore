@@ -32,4 +32,12 @@ public interface GenJobRepository extends JpaRepository<GenJob, Long> {
      */
     @Query("select coalesce(sum(j.totalCostUsd), 0) from GenJob j where j.startedAt >= :from")
     BigDecimal sumCostSince(@Param("from") Instant from);
+
+    /**
+     * 그 모션들에 들어간 돈 전부. 관리자 "오늘 밤 현황" 이 이 값을 읽는다.
+     *
+     * ★ 실패한 작업도 센다 — 실패해도 API 호출은 이미 나갔다. 목록이 비면 0(빈 IN 절은 DB 마다 다르게 군다).
+     */
+    @Query("select coalesce(sum(j.totalCostUsd), 0) from GenJob j where j.motionId in :motionIds")
+    BigDecimal sumCostByMotionIds(@Param("motionIds") java.util.Collection<Long> motionIds);
 }

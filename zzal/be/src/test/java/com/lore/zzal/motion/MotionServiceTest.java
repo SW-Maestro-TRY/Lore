@@ -94,7 +94,7 @@ class MotionServiceTest {
         when(stepRepository.findSucceededByMotion(anyLong())).thenReturn(List.<GenStepRecord>of());
 
         service = new MotionService(runner, recorder, motionRecorder, jobRepository, stepRepository,
-                motionRepository, petRepository, registry, catalog, gate, 3);
+                motionRepository, petRepository, registry, catalog, gate, 1, 2);
     }
 
     /** 실행기가 성공했다고 답하게 만든다. */
@@ -107,7 +107,7 @@ class MotionServiceTest {
     }
 
     @Test
-    @DisplayName("잘 구워지면 사용자에게 열린다")
+    @DisplayName("★ 잘 구워지면 열리는 게 아니라 검수 대기로 간다(검수 전 지급 제거)")
     void opensWhenBaked() {
         runnerSucceeds();
         when(gate.judge(anyString()))
@@ -115,7 +115,7 @@ class MotionServiceTest {
 
         service.bake(MOTION_ID);
 
-        verify(motionRecorder).open(eq(MOTION_ID), anyString(), any(), any());
+        verify(motionRecorder).toReview(eq(MOTION_ID), anyString(), any());
         verify(motionRecorder, never()).markFailed(anyLong());
     }
 
@@ -164,29 +164,32 @@ class MotionServiceTest {
     }
 
     @Test
-    @DisplayName("게이트가 실패라 하면 다시 굽고, 열지 않는다")
-    void retriesWhenGateFails() {
+    @DisplayName("★★ 게이트가 실패라 하면 검수 대기로 올리지 않고 맥미니로 넘긴다 — API 는 다시 안 부른다")
+    void handsOverToLocalWhenGateFails() {
         runnerSucceeds();
         when(gate.judge(anyString()))
                 .thenReturn(new MotionGate.Verdict(GateVerdict.FAIL, "잘림", "g0"));
 
         service.bake(MOTION_ID);
 
-        verify(runner, times(3)).run(any(), any(), any(), any());   // 최대 3번
-        verify(motionRecorder, never()).open(anyLong(), anyString(), any(), any());
-        verify(motionRecorder).markFailed(MOTION_ID);
+        verify(runner, times(1)).run(any(), any(), any(), any());   // 정본 = API 1회
+        verify(motionRecorder, never()).toReview(anyLong(), anyString(), any());
+        verify(motionRecorder).recordGate(eq(MOTION_ID), anyString(), any());   // 판정은 남긴다
+        verify(motionRecorder).requestLocalRegen(MOTION_ID, 2);
     }
 
     @Test
-    @DisplayName("굽다 실패하면 다시 시도하고, 다 쓰면 실패로 끝낸다")
-    void retriesWhenRunFails() {
+    @DisplayName("★ 로컬 재생성 한도를 다 썼으면 그 밤은 FAILED — 다음 밤에 다시 오른다")
+    void failsWhenLocalRegenExhausted() {
         when(runner.run(any(), any(), any(), any()))
                 .thenAnswer(i -> RunResult.failed(i.getArgument(1), BigDecimal.ZERO, null));
+        // MotionRecorder 가 한도 초과를 판정해 false 를 돌려준다(그 안에서 FAILED 를 찍는다)
+        when(motionRecorder.requestLocalRegen(anyLong(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(false);
 
-        service.bake(MOTION_ID);
+        service.bakeNow(MOTION_ID);
 
-        verify(runner, times(3)).run(any(), any(), any(), any());
-        verify(motionRecorder).markFailed(MOTION_ID);
+        verify(runner, times(1)).run(any(), any(), any(), any());
+        verify(motionRecorder).requestLocalRegen(MOTION_ID, 2);
     }
 
     @Test
@@ -199,38 +202,40 @@ class MotionServiceTest {
         service.bakeNow(MOTION_ID);         // 예외가 이 밖으로 새어 나오면 안 된다
 
         verify(motionRecorder).markFailed(MOTION_ID);
-        verify(motionRecorder, never()).open(anyLong(), anyString(), any(), any());
+        verify(motionRecorder, never()).toReview(anyLong(), anyString(), any());
     }
 
     @Test
-    @DisplayName("★ 실패 기록마저 터져도 굽기 스레드는 조용히 끝난다(기동 복구가 회수한다)")
+    @DisplayName("★ 재생성 요청 기록마저 터져도 굽기 스레드는 조용히 끝난다(기동 복구가 회수한다)")
     void failureRecordFailureDoesNotEscape() {
         when(runner.run(any(), any(), any(), any()))
                 .thenAnswer(i -> RunResult.failed(i.getArgument(1), BigDecimal.ZERO, null));
-        org.mockito.Mockito.doThrow(new IllegalStateException("DB 끊김")).when(motionRecorder).markFailed(anyLong());
+        org.mockito.Mockito.doThrow(new IllegalStateException("DB 끊김"))
+                .when(motionRecorder).requestLocalRegen(anyLong(), org.mockito.ArgumentMatchers.anyInt());
 
         service.bakeNow(MOTION_ID);         // 예외 없이 돌아와야 한다
 
-        verify(motionRecorder).markFailed(MOTION_ID);
+        verify(motionRecorder).requestLocalRegen(MOTION_ID, 2);
     }
 
     @Test
-    @DisplayName("★ 정본은 API 1회 — 시도 횟수를 1로 두면 딱 한 번만 굽고 FAILED")
+    @DisplayName("★★ 정본은 API 1회 — 딱 한 번 굽고, 못 구우면 맥미니(로컬)로 넘긴다")
     void canonicalSingleApiAttempt() {
-        MotionService once = new MotionService(runner, mock(GenerationRecorder.class), motionRecorder,
-                jobRepository, stepRepository, motionRepository, petRepository, registry, catalog, gate, 1);
         when(runner.run(any(), any(), any(), any()))
                 .thenAnswer(i -> RunResult.failed(i.getArgument(1), BigDecimal.ZERO, null));
 
-        once.bakeNow(MOTION_ID);
+        service.bakeNow(MOTION_ID);
 
-        verify(runner, times(1)).run(any(), any(), any(), any());
-        verify(motionRecorder).markFailed(MOTION_ID);
+        verify(runner, times(1)).run(any(), any(), any(), any());       // 돈이 나가는 쪽은 한 번뿐
+        verify(motionRecorder).requestLocalRegen(MOTION_ID, 2);
+        verify(motionRecorder, never()).markFailed(anyLong());          // 아직 실패가 아니다 — 맥미니가 남았다
     }
 
     @Test
-    @DisplayName("한 번 실패해도 다음 시도에서 성공하면 열린다")
-    void succeedsOnSecondAttempt() {
+    @DisplayName("시도 횟수를 2 이상으로 올리면 다시 굽는다 — 두 번째에 검수 대기까지 간다")
+    void retriesWhenConfigured() {
+        MotionService twice = new MotionService(runner, mock(GenerationRecorder.class), motionRecorder,
+                jobRepository, stepRepository, motionRepository, petRepository, registry, catalog, gate, 2, 2);
         when(runner.run(any(), any(), any(), any()))
                 .thenAnswer(i -> RunResult.failed(i.getArgument(1), BigDecimal.ZERO, null))
                 .thenAnswer(i -> {
@@ -241,10 +246,10 @@ class MotionServiceTest {
         when(gate.judge(anyString()))
                 .thenReturn(new MotionGate.Verdict(GateVerdict.REVIEW, "", "g0"));
 
-        service.bake(MOTION_ID);
+        twice.bakeNow(MOTION_ID);
 
         verify(runner, times(2)).run(any(), any(), any(), any());
-        verify(motionRecorder).open(eq(MOTION_ID), anyString(), any(), any());
+        verify(motionRecorder).toReview(eq(MOTION_ID), anyString(), any());
         verify(motionRecorder, never()).markFailed(anyLong());
     }
 }
