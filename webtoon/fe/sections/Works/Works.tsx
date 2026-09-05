@@ -1,49 +1,35 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-interface MockWork {
-  title: string;
-  character: string;
-  genre: string;
-  scenes: { image: string; cuts: unknown[] }[];
-}
+import { coverUrl, listRuns, type RunCard } from "../../lib/nhApi";
+import { louArt } from "../../lib/louArt";
 
 /* 둘러보기 — haeun/landing/web 의 #works 를 옮겼다.
  *
- * 원본은 /api/runs 에서 실제로 만들어진 작품 목록을 받는다. 백엔드가 없어서
- * 지금은 그 목록이 항상 빈다 — demo-api.js 도 일부러 그렇게 둔다("실제 작품의
- * 그림은 여기(public/static)에 없어서 목록만 채우면 표지가 깨진 칸으로 뜬다").
+ * **이제 진짜 목록이다.** 예전에는 백엔드가 없어 목업 한 편만 얹어 뒀는데,
+ * 지금은 `/api/webtoon/runs` 로 실제로 만들어진 작품을 받아 건다.
  *
- * 그런데 결과 화면(Result)이 이미 진짜로 여는 목업 그림(web/samples/mock.json)이
- * 있으므로, 그 하나는 깨지지 않고 보여줄 수 있다 — 목록을 통째로 비우는 대신
- * 그 한 편을 카드로 얹어서 "표지를 누르면 열린다" 흐름 자체는 눌러볼 수 있게
- * 했다. 실제 여러 작품이 쌓이는 것은 백엔드가 있어야 하는 일이라 그대로 TODO. */
+ * 빈 화면·오류 화면에도 루를 세운다 — 글자만 있으면 고장난 것처럼 읽힌다.
+ */
 export default function Works({
   onOpen,
   onCreate,
   onHome,
 }: {
-  onOpen: () => void;
+  /** 표지를 누르면 그 작품의 그 회차를 완성본 화면으로 연다. */
+  onOpen: (runId: string, episode: number) => void;
   onCreate: () => void;
   onHome: () => void;
 }) {
-  const [data, setData] = useState<MockWork | null>(null);
+  const [runs, setRuns] = useState<RunCard[] | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch("/static/samples/mock.json")
-      .then((r) => r.json())
-      .then((d) => {
-        if (!cancelled) setData(d);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
+    let alive = true;
+    listRuns()
+      .then((got) => { if (alive) setRuns(got.runs || []); })
+      .catch(() => { if (alive) setFailed(true); });
+    return () => { alive = false; };
   }, []);
 
   return (
@@ -63,30 +49,81 @@ export default function Works({
       <div className="works-grid">
         {failed && (
           <div className="works-empty">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={louArt("error")} alt="" aria-hidden="true" />
             <b>목록을 가져오지 못했어요</b>
-            잠시 후 다시 열어 주세요.
+            서버가 떠 있는지 확인해 주세요.
           </div>
         )}
-        {!failed && !data && <p className="works-empty">불러오는 중…</p>}
-        {data && (
-          <article className="works-card">
-            <button
-              type="button"
-              className="works-cover"
-              onClick={onOpen}
-              aria-label={`${data.character || "이름 없음"} 열기`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={data.scenes[0]?.image} alt="" />
+        {!failed && !runs && <p className="works-empty">불러오는 중…</p>}
+        {runs?.length === 0 && (
+          <div className="works-empty">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={louArt("empty")} alt="" aria-hidden="true" />
+            <b>아직 구경할 웹툰이 없어요</b>
+            첫 작품이 이 자리에 걸립니다.
+            <br />
+            <button type="button" className="inline-link" onClick={onCreate}>
+              내 캐릭터로 웹툰 만들기 →
             </button>
-            <div className="works-body">
-              <h3>{data.character || "이름 없음"}</h3>
-              <p className="works-sub">{[data.genre, data.title].filter(Boolean).join(" · ")}</p>
-              <p className="works-count">{data.scenes.length}장 · 화면 구경용 목업</p>
-            </div>
-          </article>
+          </div>
         )}
+        {runs?.map((r) => <WorkCard key={r.run_id} run={r} onOpen={onOpen} />)}
       </div>
     </section>
+  );
+}
+
+/* 작품 카드. 둘러보기와 마이페이지가 같은 카드를 쓰되, **내 것일 때만**
+   편집실로 가는 길과 공개 스위치가 붙는다 — 남의 작품에 있을 수 없는 길이다. */
+export function WorkCard({
+  run,
+  onOpen,
+  tools,
+}: {
+  run: RunCard;
+  onOpen: (runId: string, episode: number) => void;
+  /** 내 작품에만 붙는 줄(공개 스위치·편집실). 마이페이지가 넘긴다. */
+  tools?: React.ReactNode;
+}) {
+  const eps = run.episodes || [];
+  const first = eps[0] || 1;
+
+  return (
+    <article className="works-card">
+      <button
+        type="button"
+        className="works-cover"
+        onClick={() => onOpen(run.run_id, first)}
+        aria-label={`${run.character || run.run_id} 열기`}
+      >
+        {run.cover_page ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt="" />
+        ) : (
+          <span className="works-cover-empty" aria-hidden="true">🖼</span>
+        )}
+      </button>
+      <div className="works-body">
+        <h3>{run.character || "이름 없음"}</h3>
+        <p className="works-sub">{[run.genre, run.title].filter(Boolean).join(" · ")}</p>
+        <p className="works-count">
+          {eps.length > 1 ? `${eps.length}화 · ` : ""}{run.page_count}장
+        </p>
+        {/* 회차마다 단추를 준다 — "몇 편이 있다" 를 세는 것과 "그 편을 연다" 가
+            같은 자리에 있어야, 2화가 있는데 1화만 열리는 일이 안 생긴다.
+            회차가 하나뿐이면 「1화」 딱지는 표지를 누르는 것과 똑같은 일을
+            하므로 좁은 카드에서 자리만 먹는다 — 여러 화일 때만 낸다. */}
+        <div className="works-eps">
+          {eps.length > 1 && eps.map((n) => (
+            <button key={n} type="button" className="works-ep"
+                    onClick={() => onOpen(run.run_id, n)}>
+              {n}화
+            </button>
+          ))}
+        </div>
+        {tools}
+      </div>
+    </article>
   );
 }

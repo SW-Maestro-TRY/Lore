@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import os
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -64,8 +66,8 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 
 # 글을 쓰는 단계 / 그림을 그리는 단계. 이름이 곧 .env 의 앞자리다
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
-TEXT_STAGES = ("STORY", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
-               "REVIEW", "FIX", "BOARD", "SHEET")
+TEXT_STAGES = ("STORY", "STORY_REVIEW", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
+               "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "EPISODE_REVIEW")
 IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
@@ -149,6 +151,8 @@ class Call:
     def __call__(self, prompt: str, images=None, temperature: float = None,
                  max_tokens: int = None) -> tuple[str, dict]:
         temp = DEFAULT_TEMPERATURE if temperature is None else temperature
+        started = time.monotonic()
+        at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
         text, usage, stop = self.backend.complete(
             self.model,
             prompt,
@@ -156,13 +160,29 @@ class Call:
             max_tokens or DEFAULT_MAX_TOKENS,
             images=images or None,
         )
+        cost = story.cost_of(self.model, usage)
+        # 원화도 같이 박는다 — 그림 호출(cost.cost_fields)은 이미 넣고 있어서,
+        # 글만 빠지면 한 run 의 비용을 더할 때 두 단위가 섞인다. 환율은 호출
+        # 시점 값으로 **박아서** 남긴다(나중에 다시 계산하지 않는다).
+        if isinstance(cost, dict) and cost.get("total") is not None:
+            try:
+                import cost as costmod          # 늦게 가져온다 — cost 가 llm 을 읽는다
+                krw = costmod.usd_to_krw()
+                cost["total_krw"] = round(cost["total"] * krw) if krw else None
+            except Exception:                                        # noqa: BLE001
+                pass
         meta = {
             "stage": self.stage,
             "provider": self.provider,
             "model": self.model,
+            # 언제 · 얼마나 걸렸는지. 한 편을 뽑는 데 걸리는 시간을 나중에
+            # 재려면 호출마다 박혀 있어야 한다 — 로그로만 스쳐 가면 run 이
+            # 끝난 뒤에는 알아낼 방법이 없다.
+            "at": at,
+            "seconds": round(time.monotonic() - started, 2),
             "usage": usage,
             "stop": stop,
-            "cost": story.cost_of(self.model, usage),
+            "cost": cost,
         }
         if stop == "max_tokens":
             story.warn(f"[{self.stage}] 응답이 길이 제한에서 끊겼습니다 "
@@ -172,6 +192,7 @@ class Call:
 
 STAGE_LABEL = {
     "STORY": "이야기 후보",
+    "STORY_REVIEW": "이야기 후보 검수 (고르기 전)",
     "DETAIL": "스토리 구체화",
     "CUTSCRIPT": "컷 대본",
     "REVIEW": "스토리 검수",
@@ -181,6 +202,8 @@ STAGE_LABEL = {
     "SHEET": "시트 사양",
     "SHEET_IMAGE": "시트 그림",
     "PAGE_IMAGE": "페이지 그림",
+    "PAGE_REVIEW": "그림 검수 (장마다)",
+    "EPISODE_REVIEW": "화 전체 검수 (다 그린 뒤)",
 }
 
 

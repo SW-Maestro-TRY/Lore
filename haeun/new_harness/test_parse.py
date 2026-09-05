@@ -1378,9 +1378,432 @@ def test_review_and_fix() -> None:
     check("빈 패치", R.apply_fix(detail, {"scenes": []})[1], [])
 
 
+def test_page_review() -> None:
+    """그린 뒤 검수 — 판정은 모델 말이 아니라 코드가 센다."""
+    import os
+    import shutil
+    import tempfile
+
+    import detailart
+    import pagecheck as PC
+
+    # --- 판정 -------------------------------------------------------------
+    clean = PC.parse(json.dumps({
+        "drawn": "책상 앞에 앉아 있다", "covers": "2번 장면 앞부분",
+        "scenes": [2], "flow": "이어짐", "why": "앞 장에서 자리를 옮겼다",
+        "next_from": "책을 펴는 순간부터", "issues": [], "redraw": ""},
+        ensure_ascii=False))
+    check("문제가 없으면 통과", clean["verdict"], "통과")
+    check("다음 자리를 넘겨준다", clean["next_from"], "책을 펴는 순간부터")
+
+    hard = PC.parse(json.dumps({"flow": "이어짐", "issues": [
+        {"kind": "인물", "severity": "critical", "what": "다른 사람이 되었다"},
+        {"kind": "공간", "severity": "minor", "what": "창이 하나 늘었다"}]},
+        ensure_ascii=False))
+    check("critical 이면 다시 그린다", hard["verdict"], "재생성")
+    check("무거운 것부터", [i["severity"] for i in hard["issues"]],
+          ["critical", "minor"])
+
+    # 흐름만으로도 잡는다 — 무게를 낮게 적어 놓고 넘어가는 것을 막는다
+    jump = PC.parse('{"flow": "건너뜀", "issues": [{"severity": "minor", "what": "x"}]}')
+    check("건너뛰면 무게와 상관없이 재생성", jump["verdict"], "재생성")
+    same = PC.parse('{"flow": "제자리", "issues": []}')
+    check("제자리도 재생성", same["verdict"], "재생성")
+    odd = PC.parse('{"flow": "이어짐", "issues": [{"severity": "심각", "what": "x"}]}')
+    check("모르는 무게는 major", odd["issues"][0]["severity"], "major")
+    check("major 하나로는 안 다시 그린다", odd["verdict"], "통과")
+
+    # --- 프롬프트 ---------------------------------------------------------
+    direction = {"n": 1, "title": "제목", "genre": "판타지", "plot": "줄거리다",
+                 "scenes": ["첫 장면이다", "둘째 장면이다", "셋째 장면이다"],
+                 "cast": [{"name": "관리인", "appearance": "50대, 회색 작업복"}]}
+    text = PC.build_prompt(direction, scene_no=2, char={"name": "이하은", "description": "대학생"},
+                           cast=direction["cast"], has_prev=True,
+                           next_from="문을 여는 순간부터")
+    ok("전체 이야기를 준다", "셋째 장면이다" in text)
+    ok("지금 자리를 짚는다", "← 이 장을 그릴 때 준 장면" in text)
+    ok("앞은 그려진 자리로", "(앞 장들에서 이미 그려진 자리)" in text)
+    ok("뒤는 안 그려진 자리로", "(아직 안 그려진 자리)" in text)
+    ok("앞 장 검수가 적어 둔 것을 준다", "문을 여는 순간부터" in text)
+    ok("조연도 준다", "관리인 — 50대, 회색 작업복" in text)
+    ok("연출은 안 본다고 말한다", "연출." in text)
+
+    first = PC.build_prompt(direction, scene_no=1, has_prev=False)
+    ok("첫 장은 직전 그림이 없다고 말한다", "이 화의 첫 장이다" in first)
+    cover = PC.build_prompt(direction, scene_no=1, has_prev=True, prev_is_cover=True)
+    ok("표지는 이어질 필요가 없다고 말한다", "표지다" in cover)
+
+    note = PC.redraw_block(hard)
+    ok("지적을 그대로 넘긴다", "다른 사람이 되었다" in note)
+    ok("가벼운 것까지 넘기지는 않는다", "창이 하나 늘었다" not in note)
+    ok("연출은 건드리지 않는다", "연출은 그대로 네가 정한다" in note)
+
+    # --- 켜고 끄기 --------------------------------------------------------
+    keep = {k: os.environ.get(k) for k in ("NH_PAGE_REVIEW", "NH_PAGE_REVIEW_RETRY")}
+    try:
+        os.environ.pop("NH_PAGE_REVIEW", None)
+        os.environ.pop("NH_PAGE_REVIEW_RETRY", None)
+        ok("기본은 켜짐", PC.enabled())
+        check("기본 재생성 횟수", PC.max_redraw(), 1)
+        os.environ["NH_PAGE_REVIEW"] = "0"
+        ok("0 이면 꺼진다", not PC.enabled())
+        os.environ["NH_PAGE_REVIEW_RETRY"] = "0"
+        check("0 이면 검수만 하고 안 다시 그린다", PC.max_redraw(), 0)
+        os.environ["NH_PAGE_REVIEW_RETRY"] = "많이"
+        check("못 읽는 값은 기본으로", PC.max_redraw(), 1)
+    finally:
+        for k, v in keep.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # --- 이어그리기 프롬프트 ----------------------------------------------
+    plain = detailart.build_continue_prompt(direction, None, None, [], scene_no=2,
+                                            has_prev=True)
+    ok("장면을 한 장에 못 박지 않는다", "이 장면만 그린다" not in plain)
+    ok("순서는 못 박는다", "순서는 건너뛰지 않는다" in plain)
+    ok("앞 장 자리는 안 주면 안 붙는다", "여기서부터 이어 그린다" not in plain)
+    resumed = detailart.build_continue_prompt(direction, None, None, [], scene_no=2,
+                                              has_prev=True,
+                                              resume_from="문을 여는 순간부터")
+    ok("주면 붙는다", "여기서부터 이어 그린다" in resumed)
+
+    # --- dry-run 은 호출도 검수도 안 한다 ---------------------------------
+    root = Path(tempfile.mkdtemp(prefix="nh-review-"))
+    try:
+        run_dir = root / "run"
+        run_dir.mkdir()
+        R.write_json(run_dir / "directions.json", [direction])
+        R.write_json(run_dir / "pick.json", {"n": 1})
+        R.write_json(run_dir / "input.json", {"name": "이하은"})
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            made = detailart.draw_continue(run_dir, dry_run=True)
+        finally:
+            detailart.log = quiet
+        check("dry-run 은 아무것도 안 그린다", made, [])
+        check("표지 1 + 장면 3 = 4장",
+              sorted(p.name for p in (run_dir / "pages").glob("*.txt")),
+              ["page01.txt", "page02.txt", "page03.txt", "page04.txt"])
+        ok("검수 결과가 안 생긴다",
+           not list((run_dir / "pages").glob("*.review.json")))
+
+        # --- 다시 그리기 — 호출은 가짜로 두고 **되돌리는 흐름만** 본다
+        import imagegen
+        drawn, seen = [], []
+
+        def fake_paint(stage, prompt, out, refs=None, kind=None):
+            drawn.append(prompt)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(b"png")
+            return {"cost": {"total": 0.0}}
+
+        def fake_review(rd, page_no, **kw):
+            seen.append((page_no, kw["scene_no"], kw.get("next_from", "")))
+            bad = page_no == 3 and len([1 for p, _, _ in seen if p == 3]) == 1
+            got = {"verdict": "재생성" if bad else "통과", "flow": "건너뜀" if bad else "이어짐",
+                   "drawn": "뒤 이야기를 그렸다", "why": "결말이 보인다",
+                   "next_from": f"{page_no}장 끝에서", "issues": [], "redraw": "앞으로 돌아와라"}
+            return got, {"stage": "PAGE_REVIEW", "cost": {"total": 0.0}}
+
+        run2 = root / "run2"
+        run2.mkdir()
+        R.write_json(run2 / "directions.json", [direction])
+        R.write_json(run2 / "pick.json", {"n": 1})
+        R.write_json(run2 / "input.json", {"name": "이하은"})
+        keep_paint, keep_review = imagegen.paint, PC.review_page
+        keep_backend = imagegen.backend_for
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            imagegen.paint = fake_paint
+            imagegen.backend_for = lambda stage: ("openai", "test", "high")
+            PC.review_page = fake_review
+            made = detailart.draw_continue(run2, allow_no_sheet=True, review=True)
+        finally:
+            imagegen.paint, PC.review_page = keep_paint, keep_review
+            imagegen.backend_for = keep_backend
+            detailart.log = quiet
+
+        check("표지 1 + 장면 3 + 다시 그린 1 = 5번 그렸다", len(drawn), 5)
+        # 표지 · 2 · 3 · 3(다시) · 4 순서로 쌓인다 — 다시 그린 것도 기록에 남는다
+        check("다시 그린 장이 기록에 남는다", [m.get("redraw") for m in made],
+              [None, None, None, 1, None])
+        check("어느 장을 다시 그렸는지", [m.get("page") for m in made], [1, 2, 3, 3, 4])
+        ok("다시 그릴 때 지적을 붙인다", "앞으로 돌아와라" in drawn[2 + 1])
+        check("3페이지는 두 번 검수한다", len([1 for p, _, _ in seen if p == 3]), 2)
+        check("표지는 검수하지 않는다", [p for p, _, _ in seen if p == 1], [])
+        # 앞 장 검수가 적어 준 자리가 다음 장 프롬프트로 넘어간다
+        ok("다음 장에 넘어간다", "2장 끝에서" in drawn[2])
+        check("다시 그린 뒤의 자리가 넘어간다",
+              [nf for pg, _, nf in seen if pg == 4], ["3장 끝에서"])
+
+        # 어긋난 채로 남은 장의 자리는 안 물려준다 — 한 장의 실수가 남은
+        # 화 전체로 번지지 않게.
+        seen.clear(); drawn.clear()
+        PC.review_page = lambda rd, page_no, **kw: (
+            seen.append((page_no, kw["scene_no"], kw.get("next_from", ""))) or
+            ({"verdict": "재생성", "flow": "건너뜀", "drawn": "", "why": "",
+              "next_from": f"{page_no}장 끝에서", "issues": [], "redraw": ""},
+             {"stage": "PAGE_REVIEW", "cost": {"total": 0.0}}))
+        run3 = root / "run3"
+        run3.mkdir()
+        R.write_json(run3 / "directions.json", [direction])
+        R.write_json(run3 / "pick.json", {"n": 1})
+        R.write_json(run3 / "input.json", {"name": "이하은"})
+        quiet, detailart.log = detailart.log, lambda *_: None
+        try:
+            imagegen.paint = fake_paint
+            imagegen.backend_for = lambda stage: ("openai", "test", "high")
+            detailart.draw_continue(run3, allow_no_sheet=True, review=True)
+        finally:
+            imagegen.paint, PC.review_page = keep_paint, keep_review
+            imagegen.backend_for = keep_backend
+            detailart.log = quiet
+        check("계속 어긋나면 자리를 안 물려준다",
+              [nf for pg, _, nf in seen if pg == 3], ["", ""])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_story_review() -> None:
+    """이야기 후보 검수 — 판정은 모델 말이 아니라 코드가 센다."""
+    import storycheck as SC
+
+    clean = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "read_as": "숨은 직업의 비밀을 좇는 이야기", "issues": []}]},
+        ensure_ascii=False), expect=[1])
+    check("문제가 없으면 통과", clean["candidates"][0]["verdict"], "통과")
+    check("읽은 대로를 넘겨준다", clean["candidates"][0]["read_as"],
+          "숨은 직업의 비밀을 좇는 이야기")
+
+    hard = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "issues": [
+            {"scene": 3, "kind": "지식", "severity": "critical", "what": "알 길이 없다"},
+            {"scene": 1, "kind": "한장", "severity": "minor", "what": "사건이 둘이다"}]},
+        {"n": 2, "issues": [
+            {"scene": 2, "kind": "인과", "severity": "major", "what": "왜 그러는지 모른다"}]}]},
+        ensure_ascii=False), expect=[1, 2])
+    check("critical 이면 주의", hard["candidates"][0]["verdict"], "주의")
+    check("major 하나로는 통과", hard["candidates"][1]["verdict"], "통과")
+    check("무거운 것부터", [i["severity"] for i in hard["candidates"][0]["issues"]],
+          ["critical", "minor"])
+    check("무게를 센다", hard["candidates"][0]["counts"],
+          {"critical": 1, "major": 0, "minor": 1})
+
+    # --- 마무리: 다음 화가 궁금해지는가 --------------------------------
+    #
+    # 이 판정은 모델이 issues 로 옮겼는지에 안 기댄다 — ending 칸을 보고
+    # 코드가 직접 센다(pagecheck 이 flow 를 그렇게 다루는 것과 같다).
+    closed = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "scenes": [{"id": 1}, {"id": 2}, {"id": 3}],
+         "ending": {"changed": "없음", "question": "없음", "from": ""},
+         "issues": []}]}, ensure_ascii=False), expect=[1])
+    c = closed["candidates"][0]
+    check("다 닫혀 있으면 주의", c["verdict"], "주의")
+    check("달라진 것 없음 + 질문 없음 = 둘 다 잡는다",
+          [i["kind"] for i in c["issues"]], ["마무리", "마무리"])
+    check("마무리는 마지막 장면 번호로", c["issues"][0]["scene"], 3)
+
+    forced = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "scenes": [{"id": 1}, {"id": 2}],
+         "ending": {"changed": "정체가 들킬 위기가 됐다",
+                    "question": "저 사람은 언제부터 알고 있었나",
+                    "from": "마지막 줄뿐"},
+         "issues": []}]}, ensure_ascii=False), expect=[1])
+    c = forced["candidates"][0]
+    check("억지 훅은 major (통과는 시킨다)", c["verdict"], "통과")
+    check("억지 훅을 짚는다", c["issues"][0]["severity"], "major")
+    check("질문은 화면으로 넘긴다", c["ending"]["question"], "저 사람은 언제부터 알고 있었나")
+
+    good = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "scenes": [{"id": 1}],
+         "ending": {"changed": "곁에 두기로 했다", "question": "왜 돌아온 걸까",
+                    "from": "장면 2"},
+         "issues": []}]}, ensure_ascii=False), expect=[1])
+    check("제대로 끝나면 안 잡는다", good["candidates"][0]["issues"], [])
+
+    # 모델이 이미 적었으면 코드가 또 세지 않는다 (같은 것을 두 번 세면
+    # critical 이 부풀어서 무게가 안 읽힌다)
+    dup = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "ending": {"changed": "없음", "question": "없음", "from": ""},
+         "issues": [{"scene": 5, "kind": "마무리", "severity": "critical",
+                     "what": "아무것도 안 달라졌다"}]}]},
+        ensure_ascii=False), expect=[1])
+    check("모델이 적었으면 안 겹쳐 센다",
+          len(dup["candidates"][0]["issues"]), 1)
+
+    # ending 칸이 통째로 없는 옛 응답은 마무리를 안 잡는다 — 안 물어본 것을
+    # 못 지켰다고 할 수는 없다
+    old_shape = SC.parse('{"candidates": [{"n": 1, "issues": []}]}', expect=[1])
+    check("ending 이 없으면 마무리는 안 잡는다", old_shape["candidates"][0]["issues"], [])
+
+    # 모델이 kind 에 칸 이름을 적는 일이 실제로 나왔다 (`why`). 화면에
+    # 라벨로 그대로 붙는 자리라 한글 목록으로 되돌린다.
+    leak = SC.parse('{"candidates": [{"n": 1, "issues": ['
+                    '{"scene": 1, "kind": "why", "severity": "major", "what": "x"},'
+                    '{"scene": 1, "kind": "new", "severity": "minor", "what": "y"}]}]}',
+                    expect=[1])
+    check("칸 이름을 종류로 되돌린다",
+          [i["kind"] for i in leak["candidates"][0]["issues"]], ["인과", "신규"])
+
+    odd = SC.parse('{"candidates": [{"n": 1, "issues": [{"severity": "심각", "what": "x"}]}]}',
+                   expect=[1])
+    check("모르는 무게는 major", odd["candidates"][0]["issues"][0]["severity"], "major")
+    check("모르는 종류는 인과", odd["candidates"][0]["issues"][0]["kind"], "인과")
+
+    # 안 온 후보를 조용히 통과로 두지 않는다 — 검수가 있는 것과 없는 것이 같아진다
+    part = SC.parse('{"candidates": [{"n": 1, "issues": []}]}', expect=[1, 2, 3, 4])
+    check("빠진 후보도 자리를 남긴다", [c["n"] for c in part["candidates"]], [1, 2, 3, 4])
+    check("빠진 후보는 판정 없음", part["candidates"][3]["verdict"], "없음")
+
+    # --- 프롬프트 ---------------------------------------------------------
+    directions = [{"n": 1, "title": "제목", "genre": "판타지", "plot": "줄거리다",
+                   "scenes": ["첫 장면이다", "둘째 장면이다"],
+                   "cast": [{"name": "관리인", "appearance": "50대"}],
+                   "hidden": ["아직 안 밝힌 것"]}]
+    text = SC.build_prompt({"name": "이하은", "description": "대학생",
+                            "fields": {"성격": "조용하다"}}, directions)
+    ok("캐릭터를 준다", "이하은" in text and "조용하다" in text)
+    ok("장면을 번호로 준다", "1. 첫 장면이다" in text)
+    ok("한 줄이 한 장이라고 알려준다", "한 줄이 그림 한 장이 된다" in text)
+    # 사건 개수로는 판정하지 않는다 — 한 장은 컷 여럿이 나눠 쓰는 자리라
+    # 사건 넷짜리 장면이 컷 다섯으로 멀쩡히 그려진다(실측). 그 규칙이
+    # 되살아나면 정상 후보에 매번 지적이 붙는다.
+    ok("사건 개수로 판정하지 않는다고 못 박는다", "사건 개수를 세지 마라" in text)
+    ok("한 장이 컷 여럿임을 알려준다", "한 장은 컷 하나가 아니다" in text)
+    ok("안 밝힌 것은 문제가 아니라고 알려준다", "밝히지 않은 것" in text)
+    ok("마지막에 다음 화가 궁금한지 본다", "다음 화가 궁금해지는가" in text)
+    ok("만들 때 준 기준을 그대로 쓴다", "관계 · 상황 · 목표" in text)
+    ok("자리표시자가 안 남는다", "{character}" not in text and "{directions}" not in text)
+
+    # 후보가 없으면 호출까지 안 간다 (값이 안 나간다)
+    import tempfile, shutil
+    root = Path(tempfile.mkdtemp())
+    try:
+        got, meta = SC.review_directions(root, {"name": "이하은"}, [])
+        check("후보가 없으면 호출 안 한다", (got, meta), (None, None))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_episode_review() -> None:
+    """화 전체 검수 — 다시 그리지 않고 판정만 한다."""
+    import shutil
+    import tempfile
+
+    import episodecheck as EC
+
+    clean = EC.parse(json.dumps({
+        "read_as": "숨은 직업을 알아채는 이야기", "who": "게임 속 은신술사",
+        "where": "게임 안", "ending": "경고창이 뜬다", "matched": "",
+        "issues": []}, ensure_ascii=False))
+    check("문제가 없으면 통과", clean["verdict"], "통과")
+    check("읽은 대로를 남긴다", clean["read_as"], "숨은 직업을 알아채는 이야기")
+
+    hard = EC.parse(json.dumps({"issues": [
+        {"page": 0, "kind": "이해", "severity": "critical", "what": "무슨 일인지 모르겠다"},
+        {"page": 4, "kind": "글자", "severity": "major", "what": "말풍선 글자가 깨졌다"}]},
+        ensure_ascii=False))
+    check("critical 이면 주의", hard["verdict"], "주의")
+    check("무거운 것부터", [i["severity"] for i in hard["issues"]], ["critical", "major"])
+    check("화 전체는 0페이지", hard["issues"][0]["page"], 0)
+    check("무게를 센다", hard["counts"], {"critical": 1, "major": 1, "minor": 0})
+
+    odd = EC.parse('{"issues": [{"page": "셋", "kind": "취향", "severity": "심각", "what": "x"}]}')
+    check("모르는 무게는 major", odd["issues"][0]["severity"], "major")
+    # 모르는 종류는 그대로 둔다 — 목록에 없다고 지우면 모델이 적어 준 것이
+    # 사라진다 (pagecheck.parse 와 같은 규칙). 비었을 때만 기본값을 넣는다.
+    check("모르는 종류는 그대로", odd["issues"][0]["kind"], "취향")
+    check("빈 종류만 기본값", EC.parse('{"issues": [{"what": "x"}]}')["issues"][0]["kind"], "이해")
+    check("숫자가 아니면 0페이지", odd["issues"][0]["page"], 0)
+    check("major 하나로는 통과", odd["verdict"], "통과")
+
+    # --- 프롬프트 ---------------------------------------------------------
+    direction = {"n": 1, "title": "제목", "genre": "판타지", "plot": "줄거리다",
+                 "scenes": ["첫 장면이다", "둘째 장면이다"],
+                 "hidden": ["아직 안 밝힌 것"]}
+    text = EC.build_prompt(direction, {"name": "이하은", "description": "대학생"},
+                           [{"name": "관리인", "appearance": "50대"}])
+    ok("장면과 페이지 번호를 맞춰 준다", "1. 첫 장면이다  (→ 2페이지)" in text)
+    ok("인물을 준다", "이하은 (주인공)" in text and "관리인" in text)
+    ok("장마다 보는 검수가 안 보는 것을 본다", "글자가 읽히는가" in text)
+    ok("자리표시자가 안 남는다", "{story}" not in text)
+
+    # --- 페이지 모으기 ----------------------------------------------------
+    root = Path(tempfile.mkdtemp())
+    try:
+        pages = root / "pages"
+        pages.mkdir(parents=True)
+        for name in ("page10.png", "page02.png", "page01.png", "page02.review.json"):
+            (pages / name).write_bytes(b"x")
+        check("번호 순서대로 (10 이 2 뒤)",
+              [p.name for p in EC.pages_of(root)],
+              ["page01.png", "page02.png", "page10.png"])
+        check("그림이 없으면 호출 안 한다",
+              EC.review_episode(root / "없다", direction=direction), (None, None))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_user_story_seed() -> None:
+    """사람이 적은 이야기가 story 단계에 실제로 들어가는가.
+
+    가장 중요한 것은 **안 적었을 때 예전과 한 글자도 안 달라지는 것**이다.
+    이 값이 붙는 자리는 4개 후보를 만드는 프롬프트라, 조용히 한 문단이
+    늘면 옛 run 을 다시 돌렸을 때 다른 이야기가 나온다.
+    """
+    base = {"name": "도하람", "description": "야간 편의점 알바",
+            "fields": {}, "genre": "", "photos": [], "photo_note": "", "story": ""}
+
+    # --- 안 적었을 때 ---
+    check("안 적으면 블록이 아예 없다", R.user_story_block(base), "")
+    before = R.story_input_block(base)
+    check("안 적으면 입력이 예전 그대로", before, R.story_input_block(dict(base)))
+    ok("안 적으면 자리표시조차 없다", "사용자가 직접 적은 이야기" not in before)
+
+    withgenre = dict(base, genre="일상 미스터리")
+    ok("장르가 있어도 마찬가지",
+       "사용자가 직접 적은 이야기" not in R.story_input_block(withgenre))
+
+    # --- 적었을 때 ---
+    seed = "남이 잃어버린 물건을 찾아주다 보니 아직 잃어버리지도 않은 물건을 찾게 된다."
+    got = R.story_input_block(dict(base, story=seed))
+    ok("적은 것이 그대로 들어간다", seed in got)
+    ok("프롬프트의 '줄거리는 받지 않는다' 를 덮는다", "아무것도 안 주어졌을 때의 규칙" in got)
+    ok("넷 다 여기서 출발하라고 한다", "네 후보 모두 이 이야기에서 출발한다" in got)
+    # 넷을 같은 이야기로 만들면 고를 것이 없어진다 — 그걸 못 박는지 본다
+    ok("그래도 갈라지라고 한다", "가는 길은 서로 갈라져야" in got)
+
+    # 장르가 있을 때는 장르 참고자료 **뒤**에 와야 한다 — 모델은 뒤에 온
+    # 것을 더 세게 듣는다(compose 의 주석과 같은 이유).
+    both = R.story_input_block(dict(base, genre="무협", story=seed))
+    ok("적은 것이 장르 자료보다 뒤에 온다",
+       both.index("사용자가 직접 적은 이야기") > both.rindex("장르"))
+
+    # --- 파일에서 읽어 올 때 ---
+    import json, shutil, tempfile
+    root = Path(tempfile.mkdtemp())
+    try:
+        doc = {"name": "도하람", "character": "야간 편의점 알바", "fields": {},
+               "genre": "일상 미스터리", "story": seed, "photo": []}
+        (root / "character.json").write_text(json.dumps(doc, ensure_ascii=False),
+                                             encoding="utf-8")
+        got = R.read_character(root)
+        check("character.json 의 story 를 안 버린다", got["story"], seed)
+        # 옛 character.json 에는 이 칸이 아예 없다
+        (root / "character.json").write_text(
+            json.dumps({k: v for k, v in doc.items() if k != "story"},
+                       ensure_ascii=False), encoding="utf-8")
+        check("칸이 없는 옛 파일은 빈 문자열", R.read_character(root)["story"], "")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main() -> int:
     for fn in (test_directions, test_detail, test_detail_events,
-               test_detail_pages, test_review_and_fix,
+               test_detail_pages, test_review_and_fix, test_page_review,
+               test_story_review, test_episode_review, test_user_story_seed,
                test_board, test_gate_board, test_directing_warnings,
                test_gate_readable, test_spec,
                test_sheet_prompt, test_input, test_pages, test_cut_weight,

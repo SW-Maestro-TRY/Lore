@@ -1,6 +1,5 @@
 "use client";
 
-import logoLou from "../assets/logo-2-default.png";
 import credits from "../demo-api/credits.json";
 
 /* 상단 바 — 로고·내비·크레딧 배지·계정 배지.
@@ -15,7 +14,7 @@ export default function TopBar({ onAccount }: { onAccount: () => void }) {
       <a className="brand" href="/webtoon">
         <span className="brand-mark" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={logoLou.src} alt="" width={30} height={30} />
+          <img src={"/static/lou/logo-2-default.png"} alt="" width={30} height={30} />
         </span>
         <span className="brand-name">LORE</span>
         <span className="brand-sub">웹툰 스튜디오</span>

@@ -44,7 +44,7 @@ function storeKey() { return `lore_editor_v2:${RUN_ID || "__mock__"}:ep${EPISODE
 function epq(sep = "?") { return `${sep}ep=${EPISODE}`; }
 
 /* 크레딧은 아직 안 붙었습니다 (#16). 목업에서만 흉내로 셉니다. */
-const COST = { regen: 40, regenFeedback: 60, nobubble: 0 };
+const COST = { regen: 40, nobubble: 0 };
 const START_CREDIT = 1240;
 
 const BUBBLES = [
@@ -88,9 +88,23 @@ function save() {
 
 /* ── 서버로 올리기 ──────────────────────────────────────────────────────
    끌 때마다 올리면 초당 수십 번이 된다. 손을 멈추고 600ms 뒤에 한 번만 올린다.
-   실패해도 조용히 넘어간다 — localStorage 에는 이미 들어갔고, "이미지로 뽑기"
-   가 어차피 지금 상태를 통째로 다시 올린다. 여기서 토스트를 띄우면 서버가
-   잠깐 느릴 때마다 편집을 방해한다. */
+   토스트는 안 띄운다 — 서버가 잠깐 느릴 때마다 편집을 방해한다. 대신 제목
+   밑 한 줄(#savedNote)로 상태만 말한다.
+
+   예전에는 이것 말고 「저장」 단추가 따로 있었는데, 눌러도 여기와 **똑같은
+   일**을 했다 — 누르든 안 누르든 결과가 같은 단추라, 하는 일 없이 "안 누르면
+   날아가나" 만 만들었다. 단추를 없앤 대신 실패를 눈에 보이게 한다(예전에는
+   조용히 넘어가서, 안 올라간 것을 알 방법이 없었다). */
+
+/* 평소에는 아무 말도 안 한다 — 잘 되고 있을 때까지 떠들면 그게 곧 소음이다. */
+function paintSaved(stateName) {
+  const el = document.getElementById("savedNote");
+  if (!el) return;
+  el.dataset.state = stateName;
+  el.textContent = stateName === "saving" ? "저장하는 중…"
+                 : stateName === "fail" ? "저장하지 못했습니다 — 연결을 확인해 주세요 (이 브라우저에는 남아 있습니다)"
+                 : "";
+}
 let pushT = null, pushing = false, pushDirty = false;
 
 /* 그림이 화면에서 몇 px 로 보이는가 — 글자 크기를 그림 해상도로 옮길 때 쓴다.
@@ -122,13 +136,18 @@ async function pushNow() {
   if (!RUN_ID) return;                       // 샘플은 올릴 곳이 없다
   if (pushing) { pushDirty = true; return; }
   pushing = true;
+  paintSaved("saving");
+  let ok = false;
   try {
-    await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
+    const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
       { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(overlayPayload()) });
+    ok = res.ok;
   } catch { /* 아래에서 다시 시도된다 */ }
   pushing = false;
-  if (pushDirty) { pushDirty = false; pushSoon(); }
+  // 아직 올릴 것이 남았으면 상태를 "됐다"로 되돌리지 않는다 — 곧 다시 올린다.
+  if (pushDirty) { pushDirty = false; pushSoon(); return; }
+  paintSaved(ok ? "idle" : "fail");
 }
 
 function pushSoon() {
@@ -183,29 +202,6 @@ function paintLedger() {
 
 /* ------------------------------------------------------------------ 장 그리기 */
 
-/* ---- 대사 스크립트 ------------------------------------------------------- *
- *
- * 완성본 화면(읽는 자리)에 있던 것을 여기로 옮겼다. 대사를 확인하는 일은
- * 읽는 일이 아니라 **고치는 일** 옆에 있어야 한다 — 말풍선을 얹으면서 원래
- * 대사가 무엇이었는지 보는 자리다.
- *
- * 편집실의 data 는 완성본과 같은 컷 필드를 갖고 있어서(editor_data 의
- * speaker·dialogue·narration·thought·sfx) 그리는 코드는 그대로 옮겨 왔다. */
-
-function scriptCut(c) {
-  const lines = [];
-  if (c.narration) lines.push(`<p class="script-line narration">${esc(c.narration)}</p>`);
-  if (c.dialogue)  lines.push(`<p class="script-line"><span class="who">${esc(c.speaker || "?")}</span> ${esc(c.dialogue)}</p>`);
-  if (c.thought)   lines.push(`<p class="script-line thought">(${esc(c.thought)})</p>`);
-  if (c.sfx)       lines.push(`<p class="script-line sfx">${esc(c.sfx)}</p>`);
-  if (!lines.length) lines.push(`<p class="script-line narration">— 대사 없음</p>`);
-  return `<div class="script-cut">
-    <div class="script-no">CUT ${String(c.no).padStart(2, "0")}${c.shot ? " · " + esc(c.shot) : ""}</div>
-    ${lines.join("")}
-    <p class="script-desc">${esc(c.description)}</p>
-  </div>`;
-}
-
 /* 편집실은 **밑그림**을 본다 (raw=1).
    보는 자리(결과·둘러보기)의 같은 주소는 얹은 것이 구워진 최종본을 주는데,
    편집실은 얹은 것을 DOM 으로 따로 그리므로 밑그림에까지 구워져 있으면
@@ -214,16 +210,6 @@ function rawImg(s) {
   const u = s.image || "";
   if (!RUN_ID || !u.includes("/api/runs/")) return u;
   return u + (u.includes("?") ? "&" : "?") + "raw=1";
-}
-
-function paintScript() {
-  const body = $("#scriptBody");
-  if (!body || !data) return;
-  body.innerHTML = (data.scenes || []).map(s => `
-    <div class="script-page">
-      <div class="script-page-no">${s.no}번째 장 · 컷 ${s.cuts.map(c => c.no).join("·")}</div>
-      ${s.cuts.map(scriptCut).join("")}
-    </div>`).join("");
 }
 
 function render() {
@@ -251,12 +237,11 @@ function render() {
   $("#scenes").innerHTML = data.scenes
     .map((s, i) => sceneCard(s) + gapBar(s, i === data.scenes.length - 1))
     .join("");
-  data.scenes.forEach(s => { paintItems(s.no); paintFeedback(s.no); });
+  data.scenes.forEach(s => paintItems(s.no));
   wireScenes();
   wireGaps();
   // 지난 판은 서버에만 있다 — 목업에는 없다.
   if (RUN_ID) data.scenes.forEach(s => paintVersions(s.no));
-  paintScript();
 }
 
 /* 회차 고르개. 한 편뿐이면 안 그린다 — 고를 것이 없는 자리에 고르개를 두면
@@ -387,55 +372,10 @@ function sceneCard(s) {
       <button type="button" class="btn btn-quiet btn-sm" data-act="regen">
         다시 그리기${RUN_ID ? "" : ` <span class="cost">−${COST.regen} C</span>`}
       </button>
-      <span class="spacer"></span>
-      <button type="button" class="btn btn-quiet btn-sm" data-act="fb">피드백</button>
     </div>
 
     <div class="page-versions" data-versions></div>
 
-    <div class="fb" data-fb>
-      <div class="fb-grid">
-        <label class="fb-cell fb-story">
-          <span>📖 스토리<small>대사가 어색하다 / 이 장면 필요 없다 / 훅이 약하다</small></span>
-          <textarea maxlength="160" data-fbk="story" placeholder="이야기 자체에 대한 말"></textarea>
-        </label>
-        <label class="fb-cell fb-direct">
-          <span>🎬 연출<small>컷을 더 붙여라 / 여기서 끊어라 / 클로즈업으로</small></span>
-          <textarea maxlength="160" data-fbk="direct" placeholder="컷 나누기·카메라·리듬에 대한 말"></textarea>
-        </label>
-        <label class="fb-cell fb-art">
-          <span>🎨 그림<small>옷이 다르다 / 얼굴이 작다 / 서술과 다르게 그려졌다</small></span>
-          <textarea maxlength="160" data-fbk="art" placeholder="그림에 대한 말"></textarea>
-        </label>
-      </div>
-
-      <!-- 세 칸에 나눠 담기 어려운 말을 받는 자리. 셋으로만 물으면 "그냥 이
-           장이 통째로 별로다" 같은 말을 적을 곳이 없어서 아무 데나 끼워 넣게
-           되고, 그러면 프롬프트에 엉뚱한 이름표(스토리:/연출:)가 붙는다. -->
-      <label class="fb-cell fb-all">
-        <span>💬 전체<small>어디에 넣을지 애매한 말 · 이 장 전체에 대한 말</small></span>
-        <textarea maxlength="320" data-fbk="all"
-          placeholder="예: 이 장은 통째로 다시 갔으면 좋겠어요 / 앞 장이랑 분위기가 안 이어져요"></textarea>
-      </label>
-
-      <div class="fb-cuts">
-        ${s.cuts.map(c => `
-          <div class="fb-cut">
-            <i>CUT ${String(c.no).padStart(2, "0")}${c.shot ? " · " + esc(c.shot) : ""}</i>
-            ${c.narration ? ` ${esc(c.narration)}` : ""}
-            ${c.dialogue ? ` <b>${esc(c.speaker || "?")}</b> ${esc(c.dialogue)}` : ""}
-            ${c.thought ? ` (${esc(c.thought)})` : ""}
-            ${c.sfx ? ` <b>${esc(c.sfx)}</b>` : ""}
-          </div>`).join("")}
-      </div>
-
-      <div class="fb-send">
-        <button type="button" class="btn btn-quiet btn-sm" data-act="fbclear">비우기</button>
-        <button type="button" class="btn btn-primary btn-sm" data-act="fbregen">
-          피드백 반영해 다시 그리기${RUN_ID ? "" : ` <span class="cost">−${COST.regenFeedback} C</span>`}
-        </button>
-      </div>
-    </div>
   </section>`;
 }
 
@@ -445,25 +385,10 @@ function wireScenes() {
 
     el.addEventListener("pointerdown", () => setActive(no), true);
 
-    $("[data-act='fb']", el).addEventListener("click", () =>
-      $("[data-fb]", el).classList.toggle("is-open"));
-
     // 두 단추 다 확인 창을 거친다 — 굽는 데 1~2분과 실제 비용이 들어서, 잘못
     // 누른 것을 되돌릴 길이 없다. 다른 점은 창을 열 때 무엇이 채워져 있느냐뿐이다.
     $("[data-act='regen']", el).addEventListener("click", e =>
-      askRegen(no, e.currentTarget, COST.regen, []));
-
-    $("[data-act='fbregen']", el).addEventListener("click", e =>
-      askRegen(no, e.currentTarget, COST.regenFeedback, readNotes(el)));
-
-    $("[data-act='fbclear']", el).addEventListener("click", () => {
-      FB_KEYS.forEach(k => { $(`[data-fbk='${k}']`, el).value = ""; });
-      sc(no).fb = {}; save();
-    });
-
-    $$("[data-fbk]", el).forEach(t => t.addEventListener("input", () => {
-      sc(no).fb[t.dataset.fbk] = t.value; save();
-    }));
+      askRegen(no, e.currentTarget, COST.regen));
 
   });
   setActive(activeScene);
@@ -481,27 +406,11 @@ function setActive(no) {
  * 굽기 전에 지금 그림을 판본으로 뜨고, 실패하면 서버가 되돌려 놓는다.
  * 목업일 때만 기다리는 모습만 흉내낸다. */
 
-/* 장 밑 피드백 칸에 적힌 것. 사람에게는 갈래로 나눠 물었지만 프롬프트에는 한
-   줄로 간다 — run.py 의 {extra} 자리는 문장 하나를 받는다. "전체" 는 갈래가
-   아니라서 이름표 없이 그대로 싣는다. */
-const FB_KEYS = ["story", "direct", "art", "all"];
-const FB_LABEL = { story: "스토리", direct: "연출", art: "그림", all: "" };
-
-function readNotes(el) {
-  return FB_KEYS
-    .map(k => [k, ($(`[data-fbk='${k}']`, el)?.value || "").trim()])
-    .filter(([, v]) => v);
-}
-
-function notesToText(notes) {
-  return notes.map(([k, v]) => (FB_LABEL[k] ? `${FB_LABEL[k]}: ${v}` : v)).join(" / ");
-}
-
 /* ---- 다시 그리기 확인 창 -----------------------------------------------
  *
  * 예전에는 단추를 누른 순간 바로 구웠다. 한 장에 1~2분과 실제 생성 비용이 드는
  * 일이라 잘못 누른 것을 되돌릴 길이 없었고, **왜** 다시 그리는지를 적을 자리도
- * 그 흐름에는 없었다(장 밑 피드백 칸을 미리 펴 두는 사람은 드물다). 여기서 한
+ * 그 흐름에는 없었다. 여기서 한
  * 번 멈춰서 항목·말·글자 여부를 받고, 취소할 길을 준다. 다 비워 둔 채 눌러도
  * 된다 — 그러면 같은 조건으로 한 번 더 그린다. */
 
@@ -530,7 +439,20 @@ function paintAskTags() {
   }));
 }
 
-function askRegen(no, btn, cost, notes) {
+/* 이 장이 **어떤 장면을 받아서** 그려진 것인가.
+
+   다시 그리기 창에서 이걸 같이 보여준다. 마음에 안 드는 장을 앞에 두고
+   사람이 먼저 가려야 하는 것은 "이야기가 이런데 그림이 못 따라간 것"인지
+   "이야기 자체가 이런 것"인지다 — 그걸 모르면 그림에다 대고 이야기를
+   고쳐 달라고 적게 된다. 서버는 이 글을 이미 실어 보내고 있었는데
+   (editor_data 의 cuts[0].description) 화면이 안 쓰고 있었다. */
+function sceneSource(no) {
+  const s = (data?.scenes || []).find(x => x.no === no);
+  const c = (s?.cuts || [])[0] || {};
+  return String(c.description || "").trim();
+}
+
+function askRegen(no, btn, cost) {
   askCtx = { no, btn, cost };
   const st = sc(no);
   $("#regenAskTitle").textContent = `${no}번째 장 다시 그리기`;
@@ -543,7 +465,15 @@ function askRegen(no, btn, cost, notes) {
   paintAskTags();
   // 장 밑에 이미 적어 둔 것이 있으면 그대로 실어 준다. 여기서 고쳐도 되고,
   // 다 지우고 눌러도 된다.
-  $("#regenAskText").value = notesToText(notes);
+  // 무엇을 그리라고 준 장면이었는지. 없으면(표지·옛 작품) 자리를 통째로
+  // 비운다 — 빈 상자만 남으면 뭘 못 읽은 것처럼 보인다.
+  const src = sceneSource(no);
+  const box = $("#regenAskScene");
+  if (box) {
+    box.hidden = !src;
+    box.textContent = src;
+  }
+  $("#regenAskText").value = "";
   $("#regenAskTextless").checked = !!st.noBubble;
   $("#regenAsk").hidden = false;
   $("#regenAskText").focus();
@@ -732,14 +662,6 @@ function paintItems(no) {
   paintProps();
 }
 
-function paintFeedback(no) {
-  const el = $(`#scene-${no}`), fb = sc(no).fb || {};
-  FB_KEYS.forEach(k => {
-    const t = $(`[data-fbk='${k}']`, el);
-    if (t && fb[k]) { t.value = fb[k]; $("[data-fb]", el).classList.add("is-open"); }
-  });
-}
-
 function addItem(type, variant, text) {
   const no = activeScene, st = sc(no);
   const it = {
@@ -791,6 +713,9 @@ function wireItem(no, el) {
     r.selectNodeContents(text);
     r.collapse(false);                         // 커서를 글 끝에
     const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r);
+    // 막대를 다시 그려 「완료」를 낸다 — pick() 이 그린 막대는 글쓰기로
+    // 들어가기 전이라 그 단추가 없다.
+    paintProps();
   }
   el.addEventListener("dblclick", () => { pick(); enterEdit(); });
 
@@ -952,7 +877,7 @@ function killBar() {
   document.getElementById(BAR_ID)?.remove();
 }
 
-function barHTML(it) {
+function barHTML(it, editing) {
   const b = (act, label, title, cls = "") =>
     `<button type="button" class="ib ${cls}" data-act="${act}" title="${title}">${label}</button>`;
   const tailed = it.type === "bubble" && TAILED.has(it.variant);
@@ -960,6 +885,18 @@ function barHTML(it) {
   const tailBtn = (v, label) =>
     `<button type="button" class="ib${cur === v ? " is-on" : ""}" data-tail="${v}"` +
     ` title="꼬리 ${label}">${label}</button>`;
+  // 글을 고치는 중에는 「완료」 하나만 낸다. 나머지(크기·꼬리·복제·삭제)는
+  // 다 쓰고 나서 할 일이라, 키보드가 화면을 반쯤 덮은 상태에서 같이
+  // 늘어놓으면 정작 눌러야 할 것이 안 보인다.
+  //
+  // **이 단추가 없으면 폰에서 글쓰기를 끝낼 방법이 없다.** 끝내는 것은
+  // 원래 Esc 하나였는데 폰에는 Esc 가 없고, 바깥을 누르는 길은 올라온
+  // 키보드에 가려서 안 보인다 — 그대로 두면 다 쓰고 나서 말풍선을 옮길
+  // 수가 없다(글 고치는 중에는 끄는 것이 글자 고르기라, 그건 일부러 그렇다).
+  if (editing) {
+    return b("done", "완료", "다 썼습니다 — 이제 옮기거나 크기를 고칠 수 있습니다",
+             "is-done");
+  }
   return [
     b("smaller", "ᴀ⁻", "글자 작게"),
     b("bigger", "ᴀ⁺", "글자 크게"),
@@ -986,7 +923,7 @@ function paintProps() {
   const bar = document.createElement("div");
   bar.id = BAR_ID;
   bar.className = "item-bar";
-  bar.innerHTML = barHTML(it);
+  bar.innerHTML = barHTML(it, el.classList.contains("editing"));
   layer.appendChild(bar);
 
   const box = layer.getBoundingClientRect();
@@ -1010,6 +947,12 @@ function paintProps() {
 /* 손잡이 줄이 하는 일들. 키보드 단축키도 같은 것을 부른다 — 두 길이 갈리면
    눌러서 되는 것과 눌러서 안 되는 것이 생긴다. */
 const ACTS = {
+  // 글쓰기를 끝낸다. 저장·다시 그리기는 blur 처리가 이미 맡고 있어서
+  // 여기서는 초점만 뗀다.
+  done: () => {
+    document.querySelector(
+      `#scene-${sel?.sceneNo} .item[data-id="${sel?.id}"].editing [data-edit]`)?.blur();
+  },
   bigger: () => bumpSize(+2),
   smaller: () => bumpSize(-2),
   front: () => {
@@ -1165,7 +1108,7 @@ function toast(msg) {
 
 /* ---- 작품 고르개 — 어떤 웹툰을 편집할지 -------------------------------
  *
- * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것·피드백이
+ * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것이
  * 작품마다 다른 칸에 저장돼 있어서(storeKey), 화면만 갈아 끼우면 앞 작품의
  * state 가 남는다. 새로 열면 load() 가 그 작품 칸을 처음부터 읽는다. */
 /* 한 작품 = 카드 한 장. 표지 그림은 그 작품에 **실제로 그려진** 장에서 가져온다
@@ -1206,7 +1149,7 @@ function workCard(r, current) {
 
 /* ---- 작품 목록 — 어떤 웹툰을 편집할지 ---------------------------------
  *
- * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것·피드백이
+ * 고르면 주소를 바꾸고 새로 연다. 페이지를 다시 여는 이유: 얹은 것이
  * 작품마다 다른 칸에 저장돼 있어서(storeKey), 화면만 갈아 끼우면 앞 작품의
  * state 가 남는다. 새로 열면 load() 가 그 작품 칸을 처음부터 읽는다. */
 async function paintWorks(current) {
@@ -1369,25 +1312,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 저장은 항목을 건드릴 때마다 자동으로 된다(save() → pushSoon()). 이 단추는
   // **지금 당장** 올리고 그 결과를 말해 주는 자리다 — 자동 저장은 조용해서,
   // 창을 닫기 전에 확인하고 싶을 때 누를 곳이 있어야 한다.
-  $("#scriptBtn")?.addEventListener("click", () => {
-    const panel = $("#scriptPanel");
-    panel.hidden = !panel.hidden;
-  });
-  $("#scriptClose")?.addEventListener("click", () => { $("#scriptPanel").hidden = true; });
-
-  $("#saveBtn").addEventListener("click", async () => {
-    save();
-    if (!RUN_ID) return toast("샘플입니다 — 얹은 것은 이 브라우저에만 저장됩니다.");
-    clearTimeout(pushT);
-    try {
-      const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
-        { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(overlayPayload()) });
-      const out = await res.json();
-      if (!res.ok) throw new Error(out.error || "저장하지 못했습니다");
-      toast(`작품 폴더에 저장했습니다 — 얹은 것 ${out.items}개`);
-    } catch (err) { toast(err.message); }
-  });
 
   // 이미지로 뽑기 — 얹은 것을 그림에 구워서 내려받는다.
   // 저장과 굽기를 한 번에 보낸다. 따로 왕복하면 그 사이에 실패했을 때 화면에

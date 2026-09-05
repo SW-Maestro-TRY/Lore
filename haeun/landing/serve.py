@@ -41,6 +41,17 @@ WEB = HERE / "web"
 DEMO_DIR = HERE / "jobs" / "_demo"
 MAX_PHOTO_BYTES = 6 * 1024 * 1024
 
+# 개발할 때만 켜는 CORS. **기본은 꺼짐이다.**
+#
+# 배포에서는 화면과 이 서버가 같은 도메인 아래 있어서(CloudFront 가 /api/*
+# 만 백엔드로 보낸다) 이 헤더가 필요 없다. 필요한 것은 딱 한 경우 —
+# webtoon/fe 를 `next dev`(localhost:3000)로 띄워 놓고 여기(8800)에 바로
+# 붙여 볼 때다. 그때만 `--dev-cors` 로 켠다.
+#
+# 켜 두고 배포하면 아무 사이트나 이 서버를 부를 수 있게 되므로 기본을
+# 꺼짐으로 둔다.
+DEV_CORS = False
+
 runner = pipeline.Runner()
 nh_runner = nh.NHRunner()
 _thumb_lock = threading.Lock()
@@ -154,6 +165,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if DEV_CORS:
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         for k, v in (headers or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -313,6 +328,16 @@ class Handler(BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             return 1
         return n if 1 <= n <= 999 else 1
+
+    def do_OPTIONS(self) -> None:                               # noqa: N802
+        """브라우저가 JSON POST 전에 먼저 묻는 것(preflight).
+
+        `--dev-cors` 를 안 켰으면 이 자리 자체가 뜻이 없으므로 405 로 둔다 —
+        같은 도메인에서 부르면 브라우저가 preflight 를 아예 안 보낸다.
+        """
+        if not DEV_CORS:
+            return self._error(405, "OPTIONS 는 --dev-cors 일 때만 받습니다")
+        self._send(204, b"", "text/plain")
 
     def do_GET(self) -> None:                                   # noqa: N802
         url = urlparse(self.path)
@@ -574,14 +599,31 @@ class Handler(BaseHTTPRequestHandler):
                 m.group(1), self._ep(query))})
 
         # 다시 그리기 — 지난 판 목록과 그 그림.
+        # 지난 판 셋(목록·그림·되돌리기)은 편집실이 **주소 하나로** 부른다 —
+        # 여기서 run 종류를 갈라 준다(/result·/episode 와 같은 규칙).
         m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions", path)
         if m:
+            run_id, no = m.group(1), int(m.group(2))
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                return self._json({"versions": nh.page_versions(run_id, no)})
             return self._json({"versions": pipeline.scene_versions(
-                m.group(1), int(m.group(2)), self._ep(query))})
+                run_id, no, self._ep(query))})
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions/(\d+)", path)
         if m:
             ep = self._ep(query)
+            if (not pipeline.episode_dir(m.group(1), 1).exists()
+                    and nh.is_run(m.group(1))):
+                src = nh.version_path(m.group(1), int(m.group(2)), int(m.group(3)))
+                if not src:
+                    return self._error(404, "그 판본이 없습니다")
+                width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
+                dest = (nh.run_dir(m.group(1)) / "cache"
+                        / f"v{m.group(2)}_{m.group(3)}_w{width}.jpg")
+                try:
+                    return self._file(thumbnail(src, dest, width))
+                except Exception:                               # noqa: BLE001
+                    return self._file(src)
             src = pipeline.version_path(m.group(1), int(m.group(2)),
                                         int(m.group(3)), ep)
             if not src:
@@ -602,6 +644,13 @@ class Handler(BaseHTTPRequestHandler):
 
         m = re.fullmatch(r"/api/regens/([\w.-]+)", path)
         if m:
+            # 편집실은 어느 하네스로 만든 작품인지 모른 채 이 주소만 본다.
+            # classic 에 없으면 new_harness 쪽을 찾는다.
+            if not pipeline.regens.get(m.group(1)):
+                try:
+                    return self._json(nh_runner.regen_status(m.group(1)))
+                except KeyError:
+                    pass
             job = pipeline.regens.get(m.group(1))
             if not job:
                 return self._error(404, "그런 작업이 없습니다")
@@ -667,7 +716,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/latest":
             # 가장 최근에 **끝난** 작업. /result 가 이걸 보고 결과를 띄운다.
-            done = [j for j in runner.jobs.values() if j.status == "done" and j.run_id]
+            # 두 하네스를 같이 본다 — 메인 화면이 new_harness 로 만들기
+            # 시작한 뒤로(2026-09-03), classic 만 보면 방금 만든 것이 안 뜬다.
+            done = [j for j in (*runner.jobs.values(), *nh_runner.jobs.values())
+                    if j.status == "done" and j.run_id]
             if not done:
                 return self._error(404, "아직 완성된 작품이 없습니다")
             newest = max(done, key=lambda j: j.finished_at or 0)
@@ -1127,6 +1179,17 @@ class Handler(BaseHTTPRequestHandler):
                 body = self._body()
             except (json.JSONDecodeError, UnicodeDecodeError):
                 body = {}
+            # new_harness 작품이면 그쪽으로 넘긴다. **편집실은 이 주소 하나만
+            # 안다** — 예전에는 nh 작품에서 여기까지 와서 "그 장을 찾지 못했습니다"
+            # (404) 로 끝났다. 다시 그리기가 편집실에서 통째로 안 됐다는 뜻이다
+            # (/result·/episode.png 가 이미 같은 규칙으로 갈라지고 있었다).
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                note = str(body.get("feedback") or "").strip()
+                try:
+                    regen_id = nh_runner.regen(run_id, scene_no, note)
+                except ValueError as exc:
+                    return self._error(404, str(exc))
+                return self._json(nh_runner.regen_status(regen_id))
             ep = self._ep({**parse_qs(url.query),
                            **({"ep": [str(body["episode"])]} if body.get("episode")
                               else {})})
@@ -1179,6 +1242,14 @@ class Handler(BaseHTTPRequestHandler):
             ep = self._ep({**parse_qs(url.query),
                            **({"ep": [str(body["episode"])]} if body.get("episode")
                               else {})})
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                if not nh.revert_page(run_id, scene_no, version):
+                    return self._error(404, "그 판본으로 되돌리지 못했습니다")
+                # 한 편도 다시 이어붙인다 — 안 그러면 완성본·내려받기에는
+                # 되돌리기 전 그림이 그대로 남아서, 화면과 파일이 갈린다.
+                nh.restitch(run_id)
+                return self._json({"ok": True,
+                                   "versions": nh.page_versions(run_id, scene_no)})
             if not pipeline.revert_scene(run_id, scene_no, version, ep):
                 return self._error(404, "그 판본으로 되돌리지 못했습니다")
             return self._json({"ok": True,
@@ -1469,13 +1540,14 @@ class Handler(BaseHTTPRequestHandler):
             except pipeline.Failed as exc:
                 return self._error(400, str(exc))
 
-        # ---- new_harness 실험 경로 ------------------------------------------ #
+        # ---- new_harness 경로 ------------------------------------------------ #
         #
-        # /api/create 와 사진 처리 로직이 겹치지만 일부러 안 합친다 —
-        # /api/create 는 실제 서비스 화면(lorecomic.com/webtoon)이 매 요청마다
-        # 타는 자리라, 실험 경로를 고치다 실수로 거길 건드리는 위험을 아예
-        # 없애는 쪽을 골랐다.
-
+        # /api/create 와 사진 처리 로직이 겹치지만 일부러 안 합친다 — 하네스가
+        # 다르면(story-harness+webtoon-harness vs new_harness) job 저장소도
+        # 검수 단계도 달라서, 공통 함수 하나로 묶으면 그 차이를 매번 if 로
+        # 갈라야 한다. 2026-09-03부터 메인 화면(index.html)도 이 경로를
+        # 탄다 — 더는 "실험 전용이라 안전"이 아니고, /api/create 와 똑같이
+        # 크레딧·저작권 확인을 거친다(아래).
         if url.path == "/api/nh/create":
             try:
                 form = self._body()
@@ -1524,8 +1596,31 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "캐릭터를 알 수 있는 것이 하나는 필요합니다 — "
                                         "이름 · 설명 · 항목 · 사진 중 아무거나요.")
 
+            # 저작권 확인 — /api/create 와 같은 확인, 같은 문구.
+            if not form.pop("agree_ip", False):
+                return self._error(400, "저작권 확인에 동의해야 만들 수 있습니다")
+
+            # 크레딧 소진 — /api/create 와 같은 계산(credits.creation_cost).
+            # new_harness 는 layout_mode·preview 개념이 없으므로 항상 기본값
+            # (fast · 미리보기 아님)으로 계산한다 — 페이지 전체를 한 번에
+            # 그리는 만큼, 컷별 미리보기를 나눠 부를 자리가 없다.
+            uid = str(form.pop("uid", "") or "")
+            if not credits.valid_uid(uid):
+                return self._error(400, "uid 가 없습니다")
+            cost = credits.creation_cost(False, "fast")
+            bal = credits.balance(uid)
+            if bal < cost:
+                return self._error(
+                    402, f"크레딧이 모자랍니다 (필요 {cost} · 보유 {bal})",
+                    reason="insufficient_credit", need=cost, balance=bal)
+
             job = nh_runner.create(form, photos)
-            return self._json({"id": job.id})
+            _, bal = credits.spend(uid, cost)
+            credits.log_event("spend", uid, amount=cost, balance=bal,
+                              job_id=job.id, reason="create")
+            accounts.log_ip_consent(uid, job.id)
+            return self._json({"id": job.id, "queue_position": nh_runner.position(job.id),
+                               "credit_balance": bal})
 
         m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/pick", url.path)
         if m:
@@ -1546,7 +1641,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(409, str(exc))
             return self._json({"ok": True})
 
-        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/board-decision", url.path)
+        # 방향 고르기 화면의 "다시 만들기" — 콘티 검수가 없어진 뒤로 이
+        # 화면이 유일한 재시도 자리다(2026-09-03, board-decision 대체).
+        m = re.fullmatch(r"/api/nh/jobs/([\w.-]+)/pick-retry", url.path)
         if m:
             job = nh_runner.get(m.group(1))
             if not job:
@@ -1554,15 +1651,9 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 body = self._body()
             except (json.JSONDecodeError, UnicodeDecodeError):
-                return self._error(400, "입력을 읽지 못했습니다")
-            decision = str(body.get("decision") or "")
-            if decision not in ("approve", "retry"):
-                return self._error(400, "decision 은 approve 또는 retry 여야 합니다")
+                body = {}
             try:
-                if decision == "approve":
-                    nh_runner.approve_board(job.id)
-                else:
-                    nh_runner.retry_board(job.id, note=str(body.get("note") or ""))
+                nh_runner.retry_pick(job.id, note=str(body.get("note") or ""))
             except ValueError as exc:
                 return self._error(409, str(exc))
             return self._json({"ok": True})
@@ -1629,7 +1720,12 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/page/(\d+)/regen", url.path)
         if m:
             try:
-                regen_id = nh_runner.regen(m.group(1), int(m.group(2)))
+                try:
+                    body = self._body()
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    body = {}
+                regen_id = nh_runner.regen(m.group(1), int(m.group(2)),
+                                           str(body.get("feedback") or ""))
             except ValueError as exc:
                 return self._error(400, str(exc))
             return self._json({"id": regen_id})
@@ -1642,6 +1738,10 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=8800)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--open", action="store_true", help="브라우저를 함께 엽니다")
+    ap.add_argument("--dev-cors", action="store_true",
+                    help="다른 포트에서 온 요청을 받습니다 (webtoon/fe 를 next dev 로 "
+                         "띄워 놓고 여기에 바로 붙일 때만. 배포에서는 같은 도메인이라 "
+                         "필요 없고, 켜 두면 아무 사이트나 이 서버를 부를 수 있습니다)")
     args = ap.parse_args()
 
     pipeline.JOBS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1651,11 +1751,32 @@ def main() -> int:
             print(f"[중단] {name} 을 찾지 못했습니다: {path}")
             return 1
 
+    # 하네스는 이 서버와 **같은 파이썬**으로 돈다(subprocess 가 sys.executable
+    # 을 쓴다). 그 파이썬에 하네스가 쓰는 꾸러미가 없으면, 서버는 멀쩡히 뜨고
+    # 요청도 받다가 **크레딧을 뗀 뒤에** 첫 호출에서 죽는다 — 실제로 겪었다
+    # (2026-09-03, pyyaml 없는 python3 로 띄워서 만들기가 통째로 실패).
+    # 그래서 켤 때 미리 확인하고, 어느 파이썬으로 켜야 하는지까지 알린다.
+    missing = [m for m in ("yaml", "PIL")
+               if __import__("importlib.util", fromlist=["util"]).find_spec(m) is None]
+    if missing:
+        venv = HERE.parent / ".venv" / "bin" / "python"
+        print(f"[경고] 지금 파이썬({sys.executable})에 {' · '.join(missing)} 가 없습니다.")
+        print("       이대로 두면 만들기가 크레딧만 떼고 첫 호출에서 실패합니다.")
+        if venv.exists():
+            print(f"       이렇게 켜세요:  {venv} serve.py --port {args.port}")
+        else:
+            print("       pip install pyyaml Pillow 로 설치한 뒤 다시 켜 주세요.")
+        print()
+
     restored = runner.restore()
     if restored:
         print(f"지난 작업 {restored}건을 다시 읽었습니다 (결과 화면은 그대로 열립니다).")
 
     url = f"http://{args.host}:{args.port}/"
+    global DEV_CORS
+    DEV_CORS = args.dev_cors
+    if DEV_CORS:
+        print("⚠ --dev-cors: 다른 포트에서 온 요청도 받습니다 (개발용)", flush=True)
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"랜딩페이지:  {url}")
     print(f"결과물 바로:  {url}result      (이미 만들어 둔 마지막 1화)")

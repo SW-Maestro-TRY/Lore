@@ -9,13 +9,16 @@
 //     같은 도메인 아래에서 /api/* 만 백엔드로 보내주므로 CORS 가 없다.
 //     로컬 개발에서 백엔드가 8080 이면 그때만 rewrites 를 켜면 된다.
 //
-// rewrites — /webtoon 은 화면마다 다르다.
-//   홈(`/webtoon` 그 자체)은 webtoon/fe/WebtoonPage.tsx 로 옮겨진 React
-//   화면이다(2026-08-27, 담당: 하은) — 그래서 그 한 자리만 아래 목록에서
-//   뺐다. 나머지(둘러보기·마이페이지·결과·편집실 등)는 아직 haeun/landing
-//   의 프로토타입(순수 HTML/CSS/JS)이고, webtoon/fe/sync-landing.sh 가
-//   public/static 으로 떠 온다. 화면을 하나씩 React 로 옮길 때마다 그
-//   자리를 여기서도 빼면 된다.
+// rewrites — /webtoon 은 화면마다 다르다. (담당: 하은)
+//
+//   홈(`/webtoon` 그 자체)만 React 다(webtoon/fe/WebtoonPage.tsx). 나머지
+//   (둘러보기·마이페이지·결과·편집실 등)는 아직 haeun/landing 의
+//   프로토타입이고, webtoon/fe/sync-landing.sh 가 public/static 으로 떠
+//   온다. 화면을 하나씩 React 로 옮길 때마다 그 자리를 여기서도 빼면 된다.
+//
+//   ★ 정적 파일로 돌리면 **Lore 앱 헤더가 같이 사라진다.** rewrite 는 Next
+//     레이아웃을 통째로 건너뛰어서 그 화면만 헤더 없이 뜬다. 헤더를 남기려면
+//     그 화면은 React 여야 한다.
 const nextConfig = {
   output: 'standalone',
 
@@ -56,7 +59,9 @@ const nextConfig = {
       // 나중에 /webtoon 아래에 React 화면이 생겨도 이 규칙이 계속 유효하도록.
       beforeFiles: [
         ...apiProxy,
-        // page('', 'index.html') — 홈은 뺐다. React 화면(app/(domains)/webtoon)이 대신 잡는다.
+        // page('', 'index.html') — 홈은 뺐다. React 화면(app/(domains)/webtoon)이
+        // 대신 잡는다. **정적 파일로 되돌리면 Lore 앱 헤더가 같이 사라진다** —
+        // rewrite 는 Next 레이아웃을 통째로 건너뛰기 때문이다.
         page('/works',        'index.html'),   // 둘러보기 (?run= 이 붙으면 그 작품)
         page('/mypage',       'index.html'),   // 마이페이지
         page('/result',       'index.html'),   // 마지막 결과

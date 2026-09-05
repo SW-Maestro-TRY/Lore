@@ -50,13 +50,18 @@ export default function Step1Photo({
 
   return (
     <section className="wiz-step" data-step="1">
-      <p className="wiz-eyebrow">수면 · STEP 1 / 5</p>
-      <h3 className="wiz-title">
-        누구를 데리고
-        <br />
-        바다로 갈까요?
-      </h3>
-      <p className="wiz-sub">아는 만큼만 적으세요. 빈 칸은 루가 채웁니다.</p>
+      {/* 걸음마다 "말"(눈금·제목·안내)과 "손이 닿는 것"(입력 카드)을
+          한 겹으로 묶어 둔다. 폰에서는 위아래로 그냥 흐르고, PC 에서는
+          이 덩어리가 왼쪽 칸으로 간다(webtoon.css 의 .wiz-say). */}
+      <div className="wiz-say">
+        <p className="wiz-eyebrow">수면 · STEP 1 / 5</p>
+        <h3 className="wiz-title">
+          누구를 데리고
+          <br />
+          바다로 갈까요?
+        </h3>
+        <p className="wiz-sub">아는 만큼만 적으세요. 빈 칸은 루가 채웁니다.</p>
+      </div>
 
       <div className="wiz-card">
         <div className="photo-row">

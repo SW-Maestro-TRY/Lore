@@ -17,6 +17,7 @@ const STYLE_INFO = [
   ["pastel",    "일상툰 감성",    "일부러 덜 완성한 그림. 흔들리는 연필선, 종이 결, 바랜 파스텔 몇 색."],
   ["noir",      "다크 느와르",    "어둠이 주인공입니다. 화면 대부분이 먹으로 덮이고 빛은 얇게 남습니다."],
   ["cinematic", "시네마틱 반실사","빛으로 화려해집니다. 역광·공기·얕은 심도·필름 색보정. 얼굴은 웹툰 그대로."],
+  ["game",      "게임 원화",      "고급 모바일 게임 캐릭터 CG. 섬세한 선화에 은은하게 빛나는 채색과 정제된 조명까지."],
 ];
 
 // 장르 단추로 먼저 꺼내 두는 것들. index.html 의 datalist 에는 더 많이 있고,
@@ -28,19 +29,20 @@ const STYLE_INFO = [
 /* 그림체 썸네일. loading="lazy" 는 **안 쓴다** — 걸음이 숨어 있는 동안에는
    브라우저가 "화면 밖"으로 보고 안 받아 오다가, 걸음이 열려도 한동안 빈
    칸으로 남는다(실제로 7장 중 2장만 뜨는 것을 봤다).
-   일곱 그림체 모두 **실제로 그 그림체로 뽑아 둔 샘플**을 쓴다. 파스텔·
+   여덟 그림체 모두 **실제로 그 그림체로 뽑아 둔 샘플**을 쓴다. 파스텔·
    느와르·순정은 예시가 없던 동안 루 그림으로 자리만 채웠는데, 그러면 카드를
    봐도 어떤 그림이 나오는지 알 수가 없었다. 원본은 design-reference/picture
    에 있고, 여기에는 기존 샘플과 같은 규격(가로 1080 안, JPEG)으로 줄여
    넣는다 — 원본 PNG 는 장당 2~3MB 라 썸네일로 그대로 쓰면 안 된다. */
 const STYLE_THUMB = {
   cinematic: "/static/samples/ex-cinematic-1.jpg",
-  romance:   "/static/samples/ex-romance-1.jpg",
+  romance:   "/static/samples/ex-romance-1.png",
   webtoon:   "/static/samples/ex-webtoon-1.jpg",
   frost:     "/static/samples/ex-frost-1.jpg",
   pastel:    "/static/samples/ex-pastel-1.jpg",
   noir:      "/static/samples/ex-noir-1.jpg",
   shoujo:    "/static/samples/ex-shoujo-1.jpg",
+  game:      "/static/samples/ex-game-1.jpg",
 };
 
 const GENRE_QUICK = [
@@ -118,6 +120,11 @@ function setMode(mode) {
 }
 
 let jobId    = sessionStorage.getItem("lore_job") || null;
+// 지금 물고 있는 job 이 new_harness 경로로 만든 것인가. 2026-09-03부터
+// 메인 화면의 기본 경로가 됐다 — classic(story-harness+webtoon-harness) 은
+// job 프로토콜(상태 이름·검수 단계)이 완전히 달라서 tick() 이 이 값으로
+// 갈라 다른 함수(nhTick)를 탄다.
+let nhMode   = sessionStorage.getItem("lore_job_kind") === "nh";
 let poll     = null;
 /* 사진은 여러 장 받는다 — 한 사람을 여러 각도로 찍은 것이다.
    한 장으로는 늘 안 보이는 칸(하의·신발·뒤통수)이 남고, 다른 각도가 그 칸을 채운다. */
@@ -536,20 +543,19 @@ function creationCost() {
 }
 
 function paintCost() {
-  const preview = true;              // 지금은 미리보기만 만든다 — collect() 도 항상 preview:true
   $("#costChip").textContent = `−${creationCost()}크레딧`;
   // 단추에는 지금 나가는 값만 적고, 무슨 일이 일어나는지는 바로 밑 한 줄이
-  // 말한다 — 이야기는 한 편 전체가 만들어지고 그림은 첫 장면(3컷)만 나온다는
-  // 것을 모르고 누르면, 결과 화면에서 "이게 다야?" 가 된다.
+  // 말한다.
+  //
+  // 한동안 여기가 "미리보기 만들기 / 먼저 일부 장면을 보여드려요" 였다.
+  // 그건 예전 파이프라인(/api/create) 이야기다 — 2026-09-03부터 이 화면은
+  // new_harness(/api/nh/create)로 만들고, 거기엔 미리보기라는 것이 없다.
+  // 누르면 한 편이 끝까지 나온다. 안 고치면 다 나온 결과를 보고도 "이게
+  // 미리보기인가" 하게 된다.
   const noteEl = $("#submitNote");
   if (noteEl && !noteEl.dataset.costNote) {
     noteEl.dataset.costNote = "1";
-    const per = creationCost();
-    const full = (creditCost.full || 0)
-      * (layoutMode() === "webtoon" ? (creditCost.webtoon_mult || 1) : 1);
-    noteEl.textContent = noteEl.textContent.replace(/\s*$/, "") +
-      ` 먼저 일부 장면을 보여드려요.` +
-      ` 마음에 들면 추가 결제 없이 전체를 이어서 볼 수 있어요.`;
+    noteEl.textContent = "한 편을 끝까지 그립니다 — 10분쯤 걸려요.";
   }
   // 홈의 첫 단추에도 값을 적는다 — 다섯 걸음을 다 밟고 마지막에야 얼마인지
   // 아는 것은 늦다. /api/config 가 오기 전에는 값이 0 이라, 그동안은 숨긴다
@@ -564,8 +570,6 @@ function paintCost() {
     startChip.hidden = !full;
     startChip.textContent = `−${full}크레딧`;
   }
-  $("#submitBtn").firstChild.textContent =
-    preview ? "미리보기 만들기 " : "웹툰 만들기 ";
 }
 
 /* ---- 충전 모달 — 프리토타이핑 결제 ------------------------------------- *
@@ -1279,6 +1283,42 @@ function collect() {
   };
 }
 
+/* new_harness 가 받는 입력만 추린다.
+ *
+ * 세계관·등신·컷 배치·전문 모드·그림 검수 횟수는 story-harness +
+ * webtoon-harness 흐름의 값이라 여기서는 안 보낸다 — 안 보내는 값은
+ * 결과를 바꾸지 않는다.
+ *
+ * **줄거리(story)는 보낸다.** 예전에는 이것도 뺐는데, 입력 화면이
+ * 「어떤 이야기를 만들까요?」를 한 단계로 통째로 물어보고 확인 화면에서
+ * 다시 보여준 다음 조용히 버리고 있었다 — 사람은 자기가 적은 것이 반영된
+ * 줄 안다. 안 적었으면 빈 문자열이 가고 하네스도 아무것도 안 붙인다. */
+function collectNH() {
+  const form = $("#form");
+  const fields = {};
+  $$("[data-field]", form).forEach(el => {
+    if (el.value.trim()) fields[el.dataset.field] = el.value.trim();
+  });
+  return {
+    uid:        UID,
+    name:       form.name.value.trim(),
+    character:  form.character.value.trim(),
+    photo_note: form.photo_note.value.trim(),
+    fields,
+    genre:      form.genre.value.trim(),
+    story:      form.story.value.trim(),
+    style:      form.style.value,
+    photos_data: photos,
+    agree_ip:   $("#ipAgreeCheck").checked,
+    // 갈림길에서 고른 것. 「3번만 확인하며」면 시트와 이야기에서 멈추고,
+    // 「빠르게 결과부터」면 안 멈추고 루가 알아서 고른다.
+    //
+    // 한동안 이 값을 안 보냈다. 그래서 「빠르게 결과부터」를 골라도 똑같이
+    // 두 번 멈췄다 — 카드에는 "중간에 안 멈춥니다" 라고 적혀 있었다.
+    checkpoints: isExpert(),
+  };
+}
+
 /* 실제로 출발시킨다. 갈림길에서 "스토리 모드"를 고른 것과 마지막 걸음에서
    "웹툰 만들기"를 누른 것이 같은 일을 하므로, 단추 핸들러가 아니라 이 함수를
    양쪽이 함께 부른다. 실패하면 그 자리에 남아서 이유를 보여준다 — 여기서
@@ -1299,10 +1339,12 @@ async function startRun() {
   btn.disabled = true;
   fork.forEach(c => { c.disabled = true; });
   try {
-    const res = await fetch("/api/create", {
+    // 2026-09-03부터 메인 화면도 new_harness 로 만든다 — 이야기 후보 4개를
+    // 뽑아 사람이 하나를 고르고, 장면(사건)마다 페이지 한 장을 그린다.
+    const res = await fetch("/api/nh/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(collect()),
+      body: JSON.stringify(collectNH()),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -1322,7 +1364,9 @@ async function startRun() {
       throw new Error(data.error || "시작하지 못했습니다");
     }
     jobId = data.id;
+    nhMode = true;
     sessionStorage.setItem("lore_job", jobId);
+    sessionStorage.setItem("lore_job_kind", "nh");
     if (data.credit_balance != null) { creditBalance = data.credit_balance; paintCreditPill(); }
     shownCuts = new Set();
     startPolling();
@@ -1356,6 +1400,7 @@ function startPolling(opts = {}) {
 
 async function tick() {
   if (!jobId) return;
+  if (nhMode) return nhTick();
   let state;
   try {
     const res = await fetch(`/api/jobs/${jobId}`);
@@ -1388,6 +1433,260 @@ async function tick() {
 function mmss(sec) {
   const s = Math.max(0, Math.round(sec));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/* ------------------------------------------------------- new_harness 흐름 *
+ *
+ * 2026-09-03부터 메인 화면이 만드는 방식이다. classic(story-harness +
+ * webtoon-harness)과 job 프로토콜이 통째로 달라서 — 상태 이름도, 사람이
+ * 볼 자리도, 결과를 여는 주소도 — 폴링과 검수 화면을 여기서 따로 그린다.
+ *
+ * 사람이 멈춰 서는 자리는 **둘뿐**이다.
+ *
+ *   1. 캐릭터 시트 확인      awaiting_sheet
+ *   2. 이야기 방향 고르기    awaiting_pick   (후보 4개 중 하나)
+ *
+ * **시트가 먼저다.** 시트는 사진·설명만으로 그려져서 어느 이야기를 고르든
+ * 안 달라지므로(new_harness 의 `--sheet` 는 pick.json 을 안 읽는다), 얼굴을
+ * 먼저 확정해 놓고 이야기를 고르는 편이 사람이 판단하기 쉽다. 방향을 고른
+ * 다음은 멈추지 않는다 — 곧장 페이지를 그린다.
+ */
+
+const NH_STAGE_SAY = {
+  story: "루가 이야기를 만들고 있어요",
+  sheet: "루가 캐릭터를 디자인하고 있어요",
+  board: "루가 고른 방향을 정리하고 있어요",
+  pages: "루가 그림을 그리고 있어요",
+};
+/* style.css 의 .stage-art[data-stage] 그림과 MASCOT_MOODS 는 classic 5단계
+   (story/sheet/board/art/bind) 기준이다 — new_harness 의 "pages" 는 그림을
+   그리는 단계라 가장 가까운 art 를 빌려 쓴다. */
+const NH_STAGE_ART = { story: "story", sheet: "sheet", board: "board", pages: "art" };
+
+async function nhTick() {
+  let state;
+  try {
+    const res = await fetch(`/api/nh/jobs/${jobId}`);
+    if (res.status === 404) { forget(); return; }
+    state = await res.json();
+  } catch { return; }             // 잠깐 끊긴 것뿐이면 다음 번에 다시 받는다
+
+  renderNHProgress(state);
+  paintMini(state);
+
+  if (state.status === "done" && state.run_id) {
+    clearInterval(poll); poll = null;
+    $("#approvalModal").hidden = true;
+    document.body.classList.remove("modal-open");
+    // new_harness 에는 job 기준 결과 주소가 없다 — 완성본은 run_id 로 연다
+    // (/api/runs/<id>/result 가 new_harness run 도 같은 모양으로 준다).
+    sessionStorage.removeItem("lore_job_kind");
+    nhMode = false;
+    // **이 브라우저가 시킨 작업의 결과다.** 남겨 두지 않으면 앱이 남의
+    // 작품으로 보고(isMyRun) 내려받기·편집실로 가기·서버에 저장하기·
+    // 공유하기를 통째로 감춘다 — 방금 자기가 만든 작품인데 가져갈 길이
+    // 하나도 없어진다(실측). classic 흐름은 showResult 에서 같은 일을
+    // 하는데, new_harness 는 job 이 아니라 run_id 로 결과를 열어서
+    // 그 자리를 안 지나간다.
+    rememberMyRun(state.run_id);
+    showRunResult(state.run_id, 1);
+  } else if (state.status === "error") {
+    clearInterval(poll); poll = null;
+    $("#approvalModal").hidden = true;
+    document.body.classList.remove("modal-open");
+    renderFailure(state);
+  }
+  lastStatus = state.status;
+}
+
+function renderNHProgress(s) {
+  $("#clock").textContent = mmss(s.elapsed);
+
+  // classic 검수 상자들은 같은 팝업 안에 있다 — 닫아 두지 않으면 지난
+  // 작업의 상자가 새 작업의 상자와 겹쳐 보인다.
+  ["#sheetApproval", "#storyApproval", "#boardApproval", "#artqaApproval"]
+    .forEach(sel => { const el = $(sel); if (el) el.hidden = true; });
+
+  const sheetBox = $("#nhSheetApproval");
+  if (s.status === "awaiting_sheet") {
+    sheetBox.hidden = false;
+    // 이미지는 상태가 막 바뀐 때만 새로 건다 — 매 폴링(0.8초)마다 캐시
+    // 버스터를 새로 붙이면 같은 그림을 계속 다시 받는다.
+    if (lastStatus !== "awaiting_sheet") {
+      $("#nhSheetImg").src = `/api/nh/jobs/${jobId}/sheet.png?v=${Date.now()}`;
+      setNHButtonsBusy(false);
+    }
+  } else {
+    sheetBox.hidden = true;
+  }
+
+  const pickBox = $("#nhPickApproval");
+  if (s.status === "awaiting_pick") {
+    pickBox.hidden = false;
+    if (lastStatus !== "awaiting_pick") {
+      renderNHCards(s.directions || []);
+      setNHButtonsBusy(false);
+    }
+  } else {
+    pickBox.hidden = true;
+  }
+
+  const waiting = s.status === "awaiting_sheet" || s.status === "awaiting_pick";
+  $("#approvalModal").hidden = !waiting;
+  document.body.classList.toggle("modal-open", waiting);
+
+  if (s.status === "queued") {
+    $("#progEyebrow").textContent = "대기 중";
+    $("#progTitle").textContent = "앞에 만들고 있는 작품이 있습니다";
+    $("#progSub").textContent = "한 번에 한 편씩 만듭니다.";
+  } else if (s.status === "running") {
+    $("#progEyebrow").textContent = s.style_label || "";
+    $("#progTitle").textContent = "웹툰을 만들고 있습니다";
+    $("#progSub").textContent = "지금 무엇을 하고 있는지 아래에 그대로 보여드립니다.";
+  } else if (waiting) {
+    $("#progEyebrow").textContent = "확인이 필요합니다";
+    $("#progTitle").textContent = "잠깐 봐 주세요";
+    $("#progSub").textContent =
+      "아래에서 확인하고 넘어가 주세요 — 그동안은 아무것도 안 돌아갑니다.";
+  }
+
+  paintMascot(s, { key: NH_STAGE_ART[s.stage] || s.stage });
+  // 그림 단계에서는 몇 장째인지가 기다리는 사람에게 가장 큰 정보다 —
+  // 단계 문구(MASCOT_MOODS)에는 그 숫자가 없으니 여기서 덧붙인다.
+  if (s.status === "running" && s.stage === "pages" && s.art && s.art.total) {
+    $("#mascotLine").textContent =
+      `루가 그림을 그리고 있어요 (${s.art.done}/${s.art.total})`;
+  }
+  // 검수가 도는 동안에는 그 사실만 말해 준다. 무엇을 어떻게 보고 있는지는
+  // 안 보여준다 — 기다리는 사람이 알고 싶은 것은 "왜 아직 안 끝났나" 이지,
+  // 몇 번 장면이 왜 걸렸는지가 아니다. 서버가 say 를 비우면 위 기본
+  // 문구로 돌아간다.
+  if (s.status === "running" && s.say) {
+    $("#mascotLine").textContent = s.say;
+  }
+
+  $("#rail").innerHTML = (s.stages || []).map((key, i) => {
+    const state = i < s.stage_index ? "done" : i === s.stage_index ? "active" : "todo";
+    const mark = state === "done" ? "✓" : String(i + 1).padStart(2, "0");
+    return `
+      <li class="stage" data-state="${state}">
+        <span class="stage-dot">${mark}</span>
+        <div class="stage-main"><h3>${esc(NH_STAGE_SAY[key] || key)}</h3></div>
+      </li>`;
+  }).join("");
+
+  // 그려진 페이지는 나오는 대로 보여준다 — classic 의 "그려진 장" 자리를
+  // 그대로 쓴다(단위만 컷이 아니라 페이지다).
+  if (s.art && s.art.done) {
+    $("#cutstrip").hidden = false;
+    $("#cutCount").textContent = `${s.art.done} / ${s.art.total}장`;
+    for (let n = 1; n <= s.art.done; n++) {
+      if (shownCuts.has(n)) continue;
+      shownCuts.add(n);
+      const fig = document.createElement("figure");
+      fig.innerHTML = `<img src="/api/nh/jobs/${jobId}/page/${n}.png?w=260"
+                            alt="${n}번째 장" loading="lazy">
+                       <figcaption>${n}</figcaption>`;
+      $("#cutGrid").append(fig);
+    }
+  }
+
+  $("#logBox").textContent = (s.log || []).join("\n");
+}
+
+function setNHButtonsBusy(busy) {
+  ["#nhSheetApproveBtn", "#nhSheetRetryBtn", "#nhPickGoBtn", "#nhPickRetryBtn"]
+    .forEach(sel => { const el = $(sel); if (el) el.disabled = busy; });
+}
+
+/* 이야기 후보 4개. 고르는 데 필요한 것은 제목·장르·줄거리이고, 장면은
+   접어 둔다 — nh-review.js 가 그리는 카드를 그대로 쓴다(같은 카드를
+   /nh 실험 화면과 /demo 목업도 쓴다). */
+let nhPicked = null;
+function renderNHCards(directions) {
+  const host = $("#nhPickCards");
+  host.innerHTML = "";
+  nhPicked = null;
+  $("#nhPickGoBtn").hidden = true;
+  for (const d of directions) {
+    const card = document.createElement("div");
+    card.className = "nh-card";
+    card.dataset.n = d.n;
+    card.innerHTML = NHReview.directionCardHtml(d);
+    // 장면을 펴 보는 것과 이 방향을 고르는 것은 다른 행동이다 — 토글을
+    // 눌렀을 뿐인데 선택까지 되면, 보려던 사람이 고른 것이 된다.
+    //
+    // **카드 안의 모든 토글에 건다.** 첫 번째 것 하나만 걸어 두면 토글이
+    // 하나 더 붙는 날 그것만 조용히 새서, 펴 보려던 사람이 후보를 고른
+    // 것이 된다(실측으로 겪었다).
+    card.querySelectorAll("details")
+      .forEach(t => t.addEventListener("click", e => e.stopPropagation()));
+    card.addEventListener("click", () => {
+      $$("#nhPickCards .nh-card").forEach(c => c.classList.remove("picked"));
+      card.classList.add("picked");
+      nhPicked = d.n;
+      $("#nhPickGoBtn").hidden = false;
+    });
+    host.appendChild(card);
+  }
+}
+
+async function sendNHSheetDecision(decision, note) {
+  if (!jobId) return;
+  setNHButtonsBusy(true);
+  try {
+    const body = { decision };
+    if (note) body.note = note;
+    const res = await fetch(`/api/nh/jobs/${jobId}/sheet-decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    // 다음 tick() 이 새 상태를 받아 화면을 바꾼다 — 여기서 직접 안 바꾼다.
+  } catch (err) {
+    toast(err.message);
+    setNHButtonsBusy(false);
+  }
+}
+
+async function sendNHPick() {
+  if (!jobId || nhPicked === null) return;
+  setNHButtonsBusy(true);
+  try {
+    const res = await fetch(`/api/nh/jobs/${jobId}/pick`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ n: nhPicked }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+    shownCuts = new Set();        // 여기서부터 그림이 나온다
+  } catch (err) {
+    toast(err.message);
+    setNHButtonsBusy(false);
+  }
+}
+
+/* 넷 다 마음에 안 들 때 — 이야기 후보 자체를 다시 뽑는다. */
+async function sendNHPickRetry(note) {
+  if (!jobId) return;
+  setNHButtonsBusy(true);
+  try {
+    const body = {};
+    if (note) body.note = note;
+    const res = await fetch(`/api/nh/jobs/${jobId}/pick-retry`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "전달하지 못했습니다");
+  } catch (err) {
+    toast(err.message);
+    setNHButtonsBusy(false);
+  }
 }
 
 /* ---- 확인 화면이 보여줄 본문 ------------------------------------------- *
@@ -1658,6 +1957,13 @@ const MASCOT_WAITING = "루가 확인을 기다리고 있어요";
    있다"를 보여주는 숫자다 — 그래서 단계가 뒤로 돌아가도 숫자는 안 줄인다. */
 let louPctShown = 0;
 function louPercent(s) {
+  // new_harness 는 서버가 퍼센트를 직접 준다 — stages 가 단계 **이름 배열**
+  // 이라 아래 계산(단계마다 state·key 를 읽는다)이 통째로 안 맞는다.
+  if (typeof s.pct === "number") {
+    louPctShown = Math.max(louPctShown,
+                           Math.min(100, s.status === "done" ? 100 : s.pct));
+    return louPctShown;
+  }
   const stages = (s.stages || []).filter(st => st.state !== "skip");
   if (!stages.length) return 0;
   let done = 0, frac = 0;
@@ -2684,13 +2990,28 @@ async function openExisting(id) {
       const res = await fetch("/api/latest");
       const d = await res.json();          // 본문은 한 번만 읽을 수 있다
       if (!res.ok) throw new Error(d.error || "없습니다");
+      // 끝난 작업만 오므로 run_id 가 늘 있다 — 완성본은 어느 하네스로 만든
+      // 것이든 run_id 로 열린다(/api/runs/<id>/result).
+      if (d.run_id) return showRunResult(d.run_id, 1);
       id = d.id;
     }
-    const state = await (await fetch(`/api/jobs/${id}`)).json();
+    // new_harness 로 만든 작업은 job 주소가 다르다 — classic 에 없으면 그쪽을 본다.
+    let state = await (await fetch(`/api/jobs/${id}`)).json();
+    let isNH = false;
+    if (state.error) {
+      const alt = await (await fetch(`/api/nh/jobs/${id}`)).json();
+      if (!alt.error) { state = alt; isNH = true; }
+    }
     if (state.error) throw new Error(state.error);
     jobId = id;
+    nhMode = isNH;
     sessionStorage.setItem("lore_job", jobId);
-    if (state.status === "done") { await showResult(); return; }
+    sessionStorage.setItem("lore_job_kind", isNH ? "nh" : "classic");
+    if (state.status === "done") {
+      if (isNH && state.run_id) await showRunResult(state.run_id, 1);
+      else await showResult();
+      return;
+    }
     startPolling();                       // 아직 도는 중이면 진행 화면으로
   } catch (err) {
     toast(`${err.message} — 먼저 한 편 만들어 주세요.`);
@@ -3208,7 +3529,9 @@ function paintMini(s) {
     : state === "error" ? "멈춤" : `${pct}%`;
 
   // 얼굴은 지금 단계의 그림을 쓴다 — 표시만 보고도 어디쯤인지 짐작이 간다.
-  const key = s.stages && s.stages[s.stage_index] && s.stages[s.stage_index].key;
+  // classic 은 단계가 객체({key,title,...})이고 new_harness 는 이름 문자열이다.
+  const at = s.stages && s.stages[s.stage_index];
+  const key = typeof at === "string" ? (NH_STAGE_ART[at] || at) : (at && at.key);
   const face = $("#miniProgFace");
   if (face) {
     const want = state === "error" ? louArt("error")
@@ -3227,7 +3550,12 @@ function paintMini(s) {
 
 /* 표시를 눌렀을 때. 다 됐으면 완성본으로, 아니면 진행 화면으로 돌아간다. */
 function miniOpen() {
-  if (miniState && miniState.status === "done") { showResult(); return; }
+  if (miniState && miniState.status === "done") {
+    // new_harness 완성본은 job 이 아니라 run_id 로 연다 (nhTick 참고).
+    if (nhMode && miniState.run_id) showRunResult(miniState.run_id, 1);
+    else showResult();
+    return;
+  }
   view("running");
   window.scrollTo(0, 0);
   // 떠나 있는 동안 renderProgress 를 안 그렸다 — 상태가 그대로면 확인 시트
@@ -3322,7 +3650,8 @@ function esc(s) {
 }
 function forget() {
   sessionStorage.removeItem("lore_job");
-  jobId = null; clearInterval(poll); poll = null;
+  sessionStorage.removeItem("lore_job_kind");
+  jobId = null; nhMode = false; clearInterval(poll); poll = null;
   miniState = null;              // 떠 있는 표시는 view() 안의 syncMini() 가 닫는다
   shownCuts = new Set(); $("#cutGrid").innerHTML = ""; $("#cutstrip").hidden = true;
   $("#cancelBtn").textContent = "중단"; $("#cancelBtn").onclick = null;
@@ -3450,10 +3779,18 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#cancelConfirm").addEventListener("click", async () => {
     $("#cancelModal").hidden = true;
     if (!jobId) return;
-    await fetch(`/api/jobs/${jobId}/cancel`, { method: "POST" });
+    const base = nhMode ? "/api/nh/jobs" : "/api/jobs";
+    await fetch(`${base}/${jobId}/cancel`, { method: "POST" });
   });
   $("#sheetApproveBtn").addEventListener("click", () => sendSheetDecision("approve"));
   $("#sheetRetryBtn").addEventListener("click", () => sendSheetDecision("retry"));
+  // new_harness 검수 — 시트 확인이 먼저, 이야기 고르기가 나중이다.
+  $("#nhSheetApproveBtn").addEventListener("click", () => sendNHSheetDecision("approve"));
+  $("#nhPickGoBtn").addEventListener("click", sendNHPick);
+  // "다시 만들기"는 바로 안 나가고, 요청 사항(비어 있어도 됨)을 받는 칸을
+  // 먼저 편다 — /nh 실험 화면과 같은 nh-review.js 의 패널을 쓴다.
+  NHReview.wireRetryNote("nhSheetRetryBtn", note => sendNHSheetDecision("retry", note));
+  NHReview.wireRetryNote("nhPickRetryBtn", note => sendNHPickRetry(note));
   $("#storyApproveBtn").addEventListener("click", () => sendStoryDecision("approve"));
   $("#storyRetryBtn").addEventListener("click", () => sendStoryDecision("retry"));
   $("#boardApproveBtn").addEventListener("click", () => sendBoardDecision("approve"));

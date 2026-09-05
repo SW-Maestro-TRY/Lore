@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import wizLouImg from "../../assets/logo-2-curious.png";
+import { useEffect, useState } from "react";
+import { LOU_LOGOS, pickOne } from "../../lib/louArt";
 import config from "../../demo-api/config.json";
 import { WIZ_LAST, WIZ_NAMES, emptyWizardForm, type WizardForm } from "../../lib/wizardData";
 import Step1Photo from "./steps/Step1Photo";
@@ -26,11 +26,21 @@ export default function Wizard({
   onSubmit,
 }: {
   onClose: () => void;
-  onSubmit: (form: WizardForm) => void;
+  /** 만들기를 시작한다. 실패하면 reject 해야 이 화면이 사유를 보여준다. */
+  onSubmit: (form: WizardForm) => Promise<void>;
 }) {
   const [step, setStep] = useState(1);
+  /* 걸음의 제목 옆에 앉은 루. 걸음을 옮길 때마다 바뀐다 — 방금 걸려 있던
+     그림은 후보에서 뺀다(안 그러면 "안 바뀌었네" 로 보인다). 원본 pickWizLou
+     와 같다. 뽑는 것은 화면이 붙은 뒤다(서버/브라우저가 갈리면 안 된다). */
+  const [wizLou, setWizLou] = useState(LOU_LOGOS[0]);
+  useEffect(() => { setWizLou((now) => pickOne(LOU_LOGOS, [now])); }, [step]);
   const [form, setForm] = useState<WizardForm>(emptyWizardForm());
-  const [note, setNote] = useState("사진과 이름만 있으면 시작합니다.");
+  /* 마지막 걸음에서만 뜨는 한 줄. 여기서는 사진도 이름도 이미 받은 뒤라
+     "사진과 이름만 있으면 시작합니다" 는 지난 말이었다 — 지금 누르면 무슨
+     일이 일어나는지만 적는다. 미리보기가 아니라 한 편이 통째로 나온다. */
+  const DEFAULT_NOTE = "한 편을 끝까지 그립니다 — 10분쯤 걸려요.";
+  const [note, setNote] = useState(DEFAULT_NOTE);
   const [noteError, setNoteError] = useState(false);
 
   const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p }));
@@ -51,7 +61,7 @@ export default function Wizard({
 
   const goNext = () => {
     if (step === 1 && !step1Ok()) return;
-    setNote("사진과 이름만 있으면 시작합니다.");
+    setNote(DEFAULT_NOTE);
     setNoteError(false);
     setStep((s) => Math.min(WIZ_LAST, s + 1));
   };
@@ -66,20 +76,34 @@ export default function Wizard({
 
   const atEnd = step === WIZ_LAST;
 
+  const [sending, setSending] = useState(false);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.agreeIp) {
+      // 저작권 확인은 여기서 먼저 막는다. 서버도 다시 확인하지만, 여기서
+      // 잡아야 사람이 왜 안 되는지 바로 안다(서버 오류로 보이면 안 된다).
       setNote("저작권 확인에 동의해야 만들 수 있습니다");
       setNoteError(true);
       return;
     }
-    // TODO: /api/create 연결 — 지금은 백엔드가 없어서 진행 화면은 로컬로
-    // 흉내 낸 상태(Progress/useFakeProgress)를 보여준다.
-    onSubmit(form);
+    setNote("루가 바다로 나가는 중…");
+    setNoteError(false);
+    setSending(true);
+    onSubmit(form).catch((err: Error) => {
+      // 실패하면 **이 자리에 남는다.** 진행 화면으로 넘어가 버리면 무엇이
+      // 잘못됐는지 볼 자리가 없다(원본 startRun 과 같은 이유).
+      setNote(err.message);
+      setNoteError(true);
+      setSending(false);
+    });
   };
 
   return (
-    <section className="create">
+    /* 걸음이 깊어질수록 바다가 어두워진다 — 이 화면의 뼈대다(webtoon.css 의
+       .create[data-step]). 원본은 이 값을 body 에 매겼지만, 여기서는 앱의
+       body 를 건드리지 않고 위자드 자기 요소에 매긴다. */
+    <section className="create" data-step={step}>
       <div className="studio">
         <form className="wizard" onSubmit={handleSubmit}>
           <div className="wiz-head">
@@ -101,7 +125,7 @@ export default function Wizard({
           </div>
 
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="wiz-lou" src={wizLouImg.src} alt="" aria-hidden="true" />
+          <img className="wiz-lou" src={wizLou} alt="" aria-hidden="true" />
 
           {step === 1 && <Step1Photo form={form} onChange={patch} />}
           {step === 2 && <Step2Story form={form} onChange={patch} />}
@@ -120,12 +144,17 @@ export default function Wizard({
                 </button>
               )}
               {atEnd && (
-                <button type="submit" className="btn btn-primary wiz-go">
+                <button type="submit" className="btn btn-primary wiz-go" disabled={sending}>
                   웹툰 만들기 <span className="cost-chip">−{config.credit_cost.full}크레딧</span>
                 </button>
               )}
             </div>
-            <p className={`submit-note${noteError ? " is-error" : ""}`}>{note}</p>
+            {/* 이 줄은 **마지막 걸음에서만** 뜬다 — 원본과 같다. 앞 걸음에서는
+                무엇이 빠졌는지 말할 일이 있을 때(사진·이름)만 나온다. 원본은
+                그것을 토스트로 띄우는데, 여기엔 토스트가 없어서 이 자리를
+                쓴다 — 조용히 아무 일도 안 일어나는 것이 제일 나쁘다. */}
+            <p className={`submit-note${noteError ? " is-error" : ""}`}
+               hidden={!atEnd && !noteError}>{note}</p>
           </div>
         </form>
       </div>

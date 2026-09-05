@@ -68,7 +68,9 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -87,16 +89,26 @@ NEW_HARNESS = HERE.parent / "new_harness"
 
 STATUS_QUEUED = "queued"
 STATUS_RUNNING = "running"
-STATUS_AWAITING_PICK = "awaiting_pick"
-STATUS_AWAITING_BOARD = "awaiting_board"
 STATUS_AWAITING_SHEET = "awaiting_sheet"
+STATUS_AWAITING_PICK = "awaiting_pick"
 STATUS_DONE = "done"
 STATUS_ERROR = "error"
-AWAITING = (STATUS_AWAITING_PICK, STATUS_AWAITING_BOARD, STATUS_AWAITING_SHEET)
+AWAITING = (STATUS_AWAITING_SHEET, STATUS_AWAITING_PICK)
 
 # 화면에 보여줄 단계. new_harness 내부 단계 이름과 같다 — 세부 스텝(예:
 # pipeline.py 의 look/seed/card...)까지는 안 쪼갠다, 신호가 그만큼 없다.
-STAGES = ("story", "board", "sheet", "pages")
+#
+# 2026-09-03부터 시트가 이야기보다 먼저다 — 메인 화면(index.html)이 "캐릭터
+# 시트를 먼저 확인하고, 그 다음 이야기 방향을 고른다" 순서로 보여주기로
+# 하면서 실행 순서도 그에 맞췄다(시트는 애초에 사진·설명만으로 그려지고
+# 고른 방향과 무관하므로, 방향을 고르기 전에 그려도 아무것도 안 달라진다).
+# "board"(방향 저장)는 검수 화면이 없어진 뒤로 순간에 끝나는 걸음이라
+# pages 바로 앞에 붙여 둔다 — _run_pick_then_pages_phase 참고.
+# 편집실에서 사람이 적어 보내는 글의 상한. classic 쪽 FEEDBACK_TEXT_MAX 와
+# 같은 뜻이다 — 프롬프트 뒤에 그대로 붙는 값이라 길이를 열어 두지 않는다.
+FEEDBACK_MAX = 800
+
+STAGES = ("story", "sheet", "board", "pages")
 STAGE_LABEL = {
     "story": "이야기 설계", "board": "방향 확정",
     "sheet": "캐릭터 시트", "pages": "페이지 그림",
@@ -115,11 +127,12 @@ STYLE_CHOICES = {
     "pastel":    "pastel",
     "noir":      "noir",
     "shoujo":    "shoujo",
+    "game":      "game",
 }
 STYLE_LABEL = {
     "romance": "로맨스 판타지", "webtoon": "일반 웹툰", "frost": "세미리얼 · 성인향",
     "cinematic": "시네마틱 반실사", "pastel": "일상툰 감성", "noir": "다크 느와르",
-    "shoujo": "순정 · BL",
+    "shoujo": "순정 · BL", "game": "게임 원화",
 }
 DEFAULT_STYLE = "webtoon"                # new_harness 자체 기본(NH_STYLE)과 맞춘다
 
@@ -149,7 +162,18 @@ class NHJob:
     pick: int | None = None
     note: str = ""
     style: str = DEFAULT_STYLE
+    # 사람이 보고 넘어가는 자리(시트 확인 · 이야기 고르기)를 둘 것인가.
+    #
+    # 만들기 마지막 걸음의 갈림길이 정한다. 「빠르게 결과부터」는 "중간에 안
+    # 멈춥니다" 라고 적어 놓고도 실제로는 두 번 멈추고 있었다 — 고른 것이
+    # 아무 데도 안 실려서, 두 카드가 똑같이 동작했다.
+    #
+    # 기본은 **멈춤**이다. 안 보내는 쪽(예전 요청, 하네스 직접 호출)이 지금과
+    # 똑같이 돌아야 한다.
+    checkpoints: bool = True
     stage: str = "story"
+    # 지금 하고 있는 일 한 줄. 비어 있으면 화면이 단계 기본 문구를 쓴다.
+    say: str = ""
     art_done: int = 0
     art_total: int = 0
     log: list[str] = field(default_factory=list)
@@ -188,17 +212,14 @@ class NHJob:
                 "stage_index": stage_i,
                 "stages": list(STAGES),
                 "stage_label": STAGE_LABEL.get(self.stage, self.stage),
+                "say": self.say,
+                "checkpoints": self.checkpoints,
                 "pct": max(0, min(100, pct)),
                 "art": art,
                 "log": self.log[-60:],
                 "elapsed": round((self.finished_at or time.time())
                                  - self.started_at, 1) if self.started_at else 0,
             }
-            # 그 검수 단계일 때만 읽는다 — 매 폴링(0.8초)마다 board.json 을
-            # 여는 것은 대부분 헛일이다(pipeline.py 의 story_preview/
-            # board_preview 와 같은 절약 규칙).
-            if self.status == STATUS_AWAITING_BOARD and self.run_id:
-                out["board_summary"] = board_summary(self.run_id)
             return out
 
     def save(self) -> None:
@@ -207,6 +228,7 @@ class NHJob:
                 "id": self.id, "status": self.status, "run_id": self.run_id,
                 "error": self.error, "form": self.form,
                 "directions": self.directions, "pick": self.pick,
+                "checkpoints": self.checkpoints,
             }, ensure_ascii=False, indent=1), encoding="utf-8")
         except OSError:
             pass
@@ -271,6 +293,15 @@ class NHJob:
             self.save()
 
 
+# 검수가 도는 동안 화면에 띄울 한 줄. **무엇을 어떻게 검수하는지는 안
+# 말한다** — 기다리는 사람이 알고 싶은 것은 "지금 뭘 하고 있고, 왜 아직
+# 안 끝났나" 뿐이다. 어느 장면이 왜 걸렸는지는 만드는 쪽 사정이다.
+SAY_REVIEW_STORY = "루가 이야기를 검수하고 있어요"
+SAY_REVIEW_PAGE = "루가 방금 그린 그림을 검수하고 있어요"
+SAY_REDRAW = "검수에서 걸려서 다시 그리고 있어요"
+SAY_REVIEW_EPISODE = "루가 완성본을 처음부터 읽어보고 있어요"
+
+
 def _on_rest_line(job: NHJob, line: str) -> None:
     """2·3단계 진행 중 stdout 한 줄 -> 화면에 보여줄 단계(job.stage) 갱신."""
     # 구체화·컷 대본·컷 대본 픽스·콘티는 화면에서 한 걸음("콘티")으로 묶어
@@ -287,10 +318,26 @@ def _on_rest_line(job: NHJob, line: str) -> None:
         job.stage = "sheet"
     elif line.startswith("[페이지"):
         job.stage = "pages"
+    # 검수 — 단계(stage)는 안 바꾼다. 검수는 그 단계 **안에서** 일어나는
+    # 일이라, 걸음을 하나 더 만들면 진행 막대가 뒤로 갔다 오는 것처럼 보인다.
+    # 대신 지금 하고 있는 일 한 줄(job.say)만 바꾼다.
+    stripped = line.strip()
+    if stripped.startswith("[이야기 검수]"):
+        job.say = SAY_REVIEW_STORY
+    elif stripped.startswith("[화 검수]"):
+        job.say = SAY_REVIEW_EPISODE
+    elif stripped.startswith("[검수]"):
+        # "다시 그립니다" 는 사람이 기다리는 시간이 늘어나는 유일한 자리라
+        # 따로 말해 준다 — 안 그러면 왜 같은 장에서 오래 머무는지 모른다.
+        job.say = SAY_REDRAW if "다시 그립니다" in stripped else SAY_REVIEW_PAGE
+
     m = RE_PAGE.match(line)
     if m:
         job.art_done = int(m.group(1)) - 1
         job.art_total = int(m.group(2))
+        # 새 장을 그리기 시작하면 검수 문구를 지운다 — 안 지우면 그림을
+        # 그리는 내내 "검수하고 있어요" 가 남는다.
+        job.say = ""
 
 
 def _extract_run_id(job: NHJob) -> str | None:
@@ -308,7 +355,14 @@ def _fail(job: NHJob, message: str) -> None:
 
 
 def _run_story_phase(job: NHJob) -> None:
-    """1단계 — 이야기 후보 4개. 사람이 고를 때까지 여기서 멈춘다."""
+    """1단계 — 이야기 후보 4개를 만들고, 곧바로 캐릭터 시트로 이어간다.
+
+    2026-09-03부터 여기서 멈추지 않는다 — 메인 화면(index.html)이 "캐릭터
+    시트를 먼저 확인하고, 그 다음 이야기 방향을 고른다" 순서로 바뀌면서,
+    사람이 볼 첫 자리는 방향 후보가 아니라 시트가 됐다. 후보 4개는 이미
+    받아 뒀다가(`job.directions`) 시트를 승인한 뒤 그대로 보여준다
+    (`NHRunner.approve_sheet`) — 다시 부를 필요가 없다.
+    """
     job.status = STATUS_RUNNING
     job.started_at = time.time()
     job.save()
@@ -324,6 +378,9 @@ def _run_story_phase(job: NHJob) -> None:
         if not run_id:
             return _fail(job, "run_id 를 읽지 못했습니다")
         job.run_id = run_id
+        # 그림체를 run 에 남긴다 — 나중에 편집실에서 한 장만 다시 그릴 때
+        # 이 값이 없으면 그 장만 다른 화풍으로 나온다(write_style 참고).
+        write_style(run_id, job._env().get("NH_STYLE", ""))
 
         directions_path = NEW_HARNESS / "runs" / run_id / "directions.json"
         if not directions_path.exists():
@@ -333,10 +390,46 @@ def _run_story_phase(job: NHJob) -> None:
             return _fail(job, "이야기 후보를 하나도 못 읽었습니다 — story.md 를 확인하세요")
 
         job.directions = directions
-        job.status = STATUS_AWAITING_PICK
         job.save()
     except Exception as exc:                            # noqa: BLE001
-        _fail(job, f"{type(exc).__name__}: {exc}")
+        return _fail(job, f"{type(exc).__name__}: {exc}")
+    _run_sheet_phase(job)
+
+
+def _auto_pick(job: NHJob) -> int:
+    """사람 대신 이야기 후보 하나를 고른다 (「빠르게 결과부터」).
+
+    **자가 검수를 통과한 것 중에서 뽑는다.** 후보를 만들면서 이미 넷을 다
+    읽어 두었으므로(storycheck -> story_review.json), 그것을 안 보고 넷 중
+    아무거나 뽑는 것은 이미 치른 값을 버리는 짓이다. 통과가 하나도 없거나
+    (검수를 껐거나 실패했거나) 판정 파일이 없으면 그때 넷 중에서 뽑는다.
+
+    통과한 것이 여럿이면 **무작위**다. 늘 1번을 고르면 같은 사람이 여러 편을
+    만들 때 매번 첫 후보만 나와서, 후보를 넷 만든 뜻이 없어진다.
+    """
+    numbers = [int(d["n"]) for d in job.directions if isinstance(d, dict) and d.get("n")]
+    if not numbers:
+        return 0
+    good = []
+    try:
+        review = json.loads(
+            (NEW_HARNESS / "runs" / job.run_id / "story_review.json")
+            .read_text(encoding="utf-8"))
+        good = [int(c["n"]) for c in review.get("candidates") or []
+                if c.get("verdict") == "통과" and int(c.get("n", 0)) in numbers]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass                                   # 판정이 없으면 넷 다 후보다
+    return random.choice(good or numbers)
+
+
+def _skip_pick(job: NHJob) -> None:
+    """멈추지 않는 길 — 자동으로 하나 고르고 그림까지 이어 간다."""
+    n = _auto_pick(job)
+    if not n:
+        return _fail(job, "이야기 후보를 하나도 못 읽었습니다")
+    job.pick = n
+    job.add_log(f"[자동] 「빠르게 결과부터」라 {n}번 이야기로 갑니다")
+    _run_pick_then_pages_phase(job)
 
 
 def _run_restory_phase(job: NHJob) -> None:
@@ -375,19 +468,19 @@ def _run_restory_phase(job: NHJob) -> None:
         _fail(job, f"{type(exc).__name__}: {exc}")
 
 
-def _run_board_phase(job: NHJob) -> None:
-    """2단계 — 고른 방향을 pick.json 에 남기고 바로 검수로 넘어간다.
+def _run_pick_then_pages_phase(job: NHJob) -> None:
+    """2단계 — 고른 방향을 pick.json 에 남기고, 멈추지 않고 그림까지 잇는다.
 
     2026-09-02부터 구체화(`--detail`)·콘티를 안 돈다 — 이어그리기 흐름은
     story 단계(방향 후보)가 이미 장면 목록·등장인물 외모까지 다 뽑아 두므로,
     여기서 더 만들 것이 없다. 호출 0회(`--pick-save`)라 이 단계는 사실상
-    바로 끝난다. 함수·상태 이름(board)은 옛 흐름과 그대로 맞춰 뒀다 — 화면
-    (newharness.html)이 `STATUS_AWAITING_BOARD`를 보고 검수 UI를 띄우는
-    지점이 바뀌면 프론트도 같이 고쳐야 해서다.
+    바로 끝난다.
 
-    "다시 만들기"도 이 함수를 그대로 다시 부르지만, 다시 뽑을 것이 없어
-    pick.json 을 같은 값으로 다시 쓸 뿐이다 — 이야기 자체를 바꾸려면
-    방향 선택(1단계)으로 돌아가야 한다.
+    2026-09-03부터 그 뒤에 멈추지도 않는다 — 예전에는 여기서 멈춰 콘티
+    검수(`STATUS_AWAITING_BOARD`)를 띄웠는데, 검수할 콘티 자체가 없어진
+    (위 문단) 마당에 빈 화면을 하나 더 거치게 할 이유가 없었다. 메인
+    화면이 보여주는 검수는 이제 시트·방향 둘뿐이다 — 방향을 고른 다음은
+    곧장 그림이다.
     """
     job.status = STATUS_RUNNING
     job.stage = "board"
@@ -399,10 +492,9 @@ def _run_board_phase(job: NHJob) -> None:
             return _fail(job, "취소되었습니다")
         if code != 0:
             return _fail(job, "방향을 저장하지 못했습니다 — 로그를 확인하세요")
-        job.status = STATUS_AWAITING_BOARD
-        job.save()
     except Exception as exc:                            # noqa: BLE001
-        _fail(job, f"{type(exc).__name__}: {exc}")
+        return _fail(job, f"{type(exc).__name__}: {exc}")
+    _run_pages_phase(job)
 
 
 def _run_sheet_phase(job: NHJob) -> None:
@@ -423,6 +515,11 @@ def _run_sheet_phase(job: NHJob) -> None:
             return _fail(job, "취소되었습니다")
         if code != 0:
             return _fail(job, "시트를 만들지 못했습니다 — 로그를 확인하세요")
+        if not job.checkpoints:
+            # 「빠르게 결과부터」 — 시트도 이야기도 안 물어보고 그대로 간다.
+            job.add_log("[자동] 「빠르게 결과부터」라 시트를 그대로 씁니다")
+            job.save()
+            return _skip_pick(job)
         job.status = STATUS_AWAITING_SHEET
         job.save()
     except Exception as exc:                            # noqa: BLE001
@@ -602,9 +699,169 @@ def board_summary(run_id: str) -> dict[str, Any] | None:
     return {"cast": cast, "scenes": scenes, "cut_count": total}
 
 
+# --------------------------------------------------------------------------- #
+# 판본 — 다시 그리기 전의 그림을 남겨 둔다
+# --------------------------------------------------------------------------- #
+#
+# classic(pipeline.py 의 scene_versions·archive_scene·revert_scene)과 **같은
+# 규칙**이다. 편집실은 이 둘을 구별하지 않고 같은 주소를 부른다.
+#
+# 예전에는 new_harness 쪽에 이것이 아예 없어서, 다시 그리면 앞 그림이 그냥
+# 사라졌다 — 마음에 안 들어 다시 그렸는데 새것이 더 나쁘면 되돌릴 방법이
+# 없었다(실측).
+
+VERSIONS_DIR = "versions"
+
+
+def _versions_dir(run_id: str) -> Path:
+    return run_dir(run_id) / "pages" / VERSIONS_DIR
+
+
+def page_versions(run_id: str, page_no: int) -> list[dict[str, Any]]:
+    """그 장의 지난 판 목록. 최신이 앞에 온다."""
+    vdir = _versions_dir(run_id)
+    if not vdir.exists():
+        return []
+    out = []
+    for p in vdir.glob(f"page{int(page_no):02d}.v*.png"):
+        try:
+            v = int(p.stem.rsplit(".v", 1)[1])
+        except (ValueError, IndexError):
+            continue
+        out.append({"version": v, "at": p.stat().st_mtime,
+                    "url": f"/api/runs/{run_id}/scenes/{page_no}/versions/{v}"})
+    return sorted(out, key=lambda d: -d["version"])
+
+
+def version_path(run_id: str, page_no: int, version: int) -> Path | None:
+    p = _versions_dir(run_id) / f"page{int(page_no):02d}.v{int(version)}.png"
+    return p if p.exists() else None
+
+
+def _version_matching(run_id: str, page_no: int, src: Path) -> int | None:
+    """이 그림과 **내용이 같은** 판본이 이미 있으면 그 번호. 없으면 None.
+
+    이게 없으면 지난 판을 눌러 보기만 해도 판본이 계속 늘어난다 — v1~v3 을
+    번갈아 누르면 v4·v5·v6 이 생기고 셋 다 앞의 것과 픽셀까지 같다
+    (classic 에서 실제로 겪고 고친 것이라 여기도 같이 넣는다).
+
+    크기부터 본다. 크기가 같을 때만 바이트를 읽는다.
+    """
+    try:
+        size = src.stat().st_size
+        blob = None
+        for got in page_versions(run_id, page_no):
+            q = version_path(run_id, page_no, got["version"])
+            if q is None or q.stat().st_size != size:
+                continue
+            if blob is None:
+                blob = src.read_bytes()
+            if q.read_bytes() == blob:
+                return int(got["version"])
+    except OSError:
+        return None
+    return None
+
+
+def restitch(run_id: str) -> bool:
+    """한 편(episode.png)을 다시 이어붙인다. 호출 비용이 없다 — 그냥 잇기만 한다.
+
+    한 장이 바뀌었으면 반드시 불러야 한다. 안 그러면 화면(장 단위)과
+    내려받는 파일(한 편)이 서로 다른 그림을 보여준다.
+    """
+    try:
+        r = subprocess.run(
+            [sys.executable, "-u", "stitch.py", "--run-id", run_id],
+            cwd=str(NEW_HARNESS), env=_subprocess_env(), capture_output=True,
+            text=True, encoding="utf-8", errors="replace")
+        return r.returncode == 0
+    except Exception:                                           # noqa: BLE001
+        return False
+
+
+def archive_page(run_id: str, page_no: int) -> int | None:
+    """지금 걸려 있는 그림을 판본으로 떠 둔다. 새로 그리기 **직전**에 부른다.
+
+    이미 판본으로 있는 그림이면 새로 뜨지 않고 그 번호를 돌려준다.
+    """
+    src = unit_image(run_id, page_no)
+    if not src:
+        return None
+    same = _version_matching(run_id, page_no, src)
+    if same is not None:
+        return same
+    got = page_versions(run_id, page_no)
+    v = (got[0]["version"] + 1) if got else 1
+    vdir = _versions_dir(run_id)
+    vdir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, vdir / f"page{int(page_no):02d}.v{v}.png")
+    return v
+
+
+def revert_page(run_id: str, page_no: int, version: int) -> bool:
+    """지난 판으로 되돌린다. **되돌리기 전의 그림도 판본으로 남긴다** —
+    되돌린 것을 다시 되돌릴 수 있어야 한다."""
+    src = version_path(run_id, page_no, version)
+    dest = unit_image(run_id, page_no)
+    if not src or not dest:
+        return False
+    archive_page(run_id, page_no)
+    shutil.copy2(src, dest)
+    # copy2 는 판본 파일의 **옛 mtime 까지** 복사한다. 그대로 두면 되돌린
+    # 그림이 줄여 둔 캐시보다 오래된 파일이 되어 화면에 옛 그림이 계속 뜬다.
+    os.utime(dest, None)
+    return True
+
+
+STYLE_FILE = "style.txt"
+
+
+def write_style(run_id: str, style: str) -> None:
+    """이 작품을 어느 그림체로 그렸는지 run 폴더에 남긴다.
+
+    나중에 한 장만 다시 그릴 때 쓴다. 이 기록이 없으면 다시 그린 장만
+    하네스 기본 그림체(webtoon_lock_bg)로 나와서, 한 편 안에서 그 장만
+    화풍이 다르다(실측). 만들 때는 job 이 NH_STYLE 로 넘기지만 job 은
+    메모리에만 있고, 편집실에서 다시 그리는 것은 한참 뒤의 일이다.
+    """
+    try:
+        (run_dir(run_id) / STYLE_FILE).write_text(style.strip(), encoding="utf-8")
+    except OSError:
+        pass                                   # 못 남겨도 만드는 것 자체는 막지 않는다
+
+
+def style_of(run_id: str) -> str:
+    """남겨 둔 그림체. 없으면 빈 문자열(= 하네스 기본값으로 떨어진다).
+
+    이 기록이 생기기 전에 만든 작품은 빈 값이라 예전과 똑같이 동작한다.
+    """
+    try:
+        return (run_dir(run_id) / STYLE_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _regen_args(run_id: str, no: int, note: str) -> list[str]:
+    """이 run 을 어떤 방식으로 그렸는지 보고 같은 방식으로 다시 그린다.
+
+    `--page N` 만 주면 콘티 기반(`stage_pages` -> pageart)으로 가는데, 지금
+    제품이 만드는 작품에는 콘티도 `pages.json` 도 없다(이어그리기). 그대로
+    부르면 "pages.json 가 없습니다" 로 죽는다 — **지금 만들어지는 모든
+    작품에서 다시 그리기가 통째로 안 됐다**(실측).
+
+    `pages.json` 이 있는 옛 작품은 예전 그대로 둔다.
+    """
+    args = ["--run-id", run_id, "--page", str(no)]
+    if not (run_dir(run_id) / "pages.json").exists():
+        args.append("--detail-pages")
+    if note:
+        args += ["--note", note]
+    return args
+
+
 def _run_regen(entry: dict[str, Any]) -> None:
-    """페이지 하나만 다시 그린다. run.py --page 는 파일이 이미 있으면 그냥
-    넘어가므로(pageart.draw 의 "이미 있습니다"), 먼저 지워야 한다.
+    """페이지 하나만 다시 그린다. run.py 는 파일이 이미 있으면 그냥 넘어가므로
+    먼저 지워야 한다 — 그래서 **지우기 전에 원본을 들고 있는다.**
 
     다 그린 뒤에는 episode.png 도 다시 잇는다 — 안 그러면 완성본에는 옛
     페이지가 그대로 남아서, 다시 그린 게 화면에 안 보인다(stitch 는 호출
@@ -612,28 +869,49 @@ def _run_regen(entry: dict[str, Any]) -> None:
     """
     entry["status"] = STATUS_RUNNING
     run_id, no = entry["run_id"], entry["page"]
+    img = unit_image(run_id, no)
+    # **실패하면 되돌린다.** 예전에는 지우기만 하고 안 되돌려서, 다시 그리기가
+    # 실패한 자리에 그림이 아예 없어졌다 — 사람이 이미 값을 치른 장이 사라진다
+    # (실측). classic 쪽(pipeline.regens)은 원래 되돌리고 있었다.
+    backup = img.read_bytes() if img and img.exists() else None
+    dest = img
+    # 지금 그림을 판본으로 떠 둔다 — **다시 그린 것이 더 나쁠 때 돌아갈 자리다.**
+    # 실패했을 때 되살리는 것(backup)과는 다른 일이다: 저건 사고 복구고, 이건
+    # 사람이 나중에 골라 보라고 남기는 것이다.
+    archive_page(run_id, no)
+
+    def restore() -> None:
+        if backup is not None and dest is not None and not dest.exists():
+            dest.write_bytes(backup)
+
     try:
-        img = unit_image(run_id, no)
         if img:
             img.unlink()
+        env = _subprocess_env()
+        style = style_of(run_id)
+        if style:
+            env["NH_STYLE"] = style
         proc = subprocess.run(
-            [sys.executable, "-u", "run.py", "--run-id", run_id, "--page", str(no)],
-            cwd=str(NEW_HARNESS), env=_subprocess_env(), capture_output=True,
+            [sys.executable, "-u", "run.py",
+             *_regen_args(run_id, no, str(entry.get("note") or ""))],
+            cwd=str(NEW_HARNESS), env=env, capture_output=True,
             text=True, encoding="utf-8", errors="replace")
         entry["log"] = ((proc.stdout or "") + (proc.stderr or "")).strip()
         if proc.returncode != 0 or not unit_image(run_id, no):
+            restore()
             entry["status"] = STATUS_ERROR
-            entry["error"] = "다시 그리지 못했습니다 — 로그를 확인하세요"
+            entry["error"] = "다시 그리지 못했습니다 — 원래 그림은 그대로입니다"
             return
         stitch = subprocess.run(
             [sys.executable, "-u", "stitch.py", "--run-id", run_id],
-            cwd=str(NEW_HARNESS), env=_subprocess_env(), capture_output=True,
+            cwd=str(NEW_HARNESS), env=env, capture_output=True,
             text=True, encoding="utf-8", errors="replace")
         if stitch.returncode != 0:
             # 페이지 자체는 새로 나왔으니 실패로 안 본다 — 완성본만 못 갱신됐다.
             entry["error"] = "새 페이지는 나왔지만 한 편으로 다시 잇지 못했습니다"
         entry["status"] = STATUS_DONE
     except Exception as exc:                            # noqa: BLE001
+        restore()
         entry["status"] = STATUS_ERROR
         entry["error"] = f"{type(exc).__name__}: {exc}"
 
@@ -710,7 +988,11 @@ class NHRunner:
         style = str(form.get("style") or "").strip()
         if style not in STYLE_CHOICES:
             style = DEFAULT_STYLE
-        job = NHJob(id=job_id, form=form, dir=job_dir, style=style)
+        # 갈림길에서 「3번만 확인하며」를 골랐을 때만 멈춘다. 안 보내면
+        # 멈추는 쪽이다 — 예전 요청과 하네스 직접 호출이 지금과 똑같이 돌아야
+        # 한다(checkpoints 필드 주석 참고).
+        job = NHJob(id=job_id, form=form, dir=job_dir, style=style,
+                    checkpoints=form.get("checkpoints", True) is not False)
         self.jobs[job_id] = job
         job.save()
         self._enqueue(job_id, lambda: _run_story_phase(job))
@@ -725,7 +1007,14 @@ class NHRunner:
         if not any(d.get("n") == n for d in job.directions):
             raise ValueError(f"방향 {n} 이 없습니다")
         job.pick = n
-        self._requeue(job, _run_board_phase)
+        self._requeue(job, _run_pick_then_pages_phase)
+        return job
+
+    def retry_pick(self, job_id: str, note: str = "") -> NHJob:
+        """방향 고르기 화면의 "다시 만들기" — 이야기 후보 4개를 다시 뽑는다."""
+        job = self._require(job_id, STATUS_AWAITING_PICK)
+        job.note = note or ""
+        self._requeue(job, _run_restory_phase)
         return job
 
     def _require(self, job_id: str, status: str) -> NHJob:
@@ -747,22 +1036,17 @@ class NHRunner:
         job.save()
         self._enqueue(job.id, lambda: fn(job))
 
-    def approve_board(self, job_id: str) -> NHJob:
-        job = self._require(job_id, STATUS_AWAITING_BOARD)
-        self._requeue(job, _run_sheet_phase)
-        return job
-
-    def retry_board(self, job_id: str, note: str = "") -> NHJob:
-        # 다시 만들 게 없어진 board 단계 대신, 이야기 후보(1단계)를 다시
-        # 만든다 — _run_restory_phase 의 docstring 참고.
-        job = self._require(job_id, STATUS_AWAITING_BOARD)
-        job.note = note or ""
-        self._requeue(job, _run_restory_phase)
-        return job
-
     def approve_sheet(self, job_id: str) -> NHJob:
+        """시트 확인 — 다음은 그림이 아니라 이야기 방향 고르기다.
+
+        후보 4개는 story 단계에서 이미 받아 뒀다(`job.directions`) — 여기서
+        다시 부를 것이 없으므로 줄을 서지 않고 그 자리에서 바로 다음 화면
+        (방향 고르기)으로 넘긴다.
+        """
         job = self._require(job_id, STATUS_AWAITING_SHEET)
-        self._requeue(job, _run_pages_phase)
+        job.status = STATUS_AWAITING_PICK
+        job.stage = "story"
+        job.save()
         return job
 
     def retry_sheet(self, job_id: str, note: str = "") -> NHJob:
@@ -775,11 +1059,21 @@ class NHRunner:
     # ---- 다시 그리기(페이지 재생성) — job 과 무관하다, 완성된 뒤 둘러보기·
     # 편집실에서도 부를 수 있어야 한다 ------------------------------------- #
 
-    def regen(self, run_id: str, page_no: int) -> str:
-        if not unit_image(run_id, page_no):
+    def regen(self, run_id: str, page_no: int, note: str = "") -> str:
+        """페이지 하나를 다시 그린다. `note` 는 편집실에서 사람이 적은 것이다.
+
+        예전에는 이 값을 아예 안 받았다 — 편집실이 스토리·연출·그림 칸을
+        받아 놓고 그리는 쪽에는 한 글자도 안 넘겼다(실측). 물어보고 버리면
+        사람은 자기가 적은 것이 반영된 줄 안다.
+        """
+        # 그림 파일이 **없어도** 받는다 — 없어서 다시 그리는 것이 가장 급한
+        # 경우다(다시 그리기가 실패해 한 장이 빈 자리). 이 run 에 있을 수
+        # 없는 번호만 막는다.
+        if page_no not in page_numbers(run_id):
             raise ValueError("그 페이지가 없습니다")
         regen_id = uuid.uuid4().hex[:12]
         entry = {"id": regen_id, "run_id": run_id, "page": page_no,
+                 "note": (note or "").strip()[:FEEDBACK_MAX],
                  "status": STATUS_QUEUED, "error": None, "log": ""}
         self.regens[regen_id] = entry
         # 같은 큐를 탄다 — 이미지 호출이라 다른 job 과 동시에 돌면 안 된다.
@@ -790,7 +1084,14 @@ class NHRunner:
         entry = self.regens.get(regen_id)
         if not entry:
             raise KeyError(regen_id)
-        return {k: entry[k] for k in ("id", "run_id", "page", "status", "error")}
+        # 편집실(editor.js 의 realRegen)이 classic 과 **같은 모양**을 기대한다 —
+        # scene·note·versions 를 안 주면 진행 문구와 판본 줄이 빈 채로 뜬다.
+        return {"id": entry["id"], "run_id": entry["run_id"],
+                "page": entry["page"], "scene": entry["page"],
+                "status": entry["status"], "error": entry["error"],
+                "note": entry.get("note") or "",
+                "image": f"/api/runs/{entry['run_id']}/page/{entry['page']}",
+                "versions": page_versions(entry["run_id"], entry["page"])}
 
 
 # --------------------------------------------------------------------------- #
@@ -1003,8 +1304,18 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
 
 
 def page_numbers(run_id: str) -> list[int]:
-    """이 run 의 페이지 번호(1..N). pages.json 을 우선 보고, 없으면 실제로
-    그려진 파일 수로 판단한다(진행 중에 편집실을 미리 열어도 개수가 맞게)."""
+    """이 run 의 페이지 번호(1..N).
+
+    pages.json(콘티) 을 우선 보고, 없으면 **고른 방향의 장면 수**로 센다 —
+    표지 1장 + 장면 하나당 1장이 이어그리기의 규칙이다.
+
+    예전에는 그려진 **파일 수**로 셌는데, 그러면 중간 한 장이 없을 때 총
+    개수가 그만큼 줄어서 마지막 장이 목록에서 밀려 나갔다. 다시 그리기가
+    실패해 한 장이 비면 그 장을 다시 그릴 방법도 같이 사라진다.
+
+    둘 다 없으면(아직 방향을 안 골랐거나 옛 run) 예전처럼 파일 수로 센다 —
+    그리는 중에 편집실을 미리 열어도 개수가 맞아야 한다.
+    """
     d = run_dir(run_id)
     try:
         pages = json.loads((d / "pages.json").read_text(encoding="utf-8"))
@@ -1012,6 +1323,16 @@ def page_numbers(run_id: str) -> list[int]:
             return list(range(1, len(pages) + 1))
     except (OSError, ValueError):
         pass
+    pick = _read_json_safe(d, "pick.json")
+    try:
+        directions = json.loads((d / "directions.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        directions = []
+    chosen = next((x for x in directions if x.get("n") == pick.get("n")), None) \
+        or (directions[0] if directions else None)
+    scenes = [x for x in ((chosen or {}).get("scenes") or []) if str(x or "").strip()]
+    if scenes:
+        return list(range(1, len(scenes) + 2))          # 표지 + 장면들
     files = sorted((d / "pages").glob("page*.png")) if (d / "pages").exists() else []
     return list(range(1, len(files) + 1))
 

@@ -33,8 +33,13 @@ export default function Step5Review({
 
   return (
     <section className="wiz-step wiz-step-fork" data-step="5">
-      <p className="wiz-eyebrow">바닥 · STEP 5 / 5</p>
-      <h3 className="wiz-title">어떻게 볼까요?</h3>
+      {/* 걸음마다 "말"(눈금·제목·안내)과 "손이 닿는 것"(입력 카드)을
+          한 겹으로 묶어 둔다. 폰에서는 위아래로 그냥 흐르고, PC 에서는
+          이 덩어리가 왼쪽 칸으로 간다(webtoon.css 의 .wiz-say). */}
+      <div className="wiz-say">
+        <p className="wiz-eyebrow">바닥 · STEP 5 / 5</p>
+        <h3 className="wiz-title">어떻게 볼까요?</h3>
+      </div>
 
       <div className="fork">
         <button
@@ -56,11 +61,14 @@ export default function Step5Review({
           aria-pressed={form.mode === "expert"}
           onClick={() => pick("expert")}
         >
-          <h4>3번만 확인하며</h4>
+          {/* 멈추는 자리는 **둘**이다 — 캐릭터 시트와 이야기. 한때 콘티가 그
+              사이에 있어서 셋이었는데, 콘티 단계가 없어진 뒤로도 문구가
+              "3번만 · 이야기 · 콘티 · 그림" 그대로 남아 있었다. */}
+          <h4>2번 확인하며</h4>
           <p className="fork-lede">
-            이야기 · 콘티 · 그림
+            캐릭터 시트와 이야기,
             <br />
-            세 곳에서 보고 넘어갑니다.
+            두 곳에서 보고 넘어갑니다.
           </p>
         </button>
       </div>

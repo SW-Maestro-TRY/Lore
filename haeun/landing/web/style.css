@@ -235,6 +235,90 @@ body[data-view="nextep"]  .foot { display: none; }
 .depths b { display: block; font-size: .88rem; font-weight: 700; }
 .depths small { display: block; font-size: .77rem; color: var(--dim); margin-top: 2px; }
 
+/* ------------------------------------------------------ 어떻게 만드나 · 결과 예시 · FAQ
+
+   셋 다 홈(#landing) 안, 물 위(.top) 다음에 오는 조용한 흰 종이 자리다.
+   물빛 배경은 히어로 한 번으로 충분하고, 여기부터는 읽는 자리라 --card 위에
+   --text 로 앉힌다. 2026-09-05: 상단 바의 "어떻게 만드나"·"결과 예시" 가
+   가리키던 #how·#gallery 가 실제로는 없어서 눌러도 아무 데도 안 갔다 —
+   신뢰가 안 간다는 피드백의 원인 중 하나였다. */
+.how, .gallery, .faq {
+  max-width: 560px; margin: 0 auto; padding: 40px 20px;
+}
+.how-head, .gallery-head, .faq-head { text-align: center; margin-bottom: 22px; }
+.how-head h2, .gallery-head h2, .faq-head h2 {
+  font-size: clamp(1.25rem, 4.5vw, 1.6rem); font-weight: 800; margin: 6px 0 0;
+}
+.how .section-lede, .gallery .section-lede { margin: 10px auto 0; text-align: left; }
+.how-audience {
+  list-style: none; margin: 14px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 6px; text-align: left;
+}
+.how-audience li {
+  font-size: .86rem; color: var(--text); padding-left: 1.3em; position: relative;
+}
+.how-audience li::before { content: "·"; position: absolute; left: .3em; color: var(--accent); font-weight: 800; }
+
+/* position:relative + ::before 로 썸네일 사이를 잇는 세로줄 — 글로만
+   나열하면 "그냥 목록"으로 읽히지만, 줄로 이으면 "루가 순서대로 하는
+   이야기"로 읽힌다(2026-09-05). 줄의 left 값은 li 의 padding(16px) +
+   썸네일 반지름(44px, 2026-09-05 확대). */
+.how-steps { list-style: none; margin: 26px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; position: relative; }
+.how-steps::before {
+  content: ""; position: absolute; left: 60px; top: 30px; bottom: 30px;
+  width: 2px; background: var(--line-2); z-index: 0;
+}
+.how-steps li {
+  display: flex; gap: 16px; align-items: center; position: relative; z-index: 1;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px;
+}
+/* 진행 화면과 같은 그림(web/lou/stage/*.webp) — 기능 아이콘이 아니라
+   루가 실제로 그 일을 하는 삽화라서, 목록이 아니라 "장면"으로 읽힌다.
+   2026-09-05: 처음엔 56px 로 작게 뒀는데 "그림 좀 크게" 피드백으로 88px 로
+   키웠다 — 글씨보다 그림이 먼저 읽히는 자리로 만든다는 게 진행 화면
+   (.stage-art)의 원래 방침이기도 하다. */
+.how-thumb { position: relative; flex: none; }
+.how-stage-art {
+  width: 88px; height: 88px; border-radius: 18px; object-fit: cover;
+  border: 1px solid var(--line); background: var(--card-2); display: block;
+}
+.how-no {
+  position: absolute; left: -8px; top: -8px; width: 26px; height: 26px;
+  border-radius: 50%; background: var(--accent); color: #fff;
+  font-weight: 800; font-size: .8rem; display: grid; place-items: center;
+  box-shadow: 0 0 0 2px var(--card);
+}
+.how-steps b { display: block; font-size: 1rem; }
+.how-steps small { display: block; margin-top: 3px; font-size: .84rem; color: var(--muted); line-height: 1.55; }
+
+.gallery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+.gallery-grid figure { margin: 0; }
+.gallery-grid img {
+  width: 100%; aspect-ratio: 3/4; object-fit: cover;
+  border-radius: 12px; border: 1px solid var(--line);
+}
+.gallery-grid figcaption { text-align: center; font-size: .78rem; color: var(--muted); margin-top: 6px; }
+.gallery-full { display: flex; width: 100%; margin-top: 18px; }
+
+.faq-item {
+  border: 1px solid var(--line); border-radius: 12px; padding: 4px 16px;
+  margin-bottom: 8px; background: var(--card);
+}
+.faq-item summary {
+  padding: 12px 0; font-size: .9rem; font-weight: 700; cursor: pointer;
+  list-style: none;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after { content: "+"; float: right; color: var(--accent); font-weight: 800; }
+.faq-item[open] summary::after { content: "−"; }
+.faq-item p { margin: 0 0 14px; font-size: .84rem; color: var(--muted); line-height: 1.65; }
+
+@media (min-width: 880px) {
+  .how, .gallery, .faq { max-width: 720px; padding: 56px 32px; }
+  .gallery-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
 /* 만들기 — 물빛은 body[data-step] 이 정한다(위저드 절 참고).
 
    **바닥까지 채운다.** 걸음마다 내용 길이가 다른데, 짧은 걸음에서는 물이
@@ -629,7 +713,10 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
 }
 
 /* 고른 뒤 그 자리에서 열리는 요약 — 갈림길 카드 바로 아래다 */
-.wiz-after { margin-top: 6px; }
+/* 마지막 걸음은 흰 카드가 셋(고르개 · 요약 · 동의) 세로로 이어진다. 사이가
+   6px 이면 둥근 모서리끼리 물려서 한 덩어리로 보였다 — 실제로 "겹쳐 있다" 는
+   말을 들었다. 카드 사이는 고르개 위 간격(20px)과 같은 리듬으로 벌린다. */
+.wiz-after { margin-top: 16px; }
 
 /* 요약 */
 .wiz-summary { padding: 6px 20px; }
@@ -666,6 +753,19 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
   background: linear-gradient(180deg, transparent, var(--foot-bg, var(--ink)));
   pointer-events: none;
 }
+/* 마지막 걸음에서는 단추줄이 **안 뜬다.**
+
+   여기서 읽어야 하는 것(요약 · 저작권 확인 · 이용약관)이 곧 누르기 전에
+   확인할 것인데, 떠 있는 단추줄이 스크롤하는 내내 그 위를 지나가며 가렸다 —
+   눌러야 하는 체크박스까지 덮였다. 다른 걸음에서는 그대로 떠 있다: 거기서
+   띄운 이유는 "스크롤 끝까지 가야 「다음」이 나오는 것" 을 피하려는 것이고,
+   읽고 나서 누르는 자리가 아니라서 가릴 것이 없다.
+
+   마지막 걸음은 어차피 동의 칸이 맨 아래에 있어서 끝까지 내려가야 한다 —
+   단추가 그 뒤에 있는 것이 순서에도 맞는다. (PC·폰 둘 다.) */
+body[data-step="5"] .wiz-actions { position: static; }
+body[data-step="5"] .wiz-actions::before { display: none; }
+
 .wiz-foot { display: flex; gap: 10px; }
 .wiz-foot .btn { flex: 1; padding: 1.05em; }
 .wiz-prev { flex: 0 0 auto !important; min-width: 96px; }
@@ -820,7 +920,12 @@ body[data-step="6"] .submit-note { color: rgba(247,243,234,.7); }
    예전에는 루가 문서 흐름에 그냥 놓여 있어서 끌 자리가 없었다. */
 .mascot-stage {
   position: relative; width: 100%; height: min(52vh, 340px);
-  touch-action: none;   /* 모바일에서 끌 때 화면이 같이 스크롤되면 안 된다 */
+  /* touch-action: none 은 여기(화면 절반 가까운 넓이)가 아니라 밑의 .mascot
+     자신에게만 건다 — 손가락이 루가 아니라 이 칸의 빈 자리에서 시작해도
+     막히면, 그 넓이 때문에 사실상 화면 전체가 안 스크롤되는 것처럼 느껴진다
+     (2026-09-05, 모바일 스크롤 안 됨 리포트로 확인). 드래그가 시작된
+     지점(.mascot)의 touch-action 이 제스처 내내 적용되므로, 루를 잡고
+     칸 밖으로 끌어도 화면은 여전히 안 딸려온다. */
 }
 .mascot {
   position: absolute; left: 50%; top: 50%;
@@ -1235,7 +1340,28 @@ body[data-view="result"] .topbar { position: static; }
   padding: 26px clamp(18px, 5vw, 56px); border-top: 1px solid var(--line);
   color: var(--dim); font-size: .82rem;
 }
+.foot-brand { display: flex; flex-direction: column; gap: 4px; }
 .foot-note b { color: var(--muted); }
+/* 만든 곳 표시 — 본문보다 한 단 조용하게(오른쪽, 더 옅은 글자) 둔다.
+   신뢰를 주려고 넣는 것이지 브랜드 대신 앞세우려는 것이 아니다. */
+.foot-org { text-align: right; }
+/* 아이콘만 잘라 쓰고(마크 안의 작은 글자 대신) 화면 글꼴로 기관명을 직접
+   적는다 — 아이콘 높이를 px 로 고정하면 글줄이 바뀔 때마다(반응형 폰트)
+   로고만 어긋난다. em 으로 둬서 옆 글자 크기를 그대로 따라가게 한다. */
+.foot-org-line {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 6px; margin: 0 0 4px;
+}
+.foot-org-line:last-child { margin-bottom: 0; }
+.foot-org-icon { height: 1.3em; width: auto; display: block; flex: none; }
+.foot-org-brand span {
+  font-weight: 800; font-size: .92rem; letter-spacing: .02em; color: var(--muted);
+}
+.foot-org-line:not(.foot-org-brand) span { font-size: .78rem; opacity: .85; }
+@media (max-width: 480px) {
+  .foot-org { text-align: left; }
+  .foot-org-line { justify-content: flex-start; }
+}
 
 .toast {
   position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 90;
@@ -1800,7 +1926,8 @@ button.inline-link:hover { color: #f0d090; }
    물에 묻혀서, 필수인 줄도 모르고 지나친다. 종이 위에 올려 물과 분리한다. */
 .ip-agree {
   background: var(--card); border-radius: 16px;
-  padding: 14px 16px; margin: 0 0 14px;
+  /* 위 여백이 0 이면 요약 카드에 딱 붙어 경계가 안 보인다(위 .wiz-after 주석). */
+  padding: 14px 16px; margin: 16px 0;
   box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 8px 24px rgba(15,51,63,.07);
 }
 .ip-agree .agree-line { margin: 0; font-size: .86rem; align-items: center; }
@@ -1816,7 +1943,9 @@ button.inline-link:hover { color: #f0d090; }
   color: var(--accent-d); background: var(--sea-shore);
   padding: .1em .5em; border-radius: 999px; margin-left: .35em; white-space: nowrap;
 }
-.ip-agree .terms-box { margin: 10px 0 0; background: var(--ink-2); }
+/* 동의 줄과 약관 사이도 벌린다 — 둘 다 누르는 것이라 붙어 있으면 어느 쪽을
+   누르는지 손이 헷갈린다. */
+.ip-agree .terms-box { margin: 14px 0 0; background: var(--ink-2); }
 
 /* 내려받기 옆 한 줄 — 파일에 LORE 표시가 붙는다는 것을 미리 말한다.
    받아 보고 나서 알면 "왜 붙었지?" 가 되고, 미리 알면 그냥 사실이 된다. */
@@ -2051,6 +2180,9 @@ button.inline-link:hover { color: #f0d090; }
   background: transparent; border: none; box-shadow: none;
 }
 .approval-box .sheet-approval { margin: 0; max-height: 92vh; overflow-y: auto; }
+/* new_harness 의 이야기 고르기(.nh-approval)도 같은 팝업에 든다 — 카드가
+   넷이라 화면보다 길어지므로, 위 시트 상자와 같은 규칙으로 안에서 굴린다. */
+.approval-box .nh-approval { margin: 0; max-height: 92vh; overflow-y: auto; }
 
 /* 무엇을 확인하는지 — 이야기·콘티 본문 */
 .approval-preview:empty { display: none; }
@@ -2515,4 +2647,25 @@ body.ed .ed-top-row { min-height: 0; height: 0; padding: 0; }
   /* 패널이 열린 만큼만 본문 자리를 비운다. 닫으면 그림이 가운데로 돌아온다. */
   body.ed.dock-open-on .ed-body,
   body.ed.dock-open-on .ed-top { padding-right: 356px; }
+}
+
+/* ---- 그림을 그냥 저장해 가지 못하게 ------------------------------------ *
+ *
+ * 가져가는 길은 「이미지로 뽑기」·「내려받기」 하나로 모은다 — 그 길로 나가는
+ * 파일에만 LORE 표시가 붙는다(watermark.for_download).
+ *
+ * ⚠ **막는 것이 아니라 문턱이다.** 주소를 알면 그대로 받을 수 있다. 여기서
+ * 없애는 것은 실수로 새어 나가는 길이고, 오른쪽 누르기·끌어 놓기는 base.js
+ * 가 같이 막는다. 화면 찍기는 그대로 둔다.
+ *
+ * `-webkit-touch-callout` 이 폰에서 **길게 누르면 뜨는 「이미지 저장」 메뉴**를
+ * 없앤다 — 폰에서는 이 길이 오른쪽 누르기를 대신한다.
+ *
+ * 글자는 그대로 고를 수 있어야 한다(제목·대사를 복사하는 것은 막을 일이
+ * 아니다). 그래서 user-select 는 **그림에만** 건다. */
+img {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
 }

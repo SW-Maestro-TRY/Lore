@@ -51,10 +51,10 @@
         <div class="marquee-track">
           <img src="/static/samples/ex-cinematic-1.jpg" alt="">
           <img src="/static/samples/ex-lineart-1.jpg" alt="">
-          <img src="/static/samples/ex-romance-1.jpg" alt="">
+          <img src="/static/samples/ex-romance-1.png" alt="">
           <img src="/static/samples/ex-cinematic-1.jpg" alt="">
           <img src="/static/samples/ex-lineart-1.jpg" alt="">
-          <img src="/static/samples/ex-romance-1.jpg" alt="">
+          <img src="/static/samples/ex-romance-1.png" alt="">
         </div>
       </div>
       <div class="marquee marquee-slow">
@@ -115,7 +115,7 @@
     <div class="gallery-grid">
       <figure><img src="/static/samples/ex-cinematic-1.jpg" alt="시네마틱 반실사 예시" loading="lazy"><figcaption>시네마틱 반실사</figcaption></figure>
       <figure><img src="/static/samples/ex-cinematic-2.jpg" alt="시네마틱 반실사 예시" loading="lazy"><figcaption>말풍선·나레이션</figcaption></figure>
-      <figure><img src="/static/samples/ex-romance-1.jpg" alt="로맨스 판타지 예시" loading="lazy"><figcaption>로맨스 판타지</figcaption></figure>
+      <figure><img src="/static/samples/ex-romance-1.png" alt="로맨스 판타지 예시" loading="lazy"><figcaption>로맨스 판타지</figcaption></figure>
       <figure><img src="/static/samples/ex-lineart-2.jpg" alt="선화 액션 예시" loading="lazy"><figcaption>선화 · 액션</figcaption></figure>
     </div>
   </section>

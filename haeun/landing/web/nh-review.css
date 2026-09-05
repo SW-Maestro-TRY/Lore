@@ -122,6 +122,9 @@
    넓은 화면에서는 카드를 2열로 펼치고 글자를 키워 화면을 더 채운다. 모바일
    (480px 이하)은 padding·글자만 살짝 줄여 잘리지 않게 한다. */
 @media (min-width: 720px) {
+  /* 메인 화면(index.html)의 #nhPickCards 는 일부러 뺐다 — 그쪽 검수는 앱
+     컬럼(480px) 안의 팝업이라, 넓은 창이어도 카드가 놓일 폭은 448px 뿐이다.
+     2열로 쪼개면 카드 하나가 210px 로 눌린다. */
   #cards, #nhCards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; align-items: start; }
   .nh-card { margin-bottom: 0; padding: 18px 20px; }
   .nh-card h3 { font-size: 17px; }
@@ -133,4 +136,71 @@
   .nh-card { padding: 12px; }
   .nh-card h3 { font-size: 14px; }
   .nh-approval { padding: 12px; }
+}
+
+/* ---- 시트를 눌러서 크게 보기 -------------------------------------------- *
+ *
+ * 시트는 한 장에 전신·얼굴·디테일이 잘게 들어가 있어서 검수 화면 크기로는
+ * 눈·흉터를 볼 수가 없다. 그런데 여기서 "이 얼굴로 끝까지 간다"를 정한다.
+ *
+ * 내려받기는 그대로 막혀 있다(base.js 의 img 규칙이 여기에도 걸린다) —
+ * 크게 보는 것과 가져가는 것은 다른 일이다. */
+.nh-sheet-img { cursor: zoom-in; }
+
+.nh-zoom {
+  /* 검수 팝업(.modal-veil, z-index 200) **위**에 떠야 한다 — 시트를 누르는
+     자리가 그 팝업 안이라, 낮으면 팝업에 가려 아무 일도 안 한 것처럼 보인다. */
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(9, 26, 34, .88);
+  padding: 16px;
+  overflow: auto;                       /* 크게 벌렸을 때 끌어서 본다 */
+  overscroll-behavior: contain;
+}
+/* 열자마자 **화면을 꽉 채운다.** `max-width` 만 걸면 원래 크기가 화면보다
+   작은 그림은 그 크기 그대로 남아서, 큰 화면일수록 더 작아 보인다 —
+   크게 보려고 눌렀는데 안 커진다. width/height 를 100% 로 주고
+   object-fit 으로 비율을 지킨다. */
+.nh-zoom img {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  cursor: zoom-in;
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
+}
+/* 한 번 더 누르면 더 크게. 시트는 가로로 길어서 꽉 채워도 디테일 칸이
+   작다 — 이때부터는 **끌어서** 본다(스크롤 막대를 찾을 필요가 없다).
+
+   배율은 자바스크립트가 `--nh-zoom` 으로 넣는다(누를 때마다 2배·3배·4배,
+   그 다음엔 다시 꽉 채움). 화면 폭 기준이라 원래 크기가 작은 그림도
+   똑같이 커진다. */
+.nh-zoom.is-big { align-items: flex-start; justify-content: flex-start; }
+.nh-zoom.is-big img {
+  max-width: none; max-height: none;
+  width: calc(100% * var(--nh-zoom, 2)); height: auto;
+  /* **플렉스 항목은 기본으로 줄어든다.** 이게 없으면 폭을 300% 로 줘도
+     상자에 맞게 도로 줄어서, 눌러도 아무 일이 안 일어난다(실측 — 배율
+     표시만 3배로 바뀌고 그림은 그대로였다). */
+  flex: none;
+  cursor: grab;
+}
+.nh-zoom.is-big.is-panning img { cursor: grabbing; }
+/* 뒤 화면이 같이 굴러다니지 않게. */
+body.nh-zoom-on { overflow: hidden; }
+
+.nh-zoom-close {
+  position: fixed; top: 12px; right: 14px; z-index: 301;
+  width: 40px; height: 40px; border-radius: 999px;
+  border: none; background: rgba(255, 255, 255, .16); color: #fff;
+  font: inherit; font-size: 1rem; cursor: pointer;
+}
+.nh-zoom-close:hover { background: rgba(255, 255, 255, .28); }
+.nh-zoom-scale {
+  position: fixed; top: 14px; left: 16px; z-index: 301; margin: 0;
+  color: rgba(255, 255, 255, .8); font-size: .78rem;
+  font-variant-numeric: tabular-nums;
+}
+.nh-zoom-hint {
+  position: fixed; left: 0; right: 0; bottom: 14px; margin: 0; z-index: 301;
+  text-align: center; color: rgba(255, 255, 255, .72); font-size: .78rem;
 }
