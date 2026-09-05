@@ -1,6 +1,10 @@
 package com.lore.webtoon;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -49,6 +53,8 @@ import java.nio.charset.StandardCharsets;
 @RestController
 public class WebtoonController {
 
+    private static final Logger log = LoggerFactory.getLogger(WebtoonController.class);
+
     /** 프론트가 부르는 접두사. 이 뒤가 하네스의 {@code /api} 뒤와 같다. */
     static final String PREFIX = "/api/webtoon";
 
@@ -58,11 +64,17 @@ public class WebtoonController {
     private final HarnessGateway gateway;
     private final SpendGuard guard;
     private final GuestGate guests;
+    private final CreditGate credits;
+    /* 응답에서 작업 id 하나만 꺼내려고 쓴다. 스프링이 만들어 주는 빈이 없어서
+       (앞서 주입받게 썼다가 서버가 안 떴다) 여기서 만든다. */
+    private final ObjectMapper mapper = new ObjectMapper();
 
-    public WebtoonController(HarnessGateway gateway, SpendGuard guard, GuestGate guests) {
+    public WebtoonController(HarnessGateway gateway, SpendGuard guard,
+                             GuestGate guests, CreditGate credits) {
         this.gateway = gateway;
         this.guard = guard;
         this.guests = guests;
+        this.credits = credits;
     }
 
     /**
@@ -77,16 +89,24 @@ public class WebtoonController {
                                         @RequestHeader HttpHeaders headers) throws IOException {
         HttpMethod method = HttpMethod.valueOf(request.getMethod());
         boolean counted = false;
+        boolean creating = HttpMethod.POST.equals(method)
+                && CREATE.equals(request.getRequestURI());
+        Long me = creating ? CreditGate.currentUser() : null;
 
         // 만들기만 먼저 확인한다 — 시작한 뒤에 막으면 이미 돈이 나간 뒤다.
         // 나머지(읽기·목록·편집)는 그냥 지나간다.
-        if (HttpMethod.POST.equals(method) && CREATE.equals(request.getRequestURI())) {
+        if (creating) {
             // 전체 몫을 먼저 본다. 오늘 다 찼으면 로그인해도 못 만들므로,
             // 게스트에게 "로그인하면 됩니다" 라고 말하면 거짓말이 된다.
             String blocked = guard.whyBlocked();
-            if (blocked == null) {
+            if (blocked == null && me == null) {
+                // 게스트만 IP 로 센다. 로그인한 사람은 바로 아래에서 계정
+                // 크레딧으로 내므로, 여기서 또 세면 로그인한 쪽이 더 막힌다.
                 blocked = guests.useOrBlock(request);
                 counted = blocked == null;      // 셌으면 실패했을 때 돌려줘야 한다
+            }
+            if (blocked == null) {
+                blocked = credits.whyBlocked(me);   // 로그인 안 했으면 null
             }
             if (blocked != null) {
                 // 하네스가 사유를 한글로 적어 보내는 것과 **같은 모양**으로 답한다.
@@ -100,17 +120,58 @@ public class WebtoonController {
         }
 
         byte[] body = request.getInputStream().readAllBytes();
+
+        // 계정에서 낼 사람이면 하네스에 "이미 받았다" 고 알린다. 안 알리면
+        // 하네스가 자기 uid 크레딧에서 또 받아 두 번 내게 된다.
+        HttpHeaders out = headers;
+        if (me != null) {
+            out = new HttpHeaders();
+            out.addAll(headers);
+            out.set(CreditGate.BILLED_HEADER, String.valueOf(credits.cost()));
+        }
+
         ResponseEntity<byte[]> answer = gateway.forward(
                 method, harnessPath(request.getRequestURI()),
-                request.getQueryString(), body, headers);
+                request.getQueryString(), body, out);
+
+        boolean ok = answer.getStatusCode().is2xxSuccessful();
 
         // 시작조차 못 했으면 방금 센 한 편을 도로 물린다. 안 그러면 아무것도
         // 못 만든 사람에게 "오늘 2편 다 쓰셨어요" 가 뜬다 — 만든 적이 없으니
         // 거짓말이고, 로그인해도 오늘은 안 되는 줄 알게 된다.
-        if (counted && !answer.getStatusCode().is2xxSuccessful()) {
+        if (counted && !ok) {
             guests.refund(request);
         }
+
+        // 작업이 만들어진 **뒤에** 받는다. 먼저 받으면 만들기가 실패했을 때
+        // 낸 것만 사라진다(하네스가 같은 순서를 쓴다 — 이슈 #16).
+        if (creating && ok && me != null) {
+            credits.charge(me, jobIdOf(answer.getBody()));
+        }
         return answer;
+    }
+
+    /**
+     * 하네스가 돌려준 것에서 작업 id 만 꺼낸다.
+     *
+     * 이 클래스는 원래 본문을 <b>해석하지 않는다</b>(위 proxy 참고). 여기만
+     * 예외인 이유는 크레딧을 "무엇에 대해" 받았는지 적어야 하기 때문이다 —
+     * 그 값이 없으면 같은 사람이 두 번 눌렀을 때 두 번 빠지고, 돌려줄 때도
+     * 무엇을 돌려주는지 알 수 없다.
+     *
+     * 못 읽어도 던지지 않는다. 이미 만들어진 작업을 오류로 만들 수는 없다.
+     */
+    private String jobIdOf(byte[] answer) {
+        if (answer == null || answer.length == 0) {
+            return null;
+        }
+        try {
+            JsonNode id = mapper.readTree(answer).path("id");
+            return id.isTextual() ? id.asText() : null;
+        } catch (IOException e) {
+            log.warn("만들기 응답에서 작업 id 를 못 읽어 크레딧을 못 받았습니다", e);
+            return null;
+        }
     }
 
     /**

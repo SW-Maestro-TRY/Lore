@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@common/auth/useAuth";
 import {
-  creditBalance, listRuns, myAccountRuns, myRuns, setVisibility, type RunCard,
+  creditBalance as browserCredit, listRuns, myAccountRuns, myRuns, setVisibility,
+  type RunCard,
 } from "../../lib/nhApi";
+import { creditBalance, creditHistory, type CreditLine } from "@common/api/credits";
 import { louArt } from "../../lib/louArt";
 import { WorkCard } from "../Works/Works";
 
@@ -37,6 +39,7 @@ export default function MyPage({
   const [runs, setRuns] = useState<RunCard[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [credit, setCredit] = useState<number | null>(null);
+  const [lines, setLines] = useState<CreditLine[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -55,9 +58,18 @@ export default function MyPage({
           .then((got) => { if (alive) setRuns((got.runs || []).filter((r) => mine.has(r.run_id))); })
           .catch(() => { if (alive) setFailed(true); });
       });
+    /* 잔액은 **계정** 것을 먼저 본다. 로그인해서 들어온 화면이므로 계정 쪽이
+       맞는 값이고, 브라우저(uid) 것은 로그인 안 한 사람이 쓰던 값이다.
+       계정 쪽을 못 받으면 브라우저 것이라도 보여준다 — 크레딧 칸이 통째로
+       비면 얼마 남았는지 볼 자리가 아예 없어진다. */
     creditBalance()
       .then((got) => { if (alive) setCredit(got.balance); })
-      .catch(() => { /* 잔액을 못 받아도 목록은 보여준다 */ });
+      .catch(() => browserCredit()
+        .then((got) => { if (alive) setCredit(got.balance); })
+        .catch(() => { /* 잔액을 못 받아도 목록은 보여준다 */ }));
+    creditHistory(20)
+      .then((got) => { if (alive) setLines(got); })
+      .catch(() => { /* 내역은 없으면 안 그린다 */ });
     return () => { alive = false; };
   }, []);
 
@@ -127,9 +139,8 @@ export default function MyPage({
 
       {/* 크레딧. 상단 배지에도 숫자가 있던 자리지만 여기는 **자리**다 —
           얼마 남았는지 보고 충전할지 정하는 곳.
-          ⚠ 이 값은 계정이 아니라 이 브라우저(uid) 것이다. 가격·충전은 아직
-          안 붙었다(#16 · #155) — 그래서 「충전하기」를 그리지 않는다. 눌러도
-          아무 일이 안 일어나는 단추를 두느니 없는 편이 낫다. */}
+          충전은 아직 안 붙었다(#155) — 그래서 「충전하기」를 그리지 않는다.
+          눌러도 아무 일이 안 일어나는 단추를 두느니 없는 편이 낫다. */}
       <div className="mypage-credit">
         <div className="mypage-credit-main">
           <p className="eyebrow">크레딧</p>
@@ -139,6 +150,28 @@ export default function MyPage({
           <p className="mypage-credit-hint">한 편에 12 C</p>
         </div>
       </div>
+
+      {/* 내역. **잔액 바로 밑에** 둔다 — 숫자만 있으면 "왜 이 숫자인지" 를
+          물을 자리가 없고, 물을 자리가 없으면 줄어든 것이 늘 의심스럽다.
+          없으면 아예 안 그린다: 갓 가입한 사람에게 빈 표를 보여 줄 이유가 없다. */}
+      {lines.length > 0 && (
+        <div className="mypage-section">
+          <div className="mypage-section-head">
+            <h3>크레딧 내역</h3>
+          </div>
+          <ul className="credit-lines">
+            {lines.map((line) => (
+              <li key={line.id} className="credit-line">
+                <span className="credit-line-label">{line.memo || line.label}</span>
+                <span className="credit-line-at">{shortDate(line.at)}</span>
+                <span className={`credit-line-delta${line.delta < 0 ? " is-spent" : ""}`}>
+                  {line.delta > 0 ? "+" : ""}{line.delta}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="mypage-section">
         <div className="mypage-section-head">
@@ -234,4 +267,12 @@ function MyTools({
       </button>
     </>
   );
+}
+
+/** "9월 6일" — 연도는 안 적는다. 최근 20줄이라 해가 바뀔 일이 드물고, 적으면
+ *  그만큼 줄이 길어져 정작 볼 값(얼마가 움직였나)이 밀린다. */
+function shortDate(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  return `${at.getMonth() + 1}월 ${at.getDate()}일`;
 }

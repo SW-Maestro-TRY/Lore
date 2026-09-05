@@ -46,6 +46,7 @@ class WebtoonGuestAccessTest {
        그냥 지나간다 — 막는 쪽 동작은 SpendGuardTest·GuestGateTest 가 본다. */
     @MockitoBean SpendGuard spendGuard;
     @MockitoBean GuestGate guestGate;
+    @MockitoBean CreditGate creditGate;
     @MockitoBean JwtProvider jwtProvider;
     @MockitoBean MyWebtoonService myWebtoonService;
 
