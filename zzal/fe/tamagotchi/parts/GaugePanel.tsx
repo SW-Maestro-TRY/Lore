@@ -58,9 +58,12 @@ export default function GaugePanel({ tama, pc, name }: GaugePanelProps) {
         {/*
           아픔 한 줄. ★ **원인을 말하지 않는다** — "안 치워서 아파요" 는 사실이어도 사람을 몰아세운다.
           케어 미스를 어디에도 안 내리는 것과 같은 결이다(정본 4장). 할 일만 알려 준다.
+          ★★ 종류(kind)를 `data-*` 표식으로도 안 남긴다. 화면에 안 쓰기로 해 놓고 표식으로 남기면
+             개발자도구로 읽을 수 있고, 그건 "안 보여 준다" 가 아니라 "잘 안 보이게 둔다" 다.
+             검사는 목 상태(`__zzalMock.state()`)로 확인한다.
         */}
         {s.sick && (
-          <div data-part="sick" data-sick-kind={s.sickKind ?? ''} style={sickRow}>
+          <div data-part="sick" style={sickRow}>
             <span aria-hidden>☠</span>
             <span>아파요 · 약을 주면 바로 나아요</span>
           </div>

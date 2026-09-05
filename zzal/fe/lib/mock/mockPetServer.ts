@@ -666,7 +666,14 @@ export class MockPetServer implements PetSource {
   private resetZero(r: Row): void {
     if (r.fullness > 0) { r.zeroAcc.fullness = 0; r.zeroArmed.fullness = false; }
     if (r.happiness > 0) { r.zeroAcc.happiness = 0; r.zeroArmed.happiness = false; }
-    if (r.trash < MAX_TRASH) { r.zeroAcc.trash = 0; r.zeroArmed.trash = false; }
+    if (r.trash < MAX_TRASH) {
+      r.zeroAcc.trash = 0;
+      r.zeroArmed.trash = false;
+      // ★ 병(DIRTY)의 시계도 함께 푼다. 안 풀면 "치웠는데 시계는 계속 도는" 상태가 남는다 —
+      //   지금은 tickAwake 가 매 구간 다시 계산해 결과가 갈리지 않지만, 두 자리가 같은 사실을
+      //   따로 기억하고 있으면 언젠가 갈라진다. 불변식은 한 곳에서 지킨다.
+      r.dirtyAcc = 0;
+    }
   }
 
   /** 밥 충전 — 자는 동안에도 돈다(§16). */

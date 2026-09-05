@@ -5,6 +5,14 @@
 import { expect, test } from '@playwright/test';
 import { HOUR, MIN, advance, gotoMock, isLocked, press, status } from './helpers';
 
+/** 지금 무슨 병인가. ★ 화면에는 종류가 안 나온다(그게 결정이다) — 목 상태로 확인한다. */
+async function sickKind(page: import('@playwright/test').Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const st = (window as unknown as { __zzalMock: { state: () => { sick: { kind: string } | null } } }).__zzalMock.state();
+    return st?.sick?.kind ?? null;
+  });
+}
+
 /** 확률이 섞인 병(NEGLECT·NATURAL)은 목이 만들 수 없다 — 서버만 아는 씨앗이 섞여 있어서. 직접 앉힌다. */
 async function makeSick(page: import('@playwright/test').Page, kind: string) {
   await page.evaluate((k) => (window as unknown as { __zzalMock: { makeSick: (x: string) => void } }).__zzalMock.makeSick(k), kind);
@@ -21,9 +29,10 @@ test('아프면 아픈 자세 + 한 줄 + 약만 열리고, 약을 주면 그 �
   // 상태 한 줄 · 아픈 자세 · 해골
   expect(await status(page)).toBe('sick');
   await expect(page.locator('[data-part="sick"]')).toContainText('아파요');
-  // ★ 원인은 화면에 안 쓴다 — 표식으로만 남긴다(연출용).
-  await expect(page.locator('[data-part="sick"]')).toHaveAttribute('data-sick-kind', 'NEGLECT');
+  // ★ 원인은 화면에 **아무 데도** 안 쓴다 — 글자로도, 표식으로도. 종류는 서버(목)만 안다.
+  expect(await sickKind(page)).toBe('NEGLECT');
   await expect(page.locator('[data-part="sick"]')).not.toContainText('안 치워');
+  await expect(page.locator('[data-part="sick"]')).not.toHaveAttribute('data-sick-kind', /.*/);
   // 아픈 자세 + 해골(에셋이 없으면 CSS 글자로 대신한다)
   await expect(page.locator('[data-stage="char"]')).toHaveAttribute('data-motion', 'sick');
   await expect(page.locator('[data-overlay="skull"]')).toBeVisible();
@@ -45,7 +54,7 @@ test('간식을 연달아 다섯 개 주면 배탈(UPSET)', async ({ page }) => 
   await gotoMock(page, 'child', '2026-09-05T10:00');
   for (let i = 0; i < 5; i++) await press(page, 'snack');
   expect(await status(page)).toBe('sick');
-  await expect(page.locator('[data-part="sick"]')).toHaveAttribute('data-sick-kind', 'UPSET');
+  expect(await sickKind(page)).toBe('UPSET');
 });
 
 test('아기 60분 안에는 간식을 다섯 개 줘도 안 아프다(해석 39)', async ({ page }) => {
@@ -68,5 +77,5 @@ test('흔적이 가득한 채 여섯 시간이면 아프다(DIRTY)', async ({ pa
   //   **자는 동안에는 병 시계도 멈추기** 때문이다(정본 §16). 밤을 넘겨 깨어 있는 시간으로 여섯 시간을 채운다.
   await advance(page, 18 * HOUR);
   expect(await status(page)).toBe('sick');
-  await expect(page.locator('[data-part="sick"]')).toHaveAttribute('data-sick-kind', 'DIRTY');
+  expect(await sickKind(page)).toBe('DIRTY');
 });
