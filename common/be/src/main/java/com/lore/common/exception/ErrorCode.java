@@ -43,14 +43,22 @@ public enum ErrorCode {
     ZZAL_PET_NOT_ALIVE(HttpStatus.CONFLICT, "아직 함께 지낼 수 없어요"),
     ZZAL_PET_SLEEPING(HttpStatus.CONFLICT, "자고 있어요"),
     ZZAL_PET_NOT_SLEEPING(HttpStatus.CONFLICT, "자고 있지 않아요"),
-    ZZAL_PET_STILL_SLEEPING(HttpStatus.CONFLICT, "아직 자고 있어요"),
     ZZAL_CARE_NOT_NEEDED(HttpStatus.CONFLICT, "지금은 필요하지 않아요"),
     ZZAL_NO_FOOD(HttpStatus.CONFLICT, "밥이 다 떨어졌어요"),
-    ZZAL_TRAIN_IN_PROGRESS(HttpStatus.CONFLICT, "연습하고 있어요"),
-    ZZAL_TRAIN_ENOUGH(HttpStatus.CONFLICT, "오늘 연습은 충분해요"),
-    ZZAL_TRAIN_NOT_ENOUGH(HttpStatus.CONFLICT, "연습이 더 필요해요"),
-    ZZAL_ALL_UNLOCKED(HttpStatus.CONFLICT, "이미 다 배웠어요"),
-    ZZAL_MOTION_NOT_READY(HttpStatus.CONFLICT, "아직 꿈을 꾸고 있어요"),
+
+    // 돌보기 v2 (zzal) — 플레이 정본 v1.2 이식(2026-09-05, #192). 계약은 zzal/docs/api-v2.md.
+    // ★ 여기서 한 번에 다 적고 얼린다 — 백엔드·프론트·생성 세션이 동시에 도는 동안
+    //   이 파일을 각자 건드리면 반드시 충돌한다.
+    ZZAL_NOT_SLEEP_TIME(HttpStatus.CONFLICT, "아직 잘 시간이 아니에요"),
+    ZZAL_NOT_WAKE_TIME(HttpStatus.CONFLICT, "아직 깰 시간이 아니에요"),
+    ZZAL_SICK_REFUSES(HttpStatus.CONFLICT, "아파서 지금은 못 해요"),
+    ZZAL_BATH_DONE_TODAY(HttpStatus.CONFLICT, "오늘은 이미 씻었어요"),
+    ZZAL_CHAT_SLOT_CLOSED(HttpStatus.CONFLICT, "지금은 부르지 않았어요"),
+    ZZAL_FEATURE_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않았어요"),
+    ZZAL_TRAVELING(HttpStatus.CONFLICT, "여행 중이에요"),
+    ZZAL_NOT_TRAVELING(HttpStatus.CONFLICT, "여행 중이 아니에요"),
+    ZZAL_MOTION_NOT_OPEN(HttpStatus.CONFLICT, "아직 배우지 않은 동작이에요"),
+    ZZAL_REGEN_NOT_REQUESTED(HttpStatus.CONFLICT, "다시 굽기를 요청한 동작이 아니에요"),
 
     // 놓아주기 (zzal) — 부화 중에는 보낼 수 없다. 알을 보내면 뒤에서 굽고 있는 생성이
     // 주인 없는 일이 되어, 돈은 나가는데 받을 펫이 없는 상태로 끝난다.
