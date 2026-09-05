@@ -1,6 +1,5 @@
 package com.lore.webtoon;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +39,7 @@ class MyWebtoonServiceTest {
     void setUp() {
         links = new FakeLinks();
         gateway = mock(HarnessGateway.class);
-        service = new MyWebtoonService(links, gateway, new ObjectMapper());
+        service = new MyWebtoonService(links, gateway);
     }
 
     private void harnessReturns(String uid, String json) {

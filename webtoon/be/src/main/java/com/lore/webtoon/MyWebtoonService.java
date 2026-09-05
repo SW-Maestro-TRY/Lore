@@ -36,12 +36,20 @@ public class MyWebtoonService {
 
     private final BrowserLinkRepository links;
     private final HarnessGateway gateway;
-    private final ObjectMapper mapper;
 
-    public MyWebtoonService(BrowserLinkRepository links, HarnessGateway gateway, ObjectMapper mapper) {
+    /**
+     * 하네스가 준 JSON 을 읽을 때만 쓴다.
+     *
+     * 스프링이 주는 것을 받지 않고 직접 만든다 — 이 앱에는 {@code ObjectMapper}
+     * 빈이 없어서 주입을 걸면 <b>서버가 아예 안 뜬다</b>(실제로 그랬다).
+     * 웹 조각 테스트에서는 Jackson 자동설정이 같이 떠서 안 드러났다.
+     * 여기서 하는 일은 작은 응답 하나를 읽는 것뿐이라 앱 공용 설정이 필요 없다.
+     */
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    public MyWebtoonService(BrowserLinkRepository links, HarnessGateway gateway) {
         this.links = links;
         this.gateway = gateway;
-        this.mapper = mapper;
     }
 
     /**
