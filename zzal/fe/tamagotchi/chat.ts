@@ -121,8 +121,27 @@ function pickBy<T>(xs: readonly T[], seed: number): T {
 }
 
 /** 캐릭터가 먼저 건네는 한 줄(목 서버용). 원망 필터를 통과한 것만 나간다. */
-export function templateCall(slot: ChatSlot, personality: Personality | null, seed: number): string {
-  return sanitizeLine(pickBy(CALL[slot][personality ?? 'GENTLE'], seed));
+/**
+ * 기분 좋은 날의 **첫 부름**에 얹는 한마디(정본 §6). 성격 대사를 갈아치우지 않고 앞에 한 조각만 붙인다 —
+ * 갈아치우면 성격이 하루 사라지고, 그게 이 서비스에서 제일 큰 손실이다.
+ */
+const GOOD_DAY_PREFIX: Record<Personality, string> = {
+  GENTLE: '오늘은 기분이 좋아요. ',
+  LIVELY: '오늘 왠지 신나요! ',
+  SHY: '오늘은… 조금 용기가 나요. ',
+  CLINGY: '오늘은 더 보고 싶었어요. ',
+  COOL: '오늘은 뭐, 나쁘지 않네요. ',
+};
+
+export function templateCall(
+  slot: ChatSlot,
+  personality: Personality | null,
+  seed: number,
+  /** 기분 좋은 날의 첫 부름인가(그날의 첫 한 번만 true 로 넘긴다). */
+  goodDay = false,
+): string {
+  const line = sanitizeLine(pickBy(CALL[slot][personality ?? 'GENTLE'], seed));
+  return goodDay ? sanitizeLine(GOOD_DAY_PREFIX[personality ?? 'GENTLE'] + line) : line;
 }
 
 /**
