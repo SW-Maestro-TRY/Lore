@@ -52,7 +52,9 @@ export default function GameSection({ petId }: GameSectionProps) {
     let alive = true;
     const controller = new AbortController();
     getCurrentGame(petId, controller.signal)
-      .then((s) => { if (alive) setState(s); })
+      // ★ 복구 응답은 "아직 아무 상태도 없을 때" 만 쓴다. 시작 응답(playing:true)이 먼저 왔는데 늦게 도착한
+      //   복구 응답(playing:false)이 덮으면 치던 판이 화면에서 사라진다(리뷰 M2).
+      .then((s) => { if (alive) setState((cur) => cur ?? s); })
       .catch((e: unknown) => {
         if (!alive) return;
         if (e instanceof DOMException && e.name === 'AbortError') return;

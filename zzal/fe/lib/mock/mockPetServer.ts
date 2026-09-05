@@ -819,7 +819,6 @@ export class MockPetServer implements PetSource {
       elapsedSeconds: hatching ? elapsed : null,
       deathReason: r.phase === 'DEAD' ? 'RELEASED' : r.phase === 'FAILED' ? 'HATCH_FAILED' : null,
       hatchStartedAt: iso(r.hatchStartedAt), hatchedAt: r.hatchedAt === null ? null : iso(r.hatchedAt),
-      imageBase: alive ? 'images/zzal/demo' : null,
       serverNow: iso(now),
       clock: alive ? this.clockOf(r, now) : null,
       daysTogether: alive ? r.daysTogether : null,
@@ -830,13 +829,14 @@ export class MockPetServer implements PetSource {
       intimacy: alive ? { score: r.intimacy, percent, tier } : null,
       today: alive ? today : null,
       pieces: null,
-      motions: alive ? this.motionsOf(r) : [],
-      justUnlocked,
+      // ★ ALIVE 가 아니면 null(계약 2절 · PetResponses.Detail.from). 빈 배열을 주면 훅의 방어가 한 번도 안 돈다.
+      motions: alive ? this.motionsOf(r) : null,
+      justUnlocked: alive ? justUnlocked : null,
       learnedToday: alive
         ? r.motions
           .filter((m) => m.advanced.status === 'OPEN' && !r.seenAdv.has(m.seq) && m.advanced.imageKey !== null)
           .map((m) => ({ seq: m.seq, key: m.key, label: m.label, imageKey: m.advanced.imageKey as string, revealedAt: m.advanced.revealedAt ?? iso(now) }))
-        : [],
+        : null,
       chatReply,
       firstGift: alive ? this.firstGiftOf(r) : null,
       chatSummary: alive ? (({ openSlot, nextAt }) => ({ openSlot, nextAt }))(this.chatOf(r, now)) : null,
