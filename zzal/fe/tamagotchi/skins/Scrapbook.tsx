@@ -19,6 +19,28 @@ import { track } from '@common/analytics';
 import AuthModal from '@common/auth/AuthModal';
 import FeedbackSheet from '../FeedbackSheet';
 import GameSection from '../GameSection';
+
+/**
+ * 상태 한 줄 — key 는 뜻, 값은 지금 쓰는 말. **key 는 검사가 잡는 손잡이라 함부로 바꾸지 않는다.**
+ * 문구만 바꾸실 때는 오른쪽만 고치시면 됩니다.
+ */
+const STATUS_LINE = {
+  none: '기다리는 중',
+  failed: '태어나지 못했어요',
+  gone: '잘 보냈어요',
+  wakeable: '깨워도 돼요',
+  nap: '낮잠 중',
+  sleeping: '자는 중',
+  egg: '품는 중',
+  hatching: '지금 나오려 해요',
+  sick: '아파요',
+  hungry: '배고파해요',
+  sad: '시무룩해요',
+  dirty: '바닥이 어질러졌어요',
+  canSleep: '재울 수 있어요',
+  normal: '평상시',
+} as const;
+type StatusKey = keyof typeof STATUS_LINE;
 import { BACKGROUNDS, YEOUL } from '../constants';
 import { MAX_GAUGE } from '../rules';
 import { useDex } from '../useDex';
@@ -267,12 +289,17 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
   };
 
   // 게이지를 보기 전에 캐릭터가 먼저 말한다. 게이지는 확인용이다.
-  const status = !s.hasChar ? '기다리는 중'
-    : derived.failed ? '태어나지 못했어요'
-    : s.sleeping ? (s.canWake ? '깨워도 돼요' : (s.sleepKind === 'NAP' ? '낮잠 중' : '자는 중'))
-    : s.phase === 'egg' ? '품는 중' : s.phase === 'hatching' ? '지금 나오려 해요'
-    : s.sick ? '아파요' : s.fullness <= 0 ? '배고파해요' : s.happiness <= 0 ? '시무룩해요'
-    : s.trash >= 3 ? '바닥이 어질러졌어요' : s.canSleep ? '재울 수 있어요' : '평상시';
+  //
+  // ★ 무엇인가(key)와 뭐라고 말하나(문구)를 나눠 둔다. 문구는 상훈님이 언제든 바꾸시는 자리이고,
+  //   검사(e2e)는 key 만 본다 — 한 칸에 섞어 두면 문구를 다듬을 때마다 검사가 깨진다(결정기록 C35).
+  const statusKey: StatusKey = !s.hasChar ? 'none'
+    : s.phase === 'gone' ? 'gone'
+    : derived.failed ? 'failed'
+    : s.sleeping ? (s.canWake ? 'wakeable' : (s.sleepKind === 'NAP' ? 'nap' : 'sleeping'))
+    : s.phase === 'egg' ? 'egg' : s.phase === 'hatching' ? 'hatching'
+    : s.sick ? 'sick' : s.fullness <= 0 ? 'hungry' : s.happiness <= 0 ? 'sad'
+    : s.trash >= 3 ? 'dirty' : s.canSleep ? 'canSleep' : 'normal';
+  const status = STATUS_LINE[statusKey];
 
   // 여울 체험(섹션 1)에서만 쓰는 작은 도장·떠오르는 글자. 내 아이 쪽은 parts/GaugePanel·RoomStage 가 그린다.
   const cells = (v: number, c: string, mark: string) =>
@@ -454,7 +481,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
               <div style={L.topRow}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                   <span style={L.charName}>{s.hasChar ? cur.name : '빈 자리'}</span>
-                  <span style={L.charSub} data-status={status}>
+                  <span style={L.charSub} data-status={status} data-status-key={statusKey}>
                     {status}{s.hasChar && s.phase === 'live' ? ` · ${s.daysTogether}일째 함께` : ''}{derived.mock ? ' · 목 서버' : ''}
                   </span>
                 </div>
