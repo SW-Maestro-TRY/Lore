@@ -5,6 +5,7 @@ import com.lore.common.response.ApiResponse;
 import com.lore.zzal.chat.dto.ChatRequests;
 import com.lore.zzal.chat.dto.ChatResponses;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.pet.PetService;
 import com.lore.zzal.pet.dto.PetResponses;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -28,10 +29,12 @@ import java.time.Instant;
 public class ChatController {
 
     private final ChatService chatService;
+    private final PetService petService;
     private final MotionCatalog catalog;
 
-    public ChatController(ChatService chatService, MotionCatalog catalog) {
+    public ChatController(ChatService chatService, PetService petService, MotionCatalog catalog) {
         this.chatService = chatService;
+        this.petService = petService;
         this.catalog = catalog;
     }
 
@@ -60,7 +63,7 @@ public class ChatController {
         Instant real = Instant.now();
         ChatService.Answered a = chatService.answer(userId, petId, slot, request.text(), real);
         PetResponses.Detail pet = PetResponses.Detail.from(a.action().pet(), null, a.action().pet().now(real), catalog,
-                a.action().justUnlocked());
+                petService.motionRows(petId), a.action().justUnlocked());
         return ApiResponse.ok(new ChatResponses.Answered(pet, new ChatResponses.Reply(a.replyLine(), a.reactionKey())));
     }
 }

@@ -10,6 +10,7 @@ import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.ZzalMotionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -70,7 +71,8 @@ class PetServiceTest {
                 s3Service,
                 hatchService,
                 mock(ApplicationEventPublisher.class),
-                new MotionCatalog("", "", "v1"));
+                new MotionCatalog("", "", "v1"),
+                mock(ZzalMotionRepository.class));
     }
 
     /** T0(정오) 에 부화한 아기. */

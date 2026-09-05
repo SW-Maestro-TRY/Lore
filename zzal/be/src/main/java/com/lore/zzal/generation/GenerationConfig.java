@@ -14,6 +14,7 @@ import com.lore.zzal.generation.client.PostProcessor;
 import com.lore.zzal.generation.client.PythonMotionPostProcessor;
 import com.lore.zzal.generation.client.PythonPostProcessor;
 import com.lore.zzal.generation.client.TextClient;
+import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.MotionGridStep;
 import com.lore.zzal.generation.steps.MotionPostStep;
 import org.springframework.beans.factory.annotation.Value;
@@ -111,6 +112,18 @@ public class GenerationConfig {
             return new PythonMotionPostProcessor(storage, scripts, pythonBin, version, timeout);
         }
         return new FakeMotionPostProcessor(500);
+    }
+
+    /** 격자 1장(1층 8종). v1·v2 공통. */
+    @Bean
+    public GridStep gridStep(ImageClient imageClient, PromptLoader prompts) {
+        return new GridStep(imageClient, prompts, GridStep.NAME);
+    }
+
+    /** 격자 2장째(2층 8종). v2 만. 프롬프트 prompt/v2/grid2.txt. */
+    @Bean
+    public GridStep grid2Step(ImageClient imageClient, PromptLoader prompts) {
+        return new GridStep(imageClient, prompts, com.lore.zzal.generation.steps.PostProcessStep.GRID2);
     }
 
     @Bean

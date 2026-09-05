@@ -71,16 +71,29 @@ public class PythonPostProcessor implements PostProcessor {
 
     @Override
     public void split(String gridImageKey, String outputPrefix) throws Exception {
+        split(gridImageKey, outputPrefix, states, List.of());
+    }
+
+    /** v2 — {@code --keys} 로 카탈로그 key 를 넘기고 그 이름의 파일을 기대한다. */
+    @Override
+    public void split(String gridImageKey, String outputPrefix, List<String> keys) throws Exception {
+        if (keys == null || keys.isEmpty()) {
+            throw new IllegalArgumentException("--keys 가 비었습니다(v2 후처리는 카탈로그 key 8개가 필요)");
+        }
+        split(gridImageKey, outputPrefix, keys, List.of("--keys", String.join(",", keys)));
+    }
+
+    private void split(String gridImageKey, String outputPrefix, List<String> expected, List<String> extraArgs) throws Exception {
         Path work = Files.createTempDirectory("zzal-post-");
         try {
             Path grid = work.resolve("grid.png");
             storage.download(gridImageKey, grid);
 
             Path out = work.resolve("out");
-            run(grid, out);
+            run(grid, out, extraArgs);
 
             List<String> uploaded = new ArrayList<>();
-            for (String state : states) {
+            for (String state : expected) {
                 Path file = out.resolve(state + ".webp");
                 if (!Files.exists(file)) {
                     // 목록 중 하나라도 없으면 실패로 본다. 빠진 채로 지급하면 화면이
@@ -97,9 +110,10 @@ public class PythonPostProcessor implements PostProcessor {
         }
     }
 
-    private void run(Path grid, Path out) throws IOException, InterruptedException {
-        ProcessBuilder pb = new ProcessBuilder(
-                pythonPath, scriptPath, grid.toString(), out.toString());
+    private void run(Path grid, Path out, List<String> extraArgs) throws IOException, InterruptedException {
+        List<String> cmd = new ArrayList<>(List.of(pythonPath, scriptPath, grid.toString(), out.toString()));
+        cmd.addAll(extraArgs);
+        ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         Process p = pb.start();
 

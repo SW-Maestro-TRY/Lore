@@ -19,4 +19,10 @@ public class FakePostProcessor implements PostProcessor {
         log.info("[가짜] 후처리 — grid={} → {}/*.webp", gridImageKey, outputPrefix);
         Thread.sleep(delayMillis);
     }
+
+    @Override
+    public void split(String gridImageKey, String outputPrefix, java.util.List<String> keys) throws InterruptedException {
+        log.info("[가짜] 후처리 v2 — grid={} → {}/{{{}}}.webp", gridImageKey, outputPrefix, String.join(",", keys));
+        Thread.sleep(delayMillis);
+    }
 }

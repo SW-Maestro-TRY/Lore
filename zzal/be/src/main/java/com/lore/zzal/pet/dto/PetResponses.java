@@ -3,6 +3,7 @@ package com.lore.zzal.pet.dto;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.UnlockRule;
+import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.pet.AwakeClock;
 import com.lore.zzal.pet.SleepKind;
 import com.lore.zzal.pet.TutorialSchedule;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -112,6 +114,11 @@ public final class PetResponses {
     public record TutorialStep(String key, Instant dueAt, boolean done, boolean current) {
     }
 
+    /** 앨범(api-v2.md 1.6) — 도감 18칸 + 엽서·장면(PR-9·11 전엔 빈 목록) + 첫 심화 기념. */
+    @Schema(description = "앨범 — 열린 동작 도감(기본/심화)·엽서·혼자 논 장면·첫 심화 기념")
+    public record Album(List<Motion> motions, List<Object> postcards, List<Object> scenes, FirstGift firstGift) {
+    }
+
     public record Tutorial(boolean active, long minutesSince, List<TutorialStep> steps) {
     }
 
@@ -158,17 +165,23 @@ public final class PetResponses {
             Settings settings,
             @Schema(description = "아기 시간표. 9단계가 다 끝나면 null") Tutorial tutorial) {
 
-        /** 조회 응답 — {@code justUnlocked} 없음. */
+        /** 조회 응답 — {@code justUnlocked} 없음, 동작 행 없음(심화 상태 전부 NONE). 테스트·간이용. */
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog) {
-            return from(pet, stepLabel, now, catalog, List.of());
+            return from(pet, stepLabel, now, catalog, Map.of(), List.of());
+        }
+
+        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
+                                  List<Integer> justUnlocked) {
+            return from(pet, stepLabel, now, catalog, Map.of(), justUnlocked);
         }
 
         /**
          * @param now          이 펫의 시각({@link ZzalPet#now}). 실제 시각이 아니다
+         * @param rows         zzal_motion 행(seq → 행). 심화 행동 상태의 재료. 없으면 NONE
          * @param justUnlocked 행동 응답에만 — 이번 행동으로 열린 2층 seq
          */
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
-                                  List<Integer> justUnlocked) {
+                                  Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked) {
             boolean hatching = pet.isHatching();
             boolean alive = pet.isAlive();
             if (!alive) {
@@ -224,7 +237,7 @@ public final class PetResponses {
                     new Today(pet.getTodayGames(), pet.getTodayPetCount(), pet.getTodayCareIntimacy(),
                             pet.getSnackStreak(), pet.isTodayBathDone()),
                     null,                                                   // 조각 — PR-10
-                    motions(pet, catalog),
+                    motions(pet, catalog, rows),
                     justUnlocked,
                     List.of(),                                              // 아침 도착 — PR-7
                     new FirstGift("LOCKED", Math.max(0, ZzalRules.FIRST_GIFT_DAYS - pet.getDaysTogether())),
@@ -239,8 +252,8 @@ public final class PetResponses {
                     tutorial);
         }
 
-        /** 18칸. 잠긴 칸도 이름+조건(플랜 T2 결정 4). 심화 행동 상태는 PR-5·7 에서 zzal_motion 행과 잇는다. */
-        static List<Motion> motions(ZzalPet pet, MotionCatalog catalog) {
+        /** 18칸. 잠긴 칸도 이름+조건(플랜 T2 결정 4). 심화 행동 상태는 zzal_motion 행에서(없으면 NONE). */
+        public static List<Motion> motions(ZzalPet pet, MotionCatalog catalog, Map<Integer, ZzalMotion> rows) {
             boolean v2 = "v2".equals(pet.getHatchPipelineVersion());
             return catalog.all().stream().map(spec -> {
                 boolean unlocked = UnlockRules.isUnlocked(pet, spec, catalog);
@@ -248,11 +261,14 @@ public final class PetResponses {
                 Progress progress = !unlocked && rule.hasProgress()
                         ? new Progress(Math.min(UnlockRules.current(pet, rule.kind(), catalog), rule.target()), rule.target())
                         : null;
+                ZzalMotion row = rows.get(spec.seq());
+                Advanced advanced = row == null ? Advanced.NONE
+                        : new Advanced(row.getStatus().name(), row.advancedImageKey(), row.getRevealedAt(), row.getSeenAt() != null);
                 return new Motion(spec.seq(), spec.key(), spec.label(), spec.layer().name(), unlocked,
                         basicImageKey(pet, spec, unlocked, v2),
                         unlocked ? null : rule.hint(),
                         progress,
-                        Advanced.NONE);
+                        advanced);
             }).toList();
         }
 

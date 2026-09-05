@@ -18,4 +18,10 @@ public interface PostProcessor {
      * @param outputPrefix 결과를 올릴 폴더. 여기에 idle.webp · eat.webp … 8개가 생긴다
      */
     void split(String gridImageKey, String outputPrefix) throws Exception;
+
+    /**
+     * v2 — 격자 한 장을 <b>카탈로그 key 이름</b>으로 자른다(8개). 파이썬에 {@code --keys} 로 넘긴다.
+     * 출력 = {@code {outputPrefix}/{key}.webp}. 두 장(grid·grid2)이면 두 번 부른다.
+     */
+    void split(String gridImageKey, String outputPrefix, java.util.List<String> keys) throws Exception;
 }

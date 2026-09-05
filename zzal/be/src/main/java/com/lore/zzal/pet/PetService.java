@@ -14,6 +14,8 @@ import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.ZzalMotion;
+import com.lore.zzal.motion.ZzalMotionRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 펫 생성·조회·돌봄·잠.
@@ -47,6 +51,7 @@ public class PetService {
     private final HatchService hatchService;
     private final ApplicationEventPublisher events;
     private final MotionCatalog catalog;
+    private final ZzalMotionRepository motionRepository;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -56,8 +61,10 @@ public class PetService {
                       S3Service s3Service,
                       HatchService hatchService,
                       ApplicationEventPublisher events,
-                      MotionCatalog catalog) {
+                      MotionCatalog catalog,
+                      ZzalMotionRepository motionRepository) {
         this.catalog = catalog;
+        this.motionRepository = motionRepository;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -129,6 +136,17 @@ public class PetService {
     @Transactional(readOnly = true)
     public List<ZzalPet> list(Long userId) {
         return petRepository.findByUserIdOrderByIdDesc(userId);
+    }
+
+    /**
+     * 그 펫의 동작 행(seq → 행). v2 부화 펫은 18행, v1 펫은 옛 seq(0부터) 행이라 카탈로그 seq 와 안 겹쳐 비어 보인다.
+     * 심화 행동 상태(`motions[].advanced`)의 재료. 읽기만 한다.
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, ZzalMotion> motionRows(Long petId) {
+        return motionRepository.findByPetIdOrderBySeqAsc(petId).stream()
+                .filter(m -> m.getLayer() != null)
+                .collect(Collectors.toMap(ZzalMotion::getSeq, m -> m, (a, b) -> a));
     }
 
     // ── 조회 = 정산 ───────────────────────────────────────────────────────

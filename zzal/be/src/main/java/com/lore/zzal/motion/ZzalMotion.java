@@ -16,6 +16,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 /**
  * 펫이 배운 움직임 하나. 16프레임 고급 동작이다.
@@ -118,6 +119,40 @@ public class ZzalMotion {
     @Column
     private Instant openedAt;
 
+    // ── v2 (정본 6장, 플랜 T1 스키마) — 추가 칸은 전부 nullable/default ─────
+
+    /** 어느 층인가. v1 행은 null. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private MotionLayer layer;
+
+    /** 기본 행동이 열린 시각(기록용 — 판정은 UnlockRules). 1층은 부화 시각. */
+    @Column
+    private Instant unlockedAt;
+
+    /** 어느 밤의 큐에 올랐나(KST 날짜). */
+    @Column
+    private LocalDate nightOf;
+
+    /** 맥미니 재생성 몇 번째인가(최대 2). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int regenRound;
+
+    /** 아침에 "배워왔어요" 로 공개된 시각. */
+    @Column
+    private Instant revealedAt;
+
+    /** 사용자가 확인한 시각(learnedToday 에서 빠짐). */
+    @Column
+    private Instant seenAt;
+
+    /** 스위프가 집어 간 시각·서버(여러 대 안전). */
+    @Column
+    private Instant claimedAt;
+
+    @Column(length = 60)
+    private String claimedBy;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -139,6 +174,37 @@ public class ZzalMotion {
         m.pipelineVersion = pipelineVersion;
         m.attempts = 0;
         return m;
+    }
+
+    /**
+     * 부화 완료 때 카탈로그 한 칸을 행으로 앉힌다(18행). 심화 행동은 아직 안 굽는다(NONE).
+     * 1층 8종은 부화 순간이 곧 열린 시각.
+     */
+    public static ZzalMotion forCatalog(Long petId, MotionSpec spec, Instant hatchedAt) {
+        ZzalMotion m = new ZzalMotion();
+        m.petId = petId;
+        m.seq = spec.seq();
+        m.name = spec.key();
+        m.layer = spec.layer();
+        m.status = MotionStatus.NONE;
+        m.attempts = 0;
+        if (spec.layer() == MotionLayer.BASIC_1) {
+            m.unlockedAt = hatchedAt;
+        }
+        return m;
+    }
+
+    /** 2층 기본 행동이 열린 순간(기록). */
+    public void markUnlocked(Instant at) {
+        if (unlockedAt == null) {
+            unlockedAt = at;
+        }
+    }
+
+    public void markSeen(Instant at) {
+        if (seenAt == null) {
+            seenAt = at;
+        }
     }
 
     /** 앞서 실패한 자리를 다시 굽는다. 시도 횟수와 판정 이력은 남긴다. */
@@ -260,6 +326,35 @@ public class ZzalMotion {
 
     public Instant getOpenedAt() {
         return openedAt;
+    }
+
+    public MotionLayer getLayer() {
+        return layer;
+    }
+
+    public Instant getUnlockedAt() {
+        return unlockedAt;
+    }
+
+    public LocalDate getNightOf() {
+        return nightOf;
+    }
+
+    public int getRegenRound() {
+        return regenRound;
+    }
+
+    public Instant getRevealedAt() {
+        return revealedAt;
+    }
+
+    public Instant getSeenAt() {
+        return seenAt;
+    }
+
+    /** 심화 행동 그림 키 규약(api-v2.md 2절). OPEN 일 때만. */
+    public String advancedImageKey() {
+        return status == MotionStatus.OPEN ? imageKey : null;
     }
 
     public Instant getCreatedAt() {
