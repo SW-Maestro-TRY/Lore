@@ -17,7 +17,7 @@ test('부화 중(HATCHING) — null 블록으로 렌더되고 폴링이 스스�
   // 알: 알 화면만. ALIVE 부품은 아직 하나도 없다.
   await expect(page.locator('[data-part="hatch"][data-hatch="waiting"]')).toBeVisible();
   for (const sel of ALIVE_PARTS) await expect(page.locator(sel)).toHaveCount(0);
-  expect(await status(page)).toBe('품는 중');
+  expect(await status(page)).toBe('egg');
 
   // 사람이 새로고침하지 않아도 폴링이 알아서 넘긴다(목은 3초).
   await expect(page.locator('[data-action="feed"]')).toBeVisible({ timeout: 15_000 });
@@ -32,7 +32,7 @@ test('부화 실패(FAILED) — 폴링이 실패를 물어 와도 안 죽고, �
 
   // 실패가 폴링으로 도착한다 — 만든 사람이 화면을 떠나지 않았는데 phase 가 바뀌는 유일한 자리.
   await expect(page.locator('[data-part="hatch"]')).toHaveAttribute('data-hatch', 'failed', { timeout: 15_000 });
-  expect(await status(page)).toBe('태어나지 못했어요');
+  expect(await status(page)).toBe('failed');
   // 원인(타임아웃·재시도 횟수)은 안 보여준다(정본 §15 5번) — 사용자 잘못이 아니라는 것이 먼저 읽혀야 한다.
   await expect(page.locator('[data-part="hatch"]')).toContainText('다른 그림을 올려 주세요');
   for (const sel of ALIVE_PARTS) await expect(page.locator(sel)).toHaveCount(0);

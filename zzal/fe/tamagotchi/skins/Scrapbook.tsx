@@ -622,7 +622,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
       {/* ★ 축하(parts/CelebrationModal) — 즉시 해금 폭죽·아침 도착 "배워왔어요". */}
       <CelebrationModal tama={tama} pc={pc} name={cur.name} onSave={(seq) => dex.find((d) => d.seq === seq)?.save()} />
 
-      {!!s.toast && <div style={L.toast}>{s.toast}</div>}
+      {!!s.toast && <div data-toast style={L.toast}>{s.toast}</div>}
 
       {/* 이 화면의 유일한 로그인 벽. 보고 만지는 것은 전부 열려 있고,
           "내 아이를 만든다" 는 순간에만 계정을 묻는다(useZzalSession.create). */}
