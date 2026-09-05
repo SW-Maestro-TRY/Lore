@@ -3737,3 +3737,12 @@
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* ---- 편집실로 가는 길은 원본에서 링크(<a>)다 --------------------------
+   여기서는 화면 안 이동이라 <button> 이어야 하는데(주소가 아니라 화면
+   상태를 바꾼다), 그러면 브라우저 기본 단추 껍데기가 붙어 글씨 링크가
+   상자로 보인다. 껍데기만 벗긴다 — 색·크기는 원본 규칙 그대로. */
+.webtoon-page button.works-edit {
+  padding: 0; border: 0; background: none;
+  font: inherit; font-size: .72rem; text-align: left; cursor: pointer;
+}

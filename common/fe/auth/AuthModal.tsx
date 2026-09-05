@@ -28,6 +28,14 @@ export interface AuthModalProps {
   onClose: () => void;
   /** 열 때 보여줄 탭. 기본은 로그인 — 대부분은 이미 계정이 있는 사람이다. */
   initialTab?: AuthTab;
+  /**
+   * 로그인·가입에 **성공했을 때만** 부른다. onClose 로는 이걸 알 수 없다 —
+   * 성공해서 닫히든 사용자가 물러나든 같은 콜백이라, 성공만 붙잡고 싶은
+   * 쪽(예: 웹툰 탭이 마이페이지로 보내는 것)이 구분할 방법이 없었다.
+   *
+   * 안 넘기면 아무 일도 안 일어난다 — 지금 부르는 자리는 전부 그대로다.
+   */
+  onSuccess?: (how: "login" | "signup") => void;
 }
 
 /** 서버(SignUp 요청 DTO)와 같은 기준. 여기서 먼저 걸러야 왕복 한 번을 아낀다. */
@@ -64,7 +72,7 @@ function messageOf(e: unknown): string {
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export default function AuthModal({ open, onClose, initialTab = "login" }: AuthModalProps) {
+export default function AuthModal({ open, onClose, onSuccess, initialTab = "login" }: AuthModalProps) {
   const [tab, setTab] = useState<AuthTab>(initialTab);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -196,6 +204,7 @@ export default function AuthModal({ open, onClose, initialTab = "login" }: AuthM
     try {
       await signIn({ email: trimmedEmail, password });
       track("auth_login_succeeded");
+      onSuccess?.("login");
       onClose();
     } catch (e) {
       track("auth_login_failed", { code: errorCodeOf(e) });
@@ -240,6 +249,7 @@ export default function AuthModal({ open, onClose, initialTab = "login" }: AuthM
         agreements: { TERMS: agree.terms, PRIVACY: agree.privacy, MARKETING: agree.marketing },
       });
       track("auth_signup_succeeded");
+      onSuccess?.("signup");
       onClose();
     } catch (e) {
       track("auth_signup_failed", { code: errorCodeOf(e) });
