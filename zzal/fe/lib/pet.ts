@@ -44,8 +44,21 @@ export type ChatSlot = 'BABY' | 'MORNING' | 'NOON' | 'EVENING';
 /** 동작이 어느 층인가. GIFT 는 카탈로그 밖 선물(구르기·뒤로 넘어짐, seq 101·102). */
 export type MotionLayer = 'BASIC_1' | 'BASIC_2' | 'GIFT';
 
-/** 심화 행동(16프레임)의 굽기·검수·공개 상태. 기본 행동(2프레임)과는 별개다. */
-export type AdvancedStatus = 'NONE' | 'QUEUED' | 'BAKING' | 'REVIEW' | 'LOCAL_REQUESTED' | 'OPEN' | 'FAILED';
+/**
+ * 심화 행동(16프레임)의 진행 — **사용자에게 하는 말 네 가지뿐**이다(계약 해석 29).
+ *
+ * ★ 서버 안쪽에는 BAKING·REVIEW·LOCAL_REQUESTED·FAILED 같은 운영 상태가 더 있지만
+ *   화면에는 안 내려온다. 전부 `PRACTICING`("아직 연습 중이에요") 하나로 접힌다.
+ *   운영 사정을 사용자에게 보여 주면 "검수 대기" 가 무슨 뜻인지 설명할 길이 없고,
+ *   실패를 아이 탓처럼 읽게 만든다.
+ */
+export type AdvancedStatus = 'NONE' | 'QUEUED' | 'PRACTICING' | 'OPEN';
+
+/**
+ * 이 아이가 지금 뭔가 연습하고 있는가(펫 단위 한 칸, 계약 해석 30).
+ * 화면의 "아직 연습 중이에요" 한 줄이 18칸을 뒤지지 않고 이것만 보면 되게 서버가 접어 준다.
+ */
+export type BakingState = 'NONE' | 'QUEUED' | 'PRACTICING';
 
 /** 친밀도 구간(정본 8장: 0~30 / 40~70 / 80~100). */
 export type IntimacyTier = 'LOW' | 'MID' | 'HIGH';
@@ -149,6 +162,7 @@ export interface MotionProgress {
 
 export interface AdvancedMotion {
   status: AdvancedStatus;
+  /** ★ **도착(revealedAt) 뒤에만** 채워진다. 검수 중인 그림은 어떤 경로로도 안 내려온다. */
   imageKey: string | null;
   revealedAt: string | null;
   seen: boolean;
@@ -311,6 +325,8 @@ export interface PetDetail {
   intimacy: Intimacy | null;
   today: Today | null;
   pieces: Pieces | null;
+  /** 지금 뭔가 연습하고 있는가(가장 앞선 상태 하나). ALIVE 가 아니면 null. */
+  baking: BakingState | null;
   /** 18칸 고정. ALIVE 가 아니면 빈 목록(타입은 방어용으로 null 을 남겨 둔다). */
   motions: Motion[] | null;
   /** 이 행동으로 방금 열린 2층 동작의 seq(폭죽). 행동 응답에만, 조회에는 []. */
