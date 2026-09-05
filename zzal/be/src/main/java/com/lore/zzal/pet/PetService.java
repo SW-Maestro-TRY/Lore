@@ -224,7 +224,8 @@ public class PetService {
             pet.markSceneMade();
         }
         // ★ 여행 중이면 소식(엽서)만 쌓인다 — 장면도 도착도 없다(방에 없으므로).
-        leaveService.writePostcard(pet, now);
+        //   밀린 몫까지 채운다(조회를 했든 안 했든 결과가 같아야 한다).
+        leaveService.fillPostcards(pet, now);
         pet.visit(now);
         reveal(pet, now);
         openPieces(pet, windowStart, now);
@@ -529,6 +530,9 @@ public class PetService {
         if (!pet.isTraveling()) {
             throw new BusinessException(ErrorCode.ZZAL_NOT_TRAVELING);
         }
+        // ★★ 데려오기 <b>전에</b> 밀린 엽서를 채운다(#235 리뷰 중-1). 여행 중 한 번도 앱을 안 연 사람은
+        //   이 자리가 유일한 기회다 — callBack 이 먼저 돌면 tripStartedAt 이 지워져 몇 장이었는지 알 수 없다.
+        leaveService.fillPostcards(pet, now);
         return withUnlockDiff(pet, () -> {
             pet.callBack(now);
             leaveService.deliverAll(petId, now);

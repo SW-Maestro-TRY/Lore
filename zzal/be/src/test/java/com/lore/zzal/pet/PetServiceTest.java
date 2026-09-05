@@ -96,7 +96,10 @@ class PetServiceTest {
             postcards.add(c);
             return c;
         });
-        when(postcardRepository.findByPetIdOrderBySeqAsc(any())).thenAnswer(i -> List.copyOf(postcards));
+        when(postcardRepository.findByPetIdOrderByWrittenAtAscIdAsc(any())).thenAnswer(i -> postcards.stream()
+                .sorted(java.util.Comparator.comparing(com.lore.zzal.leave.ZzalPostcard::getWrittenAt)
+                        .thenComparing(com.lore.zzal.leave.ZzalPostcard::getId))
+                .toList());
         service = new PetService(
                 petRepository,
                 jobRepository,
@@ -627,17 +630,43 @@ class PetServiceTest {
         void callBackDeliversPostcards() {
             ZzalPet pet = traveling();
             org.springframework.test.util.ReflectionTestUtils.setField(pet, "intimacyPeak", 300);
-            // 여행 중 엽서 두 장이 쌓였다
+            // 09-05 출발 → 09-07 이면 사흘째라 세 장(하루 한 장, 상한 3)
             service.refresh(USER_ID, PET_ID, kst("2026-09-06 12:00"));
             service.refresh(USER_ID, PET_ID, kst("2026-09-07 12:00"));
-            assertThat(postcards).hasSize(2);
+            assertThat(postcards).hasSize(3);
             assertThat(service.postcards(PET_ID)).as("여행 중에는 안 보인다").isEmpty();
 
             service.callBack(USER_ID, PET_ID, kst("2026-09-07 13:00"));
 
             assertThat(pet.isTraveling()).isFalse();
             assertThat(pet.getIntimacy()).isEqualTo(150);
-            assertThat(service.postcards(PET_ID)).as("재회하면 한꺼번에 전달").hasSize(2);
+            assertThat(service.postcards(PET_ID)).as("재회하면 한꺼번에 전달").hasSize(3);
+        }
+
+        @Test
+        @DisplayName("★★ 여행 중 한 번도 안 열고 부르면? — 밀린 엽서가 그 자리에서 다 채워진다")
+        void backfillsPostcardsOnCallBack() {
+            ZzalPet pet = traveling();          // 09-05 12:00 출발
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "intimacyPeak", 100);
+
+            // 닷새 동안 앱을 한 번도 안 열었다 — 첫 요청이 곧 부르기다
+            service.callBack(USER_ID, PET_ID, kst("2026-09-10 12:00"));
+
+            assertThat(postcards).as("조회를 안 했다고 소식이 없으면 이 기능이 있는 이유가 없다").hasSize(3);
+            assertThat(service.postcards(PET_ID)).hasSize(3);
+            // 각 엽서의 시각이 그 날짜여야 한다(전부 지금이 아니라)
+            assertThat(postcards.stream().map(c -> c.getWrittenAt().atZone(ZzalRules.ZONE).toLocalDate()).distinct())
+                    .as("하루 한 장이 기록에도 남아야 한다").hasSize(3);
+        }
+
+        @Test
+        @DisplayName("★ 여행 중에는 밤 큐가 아무것도 안 굽는다 — 돈이 나가는 경로")
+        void nothingBakesWhileTraveling() {
+            ZzalPet pet = traveling();
+            com.lore.zzal.night.NightPlanner realPlanner = new com.lore.zzal.night.NightPlanner(
+                    motionRepository, new MotionCatalog("", "", "v1"));
+
+            assertThat(realPlanner.plan(pet, java.time.LocalDate.of(2026, 9, 6))).isZero();
         }
 
         @Test

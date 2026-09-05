@@ -870,6 +870,23 @@ class ZzalPetTest {
         }
 
         @Test
+        @DisplayName("★ 두 번째 여행의 엽서는 옛 엽서 뒤에 온다 — 번호가 1부터 다시 시작해도")
+        void secondTripPostcardsComeAfter() {
+            // 번호(seq)만으로 정렬하면 두 번째 여행의 1번이 첫 여행의 3번보다 앞에 선다.
+            // 그래서 저장소는 쓴 시각으로 정렬한다(#235 리뷰 하-2). 여기서는 그 전제만 확인한다.
+            ZzalPet pet = absentFor(5);
+            pet.settle(at("2026-09-06 12:00"));
+            pet.settle(at("2026-09-08 12:00"));
+            assertThat(pet.isTraveling()).isTrue();
+            pet.wrotePostcard(at("2026-09-08 12:00"));
+            assertThat(pet.getPostcardCount()).isEqualTo(1);
+
+            pet.callBack(at("2026-09-09 12:00"));
+            assertThat(pet.getPostcardCount()).as("돌아오면 다음 여행을 위해 0으로")
+                    .isEqualTo(1);   // callBack 은 세지 않는다 — 다음 출발(judgeLeaving)에서 0이 된다
+        }
+
+        @Test
         @DisplayName("★ 엽서는 하루 한 장, 최대 3장")
         void postcardsOncePerDayMaxThree() {
             ZzalPet pet = absentFor(5);

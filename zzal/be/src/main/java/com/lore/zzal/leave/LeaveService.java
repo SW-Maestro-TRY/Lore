@@ -3,11 +3,14 @@ package com.lore.zzal.leave;
 import com.lore.zzal.chat.BanFilter;
 import com.lore.zzal.pet.Chance;
 import com.lore.zzal.pet.ZzalPet;
+import com.lore.zzal.pet.ZzalRules;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
@@ -35,28 +38,47 @@ public class LeaveService {
     }
 
     /**
-     * 여행 중이면 오늘 몫의 엽서를 쓴다.
+     * 여행 중이면 <b>밀린 몫까지</b> 엽서를 채운다(정본 9장 "1장/일, 최대 3").
      *
-     * ★ 며칠이 한꺼번에 지났어도 <b>한 번에 한 장</b>만 쓴다. "하루 한 장" 이 정본이고, 어차피 세 장에서
-     *   멈추므로 다음 조회에서 마저 채워진다. 몰아서 쓰면 날짜가 겹친 엽서가 생긴다.
+     * <h3>★★ 왜 "오늘 한 장" 이 아니라 밀린 몫인가</h3>
+     * 엽서는 <b>여행 중에 앱을 안 연 사람</b>을 위한 것이다. 그런데 "조회할 때 오늘 몫 한 장" 으로 만들면,
+     * 정작 한 번도 안 열고 닷새 만에 부른 사람은 <b>엽서를 한 장도 못 받는다</b>(#235 리뷰 중-1 실측: 0장).
+     * 그건 이 기능이 있는 이유를 정면으로 어긴다. 그래서 <b>출발한 날부터 지난 날수</b>로 몇 장이 왔어야 하는지를
+     * 계산해 그만큼 채운다 — 조회를 했든 안 했든 결과가 같다(시계 엔진의 lazy settle 과 같은 생각).
      *
-     * @return 이번에 쓴 장수(0 또는 1)
+     * ★ 각 엽서의 시각은 <b>그 날짜</b>다(전부 지금이 아니라). 안 그러면 세 장이 같은 시각에 찍혀
+     *   "하루 한 장" 이 기록에서 사라진다.
+     *
+     * @return 이번에 새로 쓴 장수(0~3)
      */
-    public int writePostcard(ZzalPet pet, Instant now) {
-        if (!pet.canWritePostcard(now)) {
+    public int fillPostcards(ZzalPet pet, Instant now) {
+        if (!pet.isAlive() || !pet.isTraveling()) {
             return 0;
         }
-        int seq = pet.getPostcardCount() + 1;
-        postcardRepository.save(ZzalPostcard.of(pet.getId(), seq, place(pet, seq), now));
-        pet.wrotePostcard(now);
-        log.debug("엽서 — petId={} {}번째", pet.getId(), seq);
-        return 1;
+        Instant start = pet.getTripStartedAt();
+        long elapsedDays = ChronoUnit.DAYS.between(
+                start.atZone(ZzalRules.ZONE).toLocalDate(), now.atZone(ZzalRules.ZONE).toLocalDate()) + 1;
+        int target = (int) Math.min(ZzalRules.POSTCARD_MAX, Math.max(0, elapsedDays));
+        int made = 0;
+        for (int seq = pet.getPostcardCount() + 1; seq <= target; seq++) {
+            Instant at = start.plus(Duration.ofDays(seq - 1L));
+            if (at.isAfter(now)) {
+                at = now;                       // 아직 안 온 날짜로는 안 적는다
+            }
+            postcardRepository.save(ZzalPostcard.of(pet.getId(), seq, place(pet, seq), at));
+            pet.wrotePostcard(at);
+            made++;
+        }
+        if (made > 0) {
+            log.debug("엽서 — petId={} {}장 채움(누적 {})", pet.getId(), made, pet.getPostcardCount());
+        }
+        return made;
     }
 
     /** 재회 — 모아 둔 엽서를 한꺼번에 전달한다(정본 9장 "재회 시 3장 전달"). */
     public int deliverAll(Long petId, Instant now) {
         int delivered = 0;
-        for (ZzalPostcard card : postcardRepository.findByPetIdOrderBySeqAsc(petId)) {
+        for (ZzalPostcard card : postcardRepository.findByPetIdOrderByWrittenAtAscIdAsc(petId)) {
             if (!card.isDelivered()) {
                 card.deliver(now);
                 delivered++;
@@ -67,7 +89,7 @@ public class LeaveService {
 
     /** 전달된 엽서만(앨범). 여행 중인 엽서는 안 보인다 — 그게 부르러 갈 이유다. */
     public List<ZzalPostcard> delivered(Long petId) {
-        return postcardRepository.findByPetIdOrderBySeqAsc(petId).stream()
+        return postcardRepository.findByPetIdOrderByWrittenAtAscIdAsc(petId).stream()
                 .filter(ZzalPostcard::isDelivered)
                 .toList();
     }
