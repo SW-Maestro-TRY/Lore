@@ -152,14 +152,23 @@ export interface Today {
   bathDone: boolean;
 }
 
-/** 3층 조각 4칸. 3층 전에는 null. */
+/**
+ * 3층 조각 4칸(정본 6장). 3층(2층 8종 다 연 다음 기상) 전에는 **블록 자체가 null** 이다.
+ *
+ * 네 칸이 무엇인지 — 밥 2회(`food`) · 간식 1회와 게임 1승(`play`) · 청소 1회와 목욕 1회(`clean`) ·
+ * 채팅 1회와 쓰다듬 2회(`bond`). ★ **판정은 잠들 때만** 한다(계약 해석 48).
+ */
 export interface Pieces {
   food: boolean;
   play: boolean;
   clean: boolean;
   bond: boolean;
-  /** 이틀 연속 카운트(0~2). */
+  /** 지금 채워진 칸 수(0~4). 네 칸을 직접 세지 말고 이 값을 쓴다. */
+  count: number;
+  /** 네 칸을 며칠 연속 채웠나(0~2). 2가 되는 밤에 다음 심화 하나가 큐에 오른다. */
   streak: number;
+  /** 기분 좋은 날의 선물 조각 — 네 칸 중 **가장 앞의 빈 칸**을 채운 것으로 친다. */
+  bonus: boolean;
 }
 
 export interface MotionProgress {
@@ -332,6 +341,11 @@ export interface PetDetail {
   intimacy: Intimacy | null;
   today: Today | null;
   pieces: Pieces | null;
+  /**
+   * 오늘이 "기분 좋은 날" 인가(정본 6장) — 어젯밤 잠들 때 케어 미스 0 + 세 게이지 2칸 이상.
+   * 조각 하나를 미리 받고 첫 부름이 살가워진다. 3층 전에는 항상 false(계약 해석 52).
+   */
+  goodDay: boolean | null;
   /** 지금 뭔가 연습하고 있는가(가장 앞선 상태 하나). ALIVE 가 아니면 null. */
   baking: BakingState | null;
   /** 18칸 고정. ALIVE 가 아니면 빈 목록(타입은 방어용으로 null 을 남겨 둔다). */
