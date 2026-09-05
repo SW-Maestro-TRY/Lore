@@ -76,6 +76,7 @@ public class WebtoonController {
     public ResponseEntity<byte[]> proxy(HttpServletRequest request,
                                         @RequestHeader HttpHeaders headers) throws IOException {
         HttpMethod method = HttpMethod.valueOf(request.getMethod());
+        boolean counted = false;
 
         // 만들기만 먼저 확인한다 — 시작한 뒤에 막으면 이미 돈이 나간 뒤다.
         // 나머지(읽기·목록·편집)는 그냥 지나간다.
@@ -85,6 +86,7 @@ public class WebtoonController {
             String blocked = guard.whyBlocked();
             if (blocked == null) {
                 blocked = guests.useOrBlock(request);
+                counted = blocked == null;      // 셌으면 실패했을 때 돌려줘야 한다
             }
             if (blocked != null) {
                 // 하네스가 사유를 한글로 적어 보내는 것과 **같은 모양**으로 답한다.
@@ -98,8 +100,17 @@ public class WebtoonController {
         }
 
         byte[] body = request.getInputStream().readAllBytes();
-        return gateway.forward(method, harnessPath(request.getRequestURI()),
-                               request.getQueryString(), body, headers);
+        ResponseEntity<byte[]> answer = gateway.forward(
+                method, harnessPath(request.getRequestURI()),
+                request.getQueryString(), body, headers);
+
+        // 시작조차 못 했으면 방금 센 한 편을 도로 물린다. 안 그러면 아무것도
+        // 못 만든 사람에게 "오늘 2편 다 쓰셨어요" 가 뜬다 — 만든 적이 없으니
+        // 거짓말이고, 로그인해도 오늘은 안 되는 줄 알게 된다.
+        if (counted && !answer.getStatusCode().is2xxSuccessful()) {
+            guests.refund(request);
+        }
+        return answer;
     }
 
     /**

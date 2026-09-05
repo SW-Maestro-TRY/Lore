@@ -109,6 +109,31 @@ public class GuestGate {
         return null;
     }
 
+    /**
+     * 방금 센 한 편을 도로 물린다 — <b>시작조차 못 했을 때만</b>.
+     *
+     * 몫은 넘기기 전에 먼저 센다(그래야 같은 순간에 몰려도 덜 샌다). 그런데
+     * 넘긴 뒤에 생성 서버가 안 받으면 만들어진 것은 없는데 몫만 줄어 있다.
+     * 그대로 두면 아무것도 못 만든 사람에게 <b>"오늘 2편 다 쓰셨어요"</b> 가
+     * 뜬다 — 만든 적이 없으니 그 말은 그냥 거짓말이고, 고칠 방법도 없어
+     * 보인다(로그인해도 오늘은 안 되는 줄 안다).
+     *
+     * 지금 서버에는 생성 하네스가 아예 없어서 만들기가 늘 실패한다. 이 되돌림이
+     * 없으면 <b>배포하자마자</b> 그 거짓말이 뜬다.
+     */
+    @Transactional
+    public void refund(HttpServletRequest request) {
+        if (loggedIn() || freePerDay <= 0) {
+            return;                          // 애초에 안 셌다
+        }
+        quotas.findByIpHashAndDay(hash(clientIp(request)), LocalDate.now(clock))
+                .filter(q -> q.getUsed() > 0)
+                .ifPresent(q -> {
+                    q.giveBack();
+                    quotas.save(q);
+                });
+    }
+
     /** 로그인해 있는가. {@code @LoginUser} 는 없으면 예외를 던지므로 직접 본다. */
     private boolean loggedIn() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

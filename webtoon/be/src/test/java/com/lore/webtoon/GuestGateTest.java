@@ -154,4 +154,28 @@ class GuestGateTest {
         assertThat(rows.values()).allSatisfy(row ->
                 assertThat(row.getIpHash()).doesNotContain("203.0.113.7"));
     }
+
+    @Test
+    @DisplayName("시작조차 못 했으면 도로 물린다 — 만든 적 없는 사람에게 「다 쓰셨어요」가 뜨면 안 된다")
+    void 실패하면_도로_물린다() {
+        GuestGate gate = gate(1, DAY1);
+        HttpServletRequest me = from("1.2.3.4");
+
+        assertThat(gate.useOrBlock(me)).isNull();
+        gate.refund(me);                                   // 생성 서버가 안 받았다
+        assertThat(gate.useOrBlock(me)).isNull();          // 그러니 다시 되어야 한다
+        assertThat(gate.useOrBlock(me)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("안 센 것은 안 물린다 — 0 밑으로 내려가면 무한이 된다")
+    void 안_센_것은_안_물린다() {
+        GuestGate gate = gate(1, DAY1);
+        HttpServletRequest me = from("1.2.3.4");
+
+        gate.refund(me);
+        gate.refund(me);
+        assertThat(gate.useOrBlock(me)).isNull();
+        assertThat(gate.useOrBlock(me)).isNotNull();       // 여전히 하루 1편이다
+    }
 }

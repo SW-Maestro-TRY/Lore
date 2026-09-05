@@ -90,4 +90,11 @@ public class GuestQuota {
     void use() {
         this.used++;
     }
+
+    /** 시작조차 못 한 한 편을 도로 물린다. 0 밑으로는 안 내려간다. */
+    void giveBack() {
+        if (this.used > 0) {
+            this.used--;
+        }
+    }
 }
