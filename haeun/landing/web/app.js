@@ -1543,6 +1543,13 @@ function renderNHProgress(s) {
     $("#mascotLine").textContent =
       `루가 그림을 그리고 있어요 (${s.art.done}/${s.art.total})`;
   }
+  // 검수가 도는 동안에는 그 사실만 말해 준다. 무엇을 어떻게 보고 있는지는
+  // 안 보여준다 — 기다리는 사람이 알고 싶은 것은 "왜 아직 안 끝났나" 이지,
+  // 몇 번 장면이 왜 걸렸는지가 아니다. 서버가 say 를 비우면 위 기본
+  // 문구로 돌아간다.
+  if (s.status === "running" && s.say) {
+    $("#mascotLine").textContent = s.say;
+  }
 
   $("#rail").innerHTML = (s.stages || []).map((key, i) => {
     const state = i < s.stage_index ? "done" : i === s.stage_index ? "active" : "todo";
@@ -1594,8 +1601,12 @@ function renderNHCards(directions) {
     card.innerHTML = NHReview.directionCardHtml(d);
     // 장면을 펴 보는 것과 이 방향을 고르는 것은 다른 행동이다 — 토글을
     // 눌렀을 뿐인데 선택까지 되면, 보려던 사람이 고른 것이 된다.
-    const toggle = card.querySelector("details");
-    if (toggle) toggle.addEventListener("click", e => e.stopPropagation());
+    //
+    // **카드 안의 모든 토글에 건다.** 첫 번째 것 하나만 걸어 두면 토글이
+    // 하나 더 붙는 날 그것만 조용히 새서, 펴 보려던 사람이 후보를 고른
+    // 것이 된다(실측으로 겪었다).
+    card.querySelectorAll("details")
+      .forEach(t => t.addEventListener("click", e => e.stopPropagation()));
     card.addEventListener("click", () => {
       $$("#nhPickCards .nh-card").forEach(c => c.classList.remove("picked"));
       card.classList.add("picked");
@@ -2342,31 +2353,6 @@ function paintResultPos() {
   el.textContent = prefix + body + tail;
 }
 
-/* 다 그린 뒤 한 번 읽어 본 판정(new_harness 의 episodecheck).
- *
- * **아무것도 막지 않고, 다시 그리지도 않는다.** 여기 있는 것은 "아무것도
- * 모르는 사람이 이 화면들만 넘겨 보면 이렇게 읽힌다" 하나다 — 만든 사람은
- * 자기가 무엇을 그리려 했는지 알고 보기 때문에, 그 눈으로는 안 보이는
- * 자리다. 그래서 지적보다 「읽은 대로」가 먼저 온다.
- *
- * 판정이 없으면 상자째 감춘다. classic(story-harness) 작품에는 이 단계가
- * 아예 없어서 늘 빈 값이 온다. */
-function paintEpisodeReview(review) {
-  const box = $("#resReview");
-  if (!box) return;
-  const r = review || null;
-  if (!r || !r.verdict) { box.hidden = true; box.innerHTML = ""; return; }
-  box.hidden = false;
-  const lines = [
-    r.read_as ? `<p class="nh-review-read">${esc(r.read_as)}</p>` : "",
-    r.matched ? `<p class="nh-review-read">그림만 본 사람이 놓치는 것 — ${esc(r.matched)}</p>` : "",
-  ].filter(Boolean).join("");
-  box.innerHTML = `
-    <h4>처음 보는 사람에게는 이렇게 읽혔습니다</h4>
-    ${lines}
-    ${NHReview.reviewHtml(r, { readAs: false })}`;
-}
-
 function paintResult(r) {
   $("#resGenre").textContent  = [r.genre, r.style_label].filter(Boolean).join(" · ");
   $("#resTitle").textContent  = r.title;
@@ -2431,7 +2417,6 @@ function paintResult(r) {
     paintArtQA();
   }
 
-  paintEpisodeReview(r.review);
   paintEpisodeTabs(r);
   // 편집실 링크도 지금 보고 있는 작품·회차로 맞춘다. 예전에는 늘 목업으로
   // 갔다 — 다 만들어 놓고 "편집실에서 열기"를 누르면 남의 샘플이 떴다.

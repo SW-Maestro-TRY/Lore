@@ -157,6 +157,8 @@ class NHJob:
     note: str = ""
     style: str = DEFAULT_STYLE
     stage: str = "story"
+    # 지금 하고 있는 일 한 줄. 비어 있으면 화면이 단계 기본 문구를 쓴다.
+    say: str = ""
     art_done: int = 0
     art_total: int = 0
     log: list[str] = field(default_factory=list)
@@ -195,6 +197,7 @@ class NHJob:
                 "stage_index": stage_i,
                 "stages": list(STAGES),
                 "stage_label": STAGE_LABEL.get(self.stage, self.stage),
+                "say": self.say,
                 "pct": max(0, min(100, pct)),
                 "art": art,
                 "log": self.log[-60:],
@@ -273,6 +276,15 @@ class NHJob:
             self.save()
 
 
+# 검수가 도는 동안 화면에 띄울 한 줄. **무엇을 어떻게 검수하는지는 안
+# 말한다** — 기다리는 사람이 알고 싶은 것은 "지금 뭘 하고 있고, 왜 아직
+# 안 끝났나" 뿐이다. 어느 장면이 왜 걸렸는지는 만드는 쪽 사정이다.
+SAY_REVIEW_STORY = "루가 이야기를 검수하고 있어요"
+SAY_REVIEW_PAGE = "루가 방금 그린 그림을 검수하고 있어요"
+SAY_REDRAW = "검수에서 걸려서 다시 그리고 있어요"
+SAY_REVIEW_EPISODE = "루가 완성본을 처음부터 읽어보고 있어요"
+
+
 def _on_rest_line(job: NHJob, line: str) -> None:
     """2·3단계 진행 중 stdout 한 줄 -> 화면에 보여줄 단계(job.stage) 갱신."""
     # 구체화·컷 대본·컷 대본 픽스·콘티는 화면에서 한 걸음("콘티")으로 묶어
@@ -289,10 +301,26 @@ def _on_rest_line(job: NHJob, line: str) -> None:
         job.stage = "sheet"
     elif line.startswith("[페이지"):
         job.stage = "pages"
+    # 검수 — 단계(stage)는 안 바꾼다. 검수는 그 단계 **안에서** 일어나는
+    # 일이라, 걸음을 하나 더 만들면 진행 막대가 뒤로 갔다 오는 것처럼 보인다.
+    # 대신 지금 하고 있는 일 한 줄(job.say)만 바꾼다.
+    stripped = line.strip()
+    if stripped.startswith("[이야기 검수]"):
+        job.say = SAY_REVIEW_STORY
+    elif stripped.startswith("[화 검수]"):
+        job.say = SAY_REVIEW_EPISODE
+    elif stripped.startswith("[검수]"):
+        # "다시 그립니다" 는 사람이 기다리는 시간이 늘어나는 유일한 자리라
+        # 따로 말해 준다 — 안 그러면 왜 같은 장에서 오래 머무는지 모른다.
+        job.say = SAY_REDRAW if "다시 그립니다" in stripped else SAY_REVIEW_PAGE
+
     m = RE_PAGE.match(line)
     if m:
         job.art_done = int(m.group(1)) - 1
         job.art_total = int(m.group(2))
+        # 새 장을 그리기 시작하면 검수 문구를 지운다 — 안 지우면 그림을
+        # 그리는 내내 "검수하고 있어요" 가 남는다.
+        job.say = ""
 
 
 def _extract_run_id(job: NHJob) -> str | None:
@@ -341,7 +369,7 @@ def _run_story_phase(job: NHJob) -> None:
         if not directions:
             return _fail(job, "이야기 후보를 하나도 못 읽었습니다 — story.md 를 확인하세요")
 
-        job.directions = attach_story_review(run_id, directions)
+        job.directions = directions
         job.save()
     except Exception as exc:                            # noqa: BLE001
         return _fail(job, f"{type(exc).__name__}: {exc}")
@@ -376,7 +404,7 @@ def _run_restory_phase(job: NHJob) -> None:
         if not directions:
             return _fail(job, "이야기 후보를 하나도 못 읽었습니다 — story.md 를 확인하세요")
 
-        job.directions = attach_story_review(job.run_id, directions)
+        job.directions = directions
         job.pick = None
         job.status = STATUS_AWAITING_PICK
         job.save()
@@ -460,60 +488,6 @@ def _run_pages_phase(job: NHJob) -> None:
         job.save()
     except Exception as exc:                            # noqa: BLE001
         _fail(job, f"{type(exc).__name__}: {exc}")
-
-
-# --------------------------------------------------------------------------- #
-# 하네스가 남긴 자가검수 판정을 화면 쪽으로 옮기는 자리
-# --------------------------------------------------------------------------- #
-#
-# 두 판정 모두 **아무것도 막지 않는다.** 이야기 후보 검수는 사람이 고르는
-# 카드 옆에 붙고, 화 전체 검수는 완성본 화면에 붙는다 — 읽고 판단하는 것은
-# 사람이다. 파일이 없으면(검수를 껐거나, 옛 run 이거나, 호출이 실패했거나)
-# 조용히 비운다: 화면은 판정 칸이 통째로 안 뜬다.
-
-def story_review(run_id: str) -> dict[str, Any]:
-    """`story_review.json` -> {후보번호: 판정}. 없으면 빈 dict."""
-    doc = _read_json_safe(run_dir(run_id), "story_review.json")
-    out: dict[int, Any] = {}
-    for one in (doc.get("candidates") or []):
-        if isinstance(one, dict):
-            try:
-                out[int(one.get("n"))] = one
-            except (TypeError, ValueError):
-                continue
-    return out
-
-
-def attach_story_review(run_id: str, directions: list[dict]) -> list[dict]:
-    """후보 목록에 판정을 하나씩 얹는다 — 화면은 `d.review` 하나만 보면 된다.
-
-    후보를 **복사해서** 얹는다. directions.json 을 그대로 들고 있는 곳이
-    여럿이라(job.directions·state.json), 원본에 섞어 두면 다음에 그 파일을
-    다시 읽었을 때 판정이 있는 판과 없는 판이 갈린다.
-    """
-    if not run_id:
-        return directions
-    got = story_review(run_id)
-    if not got:
-        return directions
-    out = []
-    for d in directions:
-        if not isinstance(d, dict):
-            continue
-        one = dict(d)
-        review = got.get(d.get("n"))
-        # `없음`(모델이 그 후보를 빼먹은 것)은 안 붙인다 — 빈 판정을 붙이면
-        # 화면이 "검수했는데 문제 없음" 처럼 보여 준다. 그 둘은 다르다.
-        if review and review.get("verdict") in ("통과", "주의"):
-            one["review"] = review
-        out.append(one)
-    return out
-
-
-def episode_review(run_id: str) -> dict[str, Any]:
-    """`episode_review.json`. 없으면 빈 dict."""
-    doc = _read_json_safe(run_dir(run_id), "episode_review.json")
-    return doc if doc.get("verdict") in ("통과", "주의") else {}
 
 
 def _clear_sheet(run_id: str) -> None:
@@ -945,9 +919,6 @@ def result_by_run(run_id: str) -> dict[str, Any]:
         "stage_times": [],
         "seconds": None,
         "layout_mode": "fast",
-        # 다 그린 뒤 한 번 읽어 본 판정(episodecheck). 없으면 빈 dict 이고,
-        # 화면은 그 자리를 통째로 안 그린다.
-        "review": episode_review(run_id),
     }
 
 

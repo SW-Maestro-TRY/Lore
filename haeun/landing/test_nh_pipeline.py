@@ -246,53 +246,44 @@ def _raises_value_error(fn) -> bool:
     return False
 
 
-def test_self_review_attach() -> None:
-    """자가검수 판정이 화면 쪽으로 넘어가는 자리.
+def test_review_say() -> None:
+    """검수가 도는 동안 화면에 띄우는 한 줄.
 
-    두 판정 모두 **아무것도 막지 않는다** — 없으면 없는 채로 흘러가고,
-    있으면 후보 카드와 완성본 화면에 붙는다. 그 둘이 화면에서 같아
-    보이면 안 되므로(「검수했는데 문제 없음」 ≠ 「검수를 안 했음」),
-    없을 때 정말 아무것도 안 붙는지까지 본다.
+    사용자에게 보여주는 것은 **"지금 검수 중이다 / 걸려서 다시 그린다"**
+    까지다. 어느 장면이 왜 걸렸는지는 만드는 쪽 사정이라 안 보여준다.
+    그리고 검수는 단계(stage)를 안 바꾼다 — 걸음을 하나 더 만들면 진행
+    막대가 뒤로 갔다 오는 것처럼 보인다.
     """
     root = Path(tempfile.mkdtemp())
     try:
-        NP.NEW_HARNESS = root
-        d = root / "runs" / "r1"
-        d.mkdir(parents=True)
-        directions = [{"n": 1, "title": "가"}, {"n": 2, "title": "나"},
-                      {"n": 3, "title": "다"}]
+        job = NP.NHJob(id="j", form={}, dir=root)
+        job.stage = "pages"
 
-        # 판정 파일이 없으면 후보를 그대로 흘려보낸다 (옛 run · 검수 껐을 때)
-        check("판정이 없으면 그대로", NP.attach_story_review("r1", directions), directions)
-        check("판정이 없으면 완성본에도 안 붙는다", NP.episode_review("r1"), {})
+        NP._on_rest_line(job, "[이야기 검수] openai:gpt-4.1 로 후보 4개를 독자의 눈으로 읽습니다…")
+        check("이야기 검수 중", job.say, NP.SAY_REVIEW_STORY)
 
-        (d / "story_review.json").write_text(json.dumps({"candidates": [
-            {"n": 1, "verdict": "주의", "read_as": "읽은 대로",
-             "counts": {"critical": 1, "major": 0, "minor": 0},
-             "issues": [{"scene": 2, "kind": "지식", "severity": "critical",
-                         "what": "알 길이 없다"}]},
-            {"n": 2, "verdict": "통과", "read_as": "", "counts": {}, "issues": []},
-            # 모델이 빼먹은 후보. 빈 판정을 붙이면 화면이 "검수했는데 문제
-            # 없음" 처럼 보여 준다 — 그래서 안 붙인다.
-            {"n": 3, "verdict": "없음", "issues": []}]},
-            ensure_ascii=False), encoding="utf-8")
+        NP._on_rest_line(job, "  [검수] openai:gpt-4.1 · 그림 2장 …")
+        check("그림 검수 중", job.say, NP.SAY_REVIEW_PAGE)
+        check("검수는 단계를 안 바꾼다", job.stage, "pages")
 
-        got = NP.attach_story_review("r1", directions)
-        check("판정이 있는 후보에 붙는다", got[0]["review"]["verdict"], "주의")
-        check("문제가 없어도 붙는다", got[1]["review"]["verdict"], "통과")
-        ok("판정 없음은 안 붙는다", "review" not in got[2])
-        ok("원본은 안 건드린다", "review" not in directions[0])
+        NP._on_rest_line(job, "  [검수] 다시 그립니다 (1/1)")
+        check("걸리면 다시 그린다고 말한다", job.say, NP.SAY_REDRAW)
 
-        (d / "episode_review.json").write_text(json.dumps({
-            "verdict": "주의", "read_as": "이렇게 읽힌다",
-            "counts": {"critical": 1, "major": 0, "minor": 0},
-            "issues": [{"page": 4, "kind": "글자", "severity": "critical",
-                        "what": "글자가 뭉개졌다"}]}, ensure_ascii=False), encoding="utf-8")
-        check("완성본 판정을 읽는다", NP.episode_review("r1")["verdict"], "주의")
+        # 새 장을 그리기 시작하면 검수 문구는 사라진다 — 안 지우면 그리는
+        # 내내 "검수하고 있어요" 가 남는다.
+        NP._on_rest_line(job, "[장면 3/5] 참조 2장 …")
+        check("새 장을 그리면 지워진다", job.say, "")
+        check("장 수는 그대로 센다", (job.art_done, job.art_total), (2, 5))
 
-        # 깨진 파일은 없는 것과 같이 다룬다 — 화면에 반쪽 판정을 띄우느니 안 띄운다
-        (d / "episode_review.json").write_text("{ 부서짐", encoding="utf-8")
-        check("깨진 판정은 없는 것으로", NP.episode_review("r1"), {})
+        NP._on_rest_line(job, "[화 검수] openai:gpt-4.1 로 6장을 처음부터 읽습니다…")
+        check("완성본 검수 중", job.say, NP.SAY_REVIEW_EPISODE)
+
+        # 판정 세부(무엇이 몇 건)는 화면에 안 나간다
+        ok("판정 세부는 문구에 없다",
+           all("critical" not in t and "장면" not in t
+               for t in (NP.SAY_REVIEW_STORY, NP.SAY_REVIEW_PAGE,
+                         NP.SAY_REDRAW, NP.SAY_REVIEW_EPISODE)))
+        ok("snapshot 이 실어 보낸다", "say" in job.snapshot())
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -300,7 +291,7 @@ def test_self_review_attach() -> None:
 def main() -> int:
     for fn in (test_serial_execution, test_position, test_cancel_while_queued,
                test_pick_guards_against_double_queue, test_review_order,
-               test_self_review_attach):
+               test_review_say):
         fn()
     if fails:
         print("FAILED:")
