@@ -224,6 +224,10 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int feeds;
 
+    /** 쓰다듬기 누적(튜토리얼 3분 판정). 하루 3회 인정과는 별개. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int pets;
+
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int cleans;
 
@@ -342,6 +346,9 @@ public class ZzalPet {
         this.settledAt = now.truncatedTo(ChronoUnit.SECONDS);
         this.wokeAt = now;
         this.lastSeenAt = now;
+        // "N일째 함께" — 부화한 날이 1일째(api-v2.md 2절 예시).
+        this.daysTogether = 1;
+        this.lastVisitDate = AwakeClock.dateOf(now);
     }
 
     public void markHatchFailed() {
@@ -730,6 +737,7 @@ public class ZzalPet {
 
     /** 쓰다듬기. 행복 0, 친밀도 +5(하루 3회까지). 넘어도 반응 동작은 나온다(16장) — 그래서 거절하지 않는다. */
     public void pet(Instant now) {
+        pets += 1;
         if (todayPetCount < ZzalRules.PET_INTIMACY_PER_DAY) {
             todayPetCount += 1;
             addIntimacy(ZzalRules.PET_INTIMACY);
@@ -785,6 +793,40 @@ public class ZzalPet {
     private void addIntimacy(int by) {
         intimacy = Math.min(ZzalRules.INTIMACY_MAX, intimacy + by);
         intimacyPeak = Math.max(intimacyPeak, intimacy);
+    }
+
+    // ── 방문·성격·꾸미기·공유 (정본 3·10·15장) ───────────────────────────
+
+    /**
+     * 앱을 열었다. <b>그날(KST) 처음이면 함께한 날 +1</b>(정본 3장·16장 "기상 전이라도"). 여행 중 제외는 PR-11.
+     *
+     * @return 오늘 처음 연 것인가
+     */
+    public boolean visit(Instant now) {
+        lastSeenAt = now;
+        LocalDate today = AwakeClock.dateOf(now);
+        if (today.equals(lastVisitDate)) {
+            return false;
+        }
+        lastVisitDate = today;
+        daysTogether += 1;
+        return true;
+    }
+
+    /** 성격 그룹·세계관 한 줄. 언제든 바꾼다(정본 10장). */
+    public void choosePersonality(Personality personality, String world) {
+        this.personality = personality;
+        this.world = world == null || world.isBlank() ? null : world;
+    }
+
+    /** 배경 바꾸기. 열렸는지는 서비스가 묻는다(2층 4종). 값은 검증하지 않는다(해석 6). */
+    public void changeBackground(String background) {
+        this.background = background;
+    }
+
+    /** 다운로드·공유 — 서버는 횟수만 센다(튜토리얼 25분의 "했다" 가 되는 사실). 돌봄이 아니라 lastCaredAt 은 안 찍는다. */
+    public void share() {
+        shares += 1;
     }
 
     // ── 보상 (후기·미니게임) ──────────────────────────────────────────────
@@ -977,6 +1019,10 @@ public class ZzalPet {
 
     public int getFeeds() {
         return feeds;
+    }
+
+    public int getPets() {
+        return pets;
     }
 
     public int getCleans() {

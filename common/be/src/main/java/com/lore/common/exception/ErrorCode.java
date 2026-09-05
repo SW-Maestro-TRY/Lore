@@ -60,16 +60,6 @@ public enum ErrorCode {
     ZZAL_MOTION_NOT_OPEN(HttpStatus.CONFLICT, "아직 배우지 않은 동작이에요"),
     ZZAL_REGEN_NOT_REQUESTED(HttpStatus.CONFLICT, "다시 굽기를 요청한 동작이 아니에요"),
 
-    // ── v1 전용. 훈련·잠 길이표가 정본에서 사라져 쓸 곳이 없다. ──────────────
-    // ★ 아직 지우지 않는 이유 — v1 컨트롤러·서비스가 살아 있는 동안은 컴파일이 깨진다.
-    //   v1 경로를 걷어내는 PR(#192 PR-3)에서 아래 다섯 줄을 함께 지운다.
-    //   프론트 common/fe/api/client.ts 의 코드 유니온도 그때 같이 갱신한다.
-    @Deprecated ZZAL_PET_STILL_SLEEPING(HttpStatus.CONFLICT, "아직 자고 있어요"),
-    @Deprecated ZZAL_TRAIN_IN_PROGRESS(HttpStatus.CONFLICT, "연습하고 있어요"),
-    @Deprecated ZZAL_TRAIN_ENOUGH(HttpStatus.CONFLICT, "오늘 연습은 충분해요"),
-    @Deprecated ZZAL_TRAIN_NOT_ENOUGH(HttpStatus.CONFLICT, "연습이 더 필요해요"),
-    @Deprecated ZZAL_ALL_UNLOCKED(HttpStatus.CONFLICT, "이미 다 배웠어요"),
-
     // 놓아주기 (zzal) — 부화 중에는 보낼 수 없다. 알을 보내면 뒤에서 굽고 있는 생성이
     // 주인 없는 일이 되어, 돈은 나가는데 받을 펫이 없는 상태로 끝난다.
     ZZAL_PET_RELEASE_NOT_ALLOWED(HttpStatus.CONFLICT, "부화가 끝난 뒤에 보낼 수 있어요"),

@@ -9,6 +9,7 @@ import com.lore.zzal.generation.GenJobRepository;
 import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.StepLabels;
+import com.lore.zzal.motion.MotionCatalog;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -68,7 +69,8 @@ class PetServiceTest {
                 userRepository,
                 s3Service,
                 hatchService,
-                mock(ApplicationEventPublisher.class));
+                mock(ApplicationEventPublisher.class),
+                new MotionCatalog("", "", "v1"));
     }
 
     /** T0(정오) 에 부화한 아기. */
@@ -249,6 +251,81 @@ class PetServiceTest {
         void notMine() {
             child();
             assertCode(() -> service.advanceClock(99L, PET_ID, Duration.ofHours(1), T0), ErrorCode.ZZAL_PET_NOT_FOUND);
+        }
+    }
+
+
+    @Nested
+    @DisplayName("함께한 날 — 앱을 연 날만 +1 (정본 3·16장)")
+    class Visits {
+
+        @Test
+        @DisplayName("★ 부화한 날이 1일째. 다음 날 처음 열면 2, 같은 날 또 열어도 2. 기상 전(자는 중)이라도 센다")
+        void countsCalendarDaysOpened() {
+            ZzalPet pet = baby();
+            assertThat(pet.getDaysTogether()).isEqualTo(1);
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 20:00"));
+            assertThat(pet.getDaysTogether()).isEqualTo(1);
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 08:00"));   // 자는 중(23:00 자동 취침)
+            assertThat(pet.isSleeping()).isTrue();
+            assertThat(pet.getDaysTogether()).isEqualTo(2);
+            service.care(USER_ID, PET_ID, CareAction.PET, kst("2026-09-06 11:00"));
+            assertThat(pet.getDaysTogether()).isEqualTo(2);
+        }
+    }
+
+    @Nested
+    @DisplayName("성격·배경·공유")
+    class PersonalityBackgroundShare {
+
+        @Test
+        @DisplayName("성격은 언제든, 자는 중에도")
+        void personalityAnytime() {
+            ZzalPet pet = baby();
+            service.choosePersonality(USER_ID, PET_ID, Personality.LIVELY, "구름 위 마을", kst("2026-09-06 00:00"));
+            assertThat(pet.isSleeping()).isTrue();
+            assertThat(pet.getPersonality()).isEqualTo(Personality.LIVELY);
+            assertThat(pet.getWorld()).isEqualTo("구름 위 마을");
+            service.choosePersonality(USER_ID, PET_ID, Personality.COOL, "  ", kst("2026-09-06 00:01"));
+            assertThat(pet.getWorld()).isNull();
+        }
+
+        @Test
+        @DisplayName("배경은 2층 4종 전엔 ZZAL_FEATURE_LOCKED")
+        void backgroundLocked() {
+            ZzalPet pet = baby();
+            assertCode(() -> service.changeBackground(USER_ID, PET_ID, "window_day", T0), ErrorCode.ZZAL_FEATURE_LOCKED);
+            assertThat(pet.getBackground()).isEqualTo("room");
+        }
+
+        @Test
+        @DisplayName("공유 — 열린 동작만. 잠긴 2층·모르는 key 는 둘 다 ZZAL_MOTION_NOT_OPEN(구분해 주면 key 를 훑는 수단)")
+        void shareOnlyUnlocked() {
+            ZzalPet pet = baby();
+            service.share(USER_ID, PET_ID, "base", T0);
+            assertThat(pet.getShares()).isEqualTo(1);
+            assertCode(() -> service.share(USER_ID, PET_ID, "tilt", T0), ErrorCode.ZZAL_MOTION_NOT_OPEN);
+            assertCode(() -> service.share(USER_ID, PET_ID, "nope", T0), ErrorCode.ZZAL_MOTION_NOT_OPEN);
+        }
+    }
+
+    @Nested
+    @DisplayName("즉시 해금 — 행동 응답의 justUnlocked (정본 6장)")
+    class JustUnlocked {
+
+        @Test
+        @DisplayName("★ 재우기·깨우기 합쳐 3회가 되는 그 행동에 '자기'(11)가 실린다. 그 전엔 비어 있다")
+        void sleepWakeThreeTimes() {
+            ZzalPet pet = baby();
+            Instant t40 = T0.plus(Duration.ofMinutes(40));
+            PetService.Action a1 = service.sleep(USER_ID, PET_ID, t40);                       // 1
+            assertThat(a1.justUnlocked()).isEmpty();
+            PetService.Action a2 = service.wake(USER_ID, PET_ID, t40.plus(Duration.ofMinutes(5)));   // 2
+            assertThat(a2.justUnlocked()).isEmpty();
+            PetService.Action a3 = service.sleep(USER_ID, PET_ID, kst("2026-09-05 19:00"));  // 3 → 자기
+            assertThat(a3.justUnlocked()).containsExactly(11);
+            assertThat(UnlockRules.isUnlocked(pet, new MotionCatalog("", "", "v1").bySeq(11).orElseThrow(),
+                    new MotionCatalog("", "", "v1"))).isTrue();
         }
     }
 

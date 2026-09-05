@@ -90,14 +90,14 @@ class MotionCatalogTest {
     }
 
     @Test
-    @DisplayName("v1 행 호환 — 카탈로그에 없는 옛 이름은 그 이름의 파일을 그대로 찾는다")
-    void legacyNameFallsBackToFile() {
+    @DisplayName("카탈로그에 없는 이름의 지시문은 찾지 않는다 — 가능한 값을 말하며 거절(v1 옛 이름 폴백은 PR-3 에서 제거)")
+    void unknownKeyIsRejected() {
         MotionCatalog catalog = new MotionCatalog("", "", "v1");
 
-        // v1 실물 파일. PR-3 에서 v1 경로가 사라지면 이 폴백도 같이 걷어낸다.
-        assertThat(catalog.block("교감1_머리쓰다듬")).isNotBlank();
-        assertThatThrownBy(() -> catalog.block("없는_동작"))
-                .hasMessageContaining("zzal/prompt/v1/motions/없는_동작.txt");
+        assertThatThrownBy(() -> catalog.block("교감1_머리쓰다듬"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("카탈로그에 없는 동작")
+                .hasMessageContaining("base");
     }
 
     @Test
