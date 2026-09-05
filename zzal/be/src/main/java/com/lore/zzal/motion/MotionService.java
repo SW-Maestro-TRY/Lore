@@ -32,8 +32,10 @@ import java.util.List;
  *
  * <h3>★ 한 장씩 굽는다</h3>
  * 여러 장을 굽고 그중 고르는 방식도 있지만, 동작 하나가 격자 한 장이라 장수만큼 돈이 곱해진다.
- * 원장 통과율이 95.7% 라 기대 장수는 약 1.05장이다 — <b>한 장 굽고 실패하면 다시</b> 가 싸다
- * (2026-09-03 상훈님 확정, 최대 3번).
+ * 원장 통과율이 95.7% 라 기대 장수는 약 1.05장이다 — <b>한 장 굽고 실패하면 다시</b> 가 싸다.
+ *
+ * ★ 정본 6장은 <b>API 1회</b>다({@code app.zzal.max-motion-attempts: 1}). API 로 반복하면 같은 돈이 두세 배로 나가고,
+ *   재생성은 돈이 안 드는 맥미니(codex)가 맡는다 — 그 배선은 PR-7.
  */
 @Service
 public class MotionService {
@@ -78,15 +80,48 @@ public class MotionService {
      */
     @Async("hatchExecutor")
     public void bake(Long motionId) {
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            if (runAttempt(motionId, attempt)) {
-                return;
+        bakeNow(motionId);
+    }
+
+    /**
+     * 같은 일을 부른 스레드에서. 밤 스위프는 자기 실행기(nightExecutor)에서 이걸 부른다 — hatchExecutor 를 부화와 안 나눈다.
+     *
+     * <h3>★★ 어떤 예외가 나도 여기서 끝을 낸다</h3>
+     * 이 메서드는 <b>남의 스레드에서</b> 돈다. 예외가 그대로 탈출하면 부르는 쪽이 없어 아무도 못 받고,
+     * 그 행은 스위프가 이미 {@code BAKING} 으로 집어 둔 상태라 <b>영영 그 자리에 남는다</b> —
+     * 다음 밤 계획은 {@code NONE}·{@code FAILED} 만 보고, 스위프의 claim 은 {@code QUEUED} 만 본다.
+     * 실제로 지시문 파일 하나가 없어서 이 일이 났다(2026-09-05 리뷰 주입 INJ-C).
+     * 그래서 {@code try/catch} 로 감싸 <b>무엇이 터지든 {@code FAILED}</b> 로 내린다 — 다음 밤에 다시 오른다(정본 16장).
+     */
+    public void bakeNow(Long motionId) {
+        try {
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                if (runAttempt(motionId, attempt)) {
+                    return;
+                }
+                log.warn("모션 실패 — motionId={} attempt={}/{}", motionId, attempt, maxAttempts);
             }
-            log.warn("모션 실패 — motionId={} attempt={}/{}", motionId, attempt, maxAttempts);
+        } catch (RuntimeException | Error e) {
+            // 지시문 누락·S3·OpenAI·DB — 무엇이든 여기로 온다. 로그만 남기고 두면 BAKING 고착이다.
+            log.error("모션 굽기 중 예외 — motionId={} 를 FAILED 로 내립니다(다음 밤에 다시 오릅니다)", motionId, e);
+            markFailedQuietly(motionId);
+            return;
         }
-        // 다 써도 못 구웠다. 사용자에게는 안 보이고, 상훈님이 나중에 다시 구워 넣으실 수 있다.
-        motionRecorder.markFailed(motionId);
+        // 다 써도 못 구웠다. 사용자에게는 안 보이고, 다음 밤에 같은 동작이 다시 오른다.
+        markFailedQuietly(motionId);
         log.warn("모션 실패 확정 — motionId={} 시도={}회", motionId, maxAttempts);
+    }
+
+    /**
+     * 실패 기록마저 실패해도 이 스레드는 조용히 끝난다 — 여기서 예외가 또 나면 그 행은 다시 BAKING 고착이다.
+     * 그 경우는 {@code StuckMotionRecovery} 가 유예 뒤 회수한다.
+     */
+    private void markFailedQuietly(Long motionId) {
+        try {
+            motionRecorder.markFailed(motionId);
+        } catch (RuntimeException | Error e) {
+            log.error("모션 실패 기록마저 실패 — motionId={} (기동 복구가 회수합니다)", motionId, e);
+        }
     }
 
     /** 한 번 굽는다. 성공하면 게이트에 물어보고 열어 준다. */

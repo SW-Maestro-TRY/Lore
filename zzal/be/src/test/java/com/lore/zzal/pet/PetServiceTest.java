@@ -78,7 +78,8 @@ class PetServiceTest {
                 mock(ApplicationEventPublisher.class),
                 new MotionCatalog("", "", "v1"),
                 motionRepository,
-                seeder);
+                seeder,
+                mock(com.lore.zzal.night.NightPlanner.class));
     }
 
     /** T0(정오) 에 부화한 아기. */

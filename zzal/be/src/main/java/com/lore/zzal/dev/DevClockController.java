@@ -5,6 +5,7 @@ import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.common.response.ApiResponse;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.night.NightSweep;
 import com.lore.zzal.pet.AwakeClock;
 import com.lore.zzal.pet.PetService;
 import com.lore.zzal.pet.ZzalPet;
@@ -50,10 +51,25 @@ public class DevClockController {
 
     private final PetService petService;
     private final MotionCatalog catalog;
+    private final NightSweep nightSweep;
 
-    public DevClockController(PetService petService, MotionCatalog catalog) {
+    public DevClockController(PetService petService, MotionCatalog catalog, NightSweep nightSweep) {
         this.petService = petService;
         this.catalog = catalog;
+        this.nightSweep = nightSweep;
+    }
+
+    @Operation(summary = "밤 스위프 지금(이 펫만)", description = """
+            이 펫에 대해 23:00 스위프가 하는 일을 지금 한다 — 정산 뒤 큐 등록(첫 심화·실패 재등록) → 집어서 굽기(가짜 클라이언트면 돈 0).
+            run 기록은 남기지 않는다(진짜 밤이 아니다). 응답은 PetDetail 이고 굽기 결과는 motions[].advanced 로 본다.""")
+    @PostMapping("/{petId}/night-sweep")
+    public ApiResponse<PetResponses.Detail> nightSweep(@LoginUser Long userId, @PathVariable Long petId) {
+        Instant real = Instant.now();
+        ZzalPet pet = petService.refresh(userId, petId, real);
+        NightSweep.Result r = nightSweep.sweepPet(pet, pet.now(real));
+        org.slf4j.LoggerFactory.getLogger(DevClockController.class)
+                .info("dev 밤 스위프 — petId={} nightOf={} 등록={} 굽기={}", petId, r.nightOf(), r.queued(), r.claimed());
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of()));
     }
 
     @Operation(summary = "시간 당기기", description = """

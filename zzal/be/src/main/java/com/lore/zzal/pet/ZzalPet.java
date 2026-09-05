@@ -172,6 +172,14 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int todayCareMiss;
 
+    /** 마지막 밤잠에 든 순간의 "그날 케어 미스"(리셋 전 값). 밤 큐(첫 심화 판정)가 잠든 뒤에 읽는다. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int lastNightCareMiss;
+
+    /** 마지막 밤잠의 날짜(KST, 잠든 날). 밤 큐가 "이 밤에 이미 판정했나" 를 가른다. */
+    @Column
+    private LocalDate lastNightOf;
+
     /** 게이지가 0인 채 깨어 있는 초. 6시간이면 +1 하고 무장 해제. */
     @Column(nullable = false, columnDefinition = "bigint default 0")
     private long fullnessZeroSec;
@@ -678,6 +686,8 @@ public class ZzalPet {
             if (todayCareMiss == 0) {
                 zeroMissDays += 1;
             }
+            lastNightCareMiss = todayCareMiss;      // 밤 큐 판정 재료(리셋 전 스냅샷)
+            lastNightOf = AwakeClock.dateOf(at);
             todayCareMiss = 0;
             todayGames = 0;
             todayPetCount = 0;
@@ -1014,6 +1024,14 @@ public class ZzalPet {
 
     public int getTodayCareMiss() {
         return todayCareMiss;
+    }
+
+    public int getLastNightCareMiss() {
+        return lastNightCareMiss;
+    }
+
+    public LocalDate getLastNightOf() {
+        return lastNightOf;
     }
 
     public int getIntimacy() {

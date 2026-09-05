@@ -59,6 +59,10 @@ class MotionServiceTest {
     private GenStepRecordRepository stepRepository;
     private ZzalMotionRepository motionRepository;
     private MotionGate gate;
+    private MotionCatalog catalog;
+    private GenJobRepository jobRepository;
+    private ZzalPetRepository petRepository;
+    private PipelineRegistry registry;
     private MotionService service;
 
     private ZzalMotion motion;
@@ -72,10 +76,10 @@ class MotionServiceTest {
         gate = mock(MotionGate.class);
 
         GenerationRecorder recorder = mock(GenerationRecorder.class);
-        GenJobRepository jobRepository = mock(GenJobRepository.class);
-        ZzalPetRepository petRepository = mock(ZzalPetRepository.class);
-        PipelineRegistry registry = mock(PipelineRegistry.class);
-        MotionCatalog catalog = mock(MotionCatalog.class);
+        jobRepository = mock(GenJobRepository.class);
+        petRepository = mock(ZzalPetRepository.class);
+        registry = mock(PipelineRegistry.class);
+        catalog = mock(MotionCatalog.class);
 
         motion = ZzalMotion.start(PET_ID, 3, MOTION_NAME, "v1");
         when(motionRepository.findById(MOTION_ID)).thenReturn(Optional.of(motion));
@@ -182,6 +186,45 @@ class MotionServiceTest {
         service.bake(MOTION_ID);
 
         verify(runner, times(3)).run(any(), any(), any(), any());
+        verify(motionRecorder).markFailed(MOTION_ID);
+    }
+
+    @Test
+    @DisplayName("★★ 굽는 중 어떤 예외가 나도 FAILED 로 끝낸다 — 안 그러면 그 행이 영구 BAKING 이다")
+    void anyExceptionEndsAsFailed() {
+        // 지시문 파일이 없을 때 실제로 나던 예외(2026-09-05 리뷰 주입 INJ-C)
+        when(catalog.block(MOTION_NAME))
+                .thenThrow(new java.io.UncheckedIOException(new java.io.IOException("동작 지시문이 없습니다")));
+
+        service.bakeNow(MOTION_ID);         // 예외가 이 밖으로 새어 나오면 안 된다
+
+        verify(motionRecorder).markFailed(MOTION_ID);
+        verify(motionRecorder, never()).open(anyLong(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("★ 실패 기록마저 터져도 굽기 스레드는 조용히 끝난다(기동 복구가 회수한다)")
+    void failureRecordFailureDoesNotEscape() {
+        when(runner.run(any(), any(), any(), any()))
+                .thenAnswer(i -> RunResult.failed(i.getArgument(1), BigDecimal.ZERO, null));
+        org.mockito.Mockito.doThrow(new IllegalStateException("DB 끊김")).when(motionRecorder).markFailed(anyLong());
+
+        service.bakeNow(MOTION_ID);         // 예외 없이 돌아와야 한다
+
+        verify(motionRecorder).markFailed(MOTION_ID);
+    }
+
+    @Test
+    @DisplayName("★ 정본은 API 1회 — 시도 횟수를 1로 두면 딱 한 번만 굽고 FAILED")
+    void canonicalSingleApiAttempt() {
+        MotionService once = new MotionService(runner, mock(GenerationRecorder.class), motionRecorder,
+                jobRepository, stepRepository, motionRepository, petRepository, registry, catalog, gate, 1);
+        when(runner.run(any(), any(), any(), any()))
+                .thenAnswer(i -> RunResult.failed(i.getArgument(1), BigDecimal.ZERO, null));
+
+        once.bakeNow(MOTION_ID);
+
+        verify(runner, times(1)).run(any(), any(), any(), any());
         verify(motionRecorder).markFailed(MOTION_ID);
     }
 

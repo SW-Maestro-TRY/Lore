@@ -201,6 +201,31 @@ public class ZzalMotion {
         }
     }
 
+    /** 밤 큐에 올린다(정본 6장). */
+    public void queue(LocalDate nightOf) {
+        this.status = MotionStatus.QUEUED;
+        this.nightOf = nightOf;
+        this.claimedAt = null;
+        this.claimedBy = null;
+    }
+
+    /** 그 밤 실패 — 조각은 소모하지 않고 다음 밤에 다시 오른다(16장). */
+    public void failNight() {
+        this.status = MotionStatus.FAILED;
+    }
+
+    /**
+     * 집어 갔는데 굽지 못한 채 멈춘 것을 큐로 되돌린다(밤은 그대로 둔다).
+     *
+     * ★ 왜 곧바로 다시 굽지 않고 큐로 되돌리나 — 굽기 순서·상한(K)·집기 경쟁은 전부 스위프가 쥐고 있다.
+     *   회수한 자리에서 바로 구우면 그 세 가지를 우회해 밤 상한이 조용히 넘는다.
+     */
+    public void releaseClaim() {
+        this.status = MotionStatus.QUEUED;
+        this.claimedAt = null;
+        this.claimedBy = null;
+    }
+
     public void markSeen(Instant at) {
         if (seenAt == null) {
             seenAt = at;
