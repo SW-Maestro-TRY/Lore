@@ -1,8 +1,8 @@
 // 미니게임 API v2. zzal/be 의 GameController(`/api/zzal/v2/me/pets/{id}/games`)와 짝이다.
 //
-// ⚠️ 백엔드는 PR-4(#193)까지 **아직 v1 경로**(`/api/zzal/v1/me/pets/{id}/games`, start 에 kind 없음, 달력일 5판)다
-//    (api-v2.md 9절). 이 파일은 계약(v2)대로 두고, 연결 PR(5b)에서 실서버와 대조해 맞춘다. 그때까지 실서버 모드의
-//    게임은 404 가 난다 — 목 서버(`?mock=1`)에서만 돈다.
+// ★ 2026-09-05 실서버 왕복으로 대조 완료(정본판 경로 동작). 그때 드러난 것 두 가지:
+//    - 시작·잇기 응답에는 `finished`·`win` 칸이 **없다**. 판이 끝났는가는 친 결과(Guess)로만 안다.
+//    - 모든 응답에 `justUnlocked`·`runUnlocked` 가 실린다("행동 응답 = 상태").
 //
 // ★★ 이 파일에는 "정답" 을 담는 타입이 없다.
 //    좌·우 맞히기의 답은 서버가 쥐고 한 판에 하나씩만 공개한다. 화면이 다섯 번을 혼자 치고
@@ -38,16 +38,16 @@ export interface GameState {
   round: number | null;
   /** 지금까지 맞힌 수. LEFT_RIGHT 만. */
   hits: number | null;
-  /** 방금 끝난 판인가(finish 응답·current 에서 마지막 판). */
-  finished: boolean;
-  /** 이겼는가. 끝났을 때만. */
-  win: boolean | null;
   /** 한 판에 몇 번 겨루나(5). ★ 화면에 숫자를 박지 말고 이 값을 쓴다. */
   rounds: number;
   /** 몇 번 이상 맞히면 이기나(3). */
   winAt: number;
   /** 오늘 더 할 수 있는 판 수(두 게임 합산). 지금 치고 있는 판은 빠져 있다. */
   remainingToday: number;
+  /** 이번 시작으로 열린 2층 동작 seq(13번 놀라기 = 3판 시작). 폭죽은 이 값으로 띄운다. */
+  justUnlocked: number[];
+  /** 달리기가 열려 있는가(좌우 5승). 동작이 아니라 기능이라 따로 온다. */
+  runUnlocked: boolean;
 }
 
 /** 한 판 친 결과. answer 는 **방금 친 판의 것**이고, 남은 판의 답은 어디에도 없다. */
@@ -67,6 +67,22 @@ export interface GuessResult {
   rounds: number;
   winAt: number;
   remainingToday: number;
+  /** 이번 판으로 열린 2층 동작 seq. */
+  justUnlocked: number[];
+  /** 이 판의 승리로 5승이 됐으면 여기서 true 로 바뀐다. */
+  runUnlocked: boolean;
+}
+
+/** 달리기 끝 결과. ★ 시작·잇기와 **다른 모양**이다 — 라운드가 없고 살아남은 시간이 있다. */
+export interface RunResult {
+  gameId: number;
+  /** 살아남은 ms(서버가 상한 60,000 으로 자른다). */
+  survivedMs: number;
+  /** 30,000 이상이면 승리 = 행복 +1. */
+  win: boolean;
+  remainingToday: number;
+  justUnlocked: number[];
+  runUnlocked: boolean;
 }
 
 const base = (petId: number) => `${PET_BASE}/${petId}/games`;
@@ -86,9 +102,9 @@ export function guess(petId: number, gameId: number, pick: Side): Promise<GuessR
   return request<GuessResult>(`${base(petId)}/${gameId}/guess`, { method: 'POST', body: { pick } });
 }
 
-/** 달리기 끝(RUN). 30,000ms 이상이면 승리 = 행복 +1. 서버는 상한(60,000)만 검증. 응답의 finished·win 을 본다. */
-export function finishRun(petId: number, gameId: number, survivedMs: number): Promise<GameState> {
-  return request<GameState>(`${base(petId)}/${gameId}/finish`, { method: 'POST', body: { survivedMs } });
+/** 달리기 끝(RUN). 30,000ms 이상이면 승리 = 행복 +1. 서버는 상한(60,000)만 검증. */
+export function finishRun(petId: number, gameId: number, survivedMs: number): Promise<RunResult> {
+  return request<RunResult>(`${base(petId)}/${gameId}/finish`, { method: 'POST', body: { survivedMs } });
 }
 
 /** 치던 판 잇기(새로고침 복구). 치던 판이 없어도 에러가 아니다 — playing 이 false 로 온다. */

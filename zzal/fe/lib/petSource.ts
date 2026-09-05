@@ -19,7 +19,7 @@ import {
 } from './pet';
 import {
   finishRun, getCurrentGame, guess, startGame,
-  type GameKind, type GameState, type GuessResult, type Side,
+  type GameKind, type GameState, type GuessResult, type RunResult, type Side,
 } from './game';
 
 export interface PetSource {
@@ -49,7 +49,7 @@ export interface PetSource {
 
   startGame(petId: number, kind?: GameKind): Promise<GameState>;
   guess(petId: number, gameId: number, pick: Side): Promise<GuessResult>;
-  finishRun(petId: number, gameId: number, survivedMs: number): Promise<GameState>;
+  finishRun(petId: number, gameId: number, survivedMs: number): Promise<RunResult>;
   getCurrentGame(petId: number, signal?: AbortSignal): Promise<GameState>;
 }
 

@@ -501,6 +501,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
             petId={session.server.pet?.phase === 'ALIVE' ? session.server.pet.petId : null}
             source={session.server.source}
             onFinished={() => { void session.server?.reload(); }}
+            onUnlocked={(seqs) => session.server?.noteUnlocked(seqs)}
           />
         )}
 
