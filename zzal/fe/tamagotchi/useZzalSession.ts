@@ -77,16 +77,9 @@ export function useZzalSession(): ZzalSession {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [estimateSec, setEstimateSec] = useState<number>(HATCH_VISUAL_SPAN_SEC);
 
-  // 서버 기준 "지금" — usePet 이 경계까지 남은 시간을 잴 때 쓴다. 오프셋은 응답마다 교정된다.
-  const offsetRef = useRef(0);
-  const now = useCallback(() => Date.now() + offsetRef.current, []);
-  const pet = usePet(source, petId, now);
-  const serverNow = pet.pet?.serverNow ?? null;
-  useEffect(() => {
-    if (!serverNow) return;
-    const v = Date.parse(serverNow);
-    if (Number.isFinite(v)) offsetRef.current = v - Date.now();
-  }, [serverNow]);
+  // 시계 오프셋은 여기서 들지 않는다 — usePet 은 응답의 serverNow 로 경계까지 남은 시간을 재고,
+  // 화면의 "지금" 은 useClock 하나가 낸다(오프셋을 두 벌 들면 어긋난다).
+  const pet = usePet(source, petId);
 
   // ── 내 아이 찾기 ────────────────────────────────────────────────────────
   // 실패한 알(FAILED)과 보낸 아이(DEAD)는 자리를 먹지 않으므로 목록에서 골라낼 때부터 뺀다.

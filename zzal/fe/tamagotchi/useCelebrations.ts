@@ -57,7 +57,7 @@ export function useCelebrations(
   useEffect(() => {
     if (!justUnlocked.length || !pet) return;
     const items: Celebration[] = justUnlocked.map((seq) => {
-      const m = pet.motions.find((x) => x.seq === seq) ?? null;
+      const m = pet.motions?.find((x) => x.seq === seq) ?? null;
       const def = motionBySeq(seq);
       const key = m?.key ?? def?.key ?? String(seq);
       return {
