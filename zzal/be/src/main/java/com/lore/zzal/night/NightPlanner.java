@@ -59,6 +59,12 @@ public class NightPlanner {
         if (!pet.isAlive()) {
             return 0;
         }
+        // ★★ 여행 중에는 아무것도 굽지 않는다(#235 리뷰 하-1). 재등록(FAILED) 블록이 여행 중에도 돌면
+        //   집을 비운 사람의 몫이 <b>매일 밤 API 로 구워진다</b> — 돈이 나가는 경로라 특히 조용히 아프다.
+        //   여행 중에는 게이지도 조각도 안 도는데 굽기만 도는 것도 앞뒤가 안 맞는다.
+        if (pet.isTraveling()) {
+            return 0;
+        }
         Map<Integer, ZzalMotion> rows = motionRepository.findByPetIdOrderBySeqAsc(pet.getId()).stream()
                 .filter(m -> m.getLayer() != null)
                 .collect(Collectors.toMap(ZzalMotion::getSeq, Function.identity(), (a, b) -> a));

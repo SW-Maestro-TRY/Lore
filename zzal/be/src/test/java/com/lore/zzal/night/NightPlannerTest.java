@@ -115,6 +115,18 @@ class NightPlannerTest {
     }
 
     @Test
+    @DisplayName("★★ 여행 중에는 아무것도 안 굽는다 — 재등록도 멈춘다(돈이 나가는 경로)")
+    void nothingWhileTraveling() {
+        when(catalog.isBakeable(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        ReflectionTestUtils.setField(row(101), "status", MotionStatus.FAILED);
+        ReflectionTestUtils.setField(pet, "tripStartedAt", T0);
+
+        assertThat(planner.plan(pet, NIGHT)).isZero();
+        assertThat(row(101).getStatus()).as("실패한 행이 매일 밤 다시 구워지면 안 된다")
+                .isEqualTo(MotionStatus.FAILED);
+    }
+
+    @Test
     @DisplayName("★ 3층이 안 열린 펫에게는 두 번째 선물도 안 오른다(같은 가드 안)")
     void secondGiftNeedsTierThree() {
         when(catalog.isBakeable(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);

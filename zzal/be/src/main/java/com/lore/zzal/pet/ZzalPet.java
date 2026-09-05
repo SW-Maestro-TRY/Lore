@@ -311,12 +311,46 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean goodDayToday;
 
+    // ── 떠남·재회 (정본 9·16장) ───────────────────────────────────────────
+
     /**
-     * 여행을 떠난 시각(정본 9장). 채우는 것은 PR-11 — 지금은 <b>여행 중이면 장면을 안 남긴다</b>는
-     * 판정에만 쓰인다(여행 중에는 방에 없고, 그때 이야기는 엽서가 따로 맡는다).
+     * 짐 싸기 예고 시각. 미방문 5일 <b>또는</b> 케어 미스 8에서 켜지고, 접속하면 즉시 꺼진다.
+     *
+     * ★ 이것이 케어 미스의 <b>유일한 겉모습</b>이다(정본 4장 "보이는 신호는 짐 가방뿐").
+     *   숫자는 끝까지 안 보여주고, "이대로면 떠날 것 같다" 는 사실만 그림으로 전한다.
      */
     @Column
+    private Instant leaveNoticeAt;
+
+    /** 여행을 떠난 시각(정본 9장). 여행 중에는 게이지·병·부재가 전부 멈춘다. */
+    @Column
     private Instant tripStartedAt;
+
+    /** 여행 중 만든 엽서 수(최대 3). 재회 때 한꺼번에 전달된다. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int postcardCount;
+
+    /** 마지막으로 엽서를 만든 날(KST). 하루 한 장. */
+    @Column
+    private LocalDate lastPostcardDate;
+
+    /**
+     * 떠남 끄기(정본 9장 "설정에서 떠남 끄기 가능").
+     *
+     * ★★ 이 스위치가 있는 이유 — 떠남은 이야기지만 <b>누군가에게는 상처</b>다(자캐 커뮤니티 규범:
+     *   "떠남 끄기 옵션"). 끄면 예고도 여행도 없다. 켜고 끄는 것은 사용자의 몫이고 우리가 설득하지 않는다.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private boolean leaveEnabled = true;
+
+    /**
+     * 방금 접속으로 예고가 취소됐나 — <b>저장하지 않는다</b>({@code @Transient}).
+     *
+     * ★ 취소되면 짐 가방이 사라지는데, 그러면 사용자는 <b>자기가 무엇을 막았는지 영영 모른다.</b>
+     *   이번 응답에서 한 번은 보여주고("짐을 싸고 있었어요") 다음부터 안 보이게 한다.
+     */
+    @jakarta.persistence.Transient
+    private boolean leavingJustCancelled;
 
     // ── 친밀도 (정본 8장) ─────────────────────────────────────────────────
 
@@ -639,6 +673,11 @@ public class ZzalPet {
 
     /** 깨어 있는 구간 하나. 아기 60분의 끝에서 속도가 바뀌므로 거기서 한 번 가른다. */
     private void advanceAwake(Instant from, Instant to) {
+        // ★ 여행 중에는 게이지·흔적·병·케어 미스·부재가 전부 멈춘다(정본 9·16장 "여행 중·잠든 동안은
+        //   어떤 카운터도 안 돈다"). 자는 동안과 같은 대접이라, 여기 한 줄이면 아래 전부가 따라 멈춘다.
+        if (isTraveling()) {
+            return;
+        }
         Instant baby = babyUntil();
         if (baby != null && from.isBefore(baby)) {
             Instant babyEnd = to.isBefore(baby) ? to : baby;
@@ -886,6 +925,154 @@ public class ZzalPet {
     private long seed() {
         long base = hatchedAt != null ? hatchedAt.getEpochSecond() : 0L;
         return id != null ? base * 31 + id : base;
+    }
+
+    // ── 떠남·재회 (정본 9·16장) ───────────────────────────────────────────
+
+    /**
+     * 기상 순간의 떠남 판정(정본 16장 "예고는 그 5일째 <b>기상 시점</b>에 켜진다").
+     *
+     * ★ 왜 기상에서 하나 — 조회 때마다 보면 "5일째" 가 사람마다 다른 순간이 된다. 기상은 하루에 한 번뿐이고,
+     *   앱을 안 열어도 밤 스위프의 정산이 그 경계를 지나므로 <b>안 오는 사람에게도 똑같이</b> 돈다.
+     */
+    private void judgeLeaving(Instant at) {
+        if (!leaveEnabled || isTraveling()) {
+            return;
+        }
+        if (leaveNoticeAt == null) {
+            if (shouldNotice(at)) {
+                leaveNoticeAt = at;
+            }
+            return;
+        }
+        // 예고 중이었다면 유예가 지났는지 본다
+        if (!AwakeClock.dateOf(at).isBefore(AwakeClock.dateOf(leaveNoticeAt).plusDays(departDays()))) {
+            tripStartedAt = at;
+            leaveNoticeAt = null;
+            postcardCount = 0;
+            lastPostcardDate = null;
+        }
+    }
+
+    /** 미방문 달력 5일 <b>또는</b> 케어 미스 8(정본 9장). 30일 이상 함께했으면 미방문 쪽만 2배. */
+    private boolean shouldNotice(Instant at) {
+        if (careMiss >= ZzalRules.LEAVE_NOTICE_AT_CARE_MISS) {
+            return true;
+        }
+        if (lastVisitDate == null) {
+            return false;
+        }
+        long absent = java.time.temporal.ChronoUnit.DAYS.between(lastVisitDate, AwakeClock.dateOf(at));
+        return absent >= noticeDays();
+    }
+
+    /**
+     * 예고까지의 미방문 일수 — 30일 이상 함께했으면 2배(정본 9장 "예고·유예 각 2배").
+     *
+     * ★ 오래 함께한 사람에게 더 너그럽다. 한 달을 같이 지낸 뒤의 닷새와 사흘째의 닷새는 무게가 다르다.
+     */
+    public int noticeDays() {
+        return ZzalRules.LEAVE_NOTICE_AFTER_ABSENT_DAYS * graceMultiplier();
+    }
+
+    /** 예고 뒤 출발까지의 유예 일수 — 마찬가지로 30일 이상이면 2배. */
+    public int departDays() {
+        return ZzalRules.LEAVE_DEPART_AFTER_NOTICE_DAYS * graceMultiplier();
+    }
+
+    private int graceMultiplier() {
+        return daysTogether >= ZzalRules.LEAVE_GRACE_DOUBLE_FROM_DAYS ? 2 : 1;
+    }
+
+    /** 예고 중인가(짐 가방). */
+    public boolean isLeavingNoticed() {
+        return leaveNoticeAt != null;
+    }
+
+    public Instant getLeaveNoticeAt() {
+        return leaveNoticeAt;
+    }
+
+    /** 예고가 켜진 그 밤 기준의 출발 예정 시각(화면 표시용). */
+    public Instant departAt() {
+        return leaveNoticeAt == null ? null
+                : AwakeClock.dateOf(leaveNoticeAt).plusDays(departDays())
+                        .atTime(ZzalRules.AUTO_WAKE_AT).atZone(ZzalRules.ZONE).toInstant();
+    }
+
+    public Instant getTripStartedAt() {
+        return tripStartedAt;
+    }
+
+    public int getPostcardCount() {
+        return postcardCount;
+    }
+
+    public boolean isLeaveEnabled() {
+        return leaveEnabled;
+    }
+
+    public boolean isLeavingJustCancelled() {
+        return leavingJustCancelled;
+    }
+
+    /** 떠남을 켜고 끈다. 끄면 예고 중이던 것도 즉시 사라진다(이미 여행 중이면 부르기로 데려온다). */
+    public void setLeaveEnabled(boolean enabled) {
+        this.leaveEnabled = enabled;
+        if (!enabled) {
+            this.leaveNoticeAt = null;
+        }
+    }
+
+    /** 오늘 엽서를 만들 수 있나 — 여행 중, 하루 한 장, 최대 3장(정본 9·16장). */
+    public boolean canWritePostcard(Instant now) {
+        return isTraveling() && postcardCount < ZzalRules.POSTCARD_MAX
+                && !AwakeClock.dateOf(now).equals(lastPostcardDate);
+    }
+
+    /** 엽서 한 장을 썼다고 표시(실제 저장은 서비스가 — 엔티티는 표를 모른다). */
+    public void wrotePostcard(Instant now) {
+        postcardCount += 1;
+        lastPostcardDate = AwakeClock.dateOf(now);
+    }
+
+    /**
+     * 부르기 — 즉시 귀환(정본 9장).
+     *
+     * <pre>
+     *   게이지 전부 2칸 · 케어 미스 0 · 친밀도 = 떠나기 전 <b>최고치의 50%</b>
+     *   조각·3층 진행·도감은 그대로 보존(16장)
+     * </pre>
+     *
+     * ★ 친밀도를 0 이 아니라 최고치의 절반으로 되돌리는 이유 — 쌓아 온 것을 통째로 지우면
+     *   "다시 시작하느니 그만두자" 가 된다. 절반은 <b>돌아올 이유</b>를 남긴다.
+     */
+    public void callBack(Instant now) {
+        tripStartedAt = null;
+        leaveNoticeAt = null;
+        careMiss = 0;
+        todayCareMiss = 0;
+        intimacy = (int) Math.round(intimacyPeak * ZzalRules.REUNION_INTIMACY_RATIO);
+        fullness = ZzalRules.REUNION_GAUGE;
+        happiness = ZzalRules.REUNION_GAUGE;
+        trash = ZzalRules.TRASH_MAX - ZzalRules.REUNION_GAUGE;   // 청결 = 흔적의 반대
+        fullnessAwakeSec = 0;
+        happinessAwakeSec = 0;
+        trashAwakeSec = 0;
+        fullnessZeroSec = 0;
+        happinessZeroSec = 0;
+        cleanZeroSec = 0;
+        fullnessMissArmed = false;
+        happinessMissArmed = false;
+        cleanMissArmed = false;
+        sickSince = null;
+        sickKind = null;
+        sickAwakeSec = 0;
+        absenceAwakeSec = 0;
+        settledAt = now;
+        wokeAt = now;
+        sleepKind = null;
+        sleptAt = null;
     }
 
     // ── 조각과 3층 (정본 6·16장) ──────────────────────────────────────────
@@ -1203,6 +1390,7 @@ public class ZzalPet {
         if (was == SleepKind.NIGHT) {
             wokeAt = at;
             overslept = !manual;
+            judgeLeaving(at);
             // 어젯밤 판정을 통과했으면 오늘은 기분 좋은 날 — 조각 하나를 미리 받고 첫 부름이 살가워진다
             if (goodDayPending) {
                 goodDayPending = false;
@@ -1331,6 +1519,12 @@ public class ZzalPet {
      */
     public boolean visit(Instant now) {
         lastSeenAt = now;
+        // ★ 예고 중 접속 = 즉시 취소 + 케어 미스 -2(정본 9장). 돌아온 것 자체가 답이다.
+        if (leaveNoticeAt != null && !isTraveling()) {
+            leaveNoticeAt = null;
+            careMiss = Math.max(0, careMiss - ZzalRules.LEAVE_CANCEL_MISS_RELIEF);
+            leavingJustCancelled = true;
+        }
         // ★★ 앱을 여는 순간 <b>부재는 끝난다</b>. 여기서 안 끊으면 이 시계는 "부재" 가 아니라
         //   "깨어 있던 시간 전부" 가 되고, 30분마다 들여다보는 사람에게도 네 시간마다 "혼자 논 장면" 이
         //   남는다(#227 리뷰 상-1 실측 — 30분마다 12번 조회에 컷 2개). 정본 11·16장은 <b>부재 중</b>이다.
@@ -1341,7 +1535,10 @@ public class ZzalPet {
             return false;
         }
         lastVisitDate = today;
-        daysTogether += 1;
+        // ★ 여행 중에는 "함께한 날" 이 안 는다(정본 9장) — 같이 있지 않았으므로.
+        if (!isTraveling()) {
+            daysTogether += 1;
+        }
         return true;
     }
 

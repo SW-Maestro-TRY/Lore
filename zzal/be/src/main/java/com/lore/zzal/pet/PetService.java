@@ -60,6 +60,7 @@ public class PetService {
     private final MotionSeeder motionSeeder;
     private final NightPlanner nightPlanner;
     private final com.lore.zzal.scene.SceneService sceneService;
+    private final com.lore.zzal.leave.LeaveService leaveService;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -73,12 +74,14 @@ public class PetService {
                       ZzalMotionRepository motionRepository,
                       MotionSeeder motionSeeder,
                       NightPlanner nightPlanner,
-                      com.lore.zzal.scene.SceneService sceneService) {
+                      com.lore.zzal.scene.SceneService sceneService,
+                      com.lore.zzal.leave.LeaveService leaveService) {
         this.catalog = catalog;
         this.motionRepository = motionRepository;
         this.motionSeeder = motionSeeder;
         this.nightPlanner = nightPlanner;
         this.sceneService = sceneService;
+        this.leaveService = leaveService;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -220,6 +223,9 @@ public class PetService {
         if (made > 0) {
             pet.markSceneMade();
         }
+        // ★ 여행 중이면 소식(엽서)만 쌓인다 — 장면도 도착도 없다(방에 없으므로).
+        //   밀린 몫까지 채운다(조회를 했든 안 했든 결과가 같아야 한다).
+        leaveService.fillPostcards(pet, now);
         pet.visit(now);
         reveal(pet, now);
         openPieces(pet, windowStart, now);
@@ -506,6 +512,51 @@ public class PetService {
         return withUnlockDiff(pet, pet::share);
     }
 
+    // ── 떠남·재회 (정본 9장) ──────────────────────────────────────────────
+
+    /**
+     * 부르기 — 여행 중인 아이를 즉시 데려온다. 엽서도 이때 한꺼번에 전달된다.
+     *
+     * ★ 조건은 "여행 중" 하나뿐이다. 데려오는 데 값을 매기지 않는다 — 그건 벌이 된다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action callBack(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        Instant now = pet.now(realNow);
+        pet.settle(now);
+        if (!pet.isTraveling()) {
+            throw new BusinessException(ErrorCode.ZZAL_NOT_TRAVELING);
+        }
+        // ★★ 데려오기 <b>전에</b> 밀린 엽서를 채운다(#235 리뷰 중-1). 여행 중 한 번도 앱을 안 연 사람은
+        //   이 자리가 유일한 기회다 — callBack 이 먼저 돌면 tripStartedAt 이 지워져 몇 장이었는지 알 수 없다.
+        leaveService.fillPostcards(pet, now);
+        return withUnlockDiff(pet, () -> {
+            pet.callBack(now);
+            leaveService.deliverAll(petId, now);
+            pet.visit(now);
+        });
+    }
+
+    /** 떠남 켜기·끄기(정본 9장). 끄면 예고 중이던 것도 즉시 사라진다. */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action changeSettings(Long userId, Long petId, boolean leaveEnabled, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        touch(pet, realNow);
+        return withUnlockDiff(pet, () -> pet.setLeaveEnabled(leaveEnabled));
+    }
+
+    /** 전달된 엽서(앨범). */
+    @Transactional(readOnly = true)
+    public List<com.lore.zzal.leave.ZzalPostcard> postcards(Long petId) {
+        return leaveService.delivered(petId);
+    }
+
     // ── 개발용 시계 (DevClockController 만 부른다) ─────────────────────────
 
     /**
@@ -589,6 +640,12 @@ public class PetService {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
         }
         touch(pet, realNow);
+        // ★ 여행 중에는 방에 없다 — 돌봄도 놀이도 말 걸기도 안 된다. 조회는 되고(엽서를 봐야 한다),
+        //   데려오는 것은 call-back 뿐이다.
+        if (pet.isTraveling()) {
+            throw new BusinessException(ErrorCode.ZZAL_TRAVELING,
+                    "%s 여행 중이에요".formatted(Josa.nameSubject(pet.getName())));
+        }
         return pet;
     }
 

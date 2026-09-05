@@ -211,10 +211,44 @@ public class PetController {
         PetResponses.Detail d = detail(pet, null, real);
         return ApiResponse.ok(new PetResponses.Album(
                 d.motions() == null ? List.of() : d.motions(),
-                List.of(),
+                // 여행 엽서 — 전달된 것만(여행 중인 엽서는 안 보인다)
+                petService.postcards(petId).stream().map(PetResponses.Postcard::of).toList(),
                 // 혼자 논 장면 보관 3개(정본 16장). 최근 것부터
                 petService.scenes(petId).stream().map(PetResponses.Scene::of).toList(),
                 d.firstGift()));
+    }
+
+    // ── 떠남·재회 (정본 9장) ──────────────────────────────────────────────
+
+    @Operation(summary = "부르기(재회)", description = """
+            여행 중인 아이를 **즉시 데려온다**. 모아 둔 엽서도 이때 한꺼번에 전달된다.
+
+            - 게이지 전부 2칸 · 케어 미스 0 · 친밀도는 떠나기 전 **최고치의 50%**
+            - 도감·조각·3층 진행은 그대로 보존된다(정본 16장)
+            - 여행 중이 아니면 409(ZZAL_NOT_TRAVELING) — 데려오는 데 값을 매기지 않는다""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "돌아왔음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "여행 중이 아님(ZZAL_NOT_TRAVELING)")})
+    @PostMapping("/{petId}/call-back")
+    public ApiResponse<PetResponses.Detail> callBack(@LoginUser Long userId, @PathVariable Long petId) {
+        Instant real = Instant.now();
+        return ApiResponse.ok(detail(petService.callBack(userId, petId, real), real));
+    }
+
+    @Operation(summary = "설정(떠남 끄기)", description = """
+            떠남을 켜고 끈다(정본 9장). 끄면 예고 중이던 짐 가방도 즉시 사라진다.
+
+            ★ 이미 여행 중인 아이는 이 스위치로 돌아오지 않는다 — **부르기**로 데려온다.""")
+    @PostMapping("/{petId}/settings")
+    public ApiResponse<PetResponses.Detail> settings(@LoginUser Long userId,
+                                                     @PathVariable Long petId,
+                                                     @Valid @RequestBody PetRequests.Settings request) {
+        Instant real = Instant.now();
+        return ApiResponse.ok(detail(
+                petService.changeSettings(userId, petId, request.leaveEnabled(), real), real));
     }
 
     // ── 보내기 ────────────────────────────────────────────────────────────
