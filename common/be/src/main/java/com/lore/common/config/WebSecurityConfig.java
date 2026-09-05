@@ -77,6 +77,13 @@ public class WebSecurityConfig {
                         // 규칙은 위에서부터 먼저 맞는 것이 이기므로, 순서가 바뀌면
                         // 이 줄이 영영 안 걸린다.
                         .requestMatchers("/api/webtoon/my/**").authenticated()
+
+                        // `/api/webtoon/internal/**`(비용 적재)은 반대로 열어 둔다.
+                        // 브라우저가 부를 주소가 아니므로 로그인으로 막지 않는다 —
+                        // 부르는 쪽이 생성 하네스라 계정이 없다. 대신 미리 나눠 가진
+                        // 한 마디를 컨트롤러가 확인한다(UsageService.checkToken).
+                        // 열어 두고 안에서 막는 셈인데, 그러지 않으면 아무나 가짜
+                        // 비용을 심어 지출 상한을 무의미하게 만들 수 있다.
                         .requestMatchers("/api/webtoon/**").permitAll()
 
                         // ★ 행동 기록은 로그인 전에도 받아야 한다 — 가장 알고 싶은 것이
