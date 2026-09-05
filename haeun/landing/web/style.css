@@ -713,7 +713,10 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
 }
 
 /* 고른 뒤 그 자리에서 열리는 요약 — 갈림길 카드 바로 아래다 */
-.wiz-after { margin-top: 6px; }
+/* 마지막 걸음은 흰 카드가 셋(고르개 · 요약 · 동의) 세로로 이어진다. 사이가
+   6px 이면 둥근 모서리끼리 물려서 한 덩어리로 보였다 — 실제로 "겹쳐 있다" 는
+   말을 들었다. 카드 사이는 고르개 위 간격(20px)과 같은 리듬으로 벌린다. */
+.wiz-after { margin-top: 16px; }
 
 /* 요약 */
 .wiz-summary { padding: 6px 20px; }
@@ -1923,7 +1926,8 @@ button.inline-link:hover { color: #f0d090; }
    물에 묻혀서, 필수인 줄도 모르고 지나친다. 종이 위에 올려 물과 분리한다. */
 .ip-agree {
   background: var(--card); border-radius: 16px;
-  padding: 14px 16px; margin: 0 0 14px;
+  /* 위 여백이 0 이면 요약 카드에 딱 붙어 경계가 안 보인다(위 .wiz-after 주석). */
+  padding: 14px 16px; margin: 16px 0;
   box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 8px 24px rgba(15,51,63,.07);
 }
 .ip-agree .agree-line { margin: 0; font-size: .86rem; align-items: center; }
@@ -1939,7 +1943,9 @@ button.inline-link:hover { color: #f0d090; }
   color: var(--accent-d); background: var(--sea-shore);
   padding: .1em .5em; border-radius: 999px; margin-left: .35em; white-space: nowrap;
 }
-.ip-agree .terms-box { margin: 10px 0 0; background: var(--ink-2); }
+/* 동의 줄과 약관 사이도 벌린다 — 둘 다 누르는 것이라 붙어 있으면 어느 쪽을
+   누르는지 손이 헷갈린다. */
+.ip-agree .terms-box { margin: 14px 0 0; background: var(--ink-2); }
 
 /* 내려받기 옆 한 줄 — 파일에 LORE 표시가 붙는다는 것을 미리 말한다.
    받아 보고 나서 알면 "왜 붙었지?" 가 되고, 미리 알면 그냥 사실이 된다. */
