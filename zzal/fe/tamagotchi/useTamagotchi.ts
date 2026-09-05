@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { track } from '@common/analytics';
 import type { ApiError } from '../lib/api';
 import { assetUrl } from '../lib/assets';
-import type { CareAction, ChatSlot, ChatState, Motion, PetDetail, Personality, ShareKind } from '../lib/pet';
+import type { CareAction, ChatSlot, ChatState, Motion, PetDetail, Personality, ShareKind, SickKind } from '../lib/pet';
 import type { PetSource } from '../lib/petSource';
 import { clampChat, sanitizeLine } from './chat';
 import { NAMES, YEOUL_MOTION, MOTION_FALLBACK, DEFAULT_BACKGROUND } from './constants';
@@ -159,6 +159,8 @@ export interface DerivedFromPet {
   daysTogether: number;
   intimacyPercent: number;
   sick: boolean;
+  /** 왜 아픈가. 연출에만 쓴다 — 화면 문구는 원인을 말하지 않는다. */
+  sickKind: SickKind | null;
   /** 열린 동작 수(선물 포함). */
   unlocked: number;
   /** 18칸. ALIVE 가 아니면 []. */
@@ -197,7 +199,7 @@ function derive(pet: PetDetail | null, clock: ClockApi, hatchSpan: number, hatch
     return {
       hasChar: false, phase: 'none', eggT: 0, eggSlow: false, t: 0, fullness: 0, happiness: 0, clean: MAX_GAUGE, trash: 0, food: 0, foodLeft: 0,
       sleeping: false, sleepKind: null, canSleep: false, canWake: false, sleepLeft: 0, untilAutoSleep: null,
-      daysTogether: 0, intimacyPercent: 0, sick: false, unlocked: 0, motions: [], bathDone: false, personality: null, world: '',
+      daysTogether: 0, intimacyPercent: 0, sick: false, sickKind: null, unlocked: 0, motions: [], bathDone: false, personality: null, world: '',
       background: DEFAULT_BACKGROUND, chars: [], active: 0,
     };
   }
@@ -231,6 +233,7 @@ function derive(pet: PetDetail | null, clock: ClockApi, hatchSpan: number, hatch
     daysTogether: pet.daysTogether ?? 0,
     intimacyPercent: pet.intimacy?.percent ?? 0,
     sick: pet.sick !== null,
+    sickKind: pet.sick?.kind ?? null,
     unlocked: motions.filter((m) => m.unlocked).length,
     motions,
     bathDone: pet.today?.bathDone === true,
@@ -364,7 +367,15 @@ export function useTamagotchi({ server = null }: TamagotchiOptions = {}) {
     const next = await srv.current?.care(action);
     if (!next) return;
     setLocal((s) => ({ ...s, standLine: line }));
-    react(CARE_REACTION[action] ?? 'joy');
+    // ★ 나은 연출은 **행동 응답의 `justHealed`** 로만 띄운다(해석 38). 상태로는 "방금 나음" 과
+    //   "원래 안 아픔" 을 못 가르고, 새로고침하면 안 뜨는 것이 맞다 — 축하가 아니라 방금 일어난 일의 반응이다.
+    if (next.justHealed) {
+      react('joy');
+      pop('반짝');
+      setLocal((s) => ({ ...s, standLine: '한결 나아졌어요' }));
+    } else {
+      react(CARE_REACTION[action] ?? 'joy');
+    }
     pop(fx);
   }, [can, react, pop]);
 

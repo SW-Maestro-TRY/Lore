@@ -118,10 +118,17 @@ export interface Food {
   nextInSeconds: number | null;
 }
 
+/**
+ * 왜 아픈가(계약 해석 35). **먼저 난 병이 이긴다** — 아픈 동안 다른 조건이 차도 원인은 안 바뀐다.
+ *
+ * ★ 화면은 이 값으로 **원인을 탓하지 않는다.** 문구는 "아파요" 하나이고, kind 는 연출(무엇을 곁들일까)에만 쓴다.
+ *   "안 치워서 아파요" 는 사실이어도 사람을 몰아세운다 — 케어 미스를 어디에도 안 내리는 것과 같은 결이다.
+ */
+export type SickKind = 'NEGLECT' | 'DIRTY' | 'UPSET' | 'NATURAL';
+
 export interface Sick {
   since: string;
-  /** NATURAL · NEGLECT · DIRTY · SNACK(배탈). */
-  kind: string;
+  kind: SickKind;
 }
 
 export interface Intimacy {
@@ -335,6 +342,14 @@ export interface PetDetail {
   learnedToday: LearnedMotion[] | null;
   /** 채팅 답 응답에만. 그 밖엔 null. */
   chatReply: ChatReply | null;
+  /**
+   * 방금 약으로 나았는가. **행동 응답에만** 실린다(계약 해석 38) — 조회는 항상 false.
+   *
+   * ★ 상태만으로는 "방금 나음" 과 "원래 안 아픔" 을 가를 수 없다. 둘 다 `sick: null` 이다.
+   *   그래서 나은 연출(기쁜 자세 + 반짝)을 이 한 칸으로만 띄운다. 새로고침하면 안 뜨는 것이 맞다 —
+   *   축하가 아니라 **방금 일어난 일의 반응**이라서.
+   */
+  justHealed: boolean | null;
   firstGift: FirstGift | null;
   chatSummary: ChatSummary | null;
   scenes: Scenes | null;
