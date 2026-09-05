@@ -78,6 +78,7 @@ class PetServiceTest {
         ZzalPet pet = ZzalPet.hatch(USER_ID, "여울", null, "images/zzal/abc", T0);
         pet.markAlive("images/zzal/sheet", "생김새", T0);
         when(petRepository.findById(PET_ID)).thenReturn(Optional.of(pet));
+        when(petRepository.findByIdForUpdate(PET_ID)).thenReturn(Optional.of(pet));
         return pet;
     }
 
@@ -88,12 +89,14 @@ class PetServiceTest {
         pet.markAlive("images/zzal/sheet", "생김새", hatched);
         pet.settle(T0);
         when(petRepository.findById(PET_ID)).thenReturn(Optional.of(pet));
+        when(petRepository.findByIdForUpdate(PET_ID)).thenReturn(Optional.of(pet));
         return pet;
     }
 
     private ZzalPet egg() {
         ZzalPet pet = ZzalPet.hatch(USER_ID, "여울", null, "images/zzal/abc", T0);
         when(petRepository.findById(PET_ID)).thenReturn(Optional.of(pet));
+        when(petRepository.findByIdForUpdate(PET_ID)).thenReturn(Optional.of(pet));
         return pet;
     }
 
@@ -323,6 +326,37 @@ class PetServiceTest {
             assertThat(a3.justUnlocked()).containsExactly(11);
             assertThat(UnlockRules.isUnlocked(pet, new MotionCatalog("", "", "v1").bySeq(11).orElseThrow(),
                     new MotionCatalog("", "", "v1"))).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("동시 요청 — 같은 펫은 잠그고 직렬화 (리뷰 상-1)")
+    class Serialization {
+
+        @Test
+        @DisplayName("★ 상태를 바꾸는 길은 전부 FOR UPDATE 로 읽는다 — FEED·SNACK 연속 두 건이 둘 다 반영")
+        void mutatingPathsLockTheRow() {
+            ZzalPet pet = child();
+            pet.grantFood(T0);
+            service.care(USER_ID, PET_ID, CareAction.FEED, T0);
+            service.care(USER_ID, PET_ID, CareAction.SNACK, T0);
+            assertThat(pet.getFullness()).isEqualTo(1);
+            assertThat(pet.getHappiness()).isEqualTo(1);
+            assertThat(pet.getFeeds()).isEqualTo(1);
+            verify(petRepository, org.mockito.Mockito.times(2)).findByIdForUpdate(PET_ID);
+            verify(petRepository, org.mockito.Mockito.never()).findById(PET_ID);
+        }
+
+        @Test
+        @DisplayName("조회(refresh)·재우기·dev 시계도 잠근다. 읽기 전용 get 만 잠그지 않는다")
+        void refreshSleepDevLockToo() {
+            child();
+            service.refresh(USER_ID, PET_ID, T0);
+            service.sleep(USER_ID, PET_ID, kst("2026-09-05 19:00"));
+            service.advanceClock(USER_ID, PET_ID, Duration.ofMinutes(1), kst("2026-09-05 19:00"));
+            verify(petRepository, org.mockito.Mockito.times(3)).findByIdForUpdate(PET_ID);
+            service.get(USER_ID, PET_ID);
+            verify(petRepository, org.mockito.Mockito.times(1)).findById(PET_ID);
         }
     }
 

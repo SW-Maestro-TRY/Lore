@@ -179,8 +179,10 @@ public final class PetResponses {
                         hatching ? pet.elapsedSeconds(now) : null,
                         pet.getDeathReason() != null ? pet.getDeathReason().name() : null,
                         pet.getHatchStartedAt(), pet.getHatchedAt(), now,
-                        null, null, null, null, null, null, null, null, null, null, null, null, null,
-                        null, null, null, null, null, null, null, null, null, null);
+                        // ★ 리스트는 null 이 아니라 빈 목록(해석 20) — 화면이 길이만 보고 그리게. null 이 프론트를 깨뜨렸다.
+                        null, null, null, null, null, null, null, null, null,
+                        List.of(), List.of(), List.of(),
+                        null, null, null, null, null, null, null, null, null, null, null);
             }
 
             boolean sleeping = pet.isSleeping();
@@ -188,7 +190,8 @@ public final class PetResponses {
             Clock clock = new Clock(
                     pet.babyUntil(), sleeping, sleeping ? kind.name() : null, pet.getSleptAt(), pet.getWokeAt(),
                     pet.canSleep(now), pet.canWake(now),
-                    sleeping ? null : AwakeClock.sleepWindowOpensAt(now),
+                    // 낮잠을 지금 잘 수 있으면 창은 "지금"(api-v2.md 2절)
+                    sleeping ? null : (pet.sleepKindAvailable(now) == SleepKind.NAP ? now : AwakeClock.sleepWindowOpensAt(now)),
                     sleeping ? null : AwakeClock.nextAutoSleep(now, pet.babyUntil()),
                     sleeping ? AwakeClock.wakeWindowOpensAt(kind, pet.getSleptAt()) : null,
                     sleeping ? AwakeClock.autoWakeAt(kind, pet.getSleptAt()) : null,

@@ -40,8 +40,11 @@ class PetDetailTest {
         assertThat(d.elapsedSeconds()).isEqualTo(30);
         assertThat(d.serverNow()).isEqualTo(T0.plusSeconds(30));
         assertThat(d.clock()).isNull();
-        assertThat(d.motions()).isNull();
         assertThat(d.tutorial()).isNull();
+        // 리스트는 null 이 아니라 빈 목록(해석 20)
+        assertThat(d.motions()).isEmpty();
+        assertThat(d.justUnlocked()).isEmpty();
+        assertThat(d.learnedToday()).isEmpty();
     }
 
     @Test
@@ -107,7 +110,11 @@ class PetDetailTest {
         assertThat(d.clock().sleeping()).isFalse();
         assertThat(d.clock().canSleep()).isTrue();                              // 아기 낮잠
         assertThat(d.clock().autoSleepAt()).isEqualTo(kst("2026-09-05 23:00"));
-        assertThat(d.clock().sleepWindowOpensAt()).isEqualTo(kst("2026-09-05 19:00"));
+        assertThat(d.clock().sleepWindowOpensAt()).isEqualTo(T0.plus(Duration.ofMinutes(1)));   // 낮잠 가능 → 지금(해석·2절)
+        pet.sleep(T0.plus(Duration.ofMinutes(1)));
+        pet.settle(T0.plus(Duration.ofMinutes(12)));                              // 낮잠 씀
+        assertThat(PetResponses.Detail.from(pet, null, T0.plus(Duration.ofMinutes(12)), CATALOG)
+                .clock().sleepWindowOpensAt()).isEqualTo(kst("2026-09-05 19:00"));
         assertThat(d.daysTogether()).isEqualTo(1);
         assertThat(d.gauges()).isEqualTo(new PetResponses.Gauges(1, 3, 4, 0));
         assertThat(d.food()).isEqualTo(new PetResponses.Food(3, null));

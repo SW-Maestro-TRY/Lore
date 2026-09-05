@@ -102,18 +102,26 @@ public class PetService {
     /** 내 펫 하나. 남의 펫이면 403 이 아니라 404 — 403 은 "그 번호의 펫이 있다" 를 알려준다. */
     @Transactional(readOnly = true)
     public ZzalPet get(Long userId, Long petId) {
-        return findMine(userId, petId);
+        // 읽기 전용 — 잠그지 않는다(읽기 트랜잭션에서 FOR UPDATE 는 뜻이 없다).
+        return petRepository.findById(petId)
+                .filter(p -> p.isOwnedBy(userId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
     }
 
     /**
-     * 내 펫을 꺼낸다. 트랜잭션을 열지 않는다.
+     * 내 펫을 <b>잠그고</b> 꺼낸다. 상태를 바꾸는 모든 길(정산·돌봄·잠·dev 시계)이 여기를 지난다.
+     *
+     * <h3>★★ 왜 잠그는가 — 같은 펫에 요청 둘이 겹치면 하나가 사라진다</h3>
+     * 두 요청이 같은 행을 각자 읽어 각자 저장하면 나중 저장이 먼저 것을 덮어쓴다. 리뷰 실측: FEED 와 SNACK 을
+     * 동시에 보내면 둘 다 200 인데 FEED 가 소실됐다(3/3). 놀이 시작({@code GameService.start})과 같은 방식으로
+     * {@code SELECT … FOR UPDATE} 를 걸어 같은 펫의 요청을 직렬화한다. 다른 펫끼리는 안 기다린다.
      *
      * ★ 같은 클래스 안에서 자기 메서드를 부르면 프록시를 안 거쳐 {@code @Transactional} 이 무시된다.
      *   그래서 아래 메서드들은 {@link #get} 이 아니라 이것을 부른다(2026-09-02 에 이 함정으로
-     *   "부화 완료" 로그는 찍히는데 DB 는 QUEUED 인 일이 있었다).
+     *   "부화 완료" 로그는 찍히는데 DB 는 QUEUED 인 일이 있었다). 잠금은 트랜잭션 안에서만 뜻이 있다.
      */
     private ZzalPet findMine(Long userId, Long petId) {
-        return petRepository.findById(petId)
+        return petRepository.findByIdForUpdate(petId)
                 .filter(p -> p.isOwnedBy(userId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
     }
