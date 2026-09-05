@@ -29,7 +29,7 @@ import {
   BABY_DROP_MS, BABY_MS, CARE_MISS_ZERO_MS, CHAT_MEMORY, CHAT_SLOTS, CHAT_MAX_CHARS, DROP_MS, FEATURE_UNLOCK,
   FOOD_CHARGE_MS, GAMES_PER_DAY, INTIMACY, INTIMACY_TIERS, LEFT_RIGHT, MAX_FOOD, MAX_GAUGE, MAX_TRASH, NAME_MAX_CHARS,
   NAP, RUN, SLEEP_WINDOW, SNACK_STREAK_SICK, UNLOCK_CONDITIONS, WAKE_WINDOW, WORLD_MAX_CHARS, moodOf,
-  GIFT_SEQ, FIRST_GIFT_DAYS,
+  GIFT_SEQ, FIRST_GIFT_DAYS, HIDDEN_PROGRESS_SEQ,
 } from '../../tamagotchi/rules';
 import { BACKGROUNDS, DEFAULT_BACKGROUND, MOTIONS, SPECIAL_ADV } from '../../tamagotchi/constants';
 import { BABY_CALLS } from '../../tamagotchi/tutorial';
@@ -840,7 +840,11 @@ export class MockPetServer implements PetSource {
         seq: m.seq, key: m.key, label: m.label, layer: m.layer, unlocked,
         basicImageKey: unlocked && m.layer !== 'GIFT' ? demoImage(m.key) : null,
         hint: !unlocked && cond ? cond.hint : (m.layer === 'GIFT' ? '3일이나 함께해서…' : null),
-        progress: cond ? { current: Math.min(cond.target, this.counterValue(r, cond.counter)), target: cond.target } : null,
+        // ★ 15번(웃는 대기)만 진행도를 안 준다(계약 해석 40). 그 숫자는 곧 케어 미스를 되짚게 해 주는데
+        //   케어 미스는 숨은 수치다(정본 §4). 다른 잠긴 칸은 그대로 진행도를 준다.
+        progress: cond && cond.seq !== HIDDEN_PROGRESS_SEQ
+          ? { current: Math.min(cond.target, this.counterValue(r, cond.counter)), target: cond.target }
+          : null,
         advanced: m.advanced,
       };
     });
