@@ -108,12 +108,15 @@
 
 ### 1.6 동작·앨범
 
-| 호출 | 비고 |
-|---|---|
-| `POST /{id}/motions/{seq}/seen` | "배워왔어요" 확인. `learnedToday`에서 빠진다 |
-| `GET /{id}/album` | `Album{motions[18], postcards[], scenes[≤3], firstGift}` — 잠긴 칸도 이름+조건 |
+| 호출 | 비고 | 거절 |
+|---|---|---|
+| `POST /{id}/motions/{seq}/seen` | "배워왔어요" 확인. `learnedToday`에서 빠진다. 응답 = `PetDetail` | `ZZAL_MOTION_NOT_OPEN`(아직 도착하지 않은 동작) |
+| `GET /{id}/album` | `Album{motions[18], postcards[], scenes[≤3], firstGift}` — 잠긴 칸도 이름+조건 | |
 
-- 앨범 기능은 첫 심화 행동이 열릴 때 같이 열린다(`features.album`). 그 전에 부르면 `ZZAL_FEATURE_LOCKED`.
+- 앨범 기능은 첫 심화 행동이 **도착**할 때 같이 열린다(`features.album`). **v0 동안 조회 자체는 막지 않는다**(해석 25).
+- **아침 공개**(정본 2장) — 검수를 통과한(`OPEN`) 심화 행동은 그 펫이 **깨어 있는 첫 조회(settle)**에, 자는 펫이면 **깨우기(`POST /wake`) 응답 그 자리에서** 도착하고 그때 `revealedAt`이 찍힌다. 자는 동안에는 안 온다. 10:00을 넘겨 판정되면 그날 낮에 도착한다(정본 16장, 늦잠 강제 없음).
+- **도착 전에는 `advanced.imageKey`가 null이다.** 검수 대기·재생성 중인 그림은 어떤 경로로도 안 내려간다.
+- 다운로드·공유(`POST /{id}/share`) 대상 = 열린 기본 행동 + **도착한 심화 행동**(정본 16장).
 
 ### 1.7 미니게임(정본 7장)
 
@@ -126,7 +129,7 @@
 
 - 두 게임 합쳐 **하루 3판**, 시작한 판 기준, 잠들 때 리셋. `RUN`은 좌우 맞히기 **5승** 뒤.
 - 승리 = 행복 +1(설정 `app.zzal.reward.game-win: HAPPINESS`).
-- 응답 `GameState{playing, gameId, kind, round, hits, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}` · `Guess{…, justUnlocked[], runUnlocked}` · `RunResult{gameId, survivedMs, win, remainingToday, justUnlocked[], runUnlocked}` — **행동 응답 = 상태**: 게임 경로 해금(13번 놀라기 = 3판 시작, 달리기 = 5승)이 그 응답에 실린다(`runUnlocked`는 동작이 아니라 기능이라 별도 불리언).
+- 응답 `GameState{playing, gameId, kind, round, hits, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(★ `finished`·`win`은 **없다** — 판이 끝났는지는 `guess` 응답이 말한다) · `Guess{gameId, round, pick, answer, hit, hits, finished, win, nextRound, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(`win`은 끝났을 때만·`nextRound`는 안 끝났을 때만) · `RunResult{gameId, survivedMs, win, remainingToday, justUnlocked[], runUnlocked}` — **행동 응답 = 상태**: 게임 경로 해금(13번 놀라기 = 3판 시작, 달리기 = 5승)이 그 응답에 실린다(`runUnlocked`는 동작이 아니라 기능이라 별도 불리언).
 - **「해석」27** 밤잠을 넘긴 미완료 판은 잇지 않는다 — 익일 첫 `start`가 어제 판(오늘 기상 전 시작)을 접고(패) 새 판을 연다.
 - 달리기 서버 검증은 정본대로 상한(60,000ms)만. "시작 뒤 경과 시간 + 2초" 검사는 보류(결정기록).
 
@@ -343,6 +346,7 @@
 | **`ZZAL_NOT_TRAVELING`** | 409 | 여행 중 아닌데 부르기 |
 | **`ZZAL_MOTION_NOT_OPEN`** | 409 | 안 열린 동작 공유·seen |
 | **`ZZAL_REGEN_NOT_REQUESTED`** | 409 | 재생성 요청 없는 모션에 업로드(맥미니) |
+| **`ZZAL_NOT_IN_REVIEW`** | 409 | 검수 대기가 아닌 행에 판정(#224 리뷰) |
 | `ZZAL_GAME_NOT_FOUND` · `ZZAL_GAME_FINISHED` · `ZZAL_GAME_DAILY_LIMIT` | 404·409·409 | v1과 같음 |
 | `ZZAL_FEEDBACK_ALREADY_SUBMITTED` | 409 | v1과 같음 |
 | `ADMIN_ONLY` | 403 | 관리자 아님 |
@@ -356,10 +360,14 @@
 | 호출 | 요청 | 응답·비고 |
 |---|---|---|
 | `GET /pending` | | `REVIEW` 상태 목록(오래된 순). 펫 이름·주인 없음. `{motionId, key, label, imageKey, gateVerdict, gateNote, gateVersion, attempts, regenRound, nightOf, createdAt}` |
-| `POST /{id}/verdict` | `{verdict: OK\|REGENERATE, note? ≤500}` | OK → `OPEN`(아침 공개). REGENERATE → `regenRound<2`면 `LOCAL_REQUESTED`, 아니면 `FAILED`(다음 밤 재등록, `nightOf` 유지). 이미 **도착한** 것은 되돌리지 않고 판정만 기록 |
+| `POST /{id}/verdict` | `{verdict: OK\|REGENERATE, note? ≤500}` | **`REVIEW`인 행에만** — 아니면 409 `ZZAL_NOT_IN_REVIEW`. OK → `OPEN`(아침 공개). REGENERATE → `regenRound<2`면 `LOCAL_REQUESTED`, 아니면 `FAILED`(다음 밤 재등록, `nightOf` 유지) |
 | `GET /regen-requests` | | 맥미니 폴링. `LOCAL_REQUESTED` 목록 `{motionId, petId, sheetImageKey, identityText, motionKey, blockText, regenRound}` — **지시문 본문(`blockText`)을 통째로 실어 보낸다**(러너가 레포·DB를 안 봐도 되게). 펫이 없거나 지시문을 못 읽는 주문은 목록에서 빠지고 서버 로그에만 남는다 |
 | `POST /{id}/upload` | `{imageKey}` | 맥미니가 presign으로 올린 결과 등록 → `REVIEW`(바로 열지 않는다). `LOCAL_REQUESTED`가 아니면 `ZZAL_REGEN_NOT_REQUESTED`. 키는 부화와 같은 문(`S3Service.consume`)을 지난다 |
 | `GET /night/summary?date=YYYY-MM-DD` | | 그 밤 현황 `{nightOf, queued, baking, review, localRequested, open, failed, costUsd}` — **모션 행을 직접 세어** 만든다(`zzal_night_run`의 숫자는 "집어서 넘긴 수"라 실제와 다르다) |
+
+- **판정 창(23:00~10:00)은 서버가 막지 않는다.** 정본 2장이 늦은 판정을 허용하고(10시를 넘기면 낮에 도착) 창을 서버가 강제하면 그 규칙과 충돌한다. 창은 운영 습관이지 검증이 아니다.
+- **판정은 `REVIEW`인 행에만 통한다.** 반려해 둔 자리(`LOCAL_REQUESTED`)에는 **퇴짜 맞은 옛 그림이 그대로 붙어 있어**, 거기에 OK가 통하면 그 그림이 공개된다(#224 리뷰 실측). 그 밖(FAILED·QUEUED·NONE·이미 공개)도 같은 이유로 409.
+- **다음 밤에 다시 오르면 `regenRound`는 0으로 돌아간다** — 그 값은 "이번 밤에 맥미니를 몇 번 썼나"다. 안 돌리면 지난 밤에 두 번 쓴 자리는 다음 밤 첫 실패에 곧바로 `FAILED`가 돼 재생성 기회가 영구히 사라진다.
 
 **상태 한 바퀴** — `NONE → QUEUED`(밤 계획) `→ BAKING`(집힘) `→ REVIEW`(API 1회 성공) 또는 `LOCAL_REQUESTED`(게이트 FAIL·생성 실패) `→ REVIEW`(맥미니 업로드) `→ OPEN`(OK) `→ 도착(revealedAt)`. REGENERATE는 `LOCAL_REQUESTED`로 되돌리고, 재생성 한도(2)를 다 쓰면 `FAILED`(다음 밤에 다시).
 
@@ -429,7 +437,7 @@
 | 22 | 1.5 | 답 응답은 `{pet, chatReply}` 봉투 |
 | 23 | 1.5 | 부름 행은 조회·답 때 도래한 슬롯으로 생성, 만료 시각 규칙, 아기 60분 안엔 하루 부름 없음, `chatSummary.openSlot`은 v0에서 null. **시작 ≥ 만료인 슬롯은 없다** — 정오 이후 기상의 NOON, 18:00 이후 부화의 MORNING·NOON(부화 당일은 BABY가 있고 평일은 10:00 자동 기상이라 NOON이 17:00을 넘지 않음). 답한·만료된 BABY는 부화 당일에만 목록에 |
 | 24 | 1.5 | 재언급은 답 3개마다 그다음 답에서(4·7·10번째) |
-| 25 | 1.6 | v0에서는 앨범 조회가 항상 된다(첫 심화 전 `FEATURE_LOCKED` 게이트는 PR-7에서 `features.album`과 함께) |
+| 25 | 1.6 | **v0 동안 앨범 잠금은 플래그만이다** — `features.album`은 첫 심화가 도착해야 true지만 `GET /album`은 항상 200. 조회를 막으면 도감을 미리 못 보는데, 잠긴 칸의 이름·조건을 보여주는 것이 정본 6장이라 서로 어긋난다. 게이트를 걸지는 v1 UI를 보고 정한다 — **확정(#224 리뷰)** |
 | 26 | 2 | v2 설정인데 프롬프트가 없으면 v1로 기동·기록도 v1(조용히 v2로 적지 않음). 부팅 로그 경고 |
 | 28 | 9 | 밤 큐 우선순위의 "streak"는 PR-10 전까지 케어 미스 0인 날 수(`zeroMissDays`). 첫 심화 판정은 잠든 밤(`lastNightOf`)에만 |
 | 29 | 2 | `motions[].advanced.status`는 **사용자 말 4가지**(NONE·QUEUED·PRACTICING·OPEN). REVIEW·LOCAL_REQUESTED·BAKING·판정 끝났지만 도착 전 = 전부 `PRACTICING`. 운영 상태를 화면에 내려보내지 않는다 |
@@ -451,7 +459,7 @@
 | 2 `sick`·`pieces`·`leaving`·`trip`·`scenes.latest` | 항상 null·빈 목록 | PR-8·10·11·9 |
 | 1.5 채팅 | **v2 동작** — `GET /chat` · `POST /chat/{slot}/answer`(해석 22~24). `chatSummary.openSlot`은 null | PR-4 |
 | 1.7 미니게임 | **v2 동작** — `POST /games {kind}` · `guess` · `finish` · `current`. 합산 3판·잠들 때 리셋·RUN 5승 해금 | PR-4 |
-| 1.6 앨범·동작 | **`GET /album` 동작** — 도감 18칸(잠긴 칸 hint/progress). 엽서·장면 빈 목록. v0에선 항상 조회 가능(해석 25). **`POST /motions/{seq}/seen` 동작**(도착한 것만), 공유 대상에 도착한 심화 행동 포함 | PR-5·7 |
+| 1.6 앨범·동작 | **`GET /album` 동작** — 도감 18칸(잠긴 칸 hint/progress). 엽서·장면 빈 목록. v0 동안 잠금은 **플래그만**(해석 25). **`POST /motions/{seq}/seen` 동작**(도착한 것만), 공유 대상에 도착한 심화 행동 포함 | PR-5·7 |
 | 배포 절차 | `ZZAL_PIPELINE_VERSION` 전환은 **`HATCHING` 0건일 때**(굽는 도중 버전이 바뀌면 복구가 다른 버전 산출물을 이어받을 수 있음). 복구 job은 원래 job의 버전을 잇고 단계 재사용도 같은 버전만 | PR-5 |
 | 부화 파이프라인 v2 | `PipelineRegistry` HATCH v2 = sheet→identity→grid→grid2→post(`basic/{key}.webp`, `--keys`). `prompt/v2/*.txt`가 없으면 **v1로 기동하고 부팅 로그에 경고**, 기록도 v1 | PR-5 |
 | 5 관리자 | **v2 동작** — `/api/zzal/v2/admin/motions` 5개(`pending`·`verdict`·`regen-requests`·`upload`·`night/summary`). v1 경로는 제거 | PR-7 |
@@ -468,4 +476,5 @@
 - **2026-09-05** — PR-4: 채팅·미니게임 v2 경로 동작(9절), 해석 22~24.
 - **2026-09-05** — PR-5: 부화 18행·파이프라인 v2·앨범(9절), 해석 25·26.
 - **2026-09-05** — PR-6 리뷰 반영(#219): 밤 큐 상태 회수·이월 우선권·API 굽기 1회.
+- **2026-09-05** — PR-7(#197) 리뷰 반영(#224): 판정은 `REVIEW`인 행에만(`ZZAL_NOT_IN_REVIEW`), 깨우기 응답에 도착, `queue()`가 `regenRound` 리셋, 판정·업로드 행 잠금, 해석 25 확정(앨범은 플래그만).
 - **2026-09-05** — PR-7(#197): 검수 후 공개. 관리자 5개를 v2 경로로, 아침 공개(`revealedAt`)·`learnedToday`·`seen`·`baking`·`firstGift`·`features.album`, "검수 전 지급" 제거. 해석 29~33. 1.5 채팅 봉투·1.7 게임 응답 필드를 실물과 대조해 확정.

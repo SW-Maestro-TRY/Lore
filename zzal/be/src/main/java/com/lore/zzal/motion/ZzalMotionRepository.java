@@ -63,4 +63,14 @@ public interface ZzalMotionRepository extends JpaRepository<ZzalMotion, Long> {
     @Query("update ZzalMotion m set m.status = com.lore.zzal.motion.MotionStatus.QUEUED, m.claimedAt = null, m.claimedBy = null "
             + "where m.id = :id and m.status = com.lore.zzal.motion.MotionStatus.BAKING")
     int releaseClaim(@Param("id") Long id);
+
+    /**
+     * 판정·업로드가 <b>행을 잠그고</b> 꺼낸다(펫·게임과 같은 방식).
+     *
+     * ★ 검사와 저장 사이에 다른 요청이 끼면 둘 다 검사를 통과한다 — 같은 행에 REGENERATE 를 두 번 빠르게 누르면
+     *   재생성 한도가 한 번만 깎이고, 판정과 업로드가 겹치면 그림이 뒤바뀔 수 있다.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from ZzalMotion m where m.id = :id")
+    Optional<ZzalMotion> findByIdForUpdate(@Param("id") Long id);
 }

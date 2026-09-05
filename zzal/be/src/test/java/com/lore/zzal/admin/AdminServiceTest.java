@@ -69,6 +69,7 @@ class AdminServiceTest {
         jobRepository = mock(GenJobRepository.class);
         s3Service = mock(S3Service.class);
         when(motionRepository.findById(anyLong())).thenAnswer(i -> Optional.ofNullable(motions.get(i.<Long>getArgument(0))));
+        when(motionRepository.findByIdForUpdate(anyLong())).thenAnswer(i -> Optional.ofNullable(motions.get(i.<Long>getArgument(0))));
         when(motionRepository.findByStatusOrderByIdAsc(any())).thenAnswer(i ->
                 motions.values().stream().filter(m -> m.getStatus() == i.getArgument(0)).toList());
         when(jobRepository.sumCostByMotionIds(any())).thenReturn(new BigDecimal("0.1970"));
@@ -125,20 +126,49 @@ class AdminServiceTest {
         assertThat(m.getStatus()).isEqualTo(MotionStatus.FAILED);
         assertThat(m.getNightOf()).isEqualTo(NIGHT);     // 밤은 지운다고 좋을 게 없다(이월 우선권)
         assertThat(m.getRevealedAt()).isNull();
+
+        // ★★ 다음 밤에 다시 오르면 재생성 기회도 처음으로 돌아온다 — 안 그러면 그 동작은 영영 못 배운다(#224 중-1)
+        m.queue(NIGHT.plusDays(1));
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.QUEUED);
+        assertThat(m.getRegenRound()).isZero();
     }
 
     @Test
-    @DisplayName("★ 이미 도착한 동작에 REGENERATE — 되돌리지 않고 판정만 남긴다(도감에서 칸이 사라지면 안 된다)")
-    void doesNotRevokeArrived() {
+    @DisplayName("★★ 반려해 둔 자리(LOCAL_REQUESTED)에 OK → 409 — 퇴짜 맞은 옛 그림이 공개되면 안 된다")
+    void okOnRejectedRowIsRefused() {
         ZzalMotion m = reviewing(12L, 101);
-        m.approve(T0);
-        m.reveal(T0);
+        service.review(ADMIN, 12L, HumanVerdict.REGENERATE, "발이 잘림");
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.LOCAL_REQUESTED);
+        String rejected = m.getImageKey();          // 반려된 그림이 아직 붙어 있다
 
-        service.review(ADMIN, 12L, HumanVerdict.REGENERATE, "다시");
+        assertThatThrownBy(() -> service.review(ADMIN, 12L, HumanVerdict.OK, "역시 괜찮네"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_NOT_IN_REVIEW);
 
-        assertThat(m.getStatus()).isEqualTo(MotionStatus.OPEN);
-        assertThat(m.getHumanVerdict()).isEqualTo(HumanVerdict.REGENERATE);   // 기록은 남는다
-        assertThat(m.getRegenRound()).isZero();
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.LOCAL_REQUESTED);   // 안 열렸다
+        assertThat(m.advancedImageKey()).isNull();                           // 그림도 안 내려간다
+        assertThat(m.getImageKey()).isEqualTo(rejected);
+    }
+
+    @Test
+    @DisplayName("★ 이미 도착한 동작·실패한 자리·굽기 전 자리에도 판정이 안 통한다(REVIEW 만)")
+    void onlyReviewRowsAreJudgeable() {
+        ZzalMotion arrived = reviewing(13L, 101);
+        arrived.approve(T0);
+        arrived.reveal(T0);
+        ZzalMotion failed = reviewing(14L, 102);
+        failed.markFailed();
+        ZzalMotion untouched = ZzalMotion.forCatalog(7L, catalog.bySeq(1).orElseThrow(), T0);
+        ReflectionTestUtils.setField(untouched, "id", 15L);
+        motions.put(15L, untouched);
+
+        for (long id : new long[]{13L, 14L, 15L}) {
+            assertThatThrownBy(() -> service.review(ADMIN, id, HumanVerdict.OK, null))
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_NOT_IN_REVIEW);
+        }
+        assertThat(arrived.getStatus()).isEqualTo(MotionStatus.OPEN);
+        assertThat(failed.getStatus()).isEqualTo(MotionStatus.FAILED);
+        assertThat(untouched.getStatus()).isEqualTo(MotionStatus.NONE);
     }
 
     @Test

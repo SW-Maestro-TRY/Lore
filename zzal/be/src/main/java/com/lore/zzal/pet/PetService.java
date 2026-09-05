@@ -357,7 +357,12 @@ public class PetService {
             throw new BusinessException(ErrorCode.ZZAL_NOT_WAKE_TIME,
                     pet.getSleepKind() == SleepKind.NAP ? "조금만 더 재워 주세요" : "아침 7시에 깨워 주세요");
         }
-        return withUnlockDiff(pet, () -> pet.wake(now));
+        Action action = withUnlockDiff(pet, () -> pet.wake(now));
+        // ★★ 깨우는 그 응답에 아침 도착이 실려야 한다(#224 리뷰 상-2). touch 는 이 메서드 앞에서 돌았고
+        //   그때는 자는 중이라 아무것도 안 찍혔다. 여기서 안 부르면 "깨웠다" 응답에는 안 오고 다음 조회에서야 온다 —
+        //   "행동 응답 = 최신 상태" 원칙을 어기고, 화면은 깨우자마자 새로고침해야 배워 온 것을 본다.
+        reveal(pet, now);
+        return action;
     }
 
     // ── 성격·배경·공유 (정본 6·10·15장) ───────────────────────────────────

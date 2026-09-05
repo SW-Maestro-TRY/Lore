@@ -112,7 +112,13 @@ public class ZzalMotion {
     @Column
     private Instant reviewedAt;
 
-    /** 몇 번 구웠나. 실패해서 다시 구우면 올라간다. */
+    /**
+     * 몇 번 구웠나 — API 는 <b>굽기를 시작할 때</b>, 맥미니는 <b>결과를 올릴 때</b> 하나 오른다.
+     *
+     * ★ 두 시점이 다른 이유 — API 는 우리가 호출하니 시작을 알지만, 맥미니가 몇 번 실패했는지는 서버가 못 본다.
+     *   그래서 이 값은 "돈·시간이 든 횟수" 가 아니라 <b>서버가 아는 굽기 횟수</b>다. 맥미니가 몇 번 헛돌았는지는
+     *   러너 로그에만 남는다. 재생성 횟수는 {@code regenRound} 가 따로 센다.
+     */
     @Column(nullable = false)
     private int attempts;
 
@@ -201,12 +207,21 @@ public class ZzalMotion {
         }
     }
 
-    /** 밤 큐에 올린다(정본 6장). */
+    /**
+     * 밤 큐에 올린다(정본 6장).
+     *
+     * ★★ {@code regenRound} 를 <b>0 으로 되돌린다.</b> 그 값은 "이번 밤에 맥미니를 몇 번 썼나" 이지
+     *   그 동작의 평생 횟수가 아니다. 안 돌리면 지난 밤에 두 번 쓴 자리는 다음 밤에 API 한 판이 실패하는 순간
+     *   곧바로 {@code FAILED} 가 돼, <b>재생성 기회가 영구히 사라진다</b>(#224 리뷰 중-1).
+     *   정본 16장은 "굽기 실패는 조각을 소모하지 않는다 — 다음 밤에 같은 동작을 다시 굽는다" 이므로
+     *   다음 밤은 처음과 같은 조건이어야 한다. 평생 누적이 필요해지면 별도 칸을 만든다.
+     */
     public void queue(LocalDate nightOf) {
         this.status = MotionStatus.QUEUED;
         this.nightOf = nightOf;
         this.claimedAt = null;
         this.claimedBy = null;
+        this.regenRound = 0;
     }
 
     /** 그 밤 실패 — 조각은 소모하지 않고 다음 밤에 다시 오른다(16장). */

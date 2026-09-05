@@ -59,6 +59,7 @@ public enum ErrorCode {
     ZZAL_NOT_TRAVELING(HttpStatus.CONFLICT, "여행 중이 아니에요"),
     ZZAL_MOTION_NOT_OPEN(HttpStatus.CONFLICT, "아직 배우지 않은 동작이에요"),
     ZZAL_REGEN_NOT_REQUESTED(HttpStatus.CONFLICT, "다시 굽기를 요청한 동작이 아니에요"),
+    ZZAL_NOT_IN_REVIEW(HttpStatus.CONFLICT, "검수 대기 중인 동작이 아니에요"),
 
     // 놓아주기 (zzal) — 부화 중에는 보낼 수 없다. 알을 보내면 뒤에서 굽고 있는 생성이
     // 주인 없는 일이 되어, 돈은 나가는데 받을 펫이 없는 상태로 끝난다.

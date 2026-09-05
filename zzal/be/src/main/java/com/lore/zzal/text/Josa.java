@@ -13,8 +13,12 @@ package com.lore.zzal.text;
  *   <li><b>한글</b> — 유니코드 완성형에서 종성 인덱스가 0이 아니면 받침이 있다({@code (코드 - 0xAC00) % 28})</li>
  *   <li><b>영문</b> — 마지막 글자가 모음(a·e·i·o·u)이면 받침 없음, 자음이면 있음("Tom이가" · "Bori가")</li>
  *   <li><b>숫자</b> — 읽는 소리로 판정한다. 0(영)·1(일)·3(삼)·6(육)·7(칠)·8(팔)은 받침, 2·4·5·9는 없음</li>
- *   <li>그 밖(이모지·기호)은 <b>받침 없음</b>으로 본다 — 틀려도 "이" 를 덧붙이지 않는 쪽이 덜 어색하다</li>
+ *   <li>그 밖(이모지·기호·결합문자)은 <b>건너뛰고</b> 그 앞의 글자로 판정한다 — "밤톨🐣" 은 "밤톨이는".
+ *       끝까지 글자가 없으면(이모지뿐) 받침 없음으로 본다</li>
  * </ul>
+ *
+ * ★ 판정 전에 <b>NFC 로 정규화</b>한다. 같은 "밤톨" 이라도 자모가 풀린 형태(NFD)로 들어오면 마지막 char 가
+ *   종성 자모 하나여서 완성형 판정이 통째로 빗나간다(맥 파일명·일부 IME 가 NFD 를 낸다).
  *
  * <h3>이름 뒤의 "이"</h3>
  * 한국어에서 받침 있는 이름은 부를 때 "이" 가 붙는다(밤톨 → <b>밤톨이</b>가). 받침이 없으면 안 붙는다(보리 → 보리가).
@@ -69,17 +73,20 @@ public final class Josa {
         if (word == null || word.isBlank()) {
             return false;
         }
-        String trimmed = word.strip();
-        char last = trimmed.charAt(trimmed.length() - 1);
-        if (last >= 0xAC00 && last <= 0xD7A3) {
-            return (last - 0xAC00) % 28 != 0;
-        }
-        if (Character.isDigit(last)) {
-            return DIGITS_WITH_FINAL.indexOf(last) >= 0;
-        }
-        char lower = Character.toLowerCase(last);
-        if (lower >= 'a' && lower <= 'z') {
-            return "aeiou".indexOf(lower) < 0;
+        String normalized = java.text.Normalizer.normalize(word.strip(), java.text.Normalizer.Form.NFC);
+        // 뒤에서부터 "발음이 있는 글자" 를 찾는다 — 이모지·기호·결합문자는 소리가 없으므로 건너뛴다.
+        for (int i = normalized.length() - 1; i >= 0; i--) {
+            char c = normalized.charAt(i);
+            if (c >= 0xAC00 && c <= 0xD7A3) {
+                return (c - 0xAC00) % 28 != 0;
+            }
+            if (Character.isDigit(c)) {
+                return DIGITS_WITH_FINAL.indexOf(c) >= 0;
+            }
+            char lower = Character.toLowerCase(c);
+            if (lower >= 'a' && lower <= 'z') {
+                return "aeiou".indexOf(lower) < 0;
+            }
         }
         return false;
     }

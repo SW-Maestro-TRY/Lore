@@ -68,6 +68,25 @@ class JosaTest {
     }
 
     @Test
+    @DisplayName("★ 이모지·결합문자는 건너뛰고 앞 글자로 판정한다")
+    void skipsSymbols() {
+        assertThat(Josa.nameTopic("밤톨🐣")).isEqualTo("밤톨🐣이는");
+        assertThat(Josa.nameSubject("보리🐣")).isEqualTo("보리🐣가");
+        assertThat(Josa.nameSubject("밤톨!")).isEqualTo("밤톨!이가");
+        assertThat(Josa.nameSubject("Tom~")).isEqualTo("Tom~이가");
+    }
+
+    @Test
+    @DisplayName("★ 자모가 풀린 이름(NFD)도 같은 판정 — 맥 파일명·일부 IME 가 이 형태를 낸다")
+    void normalizesToNfc() {
+        String nfd = java.text.Normalizer.normalize("밤톨", java.text.Normalizer.Form.NFD);
+        assertThat(nfd).isNotEqualTo("밤톨");                       // 실제로 다른 문자열이다
+        assertThat(Josa.hasFinalConsonant(nfd)).isTrue();
+        assertThat(Josa.hasFinalConsonant(
+                java.text.Normalizer.normalize("보리", java.text.Normalizer.Form.NFD))).isFalse();
+    }
+
+    @Test
     @DisplayName("★ 빈 이름·이모지에도 터지지 않는다 — 거절 메시지를 만들다가 500이 나가면 안 된다")
     void neverThrows() {
         assertThat(Josa.hasFinalConsonant(null)).isFalse();

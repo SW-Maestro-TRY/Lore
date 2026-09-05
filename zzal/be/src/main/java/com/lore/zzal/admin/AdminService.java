@@ -93,26 +93,30 @@ public class AdminService {
      *       {@code nightOf} 는 그대로 둔다 — 다음 밤 계획이 FAILED 를 다시 올리고, 이월 우선권도 그 밤으로 잡힌다</li>
      * </ul>
      *
-     * ★ 이미 본 것을 다시 눌러도 막지 않는다. 잘못 누른 판정을 고칠 길이 없으면 틀린 채로 남고,
-     *   그 틀린 값이 게이트 일치율을 오염시킨다. 단 이미 {@code OPEN} 인 것을 되돌리지는 않는다 —
-     *   도감에서 칸이 사라지면 "배운 게 없어졌다" 가 되고, 그건 어설픈 그림보다 나쁘다.
+     * ★ 판정은 <b>검수 대기(REVIEW)인 행에만</b> 통한다. 공개된 것을 되돌리지 않는 것은 물론이고,
+     *   반려해 둔 자리({@code LOCAL_REQUESTED})에도 못 누른다 — 거기에는 <b>퇴짜 맞은 옛 그림이 그대로 붙어 있어</b>
+     *   OK 가 통하면 그 그림이 공개된다(#224 리뷰 실측). 잘못 누른 판정을 고치는 것은 새 그림이 올라와
+     *   다시 REVIEW 가 된 뒤에 한다.
      */
     @Transactional
     public void review(Long userId, Long motionId, HumanVerdict verdict, String note) {
         adminGuard.require(userId);
-        ZzalMotion motion = motionRepository.findById(motionId)
+        ZzalMotion motion = motionRepository.findByIdForUpdate(motionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그 모션을 찾을 수 없어요"));
+        // ★★ 지금 검수 대기인 행에만 판정한다(#224 리뷰 상-1).
+        //   안 보면 REGENERATE 로 반려한 자리(LOCAL_REQUESTED — 반려된 옛 그림이 그대로 붙어 있다)에 OK 를 눌러
+        //   <b>퇴짜 맞은 그림이 그대로 공개된다.</b> 실측으로 그 일이 났다. FAILED·QUEUED·NONE 도 같은 이유로 막는다.
+        //   "다시 눌러 고칠 수 있어야 한다" 는 REVIEW 안에서만 성립한다.
+        if (motion.getStatus() != MotionStatus.REVIEW) {
+            throw new BusinessException(ErrorCode.ZZAL_NOT_IN_REVIEW,
+                    "지금은 검수할 수 없어요(%s)".formatted(motion.getStatus()));
+        }
         Instant now = Instant.now();
         motion.review(verdict, note, now);
 
         if (verdict == HumanVerdict.OK) {
             motion.approve(now);
             log.info("검수 통과 — motionId={} 동작={} (아침 공개 대기)", motionId, motion.getName());
-            return;
-        }
-        if (motion.isRevealed()) {
-            // 이미 사용자에게 도착한 것은 되돌리지 않는다(위 주석). 판정만 기록으로 남는다.
-            log.warn("이미 도착한 동작에 REGENERATE — motionId={} 기록만 남깁니다", motionId);
             return;
         }
         if (motion.getRegenRound() >= localRegenMax) {
@@ -163,7 +167,7 @@ public class AdminService {
     @Transactional
     public void upload(Long userId, Long motionId, String imageKey) {
         adminGuard.require(userId);
-        ZzalMotion motion = motionRepository.findById(motionId)
+        ZzalMotion motion = motionRepository.findByIdForUpdate(motionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그 모션을 찾을 수 없어요"));
         if (motion.getStatus() != MotionStatus.LOCAL_REQUESTED) {
             throw new BusinessException(ErrorCode.ZZAL_REGEN_NOT_REQUESTED);

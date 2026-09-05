@@ -549,6 +549,25 @@ class PetServiceTest {
         }
 
         @Test
+        @DisplayName("★★ 깨우기 응답에 아침 도착이 실린다 — 다음 조회를 기다리게 하면 안 된다")
+        void arrivesInTheWakeResponse() {
+            ZzalPet pet = childWithId();
+            com.lore.zzal.motion.ZzalMotion gift = approvedGift();
+
+            // 23:00 자동 취침을 지나 아침 07:30 — 자는 중이라 아직 안 왔다
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 07:30"));
+            assertThat(pet.isSleeping()).isTrue();
+            assertThat(gift.getRevealedAt()).isNull();
+
+            service.wake(USER_ID, PET_ID, kst("2026-09-06 07:30"));
+
+            // ★ 깨우는 그 응답에서 도착해야 한다("행동 응답 = 최신 상태")
+            assertThat(pet.isSleeping()).isFalse();
+            assertThat(gift.getRevealedAt()).isNotNull();
+            assertThat(gift.advancedImageKey()).endsWith("/motion.webp");
+        }
+
+        @Test
         @DisplayName("★ 도착은 한 번만 찍힌다 — 다시 조회해도 시각이 바뀌지 않는다")
         void revealOnce() {
             childWithId();

@@ -49,7 +49,7 @@ public final class AdminResponses {
 
             @Schema(description = "어느 게이트 버전이 내린 판정인가", example = "g1") String gateVersion,
 
-            @Schema(description = "몇 번 구웠나(API + 맥미니)", example = "1") int attempts,
+            @Schema(description = "서버가 아는 굽기 횟수 — API 는 시작할 때, 맥미니는 결과를 올릴 때 +1(러너의 헛돈 횟수는 안 보인다)", example = "1") int attempts,
 
             @Schema(description = "맥미니 재생성 몇 번째인가(최대 2)", example = "0") int regenRound,
 
