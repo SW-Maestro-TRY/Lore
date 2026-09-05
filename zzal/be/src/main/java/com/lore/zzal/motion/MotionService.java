@@ -53,13 +53,16 @@ public class MotionService {
     private final MotionCatalog catalog;
     private final MotionGate gate;
     private final int maxAttempts;
+    /** 맥미니 재생성 상한(정본 6장 = 2). */
+    private final int localRegenMax;
 
     public MotionService(GenerationRunner runner, GenerationRecorder recorder,
                          MotionRecorder motionRecorder,
                          GenJobRepository jobRepository, GenStepRecordRepository stepRepository,
                          ZzalMotionRepository motionRepository, ZzalPetRepository petRepository,
                          PipelineRegistry registry, MotionCatalog catalog, MotionGate gate,
-                         @Value("${app.zzal.max-motion-attempts:3}") int maxAttempts) {
+                         @Value("${app.zzal.max-motion-attempts:1}") int maxAttempts,
+                         @Value("${app.zzal.night.local-regen-max:2}") int localRegenMax) {
         this.runner = runner;
         this.recorder = recorder;
         this.motionRecorder = motionRecorder;
@@ -71,6 +74,7 @@ public class MotionService {
         this.catalog = catalog;
         this.gate = gate;
         this.maxAttempts = maxAttempts;
+        this.localRegenMax = localRegenMax;
     }
 
     /**
@@ -103,13 +107,29 @@ public class MotionService {
             }
         } catch (RuntimeException | Error e) {
             // 지시문 누락·S3·OpenAI·DB — 무엇이든 여기로 온다. 로그만 남기고 두면 BAKING 고착이다.
+            // ★ 이 길은 맥미니에게 넘기지 않는다 — 지시문·시트가 없어서 터진 것이면 맥미니도 못 만든다.
             log.error("모션 굽기 중 예외 — motionId={} 를 FAILED 로 내립니다(다음 밤에 다시 오릅니다)", motionId, e);
             markFailedQuietly(motionId);
             return;
         }
-        // 다 써도 못 구웠다. 사용자에게는 안 보이고, 다음 밤에 같은 동작이 다시 오른다.
-        markFailedQuietly(motionId);
-        log.warn("모션 실패 확정 — motionId={} 시도={}회", motionId, maxAttempts);
+        // API 몫이 끝났다. 다시 만드는 일은 돈이 안 드는 맥미니가 맡는다(정본 6장).
+        handOverToLocal(motionId);
+    }
+
+    /**
+     * API 가 못 만든 자리를 맥미니(codex)에게 넘긴다. 한도({@code night.local-regen-max})를 다 썼으면
+     * 그 밤은 포기하고 {@code FAILED} — 조각은 소모하지 않고 다음 밤에 같은 동작이 다시 오른다(정본 16장).
+     */
+    private void handOverToLocal(Long motionId) {
+        try {
+            if (motionRecorder.requestLocalRegen(motionId, localRegenMax)) {
+                log.info("맥미니 재생성 요청 — motionId={} (관리자 GET /regen-requests 로 나간다)", motionId);
+            } else {
+                log.warn("로컬 재생성 한도({})를 다 썼다 — motionId={} 그 밤은 실패, 다음 밤에 다시", localRegenMax, motionId);
+            }
+        } catch (RuntimeException | Error e) {
+            log.error("재생성 요청 기록 실패 — motionId={} (기동 복구가 회수합니다)", motionId, e);
+        }
     }
 
     /**
@@ -169,22 +189,22 @@ public class MotionService {
         MotionGate.Verdict v = gate.judge(imageKey);
 
         if (v.verdict() == GateVerdict.FAIL) {
-            // 게이트가 실패라 하면 다시 굽는다. 판정은 기록에 남겨 두 판정을 비교할 수 있게 한다.
+            // 게이트가 실패라 하면 API 몫은 여기서 끝이다(정본 6장 — 다시 만드는 것은 맥미니).
+            // 판정은 기록에 남겨 기계 판정과 사람 판정을 비교할 수 있게 한다.
             motionRecorder.recordGate(motionId, imageKey, v);
 
-            // ★★ 성공 기록을 지워야 다음 시도가 실제로 다시 굽는다.
-            //   재시도는 성공한 단계를 건너뛰는데, 격자도 후처리도 "성공" 으로 남아 있으면
-            //   실행기가 둘 다 건너뛰고 <b>방금 퇴짜 맞은 그 그림을 또 판정한다.</b>
-            //   그러면 세 번을 시도해도 같은 결과가 세 번 나오고 시간만 쓴다.
+            // ★★ 성공 기록을 지운다. 재시도(설정으로 2 이상을 줬을 때)는 성공한 단계를 건너뛰는데,
+            //   격자도 후처리도 "성공" 으로 남아 있으면 실행기가 둘 다 건너뛰고
+            //   <b>방금 퇴짜 맞은 그 그림을 또 판정한다.</b>
             int discarded = recorder.discardMotionSteps(motionId);
-            log.info("게이트 실패 — 성공 기록 {}건을 지우고 다시 굽는다 (motionId={})", discarded, motionId);
+            log.info("게이트 실패 — 성공 기록 {}건을 지운다 (motionId={})", discarded, motionId);
             return false;
         }
 
-        // ★ 상훈님 확인 전에도 연다(2026-09-03 확정). 밤에 재운 사용자가 아침에 깼을 때
-        //   상훈님이 주무시는 동안 갇히면 안 된다. 확인은 사후에 하고, 반려되면 바꿔 끼운다.
-        motionRecorder.open(motionId, imageKey, v, Instant.now());
-        log.info("모션 완성 — motionId={} 동작={} 게이트={} 비용=${}",
+        // ★★ 검수 대기까지가 서버 몫이다. 사용자 화면은 상훈님이 OK 를 누르고, 그다음
+        //   펫이 깨어 있는 첫 정산에 도착한다(정본 2장 "기상 첫 화면").
+        motionRecorder.toReview(motionId, imageKey, v);
+        log.info("모션 구움 — motionId={} 동작={} 게이트={} 비용=${} (검수 대기)",
                 motionId, motion.getName(), v.verdict(), r.costUsd());
         return true;
     }

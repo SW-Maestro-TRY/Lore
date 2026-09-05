@@ -194,6 +194,8 @@
 
   "pieces": null,                        // 3층 전: null. 3층: { "food": true, "play": false, "clean": true, "bond": false, "streak": 1 }
 
+  "baking": "NONE",                      // NONE · QUEUED(오늘 밤에 굽는다) · PRACTICING(굽는 중·검수 중 — "아직 연습 중이에요")
+
   "motions": [                           // 18개 고정, seq 오름차순
     {
       "seq": 1, "key": "base", "label": "기본 자세", "layer": "BASIC_1",
@@ -201,6 +203,9 @@
       "basicImageKey": "images/zzal/pets/7/basic/base.webp",   // 잠김·선물이면 null
       "hint": null,                      // 잠긴 칸의 조건 문구: "채팅 응답 1회"
       "progress": null,                  // 잠긴 2층 칸: { "current": 0, "target": 1 }
+      // ★ status 는 DB 상태가 아니라 **사용자 말**이다: NONE · QUEUED · PRACTICING · OPEN.
+      //   REVIEW·LOCAL_REQUESTED 같은 운영 사정은 전부 PRACTICING 하나로 접힌다(해석 29).
+      //   imageKey 는 **도착(revealedAt) 뒤에만** 채워진다 — 검수 중인 그림은 안 내려간다.
       "advanced": { "status": "NONE", "imageKey": null, "revealedAt": null, "seen": false }
     },
     { "seq": 9, "key": "tilt", "label": "갸웃", "layer": "BASIC_2", "unlocked": false,
@@ -351,10 +356,12 @@
 | 호출 | 요청 | 응답·비고 |
 |---|---|---|
 | `GET /pending` | | `REVIEW` 상태 목록(오래된 순). 펫 이름·주인 없음. `{motionId, key, label, imageKey, gateVerdict, gateNote, gateVersion, attempts, regenRound, nightOf, createdAt}` |
-| `POST /{id}/verdict` | `{verdict: OK\|REGENERATE, note? ≤500}` | OK → `OPEN`(아침 공개). REGENERATE → `regenRound<2`면 `LOCAL_REQUESTED`, 아니면 `FAILED`(다음 밤 재등록) |
-| `GET /regen-requests` | | 맥미니 폴링. `LOCAL_REQUESTED` 목록 `{motionId, petId, key, promptFile, sheetImageKey, identityText, regenRound}` |
-| `POST /{id}/upload` | `{imageKey}` | 맥미니가 presign으로 올린 결과 등록 → `REVIEW`. `LOCAL_REQUESTED`가 아니면 `ZZAL_REGEN_NOT_REQUESTED` |
-| `GET /night/summary?date=YYYY-MM-DD` | | 그 밤 현황 `{nightOf, queued, baked, review, open, failed, localRequested, costUsd}` |
+| `POST /{id}/verdict` | `{verdict: OK\|REGENERATE, note? ≤500}` | OK → `OPEN`(아침 공개). REGENERATE → `regenRound<2`면 `LOCAL_REQUESTED`, 아니면 `FAILED`(다음 밤 재등록, `nightOf` 유지). 이미 **도착한** 것은 되돌리지 않고 판정만 기록 |
+| `GET /regen-requests` | | 맥미니 폴링. `LOCAL_REQUESTED` 목록 `{motionId, petId, sheetImageKey, identityText, motionKey, blockText, regenRound}` — **지시문 본문(`blockText`)을 통째로 실어 보낸다**(러너가 레포·DB를 안 봐도 되게). 펫이 없거나 지시문을 못 읽는 주문은 목록에서 빠지고 서버 로그에만 남는다 |
+| `POST /{id}/upload` | `{imageKey}` | 맥미니가 presign으로 올린 결과 등록 → `REVIEW`(바로 열지 않는다). `LOCAL_REQUESTED`가 아니면 `ZZAL_REGEN_NOT_REQUESTED`. 키는 부화와 같은 문(`S3Service.consume`)을 지난다 |
+| `GET /night/summary?date=YYYY-MM-DD` | | 그 밤 현황 `{nightOf, queued, baking, review, localRequested, open, failed, costUsd}` — **모션 행을 직접 세어** 만든다(`zzal_night_run`의 숫자는 "집어서 넘긴 수"라 실제와 다르다) |
+
+**상태 한 바퀴** — `NONE → QUEUED`(밤 계획) `→ BAKING`(집힘) `→ REVIEW`(API 1회 성공) 또는 `LOCAL_REQUESTED`(게이트 FAIL·생성 실패) `→ REVIEW`(맥미니 업로드) `→ OPEN`(OK) `→ 도착(revealedAt)`. REGENERATE는 `LOCAL_REQUESTED`로 되돌리고, 재생성 한도(2)를 다 쓰면 `FAILED`(다음 밤에 다시).
 
 ---
 
@@ -367,7 +374,7 @@
 | `POST /advance-clock` | `{seconds?, minutes?}` | 오프셋에 더한다(≤30일). 규칙은 한 글자도 안 바뀐다 |
 | `POST /set-clock` | `{at?: ISO} \| {sinceHatchMinutes?: int} \| {localTime?: "HH:mm"}` | 펫 시계를 그 시각으로. 셋 중 하나. `localTime`은 오늘(KST) 그 시각 |
 | `POST /night-sweep` | | 이 펫에 대해 23:00 스위프를 지금 실행(큐 등록·굽기) |
-| `POST /force-open/{seq}` | | 그 동작의 심화 행동을 가짜 imageKey로 즉시 `OPEN`(아침 도착 화면 확인용) |
+| `POST /force-open/{seq}` | | 그 동작의 심화 행동을 가짜 imageKey로 즉시 검수 통과(`OPEN`). **도착은 규칙 그대로** — 깨어 있으면 그 응답에서, 자는 중이면 깨어난 뒤 첫 조회에서 |
 
 응답은 전부 `PetDetail`.
 
@@ -425,6 +432,11 @@
 | 25 | 1.6 | v0에서는 앨범 조회가 항상 된다(첫 심화 전 `FEATURE_LOCKED` 게이트는 PR-7에서 `features.album`과 함께) |
 | 26 | 2 | v2 설정인데 프롬프트가 없으면 v1로 기동·기록도 v1(조용히 v2로 적지 않음). 부팅 로그 경고 |
 | 28 | 9 | 밤 큐 우선순위의 "streak"는 PR-10 전까지 케어 미스 0인 날 수(`zeroMissDays`). 첫 심화 판정은 잠든 밤(`lastNightOf`)에만 |
+| 29 | 2 | `motions[].advanced.status`는 **사용자 말 4가지**(NONE·QUEUED·PRACTICING·OPEN). REVIEW·LOCAL_REQUESTED·BAKING·판정 끝났지만 도착 전 = 전부 `PRACTICING`. 운영 상태를 화면에 내려보내지 않는다 |
+| 30 | 2 | 펫 단위 `baking` 한 칸을 더 준다(가장 앞선 상태 하나). 화면의 "아직 연습 중이에요" 한 줄이 이것만 보면 되게 |
+| 31 | 1.6 | 아침 공개는 시각이 아니라 **깨어 있는 첫 조회**에서. 자는 동안은 안 오고, 10:00을 넘겨 판정되면 낮에 온다(정본 16장) |
+| 32 | 5 | `regen-requests`는 지시문 **본문**(`blockText`)까지 실어 보낸다. 파일 이름만 주면 서버와 러너의 지시문이 조용히 갈릴 수 있다 |
+| 33 | 5 | 이미 사용자에게 **도착한** 동작에 REGENERATE를 눌러도 되돌리지 않는다(판정만 기록). 도감에서 칸이 사라지면 "배운 게 없어졌다"가 된다 |
 
 ---
 
@@ -433,17 +445,18 @@
 | 절 | 상태 | 어느 PR |
 |---|---|---|
 | 1.1 펫 · 1.2 돌봄 6종 · 1.3 잠 · 1.4 성격/배경/공유 · `PetDetail` v2 전체 모양 | **v2 경로 동작** | PR-3 (#192) |
-| 2 `motions[].advanced` | **부화 때 `zzal_motion` 18행 생성**(전부 `NONE`, 1층 `unlockedAt`=부화 시각). 밤 굽기로 상태가 바뀌는 건 PR-6·7 | PR-5 |
+| 2 `motions[].advanced` | **v2 동작** — 부화 때 18행 생성 → 밤 굽기 → 검수 → 도착. `status`는 사용자 말 4가지(해석 29), `imageKey`는 도착 뒤에만 | PR-5·6·7 |
+| 2 `baking` · `learnedToday` · `firstGift` · `features.album` | **v2 동작** — `baking`(해석 30) · 도착했는데 확인 안 한 것 · 선물 1의 진행(LOCKED·WAITING·BAKING·OPEN) · 앨범은 선물 1이 도착하면 열림 | PR-7 |
 | 2 `justUnlocked` | 행동 응답에 실림(카운터 비교) | PR-3 |
-| 2 `sick`·`pieces`·`leaving`·`trip`·`learnedToday`·`scenes.latest` | 항상 null·빈 목록 | PR-8·10·11·7·9 |
+| 2 `sick`·`pieces`·`leaving`·`trip`·`scenes.latest` | 항상 null·빈 목록 | PR-8·10·11·9 |
 | 1.5 채팅 | **v2 동작** — `GET /chat` · `POST /chat/{slot}/answer`(해석 22~24). `chatSummary.openSlot`은 null | PR-4 |
 | 1.7 미니게임 | **v2 동작** — `POST /games {kind}` · `guess` · `finish` · `current`. 합산 3판·잠들 때 리셋·RUN 5승 해금 | PR-4 |
-| 1.6 앨범 | **`GET /album` 동작** — 도감 18칸(잠긴 칸 hint/progress). 엽서·장면 빈 목록, firstGift LOCKED. v0에선 항상 조회 가능(해석 25). `seen`은 PR-7 | PR-5 |
+| 1.6 앨범·동작 | **`GET /album` 동작** — 도감 18칸(잠긴 칸 hint/progress). 엽서·장면 빈 목록. v0에선 항상 조회 가능(해석 25). **`POST /motions/{seq}/seen` 동작**(도착한 것만), 공유 대상에 도착한 심화 행동 포함 | PR-5·7 |
 | 배포 절차 | `ZZAL_PIPELINE_VERSION` 전환은 **`HATCHING` 0건일 때**(굽는 도중 버전이 바뀌면 복구가 다른 버전 산출물을 이어받을 수 있음). 복구 job은 원래 job의 버전을 잇고 단계 재사용도 같은 버전만 | PR-5 |
 | 부화 파이프라인 v2 | `PipelineRegistry` HATCH v2 = sheet→identity→grid→grid2→post(`basic/{key}.webp`, `--keys`). `prompt/v2/*.txt`가 없으면 **v1로 기동하고 부팅 로그에 경고**, 기록도 v1 | PR-5 |
-| 5 관리자 | **아직 v1 경로** `/api/zzal/v1/admin/motions` | PR-7 |
-| 6 개발 도구 | `advance-clock`·`set-clock`·**`night-sweep`(이 펫만 계획→집기→굽기, run 기록 없음)**. `force-open`은 PR-7 | PR-2·6 |
-| 밤 굽기 큐 | **동작** — 23:00 `NightSweep`(`sweep-enabled` 기본 false·서버 한 대만), `zzal_night_run(night_of PK)`, 첫 심화(3일째·케어 미스 0)·FAILED 재등록, 우선순위 선물>케어미스0일수>친밀도>id, K=200 이월, claim `UPDATE…WHERE QUEUED`, 기동 복구(23~10시 창). 굽기는 v1 `MotionService.bakeNow`(API 1회→LOCAL 전환은 PR-7) | PR-6 |
+| 5 관리자 | **v2 동작** — `/api/zzal/v2/admin/motions` 5개(`pending`·`verdict`·`regen-requests`·`upload`·`night/summary`). v1 경로는 제거 | PR-7 |
+| 6 개발 도구 | `advance-clock`·`set-clock`·**`night-sweep`(이 펫만 계획→집기→굽기, run 기록 없음)**·**`force-open/{seq}`**(가짜 검수 통과, 도착은 규칙대로) | PR-2·6·7 |
+| 밤 굽기 큐 | **동작** — 23:00 `NightSweep`(`sweep-enabled` 기본 false·서버 한 대만), `zzal_night_run(night_of PK)`, 첫 심화(3일째·케어 미스 0)·FAILED 재등록, 우선순위 선물>케어미스0일수>친밀도>id, K=200 이월, claim `UPDATE…WHERE QUEUED`, 기동 복구(23~10시 창). 굽기는 `MotionService.bakeNow` — **API 1회 → 게이트 → REVIEW / FAIL이면 LOCAL_REQUESTED**. 굽기 중 예외는 `FAILED`, 집힌 채 멈춘 자리는 기동 복구가 `QUEUED`로 회수 | PR-6·7 |
 | 후기 | v1 경로 `/api/zzal/v1/me/pets/{id}/feedback` 유지 | (변경 없음) |
 
 ## 변경 기록
@@ -454,3 +467,5 @@
 - **2026-09-05** — 상훈님 결정 반영(PR-4 첫 커밋): 해석 1·3·12·16·19 확정, 17 정정(아기 60분 시계 논외·재우기=낮잠만), 21 간식 수용.
 - **2026-09-05** — PR-4: 채팅·미니게임 v2 경로 동작(9절), 해석 22~24.
 - **2026-09-05** — PR-5: 부화 18행·파이프라인 v2·앨범(9절), 해석 25·26.
+- **2026-09-05** — PR-6 리뷰 반영(#219): 밤 큐 상태 회수·이월 우선권·API 굽기 1회.
+- **2026-09-05** — PR-7(#197): 검수 후 공개. 관리자 5개를 v2 경로로, 아침 공개(`revealedAt`)·`learnedToday`·`seen`·`baking`·`firstGift`·`features.album`, "검수 전 지급" 제거. 해석 29~33. 1.5 채팅 봉투·1.7 게임 응답 필드를 실물과 대조해 확정.

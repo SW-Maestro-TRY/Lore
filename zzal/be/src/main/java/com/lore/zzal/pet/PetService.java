@@ -15,9 +15,11 @@ import com.lore.zzal.generation.PetHatchRequested;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSeeder;
+import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.motion.ZzalMotionRepository;
 import com.lore.zzal.night.NightPlanner;
+import com.lore.zzal.text.Josa;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -93,7 +95,7 @@ public class PetService {
         petRepository.findFirstByUserIdAndPhase(userId, PetPhase.HATCHING)
                 .ifPresent(hatching -> {
                     throw new BusinessException(ErrorCode.ZZAL_PET_ALREADY_HATCHING,
-                            "%s이가 부화 중이에요".formatted(hatching.getName()));
+                            "%s 부화 중이에요".formatted(Josa.nameSubject(hatching.getName())));
                 });
 
         User user = userRepository.findById(userId)
@@ -197,7 +199,7 @@ public class PetService {
         return pets;
     }
 
-    /** 정산 + 방문(그날 처음이면 함께한 날 +1). 조회든 행동이든 펫을 만지는 모든 길이 여기를 지난다. */
+    /** 정산 + 방문(그날 처음이면 함께한 날 +1) + 아침 공개. 조회든 행동이든 펫을 만지는 모든 길이 여기를 지난다. */
     private void touch(ZzalPet pet, Instant realNow) {
         if (!pet.isAlive()) {
             return;
@@ -205,6 +207,43 @@ public class PetService {
         Instant now = pet.now(realNow);
         pet.settle(now);
         pet.visit(now);
+        reveal(pet, now);
+    }
+
+    /**
+     * 아침 공개 — 검수를 통과한(OPEN) 동작을 <b>펫이 깨어 있는 첫 정산</b>에 도착시킨다(정본 2장 "기상 첫 화면").
+     *
+     * <h3>★ 왜 시각이 아니라 "깨어 있는 첫 정산" 인가</h3>
+     * "아침 7시에 준다" 로 못 박으면 두 가지가 어긋난다 — (1) 판정이 10:00 을 넘기면 그날은 못 준다.
+     * 정본 16장은 그 경우 <b>낮에 도착</b>하라고 한다. (2) 늦잠 자는 펫에게 자는 동안 도착하면
+     * "일어나 보니 이미 알고 있던 일" 이 된다. 그래서 <b>깨어 있는 첫 정산</b> 하나로 둘 다 만족시킨다.
+     * 자는 동안에는 아무것도 안 찍히고, 깨는 순간(사용자가 깨우든 10:00 자동이든) 그 정산에서 도착한다.
+     *
+     * ★ 도착 시각({@code revealedAt})이 곧 "사용자가 볼 수 있다" 의 판정이다 — {@code advancedImageKey()} 가
+     *   그 전에는 null 을 준다. 검수 대기 중인 그림이 화면에 새는 길을 여기 한 곳으로 모았다.
+     */
+    private void reveal(ZzalPet pet, Instant now) {
+        if (pet.isSleeping()) {
+            return;
+        }
+        motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(pet.getId(), MotionStatus.OPEN)
+                .forEach(m -> m.reveal(now));
+    }
+
+    /**
+     * "배워왔어요" 를 확인했다 — {@code learnedToday} 에서 빠진다.
+     *
+     * ★ 도착하지 않은 동작에는 못 찍는다({@code ZZAL_MOTION_NOT_OPEN}) — 안 그러면 화면이
+     *   아직 오지도 않은 것을 미리 지워 버릴 수 있다.
+     */
+    @Transactional
+    public Action markSeen(Long userId, Long petId, int seq, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        Instant now = pet.now(realNow);
+        ZzalMotion row = motionRepository.findByPetIdAndSeq(petId, seq)
+                .filter(ZzalMotion::isRevealed)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_MOTION_NOT_OPEN));
+        return withUnlockDiff(pet, () -> row.markSeen(now));
     }
 
     /** 행동 결과 — 펫의 새 상태와, 이번 행동으로 열린 2층 동작(seq). */
@@ -240,7 +279,7 @@ public class PetService {
                 }
                 if (pet.getFullness() >= ZzalRules.GAUGE_MAX) {
                     throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED,
-                            "%s이는 배가 불러요".formatted(pet.getName()));
+                            "%s 배가 불러요".formatted(Josa.nameTopic(pet.getName())));
                 }
                 pet.feed(now);
             }
@@ -269,7 +308,7 @@ public class PetService {
             case MEDICINE -> {
                 if (!pet.isSick()) {
                     throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED,
-                            "%s이는 아프지 않아요".formatted(pet.getName()));
+                            "%s 아프지 않아요".formatted(Josa.nameTopic(pet.getName())));
                 }
                 pet.medicine(now);
             }
@@ -343,14 +382,17 @@ public class PetService {
     }
 
     /**
-     * 다운로드·공유 기록. 대상 = 지금 열린 동작 어느 것이든(16장). 심화 행동(OPEN)은 PR-7 에서 여기에 더한다.
+     * 다운로드·공유 기록. 대상 = 지금 열린 동작 어느 것이든 — 기본 행동(해금)과 <b>도착한 심화 행동</b> 둘 다(16장).
      * 모르는 key 도 "안 열린 동작" 으로 답한다 — 카탈로그 밖 이름을 구분해 주면 key 목록을 훑는 수단이 된다.
      */
     @Transactional
     public Action share(Long userId, Long petId, String motionKey, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
+        Map<Integer, ZzalMotion> rows = rowsOf(petId);
         boolean open = catalog.byKey(motionKey)
-                .map(spec -> UnlockRules.isUnlocked(pet, spec, catalog))
+                // 기본 행동은 해금 규칙으로, 심화 행동(선물 포함)은 "도착했나" 로 판정한다(정본 16장).
+                .map(spec -> UnlockRules.isUnlocked(pet, spec, catalog)
+                        || (rows.get(spec.seq()) != null && rows.get(spec.seq()).isRevealed()))
                 .orElse(false);
         if (!open) {
             throw new BusinessException(ErrorCode.ZZAL_MOTION_NOT_OPEN);
@@ -369,6 +411,27 @@ public class PetService {
         ZzalPet pet = findMine(userId, petId);
         pet.advanceDevClock(by);
         touch(pet, realNow);
+        return pet;
+    }
+
+    /**
+     * dev — 그 자리의 심화 행동을 가짜 그림으로 즉시 검수 통과시킨다(아침 도착 화면 확인용).
+     *
+     * ★ 도착까지 건너뛰지는 않는다. {@code revealedAt} 은 {@link #touch} 가 규칙대로 찍는다 —
+     *   그래야 "자는 동안에는 안 온다 / 낮에 판정되면 낮에 온다" 를 여기서 실제로 확인할 수 있다.
+     */
+    @Transactional
+    public ZzalPet forceOpen(Long userId, Long petId, int seq, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        Instant now = pet.now(realNow);
+        ZzalMotion row = motionRepository.findByPetIdAndSeq(petId, seq)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_MOTION_NOT_OPEN));
+        row.toReview("images/zzal/pets/%d/motions/%d/motion.webp".formatted(petId, row.getId()),
+                com.lore.zzal.motion.MotionSource.API,
+                com.lore.zzal.motion.GateVerdict.REVIEW, "dev force-open", "dev");
+        row.approve(now);
+        // 깨어 있으면 이 자리에서 바로 도착한다(자는 중이면 깨어난 뒤 첫 정산).
+        reveal(pet, now);
         return pet;
     }
 
@@ -392,7 +455,7 @@ public class PetService {
         ZzalPet pet = findMine(userId, petId);
         if (pet.isHatching()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_RELEASE_NOT_ALLOWED,
-                    "%s이가 아직 부화 중이에요".formatted(pet.getName()));
+                    "%s 아직 부화 중이에요".formatted(Josa.nameSubject(pet.getName())));
         }
         touch(pet, realNow);
         pet.release(pet.now(realNow));
@@ -408,7 +471,7 @@ public class PetService {
         ZzalPet pet = alive(userId, petId, realNow);
         if (pet.isSleeping()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_SLEEPING,
-                    "%s이가 자고 있어요".formatted(pet.getName()));
+                    "%s 자고 있어요".formatted(Josa.nameSubject(pet.getName())));
         }
         return pet;
     }

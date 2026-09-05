@@ -37,13 +37,30 @@ public class MotionRecorder {
                 m.done(imageKey, MotionSource.API, v.verdict(), v.note(), v.version()));
     }
 
-    /** 다 구워졌다. 사용자에게 보이기 시작한다. */
+    /** 다 구워졌다 → 검수 대기. 사용자에게는 아직 안 보인다(PR-7 에서 "검수 전 지급" 을 없앴다). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void open(Long motionId, String imageKey, MotionGate.Verdict v, Instant now) {
-        repository.findById(motionId).ifPresent(m -> {
-            m.done(imageKey, MotionSource.API, v.verdict(), v.note(), v.version());
-            m.open(now);
-        });
+    public void toReview(Long motionId, String imageKey, MotionGate.Verdict v) {
+        repository.findById(motionId).ifPresent(m ->
+                m.toReview(imageKey, MotionSource.API, v.verdict(), v.note(), v.version()));
+    }
+
+    /**
+     * API 몫이 끝났다 → 맥미니에게 넘기거나(한도 안) 그 밤은 포기한다(한도 밖).
+     *
+     * @return 맥미니에게 넘겼으면 true, 한도를 다 써 {@code FAILED} 로 내렸으면 false
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean requestLocalRegen(Long motionId, int max) {
+        ZzalMotion m = repository.findById(motionId).orElse(null);
+        if (m == null) {
+            return false;
+        }
+        if (m.getRegenRound() >= max) {
+            m.markFailed();     // 다음 밤에 같은 동작이 다시 오른다(정본 16장 — 조각은 소모하지 않는다)
+            return false;
+        }
+        m.requestLocalRegen();
+        return true;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

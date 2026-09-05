@@ -26,8 +26,14 @@ public interface ZzalMotionRepository extends JpaRepository<ZzalMotion, Long> {
     /** 굽다 만 채로 오래 남은 것들. 서버가 뜰 때 이어서 굽는다. */
     List<ZzalMotion> findByStatusAndUpdatedAtBefore(MotionStatus status, java.time.Instant before);
 
-    /** 아직 상훈님이 안 보신 것들. 관리자 화면이 이걸 쓴다. */
+    /** 아직 상훈님이 안 보신 것들(v1 관리자 화면). */
     List<ZzalMotion> findByHumanVerdictIsNullOrderByIdAsc();
+
+    /** 그 밤에 큐에 오른 행 전부(밤 현황). */
+    List<ZzalMotion> findByNightOf(java.time.LocalDate nightOf);
+
+    /** 공개됐는데 아직 사용자에게 도착 안 한 것 — 깨어 있는 첫 정산이 여기에 도착 시각을 찍는다. */
+    List<ZzalMotion> findByPetIdAndStatusAndRevealedAtIsNull(Long petId, MotionStatus status);
 
     /** 밤 큐 전체(상태별). 이월분(지난 밤 nightOf)도 포함된다. */
     List<ZzalMotion> findByStatusOrderByIdAsc(MotionStatus status);

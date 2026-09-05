@@ -488,4 +488,90 @@ class PetServiceTest {
             assertThat(pets.get(0).isSleeping()).isTrue();
         }
     }
+
+    /**
+     * 아침 공개 — 실패 주입(verify-failure-paths).
+     *
+     * ★ 이 분기는 정상 경로에서 <b>한 번도 안 도는</b> 종류다: "자는 중이면 안 준다" 는 자는 펫을 만들어야 돌고,
+     *   "10:00 을 넘겨 판정된 것은 낮에 준다" 는 늦은 판정을 만들어야 돈다.
+     */
+    @Nested
+    @DisplayName("아침 공개 — 검수 통과분이 언제 도착하나")
+    class Reveal {
+
+        /** 정산 대상 펫 — 조회가 동작 행을 찾으려면 id 가 있어야 한다(실제 DB 행에는 늘 있다). */
+        private ZzalPet childWithId() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
+            return pet;
+        }
+
+        /** 검수까지 통과한(OPEN) 선물 1 행. 아직 도착 전. */
+        private com.lore.zzal.motion.ZzalMotion approvedGift() {
+            com.lore.zzal.motion.ZzalMotion m = com.lore.zzal.motion.ZzalMotion.forCatalog(
+                    PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
+            m.toReview("images/zzal/pets/7/motions/9/motion.webp", com.lore.zzal.motion.MotionSource.API,
+                    com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
+            m.approve(T0);
+            when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
+                    eq(PET_ID), eq(com.lore.zzal.motion.MotionStatus.OPEN)))
+                    .thenAnswer(i -> m.getRevealedAt() == null ? List.of(m) : List.of());
+            return m;
+        }
+
+        @Test
+        @DisplayName("★ 잠든 채 검수를 통과하면 안 준다 — 깨어 있는 첫 조회에서 준다")
+        void notWhileSleeping() {
+            ZzalPet pet = childWithId();
+            com.lore.zzal.motion.ZzalMotion gift = approvedGift();
+
+            // 23:00 자동 취침을 지나 새벽 — 자는 중이다
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 02:00"));
+            assertThat(pet.isSleeping()).isTrue();
+            assertThat(gift.getRevealedAt()).isNull();
+
+            // 10:00 자동 기상을 지난 첫 조회 — 그때 도착한다
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 10:30"));
+            assertThat(pet.isSleeping()).isFalse();
+            assertThat(gift.getRevealedAt()).isNotNull();
+            assertThat(gift.advancedImageKey()).endsWith("/motion.webp");
+        }
+
+        @Test
+        @DisplayName("★ 10시를 넘겨 판정돼도 그날 낮 조회에서 도착한다(늦잠 강제 없음, 정본 16장)")
+        void arrivesInTheAfternoon() {
+            childWithId();
+            com.lore.zzal.motion.ZzalMotion gift = approvedGift();
+
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 15:00"));
+
+            assertThat(gift.getRevealedAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("★ 도착은 한 번만 찍힌다 — 다시 조회해도 시각이 바뀌지 않는다")
+        void revealOnce() {
+            childWithId();
+            com.lore.zzal.motion.ZzalMotion gift = approvedGift();
+
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 15:00"));
+            Instant first = gift.getRevealedAt();
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 16:00"));
+
+            assertThat(gift.getRevealedAt()).isEqualTo(first);
+        }
+
+        @Test
+        @DisplayName("★ 도착하지 않은 동작에 \"확인\" 을 누르면 ZZAL_MOTION_NOT_OPEN")
+        void seenBeforeArrival() {
+            childWithId();
+            com.lore.zzal.motion.ZzalMotion gift = com.lore.zzal.motion.ZzalMotion.forCatalog(
+                    PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
+            when(motionRepository.findByPetIdAndSeq(PET_ID, 101)).thenReturn(Optional.of(gift));
+            when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(any(), any())).thenReturn(List.of());
+
+            assertCode(() -> service.markSeen(USER_ID, PET_ID, 101, T0), ErrorCode.ZZAL_MOTION_NOT_OPEN);
+            assertThat(gift.getSeenAt()).isNull();
+        }
+    }
 }
