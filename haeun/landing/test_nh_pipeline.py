@@ -345,11 +345,51 @@ def test_regen_status_shape() -> None:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_page_versions() -> None:
+    """지난 판 — 다시 그리기 전 그림을 남기고, 되돌릴 수 있는가.
+
+    classic 과 같은 규칙이다. 특히 **같은 그림이면 판본을 또 뜨지 않는다** —
+    이게 없으면 지난 판을 눌러 보기만 해도 v4·v5·v6 이 계속 생긴다
+    (classic 에서 실제로 겪고 고친 것).
+    """
+    root = Path(tempfile.mkdtemp())
+    try:
+        NP.NEW_HARNESS = root
+        pages = root / "runs" / "r1" / "pages"
+        pages.mkdir(parents=True)
+        cur = pages / "page03.png"
+        cur.write_bytes(b"AAA")
+
+        check("처음엔 지난 판이 없다", NP.page_versions("r1", 3), [])
+
+        # 다시 그리기 직전 — 지금 그림을 떠 둔다
+        check("첫 판본은 v1", NP.archive_page("r1", 3), 1)
+        cur.write_bytes(b"BBB")                       # 새로 그려진 셈
+        check("그 다음은 v2", NP.archive_page("r1", 3), 2)
+        check("최신이 앞에 온다",
+              [v["version"] for v in NP.page_versions("r1", 3)], [2, 1])
+
+        # 같은 그림을 또 뜨지 않는다
+        check("내용이 같으면 있던 번호를 준다", NP.archive_page("r1", 3), 2)
+        check("판본이 안 늘어난다", len(NP.page_versions("r1", 3)), 2)
+
+        # 되돌리기 — 되돌리기 **전** 그림도 남는다
+        ok("v1 로 되돌린다", NP.revert_page("r1", 3, 1))
+        check("그림이 v1 내용", cur.read_bytes(), b"AAA")
+        check("되돌린 것을 다시 되돌릴 수 있다",
+              [v["version"] for v in NP.page_versions("r1", 3)], [2, 1])
+
+        ok("없는 판본은 안 되돌린다", not NP.revert_page("r1", 3, 99))
+        ok("그림이 없으면 뜰 것이 없다", NP.archive_page("r1", 9) is None)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main() -> int:
     for fn in (test_serial_execution, test_position, test_cancel_while_queued,
                test_pick_guards_against_double_queue, test_review_order,
                test_review_say, test_regen_args_and_style,
-               test_regen_status_shape):
+               test_regen_status_shape, test_page_versions):
         fn()
     if fails:
         print("FAILED:")

@@ -69,6 +69,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -645,6 +646,120 @@ def board_summary(run_id: str) -> dict[str, Any] | None:
     return {"cast": cast, "scenes": scenes, "cut_count": total}
 
 
+# --------------------------------------------------------------------------- #
+# 판본 — 다시 그리기 전의 그림을 남겨 둔다
+# --------------------------------------------------------------------------- #
+#
+# classic(pipeline.py 의 scene_versions·archive_scene·revert_scene)과 **같은
+# 규칙**이다. 편집실은 이 둘을 구별하지 않고 같은 주소를 부른다.
+#
+# 예전에는 new_harness 쪽에 이것이 아예 없어서, 다시 그리면 앞 그림이 그냥
+# 사라졌다 — 마음에 안 들어 다시 그렸는데 새것이 더 나쁘면 되돌릴 방법이
+# 없었다(실측).
+
+VERSIONS_DIR = "versions"
+
+
+def _versions_dir(run_id: str) -> Path:
+    return run_dir(run_id) / "pages" / VERSIONS_DIR
+
+
+def page_versions(run_id: str, page_no: int) -> list[dict[str, Any]]:
+    """그 장의 지난 판 목록. 최신이 앞에 온다."""
+    vdir = _versions_dir(run_id)
+    if not vdir.exists():
+        return []
+    out = []
+    for p in vdir.glob(f"page{int(page_no):02d}.v*.png"):
+        try:
+            v = int(p.stem.rsplit(".v", 1)[1])
+        except (ValueError, IndexError):
+            continue
+        out.append({"version": v, "at": p.stat().st_mtime,
+                    "url": f"/api/runs/{run_id}/scenes/{page_no}/versions/{v}"})
+    return sorted(out, key=lambda d: -d["version"])
+
+
+def version_path(run_id: str, page_no: int, version: int) -> Path | None:
+    p = _versions_dir(run_id) / f"page{int(page_no):02d}.v{int(version)}.png"
+    return p if p.exists() else None
+
+
+def _version_matching(run_id: str, page_no: int, src: Path) -> int | None:
+    """이 그림과 **내용이 같은** 판본이 이미 있으면 그 번호. 없으면 None.
+
+    이게 없으면 지난 판을 눌러 보기만 해도 판본이 계속 늘어난다 — v1~v3 을
+    번갈아 누르면 v4·v5·v6 이 생기고 셋 다 앞의 것과 픽셀까지 같다
+    (classic 에서 실제로 겪고 고친 것이라 여기도 같이 넣는다).
+
+    크기부터 본다. 크기가 같을 때만 바이트를 읽는다.
+    """
+    try:
+        size = src.stat().st_size
+        blob = None
+        for got in page_versions(run_id, page_no):
+            q = version_path(run_id, page_no, got["version"])
+            if q is None or q.stat().st_size != size:
+                continue
+            if blob is None:
+                blob = src.read_bytes()
+            if q.read_bytes() == blob:
+                return int(got["version"])
+    except OSError:
+        return None
+    return None
+
+
+def restitch(run_id: str) -> bool:
+    """한 편(episode.png)을 다시 이어붙인다. 호출 비용이 없다 — 그냥 잇기만 한다.
+
+    한 장이 바뀌었으면 반드시 불러야 한다. 안 그러면 화면(장 단위)과
+    내려받는 파일(한 편)이 서로 다른 그림을 보여준다.
+    """
+    try:
+        r = subprocess.run(
+            [sys.executable, "-u", "stitch.py", "--run-id", run_id],
+            cwd=str(NEW_HARNESS), env=_subprocess_env(), capture_output=True,
+            text=True, encoding="utf-8", errors="replace")
+        return r.returncode == 0
+    except Exception:                                           # noqa: BLE001
+        return False
+
+
+def archive_page(run_id: str, page_no: int) -> int | None:
+    """지금 걸려 있는 그림을 판본으로 떠 둔다. 새로 그리기 **직전**에 부른다.
+
+    이미 판본으로 있는 그림이면 새로 뜨지 않고 그 번호를 돌려준다.
+    """
+    src = unit_image(run_id, page_no)
+    if not src:
+        return None
+    same = _version_matching(run_id, page_no, src)
+    if same is not None:
+        return same
+    got = page_versions(run_id, page_no)
+    v = (got[0]["version"] + 1) if got else 1
+    vdir = _versions_dir(run_id)
+    vdir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, vdir / f"page{int(page_no):02d}.v{v}.png")
+    return v
+
+
+def revert_page(run_id: str, page_no: int, version: int) -> bool:
+    """지난 판으로 되돌린다. **되돌리기 전의 그림도 판본으로 남긴다** —
+    되돌린 것을 다시 되돌릴 수 있어야 한다."""
+    src = version_path(run_id, page_no, version)
+    dest = unit_image(run_id, page_no)
+    if not src or not dest:
+        return False
+    archive_page(run_id, page_no)
+    shutil.copy2(src, dest)
+    # copy2 는 판본 파일의 **옛 mtime 까지** 복사한다. 그대로 두면 되돌린
+    # 그림이 줄여 둔 캐시보다 오래된 파일이 되어 화면에 옛 그림이 계속 뜬다.
+    os.utime(dest, None)
+    return True
+
+
 STYLE_FILE = "style.txt"
 
 
@@ -707,6 +822,10 @@ def _run_regen(entry: dict[str, Any]) -> None:
     # (실측). classic 쪽(pipeline.regens)은 원래 되돌리고 있었다.
     backup = img.read_bytes() if img and img.exists() else None
     dest = img
+    # 지금 그림을 판본으로 떠 둔다 — **다시 그린 것이 더 나쁠 때 돌아갈 자리다.**
+    # 실패했을 때 되살리는 것(backup)과는 다른 일이다: 저건 사고 복구고, 이건
+    # 사람이 나중에 골라 보라고 남기는 것이다.
+    archive_page(run_id, no)
 
     def restore() -> None:
         if backup is not None and dest is not None and not dest.exists():
@@ -915,7 +1034,7 @@ class NHRunner:
                 "status": entry["status"], "error": entry["error"],
                 "note": entry.get("note") or "",
                 "image": f"/api/runs/{entry['run_id']}/page/{entry['page']}",
-                "versions": []}
+                "versions": page_versions(entry["run_id"], entry["page"])}
 
 
 # --------------------------------------------------------------------------- #

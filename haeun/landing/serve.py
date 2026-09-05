@@ -574,14 +574,31 @@ class Handler(BaseHTTPRequestHandler):
                 m.group(1), self._ep(query))})
 
         # 다시 그리기 — 지난 판 목록과 그 그림.
+        # 지난 판 셋(목록·그림·되돌리기)은 편집실이 **주소 하나로** 부른다 —
+        # 여기서 run 종류를 갈라 준다(/result·/episode 와 같은 규칙).
         m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions", path)
         if m:
+            run_id, no = m.group(1), int(m.group(2))
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                return self._json({"versions": nh.page_versions(run_id, no)})
             return self._json({"versions": pipeline.scene_versions(
-                m.group(1), int(m.group(2)), self._ep(query))})
+                run_id, no, self._ep(query))})
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/scenes/(\d+)/versions/(\d+)", path)
         if m:
             ep = self._ep(query)
+            if (not pipeline.episode_dir(m.group(1), 1).exists()
+                    and nh.is_run(m.group(1))):
+                src = nh.version_path(m.group(1), int(m.group(2)), int(m.group(3)))
+                if not src:
+                    return self._error(404, "그 판본이 없습니다")
+                width = max(160, min(1400, int((query.get("w") or ["1080"])[0])))
+                dest = (nh.run_dir(m.group(1)) / "cache"
+                        / f"v{m.group(2)}_{m.group(3)}_w{width}.jpg")
+                try:
+                    return self._file(thumbnail(src, dest, width))
+                except Exception:                               # noqa: BLE001
+                    return self._file(src)
             src = pipeline.version_path(m.group(1), int(m.group(2)),
                                         int(m.group(3)), ep)
             if not src:
@@ -1200,6 +1217,14 @@ class Handler(BaseHTTPRequestHandler):
             ep = self._ep({**parse_qs(url.query),
                            **({"ep": [str(body["episode"])]} if body.get("episode")
                               else {})})
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                if not nh.revert_page(run_id, scene_no, version):
+                    return self._error(404, "그 판본으로 되돌리지 못했습니다")
+                # 한 편도 다시 이어붙인다 — 안 그러면 완성본·내려받기에는
+                # 되돌리기 전 그림이 그대로 남아서, 화면과 파일이 갈린다.
+                nh.restitch(run_id)
+                return self._json({"ok": True,
+                                   "versions": nh.page_versions(run_id, scene_no)})
             if not pipeline.revert_scene(run_id, scene_no, version, ep):
                 return self._error(404, "그 판본으로 되돌리지 못했습니다")
             return self._json({"ok": True,
