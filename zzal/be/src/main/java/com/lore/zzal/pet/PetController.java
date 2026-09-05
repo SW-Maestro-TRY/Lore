@@ -45,7 +45,8 @@ public class PetController {
 
     private PetResponses.Detail detail(PetService.Action action, Instant real) {
         ZzalPet pet = action.pet();
-        return PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(pet.getId()), action.justUnlocked());
+        return PetResponses.Detail.from(pet, null, pet.now(real), catalog,
+                petService.motionRows(pet.getId()), action.justUnlocked(), action.justHealed());
     }
 
     @Operation(summary = "펫 생성", description = """

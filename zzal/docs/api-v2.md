@@ -54,7 +54,7 @@
 | `PET` | 행복 0, 친밀도 +5(하루 3회까지), 반응 동작. 3회 넘어도 성공(친밀도만 안 오름) | 없음 |
 | `CLEAN` | 흔적 0 | 흔적 0 `ZZAL_CARE_NOT_NEEDED` |
 | `BATH` | 흔적 0 + 행복 +1. 하루 1회 | 이미 함 `ZZAL_BATH_DONE_TODAY` |
-| `MEDICINE` | 병 즉시 치료 | 안 아픔 `ZZAL_CARE_NOT_NEEDED` |
+| `MEDICINE` | 병 즉시 치료(1회). 그 응답에만 `justHealed: true` | 안 아픔 `ZZAL_CARE_NOT_NEEDED` |
 
 - 밥·청소·목욕·약은 친밀도 +5(하루 합산 30 상한, 정본 8장).
 - **「해석」** 밥을 줘도 흔적은 늘지 않는다. 정본 4장 표에서 흔적은 시간(4시간마다 1개, 아기는 15분)으로만 생긴다. v1의 "먹으면 쓰레기 +1"은 폐기.
@@ -155,7 +155,7 @@
   "ready": true,                    // 부화가 끝났는가
   "step": null,                     // 부화 중일 때만: "움직임 배우는 중"
   "elapsedSeconds": null,           // 부화 중일 때만
-  "deathReason": null,              // FAILED·DEAD 일 때만: HATCH_FAILED · RELEASED · NEGLECTED
+  "deathReason": null,              // FAILED·DEAD 면 **절대 null 이 아니다**: HATCH_FAILED · RELEASED · NEGLECTED(해석 34)
   "hatchStartedAt": "2026-09-05T09:00:00Z",
   "hatchedAt": "2026-09-05T09:02:23Z",
 
@@ -183,7 +183,8 @@
   "food": { "count": 2, "nextInSeconds": 7200 },   // 재고 0..3. 가득이면 nextInSeconds null
 
   "mood": "NORMAL",                      // SICK > HUNGRY(배부름 0) > SAD(행복 0) > DIRTY(흔적 3+) > NORMAL
-  "sick": null,                          // { "since": "...", "kind": "NATURAL|NEGLECT|DIRTY|SNACK" }
+  "sick": null,                          // 아플 때만: { "since": "...", "kind": "NEGLECT|DIRTY|UPSET|NATURAL" }
+  "justHealed": false,                   // ★ 행동 응답에만. 방금 약으로 나았나 — "나은 동작(기쁜 자세+반짝)" 1회
 
   "intimacy": { "score": 120, "percent": 10, "tier": "LOW" },  // score 0..999, percent 10단위, tier LOW(0~30)·MID(40~70)·HIGH(80~100)
 
@@ -445,6 +446,11 @@
 | 31 | 1.6 | 아침 공개는 시각이 아니라 **깨어 있는 첫 조회**에서. 자는 동안은 안 오고, 10:00을 넘겨 판정되면 낮에 온다(정본 16장) |
 | 32 | 5 | `regen-requests`는 지시문 **본문**(`blockText`)까지 실어 보낸다. 파일 이름만 주면 서버와 러너의 지시문이 조용히 갈릴 수 있다 |
 | 33 | 5 | 이미 사용자에게 **도착한** 동작에 REGENERATE를 눌러도 되돌리지 않는다(판정만 기록). 도감에서 칸이 사라지면 "배운 게 없어졌다"가 된다 |
+| 34 | 2 | `phase`가 `FAILED`·`DEAD`면 `deathReason`은 **절대 null이 아니다**. 사유 칸이 생기기 전 옛 행은 지나갈 때 `HATCH_FAILED`로 채워지고, 응답도 마지막에 한 번 더 막는다. **원인 자체(무엇이 막혔는지)는 여전히 안 내려간다 — 코드값만** |
+| 35 | 2 | 병 종류 = `NEGLECT`(케어 미스 홀수 30%) · `DIRTY`(흔적 4개로 깨어 있는 6h, 100%) · `UPSET`(간식 연속 5, 100%) · `NATURAL`(심화 도착 뒤 깨어 있는 3일 안). **먼저 난 병이 이긴다** — 아픈 동안 다른 조건이 차도 원인이 안 바뀐다 |
+| 36 | 2 | 자연 발병 창 = **깨어 있는** 3일(자동 기상~자동 취침 13h × 3 = 39h). 벽시계가 아니라 깨어 있는 시간이라 "무작위 낮"이 저절로 지켜진다. 새 숫자가 아니라 창에서 파생 |
+| 37 | 2 | 자연 발병 예약은 **심화 행동이 사용자에게 도착할 때** 걸리고, 예약이 이미 있으면 덮어쓰지 않는다(한 번에 하나만 대기) |
+| 38 | 1.2 | `justHealed`는 **행동 응답에만** 실린다(조회는 항상 false). "방금 나음"과 "원래 안 아픔"을 상태로는 못 가른다 |
 
 ---
 
@@ -456,7 +462,8 @@
 | 2 `motions[].advanced` | **v2 동작** — 부화 때 18행 생성 → 밤 굽기 → 검수 → 도착. `status`는 사용자 말 4가지(해석 29), `imageKey`는 도착 뒤에만 | PR-5·6·7 |
 | 2 `baking` · `learnedToday` · `firstGift` · `features.album` | **v2 동작** — `baking`(해석 30) · 도착했는데 확인 안 한 것 · 선물 1의 진행(LOCKED·WAITING·BAKING·OPEN) · 앨범은 선물 1이 도착하면 열림 | PR-7 |
 | 2 `justUnlocked` | 행동 응답에 실림(카운터 비교) | PR-3 |
-| 2 `sick`·`pieces`·`leaving`·`trip`·`scenes.latest` | 항상 null·빈 목록 | PR-8·10·11·9 |
+| 2 `sick` · `justHealed` · `mood`의 SICK | **v2 동작** — 병 4종(해석 35)·약 1회 즉시·아픈 동안 간식/게임 거절·나은 연출 1회 | PR-8 |
+| 2 `pieces`·`leaving`·`trip`·`scenes.latest` | 항상 null·빈 목록 | PR-10·11·9 |
 | 1.5 채팅 | **v2 동작** — `GET /chat` · `POST /chat/{slot}/answer`(해석 22~24). `chatSummary.openSlot`은 null | PR-4 |
 | 1.7 미니게임 | **v2 동작** — `POST /games {kind}` · `guess` · `finish` · `current`. 합산 3판·잠들 때 리셋·RUN 5승 해금 | PR-4 |
 | 1.6 앨범·동작 | **`GET /album` 동작** — 도감 18칸(잠긴 칸 hint/progress). 엽서·장면 빈 목록. v0 동안 잠금은 **플래그만**(해석 25). **`POST /motions/{seq}/seen` 동작**(도착한 것만), 공유 대상에 도착한 심화 행동 포함 | PR-5·7 |
@@ -476,5 +483,6 @@
 - **2026-09-05** — PR-4: 채팅·미니게임 v2 경로 동작(9절), 해석 22~24.
 - **2026-09-05** — PR-5: 부화 18행·파이프라인 v2·앨범(9절), 해석 25·26.
 - **2026-09-05** — PR-6 리뷰 반영(#219): 밤 큐 상태 회수·이월 우선권·API 굽기 1회.
+- **2026-09-05** — PR-8(#198): 병·약·케어 미스 연결(9절), 해석 34~38. `deathReason`은 FAILED·DEAD에서 절대 null이 아니다.
 - **2026-09-05** — PR-7(#197) 리뷰 반영(#224): 판정은 `REVIEW`인 행에만(`ZZAL_NOT_IN_REVIEW`), 깨우기 응답에 도착, `queue()`가 `regenRound` 리셋, 판정·업로드 행 잠금, 해석 25 확정(앨범은 플래그만).
 - **2026-09-05** — PR-7(#197): 검수 후 공개. 관리자 5개를 v2 경로로, 아침 공개(`revealedAt`)·`learnedToday`·`seen`·`baking`·`firstGift`·`features.album`, "검수 전 지급" 제거. 해석 29~33. 1.5 채팅 봉투·1.7 게임 응답 필드를 실물과 대조해 확정.

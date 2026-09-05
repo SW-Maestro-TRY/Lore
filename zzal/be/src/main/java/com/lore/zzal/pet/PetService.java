@@ -226,8 +226,14 @@ public class PetService {
         if (pet.isSleeping()) {
             return;
         }
-        motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(pet.getId(), MotionStatus.OPEN)
-                .forEach(m -> m.reveal(now));
+        List<ZzalMotion> arrived = motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
+                pet.getId(), MotionStatus.OPEN);
+        arrived.forEach(m -> m.reveal(now));
+        if (!arrived.isEmpty()) {
+            // ★ 자연 발병은 심화 행동이 열린 뒤에만 예약된다(정본 16장). 1·2층 기간엔 방치 발병만 있다.
+            //   "받은 순간" 을 기준으로 삼는 이유 — 검수 통과 시각은 사용자가 모르는 서버 사정이다.
+            pet.scheduleNaturalSickness();
+        }
     }
 
     /**
@@ -246,8 +252,21 @@ public class PetService {
         return withUnlockDiff(pet, () -> row.markSeen(now));
     }
 
-    /** 행동 결과 — 펫의 새 상태와, 이번 행동으로 열린 2층 동작(seq). */
-    public record Action(ZzalPet pet, List<Integer> justUnlocked) {
+    /**
+     * 행동 결과 — 펫의 새 상태, 이번 행동으로 열린 2층 동작(seq), 그리고 <b>방금 나았나</b>.
+     *
+     * ★ {@code justHealed} 를 응답에 싣는 이유 — 정본 5장의 "나은 동작(기쁜 자세 + 반짝) 1회" 는
+     *   <b>한 번만</b> 나와야 한다. 상태(안 아픔)로는 "방금 나은 것" 과 "원래 안 아팠던 것" 을 못 가른다.
+     */
+    public record Action(ZzalPet pet, List<Integer> justUnlocked, boolean justHealed) {
+
+        public Action(ZzalPet pet, List<Integer> justUnlocked) {
+            this(pet, justUnlocked, false);
+        }
+
+        Action healed() {
+            return new Action(pet, justUnlocked, true);
+        }
     }
 
     /** 행동 전후의 열린 동작을 비교해 새로 열린 seq 를 얻는다(폭죽). 저장하지 않고 계산한다(UnlockRules). 채팅·게임도 이걸 쓴다. */
@@ -268,7 +287,10 @@ public class PetService {
     public Action care(Long userId, Long petId, CareAction action, Instant realNow) {
         ZzalPet pet = awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
-        return withUnlockDiff(pet, () -> doCare(pet, action, now));
+        boolean wasSick = pet.isSick();
+        Action result = withUnlockDiff(pet, () -> doCare(pet, action, now));
+        // 약을 먹고 나은 그 응답에만 "나은 동작" 연출이 실린다(정본 5장).
+        return wasSick && !pet.isSick() ? result.healed() : result;
     }
 
     private void doCare(ZzalPet pet, CareAction action, Instant now) {

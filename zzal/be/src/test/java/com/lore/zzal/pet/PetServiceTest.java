@@ -12,6 +12,7 @@ import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSeeder;
 import com.lore.zzal.motion.ZzalMotionRepository;
+import com.lore.zzal.pet.dto.PetResponses;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -161,8 +162,11 @@ class PetServiceTest {
                 service.care(USER_ID, PET_ID, CareAction.SNACK, T0);
             }
             assertThat(pet.getHappiness()).isEqualTo(4);          // 상한에서 멈추되 거절은 없다
-            assertThat(pet.getSnackStreak()).isEqualTo(5);        // 배탈(PR-8)의 재료
+            assertThat(pet.isSick()).isTrue();                    // ★ 5개째에 배탈(정본 5장)
+            assertThat(pet.getSickKind()).isEqualTo(SickKind.UPSET);
+            assertCode(() -> service.care(USER_ID, PET_ID, CareAction.SNACK, T0), ErrorCode.ZZAL_SICK_REFUSES);
 
+            service.care(USER_ID, PET_ID, CareAction.MEDICINE, T0);
             for (int i = 0; i < 4; i++) {
                 service.care(USER_ID, PET_ID, CareAction.PET, T0);
             }
@@ -486,6 +490,111 @@ class PetServiceTest {
             when(petRepository.findByUserIdOrderByIdDesc(USER_ID)).thenReturn(List.of(pet));
             List<ZzalPet> pets = service.refreshAll(USER_ID, kst("2026-09-06 00:00"));
             assertThat(pets.get(0).isSleeping()).isTrue();
+        }
+    }
+
+    /**
+     * 병 — 실패 주입(verify-failure-paths).
+     *
+     * ★ 여기서 지키는 것 셋 — (1) <b>케어 미스는 어디에도 안 내려간다</b>(정본 4장 "숨은 수치"),
+     *   (2) 아플 때 거절되는 것과 되는 것이 정본 그대로인가, (3) 나은 연출이 <b>한 번만</b> 나오는가.
+     */
+    @Nested
+    @DisplayName("병 — 거절·연출·미노출")
+    class Sickness {
+
+        /** 흔적을 6시간 방치해 아프게 만든다(정본 5장 100%). */
+        private ZzalPet sickPet() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 15:00"));
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 21:00"));
+            assertThat(pet.isSick()).isTrue();
+            return pet;
+        }
+
+        @Test
+        @DisplayName("★★ 케어 미스는 응답 어디에도 없다 — 보이는 신호는 짐 가방뿐(정본 4장)")
+        void careMissNeverLeaks() throws Exception {
+            ZzalPet pet = sickPet();
+            assertThat(pet.getCareMiss()).isPositive();          // 실제로 쌓여 있는데도
+
+            PetResponses.Detail detail = PetResponses.Detail.from(
+                    pet, null, kst("2026-09-06 21:00"), new MotionCatalog("", "", "v1"));
+            String json = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                    .writeValueAsString(detail);
+
+            // 이름으로도 값으로도 안 나간다 — 이 검사가 곧 "숨은 수치" 의 정의다
+            assertThat(json).doesNotContain("careMiss")
+                    .doesNotContain("zeroMissDays")
+                    .doesNotContain("MissArmed")
+                    .doesNotContain("ZeroSec")
+                    .doesNotContain("naturalSick");
+            assertThat(json).contains("\"sick\"");             // 아픈 것 자체는 내려간다
+        }
+
+        @Test
+        @DisplayName("★★ 아플 때 — 간식·게임은 거절, 밥·청소·목욕·약·쓰다듬기는 된다(정본 5·16장)")
+        void refusalsWhileSick() {
+            ZzalPet pet = sickPet();
+            Instant now = kst("2026-09-06 21:00");
+
+            assertCode(() -> service.care(USER_ID, PET_ID, CareAction.SNACK, now), ErrorCode.ZZAL_SICK_REFUSES);
+
+            service.care(USER_ID, PET_ID, CareAction.CLEAN, now);        // 흔적이 있으니 된다
+            service.care(USER_ID, PET_ID, CareAction.PET, now);
+            pet.grantFood(now);
+            service.care(USER_ID, PET_ID, CareAction.FEED, now);
+            service.care(USER_ID, PET_ID, CareAction.BATH, now);
+            assertThat(pet.isSick()).isTrue();                            // 여기까지는 여전히 아프다
+
+            service.care(USER_ID, PET_ID, CareAction.MEDICINE, now);
+            assertThat(pet.isSick()).isFalse();
+        }
+
+        @Test
+        @DisplayName("★★ 나은 연출은 약을 먹은 그 응답에만 — 다음 조회에는 안 실린다")
+        void justHealedOnlyOnce() {
+            sickPet();
+            Instant now = kst("2026-09-06 21:00");
+
+            PetService.Action healed = service.care(USER_ID, PET_ID, CareAction.MEDICINE, now);
+            assertThat(healed.justHealed()).isTrue();
+
+            PetService.Action next = service.care(USER_ID, PET_ID, CareAction.PET, now);
+            assertThat(next.justHealed()).isFalse();
+        }
+
+        @Test
+        @DisplayName("안 아픈데 약을 주면 ZZAL_CARE_NOT_NEEDED — 연출도 없다")
+        void medicineWhenHealthy() {
+            child();
+            assertCode(() -> service.care(USER_ID, PET_ID, CareAction.MEDICINE, T0), ErrorCode.ZZAL_CARE_NOT_NEEDED);
+        }
+
+        @Test
+        @DisplayName("★ 자연 발병은 심화 행동이 도착할 때 예약된다 — 도착 전에는 예약이 없다")
+        void naturalSicknessScheduledOnArrival() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
+            when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(any(), any())).thenReturn(List.of());
+            service.refresh(USER_ID, PET_ID, T0);
+            assertThat(pet.getNaturalSickDueAwakeSec()).isNull();
+
+            com.lore.zzal.motion.ZzalMotion gift = com.lore.zzal.motion.ZzalMotion.forCatalog(
+                    PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
+            gift.toReview("k", com.lore.zzal.motion.MotionSource.API,
+                    com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
+            gift.approve(T0);
+            when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
+                    eq(PET_ID), eq(com.lore.zzal.motion.MotionStatus.OPEN)))
+                    .thenAnswer(i -> gift.getRevealedAt() == null ? List.of(gift) : List.of());
+
+            service.refresh(USER_ID, PET_ID, T0);
+
+            assertThat(gift.getRevealedAt()).isNotNull();
+            assertThat(pet.getNaturalSickDueAwakeSec()).isNotNull();      // 그때 예약된다
         }
     }
 
