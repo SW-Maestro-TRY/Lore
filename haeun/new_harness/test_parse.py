@@ -1591,6 +1591,62 @@ def test_story_review() -> None:
     check("무게를 센다", hard["candidates"][0]["counts"],
           {"critical": 1, "major": 0, "minor": 1})
 
+    # --- 마무리: 다음 화가 궁금해지는가 --------------------------------
+    #
+    # 이 판정은 모델이 issues 로 옮겼는지에 안 기댄다 — ending 칸을 보고
+    # 코드가 직접 센다(pagecheck 이 flow 를 그렇게 다루는 것과 같다).
+    closed = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "scenes": [{"id": 1}, {"id": 2}, {"id": 3}],
+         "ending": {"changed": "없음", "question": "없음", "from": ""},
+         "issues": []}]}, ensure_ascii=False), expect=[1])
+    c = closed["candidates"][0]
+    check("다 닫혀 있으면 주의", c["verdict"], "주의")
+    check("달라진 것 없음 + 질문 없음 = 둘 다 잡는다",
+          [i["kind"] for i in c["issues"]], ["마무리", "마무리"])
+    check("마무리는 마지막 장면 번호로", c["issues"][0]["scene"], 3)
+
+    forced = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "scenes": [{"id": 1}, {"id": 2}],
+         "ending": {"changed": "정체가 들킬 위기가 됐다",
+                    "question": "저 사람은 언제부터 알고 있었나",
+                    "from": "마지막 줄뿐"},
+         "issues": []}]}, ensure_ascii=False), expect=[1])
+    c = forced["candidates"][0]
+    check("억지 훅은 major (통과는 시킨다)", c["verdict"], "통과")
+    check("억지 훅을 짚는다", c["issues"][0]["severity"], "major")
+    check("질문은 화면으로 넘긴다", c["ending"]["question"], "저 사람은 언제부터 알고 있었나")
+
+    good = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "scenes": [{"id": 1}],
+         "ending": {"changed": "곁에 두기로 했다", "question": "왜 돌아온 걸까",
+                    "from": "장면 2"},
+         "issues": []}]}, ensure_ascii=False), expect=[1])
+    check("제대로 끝나면 안 잡는다", good["candidates"][0]["issues"], [])
+
+    # 모델이 이미 적었으면 코드가 또 세지 않는다 (같은 것을 두 번 세면
+    # critical 이 부풀어서 무게가 안 읽힌다)
+    dup = SC.parse(json.dumps({"candidates": [
+        {"n": 1, "ending": {"changed": "없음", "question": "없음", "from": ""},
+         "issues": [{"scene": 5, "kind": "마무리", "severity": "critical",
+                     "what": "아무것도 안 달라졌다"}]}]},
+        ensure_ascii=False), expect=[1])
+    check("모델이 적었으면 안 겹쳐 센다",
+          len(dup["candidates"][0]["issues"]), 1)
+
+    # ending 칸이 통째로 없는 옛 응답은 마무리를 안 잡는다 — 안 물어본 것을
+    # 못 지켰다고 할 수는 없다
+    old_shape = SC.parse('{"candidates": [{"n": 1, "issues": []}]}', expect=[1])
+    check("ending 이 없으면 마무리는 안 잡는다", old_shape["candidates"][0]["issues"], [])
+
+    # 모델이 kind 에 칸 이름을 적는 일이 실제로 나왔다 (`why`). 화면에
+    # 라벨로 그대로 붙는 자리라 한글 목록으로 되돌린다.
+    leak = SC.parse('{"candidates": [{"n": 1, "issues": ['
+                    '{"scene": 1, "kind": "why", "severity": "major", "what": "x"},'
+                    '{"scene": 1, "kind": "new", "severity": "minor", "what": "y"}]}]}',
+                    expect=[1])
+    check("칸 이름을 종류로 되돌린다",
+          [i["kind"] for i in leak["candidates"][0]["issues"]], ["인과", "신규"])
+
     odd = SC.parse('{"candidates": [{"n": 1, "issues": [{"severity": "심각", "what": "x"}]}]}',
                    expect=[1])
     check("모르는 무게는 major", odd["candidates"][0]["issues"][0]["severity"], "major")
@@ -1612,6 +1668,8 @@ def test_story_review() -> None:
     ok("장면을 번호로 준다", "1. 첫 장면이다" in text)
     ok("한 줄이 한 장이라고 알려준다", "한 줄이 그림 한 장이 된다" in text)
     ok("안 밝힌 것은 문제가 아니라고 알려준다", "밝히지 않은 것" in text)
+    ok("마지막에 다음 화가 궁금한지 본다", "다음 화가 궁금해지는가" in text)
+    ok("만들 때 준 기준을 그대로 쓴다", "관계 · 상황 · 목표" in text)
     ok("자리표시자가 안 남는다", "{character}" not in text and "{directions}" not in text)
 
     # 후보가 없으면 호출까지 안 간다 (값이 안 나간다)

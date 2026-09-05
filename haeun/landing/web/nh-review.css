@@ -188,3 +188,19 @@
 .nh-review-episode .nh-review-read { font-size: 13px; }
 .nh-review-episode .nh-review-list { font-size: 12.5px; }
 .nh-review-episode .nh-review > summary { font-size: 12px; }
+
+/* 마지막에 남는 질문. 지적 목록 **밖**에 둔다 — 고르는 사람이 가장 먼저
+   알고 싶은 것이라, 접힌 안에 넣으면 펴 보기 전에는 안 보인다. */
+.nh-review-hook {
+  margin: 10px 0 0; padding-top: 8px;
+  border-top: 1px dashed var(--line-2, #e2e2e2);
+  font-size: 12.5px; color: #555; line-height: 1.5;
+}
+.nh-review-hook b { color: #0a5f7a; font-weight: 600; margin-right: 4px; }
+/* 안 남는 것은 눈에 띄어야 한다 — 이 후보를 고르면 1화로 끝난다는 뜻이다. */
+.nh-review-hook-none { color: #b5453c; }
+/* 질문을 이미 그렸으면 그 아래 접는 줄은 선을 또 긋지 않는다. */
+.nh-review-hook + .nh-review-after-hook { border-top: 0; margin-top: 6px; padding-top: 0; }
+.nh-review-ok .nh-review-hook { border-top: 0; margin-top: 0; padding-top: 0; }
+.nh-review-ok > p { margin: 6px 0 0; }
+.nh-review-episode .nh-review-hook { font-size: 13px; }

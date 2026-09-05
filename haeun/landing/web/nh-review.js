@@ -30,8 +30,15 @@ window.NHReview = (function () {
     if (!r) return "";
     const issues = r.issues || [];
     const n = r.counts || {};
+    // 마지막에 남는 질문은 **접지 않는다.** 후보를 고르는 사람이 가장 먼저
+    // 알고 싶은 것이 "이걸 고르면 다음 화가 궁금해지나" 라서, 지적 목록
+    // 안에 묻어 두면 펴 보기 전에는 안 보인다.
+    const q = (r.ending || {}).question;
+    const hook = q && !/^(없음|없다|-)$/.test(q.trim())
+      ? `<p class="nh-review-hook"><b>다음이 궁금해지는 것</b> ${esc(q)}</p>`
+      : (r.ending ? `<p class="nh-review-hook nh-review-hook-none">다 읽어도 다음 화에 궁금할 것이 안 남는다</p>` : "");
     if (!issues.length) {
-      return `<p class="nh-review nh-review-ok">읽어 봤습니다 — 걸리는 곳 없음</p>`;
+      return `<div class="nh-review nh-review-ok">${hook}<p>읽어 봤습니다 — 걸리는 곳 없음</p></div>`;
     }
     const heavy = (n.critical || 0) + (n.major || 0);
     const label = heavy
@@ -49,7 +56,8 @@ window.NHReview = (function () {
       </li>`;
     }).join("");
     return `
-      <details class="nh-review" data-verdict="${esc(r.verdict)}">
+      ${hook}
+      <details class="nh-review nh-review-after-hook" data-verdict="${esc(r.verdict)}">
         <summary>${esc(label)}</summary>
         ${r.read_as && (!opt || opt.readAs !== false)
           ? `<p class="nh-review-read">읽은 대로: ${esc(r.read_as)}</p>` : ""}

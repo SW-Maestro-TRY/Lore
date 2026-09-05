@@ -25,9 +25,19 @@
 더 재미있는지는 **안 본다** — 그건 사람이 고르는 자리이고, 모델이 순위를
 매기면 사람이 그 순위를 읽고 고르게 된다.
 
-여기에 하나만 더 붙는다. **한 줄이 그림 한 장이 되는가** — 한 줄에 사건이
-여럿 들어 있거나 화면에 보이는 것이 없으면 그리면서 무너진다(`kind` 가
-`한장`).
+여기에 둘이 더 붙는다.
+
+**한 줄이 그림 한 장이 되는가** — 한 줄에 사건이 여럿 들어 있거나 화면에
+보이는 것이 없으면 그리면서 무너진다(`kind` 가 `한장`).
+
+**마지막에 다음 화가 궁금해지는가** — 1화 마지막에 관계·상황·목표 중
+하나가 달라져 있고, 그 변화 때문에 질문 하나가 남는가(`kind` 가 `마무리`).
+이건 취향이 아니다. 어떤 결말이 좋은지가 아니라 **달라진 것과 남는 질문이
+있는지를 세는 것**이라 셀 수 있다. 그리고 이 기준은 새로 만든 것이 아니라
+`story_prompt` 의 「10. 마지막 장면에는 다음을 기대하게 만드는 변화가
+있어야 한다」를 그대로 가져온 것이다 — 만들 때 요구한 것을 볼 때도 그대로
+쓴다. 다른 잣대를 대면 검수가 후보를 떨어뜨리는 것이 아니라 후보와 다른
+이야기를 요구하게 된다.
 
 ## 어떻게 쓰는가
 
@@ -58,7 +68,21 @@ PROMPT_DIR = HERE / "prompt"
 STAGE = "STORY_REVIEW"
 
 SEVERITY = ("critical", "major", "minor")
-KINDS = ("인과", "지식", "신규", "연속성", "인물", "한장")
+KINDS = ("인과", "지식", "신규", "연속성", "인물", "한장", "마무리")
+
+# `ending` 에서 "비었다" 를 뜻하는 값. 모델이 프롬프트가 시킨 대로 적으면
+# 이 낱말들이 온다 — 코드가 이것을 보고 직접 문제를 세운다(아래 _ending).
+EMPTY = ("없음", "없다", "none", "-", "")
+ONLY_LAST = "마지막 줄뿐"
+
+# 모델이 `kind` 에 **칸 이름**을 적어 넣는 일이 실측으로 나왔다(`why`).
+# 프롬프트가 "issues 는 위 칸에서 나온다" 라고 시키니, 어느 칸에서 나왔는지를
+# 종류라고 쓴 것이다 — 틀린 말은 아니지만 이 값은 화면에 라벨로 그대로
+# 붙는 자리라, 한글 목록으로 되돌린다. 모르는 낱말을 통째로 버리지는
+# 않는다(pagecheck 과 같은 규칙) — 아는 것만 옮긴다.
+FIELD_KIND = {"why": "인과", "new": "신규", "gap": "연속성", "knows": "지식",
+              "events": "한장", "shows": "한장", "ending": "마무리",
+              "conflicts": "연속성", "actions": "인과"}
 
 
 def log(msg: str) -> None:
@@ -181,6 +205,47 @@ def build_prompt(char: dict | None, directions: list[dict]) -> str:
 
 # ------------------------------------------------------------------------ 파싱
 
+def _ending(one: dict, last_scene: int) -> tuple[dict, list[dict]]:
+    """`ending` 칸 -> (읽은 값, 코드가 세운 문제).
+
+    모델에게 "이건 문제니까 issues 에도 적어라" 를 시켜 놓았지만, 그것을
+    지켰는지는 **여기서 확인할 수 있다.** 안 옮겼으면 코드가 옮긴다 —
+    조용히 흘려보내면 마무리가 빈 후보가 「걸리는 곳 없음」 으로 나간다.
+
+    같은 것을 두 번 세지 않으려고, 이미 `마무리` 문제가 적혀 있으면
+    코드는 더하지 않는다.
+    """
+    raw = one.get("ending")
+    if not isinstance(raw, dict):
+        # `ending` 칸이 통째로 없다. **안 물어본 것을 못 지켰다고 셀 수는
+        # 없다** — 이 칸을 요구하기 전에 만든 판정 파일이 그렇다. 빈 값을
+        # "없음" 으로 읽으면 옛 판정이 전부 주의로 뒤집힌다.
+        return {"changed": "", "question": "", "from": ""}, []
+    ending = {"changed": _text(raw.get("changed")),
+              "question": _text(raw.get("question")),
+              "from": _text(raw.get("from"))}
+
+    said = [i for i in (one.get("issues") or [])
+            if isinstance(i, dict) and _text(i.get("kind")) == "마무리"]
+    if said:
+        return ending, []
+
+    made = []
+    def add(sev: str, what: str) -> None:
+        made.append({"scene": last_scene, "kind": "마무리",
+                     "severity": sev, "what": what, "where": ""})
+
+    if ending["changed"].lower() in EMPTY:
+        add("critical", "마지막 장면이 끝나도 관계·상황·목표가 처음 그대로다 — "
+                        "달라진 것이 없다")
+    if ending["question"].lower() in EMPTY:
+        add("critical", "다 읽고 나서 다음 화에 무엇이 궁금한지 댈 것이 없다")
+    elif ending["from"] == ONLY_LAST:
+        add("major", "다음이 궁금해지는 것이 마지막 줄에만 붙어 있다 — "
+                     "앞에 깔린 것이 없다")
+    return ending, made
+
+
 def parse(text: str, expect: list[int] | None = None) -> dict:
     """검수 응답(JSON) -> 후보별 판정.
 
@@ -209,22 +274,34 @@ def parse(text: str, expect: list[int] | None = None) -> dict:
                 continue
             sev = _text(i.get("severity")).lower()
             kind = _text(i.get("kind"))
+            kind = FIELD_KIND.get(kind.lower(), kind)
             issues.append({"scene": _int(i.get("scene")),
                            "kind": kind if kind in KINDS else (kind or "인과"),
                            "severity": sev if sev in SEVERITY else "major",
                            "what": _text(i.get("what")),
                            "where": _text(i.get("where"))})
+        # 마무리는 `ending` 칸에서 코드가 직접 센다 — 모델이 그것을 issues 로
+        # 옮겼는지에 기대지 않는다(pagecheck 이 flow 를 그렇게 다루는 것과 같다).
+        last_scene = max((i["scene"] for i in issues), default=0)
+        for sc in (one.get("scenes") or []):
+            if isinstance(sc, dict):
+                last_scene = max(last_scene, _int(sc.get("id")))
+        ending, forced = _ending(one, last_scene)
+        issues += forced
+
         issues.sort(key=lambda i: (SEVERITY.index(i["severity"]), i["scene"]))
         counts = {s: sum(1 for i in issues if i["severity"] == s) for s in SEVERITY}
         got[n] = {"n": n,
                   "verdict": "주의" if counts["critical"] else "통과",
                   "read_as": _text(one.get("read_as")),
+                  "ending": ending,
                   "counts": counts,
                   "issues": issues}
 
     out = []
     for n in (expect if expect else sorted(got)):
         out.append(got.get(n) or {"n": n, "verdict": "없음", "read_as": "",
+                                  "ending": {"changed": "", "question": "", "from": ""},
                                   "counts": {s: 0 for s in SEVERITY}, "issues": []})
     return {"candidates": out}
 
@@ -283,6 +360,10 @@ def review_directions(run_dir: Path, char: dict | None, directions: list[dict],
 
     write_json(run_dir / "story_review.json", review)
     log(f"  [이야기 검수] {summary(review)}")
+    for c in review["candidates"]:
+        q = (c.get("ending") or {}).get("question")
+        if q:
+            log(f"    {c['n']}번 마지막에 남는 질문: {q}")
     for c in review["candidates"]:
         for one in c["issues"]:
             if one["severity"] in ("critical", "major"):
