@@ -238,6 +238,23 @@ export class MockPetServer implements PetSource {
    * ★ 확률이 섞인 병(NEGLECT·NATURAL)은 목이 만들 수 없어서 — 서버만 아는 값이 씨앗에 섞인다(해석 42) —
    *   그 화면을 보려면 이 손잡이로 앉힌다. 규칙을 흉내 내는 것보다 "못 만든다" 를 드러내는 편이 정직하다.
    */
+  /** 그 동작의 심화 행동을 지금 열어 둔다(가짜 검수 통과). 도착은 규칙대로 — 깨어 있는 조회에서 보인다. */
+  forceOpen_(seq: number): void {
+    const r = this.row;
+    if (!r || r.phase !== 'ALIVE') return;
+    const m = r.motions.find((x) => x.seq === seq);
+    if (!m) return;
+    m.advanced = { status: 'QUEUED', imageKey: null, revealedAt: null, seen: false };
+    this.deliver(r, this.now());
+  }
+
+  /** 이 펫에 대해 밤 계획을 지금 돌린다(계약 6절 night-sweep 의 목 판). */
+  nightSweep_(): void {
+    const r = this.row;
+    if (!r || r.phase !== 'ALIVE') return;
+    this.planNight(r);
+  }
+
   makeSick_(kind: SickKind): void {
     const r = this.row;
     if (!r || r.phase !== 'ALIVE') return;
@@ -1254,6 +1271,10 @@ export interface ZzalMockHandle {
   failNextBake: () => void;
   /** 병을 직접 앉힌다 — 확률이 섞인 병(NEGLECT·NATURAL)은 목이 만들 수 없다. */
   makeSick: (kind: SickKind) => void;
+  /** 그 동작의 심화 행동을 지금 열어 둔다(가짜 검수 통과). */
+  forceOpen: (seq: number) => void;
+  /** 이 펫에 대해 밤 계획을 지금 돌린다. */
+  nightSweep: () => void;
   now: () => string;
   state: () => unknown;
   reset: (preset?: MockPreset) => void;
@@ -1273,6 +1294,8 @@ export function installMockHandle(server: MockPetServer): void {
     advance: (ms) => { server.advance(ms); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
     failNextBake: () => server.failNextBake_(),
     makeSick: (kind) => { server.makeSick_(kind); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
+    forceOpen: (seq) => { server.forceOpen_(seq); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
+    nightSweep: () => { server.nightSweep_(); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
     now: () => new Date(server.now()).toISOString(),
     state: () => server.state(),
     reset: (preset) => server.reset(preset),

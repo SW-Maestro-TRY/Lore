@@ -19,6 +19,7 @@ import { track } from '@common/analytics';
 import AuthModal from '@common/auth/AuthModal';
 import FeedbackSheet from '../FeedbackSheet';
 import GameSection from '../GameSection';
+import DevPanel from '../parts/DevPanel';
 import AlbumNotes from '../parts/AlbumNotes';
 import BackgroundPicker from '../parts/BackgroundPicker';
 import PiecesRow from '../parts/PiecesRow';
@@ -89,6 +90,9 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
 
   // 무대 배경 — 서버가 준 값(기본 'room'). 바꾸기는 2층 4종 뒤(features.background).
   const bg = BACKGROUNDS.some((b) => b.key === s.background) ? s.background : BACKGROUNDS[0].key;
+
+  // 개발용 시계 패널은 **주소에 `?dev=1` 이 있을 때만** 그린다. 서버 렌더에서는 주소를 모르니 안 그린다.
+  const devTools = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dev');
 
   const go = useCallback((key: string) => {
     const el = scroller.current?.querySelector<HTMLElement>(`[data-sec="${key}"]`);
@@ -658,6 +662,15 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
       <CelebrationModal tama={tama} pc={pc} name={cur.name} onSave={(seq) => dex.find((d) => d.seq === seq)?.save()} />
 
       {!!s.toast && <div data-toast style={L.toast}>{s.toast}</div>}
+
+      {/* 개발용 시계 건너뛰기 — 주소에 `?dev=1` 이 있을 때만. 운영에서는 서버가 그 주소를 안 연다. */}
+      {devTools && (
+        <DevPanel
+          petId={session.server?.pet?.phase === 'ALIVE' ? session.server.pet.petId : null}
+          mock={derived.mock}
+          onPet={(next) => session.server?.applyExternal(next)}
+        />
+      )}
 
       {/* 이 화면의 유일한 로그인 벽. 보고 만지는 것은 전부 열려 있고,
           "내 아이를 만든다" 는 순간에만 계정을 묻는다(useZzalSession.create). */}

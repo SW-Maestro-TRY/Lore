@@ -76,6 +76,8 @@ export interface TamagotchiServer {
   clearJustUnlocked: () => void;
   /** 미니게임 응답으로 열린 동작을 폭죽 줄에 얹는다(게임 응답은 PetDetail 이 아니다). */
   noteUnlocked: (seqs: number[]) => void;
+  /** 펫 경로 밖(개발용 시계 도구)에서 받아 온 최신 상태를 그대로 얹는다. */
+  applyExternal: (next: PetDetail) => void;
   chat: ChatState | null;
   chatReply: PetDetail['chatReply'];
   clearChatReply: () => void;
