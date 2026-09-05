@@ -95,14 +95,16 @@
 | 호출 | 요청 | 응답 |
 |---|---|---|
 | `GET /{id}/chat` | | `Chat{openSlot, calls[{slot, line, calledAt, expiresAt, answered}], memories[≤5]}` |
-| `POST /{id}/chat/{slot}/answer` | `{text ≤40}` | `PetDetail` (+ `chatReply{line, reactionKey}`) |
+| `POST /{id}/chat/{slot}/answer` | `{text ≤40}` | `{pet: PetDetail, chatReply{line, reactionKey}}` — **「해석」22**: `PetDetail`을 감싸는 모양(봉투 안에 두 블록) |
 
 - slot = `BABY`(아기 8분) · `MORNING`(기상+1h) · `NOON`(기상+7h) · `EVENING`(**19:00 고정**).
 - 부름은 다음 부름 시각에 만료(`ZZAL_CHAT_SLOT_CLOSED`). `EVENING`은 잠들 때 만료. 만료는 패널티 0.
 - 답하면 대사 1줄 + 반응 동작 1개 + 친밀도 +40. `BABY`는 하루 3회에 **안 센다**(친밀도 +40과 2층 조건 카운터에는 센다 — 튜토리얼 채팅 1회가 곧 갸웃 해금, 정본 16장).
 - **「해석」** `BABY` 부름은 만료되지 않는다 — 답하거나 첫 밤잠이 들 때까지 남는다(정본 16장 "밀린 부름은 순서대로").
 - **「해석」** 기상 시각이 없는 날(부화 당일)은 `MORNING`=부화+1h, `NOON`=부화+7h.
-- 대사는 v0 템플릿(5그룹×슬롯). 원망 문장 금지 필터는 출력 단계에 강제.
+- 대사는 v0 템플릿(5그룹×슬롯 4 + 답 3벌 + 재언급 1). 원망 문장 금지 필터는 출력 단계에 강제(`BanFilter`, 프론트와 같은 목록으로 두 겹).
+- **「해석」23** 부름 행은 타이머가 아니라 조회·답 때 "도래한 슬롯"으로 만들어진다(시계와 같은 이유). `MORNING`은 `NOON` 시각에, `NOON`은 19:00에, `EVENING`은 23:00에 만료하고 그 전에 잠들면 "자는 중"으로 닫힌다. 아기 60분 안에는 하루 부름이 오지 않는다(BABY만). `PetDetail.chatSummary.openSlot`은 v0에서 항상 null — 열린 슬롯은 `GET /chat`으로 본다.
+- **「해석」24** 재언급은 답이 3의 배수 번째일 때(기억이 있으면) 최근 답 하나를 끼운다.
 
 ### 1.6 동작·앨범
 
@@ -415,6 +417,9 @@
 | 19 | 1.3 | 자동 경계에서 열리는 해금(15번)은 `justUnlocked` 대신 아침 `learnedToday` 계열(PR-4 이후) — **확정(9/5)** |
 | 20 | 2 | 비-ALIVE 펫도 `motions`·`justUnlocked`·`learnedToday`는 null이 아니라 **빈 목록 `[]`**(프론트가 길이만 보도록) |
 | 21 | 1.2 | 간식은 행복 가득이어도 받는다(밥만 가득 거절) — **확정(9/5 결정 4)** |
+| 22 | 1.5 | 답 응답은 `{pet, chatReply}` 봉투 |
+| 23 | 1.5 | 부름 행은 조회·답 때 도래한 슬롯으로 생성, 만료 시각 규칙, 아기 60분 안엔 하루 부름 없음, `chatSummary.openSlot`은 v0에서 null |
+| 24 | 1.5 | 재언급은 답 3의 배수 번째 |
 
 ---
 
@@ -426,8 +431,8 @@
 | 2 `motions[].advanced` | 전부 `NONE`(부화 18행·밤 굽기 전) | PR-5·7 |
 | 2 `justUnlocked` | 행동 응답에 실림(카운터 비교) | PR-3 |
 | 2 `sick`·`pieces`·`leaving`·`trip`·`learnedToday`·`scenes.latest` | 항상 null·빈 목록 | PR-8·10·11·7·9 |
-| 2 `chatSummary.openSlot` · 1.5 채팅 | null / 미구현 | PR-4 |
-| 1.7 미니게임 | **아직 v1 경로** `/api/zzal/v1/me/pets/{id}/games`(kind 없음, 달력일 5판) | PR-4 |
+| 1.5 채팅 | **v2 동작** — `GET /chat` · `POST /chat/{slot}/answer`(해석 22~24). `chatSummary.openSlot`은 null | PR-4 |
+| 1.7 미니게임 | **v2 동작** — `POST /games {kind}` · `guess` · `finish` · `current`. 합산 3판·잠들 때 리셋·RUN 5승 해금 | PR-4 |
 | 1.6 앨범·seen | 미구현 | PR-5·7 |
 | 5 관리자 | **아직 v1 경로** `/api/zzal/v1/admin/motions` | PR-7 |
 | 6 개발 도구 | v2 경로 동작(`advance-clock`·`set-clock`). `night-sweep`·`force-open`은 PR-6·7 | PR-2 |
@@ -439,3 +444,4 @@
 - **2026-09-05** — PR-3: 9절 구현 진행 표 추가. `settings.leaveEnabled` 는 v2 판까지 항상 true.
 - **2026-09-05** — 리뷰 반영(PR-2·3): 해석 16~20 추가(낮잠 보상 0·낮잠 우선·깬 직후 밤잠 전이·자동 경계 해금 알림·비-ALIVE 리스트 `[]`).
 - **2026-09-05** — 상훈님 결정 반영(PR-4 첫 커밋): 해석 1·3·12·16·19 확정, 17 정정(아기 60분 시계 논외·재우기=낮잠만), 21 간식 수용.
+- **2026-09-05** — PR-4: 채팅·미니게임 v2 경로 동작(9절), 해석 22~24.

@@ -2,6 +2,8 @@ package com.lore.zzal.game;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -51,6 +53,15 @@ public class ZzalGame {
     @Column(name = "pet_id", nullable = false)
     private Long petId;
 
+    /** 어느 게임인가. v1 행(좌우만 있던 때)은 null → LEFT_RIGHT 로 읽는다. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 12)
+    private GameKind kind;
+
+    /** 달리기 — 살아남은 ms. 좌우 맞히기는 null. */
+    @Column
+    private Long survivedMs;
+
     /**
      * 다섯 판의 답. 'L' 과 'R' 다섯 글자(예: "LRRLR").
      *
@@ -78,9 +89,14 @@ public class ZzalGame {
     }
 
     public static ZzalGame start(Long userId, Long petId, String answers, Instant now) {
+        return start(userId, petId, GameKind.LEFT_RIGHT, answers, now);
+    }
+
+    public static ZzalGame start(Long userId, Long petId, GameKind kind, String answers, Instant now) {
         ZzalGame g = new ZzalGame();
         g.userId = userId;
         g.petId = petId;
+        g.kind = kind;
         g.answers = answers;
         g.picks = "";
         g.hits = 0;
@@ -102,6 +118,20 @@ public class ZzalGame {
         return hit;
     }
 
+    /** 달리기 끝 — 살아남은 시간을 적고 끝낸다. 서버는 상한만 검증한다(화면 물리). */
+    public void finishRun(long survivedMs, Instant now) {
+        this.survivedMs = Math.min(survivedMs, ZzalRulesBridge.RUN_MAX);
+        this.finishedAt = now;
+    }
+
+    public GameKind getKind() {
+        return kind == null ? GameKind.LEFT_RIGHT : kind;
+    }
+
+    public Long getSurvivedMs() {
+        return survivedMs;
+    }
+
     public boolean isFinished() {
         return finishedAt != null;
     }
@@ -112,7 +142,16 @@ public class ZzalGame {
     }
 
     public boolean isWin() {
+        if (getKind() == GameKind.RUN) {
+            return survivedMs != null && survivedMs >= ZzalRulesBridge.RUN_SURVIVE;
+        }
         return hits >= WIN_AT;
+    }
+
+    /** 게임 표가 pet 패키지의 규칙 상수를 한 곳에서만 참조하게 하는 다리. */
+    static final class ZzalRulesBridge {
+        static final long RUN_SURVIVE = com.lore.zzal.pet.ZzalRules.RUN_SURVIVE_MS;
+        static final long RUN_MAX = com.lore.zzal.pet.ZzalRules.RUN_SURVIVE_MAX_MS;
     }
 
     public Long getId() {

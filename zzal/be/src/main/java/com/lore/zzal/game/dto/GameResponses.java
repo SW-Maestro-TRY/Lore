@@ -33,7 +33,9 @@ public final class GameResponses {
 
             @Schema(example = "12") Long gameId,
 
-            @Schema(description = "지금 몇 번째 판인가(0부터). 0 이면 아직 한 번도 안 쳤다", example = "0")
+            @Schema(description = "LEFT_RIGHT · RUN", example = "LEFT_RIGHT") String kind,
+
+            @Schema(description = "지금 몇 번째 판인가(0부터). 0 이면 아직 한 번도 안 쳤다. 달리기는 0", example = "0")
             Integer round,
 
             @Schema(description = "지금까지 몇 번 맞혔나", example = "0") Integer hits,
@@ -45,13 +47,13 @@ public final class GameResponses {
             int remainingToday) {
 
         public static State of(ZzalGame game, int remainingToday) {
-            return new State(true, game.getId(), game.round(), game.getHits(),
+            return new State(true, game.getId(), game.getKind().name(), game.round(), game.getHits(),
                     ZzalGame.ROUNDS, ZzalGame.WIN_AT, remainingToday);
         }
 
         /** 치던 판이 없을 때. 화면은 이걸 보고 "시작" 을 그린다. */
         public static State idle(int remainingToday) {
-            return new State(false, null, null, null,
+            return new State(false, null, null, null, null,
                     ZzalGame.ROUNDS, ZzalGame.WIN_AT, remainingToday);
         }
     }
@@ -102,5 +104,13 @@ public final class GameResponses {
                     ZzalGame.WIN_AT,
                     remainingToday);
         }
+    }
+
+    @Schema(description = "달리기 끝 결과")
+    public record RunResult(
+            @Schema(example = "12") Long gameId,
+            @Schema(description = "살아남은 ms(상한 60,000 으로 잘림)", example = "31200") long survivedMs,
+            @Schema(description = "30,000 이상이면 승리") boolean win,
+            @Schema(description = "오늘 더 할 수 있는 판 수") int remainingToday) {
     }
 }

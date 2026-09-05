@@ -166,8 +166,8 @@ public class PetService {
     public record Action(ZzalPet pet, List<Integer> justUnlocked) {
     }
 
-    /** 행동 전후의 열린 동작을 비교해 새로 열린 seq 를 얻는다(폭죽). 저장하지 않고 계산한다(UnlockRules). */
-    private Action withUnlockDiff(ZzalPet pet, Runnable action) {
+    /** 행동 전후의 열린 동작을 비교해 새로 열린 seq 를 얻는다(폭죽). 저장하지 않고 계산한다(UnlockRules). 채팅·게임도 이걸 쓴다. */
+    public Action withUnlockDiff(ZzalPet pet, Runnable action) {
         Set<String> before = Set.copyOf(UnlockRules.unlockedKeys(pet, catalog));
         action.run();
         List<Integer> opened = UnlockRules.unlockedKeys(pet, catalog).stream()
@@ -353,7 +353,8 @@ public class PetService {
      * 지금 뭔가를 할 수 있는 상태인지 확인하고, 흐른 시간을 반영해 돌려준다.
      * 돌봄·재우기가 공통으로 거치는 문. (여행 중 거절은 PR-11)
      */
-    private ZzalPet awake(Long userId, Long petId, Instant realNow) {
+    /** 잠그고·정산하고·방문하고·깨어 있는지 확인. 채팅 답·게임 시작이 같은 문을 쓴다(트랜잭션 안에서 부를 것). */
+    public ZzalPet awake(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
         if (pet.isSleeping()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_SLEEPING,
@@ -362,8 +363,8 @@ public class PetService {
         return pet;
     }
 
-    /** ALIVE 인지 확인하고 정산·방문한다. 자는 중에도 되는 것(성격·배경·공유)이 거치는 문. */
-    private ZzalPet alive(Long userId, Long petId, Instant realNow) {
+    /** ALIVE 인지 확인하고 잠그고 정산·방문한다. 자는 중에도 되는 것(성격·배경·공유·채팅 조회)이 거치는 문. */
+    public ZzalPet alive(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
         if (!pet.isAlive()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);

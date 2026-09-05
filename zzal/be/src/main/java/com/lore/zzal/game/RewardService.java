@@ -42,6 +42,16 @@ public class RewardService {
         grant(petId, gameWinReward, now);
     }
 
+    /** 이미 잠그고 정산한 펫에 바로 준다(게임 서비스가 트랜잭션 안에서 부른다 — 다시 읽으면 잠금이 두 번). */
+    public void forGameWin(ZzalPet pet, Instant now) {
+        switch (gameWinReward) {
+            case FOOD -> pet.grantFood(now);
+            case HAPPINESS -> pet.grantHappiness();
+            case NONE -> {
+            }
+        }
+    }
+
     @Transactional
     public void grant(Long petId, RewardKind kind, Instant now) {
         if (kind == RewardKind.NONE) {

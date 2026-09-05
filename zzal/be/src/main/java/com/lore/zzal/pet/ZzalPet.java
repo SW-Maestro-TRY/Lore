@@ -337,14 +337,15 @@ public class ZzalPet {
         this.phase = PetPhase.ALIVE;
         this.sheetImageKey = sheetImageKey;
         this.identityText = identityText;
-        this.hatchedAt = now;
+        // ★ 초 단위로 — 정산이 초 단위라 babyUntil 에 밀리초가 남으면 "60분 끝나는 정각" 조회가 한 호출 늦어진다.
+        this.hatchedAt = now.truncatedTo(ChronoUnit.SECONDS);
         this.fullness = ZzalRules.HATCH_FULLNESS;
         this.happiness = ZzalRules.HATCH_HAPPINESS;
         this.trash = ZzalRules.HATCH_TRASH;
         this.food = ZzalRules.HATCH_FOOD;
         this.foodAt = null;
-        this.settledAt = now.truncatedTo(ChronoUnit.SECONDS);
-        this.wokeAt = now;
+        this.settledAt = this.hatchedAt;
+        this.wokeAt = this.hatchedAt;
         this.lastSeenAt = now;
         // "N일째 함께" — 부화한 날이 1일째(api-v2.md 2절 예시).
         this.daysTogether = 1;
@@ -780,7 +781,9 @@ public class ZzalPet {
     /** 간식이 아닌 행동 — 연속 간식이 끊긴다(api-v2.md 해석 2). */
     private void afterNonSnack(Instant now) {
         snackStreak = 0;
-        lastCaredAt = now;
+        if (now != null) {
+            lastCaredAt = now;
+        }
     }
 
     /** 밥·청소·목욕·약 친밀도 +5, 하루 합산 30 상한(8장). */
@@ -830,6 +833,27 @@ public class ZzalPet {
     /** 다운로드·공유 — 서버는 횟수만 센다(튜토리얼 25분의 "했다" 가 되는 사실). 돌봄이 아니라 lastCaredAt 은 안 찍는다. */
     public void share() {
         shares += 1;
+    }
+
+    // ── 미니게임·채팅 카운터 (정본 7·10장) ────────────────────────────────
+
+    /** 판을 시작했다. 하루 3판(합산)·2층 13번 조건은 시작한 판 기준(16장). */
+    public void startGame() {
+        todayGames += 1;
+        gameStarts += 1;
+        afterNonSnack(null);
+    }
+
+    /** 좌우 맞히기 승리 — 달리기 해금(5승)의 재료. */
+    public void winLeftRight() {
+        leftRightWins += 1;
+    }
+
+    /** 채팅에 답했다. 친밀도 +40, 2층 9·10·14번 조건 카운터(BABY 포함, 16장). */
+    public void answerChat() {
+        chatAnswers += 1;
+        addIntimacy(ZzalRules.CHAT_INTIMACY);
+        snackStreak = 0;
     }
 
     // ── 보상 (후기·미니게임) ──────────────────────────────────────────────

@@ -401,6 +401,26 @@ class ZzalPetTest {
         }
 
         @Test
+        @DisplayName("★ 아기 60분이 끝나는 정각(0ms)·+1초 둘 다 같은 호출에서 밤잠 전이 — 부화 시각에 밀리초가 있어도")
+        void exactBabyEndTransitions() {
+            Instant hatchedWithMillis = at("2026-09-06 01:00").plusMillis(257);
+            ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", hatchedWithMillis);
+            pet.markAlive("s", "i", hatchedWithMillis);
+            assertThat(pet.babyUntil()).isEqualTo(at("2026-09-06 02:00"));          // hatchedAt 은 초 단위
+            pet.settle(at("2026-09-06 01:59").plusMillis(900));
+            assertThat(pet.isSleeping()).isFalse();
+            pet.settle(pet.babyUntil());                                             // 정각
+            assertThat(pet.isSleeping()).isTrue();
+            assertThat(pet.getSleptAt()).isEqualTo(at("2026-09-06 02:00"));
+
+            ZzalPet other = ZzalPet.hatch(1L, "여울", null, "k", hatchedWithMillis);
+            other.markAlive("s", "i", hatchedWithMillis);
+            other.settle(other.babyUntil().plusSeconds(1));                          // +1초
+            assertThat(other.isSleeping()).isTrue();
+            assertThat(other.getSleptAt()).isEqualTo(at("2026-09-06 02:00"));
+        }
+
+        @Test
         @DisplayName("낮잠 동안 게이지 정지")
         void napFreezes() {
             ZzalPet pet = baby();
