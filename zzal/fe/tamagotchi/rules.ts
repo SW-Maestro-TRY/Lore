@@ -167,6 +167,9 @@ export const FEATURE_UNLOCK = {
   scenesAbsenceMs: 4 * HOUR,
 } as const;
 
+/** 첫 심화 행동(선물 1 · 구르기)의 seq. 정본 §6 선물 둘은 카탈로그 순서 밖이다. */
+export const GIFT_SEQ = 101;
+
 // ── §4·§11 게이지 → 대기 동작 ─────────────────────────────────────────────
 
 /**

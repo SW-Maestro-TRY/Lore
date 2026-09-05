@@ -20,7 +20,7 @@
 
 import { ApiError } from '../api';
 import type {
-  Album, ChatCall, ChatReply, ChatSlot, ChatState, Clock, CreatePetInput, Features, FirstGift, Motion, PetCreated,
+  Album, BakingState, ChatCall, ChatReply, ChatSlot, ChatState, Clock, CreatePetInput, Features, FirstGift, Motion, PetCreated,
   PetDetail, PetPhase, Personality, Settings, ShareKind, Sick, Today, Tutorial, TutorialStep,
   TutorialStepKey, CareAction,
 } from '../pet';
@@ -29,6 +29,7 @@ import {
   BABY_DROP_MS, BABY_MS, CARE_MISS_ZERO_MS, CHAT_MEMORY, CHAT_SLOTS, CHAT_MAX_CHARS, DROP_MS, FEATURE_UNLOCK,
   FOOD_CHARGE_MS, GAMES_PER_DAY, INTIMACY, INTIMACY_TIERS, LEFT_RIGHT, MAX_FOOD, MAX_GAUGE, MAX_TRASH, NAME_MAX_CHARS,
   NAP, RUN, SLEEP_WINDOW, SNACK_STREAK_SICK, UNLOCK_CONDITIONS, WAKE_WINDOW, WORLD_MAX_CHARS, moodOf,
+  GIFT_SEQ, FIRST_GIFT_DAYS,
 } from '../../tamagotchi/rules';
 import { BACKGROUNDS, DEFAULT_BACKGROUND, MOTIONS, SPECIAL_ADV } from '../../tamagotchi/constants';
 import { BABY_CALLS } from '../../tamagotchi/tutorial';
@@ -73,7 +74,7 @@ export function parseClockParam(raw: string | null): number | null {
 // 화면이 ALIVE 블록(clock·gauges·motions…)이 전부 null 인 응답으로도 안 죽는지 보는 자리다
 // (사라진 리뷰 하네스 C0~C2 자리 — 계약 2절). 목록은 FAILED 를 걸러내므로(useZzalSession),
 // 실패한 알은 "만든 뒤 폴링으로 실패가 도착"하는 실제 경로로만 화면에 뜬다 — 그래서 씨앗이 아니라 스위치다.
-export type MockPreset = 'new' | 'baby' | 'child' | 'failed';
+export type MockPreset = 'new' | 'baby' | 'child' | 'failed' | 'grown';
 
 interface MotionRow {
   seq: number;
@@ -406,7 +407,8 @@ export class MockPetServer implements PetSource {
     await this.wait();
     const r = this.alive(petId);
     this.settle(r, this.now());
-    if (!this.featuresOf(r).album) throw err(409, 'ZZAL_FEATURE_LOCKED', '첫 심화 행동을 배워 오면 열려요');
+    // ★ v0 동안 조회를 막지 않는다(해석 25). 잠긴 칸의 이름·조건을 보여주는 것이 정본 6장인데
+    //   조회 자체를 막으면 그 규칙과 어긋난다. `features.album` 은 플래그로만 쓴다.
     return { motions: this.motionsOf(r), postcards: [], scenes: [], firstGift: this.firstGiftOf(r) };
   }
 
@@ -623,6 +625,7 @@ export class MockPetServer implements PetSource {
       if (r.today.careMiss === 0) r.counters.zeroMissDays += 1;
       r.today = { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 };
       if (r.game && !r.game.finished) r.game.finished = true;
+      this.planNight(r);
     }
     if (!auto) {
       r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
@@ -639,12 +642,53 @@ export class MockPetServer implements PetSource {
     if (kind === 'NIGHT') {
       r.dayBase = t;
       r.chatAnswered.clear();
+      this.deliver(r, t);
     }
     if (kind === 'NAP') r.counters.napCount += 1;
     if (!auto) {
       r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.wake);
       r.counters.sleepWakeCount += 1;
     }
+  }
+
+  /**
+   * 밤 굽기 계획(정본 2·9장의 v0 몫). ★ 목이 굽는 것은 **첫 선물(구르기) 하나뿐**이다.
+   *
+   * 3층(seq 1→16 순서대로 굽기)은 백엔드 PR-10 이라 아직 규칙이 없다. 목이 규칙을 지어내면
+   * 실서버와 갈라지고, 그 차이는 목에서만 도는 화면을 만든다(결정기록 C40).
+   * 조건은 정본 그대로 — 함께한 날 3 이상이고 그날 케어 미스 0.
+   */
+  private planNight(r: Row): void {
+    const gift = r.motions.find((m) => m.seq === GIFT_SEQ);
+    if (!gift || gift.advanced.status !== 'NONE') return;
+    if (r.daysTogether < FIRST_GIFT_DAYS) return;
+    // doSleep 이 today 를 지우기 전에 부르므로 여기서 그날 케어 미스를 본다.
+    gift.advanced = { ...gift.advanced, status: 'QUEUED', imageKey: null, revealedAt: null, seen: false };
+  }
+
+  /**
+   * 아침 도착(해석 31). **시각이 아니라 "깨어 있는 첫 조회"** 다 — 여기서는 밤잠에서 깨는 순간.
+   * 굽기·검수는 하룻밤 안에 끝난 것으로 본다(목은 사람 판정을 흉내 내지 않는다).
+   * 도착해야 비로소 `imageKey` 가 채워진다 — 검수 중인 그림은 안 내려간다.
+   */
+  private deliver(r: Row, t: number): void {
+    for (const m of r.motions) {
+      if (m.advanced.status !== 'QUEUED' && m.advanced.status !== 'PRACTICING') continue;
+      m.advanced = {
+        status: 'OPEN',
+        imageKey: `images/zzal/pets/${r.id}/motions/${m.seq}/motion.webp`,
+        revealedAt: iso(t),
+        seen: false,
+      };
+      if (m.unlockedAt === null) m.unlockedAt = t;   // 선물은 도착이 곧 해금이다
+    }
+  }
+
+  /** 펫 단위 "지금 연습 중인가" 한 칸(해석 30) — 가장 앞선 상태 하나. */
+  private bakingOf(r: Row): BakingState {
+    if (r.motions.some((m) => m.advanced.status === 'PRACTICING')) return 'PRACTICING';
+    if (r.motions.some((m) => m.advanced.status === 'QUEUED')) return 'QUEUED';
+    return 'NONE';
   }
 
   private careIntimacy(r: Row): void {
@@ -702,7 +746,12 @@ export class MockPetServer implements PetSource {
         if (this.counterValue(r, c.counter) >= c.target) m.unlockedAt = now;
       }
     }
-    return r.motions.filter((m) => m.unlockedAt !== null && !before.has(m.seq)).map((m) => m.seq);
+    // ★ 선물(GIFT)은 여기서 빼놓는다. 선물은 조건을 채워 여는 것이 아니라 **아침에 도착하는** 것이라,
+    //   폭죽(justUnlocked)과 폴라로이드(learnedToday)가 같은 사건을 두 번 알리게 된다.
+    //   같은 일을 두 번 축하하면 두 번째가 값을 잃는다 — 도착 쪽 하나만 남긴다.
+    return r.motions
+      .filter((m) => m.unlockedAt !== null && !before.has(m.seq) && m.layer !== 'GIFT')
+      .map((m) => m.seq);
   }
 
   private motionsOf(r: Row): Motion[] {
@@ -723,12 +772,17 @@ export class MockPetServer implements PetSource {
     const l2 = r.motions.filter((m) => m.layer === 'BASIC_2' && m.unlockedAt !== null).length;
     return {
       download: true, leftRight: true, run: r.counters.leftRightWins >= FEATURE_UNLOCK.runLeftRightWins,
-      scenes: false, background: l2 >= FEATURE_UNLOCK.backgroundLayer2, album: false, pieces: false,
+      scenes: false, background: l2 >= FEATURE_UNLOCK.backgroundLayer2,
+      // 앨범은 첫 심화 행동이 **도착**하면 열린다(계약 1.6).
+      album: r.motions.some((m) => m.advanced.status === 'OPEN'), pieces: false,
     };
   }
 
   private firstGiftOf(r: Row): FirstGift {
-    const daysLeft = Math.max(0, 3 - r.daysTogether);
+    const daysLeft = Math.max(0, FIRST_GIFT_DAYS - r.daysTogether);
+    const gift = r.motions.find((m) => m.seq === GIFT_SEQ);
+    if (gift?.advanced.status === 'OPEN') return { status: 'OPEN', daysLeft: 0 };
+    if (gift && gift.advanced.status !== 'NONE') return { status: 'BAKING', daysLeft: 0 };
     return { status: daysLeft === 0 ? 'WAITING' : 'LOCKED', daysLeft };
   }
 
@@ -868,6 +922,7 @@ export class MockPetServer implements PetSource {
       intimacy: alive ? { score: r.intimacy, percent, tier } : null,
       today: alive ? today : null,
       pieces: null,
+      baking: alive ? this.bakingOf(r) : null,
       // ★ ALIVE 가 아니어도 **리스트 셋은 빈 목록**이다(계약 해석 20 — 2026-09-05 실서버 왕복으로 확인).
       //   훅·화면의 `?? []` 방어는 그대로 둔다. 목이 서버보다 험한 값을 주는 편이 안전해 보이지만,
       //   서버와 다른 모양을 내면 "목에서만 되는" 코드가 생겨 목이 거짓말을 하게 된다.
@@ -933,10 +988,27 @@ export class MockPetServer implements PetSource {
     r.lastVisitDay = dayIndex(t);
   }
 
-  private seedPreset(preset: 'baby' | 'child'): void {
+  private seedPreset(preset: 'baby' | 'child' | 'grown'): void {
     const now = this.now();
     if (preset === 'baby') {
       this.row = this.newRow('여울', '조용하지만 고집이 세요', now - HATCH_MS, now);
+      return;
+    }
+    if (preset === 'grown') {
+      // 사흘째 아이 — 2층 4종이 열려 배경 바꾸기가 되고, 오늘 밤 첫 선물(구르기)이 구워진다.
+      const g = this.newRow('여울', '조용하지만 고집이 세요', now - 3 * 24 * HOUR_MS, now - 3 * 24 * HOUR_MS);
+      g.counters = {
+        ...g.counters, feedCount: 9, petCount: 9, chatAnswers: 4, cleanCount: 5, gameStarts: 3,
+        shareCount: 2, napCount: 1, sleepWakeCount: 4, bathCount: 3,
+      };
+      g.personality = 'GENTLE';
+      g.fullness = 3; g.happiness = 3; g.trash = 1; g.food = 2; g.intimacy = 420;
+      g.daysTogether = 3;
+      g.dayBase = at(now, 10);            // 오늘 10:00 기상
+      g.settledAt = now;
+      g.lastVisitDay = dayIndex(now);
+      this.newlyUnlocked(g, new Set(), g.hatchedAt ?? now);
+      this.row = g;
       return;
     }
     // child — 두 시간 전에 태어나 튜토리얼을 다 지난 아이.
