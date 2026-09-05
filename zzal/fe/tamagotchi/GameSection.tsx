@@ -5,7 +5,7 @@
 //    보내면 개발자도구로 이겼다고 말하면 그만이고, 보상이 켜지는 순간 그게 무한 이득이 된다.
 //    그래서 왕복이 다섯 번이고, 여기에는 정답을 담는 변수 자체가 없다.
 //
-// ★ 새 그림을 만들지 않는다 — 이미 있는 캐릭터 그림(constants 의 YEOUL_MOOD)을 그대로 쓴다.
+// ★ 새 그림을 만들지 않는다 — 이미 있는 여울 그림(constants 의 YEOUL_MOTION 폴백)을 그대로 쓴다.
 //   디자인은 상훈님이 직접 다듬으실 자리라, 여기서는 동작이 도는 것까지만 한다.
 'use client';
 
@@ -57,7 +57,9 @@ export default function GameSection({ petId, source, onFinished }: GameSectionPr
     let alive = true;
     const controller = new AbortController();
     source.getCurrentGame(petId, controller.signal)
-      .then((s) => { if (alive) setState(s); })
+      // ★ 복구 응답은 "아직 아무 상태도 없을 때" 만 쓴다. 시작 응답(playing:true)이 먼저 왔는데 늦게 도착한
+      //   복구 응답(playing:false)이 덮으면 치던 판이 화면에서 사라진다(리뷰 M2).
+      .then((s) => { if (alive) setState((cur) => cur ?? s); })
       .catch((e: unknown) => {
         if (!alive) return;
         if (e instanceof DOMException && e.name === 'AbortError') return;

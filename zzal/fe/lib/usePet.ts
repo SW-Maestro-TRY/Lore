@@ -69,8 +69,12 @@ export interface UsePetResult {
   markSeen: (seq: number) => Promise<PetDetail | null>;
 }
 
-/** 다음에 서버에 다시 물을 시각(ms). 경계 중 가장 가까운 것. 없으면 null. */
-export function nextBoundaryAt(pet: PetDetail, nowMs: number): number | null {
+/**
+ * 다음에 서버에 다시 물을 시각(ms). 경계 중 가장 가까운 것. 없으면 null.
+ * ★ 기준은 응답의 `serverNow` 다(기기 시계가 아니다). 응답을 받은 순간 = serverNow 이므로 "경계 − serverNow" 가
+ *   곧 기다릴 시간이고, 시계 오프셋을 따로 들 필요가 없다(리뷰 L1 — 오프셋을 두 벌 들면 어긋난다).
+ */
+export function nextBoundaryAt(pet: PetDetail, nowMs: number = ms(pet.serverNow) ?? Date.now()): number | null {
   if (pet.phase !== 'ALIVE' || !pet.clock) return null;
   const c = pet.clock;
   const candidates: (number | null)[] = [
@@ -86,9 +90,8 @@ export function nextBoundaryAt(pet: PetDetail, nowMs: number): number | null {
 /**
  * @param source 실서버 또는 목. null 이면 아무것도 안 부른다.
  * @param petId  볼 펫. 아직 없으면 null.
- * @param now    서버 기준 "지금" 을 내는 함수(useClock.now). 경계까지 남은 시간을 잴 때 쓴다.
  */
-export function usePet(source: PetSource | null, petId: number | null, now: () => number): UsePetResult {
+export function usePet(source: PetSource | null, petId: number | null): UsePetResult {
   const [pet, setPet] = useState<PetDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState(false);
@@ -110,7 +113,9 @@ export function usePet(source: PetSource | null, petId: number | null, now: () =
     applied.current = seq;
     setPet(next);
     setError(null);
-    if (next.justUnlocked.length) setJustUnlocked((prev) => [...prev, ...next.justUnlocked.filter((s) => !prev.includes(s))]);
+    // ALIVE 가 아니면 null 이다(계약 2절). 빈 배열로 읽는다.
+    const unlocked = next.justUnlocked ?? [];
+    if (unlocked.length) setJustUnlocked((prev) => [...prev, ...unlocked.filter((s) => !prev.includes(s))]);
     if (next.chatReply) setChatReply(next.chatReply);
   }, []);
 
@@ -220,10 +225,12 @@ export function usePet(source: PetSource | null, petId: number | null, now: () =
     if (!pet) return null;
     if (hatching) return HATCH_POLL_MS;
     if (pet.phase !== 'ALIVE') return null;
-    const at = nextBoundaryAt(pet, now());
-    const untilBoundary = at === null ? Infinity : at - now() + BOUNDARY_SLACK_MS;
+    // 응답을 받은 순간이 곧 serverNow. 경계까지 남은 시간 = 경계 − serverNow.
+    const base = ms(pet.serverNow) ?? Date.now();
+    const at = nextBoundaryAt(pet, base);
+    const untilBoundary = at === null ? Infinity : at - base + BOUNDARY_SLACK_MS;
     return Math.max(BOUNDARY_SLACK_MS, Math.min(ALIVE_POLL_MS, untilBoundary));
-  }, [pet, hatching, now]);
+  }, [pet, hatching]);
 
   useEffect(() => {
     if (delay === null) return;

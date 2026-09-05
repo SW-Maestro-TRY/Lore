@@ -150,7 +150,10 @@ export interface DerivedFromPet {
   sick: boolean;
   /** 열린 동작 수(선물 포함). */
   unlocked: number;
+  /** 18칸. ALIVE 가 아니면 []. */
   motions: Motion[];
+  /** 오늘 목욕했는가(하루 1회). */
+  bathDone: boolean;
   personality: Personality | null;
   world: string;
   background: string;
@@ -183,7 +186,7 @@ function derive(pet: PetDetail | null, clock: ClockApi, hatchSpan: number, hatch
     return {
       hasChar: false, phase: 'none', eggT: 0, t: 0, fullness: 0, happiness: 0, clean: MAX_GAUGE, trash: 0, food: 0, foodLeft: 0,
       sleeping: false, sleepKind: null, canSleep: false, canWake: false, sleepLeft: 0, untilAutoSleep: null,
-      daysTogether: 0, intimacyPercent: 0, sick: false, unlocked: 0, motions: [], personality: null, world: '',
+      daysTogether: 0, intimacyPercent: 0, sick: false, unlocked: 0, motions: [], bathDone: false, personality: null, world: '',
       background: DEFAULT_BACKGROUND, chars: [], active: 0,
     };
   }
@@ -192,6 +195,8 @@ function derive(pet: PetDetail | null, clock: ClockApi, hatchSpan: number, hatch
   const elapsed = pet.elapsedSeconds ?? 0;
   const c = pet.clock;
   const g = pet.gauges;
+  // ALIVE 가 아니면 null 이다(계약 2절). 화면은 늘 배열로 본다.
+  const motions = pet.motions ?? [];
   return {
     hasChar: true,
     phase,
@@ -212,8 +217,9 @@ function derive(pet: PetDetail | null, clock: ClockApi, hatchSpan: number, hatch
     daysTogether: pet.daysTogether ?? 0,
     intimacyPercent: pet.intimacy?.percent ?? 0,
     sick: pet.sick !== null,
-    unlocked: pet.motions.filter((m) => m.unlocked).length,
-    motions: pet.motions,
+    unlocked: motions.filter((m) => m.unlocked).length,
+    motions,
+    bathDone: pet.today?.bathDone === true,
     personality: pet.personality,
     world: pet.world ?? '',
     background: pet.background ?? DEFAULT_BACKGROUND,
@@ -460,11 +466,12 @@ export function useTamagotchi({ server = null }: TamagotchiOptions = {}) {
   /** 화면이 그대로 갖다 쓰는 파생값. 규칙을 스킨이 다시 계산하지 않게 여기서 낸다. */
   const derived = useMemo(() => {
     const idle: IdleBehavior = pet ? idleBehavior(pet) : { motionKey: 'base', scale: 1, overlays: [], place: 'center' };
-    const unlockedKeys = new Set(pet?.motions.filter((m) => m.unlocked).map((m) => m.key));
+    const motions = pet?.motions ?? [];
+    const unlockedKeys = new Set(motions.filter((m) => m.unlocked).map((m) => m.key));
     /** 동작 키 → 그림 주소. 서버 키가 있으면 그것, 없으면 여울 폴백. 잠긴 2층은 1층으로 대신한다(§6). */
     const imageFor = (key: string): string => {
       const k = unlockedKeys.has(key) ? key : (MOTION_FALLBACK[key] ?? 'base');
-      const m = pet?.motions.find((x) => x.key === k);
+      const m = motions.find((x) => x.key === k);
       if (m?.basicImageKey) return assetUrl(m.basicImageKey);
       return YEOUL_MOTION[k] ?? YEOUL_MOTION.base;
     };
@@ -487,7 +494,7 @@ export function useTamagotchi({ server = null }: TamagotchiOptions = {}) {
       /** 부화 중 지금 하는 일. 서버 문장을 그대로 쓴다. */
       eggLine: pet?.step ?? EGG_STAGES[Math.min(EGG_STAGES.length - 1, Math.floor(derivedPet.eggT * EGG_STAGES.length))],
       failed: derivedPet.phase === 'failed',
-      total: pet?.motions.length ?? 0,
+      total: motions.length,
       features: pet?.features ?? null,
       light: clock.lightPhase(),
       clock,
