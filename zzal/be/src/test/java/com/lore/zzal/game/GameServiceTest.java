@@ -168,6 +168,9 @@ class GameServiceTest {
             pet.winLeftRight();
         }
         Instant nextMorning = kst("2026-09-06 11:00");          // 23:00 자동 취침 → 10:00 자동 기상 뒤
+        // ★ 밤을 넘기며 게이지가 바닥나 병이 날 수 있다(PR-8) — 이 테스트의 관심사가 아니므로 낫게 해 둔다
+        pet.settle(nextMorning);
+        pet.medicine(nextMorning);
         GameService.Started s = service.start(USER, PET, GameKind.RUN, nextMorning);
         assertThat(yesterday.isFinished()).isTrue();
         assertThat(yesterday.isWin()).isFalse();

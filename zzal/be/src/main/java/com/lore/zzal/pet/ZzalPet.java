@@ -200,6 +200,37 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean cleanMissArmed;
 
+    // ── 병 (정본 5·16장) ──────────────────────────────────────────────────
+
+    /** 아프기 시작한 시각(펫 시계). 안 아프면 null — 이 칸 하나가 "아픈가" 의 정본이다. */
+    @Column
+    private Instant sickSince;
+
+    /** 왜 아픈가. 화면에는 안 보이고 지표·디버깅용. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private SickKind sickKind;
+
+    /** 아픈 채 깨어 있는 초. 24시간마다 케어 미스 +1(정본 4장). 자는 동안은 안 흐른다. */
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long sickAwakeSec;
+
+    /**
+     * 자연 발병까지 남은 <b>깨어 있는</b> 초. null = 예약 없음(심화 행동이 아직 하나도 안 열렸다).
+     *
+     * ★ 깨어 있는 시간으로만 줄어서 "무작위 낮" 이 저절로 지켜진다(정본 5장).
+     */
+    @Column
+    private Long naturalSickDueAwakeSec;
+
+    /** 자연 발병을 몇 번 예약했나. 씨앗의 일부이자 "해금 사이클마다 1회" 의 계수기. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int naturalSickRolls;
+
+    /** 마지막으로 나은 시각. "나은 동작 1회" 연출이 이 값으로 판정된다. */
+    @Column
+    private Instant healedAt;
+
     // ── 친밀도 (정본 8장) ─────────────────────────────────────────────────
 
     @Column(nullable = false, columnDefinition = "integer default 0")
@@ -360,12 +391,20 @@ public class ZzalPet {
         this.lastVisitDate = AwakeClock.dateOf(now);
     }
 
+    /**
+     * 부화 실패로 끝낸다.
+     *
+     * ★ 이미 FAILED 인 행이라도 <b>사유가 비어 있으면 채운다</b>(#222 프론트 소견 L10). 사유 칸이 생기기 전에
+     *   실패한 옛 행들이 {@code deathReason = null} 로 남아 있는데, 화면은 그 값으로 할 말을 고르므로
+     *   비어 있으면 아무 말도 못 한다. 여기서 한 번 지나가면 그 행도 따라온다.
+     */
     public void markHatchFailed() {
-        if (phase != PetPhase.HATCHING) {
-            return;
+        if (phase == PetPhase.HATCHING) {
+            this.phase = PetPhase.FAILED;
         }
-        this.phase = PetPhase.FAILED;
-        this.deathReason = DeathReason.HATCH_FAILED;
+        if (this.phase == PetPhase.FAILED && this.deathReason == null) {
+            this.deathReason = DeathReason.HATCH_FAILED;
+        }
     }
 
     /**
@@ -490,11 +529,11 @@ public class ZzalPet {
         Instant baby = babyUntil();
         if (baby != null && from.isBefore(baby)) {
             Instant babyEnd = to.isBefore(baby) ? to : baby;
-            tick(Duration.between(from, babyEnd).getSeconds(), true);
+            tick(Duration.between(from, babyEnd).getSeconds(), true, from);
             from = babyEnd;
         }
         if (from.isBefore(to)) {
-            tick(Duration.between(from, to).getSeconds(), false);
+            tick(Duration.between(from, to).getSeconds(), false, from);
         }
     }
 
@@ -505,20 +544,35 @@ public class ZzalPet {
      * "게이지가 0인 동안" 만 세야 하는데, 0 이 되는 순간이 구간 한가운데일 수 있기 때문이다.
      * 아기 속도에서는 케어 미스가 없다(4장).
      */
-    private void tick(long seconds, boolean baby) {
+    private void tick(long seconds, boolean baby, Instant from) {
         long fullnessEvery = (baby ? ZzalRules.BABY_FULLNESS_DROP : ZzalRules.FULLNESS_DROP_AWAKE).getSeconds();
         long happinessEvery = (baby ? ZzalRules.BABY_HAPPINESS_DROP : ZzalRules.HAPPINESS_DROP_AWAKE).getSeconds();
         long trashEvery = (baby ? ZzalRules.BABY_TRASH_RISE : ZzalRules.TRASH_RISE_AWAKE).getSeconds();
 
         long remaining = seconds;
+        // ★ 병이 난 "그 순간" 을 적으려면 구간 안에서 시각도 같이 걸어야 한다. settledAt 은 아직 옛 시각이다.
+        Instant at = from;
         while (remaining > 0) {
             long step = Math.min(remaining, fullnessEvery - fullnessAwakeSec);
             step = Math.min(step, happinessEvery - happinessAwakeSec);
             step = Math.min(step, trashEvery - trashAwakeSec);
+            if (!baby) {
+                // ★★ 병·케어 미스도 게이지와 같은 대접을 받아야 한다 — "다음 사건까지만" 걷는다.
+                //   안 그러면 사건이 구간 한가운데서 일어나도 <b>구간 끝</b>에 일어난 것으로 적히고,
+                //   같은 하루라도 몇 번 조회했느냐에 따라 발병 시각이 최대 3시간 달라진다(#225 리뷰 중-1).
+                step = Math.min(step, nextSicknessEvent());
+            }
             step = Math.max(step, 1);
 
+            at = at.plusSeconds(step);
             if (!baby) {
-                accumulateZero(step);
+                // ★★ "이 step 을 걷기 전에 이미 아팠나" 를 먼저 잡는다. accumulateZero 가 이 step 안에서
+                //   병을 낼 수 있는데, 그 뒤에 step 을 통째로 병 시간에 더하면 <b>아프기도 전의 시간이
+                //   병 시간으로 적힌다</b>(#225 재확인 — 한 번에 정산 21600초 vs 1분씩 14460초, 실제 14400초).
+                //   그 차이가 24시간 케어 미스를 이르게 찍고 "그날 케어 미스 0"·첫 심화 판정까지 밀어 버린다.
+                boolean wasSick = isSick();
+                accumulateZero(step, at);
+                advanceSickness(step, at, wasSick);
             }
             fullnessAwakeSec += step;
             happinessAwakeSec += step;
@@ -574,34 +628,146 @@ public class ZzalPet {
      * 케어 미스(정본 4·16장) — 어느 게이지든 0 인 채 깨어 있는 6시간 → +1. 카운터는 하나, 무장은 게이지별.
      * 그 게이지가 채워졌다 다시 0 이 되어야 다음 +1.
      */
-    private void accumulateZero(long step) {
+    private void accumulateZero(long step, Instant at) {
         long limit = ZzalRules.CARE_MISS_ZERO_AFTER.getSeconds();
         if (fullnessMissArmed && fullness == 0) {
             fullnessZeroSec += step;
             if (fullnessZeroSec >= limit) {
                 fullnessMissArmed = false;
-                addCareMiss();
+                addCareMiss(at);
             }
         }
         if (happinessMissArmed && happiness == 0) {
             happinessZeroSec += step;
             if (happinessZeroSec >= limit) {
                 happinessMissArmed = false;
-                addCareMiss();
+                addCareMiss(at);
             }
         }
         if (cleanMissArmed && trash >= ZzalRules.TRASH_MAX) {
             cleanZeroSec += step;
+            // ★ 흔적 4개인 채 6시간이면 <b>100% 병</b>(정본 5장). 케어 미스와는 별개 규칙이라 둘 다 일어난다.
+            //   먼저 판정해서 원인이 DIRTY 로 남게 한다 — 아래 케어 미스가 굴리는 30% 는 원인을 NEGLECT 로 적는다.
+            if (cleanZeroSec >= ZzalRules.SICK_DIRTY_AFTER.getSeconds()) {
+                fallSick(SickKind.DIRTY, at);
+            }
             if (cleanZeroSec >= limit) {
                 cleanMissArmed = false;
-                addCareMiss();
+                addCareMiss(at);
             }
         }
     }
 
-    private void addCareMiss() {
+    /**
+     * 케어 미스 하나. <b>누적이 홀수가 되는 순간 30% 로 병</b>(정본 5장).
+     *
+     * ★ 짝수엔 안 굴린다 — 정본이 "1·3·5…" 라고 못 박았다. 매번 굴리면 방치가 길어질수록 병이 두 배로 잦아진다.
+     */
+    /**
+     * 다음 병·케어 미스 사건까지 남은 초. 없으면 아주 큰 값.
+     *
+     * ★ 여기 빠진 타이머가 있으면 그 사건만 "구간 끝" 으로 밀린다 — 조용히 어긋나는 종류라
+     *   타이머를 새로 만들 때는 이 목록에도 넣어야 한다.
+     */
+    private long nextSicknessEvent() {
+        long next = Long.MAX_VALUE;
+        long missLimit = ZzalRules.CARE_MISS_ZERO_AFTER.getSeconds();
+        if (fullnessMissArmed && fullness == 0) {
+            next = Math.min(next, missLimit - fullnessZeroSec);
+        }
+        if (happinessMissArmed && happiness == 0) {
+            next = Math.min(next, missLimit - happinessZeroSec);
+        }
+        if (cleanMissArmed && trash >= ZzalRules.TRASH_MAX) {
+            next = Math.min(next, missLimit - cleanZeroSec);
+            if (!isSick()) {
+                next = Math.min(next, ZzalRules.SICK_DIRTY_AFTER.getSeconds() - cleanZeroSec);
+            }
+        }
+        if (isSick()) {
+            next = Math.min(next, ZzalRules.CARE_MISS_SICK_EVERY.getSeconds() - sickAwakeSec);
+        } else if (naturalSickDueAwakeSec != null) {
+            next = Math.min(next, naturalSickDueAwakeSec);
+        }
+        return Math.max(next, 1);
+    }
+
+    private void addCareMiss(Instant at) {
         careMiss += 1;
         todayCareMiss += 1;
+        if (careMiss % 2 == 1 && Chance.hit(ZzalRules.SICK_ON_ODD_MISS_CHANCE, "sick-neglect", seed(), careMiss)) {
+            fallSick(SickKind.NEGLECT, at);
+        }
+    }
+
+    /**
+     * 병 시계 — 아픈 채 깨어 있는 24시간마다 케어 미스 +1, 그리고 자연 발병 카운트다운(정본 4·5장).
+     *
+     * ★ 자는 동안에는 이 메서드가 아예 안 불린다({@link #tick} 은 깨어 있는 구간만 걷는다).
+     *   그래서 "자는 동안 병이 안 나빠진다"(정본 2장)가 저절로 지켜진다 — 따로 막는 코드가 없다.
+     *
+     * @param wasSick 이 step 을 걷기 <b>전에</b> 이미 아팠나. 이 step 안에서 막 아프기 시작했다면
+     *                그 step 은 병 시간이 아니다(아프기 전의 시간까지 병 시간으로 세면 안 된다).
+     */
+    private void advanceSickness(long step, Instant at, boolean wasSick) {
+        if (isSick()) {
+            if (!wasSick) {
+                // 이 step 안에서 방금 아팠다 — 병 시간은 발병 순간부터 0 이다(step 절단 덕에 발병은 step 끝이다).
+                return;
+            }
+            sickAwakeSec += step;
+            long every = ZzalRules.CARE_MISS_SICK_EVERY.getSeconds();
+            while (sickAwakeSec >= every) {
+                sickAwakeSec -= every;
+                addCareMiss(at);    // 이미 아프므로 여기서 또 병이 나지는 않는다
+            }
+            return;                 // 아픈 동안에는 자연 발병 시계가 멈춘다(두 병이 겹칠 자리가 없다)
+        }
+        if (naturalSickDueAwakeSec == null) {
+            return;
+        }
+        naturalSickDueAwakeSec -= step;
+        if (naturalSickDueAwakeSec <= 0) {
+            naturalSickDueAwakeSec = null;
+            fallSick(SickKind.NATURAL, at);
+        }
+    }
+
+    /**
+     * 심화 행동 하나가 사용자에게 도착했다 → <b>자연 발병을 한 번 예약</b>한다(정본 5장 "해금 사이클마다 1회").
+     *
+     * ★ 이미 예약이 걸려 있으면 덮어쓰지 않는다. 덮어쓰면 심화가 자주 열리는 사용자만 앞 예약이 계속 밀려
+     *   영영 안 아프게 된다 — "한 번에 하나만 대기" 가 규칙을 그대로 옮긴 모양이다.
+     * ★ 1·2층 기간에는 이 메서드가 안 불린다(정본 16장 "자연 발병은 심화 행동이 열린 뒤에만").
+     */
+    public void scheduleNaturalSickness() {
+        if (naturalSickDueAwakeSec != null) {
+            return;
+        }
+        long window = ZzalRules.SICK_NATURAL_WINDOW_AWAKE.getSeconds();
+        naturalSickDueAwakeSec = Chance.pick(window, "sick-natural", seed(), naturalSickRolls) + 1;
+        naturalSickRolls += 1;
+    }
+
+    /** 아프기 시작한다. 이미 아프면 그대로 둔다(먼저 난 병이 이긴다 — 원인이 뒤바뀌면 지표가 거짓말한다). */
+    private void fallSick(SickKind kind, Instant at) {
+        if (isSick()) {
+            return;
+        }
+        sickSince = at;
+        sickKind = kind;
+        sickAwakeSec = 0;
+    }
+
+    /**
+     * 씨앗 — <b>서버가 정하는 값만</b> 쓴다(부화 시각, 있으면 펫 번호).
+     *
+     * ★ 이름·세계관처럼 사용자가 고르는 값은 넣지 않는다. 넣으면 "안 아픈 이름" 을 골라 규칙을 피할 수 있고,
+     *   그 사실이 알려지는 순간 게임이 아니라 퍼즐이 된다.
+     */
+    private long seed() {
+        long base = hatchedAt != null ? hatchedAt.getEpochSecond() : 0L;
+        return id != null ? base * 31 + id : base;
     }
 
     /** 밥 충전 — 벽시계 4시간에 1개. 자는 동안도 돈다. 가득이면 시계가 멈춘다(안 그러면 하나 먹자마자 몰아서 찬다). */
@@ -742,11 +908,20 @@ public class ZzalPet {
         afterNonSnack(now);
     }
 
-    /** 간식. 행복 +1. 연속 5개면 배탈(병은 PR-8 — 여기서는 연속만 센다). */
+    /** 간식. 행복 +1. 다른 행동 없이 <b>연속 5개면 배탈</b>(정본 5장, 100%). */
     public void snack(Instant now) {
         happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.SNACK_HAPPINESS);
         snackStreak += 1;
         lastCaredAt = now;
+        if (snackStreak >= ZzalRules.SNACK_STREAK_SICK_AT) {
+            // ★★ 아기 60분 동안에는 병이 없다(정본 12장 "케어 미스·병·감점 없음" · 16장).
+            //   튜토리얼에서 시키는 대로 눌러 보다가 아프면, 배우는 자리가 벌 받는 자리가 된다.
+            //   연속은 그래도 0 으로 끊는다 — 안 끊으면 60분이 끝나자마자 여섯 개째에 곧바로 아프다.
+            if (!isBaby(now)) {
+                fallSick(SickKind.UPSET, now);
+            }
+            snackStreak = 0;
+        }
     }
 
     /** 쓰다듬기. 행복 0, 친밀도 +5(하루 3회까지). 넘어도 반응 동작은 나온다(16장) — 그래서 거절하지 않는다. */
@@ -777,15 +952,19 @@ public class ZzalPet {
         afterNonSnack(now);
     }
 
-    /** 약. 병은 PR-8 에서 붙는다 — 지금은 친밀도와 연속 리셋만. */
+    /** 약 — <b>한 번에 즉시</b> 낫는다(정본 5장). 나은 동작(기쁜 자세 + 반짝)은 화면이 {@code justHealed} 로 한 번 보여준다. */
     public void medicine(Instant now) {
+        sickSince = null;
+        sickKind = null;
+        sickAwakeSec = 0;
+        healedAt = now;
         careIntimacy();
         afterNonSnack(now);
     }
 
-    /** 아직 병이 없다(PR-8). 서비스의 간식·게임 거절 판정이 이걸 본다. */
+    /** 아픈가. 서비스의 간식·게임 거절과 {@link #mood()} 가 이걸 본다. */
     public boolean isSick() {
-        return false;
+        return sickSince != null;
     }
 
     /** 간식이 아닌 행동 — 연속 간식이 끊긴다(api-v2.md 해석 2). */
@@ -1016,6 +1195,27 @@ public class ZzalPet {
 
     public int getFood() {
         return food;
+    }
+
+    /** 아픈 채 깨어 있던 초(24시간마다 케어 미스). 발병 순간부터 센다. */
+    public long getSickAwakeSec() {
+        return sickAwakeSec;
+    }
+
+    public Instant getSickSince() {
+        return sickSince;
+    }
+
+    public SickKind getSickKind() {
+        return sickKind;
+    }
+
+    public Instant getHealedAt() {
+        return healedAt;
+    }
+
+    public Long getNaturalSickDueAwakeSec() {
+        return naturalSickDueAwakeSec;
     }
 
     public int getCareMiss() {

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 import static com.lore.zzal.pet.AwakeClockTest.kst;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -596,10 +597,15 @@ class ZzalPetTest {
             assertThat(pet.getSnackStreak()).isEqualTo(4);
             pet.pet(T0);
             assertThat(pet.getSnackStreak()).isZero();
+            // ★ 5개째에 배탈(정본 5장 100%). 연속은 거기서 끊긴다 — 한 개 더 준다고 또 아프면 안 된다
+            //   (아기는 병이 없으므로 어린이로 확인한다 — 아기 판은 Sickness.noSicknessWhileBaby)
+            ZzalPet grown = child();
             for (int i = 0; i < 5; i++) {
-                pet.snack(T0);
+                grown.snack(T0);
             }
-            assertThat(pet.getSnackStreak()).isEqualTo(ZzalRules.SNACK_STREAK_SICK_AT);
+            assertThat(grown.isSick()).isTrue();
+            assertThat(grown.getSickKind()).isEqualTo(com.lore.zzal.pet.SickKind.UPSET);
+            assertThat(grown.getSnackStreak()).isZero();
         }
 
         @Test
@@ -714,6 +720,273 @@ class ZzalPetTest {
             egg.settle(at("2026-09-08 12:00"));
             assertThat(egg.isSleeping()).isFalse();
             assertThat(egg.getSettledAt()).isNull();
+        }
+    }
+
+    /**
+     * 병 — 실패 주입(verify-failure-paths).
+     *
+     * ★ 여기서 지키는 것은 전부 <b>정상 경로에서는 한 번도 안 도는</b> 분기다: 6시간을 더럽힌 채 두기,
+     *   아픈 채 24시간 방치, 자는 동안 시계 정지, 심화 해금 뒤의 자연 발병. 일부러 시간을 밀어야 돈다.
+     */
+    @Nested
+    @DisplayName("병 (정본 5·16장) — 실패 주입")
+    class Sickness {
+
+        @Test
+        @DisplayName("★★ 흔적 4개인 채 깨어 있는 6시간 → 100% 병(DIRTY). 그 전에는 안 아프다")
+        void dirtyForSixHours() {
+            ZzalPet pet = child();                       // 정오, 흔적 0(청소 끝)
+            // 흔적은 깨어 있는 4시간마다 1개 — 12:00~23:00(11h) + 이튿날 10:00~15:00(5h) = 16h 에 4개가 찬다
+            pet.settle(at("2026-09-06 15:00"));
+            assertThat(pet.getTrash()).isEqualTo(4);
+            assertThat(pet.isSick()).isFalse();           // 아직 6시간이 안 지났다
+
+            // 흔적 4가 된 뒤 깨어 있는 6시간(15:00~21:00)
+            pet.settle(at("2026-09-06 21:00"));
+            assertThat(pet.isSick()).isTrue();
+            assertThat(pet.getSickKind()).isEqualTo(SickKind.DIRTY);
+            assertThat(pet.mood()).isEqualTo(ZzalPet.Mood.SICK);   // 우선순위 병 > 배부름 > …
+        }
+
+        @Test
+        @DisplayName("★★ 아픈 채 깨어 있는 24시간마다 케어 미스 +1 — 약을 주면 거기서 멈춘다")
+        void neglectedSicknessCostsCareMiss() {
+            ZzalPet pet = child();
+            pet.settle(at("2026-09-06 21:00"));                   // 위와 같은 경로로 아프게 만든다(흔적 6시간)
+            assertThat(pet.isSick()).isTrue();
+            int before = pet.getCareMiss();
+
+            // 아픈 채 깨어 있는 24시간 = 실제로는 이틀 가까이(밤에는 안 센다)
+            pet.settle(at("2026-09-08 21:00"));
+            assertThat(pet.getCareMiss()).isGreaterThan(before);
+
+            int afterFirst = pet.getCareMiss();
+            pet.medicine(at("2026-09-08 21:00"));
+            pet.settle(at("2026-09-11 21:00"));                   // 나은 뒤로는 병 때문에 안 오른다
+            assertThat(pet.isSick()).isFalse();
+            // 굶주림·더러움으로 오르는 몫은 있지만, 병 몫(24시간마다)은 멈췄다
+            assertThat(pet.getSickSince()).isNull();
+        }
+
+        @Test
+        @DisplayName("★★ 자는 동안에는 병 시계가 안 흐른다 — 재우고 하룻밤을 넘겨도 케어 미스가 안 오른다")
+        void sicknessClockStopsWhileAsleep() {
+            ZzalPet pet = child();
+            pet.settle(at("2026-09-06 21:00"));
+            assertThat(pet.isSick()).isTrue();
+            pet.sleep(at("2026-09-06 22:30"));                    // 19~23시 창 안
+            int before = pet.getCareMiss();
+
+            pet.settle(at("2026-09-07 06:59"));                   // 아직 자는 중(기상은 07:00~)
+            assertThat(pet.isSleeping()).isTrue();
+            assertThat(pet.getCareMiss()).isEqualTo(before);      // 한 칸도 안 올랐다
+        }
+
+        @Test
+        @DisplayName("★ 약은 한 번에 즉시 낫는다 — 원인·시각·병 시계가 모두 지워진다")
+        void medicineHealsAtOnce() {
+            ZzalPet pet = child();
+            pet.settle(at("2026-09-06 21:00"));
+            assertThat(pet.isSick()).isTrue();
+
+            pet.medicine(at("2026-09-06 22:10"));
+
+            assertThat(pet.isSick()).isFalse();
+            assertThat(pet.getSickSince()).isNull();
+            assertThat(pet.getSickKind()).isNull();
+            assertThat(pet.getHealedAt()).isEqualTo(at("2026-09-06 22:10"));
+            assertThat(pet.mood()).isNotEqualTo(ZzalPet.Mood.SICK);
+        }
+
+        @Test
+        @DisplayName("★★ 자연 발병은 심화 행동이 열린 뒤에만 — 예약 전에는 아무리 지나도 자연 발병이 없다")
+        void naturalSicknessOnlyAfterAdvanced() {
+            ZzalPet pet = child();
+            assertThat(pet.getNaturalSickDueAwakeSec()).isNull();
+
+            pet.scheduleNaturalSickness();
+            Long due = pet.getNaturalSickDueAwakeSec();
+            assertThat(due).isNotNull();
+            // 깨어 있는 3일 = 10:00~23:00 × 3 = 39시간 안(정본 5장, 창에서 파생한 값)
+            assertThat(due).isBetween(1L, ZzalRules.SICK_NATURAL_WINDOW_AWAKE.getSeconds());
+
+            // 두 번 불러도 예약이 겹치지 않는다(한 번에 하나만 대기)
+            pet.scheduleNaturalSickness();
+            assertThat(pet.getNaturalSickDueAwakeSec()).isEqualTo(due);
+        }
+
+        @Test
+        @DisplayName("★ 자연 발병 시계는 깨어 있는 동안만 흐른다 — 자는 밤을 넘겨도 그만큼은 안 준다")
+        void naturalCountdownRunsOnlyAwake() {
+            ZzalPet pet = child();
+            pet.scheduleNaturalSickness();
+            // 뽑힌 값은 39시간 안 아무 값이라 이 테스트에서 발병할 수도 있다. 여기서 보려는 것은
+            // "얼마나 줄어드는가" 뿐이므로 넉넉한 값으로 고정한다(뽑기 자체는 ChanceTest 가 본다).
+            long due = 20 * 3600L;
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "naturalSickDueAwakeSec", due);
+
+            pet.settle(at("2026-09-05 14:00"));              // 깨어 있는 2시간
+            long afterAwake = pet.getNaturalSickDueAwakeSec();
+            assertThat(due - afterAwake).isEqualTo(2 * 3600);
+
+            pet.settle(at("2026-09-05 20:00"));              // 여기까지 깨어 있는 6시간 더
+            pet.sleep(at("2026-09-05 20:00"));               // 재운다 — 그 뒤로는 안 준다
+            pet.settle(at("2026-09-06 02:00"));
+            // 20:00 까지 깨어 있던 8시간만 줄고, 자는 6시간은 안 줄었다
+            assertThat(due - pet.getNaturalSickDueAwakeSec()).isEqualTo(8 * 3600);
+        }
+
+        @Test
+        @DisplayName("★ 예약한 시간이 다 흐르면 낮에 저절로 아프다(NATURAL)")
+        void naturalSicknessFires() {
+            ZzalPet pet = child();
+            pet.scheduleNaturalSickness();
+            // 예약을 짧게 바꿔 두고(테스트 전용) 깨어 있는 시간을 그만큼 태운다
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "naturalSickDueAwakeSec", 3600L);
+
+            pet.settle(at("2026-09-05 13:30"));
+            assertThat(pet.isSick()).isTrue();
+            assertThat(pet.getSickKind()).isEqualTo(SickKind.NATURAL);
+            assertThat(pet.getNaturalSickDueAwakeSec()).isNull();   // 예약은 소진됐다
+        }
+
+        @Test
+        @DisplayName("★ 먼저 난 병이 이긴다 — 아픈 채로 간식 5개를 줘도 원인이 안 바뀐다")
+        void firstCauseWins() {
+            ZzalPet pet = child();
+            pet.settle(at("2026-09-06 21:00"));
+            assertThat(pet.getSickKind()).isEqualTo(SickKind.DIRTY);
+
+            for (int i = 0; i < 5; i++) {
+                pet.snack(at("2026-09-06 21:00"));
+            }
+            assertThat(pet.getSickKind()).isEqualTo(SickKind.DIRTY);
+        }
+
+        @Test
+        @DisplayName("★★ 아기 60분 안에는 간식 5개를 줘도 안 아프다(정본 12·16장 \"아기 동안 병 없음\")")
+        void noSicknessWhileBaby() {
+            ZzalPet baby = baby();                       // 3분 전 부화 — 아직 아기
+            for (int i = 0; i < 5; i++) {
+                baby.snack(T0);
+            }
+            assertThat(baby.isSick()).isFalse();
+            assertThat(baby.getSnackStreak()).isZero();  // ★ 연속은 끊는다 — 60분이 끝나자마자 6개째로 아프면 안 된다
+
+            // 60분이 지난 뒤에는 규칙대로 아프다
+            ZzalPet grown = child();
+            for (int i = 0; i < 5; i++) {
+                grown.snack(T0);
+            }
+            assertThat(grown.isSick()).isTrue();
+            assertThat(grown.getSickKind()).isEqualTo(SickKind.UPSET);
+        }
+
+        @Test
+        @DisplayName("★★ 한 번에 정산하든 1초씩 정산하든 결과가 같다 — 발병 시각·병 시간이 조회 패턴에 안 묶인다")
+        void settleGranularityDoesNotMatter() {
+            ZzalPet once = child();
+            ZzalPet stepwise = child();
+            Instant from = at("2026-09-05 12:00");
+            Instant to = at("2026-09-05 22:00");
+
+            once.settle(to);
+            for (long sec = 60; sec <= Duration.between(from, to).getSeconds(); sec += 60) {
+                stepwise.settle(from.plusSeconds(sec));
+            }
+
+            assertThat(once.getCareMiss()).isEqualTo(stepwise.getCareMiss());
+            assertThat(once.isSick()).isEqualTo(stepwise.isSick());
+            assertThat(once.getSickKind()).isEqualTo(stepwise.getSickKind());
+            assertThat(once.getSickSince()).isEqualTo(stepwise.getSickSince());
+            assertThat(once.getFullness()).isEqualTo(stepwise.getFullness());
+            assertThat(once.getTrash()).isEqualTo(stepwise.getTrash());
+        }
+
+        @Test
+        @DisplayName("★★ 병 시간도 정산 패턴과 무관 — 어떻게 나눠 정산해도 \"발병 뒤 흐른 시간\" 과 같다")
+        void sickAwakeSecMatchesElapsedSinceOnset() {
+            Instant from = at("2026-09-05 12:00");
+            Instant to = at("2026-09-09 12:00");                  // 나흘 — 그 사이에 병이 나고도 남는다
+            List<Long> stepsToTry = List.of(0L, 60L, 3600L, 6 * 3600L);   // 한 번에 · 1분 · 1시간 · 6시간
+
+            Long expectedSick = null;
+            Integer expectedMiss = null;
+            for (long every : stepsToTry) {
+                ZzalPet pet = child();
+                if (every == 0) {
+                    pet.settle(to);
+                } else {
+                    for (long sec = every; sec <= Duration.between(from, to).getSeconds(); sec += every) {
+                        pet.settle(from.plusSeconds(sec));
+                    }
+                    pet.settle(to);
+                }
+                assertThat(pet.isSick()).as("나흘이면 병이 나 있어야 한다").isTrue();
+
+                // 병 시간은 "발병 뒤 깨어 있던 시간" 을 24시간으로 나눈 나머지여야 한다
+                long awakeSinceOnset = awakeSecondsBetween(pet.getSickSince(), to);
+                long expected = awakeSinceOnset % ZzalRules.CARE_MISS_SICK_EVERY.getSeconds();
+                assertThat(pet.getSickAwakeSec())
+                        .as("정산 간격 %d초 — 병 시간이 발병 뒤 경과와 같아야 한다", every)
+                        .isEqualTo(expected);
+
+                if (expectedSick == null) {
+                    expectedSick = pet.getSickAwakeSec();
+                    expectedMiss = pet.getCareMiss();
+                } else {
+                    assertThat(pet.getSickAwakeSec()).as("정산 간격 %d초", every).isEqualTo(expectedSick);
+                    assertThat(pet.getCareMiss()).as("정산 간격 %d초 — 케어 미스도 같아야 한다", every)
+                            .isEqualTo(expectedMiss);
+                }
+            }
+        }
+
+        /** {@code from}~{@code to} 사이의 깨어 있는 초(자동 창 10:00~23:00 기준). */
+        private long awakeSecondsBetween(Instant from, Instant to) {
+            long awake = 0;
+            for (Instant cur = from; cur.isBefore(to); cur = cur.plusSeconds(60)) {
+                java.time.LocalTime t = cur.atZone(ZzalRules.ZONE).toLocalTime();
+                if (!t.isBefore(ZzalRules.AUTO_WAKE_AT) && t.isBefore(ZzalRules.AUTO_SLEEP_AT)) {
+                    awake += 60;
+                }
+            }
+            return awake;
+        }
+
+        @Test
+        @DisplayName("★ 자연 발병도 정산 간격에 안 묶인다 — 예약한 초에 정확히 아프다")
+        void naturalFiresExactly() {
+            ZzalPet once = child();
+            ZzalPet stepwise = child();
+            for (ZzalPet p : List.of(once, stepwise)) {
+                org.springframework.test.util.ReflectionTestUtils.setField(p, "naturalSickDueAwakeSec", 5000L);
+            }
+            Instant from = at("2026-09-05 12:00");
+
+            once.settle(at("2026-09-05 20:00"));
+            for (long sec = 60; sec <= 8 * 3600; sec += 60) {
+                stepwise.settle(from.plusSeconds(sec));
+            }
+
+            assertThat(once.getSickSince()).isEqualTo(from.plusSeconds(5000));
+            assertThat(once.getSickSince()).isEqualTo(stepwise.getSickSince());
+        }
+
+        @Test
+        @DisplayName("★ 부화 실패 사유는 비지 않는다 — 사유 칸이 생기기 전 행도 지나갈 때 채워진다")
+        void hatchFailureAlwaysHasReason() {
+            ZzalPet egg = ZzalPet.hatch(1L, "여울", null, "images/zzal/abc", T0);
+            egg.markHatchFailed();
+            assertThat(egg.getPhase()).isEqualTo(PetPhase.FAILED);
+            assertThat(egg.getDeathReason()).isEqualTo(DeathReason.HATCH_FAILED);
+
+            // 사유가 비어 있는 옛 행(사유 칸이 생기기 전에 실패한 것)
+            ZzalPet legacy = ZzalPet.hatch(1L, "여울", null, "images/zzal/abc", T0);
+            org.springframework.test.util.ReflectionTestUtils.setField(legacy, "phase", PetPhase.FAILED);
+            legacy.markHatchFailed();
+            assertThat(legacy.getDeathReason()).isEqualTo(DeathReason.HATCH_FAILED);
         }
     }
 }

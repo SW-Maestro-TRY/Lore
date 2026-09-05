@@ -129,6 +129,22 @@ public final class ZzalRules {
     /** 자연 발병 — 심화 행동이 하나 열리면 그 뒤 3일(깨어 있는 날) 안 무작위 한 번. 1·2층 기간엔 없음. */
     public static final int SICK_NATURAL_WITHIN_DAYS = 3;
 
+    /**
+     * 깨어 있는 하루 = 자동 기상 ~ 자동 취침(10:00~23:00 = 13시간).
+     *
+     * ★ 새로 정한 숫자가 아니라 <b>위 두 창에서 파생</b>한 값이다. 창을 바꾸면 이 값도 따라 바뀐다 —
+     *   따로 적어 두면 언젠가 창만 바뀌고 이 값은 안 바뀌어 조용히 어긋난다.
+     */
+    public static final Duration AWAKE_PER_DAY = Duration.between(AUTO_WAKE_AT, AUTO_SLEEP_AT);
+
+    /**
+     * 자연 발병 창 — <b>깨어 있는</b> 3일(정본 5장 "해금 후 3일 안 무작위 낮" + 16장 "깨어 있는 시간").
+     *
+     * ★ 벽시계 3일이 아니다. 깨어 있는 시간으로 세면 "낮" 이라는 조건이 저절로 지켜진다 —
+     *   자는 동안에는 이 시계가 안 흐르므로 자다가 아플 수 없다.
+     */
+    public static final Duration SICK_NATURAL_WINDOW_AWAKE = AWAKE_PER_DAY.multipliedBy(SICK_NATURAL_WITHIN_DAYS);
+
     /** 케어 미스 누적이 홀수가 되는 순간 30%. */
     public static final double SICK_ON_ODD_MISS_CHANCE = 0.30;
 
