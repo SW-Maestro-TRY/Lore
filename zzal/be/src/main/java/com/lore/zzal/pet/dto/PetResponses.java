@@ -5,6 +5,7 @@ import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.UnlockRule;
 import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.pet.AwakeClock;
+import com.lore.zzal.pet.DeathReason;
 import com.lore.zzal.pet.SleepKind;
 import com.lore.zzal.pet.TutorialSchedule;
 import com.lore.zzal.pet.UnlockRules;
@@ -56,6 +57,12 @@ public final class PetResponses {
     public record Food(int count, Long nextInSeconds) {
     }
 
+    /**
+     * 아픈 상태(정본 5장). 안 아프면 이 블록 자체가 null.
+     *
+     * ★ {@code kind} 는 원인이지만 화면은 대개 안 쓴다 — 정본은 "아픈 자세 + 해골" 하나로만 보인다.
+     *   그래도 내려보내는 이유는 나중에 문구를 나눌 여지를 남기고(배탈 vs 방치), 지원 문의 때 원인을 짚기 위해서다.
+     */
     public record Sick(Instant since, String kind) {
     }
 
@@ -177,6 +184,10 @@ public final class PetResponses {
             Food food,
             @Schema(description = "SICK > HUNGRY > SAD > DIRTY > NORMAL") String mood,
             Sick sick,
+            @Schema(description = """
+                    ★ 행동 응답에만. 방금 약을 먹고 나았는가 — 화면이 "나은 동작(기쁜 자세 + 반짝)" 을 한 번 보여준다.
+                    상태만으로는 "방금 나음" 과 "원래 안 아픔" 을 못 가른다""")
+            boolean justHealed,
             Intimacy intimacy,
             Today today,
             @Schema(description = "3층 전엔 null") Pieces pieces,
@@ -217,6 +228,15 @@ public final class PetResponses {
          */
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
                                   Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked) {
+            return from(pet, stepLabel, now, catalog, rows, justUnlocked, false);
+        }
+
+        /**
+         * @param justHealed 방금 약을 먹고 나았는가(행동 응답에만 — "나은 동작" 을 한 번만 보여주려고)
+         */
+        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
+                                  Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
+                                  boolean justHealed) {
             boolean hatching = pet.isHatching();
             boolean alive = pet.isAlive();
             if (!alive) {
@@ -225,10 +245,10 @@ public final class PetResponses {
                         !hatching && pet.getHatchedAt() != null,
                         hatching ? stepLabel : null,
                         hatching ? pet.elapsedSeconds(now) : null,
-                        pet.getDeathReason() != null ? pet.getDeathReason().name() : null,
+                        deathReason(pet),
                         pet.getHatchStartedAt(), pet.getHatchedAt(), now,
                         // ★ 리스트는 null 이 아니라 빈 목록(해석 20) — 화면이 길이만 보고 그리게. null 이 프론트를 깨뜨렸다.
-                        null, null, null, null, null, null, null, null, null, null,
+                        null, null, null, null, null, null, false, null, null, null, null,
                         List.of(), List.of(), List.of(),
                         null, null, null, null, null, null, null, null, null, null, null);
             }
@@ -268,7 +288,9 @@ public final class PetResponses {
                     new Gauges(pet.getFullness(), pet.getHappiness(), pet.getClean(), pet.getTrash()),
                     new Food(pet.getFood(), pet.foodRemainingSeconds(now)),
                     pet.mood().name(),
-                    null,                                                   // 병 — PR-8
+                    pet.isSick() ? new Sick(pet.getSickSince(),
+                            pet.getSickKind() == null ? null : pet.getSickKind().name()) : null,
+                    justHealed,
                     Intimacy.of(pet.getIntimacy()),
                     new Today(pet.getTodayGames(), pet.getTodayPetCount(), pet.getTodayCareIntimacy(),
                             pet.getSnackStreak(), pet.isTodayBathDone()),
@@ -340,13 +362,35 @@ public final class PetResponses {
             return queued ? "QUEUED" : "NONE";
         }
 
+        /**
+         * 끝난 이유 코드 — {@code FAILED}·{@code DEAD} 면 <b>절대 비우지 않는다</b>(#222 프론트 소견 L10).
+         *
+         * ★ 화면은 이 코드로 할 말을 고른다(부화 실패 문구 / "잘 보내 줬어요"). 비어 있으면 아무 말도 못 하고
+         *   빈 화면이 된다. 사유 칸이 생기기 전에 실패한 옛 행들이 실제로 null 이었다.
+         *   <b>원인 자체(무엇 때문에 생성이 막혔는지)는 여전히 안 내려간다</b> — 코드값만 준다.
+         */
+        static String deathReason(ZzalPet pet) {
+            if (pet.getDeathReason() != null) {
+                return pet.getDeathReason().name();
+            }
+            return switch (pet.getPhase()) {
+                case FAILED -> DeathReason.HATCH_FAILED.name();
+                case DEAD -> DeathReason.NEGLECTED.name();
+                default -> null;
+            };
+        }
+
         /** 18칸. 잠긴 칸도 이름+조건(플랜 T2 결정 4). 심화 행동 상태는 zzal_motion 행에서(없으면 NONE). */
         public static List<Motion> motions(ZzalPet pet, MotionCatalog catalog, Map<Integer, ZzalMotion> rows) {
             boolean v2 = "v2".equals(pet.getHatchPipelineVersion());
             return catalog.all().stream().map(spec -> {
                 boolean unlocked = UnlockRules.isUnlocked(pet, spec, catalog);
                 UnlockRule rule = spec.unlockRule();
-                Progress progress = !unlocked && rule.hasProgress()
+                // ★★ "케어 미스 0인 날" 진행도는 안 내려간다(15번 웃는 대기). 그 숫자는 곧 <b>케어 미스</b>를
+                //   되짚게 해 주는데, 케어 미스는 정본 4장이 "숨은 수치" 로 못 박은 값이다(#225 리뷰 결정).
+                //   힌트 문구("잘 돌본 날 3번")만 주고 몇 번째인지는 말하지 않는다.
+                boolean hidden = rule.kind() == UnlockRule.Kind.ZERO_MISS_DAYS;
+                Progress progress = !unlocked && rule.hasProgress() && !hidden
                         ? new Progress(Math.min(UnlockRules.current(pet, rule.kind(), catalog), rule.target()), rule.target())
                         : null;
                 ZzalMotion row = rows.get(spec.seq());
