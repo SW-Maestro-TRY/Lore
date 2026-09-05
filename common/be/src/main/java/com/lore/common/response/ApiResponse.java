@@ -5,7 +5,7 @@ import com.lore.common.exception.ErrorCode;
 /**
  * 모든 도메인이 공유하는 공통 응답 구조.
  *
- * webtoon / comic / trailer 가 각자 다른 모양으로 응답하면 프론트에서 도메인마다
+ * webtoon / zzal / trailer 가 각자 다른 모양으로 응답하면 프론트에서 도메인마다
  * 파싱을 다르게 해야 하므로, 응답 껍데기는 여기 한 곳에서만 정의한다.
  *
  * 성공: { "success": true,  "data": {...}, "message": null, "error": null }

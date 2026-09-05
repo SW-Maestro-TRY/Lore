@@ -4,7 +4,7 @@
 // 아래 srcDirs 가 흩어진 도메인 폴더를 하나의 컴파일 단위로 묶어주는 부분.
 //
 // 그래서 각 도메인 담당자는:
-//   - 자기 폴더(예: comic/be/src/main/java) 안에서만 작업하면 되고
+//   - 자기 폴더(예: zzal/be/src/main/java) 안에서만 작업하면 되고
 //   - 공통 기능은 그냥 import 해서 쓰면 된다 (예: import com.lore.common.response.ApiResponse;)
 //   - Gradle 모듈 / 의존성 선언을 몰라도 된다. 의존성은 아래 dependencies 한 곳에만 적는다.
 
@@ -34,13 +34,21 @@ sourceSets {
             srcDirs = [
                 'common/be/src/main/java',   // 공통: config, 인증, 공통 응답
                 'webtoon/be/src/main/java',  // 하은
-                'comic/be/src/main/java',    // 상훈
+                'zzal/be/src/main/java',     // 상훈
                 'trailer/be/src/main/java',  // 병연
                 'apps/api/src/main/java'     // 서버 실행 진입점(main 클래스)
             ]
         }
         resources {
-            srcDirs = ['apps/api/src/main/resources']  // application.yml 등 실행 설정
+            srcDirs = [
+                'apps/api/src/main/resources',   // application.yml 등 실행 설정
+                // 도메인별 리소스 — 프롬프트·스크립트처럼 코드와 함께 배포돼야 하는 파일.
+                // 여기 없으면 빌드 결과에 안 들어가고, 실행할 때가 되어서야 "파일이 없다"로 터진다.
+                'common/be/src/main/resources',
+                'webtoon/be/src/main/resources',
+                'zzal/be/src/main/resources',
+                'trailer/be/src/main/resources'
+            ]
         }
     }
     test {
@@ -48,7 +56,7 @@ sourceSets {
             srcDirs = [
                 'common/be/src/test/java',
                 'webtoon/be/src/test/java',
-                'comic/be/src/test/java',
+                'zzal/be/src/test/java',
                 'trailer/be/src/test/java'
             ]
         }
@@ -97,9 +105,21 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-    // spring-boot-starter-security 는 이번 스프린트에서 의도적으로 뺐다.
-    // 넣는 순간 모든 요청이 로그인으로 튕겨 초기 개통 확인이 어려워진다.
-    // 구글 OAuth 는 Security 4.x 설정 변경 폭이 커서 다음 스프린트로 미룸.
+    // 인증 (2026-09-01 착수 — 회원가입·로그인을 공통으로 구현하기로 결정)
+    //
+    // Security 를 넣는 순간 모든 요청이 로그인으로 튕기므로, 어디를 열어둘지는
+    // WebSecurityConfig 에서 명시한다. 비밀번호 해싱(BCrypt)도 여기서 온다 —
+    // 직접 구현하면 거의 반드시 취약해지는 영역이라 검증된 것을 쓴다.
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // JWT — access(30분) / refresh(14일) 두 종류를 발급·검증한다.
+    // jjwt 는 스프링과 무관한 순수 라이브러리라 Boot 4.x 호환 문제가 없다.
+    // api 는 컴파일에, impl·jackson 은 실행에만 필요하다(공식 권장 구성).
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    testImplementation 'org.springframework.security:spring-security-test'
 }
 
 tasks.named('test') {

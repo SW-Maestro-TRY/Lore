@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import com.lore.common.auth.jwt.JwtProvider;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,6 +37,12 @@ class WebtoonControllerTest {
 
     @Autowired MockMvc mvc;
     @MockitoBean HarnessGateway gateway;
+    /* 이 조각(@WebMvcTest)에는 컨트롤러와 **필터**만 뜬다. 공용 인증 필터
+       (JwtAuthenticationFilter)가 그 필터라 같이 뜨는데, 그것이 기대는
+       JwtProvider 는 안 뜬다 — 없으면 컨텍스트가 아예 안 올라온다.
+       여기서 보는 것은 프록시가 경로·본문·응답을 어떻게 다루는가지 인증이
+       아니므로, 자리만 채워 준다(토큰이 없으면 필터는 그냥 흘려보낸다). */
+    @MockitoBean JwtProvider jwtProvider;
 
     @Test
     @DisplayName("접두사만 갈아 끼우고 뒤는 그대로 넘긴다")

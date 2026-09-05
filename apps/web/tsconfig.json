@@ -20,7 +20,7 @@
       "@/*": ["./*"],
       "@common/*": ["../../common/fe/*"],
       "@webtoon/*": ["../../webtoon/fe/*"],
-      "@comic/*": ["../../comic/fe/*"],
+      "@zzal/*": ["../../zzal/fe/*"],
       "@trailer/*": ["../../trailer/fe/*"]
     }
   },
@@ -34,8 +34,8 @@
     "../../common/fe/**/*.tsx",
     "../../webtoon/fe/**/*.ts",
     "../../webtoon/fe/**/*.tsx",
-    "../../comic/fe/**/*.ts",
-    "../../comic/fe/**/*.tsx",
+    "../../zzal/fe/**/*.ts",
+    "../../zzal/fe/**/*.tsx",
     "../../trailer/fe/**/*.ts",
     "../../trailer/fe/**/*.tsx"
   ],

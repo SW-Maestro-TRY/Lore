@@ -54,7 +54,152 @@ management:
 # 실제 업로드는 브라우저 → S3 직접(presigned PUT)이라 서버(t3.micro)를 안 거친다.
 # 버킷 이름은 환경변수로 주입한다(로컬은 미설정 가능, EC2 는 배포 시 주입).
 app:
+  # 사용자 행동 기록 (2026-09-04)
+  #
+  # ★ 화면에는 이미 41곳에 기록 지점이 심어져 있고, 받아 줄 곳이 없었을 뿐이다.
+  # ★ 지인 규모에서는 숫자가 아니라 "각자가 어디서 멈췄는지" 가 유일한 정보다.
+  analytics:
+    enabled: ${ANALYTICS_ENABLED:true}
+    # 한 번에 받을 수 있는 이벤트 수. 누구나 부를 수 있는 주소라 상한이 필요하다.
+    max-batch: ${ANALYTICS_MAX_BATCH:50}
+
   s3:
     region: ${AWS_REGION:ap-northeast-2}
     content-bucket: ${CONTENT_S3_BUCKET:}
     presign-expiry-minutes: ${S3_PRESIGN_EXPIRY:10}
+
+  # 인증 (2026-09-01)
+  #
+  # ★ JWT_SECRET 이 유출되면 아무 사용자로든 토큰을 위조할 수 있다. 운영은 /etc/lore/lore.env
+  #   에서 주입하고 절대 커밋하지 않는다. 아래 기본값은 로컬 개발 전용이며, 그 값이 그대로
+  #   운영에 올라가면 부팅 시점에 경고가 남는다.
+  # ★ HS256 은 최소 32바이트 키를 요구한다. 짧으면 서버가 뜨지 않는다.
+  jwt:
+    secret: ${JWT_SECRET:local-dev-only-secret-change-me-in-production-32bytes}
+    access-expiry: 30m
+    refresh-expiry: 14d
+
+  cookie:
+    # 로컬은 http 라 Secure 쿠키가 브라우저에 저장되지 않는다 → 개발 시 false
+    secure: ${COOKIE_SECURE:true}
+
+  # 움짤(zzal) 생성 파이프라인 (2026-09-02)
+  #
+  # ★ 기본이 '가짜' 다 — 호출 한 번에 실제로 돈이 나간다($0.19).
+  #   실수로 켜져 있는 것보다 실수로 꺼져 있는 편이 훨씬 낫다.
+  zzal:
+    # ── 파이프라인 버전 ──────────────────────────────────────────────────
+    #
+    # ★ 부화(HATCH)와 심화 행동(MOTION)의 버전 축이 따로다(PipelineRegistry 주석).
+    #   v2 부화 = 격자 2장 → 기본 행동 16종. 프롬프트가 아직 v1 뿐이면 v1 로 둔다.
+    pipeline-version: ${ZZAL_PIPELINE_VERSION:v1}
+    motion-pipeline-version: ${ZZAL_MOTION_PIPELINE_VERSION:v1}
+    max-hatch-attempts: 2
+    # 심화 행동 API 굽기 시도 횟수. ★ 정본은 API 1회 → 실패면 로컬(맥미니) 재생성 2회다.
+    #   v1 코드는 이 값으로 API 를 반복하므로, v2 밤 굽기(PR-6·7)가 붙을 때 1 로 내린다.
+    max-motion-attempts: ${ZZAL_MAX_MOTION_ATTEMPTS:3}
+    # 자동 게이트 버전(g0 = 아무것도 안 봄, 전부 사람 판정).
+    gate-version: ${ZZAL_GATE_VERSION:g0}
+
+    # ── 정본 v1.2 이식(2026-09-05, #192) ───────────────────────────────
+    #
+    # ★★ 이 파일은 공유 영역이라 백엔드 PR-1 에서 쓸 키를 전부 선점하고 얼린다.
+    #    백엔드·프론트·생성 세션이 동시에 도는 동안 각자 여기에 키를 더하면 반드시 충돌한다.
+    #    새 키가 필요하면 PR-1 브랜치(feat/#192)에 커밋을 요청한다.
+    #    키의 뜻은 zzal/docs/api-v2.md 7절.
+
+    # 부화 후처리가 만들어야 하는 파일 이름(버전별). 스크립트가 이 이름으로 webp 를 낸다.
+    #
+    # ★ v2 의 이름은 MotionCatalog 의 key 와 같아야 한다 — 화면이 basicImageKey 를
+    #   images/zzal/pets/{id}/basic/{key}.webp 로 조립한다. 다르면 그림이 안 뜨는데,
+    #   그건 실제로 화면을 봐야만 드러난다.
+    # ★ 쓰는 버전의 목록이 비어 있으면 부팅이 막힌다(설정 이름을 말하는 예외).
+    hatch:
+      states:
+        v1: idle,eat,hungry,clean,happy,sad,pet,train
+        v2: base,eat,joy,sad,sick,practice,shy,call,tilt,wave,sleep,wash,startle,nod,smile_idle,sit
+
+    # 밤에 구울 수 있는 심화 행동(16프레임) — 쉼표로 구분한 카탈로그 key.
+    #
+    # ★ 카탈로그 18종은 코드(MotionCatalog)에 고정돼 있고, 여기에는 그중 **지시문 파일이
+    #   있는 것**만 적는다. 적힌 key 의 파일(zzal/prompt/{버전}/motions/{한글파일명}.txt)이
+    #   없으면 부팅이 막힌다 — 사용자가 재우고 나서 드러나면 그 사람은 밤을 헛되이 기다린다.
+    # ★ 비어 있으면 아무것도 굽지 않는다. 그게 기본값이다 — 동작 하나가 격자 한 장이라
+    #   개수만큼 돈이 곱해지므로, 운영에서 실수로 켜지는 것보다 꺼져 있는 편이 낫다.
+    #
+    # 예) ZZAL_ADVANCED_MOTIONS=base,eat,joy   ZZAL_GIFT_MOTIONS=roll,fall_back
+    advanced-motions: ${ZZAL_ADVANCED_MOTIONS:}
+    gift-motions: ${ZZAL_GIFT_MOTIONS:}
+
+    # 밤 굽기(23:00 스위프, PR-6).
+    #
+    # ★ sweep-enabled 는 기본 꺼짐 — 서버가 두 대 이상이면 한 대만 켠다. 둘 다 켜면
+    #   같은 밤을 두 번 굽고 돈이 두 배로 나간다(claim 으로 막지만, 애초에 한 대가 맞다).
+    # ★ max-bakes = K. 밤에 API 로 굽는 상한. 200 × 약 $0.10 = $20/밤. 넘치면 다음 밤으로 이월.
+    night:
+      sweep-enabled: ${ZZAL_NIGHT_SWEEP_ENABLED:false}
+      max-bakes: ${ZZAL_NIGHT_MAX_BAKES:200}
+      local-regen-max: 2
+
+    # 채팅 대사 생성 방식 — template(5그룹×슬롯 템플릿) · llm(나중).
+    # ★ 어느 쪽이든 원망 문장 금지 필터는 출력 단계에 강제된다(정본 0장 6).
+    chat:
+      mode: ${ZZAL_CHAT_MODE:template}
+
+    # 개발용 시계 API(/api/zzal/v2/dev/**).
+    #
+    # ★★ 기본이 꺼짐이고, 꺼져 있으면 컨트롤러가 빈으로 올라오지 않아 주소 자체가 없다(404).
+    #    주소에 /dev/ 가 들어가는 것은 방어가 아니다 — 코드가 올라와 있으면 언젠가 불린다.
+    # ★ 운영에서는 켜지 않는다. 켜면 누구나 자기 펫의 시간을 마음대로 당길 수 있어
+    #   기다림으로 이루어진 이 게임의 규칙이 통째로 무의미해진다.
+    dev-tools: ${ZZAL_DEV_TOOLS:false}
+
+    # 관리자 화면(/api/zzal/v2/admin/**).
+    #
+    # ★★ dev-tools 와 같은 방식으로 막는다 — 꺼져 있으면 빈이 안 올라와 주소가 없다.
+    #    여기에 더해 (1) 관리자 계정인지 DB 로 확인하고 (2) 화면에 noindex 를 건다.
+    #    셋 중 하나만으로는 부족하다. 검색에 걸려 발견되는 것이 실제로 가장 흔한 경로다.
+    admin:
+      enabled: ${ZZAL_ADMIN:false}
+
+    # 무언가 하면 무엇을 줄 것인가.
+    #
+    # ★ 후기와 미니게임이 같은 자리를 쓴다. 미니게임 승리 = 행복 +1 은 정본 7장으로 확정.
+    #   후기 보상은 아직 미정이라 NONE(기록만 남고 아무 일도 일어나지 않는다).
+    #   고를 수 있는 것 — NONE · FOOD · HAPPINESS  (TRAIN 은 훈련과 함께 사라진다)
+    reward:
+      feedback: ${ZZAL_REWARD_FEEDBACK:NONE}
+      game-win: ${ZZAL_REWARD_GAME_WIN:HAPPINESS}
+
+    # 미니게임 — 좌·우 맞히기 + 달리기 합쳐 하루 3판(정본 7장). 잠들 때 리셋.
+    game:
+      daily-limit: ${ZZAL_GAME_DAILY_LIMIT:3}
+
+    recovery:
+      # 서버가 뜰 때 "멈춘 알" 로 볼 기준(분). 한 번의 부화가 걸릴 수 있는 최대 시간
+      # (10분)보다 넉넉히 잡는다 — 정상적으로 돌고 있는 부화를 집으면 두 번 굽게 되고
+      # 돈이 두 배로 나간다.
+      grace-minutes: 12
+      # 굽다 만 심화 행동으로 볼 기준(분).
+      motion-grace-minutes: 15
+
+    generation:
+      # OpenAI 실제 호출. 켜면 돈이 나간다
+      real: ${ZZAL_GENERATION_REAL:false}
+      # 파이썬 후처리 실제 실행. **돈이 안 든다**(우리 서버 안 계산)
+      real-postprocess: ${ZZAL_REAL_POSTPROCESS:false}
+      fake-delay-ms: ${ZZAL_FAKE_DELAY_MS:4000}
+      # 가짜 이미지 클라이언트가 '격자' 자리에 내놓을 실제 파일.
+      # 후처리를 과금 없이 검증하려면 진짜 격자가 필요하다.
+      fake-grid-key: ${ZZAL_FAKE_GRID_KEY:}
+
+    openai:
+      # ★ 절대 커밋하지 않는다. 로컬은 ~/.claude/.env, 서버는 /etc/lore/lore.env 에서 주입.
+      #   환경별로 다른 키를 쓴다 — 섞으면 dev 가 실험 한도를 먹고 원가 산정이 흐려진다.
+      api-key: ${ZZAL_OPENAI_API_KEY:}
+
+    python:
+      # 후처리가 numpy·scipy·pillow 를 쓰므로 그것들이 깔린 파이썬이어야 한다.
+      # 서버는 배포 때 만들어지는 가상환경(/opt/lore/venv/bin/python)을 가리킨다.
+      bin: ${ZZAL_PYTHON_BIN:python3}
+      timeout-seconds: 60

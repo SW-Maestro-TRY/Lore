@@ -11,7 +11,7 @@ const STEPS = [
   },
   {
     num: "02",
-    accent: "stepNumComic",
+    accent: "stepNumZzal",
     title: "원하는 포맷에서 꺼내 쓰기",
     desc: "같은 시트로 4컷도, 예고편도, 웹툰도. 매번 다시 만들 필요 없습니다.",
   },
@@ -28,7 +28,7 @@ export default function CharacterSheet() {
     <section className={styles.sheet}>
       <div className={`${styles.container} ${styles.sheetInner}`}>
         <div>
-          <div className={`${styles.eyebrow} ${styles.eyebrowComic}`}>
+          <div className={`${styles.eyebrow} ${styles.eyebrowZzal}`}>
             One character sheet
           </div>
           <h2 className={styles.sheetTitle}>

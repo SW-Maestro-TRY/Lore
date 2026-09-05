@@ -48,3 +48,23 @@
 :global([data-theme="dark"]) .dark {
   display: inline;
 }
+
+/* 좁은 화면에서는 LIGHT/DARK 글자를 접고 점만 남긴다.
+ *
+ * 헤더에 로그인 버튼이 들어오면서 한 줄이 360px 에서 6px 정도 넘쳤다. 접을 후보가
+ * 셋(탭 진입점 '시작하기' · 테마 글자 · 로그인)이었는데, 앞의 둘은 없어지면 그 기능으로
+ * 가는 길이 모바일에서 아예 사라진다(내비는 이미 숨김). 이 글자는 없어져도 점의 채움
+ * 여부로 현재 테마가 그대로 보이고, 버튼 자체는 aria-label 로 읽힌다.
+ *
+ * 선택자에 :global([data-theme]) 을 붙인 이유는 위의 테마별 규칙과 특정도를 맞추기
+ * 위해서다. 그냥 .light/.dark 로 쓰면 미디어쿼리 안이어도 위 규칙에 져서 안 먹는다. */
+@media (max-width: 640px) {
+  :global([data-theme]) .light,
+  :global([data-theme]) .dark {
+    display: none;
+  }
+
+  .toggle {
+    padding: 7px 9px;
+  }
+}

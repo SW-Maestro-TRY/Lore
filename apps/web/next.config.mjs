@@ -22,6 +22,19 @@
 const nextConfig = {
   output: 'standalone',
 
+  // redirects — 옛 주소와 다른 로마자 표기를 살려 둔다.
+  //   /comic 은 2026-08-26 에 /zzal 로 바뀌었다. 그 전에 공유된 링크가 죽지 않게 한다.
+  //   /jjal 은 '짤'의 다른 로마자 표기다. 둘 다 실제로 쓰이므로 한쪽으로 모은다.
+  async redirects() {
+    return [
+      { source: '/comic', destination: '/zzal', permanent: true },
+      { source: '/jjal',  destination: '/zzal', permanent: true },
+      // 시안 비교 때 쓰던 주소들. 먼저 공유된 링크가 죽지 않게 받아 준다.
+      { source: '/zzal/scrapbook', destination: '/zzal', permanent: false },
+      { source: '/zzal/cartridge', destination: '/zzal', permanent: false },
+    ];
+  },
+
   async rewrites() {
     // 프로토타입은 제 주소를 스스로 읽어 첫 화면을 고른다(web/app.js).
     // 그래서 화면마다 진짜 주소가 하나씩 있어야 한다 — 주소창에 그대로 뜨고,
@@ -32,10 +45,20 @@ const nextConfig = {
     // app.js 가 주소를 보고 그중 하나를 띄운다.
     const page = (path, file) => ({ source: `/webtoon${path}`, destination: `/static/${file}` });
 
+    // 로컬에서 백엔드를 따로 띄울 때만 켠다(예: API_PROXY=http://localhost:8080).
+    //
+    // ★ 브라우저에서 8080 을 직접 부르면 안 된다 — 인증이 HttpOnly 쿠키라
+    //   출처가 다르면 쿠키가 안 붙고 모든 요청이 401 이 된다. 배포에서는 CloudFront 가
+    //   같은 도메인으로 묶어 주므로 이 규칙이 필요 없다.
+    const apiProxy = process.env.API_PROXY
+      ? [{ source: '/api/:path*', destination: `${process.env.API_PROXY}/api/:path*` }]
+      : [];
+
     return {
       // beforeFiles — 라우트가 있든 없든 이쪽이 먼저 잡는다.
       // 나중에 /webtoon 아래에 React 화면이 생겨도 이 규칙이 계속 유효하도록.
       beforeFiles: [
+        ...apiProxy,
         // page('', 'index.html') — 홈은 뺐다. React 화면(app/(domains)/webtoon)이
         // 대신 잡는다. **정적 파일로 되돌리면 Lore 앱 헤더가 같이 사라진다** —
         // rewrite 는 Next 레이아웃을 통째로 건너뛰기 때문이다.

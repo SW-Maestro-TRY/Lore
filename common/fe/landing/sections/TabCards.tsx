@@ -1,6 +1,6 @@
 // 4. 3개 탭 카드 (핵심 섹션).
 //
-// 순서는 반드시 Comic → Trailer → Webtoon. 사용자 여정을 표현한 것이라 바꾸면 안 된다.
+// 순서는 반드시 Zzal → Trailer → Webtoon. 사용자 여정을 표현한 것이라 바꾸면 안 된다.
 // 카드 세 장의 프리뷰 구조가 서로 달라서 공통 컴포넌트로 묶지 않고 그대로 펼쳐 쓴다.
 import Link from "next/link";
 import styles from "../landing.module.css";
@@ -9,13 +9,13 @@ export default function TabCards() {
   return (
     <section id="tabs" className={`${styles.container} ${styles.tabs}`}>
       <div className={styles.tabGrid}>
-        {/* 01 Comic — 시작점 */}
-        <Link href="/comic" className={`${styles.card} ${styles.cardComic}`}>
+        {/* 01 Zzal — 시작점 */}
+        <Link href="/zzal" className={`${styles.card} ${styles.cardZzal}`}>
           <div className={styles.cardTop}>
-            <span className={`${styles.cardBadge} ${styles.badgeComic}`}>
-              01 Comic · 시작점
+            <span className={`${styles.cardBadge} ${styles.badgeZzal}`}>
+              01 Zzal · 시작점
             </span>
-            <span className={`${styles.cardArrow} ${styles.arrowComic}`} aria-hidden="true">
+            <span className={`${styles.cardArrow} ${styles.arrowZzal}`} aria-hidden="true">
               ↗
             </span>
           </div>
@@ -27,17 +27,17 @@ export default function TabCards() {
             오늘 있었던 일을 우리 애한테 시켜보세요. 대사 두 줄이면 기승전결 4컷,
             그대로 타임라인에 올릴 수 있는 크기로.
           </p>
-          <div className={`${styles.preview} ${styles.comicGrid}`} aria-hidden="true">
-            <div className={styles.comicCell}>
+          <div className={`${styles.preview} ${styles.zzalGrid}`} aria-hidden="true">
+            <div className={styles.zzalCell}>
               <span className={styles.cellNum}>1</span>
             </div>
-            <div className={styles.comicCell}>
+            <div className={styles.zzalCell}>
               <span className={styles.cellNum}>2</span>
             </div>
-            <div className={styles.comicCell}>
+            <div className={styles.zzalCell}>
               <span className={styles.cellNum}>3</span>
             </div>
-            <div className={`${styles.comicCell} ${styles.comicCellPunch}`}>
+            <div className={`${styles.zzalCell} ${styles.zzalCellPunch}`}>
               <span className={styles.cellLabelOnInk}>4 / PUNCH</span>
             </div>
           </div>

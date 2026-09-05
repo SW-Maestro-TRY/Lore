@@ -28,7 +28,7 @@ export default function Hero() {
           </p>
 
           <div className={styles.heroActions}>
-            <Link href="/comic" className={styles.btnPrimary}>
+            <Link href="/zzal" className={styles.btnPrimary}>
               우리 애 만들러 가기
             </Link>
             <a href={TABS_ANCHOR} className={styles.btnSecondary}>
@@ -45,7 +45,7 @@ export default function Hero() {
           </div>
           <div className={styles.collageStack}>
             <div className={`${styles.slot} ${styles.slotCut}`}>
-              <span className={`${styles.slotLabel} ${styles.labelComic}`}>
+              <span className={`${styles.slotLabel} ${styles.labelZzal}`}>
                 4-CUT
               </span>
             </div>
