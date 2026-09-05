@@ -25,7 +25,8 @@ export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBro
           루가 안내합니다.
         </h1>
         <p className="top-lede">
-          캐릭터를 띄우면, 루가 이야기 조각을 모아 한 편의 웹툰을 만들어줘요.
+          사진 한 장을 올리면, 루가 캐릭터와 이야기부터 그림까지 전부 만들어 웹툰 한
+          편을 완성해줘요.
         </p>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -44,7 +45,7 @@ export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBro
         </div>
       </div>
 
-      <ol className="depths-list">
+      <ol className="depths">
         <li>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={worldBegins.src} alt="" />

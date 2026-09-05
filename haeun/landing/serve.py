@@ -41,6 +41,17 @@ WEB = HERE / "web"
 DEMO_DIR = HERE / "jobs" / "_demo"
 MAX_PHOTO_BYTES = 6 * 1024 * 1024
 
+# 개발할 때만 켜는 CORS. **기본은 꺼짐이다.**
+#
+# 배포에서는 화면과 이 서버가 같은 도메인 아래 있어서(CloudFront 가 /api/*
+# 만 백엔드로 보낸다) 이 헤더가 필요 없다. 필요한 것은 딱 한 경우 —
+# webtoon/fe 를 `next dev`(localhost:3000)로 띄워 놓고 여기(8800)에 바로
+# 붙여 볼 때다. 그때만 `--dev-cors` 로 켠다.
+#
+# 켜 두고 배포하면 아무 사이트나 이 서버를 부를 수 있게 되므로 기본을
+# 꺼짐으로 둔다.
+DEV_CORS = False
+
 runner = pipeline.Runner()
 nh_runner = nh.NHRunner()
 _thumb_lock = threading.Lock()
@@ -154,6 +165,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if DEV_CORS:
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         for k, v in (headers or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -313,6 +328,16 @@ class Handler(BaseHTTPRequestHandler):
         except (TypeError, ValueError):
             return 1
         return n if 1 <= n <= 999 else 1
+
+    def do_OPTIONS(self) -> None:                               # noqa: N802
+        """브라우저가 JSON POST 전에 먼저 묻는 것(preflight).
+
+        `--dev-cors` 를 안 켰으면 이 자리 자체가 뜻이 없으므로 405 로 둔다 —
+        같은 도메인에서 부르면 브라우저가 preflight 를 아예 안 보낸다.
+        """
+        if not DEV_CORS:
+            return self._error(405, "OPTIONS 는 --dev-cors 일 때만 받습니다")
+        self._send(204, b"", "text/plain")
 
     def do_GET(self) -> None:                                   # noqa: N802
         url = urlparse(self.path)
@@ -1713,6 +1738,10 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=8800)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--open", action="store_true", help="브라우저를 함께 엽니다")
+    ap.add_argument("--dev-cors", action="store_true",
+                    help="다른 포트에서 온 요청을 받습니다 (webtoon/fe 를 next dev 로 "
+                         "띄워 놓고 여기에 바로 붙일 때만. 배포에서는 같은 도메인이라 "
+                         "필요 없고, 켜 두면 아무 사이트나 이 서버를 부를 수 있습니다)")
     args = ap.parse_args()
 
     pipeline.JOBS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1744,6 +1773,10 @@ def main() -> int:
         print(f"지난 작업 {restored}건을 다시 읽었습니다 (결과 화면은 그대로 열립니다).")
 
     url = f"http://{args.host}:{args.port}/"
+    global DEV_CORS
+    DEV_CORS = args.dev_cors
+    if DEV_CORS:
+        print("⚠ --dev-cors: 다른 포트에서 온 요청도 받습니다 (개발용)", flush=True)
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"랜딩페이지:  {url}")
     print(f"결과물 바로:  {url}result      (이미 만들어 둔 마지막 1화)")

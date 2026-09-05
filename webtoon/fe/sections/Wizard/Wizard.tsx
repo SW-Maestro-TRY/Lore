@@ -26,7 +26,8 @@ export default function Wizard({
   onSubmit,
 }: {
   onClose: () => void;
-  onSubmit: (form: WizardForm) => void;
+  /** 만들기를 시작한다. 실패하면 reject 해야 이 화면이 사유를 보여준다. */
+  onSubmit: (form: WizardForm) => Promise<void>;
 }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<WizardForm>(emptyWizardForm());
@@ -66,16 +67,27 @@ export default function Wizard({
 
   const atEnd = step === WIZ_LAST;
 
+  const [sending, setSending] = useState(false);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.agreeIp) {
+      // 저작권 확인은 여기서 먼저 막는다. 서버도 다시 확인하지만, 여기서
+      // 잡아야 사람이 왜 안 되는지 바로 안다(서버 오류로 보이면 안 된다).
       setNote("저작권 확인에 동의해야 만들 수 있습니다");
       setNoteError(true);
       return;
     }
-    // TODO: /api/create 연결 — 지금은 백엔드가 없어서 진행 화면은 로컬로
-    // 흉내 낸 상태(Progress/useFakeProgress)를 보여준다.
-    onSubmit(form);
+    setNote("루가 바다로 나가는 중…");
+    setNoteError(false);
+    setSending(true);
+    onSubmit(form).catch((err: Error) => {
+      // 실패하면 **이 자리에 남는다.** 진행 화면으로 넘어가 버리면 무엇이
+      // 잘못됐는지 볼 자리가 없다(원본 startRun 과 같은 이유).
+      setNote(err.message);
+      setNoteError(true);
+      setSending(false);
+    });
   };
 
   return (
@@ -120,7 +132,7 @@ export default function Wizard({
                 </button>
               )}
               {atEnd && (
-                <button type="submit" className="btn btn-primary wiz-go">
+                <button type="submit" className="btn btn-primary wiz-go" disabled={sending}>
                   웹툰 만들기 <span className="cost-chip">−{config.credit_cost.full}크레딧</span>
                 </button>
               )}
