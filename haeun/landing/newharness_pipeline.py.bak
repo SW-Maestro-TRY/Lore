@@ -68,7 +68,6 @@ from __future__ import annotations
 
 import json
 import os
-import random
 import re
 import shutil
 import subprocess
@@ -162,15 +161,6 @@ class NHJob:
     pick: int | None = None
     note: str = ""
     style: str = DEFAULT_STYLE
-    # 사람이 보고 넘어가는 자리(시트 확인 · 이야기 고르기)를 둘 것인가.
-    #
-    # 만들기 마지막 걸음의 갈림길이 정한다. 「빠르게 결과부터」는 "중간에 안
-    # 멈춥니다" 라고 적어 놓고도 실제로는 두 번 멈추고 있었다 — 고른 것이
-    # 아무 데도 안 실려서, 두 카드가 똑같이 동작했다.
-    #
-    # 기본은 **멈춤**이다. 안 보내는 쪽(예전 요청, 하네스 직접 호출)이 지금과
-    # 똑같이 돌아야 한다.
-    checkpoints: bool = True
     stage: str = "story"
     # 지금 하고 있는 일 한 줄. 비어 있으면 화면이 단계 기본 문구를 쓴다.
     say: str = ""
@@ -213,7 +203,6 @@ class NHJob:
                 "stages": list(STAGES),
                 "stage_label": STAGE_LABEL.get(self.stage, self.stage),
                 "say": self.say,
-                "checkpoints": self.checkpoints,
                 "pct": max(0, min(100, pct)),
                 "art": art,
                 "log": self.log[-60:],
@@ -228,7 +217,6 @@ class NHJob:
                 "id": self.id, "status": self.status, "run_id": self.run_id,
                 "error": self.error, "form": self.form,
                 "directions": self.directions, "pick": self.pick,
-                "checkpoints": self.checkpoints,
             }, ensure_ascii=False, indent=1), encoding="utf-8")
         except OSError:
             pass
@@ -396,42 +384,6 @@ def _run_story_phase(job: NHJob) -> None:
     _run_sheet_phase(job)
 
 
-def _auto_pick(job: NHJob) -> int:
-    """사람 대신 이야기 후보 하나를 고른다 (「빠르게 결과부터」).
-
-    **자가 검수를 통과한 것 중에서 뽑는다.** 후보를 만들면서 이미 넷을 다
-    읽어 두었으므로(storycheck -> story_review.json), 그것을 안 보고 넷 중
-    아무거나 뽑는 것은 이미 치른 값을 버리는 짓이다. 통과가 하나도 없거나
-    (검수를 껐거나 실패했거나) 판정 파일이 없으면 그때 넷 중에서 뽑는다.
-
-    통과한 것이 여럿이면 **무작위**다. 늘 1번을 고르면 같은 사람이 여러 편을
-    만들 때 매번 첫 후보만 나와서, 후보를 넷 만든 뜻이 없어진다.
-    """
-    numbers = [int(d["n"]) for d in job.directions if isinstance(d, dict) and d.get("n")]
-    if not numbers:
-        return 0
-    good = []
-    try:
-        review = json.loads(
-            (NEW_HARNESS / "runs" / job.run_id / "story_review.json")
-            .read_text(encoding="utf-8"))
-        good = [int(c["n"]) for c in review.get("candidates") or []
-                if c.get("verdict") == "통과" and int(c.get("n", 0)) in numbers]
-    except (OSError, ValueError, KeyError, TypeError):
-        pass                                   # 판정이 없으면 넷 다 후보다
-    return random.choice(good or numbers)
-
-
-def _skip_pick(job: NHJob) -> None:
-    """멈추지 않는 길 — 자동으로 하나 고르고 그림까지 이어 간다."""
-    n = _auto_pick(job)
-    if not n:
-        return _fail(job, "이야기 후보를 하나도 못 읽었습니다")
-    job.pick = n
-    job.add_log(f"[자동] 「빠르게 결과부터」라 {n}번 이야기로 갑니다")
-    _run_pick_then_pages_phase(job)
-
-
 def _run_restory_phase(job: NHJob) -> None:
     """방향 고르기 화면의 "다시 만들기" — 기존 run 에서 이야기 후보 4개를
     다시 만든다. job.note 가 있으면 이번 시도에만 반영할 요청으로 같이 준다.
@@ -515,11 +467,6 @@ def _run_sheet_phase(job: NHJob) -> None:
             return _fail(job, "취소되었습니다")
         if code != 0:
             return _fail(job, "시트를 만들지 못했습니다 — 로그를 확인하세요")
-        if not job.checkpoints:
-            # 「빠르게 결과부터」 — 시트도 이야기도 안 물어보고 그대로 간다.
-            job.add_log("[자동] 「빠르게 결과부터」라 시트를 그대로 씁니다")
-            job.save()
-            return _skip_pick(job)
         job.status = STATUS_AWAITING_SHEET
         job.save()
     except Exception as exc:                            # noqa: BLE001
@@ -988,11 +935,7 @@ class NHRunner:
         style = str(form.get("style") or "").strip()
         if style not in STYLE_CHOICES:
             style = DEFAULT_STYLE
-        # 갈림길에서 「3번만 확인하며」를 골랐을 때만 멈춘다. 안 보내면
-        # 멈추는 쪽이다 — 예전 요청과 하네스 직접 호출이 지금과 똑같이 돌아야
-        # 한다(checkpoints 필드 주석 참고).
-        job = NHJob(id=job_id, form=form, dir=job_dir, style=style,
-                    checkpoints=form.get("checkpoints", True) is not False)
+        job = NHJob(id=job_id, form=form, dir=job_dir, style=style)
         self.jobs[job_id] = job
         job.save()
         self._enqueue(job_id, lambda: _run_story_phase(job))

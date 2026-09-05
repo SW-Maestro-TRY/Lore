@@ -56,7 +56,16 @@ function mapSelector(sel) {
   if (!sel) return null;
 
   // 화면 전환은 React 가 한다 — 원본의 body[data-view=...] 는 버린다.
-  if (sel.includes("[data-view=")) return null;
+  //
+  // 딱 하나 남긴다: 걸음마다 띠 색을 바꾸는 변수
+  // (`body[data-view="create"][data-step="N"] { --foot-bg: ... }`).
+  // 이건 화면 전환이 아니라 **만들기 화면 자신의 색**이라, 버리면 마지막
+  // 걸음의 단추 띠가 밝은 채로 남아 그 위의 흰 글씨가 안 보인다.
+  if (sel.includes("[data-view=")) {
+    const m = sel.match(/^body\[data-view="create"\](\[data-step="\d+"\])$/);
+    if (!m) return null;
+    return `${SCOPE} .create${m[1]}`;
+  }
   // html 은 Lore 앱 것이다.
   if (/^html\b/.test(sel)) return null;
 

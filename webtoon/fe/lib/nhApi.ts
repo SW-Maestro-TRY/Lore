@@ -116,6 +116,10 @@ export interface NhCreateRequest {
   /** data URL 목록. 원본과 같은 이름(photos_data)으로 보낸다. */
   photos_data: string[];
   agree_ip: boolean;
+  /** 사람이 보고 넘어가는 자리(시트 확인 · 이야기 고르기)를 둘 것인가.
+   *  갈림길에서 「2번 확인하며」를 고르면 참, 「빠르게 결과부터」면 거짓이다.
+   *  안 보내면 서버가 멈추는 쪽으로 본다. */
+  checkpoints: boolean;
 }
 
 /* ---- 부르는 자리 ---------------------------------------------------------- */

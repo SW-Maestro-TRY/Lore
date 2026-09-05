@@ -604,11 +604,25 @@
  * 글자·로고 명암은 바탕 밝기를 따라간다 — 1~3걸음(모래·얕은 물·연둣빛)은
  * 밝은 바탕이라 짙은 글자, 4~5걸음(민트~심해)만 흰 글자로 뒤집는다.
  * (예전에는 3걸음부터 흰 글자였는데, 3걸음 바탕이 밝아서 글씨가 사라졌다.) */
+.webtoon-page .create[data-step="1"] { --bar-bg: var(--sea-sand); }
+.webtoon-page .create[data-step="2"] { --bar-bg: var(--ink); }
+.webtoon-page .create[data-step="3"] { --bar-bg: var(--sea-shore); }
+.webtoon-page .create[data-step="4"] { --bar-bg: var(--sea-mid); }
+.webtoon-page .create[data-step="5"] { --bar-bg: #145774; }
 
 /* 깊은 물(4~5걸음)에서만 한 벌로 뒤집는다 — 상자는 밝게, 고래는 짙게. */
+.webtoon-page .create[data-step="4"],
+.webtoon-page .create[data-step="5"] {
+  --brand-bg: var(--on-sea);
+  --brand-fg: var(--accent-d);
+  --bar-line: rgba(242,250,253,.18);
+}
 
 /* 3걸음은 연둣빛 얕은 물 — 바탕이 밝으니 글자는 짙은 쪽 그대로 두고
    실선만 물빛에 녹인다. */
+.webtoon-page .create[data-step="3"] {
+  --bar-line: rgba(47,92,83,.14);
+}
 .webtoon-page .create[data-step="3"] .wiz-eyebrow,
 .webtoon-page .create[data-step="4"] .wiz-eyebrow,
 .webtoon-page .create[data-step="5"] .wiz-eyebrow { color: var(--sea-sand); }
@@ -767,6 +781,19 @@
   background: linear-gradient(180deg, transparent, var(--foot-bg, var(--ink)));
   pointer-events: none;
 }
+/* 마지막 걸음에서는 단추줄이 **안 뜬다.**
+
+   여기서 읽어야 하는 것(요약 · 저작권 확인 · 이용약관)이 곧 누르기 전에
+   확인할 것인데, 떠 있는 단추줄이 스크롤하는 내내 그 위를 지나가며 가렸다 —
+   눌러야 하는 체크박스까지 덮였다. 다른 걸음에서는 그대로 떠 있다: 거기서
+   띄운 이유는 "스크롤 끝까지 가야 「다음」이 나오는 것" 을 피하려는 것이고,
+   읽고 나서 누르는 자리가 아니라서 가릴 것이 없다.
+
+   마지막 걸음은 어차피 동의 칸이 맨 아래에 있어서 끝까지 내려가야 한다 —
+   단추가 그 뒤에 있는 것이 순서에도 맞는다. (PC·폰 둘 다.) */
+.webtoon-page .create[data-step="5"] .wiz-actions { position: static; }
+.webtoon-page .create[data-step="5"] .wiz-actions::before { display: none; }
+
 .webtoon-page .wiz-foot { display: flex; gap: 10px; }
 .webtoon-page .wiz-foot .btn { flex: 1; padding: 1.05em; }
 .webtoon-page .wiz-prev { flex: 0 0 auto !important; min-width: 96px; }
@@ -785,6 +812,11 @@
 
 /* 각 걸음의 물빛이 바닥에서 무슨 색인지 — 위 .studio 그라디언트의 끝색이다.
    여기가 어긋나면 단추 줄만 다른 색 띠로 떠 보인다. */
+.webtoon-page .create[data-step="1"] { --foot-bg: var(--ink); }
+.webtoon-page .create[data-step="2"] { --foot-bg: var(--sea-shore); }
+.webtoon-page .create[data-step="3"] { --foot-bg: var(--sea-mid); }
+.webtoon-page .create[data-step="4"] { --foot-bg: #145774; }
+.webtoon-page .create[data-step="5"] { --foot-bg: var(--sea-abyss); }
 
 /* 「이전」은 옅은 먹빛 바탕에 짙은 글씨다 — 밝은 걸음에서는 맞지만 짙은 물
    위에서는 바탕도 글씨도 물에 잠겨 단추가 있는 줄도 모른다. 바닥이 짙어지는

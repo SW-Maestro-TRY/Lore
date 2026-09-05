@@ -36,7 +36,11 @@ export default function Wizard({
   const [wizLou, setWizLou] = useState(LOU_LOGOS[0]);
   useEffect(() => { setWizLou((now) => pickOne(LOU_LOGOS, [now])); }, [step]);
   const [form, setForm] = useState<WizardForm>(emptyWizardForm());
-  const [note, setNote] = useState("사진과 이름만 있으면 시작합니다.");
+  /* 마지막 걸음에서만 뜨는 한 줄. 여기서는 사진도 이름도 이미 받은 뒤라
+     "사진과 이름만 있으면 시작합니다" 는 지난 말이었다 — 지금 누르면 무슨
+     일이 일어나는지만 적는다. 미리보기가 아니라 한 편이 통째로 나온다. */
+  const DEFAULT_NOTE = "한 편을 끝까지 그립니다 — 10분쯤 걸려요.";
+  const [note, setNote] = useState(DEFAULT_NOTE);
   const [noteError, setNoteError] = useState(false);
 
   const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p }));
@@ -57,7 +61,7 @@ export default function Wizard({
 
   const goNext = () => {
     if (step === 1 && !step1Ok()) return;
-    setNote("사진과 이름만 있으면 시작합니다.");
+    setNote(DEFAULT_NOTE);
     setNoteError(false);
     setStep((s) => Math.min(WIZ_LAST, s + 1));
   };

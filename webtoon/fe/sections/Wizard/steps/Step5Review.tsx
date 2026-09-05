@@ -61,11 +61,14 @@ export default function Step5Review({
           aria-pressed={form.mode === "expert"}
           onClick={() => pick("expert")}
         >
-          <h4>3번만 확인하며</h4>
+          {/* 멈추는 자리는 **둘**이다 — 캐릭터 시트와 이야기. 한때 콘티가 그
+              사이에 있어서 셋이었는데, 콘티 단계가 없어진 뒤로도 문구가
+              "3번만 · 이야기 · 콘티 · 그림" 그대로 남아 있었다. */}
+          <h4>2번 확인하며</h4>
           <p className="fork-lede">
-            이야기 · 콘티 · 그림
+            캐릭터 시트와 이야기,
             <br />
-            세 곳에서 보고 넘어갑니다.
+            두 곳에서 보고 넘어갑니다.
           </p>
         </button>
       </div>

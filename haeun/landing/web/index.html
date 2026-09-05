@@ -556,9 +556,12 @@
             <p class="fork-lede">루가 알아서 그려 옵니다.<br>중간에 안 멈춥니다.</p>
           </button>
 
+          <!-- 멈추는 자리는 **둘**이다 — 캐릭터 시트와 이야기. 한때 콘티가
+               그 사이에 있어서 셋이었는데, 콘티 단계가 없어진 뒤로도 문구가
+               "3번만 · 이야기 · 콘티 · 그림" 그대로 남아 있었다. -->
           <button type="button" class="fork-card" data-mode="expert" aria-pressed="false">
-            <h4>3번만 확인하며</h4>
-            <p class="fork-lede">이야기 · 콘티 · 그림<br>세 곳에서 보고 넘어갑니다.</p>
+            <h4>2번 확인하며</h4>
+            <p class="fork-lede">캐릭터 시트와 이야기,<br>두 곳에서 보고 넘어갑니다.</p>
           </button>
         </div>
 
@@ -609,7 +612,10 @@
             웹툰 만들기 <span class="cost-chip" id="costChip">−240 크레딧</span>
           </button>
         </div>
-        <p class="submit-note" id="submitNote">사진과 이름만 있으면 시작합니다.</p>
+        <!-- 마지막 걸음에서만 뜨는 한 줄. 여기서는 사진도 이름도 이미 받은
+             뒤라 "사진과 이름만 있으면 시작합니다" 는 지난 말이었다 —
+             지금 누르면 무슨 일이 일어나는지만 적는다(paintCost 가 채운다). -->
+        <p class="submit-note" id="submitNote"></p>
       </div>
     </form>
     </div>

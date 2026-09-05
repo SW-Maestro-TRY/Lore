@@ -750,6 +750,19 @@ body[data-step="3"] .submit-note { color: rgba(47,92,83,.7); }
   background: linear-gradient(180deg, transparent, var(--foot-bg, var(--ink)));
   pointer-events: none;
 }
+/* 마지막 걸음에서는 단추줄이 **안 뜬다.**
+
+   여기서 읽어야 하는 것(요약 · 저작권 확인 · 이용약관)이 곧 누르기 전에
+   확인할 것인데, 떠 있는 단추줄이 스크롤하는 내내 그 위를 지나가며 가렸다 —
+   눌러야 하는 체크박스까지 덮였다. 다른 걸음에서는 그대로 떠 있다: 거기서
+   띄운 이유는 "스크롤 끝까지 가야 「다음」이 나오는 것" 을 피하려는 것이고,
+   읽고 나서 누르는 자리가 아니라서 가릴 것이 없다.
+
+   마지막 걸음은 어차피 동의 칸이 맨 아래에 있어서 끝까지 내려가야 한다 —
+   단추가 그 뒤에 있는 것이 순서에도 맞는다. (PC·폰 둘 다.) */
+body[data-step="5"] .wiz-actions { position: static; }
+body[data-step="5"] .wiz-actions::before { display: none; }
+
 .wiz-foot { display: flex; gap: 10px; }
 .wiz-foot .btn { flex: 1; padding: 1.05em; }
 .wiz-prev { flex: 0 0 auto !important; min-width: 96px; }

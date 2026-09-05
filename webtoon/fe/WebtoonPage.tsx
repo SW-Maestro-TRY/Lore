@@ -106,6 +106,10 @@ export default function WebtoonPage() {
       style: form.style,
       photos_data: form.photos,
       agree_ip: form.agreeIp,
+      // 갈림길에서 고른 것. 한동안 이 값을 안 보내서 「빠르게 결과부터」를
+      // 골라도 똑같이 두 번 멈췄다 — 카드에는 "중간에 안 멈춥니다" 라고
+      // 적혀 있었다.
+      checkpoints: form.mode === "expert",
     });
     setStyleLabel(STYLE_INFO.find(([key]) => key === form.style)?.[1] || "");
     setJobId(got.id);

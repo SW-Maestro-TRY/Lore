@@ -543,20 +543,19 @@ function creationCost() {
 }
 
 function paintCost() {
-  const preview = true;              // 지금은 미리보기만 만든다 — collect() 도 항상 preview:true
   $("#costChip").textContent = `−${creationCost()}크레딧`;
   // 단추에는 지금 나가는 값만 적고, 무슨 일이 일어나는지는 바로 밑 한 줄이
-  // 말한다 — 이야기는 한 편 전체가 만들어지고 그림은 첫 장면(3컷)만 나온다는
-  // 것을 모르고 누르면, 결과 화면에서 "이게 다야?" 가 된다.
+  // 말한다.
+  //
+  // 한동안 여기가 "미리보기 만들기 / 먼저 일부 장면을 보여드려요" 였다.
+  // 그건 예전 파이프라인(/api/create) 이야기다 — 2026-09-03부터 이 화면은
+  // new_harness(/api/nh/create)로 만들고, 거기엔 미리보기라는 것이 없다.
+  // 누르면 한 편이 끝까지 나온다. 안 고치면 다 나온 결과를 보고도 "이게
+  // 미리보기인가" 하게 된다.
   const noteEl = $("#submitNote");
   if (noteEl && !noteEl.dataset.costNote) {
     noteEl.dataset.costNote = "1";
-    const per = creationCost();
-    const full = (creditCost.full || 0)
-      * (layoutMode() === "webtoon" ? (creditCost.webtoon_mult || 1) : 1);
-    noteEl.textContent = noteEl.textContent.replace(/\s*$/, "") +
-      ` 먼저 일부 장면을 보여드려요.` +
-      ` 마음에 들면 추가 결제 없이 전체를 이어서 볼 수 있어요.`;
+    noteEl.textContent = "한 편을 끝까지 그립니다 — 10분쯤 걸려요.";
   }
   // 홈의 첫 단추에도 값을 적는다 — 다섯 걸음을 다 밟고 마지막에야 얼마인지
   // 아는 것은 늦다. /api/config 가 오기 전에는 값이 0 이라, 그동안은 숨긴다
@@ -571,8 +570,6 @@ function paintCost() {
     startChip.hidden = !full;
     startChip.textContent = `−${full}크레딧`;
   }
-  $("#submitBtn").firstChild.textContent =
-    preview ? "미리보기 만들기 " : "웹툰 만들기 ";
 }
 
 /* ---- 충전 모달 — 프리토타이핑 결제 ------------------------------------- *
@@ -1313,6 +1310,12 @@ function collectNH() {
     style:      form.style.value,
     photos_data: photos,
     agree_ip:   $("#ipAgreeCheck").checked,
+    // 갈림길에서 고른 것. 「3번만 확인하며」면 시트와 이야기에서 멈추고,
+    // 「빠르게 결과부터」면 안 멈추고 루가 알아서 고른다.
+    //
+    // 한동안 이 값을 안 보냈다. 그래서 「빠르게 결과부터」를 골라도 똑같이
+    // 두 번 멈췄다 — 카드에는 "중간에 안 멈춥니다" 라고 적혀 있었다.
+    checkpoints: isExpert(),
   };
 }
 
