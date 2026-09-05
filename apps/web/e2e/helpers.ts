@@ -43,7 +43,13 @@ export async function call(page: Page): Promise<string | null> {
     return null;
   }
 }
-export const status = (page: Page) => page.locator('[data-status]').first().getAttribute('data-status');
+/**
+ * 지금 상태의 **뜻**(key). 문구(`data-status`)가 아니라 이쪽을 본다 —
+ * 문구는 상훈님이 언제든 바꾸시는 자리라, 문구로 단언하면 디자인을 다듬을 때마다
+ * 검사가 우수수 깨지고 사람이 검사를 안 믿게 된다(결정기록 C35).
+ * key 목록은 `skins/Scrapbook.tsx` 의 `STATUS_LINE`.
+ */
+export const status = (page: Page) => page.locator('[data-status-key]').first().getAttribute('data-status-key');
 export const gauges = (page: Page) => page.locator('[data-part="gauges"]').first().getAttribute('data-gauges');
 export const button = (page: Page, key: string) => page.locator(`[data-action="${key}"]`).first();
 /** 축하 판(즉시 해금·아침 도착)이 떠 있으면 닫는다. 떠 있는 동안은 모든 버튼이 잠긴다(useTamagotchi.can). */

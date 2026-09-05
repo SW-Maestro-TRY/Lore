@@ -24,9 +24,11 @@ test('아기 시간표 0~61분을 순서대로 지난다', async ({ page }, info
     await doBabyStep(page, key);
   }
   // 40분 낮잠: 재우기 → 5분 뒤 깨우기(도 doBabyStep 이 함). 깬 뒤 상태
-  expect(await status(page)).not.toBe('낮잠 중');
+  expect(await status(page)).not.toBe('nap');
   await advance(page, 16 * MIN);
-  // 61분: 튜토리얼 끝, 기상+1h MORNING 부름
+  // 61분: 튜토리얼 끝. ★ 아홉 칸을 다 한 사람이라 서버는 tutorial 블록을 null 로 준다 —
+  //   그래도 종료 문구가 떠야 한다(칸이 아니라 clock.babyUntil 로 판정, 리뷰 M1).
+  await expect(page.locator('[data-toast]')).toContainText('이제 혼자서도 괜찮아요');
   expect(await call(page)).toBe('chat:MORNING');
   await expectNoErrors(errors, info);
 });

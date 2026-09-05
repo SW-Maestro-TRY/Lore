@@ -27,8 +27,11 @@ import { useCalls, type Call } from './useCalls';
 import { useCelebrations, type Celebration } from './useCelebrations';
 import { useClock, type ClockApi } from './useClock';
 
-/** 'failed' 는 태어나지 못한 알(PetPhase.FAILED). */
-export type Phase = 'none' | 'egg' | 'hatching' | 'live' | 'failed';
+/**
+ * 'failed' 는 태어나지 못한 알(PetPhase.FAILED), 'gone' 은 사용자가 보낸 아이(PetPhase.DEAD).
+ * ★ 둘을 한 칸으로 접으면 보낸 아이한테 "이 그림은 어려워요, 다른 그림을 올려 주세요" 가 뜬다.
+ */
+export type Phase = 'none' | 'egg' | 'hatching' | 'live' | 'failed' | 'gone';
 
 /** 돌봄 7행동. sleep 은 자는 동안 깨우기를 겸한다. */
 export type ActionKey = 'feed' | 'snack' | 'pet' | 'clean' | 'bath' | 'medicine' | 'sleep';
@@ -130,6 +133,12 @@ export interface DerivedFromPet {
   phase: Phase;
   /** 부화 진행 감(0~1). 알 그림을 갈아 끼우는 데만 쓴다. */
   eggT: number;
+  /**
+   * 예상 시간을 넘겼는가(= 서버가 재시도 중). "조금 더 걸려요" 문구의 기준.
+   * ★ `eggT >= 0.98` 로 보면 안 된다 — eggT 는 그림용이라 0.98 에서 멎어 있어,
+   *   예상 시간의 98% 지점부터 "조금 더 걸려요" 가 떠 버린다(아직 늦지 않았는데).
+   */
+  eggSlow: boolean;
   /** 부화 시작 후 지난 초. */
   t: number;
   fullness: number;
@@ -186,14 +195,16 @@ function initialLocal(): LocalState {
 function derive(pet: PetDetail | null, clock: ClockApi, hatchSpan: number, hatchingAnim: boolean): DerivedFromPet {
   if (!pet) {
     return {
-      hasChar: false, phase: 'none', eggT: 0, t: 0, fullness: 0, happiness: 0, clean: MAX_GAUGE, trash: 0, food: 0, foodLeft: 0,
+      hasChar: false, phase: 'none', eggT: 0, eggSlow: false, t: 0, fullness: 0, happiness: 0, clean: MAX_GAUGE, trash: 0, food: 0, foodLeft: 0,
       sleeping: false, sleepKind: null, canSleep: false, canWake: false, sleepLeft: 0, untilAutoSleep: null,
       daysTogether: 0, intimacyPercent: 0, sick: false, unlocked: 0, motions: [], bathDone: false, personality: null, world: '',
       background: DEFAULT_BACKGROUND, chars: [], active: 0,
     };
   }
   const alive = pet.phase === 'ALIVE';
-  const phase: Phase = pet.phase === 'HATCHING' ? 'egg' : alive ? (hatchingAnim ? 'hatching' : 'live') : 'failed';
+  const phase: Phase = pet.phase === 'HATCHING' ? 'egg'
+    : alive ? (hatchingAnim ? 'hatching' : 'live')
+      : pet.phase === 'DEAD' ? 'gone' : 'failed';
   const elapsed = pet.elapsedSeconds ?? 0;
   const c = pet.clock;
   const g = pet.gauges;
@@ -203,6 +214,7 @@ function derive(pet: PetDetail | null, clock: ClockApi, hatchSpan: number, hatch
     hasChar: true,
     phase,
     eggT: hatchSpan > 0 ? Math.min(0.98, elapsed / hatchSpan) : 0,
+    eggSlow: hatchSpan > 0 && elapsed >= hatchSpan,
     t: elapsed,
     fullness: g?.fullness ?? 0,
     happiness: g?.happiness ?? 0,
@@ -290,7 +302,7 @@ export function useTamagotchi({ server = null }: TamagotchiOptions = {}) {
   // ── 60분 종료 문구(한 번) ────────────────────────────────────────────
   useEffect(() => {
     if (!pet || pet.phase !== 'ALIVE') return;
-    if (takeGrownLine(pet.petId, pet.tutorial)) say(GROWN_LINE);
+    if (takeGrownLine(pet.petId, pet)) say(GROWN_LINE);
   }, [pet, say]);
 
   // ── 서버가 거절하면 그 문구를 그대로(한국어로 온다) ──────────────────
