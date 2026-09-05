@@ -16,25 +16,37 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 /**
- * 펫 한 마리.
+ * 펫 한 마리 — 플레이 정본 v1.2(#192).
  *
- * ★★ 이 클래스에서 제일 중요한 것은 "시간을 저장하지 않고 계산한다" 는 점이다(#133 에서 본격화).
+ * <h3>★★ 시간을 저장하지 않고 계산한다 — 다만 이제 "깨어 있는 시간" 으로</h3>
+ * v1 은 게이지마다 "그 값이 된 시각" 앵커를 두고 조회 때 몇 칸 지났나를 셌다. 정본은 게이지가
+ * <b>깨어 있는 시간</b>으로만 줄고(16장), 23:00 에 저절로 잠들고 10:00 에 저절로 깨며(2장), 아기 60분은
+ * 속도가 20배 빠르다(4장). 앵커 하나로는 "그 사이에 잠든 시간" 을 뺄 수 없다.
+ * <p>
+ * 그래서 <b>마지막으로 정산한 시각({@code settledAt})부터 지금까지</b>를 {@link AwakeClock} 이 경계마다 자르고,
+ * 이 클래스는 깨어 있는 구간만 걷는다({@link #settle}). 구간 안에서는 게이지마다 <b>누적 초</b>를 들고 있다가
+ * 간격을 넘길 때마다 1칸 깎는다(나머지 초는 남는다 — 자주 들여다봐도 손해가 없다).
+ * 서버가 죽어 있었든 한 달 만에 왔든 같은 결과다.
  *
- *   수치를 1초마다 깎으려면 사용자 수만큼 타이머가 돌아야 한다(t3.small 로는 안 된다).
- *   대신 값과 함께 **그 값이 시작된 시각**을 적어두고, 누가 물어볼 때 그 사이 흐른
- *   시간으로 몇 칸 떨어졌는지 센다. 그래서 브라우저를 닫아도, 3일 만에 들어와도,
- *   기기를 바꿔도 결과가 같다.
+ * <h3>★ 밥 충전 하나만 벽시계</h3>
+ * 자는 동안에도 돈다(16장 유일한 예외 — 아침에 밥이 있어야 한다). 그래서 이것만 v1 방식의 앵커({@code foodAt})다.
  *
- * ★ 시각 칸이 네 개인 이유 — "마지막 접속 시각" 하나로 두면 자주 들어오는 사람은
- *   영원히 배가 안 고프다. 포만감은 4시간에 1칸인데 1시간마다 들어와 매번
- *   "0칸 감소" 로 처리되면서 나머지 1시간이 그때마다 버려지기 때문이다.
+ * <h3>★ 하루의 경계 = 밤잠 드는 순간</h3>
+ * "그날 케어 미스 0", "하루 3판", "하루 30 상한" 은 전부 기상~취침 한 구간이고, 잠드는 순간 판정·리셋된다.
+ * 자정은 아무 의미 없다(16장). 낮잠은 경계가 아니다.
  *
- * ★ 수치·성장 칸은 이번 브랜치(#36)에서 쓰지 않는다. 같은 표라 한 번에 만들어 둘 뿐이고,
- *   실제 돌보기 로직은 #133 에서 붙는다.
+ * <h3>시각은 항상 밖에서 받는다</h3>
+ * 안에서 {@code Instant.now()} 를 부르지 않는다 — 테스트가 "6시간 뒤" 를 만들 수 있어야 하고,
+ * dev 시계 오프셋({@link #now(Instant)})이 모든 계산에 똑같이 먹어야 한다.
  *
- * 화면의 순간(토스트·말풍선·떠오르는 숫자·반응 얼굴)은 여기 없다. 서버가 알 필요가 없다.
+ * <h3>⚠️ 컬럼 추가 규칙</h3>
+ * 이미 행이 있는 표에 더하는 칸은 nullable 이거나 기본값이 있어야 한다. NOT NULL 로 만들면 DB 가 조용히
+ * 거부하고 서버는 정상 기동한 채 실제 호출 때만 터진다(2026-09-02 pet_slots). 삭제는 엔티티에서만 빼고
+ * 컬럼은 {@code _local/sql/v2-drop-legacy.sql} 로 손 실행한다.
  */
 @Entity
 @Table(name = "zzal_pet", indexes = @Index(name = "idx_zzal_pet_user", columnList = "user_id"))
@@ -45,42 +57,31 @@ public class ZzalPet {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * 주인. users 를 참조하지만 외래키를 걸지 않고 번호만 들고 있다.
-     *
-     * 도메인(zzal)이 공통 모듈의 엔티티에 직접 매달리면, 나중에 계정 구조가 바뀔 때
-     * 세 도메인이 한꺼번에 흔들린다. 번호만 보면 그 결합이 생기지 않는다.
-     */
+    /** 주인. users 를 참조하지만 외래키를 걸지 않고 번호만 든다(도메인이 공통 엔티티에 매달리지 않게). */
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
     // ── 신원 ──────────────────────────────────────────────────────────────
 
+    /** 이름. 정본 15장은 12자(요청 검증). 칸은 v1 의 20 그대로 둔다(줄이면 기존 행이 걸린다). */
     @Column(nullable = false, length = 20)
     private String name;
 
-    /** 업로드 때 받는 자유 서술 한 칸(예: "왼쪽 눈에 흉터"). 비워도 된다. */
     @Column(length = 200)
     private String note;
 
-    /** 주인이 올린 원본 그림의 S3 키. presign 이 발급하고 upload_ticket 으로 검증된 것. */
     @Column(nullable = false, length = 300)
     private String sourceImageKey;
 
-    /** 원본에서 만들어 낸 캐릭터 시트. 이후 모든 생성의 기준이 된다. */
     @Column(length = 300)
     private String sheetImageKey;
 
-    /**
-     * 시트를 보고 AI 가 글로 받아 적은 생김새 설명.
-     *
-     * 그림만 주고 "이대로 8가지 표정을 그려줘" 하면 캐릭터가 조금씩 달라진다.
-     * 글로 못박아 두면 생성이 안정된다(2026-08-26 실측).
-     * 저장해 두는 이유 둘 — 재생성 때 재사용(17초·$0.018 절약), 그리고 문제 추적.
-     * (고양이 그림에서 엉뚱한 캐릭터를 묘사하는 문단이 나와 생성이 차단된 적이 있다)
-     */
     @Column(columnDefinition = "text")
     private String identityText;
+
+    /** 어느 부화 파이프라인으로 구웠나(v1 = 8상태, v2 = 격자 2장 16종). basicImageKey 폴백 판단에 쓴다. */
+    @Column(length = 20)
+    private String hatchPipelineVersion;
 
     // ── 단계 ──────────────────────────────────────────────────────────────
 
@@ -92,102 +93,210 @@ public class ZzalPet {
     @Column(length = 20)
     private DeathReason deathReason;
 
-    // ── 수치와 그 수치가 시작된 시각 (#133 에서 사용) ──────────────────────
+    @Column(nullable = false)
+    private Instant hatchStartedAt;
+
+    /** 생성이 끝난 시각 = <b>시계가 켜진 순간</b>(정본 15장 6). 아기 60분의 출발점. */
+    @Column
+    private Instant hatchedAt;
+
+    // ── 시계 (정본 2·12·16장) ─────────────────────────────────────────────
+
+    /** 마지막으로 정산한 시각. 여기서 지금까지를 {@link AwakeClock} 이 자른다. */
+    @Column
+    private Instant settledAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private SleepKind sleepKind;
+
+    @Column
+    private Instant sleptAt;
+
+    /** 오늘 기상 시각(밤잠에서 깬 시각. 부화 당일은 부화 시각). 채팅 부름 시각의 기준. */
+    @Column
+    private Instant wokeAt;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int napCount;
+
+    /** 오늘 10:00 자동 기상(늦잠)이었나. 다음 잠까지 유지. */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean overslept;
+
+    /**
+     * 개발용 시계 오프셋(초). 이 펫의 "지금" = 실제 지금 + 오프셋.
+     *
+     * ★ v1 은 앵커를 과거로 밀었다. v2 는 "지금이 23:00" 이 성립해야 창·자동 취침을 실제 규칙으로
+     *   검증할 수 있어 시계 자체를 민다. 운영은 항상 0 이고 dev-tools 가 켜졌을 때만 바뀐다.
+     */
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long devClockOffsetSeconds;
+
+    // ── 게이지 (정본 4장) ─────────────────────────────────────────────────
 
     @Column(nullable = false)
     private int fullness;
 
-    @Column
-    private Instant fullnessAt;
-
     @Column(nullable = false)
     private int happiness;
 
-    @Column
-    private Instant happinessAt;
-
+    /** 바닥 흔적 0~4. 청결 = 4 - 흔적. */
     @Column(nullable = false)
     private int trash;
 
-    @Column
-    private Instant trashAt;
+    /** 게이지별 누적 깨어 있는 초. 간격을 넘길 때마다 1칸 깎고 나머지는 남는다. 채워도 안 멈춘다(16장). */
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long fullnessAwakeSec;
+
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long happinessAwakeSec;
+
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long trashAwakeSec;
 
     @Column(nullable = false)
     private int food;
 
+    /** 밥 충전 앵커(벽시계). 가득이면 null. */
     @Column
     private Instant foodAt;
 
-    // ── 성장 (#133 에서 사용) ─────────────────────────────────────────────
+    // ── 케어 미스 (정본 4·16장) — 어디에도 안 내려간다 ─────────────────────
 
-    /** 이번 해금에 치른 훈련 횟수. */
-    @Column(nullable = false)
+    /** 단일 누적 카운터. 리셋 주기 없음. 떠남 판정에만 쓴다. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int careMiss;
+
+    /** 오늘(기상~취침) 새로 쌓인 것. 잠들 때 "케어 미스 0인 날" 판정 뒤 0. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int todayCareMiss;
+
+    /** 게이지가 0인 채 깨어 있는 초. 6시간이면 +1 하고 무장 해제. */
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long fullnessZeroSec;
+
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long happinessZeroSec;
+
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long cleanZeroSec;
+
+    /** 무장 = 0 이 된 뒤 아직 +1 을 안 한 상태. 채워졌다 다시 0 이 되어야 다시 무장(16장). */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean fullnessMissArmed;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean happinessMissArmed;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean cleanMissArmed;
+
+    // ── 친밀도 (정본 8장) ─────────────────────────────────────────────────
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int intimacy;
+
+    /** 최고치. 재회 때 이것의 50% 로 돌아온다. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int intimacyPeak;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int todayCareIntimacy;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int todayPetCount;
+
+    // ── 오늘 (잠들 때 리셋) ───────────────────────────────────────────────
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int todayGames;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean todayBathDone;
+
+    /** 다른 행동 없이 연달아 준 간식. 5면 배탈. 잠들 때도 0. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int snackStreak;
+
+    // ── 누적 카운터 (부화 순간부터, 해금·튜토리얼 판정) ────────────────────
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int feeds;
+
+    /** 쓰다듬기 누적(튜토리얼 3분 판정). 하루 3회 인정과는 별개. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int pets;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int cleans;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int shares;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int chatAnswers;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int sleepWakeCount;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int bathCount;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int gameStarts;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int leftRightWins;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int zeroMissDays;
+
+    // ── 방문 (정본 3장) ───────────────────────────────────────────────────
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int daysTogether;
+
+    @Column
+    private LocalDate lastVisitDate;
+
+    @Column
+    private Instant lastSeenAt;
+
+    // ── 성격·꾸미기 (정본 10·15장) ────────────────────────────────────────
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private Personality personality;
+
+    @Column(length = 40)
+    private String world;
+
+    @Column(length = 32)
+    private String background;
+
+    // ── v1 잔재: DB 에 NOT NULL 로 남아 있는 세 칸 ────────────────────────
+    //
+    // ★ 엔티티에서 빼면 새 펫 INSERT 가 "null 불가" 로 터지는데, 그건 서버가 정상 기동한 뒤
+    //   실제 부화 때만 드러난다. PR-12 에서 컬럼을 drop 하기 전까지 0 으로만 채우는 매핑을 남긴다.
+    //   새 코드는 절대 읽지 않는다.
+
+    /** @deprecated v1 훈련. PR-12 drop. */
+    @Deprecated
+    @Column(nullable = false, columnDefinition = "integer default 0")
     private int trainStack;
 
-    /**
-     * 지금 도는 훈련이 끝나면 몇 회분이 쌓이는가. 훈련을 <b>시작할 때</b> 정해 여기 넣는다.
-     *
-     * ★ 끝날 때 다시 계산하지 않는 이유 — 버튼에 "2회분" 이라고 보여주고 눌렀는데
-     *   1분 사이에 행복이 한 칸 떨어졌다고 1회분이 되면, 화면이 한 약속을 서버가 어기는 것이 된다.
-     *
-     * ⚠️ 이미 행이 있는 표에 칸을 더하므로 기본값을 함께 준다. 없으면 DB 가 조용히 거부하고
-     *    서버는 정상 기동한 채 실제 호출 때만 터진다(2026-09-02 pet_slots 에서 겪음).
-     */
+    /** @deprecated v1 훈련. PR-12 drop. */
+    @Deprecated
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int trainGain;
 
-    /** 지금까지 연 모션 수. 목록 자체는 zzal_motion 에 있다. */
-    @Column(nullable = false)
+    /** @deprecated v1 해금 수. PR-12 drop. v2 는 zzal_motion 행이 정본. */
+    @Deprecated
+    @Column(nullable = false, columnDefinition = "integer default 0")
     private int unlockedCount;
 
-    @Column
-    private Instant trainStartedAt;
-
-    /** 재우기. 6시간 뒤 깨어나면서 모션 하나가 열린다(2026-09-01 확정). */
-    @Column
-    private Instant sleepStartedAt;
-
-    // ── 생애 시각 ─────────────────────────────────────────────────────────
-
-    @Column(nullable = false)
-    private Instant hatchStartedAt;
-
-    /** 8종이 다 구워진 시각. 비어 있으면 아직 부화 중이거나 실패했다. */
-    @Column
-    private Instant hatchedAt;
-
-    /**
-     * ★ 수치 시계가 켜진 시각 = <b>튜토리얼을 끝낸 순간</b>.
-     *
-     * 부화가 끝나도, 첫 밥을 줘도 시계는 안 켜진다. 켜지는 조건은 {@link #tutorialDoneAt} 하나다
-     * (이유는 그 칸의 주석에).
-     * 비어 있으면 = 아직 첫날 순서를 끝내지 않은 펫(지표로도 그대로 쓰인다).
-     */
-    @Column
-    private Instant careStartedAt;
-
-    /**
-     * ★ 첫날 순서(튜토리얼)를 끝낸 시각. 이 순간에 수치 시계가 켜진다.
-     *
-     * <h3>왜 튜토리얼 중에는 수치가 안 줄어야 하는가</h3>
-     * 첫날 순서는 "쓰다듬 → 행복 4칸 → 훈련이 2회분" 처럼 <b>숫자가 정확히 맞아떨어지는 것</b>으로
-     * 규칙을 설명 없이 가르친다. 안내를 읽는 사이에 행복이 한 칸 떨어지면 그 계산이 어긋나
-     * 튜토리얼이 자기 규칙을 못 보여준다. 프론트에서 이 문제로 실제로 막힌 적이 있어
-     * ({@code zzal/fe/tamagotchi/useTamagotchi.ts} 의 {@code inTutorial}) 서버에도 같은 개념을 둔다.
-     * 서버가 수치의 정본이 된 이상, 여기에 없으면 화면을 붙이는 순간 그 문제가 그대로 재발한다.
-     *
-     * <h3>★ 튜토리얼을 안 끝내고 떠난 펫은 영영 안 굶는다 — 의도한 동작이다</h3>
-     * 안내를 따라가다 창을 닫고 사흘 뒤에 돌아온 사람의 펫이 굶어 죽어 있으면, 그 사람은
-     * 이 서비스가 무엇인지 알기도 전에 떠난다. 방치를 벌하는 것은 규칙을 이미 배운 사람에게만
-     * 의미가 있다. 그래서 시계를 켜는 열쇠를 <b>"첫 돌봄" 이 아니라 "규칙을 다 배웠다"</b> 로 옮겼다.
-     *
-     * ⚠️ 이미 행이 있는 표에 더하는 칸이라 <b>nullable</b> 이어야 한다. NOT NULL 로 만들면
-     *    DB 가 조용히 거부하고 서버는 정상 기동한 채 실제 호출 때만 터진다(2026-09-02 에 겪음).
-     */
-    @Column
-    private Instant tutorialDoneAt;
-
-    /** 마지막으로 돌본 시각. 수치 시각 칸은 시간이 지나면 저절로 움직이므로 이것과 구분된다. */
+    /** 마지막으로 돌본 시각(방치 지표). 보내기는 돌봄이 아니라 안 찍는다. */
     @Column
     private Instant lastCaredAt;
 
@@ -202,7 +311,9 @@ public class ZzalPet {
     protected ZzalPet() {
     }
 
-    /** 그림을 받아 알을 앉힌다. 아직 수치는 흐르지 않는다(ALIVE 가 아니므로). */
+    // ── 생애 ──────────────────────────────────────────────────────────────
+
+    /** 그림을 받아 알을 앉힌다. 아직 시계는 안 켜졌다(ALIVE 가 아니므로). */
     public static ZzalPet hatch(Long userId, String name, String note, String sourceImageKey, Instant now) {
         ZzalPet pet = new ZzalPet();
         pet.userId = userId;
@@ -211,10 +322,14 @@ public class ZzalPet {
         pet.sourceImageKey = sourceImageKey;
         pet.phase = PetPhase.HATCHING;
         pet.hatchStartedAt = now;
+        pet.background = "room";
         return pet;
     }
 
-    /** 생성이 끝났다. 이 순간부터 함께 지내지만, 수치 시계는 첫 돌봄에 켜진다. */
+    /**
+     * 생성이 끝났다. <b>이 순간 시계가 켜진다</b>(정본 15장 6 — 튜토리얼 끝이 아니라 부화 순간).
+     * 아기 60분은 케어 미스·병·자동 취침이 없으니 먼저 켜도 손해가 없다.
+     */
     public void markAlive(String sheetImageKey, String identityText, Instant now) {
         if (phase != PetPhase.HATCHING) {
             return;
@@ -223,13 +338,19 @@ public class ZzalPet {
         this.sheetImageKey = sheetImageKey;
         this.identityText = identityText;
         this.hatchedAt = now;
-        this.fullness = ZzalRules.WAKE_FULLNESS;
-        this.happiness = ZzalRules.WAKE_HAPPINESS;
-        this.trash = 0;
-        this.food = ZzalRules.MAX_FOOD;
+        this.fullness = ZzalRules.HATCH_FULLNESS;
+        this.happiness = ZzalRules.HATCH_HAPPINESS;
+        this.trash = ZzalRules.HATCH_TRASH;
+        this.food = ZzalRules.HATCH_FOOD;
+        this.foodAt = null;
+        this.settledAt = now.truncatedTo(ChronoUnit.SECONDS);
+        this.wokeAt = now;
+        this.lastSeenAt = now;
+        // "N일째 함께" — 부화한 날이 1일째(api-v2.md 2절 예시).
+        this.daysTogether = 1;
+        this.lastVisitDate = AwakeClock.dateOf(now);
     }
 
-    /** 생성이 끝내 실패했다. 태어나지 못한 것이므로 DEAD 가 아니라 FAILED 다. */
     public void markHatchFailed() {
         if (phase != PetPhase.HATCHING) {
             return;
@@ -239,29 +360,8 @@ public class ZzalPet {
     }
 
     /**
-     * 주인이 직접 보낸다(놓아주기). 슬롯이 비어 다른 그림으로 새로 시작할 수 있게 된다.
-     *
-     * <h3>★ ALIVE 가 아니면 아무 일도 하지 않는다</h3>
-     * 특히 <b>부화 중</b>이 위험하다. 알을 보내 버리면 뒤에서 굽고 있는 생성 작업이 주인
-     * 없는 일이 되어, 돈은 나가는데 결과를 받을 펫이 없는 상태로 끝난다. 그래서 여기서도
-     * 막고, 서비스에서도 사용자에게 이유를 말해 준다(같은 것을 두 번 막는 것이 아니라,
-     * 도메인은 상태를 지키고 서비스는 말을 하는 역할 분담이다).
-     * 이미 DEAD·FAILED 인 아이를 다시 보내도 조용히 넘어간다 — 두 번 눌러도 안전하다.
-     *
-     * <h3>★★ 데이터를 지우지 않는다</h3>
-     * 만들어진 움짤과 모션 기록을 그대로 남긴다. 이유가 둘이다.
-     * <ul>
-     *   <li>이미 <b>돈을 써서</b> 구운 결과물이다. 지우면 그 비용이 그대로 증발한다</li>
-     *   <li>나중에 "떠난 아이와 재회" 가 붙을 자리다. 그때 기록이 없으면 붙일 수가 없다</li>
-     * </ul>
-     * 그래서 행을 지우는 대신 단계만 DEAD 로 바꾼다. 슬롯 계산이 HATCHING·ALIVE 만 세므로
-     * 남겨 두어도 새로 시작하는 데 걸리지 않는다.
-     *
-     * <p>{@code now} 를 받아 두는 이유 — 이 클래스는 시각을 안에서 만들지 않고 <b>항상 밖에서
-     * 받는다</b>(그래야 테스트가 "6시간 뒤" 를 만들 수 있다). 떠난 시각 자체는 감사 칸
-     * {@code updatedAt} 에 남으므로 지금은 따로 적지 않고, 나중에 재회 기능에 {@code releasedAt}
-     * 이 필요해지면 여기서 채운다. <b>{@code lastCaredAt} 에 적지 않는다</b> — 보내는 것은
-     * 돌보는 것이 아니라서, 거기 적으면 방치 지표가 조용히 어긋난다.
+     * 주인이 직접 보낸다(놓아주기). 행은 남긴다 — 이미 돈을 써서 구운 결과물이고 재회가 붙을 자리다.
+     * ALIVE 가 아니면 아무 일도 하지 않는다(부화 중 보내면 굽는 작업이 주인을 잃는다 — 서비스가 이유를 말한다).
      */
     public void release(Instant now) {
         if (phase != PetPhase.ALIVE) {
@@ -275,372 +375,511 @@ public class ZzalPet {
         return phase == PetPhase.HATCHING;
     }
 
-    public boolean isOwnedBy(Long userId) {
-        return this.userId.equals(userId);
-    }
-
-    /** 부화 시작부터 지금까지 몇 초 지났는가. 화면의 진행 표시에 쓴다. */
-    public long elapsedSeconds(Instant now) {
-        return Duration.between(hatchStartedAt, now).toSeconds();
-    }
-
-    // ── 시간이 하는 일 ────────────────────────────────────────────────────
-
-    /**
-     * 흐른 시간을 수치에 반영한다. <b>조회든 행동이든 가장 먼저 부른다.</b>
-     *
-     * <h3>왜 이렇게 하는가 — 깎으러 다니지 않고 계산한다</h3>
-     * 서버가 주기적으로 모든 펫을 훑어 1씩 깎는 방법도 있다. 그러면 펫이 1만 마리일 때
-     * 1시간마다 1만 줄을 고쳐야 하고, 서버가 잠깐 죽으면 그 시간만큼 안 깎여 펫마다 상태가 어긋난다.
-     * <p>
-     * 여기서는 아무것도 깎지 않는다. 대신 <b>그 수치가 마지막으로 바뀐 시각</b>을 같이 들고 있다가,
-     * 물어볼 때 "그 사이 몇 칸이 지났나" 를 계산한다. 서버가 죽어 있었든 사용자가 사흘을
-     * 안 왔든 결과가 같다.
-     *
-     * <h3>★ 앵커를 now 로 밀지 않는다</h3>
-     * 4시간에 1칸인데 3시간 59분이 지난 시점에 조회했다고 앵커를 지금으로 옮기면, 그 59분이
-     * 버려진다. 자주 들여다보는 사람의 펫은 <b>영영 배가 안 고파진다.</b>
-     * 그래서 지나간 칸 수만큼만 정확히 민다(나머지 시간은 앵커에 남는다).
-     *
-     * <h3>계산과 반영을 한 벌로 둔 이유</h3>
-     * 조회용 계산 함수를 따로 두면 언젠가 두 식이 어긋나고, 그때는 화면과 판정이 다른
-     * 값을 말하게 된다. 그래서 조회도 이 메서드를 부르고, 트랜잭션도 읽기 전용이 아니다.
-     */
-    public void applyElapsed(Instant now) {
-        if (phase != PetPhase.ALIVE) {
-            return;
-        }
-        Instant at = frozenNow(now);
-
-        // ★★ 훈련 거두기는 시계와 <b>무관하게</b> 먼저 돈다.
-        //   이것까지 시계 뒤에 두면 튜토리얼("연습 → 재우기") 이 그 자리에서 멈춘다 —
-        //   연습이 영원히 안 끝나 값을 못 치르고, 재우기가 계속 거절된다.
-        //   시계가 막는 것은 <b>줄어드는 것</b>이지 사용자가 벌어들인 진행이 아니다.
-        if (trainStartedAt != null && !at.isBefore(trainStartedAt.plus(ZzalRules.TRAIN_DURATION))) {
-            trainStack += trainGain;
-            trainStartedAt = null;
-            trainGain = 0;
-        }
-
-        // 시계가 아직 안 켜졌다 = 첫날 순서를 안 끝낸 펫. 굶지 않는다(tutorialDoneAt 주석 참고).
-        if (careStartedAt == null) {
-            return;
-        }
-
-        long dropped = stepsPassed(fullnessAt, ZzalRules.FULLNESS_DROP, at);
-        if (dropped > 0) {
-            fullness = (int) Math.max(0, fullness - dropped);
-            fullnessAt = advance(fullnessAt, ZzalRules.FULLNESS_DROP, dropped);
-        }
-
-        long sad = stepsPassed(happinessAt, ZzalRules.HAPPINESS_DROP, at);
-        if (sad > 0) {
-            happiness = (int) Math.max(0, happiness - sad);
-            happinessAt = advance(happinessAt, ZzalRules.HAPPINESS_DROP, sad);
-        }
-
-        long dirtied = stepsPassed(trashAt, ZzalRules.TRASH_RISE, at);
-        if (dirtied > 0) {
-            trash = (int) Math.min(ZzalRules.MAX_TRASH, trash + dirtied);
-            trashAt = advance(trashAt, ZzalRules.TRASH_RISE, dirtied);
-        }
-
-        long charged = stepsPassed(foodAt, ZzalRules.FOOD_CHARGE, at);
-        if (charged > 0) {
-            food = (int) Math.min(ZzalRules.MAX_FOOD, food + charged);
-            // 가득 찼으면 시계를 멈춘다. 안 그러면 하나 먹자마자 쌓인 시간만큼 한꺼번에 들어온다.
-            foodAt = food >= ZzalRules.MAX_FOOD ? null : advance(foodAt, ZzalRules.FOOD_CHARGE, charged);
-        }
-    }
-
-    /**
-     * 자는 동안은 시간이 멈춘다. 계산에 쓸 시각.
-     *
-     * 자고 일어났더니 굶어 있으면 재우는 것이 손해가 된다. 그러면 해금이 수면에 묶여 있는
-     * 이 게임의 구조 자체가 사용자에게 벌처럼 읽힌다.
-     */
-    private Instant frozenNow(Instant now) {
-        return sleepStartedAt != null && now.isAfter(sleepStartedAt) ? sleepStartedAt : now;
-    }
-
-    /** anchor 이후로 interval 이 몇 번 지났는가. */
-    private static long stepsPassed(Instant anchor, Duration interval, Instant now) {
-        if (anchor == null || !now.isAfter(anchor)) {
-            return 0;
-        }
-        return Duration.between(anchor, now).getSeconds() / interval.getSeconds();
-    }
-
-    private static Instant advance(Instant anchor, Duration interval, long steps) {
-        return anchor.plusSeconds(interval.getSeconds() * steps);
-    }
-
-    // ── 돌봄 ──────────────────────────────────────────────────────────────
-
-    /**
-     * 첫날 순서를 끝냈다. <b>이 순간 수치 시계가 켜진다.</b>
-     *
-     * ★ 두 번 불러도 안전하다 — 두 번째는 아무 일도 하지 않는다. 화면이 마지막 칸에서
-     *   버튼을 두 번 누르거나 새로고침 뒤 다시 알릴 수 있는데, 그때마다 앵커가 지금으로
-     *   밀리면 튜토리얼을 끝낸 사람이 <b>누를 때마다 배가 다시 불러진다.</b>
-     */
-    public void completeTutorial(Instant now) {
-        if (tutorialDoneAt != null) {
-            return;
-        }
-        tutorialDoneAt = now;
-        startClock(now);
-    }
-
-    public boolean isTutorialDone() {
-        return tutorialDoneAt != null;
-    }
-
-    /**
-     * 돌봄이 들어왔을 때 수치 시계를 켠다 — 단, <b>튜토리얼을 끝낸 뒤에만</b>.
-     *
-     * ★ 예전에는 첫 돌봄이 열쇠였다. 그러면 튜토리얼 첫 칸("배가 고픈가 봐요 → 밥")을
-     *   누르는 순간 시계가 켜져, 안내를 따라가는 동안 행복이 떨어지고 첫날 순서의 숫자가
-     *   어긋난다. 그래서 열쇠를 {@link #tutorialDoneAt} 으로 옮겼다.
-     *
-     * ★ 그래도 이 메서드를 남겨 둔 이유 — 튜토리얼 완료 알림이 어떤 사정으로 유실돼
-     *   {@code tutorialDoneAt} 만 찍히고 시계가 안 켜진 행이 생겨도, 다음 돌봄에서 스스로 복구된다.
-     *   {@code lastCaredAt}(방치 지표)은 튜토리얼 중에도 그대로 찍어야 한다.
-     */
-    private void startClockIfNeeded(Instant now) {
-        if (tutorialDoneAt != null) {
-            startClock(now);
-        }
-        lastCaredAt = now;
-    }
-
-    /** 지금을 모든 수치의 출발점으로 삼는다. 이미 켜져 있으면 건드리지 않는다. */
-    private void startClock(Instant now) {
-        if (careStartedAt != null) {
-            return;
-        }
-        careStartedAt = now;
-        fullnessAt = now;
-        happinessAt = now;
-        trashAt = now;
-        foodAt = food >= ZzalRules.MAX_FOOD ? null : now;
-    }
-
-    /**
-     * 밥. 포만감이 오르고 쓰레기가 하나 는다.
-     *
-     * ★ 앵커를 now 로 되돌리는 이유 — 되돌리지 않으면 오래 방치돼 앵커가 과거에 머물러 있을 때,
-     *   먹이자마자 그 사이 시간이 한꺼번에 계산돼 도로 0이 된다.
-     */
-    public void feed(Instant now) {
-        startClockIfNeeded(now);
-        boolean wasFull = food >= ZzalRules.MAX_FOOD;
-        fullness = Math.min(ZzalRules.MAX_GAUGE, fullness + ZzalRules.FEED_FULLNESS);
-        fullnessAt = now;
-        trash = Math.min(ZzalRules.MAX_TRASH, trash + ZzalRules.FEED_TRASH);
-        food -= 1;
-        // 가득 차 있어서 멈춰 있던 충전 시계를 여기서 다시 켠다.
-        if (wasFull) {
-            foodAt = now;
-        }
-    }
-
-    /** 쓰다듬. 행복이 오른다. */
-    public void pet(Instant now) {
-        startClockIfNeeded(now);
-        happiness = Math.min(ZzalRules.MAX_GAUGE, happiness + ZzalRules.PET_HAPPINESS);
-        happinessAt = now;
-    }
-
-    /** 청소. 쌓인 것을 한 번에 치운다. 낮을수록 이득이 커서 "몰아서 치우기" 가 저절로 생긴다. */
-    public void clean(Instant now) {
-        startClockIfNeeded(now);
-        trash = 0;
-        trashAt = now;
-    }
-
-    // ── 보상 (후기·미니게임이 함께 쓴다) ──────────────────────────────────
-
-    /**
-     * 밥 하나를 더 준다.
-     *
-     * ★ 상한을 넘지 않는다. 넘겨서 주면 충전 시계가 꼬여 "가득인데 계속 차는" 상태가 된다.
-     */
-    public void grantFood(Instant now) {
-        if (food >= ZzalRules.MAX_FOOD) {
-            return;
-        }
-        boolean wasEmptyClock = foodAt == null;
-        food += 1;
-        if (food >= ZzalRules.MAX_FOOD) {
-            foodAt = null;
-        } else if (wasEmptyClock) {
-            foodAt = now;
-        }
-    }
-
-    /** 연습 한 번 분량을 그냥 준다. 시간을 안 들이고 값이 쌓인다. */
-    public void grantTrain() {
-        trainStack += 1;
-    }
-
-    // ── 훈련과 잠 ─────────────────────────────────────────────────────────
-
-    /** 훈련을 시작한다. 지금 행복으로 몇 회분인지 확정해 둔다(끝날 때 다시 재지 않는다). */
-    public void startTrain(Instant now) {
-        startClockIfNeeded(now);
-        trainStartedAt = now;
-        trainGain = ZzalRules.trainGain(happiness);
-    }
-
-    /**
-     * 재운다. 자는 동안 다음에 배울 것이 구워진다.
-     *
-     * ★ 자는 시간은 <b>몇 개를 열었느냐</b>에 따라 다르다 — 첫 잠은 5분이고 뒤로 갈수록 길어진다.
-     *   그래서 재우는 시점의 {@code unlockedCount} 가 그 잠의 길이를 정한다.
-     */
-    public void goToSleep(Instant now) {
-        sleepStartedAt = now;
-        lastCaredAt = now;
-    }
-
-    /**
-     * 깨운다. 하나를 배우고 훈련 값이 비워진다.
-     *
-     * ★ 잔 시간만큼 모든 앵커를 뒤로 민다 — 이 한 줄이 "수면 중 수치 정지" 의 전부다.
-     *   오후 2시에 재웠으면 앵커가 오후 8시가 되고, 잔 6시간은 계산에서 저절로 빠진다.
-     */
-    public void wakeUp(Instant now) {
-        Duration slept = Duration.between(sleepStartedAt, now);
-        fullnessAt = shift(fullnessAt, slept);
-        happinessAt = shift(happinessAt, slept);
-        trashAt = shift(trashAt, slept);
-        foodAt = shift(foodAt, slept);
-
-        sleepStartedAt = null;
-        lastCaredAt = now;
-    }
-
-    /**
-     * 하나를 배웠다. 치른 연습이 빠진다.
-     *
-     * ★ 깨우기와 갈라 둔 이유 — 자는 동안 굽던 것이 끝내 실패할 수 있다. 그때도 깨어나기는
-     *   해야 하지만 <b>배운 것이 없으니 연습을 빼앗으면 안 된다.</b> 묶어 두면 생성이 실패한
-     *   사용자가 연습만 날리게 된다.
-     */
-    public void unlockOne() {
-        trainStack = Math.max(0, trainStack - ZzalRules.priceOf(unlockedCount));
-        unlockedCount += 1;
-    }
-
-    private static Instant shift(Instant anchor, Duration by) {
-        return anchor == null ? null : anchor.plus(by);
-    }
-
-    // ── 시연·확인용 (dev 전용) ────────────────────────────────────────────
-
-    /**
-     * 모든 시각 앵커를 {@code by} 만큼 <b>과거로</b> 민다 = 그만큼 시간이 흐른 것으로 만든다.
-     *
-     * <h3>★★ 왜 규칙(잠 5분·훈련 1분)을 짧게 바꾸지 않고 시계만 당기는가</h3>
-     * 확인하려고 {@link ZzalRules} 의 값을 줄이면, 테스트와 실제가 <b>다른 규칙</b>으로 돌게 된다.
-     * 그러면 확인한 것이 실제로 확인한 게 아니다 — 짧은 값에서만 맞고 진짜 값에서 어긋나는
-     * 종류의 버그(칸 계산의 나머지, 앵커 밀기)는 바로 그 차이에 숨는다.
-     * 시계만 당기면 <b>돌아가는 규칙은 운영과 한 글자도 다르지 않고</b> 기다림만 사라진다.
-     *
-     * <h3>앵커만 미는 이유</h3>
-     * 수치를 직접 깎아 주면 "그 사이 몇 칸이 지났나" 를 세는 실제 경로가 안 돌아, 정작
-     * 확인하고 싶은 계산이 통째로 건너뛰어진다. 여기서는 앵커만 밀고, 수치는 평소처럼
-     * {@link #applyElapsed} 가 센다.
-     *
-     * <p>{@code careStartedAt} 이 비어 있으면(첫날 순서를 안 끝낸 펫) 밀 것이 없어 그대로 둔다 —
-     * 그 상태에서 시간을 당겨도 수치가 안 줄어드는 것이 정상 동작이다.
-     */
-    public void rewindClock(Duration by) {
-        Duration back = by.negated();
-        fullnessAt = shift(fullnessAt, back);
-        happinessAt = shift(happinessAt, back);
-        trashAt = shift(trashAt, back);
-        foodAt = shift(foodAt, back);
-        careStartedAt = shift(careStartedAt, back);
-        trainStartedAt = shift(trainStartedAt, back);
-        sleepStartedAt = shift(sleepStartedAt, back);
-    }
-
-    // ── 지금 무엇을 할 수 있는가 ──────────────────────────────────────────
-
     public boolean isAlive() {
         return phase == PetPhase.ALIVE;
     }
 
+    public boolean isOwnedBy(Long userId) {
+        return this.userId.equals(userId);
+    }
+
+    public long elapsedSeconds(Instant now) {
+        return Duration.between(hatchStartedAt, now).toSeconds();
+    }
+
+    // ── 시계 ──────────────────────────────────────────────────────────────
+
+    /** 이 펫의 "지금". 실제 시각 + dev 오프셋. 서비스는 항상 이것을 계산해 넘긴다. */
+    public Instant now(Instant real) {
+        return real.plusSeconds(devClockOffsetSeconds);
+    }
+
+    /** dev — 시계를 앞으로 민다. 규칙은 한 글자도 안 바뀌고 기다림만 사라진다. */
+    public void advanceDevClock(Duration by) {
+        devClockOffsetSeconds += by.getSeconds();
+    }
+
+    /**
+     * dev — 이 펫의 지금을 {@code target} 으로 맞춘다.
+     *
+     * ★ 초 단위 오프셋이라 소수 초를 <b>올림</b>한다. 내림하면 "19:00 으로 맞춰" 가 18:59:59.6 이 되어
+     *   재우기 창 밖으로 떨어진다(실기동 스모크에서 실제로 걸렸다). 맞춘 시각보다 앞서지 않는 것이 규칙이다.
+     */
+    public void setDevClock(Instant target, Instant real) {
+        Duration d = Duration.between(real, target);
+        devClockOffsetSeconds = d.getNano() > 0 ? d.getSeconds() + 1 : d.getSeconds();
+    }
+
+    /** 아기 60분이 끝나는 시각. 부화 순간부터 실시간(앱을 닫아도 흐른다, 16장). */
+    public Instant babyUntil() {
+        return hatchedAt == null ? null : hatchedAt.plus(ZzalRules.BABY_DURATION);
+    }
+
+    public boolean isBaby(Instant now) {
+        return hatchedAt != null && now.isBefore(babyUntil());
+    }
+
     public boolean isSleeping() {
-        return sleepStartedAt != null;
+        return sleepKind != null;
     }
 
-    public boolean isTraining() {
-        return trainStartedAt != null;
-    }
-
-    /** 다음 하나를 열려면 훈련이 몇 번 필요한가. */
-    public int trainPrice() {
-        return ZzalRules.priceOf(unlockedCount);
-    }
-
-    /** 훈련 값을 다 치렀는가 = 재울 수 있는가. */
-    public boolean isTrainPaid() {
-        return trainStack >= trainPrice();
+    private AwakeClock.State clockState() {
+        return sleepKind == null
+                ? AwakeClock.State.awake(babyUntil())
+                : AwakeClock.State.asleep(sleepKind, sleptAt, babyUntil());
     }
 
     /**
-     * 다 모았는가.
+     * 흐른 시간을 반영한다. <b>조회든 행동이든 가장 먼저 부른다.</b>
      *
-     * ★ 총 개수를 <b>인자로 받는다</b> — 정본은 {@code MotionCatalog}(설정 {@code app.zzal.motions})
-     *   하나뿐인데, 엔티티는 스프링 빈을 볼 수 없다. 예전에는 {@code ZzalRules.TOTAL_MOTIONS = 13}
-     *   이 여기 박혀 있어서, 목록에 2개만 넣어도 완주가 13개를 요구했다. 정본이 둘이면
-     *   "다 모았다" 가 거짓말을 하고, 그건 예외도 로그도 없이 화면에서만 드러난다.
-     *
-     * ★ 목록이 비어 있으면(아직 무엇을 열지 안 정한 상태) 완주로 치지 않는다.
-     *   0개를 다 모았다고 하면 갓 태어난 펫이 전부 완주 처리돼 연습·재우기가 통째로 막힌다.
+     * <ol>
+     *   <li>{@code settledAt}~{@code now} 를 {@link AwakeClock} 이 경계로 자른다</li>
+     *   <li>깨어 있는 구간만 {@link #advanceAwake} 로 걷는다(게이지·흔적·케어 미스 타이머)</li>
+     *   <li>구간 끝의 경계 이벤트에서 {@link #onSleep}/{@link #onWake} 훅이 돈다</li>
+     *   <li>밥 충전은 벽시계로 따로 센다</li>
+     * </ol>
      */
-    public boolean isComplete(int totalMotions) {
-        return totalMotions > 0 && unlockedCount >= totalMotions;
+    public void settle(Instant now) {
+        if (phase != PetPhase.ALIVE) {
+            return;
+        }
+        // ★ 초 단위로 센다. 나노초를 남긴 채 settledAt 을 지금으로 옮기면 1초 미만의 조각이 매번
+        //   버려져, 0.3초 간격으로 조회하는 것만으로 게이지가 영영 안 줄어든다(리뷰 실측 — 치트 가능,
+        //   보통 폴링도 약 10% 느려짐). 초로 자르면 조각이 다음 정산으로 넘어간다.
+        now = now.truncatedTo(ChronoUnit.SECONDS);
+        if (settledAt == null) {
+            // v1 행(정산 시각이 없던 펫). 과거를 소급하지 않고 지금부터 센다 — 사흘치 굶주림을
+            // 한꺼번에 물리면 그 사람은 규칙을 배우기도 전에 떠난다.
+            settledAt = now;
+            if (wokeAt == null) {
+                wokeAt = now;
+            }
+        }
+        if (!now.isAfter(settledAt)) {
+            return;
+        }
+
+        AwakeClock.Walk walk = AwakeClock.walk(clockState(), settledAt, now);
+        for (AwakeClock.Segment seg : walk.segments()) {
+            if (seg.isAwake()) {
+                advanceAwake(seg.from(), seg.to());
+            }
+            if (seg.endEvent() != null) {
+                switch (seg.endEvent()) {
+                    case AUTO_SLEEP -> onSleep(seg.to(), SleepKind.NIGHT, false);
+                    case AUTO_WAKE -> onWake(seg.to(), false);
+                    case NAP_AUTO_WAKE -> onWake(seg.to(), false);
+                }
+            }
+        }
+        chargeFood(now);
+        settledAt = now;
     }
 
-    /** 깨울 수 있는가. 덜 잤으면 아직이다. */
+    /** 깨어 있는 구간 하나. 아기 60분의 끝에서 속도가 바뀌므로 거기서 한 번 가른다. */
+    private void advanceAwake(Instant from, Instant to) {
+        Instant baby = babyUntil();
+        if (baby != null && from.isBefore(baby)) {
+            Instant babyEnd = to.isBefore(baby) ? to : baby;
+            tick(Duration.between(from, babyEnd).getSeconds(), true);
+            from = babyEnd;
+        }
+        if (from.isBefore(to)) {
+            tick(Duration.between(from, to).getSeconds(), false);
+        }
+    }
+
+    /**
+     * 깨어 있는 {@code seconds} 를 한 속도로 걷는다.
+     *
+     * <p>한 번에 다 더하지 않고 <b>다음 칸이 떨어지는 순간까지만</b> 잘라 가며 간다 — 케어 미스 타이머는
+     * "게이지가 0인 동안" 만 세야 하는데, 0 이 되는 순간이 구간 한가운데일 수 있기 때문이다.
+     * 아기 속도에서는 케어 미스가 없다(4장).
+     */
+    private void tick(long seconds, boolean baby) {
+        long fullnessEvery = (baby ? ZzalRules.BABY_FULLNESS_DROP : ZzalRules.FULLNESS_DROP_AWAKE).getSeconds();
+        long happinessEvery = (baby ? ZzalRules.BABY_HAPPINESS_DROP : ZzalRules.HAPPINESS_DROP_AWAKE).getSeconds();
+        long trashEvery = (baby ? ZzalRules.BABY_TRASH_RISE : ZzalRules.TRASH_RISE_AWAKE).getSeconds();
+
+        long remaining = seconds;
+        while (remaining > 0) {
+            long step = Math.min(remaining, fullnessEvery - fullnessAwakeSec);
+            step = Math.min(step, happinessEvery - happinessAwakeSec);
+            step = Math.min(step, trashEvery - trashAwakeSec);
+            step = Math.max(step, 1);
+
+            if (!baby) {
+                accumulateZero(step);
+            }
+            fullnessAwakeSec += step;
+            happinessAwakeSec += step;
+            trashAwakeSec += step;
+            remaining -= step;
+
+            if (fullnessAwakeSec >= fullnessEvery) {
+                fullnessAwakeSec -= fullnessEvery;
+                dropFullness();
+            }
+            if (happinessAwakeSec >= happinessEvery) {
+                happinessAwakeSec -= happinessEvery;
+                dropHappiness();
+            }
+            if (trashAwakeSec >= trashEvery) {
+                trashAwakeSec -= trashEvery;
+                riseTrash();
+            }
+        }
+    }
+
+    private void dropFullness() {
+        if (fullness > 0) {
+            fullness -= 1;
+            if (fullness == 0) {
+                fullnessMissArmed = true;
+                fullnessZeroSec = 0;
+            }
+        }
+    }
+
+    private void dropHappiness() {
+        if (happiness > 0) {
+            happiness -= 1;
+            if (happiness == 0) {
+                happinessMissArmed = true;
+                happinessZeroSec = 0;
+            }
+        }
+    }
+
+    private void riseTrash() {
+        if (trash < ZzalRules.TRASH_MAX) {
+            trash += 1;
+            if (trash == ZzalRules.TRASH_MAX) {
+                cleanMissArmed = true;
+                cleanZeroSec = 0;
+            }
+        }
+    }
+
+    /**
+     * 케어 미스(정본 4·16장) — 어느 게이지든 0 인 채 깨어 있는 6시간 → +1. 카운터는 하나, 무장은 게이지별.
+     * 그 게이지가 채워졌다 다시 0 이 되어야 다음 +1.
+     */
+    private void accumulateZero(long step) {
+        long limit = ZzalRules.CARE_MISS_ZERO_AFTER.getSeconds();
+        if (fullnessMissArmed && fullness == 0) {
+            fullnessZeroSec += step;
+            if (fullnessZeroSec >= limit) {
+                fullnessMissArmed = false;
+                addCareMiss();
+            }
+        }
+        if (happinessMissArmed && happiness == 0) {
+            happinessZeroSec += step;
+            if (happinessZeroSec >= limit) {
+                happinessMissArmed = false;
+                addCareMiss();
+            }
+        }
+        if (cleanMissArmed && trash >= ZzalRules.TRASH_MAX) {
+            cleanZeroSec += step;
+            if (cleanZeroSec >= limit) {
+                cleanMissArmed = false;
+                addCareMiss();
+            }
+        }
+    }
+
+    private void addCareMiss() {
+        careMiss += 1;
+        todayCareMiss += 1;
+    }
+
+    /** 밥 충전 — 벽시계 4시간에 1개. 자는 동안도 돈다. 가득이면 시계가 멈춘다(안 그러면 하나 먹자마자 몰아서 찬다). */
+    private void chargeFood(Instant now) {
+        if (foodAt == null || !now.isAfter(foodAt)) {
+            return;
+        }
+        long every = ZzalRules.FOOD_CHARGE.getSeconds();
+        long charged = Duration.between(foodAt, now).getSeconds() / every;
+        if (charged > 0) {
+            food = (int) Math.min(ZzalRules.FOOD_MAX, food + charged);
+            foodAt = food >= ZzalRules.FOOD_MAX ? null : foodAt.plusSeconds(every * charged);
+        }
+    }
+
+    // ── 잠 (정본 2·12·16장) ───────────────────────────────────────────────
+
+    /**
+     * 지금 재우면 어떤 잠이 되나. 안 되면 null.
+     *
+     * <ul>
+     *   <li>아기 60분 안이고 아직 낮잠 전 → 낮잠(12장 40분. 한 번만 — api-v2.md 해석 3)</li>
+     *   <li>KST 19:00~23:00 → 밤잠</li>
+     * </ul>
+     */
+    public SleepKind sleepKindAvailable(Instant now) {
+        if (!isAlive() || isSleeping()) {
+            return null;
+        }
+        if (isBaby(now) && napCount < ZzalRules.NAP_MAX) {
+            return SleepKind.NAP;
+        }
+        return AwakeClock.inSleepWindow(now) ? SleepKind.NIGHT : null;
+    }
+
+    public boolean canSleep(Instant now) {
+        return sleepKindAvailable(now) != null;
+    }
+
+    /** 사용자가 재운다. {@link #sleepKindAvailable} 로 먼저 확인했다고 전제한다. 보상 = 행복 +1·친밀도 +10(밤잠만). */
+    public void sleep(Instant now) {
+        SleepKind kind = sleepKindAvailable(now);
+        if (kind == null) {
+            throw new IllegalStateException("지금은 재울 수 없다");
+        }
+        onSleep(now, kind, true);
+    }
+
+    /** 지금 깨울 수 있나 — 밤잠은 KST 07:00~10:00, 낮잠은 5분 뒤. */
     public boolean canWake(Instant now) {
-        return sleepStartedAt != null
-                && !now.isBefore(sleepStartedAt.plus(ZzalRules.sleepDuration(unlockedCount)));
+        if (!isSleeping()) {
+            return false;
+        }
+        return !now.isBefore(AwakeClock.wakeWindowOpensAt(sleepKind, sleptAt));
     }
 
-    /** 남은 시간(초). 아직 시작 안 했으면 null — 화면이 "없음" 과 "0초 남음" 을 구분해야 한다. */
-    public Long trainRemainingSeconds(Instant now) {
-        return remaining(trainStartedAt, ZzalRules.TRAIN_DURATION, now);
-    }
-
-    public Long sleepRemainingSeconds(Instant now) {
-        return remaining(sleepStartedAt, ZzalRules.sleepDuration(unlockedCount), now);
+    /** 사용자가 깨운다. 보상 = 친밀도 +10(밤잠만). */
+    public void wake(Instant now) {
+        if (!canWake(now)) {
+            throw new IllegalStateException("지금은 깨울 수 없다");
+        }
+        onWake(now, true);
+        // ★ 낮잠에서 깬 순간이 이미 밤(23:00~07:00)이고 아기 60분도 끝났으면 그 자리에서 밤잠에 든다.
+        //   안 그러면 "깨어 있음" 으로 답하고 다음 조회에서 잠드는데, 그건 "행동 응답 = 최신 상태" 를 어긴다
+        //   (리뷰 재현: 22:35 부화 → 23:30 낮잠 → 23:36 깨우기).
+        if (!isSleeping() && !isBaby(now) && AwakeClock.isNight(now)) {
+            onSleep(now, SleepKind.NIGHT, false);
+        }
     }
 
     /**
-     * 다음 밥이 찰 때까지. 재고가 가득이면 null.
-     *
-     * ★ 시계가 안 켜졌으면(첫날 순서를 안 끝냈으면) null 이다. 그때는 충전도 안 도는데
-     *   남은 시간만 줄어들면, 화면이 "0초 남음" 을 띄운 채 영영 안 차는 상태가 된다.
+     * 잠드는 순간의 훅. 밤잠이면 <b>하루의 경계</b> — 케어 미스 0인 날 판정 뒤 오늘 카운터 리셋.
+     * (3층 조각 판정·굽기 큐 등록은 서비스 층에서 이 뒤에 붙는다 — PR-6·10)
      */
-    public Long foodRemainingSeconds(Instant now) {
-        if (careStartedAt == null) {
-            return null;
+    private void onSleep(Instant at, SleepKind kind, boolean manual) {
+        sleepKind = kind;
+        sleptAt = at;
+        if (kind == SleepKind.NIGHT) {
+            if (todayCareMiss == 0) {
+                zeroMissDays += 1;
+            }
+            todayCareMiss = 0;
+            todayGames = 0;
+            todayPetCount = 0;
+            todayCareIntimacy = 0;
+            todayBathDone = false;
+            snackStreak = 0;
+            overslept = false;
         }
-        return remaining(foodAt, ZzalRules.FOOD_CHARGE, frozenNow(now));
+        if (manual) {
+            sleepWakeCount += 1;
+            if (kind == SleepKind.NIGHT) {
+                happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.SLEEP_HAPPINESS);
+                addIntimacy(ZzalRules.SLEEP_INTIMACY);
+            }
+            lastCaredAt = at;
+        }
     }
 
-    private static Long remaining(Instant startedAt, Duration duration, Instant now) {
-        if (startedAt == null) {
+    /** 깨는 순간의 훅. 밤잠에서 깨면 오늘 기상 시각이 된다(채팅 부름의 기준). 낮잠은 아니다. */
+    private void onWake(Instant at, boolean manual) {
+        SleepKind was = sleepKind;
+        sleepKind = null;
+        sleptAt = null;
+        if (was == SleepKind.NIGHT) {
+            wokeAt = at;
+            overslept = !manual;
+        } else if (was == SleepKind.NAP) {
+            napCount += 1;
+        }
+        if (manual) {
+            sleepWakeCount += 1;
+            // 보상은 밤잠에만(api-v2.md 해석 16). 낮잠은 재우기·깨우기 둘 다 0 — 아기 시간에 친밀도를 파밍하지 않게.
+            if (was == SleepKind.NIGHT) {
+                addIntimacy(ZzalRules.WAKE_INTIMACY);
+            }
+            lastCaredAt = at;
+        }
+    }
+
+    // ── 돌봄 (정본 4장) — "할 수 있나" 는 서비스가 묻고, 여기는 결과만 적는다 ──
+
+    /** 밥. 배부름 +1, 재고 -1. 흔적은 늘지 않는다(api-v2.md 해석 1). */
+    public void feed(Instant now) {
+        boolean wasFull = food >= ZzalRules.FOOD_MAX;
+        fullness = Math.min(ZzalRules.GAUGE_MAX, fullness + ZzalRules.FEED_FULLNESS);
+        food -= 1;
+        if (wasFull) {
+            foodAt = now;   // 가득이라 멈춰 있던 충전 시계를 다시 켠다
+        }
+        feeds += 1;
+        careIntimacy();
+        afterNonSnack(now);
+    }
+
+    /** 간식. 행복 +1. 연속 5개면 배탈(병은 PR-8 — 여기서는 연속만 센다). */
+    public void snack(Instant now) {
+        happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.SNACK_HAPPINESS);
+        snackStreak += 1;
+        lastCaredAt = now;
+    }
+
+    /** 쓰다듬기. 행복 0, 친밀도 +5(하루 3회까지). 넘어도 반응 동작은 나온다(16장) — 그래서 거절하지 않는다. */
+    public void pet(Instant now) {
+        pets += 1;
+        if (todayPetCount < ZzalRules.PET_INTIMACY_PER_DAY) {
+            todayPetCount += 1;
+            addIntimacy(ZzalRules.PET_INTIMACY);
+        }
+        afterNonSnack(now);
+    }
+
+    /** 청소. 흔적 0. */
+    public void clean(Instant now) {
+        trash = 0;
+        cleans += 1;
+        careIntimacy();
+        afterNonSnack(now);
+    }
+
+    /** 목욕. 흔적 0 + 행복 +1. 하루 1회(서비스가 막는다). */
+    public void bath(Instant now) {
+        trash = 0;
+        happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.BATH_HAPPINESS);
+        todayBathDone = true;
+        bathCount += 1;
+        careIntimacy();
+        afterNonSnack(now);
+    }
+
+    /** 약. 병은 PR-8 에서 붙는다 — 지금은 친밀도와 연속 리셋만. */
+    public void medicine(Instant now) {
+        careIntimacy();
+        afterNonSnack(now);
+    }
+
+    /** 아직 병이 없다(PR-8). 서비스의 간식·게임 거절 판정이 이걸 본다. */
+    public boolean isSick() {
+        return false;
+    }
+
+    /** 간식이 아닌 행동 — 연속 간식이 끊긴다(api-v2.md 해석 2). */
+    private void afterNonSnack(Instant now) {
+        snackStreak = 0;
+        lastCaredAt = now;
+    }
+
+    /** 밥·청소·목욕·약 친밀도 +5, 하루 합산 30 상한(8장). */
+    private void careIntimacy() {
+        int room = ZzalRules.CARE_INTIMACY_DAILY_CAP - todayCareIntimacy;
+        int give = Math.min(ZzalRules.CARE_INTIMACY, Math.max(0, room));
+        if (give > 0) {
+            todayCareIntimacy += give;
+            addIntimacy(give);
+        }
+    }
+
+    private void addIntimacy(int by) {
+        intimacy = Math.min(ZzalRules.INTIMACY_MAX, intimacy + by);
+        intimacyPeak = Math.max(intimacyPeak, intimacy);
+    }
+
+    // ── 방문·성격·꾸미기·공유 (정본 3·10·15장) ───────────────────────────
+
+    /**
+     * 앱을 열었다. <b>그날(KST) 처음이면 함께한 날 +1</b>(정본 3장·16장 "기상 전이라도"). 여행 중 제외는 PR-11.
+     *
+     * @return 오늘 처음 연 것인가
+     */
+    public boolean visit(Instant now) {
+        lastSeenAt = now;
+        LocalDate today = AwakeClock.dateOf(now);
+        if (today.equals(lastVisitDate)) {
+            return false;
+        }
+        lastVisitDate = today;
+        daysTogether += 1;
+        return true;
+    }
+
+    /** 성격 그룹·세계관 한 줄. 언제든 바꾼다(정본 10장). */
+    public void choosePersonality(Personality personality, String world) {
+        this.personality = personality;
+        this.world = world == null || world.isBlank() ? null : world;
+    }
+
+    /** 배경 바꾸기. 열렸는지는 서비스가 묻는다(2층 4종). 값은 검증하지 않는다(해석 6). */
+    public void changeBackground(String background) {
+        this.background = background;
+    }
+
+    /** 다운로드·공유 — 서버는 횟수만 센다(튜토리얼 25분의 "했다" 가 되는 사실). 돌봄이 아니라 lastCaredAt 은 안 찍는다. */
+    public void share() {
+        shares += 1;
+    }
+
+    // ── 보상 (후기·미니게임) ──────────────────────────────────────────────
+
+    /** 밥 하나를 더 준다. 상한을 넘기지 않는다(넘기면 충전 시계가 꼬인다). */
+    public void grantFood(Instant now) {
+        if (food >= ZzalRules.FOOD_MAX) {
+            return;
+        }
+        boolean clockWasOff = foodAt == null;
+        food += 1;
+        if (food >= ZzalRules.FOOD_MAX) {
+            foodAt = null;
+        } else if (clockWasOff) {
+            foodAt = now;
+        }
+    }
+
+    /** 행복 하나. 미니게임 승리(7장). */
+    public void grantHappiness() {
+        happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.GAME_WIN_HAPPINESS);
+    }
+
+    // ── 조회용 파생값 ─────────────────────────────────────────────────────
+
+    /** 다음 밥이 찰 때까지(초). 가득이면 null. 벽시계라 자는 동안도 줄어든다. */
+    public Long foodRemainingSeconds(Instant now) {
+        if (foodAt == null) {
             return null;
         }
-        long left = Duration.between(now, startedAt.plus(duration)).getSeconds();
-        return Math.max(0, left);
+        return Math.max(0, Duration.between(now, foodAt.plus(ZzalRules.FOOD_CHARGE)).getSeconds());
     }
+
+    /** 대기 동작 우선순위 — 병 > 배부름 0 > 행복 0 > 흔적 3+ > 보통(정본 4·11장). */
+    public Mood mood() {
+        if (isSick()) {
+            return Mood.SICK;
+        }
+        if (fullness == 0) {
+            return Mood.HUNGRY;
+        }
+        if (happiness == 0) {
+            return Mood.SAD;
+        }
+        if (trash >= ZzalRules.DIRTY_TRASH_AT) {
+            return Mood.DIRTY;
+        }
+        return Mood.NORMAL;
+    }
+
+    public enum Mood { SICK, HUNGRY, SAD, DIRTY, NORMAL }
+
+    // ── getter ────────────────────────────────────────────────────────────
 
     public Long getId() {
         return id;
@@ -670,12 +909,56 @@ public class ZzalPet {
         return identityText;
     }
 
+    public String getHatchPipelineVersion() {
+        return hatchPipelineVersion;
+    }
+
+    public void setHatchPipelineVersion(String version) {
+        this.hatchPipelineVersion = version;
+    }
+
     public PetPhase getPhase() {
         return phase;
     }
 
     public DeathReason getDeathReason() {
         return deathReason;
+    }
+
+    public Instant getHatchStartedAt() {
+        return hatchStartedAt;
+    }
+
+    public Instant getHatchedAt() {
+        return hatchedAt;
+    }
+
+    public Instant getSettledAt() {
+        return settledAt;
+    }
+
+    public SleepKind getSleepKind() {
+        return sleepKind;
+    }
+
+    public Instant getSleptAt() {
+        return sleptAt;
+    }
+
+    public Instant getWokeAt() {
+        return wokeAt;
+    }
+
+    public int getNapCount() {
+        return napCount;
+    }
+
+    public boolean isOverslept() {
+        return overslept;
+    }
+
+    public long getDevClockOffsetSeconds() {
+        return devClockOffsetSeconds;
     }
 
     public int getFullness() {
@@ -690,44 +973,112 @@ public class ZzalPet {
         return trash;
     }
 
+    public int getClean() {
+        return ZzalRules.TRASH_MAX - trash;
+    }
+
     public int getFood() {
         return food;
     }
 
-    public int getTrainStack() {
-        return trainStack;
+    public int getCareMiss() {
+        return careMiss;
     }
 
-    public int getTrainGain() {
-        return trainGain;
+    public int getTodayCareMiss() {
+        return todayCareMiss;
     }
 
-    public Instant getTrainStartedAt() {
-        return trainStartedAt;
+    public int getIntimacy() {
+        return intimacy;
     }
 
-    public Instant getSleepStartedAt() {
-        return sleepStartedAt;
+    public int getIntimacyPeak() {
+        return intimacyPeak;
     }
 
-    public int getUnlockedCount() {
-        return unlockedCount;
+    public int getTodayCareIntimacy() {
+        return todayCareIntimacy;
     }
 
-    public Instant getHatchStartedAt() {
-        return hatchStartedAt;
+    public int getTodayPetCount() {
+        return todayPetCount;
     }
 
-    public Instant getHatchedAt() {
-        return hatchedAt;
+    public int getTodayGames() {
+        return todayGames;
     }
 
-    public Instant getCareStartedAt() {
-        return careStartedAt;
+    public boolean isTodayBathDone() {
+        return todayBathDone;
     }
 
-    public Instant getTutorialDoneAt() {
-        return tutorialDoneAt;
+    public int getSnackStreak() {
+        return snackStreak;
+    }
+
+    public int getFeeds() {
+        return feeds;
+    }
+
+    public int getPets() {
+        return pets;
+    }
+
+    public int getCleans() {
+        return cleans;
+    }
+
+    public int getShares() {
+        return shares;
+    }
+
+    public int getChatAnswers() {
+        return chatAnswers;
+    }
+
+    public int getSleepWakeCount() {
+        return sleepWakeCount;
+    }
+
+    public int getBathCount() {
+        return bathCount;
+    }
+
+    public int getGameStarts() {
+        return gameStarts;
+    }
+
+    public int getLeftRightWins() {
+        return leftRightWins;
+    }
+
+    public int getZeroMissDays() {
+        return zeroMissDays;
+    }
+
+    public int getDaysTogether() {
+        return daysTogether;
+    }
+
+    public LocalDate getLastVisitDate() {
+        return lastVisitDate;
+    }
+
+    public Instant getLastSeenAt() {
+        return lastSeenAt;
+    }
+
+    public Personality getPersonality() {
+        return personality;
+    }
+
+    public String getWorld() {
+        return world;
+    }
+
+    public String getBackground() {
+        return background;
     }
 
     public Instant getLastCaredAt() {

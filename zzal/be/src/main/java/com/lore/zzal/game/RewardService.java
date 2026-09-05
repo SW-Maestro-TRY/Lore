@@ -51,11 +51,10 @@ public class RewardService {
         if (pet == null) {
             return;
         }
-        pet.applyElapsed(now);
+        pet.settle(pet.now(now));
         switch (kind) {
-            case FOOD -> pet.grantFood(now);
-            case TRAIN -> pet.grantTrain();
-            case HAPPINESS -> pet.pet(now);
+            case FOOD -> pet.grantFood(pet.now(now));
+            case HAPPINESS -> pet.grantHappiness();
             case NONE -> {
             }
         }
