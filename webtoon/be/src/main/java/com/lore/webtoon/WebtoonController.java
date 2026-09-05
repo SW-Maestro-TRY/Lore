@@ -41,8 +41,10 @@ import java.nio.charset.StandardCharsets;
  * <h2>딱 하나, 만들기는 그냥 안 지나간다</h2>
  *
  * {@code POST /api/webtoon/nh/create} 는 <b>여기서부터 실제로 돈이 나가는</b>
- * 유일한 자리다(실측 한 편 1,148원). 그래서 이 주소만 넘기기 전에 오늘 몫이
- * 남았는지 본다({@link SpendGuard}). 나머지는 그대로 흘러간다.
+ * 유일한 자리다(실측 한 편 1,148원). 그래서 이 주소만 넘기기 전에 두 번
+ * 멈춰 세운다 — 오늘 <b>전체</b> 몫이 남았는지({@link SpendGuard}), 그리고
+ * 로그인 안 한 <b>이 사람</b>의 몫이 남았는지({@link GuestGate}). 나머지는
+ * 그대로 흘러간다.
  */
 @RestController
 public class WebtoonController {
@@ -55,10 +57,12 @@ public class WebtoonController {
 
     private final HarnessGateway gateway;
     private final SpendGuard guard;
+    private final GuestGate guests;
 
-    public WebtoonController(HarnessGateway gateway, SpendGuard guard) {
+    public WebtoonController(HarnessGateway gateway, SpendGuard guard, GuestGate guests) {
         this.gateway = gateway;
         this.guard = guard;
+        this.guests = guests;
     }
 
     /**
@@ -76,7 +80,12 @@ public class WebtoonController {
         // 만들기만 먼저 확인한다 — 시작한 뒤에 막으면 이미 돈이 나간 뒤다.
         // 나머지(읽기·목록·편집)는 그냥 지나간다.
         if (HttpMethod.POST.equals(method) && CREATE.equals(request.getRequestURI())) {
+            // 전체 몫을 먼저 본다. 오늘 다 찼으면 로그인해도 못 만들므로,
+            // 게스트에게 "로그인하면 됩니다" 라고 말하면 거짓말이 된다.
             String blocked = guard.whyBlocked();
+            if (blocked == null) {
+                blocked = guests.useOrBlock(request);
+            }
             if (blocked != null) {
                 // 하네스가 사유를 한글로 적어 보내는 것과 **같은 모양**으로 답한다.
                 // 화면(프로토타입에서 옮겨 온 것)이 그 모양만 읽어서, 여기서

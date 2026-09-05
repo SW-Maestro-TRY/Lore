@@ -81,6 +81,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import overlay                      # 편집실 렌더링·굽기 재사용 (그대로, 안 고침)
+import usage_report
 import pipeline as classic          # write_character() 재사용 — 폼 -> character.json
 
 HERE = Path(__file__).resolve().parent
@@ -261,7 +262,14 @@ class NHJob:
                     self.add_log(line)
                     on_line(line)
         self._proc = None
-        return proc.wait()
+        code = proc.wait()
+        # 이 단계에서 나간 돈을 서버에 올린다. **단계마다** 올리는 이유는,
+        # 한 편이 다 끝나야 올리면 중간에 죽은 작업의 비용이 영영 안 잡히기
+        # 때문이다 — 죽어도 돈은 이미 나갔다. 올리다 실패해도 여기서 멈추지
+        # 않는다(usage_report.push 가 예외를 안 던진다). 파일이 정본이고
+        # 서버는 사본이라, 못 올린 것은 다음 단계에서 같이 다시 올라간다.
+        usage_report.push(self.run_id, self.add_log)
+        return code
 
     def _stitch(self) -> tuple[bool, str]:
         result = subprocess.run(
@@ -378,6 +386,9 @@ def _run_story_phase(job: NHJob) -> None:
         if not run_id:
             return _fail(job, "run_id 를 읽지 못했습니다")
         job.run_id = run_id
+        # 첫 단계는 run_id 를 모르는 채로 돌아서 위 _run 의 올리기가 그냥
+        # 지나갔다. 이름을 알게 된 지금 그 몫을 올린다.
+        usage_report.push(run_id, job.add_log)
         # 그림체를 run 에 남긴다 — 나중에 편집실에서 한 장만 다시 그릴 때
         # 이 값이 없으면 그 장만 다른 화풍으로 나온다(write_style 참고).
         write_style(run_id, job._env().get("NH_STYLE", ""))
