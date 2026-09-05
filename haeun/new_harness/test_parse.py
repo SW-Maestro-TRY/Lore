@@ -1746,10 +1746,64 @@ def test_episode_review() -> None:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_user_story_seed() -> None:
+    """사람이 적은 이야기가 story 단계에 실제로 들어가는가.
+
+    가장 중요한 것은 **안 적었을 때 예전과 한 글자도 안 달라지는 것**이다.
+    이 값이 붙는 자리는 4개 후보를 만드는 프롬프트라, 조용히 한 문단이
+    늘면 옛 run 을 다시 돌렸을 때 다른 이야기가 나온다.
+    """
+    base = {"name": "도하람", "description": "야간 편의점 알바",
+            "fields": {}, "genre": "", "photos": [], "photo_note": "", "story": ""}
+
+    # --- 안 적었을 때 ---
+    check("안 적으면 블록이 아예 없다", R.user_story_block(base), "")
+    before = R.story_input_block(base)
+    check("안 적으면 입력이 예전 그대로", before, R.story_input_block(dict(base)))
+    ok("안 적으면 자리표시조차 없다", "사용자가 직접 적은 이야기" not in before)
+
+    withgenre = dict(base, genre="일상 미스터리")
+    ok("장르가 있어도 마찬가지",
+       "사용자가 직접 적은 이야기" not in R.story_input_block(withgenre))
+
+    # --- 적었을 때 ---
+    seed = "남이 잃어버린 물건을 찾아주다 보니 아직 잃어버리지도 않은 물건을 찾게 된다."
+    got = R.story_input_block(dict(base, story=seed))
+    ok("적은 것이 그대로 들어간다", seed in got)
+    ok("프롬프트의 '줄거리는 받지 않는다' 를 덮는다", "아무것도 안 주어졌을 때의 규칙" in got)
+    ok("넷 다 여기서 출발하라고 한다", "네 후보 모두 이 이야기에서 출발한다" in got)
+    # 넷을 같은 이야기로 만들면 고를 것이 없어진다 — 그걸 못 박는지 본다
+    ok("그래도 갈라지라고 한다", "가는 길은 서로 갈라져야" in got)
+
+    # 장르가 있을 때는 장르 참고자료 **뒤**에 와야 한다 — 모델은 뒤에 온
+    # 것을 더 세게 듣는다(compose 의 주석과 같은 이유).
+    both = R.story_input_block(dict(base, genre="무협", story=seed))
+    ok("적은 것이 장르 자료보다 뒤에 온다",
+       both.index("사용자가 직접 적은 이야기") > both.rindex("장르"))
+
+    # --- 파일에서 읽어 올 때 ---
+    import json, shutil, tempfile
+    root = Path(tempfile.mkdtemp())
+    try:
+        doc = {"name": "도하람", "character": "야간 편의점 알바", "fields": {},
+               "genre": "일상 미스터리", "story": seed, "photo": []}
+        (root / "character.json").write_text(json.dumps(doc, ensure_ascii=False),
+                                             encoding="utf-8")
+        got = R.read_character(root)
+        check("character.json 의 story 를 안 버린다", got["story"], seed)
+        # 옛 character.json 에는 이 칸이 아예 없다
+        (root / "character.json").write_text(
+            json.dumps({k: v for k, v in doc.items() if k != "story"},
+                       ensure_ascii=False), encoding="utf-8")
+        check("칸이 없는 옛 파일은 빈 문자열", R.read_character(root)["story"], "")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main() -> int:
     for fn in (test_directions, test_detail, test_detail_events,
                test_detail_pages, test_review_and_fix, test_page_review,
-               test_story_review, test_episode_review,
+               test_story_review, test_episode_review, test_user_story_seed,
                test_board, test_gate_board, test_directing_warnings,
                test_gate_readable, test_spec,
                test_sheet_prompt, test_input, test_pages, test_cut_weight,

@@ -1288,11 +1288,14 @@ function collect() {
 
 /* new_harness 가 받는 입력만 추린다.
  *
- * 세계관·줄거리·등신·컷 배치·전문 모드·그림 검수 횟수는 story-harness +
- * webtoon-harness 흐름의 값이라 여기서는 안 보낸다 — new_harness 는
- * 이름·설명·항목·장르·그림체·사진만 읽는다(new_harness/README.md 의 "입력").
- * 폼에 그 칸이 그대로 남아 있는 것은 일부러다: 입력 화면까지 손대는 것은
- * 이번 범위가 아니고, 안 보내는 값은 결과를 바꾸지 않는다. */
+ * 세계관·등신·컷 배치·전문 모드·그림 검수 횟수는 story-harness +
+ * webtoon-harness 흐름의 값이라 여기서는 안 보낸다 — 안 보내는 값은
+ * 결과를 바꾸지 않는다.
+ *
+ * **줄거리(story)는 보낸다.** 예전에는 이것도 뺐는데, 입력 화면이
+ * 「어떤 이야기를 만들까요?」를 한 단계로 통째로 물어보고 확인 화면에서
+ * 다시 보여준 다음 조용히 버리고 있었다 — 사람은 자기가 적은 것이 반영된
+ * 줄 안다. 안 적었으면 빈 문자열이 가고 하네스도 아무것도 안 붙인다. */
 function collectNH() {
   const form = $("#form");
   const fields = {};
@@ -1306,6 +1309,7 @@ function collectNH() {
     photo_note: form.photo_note.value.trim(),
     fields,
     genre:      form.genre.value.trim(),
+    story:      form.story.value.trim(),
     style:      form.style.value,
     photos_data: photos,
     agree_ip:   $("#ipAgreeCheck").checked,
@@ -1475,6 +1479,13 @@ async function nhTick() {
     // (/api/runs/<id>/result 가 new_harness run 도 같은 모양으로 준다).
     sessionStorage.removeItem("lore_job_kind");
     nhMode = false;
+    // **이 브라우저가 시킨 작업의 결과다.** 남겨 두지 않으면 앱이 남의
+    // 작품으로 보고(isMyRun) 내려받기·편집실로 가기·서버에 저장하기·
+    // 공유하기를 통째로 감춘다 — 방금 자기가 만든 작품인데 가져갈 길이
+    // 하나도 없어진다(실측). classic 흐름은 showResult 에서 같은 일을
+    // 하는데, new_harness 는 job 이 아니라 run_id 로 결과를 열어서
+    // 그 자리를 안 지나간다.
+    rememberMyRun(state.run_id);
     showRunResult(state.run_id, 1);
   } else if (state.status === "error") {
     clearInterval(poll); poll = null;

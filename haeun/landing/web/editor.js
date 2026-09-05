@@ -88,9 +88,23 @@ function save() {
 
 /* ── 서버로 올리기 ──────────────────────────────────────────────────────
    끌 때마다 올리면 초당 수십 번이 된다. 손을 멈추고 600ms 뒤에 한 번만 올린다.
-   실패해도 조용히 넘어간다 — localStorage 에는 이미 들어갔고, "이미지로 뽑기"
-   가 어차피 지금 상태를 통째로 다시 올린다. 여기서 토스트를 띄우면 서버가
-   잠깐 느릴 때마다 편집을 방해한다. */
+   토스트는 안 띄운다 — 서버가 잠깐 느릴 때마다 편집을 방해한다. 대신 제목
+   밑 한 줄(#savedNote)로 상태만 말한다.
+
+   예전에는 이것 말고 「저장」 단추가 따로 있었는데, 눌러도 여기와 **똑같은
+   일**을 했다 — 누르든 안 누르든 결과가 같은 단추라, 하는 일 없이 "안 누르면
+   날아가나" 만 만들었다. 단추를 없앤 대신 실패를 눈에 보이게 한다(예전에는
+   조용히 넘어가서, 안 올라간 것을 알 방법이 없었다). */
+
+/* 평소에는 아무 말도 안 한다 — 잘 되고 있을 때까지 떠들면 그게 곧 소음이다. */
+function paintSaved(stateName) {
+  const el = document.getElementById("savedNote");
+  if (!el) return;
+  el.dataset.state = stateName;
+  el.textContent = stateName === "saving" ? "저장하는 중…"
+                 : stateName === "fail" ? "저장하지 못했습니다 — 연결을 확인해 주세요 (이 브라우저에는 남아 있습니다)"
+                 : "";
+}
 let pushT = null, pushing = false, pushDirty = false;
 
 /* 그림이 화면에서 몇 px 로 보이는가 — 글자 크기를 그림 해상도로 옮길 때 쓴다.
@@ -122,13 +136,18 @@ async function pushNow() {
   if (!RUN_ID) return;                       // 샘플은 올릴 곳이 없다
   if (pushing) { pushDirty = true; return; }
   pushing = true;
+  paintSaved("saving");
+  let ok = false;
   try {
-    await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
+    const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
       { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(overlayPayload()) });
+    ok = res.ok;
   } catch { /* 아래에서 다시 시도된다 */ }
   pushing = false;
-  if (pushDirty) { pushDirty = false; pushSoon(); }
+  // 아직 올릴 것이 남았으면 상태를 "됐다"로 되돌리지 않는다 — 곧 다시 올린다.
+  if (pushDirty) { pushDirty = false; pushSoon(); return; }
+  paintSaved(ok ? "idle" : "fail");
 }
 
 function pushSoon() {
@@ -791,6 +810,9 @@ function wireItem(no, el) {
     r.selectNodeContents(text);
     r.collapse(false);                         // 커서를 글 끝에
     const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r);
+    // 막대를 다시 그려 「완료」를 낸다 — pick() 이 그린 막대는 글쓰기로
+    // 들어가기 전이라 그 단추가 없다.
+    paintProps();
   }
   el.addEventListener("dblclick", () => { pick(); enterEdit(); });
 
@@ -952,7 +974,7 @@ function killBar() {
   document.getElementById(BAR_ID)?.remove();
 }
 
-function barHTML(it) {
+function barHTML(it, editing) {
   const b = (act, label, title, cls = "") =>
     `<button type="button" class="ib ${cls}" data-act="${act}" title="${title}">${label}</button>`;
   const tailed = it.type === "bubble" && TAILED.has(it.variant);
@@ -960,6 +982,18 @@ function barHTML(it) {
   const tailBtn = (v, label) =>
     `<button type="button" class="ib${cur === v ? " is-on" : ""}" data-tail="${v}"` +
     ` title="꼬리 ${label}">${label}</button>`;
+  // 글을 고치는 중에는 「완료」 하나만 낸다. 나머지(크기·꼬리·복제·삭제)는
+  // 다 쓰고 나서 할 일이라, 키보드가 화면을 반쯤 덮은 상태에서 같이
+  // 늘어놓으면 정작 눌러야 할 것이 안 보인다.
+  //
+  // **이 단추가 없으면 폰에서 글쓰기를 끝낼 방법이 없다.** 끝내는 것은
+  // 원래 Esc 하나였는데 폰에는 Esc 가 없고, 바깥을 누르는 길은 올라온
+  // 키보드에 가려서 안 보인다 — 그대로 두면 다 쓰고 나서 말풍선을 옮길
+  // 수가 없다(글 고치는 중에는 끄는 것이 글자 고르기라, 그건 일부러 그렇다).
+  if (editing) {
+    return b("done", "완료", "다 썼습니다 — 이제 옮기거나 크기를 고칠 수 있습니다",
+             "is-done");
+  }
   return [
     b("smaller", "ᴀ⁻", "글자 작게"),
     b("bigger", "ᴀ⁺", "글자 크게"),
@@ -986,7 +1020,7 @@ function paintProps() {
   const bar = document.createElement("div");
   bar.id = BAR_ID;
   bar.className = "item-bar";
-  bar.innerHTML = barHTML(it);
+  bar.innerHTML = barHTML(it, el.classList.contains("editing"));
   layer.appendChild(bar);
 
   const box = layer.getBoundingClientRect();
@@ -1010,6 +1044,12 @@ function paintProps() {
 /* 손잡이 줄이 하는 일들. 키보드 단축키도 같은 것을 부른다 — 두 길이 갈리면
    눌러서 되는 것과 눌러서 안 되는 것이 생긴다. */
 const ACTS = {
+  // 글쓰기를 끝낸다. 저장·다시 그리기는 blur 처리가 이미 맡고 있어서
+  // 여기서는 초점만 뗀다.
+  done: () => {
+    document.querySelector(
+      `#scene-${sel?.sceneNo} .item[data-id="${sel?.id}"].editing [data-edit]`)?.blur();
+  },
   bigger: () => bumpSize(+2),
   smaller: () => bumpSize(-2),
   front: () => {
@@ -1374,20 +1414,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     panel.hidden = !panel.hidden;
   });
   $("#scriptClose")?.addEventListener("click", () => { $("#scriptPanel").hidden = true; });
-
-  $("#saveBtn").addEventListener("click", async () => {
-    save();
-    if (!RUN_ID) return toast("샘플입니다 — 얹은 것은 이 브라우저에만 저장됩니다.");
-    clearTimeout(pushT);
-    try {
-      const res = await fetch(`/api/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
-        { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(overlayPayload()) });
-      const out = await res.json();
-      if (!res.ok) throw new Error(out.error || "저장하지 못했습니다");
-      toast(`작품 폴더에 저장했습니다 — 얹은 것 ${out.items}개`);
-    } catch (err) { toast(err.message); }
-  });
 
   // 이미지로 뽑기 — 얹은 것을 그림에 구워서 내려받는다.
   // 저장과 굽기를 한 번에 보낸다. 따로 왕복하면 그 사이에 실패했을 때 화면에

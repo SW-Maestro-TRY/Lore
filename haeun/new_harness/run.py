@@ -72,9 +72,15 @@ def read_character(path: Path) -> dict:
     폴더를 주면 그 안의 character.json 을 찾는다 — jobs/<id> 를 그대로
     넘길 수 있게 하기 위해서다.
 
-    story(줄거리)는 **읽고 버린다.** story_prompt 가 "줄거리는 받지 않는다,
-    네가 새로운 이야기를 만들어야 한다" 고 못 박고 있어서, 넘기면 프롬프트와
-    입력이 서로 반대를 말하게 된다.
+    story(줄거리)는 **사람이 직접 적었을 때만** 들고 온다. story_prompt 는
+    "줄거리는 받지 않는다, 네가 새로운 이야기를 만들어야 한다" 고 못 박고
+    있는데, 그것은 **아무것도 안 주어졌을 때의 규칙**이다 — 랜딩 화면은
+    「어떤 이야기를 만들까요?」를 한 단계로 물어보고 확인 화면에서 다시
+    보여준다. 물어보고 버리면 사람은 자기가 적은 것이 반영된 줄 안다.
+
+    프롬프트 원문은 **안 고친다.** 사람이 적은 것이 있을 때만 입력 블록에
+    한 문단을 더해 그 규칙을 덮는다(story_input_block) — 안 적었으면 블록이
+    아예 안 붙어서 예전 run 은 프롬프트가 한 글자도 안 바뀐다.
     """
     if path.is_dir():
         path = path / "character.json"
@@ -92,6 +98,7 @@ def read_character(path: Path) -> dict:
         "genre": doc.get("genre"),
         "photos": photos,
         "photo_note": doc.get("photo_note"),
+        "story": doc.get("story"),
     })
 
 
@@ -113,6 +120,7 @@ def normalize(raw: dict) -> dict:
         "genre": str(raw.get("genre") or "").strip(),
         "photos": photos,
         "photo_note": str(raw.get("photo_note") or "").strip(),
+        "story": str(raw.get("story") or "").strip(),
     }
 
 
@@ -152,6 +160,34 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
     return "\n".join(lines) + "\n"
 
 
+def user_story_block(char: dict) -> str:
+    """사람이 「어떤 이야기를 만들까요?」에 적은 것. 안 적었으면 빈 문자열.
+
+    story_prompt 는 "줄거리는 받지 않는다" 로 시작한다. 그것을 여기서
+    덮는다 — **프롬프트 파일은 안 고치고**, 사람이 적은 것이 있을 때만 이
+    문단이 붙는다. `compose` 가 입력을 프롬프트 **뒤**에 놓으므로(모델은
+    뒤에 온 것을 더 세게 듣는다) 이 문단이 이긴다. 안 적었으면 블록이
+    아예 안 붙어서 예전 run 은 프롬프트가 한 글자도 안 바뀐다.
+
+    **후보 4개를 다 같은 이야기로 만들라는 뜻은 아니다.** 그러면 고를
+    것이 없어진다 — 출발점만 공유하고 가는 길은 갈라지게 못 박는다.
+    """
+    seed = (char.get("story") or "").strip()
+    if not seed:
+        return ""
+    return ("\n## 사용자가 직접 적은 이야기\n\n"
+            "앞에서 「줄거리는 받지 않는다」고 한 것은 **아무것도 안 주어졌을 "
+            "때의 규칙**이다. 아래는 이 작품을 만들어 달라고 한 사람이 직접 "
+            "적은 것이라, 여기서는 이것이 출발점이다.\n\n"
+            f"> {seed}\n\n"
+            "- **네 후보 모두 이 이야기에서 출발한다.** 하나라도 여기서 "
+            "벗어나면 사람이 적은 것을 버린 것이다.\n"
+            "- 그렇다고 넷을 같은 이야기로 만들지 마라. 출발점만 같고 **가는 "
+            "길은 서로 갈라져야** 고를 것이 생긴다.\n"
+            "- 적힌 것이 한 줄뿐이어도 그 한 줄이 1화 안에서 **실제로 일어나야** "
+            "한다. 배경 설정으로만 깔고 넘어가지 마라.\n")
+
+
 def story_input_block(char: dict) -> str:
     """이야기 단계의 입력 — 장르가 주어졌을 때만 장르 참고 자료를 더한다.
 
@@ -165,7 +201,7 @@ def story_input_block(char: dict) -> str:
     block = input_block(char).rstrip("\n")
     genre = char["genre"]
     if not genre:
-        return block + "\n"
+        return block + "\n" + user_story_block(char)
     lines = [block]
     lore = genre_lore_for(genre)
     if lore:
@@ -173,7 +209,7 @@ def story_input_block(char: dict) -> str:
     world = world_text_for(genre)
     if world:
         lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines) + "\n" + user_story_block(char)
 
 
 def load_prompt(name: str) -> str:

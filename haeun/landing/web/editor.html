@@ -36,12 +36,6 @@
         <button type="button" class="credit-more" id="ledgerBtn">내역</button>
       </div>
     </div>
-    <!-- 폰에서는 이 줄이 통째로 **화면 아래 단추줄**이 된다 (editor.css 의
-         .ed-top-right 참고). 머리줄 하나에 로고·크레딧·단추 셋을 다 넣으면
-         590px 가 필요한데 컬럼은 480px 이라, 「저장」과 「이미지로 뽑기」가
-         화면 밖으로 밀려나 아예 안 보였다(실측). 넓은 화면에서만 머리에
-         남는다. 도구 손잡이도 같은 줄에 들어와서, 폰에서는 네 단추가 엄지
-         닿는 자리에 나란히 선다. -->
   </div>
 
   <div class="ed-strip">
@@ -108,11 +102,15 @@
              대사를 확인하는 것은 읽는 일이 아니라 **고치는 일** 옆에 있어야 한다.
              말풍선을 얹으면서 원래 대사가 무엇이었는지 보는 자리다. -->
         <button type="button" class="btn btn-quiet btn-sm" id="scriptBtn">대사</button>
-        <button type="button" class="btn btn-quiet btn-sm" id="saveBtn">저장</button>
         <!-- 얹은 것을 진짜 그림에 굽는다. 여기까지 와야 가져갈 것이 생긴다 —
              이 단추가 없던 동안, 배치한 말풍선은 브라우저 밖으로 나갈 길이 없었다. -->
         <button type="button" class="btn btn-primary btn-sm" id="bakeBtn">이미지로 뽑기</button>
       </div>
+      <!-- 얹은 것은 손을 멈추면 저절로 올라간다(editor.js 의 pushSoon). 예전에는
+           「저장」 단추가 그 옆에 있었는데, 누르든 안 누르든 같은 일이 일어나는
+           단추라 "안 누르면 날아가나" 만 만들었다. 단추를 없앤 대신 **올라갔는지
+           아닌지를 여기서 말한다** — 조용히 실패하면 그것만 모르게 되기 때문이다. -->
+      <p class="ed-saved" id="savedNote" data-state="idle"></p>
     </div>
 
     <!-- 회차 고르개. 한 편뿐인 작품에서는 editor.js 가 통째로 감춘다. -->
