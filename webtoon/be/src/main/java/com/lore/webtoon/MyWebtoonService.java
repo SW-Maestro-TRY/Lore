@@ -82,17 +82,33 @@ public class MyWebtoonService {
      *
      * 한 uid 를 못 읽어도 나머지는 준다 — 기기 하나 때문에 목록 전체가
      * 사라지는 것이 제일 나쁘다.
+     *
+     * <b>다만 하나도 못 읽었으면 빈 목록을 주지 않고 실패로 답한다.</b> 빈
+     * 목록은 "작품이 없다" 는 뜻인데, 못 읽은 것은 그 말이 아니다. 둘을
+     * 뭉개면 하네스가 죽어 있을 때 화면이 <b>"아직 만든 웹툰이 없어요"</b> 라고
+     * 말한다 — 만든 사람에게 그건 작품이 사라졌다는 소리로 읽힌다.
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> myRuns(Long userId) {
         Map<String, Map<String, Object>> merged = new LinkedHashMap<>();
-        for (BrowserLink one : links.findByUserId(userId)) {
-            for (Map<String, Object> run : runsOf(one.getBrowserUid())) {
+        List<BrowserLink> mine = links.findByUserId(userId);
+        int failed = 0;
+        for (BrowserLink one : mine) {
+            List<Map<String, Object>> got = runsOf(one.getBrowserUid());
+            if (got == null) {
+                failed++;
+                continue;
+            }
+            for (Map<String, Object> run : got) {
                 Object id = run.get("run_id");
                 if (id != null) {
                     merged.putIfAbsent(String.valueOf(id), run);
                 }
             }
+        }
+        if (!mine.isEmpty() && failed == mine.size()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR,
+                    "작품 목록을 가져오지 못했습니다");
         }
         return new ArrayList<>(merged.values());
     }
@@ -138,7 +154,11 @@ public class MyWebtoonService {
     /** 내 계정에 이어진 브라우저 중 이 작품을 만든 uid. 내 것이 아니면 null. */
     private String ownerUidOf(Long userId, String runId) {
         for (BrowserLink one : links.findByUserId(userId)) {
-            for (Map<String, Object> run : runsOf(one.getBrowserUid())) {
+            List<Map<String, Object>> got = runsOf(one.getBrowserUid());
+            if (got == null) {
+                continue;                       // 못 읽은 기기는 건너뛴다
+            }
+            for (Map<String, Object> run : got) {
                 if (runId.equals(String.valueOf(run.get("run_id")))) {
                     return one.getBrowserUid();
                 }
@@ -147,6 +167,7 @@ public class MyWebtoonService {
         return null;
     }
 
+    /** @return 그 브라우저가 만든 것. <b>못 읽었으면 null</b> — 빈 목록과 다르다(위 참고). */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> runsOf(String uid) {
         String query = "owner=" + URLEncoder.encode(uid, StandardCharsets.UTF_8);
@@ -154,7 +175,7 @@ public class MyWebtoonService {
                 gateway.forward(HttpMethod.GET, "/api/runs", query, null, new HttpHeaders());
         if (!res.getStatusCode().is2xxSuccessful() || res.getBody() == null) {
             log.warn("작품 목록을 못 받았습니다 (uid={}, status={})", uid, res.getStatusCode());
-            return List.of();
+            return null;
         }
         try {
             Map<String, Object> body = mapper.readValue(res.getBody(), Map.class);
@@ -162,7 +183,7 @@ public class MyWebtoonService {
             return runs instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
         } catch (IOException e) {
             log.warn("작품 목록을 읽지 못했습니다 (uid={})", uid, e);
-            return List.of();
+            return null;
         }
     }
 
