@@ -9,7 +9,7 @@
 //
 // 예외 하나 — 60분 종료 문구는 sessionStorage 로 한 번만 띄운다(서버에 "봤다" 를 남길 사실이 없어서).
 
-import type { Tutorial, TutorialStep, TutorialStepKey } from '../lib/pet';
+import type { PetDetail, Tutorial, TutorialStep, TutorialStepKey } from '../lib/pet';
 
 /** 부름 하나가 강조할 버튼. 'chat'·'personality'·'game'·'share' 는 돌봄 버튼 밖의 UI 다. */
 export type BabyWant = 'feed' | 'pet' | 'chat' | 'personality' | 'clean' | 'game' | 'share' | 'sleep' | null;
@@ -84,11 +84,18 @@ const GROWN_KEY = (petId: number) => `zzal.grown.${petId}`;
 /**
  * 60분 종료 문구를 띄워야 하는가. 띄웠으면 true 를 한 번만 돌려주고 기록한다.
  * ★ sessionStorage 가 이 파일이 브라우저에 남기는 유일한 것이다.
+ *
+ * ★★ 판정 기준이 `tutorial.steps` 의 DONE 칸이 **아니다.**
+ *    아홉 칸을 다 한 사람에게는 서버가 `tutorial` 블록 자체를 null 로 준다(계약 해석 9).
+ *    그러면 DONE 칸을 찾을 수 없어, **가장 잘 따라온 사람만 축하 문구를 못 받는다.**
+ *    그래서 "60분이 지났는가" 를 서버가 준 두 시각(`clock.babyUntil` · `serverNow`)으로 직접 본다.
  */
-export function takeGrownLine(petId: number, tutorial: Tutorial | null): boolean {
-  if (!tutorial) return false;
-  const grown = tutorial.steps.find((s) => s.key === 'DONE');
-  if (!grown?.done) return false;
+export function takeGrownLine(petId: number, pet: PetDetail): boolean {
+  if (pet.phase !== 'ALIVE' || !pet.clock) return false;
+  const babyUntil = Date.parse(pet.clock.babyUntil);
+  const now = Date.parse(pet.serverNow);
+  if (!Number.isFinite(babyUntil) || !Number.isFinite(now)) return false;
+  if (now < babyUntil) return false;
   try {
     const k = GROWN_KEY(petId);
     if (window.sessionStorage.getItem(k) === '1') return false;

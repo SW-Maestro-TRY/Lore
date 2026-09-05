@@ -22,7 +22,7 @@ export default function HatchWait({ tama, pc, onRetry }: HatchWaitProps) {
   if (s.phase !== 'egg' && !derived.failed) return null;
 
   // 예상 시간을 넘겼다 = 서버가 재시도 중이다(실측 143초, 재시도 포함 최대 약 7분). 숫자는 안 보여준다.
-  const slow = s.phase === 'egg' && s.eggT >= 0.98;
+  const slow = s.phase === 'egg' && s.eggSlow;
 
   return (
     <div style={notePaper(pc)} data-part="hatch" data-hatch={derived.failed ? 'failed' : slow ? 'slow' : 'waiting'}>

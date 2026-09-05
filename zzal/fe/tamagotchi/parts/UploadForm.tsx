@@ -24,7 +24,10 @@ export interface UploadFormProps {
 export default function UploadForm({ tama, compact = false, onSubmit }: UploadFormProps) {
   const { state: s, derived, form } = tama;
   const canSubmit = derived.canSubmit && !derived.creating;
-  const nameLen = Array.from(s.form.name).length;
+  // ★ 12자의 기준은 **UTF-16 길이**(`String.length`)다 — 서버 `@Size(max = 12)` 와 같은 자다.
+  //   코드 포인트(`Array.from(...).length`)로 세면 이모지 하나가 화면에선 1자, 서버에선 2자가 되어
+  //   화면이 통과시킨 이름이 400 으로 튕긴다. 세는 자와 자르는 자와 막는 자가 모두 같아야 한다.
+  const nameLen = s.form.name.length;
 
   const input: CSSProperties = { flex: 1, minWidth: 0, minHeight: 52, padding: '0 14px', border: 'none', borderBottom: '2px solid #D6CBAE', borderRadius: 0, background: 'rgba(255,255,255,.5)', color: INK, fontFamily: GAEGU, fontWeight: 700, fontSize: 17 };
   const textarea: CSSProperties = { padding: '12px 14px', border: 'none', borderBottom: '2px solid #D6CBAE', background: 'rgba(255,255,255,.5)', color: INK, fontFamily: GAEGU, fontSize: 16, lineHeight: 1.7, resize: 'none' };
@@ -44,7 +47,7 @@ export default function UploadForm({ tama, compact = false, onSubmit }: UploadFo
         <div style={{ display: 'flex', gap: 8 }}>
           <input
             value={s.form.name}
-            onChange={(e) => form.patchForm({ name: Array.from(e.target.value).slice(0, NAME_MAX_CHARS).join('') })}
+            onChange={(e) => form.patchForm({ name: e.target.value.slice(0, NAME_MAX_CHARS) })}
             maxLength={NAME_MAX_CHARS}
             placeholder={compact ? `이름 (${NAME_MAX_CHARS}자)` : '아이의 이름'}
             aria-label="아이의 이름"
