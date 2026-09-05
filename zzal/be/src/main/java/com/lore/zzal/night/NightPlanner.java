@@ -1,6 +1,7 @@
 package com.lore.zzal.night;
 
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionLayer;
 import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
@@ -89,7 +90,55 @@ public class NightPlanner {
                         pet.getId(), gift.getName());
             }
         }
+        // 3) 3층 — 조각 4개를 <b>이틀 연속</b> 모았으면 다음 심화 하나(정본 6장)
+        if (pet.isPiecesEnabled() && pet.getLastNightPieceStreak() >= ZzalRules.PIECES_STREAK_TO_BAKE
+                && nightOf.equals(pet.getLastNightOf())) {
+            ZzalMotion next = nextAdvanced(rows);
+            if (next != null) {
+                next.queue(nightOf);
+                pet.consumePieceStreak();
+                queued++;
+                log.info("3층 심화 큐 등록 — petId={} nightOf={} seq={} key={}",
+                        pet.getId(), nightOf, next.getSeq(), next.getName());
+            } else {
+                log.info("조각은 찼지만 구울 심화가 없다 — petId={} (app.zzal.advanced-motions 확인)", pet.getId());
+            }
+        }
+
+        // 4) 두 번째 선물(뒤로 넘어짐) — 3층 심화가 8종 열린 뒤(정본 6·16장)
+        if (openedAdvanced(rows) >= ZzalRules.SECOND_GIFT_AFTER_ADVANCED && catalog.gifts().size() > 1) {
+            ZzalMotion gift2 = rows.get(catalog.gifts().get(1).seq());
+            if (gift2 != null && gift2.getStatus() == MotionStatus.NONE && catalog.isBakeable(gift2.getName())) {
+                gift2.queue(nightOf);
+                queued++;
+                log.info("두 번째 선물 큐 등록 — petId={} nightOf={} key={}", pet.getId(), nightOf, gift2.getName());
+            }
+        }
         return queued;
+    }
+
+    /**
+     * 다음에 구울 3층 심화 — <b>13장 번호 순</b>(정본 16장 "3층 심화 순서 = 13장 번호 순").
+     *
+     * ★ 선물(101·102)은 이 순서 밖이다 — 번호에 안 들어간다(16장). 지시문이 없는 동작은 건너뛴다.
+     * ★ 이미 오른 것·굽는 중·검수 중·열린 것은 후보가 아니다. {@code FAILED} 도 여기서 안 집는다 —
+     *   그건 위 1)이 이미 다시 올렸다(두 번 올리면 같은 밤에 두 번 굽는다).
+     */
+    private ZzalMotion nextAdvanced(Map<Integer, ZzalMotion> rows) {
+        return rows.values().stream()
+                .filter(m -> m.getLayer() != MotionLayer.GIFT)
+                .filter(m -> m.getStatus() == MotionStatus.NONE)
+                .filter(m -> catalog.isBakeable(m.getName()))
+                .min(java.util.Comparator.comparingInt(ZzalMotion::getSeq))
+                .orElse(null);
+    }
+
+    /** 3층 심화가 몇 종 열렸나(선물 제외). 두 번째 선물의 조건. */
+    private static long openedAdvanced(Map<Integer, ZzalMotion> rows) {
+        return rows.values().stream()
+                .filter(m -> m.getLayer() != MotionLayer.GIFT)
+                .filter(m -> m.getStatus() == MotionStatus.OPEN)
+                .count();
     }
 
     /** 첫 선물 spec(구르기). 순서는 16장 기본값 "구르기 먼저". */

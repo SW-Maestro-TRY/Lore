@@ -218,6 +218,27 @@ public class PetService {
         }
         pet.visit(now);
         reveal(pet, now);
+        openPieces(pet, now);
+    }
+
+    /**
+     * 조각 4칸 등장 — 2층 8종이 다 열린 뒤 <b>처음 맞는 기상</b>(정본 6·16장).
+     *
+     * ★ 여기(서비스)에서 판정하는 이유 — "2층 8종이 다 열렸나" 는 카탈로그와 해금 규칙을 알아야 답할 수 있고,
+     *   엔티티는 그 둘을 모른다. 엔티티는 "언제 다 열렸는지" 와 "언제 열어 줬는지" 만 기억한다.
+     */
+    private void openPieces(ZzalPet pet, Instant now) {
+        if (pet.isPiecesEnabled()) {
+            return;
+        }
+        int layerTwoTotal = (int) catalog.basic().stream()
+                .filter(spec -> spec.layer() == com.lore.zzal.motion.MotionLayer.BASIC_2).count();
+        if (UnlockRules.openedLayerTwo(pet, catalog) >= layerTwoTotal) {
+            pet.markLayerTwoDone(now);
+        }
+        if (pet.readyForPieces(now)) {
+            pet.enablePieces(now);
+        }
     }
 
     /** 그 펫의 혼자 논 장면(최근 것부터, 최대 3). */

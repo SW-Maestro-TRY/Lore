@@ -49,6 +49,86 @@ class NightPlannerTest {
         planner = new NightPlanner(repo, catalog);
     }
 
+    /** 3층이 열리고 조각을 이틀 연속 모은 상태로 만든다(잠든 뒤 스냅샷까지). */
+    private void tierThreeReady(int streak) {
+        pet.enablePieces(T0);
+        ReflectionTestUtils.setField(pet, "pieceStreak", streak);
+        ReflectionTestUtils.setField(pet, "lastNightPieceStreak", streak);
+        ReflectionTestUtils.setField(pet, "lastNightOf", NIGHT);
+    }
+
+    @Test
+    @DisplayName("★★ 조각 4개 이틀 연속 → 다음 심화 하나가 13장 번호 순으로 오른다")
+    void tierThreeQueuesNextInOrder() {
+        tierThreeReady(2);
+        when(catalog.isBakeable(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+
+        int queued = planner.plan(pet, NIGHT);
+
+        assertThat(queued).isEqualTo(1);
+        assertThat(row(1).getStatus()).as("13장 1번(기본 자세)부터").isEqualTo(MotionStatus.QUEUED);
+        assertThat(row(2).getStatus()).isEqualTo(MotionStatus.NONE);
+        assertThat(pet.getPieceStreak()).as("연속은 소모된다").isZero();
+    }
+
+    @Test
+    @DisplayName("★ 이미 구운 것은 건너뛰고 다음 번호로 — 선물(101·102)은 이 순서 밖")
+    void tierThreeSkipsDone() {
+        tierThreeReady(2);
+        when(catalog.isBakeable(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        ReflectionTestUtils.setField(row(1), "status", MotionStatus.OPEN);
+        ReflectionTestUtils.setField(row(2), "status", MotionStatus.REVIEW);
+
+        planner.plan(pet, NIGHT);
+
+        assertThat(row(3).getStatus()).isEqualTo(MotionStatus.QUEUED);
+        assertThat(row(101).getStatus()).as("선물은 순서 밖").isNotEqualTo(MotionStatus.QUEUED);
+    }
+
+    @Test
+    @DisplayName("★★ 연속이 1이면 안 오른다 — 이틀 연속이어야 한다")
+    void tierThreeNeedsTwo() {
+        tierThreeReady(1);
+        when(catalog.isBakeable(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+
+        assertThat(planner.plan(pet, NIGHT)).isZero();
+        assertThat(row(1).getStatus()).isEqualTo(MotionStatus.NONE);
+    }
+
+    @Test
+    @DisplayName("★★ 실패한 밤은 조각을 소모하지 않는다 — FAILED 행이 다음 밤에 다시 오른다")
+    void failedNightIsRetriedWithoutPieces() {
+        tierThreeReady(2);
+        when(catalog.isBakeable(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        planner.plan(pet, NIGHT);
+        assertThat(row(1).getStatus()).isEqualTo(MotionStatus.QUEUED);
+
+        // 그 밤에 실패했다 — 조각을 다시 모으지 않아도 다음 밤에 같은 동작이 오른다(정본 16장)
+        row(1).markFailed();
+        ReflectionTestUtils.setField(pet, "lastNightOf", NIGHT.plusDays(1));
+        int queued = planner.plan(pet, NIGHT.plusDays(1));
+
+        assertThat(queued).isEqualTo(1);
+        assertThat(row(1).getStatus()).isEqualTo(MotionStatus.QUEUED);
+        assertThat(row(1).getNightOf()).isEqualTo(NIGHT.plusDays(1));
+        assertThat(row(2).getStatus()).as("연속은 이미 소모됐으니 새 동작은 안 오른다").isEqualTo(MotionStatus.NONE);
+    }
+
+    @Test
+    @DisplayName("★ 두 번째 선물은 3층 8종이 열린 뒤에 오른다")
+    void secondGiftAfterEightAdvanced() {
+        tierThreeReady(0);
+        when(catalog.isBakeable(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        for (int seq = 1; seq <= 7; seq++) {
+            ReflectionTestUtils.setField(row(seq), "status", MotionStatus.OPEN);
+        }
+        assertThat(planner.plan(pet, NIGHT)).as("7종으로는 아직").isZero();
+
+        ReflectionTestUtils.setField(row(8), "status", MotionStatus.OPEN);
+        planner.plan(pet, NIGHT);
+        assertThat(row(102).getStatus()).isEqualTo(MotionStatus.QUEUED);
+    }
+
     private ZzalMotion row(int seq) {
         return rows.stream().filter(m -> m.getSeq() == seq).findFirst().orElseThrow();
     }

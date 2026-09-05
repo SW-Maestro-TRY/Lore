@@ -213,6 +213,24 @@ class PetDetailTest {
     }
 
     @Test
+    @DisplayName("★★ 3층 전에는 pieces 가 null — 조각 칸이 화면에 없다")
+    void piecesNullBeforeTierThree() {
+        ZzalPet pet = baby();
+        PetResponses.Detail before = PetResponses.Detail.from(pet, null, T0, CATALOG);
+        assertThat(before.pieces()).isNull();
+        assertThat(before.features().pieces()).isFalse();
+        assertThat(before.goodDay()).isFalse();
+
+        pet.enablePieces(T0);
+        PetResponses.Detail after = PetResponses.Detail.from(pet, null, T0, CATALOG);
+        assertThat(after.pieces()).isNotNull();
+        assertThat(after.features().pieces()).isTrue();
+        assertThat(after.pieces().count()).isZero();
+        assertThat(after.pieces().streak()).isZero();
+        assertThat(after.pieces().bonus()).isFalse();
+    }
+
+    @Test
     @DisplayName("baking — 밤 큐에 오르면 QUEUED, 아무 일도 없으면 NONE")
     void bakingSummary() {
         ZzalPet pet = baby();

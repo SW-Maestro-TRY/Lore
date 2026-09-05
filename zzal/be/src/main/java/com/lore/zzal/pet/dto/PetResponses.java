@@ -81,7 +81,19 @@ public final class PetResponses {
     public record Today(int games, int pets, int careIntimacy, int snackStreak, boolean bathDone) {
     }
 
-    public record Pieces(boolean food, boolean play, boolean clean, boolean bond, int streak) {
+    /**
+     * 오늘 모은 조각(정본 6장) — 3층 전에는 이 블록 자체가 null.
+     *
+     * ★ {@code streak} 는 "조각 4개를 며칠 연속 모았나". 2가 되는 밤에 다음 심화 하나가 큐에 오른다.
+     * ★ {@code bonus} 는 기분 좋은 날의 선물 조각 — 네 칸 중 <b>가장 앞의 빈 칸</b>을 채운 것으로 친다.
+     */
+    public record Pieces(boolean food, boolean play, boolean clean, boolean bond,
+                         int count, int streak, boolean bonus) {
+
+        static Pieces of(ZzalPet pet) {
+            return new Pieces(pet.pieceFood(), pet.piecePlay(), pet.pieceClean(), pet.pieceBond(),
+                    pet.pieceCount(), pet.getPieceStreak(), pet.isBonusPiece());
+        }
     }
 
     public record Progress(int current, int target) {
@@ -207,6 +219,10 @@ public final class PetResponses {
             Today today,
             @Schema(description = "3층 전엔 null") Pieces pieces,
             @Schema(description = """
+                    오늘이 "기분 좋은 날" 인가(정본 6장) — 어젯밤 벌점 0 + 세 게이지 2칸 이상.
+                    조각 하나를 미리 받고 첫 부름이 살가워진다. 3층 전에는 항상 false""")
+            boolean goodDay,
+            @Schema(description = """
                     지금 뭔가 굽고 있나 — NONE(없음) · QUEUED(오늘 밤에 굽는다) · PRACTICING(연습 중).
                     화면은 PRACTICING 일 때 "아직 연습 중이에요" 한 줄을 띄운다(정본 16장)""",
                     example = "NONE")
@@ -274,7 +290,7 @@ public final class PetResponses {
                         deathReason(pet),
                         pet.getHatchStartedAt(), pet.getHatchedAt(), now,
                         // ★ 리스트는 null 이 아니라 빈 목록(해석 20) — 화면이 길이만 보고 그리게. null 이 프론트를 깨뜨렸다.
-                        null, null, null, null, null, null, false, null, null, null, null,
+                        null, null, null, null, null, null, false, null, null, null, false, null,
                         List.of(), List.of(), false, List.of(),
                         null, null, null, null, null, null, null, null, null, null, null);
             }
@@ -299,7 +315,7 @@ public final class PetResponses {
                     pet.isScenesEnabled(),                                  // 장면 — 첫 부재 4시간 뒤 자동
                     layerTwoOpen >= ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN,
                     "OPEN".equals(firstGift.status()),                       // 앨범 = 첫 심화가 도착하면 같이 열린다(정본 6장)
-                    false);                                                 // 조각 — PR-10
+                    pet.isPiecesEnabled());                                 // 조각
 
             TutorialSchedule.State t = TutorialSchedule.of(pet, now);
             Tutorial tutorial = t == null ? null : new Tutorial(t.active(), t.minutesSince(),
@@ -320,7 +336,8 @@ public final class PetResponses {
                     Intimacy.of(pet.getIntimacy()),
                     new Today(pet.getTodayGames(), pet.getTodayPetCount(), pet.getTodayCareIntimacy(),
                             pet.getSnackStreak(), pet.isTodayBathDone()),
-                    null,                                                   // 조각 — PR-10
+                    pet.isPiecesEnabled() ? Pieces.of(pet) : null,
+                    pet.isGoodDayToday(),
                     baking(rows),
                     motions(pet, catalog, rows),
                     justUnlocked,

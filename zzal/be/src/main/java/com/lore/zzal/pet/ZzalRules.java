@@ -167,6 +167,15 @@ public final class ZzalRules {
     /** 3층 조각 — 4개를 이틀 연속 채우면 다음 밤 굽기. 굽기 실패는 조각을 소모하지 않는다. */
     public static final int PIECES_STREAK_TO_BAKE = 2;
 
+    /** 밥 조각 — 하루에 밥 2회(정본 6장). */
+    public static final int PIECE_FEEDS = 2;
+
+    /** 교감 조각의 쓰다듬기 쪽 — 하루 2회(채팅 응답 1회면 그것으로 충족). */
+    public static final int PIECE_PETS = 2;
+
+    /** 두 번째 선물(뒤로 넘어짐)은 3층 심화가 이만큼 열린 뒤(정본 6·16장). */
+    public static final int SECOND_GIFT_AFTER_ADVANCED = 8;
+
     /** 기분 좋은 날(3층) = 잠들 때 케어 미스 0 + 세 게이지 2칸 이상 → 다음 날 조각 1 선지급. */
     public static final int GOOD_DAY_GAUGE_AT_LEAST = 2;
 
