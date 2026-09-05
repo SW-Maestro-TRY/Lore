@@ -102,6 +102,10 @@ AWAITING = (STATUS_AWAITING_SHEET, STATUS_AWAITING_PICK)
 # 고른 방향과 무관하므로, 방향을 고르기 전에 그려도 아무것도 안 달라진다).
 # "board"(방향 저장)는 검수 화면이 없어진 뒤로 순간에 끝나는 걸음이라
 # pages 바로 앞에 붙여 둔다 — _run_pick_then_pages_phase 참고.
+# 편집실에서 사람이 적어 보내는 글의 상한. classic 쪽 FEEDBACK_TEXT_MAX 와
+# 같은 뜻이다 — 프롬프트 뒤에 그대로 붙는 값이라 길이를 열어 두지 않는다.
+FEEDBACK_MAX = 800
+
 STAGES = ("story", "sheet", "board", "pages")
 STAGE_LABEL = {
     "story": "이야기 설계", "board": "방향 확정",
@@ -361,6 +365,9 @@ def _run_story_phase(job: NHJob) -> None:
         if not run_id:
             return _fail(job, "run_id 를 읽지 못했습니다")
         job.run_id = run_id
+        # 그림체를 run 에 남긴다 — 나중에 편집실에서 한 장만 다시 그릴 때
+        # 이 값이 없으면 그 장만 다른 화풍으로 나온다(write_style 참고).
+        write_style(run_id, job._env().get("NH_STYLE", ""))
 
         directions_path = NEW_HARNESS / "runs" / run_id / "directions.json"
         if not directions_path.exists():
@@ -638,9 +645,55 @@ def board_summary(run_id: str) -> dict[str, Any] | None:
     return {"cast": cast, "scenes": scenes, "cut_count": total}
 
 
+STYLE_FILE = "style.txt"
+
+
+def write_style(run_id: str, style: str) -> None:
+    """이 작품을 어느 그림체로 그렸는지 run 폴더에 남긴다.
+
+    나중에 한 장만 다시 그릴 때 쓴다. 이 기록이 없으면 다시 그린 장만
+    하네스 기본 그림체(webtoon_lock_bg)로 나와서, 한 편 안에서 그 장만
+    화풍이 다르다(실측). 만들 때는 job 이 NH_STYLE 로 넘기지만 job 은
+    메모리에만 있고, 편집실에서 다시 그리는 것은 한참 뒤의 일이다.
+    """
+    try:
+        (run_dir(run_id) / STYLE_FILE).write_text(style.strip(), encoding="utf-8")
+    except OSError:
+        pass                                   # 못 남겨도 만드는 것 자체는 막지 않는다
+
+
+def style_of(run_id: str) -> str:
+    """남겨 둔 그림체. 없으면 빈 문자열(= 하네스 기본값으로 떨어진다).
+
+    이 기록이 생기기 전에 만든 작품은 빈 값이라 예전과 똑같이 동작한다.
+    """
+    try:
+        return (run_dir(run_id) / STYLE_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _regen_args(run_id: str, no: int, note: str) -> list[str]:
+    """이 run 을 어떤 방식으로 그렸는지 보고 같은 방식으로 다시 그린다.
+
+    `--page N` 만 주면 콘티 기반(`stage_pages` -> pageart)으로 가는데, 지금
+    제품이 만드는 작품에는 콘티도 `pages.json` 도 없다(이어그리기). 그대로
+    부르면 "pages.json 가 없습니다" 로 죽는다 — **지금 만들어지는 모든
+    작품에서 다시 그리기가 통째로 안 됐다**(실측).
+
+    `pages.json` 이 있는 옛 작품은 예전 그대로 둔다.
+    """
+    args = ["--run-id", run_id, "--page", str(no)]
+    if not (run_dir(run_id) / "pages.json").exists():
+        args.append("--detail-pages")
+    if note:
+        args += ["--note", note]
+    return args
+
+
 def _run_regen(entry: dict[str, Any]) -> None:
-    """페이지 하나만 다시 그린다. run.py --page 는 파일이 이미 있으면 그냥
-    넘어가므로(pageart.draw 의 "이미 있습니다"), 먼저 지워야 한다.
+    """페이지 하나만 다시 그린다. run.py 는 파일이 이미 있으면 그냥 넘어가므로
+    먼저 지워야 한다 — 그래서 **지우기 전에 원본을 들고 있는다.**
 
     다 그린 뒤에는 episode.png 도 다시 잇는다 — 안 그러면 완성본에는 옛
     페이지가 그대로 남아서, 다시 그린 게 화면에 안 보인다(stitch 는 호출
@@ -648,28 +701,45 @@ def _run_regen(entry: dict[str, Any]) -> None:
     """
     entry["status"] = STATUS_RUNNING
     run_id, no = entry["run_id"], entry["page"]
+    img = unit_image(run_id, no)
+    # **실패하면 되돌린다.** 예전에는 지우기만 하고 안 되돌려서, 다시 그리기가
+    # 실패한 자리에 그림이 아예 없어졌다 — 사람이 이미 값을 치른 장이 사라진다
+    # (실측). classic 쪽(pipeline.regens)은 원래 되돌리고 있었다.
+    backup = img.read_bytes() if img and img.exists() else None
+    dest = img
+
+    def restore() -> None:
+        if backup is not None and dest is not None and not dest.exists():
+            dest.write_bytes(backup)
+
     try:
-        img = unit_image(run_id, no)
         if img:
             img.unlink()
+        env = _subprocess_env()
+        style = style_of(run_id)
+        if style:
+            env["NH_STYLE"] = style
         proc = subprocess.run(
-            [sys.executable, "-u", "run.py", "--run-id", run_id, "--page", str(no)],
-            cwd=str(NEW_HARNESS), env=_subprocess_env(), capture_output=True,
+            [sys.executable, "-u", "run.py",
+             *_regen_args(run_id, no, str(entry.get("note") or ""))],
+            cwd=str(NEW_HARNESS), env=env, capture_output=True,
             text=True, encoding="utf-8", errors="replace")
         entry["log"] = ((proc.stdout or "") + (proc.stderr or "")).strip()
         if proc.returncode != 0 or not unit_image(run_id, no):
+            restore()
             entry["status"] = STATUS_ERROR
-            entry["error"] = "다시 그리지 못했습니다 — 로그를 확인하세요"
+            entry["error"] = "다시 그리지 못했습니다 — 원래 그림은 그대로입니다"
             return
         stitch = subprocess.run(
             [sys.executable, "-u", "stitch.py", "--run-id", run_id],
-            cwd=str(NEW_HARNESS), env=_subprocess_env(), capture_output=True,
+            cwd=str(NEW_HARNESS), env=env, capture_output=True,
             text=True, encoding="utf-8", errors="replace")
         if stitch.returncode != 0:
             # 페이지 자체는 새로 나왔으니 실패로 안 본다 — 완성본만 못 갱신됐다.
             entry["error"] = "새 페이지는 나왔지만 한 편으로 다시 잇지 못했습니다"
         entry["status"] = STATUS_DONE
     except Exception as exc:                            # noqa: BLE001
+        restore()
         entry["status"] = STATUS_ERROR
         entry["error"] = f"{type(exc).__name__}: {exc}"
 
@@ -813,11 +883,21 @@ class NHRunner:
     # ---- 다시 그리기(페이지 재생성) — job 과 무관하다, 완성된 뒤 둘러보기·
     # 편집실에서도 부를 수 있어야 한다 ------------------------------------- #
 
-    def regen(self, run_id: str, page_no: int) -> str:
-        if not unit_image(run_id, page_no):
+    def regen(self, run_id: str, page_no: int, note: str = "") -> str:
+        """페이지 하나를 다시 그린다. `note` 는 편집실에서 사람이 적은 것이다.
+
+        예전에는 이 값을 아예 안 받았다 — 편집실이 스토리·연출·그림 칸을
+        받아 놓고 그리는 쪽에는 한 글자도 안 넘겼다(실측). 물어보고 버리면
+        사람은 자기가 적은 것이 반영된 줄 안다.
+        """
+        # 그림 파일이 **없어도** 받는다 — 없어서 다시 그리는 것이 가장 급한
+        # 경우다(다시 그리기가 실패해 한 장이 빈 자리). 이 run 에 있을 수
+        # 없는 번호만 막는다.
+        if page_no not in page_numbers(run_id):
             raise ValueError("그 페이지가 없습니다")
         regen_id = uuid.uuid4().hex[:12]
         entry = {"id": regen_id, "run_id": run_id, "page": page_no,
+                 "note": (note or "").strip()[:FEEDBACK_MAX],
                  "status": STATUS_QUEUED, "error": None, "log": ""}
         self.regens[regen_id] = entry
         # 같은 큐를 탄다 — 이미지 호출이라 다른 job 과 동시에 돌면 안 된다.
@@ -828,7 +908,14 @@ class NHRunner:
         entry = self.regens.get(regen_id)
         if not entry:
             raise KeyError(regen_id)
-        return {k: entry[k] for k in ("id", "run_id", "page", "status", "error")}
+        # 편집실(editor.js 의 realRegen)이 classic 과 **같은 모양**을 기대한다 —
+        # scene·note·versions 를 안 주면 진행 문구와 판본 줄이 빈 채로 뜬다.
+        return {"id": entry["id"], "run_id": entry["run_id"],
+                "page": entry["page"], "scene": entry["page"],
+                "status": entry["status"], "error": entry["error"],
+                "note": entry.get("note") or "",
+                "image": f"/api/runs/{entry['run_id']}/page/{entry['page']}",
+                "versions": []}
 
 
 # --------------------------------------------------------------------------- #
@@ -1041,8 +1128,18 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
 
 
 def page_numbers(run_id: str) -> list[int]:
-    """이 run 의 페이지 번호(1..N). pages.json 을 우선 보고, 없으면 실제로
-    그려진 파일 수로 판단한다(진행 중에 편집실을 미리 열어도 개수가 맞게)."""
+    """이 run 의 페이지 번호(1..N).
+
+    pages.json(콘티) 을 우선 보고, 없으면 **고른 방향의 장면 수**로 센다 —
+    표지 1장 + 장면 하나당 1장이 이어그리기의 규칙이다.
+
+    예전에는 그려진 **파일 수**로 셌는데, 그러면 중간 한 장이 없을 때 총
+    개수가 그만큼 줄어서 마지막 장이 목록에서 밀려 나갔다. 다시 그리기가
+    실패해 한 장이 비면 그 장을 다시 그릴 방법도 같이 사라진다.
+
+    둘 다 없으면(아직 방향을 안 골랐거나 옛 run) 예전처럼 파일 수로 센다 —
+    그리는 중에 편집실을 미리 열어도 개수가 맞아야 한다.
+    """
     d = run_dir(run_id)
     try:
         pages = json.loads((d / "pages.json").read_text(encoding="utf-8"))
@@ -1050,6 +1147,16 @@ def page_numbers(run_id: str) -> list[int]:
             return list(range(1, len(pages) + 1))
     except (OSError, ValueError):
         pass
+    pick = _read_json_safe(d, "pick.json")
+    try:
+        directions = json.loads((d / "directions.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        directions = []
+    chosen = next((x for x in directions if x.get("n") == pick.get("n")), None) \
+        or (directions[0] if directions else None)
+    scenes = [x for x in ((chosen or {}).get("scenes") or []) if str(x or "").strip()]
+    if scenes:
+        return list(range(1, len(scenes) + 2))          # 표지 + 장면들
     files = sorted((d / "pages").glob("page*.png")) if (d / "pages").exists() else []
     return list(range(1, len(files) + 1))
 

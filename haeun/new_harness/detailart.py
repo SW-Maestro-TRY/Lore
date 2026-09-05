@@ -409,9 +409,26 @@ def build_continue_prompt(direction: dict, char: dict | None, spec: dict | None,
             .replace("{scene}", scene_instr))
 
 
+def note_block(note: str) -> str:
+    """편집실에서 사람이 적은 것 -> 그림 프롬프트 뒤에 붙는 문단.
+
+    **연출을 지시로 바꾸지 않는다.** 사람이 "컷을 더 붙여라" 라고 적으면
+    그건 따르되, 안 적은 것까지 이 문단 때문에 굳으면 안 된다 — 컷 대본
+    단계를 없앤 이유가 그것이다. 그래서 적힌 것만 반영하라고 못 박는다.
+    """
+    return ("## 다시 그린다 — 이 장을 본 사람이 남긴 말\n\n"
+            "이 장은 이미 한 번 그려졌고, 그것을 본 사람이 아래를 적었다. "
+            "**같은 장면을 다시 그리되 아래를 반영한다.**\n\n"
+            f"{note.strip()}\n\n"
+            "- 위에 적힌 것만 바꾼다. 적히지 않은 것(컷 수·구도·카메라·여백·"
+            "대사)은 **네가 그대로 다시 정한다** — 앞서 그린 것을 따라 할 "
+            "필요도, 피할 필요도 없다.\n"
+            "- 적힌 말이 이야기와 부딪히면 이야기를 따른다.\n")
+
+
 def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                   allow_no_sheet: bool = False, on_page=None,
-                  review: bool | None = None) -> list[dict]:
+                  review: bool | None = None, note: str = "") -> list[dict]:
     """이어그리기 — **지금의 최종 방식.** 구체화(detail.json)·콘티(board.json)·
     컷 대본을 전부 건너뛰고, story 단계(방향 후보) 산출물만으로 그린다.
 
@@ -430,6 +447,12 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     지금 장 두 그림을 이야기와 함께 모델에게 주고 "이어지는가" 를 묻는다.
     `이어짐` 이 아니거나 critical 이 나오면 그 장을 지우고 한 번 다시 그린다.
     None 이면 `.env`(`NH_PAGE_REVIEW`, 기본 켜짐)를 따른다.
+
+    note : 편집실에서 사람이 적어 보낸 것(다시 그리기). 그리는 프롬프트
+    **뒤**에 붙는다 — 모델은 뒤에 온 것을 더 세게 듣는다. 검수가 붙이는
+    글(pagecheck.redraw_block)과 같은 자리이고, 둘 다 있으면 사람 말이 뒤에
+    온다: 검수는 이야기가 어긋난 것을 잡는 장치이고, 사람은 그 판정까지
+    보고 나서 다시 그리라고 한 것이라 사람 쪽이 더 최근이다.
 
     검수를 그리기 **전**이 아니라 **후**에 두는 이유는, 컷을 미리 정해 주는
     순간 연출이 지시를 옮기기만 해서 평평해지기 때문이다 — 그래서 자유롭게
@@ -500,6 +523,11 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                                             scene_no=n_, has_prev=has_prev,
                                             resume_from=resume_from)
                       .replace("{style}", imageprompt.load_style(style)))
+        # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
+        # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
+        # 그 사람 말대로 다시 그리는 것이다.
+        if note.strip():
+            prompt += "\n\n" + note_block(note)
         (dest / f"page{page_no:02d}.txt").write_text(prompt, encoding="utf-8")
         if only and page_no not in only:
             continue

@@ -288,10 +288,68 @@ def test_review_say() -> None:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_regen_args_and_style() -> None:
+    """다시 그리기 — 어떤 명령으로 부르고, 그림체를 잃지 않는가.
+
+    셋 다 실제로 겪은 것이다:
+      1. `--page N` 만 주면 콘티 기반으로 가서, 콘티가 없는 지금 작품은
+         "pages.json 가 없습니다" 로 죽는다 — 다시 그리기가 통째로 안 됐다.
+      2. 그림체를 안 넘겨서, 다시 그린 장만 하네스 기본 화풍으로 나온다.
+      3. 사람이 편집실에 적은 말이 그리는 쪽으로 아예 안 갔다.
+    """
+    root = Path(tempfile.mkdtemp())
+    try:
+        NP.NEW_HARNESS = root
+        d = root / "runs" / "r1"
+        d.mkdir(parents=True)
+
+        # 콘티가 없는 작품(지금 제품이 만드는 것) -> 이어그리기로 다시 그린다
+        args = NP._regen_args("r1", 3, "")
+        check("이어그리기로 부른다", args, ["--run-id", "r1", "--page", "3", "--detail-pages"])
+
+        # 콘티가 있는 옛 작품은 예전 그대로
+        (d / "pages.json").write_text("{}", encoding="utf-8")
+        check("콘티가 있으면 예전 그대로",
+              NP._regen_args("r1", 3, ""), ["--run-id", "r1", "--page", "3"])
+        (d / "pages.json").unlink()
+
+        # 사람이 적은 말은 --note 로 간다
+        check("적은 말을 넘긴다", NP._regen_args("r1", 3, "표정을 더 굳게")[-2:],
+              ["--note", "표정을 더 굳게"])
+        ok("안 적으면 --note 를 안 붙인다", "--note" not in NP._regen_args("r1", 3, ""))
+
+        # --- 그림체 ---
+        check("기록이 없으면 빈 값", NP.style_of("r1"), "")
+        NP.write_style("r1", "pastel")
+        check("남기고 읽는다", NP.style_of("r1"), "pastel")
+        # 없는 run 에 써도 죽지 않는다 (폴더가 아직 없을 때)
+        NP.write_style("없는run", "pastel")
+        check("없는 run 은 조용히 넘어간다", NP.style_of("없는run"), "")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_regen_status_shape() -> None:
+    """편집실이 classic 과 같은 모양을 기대한다 — 안 맞으면 진행 문구가 빈다."""
+    root = Path(tempfile.mkdtemp())
+    try:
+        r = make_runner(root)
+        r.regens["x1"] = {"id": "x1", "run_id": "r1", "page": 3, "note": "더 어둡게",
+                          "status": "done", "error": None, "log": ""}
+        got = r.regen_status("x1")
+        for k in ("id", "run_id", "scene", "status", "error", "note", "image", "versions"):
+            ok(f"{k} 를 준다", k in got)
+        check("scene 은 page 와 같다", got["scene"], 3)
+        check("적은 말을 되돌려준다", got["note"], "더 어둡게")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def main() -> int:
     for fn in (test_serial_execution, test_position, test_cancel_while_queued,
                test_pick_guards_against_double_queue, test_review_order,
-               test_review_say):
+               test_review_say, test_regen_args_and_style,
+               test_regen_status_shape):
         fn()
     if fails:
         print("FAILED:")

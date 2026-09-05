@@ -602,6 +602,13 @@ class Handler(BaseHTTPRequestHandler):
 
         m = re.fullmatch(r"/api/regens/([\w.-]+)", path)
         if m:
+            # 편집실은 어느 하네스로 만든 작품인지 모른 채 이 주소만 본다.
+            # classic 에 없으면 new_harness 쪽을 찾는다.
+            if not pipeline.regens.get(m.group(1)):
+                try:
+                    return self._json(nh_runner.regen_status(m.group(1)))
+                except KeyError:
+                    pass
             job = pipeline.regens.get(m.group(1))
             if not job:
                 return self._error(404, "그런 작업이 없습니다")
@@ -1130,6 +1137,17 @@ class Handler(BaseHTTPRequestHandler):
                 body = self._body()
             except (json.JSONDecodeError, UnicodeDecodeError):
                 body = {}
+            # new_harness 작품이면 그쪽으로 넘긴다. **편집실은 이 주소 하나만
+            # 안다** — 예전에는 nh 작품에서 여기까지 와서 "그 장을 찾지 못했습니다"
+            # (404) 로 끝났다. 다시 그리기가 편집실에서 통째로 안 됐다는 뜻이다
+            # (/result·/episode.png 가 이미 같은 규칙으로 갈라지고 있었다).
+            if not pipeline.episode_dir(run_id, 1).exists() and nh.is_run(run_id):
+                note = str(body.get("feedback") or "").strip()
+                try:
+                    regen_id = nh_runner.regen(run_id, scene_no, note)
+                except ValueError as exc:
+                    return self._error(404, str(exc))
+                return self._json(nh_runner.regen_status(regen_id))
             ep = self._ep({**parse_qs(url.query),
                            **({"ep": [str(body["episode"])]} if body.get("episode")
                               else {})})
@@ -1652,7 +1670,12 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/nh/runs/([\w.-]+)/page/(\d+)/regen", url.path)
         if m:
             try:
-                regen_id = nh_runner.regen(m.group(1), int(m.group(2)))
+                try:
+                    body = self._body()
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    body = {}
+                regen_id = nh_runner.regen(m.group(1), int(m.group(2)),
+                                           str(body.get("feedback") or ""))
             except ValueError as exc:
                 return self._error(400, str(exc))
             return self._json({"id": regen_id})

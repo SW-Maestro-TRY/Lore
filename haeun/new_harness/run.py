@@ -2112,7 +2112,8 @@ def stage_pages(run_dir: Path, dry_run: bool, only=None,
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
-                       episode_review: bool | None = None) -> None:
+                       episode_review: bool | None = None,
+                       note: str = "") -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     story 단계(방향 후보) 산출물만으로 표지+전체 씬을 그린다.
 
@@ -2128,6 +2129,7 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
     """
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
                                    allow_no_sheet=allow_no_sheet, review=review,
+                                   note=note,
                                    on_page=lambda meta: record(run_dir, meta))
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
@@ -2356,7 +2358,8 @@ def main(argv=None) -> int:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
                                allow_no_sheet=args.no_sheet,
                                review=False if args.no_page_review else None,
-                               episode_review=False if args.no_episode_review else None)
+                               episode_review=False if args.no_episode_review else None,
+                               note=args.note)
         elif args.pages or args.page:
             stage_pages(run_dir, args.dry_run, only=args.page or None,
                         allow_no_sheet=args.no_sheet)
