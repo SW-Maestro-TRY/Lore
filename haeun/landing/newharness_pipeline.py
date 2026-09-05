@@ -135,6 +135,26 @@ STYLE_LABEL = {
     "cinematic": "시네마틱 반실사", "pastel": "일상툰 감성", "noir": "다크 느와르",
     "shoujo": "순정 · BL", "game": "게임 원화",
 }
+
+# run 폴더에 남는 것(style.txt)은 **하네스 쪽 이름**이다 — 다시 그릴 때 그대로
+# NH_STYLE 로 넘겨야 해서 그렇다. 그런데 딱지는 선택 키로 찾으므로, 여덟 중
+# 이름이 다른 둘(romance→romance_fantasy · webtoon→webtoon_lock_bg)만 되짚지
+# 못하고 화면에 "webtoon_lock_bg" 같은 글자가 그대로 나간다. 나머지 여섯은
+# 두 이름이 같아서 우연히 맞았고, 그래서 한동안 안 드러났다.
+STYLE_KEY_BY_NH = {nh: key for key, nh in STYLE_CHOICES.items()}
+
+
+def style_label_of(stored: str) -> str:
+    """저장된 그림체 -> 사람이 읽을 딱지. 모르는 값이면 빈 문자열.
+
+    빈 문자열을 주는 이유: 화면이 딱지를 아예 안 그린다. 모르는 값을 그대로
+    내보내면 "webtoon_lock_bg" 가 그림체 이름인 줄 안다.
+    """
+    stored = (stored or "").strip()
+    if not stored:
+        return ""
+    key = STYLE_KEY_BY_NH.get(stored, stored)
+    return STYLE_LABEL.get(key, "")
 DEFAULT_STYLE = "webtoon"                # new_harness 자체 기본(NH_STYLE)과 맞춘다
 
 # "[페이지 3/7] 컷 2개 · 참조 2장 …" — pageart.draw() 가 찍는 줄 (pageart.py:116).
@@ -208,7 +228,7 @@ class NHJob:
                 "directions": self.directions,
                 "pick": self.pick,
                 "style": self.style,
-                "style_label": STYLE_LABEL.get(self.style, self.style),
+                "style_label": style_label_of(self.style),
                 "stage": self.stage,
                 "stage_index": stage_i,
                 "stages": list(STAGES),
@@ -1158,7 +1178,7 @@ def list_runs(limit: int = 60) -> list[dict[str, Any]]:
             "page_count": len(drawn),
             # 어느 그림체로 그렸나. 옛 작품은 style.txt 가 없어 빈 값이고,
             # 화면은 그때 이 딱지를 아예 안 그린다.
-            "style_label": STYLE_LABEL.get(style_of(rid), style_of(rid)),
+            "style_label": style_label_of(style_of(rid)),
             "engine": "new_harness",       # 화면이 굳이 안 봐도 되지만, 구분은 남긴다
         })
         if len(out) >= limit:
@@ -1188,7 +1208,7 @@ def result_by_run(run_id: str) -> dict[str, Any]:
         "title": title_of(run_id, pick),
         "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
         # 옛 작품은 style.txt 가 없어서 빈 값이다 — 화면이 그때는 안 그린다.
-        "style_label": STYLE_LABEL.get(style, style),
+        "style_label": style_label_of(style),
         # 줄거리는 고른 이야기 쪽에 있다. pick.json 은 무엇을 골랐는지(n)와
         # 제목만 들고 있어서, 그것만 보면 늘 비어 있었다.
         "logline": str(chosen.get("plot") or pick.get("plot") or ""),

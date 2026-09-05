@@ -33,7 +33,7 @@
       "cover_episode": 1,
       "cover_page": 1,
       "page_count": 6,
-      "style_label": "",
+      "style_label": "일반 웹툰",
       "engine": "new_harness"
     },
     {
@@ -51,7 +51,7 @@
       "cover_episode": 1,
       "cover_page": 1,
       "page_count": 6,
-      "style_label": "",
+      "style_label": "로맨스 판타지",
       "engine": "new_harness"
     }
   ]

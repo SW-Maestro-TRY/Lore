@@ -385,11 +385,32 @@ def test_page_versions() -> None:
         shutil.rmtree(root, ignore_errors=True)
 
 
+def test_style_label_round_trip() -> None:
+    """고를 수 있는 그림체 여덟이 **전부** 사람이 읽을 딱지로 되짚어지는가.
+
+    run 폴더에 남는 것은 하네스 쪽 이름(NH_STYLE)이고 딱지는 선택 키로 찾는데,
+    여덟 중 둘만 두 이름이 다르다(romance→romance_fantasy ·
+    webtoon→webtoon_lock_bg). 그래서 나머지 여섯이 우연히 맞는 동안 그 둘만
+    "webtoon_lock_bg" 라는 글자를 그림체 이름이라고 화면에 내보냈다.
+    새 그림체를 더할 때 같은 실수를 하기 쉬워서 여기서 막는다.
+    """
+    for key, stored in NP.STYLE_CHOICES.items():
+        want = NP.STYLE_LABEL[key]
+        ok(f"그림체 딱지: {key}", NP.style_label_of(stored) == want,
+           f"{stored} -> {NP.style_label_of(stored)!r} (기대 {want!r})")
+        # 선택 키를 그대로 줘도 같은 답이어야 한다 — 진행 화면은 키를 준다.
+        ok(f"그림체 딱지(키): {key}", NP.style_label_of(key) == want)
+
+    ok("모르는 값은 빈 딱지", NP.style_label_of("없는그림체") == "")
+    ok("빈 값은 빈 딱지", NP.style_label_of("") == "")
+
+
 def main() -> int:
     for fn in (test_serial_execution, test_position, test_cancel_while_queued,
                test_pick_guards_against_double_queue, test_review_order,
                test_review_say, test_regen_args_and_style,
-               test_regen_status_shape, test_page_versions):
+               test_regen_status_shape, test_page_versions,
+               test_style_label_round_trip):
         fn()
     if fails:
         print("FAILED:")
