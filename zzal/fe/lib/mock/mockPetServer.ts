@@ -24,7 +24,7 @@ import type {
   PetDetail, PetPhase, Personality, Settings, ShareKind, Sick, Today, Tutorial, TutorialStep,
   TutorialStepKey, CareAction,
 } from '../pet';
-import type { GameKind, GameState, GuessResult, Side } from '../game';
+import type { GameKind, GameState, GuessResult, RunResult, Side } from '../game';
 import {
   BABY_DROP_MS, BABY_MS, CARE_MISS_ZERO_MS, CHAT_MEMORY, CHAT_SLOTS, CHAT_MAX_CHARS, DROP_MS, FEATURE_UNLOCK,
   FOOD_CHARGE_MS, GAMES_PER_DAY, INTIMACY, INTIMACY_TIERS, LEFT_RIGHT, MAX_FOOD, MAX_GAUGE, MAX_TRASH, NAME_MAX_CHARS,
@@ -137,6 +137,8 @@ interface Row {
   settings: Settings;
 
   chatAnswered: Set<string>;
+  /** 답한 부름의 내용 — 서버 ChatCall 이 answer·replyLine·reactionKey 를 함께 주므로 목도 남긴다. */
+  chatLog: Map<string, { answer: string; replyLine: string; reactionKey: string }>;
   memory: string[];
 
   daysTogether: number;
@@ -387,6 +389,7 @@ export class MockPetServer implements PetSource {
     r.memory = [...r.memory, clampChat(trimmed)].slice(-CHAT_MEMORY);
     const open = r.motions.find((m) => m.key === reactionKey && m.unlockedAt !== null);
     const chatReply: ChatReply = { line: reply, reactionKey: open ? reactionKey : 'shy' };
+    r.chatLog.set(this.slotKey(r, slot), { answer: clampChat(trimmed), replyLine: chatReply.line, reactionKey: chatReply.reactionKey });
     return this.detail(r, now, this.newlyUnlocked(r, before, now), chatReply);
   }
 
@@ -437,6 +440,7 @@ export class MockPetServer implements PetSource {
     if (r.sick) throw err(409, 'ZZAL_SICK_REFUSES', '아파서 놀 기운이 없대요');
     if (r.today.games >= GAMES_PER_DAY) throw err(409, 'ZZAL_GAME_DAILY_LIMIT', '오늘은 충분히 놀았어요');
     if (kind === 'RUN' && !this.featuresOf(r).run) throw err(409, 'ZZAL_FEATURE_LOCKED', '좌우 맞히기에서 5번 이기면 열려요');
+    const before = this.unlockedSeqs(r);
     r.today.games += 1;
     r.counters.gameStarts += 1;
     r.today.snackStreak = 0;
@@ -444,9 +448,9 @@ export class MockPetServer implements PetSource {
       gameId: this.nextGameId++, kind, round: 0, hits: 0, finished: false, win: null,
       answers: Array.from({ length: LEFT_RIGHT.rounds }, () => (this.nextSeed() % 2 === 0 ? 'LEFT' : 'RIGHT')),
     };
-    // 해금(놀라기 = 3판)은 다음 상태 조회에서 justUnlocked 없이 unlocked 로 드러난다 — 게임 응답은 PetDetail 이 아니라서.
-    this.newlyUnlocked(r, this.unlockedSeqs(r), now);
-    return this.gameState(r, now);
+    // 놀라기(13번)는 3판째 **시작**으로 열린다. 게임 응답은 PetDetail 이 아니지만
+    // 서버가 justUnlocked 를 함께 주므로("행동 응답 = 상태") 목도 같이 싣는다.
+    return this.gameState(r, now, this.newlyUnlocked(r, before, now));
   }
 
   async guess(petId: number, gameId: number, pick: Side): Promise<GuessResult> {
@@ -456,6 +460,7 @@ export class MockPetServer implements PetSource {
     const g = r.game;
     if (!g || g.gameId !== gameId || g.kind !== 'LEFT_RIGHT') throw err(404, 'ZZAL_GAME_NOT_FOUND', '진행 중인 놀이가 없어요');
     if (g.finished) throw err(409, 'ZZAL_GAME_FINISHED', '이미 끝난 놀이예요');
+    const before = this.unlockedSeqs(r);
     const answer = g.answers[g.round];
     const hit = answer === pick;
     const round = g.round;
@@ -471,15 +476,15 @@ export class MockPetServer implements PetSource {
       }
     }
     if (g.finished) g.win = win;
-    void now;
     return {
       gameId, round, pick, answer, hit, hits: g.hits, finished: g.finished, win,
       nextRound: g.finished ? null : g.round, rounds: LEFT_RIGHT.rounds, winAt: LEFT_RIGHT.winAt,
       remainingToday: Math.max(0, GAMES_PER_DAY - r.today.games),
+      justUnlocked: this.newlyUnlocked(r, before, now), runUnlocked: this.featuresOf(r).run,
     };
   }
 
-  async finishRun(petId: number, gameId: number, survivedMs: number): Promise<GameState> {
+  async finishRun(petId: number, gameId: number, survivedMs: number): Promise<RunResult> {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
@@ -489,10 +494,15 @@ export class MockPetServer implements PetSource {
     if (!Number.isFinite(survivedMs) || survivedMs < 0 || survivedMs > RUN.targetMs * 2) {
       throw err(400, 'INVALID_INPUT', '기록이 이상해요');
     }
+    const before = this.unlockedSeqs(r);
     g.finished = true;
     g.win = survivedMs >= RUN.targetMs;
     if (g.win) r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
-    return this.gameState(r, now);
+    return {
+      gameId, survivedMs, win: g.win,
+      remainingToday: Math.max(0, GAMES_PER_DAY - r.today.games),
+      justUnlocked: this.newlyUnlocked(r, before, now), runUnlocked: this.featuresOf(r).run,
+    };
   }
 
   async getCurrentGame(petId: number): Promise<GameState> {
@@ -724,12 +734,18 @@ export class MockPetServer implements PetSource {
   private slotTimes(r: Row): Array<{ slot: ChatSlot; atMs: number }> {
     const hatched = r.hatchedAt ?? r.hatchStartedAt;
     const evening = at(r.dayBase, CHAT_SLOTS.EVENING.hour);
-    // 해석 23(api-v2.md): 정오 이후에 기상한 날은 NOON 부름이 없다(기상+7h 가 저녁 부름과 겹친다).
-    const noonSkipped = tod(r.dayBase) >= 12 * HOUR_MS;
+    // 해석 23(api-v2.md): **시작이 만료보다 늦거나 같은 슬롯은 없다.**
+    // 하루 부름은 앞엣것이 뒤엣것의 시각에 만료되고 저녁(19:00)이 마지막이라, 저녁 시각에 걸리거나
+    // 그 뒤에 도래할 아침·낮 부름은 태어나자마자 만료된 것이라 아예 만들지 않는다.
+    //   · 정오 이후에 기상한 날 → 낮 부름(기상+7h)이 19:00 이후
+    //   · 18시 이후에 부화한 날 → 아침(부화+1h)·낮(부화+7h)이 둘 다 19:00 이후
+    const daily = ([
+      { slot: 'MORNING', atMs: r.dayBase + CHAT_SLOTS.MORNING.afterWakeMs },
+      { slot: 'NOON', atMs: r.dayBase + CHAT_SLOTS.NOON.afterWakeMs },
+    ] as Array<{ slot: ChatSlot; atMs: number }>).filter((t) => t.atMs < evening);
     return [
       { slot: 'BABY', atMs: hatched + CHAT_SLOTS.BABY.afterHatchMs },
-      { slot: 'MORNING', atMs: r.dayBase + CHAT_SLOTS.MORNING.afterWakeMs },
-      ...(noonSkipped ? [] : [{ slot: 'NOON' as ChatSlot, atMs: r.dayBase + CHAT_SLOTS.NOON.afterWakeMs }]),
+      ...daily,
       { slot: 'EVENING', atMs: evening },
     ];
   }
@@ -752,7 +768,7 @@ export class MockPetServer implements PetSource {
     if (babyAlive && baby.atMs <= now) {
       calls.push({
         slot: 'BABY', line: templateCall('BABY', r.personality, r.daysTogether), calledAt: iso(baby.atMs),
-        expiresAt: null, answered: answered('BABY'),
+        expiresAt: null, answered: answered('BABY'), ...this.answerOf(r, 'BABY'),
       });
     }
     daily.forEach((t, i) => {
@@ -760,6 +776,7 @@ export class MockPetServer implements PetSource {
       calls.push({
         slot: t.slot, line: templateCall(t.slot, r.personality, r.counters.chatAnswers + r.daysTogether + i),
         calledAt: iso(t.atMs), expiresAt: next ? iso(next.atMs) : null, answered: answered(t.slot),
+        ...this.answerOf(r, t.slot),
       });
     });
     let openSlot: ChatSlot | null = null;
@@ -772,6 +789,14 @@ export class MockPetServer implements PetSource {
     }
     const future = times.filter((t) => t.slot !== 'BABY' && t.atMs > now).sort((a, b) => a.atMs - b.atMs);
     return { openSlot, calls, memories: [...r.memory], nextAt: future[0] ? iso(future[0].atMs) : null };
+  }
+
+  /** 그 슬롯에 이미 답했으면 답·대사·반응을, 아니면 null 셋을 준다. */
+  private answerOf(r: Row, slot: ChatSlot): Pick<ChatCall, 'answer' | 'replyLine' | 'reactionKey'> {
+    const got = r.chatLog.get(this.slotKey(r, slot));
+    return got
+      ? { answer: got.answer, replyLine: got.replyLine, reactionKey: got.reactionKey }
+      : { answer: null, replyLine: null, reactionKey: null };
   }
 
   private tutorialOf(r: Row, now: number): Tutorial | null {
@@ -800,16 +825,21 @@ export class MockPetServer implements PetSource {
     return { active: now < r.babyUntil, minutesSince: Math.floor((now - hatched) / 60_000), steps };
   }
 
-  private gameState(r: Row, now: number): GameState {
+  /**
+   * 시작·잇기 응답. ★ `finished`·`win` 칸이 없다 — 서버 State 에도 없다(실서버 왕복 확인).
+   * 판이 끝났는가는 친 결과(GuessResult)로만 안다.
+   */
+  private gameState(r: Row, now: number, justUnlocked: number[] = []): GameState {
     void now;
     const g = r.game;
     const playing = g !== null && !g.finished;
     return {
-      playing, gameId: playing ? g.gameId : null, kind: g?.kind ?? null,
-      round: playing && g.kind === 'LEFT_RIGHT' ? g.round : null, hits: g && g.kind === 'LEFT_RIGHT' ? g.hits : null,
-      finished: g !== null && g.finished, win: g?.win ?? null,
+      playing, gameId: playing ? g.gameId : null, kind: playing ? g.kind : null,
+      round: playing && g.kind === 'LEFT_RIGHT' ? g.round : null,
+      hits: playing && g.kind === 'LEFT_RIGHT' ? g.hits : null,
       rounds: LEFT_RIGHT.rounds, winAt: LEFT_RIGHT.winAt,
       remainingToday: Math.max(0, GAMES_PER_DAY - r.today.games),
+      justUnlocked, runUnlocked: this.featuresOf(r).run,
     };
   }
 
@@ -837,14 +867,16 @@ export class MockPetServer implements PetSource {
       intimacy: alive ? { score: r.intimacy, percent, tier } : null,
       today: alive ? today : null,
       pieces: null,
-      // ★ ALIVE 가 아니면 null(계약 2절 · PetResponses.Detail.from). 빈 배열을 주면 훅의 방어가 한 번도 안 돈다.
-      motions: alive ? this.motionsOf(r) : null,
-      justUnlocked: alive ? justUnlocked : null,
+      // ★ ALIVE 가 아니어도 **리스트 셋은 빈 목록**이다(계약 해석 20 — 2026-09-05 실서버 왕복으로 확인).
+      //   훅·화면의 `?? []` 방어는 그대로 둔다. 목이 서버보다 험한 값을 주는 편이 안전해 보이지만,
+      //   서버와 다른 모양을 내면 "목에서만 되는" 코드가 생겨 목이 거짓말을 하게 된다.
+      motions: alive ? this.motionsOf(r) : [],
+      justUnlocked: alive ? justUnlocked : [],
       learnedToday: alive
         ? r.motions
           .filter((m) => m.advanced.status === 'OPEN' && !r.seenAdv.has(m.seq) && m.advanced.imageKey !== null)
           .map((m) => ({ seq: m.seq, key: m.key, label: m.label, imageKey: m.advanced.imageKey as string, revealedAt: m.advanced.revealedAt ?? iso(now) }))
-        : null,
+        : [],
       chatReply,
       firstGift: alive ? this.firstGiftOf(r) : null,
       // ★ v0 백엔드(PR #216)는 chatSummary.openSlot 을 null 로 준다 — 열린 슬롯은 GET /chat 으로 읽는다. 목도 같은 모양.
@@ -879,7 +911,7 @@ export class MockPetServer implements PetSource {
       },
       motions: [...MOTIONS.map(mk), ...SPECIAL_ADV.map(mk)],
       personality: null, world: null, background: DEFAULT_BACKGROUND, settings: { leaveEnabled: true },
-      chatAnswered: new Set(), memory: [],
+      chatAnswered: new Set(), chatLog: new Map(), memory: [],
       daysTogether: 0, lastVisitDay: -1,
       game: null, seenAdv: new Set(),
     };
