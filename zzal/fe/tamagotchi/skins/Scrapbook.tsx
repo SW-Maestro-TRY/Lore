@@ -8,6 +8,8 @@
 //
 // 2026-09-05 v2(PR2): 훈련·친구·시연 갈래를 걷어내고 v2 훅에 맞췄다.
 // 2026-09-05 PR3: 다마고치 섹션을 부품(parts/RoomStage·CallBanner·GaugePanel·ActionBar·CelebrationModal)으로 갈랐다.
+// 2026-09-05 PR4: 온보딩(정본 §15) — 여울 60초 대본(YeoulDemo)·올리기 폼(UploadForm, 이름 12자·학습 미사용 문구)·
+//   부화 대기/실패(HatchWait)·인앱 브라우저 배너(InAppBanner)를 부품으로 넣었다.
 //   ★ 이후 로직 세션은 이 파일을 편집하지 않는다 — 새 UI 는 parts 에 새 파일 + 여기 한 줄 삽입을 요청한다.
 //     상훈님은 이 파일·parts 의 style 을 자유롭게 다듬으신다(플랜 T2 결정 3).
 'use client';
@@ -17,7 +19,7 @@ import { track } from '@common/analytics';
 import AuthModal from '@common/auth/AuthModal';
 import FeedbackSheet from '../FeedbackSheet';
 import GameSection from '../GameSection';
-import { BACKGROUNDS, YEOUL, YEOUL_LOOP } from '../constants';
+import { BACKGROUNDS, YEOUL } from '../constants';
 import { MAX_GAUGE } from '../rules';
 import { useDex } from '../useDex';
 import { useTamagotchi } from '../useTamagotchi';
@@ -27,6 +29,10 @@ import CallBanner from '../parts/CallBanner';
 import CelebrationModal from '../parts/CelebrationModal';
 import GaugePanel from '../parts/GaugePanel';
 import RoomStage from '../parts/RoomStage';
+import HatchWait from '../parts/HatchWait';
+import InAppBanner from '../parts/InAppBanner';
+import UploadForm from '../parts/UploadForm';
+import YeoulDemo from '../parts/YeoulDemo';
 import '../tamagotchi.css';
 
 
@@ -328,38 +334,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
     dot: { width: 7, height: 7, borderRadius: 4, background: t[0] === 'dama' && s.hasChar ? RED : '#BFB49A' } as CSSProperties,
   }));
 
-  // 서버 모드에서는 그림도 필수다(이름·그림 필수, 세부사항은 선택).
-  const canSubmit = derived.canSubmit && !derived.creating;
-  const submitStyle: CSSProperties = {
-    minHeight: 58, border: '1px solid ' + (canSubmit ? '#2F2A22' : '#DCD2B8'), borderRadius: 3,
-    background: canSubmit ? INK : 'rgba(230,224,206,.8)', color: canSubmit ? '#FFF8EC' : '#A79C82',
-    fontFamily: GAEGU, fontWeight: 700, fontSize: 17,
-    cursor: canSubmit ? 'pointer' : 'default',
-    boxShadow: canSubmit ? '2px 3px 0 rgba(58,53,43,.2)' : 'none', transition: 'all .22s ease',
-  };
-  const submitLabel = derived.creating ? '데려오는 중…' : '알로 데려오기';
   const imgUrl = s.imgUrl || YEOUL;
-
-  const uploadFields = (compact: boolean) => (
-    <>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <input value={s.form.name} onChange={e => form.patchForm({ name: e.target.value })} placeholder={compact ? '이름' : '아이의 이름'} style={L.input} />
-        <button onClick={form.randomName} style={L.smallTag}>랜덤</button>
-      </div>
-      <textarea
-        value={s.form.note}
-        onChange={e => form.patchForm({ note: e.target.value })}
-        rows={compact ? 2 : 3}
-        placeholder={compact ? '하고 싶은 말 (선택)' : '조용하지만 고집이 세요'}
-        style={L.textarea}
-      />
-      <label style={L.checkRow}>
-        <input type="checkbox" checked={s.form.agree} onChange={e => form.patchForm({ agree: e.target.checked })} style={{ width: 20, height: 20, accentColor: RED, flex: '0 0 auto' }} />
-        <span style={{ fontSize: 14, color: '#4A4438' }}>제가 그린 그림이 맞습니다</span>
-      </label>
-      <button onClick={submit} disabled={!canSubmit} style={submitStyle}>{submitLabel}</button>
-    </>
-  );
 
   return (
     <div
@@ -375,6 +350,8 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
         ref={scroller}
         style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', scrollSnapType: 'y proximity', paddingBottom: 98 }}
       >
+        {/* 카톡·인스타 인앱 브라우저면 한 줄(정본 §15). 막지 않는다. */}
+        <InAppBanner />
         {/* 섹션 1 — 여울 체험. 다 자란 여울을 직접 만져보는 자리.
             ★ booting 동안에는 안 그린다 — 이미 키우는 사람에게 이 장이 스치면
               "내 아이가 사라졌나" 로 읽힌다. */}
@@ -395,13 +372,13 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                   <span style={L.tape2} />
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15 }}>
                     <div style={L.polaroid}>
-                      <div style={L.photo}>
-                        <div style={L.floorLine} />
-                        <img src={YEOUL_LOOP} alt="여울이 노는 모습" style={L.charImg} />
+                      <div style={{ position: 'relative' }}>
+                        {/* 여울 60초 대본 — 새 튜토리얼의 빨리감기(정본 §15). 규칙 없는 그림책이다. */}
+                        <YeoulDemo width={w} />
                         {s.sampleFx.map(fx => <span key={fx.id} style={fxStyle(fx)}>{fx.text}</span>)}
                       </div>
                       <div style={L.polaroidCaption}>
-                        <span style={{ fontFamily: PEN, fontSize: 21, lineHeight: 1 }}>여울이 · 다 자란 모습</span>
+                        <span style={{ fontFamily: PEN, fontSize: 21, lineHeight: 1 }}>여울이 · 60초로 보는 첫 한 시간</span>
                       </div>
                     </div>
 
@@ -457,25 +434,8 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                     <input type="file" accept="image/*" onChange={form.onPickImg} style={{ display: 'none' }} />
                   </label>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 17 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                      <span style={L.fieldLabel}>이름</span>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input value={s.form.name} onChange={e => form.patchForm({ name: e.target.value })} placeholder="아이의 이름" style={L.input} />
-                        <button onClick={form.randomName} style={L.smallTag}>랜덤</button>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                      <span style={L.fieldLabel}>이 아이에 대해 하고 싶은 말 (선택)</span>
-                      <textarea value={s.form.note} onChange={e => form.patchForm({ note: e.target.value })} rows={3} placeholder="조용하지만 고집이 세요" style={L.textarea} />
-                    </div>
-                    <label style={L.checkRow}>
-                      <input type="checkbox" checked={s.form.agree} onChange={e => form.patchForm({ agree: e.target.checked })} style={{ width: 20, height: 20, accentColor: RED, flex: '0 0 auto' }} />
-                      <span style={{ fontSize: 14, color: '#4A4438' }}>제가 그린 그림이 맞습니다</span>
-                    </label>
-                    <button onClick={submit} disabled={!canSubmit} style={submitStyle}>{submitLabel}</button>
-                    <p style={L.smallHand}>올린 그림은 그대로 씁니다. 손대지 않아요.</p>
-                  </div>
+                  {/* 이름 12자·설정·동의·"올린 그림은 학습에 쓰지 않습니다"(parts/UploadForm) */}
+                  <UploadForm tama={tama} onSubmit={submit} />
                 </div>
               </div>
             </div>
@@ -514,34 +474,8 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
               {/* 부름 한 줄 + 성격 고르기(parts/CallBanner) */}
               <CallBanner tama={tama} pc={pc} />
 
-              {/* 품는 중 안내. 문구는 서버가 지금 하는 일을 사람 말로 준 것 그대로다. */}
-              {s.phase === 'egg' && (
-                <div style={L.notePaper}>
-                  <span style={L.h3}>품는 중</span>
-                  <p style={{ ...L.body, color: INK }}>{derived.eggLine}</p>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#A79C82' }}>
-                    {Math.floor(s.t / 60)}분 {s.t % 60}초 지남
-                  </span>
-                </div>
-              )}
-
-              {/* 태어나지 못한 알. 자리를 먹지 않으므로 내려놓으면 곧바로 다시 올릴 수 있다.
-                  ★ 사용자 잘못이 아니라는 것이 먼저 읽혀야 한다 — 그림을 탓하면 다시 안 온다. */}
-              {derived.failed && (
-                <div style={L.notePaper}>
-                  <span style={L.h3}>이 그림은 좀 어렵네요</span>
-                  <p style={L.body}>
-                    이번엔 아이를 깨우지 못했어요. 다른 그림으로 다시 해 보면 잘 되는 경우가 많아요.
-                  </p>
-                  {/* 알을 내려놓아야 올리는 자리가 다시 그려지므로, 한 박자 뒤에 옮긴다. */}
-                  <button
-                    onClick={() => { ui.retryHatch(); window.setTimeout(goUpload, 80); }}
-                    style={L.tagBtnA}
-                  >
-                    다시 해보기
-                  </button>
-                </div>
-              )}
+              {/* 부화 대기·실패 — 단계 문구·"조금 더 걸려요"·"이 그림은 어려워요"·여울 시연(parts/HatchWait) */}
+              <HatchWait tama={tama} pc={pc} onRetry={goUpload} />
 
               {!s.hasChar && !derived.booting && (
                 <div style={L.notePaper}>
@@ -652,7 +586,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                 </div>
                 <input type="file" accept="image/*" onChange={form.onPickImg} style={{ display: 'none' }} />
               </label>
-              {uploadFields(true)}
+              <UploadForm tama={tama} compact onSubmit={submit} />
             </div>
           </div>
         </div>

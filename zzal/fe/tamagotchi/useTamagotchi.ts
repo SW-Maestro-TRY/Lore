@@ -397,7 +397,7 @@ export function useTamagotchi({ server = null }: TamagotchiOptions = {}) {
 
   const sendChat = useCallback(async () => {
     const msg = clampChat(ref.current.chatDraft);
-    const slot = calls.current?.slot ?? petRef.current?.chatSummary?.openSlot ?? null;
+    const slot = calls.current?.slot ?? srv.current?.chat?.openSlot ?? null;
     if (!msg || !slot) return;
     setLocal((s) => ({ ...s, chatUser: msg, chatDraft: '', chatReply: '', chatTyping: true }));
     track('zzal_chat_answer', { slot });

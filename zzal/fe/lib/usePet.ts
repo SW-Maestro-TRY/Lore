@@ -50,7 +50,7 @@ export interface UsePetResult {
   justUnlocked: number[];
   clearJustUnlocked: () => void;
 
-  /** 열린 부름의 대사·목록. openSlot 이 있을 때만 서버에 물어 채운다. */
+  /** 오늘의 부름 목록과 열린 슬롯(GET /chat). ALIVE 응답마다 갱신된다 — chatSummary.openSlot 은 v0 에서 null. */
   chat: ChatState | null;
   /** 방금 답에 대한 대사. 화면이 말풍선을 내린 뒤 clearChatReply() 로 지운다. */
   chatReply: PetDetail['chatReply'];
@@ -256,15 +256,15 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
   }, [petId, reload]);
 
   // ── 부름 대사 ─────────────────────────────────────────────────────────
-  // 열린 슬롯이 있을 때만 묻는다. 슬롯이 바뀌거나 답한 뒤(chat=null) 다시 묻는다.
-  const openSlot = pet?.chatSummary?.openSlot ?? null;
+  // ★ v0 백엔드는 chatSummary.openSlot 을 null 로 준다(PR #216) — 열린 슬롯은 GET /chat 이 정본이다.
+  //   그래서 ALIVE 상태가 새로 올 때마다(폴링·행동) 같이 묻는다. 답한 뒤(chat=null)도 다시 묻는다.
+  const aliveStamp = pet?.phase === 'ALIVE' ? pet.serverNow : null;
   useEffect(() => {
     const s = src.current;
-    if (!s || petId === null || !openSlot) {
+    if (!s || petId === null || !aliveStamp) {
       setChat(null);
       return;
     }
-    if (chat && chat.openSlot === openSlot) return;
     let alive = true;
     const controller = new AbortController();
     s.getChat(petId, controller.signal)
@@ -276,7 +276,7 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
       alive = false;
       controller.abort();
     };
-  }, [petId, openSlot, chat]);
+  }, [petId, aliveStamp]);
 
   return {
     pet, loading, error, acting,

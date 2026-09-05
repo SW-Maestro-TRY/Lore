@@ -715,10 +715,12 @@ export class MockPetServer implements PetSource {
   private slotTimes(r: Row): Array<{ slot: ChatSlot; atMs: number }> {
     const hatched = r.hatchedAt ?? r.hatchStartedAt;
     const evening = at(r.dayBase, CHAT_SLOTS.EVENING.hour);
+    // 해석 23(api-v2.md): 정오 이후에 기상한 날은 NOON 부름이 없다(기상+7h 가 저녁 부름과 겹친다).
+    const noonSkipped = tod(r.dayBase) >= 12 * HOUR_MS;
     return [
       { slot: 'BABY', atMs: hatched + CHAT_SLOTS.BABY.afterHatchMs },
       { slot: 'MORNING', atMs: r.dayBase + CHAT_SLOTS.MORNING.afterWakeMs },
-      { slot: 'NOON', atMs: r.dayBase + CHAT_SLOTS.NOON.afterWakeMs },
+      ...(noonSkipped ? [] : [{ slot: 'NOON' as ChatSlot, atMs: r.dayBase + CHAT_SLOTS.NOON.afterWakeMs }]),
       { slot: 'EVENING', atMs: evening },
     ];
   }
@@ -836,7 +838,8 @@ export class MockPetServer implements PetSource {
         : null,
       chatReply,
       firstGift: alive ? this.firstGiftOf(r) : null,
-      chatSummary: alive ? (({ openSlot, nextAt }) => ({ openSlot, nextAt }))(this.chatOf(r, now)) : null,
+      // ★ v0 백엔드(PR #216)는 chatSummary.openSlot 을 null 로 준다 — 열린 슬롯은 GET /chat 으로 읽는다. 목도 같은 모양.
+      chatSummary: alive ? { openSlot: null, nextAt: this.chatOf(r, now).nextAt } : null,
       scenes: alive ? { enabled: false, latest: null } : null,
       personality: r.personality, world: r.world, background: alive ? r.background : null,
       features: alive ? this.featuresOf(r) : null,
