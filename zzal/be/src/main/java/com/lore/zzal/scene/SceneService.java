@@ -53,7 +53,10 @@ public class SceneService {
     }
 
     /**
-     * 조회·행동 때 부재분을 정산한다 — 쌓인 4시간 청크만큼 장면을 남기고 그만큼 덜어낸다.
+     * 조회·행동 때 부재분을 정산한다 — 쌓인 4시간 청크만큼 장면을 남긴다.
+     *
+     * ★ 여기서 말하는 "부재" 는 <b>마지막으로 앱을 연 뒤</b>다({@code ZzalPet.visit} 가 그 시계를 0으로 끊는다).
+     *   그래서 계속 들여다보는 사람에게는 아무 컷도 안 남는다.
      *
      * @return 이번에 새로 남은 컷 수(0 이면 아무 일도 없었다)
      */
@@ -73,6 +76,7 @@ public class SceneService {
             Instant at = awakeMinus(now, ZzalRules.SCENE_ABSENCE_CHUNK.getSeconds() * (i - 1L));
             save(pet, at, false);
         }
+        trim(pet.getId());              // ★ 컷마다가 아니라 한 번만
         pet.consumeScenes(pending, now);
         log.debug("혼자 논 장면 — petId={} 청크={} 저장={}", pet.getId(), pending, made);
         return made;
@@ -96,12 +100,15 @@ public class SceneService {
         if (!pet.isScenesEnabled()) {
             return 0;
         }
-        Instant at = pet.getSleptAt();
-        pet.markNightScene(at);         // 아파서 안 남기더라도 표식은 찍는다(같은 잠을 매번 다시 보지 않게)
+        // ★ "지금 자고 있나" 가 아니라 <b>잠들 때 남긴 쪽지</b>를 쓴다 — 밤새 앱을 안 열고 아침에 열면
+        //   그 한 번의 정산이 잠들기와 깨어나기를 한꺼번에 처리해 "지금 자고 있나" 는 이미 거짓이다.
+        Instant at = pet.getPendingNightSceneAt();
+        pet.markNightScene(at);         // 아파서 안 남기더라도 쪽지는 지운다(같은 잠을 매번 다시 보지 않게)
         if (pet.isSick()) {
             return 0;
         }
         save(pet, at, true);
+        trim(pet.getId());
         return 1;
     }
 
@@ -150,15 +157,21 @@ public class SceneService {
 
     // ── 한 컷 만들기 ──────────────────────────────────────────────────────
 
+    /**
+     * 한 컷 저장. ★ {@code trim} 은 여기서 부르지 않는다 — 부르는 쪽이 <b>한 번만</b> 부른다.
+     * 컷마다 부르면 세 컷을 남길 때 표를 세 번 통째로 다시 읽는다.
+     */
     private void save(ZzalPet pet, Instant at, boolean night) {
         String motionKey = night ? "practice" : idleMotion(pet, at);
         sceneRepository.save(ZzalScene.of(pet.getId(), motionKey, pet.getBackground(),
                 prop(pet, at), at, pet.mood().name(), night));
-        trim(pet.getId());
     }
 
     /**
      * 넘치는 것을 지운다 — <b>가장 오래된 것부터</b>(정본 16장 "보관 3개").
+     *
+     * ★ 잠금은 따로 안 건다 — 이 서비스를 부르는 길은 전부 {@code PetService.touch} 이고, 그 앞에서
+     *   펫 행을 이미 {@code SELECT … FOR UPDATE} 로 잡고 있다(같은 펫의 요청은 거기서 직렬화된다).
      *
      * ★ 지우지 않으면 이 표가 사용자당 무한히 자란다. 지우는 쪽을 고른 이유는 "3개" 가 정본이고,
      *   더 남겨 두면 앨범에서 어느 셋을 보여줄지 또 정해야 하기 때문이다.

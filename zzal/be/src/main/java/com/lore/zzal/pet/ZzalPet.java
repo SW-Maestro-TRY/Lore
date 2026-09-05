@@ -261,6 +261,17 @@ public class ZzalPet {
     private Instant nightSceneAt;
 
     /**
+     * 밤 장면을 <b>아직 안 만든 잠</b>의 잠든 시각. 잠드는 순간 적어 두고, 다음 정산·조회에서 쓴 뒤 지운다.
+     *
+     * ★★ 왜 "지금 자고 있나" 로 판정하면 안 되나 — 밤새 앱을 안 열고 다음 날 아침에 열면,
+     *   그 한 번의 정산이 <b>잠들기와 깨어나기를 한꺼번에</b> 처리한다. 그 끝에서는 이미 깨어 있어서
+     *   "자고 있나" 가 거짓이고, 그러면 밤 장면은 <b>23~10시에 앱을 연 사람만</b> 받게 된다
+     *   (#227 리뷰 상-2 — 정상 흐름에서 안 남았다). 잠든 순간에 쪽지를 남기면 언제 열어도 받는다.
+     */
+    @Column
+    private Instant pendingNightSceneAt;
+
+    /**
      * 여행을 떠난 시각(정본 9장). 채우는 것은 PR-11 — 지금은 <b>여행 중이면 장면을 안 남긴다</b>는
      * 판정에만 쓰인다(여행 중에는 방에 없고, 그때 이야기는 엽서가 따로 맡는다).
      */
@@ -602,7 +613,10 @@ public class ZzalPet {
 
             at = at.plusSeconds(step);
             // 부재 시계는 아기 때도 흐른다 — 아기 60분에 앱을 닫고 네 시간 뒤 오면 그 사이도 혼자 있던 것이다.
-            absenceAwakeSec += step;
+            // ★ 여행 중에는 안 센다 — 방에 없으니 "혼자 방에서 논" 시간이 아니다(PR-11 대비).
+            if (!isTraveling()) {
+                absenceAwakeSec += step;
+            }
             if (!baby) {
                 // ★★ "이 step 을 걷기 전에 이미 아팠나" 를 먼저 잡는다. accumulateZero 가 이 step 안에서
                 //   병을 낼 수 있는데, 그 뒤에 step 을 통째로 병 시간에 더하면 <b>아프기도 전의 시간이
@@ -841,14 +855,20 @@ public class ZzalPet {
         return sceneJustMade;
     }
 
-    /** 밤 연습 장면을 남겼다고 표시(같은 잠에 두 컷을 남기지 않는다). */
+    /** 밤 연습 장면 처리가 끝났다고 표시(같은 잠에 두 컷을 남기지 않는다). */
     public void markNightScene(Instant at) {
         this.nightSceneAt = at;
+        this.pendingNightSceneAt = null;
     }
 
-    /** 이 잠에 대해 밤 장면을 아직 안 남겼나. */
+    /** 아직 처리 안 한 밤잠이 있나. */
     public boolean needsNightScene() {
-        return sleepKind == SleepKind.NIGHT && sleptAt != null && !sleptAt.equals(nightSceneAt);
+        return pendingNightSceneAt != null;
+    }
+
+    /** 그 밤잠에 든 시각(장면의 시각이 된다). 없으면 null. */
+    public Instant getPendingNightSceneAt() {
+        return pendingNightSceneAt;
     }
 
     /** 혼자 놀기 기능이 열렸나(정본 6장 — 첫 부재 4시간 뒤 자동). */
@@ -953,6 +973,10 @@ public class ZzalPet {
         sleepKind = kind;
         sleptAt = at;
         if (kind == SleepKind.NIGHT) {
+            // 밤 장면(연습 장면) 쪽지 — 실제로 만드는 것은 서비스가 다음 정산에서(엔티티는 표를 모른다)
+            if (!at.equals(nightSceneAt)) {
+                pendingNightSceneAt = at;
+            }
             if (todayCareMiss == 0) {
                 zeroMissDays += 1;
             }
@@ -1103,6 +1127,11 @@ public class ZzalPet {
      */
     public boolean visit(Instant now) {
         lastSeenAt = now;
+        // ★★ 앱을 여는 순간 <b>부재는 끝난다</b>. 여기서 안 끊으면 이 시계는 "부재" 가 아니라
+        //   "깨어 있던 시간 전부" 가 되고, 30분마다 들여다보는 사람에게도 네 시간마다 "혼자 논 장면" 이
+        //   남는다(#227 리뷰 상-1 실측 — 30분마다 12번 조회에 컷 2개). 정본 11·16장은 <b>부재 중</b>이다.
+        //   남은 초(4시간에 못 미친 나머지)도 그 부재와 함께 끝난다 — 다음 부재는 처음부터 센다.
+        absenceAwakeSec = 0;
         LocalDate today = AwakeClock.dateOf(now);
         if (today.equals(lastVisitDate)) {
             return false;

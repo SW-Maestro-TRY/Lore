@@ -104,6 +104,20 @@ class SceneServiceTest {
     }
 
     @Test
+    @DisplayName("★ 세 컷을 한 번에 남겨도 정리는 한 번만 — 컷마다 표를 다시 읽지 않는다")
+    void trimsOnce() {
+        ZzalPet pet = child();
+        ReflectionTestUtils.setField(pet, "absenceAwakeSec", 12 * 3600L);
+
+        service.recordAbsence(pet, T0);
+
+        assertThat(stored).hasSize(3);
+        // save 3번 + trim 1번 = 조회 1번(정리) — 컷마다 정리하면 3번이 된다
+        org.mockito.Mockito.verify(repository, org.mockito.Mockito.times(1))
+                .findByPetIdOrderBySceneAtDescIdDesc(any());
+    }
+
+    @Test
     @DisplayName("★★ 넷째 컷이 생기면 가장 오래된 것이 사라진다(보관 3개)")
     void fourthDropsOldest() {
         ZzalPet pet = child();
@@ -203,6 +217,19 @@ class SceneServiceTest {
         assertThat(service.recordAbsence(pet, T0)).isZero();
         assertThat(service.recordNight(pet)).isZero();
         assertThat(stored).isEmpty();
+    }
+
+    @Test
+    @DisplayName("★★ 여행 중에는 부재 시계도 안 흐른다 — 돌아와서 장면이 몰아서 생기지 않는다")
+    void absenceStopsWhileTraveling() {
+        ZzalPet pet = child();
+        ReflectionTestUtils.setField(pet, "absenceAwakeSec", 0L);   // 아기 60분에 쌓인 것을 지우고 시작
+        ReflectionTestUtils.setField(pet, "tripStartedAt", T0);
+
+        pet.settle(kst("2026-09-05 22:00"));                   // 깨어 있는 10시간
+
+        assertThat(pet.getAbsenceAwakeSec()).isZero();
+        assertThat(pet.pendingScenes()).isZero();
     }
 
     @Test

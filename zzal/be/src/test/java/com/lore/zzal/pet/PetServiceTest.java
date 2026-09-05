@@ -58,6 +58,7 @@ class PetServiceTest {
     private ZzalMotionRepository motionRepository;
     private MotionSeeder seeder;
     private com.lore.zzal.scene.ZzalSceneRepository sceneRepository;
+    private final java.util.List<com.lore.zzal.scene.ZzalScene> scenes = new java.util.ArrayList<>();
     private PetService service;
 
     @BeforeEach
@@ -70,8 +71,21 @@ class PetServiceTest {
         motionRepository = mock(ZzalMotionRepository.class);
         seeder = mock(MotionSeeder.class);
         sceneRepository = mock(com.lore.zzal.scene.ZzalSceneRepository.class);
-        when(sceneRepository.findByPetIdOrderBySceneAtDescIdDesc(any())).thenReturn(List.of());
-        when(sceneRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        scenes.clear();
+        when(sceneRepository.save(any())).thenAnswer(i -> {
+            com.lore.zzal.scene.ZzalScene sc = i.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(sc, "id", (long) (scenes.size() + 1));
+            scenes.add(sc);
+            return sc;
+        });
+        when(sceneRepository.findByPetIdOrderBySceneAtDescIdDesc(any())).thenAnswer(i -> scenes.stream()
+                .sorted(java.util.Comparator.comparing(com.lore.zzal.scene.ZzalScene::getSceneAt)
+                        .thenComparing(com.lore.zzal.scene.ZzalScene::getId).reversed())
+                .toList());
+        org.mockito.Mockito.doAnswer(i -> {
+            scenes.remove(i.<com.lore.zzal.scene.ZzalScene>getArgument(0));
+            return null;
+        }).when(sceneRepository).delete(any());
         service = new PetService(
                 petRepository,
                 jobRepository,
@@ -495,6 +509,76 @@ class PetServiceTest {
             when(petRepository.findByUserIdOrderByIdDesc(USER_ID)).thenReturn(List.of(pet));
             List<ZzalPet> pets = service.refreshAll(USER_ID, kst("2026-09-06 00:00"));
             assertThat(pets.get(0).isSleeping()).isTrue();
+        }
+    }
+
+    /**
+     * 혼자 논 장면 — 실패 주입(verify-failure-paths). ★ 여기는 <b>진짜 조회 경로</b>(touch)를 탄다.
+     *
+     * SceneServiceTest 는 서비스만 따로 보지만, 이 두 가지는 조회·행동이 지나는 길에서만 드러난다 —
+     * "계속 보고 있으면 안 남는다"(부재의 정의)와 "밤새 안 열고 아침에 열어도 밤 장면이 온다".
+     */
+    @Nested
+    @DisplayName("혼자 논 장면 — 조회 경로에서")
+    class Scenes {
+
+        private ZzalPet withId() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
+            return pet;
+        }
+
+        @Test
+        @DisplayName("★★ 계속 보고 있으면 장면이 안 남는다 — 30분마다 12번 조회(6시간)해도 컷 0")
+        void watchingDoesNotCountAsAbsence() {
+            ZzalPet pet = withId();
+
+            for (int i = 1; i <= 12; i++) {
+                service.refresh(USER_ID, PET_ID, T0.plus(Duration.ofMinutes(30L * i)));
+            }
+
+            assertThat(scenes).as("부재가 아니라 '깨어 있던 시간' 을 세면 여기서 컷이 생긴다").isEmpty();
+            assertThat(pet.getAbsenceAwakeSec()).isZero();     // 볼 때마다 끊긴다
+            assertThat(pet.isScenesEnabled()).isFalse();
+        }
+
+        @Test
+        @DisplayName("★ 4시간을 비우면 한 컷 — 그러나 그 직후 다시 4시간을 비워야 다음 컷이다(남은 초는 안 넘어간다)")
+        void absenceStartsOverEachVisit() {
+            withId();
+            service.refresh(USER_ID, PET_ID, T0);                             // 부재 시계를 여기서 0으로
+            service.refresh(USER_ID, PET_ID, T0.plus(Duration.ofHours(7)));   // 7시간 비움 → 한 컷(3시간 남음)
+            assertThat(scenes).hasSize(1);
+
+            service.refresh(USER_ID, PET_ID, T0.plus(Duration.ofHours(9)));   // 2시간 더 → 아직 아님
+            assertThat(scenes).as("남은 3시간이 넘어왔다면 여기서 두 번째 컷이 생긴다").hasSize(1);
+        }
+
+        @Test
+        @DisplayName("★★ 밤새 안 열고 아침에 열어도 밤 연습 장면이 온다 — 22:00 재우기 → 다음 날 11:00 조회")
+        void nightSceneSurvivesUntilMorning() {
+            ZzalPet pet = withId();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "scenesEnabledAt", T0);
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 19:30"));
+            // 아프면 연습 장면을 안 남기는 것이 규칙이라(정본 16장), 이 테스트에서는 낫게 해 둔다
+            if (pet.isSick()) {
+                service.care(USER_ID, PET_ID, CareAction.MEDICINE, kst("2026-09-05 19:30"));
+            }
+            service.sleep(USER_ID, PET_ID, kst("2026-09-05 22:00"));
+            int afterSleep = scenes.size();
+
+            // 그 뒤로 앱을 안 열다가 다음 날 11:00(10:00 자동 기상을 지난 뒤)에 연다
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 11:00"));
+
+            assertThat(scenes).as("재우는 응답에서든 아침 첫 조회에서든 한 번은 남아야 한다").isNotEmpty();
+            assertThat(scenes.stream().filter(com.lore.zzal.scene.ZzalScene::isNight))
+                    .singleElement()
+                    .satisfies(sc -> {
+                        assertThat(sc.getMotionKey()).isEqualTo("practice");
+                        assertThat(sc.getSceneAt()).isEqualTo(kst("2026-09-05 22:00"));
+                    });
+            assertThat(afterSleep).isPositive();               // 재우는 응답에 이미 실렸다
+            assertThat(pet.needsNightScene()).isFalse();       // 쪽지는 소비됐다
         }
     }
 
