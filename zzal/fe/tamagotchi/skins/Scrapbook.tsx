@@ -21,6 +21,7 @@ import FeedbackSheet from '../FeedbackSheet';
 import GameSection from '../GameSection';
 import AlbumNotes from '../parts/AlbumNotes';
 import BackgroundPicker from '../parts/BackgroundPicker';
+import PiecesRow from '../parts/PiecesRow';
 
 /**
  * 상태 한 줄 — key 는 뜻, 값은 지금 쓰는 말. **key 는 검사가 잡는 손잡이라 함부로 바꾸지 않는다.**
@@ -523,6 +524,11 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                 <div style={L.panel} data-part="panel">
                   <GaugePanel tama={tama} pc={pc} name={cur.name} />
                   <ActionBar tama={tama} pc={pc} />
+                  {/* 조각 4칸 — 3층 전에는 서버가 null 을 주고, 그때는 아예 안 그린다(parts/PiecesRow). */}
+                  <PiecesRow
+                    pieces={session.server?.pet?.pieces ?? null}
+                    goodDay={session.server?.pet?.goodDay === true}
+                  />
                   {/* 방 꾸미기 — 2층 4종 뒤(parts/BackgroundPicker). 잠겨 있어도 조건은 보여 준다. */}
                   <BackgroundPicker
                     current={bg}

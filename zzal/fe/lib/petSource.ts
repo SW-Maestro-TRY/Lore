@@ -8,6 +8,7 @@
 //   ?mock=new        아이 없음(올리기부터)
 //   ?mock=failed     부화 실패(ALIVE 블록이 전부 null 인 응답 — 화면이 안 죽는지 보는 자리)
 //   ?mock=grown      사흘째 · 2층 4종 열림 · 오늘 밤 첫 선물이 구워지는 자리
+//   ?mock=layer3     닷새째 · 2층 8종 전부 열림 — 다음 기상에 조각 4칸이 등장
 //   &clock=2026-09-05T10:30   시작 시각을 KST 로 못 박음(그 뒤로는 실시간)
 //
 // ★ 목은 페이지당 하나(모듈 싱글턴). 훅이 여러 번 만들면 각자 다른 시계를 갖게 된다.
@@ -74,7 +75,7 @@ export async function resolvePetSource(search: string): Promise<PetSource> {
   type MockPreset = Parameters<typeof MockPetServer.prototype.reset>[0] & string;
   // ★ 아는 이름만 골라 쓴다. 목록에 없으면 조용히 'baby' 가 되므로, 새 프리셋을 만들 때 여기를 빼먹으면
   //   "프리셋을 만들었는데 아기가 뜬다" 가 된다(실제로 한 번 겪었다).
-  const KNOWN: MockPreset[] = ['new', 'baby', 'child', 'failed', 'grown'];
+  const KNOWN: MockPreset[] = ['new', 'baby', 'child', 'failed', 'grown', 'layer3'];
   const preset = (KNOWN as string[]).includes(mock) ? (mock as MockPreset) : 'baby';
   const server = new MockPetServer({ preset, clockStartMs: parseClockParam(params.get('clock')) });
   installMockHandle(server);

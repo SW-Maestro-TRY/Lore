@@ -20,7 +20,7 @@
 
 import { ApiError } from '../api';
 import type {
-  Album, BakingState, ChatCall, ChatReply, ChatSlot, ChatState, Clock, CreatePetInput, Features, FirstGift, Motion, PetCreated,
+  Album, BakingState, ChatCall, ChatReply, ChatSlot, ChatState, Clock, CreatePetInput, Features, FirstGift, Motion, PetCreated, Pieces, SickKind,
   PetDetail, PetPhase, Personality, Settings, ShareKind, Sick, Today, Tutorial, TutorialStep,
   TutorialStepKey, CareAction,
 } from '../pet';
@@ -74,7 +74,7 @@ export function parseClockParam(raw: string | null): number | null {
 // 화면이 ALIVE 블록(clock·gauges·motions…)이 전부 null 인 응답으로도 안 죽는지 보는 자리다
 // (사라진 리뷰 하네스 C0~C2 자리 — 계약 2절). 목록은 FAILED 를 걸러내므로(useZzalSession),
 // 실패한 알은 "만든 뒤 폴링으로 실패가 도착"하는 실제 경로로만 화면에 뜬다 — 그래서 씨앗이 아니라 스위치다.
-export type MockPreset = 'new' | 'baby' | 'child' | 'failed' | 'grown';
+export type MockPreset = 'new' | 'baby' | 'child' | 'failed' | 'grown' | 'layer3';
 
 interface MotionRow {
   seq: number;
@@ -123,6 +123,23 @@ interface Row {
   food: number;
   foodAcc: number;
   sick: Sick | null;
+  /** 흔적이 가득한 채 깨어 있던 누적 시간(ms). DIRTY 발병용. */
+  dirtyAcc: number;
+  /** 3층이 열렸나(2층 8종 다 연 다음 기상). */
+  piecesEnabled: boolean;
+  /** 2층 8종이 **실제로** 다 열린 시각. 관측 시각이 아니다(해석 49). null 이면 아직. */
+  layer2DoneAt: number | null;
+  /**
+   * 조각 네 칸을 세는 하루 카운터. ★ `today` 안에 두지 않는다 — `today` 는 그대로 응답에 나가는
+   * 블록이라, 내부용 숫자를 섞으면 계약에 없는 필드가 새어 나간다.
+   */
+  pieceDay: { feeds: number; snacks: number; gameWins: number; cleans: number; chats: number };
+  /** 네 칸을 며칠 연속 채웠나(0~2). 잠들 때 판정한다(해석 48). */
+  pieceStreak: number;
+  bonusPiece: boolean;
+  goodDay: boolean;
+  /** 다음 기상에 기분 좋은 날로 켤 것인가(잠들 때 판정 → 다음 날 기상, 해석 52). */
+  goodDayNext: boolean;
 
   intimacy: number;
   today: Today & { careMiss: number };
@@ -216,6 +233,17 @@ export class MockPetServer implements PetSource {
     this.failNextBake = true;
   }
 
+  /**
+   * 병을 직접 앉힌다(디버그 손잡이).
+   * ★ 확률이 섞인 병(NEGLECT·NATURAL)은 목이 만들 수 없어서 — 서버만 아는 값이 씨앗에 섞인다(해석 42) —
+   *   그 화면을 보려면 이 손잡이로 앉힌다. 규칙을 흉내 내는 것보다 "못 만든다" 를 드러내는 편이 정직하다.
+   */
+  makeSick_(kind: SickKind): void {
+    const r = this.row;
+    if (!r || r.phase !== 'ALIVE') return;
+    this.fallSick(r, kind, this.now());
+  }
+
   reset(preset: MockPreset = 'baby'): void {
     this.row = null;
     this.hatchFails = preset === 'failed';
@@ -257,6 +285,8 @@ export class MockPetServer implements PetSource {
     const now = this.settle(r, this.now());
     if (r.sleeping) throw err(409, 'ZZAL_PET_SLEEPING', '자고 있어요');
     const before = this.unlockedSeqs(r);
+    /** 이 행동으로 방금 나았는가. 행동 응답에만 실린다(해석 38). */
+    let healed = false;
 
     switch (action) {
       case 'FEED':
@@ -266,6 +296,7 @@ export class MockPetServer implements PetSource {
         if (r.food < MAX_FOOD && r.foodAcc === 0) r.foodAcc = 0;
         r.fullness += 1;
         r.counters.feedCount += 1;
+        r.pieceDay.feeds += 1;
         r.today.snackStreak = 0;
         this.careIntimacy(r);
         break;
@@ -273,9 +304,12 @@ export class MockPetServer implements PetSource {
         if (r.sick) throw err(409, 'ZZAL_SICK_REFUSES', '아파서 간식은 싫대요');
         // 가득이어도 받는다 — 거절하면 "연속 5개면 배탈"(§4) 에 닿을 길이 없다. 행복만 상한에서 멈춘다.
         r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
+        r.pieceDay.snacks += 1;
         r.today.snackStreak += 1;
         if (r.today.snackStreak >= SNACK_STREAK_SICK) {
-          r.sick = { since: iso(now), kind: 'SNACK' };
+          // ★ 아기 60분 안에는 병이 없다(해석 39). 연속 카운터는 5에서 0으로 끊는다 —
+          //   안 끊으면 60분이 끝나자마자 여섯 개째에 곧바로 아프게 된다.
+          if (now >= r.babyUntil) this.fallSick(r, 'UPSET', now);
           r.today.snackStreak = 0;
         }
         break;
@@ -291,6 +325,7 @@ export class MockPetServer implements PetSource {
         if (r.trash <= 0) throw err(409, 'ZZAL_CARE_NOT_NEEDED', '이미 깨끗해요');
         r.trash = 0;
         r.counters.cleanCount += 1;
+        r.pieceDay.cleans += 1;
         r.today.snackStreak = 0;
         this.careIntimacy(r);
         break;
@@ -306,13 +341,14 @@ export class MockPetServer implements PetSource {
       case 'MEDICINE':
         if (!r.sick) throw err(409, 'ZZAL_CARE_NOT_NEEDED', '지금은 건강해요');
         r.sick = null;
+        healed = true;
         this.careIntimacy(r);
         break;
       default:
         throw err(400, 'INVALID_INPUT', '모르는 행동이에요');
     }
     this.resetZero(r);
-    return this.detail(r, now, this.newlyUnlocked(r, before, now));
+    return this.detail(r, now, this.newlyUnlocked(r, before, now), null, healed);
   }
 
   async sleep(petId: number): Promise<PetDetail> {
@@ -392,6 +428,7 @@ export class MockPetServer implements PetSource {
     const before = this.unlockedSeqs(r);
     r.chatAnswered.add(this.slotKey(r, slot));
     r.counters.chatAnswers += 1;
+    r.pieceDay.chats += 1;
     r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.chat);
     r.today.snackStreak = 0;
     const { reply, reactionKey } = templateReply(r.personality, trimmed, r.memory, this.nextSeed());
@@ -486,6 +523,7 @@ export class MockPetServer implements PetSource {
       win = g.hits >= LEFT_RIGHT.winAt;
       if (win) {
         r.counters.leftRightWins += 1;
+        r.pieceDay.gameWins += 1;
         r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
       }
     }
@@ -590,13 +628,35 @@ export class MockPetServer implements PetSource {
         if (r[g] > 0) r[g] -= 1;
       }
     }
+    // 흔적. ★ 이 구간에서 **언제 가득 찼는지**까지 알아야 한다 — DIRTY 병이 "가득한 채 6시간" 이라
+    //   구간 하나를 통째로 세면 12시간을 한 번에 밀 때 없던 병이 생긴다(실측).
+    const needToFull = Math.max(0, MAX_TRASH - r.trash);
     r.acc.trash += dt;
+    let trashSteps = 0;
     while (r.acc.trash >= rate.trash) {
       r.acc.trash -= rate.trash;
+      trashSteps += 1;
       if (r.trash < MAX_TRASH) r.trash += 1;
     }
+    /** 이 구간에서 흔적이 가득한 채로 흐른 시간. 이미 가득이었으면 구간 전체. */
+    const fullMs = r.trash < MAX_TRASH ? 0
+      : needToFull === 0 ? dt
+        : Math.max(0, (trashSteps - needToFull) * rate.trash + r.acc.trash);
     // 케어 미스 — 아기 60분엔 없다(§12). 구간 끝 상태로 근사한다.
     if (baby) return;
+    // ★ 병 DIRTY — 흔적이 가득한 채로 **깨어 있는** 6시간(해석 35, 100%).
+    //   NEGLECT(확률 30%)·NATURAL(확률·서버 비밀 씨앗)은 목이 만들지 않는다 — 아래 fallSick 주석.
+    if (fullMs > 0) {
+      const wasBelow = r.dirtyAcc < CARE_MISS_ZERO_MS;
+      r.dirtyAcc += fullMs;
+      // ★ 발병 시각은 **6시간을 넘긴 그 순간**이다 — 구간 끝이 아니라. 그래야 세 시간 만에 한 번 보든
+      //   1분마다 보든 `sick.since` 가 같다(해석 41 과 같은 결).
+      if (wasBelow && r.dirtyAcc >= CARE_MISS_ZERO_MS) {
+        this.fallSick(r, 'DIRTY', to - (r.dirtyAcc - CARE_MISS_ZERO_MS));
+      }
+    } else {
+      r.dirtyAcc = 0;
+    }
     const zero = { fullness: r.fullness <= 0, happiness: r.happiness <= 0, trash: r.trash >= MAX_TRASH };
     for (const g of ['fullness', 'happiness', 'trash'] as const) {
       if (!zero[g]) { r.zeroAcc[g] = 0; r.zeroArmed[g] = false; continue; }
@@ -608,11 +668,32 @@ export class MockPetServer implements PetSource {
     }
   }
 
+  /**
+   * 병에 걸린다. ★ **먼저 난 병이 이긴다**(해석 35) — 아픈 동안 다른 조건이 차도 원인이 안 바뀐다.
+   *
+   * ★★ 목은 **확률이 섞인 병을 만들지 않는다.** `NEGLECT`(30%)·`NATURAL`(깨어 있는 3일 창)은
+   *    서버만 아는 값이 씨앗에 섞여 있어(해석 42) 목이 같은 값을 낼 방법이 아예 없다.
+   *    흉내 내면 "목에서만 나는 병" 이 되고, 그 화면은 실서버에서 한 번도 안 돈다(결정기록 C40).
+   *    화면 확인이 필요하면 `__zzalMock.makeSick('NEGLECT')` 로 직접 앉힌다.
+   */
+  private fallSick(r: Row, kind: SickKind, at_: number): void {
+    if (r.sick) return;
+    r.sick = { since: iso(at_), kind };
+    r.dirtyAcc = 0;
+  }
+
   /** 채워진 게이지의 바닥 타이머를 푼다(행동 직후). */
   private resetZero(r: Row): void {
     if (r.fullness > 0) { r.zeroAcc.fullness = 0; r.zeroArmed.fullness = false; }
     if (r.happiness > 0) { r.zeroAcc.happiness = 0; r.zeroArmed.happiness = false; }
-    if (r.trash < MAX_TRASH) { r.zeroAcc.trash = 0; r.zeroArmed.trash = false; }
+    if (r.trash < MAX_TRASH) {
+      r.zeroAcc.trash = 0;
+      r.zeroArmed.trash = false;
+      // ★ 병(DIRTY)의 시계도 함께 푼다. 안 풀면 "치웠는데 시계는 계속 도는" 상태가 남는다 —
+      //   지금은 tickAwake 가 매 구간 다시 계산해 결과가 갈리지 않지만, 두 자리가 같은 사실을
+      //   따로 기억하고 있으면 언젠가 갈라진다. 불변식은 한 곳에서 지킨다.
+      r.dirtyAcc = 0;
+    }
   }
 
   /** 밥 충전 — 자는 동안에도 돈다(§16). */
@@ -637,7 +718,17 @@ export class MockPetServer implements PetSource {
       // ★ 반드시 리셋 **앞**에서 계획한다 — 밤 굽기 조건이 "그날 케어 미스 0" 이라,
       //   today 를 지운 뒤에 물으면 언제나 0 이 나와 **아무 날이나 굽게** 된다.
       this.planNight(r);
+      // ★ 조각은 **잠들 때만** 판정한다(해석 48). 3층 전에는 아예 안 센다 — 연속도 안 쌓인다.
+      if (r.piecesEnabled) {
+        r.pieceStreak = this.pieceCount(r) >= 4 ? Math.min(2, r.pieceStreak + 1) : 0;
+      }
+      // 기분 좋은 날은 **잠들 때 판정해 다음 기상에** 켠다(해석 52). 잠들면 꺼진다.
+      r.goodDayNext = r.piecesEnabled && r.today.careMiss === 0
+        && r.fullness >= 2 && r.happiness >= 2 && (MAX_TRASH - r.trash) >= 2;
+      r.goodDay = false;
+      r.bonusPiece = false;
       r.today = { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 };
+      r.pieceDay = { feeds: 0, snacks: 0, gameWins: 0, cleans: 0, chats: 0 };
       if (r.game && !r.game.finished) r.game.finished = true;
     }
     if (!auto) {
@@ -656,6 +747,12 @@ export class MockPetServer implements PetSource {
       r.dayBase = t;
       r.chatAnswered.clear();
       this.deliver(r, t);
+      // ★ 조각 4칸은 2층 8종을 다 연 **그 뒤에 맞는 기상**에 등장한다(해석 49).
+      //   기준은 "다 열린 시각"이지 "우리가 알아챈 시각"이 아니다 — 밤에 완성되면 바로 다음 아침이다.
+      if (!r.piecesEnabled && r.layer2DoneAt !== null && r.layer2DoneAt < t) r.piecesEnabled = true;
+      r.goodDay = r.goodDayNext;
+      r.bonusPiece = r.goodDayNext;
+      r.goodDayNext = false;
     }
     if (kind === 'NAP') r.counters.napCount += 1;
     if (!auto) {
@@ -706,6 +803,31 @@ export class MockPetServer implements PetSource {
     }
     // 한 밤만 실패시킨다 — 다음 밤에는 정상으로 돌아온다.
     if (failed) this.failNextBake = false;
+  }
+
+  /**
+   * 조각 네 칸(정본 §6). 오늘 한 일로 그때그때 계산한다 — 따로 저장하지 않는다.
+   * ★ 기분 좋은 날의 선물 조각은 **가장 앞의 빈 칸**을 채운 것으로 친다.
+   */
+  private piecesOf(r: Row): Pieces {
+    const raw = {
+      food: r.pieceDay.feeds >= 2,
+      play: r.pieceDay.snacks >= 1 && r.pieceDay.gameWins >= 1,
+      clean: r.pieceDay.cleans >= 1 && r.today.bathDone,
+      bond: r.pieceDay.chats >= 1 && r.today.pets >= 2,
+    };
+    const keys = ['food', 'play', 'clean', 'bond'] as const;
+    const filled = { ...raw };
+    if (r.bonusPiece) {
+      const firstEmpty = keys.find((k) => !filled[k]);
+      if (firstEmpty) filled[firstEmpty] = true;
+    }
+    const count = keys.filter((k) => filled[k]).length;
+    return { ...filled, count, streak: r.pieceStreak, bonus: r.bonusPiece };
+  }
+
+  private pieceCount(r: Row): number {
+    return this.piecesOf(r).count;
   }
 
   /** 펫 단위 "지금 연습 중인가" 한 칸(해석 30) — 가장 앞선 상태 하나. */
@@ -773,6 +895,13 @@ export class MockPetServer implements PetSource {
     // ★ 선물(GIFT)은 여기서 빼놓는다. 선물은 조건을 채워 여는 것이 아니라 **아침에 도착하는** 것이라,
     //   폭죽(justUnlocked)과 폴라로이드(learnedToday)가 같은 사건을 두 번 알리게 된다.
     //   같은 일을 두 번 축하하면 두 번째가 값을 잃는다 — 도착 쪽 하나만 남긴다.
+    // 2층 8종이 **실제로 다 열린 시각**을 남긴다(해석 49) — 마지막 칸이 열린 그 시각이다.
+    if (r.layer2DoneAt === null) {
+      const l2 = r.motions.filter((m) => m.layer === 'BASIC_2');
+      if (l2.length > 0 && l2.every((m) => m.unlockedAt !== null)) {
+        r.layer2DoneAt = Math.max(...l2.map((m) => m.unlockedAt as number));
+      }
+    }
     return r.motions
       .filter((m) => m.unlockedAt !== null && !before.has(m.seq) && m.layer !== 'GIFT')
       .map((m) => m.seq);
@@ -802,7 +931,7 @@ export class MockPetServer implements PetSource {
       download: true, leftRight: true, run: r.counters.leftRightWins >= FEATURE_UNLOCK.runLeftRightWins,
       scenes: false, background: l2 >= FEATURE_UNLOCK.backgroundLayer2,
       // 앨범은 첫 심화 행동이 **도착**하면 열린다(계약 1.6).
-      album: r.motions.some((m) => m.advanced.status === 'OPEN'), pieces: false,
+      album: r.motions.some((m) => m.advanced.status === 'OPEN'), pieces: r.piecesEnabled,
     };
   }
 
@@ -857,7 +986,8 @@ export class MockPetServer implements PetSource {
     daily.forEach((t, i) => {
       const next = daily[i + 1] ?? times.find((x) => x.slot !== 'BABY' && x.atMs > t.atMs);
       calls.push({
-        slot: t.slot, line: templateCall(t.slot, r.personality, r.counters.chatAnswers + r.daysTogether + i),
+        // 기분 좋은 날은 **그날 첫 부름**만 살갑다(정본 §6). 하루 내내 들뜨면 그날의 특별함이 사라진다.
+        slot: t.slot, line: templateCall(t.slot, r.personality, r.counters.chatAnswers + r.daysTogether + i, r.goodDay && i === 0),
         calledAt: iso(t.atMs), expiresAt: next ? iso(next.atMs) : null, answered: answered(t.slot),
         ...this.answerOf(r, t.slot),
       });
@@ -926,7 +1056,7 @@ export class MockPetServer implements PetSource {
     };
   }
 
-  private detail(r: Row, now: number, justUnlocked: number[] = [], chatReply: ChatReply | null = null): PetDetail {
+  private detail(r: Row, now: number, justUnlocked: number[] = [], chatReply: ChatReply | null = null, justHealed = false): PetDetail {
     const alive = r.phase === 'ALIVE';
     const hatching = r.phase === 'HATCHING';
     const elapsed = Math.floor((now - r.hatchStartedAt) / 1000);
@@ -949,7 +1079,8 @@ export class MockPetServer implements PetSource {
       sick: alive ? r.sick : null,
       intimacy: alive ? { score: r.intimacy, percent, tier } : null,
       today: alive ? today : null,
-      pieces: null,
+      pieces: alive && r.piecesEnabled ? this.piecesOf(r) : null,
+      goodDay: alive ? r.goodDay : null,
       baking: alive ? this.bakingOf(r) : null,
       // ★ ALIVE 가 아니어도 **리스트 셋은 빈 목록**이다(계약 해석 20 — 2026-09-05 실서버 왕복으로 확인).
       //   훅·화면의 `?? []` 방어는 그대로 둔다. 목이 서버보다 험한 값을 주는 편이 안전해 보이지만,
@@ -962,6 +1093,8 @@ export class MockPetServer implements PetSource {
           .map((m) => ({ seq: m.seq, key: m.key, label: m.label, imageKey: m.advanced.imageKey as string, revealedAt: m.advanced.revealedAt ?? iso(now) }))
         : [],
       chatReply,
+      // ★ 행동 응답에만 true. 조회는 늘 false — 상태로는 "방금 나음"과 "원래 안 아픔"을 못 가른다(해석 38).
+      justHealed: alive ? justHealed : null,
       firstGift: alive ? this.firstGiftOf(r) : null,
       // ★ v0 백엔드(PR #216)는 chatSummary.openSlot 을 null 로 준다 — 열린 슬롯은 GET /chat 으로 읽는다. 목도 같은 모양.
       chatSummary: alive ? { openSlot: null, nextAt: this.chatOf(r, now).nextAt } : null,
@@ -987,7 +1120,9 @@ export class MockPetServer implements PetSource {
       fullness: 1, happiness: 3, trash: 0,
       acc: { fullness: 0, happiness: 0, trash: 0 }, zeroAcc: { fullness: 0, happiness: 0, trash: 0 },
       zeroArmed: { fullness: false, happiness: false, trash: false },
-      food: MAX_FOOD, foodAcc: 0, sick: null,
+      food: MAX_FOOD, foodAcc: 0, sick: null, dirtyAcc: 0,
+      piecesEnabled: false, layer2DoneAt: null, pieceStreak: 0, bonusPiece: false, goodDay: false, goodDayNext: false,
+      pieceDay: { feeds: 0, snacks: 0, gameWins: 0, cleans: 0, chats: 0 },
       intimacy: 0, today: { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 },
       counters: {
         chatAnswers: 0, sleepWakeCount: 0, bathCount: 0, gameStarts: 0, leftRightWins: 0, zeroMissDays: 0,
@@ -1016,10 +1151,28 @@ export class MockPetServer implements PetSource {
     r.lastVisitDay = dayIndex(t);
   }
 
-  private seedPreset(preset: 'baby' | 'child' | 'grown'): void {
+  private seedPreset(preset: 'baby' | 'child' | 'grown' | 'layer3'): void {
     const now = this.now();
     if (preset === 'baby') {
       this.row = this.newRow('여울', '조용하지만 고집이 세요', now - HATCH_MS, now);
+      return;
+    }
+    if (preset === 'layer3') {
+      // 2층 8종을 다 연 아이. ★ 조각은 아직 없다 — **다음 기상**에 등장한다(해석 49).
+      const g = this.newRow('여울', '조용하지만 고집이 세요', now - 5 * 24 * HOUR_MS, now - 5 * 24 * HOUR_MS);
+      g.counters = {
+        ...g.counters, feedCount: 20, petCount: 20, chatAnswers: 12, cleanCount: 9, gameStarts: 3,
+        shareCount: 3, napCount: 1, sleepWakeCount: 8, bathCount: 3, zeroMissDays: 3, leftRightWins: 5,
+      };
+      g.personality = 'GENTLE';
+      g.fullness = 2; g.happiness = 3; g.trash = 1; g.food = 3; g.intimacy = 700;
+      g.daysTogether = 5;
+      const ten3 = at(now, 10);
+      g.dayBase = ten3 <= now ? ten3 : ten3 - DAY_MS;
+      g.settledAt = now;
+      g.lastVisitDay = dayIndex(now);
+      this.newlyUnlocked(g, new Set(), now - 2 * HOUR_MS);   // 두 시간 전에 마지막 칸이 열렸다
+      this.row = g;
       return;
     }
     if (preset === 'grown') {
@@ -1099,6 +1252,8 @@ export interface ZzalMockHandle {
   advance: (ms: number) => void;
   /** 다음 밤 굽기를 한 번 실패시킨다. 실패 경로(다음 밤 재시도)를 눈으로 보려고 둔다. */
   failNextBake: () => void;
+  /** 병을 직접 앉힌다 — 확률이 섞인 병(NEGLECT·NATURAL)은 목이 만들 수 없다. */
+  makeSick: (kind: SickKind) => void;
   now: () => string;
   state: () => unknown;
   reset: (preset?: MockPreset) => void;
@@ -1117,6 +1272,7 @@ export function installMockHandle(server: MockPetServer): void {
     // 시간을 민 뒤 훅이 곧바로 다시 묻게 알린다(usePet 이 듣는다). 폴링 타이머는 벽시계라 안 그러면 최대 60초 낡은 화면이다.
     advance: (ms) => { server.advance(ms); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
     failNextBake: () => server.failNextBake_(),
+    makeSick: (kind) => { server.makeSick_(kind); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
     now: () => new Date(server.now()).toISOString(),
     state: () => server.state(),
     reset: (preset) => server.reset(preset),

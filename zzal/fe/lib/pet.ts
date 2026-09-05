@@ -118,10 +118,17 @@ export interface Food {
   nextInSeconds: number | null;
 }
 
+/**
+ * 왜 아픈가(계약 해석 35). **먼저 난 병이 이긴다** — 아픈 동안 다른 조건이 차도 원인은 안 바뀐다.
+ *
+ * ★ 화면은 이 값으로 **원인을 탓하지 않는다.** 문구는 "아파요" 하나이고, kind 는 연출(무엇을 곁들일까)에만 쓴다.
+ *   "안 치워서 아파요" 는 사실이어도 사람을 몰아세운다 — 케어 미스를 어디에도 안 내리는 것과 같은 결이다.
+ */
+export type SickKind = 'NEGLECT' | 'DIRTY' | 'UPSET' | 'NATURAL';
+
 export interface Sick {
   since: string;
-  /** NATURAL · NEGLECT · DIRTY · SNACK(배탈). */
-  kind: string;
+  kind: SickKind;
 }
 
 export interface Intimacy {
@@ -145,14 +152,23 @@ export interface Today {
   bathDone: boolean;
 }
 
-/** 3층 조각 4칸. 3층 전에는 null. */
+/**
+ * 3층 조각 4칸(정본 6장). 3층(2층 8종 다 연 다음 기상) 전에는 **블록 자체가 null** 이다.
+ *
+ * 네 칸이 무엇인지 — 밥 2회(`food`) · 간식 1회와 게임 1승(`play`) · 청소 1회와 목욕 1회(`clean`) ·
+ * 채팅 1회와 쓰다듬 2회(`bond`). ★ **판정은 잠들 때만** 한다(계약 해석 48).
+ */
 export interface Pieces {
   food: boolean;
   play: boolean;
   clean: boolean;
   bond: boolean;
-  /** 이틀 연속 카운트(0~2). */
+  /** 지금 채워진 칸 수(0~4). 네 칸을 직접 세지 말고 이 값을 쓴다. */
+  count: number;
+  /** 네 칸을 며칠 연속 채웠나(0~2). 2가 되는 밤에 다음 심화 하나가 큐에 오른다. */
   streak: number;
+  /** 기분 좋은 날의 선물 조각 — 네 칸 중 **가장 앞의 빈 칸**을 채운 것으로 친다. */
+  bonus: boolean;
 }
 
 export interface MotionProgress {
@@ -325,6 +341,11 @@ export interface PetDetail {
   intimacy: Intimacy | null;
   today: Today | null;
   pieces: Pieces | null;
+  /**
+   * 오늘이 "기분 좋은 날" 인가(정본 6장) — 어젯밤 잠들 때 케어 미스 0 + 세 게이지 2칸 이상.
+   * 조각 하나를 미리 받고 첫 부름이 살가워진다. 3층 전에는 항상 false(계약 해석 52).
+   */
+  goodDay: boolean | null;
   /** 지금 뭔가 연습하고 있는가(가장 앞선 상태 하나). ALIVE 가 아니면 null. */
   baking: BakingState | null;
   /** 18칸 고정. ALIVE 가 아니면 빈 목록(타입은 방어용으로 null 을 남겨 둔다). */
@@ -335,6 +356,14 @@ export interface PetDetail {
   learnedToday: LearnedMotion[] | null;
   /** 채팅 답 응답에만. 그 밖엔 null. */
   chatReply: ChatReply | null;
+  /**
+   * 방금 약으로 나았는가. **행동 응답에만** 실린다(계약 해석 38) — 조회는 항상 false.
+   *
+   * ★ 상태만으로는 "방금 나음" 과 "원래 안 아픔" 을 가를 수 없다. 둘 다 `sick: null` 이다.
+   *   그래서 나은 연출(기쁜 자세 + 반짝)을 이 한 칸으로만 띄운다. 새로고침하면 안 뜨는 것이 맞다 —
+   *   축하가 아니라 **방금 일어난 일의 반응**이라서.
+   */
+  justHealed: boolean | null;
   firstGift: FirstGift | null;
   chatSummary: ChatSummary | null;
   scenes: Scenes | null;

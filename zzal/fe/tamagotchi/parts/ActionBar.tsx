@@ -32,12 +32,14 @@ export default function ActionBar({ tama, pc }: ActionBarProps) {
 
   const buttons: { key: ActionKey; label: string; sub: string; act: () => void }[] = [
     { key: 'feed', label: '밥', sub: foodSub, act: actions.feed },
-    { key: 'snack', label: '간식', sub: s.sick ? '아파요' : '', act: actions.snack },
+    // 아픈 동안 안 되는 것 = 간식·미니게임(정본 §16). 왜 안 되는지를 버튼 밑에 미리 적어 둔다 —
+    // 눌러 보고 거절당하는 것보다 낫다.
+    { key: 'snack', label: '간식', sub: s.sick ? '아플 땐 못 먹어요' : '', act: actions.snack },
     { key: 'pet', label: '쓰다듬', sub: '', act: actions.pet },
     { key: 'clean', label: '청소', sub: s.trash > 0 ? `${s.trash}개` : '깨끗', act: actions.clean },
     // 서버 사실(today.bathDone)로 판정한다 — can() 은 행동 중·축하 중에도 false 라 "오늘 했어요" 가 잘못 뜬다(리뷰 L3).
     { key: 'bath', label: '목욕', sub: s.bathDone ? '오늘 했어요' : '', act: actions.bath },
-    { key: 'medicine', label: '약', sub: s.sick ? '필요해요' : '', act: actions.medicine },
+    { key: 'medicine', label: '약', sub: s.sick ? '지금 필요해요' : '', act: actions.medicine },
     { key: 'sleep', label: sleepLabel, sub: sleepSub, act: () => void actions.sleep() },
   ];
 
