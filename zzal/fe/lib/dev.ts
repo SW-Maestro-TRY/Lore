@@ -17,9 +17,27 @@ export function advanceClock(petId: number, minutes: number): Promise<PetDetail>
   return request<PetDetail>(`${DEV_BASE}/${petId}/advance-clock`, { method: 'POST', body: { minutes } });
 }
 
-/** 그 펫의 시계를 오늘(KST) 그 시각으로. **앞으로만** 간다 — 서버가 부화 이전 시각을 거절한다. */
-export function setLocalTime(petId: number, localTime: string): Promise<PetDetail> {
-  return request<PetDetail>(`${DEV_BASE}/${petId}/set-clock`, { method: 'POST', body: { localTime } });
+/**
+ * 그 펫의 시계를 그 시각(절대 시각)으로.
+ *
+ * ★ `localTime` 을 쓰지 않는 이유 — 서버는 그것을 **오늘 날짜**로 읽는다. 밤 11시에 "19:00" 을 보내면
+ *   이미 지난 시각이라 400(`부화 전 시각으로는 맞출 수 없어요`)이 난다(실측). 시계는 앞으로만 간다.
+ *   그래서 화면이 **다음에 그 시각이 오는 때**를 계산해 절대 시각으로 보낸다.
+ */
+export function setClockAt(petId: number, atIso: string): Promise<PetDetail> {
+  return request<PetDetail>(`${DEV_BASE}/${petId}/set-clock`, { method: 'POST', body: { at: atIso } });
+}
+
+/**
+ * `nowMs` 다음에 KST `HH:mm` 이 오는 순간(ms). 오늘 그 시각이 이미 지났으면 **내일** 그 시각이다.
+ * ★ 기준은 **서버 시각**(`serverNow`)이다 — 기기 시계를 쓰면 폰이 빠른 사람만 400 을 받는다.
+ */
+export function nextLocalAt(nowMs: number, hhmm: string): number {
+  const [hh, mm] = hhmm.split(':').map(Number);
+  const KST = 9 * 3_600_000;
+  const dayStartUtc = Math.floor((nowMs + KST) / 86_400_000) * 86_400_000 - KST;
+  const target = dayStartUtc + (hh * 60 + mm) * 60_000;
+  return target > nowMs ? target : target + 86_400_000;
 }
 
 /**

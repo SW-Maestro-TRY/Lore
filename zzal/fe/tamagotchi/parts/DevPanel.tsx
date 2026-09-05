@@ -8,13 +8,15 @@
 
 import { useState } from 'react';
 import { ApiError } from '../../lib/api';
-import { advanceClock, forceOpen, nightSweep, setLocalTime } from '../../lib/dev';
+import { advanceClock, forceOpen, nextLocalAt, nightSweep, setClockAt } from '../../lib/dev';
 import type { PetDetail } from '../../lib/pet';
 import { EDGE, GAEGU, INK, PAPER, SUB } from './theme';
 
 export interface DevPanelProps {
   /** 시계를 밀 펫. 없으면(아이 없음) 아무것도 안 그린다. */
   petId: number | null;
+  /** 지금 그 펫의 시각(응답의 `serverNow`). 시각 이동의 기준 — 기기 시계를 쓰지 않는다. */
+  serverNow: string | null;
   /** 목 모드인가. 그러면 서버 대신 목 시계를 민다. */
   mock: boolean;
   /** 응답으로 온 최신 상태를 화면에 얹는다(행동 응답 = 상태). */
@@ -43,18 +45,7 @@ const JUMPS: Jump[] = [
   { label: '밤 큐 돌리기', act: 'night-sweep' },
 ];
 
-/** 목 시계에서 "다음 번 그 시각"까지 몇 분인가. 이미 지났으면 내일 그 시각이다. */
-function minutesToLocal(nowIso: string, at: string): number {
-  const [hh, mm] = at.split(':').map(Number);
-  const now = new Date(nowIso).getTime();
-  const kst = now + 9 * 3_600_000;
-  const dayStart = Math.floor(kst / 86_400_000) * 86_400_000 - 9 * 3_600_000;
-  let target = dayStart + (hh * 60 + mm) * 60_000;
-  if (target <= now) target += 86_400_000;
-  return Math.round((target - now) / 60_000);
-}
-
-export default function DevPanel({ petId, mock, onPet }: DevPanelProps) {
+export default function DevPanel({ petId, serverNow, mock, onPet }: DevPanelProps) {
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (petId == null) return null;
@@ -71,13 +62,21 @@ export default function DevPanel({ petId, mock, onPet }: DevPanelProps) {
         if (!handle) { setNote('목 서버를 찾지 못했어요'); return; }
         if (j.act === 'force-open') handle.forceOpen(GIFT_SEQ);
         else if (j.act === 'night-sweep') handle.nightSweep();
-        else handle.advance((j.minutes ?? minutesToLocal(handle.now(), j.at as string)) * 60_000);
+        else if (j.minutes != null) handle.advance(j.minutes * 60_000);
+        else {
+          // 목도 같은 규칙 — **다음에 그 시각이 오는 때**까지 민다(이미 지났으면 내일).
+          const now = new Date(handle.now()).getTime();
+          handle.advance(nextLocalAt(now, j.at as string) - now);
+        }
         return;
       }
+      // ★ 시각 이동은 **서버 시각 기준 다음 도래 시각**을 절대 시각으로 보낸다.
+      //   `localTime` 으로 보내면 서버가 오늘 날짜로 읽어, 이미 지난 시각이면 400 이 난다(실측).
+      const base = serverNow ? new Date(serverNow).getTime() : Date.now();
       const next = j.act === 'force-open' ? await forceOpen(petId, GIFT_SEQ)
         : j.act === 'night-sweep' ? await nightSweep(petId)
           : j.minutes != null ? await advanceClock(petId, j.minutes)
-            : await setLocalTime(petId, j.at as string);
+            : await setClockAt(petId, new Date(nextLocalAt(base, j.at as string)).toISOString());
       onPet(next);
     } catch (e) {
       // ★ dev 도구가 꺼진 서버에서는 그 주소가 아예 없다(404) 또는 막힌다(403).

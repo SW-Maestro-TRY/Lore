@@ -667,6 +667,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
       {devTools && (
         <DevPanel
           petId={session.server?.pet?.phase === 'ALIVE' ? session.server.pet.petId : null}
+          serverNow={session.server?.pet?.serverNow ?? null}
           mock={derived.mock}
           onPet={(next) => session.server?.applyExternal(next)}
         />

@@ -36,6 +36,27 @@ test('19:00 으로 옮기면 재우기가 열리고, 23:30 으로 옮기면 자�
   expect(await status(page)).not.toBe('sleeping');
 });
 
+test('이미 지난 시각을 누르면 내일 그 시각으로 간다', async ({ page }) => {
+  // ★ 23시대에 "19:00으로" 를 누르면 오늘 19:00 은 이미 지났다. 서버는 localTime 을 오늘 날짜로 읽어
+  //   400(부화 전 시각)을 내므로, 화면이 **다음에 그 시각이 오는 때**를 계산해 절대 시각으로 보낸다.
+  await page.goto('/zzal?mock=child&clock=2026-09-05T23:10&dev=1', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-part="devpanel"]');
+  await page.waitForFunction(() => !!(window as unknown as { __zzalMock?: unknown }).__zzalMock);
+
+  const at = () => page.evaluate(() => (window as unknown as { __zzalMock: { now: () => string } }).__zzalMock.now());
+  const before = new Date(await at()).getTime();
+
+  await page.locator('[data-dev-jump="19:00으로"]').click();
+  await page.waitForTimeout(600);
+  const after = new Date(await at()).getTime();
+
+  // 뒤로 가지 않는다. 그리고 하루 안쪽으로 앞으로 간다(23:10 → 내일 19:00 ≈ 19시간 50분).
+  expect(after, '시계는 앞으로만 간다').toBeGreaterThan(before);
+  const hours = (after - before) / 3_600_000;
+  expect(hours).toBeGreaterThan(19);
+  expect(hours).toBeLessThan(20);
+});
+
 test('분 단위 건너뛰기도 시계를 민다', async ({ page }) => {
   await page.goto('/zzal?mock=baby&dev=1', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-action="feed"]');
