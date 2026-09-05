@@ -566,8 +566,13 @@ public class ZzalPet {
 
             at = at.plusSeconds(step);
             if (!baby) {
+                // ★★ "이 step 을 걷기 전에 이미 아팠나" 를 먼저 잡는다. accumulateZero 가 이 step 안에서
+                //   병을 낼 수 있는데, 그 뒤에 step 을 통째로 병 시간에 더하면 <b>아프기도 전의 시간이
+                //   병 시간으로 적힌다</b>(#225 재확인 — 한 번에 정산 21600초 vs 1분씩 14460초, 실제 14400초).
+                //   그 차이가 24시간 케어 미스를 이르게 찍고 "그날 케어 미스 0"·첫 심화 판정까지 밀어 버린다.
+                boolean wasSick = isSick();
                 accumulateZero(step, at);
-                advanceSickness(step, at);
+                advanceSickness(step, at, wasSick);
             }
             fullnessAwakeSec += step;
             happinessAwakeSec += step;
@@ -700,9 +705,16 @@ public class ZzalPet {
      *
      * ★ 자는 동안에는 이 메서드가 아예 안 불린다({@link #tick} 은 깨어 있는 구간만 걷는다).
      *   그래서 "자는 동안 병이 안 나빠진다"(정본 2장)가 저절로 지켜진다 — 따로 막는 코드가 없다.
+     *
+     * @param wasSick 이 step 을 걷기 <b>전에</b> 이미 아팠나. 이 step 안에서 막 아프기 시작했다면
+     *                그 step 은 병 시간이 아니다(아프기 전의 시간까지 병 시간으로 세면 안 된다).
      */
-    private void advanceSickness(long step, Instant at) {
+    private void advanceSickness(long step, Instant at, boolean wasSick) {
         if (isSick()) {
+            if (!wasSick) {
+                // 이 step 안에서 방금 아팠다 — 병 시간은 발병 순간부터 0 이다(step 절단 덕에 발병은 step 끝이다).
+                return;
+            }
             sickAwakeSec += step;
             long every = ZzalRules.CARE_MISS_SICK_EVERY.getSeconds();
             while (sickAwakeSec >= every) {
@@ -1183,6 +1195,11 @@ public class ZzalPet {
 
     public int getFood() {
         return food;
+    }
+
+    /** 아픈 채 깨어 있던 초(24시간마다 케어 미스). 발병 순간부터 센다. */
+    public long getSickAwakeSec() {
+        return sickAwakeSec;
     }
 
     public Instant getSickSince() {

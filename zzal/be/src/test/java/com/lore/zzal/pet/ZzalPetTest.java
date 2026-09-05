@@ -905,6 +905,57 @@ class ZzalPetTest {
         }
 
         @Test
+        @DisplayName("★★ 병 시간도 정산 패턴과 무관 — 어떻게 나눠 정산해도 \"발병 뒤 흐른 시간\" 과 같다")
+        void sickAwakeSecMatchesElapsedSinceOnset() {
+            Instant from = at("2026-09-05 12:00");
+            Instant to = at("2026-09-09 12:00");                  // 나흘 — 그 사이에 병이 나고도 남는다
+            List<Long> stepsToTry = List.of(0L, 60L, 3600L, 6 * 3600L);   // 한 번에 · 1분 · 1시간 · 6시간
+
+            Long expectedSick = null;
+            Integer expectedMiss = null;
+            for (long every : stepsToTry) {
+                ZzalPet pet = child();
+                if (every == 0) {
+                    pet.settle(to);
+                } else {
+                    for (long sec = every; sec <= Duration.between(from, to).getSeconds(); sec += every) {
+                        pet.settle(from.plusSeconds(sec));
+                    }
+                    pet.settle(to);
+                }
+                assertThat(pet.isSick()).as("나흘이면 병이 나 있어야 한다").isTrue();
+
+                // 병 시간은 "발병 뒤 깨어 있던 시간" 을 24시간으로 나눈 나머지여야 한다
+                long awakeSinceOnset = awakeSecondsBetween(pet.getSickSince(), to);
+                long expected = awakeSinceOnset % ZzalRules.CARE_MISS_SICK_EVERY.getSeconds();
+                assertThat(pet.getSickAwakeSec())
+                        .as("정산 간격 %d초 — 병 시간이 발병 뒤 경과와 같아야 한다", every)
+                        .isEqualTo(expected);
+
+                if (expectedSick == null) {
+                    expectedSick = pet.getSickAwakeSec();
+                    expectedMiss = pet.getCareMiss();
+                } else {
+                    assertThat(pet.getSickAwakeSec()).as("정산 간격 %d초", every).isEqualTo(expectedSick);
+                    assertThat(pet.getCareMiss()).as("정산 간격 %d초 — 케어 미스도 같아야 한다", every)
+                            .isEqualTo(expectedMiss);
+                }
+            }
+        }
+
+        /** {@code from}~{@code to} 사이의 깨어 있는 초(자동 창 10:00~23:00 기준). */
+        private long awakeSecondsBetween(Instant from, Instant to) {
+            long awake = 0;
+            for (Instant cur = from; cur.isBefore(to); cur = cur.plusSeconds(60)) {
+                java.time.LocalTime t = cur.atZone(ZzalRules.ZONE).toLocalTime();
+                if (!t.isBefore(ZzalRules.AUTO_WAKE_AT) && t.isBefore(ZzalRules.AUTO_SLEEP_AT)) {
+                    awake += 60;
+                }
+            }
+            return awake;
+        }
+
+        @Test
         @DisplayName("★ 자연 발병도 정산 간격에 안 묶인다 — 예약한 초에 정확히 아프다")
         void naturalFiresExactly() {
             ZzalPet once = child();
