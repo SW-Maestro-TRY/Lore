@@ -614,16 +614,19 @@ public class ZzalPet {
      * 지금 재우면 어떤 잠이 되나. 안 되면 null.
      *
      * <ul>
-     *   <li>아기 60분 안이고 아직 낮잠 전 → 낮잠(12장 40분. 한 번만 — api-v2.md 해석 3)</li>
-     *   <li>KST 19:00~23:00 → 밤잠</li>
+     *   <li>아기 60분 안 → 낮잠만(12장 40분. 한 번 — api-v2.md 해석 3). 밤잠 없음</li>
+     *   <li>60분 뒤 KST 19:00~23:00 → 밤잠</li>
      * </ul>
      */
     public SleepKind sleepKindAvailable(Instant now) {
         if (!isAlive() || isSleeping()) {
             return null;
         }
-        if (isBaby(now) && napCount < ZzalRules.NAP_MAX) {
-            return SleepKind.NAP;
+        // ★ 아기 60분은 시계와 완전 논외(상훈님 2026-09-05 결정) — 새벽 1시에 부화해도 60분은 그대로 진행.
+        //   그 안의 재우기 버튼은 낮잠뿐이고(한 번), 밤잠은 없다. 60분이 끝난 시각이 밤이면 그 순간 저절로
+        //   밤잠에 든다(AwakeClock.nextAutoSleep), 19~23시면 보통대로(재우기 가능·23시 자동).
+        if (isBaby(now)) {
+            return napCount < ZzalRules.NAP_MAX ? SleepKind.NAP : null;
         }
         return AwakeClock.inSleepWindow(now) ? SleepKind.NIGHT : null;
     }

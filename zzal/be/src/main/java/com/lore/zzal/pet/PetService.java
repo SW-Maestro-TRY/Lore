@@ -199,13 +199,11 @@ public class PetService {
                 }
                 pet.feed(now);
             }
+            // ★ 간식은 행복이 가득이어도 받는다(상훈님 2026-09-05 결정 — 원조도 간식은 항상 먹고 과다 시 병).
+            //   밥만 가득이면 거절. 연속 5개 배탈은 PR-8.
             case SNACK -> {
                 if (pet.isSick()) {
                     throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
-                }
-                if (pet.getHappiness() >= ZzalRules.GAUGE_MAX) {
-                    throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED,
-                            "%s이는 지금 아주 기분이 좋아요".formatted(pet.getName()));
                 }
                 pet.snack(now);
             }

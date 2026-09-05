@@ -145,15 +145,14 @@ class PetServiceTest {
         }
 
         @Test
-        @DisplayName("간식 — 가득이면 거절, 쓰다듬기 — 거절 없음(4번째도 200)")
+        @DisplayName("★ 간식은 행복이 가득이어도 받는다(상훈님 9/5 결정) · 쓰다듬기 — 거절 없음(4번째도 200)")
         void snackAndPet() {
             ZzalPet pet = child();
-            service.care(USER_ID, PET_ID, CareAction.SNACK, T0);
-            service.care(USER_ID, PET_ID, CareAction.SNACK, T0);
-            service.care(USER_ID, PET_ID, CareAction.SNACK, T0);
-            service.care(USER_ID, PET_ID, CareAction.SNACK, T0);
-            assertThat(pet.getHappiness()).isEqualTo(4);
-            assertCode(() -> service.care(USER_ID, PET_ID, CareAction.SNACK, T0), ErrorCode.ZZAL_CARE_NOT_NEEDED);
+            for (int i = 0; i < 5; i++) {
+                service.care(USER_ID, PET_ID, CareAction.SNACK, T0);
+            }
+            assertThat(pet.getHappiness()).isEqualTo(4);          // 상한에서 멈추되 거절은 없다
+            assertThat(pet.getSnackStreak()).isEqualTo(5);        // 배탈(PR-8)의 재료
 
             for (int i = 0; i < 4; i++) {
                 service.care(USER_ID, PET_ID, CareAction.PET, T0);
