@@ -206,8 +206,8 @@
     <div class="top-intro">
       <p class="hero-kicker">Story is the sea</p>
       <h1>이야기의 바다,<br>루가 안내합니다.</h1>
-      <p class="top-lede">캐릭터를 띄우면, 루가 이야기 조각을 모아
-         한 편의 웹툰을 만들어줘요.</p>
+      <p class="top-lede">사진 한 장을 올리면, 루가 캐릭터와 이야기부터
+         그림까지 전부 만들어 웹툰 한 편을 완성해줘요.</p>
       <!-- 들어올 때마다 루의 그림이 바뀐다(app.js 가 고른다). 여기 적힌 것은
            자바스크립트가 안 돌 때 나올 기본 그림이다. -->
       <img class="hero-lou" id="heroLou" src="/static/lou/hero-whale2.png" alt="LORE의 마스코트 고래 루">
@@ -239,6 +239,168 @@
       </li>
     </ol>
 
+  </section>
+
+  <!-- ============================================== 어떻게 만드나 (#how) ===
+       상단 바의 "어떻게 만드나" 가 가리키던 자리 — 예전에는 이 id 를 가진
+       섹션이 아예 없어서 눌러도 아무 데도 안 갔다(2026-09-05, 신뢰가 안
+       간다는 피드백으로 확인). 여기서 "뭘, 누구를 위해, 어떻게" 를 명시한다 —
+       기능 나열이 아니라 왜 필요한지부터 말한다. -->
+  <section class="how" id="how">
+    <div class="how-head">
+      <p class="eyebrow">How it works</p>
+      <h2>사진 한 장이 웹툰 한 화가 되기까지</h2>
+      <p class="section-lede">
+        루는 그림 도구가 아니라 <b>제작 과정 전체를 대신하는 스튜디오</b>예요.
+        캐릭터 사진 한 장, 이야기 한 줄이면 웹툰 한 화가 통째로 나옵니다.
+      </p>
+      <ul class="how-audience">
+        <li>웹소설·팬픽 세계관을 그림으로 먼저 확인해보고 싶은 작가</li>
+        <li>캐릭터는 있지만 웹툰 제작은 처음인 창작 입문자</li>
+        <li>여러 그림체·전개를 빠르게 뽑아보고 고르고 싶은 기획자</li>
+      </ul>
+    </div>
+
+    <!-- 진행 화면(#stageArt)과 같은 그림(web/lou/stage/*.webp)을 그대로
+         쓴다 — 루가 실제로 그 일을 하는 그림이라, "기능 설명" 대신 "루가
+         이렇게 만들어요" 라는 이야기로 읽힌다(2026-09-05). 나중에 만드는
+         동안 같은 그림을 또 보게 되니 낯이 익다. -->
+    <ol class="how-steps">
+      <li>
+        <div class="how-thumb">
+          <img class="how-stage-art" src="/static/lou/stage/sheet.webp" alt="" aria-hidden="true">
+          <span class="how-no">1</span>
+        </div>
+        <div>
+          <b>루가 사진 속 얼굴을 보고 캐릭터 시트를 그려요</b>
+          <small>사진 한 장, 이름 하나면 충분해요. 그 얼굴 그대로 끝까지 이어집니다.</small>
+        </div>
+      </li>
+      <li>
+        <div class="how-thumb">
+          <img class="how-stage-art" src="/static/lou/stage/story.webp" alt="" aria-hidden="true">
+          <span class="how-no">2</span>
+        </div>
+        <div>
+          <b>루가 캐릭터를 보고 이야기를 지어요</b>
+          <small>한 줄만 적어도, 아예 비워 둬도 괜찮아요.</small>
+        </div>
+      </li>
+      <li>
+        <div class="how-thumb">
+          <img class="how-stage-art" src="/static/lou/stage/art.webp" alt="" aria-hidden="true">
+          <span class="how-no">3</span>
+        </div>
+        <div>
+          <b>루가 표지부터 순서대로 그려요</b>
+          <small>한 편 그리는 데 보통 10분 정도 걸려요.</small>
+        </div>
+      </li>
+      <li>
+        <div class="how-thumb">
+          <img class="how-stage-art" src="/static/lou/stage/done.webp" alt="" aria-hidden="true">
+          <span class="how-no">4</span>
+        </div>
+        <div>
+          <b>다 그린 뒤에도 마음에 안 들면 다시</b>
+          <small>편집실에서 컷을 골라 손볼 수 있어요.</small>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============================================== 결과 예시 (#gallery) ===
+       상단 바의 "결과 예시" 가 가리키던 자리 — 마찬가지로 비어 있었다.
+       그림체 미리보기(실제 생성 결과, 위저드 3걸음에서 쓰는 것과 같은 파일)를
+       보여주고, 완성된 한 편 전체는 /demo/result 로 보낸다. -->
+  <section class="gallery" id="gallery">
+    <div class="gallery-head">
+      <p class="eyebrow">Examples</p>
+      <h2>루가 그린 그림체</h2>
+      <p class="section-lede">그림체마다 손이 다릅니다 — 마음에 드는 결로 시작하세요.</p>
+    </div>
+    <div class="gallery-grid">
+      <figure><img src="/static/samples/ex-romance-1.png" alt="로맨스 그림체 예시" loading="lazy"><figcaption>로맨스</figcaption></figure>
+      <figure><img src="/static/samples/ex-webtoon-1.jpg" alt="웹툰체 예시" loading="lazy"><figcaption>웹툰체</figcaption></figure>
+      <figure><img src="/static/samples/ex-frost-1.jpg" alt="프로스트 그림체 예시" loading="lazy"><figcaption>프로스트</figcaption></figure>
+      <figure><img src="/static/samples/ex-shoujo-1.jpg" alt="순정 그림체 예시" loading="lazy"><figcaption>순정</figcaption></figure>
+    </div>
+    <a class="btn btn-ghost gallery-full" href="/demo/result">완성된 웹툰 한 편 전체 보기 →</a>
+  </section>
+
+  <!-- ============================================== 자주 묻는 것 (#faq) ===
+       "이게 뭐지" 를 남기는 자리(대사 수정 · 중단·이어하기 · 소요 시간)를
+       먼저 답한다 — 다 만든 뒤에 알게 되면 실망이지만, 미리 알면 그냥 사실이다
+       (워터마크 안내와 같은 이유, landing/README.md 참고). -->
+  <section class="faq" id="faq">
+    <div class="faq-head">
+      <p class="eyebrow">FAQ</p>
+      <h2>자주 묻는 것</h2>
+    </div>
+    <details class="faq-item">
+      <summary>이건 누가 만든 서비스인가요?</summary>
+      <p><b>AI SW 마에스트로</b> 과정에서 만들고 있는 프로젝트예요. 아직
+         다듬는 중이라 낯선 부분이 남아 있을 수 있는데, 발견하시면 언제든
+         알려주세요 — 확인하고 고치겠습니다.</p>
+    </details>
+    <details class="faq-item">
+      <summary>AI SW 마에스트로란 무엇인가요?</summary>
+      <p>과학기술정보통신부가 주관하고 정보통신기획평가원(IITP)이 운영하는
+         AI 소프트웨어 인재 양성 과정이에요. LORE는 이 과정에서 실제로
+         기획하고 만들고 있는 프로젝트입니다.</p>
+    </details>
+    <details class="faq-item">
+      <summary>대사가 어색하거나 틀렸어요 — 고칠 수 있나요?</summary>
+      <p>그림에 함께 그려진 글자라 바로 고쳐지지는 않아요. 편집실에서 그
+         컷을 다시 그리게 하거나, 원래 글자를 가리고 새 말풍선을 얹어
+         원하는 대사로 바꿀 수 있어요.</p>
+    </details>
+    <details class="faq-item">
+      <summary>마음에 안 들면 다시 만들 수 있나요?</summary>
+      <p>네, 가능해요. <b>「3번만 확인하며」</b>를 고르면 이야기와 그림 단계
+         마다 확인하면서 다시 만들 수 있고, 완성한 뒤에도 편집실에서 컷
+         단위로 다시 그릴 수 있어요.</p>
+    </details>
+    <details class="faq-item">
+      <summary>만들다가 창을 닫거나 다른 걸 하면 어떻게 되나요?</summary>
+      <p>괜찮아요. 진행 상황은 서버가 갖고 있어서, 나중에 같은 작업으로
+         다시 들어오면 하던 데서 그대로 이어집니다.</p>
+    </details>
+    <details class="faq-item">
+      <summary>얼마나 걸리나요?</summary>
+      <p>한 편에 보통 10분 안팎 걸려요. 그림체나 이야기 길이에 따라
+         조금씩 달라질 수 있어요.</p>
+    </details>
+    <details class="faq-item">
+      <summary>그림을 하나도 못 그려도 쓸 수 있나요?</summary>
+      <p>네, 그림을 못 그리셔도 괜찮아요. 사진 한 장과 이름만 있으면
+         버튼 하나로 끝까지 완성됩니다.</p>
+    </details>
+    <details class="faq-item">
+      <summary>그림체는 몇 가지인가요?</summary>
+      <p>로맨스·웹툰체·프로스트·순정 등 여러 그림체가 있어요. 위
+         「루가 그린 그림체」에서 실제 결과를 미리 볼 수 있어요.</p>
+    </details>
+    <details class="faq-item">
+      <summary>로그인 안 해도 만들 수 있나요?</summary>
+      <p>네, 로그인 없이도 게스트로 끝까지 만들 수 있어요. 나중에
+         로그인해서 저장하면 마이페이지에서 다시 볼 수 있어요.</p>
+    </details>
+    <details class="faq-item">
+      <summary>여러 캐릭터로 여러 편 만들 수 있나요?</summary>
+      <p>네, 얼마든지요. 로그인하면 그동안 만든 작품이 마이페이지에
+         모두 모여요.</p>
+    </details>
+    <details class="faq-item">
+      <summary>완성한 웹툰은 다른 사람도 볼 수 있나요?</summary>
+      <p>기본적으로 <b>둘러보기</b>에 공개돼요. 마이페이지에서 언제든
+         비공개로 바꿀 수 있어요.</p>
+    </details>
+    <details class="faq-item">
+      <summary>올린 사진은 어떻게 되나요?</summary>
+      <p>캐릭터를 만드는 데만 사용하고, 시트가 완성되면 서버에서 바로
+         삭제해요.</p>
+    </details>
   </section>
 </main>
 
@@ -768,8 +930,24 @@
 </section>
 
 <footer class="foot">
-  <span>LORE 웹툰 스튜디오</span>
-  <span class="foot-note">고래 <b>루</b>가 안내합니다 · 말풍선과 대사는 그림 안에 함께 그려집니다</span>
+  <div class="foot-brand">
+    <span>LORE 웹툰 스튜디오</span>
+    <span class="foot-note">고래 <b>루</b>가 안내합니다 · 말풍선과 대사는 그림 안에 함께 그려집니다</span>
+  </div>
+  <!-- 만든 곳 표시 — "이게 뭐지, 믿어도 되나" 피드백에 대응(2026-09-05).
+       실제 사업자등록번호는 없다(AI SW 마에스트로 과정의 프로젝트라 별도
+       법인이 아니다) — 있지도 않은 번호를 지어 넣지 않는다. 로고 원본은
+       design-reference/{somalogo.jpeg, logo.png, itplogo.png} 로 받아
+       배경을 다듬어(magick -trim) web/badges/ 에 옮겨 뒀다 — 색은 원본
+       기관 색 그대로 두고 흑백 처리하지 않는다(공식 로고는 임의로 톤을
+       바꾸지 않는 것이 원칙이다). -->
+  <div class="foot-org">
+    <div class="foot-org-badges">
+      <img src="/static/badges/asm.png" alt="AI·SW 마에스트로">
+      <img src="/static/badges/msit.png" alt="과학기술정보통신부">
+      <img src="/static/badges/iitp.png" alt="정보통신기획평가원(IITP)">
+    </div>
+  </div>
 </footer>
 
 <!-- 확인 팝업은 **진행 화면 밖**에 둔다. 안에 두면 #progress 가 숨는 순간
@@ -1054,5 +1232,25 @@
      읽어야 한다 — app.js 가 붙는 순간 NHReview 를 쓴다. -->
 <script src="/static/nh-review.js"></script>
 <script src="/static/app.js"></script>
+<script>
+  /* 상단 바의 "어떻게 만드나"(#how) · "결과 예시"(#gallery) 가 눌러도 안
+     움직였다(2026-09-05 확인) — html 의 scroll-behavior:smooth 와 브라우저의
+     "주소창 해시로 바로 열기" 가 겹치면, 히어로 그림처럼 치수를 안 박아 둔
+     이미지가 로딩되며 레이아웃이 밀리는 순간 스무스 스크롤 애니메이션이
+     끊겨 화면 맨 위에 그대로 남았다(실측: window.scrollTo(0,0) 도 같은
+     증상). 그림까지 다 실린 뒤(window 의 load) 한 번 더 그 자리로 보내면
+     끊길 일이 없다 — 이미 화면이 최종 크기로 자리 잡은 뒤라서. */
+  function jumpToHash() {
+    if (!location.hash) return;
+    const el = document.querySelector(location.hash);
+    if (el) el.scrollIntoView({ behavior: "instant", block: "start" });
+  }
+  // 주소로 바로 열 때(#how 를 북마크·공유 링크로 열 때)는 load 에서 한 번,
+  // 이미 홈에 있다가 상단 바 링크를 누를 때(같은 문서 안 해시 변경)는
+  // hashchange 로 한 번 — 실측해 보니 원인이 서로 다른 두 경로였다
+  // (2026-09-05, 위 주석 참고). 훅을 안 걸면 각각 따로 안 된다.
+  window.addEventListener("load", jumpToHash);
+  window.addEventListener("hashchange", jumpToHash);
+</script>
 </body>
 </html>
