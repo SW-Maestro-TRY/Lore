@@ -54,6 +54,7 @@ public class WebSecurityConfig {
                         // 로그인 없이 열려 있어야 하는 것
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/api/swagger-ui/**", "/api/swagger-ui.html", "/api/v3/api-docs/**").permitAll() // 문서는 /api 아래(#231)
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         // 조회만 열어 두는 것 — 랜딩·공개 목록이 여기 걸린다
                         .requestMatchers(HttpMethod.GET, "/api/zzal/v1/public/**").permitAll()

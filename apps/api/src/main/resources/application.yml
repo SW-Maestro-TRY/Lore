@@ -33,10 +33,15 @@ spring:
       hibernate:
         format_sql: true
 
-# Swagger UI 주소: http://localhost:8080/swagger-ui.html
+# Swagger UI 주소: http://localhost:8080/api/swagger-ui.html (문서·정의 모두 /api 아래 — CloudFront→ALB 가 /api/* 만 백엔드로 보내므로)
+# 운영에서 끄려면 SPRINGDOC_ENABLED=false (UI·정의 둘 다 내려간다)
 springdoc:
   swagger-ui:
-    path: /swagger-ui.html
+    path: /api/swagger-ui.html
+    enabled: ${SPRINGDOC_ENABLED:true}
+  api-docs:
+    path: /api/v3/api-docs
+    enabled: ${SPRINGDOC_ENABLED:true}
 
 # 상태 확인(헬스체크) 엔드포인트.
 # /actuator/health 가 200 이면 서버가 정상. 배포 직후 확인·CI/CD 배포 성공 판정에 쓴다.
