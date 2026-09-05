@@ -105,8 +105,17 @@ export function WorkCard({
         )}
       </button>
       <div className="works-body">
-        <h3>{run.character || "이름 없음"}</h3>
-        <p className="works-sub">{[run.genre, run.title].filter(Boolean).join(" · ")}</p>
+        {/* **제목이 먼저다.** 예전에는 캐릭터 이름이 제목 자리에 있었는데,
+            둘러보기는 남의 작품을 고르는 곳이라 「강냥이」보다 「버려진 직업의
+            비밀」이 고르는 데 쓰인다 — 이름은 그 작품을 이미 아는 사람에게만
+            뜻이 있다. 이름은 아래로 내려 누구 이야기인지만 알린다. */}
+        <h3>{run.title || "제목 없음"}</h3>
+        <p className="works-sub">
+          {[run.character, run.genre].filter(Boolean).join(" · ")}
+        </p>
+        {/* 그림체. 남긴 기록이 없는 옛 작품은 아예 안 그린다 — 빈 딱지가
+            붙어 있으면 그림체가 없는 작품처럼 보인다. */}
+        {run.style_label && <p className="works-style">{run.style_label}</p>}
         {/* 장 수는 안 적는다 — 읽는 사람이 고를 때 쓰는 값이 아니고("6장"이
             길다는 뜻인지 짧다는 뜻인지 아무도 모른다), 카드에서 제일 먼저
             눈에 띄는 자리를 세는 숫자가 차지하고 있었다. 여러 화가 있는

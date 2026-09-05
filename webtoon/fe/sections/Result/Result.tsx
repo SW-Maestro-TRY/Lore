@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   episodeDownloadUrl, isMyRun, pageUrl, readResult, type RunResult,
 } from "../../lib/nhApi";
+import ShareBar from "../Share/ShareBar";
 
 /* 완성본 — haeun/landing/web 의 #result 를 옮겼다.
  *
@@ -35,6 +36,9 @@ export default function Result({
 }) {
   const [data, setData] = useState<RunResult | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  /* 지금 설명을 펼친 장. 한 번에 하나만 연다 — 여러 개를 켜 두면 읽는 흐름이
+     설명으로 끊기고, 어차피 보고 있는 것은 한 장이다. */
+  const [openPage, setOpenPage] = useState<number | null>(null);
 
   useEffect(() => {
     if (!runId) return;
@@ -74,6 +78,9 @@ export default function Result({
 
   return (
     <section className="result">
+      {/* 머리. **본문과 같은 폭으로** 선다 — 예전에는 표지 카드가 제 내용만큼만
+          좁게 서서, 아래 그림과 왼쪽 끝이 안 맞고 긴 제목은 그 좁은 칸 안에서
+          잘렸다. 읽기 전에 보는 것이 제목이라 그 자리가 흔들리면 안 된다. */}
       <header className="result-head">
         <div className="result-cover">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -89,6 +96,12 @@ export default function Result({
           </div>
         </div>
         {data.logline && <p className="result-logline">{data.logline}</p>}
+
+        {/* 공유는 **누구에게나** 낸다. 남의 작품을 남에게 보내는 것도 이
+            제품이 바라는 일이고(그래서 둘러보기가 있다), 내려받기와 달리
+            남의 그림을 가져가는 것이 아니라 이 자리를 가리키는 것뿐이다. */}
+        <ShareBar runId={runId} episode={ep} title={data.title}
+                  character={data.character} />
 
         {/* 내 작품에만 있을 수 있는 것들 — 남의 작품이면 읽는 것만 남는다. */}
         {mine && (
@@ -120,9 +133,30 @@ export default function Result({
                 ...(w !== 1 ? { width: `${(w * 100).toFixed(2)}%`, marginInline: "auto" } : {}),
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="cut-img" src={pageUrl(runId, pg.no)}
-                   alt={`${pg.no}번째 장`} loading="lazy" />
+              {/* 눌러서 이 장이 무슨 장면인지 펴 보기. 설명을 늘 띄워 두면
+                  읽는 흐름이 매 장 끊기고, 아예 없으면 무슨 이야기인지 놓친
+                  사람이 되돌아갈 곳이 없다 — 그래서 **눌렀을 때만** 뜬다.
+                  설명이 없는 장(표지)은 누르는 것 자체를 막는다: 눌러도 아무
+                  일이 없으면 고장난 줄 안다. */}
+              {pg.caption ? (
+                <button
+                  type="button"
+                  className={`page-peek${openPage === pg.no ? " is-open" : ""}`}
+                  aria-expanded={openPage === pg.no}
+                  onClick={() => setOpenPage(openPage === pg.no ? null : pg.no)}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img className="cut-img" src={pageUrl(runId, pg.no)}
+                       alt={pg.caption} loading="lazy" />
+                  {openPage === pg.no && (
+                    <span className="page-caption">{pg.caption}</span>
+                  )}
+                </button>
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img className="cut-img" src={pageUrl(runId, pg.no)}
+                     alt={`${pg.no}번째 장`} loading="lazy" />
+              )}
             </div>
           );
         })}

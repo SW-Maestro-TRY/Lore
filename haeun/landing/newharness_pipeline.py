@@ -1156,6 +1156,9 @@ def list_runs(limit: int = 60) -> list[dict[str, Any]]:
             "cover_episode": 1,
             "cover_page": drawn[0],
             "page_count": len(drawn),
+            # 어느 그림체로 그렸나. 옛 작품은 style.txt 가 없어 빈 값이고,
+            # 화면은 그때 이 딱지를 아예 안 그린다.
+            "style_label": STYLE_LABEL.get(style_of(rid), style_of(rid)),
             "engine": "new_harness",       # 화면이 굳이 안 봐도 되지만, 구분은 남긴다
         })
         if len(out) >= limit:
@@ -1176,15 +1179,22 @@ def result_by_run(run_id: str) -> dict[str, Any]:
         return {}
     input_doc = _read_json_safe(d, "input.json")
     pick = _read_json_safe(d, "pick.json")
+    style = style_of(run_id)
+    chosen = direction_of(run_id, pick)
+    scenes = [str(x) for x in (chosen.get("scenes") or [])]
     return {
         "run_id": run_id,
         "character": str(input_doc.get("name") or ""),
         "title": title_of(run_id, pick),
         "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
-        "style_label": "",
-        "logline": "",
+        # 옛 작품은 style.txt 가 없어서 빈 값이다 — 화면이 그때는 안 그린다.
+        "style_label": STYLE_LABEL.get(style, style),
+        # 줄거리는 고른 이야기 쪽에 있다. pick.json 은 무엇을 골랐는지(n)와
+        # 제목만 들고 있어서, 그것만 보면 늘 비어 있었다.
+        "logline": str(chosen.get("plot") or pick.get("plot") or ""),
         "episode": 1,
-        "pages": [{"no": n, "gap": 0, "width": 1} for n in numbers],
+        "pages": [{"no": n, "gap": 0, "width": 1, "caption": _caption(scenes, n)}
+                  for n in numbers],
         "page_count": len(numbers),
         "planned_pages": len(page_numbers(run_id)),
         "preview": False,
@@ -1194,6 +1204,41 @@ def result_by_run(run_id: str) -> dict[str, Any]:
         "seconds": None,
         "layout_mode": "fast",
     }
+
+
+def direction_of(run_id: str, pick: dict[str, Any] | None = None) -> dict[str, Any]:
+    """이 작품이 고른 이야기 하나 — 줄거리·장면 목록이 다 여기 있다.
+
+    후보 넷 중 사람이 고른 것이 pick.json 의 n 이고, 그 내용은
+    directions.json 의 같은 번호에 있다. 못 읽으면 빈 것 — 줄거리와 캡션이
+    안 뜰 뿐이고 읽는 데는 지장이 없다.
+    """
+    d = run_dir(run_id)
+    pick = pick if pick is not None else _read_json_safe(d, "pick.json")
+    try:
+        chosen = int(pick.get("n") or 0)
+    except (TypeError, ValueError):
+        return {}
+    try:
+        directions = json.loads((d / "directions.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(directions, list):
+        return {}
+    for one in directions:
+        if isinstance(one, dict) and int(one.get("n") or 0) == chosen:
+            return one
+    return {}
+
+
+def _caption(scenes: list[str], page_no: int) -> str:
+    """이 장이 그린 장면 한 줄.
+
+    **1장은 표지다.** 장면을 안 그리고 제목만 크게 얹으므로 캡션이 없다
+    (있는 척하면 2장의 장면이 1장 것으로 밀린다). 그래서 2장이 첫 장면이다.
+    """
+    i = page_no - 2
+    return scenes[i] if 0 <= i < len(scenes) else ""
 
 
 TITLE_MAX = 60
