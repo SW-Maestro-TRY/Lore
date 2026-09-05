@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
  * 도메인이 3개로 나뉘어 있어도 문서는 한 곳에서 모아 보는 게 편하므로 common 에 둔다.
  * springdoc 의존성만으로도 문서는 뜨지만, 제목·설명·버전은 여기서 정해준다.
  *
- * 문서 주소: http://localhost:8080/swagger-ui.html
+ * 문서 주소: http://localhost:8080/api/swagger-ui.html
  */
 @Configuration
 public class SwaggerConfig {
