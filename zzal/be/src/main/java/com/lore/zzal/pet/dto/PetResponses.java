@@ -11,6 +11,10 @@ import com.lore.zzal.pet.TutorialSchedule;
 import com.lore.zzal.pet.UnlockRules;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
+import com.lore.zzal.leave.LeaveService;
+import com.lore.zzal.leave.ZzalPostcard;
+import com.lore.zzal.scene.SceneService;
+import com.lore.zzal.scene.ZzalScene;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
@@ -79,7 +83,19 @@ public final class PetResponses {
     public record Today(int games, int pets, int careIntimacy, int snackStreak, boolean bathDone) {
     }
 
-    public record Pieces(boolean food, boolean play, boolean clean, boolean bond, int streak) {
+    /**
+     * 오늘 모은 조각(정본 6장) — 3층 전에는 이 블록 자체가 null.
+     *
+     * ★ {@code streak} 는 "조각 4개를 며칠 연속 모았나". 2가 되는 밤에 다음 심화 하나가 큐에 오른다.
+     * ★ {@code bonus} 는 기분 좋은 날의 선물 조각 — 네 칸 중 <b>가장 앞의 빈 칸</b>을 채운 것으로 친다.
+     */
+    public record Pieces(boolean food, boolean play, boolean clean, boolean bond,
+                         int count, int streak, boolean bonus) {
+
+        static Pieces of(ZzalPet pet) {
+            return new Pieces(pet.pieceFood(), pet.piecePlay(), pet.pieceClean(), pet.pieceBond(),
+                    pet.pieceCount(), pet.getPieceStreak(), pet.isBonusPiece());
+        }
     }
 
     public record Progress(int current, int target) {
@@ -132,17 +148,45 @@ public final class PetResponses {
     public record ChatSummary(String openSlot, Instant nextAt) {
     }
 
-    public record Scenes(boolean enabled, Object latest) {
+    /**
+     * 혼자 논 장면 한 컷 — <b>레시피</b>다(정본 11·16장). 화면이 이 다섯 값으로 그림을 조립한다.
+     *
+     * ★ 그림 주소가 아니라 재료를 준다. 배경을 바꾸거나 소품 그림이 좋아지면 옛 장면도 같이 좋아진다.
+     */
+    public record Scene(String motionKey, String background, String prop, Instant at, String line) {
+
+        public static Scene of(ZzalScene s) {
+            return new Scene(s.getMotionKey(), s.getBackground(), s.getProp(), s.getSceneAt(),
+                    SceneService.line(s));
+        }
+    }
+
+    public record Scenes(boolean enabled, Scene latest) {
     }
 
     public record Features(boolean download, boolean leftRight, boolean run, boolean scenes,
                            boolean background, boolean album, boolean pieces) {
     }
 
-    public record Leaving(Instant noticedAt, Instant departsAt) {
+    /**
+     * 짐 싸기 예고(정본 9장) — <b>케어 미스의 유일한 겉모습</b>이다(정본 4장 "보이는 신호는 짐 가방뿐").
+     *
+     * ★ {@code justCancelled} 는 "방금 돌아와서 취소됐다" — 이번 응답에만 실린다. 그러지 않으면
+     *   사용자는 자기가 무엇을 막았는지 영영 모른다(짐 가방이 그냥 사라진다).
+     */
+    public record Leaving(Instant noticedAt, Instant departsAt, boolean justCancelled) {
     }
 
+    /** 여행 중(정본 9장). {@code postcards} 는 지금까지 온 엽서 수(최대 3) — 내용은 재회 때 전달된다. */
     public record Trip(Instant startedAt, int postcards) {
+    }
+
+    /** 여행에서 보내온 엽서 한 장 — 장면과 같은 레시피 방식(어디서·언제·한 줄). */
+    public record Postcard(int seq, String place, Instant at, String line) {
+
+        public static Postcard of(ZzalPostcard card) {
+            return new Postcard(card.getSeq(), card.getPlace(), card.getWrittenAt(), LeaveService.line(card));
+        }
     }
 
     public record Settings(boolean leaveEnabled) {
@@ -153,7 +197,7 @@ public final class PetResponses {
 
     /** 앨범(api-v2.md 1.6) — 도감 18칸 + 엽서·장면(PR-9·11 전엔 빈 목록) + 첫 심화 기념. */
     @Schema(description = "앨범 — 열린 동작 도감(기본/심화)·엽서·혼자 논 장면·첫 심화 기념")
-    public record Album(List<Motion> motions, List<Object> postcards, List<Object> scenes, FirstGift firstGift) {
+    public record Album(List<Motion> motions, List<Postcard> postcards, List<Scene> scenes, FirstGift firstGift) {
     }
 
     public record Tutorial(boolean active, long minutesSince, List<TutorialStep> steps) {
@@ -192,12 +236,20 @@ public final class PetResponses {
             Today today,
             @Schema(description = "3층 전엔 null") Pieces pieces,
             @Schema(description = """
+                    오늘이 "기분 좋은 날" 인가(정본 6장) — 어젯밤 벌점 0 + 세 게이지 2칸 이상.
+                    조각 하나를 미리 받고 첫 부름이 살가워진다. 3층 전에는 항상 false""")
+            boolean goodDay,
+            @Schema(description = """
                     지금 뭔가 굽고 있나 — NONE(없음) · QUEUED(오늘 밤에 굽는다) · PRACTICING(연습 중).
                     화면은 PRACTICING 일 때 "아직 연습 중이에요" 한 줄을 띄운다(정본 16장)""",
                     example = "NONE")
             String baking,
             List<Motion> motions,
             @Schema(description = "행동 응답에만. 이번 행동으로 열린 2층 seq") List<Integer> justUnlocked,
+            @Schema(description = """
+                    이번 조회에서 혼자 논 장면이 새로 남았는가 — 귀환 첫 화면이 이걸 보고 한 번 띄운다.
+                    다음 조회에는 false""")
+            boolean sceneNew,
             List<Learned> learnedToday,
             FirstGift firstGift,
             ChatSummary chatSummary,
@@ -228,15 +280,22 @@ public final class PetResponses {
          */
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
                                   Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked) {
-            return from(pet, stepLabel, now, catalog, rows, justUnlocked, false);
+            return from(pet, stepLabel, now, catalog, rows, justUnlocked, false, List.of());
+        }
+
+        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
+                                  Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
+                                  boolean justHealed) {
+            return from(pet, stepLabel, now, catalog, rows, justUnlocked, justHealed, List.of());
         }
 
         /**
          * @param justHealed 방금 약을 먹고 나았는가(행동 응답에만 — "나은 동작" 을 한 번만 보여주려고)
+         * @param scenes     혼자 논 장면, 최근 것부터(최대 3). 맨 앞 하나가 {@code scenes.latest}
          */
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
                                   Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
-                                  boolean justHealed) {
+                                  boolean justHealed, List<ZzalScene> scenes) {
             boolean hatching = pet.isHatching();
             boolean alive = pet.isAlive();
             if (!alive) {
@@ -248,8 +307,8 @@ public final class PetResponses {
                         deathReason(pet),
                         pet.getHatchStartedAt(), pet.getHatchedAt(), now,
                         // ★ 리스트는 null 이 아니라 빈 목록(해석 20) — 화면이 길이만 보고 그리게. null 이 프론트를 깨뜨렸다.
-                        null, null, null, null, null, null, false, null, null, null, null,
-                        List.of(), List.of(), List.of(),
+                        null, null, null, null, null, null, false, null, null, null, false, null,
+                        List.of(), List.of(), false, List.of(),
                         null, null, null, null, null, null, null, null, null, null, null);
             }
 
@@ -270,10 +329,10 @@ public final class PetResponses {
             Features features = new Features(
                     true, true,
                     pet.getLeftRightWins() >= ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS,
-                    false,                                                  // 장면 — PR-9
+                    pet.isScenesEnabled(),                                  // 장면 — 첫 부재 4시간 뒤 자동
                     layerTwoOpen >= ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN,
                     "OPEN".equals(firstGift.status()),                       // 앨범 = 첫 심화가 도착하면 같이 열린다(정본 6장)
-                    false);                                                 // 조각 — PR-10
+                    pet.isPiecesEnabled());                                 // 조각
 
             TutorialSchedule.State t = TutorialSchedule.of(pet, now);
             Tutorial tutorial = t == null ? null : new Tutorial(t.active(), t.minutesSince(),
@@ -294,20 +353,24 @@ public final class PetResponses {
                     Intimacy.of(pet.getIntimacy()),
                     new Today(pet.getTodayGames(), pet.getTodayPetCount(), pet.getTodayCareIntimacy(),
                             pet.getSnackStreak(), pet.isTodayBathDone()),
-                    null,                                                   // 조각 — PR-10
+                    pet.isPiecesEnabled() ? Pieces.of(pet) : null,
+                    pet.isGoodDayToday(),
                     baking(rows),
                     motions(pet, catalog, rows),
                     justUnlocked,
+                    pet.isSceneJustMade(),
                     learnedToday(catalog, rows),
                     firstGift,
                     new ChatSummary(null, nextChatAt(pet, now)),           // 부름 — PR-4
-                    new Scenes(false, null),
+                    new Scenes(pet.isScenesEnabled(),
+                            scenes.isEmpty() ? null : Scene.of(scenes.get(0))),
                     pet.getPersonality() == null ? null : pet.getPersonality().name(),
                     pet.getWorld(),
                     pet.getBackground(),
                     features,
-                    null, null,                                             // 떠남·여행 — PR-11
-                    new Settings(true),
+                    leaving(pet),
+                    pet.isTraveling() ? new Trip(pet.getTripStartedAt(), pet.getPostcardCount()) : null,
+                    new Settings(pet.isLeaveEnabled()),
                     tutorial);
         }
 
@@ -378,6 +441,19 @@ public final class PetResponses {
                 case DEAD -> DeathReason.NEGLECTED.name();
                 default -> null;
             };
+        }
+
+        /**
+         * 짐 가방 — 예고 중이거나 <b>방금 취소됐을 때</b>만.
+         *
+         * ★ 취소된 뒤에도 이번 한 번은 내려보낸다. 안 그러면 접속과 동시에 짐이 사라져,
+         *   사용자는 <b>자기가 무엇을 막았는지</b> 모른 채 지나간다.
+         */
+        static Leaving leaving(ZzalPet pet) {
+            if (pet.isLeavingNoticed()) {
+                return new Leaving(pet.getLeaveNoticeAt(), pet.departAt(), false);
+            }
+            return pet.isLeavingJustCancelled() ? new Leaving(null, null, true) : null;
         }
 
         /** 18칸. 잠긴 칸도 이름+조건(플랜 T2 결정 4). 심화 행동 상태는 zzal_motion 행에서(없으면 NONE). */

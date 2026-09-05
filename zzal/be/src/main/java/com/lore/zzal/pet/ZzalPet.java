@@ -231,6 +231,127 @@ public class ZzalPet {
     @Column
     private Instant healedAt;
 
+    // ── 부재·장면 (정본 11·16장) ──────────────────────────────────────────
+
+    /**
+     * 마지막으로 앱을 연 뒤 <b>깨어 있는</b> 초. 4시간마다 혼자 논 장면이 한 컷 남는다(정본 11장).
+     *
+     * ★ 벽시계가 아니다 — 밤새 자는 8시간을 "혼자 논 시간" 으로 세면 매일 아침 장면이 두 컷씩 쌓인다.
+     *   자는 동안 이 시계는 멈춘다({@link #tick} 이 깨어 있는 구간만 걷는다).
+     */
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long absenceAwakeSec;
+
+    /** 혼자 놀기 기능이 켜진 시각 — 첫 부재 4시간이 지나면 자동(정본 6장 기능 해금). */
+    @Column
+    private Instant scenesEnabledAt;
+
+    /**
+     * 이번 정산에서 장면이 새로 남았나 — <b>저장하지 않는다</b>({@code @Transient}).
+     *
+     * ★ 이 값의 수명은 "이 요청" 이다. DB 칸으로 두면 다음 조회에도 남아 폴라로이드가 두 번 뜨고,
+     *   ThreadLocal 로 두면 스레드가 재사용될 때 남의 요청으로 새어 나간다. 지금 다루는 그 객체에 붙이는 것이
+     *   수명이 정확히 맞는 자리다.
+     */
+    @jakarta.persistence.Transient
+    private boolean sceneJustMade;
+
+    /** 밤 연습 장면을 남긴 잠(그 밤 잠든 시각). 같은 잠에 두 컷을 남기지 않으려는 표식. */
+    @Column
+    private Instant nightSceneAt;
+
+    /**
+     * 밤 장면을 <b>아직 안 만든 잠</b>의 잠든 시각. 잠드는 순간 적어 두고, 다음 정산·조회에서 쓴 뒤 지운다.
+     *
+     * ★★ 왜 "지금 자고 있나" 로 판정하면 안 되나 — 밤새 앱을 안 열고 다음 날 아침에 열면,
+     *   그 한 번의 정산이 <b>잠들기와 깨어나기를 한꺼번에</b> 처리한다. 그 끝에서는 이미 깨어 있어서
+     *   "자고 있나" 가 거짓이고, 그러면 밤 장면은 <b>23~10시에 앱을 연 사람만</b> 받게 된다
+     *   (#227 리뷰 상-2 — 정상 흐름에서 안 남았다). 잠든 순간에 쪽지를 남기면 언제 열어도 받는다.
+     */
+    @Column
+    private Instant pendingNightSceneAt;
+
+    /**
+     * 그 밤에 <b>잠들 때</b> 아팠나 — 밤 장면을 만들지 말지의 판정 재료(정본 16장).
+     *
+     * ★★ 소비 시점(아침)의 상태로 판정하면 안 된다 — 밤새 병이 나면 그 밤 장면이 통째로 버려지고,
+     *   반대로 아침에 약을 먹었으면 아팠던 밤에 연습 장면이 생긴다(#234 리뷰 중-2).
+     *   케어 미스 스냅샷({@code lastNightCareMiss})과 같은 방식이다.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean pendingNightSick;
+
+    /** 그 밤에 잠들 때의 기분(장면의 {@code mood}). 아침 것을 쓰면 그날의 이야기가 아니다. */
+    @Column(length = 20)
+    private String pendingNightMood;
+
+    // ── 3층 (정본 6·16장) ─────────────────────────────────────────────────
+
+    /** 2층 8종이 모두 열린 것을 처음 본 시각. "다음 날 아침" 을 세는 기준. */
+    @Column
+    private Instant layerTwoDoneAt;
+
+    /** 조각 4칸이 등장한 시각 — 2층 8종이 다 열린 뒤 <b>처음 맞는 기상</b>(정본 16장). */
+    @Column
+    private Instant piecesEnabledAt;
+
+    /** 조각 4개를 모은 밤이 며칠 연속인가. 하루라도 빠지면 0(정본 16장 "이틀 연속"). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int pieceStreak;
+
+    /** 마지막 밤잠에 든 순간의 연속 일수(리셋 전 스냅샷). 밤 큐가 잠든 뒤에 읽는다. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int lastNightPieceStreak;
+
+    /** 오늘 밤 "기분 좋은 날" 판정을 통과했나 → 내일 아침에 선물(정본 6장). */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean goodDayPending;
+
+    /** 오늘이 기분 좋은 날인가 — 살가운 첫 부름·웃는 대기(정본 6장). 잠들 때 꺼진다. */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean goodDayToday;
+
+    // ── 떠남·재회 (정본 9·16장) ───────────────────────────────────────────
+
+    /**
+     * 짐 싸기 예고 시각. 미방문 5일 <b>또는</b> 케어 미스 8에서 켜지고, 접속하면 즉시 꺼진다.
+     *
+     * ★ 이것이 케어 미스의 <b>유일한 겉모습</b>이다(정본 4장 "보이는 신호는 짐 가방뿐").
+     *   숫자는 끝까지 안 보여주고, "이대로면 떠날 것 같다" 는 사실만 그림으로 전한다.
+     */
+    @Column
+    private Instant leaveNoticeAt;
+
+    /** 여행을 떠난 시각(정본 9장). 여행 중에는 게이지·병·부재가 전부 멈춘다. */
+    @Column
+    private Instant tripStartedAt;
+
+    /** 여행 중 만든 엽서 수(최대 3). 재회 때 한꺼번에 전달된다. */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int postcardCount;
+
+    /** 마지막으로 엽서를 만든 날(KST). 하루 한 장. */
+    @Column
+    private LocalDate lastPostcardDate;
+
+    /**
+     * 떠남 끄기(정본 9장 "설정에서 떠남 끄기 가능").
+     *
+     * ★★ 이 스위치가 있는 이유 — 떠남은 이야기지만 <b>누군가에게는 상처</b>다(자캐 커뮤니티 규범:
+     *   "떠남 끄기 옵션"). 끄면 예고도 여행도 없다. 켜고 끄는 것은 사용자의 몫이고 우리가 설득하지 않는다.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private boolean leaveEnabled = true;
+
+    /**
+     * 방금 접속으로 예고가 취소됐나 — <b>저장하지 않는다</b>({@code @Transient}).
+     *
+     * ★ 취소되면 짐 가방이 사라지는데, 그러면 사용자는 <b>자기가 무엇을 막았는지 영영 모른다.</b>
+     *   이번 응답에서 한 번은 보여주고("짐을 싸고 있었어요") 다음부터 안 보이게 한다.
+     */
+    @jakarta.persistence.Transient
+    private boolean leavingJustCancelled;
+
     // ── 친밀도 (정본 8장) ─────────────────────────────────────────────────
 
     @Column(nullable = false, columnDefinition = "integer default 0")
@@ -253,6 +374,32 @@ public class ZzalPet {
 
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean todayBathDone;
+
+    // ── 조각 (정본 6·16장) — 오늘 무엇을 했나. 잠들 때 판정하고 리셋 ─────
+
+    /** 오늘 밥을 몇 번 줬나(밥 조각 = 2회). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int todayFeeds;
+
+    /** 오늘 간식을 몇 번 줬나(놀이 조각 = 간식 1회 또는 게임 1승). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int todaySnacks;
+
+    /** 오늘 청소를 몇 번 했나(청결 조각 = 청소 1회 또는 목욕 1회). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int todayCleans;
+
+    /** 오늘 미니게임을 몇 번 이겼나(놀이 조각). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int todayGameWins;
+
+    /** 오늘 채팅에 몇 번 답했나(교감 조각 = 채팅 1회 또는 쓰다듬기 2회). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int todayChatAnswers;
+
+    /** 기분 좋은 날의 선물 — 오늘 조각 하나를 미리 받았나(정본 6장). */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean bonusPiece;
 
     /** 다른 행동 없이 연달아 준 간식. 5면 배탈. 잠들 때도 0. */
     @Column(nullable = false, columnDefinition = "integer default 0")
@@ -526,6 +673,11 @@ public class ZzalPet {
 
     /** 깨어 있는 구간 하나. 아기 60분의 끝에서 속도가 바뀌므로 거기서 한 번 가른다. */
     private void advanceAwake(Instant from, Instant to) {
+        // ★ 여행 중에는 게이지·흔적·병·케어 미스·부재가 전부 멈춘다(정본 9·16장 "여행 중·잠든 동안은
+        //   어떤 카운터도 안 돈다"). 자는 동안과 같은 대접이라, 여기 한 줄이면 아래 전부가 따라 멈춘다.
+        if (isTraveling()) {
+            return;
+        }
         Instant baby = babyUntil();
         if (baby != null && from.isBefore(baby)) {
             Instant babyEnd = to.isBefore(baby) ? to : baby;
@@ -565,6 +717,11 @@ public class ZzalPet {
             step = Math.max(step, 1);
 
             at = at.plusSeconds(step);
+            // 부재 시계는 아기 때도 흐른다 — 아기 60분에 앱을 닫고 네 시간 뒤 오면 그 사이도 혼자 있던 것이다.
+            // ★ 여행 중에는 안 센다 — 방에 없으니 "혼자 방에서 논" 시간이 아니다(PR-11 대비).
+            if (!isTraveling()) {
+                absenceAwakeSec += step;
+            }
             if (!baby) {
                 // ★★ "이 step 을 걷기 전에 이미 아팠나" 를 먼저 잡는다. accumulateZero 가 이 step 안에서
                 //   병을 낼 수 있는데, 그 뒤에 step 을 통째로 병 시간에 더하면 <b>아프기도 전의 시간이
@@ -770,6 +927,332 @@ public class ZzalPet {
         return id != null ? base * 31 + id : base;
     }
 
+    // ── 떠남·재회 (정본 9·16장) ───────────────────────────────────────────
+
+    /**
+     * 기상 순간의 떠남 판정(정본 16장 "예고는 그 5일째 <b>기상 시점</b>에 켜진다").
+     *
+     * ★ 왜 기상에서 하나 — 조회 때마다 보면 "5일째" 가 사람마다 다른 순간이 된다. 기상은 하루에 한 번뿐이고,
+     *   앱을 안 열어도 밤 스위프의 정산이 그 경계를 지나므로 <b>안 오는 사람에게도 똑같이</b> 돈다.
+     */
+    private void judgeLeaving(Instant at) {
+        if (!leaveEnabled || isTraveling()) {
+            return;
+        }
+        if (leaveNoticeAt == null) {
+            if (shouldNotice(at)) {
+                leaveNoticeAt = at;
+            }
+            return;
+        }
+        // 예고 중이었다면 유예가 지났는지 본다
+        if (!AwakeClock.dateOf(at).isBefore(AwakeClock.dateOf(leaveNoticeAt).plusDays(departDays()))) {
+            tripStartedAt = at;
+            leaveNoticeAt = null;
+            postcardCount = 0;
+            lastPostcardDate = null;
+        }
+    }
+
+    /** 미방문 달력 5일 <b>또는</b> 케어 미스 8(정본 9장). 30일 이상 함께했으면 미방문 쪽만 2배. */
+    private boolean shouldNotice(Instant at) {
+        if (careMiss >= ZzalRules.LEAVE_NOTICE_AT_CARE_MISS) {
+            return true;
+        }
+        if (lastVisitDate == null) {
+            return false;
+        }
+        long absent = java.time.temporal.ChronoUnit.DAYS.between(lastVisitDate, AwakeClock.dateOf(at));
+        return absent >= noticeDays();
+    }
+
+    /**
+     * 예고까지의 미방문 일수 — 30일 이상 함께했으면 2배(정본 9장 "예고·유예 각 2배").
+     *
+     * ★ 오래 함께한 사람에게 더 너그럽다. 한 달을 같이 지낸 뒤의 닷새와 사흘째의 닷새는 무게가 다르다.
+     */
+    public int noticeDays() {
+        return ZzalRules.LEAVE_NOTICE_AFTER_ABSENT_DAYS * graceMultiplier();
+    }
+
+    /** 예고 뒤 출발까지의 유예 일수 — 마찬가지로 30일 이상이면 2배. */
+    public int departDays() {
+        return ZzalRules.LEAVE_DEPART_AFTER_NOTICE_DAYS * graceMultiplier();
+    }
+
+    private int graceMultiplier() {
+        return daysTogether >= ZzalRules.LEAVE_GRACE_DOUBLE_FROM_DAYS ? 2 : 1;
+    }
+
+    /** 예고 중인가(짐 가방). */
+    public boolean isLeavingNoticed() {
+        return leaveNoticeAt != null;
+    }
+
+    public Instant getLeaveNoticeAt() {
+        return leaveNoticeAt;
+    }
+
+    /** 예고가 켜진 그 밤 기준의 출발 예정 시각(화면 표시용). */
+    public Instant departAt() {
+        return leaveNoticeAt == null ? null
+                : AwakeClock.dateOf(leaveNoticeAt).plusDays(departDays())
+                        .atTime(ZzalRules.AUTO_WAKE_AT).atZone(ZzalRules.ZONE).toInstant();
+    }
+
+    public Instant getTripStartedAt() {
+        return tripStartedAt;
+    }
+
+    public int getPostcardCount() {
+        return postcardCount;
+    }
+
+    public boolean isLeaveEnabled() {
+        return leaveEnabled;
+    }
+
+    public boolean isLeavingJustCancelled() {
+        return leavingJustCancelled;
+    }
+
+    /** 떠남을 켜고 끈다. 끄면 예고 중이던 것도 즉시 사라진다(이미 여행 중이면 부르기로 데려온다). */
+    public void setLeaveEnabled(boolean enabled) {
+        this.leaveEnabled = enabled;
+        if (!enabled) {
+            this.leaveNoticeAt = null;
+        }
+    }
+
+    /** 오늘 엽서를 만들 수 있나 — 여행 중, 하루 한 장, 최대 3장(정본 9·16장). */
+    public boolean canWritePostcard(Instant now) {
+        return isTraveling() && postcardCount < ZzalRules.POSTCARD_MAX
+                && !AwakeClock.dateOf(now).equals(lastPostcardDate);
+    }
+
+    /** 엽서 한 장을 썼다고 표시(실제 저장은 서비스가 — 엔티티는 표를 모른다). */
+    public void wrotePostcard(Instant now) {
+        postcardCount += 1;
+        lastPostcardDate = AwakeClock.dateOf(now);
+    }
+
+    /**
+     * 부르기 — 즉시 귀환(정본 9장).
+     *
+     * <pre>
+     *   게이지 전부 2칸 · 케어 미스 0 · 친밀도 = 떠나기 전 <b>최고치의 50%</b>
+     *   조각·3층 진행·도감은 그대로 보존(16장)
+     * </pre>
+     *
+     * ★ 친밀도를 0 이 아니라 최고치의 절반으로 되돌리는 이유 — 쌓아 온 것을 통째로 지우면
+     *   "다시 시작하느니 그만두자" 가 된다. 절반은 <b>돌아올 이유</b>를 남긴다.
+     */
+    public void callBack(Instant now) {
+        tripStartedAt = null;
+        leaveNoticeAt = null;
+        careMiss = 0;
+        todayCareMiss = 0;
+        intimacy = (int) Math.round(intimacyPeak * ZzalRules.REUNION_INTIMACY_RATIO);
+        fullness = ZzalRules.REUNION_GAUGE;
+        happiness = ZzalRules.REUNION_GAUGE;
+        trash = ZzalRules.TRASH_MAX - ZzalRules.REUNION_GAUGE;   // 청결 = 흔적의 반대
+        fullnessAwakeSec = 0;
+        happinessAwakeSec = 0;
+        trashAwakeSec = 0;
+        fullnessZeroSec = 0;
+        happinessZeroSec = 0;
+        cleanZeroSec = 0;
+        fullnessMissArmed = false;
+        happinessMissArmed = false;
+        cleanMissArmed = false;
+        sickSince = null;
+        sickKind = null;
+        sickAwakeSec = 0;
+        absenceAwakeSec = 0;
+        settledAt = now;
+        wokeAt = now;
+        sleepKind = null;
+        sleptAt = null;
+    }
+
+    // ── 조각과 3층 (정본 6·16장) ──────────────────────────────────────────
+
+    /** 밥 조각 — 오늘 밥 2회. */
+    public boolean pieceFood() {
+        return todayFeeds >= ZzalRules.PIECE_FEEDS;
+    }
+
+    /** 놀이 조각 — 간식 1회 <b>또는</b> 게임 1승. */
+    public boolean piecePlay() {
+        return todaySnacks >= 1 || todayGameWins >= 1;
+    }
+
+    /** 청결 조각 — 청소 1회 <b>또는</b> 목욕 1회. */
+    public boolean pieceClean() {
+        return todayCleans >= 1 || todayBathDone;
+    }
+
+    /** 교감 조각 — 채팅 응답 1회 <b>또는</b> 쓰다듬기 2회. */
+    public boolean pieceBond() {
+        return todayChatAnswers >= 1 || todayPetCount >= ZzalRules.PIECE_PETS;
+    }
+
+    /**
+     * 오늘 모은 조각 수(0~4). 기분 좋은 날의 선물 조각은 <b>가장 앞의 빈 칸</b>을 채운 것으로 친다.
+     *
+     * ★ "어느 칸을 채웠나" 를 따로 저장하지 않는 이유 — 선물은 하루짜리이고, 사용자가 보는 것은
+     *   "네 칸 중 몇 개" 다. 어느 칸인지까지 저장하면 칸이 하나 늘고 리셋할 것도 하나 는다.
+     */
+    public int pieceCount() {
+        int earned = (pieceFood() ? 1 : 0) + (piecePlay() ? 1 : 0) + (pieceClean() ? 1 : 0) + (pieceBond() ? 1 : 0);
+        return bonusPiece ? Math.min(4, earned + 1) : earned;
+    }
+
+    /** 3층(조각)이 열렸나 — 2층 8종이 다 열린 뒤 처음 맞는 기상(정본 16장). */
+    public boolean isPiecesEnabled() {
+        return piecesEnabledAt != null;
+    }
+
+    /**
+     * 2층 8종이 다 열린 것을 처음 봤다고 적는다. 여기서 바로 조각을 열지 않는다 —
+     * 정본 16장이 "다 열린 뒤 <b>처음 맞는 기상</b>" 이라고 못 박았다.
+     */
+    public void markLayerTwoDone(Instant at) {
+        if (layerTwoDoneAt == null) {
+            layerTwoDoneAt = at;
+        }
+    }
+
+    /**
+     * 조각 4칸을 등장시킬 때가 됐나 — 2층 8종을 다 연 <b>그 뒤에 맞은 기상</b>이어야 한다.
+     *
+     * ★ 같은 날 밤에 8종을 다 열고 그 자리에서 조각이 나오면 "다음 날 아침" 이 아니다.
+     */
+    public boolean readyForPieces(Instant now) {
+        return piecesEnabledAt == null && layerTwoDoneAt != null && !isSleeping()
+                && wokeAt != null && wokeAt.isAfter(layerTwoDoneAt);
+    }
+
+    public void enablePieces(Instant at) {
+        if (piecesEnabledAt == null) {
+            piecesEnabledAt = at;
+        }
+    }
+
+    /** 기분 좋은 날의 선물 조각을 오늘 받았나. */
+    public boolean isBonusPiece() {
+        return bonusPiece;
+    }
+
+    public int getPieceStreak() {
+        return pieceStreak;
+    }
+
+    /** 잠든 순간의 연속 일수(밤 큐 판정 재료). */
+    public int getLastNightPieceStreak() {
+        return lastNightPieceStreak;
+    }
+
+    /** 이 밤의 몫을 큐에 올렸다 — 연속을 소모한다(실패해도 그 행은 FAILED 로 다음 밤에 다시 오른다). */
+    public void consumePieceStreak() {
+        pieceStreak = 0;
+        lastNightPieceStreak = 0;
+    }
+
+    /** 오늘이 기분 좋은 날인가(살가운 첫 부름·웃는 대기). */
+    public boolean isGoodDayToday() {
+        return goodDayToday;
+    }
+
+    public Instant getPiecesEnabledAt() {
+        return piecesEnabledAt;
+    }
+
+    // ── 혼자 논 장면 (정본 11·16장) ───────────────────────────────────────
+
+    /** 지금까지 쌓인 부재로 장면을 몇 컷 남길 수 있나(깨어 있는 4시간에 한 컷). */
+    public int pendingScenes() {
+        return (int) (absenceAwakeSec / ZzalRules.SCENE_ABSENCE_CHUNK.getSeconds());
+    }
+
+    /**
+     * 장면 {@code count} 컷을 남겼다고 표시한다 — 쓴 만큼(4시간 × count)을 덜어낸다.
+     *
+     * ★ 이 나머지는 <b>그 부재 안에서만</b> 뜻이 있다. 앱을 여는 순간 {@link #visit} 이 부재 시계를
+     *   0으로 끊으므로(B79) 다음 부재로 넘어가지 않는다 — 넘기면 "1시간만 비워도 컷이 생기는" 상태가
+     *   이어져 "부재 4시간마다" 가 아니게 된다.
+     */
+    public void consumeScenes(int count, Instant at) {
+        if (count <= 0) {
+            return;
+        }
+        absenceAwakeSec -= (long) count * ZzalRules.SCENE_ABSENCE_CHUNK.getSeconds();
+        if (scenesEnabledAt == null) {
+            scenesEnabledAt = at;       // 첫 부재 4시간이 지나면 기능이 열린다(정본 6장)
+        }
+    }
+
+    /** 이번 요청에서 장면이 새로 남았다고 표시한다(응답에만 실린다). */
+    public void markSceneMade() {
+        this.sceneJustMade = true;
+    }
+
+    /** 이번 요청에서 장면이 새로 남았나. */
+    public boolean isSceneJustMade() {
+        return sceneJustMade;
+    }
+
+    /** 밤 연습 장면 처리가 끝났다고 표시(같은 잠에 두 컷을 남기지 않는다). */
+    public void markNightScene(Instant at) {
+        this.nightSceneAt = at;
+        this.pendingNightSceneAt = null;
+        this.pendingNightSick = false;
+        this.pendingNightMood = null;
+    }
+
+    /** 그 밤에 잠들 때 아팠나(밤 장면 판정 재료). */
+    public boolean wasSickWhenSleeping() {
+        return pendingNightSick;
+    }
+
+    /** 그 밤에 잠들 때의 기분(밤 장면에 적힐 값). 기록이 없으면 지금 기분. */
+    public String nightSceneMood() {
+        return pendingNightMood != null ? pendingNightMood : mood().name();
+    }
+
+    /** 아직 처리 안 한 밤잠이 있나. */
+    public boolean needsNightScene() {
+        return pendingNightSceneAt != null;
+    }
+
+    /** 그 밤잠에 든 시각(장면의 시각이 된다). 없으면 null. */
+    public Instant getPendingNightSceneAt() {
+        return pendingNightSceneAt;
+    }
+
+    /** 혼자 놀기 기능이 열렸나(정본 6장 — 첫 부재 4시간 뒤 자동). */
+    public boolean isScenesEnabled() {
+        return scenesEnabledAt != null;
+    }
+
+    /** 여행 중인가. PR-11 이 채운다 — 여행 중에는 방에 없으니 혼자 논 장면도 없다. */
+    public boolean isTraveling() {
+        return tripStartedAt != null;
+    }
+
+    /** 뽑기 씨앗 — 장면 서비스가 엔티티 밖에서도 같은 규칙으로 굴릴 수 있게 연다. */
+    public long chanceSeed() {
+        return seed();
+    }
+
+    public long getAbsenceAwakeSec() {
+        return absenceAwakeSec;
+    }
+
+    public Instant getScenesEnabledAt() {
+        return scenesEnabledAt;
+    }
+
     /** 밥 충전 — 벽시계 4시간에 1개. 자는 동안도 돈다. 가득이면 시계가 멈춘다(안 그러면 하나 먹자마자 몰아서 찬다). */
     private void chargeFood(Instant now) {
         if (foodAt == null || !now.isAfter(foodAt)) {
@@ -849,16 +1332,43 @@ public class ZzalPet {
         sleepKind = kind;
         sleptAt = at;
         if (kind == SleepKind.NIGHT) {
+            // 밤 장면(연습 장면) 쪽지 — 실제로 만드는 것은 서비스가 다음 정산에서(엔티티는 표를 모른다)
+            if (!at.equals(nightSceneAt)) {
+                pendingNightSceneAt = at;
+                pendingNightSick = isSick();        // ★ 잠들 때의 상태를 함께 적는다(아침 것이 아니라)
+                pendingNightMood = mood().name();
+            }
             if (todayCareMiss == 0) {
                 zeroMissDays += 1;
             }
             lastNightCareMiss = todayCareMiss;      // 밤 큐 판정 재료(리셋 전 스냅샷)
             lastNightOf = AwakeClock.dateOf(at);
+
+            // ★ 조각 판정은 <b>리셋보다 먼저</b>(정본 2장 "잠드는 순간 하는 일" 첫 줄).
+            //   3층 전에는 아예 안 센다 — 조각 칸이 화면에 없는데 뒤에서 연속이 쌓이면 안 된다.
+            if (isPiecesEnabled()) {
+                pieceStreak = pieceCount() >= 4 ? pieceStreak + 1 : 0;
+            }
+            lastNightPieceStreak = pieceStreak;      // 밤 큐가 잠든 뒤에 읽는다(케어 미스와 같은 방식)
+
+            // 기분 좋은 날 — 오늘 벌점 0 + 세 게이지가 2칸 이상이면 <b>내일 아침</b>에 선물(정본 6장)
+            goodDayPending = isPiecesEnabled() && todayCareMiss == 0
+                    && fullness >= ZzalRules.GOOD_DAY_GAUGE_AT_LEAST
+                    && happiness >= ZzalRules.GOOD_DAY_GAUGE_AT_LEAST
+                    && getClean() >= ZzalRules.GOOD_DAY_GAUGE_AT_LEAST;
+
             todayCareMiss = 0;
             todayGames = 0;
             todayPetCount = 0;
             todayCareIntimacy = 0;
             todayBathDone = false;
+            todayFeeds = 0;
+            todaySnacks = 0;
+            todayCleans = 0;
+            todayGameWins = 0;
+            todayChatAnswers = 0;
+            bonusPiece = false;
+            goodDayToday = false;
             snackStreak = 0;
             overslept = false;
         }
@@ -880,6 +1390,13 @@ public class ZzalPet {
         if (was == SleepKind.NIGHT) {
             wokeAt = at;
             overslept = !manual;
+            judgeLeaving(at);
+            // 어젯밤 판정을 통과했으면 오늘은 기분 좋은 날 — 조각 하나를 미리 받고 첫 부름이 살가워진다
+            if (goodDayPending) {
+                goodDayPending = false;
+                goodDayToday = true;
+                bonusPiece = true;
+            }
         } else if (was == SleepKind.NAP) {
             napCount += 1;
         }
@@ -900,6 +1417,7 @@ public class ZzalPet {
         boolean wasFull = food >= ZzalRules.FOOD_MAX;
         fullness = Math.min(ZzalRules.GAUGE_MAX, fullness + ZzalRules.FEED_FULLNESS);
         food -= 1;
+        todayFeeds += 1;
         if (wasFull) {
             foodAt = now;   // 가득이라 멈춰 있던 충전 시계를 다시 켠다
         }
@@ -912,6 +1430,7 @@ public class ZzalPet {
     public void snack(Instant now) {
         happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.SNACK_HAPPINESS);
         snackStreak += 1;
+        todaySnacks += 1;
         lastCaredAt = now;
         if (snackStreak >= ZzalRules.SNACK_STREAK_SICK_AT) {
             // ★★ 아기 60분 동안에는 병이 없다(정본 12장 "케어 미스·병·감점 없음" · 16장).
@@ -938,6 +1457,7 @@ public class ZzalPet {
     public void clean(Instant now) {
         trash = 0;
         cleans += 1;
+        todayCleans += 1;
         careIntimacy();
         afterNonSnack(now);
     }
@@ -999,12 +1519,26 @@ public class ZzalPet {
      */
     public boolean visit(Instant now) {
         lastSeenAt = now;
+        // ★ 예고 중 접속 = 즉시 취소 + 케어 미스 -2(정본 9장). 돌아온 것 자체가 답이다.
+        if (leaveNoticeAt != null && !isTraveling()) {
+            leaveNoticeAt = null;
+            careMiss = Math.max(0, careMiss - ZzalRules.LEAVE_CANCEL_MISS_RELIEF);
+            leavingJustCancelled = true;
+        }
+        // ★★ 앱을 여는 순간 <b>부재는 끝난다</b>. 여기서 안 끊으면 이 시계는 "부재" 가 아니라
+        //   "깨어 있던 시간 전부" 가 되고, 30분마다 들여다보는 사람에게도 네 시간마다 "혼자 논 장면" 이
+        //   남는다(#227 리뷰 상-1 실측 — 30분마다 12번 조회에 컷 2개). 정본 11·16장은 <b>부재 중</b>이다.
+        //   남은 초(4시간에 못 미친 나머지)도 그 부재와 함께 끝난다 — 다음 부재는 처음부터 센다.
+        absenceAwakeSec = 0;
         LocalDate today = AwakeClock.dateOf(now);
         if (today.equals(lastVisitDate)) {
             return false;
         }
         lastVisitDate = today;
-        daysTogether += 1;
+        // ★ 여행 중에는 "함께한 날" 이 안 는다(정본 9장) — 같이 있지 않았으므로.
+        if (!isTraveling()) {
+            daysTogether += 1;
+        }
         return true;
     }
 
@@ -1036,11 +1570,13 @@ public class ZzalPet {
     /** 좌우 맞히기 승리 — 달리기 해금(5승)의 재료. */
     public void winLeftRight() {
         leftRightWins += 1;
+        todayGameWins += 1;
     }
 
     /** 채팅에 답했다. 친밀도 +40, 2층 9·10·14번 조건 카운터(BABY 포함, 16장). */
     public void answerChat() {
         chatAnswers += 1;
+        todayChatAnswers += 1;
         addIntimacy(ZzalRules.CHAT_INTIMACY);
         snackStreak = 0;
     }

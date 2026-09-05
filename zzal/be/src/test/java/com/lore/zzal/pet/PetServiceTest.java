@@ -57,6 +57,10 @@ class PetServiceTest {
     private HatchService hatchService;
     private ZzalMotionRepository motionRepository;
     private MotionSeeder seeder;
+    private com.lore.zzal.scene.ZzalSceneRepository sceneRepository;
+    private com.lore.zzal.leave.ZzalPostcardRepository postcardRepository;
+    private final java.util.List<com.lore.zzal.leave.ZzalPostcard> postcards = new java.util.ArrayList<>();
+    private final java.util.List<com.lore.zzal.scene.ZzalScene> scenes = new java.util.ArrayList<>();
     private PetService service;
 
     @BeforeEach
@@ -68,6 +72,34 @@ class PetServiceTest {
         hatchService = mock(HatchService.class);
         motionRepository = mock(ZzalMotionRepository.class);
         seeder = mock(MotionSeeder.class);
+        sceneRepository = mock(com.lore.zzal.scene.ZzalSceneRepository.class);
+        scenes.clear();
+        when(sceneRepository.save(any())).thenAnswer(i -> {
+            com.lore.zzal.scene.ZzalScene sc = i.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(sc, "id", (long) (scenes.size() + 1));
+            scenes.add(sc);
+            return sc;
+        });
+        when(sceneRepository.findByPetIdOrderBySceneAtDescIdDesc(any())).thenAnswer(i -> scenes.stream()
+                .sorted(java.util.Comparator.comparing(com.lore.zzal.scene.ZzalScene::getSceneAt)
+                        .thenComparing(com.lore.zzal.scene.ZzalScene::getId).reversed())
+                .toList());
+        org.mockito.Mockito.doAnswer(i -> {
+            scenes.remove(i.<com.lore.zzal.scene.ZzalScene>getArgument(0));
+            return null;
+        }).when(sceneRepository).delete(any());
+        postcardRepository = mock(com.lore.zzal.leave.ZzalPostcardRepository.class);
+        postcards.clear();
+        when(postcardRepository.save(any())).thenAnswer(i -> {
+            com.lore.zzal.leave.ZzalPostcard c = i.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(c, "id", (long) (postcards.size() + 1));
+            postcards.add(c);
+            return c;
+        });
+        when(postcardRepository.findByPetIdOrderByWrittenAtAscIdAsc(any())).thenAnswer(i -> postcards.stream()
+                .sorted(java.util.Comparator.comparing(com.lore.zzal.leave.ZzalPostcard::getWrittenAt)
+                        .thenComparing(com.lore.zzal.leave.ZzalPostcard::getId))
+                .toList());
         service = new PetService(
                 petRepository,
                 jobRepository,
@@ -80,7 +112,9 @@ class PetServiceTest {
                 new MotionCatalog("", "", "v1"),
                 motionRepository,
                 seeder,
-                mock(com.lore.zzal.night.NightPlanner.class));
+                mock(com.lore.zzal.night.NightPlanner.class),
+                new com.lore.zzal.scene.SceneService(sceneRepository, new MotionCatalog("", "", "v1")),
+                new com.lore.zzal.leave.LeaveService(postcardRepository));
     }
 
     /** T0(정오) 에 부화한 아기. */
@@ -490,6 +524,221 @@ class PetServiceTest {
             when(petRepository.findByUserIdOrderByIdDesc(USER_ID)).thenReturn(List.of(pet));
             List<ZzalPet> pets = service.refreshAll(USER_ID, kst("2026-09-06 00:00"));
             assertThat(pets.get(0).isSleeping()).isTrue();
+        }
+    }
+
+    /**
+     * 혼자 논 장면 — 실패 주입(verify-failure-paths). ★ 여기는 <b>진짜 조회 경로</b>(touch)를 탄다.
+     *
+     * SceneServiceTest 는 서비스만 따로 보지만, 이 두 가지는 조회·행동이 지나는 길에서만 드러난다 —
+     * "계속 보고 있으면 안 남는다"(부재의 정의)와 "밤새 안 열고 아침에 열어도 밤 장면이 온다".
+     */
+    @Nested
+    @DisplayName("혼자 논 장면 — 조회 경로에서")
+    class Scenes {
+
+        private ZzalPet withId() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
+            return pet;
+        }
+
+        @Test
+        @DisplayName("★★ 계속 보고 있으면 장면이 안 남는다 — 30분마다 12번 조회(6시간)해도 컷 0")
+        void watchingDoesNotCountAsAbsence() {
+            ZzalPet pet = withId();
+
+            for (int i = 1; i <= 12; i++) {
+                service.refresh(USER_ID, PET_ID, T0.plus(Duration.ofMinutes(30L * i)));
+            }
+
+            assertThat(scenes).as("부재가 아니라 '깨어 있던 시간' 을 세면 여기서 컷이 생긴다").isEmpty();
+            assertThat(pet.getAbsenceAwakeSec()).isZero();     // 볼 때마다 끊긴다
+            assertThat(pet.isScenesEnabled()).isFalse();
+        }
+
+        @Test
+        @DisplayName("★ 4시간을 비우면 한 컷 — 그러나 그 직후 다시 4시간을 비워야 다음 컷이다(남은 초는 안 넘어간다)")
+        void absenceStartsOverEachVisit() {
+            withId();
+            service.refresh(USER_ID, PET_ID, T0);                             // 부재 시계를 여기서 0으로
+            service.refresh(USER_ID, PET_ID, T0.plus(Duration.ofHours(7)));   // 7시간 비움 → 한 컷(3시간 남음)
+            assertThat(scenes).hasSize(1);
+
+            service.refresh(USER_ID, PET_ID, T0.plus(Duration.ofHours(9)));   // 2시간 더 → 아직 아님
+            assertThat(scenes).as("남은 3시간이 넘어왔다면 여기서 두 번째 컷이 생긴다").hasSize(1);
+        }
+
+        @Test
+        @DisplayName("★★ 밤새 안 열고 아침에 열어도 밤 연습 장면이 온다 — 22:00 재우기 → 다음 날 11:00 조회")
+        void nightSceneSurvivesUntilMorning() {
+            ZzalPet pet = withId();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "scenesEnabledAt", T0);
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 19:30"));
+            // 아프면 연습 장면을 안 남기는 것이 규칙이라(정본 16장), 이 테스트에서는 낫게 해 둔다
+            if (pet.isSick()) {
+                service.care(USER_ID, PET_ID, CareAction.MEDICINE, kst("2026-09-05 19:30"));
+            }
+            service.sleep(USER_ID, PET_ID, kst("2026-09-05 22:00"));
+            int afterSleep = scenes.size();
+
+            // 그 뒤로 앱을 안 열다가 다음 날 11:00(10:00 자동 기상을 지난 뒤)에 연다
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 11:00"));
+
+            assertThat(scenes).as("재우는 응답에서든 아침 첫 조회에서든 한 번은 남아야 한다").isNotEmpty();
+            assertThat(scenes.stream().filter(com.lore.zzal.scene.ZzalScene::isNight))
+                    .singleElement()
+                    .satisfies(sc -> {
+                        assertThat(sc.getMotionKey()).isEqualTo("practice");
+                        assertThat(sc.getSceneAt()).isEqualTo(kst("2026-09-05 22:00"));
+                    });
+            assertThat(afterSleep).isPositive();               // 재우는 응답에 이미 실렸다
+            assertThat(pet.needsNightScene()).isFalse();       // 쪽지는 소비됐다
+        }
+    }
+
+    /**
+     * 떠남·재회 — 서비스 경로(verify-failure-paths).
+     *
+     * ★ 여행 중에는 <b>방에 없다</b> — 돌봄·놀이·말 걸기가 전부 거절되고, 조회와 부르기만 된다.
+     */
+    @Nested
+    @DisplayName("떠남·재회 — 여행 중 거절과 재회")
+    class Traveling {
+
+        private ZzalPet traveling() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "tripStartedAt", T0);
+            return pet;
+        }
+
+        @Test
+        @DisplayName("★★ 여행 중 돌봄·재우기·공유는 ZZAL_TRAVELING — 조회는 된다")
+        void travelingRefusesActions() {
+            ZzalPet pet = traveling();
+
+            assertCode(() -> service.care(USER_ID, PET_ID, CareAction.FEED, T0), ErrorCode.ZZAL_TRAVELING);
+            assertCode(() -> service.sleep(USER_ID, PET_ID, kst("2026-09-05 20:00")), ErrorCode.ZZAL_TRAVELING);
+            assertCode(() -> service.share(USER_ID, PET_ID, "base", T0), ErrorCode.ZZAL_TRAVELING);
+
+            assertThat(service.refresh(USER_ID, PET_ID, T0)).isSameAs(pet);   // 조회는 막지 않는다
+        }
+
+        @Test
+        @DisplayName("★★ 부르기 — 엽서가 전달되고 상태가 돌아온다")
+        void callBackDeliversPostcards() {
+            ZzalPet pet = traveling();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "intimacyPeak", 300);
+            // 09-05 출발 → 09-07 이면 사흘째라 세 장(하루 한 장, 상한 3)
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 12:00"));
+            service.refresh(USER_ID, PET_ID, kst("2026-09-07 12:00"));
+            assertThat(postcards).hasSize(3);
+            assertThat(service.postcards(PET_ID)).as("여행 중에는 안 보인다").isEmpty();
+
+            service.callBack(USER_ID, PET_ID, kst("2026-09-07 13:00"));
+
+            assertThat(pet.isTraveling()).isFalse();
+            assertThat(pet.getIntimacy()).isEqualTo(150);
+            assertThat(service.postcards(PET_ID)).as("재회하면 한꺼번에 전달").hasSize(3);
+        }
+
+        @Test
+        @DisplayName("★★ 여행 중 한 번도 안 열고 부르면? — 밀린 엽서가 그 자리에서 다 채워진다")
+        void backfillsPostcardsOnCallBack() {
+            ZzalPet pet = traveling();          // 09-05 12:00 출발
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "intimacyPeak", 100);
+
+            // 닷새 동안 앱을 한 번도 안 열었다 — 첫 요청이 곧 부르기다
+            service.callBack(USER_ID, PET_ID, kst("2026-09-10 12:00"));
+
+            assertThat(postcards).as("조회를 안 했다고 소식이 없으면 이 기능이 있는 이유가 없다").hasSize(3);
+            assertThat(service.postcards(PET_ID)).hasSize(3);
+            // 각 엽서의 시각이 그 날짜여야 한다(전부 지금이 아니라)
+            assertThat(postcards.stream().map(c -> c.getWrittenAt().atZone(ZzalRules.ZONE).toLocalDate()).distinct())
+                    .as("하루 한 장이 기록에도 남아야 한다").hasSize(3);
+        }
+
+        @Test
+        @DisplayName("★ 여행 중에는 밤 큐가 아무것도 안 굽는다 — 돈이 나가는 경로")
+        void nothingBakesWhileTraveling() {
+            ZzalPet pet = traveling();
+            com.lore.zzal.night.NightPlanner realPlanner = new com.lore.zzal.night.NightPlanner(
+                    motionRepository, new MotionCatalog("", "", "v1"));
+
+            assertThat(realPlanner.plan(pet, java.time.LocalDate.of(2026, 9, 6))).isZero();
+        }
+
+        @Test
+        @DisplayName("여행 중이 아닌데 부르면 ZZAL_NOT_TRAVELING")
+        void callBackWhenNotTraveling() {
+            child();
+            assertCode(() -> service.callBack(USER_ID, PET_ID, T0), ErrorCode.ZZAL_NOT_TRAVELING);
+        }
+
+        @Test
+        @DisplayName("★ 떠남 끄기는 여행 중에도 부를 수 있다(설정은 방 밖 이야기)")
+        void settingsWorkWhileTraveling() {
+            ZzalPet pet = traveling();
+            service.changeSettings(USER_ID, PET_ID, false, T0);
+            assertThat(pet.isLeaveEnabled()).isFalse();
+            assertThat(pet.isTraveling()).as("끈다고 돌아오지는 않는다 — 부르기로 데려온다").isTrue();
+        }
+    }
+
+    /**
+     * 조각 등장 시점 — 실패 주입(verify-failure-paths).
+     *
+     * ★ 여기서 지키는 것은 <b>"하루 늦지 않는다"</b> 하나다. 정상 흐름(23:00 자동 취침 판정으로 마지막 칸이
+     *   열리고 다음 날 아침에 조회)에서 하루가 밀려도 예외도 로그도 안 나고, 사용자만 하루를 더 기다린다.
+     */
+    @Nested
+    @DisplayName("조각 등장 — 관측 시각이 아니라 해금 시각으로")
+    class PiecesGate {
+
+        /** 2층 8종이 다 열린 상태의 어린이(카운터를 채워 해금 규칙을 만족시킨다). */
+        private ZzalPet layerTwoDone() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
+            for (String f : List.of("chatAnswers", "bathCount", "gameStarts", "sleepWakeCount", "zeroMissDays")) {
+                org.springframework.test.util.ReflectionTestUtils.setField(pet, f, 12);
+            }
+            return pet;
+        }
+
+        private void rowsFor(ZzalPet pet) {
+            MotionCatalog cat = new MotionCatalog("", "", "v1");
+            List<com.lore.zzal.motion.ZzalMotion> rows = cat.all().stream()
+                    .map(spec -> com.lore.zzal.motion.ZzalMotion.forCatalog(PET_ID, spec, T0)).toList();
+            when(motionRepository.findByPetIdOrderBySeqAsc(PET_ID)).thenReturn(rows);
+        }
+
+        @Test
+        @DisplayName("★★ 밤에 완성되면 다음 날 아침 첫 조회에 조각이 등장한다 — 하루 더 기다리지 않는다")
+        void appearsOnTheVeryNextMorning() {
+            ZzalPet pet = layerTwoDone();
+            rowsFor(pet);
+
+            // 09-05 낮에 이미 8종이 다 열린 상태로 한 번 정산(완성 시각이 그때로 적힌다)
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 14:00"));
+            assertThat(pet.isPiecesEnabled()).as("같은 날 낮에는 아직").isFalse();
+
+            // 그 뒤 앱을 안 열다가 다음 날 12:00 에 연다 — 그 사이 23:00 취침·10:00 기상이 지나갔다
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 12:00"));
+
+            assertThat(pet.isPiecesEnabled()).as("그 기상을 놓치면 하루 늦는다").isTrue();
+        }
+
+        @Test
+        @DisplayName("★ 완성된 그 자리에서는 안 열린다 — 기상을 한 번 지나야 한다")
+        void notOnTheSameDay() {
+            ZzalPet pet = layerTwoDone();
+            rowsFor(pet);
+
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 14:00"));
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 20:00"));
+
+            assertThat(pet.isPiecesEnabled()).isFalse();
         }
     }
 

@@ -15,6 +15,7 @@ import com.lore.zzal.generation.PetHatchRequested;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSeeder;
+import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.motion.ZzalMotionRepository;
@@ -58,6 +59,8 @@ public class PetService {
     private final ZzalMotionRepository motionRepository;
     private final MotionSeeder motionSeeder;
     private final NightPlanner nightPlanner;
+    private final com.lore.zzal.scene.SceneService sceneService;
+    private final com.lore.zzal.leave.LeaveService leaveService;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -70,11 +73,15 @@ public class PetService {
                       MotionCatalog catalog,
                       ZzalMotionRepository motionRepository,
                       MotionSeeder motionSeeder,
-                      NightPlanner nightPlanner) {
+                      NightPlanner nightPlanner,
+                      com.lore.zzal.scene.SceneService sceneService,
+                      com.lore.zzal.leave.LeaveService leaveService) {
         this.catalog = catalog;
         this.motionRepository = motionRepository;
         this.motionSeeder = motionSeeder;
         this.nightPlanner = nightPlanner;
+        this.sceneService = sceneService;
+        this.leaveService = leaveService;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -205,9 +212,72 @@ public class PetService {
             return;
         }
         Instant now = pet.now(realNow);
+        // ★ 정산 전의 시각을 잡아 둔다 — 이번 정산 안에서 열린 칸은 "그 사이 어딘가" 에 열린 것이고,
+        //   그 시각을 <b>구간의 시작</b>으로 잡아야 그 사이에 있었던 기상을 놓치지 않는다(#234 리뷰 중-1).
+        Instant windowStart = pet.getSettledAt() == null ? now : pet.getSettledAt();
         pet.settle(now);
+        // ★★ 순서가 중요하다 — 부재 장면은 <b>방문 기록 전에</b> 정산해야 한다.
+        //   {@code visit} 이 "부재는 여기서 끝" 이라며 부재 시계를 0으로 끊기 때문에,
+        //   뒤로 미루면 방금 비운 시간이 통째로 사라진다.
+        int made = sceneService.recordAbsence(pet, now) + sceneService.recordNight(pet);
+        if (made > 0) {
+            pet.markSceneMade();
+        }
+        // ★ 여행 중이면 소식(엽서)만 쌓인다 — 장면도 도착도 없다(방에 없으므로).
+        //   밀린 몫까지 채운다(조회를 했든 안 했든 결과가 같아야 한다).
+        leaveService.fillPostcards(pet, now);
         pet.visit(now);
         reveal(pet, now);
+        openPieces(pet, windowStart, now);
+    }
+
+    /**
+     * 조각 4칸 등장 — 2층 8종이 다 열린 뒤 <b>처음 맞는 기상</b>(정본 6·16장).
+     *
+     * ★ 여기(서비스)에서 판정하는 이유 — "2층 8종이 다 열렸나" 는 카탈로그와 해금 규칙을 알아야 답할 수 있고,
+     *   엔티티는 그 둘을 모른다. 엔티티는 "언제 다 열렸는지" 와 "언제 열어 줬는지" 만 기억한다.
+     */
+    private void openPieces(ZzalPet pet, Instant unlockedAt, Instant now) {
+        if (pet.isPiecesEnabled()) {
+            return;
+        }
+        Map<Integer, ZzalMotion> rows = rowsOf(pet.getId());
+        int opened = 0;
+        int layerTwoTotal = 0;
+        Instant lastUnlock = null;
+        for (MotionSpec spec : catalog.basic()) {
+            if (spec.layer() != com.lore.zzal.motion.MotionLayer.BASIC_2) {
+                continue;
+            }
+            layerTwoTotal++;
+            if (!UnlockRules.isUnlocked(pet, spec, catalog)) {
+                continue;
+            }
+            opened++;
+            ZzalMotion row = rows.get(spec.seq());
+            if (row != null) {
+                // ★ 열린 시각을 그 자리에서 적어 둔다. 그러지 않으면 "언제 열렸나" 를 나중에 알 길이 없어
+                //   완성 시각을 관측 시각으로 쓰게 되고, 그러면 조각이 한 기상 늦게 등장한다(#234 리뷰 중-1).
+                row.markUnlocked(unlockedAt);
+                lastUnlock = row.getUnlockedAt() == null || lastUnlock == null
+                        || row.getUnlockedAt().isAfter(lastUnlock) ? row.getUnlockedAt() : lastUnlock;
+            }
+        }
+        if (opened >= layerTwoTotal) {
+            // ★★ 완성 시각 = <b>마지막 칸이 열린 시각</b>(관측 시각이 아니다). 23:00 자동 취침 판정으로
+            //   마지막 칸이 열리고 다음 날 아침에 조회하는 정상 흐름에서, 관측 시각을 쓰면 완성이 그 아침으로
+            //   적혀 <b>바로 그 기상을 놓친다</b> — 조각이 하루 늦게 등장한다.
+            pet.markLayerTwoDone(lastUnlock != null ? lastUnlock : unlockedAt);
+        }
+        if (pet.readyForPieces(now)) {
+            pet.enablePieces(now);
+        }
+    }
+
+    /** 그 펫의 혼자 논 장면(최근 것부터, 최대 3). */
+    @Transactional(readOnly = true)
+    public List<com.lore.zzal.scene.ZzalScene> scenes(Long petId) {
+        return sceneService.recent(petId);
     }
 
     /**
@@ -275,10 +345,15 @@ public class PetService {
         }
     }
 
+
     /** 행동 전후의 열린 동작을 비교해 새로 열린 seq 를 얻는다(폭죽). 저장하지 않고 계산한다(UnlockRules). 채팅·게임도 이걸 쓴다. */
     public Action withUnlockDiff(ZzalPet pet, Runnable action) {
         Set<String> before = Set.copyOf(UnlockRules.unlockedKeys(pet, catalog));
         action.run();
+        // ★ 행동으로 마지막 2층 칸이 열렸을 수 있다 — touch 의 판정은 행동 <b>전</b>에 돌았다(#234 리뷰 중-1).
+        //   행동으로 열린 것은 "지금" 열린 것이라 구간 시작도 지금이다.
+        Instant actedAt = pet.getSettledAt() == null ? Instant.now() : pet.getSettledAt();
+        openPieces(pet, actedAt, actedAt);
         List<Integer> opened = UnlockRules.unlockedKeys(pet, catalog).stream()
                 .filter(k -> !before.contains(k))
                 .map(k -> catalog.byKey(k).orElseThrow().seq())
@@ -357,6 +432,10 @@ public class PetService {
             throw new BusinessException(ErrorCode.ZZAL_NOT_SLEEP_TIME, "저녁 7시가 되면 재워 주세요");
         }
         Action a = withUnlockDiff(pet, () -> pet.sleep(now));
+        // ★ 재우는 그 응답에 밤 연습 장면이 실리게 한다(touch 는 잠들기 전에 돌았다).
+        if (sceneService.recordNight(pet) > 0) {
+            pet.markSceneMade();
+        }
         // ★ 밤잠에 든 순간 = 굽기 큐 등록(정본 2장 "잠드는 순간 하는 일"). 23:00 자동 취침은 스위프가 같은 일을 한다.
         if (pet.getSleepKind() == SleepKind.NIGHT) {
             nightPlanner.plan(pet, AwakeClock.dateOf(now));
@@ -431,6 +510,51 @@ public class PetService {
             throw new BusinessException(ErrorCode.ZZAL_MOTION_NOT_OPEN);
         }
         return withUnlockDiff(pet, pet::share);
+    }
+
+    // ── 떠남·재회 (정본 9장) ──────────────────────────────────────────────
+
+    /**
+     * 부르기 — 여행 중인 아이를 즉시 데려온다. 엽서도 이때 한꺼번에 전달된다.
+     *
+     * ★ 조건은 "여행 중" 하나뿐이다. 데려오는 데 값을 매기지 않는다 — 그건 벌이 된다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action callBack(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        Instant now = pet.now(realNow);
+        pet.settle(now);
+        if (!pet.isTraveling()) {
+            throw new BusinessException(ErrorCode.ZZAL_NOT_TRAVELING);
+        }
+        // ★★ 데려오기 <b>전에</b> 밀린 엽서를 채운다(#235 리뷰 중-1). 여행 중 한 번도 앱을 안 연 사람은
+        //   이 자리가 유일한 기회다 — callBack 이 먼저 돌면 tripStartedAt 이 지워져 몇 장이었는지 알 수 없다.
+        leaveService.fillPostcards(pet, now);
+        return withUnlockDiff(pet, () -> {
+            pet.callBack(now);
+            leaveService.deliverAll(petId, now);
+            pet.visit(now);
+        });
+    }
+
+    /** 떠남 켜기·끄기(정본 9장). 끄면 예고 중이던 것도 즉시 사라진다. */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action changeSettings(Long userId, Long petId, boolean leaveEnabled, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        touch(pet, realNow);
+        return withUnlockDiff(pet, () -> pet.setLeaveEnabled(leaveEnabled));
+    }
+
+    /** 전달된 엽서(앨범). */
+    @Transactional(readOnly = true)
+    public List<com.lore.zzal.leave.ZzalPostcard> postcards(Long petId) {
+        return leaveService.delivered(petId);
     }
 
     // ── 개발용 시계 (DevClockController 만 부른다) ─────────────────────────
@@ -516,6 +640,12 @@ public class PetService {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
         }
         touch(pet, realNow);
+        // ★ 여행 중에는 방에 없다 — 돌봄도 놀이도 말 걸기도 안 된다. 조회는 되고(엽서를 봐야 한다),
+        //   데려오는 것은 call-back 뿐이다.
+        if (pet.isTraveling()) {
+            throw new BusinessException(ErrorCode.ZZAL_TRAVELING,
+                    "%s 여행 중이에요".formatted(Josa.nameSubject(pet.getName())));
+        }
         return pet;
     }
 
