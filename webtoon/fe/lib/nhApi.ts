@@ -20,6 +20,8 @@
  *
  * (그때는 하네스를 `python3 serve.py --dev-cors` 로 띄워야 브라우저가 막지
  *  않는다. 배포에서는 같은 도메인이라 그 스위치가 필요 없다.) */
+import { request as appRequest } from "@common/api/client";
+
 const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon";
 
 /** 이 브라우저를 가리키는 값. 원본(app.js 의 getUid)과 **같은 키**를 쓴다 —
@@ -223,6 +225,25 @@ export function listRuns(mine = false): Promise<{ runs: RunCard[] }> {
  *  뜬다. ?w=320 으로 줄여 받아 한 장에 60KB 안쪽이다. */
 export function coverUrl(runId: string, page: number, episode = 1): string {
   return `${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`;
+}
+
+/* ---- 로그인한 사람의 것 ---------------------------------------------------
+ *
+ * 위 주소들과 다르다. 여기는 **자바가 판단하는 자리**라 로그인이 필요하고,
+ * 응답도 이 저장소 규약대로 봉투에 담겨 온다(`{success, data, ...}`) —
+ * 그래서 공용 클라이언트로 부른다(봉투를 벗기고 실패를 던져 준다). */
+
+/** 이 브라우저를 내 계정에 잇는다. **로그인할 때마다** 부른다 — 기기를 바꾸면
+ *  uid 가 새로 생겨서, 한 번만 잇는 것으로는 두 번째 기기가 안 붙는다. */
+export function linkThisBrowser(): Promise<{ linked: boolean }> {
+  return appRequest<{ linked: boolean }>("/api/webtoon/my/link", {
+    method: "POST", body: { uid: getUid() },
+  });
+}
+
+/** 내 계정에 이어진 브라우저들이 만든 작품 전부. 나만 보기로 내려 둔 것도 온다. */
+export function myAccountRuns(): Promise<RunCard[]> {
+  return appRequest<RunCard[]>("/api/webtoon/my/runs");
 }
 
 /** 이 브라우저의 크레딧 잔액.

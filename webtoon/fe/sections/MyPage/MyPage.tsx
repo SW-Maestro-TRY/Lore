@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@common/auth/useAuth";
 import {
-  creditBalance, listRuns, myRuns, setVisibility, type RunCard,
+  creditBalance, listRuns, myAccountRuns, myRuns, setVisibility, type RunCard,
 } from "../../lib/nhApi";
 import { louArt } from "../../lib/louArt";
 import { WorkCard } from "../Works/Works";
@@ -14,11 +14,13 @@ import { WorkCard } from "../Works/Works";
  * (`/webtoon?view=mypage`). 로그인 안 했으면 들어올 일이 없지만, 주소를
  * 직접 치고 들어올 수는 있으므로 그때는 로그인하라고만 말한다.
  *
- * ⚠ **목록은 아직 이 브라우저 것만이다.** 작품은 계정이 아니라 브라우저
- * uid 로 묶여 있어서, 다른 기기에서 로그인하면 안 보인다. 계정에 붙이는 것이
- * 이 이슈(#223)의 다음 걸음이다 — 그때 이 함수만 서버 목록으로 바꾸면 되고
- * 화면은 안 바뀐다. 지금 "저장한 작품" 이라고 안 쓰고 "내가 만든 웹툰" 이라고
- * 쓰는 것도 그래서다. 서버에 담아 둔 것이 아니라 이 브라우저가 만든 것이다.
+ * 목록은 **계정 것**이다. 작품 자체에는 계정 번호가 안 박혀 있고 브라우저
+ * uid 로만 묶여 있어서, 서버가 (계정 ↔ uid) 연결을 들고 있다가 그 브라우저들이
+ * 만든 것을 모아 준다(webtoon/be 의 BrowserLink · MyWebtoonService). 그래서
+ * 로그인 전에 만든 것도, 다른 기기에서 만든 것도 따라온다.
+ *
+ * 그래도 "저장한 작품" 이라고 쓰지 않는다 — 서버에 담아 둔 것이 아니라 내가
+ * 만든 것이고, uid 는 꾸밀 수 있는 값이라 소유의 증명도 아니다.
  */
 export default function MyPage({
   onOpenWork,
@@ -38,13 +40,21 @@ export default function MyPage({
 
   useEffect(() => {
     let alive = true;
-    /* 목록은 둘러보기와 같은 주소에서 받아 **내 것만** 남긴다. 서버에 "내
-       것만 달라" 고 물을 길이 아직 없어서다(위 주석). 비공개로 내린 작품도
-       내 목록에는 남아야 하므로 그 필터는 여기서 안 건다. */
-    const mine = new Set(myRuns());
-    listRuns()
-      .then((got) => { if (alive) setRuns((got.runs || []).filter((r) => mine.has(r.run_id))); })
-      .catch(() => { if (alive) setFailed(true); });
+    /* 서버에 **내 계정 것**을 묻는다. 계정에 이어진 브라우저들이 만든 것을
+       모아서 준다(webtoon/be 의 MyWebtoonService) — 그래서 기기를 바꿔도
+       보이고, 나만 보기로 내려 둔 것도 온다.
+
+       못 받으면 이 브라우저가 만든 것만이라도 보여준다. 로그인은 됐는데
+       목록만 못 받은 상황에서 빈 화면을 주면 "내 작품이 다 사라졌다" 로
+       읽힌다 — 그것보다는 덜 보이는 편이 낫다. */
+    myAccountRuns()
+      .then((got) => { if (alive) setRuns(got); })
+      .catch(() => {
+        const mine = new Set(myRuns());
+        listRuns()
+          .then((got) => { if (alive) setRuns((got.runs || []).filter((r) => mine.has(r.run_id))); })
+          .catch(() => { if (alive) setFailed(true); });
+      });
     creditBalance()
       .then((got) => { if (alive) setCredit(got.balance); })
       .catch(() => { /* 잔액을 못 받아도 목록은 보여준다 */ });

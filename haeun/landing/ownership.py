@@ -87,6 +87,23 @@ def creator_uid(run_id: str) -> str | None:
         return _cache.get(str(run_id))
 
 
+def runs_of(uid: str) -> set[str]:
+    """이 uid 가 만든 run_id 전부.
+
+    `creator_uid` 를 작품마다 부르는 것과 같은 답이지만, 목록을 만들 때는 한 번에
+    받는 편이 낫다 — 작품이 쌓일수록 한 건씩 묻는 값이 붙는다.
+
+    ⚠️ **uid 는 브라우저가 들고 다니는 값이라 꾸밀 수 있다.** 이 함수가 답하는
+    것은 "이 브라우저가 만든 것" 이지 "이 사람 것" 이 아니다. 계정으로 묶는
+    일은 이것을 받는 쪽(webtoon/be)이 한다.
+    """
+    if not uid:
+        return set()
+    creator_uid("")                      # 캐시를 최신으로 (필요할 때만 다시 읽는다)
+    with _lock:
+        return {run_id for run_id, made_by in _cache.items() if made_by == uid}
+
+
 def may_claim(run_id: str, uid: str, already_claimed_by: str | None) -> tuple[bool, str]:
     """이 사람이 이 작품을 자기 계정에 담아도 되는가.
 

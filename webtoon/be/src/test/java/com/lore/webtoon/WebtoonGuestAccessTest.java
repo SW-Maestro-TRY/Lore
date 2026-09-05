@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 그 한 줄이 사라지면 여기서 먼저 걸린다. (공용 파일이라 남이 고칠 수 있어서
  * 더 필요한 검사다.)
  */
-@WebMvcTest(WebtoonController.class)
+@WebMvcTest({WebtoonController.class, MyWebtoonController.class})
 @Import(WebSecurityConfig.class)
 @TestPropertySource(properties = {
         // JwtProvider 는 목이라 안 쓰지만, 설정 바인딩은 값이 있어야 뜬다.
@@ -42,6 +42,18 @@ class WebtoonGuestAccessTest {
     @Autowired MockMvc mvc;
     @MockitoBean HarnessGateway gateway;
     @MockitoBean JwtProvider jwtProvider;
+    @MockitoBean MyWebtoonService myWebtoonService;
+
+    @Test
+    @DisplayName("「내」 것을 다루는 주소는 로그인이 있어야 한다")
+    void 내_주소는_잠겨_있다() throws Exception {
+        // 게스트 규칙(`/api/webtoon/**` permitAll)이 이 주소까지 열어 버리면
+        // 남의 목록을 아무나 부를 수 있게 된다. 순서가 뒤집히면 여기서 걸린다.
+        mvc.perform(get("/api/webtoon/my/runs")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/webtoon/my/link")
+                        .contentType("application/json").content("{\"uid\":\"u1\"}"))
+                .andExpect(status().isUnauthorized());
+    }
 
     @Test
     @DisplayName("로그인 없이도 웹툰 주소가 열린다 — 401 이 아니다")

@@ -70,6 +70,12 @@ public class WebSecurityConfig {
                         // ⚠️ 그래서 지금은 **누구나 부를 수 있고 uid 도 스스로 지어낼 수
                         //    있다.** 프리토타이핑 단계라 이대로 두지만, 실제로 돈이 나가는
                         //    생성이므로 계정을 붙일 때 여기부터 같이 잠가야 한다.
+                        //
+                        // 딱 하나 예외 — `/api/webtoon/my/**` 는 "내" 것을 다루므로
+                        // 로그인이 있어야 뜻이 성립한다. permitAll **앞에** 둔다:
+                        // 규칙은 위에서부터 먼저 맞는 것이 이기므로, 순서가 바뀌면
+                        // 이 줄이 영영 안 걸린다.
+                        .requestMatchers("/api/webtoon/my/**").authenticated()
                         .requestMatchers("/api/webtoon/**").permitAll()
 
                         // ★ 행동 기록은 로그인 전에도 받아야 한다 — 가장 알고 싶은 것이

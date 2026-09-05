@@ -495,6 +495,23 @@ class Handler(BaseHTTPRequestHandler):
             # run 도 같은 모양으로 섞어 준다(nh.list_runs 가 classic 과 같은
             # 필드를 돌려준다) — 화면(app.js)은 어느 쪽에서 왔는지 몰라도 된다.
             runs = pipeline.list_runs() + nh.list_runs()
+
+            # `?owner=<uid>` 는 **그 브라우저가 만든 것만** 준다.
+            #
+            # 둘러보기와 다른 목록이다: 자기 작품은 나만 보기로 내려 둔 것도
+            # 보여야 하므로 공개 필터를 안 건다. 대신 소유를 못 밝히면 아무것도
+            # 안 준다 — 여기서 빈손을 주는 편이, 실수로 전체 목록을 내주는
+            # 것보다 낫다.
+            #
+            # ⚠️ uid 는 브라우저가 들고 다니는 값이라 꾸밀 수 있다(ownership.py
+            #    머리 주석). 이 주소가 답하는 것은 "이 브라우저가 만든 것" 이지
+            #    "이 사람 것" 이 아니다 — 계정으로 묶는 일은 webtoon/be 가 한다.
+            owner = (query.get("owner") or [""])[0].strip()
+            if owner:
+                mine = ownership.runs_of(owner)
+                return self._json({"runs": [r for r in runs
+                                            if str(r.get("run_id")) in mine]})
+
             return self._json({"runs": visibility.filter_public(runs)})
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/episode", path)

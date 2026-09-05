@@ -26,6 +26,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useAuth } from "@common/auth/useAuth";
 import "./webtoon.css";
 
 import Hero from "./sections/Hero";
@@ -38,7 +39,7 @@ import Works from "./sections/Works/Works";
 import MyPage from "./sections/MyPage/MyPage";
 import Editor from "./sections/Editor/Editor";
 import { STYLE_INFO, type WizardForm } from "./lib/wizardData";
-import { createJob } from "./lib/nhApi";
+import { createJob, linkThisBrowser } from "./lib/nhApi";
 
 type View = "landing" | "create" | "running" | "result" | "works" | "mypage" | "editor";
 
@@ -106,6 +107,22 @@ function WebtoonScreens() {
     if (asked && asked in VIEWS) { setView(asked as View); return; }
     setView("landing");
   }, [search]);
+
+  /* 로그인해 있으면 이 브라우저를 계정에 잇는다.
+     안 이으면 마이페이지의 「내가 만든 웹툰」이 빈다 — 작품이 계정이 아니라
+     브라우저 uid 로 묶여 있어서다(webtoon/be 의 BrowserLink 참고).
+
+     **로그인할 때가 아니라 이 화면에 들어올 때마다** 한다. 기기를 바꾸면 uid
+     가 새로 생기고, 다른 탭에서 로그인하고 여기로 건너올 수도 있다. 서버는
+     같은 짝이면 아무 일도 안 하므로 여러 번 불러도 된다.
+
+     실패해도 삼킨다 — 목록이 비어 보일 뿐이고 다음에 다시 시도한다. 이걸로
+     화면을 막으면 만들던 사람이 로그인 때문에 멈춘다. (잇는 일이 공용 헤더가
+     아니라 여기 있는 이유: 공용 코드가 도메인을 알면 안 된다.) */
+  const { status: authStatus } = useAuth();
+  useEffect(() => {
+    if (authStatus === "authenticated") void linkThisBrowser().catch(() => {});
+  }, [authStatus]);
 
   /* 그림을 그냥 저장해 가지 못하게 — 오른쪽 누르기와 끌어다 놓기.
      원본은 base.js 가 document 에 걸지만, 여기는 Lore 앱 안이라 이 화면

@@ -32,6 +32,7 @@ export default function SiteHeader() {
      나가는 문이다. 다른 탭은 한 픽셀도 안 바뀐다. */
   const onWebtoon = pathname.startsWith("/webtoon");
 
+
   const { status, user, isAuthenticated, signOut } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
 
