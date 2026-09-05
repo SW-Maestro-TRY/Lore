@@ -3966,7 +3966,10 @@
 /* ── 둘러보기 카드의 그림체 딱지 ─────────────────────────────────────
    제목·이름 아래에 작게. 고르는 데 쓰이는 값이지만 제목만큼은 아니다. */
 .webtoon-page .works-style {
-  display: inline-block;
+  /* 카드 본문이 세로 flex 라, inline-block 만으로는 안 줄고 한 줄을 다 먹는다
+     (stretch 가 기본이다) — 회색 띠가 카드를 가로지르는 꼴이 된다. */
+  align-self: flex-start;
+  width: fit-content;
   margin: 6px 0 0;
   padding: 2px 8px;
   border-radius: 999px;
