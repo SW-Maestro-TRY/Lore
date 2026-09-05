@@ -6,7 +6,12 @@ import com.lore.zzal.generation.steps.PostProcessStep;
 import com.lore.zzal.generation.steps.MotionGridStep;
 import com.lore.zzal.generation.steps.MotionPostStep;
 import com.lore.zzal.generation.steps.SheetStep;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -34,16 +39,53 @@ public class PipelineRegistry {
     private final Map<GenKind, Map<String, List<GenerationStep>>> versions;
     private final Map<GenKind, String> currentVersions;
 
-    public PipelineRegistry(SheetStep sheet, IdentityStep identity, GridStep grid, PostProcessStep post,
+    private static final Logger log = LoggerFactory.getLogger(PipelineRegistry.class);
+
+    @Autowired
+    public PipelineRegistry(SheetStep sheet, IdentityStep identity,
+                            @Qualifier("gridStep") GridStep grid, @Qualifier("grid2Step") GridStep grid2,
+                            PostProcessStep post,
                             MotionGridStep motionGrid, MotionPostStep motionPost,
                             @Value("${app.zzal.pipeline-version:v1}") String hatchVersion,
                             @Value("${app.zzal.motion-pipeline-version:v1}") String motionVersion) {
+        this(sheet, identity, grid, grid2, post, motionGrid, motionPost, hatchVersion, motionVersion,
+                path -> new ClassPathResource(path).exists());
+    }
+
+    /** 테스트용 — 프롬프트 파일이 있는지를 밖에서 정한다. */
+    PipelineRegistry(SheetStep sheet, IdentityStep identity, GridStep grid, GridStep grid2, PostProcessStep post,
+                     MotionGridStep motionGrid, MotionPostStep motionPost,
+                     String hatchVersion, String motionVersion, java.util.function.Predicate<String> resourceExists) {
         this.versions = Map.of(
-                GenKind.HATCH, Map.of("v1", List.of(sheet, identity, grid, post)),
+                GenKind.HATCH, Map.of(
+                        "v1", List.of(sheet, identity, grid, post),
+                        // v2 = 격자 2장(1층·2층) → 기본 행동 16종(정본 13장). 프롬프트 prompt/v2/{sheet,identity,grid,grid2}.txt
+                        "v2", List.of(sheet, identity, grid, grid2, post)),
                 GenKind.MOTION, Map.of("v1", List.of(motionGrid, motionPost)));
         this.currentVersions = Map.of(
-                GenKind.HATCH, hatchVersion,
+                GenKind.HATCH, resolveHatchVersion(hatchVersion, resourceExists),
                 GenKind.MOTION, motionVersion);
+    }
+
+    /**
+     * v2 를 켰는데 프롬프트가 아직 없으면(생성 세션 PR 미머지) v1 로 기동한다 — 부팅 로그에 크게 남긴다.
+     *
+     * ★ 조용히 v1 로 가지 않는다. 설정은 v2 인데 기록은 v1 로 남는 것이 "설명이 안 되는 결과" 이므로,
+     *   기록({@code hatchPipelineVersion})도 여기서 정한 v1 로 남고 로그가 그 이유를 말한다.
+     */
+    private static String resolveHatchVersion(String configured, java.util.function.Predicate<String> resourceExists) {
+        if (!"v2".equals(configured)) {
+            return configured;
+        }
+        List<String> missing = List.of("sheet", "identity", "grid", "grid2").stream()
+                .map(n -> "zzal/prompt/v2/" + n + ".txt")
+                .filter(path -> !resourceExists.test(path))
+                .toList();
+        if (missing.isEmpty()) {
+            return "v2";
+        }
+        log.warn("★ app.zzal.pipeline-version=v2 인데 프롬프트가 없어 부화를 v1 로 기동합니다 — 없는 파일: {}", missing);
+        return "v1";
     }
 
     public List<GenerationStep> steps(GenKind kind, String version) {

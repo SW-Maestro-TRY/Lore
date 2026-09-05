@@ -85,9 +85,13 @@ public class StuckHatchRecovery {
                 recorder.markPetFailed(pet.getId());
                 continue;
             }
+            // ★ 원래 job 의 버전을 잇는다 — 설정이 그 사이 v2 로 바뀌었어도 굽던 알은 굽던 버전으로 끝낸다
+            //   (#218 리뷰: 안 그러면 v1 격자를 v2 후처리가 자르려다 어긋난다). 기록이 없으면 현재 버전.
+            String version = jobRepository.findFirstByPetIdOrderByIdDesc(pet.getId())
+                    .map(GenJob::getPipelineVersion)
+                    .orElse(hatchService.currentVersion());
             GenJob job = jobRepository.save(GenJob.start(
-                    pet.getId(), GenKind.HATCH, (int) attempts + 1,
-                    hatchService.currentVersion(), Instant.now()));
+                    pet.getId(), GenKind.HATCH, (int) attempts + 1, version, Instant.now()));
             log.info("이어서 굽기 — petId={} attempt={}", pet.getId(), attempts + 1);
             hatchService.hatch(job.getId(), pet.getId(), job.getPipelineVersion());
         }

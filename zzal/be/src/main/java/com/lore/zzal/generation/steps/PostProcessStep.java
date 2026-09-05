@@ -4,6 +4,9 @@ import com.lore.zzal.generation.GenerationStep;
 import com.lore.zzal.generation.StepContext;
 import com.lore.zzal.generation.StepResult;
 import com.lore.zzal.generation.client.PostProcessor;
+import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionLayer;
+import com.lore.zzal.motion.MotionSpec;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,9 +24,11 @@ public class PostProcessStep implements GenerationStep {
     public static final String NAME = "postprocess";
 
     private final PostProcessor postProcessor;
+    private final MotionCatalog catalog;
 
-    public PostProcessStep(PostProcessor postProcessor) {
+    public PostProcessStep(PostProcessor postProcessor, MotionCatalog catalog) {
         this.postProcessor = postProcessor;
+        this.catalog = catalog;
     }
 
     @Override
@@ -44,7 +49,23 @@ public class PostProcessStep implements GenerationStep {
 
     @Override
     public StepResult run(StepContext ctx) throws Exception {
-        postProcessor.split(ctx.image(GridStep.NAME), "images/zzal/pets/%d".formatted(ctx.petId()));
+        String grid2 = ctx.image(GRID2);
+        if (grid2 == null) {
+            // v1 — 격자 1장 → 8상태(idle·eat·…). 출력 이름은 설정 hatch.states.v1.
+            postProcessor.split(ctx.image(GridStep.NAME), "images/zzal/pets/%d".formatted(ctx.petId()), ctx.version());
+            return StepResult.free(NAME);
+        }
+        // v2 — 격자 2장 → 기본 행동 16종. 출력 = basic/{key}.webp (api-v2.md 2절 규약), 이름은 카탈로그 key.
+        String prefix = "images/zzal/pets/%d/basic".formatted(ctx.petId());
+        postProcessor.split(ctx.image(GridStep.NAME), prefix, ctx.version(), keysOf(MotionLayer.BASIC_1));
+        postProcessor.split(grid2, prefix, ctx.version(), keysOf(MotionLayer.BASIC_2));
         return StepResult.free(NAME);
+    }
+
+    /** v2 두 번째 격자의 단계 이름. */
+    public static final String GRID2 = "grid2";
+
+    private java.util.List<String> keysOf(MotionLayer layer) {
+        return catalog.basic().stream().filter(m -> m.layer() == layer).map(MotionSpec::key).toList();
     }
 }

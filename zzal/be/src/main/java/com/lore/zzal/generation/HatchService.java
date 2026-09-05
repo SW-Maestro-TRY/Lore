@@ -2,6 +2,7 @@ package com.lore.zzal.generation;
 
 import com.lore.zzal.generation.steps.IdentityStep;
 import com.lore.zzal.pet.ZzalPet;
+import com.lore.zzal.motion.MotionSeeder;
 import com.lore.zzal.pet.ZzalPetRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,19 +27,22 @@ public class HatchService {
     private final GenerationRecorder recorder;
     private final GenJobRepository jobRepository;
     private final PipelineRegistry registry;
+    private final MotionSeeder motionSeeder;
     private final ZzalPetRepository petRepository;
     private final int maxAttempts;
 
     public HatchService(GenerationRunner runner, GenerationRecorder recorder,
                         GenJobRepository jobRepository, PipelineRegistry registry,
                         ZzalPetRepository petRepository,
-                        @Value("${app.zzal.max-hatch-attempts:2}") int maxAttempts) {
+                        @Value("${app.zzal.max-hatch-attempts:2}") int maxAttempts,
+                        MotionSeeder motionSeeder) {
         this.runner = runner;
         this.recorder = recorder;
         this.jobRepository = jobRepository;
         this.registry = registry;
         this.petRepository = petRepository;
         this.maxAttempts = maxAttempts;
+        this.motionSeeder = motionSeeder;
     }
 
     @Async("hatchExecutor")
@@ -94,11 +98,14 @@ public class HatchService {
 
         RunResult r = runner.run(jobId, ctx,
                 registry.steps(GenKind.HATCH, version),
-                recorder.loadSucceeded(petId, GenKind.HATCH));
+                recorder.loadSucceeded(petId, GenKind.HATCH, version));
         if (!r.success()) {
             return false;
         }
-        recorder.markPetAlive(petId, ctx.image("sheet"), ctx.text("identity"), Instant.now());
+        Instant now = Instant.now();
+        recorder.markPetAlive(petId, ctx.image("sheet"), ctx.text("identity"), now);
+        // ★ 부화 완료 = 동작 18행(정본 13장). 1층 8종은 이 순간이 열린 시각. 심화 행동은 아직(NONE).
+        motionSeeder.seed(petId, now);
         log.info("부화 완료 — petId={} version={} 비용=${}", petId, version, r.costUsd());
         return true;
     }

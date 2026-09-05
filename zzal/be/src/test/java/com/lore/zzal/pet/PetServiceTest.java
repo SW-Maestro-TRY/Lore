@@ -10,6 +10,8 @@ import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionSeeder;
+import com.lore.zzal.motion.ZzalMotionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -52,6 +54,8 @@ class PetServiceTest {
     private S3Service s3Service;
     private GenJobRepository jobRepository;
     private HatchService hatchService;
+    private ZzalMotionRepository motionRepository;
+    private MotionSeeder seeder;
     private PetService service;
 
     @BeforeEach
@@ -61,6 +65,8 @@ class PetServiceTest {
         userRepository = mock(UserRepository.class);
         s3Service = mock(S3Service.class);
         hatchService = mock(HatchService.class);
+        motionRepository = mock(ZzalMotionRepository.class);
+        seeder = mock(MotionSeeder.class);
         service = new PetService(
                 petRepository,
                 jobRepository,
@@ -70,7 +76,9 @@ class PetServiceTest {
                 s3Service,
                 hatchService,
                 mock(ApplicationEventPublisher.class),
-                new MotionCatalog("", "", "v1"));
+                new MotionCatalog("", "", "v1"),
+                motionRepository,
+                seeder);
     }
 
     /** T0(정오) 에 부화한 아기. */
@@ -356,6 +364,39 @@ class PetServiceTest {
             verify(petRepository, org.mockito.Mockito.times(3)).findByIdForUpdate(PET_ID);
             service.get(USER_ID, PET_ID);
             verify(petRepository, org.mockito.Mockito.times(1)).findById(PET_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("동작 행 자가 치유 (#218 리뷰)")
+    class SelfHeal {
+
+        @Test
+        @DisplayName("★ ALIVE 인데 행이 0개면 조회 때 18행을 채운다(멱등 seed) — 부화 완료 때 저장이 실패한 펫")
+        void seedsWhenRowsMissing() {
+            ZzalPet pet = baby();
+            when(motionRepository.findByPetIdOrderBySeqAsc(PET_ID)).thenReturn(List.of());
+            when(seeder.seed(PET_ID, pet.getHatchedAt())).thenReturn(18);
+
+            service.motionRows(PET_ID);
+
+            verify(seeder).seed(PET_ID, pet.getHatchedAt());
+        }
+
+        @Test
+        @DisplayName("행이 18개면 seed 를 부르지 않는다 · 부화 중(HATCHING)이면 부르지 않는다")
+        void noSeedWhenComplete() {
+            ZzalPet pet = baby();
+            MotionCatalog catalog = new MotionCatalog("", "", "v1");
+            when(motionRepository.findByPetIdOrderBySeqAsc(PET_ID)).thenReturn(
+                    catalog.all().stream().map(sp -> com.lore.zzal.motion.ZzalMotion.forCatalog(PET_ID, sp, T0)).toList());
+            service.motionRows(PET_ID);
+            verify(seeder, org.mockito.Mockito.never()).seed(anyLong(), any());
+
+            egg();
+            when(motionRepository.findByPetIdOrderBySeqAsc(PET_ID)).thenReturn(List.of());
+            service.motionRows(PET_ID);
+            verify(seeder, org.mockito.Mockito.never()).seed(anyLong(), any());
         }
     }
 

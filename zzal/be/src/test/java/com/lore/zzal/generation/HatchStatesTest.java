@@ -46,14 +46,16 @@ class HatchStatesTest {
     }
 
     @Test
-    @DisplayName("★ 실패 주입 — 빈 목록으로 후처리기를 만들 수 없다(0종 완료로 조용히 성공하는 길을 막는다)")
+    @DisplayName("★ 실패 주입 — 그 버전의 목록이 비면 내려받기 전에 막힌다(0종 완료로 조용히 성공하는 길을 막는다)")
     void processorRejectsEmptyStates() {
         PipelineScripts scripts = mock(PipelineScripts.class);
-        when(scripts.script("v2", "service_post.py")).thenReturn("/tmp/service_post.py");
+        PythonPostProcessor p = new PythonPostProcessor(mock(S3Storage.class), scripts, "python3", 60,
+                v -> v.equals("v1") ? List.of("idle") : List.of());
 
-        assertThatThrownBy(() -> new PythonPostProcessor(
-                mock(S3Storage.class), scripts, "python3", "v2", 60, List.of()))
+        assertThatThrownBy(() -> p.split("images/zzal/pets/7/grid.png", "images/zzal/pets/7", "v2"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("app.zzal.hatch.states.v2");
+        assertThatThrownBy(() -> p.split("images/zzal/pets/7/grid.png", "images/zzal/pets/7", "v2", List.of()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

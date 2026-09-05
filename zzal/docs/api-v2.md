@@ -422,6 +422,8 @@
 | 22 | 1.5 | 답 응답은 `{pet, chatReply}` 봉투 |
 | 23 | 1.5 | 부름 행은 조회·답 때 도래한 슬롯으로 생성, 만료 시각 규칙, 아기 60분 안엔 하루 부름 없음, `chatSummary.openSlot`은 v0에서 null. **시작 ≥ 만료인 슬롯은 없다** — 정오 이후 기상의 NOON, 18:00 이후 부화의 MORNING·NOON(부화 당일은 BABY가 있고 평일은 10:00 자동 기상이라 NOON이 17:00을 넘지 않음). 답한·만료된 BABY는 부화 당일에만 목록에 |
 | 24 | 1.5 | 재언급은 답 3개마다 그다음 답에서(4·7·10번째) |
+| 25 | 1.6 | v0에서는 앨범 조회가 항상 된다(첫 심화 전 `FEATURE_LOCKED` 게이트는 PR-7에서 `features.album`과 함께) |
+| 26 | 2 | v2 설정인데 프롬프트가 없으면 v1로 기동·기록도 v1(조용히 v2로 적지 않음). 부팅 로그 경고 |
 
 ---
 
@@ -430,12 +432,14 @@
 | 절 | 상태 | 어느 PR |
 |---|---|---|
 | 1.1 펫 · 1.2 돌봄 6종 · 1.3 잠 · 1.4 성격/배경/공유 · `PetDetail` v2 전체 모양 | **v2 경로 동작** | PR-3 (#192) |
-| 2 `motions[].advanced` | 전부 `NONE`(부화 18행·밤 굽기 전) | PR-5·7 |
+| 2 `motions[].advanced` | **부화 때 `zzal_motion` 18행 생성**(전부 `NONE`, 1층 `unlockedAt`=부화 시각). 밤 굽기로 상태가 바뀌는 건 PR-6·7 | PR-5 |
 | 2 `justUnlocked` | 행동 응답에 실림(카운터 비교) | PR-3 |
 | 2 `sick`·`pieces`·`leaving`·`trip`·`learnedToday`·`scenes.latest` | 항상 null·빈 목록 | PR-8·10·11·7·9 |
 | 1.5 채팅 | **v2 동작** — `GET /chat` · `POST /chat/{slot}/answer`(해석 22~24). `chatSummary.openSlot`은 null | PR-4 |
 | 1.7 미니게임 | **v2 동작** — `POST /games {kind}` · `guess` · `finish` · `current`. 합산 3판·잠들 때 리셋·RUN 5승 해금 | PR-4 |
-| 1.6 앨범·seen | 미구현 | PR-5·7 |
+| 1.6 앨범 | **`GET /album` 동작** — 도감 18칸(잠긴 칸 hint/progress). 엽서·장면 빈 목록, firstGift LOCKED. v0에선 항상 조회 가능(해석 25). `seen`은 PR-7 | PR-5 |
+| 배포 절차 | `ZZAL_PIPELINE_VERSION` 전환은 **`HATCHING` 0건일 때**(굽는 도중 버전이 바뀌면 복구가 다른 버전 산출물을 이어받을 수 있음). 복구 job은 원래 job의 버전을 잇고 단계 재사용도 같은 버전만 | PR-5 |
+| 부화 파이프라인 v2 | `PipelineRegistry` HATCH v2 = sheet→identity→grid→grid2→post(`basic/{key}.webp`, `--keys`). `prompt/v2/*.txt`가 없으면 **v1로 기동하고 부팅 로그에 경고**, 기록도 v1 | PR-5 |
 | 5 관리자 | **아직 v1 경로** `/api/zzal/v1/admin/motions` | PR-7 |
 | 6 개발 도구 | v2 경로 동작(`advance-clock`·`set-clock`). `night-sweep`·`force-open`은 PR-6·7 | PR-2 |
 | 후기 | v1 경로 `/api/zzal/v1/me/pets/{id}/feedback` 유지 | (변경 없음) |
@@ -447,3 +451,4 @@
 - **2026-09-05** — 리뷰 반영(PR-2·3): 해석 16~20 추가(낮잠 보상 0·낮잠 우선·깬 직후 밤잠 전이·자동 경계 해금 알림·비-ALIVE 리스트 `[]`).
 - **2026-09-05** — 상훈님 결정 반영(PR-4 첫 커밋): 해석 1·3·12·16·19 확정, 17 정정(아기 60분 시계 논외·재우기=낮잠만), 21 간식 수용.
 - **2026-09-05** — PR-4: 채팅·미니게임 v2 경로 동작(9절), 해석 22~24.
+- **2026-09-05** — PR-5: 부화 18행·파이프라인 v2·앨범(9절), 해석 25·26.

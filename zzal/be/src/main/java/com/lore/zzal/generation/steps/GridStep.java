@@ -6,7 +6,6 @@ import com.lore.zzal.generation.StepContext;
 import com.lore.zzal.generation.StepResult;
 import com.lore.zzal.generation.client.ModelSpec;
 import com.lore.zzal.generation.client.ImageClient;
-import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +19,11 @@ import java.util.List;
  *
  * 실측 54~60초 · $0.086
  */
-@Component
+/**
+ * 격자 한 장을 굽는다. v2 는 이 단계가 두 번 돈다 — {@code grid}(1층 8종)·{@code grid2}(2층 8종). 이름만 다르고
+ * 프롬프트 파일({@code prompt/{버전}/{이름}.txt})과 출력 키({@code {이름}.png})가 그 이름을 따른다.
+ * 빈은 {@link com.lore.zzal.generation.GenerationConfig} 에서 이름별로 만든다.
+ */
 public class GridStep implements GenerationStep {
 
     public static final String NAME = "grid";
@@ -30,15 +33,21 @@ public class GridStep implements GenerationStep {
 
     private final ImageClient imageClient;
     private final PromptLoader prompts;
+    private final String name;
 
     public GridStep(ImageClient imageClient, PromptLoader prompts) {
+        this(imageClient, prompts, NAME);
+    }
+
+    public GridStep(ImageClient imageClient, PromptLoader prompts, String name) {
         this.imageClient = imageClient;
         this.prompts = prompts;
+        this.name = name;
     }
 
     @Override
     public String name() {
-        return NAME;
+        return name;
     }
 
     @Override
@@ -56,7 +65,7 @@ public class GridStep implements GenerationStep {
         // ★ 격자 프롬프트에는 {IDENT} 자리가 있다. 그 자리에 정체성 문단이 그대로 들어간다
         //   — 뒤에 덧붙이는 게 아니다. 실험에서 확립한 시드가 정확히 이 구조다
         //   (템플릿 6,195자 + 문단 530자 → 시드 6,047자).
-        String prompt = prompts.prompt(ctx.version(), NAME);
+        String prompt = prompts.prompt(ctx.version(), name);
         String identity = ctx.text(IdentityStep.NAME);
 
         if (identity != null && !identity.isBlank()) {
@@ -70,12 +79,12 @@ public class GridStep implements GenerationStep {
         List<String> refs = new ArrayList<>();
         refs.add(ctx.image(SheetStep.NAME));
 
-        ModelSpec spec = prompts.model(ctx.version(), NAME);
+        ModelSpec spec = prompts.model(ctx.version(), name);
         ImageClient.Result r = imageClient.generate(
                 prompt, refs,
-                "images/zzal/pets/%d/grid.png".formatted(ctx.petId()),
+                "images/zzal/pets/%d/%s.png".formatted(ctx.petId(), name),
                 spec);
 
-        return StepResult.image(NAME, r.imageKey(), spec.model(), r.costUsd());
+        return StepResult.image(name, r.imageKey(), spec.model(), r.costUsd());
     }
 }

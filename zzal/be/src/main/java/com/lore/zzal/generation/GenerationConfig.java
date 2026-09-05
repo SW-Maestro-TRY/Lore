@@ -14,6 +14,7 @@ import com.lore.zzal.generation.client.PostProcessor;
 import com.lore.zzal.generation.client.PythonMotionPostProcessor;
 import com.lore.zzal.generation.client.PythonPostProcessor;
 import com.lore.zzal.generation.client.TextClient;
+import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.MotionGridStep;
 import com.lore.zzal.generation.steps.MotionPostStep;
 import org.springframework.beans.factory.annotation.Value;
@@ -113,6 +114,18 @@ public class GenerationConfig {
         return new FakeMotionPostProcessor(500);
     }
 
+    /** 격자 1장(1층 8종). v1·v2 공통. */
+    @Bean
+    public GridStep gridStep(ImageClient imageClient, PromptLoader prompts) {
+        return new GridStep(imageClient, prompts, GridStep.NAME);
+    }
+
+    /** 격자 2장째(2층 8종). v2 만. 프롬프트 prompt/v2/grid2.txt. */
+    @Bean
+    public GridStep grid2Step(ImageClient imageClient, PromptLoader prompts) {
+        return new GridStep(imageClient, prompts, com.lore.zzal.generation.steps.PostProcessStep.GRID2);
+    }
+
     @Bean
     public MotionGridStep motionGridStep(ImageClient imageClient, PromptLoader prompts) {
         return new MotionGridStep(imageClient, prompts);
@@ -128,14 +141,15 @@ public class GenerationConfig {
             @Value("${app.zzal.generation.real-postprocess:false}") boolean real,
             S3Storage storage, PipelineScripts scripts,
             @Value("${app.zzal.python.bin:python3}") String pythonBin,
-            @Value("${app.zzal.pipeline-version:v1}") String version,
+            @Value("${app.zzal.pipeline-version:v1}") String configuredVersion,
             @Value("${app.zzal.python.timeout-seconds:60}") int timeout,
             Environment env) {
-        // ★ 가짜일 때도 목록을 읽는다 — 설정이 빠졌다는 사실을 실제 후처리를 켜는 날까지
-        //   숨기지 않기 위해서다. 빠졌으면 여기서 설정 이름을 말하며 부팅이 막힌다.
-        List<String> states = hatchStates(env, version);
+        // ★ 부팅 때 설정된 버전의 목록이 있는지 확인한다(빠졌으면 설정 이름을 말하며 막힘). 실제 사용 버전은
+        //   호출마다 job 에서 온다 — 폴백으로 v1 이 됐는데 빈은 v2 로 굳어 있던 어긋남을 막는다(#218 리뷰).
+        hatchStates(env, configuredVersion);
+        hatchStates(env, "v1");
         if (real) {
-            return new PythonPostProcessor(storage, scripts, pythonBin, version, timeout, states);
+            return new PythonPostProcessor(storage, scripts, pythonBin, timeout, v -> hatchStates(env, v));
         }
         return new FakePostProcessor(500);
     }

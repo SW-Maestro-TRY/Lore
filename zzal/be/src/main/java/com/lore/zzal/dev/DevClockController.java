@@ -87,7 +87,7 @@ public class DevClockController {
         }
         Instant real = Instant.now();
         ZzalPet pet = petService.advanceClock(userId, petId, by, real);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog));
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of()));
     }
 
     @Operation(summary = "시계 맞추기", description = """
@@ -135,6 +135,6 @@ public class DevClockController {
                     "지금부터 %d일 안으로만 맞출 수 있어요".formatted(MAX_ADVANCE.toDays()));
         }
         ZzalPet pet = petService.setClock(userId, petId, target, real);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog));
+        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of()));
     }
 }
