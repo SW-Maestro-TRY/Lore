@@ -112,12 +112,6 @@ export const YEOUL_MOTION: Record<string, string> = {
   fall_back: `${CDN}/zzal/demo/sad.webp`,
 };
 
-/** 옛 mood 이름 → 여울 그림. GameSection 이 아직 쓴다(PR3 에서 YEOUL_MOTION 으로 바꾼다). */
-export const YEOUL_MOOD: Record<string, string> = {
-  idle: YEOUL_MOTION.base, eat: YEOUL_MOTION.eat, hungry: YEOUL_MOTION.sick, clean: YEOUL_MOTION.wash,
-  happy: YEOUL_MOTION.joy, sad: YEOUL_MOTION.sad, pet: YEOUL_MOTION.shy, train: YEOUL_MOTION.practice,
-};
-
 /** 받침이 있으면 앞의 것, 없으면 뒤의 것. "쓰다듬을" / "청소를" */
 export function josa(word: string, withFinal: string, withoutFinal: string): string {
   const last = word.charCodeAt(word.length - 1);

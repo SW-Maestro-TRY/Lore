@@ -273,7 +273,8 @@ export interface Tutorial {
  *
  * ★ 블록 단위로 nullable 이다. 단계에 따라 채워지는 것이 다르다:
  *   - HATCHING 일 때만: step · elapsedSeconds
- *   - ALIVE 일 때만: clock 이하 전부(motions 는 빈 배열)
+ *   - ALIVE 일 때만: clock 이하 전부 — **motions·justUnlocked·learnedToday 도 null** 이다(빈 배열이 아니다).
+ *     화면·훅은 `pet.motions ?? []` 로 읽는다. 목 서버도 같은 모양을 낸다(리뷰 H1 — 부화 중 첫 렌더가 죽었다).
  *   - FAILED/DEAD 일 때만: deathReason
  *   - 행동 응답에만: justUnlocked 가 비어 있지 않을 수 있다
  */
@@ -294,8 +295,6 @@ export interface PetDetail {
   hatchStartedAt: string | null;
   /** 시계가 켜진 순간이자 튜토리얼 0분. */
   hatchedAt: string | null;
-  /** 이 아이의 그림이 사는 곳(`images/zzal/pets/{id}`). 부화 전에는 null. */
-  imageBase: string | null;
 
   /** ★ 항상 온다. 프론트 시계의 유일한 기준. */
   serverNow: string;
@@ -310,11 +309,12 @@ export interface PetDetail {
   intimacy: Intimacy | null;
   today: Today | null;
   pieces: Pieces | null;
-  motions: Motion[];
-  /** 이 행동으로 방금 열린 2층 동작의 seq(폭죽). 행동 응답에만, 조회에는 항상 []. */
-  justUnlocked: number[];
-  /** 밤에 합격해 아침에 도착한 심화 행동(아직 seen 이 아닌 것). */
-  learnedToday: LearnedMotion[];
+  /** 18칸 고정. ALIVE 가 아니면 null. */
+  motions: Motion[] | null;
+  /** 이 행동으로 방금 열린 2층 동작의 seq(폭죽). 행동 응답에만, 조회에는 []. ALIVE 가 아니면 null. */
+  justUnlocked: number[] | null;
+  /** 밤에 합격해 아침에 도착한 심화 행동(아직 seen 이 아닌 것). ALIVE 가 아니면 null. */
+  learnedToday: LearnedMotion[] | null;
   /** 채팅 답 응답에만. 그 밖엔 null. */
   chatReply: ChatReply | null;
   firstGift: FirstGift | null;
