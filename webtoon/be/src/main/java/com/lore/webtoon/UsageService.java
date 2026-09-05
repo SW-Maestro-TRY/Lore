@@ -33,6 +33,16 @@ public class UsageService {
         this.usage = usage;
         this.guard = guard;
         this.token = token == null ? "" : token.trim();
+        // 한 마디는 **아스키만** 된다. HTTP 헤더 값에 한글을 실으면 스프링
+        // 시큐리티의 방화벽이 요청 자체를 거절해서, 비용이 조용히 안 쌓이고
+        // 500 만 남는다 — 그런데 그때 서버 로그는 "처리되지 않은 예외" 라고만
+        // 말해서 한 마디 때문인 줄 알기 어렵다(실제로 여기서 한 번 헤맸다).
+        // 뜰 때 미리 말해 준다.
+        if (!this.token.isEmpty() && !this.token.chars().allMatch(c -> c > 0x20 && c < 0x7F)) {
+            log.error("LORE_WEBTOON_INTERNAL_TOKEN 에 아스키가 아닌 글자나 공백이 있습니다. "
+                    + "HTTP 헤더에 실을 수 없어 비용 적재가 전부 실패합니다 — "
+                    + "영문·숫자·기호로 바꿔 주세요.");
+        }
         if (this.token.isEmpty()) {
             // 부팅을 막지는 않는다 — 로컬에서는 이것 없이도 서버가 떠야 한다.
             // 대신 크게 남긴다: 값이 비면 비용 적재가 통째로 막히는데, 그 사실이
@@ -89,16 +99,45 @@ public class UsageService {
         return fresh.size();
     }
 
+    /**
+     * 만들려는 사람에게 보여 줄 것 — <b>몫만</b>.
+     *
+     * 돈은 안 담는다. 한 편에 얼마가 드는지는 우리 원가이고, 화면에 흘리면
+     * 그대로 밖으로 나간다(가격은 아직 안 정했고 크레딧 숫자도 목업이다 —
+     * 이 저장소 규칙 참고). 만들려는 사람이 알아야 하는 것은 "지금 만들 수
+     * 있나, 오늘 몇 편 남았나" 뿐이다.
+     */
     @Transactional(readOnly = true)
     public ApiResponse<TodayView> today() {
         SpendGuard.Today t = guard.today();
-        Instant from = LocalDate.now(ZONE).atStartOfDay(ZONE).toInstant();
+        return ApiResponse.ok(new TodayView(t.runs(), t.runLimit(), guard.whyBlocked() == null));
+    }
+
+    /**
+     * 운영하는 사람이 볼 것 — 오늘 · 이번 달 · 무엇에 얼마나.
+     *
+     * <b>한 마디를 확인하고 준다.</b> 여기 담긴 것은 단계별·모델별 원가라
+     * 우리 원가 구조가 그대로 드러난다. 화면에서 부르지 않고 손에서 부른다
+     * (haeun/landing/spend_report.py) — 브라우저에 한 마디를 심으면 그것을
+     * 심는 순간 더 이상 비밀이 아니다.
+     */
+    @Transactional(readOnly = true)
+    public ApiResponse<SpendView> spend(String givenToken) {
+        checkToken(givenToken);
+        Instant now = Instant.now();
+        LocalDate today = LocalDate.now(ZONE);
+        Instant dayFrom = today.atStartOfDay(ZONE).toInstant();
+        Instant monthFrom = today.withDayOfMonth(1).atStartOfDay(ZONE).toInstant();
+
+        SpendGuard.Today t = guard.today();
         List<Line> lines = new ArrayList<>();
-        for (Object[] row : usage.breakdownBetween(from, Instant.now())) {
+        for (Object[] row : usage.breakdownBetween(dayFrom, now)) {
             lines.add(new Line((String) row[0], (String) row[1],
                     ((Number) row[2]).longValue(), ((Number) row[3]).longValue()));
         }
-        return ApiResponse.ok(new TodayView(t.runs(), t.runLimit(), t.krw(), t.krwLimit(),
+        return ApiResponse.ok(new SpendView(
+                t.runs(), t.runLimit(), t.krw(), t.krwLimit(),
+                usage.runsBetween(monthFrom, now), usage.krwBetween(monthFrom, now),
                 guard.whyBlocked() == null, lines));
     }
 
@@ -125,9 +164,21 @@ public class UsageService {
     }
 
     /**
+     * 만들려는 사람에게 보여 줄 것. <b>돈은 없다</b>(위 today() 참고).
+     *
      * @param canCreate 지금 새로 만들 수 있는가. 화면이 이걸 보고 미리 알린다
      */
-    public record TodayView(long runs, long runLimit, long krw, long krwLimit,
+    public record TodayView(long runs, long runLimit, boolean canCreate) {
+    }
+
+    /**
+     * 운영하는 사람이 볼 것.
+     *
+     * @param monthRuns 이번 달 만든 편수
+     * @param monthKrw  이번 달 나간 돈(원)
+     */
+    public record SpendView(long runs, long runLimit, long krw, long krwLimit,
+                            long monthRuns, long monthKrw,
                             boolean canCreate, List<Line> breakdown) {
     }
 

@@ -3,6 +3,7 @@ package com.lore.webtoon;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -58,6 +59,12 @@ public class GuestGate {
     private final String salt;
     private final Clock clock;
 
+    /* 생성자가 둘이라(아래 하나는 검사에서 시계를 갈아 끼우려고 둔 것)
+       스프링이 어느 것으로 만들지 못 고른다 — 표시가 없으면 인자 없는
+       생성자를 찾다가 서버가 아예 안 뜬다. 검사만으로는 안 잡힌다: 검사는
+       이 클래스를 손으로 만들거나 가짜로 바꿔치기하므로 스프링이 고를 일이
+       없다. 실제 DB 로 띄워 보고서야 나왔다. */
+    @Autowired
     public GuestGate(GuestQuotaRepository quotas,
                      @Value("${lore.webtoon.spend.guest-free:2}") long freePerDay,
                      @Value("${lore.webtoon.spend.ip-salt:}") String salt) {

@@ -51,15 +51,27 @@ public class UsageController {
         return ApiResponse.ok(new Ingested(service.ingest(request.runId(), request.calls())));
     }
 
-    @Operation(summary = "오늘 얼마나 썼나", description = """
-            오늘 만든 편수와 나간 돈, 그리고 상한. 무엇에 얼마나 썼는지도 함께 준다.
+    @Operation(summary = "오늘 몫이 얼마나 남았나", description = """
+            오늘 만든 편수와 상한, 그리고 지금 만들 수 있는지.
 
-            누구나 볼 수 있게 열어 둔다 — 여기 담긴 것은 우리가 쓴 값이지 사용자의
-            개인 정보가 아니고, "오늘 몫이 얼마나 남았나" 는 만들려는 사람도 알아야
-            하는 값이다.""")
+            누구나 볼 수 있게 열어 둔다 — 만들려는 사람이 알아야 하는 값이고
+            개인 정보가 아니다. **돈은 안 담는다.** 한 편에 얼마가 드는지는 우리
+            원가라 화면에 실으면 그대로 밖으로 나간다 — 그건 /spend 쪽이다.""")
     @GetMapping("/today")
     public ApiResponse<UsageService.TodayView> today() {
         return service.today();
+    }
+
+    @Operation(summary = "얼마나 나갔나 (운영용)", description = """
+            오늘 · 이번 달 나간 돈과, 무엇에 얼마나 썼는지(단계·모델별).
+
+            **한 마디가 있어야 준다.** 단계별·모델별 원가는 우리 원가 구조가
+            그대로 드러나는 값이다. 브라우저가 아니라 손에서 부른다 —
+            haeun/landing/spend_report.py.""")
+    @GetMapping("/spend")
+    public ApiResponse<UsageService.SpendView> spend(
+            @RequestHeader(name = TOKEN_HEADER, required = false) String token) {
+        return service.spend(token);
     }
 
     /** 헤더 이름. 값은 서버 환경변수로만 준다 — 코드에도 저장소에도 안 적는다. */
