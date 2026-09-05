@@ -11,6 +11,8 @@ import com.lore.zzal.pet.TutorialSchedule;
 import com.lore.zzal.pet.UnlockRules;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
+import com.lore.zzal.leave.LeaveService;
+import com.lore.zzal.leave.ZzalPostcard;
 import com.lore.zzal.scene.SceneService;
 import com.lore.zzal.scene.ZzalScene;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -166,10 +168,25 @@ public final class PetResponses {
                            boolean background, boolean album, boolean pieces) {
     }
 
-    public record Leaving(Instant noticedAt, Instant departsAt) {
+    /**
+     * 짐 싸기 예고(정본 9장) — <b>케어 미스의 유일한 겉모습</b>이다(정본 4장 "보이는 신호는 짐 가방뿐").
+     *
+     * ★ {@code justCancelled} 는 "방금 돌아와서 취소됐다" — 이번 응답에만 실린다. 그러지 않으면
+     *   사용자는 자기가 무엇을 막았는지 영영 모른다(짐 가방이 그냥 사라진다).
+     */
+    public record Leaving(Instant noticedAt, Instant departsAt, boolean justCancelled) {
     }
 
+    /** 여행 중(정본 9장). {@code postcards} 는 지금까지 온 엽서 수(최대 3) — 내용은 재회 때 전달된다. */
     public record Trip(Instant startedAt, int postcards) {
+    }
+
+    /** 여행에서 보내온 엽서 한 장 — 장면과 같은 레시피 방식(어디서·언제·한 줄). */
+    public record Postcard(int seq, String place, Instant at, String line) {
+
+        public static Postcard of(ZzalPostcard card) {
+            return new Postcard(card.getSeq(), card.getPlace(), card.getWrittenAt(), LeaveService.line(card));
+        }
     }
 
     public record Settings(boolean leaveEnabled) {
@@ -180,7 +197,7 @@ public final class PetResponses {
 
     /** 앨범(api-v2.md 1.6) — 도감 18칸 + 엽서·장면(PR-9·11 전엔 빈 목록) + 첫 심화 기념. */
     @Schema(description = "앨범 — 열린 동작 도감(기본/심화)·엽서·혼자 논 장면·첫 심화 기념")
-    public record Album(List<Motion> motions, List<Object> postcards, List<Scene> scenes, FirstGift firstGift) {
+    public record Album(List<Motion> motions, List<Postcard> postcards, List<Scene> scenes, FirstGift firstGift) {
     }
 
     public record Tutorial(boolean active, long minutesSince, List<TutorialStep> steps) {
@@ -351,8 +368,9 @@ public final class PetResponses {
                     pet.getWorld(),
                     pet.getBackground(),
                     features,
-                    null, null,                                             // 떠남·여행 — PR-11
-                    new Settings(true),
+                    leaving(pet),
+                    pet.isTraveling() ? new Trip(pet.getTripStartedAt(), pet.getPostcardCount()) : null,
+                    new Settings(pet.isLeaveEnabled()),
                     tutorial);
         }
 
@@ -423,6 +441,19 @@ public final class PetResponses {
                 case DEAD -> DeathReason.NEGLECTED.name();
                 default -> null;
             };
+        }
+
+        /**
+         * 짐 가방 — 예고 중이거나 <b>방금 취소됐을 때</b>만.
+         *
+         * ★ 취소된 뒤에도 이번 한 번은 내려보낸다. 안 그러면 접속과 동시에 짐이 사라져,
+         *   사용자는 <b>자기가 무엇을 막았는지</b> 모른 채 지나간다.
+         */
+        static Leaving leaving(ZzalPet pet) {
+            if (pet.isLeavingNoticed()) {
+                return new Leaving(pet.getLeaveNoticeAt(), pet.departAt(), false);
+            }
+            return pet.isLeavingJustCancelled() ? new Leaving(null, null, true) : null;
         }
 
         /** 18칸. 잠긴 칸도 이름+조건(플랜 T2 결정 4). 심화 행동 상태는 zzal_motion 행에서(없으면 NONE). */

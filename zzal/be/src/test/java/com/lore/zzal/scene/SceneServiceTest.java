@@ -92,6 +92,8 @@ class SceneServiceTest {
     @DisplayName("★ 남는 것은 최대 3컷 — 열흘을 비워도 마찬가지고, 쓴 시간만큼만 덜어낸다")
     void keepsAtMostThree() {
         ZzalPet pet = child();
+        // ★ 열흘을 비우면 떠남 예고·여행이 걸린다(PR-11) — 이 테스트의 관심사가 아니므로 떠남을 끈다
+        pet.setLeaveEnabled(false);
         pet.settle(kst("2026-09-15 12:00"));                  // 열흘
         int pending = pet.pendingScenes();
         assertThat(pending).isGreaterThan(3);

@@ -58,6 +58,8 @@ class PetServiceTest {
     private ZzalMotionRepository motionRepository;
     private MotionSeeder seeder;
     private com.lore.zzal.scene.ZzalSceneRepository sceneRepository;
+    private com.lore.zzal.leave.ZzalPostcardRepository postcardRepository;
+    private final java.util.List<com.lore.zzal.leave.ZzalPostcard> postcards = new java.util.ArrayList<>();
     private final java.util.List<com.lore.zzal.scene.ZzalScene> scenes = new java.util.ArrayList<>();
     private PetService service;
 
@@ -86,6 +88,15 @@ class PetServiceTest {
             scenes.remove(i.<com.lore.zzal.scene.ZzalScene>getArgument(0));
             return null;
         }).when(sceneRepository).delete(any());
+        postcardRepository = mock(com.lore.zzal.leave.ZzalPostcardRepository.class);
+        postcards.clear();
+        when(postcardRepository.save(any())).thenAnswer(i -> {
+            com.lore.zzal.leave.ZzalPostcard c = i.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(c, "id", (long) (postcards.size() + 1));
+            postcards.add(c);
+            return c;
+        });
+        when(postcardRepository.findByPetIdOrderBySeqAsc(any())).thenAnswer(i -> List.copyOf(postcards));
         service = new PetService(
                 petRepository,
                 jobRepository,
@@ -99,7 +110,8 @@ class PetServiceTest {
                 motionRepository,
                 seeder,
                 mock(com.lore.zzal.night.NightPlanner.class),
-                new com.lore.zzal.scene.SceneService(sceneRepository, new MotionCatalog("", "", "v1")));
+                new com.lore.zzal.scene.SceneService(sceneRepository, new MotionCatalog("", "", "v1")),
+                new com.lore.zzal.leave.LeaveService(postcardRepository));
     }
 
     /** T0(정오) 에 부화한 아기. */
@@ -579,6 +591,69 @@ class PetServiceTest {
                     });
             assertThat(afterSleep).isPositive();               // 재우는 응답에 이미 실렸다
             assertThat(pet.needsNightScene()).isFalse();       // 쪽지는 소비됐다
+        }
+    }
+
+    /**
+     * 떠남·재회 — 서비스 경로(verify-failure-paths).
+     *
+     * ★ 여행 중에는 <b>방에 없다</b> — 돌봄·놀이·말 걸기가 전부 거절되고, 조회와 부르기만 된다.
+     */
+    @Nested
+    @DisplayName("떠남·재회 — 여행 중 거절과 재회")
+    class Traveling {
+
+        private ZzalPet traveling() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "tripStartedAt", T0);
+            return pet;
+        }
+
+        @Test
+        @DisplayName("★★ 여행 중 돌봄·재우기·공유는 ZZAL_TRAVELING — 조회는 된다")
+        void travelingRefusesActions() {
+            ZzalPet pet = traveling();
+
+            assertCode(() -> service.care(USER_ID, PET_ID, CareAction.FEED, T0), ErrorCode.ZZAL_TRAVELING);
+            assertCode(() -> service.sleep(USER_ID, PET_ID, kst("2026-09-05 20:00")), ErrorCode.ZZAL_TRAVELING);
+            assertCode(() -> service.share(USER_ID, PET_ID, "base", T0), ErrorCode.ZZAL_TRAVELING);
+
+            assertThat(service.refresh(USER_ID, PET_ID, T0)).isSameAs(pet);   // 조회는 막지 않는다
+        }
+
+        @Test
+        @DisplayName("★★ 부르기 — 엽서가 전달되고 상태가 돌아온다")
+        void callBackDeliversPostcards() {
+            ZzalPet pet = traveling();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "intimacyPeak", 300);
+            // 여행 중 엽서 두 장이 쌓였다
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 12:00"));
+            service.refresh(USER_ID, PET_ID, kst("2026-09-07 12:00"));
+            assertThat(postcards).hasSize(2);
+            assertThat(service.postcards(PET_ID)).as("여행 중에는 안 보인다").isEmpty();
+
+            service.callBack(USER_ID, PET_ID, kst("2026-09-07 13:00"));
+
+            assertThat(pet.isTraveling()).isFalse();
+            assertThat(pet.getIntimacy()).isEqualTo(150);
+            assertThat(service.postcards(PET_ID)).as("재회하면 한꺼번에 전달").hasSize(2);
+        }
+
+        @Test
+        @DisplayName("여행 중이 아닌데 부르면 ZZAL_NOT_TRAVELING")
+        void callBackWhenNotTraveling() {
+            child();
+            assertCode(() -> service.callBack(USER_ID, PET_ID, T0), ErrorCode.ZZAL_NOT_TRAVELING);
+        }
+
+        @Test
+        @DisplayName("★ 떠남 끄기는 여행 중에도 부를 수 있다(설정은 방 밖 이야기)")
+        void settingsWorkWhileTraveling() {
+            ZzalPet pet = traveling();
+            service.changeSettings(USER_ID, PET_ID, false, T0);
+            assertThat(pet.isLeaveEnabled()).isFalse();
+            assertThat(pet.isTraveling()).as("끈다고 돌아오지는 않는다 — 부르기로 데려온다").isTrue();
         }
     }
 

@@ -64,4 +64,17 @@ public final class PetRequests {
 
         public enum ShareKind { DOWNLOAD, SHARE }
     }
+
+    /**
+     * 떠남 켜기·끄기(정본 9장 "설정에서 떠남 끄기 가능").
+     *
+     * ★★ 이 스위치가 있는 이유 — 떠남은 이야기지만 <b>누군가에게는 상처</b>다(자캐 커뮤니티 규범).
+     *   끄면 예고도 여행도 없고, 우리가 다시 켜라고 설득하지 않는다.
+     */
+    @Schema(description = "펫 설정")
+    public record Settings(
+
+            @Schema(description = "떠남을 켤 것인가. 끄면 예고 중이던 것도 즉시 사라진다", example = "true")
+            @NotNull Boolean leaveEnabled) {
+    }
 }

@@ -724,6 +724,171 @@ class ZzalPetTest {
     }
 
     /**
+     * 떠남·재회 — 실패 주입(verify-failure-paths).
+     *
+     * ★ 여기서 지키는 것은 <b>"떠남은 벌이 아니다"</b>이다. 예고는 돌아오면 즉시 취소되고, 여행 중에는
+     *   아무 시계도 안 돌며, 부르면 그동안 쌓은 것을 절반은 안고 돌아온다. 끄고 싶으면 끌 수 있다.
+     */
+    @Nested
+    @DisplayName("떠남·재회 (정본 9·16장) — 실패 주입")
+    class Leaving {
+
+        /** 마지막 방문을 {@code days} 일 전으로 밀어 둔 어린이. */
+        private ZzalPet absentFor(int days) {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "lastVisitDate",
+                    java.time.LocalDate.of(2026, 9, 6).minusDays(days));   // 판정은 09-06 기상에서 돈다
+            return pet;
+        }
+
+        @Test
+        @DisplayName("★★ 미방문 5일 → 기상에 짐 싸기 예고. 그 전에는 없다")
+        void noticeAfterFiveDays() {
+            ZzalPet four = absentFor(4);
+            four.settle(at("2026-09-06 12:00"));          // 23:00 취침 → 10:00 기상을 지난다
+            assertThat(four.isLeavingNoticed()).as("나흘로는 아직").isFalse();
+
+            ZzalPet five = absentFor(5);
+            five.settle(at("2026-09-06 12:00"));
+            assertThat(five.isLeavingNoticed()).isTrue();
+            assertThat(five.departAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("★ 케어 미스 8이면 방문과 무관하게 예고")
+        void noticeAtEightCareMiss() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "careMiss", 8);
+            pet.settle(at("2026-09-06 12:00"));
+            assertThat(pet.isLeavingNoticed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("★★ 예고 중 접속하면 즉시 취소 + 케어 미스 -2")
+        void visitCancelsNotice() {
+            ZzalPet pet = absentFor(5);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "careMiss", 5);
+            pet.settle(at("2026-09-06 12:00"));
+            assertThat(pet.isLeavingNoticed()).isTrue();
+
+            pet.visit(at("2026-09-06 12:00"));
+
+            assertThat(pet.isLeavingNoticed()).isFalse();
+            assertThat(pet.getCareMiss()).isEqualTo(3);
+            assertThat(pet.isLeavingJustCancelled()).as("이번 한 번은 알려 준다").isTrue();
+        }
+
+        @Test
+        @DisplayName("★★ 예고 2일 뒤 여행 — 그 뒤로는 게이지도 병도 부재도 멈춘다")
+        void departsTwoDaysAfterNotice() {
+            ZzalPet pet = absentFor(5);
+            pet.settle(at("2026-09-06 12:00"));
+            assertThat(pet.isLeavingNoticed()).isTrue();
+            int fullnessBefore = pet.getFullness();
+
+            pet.settle(at("2026-09-08 12:00"));           // 예고 2일 뒤
+            assertThat(pet.isTraveling()).isTrue();
+            assertThat(pet.isLeavingNoticed()).as("떠났으면 짐 가방은 없다").isFalse();
+
+            long absenceBefore = pet.getAbsenceAwakeSec();
+            pet.settle(at("2026-09-12 12:00"));           // 여행 중 나흘
+            assertThat(pet.getAbsenceAwakeSec()).as("부재 시계도 멈춘다").isEqualTo(absenceBefore);
+            assertThat(pet.getFullness()).isLessThanOrEqualTo(fullnessBefore);
+        }
+
+        @Test
+        @DisplayName("★★ 함께한 날 30일 이상이면 예고·유예가 각각 2배")
+        void graceDoublesAfterThirtyDays() {
+            ZzalPet pet = absentFor(5);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "daysTogether", 30);
+            assertThat(pet.noticeDays()).isEqualTo(10);
+            assertThat(pet.departDays()).isEqualTo(4);
+
+            pet.settle(at("2026-09-06 12:00"));
+            assertThat(pet.isLeavingNoticed()).as("닷새로는 아직(오래 함께했으니 열흘)").isFalse();
+        }
+
+        @Test
+        @DisplayName("★★ 떠남을 끈 펫은 예고도 여행도 없다")
+        void disabledMeansNoLeaving() {
+            ZzalPet pet = absentFor(30);
+            pet.setLeaveEnabled(false);
+
+            pet.settle(at("2026-09-20 12:00"));
+
+            assertThat(pet.isLeavingNoticed()).isFalse();
+            assertThat(pet.isTraveling()).isFalse();
+        }
+
+        @Test
+        @DisplayName("★ 끄면 예고 중이던 짐 가방도 즉시 사라진다")
+        void disablingClearsNotice() {
+            ZzalPet pet = absentFor(5);
+            pet.settle(at("2026-09-06 12:00"));
+            assertThat(pet.isLeavingNoticed()).isTrue();
+
+            pet.setLeaveEnabled(false);
+
+            assertThat(pet.isLeavingNoticed()).isFalse();
+        }
+
+        @Test
+        @DisplayName("★★ 부르기 — 게이지 전부 2 · 케어 미스 0 · 친밀도는 최고치의 50% · 부재 시계 0")
+        void callBackRestores() {
+            ZzalPet pet = absentFor(5);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "intimacyPeak", 400);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "careMiss", 9);
+            pet.settle(at("2026-09-06 12:00"));
+            pet.settle(at("2026-09-08 12:00"));
+            assertThat(pet.isTraveling()).isTrue();
+
+            pet.callBack(at("2026-09-10 12:00"));
+
+            assertThat(pet.isTraveling()).isFalse();
+            assertThat(pet.getFullness()).isEqualTo(2);
+            assertThat(pet.getHappiness()).isEqualTo(2);
+            assertThat(pet.getClean()).isEqualTo(2);
+            assertThat(pet.getCareMiss()).isZero();
+            assertThat(pet.getIntimacy()).isEqualTo(200);
+            assertThat(pet.getAbsenceAwakeSec()).isZero();
+            assertThat(pet.isSick()).isFalse();
+            assertThat(pet.isSleeping()).isFalse();
+        }
+
+        @Test
+        @DisplayName("★ 여행 중에는 함께한 날이 안 는다")
+        void daysTogetherStopsWhileTraveling() {
+            ZzalPet pet = absentFor(5);
+            pet.settle(at("2026-09-06 12:00"));
+            pet.settle(at("2026-09-08 12:00"));
+            assertThat(pet.isTraveling()).isTrue();
+            int days = pet.getDaysTogether();
+
+            pet.visit(at("2026-09-09 12:00"));
+
+            assertThat(pet.getDaysTogether()).isEqualTo(days);
+        }
+
+        @Test
+        @DisplayName("★ 엽서는 하루 한 장, 최대 3장")
+        void postcardsOncePerDayMaxThree() {
+            ZzalPet pet = absentFor(5);
+            pet.settle(at("2026-09-06 12:00"));
+            pet.settle(at("2026-09-08 12:00"));
+            assertThat(pet.canWritePostcard(at("2026-09-08 12:00"))).isTrue();
+
+            pet.wrotePostcard(at("2026-09-08 12:00"));
+            assertThat(pet.canWritePostcard(at("2026-09-08 20:00"))).as("같은 날엔 한 장").isFalse();
+            assertThat(pet.canWritePostcard(at("2026-09-09 12:00"))).isTrue();
+
+            pet.wrotePostcard(at("2026-09-09 12:00"));
+            pet.wrotePostcard(at("2026-09-10 12:00"));
+            assertThat(pet.getPostcardCount()).isEqualTo(3);
+            assertThat(pet.canWritePostcard(at("2026-09-11 12:00"))).as("세 장에서 멈춘다").isFalse();
+        }
+    }
+
+    /**
      * 조각 — 실패 주입(verify-failure-paths).
      *
      * ★ 여기서 지키는 것은 <b>"잠들 때만 판정한다"</b>와 <b>"3층 전에는 아무것도 안 센다"</b>이다.
