@@ -2629,3 +2629,24 @@ body.ed .ed-top-row { min-height: 0; height: 0; padding: 0; }
   body.ed.dock-open-on .ed-body,
   body.ed.dock-open-on .ed-top { padding-right: 356px; }
 }
+
+/* ---- 그림을 그냥 저장해 가지 못하게 ------------------------------------ *
+ *
+ * 가져가는 길은 「이미지로 뽑기」·「내려받기」 하나로 모은다 — 그 길로 나가는
+ * 파일에만 LORE 표시가 붙는다(watermark.for_download).
+ *
+ * ⚠ **막는 것이 아니라 문턱이다.** 주소를 알면 그대로 받을 수 있다. 여기서
+ * 없애는 것은 실수로 새어 나가는 길이고, 오른쪽 누르기·끌어 놓기는 base.js
+ * 가 같이 막는다. 화면 찍기는 그대로 둔다.
+ *
+ * `-webkit-touch-callout` 이 폰에서 **길게 누르면 뜨는 「이미지 저장」 메뉴**를
+ * 없앤다 — 폰에서는 이 길이 오른쪽 누르기를 대신한다.
+ *
+ * 글자는 그대로 고를 수 있어야 한다(제목·대사를 복사하는 것은 막을 일이
+ * 아니다). 그래서 user-select 는 **그림에만** 건다. */
+img {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
