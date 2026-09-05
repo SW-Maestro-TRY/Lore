@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { mountEditor } from "../../lib/editorCore";
+import ShareBar from "../Share/ShareBar";
 
 /* 편집실 — haeun/landing/web 의 editor.html 을 옮겼다.
  *
@@ -112,6 +113,13 @@ export default function Editor({
               <button type="button" className="btn btn-primary btn-sm" id="bakeBtn">
                 이미지로 뽑기
               </button>
+              {/* 뽑는 것 옆에 보내는 것. 여기까지 온 사람은 다 만든 사람이고,
+                  다 만든 사람이 다음에 하고 싶은 일이 「가져가기」 아니면
+                  「보여주기」다 — 지금까지는 앞엣것만 있었다.
+                  샘플(runId 없음)에는 안 낸다: 보낼 곳이 없는 링크다. */}
+              {runId && (
+                <ShareBar runId={runId} episode={episode} />
+              )}
             </div>
             {/* 얹은 것은 손을 멈추면 저절로 올라간다. 예전에는 「저장」 단추가
                 그 옆에 있었는데, 누르든 안 누르든 같은 일이 일어나는 단추라

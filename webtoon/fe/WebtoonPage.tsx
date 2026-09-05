@@ -25,7 +25,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@common/auth/useAuth";
 import "./webtoon.css";
 
@@ -68,7 +68,25 @@ function WebtoonScreens() {
   /** 다 만들어진 작품. 결과·편집실이 이것으로 서버에 묻는다. */
   const [runId, setRunId] = useState<string | null>(null);
   const [styleLabel, setStyleLabel] = useState("");
-  const goHome = () => setView("landing");
+
+  /* 화면을 바꿀 때 **주소도 같이 민다.**
+     예전에는 상태만 바꿔서, 홈 → 둘러보기 → 완성본으로 들어간 뒤 뒤로가기를
+     누르면 웹툰 탭을 통째로 빠져나갔다(주소가 한 번도 안 바뀌었으니 브라우저가
+     보기엔 그 사이에 아무 일도 없었다). 화면 여섯을 오가는 것이 이 탭의 거의
+     전부라, 뒤로가기가 안 되면 들어간 곳마다 갇힌다.
+
+     민 주소는 아래 useEffect 가 다시 읽어 화면을 맞춘다 — 그래서 앞으로가기도
+     같이 산다. 만들던 중(running)만 주소에 안 싣는다: 주소만으로는 어느
+     작업인지 알 수 없어서, 뒤로 갔다 오면 빈 진행 화면이 뜬다. */
+  const router = useRouter();
+  const go = (next: Exclude<View, "running">, id?: string) => {
+    const q = next === "result" && id ? `?run=${encodeURIComponent(id)}`
+      : next === "editor" && id ? `?view=editor&run=${encodeURIComponent(id)}`
+      : next === "landing" ? ""
+      : `?view=${next}`;
+    router.push(`/webtoon${q}`);
+  };
+  const goHome = () => go("landing");
 
   /* Lore 앱 헤더는 화면 위에 붙어 따라온다. 이 화면의 여러 자리가 그 높이를
      알아야 한다 — 화면을 꽉 채우는 min-height, 편집실 제목 띠가 서는 자리,
@@ -102,10 +120,12 @@ function WebtoonScreens() {
   const search = useSearchParams();
   useEffect(() => {
     const run = search.get("run");
-    if (run) { setRunId(run); setView("result"); return; }
+    if (run) setRunId(run);
     const asked = search.get("view");
+    // view 를 먼저 본다 — 편집실은 `?view=editor&run=x` 처럼 둘 다 달고 오므로,
+    // run 을 먼저 보면 편집실로 못 가고 늘 완성본이 뜬다.
     if (asked && asked in VIEWS) { setView(asked as View); return; }
-    setView("landing");
+    setView(run ? "result" : "landing");
   }, [search]);
 
   /* 로그인해 있으면 이 브라우저를 계정에 잇는다.
@@ -171,8 +191,8 @@ function WebtoonScreens() {
           그 덩어리에 걸려 있어서, 안 묶으면 넓은 화면에서 홈만 틀에 갇힌다. */}
       {view === "landing" && (
         <div className="landing">
-          <Hero onStart={() => setView("create")} onBrowse={() => setView("works")} />
-          <HowGalleryFaq onSeeFull={() => setView("result")} />
+          <Hero onStart={() => go("create")} onBrowse={() => go("works")} />
+          <HowGalleryFaq onSeeFull={() => go("result", runId || undefined)} />
           <Foot />
         </div>
       )}
@@ -182,25 +202,25 @@ function WebtoonScreens() {
           jobId={jobId}
           styleLabel={styleLabel}
           onExit={goHome}
-          onDone={(id) => { setRunId(id); setView("result"); }}
+          onDone={(id) => go("result", id)}
         />
       )}
       {view === "result" && (
-        <Result runId={runId} onExit={goHome} onEditor={() => setView("editor")} />
+        <Result runId={runId} onExit={goHome} onEditor={() => go("editor", runId || undefined)} />
       )}
       {view === "works" && (
         <Works
-          onOpen={(id) => { setRunId(id); setView("result"); }}
-          onCreate={() => setView("create")}
+          onOpen={(id) => go("result", id)}
+          onCreate={() => go("create")}
           onHome={goHome}
         />
       )}
       {view === "mypage" && (
         <MyPage
-          onOpenWork={(id) => { setRunId(id); setView("result"); }}
-          onOpenEditor={(id) => { setRunId(id); setView("editor"); }}
-          onCreate={() => setView("create")}
-          onBrowse={() => setView("works")}
+          onOpenWork={(id) => go("result", id)}
+          onOpenEditor={(id) => go("editor", id)}
+          onCreate={() => go("create")}
+          onBrowse={() => go("works")}
         />
       )}
       {/* 편집실은 완성본에서 들어온다 — 그 작품 그 회차를 그대로 연다.

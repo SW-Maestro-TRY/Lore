@@ -135,6 +135,26 @@ STYLE_LABEL = {
     "cinematic": "시네마틱 반실사", "pastel": "일상툰 감성", "noir": "다크 느와르",
     "shoujo": "순정 · BL", "game": "게임 원화",
 }
+
+# run 폴더에 남는 것(style.txt)은 **하네스 쪽 이름**이다 — 다시 그릴 때 그대로
+# NH_STYLE 로 넘겨야 해서 그렇다. 그런데 딱지는 선택 키로 찾으므로, 여덟 중
+# 이름이 다른 둘(romance→romance_fantasy · webtoon→webtoon_lock_bg)만 되짚지
+# 못하고 화면에 "webtoon_lock_bg" 같은 글자가 그대로 나간다. 나머지 여섯은
+# 두 이름이 같아서 우연히 맞았고, 그래서 한동안 안 드러났다.
+STYLE_KEY_BY_NH = {nh: key for key, nh in STYLE_CHOICES.items()}
+
+
+def style_label_of(stored: str) -> str:
+    """저장된 그림체 -> 사람이 읽을 딱지. 모르는 값이면 빈 문자열.
+
+    빈 문자열을 주는 이유: 화면이 딱지를 아예 안 그린다. 모르는 값을 그대로
+    내보내면 "webtoon_lock_bg" 가 그림체 이름인 줄 안다.
+    """
+    stored = (stored or "").strip()
+    if not stored:
+        return ""
+    key = STYLE_KEY_BY_NH.get(stored, stored)
+    return STYLE_LABEL.get(key, "")
 DEFAULT_STYLE = "webtoon"                # new_harness 자체 기본(NH_STYLE)과 맞춘다
 
 # "[페이지 3/7] 컷 2개 · 참조 2장 …" — pageart.draw() 가 찍는 줄 (pageart.py:116).
@@ -208,7 +228,7 @@ class NHJob:
                 "directions": self.directions,
                 "pick": self.pick,
                 "style": self.style,
-                "style_label": STYLE_LABEL.get(self.style, self.style),
+                "style_label": style_label_of(self.style),
                 "stage": self.stage,
                 "stage_index": stage_i,
                 "stages": list(STAGES),
@@ -1156,6 +1176,9 @@ def list_runs(limit: int = 60) -> list[dict[str, Any]]:
             "cover_episode": 1,
             "cover_page": drawn[0],
             "page_count": len(drawn),
+            # 어느 그림체로 그렸나. 옛 작품은 style.txt 가 없어 빈 값이고,
+            # 화면은 그때 이 딱지를 아예 안 그린다.
+            "style_label": style_label_of(style_of(rid)),
             "engine": "new_harness",       # 화면이 굳이 안 봐도 되지만, 구분은 남긴다
         })
         if len(out) >= limit:
@@ -1176,15 +1199,22 @@ def result_by_run(run_id: str) -> dict[str, Any]:
         return {}
     input_doc = _read_json_safe(d, "input.json")
     pick = _read_json_safe(d, "pick.json")
+    style = style_of(run_id)
+    chosen = direction_of(run_id, pick)
+    scenes = [str(x) for x in (chosen.get("scenes") or [])]
     return {
         "run_id": run_id,
         "character": str(input_doc.get("name") or ""),
         "title": title_of(run_id, pick),
         "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
-        "style_label": "",
-        "logline": "",
+        # 옛 작품은 style.txt 가 없어서 빈 값이다 — 화면이 그때는 안 그린다.
+        "style_label": style_label_of(style),
+        # 줄거리는 고른 이야기 쪽에 있다. pick.json 은 무엇을 골랐는지(n)와
+        # 제목만 들고 있어서, 그것만 보면 늘 비어 있었다.
+        "logline": str(chosen.get("plot") or pick.get("plot") or ""),
         "episode": 1,
-        "pages": [{"no": n, "gap": 0, "width": 1} for n in numbers],
+        "pages": [{"no": n, "gap": 0, "width": 1, "caption": _caption(scenes, n)}
+                  for n in numbers],
         "page_count": len(numbers),
         "planned_pages": len(page_numbers(run_id)),
         "preview": False,
@@ -1194,6 +1224,41 @@ def result_by_run(run_id: str) -> dict[str, Any]:
         "seconds": None,
         "layout_mode": "fast",
     }
+
+
+def direction_of(run_id: str, pick: dict[str, Any] | None = None) -> dict[str, Any]:
+    """이 작품이 고른 이야기 하나 — 줄거리·장면 목록이 다 여기 있다.
+
+    후보 넷 중 사람이 고른 것이 pick.json 의 n 이고, 그 내용은
+    directions.json 의 같은 번호에 있다. 못 읽으면 빈 것 — 줄거리와 캡션이
+    안 뜰 뿐이고 읽는 데는 지장이 없다.
+    """
+    d = run_dir(run_id)
+    pick = pick if pick is not None else _read_json_safe(d, "pick.json")
+    try:
+        chosen = int(pick.get("n") or 0)
+    except (TypeError, ValueError):
+        return {}
+    try:
+        directions = json.loads((d / "directions.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(directions, list):
+        return {}
+    for one in directions:
+        if isinstance(one, dict) and int(one.get("n") or 0) == chosen:
+            return one
+    return {}
+
+
+def _caption(scenes: list[str], page_no: int) -> str:
+    """이 장이 그린 장면 한 줄.
+
+    **1장은 표지다.** 장면을 안 그리고 제목만 크게 얹으므로 캡션이 없다
+    (있는 척하면 2장의 장면이 1장 것으로 밀린다). 그래서 2장이 첫 장면이다.
+    """
+    i = page_no - 2
+    return scenes[i] if 0 <= i < len(scenes) else ""
 
 
 TITLE_MAX = 60

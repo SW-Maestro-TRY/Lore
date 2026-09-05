@@ -1647,10 +1647,26 @@ class Handler(BaseHTTPRequestHandler):
             # new_harness 는 layout_mode·preview 개념이 없으므로 항상 기본값
             # (fast · 미리보기 아님)으로 계산한다 — 페이지 전체를 한 번에
             # 그리는 만큼, 컷별 미리보기를 나눠 부를 자리가 없다.
+            #
+            # **로그인한 사람은 여기서 안 받는다.** 앞에 선 앱 서버가 계정
+            # 크레딧에서 이미 받았다고 알려 주면(X-Lore-Account-Billed) 그냥
+            # 넘어간다 — 안 그러면 로그인한 사람만 계정과 uid 두 곳에서 두 번
+            # 낸다. 이 표시를 믿어도 되는 이유는 이 서버가 밖에 안 열려 있기
+            # 때문이다: 브라우저는 늘 앱 서버를 거치고, 여기 주소는 서버 안에서만
+            # 닿는다. 그 전제가 깨지면(이 서버를 밖에 열면) 이 표시부터 다시 봐야
+            # 한다.
             uid = str(form.pop("uid", "") or "")
             if not credits.valid_uid(uid):
                 return self._error(400, "uid 가 없습니다")
+            billed = self.headers.get("X-Lore-Account-Billed")
             cost = credits.creation_cost(False, "fast")
+            if billed:
+                job = nh_runner.create(form, photos)
+                accounts.log_ip_consent(uid, job.id)
+                return self._json({"id": job.id,
+                                   "queue_position": nh_runner.position(job.id),
+                                   "credit_balance": credits.balance(uid)})
+
             bal = credits.balance(uid)
             if bal < cost:
                 return self._error(

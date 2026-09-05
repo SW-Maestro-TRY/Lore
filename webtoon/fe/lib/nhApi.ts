@@ -243,6 +243,8 @@ export interface RunCard {
   /** 표지로 쓸 장 번호. 없으면 아직 그림이 없는 작품이다. */
   cover_page?: number;
   page_count: number;
+  /** 어느 그림체로 그렸나. 그 기록이 생기기 전 작품은 빈 값이다. */
+  style_label?: string;
   /** 내 작품 목록에서만 온다 — 둘러보기에 걸려 있는가. */
   public?: boolean;
 }
@@ -318,7 +320,8 @@ export interface RunResult {
   logline: string;
   episode: number;
   /** 장마다 아래 여백(gap)과 지면 폭(width) — 파일과 같은 눈금으로 그리려고 준다. */
-  pages: { no: number; gap: number; width: number }[];
+  /** `caption` 은 그 장이 그린 장면 한 줄. 표지(1장)와 옛 작품은 빈 값이다. */
+  pages: { no: number; gap: number; width: number; caption?: string }[];
   page_count: number;
   planned_pages: number;
   preview: boolean;

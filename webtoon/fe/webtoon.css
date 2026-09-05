@@ -3793,3 +3793,187 @@
   display: block; margin-top: .35em;
   font-size: .72rem; color: #b5453c; font-weight: 600;
 }
+
+/* ── 크레딧 내역 (마이페이지) ─────────────────────────────────────────
+   원본 프로토타입에 없던 자리라 여기서 새로 그린다(port-css.mjs 가 옮기는
+   것은 원본에 있는 것뿐이다).
+
+   한 줄에 셋을 세로로 안 쌓고 가로로 둔다 — 스무 줄이 쌓이는 목록이라
+   한 줄이 3층이 되면 화면이 통째로 내역으로 덮인다. 무엇에(왼쪽) · 언제
+   (가운데) · 얼마(오른쪽) 순서인데, **얼마**가 오른쪽 끝에 세로로 줄
+   맞춰 서야 훑으면서 더하고 뺄 수 있다. */
+.webtoon-page .credit-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line-2);
+}
+
+.webtoon-page .credit-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 14px;
+}
+
+/* 무엇에 — 길면 줄인다. 사유가 길다고 날짜와 금액이 밀리면 안 된다. */
+.webtoon-page .credit-line-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.webtoon-page .credit-line-at {
+  flex: none;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* 얼마 — 폭을 고정하고 숫자 폭을 고르게 해서 자릿수가 달라도 세로로 맞는다. */
+.webtoon-page .credit-line-delta {
+  flex: none;
+  min-width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* 쓴 것은 색을 뺀다. 받은 것과 같은 색이면 훑을 때 방향이 안 보인다. */
+.webtoon-page .credit-line-delta.is-spent {
+  color: var(--ink-3);
+}
+
+/* ── 결과 화면 머리 ───────────────────────────────────────────────────
+   표지 카드가 제 내용만큼만 좁게 서서 아래 그림과 왼쪽 끝이 안 맞았다.
+   읽기 전에 보는 것이 제목이라 그 자리가 흔들리면 읽는 것부터 어수선하다.
+   본문(.reader)과 같은 폭으로 세우고, 긴 제목이 잘리는 대신 줄바꿈되게 한다. */
+.webtoon-page .result-head > .result-cover {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.webtoon-page .result-cover-text {
+  min-width: 0;             /* 안 주면 flex 안에서 제목이 안 줄고 넘친다 */
+}
+
+/* 제목은 자르지 않는다. 한 줄에 안 들어가면 줄을 바꾼다 — 「칠흑의 꽃 피어날
+   때…」처럼 끝이 잘리면 무슨 작품인지 알 수가 없다. */
+.webtoon-page .result-cover-text h2 {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+/* ── 장면 설명 (눌러서 펴기) ──────────────────────────────────────────
+   그림 자체가 단추다. 그래서 단추의 기본 꾸밈을 전부 걷어낸다 — 안 걷으면
+   장마다 회색 테두리가 생겨서 읽는 흐름이 칸으로 끊긴다. */
+.webtoon-page .page-peek {
+  appearance: none;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  position: relative;
+  cursor: zoom-in;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.webtoon-page .page-peek.is-open {
+  cursor: zoom-out;
+}
+
+/* 설명은 **화면 아래에 붙여** 띄운다.
+   처음에는 그림 아래쪽에 겹쳐 깔았는데, 세로 스크롤 웹툰의 한 장은 화면보다
+   몇 배 길어서 「누른 자리」와 「그림의 맨 아래」가 아주 멀다 — 눌러도 아무
+   일이 없는 것처럼 보였다(실측). 흐름에 끼워 넣는 것도 안 된다: 펼 때마다
+   아래 그림이 통째로 밀려 읽던 자리를 잃는다.
+
+   한 번에 하나만 열리므로 이 띠도 하나뿐이다. */
+.webtoon-page .page-caption {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(680px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: rgba(9, 22, 28, .93);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  overflow-wrap: anywhere;
+  box-shadow: 0 8px 28px rgba(15, 51, 63, .3);
+}
+
+/* ── 공유하기 ───────────────────────────────────────────────────────
+   머리(.result-head)가 flex 라, 폭을 안 잡아 주면 이 덩어리가 줄거리 옆에
+   끼었다가 목록을 펴는 순간 아래로 떨어진다 — 누를 때마다 단추가 움직인다.
+   처음부터 한 줄을 통째로 쓰게 해서 자리를 고정한다. */
+.webtoon-page .share {
+  flex: 1 0 100%;
+  margin-top: 10px;
+}
+
+.webtoon-page .share-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.webtoon-page .share-said {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.webtoon-page .share-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.webtoon-page .share-one {
+  appearance: none;
+  padding: 8px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--paper, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.webtoon-page .share-one:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── 둘러보기 카드의 그림체 딱지 ─────────────────────────────────────
+   제목·이름 아래에 작게. 고르는 데 쓰이는 값이지만 제목만큼은 아니다. */
+.webtoon-page .works-style {
+  /* 카드 본문이 세로 flex 라, inline-block 만으로는 안 줄고 한 줄을 다 먹는다
+     (stretch 가 기본이다) — 회색 띠가 카드를 가로지르는 꼴이 된다. */
+  align-self: flex-start;
+  width: fit-content;
+  margin: 6px 0 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--line-2);
+  color: var(--ink-3);
+  font-size: 12px;
+}
