@@ -220,7 +220,8 @@ export class MockPetServer implements PetSource {
     if (this.row && (this.row.phase === 'HATCHING')) throw err(409, 'ZZAL_PET_ALREADY_HATCHING', '아직 부화 중이에요');
     if (this.row && this.row.phase === 'ALIVE') throw err(409, 'ZZAL_PET_LIMIT_REACHED', '더 키울 수 있는 자리가 없어요');
     const name = input.name.trim();
-    if (!name || name.length > NAME_MAX_CHARS)  // UTF-16 길이 — 서버 @Size 와 같은 자 throw err(400, 'INVALID_INPUT', `이름은 ${NAME_MAX_CHARS}자까지예요`);
+    // ★ 12자의 기준은 UTF-16 길이(String.length)다 — 서버 @Size(max = 12) 와 같은 자.
+    if (!name || name.length > NAME_MAX_CHARS) throw err(400, 'INVALID_INPUT', `이름은 ${NAME_MAX_CHARS}자까지예요`);
     if (!input.imageKey) throw err(400, 'INVALID_UPLOAD_KEY', '올린 그림을 찾지 못했어요');
     this.row = this.newRow(name, input.note?.trim() || null, now, null);
     return {
