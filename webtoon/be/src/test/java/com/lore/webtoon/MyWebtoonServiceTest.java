@@ -120,8 +120,7 @@ class MyWebtoonServiceTest {
                              any(), any(), any(HttpHeaders.class)))
                 .thenReturn(ResponseEntity.ok("{\"public\":false}".getBytes(StandardCharsets.UTF_8)));
 
-        ResponseEntity<byte[]> res = service.setVisibility(7L, "r1", false);
-        assertThat(res.getStatusCode().value()).isEqualTo(200);
+        assertThat(service.setVisibility(7L, "r1", false)).isFalse();
 
         // 하네스가 주인을 확인할 수 있게 **만든 브라우저의 uid** 가 실려야 한다.
         ArgumentCaptor<byte[]> body = ArgumentCaptor.forClass(byte[].class);
@@ -129,6 +128,20 @@ class MyWebtoonServiceTest {
                                 any(), body.capture(), any(HttpHeaders.class));
         assertThat(new String(body.getValue(), StandardCharsets.UTF_8))
                 .contains("\"uid\":\"uidA\"").contains("\"public\":false");
+    }
+
+    @Test
+    @DisplayName("하네스가 못 바꿨으면 바뀐 척하지 않는다")
+    void 하네스_실패는_실패다() {
+        service.link(7L, "uidA");
+        harnessReturns("uidA", "{\"runs\":[{\"run_id\":\"r1\"}]}");
+        when(gateway.forward(eq(HttpMethod.POST), eq("/api/runs/r1/visibility"),
+                             any(), any(), any(HttpHeaders.class)))
+                .thenReturn(ResponseEntity.status(403).body("{\"error\":\"x\"}".getBytes()));
+
+        // 껐다고 화면에 보이는데 실제로는 걸려 있는 것이 제일 나쁘다.
+        assertThatThrownBy(() -> service.setVisibility(7L, "r1", false))
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test

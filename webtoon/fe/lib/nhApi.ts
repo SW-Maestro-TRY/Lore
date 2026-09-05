@@ -263,7 +263,7 @@ export function creditBalance(): Promise<{ balance: number }> {
  *  그 세션이 없다 — 그대로 부르면 눌러도 늘 401 이었다. 자바가 내 계정에
  *  이어진 브라우저의 작품인지 보고 넘긴다. */
 export function setVisibility(runId: string, isPublic: boolean) {
-  return appRequest<unknown>(
+  return appRequest<{ runId: string; public: boolean }>(
     `/api/webtoon/my/runs/${encodeURIComponent(runId)}/visibility`,
     { method: "POST", body: { public: isPublic } });
 }

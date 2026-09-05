@@ -110,11 +110,11 @@ public class MyWebtoonService {
      * 맞으면 그 uid 를 실어 하네스에 넘긴다. 하네스도 uid 가 만든 이의 것인지
      * 한 번 더 본다 — 그 주소를 직접 부를 수도 있어서 양쪽이 다 본다.
      *
-     * @return 하네스가 준 응답을 그대로 (상태 · 본문 모두)
-     * @throws BusinessException 내 작품이 아닐 때
+     * @return 바뀐 뒤의 공개 여부
+     * @throws BusinessException 내 작품이 아니거나 하네스가 못 바꿨을 때
      */
     @Transactional(readOnly = true)
-    public ResponseEntity<byte[]> setVisibility(Long userId, String runId, boolean isPublic) {
+    public boolean setVisibility(Long userId, String runId, boolean isPublic) {
         String owner = ownerUidOf(userId, runId);
         if (owner == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 바꿀 수 있습니다");
@@ -123,8 +123,16 @@ public class MyWebtoonService {
                 .getBytes(StandardCharsets.UTF_8);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        return gateway.forward(HttpMethod.POST,
+        ResponseEntity<byte[]> res = gateway.forward(HttpMethod.POST,
                 "/api/runs/" + runId + "/visibility", null, body, headers);
+
+        // 하네스가 안 바꿨는데 화면에 바뀐 것으로 보이면 제일 나쁘다 —
+        // 껐다고 믿는데 실제로는 걸려 있게 된다.
+        if (!res.getStatusCode().is2xxSuccessful()) {
+            log.warn("공개 여부를 못 바꿨습니다 (run={}, status={})", runId, res.getStatusCode());
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "공개 여부를 바꾸지 못했습니다");
+        }
+        return isPublic;
     }
 
     /** 내 계정에 이어진 브라우저 중 이 작품을 만든 uid. 내 것이 아니면 null. */

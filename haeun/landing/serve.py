@@ -509,8 +509,11 @@ class Handler(BaseHTTPRequestHandler):
             owner = (query.get("owner") or [""])[0].strip()
             if owner:
                 mine = ownership.runs_of(owner)
-                return self._json({"runs": [r for r in runs
-                                            if str(r.get("run_id")) in mine]})
+                # 지금 공개 상태를 얹어서 준다. 안 얹으면 화면이 그 값을 모르니
+                # 스위치가 늘 「공개」로 그려지고, 껐다 다시 열어도 그대로다 —
+                # 눌러도 아무 일이 안 일어나는 것처럼 보인다(실제로 그랬다).
+                return self._json({"runs": visibility.mark(
+                    [r for r in runs if str(r.get("run_id")) in mine])})
 
             return self._json({"runs": visibility.filter_public(runs)})
 

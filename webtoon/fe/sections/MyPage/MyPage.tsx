@@ -196,6 +196,11 @@ function MyTools({
   onOpenEditor: (runId: string, episode: number) => void;
 }) {
   const [pub, setPub] = useState(run.public !== false);
+  const [failed, setFailed] = useState(false);
+
+  /* 목록을 다시 받으면 서버가 준 값으로 되돌린다 — 안 하면 화면이 들고 있는
+     값과 서버가 갈린 채로 남는다. */
+  useEffect(() => { setPub(run.public !== false); }, [run.public]);
   const [busy, setBusy] = useState(false);
   const first = run.episodes?.[0] || 1;
 
@@ -204,18 +209,25 @@ function MyTools({
   const toggle = (want: boolean) => {
     setPub(want);
     setBusy(true);
+    setFailed(false);
     setVisibility(run.run_id, want)
-      .catch(() => setPub(!want))
+      .catch(() => { setPub(!want); setFailed(true); })
       .finally(() => setBusy(false));
   };
 
+  /* 「둘러보기에 공개 / 나만 보기」 라고 적었더니 무엇을 누르는 건지 안
+     읽혔다 — 체크가 켜진 것이 "지금 공개" 인지 "공개하겠다" 인지 헷갈린다.
+     지금 상태를 그냥 **공개 / 비공개** 로 말하고, 스위치는 그 상태를 뒤집는
+     것으로 둔다. */
   return (
     <>
-      <label className="works-pub">
-        <input type="checkbox" className="works-pub-box" checked={pub} disabled={busy}
+      <label className={`works-pub${pub ? "" : " is-off"}`}>
+        <input type="checkbox" role="switch" className="works-pub-box"
+               checked={pub} disabled={busy}
                onChange={(e) => toggle(e.target.checked)} />
-        <span>{pub ? "둘러보기에 공개" : "나만 보기"}</span>
+        <span>{pub ? "공개" : "비공개"}</span>
       </label>
+      {failed && <span className="works-pub-fail">바꾸지 못했습니다</span>}
       <button type="button" className="works-edit"
               onClick={() => onOpenEditor(run.run_id, first)}>
         편집실에서 열기 →
