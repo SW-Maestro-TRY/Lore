@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import static com.lore.zzal.pet.AwakeClockTest.kst;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -147,6 +148,22 @@ class ZzalPetTest {
             assertThat(pet.getHappiness()).isEqualTo(3);      // 2 → 3
             pet.clean(at("2026-09-05 16:00"));
             assertThat(pet.getTrash()).isZero();
+        }
+
+        @Test
+        @DisplayName("★ 1초 미만 조각이 버려지지 않는다 — 0.3초 간격 600회 정산 = 180초 한 번 정산")
+        void subSecondPollingDoesNotFreeze() {
+            ZzalPet polled = baby();
+            ZzalPet control = baby();
+            Instant t = T0;
+            for (int i = 0; i < 600; i++) {
+                t = t.plusMillis(300);
+                polled.settle(t);
+            }
+            control.settle(T0.plus(Duration.ofSeconds(180)));
+            assertThat(polled.getFullness()).isZero();                 // 아기 3분에 1칸
+            assertThat(polled.getFullness()).isEqualTo(control.getFullness());
+            assertThat(polled.getSettledAt()).isEqualTo(control.getSettledAt().truncatedTo(ChronoUnit.SECONDS));
         }
 
         @Test
@@ -297,13 +314,51 @@ class ZzalPetTest {
             assertThat(pet.canWake(t40.plus(Duration.ofMinutes(4)))).isFalse();
             assertThat(pet.canWake(t40.plus(Duration.ofMinutes(5)))).isTrue();
 
+            int intimacy = pet.getIntimacy();
             pet.settle(t40.plus(Duration.ofMinutes(11)));      // 안 깨움 → 10분 뒤 자동
             assertThat(pet.isSleeping()).isFalse();
             assertThat(pet.getNapCount()).isEqualTo(1);
+            assertThat(pet.getIntimacy()).isEqualTo(intimacy);   // 낮잠은 재우기·깨우기 둘 다 보상 0(해석 16)
             assertThat(pet.getWokeAt()).isEqualTo(T0);          // 낮잠은 기상 시각이 아니다
 
             // 두 번째 낮잠은 없다(해석 3). 아직 아기지만 창 밖.
             assertThat(pet.sleepKindAvailable(t40.plus(Duration.ofMinutes(12)))).isNull();
+        }
+
+        @Test
+        @DisplayName("낮잠 보상 없음 — 수동으로 깨워도 친밀도 0, 밤잠만 +10 (해석 16)")
+        void napGivesNoReward() {
+            ZzalPet pet = baby();
+            Instant t = T0.plus(Duration.ofMinutes(40));
+            pet.settle(t);
+            pet.sleep(t);
+            pet.settle(t.plus(Duration.ofMinutes(5)));
+            pet.wake(t.plus(Duration.ofMinutes(5)));
+            assertThat(pet.getIntimacy()).isZero();
+            assertThat(pet.getSleepWakeCount()).isEqualTo(2);   // 횟수(2층 11번 조건)에는 든다
+        }
+
+        @Test
+        @DisplayName("★ 낮잠에서 깬 순간이 이미 밤이고 아기 60분도 끝났으면 그 자리에서 밤잠에 든다 — 행동 응답 = 최신 상태")
+        void wakingFromNapIntoNightSleepsImmediately() {
+            Instant hatched = at("2026-09-05 22:35");
+            ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", hatched);
+            pet.markAlive("s", "i", hatched);
+            pet.settle(at("2026-09-05 23:30"));
+            pet.sleep(at("2026-09-05 23:30"));                   // 낮잠(아기 60분 안)
+            pet.settle(at("2026-09-05 23:36"));
+            pet.wake(at("2026-09-05 23:36"));                    // 60분(23:35) 지났고 밤
+            assertThat(pet.isSleeping()).isTrue();
+            assertThat(pet.getSleepKind()).isEqualTo(SleepKind.NIGHT);
+            assertThat(pet.getSleptAt()).isEqualTo(at("2026-09-05 23:36"));
+            assertThat(pet.getNapCount()).isEqualTo(1);
+            // 아직 아기면 깨어 있는다 — 유예(16장)
+            ZzalPet late = ZzalPet.hatch(1L, "여울", null, "k", at("2026-09-05 22:50"));
+            late.markAlive("s", "i", at("2026-09-05 22:50"));
+            late.sleep(at("2026-09-05 23:30"));
+            late.settle(at("2026-09-05 23:36"));
+            late.wake(at("2026-09-05 23:36"));
+            assertThat(late.isSleeping()).isFalse();
         }
 
         @Test

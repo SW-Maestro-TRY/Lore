@@ -17,6 +17,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 /**
  * 펫 한 마리 — 플레이 정본 v1.2(#192).
@@ -338,7 +339,7 @@ public class ZzalPet {
         this.trash = ZzalRules.HATCH_TRASH;
         this.food = ZzalRules.HATCH_FOOD;
         this.foodAt = null;
-        this.settledAt = now;
+        this.settledAt = now.truncatedTo(ChronoUnit.SECONDS);
         this.wokeAt = now;
         this.lastSeenAt = now;
     }
@@ -435,6 +436,10 @@ public class ZzalPet {
         if (phase != PetPhase.ALIVE) {
             return;
         }
+        // ★ 초 단위로 센다. 나노초를 남긴 채 settledAt 을 지금으로 옮기면 1초 미만의 조각이 매번
+        //   버려져, 0.3초 간격으로 조회하는 것만으로 게이지가 영영 안 줄어든다(리뷰 실측 — 치트 가능,
+        //   보통 폴링도 약 10% 느려짐). 초로 자르면 조각이 다음 정산으로 넘어간다.
+        now = now.truncatedTo(ChronoUnit.SECONDS);
         if (settledAt == null) {
             // v1 행(정산 시각이 없던 펫). 과거를 소급하지 않고 지금부터 센다 — 사흘치 굶주림을
             // 한꺼번에 물리면 그 사람은 규칙을 배우기도 전에 떠난다.
@@ -637,12 +642,18 @@ public class ZzalPet {
         return !now.isBefore(AwakeClock.wakeWindowOpensAt(sleepKind, sleptAt));
     }
 
-    /** 사용자가 깨운다. 보상 = 친밀도 +10. */
+    /** 사용자가 깨운다. 보상 = 친밀도 +10(밤잠만). */
     public void wake(Instant now) {
         if (!canWake(now)) {
             throw new IllegalStateException("지금은 깨울 수 없다");
         }
         onWake(now, true);
+        // ★ 낮잠에서 깬 순간이 이미 밤(23:00~07:00)이고 아기 60분도 끝났으면 그 자리에서 밤잠에 든다.
+        //   안 그러면 "깨어 있음" 으로 답하고 다음 조회에서 잠드는데, 그건 "행동 응답 = 최신 상태" 를 어긴다
+        //   (리뷰 재현: 22:35 부화 → 23:30 낮잠 → 23:36 깨우기).
+        if (!isSleeping() && !isBaby(now) && AwakeClock.isNight(now)) {
+            onSleep(now, SleepKind.NIGHT, false);
+        }
     }
 
     /**
@@ -687,7 +698,10 @@ public class ZzalPet {
         }
         if (manual) {
             sleepWakeCount += 1;
-            addIntimacy(ZzalRules.WAKE_INTIMACY);
+            // 보상은 밤잠에만(api-v2.md 해석 16). 낮잠은 재우기·깨우기 둘 다 0 — 아기 시간에 친밀도를 파밍하지 않게.
+            if (was == SleepKind.NIGHT) {
+                addIntimacy(ZzalRules.WAKE_INTIMACY);
+            }
             lastCaredAt = at;
         }
     }

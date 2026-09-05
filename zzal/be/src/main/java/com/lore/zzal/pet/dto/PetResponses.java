@@ -101,7 +101,7 @@ public final class PetResponses {
                     alive ? pet.getWokeAt() : null,
                     alive ? pet.canSleep(now) : null,
                     alive ? pet.canWake(now) : null,
-                    alive && !sleeping ? AwakeClock.sleepWindowOpensAt(now) : null,
+                    alive && !sleeping ? (pet.sleepKindAvailable(now) == SleepKind.NAP ? now : AwakeClock.sleepWindowOpensAt(now)) : null,
                     alive && !sleeping ? AwakeClock.nextAutoSleep(now, pet.babyUntil()) : null,
                     sleeping ? AwakeClock.wakeWindowOpensAt(kind, pet.getSleptAt()) : null,
                     sleeping ? AwakeClock.autoWakeAt(kind, pet.getSleptAt()) : null,

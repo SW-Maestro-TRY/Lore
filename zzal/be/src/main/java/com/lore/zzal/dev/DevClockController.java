@@ -69,7 +69,12 @@ public class DevClockController {
     public ApiResponse<PetResponses.Detail> advanceClock(@LoginUser Long userId,
                                                          @PathVariable Long petId,
                                                          @Valid @RequestBody DevRequests.AdvanceClock request) {
-        Duration by = request.toDuration();
+        Duration by;
+        try {
+            by = request.toDuration();
+        } catch (ArithmeticException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "당길 시간이 너무 커요");
+        }
         if (by.isZero() || by.isNegative()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "당길 시간을 초 또는 분으로 주세요");
         }
@@ -99,22 +104,32 @@ public class DevClockController {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "at · sinceHatchMinutes · localTime 중 하나만 주세요");
         }
         Instant real = Instant.now();
+        ZzalPet current = petService.get(userId, petId);
+        if (current.getHatchedAt() == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "아직 부화하지 않았어요");
+        }
         Instant target;
         if (request.at() != null) {
             target = request.at();
         } else if (request.sinceHatchMinutes() != null) {
-            ZzalPet pet = petService.get(userId, petId);
-            if (pet.getHatchedAt() == null) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT, "아직 부화하지 않았어요");
-            }
-            target = pet.getHatchedAt().plus(Duration.ofMinutes(request.sinceHatchMinutes()));
+            target = current.getHatchedAt().plus(Duration.ofMinutes(request.sinceHatchMinutes()));
         } else {
             try {
                 LocalTime t = LocalTime.parse(request.localTime());
-                target = AwakeClock.dateOf(real).atTime(t).atZone(ZzalRules.ZONE).toInstant();
+                // ★ "오늘" 은 서버 날짜가 아니라 이 펫의 시계 날짜다 — 이미 내일로 밀어 둔 펫에 "19:00" 을 주면
+                //   내일 19:00 이어야 한다(리뷰 주입 E: 서버 날짜를 써서 어제로 되돌아갔다).
+                target = AwakeClock.dateOf(current.now(real)).atTime(t).atZone(ZzalRules.ZONE).toInstant();
             } catch (DateTimeParseException e) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT, "localTime 은 HH:mm 형식이에요");
             }
+        }
+        // 부화 전으로는 못 간다(정산이 hatchedAt 이전을 걸을 수 없다). 미래는 advance 와 같은 30일 상한.
+        if (target.isBefore(current.getHatchedAt())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "부화 전 시각으로는 맞출 수 없어요");
+        }
+        if (target.isAfter(real.plus(MAX_ADVANCE))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "지금부터 %d일 안으로만 맞출 수 있어요".formatted(MAX_ADVANCE.toDays()));
         }
         ZzalPet pet = petService.setClock(userId, petId, target, real);
         return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real)));

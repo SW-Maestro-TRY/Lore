@@ -24,8 +24,10 @@ public final class DevRequests {
 
             @Schema(description = "당길 분", example = "240") Long minutes) {
 
+        /** ★ 넘치면 예외 — 조용히 음수로 감기면 30일 상한을 우회한다(리뷰 주입: minutes=Long.MAX). */
         public Duration toDuration() {
-            long total = (seconds == null ? 0 : seconds) + (minutes == null ? 0 : minutes) * 60;
+            long total = Math.addExact(seconds == null ? 0 : seconds,
+                    Math.multiplyExact(minutes == null ? 0 : minutes, 60L));
             return Duration.ofSeconds(total);
         }
     }
