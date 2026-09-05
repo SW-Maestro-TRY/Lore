@@ -114,9 +114,9 @@ window.NHReview = (function () {
   }
 
   /* "다시 만들기" 버튼을 누르면 바로 요청을 보내지 않고, 요청 사항을 적을
-     수 있는 칸을 편다 — 비워 두고 확인해도 된다(placeholder 로 안내). 이
-     버튼은 다른 클릭 리스너를 따로 달지 않는다 — 요청은 항상 이 칸의
-     "다시 만들기" 확인 버튼으로만 나간다.
+     수 있는 칸을 편다 — 비워 두고 확인해도 된다. 이 버튼은 다른 클릭
+     리스너를 따로 달지 않는다 — 요청은 항상 이 칸의 "다시 만들기" 확인
+     버튼으로만 나간다.
      retryBtn 은 `.nh-approval-actions` 안에 있어야 한다(패널을 그 바로
      뒤에 붙인다). onSubmit(note) 이 실제 요청을 보내는 자리다 — 이
      함수는 UI만 맡고 네트워크 호출은 모른다(목업 페이지는 onSubmit 에서
@@ -129,7 +129,7 @@ window.NHReview = (function () {
     panel.className = "nh-retry-note";
     panel.hidden = true;
     panel.innerHTML = `
-      <textarea placeholder="다시 만들 때 반영할 것이 있으면 적어 주세요 (비워 두고 다시 만들기를 눌러도 됩니다)"></textarea>
+      <textarea placeholder="다시 만들 때 반영할 것이 있으면 적어 주세요"></textarea>
       <div class="nh-retry-note-actions">
         <button type="button" class="btn btn-quiet btn-sm" data-act="cancel">취소</button>
         <button type="button" class="btn btn-primary btn-sm" data-act="confirm">다시 만들기</button>
@@ -151,6 +151,58 @@ window.NHReview = (function () {
     });
   }
 
+  /* ---- 시트를 눌러서 크게 보기 ------------------------------------------ *
+   *
+   * 캐릭터 시트는 한 장 안에 전신·얼굴·디테일이 잘게 들어가 있어서, 검수
+   * 화면에 들어가는 크기로는 **눈·흉터 같은 것을 볼 수가 없다.** 그런데
+   * 여기서 "이 얼굴로 끝까지 간다"를 정해야 한다.
+   *
+   * 눌러서 여는 것은 **화면에 꽉 채운 같은 그림**이다. 한 번 더 누르면
+   * 원래 크기로 벌어지고 끌어서 볼 수 있다 — 시트는 가로로 길어서 꽉
+   * 채워도 디테일 칸이 작다.
+   *
+   * 내려받기는 그대로 막혀 있다 — base.js 가 모든 그림에 거는 규칙이
+   * 여기서 만든 그림에도 그대로 걸린다(오른쪽 누르기·끌어 놓기·길게
+   * 누르기). 크게 보는 것과 가져가는 것은 다른 일이다.
+   *
+   * 화면마다 시트가 뜨는 때가 달라서(본편은 서버 응답 뒤에 src 를 넣는다)
+   * 요소마다 거는 대신 **문서에 한 번** 건다. */
+  function wireSheetZoom() {
+    document.addEventListener("click", ev => {
+      const img = ev.target.closest?.(".nh-sheet-img");
+      if (!img || !img.getAttribute("src")) return;
+      openZoom(img.getAttribute("src"), img.getAttribute("alt") || "캐릭터 시트");
+    });
+  }
+
+  function openZoom(src, alt) {
+    const box = document.createElement("div");
+    box.className = "nh-zoom";
+    box.innerHTML = `
+      <img src="${esc(src)}" alt="${esc(alt)}">
+      <button type="button" class="nh-zoom-close" aria-label="닫기">✕</button>
+      <p class="nh-zoom-hint">눌러서 더 크게 · 바깥을 누르면 닫힙니다</p>`;
+    const img = box.querySelector("img");
+
+    const close = () => {
+      box.remove();
+      document.removeEventListener("keydown", onKey);
+      document.body.classList.remove("nh-zoom-on");
+    };
+    const onKey = e => { if (e.key === "Escape") close(); };
+
+    box.addEventListener("click", e => {
+      // 그림을 누르면 크게/작게, 바깥이나 ✕ 를 누르면 닫는다.
+      if (e.target === img) { box.classList.toggle("is-big"); return; }
+      close();
+    });
+    document.addEventListener("keydown", onKey);
+    document.body.classList.add("nh-zoom-on");
+    document.body.appendChild(box);
+  }
+
+  wireSheetZoom();
+
   return { directionCardHtml, cutHtml, castHtml, countLabel, scenesHtml,
-          simpleScenesHtml, fillBoard, wireRetryNote };
+          simpleScenesHtml, fillBoard, wireRetryNote, openZoom };
 })();

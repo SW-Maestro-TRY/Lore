@@ -133,17 +133,25 @@
   const SPEC = [
     { key: "story", title: "이야기 설계", desc: "캐릭터에서 이야기 후보 4개를 만들고, 고른 방향을 정리합니다",
       say: "루가 이야기를 만들고 있어요",
+      // 후보를 다 쓴 뒤 한 번 더 읽는다(storycheck) — 본편은 이 동안
+      // 문구가 바뀐다(newharness_pipeline 의 SAY_REVIEW_STORY).
+      review: "루가 이야기를 검수하고 있어요",
       steps: ["사진에서 외형 읽기", "장르·세계관 정하기", "이야기 후보 4개 쓰기",
-              "등장인물 외모 뽑기", "고른 방향 정리"] },
+              "등장인물 외모 뽑기", "고른 방향 검수"] },
     { key: "sheet", title: "캐릭터 시트", desc: "컷마다 같은 얼굴이 나오도록 기준 그림을 만듭니다",
       say: "루가 캐릭터를 디자인하고 있어요",
       steps: ["외형 사양 정리", "시트 그리기", "기준 시트 확정"] },
     { key: "art", title: "그림 그리기", desc: "표지부터 장면 순서대로, 직전 장과 이어서 한 장씩 그립니다",
       say: "루가 그림을 그리고 있어요",
-      steps: ["표지 그리기", "장면 순서대로 이어 그리기"] },
+      // 한 장을 그릴 때마다 직전 장과 견줘 본다(pagecheck). 어긋나면 그
+      // 자리에서 다시 그리므로, 기다리는 시간이 늘어나는 유일한 자리다.
+      review: "루가 방금 그린 그림을 검수하고 있어요",
+      steps: ["표지 그리기", "장면 순서대로 이어 그리기", "그린 장마다 검수"] },
     { key: "bind", title: "한 편으로 잇기", desc: "그린 장을 순서대로 세로로 이어 붙입니다",
       say: "루가 완성도를 확인하고 있어요",
-      steps: ["이어 붙이기"] },
+      // 다 그린 뒤 처음부터 한 번 읽는다(episodecheck).
+      review: "루가 완성본을 처음부터 읽어보고 있어요",
+      steps: ["이어 붙이기", "처음부터 읽어보기"] },
   ];
   const STAGES = SPEC.map(x => x.key);
 
@@ -196,7 +204,12 @@
     const lo = i / STAGES.length * 100, hi = (i + 1) / STAGES.length * 100;
     const stageFrac = Math.max(0, Math.min(1, (pct - lo) / (hi - lo)));
     const done = Math.min(ART_TOTAL, Math.round(stageFrac * ART_TOTAL));
-    say.textContent = SPEC[i].key === "art" ? `${SPEC[i].say} (${done}/${ART_TOTAL})` : SPEC[i].say;
+    // 검수는 그 단계 **안에서** 일어난다 — 걸음을 하나 더 만들지 않는다
+    // (본편도 stage 를 안 바꾸고 문구만 바꾼다). 단계의 뒤쪽에서 문구가
+    // 검수로 바뀌는 것으로 그 사실을 보여준다.
+    const reviewing = !!SPEC[i].review && stageFrac > 0.72;
+    say.textContent = reviewing ? SPEC[i].review
+      : SPEC[i].key === "art" ? `${SPEC[i].say} (${done}/${ART_TOTAL})` : SPEC[i].say;
     if (SPEC[i].key === "art") renderDemoLivePages(done);
     else $("#demoLivePages").hidden = true, liveShown = -1;
     $("#louBarFill").style.width = pct + "%";
@@ -242,9 +255,8 @@
   <button type="button" data-demo="boardApproval">콘티 검수 (실패)</button>
   <button type="button" data-demo="artqaApproval">그림 검수</button>
   <b>/nh:</b>
-  <button type="button" data-demo="nhPicker">방향 고르기</button>
-  <button type="button" data-demo="nhBoard">콘티</button>
   <button type="button" data-demo="nhSheet">시트</button>
+  <button type="button" data-demo="nhPicker">이야기 고르기</button>
   <button type="button" data-demo="">닫기</button>
 </nav>
 <style>
@@ -428,30 +440,26 @@
          같은 함수로 그리고, nh-review.css 도 같은 파일을 읽는다. -->
     <div class="nh-approval" id="nhPicker" hidden>
       <div class="nh-picker-head">
-        <h2>어느 방향으로 갈까요?</h2>
+        <h2>어느 이야기로 갈까요?</h2>
         <p class="nh-hint">넷 중 하나를 고릅니다. 장면은 접혀 있고, 눌러야 펼쳐집니다.</p>
       </div>
       <div id="nhCards"></div>
       <div class="nh-approval-actions" id="nhPickActions" hidden>
-        <button type="button" class="btn btn-quiet" id="nhPickAgain">다시 고르기</button>
         <button type="button" class="btn btn-primary" id="nhPickGo">이대로 진행하기</button>
       </div>
-    </div>
-
-    <div class="nh-approval" id="nhBoard" hidden>
-      <h2>고른 이야기를 확인해 주세요</h2>
-      <p class="nh-hint">여기서 정한 대로 그림이 나옵니다. <span id="nhBoardCount"></span></p>
-      <div class="nh-cast" id="nhBoardCast"></div>
-      <div id="nhBoardScenes"></div>
+      <!-- 넷 다 마음에 안 들 때. 본편에서는 누르면 요청 사항을 적는 칸이
+           먼저 열린다(nh-review.js 의 wireRetryNote). -->
       <div class="nh-approval-actions">
-        <button type="button" id="nhBoardRetry" class="btn btn-quiet">다시 만들기</button>
-        <button type="button" class="btn btn-primary">이대로 진행</button>
+        <button type="button" class="btn btn-quiet btn-sm" id="nhPickAgain">이야기 후보 다시 만들기</button>
       </div>
     </div>
 
-    <div class="nh-approval" id="nhSheet" hidden>
-      <h2>캐릭터 시트를 확인해 주세요</h2>
-      <p class="nh-hint">이제부터 모든 페이지가 이 얼굴을 따라갑니다.</p>
+    <div class="sheet-approval" id="nhSheet" hidden>
+      <div class="sheet-approval-head">
+        <h3>캐릭터 시트를 확인해 주세요</h3>
+        <p>이제부터 모든 페이지가 이 얼굴을 따라갑니다. 원본과 다르면 여기서
+           다시 만드세요 — 진행한 뒤에는 모든 장이 이 시트를 기준으로 그려집니다.</p>
+      </div>
       <img class="nh-sheet-img" src="/static/demo/sheet_sample.jpg" alt="캐릭터 시트">
       <div class="nh-approval-actions">
         <button type="button" id="nhSheetRetry" class="btn btn-quiet">다시 만들기</button>
@@ -467,7 +475,7 @@
 (() => {
   const veil = document.getElementById("approvalModal");
   const panels = ["sheetApproval","storyApproval","boardApproval","artqaApproval",
-                  "nhPicker","nhBoard","nhSheet"];
+                  "nhSheet","nhPicker"];
   const show = id => {
     panels.forEach(p => document.getElementById(p).hidden = (p !== id));
     veil.hidden = !id;
@@ -489,14 +497,14 @@
       scenes: ["궁정 서고로 복귀하며 옛 동료들의 환영과 미묘한 시선을 받는다.",
                "인수인계를 받다 자신의 이름이 빠진 명령서와, 예전 약속이 적힌 쪽지를 발견한다.",
                "쪽지를 들고 정원으로 나갔다가 옛 연인과 스쳐 지나간다.",
-               "밤에 혼자 남아 \"이미 잊었다\"고 중얼이지만, 쪽지를 찢지 못하고 품에 넣는다."],
+               "밤에 혼자 남아 \"이미 잊었다\"고 중얼이지만, 쪽지를 찢지 못하고 품에 넣는다."] },
     { n: 2, title: "연회장의 꽃, 두 명의 승자", genre: "로맨스 판타지",
       plot: "조용히 있고 싶은 하은은 사교 연회장에서 매번 부딪히는 라이벌과 또다시 주목을 받는다. 신경전은 내기에서 절정에 달하지만, 예상치 못한 사건으로 분위기가 급변한다.",
       scenes: ["라이벌이 일부러 다가와 옷차림을 지적하며 말다툼이 시작된다.",
                "커플 선발 내기에 끌려가 서로 다른 파트너를 골라 신경전을 벌인다.",
                "마탑주가 나타나 무대를 얼려버려 내기가 중단된다.",
                "둘이 협력해 얼어붙은 출입구를 함께 연다.",
-               "\"오늘만은 없던 일로 하자\"고 말하지만, 서로를 의식하며 헤어진다."],
+               "\"오늘만은 없던 일로 하자\"고 말하지만, 서로를 의식하며 헤어진다."] },
     { n: 3, title: "대공 저택의 새로운 규칙", genre: "로맨스 판타지",
       plot: "계약 약혼녀가 된 하은은 폐허가 된 저택을 재정비하며 달라진 자신의 위치에 적응하려 애쓴다. 이전의 방식이 더는 통하지 않음을 느끼던 중, 약혼자와 인연이 있던 청년이 저택을 찾아온다.",
       scenes: ["재건 중인 저택에서 새 규칙을 상의하지만 기존 하인들이 말을 듣지 않는다.",
@@ -511,36 +519,20 @@
                "아침식사에 일부러 재료를 바꿔 넣자 마법사의 태도가 잠깐 흔들린다.",
                "그날 밤, 이틀 전에는 없던 작은 등불이 켜진 것을 본다."] },
   ];
-  // 2026-09-02부터 실제 화면도 콘티·컷 대본 없이(이어그리기) 이 모양으로만
-  // 검수한다 — direction_summary() 와 같은 모양(engine:"direction", 컷 없이
-  // 장면 요약만). NH_DIRECTIONS[3](4번 "반복된 아침")을 고른 뒤의 화면이다.
-  const NH_BOARD = {
-    engine: "direction",
-    cast: [
-      { name: "마법사", appearance: "30대 후반 남성, 은빛 머리, 연녹색 눈동자, 얇은 마법 로브, 손가락에 은반지." },
-    ],
-    scenes: NH_DIRECTIONS[3].scenes.map((s, i) => ({ id: i + 1, summary: s })),
-  };
   document.getElementById("nhCards").innerHTML = NH_DIRECTIONS.map(d =>
     `<div class="nh-card" data-n="${d.n}">${NHReview.directionCardHtml(d)}</div>`).join("");
-  NHReview.fillBoard(NH_BOARD, {
-    cast: "#nhBoardCast", count: "#nhBoardCount", scenes: "#nhBoardScenes" });
-
-  // 방향 카드 선택 — 시연이라 실제 요청은 안 나간다. 실제 화면과 같은
-  // 상호작용(고르면 "다시 고르기"/"이대로 진행하기"가 뜬다)만 보여준다.
+  // 이야기 카드 선택 — 시연이라 실제 요청은 안 나간다. 실제 화면과 같은
+  // 상호작용(고르기 전에는 "이대로 진행하기"가 안 뜬다)만 보여준다.
   const nhPickActions = document.getElementById("nhPickActions");
   document.querySelectorAll("#nhCards .nh-card").forEach(card => {
-    const toggle = card.querySelector("details");
-    if (toggle) toggle.addEventListener("click", e => e.stopPropagation());
+    // 본편과 같다 — 카드 안 **모든** 토글에 건다(app.js 의 renderNHCards).
+    card.querySelectorAll("details")
+      .forEach(t => t.addEventListener("click", e => e.stopPropagation()));
     card.addEventListener("click", () => {
       document.querySelectorAll("#nhCards .nh-card").forEach(c => c.classList.remove("picked"));
       card.classList.add("picked");
       nhPickActions.hidden = false;
     });
-  });
-  document.getElementById("nhPickAgain").addEventListener("click", () => {
-    document.querySelectorAll("#nhCards .nh-card").forEach(c => c.classList.remove("picked"));
-    nhPickActions.hidden = true;
   });
   document.getElementById("nhPickGo").addEventListener("click", () => show(""));
 
@@ -555,7 +547,9 @@
       + (note.trim() ? `: "${note.trim()}"` : " (빈 채로도 다시 만들 수 있습니다).");
     setTimeout(() => { box.textContent = original; show(""); }, 1600);
   }
-  NHReview.wireRetryNote("nhBoardRetry", note => demoRetryNote("이야기 후보", note));
+  // 본편과 같은 자리다 — 「이야기 후보 다시 만들기」는 요청 사항을 적는 칸을
+  // 먼저 편다(index.html 의 nhPickRetryBtn).
+  NHReview.wireRetryNote("nhPickAgain", note => demoRetryNote("이야기 후보", note));
   NHReview.wireRetryNote("nhSheetRetry", note => demoRetryNote("캐릭터 시트", note));
 
   // 피드백 칩도 눌리는 감은 나게 (전송은 없음)

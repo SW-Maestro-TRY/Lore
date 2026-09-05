@@ -138,3 +138,57 @@
   .nh-approval { padding: 12px; }
 }
 
+/* ---- 시트를 눌러서 크게 보기 -------------------------------------------- *
+ *
+ * 시트는 한 장에 전신·얼굴·디테일이 잘게 들어가 있어서 검수 화면 크기로는
+ * 눈·흉터를 볼 수가 없다. 그런데 여기서 "이 얼굴로 끝까지 간다"를 정한다.
+ *
+ * 내려받기는 그대로 막혀 있다(base.js 의 img 규칙이 여기에도 걸린다) —
+ * 크게 보는 것과 가져가는 것은 다른 일이다. */
+.nh-sheet-img { cursor: zoom-in; }
+
+.nh-zoom {
+  /* 검수 팝업(.modal-veil, z-index 200) **위**에 떠야 한다 — 시트를 누르는
+     자리가 그 팝업 안이라, 낮으면 팝업에 가려 아무 일도 안 한 것처럼 보인다. */
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(9, 26, 34, .88);
+  padding: 16px;
+  overflow: auto;                       /* 크게 벌렸을 때 끌어서 본다 */
+  overscroll-behavior: contain;
+}
+.nh-zoom img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+  cursor: zoom-in;
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
+}
+/* 한 번 더 누르면 원래 크기로 — 시트는 가로로 길어서 꽉 채워도 디테일
+   칸이 작다. 이때부터는 스크롤해서 본다.
+
+   `min-width` 로 바닥을 깐다: 원래 크기가 화면보다 **작은** 그림(목업의
+   560px 짜리 샘플이 그렇다)은 그냥 두면 눌러도 아무 일이 안 일어난다 —
+   「눌러서 더 크게」라고 적어 놓고 안 커지면 고장으로 읽힌다. 실제 시트는
+   1536px 라 원래 크기가 이미 이보다 크고, 그때는 이 값이 아무것도 안 한다. */
+.nh-zoom.is-big { align-items: flex-start; justify-content: flex-start; }
+.nh-zoom.is-big img {
+  max-width: none; max-height: none;
+  width: auto; height: auto;
+  min-width: 180%;
+  cursor: zoom-out;
+}
+/* 뒤 화면이 같이 굴러다니지 않게. */
+body.nh-zoom-on { overflow: hidden; }
+
+.nh-zoom-close {
+  position: fixed; top: 12px; right: 14px; z-index: 301;
+  width: 40px; height: 40px; border-radius: 999px;
+  border: none; background: rgba(255, 255, 255, .16); color: #fff;
+  font: inherit; font-size: 1rem; cursor: pointer;
+}
+.nh-zoom-close:hover { background: rgba(255, 255, 255, .28); }
+.nh-zoom-hint {
+  position: fixed; left: 0; right: 0; bottom: 14px; margin: 0; z-index: 301;
+  text-align: center; color: rgba(255, 255, 255, .72); font-size: .78rem;
+}
