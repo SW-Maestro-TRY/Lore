@@ -34,21 +34,12 @@ import { BACKGROUNDS, DEFAULT_BACKGROUND, MOTIONS, SPECIAL_ADV } from '../../tam
 import { BABY_CALLS } from '../../tamagotchi/tutorial';
 import { clampChat, templateCall, templateReply } from '../../tamagotchi/chat';
 import type { PetSource } from '../petSource';
+import { DAY_MS, HOUR_MS, at, dayIndex, timeOfDay } from '../kst';
 
-// ── 시계(KST 고정, DST 없음이라 산수로 충분) ───────────────────────────────
+// ── 시계(KST 고정) — 경계 산수는 lib/kst.ts 한 벌을 훅과 같이 쓴다 ─────────
 
-const KST_MS = 9 * 3600_000;
-const DAY_MS = 86_400_000;
-const HOUR_MS = 3600_000;
-
-/** 그 시각이 속한 KST 날의 자정(ms). */
-const dayStart = (ms: number) => Math.floor((ms + KST_MS) / DAY_MS) * DAY_MS - KST_MS;
-/** KST 자정부터 지난 ms. */
-const tod = (ms: number) => ms - dayStart(ms);
-/** 같은 KST 날의 hh:00. */
-const at = (ms: number, hour: number) => dayStart(ms) + hour * HOUR_MS;
+const tod = timeOfDay;
 const iso = (ms: number) => new Date(ms).toISOString();
-const dayIndex = (ms: number) => Math.floor((ms + KST_MS) / DAY_MS);
 
 export class MockClock {
   private offset: number;
@@ -953,6 +944,9 @@ export class MockPetServer implements PetSource {
   }
 }
 
+/** 목 시계를 민 뒤 쏘는 이벤트 이름. usePet 이 듣고 즉시 다시 묻는다. 실서버에서는 아무도 안 쏜다. */
+export const MOCK_ADVANCED_EVENT = 'zzal:mock-advanced';
+
 /** 브라우저 콘솔·Playwright 가 잡는 손잡이. */
 export interface ZzalMockHandle {
   advance: (ms: number) => void;
@@ -971,7 +965,8 @@ declare global {
 export function installMockHandle(server: MockPetServer): void {
   if (typeof window === 'undefined') return;
   window.__zzalMock = {
-    advance: (ms) => server.advance(ms),
+    // 시간을 민 뒤 훅이 곧바로 다시 묻게 알린다(usePet 이 듣는다). 폴링 타이머는 벽시계라 안 그러면 최대 60초 낡은 화면이다.
+    advance: (ms) => { server.advance(ms); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
     now: () => new Date(server.now()).toISOString(),
     state: () => server.state(),
     reset: (preset) => server.reset(preset),

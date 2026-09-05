@@ -5,14 +5,15 @@
 //    보내면 개발자도구로 이겼다고 말하면 그만이고, 보상이 켜지는 순간 그게 무한 이득이 된다.
 //    그래서 왕복이 다섯 번이고, 여기에는 정답을 담는 변수 자체가 없다.
 //
-// ★ 새 그림을 만들지 않는다 — 이미 있는 캐릭터 그림(constants 의 YEOUL_MOOD)을 그대로 쓴다.
+// ★ 새 그림을 만들지 않는다 — 이미 있는 여울 그림(constants 의 YEOUL_MOTION 폴백)을 그대로 쓴다.
 //   디자인은 상훈님이 직접 다듬으실 자리라, 여기서는 동작이 도는 것까지만 한다.
 'use client';
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { ApiError } from '../lib/api';
-import { getCurrentGame, guess as guessApi, startGame, type GameState, type GuessResult, type Side } from '../lib/game';
-import { YEOUL_MOOD } from './_v1/constants';
+import type { GameState, GuessResult, Side } from '../lib/game';
+import type { PetSource } from '../lib/petSource';
+import { YEOUL_MOTION } from './constants';
 
 const PEN = "'Nanum Pen Script',cursive";
 const GAEGU = "'Gaegu',cursive";
@@ -26,6 +27,10 @@ const EDGE = '#E0D7C0';
 export interface GameSectionProps {
   /** 누구와 놀 것인가. 아직 아이가 없으면 null 을 넘긴다(아무것도 안 그린다). */
   petId: number | null;
+  /** 실서버 또는 목. 훅과 같은 출처를 써야 목 모드에서 실서버를 두드리지 않는다. */
+  source: PetSource;
+  /** 게임이 끝나면 부른다 — 응답이 펫 상태가 아니라서 해금·게이지는 다시 물어야 보인다(결정기록 C17). */
+  onFinished?: () => void;
 }
 
 function messageOf(e: unknown): string {
@@ -33,7 +38,7 @@ function messageOf(e: unknown): string {
   return '연결하지 못했습니다';
 }
 
-export default function GameSection({ petId }: GameSectionProps) {
+export default function GameSection({ petId, source, onFinished }: GameSectionProps) {
   /** 서버가 준 마지막 상태. 시작 전에도 remainingToday 를 보려고 들고 있는다. */
   const [state, setState] = useState<GameState | null>(null);
   /** 방금 친 판의 결과. 한 판마다 갈아 끼운다. */
@@ -51,7 +56,7 @@ export default function GameSection({ petId }: GameSectionProps) {
     }
     let alive = true;
     const controller = new AbortController();
-    getCurrentGame(petId, controller.signal)
+    source.getCurrentGame(petId, controller.signal)
       // ★ 복구 응답은 "아직 아무 상태도 없을 때" 만 쓴다. 시작 응답(playing:true)이 먼저 왔는데 늦게 도착한
       //   복구 응답(playing:false)이 덮으면 치던 판이 화면에서 사라진다(리뷰 M2).
       .then((s) => { if (alive) setState((cur) => cur ?? s); })
@@ -61,7 +66,7 @@ export default function GameSection({ petId }: GameSectionProps) {
         setError(messageOf(e));
       });
     return () => { alive = false; controller.abort(); };
-  }, [petId]);
+  }, [petId, source]);
 
   const start = useCallback(async () => {
     if (petId == null || busy) return;
@@ -69,13 +74,13 @@ export default function GameSection({ petId }: GameSectionProps) {
     setError(null);
     setLast(null);
     try {
-      setState(await startGame(petId));
+      setState(await source.startGame(petId, 'LEFT_RIGHT'));
     } catch (e) {
       setError(messageOf(e));
     } finally {
       setBusy(false);
     }
-  }, [petId, busy]);
+  }, [petId, busy, source]);
 
   const pick = useCallback(
     async (side: Side) => {
@@ -83,10 +88,11 @@ export default function GameSection({ petId }: GameSectionProps) {
       setBusy(true);
       setError(null);
       try {
-        const r = await guessApi(petId, state.gameId, side);
+        const r = await source.guess(petId, state.gameId, side);
         setLast(r);
         // ★ 응답이 곧 최신 상태다. 친 뒤에 다시 조회하지 않는다 — 왕복이 두 번이 되고
         //   그 사이에 값이 어긋난다(usePet 이 지키는 규칙과 같다).
+        if (r.finished) onFinished?.();
         setState({
           kind: 'LEFT_RIGHT', finished: r.finished, win: r.win,
           rounds: r.rounds, winAt: r.winAt, remainingToday: r.remainingToday,
@@ -100,7 +106,7 @@ export default function GameSection({ petId }: GameSectionProps) {
         setBusy(false);
       }
     },
-    [petId, busy, state],
+    [petId, busy, state, source, onFinished],
   );
 
   // 아이가 없으면 놀 상대가 없다. 아무것도 그리지 않는다.
@@ -115,7 +121,7 @@ export default function GameSection({ petId }: GameSectionProps) {
   const hits = playing ? (state?.hits ?? 0) : (last?.hits ?? 0);
 
   /** 결과 연출은 있는 그림으로만 한다 — 맞으면 기쁜 얼굴, 틀리면 시무룩. */
-  const face = last == null ? YEOUL_MOOD.idle : last.hit ? YEOUL_MOOD.happy : YEOUL_MOOD.sad;
+  const face = last == null ? YEOUL_MOTION.base : last.hit ? YEOUL_MOTION.joy : YEOUL_MOTION.sad;
 
   return (
     <section data-sec="game" style={S.sec}>
