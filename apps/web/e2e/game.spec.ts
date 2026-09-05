@@ -10,7 +10,13 @@ async function playOne(page: Page): Promise<number> {
   await page.waitForTimeout(500);
   let popped = await dismissCelebrations(page);
   await page.waitForSelector('[data-action="game-left"]');
-  for (let i = 0; i < 5; i++) { await page.locator('[data-action="game-left"]').click(); await page.waitForTimeout(150); }
+  for (let i = 0; i < 5; i++) {
+    // ★ 매 판마다 폭죽을 확인하고 닫는다. 시작 직후 한 번만 닫으면, 응답이 늦게 온 날
+    //   판이 도중에 올라와 다음 클릭을 가로챈다(전체 스펙을 함께 돌릴 때 실제로 났다).
+    popped += await dismissCelebrations(page);
+    await page.locator('[data-action="game-left"]').click();
+    await page.waitForTimeout(150);
+  }
   await page.waitForTimeout(500);
   popped += await dismissCelebrations(page);
   return popped;

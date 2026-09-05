@@ -34,7 +34,9 @@ function giftLine(g: PetDetail['firstGift'], name: string): string | null {
 }
 
 export default function AlbumNotes({ practicing, firstGift, unlocked, postcards, scenes, name }: AlbumNotesProps) {
-  const gift = giftLine(firstGift, name);
+  // ★ 연습 중일 때 선물 줄("첫 선물을 준비하고 있어요")은 접는다 —
+  //   바로 위에 "아직 연습 중이에요" 가 이미 같은 말을 하고 있다. 같은 말을 두 줄로 하면 둘 다 안 읽힌다.
+  const gift = practicing && firstGift?.status === 'BAKING' ? null : giftLine(firstGift, name);
   if (!gift && !practicing && !postcards && !scenes) return null;
 
   return (

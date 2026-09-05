@@ -182,6 +182,8 @@ export class MockPetServer implements PetSource {
   private seed: number;
   /** `?mock=failed` — 부화가 끝나는 순간 ALIVE 가 아니라 FAILED 로 간다. */
   private hatchFails = false;
+  /** 다음 밤 굽기를 실패시킨다(`__zzalMock.failNextBake()`). 실패 경로를 실제로 밟아 보려고 둔다. */
+  private failNextBake = false;
 
   constructor(opts: MockOptions = {}) {
     this.clock = new MockClock(opts.clockStartMs ?? null);
@@ -207,6 +209,11 @@ export class MockPetServer implements PetSource {
   state(): Readonly<Row> | null {
     if (this.row) this.settle(this.row, this.now());
     return this.row;
+  }
+
+  /** 다음 밤 굽기를 한 번 실패시킨다(디버그 손잡이). */
+  failNextBake_(): void {
+    this.failNextBake = true;
   }
 
   reset(preset: MockPreset = 'baby'): void {
@@ -399,6 +406,10 @@ export class MockPetServer implements PetSource {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
+    // ★ 도착한 것만 확인할 수 있다(계약 1.6). 아직 굽는 중인 seq 를 확인 처리하면
+    //   그 동작은 도착해도 영영 폴라로이드가 안 뜬다.
+    const m = r.motions.find((x) => x.seq === seq);
+    if (!m || m.advanced.status !== 'OPEN') throw err(409, 'ZZAL_MOTION_NOT_OPEN', '아직 배워 오지 않은 동작이에요');
     r.seenAdv.add(seq);
     return this.detail(r, now);
   }
@@ -623,9 +634,11 @@ export class MockPetServer implements PetSource {
       // 하루의 경계 = 잠드는 순간(§16). 판정·리셋.
       r.nightCount += 1;
       if (r.today.careMiss === 0) r.counters.zeroMissDays += 1;
+      // ★ 반드시 리셋 **앞**에서 계획한다 — 밤 굽기 조건이 "그날 케어 미스 0" 이라,
+      //   today 를 지운 뒤에 물으면 언제나 0 이 나와 **아무 날이나 굽게** 된다.
+      this.planNight(r);
       r.today = { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 };
       if (r.game && !r.game.finished) r.game.finished = true;
-      this.planNight(r);
     }
     if (!auto) {
       r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
@@ -662,7 +675,9 @@ export class MockPetServer implements PetSource {
     const gift = r.motions.find((m) => m.seq === GIFT_SEQ);
     if (!gift || gift.advanced.status !== 'NONE') return;
     if (r.daysTogether < FIRST_GIFT_DAYS) return;
-    // doSleep 이 today 를 지우기 전에 부르므로 여기서 그날 케어 미스를 본다.
+    // ★ 그날 케어 미스 0(정본 §16). doSleep 이 today 를 지우기 **전에** 부르므로 여기서 볼 수 있다.
+    //   이 줄이 없으면 목이 서버보다 너그러워지고, e2e 는 통과하는데 실서버에서는 선물이 안 온다.
+    if (r.today.careMiss !== 0) return;
     gift.advanced = { ...gift.advanced, status: 'QUEUED', imageKey: null, revealedAt: null, seen: false };
   }
 
@@ -672,8 +687,15 @@ export class MockPetServer implements PetSource {
    * 도착해야 비로소 `imageKey` 가 채워진다 — 검수 중인 그림은 안 내려간다.
    */
   private deliver(r: Row, t: number): void {
+    const failed = this.failNextBake;
     for (const m of r.motions) {
       if (m.advanced.status !== 'QUEUED' && m.advanced.status !== 'PRACTICING') continue;
+      // ★ 실패 경로 — 그 밤에 못 구우면 **NONE 으로 되돌리고 다음 밤에 다시** 등록된다(계약 5절).
+      //   정상 경로만 만들어 두면 이 길은 실행된 적 없이 배포된다(메모리 verify-failure-paths).
+      if (this.failNextBake) {
+        m.advanced = { status: 'NONE', imageKey: null, revealedAt: null, seen: false };
+        continue;
+      }
       m.advanced = {
         status: 'OPEN',
         imageKey: `images/zzal/pets/${r.id}/motions/${m.seq}/motion.webp`,
@@ -682,6 +704,8 @@ export class MockPetServer implements PetSource {
       };
       if (m.unlockedAt === null) m.unlockedAt = t;   // 선물은 도착이 곧 해금이다
     }
+    // 한 밤만 실패시킨다 — 다음 밤에는 정상으로 돌아온다.
+    if (failed) this.failNextBake = false;
   }
 
   /** 펫 단위 "지금 연습 중인가" 한 칸(해석 30) — 가장 앞선 상태 하나. */
@@ -1004,7 +1028,9 @@ export class MockPetServer implements PetSource {
       g.personality = 'GENTLE';
       g.fullness = 3; g.happiness = 3; g.trash = 1; g.food = 2; g.intimacy = 420;
       g.daysTogether = 3;
-      g.dayBase = at(now, 10);            // 오늘 10:00 기상
+      // 오늘 10:00 기상. ★ 아직 10시 전이면 어제 10:00 이다 — 기상 시각이 미래면 시계가 뒤집힌다.
+      const ten = at(now, 10);
+      g.dayBase = ten <= now ? ten : ten - DAY_MS;
       g.settledAt = now;
       g.lastVisitDay = dayIndex(now);
       this.newlyUnlocked(g, new Set(), g.hatchedAt ?? now);
@@ -1067,6 +1093,8 @@ export const MOCK_ADVANCED_EVENT = 'zzal:mock-advanced';
 /** 브라우저 콘솔·Playwright 가 잡는 손잡이. */
 export interface ZzalMockHandle {
   advance: (ms: number) => void;
+  /** 다음 밤 굽기를 한 번 실패시킨다. 실패 경로(다음 밤 재시도)를 눈으로 보려고 둔다. */
+  failNextBake: () => void;
   now: () => string;
   state: () => unknown;
   reset: (preset?: MockPreset) => void;
@@ -1084,6 +1112,7 @@ export function installMockHandle(server: MockPetServer): void {
   window.__zzalMock = {
     // 시간을 민 뒤 훅이 곧바로 다시 묻게 알린다(usePet 이 듣는다). 폴링 타이머는 벽시계라 안 그러면 최대 60초 낡은 화면이다.
     advance: (ms) => { server.advance(ms); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
+    failNextBake: () => server.failNextBake_(),
     now: () => new Date(server.now()).toISOString(),
     state: () => server.state(),
     reset: (preset) => server.reset(preset),

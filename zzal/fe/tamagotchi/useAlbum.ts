@@ -152,7 +152,10 @@ export function useAlbum(opts: UseAlbumOptions): AlbumView {
     cards,
     unlocked: pet?.features?.album === true,
     practicing: pet?.baking === 'PRACTICING' || pet?.baking === 'QUEUED',
-    firstGift: album?.firstGift ?? pet?.firstGift ?? null,
+    // ★ **상태가 먼저, 앨범 응답은 보조**다. 앨범은 도착 수가 바뀔 때만 다시 읽는데,
+    //   WAITING → BAKING 처럼 도착 없이 바뀌는 구간에서는 낡은 앨범이 이겨
+    //   밤새 "오늘 잘 지내면…" 이 그대로 남는다. 폴링으로 매번 새로 오는 쪽을 앞에 둔다.
+    firstGift: pet?.firstGift ?? album?.firstGift ?? null,
     postcards: album?.postcards ?? [],
     scenes: album?.scenes ?? [],
     loading,

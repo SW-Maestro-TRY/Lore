@@ -2,7 +2,7 @@
 // 뽑기가 아니라 '내가 키워서 받았다' 가 되게 결과보다 원인을 먼저 띄운다. 닫으면 다음 축하가 뜬다(useCelebrations).
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { track } from '@common/analytics';
 import { ASSET, josa } from '../constants';
 import type { Tamagotchi } from '../useTamagotchi';
@@ -19,8 +19,12 @@ export interface CelebrationModalProps {
 export default function CelebrationModal({ tama, pc, name, onSave }: CelebrationModalProps) {
   const { state: s, derived, ui } = tama;
   const c = derived.celebration;
-  /** "이런 동작도 원해요?" 를 눌렀는가. 판 하나 동안만 기억한다. */
+  /** "이런 동작도 원해요?" 를 눌렀는가. **판 하나 동안만** 기억한다. */
   const [wanted, setWanted] = useState(false);
+  // ★ 축하가 줄지어 뜰 때 이 판은 다시 마운트되지 않는다(같은 자리에 내용만 바뀐다).
+  //   그래서 눌러 둔 표시가 다음 축하로 새어 "이미 적어 뒀어요" 가 뜬다. 판이 바뀌면 되돌린다.
+  const seq = c?.seq ?? null;
+  useEffect(() => { setWanted(false); }, [seq]);
   if (!c) return null;
 
   const polaroid: CSSProperties = { position: 'relative', background: '#FFFEFA', padding: pc ? '13px 13px 0' : '8px 8px 0', border: '1px solid #EDE6D4', boxShadow: '4px 6px 0 rgba(58,53,43,.1)', transform: 'rotate(-1.5deg)', display: 'inline-block' };
