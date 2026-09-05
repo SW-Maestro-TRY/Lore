@@ -424,6 +424,7 @@
 | 24 | 1.5 | 재언급은 답 3개마다 그다음 답에서(4·7·10번째) |
 | 25 | 1.6 | v0에서는 앨범 조회가 항상 된다(첫 심화 전 `FEATURE_LOCKED` 게이트는 PR-7에서 `features.album`과 함께) |
 | 26 | 2 | v2 설정인데 프롬프트가 없으면 v1로 기동·기록도 v1(조용히 v2로 적지 않음). 부팅 로그 경고 |
+| 28 | 9 | 밤 큐 우선순위의 "streak"는 PR-10 전까지 케어 미스 0인 날 수(`zeroMissDays`). 첫 심화 판정은 잠든 밤(`lastNightOf`)에만 |
 
 ---
 
@@ -441,7 +442,8 @@
 | 배포 절차 | `ZZAL_PIPELINE_VERSION` 전환은 **`HATCHING` 0건일 때**(굽는 도중 버전이 바뀌면 복구가 다른 버전 산출물을 이어받을 수 있음). 복구 job은 원래 job의 버전을 잇고 단계 재사용도 같은 버전만 | PR-5 |
 | 부화 파이프라인 v2 | `PipelineRegistry` HATCH v2 = sheet→identity→grid→grid2→post(`basic/{key}.webp`, `--keys`). `prompt/v2/*.txt`가 없으면 **v1로 기동하고 부팅 로그에 경고**, 기록도 v1 | PR-5 |
 | 5 관리자 | **아직 v1 경로** `/api/zzal/v1/admin/motions` | PR-7 |
-| 6 개발 도구 | v2 경로 동작(`advance-clock`·`set-clock`). `night-sweep`·`force-open`은 PR-6·7 | PR-2 |
+| 6 개발 도구 | `advance-clock`·`set-clock`·**`night-sweep`(이 펫만 계획→집기→굽기, run 기록 없음)**. `force-open`은 PR-7 | PR-2·6 |
+| 밤 굽기 큐 | **동작** — 23:00 `NightSweep`(`sweep-enabled` 기본 false·서버 한 대만), `zzal_night_run(night_of PK)`, 첫 심화(3일째·케어 미스 0)·FAILED 재등록, 우선순위 선물>케어미스0일수>친밀도>id, K=200 이월, claim `UPDATE…WHERE QUEUED`, 기동 복구(23~10시 창). 굽기는 v1 `MotionService.bakeNow`(API 1회→LOCAL 전환은 PR-7) | PR-6 |
 | 후기 | v1 경로 `/api/zzal/v1/me/pets/{id}/feedback` 유지 | (변경 없음) |
 
 ## 변경 기록

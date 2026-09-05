@@ -78,6 +78,11 @@ public class MotionService {
      */
     @Async("hatchExecutor")
     public void bake(Long motionId) {
+        bakeNow(motionId);
+    }
+
+    /** 같은 일을 부른 스레드에서. 밤 스위프는 자기 실행기(nightExecutor)에서 이걸 부른다 — hatchExecutor 를 부화와 안 나눈다. */
+    public void bakeNow(Long motionId) {
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             if (runAttempt(motionId, attempt)) {
                 return;

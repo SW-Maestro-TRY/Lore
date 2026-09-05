@@ -17,6 +17,7 @@ import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSeeder;
 import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.motion.ZzalMotionRepository;
+import com.lore.zzal.night.NightPlanner;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +55,7 @@ public class PetService {
     private final MotionCatalog catalog;
     private final ZzalMotionRepository motionRepository;
     private final MotionSeeder motionSeeder;
+    private final NightPlanner nightPlanner;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -65,10 +67,12 @@ public class PetService {
                       ApplicationEventPublisher events,
                       MotionCatalog catalog,
                       ZzalMotionRepository motionRepository,
-                      MotionSeeder motionSeeder) {
+                      MotionSeeder motionSeeder,
+                      NightPlanner nightPlanner) {
         this.catalog = catalog;
         this.motionRepository = motionRepository;
         this.motionSeeder = motionSeeder;
+        this.nightPlanner = nightPlanner;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -285,7 +289,12 @@ public class PetService {
         if (pet.sleepKindAvailable(now) == null) {
             throw new BusinessException(ErrorCode.ZZAL_NOT_SLEEP_TIME, "저녁 7시가 되면 재워 주세요");
         }
-        return withUnlockDiff(pet, () -> pet.sleep(now));
+        Action a = withUnlockDiff(pet, () -> pet.sleep(now));
+        // ★ 밤잠에 든 순간 = 굽기 큐 등록(정본 2장 "잠드는 순간 하는 일"). 23:00 자동 취침은 스위프가 같은 일을 한다.
+        if (pet.getSleepKind() == SleepKind.NIGHT) {
+            nightPlanner.plan(pet, AwakeClock.dateOf(now));
+        }
+        return a;
     }
 
     /**

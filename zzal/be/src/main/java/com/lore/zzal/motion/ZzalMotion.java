@@ -201,6 +201,24 @@ public class ZzalMotion {
         }
     }
 
+    /** 밤 큐에 올린다(정본 6장). */
+    public void queue(LocalDate nightOf) {
+        this.status = MotionStatus.QUEUED;
+        this.nightOf = nightOf;
+        this.claimedAt = null;
+        this.claimedBy = null;
+    }
+
+    /** 그 밤 실패 — 조각은 소모하지 않고 다음 밤에 다시 오른다(16장). */
+    public void failNight() {
+        this.status = MotionStatus.FAILED;
+    }
+
+    /** 밤 큐에 올릴 수 있나 — 아직 안 굽거나(NONE) 지난 밤에 실패한 것. */
+    public boolean isQueueable() {
+        return status == MotionStatus.NONE || status == MotionStatus.FAILED;
+    }
+
     public void markSeen(Instant at) {
         if (seenAt == null) {
             seenAt = at;
