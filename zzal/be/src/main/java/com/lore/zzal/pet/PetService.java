@@ -58,6 +58,7 @@ public class PetService {
     private final ZzalMotionRepository motionRepository;
     private final MotionSeeder motionSeeder;
     private final NightPlanner nightPlanner;
+    private final com.lore.zzal.scene.SceneService sceneService;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -70,11 +71,13 @@ public class PetService {
                       MotionCatalog catalog,
                       ZzalMotionRepository motionRepository,
                       MotionSeeder motionSeeder,
-                      NightPlanner nightPlanner) {
+                      NightPlanner nightPlanner,
+                      com.lore.zzal.scene.SceneService sceneService) {
         this.catalog = catalog;
         this.motionRepository = motionRepository;
         this.motionSeeder = motionSeeder;
         this.nightPlanner = nightPlanner;
+        this.sceneService = sceneService;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -206,8 +209,20 @@ public class PetService {
         }
         Instant now = pet.now(realNow);
         pet.settle(now);
+        // ★ 순서가 중요하다 — 부재 장면은 <b>방문 기록 전에</b> 정산해야 한다.
+        //   visit 이 "마지막으로 본 시각" 을 지금으로 밀기 때문에, 뒤로 미루면 방금 비운 시간이 사라진다.
+        int made = sceneService.recordAbsence(pet, now) + sceneService.recordNight(pet);
+        if (made > 0) {
+            pet.markSceneMade();
+        }
         pet.visit(now);
         reveal(pet, now);
+    }
+
+    /** 그 펫의 혼자 논 장면(최근 것부터, 최대 3). */
+    @Transactional(readOnly = true)
+    public List<com.lore.zzal.scene.ZzalScene> scenes(Long petId) {
+        return sceneService.recent(petId);
     }
 
     /**
@@ -274,6 +289,7 @@ public class PetService {
             return new Action(pet, justUnlocked, true);
         }
     }
+
 
     /** 행동 전후의 열린 동작을 비교해 새로 열린 seq 를 얻는다(폭죽). 저장하지 않고 계산한다(UnlockRules). 채팅·게임도 이걸 쓴다. */
     public Action withUnlockDiff(ZzalPet pet, Runnable action) {

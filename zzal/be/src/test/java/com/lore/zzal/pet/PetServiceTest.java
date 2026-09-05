@@ -57,6 +57,7 @@ class PetServiceTest {
     private HatchService hatchService;
     private ZzalMotionRepository motionRepository;
     private MotionSeeder seeder;
+    private com.lore.zzal.scene.ZzalSceneRepository sceneRepository;
     private PetService service;
 
     @BeforeEach
@@ -68,6 +69,9 @@ class PetServiceTest {
         hatchService = mock(HatchService.class);
         motionRepository = mock(ZzalMotionRepository.class);
         seeder = mock(MotionSeeder.class);
+        sceneRepository = mock(com.lore.zzal.scene.ZzalSceneRepository.class);
+        when(sceneRepository.findByPetIdOrderBySceneAtDescIdDesc(any())).thenReturn(List.of());
+        when(sceneRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         service = new PetService(
                 petRepository,
                 jobRepository,
@@ -80,7 +84,8 @@ class PetServiceTest {
                 new MotionCatalog("", "", "v1"),
                 motionRepository,
                 seeder,
-                mock(com.lore.zzal.night.NightPlanner.class));
+                mock(com.lore.zzal.night.NightPlanner.class),
+                new com.lore.zzal.scene.SceneService(sceneRepository, new MotionCatalog("", "", "v1")));
     }
 
     /** T0(정오) 에 부화한 아기. */

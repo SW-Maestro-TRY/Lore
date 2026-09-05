@@ -11,6 +11,8 @@ import com.lore.zzal.pet.TutorialSchedule;
 import com.lore.zzal.pet.UnlockRules;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
+import com.lore.zzal.scene.SceneService;
+import com.lore.zzal.scene.ZzalScene;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
@@ -132,7 +134,20 @@ public final class PetResponses {
     public record ChatSummary(String openSlot, Instant nextAt) {
     }
 
-    public record Scenes(boolean enabled, Object latest) {
+    /**
+     * 혼자 논 장면 한 컷 — <b>레시피</b>다(정본 11·16장). 화면이 이 다섯 값으로 그림을 조립한다.
+     *
+     * ★ 그림 주소가 아니라 재료를 준다. 배경을 바꾸거나 소품 그림이 좋아지면 옛 장면도 같이 좋아진다.
+     */
+    public record Scene(String motionKey, String background, String prop, Instant at, String line) {
+
+        public static Scene of(ZzalScene s) {
+            return new Scene(s.getMotionKey(), s.getBackground(), s.getProp(), s.getSceneAt(),
+                    SceneService.line(s));
+        }
+    }
+
+    public record Scenes(boolean enabled, Scene latest) {
     }
 
     public record Features(boolean download, boolean leftRight, boolean run, boolean scenes,
@@ -153,7 +168,7 @@ public final class PetResponses {
 
     /** 앨범(api-v2.md 1.6) — 도감 18칸 + 엽서·장면(PR-9·11 전엔 빈 목록) + 첫 심화 기념. */
     @Schema(description = "앨범 — 열린 동작 도감(기본/심화)·엽서·혼자 논 장면·첫 심화 기념")
-    public record Album(List<Motion> motions, List<Object> postcards, List<Object> scenes, FirstGift firstGift) {
+    public record Album(List<Motion> motions, List<Object> postcards, List<Scene> scenes, FirstGift firstGift) {
     }
 
     public record Tutorial(boolean active, long minutesSince, List<TutorialStep> steps) {
@@ -198,6 +213,10 @@ public final class PetResponses {
             String baking,
             List<Motion> motions,
             @Schema(description = "행동 응답에만. 이번 행동으로 열린 2층 seq") List<Integer> justUnlocked,
+            @Schema(description = """
+                    이번 조회에서 혼자 논 장면이 새로 남았는가 — 귀환 첫 화면이 이걸 보고 한 번 띄운다.
+                    다음 조회에는 false""")
+            boolean sceneNew,
             List<Learned> learnedToday,
             FirstGift firstGift,
             ChatSummary chatSummary,
@@ -228,15 +247,22 @@ public final class PetResponses {
          */
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
                                   Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked) {
-            return from(pet, stepLabel, now, catalog, rows, justUnlocked, false);
+            return from(pet, stepLabel, now, catalog, rows, justUnlocked, false, List.of());
+        }
+
+        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
+                                  Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
+                                  boolean justHealed) {
+            return from(pet, stepLabel, now, catalog, rows, justUnlocked, justHealed, List.of());
         }
 
         /**
          * @param justHealed 방금 약을 먹고 나았는가(행동 응답에만 — "나은 동작" 을 한 번만 보여주려고)
+         * @param scenes     혼자 논 장면, 최근 것부터(최대 3). 맨 앞 하나가 {@code scenes.latest}
          */
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
                                   Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
-                                  boolean justHealed) {
+                                  boolean justHealed, List<ZzalScene> scenes) {
             boolean hatching = pet.isHatching();
             boolean alive = pet.isAlive();
             if (!alive) {
@@ -249,7 +275,7 @@ public final class PetResponses {
                         pet.getHatchStartedAt(), pet.getHatchedAt(), now,
                         // ★ 리스트는 null 이 아니라 빈 목록(해석 20) — 화면이 길이만 보고 그리게. null 이 프론트를 깨뜨렸다.
                         null, null, null, null, null, null, false, null, null, null, null,
-                        List.of(), List.of(), List.of(),
+                        List.of(), List.of(), false, List.of(),
                         null, null, null, null, null, null, null, null, null, null, null);
             }
 
@@ -270,7 +296,7 @@ public final class PetResponses {
             Features features = new Features(
                     true, true,
                     pet.getLeftRightWins() >= ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS,
-                    false,                                                  // 장면 — PR-9
+                    pet.isScenesEnabled(),                                  // 장면 — 첫 부재 4시간 뒤 자동
                     layerTwoOpen >= ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN,
                     "OPEN".equals(firstGift.status()),                       // 앨범 = 첫 심화가 도착하면 같이 열린다(정본 6장)
                     false);                                                 // 조각 — PR-10
@@ -298,10 +324,12 @@ public final class PetResponses {
                     baking(rows),
                     motions(pet, catalog, rows),
                     justUnlocked,
+                    pet.isSceneJustMade(),
                     learnedToday(catalog, rows),
                     firstGift,
                     new ChatSummary(null, nextChatAt(pet, now)),           // 부름 — PR-4
-                    new Scenes(false, null),
+                    new Scenes(pet.isScenesEnabled(),
+                            scenes.isEmpty() ? null : Scene.of(scenes.get(0))),
                     pet.getPersonality() == null ? null : pet.getPersonality().name(),
                     pet.getWorld(),
                     pet.getBackground(),
