@@ -3,12 +3,14 @@ package com.lore.webtoon;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Webtoon 도메인 진입점.
@@ -36,12 +38,13 @@ import java.io.IOException;
  * 프론트는 상대경로로 부르고, 운영에서는 CloudFront 가 {@code /api/*} 만
  * 백엔드로 보낸다 — 그래서 CORS 가 없다.
  *
- * <h2>아직 안 하는 것</h2>
+ * <h2>딱 하나, 만들기는 그냥 안 지나간다</h2>
  *
- * 인증 · 크레딧 차감 · 내 작품 목록은 자바가 맡아야 할 일이지만 지금은
- * 하네스 쪽 구현이 그대로 돈다(파일 기반). DB 로 옮길 때 이 클래스 옆에
- * 진짜 컨트롤러를 만들고 그 주소만 더 구체적으로 매핑하면 된다 — 스프링은
- * 더 구체적인 매핑을 먼저 고르므로 프록시보다 앞선다.
+ * {@code POST /api/webtoon/nh/create} 는 <b>여기서부터 실제로 돈이 나가는</b>
+ * 유일한 자리다(실측 한 편 1,148원). 그래서 이 주소만 넘기기 전에 두 번
+ * 멈춰 세운다 — 오늘 <b>전체</b> 몫이 남았는지({@link SpendGuard}), 그리고
+ * 로그인 안 한 <b>이 사람</b>의 몫이 남았는지({@link GuestGate}). 나머지는
+ * 그대로 흘러간다.
  */
 @RestController
 public class WebtoonController {
@@ -49,10 +52,17 @@ public class WebtoonController {
     /** 프론트가 부르는 접두사. 이 뒤가 하네스의 {@code /api} 뒤와 같다. */
     static final String PREFIX = "/api/webtoon";
 
-    private final HarnessGateway gateway;
+    /** 이 주소만 지나가기 전에 한 번 멈춰 세운다 — 여기서부터 돈이 나간다. */
+    static final String CREATE = PREFIX + "/nh/create";
 
-    public WebtoonController(HarnessGateway gateway) {
+    private final HarnessGateway gateway;
+    private final SpendGuard guard;
+    private final GuestGate guests;
+
+    public WebtoonController(HarnessGateway gateway, SpendGuard guard, GuestGate guests) {
         this.gateway = gateway;
+        this.guard = guard;
+        this.guests = guests;
     }
 
     /**
@@ -66,9 +76,41 @@ public class WebtoonController {
     public ResponseEntity<byte[]> proxy(HttpServletRequest request,
                                         @RequestHeader HttpHeaders headers) throws IOException {
         HttpMethod method = HttpMethod.valueOf(request.getMethod());
+        boolean counted = false;
+
+        // 만들기만 먼저 확인한다 — 시작한 뒤에 막으면 이미 돈이 나간 뒤다.
+        // 나머지(읽기·목록·편집)는 그냥 지나간다.
+        if (HttpMethod.POST.equals(method) && CREATE.equals(request.getRequestURI())) {
+            // 전체 몫을 먼저 본다. 오늘 다 찼으면 로그인해도 못 만들므로,
+            // 게스트에게 "로그인하면 됩니다" 라고 말하면 거짓말이 된다.
+            String blocked = guard.whyBlocked();
+            if (blocked == null) {
+                blocked = guests.useOrBlock(request);
+                counted = blocked == null;      // 셌으면 실패했을 때 돌려줘야 한다
+            }
+            if (blocked != null) {
+                // 하네스가 사유를 한글로 적어 보내는 것과 **같은 모양**으로 답한다.
+                // 화면(프로토타입에서 옮겨 온 것)이 그 모양만 읽어서, 여기서
+                // 봉투를 씌우면 "알 수 없는 오류" 밖에 못 띄운다.
+                return ResponseEntity.status(429)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(("{\"error\":\"" + blocked + "\"}")
+                                .getBytes(StandardCharsets.UTF_8));
+            }
+        }
+
         byte[] body = request.getInputStream().readAllBytes();
-        return gateway.forward(method, harnessPath(request.getRequestURI()),
-                               request.getQueryString(), body, headers);
+        ResponseEntity<byte[]> answer = gateway.forward(
+                method, harnessPath(request.getRequestURI()),
+                request.getQueryString(), body, headers);
+
+        // 시작조차 못 했으면 방금 센 한 편을 도로 물린다. 안 그러면 아무것도
+        // 못 만든 사람에게 "오늘 2편 다 쓰셨어요" 가 뜬다 — 만든 적이 없으니
+        // 거짓말이고, 로그인해도 오늘은 안 되는 줄 알게 된다.
+        if (counted && !answer.getStatusCode().is2xxSuccessful()) {
+            guests.refund(request);
+        }
+        return answer;
     }
 
     /**
