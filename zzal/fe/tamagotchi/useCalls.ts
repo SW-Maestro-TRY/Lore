@@ -43,7 +43,8 @@ export function useCalls(pet: PetDetail | null, chat: ChatState | null, nowMs: n
   return useMemo<CallsApi>(() => {
     if (!pet || pet.phase !== 'ALIVE') return { current: null, queue: [], chatOpen: false };
 
-    const openSlot = pet.chatSummary?.openSlot ?? null;
+    // 열린 슬롯은 GET /chat 이 정본(v0 백엔드는 chatSummary.openSlot 을 null 로 준다). 없으면 요약으로 폴백.
+    const openSlot = chat?.openSlot ?? pet.chatSummary?.openSlot ?? null;
     const openCall = openSlot ? chat?.calls.find((c) => c.slot === openSlot) ?? null : null;
 
     const queue: Call[] = [];

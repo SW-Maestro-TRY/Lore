@@ -8,6 +8,8 @@
 //
 // 2026-09-05 v2(PR2): 훈련·친구·시연 갈래를 걷어내고 v2 훅에 맞췄다.
 // 2026-09-05 PR3: 다마고치 섹션을 부품(parts/RoomStage·CallBanner·GaugePanel·ActionBar·CelebrationModal)으로 갈랐다.
+// 2026-09-05 PR4: 온보딩(정본 §15) — 여울 60초 대본(YeoulDemo)·올리기 폼(UploadForm, 이름 12자·학습 미사용 문구)·
+//   부화 대기/실패(HatchWait)·인앱 브라우저 배너(InAppBanner)를 부품으로 넣었다.
 //   ★ 이후 로직 세션은 이 파일을 편집하지 않는다 — 새 UI 는 parts 에 새 파일 + 여기 한 줄 삽입을 요청한다.
 //     상훈님은 이 파일·parts 의 style 을 자유롭게 다듬으신다(플랜 T2 결정 3).
 'use client';
@@ -17,7 +19,29 @@ import { track } from '@common/analytics';
 import AuthModal from '@common/auth/AuthModal';
 import FeedbackSheet from '../FeedbackSheet';
 import GameSection from '../GameSection';
-import { BACKGROUNDS, YEOUL, YEOUL_LOOP } from '../constants';
+
+/**
+ * 상태 한 줄 — key 는 뜻, 값은 지금 쓰는 말. **key 는 검사가 잡는 손잡이라 함부로 바꾸지 않는다.**
+ * 문구만 바꾸실 때는 오른쪽만 고치시면 됩니다.
+ */
+const STATUS_LINE = {
+  none: '기다리는 중',
+  failed: '태어나지 못했어요',
+  gone: '잘 보냈어요',
+  wakeable: '깨워도 돼요',
+  nap: '낮잠 중',
+  sleeping: '자는 중',
+  egg: '품는 중',
+  hatching: '지금 나오려 해요',
+  sick: '아파요',
+  hungry: '배고파해요',
+  sad: '시무룩해요',
+  dirty: '바닥이 어질러졌어요',
+  canSleep: '재울 수 있어요',
+  normal: '평상시',
+} as const;
+type StatusKey = keyof typeof STATUS_LINE;
+import { BACKGROUNDS, YEOUL } from '../constants';
 import { MAX_GAUGE } from '../rules';
 import { useDex } from '../useDex';
 import { useTamagotchi } from '../useTamagotchi';
@@ -27,6 +51,10 @@ import CallBanner from '../parts/CallBanner';
 import CelebrationModal from '../parts/CelebrationModal';
 import GaugePanel from '../parts/GaugePanel';
 import RoomStage from '../parts/RoomStage';
+import HatchWait from '../parts/HatchWait';
+import InAppBanner from '../parts/InAppBanner';
+import UploadForm from '../parts/UploadForm';
+import YeoulDemo from '../parts/YeoulDemo';
 import '../tamagotchi.css';
 
 
@@ -261,12 +289,17 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
   };
 
   // 게이지를 보기 전에 캐릭터가 먼저 말한다. 게이지는 확인용이다.
-  const status = !s.hasChar ? '기다리는 중'
-    : derived.failed ? '태어나지 못했어요'
-    : s.sleeping ? (s.canWake ? '깨워도 돼요' : (s.sleepKind === 'NAP' ? '낮잠 중' : '자는 중'))
-    : s.phase === 'egg' ? '품는 중' : s.phase === 'hatching' ? '지금 나오려 해요'
-    : s.sick ? '아파요' : s.fullness <= 0 ? '배고파해요' : s.happiness <= 0 ? '시무룩해요'
-    : s.trash >= 3 ? '바닥이 어질러졌어요' : s.canSleep ? '재울 수 있어요' : '평상시';
+  //
+  // ★ 무엇인가(key)와 뭐라고 말하나(문구)를 나눠 둔다. 문구는 상훈님이 언제든 바꾸시는 자리이고,
+  //   검사(e2e)는 key 만 본다 — 한 칸에 섞어 두면 문구를 다듬을 때마다 검사가 깨진다(결정기록 C35).
+  const statusKey: StatusKey = !s.hasChar ? 'none'
+    : s.phase === 'gone' ? 'gone'
+    : derived.failed ? 'failed'
+    : s.sleeping ? (s.canWake ? 'wakeable' : (s.sleepKind === 'NAP' ? 'nap' : 'sleeping'))
+    : s.phase === 'egg' ? 'egg' : s.phase === 'hatching' ? 'hatching'
+    : s.sick ? 'sick' : s.fullness <= 0 ? 'hungry' : s.happiness <= 0 ? 'sad'
+    : s.trash >= 3 ? 'dirty' : s.canSleep ? 'canSleep' : 'normal';
+  const status = STATUS_LINE[statusKey];
 
   // 여울 체험(섹션 1)에서만 쓰는 작은 도장·떠오르는 글자. 내 아이 쪽은 parts/GaugePanel·RoomStage 가 그린다.
   const cells = (v: number, c: string, mark: string) =>
@@ -328,38 +361,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
     dot: { width: 7, height: 7, borderRadius: 4, background: t[0] === 'dama' && s.hasChar ? RED : '#BFB49A' } as CSSProperties,
   }));
 
-  // 서버 모드에서는 그림도 필수다(이름·그림 필수, 세부사항은 선택).
-  const canSubmit = derived.canSubmit && !derived.creating;
-  const submitStyle: CSSProperties = {
-    minHeight: 58, border: '1px solid ' + (canSubmit ? '#2F2A22' : '#DCD2B8'), borderRadius: 3,
-    background: canSubmit ? INK : 'rgba(230,224,206,.8)', color: canSubmit ? '#FFF8EC' : '#A79C82',
-    fontFamily: GAEGU, fontWeight: 700, fontSize: 17,
-    cursor: canSubmit ? 'pointer' : 'default',
-    boxShadow: canSubmit ? '2px 3px 0 rgba(58,53,43,.2)' : 'none', transition: 'all .22s ease',
-  };
-  const submitLabel = derived.creating ? '데려오는 중…' : '알로 데려오기';
   const imgUrl = s.imgUrl || YEOUL;
-
-  const uploadFields = (compact: boolean) => (
-    <>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <input value={s.form.name} onChange={e => form.patchForm({ name: e.target.value })} placeholder={compact ? '이름' : '아이의 이름'} style={L.input} />
-        <button onClick={form.randomName} style={L.smallTag}>랜덤</button>
-      </div>
-      <textarea
-        value={s.form.note}
-        onChange={e => form.patchForm({ note: e.target.value })}
-        rows={compact ? 2 : 3}
-        placeholder={compact ? '하고 싶은 말 (선택)' : '조용하지만 고집이 세요'}
-        style={L.textarea}
-      />
-      <label style={L.checkRow}>
-        <input type="checkbox" checked={s.form.agree} onChange={e => form.patchForm({ agree: e.target.checked })} style={{ width: 20, height: 20, accentColor: RED, flex: '0 0 auto' }} />
-        <span style={{ fontSize: 14, color: '#4A4438' }}>제가 그린 그림이 맞습니다</span>
-      </label>
-      <button onClick={submit} disabled={!canSubmit} style={submitStyle}>{submitLabel}</button>
-    </>
-  );
 
   return (
     <div
@@ -375,6 +377,8 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
         ref={scroller}
         style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', scrollSnapType: 'y proximity', paddingBottom: 98 }}
       >
+        {/* 카톡·인스타 인앱 브라우저면 한 줄(정본 §15). 막지 않는다. */}
+        <InAppBanner />
         {/* 섹션 1 — 여울 체험. 다 자란 여울을 직접 만져보는 자리.
             ★ booting 동안에는 안 그린다 — 이미 키우는 사람에게 이 장이 스치면
               "내 아이가 사라졌나" 로 읽힌다. */}
@@ -395,13 +399,13 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                   <span style={L.tape2} />
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15 }}>
                     <div style={L.polaroid}>
-                      <div style={L.photo}>
-                        <div style={L.floorLine} />
-                        <img src={YEOUL_LOOP} alt="여울이 노는 모습" style={L.charImg} />
+                      <div style={{ position: 'relative' }}>
+                        {/* 여울 60초 대본 — 새 튜토리얼의 빨리감기(정본 §15). 규칙 없는 그림책이다. */}
+                        <YeoulDemo width={w} />
                         {s.sampleFx.map(fx => <span key={fx.id} style={fxStyle(fx)}>{fx.text}</span>)}
                       </div>
                       <div style={L.polaroidCaption}>
-                        <span style={{ fontFamily: PEN, fontSize: 21, lineHeight: 1 }}>여울이 · 다 자란 모습</span>
+                        <span style={{ fontFamily: PEN, fontSize: 21, lineHeight: 1 }}>여울이 · 60초로 보는 첫 한 시간</span>
                       </div>
                     </div>
 
@@ -457,25 +461,8 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                     <input type="file" accept="image/*" onChange={form.onPickImg} style={{ display: 'none' }} />
                   </label>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 17 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                      <span style={L.fieldLabel}>이름</span>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input value={s.form.name} onChange={e => form.patchForm({ name: e.target.value })} placeholder="아이의 이름" style={L.input} />
-                        <button onClick={form.randomName} style={L.smallTag}>랜덤</button>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                      <span style={L.fieldLabel}>이 아이에 대해 하고 싶은 말 (선택)</span>
-                      <textarea value={s.form.note} onChange={e => form.patchForm({ note: e.target.value })} rows={3} placeholder="조용하지만 고집이 세요" style={L.textarea} />
-                    </div>
-                    <label style={L.checkRow}>
-                      <input type="checkbox" checked={s.form.agree} onChange={e => form.patchForm({ agree: e.target.checked })} style={{ width: 20, height: 20, accentColor: RED, flex: '0 0 auto' }} />
-                      <span style={{ fontSize: 14, color: '#4A4438' }}>제가 그린 그림이 맞습니다</span>
-                    </label>
-                    <button onClick={submit} disabled={!canSubmit} style={submitStyle}>{submitLabel}</button>
-                    <p style={L.smallHand}>올린 그림은 그대로 씁니다. 손대지 않아요.</p>
-                  </div>
+                  {/* 이름 12자·설정·동의·"올린 그림은 학습에 쓰지 않습니다"(parts/UploadForm) */}
+                  <UploadForm tama={tama} onSubmit={submit} />
                 </div>
               </div>
             </div>
@@ -494,7 +481,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
               <div style={L.topRow}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                   <span style={L.charName}>{s.hasChar ? cur.name : '빈 자리'}</span>
-                  <span style={L.charSub} data-status={status}>
+                  <span style={L.charSub} data-status={status} data-status-key={statusKey}>
                     {status}{s.hasChar && s.phase === 'live' ? ` · ${s.daysTogether}일째 함께` : ''}{derived.mock ? ' · 목 서버' : ''}
                   </span>
                 </div>
@@ -514,34 +501,8 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
               {/* 부름 한 줄 + 성격 고르기(parts/CallBanner) */}
               <CallBanner tama={tama} pc={pc} />
 
-              {/* 품는 중 안내. 문구는 서버가 지금 하는 일을 사람 말로 준 것 그대로다. */}
-              {s.phase === 'egg' && (
-                <div style={L.notePaper}>
-                  <span style={L.h3}>품는 중</span>
-                  <p style={{ ...L.body, color: INK }}>{derived.eggLine}</p>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: '#A79C82' }}>
-                    {Math.floor(s.t / 60)}분 {s.t % 60}초 지남
-                  </span>
-                </div>
-              )}
-
-              {/* 태어나지 못한 알. 자리를 먹지 않으므로 내려놓으면 곧바로 다시 올릴 수 있다.
-                  ★ 사용자 잘못이 아니라는 것이 먼저 읽혀야 한다 — 그림을 탓하면 다시 안 온다. */}
-              {derived.failed && (
-                <div style={L.notePaper}>
-                  <span style={L.h3}>이 그림은 좀 어렵네요</span>
-                  <p style={L.body}>
-                    이번엔 아이를 깨우지 못했어요. 다른 그림으로 다시 해 보면 잘 되는 경우가 많아요.
-                  </p>
-                  {/* 알을 내려놓아야 올리는 자리가 다시 그려지므로, 한 박자 뒤에 옮긴다. */}
-                  <button
-                    onClick={() => { ui.retryHatch(); window.setTimeout(goUpload, 80); }}
-                    style={L.tagBtnA}
-                  >
-                    다시 해보기
-                  </button>
-                </div>
-              )}
+              {/* 부화 대기·실패 — 단계 문구·"조금 더 걸려요"·"이 그림은 어려워요"·여울 시연(parts/HatchWait) */}
+              <HatchWait tama={tama} pc={pc} onRetry={goUpload} />
 
               {!s.hasChar && !derived.booting && (
                 <div style={L.notePaper}>
@@ -567,6 +528,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
             petId={session.server.pet?.phase === 'ALIVE' ? session.server.pet.petId : null}
             source={session.server.source}
             onFinished={() => { void session.server?.reload(); }}
+            onUnlocked={(seqs) => session.server?.noteUnlocked(seqs)}
           />
         )}
 
@@ -578,13 +540,20 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                 <span style={{ fontFamily: PEN, fontSize: 22, color: RED, lineHeight: 1 }}>모은 것들</span>
                 <h2 style={L.h2}>도감</h2>
               </div>
-              {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가·첫 동작을 얻었는가)는
-                  FeedbackSheet 이 서버에 직접 물어 정한다. 여기서 판정하면 스킨이 그 규칙을
-                  알아야 하고, 규칙이 바뀔 때마다 스킨이 같이 바뀐다.
-                  hold 는 해금 축하 판 위에 겹쳐 뜨는 것을 막는다(축하가 닫힌 뒤에 올라온다). */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 0 auto' }}>
+              {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가·아기 시간표 중인가·심화 행동이
+                  도착했는가)는 FeedbackSheet 이 정한다. 여기서 판정하면 스킨이 그 규칙을 알아야 하고,
+                  규칙이 바뀔 때마다 스킨이 같이 바뀐다.
+                  hold 는 해금 축하 판 위에 겹쳐 뜨는 것을 막는다(축하가 닫힌 뒤에 올라온다).
+                  ★ 이 자리(도감 구역)에 두는 것이 곧 "돌봄 버튼을 덮지 않는다" 이다. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', maxWidth: '100%' }}>
                 {/* 후기는 실서버 전용(v1 경로) — 목에서는 안 그린다. */}
-                <FeedbackSheet petId={!derived.mock ? (session.server?.pet?.petId ?? null) : null} unlocked={s.unlocked} hold={!!derived.celebration} />
+                <FeedbackSheet
+                  petId={!derived.mock ? (session.server?.pet?.petId ?? null) : null}
+                  // 받은 움직임이 실제로 있을 때만 "받은 움직임, 어땠어요?" 를 묻는다.
+                  advancedArrived={(session.server?.pet?.learnedToday?.length ?? 0) > 0 || session.server?.pet?.firstGift?.status === 'OPEN'}
+                  tutorialActive={derived.tutorial}
+                  hold={!!derived.celebration}
+                />
                 <span style={L.countTag}>{s.unlocked} / {dex.length}</span>
               </div>
             </div>
@@ -652,7 +621,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                 </div>
                 <input type="file" accept="image/*" onChange={form.onPickImg} style={{ display: 'none' }} />
               </label>
-              {uploadFields(true)}
+              <UploadForm tama={tama} compact onSubmit={submit} />
             </div>
           </div>
         </div>
@@ -661,7 +630,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
       {/* ★ 축하(parts/CelebrationModal) — 즉시 해금 폭죽·아침 도착 "배워왔어요". */}
       <CelebrationModal tama={tama} pc={pc} name={cur.name} onSave={(seq) => dex.find((d) => d.seq === seq)?.save()} />
 
-      {!!s.toast && <div style={L.toast}>{s.toast}</div>}
+      {!!s.toast && <div data-toast style={L.toast}>{s.toast}</div>}
 
       {/* 이 화면의 유일한 로그인 벽. 보고 만지는 것은 전부 열려 있고,
           "내 아이를 만든다" 는 순간에만 계정을 묻는다(useZzalSession.create). */}

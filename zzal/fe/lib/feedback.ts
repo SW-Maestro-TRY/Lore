@@ -9,6 +9,7 @@
 //    있는 것은 **로그인이 없던 시절**이라 그 자리 말고는 사람을 다시 찾을 길이 없었기 때문이다.
 
 import { request } from './api';
+import { PET_BASE } from './pet';
 
 /**
  * 고를 수 있는 칩. 서버의 FeedbackRequests.Tag 와 같은 값이다.
@@ -55,7 +56,11 @@ export interface FeedbackInput {
   text: string;
 }
 
-const base = (petId: number) => `/api/zzal/v1/me/pets/${petId}/feedback`;
+// ★ 후기만 아직 v1 경로에 남아 있다(계약 9절 "후기는 변경 없음"). 그래도 주소를 손으로 적지 않고
+//   PET_BASE 에서 만들어 쓴다 — 밖으로 보이는 이름을 v1 로 통일하면 두 경로가 같아지고,
+//   그때 고칠 곳이 한 줄이어야 한다(결정기록 C41). 서버가 옮기기 전까지는 v2→v1 로 되돌린다.
+const FEEDBACK_BASE = PET_BASE.replace('/v2/', '/v1/');
+const base = (petId: number) => `${FEEDBACK_BASE}/${petId}/feedback`;
 
 /**
  * 후기 남기기.
