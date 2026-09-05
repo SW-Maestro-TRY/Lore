@@ -3737,3 +3737,59 @@
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* ---- 편집실로 가는 길은 원본에서 링크(<a>)다 --------------------------
+   여기서는 화면 안 이동이라 <button> 이어야 하는데(주소가 아니라 화면
+   상태를 바꾼다), 그러면 브라우저 기본 단추 껍데기가 붙어 글씨 링크가
+   상자로 보인다. 껍데기만 벗긴다 — 색·크기는 원본 규칙 그대로. */
+.webtoon-page button.works-edit {
+  padding: 0; border: 0; background: none;
+  font: inherit; font-size: .72rem; text-align: left; cursor: pointer;
+}
+
+/* ---- 공개 / 비공개 스위치 ----------------------------------------------
+ *
+ * 원본은 네모 체크박스에 「둘러보기에 공개 / 나만 보기」 였는데, 체크가 켜진
+ * 것이 "지금 공개" 인지 "공개하겠다" 인지 안 읽혔다. 지금 상태를 그냥
+ * 공개·비공개로 말하고, 모양도 **스위치**로 바꾼다 — 네모는 "고른다",
+ * 스위치는 "켜져 있다/꺼져 있다" 로 읽힌다. 여기서 말하려는 것은 뒤쪽이다.
+ *
+ * 마크업은 그대로 checkbox 다(`role="switch"`). 스크린리더도 키보드도 그대로
+ * 동작하고, 바꾸는 것은 보이는 모양뿐이다.
+ *
+ * ⚠ 선택자를 `.works-pub .works-pub-box` 로 한 겹 더 준 이유 — 원본에
+ *   `.works-pub input { width: 1.05em }` 이 있어서, 한 겹으로 쓰면 그쪽이
+ *   특정도로 이겨 스위치가 14px 로 쪼그라든다(실측). !important 로 덮으면
+ *   다음 사람이 왜 안 먹는지 또 찾게 된다. */
+.webtoon-page .works-pub {
+  display: flex; align-items: center; gap: .5em; margin-top: .5em;
+  font-size: .74rem; font-weight: 600; color: var(--accent-d); cursor: pointer;
+}
+.webtoon-page .works-pub.is-off { color: var(--dim); }
+
+.webtoon-page .works-pub .works-pub-box {
+  appearance: none; -webkit-appearance: none;
+  flex: none; position: relative; margin: 0; cursor: pointer;
+  width: 34px; height: 20px; border-radius: 999px;
+  background: var(--line-2); border: none;
+  transition: background-color .16s ease;
+}
+/* 손잡이. 켜지면 오른쪽으로 미끄러진다 — 그 움직임이 "바뀌었다" 를 말한다. */
+.webtoon-page .works-pub .works-pub-box::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(15,51,63,.35);
+  transition: transform .16s ease;
+}
+.webtoon-page .works-pub .works-pub-box:checked { background: var(--accent); }
+.webtoon-page .works-pub .works-pub-box:checked::after { transform: translateX(14px); }
+.webtoon-page .works-pub .works-pub-box:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+/* 보내는 중에는 못 누르게 하고, 그 사실을 흐리게 알린다. */
+.webtoon-page .works-pub .works-pub-box:disabled { opacity: .5; cursor: progress; }
+
+.webtoon-page .works-pub-fail {
+  display: block; margin-top: .35em;
+  font-size: .72rem; color: #b5453c; font-weight: 600;
+}

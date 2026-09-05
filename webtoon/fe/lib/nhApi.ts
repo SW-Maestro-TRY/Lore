@@ -20,6 +20,8 @@
  *
  * (그때는 하네스를 `python3 serve.py --dev-cors` 로 띄워야 브라우저가 막지
  *  않는다. 배포에서는 같은 도메인이라 그 스위치가 필요 없다.) */
+import { request as appRequest } from "@common/api/client";
+
 const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon";
 
 /** 이 브라우저를 가리키는 값. 원본(app.js 의 getUid)과 **같은 키**를 쓴다 —
@@ -141,6 +143,38 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+/* ---- 하네스가 없을 때 ------------------------------------------------------
+ *
+ * 실제 서버(lorecomic.com)에는 생성 하네스가 없다 — 올리는 순간 API 키와
+ * 무한 생성이 따라오므로 일부러 안 올렸다. 그래서 위 주소들은 배포에서 전부
+ * 502 로 죽는다. 그대로 두면 웹툰 탭에 걸린 작품이 하나도 안 보인다.
+ *
+ * 그 자리를 **미리 구워 둔 공개본 한 벌**로 메운다(haeun/landing/export_demo.py
+ * 가 뽑고, 빌드가 /static/gallery 로 떠 온다). 만들기·편집실은 여전히 안 된다 —
+ * 그건 하네스가 있어야 하는 일이고, 없는 것을 있는 척하지 않는다.
+ *
+ * **먼저 진짜 서버를 부르고, 실패했을 때만** 이리 온다. 로컬에서 하네스를
+ * 띄워 두면 이 길로 아예 안 들어오므로, 개발 중에 옛 스냅샷을 보고 있을 일이
+ * 없다. */
+
+const DEMO = "/static/gallery";
+
+/** 지금 화면이 스냅샷을 보고 있는가.
+ *
+ *  그림 주소(coverUrl·pageUrl)는 그냥 문자열을 만드는 함수라 스스로 실패를
+ *  알아챌 수가 없다 — <img src> 에 박히면 끝이다. 그래서 목록·완성본을 받는
+ *  쪽이 실패를 겪으면 여기에 표시를 남기고, 그림 주소는 그 표시를 본다.
+ *  둘 중 하나는 그림보다 반드시 먼저 도므로(목록이 있어야 카드를 그리고,
+ *  완성본이 있어야 장을 그린다) 순서가 어긋나지 않는다. */
+let onSnapshot = false;
+
+async function snapshot<T>(path: string): Promise<T> {
+  const res = await fetch(`${DEMO}${path}`);
+  if (!res.ok) throw new Error("작품을 불러오지 못했습니다");
+  onSnapshot = true;
+  return (await res.json()) as T;
+}
+
 function post<T>(path: string, body?: unknown): Promise<T> {
   return call<T>(path, {
     method: "POST",
@@ -215,20 +249,61 @@ export interface RunCard {
 
 export function listRuns(mine = false): Promise<{ runs: RunCard[] }> {
   const q = mine ? `?mine=1&uid=${encodeURIComponent(getUid())}` : "";
-  return call<{ runs: RunCard[] }>(`/runs${q}`);
+  return call<{ runs: RunCard[] }>(`/runs${q}`).catch((e) => {
+    // 「내가 만든 것」은 스냅샷으로 메우지 않는다 — 구워 둔 것은 남의 작품이라,
+    // 내 목록에 끼워 넣으면 만든 적 없는 작품이 내 것으로 보인다.
+    if (mine) throw e;
+    return snapshot<{ runs: RunCard[] }>("/runs.json");
+  });
 }
 
 /** 카드 표지. 목록은 화면을 바꿔 끼우며 그리므로 loading="lazy" 를 안 쓴다 —
  *  그 경로에서는 브라우저가 "화면에 들어왔다" 를 다시 안 재서 표지가 영영 안
  *  뜬다. ?w=320 으로 줄여 받아 한 장에 60KB 안쪽이다. */
 export function coverUrl(runId: string, page: number, episode = 1): string {
+  if (onSnapshot) return `${DEMO}/${encodeURIComponent(runId)}/cover.jpg`;
   return `${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`;
 }
 
+/* ---- 로그인한 사람의 것 ---------------------------------------------------
+ *
+ * 위 주소들과 다르다. 여기는 **자바가 판단하는 자리**라 로그인이 필요하고,
+ * 응답도 이 저장소 규약대로 봉투에 담겨 온다(`{success, data, ...}`) —
+ * 그래서 공용 클라이언트로 부른다(봉투를 벗기고 실패를 던져 준다). */
+
+/** 이 브라우저를 내 계정에 잇는다. **로그인할 때마다** 부른다 — 기기를 바꾸면
+ *  uid 가 새로 생겨서, 한 번만 잇는 것으로는 두 번째 기기가 안 붙는다. */
+export function linkThisBrowser(): Promise<{ linked: boolean }> {
+  return appRequest<{ linked: boolean }>("/api/webtoon/my/link", {
+    method: "POST", body: { uid: getUid() },
+  });
+}
+
+/** 내 계정에 이어진 브라우저들이 만든 작품 전부. 나만 보기로 내려 둔 것도 온다. */
+export function myAccountRuns(): Promise<RunCard[]> {
+  return appRequest<RunCard[]>("/api/webtoon/my/runs");
+}
+
+/** 이 브라우저의 크레딧 잔액.
+ *
+ *  ⚠ 계정이 아니라 **uid** 로 센다. 로그인해도 지금은 이 값이 안 따라온다 —
+ *  계정에 붙이는 것은 #223, 가격·결제는 #16 · #155 다. 그래도 **실제 잔액**
+ *  이다(만들 때 여기서 깎인다). 화면에 지어낸 숫자를 쓰지 않는다. */
+export function creditBalance(): Promise<{ balance: number }> {
+  return call<{ balance: number }>(`/credits?uid=${encodeURIComponent(getUid())}`);
+}
+
 /** 둘러보기에 거는가 내리는가. 실패하면 화면도 되돌려야 한다 — 껐다고
- *  보이는데 실제로는 걸려 있는 것이 제일 나쁘다. */
+ *  보이는데 실제로는 걸려 있는 것이 제일 나쁘다.
+ *
+ *  하네스로 바로 넘기지 않고 **자바를 거친다**(`/my/...`). 하네스의 같은
+ *  주소는 하네스 자기 계정 세션을 보는데 웹툰 탭은 앱 계정으로 로그인하므로
+ *  그 세션이 없다 — 그대로 부르면 눌러도 늘 401 이었다. 자바가 내 계정에
+ *  이어진 브라우저의 작품인지 보고 넘긴다. */
 export function setVisibility(runId: string, isPublic: boolean) {
-  return post(`/runs/${encodeURIComponent(runId)}/visibility`, { public: isPublic });
+  return appRequest<{ runId: string; public: boolean }>(
+    `/api/webtoon/my/runs/${encodeURIComponent(runId)}/visibility`,
+    { method: "POST", body: { public: isPublic } });
 }
 
 /* ---- 완성본 --------------------------------------------------------------- */
@@ -250,11 +325,15 @@ export interface RunResult {
 }
 
 export function readResult(runId: string): Promise<RunResult> {
-  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`);
+  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`)
+    .catch(() => snapshot<RunResult>(`/${encodeURIComponent(runId)}/result.json`));
 }
 
 /** 완성본의 한 장. `raw` 는 얹은 것(말풍선) 없이 밑그림만 — 편집실이 쓴다. */
 export function pageUrl(runId: string, no: number, width = 1080, raw = false): string {
+  if (onSnapshot && !raw) {
+    return `${DEMO}/${encodeURIComponent(runId)}/p${String(no).padStart(2, "0")}.jpg`;
+  }
   return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`;
 }
 

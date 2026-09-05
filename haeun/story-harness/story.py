@@ -102,8 +102,26 @@ def load_dotenv(path: Path = None) -> dict:
 load_dotenv()
 
 
+# 이 하네스만 쓰는 값의 앞자리.
+#
+# 운영 서버는 도메인 여럿이 한 기계를 나눠 쓴다. 거기서 `OPENAI_API_KEY` 같은
+# 이름을 그대로 쓰면 누가 쓴 키인지 가릴 수가 없고, 남의 설정이 이쪽에 흘러
+# 들어오기도 한다. 그래서 **앞자리를 붙인 이름을 먼저 본다.**
+#
+#     HAEUN_OPENAI_API_KEY=...     서버에는 이것만 둔다
+#     OPENAI_API_KEY=...           없으면 이걸 본다 (내 컴퓨터의 .env)
+#
+# 옆 도메인(zzal)이 `ZZAL_OPENAI_API_KEY` 를 쓰는 것과 같은 규칙이다.
+#
+# ★ 앞자리 이름이 없으면 예전과 **한 글자도 다르지 않게** 동작한다. 그래서
+#   지금 쓰던 .env 도, 하네스를 직접 돌리던 것도 그대로다.
+ENV_PREFIX = "HAEUN_"
+
+
 def env(key: str, default=None):
-    value = os.environ.get(key)
+    value = os.environ.get(ENV_PREFIX + key)
+    if value in (None, ""):
+        value = os.environ.get(key)
     return value if value not in (None, "") else default
 
 

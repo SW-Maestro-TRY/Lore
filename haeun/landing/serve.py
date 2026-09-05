@@ -495,6 +495,26 @@ class Handler(BaseHTTPRequestHandler):
             # run 도 같은 모양으로 섞어 준다(nh.list_runs 가 classic 과 같은
             # 필드를 돌려준다) — 화면(app.js)은 어느 쪽에서 왔는지 몰라도 된다.
             runs = pipeline.list_runs() + nh.list_runs()
+
+            # `?owner=<uid>` 는 **그 브라우저가 만든 것만** 준다.
+            #
+            # 둘러보기와 다른 목록이다: 자기 작품은 나만 보기로 내려 둔 것도
+            # 보여야 하므로 공개 필터를 안 건다. 대신 소유를 못 밝히면 아무것도
+            # 안 준다 — 여기서 빈손을 주는 편이, 실수로 전체 목록을 내주는
+            # 것보다 낫다.
+            #
+            # ⚠️ uid 는 브라우저가 들고 다니는 값이라 꾸밀 수 있다(ownership.py
+            #    머리 주석). 이 주소가 답하는 것은 "이 브라우저가 만든 것" 이지
+            #    "이 사람 것" 이 아니다 — 계정으로 묶는 일은 webtoon/be 가 한다.
+            owner = (query.get("owner") or [""])[0].strip()
+            if owner:
+                mine = ownership.runs_of(owner)
+                # 지금 공개 상태를 얹어서 준다. 안 얹으면 화면이 그 값을 모르니
+                # 스위치가 늘 「공개」로 그려지고, 껐다 다시 열어도 그대로다 —
+                # 눌러도 아무 일이 안 일어나는 것처럼 보인다(실제로 그랬다).
+                return self._json({"runs": visibility.mark(
+                    [r for r in runs if str(r.get("run_id")) in mine])})
+
             return self._json({"runs": visibility.filter_public(runs)})
 
         m = re.fullmatch(r"/api/runs/([\w.-]+)/episode", path)
@@ -1264,16 +1284,39 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/runs/([\w.-]+)/visibility", url.path)
         if m:
             run_id = m.group(1)
-            key = self._account_key()
-            if not key:
-                return self._error(401, "로그인이 필요합니다")
-            account = accounts.get_account(key)
-            if run_id not in set((account or {}).get("claimed_runs", [])):
-                return self._error(403, "내 계정에 담아둔 작품만 바꿀 수 있습니다")
             try:
                 body = self._body()
             except (json.JSONDecodeError, UnicodeDecodeError):
                 body = {}
+
+            # 누가 바꾸는가 — 길이 둘이다.
+            #
+            #   1. 이 하네스의 계정 세션 (프로토타입 랜딩이 쓰는 길)
+            #   2. 만든 브라우저의 uid  (웹툰 탭이 쓰는 길)
+            #
+            # 2번이 필요한 이유: 웹툰 탭은 **앱 계정**(스프링의 JWT)으로 로그인
+            # 하는데 하네스는 그 계정을 모른다. 그래서 1번만 두면 웹툰 탭에서는
+            # 공개 스위치가 늘 401 이었다 — 눌러도 아무 일이 안 일어났다.
+            #
+            # uid 는 그 작품을 만든 브라우저의 것이어야 한다(ownership). 앞에
+            # 선 스프링도 자기 계정에 이어진 uid 인지 먼저 확인하고 보낸다 —
+            # 두 번 보는 셈인데, 여기를 직접 부를 수도 있어서 둘 다 본다.
+            #
+            # ⚠️ uid 는 꾸밀 수 있는 값이다(ownership.py 머리 주석). 이 확인이
+            #    막는 것은 "주소만 아는 사람이 남의 작품을 내리는 것" 이지
+            #    작정한 공격이 아니다.
+            key = self._account_key()
+            if key:
+                account = accounts.get_account(key)
+                if run_id not in set((account or {}).get("claimed_runs", [])):
+                    return self._error(403, "내 계정에 담아둔 작품만 바꿀 수 있습니다")
+            else:
+                uid = str(body.get("uid") or "").strip()
+                if not uid:
+                    return self._error(401, "로그인이 필요합니다")
+                if ownership.creator_uid(run_id) != uid:
+                    return self._error(403, "내가 만든 작품만 바꿀 수 있습니다")
+
             public = bool(body.get("public"))
             visibility.set_public(run_id, public)
             return self._json({"run_id": run_id, "public": public})

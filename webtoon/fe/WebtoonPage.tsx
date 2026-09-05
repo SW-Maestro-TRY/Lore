@@ -24,7 +24,9 @@
 // 전역 오염을 막으려고 .webtoon-page 스코프로 감싼다(webtoon.css 참고).
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useAuth } from "@common/auth/useAuth";
 import "./webtoon.css";
 
 import Hero from "./sections/Hero";
@@ -37,11 +39,27 @@ import Works from "./sections/Works/Works";
 import MyPage from "./sections/MyPage/MyPage";
 import Editor from "./sections/Editor/Editor";
 import { STYLE_INFO, type WizardForm } from "./lib/wizardData";
-import { createJob } from "./lib/nhApi";
+import { createJob, linkThisBrowser } from "./lib/nhApi";
 
 type View = "landing" | "create" | "running" | "result" | "works" | "mypage" | "editor";
 
+/** 주소로 열 수 있는 화면. 만들던 중(running)은 뺀다 — 주소만으로는 어느
+ *  작업인지 알 수 없어서, 넣으면 빈 진행 화면이 뜬다. */
+const VIEWS = { landing: 1, create: 1, result: 1, works: 1, mypage: 1, editor: 1 } as const;
+
+/* 주소(`?view=`·`?run=`)를 읽으려면 useSearchParams 가 필요한데, 그것을 쓰는
+   컴포넌트는 <Suspense> 안에 있어야 한다 — 없으면 빌드가 이 페이지를 미리
+   그리다가 멈춘다("should be wrapped in a suspense boundary"). 주소를 읽는
+   일은 브라우저에서만 할 수 있으니, 미리 그리는 동안에는 빈 자리를 둔다. */
 export default function WebtoonPage() {
+  return (
+    <Suspense fallback={null}>
+      <WebtoonScreens />
+    </Suspense>
+  );
+}
+
+function WebtoonScreens() {
   // 원본(app.js 의 view())은 body[data-view] 로 화면을 스위치한다. 여기서는
   // 그것을 상태로 둔다.
   const [view, setView] = useState<View>("landing");
@@ -72,13 +90,39 @@ export default function WebtoonPage() {
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  /* 주소로 바로 열기 — `/webtoon?run=<id>` 는 그 작품의 완성본 화면이다.
-     공유 링크가 이 길로 들어온다(원본 app.js 의 `?run=` 과 같은 자리).
-     남의 작품이면 결과 화면이 알아서 내려받기·편집실을 감춘다. */
+  /* 주소로 바로 열기.
+       `/webtoon?run=<id>`     그 작품의 완성본 (공유 링크가 이 길로 들어온다 —
+                               남의 작품이면 결과 화면이 내려받기·편집실을 감춘다)
+       `/webtoon?view=mypage`  마이페이지 (헤더가 이 길로 보낸다)
+
+     주소를 **읽기만** 하는 것이 아니라 뒤로가기에도 따라간다. 헤더에서
+     마이페이지로 가면 주소가 바뀌는데, 뒤로가기를 눌러도 화면이 그대로면
+     "뒤로가기가 안 먹는다" 가 된다 — Next 의 라우팅은 이 컴포넌트를 다시
+     안 만든다. */
+  const search = useSearchParams();
   useEffect(() => {
-    const asked = new URLSearchParams(window.location.search).get("run");
-    if (asked) { setRunId(asked); setView("result"); }
-  }, []);
+    const run = search.get("run");
+    if (run) { setRunId(run); setView("result"); return; }
+    const asked = search.get("view");
+    if (asked && asked in VIEWS) { setView(asked as View); return; }
+    setView("landing");
+  }, [search]);
+
+  /* 로그인해 있으면 이 브라우저를 계정에 잇는다.
+     안 이으면 마이페이지의 「내가 만든 웹툰」이 빈다 — 작품이 계정이 아니라
+     브라우저 uid 로 묶여 있어서다(webtoon/be 의 BrowserLink 참고).
+
+     **로그인할 때가 아니라 이 화면에 들어올 때마다** 한다. 기기를 바꾸면 uid
+     가 새로 생기고, 다른 탭에서 로그인하고 여기로 건너올 수도 있다. 서버는
+     같은 짝이면 아무 일도 안 하므로 여러 번 불러도 된다.
+
+     실패해도 삼킨다 — 목록이 비어 보일 뿐이고 다음에 다시 시도한다. 이걸로
+     화면을 막으면 만들던 사람이 로그인 때문에 멈춘다. (잇는 일이 공용 헤더가
+     아니라 여기 있는 이유: 공용 코드가 도메인을 알면 안 된다.) */
+  const { status: authStatus } = useAuth();
+  useEffect(() => {
+    if (authStatus === "authenticated") void linkThisBrowser().catch(() => {});
+  }, [authStatus]);
 
   /* 그림을 그냥 저장해 가지 못하게 — 오른쪽 누르기와 끌어다 놓기.
      원본은 base.js 가 document 에 걸지만, 여기는 Lore 앱 안이라 이 화면
@@ -153,10 +197,10 @@ export default function WebtoonPage() {
       )}
       {view === "mypage" && (
         <MyPage
-          onOpenWork={() => setView("result")}
+          onOpenWork={(id) => { setRunId(id); setView("result"); }}
+          onOpenEditor={(id) => { setRunId(id); setView("editor"); }}
           onCreate={() => setView("create")}
           onBrowse={() => setView("works")}
-          onHome={goHome}
         />
       )}
       {/* 편집실은 완성본에서 들어온다 — 그 작품 그 회차를 그대로 연다.

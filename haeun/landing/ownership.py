@@ -4,8 +4,13 @@
 아니고, 게스트도 만들 수 있어서 계정과 묶이지도 않는다. 그래서 이미 남아 있는
 두 기록을 이어 붙여 만든 사람을 찾는다:
 
-    data/ip_consent.jsonl      {uid, job_id}   — 만들 때마다 남는 저작권 확인
-    jobs/<job_id>/state.json   {id, run_id}    — 그 작업이 어느 run 이 됐는지
+    data/ip_consent.jsonl          {uid, job_id}   — 만들 때마다 남는 저작권 확인
+    jobs<*>/<job_id>/state.json    {id, run_id}    — 그 작업이 어느 run 이 됐는지
+
+**작업 폴더가 둘이다.** 예전 파이프라인은 `jobs/`, 지금 쓰는 new_harness 는
+`jobs_nh/` 에 쌓인다(newharness_pipeline.JOBS_DIR). 한동안 여기서 `jobs/` 만
+봤는데, 그러면 **지금 제품으로 만든 작품은 주인이 하나도 안 잡힌다** — 마이
+페이지에 안 뜨고 공개 스위치도 못 쓴다. 실제로 그랬다(2026-09-05).
 
 **왜 필요한가.** 「계정에 담아두기」가 run_id 만 받고 있어서, 주소만 알면 남의
 작품도 자기 계정에 담을 수 있었다. 담고 나면 그 작품의 공개 여부까지 바꿀 수
@@ -27,7 +32,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "data"
-JOBS = HERE / "jobs"
+# 작업 폴더 둘 다 본다 (위 머리말 참고). 없는 폴더는 그냥 건너뛴다.
+JOBS_DIRS = (HERE / "jobs", HERE / "jobs_nh")
 CONSENT_FILE = DATA / "ip_consent.jsonl"
 
 _lock = threading.Lock()
@@ -58,16 +64,18 @@ def _job_uids() -> dict[str, str]:
 def _rebuild() -> dict[str, str]:
     owners: dict[str, str] = {}
     job_uids = _job_uids()
-    if not job_uids or not JOBS.is_dir():
+    if not job_uids:
         return owners
     for job_id, uid in job_uids.items():
-        state = JOBS / job_id / "state.json"
-        try:
-            run_id = json.loads(state.read_text(encoding="utf-8")).get("run_id")
-        except (OSError, ValueError):
-            continue
-        if run_id:
-            owners[str(run_id)] = uid
+        for root in JOBS_DIRS:
+            state = root / job_id / "state.json"
+            try:
+                run_id = json.loads(state.read_text(encoding="utf-8")).get("run_id")
+            except (OSError, ValueError):
+                continue
+            if run_id:
+                owners[str(run_id)] = uid
+                break
     return owners
 
 
@@ -85,6 +93,23 @@ def creator_uid(run_id: str) -> str | None:
             _cache = _rebuild()
             _cache_mtime = mtime
         return _cache.get(str(run_id))
+
+
+def runs_of(uid: str) -> set[str]:
+    """이 uid 가 만든 run_id 전부.
+
+    `creator_uid` 를 작품마다 부르는 것과 같은 답이지만, 목록을 만들 때는 한 번에
+    받는 편이 낫다 — 작품이 쌓일수록 한 건씩 묻는 값이 붙는다.
+
+    ⚠️ **uid 는 브라우저가 들고 다니는 값이라 꾸밀 수 있다.** 이 함수가 답하는
+    것은 "이 브라우저가 만든 것" 이지 "이 사람 것" 이 아니다. 계정으로 묶는
+    일은 이것을 받는 쪽(webtoon/be)이 한다.
+    """
+    if not uid:
+        return set()
+    creator_uid("")                      # 캐시를 최신으로 (필요할 때만 다시 읽는다)
+    with _lock:
+        return {run_id for run_id, made_by in _cache.items() if made_by == uid}
 
 
 def may_claim(run_id: str, uid: str, already_claimed_by: str | None) -> tuple[bool, str]:

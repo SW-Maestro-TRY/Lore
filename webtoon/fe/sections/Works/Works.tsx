@@ -107,9 +107,11 @@ export function WorkCard({
       <div className="works-body">
         <h3>{run.character || "이름 없음"}</h3>
         <p className="works-sub">{[run.genre, run.title].filter(Boolean).join(" · ")}</p>
-        <p className="works-count">
-          {eps.length > 1 ? `${eps.length}화 · ` : ""}{run.page_count}장
-        </p>
+        {/* 장 수는 안 적는다 — 읽는 사람이 고를 때 쓰는 값이 아니고("6장"이
+            길다는 뜻인지 짧다는 뜻인지 아무도 모른다), 카드에서 제일 먼저
+            눈에 띄는 자리를 세는 숫자가 차지하고 있었다. 여러 화가 있는
+            것은 고르는 데 쓰이므로 남긴다. */}
+        {eps.length > 1 && <p className="works-count">{eps.length}화</p>}
         {/* 회차마다 단추를 준다 — "몇 편이 있다" 를 세는 것과 "그 편을 연다" 가
             같은 자리에 있어야, 2화가 있는데 1화만 열리는 일이 안 생긴다.
             회차가 하나뿐이면 「1화」 딱지는 표지를 누르는 것과 똑같은 일을
