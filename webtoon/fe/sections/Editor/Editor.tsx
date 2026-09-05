@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { mountEditor } from "../../lib/editorCore";
 
 /* 편집실 — haeun/landing/web 의 editor.html 을 옮겼다.
@@ -25,35 +25,13 @@ export default function Editor({
   /** 왼쪽 목록에서 다른 작품·회차를 골랐을 때. */
   onOpenRun?: (runId: string, episode: number) => void;
 }) {
-  const rootRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const dispose = mountEditor({ runId, episode }, (r, ep) => onOpenRun?.(r, ep));
     return () => dispose();
   }, [runId, episode, onOpenRun]);
 
-  /* 편집실의 제목 띠(.ed-top)는 화면 위에 붙어 따라온다. 원본은 혼자 뜨는
-     페이지라 그 자리가 곧 맨 위였지만, 여기서는 위에 Lore 앱 헤더가 붙어
-     있어서 그냥 top:0 으로 두면 앱 헤더를 덮는다.
-
-     높이를 코드에 적어 두면 앱 헤더가 바뀔 때 조용히 어긋나므로, 붙어 있는
-     헤더를 **재서** 넣는다. */
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const measure = () => {
-      const head = [...document.querySelectorAll("header")].find(
-        (h) => !h.closest(".webtoon-page") && getComputedStyle(h).position === "sticky",
-      );
-      el.style.setProperty("--lore-header-h", `${Math.round(head?.getBoundingClientRect().height || 0)}px`);
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, []);
-
   return (
-    <div className="ed" ref={rootRef}>
+    <div className="ed">
       {/* 머리 · 제목 띠 · 구운 결과를 한 덩어리로 붙박아 둔다. 따로 붙이면
           아래 줄의 top 값을 위 줄 높이에 손으로 맞춰야 해서 글꼴이 바뀔 때
           어긋난다. */}

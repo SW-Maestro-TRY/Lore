@@ -24,7 +24,7 @@
 // 전역 오염을 막으려고 .webtoon-page 스코프로 감싼다(webtoon.css 참고).
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./webtoon.css";
 
 import Hero from "./sections/Hero";
@@ -51,6 +51,26 @@ export default function WebtoonPage() {
   const [runId, setRunId] = useState<string | null>(null);
   const [styleLabel, setStyleLabel] = useState("");
   const goHome = () => setView("landing");
+
+  /* Lore 앱 헤더는 화면 위에 붙어 따라온다. 이 화면의 여러 자리가 그 높이를
+     알아야 한다 — 화면을 꽉 채우는 min-height, 편집실 제목 띠가 서는 자리,
+     도구 서랍의 천장. 높이를 코드에 적어 두면 앱 헤더가 바뀔 때 조용히
+     어긋나므로, 붙어 있는 헤더를 **재서** 변수로 넘긴다. */
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const measure = () => {
+      const head = [...document.querySelectorAll("header")].find(
+        (h) => !h.closest(".webtoon-page") && getComputedStyle(h).position === "sticky",
+      );
+      el.style.setProperty("--lore-header-h",
+        `${Math.round(head?.getBoundingClientRect().height || 0)}px`);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   /* 주소로 바로 열기 — `/webtoon?run=<id>` 는 그 작품의 완성본 화면이다.
      공유 링크가 이 길로 들어온다(원본 app.js 의 `?run=` 과 같은 자리).
@@ -94,16 +114,19 @@ export default function WebtoonPage() {
 
   return (
     <div
+      ref={rootRef}
       className={`webtoon-page${view === "result" ? " is-result" : ""}`}
       onContextMenu={guardImage}
       onDragStart={guardImage}
     >
+      {/* 홈은 한 겹으로 묶는다 — 원본의 #landing 자리다. 폭·배경 규칙이
+          그 덩어리에 걸려 있어서, 안 묶으면 넓은 화면에서 홈만 틀에 갇힌다. */}
       {view === "landing" && (
-        <>
+        <div className="landing">
           <Hero onStart={() => setView("create")} onBrowse={() => setView("works")} />
           <HowGalleryFaq onSeeFull={() => setView("result")} />
           <Foot />
-        </>
+        </div>
       )}
       {view === "create" && <Wizard onClose={goHome} onSubmit={start} />}
       {view === "running" && jobId && (

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import wizLouImg from "../../assets/logo-2-curious.png";
+import { useEffect, useState } from "react";
+import { LOU_LOGOS, pickOne } from "../../lib/louArt";
 import config from "../../demo-api/config.json";
 import { WIZ_LAST, WIZ_NAMES, emptyWizardForm, type WizardForm } from "../../lib/wizardData";
 import Step1Photo from "./steps/Step1Photo";
@@ -30,6 +30,11 @@ export default function Wizard({
   onSubmit: (form: WizardForm) => Promise<void>;
 }) {
   const [step, setStep] = useState(1);
+  /* 걸음의 제목 옆에 앉은 루. 걸음을 옮길 때마다 바뀐다 — 방금 걸려 있던
+     그림은 후보에서 뺀다(안 그러면 "안 바뀌었네" 로 보인다). 원본 pickWizLou
+     와 같다. 뽑는 것은 화면이 붙은 뒤다(서버/브라우저가 갈리면 안 된다). */
+  const [wizLou, setWizLou] = useState(LOU_LOGOS[0]);
+  useEffect(() => { setWizLou((now) => pickOne(LOU_LOGOS, [now])); }, [step]);
   const [form, setForm] = useState<WizardForm>(emptyWizardForm());
   const [note, setNote] = useState("사진과 이름만 있으면 시작합니다.");
   const [noteError, setNoteError] = useState(false);
@@ -91,7 +96,10 @@ export default function Wizard({
   };
 
   return (
-    <section className="create">
+    /* 걸음이 깊어질수록 바다가 어두워진다 — 이 화면의 뼈대다(webtoon.css 의
+       .create[data-step]). 원본은 이 값을 body 에 매겼지만, 여기서는 앱의
+       body 를 건드리지 않고 위자드 자기 요소에 매긴다. */
+    <section className="create" data-step={step}>
       <div className="studio">
         <form className="wizard" onSubmit={handleSubmit}>
           <div className="wiz-head">
@@ -113,7 +121,7 @@ export default function Wizard({
           </div>
 
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="wiz-lou" src={wizLouImg.src} alt="" aria-hidden="true" />
+          <img className="wiz-lou" src={wizLou} alt="" aria-hidden="true" />
 
           {step === 1 && <Step1Photo form={form} onChange={patch} />}
           {step === 2 && <Step2Story form={form} onChange={patch} />}
@@ -137,7 +145,12 @@ export default function Wizard({
                 </button>
               )}
             </div>
-            <p className={`submit-note${noteError ? " is-error" : ""}`}>{note}</p>
+            {/* 이 줄은 **마지막 걸음에서만** 뜬다 — 원본과 같다. 앞 걸음에서는
+                무엇이 빠졌는지 말할 일이 있을 때(사진·이름)만 나온다. 원본은
+                그것을 토스트로 띄우는데, 여기엔 토스트가 없어서 이 자리를
+                쓴다 — 조용히 아무 일도 안 일어나는 것이 제일 나쁘다. */}
+            <p className={`submit-note${noteError ? " is-error" : ""}`}
+               hidden={!atEnd && !noteError}>{note}</p>
           </div>
         </form>
       </div>

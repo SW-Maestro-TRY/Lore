@@ -14,13 +14,18 @@ export default function Step3Genre({
 
   return (
     <section className="wiz-step" data-step="3">
-      <p className="wiz-eyebrow">깊은 바다 · STEP 3 / 5</p>
-      <h3 className="wiz-title">
-        어떤 장르로
-        <br />
-        그릴까요?
-      </h3>
-      <p className="wiz-sub">안 고르면 루가 이야기에 맞춰 정합니다.</p>
+      {/* 걸음마다 "말"(눈금·제목·안내)과 "손이 닿는 것"(입력 카드)을
+          한 겹으로 묶어 둔다. 폰에서는 위아래로 그냥 흐르고, PC 에서는
+          이 덩어리가 왼쪽 칸으로 간다(webtoon.css 의 .wiz-say). */}
+      <div className="wiz-say">
+        <p className="wiz-eyebrow">깊은 바다 · STEP 3 / 5</p>
+        <h3 className="wiz-title">
+          어떤 장르로
+          <br />
+          그릴까요?
+        </h3>
+        <p className="wiz-sub">안 고르면 루가 이야기에 맞춰 정합니다.</p>
+      </div>
 
       <div className="wiz-card">
         <div className="genre-quick">

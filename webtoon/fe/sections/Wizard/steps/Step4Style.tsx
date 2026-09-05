@@ -12,12 +12,17 @@ export default function Step4Style({
 }) {
   return (
     <section className="wiz-step" data-step="4">
-      <p className="wiz-eyebrow">심해 · STEP 4 / 5</p>
-      <h3 className="wiz-title">
-        어떤 그림체로
-        <br />
-        그릴까요?
-      </h3>
+      {/* 걸음마다 "말"(눈금·제목·안내)과 "손이 닿는 것"(입력 카드)을
+          한 겹으로 묶어 둔다. 폰에서는 위아래로 그냥 흐르고, PC 에서는
+          이 덩어리가 왼쪽 칸으로 간다(webtoon.css 의 .wiz-say). */}
+      <div className="wiz-say">
+        <p className="wiz-eyebrow">심해 · STEP 4 / 5</p>
+        <h3 className="wiz-title">
+          어떤 그림체로
+          <br />
+          그릴까요?
+        </h3>
+      </div>
 
       <div className="wiz-card">
         <div className="styles">

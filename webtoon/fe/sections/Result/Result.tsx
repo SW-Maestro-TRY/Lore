@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import coverArt from "../../assets/stage/done.webp";
 import {
   episodeDownloadUrl, isMyRun, pageUrl, readResult, type RunResult,
 } from "../../lib/nhApi";
@@ -78,7 +77,7 @@ export default function Result({
       <header className="result-head">
         <div className="result-cover">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="result-cover-art" src={coverArt.src} alt="" aria-hidden="true" />
+          <img className="result-cover-art" src={"/static/lou/stage/done.webp"} alt="" aria-hidden="true" />
           <div className="result-cover-text">
             <p className="eyebrow">{[data.genre, data.style_label].filter(Boolean).join(" · ")}</p>
             <div className="title-row">

@@ -1,7 +1,7 @@
-import heroWhale from "../assets/hero-whale2.png";
-import worldBegins from "../assets/world-begins.png";
-import worldVoyage from "../assets/world-voyage.png";
-import worldDepth from "../assets/world-depth.png";
+"use client";
+
+import { useEffect, useState } from "react";
+import { HERO_LOUS, pickOne } from "../lib/louArt";
 import config from "../demo-api/config.json";
 
 /* 홈 = 소개 + 만들기. 둘을 떼어 놓지 않는다.
@@ -13,6 +13,13 @@ import config from "../demo-api/config.json";
  * 정적 프로토타입으로 이어지고 있어서(apps/web/next.config.mjs) 새 화면
  * (Works)으로 대신 연결한다. */
 export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBrowse: () => void }) {
+  /* 루는 두 마리가 그려져 있어서, 들어올 때마다 하나를 뽑는다 — 어느 쪽이
+     나올지 모르는 편이 살아 있는 느낌이다(원본 pickHero). 뽑는 것은 화면이
+     붙은 **뒤**다: 서버에서 뽑으면 서버와 브라우저가 서로 다른 고래를 골라
+     하이드레이션이 어긋난다. */
+  const [lou, setLou] = useState(HERO_LOUS[0]);
+  useEffect(() => { setLou(pickOne(HERO_LOUS)); }, []);
+
   return (
     <section className="top" id="top">
       <div className="hero-sea" aria-hidden="true" />
@@ -31,7 +38,7 @@ export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBro
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className="hero-lou"
-          src={heroWhale.src}
+          src={lou}
           alt="LORE의 마스코트 고래 루"
         />
         <div className="hero-cta">
@@ -48,7 +55,7 @@ export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBro
       <ol className="depths">
         <li>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={worldBegins.src} alt="" />
+          <img src={"/static/lou/art/world-begins.png"} alt="" />
           <div>
             <b>수면 — 이야기의 시작</b>
             <small>캐릭터를 만나는 곳</small>
@@ -56,7 +63,7 @@ export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBro
         </li>
         <li>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={worldVoyage.src} alt="" />
+          <img src={"/static/lou/art/world-voyage.png"} alt="" />
           <div>
             <b>항해 — 이야기의 전개</b>
             <small>세계와 사건을 탐험</small>
@@ -64,7 +71,7 @@ export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBro
         </li>
         <li>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={worldDepth.src} alt="" />
+          <img src={"/static/lou/art/world-depth.png"} alt="" />
           <div>
             <b>심해 — 이야기의 깊이</b>
             <small>숨겨진 과거와 진실</small>

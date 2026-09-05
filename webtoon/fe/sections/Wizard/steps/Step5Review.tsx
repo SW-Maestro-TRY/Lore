@@ -33,8 +33,13 @@ export default function Step5Review({
 
   return (
     <section className="wiz-step wiz-step-fork" data-step="5">
-      <p className="wiz-eyebrow">바닥 · STEP 5 / 5</p>
-      <h3 className="wiz-title">어떻게 볼까요?</h3>
+      {/* 걸음마다 "말"(눈금·제목·안내)과 "손이 닿는 것"(입력 카드)을
+          한 겹으로 묶어 둔다. 폰에서는 위아래로 그냥 흐르고, PC 에서는
+          이 덩어리가 왼쪽 칸으로 간다(webtoon.css 의 .wiz-say). */}
+      <div className="wiz-say">
+        <p className="wiz-eyebrow">바닥 · STEP 5 / 5</p>
+        <h3 className="wiz-title">어떻게 볼까요?</h3>
+      </div>
 
       <div className="fork">
         <button

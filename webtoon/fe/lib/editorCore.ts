@@ -220,10 +220,11 @@ export function mountEditor(
     if (fromEl) flyCredit(amount, fromEl);
   }
   function paintCredit(bump) {
+    // 실제 작품에서는 크레딧 칩이 감춰져 있다(위 참고) — 없어도 그냥 넘어간다.
     const el = $("#creditNum");
-    el.textContent = state.credit.toLocaleString("ko-KR");
-    if (bump) {
-      const box = $("#creditBox");
+    if (el) el.textContent = state.credit.toLocaleString("ko-KR");
+    const box = $("#creditBox");
+    if (bump && box) {
       box.classList.remove("bump"); void box.offsetWidth; box.classList.add("bump");
     }
   }
@@ -1304,11 +1305,18 @@ export function mountEditor(
       if (stage) stage.innerHTML = html;
       return;
     }
-    // 실제 작품이면 목업 배지를 지운다 — 여기서부터는 진짜로 그린다.
+    // 실제 작품이면 목업 배지를 감춘다 — 여기서부터는 진짜로 그린다.
+    //
+    // 원본은 이 자리에서 노드를 **지웠다**(remove). 여기서는 안 된다 — 이
+    // 마크업은 React 가 들고 있어서, 지워도 React 는 지운 줄 모른다. 편집실을
+    // 나갔다 다시 들어오면 React 는 "그대로 있다" 고 보고 다시 안 그리는데,
+    // 엔진은 그 노드를 다시 찾다가 빈손을 잡는다(실제로 그렇게 터졌다).
+    // 감추기만 하면 트리가 그대로라 몇 번을 드나들어도 같다.
     if (RUN_ID) {
-      document.querySelector(".mock-badge")?.remove();
-      document.querySelector("#creditBox")?.remove();
-      document.querySelector("#ledgerBtn")?.remove();
+      for (const sel of [".mock-badge", "#creditBox", "#ledgerBtn"]) {
+        const el = document.querySelector(sel);
+        if (el) el.hidden = true;
+      }
     }
     // 서버에 저장된 것이 **기준**이다. 다른 기기에서 얹은 것도 여기서 따라온다.
     // 서버가 조용하면(못 읽으면) localStorage 에 있던 것을 그대로 쓴다 — 하던

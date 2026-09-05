@@ -4,14 +4,11 @@
 // 사업자등록번호는 없다 — AI SW 마에스트로 과정의 프로젝트라 별도 법인이
 // 아니고, 있지도 않은 번호를 지어 넣지 않는다.
 
-import asm from "../assets/badges/asm-icon.png";
-import msit from "../assets/badges/msit-icon.png";
-import iitp from "../assets/badges/iitp-icon.png";
 
 const ORGS: [src: string, label: string, brand: boolean][] = [
-  [asm.src, "AI SW MAESTRO", true],
-  [msit.src, "과학기술정보통신부", false],
-  [iitp.src, "정보통신기획평가원(IITP)", false],
+  ["/static/badges/asm-icon.png", "AI SW MAESTRO", true],
+  ["/static/badges/msit-icon.png", "과학기술정보통신부", false],
+  ["/static/badges/iitp-icon.png", "정보통신기획평가원(IITP)", false],
 ];
 
 export default function Foot() {

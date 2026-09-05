@@ -1,31 +1,23 @@
 // 홈 아래쪽 세 섹션 — 어떻게 만드나 · 결과 예시 · 자주 묻는 것.
 // haeun/landing/web/index.html 의 #how · #gallery · #faq 를 그대로 옮겼다.
 
-import stageSheet from "../assets/stage/sheet.webp";
-import stageStory from "../assets/stage/story.webp";
-import stageArt from "../assets/stage/art.webp";
-import stageDone from "../assets/stage/done.webp";
-import exRomance from "../assets/ex-romance-1.png";
-import exWebtoon from "../assets/ex-webtoon-1.jpg";
-import exFrost from "../assets/ex-frost-1.jpg";
-import exShoujo from "../assets/ex-shoujo-1.jpg";
 
 const STEPS: [src: string, title: string, sub: string][] = [
-  [stageSheet.src, "루가 사진 속 얼굴을 보고 캐릭터 시트를 그려요",
+  ["/static/lou/stage/sheet.webp", "루가 사진 속 얼굴을 보고 캐릭터 시트를 그려요",
    "사진 한 장, 이름 하나면 충분해요. 그 얼굴 그대로 끝까지 이어집니다."],
-  [stageStory.src, "루가 캐릭터를 보고 이야기를 지어요",
+  ["/static/lou/stage/story.webp", "루가 캐릭터를 보고 이야기를 지어요",
    "한 줄만 적어도, 아예 비워 둬도 괜찮아요."],
-  [stageArt.src, "루가 표지부터 순서대로 그려요",
+  ["/static/lou/stage/art.webp", "루가 표지부터 순서대로 그려요",
    "한 편 그리는 데 보통 10분 정도 걸려요."],
-  [stageDone.src, "다 그린 뒤에도 마음에 안 들면 다시",
+  ["/static/lou/stage/done.webp", "다 그린 뒤에도 마음에 안 들면 다시",
    "편집실에서 컷을 골라 손볼 수 있어요."],
 ];
 
 const GALLERY: [src: string, alt: string, cap: string][] = [
-  [exRomance.src, "로맨스 그림체 예시", "로맨스"],
-  [exWebtoon.src, "웹툰체 예시", "웹툰체"],
-  [exFrost.src, "프로스트 그림체 예시", "프로스트"],
-  [exShoujo.src, "순정 그림체 예시", "순정"],
+  ["/static/samples/ex-romance-1.png", "로맨스 그림체 예시", "로맨스"],
+  ["/static/samples/ex-webtoon-1.jpg", "웹툰체 예시", "웹툰체"],
+  ["/static/samples/ex-frost-1.jpg", "프로스트 그림체 예시", "프로스트"],
+  ["/static/samples/ex-shoujo-1.jpg", "순정 그림체 예시", "순정"],
 ];
 
 const FAQ: [q: string, a: React.ReactNode][] = [
