@@ -20,9 +20,10 @@ const COLS = 'user_id,name,source_image_key,phase,hatch_started_at,hatched_at,se
   + 'last_visit_date,created_at,updated_at';
 
 /**
- * 후기 쪽지(FeedbackSheet)가 저절로 올라오면 닫는다.
- * ★ 이 판은 **실서버 모드에서만** 그려진다(목에서는 petId 를 null 로 넘긴다). 그래서 목 스펙에는
- *   한 번도 안 나오고, 서버 모드에서만 돌봄 버튼을 덮어 클릭을 가로챈다.
+ * 후기 쪽지(FeedbackSheet)가 올라와 있으면 닫는다.
+ * ★ 이 물음은 **실서버 모드에서만** 그려진다(목에서는 petId 를 null 로 넘긴다).
+ *   이제는 첫 심화 행동이 도착한 뒤에만, 그것도 돌봄 버튼을 안 덮는 띠로 뜨지만,
+ *   그 자리에서 스펙이 멎지 않도록 손잡이는 남겨 둔다.
  */
 async function closeFeedback(page: import('@playwright/test').Page): Promise<void> {
   const later = page.locator('[data-action="feedback-close"]');
@@ -59,10 +60,14 @@ test.describe('server mode', () => {
     // 3) 돌보기 화면이 실서버 응답으로 그려진다.
     await page.goto('/zzal', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-action="feed"]', { timeout: 30_000 });
-    await closeFeedback(page);
     expect(await gauges(page), '부화 초기값 배부름 1 · 행복 3 · 청결 4(계약 해석 11)').toBe('1/3/4');
 
-    // 4) 밥 — 행동 응답이 곧 최신 상태다(다시 묻지 않는다).
+    // ★ 부화 직후에는 후기 물음이 없어야 한다 — 받은 움직임이 아직 없고, 아기 시간표가 도는 중이다.
+    //   전에는 여기서 후기 판이 올라와 밥 버튼을 덮었다(실서버 모드에서만 드러난 자리).
+    await expect(page.locator('[data-part="feedback-banner"]')).toHaveCount(0);
+    await expect(page.locator('[role="dialog"][aria-label="후기 남기기"]')).toHaveCount(0);
+
+    // 4) 밥 — 아무것도 안 닫고 바로 눌려야 한다. 행동 응답이 곧 최신 상태다(다시 묻지 않는다).
     await button(page, 'feed').click();
     await expect.poll(() => gauges(page)).toBe('2/3/4');
 
@@ -91,7 +96,7 @@ test.describe('server mode', () => {
     await closeFeedback(page);
     expect(await isLocked(page, 'sleep')).toBe(false);
     await button(page, 'sleep').click();
-    await expect.poll(() => status(page)).toBe('자는 중');
+    await expect.poll(() => status(page)).toBe('sleeping');
 
     // 6) 아침까지 밀고 깨운다 — 07~10시가 깨우기 창이라 12시간 30분 뒤(07:30)에 깨울 수 있다.
     expect((await dev('advance-clock', { minutes: 12 * 60 + 30 })).ok()).toBeTruthy();
