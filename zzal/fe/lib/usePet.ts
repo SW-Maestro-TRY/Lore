@@ -49,6 +49,12 @@ export interface UsePetResult {
    */
   justUnlocked: number[];
   clearJustUnlocked: () => void;
+  /**
+   * 펫 응답이 아닌 곳(미니게임)에서 열린 동작을 폭죽 줄에 얹는다.
+   * ★ 게임 응답은 `PetDetail` 이 아니라서 apply() 를 못 탄다. 다시 물어서도 못 잡는다 —
+   *   조회 응답의 `justUnlocked` 는 늘 비어 있기 때문(계약 2절 "행동 응답에만").
+   */
+  noteUnlocked: (seqs: number[]) => void;
 
   /** 오늘의 부름 목록과 열린 슬롯(GET /chat). ALIVE 응답마다 갱신된다 — chatSummary.openSlot 은 v0 에서 null. */
   chat: ChatState | null;
@@ -176,6 +182,11 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
   );
   const markSeen = useCallback((seq: number) => act((s, id) => s.markMotionSeen(id, seq)), [act]);
 
+  const noteUnlocked = useCallback((seqs: number[]) => {
+    if (!seqs.length) return;
+    setJustUnlocked((prev) => [...prev, ...seqs.filter((x) => !prev.includes(x))]);
+  }, []);
+
   const clearJustUnlocked = useCallback(() => setJustUnlocked([]), []);
   const clearChatReply = useCallback(() => setChatReply(null), []);
 
@@ -280,7 +291,7 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
 
   return {
     pet, loading, error, acting,
-    justUnlocked, clearJustUnlocked,
+    justUnlocked, clearJustUnlocked, noteUnlocked,
     chat, chatReply, clearChatReply,
     reload, care, sleep, wake, setPersonality, setBackground, share, answerChat, markSeen,
   };

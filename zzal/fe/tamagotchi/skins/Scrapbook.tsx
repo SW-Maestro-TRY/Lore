@@ -528,6 +528,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
             petId={session.server.pet?.phase === 'ALIVE' ? session.server.pet.petId : null}
             source={session.server.source}
             onFinished={() => { void session.server?.reload(); }}
+            onUnlocked={(seqs) => session.server?.noteUnlocked(seqs)}
           />
         )}
 
@@ -539,13 +540,20 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                 <span style={{ fontFamily: PEN, fontSize: 22, color: RED, lineHeight: 1 }}>모은 것들</span>
                 <h2 style={L.h2}>도감</h2>
               </div>
-              {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가·첫 동작을 얻었는가)는
-                  FeedbackSheet 이 서버에 직접 물어 정한다. 여기서 판정하면 스킨이 그 규칙을
-                  알아야 하고, 규칙이 바뀔 때마다 스킨이 같이 바뀐다.
-                  hold 는 해금 축하 판 위에 겹쳐 뜨는 것을 막는다(축하가 닫힌 뒤에 올라온다). */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 0 auto' }}>
+              {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가·아기 시간표 중인가·심화 행동이
+                  도착했는가)는 FeedbackSheet 이 정한다. 여기서 판정하면 스킨이 그 규칙을 알아야 하고,
+                  규칙이 바뀔 때마다 스킨이 같이 바뀐다.
+                  hold 는 해금 축하 판 위에 겹쳐 뜨는 것을 막는다(축하가 닫힌 뒤에 올라온다).
+                  ★ 이 자리(도감 구역)에 두는 것이 곧 "돌봄 버튼을 덮지 않는다" 이다. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', maxWidth: '100%' }}>
                 {/* 후기는 실서버 전용(v1 경로) — 목에서는 안 그린다. */}
-                <FeedbackSheet petId={!derived.mock ? (session.server?.pet?.petId ?? null) : null} unlocked={s.unlocked} hold={!!derived.celebration} />
+                <FeedbackSheet
+                  petId={!derived.mock ? (session.server?.pet?.petId ?? null) : null}
+                  // 받은 움직임이 실제로 있을 때만 "받은 움직임, 어땠어요?" 를 묻는다.
+                  advancedArrived={(session.server?.pet?.learnedToday?.length ?? 0) > 0 || session.server?.pet?.firstGift?.status === 'OPEN'}
+                  tutorialActive={derived.tutorial}
+                  hold={!!derived.celebration}
+                />
                 <span style={L.countTag}>{s.unlocked} / {dex.length}</span>
               </div>
             </div>
@@ -622,7 +630,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
       {/* ★ 축하(parts/CelebrationModal) — 즉시 해금 폭죽·아침 도착 "배워왔어요". */}
       <CelebrationModal tama={tama} pc={pc} name={cur.name} onSave={(seq) => dex.find((d) => d.seq === seq)?.save()} />
 
-      {!!s.toast && <div style={L.toast}>{s.toast}</div>}
+      {!!s.toast && <div data-toast style={L.toast}>{s.toast}</div>}
 
       {/* 이 화면의 유일한 로그인 벽. 보고 만지는 것은 전부 열려 있고,
           "내 아이를 만든다" 는 순간에만 계정을 묻는다(useZzalSession.create). */}

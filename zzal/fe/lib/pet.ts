@@ -273,8 +273,10 @@ export interface Tutorial {
  *
  * ★ 블록 단위로 nullable 이다. 단계에 따라 채워지는 것이 다르다:
  *   - HATCHING 일 때만: step · elapsedSeconds
- *   - ALIVE 일 때만: clock 이하 전부 — **motions·justUnlocked·learnedToday 도 null** 이다(빈 배열이 아니다).
- *     화면·훅은 `pet.motions ?? []` 로 읽는다. 목 서버도 같은 모양을 낸다(리뷰 H1 — 부화 중 첫 렌더가 죽었다).
+ *   - ALIVE 일 때만: clock 이하 전부. 단 **리스트 셋(motions·justUnlocked·learnedToday)은 null 이 아니라
+ *     빈 목록 `[]`** 이다(계약 해석 20, 실서버 왕복으로 확인). 그래도 타입은 `| null` 로 두고 화면·훅은
+ *     `pet.motions ?? []` 로 읽는다 — 서버가 한 번 null 을 보내면 화면이 통째로 죽는 자리라
+ *     방어를 걷어내지 않는다(리뷰 H1 — 부화 중 첫 렌더가 죽었다).
  *   - FAILED/DEAD 일 때만: deathReason
  *   - 행동 응답에만: justUnlocked 가 비어 있지 않을 수 있다
  */
@@ -309,11 +311,11 @@ export interface PetDetail {
   intimacy: Intimacy | null;
   today: Today | null;
   pieces: Pieces | null;
-  /** 18칸 고정. ALIVE 가 아니면 null. */
+  /** 18칸 고정. ALIVE 가 아니면 빈 목록(타입은 방어용으로 null 을 남겨 둔다). */
   motions: Motion[] | null;
-  /** 이 행동으로 방금 열린 2층 동작의 seq(폭죽). 행동 응답에만, 조회에는 []. ALIVE 가 아니면 null. */
+  /** 이 행동으로 방금 열린 2층 동작의 seq(폭죽). 행동 응답에만, 조회에는 []. */
   justUnlocked: number[] | null;
-  /** 밤에 합격해 아침에 도착한 심화 행동(아직 seen 이 아닌 것). ALIVE 가 아니면 null. */
+  /** 밤에 합격해 아침에 도착한 심화 행동(아직 seen 이 아닌 것). */
   learnedToday: LearnedMotion[] | null;
   /** 채팅 답 응답에만. 그 밖엔 null. */
   chatReply: ChatReply | null;
@@ -360,6 +362,12 @@ export interface ChatCall {
   /** 만료 시각(다음 부름 시각 · 저녁은 잠들 때 = null). */
   expiresAt: string | null;
   answered: boolean;
+  /** 내가 답한 말. 아직 안 했으면 null. */
+  answer: string | null;
+  /** 그 답에 아이가 돌려준 한 줄. 아직 안 했으면 null. */
+  replyLine: string | null;
+  /** 그때 지은 반응 동작 키. 아직 안 했으면 null. */
+  reactionKey: string | null;
 }
 
 /** GET /chat 의 응답. */
@@ -387,6 +395,12 @@ export interface Album {
   firstGift: FirstGift | null;
 }
 
+/**
+ * 펫 API 의 기준 경로 — **여기 한 줄만 고치면 온 프론트가 따라온다.**
+ * `game.ts` 도 이 상수를 가져다 쓰고, 다른 곳에는 경로 문자열을 적지 않는다.
+ * (밖으로 보이는 이름을 v1 로 통일하기로 해서 서버 경로가 곧 `/api/zzal/v1/…` 로 바뀐다.
+ *  그때 바꿀 곳이 이 한 줄이어야 한다.)
+ */
 export const PET_BASE = '/api/zzal/v2/me/pets';
 
 /**
@@ -451,12 +465,20 @@ export function getChat(petId: number, signal?: AbortSignal): Promise<ChatState>
   return request<ChatState>(`${PET_BASE}/${petId}/chat`, { signal });
 }
 
-/** 부름에 답한다. 40자. 응답은 PetDetail + chatReply. 닫힌 슬롯이면 ZZAL_CHAT_SLOT_CLOSED. */
-export function answerChat(petId: number, slot: ChatSlot, text: string): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/chat/${slot}/answer`, {
-    method: 'POST',
-    body: { text },
-  });
+/**
+ * 부름에 답한다. 40자. 닫힌 슬롯이면 ZZAL_CHAT_SLOT_CLOSED.
+ *
+ * ★ 이 하나만 응답 모양이 다르다 — 서버는 `{pet, chatReply}` 로 **두 블록을 감싸서** 준다(계약 해석 22).
+ *   다른 행동은 전부 `PetDetail` 그 자체다. 여기서 풀어서 `chatReply` 를 펫 안으로 옮겨 넣어,
+ *   훅과 목 서버는 끝까지 "행동 응답 = PetDetail" 하나만 알면 되게 한다.
+ *   (풀지 않으면 훅이 받는 객체에 `petId` 조차 없어 화면이 조용히 빈다 — 실서버 왕복에서 확인.)
+ */
+export async function answerChat(petId: number, slot: ChatSlot, text: string): Promise<PetDetail> {
+  const res = await request<{ pet: PetDetail; chatReply: ChatReply | null }>(
+    `${PET_BASE}/${petId}/chat/${slot}/answer`,
+    { method: 'POST', body: { text } },
+  );
+  return { ...res.pet, chatReply: res.chatReply };
 }
 
 /** "배워왔어요" 확인. learnedToday 에서 빠진다. */

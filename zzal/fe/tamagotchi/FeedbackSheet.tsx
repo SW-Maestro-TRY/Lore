@@ -51,12 +51,22 @@ export interface FeedbackSheetProps {
   /** 어느 아이에 대한 후기인가. 없으면(비로그인·아직 아이 없음) 아무것도 안 그린다. */
   petId: number | null;
   /**
-   * 지금까지 연 동작 수. **1 이상이 되면 한 번 저절로 올라온다.**
+   * **첫 심화 행동(16프레임)이 도착했는가.** 이것이 되기 전에는 저절로 안 올라온다.
    *
    * ★ 왜 하필 그때인가 — 상훈님이 2026-08-25 에 "첫 해금 직후 좋다" 로 확정하셨다.
    *   결과물을 아직 못 본 사람에게 결과물의 후기를 물으면 답할 것이 없다.
+   * ★★ 2026-09-05 정정 — 기준이 "연 동작 수 1 이상" 이었는데, 정본판에서는 부화 즉시
+   *   1층 8종이 열려 **첫 화면에서 곧바로** 올라왔다. 그러면 처음 온 사람이 아직
+   *   아무것도 못 본 채로 후기를 요구받고, 판이 돌봄 버튼까지 덮었다(리뷰 결정).
+   *   "받은 움직임, 어땠어요?" 라고 묻는 판이니 **받은 움직임이 실제로 있을 때만** 묻는다.
    */
-  unlocked: number;
+  advancedArrived: boolean;
+  /**
+   * 아기 시간표가 도는 중인가. 도는 동안에는 **절대** 안 띄운다.
+   *
+   * ★ 첫 60분은 이 서비스가 사람을 붙잡는 유일한 창이다. 그 사이에 다른 것을 끼우지 않는다.
+   */
+  tutorialActive: boolean;
   /**
    * 지금 다른 것이 화면을 덮고 있는가(해금 축하 판).
    *
@@ -97,7 +107,7 @@ function messageOf(e: unknown): string {
   return '보내지 못했습니다';
 }
 
-export default function FeedbackSheet({ petId, unlocked, hold = false }: FeedbackSheetProps) {
+export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, hold = false }: FeedbackSheetProps) {
   /** 서버가 아는 사실 — 이미 냈는가. null 이면 아직 못 물어봤다. */
   const [submitted, setSubmitted] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
@@ -112,6 +122,12 @@ export default function FeedbackSheet({ petId, unlocked, hold = false }: Feedbac
 
   /** 어디서 열렸나. 닫힘 기록에 같은 값을 실어 열림과 짝을 맞춘다. */
   const from = useRef<'unlock' | 'dex'>('dex');
+  /**
+   * 저절로 올라온 것인가. ★ 저절로 올라온 것은 **화면을 덮지 않는 띠**로 그린다.
+   *   사람이 도감에서 직접 연 것만 판(모달)으로 띄운다 — 내가 연 판은 내가 닫으면 되지만,
+   *   저절로 뜬 판은 하려던 일을 가로막는다.
+   */
+  const [banner, setBanner] = useState(false);
 
   // 이미 냈는지 물어본다. ★ 이 한 번이 "이미 낸 사람에게 또 띄우지 않는다" 를 지킨다.
   useEffect(() => {
@@ -132,18 +148,19 @@ export default function FeedbackSheet({ petId, unlocked, hold = false }: Feedbac
     return () => { alive = false; controller.abort(); };
   }, [petId]);
 
-  // 첫 동작을 얻은 직후 한 번. 축하 판이 떠 있는 동안에는 기다린다.
+  // 첫 심화 행동이 도착한 뒤 한 번. 축하 판이 떠 있는 동안·아기 시간표 중에는 안 띄운다.
   useEffect(() => {
-    if (petId == null || submitted !== false || open || hold) return;
-    if (unlocked < 1 || wasAsked(petId)) return;
+    if (petId == null || submitted !== false || open || banner || hold) return;
+    if (tutorialActive || !advancedArrived || wasAsked(petId)) return;
     markAsked(petId);
     from.current = 'unlock';
-    setOpen(true);
+    setBanner(true);
     track('zzal_feedback_opened', { from: 'unlock' });
-  }, [petId, submitted, open, hold, unlocked]);
+  }, [petId, submitted, open, banner, hold, tutorialActive, advancedArrived]);
 
   const openFromDex = useCallback(() => {
     if (petId == null) return;
+    setBanner(false);
     // 손으로 연 것도 "물어봤다" 로 친다 — 닫고 새로고침했을 때 또 저절로 뜨면 성가시다.
     markAsked(petId);
     from.current = 'dex';
@@ -202,6 +219,18 @@ export default function FeedbackSheet({ petId, unlocked, hold = false }: Feedbac
         <button data-action="feedback-open" onClick={openFromDex} style={S.link}>
           후기 남기기
         </button>
+      )}
+
+      {/*
+        저절로 올라온 물음은 **띠**로만 그린다. 이 자리는 도감 구역이라 위쪽 돌봄 버튼을 덮지 않고,
+        덮개(dim)도 없어서 하려던 일을 가로막지 않는다. 판으로 여는 것은 사람이 "네" 를 누른 뒤.
+      */}
+      {banner && !open && (
+        <div data-part="feedback-banner" style={S.banner}>
+          <span style={S.bannerText}>받은 움직임, 어땠어요?</span>
+          <button data-action="feedback-banner-open" onClick={openFromDex} style={S.bannerYes}>한 장 남기기</button>
+          <button data-action="feedback-close" onClick={() => { setBanner(false); }} style={S.bannerNo}>나중에</button>
+        </div>
       )}
 
       {open && (
@@ -297,6 +326,21 @@ export default function FeedbackSheet({ petId, unlocked, hold = false }: Feedbac
 }
 
 const S = {
+  banner: {
+    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+    margin: '12px 0 0', padding: '10px 12px',
+    background: '#FBEFA8', border: '1px solid ' + EDGE, borderRadius: 3,
+    boxShadow: '2px 3px 0 rgba(58,53,43,.14)',
+  } as CSSProperties,
+  bannerText: { flex: '1 1 auto', fontFamily: GAEGU, fontWeight: 700, fontSize: 16, color: INK } as CSSProperties,
+  bannerYes: {
+    border: '1px solid ' + INK, background: PAPER, borderRadius: 3, padding: '5px 10px',
+    cursor: 'pointer', fontFamily: GAEGU, fontWeight: 700, fontSize: 14, color: INK,
+  } as CSSProperties,
+  bannerNo: {
+    border: 'none', background: 'none', padding: '5px 4px', cursor: 'pointer',
+    fontFamily: PEN, fontSize: 16, color: SUB,
+  } as CSSProperties,
   link: {
     border: 'none', background: 'none', padding: 0, cursor: 'pointer',
     fontFamily: PEN, fontSize: 18, color: SUB, textDecoration: 'underline',
