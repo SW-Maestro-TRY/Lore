@@ -35,7 +35,8 @@ export default function ActionBar({ tama, pc }: ActionBarProps) {
     { key: 'snack', label: '간식', sub: s.sick ? '아파요' : '', act: actions.snack },
     { key: 'pet', label: '쓰다듬', sub: '', act: actions.pet },
     { key: 'clean', label: '청소', sub: s.trash > 0 ? `${s.trash}개` : '깨끗', act: actions.clean },
-    { key: 'bath', label: '목욕', sub: can('bath') || s.sleeping ? '' : '오늘 했어요', act: actions.bath },
+    // 서버 사실(today.bathDone)로 판정한다 — can() 은 행동 중·축하 중에도 false 라 "오늘 했어요" 가 잘못 뜬다(리뷰 L3).
+    { key: 'bath', label: '목욕', sub: s.bathDone ? '오늘 했어요' : '', act: actions.bath },
     { key: 'medicine', label: '약', sub: s.sick ? '필요해요' : '', act: actions.medicine },
     { key: 'sleep', label: sleepLabel, sub: sleepSub, act: () => void actions.sleep() },
   ];
