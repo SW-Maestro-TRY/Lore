@@ -264,9 +264,13 @@ def _ending(one: dict, last_scene: int) -> tuple[dict, list[dict]]:
     #
     # 셋 다 **모델이 스스로 적어 놓은 값**으로 센다. 새로 판정하지 않는다.
 
-    if _yes(ending["answered_here"]):
-        add("major", "남는 질문을 이 화에 이미 나온 것만으로 답할 수 있다 — "
-                     "다음 화를 볼 이유가 못 된다")
+    # **참/거짓이 아니라 한 줄로 묻는다.** 처음에는 true/false 로 물었더니
+    # 모델이 그 칸을 통째로 건너뛰었다(실측) — 바로 옆 after_turn 은 "한 줄로
+    # 적거나 없음" 이라 잘 답했다. 같은 모양으로 맞췄다.
+    answered = ending["answered_here"]
+    if answered and answered.lower() not in EMPTY:
+        add("major", "남는 질문의 답이 이 화 안에 이미 있다 — "
+                     f"다음 화를 볼 이유가 못 된다: {answered}")
 
     after = ending["after_turn"]
     if after and after.lower() not in EMPTY:
@@ -279,11 +283,6 @@ def _ending(one: dict, last_scene: int) -> tuple[dict, list[dict]]:
         add("major", "남는 질문이 손에 안 잡힌다 — "
                      "\"앞으로 어떻게 될까\" 는 질문이 아니라 감상이다")
     return ending, made
-
-
-def _yes(v: str) -> bool:
-    """모델이 참으로 적은 것. true · 예 · 그렇다 를 다 받는다."""
-    return v.strip().lower() in ("true", "예", "yes", "그렇다", "y", "1")
 
 
 # 이 말만으로 끝나는 질문은 무엇을 묻는지가 없다. **여기 없는 말은 안 잡는다** —

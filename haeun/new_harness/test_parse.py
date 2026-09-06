@@ -1701,7 +1701,11 @@ def test_story_review() -> None:
                                 " 무엇인지, 앞으로 어떻게 될지"}) == [])
     ok("이 화 안에서 답이 되면 잡는다",
        len(ending_made({"changed": "달라짐", "question": "노인이 왜 숨겼나",
-                        "from": "3", "answered_here": "true"})) == 1)
+                        "from": "3",
+                        "answered_here": "3장에서 이미 이름이 나온다"})) == 1)
+    ok("답이 안 나와 있으면 안 잡는다",
+       ending_made({"changed": "달라짐", "question": "노인이 왜 숨겼나",
+                    "from": "3", "answered_here": "없음"}) == [])
     ok("뒤에 정리 사건이 붙으면 잡는다",
        len(ending_made({"changed": "달라짐", "question": "노인이 왜 숨겼나",
                         "from": "3", "after_turn": "돌아서서 복도를 빠져나간다"})) == 1)
