@@ -125,6 +125,21 @@ public class AfterRun {
             int code = harness.upload(runId, onLine);
             if (code != 0) {
                 log.error("그림을 S3 에 못 올렸습니다 (run={}, exit={})", runId, code);
+                return;
+            }
+            /* **올린 것과 적힌 것은 다른 일이다.**
+             *
+             * 스크립트는 S3 에 올린 다음 그 주소를 이 서버에 도로 알려 주는데,
+             * 알리는 쪽만 조용히 실패할 수 있다(내부 토큰이 없으면 그렇다 —
+             * 실제로 겪었다). 그러면 화면에는 "올렸습니다" 가 찍히는데 DB 는
+             * 비어 있고, 나중에 작품을 DB 로 찾으면 그림이 없는 줄만 나온다.
+             *
+             * 올린 직후에 한 번 세어 본다. 여기서 크게 남겨 두지 않으면 이걸
+             * 배포에서 다시 찾게 된다. */
+            if (!pages.has(runId)) {
+                log.error("그림은 S3 에 올라갔는데 주소가 DB 에 없습니다 (run={}). "
+                        + "LORE_WEBTOON_INTERNAL_TOKEN 을 확인하세요 — 없으면 "
+                        + "s3_upload.py 가 알리는 단계를 건너뜁니다.", runId);
             }
         } catch (Exception e) {                     // noqa: 여기서 만들기를 실패시키지 않는다
             log.error("그림을 S3 에 못 올렸습니다 (run={})", runId, e);

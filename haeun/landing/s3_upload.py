@@ -114,7 +114,19 @@ def report(run_id: str, uploads: list[dict], on_log=None) -> int:
     이미 돈을 치른 작업이다. 못 알린 것은 다시 올리면 그때 같이 알려진다
     (서버가 같은 자리를 덮어써 주므로 두 번 보내도 줄이 안 는다).
     """
-    if not uploads or not TOKEN:
+    if not uploads:
+        return 0
+    if not TOKEN:
+        # **조용히 넘어가면 안 된다.** 그림은 S3 에 올라갔는데 주소만 DB 에
+        # 안 적히는 상태가 되고, 화면은 "올렸습니다" 를 그대로 보여 준다.
+        # 나중에 DB 로 작품을 찾을 때 그림이 없는 줄만 남는다 — 실제로 한 번
+        # 겪었고, 원인이 이 한 줄이라는 것을 알아내는 데 한참 걸렸다.
+        if on_log:
+            on_log("[S3] LORE_WEBTOON_INTERNAL_TOKEN 이 없어 주소를 DB 에 못 적었습니다"
+                   " — 그림은 올라갔지만 서버는 그것을 모릅니다."
+                   " 환경변수를 넣고 이 작업을 다시 올리면 그때 같이 적힙니다.")
+        print("[S3] ⚠ LORE_WEBTOON_INTERNAL_TOKEN 없음 — S3 에는 올라갔으나"
+              " DB 에 주소를 안 적었습니다", file=sys.stderr)
         return 0
     body = json.dumps({"runId": run_id, "pages": [
         {"pageNo": u["page_no"], "width": u["width"],
