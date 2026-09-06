@@ -4274,3 +4274,66 @@
   color: var(--muted);
   font-size: 12px;
 }
+
+/* ---- 진행 화면의 단계 패널 --------------------------------------------------
+ *
+ * 단계마다 무엇을 하는지 적고, 지나온 단계는 눌러서 결과를 볼 수 있게 한다
+ * (sections/Progress/StageRail.tsx). 「빠르게 결과부터」로 만들어도 똑같이
+ * 보이되, 읽기만 된다. */
+
+.webtoon-page .stage-open {
+  margin-top: .6em;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: .82rem;
+  cursor: pointer;
+}
+.webtoon-page .stage-open:hover { border-color: var(--accent); color: var(--accent); }
+
+.webtoon-page .stage-result {
+  margin-top: .8em;
+  border-top: 1px solid var(--line);
+  padding-top: .8em;
+  display: grid;
+  gap: .7em;
+}
+.webtoon-page .stage-hint { color: var(--dim); font-size: .8rem; margin: 0; }
+
+.webtoon-page .story-picks { list-style: none; margin: 0; padding: 0; display: grid; gap: .6em; }
+.webtoon-page .story-pick {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  /* 안 고른 것은 흐리게. 지운 것이 아니라 "이것도 있었다" 는 기록이다. */
+  opacity: .55;
+}
+.webtoon-page .story-pick[data-chosen="true"] { opacity: 1; border-color: var(--accent); }
+.webtoon-page .story-pick-head { display: flex; align-items: center; gap: .5em; flex-wrap: wrap; }
+.webtoon-page .story-pick-tag {
+  font-size: .72rem; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 999px; padding: 1px 8px;
+}
+.webtoon-page .story-pick p { margin: .4em 0 0; font-size: .86rem; color: var(--muted); line-height: 1.55; }
+
+.webtoon-page .board-scenes {
+  margin: 0; padding-left: 1.2em; display: grid; gap: .4em;
+  font-size: .86rem; color: var(--muted); line-height: 1.55;
+}
+
+.webtoon-page .stage-sheet {
+  border: 1px solid var(--line); border-radius: 10px;
+  background: transparent; padding: 0; cursor: zoom-in; overflow: hidden;
+  display: block; width: 100%;
+}
+.webtoon-page .stage-sheet img { display: block; width: 100%; height: auto; }
+
+/* 좁은 화면에서는 단계 칸의 동그라미가 자리를 너무 먹는다 — 설명이 두 줄로
+   접히면서 글이 손톱만해진다. */
+@media (max-width: 560px) {
+  .webtoon-page .stage { grid-template-columns: 26px 1fr; padding: 13px 14px; gap: 10px; }
+  .webtoon-page .stage-dot { width: 26px; height: 26px; font-size: .72rem; }
+  .webtoon-page .stage[data-state="active"] .stage-dot::after { width: 26px; height: 26px; }
+}

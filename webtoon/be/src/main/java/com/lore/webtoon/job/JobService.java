@@ -133,6 +133,12 @@ public class JobService {
         return publicId;
     }
 
+    /** 이 작업이 만들고 있는 run 번호. 첫 단계가 끝나야 생기므로 없을 수 있다. */
+    @Transactional(readOnly = true)
+    public String runOf(String publicId) {
+        return store.byPublicId(publicId).getRunId();
+    }
+
     @Transactional(readOnly = true)
     public JobView view(String publicId) {
         WebtoonJob job = store.byPublicId(publicId);

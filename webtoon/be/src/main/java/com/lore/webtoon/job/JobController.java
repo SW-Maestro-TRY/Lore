@@ -13,10 +13,15 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
 /**
@@ -51,13 +56,15 @@ public class JobController {
     static final String PREFIX = "/api/webtoon/nh";
 
     private final JobService jobs;
+    private final RunArt art;
     private final SpendGuard guard;
     private final GuestGate guests;
     private final CreditGate credits;
 
-    public JobController(JobService jobs, SpendGuard guard, GuestGate guests,
+    public JobController(JobService jobs, RunArt art, SpendGuard guard, GuestGate guests,
                          CreditGate credits) {
         this.jobs = jobs;
+        this.art = art;
         this.guard = guard;
         this.guests = guests;
         this.credits = credits;
@@ -130,6 +137,40 @@ public class JobController {
     public Map<String, Object> sheet(@PathVariable String id) {
         jobs.approveSheet(id);
         return Map.of("ok", true);
+    }
+
+    /**
+     * 만드는 동안 보는 그림 — 캐릭터 시트와 방금 그린 장.
+     *
+     * 진행 화면이 {@code <img src>} 에 그대로 넣는 주소라, 봉투도 JSON 도
+     * 없이 그림 자체를 준다. 아직 안 그린 것은 404 다 — 화면은 그 자리를
+     * 비워 두고 다음에 다시 묻는다.
+     */
+    @Operation(summary = "만드는 중인 캐릭터 시트")
+    @GetMapping(value = "/jobs/{id}/sheet.png", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> sheetImage(@PathVariable String id) throws IOException {
+        String runId = jobs.runOf(id);
+        Path src = runId == null ? null : art.sheet(runId);
+        return src == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(Files.readAllBytes(src));
+    }
+
+    @Operation(summary = "만드는 중인 한 장")
+    @GetMapping("/jobs/{id}/page/{no}.png")
+    public ResponseEntity<byte[]> pageImage(@PathVariable String id, @PathVariable int no,
+                                            @RequestParam(defaultValue = "1080") int w)
+            throws IOException {
+        String runId = jobs.runOf(id);
+        Path src = runId == null ? null : art.page(runId, no);
+        if (src == null) {
+            return ResponseEntity.notFound().build();
+        }
+        byte[] body = art.scaled(src, w);
+        // 줄인 것은 JPEG 이고 원본은 PNG 다 — 브라우저가 안 헷갈리게 밝힌다.
+        MediaType type = body.length > 1 && body[0] == (byte) 0x89
+                ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG;
+        return ResponseEntity.ok().contentType(type).body(body);
     }
 
     /**
