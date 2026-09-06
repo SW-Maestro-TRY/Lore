@@ -32,7 +32,7 @@ test('올리기 → 부화 중(null 블록) 렌더 → 3초 뒤 부화 → 0분 
 test('카톡 인앱 브라우저면 배너 한 줄', async ({ browser }) => {
   const ctx = await browser.newContext({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 KAKAOTALK 10.4.0', viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
-  await page.goto('/zzal?mock=1', { waitUntil: 'domcontentloaded' });
+  await page.goto('/zzal?skin=scrapbook&mock=1', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('[data-part="inapp"]')).toHaveAttribute('data-inapp', 'kakao');
   await expect(page.locator('[data-action="open-external"]')).toHaveCount(1);
   await ctx.close();
