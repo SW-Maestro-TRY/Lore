@@ -64,6 +64,28 @@ export default function Step1Photo({
       </div>
 
       <div className="wiz-card">
+        {/* **캐릭터를 골라 왔으면 사진을 또 안 받는다.** 그림은 서버가 그
+            캐릭터 것으로 붙인다. 여기서 사진을 또 올리라고 하면 캐릭터를
+            만들어 둔 의미가 없어진다. */}
+        {form.characterId ? (
+          <div className="wiz-picked">
+            {form.characterArt && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="wiz-picked-art" src={form.characterArt} alt={form.name} />
+            )}
+            <div className="wiz-picked-body">
+              <p className="wiz-picked-tag">이 캐릭터로 만듭니다</p>
+              <b>{form.name}</b>
+              <button type="button" className="btn btn-quiet btn-sm"
+                      onClick={() => onChange({
+                        characterId: undefined, characterArt: undefined,
+                        name: "", character: "",
+                      })}>
+                다른 캐릭터로
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="photo-row">
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="photo-drop" onClick={() => inputRef.current?.click()}>
@@ -114,6 +136,17 @@ export default function Step1Photo({
             </li>
           </ul>
         </div>
+        )}
+
+        {/* 만들어 둔 캐릭터가 있으면 여기서 바로 고른다 — 사진을 다시 올릴
+            이유가 없다. 없으면 이 문이 캐릭터를 만드는 자리로 데려간다.
+            **막다른 길을 만들지 않는 자리다.** */}
+        {!form.characterId && (
+          <p className="wiz-pickfrom">
+            자캐 사진이 없으신가요?{" "}
+            <a href="/webtoon?view=characters">내 캐릭터에서 고르기 →</a>
+          </p>
+        )}
 
         <label className="field">
           <span>

@@ -38,14 +38,18 @@ import Result from "./sections/Result/Result";
 import Works from "./sections/Works/Works";
 import MyPage from "./sections/MyPage/MyPage";
 import Editor from "./sections/Editor/Editor";
+import Characters from "./sections/Characters/Characters";
 import { STYLE_INFO, type WizardForm } from "./lib/wizardData";
 import { createJob, linkThisBrowser } from "./lib/nhApi";
+import type { Character } from "./lib/charApi";
 
-type View = "landing" | "create" | "running" | "result" | "works" | "mypage" | "editor";
+type View = "landing" | "create" | "running" | "result" | "works" | "mypage"
+  | "editor" | "characters";
 
 /** 주소로 열 수 있는 화면. 만들던 중(running)은 뺀다 — 주소만으로는 어느
  *  작업인지 알 수 없어서, 넣으면 빈 진행 화면이 뜬다. */
-const VIEWS = { landing: 1, create: 1, result: 1, works: 1, mypage: 1, editor: 1 } as const;
+const VIEWS = { landing: 1, create: 1, result: 1, works: 1, mypage: 1, editor: 1,
+                characters: 1 } as const;
 
 /* 주소(`?view=`·`?run=`)를 읽으려면 useSearchParams 가 필요한데, 그것을 쓰는
    컴포넌트는 <Suspense> 안에 있어야 한다 — 없으면 빌드가 이 페이지를 미리
@@ -139,6 +143,11 @@ function WebtoonScreens() {
      실패해도 삼킨다 — 목록이 비어 보일 뿐이고 다음에 다시 시도한다. 이걸로
      화면을 막으면 만들던 사람이 로그인 때문에 멈춘다. (잇는 일이 공용 헤더가
      아니라 여기 있는 이유: 공용 코드가 도메인을 알면 안 된다.) */
+  /* 「이 캐릭터로 웹툰 만들기」로 넘어올 때 들고 오는 것. 만들기 화면이
+     이름·설명·그림을 이미 채운 채로 열린다 — 캐릭터를 만들어 두고도 다시
+     처음부터 적게 하면 만들어 둔 의미가 없다. */
+  const [preset, setPreset] = useState<Character | null>(null);
+
   const { status: authStatus } = useAuth();
   useEffect(() => {
     if (authStatus === "authenticated") void linkThisBrowser().catch(() => {});
@@ -169,6 +178,8 @@ function WebtoonScreens() {
       story: form.story.trim(),
       style: form.style,
       photos_data: form.photos,
+      // 고른 캐릭터가 있으면 번호만 보낸다 — 그림은 서버가 붙인다.
+      character_id: form.characterId,
       agree_ip: form.agreeIp,
       // 갈림길에서 고른 것. 한동안 이 값을 안 보내서 「빠르게 결과부터」를
       // 골라도 똑같이 두 번 멈췄다 — 카드에는 "중간에 안 멈춥니다" 라고
@@ -196,7 +207,12 @@ function WebtoonScreens() {
           <Foot />
         </div>
       )}
-      {view === "create" && <Wizard onClose={goHome} onSubmit={start} />}
+      {view === "create" && (
+        <Wizard onClose={goHome} onSubmit={start} preset={preset} />
+      )}
+      {view === "characters" && (
+        <Characters onUse={(c) => { setPreset(c); go("create"); }} />
+      )}
       {view === "running" && jobId && (
         <Progress
           jobId={jobId}

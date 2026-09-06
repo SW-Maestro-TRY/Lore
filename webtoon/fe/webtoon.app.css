@@ -702,3 +702,84 @@
   font-size: .8rem;
   text-align: center;
 }
+
+/* ---- 캐릭터 탭 -------------------------------------------------------------
+ *
+ * 웹툰보다 **먼저 있는 자리**다. 캐릭터를 만들어 두고 그 캐릭터로 웹툰을
+ * 만든다(sections/Characters). 목록이 비어 있어도 막다른 길이 아니게,
+ * 만드는 문과 기본 제공 캐릭터를 같이 둔다. */
+
+.webtoon-page .chars { max-width: 1040px; margin: 0 auto; padding: 28px 20px 80px; }
+.webtoon-page .chars-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 22px;
+}
+.webtoon-page .chars-head h2 { font-size: 1.5rem; font-weight: 800; margin: .15em 0 0; }
+.webtoon-page .chars-sub { color: var(--muted); font-size: .86rem; margin: .35em 0 0; }
+.webtoon-page .chars-section { font-size: 1.05rem; font-weight: 700; margin: 34px 0 0; }
+.webtoon-page .chars-empty { color: var(--dim); }
+.webtoon-page .chars-error { color: #d64545; font-size: .88rem; }
+
+.webtoon-page .chars-blank {
+  border: 1px dashed var(--line-2); border-radius: var(--radius);
+  padding: 30px 24px; text-align: center; display: grid; gap: .5em; justify-items: center;
+}
+.webtoon-page .chars-blank p { margin: 0; color: var(--muted); }
+.webtoon-page .chars-blank .btn { margin-top: .6em; }
+
+.webtoon-page .char-grid {
+  list-style: none; margin: 14px 0 0; padding: 0;
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.webtoon-page .char-card {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--card); overflow: hidden; display: flex; flex-direction: column;
+}
+.webtoon-page .char-art {
+  aspect-ratio: 3 / 4; background: var(--card-2);
+  display: grid; place-items: center; overflow: hidden;
+}
+.webtoon-page .char-art img { width: 100%; height: 100%; object-fit: cover; }
+.webtoon-page .char-art-none { color: var(--dim); font-size: .82rem; }
+.webtoon-page .char-body { padding: 12px 14px 14px; display: grid; gap: .4em; }
+.webtoon-page .char-name { font-size: 1rem; }
+.webtoon-page .char-desc {
+  margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.5;
+  /* 설명이 길면 카드 높이가 제각각이 된다 — 세 줄에서 끊는다. */
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.webtoon-page .char-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: .3em; }
+
+/* 만들기 창 */
+.webtoon-page .char-make { max-width: 520px; }
+.webtoon-page .char-field { display: grid; gap: .35em; margin-bottom: 16px; }
+.webtoon-page .char-field > span { font-size: .86rem; font-weight: 600; }
+.webtoon-page .char-req { color: #d64545; font-size: .74rem; font-weight: 700; }
+.webtoon-page .char-opt { color: var(--dim); font-size: .74rem; font-style: normal; font-weight: 500; }
+.webtoon-page .char-field input[type="text"],
+.webtoon-page .char-field textarea,
+.webtoon-page .char-field select {
+  border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px;
+  font: inherit; background: var(--card); color: var(--text); width: 100%;
+}
+.webtoon-page .char-photo {
+  border: 1px dashed var(--line-2); border-radius: 10px; padding: 12px;
+  display: grid; gap: .6em; justify-items: center;
+}
+.webtoon-page .char-photo img { max-height: 160px; border-radius: 8px; }
+.webtoon-page .char-photo-none { color: var(--dim); font-size: .82rem; }
+.webtoon-page .char-photo-acts { display: flex; gap: 8px; }
+.webtoon-page .char-note { color: var(--dim); font-size: .78rem; line-height: 1.55; margin: .4em 0 0; }
+.webtoon-page .char-go { width: 100%; margin-top: 6px; }
+
+/* 위자드 1걸음 — 골라 온 캐릭터 */
+.webtoon-page .wiz-picked {
+  display: flex; gap: 14px; align-items: center;
+  border: 1px solid var(--accent); border-radius: var(--radius); padding: 14px;
+}
+.webtoon-page .wiz-picked-art { width: 84px; height: 112px; object-fit: cover; border-radius: 8px; }
+.webtoon-page .wiz-picked-body { display: grid; gap: .3em; }
+.webtoon-page .wiz-picked-tag { color: var(--accent); font-size: .76rem; margin: 0; }
+.webtoon-page .wiz-pickfrom { color: var(--muted); font-size: .84rem; margin: 12px 0 0; }
+.webtoon-page .wiz-pickfrom a { color: var(--accent); font-weight: 600; }

@@ -25,10 +25,13 @@ import Step5Review from "./steps/Step5Review";
 export default function Wizard({
   onClose,
   onSubmit,
+  preset,
 }: {
   onClose: () => void;
   /** 만들기를 시작한다. 실패하면 reject 해야 이 화면이 사유를 보여준다. */
   onSubmit: (form: WizardForm) => Promise<void>;
+  /** 캐릭터 탭에서 「이 캐릭터로 웹툰 만들기」로 넘어왔을 때 들고 온 것. */
+  preset?: { id: string; name: string; description: string; art_url: string | null } | null;
 }) {
   const allowance = useAllowance();
   const allowLine = allowanceLine(allowance);
@@ -39,6 +42,20 @@ export default function Wizard({
   const [wizLou, setWizLou] = useState(LOU_LOGOS[0]);
   useEffect(() => { setWizLou((now) => pickOne(LOU_LOGOS, [now])); }, [step]);
   const [form, setForm] = useState<WizardForm>(emptyWizardForm());
+
+  /* 캐릭터를 들고 왔으면 1걸음을 **이미 채운 채로** 연다. 만들어 둔 캐릭터를
+     또 적게 하면 만들어 둔 의미가 없다. 사진은 안 들고 온다 — 번호만 보내고
+     그림은 서버가 붙인다(브라우저가 내려받아 다시 올릴 이유가 없다). */
+  useEffect(() => {
+    if (!preset) return;
+    setForm((f) => ({
+      ...f,
+      name: preset.name,
+      character: preset.description || f.character,
+      characterId: preset.id,
+      characterArt: preset.art_url || undefined,
+    }));
+  }, [preset]);
   /* 마지막 걸음에서만 뜨는 한 줄. 여기서는 사진도 이름도 이미 받은 뒤라
      "사진과 이름만 있으면 시작합니다" 는 지난 말이었다 — 지금 누르면 무슨
      일이 일어나는지만 적는다. 미리보기가 아니라 한 편이 통째로 나온다. */
@@ -49,7 +66,8 @@ export default function Wizard({
   const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p }));
 
   const step1Ok = () => {
-    if (!form.photos.length) {
+    // 캐릭터를 골라 왔으면 사진을 또 받지 않는다 — 그림은 서버가 붙인다.
+    if (!form.characterId && !form.photos.length) {
       setNote("캐릭터 사진을 올려주세요");
       setNoteError(true);
       return false;

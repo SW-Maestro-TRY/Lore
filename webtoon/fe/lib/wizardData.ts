@@ -57,6 +57,11 @@ export type WizardMode = "simple" | "expert";
 
 export interface WizardForm {
   photos: string[]; // data URL
+  /** 「이 캐릭터로 웹툰 만들기」로 들어왔을 때. 서버가 이 번호로 그림을 붙인다 —
+   *  브라우저가 그림을 내려받아 다시 올릴 이유가 없다. */
+  characterId?: string;
+  /** 미리 보여줄 그림 주소. 보내는 값이 아니라 화면에만 쓴다. */
+  characterArt?: string;
   name: string;
   character: string;
   story: string;
@@ -68,6 +73,8 @@ export interface WizardForm {
 
 export const emptyWizardForm = (): WizardForm => ({
   photos: [],
+  characterId: undefined,
+  characterArt: undefined,
   name: "",
   character: "",
   story: "",

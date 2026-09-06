@@ -146,6 +146,20 @@ public class PrivateArt {
         };
     }
 
+    /** 올려 둔 그림을 도로 읽는다. 없거나 못 읽으면 {@code null}. */
+    public byte[] read(String key) {
+        if (!ready() || key == null || key.isBlank()) {
+            return null;
+        }
+        try {
+            return s3.getObjectAsBytes(GetObjectRequest.builder()
+                    .bucket(bucket).key(key).build()).asByteArray();
+        } catch (RuntimeException e) {
+            log.error("그림을 못 읽었습니다 (key={})", key, e);
+            return null;
+        }
+    }
+
     /**
      * 잠깐 열리는 주소. 주인 확인은 <b>부르는 쪽이</b> 먼저 한다 — 여기까지
      * 오면 이미 봐도 되는 사람이다.
