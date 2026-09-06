@@ -81,6 +81,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import overlay                      # 편집실 렌더링·굽기 재사용 (그대로, 안 고침)
+import s3_upload
 import usage_report
 import pipeline as classic          # write_character() 재사용 — 폼 -> character.json
 
@@ -578,6 +579,12 @@ def _run_pages_phase(job: NHJob) -> None:
         job.status = STATUS_DONE
         job.finished_at = time.time()
         job.save()
+
+        # 다 그렸으면 S3 에 올린다. **다 끝난 뒤에** 하는 이유: 편집실에서 얹은
+        # 것까지 구운 최종본을 올려야 하는데, 그건 마지막 이어붙이기가 끝나야
+        # 나온다. 여기서 실패해도 만들기는 성공이다 — 그림은 이미 여기 있고
+        # 화면도 그것으로 볼 수 있다(s3_upload.publish 가 다 삼킨다).
+        s3_upload.publish(job.run_id, job.add_log)
     except Exception as exc:                            # noqa: BLE001
         _fail(job, f"{type(exc).__name__}: {exc}")
 

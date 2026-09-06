@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -67,22 +68,29 @@ public class WebtoonController {
     private static final Pattern JOB = Pattern.compile(
             Pattern.quote(PREFIX) + "/nh/jobs/([\\w.-]+)");
 
+    /** 그림 한 장을 달라는 자리. S3 에 올라와 있으면 거기로 보낸다. */
+    private static final Pattern PAGE = Pattern.compile(
+            Pattern.quote(PREFIX) + "/runs/([\\w.-]+)/page/(\\d+)");
+
     private final HarnessGateway gateway;
     private final SpendGuard guard;
     private final GuestGate guests;
     private final CreditGate credits;
     private final WorkLedger ledger;
+    private final PageStore pages;
     /* 응답에서 작업 id 하나만 꺼내려고 쓴다. 스프링이 만들어 주는 빈이 없어서
        (앞서 주입받게 썼다가 서버가 안 떴다) 여기서 만든다. */
     private final ObjectMapper mapper = new ObjectMapper();
 
     public WebtoonController(HarnessGateway gateway, SpendGuard guard,
-                             GuestGate guests, CreditGate credits, WorkLedger ledger) {
+                             GuestGate guests, CreditGate credits, WorkLedger ledger,
+                             PageStore pages) {
         this.gateway = gateway;
         this.guard = guard;
         this.guests = guests;
         this.credits = credits;
         this.ledger = ledger;
+        this.pages = pages;
     }
 
     /**
@@ -124,6 +132,26 @@ public class WebtoonController {
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(("{\"error\":\"" + blocked + "\"}")
                                 .getBytes(StandardCharsets.UTF_8));
+            }
+        }
+
+        /* 그림은 **S3 에 있으면 그리로 보낸다.**
+         *
+         * 하네스를 거치면 원본을 열어 폭을 줄여 내보내는데(그때마다 CPU 를
+         * 쓴다), 이미 줄여서 올려 둔 것이 있으면 그럴 이유가 없다. 무엇보다
+         * 하네스가 없는 서버에서도 그림이 보여야 한다 — 그것이 S3 로 옮긴
+         * 이유다.
+         *
+         * 없으면 그냥 아래로 흘러가 예전처럼 하네스가 내보낸다. 한 번에
+         * 갈아타지 않는다: 아직 안 올라간 옛 작품이 그대로 보여야 한다. */
+        if (HttpMethod.GET.equals(method)) {
+            Matcher page = PAGE.matcher(request.getRequestURI());
+            if (page.matches()) {
+                String at = pages.urlOf(page.group(1), Integer.parseInt(page.group(2)),
+                                        widthOf(request.getQueryString()));
+                if (at != null) {
+                    return ResponseEntity.status(302).location(URI.create(at)).build();
+                }
             }
         }
 
@@ -173,6 +201,23 @@ public class WebtoonController {
         }
         return answer;
     }
+
+    /**
+     * `?w=` 로 달라고 한 폭. 없으면 본문 크기(1080).
+     *
+     * 올려 둔 폭과 <b>정확히 같은 값일 때만</b> S3 로 보낸다(PageStore 가 그렇게
+     * 찾는다). 어중간한 폭을 달라고 하면 하네스가 그 자리에서 줄여 준다 —
+     * 아무 폭이나 S3 에 만들어 두면 끝이 없다.
+     */
+    private static int widthOf(String query) {
+        if (query == null) {
+            return 1080;
+        }
+        Matcher m = WIDTH.matcher(query);
+        return m.find() ? Integer.parseInt(m.group(1)) : 1080;
+    }
+
+    private static final Pattern WIDTH = Pattern.compile("(?:^|&)w=(\\d{1,4})(?:&|$)");
 
     /**
      * 만들기 요청에서 브라우저 값만 꺼낸다.

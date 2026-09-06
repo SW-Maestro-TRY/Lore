@@ -44,6 +44,7 @@ class WebtoonControllerTest {
     @MockitoBean GuestGate guestGate;
     @MockitoBean CreditGate creditGate;
     @MockitoBean WorkLedger workLedger;
+    @MockitoBean PageStore pageStore;
     /* 이 조각(@WebMvcTest)에는 컨트롤러와 **필터**만 뜬다. 공용 인증 필터
        (JwtAuthenticationFilter)가 그 필터라 같이 뜨는데, 그것이 기대는
        JwtProvider 는 안 뜬다 — 없으면 컨텍스트가 아예 안 올라온다.
