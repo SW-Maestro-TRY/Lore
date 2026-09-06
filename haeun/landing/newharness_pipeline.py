@@ -547,6 +547,7 @@ def _run_sheet_phase(job: NHJob) -> None:
             return _fail(job, "취소되었습니다")
         if code != 0:
             return _fail(job, "시트를 만들지 못했습니다 — 로그를 확인하세요")
+        _drop_photos(job)
         if not job.checkpoints:
             # 「빠르게 결과부터」 — 시트도 이야기도 안 물어보고 그대로 간다.
             job.add_log("[자동] 「빠르게 결과부터」라 시트를 그대로 씁니다")
@@ -556,6 +557,34 @@ def _run_sheet_phase(job: NHJob) -> None:
         job.save()
     except Exception as exc:                            # noqa: BLE001
         _fail(job, f"{type(exc).__name__}: {exc}")
+
+
+def _drop_photos(job: "NHJob") -> None:
+    """사람이 올린 사진을 지운다 — 화면이 그렇게 약속했다.
+
+    만들기 첫 걸음에 **"올린 사진은 캐릭터를 만드는 데만 쓰고, 시트가 나오면
+    서버에서 지웁니다"** 라고 적혀 있는데 안 지우고 있었다. 다 만든 작업
+    폴더에 photo1.png 가 그대로 남아 있었다 — 사람 얼굴이 들어올 수 있는
+    값이고, 무엇보다 안 지킬 약속을 화면에 적어 두면 안 된다.
+
+    **여기가 지울 수 있는 가장 이른 자리다.** 사진은 시트 사양을 쓸 때만
+    쓰인다(모델이 사진을 읽고 외모를 글로 적고, 그림은 그 글만 보고 그린다 —
+    run.py 의 "[시트] 그리는 중… (사진 없이 사양만)"). 사양이 나온 뒤로는
+    다시 안 쓰인다.
+
+    못 지워도 만들기는 안 멈춘다 — 그림은 이미 나오는 중이다.
+    """
+    try:
+        gone = 0
+        for one in sorted(job.dir.glob("photo*")):
+            one.unlink(missing_ok=True)
+            gone += 1
+        if gone:
+            job.add_log(f"[정리] 올린 사진 {gone}장을 지웠습니다")
+            job.save()
+    except Exception as exc:                            # noqa: BLE001
+        job.add_log(f"[정리] 올린 사진을 못 지웠습니다 ({type(exc).__name__})")
+        job.save()
 
 
 def _run_pages_phase(job: NHJob) -> None:

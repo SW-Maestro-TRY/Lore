@@ -63,12 +63,15 @@ public class JobRunner {
     private final CreditGate credits;
     private final GuestGate guests;
     private final Path runsDir;
+    /** 사람이 올린 사진과 입력이 있는 자리. 시트가 나오면 사진을 여기서 지운다. */
+    private final Path jobsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
                      StoryStore stories, AfterRun after, WorkLedger works,
                      CreditGate credits, GuestGate guests,
-                     @Value("${lore.webtoon.python.runs-dir:}") String runsDir) {
+                     @Value("${lore.webtoon.python.runs-dir:}") String runsDir,
+                     @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.harness = harness;
         this.progress = progress;
         this.store = store;
@@ -80,6 +83,8 @@ public class JobRunner {
         this.runsDir = (runsDir == null || runsDir.isBlank()
                 ? harness.dir().resolve("runs")
                 : Path.of(runsDir)).toAbsolutePath().normalize();
+        this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
+                ? "haeun/landing/jobs_spring" : jobsDir).toAbsolutePath().normalize();
     }
 
     /** 차례에 넣는다. 곧바로 돌지 않을 수 있다 — 앞에 밀린 것이 있으면 기다린다. */
@@ -178,6 +183,9 @@ public class JobRunner {
         if (code != 0) {
             throw new IllegalStateException("캐릭터 시트를 만들지 못했습니다");
         }
+
+        // 여기서 올린 사진을 지운다 — 화면이 그렇게 약속했다.
+        dropPhotos(jobId);
 
         if (job.isCheckpoints()) {
             store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
@@ -372,6 +380,48 @@ public class JobRunner {
     /** 한글이 섞여 있는가 — 우리가 사람에게 하려고 쓴 말인지 가르는 자리. */
     private static boolean hasHangul(String s) {
         return s.codePoints().anyMatch(c -> c >= 0xAC00 && c <= 0xD7A3);
+    }
+
+    /**
+     * 사람이 올린 사진을 지운다.
+     *
+     * <h2>왜 여기인가</h2>
+     *
+     * 사진은 <b>시트 사양을 쓸 때만</b> 쓰인다 — 모델이 사진을 읽고 외모를
+     * 글로 적고, 그림은 그 글만 보고 그린다(run.py 의 `[시트] 그리는 중…
+     * (사진 없이 사양만)`). 사양이 나온 뒤로는 다시 안 쓰이므로, 이 걸음이
+     * 끝나는 자리가 지울 수 있는 가장 이른 자리다.
+     *
+     * <h2>왜 지우나</h2>
+     *
+     * 만들기 첫 걸음에 <b>"올린 사진은 캐릭터를 만드는 데만 쓰고, 시트가
+     * 나오면 서버에서 지웁니다"</b> 라고 적혀 있다. 그런데 안 지우고 있었다 —
+     * 다 만든 작업 폴더에 photo1.png 가 그대로 남아 있었다. 사람 얼굴이 들어올
+     * 수 있는 값이고, 무엇보다 <b>안 지킬 약속을 화면에 적어 두면 안 된다.</b>
+     *
+     * 못 지워도 만들기는 안 멈춘다 — 그림은 이미 나오는 중이다. 대신 크게
+     * 남긴다: 안 지워진 사진은 사람이 나중에 치워야 하는 일이다.
+     */
+    private void dropPhotos(Long jobId) {
+        WebtoonJob job = store.byId(jobId);
+        if (job == null) {
+            return;
+        }
+        Path dir = jobsDir.resolve(job.getPublicId());
+        try (var found = Files.list(dir)) {
+            List<Path> photos = found
+                    .filter(p -> p.getFileName().toString().startsWith("photo"))
+                    .toList();
+            for (Path one : photos) {
+                Files.deleteIfExists(one);
+            }
+            if (!photos.isEmpty()) {
+                log.info("올린 사진 {}장을 지웠습니다 (job={})", photos.size(), job.getPublicId());
+            }
+        } catch (IOException | RuntimeException e) {
+            log.error("올린 사진을 못 지웠습니다 (job={}) — 사람이 치워야 합니다",
+                    job.getPublicId(), e);
+        }
     }
 
     /** 지금 시각. 검사에서 갈아 끼우려고 따로 둔다. */
