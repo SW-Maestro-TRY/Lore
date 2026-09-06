@@ -1,6 +1,7 @@
 package com.lore.webtoon.job;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.lore.webtoon.WorkLedger;
 import com.lore.webtoon.story.StoryStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -56,17 +57,19 @@ public class JobRunner {
     private final JobStore store;
     private final StoryStore stories;
     private final AfterRun after;
+    private final WorkLedger works;
     private final Path runsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
-                     StoryStore stories, AfterRun after,
+                     StoryStore stories, AfterRun after, WorkLedger works,
                      @Value("${lore.webtoon.python.runs-dir:}") String runsDir) {
         this.harness = harness;
         this.progress = progress;
         this.store = store;
         this.stories = stories;
         this.after = after;
+        this.works = works;
         this.runsDir = (runsDir == null || runsDir.isBlank()
                 ? harness.dir().resolve("runs")
                 : Path.of(runsDir)).toAbsolutePath().normalize();
@@ -123,6 +126,8 @@ public class JobRunner {
             throw new IllegalStateException("작품 번호를 읽지 못했습니다");
         }
         store.learnRun(jobId, runId);
+        // 장부에도 채운다 — 이게 없으면 「내가 만든 웹툰」이 이 작품을 못 찾는다.
+        works.learnedRun(job.getPublicId(), runId, job.getUserId());
         writeStyle(runId, job.getStyle());
 
         List<Map<String, Object>> directions = directionsOf(runId);

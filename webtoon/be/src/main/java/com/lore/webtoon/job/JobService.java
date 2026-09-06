@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.WorkLedger;
 import com.lore.webtoon.story.StoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,13 +77,15 @@ public class JobService {
     private final JobRunner runner;
     private final JobProgress progress;
     private final StoryStore stories;
+    private final WorkLedger works;
     private final Path jobsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobService(WebtoonJobRepository jobs, JobStore store, JobRunner runner,
-                      JobProgress progress, StoryStore stories,
+                      JobProgress progress, StoryStore stories, WorkLedger works,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
+        this.works = works;
         this.store = store;
         this.runner = runner;
         this.progress = progress;
@@ -128,6 +131,14 @@ public class JobService {
                 publicId, userId, browserUid, style,
                 form.checkpoints() == null || form.checkpoints(),
                 inputOf(form), Instant.now()));
+
+        /* **장부에도 적는다.**
+         *
+         * 프록시 길은 하네스 응답을 보고 적는데(WebtoonController), 이 길은
+         * 그 응답을 안 지나간다. 그래서 여기로 만든 작품이 장부에 한 줄도 안
+         * 남았고, 만든 사람이 마이페이지에서 자기 작품을 못 봤다 — 비용도
+         * 그림도 다 남았는데 <b>주인만 없었다.</b> */
+        works.started(publicId, userId, browserUid);
 
         runner.enqueue(job.getId(), dir);
         return publicId;

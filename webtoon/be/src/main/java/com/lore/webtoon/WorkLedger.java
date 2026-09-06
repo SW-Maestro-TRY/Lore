@@ -49,7 +49,19 @@ public class WorkLedger {
      */
     @Transactional
     public void started(byte[] answer, Long userId, String browserUid) {
-        String jobId = text(answer, "id");
+        started(text(answer, "id"), userId, browserUid);
+    }
+
+    /**
+     * 같은 일인데 <b>값을 이미 아는 쪽</b>이 부르는 자리.
+     *
+     * 프록시 길은 하네스가 준 JSON 밖에 없어서 거기서 번호를 꺼내지만,
+     * 스프링이 직접 만드는 길은 번호를 그냥 들고 있다. 이게 없어서 그 길로
+     * 만든 작품이 <b>장부에 한 줄도 안 남았다</b> — 만든 사람의 마이페이지에
+     * 자기 작품이 안 보였다.
+     */
+    @Transactional
+    public void started(String jobId, Long userId, String browserUid) {
         if (jobId == null || browserUid == null || browserUid.isBlank()) {
             return;
         }
@@ -73,7 +85,12 @@ public class WorkLedger {
      */
     @Transactional
     public void progressed(String jobId, byte[] answer, Long userId) {
-        String runId = text(answer, "run_id");
+        learnedRun(jobId, text(answer, "run_id"), userId);
+    }
+
+    /** 위와 같은 일. 작품 번호를 이미 아는 쪽이 부른다. */
+    @Transactional
+    public void learnedRun(String jobId, String runId, Long userId) {
         if (jobId == null || runId == null) {
             return;
         }
