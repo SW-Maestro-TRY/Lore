@@ -36,10 +36,12 @@ public class UsageController {
 
     private final UsageService service;
     private final PageStore store;
+    private final WorkLedger ledger;
 
-    public UsageController(UsageService service, PageStore store) {
+    public UsageController(UsageService service, PageStore store, WorkLedger ledger) {
         this.service = service;
         this.store = store;
+        this.ledger = ledger;
     }
 
     @Operation(summary = "모델 호출 비용 올리기", description = """
@@ -87,7 +89,10 @@ public class UsageController {
     public ApiResponse<Ingested> pages(@RequestHeader(name = TOKEN_HEADER, required = false) String token,
                                        @Valid @RequestBody PagesRequest request) {
         service.checkToken(token);
-        return ApiResponse.ok(new Ingested(store.record(request.runId(), request.pages())));
+        // 비공개 작품이면 CloudFront 가 안 내주는 자리로 옮겨서 적는다.
+        // 하네스는 공개 여부를 모른다 — 그건 계정 쪽 사정이다.
+        return ApiResponse.ok(new Ingested(store.record(
+                request.runId(), request.pages(), ledger.isPublic(request.runId()))));
     }
 
     /** 헤더 이름. 값은 서버 환경변수로만 준다 — 코드에도 저장소에도 안 적는다. */

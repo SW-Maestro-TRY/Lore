@@ -49,6 +49,7 @@ class WebtoonGuestAccessTest {
     @MockitoBean CreditGate creditGate;
     @MockitoBean WorkLedger workLedger;
     @MockitoBean PageStore pageStore;
+    @MockitoBean PrivateArt privateArt;
     @MockitoBean JwtProvider jwtProvider;
     @MockitoBean MyWebtoonService myWebtoonService;
 

@@ -85,6 +85,25 @@ public class WebtoonWork {
     @Column(name = "browser_uid", nullable = false, length = 64)
     private String browserUid;
 
+    /**
+     * 둘러보기에 걸려 있나.
+     *
+     * <b>기본이 공개다.</b> 하네스 쪽 규칙과 같게 맞춘다(landing/visibility.py) —
+     * 기본이 비공개면 둘러보기가 늘 비어서 처음 온 사람에게 고장난 화면으로
+     * 보인다. 대신 만들기 마지막 걸음에서 미리 말하고 마이페이지에서 내릴 수
+     * 있게 한다.
+     *
+     * 이 값이 <b>그림을 어디에 두는지</b>까지 정한다 — 공개는 CloudFront 가
+     * 내주는 자리, 비공개는 안 내주는 자리(PrivateArt).
+     */
+    /* `default true` 를 꼭 적는다. 안 적으면 이미 줄이 있는 표에 "빈 값 금지"
+       칸을 더하는 꼴이라, 그 자리에 넣을 값이 없어 컬럼 추가 자체가 실패한다
+       (실제로 그랬다 — 이미 만든 작품 세 편이 있었다). 기본값이 있으면 옛
+       줄이 그 값으로 채워지고, 공개가 기본이라 예전과 똑같이 보인다. */
+    @Column(name = "is_public", nullable = false,
+            columnDefinition = "boolean not null default true")
+    private boolean isPublic = true;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -146,5 +165,13 @@ public class WebtoonWork {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isPublic() {
+        return isPublic;
+    }
+
+    void setPublic(boolean value) {
+        this.isPublic = value;
     }
 }

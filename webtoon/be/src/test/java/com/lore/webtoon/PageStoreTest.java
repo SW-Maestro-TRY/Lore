@@ -31,6 +31,9 @@ class PageStoreTest {
     private static final String CDN = "https://lorecomic.com";
 
     private final List<WebtoonPage> rows = new ArrayList<>();
+    /* 자리를 옮기는 일은 S3 를 만지므로 여기서 볼 것이 아니다(PrivateArtTest 가
+       규칙을 본다). 가짜는 아무것도 안 옮긴다. */
+    private final PrivateArt art = mock(PrivateArt.class);
     private PageStore store;
 
     @BeforeEach
@@ -58,7 +61,7 @@ class PageStoreTest {
             }
             return p;
         });
-        store = new PageStore(repo, CDN, FIXED);
+        store = new PageStore(repo, art, CDN, FIXED);
     }
 
     private static PageStore.Upload up(int page, int width, String key) {
@@ -132,7 +135,7 @@ class PageStoreTest {
                 .thenReturn(Optional.of(WebtoonPage.of(
                         "run-1", 2, 1080, "images/webtoon/abc.jpg", 1, Instant.now())));
 
-        assertThat(new PageStore(repo, "", FIXED).urlOf("run-1", 2, 1080))
+        assertThat(new PageStore(repo, art, "", FIXED).urlOf("run-1", 2, 1080))
                 .isEqualTo("/images/webtoon/abc.jpg");
     }
 
@@ -144,7 +147,7 @@ class PageStoreTest {
                 .thenReturn(Optional.of(WebtoonPage.of(
                         "run-1", 2, 1080, "images/webtoon/abc.jpg", 1, Instant.now())));
 
-        assertThat(new PageStore(repo, "https://cdn.example.com///", FIXED)
+        assertThat(new PageStore(repo, art, "https://cdn.example.com///", FIXED)
                 .urlOf("run-1", 2, 1080))
                 .isEqualTo("https://cdn.example.com/images/webtoon/abc.jpg");
     }
