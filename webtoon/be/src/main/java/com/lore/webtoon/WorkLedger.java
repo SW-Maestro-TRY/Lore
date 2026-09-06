@@ -162,8 +162,14 @@ public class WorkLedger {
         if (userId == null) {
             return false;
         }
-        return userId.equals(work.getUserId())
-                || links.existsByUserIdAndBrowserUid(userId, work.getBrowserUid());
+        if (userId.equals(work.getUserId())) {
+            return true;
+        }
+        // 브라우저로 물려받는 것은 **주인이 아직 없는 작품만**이다. 주인이 있는데도
+        // 브라우저가 같다고 열어 주면, 한 컴퓨터를 같이 쓴 사람끼리 서로의 비공개
+        // 작품을 볼 수 있게 된다(WebtoonWorkRepository.ownedBy 의 주석 참고).
+        return work.getUserId() == null
+                && links.existsByUserIdAndBrowserUid(userId, work.getBrowserUid());
     }
 
     /** 이 계정 것 전부. 최근 만든 것부터. */

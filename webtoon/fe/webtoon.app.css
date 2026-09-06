@@ -682,3 +682,23 @@
   .webtoon-page .stage-dot { width: 26px; height: 26px; font-size: .72rem; }
   .webtoon-page .stage[data-state="active"] .stage-dot::after { width: 26px; height: 26px; }
 }
+
+/* ---- 만들기 전에 알려 주는 한 줄 ------------------------------------------
+ *
+ * 「−12크레딧」은 로그인한 사람에게만 참이다. 게스트에게는 크레딧이 아예
+ * 없는데 그 값이 적혀 있었고, 정작 무료 몇 편이 남았는지는 어디에도 없었다.
+ * 홈의 시작 단추 아래와 만들기 걸음 내내 같은 줄을 둔다. */
+
+.webtoon-page .hero-allowance {
+  margin: .7em 0 0;
+  color: var(--muted);
+  font-size: .82rem;
+  /* 글줄 정렬은 히어로 블록을 따른다 — 가운데로 못 박으면 왼쪽 정렬인
+     본문에서 이 줄만 떠 보인다. */
+}
+.webtoon-page .submit-allowance {
+  margin: .5em 0 0;
+  color: var(--dim);
+  font-size: .8rem;
+  text-align: center;
+}

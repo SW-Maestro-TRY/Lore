@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -68,6 +69,36 @@ public class JobController {
         this.guard = guard;
         this.guests = guests;
         this.credits = credits;
+    }
+
+    /**
+     * 만들기 전에 화면이 묻는 것 — <b>지금 이 사람은 무엇으로 만드는가.</b>
+     *
+     * 로그인 안 한 사람에게 화면이 「−12크레딧」이라고 적고 있었다. 그 사람에게는
+     * 크레딧이 아예 없다(게스트는 하루 무료 몇 편으로 센다) — 없는 값을 낸다고
+     * 적어 두고, 정작 몇 편이 남았는지는 어디에도 없었다. 다 쓰고 나서야
+     * "오늘 2편 다 쓰셨어요" 를 처음 본다.
+     *
+     * 봉투를 안 씌운다 — 이 화면이 읽는 다른 것들과 같은 모양으로 둔다.
+     */
+    @Operation(summary = "지금 만들면 무엇이 드나",
+            description = "게스트면 남은 무료 편수, 로그인했으면 크레딧 값과 잔액.")
+    @GetMapping("/allowance")
+    public Map<String, Object> allowance(HttpServletRequest request) {
+        Long me = CreditGate.currentUser();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("logged_in", me != null);
+        out.put("credit_cost", credits.cost());
+        if (me == null) {
+            Integer left = guests.freeLeft(request);
+            out.put("free_left", left);
+            out.put("free_per_day", guests.freePerDay());
+        } else {
+            out.put("balance", credits.balanceOf(me));
+        }
+        // 오늘 전체 몫이 찼으면 로그인해도 못 만든다 — 그 말을 먼저 해야 한다.
+        out.put("blocked", guard.whyBlocked());
+        return out;
     }
 
     @Operation(summary = "웹툰 만들기 시작", description = """

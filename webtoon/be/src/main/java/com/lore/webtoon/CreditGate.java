@@ -57,13 +57,19 @@ public class CreditGate {
         this.cost = cost;
     }
 
+    /** 이 사람의 잔액. 로그인 안 했으면 0 — 게스트는 크레딧으로 안 센다. */
+    public int balanceOf(Long userId) {
+        return userId == null ? 0 : credits.balance(userId);
+    }
+
     /** 지금 로그인한 사람. 안 했으면 {@code null}. */
     public static Long currentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null && auth.getPrincipal() instanceof Long id ? id : null;
     }
 
-    int cost() {
+    /** 한 편에 드는 값. 화면이 만들기 전에 적어 두려고도 묻는다. */
+    public int cost() {
         return cost;
     }
 
