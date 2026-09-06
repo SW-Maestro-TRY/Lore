@@ -105,14 +105,22 @@ public class WebtoonController {
                 blocked = guests.useOrBlock(request);
                 counted = blocked == null;      // 셌으면 실패했을 때 돌려줘야 한다
             }
+            // 막힌 이유에 따라 코드가 다르다. **몫이 다 찬 것(429)과 값이
+            // 모자란 것(402)은 다른 일이다** — 앞엣것은 기다리면 풀리고
+            // 뒤엣것은 충전해야 풀린다. 화면이 "내일 다시 오세요" 를 띄울지
+            // "충전하러 가기" 를 띄울지가 여기서 갈린다.
+            int code = 429;
             if (blocked == null) {
                 blocked = credits.whyBlocked(me);   // 로그인 안 했으면 null
+                if (blocked != null) {
+                    code = 402;
+                }
             }
             if (blocked != null) {
                 // 하네스가 사유를 한글로 적어 보내는 것과 **같은 모양**으로 답한다.
                 // 화면(프로토타입에서 옮겨 온 것)이 그 모양만 읽어서, 여기서
                 // 봉투를 씌우면 "알 수 없는 오류" 밖에 못 띄운다.
-                return ResponseEntity.status(429)
+                return ResponseEntity.status(code)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(("{\"error\":\"" + blocked + "\"}")
                                 .getBytes(StandardCharsets.UTF_8));
