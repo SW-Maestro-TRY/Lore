@@ -163,10 +163,10 @@ export default function MyPage({
           </button>
         </nav>
 
+        {/* 만들기는 **본문 머리**에 있다(「내 웹툰」 옆). 여기 두면 어느 탭에
+            있든 같은 자리에 뜨는데, 캐릭터를 보고 있는 사람에게 웹툰 만들기를
+            들이미는 셈이 된다. 목록 옆에 있으면 "이 목록에 한 편 더" 로 읽힌다. */}
         <div className="me-rail-foot">
-          <button type="button" className="me-btn me-btn-go" onClick={onCreate}>
-            새 웹툰 만들기
-          </button>
           <button type="button" className="me-quit" onClick={() => void signOut()}>
             로그아웃
           </button>
@@ -187,7 +187,12 @@ export default function MyPage({
                   {shown.length}편{hidden ? ` · 나만 보기 ${hidden}` : ""}
                 </p>
               )}
-              <button type="button" className="me-btn" onClick={onBrowse}>둘러보기</button>
+              <div className="me-top-acts">
+                <button type="button" className="me-btn" onClick={onBrowse}>둘러보기</button>
+                <button type="button" className="me-btn me-btn-go" onClick={onCreate}>
+                  새 웹툰 만들기
+                </button>
+              </div>
             </div>
 
             <div className="works-grid me-works">

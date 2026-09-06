@@ -1245,6 +1245,8 @@
 }
 .webtoon-page .me-top-sub { margin: 0; font-size: .76rem; color: var(--text-subtle); }
 .webtoon-page .me-top .me-btn { margin-left: auto; }
+.webtoon-page .me-top-acts { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.webtoon-page .me-top-acts .me-btn { margin-left: 0; }
 
 /* 작품 칸은 원본(.works-grid)을 그대로 쓴다 — 둘러보기와 같은 카드여야
    한다. 여기서는 칸 폭만 이 화면에 맞춘다. */
