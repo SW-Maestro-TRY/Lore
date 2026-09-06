@@ -58,7 +58,7 @@ test.describe('server mode', () => {
     expect(Number(petId)).toBeGreaterThan(0);
 
     // 3) 돌보기 화면이 실서버 응답으로 그려진다.
-    await page.goto('/zzal', { waitUntil: 'domcontentloaded' });
+    await page.goto('/zzal?skin=scrapbook', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-action="feed"]', { timeout: 30_000 });
     expect(await gauges(page), '부화 초기값 배부름 1 · 행복 3 · 청결 4(계약 해석 11)').toBe('1/3/4');
 

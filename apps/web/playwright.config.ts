@@ -38,7 +38,7 @@ export default defineConfig({
     // 서버 모드에서는 `API_PROXY` 를 켜서 /api/* 를 읽기 전용 사본 백엔드로 넘긴다
     // (next.config.mjs 의 rewrites — 이게 없으면 브라우저가 3177 포트로 API 를 찾아 404 를 받는다).
     command: `NEXT_PUBLIC_CDN_BASE= ${API_PROXY ? `API_PROXY=${API_PROXY} ` : ''}npx next dev -p ${PORT}`,
-    url: `${BASE}/zzal?mock=1`,
+    url: `${BASE}/zzal?skin=scrapbook&mock=1`,
     reuseExistingServer: true,
     timeout: 120_000,
   },

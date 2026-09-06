@@ -19,6 +19,21 @@
   --btn-primary-fg: #fff8ec;
 }
 
+/* ── 여울 : 따뜻한 종이 바탕 (클로드 디자인 시안) ─────────── */
+:root[data-skin="yeoul"] {
+  --header-bg: rgba(255, 251, 244, 0.92);
+  --surface-2: rgba(248, 242, 231, 0.9);
+  --surface-hover: rgba(251, 234, 229, 0.9);
+  --text: #4a4038;
+  --text-muted: #5c544b;
+  --text-subtle: #7b6f63;
+  --border: rgba(74, 64, 56, 0.12);
+  --border-strong: rgba(74, 64, 56, 0.2);
+  --accent-zzal: #9c4232;
+  --btn-primary-bg: #9c4232;
+  --btn-primary-fg: #fff6f2;
+}
+
 /* 헤더 아래로 앱이 들어간다. 헤더는 sticky 라 스크롤해도 계속 보이고,
  * 앱은 남은 높이를 정확히 채운다(헤더 높이는 실측해 --tama-header-h 로 들어온다).
  *
