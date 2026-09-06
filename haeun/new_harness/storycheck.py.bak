@@ -231,10 +231,7 @@ def _ending(one: dict, last_scene: int) -> tuple[dict, list[dict]]:
         return {"changed": "", "question": "", "from": ""}, []
     ending = {"changed": _text(raw.get("changed")),
               "question": _text(raw.get("question")),
-              "from": _text(raw.get("from")),
-              # 2026-09-06 추가. 없으면 빈 값이라 옛 판정은 그대로 통과한다.
-              "answered_here": _text(raw.get("answered_here")),
-              "after_turn": _text(raw.get("after_turn"))}
+              "from": _text(raw.get("from"))}
 
     said = [i for i in (one.get("issues") or [])
             if isinstance(i, dict) and _text(i.get("kind")) == "마무리"]
@@ -254,60 +251,7 @@ def _ending(one: dict, last_scene: int) -> tuple[dict, list[dict]]:
     elif ending["from"] == ONLY_LAST:
         add("major", "다음이 궁금해지는 것이 마지막 줄에만 붙어 있다 — "
                      "앞에 깔린 것이 없다")
-
-    # ---- 여기부터 2026-09-06 추가 --------------------------------------
-    #
-    # 위 셋만으로는 **조용한 마무리가 그대로 통과한다.** 실측: 마지막 장면이
-    # "새로운 시작의 단서를 얻는다" 로 끝난 후보가 통과로 나갔고, 검수가 적은
-    # 남는 질문은 "앞으로 어떻게 될지" 였다. 달라진 것도 있고 질문도 있으니
-    # 위 규칙은 다 지나간다 — 그런데 읽는 사람에게는 아무것도 안 걸린다.
-    #
-    # 셋 다 **모델이 스스로 적어 놓은 값**으로 센다. 새로 판정하지 않는다.
-
-    if _yes(ending["answered_here"]):
-        add("major", "남는 질문을 이 화에 이미 나온 것만으로 답할 수 있다 — "
-                     "다음 화를 볼 이유가 못 된다")
-
-    after = ending["after_turn"]
-    if after and after.lower() not in EMPTY:
-        add("major", "뜻이 바뀌는 사건 뒤에 정리하는 사건이 더 붙어 있다 — "
-                     f"{after}")
-
-    # "앞으로 어떻게 될까" 류는 질문이 아니라 감상이다. 무엇을 묻는지가 없으면
-    # 다음 화를 볼 이유가 안 된다. 낱말로 세는 것이라 **확실한 것만** 잡는다.
-    if ending["question"] and _vague(ending["question"]):
-        add("major", "남는 질문이 손에 안 잡힌다 — "
-                     "\"앞으로 어떻게 될까\" 는 질문이 아니라 감상이다")
     return ending, made
-
-
-def _yes(v: str) -> bool:
-    """모델이 참으로 적은 것. true · 예 · 그렇다 를 다 받는다."""
-    return v.strip().lower() in ("true", "예", "yes", "그렇다", "y", "1")
-
-
-# 이 말만으로 끝나는 질문은 무엇을 묻는지가 없다. **여기 없는 말은 안 잡는다** —
-# 애매한 것을 넓게 잡으면 멀쩡한 질문까지 걸린다.
-VAGUE = ("앞으로 어떻게", "어떻게 될지", "어떻게 될까", "어떻게 되는지",
-         "어떻게 흘러갈", "무슨 일이 일어날지", "다음이 궁금")
-
-
-def _vague(question: str) -> bool:
-    """질문이 손에 잡히는가 — 잡히면 거짓.
-
-    두루뭉술한 말이 들어 있어도 **그 앞에 구체적인 것이 같이 적혀 있으면**
-    잡지 않는다. "이올이 규칙을 어기고 얻은 것이 무엇인지, 앞으로 어떻게
-    될지" 는 앞쪽이 구체적이라 질문이 맞다. 두루뭉술한 말 **뿐**일 때만 센다.
-    """
-    q = question.strip()
-    if not any(v in q for v in VAGUE):
-        return False
-    # 두루뭉술한 말을 걷어내고도 스무 자 넘게 남으면, 남은 쪽이 진짜 질문이다.
-    rest = q
-    for v in VAGUE:
-        rest = rest.replace(v, "")
-    rest = "".join(ch for ch in rest if ch not in " ,·、.?？\n")
-    return len(rest) < 20
 
 
 def parse(text: str, expect: list[int] | None = None) -> dict:
