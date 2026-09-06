@@ -19,10 +19,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { bgUrl } from '../constants';
 import {
   ALBUM_TABS, CALLS_PER_DAY, CELLS, CHAT_MAX, CLOCK, DECO_UNLOCK, EGG_COPY, FEATURE_LOCK,
-  FREE_MAX, GUESS_ROUNDS, GUESS_WIN, HATCH_STAGES, HATCH_STAGE_SEC, LV, MAX_STOCK,
+  GUESS_ROUNDS, GUESS_WIN, HATCH_STAGES, HATCH_STAGE_SEC, LV, MAX_STOCK,
   MORNING, MORNING_LINES, MOTION_CELLS, NAME_MAX, NAME_POOL, NAP_SEC, PETS_PER_DAY,
   PLAYS_PER_DAY, ROOM_BG, ROOM_KEYS, RUN_UNLOCK, SCENE_LINES, SNACK_WARN, STEPS, TUTOR,
-  UNLOCK_MS, WALLS, WORLD_MAX, yeoulImg,
+  UNLOCK_MS, WALLS, yeoulImg,
   type AlbumTab, type AuthTab, type CounterKey, type HatchFail, type LvKey, type NeedStyle,
   type PanelKey, type RoomKey, type ScreenKey, type StepKey,
 } from './constants';
@@ -50,8 +50,8 @@ export interface Modal {
 export interface Call {
   kind: 'tutor' | 'chat' | 'care';
   text: string;
-  /** 깜빡일 곳. 캐릭터 자신이면 'char'. */
-  hint: RoomKey | 'char';
+  /** 깜빡일 곳. 캐릭터 자신이면 'char', 대화 시트면 'chat', 그 자리에서 약을 주면 'med'. */
+  hint: RoomKey | 'char' | 'chat' | 'med';
 }
 
 export type Counters = Record<CounterKey, number>;
@@ -69,12 +69,16 @@ export interface YeoulState {
   // ── 아이 ──
   petName: string;
   imgUrl: string | null;
+  /** 항목마다 칩 하나 + 긴 글 하나(9/6 2차 결정). */
   persona: string | null;
+  personaNote: string;
   tone: string | null;
+  toneNote: string;
   genre: string | null;
+  genreNote: string;
+  worldChip: string | null;
   world: string;
   free: string;
-  freeOpen: boolean;
   user: Record<string, string | null>;
 
   // ── 부화 ──
@@ -117,13 +121,14 @@ export interface YeoulState {
   // ── 화면 ──
   panel: PanelKey;
   sheetOpen: boolean;
-  playTab: 'talk' | 'guess' | 'run';
+  /** 무대 위에 뜬 게임 창. 시트가 아니라 **모달**이다(9/6 2차 결정). */
+  game: 'none' | 'guess' | 'run';
   albumTab: AlbumTab;
   draft: string;
   log: ChatLine[];
   memories: string[];
   resolved: Partial<Record<string, boolean>>;
-  guess: { round: number; win: number; lose: number; msg: string };
+  guess: { round: number; win: number; lose: number; msg: string; over: boolean };
   wallId: string;
   saved: number;
   wishes: number;
@@ -151,16 +156,18 @@ function initial(): YeoulState {
   return {
     screen: 'onb', step: 0,
     authTab: 'join', email: '', pw: '', agreed: false,
-    petName: '', imgUrl: null, persona: null, tone: null, genre: null, world: '', free: '', freeOpen: false, user: {},
+    petName: '', imgUrl: null,
+    persona: null, personaNote: '', tone: null, toneNote: '', genre: null, genreNote: '',
+    worldChip: null, world: '', free: '', user: {},
     hatchAt: Date.now(), basicReady: false, hatchFail: 'none', cracking: false,
     day: 1, bond: 10,
     full: 1, happy: 2, stock: MAX_STOCK, trace: 0, plays: PLAYS_PER_DAY, snacks: 0, pets: 0, calls: CALLS_PER_DAY,
     bathUsed: false, sick: false, justHealed: false, sleeping: false, night: false, morning: false, overslept: false,
     tutor: 0, nap: 'none',
     counters: zeroCounters(), unlocked: [...FLOOR1], runWins: 0,
-    panel: 'table', sheetOpen: false, playTab: 'talk', albumTab: 'motion', draft: '',
+    panel: 'table', sheetOpen: false, game: 'none', albumTab: 'motion', draft: '',
     log: [], memories: [],
-    resolved: {}, guess: { round: 0, win: 0, lose: 0, msg: '' },
+    resolved: {}, guess: { round: 0, win: 0, lose: 0, msg: '', over: false },
     wallId: WALLS[0].id, saved: 0, wishes: 0, scenes: 0,
     needStyle: '색+모양+글자', leaveOff: false,
     hearts: false, says: '', sys: '', modal: null,
@@ -178,10 +185,10 @@ const sampleState = (): Partial<YeoulState> => ({
   counters: { chat: 6, sleepWake: 4, bath: 3, game: 5, cleanDay: 2, floor2: 5, days: 12 },
   unlocked: [...FLOOR1, 'tilt', 'wave', 'sleep', 'wash', 'startle'],
   runWins: 5,
-  panel: 'table', sheetOpen: false, playTab: 'talk', albumTab: 'motion', draft: '',
+  panel: 'table', sheetOpen: false, game: 'none', albumTab: 'motion', draft: '',
   log: [{ who: 'pet', text: '저는 여울이에요. 연습 상대예요.' }],
   memories: ['빵 좋아함', '비 싫어함'],
-  resolved: {}, guess: { round: 0, win: 0, lose: 0, msg: '' },
+  resolved: {}, guess: { round: 0, win: 0, lose: 0, msg: '', over: false },
   saved: 2, wishes: 0, scenes: 1, hearts: false, says: '', sys: '', modal: null,
 });
 
@@ -304,6 +311,7 @@ export function useYeoul({ pc }: UseYeoulOptions) {
   const openPanel = useCallback((k: PanelKey) => {
     const v = ref.current;
     if ((v.sleeping || v.nap === 'sleeping') && k !== 'bed' && k !== 'pet') { sys('자는 중엔 들어갈 수 없어요'); return; }
+    if (v.game !== 'none') return;
     if (v.sick && k === 'play') { sys('아플 땐 못 놀아요'); return; }
     const resolved = { ...v.resolved };
     if ((ROOM_KEYS as readonly string[]).includes(k)) resolved[k] = true;
@@ -423,18 +431,33 @@ export function useYeoul({ pc }: UseYeoulOptions) {
   }, [bump, tutorDone]);
 
   /** 말풍선의 "답하기" — 부름 종류에 따라 갈 곳이 다르다. */
-  const answerCall = useCallback((hint: RoomKey | 'char') => {
+  const answerCall = useCallback((hint: RoomKey | 'char' | 'chat' | 'med') => {
     if (hint === 'char') { onPet(); return; }
-    if (hint === 'play') { patch({ panel: 'play', playTab: 'talk', sheetOpen: true }); return; }
+    // 약은 방에 들어가지 않고 그 자리에서 준다(9/6 3차 결정 — 욕실에서 약을 뺐다).
+    if (hint === 'med') { onMed(); return; }
     openPanel(hint);
-  }, [onPet, openPanel, patch]);
+  }, [onMed, onPet, openPanel]);
 
-  // ── 놀이 ──────────────────────────────────────────────────────────────
-  const pickTab = useCallback((t: YeoulState['playTab']) => patch({ playTab: t }), [patch]);
+  // ── 놀이 — 게임은 시트가 아니라 무대 위 **모달**이다(9/6 2차 결정) ────────
+  /** 시트를 닫고 게임 창을 연다. 캐릭터가 계속 보여야 노는 느낌이 난다. */
+  const openGame = useCallback((kind: 'guess' | 'run') => {
+    const v = ref.current;
+    if (kind === 'run') { patch({ game: 'run', sheetOpen: false }); return; }
+    if (v.plays <= 0) { sys('오늘 남은 판이 없어요'); return; }
+    patch({ game: 'guess', sheetOpen: false, guess: { round: 0, win: 0, lose: 0, msg: '', over: false } });
+  }, [patch, sys]);
+  const closeGame = useCallback(() => patch({ game: 'none' }), [patch]);
+  /** 결과를 보고 "한 판 더". 남은 판이 없으면 창을 닫는다. */
+  const againGame = useCallback(() => {
+    const v = ref.current;
+    if (v.plays <= 0) { sys('오늘 남은 판이 없어요'); patch({ game: 'none' }); return; }
+    patch({ guess: { round: 0, win: 0, lose: 0, msg: '', over: false } });
+  }, [patch, sys]);
 
   /** 좌우 맞히기 = 5번 중 3번(진행 표시, 3승/3패에 종료). */
   const guessSide = useCallback(() => {
     const v = ref.current;
+    if (v.guess.over) return;
     if (v.plays <= 0) { sys('오늘 남은 판이 없어요'); return; }
     // ★ 진짜 게임은 서버가 답을 쥔다(GameSection). 여기 무작위는 배치 확인용 자리표시다.
     const hit = Math.random() < 0.5;
@@ -444,7 +467,7 @@ export function useYeoul({ pc }: UseYeoulOptions) {
     if (!over) { patch({ guess: g }); return; }
     const won = g.win >= GUESS_WIN;
     bump('game', 1, {
-      guess: { round: 0, win: 0, lose: 0, msg: won ? `${g.win}대 ${g.lose}으로 이겼어요` : `${g.win}대 ${g.lose}으로 졌어요` },
+      guess: { ...g, over: true, msg: won ? `${g.win}대 ${g.lose}으로 이겼어요` : `${g.win}대 ${g.lose}으로 졌어요` },
       plays: v.plays - 1,
       runWins: v.runWins + (won ? 1 : 0),
       happy: won ? Math.min(CELLS, v.happy + 1) : v.happy,
@@ -485,9 +508,12 @@ export function useYeoul({ pc }: UseYeoulOptions) {
   const setPersona = useCallback((k: string) => patch({ persona: k }), [patch]);
   const setTone = useCallback((v: string) => patch({ tone: ref.current.tone === v ? null : v }), [patch]);
   const setGenre = useCallback((v: string) => patch({ genre: ref.current.genre === v ? null : v }), [patch]);
-  const setWorld = useCallback((v: string) => patch({ world: v.slice(0, WORLD_MAX) }), [patch]);
-  const setFree = useCallback((v: string) => patch({ free: v.slice(0, FREE_MAX) }), [patch]);
-  const toggleFree = useCallback(() => patch({ freeOpen: !ref.current.freeOpen }), [patch]);
+  const setWorldChip = useCallback((v: string) => patch({ worldChip: ref.current.worldChip === v ? null : v }), [patch]);
+  const setWorld = useCallback((v: string) => patch({ world: v }), [patch]);
+  const setFree = useCallback((v: string) => patch({ free: v }), [patch]);
+  const setPersonaNote = useCallback((v: string) => patch({ personaNote: v }), [patch]);
+  const setToneNote = useCallback((v: string) => patch({ toneNote: v }), [patch]);
+  const setGenreNote = useCallback((v: string) => patch({ genreNote: v }), [patch]);
 
   // ── 개발용 스위치(실서비스에서는 지운다) ──────────────────────────────
   const setTime = useCallback((v: 'day' | 'night' | 'morning' | 'late' | 'sleep') => {
@@ -663,6 +689,7 @@ export function useYeoul({ pc }: UseYeoulOptions) {
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       const v = ref.current;
       if (v.modal) { if (e.key === 'Escape' || e.key === 'Enter') closeModal(); return; }
+      if (v.game !== 'none' && e.key === 'Escape') { closeGame(); return; }
       if (v.screen === 'onb') {
         if (e.key === 'Enter') { e.preventDefault(); onNext(); }
         if (e.key === 'Escape') { e.preventDefault(); onBack(); }
@@ -673,11 +700,11 @@ export function useYeoul({ pc }: UseYeoulOptions) {
       if (n >= 1 && n <= ROOM_KEYS.length) { openPanel(ROOM_KEYS[n - 1]); return; }
       if (e.key === ' ') { e.preventDefault(); onPet(); return; }
       if (e.key === 'Escape') { closeSheet(); return; }
-      if (v.panel === 'play' && v.playTab === 'guess' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) guessSide();
+      if (v.game === 'guess' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) guessSide();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [pc, closeModal, closeSheet, guessSide, onBack, onNext, onPet, openPanel, tapEgg]);
+  }, [pc, closeGame, closeModal, closeSheet, guessSide, onBack, onNext, onPet, openPanel, tapEgg]);
 
   // ── 화면이 그대로 읽는 값 ─────────────────────────────────────────────
 
@@ -685,9 +712,10 @@ export function useYeoul({ pc }: UseYeoulOptions) {
   const levels = useMemo((): Record<RoomKey, LvKey> => {
     if (mode === 'sleep') return { table: 'off', bath: 'off', play: 'off', bed: 'sleep', album: 'plain' };
     const table: LvKey = s.full <= 1 ? 'now' : s.full <= 2 ? 'soon' : 'ok';
-    let bath: LvKey = s.trace >= 3 ? 'now' : s.trace >= 1 ? 'soon' : 'ok';
+    // ★ 욕실은 **흔적 기준으로만** 색이 바뀐다. 아픔은 말풍선과 무대의 약병이 맡는다(9/6 3차 결정).
+    const bath: LvKey = s.trace >= 3 ? 'now' : s.trace >= 1 ? 'soon' : 'ok';
     let play: LvKey = s.plays <= 0 ? 'off' : s.happy <= 1 ? 'now' : s.happy <= 2 ? 'soon' : 'ok';
-    if (mode === 'sick') { bath = 'med'; play = 'gray'; }
+    if (mode === 'sick') play = 'gray';
     // 튜토리얼 40분 낮잠 동안에도 침실은 '지금 할 수 있다' 로 보여야 한다(부름과 버튼이 어긋나면 안 된다).
     const napStep = s.tutor !== null && TUTOR[s.tutor]?.done === 'nap';
     return { table, bath, play, bed: napStep || s.morning || mode === 'night' ? 'ready' : 'off', album: 'plain' };
@@ -698,12 +726,12 @@ export function useYeoul({ pc }: UseYeoulOptions) {
     if (mode === 'sleep') return [];
     if (tutorStep) return [{ kind: 'tutor', text: tutorStep.say, hint: tutorStep.hint }];
     const out: Call[] = [];
-    if (s.sick) out.push({ kind: 'care', text: '아파요 · 약을 주면 바로 나아요', hint: 'bath' });
+    if (s.sick) out.push({ kind: 'care', text: '아파요 · 약을 주면 바로 나아요', hint: 'med' });
     if (s.full <= 1 && !s.resolved.table) out.push({ kind: 'care', text: '배고파요', hint: 'table' });
     if (s.trace >= 2 && !s.resolved.bath) out.push({ kind: 'care', text: '여기 좀 치워 주세요', hint: 'bath' });
     if (!s.resolved.chat && s.calls > 0) {
       const last = s.log[s.log.length - 1];
-      out.push({ kind: 'chat', text: last?.who === 'pet' ? last.text : '있잖아, 오늘은 뭐 했어요?', hint: 'play' });
+      out.push({ kind: 'chat', text: last?.who === 'pet' ? last.text : '있잖아, 오늘은 뭐 했어요?', hint: 'chat' });
     }
     if (mode === 'night' && !s.resolved.bed) out.push({ kind: 'care', text: '이제 졸려요', hint: 'bed' });
     return out;
@@ -732,7 +760,12 @@ export function useYeoul({ pc }: UseYeoulOptions) {
         show: true, text: top.text,
         chip: isEnd
           ? { label: '알겠어요', tap: skipTutor }
-          : { label: top.kind === 'chat' ? '답하기' : top.hint === 'char' ? '쓰다듬기' : '들어가기', tap: () => answerCall(top.hint) },
+          : {
+            label: top.hint === 'med' ? '약 주기'
+              : top.kind === 'chat' || top.hint === 'chat' ? '답하기'
+                : top.hint === 'char' ? '쓰다듬기' : '들어가기',
+            tap: () => answerCall(top.hint),
+          },
         more: calls.length > 1 ? calls.length - 1 : 0,
       };
     }
@@ -808,9 +841,10 @@ export function useYeoul({ pc }: UseYeoulOptions) {
     openPanel, closeSheet,
     onPet, onRice, onSnack, onClean, onBath, onMed, onSleep,
     setDraft, onSend, answerCall,
-    pickTab, guessSide,
+    openGame, closeGame, againGame, guessSide,
     pickAlbumTab, onDownload, onShare, addWish, pickWall,
-    pickNeedStyle, toggleLeave, setPersona, setTone, setGenre, setWorld, setFree, toggleFree,
+    pickNeedStyle, toggleLeave, setPersona, setTone, setGenre, setWorldChip, setWorld, setFree,
+    setPersonaNote, setToneNote, setGenreNote,
     setTime, toggleSick, passTime, showUnlockDemo, showMorning, skipTutor,
     enterSample, leaveSample, goEgg, tapEgg, reUpload, setBasicReady, setHatchFail,
     goStep, goRoom, onNext, onBack, onPickImg, setName, randomName,

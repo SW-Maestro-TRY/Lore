@@ -11,9 +11,9 @@
 //   · 방에 들어가면 **무대 배경이 그 방으로 바뀐다**. 시트는 내용만큼만 올라와 캐릭터가 계속 보인다.
 'use client';
 
-import type { CSSProperties } from 'react';
+import { useRef, type CSSProperties } from 'react';
 import { ASSET } from '../constants';
-import { HATCH_STAGES, SHEET_H, yeoulImg } from './constants';
+import { GUESS_ROUNDS, HATCH_STAGES, SHEET_H, yeoulImg } from './constants';
 import PanelBody, { RoomButtons, panelMeta } from './Panels';
 import { C, GAEGU, MONO, SANS, cta, ghost, note, radius, sysLine, title } from './ui';
 import type { Yeoul } from './useYeoul';
@@ -40,6 +40,16 @@ function motionOf(y: Yeoul): string {
 // ── 무대 ────────────────────────────────────────────────────────────────
 export function Stage({ y, height }: { y: Yeoul; height: number | string }) {
   const { s, derived, actions } = y;
+  // ★ 대화로 들어가는 길 — **길게 누르기**. 짧게 누르면 쓰다듬기 그대로다.
+  //   부름이 없을 때도 대화를 열 길이 하나는 있어야 해서 둔 기본값이고, **진입 방식은 미정**이다.
+  const press = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef(false);
+  const holdStart = () => {
+    held.current = false;
+    if (press.current) clearTimeout(press.current);
+    press.current = setTimeout(() => { held.current = true; actions.openPanel('chat'); }, 500);
+  };
+  const holdEnd = () => { if (press.current) clearTimeout(press.current); };
   const b = derived.bubble;
   const trash = s.trace > 0 ? ASSET.trash[Math.min(s.trace, ASSET.trash.length) - 1].src : null;
   const asleep = s.sleeping || s.nap === 'sleeping';
@@ -50,7 +60,11 @@ export function Stage({ y, height }: { y: Yeoul; height: number | string }) {
   return (
     <div
       data-part="room" data-mode={derived.mode} data-room={derived.stageBg.room}
-      onClick={actions.onPet}
+      onClick={() => { if (held.current) { held.current = false; return; } actions.onPet(); }}
+      onPointerDown={holdStart}
+      onPointerUp={holdEnd}
+      onPointerLeave={holdEnd}
+      onContextMenu={(e) => e.preventDefault()}
       style={{ position: 'relative', width: '100%', height, borderRadius: radius.lg, overflow: 'hidden', border: `1px solid ${C.line}`, background: C.slotDim, cursor: 'pointer' }}
     >
       {/* 배경 — 방에 들어가면 그 방으로 바뀐다. */}
@@ -118,6 +132,31 @@ export function Stage({ y, height }: { y: Yeoul; height: number | string }) {
             )}
           </div>
         </div>
+      )}
+
+      {/* 무대 안 약병 — **아플 때만** 나타난다. 안 아프면 화면 어디에도 약이 없다(9/6 3차 결정).
+          ★ 자리는 **미정**이다. 지금은 무대 오른쪽 위 구석이 기본값.
+          그림 에셋(ASSET.medicine)이 아직 없어 CSS 로 약병 모양만 세워 둔다. */}
+      {s.sick && !asleep && (
+        <button
+          data-action="medicine"
+          onClick={(e) => { e.stopPropagation(); actions.onMed(); }}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label="약 주기"
+          style={{
+            position: 'absolute', right: 12, top: 12, width: 42, height: 52, padding: 0, cursor: 'pointer',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end',
+            borderRadius: 12, border: `1px solid ${C.line}`, background: 'rgba(255,251,244,.9)',
+            animation: 'yeoulBlink 1.3s ease-in-out infinite',
+          }}
+        >
+          {/* 뚜껑 */}
+          <span style={{ width: 13, height: 7, borderRadius: '3px 3px 0 0', background: '#8E3A2B' }} />
+          {/* 병 */}
+          <span style={{ width: 25, height: 27, marginBottom: 5, borderRadius: '5px 5px 7px 7px', background: '#E9D9CF', border: '1px solid #C9B4A6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ width: 11, height: 3, borderRadius: 2, background: '#8E3A2B' }} />
+          </span>
+        </button>
       )}
 
       {s.hearts && (
@@ -230,6 +269,69 @@ export function Modal({ y }: { y: Yeoul }) {
   );
 }
 
+// ── 게임 창 — 시트가 아니라 **무대 위 작은 모달**(9/6 2차 결정) ──────────
+//
+// 왜 모달인가 — 시트로 올리면 캐릭터가 가려져서 "같이 논다" 가 아니라 "메뉴를 고른다" 가 된다.
+// 무대 가운데에 작은 창으로 뜨면 뒤로 아이가 계속 보인다.
+export function GameModal({ y }: { y: Yeoul }) {
+  const { s, derived, actions } = y;
+  if (s.game === 'none') return null;
+  const g = s.guess;
+  const run = s.game === 'run';
+
+  return (
+    // 무대를 감싼 칸 안에 놓인다 — 화면 전체가 아니라 **무대 위 가운데**에 뜬다.
+    <div style={{ position: 'absolute', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, animation: 'yeoulFadeIn .18s ease' }}>
+      <div onClick={actions.closeGame} style={{ position: 'absolute', inset: 0, background: 'rgba(74,64,56,.34)', borderRadius: radius.lg }} />
+      <div
+        data-part="game" data-game={s.game}
+        style={{ position: 'relative', width: '100%', maxWidth: 300, padding: '15px 16px 13px', borderRadius: 20, background: C.paperHi, border: `1px solid ${C.line}`, boxShadow: '0 12px 34px rgba(74,64,56,.22)', ...col(9), alignItems: 'center', animation: 'yeoulPop .26s ease', boxSizing: 'border-box' }}
+      >
+        <div style={{ ...row(9), width: '100%' }}>
+          <span style={{ ...title, fontSize: 19 }}>{run ? '달리기' : '좌우 맞히기'}</span>
+          <span style={{ flex: 1 }} />
+          <button data-action="game-close" onClick={actions.closeGame} style={{ border: `1px solid ${C.line}`, background: C.slot, borderRadius: radius.pill, width: 26, height: 26, fontSize: 12, color: C.sub, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+        </div>
+
+        {run ? (
+          <div style={{ ...col(8), width: '100%', padding: 15, borderRadius: radius.md, background: '#F1EBE0', border: '1px dashed rgba(74,64,56,.18)', boxSizing: 'border-box' }}>
+            <span style={{ fontSize: 13.5, color: C.sub }}>{derived.runLocked ? '아직 잠겨 있어요' : '곧 열려요'}</span>
+            <span style={note}>{derived.runLocked ? derived.runCond : '한 버튼으로 뛰어넘어요. 30초를 버티면 이겨요. (게임 화면은 다음 판에서)'}</span>
+          </div>
+        ) : (
+          <>
+            {/* 캐릭터 얼굴 — 누구와 노는지가 보여야 한다. */}
+            <div style={{ width: 74, height: 74, flex: 'none', borderRadius: '50%', overflow: 'hidden', background: C.slotDim, border: `1px solid ${C.line}` }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={s.imgUrl ?? yeoulImg(g.over ? (g.win >= g.lose ? 'joy' : 'sad') : 'base')} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
+            </div>
+
+            <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.3, color: C.ink, textAlign: 'center' }}>
+              {g.msg || '어느 손에 있을까요?'}
+            </span>
+            <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.sub }}>
+              {GUESS_ROUNDS}번 중 {Math.min(g.round + (g.over ? 0 : 1), GUESS_ROUNDS)}번째 · 맞힌 수 {g.win}
+            </span>
+
+            {g.over ? (
+              <div style={{ ...col(8), width: '100%' }}>
+                <button data-action="game-again" onClick={actions.againGame} style={{ ...cta, padding: 13, fontSize: 13.5, borderRadius: radius.md }}>한 판 더</button>
+                <button data-action="game-done" onClick={actions.closeGame} style={{ ...ghost, textAlign: 'center' }}>닫기</button>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, width: '100%' }}>
+                <button data-action="game-left" onClick={actions.guessSide} style={{ ...ghost, padding: '20px 6px', textAlign: 'center', fontSize: 15 }}>왼쪽</button>
+                <button data-action="game-right" onClick={actions.guessSide} style={{ ...ghost, padding: '20px 6px', textAlign: 'center', fontSize: 15 }}>오른쪽</button>
+              </div>
+            )}
+            <span style={{ fontSize: 11, color: C.faint }}>오늘 남은 판 {s.plays}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── 방 화면 ─────────────────────────────────────────────────────────────
 export default function Room({ y }: { y: Yeoul }) {
   const { s, derived, actions, pc } = y;
@@ -299,7 +401,10 @@ export default function Room({ y }: { y: Yeoul }) {
           </div>
 
           <div style={{ flex: '6 1 420px', minWidth: 'min(100%,380px)', order: 1, ...col(12) }}>
-            <Stage y={y} height="min(58vh,470px)" />
+            <div style={{ position: 'relative' }}>
+              <Stage y={y} height="min(58vh,470px)" />
+              <GameModal y={y} />
+            </div>
             <RoomButtons y={y} />
             {sysRow}
           </div>
@@ -318,7 +423,10 @@ export default function Room({ y }: { y: Yeoul }) {
     <div style={{ ...col(10), padding: '12px 12px 20px', maxWidth: 460, margin: '0 auto', position: 'relative', minHeight: '100%', boxSizing: 'border-box' }}>
       {sample && <SampleBar y={y} />}
       <Header y={y} />
-      <Stage y={y} height="min(48vh,360px)" />
+      <div style={{ position: 'relative' }}>
+        <Stage y={y} height="min(48vh,360px)" />
+        <GameModal y={y} />
+      </div>
       <RoomButtons y={y} />
       {sysRow}
 

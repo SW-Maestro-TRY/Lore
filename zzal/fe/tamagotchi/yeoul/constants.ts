@@ -19,7 +19,7 @@ export const ROOM_KEYS = ['table', 'bath', 'play', 'bed', 'album'] as const;
 export type RoomKey = (typeof ROOM_KEYS)[number];
 
 /** 방 버튼 말고 헤더(이름 탭)에서 여는 칸. 알림·설정 버튼은 9/6 결정으로 삭제됐다. */
-export type PanelKey = RoomKey | 'pet';
+export type PanelKey = RoomKey | 'pet' | 'chat';
 
 /**
  * 급함의 단계. **색만으로 가르지 않는다** — 모양(shape)과 글자(word)를 함께 둔 이유가 이것이다.
@@ -49,18 +49,19 @@ export const WALLS = BACKGROUNDS.map((b) => ({ id: b.key, name: b.label, img: bg
  * 방 전용 배경 5장은 아직 없다 → 배경 16종 중 가장 가까운 것을 임시로 매핑하고 소품은 CSS 로 표시한다.
  * 그림(E4)이 오면 여기 key 만 갈아 끼우면 된다.
  */
-export const ROOM_BG: Record<RoomKey | 'base', { bg: string | null; prop: string }> = {
+export const ROOM_BG: Record<RoomKey | 'base' | 'chat', { bg: string | null; prop: string }> = {
   base:  { bg: null,             prop: '' },        // null = 사용자가 고른 배경
   table: { bg: 'cafe',           prop: '식탁' },
   bath:  { bg: 'checker',        prop: '욕조' },
   play:  { bg: 'field',          prop: '공' },
   bed:   { bg: 'window_night',   prop: '침대' },
   album: { bg: null,             prop: '' },
+  chat:  { bg: null,             prop: '' },
 };
 
 /** 시트 높이 — 내용만큼만 올라와야 무대의 캐릭터가 계속 보인다(카드 2 판단 4). */
 export const SHEET_H: Record<PanelKey, string> = {
-  table: '42%', bath: '46%', play: '72%', bed: '38%', album: '78%', pet: '64%',
+  table: '42%', bath: '46%', play: '46%', bed: '38%', album: '78%', pet: '64%', chat: '66%',
 };
 
 // ── 흐름 11단계 ──────────────────────────────────────────────────────────
@@ -116,8 +117,23 @@ export const PERSONALITIES: ReadonlyArray<{ key: string; label: string; desc: st
   { key: 'clingy', label: '응석',  desc: '자주 부르고 곁에 있으려 해요' },
   { key: 'chic',  label: '시크',   desc: '무심한 척하지만 챙겨요' },
 ];
-export const TONES = ['반말', '존댓말', '사투리', '무뚝뚝', '애교'] as const;
-export const GENRES = ['일상', '판타지', 'SF', '학원', '로맨스', '무협'] as const;
+export const TONES = ['반말', '존댓말', '사투리', '어린아이', '어른스러움', '무뚝뚝', '애교'] as const;
+export const GENRES = ['일상', '판타지', 'SF', '학원', '역사', '로맨스', '무협'] as const;
+/** 세계관도 칩 + 긴 글이다(9/6 2차 결정 — 40자 제한은 없앴다). */
+export const WORLDS = ['현대', '중세', '미래', '자연', '도시', '우주', '학교'] as const;
+
+/**
+ * 항목마다 붙는 여러 줄 입력의 안내 문구.
+ * 왜 칩만으로 안 되는가 — 칩은 고르기 쉬운 대신 "이 아이만의 것" 을 못 담는다.
+ * 칩으로 방향을 잡고 그 아래에 길게 쓰게 하면 둘 다 된다(9/6 2차 결정).
+ */
+export const NOTE_PLACEHOLDER: Record<string, string> = {
+  persona: '자세히 써도 돼요. 예: 낯을 가리지만 한번 친해지면 계속 따라다녀요',
+  tone: '입버릇이나 자주 쓰는 말이 있으면 적어 주세요',
+  genre: '어떤 이야기 속 아이인지 적어 주세요',
+  world: '사는 곳, 시대, 함께 있는 사람들 같은 걸 적어 주세요',
+  free: '좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요',
+};
 
 /** 이름 랜덤 후보(repo constants.NAMES 와 같은 결). */
 export const NAME_POOL = ['보리', '여름', '노루', '단이', '설아', '하루', '도담', '미르', '온이', '새벽'];
@@ -174,8 +190,8 @@ export interface TutorStep {
   min: number;
   /** 캐릭터가 하는 말. */
   say: string;
-  /** 깜빡일 곳. 캐릭터 자신이면 'char'. */
-  hint: RoomKey | 'char';
+  /** 깜빡일 곳. 캐릭터 자신이면 'char', 대화 시트면 'chat'. */
+  hint: RoomKey | 'char' | 'chat';
   /** 이 행동이 끝나면 넘어간다. */
   done: 'feed' | 'pet' | 'chat' | 'clean' | 'game' | 'share' | 'nap' | 'end';
 }
@@ -183,7 +199,7 @@ export interface TutorStep {
 export const TUTOR: readonly TutorStep[] = [
   { min: 0,  say: '배가 고픈가 봐요',                             hint: 'table', done: 'feed' },
   { min: 3,  say: '쓰다듬어 주세요',                              hint: 'char',  done: 'pet' },
-  { min: 8,  say: '있잖아, 오늘은 뭐 했어요?',                     hint: 'play',  done: 'chat' },
+  { min: 8,  say: '있잖아, 오늘은 뭐 했어요?',                     hint: 'chat',  done: 'chat' },
   { min: 15, say: '바닥을 치워 주세요',                           hint: 'bath',  done: 'clean' },
   { min: 20, say: '같이 놀아 볼까요',                             hint: 'play',  done: 'game' },
   { min: 25, say: '이 모습 가져가실래요',                          hint: 'album', done: 'share' },
@@ -289,8 +305,8 @@ export const PLAYS_PER_DAY = 3;
 export const CALLS_PER_DAY = 3;
 export const CHAT_MAX = 40;
 export const NAME_MAX = 12;
-export const WORLD_MAX = 40;
-export const FREE_MAX = 60;
+/** 항목마다 붙는 여러 줄 입력의 상한. 길게 쓰라는 칸이라 넉넉히 둔다. */
+export const NOTE_MAX = 300;
 /** 좌우 맞히기 = 5번 중 3번(진행 표시, 3승/3패에 종료). */
 export const GUESS_ROUNDS = 5;
 export const GUESS_WIN = 3;
