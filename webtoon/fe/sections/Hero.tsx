@@ -62,12 +62,16 @@ export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBro
         {line && <p className="hero-allowance">{line}</p>}
       </div>
 
+      {/* 홈의 세 단계는 **승선 · 항해 · 모험** 이다. 위자드의 다섯 걸음
+          (수면·항해·깊은 바다·심해·바닥)과는 다른 이름표다 — 저쪽은 만드는
+          동안 지금 어디쯤인지 세는 눈금이고, 여기는 이 서비스가 무엇을
+          해주는지 소개하는 세 마디다. 「항해」한 단어만 겹친다. */}
       <ol className="depths">
         <li>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={"/static/lou/art/world-begins.png"} alt="" />
           <div>
-            <b>수면 — 이야기의 시작</b>
+            <b>승선 — 이야기의 시작</b>
             <small>캐릭터를 만나는 곳</small>
           </div>
         </li>
@@ -83,7 +87,7 @@ export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBro
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={"/static/lou/art/world-depth.png"} alt="" />
           <div>
-            <b>심해 — 이야기의 깊이</b>
+            <b>모험 — 이야기의 깊이</b>
             <small>숨겨진 과거와 진실</small>
           </div>
         </li>

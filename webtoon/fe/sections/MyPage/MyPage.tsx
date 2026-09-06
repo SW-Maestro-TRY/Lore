@@ -113,24 +113,23 @@ export default function MyPage({
 
   return (
     <section className="mypage">
+      {/* **프로필과 크레딧을 한 덩어리로.** 따로 두었더니 흰 카드가 둘 쌓이고,
+          크레딧 칸은 숫자 하나에 카드를 통째로 쓰느라 안이 텅 비었다. 다만
+          한 줄로 다 밀어 넣지는 않는다 — 위는 나(누구인가 · 무엇을 할 것인가),
+          아래는 크레딧(얼마 남았나)으로 줄을 나눈다. */}
       <header className="mypage-head">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="mypage-photo" src="/static/lou/react/idle/01.webp" alt="" />
         <div className="mypage-who">
-          <p className="eyebrow">마이페이지</p>
-          {/* 이메일 전체를 제목에 걸면 좁은 화면에서 밀린다 — 아이디만 크게
-              쓰고 전체는 아래 줄에 둔다. */}
-          <h2>{user?.email.split("@")[0]}</h2>
-          {/* 이메일과 편수를 한 줄에 이어 붙였더니 좁은 화면에서 접히면서
-              가운뎃점이 줄 앞에 남았다 — 두 줄로 나눈다. */}
-          <p className="mypage-meta">{user?.email}</p>
-          {runs && (
-            <p className="mypage-meta">
-              내가 만든 웹툰 {runs.length}편
-              {hidden ? ` · 그중 ${hidden}편은 나만 보기` : ""}
-            </p>
-          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="mypage-photo" src="/static/lou/react/idle/01.webp" alt="" />
+          <div className="mypage-name">
+            <p className="eyebrow">마이페이지</p>
+            {/* 이메일 전체를 제목에 걸면 좁은 화면에서 밀린다 — 아이디만 크게
+                쓰고 전체는 아래 줄에 둔다. */}
+            <h2>{user?.email.split("@")[0]}</h2>
+            <p className="mypage-meta">{user?.email}</p>
+          </div>
         </div>
+
         <div className="mypage-actions">
           <button type="button" className="btn btn-primary btn-sm" onClick={onCreate}>
             새 웹툰 만들기
@@ -139,33 +138,23 @@ export default function MyPage({
             로그아웃
           </button>
         </div>
-      </header>
 
-      {/* 크레딧. 상단 배지에도 숫자가 있던 자리지만 여기는 **자리**다 —
-          얼마 남았는지 보고 충전할지 정하는 곳.
-          충전은 아직 안 붙었다(#155) — 그래서 「충전하기」를 그리지 않는다.
-          눌러도 아무 일이 안 일어나는 단추를 두느니 없는 편이 낫다. */}
-      <div className="mypage-credit">
-        <div className="mypage-credit-main">
-          <p className="eyebrow">크레딧</p>
+        {/* 크레딧은 여기서 **잔액과 갈 자리**만 말한다. 잔액만 보여 주면
+            모자란 사람이 어디로 가야 하는지 모르고, 줄어든 이유가 궁금한
+            사람도 물을 자리가 없다. (실제 결제는 아직이다 — #155) */}
+        <div className="mypage-credit">
           <p className="mypage-credit-num">
             <b>{credit ?? "…"}</b> <span>C</span>
           </p>
           <p className="mypage-credit-hint">한 편에 12 C</p>
+          <div className="mypage-credit-acts">
+            <button type="button" className="btn btn-quiet btn-sm"
+                    onClick={() => setOpen("charge")}>충전</button>
+            <button type="button" className="btn btn-quiet btn-sm"
+                    onClick={() => setOpen("history")}>내역</button>
+          </div>
         </div>
-        {/* 갈 자리를 만든다. 잔액만 보여 주면 모자란 사람이 어디로 가야 하는지
-            모르고, 줄어든 이유가 궁금한 사람도 물을 자리가 없다. */}
-        <div className="mypage-credit-acts">
-          <button type="button" className="btn btn-quiet btn-sm"
-                  onClick={() => setOpen("charge")}>
-            충전
-          </button>
-          <button type="button" className="btn btn-quiet btn-sm"
-                  onClick={() => setOpen("history")}>
-            내역
-          </button>
-        </div>
-      </div>
+      </header>
 
       {open === "history" && <CreditHistory onClose={() => setOpen(null)} />}
       {open === "charge" && <CreditCharge onClose={() => setOpen(null)} />}
@@ -175,6 +164,9 @@ export default function MyPage({
           여기 들어온 사람이 다음에 할 일은 대개 "저 캐릭터로 하나 더" 다.
           옆으로 넘겨 보게 해서 작품 목록을 아래로 밀지 않는다. */}
       <MyCharacters onOpen={onCharacters} />
+
+      {/* **내 캐릭터를 작품보다 먼저 둔다.** 웹툰은 캐릭터로 만드는 것이라,
+          여기 들어온 사람이 다음에 할 일은 대개 "저 캐릭터로 하나 더" 다. */}
 
       <div className="mypage-section">
         <div className="mypage-section-head">

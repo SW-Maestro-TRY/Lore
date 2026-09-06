@@ -21,16 +21,34 @@ export default function MyCharacters({ onOpen }: { onOpen: () => void }) {
     return () => { alive = false; };
   }, []);
 
-  if (!mine || mine.length === 0) return null;
+  // 못 받아 왔을 때만 안 그린다. **없는 것과 모르는 것은 다르다** —
+  // 없으면 만들러 가는 길을 보여줘야 하고, 모르면 아무 말도 안 하는 게 맞다.
+  if (!mine) return null;
 
   return (
     <section className="mypage-chars">
       <div className="mypage-chars-head">
-        <h3>내 캐릭터 {mine.length}</h3>
-        <button type="button" className="btn btn-quiet btn-sm" onClick={onOpen}>
-          모두 보기
-        </button>
+        <h3>내 캐릭터{mine.length ? ` ${mine.length}` : ""}</h3>
+        {mine.length > 0 && (
+          <button type="button" className="btn btn-quiet btn-sm" onClick={onOpen}>
+            모두 보기
+          </button>
+        )}
       </div>
+
+      {/* **없다고 이 줄을 지우지 않는다.** 지우면 캐릭터라는 것이 있는 줄도
+          모른 채로 웹툰만 만들게 된다 — 여기가 그것을 알리는 자리다. */}
+      {mine.length === 0 && (
+        <button type="button" className="mychar-blank" onClick={onOpen}>
+          <b>+</b>
+          <span>
+            <b>아직 만든 캐릭터가 없어요</b>
+            캐릭터를 만들어 두면 웹툰을 만들 때마다 다시 적지 않아도 돼요.
+          </span>
+          <em>캐릭터 만들러 가기 →</em>
+        </button>
+      )}
+      {mine.length > 0 && (
       <ul className="mychar-strip">
         {mine.map((c) => (
           <li key={c.id}>
@@ -46,6 +64,7 @@ export default function MyCharacters({ onOpen }: { onOpen: () => void }) {
           </li>
         ))}
       </ul>
+      )}
     </section>
   );
 }
