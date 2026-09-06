@@ -1,13 +1,20 @@
 package com.lore.webtoon.job;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.WorkLedger;
+import com.lore.webtoon.story.StoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -71,16 +78,20 @@ public class JobService {
     private final JobStore store;
     private final JobRunner runner;
     private final JobProgress progress;
+    private final StoryStore stories;
+    private final WorkLedger works;
     private final Path jobsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobService(WebtoonJobRepository jobs, JobStore store, JobRunner runner,
-                      JobProgress progress,
+                      JobProgress progress, StoryStore stories, WorkLedger works,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
+        this.works = works;
         this.store = store;
         this.runner = runner;
         this.progress = progress;
+        this.stories = stories;
         this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
                 ? "haeun/landing/jobs_spring" : jobsDir).toAbsolutePath().normalize();
     }
@@ -93,7 +104,8 @@ public class JobService {
      * 로만 알게 된다.
      */
     @Transactional
-    public String create(CreateRequest form, Long userId, String browserUid) {
+    public String create(CreateRequest form, Long userId, String browserUid,
+                         String guestKey) {
         if (!form.agreeIp()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "저작권 확인에 동의해야 만들 수 있습니다");
@@ -119,11 +131,46 @@ public class JobService {
 
         String style = STYLE.getOrDefault(blank(form.style()), DEFAULT_STYLE);
         WebtoonJob job = jobs.save(WebtoonJob.queued(
-                publicId, userId, browserUid, style,
-                form.checkpoints() == null || form.checkpoints(), Instant.now()));
+                publicId, userId, browserUid, guestKey, style,
+                form.checkpoints() == null || form.checkpoints(),
+                inputOf(form), Instant.now()));
 
-        runner.enqueue(job.getId(), dir);
+        /* **장부에도 적는다.**
+         *
+         * 프록시 길은 하네스 응답을 보고 적는데(WebtoonController), 이 길은
+         * 그 응답을 안 지나간다. 그래서 여기로 만든 작품이 장부에 한 줄도 안
+         * 남았고, 만든 사람이 마이페이지에서 자기 작품을 못 봤다 — 비용도
+         * 그림도 다 남았는데 <b>주인만 없었다.</b> */
+        works.started(publicId, userId, browserUid);
+
+        /* **커밋된 뒤에 그리기 시작한다.**
+         *
+         * 그리는 쪽은 다른 실타래에서 자기 트랜잭션으로 이 작업을 다시 읽는다
+         * (JobStore 의 REQUIRES_NEW). 여기서 바로 시작시키면 아직 커밋이 안 끝나
+         * 그 줄이 안 보이고, 방금 만든 작업을 "그런 작업이 없다" 로 읽는다 —
+         * 사람에게는 만들자마자 실패로 뜬다. 실제로 그랬다.
+         *
+         * 트랜잭션 밖(검사 등)에서 불릴 수도 있으니, 붙을 곳이 없으면 그냥
+         * 바로 시작한다. */
+        Long id = job.getId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            runner.enqueue(id, dir);
+                        }
+                    });
+        } else {
+            runner.enqueue(id, dir);
+        }
         return publicId;
+    }
+
+    /** 이 작업이 만들고 있는 run 번호. 첫 단계가 끝나야 생기므로 없을 수 있다. */
+    @Transactional(readOnly = true)
+    public String runOf(String publicId) {
+        return store.byPublicId(publicId).getRunId();
     }
 
     @Transactional(readOnly = true)
@@ -146,6 +193,7 @@ public class JobService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 이야기가 없습니다");
         }
         store.pick(job.getId(), n);
+        stories.choose(job.getRunId(), n);       // 무엇을 골랐는지도 DB 에 남는다
         runner.resumeAfterPick(job.getId());
     }
 
@@ -249,6 +297,29 @@ public class JobService {
                 .writeValue(dir.resolve("character.json").toFile(), doc);
     }
 
+    /**
+     * 사람이 넣은 것을 DB 에 남길 모양으로.
+     *
+     * <b>사진은 뺀다.</b> 사람 얼굴이 들어올 수 있는 값이고, 여기 쌓을 것이
+     * 아니다 — 몇 장을 올렸는지만 적는다.
+     */
+    private String inputOf(CreateRequest form) {
+        Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("name", blank(form.name()));
+        doc.put("character", blank(form.character()));
+        doc.put("genre", blank(form.genre()));
+        doc.put("story", blank(form.story()));
+        doc.put("style", blank(form.style()));
+        doc.put("fields", form.fields() == null ? Map.of() : form.fields());
+        doc.put("photos", form.photosData() == null ? 0 : form.photosData().size());
+        try {
+            return mapper.writeValueAsString(doc);
+        } catch (IOException e) {
+            log.warn("입력을 남기지 못했습니다 (job 은 그대로 진행합니다)", e);
+            return null;
+        }
+    }
+
     private boolean notBlank(String s) {
         return s != null && !s.isBlank();
     }
@@ -257,10 +328,37 @@ public class JobService {
         return s == null ? "" : s.trim();
     }
 
-    /** 화면이 보내는 것. 파이썬 서버가 받던 것과 같은 이름들이다. */
+    /**
+     * 화면이 보내는 것.
+     *
+     * <h2>이름을 자바 식으로 바꾸지 않는다</h2>
+     *
+     * 화면은 프로토타입에서 옮겨 온 것이라 파이썬이 받던 이름을 그대로
+     * 보낸다 — {@code photos_data} · {@code agree_ip}. 자바 쪽만 camelCase 로
+     * 적어 두면 <b>그 두 칸이 통째로 안 들어온다.</b> 실제로 그랬다: 저작권에
+     * 동의하고 눌러도 "동의해야 합니다" 로 막혔고, 사진도 같이 버려졌다.
+     *
+     * 그래서 <b>줄 위의 이름은 파이썬 것</b>으로 두고, 자바 이름은 별명으로
+     * 같이 받는다(옛 호출을 안 깨뜨리려고).
+     *
+     * <h2>동의 칸은 {@code Boolean} 이다</h2>
+     *
+     * {@code boolean} 으로 두면 그 칸이 <b>없을 때</b> Jackson 이 본문 전체를
+     * 거절한다 — 사람에게는 "입력값이 올바르지 않습니다" 라는, 무엇을 고쳐야
+     * 하는지 알 수 없는 말만 남는다. 없으면 안 한 것으로 보고, 그 다음
+     * {@code create()} 가 <b>왜</b> 안 되는지 한글로 말하게 둔다.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)   // 화면이 안 읽히는 칸을 하나 더 보낸다(photo_note)
     public record CreateRequest(String name, String character, String genre, String story,
                                 String style, Map<String, String> fields,
-                                List<String> photosData, boolean agreeIp,
+                                @JsonProperty("photos_data") @JsonAlias("photosData")
+                                List<String> photosData,
+                                @JsonProperty("agree_ip") @JsonAlias("agreeIp")
+                                Boolean agreeIp,
                                 Boolean checkpoints, String uid) {
+
+        public CreateRequest {
+            agreeIp = agreeIp != null && agreeIp;
+        }
     }
 }

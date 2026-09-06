@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { HERO_LOUS, pickOne } from "../lib/louArt";
-import config from "../demo-api/config.json";
+import { useAllowance, allowanceLine } from "../lib/useAllowance";
 
 /* 홈 = 소개 + 만들기. 둘을 떼어 놓지 않는다.
  *
@@ -13,6 +13,8 @@ import config from "../demo-api/config.json";
  * 정적 프로토타입으로 이어지고 있어서(apps/web/next.config.mjs) 새 화면
  * (Works)으로 대신 연결한다. */
 export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBrowse: () => void }) {
+  const allowance = useAllowance();
+  const line = allowanceLine(allowance);
   /* 루는 두 마리가 그려져 있어서, 들어올 때마다 하나를 뽑는다 — 어느 쪽이
      나올지 모르는 편이 살아 있는 느낌이다(원본 pickHero). 뽑는 것은 화면이
      붙은 **뒤**다: 서버에서 뽑으면 서버와 브라우저가 서로 다른 고래를 골라
@@ -44,12 +46,20 @@ export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBro
         <div className="hero-cta">
           <button type="button" className="btn btn-primary" onClick={onStart}>
             내 캐릭터로 웹툰 만들기
-            <span className="cost-chip">−{config.credit_cost.full}크레딧</span>
+            {/* 크레딧 값은 **로그인한 사람에게만** 참이다. 게스트에게는 크레딧이
+                아예 없는데 「−12크레딧」이라고 적혀 있었다 — 없는 값을 낸다고
+                적어 두고, 정작 무료 몇 편이 남았는지는 안 알려 줬다. */}
+            {allowance?.logged_in && (
+              <span className="cost-chip">−{allowance.credit_cost}크레딧</span>
+            )}
           </button>
           <button type="button" className="btn btn-shell" onClick={onBrowse}>
             둘러보기
           </button>
         </div>
+        {/* 시작하기 전에 알려 준다. 다섯 걸음을 다 걷고 나서 "다 쓰셨어요" 를
+            처음 보면, 그때는 이미 사진을 올리고 이야기까지 적은 뒤다. */}
+        {line && <p className="hero-allowance">{line}</p>}
       </div>
 
       <ol className="depths">

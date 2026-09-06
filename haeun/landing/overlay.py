@@ -34,6 +34,8 @@ from __future__ import annotations
 import json
 import math
 import sys
+import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -448,6 +450,28 @@ def has_items(data: dict[str, Any], no: int) -> bool:
     return bool(scene_spec(data, no).get("items"))
 
 
+def _save_atomically(img, out: Path) -> None:
+    """옆에 써 두고 **한 번에 바꿔 끼운다.**
+
+    같은 자리에 쓰는 곳이 둘이다 — 편집실에서 그 장을 <b>보기만 해도</b>
+    {@code bake_one} 이 굽고, 「이미지로 뽑기」는 {@code bake} 로 전부 굽는다.
+    둘이 겹치면 한 파일에 두 벌이 섞여 들어가, 끝 표시(IEND)까지 멀쩡한데
+    가운데가 깨진 그림이 남는다. 실제로 그렇게 한 장이 깨졌다 — 얹은 것이
+    있는 장만, 그 장만.
+
+    파일 바꿔 끼우기(os.replace)는 한 번에 일어나므로, 겹쳐도 나중 것이
+    이기기만 하고 반쯤 쓰인 파일은 아무도 못 본다.
+    """
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_name(f"{out.name}.{os.getpid()}-{threading.get_ident()}.tmp")
+    try:
+        # PIL 은 확장자로 형식을 고른다 — 임시 이름은 .tmp 라 알 수가 없으므로
+        # 본 이름의 확장자로 직접 알려 준다.
+        img.save(tmp, format=(out.suffix.lstrip(".") or "PNG").upper())
+        os.replace(tmp, out)
+    finally:
+        tmp.unlink(missing_ok=True)
+
 def bake_one(ep_dir: Path, no: int, src: Path,
              data: dict[str, Any] | None = None) -> Path:
     """장 **하나만** 굽는다. 화면이 최종본을 보여줄 때 그때그때 쓴다.
@@ -463,8 +487,7 @@ def bake_one(ep_dir: Path, no: int, src: Path,
     base.load()
     img, _gone = render_scene(base, scene_spec(data, no))
     out = baked_scene_path(ep_dir, no)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    img.save(out)
+    _save_atomically(img, out)
     return out
 
 
@@ -507,7 +530,7 @@ def bake(ep_dir: Path, numbers: list[int], base_of, data: dict[str, Any] | None 
         except OSError as exc:
             raise OverlayError(f"{no}번째 장의 그림을 읽지 못했습니다: {exc}") from exc
         img, gone = render_scene(base, scenes.get(str(no)) or {})
-        img.save(baked_scene_path(ep_dir, no))
+        _save_atomically(img, baked_scene_path(ep_dir, no))
         made.append(no)
         skipped.extend(f"{no}장 {g}" for g in gone)
 

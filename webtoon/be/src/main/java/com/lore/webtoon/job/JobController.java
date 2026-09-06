@@ -2,6 +2,9 @@ package com.lore.webtoon.job;
 
 import com.lore.common.exception.BusinessException;
 import com.lore.webtoon.CreditGate;
+import com.lore.webtoon.GuestGate;
+import com.lore.webtoon.SpendGuard;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -10,10 +13,16 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -48,16 +57,101 @@ public class JobController {
     static final String PREFIX = "/api/webtoon/nh";
 
     private final JobService jobs;
+    private final RunArt art;
+    private final SpendGuard guard;
+    private final GuestGate guests;
+    private final CreditGate credits;
 
-    public JobController(JobService jobs) {
+    public JobController(JobService jobs, RunArt art, SpendGuard guard, GuestGate guests,
+                         CreditGate credits) {
         this.jobs = jobs;
+        this.art = art;
+        this.guard = guard;
+        this.guests = guests;
+        this.credits = credits;
     }
 
-    @Operation(summary = "웹툰 만들기 시작")
+    /**
+     * 만들기 전에 화면이 묻는 것 — <b>지금 이 사람은 무엇으로 만드는가.</b>
+     *
+     * 로그인 안 한 사람에게 화면이 「−12크레딧」이라고 적고 있었다. 그 사람에게는
+     * 크레딧이 아예 없다(게스트는 하루 무료 몇 편으로 센다) — 없는 값을 낸다고
+     * 적어 두고, 정작 몇 편이 남았는지는 어디에도 없었다. 다 쓰고 나서야
+     * "오늘 2편 다 쓰셨어요" 를 처음 본다.
+     *
+     * 봉투를 안 씌운다 — 이 화면이 읽는 다른 것들과 같은 모양으로 둔다.
+     */
+    @Operation(summary = "지금 만들면 무엇이 드나",
+            description = "게스트면 남은 무료 편수, 로그인했으면 크레딧 값과 잔액.")
+    @GetMapping("/allowance")
+    public Map<String, Object> allowance(HttpServletRequest request) {
+        Long me = CreditGate.currentUser();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("logged_in", me != null);
+        out.put("credit_cost", credits.cost());
+        if (me == null) {
+            Integer left = guests.freeLeft(request);
+            out.put("free_left", left);
+            out.put("free_per_day", guests.freePerDay());
+        } else {
+            out.put("balance", credits.balanceOf(me));
+        }
+        // 오늘 전체 몫이 찼으면 로그인해도 못 만든다 — 그 말을 먼저 해야 한다.
+        out.put("blocked", guard.whyBlocked());
+        return out;
+    }
+
+    @Operation(summary = "웹툰 만들기 시작", description = """
+            **돈이 나가는 유일한 자리다.** 넘기기 전에 세 번 멈춰 세운다 —
+            오늘 전체 몫 · 로그인 안 한 사람의 하루 몫 · 계정 크레딧.""")
     @PostMapping("/create")
-    public Map<String, Object> create(@RequestBody JobService.CreateRequest form) {
-        String id = jobs.create(form, CreditGate.currentUser(), form.uid());
-        return Map.of("id", id, "queue_position", 0);
+    public ResponseEntity<Map<String, Object>> create(HttpServletRequest request,
+                                                      @RequestBody JobService.CreateRequest form) {
+        Long me = CreditGate.currentUser();
+
+        /* **여기도 문지기가 서야 한다.**
+         *
+         * 프록시 길(WebtoonController)에는 이 셋이 이미 서 있는데, 이 길은
+         * 그걸 안 거친다 — 처음 만들 때 그대로 뒀더니 크레딧 0 으로도 그냥
+         * 만들어졌다. 스위치를 켜는 순간 아무나 무한히 만들 수 있게 된다.
+         *
+         * 순서는 프록시 길과 같다: 전체 몫이 먼저다. 오늘 다 찼으면 로그인해도
+         * 못 만드는데 "로그인하면 됩니다" 라고 말하면 거짓말이 된다. */
+        String blocked = guard.whyBlocked();
+        int code = 429;
+        boolean counted = false;
+        String guestKey = null;
+        if (blocked == null && me == null) {
+            blocked = guests.useOrBlock(request);
+            counted = blocked == null;
+            // 나중에(그리다가) 실패해도 되돌릴 수 있게 누구였는지 남긴다.
+            if (counted) {
+                guestKey = guests.keyOf(request);
+            }
+        }
+        if (blocked == null) {
+            blocked = credits.whyBlocked(me);
+            if (blocked != null) {
+                code = 402;                     // 기다려도 안 풀린다 — 충전해야 한다
+            }
+        }
+        if (blocked != null) {
+            return ResponseEntity.status(code).body(Map.of("error", blocked));
+        }
+
+        String id;
+        try {
+            id = jobs.create(form, me, form.uid(), guestKey);
+        } catch (RuntimeException e) {
+            // 시작도 못 했으면 방금 센 한 편을 도로 물린다 — 만든 적 없는
+            // 사람에게 "오늘 몫을 다 쓰셨어요" 가 뜨면 안 된다.
+            if (counted) {
+                guests.refund(request);
+            }
+            throw e;
+        }
+        credits.charge(me, id);                 // 만들어진 뒤에 받는다
+        return ResponseEntity.ok(Map.of("id", id, "queue_position", 0));
     }
 
     @Operation(summary = "진행 상황", description = """
@@ -79,6 +173,40 @@ public class JobController {
     public Map<String, Object> sheet(@PathVariable String id) {
         jobs.approveSheet(id);
         return Map.of("ok", true);
+    }
+
+    /**
+     * 만드는 동안 보는 그림 — 캐릭터 시트와 방금 그린 장.
+     *
+     * 진행 화면이 {@code <img src>} 에 그대로 넣는 주소라, 봉투도 JSON 도
+     * 없이 그림 자체를 준다. 아직 안 그린 것은 404 다 — 화면은 그 자리를
+     * 비워 두고 다음에 다시 묻는다.
+     */
+    @Operation(summary = "만드는 중인 캐릭터 시트")
+    @GetMapping(value = "/jobs/{id}/sheet.png", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> sheetImage(@PathVariable String id) throws IOException {
+        String runId = jobs.runOf(id);
+        Path src = runId == null ? null : art.sheet(runId);
+        return src == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(Files.readAllBytes(src));
+    }
+
+    @Operation(summary = "만드는 중인 한 장")
+    @GetMapping("/jobs/{id}/page/{no}.png")
+    public ResponseEntity<byte[]> pageImage(@PathVariable String id, @PathVariable int no,
+                                            @RequestParam(defaultValue = "1080") int w)
+            throws IOException {
+        String runId = jobs.runOf(id);
+        Path src = runId == null ? null : art.page(runId, no);
+        if (src == null) {
+            return ResponseEntity.notFound().build();
+        }
+        byte[] body = art.scaled(src, w);
+        // 줄인 것은 JPEG 이고 원본은 PNG 다 — 브라우저가 안 헷갈리게 밝힌다.
+        MediaType type = body.length > 1 && body[0] == (byte) 0x89
+                ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG;
+        return ResponseEntity.ok().contentType(type).body(body);
     }
 
     /**

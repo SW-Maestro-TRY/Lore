@@ -137,10 +137,29 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     // 하네스가 사유를 한글로 적어 보낸다(예: "크레딧이 모자랍니다").
     // 그것을 그대로 올려야 화면이 무엇이 잘못됐는지 말할 수 있다.
-    const said = (body as { error?: string } | null)?.error;
-    throw new Error(said || `요청이 실패했습니다 (${res.status})`);
+    throw new Error(reasonOf(body) || `요청이 실패했습니다 (${res.status})`);
   }
   return body as T;
+}
+
+/** 실패한 응답에서 **사람이 읽을 한 줄**을 꺼낸다.
+ *
+ * 사유가 오는 모양이 두 가지다. 하네스는 `{error: "크레딧이 모자랍니다"}` 로
+ * 적어 보내고, 스프링의 공용 봉투는 `{error: {code, message}, message}` 로 적어
+ * 보낸다. 앞의 모양만 읽고 있어서, 봉투가 오면 그 **객체**가 그대로 글자가 돼
+ * 화면에 `[object Object]` 가 떴다 — 서버는 왜 안 되는지 정확히 말했는데
+ * 사람에게는 아무 말도 안 한 셈이다.
+ *
+ * 자세한 쪽(`error.message`)을 먼저 본다. 봉투의 바깥 `message` 는 오류 코드의
+ * 기본 문구라 대개 더 뭉툭하다. */
+function reasonOf(body: unknown): string {
+  const b = body as { error?: unknown; message?: unknown } | null;
+  const err = b?.error;
+  if (typeof err === "string" && err.trim()) return err;
+  const inner = (err as { message?: unknown } | null)?.message;
+  if (typeof inner === "string" && inner.trim()) return inner;
+  if (typeof b?.message === "string" && b.message.trim()) return b.message;
+  return "";
 }
 
 /* ---- 하네스가 없을 때 ------------------------------------------------------

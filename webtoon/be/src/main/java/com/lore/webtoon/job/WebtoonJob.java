@@ -66,6 +66,17 @@ public class WebtoonJob {
     @Column(name = "browser_uid", nullable = false, length = 64)
     private String browserUid;
 
+    /**
+     * 로그인 안 한 사람의 하루 몫을 가리키는 열쇠.
+     *
+     * 만들기는 몇 분 뒤에 실패할 수 있는데, 그때는 요청이 없어서 그 사람이
+     * 누구였는지 알 길이 없다. 그러면 <b>만든 것도 없는데 오늘 몫만 줄어</b>
+     * 있게 된다. 되돌릴 수 있게 여기 남긴다. 로그인한 사람은 비어 있다
+     * (그쪽은 크레딧으로 센다).
+     */
+    @Column(name = "guest_key", length = 80)
+    private String guestKey;
+
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private JobStatus status;
@@ -92,6 +103,20 @@ public class WebtoonJob {
     @Column(name = "picked")
     private Integer picked;
 
+    /**
+     * 만들 때 사람이 넣은 것 — 이름 · 설명 · 장르 · 어떤 이야기를 원했나.
+     *
+     * <b>결과만 남기면 "이 입력이 좋은 결과를 냈나" 를 물을 수가 없다.</b>
+     * 지금까지 이건 작업 폴더의 character.json 에만 있었다 — 그 폴더가
+     * 없어지면 무엇으로 만든 작품인지 아무도 모른다.
+     *
+     * 통째로 JSON 으로 둔다. 칸으로 쪼개면 폼이 바뀔 때마다 표를 고쳐야 하고,
+     * 제품이 이 값으로 하는 일은 <b>나중에 들여다보는 것</b>뿐이다.
+     * 사진은 안 넣는다 — 사람 얼굴이 들어올 수 있는 값이라 여기 쌓을 것이 아니다.
+     */
+    @Column(name = "input_json", columnDefinition = "text")
+    private String inputJson;
+
     /** 왜 실패했나. 사람이 읽을 한 줄. */
     @Column(length = 300)
     private String error;
@@ -105,13 +130,15 @@ public class WebtoonJob {
     protected WebtoonJob() {
     }
 
-    private WebtoonJob(String publicId, Long userId, String browserUid,
-                       String style, boolean checkpoints, Instant at) {
+    private WebtoonJob(String publicId, Long userId, String browserUid, String guestKey,
+                       String style, boolean checkpoints, String inputJson, Instant at) {
         this.publicId = publicId;
+        this.guestKey = guestKey;
         this.userId = userId;
         this.browserUid = browserUid;
         this.style = style;
         this.checkpoints = checkpoints;
+        this.inputJson = inputJson;
         this.status = JobStatus.QUEUED;
         this.stage = JobStage.STORY;
         this.createdAt = at;
@@ -119,8 +146,10 @@ public class WebtoonJob {
     }
 
     public static WebtoonJob queued(String publicId, Long userId, String browserUid,
-                                    String style, boolean checkpoints, Instant at) {
-        return new WebtoonJob(publicId, userId, browserUid, style, checkpoints, at);
+                                    String guestKey, String style, boolean checkpoints,
+                                    String inputJson, Instant at) {
+        return new WebtoonJob(publicId, userId, browserUid, guestKey,
+                style, checkpoints, inputJson, at);
     }
 
     void moveTo(JobStatus status, JobStage stage, Instant at) {
@@ -167,6 +196,10 @@ public class WebtoonJob {
         return browserUid;
     }
 
+    public String getGuestKey() {
+        return guestKey;
+    }
+
     public JobStatus getStatus() {
         return status;
     }
@@ -185,6 +218,10 @@ public class WebtoonJob {
 
     public Integer getPicked() {
         return picked;
+    }
+
+    public String getInputJson() {
+        return inputJson;
     }
 
     public String getError() {

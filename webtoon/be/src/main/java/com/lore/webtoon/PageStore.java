@@ -153,6 +153,15 @@ public class PageStore {
         return moved;
     }
 
+    /** 이 작품의 장 번호들. 표지와 장 수를 낼 때 쓴다. */
+    @Transactional(readOnly = true)
+    public List<Integer> pageNumbersOf(String runId) {
+        return pages.findByRunIdOrderByPageNoAscWidthAsc(runId).stream()
+                .map(WebtoonPage::getPageNo)
+                .distinct()
+                .toList();
+    }
+
     /** S3 에 올라와 있는 작품인가. */
     @Transactional(readOnly = true)
     public boolean has(String runId) {

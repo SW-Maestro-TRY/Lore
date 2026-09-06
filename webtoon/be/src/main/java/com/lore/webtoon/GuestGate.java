@@ -121,6 +121,52 @@ public class GuestGate {
      * 지금 서버에는 생성 하네스가 아예 없어서 만들기가 늘 실패한다. 이 되돌림이
      * 없으면 <b>배포하자마자</b> 그 거짓말이 뜬다.
      */
+    /**
+     * 오늘 몇 편 더 만들 수 있나. 로그인했으면 {@code null}(그쪽은 크레딧으로 센다).
+     *
+     * <b>물어볼 자리가 없어서 화면이 아무 말도 못 했다.</b> 로그인 안 한 사람에게
+     * 「−12크레딧」이라고 적혀 있었는데, 그 사람에게는 크레딧이 아예 없다 —
+     * 없는 값을 낸다고 적어 두고, 정작 무료 몇 편이 남았는지는 안 알려 줬다.
+     * 다 쓰고 나서야 "오늘 2편 다 쓰셨어요" 를 처음 본다.
+     */
+    @Transactional(readOnly = true)
+    public Integer freeLeft(HttpServletRequest request) {
+        if (loggedIn() || freePerDay <= 0) {
+            return null;
+        }
+        int used = quotas.findByIpHashAndDay(hash(clientIp(request)), LocalDate.now(clock))
+                .map(GuestQuota::getUsed).orElse(0);
+        return (int) Math.max(0, freePerDay - used);
+    }
+
+    /** 하루에 몇 편까지 무료인가. 화면이 "2편 중 1편" 처럼 적으려고 쓴다. */
+    public int freePerDay() {
+        return (int) freePerDay;
+    }
+
+    /**
+     * 이 사람의 몫을 가리키는 열쇠. 나중에(다른 실타래에서) 되돌리려면 이게
+     * 있어야 한다 — 만들기는 몇 분 뒤에 실패하고, 그때는 요청이 없다.
+     * 로그인했거나 안 세는 설정이면 {@code null}.
+     */
+    public String keyOf(HttpServletRequest request) {
+        return loggedIn() || freePerDay <= 0 ? null : hash(clientIp(request));
+    }
+
+    /** 열쇠로 되돌린다. 만들기가 <b>한참 뒤에</b> 실패했을 때 쓴다. */
+    @Transactional
+    public void refundKey(String key) {
+        if (key == null || key.isBlank() || freePerDay <= 0) {
+            return;
+        }
+        quotas.findByIpHashAndDay(key, LocalDate.now(clock))
+                .filter(q -> q.getUsed() > 0)
+                .ifPresent(q -> {
+                    q.giveBack();
+                    quotas.save(q);
+                });
+    }
+
     @Transactional
     public void refund(HttpServletRequest request) {
         if (loggedIn() || freePerDay <= 0) {

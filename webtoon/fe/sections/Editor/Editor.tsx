@@ -153,8 +153,14 @@ export default function Editor({
           </div>
 
           <div className="dock-body" id="dockBody">
+            {/* 글을 고치는 법을 **여기서 말한다.** 엔진은 고른 것을 다시 누르면
+                커서가 서게 해 뒀는데(lib/editorCore 의 enterEdit — 처음 짚었을
+                때 바로 글쓰기로 들어가면 옮길 수가 없어서 그렇다), 화면 어디에도
+                그 말이 없었다. 얹어 놓고 글자를 못 바꾸는 줄 알고 지웠다가 다시
+                얹게 된다. */}
             <p className="dock-hint" id="dockHint">
-              누르면 <b id="activeSceneLabel">1번째 장</b>에 올라갑니다 — 끌어서 옮기세요.
+              누르면 <b id="activeSceneLabel">1번째 장</b>에 올라갑니다 — 끌어서 옮기고,
+              한 번 더 누르면 글을 고칩니다.
             </p>
 
             {/* 고른 요소를 고치는 자리는 여기가 아니라 **그림 위**다. 전에는

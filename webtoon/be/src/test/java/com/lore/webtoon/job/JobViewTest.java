@@ -25,7 +25,7 @@ class JobViewTest {
 
     private WebtoonJob job(JobStatus status, JobStage stage) {
         WebtoonJob job = WebtoonJob.queued("job-1", 7L, "uid-a", "romance_fantasy",
-                true, Instant.parse("2026-09-06T00:00:00Z"));
+                true, "{}", Instant.parse("2026-09-06T00:00:00Z"));
         job.moveTo(status, stage, Instant.parse("2026-09-06T00:01:00Z"));
         return job;
     }

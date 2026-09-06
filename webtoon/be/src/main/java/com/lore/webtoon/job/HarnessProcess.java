@@ -113,6 +113,46 @@ public class HarnessProcess {
         return p.exitValue();
     }
 
+    /**
+     * 다 그린 그림을 S3 로 올린다.
+     *
+     * 올리는 코드는 파이썬에 이미 있다({@code landing/s3_upload.py}) — 원본을
+     * 줄이고 올리고 주소를 이 서버에 알리는 일까지 그 안에 있다. 자바로 다시
+     * 쓰면 같은 일이 두 벌이 되고, 두 벌은 반드시 어긋난다.
+     *
+     * 이건 하네스 폴더가 아니라 <b>랜딩 폴더</b>에 있어서 자리가 다르다.
+     */
+    public int upload(String runId, Consumer<String> onLine)
+            throws IOException, InterruptedException {
+        Path landing = harnessDir.getParent().resolve("landing");
+        ProcessBuilder pb = new ProcessBuilder(python, "-u", "s3_upload.py", runId);
+        pb.directory(landing.toFile());
+        pb.redirectErrorStream(true);
+
+        Process p = pb.start();
+        Thread reader = Thread.ofVirtual().start(() -> {
+            try (BufferedReader in = new BufferedReader(
+                    new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = in.readLine()) != null) {
+                    if (!line.isBlank()) {
+                        onLine.accept(line);
+                    }
+                }
+            } catch (IOException e) {
+                log.warn("올리기 출력을 읽다 끊겼습니다", e);
+            }
+        });
+        boolean done = p.waitFor(600, TimeUnit.SECONDS);
+        if (!done) {
+            p.destroyForcibly();
+            reader.join(3_000);
+            throw new IllegalStateException("그림 올리기가 너무 오래 걸립니다");
+        }
+        reader.join(5_000);
+        return p.exitValue();
+    }
+
     /** 이어 붙이기. 한 걸음이라기보다 마무리라 따로 둔다. */
     public int stitch(String runId, Map<String, String> env, Consumer<String> onLine)
             throws IOException, InterruptedException {

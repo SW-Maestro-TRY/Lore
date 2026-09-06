@@ -2,6 +2,7 @@ package com.lore.webtoon;
 
 import com.lore.common.exception.BusinessException;
 import org.mockito.ArgumentCaptor;
+import com.lore.webtoon.story.StoryStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -36,6 +38,7 @@ class MyWebtoonServiceTest {
     private HarnessGateway gateway;
     private WorkLedger ledger;
     private PageStore pageStore;
+    private StoryStore storyStore;
     private MyWebtoonService service;
 
     @BeforeEach
@@ -48,8 +51,12 @@ class MyWebtoonServiceTest {
         ledger = mock(WorkLedger.class);
         /* 그림 자리를 옮기는 일은 여기서 볼 것이 아니다(PageStoreTest 가 본다). */
         pageStore = mock(PageStore.class);
+        /* 이야기 표는 여기서 볼 것이 아니다(StoryStoreTest 가 본다). 가짜는 빈
+           것을 주므로, 이 파일의 검사들은 지금까지처럼 하네스가 준 것만 본다. */
+        storyStore = mock(StoryStore.class);
+        when(storyStore.chosenOf(anyString())).thenReturn(java.util.Optional.empty());
         when(ledger.runIdsOf(anyLong())).thenReturn(List.of());
-        service = new MyWebtoonService(links, gateway, ledger, pageStore);
+        service = new MyWebtoonService(links, gateway, ledger, pageStore, storyStore);
     }
 
     private void harnessReturns(String uid, String json) {

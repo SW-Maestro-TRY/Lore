@@ -6,6 +6,11 @@ jobs/
 # new_harness/runs/ 에 남는다 — jobs/ 와 같은 취급.
 jobs_nh/
 
+# 스프링이 직접 만들 때(webtoon/be 의 JobService) 쓰는 job 폴더.
+# jobs_nh/ 와 같은 취급 — 사람이 올린 사진과 입력이 들어 있고, 산출물은
+# new_harness/runs/ 에 남는다.
+jobs_spring/
+
 # 크레딧 잔액·결제 로그 — 서버가 계속 고쳐 쓰는 상태라 jobs/ 와 같은 취급.
 data/
 

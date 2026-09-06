@@ -1,6 +1,10 @@
 package com.lore.webtoon.job;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.lore.webtoon.CreditGate;
+import com.lore.webtoon.GuestGate;
+import com.lore.webtoon.WorkLedger;
+import com.lore.webtoon.story.StoryStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,14 +57,26 @@ public class JobRunner {
     private final HarnessProcess harness;
     private final JobProgress progress;
     private final JobStore store;
+    private final StoryStore stories;
+    private final AfterRun after;
+    private final WorkLedger works;
+    private final CreditGate credits;
+    private final GuestGate guests;
     private final Path runsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
+                     StoryStore stories, AfterRun after, WorkLedger works,
+                     CreditGate credits, GuestGate guests,
                      @Value("${lore.webtoon.python.runs-dir:}") String runsDir) {
         this.harness = harness;
         this.progress = progress;
         this.store = store;
+        this.stories = stories;
+        this.after = after;
+        this.works = works;
+        this.credits = credits;
+        this.guests = guests;
         this.runsDir = (runsDir == null || runsDir.isBlank()
                 ? harness.dir().resolve("runs")
                 : Path.of(runsDir)).toAbsolutePath().normalize();
@@ -117,19 +133,27 @@ public class JobRunner {
             throw new IllegalStateException("작품 번호를 읽지 못했습니다");
         }
         store.learnRun(jobId, runId);
+        // 장부에도 채운다 — 이게 없으면 「내가 만든 웹툰」이 이 작품을 못 찾는다.
+        works.learnedRun(job.getPublicId(), runId, job.getUserId());
+        writeStyle(runId, job.getStyle());
 
         List<Map<String, Object>> directions = directionsOf(runId);
         if (directions.isEmpty()) {
             throw new IllegalStateException("이야기 후보를 하나도 못 읽었습니다");
         }
         store.directions(jobId, directions);
+        // **이야기를 DB 로 옮겨 담는다.** 이게 없으면 하네스 폴더가 없어질 때
+        // 제목도 줄거리도 못 읽는다 — 그 폴더는 작업대지 창고가 아니다.
+        stories.save(runId, directions);
 
         if (job.isCheckpoints()) {
             store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
             return;                                 // 사람이 고를 때까지 멈춘다
         }
         // 「빠르게 결과부터」 — 서버가 고른다. 규칙은 사람이 볼 때와 같다.
-        store.pick(jobId, autoPick(runId, directions.size()));
+        int picked = autoPick(runId, directions.size());
+        store.pick(jobId, picked);
+        stories.choose(runId, picked);
         sheet(jobId);
     }
 
@@ -137,9 +161,19 @@ public class JobRunner {
         WebtoonJob job = store.running(jobId, JobStage.SHEET);
         progress.say(jobId, "루가 캐릭터를 그리고 있어요");
 
-        int code = harness.run(
+        /* **두 번 부른다.** `--pick-save` 는 고른 번호를 파일에 적기만 하고
+           (0.5 초면 끝난다), 실제로 시트를 그리는 것은 `--sheet` 다. 처음에
+           하나로 알고 `--pick-save` 만 불렀더니 시트 없이 다음 걸음으로
+           넘어가 거기서 죽었다 — 그때도 이야기 짓는 값은 이미 나간 뒤였다. */
+        int picked = harness.run(
                 List.of("--run-id", job.getRunId(),
                         "--pick", String.valueOf(job.getPicked()), "--pick-save"),
+                env(job), line -> progress.line(jobId, line));
+        if (picked != 0) {
+            throw new IllegalStateException("고른 이야기를 저장하지 못했습니다");
+        }
+
+        int code = harness.run(List.of("--run-id", job.getRunId(), "--sheet"),
                 env(job), line -> progress.line(jobId, line));
         if (code != 0) {
             throw new IllegalStateException("캐릭터 시트를 만들지 못했습니다");
@@ -167,6 +201,12 @@ public class JobRunner {
         }
 
         store.done(jobId);
+
+        /* **다 만든 뒤에 남길 것을 남긴다** — 나간 돈과 그림.
+           안 하면 비용이 파일에만 남아 일일 상한이 무의미해지고(아무리 만들어도
+           "오늘 0원"), 그림은 하네스 디스크에만 남아 그 폴더가 없으면 못 본다.
+           여기서 실패해도 만들기는 성공이다 — 그림은 이미 있고 사람은 볼 수 있다. */
+        after.finish(job.getRunId(), line -> progress.line(jobId, line));
         progress.forget(jobId);
     }
 
@@ -176,6 +216,26 @@ public class JobRunner {
         Map<String, String> env = new HashMap<>();
         env.put("NH_STYLE", job.getStyle());
         return env;
+    }
+
+    /**
+     * 어느 그림체로 그렸는지 작품 폴더에 남긴다.
+     *
+     * <b>없으면 둘러보기 카드에 그림체가 안 뜬다</b> — 실제로 스프링 경로로
+     * 처음 만든 작품이 그랬다. 파이썬 서버는 이걸 남기는데(write_style) 이 길은
+     * 안 남기고 있었다.
+     *
+     * 나중에 한 장만 다시 그릴 때도 쓴다. 이 기록이 없으면 다시 그린 장만
+     * 하네스 기본 그림체로 나와서 한 편 안에서 그 장만 화풍이 다르다.
+     *
+     * 못 남겨도 만들기는 안 막는다 — 딱지가 안 뜰 뿐이다.
+     */
+    private void writeStyle(String runId, String style) {
+        try {
+            Files.writeString(runsDir.resolve(runId).resolve("style.txt"), style);
+        } catch (IOException e) {
+            log.warn("그림체를 남기지 못했습니다 (run={}, style={})", runId, style, e);
+        }
     }
 
     /**
@@ -250,10 +310,68 @@ public class JobRunner {
         return passed.get((int) (Math.random() * passed.size()));
     }
 
+    /**
+     * 실패했다. <b>사람에게는 사람 말로, 그리고 낸 것은 돌려준다.</b>
+     *
+     * 전에는 예외 메시지를 그대로 화면에 실었다. 그래서 자바가 던진
+     * {@code No value present} 같은 영어 한 줄이 사람에게 그대로 나갔다 —
+     * 무슨 일이 났는지도, 무엇을 하면 되는지도 알 수 없고, 크레딧은 이미
+     * 빠진 뒤였다. 실제로 그렇게 나갔다.
+     *
+     * 그래서 두 가지를 한다.
+     *
+     * <ul>
+     *   <li><b>말을 고른다.</b> 우리가 사람에게 하려고 쓴 한글 문장만
+     *       내보내고, 나머지(버그에서 나온 영어 예외)는 로그에만 남기고
+     *       화면에는 무슨 일인지 · 크레딧은 어떻게 됐는지를 적는다.</li>
+     *   <li><b>돌려준다.</b> 크레딧과, 로그인 안 한 사람의 하루 몫을.
+     *       만들어진 것이 없는데 값만 빠져 있으면 그건 그냥 잃은 것이다.</li>
+     * </ul>
+     */
     private void fail(Long jobId, Exception e) {
         log.error("만들기가 실패했습니다 (job={})", jobId, e);
-        store.failed(jobId, e.getMessage() == null ? e.toString() : e.getMessage());
+        boolean paidBack = refund(jobId);
+        store.failed(jobId, humanReason(e, paidBack));
         progress.forget(jobId);
+    }
+
+    /** 낸 것을 돌려준다. -> 실제로 돌려줬으면 참(화면에 그렇게 적으려고). */
+    private boolean refund(Long jobId) {
+        try {
+            WebtoonJob job = store.byId(jobId);
+            if (job == null) {
+                return false;
+            }
+            credits.refund(job.getUserId(), job.getPublicId());
+            guests.refundKey(job.getGuestKey());
+            return job.getUserId() != null || job.getGuestKey() != null;
+        } catch (RuntimeException ex) {      // noqa: 돌려주다 죽어서 실패를 못 적으면 더 나쁘다
+            log.error("낸 것을 못 돌려줬습니다 (job={}) — 사람이 맞춰야 합니다", jobId, ex);
+            return false;
+        }
+    }
+
+    /**
+     * 화면에 나갈 한 줄.
+     *
+     * 사람에게 보여도 되는 것은 <b>우리가 그러라고 쓴 한글 문장</b>뿐이다
+     * (예: "이야기 후보를 만들지 못했습니다"). 그 밖의 예외는 전부 버그이고,
+     * 그 문구는 사람에게 아무 도움이 안 된다 — 무슨 일인지만 말하고 사유는
+     * 로그에 둔다.
+     */
+    private static String humanReason(Exception e, boolean paidBack) {
+        String said = e.getMessage();
+        String head = said != null && hasHangul(said)
+                ? said
+                : "그리는 도중에 문제가 생겼습니다.";
+        return paidBack
+                ? head + " 크레딧은 돌려드렸어요 — 다시 시도해 주세요."
+                : head + " 다시 시도해 주세요.";
+    }
+
+    /** 한글이 섞여 있는가 — 우리가 사람에게 하려고 쓴 말인지 가르는 자리. */
+    private static boolean hasHangul(String s) {
+        return s.codePoints().anyMatch(c -> c >= 0xAC00 && c <= 0xD7A3);
     }
 
     /** 지금 시각. 검사에서 갈아 끼우려고 따로 둔다. */

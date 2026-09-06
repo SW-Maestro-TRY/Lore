@@ -10,6 +10,7 @@ import { headLine, mascotLine, mmss, NH_STAGE_ART } from "./nhStage";
 import SheetApproval from "./SheetApproval";
 import PickApproval from "./PickApproval";
 import ZoomView from "./ZoomView";
+import StageRail from "./StageRail";
 
 /* 기다리는 화면 — haeun/landing/web 의 #progress 를 옮겼다.
  *
@@ -126,27 +127,24 @@ export default function Progress({
 
             <details className="stage-detail">
               <summary>지금 하고 있는 일 자세히</summary>
-              <ol className="rail">
-                {job.stages.map((key, i) => {
-                  const state = i < job.stage_index ? "done" : i === job.stage_index ? "active" : "todo";
-                  return (
-                    <li key={key} className="stage" data-state={state}>
-                      <span className="stage-dot">
-                        {state === "done" ? "✓" : String(i + 1).padStart(2, "0")}
-                      </span>
-                      <div className="stage-main">
-                        <h3>{i === job.stage_index ? job.stage_label : key}</h3>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
+              <StageRail
+                job={job}
+                jobId={jobId}
+                sheetVersion={sheetVersion}
+                onZoom={(src, alt) => setZoom({ src, alt })}
+              />
             </details>
           </div>
 
-          <p className="eyebrow">{head.eyebrow}</p>
-          <h2>{head.title}</h2>
-          <p className="progress-sub">{head.sub}</p>
+          {/* 만드는 중에는 이 세 줄이 비어 있다 — 위에 이미 다 있는 말이라
+              또 적으면 같은 말을 두 번 하는 것이 된다(nhStage 의 headLine). */}
+          {head.title && (
+            <>
+              {head.eyebrow && <p className="eyebrow">{head.eyebrow}</p>}
+              <h2>{head.title}</h2>
+              {head.sub && <p className="progress-sub">{head.sub}</p>}
+            </>
+          )}
         </header>
 
         {/* ---- 사람이 멈춰 서는 자리 둘 ---- */}
