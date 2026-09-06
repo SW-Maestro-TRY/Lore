@@ -13,19 +13,25 @@ import CreditCharge from "./CreditCharge";
 import { louArt } from "../../lib/louArt";
 import { WorkCard } from "../Works/Works";
 
-/* 마이페이지 — haeun/landing/web 의 #mypage 를 옮겼다.
+/* 마이페이지 — **작업실.**
  *
- * **로그인한 사람의 자리다.** 헤더의 「마이페이지」가 여기로 보낸다
- * (`/webtoon?view=mypage`). 로그인 안 했으면 들어올 일이 없지만, 주소를
- * 직접 치고 들어올 수는 있으므로 그때는 로그인하라고만 말한다.
+ * ## 왜 웹툰 화면과 다르게 생겼나
  *
- * 목록은 **계정 것**이다. 작품 자체에는 계정 번호가 안 박혀 있고 브라우저
- * uid 로만 묶여 있어서, 서버가 (계정 ↔ uid) 연결을 들고 있다가 그 브라우저들이
- * 만든 것을 모아 준다(webtoon/be 의 BrowserLink · MyWebtoonService). 그래서
- * 로그인 전에 만든 것도, 다른 기기에서 만든 것도 따라온다.
+ * 이 화면은 웹툰만의 것이 아니라 LORE 가 공통으로 쓰는 자리다. 그런데 여태
+ * 웹툰 청록(`--accent`)으로 칠해져 있어서, 짤이나 예고편에서 들어온 사람에게는
+ * 남의 집으로 읽힌다. 그래서 여기서만 **LORE 토큰**을 쓴다 — `--webtoon`(보라)
+ * · `--text` · `--surface-2` · Archivo. 이 값들은 `common/fe/styles/tokens.css`
+ * 에 있고 앱 껍데기(apps/web/app/layout.tsx)가 이미 불러 둔다.
  *
- * 그래도 "저장한 작품" 이라고 쓰지 않는다 — 서버에 담아 둔 것이 아니라 내가
- * 만든 것이고, uid 는 꾸밀 수 있는 값이라 소유의 증명도 아니다.
+ * ## 구조 — 왼쪽 레일 하나
+ *
+ * 왼쪽에 **내가 누구인지 · 얼마 남았는지 · 어디로 갈지**를 고정해 두고,
+ * 오른쪽만 갈아 끼운다. 전에는 프로필 카드 · 크레딧 카드 · 캐릭터 줄 · 작품
+ * 목록이 위에서부터 쌓여 있었는데, 그 구조에는 **짤과 예고편이 들어올 자리가
+ * 없다** — 나중에 끼워 넣으면 웹툰만 또 특별해진다. 레일이면 한 줄만 늘면 된다.
+ *
+ * 지금 레일에 웹툰과 캐릭터만 있는 것은 그 둘만 실제로 있기 때문이다.
+ * 없는 것을 미리 그려 두지 않는다.
  */
 export default function MyPage({
   onOpenWork,
@@ -47,6 +53,8 @@ export default function MyPage({
   const [credit, setCredit] = useState<number | null>(null);
   /** 지금 열려 있는 창. 둘이 같이 뜨면 안 되므로 하나로 센다. */
   const [open, setOpen] = useState<"history" | "charge" | null>(null);
+  /** 오른쪽에 무엇을 띄울지. 레일이 이것만 바꾼다. */
+  const [tab, setTab] = useState<"works" | "chars">("works");
 
   useEffect(() => {
     let alive = true;
@@ -79,8 +87,8 @@ export default function MyPage({
 
   if (status === "loading") {
     return (
-      <section className="mypage">
-        <header className="mypage-head"><h2>불러오는 중…</h2></header>
+      <section className="me">
+        <p className="me-loading">불러오는 중…</p>
       </section>
     );
   }
@@ -89,126 +97,145 @@ export default function MyPage({
      여기서 모달을 또 띄우면 로그인 창을 여는 자리가 둘이 된다. */
   if (!isAuthenticated) {
     return (
-      <section className="mypage">
-        <header className="mypage-head">
-          <div className="mypage-who">
-            <p className="eyebrow">마이페이지</p>
-            <h2>로그인이 필요합니다</h2>
-            <p className="mypage-meta">위 <b>로그인</b>을 눌러 주세요.</p>
-          </div>
-          <div className="mypage-actions">
-            <button type="button" className="btn btn-primary btn-sm" onClick={onCreate}>
+      <section className="me">
+        <div className="me-guest">
+          <p className="me-eyebrow">마이페이지</p>
+          <h2>로그인이 필요합니다</h2>
+          <p className="me-guest-sub">위 <b>로그인</b>을 눌러 주세요.</p>
+          <div className="me-guest-acts">
+            <button type="button" className="me-btn me-btn-go" onClick={onCreate}>
               새 웹툰 만들기
             </button>
-            <button type="button" className="btn btn-quiet btn-sm" onClick={onBrowse}>
+            <button type="button" className="me-btn" onClick={onBrowse}>
               둘러보기
             </button>
           </div>
-        </header>
+        </div>
       </section>
     );
   }
 
-  const hidden = (runs || []).filter((r) => r.public === false).length;
+  const id = user?.email.split("@")[0] || "나";
+  const shown = runs || [];
+  const hidden = shown.filter((r) => r.public === false).length;
 
   return (
-    <section className="mypage">
-      {/* **프로필과 크레딧을 한 덩어리로.** 따로 두었더니 흰 카드가 둘 쌓이고,
-          크레딧 칸은 숫자 하나에 카드를 통째로 쓰느라 안이 텅 비었다. 다만
-          한 줄로 다 밀어 넣지는 않는다 — 위는 나(누구인가 · 무엇을 할 것인가),
-          아래는 크레딧(얼마 남았나)으로 줄을 나눈다. */}
-      <header className="mypage-head">
-        <div className="mypage-who">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="mypage-photo" src="/static/lou/react/idle/01.webp" alt="" />
-          <div className="mypage-name">
-            <p className="eyebrow">마이페이지</p>
-            {/* 이메일 전체를 제목에 걸면 좁은 화면에서 밀린다 — 아이디만 크게
-                쓰고 전체는 아래 줄에 둔다. */}
-            <h2>{user?.email.split("@")[0]}</h2>
-            <p className="mypage-meta">{user?.email}</p>
-          </div>
+    <section className="me">
+      {/* ── 레일 ────────────────────────────────────────────────
+          나 · 잔액 · 갈 곳. 화면이 좁아지면 가로로 눕는다. */}
+      <aside className="me-rail">
+        <div className="me-who">
+          <span className="me-face" aria-hidden="true">{id.slice(0, 1).toUpperCase()}</span>
+          <span className="me-who-txt">
+            {/* 이메일 전체는 좁은 화면에서 밀리므로 아이디를 크게 쓰고
+                전체는 아래 줄에 작게 둔다. */}
+            <b>{id}</b>
+            <span title={user?.email}>{user?.email}</span>
+          </span>
         </div>
 
-        <div className="mypage-actions">
-          <button type="button" className="btn btn-primary btn-sm" onClick={onCreate}>
-            새 웹툰 만들기
-          </button>
-          <button type="button" className="btn btn-quiet btn-sm" onClick={() => void signOut()}>
-            로그아웃
-          </button>
-        </div>
-
-        {/* 크레딧은 여기서 **잔액과 갈 자리**만 말한다. 잔액만 보여 주면
-            모자란 사람이 어디로 가야 하는지 모르고, 줄어든 이유가 궁금한
-            사람도 물을 자리가 없다. (실제 결제는 아직이다 — #155) */}
-        <div className="mypage-credit">
-          <p className="mypage-credit-num">
-            <b>{credit ?? "…"}</b> <span>C</span>
-          </p>
-          <p className="mypage-credit-hint">한 편에 12 C</p>
-          <div className="mypage-credit-acts">
-            <button type="button" className="btn btn-quiet btn-sm"
+        {/* 크레딧은 **잔액과 갈 자리**를 함께 준다. 잔액만 보여 주면 모자란
+            사람이 어디로 가야 하는지 모르고, 줄어든 이유가 궁금한 사람도 물을
+            자리가 없다. (실제 결제는 아직이다 — #155) */}
+        <div className="me-credit">
+          <p className="me-credit-n">{credit ?? "…"}<small>C</small></p>
+          <p className="me-credit-u">한 편 12 C</p>
+          <div className="me-credit-acts">
+            <button type="button" className="me-btn me-btn-xs"
                     onClick={() => setOpen("charge")}>충전</button>
-            <button type="button" className="btn btn-quiet btn-sm"
+            <button type="button" className="me-btn me-btn-xs"
                     onClick={() => setOpen("history")}>내역</button>
           </div>
         </div>
-      </header>
 
-      {open === "history" && <CreditHistory onClose={() => setOpen(null)} />}
-      {open === "charge" && <CreditCharge onClose={() => setOpen(null)} />}
+        {/* 짤·예고편이 생기면 여기 한 줄씩 는다. 그때 이 화면의 구조는
+            안 바뀐다 — 레일을 쓴 이유가 그것이다. */}
+        <nav className="me-nav">
+          <p className="me-nav-grp">만든 것</p>
+          <button type="button" className={`me-nav-a${tab === "works" ? " on" : ""}`}
+                  onClick={() => setTab("works")}>
+            웹툰<span>{shown.length || ""}</span>
+          </button>
+          <p className="me-nav-grp">재료</p>
+          <button type="button" className={`me-nav-a${tab === "chars" ? " on" : ""}`}
+                  onClick={() => setTab("chars")}>
+            캐릭터
+          </button>
+        </nav>
 
-
-      {/* **내 캐릭터를 작품보다 먼저 둔다.** 웹툰은 캐릭터로 만드는 것이라,
-          여기 들어온 사람이 다음에 할 일은 대개 "저 캐릭터로 하나 더" 다.
-          옆으로 넘겨 보게 해서 작품 목록을 아래로 밀지 않는다. */}
-      <MyCharacters onOpen={onCharacters} />
-
-      {/* **내 캐릭터를 작품보다 먼저 둔다.** 웹툰은 캐릭터로 만드는 것이라,
-          여기 들어온 사람이 다음에 할 일은 대개 "저 캐릭터로 하나 더" 다. */}
-
-      <div className="mypage-section">
-        <div className="mypage-section-head">
-          <h3>내가 만든 웹툰</h3>
-          <button type="button" className="btn btn-quiet btn-sm" onClick={onBrowse}>
-            둘러보기
+        <div className="me-rail-foot">
+          <button type="button" className="me-btn me-btn-go" onClick={onCreate}>
+            새 웹툰 만들기
+          </button>
+          <button type="button" className="me-quit" onClick={() => void signOut()}>
+            로그아웃
           </button>
         </div>
+      </aside>
 
-        {/* 옆으로 미는 줄. 세로로 쌓으면 몇 편만 있어도 화면이 길어지고,
-            여기서 보고 싶은 것은 "무엇이 있나" 지 한 편 한 편이 아니다. */}
-        <div className="works-grid works-rail">
-          {failed && (
-            <div className="works-empty">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={louArt("error")} alt="" aria-hidden="true" />
-              <b>목록을 가져오지 못했어요</b>
-              서버가 떠 있는지 확인해 주세요.
+      {/* ── 본문 ──────────────────────────────────────────────── */}
+      <div className="me-main">
+        {open === "history" && <CreditHistory onClose={() => setOpen(null)} />}
+        {open === "charge" && <CreditCharge onClose={() => setOpen(null)} />}
+
+        {tab === "works" && (
+          <>
+            <div className="me-top">
+              <h2>내 웹툰</h2>
+              {shown.length > 0 && (
+                <p className="me-top-sub">
+                  {shown.length}편{hidden ? ` · 나만 보기 ${hidden}` : ""}
+                </p>
+              )}
+              <button type="button" className="me-btn" onClick={onBrowse}>둘러보기</button>
             </div>
-          )}
-          {!failed && !runs && <p className="works-empty">불러오는 중…</p>}
-          {runs?.length === 0 && (
-            <div className="works-empty">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={louArt("empty")} alt="" aria-hidden="true" />
-              <b>아직 만든 웹툰이 없어요</b>
-              첫 작품이 이 자리에 걸립니다.
-              <br />
-              <button type="button" className="inline-link" onClick={onCreate}>
-                내 캐릭터로 웹툰 만들기 →
+
+            <div className="works-grid me-works">
+              {failed && (
+                <div className="works-empty">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={louArt("error")} alt="" aria-hidden="true" />
+                  <b>목록을 가져오지 못했어요</b>
+                  서버가 떠 있는지 확인해 주세요.
+                </div>
+              )}
+              {!failed && !runs && <p className="works-empty">불러오는 중…</p>}
+              {runs?.length === 0 && (
+                <div className="works-empty">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={louArt("empty")} alt="" aria-hidden="true" />
+                  <b>아직 만든 웹툰이 없어요</b>
+                  첫 작품이 이 자리에 걸립니다.
+                  <br />
+                  <button type="button" className="inline-link" onClick={onCreate}>
+                    내 캐릭터로 웹툰 만들기
+                  </button>
+                </div>
+              )}
+              {runs?.map((r) => (
+                <WorkCard
+                  key={r.run_id}
+                  run={r}
+                  onOpen={onOpenWork}
+                  tools={<MyTools run={r} onOpenEditor={onOpenEditor} />}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {tab === "chars" && (
+          <>
+            <div className="me-top">
+              <h2>내 캐릭터</h2>
+              <p className="me-top-sub">웹툰을 만들 때마다 다시 적지 않아도 돼요</p>
+              <button type="button" className="me-btn" onClick={onCharacters}>
+                캐릭터 탭으로
               </button>
             </div>
-          )}
-          {runs?.map((r) => (
-            <WorkCard
-              key={r.run_id}
-              run={r}
-              onOpen={onOpenWork}
-              tools={<MyTools run={r} onOpenEditor={onOpenEditor} />}
-            />
-          ))}
-        </div>
+            <MyCharacters onOpen={onCharacters} />
+          </>
+        )}
       </div>
     </section>
   );

@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { listCharacters, type Character } from "../../lib/charApi";
 
-/* 마이페이지의 「내 캐릭터」 줄.
+/* 마이페이지의 「내 캐릭터」 칸.
  *
- * **작품보다 먼저 둔다.** 웹툰은 캐릭터로 만드는 것이라, 여기 들어온 사람이
- * 다음에 할 일은 대개 "저 캐릭터로 하나 더" 다.
+ * **제목을 스스로 안 단다.** 레일에서 캐릭터를 고르고 들어오는 자리라, 본문
+ * 머리(`me-top`)가 이미 「내 캐릭터」라고 말한다. 여기서 h3 를 또 달면 같은
+ * 제목이 두 줄 겹친다.
  *
- * 옆으로 넘겨 본다 — 세로로 쌓으면 캐릭터가 늘수록 작품 목록이 한참 밀린다.
- * 만든 것이 없으면 이 줄을 아예 안 그린다: 빈 칸을 하나 더 보여 줄 이유가 없다. */
+ * 옆으로 넘겨 본다 — 세로로 쌓으면 캐릭터가 늘수록 아래가 한참 밀린다. */
 export default function MyCharacters({ onOpen }: { onOpen: () => void }) {
   const [mine, setMine] = useState<Character[] | null>(null);
 
@@ -26,16 +26,7 @@ export default function MyCharacters({ onOpen }: { onOpen: () => void }) {
   if (!mine) return null;
 
   return (
-    <section className="mypage-chars">
-      <div className="mypage-chars-head">
-        <h3>내 캐릭터{mine.length ? ` ${mine.length}` : ""}</h3>
-        {mine.length > 0 && (
-          <button type="button" className="btn btn-quiet btn-sm" onClick={onOpen}>
-            모두 보기
-          </button>
-        )}
-      </div>
-
+    <section className="me-chars">
       {/* **없다고 이 줄을 지우지 않는다.** 지우면 캐릭터라는 것이 있는 줄도
           모른 채로 웹툰만 만들게 된다 — 여기가 그것을 알리는 자리다. */}
       {mine.length === 0 && (
