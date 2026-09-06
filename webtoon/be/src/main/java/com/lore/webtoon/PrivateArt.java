@@ -5,13 +5,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 import java.time.Duration;
+import java.util.UUID;
 
 /**
  * 나만 보는 그림을 나만 보게 한다.
@@ -83,6 +86,64 @@ public class PrivateArt {
         }
         String name = key.substring(key.lastIndexOf('/') + 1);
         return (toPublic ? PUBLIC_PREFIX : PRIVATE_PREFIX) + name;
+    }
+
+    /** 버킷을 안 정해 두면 S3 를 아예 안 쓴다(로컬). */
+    public boolean ready() {
+        return !bucket.isEmpty();
+    }
+
+    /**
+     * 그림 한 장을 올린다. -> 올린 키. 못 올리면 {@code null}
+     *
+     * <h2>왜 자바가 올리나</h2>
+     *
+     * 웹툰 페이지는 파이썬이 올린다({@code s3_upload.py}) — 원본을 줄이고 여러
+     * 폭으로 만들어 한꺼번에 올리는 일이라 그 코드가 이미 거기 있고, 자바로
+     * 다시 쓰면 두 벌이 된다.
+     *
+     * 캐릭터 그림은 <b>한 장이고 줄일 것도 없다.</b> 그 한 장을 올리자고
+     * 파이썬을 한 번 더 부르면, 값 계산과 주인 확인이 이미 끝난 자리에서
+     * 프로세스를 하나 더 띄우는 셈이 된다. 여기서는 자바가 그대로 올린다.
+     *
+     * <h2>자리</h2>
+     *
+     * 캐릭터 그림은 만든 사람만 본다 — 그래서 <b>안 열리는 자리</b>에 둔다.
+     * 화면은 잠깐 열리는 주소({@link #temporaryUrl})로 받아 간다. 기본 제공
+     * 캐릭터처럼 누구나 봐도 되는 것은 {@link #move} 로 옮긴다.
+     */
+    public String upload(byte[] body, String contentType, boolean isPublic) {
+        if (!ready() || body == null || body.length == 0) {
+            return null;
+        }
+        String key = (isPublic ? PUBLIC_PREFIX : PRIVATE_PREFIX)
+                + "char/" + UUID.randomUUID().toString().replace("-", "")
+                + extensionOf(contentType);
+        try {
+            s3.putObject(PutObjectRequest.builder()
+                            .bucket(bucket).key(key)
+                            .contentType(contentType == null ? "image/png" : contentType)
+                            // 키에 임의의 이름이 들어가 같은 주소가 다른 그림이 될 일이
+                            // 없으므로 오래 담아 둬도 된다(s3_upload.py 와 같은 규칙).
+                            .cacheControl("public, max-age=31536000, immutable")
+                            .build(),
+                    RequestBody.fromBytes(body));
+            return key;
+        } catch (RuntimeException e) {
+            log.error("캐릭터 그림을 못 올렸습니다 (key={})", key, e);
+            return null;
+        }
+    }
+
+    private static String extensionOf(String contentType) {
+        if (contentType == null) {
+            return ".png";
+        }
+        return switch (contentType.toLowerCase()) {
+            case "image/jpeg", "image/jpg" -> ".jpg";
+            case "image/webp" -> ".webp";
+            default -> ".png";
+        };
     }
 
     /**
