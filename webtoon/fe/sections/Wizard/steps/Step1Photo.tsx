@@ -45,7 +45,9 @@ export default function Step1Photo({
   };
 
   const countLabel =
-    form.photos.length === 0
+    form.characterId
+      ? "내 캐릭터에서 골랐어요 · ✕ 를 눌러 되돌립니다"
+      : form.photos.length === 0
       ? "눌러서 사진을 올려주세요"
       : form.photos.length === 1
         ? `1 / ${MAX_PHOTOS}장 · 각도를 바꿔 더 올리면 더 닮게 그립니다`
@@ -67,30 +69,6 @@ export default function Step1Photo({
       </div>
 
       <div className="wiz-card">
-        {/* **캐릭터를 골라 왔으면 사진을 또 안 받는다.** 그림은 서버가 그
-            캐릭터 것으로 붙인다. 여기서 사진을 또 올리라고 하면 캐릭터를
-            만들어 둔 의미가 없어진다. */}
-        {form.characterId ? (
-          <div className="wiz-picked">
-            {form.characterArt && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="wiz-picked-art" src={form.characterArt} alt={form.name} />
-            )}
-            <div className="wiz-picked-body">
-              <p className="wiz-picked-tag">이 캐릭터로 만들어요</p>
-              <b>{form.name}</b>
-            </div>
-            {/* 바꾸는 길은 **조용히** 둔다. 이미 고르고 온 사람에게 크게 보일
-                단추가 아니다 — 알약처럼 붙여 뒀더니 이름 옆의 딱지처럼 읽혔다. */}
-            <button type="button" className="wiz-picked-swap"
-                    onClick={() => onChange({
-                      characterId: undefined, characterArt: undefined,
-                      name: "", character: "",
-                    })}>
-              바꾸기
-            </button>
-          </div>
-        ) : (
         <div className="photo-row">
           {/* **두 갈래를 나란히 둔다.**
            *
@@ -101,7 +79,8 @@ export default function Step1Photo({
            * 이제 같은 크기로 둘을 나란히 놓는다 — 올리거나, 캐릭터에서
            * 고르거나. 둘 다 정상적인 길이라는 것을 자리로 말한다. */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label className="photo-drop" onClick={() => inputRef.current?.click()}>
+          <label className="photo-drop"
+                 onClick={() => { if (!form.characterId) inputRef.current?.click(); }}>
             <input
               ref={inputRef}
               type="file"
@@ -111,9 +90,32 @@ export default function Step1Photo({
               onChange={(e) => addFiles(e.target.files)}
             />
             <span className="photo-hint">
-              캐릭터 사진 <em className="req">필수</em>
+              {form.characterId
+                ? <>캐릭터 <b>{form.name}</b></>
+                : <>캐릭터 사진 <em className="req">필수</em></>}
             </span>
             <div className="photo-strip">
+              {/* **골라 온 캐릭터도 사진과 같은 자리에 같은 모양으로 둔다.**
+                  따로 칸을 만들었더니 크기도 모양도 이 화면과 겉돌았다. */}
+              {form.characterId && form.characterArt && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <figure className="shot">
+                  <img src={form.characterArt} alt={form.name} />
+                  <button
+                    type="button"
+                    className="shot-x"
+                    aria-label="다른 캐릭터로"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onChange({ characterId: undefined, characterArt: undefined,
+                                 name: "", character: "" });
+                    }}
+                  >
+                    ✕
+                  </button>
+                </figure>
+              )}
               {form.photos.map((src, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <figure className="shot" key={i}>
@@ -158,7 +160,6 @@ export default function Step1Photo({
             </li>
           </ul>
         </div>
-        )}
 
         <label className="field">
           <span>

@@ -4594,36 +4594,3 @@
 }
 .webtoon-page .mychar b { font-size: .8rem; padding: 7px 8px 9px; font-weight: 700; }
 
-/* ---- 1걸음에서 고른 캐릭터 --------------------------------------------------
- *
- * ⚠ 이 규칙이 없으면 그림이 폭을 통째로 먹는다. 실제로 한 번 지웠다가
- * 상반신이 화면을 가득 채운 채로 나왔다 — <img> 는 크기를 안 정해 주면
- * 원본 크기(1024px)로 눕는다. */
-
-.webtoon-page .wiz-picked {
-  display: flex; gap: 12px; align-items: center;
-  border: 1px solid var(--accent); border-radius: 14px;
-  background: var(--card); padding: 12px;
-}
-.webtoon-page .wiz-picked-art {
-  width: 68px; height: 68px; flex: 0 0 68px;
-  object-fit: cover; border-radius: 10px; display: block;
-}
-.webtoon-page .wiz-picked-body { display: grid; gap: .2em; min-width: 0; flex: 1 1 auto; }
-.webtoon-page .wiz-picked-tag {
-  color: var(--accent); font-size: .72rem; margin: 0; font-weight: 700;
-}
-.webtoon-page .wiz-picked-body b {
-  font-size: 1rem;
-  /* 이름이 길어도 칸을 안 넘긴다. */
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* 바꾸는 길은 조용히. 알약 단추로 두면 이름 옆의 딱지처럼 읽힌다. */
-.webtoon-page .wiz-picked-swap {
-  flex: 0 0 auto; align-self: center;
-  background: transparent; border: 0; padding: .4em .2em;
-  color: var(--muted); font: inherit; font-size: .8rem; cursor: pointer;
-  text-decoration: underline; text-underline-offset: 3px;
-  text-decoration-color: rgba(15,51,63,.25);
-}
-.webtoon-page .wiz-picked-swap:hover { color: var(--accent); }
