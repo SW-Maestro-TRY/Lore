@@ -195,21 +195,33 @@ function SampleBar({ y }: { y: Yeoul }) {
   );
 }
 
-// ── 헤더 — 이름을 탭하면 아이 정보(옛 설정)가 열린다 ─────────────────────
+// ── 헤더 — 이름·N일째·친밀도 한 줄 + 오른쪽 끝 아이 정보 버튼 ────────────
 function Header({ y }: { y: Yeoul }) {
   const { s, actions } = y;
   return (
     <div style={{ ...row(9), justifyContent: 'space-between' }}>
-      {/* ★ 아이 정보 진입 위치는 **미정**이다 — 헤더 이름 탭은 9/6에 정한 기본값이다. */}
-      <button
-        data-action="open-pet" onClick={() => actions.openPanel('pet')}
-        style={{ ...row(7), flexWrap: 'wrap', border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontFamily: SANS, textAlign: 'left' }}
-      >
-        <span style={{ fontSize: 14.5, color: C.ink, borderBottom: `1px dashed ${C.line}` }}>{s.petName || '아이'}</span>
+      <span style={{ ...row(7), flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 14.5, color: C.ink }}>{s.petName || '아이'}</span>
         <span style={{ fontSize: 12, color: C.sub }}>·</span>
         <span style={{ fontSize: 14, color: C.sub }}>{s.day}일째</span>
         <span style={{ fontSize: 12, color: C.sub }}>·</span>
         <span style={{ fontSize: 14, color: C.sub }}>친밀도 {s.bond}%</span>
+      </span>
+      {/* ★ 아이 정보(성격·말투·세계관·표기 방식·떠남 끄기)로 들어가는 유일한 문.
+          9/6 3차 결정으로 이름 탭에서 여기(친밀도 옆)로 옮겼다. **자리는 아직 미정**이고,
+          톱니 자리표시는 그림 에셋이 오면 바꾼다. */}
+      <button
+        data-action="open-pet" onClick={() => actions.openPanel('pet')} aria-label="아이 정보"
+        style={{
+          ...row(5), flex: 'none', padding: '5px 10px', borderRadius: radius.pill, cursor: 'pointer',
+          fontFamily: SANS, fontSize: 11.5, lineHeight: 1,
+          border: `1px solid ${s.panel === 'pet' && s.sheetOpen ? C.accent : '#E9E1D4'}`,
+          background: s.panel === 'pet' && s.sheetOpen ? C.accentSoft : '#FDF8EE',
+          color: s.panel === 'pet' && s.sheetOpen ? C.accent : C.sub,
+        }}
+      >
+        <span aria-hidden style={{ fontSize: 12 }}>⚙</span>
+        아이 정보
       </button>
     </div>
   );

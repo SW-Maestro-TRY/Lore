@@ -192,7 +192,7 @@ export default function Onboarding({ y, tick }: { y: Yeoul; tick: number }) {
               name="persona" title="성격 · 다섯 중 하나" chips={PERSONALITIES.map((p) => p.label)}
               picked={PERSONALITIES.find((p) => p.key === s.persona)?.label ?? null}
               onPick={(v) => actions.setPersona(PERSONALITIES.find((p) => p.label === v)?.key ?? v)}
-              note={s.personaNote} onNote={actions.setPersonaNote} placeholder={NOTE_PLACEHOLDER.persona} rows={4}
+              note={s.personaNote} onNote={actions.setPersonaNote} placeholder={NOTE_PLACEHOLDER.persona}
             />
             {!!s.persona && (
               <span style={{ ...note, marginTop: -10, color: C.faint }}>
@@ -205,10 +205,10 @@ export default function Onboarding({ y, tick }: { y: Yeoul; tick: number }) {
             <ChipNote name="genre" title="장르" chips={GENRES} picked={s.genre} onPick={actions.setGenre}
               note={s.genreNote} onNote={actions.setGenreNote} placeholder={NOTE_PLACEHOLDER.genre} />
             <ChipNote name="world" title="세계관" chips={WORLDS} picked={s.worldChip} onPick={actions.setWorldChip}
-              note={s.world} onNote={actions.setWorld} placeholder={NOTE_PLACEHOLDER.world} rows={4} />
+              note={s.world} onNote={actions.setWorld} placeholder={NOTE_PLACEHOLDER.world} />
             {/* 이 칸만 칩이 없다 — 방향을 미리 잡아 주면 오히려 안 쓰게 된다. */}
             <ChipNote name="free" title="그 밖에 알려주고 싶은 것"
-              note={s.free} onNote={actions.setFree} placeholder={NOTE_PLACEHOLDER.free} rows={4} />
+              note={s.free} onNote={actions.setFree} placeholder={NOTE_PLACEHOLDER.free} />
           </div>
         )}
 
