@@ -13,8 +13,8 @@ import CharacterMake from "./CharacterMake";
  * 처음부터 다시 적어야 했다. 여기서 순서가 뒤집힌다 — 캐릭터를 만들어 두고,
  * 그 캐릭터로 웹툰을 만든다.
  *
- * 목록이 비어 있어도 **막다른 길이 아니다.** 기본 제공 캐릭터가 같이 보이고,
- * 만들 것이 없으면 바로 만들 수 있다. */
+ * 껍데기와 카드는 「둘러보기」(Works)와 같은 모양이다. 두 화면이 나란히
+ * 있는데 결이 다르면 다른 서비스처럼 보인다. */
 export default function Characters({ onUse }: {
   /** 「이 캐릭터로 웹툰 만들기」 — 이름과 그림을 들고 만들기 화면으로 간다. */
   onUse: (c: Character) => void;
@@ -50,105 +50,109 @@ export default function Characters({ onUse }: {
     }
   };
 
+  /* 만들기는 **화면 하나를 통째로 쓴다.** 작은 창으로 두면 적을 것과 그림체
+     여덟 개가 그 안에 안 들어간다. */
+  if (making) {
+    return (
+      <CharacterMake
+        onClose={() => setMaking(false)}
+        /* 만들자마자 위자드로 넘기지 않는다 — 그림이 아직 없다. 목록에서
+           「그리는 중」으로 보이다가 다 되면 그때 고른다. */
+        onMade={() => { setMaking(false); load(); }}
+      />
+    );
+  }
+
   const mine = got?.characters.filter((c) => c.mine) ?? [];
   const builtin = got?.characters.filter((c) => c.builtin) ?? [];
 
   return (
     <section className="chars">
       <header className="chars-head">
-        <div>
-          <p className="eyebrow">내 캐릭터</p>
-          <h2>누구로 웹툰을 만들까요?</h2>
-          {/* 값을 **먼저** 말한다. 만들고 나서 "크레딧이 모자랍니다" 를 만나면
-              그때는 이미 이름과 설명을 다 적은 뒤다. */}
-          {got && (
-            <p className="chars-sub">
-              {got.free_left > 0
-                ? `오늘 ${got.free_left}개까지 무료로 만들 수 있어요`
-                : `한 개에 ${got.credit_cost}크레딧`}
-            </p>
-          )}
-        </div>
-        <button type="button" className="btn btn-primary" onClick={() => setMaking(true)}>
-          + 캐릭터 만들기
-        </button>
+        <p className="eyebrow">내 캐릭터</p>
+        <h2>누구로 웹툰을 만들까요?</h2>
+        <p className="chars-lede">
+          캐릭터를 만들어 두면 웹툰을 만들 때마다 다시 적지 않아도 돼요.
+          사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.
+        </p>
+        {/* 값을 **먼저** 말한다. 만들고 나서 "크레딧이 모자랍니다" 를 만나면
+            그때는 이미 다 적은 뒤다. */}
+        {got && (
+          <p className="chars-quota">
+            {got.free_left > 0
+              ? `오늘 ${got.free_left}개까지 무료`
+              : `한 개에 ${got.credit_cost}크레딧`}
+          </p>
+        )}
       </header>
 
       {failed && <p className="chars-error" role="alert">{failed}</p>}
       {!got && !failed && <p className="chars-empty">불러오는 중…</p>}
 
-      {got && mine.length === 0 && (
-        /* 만든 것이 없을 때. **없다고만 말하지 않는다** — 무엇을 하면 되는지
-           같이 준다. 자캐 그림이 없어도 만들 수 있다는 것까지. */
-        <div className="chars-blank">
-          <p><b>아직 만든 캐릭터가 없어요.</b></p>
-          <p>사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.</p>
-          <button type="button" className="btn btn-primary" onClick={() => setMaking(true)}>
-            나만의 캐릭터 만들기
-          </button>
-        </div>
+      {got && (
+        <ul className="char-grid">
+          {mine.map((c) => (
+            <CharCard key={c.id} c={c} onUse={onUse} onDrop={drop} />
+          ))}
+          {/* **만드는 문을 목록 안에 둔다.** 구석에 단추 하나만 두면 빈
+              화면에서 갈 곳이 안 보인다. */}
+          <li>
+            <button type="button" className="char-new" onClick={() => setMaking(true)}>
+              <b>+</b>
+              새 캐릭터
+              <span>사진 없이 설명만으로도</span>
+            </button>
+          </li>
+        </ul>
       )}
-
-      {mine.length > 0 && <CharGrid list={mine} onUse={onUse} onDrop={drop} />}
 
       {builtin.length > 0 && (
         <>
           <h3 className="chars-section">둘러보기용 캐릭터</h3>
-          <p className="chars-sub">만들 것이 없을 때 바로 써 볼 수 있어요.</p>
-          <CharGrid list={builtin} onUse={onUse} />
+          <p className="chars-lede">만들 것이 없을 때 바로 써 볼 수 있어요.</p>
+          <ul className="char-grid">
+            {builtin.map((c) => <CharCard key={c.id} c={c} onUse={onUse} />)}
+          </ul>
         </>
-      )}
-
-      {making && (
-        <CharacterMake
-          onClose={() => setMaking(false)}
-          /* 만들자마자 위자드로 넘기지 않는다 — 그림이 아직 없다. 목록에서
-             「그리는 중」으로 보이다가 다 되면 그때 고른다. */
-          onMade={() => { setMaking(false); load(); }}
-        />
       )}
     </section>
   );
 }
 
-function CharGrid({ list, onUse, onDrop }: {
-  list: Character[];
+function CharCard({ c, onUse, onDrop }: {
+  c: Character;
   onUse: (c: Character) => void;
   onDrop?: (c: Character) => void;
 }) {
   return (
-    <ul className="char-grid">
-      {list.map((c) => (
-        <li key={c.id} className="char-card">
-          <div className="char-art" data-status={c.status}>
-            {c.status === "drawing"
-              ? <span className="char-art-none">그리는 중…<br />1분쯤 걸려요</span>
-              : c.status === "error"
-                ? <span className="char-art-none">{c.error || "못 그렸어요"}</span>
-                : c.art_url
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={c.art_url} alt={c.name} loading="lazy" />
-                  : <span className="char-art-none">그림 없음</span>}
-          </div>
-          <div className="char-body">
-            <b className="char-name">{c.name}</b>
-            {c.description && <p className="char-desc">{c.description}</p>}
-            <div className="char-acts">
-              {/* 아직 안 그려졌으면 못 누른다 — 그림 없이 넘어가면 위자드가
-                  빈 캐릭터로 시작한다. */}
-              <button type="button" className="btn btn-primary btn-sm"
-                      disabled={c.status !== "ready"} onClick={() => onUse(c)}>
-                {c.status === "drawing" ? "그리는 중…" : "이 캐릭터로 웹툰 만들기"}
-              </button>
-              {onDrop && (
-                <button type="button" className="btn btn-quiet btn-sm" onClick={() => onDrop(c)}>
-                  지우기
-                </button>
-              )}
-            </div>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <li className="char-card">
+      <div className="char-art" data-status={c.status}>
+        {c.status === "drawing"
+          ? <span className="char-art-none">그리는 중…<br />1분쯤 걸려요</span>
+          : c.status === "error"
+            ? <span className="char-art-none">{c.error || "못 그렸어요"}</span>
+            : c.art_url
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={c.art_url} alt={c.name} loading="lazy" />
+              : <span className="char-art-none">그림 없음</span>}
+      </div>
+      <div className="char-body">
+        <b className="char-name">{c.name}</b>
+        {c.description && <p className="char-desc">{c.description}</p>}
+        <div className="char-acts">
+          {/* 아직 안 그려졌으면 못 누른다 — 그림 없이 넘어가면 위자드가 빈
+              캐릭터로 시작한다. */}
+          <button type="button" className="btn btn-primary btn-sm"
+                  disabled={c.status !== "ready"} onClick={() => onUse(c)}>
+            {c.status === "drawing" ? "그리는 중…" : "이 캐릭터로 웹툰"}
+          </button>
+          {onDrop && c.status !== "drawing" && (
+            <button type="button" className="btn btn-quiet btn-sm" onClick={() => onDrop(c)}>
+              지우기
+            </button>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }

@@ -55,7 +55,11 @@ def load_prompt(name: str) -> str:
 
 def spec_of(name: str, description: str, photo: Path | None) -> dict:
     """외모를 글로 적는다. 사진이 있으면 읽고, 없으면 설명만 본다."""
-    lines = ["# 이번 입력", "", f"캐릭터 이름: {name}"]
+    lines = ["# 이번 입력", ""]
+    if name.strip():
+        lines.append(f"캐릭터 이름: {name.strip()}")
+    else:
+        lines.append("캐릭터 이름: (없음 — 설명에 어울리는 한국어 이름을 네가 짓는다)")
     if description.strip():
         lines += ["", "캐릭터 설명:", description.strip()]
     if photo is not None:
@@ -99,7 +103,9 @@ def portrait_prompt(spec: dict, style_text: str) -> str:
         "a single cover-quality picture of ONE character.",
         "",
         "[COMPOSITION]",
-        "One character only. Waist-up to full body, facing the viewer or slightly turned.",
+        "One character only. **Waist-up**, facing the viewer or slightly turned — "
+        "close enough that the face and the upper body read clearly. Not a tiny "
+        "full-body figure in a wide space.",
         "The face is clearly visible and is the centre of attention.",
         "A simple, attractive background that suits the character — soft light, a hint of "
         "place or mood. Not a plain white cutout, and not a busy scene that competes with "
@@ -127,7 +133,9 @@ def portrait_prompt(spec: dict, style_text: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="캐릭터 그림 한 장을 만든다")
-    ap.add_argument("--name", required=True)
+    # **이름은 안 받아도 된다.** 안 주면 사양이 지어 준다 — 사람에게
+    # 이름부터 물으면 "뭐라고 부르지" 에서 멈춘다.
+    ap.add_argument("--name", default="")
     ap.add_argument("--description", default="")
     ap.add_argument("--photo", type=Path, default=None, help="있으면 읽어서 외모를 적는다")
     ap.add_argument("--style", default=None, help="그림체. 안 주면 하네스 기본")
@@ -149,12 +157,17 @@ def main() -> int:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     log("[캐릭터] 그리는 중…")
-    art_meta = imagegen.paint("SHEET_IMAGE", prompt, args.out, kind=imagegen.PAGE_KIND)
+    # **정사각으로 그린다.** 세로로 긴 웹툰 페이지 비율(2:3)로 그렸더니 카드에
+    # 걸린 그림이 지나치게 길쭉했다. 캐릭터 한 장은 얼굴과 상반신이 보이면
+    # 되는 것이라 정사각이 알맞다("details" 칸이 이미 1024x1024 다).
+    art_meta = imagegen.paint("SHEET_IMAGE", prompt, args.out, kind="details")
     log(f"  -> {args.out}")
 
     # 부르는 쪽이 읽을 한 줄. 비용은 두 호출을 합쳐서 낸다.
     print(json.dumps({
         "out": str(args.out),
+        # 사람이 이름을 안 적었으면 사양이 지은 것을 돌려준다.
+        "named": (spec.get("name") or "").strip(),
         "name": args.name,
         "source": "photo" if args.photo is not None else "prompt",
         "calls": [spec_meta, art_meta],

@@ -1,19 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createCharacter, type Character } from "../../lib/charApi";
 import { STYLE_INFO } from "../../lib/wizardData";
+import { STYLE_THUMB } from "../../lib/styleThumbs";
 
-/* 캐릭터 하나 만들기.
+/* 캐릭터 하나 만들기 — **화면 하나를 통째로 쓴다.**
+ *
+ * 처음에는 작은 창(모달)으로 만들었는데, 적을 것이 넷이고 그림체는 여덟 개를
+ * 눈으로 견줘야 해서 그 안에서는 아무것도 제대로 안 보였다. 웹툰 만들기가
+ * 화면을 통째로 쓰는 것과 같은 이유다.
  *
  * **두 갈래가 나란히 있다.** 사진으로 만들거나, 설명만으로 만들거나.
  * 뒤쪽이 이 기능이 생긴 이유다 — 자캐 그림이 없는 사람도 캐릭터를 가질 수
- * 있어야 한다. 그래서 사진 쪽을 위에 두되 **선택**이라고 적고, 설명은 어느
- * 쪽이든 받는다.
+ * 있어야 한다.
  *
- * 올린 사진은 **서버에 안 남는다.** 외모를 글로 옮기는 데만 쓰고 그림이
- * 나오면 지운다 — 그 말을 여기서 해 준다. 안 적어 두면 얼굴 사진을 올리는
- * 일이 그냥 무서운 일이 된다. */
+ * **이름도 필수가 아니다.** 이름부터 물으면 "뭐라고 부르지" 에서 멈춘다.
+ * 안 적으면 서버가 지어 준다. */
 export default function CharacterMake({ onClose, onMade }: {
   onClose: () => void;
   onMade: (c: Character) => void;
@@ -26,34 +29,28 @@ export default function CharacterMake({ onClose, onMade }: {
   const [failed, setFailed] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, busy]);
-
   const pick = (f: File | undefined) => {
     if (!f) return;
     if (f.size > 6 * 1024 * 1024) { setFailed("사진이 너무 큽니다 (6MB 까지)"); return; }
     const r = new FileReader();
-    r.onload = () => setPhoto(String(r.result));
+    r.onload = () => { setPhoto(String(r.result)); setFailed(null); };
     r.readAsDataURL(f);
   };
 
-  const ready = name.trim() && (photo || description.trim());
+  /** 사진이든 설명이든 **하나만** 있으면 만든다. */
+  const ready = Boolean(photo || description.trim());
 
   const submit = async () => {
     if (!ready || busy) return;
     setBusy(true);
     setFailed(null);
     try {
-      const made = await createCharacter({
+      onMade(await createCharacter({
         name: name.trim(),
         description: description.trim(),
         photo_data: photo || undefined,
         style,
-      });
-      onMade(made);
+      }));
     } catch (e) {
       setFailed((e as Error).message);
       setBusy(false);
@@ -61,39 +58,37 @@ export default function CharacterMake({ onClose, onMade }: {
   };
 
   return (
-    <div className="credit-modal" role="dialog" aria-modal="true" aria-label="캐릭터 만들기">
-      <button type="button" className="credit-modal-veil" aria-label="닫기"
-              onClick={() => { if (!busy) onClose(); }} />
+    <section className="charmake">
+      <header className="charmake-head">
+        <button type="button" className="btn btn-quiet btn-sm"
+                onClick={onClose} disabled={busy}>← 내 캐릭터</button>
+        <h2>어떤 캐릭터인가요?</h2>
+        <p className="chars-lede">
+          사진이 있으면 사진으로, 없으면 설명만으로도 그립니다.
+        </p>
+      </header>
 
-      <div className="credit-modal-box char-make">
-        <header className="credit-modal-head">
-          <h3>캐릭터 만들기</h3>
-          <button type="button" className="credit-modal-x" onClick={onClose}
-                  disabled={busy} aria-label="닫기">✕</button>
-        </header>
-
-        <div className="credit-modal-body">
+      <div className="charmake-body">
+        <div className="charmake-card">
           <label className="char-field">
-            <span>이름 <b className="char-req">필수</b></span>
-            <input type="text" value={name} placeholder="예: 차사"
-                   onChange={(e) => setName(e.target.value)} disabled={busy} />
-          </label>
-
-          <label className="char-field">
-            <span>어떤 캐릭터인가요?</span>
+            <span>어떤 캐릭터인가요? <b className="char-req">필수</b></span>
             <textarea
               value={description}
-              rows={4}
-              placeholder={"성격·하는 일·생김새 등 아는 만큼.\n예) 택배만 배달하는 저승사자. 200년째 같은 일을 한다."}
+              rows={6}
+              placeholder={"성격·하는 일·생김새 등 아는 만큼.\n예) 편의점 야간 알바를 하는 구미호. 꼬리를 코트 안에 숨기고 다닌다."}
               onChange={(e) => setDescription(e.target.value)}
               disabled={busy}
             />
           </label>
 
+          <label className="char-field">
+            <span>이름 <em className="char-opt">선택 · 비우면 루가 지어요</em></span>
+            <input type="text" value={name} placeholder="예: 마루"
+                   onChange={(e) => setName(e.target.value)} disabled={busy} />
+          </label>
+
           <div className="char-field">
             <span>사진 <em className="char-opt">선택</em></span>
-            {/* **선택이라고 적는다.** 여기가 이 기능이 생긴 자리다 — 사진이
-                없으면 못 만드는 줄 알고 나가는 사람을 붙잡는 것. */}
             <div className="char-photo">
               {photo
                 // eslint-disable-next-line @next/next/no-img-element
@@ -117,27 +112,45 @@ export default function CharacterMake({ onClose, onMade }: {
               지웁니다. 남는 것은 그려진 캐릭터뿐이에요.
             </p>
           </div>
+        </div>
 
-          <label className="char-field">
-            <span>그림체</span>
-            <select value={style} onChange={(e) => setStyle(e.target.value)} disabled={busy}>
-              {STYLE_INFO.map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-          </label>
-
-          {failed && <p className="chars-error" role="alert">{failed}</p>}
-
-          <button type="button" className="btn btn-primary char-go"
-                  onClick={submit} disabled={!ready || busy}>
-            {busy ? "그리는 중… (1분쯤 걸려요)" : "캐릭터 만들기"}
-          </button>
-          {!ready && !busy && (
-            <p className="char-note">이름과, 사진 또는 설명 중 하나가 있으면 만들 수 있어요.</p>
-          )}
+        <div className="charmake-card">
+          {/* **그림체는 보고 고른다.** 이름만으로는 "세미리얼" 이 무엇인지 알
+              수가 없다. 위자드가 쓰는 것과 같은 견본이다. */}
+          <div className="char-field"><span>그림체</span></div>
+          <ul className="style-pick">
+            {STYLE_INFO.map(([key, label, desc]) => (
+              <li key={key}>
+                <button
+                  type="button"
+                  className={`style-card${style === key ? " is-on" : ""}`}
+                  onClick={() => setStyle(key)}
+                  disabled={busy}
+                  aria-pressed={style === key}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={STYLE_THUMB[key]} alt="" loading="lazy" />
+                  <b>{label}</b>
+                  <span>{desc}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
-    </div>
+
+      <footer className="charmake-foot">
+        {failed && <p className="chars-error" role="alert">{failed}</p>}
+        <button type="button" className="btn btn-primary charmake-go"
+                onClick={submit} disabled={!ready || busy}>
+          {busy ? "보내는 중…" : "캐릭터 만들기"}
+        </button>
+        <p className="char-note">
+          {ready
+            ? "그리는 데 1분쯤 걸려요. 기다리지 않아도 목록에서 볼 수 있어요."
+            : "어떤 캐릭터인지 한 줄만 적어 주세요 — 사진은 없어도 됩니다."}
+        </p>
+      </footer>
+    </section>
   );
 }

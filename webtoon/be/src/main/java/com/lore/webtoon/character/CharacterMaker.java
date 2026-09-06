@@ -53,7 +53,8 @@ public class CharacterMaker {
     }
 
     /** 만든 결과. {@code art} 는 그린 파일, {@code source} 는 사진에서인지 글에서인지. */
-    public record Made(Path art, CharacterSource source, List<JsonNode> calls) {
+    /** @param named 사양이 정한 이름. 사람이 안 적었을 때 쓴다. */
+    public record Made(Path art, CharacterSource source, String named, List<JsonNode> calls) {
     }
 
     /**
@@ -122,6 +123,6 @@ public class CharacterMaker {
                 ? CharacterSource.PHOTO : CharacterSource.PROMPT;
         List<JsonNode> calls = new ArrayList<>();
         got.path("calls").forEach(calls::add);
-        return new Made(art, source, calls);
+        return new Made(art, source, got.path("named").asText(""), calls);
     }
 }

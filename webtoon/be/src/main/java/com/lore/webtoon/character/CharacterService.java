@@ -131,14 +131,15 @@ public class CharacterService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED,
                     "캐릭터를 만들려면 로그인해 주세요 — 만든 캐릭터는 계정에 남습니다.");
         }
-        if (name == null || name.isBlank()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "캐릭터 이름을 적어주세요");
-        }
         boolean hasPhoto = photoDataUrl != null && !photoDataUrl.isBlank();
         if (!hasPhoto && (description == null || description.isBlank())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
-                    "사진이 없으면 설명이 있어야 합니다 — 어떤 캐릭터인지 알려주세요.");
+                    "어떤 캐릭터인지 한 줄만 적어 주세요 — 사진은 없어도 됩니다.");
         }
+        /* **이름은 안 물어도 된다.** 이름부터 요구하면 "뭐라고 부르지" 에서
+           멈춘다. 안 적었으면 여기서 임시로 두고, 그리는 쪽이 사양을 쓰면서
+           지어 준 이름으로 바꿔 준다(사양에 name 칸이 있다). */
+        String called = name == null ? "" : name.trim();
         if (!maker.ready()) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR,
                     "지금은 캐릭터를 만들 수 없습니다");
@@ -168,7 +169,8 @@ public class CharacterService {
 
         Instant now = Instant.now(clock);
         WebtoonCharacter saved = characters.save(WebtoonCharacter.drawing(
-                publicId, userId, name.trim(), description, now));
+                publicId, userId, called.isEmpty() ? "이름 없는 캐릭터" : called,
+                description, now));
 
         if (!free) {
             credits.charge(userId, cost, "character:" + publicId, "캐릭터 만들기");
@@ -190,12 +192,12 @@ public class CharacterService {
                     new TransactionSynchronization() {
                         @Override
                         public void afterCommit() {
-                            line.submit(() -> draw(id, name.trim(), description, finalPhoto,
+                            line.submit(() -> draw(id, called, description, finalPhoto,
                                     style, dir));
                         }
                     });
         } else {
-            line.submit(() -> draw(id, name.trim(), description, finalPhoto, style, dir));
+            line.submit(() -> draw(id, called, description, finalPhoto, style, dir));
         }
         return saved;
     }
@@ -207,10 +209,12 @@ public class CharacterService {
         try {
             CharacterMaker.Made made = maker.make(name, description, photo, style, drawn);
             String key = uploadArt(made.art());
-            finish(id, key, made.source(), null);
+            // 사람이 이름을 안 적었으면 사양이 지어 준 것을 쓴다.
+            finish(id, key, made.source(), null,
+                    name.isBlank() ? made.named() : null);
         } catch (Exception e) {                    // noqa: 사유는 로그에, 사람에겐 한 줄
             log.error("캐릭터를 못 그렸습니다 (id={}, name={})", id, name, e);
-            finish(id, null, null, "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.");
+            finish(id, null, null, "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.", null);
         } finally {
             // **어떻게 끝나든 올린 사진은 지운다.** 외모를 글로 적는 데만 쓰고,
             // 그 뒤로는 다시 안 쓴다. 사람 얼굴을 서버에 둘 이유가 없다.
@@ -219,12 +223,15 @@ public class CharacterService {
     }
 
     @Transactional
-    protected void finish(Long id, String key, CharacterSource source, String why) {
+    protected void finish(Long id, String key, CharacterSource source, String why, String named) {
         characters.findById(id).ifPresent(one -> {
             Instant now = Instant.now(clock);
             if (why != null) {
                 one.failed(why, now);
             } else {
+                if (named != null && !named.isBlank()) {
+                    one.rename(named, one.getDescription(), now);
+                }
                 one.drewArt(key, source == null ? CharacterSource.PROMPT : source, now);
             }
             characters.save(one);
