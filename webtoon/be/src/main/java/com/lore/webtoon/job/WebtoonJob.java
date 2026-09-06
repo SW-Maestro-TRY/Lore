@@ -92,6 +92,20 @@ public class WebtoonJob {
     @Column(name = "picked")
     private Integer picked;
 
+    /**
+     * 만들 때 사람이 넣은 것 — 이름 · 설명 · 장르 · 어떤 이야기를 원했나.
+     *
+     * <b>결과만 남기면 "이 입력이 좋은 결과를 냈나" 를 물을 수가 없다.</b>
+     * 지금까지 이건 작업 폴더의 character.json 에만 있었다 — 그 폴더가
+     * 없어지면 무엇으로 만든 작품인지 아무도 모른다.
+     *
+     * 통째로 JSON 으로 둔다. 칸으로 쪼개면 폼이 바뀔 때마다 표를 고쳐야 하고,
+     * 제품이 이 값으로 하는 일은 <b>나중에 들여다보는 것</b>뿐이다.
+     * 사진은 안 넣는다 — 사람 얼굴이 들어올 수 있는 값이라 여기 쌓을 것이 아니다.
+     */
+    @Column(name = "input_json", columnDefinition = "text")
+    private String inputJson;
+
     /** 왜 실패했나. 사람이 읽을 한 줄. */
     @Column(length = 300)
     private String error;
@@ -106,12 +120,13 @@ public class WebtoonJob {
     }
 
     private WebtoonJob(String publicId, Long userId, String browserUid,
-                       String style, boolean checkpoints, Instant at) {
+                       String style, boolean checkpoints, String inputJson, Instant at) {
         this.publicId = publicId;
         this.userId = userId;
         this.browserUid = browserUid;
         this.style = style;
         this.checkpoints = checkpoints;
+        this.inputJson = inputJson;
         this.status = JobStatus.QUEUED;
         this.stage = JobStage.STORY;
         this.createdAt = at;
@@ -119,8 +134,9 @@ public class WebtoonJob {
     }
 
     public static WebtoonJob queued(String publicId, Long userId, String browserUid,
-                                    String style, boolean checkpoints, Instant at) {
-        return new WebtoonJob(publicId, userId, browserUid, style, checkpoints, at);
+                                    String style, boolean checkpoints,
+                                    String inputJson, Instant at) {
+        return new WebtoonJob(publicId, userId, browserUid, style, checkpoints, inputJson, at);
     }
 
     void moveTo(JobStatus status, JobStage stage, Instant at) {
@@ -185,6 +201,10 @@ public class WebtoonJob {
 
     public Integer getPicked() {
         return picked;
+    }
+
+    public String getInputJson() {
+        return inputJson;
     }
 
     public String getError() {

@@ -123,7 +123,8 @@ public class JobService {
         String style = STYLE.getOrDefault(blank(form.style()), DEFAULT_STYLE);
         WebtoonJob job = jobs.save(WebtoonJob.queued(
                 publicId, userId, browserUid, style,
-                form.checkpoints() == null || form.checkpoints(), Instant.now()));
+                form.checkpoints() == null || form.checkpoints(),
+                inputOf(form), Instant.now()));
 
         runner.enqueue(job.getId(), dir);
         return publicId;
@@ -251,6 +252,29 @@ public class JobService {
         }
         mapper.writerWithDefaultPrettyPrinter()
                 .writeValue(dir.resolve("character.json").toFile(), doc);
+    }
+
+    /**
+     * 사람이 넣은 것을 DB 에 남길 모양으로.
+     *
+     * <b>사진은 뺀다.</b> 사람 얼굴이 들어올 수 있는 값이고, 여기 쌓을 것이
+     * 아니다 — 몇 장을 올렸는지만 적는다.
+     */
+    private String inputOf(CreateRequest form) {
+        Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("name", blank(form.name()));
+        doc.put("character", blank(form.character()));
+        doc.put("genre", blank(form.genre()));
+        doc.put("story", blank(form.story()));
+        doc.put("style", blank(form.style()));
+        doc.put("fields", form.fields() == null ? Map.of() : form.fields());
+        doc.put("photos", form.photosData() == null ? 0 : form.photosData().size());
+        try {
+            return mapper.writeValueAsString(doc);
+        } catch (IOException e) {
+            log.warn("입력을 남기지 못했습니다 (job 은 그대로 진행합니다)", e);
+            return null;
+        }
     }
 
     private boolean notBlank(String s) {

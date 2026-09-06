@@ -55,16 +55,18 @@ public class JobRunner {
     private final JobProgress progress;
     private final JobStore store;
     private final StoryStore stories;
+    private final AfterRun after;
     private final Path runsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
-                     StoryStore stories,
+                     StoryStore stories, AfterRun after,
                      @Value("${lore.webtoon.python.runs-dir:}") String runsDir) {
         this.harness = harness;
         this.progress = progress;
         this.store = store;
         this.stories = stories;
+        this.after = after;
         this.runsDir = (runsDir == null || runsDir.isBlank()
                 ? harness.dir().resolve("runs")
                 : Path.of(runsDir)).toAbsolutePath().normalize();
@@ -187,6 +189,12 @@ public class JobRunner {
         }
 
         store.done(jobId);
+
+        /* **다 만든 뒤에 남길 것을 남긴다** — 나간 돈과 그림.
+           안 하면 비용이 파일에만 남아 일일 상한이 무의미해지고(아무리 만들어도
+           "오늘 0원"), 그림은 하네스 디스크에만 남아 그 폴더가 없으면 못 본다.
+           여기서 실패해도 만들기는 성공이다 — 그림은 이미 있고 사람은 볼 수 있다. */
+        after.finish(job.getRunId(), line -> progress.line(jobId, line));
         progress.forget(jobId);
     }
 
