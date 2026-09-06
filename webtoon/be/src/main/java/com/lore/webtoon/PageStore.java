@@ -27,18 +27,20 @@ public class PageStore {
     private static final Logger log = LoggerFactory.getLogger(PageStore.class);
 
     private final WebtoonPageRepository pages;
+    private final PrivateArt art;
     /** 그림을 읽어 주는 곳. 비어 있으면 같은 도메인의 상대경로로 준다. */
     private final String cdn;
     private final Clock clock;
 
     @Autowired
-    public PageStore(WebtoonPageRepository pages,
+    public PageStore(WebtoonPageRepository pages, PrivateArt art,
                      @Value("${lore.webtoon.cdn-base:}") String cdn) {
-        this(pages, cdn, Clock.systemUTC());
+        this(pages, art, cdn, Clock.systemUTC());
     }
 
-    PageStore(WebtoonPageRepository pages, String cdn, Clock clock) {
+    PageStore(WebtoonPageRepository pages, PrivateArt art, String cdn, Clock clock) {
         this.pages = pages;
+        this.art = art;
         this.cdn = cdn == null ? "" : cdn.replaceAll("/+$", "");
         this.clock = clock;
     }
@@ -51,6 +53,16 @@ public class PageStore {
      */
     @Transactional
     public int record(String runId, List<Upload> uploads) {
+        return record(runId, uploads, true);
+    }
+
+    /**
+     * @param isPublic 지금 공개인가. 비공개면 올라온 그림을 <b>CloudFront 가 안
+     *                 내주는 자리로 옮긴다</b> — 하네스는 공개 여부를 모르고
+     *                 늘 공개 자리에 올리므로, 받는 쪽에서 맞춰 준다.
+     */
+    @Transactional
+    public int record(String runId, List<Upload> uploads, boolean isPublic) {
         if (runId == null || runId.isBlank() || uploads == null) {
             return 0;
         }
@@ -71,6 +83,9 @@ public class PageStore {
             }
         }
         log.info("작품 그림 주소를 적었습니다 (run={}, 새로 {}개)", runId, fresh);
+        if (!isPublic) {
+            moveAll(runId, false);
+        }
         return fresh;
     }
 
@@ -97,8 +112,45 @@ public class PageStore {
     @Transactional(readOnly = true)
     public String urlOf(String runId, int pageNo, int width) {
         return pages.findByRunIdAndPageNoAndWidth(runId, pageNo, width)
-                .map(p -> url(p.getS3Key()))
+                .map(p -> PrivateArt.isPrivate(p.getS3Key())
+                        // 비공개 자리에 있는 것은 CloudFront 가 안 내준다.
+                        // 잠깐 열리는 주소를 만들어 준다 — 여기까지 왔다는 것은
+                        // 부르는 쪽이 이미 주인 확인을 마쳤다는 뜻이다.
+                        ? art.temporaryUrl(p.getS3Key())
+                        : url(p.getS3Key()))
                 .orElse(null);
+    }
+
+    /**
+     * 이 작품의 그림을 공개 자리 / 비공개 자리로 옮긴다.
+     *
+     * 자리로 가르므로 공개 여부를 바꾸면 실제로 옮겨야 한다. <b>안 옮기면
+     * 비공개로 내려도 계속 열린다.</b>
+     *
+     * 한 장을 못 옮겨도 나머지는 옮긴다 — 하나 때문에 전부 옛 자리에 남는
+     * 것이 더 나쁘다. 못 옮긴 것은 크게 남긴다.
+     *
+     * @return 옮긴 장 수
+     */
+    @Transactional
+    public int moveAll(String runId, boolean toPublic) {
+        int moved = 0;
+        for (WebtoonPage page : pages.findByRunIdOrderByPageNoAscWidthAsc(runId)) {
+            if (PrivateArt.isPrivate(page.getS3Key()) != toPublic) {
+                continue;                       // 이미 맞는 자리에 있다
+            }
+            String to = art.move(page.getS3Key(), toPublic);
+            if (to != null && !to.equals(page.getS3Key())) {
+                page.movedTo(to, page.getBytes(), Instant.now(clock));
+                pages.save(page);
+                moved++;
+            }
+        }
+        if (moved > 0) {
+            log.info("작품 그림을 {} 자리로 옮겼습니다 (run={}, {}장)",
+                    toPublic ? "공개" : "비공개", runId, moved);
+        }
+        return moved;
     }
 
     /** S3 에 올라와 있는 작품인가. */

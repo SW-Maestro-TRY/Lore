@@ -33,11 +33,13 @@ public class WorkLedger {
     private static final Logger log = LoggerFactory.getLogger(WorkLedger.class);
 
     private final WebtoonWorkRepository works;
+    private final BrowserLinkRepository links;
     /* 스프링이 만들어 주는 빈이 없다(앞서 주입받게 썼다가 서버가 안 떴다). */
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public WorkLedger(WebtoonWorkRepository works) {
+    public WorkLedger(WebtoonWorkRepository works, BrowserLinkRepository links) {
         this.works = works;
+        this.links = links;
     }
 
     /**
@@ -91,6 +93,60 @@ public class WorkLedger {
         } catch (RuntimeException e) {
             log.error("작품 번호를 적지 못했습니다 (job={}, run={})", jobId, runId, e);
         }
+    }
+
+    /**
+     * 이 작품을 이 사람이 봐도 되나.
+     *
+     * 공개면 누구나, 비공개면 주인만. <b>모르는 작품은 봐도 된다고 답한다</b> —
+     * 아직 이 표로 안 옮겨 온 옛 작품이 있고, 그것까지 막으면 멀쩡한 사람이
+     * 자기 작품을 못 본다. 옮겨 오는 것이 끝나면 반대로 뒤집을 자리다.
+     */
+    @Transactional(readOnly = true)
+    public boolean mayRead(String runId, Long userId) {
+        return works.findFirstByRunId(runId)
+                .map(work -> work.isPublic() || isOwner(work, userId))
+                .orElse(true);
+    }
+
+    /** 이 작품을 이 사람이 공개/비공개로 바꿔도 되나. */
+    @Transactional(readOnly = true)
+    public boolean mayChange(String runId, Long userId) {
+        return works.findFirstByRunId(runId).map(w -> isOwner(w, userId)).orElse(false);
+    }
+
+    /** 공개 여부를 적는다. -> 바뀌었으면 true (같은 값이면 아무 일도 안 한다) */
+    @Transactional
+    public boolean setPublic(String runId, boolean value) {
+        return works.findFirstByRunId(runId).map(work -> {
+            if (work.isPublic() == value) {
+                return false;
+            }
+            work.setPublic(value);
+            works.save(work);
+            return true;
+        }).orElse(false);
+    }
+
+    /** 지금 공개인가. 모르는 작품은 공개로 본다(위 mayRead 와 같은 이유). */
+    @Transactional(readOnly = true)
+    public boolean isPublic(String runId) {
+        return works.findFirstByRunId(runId).map(WebtoonWork::isPublic).orElse(true);
+    }
+
+    /**
+     * 주인인가.
+     *
+     * 계정이 직접 붙어 있거나, 이 계정에 이어진 브라우저가 만든 것이면 주인이다.
+     * 로그인 안 했으면 주인일 수 없다 — 게스트끼리는 서로를 구별할 방법이 없고
+     * (uid 는 지어낼 수 있다), 그 값을 믿으면 아무나 남의 비공개 작품을 열 수 있다.
+     */
+    private boolean isOwner(WebtoonWork work, Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        return userId.equals(work.getUserId())
+                || links.existsByUserIdAndBrowserUid(userId, work.getBrowserUid());
     }
 
     /** 이 계정 것 전부. 최근 만든 것부터. */

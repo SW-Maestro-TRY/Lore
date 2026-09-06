@@ -36,6 +36,7 @@ public class MyWebtoonService {
 
     private final BrowserLinkRepository links;
     private final WorkLedger ledger;
+    private final PageStore pages;
     private final HarnessGateway gateway;
 
     /**
@@ -49,10 +50,11 @@ public class MyWebtoonService {
     private final ObjectMapper mapper = new ObjectMapper();
 
     public MyWebtoonService(BrowserLinkRepository links, HarnessGateway gateway,
-                            WorkLedger ledger) {
+                            WorkLedger ledger, PageStore pages) {
         this.links = links;
         this.gateway = gateway;
         this.ledger = ledger;
+        this.pages = pages;
     }
 
     /**
@@ -213,24 +215,52 @@ public class MyWebtoonService {
      * @return 바뀐 뒤의 공개 여부
      * @throws BusinessException 내 작품이 아니거나 하네스가 못 바꿨을 때
      */
-    @Transactional(readOnly = true)
+    /* **읽기 전용이면 안 된다.** 예전에는 하네스로 넘기기만 해서 읽기 전용이
+       맞았는데, 지금은 공개 여부와 그림 자리를 DB 에 쓴다. 읽기 전용 트랜잭션은
+       쓴 것을 예외 없이 **조용히 버린다**(Hibernate 가 flush 를 안 한다) —
+       실제로 그랬다: S3 의 그림 18개는 비공개 자리로 옮겨졌는데 DB 는 그대로라,
+       화면은 "공개" 라고 말하면서 그림은 아무도 못 보는 상태가 됐다. 응답은
+       성공이었다. */
+    @Transactional
     public boolean setVisibility(Long userId, String runId, boolean isPublic) {
+        // 주인 확인을 **DB 로도** 한다. 아래 하네스 쪽 길은 파일 두 개를 이어
+        // 붙인 것이라, 그 파일이 없으면(하네스가 죽었거나 옮겨 간 뒤) 내 작품인데도
+        // 못 바꾼다.
         String owner = ownerUidOf(userId, runId);
-        if (owner == null) {
+        if (owner == null && !ledger.mayChange(runId, userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 바꿀 수 있습니다");
         }
-        byte[] body = ("{\"public\":" + isPublic + ",\"uid\":\"" + owner + "\"}")
-                .getBytes(StandardCharsets.UTF_8);
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        ResponseEntity<byte[]> res = gateway.forward(HttpMethod.POST,
-                "/api/runs/" + runId + "/visibility", null, body, headers);
 
-        // 하네스가 안 바꿨는데 화면에 바뀐 것으로 보이면 제일 나쁘다 —
-        // 껐다고 믿는데 실제로는 걸려 있게 된다.
-        if (!res.getStatusCode().is2xxSuccessful()) {
-            log.warn("공개 여부를 못 바꿨습니다 (run={}, status={})", runId, res.getStatusCode());
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "공개 여부를 바꾸지 못했습니다");
+        if (owner != null) {
+            byte[] body = ("{\"public\":" + isPublic + ",\"uid\":\"" + owner + "\"}")
+                    .getBytes(StandardCharsets.UTF_8);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            ResponseEntity<byte[]> res = gateway.forward(HttpMethod.POST,
+                    "/api/runs/" + runId + "/visibility", null, body, headers);
+
+            // 하네스가 안 바꿨는데 화면에 바뀐 것으로 보이면 제일 나쁘다 —
+            // 껐다고 믿는데 실제로는 걸려 있게 된다.
+            if (!res.getStatusCode().is2xxSuccessful()) {
+                log.warn("공개 여부를 못 바꿨습니다 (run={}, status={})", runId, res.getStatusCode());
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "공개 여부를 바꾸지 못했습니다");
+            }
+        }
+
+        ledger.setPublic(runId, isPublic);
+
+        /* **그림도 옮긴다.** 공개/비공개를 자리로 가르기 때문에(PrivateArt),
+           안 옮기면 비공개로 내려도 CloudFront 가 계속 내준다 — 스위치가
+           거짓말을 하는 셈이다.
+
+           옮기다 실패해도 여기서 안 던진다: 이미 DB 와 하네스는 바뀌었고,
+           목록에서는 내려가 있다. 남은 것은 "주소를 아는 사람에게 아직
+           열린다" 이고, 그건 크게 남겨 두고 다시 시도할 일이다. */
+        try {
+            pages.moveAll(runId, isPublic);
+        } catch (RuntimeException e) {
+            log.error("공개 여부는 바꿨는데 그림을 못 옮겼습니다 (run={}, public={})",
+                    runId, isPublic, e);
         }
         return isPublic;
     }

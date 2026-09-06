@@ -147,7 +147,18 @@ public class WebtoonController {
         if (HttpMethod.GET.equals(method)) {
             Matcher page = PAGE.matcher(request.getRequestURI());
             if (page.matches()) {
-                String at = pages.urlOf(page.group(1), Integer.parseInt(page.group(2)),
+                String runId = page.group(1);
+
+                /* **비공개는 주인만 본다.** 지금까지는 목록에서 가려질 뿐이라
+                   작품 번호만 알면 누구나 그림을 받을 수 있었다(실측). */
+                if (!ledger.mayRead(runId, me())) {
+                    return ResponseEntity.status(404)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body("{\"error\":\"그 장의 그림이 없습니다\"}"
+                                    .getBytes(StandardCharsets.UTF_8));
+                }
+
+                String at = pages.urlOf(runId, Integer.parseInt(page.group(2)),
                                         widthOf(request.getQueryString()));
                 if (at != null) {
                     return ResponseEntity.status(302).location(URI.create(at)).build();
@@ -218,6 +229,11 @@ public class WebtoonController {
     }
 
     private static final Pattern WIDTH = Pattern.compile("(?:^|&)w=(\\d{1,4})(?:&|$)");
+
+    /** 지금 로그인한 사람. 안 했으면 null. */
+    private static Long me() {
+        return CreditGate.currentUser();
+    }
 
     /**
      * 만들기 요청에서 브라우저 값만 꺼낸다.

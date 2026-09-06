@@ -35,6 +35,7 @@ class MyWebtoonServiceTest {
     private FakeLinks links;
     private HarnessGateway gateway;
     private WorkLedger ledger;
+    private PageStore pageStore;
     private MyWebtoonService service;
 
     @BeforeEach
@@ -45,8 +46,10 @@ class MyWebtoonServiceTest {
            목록을 주므로, 이 파일의 검사들은 지금까지처럼 하네스가 준 것만
            본다 — 옮겨 가는 중에도 예전 동작이 그대로인지가 여기서 지켜진다. */
         ledger = mock(WorkLedger.class);
+        /* 그림 자리를 옮기는 일은 여기서 볼 것이 아니다(PageStoreTest 가 본다). */
+        pageStore = mock(PageStore.class);
         when(ledger.runIdsOf(anyLong())).thenReturn(List.of());
-        service = new MyWebtoonService(links, gateway, ledger);
+        service = new MyWebtoonService(links, gateway, ledger, pageStore);
     }
 
     private void harnessReturns(String uid, String json) {

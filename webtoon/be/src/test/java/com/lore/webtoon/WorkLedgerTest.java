@@ -25,6 +25,9 @@ import static org.mockito.Mockito.when;
 class WorkLedgerTest {
 
     private final List<WebtoonWork> rows = new ArrayList<>();
+    /* 계정↔브라우저 연결은 여기서 볼 것이 아니다. 가짜는 "안 이어져 있다" 고
+       답하므로, 주인 판정은 계정이 직접 붙은 경우만 본다. */
+    private final BrowserLinkRepository links = mock(BrowserLinkRepository.class);
     private WorkLedger ledger;
 
     @BeforeEach
@@ -41,7 +44,7 @@ class WorkLedgerTest {
             }
             return w;
         });
-        ledger = new WorkLedger(repo);
+        ledger = new WorkLedger(repo, links);
     }
 
     private static byte[] json(String s) {
@@ -171,7 +174,7 @@ class WorkLedgerTest {
         // ownedBy 는 쿼리에서 걸러 준다. 여기서는 그 약속을 문서로 굳힌다.
         when(repo.ownedBy(7L)).thenReturn(List.of(
                 WebtoonWork.moved("run-1", "run-1", 7L, "uid-a", java.time.Instant.now())));
-        assertThat(new WorkLedger(repo).runIdsOf(7L)).containsExactly("run-1");
+        assertThat(new WorkLedger(repo, links).runIdsOf(7L)).containsExactly("run-1");
         assertThat(Optional.of("문서용")).isPresent();
     }
 }
