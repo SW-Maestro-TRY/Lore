@@ -66,25 +66,36 @@ export default function ShareBar({
   };
 
   return (
-    <div className="share">
-      <div className="share-row">
-        <button type="button" className="btn btn-quiet" onClick={start}
-                aria-expanded={open}>
-          공유하기
-        </button>
-        {said && <span className="share-said" role="status">{said}</span>}
-      </div>
+    <span className="share">
+      {/* 제목 옆에 서는 아이콘 하나. 「공유하기」라고 적힌 단추를 제목 아래
+          줄에 두면 그 줄이 통째로 단추줄이 되어, 읽으러 온 사람 눈에 제목
+          다음으로 큰 것이 「공유하기」가 된다. 아이콘은 제목의 일부처럼
+          붙어 서서 필요한 사람만 찾는다.
+          그림만 두면 무엇인지 모르는 사람이 있으므로 이름은 남긴다(읽어
+          주는 기계와 마우스를 올린 사람 둘 다에게). */}
+      <button type="button" className="share-icon" onClick={start}
+              aria-expanded={open} aria-label="공유하기" title="공유하기">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"
+             fill="none" stroke="currentColor" strokeWidth="1.9"
+             strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="18" cy="5" r="3" />
+          <circle cx="6" cy="12" r="3" />
+          <circle cx="18" cy="19" r="3" />
+          <path d="M8.6 10.6 15.4 6.4M8.6 13.4l6.8 4.2" />
+        </svg>
+      </button>
 
       {open && (
-        <div className="share-list">
+        <span className="share-list">
           {SHARE_TARGETS.map((t) => (
             <button key={t.key} type="button" className="share-one"
                     onClick={() => pick(t.key, t.href)}>
               {t.label}
             </button>
           ))}
-        </div>
+        </span>
       )}
-    </div>
+      {said && <span className="share-said" role="status">{said}</span>}
+    </span>
   );
 }

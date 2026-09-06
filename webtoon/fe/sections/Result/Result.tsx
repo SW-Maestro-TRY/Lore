@@ -86,9 +86,20 @@ export default function Result({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="result-cover-art" src={"/static/lou/stage/done.webp"} alt="" aria-hidden="true" />
           <div className="result-cover-text">
-            <p className="eyebrow">{[data.genre, data.style_label].filter(Boolean).join(" · ")}</p>
+            {/* 장르와 그림체가 같은 말일 때가 있다(로맨스 판타지 장르 +
+                로맨스 판타지 그림체) — 그대로 이으면 「로맨스 판타지 ·
+                로맨스 판타지」가 된다. 겹치면 하나만 말한다. */}
+            <p className="eyebrow">
+              {[...new Set([data.genre, data.style_label].filter(Boolean))].join(" · ")}
+            </p>
             <div className="title-row">
               <h2>{data.title}</h2>
+              {/* 공유는 **누구에게나** 낸다. 남의 작품을 남에게 보내는 것도 이
+                  제품이 바라는 일이고(그래서 둘러보기가 있다), 내려받기와
+                  달리 남의 그림을 가져가는 것이 아니라 이 자리를 가리키는
+                  것뿐이다. */}
+              <ShareBar runId={runId} episode={ep} title={data.title}
+                        character={data.character} />
             </div>
             <p className="result-sub">
               {data.character ? `${data.character} · ` : ""}{ep}화{short}
@@ -96,12 +107,6 @@ export default function Result({
           </div>
         </div>
         {data.logline && <p className="result-logline">{data.logline}</p>}
-
-        {/* 공유는 **누구에게나** 낸다. 남의 작품을 남에게 보내는 것도 이
-            제품이 바라는 일이고(그래서 둘러보기가 있다), 내려받기와 달리
-            남의 그림을 가져가는 것이 아니라 이 자리를 가리키는 것뿐이다. */}
-        <ShareBar runId={runId} episode={ep} title={data.title}
-                  character={data.character} />
 
         {/* 내 작품에만 있을 수 있는 것들 — 남의 작품이면 읽는 것만 남는다. */}
         {mine && (
