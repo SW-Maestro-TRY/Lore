@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { LOU_LOGOS, pickOne } from "../../lib/louArt";
 import config from "../../demo-api/config.json";
-import { useAllowance, allowanceLine } from "../../lib/useAllowance";
+import { useAllowance } from "../../lib/useAllowance";
 import { WIZ_LAST, WIZ_NAMES, emptyWizardForm, type WizardForm } from "../../lib/wizardData";
 import Step1Photo from "./steps/Step1Photo";
 import Step2Story from "./steps/Step2Story";
@@ -37,7 +37,6 @@ export default function Wizard({
   preset?: { id: string; name: string; description: string; art_url: string | null } | null;
 }) {
   const allowance = useAllowance();
-  const allowLine = allowanceLine(allowance);
   const [step, setStep] = useState(1);
   /* 걸음의 제목 옆에 앉은 루. 걸음을 옮길 때마다 바뀐다 — 방금 걸려 있던
      그림은 후보에서 뺀다(안 그러면 "안 바뀌었네" 로 보인다). 원본 pickWizLou
@@ -188,9 +187,7 @@ export default function Wizard({
                 쓴다 — 조용히 아무 일도 안 일어나는 것이 제일 나쁘다. */}
             <p className={`submit-note${noteError ? " is-error" : ""}`}
                hidden={!atEnd && !noteError}>{note}</p>
-            {/* **걸음 내내 보인다.** 마지막에만 알려 주면, 사진을 올리고 이야기까지
-                적고 나서야 "오늘 몫을 다 쓰셨어요" 를 처음 만난다. */}
-            {allowLine && !noteError && <p className="submit-allowance">{allowLine}</p>}
+
           </div>
         </form>
       </div>

@@ -41,11 +41,12 @@ export default function MyCharacters({ onOpen }: { onOpen: () => void }) {
       {mine.length === 0 && (
         <button type="button" className="mychar-blank" onClick={onOpen}>
           <b>+</b>
+          {/* 칸 전체가 눌리는 단추다 — 안에 「만들러 가기 →」를 또 두면 그것만
+              눌러야 하는 줄 알고, 두 줄이 서로 밀려 줄바꿈도 어그러졌다. */}
           <span>
-            <b>아직 만든 캐릭터가 없어요</b>
-            캐릭터를 만들어 두면 웹툰을 만들 때마다 다시 적지 않아도 돼요.
+            <strong>아직 만든 캐릭터가 없어요</strong>
+            <small>캐릭터를 만들어 두면 웹툰을 만들 때마다 다시 적지 않아도 돼요.</small>
           </span>
-          <em>캐릭터 만들러 가기 →</em>
         </button>
       )}
       {mine.length > 0 && (

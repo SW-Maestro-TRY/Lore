@@ -111,7 +111,9 @@ export default function HowGalleryFaq({ onSeeFull }: { onSeeFull: () => void }) 
             </figure>
           ))}
         </div>
-        <button type="button" className="btn btn-ghost gallery-full" onClick={onSeeFull}>
+        {/* 이 단추만 `btn-ghost` 였다 — 테두리와 글자색만 있고 배경이 없어서
+            혼자 글처럼 보였다. 다른 보조 단추와 같은 옷으로 맞춘다. */}
+        <button type="button" className="btn btn-quiet gallery-full" onClick={onSeeFull}>
           완성된 웹툰 한 편 전체 보기 →
         </button>
       </section>

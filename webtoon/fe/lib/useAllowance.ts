@@ -43,11 +43,13 @@ export function useAllowance(): Allowance | null {
 export function allowanceLine(a: Allowance | null): string {
   if (!a) return "";
   if (a.blocked) return a.blocked;
+  /* **문장으로 쓰지 않는다.** 값을 확인하러 흘깃 보는 자리라, 읽어야 하는
+     문장보다 눈에 걸리는 딱지가 맞다. */
   if (!a.logged_in) {
     if (a.free_left == null) return "";
     return a.free_left > 0
-      ? `오늘 무료로 ${a.free_left}편 만들 수 있어요`
-      : "오늘 무료 몫을 다 쓰셨어요 — 로그인하면 이어서 만들 수 있어요";
+      ? `오늘 무료 ${a.free_left}편`
+      : "오늘 무료 소진 · 로그인하면 이어서";
   }
-  return `한 편에 ${a.credit_cost}크레딧 · 지금 ${a.balance ?? 0}C 있어요`;
+  return `한 편 ${a.credit_cost}크레딧 · 보유 ${a.balance ?? 0}C`;
 }

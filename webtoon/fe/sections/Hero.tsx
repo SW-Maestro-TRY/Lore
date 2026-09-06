@@ -58,7 +58,8 @@ export default function Hero({ onStart, onBrowse }: { onStart: () => void; onBro
           </button>
         </div>
         {/* 시작하기 전에 알려 준다. 다섯 걸음을 다 걷고 나서 "다 쓰셨어요" 를
-            처음 보면, 그때는 이미 사진을 올리고 이야기까지 적은 뒤다. */}
+            처음 보면, 그때는 이미 사진을 올리고 이야기까지 적은 뒤다.
+            **문장이 아니라 딱지다** — 흘깃 보는 자리다. */}
         {line && <p className="hero-allowance">{line}</p>}
       </div>
 
