@@ -121,6 +121,29 @@ public class GuestGate {
      * 지금 서버에는 생성 하네스가 아예 없어서 만들기가 늘 실패한다. 이 되돌림이
      * 없으면 <b>배포하자마자</b> 그 거짓말이 뜬다.
      */
+    /**
+     * 이 사람의 몫을 가리키는 열쇠. 나중에(다른 실타래에서) 되돌리려면 이게
+     * 있어야 한다 — 만들기는 몇 분 뒤에 실패하고, 그때는 요청이 없다.
+     * 로그인했거나 안 세는 설정이면 {@code null}.
+     */
+    public String keyOf(HttpServletRequest request) {
+        return loggedIn() || freePerDay <= 0 ? null : hash(clientIp(request));
+    }
+
+    /** 열쇠로 되돌린다. 만들기가 <b>한참 뒤에</b> 실패했을 때 쓴다. */
+    @Transactional
+    public void refundKey(String key) {
+        if (key == null || key.isBlank() || freePerDay <= 0) {
+            return;
+        }
+        quotas.findByIpHashAndDay(key, LocalDate.now(clock))
+                .filter(q -> q.getUsed() > 0)
+                .ifPresent(q -> {
+                    q.giveBack();
+                    quotas.save(q);
+                });
+    }
+
     @Transactional
     public void refund(HttpServletRequest request) {
         if (loggedIn() || freePerDay <= 0) {

@@ -1,6 +1,8 @@
 package com.lore.webtoon.job;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.lore.webtoon.CreditGate;
+import com.lore.webtoon.GuestGate;
 import com.lore.webtoon.WorkLedger;
 import com.lore.webtoon.story.StoryStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,11 +60,14 @@ public class JobRunner {
     private final StoryStore stories;
     private final AfterRun after;
     private final WorkLedger works;
+    private final CreditGate credits;
+    private final GuestGate guests;
     private final Path runsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
                      StoryStore stories, AfterRun after, WorkLedger works,
+                     CreditGate credits, GuestGate guests,
                      @Value("${lore.webtoon.python.runs-dir:}") String runsDir) {
         this.harness = harness;
         this.progress = progress;
@@ -70,6 +75,8 @@ public class JobRunner {
         this.stories = stories;
         this.after = after;
         this.works = works;
+        this.credits = credits;
+        this.guests = guests;
         this.runsDir = (runsDir == null || runsDir.isBlank()
                 ? harness.dir().resolve("runs")
                 : Path.of(runsDir)).toAbsolutePath().normalize();
@@ -303,10 +310,68 @@ public class JobRunner {
         return passed.get((int) (Math.random() * passed.size()));
     }
 
+    /**
+     * 실패했다. <b>사람에게는 사람 말로, 그리고 낸 것은 돌려준다.</b>
+     *
+     * 전에는 예외 메시지를 그대로 화면에 실었다. 그래서 자바가 던진
+     * {@code No value present} 같은 영어 한 줄이 사람에게 그대로 나갔다 —
+     * 무슨 일이 났는지도, 무엇을 하면 되는지도 알 수 없고, 크레딧은 이미
+     * 빠진 뒤였다. 실제로 그렇게 나갔다.
+     *
+     * 그래서 두 가지를 한다.
+     *
+     * <ul>
+     *   <li><b>말을 고른다.</b> 우리가 사람에게 하려고 쓴 한글 문장만
+     *       내보내고, 나머지(버그에서 나온 영어 예외)는 로그에만 남기고
+     *       화면에는 무슨 일인지 · 크레딧은 어떻게 됐는지를 적는다.</li>
+     *   <li><b>돌려준다.</b> 크레딧과, 로그인 안 한 사람의 하루 몫을.
+     *       만들어진 것이 없는데 값만 빠져 있으면 그건 그냥 잃은 것이다.</li>
+     * </ul>
+     */
     private void fail(Long jobId, Exception e) {
         log.error("만들기가 실패했습니다 (job={})", jobId, e);
-        store.failed(jobId, e.getMessage() == null ? e.toString() : e.getMessage());
+        boolean paidBack = refund(jobId);
+        store.failed(jobId, humanReason(e, paidBack));
         progress.forget(jobId);
+    }
+
+    /** 낸 것을 돌려준다. -> 실제로 돌려줬으면 참(화면에 그렇게 적으려고). */
+    private boolean refund(Long jobId) {
+        try {
+            WebtoonJob job = store.byId(jobId);
+            if (job == null) {
+                return false;
+            }
+            credits.refund(job.getUserId(), job.getPublicId());
+            guests.refundKey(job.getGuestKey());
+            return job.getUserId() != null || job.getGuestKey() != null;
+        } catch (RuntimeException ex) {      // noqa: 돌려주다 죽어서 실패를 못 적으면 더 나쁘다
+            log.error("낸 것을 못 돌려줬습니다 (job={}) — 사람이 맞춰야 합니다", jobId, ex);
+            return false;
+        }
+    }
+
+    /**
+     * 화면에 나갈 한 줄.
+     *
+     * 사람에게 보여도 되는 것은 <b>우리가 그러라고 쓴 한글 문장</b>뿐이다
+     * (예: "이야기 후보를 만들지 못했습니다"). 그 밖의 예외는 전부 버그이고,
+     * 그 문구는 사람에게 아무 도움이 안 된다 — 무슨 일인지만 말하고 사유는
+     * 로그에 둔다.
+     */
+    private static String humanReason(Exception e, boolean paidBack) {
+        String said = e.getMessage();
+        String head = said != null && hasHangul(said)
+                ? said
+                : "그리는 도중에 문제가 생겼습니다.";
+        return paidBack
+                ? head + " 크레딧은 돌려드렸어요 — 다시 시도해 주세요."
+                : head + " 다시 시도해 주세요.";
+    }
+
+    /** 한글이 섞여 있는가 — 우리가 사람에게 하려고 쓴 말인지 가르는 자리. */
+    private static boolean hasHangul(String s) {
+        return s.codePoints().anyMatch(c -> c >= 0xAC00 && c <= 0xD7A3);
     }
 
     /** 지금 시각. 검사에서 갈아 끼우려고 따로 둔다. */

@@ -89,9 +89,14 @@ public class JobController {
         String blocked = guard.whyBlocked();
         int code = 429;
         boolean counted = false;
+        String guestKey = null;
         if (blocked == null && me == null) {
             blocked = guests.useOrBlock(request);
             counted = blocked == null;
+            // 나중에(그리다가) 실패해도 되돌릴 수 있게 누구였는지 남긴다.
+            if (counted) {
+                guestKey = guests.keyOf(request);
+            }
         }
         if (blocked == null) {
             blocked = credits.whyBlocked(me);
@@ -105,7 +110,7 @@ public class JobController {
 
         String id;
         try {
-            id = jobs.create(form, me, form.uid());
+            id = jobs.create(form, me, form.uid(), guestKey);
         } catch (RuntimeException e) {
             // 시작도 못 했으면 방금 센 한 편을 도로 물린다 — 만든 적 없는
             // 사람에게 "오늘 몫을 다 쓰셨어요" 가 뜨면 안 된다.

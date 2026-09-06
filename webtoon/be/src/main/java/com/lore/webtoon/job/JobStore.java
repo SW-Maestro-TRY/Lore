@@ -42,6 +42,12 @@ public class JobStore {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 작업이 없습니다"));
     }
 
+    /** 번호로 하나. 없으면 null — 실패를 적는 길에서 쓰므로 여기서 또 죽으면 안 된다. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public WebtoonJob byId(Long id) {
+        return jobs.findById(id).orElse(null);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public WebtoonJob running(Long id, JobStage stage) {
         WebtoonJob job = jobs.findById(id).orElseThrow();

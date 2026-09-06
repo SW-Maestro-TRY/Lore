@@ -66,6 +66,17 @@ public class WebtoonJob {
     @Column(name = "browser_uid", nullable = false, length = 64)
     private String browserUid;
 
+    /**
+     * 로그인 안 한 사람의 하루 몫을 가리키는 열쇠.
+     *
+     * 만들기는 몇 분 뒤에 실패할 수 있는데, 그때는 요청이 없어서 그 사람이
+     * 누구였는지 알 길이 없다. 그러면 <b>만든 것도 없는데 오늘 몫만 줄어</b>
+     * 있게 된다. 되돌릴 수 있게 여기 남긴다. 로그인한 사람은 비어 있다
+     * (그쪽은 크레딧으로 센다).
+     */
+    @Column(name = "guest_key", length = 80)
+    private String guestKey;
+
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private JobStatus status;
@@ -119,9 +130,10 @@ public class WebtoonJob {
     protected WebtoonJob() {
     }
 
-    private WebtoonJob(String publicId, Long userId, String browserUid,
+    private WebtoonJob(String publicId, Long userId, String browserUid, String guestKey,
                        String style, boolean checkpoints, String inputJson, Instant at) {
         this.publicId = publicId;
+        this.guestKey = guestKey;
         this.userId = userId;
         this.browserUid = browserUid;
         this.style = style;
@@ -134,9 +146,10 @@ public class WebtoonJob {
     }
 
     public static WebtoonJob queued(String publicId, Long userId, String browserUid,
-                                    String style, boolean checkpoints,
+                                    String guestKey, String style, boolean checkpoints,
                                     String inputJson, Instant at) {
-        return new WebtoonJob(publicId, userId, browserUid, style, checkpoints, inputJson, at);
+        return new WebtoonJob(publicId, userId, browserUid, guestKey,
+                style, checkpoints, inputJson, at);
     }
 
     void moveTo(JobStatus status, JobStage stage, Instant at) {
@@ -181,6 +194,10 @@ public class WebtoonJob {
 
     public String getBrowserUid() {
         return browserUid;
+    }
+
+    public String getGuestKey() {
+        return guestKey;
     }
 
     public JobStatus getStatus() {

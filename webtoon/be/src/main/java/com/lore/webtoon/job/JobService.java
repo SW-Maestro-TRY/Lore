@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -102,7 +104,8 @@ public class JobService {
      * 로만 알게 된다.
      */
     @Transactional
-    public String create(CreateRequest form, Long userId, String browserUid) {
+    public String create(CreateRequest form, Long userId, String browserUid,
+                         String guestKey) {
         if (!form.agreeIp()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "저작권 확인에 동의해야 만들 수 있습니다");
@@ -128,7 +131,7 @@ public class JobService {
 
         String style = STYLE.getOrDefault(blank(form.style()), DEFAULT_STYLE);
         WebtoonJob job = jobs.save(WebtoonJob.queued(
-                publicId, userId, browserUid, style,
+                publicId, userId, browserUid, guestKey, style,
                 form.checkpoints() == null || form.checkpoints(),
                 inputOf(form), Instant.now()));
 
@@ -140,7 +143,27 @@ public class JobService {
          * 그림도 다 남았는데 <b>주인만 없었다.</b> */
         works.started(publicId, userId, browserUid);
 
-        runner.enqueue(job.getId(), dir);
+        /* **커밋된 뒤에 그리기 시작한다.**
+         *
+         * 그리는 쪽은 다른 실타래에서 자기 트랜잭션으로 이 작업을 다시 읽는다
+         * (JobStore 의 REQUIRES_NEW). 여기서 바로 시작시키면 아직 커밋이 안 끝나
+         * 그 줄이 안 보이고, 방금 만든 작업을 "그런 작업이 없다" 로 읽는다 —
+         * 사람에게는 만들자마자 실패로 뜬다. 실제로 그랬다.
+         *
+         * 트랜잭션 밖(검사 등)에서 불릴 수도 있으니, 붙을 곳이 없으면 그냥
+         * 바로 시작한다. */
+        Long id = job.getId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            runner.enqueue(id, dir);
+                        }
+                    });
+        } else {
+            runner.enqueue(id, dir);
+        }
         return publicId;
     }
 
