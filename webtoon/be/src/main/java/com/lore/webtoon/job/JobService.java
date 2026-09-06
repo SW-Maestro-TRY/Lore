@@ -3,6 +3,7 @@ package com.lore.webtoon.job;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.story.StoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -71,16 +72,18 @@ public class JobService {
     private final JobStore store;
     private final JobRunner runner;
     private final JobProgress progress;
+    private final StoryStore stories;
     private final Path jobsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobService(WebtoonJobRepository jobs, JobStore store, JobRunner runner,
-                      JobProgress progress,
+                      JobProgress progress, StoryStore stories,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
         this.store = store;
         this.runner = runner;
         this.progress = progress;
+        this.stories = stories;
         this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
                 ? "haeun/landing/jobs_spring" : jobsDir).toAbsolutePath().normalize();
     }
@@ -146,6 +149,7 @@ public class JobService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 이야기가 없습니다");
         }
         store.pick(job.getId(), n);
+        stories.choose(job.getRunId(), n);       // 무엇을 골랐는지도 DB 에 남는다
         runner.resumeAfterPick(job.getId());
     }
 

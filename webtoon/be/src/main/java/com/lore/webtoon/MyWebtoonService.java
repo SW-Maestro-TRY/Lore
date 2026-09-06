@@ -3,6 +3,7 @@ package com.lore.webtoon;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.story.StoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -37,6 +38,7 @@ public class MyWebtoonService {
     private final BrowserLinkRepository links;
     private final WorkLedger ledger;
     private final PageStore pages;
+    private final StoryStore stories;
     private final HarnessGateway gateway;
 
     /**
@@ -50,11 +52,12 @@ public class MyWebtoonService {
     private final ObjectMapper mapper = new ObjectMapper();
 
     public MyWebtoonService(BrowserLinkRepository links, HarnessGateway gateway,
-                            WorkLedger ledger, PageStore pages) {
+                            WorkLedger ledger, PageStore pages, StoryStore stories) {
         this.links = links;
         this.gateway = gateway;
         this.ledger = ledger;
         this.pages = pages;
+        this.stories = stories;
     }
 
     /**
@@ -170,6 +173,14 @@ public class MyWebtoonService {
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> cardOf(String runId) {
+        /* **DB 가 아는 것으로 먼저 만든다.** 제목·줄거리가 DB 에 있으면 하네스
+           폴더가 없어도 카드를 그릴 수 있다 — 그게 그 폴더를 작업대로 만드는
+           일의 전부다. 표지와 장 수는 그림 쪽(webtoon_page)이 안다. */
+        Map<String, Object> fromDb = cardFromDb(runId);
+        if (fromDb != null) {
+            return fromDb;
+        }
+
         ResponseEntity<byte[]> res = gateway.forward(
                 HttpMethod.GET, "/api/runs/" + runId + "/result", null, null, new HttpHeaders());
         if (!res.getStatusCode().is2xxSuccessful() || res.getBody() == null) {
@@ -197,6 +208,29 @@ public class MyWebtoonService {
             log.warn("작품 하나를 읽지 못했습니다 (run={})", runId, e);
             return null;
         }
+    }
+
+    /**
+     * DB 만으로 만든 카드. 아직 안 옮겨 온 작품이면 {@code null} — 그때는
+     * 위에서 하네스에게 묻는다.
+     */
+    private Map<String, Object> cardFromDb(String runId) {
+        var story = stories.chosenOf(runId).orElse(null);
+        var pageNos = pages.pageNumbersOf(runId);
+        if (story == null || pageNos.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> card = new LinkedHashMap<>();
+        card.put("run_id", runId);
+        card.put("character", "");          // 캐릭터 이름은 아직 DB 에 없다 (#243)
+        card.put("title", story.getTitle() == null ? "" : story.getTitle());
+        card.put("genre", story.getGenre() == null ? "" : story.getGenre());
+        card.put("style_label", "");
+        card.put("episodes", List.of(1));
+        card.put("cover_episode", 1);
+        card.put("cover_page", pageNos.get(0));
+        card.put("page_count", pageNos.size());
+        return card;
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.lore.webtoon.job;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.lore.webtoon.story.StoryStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,14 +54,17 @@ public class JobRunner {
     private final HarnessProcess harness;
     private final JobProgress progress;
     private final JobStore store;
+    private final StoryStore stories;
     private final Path runsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
+                     StoryStore stories,
                      @Value("${lore.webtoon.python.runs-dir:}") String runsDir) {
         this.harness = harness;
         this.progress = progress;
         this.store = store;
+        this.stories = stories;
         this.runsDir = (runsDir == null || runsDir.isBlank()
                 ? harness.dir().resolve("runs")
                 : Path.of(runsDir)).toAbsolutePath().normalize();
@@ -123,13 +127,18 @@ public class JobRunner {
             throw new IllegalStateException("이야기 후보를 하나도 못 읽었습니다");
         }
         store.directions(jobId, directions);
+        // **이야기를 DB 로 옮겨 담는다.** 이게 없으면 하네스 폴더가 없어질 때
+        // 제목도 줄거리도 못 읽는다 — 그 폴더는 작업대지 창고가 아니다.
+        stories.save(runId, directions);
 
         if (job.isCheckpoints()) {
             store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
             return;                                 // 사람이 고를 때까지 멈춘다
         }
         // 「빠르게 결과부터」 — 서버가 고른다. 규칙은 사람이 볼 때와 같다.
-        store.pick(jobId, autoPick(runId, directions.size()));
+        int picked = autoPick(runId, directions.size());
+        store.pick(jobId, picked);
+        stories.choose(runId, picked);
         sheet(jobId);
     }
 
