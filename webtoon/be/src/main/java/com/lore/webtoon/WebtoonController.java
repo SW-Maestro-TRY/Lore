@@ -14,7 +14,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Webtoon 도메인 진입점.
@@ -61,20 +64,33 @@ public class WebtoonController {
     /** 이 주소만 지나가기 전에 한 번 멈춰 세운다 — 여기서부터 돈이 나간다. */
     static final String CREATE = PREFIX + "/nh/create";
 
+    /** 진행 상황을 묻는 자리. 작품 번호가 여기 실려 오므로 지나가는 김에 적는다. */
+    private static final Pattern JOB = Pattern.compile(
+            Pattern.quote(PREFIX) + "/nh/jobs/([\\w.-]+)");
+
+    /** 그림 한 장을 달라는 자리. S3 에 올라와 있으면 거기로 보낸다. */
+    private static final Pattern PAGE = Pattern.compile(
+            Pattern.quote(PREFIX) + "/runs/([\\w.-]+)/page/(\\d+)");
+
     private final HarnessGateway gateway;
     private final SpendGuard guard;
     private final GuestGate guests;
     private final CreditGate credits;
+    private final WorkLedger ledger;
+    private final PageStore pages;
     /* 응답에서 작업 id 하나만 꺼내려고 쓴다. 스프링이 만들어 주는 빈이 없어서
        (앞서 주입받게 썼다가 서버가 안 떴다) 여기서 만든다. */
     private final ObjectMapper mapper = new ObjectMapper();
 
     public WebtoonController(HarnessGateway gateway, SpendGuard guard,
-                             GuestGate guests, CreditGate credits) {
+                             GuestGate guests, CreditGate credits, WorkLedger ledger,
+                             PageStore pages) {
         this.gateway = gateway;
         this.guard = guard;
         this.guests = guests;
         this.credits = credits;
+        this.ledger = ledger;
+        this.pages = pages;
     }
 
     /**
@@ -119,6 +135,26 @@ public class WebtoonController {
             }
         }
 
+        /* 그림은 **S3 에 있으면 그리로 보낸다.**
+         *
+         * 하네스를 거치면 원본을 열어 폭을 줄여 내보내는데(그때마다 CPU 를
+         * 쓴다), 이미 줄여서 올려 둔 것이 있으면 그럴 이유가 없다. 무엇보다
+         * 하네스가 없는 서버에서도 그림이 보여야 한다 — 그것이 S3 로 옮긴
+         * 이유다.
+         *
+         * 없으면 그냥 아래로 흘러가 예전처럼 하네스가 내보낸다. 한 번에
+         * 갈아타지 않는다: 아직 안 올라간 옛 작품이 그대로 보여야 한다. */
+        if (HttpMethod.GET.equals(method)) {
+            Matcher page = PAGE.matcher(request.getRequestURI());
+            if (page.matches()) {
+                String at = pages.urlOf(page.group(1), Integer.parseInt(page.group(2)),
+                                        widthOf(request.getQueryString()));
+                if (at != null) {
+                    return ResponseEntity.status(302).location(URI.create(at)).build();
+                }
+            }
+        }
+
         byte[] body = request.getInputStream().readAllBytes();
 
         // 계정에서 낼 사람이면 하네스에 "이미 받았다" 고 알린다. 안 알리면
@@ -136,6 +172,21 @@ public class WebtoonController {
 
         boolean ok = answer.getStatusCode().is2xxSuccessful();
 
+        // 지나가는 김에 **누가 만든 것인지** 적어 둔다. 하네스는 계정을 모르고
+        // (게스트도 만들 수 있어서 알 수가 없다) 계정을 아는 것은 여기뿐이다.
+        // 적는 일은 만들기를 막지 않는다 — WorkLedger 안에서 다 삼킨다.
+        if (ok) {
+            if (creating) {
+                ledger.started(answer.getBody(), me, uidOf(body));
+            } else {
+                Matcher job = JOB.matcher(request.getRequestURI());
+                if (job.matches()) {
+                    ledger.progressed(job.group(1), answer.getBody(),
+                                      CreditGate.currentUser());
+                }
+            }
+        }
+
         // 시작조차 못 했으면 방금 센 한 편을 도로 물린다. 안 그러면 아무것도
         // 못 만든 사람에게 "오늘 2편 다 쓰셨어요" 가 뜬다 — 만든 적이 없으니
         // 거짓말이고, 로그인해도 오늘은 안 되는 줄 알게 된다.
@@ -149,6 +200,42 @@ public class WebtoonController {
             credits.charge(me, jobIdOf(answer.getBody()));
         }
         return answer;
+    }
+
+    /**
+     * `?w=` 로 달라고 한 폭. 없으면 본문 크기(1080).
+     *
+     * 올려 둔 폭과 <b>정확히 같은 값일 때만</b> S3 로 보낸다(PageStore 가 그렇게
+     * 찾는다). 어중간한 폭을 달라고 하면 하네스가 그 자리에서 줄여 준다 —
+     * 아무 폭이나 S3 에 만들어 두면 끝이 없다.
+     */
+    private static int widthOf(String query) {
+        if (query == null) {
+            return 1080;
+        }
+        Matcher m = WIDTH.matcher(query);
+        return m.find() ? Integer.parseInt(m.group(1)) : 1080;
+    }
+
+    private static final Pattern WIDTH = Pattern.compile("(?:^|&)w=(\\d{1,4})(?:&|$)");
+
+    /**
+     * 만들기 요청에서 브라우저 값만 꺼낸다.
+     *
+     * 이 클래스는 본문을 해석하지 않는 것이 원칙이지만(위 proxy 참고), 게스트가
+     * 만든 작품의 주인을 적으려면 이 값이 있어야 한다 — 게스트에게는 계정이
+     * 없고 이것 말고 가리킬 것이 없다. 못 읽으면 안 적고 넘어간다.
+     */
+    private String uidOf(byte[] body) {
+        if (body == null || body.length == 0) {
+            return null;
+        }
+        try {
+            JsonNode uid = mapper.readTree(body).path("uid");
+            return uid.isTextual() ? uid.asText() : null;
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /**

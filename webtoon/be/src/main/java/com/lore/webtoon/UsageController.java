@@ -35,9 +35,11 @@ public class UsageController {
     static final String PREFIX = "/api/webtoon/internal";
 
     private final UsageService service;
+    private final PageStore store;
 
-    public UsageController(UsageService service) {
+    public UsageController(UsageService service, PageStore store) {
         this.service = service;
+        this.store = store;
     }
 
     @Operation(summary = "모델 호출 비용 올리기", description = """
@@ -74,8 +76,26 @@ public class UsageController {
         return service.spend(token);
     }
 
+    @Operation(summary = "올린 그림 주소 적기", description = """
+            하네스가 S3 에 올린 뒤 부른다. 같은 자리(작품·장·폭)가 이미 있으면
+            주소만 바꾼다 — 다시 구운 그림이 올라온 것이라 옛 주소를 들고 있으면
+            안 된다.
+
+            **파일이 아니라 주소만 받는다.** 그림은 S3 에 있고 여기는 그 자리를
+            가리키는 글자만 적는다.""")
+    @PostMapping("/pages")
+    public ApiResponse<Ingested> pages(@RequestHeader(name = TOKEN_HEADER, required = false) String token,
+                                       @Valid @RequestBody PagesRequest request) {
+        service.checkToken(token);
+        return ApiResponse.ok(new Ingested(store.record(request.runId(), request.pages())));
+    }
+
     /** 헤더 이름. 값은 서버 환경변수로만 준다 — 코드에도 저장소에도 안 적는다. */
     static final String TOKEN_HEADER = "X-Lore-Internal";
+
+    /** @param pages 올린 것들. width 0 은 원본이다. */
+    public record PagesRequest(@NotBlank String runId, @Valid List<PageStore.Upload> pages) {
+    }
 
     /** @param calls meta.json 의 calls 를 그대로. 순서가 곧 seq 다. */
     public record IngestRequest(@NotBlank String runId, @Valid List<UsageService.Call> calls) {
