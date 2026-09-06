@@ -288,11 +288,25 @@ export const MORNING = {
   wish: '이런 동작도 보고 싶어요',
 } as const;
 
-/** 앨범 "장면" 탭에 쓰는 톤 3벌(초안의 아침 엽서 문구가 여기로 옮겨 왔다). */
-export const SCENE_LINES: ReadonlyArray<readonly [string, string]> = [
-  ['오늘 아침, 창가에 앉아 있었어요.', 'window_day'],
-  ['밥을 다 먹고 한참 서 있었어요.', 'field'],
-  ['문 앞에서 당신을 기다렸어요.', 'room'],
+/**
+ * 앨범 "엽서" 탭의 목 예시 — 정본 §9(여행 중 하루 1장, 최대 3).
+ * 왜 목이 필요한가 — 빈 칸만 보면 이 탭이 무엇을 담는 곳인지 판단할 수가 없다.
+ * 서버가 붙으면 `postcards` 응답으로 갈아 끼운다.
+ */
+export const POSTCARD_MOCK: ReadonlyArray<{ bg: string; line: string; day: string }> = [
+  { bg: 'field',   line: '여기는 바람이 좋아요. 곧 돌아갈게요.', day: '여행 2일째' },
+  { bg: 'sea',     line: '바다를 처음 봤어요. 소리가 커요.',     day: '여행 3일째' },
+];
+
+/**
+ * 앨범 "장면" 탭의 목 예시 — 정본 §11 레시피 5값(동작·배경·소품·시각·게이지 상태).
+ * 톤은 방치를 탓하지 않는다 — "별일 없었어요" 결로 쓴다(§0 원칙 6).
+ * 초안의 아침 엽서 문구 3벌(창가·밥·문 앞)이 여기로 옮겨 왔다.
+ */
+export const SCENE_MOCK: ReadonlyArray<{ bg: string; motion: string; prop: string; line: string; time: string }> = [
+  { bg: 'window_day',  motion: 'base', prop: '공',    line: '오후에 창가에서 공을 굴렸어요', time: '낮 · 오후 3시쯤' },
+  { bg: 'room',        motion: 'eat',  prop: '밥그릇', line: '밥을 다 먹고 한참 서 있었어요', time: '아침 · 9시쯤' },
+  { bg: 'window_rain', motion: 'base', prop: '',      line: '문 앞에서 기다리다 앉았어요. 별일 없었어요', time: '저녁 · 6시쯤' },
 ];
 
 // ── 숫자 상한(§4·§7·§10·§15) ────────────────────────────────────────────
