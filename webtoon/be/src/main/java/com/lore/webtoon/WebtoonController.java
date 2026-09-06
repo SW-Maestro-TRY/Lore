@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Webtoon 도메인 진입점.
@@ -61,20 +63,26 @@ public class WebtoonController {
     /** 이 주소만 지나가기 전에 한 번 멈춰 세운다 — 여기서부터 돈이 나간다. */
     static final String CREATE = PREFIX + "/nh/create";
 
+    /** 진행 상황을 묻는 자리. 작품 번호가 여기 실려 오므로 지나가는 김에 적는다. */
+    private static final Pattern JOB = Pattern.compile(
+            Pattern.quote(PREFIX) + "/nh/jobs/([\\w.-]+)");
+
     private final HarnessGateway gateway;
     private final SpendGuard guard;
     private final GuestGate guests;
     private final CreditGate credits;
+    private final WorkLedger ledger;
     /* 응답에서 작업 id 하나만 꺼내려고 쓴다. 스프링이 만들어 주는 빈이 없어서
        (앞서 주입받게 썼다가 서버가 안 떴다) 여기서 만든다. */
     private final ObjectMapper mapper = new ObjectMapper();
 
     public WebtoonController(HarnessGateway gateway, SpendGuard guard,
-                             GuestGate guests, CreditGate credits) {
+                             GuestGate guests, CreditGate credits, WorkLedger ledger) {
         this.gateway = gateway;
         this.guard = guard;
         this.guests = guests;
         this.credits = credits;
+        this.ledger = ledger;
     }
 
     /**
@@ -136,6 +144,21 @@ public class WebtoonController {
 
         boolean ok = answer.getStatusCode().is2xxSuccessful();
 
+        // 지나가는 김에 **누가 만든 것인지** 적어 둔다. 하네스는 계정을 모르고
+        // (게스트도 만들 수 있어서 알 수가 없다) 계정을 아는 것은 여기뿐이다.
+        // 적는 일은 만들기를 막지 않는다 — WorkLedger 안에서 다 삼킨다.
+        if (ok) {
+            if (creating) {
+                ledger.started(answer.getBody(), me, uidOf(body));
+            } else {
+                Matcher job = JOB.matcher(request.getRequestURI());
+                if (job.matches()) {
+                    ledger.progressed(job.group(1), answer.getBody(),
+                                      CreditGate.currentUser());
+                }
+            }
+        }
+
         // 시작조차 못 했으면 방금 센 한 편을 도로 물린다. 안 그러면 아무것도
         // 못 만든 사람에게 "오늘 2편 다 쓰셨어요" 가 뜬다 — 만든 적이 없으니
         // 거짓말이고, 로그인해도 오늘은 안 되는 줄 알게 된다.
@@ -149,6 +172,25 @@ public class WebtoonController {
             credits.charge(me, jobIdOf(answer.getBody()));
         }
         return answer;
+    }
+
+    /**
+     * 만들기 요청에서 브라우저 값만 꺼낸다.
+     *
+     * 이 클래스는 본문을 해석하지 않는 것이 원칙이지만(위 proxy 참고), 게스트가
+     * 만든 작품의 주인을 적으려면 이 값이 있어야 한다 — 게스트에게는 계정이
+     * 없고 이것 말고 가리킬 것이 없다. 못 읽으면 안 적고 넘어간다.
+     */
+    private String uidOf(byte[] body) {
+        if (body == null || body.length == 0) {
+            return null;
+        }
+        try {
+            JsonNode uid = mapper.readTree(body).path("uid");
+            return uid.isTextual() ? uid.asText() : null;
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /**

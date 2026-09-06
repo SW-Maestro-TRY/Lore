@@ -35,6 +35,7 @@ public class MyWebtoonService {
     private static final int UID_MAX = 64;
 
     private final BrowserLinkRepository links;
+    private final WorkLedger ledger;
     private final HarnessGateway gateway;
 
     /**
@@ -47,9 +48,11 @@ public class MyWebtoonService {
      */
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public MyWebtoonService(BrowserLinkRepository links, HarnessGateway gateway) {
+    public MyWebtoonService(BrowserLinkRepository links, HarnessGateway gateway,
+                            WorkLedger ledger) {
         this.links = links;
         this.gateway = gateway;
+        this.ledger = ledger;
     }
 
     /**
@@ -70,6 +73,26 @@ public class MyWebtoonService {
             return false;
         }
         links.save(BrowserLink.of(userId, uid, Instant.now()));
+
+        /* 이 브라우저가 **이 표가 생기기 전에** 만들어 둔 작품을 옮겨 담는다.
+         * 안 하면 로그인한 사람에게 옛 작품이 DB 쪽에서는 안 보인다 — 지금은
+         * 하네스 쪽 길이 아직 살아 있어 목록에 뜨지만, 하네스가 없는 실서버에서
+         * 는 그대로 사라진다.
+         *
+         * 로그인할 때 하는 이유: 그때가 "이 브라우저의 것" 을 처음 아는 순간이고,
+         * 한 번만 해도 되는 일이다. 실패해도 로그인은 안 막는다. */
+        try {
+            List<Map<String, Object>> already = runsOf(uid);
+            if (already != null && !already.isEmpty()) {
+                List<String> ids = already.stream()
+                        .map(run -> String.valueOf(run.get("run_id")))
+                        .filter(id -> !"null".equals(id))
+                        .toList();
+                ledger.moveIn(Map.of(uid, ids));
+            }
+        } catch (RuntimeException e) {
+            log.warn("옛 작품을 옮겨 담지 못했습니다 (uid={})", uid, e);
+        }
         return true;
     }
 
@@ -106,11 +129,72 @@ public class MyWebtoonService {
                 }
             }
         }
-        if (!mine.isEmpty() && failed == mine.size()) {
+
+        /* **DB 가 아는 것도 합친다.**
+         *
+         * 위는 하네스에게 "이 브라우저가 만든 것" 을 묻는 길인데, 하네스가 그
+         * 답을 파일 두 개를 이어 붙여 만든다(landing/ownership.py) — 그 파일이
+         * 없거나 어긋나면 내 작품이 조용히 빠진다. DB 는 만들 때 직접 적어 둔
+         * 것이라 그럴 일이 없다.
+         *
+         * 둘을 합치는 이유: 지금 옮겨 가는 중이라 어느 한쪽만 아는 작품이
+         * 양쪽에 다 있다. DB 에만 있는 것은 여기서 얹고, 하네스에만 있는 것은
+         * 위에서 이미 들어왔다. 한 번에 갈아타지 않는다 — 갈아타다 빠지면
+         * 만든 사람에게는 작품이 사라진 것으로 보인다. */
+        for (String runId : ledger.runIdsOf(userId)) {
+            if (runId == null || merged.containsKey(runId)) {
+                continue;
+            }
+            Map<String, Object> card = cardOf(runId);
+            if (card != null) {
+                merged.put(runId, card);
+            }
+        }
+
+        // 하네스를 하나도 못 읽었고 DB 도 비었을 때만 실패로 답한다. DB 에
+        // 있는 것이라도 보여줄 수 있으면 그게 낫다.
+        if (!mine.isEmpty() && failed == mine.size() && merged.isEmpty()) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR,
                     "작품 목록을 가져오지 못했습니다");
         }
         return new ArrayList<>(merged.values());
+    }
+
+    /**
+     * 작품 하나의 카드. 내용(제목·표지·장 수)은 여전히 하네스가 안다 — DB 가
+     * 아는 것은 <b>누구 것인가</b> 뿐이다.
+     *
+     * @return 못 읽으면 {@code null}. 그 한 편만 빠지고 나머지는 보여준다
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> cardOf(String runId) {
+        ResponseEntity<byte[]> res = gateway.forward(
+                HttpMethod.GET, "/api/runs/" + runId + "/result", null, null, new HttpHeaders());
+        if (!res.getStatusCode().is2xxSuccessful() || res.getBody() == null) {
+            return null;
+        }
+        try {
+            Map<String, Object> got = mapper.readValue(res.getBody(), Map.class);
+            if (got.get("run_id") == null) {
+                return null;
+            }
+            List<Map<String, Object>> pages =
+                    (List<Map<String, Object>>) got.getOrDefault("pages", List.of());
+            Map<String, Object> card = new LinkedHashMap<>();
+            card.put("run_id", got.get("run_id"));
+            card.put("character", got.getOrDefault("character", ""));
+            card.put("title", got.getOrDefault("title", ""));
+            card.put("genre", got.getOrDefault("genre", ""));
+            card.put("style_label", got.getOrDefault("style_label", ""));
+            card.put("episodes", List.of(1));
+            card.put("cover_episode", 1);
+            card.put("cover_page", pages.isEmpty() ? null : pages.get(0).get("no"));
+            card.put("page_count", pages.size());
+            return card;
+        } catch (IOException e) {
+            log.warn("작품 하나를 읽지 못했습니다 (run={})", runId, e);
+            return null;
+        }
     }
 
     /**
