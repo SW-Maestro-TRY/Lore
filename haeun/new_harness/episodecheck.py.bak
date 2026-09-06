@@ -26,25 +26,6 @@
 글자가 대표다. pagecheck 은 그것 때문에 다시 그리면 손해라서 안 보지만,
 여기서는 다시 그릴 일이 없으니 사람에게 알려 주기만 하면 된다.
 
-## 왜 호출을 둘로 가르는가
-
-한 번에 물으면 **블라인드가 안 된다.** 「너는 오늘 처음 켠 독자다」 라고 적고
-그림과 줄거리를 같은 요청에 붙이면, 모델은 이미 읽은 것을 안 읽은 척할 수
-없다. 그러면 `read_as` 가 그림에서 읽은 것이 아니라 **붙여 준 줄거리의
-요약**이 되고, 안 읽히는 화가 읽히는 것으로 기록된다. 결과가 그럴듯해서
-아무도 눈치를 못 챈다.
-
-그래서 두 번 부른다.
-
-1. **블라인드 읽기**(`blind_read_prompt`) — 그림만. 제목도 장르도 줄거리도
-   요청 안에 없다. 못 읽으면 못 읽었다고 나온다.
-2. **견주기**(`episode_review_prompt`) — 1번의 보고와 되려던 것을 놓고
-   무엇이 안 닿았는지 본다. **그림을 안 붙인다** — 글만 오가므로 값이
-   거의 안 붙는다.
-
-결과는 예전과 **같은 모양**으로 합쳐 쓴다(`episode_review.json`) — 화면과
-run.py 는 아무것도 안 바뀐다.
-
 ## 어떻게 쓰는가
 
 이어그리기가 이 화를 다 그린 뒤에 한 번 부른다 (`NH_EPISODE_REVIEW=0`
@@ -72,8 +53,7 @@ HERE = Path(__file__).resolve().parent
 RUNS_DIR = HERE / "runs"
 PROMPT_DIR = HERE / "prompt"
 PAGE_DIR = "pages"
-STAGE = "EPISODE_REVIEW"          # 1) 그림만 보는 블라인드 읽기
-MATCH_STAGE = "EPISODE_MATCH"     # 2) 되려던 것과 견주기 (글만, 그림 안 붙임)
+STAGE = "EPISODE_REVIEW"
 
 SEVERITY = ("critical", "major", "minor")
 KINDS = ("이해", "인물", "공간", "흐름", "글자", "마무리")
@@ -182,42 +162,11 @@ def story_block(direction: dict, char: dict | None = None, cast=()) -> str:
     return "\n".join(lines)
 
 
-def _prompt(name: str) -> str:
-    path = PROMPT_DIR / name
+def build_prompt(direction: dict, char: dict | None = None, cast=()) -> str:
+    path = PROMPT_DIR / "episode_review_prompt"
     if not path.exists():
         raise SystemExit(f"프롬프트가 없습니다: {path}")
-    return path.read_text(encoding="utf-8")
-
-
-def build_blind_prompt() -> str:
-    """1) 그림만 보는 쪽. **인자가 없다** — 그게 요점이다.
-
-    여기에 무엇이든 끼워 넣을 수 있게 두면 언젠가 끼워진다. 줄거리가 한 줄
-    들어가는 순간 이 검수는 다시 "이미 아는 사람" 이 되고, 그때는 결과가
-    그럴듯해서 아무도 눈치를 못 챈다.
-    """
-    return _prompt("blind_read_prompt")
-
-
-def build_match_prompt(blind: dict, direction: dict,
-                       char: dict | None = None, cast=()) -> str:
-    """2) 견주는 쪽. 블라인드 보고와 되려던 것만 넣는다 (그림은 안 붙인다)."""
-    said = ["[읽은 대로] " + (_text(blind.get("read_as")) or "(말 못 함)"),
-            "[주인공] " + (_text(blind.get("who")) or "(모르겠다)"),
-            "[어디] " + (_text(blind.get("where")) or "(모르겠다)"),
-            "[마지막에 남는 것] " + (_text(blind.get("ending")) or "(없음)")]
-    if _text(blind.get("guessed")):
-        said.append("[짐작으로 메운 것] " + _text(blind["guessed"]))
-    found = blind.get("issues") or []
-    if found:
-        said.append("")
-        said.append("[그 사람이 이미 적어 둔 문제 — 다시 적지 마라]")
-        for one in found:
-            where = f"{one['page']}페이지" if one.get("page") else "화 전체"
-            said.append(f"- {where} [{one.get('severity')}] "
-                        f"{one.get('kind')}: {one.get('what')}")
-    return (_prompt("episode_review_prompt")
-            .replace("{blind}", "\n".join(said))
+    return (path.read_text(encoding="utf-8")
             .replace("{story}", story_block(direction, char, cast)))
 
 
@@ -246,31 +195,7 @@ def parse(text: str) -> dict:
             "who": _text(obj.get("who")),
             "where": _text(obj.get("where")),
             "ending": _text(obj.get("ending")),
-            # 그림에 없는데 짐작으로 메운 것. 블라인드 읽기에서만 나온다 —
-            # 짐작이 맞았더라도 그림이 말해 준 것이 아니므로 다음 독자는
-            # 틀리게 짐작한다.
-            "guessed": _text(obj.get("guessed")),
             "matched": _text(obj.get("matched")),
-            "counts": counts,
-            "issues": issues}
-
-
-def merge(blind: dict, match: dict | None) -> dict:
-    """블라인드 읽기와 견주기를 **예전과 같은 한 덩어리**로 합친다.
-
-    화면(landing)과 run.py 는 이 모양만 안다 — 호출을 둘로 가른 것이
-    바깥으로 새어 나가지 않게 한다. 견주기가 실패했으면 블라인드 것만
-    쓴다: 그림은 이미 다 그렸고, 처음 읽은 사람이 말한 것은 그 자체로
-    쓸모가 있다.
-    """
-    if not match:
-        return blind
-    issues = list(blind["issues"]) + list(match["issues"])
-    issues.sort(key=lambda i: (SEVERITY.index(i["severity"]), i["page"]))
-    counts = {s: sum(1 for i in issues if i["severity"] == s) for s in SEVERITY}
-    return {**blind,
-            "matched": match["matched"],
-            "verdict": "주의" if counts["critical"] else "통과",
             "counts": counts,
             "issues": issues}
 
@@ -283,105 +208,59 @@ def summary(review: dict) -> str:
 
 # -------------------------------------------------------------------- 호출 한 번
 
-def _one_call(stage: str, prompt: str, images, run_dir: Path, stem: str, label: str):
-    """한 번 부르고 (원문, 호출기록) 을 돌려준다. **예외를 밖으로 안 던진다.**
-
-    그림은 이미 다 그려서 값을 치렀다 — 검수가 안 됐다고 화를 잃으면 안 된다.
-    원문은 파싱 전에 먼저 쓴다: 파싱이 죽어도 그 호출에 쓴 돈이 안 사라진다.
-    """
-    call = llm.Call(stage)
-    try:
-        text, meta = call(prompt, images=images, temperature=0.2)
-    except Exception as exc:                                          # noqa: BLE001
-        meta = {"stage": stage, "provider": call.provider, "model": call.model,
-                "usage": None, "stop": None,
-                "pages": len(images) if images else 0,
-                "cost": {"input": 0.0, "output": 0.0, "cache_read": 0.0,
-                         "cache_write": 0.0, "total": 0.0},
-                "error": f"{type(exc).__name__}: {exc}"}
-        log(f"  [{label}] 실패 — {meta['error']} (그림은 그대로 둡니다)")
-        return None, meta
-    write_text(run_dir / f"{stem}.txt", text)
-    meta["pages"] = len(images) if images else 0
-    return text, meta
-
-
 def review_episode(run_dir: Path, *, direction: dict, char: dict | None = None,
-                   cast=(), dry_run: bool = False) -> tuple[dict | None, list[dict]]:
-    """이 화 전부를 검수한다. -> (판정, 호출기록 목록).
+                   cast=(), dry_run: bool = False) -> tuple[dict | None, dict | None]:
+    """이 화 전부를 한 번에 검수한다. -> (판정, 호출기록).
 
-    **두 번 부른다** (머리말의 「왜 호출을 둘로 가르는가」 참고):
-    먼저 그림만 보여 주고, 그 다음에 그 보고와 되려던 것을 견준다.
-
-    호출기록이 **목록**인 것이 예전과 다르다. 부르는 쪽은 이제 하나가
-    아니라 여럿을 meta.json 에 적어야 한다.
+    호출이 실패해도 **예외를 밖으로 안 던진다.** 그림은 이미 다 그려서 값을
+    치렀다 — 검수가 안 됐다고 화를 잃으면 안 된다.
     """
     pages = pages_of(run_dir)
     if not pages:
         log("  [화 검수] 그려진 페이지가 없습니다 — 건너뜁니다")
-        return None, []
+        return None, None
 
-    blind_prompt = build_blind_prompt()
-    write_text(run_dir / "blind_read_prompt.txt", blind_prompt)
+    prompt = build_prompt(direction, char, cast)
+    write_text(run_dir / "episode_review_prompt.txt", prompt)
     if dry_run:
-        # 견주기 프롬프트도 같이 써 둔다. 블라인드 보고가 아직 없으므로
-        # 그 자리에는 무엇이 들어갈지만 적는다 — 0원으로 모양을 본다.
-        write_text(run_dir / "episode_review_prompt.txt",
-                   build_match_prompt({"read_as": "(1번 호출이 여기에 들어간다)"},
-                                      direction, char, cast))
-        log(f"[화 검수] 프롬프트만 썼습니다 -> {run_dir / 'blind_read_prompt.txt'}")
-        return None, []
+        log(f"[화 검수] 프롬프트만 썼습니다 -> {run_dir / 'episode_review_prompt.txt'}")
+        return None, None
 
     if len(pages) > MAX_IMAGES:
         log(f"  [화 검수] 페이지가 {len(pages)}장이라 뒤 {MAX_IMAGES}장만 붙입니다")
         pages = pages[-MAX_IMAGES:]
 
-    calls: list[dict] = []
-
-    # ── 1) 블라인드 읽기 — 그림만. 줄거리는 이 요청 어디에도 없다 ──────
+    call = llm.Call(STAGE)
     images = llm.load_images(pages)
-    log(f"[화 검수] {len(images)}장을 **아무 정보 없이** 처음부터 읽습니다…")
-    text, meta = _one_call(STAGE, blind_prompt, images, run_dir,
-                           "blind_read", "블라인드 읽기")
-    calls.append(meta)
-    if text is None:
-        return None, calls
+    log(f"[화 검수] {call.describe()} 로 {len(images)}장을 처음부터 읽습니다…")
     try:
-        blind = parse(text)
+        text, meta = call(prompt, images=images, temperature=0.2)
+    except Exception as exc:                                          # noqa: BLE001
+        meta = {"stage": STAGE, "provider": call.provider, "model": call.model,
+                "usage": None, "stop": None, "pages": len(images),
+                "cost": {"input": 0.0, "output": 0.0, "cache_read": 0.0,
+                         "cache_write": 0.0, "total": 0.0},
+                "error": f"{type(exc).__name__}: {exc}"}
+        log(f"  [화 검수] 실패 — {meta['error']} (그림은 그대로 둡니다)")
+        return None, meta
+
+    write_text(run_dir / "episode_review.txt", text)
+    meta["pages"] = len(images)
+    try:
+        review = parse(text)
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
-        log(f"  [블라인드 읽기] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")
-        return None, calls
+        log(f"  [화 검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")
+        return None, meta
 
-    log(f"  [블라인드 읽기] 읽은 대로: {blind['read_as'] or '(말 못 함)'}")
-    if blind["guessed"]:
-        log(f"    짐작으로 메운 것: {blind['guessed']}")
-
-    # ── 2) 견주기 — 글만. 그림을 안 붙이므로 값이 거의 안 붙는다 ───────
-    match_prompt = build_match_prompt(blind, direction, char, cast)
-    write_text(run_dir / "episode_review_prompt.txt", match_prompt)
-    log("[화 검수] 되려던 것과 견줍니다…")
-    text2, meta2 = _one_call(MATCH_STAGE, match_prompt, None, run_dir,
-                             "episode_review", "견주기")
-    calls.append(meta2)
-    match = None
-    if text2 is not None:
-        try:
-            match = parse(text2)
-        except Exception as exc:                                      # noqa: BLE001
-            meta2["error"] = f"{type(exc).__name__}: {exc}"
-            log(f"  [견주기] 응답을 읽지 못했습니다 — {meta2['error']} "
-                f"(블라인드 읽기만 씁니다)")
-
-    review = merge(blind, match)
     write_json(run_dir / "episode_review.json", review)
     log(f"  [화 검수] {summary(review)}")
-    if review["matched"]:
-        log(f"    안 닿은 것: {review['matched']}")
+    if review["read_as"]:
+        log(f"    읽은 대로: {review['read_as']}")
     for one in review["issues"]:
         where = f"{one['page']}페이지 " if one["page"] else "화 전체 "
         log(f"    - {where}[{one['severity']}] {one['kind']}: {one['what']}")
-    return review, calls
+    return review, meta
 
 
 # -------------------------------------------------------------------- 단독 실행
@@ -398,11 +277,10 @@ def review_run(run_dir: Path, dry_run: bool = False, on_call=None) -> dict | Non
     hero = _text((char or {}).get("name"))
     cast = [c for c in (direction.get("cast") or [])
             if isinstance(c, dict) and _text(c.get("name")) and _text(c.get("name")) != hero]
-    review, calls = review_episode(run_dir, direction=direction, char=char,
-                                   cast=cast, dry_run=dry_run)
-    for meta in calls:
-        if meta and on_call:
-            on_call(meta)
+    review, meta = review_episode(run_dir, direction=direction, char=char,
+                                  cast=cast, dry_run=dry_run)
+    if meta and on_call:
+        on_call(meta)
     return review
 
 

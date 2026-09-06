@@ -1440,6 +1440,48 @@ def test_page_review() -> None:
     ok("지적을 그대로 넘긴다", "다른 사람이 되었다" in note)
     ok("가벼운 것까지 넘기지는 않는다", "창이 하나 늘었다" not in note)
     ok("연출은 건드리지 않는다", "연출은 그대로 네가 정한다" in note)
+    ok("보통은 못 박는 문단이 안 붙는다", "연출이 아니라 지켜야 할 것" not in note)
+
+    # --- 말풍선·효과음 ----------------------------------------------------
+    # 실제로 나온 오류다: 차사가 하는 말인데 꼬리가 노인을 향하고, 문 끼익
+    # 소리가 말풍선 안에 들어갔다. 둘 다 연출이 아니라 **틀린 것**이라
+    # critical 로 잡고 다시 그린다. 그런데 다시 그리기 안내의 마지막 줄이
+    # "대사는 따라 할 필요가 없다" 라서, 못 박는 문단이 없으면 방금 짚은
+    # 지적이 도로 풀린다.
+    wrong = PC.parse(json.dumps({"flow": "이어짐", "issues": [
+        {"kind": "말풍선", "severity": "critical",
+         "what": "차사의 말인데 꼬리가 노인을 향한다"},
+        {"kind": "효과음", "severity": "critical",
+         "what": "문 끼익 소리가 말풍선에 들어갔다"}]}, ensure_ascii=False))
+    check("말풍선 종류를 그대로 둔다", wrong["issues"][0]["kind"], "말풍선")
+    check("효과음 종류를 그대로 둔다", wrong["issues"][1]["kind"], "효과음")
+    check("critical 이라 다시 그린다", wrong["verdict"], "재생성")
+
+    fix = PC.redraw_block(wrong)
+    ok("못 박는 문단이 붙는다", "연출이 아니라 지켜야 할 것" in fix)
+    ok("누가 한 말인지를 지킨다", "누가 한 말인지 헷갈리지 않아야" in fix)
+    ok("사물 소리는 말풍선 밖", "사물이 낸 소리는 말풍선에 담지 않는다" in fix)
+    ok("사람이 낸 소리는 대사로 남긴다", "비명·헛기침·웃음" in fix)
+    ok("말풍선 개수·자리는 여전히 그림의 몫",
+       "몇 개 어떻게 놓을지는 " in fix and "네가 정하되" in fix)
+
+    only_sfx = PC.redraw_block(PC.parse(json.dumps({"flow": "이어짐", "issues": [
+        {"kind": "효과음", "severity": "critical", "what": "쿵이 말풍선에 있다"}]},
+        ensure_ascii=False)))
+    ok("걸린 것만 못 박는다", "누가 한 말인지" not in only_sfx
+       and "사물이 낸 소리는 말풍선에 담지 않는다" in only_sfx)
+
+    # --- 세로형은 경고까지만 -----------------------------------------------
+    # 다시 그려도 캔버스가 같아서 같은 결과가 나오기 쉽다. 그 값은 이야기를
+    # 바로잡는 데 쓰는 편이 낫다 — 그래서 알려 주기만 하고 재생성은 안 한다.
+    flat = PC.parse(json.dumps({"flow": "이어짐", "issues": [
+        {"kind": "세로형", "severity": "major", "what": "컷이 전부 가로로 납작하다"}]},
+        ensure_ascii=False))
+    check("세로형 종류를 그대로 둔다", flat["issues"][0]["kind"], "세로형")
+    check("경고만 — 다시 그리지 않는다", flat["verdict"], "통과")
+    ok("검수 프롬프트가 critical 로 못 올리게 막는다",
+       "절대 `critical` 로 올리지 마라" in PC.build_prompt(direction, scene_no=2,
+                                                          has_prev=True))
 
     # --- 켜고 끄기 --------------------------------------------------------
     keep = {k: os.environ.get(k) for k in ("NH_PAGE_REVIEW", "NH_PAGE_REVIEW_RETRY")}
@@ -1758,16 +1800,59 @@ def test_episode_review() -> None:
     check("숫자가 아니면 0페이지", odd["issues"][0]["page"], 0)
     check("major 하나로는 통과", odd["verdict"], "통과")
 
+    # --- 합치기 -----------------------------------------------------------
+    # 블라인드 읽기와 견주기를 합쳐도 **예전과 같은 한 덩어리**여야 한다.
+    blind = EC.parse(json.dumps({
+        "read_as": "모르겠다", "who": "모르겠다", "where": "모르겠다",
+        "ending": "없음", "guessed": "이름을 지어냈다",
+        "issues": [{"page": 4, "kind": "글자", "severity": "major", "what": "깨졌다"}]},
+        ensure_ascii=False))
+    matched = EC.parse(json.dumps({
+        "matched": "주인공 직업이 안 닿았다",
+        "issues": [{"page": 0, "kind": "이해", "severity": "critical",
+                    "what": "다른 이야기로 읽혔다"}]}, ensure_ascii=False))
+    both = EC.merge(blind, matched)
+    check("읽은 대로는 블라인드 것", both["read_as"], "모르겠다")
+    check("짐작한 것을 남긴다", both["guessed"], "이름을 지어냈다")
+    check("안 닿은 것은 견주기 것", both["matched"], "주인공 직업이 안 닿았다")
+    check("문제를 둘 다 모은다", len(both["issues"]), 2)
+    check("합친 뒤 다시 무게 순", [i["severity"] for i in both["issues"]],
+          ["critical", "major"])
+    check("합친 뒤 다시 센다", both["counts"], {"critical": 1, "major": 1, "minor": 0})
+    check("critical 이 생기면 주의", both["verdict"], "주의")
+    check("견주기가 죽으면 블라인드 것만", EC.merge(blind, None), blind)
+
     # --- 프롬프트 ---------------------------------------------------------
-    direction = {"n": 1, "title": "제목", "genre": "판타지", "plot": "줄거리다",
+    # 눈에 띄는 값으로 둔다 — "제목"·"판타지" 같은 흔한 낱말은 프롬프트
+    # 본문에도 들어 있어서(「제목도 장르도 줄거리도 모른다」) 샜는지 못 가린다.
+    direction = {"n": 1, "title": "달빛장부", "genre": "게임판타지",
+                 "plot": "청산인이 장비를 회수한다",
                  "scenes": ["첫 장면이다", "둘째 장면이다"],
                  "hidden": ["아직 안 밝힌 것"]}
-    text = EC.build_prompt(direction, {"name": "이하은", "description": "대학생"},
-                           [{"name": "관리인", "appearance": "50대"}])
+
+    # 블라인드 읽기 프롬프트에 줄거리가 **한 글자도** 들어가면 안 된다.
+    # 이게 깨지면 검수가 조용히 예전(이미 아는 사람)으로 돌아간다 — 결과가
+    # 그럴듯해서 아무도 눈치를 못 챈다. 그래서 여기서 못 박는다.
+    cold = EC.build_blind_prompt()
+    ok("블라인드에 줄거리가 없다", "청산인이 장비를 회수한다" not in cold)
+    ok("블라인드에 제목·장르가 없다", "달빛장부" not in cold and "게임판타지" not in cold)
+    ok("블라인드에 장면이 없다", "첫 장면이다" not in cold)
+    ok("블라인드에 자리표시자가 없다", "{" not in cold.split("```json")[0])
+    ok("블라인드도 글자를 본다", "글자가 읽히는가" in cold)
+    ok("모르면 모른다고 하라고 한다", "모르겠으면 모르겠다고 적어라" in cold)
+
+    text = EC.build_match_prompt(
+        {"read_as": "무슨 이야기인지 모르겠다", "who": "모르겠다",
+         "where": "모르겠다", "ending": "없음", "guessed": "직업을 지어냈다",
+         "issues": [{"page": 4, "kind": "글자", "severity": "major", "what": "깨졌다"}]},
+        direction, {"name": "이하은", "description": "대학생"},
+        [{"name": "관리인", "appearance": "50대"}])
     ok("장면과 페이지 번호를 맞춰 준다", "1. 첫 장면이다  (→ 2페이지)" in text)
     ok("인물을 준다", "이하은 (주인공)" in text and "관리인" in text)
-    ok("장마다 보는 검수가 안 보는 것을 본다", "글자가 읽히는가" in text)
-    ok("자리표시자가 안 남는다", "{story}" not in text)
+    ok("블라인드 보고를 넣는다", "무슨 이야기인지 모르겠다" in text)
+    ok("짐작한 것을 넘긴다", "직업을 지어냈다" in text)
+    ok("이미 적은 문제를 넘긴다", "4페이지 [major] 글자: 깨졌다" in text)
+    ok("자리표시자가 안 남는다", "{story}" not in text and "{blind}" not in text)
 
     # --- 페이지 모으기 ----------------------------------------------------
     root = Path(tempfile.mkdtemp())
@@ -1779,8 +1864,9 @@ def test_episode_review() -> None:
         check("번호 순서대로 (10 이 2 뒤)",
               [p.name for p in EC.pages_of(root)],
               ["page01.png", "page02.png", "page10.png"])
+        # 기록이 **목록**이다 — 이제 두 번 부르므로(블라인드 읽기 + 견주기)
         check("그림이 없으면 호출 안 한다",
-              EC.review_episode(root / "없다", direction=direction), (None, None))
+              EC.review_episode(root / "없다", direction=direction), (None, []))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 

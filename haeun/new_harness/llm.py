@@ -67,7 +67,8 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 # 글을 쓰는 단계 / 그림을 그리는 단계. 이름이 곧 .env 의 앞자리다
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
 TEXT_STAGES = ("STORY", "STORY_REVIEW", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
-               "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "EPISODE_REVIEW")
+               "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "EPISODE_REVIEW",
+               "EPISODE_MATCH")
 IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
@@ -203,7 +204,8 @@ STAGE_LABEL = {
     "SHEET_IMAGE": "시트 그림",
     "PAGE_IMAGE": "페이지 그림",
     "PAGE_REVIEW": "그림 검수 (장마다)",
-    "EPISODE_REVIEW": "화 전체 검수 (다 그린 뒤)",
+    "EPISODE_REVIEW": "화 전체 블라인드 읽기 (그림만, 줄거리 없이)",
+    "EPISODE_MATCH": "되려던 것과 견주기 (글만, 그림 안 붙임)",
 }
 
 
