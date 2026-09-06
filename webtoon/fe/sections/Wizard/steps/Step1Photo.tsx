@@ -8,9 +8,12 @@ import { MAX_PHOTOS, type WizardForm } from "../../../lib/wizardData";
 export default function Step1Photo({
   form,
   onChange,
+  onPickCharacter,
 }: {
   form: WizardForm;
   onChange: (patch: Partial<WizardForm>) => void;
+  /** 「내 캐릭터에서 고르기」 — 캐릭터 탭으로 간다. */
+  onPickCharacter: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -74,19 +77,29 @@ export default function Step1Photo({
               <img className="wiz-picked-art" src={form.characterArt} alt={form.name} />
             )}
             <div className="wiz-picked-body">
-              <p className="wiz-picked-tag">이 캐릭터로 만듭니다</p>
+              <p className="wiz-picked-tag">이 캐릭터로 만들어요</p>
               <b>{form.name}</b>
-              <button type="button" className="btn btn-quiet btn-sm"
-                      onClick={() => onChange({
-                        characterId: undefined, characterArt: undefined,
-                        name: "", character: "",
-                      })}>
-                다른 캐릭터로
-              </button>
             </div>
+            {/* 바꾸는 길은 **조용히** 둔다. 이미 고르고 온 사람에게 크게 보일
+                단추가 아니다 — 알약처럼 붙여 뒀더니 이름 옆의 딱지처럼 읽혔다. */}
+            <button type="button" className="wiz-picked-swap"
+                    onClick={() => onChange({
+                      characterId: undefined, characterArt: undefined,
+                      name: "", character: "",
+                    })}>
+              바꾸기
+            </button>
           </div>
         ) : (
         <div className="photo-row">
+          {/* **두 갈래를 나란히 둔다.**
+           *
+           * 전에는 사진 칸 하나만 크게 있고, 그 아래에 "자캐 사진이 없으신가요?"
+           * 를 작은 글씨로 붙여 뒀다. 사진이 없는 사람은 그 큰 칸 앞에서 이미
+           * 막힌 뒤라 아래를 안 읽는다.
+           *
+           * 이제 같은 크기로 둘을 나란히 놓는다 — 올리거나, 캐릭터에서
+           * 고르거나. 둘 다 정상적인 길이라는 것을 자리로 말한다. */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="photo-drop" onClick={() => inputRef.current?.click()}>
             <input
@@ -127,6 +140,15 @@ export default function Step1Photo({
             </div>
             <span className="photo-count">{countLabel}</span>
           </label>
+
+          <button type="button" className="photo-drop photo-pick" onClick={onPickCharacter}>
+            <span className="photo-pick-icon" aria-hidden="true">✦</span>
+            <span className="photo-hint">내 캐릭터에서 고르기</span>
+            <span className="photo-count">
+              만들어 둔 캐릭터를 쓰거나, 사진 없이 새로 만들어요
+            </span>
+          </button>
+
           <ul className="photo-rules">
             <li>본인이 찍었거나 직접 그린 사진, 또는 쓸 권한이 있는 사진만 올려주세요.</li>
             <li>실존 인물은 본인이거나 동의를 받은 경우에만 올려주세요.</li>
@@ -136,16 +158,6 @@ export default function Step1Photo({
             </li>
           </ul>
         </div>
-        )}
-
-        {/* 만들어 둔 캐릭터가 있으면 여기서 바로 고른다 — 사진을 다시 올릴
-            이유가 없다. 없으면 이 문이 캐릭터를 만드는 자리로 데려간다.
-            **막다른 길을 만들지 않는 자리다.** */}
-        {!form.characterId && (
-          <p className="wiz-pickfrom">
-            자캐 사진이 없으신가요?{" "}
-            <a href="/webtoon?view=characters">내 캐릭터에서 고르기 →</a>
-          </p>
         )}
 
         <label className="field">

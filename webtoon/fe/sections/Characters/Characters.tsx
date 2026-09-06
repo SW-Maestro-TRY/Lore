@@ -144,7 +144,7 @@ function CharCard({ c, onUse, onDrop }: {
               캐릭터로 시작한다. */}
           <button type="button" className="btn btn-primary btn-sm"
                   disabled={c.status !== "ready"} onClick={() => onUse(c)}>
-            {c.status === "drawing" ? "그리는 중…" : "이 캐릭터로 웹툰"}
+            {c.status === "drawing" ? "그리는 중…" : "이 캐릭터로 웹툰 만들기"}
           </button>
           {onDrop && c.status !== "drawing" && (
             <button type="button" className="btn btn-quiet btn-sm" onClick={() => onDrop(c)}>

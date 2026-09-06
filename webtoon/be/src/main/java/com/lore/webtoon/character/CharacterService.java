@@ -13,7 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.awt.Image;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import javax.imageio.ImageIO;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -50,6 +55,9 @@ public class CharacterService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
     private static final int MAX_PHOTO_BYTES = 6 * 1024 * 1024;
+
+    /** 카드에도 외모를 읽는 데도 이만하면 넘친다. */
+    private static final int ART_WIDTH = 768;
 
     private final WebtoonCharacterRepository characters;
     private final CharacterMaker maker;
@@ -311,13 +319,54 @@ public class CharacterService {
         }
     }
 
-    /** 그린 것을 S3 로. 못 올려도 캐릭터는 만들어진 것으로 친다(파일은 남아 있다). */
+    /**
+     * 그린 것을 S3 로. 못 올려도 캐릭터는 만들어진 것으로 친다(파일은 남아 있다).
+     *
+     * <b>줄여서 올린다.</b> 모델이 주는 원본은 1024px PNG 라 한 장에 1.5~2.7MB 다.
+     * 카드에는 200px 남짓으로 보이는데, 목록에 아홉 장이 있으면 20MB 를 받는
+     * 셈이라 폰에서는 아무것도 안 뜬 채로 한참 기다린다(실제로 그랬다).
+     *
+     * 웹툰 페이지처럼 여러 폭을 만들지는 않는다 — 캐릭터 그림이 쓰이는 곳은
+     * 카드와 (웹툰 만들 때) 외모를 읽는 자리 둘뿐이고, 둘 다 768px 이면 넘친다.
+     */
     private String uploadArt(Path drawn) {
         try {
-            return art.upload(Files.readAllBytes(drawn), "image/png", false);
+            byte[] body = shrink(Files.readAllBytes(drawn));
+            return art.upload(body, body.length > 1 && body[0] == (byte) 0x89
+                    ? "image/png" : "image/jpeg", false);
         } catch (IOException | RuntimeException e) {
             log.error("캐릭터 그림을 못 올렸습니다 ({})", drawn, e);
             return null;
+        }
+    }
+
+    /** 긴 변을 {@value #ART_WIDTH}px 로. 못 줄이면 원본 그대로 올린다. */
+    static byte[] shrunk(byte[] original) {
+        return shrink(original);
+    }
+
+    private static byte[] shrink(byte[] original) {
+        try {
+            BufferedImage full = ImageIO.read(new ByteArrayInputStream(original));
+            if (full == null || Math.max(full.getWidth(), full.getHeight()) <= ART_WIDTH) {
+                return original;
+            }
+            double k = ART_WIDTH / (double) Math.max(full.getWidth(), full.getHeight());
+            int w = Math.max(1, (int) Math.round(full.getWidth() * k));
+            int h = Math.max(1, (int) Math.round(full.getHeight() * k));
+            BufferedImage small = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+            var g = small.createGraphics();
+            try {
+                g.drawImage(full.getScaledInstance(w, h, Image.SCALE_SMOOTH), 0, 0, null);
+            } finally {
+                g.dispose();
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(small, "jpg", out);
+            return out.toByteArray();
+        } catch (IOException | RuntimeException e) {
+            log.warn("캐릭터 그림을 못 줄였습니다 — 원본을 올립니다", e);
+            return original;
         }
     }
 }

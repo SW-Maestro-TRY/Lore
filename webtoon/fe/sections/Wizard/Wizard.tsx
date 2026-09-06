@@ -26,8 +26,11 @@ export default function Wizard({
   onClose,
   onSubmit,
   preset,
+  onPickCharacter,
 }: {
   onClose: () => void;
+  /** 1걸음에서 「내 캐릭터에서 고르기」를 눌렀을 때. */
+  onPickCharacter: () => void;
   /** 만들기를 시작한다. 실패하면 reject 해야 이 화면이 사유를 보여준다. */
   onSubmit: (form: WizardForm) => Promise<void>;
   /** 캐릭터 탭에서 「이 캐릭터로 웹툰 만들기」로 넘어왔을 때 들고 온 것. */
@@ -148,7 +151,10 @@ export default function Wizard({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="wiz-lou" src={wizLou} alt="" aria-hidden="true" />
 
-          {step === 1 && <Step1Photo form={form} onChange={patch} />}
+          {step === 1 && (
+            <Step1Photo form={form} onChange={patch}
+                        onPickCharacter={onPickCharacter} />
+          )}
           {step === 2 && <Step2Story form={form} onChange={patch} />}
           {step === 3 && <Step3Genre form={form} onChange={patch} />}
           {step === 4 && <Step4Style form={form} onChange={patch} />}

@@ -208,7 +208,8 @@ function WebtoonScreens() {
         </div>
       )}
       {view === "create" && (
-        <Wizard onClose={goHome} onSubmit={start} preset={preset} />
+        <Wizard onClose={goHome} onSubmit={start} preset={preset}
+                onPickCharacter={() => go("characters")} />
       )}
       {view === "characters" && (
         <Characters onUse={(c) => { setPreset(c); go("create"); }} />
@@ -237,6 +238,7 @@ function WebtoonScreens() {
           onOpenEditor={(id) => go("editor", id)}
           onCreate={() => go("create")}
           onBrowse={() => go("works")}
+          onCharacters={() => go("characters")}
         />
       )}
       {/* 편집실은 완성본에서 들어온다 — 그 작품 그 회차를 그대로 연다.

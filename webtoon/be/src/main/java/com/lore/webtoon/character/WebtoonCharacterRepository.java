@@ -28,6 +28,13 @@ public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharact
            """)
     List<WebtoonCharacter> pickableBy(@Param("userId") Long userId);
 
+    /** 이 이름의 기본 제공 캐릭터가 이미 있나. 서버가 다시 떠도 안 늘게 하는 자리. */
+    boolean existsByOwnerIdIsNullAndName(String name);
+
+    default boolean existsBuiltinNamed(String name) {
+        return existsByOwnerIdIsNullAndName(name);
+    }
+
     /** 오늘 이 사람이 몇 개나 만들었나 — 하루 무료 몫을 세는 자리. */
     @Query("""
            select count(c) from WebtoonCharacter c

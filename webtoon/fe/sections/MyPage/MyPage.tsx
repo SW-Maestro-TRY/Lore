@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import MyCharacters from "./MyCharacters";
 import { useAuth } from "@common/auth/useAuth";
 import {
   creditBalance as browserCredit, listRuns, myAccountRuns, myRuns, setVisibility,
@@ -31,11 +32,14 @@ export default function MyPage({
   onOpenEditor,
   onCreate,
   onBrowse,
+  onCharacters,
 }: {
   onOpenWork: (runId: string, episode: number) => void;
   onOpenEditor: (runId: string, episode: number) => void;
   onCreate: () => void;
   onBrowse: () => void;
+  /** 캐릭터 탭으로. */
+  onCharacters: () => void;
 }) {
   const { status, user, isAuthenticated, signOut } = useAuth();
   const [runs, setRuns] = useState<RunCard[] | null>(null);
@@ -166,6 +170,11 @@ export default function MyPage({
       {open === "history" && <CreditHistory onClose={() => setOpen(null)} />}
       {open === "charge" && <CreditCharge onClose={() => setOpen(null)} />}
 
+
+      {/* **내 캐릭터를 작품보다 먼저 둔다.** 웹툰은 캐릭터로 만드는 것이라,
+          여기 들어온 사람이 다음에 할 일은 대개 "저 캐릭터로 하나 더" 다.
+          옆으로 넘겨 보게 해서 작품 목록을 아래로 밀지 않는다. */}
+      <MyCharacters onOpen={onCharacters} />
 
       <div className="mypage-section">
         <div className="mypage-section-head">
