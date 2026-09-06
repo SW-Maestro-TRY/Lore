@@ -97,4 +97,15 @@ export const KEYFRAMES = `
 @keyframes yeoulFadeIn{from{opacity:0}to{opacity:1}}
 @keyframes yeoulBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 @keyframes yeoulPop{0%{transform:scale(.94);opacity:0}62%{transform:scale(1.03);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes yeoulBlink{0%,100%{box-shadow:0 0 0 0 rgba(156,66,50,0)}50%{box-shadow:0 0 0 5px rgba(156,66,50,.28)}}
+@keyframes yeoulShake{0%,100%{transform:rotate(0)}20%{transform:rotate(-5deg)}40%{transform:rotate(5deg)}60%{transform:rotate(-3deg)}80%{transform:rotate(3deg)}}
+@keyframes yeoulBurst{0%{opacity:0;transform:scale(.5)}30%{opacity:1;transform:scale(1.08)}100%{opacity:0;transform:scale(1.25)}}
 `;
+
+/** 튜토리얼이 "여기를 눌러 주세요" 라고 말하는 방식 — 잠그지 않고 눈에 띄게만 한다(정본 §12). */
+export const blink: CSSProperties = { animation: 'yeoulBlink 1.1s ease-in-out infinite' };
+
+/** 버튼 아래 작은 시스템 한 줄. 거절은 캐릭터 말이 아니다(9/6 결정 — 원망처럼 읽히지 않게). */
+export const sysLine: CSSProperties = {
+  fontFamily: SANS, fontSize: 11.5, lineHeight: 1.5, color: C.faint, textAlign: 'center',
+};
