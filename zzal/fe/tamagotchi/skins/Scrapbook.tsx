@@ -19,6 +19,10 @@ import { track } from '@common/analytics';
 import AuthModal from '@common/auth/AuthModal';
 import FeedbackSheet from '../FeedbackSheet';
 import GameSection from '../GameSection';
+import DevPanel from '../parts/DevPanel';
+import AlbumNotes from '../parts/AlbumNotes';
+import BackgroundPicker from '../parts/BackgroundPicker';
+import PiecesRow from '../parts/PiecesRow';
 
 /**
  * 상태 한 줄 — key 는 뜻, 값은 지금 쓰는 말. **key 는 검사가 잡는 손잡이라 함부로 바꾸지 않는다.**
@@ -43,7 +47,7 @@ const STATUS_LINE = {
 type StatusKey = keyof typeof STATUS_LINE;
 import { BACKGROUNDS, YEOUL } from '../constants';
 import { MAX_GAUGE } from '../rules';
-import { useDex } from '../useDex';
+import { useAlbum } from '../useAlbum';
 import { useTamagotchi } from '../useTamagotchi';
 import { useZzalSession } from '../useZzalSession';
 import ActionBar from '../parts/ActionBar';
@@ -86,6 +90,9 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
 
   // 무대 배경 — 서버가 준 값(기본 'room'). 바꾸기는 2층 4종 뒤(features.background).
   const bg = BACKGROUNDS.some((b) => b.key === s.background) ? s.background : BACKGROUNDS[0].key;
+
+  // 개발용 시계 패널은 **주소에 `?dev=1` 이 있을 때만** 그린다. 서버 렌더에서는 주소를 모르니 안 그린다.
+  const devTools = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dev');
 
   const go = useCallback((key: string) => {
     const el = scroller.current?.querySelector<HTMLElement>(`[data-sec="${key}"]`);
@@ -339,11 +346,15 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
   }));
 
   // 도감은 서버가 정본이다 — 18칸 전부 이름·조건이 온다(정본 §6). 잠긴 칸에는 여울이가 흐리게 대신 선다.
-  const dex = useDex({
+  // 엽서·장면·첫 심화 기념만 상태에 없어서 앨범을 한 번 더 읽는다.
+  const album = useAlbum({
+    source: session.server?.source ?? null,
+    pet: session.server?.pet ?? null,
     motions: s.motions, pc, say: ui.say,
     petName: session.server?.pet?.name,
     onShared: (key, kind) => { void tama.actions.share(key, kind); },
   });
+  const dex = album.cards;
 
   // 하단 바는 탭이 아니라 섹션 점프다. 앱으로 낼 때 그대로 탭이 된다.
   const tabDefs: [string, string][] = (s.hasChar || derived.booting)
@@ -517,6 +528,17 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
                 <div style={L.panel} data-part="panel">
                   <GaugePanel tama={tama} pc={pc} name={cur.name} />
                   <ActionBar tama={tama} pc={pc} />
+                  {/* 조각 4칸 — 3층 전에는 서버가 null 을 주고, 그때는 아예 안 그린다(parts/PiecesRow). */}
+                  <PiecesRow
+                    pieces={session.server?.pet?.pieces ?? null}
+                    goodDay={session.server?.pet?.goodDay === true}
+                  />
+                  {/* 방 꾸미기 — 2층 4종 뒤(parts/BackgroundPicker). 잠겨 있어도 조건은 보여 준다. */}
+                  <BackgroundPicker
+                    current={bg}
+                    unlocked={derived.features?.background === true}
+                    onPick={(key) => { void tama.actions.changeBackground(key); }}
+                  />
                 </div>
               )}
             </div>
@@ -559,6 +581,15 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
             </div>
 
             <div style={L.albumSheet}>
+              {/* 밤에 굽는 일은 사용자가 자는 동안 일어난다. 아무 말도 없으면 "고장났나" 가 된다. */}
+              <AlbumNotes
+                practicing={album.practicing}
+                firstGift={album.firstGift}
+                unlocked={album.unlocked}
+                postcards={album.postcards.length}
+                scenes={album.scenes.length}
+                name={cur.name}
+              />
               {/* 한 칸도 없는 것은 고장이 아니다 — 아직 아무것도 안 열린 상태다.
                   빈 판만 두면 안 그려진 것처럼 보이므로, 어떻게 하면 늘어나는지 말해 준다. */}
               {dex.length === 0 && (
@@ -631,6 +662,16 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
       <CelebrationModal tama={tama} pc={pc} name={cur.name} onSave={(seq) => dex.find((d) => d.seq === seq)?.save()} />
 
       {!!s.toast && <div data-toast style={L.toast}>{s.toast}</div>}
+
+      {/* 개발용 시계 건너뛰기 — 주소에 `?dev=1` 이 있을 때만. 운영에서는 서버가 그 주소를 안 연다. */}
+      {devTools && (
+        <DevPanel
+          petId={session.server?.pet?.phase === 'ALIVE' ? session.server.pet.petId : null}
+          serverNow={session.server?.pet?.serverNow ?? null}
+          mock={derived.mock}
+          onPet={(next) => session.server?.applyExternal(next)}
+        />
+      )}
 
       {/* 이 화면의 유일한 로그인 벽. 보고 만지는 것은 전부 열려 있고,
           "내 아이를 만든다" 는 순간에만 계정을 묻는다(useZzalSession.create). */}

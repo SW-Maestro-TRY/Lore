@@ -4,7 +4,7 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 export const MIN = 60_000;
 export const HOUR = 3_600_000;
 
-export type Preset = 'baby' | 'child' | 'new' | 'failed';
+export type Preset = 'baby' | 'child' | 'new' | 'failed' | 'grown' | 'layer3';
 
 /** 콘솔·페이지 에러와 실패 응답을 모은다. `/api/*` 404(백엔드 없음)와 `/zzal/*` 그림 404(S3 전용)는 예상된 것이라 뺀다. */
 export function collectErrors(page: Page): string[] {
