@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,6 +23,8 @@ import java.time.ZoneId;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 캐릭터를 만들고 고르는 일.
@@ -55,6 +59,10 @@ public class CharacterService {
     private final int freePerDay;
     private final int cost;
     private final Clock clock;
+    /* 한 줄로 세운다 — 그림 호출을 한꺼번에 여러 개 띄우면 값이 몰려 나간다. */
+    private final ExecutorService line =
+            Executors.newSingleThreadExecutor(r -> Thread.ofVirtual()
+                    .name("webtoon-character").unstarted(r));
 
     /* 생성자가 둘이다(아래 하나는 검사에서 시계를 갈아 끼우려고 둔 것) — 표시가
        없으면 스프링이 인자 없는 생성자를 찾다가 서버가 아예 안 뜬다. 이 저장소에서
@@ -147,40 +155,80 @@ public class CharacterService {
 
         String publicId = UUID.randomUUID().toString().replace("-", "").substring(0, 20);
         Path dir = workDir.resolve(publicId);
-        Path photo = null;
-        Path drawn = dir.resolve("art.png");
-        CharacterMaker.Made made;
+        Path photo;
         try {
             Files.createDirectories(dir);
-            if (hasPhoto) {
-                photo = savePhoto(dir, photoDataUrl);
-            }
-            made = maker.make(name.trim(), description, photo, style, drawn);
+            photo = hasPhoto ? savePhoto(dir, photoDataUrl) : null;
         } catch (BusinessException e) {
             throw e;
+        } catch (IOException e) {
+            log.error("캐릭터 준비에 실패했습니다 (user={})", userId, e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "캐릭터를 만들지 못했습니다");
+        }
+
+        Instant now = Instant.now(clock);
+        WebtoonCharacter saved = characters.save(WebtoonCharacter.drawing(
+                publicId, userId, name.trim(), description, now));
+
+        if (!free) {
+            credits.charge(userId, cost, "character:" + publicId, "캐릭터 만들기");
+        }
+
+        /* **곧바로 돌려주고 뒤에서 그린다.**
+         *
+         * 그리는 데 1분쯤 걸리는데, 그동안 요청을 붙들고 있으면 배포에서
+         * 끊긴다 — CloudFront 의 기본 응답 대기가 30초다. 로컬 개발 프록시가
+         * 먼저 `socket hang up` 으로 알려 줬다: 그림은 다 그려졌고 DB 에도
+         * 들어갔는데 화면에는 500 이 떴다.
+         *
+         * 커밋된 뒤에 시작한다 — 그리는 쪽은 다른 실타래에서 이 줄을 다시
+         * 읽는다(웹툰 만들기가 같은 자리에서 걸렸다). */
+        Path finalPhoto = photo;
+        Long id = saved.getId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            line.submit(() -> draw(id, name.trim(), description, finalPhoto,
+                                    style, dir));
+                        }
+                    });
+        } else {
+            line.submit(() -> draw(id, name.trim(), description, finalPhoto, style, dir));
+        }
+        return saved;
+    }
+
+    /** 뒤에서 그린다. 여기서 죽어도 줄이 멈추면 안 된다. */
+    private void draw(Long id, String name, String description, Path photo,
+                      String style, Path dir) {
+        Path drawn = dir.resolve("art.png");
+        try {
+            CharacterMaker.Made made = maker.make(name, description, photo, style, drawn);
+            String key = uploadArt(made.art());
+            finish(id, key, made.source(), null);
         } catch (Exception e) {                    // noqa: 사유는 로그에, 사람에겐 한 줄
-            log.error("캐릭터를 못 만들었습니다 (user={}, name={})", userId, name, e);
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR,
-                    "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.");
+            log.error("캐릭터를 못 그렸습니다 (id={}, name={})", id, name, e);
+            finish(id, null, null, "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.");
         } finally {
             // **어떻게 끝나든 올린 사진은 지운다.** 외모를 글로 적는 데만 쓰고,
             // 그 뒤로는 다시 안 쓴다. 사람 얼굴을 서버에 둘 이유가 없다.
             dropPhoto(photo);
         }
+    }
 
-        String key = uploadArt(made.art());
-        Instant now = Instant.now(clock);
-        WebtoonCharacter saved = characters.save(WebtoonCharacter.of(
-                publicId, userId, name.trim(), description, made.source(), now));
-        if (key != null) {
-            saved.drewArt(key, now);
-            characters.save(saved);
-        }
-
-        if (!free) {
-            credits.charge(userId, cost, "character:" + publicId, "캐릭터 만들기");
-        }
-        return saved;
+    @Transactional
+    protected void finish(Long id, String key, CharacterSource source, String why) {
+        characters.findById(id).ifPresent(one -> {
+            Instant now = Instant.now(clock);
+            if (why != null) {
+                one.failed(why, now);
+            } else {
+                one.drewArt(key, source == null ? CharacterSource.PROMPT : source, now);
+            }
+            characters.save(one);
+        });
     }
 
     @Transactional

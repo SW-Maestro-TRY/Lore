@@ -78,6 +78,22 @@ public class WebtoonCharacter {
     @Enumerated(EnumType.STRING)
     private CharacterSource source;
 
+    /**
+     * 그리는 중인가, 다 됐나.
+     *
+     * 그리는 데 1분쯤 걸려서 <b>요청을 붙들고 기다릴 수가 없다</b> — 배포의
+     * 어느 자리도 그만큼 긴 연결을 안 기다려 준다. 만들기는 곧바로 돌려주고
+     * 화면이 이 값을 보고 「그리는 중」을 띄운다.
+     */
+    @Column(nullable = false, length = 20,
+            columnDefinition = "varchar(20) not null default 'READY'")
+    @Enumerated(EnumType.STRING)
+    private CharacterStatus status = CharacterStatus.READY;
+
+    /** 못 그렸을 때 사람이 읽을 한 줄. */
+    @Column(length = 300)
+    private String error;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -88,8 +104,9 @@ public class WebtoonCharacter {
     }
 
     private WebtoonCharacter(String publicId, Long ownerId, String name, String description,
-                             CharacterSource source, Instant at) {
+                             CharacterSource source, CharacterStatus status, Instant at) {
         this.publicId = publicId;
+        this.status = status;
         this.ownerId = ownerId;
         this.name = name;
         this.description = description;
@@ -98,20 +115,33 @@ public class WebtoonCharacter {
         this.updatedAt = at;
     }
 
-    public static WebtoonCharacter of(String publicId, Long ownerId, String name,
-                                      String description, CharacterSource source, Instant at) {
-        return new WebtoonCharacter(publicId, ownerId, name, description, source, at);
+    /** 만들어 놓고 그리기 시작한다. 그림은 아직 없다. */
+    public static WebtoonCharacter drawing(String publicId, Long ownerId, String name,
+                                           String description, Instant at) {
+        return new WebtoonCharacter(publicId, ownerId, name, description,
+                CharacterSource.PROMPT, CharacterStatus.DRAWING, at);
     }
 
     /** 기본 제공. 주인이 없다 — 누구나 골라 쓴다. */
     public static WebtoonCharacter builtin(String publicId, String name, String description,
                                            Instant at) {
         return new WebtoonCharacter(publicId, null, name, description,
-                CharacterSource.BUILTIN, at);
+                CharacterSource.BUILTIN, CharacterStatus.READY, at);
     }
 
-    public void drewArt(String key, Instant at) {
+    /** 다 그렸다. */
+    public void drewArt(String key, CharacterSource source, Instant at) {
         this.artKey = key;
+        this.source = source;
+        this.status = CharacterStatus.READY;
+        this.error = null;
+        this.updatedAt = at;
+    }
+
+    /** 못 그렸다. 사유는 사람이 읽을 한 줄이어야 한다. */
+    public void failed(String why, Instant at) {
+        this.status = CharacterStatus.ERROR;
+        this.error = why == null ? null : why.substring(0, Math.min(why.length(), 300));
         this.updatedAt = at;
     }
 
@@ -158,6 +188,14 @@ public class WebtoonCharacter {
 
     public CharacterSource getSource() {
         return source;
+    }
+
+    public CharacterStatus getStatus() {
+        return status;
+    }
+
+    public String getError() {
+        return error;
     }
 
     public Instant getCreatedAt() {

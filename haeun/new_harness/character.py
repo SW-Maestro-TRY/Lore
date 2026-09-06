@@ -39,6 +39,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import imagegen                                      # noqa: E402
+import imageprompt                                   # noqa: E402
 import llm                                           # noqa: E402
 import sheet as sheetmod                             # noqa: E402
 
@@ -77,6 +78,53 @@ def spec_of(name: str, description: str, photo: Path | None) -> dict:
     return spec, meta
 
 
+def portrait_prompt(spec: dict, style_text: str) -> str:
+    """사양 -> **한 장짜리 그림** 프롬프트.
+
+    자료 시트(`sheet.build_prompt`)를 안 쓴다. 그건 앞·옆·뒤와 표정 여섯 개를
+    한 장에 늘어놓은 <b>작업용 참고 자료</b>라, 「내 캐릭터」 칸에 걸어 두면
+    예쁘지가 않다. 여기서 필요한 것은 이 캐릭터를 한 장으로 보여주는
+    <b>표지 같은 그림</b>이다.
+
+    사양은 그대로 쓴다 — 사진이나 설명에서 뽑아낸 고정 요소(머리색·옷·소품)가
+    거기 적혀 있고, 그게 있어야 나중에 웹툰을 만들 때 같은 인물로 읽힌다.
+    """
+    palette = spec["color_palette"]
+    colors = " / ".join(f"{k}: {palette[k]}" for k in sheetmod.PALETTE_KEYS if palette.get(k))
+    details = spec["design_details"]
+    props = spec["props"]
+
+    parts = [
+        "Character portrait illustration for a Korean webtoon service — "
+        "a single cover-quality picture of ONE character.",
+        "",
+        "[COMPOSITION]",
+        "One character only. Waist-up to full body, facing the viewer or slightly turned.",
+        "The face is clearly visible and is the centre of attention.",
+        "A simple, attractive background that suits the character — soft light, a hint of "
+        "place or mood. Not a plain white cutout, and not a busy scene that competes with "
+        "the character.",
+        "No text, no labels, no captions, no watermark, no logo, no signature.",
+        "No panel borders, no split frames, no turnaround views, no expression rows — "
+        "this is ONE picture, not a reference sheet.",
+        "",
+        "[CHARACTER]",
+        f"  {spec['appearance_en']}",
+    ]
+    if spec.get("species"):
+        parts.append(f"  종족: {spec['species']}")
+    if details:
+        parts.append("  고정 요소 (반드시 그대로 그린다):")
+        parts += [f"    - {d}" for d in details]
+    if props:
+        parts.append("  지물: " + " / ".join(props))
+    if colors:
+        parts.append(f"  색: {colors}")
+
+    parts += ["", "STYLE", style_text, ""]
+    return "\n".join(parts)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="캐릭터 그림 한 장을 만든다")
     ap.add_argument("--name", required=True)
@@ -91,11 +139,17 @@ def main() -> int:
         args.photo = None
 
     spec, spec_meta = spec_of(args.name, args.description, args.photo)
-    prompt = sheetmod.build_prompt(spec, args.style)
+
+    # **그림체는 이름이 아니라 문구를 넘긴다.** 받은 값이 그대로 STYLE 칸에
+    # 실린다 — 이름을 넘기면 "romance" 다섯 글자가 그림체 설명 전부가 되고,
+    # 모델에게 아무 말도 안 한 것과 같아진다(실측으로 그렇게 밋밋한 그림이
+    # 한 장 나왔다).
+    style_text = imageprompt.load_style(args.style)
+    prompt = portrait_prompt(spec, style_text)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    log("[캐릭터] 그리는 중… (사진 없이 사양만)")
-    art_meta = imagegen.paint("SHEET_IMAGE", prompt, args.out, kind=imagegen.SHEET_KIND)
+    log("[캐릭터] 그리는 중…")
+    art_meta = imagegen.paint("SHEET_IMAGE", prompt, args.out, kind=imagegen.PAGE_KIND)
     log(f"  -> {args.out}")
 
     # 부르는 쪽이 읽을 한 줄. 비용은 두 호출을 합쳐서 낸다.

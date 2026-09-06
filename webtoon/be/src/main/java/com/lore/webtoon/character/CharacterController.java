@@ -93,6 +93,8 @@ public class CharacterController {
         m.put("description", one.getDescription() == null ? "" : one.getDescription());
         m.put("art_url", characters.artUrl(one));
         m.put("source", one.getSource().name().toLowerCase());
+        m.put("status", one.getStatus().name().toLowerCase());
+        m.put("error", one.getError());
         m.put("builtin", one.isBuiltin());
         m.put("mine", one.ownedBy(me));
         m.put("created_at", one.getCreatedAt().toString());

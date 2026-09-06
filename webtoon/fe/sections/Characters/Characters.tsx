@@ -31,6 +31,15 @@ export default function Characters({ onUse }: {
 
   useEffect(() => { load(); }, [load]);
 
+  /* 그리는 중인 것이 있으면 다 될 때까지 물어본다. 만들기는 곧바로 돌아오고
+     그림은 뒤에서 그려진다(1분쯤) — 안 물어보면 「그리는 중」에서 멈춰 있다. */
+  const drawing = got?.characters.some((c) => c.status === "drawing") ?? false;
+  useEffect(() => {
+    if (!drawing) return;
+    const t = setInterval(load, 3000);
+    return () => clearInterval(t);
+  }, [drawing, load]);
+
   const drop = async (c: Character) => {
     if (!window.confirm(`「${c.name}」을(를) 지울까요?`)) return;
     try {
@@ -93,7 +102,9 @@ export default function Characters({ onUse }: {
       {making && (
         <CharacterMake
           onClose={() => setMaking(false)}
-          onMade={(c) => { setMaking(false); load(); onUse(c); }}
+          /* 만들자마자 위자드로 넘기지 않는다 — 그림이 아직 없다. 목록에서
+             「그리는 중」으로 보이다가 다 되면 그때 고른다. */
+          onMade={() => { setMaking(false); load(); }}
         />
       )}
     </section>
@@ -109,18 +120,25 @@ function CharGrid({ list, onUse, onDrop }: {
     <ul className="char-grid">
       {list.map((c) => (
         <li key={c.id} className="char-card">
-          <div className="char-art">
-            {c.art_url
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={c.art_url} alt={c.name} loading="lazy" />
-              : <span className="char-art-none">그림 없음</span>}
+          <div className="char-art" data-status={c.status}>
+            {c.status === "drawing"
+              ? <span className="char-art-none">그리는 중…<br />1분쯤 걸려요</span>
+              : c.status === "error"
+                ? <span className="char-art-none">{c.error || "못 그렸어요"}</span>
+                : c.art_url
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={c.art_url} alt={c.name} loading="lazy" />
+                  : <span className="char-art-none">그림 없음</span>}
           </div>
           <div className="char-body">
             <b className="char-name">{c.name}</b>
             {c.description && <p className="char-desc">{c.description}</p>}
             <div className="char-acts">
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => onUse(c)}>
-                이 캐릭터로 웹툰 만들기
+              {/* 아직 안 그려졌으면 못 누른다 — 그림 없이 넘어가면 위자드가
+                  빈 캐릭터로 시작한다. */}
+              <button type="button" className="btn btn-primary btn-sm"
+                      disabled={c.status !== "ready"} onClick={() => onUse(c)}>
+                {c.status === "drawing" ? "그리는 중…" : "이 캐릭터로 웹툰 만들기"}
               </button>
               {onDrop && (
                 <button type="button" className="btn btn-quiet btn-sm" onClick={() => onDrop(c)}>
