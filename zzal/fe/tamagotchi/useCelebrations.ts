@@ -71,7 +71,10 @@ export function useCelebrations(
     consumeUnlocked();
   }, [justUnlocked, pet, consumeUnlocked]);
 
-  const learned = pet?.learnedToday ?? [];
+  // ★ `pet.learnedToday` 는 응답마다 새 배열이라 그대로 deps 에 넣으면 폴링마다 효과가 돈다.
+  //   실제로 바뀌는 것은 seq 목록뿐이라, 그것으로 서명을 만들어 그때만 다시 계산한다.
+  const learnedKey = (pet?.learnedToday ?? []).map((l) => l.seq).join(',');
+  const learned = useMemo(() => pet?.learnedToday ?? [], [learnedKey]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const fresh = learned.filter((l) => !queuedArrivals.current.has(l.seq));
     if (!fresh.length) return;

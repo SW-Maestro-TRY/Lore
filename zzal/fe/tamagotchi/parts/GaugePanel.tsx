@@ -43,12 +43,31 @@ export default function GaugePanel({ tama, pc, name }: GaugePanelProps) {
     </div>
   );
 
+  const sickRow: CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 7,
+    padding: '7px 10px', background: '#FBE7E1', border: '1px solid #E6C9C0', borderRadius: 3,
+    fontFamily: GAEGU, fontWeight: 700, fontSize: 14, color: '#8C4B3B',
+  };
+
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} data-part="gauges" data-gauges={`${s.fullness}/${s.happiness}/${s.clean}`}>
         {row('fullness', '배부름', s.fullness, RED, '●')}
         {row('happiness', '행복', s.happiness, GRN, '♥')}
         {row('clean', '청결', s.clean, BLUE, '✦')}
+        {/*
+          아픔 한 줄. ★ **원인을 말하지 않는다** — "안 치워서 아파요" 는 사실이어도 사람을 몰아세운다.
+          케어 미스를 어디에도 안 내리는 것과 같은 결이다(정본 4장). 할 일만 알려 준다.
+          ★★ 종류(kind)를 `data-*` 표식으로도 안 남긴다. 화면에 안 쓰기로 해 놓고 표식으로 남기면
+             개발자도구로 읽을 수 있고, 그건 "안 보여 준다" 가 아니라 "잘 안 보이게 둔다" 다.
+             검사는 목 상태(`__zzalMock.state()`)로 확인한다.
+        */}
+        {s.sick && (
+          <div data-part="sick" style={sickRow}>
+            <span aria-hidden>☠</span>
+            <span>아파요 · 약을 주면 바로 나아요</span>
+          </div>
+        )}
         <div style={infoRow}>
           <span data-days={s.daysTogether}>{s.daysTogether}일째 함께</span>
           <span data-intimacy={s.intimacyPercent}>친밀도 {s.intimacyPercent}%</span>
