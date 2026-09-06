@@ -72,6 +72,20 @@ export const NH_STAGE_DESC: Record<string, string> = {
     + "앞 장과 이어지는지 · 글이 그림에 담겼는지 검수하고, 걸리면 다시 그립니다.",
 };
 
+/**
+ * 단계의 이름.
+ *
+ * 서버는 <b>지금 하는 단계의 이름만</b> 준다(`stage_label`). 그래서 나머지 줄에는
+ * 영어 키가 그대로 보였다 — "01 이야기 짓기 · 02 sheet · 03 board · 04 pages".
+ * 지나갈 단계도 사람이 읽을 이름이어야 한다. 모르는 단계는 키를 그대로 쓴다.
+ */
+export const NH_STAGE_NAME: Record<string, string> = {
+  story: "이야기 짓기",
+  sheet: "캐릭터 그리기",
+  board: "회차 짜기",
+  pages: "페이지 그림",
+};
+
 /** 단계마다 이 화면이 보여줄 수 있는 것. 없으면 펼칠 것이 없다. */
 export const NH_STAGE_RESULT: Record<string, string> = {
   story: "지어낸 이야기 4개 보기",

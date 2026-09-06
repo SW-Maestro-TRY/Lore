@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { sheetImageUrl } from "../../lib/nhApi";
-import { NH_STAGE_DESC, NH_STAGE_RESULT } from "./nhStage";
+import { NH_STAGE_DESC, NH_STAGE_NAME, NH_STAGE_RESULT } from "./nhStage";
 import type { NhDirection, NhJob } from "../../lib/nhApi";
 
 /* 단계 목록 — 무엇을 하는 중이고, 지나온 단계가 무엇을 내놨는지.
@@ -41,7 +41,9 @@ export default function StageRail({ job, jobId, sheetVersion, onZoom }: {
     <ol className="rail">
       {job.stages.map((key, i) => {
         const state = i < job.stage_index ? "done" : i === job.stage_index ? "active" : "todo";
-        const label = i === job.stage_index ? job.stage_label : key;
+        // 지금 하는 단계는 서버가 준 이름이 이긴다(검수 중 같은 상태를 담는다).
+        const label = (i === job.stage_index && job.stage_label)
+          || NH_STAGE_NAME[key] || key;
         const can = hasResult(key, i);
         const isOpen = open === key;
 
