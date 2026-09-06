@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { LOU_LOGOS, pickOne } from "../../lib/louArt";
 import config from "../../demo-api/config.json";
-import { useAllowance, allowanceLine } from "../../lib/useAllowance";
+import { useAllowance } from "../../lib/useAllowance";
 import { WIZ_LAST, WIZ_NAMES, emptyWizardForm, type WizardForm } from "../../lib/wizardData";
 import Step1Photo from "./steps/Step1Photo";
 import Step2Story from "./steps/Step2Story";
@@ -25,13 +25,18 @@ import Step5Review from "./steps/Step5Review";
 export default function Wizard({
   onClose,
   onSubmit,
+  preset,
+  onPickCharacter,
 }: {
   onClose: () => void;
+  /** 1걸음에서 「내 캐릭터에서 고르기」를 눌렀을 때. */
+  onPickCharacter: () => void;
   /** 만들기를 시작한다. 실패하면 reject 해야 이 화면이 사유를 보여준다. */
   onSubmit: (form: WizardForm) => Promise<void>;
+  /** 캐릭터 탭에서 「이 캐릭터로 웹툰 만들기」로 넘어왔을 때 들고 온 것. */
+  preset?: { id: string; name: string; description: string; art_url: string | null } | null;
 }) {
   const allowance = useAllowance();
-  const allowLine = allowanceLine(allowance);
   const [step, setStep] = useState(1);
   /* 걸음의 제목 옆에 앉은 루. 걸음을 옮길 때마다 바뀐다 — 방금 걸려 있던
      그림은 후보에서 뺀다(안 그러면 "안 바뀌었네" 로 보인다). 원본 pickWizLou
@@ -39,6 +44,20 @@ export default function Wizard({
   const [wizLou, setWizLou] = useState(LOU_LOGOS[0]);
   useEffect(() => { setWizLou((now) => pickOne(LOU_LOGOS, [now])); }, [step]);
   const [form, setForm] = useState<WizardForm>(emptyWizardForm());
+
+  /* 캐릭터를 들고 왔으면 1걸음을 **이미 채운 채로** 연다. 만들어 둔 캐릭터를
+     또 적게 하면 만들어 둔 의미가 없다. 사진은 안 들고 온다 — 번호만 보내고
+     그림은 서버가 붙인다(브라우저가 내려받아 다시 올릴 이유가 없다). */
+  useEffect(() => {
+    if (!preset) return;
+    setForm((f) => ({
+      ...f,
+      name: preset.name,
+      character: preset.description || f.character,
+      characterId: preset.id,
+      characterArt: preset.art_url || undefined,
+    }));
+  }, [preset]);
   /* 마지막 걸음에서만 뜨는 한 줄. 여기서는 사진도 이름도 이미 받은 뒤라
      "사진과 이름만 있으면 시작합니다" 는 지난 말이었다 — 지금 누르면 무슨
      일이 일어나는지만 적는다. 미리보기가 아니라 한 편이 통째로 나온다. */
@@ -49,7 +68,8 @@ export default function Wizard({
   const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p }));
 
   const step1Ok = () => {
-    if (!form.photos.length) {
+    // 캐릭터를 골라 왔으면 사진을 또 받지 않는다 — 그림은 서버가 붙인다.
+    if (!form.characterId && !form.photos.length) {
       setNote("캐릭터 사진을 올려주세요");
       setNoteError(true);
       return false;
@@ -130,7 +150,10 @@ export default function Wizard({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="wiz-lou" src={wizLou} alt="" aria-hidden="true" />
 
-          {step === 1 && <Step1Photo form={form} onChange={patch} />}
+          {step === 1 && (
+            <Step1Photo form={form} onChange={patch}
+                        onPickCharacter={onPickCharacter} />
+          )}
           {step === 2 && <Step2Story form={form} onChange={patch} />}
           {step === 3 && <Step3Genre form={form} onChange={patch} />}
           {step === 4 && <Step4Style form={form} onChange={patch} />}
@@ -164,9 +187,7 @@ export default function Wizard({
                 쓴다 — 조용히 아무 일도 안 일어나는 것이 제일 나쁘다. */}
             <p className={`submit-note${noteError ? " is-error" : ""}`}
                hidden={!atEnd && !noteError}>{note}</p>
-            {/* **걸음 내내 보인다.** 마지막에만 알려 주면, 사진을 올리고 이야기까지
-                적고 나서야 "오늘 몫을 다 쓰셨어요" 를 처음 만난다. */}
-            {allowLine && !noteError && <p className="submit-allowance">{allowLine}</p>}
+
           </div>
         </form>
       </div>

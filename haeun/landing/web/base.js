@@ -53,12 +53,21 @@
    * 화면 찍기는 그대로 둔다(막을 방법도 없고, 막을 것도 아니다).
    *
    * 내려받기 단추는 <a download> 라 여기 안 걸린다 — 그림이 아니다. */
+  //
+  // **`IMG` 만 보면 샌다.** 그림 위에 손잡이·말풍선·빈 칸이 겹쳐 있으면
+  // 오른쪽 누르기의 과녁이 그 겹친 것이 되어 이 검사를 그냥 통과했다.
+  // 그림 한 장을 정확히 겨눠야만 막히는 문턱은 문턱이 아니다. 그래서
+  // 통째로 막고 **글 쓰는 칸만** 비워 둔다 — 거기엔 저장할 그림이 없고,
+  // 복사·붙여넣기 메뉴는 있어야 한다.
+  const inText = el => !!(el && el.closest &&
+    el.closest('input, textarea, [contenteditable="true"], [contenteditable=""]'));
+
   document.addEventListener("contextmenu", ev => {
-    if (ev.target && ev.target.tagName === "IMG") ev.preventDefault();
+    if (!inText(ev.target)) ev.preventDefault();
   });
   // 끌어서 바탕화면·다른 창에 떨구는 길.
   document.addEventListener("dragstart", ev => {
-    if (ev.target && ev.target.tagName === "IMG") ev.preventDefault();
+    if (!inText(ev.target)) ev.preventDefault();
   });
 
   // /static/ 은 건드리지 않는다. 정적 파일은 어느 쪽에서도 뿌리에 있다.

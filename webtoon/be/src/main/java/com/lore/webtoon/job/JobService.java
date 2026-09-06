@@ -6,7 +6,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.PrivateArt;
 import com.lore.webtoon.WorkLedger;
+import com.lore.webtoon.character.CharacterService;
+import com.lore.webtoon.character.WebtoonCharacter;
 import com.lore.webtoon.story.StoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,14 +83,19 @@ public class JobService {
     private final JobProgress progress;
     private final StoryStore stories;
     private final WorkLedger works;
+    private final CharacterService characters;
+    private final PrivateArt art;
     private final Path jobsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobService(WebtoonJobRepository jobs, JobStore store, JobRunner runner,
                       JobProgress progress, StoryStore stories, WorkLedger works,
+                      CharacterService characters, PrivateArt art,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
         this.works = works;
+        this.characters = characters;
+        this.art = art;
         this.store = store;
         this.runner = runner;
         this.progress = progress;
@@ -123,6 +131,16 @@ public class JobService {
         try {
             Files.createDirectories(dir);
             List<Path> photos = savePhotos(dir, form.photosData());
+            Path fromCharacter = characterArt(dir, form.characterId(), userId);
+            /* 캐릭터를 골라 왔으면 그 그림을 참조로 붙인다.
+             *
+             * 화면은 **번호만** 보낸다. 그림은 S3 의 안 열리는 자리에 있고,
+             * 브라우저가 그것을 내려받아 base64 로 다시 올리면 같은 그림이
+             * 두 번 오간다 — 게다가 그 주소는 CORS 가 안 열려 있다. */
+            if (fromCharacter != null) {
+                photos = new ArrayList<>(photos);
+                photos.add(fromCharacter);
+            }
             writeCharacter(dir, form, photos);
         } catch (IOException e) {
             log.error("만들기 준비에 실패했습니다 (job={})", publicId, e);
@@ -214,6 +232,35 @@ public class JobService {
      * 폭을 줄여 둔다 — 원본 그대로 넘기면 모델에 보내는 값이 커져서 느리고
      * 비싸다. 못 여는 사진은 여기서 막는다(아이폰 HEIC 등).
      */
+    /**
+     * 골라 온 캐릭터의 그림을 작업 폴더에 내려놓는다. 없으면 {@code null}.
+     *
+     * <b>남의 캐릭터는 안 붙인다.</b> 내 것이거나 기본 제공만 — 안 그러면 번호를
+     * 찍어 넣어 남의 캐릭터로 웹툰을 만들 수 있다(그 기능은 #259 에서 따로 다룬다).
+     *
+     * 못 가져와도 만들기는 안 막는다. 이름과 설명은 이미 폼에 실려 왔으므로
+     * 그것만으로도 그릴 수 있다 — 여기서 막으면 S3 가 잠깐 흔들릴 때 만들기가
+     * 통째로 죽는다.
+     */
+    private Path characterArt(Path dir, String characterId, Long userId) {
+        if (characterId == null || characterId.isBlank()) {
+            return null;
+        }
+        try {
+            WebtoonCharacter one = characters.byPublicId(characterId, userId);
+            byte[] bytes = art.read(one.getArtKey());
+            if (bytes == null || bytes.length == 0) {
+                return null;
+            }
+            Path out = dir.resolve("charart.png");
+            Files.write(out, bytes);
+            return out;
+        } catch (Exception e) {                     // noqa: 못 붙여도 만들기는 간다
+            log.warn("고른 캐릭터의 그림을 못 붙였습니다 (character={})", characterId, e);
+            return null;
+        }
+    }
+
     private List<Path> savePhotos(Path dir, List<String> dataUrls) throws IOException {
         List<Path> saved = new ArrayList<>();
         if (dataUrls == null) {
@@ -355,7 +402,12 @@ public class JobService {
                                 List<String> photosData,
                                 @JsonProperty("agree_ip") @JsonAlias("agreeIp")
                                 Boolean agreeIp,
-                                Boolean checkpoints, String uid) {
+                                Boolean checkpoints, String uid,
+                                /* 캐릭터 탭에서 골라 온 것. 있으면 이름·설명·그림을
+                                   여기서 붙인다 — 화면이 그림을 내려받아 다시 올릴
+                                   이유가 없다. */
+                                @JsonProperty("character_id") @JsonAlias("characterId")
+                                String characterId) {
 
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;

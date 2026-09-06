@@ -2159,10 +2159,12 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
     cast = [c for c in (direction.get("cast") or [])
             if isinstance(c, dict) and (c.get("name") or "").strip()
             and (c.get("name") or "").strip() != hero]
-    _, rmeta = episodecheck.review_episode(run_dir, direction=direction,
-                                           char=char, cast=cast)
-    if rmeta:
-        record(run_dir, rmeta)
+    # 이제 두 번 부른다 (블라인드 읽기 + 견주기) — 기록도 여럿이다.
+    _, rcalls = episodecheck.review_episode(run_dir, direction=direction,
+                                            char=char, cast=cast)
+    for rmeta in rcalls:
+        if rmeta:
+            record(run_dir, rmeta)
 
 
 # --------------------------------------------------------------------- CLI

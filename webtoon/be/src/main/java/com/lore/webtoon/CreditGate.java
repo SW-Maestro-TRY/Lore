@@ -79,12 +79,19 @@ public class CreditGate {
      * @return 막을 이유(사람이 읽을 한 줄). 괜찮거나 로그인 안 했으면 {@code null}
      */
     public String whyBlocked(Long userId) {
-        if (userId == null || cost <= 0) {
+        return whyBlocked(userId, cost);
+    }
+
+    /**
+     * 값을 지정해서 묻는다 — 웹툰 한 편(12)과 캐릭터 한 장(1)은 값이 다르다.
+     */
+    public String whyBlocked(Long userId, int need) {
+        if (userId == null || need <= 0) {
             return null;
         }
         int have = credits.balance(userId);
-        if (have < cost) {
-            return "크레딧이 모자랍니다 (필요 " + cost + " · 보유 " + have + ")";
+        if (have < need) {
+            return "크레딧이 모자랍니다 (필요 " + need + " · 보유 " + have + ")";
         }
         return null;
     }
@@ -100,17 +107,25 @@ public class CreditGate {
      * @param jobId 무엇에 대한 값인가. 같은 작업으로 두 번 불려도 한 번만 빠진다
      */
     public void charge(Long userId, String jobId) {
-        if (userId == null || cost <= 0 || jobId == null || jobId.isBlank()) {
+        charge(userId, cost, jobId, null);
+    }
+
+    /** 값과 사유를 지정해서 받는다. 같은 {@code ref} 로 두 번 불려도 한 번만 빠진다. */
+    public void charge(Long userId, int amount, String ref, String memo) {
+        if (userId == null || amount <= 0 || ref == null || ref.isBlank()) {
             return;
         }
         try {
-            credits.spend(userId, cost, jobId);
+            credits.spend(userId, amount, ref);
+            if (memo != null) {
+                log.debug("크레딧 {} 받음 (user={}, {})", amount, userId, memo);
+            }
         } catch (BusinessException e) {
             // 미리 봤을 때는 있었는데 그 사이에 다른 창에서 썼다는 뜻이다.
             log.error("크레딧을 못 받았습니다 — 만들기는 이미 시작됐습니다 "
-                    + "(user={}, job={}, {})", userId, jobId, e.getMessage());
+                    + "(user={}, ref={}, {})", userId, ref, e.getMessage());
         } catch (RuntimeException e) {
-            log.error("크레딧을 못 받았습니다 (user={}, job={})", userId, jobId, e);
+            log.error("크레딧을 못 받았습니다 (user={}, ref={})", userId, ref, e);
         }
     }
 
@@ -127,7 +142,7 @@ public class CreditGate {
     }
 
     /** 크레딧이 모자랄 때의 코드. 화면이 이걸 보고 "충전하러 가기" 를 띄운다. */
-    static ErrorCode notEnough() {
+    public static ErrorCode notEnough() {
         return ErrorCode.CREDIT_NOT_ENOUGH;
     }
 }

@@ -17,7 +17,7 @@ export default function Foot() {
       <div className="foot-brand">
         <span>LORE 웹툰 스튜디오</span>
         <span className="foot-note">
-          고래 <b>루</b>가 안내합니다 · 말풍선과 대사는 그림 안에 함께 그려집니다
+          고래 <b>루</b>가 안내합니다 · 사진 한 장이 웹툰 한 화가 됩니다
         </span>
       </div>
       <div className="foot-org">

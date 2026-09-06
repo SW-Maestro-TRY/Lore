@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""캐릭터 그림 한 장 — 웹툰 한 편을 안 만들고 캐릭터만 만든다.
+
+## 왜 따로 있나
+
+`run.py --sheet` 는 **작품 폴더 안에서** 돈다. 고른 이야기가 있어야 하고,
+결과는 그 작품의 캐릭터 시트다. 그런데 캐릭터 탭에서 하려는 것은 그 반대다 —
+**이야기 없이 캐릭터부터** 만들어 두고, 나중에 그 캐릭터로 웹툰을 만든다.
+
+그래서 같은 조각(사양 쓰기 · 그리기)을 쓰되 작품 없이 도는 길을 하나 둔다.
+프롬프트도 모델 설정도 `run.py` 와 같은 것을 본다 — 두 벌이 되면 반드시
+어긋난다.
+
+## 두 갈래
+
+    --photo <파일>   사진을 읽어 외모를 글로 적고, 그 글로 그린다
+    (사진 없음)      이름과 설명만으로 적고 그린다  ← 자캐 그림이 없는 사람의 길
+
+사진을 쓰더라도 **그림에는 사진을 안 붙인다.** OpenAI 는 참조 이미지가 붙으면
+"이 그림을 고쳐라" 쪽으로 읽어서, 올린 사진이 낙서거나 화풍이 다르면 그것을
+따라가느라 사양대로 안 그린다(run.py 의 stage_sheet 주석과 같은 이유).
+
+## 쓰는 법
+
+    python character.py --name 차사 --description "택배 배달 저승사자" \
+        --out /어디/에/그림.png [--photo /올린/사진.png] [--style game]
+
+끝나면 만든 것을 한 줄 JSON 으로 stdout 에 찍는다 — 부르는 쪽(스프링)이 이걸
+읽는다. 진행 상황은 stderr 로 나간다.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import imagegen                                      # noqa: E402
+import imageprompt                                   # noqa: E402
+import llm                                           # noqa: E402
+import sheet as sheetmod                             # noqa: E402
+
+
+def log(msg: str) -> None:
+    """진행 상황은 stderr 로. stdout 은 결과 JSON 한 줄만 쓴다."""
+    print(msg, file=sys.stderr, flush=True)
+
+
+def load_prompt(name: str) -> str:
+    return (HERE / "prompt" / name).read_text(encoding="utf-8")
+
+
+def spec_of(name: str, description: str, photo: Path | None) -> dict:
+    """외모를 글로 적는다. 사진이 있으면 읽고, 없으면 설명만 본다."""
+    lines = ["# 이번 입력", ""]
+    if name.strip():
+        lines.append(f"캐릭터 이름: {name.strip()}")
+    else:
+        lines.append("캐릭터 이름: (없음 — 설명에 어울리는 한국어 이름을 네가 짓는다)")
+    if description.strip():
+        lines += ["", "캐릭터 설명:", description.strip()]
+    if photo is not None:
+        lines += ["", "첨부한 사진을 보고 외모를 적는다."]
+    else:
+        # **사진이 없다고 멈추지 않는다.** 이 길이 이 기능의 핵심이다 —
+        # 자캐 그림이 없는 사람도 캐릭터를 가질 수 있어야 한다.
+        lines += ["", "사진은 없다. 위 설명만 보고 외모를 정한다.",
+                  "설명에 없는 것(머리색·눈색·옷·나이대 등)은 설명과 어울리게 네가 정한다."]
+    prompt = load_prompt("sheet_prompt") + "\n\n---\n\n" + "\n".join(lines)
+
+    call = llm.Call("SHEET")
+    log(f"[캐릭터] {call.describe()} 로 외모를 적습니다…")
+    images = llm.load_images([str(photo)]) if photo is not None else None
+    text, meta = call(prompt, images=images, temperature=0.4)
+    spec = sheetmod.parse_spec(text)
+    bad = sheetmod.gate_spec(spec)
+    if bad:
+        log("[캐릭터] 사양에 빠진 것: " + " · ".join(bad))
+    return spec, meta
+
+
+def portrait_prompt(spec: dict, style_text: str) -> str:
+    """사양 -> **한 장짜리 그림** 프롬프트.
+
+    자료 시트(`sheet.build_prompt`)를 안 쓴다. 그건 앞·옆·뒤와 표정 여섯 개를
+    한 장에 늘어놓은 <b>작업용 참고 자료</b>라, 「내 캐릭터」 칸에 걸어 두면
+    예쁘지가 않다. 여기서 필요한 것은 이 캐릭터를 한 장으로 보여주는
+    <b>표지 같은 그림</b>이다.
+
+    사양은 그대로 쓴다 — 사진이나 설명에서 뽑아낸 고정 요소(머리색·옷·소품)가
+    거기 적혀 있고, 그게 있어야 나중에 웹툰을 만들 때 같은 인물로 읽힌다.
+    """
+    palette = spec["color_palette"]
+    colors = " / ".join(f"{k}: {palette[k]}" for k in sheetmod.PALETTE_KEYS if palette.get(k))
+    details = spec["design_details"]
+    props = spec["props"]
+
+    parts = [
+        "Character portrait illustration for a Korean webtoon service — "
+        "a single cover-quality picture of ONE character.",
+        "",
+        "[COMPOSITION]",
+        "One character only. **Waist-up**, facing the viewer or slightly turned — "
+        "close enough that the face and the upper body read clearly. Not a tiny "
+        "full-body figure in a wide space.",
+        "The face is clearly visible and is the centre of attention.",
+        "A simple, attractive background that suits the character — soft light, a hint of "
+        "place or mood. Not a plain white cutout, and not a busy scene that competes with "
+        "the character.",
+        "No text, no labels, no captions, no watermark, no logo, no signature.",
+        "No panel borders, no split frames, no turnaround views, no expression rows — "
+        "this is ONE picture, not a reference sheet.",
+        "",
+        "[CHARACTER]",
+        f"  {spec['appearance_en']}",
+    ]
+    if spec.get("species"):
+        parts.append(f"  종족: {spec['species']}")
+    if details:
+        parts.append("  고정 요소 (반드시 그대로 그린다):")
+        parts += [f"    - {d}" for d in details]
+    if props:
+        parts.append("  지물: " + " / ".join(props))
+    if colors:
+        parts.append(f"  색: {colors}")
+
+    parts += ["", "STYLE", style_text, ""]
+    return "\n".join(parts)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="캐릭터 그림 한 장을 만든다")
+    # **이름은 안 받아도 된다.** 안 주면 사양이 지어 준다 — 사람에게
+    # 이름부터 물으면 "뭐라고 부르지" 에서 멈춘다.
+    ap.add_argument("--name", default="")
+    ap.add_argument("--description", default="")
+    ap.add_argument("--photo", type=Path, default=None, help="있으면 읽어서 외모를 적는다")
+    ap.add_argument("--style", default=None, help="그림체. 안 주면 하네스 기본")
+    ap.add_argument("--out", type=Path, required=True)
+    args = ap.parse_args()
+
+    if args.photo is not None and not args.photo.is_file():
+        log(f"[캐릭터] 사진이 없습니다: {args.photo} — 설명만으로 그립니다")
+        args.photo = None
+
+    spec, spec_meta = spec_of(args.name, args.description, args.photo)
+
+    # **그림체는 이름이 아니라 문구를 넘긴다.** 받은 값이 그대로 STYLE 칸에
+    # 실린다 — 이름을 넘기면 "romance" 다섯 글자가 그림체 설명 전부가 되고,
+    # 모델에게 아무 말도 안 한 것과 같아진다(실측으로 그렇게 밋밋한 그림이
+    # 한 장 나왔다).
+    style_text = imageprompt.load_style(args.style)
+    prompt = portrait_prompt(spec, style_text)
+
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    log("[캐릭터] 그리는 중…")
+    # **정사각으로 그린다.** 세로로 긴 웹툰 페이지 비율(2:3)로 그렸더니 카드에
+    # 걸린 그림이 지나치게 길쭉했다. 캐릭터 한 장은 얼굴과 상반신이 보이면
+    # 되는 것이라 정사각이 알맞다("details" 칸이 이미 1024x1024 다).
+    art_meta = imagegen.paint("SHEET_IMAGE", prompt, args.out, kind="details")
+    log(f"  -> {args.out}")
+
+    # 부르는 쪽이 읽을 한 줄. 비용은 두 호출을 합쳐서 낸다.
+    print(json.dumps({
+        "out": str(args.out),
+        # 사람이 이름을 안 적었으면 사양이 지은 것을 돌려준다.
+        "named": (spec.get("name") or "").strip(),
+        "name": args.name,
+        "source": "photo" if args.photo is not None else "prompt",
+        "calls": [spec_meta, art_meta],
+    }, ensure_ascii=False), flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

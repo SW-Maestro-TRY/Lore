@@ -38,14 +38,18 @@ import Result from "./sections/Result/Result";
 import Works from "./sections/Works/Works";
 import MyPage from "./sections/MyPage/MyPage";
 import Editor from "./sections/Editor/Editor";
+import Characters from "./sections/Characters/Characters";
 import { STYLE_INFO, type WizardForm } from "./lib/wizardData";
 import { createJob, linkThisBrowser } from "./lib/nhApi";
+import type { Character } from "./lib/charApi";
 
-type View = "landing" | "create" | "running" | "result" | "works" | "mypage" | "editor";
+type View = "landing" | "create" | "running" | "result" | "works" | "mypage"
+  | "editor" | "characters";
 
 /** 주소로 열 수 있는 화면. 만들던 중(running)은 뺀다 — 주소만으로는 어느
  *  작업인지 알 수 없어서, 넣으면 빈 진행 화면이 뜬다. */
-const VIEWS = { landing: 1, create: 1, result: 1, works: 1, mypage: 1, editor: 1 } as const;
+const VIEWS = { landing: 1, create: 1, result: 1, works: 1, mypage: 1, editor: 1,
+                characters: 1 } as const;
 
 /* 주소(`?view=`·`?run=`)를 읽으려면 useSearchParams 가 필요한데, 그것을 쓰는
    컴포넌트는 <Suspense> 안에 있어야 한다 — 없으면 빌드가 이 페이지를 미리
@@ -139,6 +143,11 @@ function WebtoonScreens() {
      실패해도 삼킨다 — 목록이 비어 보일 뿐이고 다음에 다시 시도한다. 이걸로
      화면을 막으면 만들던 사람이 로그인 때문에 멈춘다. (잇는 일이 공용 헤더가
      아니라 여기 있는 이유: 공용 코드가 도메인을 알면 안 된다.) */
+  /* 「이 캐릭터로 웹툰 만들기」로 넘어올 때 들고 오는 것. 만들기 화면이
+     이름·설명·그림을 이미 채운 채로 열린다 — 캐릭터를 만들어 두고도 다시
+     처음부터 적게 하면 만들어 둔 의미가 없다. */
+  const [preset, setPreset] = useState<Character | null>(null);
+
   const { status: authStatus } = useAuth();
   useEffect(() => {
     if (authStatus === "authenticated") void linkThisBrowser().catch(() => {});
@@ -148,9 +157,22 @@ function WebtoonScreens() {
      원본은 base.js 가 document 에 걸지만, 여기는 Lore 앱 안이라 이 화면
      안에서만 막는다(앱 전체의 오른쪽 누르기를 뺏을 자리가 아니다).
      폰의 길게 누르기와 끌기는 webtoon.css 의 img 규칙이 같이 막는다.
-     ⚠ 막는 것이 아니라 문턱이다 — 주소를 알면 그대로 받을 수 있다. */
+     ⚠ 막는 것이 아니라 문턱이다 — 주소를 알면 그대로 받을 수 있다.
+
+     **`IMG` 만 보면 샌다.** 그림 위에 손잡이·말풍선·빈 칸이 겹쳐 있으면
+     오른쪽 누르기의 과녁이 그 겹친 것이 되고(pointer-events 로 위에 뜬
+     것들), 그때는 이 검사를 그냥 통과했다. 그림 한 장을 정확히 겨눠야만
+     막히는 문턱은 문턱이 아니다.
+
+     그래서 이 화면 안에서는 오른쪽 누르기를 통째로 막고, **글 쓰는 칸만**
+     비워 둔다 — 제목이나 대사를 고쳐 쓸 때 복사·붙여넣기 메뉴는 있어야
+     하고, 거기엔 저장할 그림도 없다. */
+  const inText = (el: HTMLElement | null) =>
+    !!el?.closest?.('input, textarea, [contenteditable="true"], [contenteditable=""]');
+
   const guardImage = (ev: React.SyntheticEvent) => {
-    if ((ev.target as HTMLElement)?.tagName === "IMG") ev.preventDefault();
+    if (inText(ev.target as HTMLElement)) return;
+    ev.preventDefault();
   };
 
   /* 만들기 시작. 실패는 **위자드가 그 자리에서** 보여줘야 하므로 여기서
@@ -169,6 +191,8 @@ function WebtoonScreens() {
       story: form.story.trim(),
       style: form.style,
       photos_data: form.photos,
+      // 고른 캐릭터가 있으면 번호만 보낸다 — 그림은 서버가 붙인다.
+      character_id: form.characterId,
       agree_ip: form.agreeIp,
       // 갈림길에서 고른 것. 한동안 이 값을 안 보내서 「빠르게 결과부터」를
       // 골라도 똑같이 두 번 멈췄다 — 카드에는 "중간에 안 멈춥니다" 라고
@@ -192,11 +216,21 @@ function WebtoonScreens() {
       {view === "landing" && (
         <div className="landing">
           <Hero onStart={() => go("create")} onBrowse={() => go("works")} />
-          <HowGalleryFaq onSeeFull={() => go("result", runId || undefined)} />
+          {/* 「완성된 웹툰 한 편 전체 보기」 — **둘러보기로 보낸다.**
+              전에는 특정 작품 하나를 열었는데, 그 자리는 견본 몇 장을 보고
+              "실제로는 어떻게 나오나" 가 궁금해진 자리다. 한 편만 보여주면
+              그 한 편이 전부인 줄 안다. */}
+          <HowGalleryFaq onSeeFull={() => go("works")} />
           <Foot />
         </div>
       )}
-      {view === "create" && <Wizard onClose={goHome} onSubmit={start} />}
+      {view === "create" && (
+        <Wizard onClose={goHome} onSubmit={start} preset={preset}
+                onPickCharacter={() => go("characters")} />
+      )}
+      {view === "characters" && (
+        <Characters onUse={(c) => { setPreset(c); go("create"); }} />
+      )}
       {view === "running" && jobId && (
         <Progress
           jobId={jobId}
@@ -221,6 +255,7 @@ function WebtoonScreens() {
           onOpenEditor={(id) => go("editor", id)}
           onCreate={() => go("create")}
           onBrowse={() => go("works")}
+          onCharacters={() => go("characters")}
         />
       )}
       {/* 편집실은 완성본에서 들어온다 — 그 작품 그 회차를 그대로 연다.
