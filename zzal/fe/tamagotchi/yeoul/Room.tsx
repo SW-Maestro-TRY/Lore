@@ -247,9 +247,13 @@ export function Modal({ y }: { y: Yeoul }) {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={f.polaroid.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={yeoulImg('roll')} alt="" style={{ position: 'absolute', left: '50%', bottom: '8%', width: '52%', marginLeft: '-26%', objectFit: 'contain', display: 'block' }} />
+              <img src={yeoulImg(f.polaroid.char ?? 'roll')} alt="" style={{ position: 'absolute', left: '50%', bottom: '8%', width: '52%', marginLeft: '-26%', objectFit: 'contain', display: 'block' }} />
+              {!!f.polaroid.prop && (
+                <span style={{ position: 'absolute', left: 8, bottom: 8, padding: '3px 8px', borderRadius: radius.pill, background: 'rgba(255,251,244,.86)', border: `1px solid ${C.line}`, fontSize: 10.5, color: C.sub }}>{f.polaroid.prop} 자리</span>
+              )}
             </div>
             <span style={{ fontFamily: GAEGU, fontSize: 18, lineHeight: 1.35, color: C.ink, textAlign: 'center' }}>{f.polaroid.caption}</span>
+            {!!f.polaroid.sub && <span style={{ fontFamily: MONO, fontSize: 11, color: C.faint, textAlign: 'center' }}>{f.polaroid.sub}</span>}
           </div>
         )}
 

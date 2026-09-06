@@ -7,7 +7,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { DECO_UNLOCK, EMPTY, FEATURE_LOCK, MOTION_CELLS, SCENE_LINES, WALLS, yeoulImg } from './constants';
+import { DECO_UNLOCK, EMPTY, FEATURE_LOCK, MOTION_CELLS, POSTCARD_MOCK, SCENE_MOCK, WALLS, yeoulImg } from './constants';
 import { C, GAEGU, SANS, ghost, label, note, radius, tab } from './ui';
 import type { Yeoul } from './useYeoul';
 
@@ -62,28 +62,56 @@ export default function Album({ y }: { y: Yeoul }) {
         </div>
       )}
 
-      {/* ── 엽서(여행) ── */}
+      {/* ── 엽서(여행) — 정본 §9. 하루 한 장, 최대 3장. ── */}
       {s.albumTab === 'card' && (
-        <div style={{ ...col(9), padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center' }}>
-          <span style={{ fontFamily: GAEGU, fontSize: 19, color: C.ink }}>{EMPTY.card}</span>
-          <span style={note}>자리를 오래 비우면 여행을 떠나고, 그때 보낸 엽서가 여기 쌓여요.</span>
-        </div>
+        s.cards > 0 ? (
+          <div style={col(10)}>
+            {POSTCARD_MOCK.slice(0, s.cards).map((c, i) => (
+              <button
+                key={c.day} data-card={i} onClick={() => actions.showCard(i)}
+                style={{ padding: '11px 11px 15px', background: '#FFFFFF', border: `1px solid ${C.line}`, boxShadow: '0 3px 12px rgba(74,64,56,.12)', cursor: 'pointer', textAlign: 'center', ...col(8), width: '100%', boxSizing: 'border-box' }}
+              >
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', overflow: 'hidden', background: '#EBD3C7' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={WALLS.find((w) => w.id === c.bg)?.img ?? WALLS[0].img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={yeoulImg('call')} alt="" style={{ position: 'absolute', left: '50%', bottom: '5%', width: '34%', marginLeft: '-17%', objectFit: 'contain', display: 'block' }} />
+                </div>
+                <span style={{ fontFamily: GAEGU, fontSize: 17, lineHeight: 1.4, color: C.ink }}>{c.line}</span>
+                <span style={{ fontSize: 11, color: C.faint }}>{c.day}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div style={{ ...col(9), padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center' }}>
+            <span style={{ fontFamily: GAEGU, fontSize: 19, color: C.ink }}>{EMPTY.card}</span>
+            <span style={note}>자리를 오래 비우면 여행을 떠나고, 그때 보낸 엽서가 여기 쌓여요.</span>
+          </div>
+        )
       )}
 
-      {/* ── 장면(혼자 논 모습) ── */}
+      {/* ── 장면(혼자 논 모습) — 정본 §11 레시피 5값을 한 장으로 조립한다. ── */}
       {s.albumTab === 'scene' && (
         s.scenes > 0 ? (
-          <div style={col(9)}>
-            {SCENE_LINES.slice(0, s.scenes).map(([text, bg]) => (
-              <div key={text} style={{ ...col(7), padding: 11, borderRadius: radius.md, background: C.paper, border: `1px solid ${C.line}` }}>
+          <div style={col(10)}>
+            {SCENE_MOCK.slice(0, s.scenes).map((c, i) => (
+              <button
+                key={c.line} data-scene={i} onClick={() => actions.showScene(i)}
+                style={{ ...col(8), padding: 11, borderRadius: radius.md, background: C.paper, border: `1px solid ${C.line}`, cursor: 'pointer', textAlign: 'left', width: '100%', boxSizing: 'border-box' }}
+              >
                 <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', borderRadius: 9, overflow: 'hidden', background: '#EBD3C7' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={WALLS.find((w) => w.id === bg)?.img ?? WALLS[0].img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <img src={WALLS.find((w) => w.id === c.bg)?.img ?? WALLS[0].img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={s.imgUrl ?? yeoulImg('base')} alt="" style={{ position: 'absolute', left: '50%', bottom: '6%', height: '78%', marginLeft: '-19%', width: '38%', objectFit: 'contain', display: 'block' }} />
+                  <img src={s.imgUrl ?? yeoulImg(c.motion)} alt="" style={{ position: 'absolute', left: '50%', bottom: '5%', height: '80%', width: '34%', marginLeft: '-17%', objectFit: 'contain', display: 'block' }} />
+                  {/* 소품은 하루 하나(§11). 그림이 없어 자리만 표시한다. */}
+                  {!!c.prop && (
+                    <span style={{ position: 'absolute', left: 8, bottom: 8, padding: '3px 8px', borderRadius: radius.pill, background: 'rgba(255,251,244,.86)', border: `1px solid ${C.line}`, fontSize: 10.5, color: C.sub }}>{c.prop} 자리</span>
+                  )}
                 </div>
-                <span style={{ fontFamily: GAEGU, fontSize: 16, color: C.ink }}>{text}</span>
-              </div>
+                <span style={{ fontFamily: GAEGU, fontSize: 16, lineHeight: 1.4, color: C.ink }}>{c.line}</span>
+                <span style={{ fontSize: 11, color: C.faint }}>{c.time}</span>
+              </button>
             ))}
           </div>
         ) : (

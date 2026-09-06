@@ -21,8 +21,8 @@ import {
   ALBUM_TABS, CALLS_PER_DAY, CELLS, CHAT_MAX, CLOCK, DECO_UNLOCK, EGG_COPY, FEATURE_LOCK,
   GUESS_ROUNDS, GUESS_WIN, HATCH_STAGES, HATCH_STAGE_SEC, LV, MAX_STOCK,
   MORNING, MORNING_LINES, MOTION_CELLS, NAME_MAX, NAME_POOL, NAP_SEC, PETS_PER_DAY,
-  PLAYS_PER_DAY, ROOM_BG, ROOM_KEYS, RUN_UNLOCK, SCENE_LINES, SNACK_WARN, STEPS, TUTOR,
-  UNLOCK_MS, WALLS, yeoulImg,
+  PLAYS_PER_DAY, ROOM_BG, ROOM_KEYS, RUN_UNLOCK, SNACK_WARN, STEPS, TUTOR,
+  POSTCARD_MOCK, SCENE_MOCK, UNLOCK_MS, WALLS, yeoulImg,
   type AlbumTab, type AuthTab, type CounterKey, type HatchFail, type LvKey, type NeedStyle,
   type PanelKey, type RoomKey, type ScreenKey, type StepKey,
 } from './constants';
@@ -39,7 +39,7 @@ export interface Modal {
   title: string;
   body?: string;
   lines?: readonly string[];
-  polaroid?: { img: string; caption: string };
+  polaroid?: { img: string; caption: string; char?: string; sub?: string; prop?: string };
   actions: ModalAction[];
   /** 아무 데나 눌러도 닫히는가(폭죽은 탭 스킵). */
   tapAny?: boolean;
@@ -132,6 +132,8 @@ export interface YeoulState {
   wallId: string;
   saved: number;
   wishes: number;
+  /** 받은 여행 엽서 수(§9 최대 3). 목이라 처음부터 한 장 들고 있다. */
+  cards: number;
   scenes: number;
   needStyle: NeedStyle;
   leaveOff: boolean;
@@ -168,7 +170,7 @@ function initial(): YeoulState {
     panel: 'table', sheetOpen: false, game: 'none', albumTab: 'motion', draft: '',
     log: [], memories: [],
     resolved: {}, guess: { round: 0, win: 0, lose: 0, msg: '', over: false },
-    wallId: WALLS[0].id, saved: 0, wishes: 0, scenes: 0,
+    wallId: WALLS[0].id, saved: 0, wishes: 0, cards: 1, scenes: 1,
     needStyle: '색+모양+글자', leaveOff: false,
     hearts: false, says: '', sys: '', modal: null,
     snapshot: null,
@@ -189,7 +191,7 @@ const sampleState = (): Partial<YeoulState> => ({
   log: [{ who: 'pet', text: '저는 여울이에요. 연습 상대예요.' }],
   memories: ['빵 좋아함', '비 싫어함'],
   resolved: {}, guess: { round: 0, win: 0, lose: 0, msg: '', over: false },
-  saved: 2, wishes: 0, scenes: 1, hearts: false, says: '', sys: '', modal: null,
+  saved: 2, wishes: 0, cards: 2, scenes: 3, hearts: false, says: '', sys: '', modal: null,
 });
 
 const cells = (n: number) => Array.from({ length: CELLS }, (_, i) => i < n);
@@ -495,6 +497,25 @@ export function useYeoul({ pc }: UseYeoulOptions) {
     sys('어떤 동작을 원하시는지 적어 뒀어요');
   }, [patch, sys]);
 
+  /** 엽서·장면 한 장을 크게 본다. 전면 판을 그대로 쓴다. */
+  const showCard = useCallback((i: number) => {
+    const c = POSTCARD_MOCK[i % POSTCARD_MOCK.length];
+    openModal({
+      kind: 'motion', title: '여행에서 온 엽서',
+      polaroid: { img: bgUrl(c.bg), caption: c.line, sub: c.day, char: 'call' },
+      tapAny: true, actions: [{ label: '닫기', tap: closeModal, primary: true }],
+    });
+  }, [closeModal, openModal]);
+
+  const showScene = useCallback((i: number) => {
+    const c = SCENE_MOCK[i % SCENE_MOCK.length];
+    openModal({
+      kind: 'motion', title: '혼자 논 장면',
+      polaroid: { img: bgUrl(c.bg), caption: c.line, sub: c.time, char: c.motion, prop: c.prop },
+      tapAny: true, actions: [{ label: '닫기', tap: closeModal, primary: true }],
+    });
+  }, [closeModal, openModal]);
+
   const pickWall = useCallback((id: string) => {
     const open2 = ref.current.unlocked.filter((k) => MOTION_CELLS.find((c) => c.key === k)?.floor === 2).length;
     if (open2 < DECO_UNLOCK) { sys(FEATURE_LOCK.deco); return; }
@@ -554,7 +575,7 @@ export function useYeoul({ pc }: UseYeoulOptions) {
       kind: 'morning',
       title: MORNING.title,
       lines: MORNING_LINES,
-      polaroid: { img: bgUrl(SCENE_LINES[v.scenes % SCENE_LINES.length][1]), caption: `${v.petName} · 구르기` },
+      polaroid: { img: bgUrl(SCENE_MOCK[v.scenes % SCENE_MOCK.length].bg), caption: `${v.petName} · 구르기`, char: 'roll' },
       actions: [
         { label: MORNING.save, tap: () => { onDownload('구르기'); closeModal(); }, primary: true },
         { label: MORNING.go, tap: () => { closeModal(); openPanel('album'); }, primary: false },
@@ -584,7 +605,7 @@ export function useYeoul({ pc }: UseYeoulOptions) {
         stock: v.stock, trace: v.trace, plays: v.plays, snacks: v.snacks, pets: v.pets, calls: v.calls,
         bathUsed: v.bathUsed, sick: v.sick, sleeping: v.sleeping, night: v.night, morning: v.morning,
         tutor: v.tutor, nap: v.nap, counters: v.counters, unlocked: v.unlocked, runWins: v.runWins,
-        log: v.log, memories: v.memories, resolved: v.resolved, saved: v.saved, scenes: v.scenes,
+        log: v.log, memories: v.memories, resolved: v.resolved, saved: v.saved, cards: v.cards, scenes: v.scenes,
       },
       ...sampleState(),
       hatchAt: v.hatchAt,
@@ -842,7 +863,7 @@ export function useYeoul({ pc }: UseYeoulOptions) {
     onPet, onRice, onSnack, onClean, onBath, onMed, onSleep,
     setDraft, onSend, answerCall,
     openGame, closeGame, againGame, guessSide,
-    pickAlbumTab, onDownload, onShare, addWish, pickWall,
+    pickAlbumTab, onDownload, onShare, addWish, pickWall, showCard, showScene,
     pickNeedStyle, toggleLeave, setPersona, setTone, setGenre, setWorldChip, setWorld, setFree,
     setPersonaNote, setToneNote, setGenreNote,
     setTime, toggleSick, passTime, showUnlockDemo, showMorning, skipTutor,
