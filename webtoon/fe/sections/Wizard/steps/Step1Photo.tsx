@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { listCharacters } from "../../../lib/charApi";
 import { MAX_PHOTOS, type WizardForm } from "../../../lib/wizardData";
 
 /* 1 · 수면 — 사진 · 이름 · 캐릭터 설명. haeun/landing의 setupPhoto() 를
@@ -16,6 +17,20 @@ export default function Step1Photo({
   onPickCharacter: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /* 만들어 둔 캐릭터가 있나. 있고 없고에 따라 안내가 달라진다 — 없는 사람에게
+     "고르세요" 라고 하면 또 막다른 길이다. 못 물어봤으면 없는 쪽으로 본다. */
+  const [has, setHas] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    listCharacters()
+      .then((v) => { if (alive) setHas(v.characters.some((c) => c.mine)); })
+      .catch(() => { /* 못 물어보면 "만들고 오기" 로 둔다 */ });
+    return () => { alive = false; };
+  }, []);
+
+  /** 아직 아무것도 안 정했다 — 안내가 뜨는 조건. */
+  const empty = !form.characterId && form.photos.length === 0;
 
   const addFiles = (files: FileList | null) => {
     const list = [...(files ?? [])];
@@ -70,14 +85,6 @@ export default function Step1Photo({
 
       <div className="wiz-card">
         <div className="photo-row">
-          {/* **두 갈래를 나란히 둔다.**
-           *
-           * 전에는 사진 칸 하나만 크게 있고, 그 아래에 "자캐 사진이 없으신가요?"
-           * 를 작은 글씨로 붙여 뒀다. 사진이 없는 사람은 그 큰 칸 앞에서 이미
-           * 막힌 뒤라 아래를 안 읽는다.
-           *
-           * 이제 같은 크기로 둘을 나란히 놓는다 — 올리거나, 캐릭터에서
-           * 고르거나. 둘 다 정상적인 길이라는 것을 자리로 말한다. */}
           {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
           <label className="photo-drop"
                  onClick={() => { if (!form.characterId) inputRef.current?.click(); }}>
@@ -143,13 +150,18 @@ export default function Step1Photo({
             <span className="photo-count">{countLabel}</span>
           </label>
 
-          <button type="button" className="photo-drop photo-pick" onClick={onPickCharacter}>
-            <span className="photo-pick-icon" aria-hidden="true">✦</span>
-            <span className="photo-hint">내 캐릭터에서 고르기</span>
-            <span className="photo-count">
-              만들어 둔 캐릭터를 쓰거나, 사진 없이 새로 만들어요
-            </span>
-          </button>
+          {/* **아무것도 없을 때만 뜬다.** 사진을 올리거나 캐릭터를 고르면
+              사라진다 — 이미 길을 찾은 사람에게 계속 붙어 있을 안내가 아니다.
+              만들어 둔 것이 있으면 「고르기」로, 없으면 「만들고 오기」로
+              말이 바뀐다: 없는 사람에게 "고르세요" 는 또 막다른 길이다. */}
+          {empty && (
+            <p className="photo-hasnt">
+              <span>{has ? "만들어 둔 캐릭터가 있어요" : "캐릭터 사진이 없으신가요?"}</span>
+              <button type="button" className="btn btn-quiet btn-sm" onClick={onPickCharacter}>
+                {has ? "내 캐릭터에서 고르기" : "캐릭터 먼저 만들고 오기"} →
+              </button>
+            </p>
+          )}
 
           <ul className="photo-rules">
             <li>본인이 찍었거나 직접 그린 사진, 또는 쓸 권한이 있는 사진만 올려주세요.</li>
