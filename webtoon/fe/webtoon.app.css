@@ -139,6 +139,60 @@
   font-size: .72rem; color: #b5453c; font-weight: 600;
 }
 
+/* ── 크레딧 내역 (마이페이지) ─────────────────────────────────────────
+   원본 프로토타입에 없던 자리라 여기서 새로 그린다(port-css.mjs 가 옮기는
+   것은 원본에 있는 것뿐이다).
+
+   한 줄에 셋을 세로로 안 쌓고 가로로 둔다 — 스무 줄이 쌓이는 목록이라
+   한 줄이 3층이 되면 화면이 통째로 내역으로 덮인다. 무엇에(왼쪽) · 언제
+   (가운데) · 얼마(오른쪽) 순서인데, **얼마**가 오른쪽 끝에 세로로 줄
+   맞춰 서야 훑으면서 더하고 뺄 수 있다. */
+.webtoon-page .credit-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line-2);
+}
+
+.webtoon-page .credit-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 14px;
+}
+
+/* 무엇에 — 길면 줄인다. 사유가 길다고 날짜와 금액이 밀리면 안 된다. */
+.webtoon-page .credit-line-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.webtoon-page .credit-line-at {
+  flex: none;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* 얼마 — 폭을 고정하고 숫자 폭을 고르게 해서 자릿수가 달라도 세로로 맞는다. */
+.webtoon-page .credit-line-delta {
+  flex: none;
+  min-width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* 쓴 것은 색을 뺀다. 받은 것과 같은 색이면 훑을 때 방향이 안 보인다. */
+.webtoon-page .credit-line-delta.is-spent {
+  color: var(--muted);
+}
+
 /* ── 크레딧 (마이페이지) ──────────────────────────────────────────────
    원본 프로토타입에 없던 자리라 여기서 새로 그린다.
 
@@ -474,48 +528,81 @@
 }
 
 /* ── 공유하기 ───────────────────────────────────────────────────────
-   머리(.result-head)가 flex 라, 폭을 안 잡아 주면 이 덩어리가 줄거리 옆에
-   끼었다가 목록을 펴는 순간 아래로 떨어진다 — 누를 때마다 단추가 움직인다.
-   처음부터 한 줄을 통째로 쓰게 해서 자리를 고정한다. */
+   제목 옆에 서는 아이콘 하나. 목록은 그 아래에 떠서 아무것도 안 민다 —
+   흐름에 끼워 넣으면 펼 때마다 제목 아래가 통째로 내려간다. */
 .webtoon-page .share {
-  flex: 1 0 100%;
-  margin-top: 10px;
-}
-
-.webtoon-page .share-row {
-  display: flex;
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  vertical-align: middle;
+  margin-left: 8px;
 }
 
-.webtoon-page .share-said {
-  font-size: 13px;
+.webtoon-page .share-icon {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: transparent;
   color: var(--muted);
+  cursor: pointer;
+  transition: color .14s ease, border-color .14s ease;
 }
 
+.webtoon-page .share-icon:hover,
+.webtoon-page .share-icon[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 목록은 아이콘 아래에 띄운다. 제목 줄 안에 있으므로 흐름에 넣으면 제목이
+   밀린다 — 누를 때마다 글이 움직이면 읽던 자리를 잃는다. */
 .webtoon-page .share-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--paper, #fff);
+  box-shadow: 0 10px 28px rgba(15, 51, 63, .16);
 }
 
 .webtoon-page .share-one {
   appearance: none;
-  padding: 8px 14px;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  background: var(--paper, #fff);
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: inherit;
   font: inherit;
   font-size: 14px;
+  text-align: left;
   cursor: pointer;
 }
 
 .webtoon-page .share-one:hover {
-  border-color: var(--accent);
+  background: var(--line-2);
   color: var(--accent);
+}
+
+/* 알림 한 줄. 아이콘 옆에 짧게 뜬다 — 자리를 차지하지만 곧 사라진다. */
+.webtoon-page .share-said {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 /* ── 둘러보기 카드의 그림체 딱지 ─────────────────────────────────────

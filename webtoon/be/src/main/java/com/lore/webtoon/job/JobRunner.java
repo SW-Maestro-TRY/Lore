@@ -121,6 +121,7 @@ public class JobRunner {
             throw new IllegalStateException("작품 번호를 읽지 못했습니다");
         }
         store.learnRun(jobId, runId);
+        writeStyle(runId, job.getStyle());
 
         List<Map<String, Object>> directions = directionsOf(runId);
         if (directions.isEmpty()) {
@@ -195,6 +196,26 @@ public class JobRunner {
         Map<String, String> env = new HashMap<>();
         env.put("NH_STYLE", job.getStyle());
         return env;
+    }
+
+    /**
+     * 어느 그림체로 그렸는지 작품 폴더에 남긴다.
+     *
+     * <b>없으면 둘러보기 카드에 그림체가 안 뜬다</b> — 실제로 스프링 경로로
+     * 처음 만든 작품이 그랬다. 파이썬 서버는 이걸 남기는데(write_style) 이 길은
+     * 안 남기고 있었다.
+     *
+     * 나중에 한 장만 다시 그릴 때도 쓴다. 이 기록이 없으면 다시 그린 장만
+     * 하네스 기본 그림체로 나와서 한 편 안에서 그 장만 화풍이 다르다.
+     *
+     * 못 남겨도 만들기는 안 막는다 — 딱지가 안 뜰 뿐이다.
+     */
+    private void writeStyle(String runId, String style) {
+        try {
+            Files.writeString(runsDir.resolve(runId).resolve("style.txt"), style);
+        } catch (IOException e) {
+            log.warn("그림체를 남기지 못했습니다 (run={}, style={})", runId, style, e);
+        }
     }
 
     /**
