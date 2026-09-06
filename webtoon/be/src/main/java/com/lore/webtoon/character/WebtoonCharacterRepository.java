@@ -35,6 +35,9 @@ public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharact
         return existsByOwnerIdIsNullAndName(name);
     }
 
+    /** 기본 제공 전부. 목록에서 빠진 것을 거둘 때 쓴다. */
+    List<WebtoonCharacter> findByOwnerIdIsNull();
+
     /** 오늘 이 사람이 몇 개나 만들었나 — 하루 무료 몫을 세는 자리. */
     @Query("""
            select count(c) from WebtoonCharacter c

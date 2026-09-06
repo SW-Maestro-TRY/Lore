@@ -13,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 /**
@@ -36,6 +38,15 @@ import java.util.UUID;
  * <h2>여러 번 떠도 한 번만 심는다</h2>
  *
  * 이름으로 이미 있는지 본다. 서버가 다시 떠도 늘지 않는다.
+ *
+ * <h2>목록에서 뺀 것은 거둔다</h2>
+ *
+ * 여기 {@code SEEDS} 가 <b>유일한 근거</b>다. 목록에서 지웠는데 DB 에 남아
+ * 있으면 화면에는 그대로 보이고, 지운 사람은 지워진 줄 안다. 그래서 뜰 때마다
+ * 목록에 없는 기본 제공 캐릭터를 지운다.
+ *
+ * 이미 그 캐릭터로 만든 작품은 <b>안 없어진다</b> — 만들 때 그림을 작업 폴더로
+ * 복사해 두고 쓰므로 작품이 이 줄을 참조하지 않는다.
  */
 @Component
 public class BuiltinCharacters implements ApplicationRunner {
@@ -65,8 +76,6 @@ public class BuiltinCharacters implements ApplicationRunner {
             new Seed("noir", "ex-noir-1.jpg", "강도윤",
                     "잠복 열흘째인 형사. 담배를 끊었다고 말하고 다니는데 "
                     + "주머니에는 늘 한 갑이 있다."),
-            new Seed("cinematic", "ex-cinematic-1.jpg", "리안",
-                    "역광으로만 찍히는 배우. 카메라가 꺼지면 아무도 그를 못 알아본다."),
             new Seed("game", "ex-game-1.jpg", "이올",
                     "길드 청산인. 망한 길드를 찾아가 장비를 회수한다. "
                     + "가는 곳마다 환영받지 못해서 말수가 적다."));
@@ -125,6 +134,26 @@ public class BuiltinCharacters implements ApplicationRunner {
         if (made > 0) {
             log.info("기본 캐릭터 {}명을 심었습니다", made);
         }
+        retire();
+    }
+
+    /**
+     * {@code SEEDS} 에서 빠진 기본 제공 캐릭터를 지운다.
+     *
+     * 목록에서 지웠는데 DB 에 남아 있으면 화면에는 그대로 보인다 — 지운
+     * 사람은 지워진 줄 알고, 왜 아직 나오는지 찾느라 시간을 쓴다.
+     */
+    private void retire() {
+        Set<String> keep = SEEDS.stream().map(Seed::name).collect(Collectors.toSet());
+        List<WebtoonCharacter> gone = characters.findByOwnerIdIsNull().stream()
+                .filter(one -> !keep.contains(one.getName()))
+                .toList();
+        if (gone.isEmpty()) {
+            return;
+        }
+        characters.deleteAll(gone);
+        log.info("목록에서 빠진 기본 캐릭터 {}명을 거뒀습니다: {}", gone.size(),
+                gone.stream().map(WebtoonCharacter::getName).toList());
     }
 
     private static String typeOf(String file) {

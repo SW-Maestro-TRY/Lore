@@ -66,6 +66,33 @@ export default function Characters({ onUse }: {
   const mine = got?.characters.filter((c) => c.mine) ?? [];
   const builtin = got?.characters.filter((c) => c.builtin) ?? [];
 
+  const mineBlock = (
+    <ul className="char-grid">
+      {mine.map((c) => (
+        <CharCard key={c.id} c={c} onUse={onUse} onDrop={drop} />
+      ))}
+      {/* **만드는 문을 목록 안에 둔다.** 구석에 단추 하나만 두면 빈
+          화면에서 갈 곳이 안 보인다. */}
+      <li>
+        <button type="button" className="char-new" onClick={() => setMaking(true)}>
+          <b>+</b>
+          새 캐릭터
+          <span>사진 없이 설명만으로도</span>
+        </button>
+      </li>
+    </ul>
+  );
+
+  const builtinBlock = builtin.length > 0 ? (
+    <div className="chars-builtin">
+      <h3 className="chars-section">둘러보기용 캐릭터</h3>
+      <p className="chars-lede">만들 것이 없을 때 바로 써 볼 수 있어요.</p>
+      <ul className="char-grid">
+        {builtin.map((c) => <CharCard key={c.id} c={c} onUse={onUse} />)}
+      </ul>
+    </div>
+  ) : null;
+
   return (
     <section className="chars">
       <header className="chars-head">
@@ -89,32 +116,19 @@ export default function Characters({ onUse }: {
       {failed && <p className="chars-error" role="alert">{failed}</p>}
       {!got && !failed && <p className="chars-empty">불러오는 중…</p>}
 
-      {got && (
-        <ul className="char-grid">
-          {mine.map((c) => (
-            <CharCard key={c.id} c={c} onUse={onUse} onDrop={drop} />
-          ))}
-          {/* **만드는 문을 목록 안에 둔다.** 구석에 단추 하나만 두면 빈
-              화면에서 갈 곳이 안 보인다. */}
-          <li>
-            <button type="button" className="char-new" onClick={() => setMaking(true)}>
-              <b>+</b>
-              새 캐릭터
-              <span>사진 없이 설명만으로도</span>
-            </button>
-          </li>
-        </ul>
-      )}
+      {/* **만들어 둔 것이 없으면 둘러보기용을 위로 올린다.**
 
-      {builtin.length > 0 && (
-        <>
-          <h3 className="chars-section">둘러보기용 캐릭터</h3>
-          <p className="chars-lede">만들 것이 없을 때 바로 써 볼 수 있어요.</p>
-          <ul className="char-grid">
-            {builtin.map((c) => <CharCard key={c.id} c={c} onUse={onUse} />)}
-          </ul>
-        </>
-      )}
+          이 화면의 제목은 「누구로 웹툰을 만들까요?」다. 그런데 만든 것이
+          없는 사람에게 맨 위가 빈 목록과 「+ 새 캐릭터」 하나면, 물어 놓고
+          고를 것을 안 준 셈이 된다. 바로 쓸 수 있는 것을 먼저 보여 주고,
+          만드는 문은 그 아래에 둔다 — 처음 온 사람은 대개 하나 골라서
+          한 편 만들어 보는 쪽이 먼저다.
+
+          만들어 둔 것이 있으면 예전 순서 그대로다. 그 사람에게는 자기
+          캐릭터가 목적이고 둘러보기용은 보조다. */}
+      {got && mine.length === 0 && builtinBlock}
+      {got && mineBlock}
+      {got && mine.length > 0 && builtinBlock}
     </section>
   );
 }

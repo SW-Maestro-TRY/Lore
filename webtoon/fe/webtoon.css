@@ -4423,8 +4423,8 @@
 }
 @keyframes char-wait { 50% { opacity: .55; } }
 
-.webtoon-page .char-body { padding: 11px 12px 13px; display: grid; gap: .35em; }
-.webtoon-page .char-name { font-size: .95rem; line-height: 1.35; }
+.webtoon-page .char-body { padding: 9px 10px 11px; display: grid; gap: .3em; }
+.webtoon-page .char-name { font-size: .88rem; line-height: 1.35; }
 .webtoon-page .char-desc {
   margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.5;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -4437,7 +4437,7 @@
 .webtoon-page .char-new {
   border: 1.5px dashed var(--line-2); border-radius: 16px; background: transparent;
   display: grid; place-items: center; gap: .3em; cursor: pointer;
-  min-height: 190px; padding: 16px; text-align: center;
+  min-height: 150px; padding: 14px; text-align: center;
   color: var(--accent-d); font-weight: 700; font-size: .9rem;
   transition: border-color .16s ease, background .16s ease;
 }
@@ -4520,7 +4520,9 @@
 /* ---- 넓어지면 칸을 늘린다 -------------------------------------------------- */
 
 @media (min-width: 620px) {
-  .webtoon-page .char-grid { grid-template-columns: repeat(3, 1fr); }
+  /* 칸 수를 못 박지 않고 **한 칸의 최대 폭**으로 끊는다. 개수로 끊으면
+     화면이 넓어질수록 카드가 같이 커져서 한 장이 손바닥만 해진다. */
+  .webtoon-page .char-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   .webtoon-page .style-pick { grid-template-columns: repeat(3, 1fr); }
 }
 
@@ -4529,7 +4531,7 @@
   .webtoon-page .charmake { padding: 30px 24px 100px; }
   .webtoon-page .chars > *,
   .webtoon-page .charmake > * { max-width: 1040px; margin-left: auto; margin-right: auto; }
-  .webtoon-page .char-grid { grid-template-columns: repeat(4, 1fr); }
+  .webtoon-page .char-grid { grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); }
   /* 적는 곳과 고르는 곳을 좌우로. 여기서 처음 나뉜다.
    *
    * 만들기 단추는 **적는 칸 바로 밑**(사진 문구 아래)에 붙는다. 화면 맨
@@ -4776,3 +4778,11 @@
 .webtoon-page .gallery-full:hover {
   border-color: var(--accent); background: var(--card-2);
 }
+
+/* ---- 둘러보기용 캐릭터 덩어리 ---------------------------------------------
+ *
+ * 내 캐릭터가 없으면 이 덩어리가 **위로 올라간다**(Characters.tsx 참고).
+ * 순서가 두 가지라 간격을 제목의 margin 에 기대지 않고 덩어리가 갖는다. */
+
+.webtoon-page .chars-builtin { margin-top: 28px; }
+.webtoon-page .chars-builtin:first-of-type { margin-top: 16px; }
