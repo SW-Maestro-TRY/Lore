@@ -6,7 +6,9 @@ import {
   creditBalance as browserCredit, listRuns, myAccountRuns, myRuns, setVisibility,
   type RunCard,
 } from "../../lib/nhApi";
-import { creditBalance, creditHistory, type CreditLine } from "@common/api/credits";
+import { creditBalance } from "@common/api/credits";
+import CreditHistory from "./CreditHistory";
+import CreditCharge from "./CreditCharge";
 import { louArt } from "../../lib/louArt";
 import { WorkCard } from "../Works/Works";
 
@@ -39,7 +41,8 @@ export default function MyPage({
   const [runs, setRuns] = useState<RunCard[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [credit, setCredit] = useState<number | null>(null);
-  const [lines, setLines] = useState<CreditLine[]>([]);
+  /** 지금 열려 있는 창. 둘이 같이 뜨면 안 되므로 하나로 센다. */
+  const [open, setOpen] = useState<"history" | "charge" | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -67,9 +70,6 @@ export default function MyPage({
       .catch(() => browserCredit()
         .then((got) => { if (alive) setCredit(got.balance); })
         .catch(() => { /* 잔액을 못 받아도 목록은 보여준다 */ }));
-    creditHistory(20)
-      .then((got) => { if (alive) setLines(got); })
-      .catch(() => { /* 내역은 없으면 안 그린다 */ });
     return () => { alive = false; };
   }, []);
 
@@ -149,29 +149,23 @@ export default function MyPage({
           </p>
           <p className="mypage-credit-hint">한 편에 12 C</p>
         </div>
+        {/* 갈 자리를 만든다. 잔액만 보여 주면 모자란 사람이 어디로 가야 하는지
+            모르고, 줄어든 이유가 궁금한 사람도 물을 자리가 없다. */}
+        <div className="mypage-credit-acts">
+          <button type="button" className="btn btn-quiet btn-sm"
+                  onClick={() => setOpen("charge")}>
+            충전
+          </button>
+          <button type="button" className="btn btn-quiet btn-sm"
+                  onClick={() => setOpen("history")}>
+            내역
+          </button>
+        </div>
       </div>
 
-      {/* 내역. **잔액 바로 밑에** 둔다 — 숫자만 있으면 "왜 이 숫자인지" 를
-          물을 자리가 없고, 물을 자리가 없으면 줄어든 것이 늘 의심스럽다.
-          없으면 아예 안 그린다: 갓 가입한 사람에게 빈 표를 보여 줄 이유가 없다. */}
-      {lines.length > 0 && (
-        <div className="mypage-section">
-          <div className="mypage-section-head">
-            <h3>크레딧 내역</h3>
-          </div>
-          <ul className="credit-lines">
-            {lines.map((line) => (
-              <li key={line.id} className="credit-line">
-                <span className="credit-line-label">{line.memo || line.label}</span>
-                <span className="credit-line-at">{shortDate(line.at)}</span>
-                <span className={`credit-line-delta${line.delta < 0 ? " is-spent" : ""}`}>
-                  {line.delta > 0 ? "+" : ""}{line.delta}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {open === "history" && <CreditHistory onClose={() => setOpen(null)} />}
+      {open === "charge" && <CreditCharge onClose={() => setOpen(null)} />}
+
 
       <div className="mypage-section">
         <div className="mypage-section-head">
@@ -267,12 +261,4 @@ function MyTools({
       </button>
     </>
   );
-}
-
-/** "9월 6일" — 연도는 안 적는다. 최근 20줄이라 해가 바뀔 일이 드물고, 적으면
- *  그만큼 줄이 길어져 정작 볼 값(얼마가 움직였나)이 밀린다. */
-function shortDate(iso: string): string {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return "";
-  return `${at.getMonth() + 1}월 ${at.getDate()}일`;
 }

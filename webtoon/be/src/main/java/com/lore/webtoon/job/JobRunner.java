@@ -146,9 +146,19 @@ public class JobRunner {
         WebtoonJob job = store.running(jobId, JobStage.SHEET);
         progress.say(jobId, "루가 캐릭터를 그리고 있어요");
 
-        int code = harness.run(
+        /* **두 번 부른다.** `--pick-save` 는 고른 번호를 파일에 적기만 하고
+           (0.5 초면 끝난다), 실제로 시트를 그리는 것은 `--sheet` 다. 처음에
+           하나로 알고 `--pick-save` 만 불렀더니 시트 없이 다음 걸음으로
+           넘어가 거기서 죽었다 — 그때도 이야기 짓는 값은 이미 나간 뒤였다. */
+        int picked = harness.run(
                 List.of("--run-id", job.getRunId(),
                         "--pick", String.valueOf(job.getPicked()), "--pick-save"),
+                env(job), line -> progress.line(jobId, line));
+        if (picked != 0) {
+            throw new IllegalStateException("고른 이야기를 저장하지 못했습니다");
+        }
+
+        int code = harness.run(List.of("--run-id", job.getRunId(), "--sheet"),
                 env(job), line -> progress.line(jobId, line));
         if (code != 0) {
             throw new IllegalStateException("캐릭터 시트를 만들지 못했습니다");

@@ -2,6 +2,9 @@ package com.lore.webtoon.job;
 
 import com.lore.common.exception.BusinessException;
 import com.lore.webtoon.CreditGate;
+import com.lore.webtoon.GuestGate;
+import com.lore.webtoon.SpendGuard;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -48,16 +51,64 @@ public class JobController {
     static final String PREFIX = "/api/webtoon/nh";
 
     private final JobService jobs;
+    private final SpendGuard guard;
+    private final GuestGate guests;
+    private final CreditGate credits;
 
-    public JobController(JobService jobs) {
+    public JobController(JobService jobs, SpendGuard guard, GuestGate guests,
+                         CreditGate credits) {
         this.jobs = jobs;
+        this.guard = guard;
+        this.guests = guests;
+        this.credits = credits;
     }
 
-    @Operation(summary = "웹툰 만들기 시작")
+    @Operation(summary = "웹툰 만들기 시작", description = """
+            **돈이 나가는 유일한 자리다.** 넘기기 전에 세 번 멈춰 세운다 —
+            오늘 전체 몫 · 로그인 안 한 사람의 하루 몫 · 계정 크레딧.""")
     @PostMapping("/create")
-    public Map<String, Object> create(@RequestBody JobService.CreateRequest form) {
-        String id = jobs.create(form, CreditGate.currentUser(), form.uid());
-        return Map.of("id", id, "queue_position", 0);
+    public ResponseEntity<Map<String, Object>> create(HttpServletRequest request,
+                                                      @RequestBody JobService.CreateRequest form) {
+        Long me = CreditGate.currentUser();
+
+        /* **여기도 문지기가 서야 한다.**
+         *
+         * 프록시 길(WebtoonController)에는 이 셋이 이미 서 있는데, 이 길은
+         * 그걸 안 거친다 — 처음 만들 때 그대로 뒀더니 크레딧 0 으로도 그냥
+         * 만들어졌다. 스위치를 켜는 순간 아무나 무한히 만들 수 있게 된다.
+         *
+         * 순서는 프록시 길과 같다: 전체 몫이 먼저다. 오늘 다 찼으면 로그인해도
+         * 못 만드는데 "로그인하면 됩니다" 라고 말하면 거짓말이 된다. */
+        String blocked = guard.whyBlocked();
+        int code = 429;
+        boolean counted = false;
+        if (blocked == null && me == null) {
+            blocked = guests.useOrBlock(request);
+            counted = blocked == null;
+        }
+        if (blocked == null) {
+            blocked = credits.whyBlocked(me);
+            if (blocked != null) {
+                code = 402;                     // 기다려도 안 풀린다 — 충전해야 한다
+            }
+        }
+        if (blocked != null) {
+            return ResponseEntity.status(code).body(Map.of("error", blocked));
+        }
+
+        String id;
+        try {
+            id = jobs.create(form, me, form.uid());
+        } catch (RuntimeException e) {
+            // 시작도 못 했으면 방금 센 한 편을 도로 물린다 — 만든 적 없는
+            // 사람에게 "오늘 몫을 다 쓰셨어요" 가 뜨면 안 된다.
+            if (counted) {
+                guests.refund(request);
+            }
+            throw e;
+        }
+        credits.charge(me, id);                 // 만들어진 뒤에 받는다
+        return ResponseEntity.ok(Map.of("id", id, "queue_position", 0));
     }
 
     @Operation(summary = "진행 상황", description = """
