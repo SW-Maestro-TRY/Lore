@@ -4630,3 +4630,14 @@
 @media (max-width: 380px) {
   .webtoon-page .pick-way-box { grid-template-columns: 1fr; }
 }
+
+/* ---- 2걸음: 이야기 칸을 크게 ----------------------------------------------
+ *
+ * 이 걸음은 **적는 것 하나뿐**인데 칸이 다섯 줄이라, 넓은 화면에서는 카드
+ * 안이 텅 비고 좁은 화면에서는 줄거리를 두어 줄 쓰면 바로 안쪽으로 스크롤이
+ * 생겼다. 화면 높이에 맞춰 늘린다 — 다만 위아래로 끝없이 자라지 않게 천장을
+ * 둔다(폰을 가로로 눕히면 화면보다 커진다). */
+
+.webtoon-page .wiz-step[data-step="2"] .field textarea {
+  min-height: clamp(190px, 38vh, 360px);
+}

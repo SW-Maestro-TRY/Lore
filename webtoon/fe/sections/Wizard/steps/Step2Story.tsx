@@ -27,7 +27,7 @@ export default function Step2Story({
         <label className="field big">
           <span className="sr-only">이야기</span>
           <textarea
-            rows={5}
+            rows={9}
             placeholder={"한 줄이어도 되고 줄거리여도 됩니다.\n예) 평범한 회사원인데 로맨스 판타지 소설에 빙의했다"}
             value={form.story}
             onChange={(e) => onChange({ story: e.target.value })}
