@@ -688,8 +688,10 @@ export function useYeoul({ pc }: UseYeoulOptions) {
     let bath: LvKey = s.trace >= 3 ? 'now' : s.trace >= 1 ? 'soon' : 'ok';
     let play: LvKey = s.plays <= 0 ? 'off' : s.happy <= 1 ? 'now' : s.happy <= 2 ? 'soon' : 'ok';
     if (mode === 'sick') { bath = 'med'; play = 'gray'; }
-    return { table, bath, play, bed: s.morning ? 'ready' : mode === 'night' ? 'ready' : 'off', album: 'plain' };
-  }, [mode, s.full, s.trace, s.plays, s.happy, s.morning]);
+    // 튜토리얼 40분 낮잠 동안에도 침실은 '지금 할 수 있다' 로 보여야 한다(부름과 버튼이 어긋나면 안 된다).
+    const napStep = s.tutor !== null && TUTOR[s.tutor]?.done === 'nap';
+    return { table, bath, play, bed: napStep || s.morning || mode === 'night' ? 'ready' : 'off', album: 'plain' };
+  }, [mode, s.full, s.trace, s.plays, s.happy, s.morning, s.tutor]);
 
   /** 지금 아이가 기다리는 것들. 첫 번째가 말풍선에 뜬다(병 > 밥 > 청소 > 채팅 > 졸림). */
   const calls = useMemo((): Call[] => {
