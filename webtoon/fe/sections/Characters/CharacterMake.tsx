@@ -137,9 +137,8 @@ export default function CharacterMake({ onClose, onMade }: {
             ))}
           </ul>
         </div>
-      </div>
 
-      <footer className="charmake-foot">
+        <footer className="charmake-foot">
         {failed && <p className="chars-error" role="alert">{failed}</p>}
         <button type="button" className="btn btn-primary charmake-go"
                 onClick={submit} disabled={!ready || busy}>
@@ -150,7 +149,8 @@ export default function CharacterMake({ onClose, onMade }: {
             ? "그리는 데 1분쯤 걸려요. 기다리지 않아도 목록에서 볼 수 있어요."
             : "어떤 캐릭터인지 한 줄만 적어 주세요 — 사진은 없어도 됩니다."}
         </p>
-      </footer>
+        </footer>
+      </div>
     </section>
   );
 }

@@ -4512,7 +4512,7 @@
   border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset;
 }
 
-.webtoon-page .charmake-foot { margin-top: 20px; display: grid; gap: .5em; }
+.webtoon-page .charmake-foot { margin-top: 4px; display: grid; gap: .5em; }
 .webtoon-page .charmake-foot .btn { width: 100%; }
 
 /* ---- 넓어지면 칸을 늘린다 -------------------------------------------------- */
@@ -4528,8 +4528,20 @@
   .webtoon-page .chars > *,
   .webtoon-page .charmake > * { max-width: 1040px; margin-left: auto; margin-right: auto; }
   .webtoon-page .char-grid { grid-template-columns: repeat(4, 1fr); }
-  /* 적는 곳과 고르는 곳을 좌우로. 여기서 처음 나뉜다. */
-  .webtoon-page .charmake-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
-  .webtoon-page .charmake-foot { justify-items: start; }
-  .webtoon-page .charmake-foot .btn { width: auto; min-width: 240px; }
+  /* 적는 곳과 고르는 곳을 좌우로. 여기서 처음 나뉜다.
+   *
+   * 만들기 단추는 **적는 칸 바로 밑**(사진 문구 아래)에 붙는다. 화면 맨
+   * 아래에 두면 그림체 여덟 개를 지나 한참 내려가야 눌린다.
+   *
+   * 좁은 화면에서는 그대로 맨 아래다 — 거기서는 그림체가 단추 위에 있어야
+   * 한다. 안 그러면 고르기도 전에 만들기가 먼저 나온다. */
+  .webtoon-page .charmake-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    align-items: start;
+  }
+  .webtoon-page .charmake-body > .charmake-card:nth-of-type(2) {
+    grid-column: 2; grid-row: 1 / span 2;
+  }
+  .webtoon-page .charmake-foot { grid-column: 1; justify-items: start; }
+  .webtoon-page .charmake-foot .btn { width: 100%; }
 }
