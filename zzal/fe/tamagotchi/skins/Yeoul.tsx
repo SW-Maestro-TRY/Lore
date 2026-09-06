@@ -87,6 +87,8 @@ export default function Yeoul({ mode = 'phone' }: SkinProps) {
       n: '11', label: '도감·모달',
       items: [
         { label: '도감 열기', on: room && s.panel === 'album' && s.sheetOpen, pick: () => { actions.goRoom(); actions.openPanel('album'); } },
+        { label: '대화 열기', on: room && s.panel === 'chat' && s.sheetOpen, pick: () => { actions.goRoom(); actions.openPanel('chat'); } },
+        { label: '게임 창', on: s.game !== 'none', pick: () => { actions.goRoom(); actions.openGame('guess'); } },
         { label: '해금 보기', on: false, pick: actions.showUnlockDemo },
         { label: '아침 도착 보기', on: false, pick: actions.showMorning },
         { label: '아이 정보', on: room && s.panel === 'pet' && s.sheetOpen, pick: () => { actions.goRoom(); actions.openPanel('pet'); } },

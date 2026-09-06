@@ -15,11 +15,12 @@
 
 import type { CSSProperties } from 'react';
 import Album from './Album';
+import ChipNote from './Fields';
 import {
   CALLS_PER_DAY, CELLS, CHAT_MAX, CLOCK, GENRES, GUESS_ROUNDS, GUESS_WIN, LV, MOTION_CELLS,
-  NEED_STYLES, PERSONALITIES, ROOM_KEYS, TONES, WORLD_MAX, type PanelKey,
+  NEED_STYLES, NOTE_PLACEHOLDER, PERSONALITIES, ROOM_KEYS, TONES, WORLDS, type PanelKey,
 } from './constants';
-import { C, GAEGU, GAUGE_COLOR, SANS, gaugeCell, input, label, note, pill, radius, slotBtn, tab } from './ui';
+import { C, GAUGE_COLOR, SANS, gaugeCell, input, label, note, pill, radius, slotBtn } from './ui';
 import type { Yeoul } from './useYeoul';
 
 const col = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap });
@@ -43,10 +44,11 @@ export function panelMeta(k: PanelKey, y: Yeoul): [string, string] {
   switch (k) {
     case 'table': return ['식탁', '배부름과 밥'];
     case 'bath': return ['욕실', '흔적과 몸단장'];
-    case 'play': return ['놀이', '대화 · 좌우 맞히기 · 달리기'];
+    case 'play': return ['놀이', `오늘 남은 판 ${s.plays}`];
     case 'bed': return ['침실', s.nap === 'none' ? '재우기' : '낮잠'];
     case 'album': return ['앨범', `동작 ${s.unlocked.length}/${MOTION_CELLS.length}`];
     case 'pet': return [s.petName || '아이', '아이 정보'];
+    case 'chat': return ['대화', `오늘 부름 ${s.calls}/${CALLS_PER_DAY}`];
   }
 }
 
@@ -84,117 +86,104 @@ function Bath({ y }: { y: Yeoul }) {
         <span style={{ fontSize: 14 }}>흔적</span>
         <span style={{ fontSize: 13, color: C.sub }}>{s.trace}개</span>
       </div>
-      <div style={grid(3, 10)}>
+      {/* ★ 약은 여기 없다 — 아플 때만 말풍선의 `약 주기` 와 무대의 약병으로 나타난다(9/6 3차 결정). */}
+      <div style={grid(2, 10)}>
         <button data-action="clean" onClick={actions.onClean} style={{ ...slotBtn, textAlign: 'center' }}>청소</button>
         <button data-action="bath" onClick={actions.onBath} style={{ ...slotBtn, textAlign: 'center', background: s.bathUsed ? C.slotDim : C.slot, color: s.bathUsed ? C.sub : C.ink }}>
           목욕<br /><span style={{ fontSize: 11, opacity: .8 }}>{s.bathUsed ? '오늘 완료' : '오늘 1회'}</span>
         </button>
-        <button data-action="medicine" onClick={actions.onMed} style={{ ...slotBtn, textAlign: 'center', background: s.sick ? '#FADCD6' : C.slotDim, color: s.sick ? C.accent : C.sub, borderColor: s.sick ? '#EFBDB2' : C.line }}>약</button>
       </div>
     </div>
   );
 }
 
-// ── 놀이 ────────────────────────────────────────────────────────────────
+// ── 놀이 — 게임은 시트가 아니라 무대 위 모달로 뜬다(9/6 2차 결정) ───────
 function Play({ y }: { y: Yeoul }) {
   const { s, derived, actions } = y;
-  const tabs: [Yeoul['s']['playTab'], string][] = [['talk', '대화'], ['guess', '좌우 맞히기'], ['run', '달리기']];
-  /** 입력창은 **부름이 있을 때만** 열린다(정본 §10 — 하루 3회의 부름에 한 번 답한다). */
-  const chatOpen = !s.resolved.chat && s.calls > 0;
-  const g = s.guess;
-
   return (
     <div style={col(12)}>
-      <div style={{ display: 'flex', gap: 7 }}>
-        {tabs.map(([k, t]) => (
-          <button key={k} data-tab={k} onClick={() => actions.pickTab(k)} style={tab(s.playTab === k)}>{t}</button>
+      <Gauge name="행복" on={derived.happyCells} color={GAUGE_COLOR.happy} />
+
+      <button
+        data-action="game-start" onClick={() => actions.openGame('guess')}
+        style={{ ...slotBtn, ...col(4), background: s.plays > 0 ? C.slot : C.slotDim }}
+      >
+        <span style={{ fontSize: 15 }}>좌우 맞히기 시작</span>
+        <span style={{ fontSize: 12, color: C.sub }}>{GUESS_ROUNDS}번 중 {GUESS_WIN}번 맞히면 이겨요</span>
+      </button>
+
+      {derived.runLocked ? (
+        <div data-part="run-lock" style={{ ...col(6), padding: 15, borderRadius: radius.md, background: '#F1EBE0', border: '1px dashed rgba(74,64,56,.18)' }}>
+          <span style={{ fontSize: 14, color: C.sub }}>달리기 · 아직 잠겨 있어요</span>
+          <span style={note}>{derived.runCond}</span>
+        </div>
+      ) : (
+        <button data-action="game-run" onClick={() => actions.openGame('run')} style={{ ...slotBtn, ...col(4) }}>
+          <span style={{ fontSize: 15 }}>달리기 시작</span>
+          <span style={{ fontSize: 12, color: C.sub }}>30초를 버티면 이겨요</span>
+        </button>
+      )}
+
+      <span style={label}>오늘 남은 판 {s.plays}</span>
+    </div>
+  );
+}
+
+// ── 대화 — 놀이에서 빠져나온 독립 칸(9/6 2차 결정) ───────────────────────
+function Chat({ y }: { y: Yeoul }) {
+  const { s, derived, actions } = y;
+  /** 입력창은 **부름이 있을 때만** 열린다(정본 §10 — 하루 3회의 부름에 한 번 답한다). */
+  const open = !s.resolved.chat && s.calls > 0;
+  return (
+    <div style={col(11)}>
+      <span style={label}>오늘 남은 부름 {s.calls}/{CALLS_PER_DAY} · 한 번에 {CHAT_MAX}자</span>
+
+      <div style={{ ...col(9), maxHeight: 220, overflow: 'auto', paddingRight: 3 }}>
+        {s.log.length === 0 && <span style={note}>아직 나눈 이야기가 없어요.</span>}
+        {s.log.map((l, i) => (
+          <div
+            key={i}
+            style={{
+              alignSelf: l.who === 'pet' ? 'flex-start' : 'flex-end', maxWidth: '88%',
+              padding: '11px 14px', fontSize: 13.5, lineHeight: 1.6,
+              borderRadius: l.who === 'pet' ? '16px 16px 16px 5px' : '16px 16px 5px 16px',
+              background: l.who === 'pet' ? '#F1EBE0' : C.accent,
+              color: l.who === 'pet' ? C.ink : C.accentInk,
+            }}
+          >{l.text}</div>
         ))}
       </div>
 
-      {s.playTab === 'talk' && (
-        <div style={col(11)}>
-          <span style={label}>오늘 남은 부름 {s.calls}/{CALLS_PER_DAY} · 한 번에 {CHAT_MAX}자</span>
-          <div style={{ ...col(9), maxHeight: 200, overflow: 'auto', paddingRight: 3 }}>
-            {s.log.length === 0 && <span style={note}>아직 나눈 이야기가 없어요.</span>}
-            {s.log.map((l, i) => (
-              <div
-                key={i}
-                style={{
-                  alignSelf: l.who === 'pet' ? 'flex-start' : 'flex-end', maxWidth: '88%',
-                  padding: '11px 14px', fontSize: 13.5, lineHeight: 1.6,
-                  borderRadius: l.who === 'pet' ? '16px 16px 16px 5px' : '16px 16px 5px 16px',
-                  background: l.who === 'pet' ? '#F1EBE0' : C.accent,
-                  color: l.who === 'pet' ? C.ink : C.accentInk,
-                }}
-              >{l.text}</div>
-            ))}
-          </div>
-
-          {chatOpen ? (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input
-                data-action="chat-input"
-                value={s.draft}
-                maxLength={CHAT_MAX}
-                placeholder={`${CHAT_MAX}자까지 · 한 번만 답할 수 있어요`}
-                aria-label={`${s.petName || '아이'}에게 답하기`}
-                onChange={(e) => actions.setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); actions.onSend(); } }}
-                style={{ ...input, flex: 1, borderRadius: radius.pill, background: C.slot }}
-              />
-              <button data-action="chat-send" onClick={actions.onSend} style={{ padding: '11px 17px', borderRadius: radius.pill, border: 'none', background: C.ink, color: '#FBF6EC', fontSize: 13, cursor: 'pointer', fontFamily: SANS }}>보내기</button>
-            </div>
-          ) : (
-            <div data-part="chat-closed" style={{ padding: '13px 15px', borderRadius: radius.md, background: C.slotDim, ...col(4) }}>
-              <span style={{ fontSize: 13, color: C.ink }}>다음 부름은 {derived.nextCallAt}에 와요</span>
-              <span style={note}>답하지 못한 부름은 조용히 지나가요. 아무 일도 생기지 않아요.</span>
-            </div>
-          )}
-
-          {s.memories.length > 0 && (
-            <div style={col(6)}>
-              <span style={label}>기억해 둔 것</span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                {s.memories.map((m, i) => (
-                  <span key={i} style={{ padding: '5px 11px', borderRadius: radius.pill, background: '#F1EBE0', border: `1px solid ${C.lineSoft}`, fontSize: 11.5, color: C.sub }}>{m}</span>
-                ))}
-              </div>
-            </div>
-          )}
+      {open ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            data-action="chat-input"
+            value={s.draft}
+            maxLength={CHAT_MAX}
+            placeholder={`${CHAT_MAX}자까지 · 한 번만 답할 수 있어요`}
+            aria-label={`${s.petName || '아이'}에게 답하기`}
+            onChange={(e) => actions.setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); actions.onSend(); } }}
+            style={{ ...input, flex: 1, borderRadius: radius.pill, background: C.slot }}
+          />
+          <button data-action="chat-send" onClick={actions.onSend} style={{ padding: '11px 17px', borderRadius: radius.pill, border: 'none', background: C.ink, color: '#FBF6EC', fontSize: 13, cursor: 'pointer', fontFamily: SANS }}>보내기</button>
+        </div>
+      ) : (
+        <div data-part="chat-closed" style={{ padding: '13px 15px', borderRadius: radius.md, background: C.slotDim, ...col(4) }}>
+          <span style={{ fontSize: 13, color: C.ink }}>다음 부름은 {derived.nextCallAt}에 와요</span>
+          <span style={note}>답하지 못한 부름은 조용히 지나가요. 아무 일도 생기지 않아요.</span>
         </div>
       )}
 
-      {s.playTab === 'guess' && (
-        <div style={col(12)}>
-          <Gauge name="행복" on={derived.happyCells} color={GAUGE_COLOR.happy} />
-          {/* 5번 중 3번 — 진행이 보여야 "한 판" 이 어디서 끝나는지 안다. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {Array.from({ length: GUESS_ROUNDS }, (_, i) => (
-              <span key={i} style={{ flex: 1, height: 6, borderRadius: 3, background: i < g.round ? C.accent : '#EFE7DA' }} />
+      {s.memories.length > 0 && (
+        <div style={col(6)}>
+          <span style={label}>기억해 둔 것</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {s.memories.map((m, i) => (
+              <span key={i} style={{ padding: '5px 11px', borderRadius: radius.pill, background: '#F1EBE0', border: `1px solid ${C.lineSoft}`, fontSize: 11.5, color: C.sub }}>{m}</span>
             ))}
-            <span style={{ fontSize: 11.5, color: C.sub, flex: 'none' }}>{g.win}승 {g.lose}패</span>
           </div>
-          <span style={{ fontFamily: GAEGU, fontSize: 19, color: C.ink }}>{g.msg || `어느 손에 있을까요? · ${GUESS_WIN}번 먼저 맞히기`}</span>
-          <div style={grid(2, 10)}>
-            <button data-action="game-left" onClick={actions.guessSide} style={{ ...slotBtn, padding: '22px 6px', textAlign: 'center', fontSize: 15 }}>왼쪽</button>
-            <button data-action="game-right" onClick={actions.guessSide} style={{ ...slotBtn, padding: '22px 6px', textAlign: 'center', fontSize: 15 }}>오른쪽</button>
-          </div>
-          <span style={label}>오늘 남은 판 {s.plays}</span>
         </div>
-      )}
-
-      {s.playTab === 'run' && (
-        derived.runLocked ? (
-          <div style={{ ...col(8), padding: 17, borderRadius: radius.md, background: '#F1EBE0', border: '1px dashed rgba(74,64,56,.18)' }}>
-            <span style={{ fontSize: 14, color: C.sub }}>달리기 · 아직 잠겨 있어요</span>
-            <span style={note}>{derived.runCond}</span>
-          </div>
-        ) : (
-          <div style={{ ...col(8), padding: 17, borderRadius: radius.md, background: C.slot, border: `1px solid ${C.line}` }}>
-            <span style={{ fontSize: 14, color: C.ink }}>달리기가 열렸어요</span>
-            <span style={note}>한 버튼으로 뛰어넘어요. 30초를 버티면 이겨요. (게임 화면은 다음 판에서)</span>
-          </div>
-        )
       )}
     </div>
   );
@@ -242,33 +231,18 @@ function Pet({ y }: { y: Yeoul }) {
         ))}
       </div>
 
-      <div style={col(7)}>
-        <span style={label}>성격 · 언제든 바꿔요</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {PERSONALITIES.map((p) => (
-            <button key={p.key} data-persona={p.key} onClick={() => actions.setPersona(p.key)} style={pill(s.persona === p.key)}>{p.label}</button>
-          ))}
-        </div>
-      </div>
-
-      <div style={col(7)}>
-        <span style={label}>말투</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {TONES.map((t) => <button key={t} onClick={() => actions.setTone(t)} style={pill(s.tone === t)}>{t}</button>)}
-        </div>
-      </div>
-
-      <div style={col(7)}>
-        <span style={label}>장르</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {GENRES.map((g) => <button key={g} onClick={() => actions.setGenre(g)} style={pill(s.genre === g)}>{g}</button>)}
-        </div>
-      </div>
-
-      <div style={col(6)}>
-        <span style={label}>세계관 한 줄 · {WORLD_MAX}자</span>
-        <input data-field="world" value={s.world} maxLength={WORLD_MAX} placeholder="빵집 뒷마당에서 자란 아이" onChange={(e) => actions.setWorld(e.target.value)} style={input} />
-      </div>
+      <ChipNote
+        name="persona" title="성격 · 언제든 바꿔요" chips={PERSONALITIES.map((p) => p.label)}
+        picked={PERSONALITIES.find((p) => p.key === s.persona)?.label ?? null}
+        onPick={(v) => actions.setPersona(PERSONALITIES.find((p) => p.label === v)?.key ?? v)}
+        note={s.personaNote} onNote={actions.setPersonaNote} placeholder={NOTE_PLACEHOLDER.persona}
+      />
+      <ChipNote name="tone" title="말투" chips={TONES} picked={s.tone} onPick={actions.setTone}
+        note={s.toneNote} onNote={actions.setToneNote} placeholder={NOTE_PLACEHOLDER.tone} />
+      <ChipNote name="genre" title="장르" chips={GENRES} picked={s.genre} onPick={actions.setGenre}
+        note={s.genreNote} onNote={actions.setGenreNote} placeholder={NOTE_PLACEHOLDER.genre} />
+      <ChipNote name="world" title="세계관" chips={WORLDS} picked={s.worldChip} onPick={actions.setWorldChip}
+        note={s.world} onNote={actions.setWorld} placeholder={NOTE_PLACEHOLDER.world} />
 
       <div style={col(7)}>
         <span style={label}>버튼 표기 · 색만으로 가르지 않기</span>
@@ -297,6 +271,7 @@ export default function PanelBody({ y }: { y: Yeoul }) {
     case 'bed': return <Bed y={y} />;
     case 'album': return <Album y={y} />;
     case 'pet': return <Pet y={y} />;
+    case 'chat': return <Chat y={y} />;
   }
 }
 

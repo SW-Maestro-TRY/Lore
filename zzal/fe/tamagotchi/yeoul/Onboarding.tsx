@@ -9,9 +9,10 @@
 'use client';
 
 import { useRef, type CSSProperties } from 'react';
+import ChipNote from './Fields';
 import {
-  AUTH, GENRES, FREE_MAX, LANDING, NAME_MAX, PERSONALITIES, STEPS, TONES, UPLOAD_BAD, UPLOAD_GOOD,
-  UPLOAD_NOTE, USER_FIELDS, USER_LEAD, WORLD_MAX, yeoulImg,
+  AUTH, GENRES, LANDING, NAME_MAX, NOTE_PLACEHOLDER, PERSONALITIES, STEPS, TONES, UPLOAD_BAD,
+  UPLOAD_GOOD, UPLOAD_NOTE, USER_FIELDS, USER_LEAD, WORLDS, yeoulImg,
 } from './constants';
 import { C, GAEGU, SANS, cta, ghost, input, label, note, pill, radius, sysLine } from './ui';
 import type { Yeoul } from './useYeoul';
@@ -175,7 +176,7 @@ export default function Onboarding({ y, tick }: { y: Yeoul; tick: number }) {
           </div>
         )}
 
-        {/* 4. 캐릭터 정보 — 고르기 쉽게 칩·버튼으로만. */}
+        {/* 4. 캐릭터 정보 — 항목마다 **칩 한 줄 + 그 아래 긴 글**(9/6 2차 결정). */}
         {k === 'char' && (
           <div style={col(16)}>
             <div style={col(7)}>
@@ -186,51 +187,28 @@ export default function Onboarding({ y, tick }: { y: Yeoul; tick: number }) {
               </div>
             </div>
 
-            <div style={col(8)}>
-              <span style={label}>성격 · 다섯 중 하나</span>
-              {PERSONALITIES.map((p) => (
-                <button
-                  key={p.key} data-persona={p.key} onClick={() => actions.setPersona(p.key)}
-                  style={{ ...row(11), padding: '12px 14px', borderRadius: radius.md, cursor: 'pointer', textAlign: 'left', fontFamily: SANS, border: `${s.persona === p.key ? 2 : 1}px solid ${s.persona === p.key ? C.accent : C.line}`, background: s.persona === p.key ? C.accentSoft : C.paperHi }}
-                >
-                  <span style={{ fontSize: 14.5, width: 46, flex: 'none', color: s.persona === p.key ? C.accent : C.ink }}>{p.label}</span>
-                  <span style={{ fontSize: 12, color: C.sub }}>{p.desc}</span>
-                </button>
-              ))}
-            </div>
+            {/* 성격만 칩에 한 줄 설명이 따로 붙는다 — 다섯 중 무엇을 고르는지가 톤을 정하기 때문이다. */}
+            <ChipNote
+              name="persona" title="성격 · 다섯 중 하나" chips={PERSONALITIES.map((p) => p.label)}
+              picked={PERSONALITIES.find((p) => p.key === s.persona)?.label ?? null}
+              onPick={(v) => actions.setPersona(PERSONALITIES.find((p) => p.label === v)?.key ?? v)}
+              note={s.personaNote} onNote={actions.setPersonaNote} placeholder={NOTE_PLACEHOLDER.persona} rows={4}
+            />
+            {!!s.persona && (
+              <span style={{ ...note, marginTop: -10, color: C.faint }}>
+                {PERSONALITIES.find((p) => p.key === s.persona)?.desc}
+              </span>
+            )}
 
-            <div style={col(7)}>
-              <span style={label}>말투</span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {TONES.map((t) => <button key={t} data-tone={t} onClick={() => actions.setTone(t)} style={pill(s.tone === t)}>{t}</button>)}
-              </div>
-            </div>
-
-            <div style={col(7)}>
-              <span style={label}>장르</span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {GENRES.map((g) => <button key={g} data-genre={g} onClick={() => actions.setGenre(g)} style={pill(s.genre === g)}>{g}</button>)}
-              </div>
-            </div>
-
-            <div style={col(6)}>
-              <span style={label}>세계관 한 줄 · {WORLD_MAX}자</span>
-              <input data-field="world" value={s.world} maxLength={WORLD_MAX} placeholder="빵집 뒷마당에서 자란 아이" onChange={(e) => actions.setWorld(e.target.value)} style={input} />
-            </div>
-
-            <div style={col(7)}>
-              <button data-action="free-toggle" onClick={actions.toggleFree} style={{ ...ghost, textAlign: 'left' }}>
-                {s.freeOpen ? '그 밖에 알려주고 싶은 것 접기' : '그 밖에 알려주고 싶은 것'}
-              </button>
-              {s.freeOpen && (
-                <textarea
-                  data-field="free" value={s.free} maxLength={FREE_MAX} rows={3}
-                  placeholder="좋아하는 것, 버릇, 말버릇 아무거나"
-                  onChange={(e) => actions.setFree(e.target.value)}
-                  style={{ ...input, resize: 'none', lineHeight: 1.6 }}
-                />
-              )}
-            </div>
+            <ChipNote name="tone" title="말투" chips={TONES} picked={s.tone} onPick={actions.setTone}
+              note={s.toneNote} onNote={actions.setToneNote} placeholder={NOTE_PLACEHOLDER.tone} />
+            <ChipNote name="genre" title="장르" chips={GENRES} picked={s.genre} onPick={actions.setGenre}
+              note={s.genreNote} onNote={actions.setGenreNote} placeholder={NOTE_PLACEHOLDER.genre} />
+            <ChipNote name="world" title="세계관" chips={WORLDS} picked={s.worldChip} onPick={actions.setWorldChip}
+              note={s.world} onNote={actions.setWorld} placeholder={NOTE_PLACEHOLDER.world} rows={4} />
+            {/* 이 칸만 칩이 없다 — 방향을 미리 잡아 주면 오히려 안 쓰게 된다. */}
+            <ChipNote name="free" title="그 밖에 알려주고 싶은 것"
+              note={s.free} onNote={actions.setFree} placeholder={NOTE_PLACEHOLDER.free} rows={4} />
           </div>
         )}
 
