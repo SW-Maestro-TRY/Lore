@@ -1,5 +1,8 @@
 package com.lore.webtoon.job;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
@@ -285,10 +288,37 @@ public class JobService {
         return s == null ? "" : s.trim();
     }
 
-    /** 화면이 보내는 것. 파이썬 서버가 받던 것과 같은 이름들이다. */
+    /**
+     * 화면이 보내는 것.
+     *
+     * <h2>이름을 자바 식으로 바꾸지 않는다</h2>
+     *
+     * 화면은 프로토타입에서 옮겨 온 것이라 파이썬이 받던 이름을 그대로
+     * 보낸다 — {@code photos_data} · {@code agree_ip}. 자바 쪽만 camelCase 로
+     * 적어 두면 <b>그 두 칸이 통째로 안 들어온다.</b> 실제로 그랬다: 저작권에
+     * 동의하고 눌러도 "동의해야 합니다" 로 막혔고, 사진도 같이 버려졌다.
+     *
+     * 그래서 <b>줄 위의 이름은 파이썬 것</b>으로 두고, 자바 이름은 별명으로
+     * 같이 받는다(옛 호출을 안 깨뜨리려고).
+     *
+     * <h2>동의 칸은 {@code Boolean} 이다</h2>
+     *
+     * {@code boolean} 으로 두면 그 칸이 <b>없을 때</b> Jackson 이 본문 전체를
+     * 거절한다 — 사람에게는 "입력값이 올바르지 않습니다" 라는, 무엇을 고쳐야
+     * 하는지 알 수 없는 말만 남는다. 없으면 안 한 것으로 보고, 그 다음
+     * {@code create()} 가 <b>왜</b> 안 되는지 한글로 말하게 둔다.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)   // 화면이 안 읽히는 칸을 하나 더 보낸다(photo_note)
     public record CreateRequest(String name, String character, String genre, String story,
                                 String style, Map<String, String> fields,
-                                List<String> photosData, boolean agreeIp,
+                                @JsonProperty("photos_data") @JsonAlias("photosData")
+                                List<String> photosData,
+                                @JsonProperty("agree_ip") @JsonAlias("agreeIp")
+                                Boolean agreeIp,
                                 Boolean checkpoints, String uid) {
+
+        public CreateRequest {
+            agreeIp = agreeIp != null && agreeIp;
+        }
     }
 }
