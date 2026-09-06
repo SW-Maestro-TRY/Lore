@@ -58,7 +58,7 @@ public class CreditGate {
     }
 
     /** 지금 로그인한 사람. 안 했으면 {@code null}. */
-    static Long currentUser() {
+    public static Long currentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null && auth.getPrincipal() instanceof Long id ? id : null;
     }

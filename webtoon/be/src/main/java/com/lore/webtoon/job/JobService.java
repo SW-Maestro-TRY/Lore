@@ -1,0 +1,266 @@
+package com.lore.webtoon.job;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * 만들기 — 받고, 줄 세우고, 보여 준다.
+ *
+ * 파이썬 서버의 {@code NHRunner} 와 {@code /api/nh/*} 가 하던 일이다.
+ */
+@Service
+public class JobService {
+
+    private static final Logger log = LoggerFactory.getLogger(JobService.class);
+
+    /** 사진은 이만큼까지. 원본 그대로 받으면 폼 하나가 수십 MB 가 된다. */
+    private static final int MAX_PHOTOS = 4;
+    private static final int MAX_PHOTO_BYTES = 6 * 1024 * 1024;
+    private static final int PHOTO_WIDTH = 1400;
+
+    /** 그림체 고른 값 -> 하네스가 아는 이름. 파이썬 쪽 STYLE_CHOICES 와 같아야 한다. */
+    private static final Map<String, String> STYLE = Map.of(
+            "romance", "romance_fantasy",
+            "webtoon", "webtoon_lock_bg",
+            "frost", "frost",
+            "cinematic", "cinematic",
+            "pastel", "pastel",
+            "noir", "noir",
+            "shoujo", "shoujo",
+            "game", "game");
+
+    private static final Map<String, String> STYLE_LABEL = Map.of(
+            "romance_fantasy", "로맨스 판타지",
+            "webtoon_lock_bg", "일반 웹툰",
+            "frost", "세미리얼 · 성인향",
+            "cinematic", "시네마틱 반실사",
+            "pastel", "일상툰 감성",
+            "noir", "다크 느와르",
+            "shoujo", "순정 · BL",
+            "game", "게임 원화");
+
+    private static final Map<String, String> STAGE_LABEL = Map.of(
+            "story", "이야기 짓기",
+            "sheet", "캐릭터 시트",
+            "board", "장면 나누기",
+            "pages", "페이지 그림");
+
+    private static final String DEFAULT_STYLE = "webtoon_lock_bg";
+
+    private final WebtoonJobRepository jobs;
+    private final JobStore store;
+    private final JobRunner runner;
+    private final JobProgress progress;
+    private final Path jobsDir;
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    public JobService(WebtoonJobRepository jobs, JobStore store, JobRunner runner,
+                      JobProgress progress,
+                      @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
+        this.jobs = jobs;
+        this.store = store;
+        this.runner = runner;
+        this.progress = progress;
+        this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
+                ? "haeun/landing/jobs_spring" : jobsDir).toAbsolutePath().normalize();
+    }
+
+    /**
+     * 만들기를 받는다.
+     *
+     * <b>여기서 검사한 것만 파이썬에 넘어간다.</b> 사진이 너무 크거나 못 여는
+     * 것이면 여기서 막는다 — 파이썬까지 가서 죽으면 사람은 "만들기가 안 된다"
+     * 로만 알게 된다.
+     */
+    @Transactional
+    public String create(CreateRequest form, Long userId, String browserUid) {
+        if (!form.agreeIp()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "저작권 확인에 동의해야 만들 수 있습니다");
+        }
+        boolean known = notBlank(form.name()) || notBlank(form.character())
+                || (form.fields() != null && form.fields().values().stream().anyMatch(this::notBlank))
+                || (form.photosData() != null && !form.photosData().isEmpty());
+        if (!known) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "캐릭터를 알 수 있는 것이 하나는 필요합니다 — 이름 · 설명 · 항목 · 사진 중 아무거나요.");
+        }
+
+        String publicId = UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+        Path dir = jobsDir.resolve(publicId);
+        try {
+            Files.createDirectories(dir);
+            List<Path> photos = savePhotos(dir, form.photosData());
+            writeCharacter(dir, form, photos);
+        } catch (IOException e) {
+            log.error("만들기 준비에 실패했습니다 (job={})", publicId, e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "만들기를 시작하지 못했습니다");
+        }
+
+        String style = STYLE.getOrDefault(blank(form.style()), DEFAULT_STYLE);
+        WebtoonJob job = jobs.save(WebtoonJob.queued(
+                publicId, userId, browserUid, style,
+                form.checkpoints() == null || form.checkpoints(), Instant.now()));
+
+        runner.enqueue(job.getId(), dir);
+        return publicId;
+    }
+
+    @Transactional(readOnly = true)
+    public JobView view(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        return JobView.of(job, progress.of(job.getId()),
+                store.directionsOf(job.getId()),
+                STYLE_LABEL.getOrDefault(job.getStyle(), ""),
+                STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()));
+    }
+
+    /** 사람이 이야기를 골랐다. */
+    public void pick(String publicId, int n) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_PICK) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 고를 차례가 아닙니다");
+        }
+        List<Map<String, Object>> got = store.directionsOf(job.getId());
+        if (n < 1 || n > got.size()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 이야기가 없습니다");
+        }
+        store.pick(job.getId(), n);
+        runner.resumeAfterPick(job.getId());
+    }
+
+    /** 사람이 캐릭터 시트를 확인했다. */
+    public void approveSheet(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SHEET) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 확인할 차례가 아닙니다");
+        }
+        runner.resumeAfterSheet(job.getId());
+    }
+
+    /* ---- 준비 ------------------------------------------------------------- */
+
+    /**
+     * 올라온 사진을 저장한다.
+     *
+     * 폭을 줄여 둔다 — 원본 그대로 넘기면 모델에 보내는 값이 커져서 느리고
+     * 비싸다. 못 여는 사진은 여기서 막는다(아이폰 HEIC 등).
+     */
+    private List<Path> savePhotos(Path dir, List<String> dataUrls) throws IOException {
+        List<Path> saved = new ArrayList<>();
+        if (dataUrls == null) {
+            return saved;
+        }
+        if (dataUrls.size() > MAX_PHOTOS) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "사진은 " + MAX_PHOTOS + "장까지 올릴 수 있습니다");
+        }
+        int i = 0;
+        for (String url : dataUrls) {
+            i++;
+            if (url == null || !url.startsWith("data:")) {
+                continue;
+            }
+            byte[] raw;
+            try {
+                raw = Base64.getDecoder().decode(url.substring(url.indexOf(',') + 1));
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        i + "번째 사진을 읽지 못했습니다");
+            }
+            if (raw.length > MAX_PHOTO_BYTES) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        i + "번째 사진이 너무 큽니다 (6MB 까지)");
+            }
+            BufferedImage image = ImageIO.read(new ByteArrayInputStream(raw));
+            if (image == null) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        i + "번째 사진을 열지 못했습니다. 아이폰 사진(HEIC)이면 JPG 나 PNG 로 바꿔서 올려 주세요.");
+            }
+            Path to = dir.resolve("photo" + i + ".png");
+            ImageIO.write(shrink(image), "png", to.toFile());
+            saved.add(to);
+        }
+        return saved;
+    }
+
+    private static BufferedImage shrink(BufferedImage src) {
+        if (src.getWidth() <= PHOTO_WIDTH) {
+            return src;
+        }
+        int height = Math.round(src.getHeight() * (float) PHOTO_WIDTH / src.getWidth());
+        BufferedImage out = new BufferedImage(PHOTO_WIDTH, height, BufferedImage.TYPE_INT_RGB);
+        var g = out.createGraphics();
+        g.drawImage(src.getScaledInstance(PHOTO_WIDTH, height, java.awt.Image.SCALE_SMOOTH),
+                0, 0, null);
+        g.dispose();
+        return out;
+    }
+
+    /**
+     * 폼을 파이썬이 읽는 캐릭터 파일로.
+     *
+     * <b>빈 칸은 빈 칸으로 둔다.</b> 코드가 기본값을 채우면 사람이 준 것과
+     * 코드가 지어낸 것이 섞인다 — 하네스가 하지 않기로 한 일이다.
+     */
+    private void writeCharacter(Path dir, CreateRequest form, List<Path> photos)
+            throws IOException {
+        Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("name", blank(form.name()));
+        doc.put("character", blank(form.character()));
+        Map<String, String> fields = new LinkedHashMap<>();
+        if (form.fields() != null) {
+            form.fields().forEach((k, v) -> {
+                if (notBlank(v)) {
+                    fields.put(k, v.trim());
+                }
+            });
+        }
+        doc.put("fields", fields);
+        doc.put("genre", blank(form.genre()));
+        doc.put("world", Map.of("preset", "", "text", ""));
+        doc.put("story", blank(form.story()));
+        if (photos.size() == 1) {
+            doc.put("photo", photos.get(0).toString());
+        } else if (!photos.isEmpty()) {
+            doc.put("photo", photos.stream().map(Path::toString).toList());
+        }
+        mapper.writerWithDefaultPrettyPrinter()
+                .writeValue(dir.resolve("character.json").toFile(), doc);
+    }
+
+    private boolean notBlank(String s) {
+        return s != null && !s.isBlank();
+    }
+
+    private String blank(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    /** 화면이 보내는 것. 파이썬 서버가 받던 것과 같은 이름들이다. */
+    public record CreateRequest(String name, String character, String genre, String story,
+                                String style, Map<String, String> fields,
+                                List<String> photosData, boolean agreeIp,
+                                Boolean checkpoints, String uid) {
+    }
+}
