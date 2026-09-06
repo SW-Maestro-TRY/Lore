@@ -1129,6 +1129,30 @@ export function mountEditor(
     return String(s ?? "").replace(/[&<>"]/g,
       c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
+  /* 구운 파일을 **바로 내려받는다.**
+   *
+   * 전에는 굽고 → 결과 칸이 뜨고 → 거기서 「내려받기」를 또 눌러야 했다.
+   * 단추 이름이 "이미지로 뽑기" 인데 눌러도 파일이 안 나오면, 사람은 굽는 것과
+   * 받는 것이 다른 일이라는 걸 모르므로 그냥 느린 것으로 읽는다 (실제 피드백:
+   * "너무 오래걸려"). 굽는 목적은 가져가는 것 하나뿐이라 두 걸음으로 나눌
+   * 이유가 없다.
+   *
+   * 결과 칸은 그대로 남긴다 — 안 그려진 장이나 빠진 스티커를 알려야 하고,
+   * 받기를 놓쳤을 때 다시 누를 자리도 있어야 한다. */
+  function pullFile(url, name) {
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name || "";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (_) {
+      /* 막히면 결과 칸의 「내려받기」가 그대로 있다 */
+    }
+  }
+
   /* 구운 결과 — 몇 장을 구웠고 무엇이 빠졌는지 말하고, 내려받을 자리를 준다.
      토스트 한 줄로 끝내지 않는 이유: 스티커가 빠졌거나 안 그려진 장이 있으면
      그것을 알아야 하고, 그건 한 줄에 안 들어간다. */
@@ -1144,7 +1168,7 @@ export function mountEditor(
       <div class="bake-head">
         <b>${out.scenes.length}장을 구웠습니다</b>
         <span>${out.width}×${out.height}px · 얹은 것 ${out.items}개</span>
-        <span class="bake-wm">내려받는 파일에는 아래에 LORE 표시가 붙습니다 — 그만큼 세로가 조금 깁니다.</span>
+        <span class="bake-wm">내려받는 파일에는 컷마다 LORE 표시가 붙고, 맨 아래에 브랜드 띠가 한 줄 덧대집니다.</span>
       </div>
       ${gone}${skip}
       <div class="bake-acts">
@@ -1391,6 +1415,8 @@ export function mountEditor(
         const out = await res.json();
         if (!res.ok) throw new Error(out.error || "굽지 못했습니다");
         showBaked(out);
+        // 굽자마자 바로 받는다 (pullFile 머리말 참고)
+        pullFile(atApi(out.url), `${RUN_ID}.png`);
       } catch (err) { toast(err.message); }
       btn.disabled = false;
       btn.textContent = was;

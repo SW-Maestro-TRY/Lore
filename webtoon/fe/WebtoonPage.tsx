@@ -157,9 +157,22 @@ function WebtoonScreens() {
      원본은 base.js 가 document 에 걸지만, 여기는 Lore 앱 안이라 이 화면
      안에서만 막는다(앱 전체의 오른쪽 누르기를 뺏을 자리가 아니다).
      폰의 길게 누르기와 끌기는 webtoon.css 의 img 규칙이 같이 막는다.
-     ⚠ 막는 것이 아니라 문턱이다 — 주소를 알면 그대로 받을 수 있다. */
+     ⚠ 막는 것이 아니라 문턱이다 — 주소를 알면 그대로 받을 수 있다.
+
+     **`IMG` 만 보면 샌다.** 그림 위에 손잡이·말풍선·빈 칸이 겹쳐 있으면
+     오른쪽 누르기의 과녁이 그 겹친 것이 되고(pointer-events 로 위에 뜬
+     것들), 그때는 이 검사를 그냥 통과했다. 그림 한 장을 정확히 겨눠야만
+     막히는 문턱은 문턱이 아니다.
+
+     그래서 이 화면 안에서는 오른쪽 누르기를 통째로 막고, **글 쓰는 칸만**
+     비워 둔다 — 제목이나 대사를 고쳐 쓸 때 복사·붙여넣기 메뉴는 있어야
+     하고, 거기엔 저장할 그림도 없다. */
+  const inText = (el: HTMLElement | null) =>
+    !!el?.closest?.('input, textarea, [contenteditable="true"], [contenteditable=""]');
+
   const guardImage = (ev: React.SyntheticEvent) => {
-    if ((ev.target as HTMLElement)?.tagName === "IMG") ev.preventDefault();
+    if (inText(ev.target as HTMLElement)) return;
+    ev.preventDefault();
   };
 
   /* 만들기 시작. 실패는 **위자드가 그 자리에서** 보여줘야 하므로 여기서
@@ -203,7 +216,11 @@ function WebtoonScreens() {
       {view === "landing" && (
         <div className="landing">
           <Hero onStart={() => go("create")} onBrowse={() => go("works")} />
-          <HowGalleryFaq onSeeFull={() => go("result", runId || undefined)} />
+          {/* 「완성된 웹툰 한 편 전체 보기」 — **둘러보기로 보낸다.**
+              전에는 특정 작품 하나를 열었는데, 그 자리는 견본 몇 장을 보고
+              "실제로는 어떻게 나오나" 가 궁금해진 자리다. 한 편만 보여주면
+              그 한 편이 전부인 줄 안다. */}
+          <HowGalleryFaq onSeeFull={() => go("works")} />
           <Foot />
         </div>
       )}

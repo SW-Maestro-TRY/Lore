@@ -1105,3 +1105,19 @@
      들어가 눌리지 않는다. */
   padding-bottom: 160px;
 }
+
+/* ---- 갤러리 아래 「완성된 웹툰 보러 가기」 ----------------------------------
+ *
+ * 폭을 꽉 채운 옅은 알약이라 **눌리지 않는 띠**처럼 보였다. 이 자리는 견본
+ * 몇 장을 보고 "실제로는 어떻게 나오나" 가 궁금해진 사람이 누르는 곳이라,
+ * 단추로 보여야 한다. 글자 길이만큼만 쓰고 가운데에 둔다. */
+
+.webtoon-page .gallery-full {
+  width: auto; margin: 22px auto 0;
+  background: var(--card); color: var(--accent-d);
+  border: 1px solid var(--line-2); font-weight: 700;
+  box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 4px 14px rgba(15,51,63,.07);
+}
+.webtoon-page .gallery-full:hover {
+  border-color: var(--accent); background: var(--card-2);
+}

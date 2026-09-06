@@ -174,9 +174,35 @@ def cut_layout(paths: list[Path], gaps: list[int], ratios: list[float],
     return bounds
 
 
+def _luma(img, box: tuple[int, int, int, int]) -> float:
+    """`box` 자리의 평균 밝기 (0~255). 표시를 밝게 쓸지 어둡게 쓸지 정한다."""
+    x0, y0, x1, y1 = box
+    w, h = img.size
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(w, x1), min(h, y1)
+    if x1 <= x0 or y1 <= y0:
+        return 128.0
+    patch = img.convert("L").crop((x0, y0, x1, y1))
+    # 큰 그림에서 픽셀을 다 훑으면 한 편(수만 px)에 눈에 띄게 느려진다.
+    patch = patch.resize((8, 8))
+    px = list(patch.getdata())
+    return sum(px) / len(px)
+
+
 def _mark_layer(canvas_size: tuple[int, int],
-                 boxes: list[tuple[int, int, int, int]]):
-    """`boxes` 마다 그 자리 오른쪽 아래에 반투명 워드마크를 찍은 레이어."""
+                 boxes: list[tuple[int, int, int, int]],
+                 under=None):
+    """`boxes` 마다 그 자리 오른쪽 아래에 반투명 워드마크를 찍은 레이어.
+
+    **밑그림을 보고 색을 뒤집는다.** 전에는 늘 밝은 색(PAPER)으로만 찍었는데,
+    이 서비스의 그림은 흰 여백이 많아서 — 컷 오른쪽 아래가 하얀 경우가 잦다 —
+    표시가 흰 바탕에 흰 글자가 되어 사실상 안 보였다. 실측으로 확인했다:
+    한 편 6장 중 4장이 여백에 걸려 거의 안 읽혔다.
+
+    그림자만 깔아서는 못 살린다(그림자는 옅어야 방해가 안 되고, 옅으면 흰
+    글자를 못 떠받친다). 그래서 그 자리 평균 밝기를 재서 밝으면 잉크색,
+    어두우면 종이색으로 쓴다. `under` 가 없으면 예전처럼 밝은 색이다.
+    """
     Image, ImageDraw = _pil()
     layer = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -188,10 +214,14 @@ def _mark_layer(canvas_size: tuple[int, int],
         pad = max(10, size // 2)
         x, y = x0 + bw - pad - tw - box[0], y0 + bh - pad - th - box[1]
 
-        # 밝은 그림에서도 어두운 그림에서도 읽히게 옅은 그림자를 깐다
+        bright = _luma(under, (x, y, x + tw, y + th)) if under is not None else 0.0
+        light = bright < 150                # 밑이 어두우면 밝은 글자
+        ink = (*PAPER, MARK_ALPHA) if light else (*SEA_DEEP, MARK_ALPHA)
+        shade = (0, 0, 0, MARK_ALPHA // 3) if light else (255, 255, 255, MARK_ALPHA // 2)
+
         off = max(1, size // 20)
-        d.text((x + off, y + off), WORDMARK, font=font, fill=(0, 0, 0, MARK_ALPHA // 3))
-        d.text((x, y), WORDMARK, font=font, fill=(*PAPER, MARK_ALPHA))
+        d.text((x + off, y + off), WORDMARK, font=font, fill=shade)
+        d.text((x, y), WORDMARK, font=font, fill=ink)
     return layer
 
 
@@ -199,7 +229,7 @@ def _draw_mark(img):
     """그림 오른쪽 아래 반투명 워드마크 하나. 컷 경계를 모를 때 쓰는 예전 동작."""
     Image, _ = _pil()
     w, h = img.size
-    layer = _mark_layer((w, h), [(0, 0, w, h)])
+    layer = _mark_layer((w, h), [(0, 0, w, h)], under=img)
     return Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
 
 
@@ -215,7 +245,7 @@ def _draw_percut_marks(img, bounds: list[tuple[int, int, int, int]]):
             if bw > 0 and bh > 0 and 0 <= x and 0 <= y and x + bw <= w and y + bh <= h]
     if not safe:
         return _draw_mark(img)
-    layer = _mark_layer((w, h), safe)
+    layer = _mark_layer((w, h), safe, under=img)
     return Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
 
 
