@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { listCharacters } from "../../../lib/charApi";
+import { useRef, useState } from "react";
 import { MAX_PHOTOS, type WizardForm } from "../../../lib/wizardData";
 
 /* 1 · 수면 — 사진 · 이름 · 캐릭터 설명. haeun/landing의 setupPhoto() 를
@@ -18,19 +17,10 @@ export default function Step1Photo({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  /* 만들어 둔 캐릭터가 있나. 있고 없고에 따라 안내가 달라진다 — 없는 사람에게
-     "고르세요" 라고 하면 또 막다른 길이다. 못 물어봤으면 없는 쪽으로 본다. */
-  const [has, setHas] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    listCharacters()
-      .then((v) => { if (alive) setHas(v.characters.some((c) => c.mine)); })
-      .catch(() => { /* 못 물어보면 "만들고 오기" 로 둔다 */ });
-    return () => { alive = false; };
-  }, []);
-
-  /** 아직 아무것도 안 정했다 — 안내가 뜨는 조건. */
-  const empty = !form.characterId && form.photos.length === 0;
+  /* 사진 칸을 누르면 **무엇으로 채울지부터** 묻는다. 바로 파일 고르개를 열면
+     자캐 그림이 없는 사람은 거기서 막힌다 — 그 사람에게도 길이 있다는 것을
+     이 자리에서 말해야 한다. */
+  const [choosing, setChoosing] = useState(false);
 
   const addFiles = (files: FileList | null) => {
     const list = [...(files ?? [])];
@@ -85,17 +75,28 @@ export default function Step1Photo({
 
       <div className="wiz-card">
         <div className="photo-row">
-          {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label className="photo-drop"
-                 onClick={() => { if (!form.characterId) inputRef.current?.click(); }}>
-            <input
-              ref={inputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              multiple
-              hidden
-              onChange={(e) => addFiles(e.target.files)}
-            />
+          {/* **파일 고르개는 이 칸 밖에 둔다.**
+           *
+           * 전에는 이 칸이 <label> 이고 그 안에 파일 입력이 있었다. 라벨은
+           * 눌리면 안에 든 입력을 <b>브라우저가 자동으로</b> 연다 — 그래서
+           * 무엇으로 채울지 묻는 창과 파일 창이 같이 떴다. 이제 이 칸은 묻기만
+           * 하고, 파일 창은 「사진 올리기」를 고른 뒤에 연다. */}
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            multiple
+            hidden
+            onChange={(e) => addFiles(e.target.files)}
+          />
+          <div className="photo-drop" role="button" tabIndex={0}
+               onClick={() => { if (!form.characterId) setChoosing(true); }}
+               onKeyDown={(e) => {
+                 if (e.key === "Enter" || e.key === " ") {
+                   e.preventDefault();
+                   if (!form.characterId) setChoosing(true);
+                 }
+               }}>
             <span className="photo-hint">
               {form.characterId
                 ? <>캐릭터 <b>{form.name}</b></>
@@ -148,20 +149,7 @@ export default function Step1Photo({
               )}
             </div>
             <span className="photo-count">{countLabel}</span>
-          </label>
-
-          {/* **아무것도 없을 때만 뜬다.** 사진을 올리거나 캐릭터를 고르면
-              사라진다 — 이미 길을 찾은 사람에게 계속 붙어 있을 안내가 아니다.
-              만들어 둔 것이 있으면 「고르기」로, 없으면 「만들고 오기」로
-              말이 바뀐다: 없는 사람에게 "고르세요" 는 또 막다른 길이다. */}
-          {empty && (
-            <p className="photo-hasnt">
-              <span>{has ? "만들어 둔 캐릭터가 있어요" : "캐릭터 사진이 없으신가요?"}</span>
-              <button type="button" className="btn btn-quiet btn-sm" onClick={onPickCharacter}>
-                {has ? "내 캐릭터에서 고르기" : "캐릭터 먼저 만들고 오기"} →
-              </button>
-            </p>
-          )}
+          </div>
 
           <ul className="photo-rules">
             <li>본인이 찍었거나 직접 그린 사진, 또는 쓸 권한이 있는 사진만 올려주세요.</li>
@@ -198,6 +186,34 @@ export default function Step1Photo({
           />
         </label>
       </div>
+      {choosing && (
+        <div className="pick-way" role="dialog" aria-modal="true"
+             aria-label="캐릭터를 어떻게 넣을까요">
+          <button type="button" className="pick-way-veil" aria-label="닫기"
+                  onClick={() => setChoosing(false)} />
+          <div className="pick-way-box">
+            <button type="button" className="pick-way-x" aria-label="닫기"
+                    onClick={() => setChoosing(false)}>✕</button>
+            <h3>캐릭터를 어떻게 넣을까요?</h3>
+            <button
+              type="button"
+              className="pick-way-one"
+              onClick={() => { setChoosing(false); inputRef.current?.click(); }}
+            >
+              <b>캐릭터 사진 올리기</b>
+              <span>자캐 그림이나 사진이 있으면 그걸로 그려요</span>
+            </button>
+            <button
+              type="button"
+              className="pick-way-one"
+              onClick={() => { setChoosing(false); onPickCharacter(); }}
+            >
+              <b>캐릭터 직접 만들기</b>
+              <span>사진이 없어도 돼요 — 설명만으로 그려 드려요</span>
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

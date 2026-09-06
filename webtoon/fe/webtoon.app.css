@@ -918,40 +918,60 @@
 .webtoon-page .mychar b { font-size: .8rem; padding: 7px 8px 9px; font-weight: 700; }
 
 
-/* ---- 1걸음: 캐릭터가 없을 때만 뜨는 안내 -----------------------------------
- *
- * 사진을 올리거나 캐릭터를 고르면 **사라진다.** 이미 길을 찾은 사람에게
- * 계속 붙어 있을 안내가 아니다.
- *
- * 전에는 사진 칸과 같은 크기의 회색 덩어리를 옆에 하나 더 뒀는데, 크기만
- * 같고 성격이 달라서 둘이 싸웠다. 지금은 사진 칸 아래에 붙는 한 줄이다 —
- * 안내는 안내처럼 보여야 한다. */
 
-.webtoon-page .photo-hasnt {
+/* ---- 사진 칸을 누르면 뜨는 두 갈래 ------------------------------------------
+ *
+ * 바로 파일 고르개를 열면 자캐 그림이 없는 사람은 거기서 막힌다. 그 사람에게도
+ * 길이 있다는 것을 **누른 그 자리에서** 말해야 한다.
+ *
+ * 화면 밖에 안내를 덧붙이는 대신 여기서 묻는 이유: 사진 칸 옆에 같은 크기의
+ * 안내 칸을 하나 더 뒀더니 둘이 싸웠고, 아래에 한 줄로 붙였더니 사진 칸을
+ * 먼저 누른 사람은 그 줄을 지나쳐 버렸다. */
+
+.webtoon-page .pick-way {
+  position: fixed; inset: 0; z-index: 60;
+  display: grid; place-items: center; padding: 20px;
+}
+.webtoon-page .pick-way-veil {
+  position: absolute; inset: 0; border: 0; padding: 0;
+  background: rgba(10,32,38,.45); cursor: pointer;
+}
+.webtoon-page .pick-way-box {
+  position: relative; width: min(560px, 100%);
+  background: var(--card); border-radius: 18px; padding: 20px;
+  box-shadow: 0 20px 60px rgba(15,51,63,.28);
+  /* 두 갈래를 **나란히** 둔다 — 위아래로 쌓으면 위쪽이 먼저 읽혀서
+     "사진이 기본이고 만들기는 대안" 처럼 보인다. 둘 다 같은 길이다. */
+  display: grid; gap: 10px; grid-template-columns: 1fr 1fr;
+}
+.webtoon-page .pick-way-box h3 {
   grid-column: 1 / -1;
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: 8px;
-  margin: 2px 0 0; padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(15,51,63,.045);
-  color: var(--muted); font-size: .84rem;
+  font-size: 1.05rem; font-weight: 800; color: var(--accent-d);
+  margin: 0 0 .3em; text-align: center;
 }
-.webtoon-page .photo-hasnt .btn { flex: 0 0 auto; }
-
-/* 좁으면 단추가 한 줄을 다 쓴다 — 눌리는 자리가 커야 한다. */
-@media (max-width: 480px) {
-  .webtoon-page .photo-hasnt { flex-direction: column; align-items: stretch; text-align: center; }
-  .webtoon-page .photo-hasnt .btn { width: 100%; }
+.webtoon-page .pick-way-one {
+  display: grid; gap: .3em; text-align: center; align-content: start;
+  border: 1px solid var(--line-2); border-radius: 14px;
+  background: var(--paper); padding: 18px 14px; cursor: pointer;
+  font: inherit; color: var(--text);
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
 }
+.webtoon-page .pick-way-one:hover {
+  border-color: var(--accent); background: rgba(15,51,63,.03); transform: translateY(-1px);
+}
+.webtoon-page .pick-way-one b { font-size: .95rem; }
+.webtoon-page .pick-way-one span { font-size: .78rem; color: var(--dim); line-height: 1.5; }
+/* 닫기는 오른쪽 위 ✕ 로. 아래에 단추로 두면 두 갈래와 같은 무게로 읽혀서
+   "세 번째 선택지" 처럼 보인다. */
+.webtoon-page .pick-way-x {
+  position: absolute; right: 10px; top: 10px;
+  width: 32px; height: 32px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--dim); cursor: pointer;
+  font-size: .95rem; line-height: 1; display: grid; place-items: center;
+}
+.webtoon-page .pick-way-x:hover { background: rgba(15,51,63,.06); color: var(--text); }
 
-/* 사진 칸은 원래대로다 — 옆에 뭘 더 두지 않는다.
- *
- * 넓은 화면에서 이 격자는 원래 `132px 1fr`(사진 | 이용 안내)이다. 거기에
- * 안내 줄을 하나 더 끼우면서 이용 안내가 132px 칸으로 밀려 글자가 네 글자씩
- * 끊겼다. 자리를 못 박아 원래 배치를 되살린다. */
-.webtoon-page .photo-row { display: grid; gap: 10px; }
-
-@media (min-width: 900px) {
-  .webtoon-page .photo-row .photo-rules { grid-column: 2; grid-row: 1; }
-  .webtoon-page .photo-hasnt { grid-column: 1 / -1; grid-row: 2; }
+/* 아주 좁은 폰에서는 나란히 두면 글자가 두 글자씩 끊긴다 — 거기서만 쌓는다. */
+@media (max-width: 380px) {
+  .webtoon-page .pick-way-box { grid-template-columns: 1fr; }
 }
