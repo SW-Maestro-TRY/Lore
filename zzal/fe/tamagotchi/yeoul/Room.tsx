@@ -17,6 +17,7 @@
 //   `useFootPad` 가 그림에서 직접 잰다(못 재면 여울 기준값으로 되돌아간다).
 'use client';
 
+import { useEffect, useState } from 'react';
 import { EGG_IMG, KIND_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
@@ -293,27 +294,70 @@ function SampleBar({ y }: { y: Yeoul }) {
 }
 
 /** 튜토리얼 카드 — 샘플 방에서는 이전·다음으로 넘기고, 진짜 방에서는 직접 해야 넘어간다. */
+/**
+ * 여울 샘플 방의 상단 안내.
+ *
+ * ★ 무대 위쪽을 크게 덮지 않게 압축했다(2026-09-07 상훈님 지시 "조금 더 콤팩트하게 수납").
+ *   - 점 여덟 개 → `3 / 8` 한 덩어리. 여덟 개는 자리만 먹고 몇 번째인지 읽히지도 않았다.
+ *   - 이전·다음·진행을 **글과 같은 흐름에** 흘려 둔 줄을 없앴다(따로 한 줄이면 그만큼 더 덮는다).
+ * ★ 접을 수 있다. 다만 **기본은 펼침**이고, 부름이 다음으로 넘어가면 **자동으로 다시 펼친다** —
+ *   새 안내가 접힌 채로 지나가면 사용자가 못 읽는다. 그래서 접힘은 이 카드가 스스로만 들고,
+ *   튜토리얼 진행(useYeoul)은 건드리지 않는다.
+ */
 function TutorCard({ y }: { y: Yeoul }) {
   const { v } = y;
   const b = v.bub;
+  const [folded, setFolded] = useState(false);
+  useEffect(() => { setFolded(false); }, [b.stepText]);
+
+  const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
+  const pill = { padding: '4px 10px', borderRadius: radius.pill, fontSize: 11.5, whiteSpace: 'nowrap' as const };
+
+  if (folded) {
+    return (
+      <button
+        data-part="tutor-folded"
+        onClick={stop(() => setFolded(false))}
+        style={{
+          position: 'absolute', left: 12, top: b.tutTop, zIndex: 3,
+          display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: radius.pill,
+          background: 'rgba(255,253,248,.95)', border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)',
+        }}
+      >
+        <span style={{ fontSize: 11.5, color: C.sub2 }}>여울의 안내</span>
+        <span style={{ font: `9.5px ${MONO}`, color: C.faint2 }}>{b.stepText}</span>
+        <span style={{ fontSize: 10, color: C.faint2 }}>∨</span>
+      </button>
+    );
+  }
+
   return (
-    <div style={{
+    <div data-part="tutor" style={{
       position: 'absolute', left: 12, right: 12, top: b.tutTop, zIndex: 3,
-      display: 'flex', flexDirection: 'column', gap: 9, padding: '11px 13px', borderRadius: radius.md,
+      padding: '7px 24px 7px 11px', borderRadius: radius.md,
       background: 'rgba(255,253,248,.95)', border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)',
       animation: 'yPop .24s ease',
     }}>
-      <span style={{ fontFamily: GAEGU, fontSize: 17, lineHeight: 1.3, color: C.ink }}>{b.tutText}</span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-        {b.hasPrev && <button onClick={(e) => { e.stopPropagation(); b.prev(); }} style={{ padding: '7px 13px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 12.5, color: C.sub2 }}>이전</button>}
-        <span style={{ flex: 1 }} />
-        <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {b.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 5, borderRadius: 3, background: d.bg }} />)}
-        </span>
-        <span style={{ flex: 1 }} />
-        {b.hasNext && <button onClick={(e) => { e.stopPropagation(); b.chipTap(); }} style={{ padding: '7px 14px', borderRadius: radius.pill, border: 'none', background: C.accent, color: C.accentInk, fontSize: 12.5, whiteSpace: 'nowrap' }}>{b.chipLabel}</button>}
-        {b.hasHint && <span style={{ fontSize: 11, color: 'rgba(74,64,56,.45)', whiteSpace: 'nowrap' }}>{b.hintText}</span>}
-        {b.hasSkip && <button onClick={(e) => { e.stopPropagation(); b.skipStep(); }} style={{ padding: '7px 11px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11.5, color: C.sub2, whiteSpace: 'nowrap' }}>나중에</button>}
+      {/* 손잡이는 흐름 밖에 둔다 — 글이 그 밑으로 흐르지 않게 오른쪽 여백을 미리 비워 뒀다. */}
+      <button
+        data-part="tutor-fold" onClick={stop(() => setFolded(true))} aria-label="안내 접기"
+        style={{ position: 'absolute', right: 6, top: 6, width: 20, height: 20, borderRadius: radius.pill, border: 'none', background: 'none', fontSize: 10, color: C.faint2, lineHeight: 1 }}
+      >∧</button>
+
+      {/* 글과 손잡이들을 한 흐름에 둔다. 글이 끝난 자리에 이어 붙어 줄을 더 쓰지 않는다. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 6px' }}>
+        <span style={{ fontFamily: GAEGU, fontSize: 15, lineHeight: 1.22, color: C.ink }}>{b.tutText}</span>
+        <span style={{ font: `9.5px ${MONO}`, color: C.faint2 }}>{b.stepText}</span>
+        {b.hasPrev && (
+          <button onClick={stop(b.prev)} data-tutor-prev style={{ ...pill, border: `1px solid ${C.lineHard}`, background: C.slot, color: C.sub2 }}>이전</button>
+        )}
+        {b.hasNext && (
+          <button onClick={stop(b.chipTap)} data-tutor-next style={{ ...pill, border: 'none', background: C.accent, color: C.accentInk }}>{b.chipLabel}</button>
+        )}
+        {b.hasHint && <span style={{ fontSize: 11, color: C.faint2, whiteSpace: 'nowrap' }}>{b.hintText}</span>}
+        {b.hasSkip && (
+          <button onClick={stop(b.skipStep)} style={{ ...pill, border: `1px solid ${C.lineHard}`, background: C.slot, color: C.sub2 }}>나중에</button>
+        )}
       </div>
     </div>
   );

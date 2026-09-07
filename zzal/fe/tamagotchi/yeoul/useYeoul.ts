@@ -154,6 +154,8 @@ export interface Bubble {
   show: boolean; text: string; chipLabel: string;
   hasPrev: boolean; hasNext: boolean; hasHint: boolean; hintText: string; hasSkip: boolean;
   dots: { w: string; bg: string }[];
+  /** '3 / 8' — 점 여덟 개 대신 쓰는 한 덩어리. 자리도 덜 먹고 읽히기도 낫다. */
+  stepText: string;
   prev: () => void; chipTap: () => void; skipStep: () => void;
 }
 export interface Opt extends Sel { text: string; pick: () => void }
@@ -776,6 +778,7 @@ export function useYeoul() {
       hasHint: !!tut && !s.sampleMode,
       hintText: '직접 해 보면 다음으로',
       hasSkip: !!tut && !s.sampleMode,
+      stepText: `${s.tutor + 1} / ${TUT.length}`,
       dots: TUT.map((_, i) => ({
         w: tut && i === s.tutor ? '14px' : '5px',
         bg: tut && i === s.tutor ? ACCENT : i < s.tutor ? C.accentDim : 'rgba(74,64,56,.14)',
