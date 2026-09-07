@@ -117,6 +117,9 @@ export interface NhCreateRequest {
   style: string;
   /** data URL 목록. 원본과 같은 이름(photos_data)으로 보낸다. */
   photos_data: string[];
+  /** presign 으로 먼저 올린 사진의 키. 있으면 서버가 이쪽을 쓰고 본문에
+   *  사진이 안 실린다 — 넷이면 20MB 넘던 요청이 몇백 바이트가 된다. */
+  photo_keys?: string[];
   agree_ip: boolean;
   /** 사람이 보고 넘어가는 자리(시트 확인 · 이야기 고르기)를 둘 것인가.
    *  갈림길에서 「2번 확인하며」를 고르면 참, 「빠르게 결과부터」면 거짓이다.

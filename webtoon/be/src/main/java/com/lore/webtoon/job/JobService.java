@@ -1,5 +1,7 @@
 package com.lore.webtoon.job;
 
+import com.lore.common.s3.S3Service;
+import com.lore.common.s3.S3Storage;
 import com.lore.webtoon.art.PrivateArt;
 import com.lore.webtoon.harness.WebtoonController;
 import com.lore.webtoon.work.WorkLedger;
@@ -86,17 +88,22 @@ public class JobService {
     private final WorkLedger works;
     private final CharacterService characters;
     private final PrivateArt art;
+    private final S3Service uploads;
+    private final S3Storage storage;
     private final Path jobsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobService(WebtoonJobRepository jobs, JobStore store, JobRunner runner,
                       JobProgress progress, StoryStore stories, WorkLedger works,
                       CharacterService characters, PrivateArt art,
+                      S3Service uploads, S3Storage storage,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
         this.works = works;
         this.characters = characters;
         this.art = art;
+        this.uploads = uploads;
+        this.storage = storage;
         this.store = store;
         this.runner = runner;
         this.progress = progress;
@@ -131,7 +138,14 @@ public class JobService {
         Path dir = jobsDir.resolve(publicId);
         try {
             Files.createDirectories(dir);
-            List<Path> photos = savePhotos(dir, form.photosData());
+            /* **키가 오면 그쪽을 쓴다.** presign 으로 올리면 사진이 요청 본문에
+               안 실리므로 넷이면 20MB 넘던 create 가 몇백 바이트가 된다.
+               data URL 도 계속 받는다 — 화면이 한 번에 갈아타지 않아도 되고,
+               게스트는 계정이 없어서 티켓을 못 받는다(presign 은 로그인이
+               필요하다). 둘 다 오면 키가 이긴다. */
+            List<Path> photos = form.photoKeys() != null && !form.photoKeys().isEmpty()
+                    ? pullPhotos(dir, form.photoKeys(), userId)
+                    : savePhotos(dir, form.photosData());
             Path fromCharacter = characterArt(dir, form.characterId(), userId);
             /* 캐릭터를 골라 왔으면 그 그림을 참조로 붙인다.
              *
@@ -295,6 +309,48 @@ public class JobService {
         }
     }
 
+    /**
+     * presign 으로 S3 에 올라간 사진을 작업 폴더로 내린다.
+     *
+     * <b>티켓을 먼저 태운다</b>({@code S3Service.consume}) — 남의 키를 적어 보내거나
+     * 같은 키를 두 번 쓰는 것을 그 안에서 막는다. 태우지 않고 내려받으면 키만 알면
+     * 남이 올린 사진을 자기 작업에 붙일 수 있다.
+     *
+     * 내린 뒤에는 {@code photo1.png} … 로 두어 예전 길과 같은 모양이 되게 한다 —
+     * 하네스는 그 이름만 안다.
+     */
+    private List<Path> pullPhotos(Path dir, List<String> keys, Long userId) throws IOException {
+        List<Path> saved = new ArrayList<>();
+        if (keys == null || keys.isEmpty()) {
+            return saved;
+        }
+        if (keys.size() > MAX_PHOTOS) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "사진은 " + MAX_PHOTOS + "장까지 올릴 수 있습니다");
+        }
+        int i = 0;
+        for (String key : keys) {
+            i++;
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            uploads.consume(userId, key, Instant.now());
+            Path raw = dir.resolve("upload" + i);
+            storage.download(key, raw);
+            BufferedImage image = ImageIO.read(raw.toFile());
+            if (image == null) {
+                Files.deleteIfExists(raw);
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        i + "번째 사진을 열지 못했습니다. 아이폰 사진(HEIC)이면 JPG 나 PNG 로 바꿔서 올려 주세요.");
+            }
+            Path to = dir.resolve("photo" + i + ".png");
+            ImageIO.write(shrink(image), "png", to.toFile());
+            Files.deleteIfExists(raw);
+            saved.add(to);
+        }
+        return saved;
+    }
+
     private List<Path> savePhotos(Path dir, List<String> dataUrls) throws IOException {
         List<Path> saved = new ArrayList<>();
         if (dataUrls == null) {
@@ -434,6 +490,11 @@ public class JobService {
                                 String style, Map<String, String> fields,
                                 @JsonProperty("photos_data") @JsonAlias("photosData")
                                 List<String> photosData,
+                                /* presign 으로 올린 사진의 키. photos_data 대신 이것을
+                                   보내면 본문에 사진이 안 실린다 — 넷이면 20MB 가 넘던
+                                   요청이 몇백 바이트가 된다. 둘 다 오면 키를 먼저 쓴다. */
+                                @JsonProperty("photo_keys") @JsonAlias("photoKeys")
+                                List<String> photoKeys,
                                 @JsonProperty("agree_ip") @JsonAlias("agreeIp")
                                 Boolean agreeIp,
                                 Boolean checkpoints, String uid,

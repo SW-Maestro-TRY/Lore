@@ -41,6 +41,7 @@ import Editor from "./sections/Editor/Editor";
 import Characters from "./sections/Characters/Characters";
 import { STYLE_INFO, type WizardForm } from "./lib/wizardData";
 import { createJob, linkThisBrowser } from "./lib/nhApi";
+import { uploadDataUrls } from "@common/api/uploads";
 import type { Character } from "./lib/charApi";
 
 type View = "landing" | "create" | "running" | "result" | "works" | "mypage"
@@ -189,6 +190,26 @@ function WebtoonScreens() {
      삼키지 않고 그대로 던진다 — 진행 화면으로 넘어가 버리면 무엇이
      잘못됐는지 볼 자리가 없다(원본 startRun 과 같은 이유). */
   const start = async (form: WizardForm) => {
+    /* **사진은 S3 로 먼저 올린다** (팀 공용 presign). 본문에 data URL 로
+       실으면 넷이면 요청이 20MB 를 넘어서 서버가 그걸 다 받아 들고 있어야
+       한다 — t3.micro 에서 그게 제일 먼저 막힌다. 브라우저가 S3 로 바로
+       올리고 우리는 키만 넘긴다.
+
+       **로그인한 사람만** 이 길로 간다. presign 은 티켓을 계정에 묶어
+       남의 키를 적어 넣는 것을 막는데, 게스트는 계정이 없다. 게스트는
+       예전처럼 data URL 로 보낸다 — 서버가 둘 다 받는다.
+
+       올리다 실패하면 data URL 로 되돌린다. 사진 올리는 길이 잠깐 막혔다고
+       만들기가 통째로 죽으면 안 된다. */
+    let keys: string[] | undefined;
+    if (authStatus === "authenticated" && form.photos.length) {
+      try {
+        keys = await uploadDataUrls(form.photos, "webtoon");
+      } catch {
+        keys = undefined;
+      }
+    }
+
     const got = await createJob({
       name: form.name.trim(),
       character: form.character.trim(),
@@ -200,7 +221,9 @@ function WebtoonScreens() {
       // 사람은 자기가 적은 것이 반영된 줄 안다.
       story: form.story.trim(),
       style: form.style,
-      photos_data: form.photos,
+      // 키로 올렸으면 사진은 안 싣는다 — 두 벌을 보내는 셈이 된다.
+      photos_data: keys ? [] : form.photos,
+      photo_keys: keys,
       // 고른 캐릭터가 있으면 번호만 보낸다 — 그림은 서버가 붙인다.
       character_id: form.characterId,
       agree_ip: form.agreeIp,
