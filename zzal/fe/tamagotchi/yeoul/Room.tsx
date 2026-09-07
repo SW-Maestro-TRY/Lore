@@ -438,11 +438,24 @@ function ChatBar({ y }: { y: Yeoul }) {
 function Popover({ y, popRef }: { y: Yeoul; popRef: (el: HTMLDivElement | null) => void }) {
   const p = y.v.pop;
   return (
+    // ★ 자리 잡기(겉)와 나타나는 동작(속)을 **두 겹으로 나눈다.**
+    //   한 요소에 인라인 `transform: translateX` 와 `animation: yPopIn` 을 같이 걸면,
+    //   키프레임도 transform 을 건드리기 때문에 재생되는 0.2초 동안 인라인 값이 통째로 덮이고
+    //   팝오버가 엉뚱한 자리(오른쪽 끝 타일이면 화면 밖)에 떴다가 끝나는 순간 튀어 들어온다.
+    //   실측: 앨범 타일에서 left 344 → 129 로 215px 순간이동(2026-09-07).
+    //   키프레임에 translateX 를 박는 방법은 안 쓴다 — 타일마다 값이 달라 키프레임이 다섯 벌 된다.
+    // ★ popRef 는 **겉**에 둔다. 속은 재생 중 살짝 움직이므로, 겉을 재야 무대 겹침이 흔들리지 않는다.
     <div
       ref={popRef} data-part="pop"
       onClick={(e) => e.stopPropagation()}
       style={{
         position: 'relative', width: 'min(252px,92%)', left: p.leftPct, transform: `translateX(${p.tx})`,
+      }}
+    >
+    <div
+      data-part="pop-card"
+      style={{
+        position: 'relative', width: '100%',
         padding: '12px 13px', boxSizing: 'border-box', borderRadius: radius.lg,
         background: C.paper, border: `1px solid ${C.lineSoft}`, boxShadow: '0 8px 24px rgba(74,64,56,.16)',
         display: 'flex', flexDirection: 'column', gap: 11, animation: p.anim,
@@ -471,6 +484,7 @@ function Popover({ y, popRef }: { y: Yeoul; popRef: (el: HTMLDivElement | null) 
         {p.hasB && p.b && <PopButton b={p.b} />}
       </span>
       <span style={{ position: 'absolute', left: p.tailPct, bottom: -6, width: 12, height: 12, background: C.paper, borderRight: `1px solid ${C.lineSoft}`, borderBottom: `1px solid ${C.lineSoft}`, transform: 'translateX(-50%) rotate(45deg)' }} />
+    </div>
     </div>
   );
 }
