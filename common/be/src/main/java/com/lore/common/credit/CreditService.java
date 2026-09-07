@@ -100,10 +100,17 @@ public class CreditService {
      */
     @Transactional
     public int grantOnce(Long userId, int amount, CreditReason reason, String refId) {
+        return grantOnce(userId, amount, reason, CreditDomain.COMMON, refId);
+    }
+
+    /** 어디서 준 것인지까지 적는다. 가입 축하·오늘의 무료는 {@code COMMON} 이다. */
+    @Transactional
+    public int grantOnce(Long userId, int amount, CreditReason reason,
+                         CreditDomain domain, String refId) {
         if (amount <= 0) {
             return 0;                       // 0 이면 그 몫을 안 주는 설정이다
         }
-        return write(userId, amount, reason, refId, reason.label()) ? amount : 0;
+        return write(userId, amount, reason, domain, refId, reason.label()) ? amount : 0;
     }
 
     /**
@@ -119,6 +126,18 @@ public class CreditService {
      */
     @Transactional
     public int spend(Long userId, int amount, String refId) {
+        return spend(userId, CreditDomain.COMMON, amount, refId, null);
+    }
+
+    /**
+     * 어느 서비스에서 무엇에 썼는지까지 적는다.
+     *
+     * @param domain 웹툰인지 짤인지. 내역 화면이 이것으로 갈라 보여 주고,
+     *               도메인별 지출도 이것으로 센다
+     * @param memo   사람이 읽을 한 줄(작품 이름 등). 비우면 이유의 기본 문구
+     */
+    @Transactional
+    public int spend(Long userId, CreditDomain domain, int amount, String refId, String memo) {
         if (amount <= 0) {
             return 0;
         }
@@ -130,8 +149,10 @@ public class CreditService {
             throw new BusinessException(ErrorCode.CREDIT_NOT_ENOUGH,
                     "크레딧이 모자랍니다 (필요 " + amount + " · 보유 " + have + ")");
         }
-        return write(userId, -amount, CreditReason.SPEND, refId, CreditReason.SPEND.label())
-                ? amount : 0;
+        String line = memo == null || memo.isBlank()
+                ? (domain == null ? CreditDomain.COMMON : domain).label() + "에서 사용"
+                : memo;
+        return write(userId, -amount, CreditReason.SPEND, domain, refId, line) ? amount : 0;
     }
 
     /**
@@ -146,14 +167,18 @@ public class CreditService {
     @Transactional
     public int refund(Long userId, String refId, String why) {
         List<CreditEvent> mine = events.historyOf(userId, PageRequest.of(0, MAX_HISTORY));
-        int paid = mine.stream()
+        List<CreditEvent> paidRows = mine.stream()
                 .filter(e -> e.getReason() == CreditReason.SPEND && e.getRefId().equals(refId))
-                .mapToInt(e -> -e.getDelta())
-                .sum();
+                .toList();
+        int paid = paidRows.stream().mapToInt(e -> -e.getDelta()).sum();
         if (paid <= 0) {
             return 0;
         }
-        return write(userId, paid, CreditReason.REFUND, refId,
+        /* **도메인은 낸 줄에서 물려받는다.** 돌려주는 쪽이 따로 정하게 두면
+           웹툰에서 낸 것을 짤로 돌려준 것처럼 적힐 수 있고, 그러면 도메인별
+           합계가 어긋난다. 금액을 부르는 쪽이 안 정하는 것과 같은 이유다. */
+        CreditDomain domain = paidRows.get(0).getDomain();
+        return write(userId, paid, CreditReason.REFUND, domain, refId,
                 why == null || why.isBlank() ? CreditReason.REFUND.label() : why) ? paid : 0;
     }
 
@@ -178,13 +203,14 @@ public class CreditService {
      * @return 이번에 새로 적었으면 true
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    boolean write(Long userId, int delta, CreditReason reason, String refId, String memo) {
+    boolean write(Long userId, int delta, CreditReason reason, CreditDomain domain,
+                  String refId, String memo) {
         if (events.existsByUserIdAndReasonAndRefId(userId, reason, refId)) {
             return false;
         }
         try {
             events.saveAndFlush(CreditEvent.of(
-                    userId, delta, reason, refId, memo, Instant.now(clock)));
+                    userId, delta, reason, domain, refId, memo, Instant.now(clock)));
             return true;
         } catch (DataIntegrityViolationException race) {
             log.debug("같은 크레딧 기록이 거의 동시에 들어왔습니다 (user={}, {} {})",

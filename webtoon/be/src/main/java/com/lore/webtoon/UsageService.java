@@ -1,5 +1,6 @@
 package com.lore.webtoon;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.common.response.ApiResponse;
@@ -183,6 +184,7 @@ public class UsageService {
     }
 
     /** @param krw 이 단계·모델에 오늘 나간 돈 */
+    @Schema(name = "UsageLine", description = "단계별 비용 한 줄")
     public record Line(String stage, String model, long krw, long calls) {
     }
 }

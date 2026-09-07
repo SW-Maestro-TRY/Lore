@@ -1,5 +1,6 @@
 package com.lore.webtoon;
 
+import com.lore.common.credit.CreditDomain;
 import com.lore.common.credit.CreditService;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
@@ -116,7 +117,10 @@ public class CreditGate {
             return;
         }
         try {
-            credits.spend(userId, amount, ref);
+            /* **웹툰에서 쓴 것이라고 적는다.** 장부는 세 도메인이 같이 쓰므로,
+               안 적으면 내역에 어디서 쓴 것인지가 안 남고 도메인별 지출도
+               못 센다. memo 는 사람이 읽을 한 줄이라 그대로 넘긴다. */
+            credits.spend(userId, CreditDomain.WEBTOON, amount, ref, memo);
             if (memo != null) {
                 log.debug("크레딧 {} 받음 (user={}, {})", amount, userId, memo);
             }

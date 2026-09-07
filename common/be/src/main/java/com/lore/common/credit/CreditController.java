@@ -3,6 +3,7 @@ package com.lore.common.credit;
 import com.lore.common.auth.jwt.LoginUser;
 import com.lore.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -58,13 +59,18 @@ public class CreditController {
      * @param delta  움직인 양. 받으면 양수, 쓰면 음수
      * @param reason 코드 이름 그대로 — 화면이 문구가 아니라 이것으로 분기한다
      * @param label  사람이 읽을 말
+     * @param domain 어느 서비스에서 일어난 일인가 (WEBTOON · ZZAL · TRAILER · COMMON).
+     *               이 칸이 생기기 전 줄은 COMMON 으로 온다
+     * @param domainLabel 사람이 읽을 서비스 이름
      */
+    @Schema(name = "CreditEventLine", description = "크레딧 내역 한 줄")
     public record Line(Long id, int delta, String reason, String label,
-                       String memo, Instant at) {
+                       String domain, String domainLabel, String memo, Instant at) {
 
         static Line from(CreditEvent e) {
             return new Line(e.getId(), e.getDelta(), e.getReason().name(),
-                    e.getReason().label(), e.getMemo(), e.getCreatedAt());
+                    e.getReason().label(), e.getDomain().name(), e.getDomain().label(),
+                    e.getMemo(), e.getCreatedAt());
         }
     }
 }

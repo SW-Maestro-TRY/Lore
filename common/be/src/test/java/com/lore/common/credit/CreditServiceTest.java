@@ -146,6 +146,41 @@ class CreditServiceTest {
     }
 
     @Test
+    @DisplayName("어디서 썼는지가 장부에 남는다 — 장부를 세 도메인이 같이 쓴다")
+    void 도메인이_남는다() {
+        CreditService credits = service(12, 20, DAY1);
+        credits.balanceWithDaily(ME);
+        credits.spend(ME, CreditDomain.WEBTOON, 12, "run-1", "남은 시간만큼");
+
+        CreditEvent spent = credits.history(ME, 10).stream()
+                .filter(e -> e.getReason() == CreditReason.SPEND).findFirst().orElseThrow();
+        assertThat(spent.getDomain()).isEqualTo(CreditDomain.WEBTOON);
+        assertThat(spent.getMemo()).isEqualTo("남은 시간만큼");
+    }
+
+    @Test
+    @DisplayName("받은 것은 공통이다 — 웹툰으로 적어 두면 도메인별 지출에 받은 것이 섞인다")
+    void 받은_것은_공통() {
+        CreditService credits = service(12, 20, DAY1);
+        credits.balanceWithDaily(ME);
+        assertThat(credits.history(ME, 10)).allSatisfy(e ->
+                assertThat(e.getDomain()).isEqualTo(CreditDomain.COMMON));
+    }
+
+    @Test
+    @DisplayName("돌려줄 때 도메인을 낸 줄에서 물려받는다 — 부르는 쪽이 정하면 합계가 어긋난다")
+    void 환원은_도메인을_물려받는다() {
+        CreditService credits = service(12, 20, DAY1);
+        credits.balanceWithDaily(ME);
+        credits.spend(ME, CreditDomain.WEBTOON, 12, "run-1", "남은 시간만큼");
+        assertThat(credits.refund(ME, "run-1", "못 만들었습니다")).isEqualTo(12);
+
+        CreditEvent back = credits.history(ME, 10).stream()
+                .filter(e -> e.getReason() == CreditReason.REFUND).findFirst().orElseThrow();
+        assertThat(back.getDomain()).isEqualTo(CreditDomain.WEBTOON);
+    }
+
+    @Test
     @DisplayName("돌려주면 낸 만큼 돌아오고, 뺀 줄은 그대로 남는다")
     void 환원() {
         CreditService credits = service(12, 20, DAY1);

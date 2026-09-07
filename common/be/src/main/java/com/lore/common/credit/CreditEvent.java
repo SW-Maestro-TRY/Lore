@@ -74,6 +74,20 @@ public class CreditEvent {
     private CreditReason reason;
 
     /**
+     * 어느 서비스에서 일어난 일인가. 이유(reason)가 "무슨 성격의 움직임인가"
+     * 라면 이것은 "어디서인가" 다.
+     *
+     * <b>옛 줄은 비어 있다.</b> 이 칸이 생기기 전에 쌓인 것은 전부 웹툰에서
+     * 나온 것이지만(그때는 웹툰만 크레딧을 썼다), 그렇다고 웹툰으로 채워
+     * 넣지 않는다 — 실제로 그 줄에 적혀 있던 것은 "모른다" 이고, 나중에
+     * 도메인별 합계를 낼 때 추측으로 채운 값이 실측처럼 보이면 안 된다.
+     * 읽는 쪽은 비어 있으면 {@link CreditDomain#COMMON} 으로 본다.
+     */
+    @Column(length = 20)
+    @Enumerated(EnumType.STRING)
+    private CreditDomain domain;
+
+    /**
      * 무엇 때문인가 — 작품 id, 결제 id 같은 것.
      *
      * 이유별로 하나뿐인 일(가입 축하 등)에는 이유 이름을 그대로 넣는다.
@@ -93,19 +107,20 @@ public class CreditEvent {
     protected CreditEvent() {
     }
 
-    private CreditEvent(Long userId, int delta, CreditReason reason,
+    private CreditEvent(Long userId, int delta, CreditReason reason, CreditDomain domain,
                         String refId, String memo, Instant createdAt) {
         this.userId = userId;
         this.delta = delta;
         this.reason = reason;
+        this.domain = domain == null ? CreditDomain.COMMON : domain;
         this.refId = refId;
         this.memo = memo;
         this.createdAt = createdAt;
     }
 
-    static CreditEvent of(Long userId, int delta, CreditReason reason,
+    static CreditEvent of(Long userId, int delta, CreditReason reason, CreditDomain domain,
                           String refId, String memo, Instant at) {
-        return new CreditEvent(userId, delta, reason, refId, memo, at);
+        return new CreditEvent(userId, delta, reason, domain, refId, memo, at);
     }
 
     public Long getId() {
@@ -122,6 +137,11 @@ public class CreditEvent {
 
     public CreditReason getReason() {
         return reason;
+    }
+
+    /** 어디서 일어난 일인가. 이 칸이 생기기 전 줄은 {@code COMMON} 으로 읽는다. */
+    public CreditDomain getDomain() {
+        return domain == null ? CreditDomain.COMMON : domain;
     }
 
     public String getRefId() {
