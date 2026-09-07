@@ -166,6 +166,16 @@ export const KIND_IMG: Record<FrameKind, string> = {
   sick: demoUrl('hungry'), train: demoUrl('train'), pet: demoUrl('pet'), clean: demoUrl('clean'),
 };
 
+/**
+ * 발밑 투명 여백. 그림 한 장은 313 × 350 인데 배경을 지우고 나면 **아래 54px 이 빈칸**이라,
+ * 칸을 바닥선에 맞추면 아이가 그만큼 떠 보인다(2026-09-07 상훈님 지적).
+ *
+ * 재는 법 — 여덟 종의 알파 경계를 브라우저 캔버스로 훑고, 발끝 선을 그어 눈으로 확인했다.
+ * 여덟 종이 전부 같은 선이었다(idle·eat·happy·sad·hungry·train·pet·clean).
+ * ★ 그림을 새로 뽑으면 이 값도 다시 재야 한다 — 여백이 달라지면 아이가 뜨거나 잠긴다.
+ */
+export const SPRITE_FOOT_PAD = 54 / 350;
+
 export const EGG_IMG = {
   idle: assetUrl('egg_idle'), hatch: assetUrl('egg_hatch'), crack: assetUrl('egg_crack'),
 } as const;
