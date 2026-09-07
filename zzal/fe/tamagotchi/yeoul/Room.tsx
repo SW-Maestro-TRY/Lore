@@ -11,19 +11,25 @@
 // ★ 캐릭터는 팝오버가 열린 만큼 위로 올라간다(`lift`). 무대 아래끝과 팝오버 윗끝을 실제로
 //   재서 그만큼만 든다 — 숫자를 박아 두면 화면 높이가 바뀔 때 조용히 겹친다.
 //
-// ★ 캐릭터 칸은 발밑 여백(`SPRITE_FOOT_PAD`)만큼 더 내린다. 그림 313 × 350 의 아래 54px 이
-//   배경 제거로 비어 있어서, 칸을 바닥선에 맞추면 **발이 바닥선 위에 떠서** 그림자와 벌어진다.
-//   여백만큼 내리면 발끝이 시안이 의도한 자리(그림자 위)에 정확히 앉는다.
+// ★ 캐릭터 칸은 발밑 여백만큼 더 내린다. 배경을 지운 그림은 발 아래가 비어 있어서, 칸을
+//   바닥선에 맞추면 **발이 바닥선 위에 떠서** 그림자와 벌어진다. 여백은 그림마다 다르므로
+//   `useFootPad` 가 그림에서 직접 잰다(못 재면 여울 기준값으로 되돌아간다).
 'use client';
 
 import { EGG_IMG, KIND_IMG, SPRITE_FOOT_PAD } from './constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
 import Panels from './Panels';
+import { useFootPad, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { v, actions, stageRef, popRef } = y;
+  // 서버가 내 아이 그림을 줬으면 그걸 쓰고, 아직 없으면 여울로 버틴다.
+  const live = useLive();
+  const charSrc = live.img(v.spriteKind) ?? KIND_IMG[v.spriteKind];
+  // 발밑 여백은 그림마다 다르다 — 상수로 두면 어떤 아이는 뜨고 어떤 아이는 잠긴다.
+  const footPad = useFootPad(charSrc, SPRITE_FOOT_PAD);
 
   return (
     <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
@@ -73,7 +79,7 @@ export default function Room({ y }: { y: Yeoul }) {
           onClick={(e) => { e.stopPropagation(); actions.onPet(); }}
           style={{
             position: 'absolute', left: 0, right: 0,
-            bottom: `calc(max(min(212px,34%),${v.lift.char}) - min(350px,58%) * ${SPRITE_FOOT_PAD})`,
+            bottom: `calc(max(min(212px,34%),${v.lift.char}) - min(350px,58%) * ${footPad})`,
             height: 'min(350px,58%)', display: 'flex', justifyContent: 'center', zIndex: 2,
             animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
           }}
@@ -98,7 +104,7 @@ export default function Room({ y }: { y: Yeoul }) {
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={KIND_IMG[v.spriteKind]} alt=""
+                  src={charSrc} alt=""
                   style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', animation: 'yBob 4.6s ease-in-out infinite', filter: v.st.charFilter }}
                 />
               </div>

@@ -22,6 +22,7 @@ import Onboarding from '../yeoul/Onboarding';
 import Room from '../yeoul/Room';
 import { STEPS, WEB_KEYS } from '../yeoul/constants';
 import { C, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, radius } from '../yeoul/ui';
+import { LiveProvider, useHatchState } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import type { SkinProps } from './Scrapbook';
 
@@ -36,6 +37,14 @@ export default function Yeoul(_props: SkinProps) {
     if (isAuthenticated) passAuth('session');
   }, [isAuthenticated, passAuth]);
 
+  // 진짜 부화(그림을 올린 경우)만 여기 붙는다. 안 올렸으면 통째로 잠자고 화면은 목으로 돈다.
+  const live = useHatchState();
+  const { patch } = actions;
+  useEffect(() => {
+    // 서버가 다 구웠으면 목의 부화 칸도 가득 채워 '지금 만나러 가기' 를 연다.
+    if (live.ready) patch({ hatch: 4 });
+  }, [live.ready, patch]);
+
   return (
     <div
       className="yeoul"
@@ -47,6 +56,7 @@ export default function Yeoul(_props: SkinProps) {
     >
       <style>{KEYFRAMES}</style>
 
+      <LiveProvider value={live}>
       <div
         data-part="shell"
         style={{
@@ -67,6 +77,7 @@ export default function Yeoul(_props: SkinProps) {
           onSuccess={(how) => actions.passAuth(how)}
         />
       </div>
+      </LiveProvider>
 
       <DevJump y={y} />
     </div>
