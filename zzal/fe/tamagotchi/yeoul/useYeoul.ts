@@ -547,6 +547,11 @@ export function useYeoul() {
   const pickChip = useCallback((k: string, v: string) => () => setS((w) => ({ ...w, picks: { ...w.picks, [k]: w.picks[k] === v ? null : v } })), []);
   const onGroupText = useCallback((k: string) => (t: string) => setS((w) => ({ ...w, texts: { ...w.texts, [k]: t.slice(0, 60) } })), []);
   const pickUser = useCallback((k: string, v: string) => () => setS((w) => ({ ...w, user: { ...w.user, [k]: w.user[k] === v ? null : v } })), []);
+  /**
+   * 여울의 물음에 답하거나 넘긴다. 답은 `user` 에 쌓인다.
+   * ★ 고른 호칭(`user.nick`)을 아이가 실제로 부르는 말에 끼우는 것은 아직 안 했다 —
+   *   말투·대사 생성이 서버로 넘어갈 때 그쪽에서 쓴다. 지금은 저장만 한다.
+   */
   const askNext = useCallback((key: string | null, val: string | null) => () => {
     lastSel.current = Date.now();
     setS((v) => ({ ...v, user: key && val ? { ...v.user, [key]: val } : v.user, uq: v.uq + 1 }));
@@ -904,7 +909,8 @@ export function useYeoul() {
         const q = s.sampleMode && s.uq < USER_Q.length ? USER_Q[s.uq] : null;
         return {
           show: s.screen === 'room' && !!q && !s.chatOpen && !s.sheet && !s.popOpen,
-          text: q ? `${q.label}?` : '', step: `${s.uq + 1} / ${USER_Q.length}`,
+          // label 이 이미 여울의 말(물음표 포함)이라 손대지 않고 그대로 쓴다.
+          text: q ? q.label : '', step: `${s.uq + 1} / ${USER_Q.length}`,
           opts: q ? q.opts.map((o) => ({ text: o, pick: askNext(q.key, o) })) : [],
           skip: askNext(null, null),
         };
