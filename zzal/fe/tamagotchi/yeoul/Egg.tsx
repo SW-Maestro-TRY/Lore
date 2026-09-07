@@ -6,11 +6,15 @@
 
 import { EGG_IMG } from './constants';
 import { C, GAEGU, radius } from './ui';
+import { useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
 export default function Egg({ y }: { y: Yeoul }) {
   const { v, actions } = y;
+  const live = useLive();
   const e = v.egg;
+  // 진짜로 굽고 있으면 서버가 지금 하는 일을 그대로 보여 준다. 기다림을 감추지 않는다.
+  const stage = live.petId ? (live.failed ? '이 그림은 좀 어렵네요' : live.step ?? e.stage) : e.stage;
   const img = e.isCrack ? EGG_IMG.crack : e.isReady ? EGG_IMG.hatch : EGG_IMG.idle;
   const anim = e.isCrack ? 'yCrack .4s ease-in-out infinite'
     : e.isReady ? 'yWiggle 1.1s ease-in-out infinite' : 'yWiggle 2.2s ease-in-out infinite';
@@ -29,13 +33,14 @@ export default function Egg({ y }: { y: Yeoul }) {
           <span style={{ display: 'flex', gap: 5 }}>
             {e.dots.map((d, i) => <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: d.bg }} />)}
           </span>
-          <span style={{ fontSize: 12, color: 'rgba(74,64,56,.55)' }}>{e.stage}</span>
+          <span style={{ fontSize: 12, color: 'rgba(74,64,56,.55)' }}>{stage}</span>
         </span>
       </div>
 
       <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button onClick={actions.tapEgg} data-action="egg-cta" style={{ padding: 16, borderRadius: radius.md, border: 'none', background: e.ctaBg, color: e.ctaFg, fontSize: 15.5 }}>{e.cta}</button>
         {e.hasMsg && <span style={{ textAlign: 'center', fontSize: 11.5, lineHeight: 1.5, color: C.faint }}>{e.msg}</span>}
+        {live.error && <span style={{ textAlign: 'center', fontSize: 11.5, lineHeight: 1.5, color: C.accent }}>{live.error}</span>}
         <button onClick={actions.backToSample} style={{ padding: 4, border: 'none', background: 'none', fontSize: 12, color: 'rgba(74,64,56,.45)' }}>여울 샘플로 돌아가기</button>
       </div>
     </div>

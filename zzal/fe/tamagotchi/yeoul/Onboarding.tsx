@@ -7,12 +7,16 @@
 // 캐릭터 칸은 "이름만 필수" 다. 나머지는 칩 한 줄 + 긴 글 한 줄이고, 안 채워도 넘어간다.
 'use client';
 
+import { useRef } from 'react';
 import { KIND_IMG, ONB_COPY, GOOD_EX, BAD_EX } from './constants';
 import { C, GAEGU, MONO, radius } from './ui';
+import { useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
 export default function Onboarding({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
+  const live = useLive();
+  const file = useRef<HTMLInputElement>(null);
   const o = v.onb;
   const key = o.stepKey;
   const [title, sub] = ONB_COPY[key];
@@ -76,13 +80,31 @@ export default function Onboarding({ y }: { y: Yeoul }) {
               ))}
             </div>
 
+            {/* 진짜 올리기. 파일은 우리 서버를 안 지나고 브라우저가 S3 로 바로 보낸다. */}
+            <input
+              ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { void live.upload(f); actions.onUpload(); }
+                e.target.value = '';
+              }}
+            />
             <button
-              onClick={actions.onUpload} data-action="upload"
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '30px 20px', borderRadius: radius.lg, border: `2px dashed ${o.upBd}`, background: o.upBg }}
+              onClick={() => file.current?.click()} data-action="upload" disabled={live.busy}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: radius.lg, border: `2px dashed ${live.imageKey ? C.accent : o.upBd}`, background: live.imageKey ? C.accentSoft : o.upBg }}
             >
-              <span style={{ fontFamily: GAEGU, fontSize: 20, color: C.ink }}>{o.upLabel}</span>
-              <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.48)' }}>{o.upNote}</span>
+              {live.previewUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={live.previewUrl} alt="" style={{ width: 132, height: 132, objectFit: 'contain', display: 'block' }} />
+              )}
+              <span style={{ fontFamily: GAEGU, fontSize: 20, color: C.ink }}>
+                {live.busy ? '올리는 중…' : live.imageKey ? '그림을 올렸어요' : o.upLabel}
+              </span>
+              <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.48)' }}>
+                {live.imageKey ? '다시 누르면 바꿀 수 있어요' : o.upNote}
+              </span>
             </button>
+            {live.error && <span style={{ fontSize: 12, lineHeight: 1.6, color: C.accent }}>{live.error}</span>}
             <span style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
           </div>
         )}
@@ -160,7 +182,7 @@ export default function Onboarding({ y }: { y: Yeoul }) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, padding: '10px 0 0' }}>
             <div style={{ width: 209, height: 209, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'yPop .5s ease' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={KIND_IMG.idle} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+              <img src={live.img('idle') ?? KIND_IMG.idle} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
               <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 26, color: C.ink }}>{o.bornName}</span>
@@ -171,7 +193,13 @@ export default function Onboarding({ y }: { y: Yeoul }) {
       </div>
 
       <div style={{ flex: 'none', padding: '10px 24px 30px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-        <button onClick={actions.onNext} data-action="onb-next" style={{ padding: 16, borderRadius: radius.md, border: 'none', background: C.accent, color: C.accentInk, fontSize: 15.5, boxShadow: '0 4px 12px rgba(192,104,92,.22)' }}>{o.cta}</button>
+        <button
+          onClick={() => {
+            // 그림을 올렸으면 이 순간이 **부화 시작**이다(이름·세부사항이 다 모인 시점).
+            if (key === 'char' && s.petName) void live.start(s.petName, s.texts.extra ?? '');
+            actions.onNext();
+          }}
+          data-action="onb-next" style={{ padding: 16, borderRadius: radius.md, border: 'none', background: C.accent, color: C.accentInk, fontSize: 15.5, boxShadow: '0 4px 12px rgba(192,104,92,.22)' }}>{o.cta}</button>
         {o.hasSkip && (
           <button onClick={actions.onNext} style={{ padding: 4, border: 'none', background: 'none', fontSize: 12, color: 'rgba(74,64,56,.45)' }}>나중에 할게요</button>
         )}
