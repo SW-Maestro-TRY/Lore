@@ -261,6 +261,18 @@ export const LEARN_GOALS = [
   { name: '놀라기', cond: '좌우 맞히기', need: 3, counter: 'cGame' },
 ] as const;
 
+/**
+ * 조각 4칸(정본 §"조각 4개(3층부터, 잠들 때 판정·리셋)").
+ * 3층이 시작되면 좌측 하단 카드가 로드맵에서 이 도장으로 넘어간다.
+ * ★ 이름·조건은 정본 그대로다. 바꾸려면 정본을 먼저 고칠 것.
+ */
+export const SHARDS = [
+  { key: 'food', label: '밥', cond: '밥 2회' },
+  { key: 'play', label: '놀이', cond: '간식 1회 또는 게임 1승' },
+  { key: 'clean', label: '청결', cond: '청소 1회 또는 목욕 1회' },
+  { key: 'bond', label: '교감', cond: '채팅 1회 또는 쓰다듬기 2회' },
+] as const;
+
 /** 아침에 도착하는 엽서 세 벌. */
 export const POSTCARDS: ReadonlyArray<readonly [string, string]> = [
   ['오늘 아침, 창가에 앉아 있었어요.', '#F6E7DF'],

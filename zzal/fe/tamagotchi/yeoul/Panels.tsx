@@ -26,11 +26,13 @@ function Sheet({ y }: { y: Yeoul }) {
   const sh = v.sheet;
   return (
     <>
-      <div onClick={actions.closeSheet} style={{ position: 'absolute', inset: 0, background: 'rgba(74,64,56,.32)', animation: sh.dimAnim }} />
+      {/* ★ 쌓임 순서 — 무대의 캐릭터가 z 2, 타일이 z 6 이라 z 를 안 주면 그 밑에 깔린다.
+          실제로 전면 판의 버튼이 캐릭터 그림에 가려 안 눌렸다(2026-09-07). 벽 9 · 액자 10 위로 올린다. */}
+      <div onClick={actions.closeSheet} style={{ position: 'absolute', inset: 0, zIndex: 11, background: 'rgba(74,64,56,.32)', animation: sh.dimAnim }} />
       <div
         data-part="sheet" data-sheet={sh.key ?? ''}
         style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0, height: sh.height,
+          position: 'absolute', left: 0, right: 0, bottom: 0, height: sh.height, zIndex: 11,
           display: 'flex', flexDirection: 'column', background: C.paper,
           borderRadius: '24px 24px 44px 44px', boxShadow: '0 -10px 30px rgba(74,64,56,.16)', animation: sh.anim,
         }}
@@ -290,7 +292,7 @@ function Fire({ y }: { y: Yeoul }) {
   const f = y.s.fire!;
   const backdrop = f.tapAny ? y.actions.closeFire : undefined;
   return (
-    <div data-part="fire" style={{ position: 'absolute', inset: 0, background: 'rgba(74,64,56,.52)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yFadeIn .2s ease' }}>
+    <div data-part="fire" style={{ position: 'absolute', inset: 0, zIndex: 12, background: 'rgba(74,64,56,.52)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yFadeIn .2s ease' }}>
       <div onClick={backdrop} style={{ position: 'absolute', inset: 0 }} />
       <div style={{ position: 'relative', width: '100%', padding: '24px 22px', borderRadius: radius.xl, background: C.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, animation: 'yPop .3s ease', boxSizing: 'border-box' }}>
         {f.polaroid && (

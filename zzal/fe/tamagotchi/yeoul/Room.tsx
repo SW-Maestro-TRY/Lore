@@ -270,13 +270,6 @@ function Hud({ y }: { y: Yeoul }) {
           </span>
           아이 정보
         </button>
-        {v.shards.show && (
-          <span style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-            {v.shards.cells.map((c, i) => (
-              <span key={i} style={{ width: 9, height: 9, borderRadius: 2, border: '1px solid rgba(74,64,56,.22)', background: c.bg, transform: 'rotate(45deg)' }} />
-            ))}
-          </span>
-        )}
       </div>
     </>
   );
@@ -445,6 +438,31 @@ function MiniCard({ y }: { y: Yeoul }) {
             </span>
             <span style={{ fontSize: 12, color: C.sub, whiteSpace: 'nowrap' }}>{m.cond}</span>
           </span>
+        </span>
+      )}
+
+      {/* 배울 것을 다 배우면(=3층 시작) 같은 카드가 조각 도장으로 넘어간다. 카드는 사라지지 않는다. */}
+      {m.hasShards && (
+        <span data-part="shards" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 11, color: '#6E655C' }}>오늘의 조각</span>
+            <span style={{ flex: 1 }} />
+            <span style={{ font: `9.5px ${MONO}`, color: C.faint2 }}>{m.shardCount}</span>
+          </span>
+          <span style={{ display: 'flex', gap: 7 }}>
+            {m.shards.map((x) => (
+              <span key={x.label} title={x.cond} data-shard={x.label} data-on={x.on ? '1' : '0'}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                <span style={{
+                  width: 17, height: 17, borderRadius: 3, transform: 'rotate(45deg)',
+                  border: `1px solid ${x.on ? C.accent : 'rgba(74,64,56,.22)'}`,
+                  background: x.on ? C.accentSoft : C.slotDim,
+                }} />
+                <span style={{ fontSize: 10.5, color: x.on ? C.ink : C.faint2 }}>{x.label}</span>
+              </span>
+            ))}
+          </span>
+          <span style={{ fontSize: 10.5, lineHeight: 1.5, color: C.faint2 }}>잠들 때 세어 보고 다시 시작해요</span>
         </span>
       )}
     </div>
