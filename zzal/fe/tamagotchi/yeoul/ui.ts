@@ -119,4 +119,10 @@ export const KEYFRAMES = `
 .yeoul button{font-family:inherit;cursor:pointer;transition:transform .12s ease, background .18s ease, border-color .18s ease}
 .yeoul button:active{transform:scale(.96)}
 .yeoul input{font-family:inherit}
+/* 좌측 하단 카드 — 평소엔 요약만, 누르거나(클래스) 손을 올리면(hover) 설명이 펴진다.
+   ★ hover 는 (hover: hover) 안에서만 켠다. 터치 기기에서 hover 를 켜면 한 번 누른 뒤
+     떨어지지 않아 계속 펴진 채로 남는다. 폰에서 유일하게 확실한 길은 누르기다. */
+.yeoul-mini-more{display:none}
+.yeoul-mini-more.is-open{display:flex}
+@media (hover: hover){ .yeoul-mini:hover .yeoul-mini-more{display:flex} }
 `;

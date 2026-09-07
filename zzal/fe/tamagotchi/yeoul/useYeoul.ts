@@ -937,6 +937,11 @@ export function useYeoul() {
           label: x.label, cond: x.cond, on: i < s.shards,
         })),
         shardCount: `${Math.min(4, s.shards)} / 4`,
+        // 펼쳤을 때 보여 줄 네 목표 전부(접혀 있을 땐 `goal` 하나만 보인다).
+        goals: LEARN_GOALS.map((g) => {
+          const have = s[g.counter] as number;
+          return { name: g.name, cond: `${g.cond} ${Math.min(have, g.need)} / ${g.need}`, done: have >= g.need };
+        }),
       },
       ask: (() => {
         const q = s.sampleMode && s.uq < USER_Q.length ? USER_Q[s.uq] : null;

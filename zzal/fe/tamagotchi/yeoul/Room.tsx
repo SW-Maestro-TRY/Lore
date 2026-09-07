@@ -411,14 +411,34 @@ function ChatFab({ y }: { y: Yeoul }) {
 }
 
 /** 왼쪽 아래 작은 카드 — 튜토리얼 중엔 부름, 아니면 "다음에 배울 것". */
+/**
+ * 좌측 하단 카드 — 튜토리얼 부름 / 로드맵 / 조각 도장, 셋을 차례로 맡는다.
+ *
+ * ★ 평소엔 **요약만** 보이고, 누르거나 손을 올리면 위로 펴지며 설명이 나온다
+ *   (2026-09-07 상훈님 지시). 모달로 방을 덮지 않고 **제자리에서** 펴는 쪽을 골랐다 —
+ *   샘플 방 안내 카드가 이미 접기/펴기를 쓰고 있어 같은 문법이면 화면이 한 벌로 읽힌다.
+ * ★ 펼침이 **위로** 자란다. 아래는 타일 자리라 내려갈 곳이 없어서 `bottom` 으로 붙였다.
+ * ★ 팝오버·대화·시트가 열리면 이 카드는 **아예 사라진다**(`mini.show` 조건). 그래서 펼친 채로
+ *   그것들과 겹칠 일이 없다 — 겹침을 막는 규칙을 따로 두지 않고 표시 조건 하나로 끝냈다.
+ */
 function MiniCard({ y }: { y: Yeoul }) {
   const m = y.v.mini;
+  const [open, setOpen] = useState(false);
+  const more = `yeoul-mini-more${open ? ' is-open' : ''}`;
+  const canOpen = m.hasGoal || m.hasShards;
+
   return (
-    <div style={{
-      position: 'absolute', left: 14, bottom: 116, zIndex: 4, maxWidth: 210,
-      display: 'flex', flexDirection: 'column', gap: 6, padding: '9px 12px', borderRadius: radius.md,
-      background: 'rgba(255,253,248,.95)', border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)',
-    }}>
+    <div
+      className="yeoul-mini"
+      onClick={(e) => { e.stopPropagation(); if (canOpen) setOpen((v) => !v); }}
+      data-part="mini" data-open={open ? '1' : '0'}
+      style={{
+        position: 'absolute', left: 14, bottom: 116, zIndex: 4, maxWidth: 232,
+        display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 11px', borderRadius: radius.md,
+        background: 'rgba(255,253,248,.95)', border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)',
+        cursor: canOpen ? 'pointer' : 'default',
+      }}
+    >
       {m.isTut && (
         <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={{ fontFamily: GAEGU, fontSize: 15, lineHeight: 1.3, color: C.ink }}>{m.tutText}</span>
@@ -428,42 +448,55 @@ function MiniCard({ y }: { y: Yeoul }) {
           >나중에</button>
         </span>
       )}
-      {m.hasGoal && (
-        <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ fontSize: 11, color: '#6E655C' }}>다음에 배울 것</span>
-          <span style={{ fontSize: 13, color: C.ink }}>{m.name}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(74,64,56,.14)', overflow: 'hidden' }}>
-              <span style={{ display: 'block', height: '100%', width: m.barW, background: C.accent }} />
-            </span>
-            <span style={{ fontSize: 12, color: C.sub, whiteSpace: 'nowrap' }}>{m.cond}</span>
-          </span>
-        </span>
-      )}
 
-      {/* 배울 것을 다 배우면(=3층 시작) 같은 카드가 조각 도장으로 넘어간다. 카드는 사라지지 않는다. */}
-      {m.hasShards && (
-        <span data-part="shards" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontSize: 11, color: '#6E655C' }}>오늘의 조각</span>
-            <span style={{ flex: 1 }} />
-            <span style={{ font: `9.5px ${MONO}`, color: C.faint2 }}>{m.shardCount}</span>
+      {/* ── 로드맵 ── 접히면 다음 하나만, 펴면 넷 전부 */}
+      {m.hasGoal && (
+        <>
+          <span data-part="mini-sum" style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 12, color: C.ink }}>{m.name}</span>
+            <span style={{ font: `9.5px ${MONO}`, color: C.faint2 }}>{m.cond}</span>
           </span>
-          <span style={{ display: 'flex', gap: 7 }}>
-            {m.shards.map((x) => (
-              <span key={x.label} title={x.cond} data-shard={x.label} data-on={x.on ? '1' : '0'}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                <span style={{
-                  width: 17, height: 17, borderRadius: 3, transform: 'rotate(45deg)',
-                  border: `1px solid ${x.on ? C.accent : 'rgba(74,64,56,.22)'}`,
-                  background: x.on ? C.accentSoft : C.slotDim,
-                }} />
-                <span style={{ fontSize: 10.5, color: x.on ? C.ink : C.faint2 }}>{x.label}</span>
+          <span className={more} data-part="mini-more" style={{ flexDirection: 'column', gap: 5, paddingTop: 2 }}>
+            <span style={{ fontSize: 10.5, color: C.faint2 }}>배울 것</span>
+            {m.goals.map((g) => (
+              <span key={g.name} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{ fontSize: 11.5, color: g.done ? C.faint2 : C.ink, textDecoration: g.done ? 'line-through' : 'none' }}>{g.name}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ font: `9.5px ${MONO}`, color: C.faint2, whiteSpace: 'nowrap' }}>{g.cond}</span>
               </span>
             ))}
           </span>
-          <span style={{ fontSize: 10.5, lineHeight: 1.5, color: C.faint2 }}>잠들 때 세어 보고 다시 시작해요</span>
-        </span>
+        </>
+      )}
+
+      {/* ── 조각 ── 접히면 도장 넷만(이름 없이), 펴면 조건 한 줄씩 */}
+      {m.hasShards && (
+        <>
+          <span data-part="shards" data-part-sum="1" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ display: 'flex', gap: 5 }}>
+              {m.shards.map((x) => (
+                <span key={x.label} data-shard={x.label} data-on={x.on ? '1' : '0'}
+                  style={{
+                    width: 13, height: 13, borderRadius: 3, transform: 'rotate(45deg)',
+                    border: `1px solid ${x.on ? C.accent : 'rgba(74,64,56,.22)'}`,
+                    background: x.on ? C.accentSoft : C.slotDim,
+                  }} />
+              ))}
+            </span>
+            <span style={{ font: `9.5px ${MONO}`, color: C.faint2 }}>조각 {m.shardCount}</span>
+          </span>
+          <span className={more} data-part="mini-more" style={{ flexDirection: 'column', gap: 5, paddingTop: 2 }}>
+            {m.shards.map((x) => (
+              <span key={x.label} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{ width: 8, height: 8, flex: 'none', borderRadius: 2, transform: 'rotate(45deg)', border: `1px solid ${x.on ? C.accent : 'rgba(74,64,56,.22)'}`, background: x.on ? C.accentSoft : C.slotDim }} />
+                <span style={{ fontSize: 11.5, color: x.on ? C.ink : C.sub2 }}>{x.label}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ fontSize: 10.5, color: C.faint2, whiteSpace: 'nowrap' }}>{x.cond}</span>
+              </span>
+            ))}
+            <span style={{ fontSize: 10.5, lineHeight: 1.5, color: C.faint2 }}>잠들 때 세어 보고 다시 시작해요</span>
+          </span>
+        </>
       )}
     </div>
   );
