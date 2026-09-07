@@ -402,9 +402,42 @@ function AskCard({ y }: { y: Yeoul }) {
       <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.35, color: C.ink }}>{a.text}</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {a.opts.map((o) => (
-          <button key={o.text} onClick={o.pick} data-ask-opt={o.text} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 12.5, color: C.ink }}>{o.text}</button>
+          <button
+            key={o.text} onClick={o.pick} data-ask-opt={o.text}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+              padding: o.note ? '7px 13px' : '9px 14px', borderRadius: radius.pill,
+              border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 12.5, color: C.ink,
+            }}
+          >
+            <span>{o.text}</span>
+            {/* 말은 크게, 시각은 작고 흐리게 — 욕실 팝오버의 '목욕 / 오늘 1회' 와 같은 규칙. */}
+            {o.note && <span style={{ fontSize: 10, opacity: 0.75 }}>{o.note}</span>}
+          </button>
         ))}
       </div>
+
+      {/* 넷 중에 없을 수 있는 문항(호칭)은 직접 적는 줄을 함께 둔다. */}
+      {a.hasInput && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input
+            value={a.draft} onChange={(e) => a.onDraft(e.target.value)} maxLength={a.inputMax}
+            placeholder={a.inputPh} data-ask-input
+            onKeyDown={(e) => { if (e.key === 'Enter' && a.hasConfirm) a.confirm(); }}
+            style={{
+              flex: 1, minWidth: 0, padding: '9px 13px', borderRadius: radius.pill,
+              border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: 12.5, color: C.ink, outline: 'none',
+            }}
+          />
+          {a.hasConfirm && (
+            <button
+              onClick={a.confirm} data-ask-confirm
+              style={{ flex: 'none', padding: '9px 13px', borderRadius: radius.pill, border: 'none', background: C.accent, color: C.accentInk, fontSize: 12.5, whiteSpace: 'nowrap' }}
+            >이렇게 불러 주세요</button>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button onClick={a.skip} data-ask-skip style={{ padding: '4px 2px', border: 'none', background: 'none', fontSize: 12, color: C.faint2 }}>나중에</button>
         <span style={{ flex: 1 }} />

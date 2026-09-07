@@ -50,6 +50,8 @@ export interface YeoulState {
   picks: Record<string, string | null>; texts: Record<string, string>;
   user: Record<string, string | null>; uq: number;
   petName: string; uploaded: boolean; authed: string;
+  /** 여울의 물음에 **직접 적는** 칸의 초안(지금은 호칭 문항만 쓴다). */
+  askDraft: string;
   fire: Fire | null; decoOpen: boolean; albumOpen: number;
   wallOpen: boolean; wallClosing: boolean;
   frame: FrameData | null; frameClosing: boolean;
@@ -86,7 +88,7 @@ const INITIAL: YeoulState = {
   memories: ['빵 좋아함', '비 싫어함', '왼쪽을 잘 맞힘', '늦잠', '파란색'],
   resolved: {}, calls: 3, guess: null,
   wallId: 'cream', picks: {}, texts: {}, user: {}, uq: 0,
-  petName: '보리', uploaded: false, authed: '',
+  petName: '보리', uploaded: false, authed: '', askDraft: '',
   fire: null, decoOpen: false, albumOpen: 8,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
@@ -554,7 +556,11 @@ export function useYeoul() {
    */
   const askNext = useCallback((key: string | null, val: string | null) => () => {
     lastSel.current = Date.now();
-    setS((v) => ({ ...v, user: key && val ? { ...v.user, [key]: val } : v.user, uq: v.uq + 1 }));
+    setS((v) => ({ ...v, user: key && val ? { ...v.user, [key]: val } : v.user, uq: v.uq + 1, askDraft: '' }));
+  }, []);
+  /** 직접 적기. 적기 시작하면 칩 선택을 지운다 — 둘 다 켜져 있으면 무엇이 답인지 알 수 없다. */
+  const onAskDraft = useCallback((key: string, t: string, max: number) => {
+    setS((v) => ({ ...v, askDraft: t.slice(0, max), user: { ...v.user, [key]: null } }));
   }, []);
 
   // ── 가입·로그인 모달 ──
@@ -907,11 +913,23 @@ export function useYeoul() {
       },
       ask: (() => {
         const q = s.sampleMode && s.uq < USER_Q.length ? USER_Q[s.uq] : null;
+        const draft = s.askDraft.trim();
         return {
           show: s.screen === 'room' && !!q && !s.chatOpen && !s.sheet && !s.popOpen,
           // label 이 이미 여울의 말(물음표 포함)이라 손대지 않고 그대로 쓴다.
           text: q ? q.label : '', step: `${s.uq + 1} / ${USER_Q.length}`,
-          opts: q ? q.opts.map((o) => ({ text: o, pick: askNext(q.key, o) })) : [],
+          // 시각이 붙은 칩은 그 시각까지 답으로 저장한다 — '아침' 만 남기면 나중에 구간을 알 수 없다.
+          opts: q ? q.opts.map((o) => ({
+            text: o.text, note: o.note ?? '',
+            pick: askNext(q.key, o.note ? `${o.text} ${o.note}` : o.text),
+          })) : [],
+          hasInput: !!q?.input,
+          inputPh: q?.input?.ph ?? '', inputMax: q?.input?.max ?? 12,
+          draft: s.askDraft,
+          onDraft: (t: string) => { if (q?.input) onAskDraft(q.key, t, q.input.max); },
+          // 적어 넣었으면 넘길 손잡이가 필요하다 — 칩을 안 골라도 이걸로 넘어간다.
+          hasConfirm: !!q?.input && draft.length > 0,
+          confirm: q ? askNext(q.key, draft) : askNext(null, null),
           skip: askNext(null, null),
         };
       })(),
@@ -1055,9 +1073,11 @@ export function useYeoul() {
           char: s.petName ? '이 아이로 시작하기' : '이름부터 지어 줘요',
           born: `${s.petName}의 방으로 들어가기`,
         } as Record<StepKey, string>)[STEPS[s.step] as StepKey],
+        // 옛 온보딩 'user' 칸의 잔재다. STEPS 에 'user' 가 없어 **지금은 도달할 수 없는 길**이고,
+        // 되살리려면 문구부터 다시 봐야 한다 — USER_Q.label 은 항목 이름이 아니라 여울의 말이다.
         userFields: USER_Q.map((f) => ({
           label: f.label,
-          opts: f.opts.map((o) => ({ text: o, pick: pickUser(f.key, o), ...sel(s.user[f.key] === o) })),
+          opts: f.opts.map((o) => ({ text: o.text, pick: pickUser(f.key, o.text), ...sel(s.user[f.key] === o.text) })),
         })),
         extraVal: s.texts.extra ?? '',
         onExtra: onGroupText('extra'),
@@ -1071,7 +1091,7 @@ export function useYeoul() {
     s, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
-    pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime,
+    pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,
     toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash,
   ]);
 
