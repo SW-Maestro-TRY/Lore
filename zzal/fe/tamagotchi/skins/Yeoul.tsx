@@ -3,7 +3,8 @@
 // 껍데기가 하는 일은 셋뿐이다.
 //   1) 헤더 아래 남은 높이를 **한 통**으로 채운다. 페이지는 스크롤하지 않는다.
 //   2) 가운데 560px 로 세운다. 태블릿·데스크톱도 같은 한 벌이다(시안 확정 — PC 2단 배치는 폐기).
-//   3) 화면 넷(온보딩·방·알)을 갈아 끼우고, 가입 모달을 그 위에 얹는다.
+//   3) 화면 셋(온보딩·방·알)을 갈아 끼우고, **공통 가입·로그인 모달**을 그 위에 얹는다.
+//      — 헤더의 '로그인' 이 여는 것과 같은 창이다(상훈님 9/7 지시). 인증은 그 부품이 서버로 한다.
 //
 // ★ 개발용 이동 띠는 **떠 있는 창**이다. 예전처럼 위에 자리를 차지하면 무대 높이가 줄어
 //   판정한 화면과 실제 화면이 달라진다 — 배경 그림을 무대 크기에 맞춰 만들 예정이라 특히 그렇다.
@@ -13,8 +14,9 @@
 // 색·여백을 손보실 자리는 `yeoul/ui.ts` 한 곳이다.
 'use client';
 
-import { useState } from 'react';
-import AuthModal from '../yeoul/AuthModal';
+import { useEffect, useState } from 'react';
+import AuthModal from '@common/auth/AuthModal';
+import { useAuth } from '@common/auth/useAuth';
 import Egg from '../yeoul/Egg';
 import Onboarding from '../yeoul/Onboarding';
 import Room from '../yeoul/Room';
@@ -25,7 +27,14 @@ import type { SkinProps } from './Scrapbook';
 
 export default function Yeoul(_props: SkinProps) {
   const y = useYeoul();
-  const { v } = y;
+  const { s, v, actions } = y;
+
+  // 이미 로그인한 채로 들어온 사람에게는 문을 열어 둔다 — 첫 화면에서 다시 묻지 않는다.
+  const { isAuthenticated } = useAuth();
+  const { passAuth } = actions;
+  useEffect(() => {
+    if (isAuthenticated) passAuth('session');
+  }, [isAuthenticated, passAuth]);
 
   return (
     <div
@@ -51,7 +60,12 @@ export default function Yeoul(_props: SkinProps) {
         {v.screen.room && <Room y={y} />}
         {v.screen.egg && <Egg y={y} />}
         {v.screen.onb && <Onboarding y={y} />}
-        <AuthModal y={y} />
+        <AuthModal
+          open={s.authOpen}
+          onClose={actions.closeAuth}
+          initialTab={s.authTab}
+          onSuccess={(how) => actions.passAuth(how)}
+        />
       </div>
 
       <DevJump y={y} />
@@ -106,7 +120,7 @@ function DevJump({ y }: { y: ReturnType<typeof useYeoul> }) {
         { label: '알림', on: s.sheet === 'notify', pick: actions.openNotify },
         { label: '아이 정보', on: s.sheet === 'settings', pick: actions.openSettings },
         { label: '다음 날', on: false, pick: actions.nextDay },
-        { label: '가입 모달', on: s.authOpen, pick: actions.openAuth('join') },
+        { label: '가입 모달', on: s.authOpen, pick: actions.openAuth('signup') },
         { label: '처음부터', on: false, pick: actions.restart },
       ],
     },

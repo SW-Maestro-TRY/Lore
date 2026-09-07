@@ -59,8 +59,11 @@ export interface YeoulState {
   tutor: number; tutorOn: boolean;
   cracking: boolean; eggMsg: string; nameErr: boolean;
   hintI: number; popRise: number; leaveOff: boolean;
-  /** 가입·로그인 모달. 랜딩에서 무언가 하려 할 때 뜬다(상훈님 9/7 결정). */
-  authOpen: boolean; authTab: 'join' | 'login';
+  /**
+   * 가입·로그인 모달. 랜딩에서 무언가 하려 할 때 뜬다(상훈님 9/7 결정).
+   * 창 자체는 공통 부품(`@common/auth/AuthModal`)이고 여기서는 여닫기만 든다.
+   */
+  authOpen: boolean; authTab: 'login' | 'signup';
 }
 
 /**
@@ -88,7 +91,7 @@ const INITIAL: YeoulState = {
   sampleMode: false, hatch: 0, snapshot: null,
   tutor: 0, tutorOn: false, cracking: false, eggMsg: '', nameErr: false,
   hintI: 0, popRise: 0, leaveOff: false,
-  authOpen: false, authTab: 'join',
+  authOpen: false, authTab: 'signup',
 };
 
 // ── 작은 계산들 ──────────────────────────────────────────────────────────
@@ -509,7 +512,7 @@ export function useYeoul() {
   const onNext = useCallback(() => {
     const key = STEPS[s.step];
     // 랜딩에서 무언가 하려 하면 가입·로그인부터(상훈님 9/7 결정).
-    if (key === 'landing' && !s.authed) { patch({ authOpen: true, authTab: 'join' }); return; }
+    if (key === 'landing' && !s.authed) { patch({ authOpen: true, authTab: 'signup' }); return; }
     if (key === 'char') {
       if (!s.petName) {
         patch({ nameErr: true });
@@ -539,12 +542,18 @@ export function useYeoul() {
   }, []);
 
   // ── 가입·로그인 모달 ──
-  const openAuth = useCallback((tab: 'join' | 'login') => () => patch({ authOpen: true, authTab: tab }), [patch]);
+  //
+  // 창은 공통 부품이 그린다(`@common/auth/AuthModal` — 헤더의 '로그인' 과 **같은 창**).
+  // 여기서는 여닫기와 "통과했다" 만 든다. 서버를 부르는 일은 전부 그 부품 몫이다.
+  const openAuth = useCallback((tab: 'login' | 'signup') => () => patch({ authOpen: true, authTab: tab }), [patch]);
   const closeAuth = useCallback(() => patch({ authOpen: false }), [patch]);
-  const doAuth = useCallback((how: string) => () => {
-    setS((v) => ({ ...v, authed: how, authOpen: false, screen: 'onb', step: Math.max(v.step, STEPS.indexOf('upload')) }));
-    flash(`${how} 로 시작해요`);
-  }, [flash]);
+  /** 로그인·가입에 **성공했을 때만** 부른다. 이미 로그인한 채로 들어온 사람도 이 길로 통과한다. */
+  const passAuth = useCallback((how: string) => {
+    setS((w) => (w.authed === how ? w : {
+      ...w, authed: how, authOpen: false,
+      step: w.screen === 'onb' ? Math.max(w.step, STEPS.indexOf('upload')) : w.step,
+    }));
+  }, []);
 
   // ── 설정·개발용 ──
   const pickWall = useCallback((id: string) => () => { patch({ wallId: id }); flash('벽지를 바꿨어요'); }, [patch, flash]);
@@ -1053,7 +1062,7 @@ export function useYeoul() {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings,
     setMode, nextDay, restart, startTutor, endTutor, skipTutorStep, openPlay,
-    openAuth, closeAuth, doAuth,
+    openAuth, closeAuth, passAuth,
     backToSample: () => patch({ screen: 'room' }),
   }), [
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
@@ -1061,7 +1070,7 @@ export function useYeoul() {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings,
     setMode, nextDay, restart, startTutor, endTutor, skipTutorStep, openPlay,
-    openAuth, closeAuth, doAuth,
+    openAuth, closeAuth, passAuth,
   ]);
 
   return { s, v, actions, stageRef, popRef };
