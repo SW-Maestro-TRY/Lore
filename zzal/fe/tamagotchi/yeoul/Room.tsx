@@ -39,6 +39,7 @@ export default function Room({ y }: { y: Yeoul }) {
       {v.pop.show && <div onClick={actions.closePop} style={{ position: 'absolute', inset: 0, zIndex: 2 }} />}
 
       {v.hud.show && <Hud y={y} />}
+      {v.sample.show && <SampleHud y={y} />}
 
       {/* ── 무대 ───────────────────────────────────────────────── */}
       <div
@@ -50,8 +51,6 @@ export default function Room({ y }: { y: Yeoul }) {
         }}
       >
         <div style={{ position: 'absolute', inset: 0, backgroundImage: v.st.pattern, opacity: 0.5 }} />
-
-        {v.sample.show && <SampleBar y={y} />}
 
         {/* 창문 — 낮엔 해, 밤엔 달. */}
         <div style={{
@@ -123,8 +122,6 @@ export default function Room({ y }: { y: Yeoul }) {
           </>
         )}
         {v.st.sick && <div style={{ position: 'absolute', inset: 0, background: 'rgba(130,132,138,.2)', animation: 'yFadeIn .4s ease' }} />}
-
-        {v.bub.isTut && <TutorCard y={y} />}
 
         {v.bub.show && (
           <div style={{
@@ -264,40 +261,52 @@ function Hud({ y }: { y: Yeoul }) {
   );
 }
 
-/** 여울 샘플 방의 위쪽 띠 — 왼쪽은 정보 수정으로 돌아가기, 오른쪽은 내 알의 부화 진행. */
-function SampleBar({ y }: { y: Yeoul }) {
+/**
+ * 여울 샘플 방의 **머리 띠**. 진짜 방의 HUD 가 있어야 할 자리를 샘플 방도 똑같이 채운다.
+ *
+ * ★ 왜 무대 위가 아니라 무대 밖인가(2026-09-07 상훈님 지시 "너무 애매한 위치에 애매하게 있다")
+ *   전에는 '정보 수정'·알 배지·안내 카드 셋이 **각각 무대 그림 위에 떠 있었다.** 서로 관계가 없어
+ *   보이고, 창문과 아이 머리를 덮었다. 진짜 방에는 이미 머리 영역이 있고 무대가 깨끗한데,
+ *   샘플 방만 `hud.show = !sampleMode` 로 그 자리가 비어 셋이 무대로 흘러내린 것이었다.
+ *   그래서 같은 자리에 샘플 전용 띠를 만들어 셋을 들이고, **무대에는 아이만 남긴다.**
+ *   여백·배경은 진짜 방 HUD 와 같은 값을 쓴다(좌우 20px · 셸 바탕).
+ */
+function SampleHud({ y }: { y: Yeoul }) {
   const { v } = y;
   return (
-    <div style={{ position: 'absolute', left: 12, right: 12, top: 10, zIndex: 4, display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-      <button
-        onClick={(e) => { e.stopPropagation(); v.sample.exit(); }}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 13px 8px 11px', borderRadius: radius.pill, border: 'none', background: 'rgba(74,64,56,.82)', color: '#FBF6EC', fontSize: 11.5, backdropFilter: 'blur(4px)', whiteSpace: 'nowrap' }}
-      >‹ 정보 수정</button>
-      <span style={{ flex: 1 }} />
-      <button
-        onClick={(e) => { e.stopPropagation(); v.sample.forceHatch(); }}
-        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, border: 'none', background: 'none', padding: 0 }}
-      >
-        <span style={{ position: 'relative', width: 60, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ position: 'absolute', inset: -6, borderRadius: '50%', background: '#F4C9A8', opacity: v.sample.haloOpacity, animation: 'yHalo 1.6s ease-in-out infinite' }} />
-          <span style={{ position: 'relative', width: 60, height: 60, borderRadius: '50%', background: v.sample.ring, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ width: 48, height: 48, borderRadius: '50%', background: C.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+    // 띠는 무대를 그만큼 잡아먹는다 — 아이가 주인공이라 여백을 최소로 잡았다.
+    <div data-part="sample-hud" style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 20px 7px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          onClick={v.sample.exit} data-part="sample-exit"
+          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px 5px 9px', borderRadius: radius.pill, border: '1px solid #E9E1D4', background: '#FDF8EE', fontSize: 11.5, lineHeight: 1, color: '#7B6F63' }}
+        >‹ 정보 수정</button>
+        <span style={{ flex: 1 }} />
+        {/* 알은 여전히 눌러서 알 화면으로 간다. 띠 안으로 들어온 만큼 고리·후광은 걷어냈다. */}
+        <button
+          onClick={v.sample.forceHatch} data-part="sample-egg"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 11px 4px 5px', borderRadius: radius.pill, border: '1px solid #E9E1D4', background: '#FDF8EE' }}
+        >
+          <span style={{ width: 22, height: 22, borderRadius: '50%', background: v.sample.ring, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ width: 17, height: 17, borderRadius: '50%', background: C.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={EGG_IMG.idle} alt="" style={{ width: 30, height: 34, objectFit: 'contain', display: 'block', animation: v.sample.eggAnim }} />
+              <img src={EGG_IMG.idle} alt="" style={{ width: 11, height: 13, objectFit: 'contain', display: 'block', animation: v.sample.eggAnim }} />
             </span>
           </span>
-        </span>
-        <span style={{ padding: '3px 10px', borderRadius: radius.pill, background: v.sample.noteBg, color: '#FBF6EC', fontSize: 10.5, whiteSpace: 'nowrap' }}>{v.sample.eggNote}</span>
-      </button>
+          <span style={{ fontSize: 11.5, lineHeight: 1, color: '#7B6F63' }}>{v.sample.eggNote}</span>
+          <span style={{ font: `9.5px ${MONO}`, color: C.faint2 }}>{v.sample.eggCount}</span>
+        </button>
+      </div>
+      {v.bub.isTut && <TutorCard y={y} />}
     </div>
   );
 }
 
-/** 튜토리얼 카드 — 샘플 방에서는 이전·다음으로 넘기고, 진짜 방에서는 직접 해야 넘어간다. */
 /**
  * 여울 샘플 방의 상단 안내.
  *
- * ★ 무대 위쪽을 크게 덮지 않게 압축했다(2026-09-07 상훈님 지시 "조금 더 콤팩트하게 수납").
+ * ★ 이제 **무대 밖 머리 띠 안**에 산다(→ `SampleHud`). 무대 위에 떠 있던 것을 내렸다.
+ * ★ 크기도 압축했다(2026-09-07 상훈님 지시 "조금 더 콤팩트하게 수납").
  *   - 점 여덟 개 → `3 / 8` 한 덩어리. 여덟 개는 자리만 먹고 몇 번째인지 읽히지도 않았다.
  *   - 이전·다음·진행을 **글과 같은 흐름에** 흘려 둔 줄을 없앴다(따로 한 줄이면 그만큼 더 덮는다).
  * ★ 접을 수 있다. 다만 **기본은 펼침**이고, 부름이 다음으로 넘어가면 **자동으로 다시 펼친다** —
@@ -319,9 +328,9 @@ function TutorCard({ y }: { y: Yeoul }) {
         data-part="tutor-folded"
         onClick={stop(() => setFolded(false))}
         style={{
-          position: 'absolute', left: 12, top: b.tutTop, zIndex: 3,
-          display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: radius.pill,
-          background: 'rgba(255,253,248,.95)', border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)',
+          alignSelf: 'flex-start',
+          display: 'flex', alignItems: 'center', gap: 6, padding: '5px 11px', borderRadius: radius.pill,
+          background: C.slot, border: `1px solid ${C.line}`,
         }}
       >
         <span style={{ fontSize: 11.5, color: C.sub2 }}>여울의 안내</span>
@@ -333,9 +342,8 @@ function TutorCard({ y }: { y: Yeoul }) {
 
   return (
     <div data-part="tutor" style={{
-      position: 'absolute', left: 12, right: 12, top: b.tutTop, zIndex: 3,
-      padding: '7px 24px 7px 11px', borderRadius: radius.md,
-      background: 'rgba(255,253,248,.95)', border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)',
+      position: 'relative', padding: '6px 22px 6px 10px', borderRadius: radius.md,
+      background: C.slot, border: `1px solid ${C.line}`,
       animation: 'yPop .24s ease',
     }}>
       {/* 손잡이는 흐름 밖에 둔다 — 글이 그 밑으로 흐르지 않게 오른쪽 여백을 미리 비워 뒀다. */}
