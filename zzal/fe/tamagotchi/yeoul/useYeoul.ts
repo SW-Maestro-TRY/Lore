@@ -1028,14 +1028,16 @@ export function useYeoul() {
         upBg: s.uploaded ? C.accentSoft : C.paper,
         upLabel: s.uploaded ? '그림을 올렸어요' : '그림 올리기',
         upNote: s.uploaded ? '다시 누르면 바꿀 수 있어요' : 'PNG · JPG · 10MB까지',
+        // ★ 올리기 칸의 라벨·잠금은 여기서 정하지 않는다. 목(useYeoul)은 그림이 **실제로**
+        //   올라갔는지 모르고 `s.uploaded`(파일을 골랐다) 까지만 안다. 진짜 기준인
+        //   `live.imageKey` 는 화면(Onboarding)만 볼 수 있어서 거기서 덮어쓴다.
         cta: ({
           landing: '내 아이 데려오기',
-          upload: s.uploaded ? '다음' : '그림 없이 계속',
+          upload: '다음',
           user: '다 됐어요',
           char: s.petName ? '이 아이로 시작하기' : '이름부터 지어 줘요',
           born: `${s.petName}의 방으로 들어가기`,
         } as Record<StepKey, string>)[STEPS[s.step] as StepKey],
-        hasSkip: STEPS[s.step] === 'upload',
         userFields: USER_Q.map((f) => ({
           label: f.label,
           opts: f.opts.map((o) => ({ text: o, pick: pickUser(f.key, o), ...sel(s.user[f.key] === o) })),
