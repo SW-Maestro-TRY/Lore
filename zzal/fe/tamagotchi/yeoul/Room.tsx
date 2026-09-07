@@ -558,12 +558,9 @@ function Popover({ y }: { y: Yeoul }) {
         )}
       </span>
       <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        {p.hasHint && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', borderRadius: radius.sm, background: C.accentSoft }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent }} />
-            <span style={{ fontSize: 11.5, lineHeight: 1.4, color: C.accent }}>{p.hint}</span>
-          </span>
-        )}
+        {/* ★ '여기서 ○○ 누르기' 안내 줄은 없앴다(2026-09-07 상훈님 지시).
+            같은 말을 세 번 하고 있었다 — 위 안내 카드가 무엇을 할지 말하고, 대상 버튼이 깜빡인다.
+            깜빡임(yBlink)은 남긴다. 글자 없이 가리킬 수 있는 유일한 수단이라 그것까지 없애면 못 찾는다. */}
         {p.a && <PopButton b={p.a} />}
         {p.hasB && p.b && <PopButton b={p.b} />}
       </span>
