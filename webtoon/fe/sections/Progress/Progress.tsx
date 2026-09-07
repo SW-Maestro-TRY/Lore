@@ -33,12 +33,15 @@ export default function Progress({
   styleLabel,
   onExit,
   onDone,
+  onBrowse,
 }: {
   jobId: string;
   /** 만들 때 고른 그림체 이름. 서버도 style_label 을 주지만 첫 폴링 전까지 비어 있다. */
   styleLabel?: string;
   onExit: () => void;
   onDone: (runId: string) => void;
+  /** 기다리는 동안 둘러보기로. 만들기는 서버에서 계속 돈다. */
+  onBrowse: () => void;
 }) {
   const { job, offline, busy, send } = useNhJob(jobId);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -47,11 +50,26 @@ export default function Progress({
   const [sheetVersion, setSheetVersion] = useState(() => Date.now());
   const [failed, setFailed] = useState<string | null>(null);
 
+  /** 사람이 답할 차례인가. */
+  const waiting = job?.status === "awaiting_sheet" || job?.status === "awaiting_pick";
+  /** 루 놀이터가 지금 화면에 있는가 — 아래 렌더 조건과 **똑같아야 한다.** */
+  const playOpen = !!job && !waiting;
+
+  /* 루 놀이터는 **확인 차례에는 DOM 에 없다**(아래 `{!waiting && ...}`).
+     그런데 붙이는 일을 마운트 때 한 번만 하면, 확인 차례에 이 화면이 뜬
+     경우 붙일 대상이 없어서 그냥 지나가고 — 확인이 끝나 놀이터가 나타나도
+     **영영 아무 반응이 없다.** 실제로 그랬다: 시트 확인 중에 새로고침하면
+     그 뒤로 루를 눌러도 안 움직였다.
+
+     그래서 놀이터가 나타나고 사라질 때마다 다시 붙인다. 조건을 `waiting`
+     하나로 두면 안 된다 — 첫 폴링 전에는 job 이 없어 화면 자체가 안 그려지는데
+     `waiting` 은 그때도 false 라, 곧바로 진행 중으로 오면 효과가 다시 안 돈다. */
   useEffect(() => {
+    if (!playOpen) return;
     const disposeLou = setupLou();
     const disposeTips = setupTips();
     return () => { disposeLou(); disposeTips(); };
-  }, []);
+  }, [playOpen]);
 
   /* 다 되면 결과 화면으로. **내 작품으로 남기는 것을 잊으면 안 된다** —
      안 남기면 앱이 남의 작품으로 보고 완성본 화면의 내려받기·편집실·저장·
@@ -100,7 +118,6 @@ export default function Progress({
 
   const head = headLine(job.status, job.style_label || styleLabel || "");
   const line = mascotLine(job.status, job.stage, job.say, job.art);
-  const waiting = job.status === "awaiting_sheet" || job.status === "awaiting_pick";
 
   /** 검수 답 보내기 — 실패하면 그 자리에서 말한다(조용히 삼키면 사람이 또 누른다). */
   const answer = (fn: () => Promise<unknown>) => {
@@ -231,6 +248,23 @@ export default function Progress({
         {/* 통신이 잠깐 끊긴 것은 작업 실패가 아니다 — 서버에서는 계속 돈다. */}
         {offline && (
           <p className="progress-sub">연결이 잠깐 끊겼습니다 — 다시 받아오는 중입니다.</p>
+        )}
+
+        {/* **기다리는 동안 다른 걸 봐도 된다.**
+            한 편에 십 분 안팎이 걸리는데 이 화면이 그동안 사람을 붙들고
+            있었다 — 나갈 단추가 없어서, 나가려면 뒤로가기를 눌러야 했고
+            그러면 만들던 데로 돌아올 길이 없었다(작업 번호가 주소에 없었다).
+            지금은 주소에 실리므로 나갔다 와도 그대로 이어진다. 만들기는
+            서버에서 도는 것이라 창을 닫아도 안 멈춘다 — 그 말을 같이 적는다.
+
+            확인 차례에는 안 띄운다: 그때는 사람이 답해야 앞으로 간다. */}
+        {!waiting && (
+          <div className="wait-away">
+            <button type="button" className="btn btn-quiet btn-sm" onClick={onBrowse}>
+              기다리는 동안 웹툰 보기
+            </button>
+            <span>만들기는 서버에서 계속 돌아요. 나갔다 와도 이어집니다.</span>
+          </div>
         )}
 
         {!waiting && (

@@ -227,6 +227,23 @@ function WebtoonScreens() {
     >
       {/* 홈은 한 겹으로 묶는다 — 원본의 #landing 자리다. 폭·배경 규칙이
           그 덩어리에 걸려 있어서, 안 묶으면 넓은 화면에서 홈만 틀에 갇힌다. */}
+      {/* **만들던 것이 있으면 돌아갈 길을 늘 띄운다.**
+          기다리는 동안 둘러보러 나갈 수 있게 해 놓고 돌아올 단추가 없으면,
+          나간 사람은 만들던 것이 어디 갔는지 모른다 — 주소를 외워 둘 리도
+          없다. 진행 화면 자신에게는 안 띄운다(이미 거기다). */}
+      {jobId && view !== "running" && (
+        <button type="button" className="back-to-run"
+                onClick={() => { setView("running"); router.replace(
+                  `/webtoon?view=running&job=${encodeURIComponent(jobId)}`); }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/static/lou/react/idle/01.webp" alt="" aria-hidden="true" />
+          <span>
+            <b>루가 웹툰을 만들고 있어요</b>
+            <small>눌러서 돌아가기</small>
+          </span>
+        </button>
+      )}
+
       {view === "landing" && (
         <div className="landing">
           <Hero onStart={() => go("create")} onBrowse={() => go("works")} />
@@ -248,9 +265,16 @@ function WebtoonScreens() {
       {view === "running" && jobId && (
         <Progress
           jobId={jobId}
+          onBrowse={() => go("works")}
           styleLabel={styleLabel}
-          onExit={goHome}
-          onDone={(id) => go("result", id)}
+          onExit={() => { setJobId(null); goHome(); }}
+          onDone={(id) => {
+            /* **다 만들었으면 돌아갈 것이 없다.** 안 지우면 결과 화면에서도
+               「루가 웹툰을 만들고 있어요」 띠가 그대로 떠 있고, 눌러 보면
+               이미 끝난 작업의 진행 화면으로 되돌아간다. */
+            setJobId(null);
+            go("result", id);
+          }}
         />
       )}
       {view === "result" && (
