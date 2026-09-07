@@ -120,6 +120,44 @@ public class JobRunner {
         });
     }
 
+    /**
+     * 시트만 <b>다시 그린다.</b> 그리고 나서 다시 확인을 기다린다.
+     *
+     * 사람이 적어 보낸 말은 하네스의 {@code --note} 로 넘긴다 — 파이썬 쪽
+     * ({@code newharness_pipeline._run_sheet_phase})과 같은 인자다. 환경변수가
+     * 아니다: 하네스는 이 값을 그리는 프롬프트 뒤에 붙인다.
+     *
+     * 지운 것은 부르는 쪽이 이미 지웠다({@code JobService.clearSheet}) —
+     * 안 지우면 하네스가 "이미 있다" 며 그냥 넘어간다.
+     */
+    public void redrawSheet(Long jobId, String note) {
+        line.submit(() -> {
+            try {
+                WebtoonJob job = store.running(jobId, JobStage.SHEET);
+                progress.say(jobId, "루가 캐릭터를 다시 그리고 있어요");
+
+                List<String> args = new ArrayList<>(
+                        List.of("--run-id", job.getRunId(), "--sheet"));
+                if (note != null && !note.isBlank()) {
+                    args.add("--note");
+                    args.add(note);
+                }
+                int code = harness.run(args, env(job), l -> progress.line(jobId, l));
+                if (code != 0) {
+                    throw new IllegalStateException("캐릭터 시트를 다시 만들지 못했습니다");
+                }
+                store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
+            } catch (Exception e) {
+                fail(jobId, e);
+            }
+        });
+    }
+
+    /** 이 작품의 폴더. 시트를 지우는 쪽이 쓴다. */
+    public Path runDir(String runId) {
+        return runsDir.resolve(runId);
+    }
+
     /* ---- 걸음 셋 ---------------------------------------------------------- */
 
     private void story(Long jobId, Path jobDir) throws Exception {

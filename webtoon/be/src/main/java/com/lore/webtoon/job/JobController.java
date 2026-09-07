@@ -169,11 +169,31 @@ public class JobController {
         return Map.of("ok", true);
     }
 
-    @Operation(summary = "캐릭터 시트 확인")
-    @PostMapping("/jobs/{id}/sheet")
-    public Map<String, Object> sheet(@PathVariable String id) {
-        jobs.approveSheet(id);
+    /**
+     * 캐릭터 시트를 보고 정한다 — 이대로 가거나(approve), 다시 그리거나(retry).
+     *
+     * <b>주소 이름이 화면과 어긋나 있었다.</b> 화면은 처음부터
+     * {@code /sheet-decision} 을 불렀는데 여기에는 {@code /sheet} 만 있어서,
+     * 그 요청이 아래 프록시로 새어 파이썬 서버까지 갔다. 파이썬은 스프링이
+     * 만든 작업을 모르므로 「그런 작업이 없습니다」를 냈다 — 시트에서 더
+     * 나아갈 수 없었다. 옛 이름도 남겨 둔다(둘 다 받는다).
+     */
+    @Operation(summary = "캐릭터 시트 확인",
+            description = "decision=approve 면 그대로 진행, retry 면 시트를 다시 그린다.")
+    @PostMapping({"/jobs/{id}/sheet-decision", "/jobs/{id}/sheet"})
+    public Map<String, Object> sheet(@PathVariable String id,
+                                     @RequestBody(required = false) SheetDecision body) {
+        String decision = body == null ? null : body.decision();
+        if ("retry".equalsIgnoreCase(decision)) {
+            jobs.retrySheet(id, body.note());
+        } else {
+            jobs.approveSheet(id);
+        }
         return Map.of("ok", true);
+    }
+
+    /** 본문이 없으면(옛 이름으로 부르면) 그대로 진행으로 본다. */
+    public record SheetDecision(String decision, String note) {
     }
 
     /**

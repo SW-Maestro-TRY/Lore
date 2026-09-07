@@ -80,8 +80,9 @@ function WebtoonScreens() {
      전부라, 뒤로가기가 안 되면 들어간 곳마다 갇힌다.
 
      민 주소는 아래 useEffect 가 다시 읽어 화면을 맞춘다 — 그래서 앞으로가기도
-     같이 산다. 만들던 중(running)만 주소에 안 싣는다: 주소만으로는 어느
-     작업인지 알 수 없어서, 뒤로 갔다 오면 빈 진행 화면이 뜬다. */
+     같이 산다. 만들던 중(running)은 `?view=running&job=<번호>` 로 싣는다 —
+     번호가 있어야 서버에 무엇을 묻는지 알 수 있고, 그래야 새로고침해도
+     하던 데로 돌아온다. */
   const router = useRouter();
   const go = (next: Exclude<View, "running">, id?: string) => {
     const q = next === "result" && id ? `?run=${encodeURIComponent(id)}`
@@ -125,6 +126,15 @@ function WebtoonScreens() {
   useEffect(() => {
     const run = search.get("run");
     if (run) setRunId(run);
+
+    /* **만들던 중이면 그 작업으로 돌아간다.**
+       진행 상황은 서버가 들고 있는데(작업 번호로 묻는다) 그 번호가 화면
+       상태에만 있어서, 새로고침 한 번이면 만들던 데로 돌아갈 길이 없었다.
+       자주 묻는 것에 "나중에 다시 들어오면 하던 데서 이어집니다" 라고
+       적어 둔 그 약속이 안 지켜지고 있었다. 번호를 주소에 실어 지킨다. */
+    const job = search.get("job");
+    if (job) { setJobId(job); setView("running"); return; }
+
     const asked = search.get("view");
     // view 를 먼저 본다 — 편집실은 `?view=editor&run=x` 처럼 둘 다 달고 오므로,
     // run 을 먼저 보면 편집실로 못 가고 늘 완성본이 뜬다.
@@ -202,6 +212,10 @@ function WebtoonScreens() {
     setStyleLabel(STYLE_INFO.find(([key]) => key === form.style)?.[1] || "");
     setJobId(got.id);
     setView("running");
+    /* 작업 번호를 주소에 싣는다 — 새로고침하거나 창을 닫았다 다시 와도
+       하던 데로 돌아온다. replace 로 미는 이유: 뒤로가기가 방금 떠난
+       만들기 화면으로 가야지, 만들던 중으로 되돌아오면 안 된다. */
+    router.replace(`/webtoon?view=running&job=${encodeURIComponent(got.id)}`);
   };
 
   return (

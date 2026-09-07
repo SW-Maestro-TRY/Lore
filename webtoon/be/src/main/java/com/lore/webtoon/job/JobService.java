@@ -224,6 +224,39 @@ public class JobService {
         runner.resumeAfterSheet(job.getId());
     }
 
+    /**
+     * 시트를 <b>다시 그린다.</b> 사람이 적어 보낸 말은 그리는 프롬프트 뒤에 붙는다.
+     *
+     * 그리기 전에 이미 있는 시트를 지운다 — {@code run.py} 의 {@code stage_sheet}
+     * 이 "사양·그림이 이미 있으면 다시 안 그린다"로 정해 놨기 때문이다. 안 지우면
+     * 다시 만들기를 눌러도 같은 그림이 그대로 있고, 사람은 눌렀는데 아무 일도
+     * 안 일어난 것으로 본다. (파이썬 쪽 `_clear_sheet` 과 같은 규칙이다.)
+     */
+    public void retrySheet(String publicId, String note) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SHEET) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 확인할 차례가 아닙니다");
+        }
+        clearSheet(job.getRunId());
+        runner.redrawSheet(job.getId(), note == null ? "" : note.trim());
+    }
+
+    /** 시트를 다시 그리려면 먼저 지운다. 못 지운 것이 있어도 계속 간다. */
+    private void clearSheet(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return;
+        }
+        Path dir = runner.runDir(runId);
+        for (String name : new String[]{"sheet.png", "sheet_spec.json",
+                                        "sheet_prompt.txt", "sheet_spec_prompt.txt"}) {
+            try {
+                Files.deleteIfExists(dir.resolve(name));
+            } catch (IOException e) {         // noqa: 하나 못 지워도 나머지를 지운다
+                log.warn("시트를 못 지웠습니다 ({})", name, e);
+            }
+        }
+    }
+
     /* ---- 준비 ------------------------------------------------------------- */
 
     /**
