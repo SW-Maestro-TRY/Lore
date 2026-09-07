@@ -75,7 +75,7 @@ public class PrivateArt {
         this.ttl = Duration.ofMinutes(Math.max(1, minutes));
     }
 
-    static boolean isPrivate(String key) {
+    public static boolean isPrivate(String key) {
         return key != null && key.startsWith(PRIVATE_PREFIX);
     }
 

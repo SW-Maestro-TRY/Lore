@@ -66,6 +66,8 @@ public class CharacterService {
     private final Path workDir;
     private final int freePerDay;
     private final int cost;
+    /** 공개 그림을 내주는 앞자리. PageStore 와 같은 값을 본다. */
+    private final String cdn;
     private final Clock clock;
     /* 한 줄로 세운다 — 그림 호출을 한꺼번에 여러 개 띄우면 값이 몰려 나간다. */
     private final ExecutorService line =
@@ -81,13 +83,15 @@ public class CharacterService {
                             PrivateArt art, CreditGate credits,
                             @Value("${lore.webtoon.character.work-dir:}") String workDir,
                             @Value("${lore.webtoon.character.free-per-day:5}") int freePerDay,
-                            @Value("${lore.webtoon.character.credit-cost:1}") int cost) {
-        this(characters, maker, art, credits, workDir, freePerDay, cost, Clock.system(ZONE));
+                            @Value("${lore.webtoon.character.credit-cost:1}") int cost,
+                            @Value("${lore.webtoon.cdn-base:}") String cdn) {
+        this(characters, maker, art, credits, workDir, freePerDay, cost, cdn,
+             Clock.system(ZONE));
     }
 
     CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
                      PrivateArt art, CreditGate credits, String workDir,
-                     int freePerDay, int cost, Clock clock) {
+                     int freePerDay, int cost, String cdn, Clock clock) {
         this.characters = characters;
         this.maker = maker;
         this.art = art;
@@ -96,6 +100,7 @@ public class CharacterService {
                 ? "haeun/landing/characters" : workDir).toAbsolutePath().normalize();
         this.freePerDay = freePerDay;
         this.cost = cost;
+        this.cdn = cdn == null ? "" : cdn.replaceAll("/+$", "");
         this.clock = clock;
     }
 
@@ -272,14 +277,35 @@ public class CharacterService {
         characters.delete(one);
     }
 
-    /** 화면이 그림을 볼 주소. 없으면 {@code null}. */
+    /**
+     * 화면이 그림을 볼 주소. 없으면 {@code null}.
+     *
+     * <b>공개 자리에 있는 것은 CDN 주소를 그대로 준다.</b> 예전에는 무엇이든
+     * 서명 주소(presigned)로 만들었는데 그게 셋을 망쳤다:
+     *
+     * <ul>
+     *   <li>서명 주소는 <b>시간이 지나면 만료된다.</b> 화면을 열어 둔 채로
+     *       두면 그림이 사라진다</li>
+     *   <li>CDN 을 건너뛰고 S3 에서 바로 받는다 — 누구나 봐도 되는 그림에
+     *       매번 S3 대역폭을 쓴다</li>
+     *   <li>S3 를 못 잡으면 <b>주소가 아예 null 이 되어 그림이 통째로
+     *       사라진다.</b> 정작 그림은 CDN 에 멀쩡히 있는데도 그렇다</li>
+     * </ul>
+     *
+     * 가르는 규칙은 {@code PageStore.urlOf} 와 같다 — 비공개 자리는 CloudFront
+     * 가 안 내주므로 그때만 잠깐 열리는 주소를 만든다. 둘 중 하나를 고치면
+     * 다른 쪽도 같이 본다.
+     */
     @Transactional(readOnly = true)
     public String artUrl(WebtoonCharacter one) {
         String key = one.getArtKey();
-        if (key == null || key.isBlank() || !art.ready()) {
+        if (key == null || key.isBlank()) {
             return null;
         }
-        return art.temporaryUrl(key);
+        if (!PrivateArt.isPrivate(key)) {
+            return cdn.isEmpty() ? "/" + key : cdn + "/" + key;
+        }
+        return art.ready() ? art.temporaryUrl(key) : null;
     }
 
     int cost() {
