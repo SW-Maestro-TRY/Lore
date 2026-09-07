@@ -149,7 +149,7 @@ export interface Stage {
   charFilter: string; play: 'running' | 'paused';
 }
 export interface Bubble {
-  isTut: boolean; tutTop: string; top: string; tutText: string;
+  isTut: boolean; top: string; tutText: string;
   show: boolean; text: string; chipLabel: string;
   hasPrev: boolean; hasNext: boolean; hasHint: boolean; hintText: string; hasSkip: boolean;
   dots: { w: string; bg: string }[];
@@ -764,7 +764,6 @@ export function useYeoul() {
     const chatLine = s.chatOpen ? (s.petLine || '오늘은 뭐 했어요?') : null;
     const bub: Bubble = {
       isTut: !!tut && s.sampleMode && !s.sleeping && !s.chatOpen,
-      tutTop: s.sampleMode ? '96px' : '10px',
       top: s.sampleMode ? '96px' : '12px',
       tutText: tut?.text ?? '',
       show: !tut && (!!top || !!chatLine) && !s.sleeping,
@@ -913,6 +912,7 @@ export function useYeoul() {
         eggAnim: s.hatch >= 4 ? 'yCrack 1.5s ease-in-out infinite'
           : s.hatch === 3 ? 'yWiggle 2.4s ease-in-out infinite' : 'yBob 2.8s ease-in-out infinite',
         eggNote: s.hatch >= 4 ? '부화 완료' : '부화 중',
+        eggCount: `${Math.min(4, s.hatch)} / 4`,
         noteBg: s.hatch >= 4 ? ACCENT : 'rgba(74,64,56,.82)',
         haloOpacity: s.hatch >= 4 ? 1 : 0,
         exit: exitSample, forceHatch: goEgg,
