@@ -35,6 +35,9 @@ public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharact
         return existsByOwnerIdIsNullAndName(name);
     }
 
+    /** 이 이름의 기본 제공 캐릭터. 그림이 비었으면 채워 넣을 때 쓴다. */
+    Optional<WebtoonCharacter> findFirstByOwnerIdIsNullAndName(String name);
+
     /** 기본 제공 전부. 목록에서 빠진 것을 거둘 때 쓴다. */
     List<WebtoonCharacter> findByOwnerIdIsNull();
 

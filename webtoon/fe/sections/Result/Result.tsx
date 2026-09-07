@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  episodeDownloadUrl, isMyRun, pageUrl, readResult, type RunResult,
+  episodeDownloadUrl, isMyRun, myAccountRuns, pageUrl, readResult, type RunResult,
 } from "../../lib/nhApi";
 import ShareBar from "../Share/ShareBar";
 
@@ -35,6 +35,31 @@ export default function Result({
   onEditor: () => void;
 }) {
   const [data, setData] = useState<RunResult | null>(null);
+  /* **내 작품인가 — 브라우저만 믿지 않는다.**
+     `isMyRun` 은 localStorage 만 본다. 그래서 다른 기기에서 로그인하거나
+     브라우저 저장소를 지우면, 내가 만든 작품인데도 내려받기·편집실·공개
+     스위치가 통째로 사라진다 — 마이페이지는 계정 기준으로 목록을 주면서
+     정작 그 목록에서 열면 남의 것으로 보는 셈이다(실측으로 확인).
+
+     주인이 누구인지는 서버가 안다(webtoon_work.user_id). 그래서 계정 쪽
+     목록도 같이 물어보고, 둘 중 하나에만 있어도 내 것으로 본다. 서버를
+     못 받으면 예전처럼 브라우저 것만 쓴다 — 목록을 못 받았다고 내 작품이
+     남의 것이 되면 안 된다.
+
+     **훅은 early return 앞에 둔다.** 아래에 두었더니 "작품을 못 열었다"
+     갈래에서는 이 훅이 안 불려서, 리액트가 훅 순서가 바뀌었다고 화면을
+     통째로 멈춰 세웠다(실측). 훅은 언제나 같은 순서로 불려야 한다. */
+  const [ownedByAccount, setOwnedByAccount] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    myAccountRuns()
+      .then((got) => {
+        if (alive) setOwnedByAccount(got.some((r) => r.run_id === runId));
+      })
+      .catch(() => { /* 브라우저 것만 쓴다 */ });
+    return () => { alive = false; };
+  }, [runId]);
+
   const [failed, setFailed] = useState<string | null>(null);
   /* 지금 설명을 펼친 장. 한 번에 하나만 연다 — 여러 개를 켜 두면 읽는 흐름이
      설명으로 끊기고, 어차피 보고 있는 것은 한 장이다. */
@@ -71,7 +96,7 @@ export default function Result({
     );
   }
 
-  const mine = isMyRun(runId);
+  const mine = isMyRun(runId) || ownedByAccount;
   const ep = data.episode || 1;
   const short = data.preview && data.planned_pages > data.page_count
     ? ` · 미리보기 (${data.planned_pages}장 중 앞 ${data.page_count}장만 그렸습니다)` : "";

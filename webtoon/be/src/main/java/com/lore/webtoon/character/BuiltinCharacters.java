@@ -102,8 +102,19 @@ public class BuiltinCharacters implements ApplicationRunner {
             return;
         }
         int made = 0;
+        int fixed = 0;
         for (Seed seed : SEEDS) {
-            if (characters.existsBuiltinNamed(seed.name())) {
+            /* **이름만 보고 넘기면 그림 없는 줄이 영영 남는다.**
+             *
+             * 심을 때 S3 를 못 잡으면 이름·설명만 들어가고 그림은 비는데,
+             * 다음 기동에서 "이미 있다" 며 그냥 넘어가서 화면에 「그림 없음」
+             * 이 계속 뜬다. DB 를 비우고 다시 띄웠을 때 실제로 그랬다 —
+             * 그 순간 S3 설정이 없었고, 뒤에 설정을 채워도 안 고쳐졌다.
+             *
+             * 그래서 이름이 있어도 **그림이 비어 있으면 다시 채운다.** */
+            WebtoonCharacter old = characters.findFirstByOwnerIdIsNullAndName(seed.name())
+                    .orElse(null);
+            if (old != null && old.getArtKey() != null && !old.getArtKey().isBlank()) {
                 continue;
             }
             Path file = samples.resolve(seed.file());
@@ -122,6 +133,16 @@ public class BuiltinCharacters implements ApplicationRunner {
                 continue;
             }
             Instant now = Instant.now();
+            if (old != null) {
+                // 이미 있는 줄에 그림만 채운다 — 지우고 새로 만들면 그 캐릭터로
+                // 만든 작품이 가리키던 번호가 바뀐다.
+                if (key != null) {
+                    old.drewArt(key, CharacterSource.BUILTIN, now);
+                    characters.save(old);
+                    fixed++;
+                }
+                continue;
+            }
             WebtoonCharacter one = WebtoonCharacter.builtin(
                     UUID.randomUUID().toString().replace("-", "").substring(0, 20),
                     seed.name(), seed.description(), now);
@@ -130,6 +151,9 @@ public class BuiltinCharacters implements ApplicationRunner {
             }
             characters.save(one);
             made++;
+        }
+        if (fixed > 0) {
+            log.info("그림이 비어 있던 기본 캐릭터 {}명을 채웠습니다", fixed);
         }
         if (made > 0) {
             log.info("기본 캐릭터 {}명을 심었습니다", made);

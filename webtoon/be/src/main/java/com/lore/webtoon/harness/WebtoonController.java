@@ -8,6 +8,8 @@ import com.lore.webtoon.usage.SpendGuard;
 import com.lore.webtoon.work.WorkLedger;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,6 +77,9 @@ public class WebtoonController {
             Pattern.quote(PREFIX) + "/nh/jobs/([\\w.-]+)");
 
     /** 그림 한 장을 달라는 자리. S3 에 올라와 있으면 거기로 보낸다. */
+    /** 둘러보기 목록. 여기서 비공개를 걷어낸다. */
+    private static final Pattern LIST = Pattern.compile(Pattern.quote(PREFIX) + "/runs");
+
     private static final Pattern PAGE = Pattern.compile(
             Pattern.quote(PREFIX) + "/runs/([\\w.-]+)/page/(\\d+)");
 
@@ -224,7 +229,67 @@ public class WebtoonController {
         if (creating && ok && me != null) {
             credits.charge(me, jobIdOf(answer.getBody()));
         }
+
+        /* **비공개로 내린 작품을 둘러보기에서 뺀다.**
+         *
+         * 공개 여부가 두 곳에 갈려 있었다 — 마이페이지 스위치는 스프링 DB
+         * (webtoon_work.is_public)에 쓰는데, 둘러보기 목록은 하네스가 만들고
+         * 하네스는 자기 파일(landing/data/hidden_runs.json)만 본다. 그래서
+         * 비공개로 내려도 목록에 그대로 남았다 — 제목·장르·캐릭터 이름이
+         * 다 보이고 그림만 막혔다(실측으로 확인).
+         *
+         * 절반만 숨겨지는 것이 제일 나쁘다. 지나가는 길에 여기서 거른다:
+         * 진실은 DB 에 있고(#241 이 그리로 옮겼다) 그것을 아는 곳이 여기다.
+         */
+        if (ok && LIST.matcher(request.getRequestURI()).matches()) {
+            return hidePrivate(answer);
+        }
         return answer;
+    }
+
+    /** 목록 응답에서 비공개 작품을 걷어낸다. 못 읽으면 원본 그대로 — 목록이
+     *  통째로 안 뜨는 것보다는 덜 걸러진 편이 낫다. */
+    private ResponseEntity<byte[]> hidePrivate(ResponseEntity<byte[]> answer) {
+        byte[] body = answer.getBody();
+        if (body == null || body.length == 0) {
+            return answer;
+        }
+        try {
+            JsonNode root = mapper.readTree(body);
+            JsonNode runs = root.path("runs");
+            if (!runs.isArray()) {
+                return answer;
+            }
+            ArrayNode kept = mapper.createArrayNode();
+            for (JsonNode one : runs) {
+                String runId = one.path("run_id").asText("");
+                /* **내 것이어도 뺀다.** 둘러보기는 공개 갤러리라, 비공개로
+                   내린 것이 주인에게만 보이면 "내렸는데 왜 아직 있지" 가 된다.
+                   자기 작품을 보는 자리는 마이페이지다 — 거기서는 비공개도
+                   다 보인다(MyWebtoonService). */
+                if (runId.isBlank() || ledger.isPublic(runId)) {
+                    kept.add(one);
+                }
+            }
+            ((ObjectNode) root).set("runs", kept);
+            return ResponseEntity.status(answer.getStatusCode())
+                    .headers(stripLength(answer.getHeaders()))
+                    .body(mapper.writeValueAsBytes(root));
+        } catch (Exception e) {              // noqa: 못 걸러도 목록은 내보낸다
+            log.warn("둘러보기에서 비공개를 못 걸렀습니다", e);
+            return answer;
+        }
+    }
+
+    /** 본문 길이가 바뀌었으므로 옛 Content-Length 를 뗀다. */
+    private static HttpHeaders stripLength(HttpHeaders from) {
+        HttpHeaders out = new HttpHeaders();
+        from.forEach((k, v) -> {
+            if (!HttpHeaders.CONTENT_LENGTH.equalsIgnoreCase(k)) {
+                out.addAll(k, v);
+            }
+        });
+        return out;
     }
 
     /**

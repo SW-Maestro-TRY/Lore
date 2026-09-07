@@ -93,6 +93,24 @@ export default function Progress({
               </p>
             )}
           </header>
+
+        {/* **기다리는 동안 다른 걸 봐도 된다.**
+            한 편에 십 분 안팎이 걸리는데 이 화면이 그동안 사람을 붙들고
+            있었다. 만들기는 서버에서 도는 것이라 창을 닫아도 안 멈춘다 —
+            그 말을 같이 적는다.
+
+            **진행 카드 바로 아래**에 둔다. 맨 밑에 두었더니 스크롤을 한참
+            내려야 보여서, 나갈 수 있다는 것 자체를 모르고 붙들려 있었다.
+
+            확인 차례에는 안 띄운다: 그때는 사람이 답해야 앞으로 간다. */}
+        {!waiting && (
+          <div className="wait-away">
+            <button type="button" className="btn btn-quiet btn-sm" onClick={onBrowse}>
+              기다리는 동안 웹툰 보기
+            </button>
+            <span>만들기는 서버에서 계속 돌아요. 나갔다 와도 이어집니다.</span>
+          </div>
+        )}
         </div>
       </section>
     );
@@ -238,33 +256,14 @@ export default function Progress({
           </div>
         )}
 
-        {/* 서버가 찍는 줄을 그대로 보여준다 — 무엇을 하고 있는지 숨기지
-            않는 것이 이 화면의 약속이다. */}
-        <details className="console">
-          <summary>자세히 보기 <small>파이프라인 로그</small></summary>
-          <pre>{(job.log || []).join("\n")}</pre>
-        </details>
+        {/* 파이프라인 로그(「자세히 보기」)를 뺐다 — 무엇을 하고 있는지는
+            위 「지금 하고 있는 일 자세히」가 사람 말로 다 보여 준다. 서버가
+            찍는 줄은 그 위에 한 겹 더 쌓여 화면만 길어졌다. 로그가 필요하면
+            서버 쪽에서 본다(job.log 는 API 로 계속 나간다). */}
 
         {/* 통신이 잠깐 끊긴 것은 작업 실패가 아니다 — 서버에서는 계속 돈다. */}
         {offline && (
           <p className="progress-sub">연결이 잠깐 끊겼습니다 — 다시 받아오는 중입니다.</p>
-        )}
-
-        {/* **기다리는 동안 다른 걸 봐도 된다.**
-            한 편에 십 분 안팎이 걸리는데 이 화면이 그동안 사람을 붙들고
-            있었다 — 나갈 단추가 없어서, 나가려면 뒤로가기를 눌러야 했고
-            그러면 만들던 데로 돌아올 길이 없었다(작업 번호가 주소에 없었다).
-            지금은 주소에 실리므로 나갔다 와도 그대로 이어진다. 만들기는
-            서버에서 도는 것이라 창을 닫아도 안 멈춘다 — 그 말을 같이 적는다.
-
-            확인 차례에는 안 띄운다: 그때는 사람이 답해야 앞으로 간다. */}
-        {!waiting && (
-          <div className="wait-away">
-            <button type="button" className="btn btn-quiet btn-sm" onClick={onBrowse}>
-              기다리는 동안 웹툰 보기
-            </button>
-            <span>만들기는 서버에서 계속 돌아요. 나갔다 와도 이어집니다.</span>
-          </div>
         )}
 
         {!waiting && (
