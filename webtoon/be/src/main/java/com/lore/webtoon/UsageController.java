@@ -20,7 +20,7 @@ import java.util.List;
  * <h2>올리는 쪽은 사람이 아니라 하네스다</h2>
  *
  * {@code /internal/**} 은 생성 하네스(serve.py)만 부른다. 그런데
- * {@code /api/webtoon/**} 은 게스트에게 열려 있어서, 그대로 두면 <b>아무나
+ * {@code /api/webtoon/v1/**} 은 게스트에게 열려 있어서, 그대로 두면 <b>아무나
  * 가짜 비용을 심을 수 있다.</b> 비용이 부풀면 상한이 엉뚱한 자리에서 걸려
  * 멀쩡한 사람이 못 만들게 되고, 반대로 낮춰 심으면 상한 자체가 무의미해진다.
  *
@@ -32,7 +32,7 @@ import java.util.List;
 @RequestMapping(UsageController.PREFIX)
 public class UsageController {
 
-    static final String PREFIX = "/api/webtoon/internal";
+    static final String PREFIX = WebtoonApi.V1 + "/internal";
 
     private final UsageService service;
     private final PageStore store;

@@ -1,7 +1,7 @@
 /* 생성 하네스에 말 거는 자리.
  *
  * 원본(haeun/landing/web/app.js)이 `/api/nh/...` 를 직접 부르는 것을, 여기서는
- * `/api/webtoon/nh/...` 로 부른다 — 그 앞에 스프링이 서 있고(webtoon/be),
+ * `/api/webtoon/v1/nh/...` 로 부른다 — 그 앞에 스프링이 서 있고(webtoon/be),
  * 접두사만 갈아 끼워 같은 하네스로 넘긴다. **응답 모양은 원본과 같다.**
  * 그래서 이 파일이 하는 일은 주소 앞에 접두사를 붙이고 타입을 적는 것뿐이다.
  *
@@ -22,7 +22,7 @@
  *  않는다. 배포에서는 같은 도메인이라 그 스위치가 필요 없다.) */
 import { request as appRequest } from "@common/api/client";
 
-const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon";
+const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
 /** 이 브라우저를 가리키는 값. 원본(app.js 의 getUid)과 **같은 키**를 쓴다 —
  *  프로토타입에서 만든 작품과 이식본에서 만든 작품이 같은 사람 것이 되어야
@@ -298,14 +298,14 @@ export function coverUrl(runId: string, page: number, episode = 1): string {
 /** 이 브라우저를 내 계정에 잇는다. **로그인할 때마다** 부른다 — 기기를 바꾸면
  *  uid 가 새로 생겨서, 한 번만 잇는 것으로는 두 번째 기기가 안 붙는다. */
 export function linkThisBrowser(): Promise<{ linked: boolean }> {
-  return appRequest<{ linked: boolean }>("/api/webtoon/my/link", {
+  return appRequest<{ linked: boolean }>("/api/webtoon/v1/my/link", {
     method: "POST", body: { uid: getUid() },
   });
 }
 
 /** 내 계정에 이어진 브라우저들이 만든 작품 전부. 나만 보기로 내려 둔 것도 온다. */
 export function myAccountRuns(): Promise<RunCard[]> {
-  return appRequest<RunCard[]>("/api/webtoon/my/runs");
+  return appRequest<RunCard[]>("/api/webtoon/v1/my/runs");
 }
 
 /** 이 브라우저의 크레딧 잔액.
@@ -326,7 +326,7 @@ export function creditBalance(): Promise<{ balance: number }> {
  *  이어진 브라우저의 작품인지 보고 넘긴다. */
 export function setVisibility(runId: string, isPublic: boolean) {
   return appRequest<{ runId: string; public: boolean }>(
-    `/api/webtoon/my/runs/${encodeURIComponent(runId)}/visibility`,
+    `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/visibility`,
     { method: "POST", body: { public: isPublic } });
 }
 

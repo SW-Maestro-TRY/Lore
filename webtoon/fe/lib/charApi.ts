@@ -5,7 +5,7 @@
  * 웹툰 쪽(nhApi)과 같은 규칙이다 — 봉투를 안 씌운 응답을 그대로 읽고, 실패는
  * `{error: "사람이 읽을 한 줄"}` 로 온다. */
 
-const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon";
+const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
 export interface Character {
   id: string;

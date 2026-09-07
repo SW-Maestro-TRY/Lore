@@ -24,14 +24,14 @@ import java.util.regex.Pattern;
  *
  * <h2>지금은 프록시 한 자리뿐이다</h2>
  *
- * {@code /api/webtoon/**} 로 온 것을 생성 하네스(serve.py)의 {@code /api/**}
+ * {@code /api/webtoon/v1/**} 로 온 것을 생성 하네스(serve.py)의 {@code /api/**}
  * 로 그대로 넘긴다.
  *
  * <pre>
- *   POST /api/webtoon/nh/create                -&gt; POST http://…:8800/api/nh/create
- *   GET  /api/webtoon/nh/jobs/{id}             -&gt; GET  …/api/nh/jobs/{id}
- *   GET  /api/webtoon/runs/{id}/result         -&gt; GET  …/api/runs/{id}/result
- *   POST /api/webtoon/runs/{id}/scenes/3/regen -&gt; …/api/runs/{id}/scenes/3/regen
+ *   POST /api/webtoon/v1/nh/create                -&gt; POST http://…:8800/api/nh/create
+ *   GET  /api/webtoon/v1/nh/jobs/{id}             -&gt; GET  …/api/nh/jobs/{id}
+ *   GET  /api/webtoon/v1/runs/{id}/result         -&gt; GET  …/api/runs/{id}/result
+ *   POST /api/webtoon/v1/runs/{id}/scenes/3/regen -&gt; …/api/runs/{id}/scenes/3/regen
  * </pre>
  *
  * 주소를 하나하나 안 적는 이유는, 화면이 부르는 주소가 아직 움직이고 있어서다.
@@ -47,7 +47,7 @@ import java.util.regex.Pattern;
  *
  * <h2>딱 하나, 만들기는 그냥 안 지나간다</h2>
  *
- * {@code POST /api/webtoon/nh/create} 는 <b>여기서부터 실제로 돈이 나가는</b>
+ * {@code POST /api/webtoon/v1/nh/create} 는 <b>여기서부터 실제로 돈이 나가는</b>
  * 유일한 자리다(실측 한 편 1,148원). 그래서 이 주소만 넘기기 전에 두 번
  * 멈춰 세운다 — 오늘 <b>전체</b> 몫이 남았는지({@link SpendGuard}), 그리고
  * 로그인 안 한 <b>이 사람</b>의 몫이 남았는지({@link GuestGate}). 나머지는
@@ -59,7 +59,7 @@ public class WebtoonController {
     private static final Logger log = LoggerFactory.getLogger(WebtoonController.class);
 
     /** 프론트가 부르는 접두사. 이 뒤가 하네스의 {@code /api} 뒤와 같다. */
-    static final String PREFIX = "/api/webtoon";
+    static final String PREFIX = WebtoonApi.V1;
 
     /** 이 주소만 지나가기 전에 한 번 멈춰 세운다 — 여기서부터 돈이 나간다. */
     static final String CREATE = PREFIX + "/nh/create";
@@ -288,7 +288,7 @@ public class WebtoonController {
     /**
      * 프론트가 부른 주소 -&gt; 하네스 주소.
      *
-     * {@code /api/webtoon/nh/jobs/x} -&gt; {@code /api/nh/jobs/x}
+     * {@code /api/webtoon/v1/nh/jobs/x} -&gt; {@code /api/nh/jobs/x}
      *
      * 접두사만 갈아 끼운다. 뒤는 손대지 않는다 — 하네스가 쓰는 경로 규칙을
      * 여기서 알 필요가 없고, 알려고 하면 양쪽이 어긋나는 자리가 하나 더 는다.

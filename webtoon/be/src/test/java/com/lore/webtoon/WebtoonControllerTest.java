@@ -56,9 +56,9 @@ class WebtoonControllerTest {
     @Test
     @DisplayName("접두사만 갈아 끼우고 뒤는 그대로 넘긴다")
     void 경로매핑() {
-        assertThat(WebtoonController.harnessPath("/api/webtoon/nh/jobs/abc"))
+        assertThat(WebtoonController.harnessPath("/api/webtoon/v1/nh/jobs/abc"))
                 .isEqualTo("/api/nh/jobs/abc");
-        assertThat(WebtoonController.harnessPath("/api/webtoon/runs/r1/scenes/3/regen"))
+        assertThat(WebtoonController.harnessPath("/api/webtoon/v1/runs/r1/scenes/3/regen"))
                 .isEqualTo("/api/runs/r1/scenes/3/regen");
         // 접두사가 없으면 건드리지 않는다 (이 컨트롤러로 올 일은 없지만,
         // substring 이 엉뚱한 자리를 자르지 않는다는 것을 못 박아 둔다)
@@ -71,7 +71,7 @@ class WebtoonControllerTest {
         when(gateway.forward(any(), any(), any(), any(), any()))
                 .thenReturn(ResponseEntity.ok().body("{\"id\":\"x\"}".getBytes()));
 
-        mvc.perform(post("/api/webtoon/nh/create?ep=1")
+        mvc.perform(post("/api/webtoon/v1/nh/create?ep=1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"도하람\"}"))
                 .andExpect(status().isOk());
@@ -90,7 +90,7 @@ class WebtoonControllerTest {
         when(gateway.forward(any(), any(), any(), any(), any()))
                 .thenReturn(ResponseEntity.ok().body("{\"status\":\"done\"}".getBytes()));
 
-        mvc.perform(get("/api/webtoon/nh/jobs/j1"))
+        mvc.perform(get("/api/webtoon/v1/nh/jobs/j1"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("{\"status\":\"done\"}"));
     }
@@ -110,7 +110,7 @@ class WebtoonControllerTest {
         // 이지 "어떤 글자로 읽힌다" 가 아니다. 문자열로 견주면 테스트가
         // 응답 헤더의 charset 을 어떻게 읽느냐에 걸려서, 실제로는 멀쩡한
         // 것이 깨져 보인다(하네스는 charset=utf-8 을 붙여 보낸다).
-        byte[] got = mvc.perform(post("/api/webtoon/nh/create"))
+        byte[] got = mvc.perform(post("/api/webtoon/v1/nh/create"))
                 .andExpect(status().is(402))
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(got).isEqualTo(said);

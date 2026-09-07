@@ -28,8 +28,8 @@ import java.util.Map;
  *
  * <h2>로그인이 필요한 유일한 웹툰 주소다</h2>
  *
- * 나머지 {@code /api/webtoon/**} 는 게스트도 부를 수 있게 열려 있다
- * (common 의 WebSecurityConfig). {@code /api/webtoon/my/**} 만 그 앞에서
+ * 나머지 {@code /api/webtoon/v1/**} 는 게스트도 부를 수 있게 열려 있다
+ * (common 의 WebSecurityConfig). {@code /api/webtoon/v1/my/**} 만 그 앞에서
  * 잠근다 — 로그인 안 한 사람에게는 "내" 라는 말이 성립하지 않는다.
  */
 @Tag(name = "Webtoon", description = "웹툰 스튜디오")
@@ -37,7 +37,7 @@ import java.util.Map;
 @RequestMapping(MyWebtoonController.PREFIX)
 public class MyWebtoonController {
 
-    static final String PREFIX = "/api/webtoon/my";
+    static final String PREFIX = WebtoonApi.V1 + "/my";
 
     private final MyWebtoonService service;
 
@@ -60,7 +60,7 @@ public class MyWebtoonController {
             내 계정에 이어진 브라우저들이 만든 작품 전부. 나만 보기로 내려 둔
             것도 포함한다 — 내 목록이라서다.
 
-            모양은 둘러보기 목록(GET /api/webtoon/runs)과 같다.""")
+            모양은 둘러보기 목록(GET /api/webtoon/v1/runs)과 같다.""")
     @GetMapping("/runs")
     public ApiResponse<List<Map<String, Object>>> runs(@LoginUser Long userId) {
         return ApiResponse.ok(service.myRuns(userId));

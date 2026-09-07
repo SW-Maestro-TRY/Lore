@@ -133,7 +133,7 @@ def report(run_id: str, uploads: list[dict], on_log=None) -> int:
          "key": u["key"], "bytes": u["bytes"]} for u in uploads]},
         ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
-        f"{API_BASE}/api/webtoon/internal/pages", data=body, method="POST",
+        f"{API_BASE}/api/webtoon/v1/internal/pages", data=body, method="POST",
         headers={"Content-Type": "application/json", "X-Lore-Internal": TOKEN})
     try:
         with urllib.request.urlopen(req, timeout=10) as res:

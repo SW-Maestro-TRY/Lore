@@ -13,7 +13,7 @@
 과 같은 한 마디다.
 
 만들려는 사람에게 보이는 값은 이것과 다르다 — 그쪽은 돈이 없고 "오늘 몇 편
-남았나" 만 있다(`/api/webtoon/internal/today`).
+남았나" 만 있다(`/api/webtoon/v1/internal/today`).
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def main() -> int:
         print("서버에 넣은 것과 같은 값을 환경변수로 주세요.", file=sys.stderr)
         return 1
 
-    req = urllib.request.Request(f"{base}/api/webtoon/internal/spend",
+    req = urllib.request.Request(f"{base}/api/webtoon/v1/internal/spend",
                                  headers={"X-Lore-Internal": TOKEN})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as res:

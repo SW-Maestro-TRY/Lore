@@ -20,7 +20,7 @@
 
 import { louArt } from "./louArt";
 
-const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon";
+const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
 export interface EditorOpen {
   /** 열 작품. 비면 목업(샘플)이다 — 원본이 `?run=` 없이 열었을 때와 같다. */

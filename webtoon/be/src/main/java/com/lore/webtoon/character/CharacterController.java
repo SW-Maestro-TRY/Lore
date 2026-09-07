@@ -1,5 +1,6 @@
 package com.lore.webtoon.character;
 
+import com.lore.webtoon.WebtoonApi;
 import com.lore.common.exception.BusinessException;
 import com.lore.webtoon.CreditGate;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,7 +32,7 @@ import java.util.Map;
 @RequestMapping(CharacterController.PREFIX)
 public class CharacterController {
 
-    static final String PREFIX = "/api/webtoon/characters";
+    static final String PREFIX = WebtoonApi.V1 + "/characters";
 
     private final CharacterService characters;
 

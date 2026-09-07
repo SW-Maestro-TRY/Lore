@@ -9,7 +9,7 @@ import ShareBar from "../Share/ShareBar";
 /* 완성본 — haeun/landing/web 의 #result 를 옮겼다.
  *
  * **이제 실제 작품을 읽는다.** 예전에는 목업(mock.json)만 보여줬는데, 지금은
- * `/api/webtoon/runs/{id}/result` 로 방금 만든 것을 그대로 연다.
+ * `/api/webtoon/v1/runs/{id}/result` 로 방금 만든 것을 그대로 연다.
  *
  * 내려받기 · 편집실은 **내 작품일 때만** 보인다. 남이 보낸 링크로 들어온
  * 작품에서 내려받기를 권하면 남의 그림을 내 것처럼 가져가는 꼴이 된다

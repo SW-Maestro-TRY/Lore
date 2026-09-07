@@ -94,7 +94,7 @@ def push(run_id: str, on_log=None) -> int:
     body = json.dumps({"runId": run_id, "calls": [_shape(c) for c in calls]},
                       ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
-        f"{BASE}/api/webtoon/internal/usage", data=body, method="POST",
+        f"{BASE}/api/webtoon/v1/internal/usage", data=body, method="POST",
         headers={"Content-Type": "application/json", "X-Lore-Internal": TOKEN})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as res:

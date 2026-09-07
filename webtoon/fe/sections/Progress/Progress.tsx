@@ -15,7 +15,7 @@ import StageRail from "./StageRail";
 /* 기다리는 화면 — haeun/landing/web 의 #progress 를 옮겼다.
  *
  * **이제 흉내가 아니다.** 예전에는 백엔드가 없어서 로컬 타이머로 진행을
- * 흉내 냈는데(useFakeProgress), 지금은 `/api/webtoon/nh/jobs/{id}` 를 0.8초
+ * 흉내 냈는데(useFakeProgress), 지금은 `/api/webtoon/v1/nh/jobs/{id}` 를 0.8초
  * 마다 받아 실제 작업을 그린다 — 원본 app.js 의 nhTick 과 같은 방식이다.
  *
  * 사람이 멈춰 서는 자리는 **둘뿐**이다. 시트 확인 → 이야기 고르기, 그

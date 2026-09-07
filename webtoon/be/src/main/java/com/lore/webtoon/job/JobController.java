@@ -1,5 +1,6 @@
 package com.lore.webtoon.job;
 
+import com.lore.webtoon.WebtoonApi;
 import com.lore.common.exception.BusinessException;
 import com.lore.webtoon.CreditGate;
 import com.lore.webtoon.GuestGate;
@@ -39,7 +40,7 @@ import java.util.Map;
  * </pre>
  *
  * 켰을 때 이 길이 이기는 이유: 스프링은 <b>더 구체적인 매핑</b>을 먼저 고른다.
- * {@code WebtoonController} 는 {@code /api/webtoon/**} 라는 넓은 그물이고,
+ * {@code WebtoonController} 는 {@code /api/webtoon/v1/**} 라는 넓은 그물이고,
  * 여기는 주소를 하나씩 적었다.
  *
  * <h2>응답 모양은 그대로다</h2>
@@ -54,7 +55,7 @@ import java.util.Map;
 @ConditionalOnProperty(name = "lore.webtoon.python.direct", havingValue = "true")
 public class JobController {
 
-    static final String PREFIX = "/api/webtoon/nh";
+    static final String PREFIX = WebtoonApi.V1 + "/nh";
 
     private final JobService jobs;
     private final RunArt art;
