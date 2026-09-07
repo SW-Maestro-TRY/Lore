@@ -379,28 +379,36 @@ function MiniCard({ y }: { y: Yeoul }) {
 }
 
 /** 여울이 하나씩 묻는 설문. 온보딩 칸이 아니라 샘플 방 안에서 묻는다(시안 확정). */
+/**
+ * 여울이 하나씩 묻는 창.
+ *
+ * ★ '여울이 물어봐요' 딱지를 뺐다(2026-09-07 상훈님 지시). 딱지 밑에 '연령대' 같은 항목 이름이
+ *   붙어 있으니 설문지로 읽혔다. 말하는 사람은 **말투로** 드러나야지 라벨로 붙이는 게 아니다.
+ *   그래서 묻는 말이 카드의 첫 줄이고, 진행(1/6)은 답을 다 읽은 뒤 눈에 걸리도록 맨 아래 구석에 둔다.
+ * ★ 무대의 말풍선과 헷갈리면 안 되므로 카드 꼴(둥근 모서리·그림자)은 그대로 둔다.
+ */
 function AskCard({ y }: { y: Yeoul }) {
   const a = y.v.ask;
   return (
     <div
+      data-part="ask"
       onClick={(e) => e.stopPropagation()}
       style={{
-        width: '100%', boxSizing: 'border-box', padding: '13px 14px', borderRadius: radius.lg,
+        width: '100%', boxSizing: 'border-box', padding: '15px 15px 11px', borderRadius: radius.lg,
         background: C.paper, border: `1px solid ${C.lineSoft}`, boxShadow: '0 8px 24px rgba(74,64,56,.16)',
-        display: 'flex', flexDirection: 'column', gap: 10, animation: 'yPopIn .2s cubic-bezier(.2,.9,.25,1)',
+        display: 'flex', flexDirection: 'column', gap: 11, animation: 'yPopIn .2s cubic-bezier(.2,.9,.25,1)',
       }}
     >
-      <span style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-        <span style={{ fontSize: 10.5, color: 'rgba(74,64,56,.45)' }}>여울이 물어봐요</span>
-        <span style={{ flex: 1 }} />
-        <span style={{ font: `10px ${MONO}`, color: 'rgba(74,64,56,.4)' }}>{a.step}</span>
-      </span>
-      <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.3, color: C.ink }}>{a.text}</span>
+      <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.35, color: C.ink }}>{a.text}</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {a.opts.map((o) => (
-          <button key={o.text} onClick={o.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 12.5, color: C.ink }}>{o.text}</button>
+          <button key={o.text} onClick={o.pick} data-ask-opt={o.text} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 12.5, color: C.ink }}>{o.text}</button>
         ))}
-        <button onClick={a.skip} style={{ padding: '9px 12px', borderRadius: radius.pill, border: 'none', background: 'none', fontSize: 12, color: 'rgba(74,64,56,.45)' }}>나중에</button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button onClick={a.skip} data-ask-skip style={{ padding: '4px 2px', border: 'none', background: 'none', fontSize: 12, color: C.faint2 }}>나중에</button>
+        <span style={{ flex: 1 }} />
+        <span style={{ font: `9.5px ${MONO}`, color: C.faint2 }}>{a.step}</span>
       </div>
     </div>
   );
