@@ -74,6 +74,8 @@ export default function Yeoul(_props: SkinProps) {
           open={s.authOpen}
           onClose={actions.closeAuth}
           initialTab={s.authTab}
+          // ★ 로그인 성공에서만 온다. 가입만 한 사람이 올리기 칸으로 넘어가면 안 된다
+          //   (2026-09-08 가입·로그인 분리). 이미 로그인해 둔 사람은 위의 useAuth 효과가 연다.
           onSuccess={(how) => actions.passAuth(how)}
         />
       </div>

@@ -57,8 +57,8 @@ public class AuthService {
      *                   "안 물어본 것"과 "거부한 것"은 다르기 때문이다.
      */
     @Transactional
-    public Tokens signUp(String email, String rawPassword, Map<AgreementType, Boolean> agreements,
-                         String termsVersion, String userAgent, Instant now) {
+    public void signUp(String email, String rawPassword, Map<AgreementType, Boolean> agreements,
+                       String termsVersion, Instant now) {
         if (userRepository.existsByEmail(email)) {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
@@ -72,7 +72,8 @@ public class AuthService {
         agreements.forEach((type, agreed) ->
                 agreementRepository.save(UserAgreement.of(user, type, termsVersion, Boolean.TRUE.equals(agreed), now)));
 
-        return issueTokens(user, userAgent, now);
+        // ★ 토큰을 만들지 않는다(상훈님 2026-09-08 결정: 가입과 로그인 분리).
+        //   쓰지도 않을 토큰을 발급하면 낭비이고 유출면만 넓어진다. 가입은 계정을 만드는 것까지다.
     }
 
     /**

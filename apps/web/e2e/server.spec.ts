@@ -42,22 +42,32 @@ test.describe('server mode', () => {
   test.skip(!process.env.E2E_SERVER, 'E2E_SERVER=1 이고 백엔드가 떠 있을 때만');
   test.setTimeout(120_000);
 
-  test('가입 → 부화(DB) → 돌보기 → 재우기 창 → 채팅 답까지 실서버로 한 바퀴', async ({ page }) => {
+  test('가입 → 로그인 → 부화(DB) → 돌보기 → 재우기 창 → 채팅 답까지 실서버로 한 바퀴', async ({ page }) => {
     const email = `e2e${Date.now()}@test.com`;
+    const password = 'password123';
 
-    // 1) 가입 — page.request 는 브라우저와 쿠키 통을 함께 쓴다. 이 한 번으로 화면도 로그인 상태가 된다.
+    // 1) 가입 — **계정만 만든다. 여기서는 로그인이 안 된다**(상훈님 2026-09-08 결정).
+    //    전에는 가입 응답에 쿠키가 붙어 이 한 번으로 화면까지 로그인 상태가 됐다.
     const signup = await page.request.post('/api/v1/auth/signup', {
-      data: { email, password: 'password123', agreements: { TERMS: true, PRIVACY: true, MARKETING: false } },
+      data: { email, password, agreements: { TERMS: true, PRIVACY: true, MARKETING: false } },
     });
     expect(signup.ok(), await signup.text()).toBeTruthy();
 
-    // 2) 부화 흉내 — 이 사용자 앞으로 ALIVE 펫 한 마리.
+    // 가입만으로는 아직 비로그인이다. 이 단언이 깨지면 누가 가입에 쿠키를 되돌린 것이다.
+    expect((await page.request.get('/api/v1/users/me')).status()).toBe(401);
+
+    // 2) 로그인 — page.request 는 브라우저와 쿠키 통을 함께 쓰므로 이제 화면도 로그인 상태가 된다.
+    const login = await page.request.post('/api/v1/auth/login', { data: { email, password } });
+    expect(login.ok(), await login.text()).toBeTruthy();
+    expect((await page.request.get('/api/v1/users/me')).status()).toBe(200);
+
+    // 3) 부화 흉내 — 이 사용자 앞으로 ALIVE 펫 한 마리.
     const userId = q(`select id from users where email='${email}'`);
     const petId = q(`insert into zzal_pet(${COLS}) values(${userId},'보리','images/zzal/e2e','ALIVE',`
       + `now(),now(),now(),now(),1,3,0,3,0,0,0,'room',1,current_date,now(),now()) returning id`);
     expect(Number(petId)).toBeGreaterThan(0);
 
-    // 3) 돌보기 화면이 실서버 응답으로 그려진다.
+    // 4) 돌보기 화면이 실서버 응답으로 그려진다.
     await page.goto('/zzal?skin=scrapbook', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-action="feed"]', { timeout: 30_000 });
     expect(await gauges(page), '부화 초기값 배부름 1 · 행복 3 · 청결 4(계약 해석 11)').toBe('1/3/4');
@@ -67,11 +77,11 @@ test.describe('server mode', () => {
     await expect(page.locator('[data-part="feedback-banner"]')).toHaveCount(0);
     await expect(page.locator('[role="dialog"][aria-label="후기 남기기"]')).toHaveCount(0);
 
-    // 4) 밥 — 아무것도 안 닫고 바로 눌려야 한다. 행동 응답이 곧 최신 상태다(다시 묻지 않는다).
+    // 5) 밥 — 아무것도 안 닫고 바로 눌려야 한다. 행동 응답이 곧 최신 상태다(다시 묻지 않는다).
     await button(page, 'feed').click();
     await expect.poll(() => gauges(page)).toBe('2/3/4');
 
-    // 5) 재우기 창 18:59 → 19:00. ★ 시계는 **앞으로만** 민다 — dev 도구가 부화 이전 시각을 거부하고,
+    // 6) 재우기 창 18:59 → 19:00. ★ 시계는 **앞으로만** 민다 — dev 도구가 부화 이전 시각을 거부하고,
     //    지금 몇 시에 돌리든 같은 결과가 나와야 하므로 "내일 18:59"(KST)라는 절대 시각을 만든다.
     const dev = (path: string, body: unknown) => page.request.post(`/api/zzal/v2/dev/pets/${petId}/${path}`, { data: body });
     const tomorrowKst = (hh: number, mm: number) => {
@@ -98,12 +108,12 @@ test.describe('server mode', () => {
     await button(page, 'sleep').click();
     await expect.poll(() => status(page)).toBe('sleeping');
 
-    // 6) 아침까지 밀고 깨운다 — 07~10시가 깨우기 창이라 12시간 30분 뒤(07:30)에 깨울 수 있다.
+    // 7) 아침까지 밀고 깨운다 — 07~10시가 깨우기 창이라 12시간 30분 뒤(07:30)에 깨울 수 있다.
     expect((await dev('advance-clock', { minutes: 12 * 60 + 30 })).ok()).toBeTruthy();
     const woke = await page.request.post(`/api/zzal/v2/me/pets/${petId}/wake`);
     expect(woke.ok(), await woke.text()).toBeTruthy();
 
-    // 7) 채팅 — 아침 부름은 기상 +1시간에 도래한다(계약 1.5).
+    // 8) 채팅 — 아침 부름은 기상 +1시간에 도래한다(계약 1.5).
     //    ★ 답 응답만 모양이 다르다(`{pet, chatReply}` 봉투). 여기서 대사 말풍선이 뜨면 그 봉투를 제대로 푼 것이다.
     expect((await dev('advance-clock', { minutes: 70 })).ok()).toBeTruthy();
     await page.reload({ waitUntil: 'domcontentloaded' });

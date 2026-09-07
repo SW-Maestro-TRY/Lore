@@ -44,11 +44,8 @@ public class AuthController {
     }
 
     @Operation(summary = "회원가입", description = """
-            이메일·비밀번호로 가입하고 **바로 로그인 상태**가 된다(토큰 2종이 쿠키로 발급됨).
-
-            - access_token 쿠키 = 모든 요청에 붙어 신분을 증명. 30분
-            - refresh_token 쿠키 = access 를 새로 받을 때만 사용. 14일. Path 가 /api/v1/auth 로 좁혀져 있다
-            - 두 쿠키 모두 HttpOnly 라 자바스크립트로 읽을 수 없다""")
+            이메일·비밀번호로 **계정만 만든다. 토큰은 발급하지 않는다** —
+            가입 뒤에는 `/login` 으로 따로 로그인해야 한다(상훈님 2026-09-08 결정).""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "가입 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
@@ -56,14 +53,14 @@ public class AuthController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "이미 가입된 이메일(EMAIL_ALREADY_EXISTS)")})
     @PostMapping("/signup")
-    public ApiResponse<Void> signUp(@Valid @RequestBody AuthRequests.SignUp request,
-                                    @RequestHeader(value = "User-Agent", required = false) String userAgent,
-                                    HttpServletResponse response) {
-        Instant now = Instant.now();
-        AuthService.Tokens tokens = authService.signUp(
+    public ApiResponse<Void> signUp(@Valid @RequestBody AuthRequests.SignUp request) {
+        // ★ 가입은 **계정만 만든다. 로그인은 시키지 않는다**(상훈님 2026-09-08 결정).
+        //   전에는 여기서 writeCookies 로 토큰을 심어 가입하는 순간 로그인됐다. 그러면
+        //   화면이 "가입 뒤 로그인" 을 흉내 내 봐야 이미 로그인된 사람에게 폼을 보이는 꼴이 된다.
+        //   되돌리지 말 것 — 되돌리면 로그인 화면이 조용히 무의미해진다.
+        authService.signUp(
                 request.email(), request.password(), request.agreements(),
-                CURRENT_TERMS_VERSION, userAgent, now);
-        writeCookies(response, tokens);
+                CURRENT_TERMS_VERSION, Instant.now());
         return ApiResponse.ok();
     }
 

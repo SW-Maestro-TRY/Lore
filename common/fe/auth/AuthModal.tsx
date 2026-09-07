@@ -17,7 +17,7 @@ import { createPortal } from "react-dom";
 import { ApiError } from "../api/client";
 import { track } from "../analytics";
 import { LEGAL_LINKS } from "../links";
-import { signIn, signUpAndSignIn } from "./useAuth";
+import { signIn, signUp } from "./useAuth";
 import styles from "./AuthModal.module.css";
 
 export type AuthTab = "login" | "signup";
@@ -29,13 +29,17 @@ export interface AuthModalProps {
   /** 열 때 보여줄 탭. 기본은 로그인 — 대부분은 이미 계정이 있는 사람이다. */
   initialTab?: AuthTab;
   /**
-   * 로그인·가입에 **성공했을 때만** 부른다. onClose 로는 이걸 알 수 없다 —
+   * **로그인에 성공했을 때만** 부른다. onClose 로는 이걸 알 수 없다 —
    * 성공해서 닫히든 사용자가 물러나든 같은 콜백이라, 성공만 붙잡고 싶은
    * 쪽(예: 웹툰 탭이 마이페이지로 보내는 것)이 구분할 방법이 없었다.
    *
-   * 안 넘기면 아무 일도 안 일어난다 — 지금 부르는 자리는 전부 그대로다.
+   * ★ **가입은 여기 안 들어온다**(상훈님 2026-09-08 결정: 가입과 로그인 분리).
+   *   가입만 한 사람은 아직 로그인 전이라, 이걸 불러 주면 부르는 쪽이 "로그인됐다" 로 알고
+   *   마이페이지로 보내거나 다음 칸으로 넘긴다 — 로그인 안 된 채로. 그래서 타입도 "login" 하나다.
+   *
+   * 안 넘기면 아무 일도 안 일어난다.
    */
-  onSuccess?: (how: "login" | "signup") => void;
+  onSuccess?: (how: "login") => void;
 }
 
 /** 서버(SignUp 요청 DTO)와 같은 기준. 여기서 먼저 걸러야 왕복 한 번을 아낀다. */
@@ -79,6 +83,8 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [agree, setAgree] = useState<AgreementState>(NO_AGREEMENT);
   const [formError, setFormError] = useState<string | null>(null);
+  /** 가입이 끝난 뒤 로그인 탭에 띄우는 안내. 오류가 아니라 알림이라 색을 달리 쓴다. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // 포털은 DOM 이 있어야 쏜다. 서버 렌더에는 document 가 없다.
@@ -107,6 +113,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   useEffect(() => {
     if (!open) return;
     setTab(initialTab);
+    setNotice(null);
     setEmail("");
     setPassword("");
     setPasswordConfirm("");
@@ -175,6 +182,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     if (next === tab) return;
     track("auth_tab_switched", { from: tab, to: next });
     setTab(next);
+    setNotice(null);
     // 이메일·비밀번호는 남긴다. 로그인에 실패해 가입으로 넘어오는 흐름이 가장 흔한데
     // 거기서 다시 치게 하면 그 자리에서 그만둔다. 오류 문구만 지운다.
     setFormError(null);
@@ -239,7 +247,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     setSubmitting(true);
     setFormError(null);
     try {
-      await signUpAndSignIn({
+      await signUp({
         email: trimmedEmail,
         password,
         // 서버는 Map<AgreementType, Boolean> 을 받는다. 연령 확인은 여기 없다 —
@@ -249,8 +257,16 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
         agreements: { TERMS: agree.terms, PRIVACY: agree.privacy, MARKETING: agree.marketing },
       });
       track("auth_signup_succeeded");
-      onSuccess?.("signup");
-      onClose();
+      // ★ 가입은 로그인이 아니다(상훈님 2026-09-08 결정). 그래서
+      //   - 모달을 닫지 않고 **로그인 탭으로 넘긴다**(이메일은 그대로 두어 다시 치지 않게).
+      //   - `onSuccess` 는 **부르지 않는다.** 그 콜백의 계약은 "로그인됐다" 이고, 지금은 아니다.
+      //     (부르면 웹툰 탭이 마이페이지로 튕기고, 여울이 올리기 칸으로 넘어간다 — 로그인 안 된 채로)
+      setTab("login");
+      setPassword("");
+      setPasswordConfirm("");
+      setAgree(NO_AGREEMENT);
+      setFormError(null);
+      setNotice("가입됐어요. 이제 로그인해 주세요");
     } catch (e) {
       track("auth_signup_failed", { code: errorCodeOf(e) });
       setFormError(messageOf(e));
@@ -449,6 +465,12 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
           {formError && (
             <p className={styles.error} role="alert">
               {formError}
+            </p>
+          )}
+          {/* 가입을 마치고 로그인 탭으로 넘어왔을 때의 안내. 오류가 아니므로 role 을 status 로 둔다. */}
+          {notice && !formError && (
+            <p className={styles.notice} role="status">
+              {notice}
             </p>
           )}
 
