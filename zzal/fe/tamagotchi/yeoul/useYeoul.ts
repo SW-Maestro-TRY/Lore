@@ -141,7 +141,6 @@ export interface Pop {
   show: boolean; anim: string; name: string; say: string;
   bar: { bg: string }[]; hasBar: boolean; count: string;
   a: PopBtn | null; b: PopBtn | null; hasB: boolean;
-  hasHint: boolean; hint: string;
   leftPct: string; tx: string; tailPct: string;
 }
 export interface Stage {
@@ -735,8 +734,6 @@ export function useYeoul() {
       count: selK === 'bed' || selK === 'album' ? ''
         : `${({ table: '배부름', bath: '단정함', play: '기분' } as Record<string, string>)[selK]} ${cur.on}/${cur.n}`,
       a: pbtn(cur.a, isTutTarget), b: pbtn(cur.b, false), hasB: !!cur.b,
-      hasHint: isTutTarget,
-      hint: tut ? `여기서 ‘${cur.a.label}’ 누르기` : '',
       leftPct: `${(slot + 0.5) * 20}%`,
       tx: slot === 0 ? '-16%' : slot === 4 ? '-84%' : '-50%',
       tailPct: slot === 0 ? '16%' : slot === 4 ? '84%' : '50%',
