@@ -105,14 +105,45 @@ export const BAD_EX: ReadonlyArray<readonly [string, string]> = [
  *   그래서 화면은 이 값을 **가공하지 말고 그대로** 써야 한다.
  * ★ `age`·`from` 은 상훈님이 타겟 유저를 가늠하는 데 쓰는 항목이라 빼지 않는다. 말투만 바꿨다.
  */
-export const USER_Q = [
-  { key: 'nick', label: '제가 뭐라고 불러드리면 좋을까요?', opts: ['이름 없이', '언니/오빠', '엄마/아빠', '친구'] },
-  { key: 'when', label: '주로 언제 만나러 오실 것 같아요?', opts: ['아침', '점심', '저녁', '밤'] },
-  { key: 'whose', label: '이 아이는 어떤 사이예요?', opts: ['제 자캐예요', '친구 자캐예요', '좋아하는 캐릭터예요'] },
-  { key: 'draw', label: '그림은 직접 그리시나요?', opts: ['그려요', '보는 걸 좋아해요', '둘 다요'] },
-  { key: 'from', label: '저희는 어떻게 알고 오셨어요?', opts: ['X(트위터)', '인스타', '유튜브', '친구 소개', '검색'] },
-  { key: 'age', label: '나이대를 여쭤봐도 될까요?', opts: ['10대', '20대', '30대', '40대 이상'] },
-] as const;
+export interface UserQOpt {
+  text: string;
+  /** 칩 둘째 줄에 작게 붙는 말(예: 시각 범위). 없으면 한 줄짜리 칩이다. */
+  note?: string;
+}
+export interface UserQ {
+  key: string;
+  /** 여울이 하는 말 그대로. 화면은 가공하지 않는다. */
+  label: string;
+  opts: readonly UserQOpt[];
+  /** 고르는 것 말고 **직접 적을** 수도 있는 문항이면 채운다. */
+  input?: { ph: string; max: number };
+}
+
+export const USER_Q: readonly UserQ[] = [
+  {
+    key: 'nick', label: '제가 뭐라고 불러드리면 좋을까요?',
+    opts: [{ text: '이름 없이' }, { text: '언니/오빠' }, { text: '엄마/아빠' }, { text: '친구' }],
+    // 넷 중에 없을 수 있다. 캐릭터 칸과 같은 '칩 한 줄 + 입력 한 줄'(9/6 결정)을 여기도 쓴다.
+    input: { ph: '직접 적어 주셔도 돼요', max: 12 },
+  },
+  {
+    // ★ 시각 구간은 게임 시계와 어긋나면 안 된다 — 재우기 저녁 7시, 깨우기 아침 7~10시.
+    key: 'when', label: '주로 언제 만나러 오실 것 같아요?',
+    opts: [
+      { text: '아침', note: '6~11시' }, { text: '낮', note: '11~17시' },
+      { text: '저녁', note: '17~22시' }, { text: '밤', note: '22시 이후' },
+    ],
+  },
+  {
+    // '친구 자캐예요' 는 남긴다 — 남의 자캐인지가 우리가 다루는 방식을 가르는 구분이라
+    // (자캐 커뮤니티에서 민감한 지점) 지우면 나중에 알 길이 없다.
+    key: 'whose', label: '이 아이는 어떤 사이예요?',
+    opts: [{ text: '제 자캐예요' }, { text: '친구 자캐예요' }, { text: '최애캐예요' }, { text: '별 사이 아니에요' }],
+  },
+  { key: 'draw', label: '그림은 직접 그리시나요?', opts: [{ text: '그려요' }, { text: '보는 걸 좋아해요' }, { text: '둘 다요' }] },
+  { key: 'from', label: '저희는 어떻게 알고 오셨어요?', opts: [{ text: 'X(트위터)' }, { text: '인스타' }, { text: '유튜브' }, { text: '친구 소개' }, { text: '검색' }] },
+  { key: 'age', label: '나이대를 여쭤봐도 될까요?', opts: [{ text: '10대' }, { text: '20대' }, { text: '30대' }, { text: '40대 이상' }] },
+];
 
 /** 온보딩 네 칸. 가입은 칸이 아니라 랜딩 CTA 에서 뜨는 모달이다(상훈님 9/7 결정). */
 export const STEPS = ['landing', 'upload', 'char', 'born'] as const;
