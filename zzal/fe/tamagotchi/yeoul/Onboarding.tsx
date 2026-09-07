@@ -21,6 +21,16 @@ export default function Onboarding({ y }: { y: Yeoul }) {
   const key = o.stepKey;
   const [title, sub] = ONB_COPY[key];
 
+  // ★ 그림은 **필수**다(상훈님 2026-09-07 결정). '그림 없이 계속' 은 없앴다 —
+  //   그림 없이 넘어가면 아이를 만들 재료가 없어서 그 뒤 화면이 전부 목이 된다.
+  // ★ 판정 기준은 목 상태(`s.uploaded`)가 아니라 **실제로 올라간 키**(`live.imageKey`)다.
+  //   파일만 고르고 업로드가 실패한 경우(네트워크·CORS)에도 s.uploaded 는 true 가 되므로,
+  //   그것으로 막으면 재료 없이 통과한다.
+  const uploadBlocked = key === 'upload' && !live.imageKey;
+  const ctaLabel = key === 'upload'
+    ? (live.busy ? '올리는 중…' : live.imageKey ? '다음' : '그림을 먼저 올려 주세요')
+    : o.cta;
+
   return (
     <div data-part="onb" data-step={key} style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, background: key === 'born' ? C.bornBg : C.onbBg }}>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 22px 6px' }}>
@@ -54,6 +64,40 @@ export default function Onboarding({ y }: { y: Yeoul }) {
 
         {key === 'upload' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* ★ 올리는 칸이 **맨 위**다. 예시를 먼저 두었더니 390×844 에서 버튼이 화면 밖으로
+                밀려 스크롤해야 보였다(2026-09-07 상훈님 지적). 여기서 할 일은 하나뿐이므로
+                그 하나가 첫 화면에 있어야 한다. 예시는 참고물이라 아래로 내렸다. */}
+            {/* 진짜 올리기. 파일은 우리 서버를 안 지나고 브라우저가 S3 로 바로 보낸다. */}
+            <input
+              ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { void live.upload(f); actions.onUpload(); }
+                e.target.value = '';
+              }}
+            />
+            <button
+              onClick={() => file.current?.click()} data-action="upload" disabled={live.busy}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: radius.lg, border: `2px dashed ${live.imageKey ? C.accent : 'rgba(74,64,56,.18)'}`, background: live.imageKey ? C.accentSoft : C.paper }}
+            >
+              {live.previewUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={live.previewUrl} alt="" style={{ width: 132, height: 132, objectFit: 'contain', display: 'block' }} />
+              )}
+              {/* ★ 문구는 **올라간 키**만 보고 정한다. 목 상태(`o.upLabel`)는 '파일을 골랐다' 까지만
+                  알아서, 업로드가 실패해도 '그림을 올렸어요' 라고 거짓말을 했다(2026-09-07 실측 S3 403).
+                  아래 CTA 는 잠겨 있는데 여기만 성공이라 말하면 사용자가 갇힌다. */}
+              <span style={{ fontFamily: GAEGU, fontSize: 20, color: C.ink }}>
+                {live.busy ? '올리는 중…' : live.imageKey ? '그림을 올렸어요' : '그림 올리기'}
+              </span>
+              <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.48)' }}>
+                {live.imageKey ? '다시 누르면 바꿀 수 있어요' : 'PNG · JPG · 10MB까지'}
+              </span>
+            </button>
+            {live.error && <span style={{ fontSize: 12, lineHeight: 1.6, color: C.accent }}>{live.error}</span>}
+            {/* 가장 먼저 읽혀야 하는 한 줄 — 자캐를 맡기는 사람이 제일 먼저 의심하는 지점이다. */}
+            <span style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
+
             <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림이면 좋아요</span>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {GOOD_EX.map(([lbl, color]) => (
@@ -79,33 +123,6 @@ export default function Onboarding({ y }: { y: Yeoul }) {
                 </div>
               ))}
             </div>
-
-            {/* 진짜 올리기. 파일은 우리 서버를 안 지나고 브라우저가 S3 로 바로 보낸다. */}
-            <input
-              ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) { void live.upload(f); actions.onUpload(); }
-                e.target.value = '';
-              }}
-            />
-            <button
-              onClick={() => file.current?.click()} data-action="upload" disabled={live.busy}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: radius.lg, border: `2px dashed ${live.imageKey ? C.accent : o.upBd}`, background: live.imageKey ? C.accentSoft : o.upBg }}
-            >
-              {live.previewUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={live.previewUrl} alt="" style={{ width: 132, height: 132, objectFit: 'contain', display: 'block' }} />
-              )}
-              <span style={{ fontFamily: GAEGU, fontSize: 20, color: C.ink }}>
-                {live.busy ? '올리는 중…' : live.imageKey ? '그림을 올렸어요' : o.upLabel}
-              </span>
-              <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.48)' }}>
-                {live.imageKey ? '다시 누르면 바꿀 수 있어요' : o.upNote}
-              </span>
-            </button>
-            {live.error && <span style={{ fontSize: 12, lineHeight: 1.6, color: C.accent }}>{live.error}</span>}
-            <span style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
           </div>
         )}
 
@@ -199,10 +216,16 @@ export default function Onboarding({ y }: { y: Yeoul }) {
             if (key === 'char' && s.petName) void live.start(s.petName, s.texts.extra ?? '');
             actions.onNext();
           }}
-          data-action="onb-next" style={{ padding: 16, borderRadius: radius.md, border: 'none', background: C.accent, color: C.accentInk, fontSize: 15.5, boxShadow: '0 4px 12px rgba(192,104,92,.22)' }}>{o.cta}</button>
-        {o.hasSkip && (
-          <button onClick={actions.onNext} style={{ padding: 4, border: 'none', background: 'none', fontSize: 12, color: 'rgba(74,64,56,.45)' }}>나중에 할게요</button>
-        )}
+          data-action="onb-next"
+          disabled={uploadBlocked}
+          style={{
+            padding: 16, borderRadius: radius.md, border: 'none', fontSize: 15.5,
+            background: uploadBlocked ? C.off : C.accent,
+            color: uploadBlocked ? '#8B8175' : C.accentInk,
+            cursor: uploadBlocked ? 'default' : 'pointer',
+            boxShadow: uploadBlocked ? 'none' : '0 4px 12px rgba(192,104,92,.22)',
+          }}
+        >{ctaLabel}</button>
       </div>
     </div>
   );
