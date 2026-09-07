@@ -1,8 +1,8 @@
 package com.lore.webtoon.character;
 
+import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.common.exception.BusinessException;
-import com.lore.webtoon.CreditGate;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;

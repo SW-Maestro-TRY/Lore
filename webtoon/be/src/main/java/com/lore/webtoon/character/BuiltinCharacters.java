@@ -1,6 +1,6 @@
 package com.lore.webtoon.character;
 
-import com.lore.webtoon.PrivateArt;
+import com.lore.webtoon.art.PrivateArt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;

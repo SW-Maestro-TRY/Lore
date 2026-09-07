@@ -1,5 +1,6 @@
 package com.lore.webtoon.job;
 
+import com.lore.webtoon.art.WebtoonPage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
