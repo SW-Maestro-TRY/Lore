@@ -33,6 +33,26 @@ export default function Room({ y }: { y: Yeoul }) {
   // 발밑 여백은 그림마다 다르다 — 상수로 두면 어떤 아이는 뜨고 어떤 아이는 잠긴다.
   const footPad = useFootPad(charSrc, SPRITE_FOOT_PAD);
 
+  // ── 아이를 어디에 얼마나 크게 세울 것인가 ──────────────────────────────
+  //
+  // 규칙은 셋이고, 위에서부터 양보할 수 없는 순서다.
+  //   1) 상호작용으로 안 움직인다 — 아래 값은 전부 화면 크기만의 함수다(실측이 아니다).
+  //      팝오버를 여닫든 방을 바꾸든 진짜 방/샘플 방을 오가든 같은 화면에선 같은 자리다.
+  //   2) 아이가 무대 밖으로 안 나간다 — 머리끝이 무대 위끝 안에.
+  //   3) 팝오버가 발을 안 덮는다 — 발끝이 팝오버 윗변보다 위에.
+  //   4) 그 안에서 최대한 크게.
+  //
+  // ★ 발끝(`LIFT`) — 원래는 `POP_LIFT + 34` 한 값이었는데, 무대가 짧은 화면(360×640)에서는
+  //   그 높이가 무대에 비해 과해 아이 머리가 잘렸다. 그래서 **무대의 62% 로도 한 번 깎는다.**
+  //   62% 는 무대가 384px 아래로 내려갈 때만 걸리고, 그 아래에서도 발끝이 팝오버 윗변(최대
+  //   `POP_LIFT`)보다 위로 남는다. 화면 높이로만 정해지는 값이라 1)을 깨지 않는다.
+  // ★ 키(`CHAR_H`) — 58% 로도 모자라면 **남은 머리 공간에 맞춰 더 줄인다.**
+  //   머리끝 = 발끝 + 키 × (1 − 발밑여백) 이므로, 그 식을 뒤집어 키의 상한을 잡았다.
+  //   `HEAD_SAFE` 는 반올림에 먹히지 않도록 두는 최소 여유다.
+  const HEAD_SAFE = 8;
+  const LIFT = `max(min(212px,34%),min(${POP_LIFT + 34}px,62%))`;
+  const CHAR_H = `min(350px,58%,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${(1 - footPad).toFixed(4)}))`;
+
   return (
     <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
       {/* 팝오버가 열려 있으면 무대 아무 데나 눌러 닫을 수 있다. */}
@@ -66,7 +86,8 @@ export default function Room({ y }: { y: Yeoul }) {
 
         {/* 그림자 — 캐릭터와 같은 걸음으로 움직인다. */}
         <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: `max(min(202px,33%),${POP_LIFT + 4}px)`, height: 24,
+          position: 'absolute', left: 0, right: 0, // 그림자는 발끝을 따라간다 — 발끝에서 18px 아래가 중심(예전 값과 같다).
+          bottom: `calc(${LIFT} - 30px)`, height: 24,
           display: 'flex', justifyContent: 'center',
           animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
         }}>
@@ -79,8 +100,8 @@ export default function Room({ y }: { y: Yeoul }) {
           onClick={(e) => { e.stopPropagation(); actions.onPet(); }}
           style={{
             position: 'absolute', left: 0, right: 0,
-            bottom: `calc(max(min(212px,34%),${POP_LIFT + 34}px) - min(350px,58%) * ${footPad})`,
-            height: 'min(350px,58%)', display: 'flex', justifyContent: 'center', zIndex: 2,
+            bottom: `calc(${LIFT} - ${CHAR_H} * ${footPad})`,
+            height: CHAR_H, display: 'flex', justifyContent: 'center', zIndex: 2,
             animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
           }}
         >
