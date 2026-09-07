@@ -147,7 +147,12 @@ export function useLive(): Live {
 //   배경을 지운 그림은 발 아래가 비어 있고, 그 여백이 **그림마다 다르다**.
 //   여울 시연본은 350 중 54px(15.4%)인데, 서버가 만든 아이는 30px(8.6%)이었다(2026-09-07 실측).
 //   상수 하나로 내리면 어떤 아이는 뜨고 어떤 아이는 바닥에 잠긴다 — 그리고 **아무 소리도 안 난다.**
-//   그래서 그림에서 직접 잰다. 못 재면(다른 출처·CORS) 넘겨받은 기본값으로 되돌아간다.
+//   그래서 그림에서 직접 잰다. 못 재면 넘겨받은 기본값으로 되돌아간다.
+//
+// ★ 지금은 **같은 출처의 그림만** 잰다. 생성된 그림은 CloudFront 에서 오는데 그쪽이 CORS 헤더를
+//   안 줘서 캔버스로 읽는 순간 막히고, 콘솔에 오류만 쌓인다(2026-09-07 실측). 시도조차 안 하는
+//   편이 조용하다. `/images/*` 를 같은 출처로 넘기는 프록시가 생기면 그때 저절로 켜진다.
+//   그때까지 생성된 아이는 여울 기준값으로 앉는다 — 상훈님 결정(2026-09-07): 지금은 이대로 간다.
 const padCache = new Map<string, number>();
 
 export function useFootPad(src: string, fallback: number): number {
@@ -157,6 +162,10 @@ export function useFootPad(src: string, fallback: number): number {
     const cached = padCache.get(src);
     if (cached !== undefined) { setPad(cached); return; }
     if (!src) return;
+    // 다른 출처면 어차피 못 읽는다. 조용히 기본값으로 간다.
+    try {
+      if (new URL(src, window.location.href).origin !== window.location.origin) return;
+    } catch { return; }
     let alive = true;
     const img = new Image();
     // 다른 출처의 그림을 캔버스로 읽으려면 이 표시가 있어야 한다(없으면 읽는 순간 막힌다).
