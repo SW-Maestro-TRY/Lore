@@ -1,335 +1,200 @@
 // 여울 시안의 데이터 표. **숫자와 문구만** — React 도 화면도 모른다.
 //
-// 무엇 — 흐름 11단계(랜딩 → 가입 → 올리기 → 캐릭터 → 유저 → 여울 샘플 → 알 → 태어남 →
-//        튜토리얼 → 보통 게임 → 도감)에서 쓰는 문구·조건·매핑을 한곳에 모은 표다.
-// 왜   — 화면(Onboarding·Egg·Room·Panels·Album)이 문구를 직접 들고 있으면 같은 말이 여러 곳에
-//        흩어져 정본과 어긋나도 안 보인다. 표를 한 곳에 두면 정본과 나란히 놓고 비교할 수 있다.
-//
-// 출처 = 정본 `~/.claude/soma/lore/다마고치-플레이-설계.md` v1.3 (§2 시계 · §4 게이지 · §6 해금 ·
-//        §7 미니게임 · §10 채팅 · §12 아기 시간표 · §13 동작 16종 · §15 온보딩 · §16 해석 규칙)
-//        + 지시서 `~/.claude/soma/lore/tools/ux-brief-0906.md`(9/6 상훈님 흐름 확정).
+// 출처 = 클로드 디자인 `여울 반응형.dc.html`(2026-09-07 상훈님 최종본)의 상수부를 그대로 옮긴 것.
+// 시안이 정본이므로 값을 임의로 바꾸지 않는다. 바꿀 일이 생기면 시안을 먼저 올리고 여기를 맞춘다.
 //
 // ★ 여기 값은 **프론트 전용 목**이다. 서버가 붙으면 rules.ts·서버 응답이 정본을 들고 오고
 //   이 표는 문구(카피)만 남는다. 지금 숫자는 화면을 눌러 보기 위한 자리표시다.
+import { assetUrl, demoUrl } from '../constants';
 
-import { BACKGROUNDS, MOTIONS, SPECIAL_ADV, YEOUL_MOTION, bgUrl } from '../constants';
-
-/** 방 다섯 칸. key 는 검사·상태 저장의 손잡이라 함부로 안 바꾼다. */
+/** 방 다섯 칸. key 는 상태 저장·검사의 손잡이라 함부로 안 바꾼다. */
 export const ROOM_KEYS = ['table', 'bath', 'play', 'bed', 'album'] as const;
 export type RoomKey = (typeof ROOM_KEYS)[number];
 
-/** 방 버튼 말고 헤더(이름 탭)에서 여는 칸. 알림·설정 버튼은 9/6 결정으로 삭제됐다. */
-export type PanelKey = RoomKey | 'pet' | 'chat';
+/** 하단 타일에 적히는 이름(시안 확정: 식탁→주방, 놀이→마당). */
+export const ROOM_NAME: Record<RoomKey, string> = {
+  table: '주방', bath: '욕실', play: '마당', bed: '침실', album: '앨범',
+};
+
+/** 시트 제목은 타일 이름과 다르다(시안 `sheetTitles`). */
+export const SHEET_TITLE: Record<string, readonly [string, string]> = {
+  table: ['식탁', '배부름과 밥'],
+  bath: ['욕실', '흔적과 몸단장'],
+  play: ['놀이', '대화 · 맞히기 · 달리기'],
+  bed: ['침실', '재우기'],
+  notify: ['알림', '기다리는 일'],
+};
+
+/** 타일 아이콘 — 선 몇 개로 그린다(에셋 없이 색만 갈아입도록). `$BG` 자리에 타일 배경색이 들어간다. */
+export const LINE: Record<RoomKey, readonly string[]> = {
+  table: [
+    'left:2px;top:13px;width:22px;height:10px;border:2px solid currentColor;border-top:none;border-radius:0 0 12px 12px',
+    'left:7px;top:7px;width:12px;height:7px;border-radius:7px 7px 0 0;background:currentColor',
+  ],
+  bath: [
+    'left:5px;top:2px;width:15px;height:15px;border:2px solid currentColor;border-radius:50% 50% 50% 3px;transform:rotate(45deg)',
+    'left:3px;top:21px;width:20px;height:2px;border-radius:2px;background:currentColor',
+  ],
+  play: [
+    'left:3px;top:3px;width:20px;height:20px;border:2px solid currentColor;border-radius:50%',
+    'left:12px;top:3px;width:2px;height:20px;background:currentColor;transform:rotate(35deg)',
+  ],
+  bed: [
+    'left:2px;top:12px;width:22px;height:10px;border:2px solid currentColor;border-radius:4px',
+    'left:4px;top:6px;width:9px;height:6px;border-radius:2px;background:currentColor',
+  ],
+  album: [
+    'left:4px;top:2px;width:18px;height:22px;border:2px solid currentColor;border-radius:3px',
+    'left:7px;top:17px;width:12px;height:2px;background:currentColor',
+    'left:9px;top:7px;width:6px;height:6px;border-radius:50%;background:currentColor',
+  ],
+};
+
+/** 팝오버 첫 줄 — 아이가 제 상태를 말한다. */
+export const SAY = {
+  table: { ok: '배가 안 고파요', soon: '슬슬 배가 고파요', now: '지금 배가 고파요' },
+  bath: { ok: '깨끗해요', soon: '슬슬 지저분해요', now: '지금 씻고 싶어요' },
+  play: { ok: '기분이 좋아요', soon: '슬슬 심심해요', now: '지금 놀고 싶어요' },
+} as const;
 
 /**
- * 급함의 단계. **색만으로 가르지 않는다** — 모양(shape)과 글자(word)를 함께 둔 이유가 이것이다.
- * 아이 정보 시트에서 "색+모양+글자 / 색+글자 / 색+모양" 셋 중 하나를 고른다.
+ * 방 꾸미기 · 벽지 네 종. 시안이 CSS 색으로 확정했다.
+ * ★ 방 배경 그림(무대에 깔 실물)은 화면 크기를 확정한 뒤 그 비율로 새로 만든다(상훈님 9/7 결정).
+ *   그때 여기에 `img` 를 더해 색 대신 그림을 깐다.
  */
-export const LV = {
-  ok:    { bg: '#E4F0DC', fg: '#3A5A33', bd: '#C6DFB9', shape: '◌', word: '괜찮음' },
-  soon:  { bg: '#FBEFCF', fg: '#6B5413', bd: '#EDD9A0', shape: '◑', word: '슬슬' },
-  now:   { bg: '#FADCD6', fg: '#8E3A2B', bd: '#EFBDB2', shape: '●', word: '지금' },
-  off:   { bg: '#EDE9E2', fg: '#6B6058', bd: '#DFD9D0', shape: '–', word: '—' },
-  gray:  { bg: '#EDE9E2', fg: '#6B6058', bd: '#DFD9D0', shape: '◌', word: '못 놀아요' },
-  sleep: { bg: '#DFE5F2', fg: '#33416B', bd: '#C2CBE2', shape: '●', word: '자는 중' },
-  ready: { bg: '#FBEFCF', fg: '#6B5413', bd: '#EDD9A0', shape: '◑', word: '준비됐어요' },
-  med:   { bg: '#FADCD6', fg: '#8E3A2B', bd: '#EFBDB2', shape: '●', word: '약 지금' },
-  plain: { bg: '#F4EEE3', fg: '#5C544B', bd: '#E3DBCD', shape: '', word: '' },
-} as const;
-export type LvKey = keyof typeof LV;
+export const WALLS = [
+  { id: 'cream', name: '크림', wall: '#FBEFE2', floor: '#EFDFCC' },
+  { id: 'mint', name: '민트', wall: '#E5F1EA', floor: '#D5E5DA' },
+  { id: 'sky', name: '하늘', wall: '#E7EFF8', floor: '#D8E3EF' },
+  { id: 'peach', name: '복숭아', wall: '#FBE7E2', floor: '#F0D5CE' },
+] as const;
 
+/** 성격 다섯 갈래 → 캐릭터 칸의 칩. */
+export const PERSONA = ['온순', '활발', '수줍음', '응석', '시크'] as const;
+export const TONE = ['반말', '존댓말', '사투리', '어린아이', '어른스러움', '무뚝뚝', '애교'] as const;
+export const GENRE = ['일상', '판타지', 'SF', '학원', '역사', '로맨스', '무협'] as const;
+export const WORLD = ['현대', '중세', '미래', '자연', '도시', '우주', '학교'] as const;
+export const NAME_POOL = ['여울', '보리', '단이', '모래', '노을', '서리', '하루', '도담'] as const;
+
+/** 캐릭터 칸 네 묶음 — 칩 한 줄 + 긴 글 한 줄(9/6 상훈님 2차 결정). */
+export const CHAR_GROUPS = [
+  { key: 'persona', label: '성격 · 다섯 중 하나', opts: PERSONA, ph: '자세히 쓰셔도 돼요. 예: 낯을 가리지만 한번 친해지면 계속 따라다녀요' },
+  { key: 'tone', label: '말투', opts: TONE, ph: '입버릇이나 자주 쓰는 말이 있으면 적어 주세요' },
+  { key: 'genre', label: '장르', opts: GENRE, ph: '어떤 이야기 속 아이인지 적어 주세요' },
+  { key: 'world', label: '세계관', opts: WORLD, ph: '사는 곳, 시대, 함께 있는 사람들 같은 걸 적어 주세요' },
+] as const;
+
+export const GOOD_EX: ReadonlyArray<readonly [string, string]> = [
+  ['얼굴이 크게 나온 정면', '#E8F0E2'],
+  ['선이 또렷한 그림', '#E8F0E2'],
+  ['한 마리만 · 배경 없이', '#E8F0E2'],
+];
+export const BAD_EX: ReadonlyArray<readonly [string, string]> = [
+  ['여러 명', '#F6E7E4'],
+  ['뒷모습', '#F6E7E4'],
+  ['너무 작음', '#F6E7E4'],
+  ['배경이 복잡', '#F6E7E4'],
+];
+
+/**
+ * 유저 설문 다섯 문항. **온보딩 칸이 아니다** — 시안이 이걸 샘플 방으로 옮겼다.
+ * 여울(연습 상대)이 방에서 한 문항씩 물어보고, 언제든 "나중에" 로 넘길 수 있다.
+ */
+export const USER_Q = [
+  { key: 'age', label: '연령대', opts: ['10대', '20대', '30대', '40대 이상'] },
+  { key: 'from', label: '어디서 알게 됐나요', opts: ['X(트위터)', '인스타', '유튜브', '친구 소개', '검색'] },
+  { key: 'draw', label: '자캐는', opts: ['그려요', '보는 걸 좋아해요', '둘 다요'] },
+  { key: 'when', label: '주로 만나는 시간', opts: ['아침', '점심', '저녁', '밤'] },
+  { key: 'whose', label: '이 아이는', opts: ['내 자캐', '친구 자캐', '좋아하는 캐릭터'] },
+] as const;
+
+/** 온보딩 네 칸. 가입은 칸이 아니라 랜딩 CTA 에서 뜨는 모달이다(상훈님 9/7 결정). */
+export const STEPS = ['landing', 'upload', 'char', 'born'] as const;
+export type StepKey = (typeof STEPS)[number] | 'user';
+
+/** 화면 큰 갈래. onb → (샘플)room → egg → room. */
+export type ScreenKey = 'onb' | 'room' | 'egg';
+
+export const ONB_COPY: Record<StepKey, readonly [string, string]> = {
+  landing: ['그림 한 장이면,\n같이 살 수 있어요', '내가 그린 아이가 방 하나를 얻습니다.'],
+  upload: ['아이 그림을 올려요', '한 번에 한 장만 올려요. 이 그림이 그대로 아이가 돼요.'],
+  user: ['당신은 어떤 분인가요', '알려주면 아이가 더 살갑게 대해요. 전부 선택이에요.'],
+  char: ['어떤 아이인가요', '이름만 정하면 시작할 수 있어요.'],
+  born: ['태어났어요', '이제 이 아이의 첫날이에요.'],
+};
+
+/** 튜토리얼 · 샘플 방(여울이 연습을 시킨다). */
+export interface TutorStep { at: string; room: string | null; act: 'a' | 'pet' | null; done: string; text: string }
+export const TUTOR: readonly TutorStep[] = [
+  { at: '0분', room: null, act: null, done: 'any', text: '안녕하세요, 저는 여울이에요. 당신의 아이가 나올 동안 여기서 연습해요.' },
+  { at: '3분', room: null, act: 'pet', done: 'pet', text: '제 몸을 톡 눌러 보세요. 언제든 다시 해도 돼요.' },
+  { at: '8분', room: 'table', act: 'a', done: 'feed', text: '슬슬 배가 고파요. 주방에서 밥을 주면 배부름이 차요.' },
+  { at: '15분', room: 'bath', act: 'a', done: 'clean', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주면 말끔해져요.' },
+  { at: '20분', room: 'play', act: 'a', done: 'game', text: '심심해요. 마당에서 좌우 맞히기를 하면 기분이 올라가요.' },
+  { at: '25분', room: 'chat', act: null, done: 'chat', text: '오른쪽 아래 말풍선을 누르면 저랑 얘기할 수 있어요.' },
+  { at: '40분', room: 'bed', act: 'a', done: 'sleep', text: '저녁이 되면 침실에서 재워 주세요. 자는 동안 다 회복돼요.' },
+  { at: '60분', room: 'album', act: 'a', done: 'album', text: '같이한 동작은 앨범에 쌓여요. 방 벽을 열어 보세요.' },
+];
+
+/** 튜토리얼 · 진짜 방(내 아이의 첫날). 샘플과 달리 **직접 해야** 다음으로 간다. */
+export const TUTOR_MAIN: readonly TutorStep[] = [
+  { at: '0분', room: null, act: null, done: 'any', text: '오늘부터 함께예요. 천천히 둘러봐도 돼요.' },
+  { at: '3분', room: null, act: 'pet', done: 'pet', text: '손을 대 보세요. 쓰다듬기는 하루 세 번까지 세어 줘요.' },
+  { at: '8분', room: 'table', act: 'a', done: 'feed', text: '배가 고파요. 주방에서 밥을 주세요 · 재고는 시간이 지나면 채워져요.' },
+  { at: '15분', room: 'bath', act: 'a', done: 'clean', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요.' },
+  { at: '20분', room: 'play', act: 'a', done: 'game', text: '놀고 싶어요. 좌우 맞히기는 하루 세 판이에요.' },
+  { at: '25분', room: 'chat', act: null, done: 'chat', text: '하루에 세 번 불러요. 말풍선을 누르면 답할 수 있어요.' },
+  { at: '40분', room: 'bed', act: 'a', done: 'sleep', text: '저녁 7시가 되면 침실에서 재워 주세요. 자는 동안 다 회복돼요.' },
+  { at: '60분', room: 'album', act: 'a', done: 'album', text: '함께한 순간은 앨범 벽에 쌓여요. 열어 보세요.' },
+];
+
+/** 앨범 18칸. `이름 · 조건` 형식이고 두 번째 값이 1 이면 이미 열린 칸이다. */
+export const ALBUM: ReadonlyArray<readonly [string, number]> = [
+  ['첫 만남', 1], ['첫 밥', 1], ['첫 목욕', 1], ['늦은 밤', 1], ['창가', 1], ['장난감', 1], ['낮잠', 1], ['첫 대화', 1],
+  ['비 오는 날 · 비 올 때 함께', 0], ['달리기 · 2층 해금', 0], ['생일 · 30일째', 0], ['두 번째 층 · 2층 해금', 0],
+  ['아침 인사 · 07시 깨우기', 0], ['간식 파티 · 간식 10개', 0], ['단짝 · 친밀도 60%', 0], ['기억 상자 · 기억 10개', 0],
+  ['먼 여행 · 3층 해금', 0], ['졸업 · 60일째', 0],
+];
+
+/** 액자에 걸리는 동작 여덟 종(여울 실물이 이 여덟뿐이라 순환시킨다). */
+export const FRAME_KINDS = ['happy', 'eat', 'clean', 'idle', 'sad', 'train', 'pet', 'sick'] as const;
+export type FrameKind = (typeof FRAME_KINDS)[number];
+
+/** 동작 → 여울 그림. 시안이 쓰던 매핑 그대로. */
+export const KIND_IMG: Record<FrameKind, string> = {
+  idle: demoUrl('idle'), eat: demoUrl('eat'), happy: demoUrl('happy'), sad: demoUrl('sad'),
+  sick: demoUrl('hungry'), train: demoUrl('train'), pet: demoUrl('pet'), clean: demoUrl('clean'),
+};
+
+export const EGG_IMG = {
+  idle: assetUrl('egg_idle'), hatch: assetUrl('egg_hatch'), crack: assetUrl('egg_crack'),
+} as const;
+
+/** 버튼 표기 세 가지 — 색맹·저시력 대비로 색 말고 모양·글자를 함께 낼 수 있게(정본 §16). */
 export const NEED_STYLES = ['색+모양+글자', '색+글자', '색+모양'] as const;
 export type NeedStyle = (typeof NEED_STYLES)[number];
 
-/** 방 꾸미기 = 무대 배경 16종(repo constants.BACKGROUNDS 그대로). 이 선택은 **기본 방**에만 걸린다. */
-export const WALLS = BACKGROUNDS.map((b) => ({ id: b.key, name: b.label, img: bgUrl(b.key) }));
+/** 대화 입력창이 2.6초마다 바꿔 보여 주는 예시. */
+export const CHAT_HINTS = ['잘 지냈어', '조금 피곤해', '보고 싶었어', '오늘 빵 만들었어'] as const;
+export const CHAT_QUICK = ['잘 지냈어', '빵 만들었어', '조금 피곤해'] as const;
+export const CHAT_REPLY = ['그 얘기 기억해 둘게요.', '오늘도 들려줘서 좋아요.', '나도 그런 날이 있어요.', '음, 그랬구나.'] as const;
 
-/**
- * 방에 들어가면 무대 배경이 그 방으로 바뀐다(9/6 상훈님 결정, 카드 1 — 2번 방식).
- * 방 전용 배경 5장은 아직 없다 → 배경 16종 중 가장 가까운 것을 임시로 매핑하고 소품은 CSS 로 표시한다.
- * 그림(E4)이 오면 여기 key 만 갈아 끼우면 된다.
- */
-export const ROOM_BG: Record<RoomKey | 'base' | 'chat', { bg: string | null; prop: string }> = {
-  base:  { bg: null,             prop: '' },        // null = 사용자가 고른 배경
-  table: { bg: 'cafe',           prop: '식탁' },
-  bath:  { bg: 'checker',        prop: '욕조' },
-  play:  { bg: 'field',          prop: '공' },
-  bed:   { bg: 'window_night',   prop: '침대' },
-  album: { bg: null,             prop: '' },
-  chat:  { bg: null,             prop: '' },
-};
+/** 다음에 배울 동작 — 왼쪽 아래 작은 카드가 이 표를 보고 하나를 고른다. */
+export const LEARN_GOALS = [
+  { name: '손 흔들며 인사', cond: '대화 답하기', need: 4, counter: 'cChat' },
+  { name: '씻기', cond: '목욕하기', need: 3, counter: 'cBath' },
+  { name: '자기', cond: '재우기', need: 3, counter: 'cSleep' },
+  { name: '놀라기', cond: '좌우 맞히기', need: 3, counter: 'cGame' },
+] as const;
 
-/** 시트 높이 — 내용만큼만 올라와야 무대의 캐릭터가 계속 보인다(카드 2 판단 4). */
-export const SHEET_H: Record<PanelKey, string> = {
-  table: '42%', bath: '46%', play: '46%', bed: '38%', album: '78%', pet: '64%', chat: '66%',
-};
-
-// ── 흐름 11단계 ──────────────────────────────────────────────────────────
-
-/** 온보딩 칸(6번 여울 샘플·7번 알은 별도 화면이라 여기 없다). */
-export const STEPS = ['landing', 'auth', 'upload', 'char', 'user'] as const;
-export type StepKey = (typeof STEPS)[number];
-
-/** 화면 큰 갈래. onb → sample → egg → room. */
-export type ScreenKey = 'onb' | 'sample' | 'egg' | 'room';
-
-/** 1. 랜딩 — 내용은 상훈님이 구상 중이라 **자리만**. 알 그림은 여기서 쓰지 않는다. */
-export const LANDING = {
-  head: '그림 한 장이면,\n같이 살 수 있어요',
-  lines: [
-    '내가 그린 아이가 방 하나를 얻어요.',
-    '밥을 주고, 말을 걸고, 같이 자고 일어나요.',
-    '밤사이 새 동작을 배워 아침에 보여 줘요.',
-  ],
-  cta: '내 아이 데려오기',
-  /** 무대에서 4초 간격으로 도는 동작(있는 여울 에셋 안에서). */
-  loop: ['base', 'eat', 'joy', 'sleep', 'wash'] as const,
-  loopMs: 4000,
-} as const;
-
-/** 2. 가입/로그인 — 프론트 전용 가짜 폼. 누르면 통과한다. */
-export const AUTH = {
-  tabs: [['join', '가입'], ['login', '로그인']] as const,
-  consent: '올린 그림은 학습에 쓰지 않습니다. 이 아이를 만드는 데만 써요.',
-  consentCheck: '위 내용을 읽고 동의해요',
-} as const;
-export type AuthTab = (typeof AUTH.tabs)[number][0];
-
-/** 3. 올리기 — 되는 예시와 안 되는 예시를 나란히 둔다. */
-export const UPLOAD_GOOD: ReadonlyArray<readonly [string, string]> = [
-  ['얼굴이 크게 나온 정면', 'base'],
-  ['선이 또렷한 그림', 'joy'],
-  ['한 마리만 · 배경 없이', 'shy'],
-];
-export const UPLOAD_BAD: ReadonlyArray<readonly [string, string]> = [
-  ['여러 명', 'call'],
-  ['뒷모습', 'sad'],
-  ['너무 작음', 'sick'],
-  ['배경이 복잡', 'practice'],
-];
-export const UPLOAD_NOTE = '한 번에 한 장만 올려요. 이 그림이 그대로 아이가 돼요.';
-
-/** 4. 캐릭터 정보 — 전부 선택. 고르기 쉽게 칩·버튼으로만 받는다. */
-export const PERSONALITIES: ReadonlyArray<{ key: string; label: string; desc: string }> = [
-  { key: 'calm',  label: '온순',   desc: '조용하고 느긋하게 말해요' },
-  { key: 'lively', label: '활발',  desc: '들떠서 말이 빨라요' },
-  { key: 'shy',   label: '수줍음', desc: '조심스럽게 한 마디씩 해요' },
-  { key: 'clingy', label: '응석',  desc: '자주 부르고 곁에 있으려 해요' },
-  { key: 'chic',  label: '시크',   desc: '무심한 척하지만 챙겨요' },
-];
-export const TONES = ['반말', '존댓말', '사투리', '어린아이', '어른스러움', '무뚝뚝', '애교'] as const;
-export const GENRES = ['일상', '판타지', 'SF', '학원', '역사', '로맨스', '무협'] as const;
-/** 세계관도 칩 + 긴 글이다(9/6 2차 결정 — 40자 제한은 없앴다). */
-export const WORLDS = ['현대', '중세', '미래', '자연', '도시', '우주', '학교'] as const;
-
-/**
- * 항목마다 붙는 여러 줄 입력의 안내 문구.
- * 왜 칩만으로 안 되는가 — 칩은 고르기 쉬운 대신 "이 아이만의 것" 을 못 담는다.
- * 칩으로 방향을 잡고 그 아래에 길게 쓰게 하면 둘 다 된다(9/6 2차 결정).
- */
-export const NOTE_PLACEHOLDER: Record<string, string> = {
-  persona: '자세히 써도 돼요. 예: 낯을 가리지만 한번 친해지면 계속 따라다녀요',
-  tone: '입버릇이나 자주 쓰는 말이 있으면 적어 주세요',
-  genre: '어떤 이야기 속 아이인지 적어 주세요',
-  world: '사는 곳, 시대, 함께 있는 사람들 같은 걸 적어 주세요',
-  free: '좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요',
-};
-
-/** 이름 랜덤 후보(repo constants.NAMES 와 같은 결). */
-export const NAME_POOL = ['보리', '여름', '노루', '단이', '설아', '하루', '도담', '미르', '온이', '새벽'];
-
-/** 성격을 안 고르고 넘어갈 때 한 번 확인. */
-export const CHAR_SKIP = {
-  body: '성격을 안 고르면 기본 말투로 말해요. 이대로 갈까요?',
-  go: '이대로',
-  back: '골라 볼게요',
-} as const;
-
-/**
- * 5. 유저 정보 — 목적은 기획(누가·왜 쓰나). 대놓고 묻지 않고 "알려주면 아이가 더 살갑게 대해요".
- * ★ 서버에 보낼 곳이 아직 없다(누락표: users 확장 또는 별도 표 필요). 지금은 화면 상태로만 둔다.
- */
-export const USER_FIELDS: ReadonlyArray<{ key: string; label: string; opts: readonly string[] }> = [
-  { key: 'age',   label: '연령대',           opts: ['10대', '20대', '30대', '40대 이상'] },
-  { key: 'from',  label: '어디서 알게 됐나요', opts: ['X(트위터)', '인스타', '유튜브', '친구 소개', '검색'] },
-  { key: 'exp',   label: '자캐는',            opts: ['그려요', '보는 걸 좋아해요', '둘 다요'] },
-  { key: 'when',  label: '주로 만나는 시간',   opts: ['아침', '점심', '저녁', '밤'] },
-  { key: 'whose', label: '이 아이는',         opts: ['내 자캐', '친구 자캐', '좋아하는 캐릭터'] },
-];
-export const USER_LEAD = '알려주면 아이가 더 살갑게 대해요. 전부 선택이에요.';
-
-/** 6·7. 부화 단계 서사 — 숫자 게이지가 아니라 이야기로 말한다(§15 4번). */
-export const HATCH_STAGES: readonly string[] = [
-  '그림을 살펴보는 중',
-  '그리는 중',
-  '움직임을 배우는 중',
-  '거의 다 됐어요',
-];
-/** 목에서 한 단계가 넘어가는 데 걸리는 시간(초). 실제로는 서버 hatchStartedAt·estimatedSeconds. */
-export const HATCH_STAGE_SEC = 20;
-
-/** 7. 알 화면 — 아직 안 나왔을 때·실패 2종. 원인은 노출하지 않는다(§15 5번). */
-export const EGG_COPY = {
-  waitTitle: '조금 더 기다려 주세요',
-  waitBody: '기다리는 동안 여울과 놀 수 있어요.',
-  toSample: '여울 샘플로 가시겠어요?',
-  tapHint: '알을 톡 눌러 보세요',
-  slow: '조금 더 걸려요',
-  reject: '이 그림은 어려워요. 다른 그림을 올려 주세요',
-  again: '다른 그림 올리기',
-  bornTitle: '태어났어요',
-  crackMs: 2800,
-} as const;
-export type HatchFail = 'none' | 'slow' | 'reject';
-
-// ── 9. 튜토리얼 = 아기 60분(§12) ─────────────────────────────────────────
-
-/** 부름 하나. `done` 이 오면 다음으로 넘어간다(시간이 아니라 **행동 완료**). */
-export interface TutorStep {
-  /** 정본 표의 분 — 화면엔 안 쓰고 순서·개발 띠 표시용. */
-  min: number;
-  /** 캐릭터가 하는 말. */
-  say: string;
-  /** 깜빡일 곳. 캐릭터 자신이면 'char', 대화 시트면 'chat'. */
-  hint: RoomKey | 'char' | 'chat';
-  /** 이 행동이 끝나면 넘어간다. */
-  done: 'feed' | 'pet' | 'chat' | 'clean' | 'game' | 'share' | 'nap' | 'end';
-}
-
-export const TUTOR: readonly TutorStep[] = [
-  { min: 0,  say: '배가 고픈가 봐요',                             hint: 'table', done: 'feed' },
-  { min: 3,  say: '쓰다듬어 주세요',                              hint: 'char',  done: 'pet' },
-  { min: 8,  say: '있잖아, 오늘은 뭐 했어요?',                     hint: 'chat',  done: 'chat' },
-  { min: 15, say: '바닥을 치워 주세요',                           hint: 'bath',  done: 'clean' },
-  { min: 20, say: '같이 놀아 볼까요',                             hint: 'play',  done: 'game' },
-  { min: 25, say: '이 모습 가져가실래요',                          hint: 'album', done: 'share' },
-  { min: 40, say: '졸린가 봐요',                                  hint: 'bed',   done: 'nap' },
-  { min: 60, say: '이제 혼자서도 괜찮아요 · 저녁 7시가 되면 재워 주세요', hint: 'char', done: 'end' },
+/** 아침에 도착하는 엽서 세 벌. */
+export const POSTCARDS: ReadonlyArray<readonly [string, string]> = [
+  ['오늘 아침, 창가에 앉아 있었어요.', '#F6E7DF'],
+  ['밥을 다 먹고 한참 서 있었어요.', '#E3EFDC'],
+  ['문 앞에서 당신을 기다렸어요.', '#DEEAF3'],
 ];
 
-/** 낮잠 — 재우기 누르면 5분 커튼, 그다음 깨우기(§16 9/5 결정). 목에서는 5초로 줄여 눌러 본다. */
-export const NAP_SEC = 5;
-
-// ── 10. 보통 게임(§2 시계) ───────────────────────────────────────────────
-
-export const CLOCK = {
-  sleepFrom: 19, sleepTo: 23,
-  wakeFrom: 7, wakeTo: 10,
-  /** 재우기·깨우기 창 밖일 때 버튼 아래 시스템 한 줄. */
-  tooEarly: '저녁 7시부터 재울 수 있어요',
-  lateWake: '늦잠을 잤어요. 그래도 괜찮아요',
-  sleepNote: '창 밖이 어두워요. 지금 재울 수 있어요',
-  wakeNote: '아침이에요. 7시부터 10시 사이에 깨워 주세요',
-  reward: '재우고 나면 행복이 한 칸 올라요',
-} as const;
-
-// ── 11. 도감(§6·§13) ────────────────────────────────────────────────────
-
-/** 앨범 탭 넷. */
-export const ALBUM_TABS = [['motion', '동작'], ['card', '엽서'], ['scene', '장면'], ['deco', '방 꾸미기']] as const;
-export type AlbumTab = (typeof ALBUM_TABS)[number][0];
-
-/** 진행이 세어지는 카운터 이름. 잠긴 칸의 "채팅 응답 4회 · 1/4" 이 여기서 나온다. */
-export type CounterKey = 'chat' | 'sleepWake' | 'bath' | 'game' | 'cleanDay' | 'floor2' | 'days';
-
-export interface MotionCell {
-  key: string;
-  label: string;
-  /** 1 = 1층(처음부터) · 2 = 2층(조건) · 3 = 선물. */
-  floor: 1 | 2 | 3;
-  /** 잠긴 칸에 적는 조건 문장. */
-  cond: string;
-  counter?: CounterKey;
-  need?: number;
-}
-
-/** 동작 18칸 = 1층 8 + 2층 8 + 선물 2. 이름은 §13, 조건은 §6 조건표. */
-export const MOTION_CELLS: readonly MotionCell[] = [
-  ...MOTIONS.slice(0, 8).map((m): MotionCell => ({ key: m.key, label: m.label, floor: 1, cond: '처음부터 열려 있어요' })),
-  { key: 'tilt',       label: '갸웃',          floor: 2, cond: '채팅 응답 1회',            counter: 'chat',      need: 1 },
-  { key: 'wave',       label: '손 흔들며 인사', floor: 2, cond: '채팅 응답 4회',            counter: 'chat',      need: 4 },
-  { key: 'sleep',      label: '자기',          floor: 2, cond: '재우기·깨우기 3회',        counter: 'sleepWake', need: 3 },
-  { key: 'wash',       label: '씻기',          floor: 2, cond: '목욕 3회',                counter: 'bath',      need: 3 },
-  { key: 'startle',    label: '놀라기',        floor: 2, cond: '미니게임 3판',            counter: 'game',      need: 3 },
-  { key: 'nod',        label: '끄덕이기',      floor: 2, cond: '채팅 응답 12회',           counter: 'chat',      need: 12 },
-  { key: 'smile_idle', label: '웃는 대기',     floor: 2, cond: '케어 미스 0인 날 3번',      counter: 'cleanDay',  need: 3 },
-  { key: 'sit',        label: '앉아 쉬기',     floor: 2, cond: '2층 6종 열림',             counter: 'floor2',    need: 6 },
-  { key: SPECIAL_ADV[0].key, label: SPECIAL_ADV[0].label, floor: 3, cond: '함께한 날 3일 · 그날 케어 미스 0', counter: 'days', need: 3 },
-  { key: SPECIAL_ADV[1].key, label: SPECIAL_ADV[1].label, floor: 3, cond: '2층을 다 연 뒤 두 번째 선물' },
+/** 웹에서만 보이는 단축키 안내. */
+export const WEB_KEYS: ReadonlyArray<readonly [string, string]> = [
+  ['1~5', '방'], ['Space', '쓰다듬기'], ['Enter', '대화'], ['Esc', '닫기'],
 ];
-
-/** 기능 잠금 문구(§6 기능 해금). */
-export const FEATURE_LOCK = {
-  run: (win: number) => `좌우 맞히기 5번 이기면 · 지금 ${win}/5`,
-  deco: '2층 동작 4개를 열면 방을 꾸밀 수 있어요',
-} as const;
-
-/** 비어 있을 때의 안내(원칙: 대기·실패는 서사로). */
-export const EMPTY = {
-  card: '아직 여행을 안 갔어요',
-  scene: '아직 혼자 논 날이 없어요. 자리를 비운 사이의 모습이 여기 남아요',
-} as const;
-
-// ── 모달 문구 ────────────────────────────────────────────────────────────
-
-/** 해금 폭죽 — 인과 문장 먼저, 2초, 탭 스킵, "축하합니다" 금지(8/26). */
-export const UNLOCK_MS = 2000;
-
-/** 아침 도착(심화 동작) 문구 3벌 — 순서대로 한 줄씩 읽힌다. */
-export const MORNING_LINES: readonly string[] = [
-  '어젯밤 연습해서',
-  '자는 사이에 이걸 익혔어요',
-  '아침에 보여 주고 싶었대요',
-];
-export const MORNING = {
-  title: '오늘 이런 걸 배워왔어요',
-  save: '저장',
-  go: '보러 가기',
-  wish: '이런 동작도 보고 싶어요',
-} as const;
-
-/**
- * 앨범 "엽서" 탭의 목 예시 — 정본 §9(여행 중 하루 1장, 최대 3).
- * 왜 목이 필요한가 — 빈 칸만 보면 이 탭이 무엇을 담는 곳인지 판단할 수가 없다.
- * 서버가 붙으면 `postcards` 응답으로 갈아 끼운다.
- */
-export const POSTCARD_MOCK: ReadonlyArray<{ bg: string; line: string; day: string }> = [
-  { bg: 'field',   line: '여기는 바람이 좋아요. 곧 돌아갈게요.', day: '여행 2일째' },
-  { bg: 'sea',     line: '바다를 처음 봤어요. 소리가 커요.',     day: '여행 3일째' },
-];
-
-/**
- * 앨범 "장면" 탭의 목 예시 — 정본 §11 레시피 5값(동작·배경·소품·시각·게이지 상태).
- * 톤은 방치를 탓하지 않는다 — "별일 없었어요" 결로 쓴다(§0 원칙 6).
- * 초안의 아침 엽서 문구 3벌(창가·밥·문 앞)이 여기로 옮겨 왔다.
- */
-export const SCENE_MOCK: ReadonlyArray<{ bg: string; motion: string; prop: string; line: string; time: string }> = [
-  { bg: 'window_day',  motion: 'base', prop: '공',    line: '오후에 창가에서 공을 굴렸어요', time: '낮 · 오후 3시쯤' },
-  { bg: 'room',        motion: 'eat',  prop: '밥그릇', line: '밥을 다 먹고 한참 서 있었어요', time: '아침 · 9시쯤' },
-  { bg: 'window_rain', motion: 'base', prop: '',      line: '문 앞에서 기다리다 앉았어요. 별일 없었어요', time: '저녁 · 6시쯤' },
-];
-
-// ── 숫자 상한(§4·§7·§10·§15) ────────────────────────────────────────────
-
-export const CELLS = 4;
-export const MAX_STOCK = 3;
-export const FOOD_REFILL_MIN = 240;
-export const PETS_PER_DAY = 3;
-export const PLAYS_PER_DAY = 3;
-export const CALLS_PER_DAY = 3;
-export const CHAT_MAX = 40;
-export const NAME_MAX = 12;
-/** 항목마다 붙는 여러 줄 입력의 상한. 길게 쓰라는 칸이라 넉넉히 둔다. */
-export const NOTE_MAX = 300;
-/** 좌우 맞히기 = 5번 중 3번(진행 표시, 3승/3패에 종료). */
-export const GUESS_ROUNDS = 5;
-export const GUESS_WIN = 3;
-/** 달리기 해금 = 좌우 맞히기 5승. */
-export const RUN_UNLOCK = 5;
-/** 방 꾸미기 해금 = 2층 4종. */
-export const DECO_UNLOCK = 4;
-/** 간식 경고는 4개째(5개가 배탈). */
-export const SNACK_WARN = 4;
-
-/** 여울 그림 — 프론트 전용이라 서버 imageKey 대신 폴백 표를 그대로 쓴다. */
-export const yeoulImg = (motion: string) => YEOUL_MOTION[motion] ?? YEOUL_MOTION.base;

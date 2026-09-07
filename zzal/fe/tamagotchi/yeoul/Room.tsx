@@ -1,473 +1,478 @@
-// 방 화면 — 헤더 · 무대 · 방 다섯 칸 · (폰)바텀시트 / (PC)오른쪽 고정 칸 · 전면 판.
+// 방 — 여울 시안의 본 화면. 위에서 아래로 셋이다.
 //
-// 무엇 — 흐름 8~11(태어남 → 튜토리얼 → 보통 게임 → 도감)이 전부 이 한 화면에서 일어난다.
-//        여울 샘플(6번)도 **완전히 같은 화면**을 쓰고 위에 띠 하나만 더 붙는다.
-// 왜   — 리서치·정본 모두 "화면은 하나"다. 튜토리얼도 별도 화면을 만들지 않고 캐릭터가
-//        말풍선으로 부르고 눌러야 할 버튼이 깜빡인다(정본 §12 — 잠그지는 않는다).
+//   머리   이름 · 며칠째 · 친밀도 · [아이 정보]
+//   무대   벽·바닥·창문 위에서 아이가 좌우로 오간다. 말풍선·튜토리얼·하트가 여기 뜬다.
+//   아래   타일 다섯(주방·욕실·마당·침실·앨범)과, **누른 타일 바로 위에 뜨는 팝오버**
 //
-// 9/6 결정으로 바뀐 것 —
-//   · 헤더의 `알림`·`설정` 삭제. 설정은 **이름을 탭 → 아이 정보 시트**(진입 위치 미정, 기본값).
-//   · 토스트 삭제 → 캐릭터 말풍선. 거절은 캐릭터가 아니라 **버튼 아래 시스템 한 줄**.
-//   · 방에 들어가면 **무대 배경이 그 방으로 바뀐다**. 시트는 내용만큼만 올라와 캐릭터가 계속 보인다.
+// ★ 시트가 아니라 팝오버인 것이 이 판의 핵심이다(2026-09-07 클로드 디자인 확정).
+//   무대를 덮지 않으므로 아이를 보면서 밥을 줄 수 있다. 대신 깊은 화면(앨범·아이 정보·놀이)만
+//   아래에서 올라오는 시트로 남겼다 → `Panels.tsx`.
+//
+// ★ 캐릭터는 팝오버가 열린 만큼 위로 올라간다(`lift`). 무대 아래끝과 팝오버 윗끝을 실제로
+//   재서 그만큼만 든다 — 숫자를 박아 두면 화면 높이가 바뀔 때 조용히 겹친다.
 'use client';
 
-import { useRef, type CSSProperties } from 'react';
-import { ASSET } from '../constants';
-import { GUESS_ROUNDS, HATCH_STAGES, SHEET_H, yeoulImg } from './constants';
-import PanelBody, { RoomButtons, panelMeta } from './Panels';
-import { C, GAEGU, MONO, SANS, cta, ghost, note, radius, sysLine, title } from './ui';
+import { EGG_IMG, KIND_IMG } from './constants';
+import { C, GAEGU, MONO, radius } from './ui';
+import Album from './Album';
+import Panels from './Panels';
 import type { Yeoul } from './useYeoul';
 
-const col = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap });
-const row = (gap: number): CSSProperties => ({ display: 'flex', alignItems: 'center', gap });
-
-const card: CSSProperties = {
-  ...col(11), padding: 16, borderRadius: radius.md,
-  background: C.paper, border: `1px solid ${C.line}`, boxSizing: 'border-box',
-};
-
-/** 지금 캐릭터가 지을 표정. 프론트 전용 목이라 표 하나로 고른다(정본 §4 우선순위). */
-function motionOf(y: Yeoul): string {
-  const { s } = y;
-  if (s.sleeping || s.nap === 'sleeping') return 'sleep';
-  if (s.sick) return 'sick';
-  if (s.justHealed) return 'joy';
-  if (s.hearts) return 'shy';
-  if (s.full <= 0 || s.happy <= 0) return 'sad';
-  return 'base';
-}
-
-// ── 무대 ────────────────────────────────────────────────────────────────
-export function Stage({ y, height }: { y: Yeoul; height: number | string }) {
-  const { s, derived, actions } = y;
-  // ★ 대화로 들어가는 길 — **길게 누르기**. 짧게 누르면 쓰다듬기 그대로다.
-  //   부름이 없을 때도 대화를 열 길이 하나는 있어야 해서 둔 기본값이고, **진입 방식은 미정**이다.
-  const press = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const held = useRef(false);
-  const holdStart = () => {
-    held.current = false;
-    if (press.current) clearTimeout(press.current);
-    press.current = setTimeout(() => { held.current = true; actions.openPanel('chat'); }, 500);
-  };
-  const holdEnd = () => { if (press.current) clearTimeout(press.current); };
-  const b = derived.bubble;
-  const trash = s.trace > 0 ? ASSET.trash[Math.min(s.trace, ASSET.trash.length) - 1].src : null;
-  const asleep = s.sleeping || s.nap === 'sleeping';
-  const petHint = derived.tutorStep?.hint === 'char';
-
-  const layer: CSSProperties = { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none' };
+export default function Room({ y }: { y: Yeoul }) {
+  const { v, actions, stageRef, popRef } = y;
 
   return (
-    <div
-      data-part="room" data-mode={derived.mode} data-room={derived.stageBg.room}
-      onClick={() => { if (held.current) { held.current = false; return; } actions.onPet(); }}
-      onPointerDown={holdStart}
-      onPointerUp={holdEnd}
-      onPointerLeave={holdEnd}
-      onContextMenu={(e) => e.preventDefault()}
-      style={{ position: 'relative', width: '100%', height, borderRadius: radius.lg, overflow: 'hidden', border: `1px solid ${C.line}`, background: C.slotDim, cursor: 'pointer' }}
-    >
-      {/* 배경 — 방에 들어가면 그 방으로 바뀐다. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={derived.stageBg.img} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+    <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
+      {/* 팝오버가 열려 있으면 무대 아무 데나 눌러 닫을 수 있다. */}
+      {v.pop.show && <div onClick={actions.closePop} style={{ position: 'absolute', inset: 0, zIndex: 2 }} />}
 
-      {/* 방 소품 자리 — 진짜 그림(E4)이 오기 전까지는 글자로 자리만 잡는다. */}
-      {!!derived.stageBg.prop && (
-        <span data-part="prop" style={{ position: 'absolute', left: 12, bottom: 12, padding: '5px 11px', borderRadius: radius.pill, background: 'rgba(255,251,244,.86)', border: `1px solid ${C.line}`, fontSize: 11.5, color: C.sub, pointerEvents: 'none' }}>
-            {derived.stageBg.prop} 자리
-        </span>
-      )}
+      {v.hud.show && <Hud y={y} />}
 
-      {/* 캐릭터 — 무대보다 작아야 '방 안에 서 있다' 가 된다. 발이 아래 13% 에 닿는다. */}
+      {/* ── 무대 ───────────────────────────────────────────────── */}
       <div
-        data-stage="char" data-motion={motionOf(y)}
-        style={{ position: 'absolute', left: '50%', bottom: '13%', width: '46%', marginLeft: '-23%', aspectRatio: '313 / 350', animation: 'yeoulBob 4.6s ease-in-out infinite' }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={s.imgUrl ?? yeoulImg(motionOf(y))}
-          alt={`${s.petName} · ${motionOf(y)}`}
-          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', borderRadius: 14, filter: asleep ? 'saturate(.65) brightness(.9)' : s.sick ? 'saturate(.5)' : 'none', boxShadow: petHint ? '0 0 0 4px rgba(156,66,50,.3)' : undefined, animation: petHint ? 'yeoulBlink 1.1s ease-in-out infinite' : undefined }}
-        />
-      </div>
-
-      {/* 나은 연출 — 기쁜 자세 + 반짝(정본 §5). */}
-      {s.justHealed && (
-        <div style={{ position: 'absolute', left: '50%', bottom: '40%', transform: 'translateX(-50%)', fontSize: 30, animation: 'yeoulBurst 1.4s ease forwards', pointerEvents: 'none' }}>✦</div>
-      )}
-
-      {/* 흔적은 바닥에 쌓여 캐릭터 앞을 가린다. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {trash && <img src={trash} alt={`흔적 ${s.trace}개`} style={{ ...layer, bottom: 0 }} />}
-
-      {asleep && (
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', animation: 'yeoulFadeIn .5s ease' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={ASSET.curtainClosed.src} alt="자는 중" style={layer} />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={ASSET.moon.src} alt="" style={layer} />
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 24, textAlign: 'center', fontFamily: GAEGU, fontSize: 22, color: '#F6EEDD', textShadow: '0 1px 6px rgba(28,34,58,.6)' }}>
-            {s.nap === 'sleeping' ? '낮잠 자는 중이에요' : '자고 있어요'}
-          </div>
-        </div>
-      )}
-
-      {/* 말풍선 = 캐릭터의 입. 답 > 부름 > 하트 > 방금 한 일. */}
-      {b.show && (
-        <div
-          data-part="call"
-          style={{ position: 'absolute', left: '50%', top: '7%', transform: 'translateX(-50%)', width: '80%', ...col(8), alignItems: 'center', animation: 'yeoulPop .28s ease' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div style={{ position: 'relative', background: C.paperHi, border: `1px solid rgba(74,64,56,.13)`, borderRadius: 17, padding: '10px 15px', boxShadow: '0 5px 14px rgba(74,64,56,.1)', textAlign: 'center' }}>
-            <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.35, color: C.ink }}>{b.text}</span>
-            <div style={{ position: 'absolute', left: '50%', bottom: -6, transform: 'translateX(-50%) rotate(45deg)', width: 11, height: 11, background: C.paperHi, borderRight: `1px solid rgba(74,64,56,.13)`, borderBottom: `1px solid rgba(74,64,56,.13)` }} />
-          </div>
-          <div style={row(8)}>
-            {b.chip && (
-              <button data-action="call-answer" onClick={b.chip.tap} style={{ border: 'none', background: C.accent, color: C.accentInk, borderRadius: radius.pill, padding: '7px 16px', fontSize: 13, cursor: 'pointer', fontFamily: SANS, boxShadow: '0 3px 9px rgba(156,66,50,.28)' }}>{b.chip.label}</button>
-            )}
-            {b.more > 0 && (
-              <button data-action="call-more" onClick={() => actions.openPanel('pet')} style={{ border: `1px solid ${C.line}`, background: C.paperHi, borderRadius: radius.pill, padding: '6px 11px', fontFamily: MONO, fontSize: 11, color: C.sub, cursor: 'pointer' }}>+{b.more}</button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 무대 안 약병 — **아플 때만** 나타난다. 안 아프면 화면 어디에도 약이 없다(9/6 3차 결정).
-          ★ 자리는 **미정**이다. 지금은 무대 오른쪽 위 구석이 기본값.
-          그림 에셋(ASSET.medicine)이 아직 없어 CSS 로 약병 모양만 세워 둔다. */}
-      {s.sick && !asleep && (
-        <button
-          data-action="medicine"
-          onClick={(e) => { e.stopPropagation(); actions.onMed(); }}
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label="약 주기"
-          style={{
-            position: 'absolute', right: 12, top: 12, width: 42, height: 52, padding: 0, cursor: 'pointer',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end',
-            borderRadius: 12, border: `1px solid ${C.line}`, background: 'rgba(255,251,244,.9)',
-            animation: 'yeoulBlink 1.3s ease-in-out infinite',
-          }}
-        >
-          {/* 뚜껑 */}
-          <span style={{ width: 13, height: 7, borderRadius: '3px 3px 0 0', background: '#8E3A2B' }} />
-          {/* 병 */}
-          <span style={{ width: 25, height: 27, marginBottom: 5, borderRadius: '5px 5px 7px 7px', background: '#E9D9CF', border: '1px solid #C9B4A6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ width: 11, height: 3, borderRadius: 2, background: '#8E3A2B' }} />
-          </span>
-        </button>
-      )}
-
-      {s.hearts && (
-        <div style={{ position: 'absolute', left: '50%', bottom: '44%', animation: 'yeoulFloatUp 1.1s ease forwards', fontSize: 24, letterSpacing: 3, color: '#D97386', pointerEvents: 'none' }}>
-          {s.pets >= 3 ? '♥♥♥' : s.pets === 2 ? '♥♥♡' : '♥♡♡'}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── 여울 샘플 띠(부화 대기) ──────────────────────────────────────────────
-function SampleBar({ y }: { y: Yeoul }) {
-  const { derived, actions } = y;
-  const h = derived.hatch;
-  return (
-    <div data-part="sample" style={{ ...col(9), padding: '11px 14px', borderRadius: radius.md, background: '#FBEFE9', border: '1.5px dashed #C79A8C' }}>
-      <div style={{ ...row(9), flexWrap: 'wrap' }}>
-        <span style={{ padding: '3px 9px', borderRadius: radius.pill, background: C.accent, color: C.accentInk, fontSize: 11 }}>여울 샘플</span>
-        <span style={{ fontSize: 13, color: '#5A3D32' }}>내 아이 부화 현황</span>
-        <span style={{ flex: 1 }} />
-        <span style={{ fontFamily: MONO, fontSize: 11, color: '#6B4A3E' }}>{h.elapsed}</span>
-      </div>
-      <div style={{ ...row(7), flexWrap: 'wrap' }}>
-        {HATCH_STAGES.map((t, i) => (
-          <span key={t} style={{ ...row(5), fontSize: 11.5, color: i <= h.idx || h.ready ? '#5A3D32' : '#B39A8F' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: i < h.idx || h.ready ? C.accent : i === h.idx ? '#E7A895' : '#EBD3C7' }} />
-            {t}
-          </span>
-        ))}
-      </div>
-      <button data-action="to-egg" onClick={actions.leaveSample} style={{ ...ghost, background: C.accent, borderColor: C.accent, color: C.accentInk, textAlign: 'center' }}>
-        내 아이 보러 가기
-      </button>
-    </div>
-  );
-}
-
-// ── 헤더 — 이름·N일째·친밀도 한 줄 + 오른쪽 끝 아이 정보 버튼 ────────────
-function Header({ y }: { y: Yeoul }) {
-  const { s, actions } = y;
-  return (
-    <div style={{ ...row(9), justifyContent: 'space-between' }}>
-      <span style={{ ...row(7), flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 14.5, color: C.ink }}>{s.petName || '아이'}</span>
-        <span style={{ fontSize: 12, color: C.sub }}>·</span>
-        <span style={{ fontSize: 14, color: C.sub }}>{s.day}일째</span>
-        <span style={{ fontSize: 12, color: C.sub }}>·</span>
-        <span style={{ fontSize: 14, color: C.sub }}>친밀도 {s.bond}%</span>
-      </span>
-      {/* ★ 아이 정보(성격·말투·세계관·표기 방식·떠남 끄기)로 들어가는 유일한 문.
-          9/6 3차 결정으로 이름 탭에서 여기(친밀도 옆)로 옮겼다. **자리는 아직 미정**이고,
-          톱니 자리표시는 그림 에셋이 오면 바꾼다. */}
-      <button
-        data-action="open-pet" onClick={() => actions.openPanel('pet')} aria-label="아이 정보"
+        ref={stageRef}
+        data-part="stage"
+        onClick={actions.closePop}
         style={{
-          ...row(5), flex: 'none', padding: '5px 10px', borderRadius: radius.pill, cursor: 'pointer',
-          fontFamily: SANS, fontSize: 11.5, lineHeight: 1,
-          border: `1px solid ${s.panel === 'pet' && s.sheetOpen ? C.accent : '#E9E1D4'}`,
-          background: s.panel === 'pet' && s.sheetOpen ? C.accentSoft : '#FDF8EE',
-          color: s.panel === 'pet' && s.sheetOpen ? C.accent : C.sub,
+          flex: '1 1 auto', position: 'relative', width: '100%', minHeight: 0, overflow: 'hidden',
+          background: v.st.wall, transition: 'background .55s ease, filter .35s ease',
         }}
       >
-        <span aria-hidden style={{ fontSize: 12 }}>⚙</span>
-        아이 정보
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: v.st.pattern, opacity: 0.5 }} />
+
+        {v.sample.show && <SampleBar y={y} />}
+
+        {/* 창문 — 낮엔 해, 밤엔 달. */}
+        <div style={{
+          position: 'absolute', left: 28, top: 34, width: 98, height: 98, borderRadius: 15,
+          border: `5px solid ${v.st.frame}`, background: v.st.sky, overflow: 'hidden',
+        }}>
+          {v.st.moon && <div style={{ position: 'absolute', right: 15, top: 13, width: 27, height: 27, borderRadius: '50%', background: '#F7EDCD', boxShadow: '0 0 20px rgba(247,237,205,.75)' }} />}
+          {v.st.sun && <div style={{ position: 'absolute', right: 16, top: 15, width: 23, height: 23, borderRadius: '50%', background: '#FBE7B4' }} />}
+        </div>
+
+        {/* 바닥 */}
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 'min(266px,44%)', background: v.st.floor, borderTop: '1px solid rgba(74,64,56,.09)' }} />
+
+        {/* 그림자 — 캐릭터와 같은 걸음으로 움직인다. */}
+        <div style={{
+          position: 'absolute', left: 0, right: 0, bottom: `max(min(202px,33%),${v.lift.shadow})`, height: 24,
+          display: 'flex', justifyContent: 'center',
+          animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
+        }}>
+          <span style={{ display: 'block', width: 'min(236px,62%)', height: '100%', borderRadius: '50%', background: 'rgba(74,64,56,.15)', filter: 'blur(7px)' }} />
+        </div>
+
+        {/* 아이 — 좌우로 오가고(wander) 가끔 뛴다(hop). 눌러서 쓰다듬는다. */}
+        <div
+          data-part="pet"
+          onClick={(e) => { e.stopPropagation(); actions.onPet(); }}
+          style={{
+            position: 'absolute', left: 0, right: 0, bottom: `max(min(212px,34%),${v.lift.char})`,
+            height: 'min(350px,58%)', display: 'flex', justifyContent: 'center', zIndex: 2,
+            animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
+          }}
+        >
+          <div style={{ position: 'relative', height: '100%', aspectRatio: '313/350', maxWidth: '88%' }}>
+            {v.guide.tap && (
+              <>
+                <span style={{ position: 'absolute', left: '50%', top: '52%', marginLeft: -70, width: 140, height: 140, borderRadius: '50%', border: '2px solid rgba(156,66,50,.5)', animation: 'yRipple 1.9s ease-out infinite', pointerEvents: 'none' }} />
+                <span style={{
+                  position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: radius.pill,
+                  background: 'rgba(255,253,248,.94)', border: '1px solid rgba(156,66,50,.22)',
+                  fontSize: 11.5, color: C.accent, whiteSpace: 'nowrap',
+                  animation: 'yTapdot 1.9s ease-in-out infinite', pointerEvents: 'none',
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent }} />
+                  {v.guide.label}
+                </span>
+              </>
+            )}
+            <div style={{ width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play }}>
+              <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={KIND_IMG[v.spriteKind]} alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', animation: 'yBob 4.6s ease-in-out infinite', filter: v.st.charFilter }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 자는 중 — 커튼을 친다. */}
+        {v.st.curtain && (
+          <>
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg,rgba(43,52,82,.6),rgba(43,52,82,.3))', animation: 'yFadeIn .5s ease' }} />
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '34%', background: 'linear-gradient(90deg,#3E4A72,#5A6894)', backgroundImage: 'repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 3px,transparent 3px 26px)', borderRight: '3px solid #2C3557', boxShadow: '6px 0 16px rgba(28,34,58,.45)' }} />
+            <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '34%', background: 'linear-gradient(270deg,#3E4A72,#5A6894)', backgroundImage: 'repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 3px,transparent 3px 26px)', borderLeft: '3px solid #2C3557', boxShadow: '-6px 0 16px rgba(28,34,58,.45)' }} />
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 24, textAlign: 'center', fontFamily: GAEGU, fontSize: 22, color: '#F6EEDD', textShadow: '0 1px 6px rgba(28,34,58,.6)' }}>자고 있어요</div>
+          </>
+        )}
+        {v.st.sick && <div style={{ position: 'absolute', inset: 0, background: 'rgba(130,132,138,.2)', animation: 'yFadeIn .4s ease' }} />}
+
+        {v.bub.isTut && <TutorCard y={y} />}
+
+        {v.bub.show && (
+          <div style={{
+            position: 'absolute', left: '50%', top: v.bub.top, zIndex: 3, width: 280, marginLeft: -140,
+            display: 'flex', justifyContent: 'center',
+            animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
+          }}>
+            <div style={{ position: 'relative', maxWidth: '100%', background: C.paper, border: '1px solid rgba(74,64,56,.13)', borderRadius: radius.md, padding: '9px 15px', boxShadow: '0 4px 14px rgba(74,64,56,.12)', textAlign: 'center', animation: 'yPop .28s ease' }}>
+              <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.3, color: C.ink }}>{v.bub.text}</span>
+              <div style={{ position: 'absolute', left: '50%', bottom: -6, transform: 'translateX(-50%) rotate(45deg)', width: 11, height: 11, background: C.paper, borderRight: '1px solid rgba(74,64,56,.13)', borderBottom: '1px solid rgba(74,64,56,.13)' }} />
+            </div>
+          </div>
+        )}
+
+        {v.hearts.show && (
+          <div style={{ position: 'absolute', left: '50%', bottom: '44%', animation: 'yFloatup 1.1s ease forwards', fontSize: 24, letterSpacing: 3, color: '#D97386', textShadow: '0 1px 5px rgba(255,255,255,.8)' }}>
+            {v.hearts.text}
+          </div>
+        )}
+      </div>
+
+      {/* ── 아래 — 팝오버와 타일 ─────────────────────────────────── */}
+      <div onClick={actions.bottomTap} style={{ position: 'relative', flex: 'none', padding: '10px 12px 22px' }}>
+        {v.fab.show && <ChatFab y={y} />}
+        {v.mini.show && <MiniCard y={y} />}
+        {v.medFab.show && (
+          <button
+            onClick={(e) => { e.stopPropagation(); actions.onMed(); }}
+            style={{
+              position: 'absolute', right: 72, bottom: 116, zIndex: 4, width: 48, height: 48, borderRadius: '50%',
+              border: `2px solid ${C.accent}`, background: C.paper, boxShadow: '0 4px 14px rgba(74,64,56,.14)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'yBlink 1.3s ease-in-out infinite',
+            }}
+            aria-label="약 주기"
+          >
+            <span style={{ position: 'relative', width: 30, height: 16, display: 'block' }}>
+              <span style={{ position: 'absolute', inset: 0, border: `2px solid ${C.accent}`, borderRadius: radius.pill, background: `linear-gradient(90deg,${C.accent} 0 50%,${C.paper} 50% 100%)` }} />
+            </span>
+          </button>
+        )}
+
+        <div style={{ position: 'absolute', left: 12, right: 12, bottom: 116, zIndex: 5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+          {v.ask.show && <AskCard y={y} />}
+          {v.chat.show && <ChatBar y={y} />}
+          {v.toast.show && (
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', marginBottom: 9, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+              <span style={{ background: 'rgba(74,64,56,.92)', color: '#FBF6EC', borderRadius: radius.pill, padding: '7px 16px', fontSize: 12, animation: 'yFadeIn .2s ease' }}>{v.toast.text}</span>
+            </div>
+          )}
+          {v.pop.show && <Popover y={y} popRef={popRef} />}
+        </div>
+
+        <div data-part="tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 6 }}>
+          {v.tiles.map((r) => (
+            <button
+              key={r.key} data-room={r.key}
+              onClick={(e) => { e.stopPropagation(); r.pick(); }}
+              style={{
+                position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+                padding: '11px 4px 10px', borderRadius: radius.md,
+                borderStyle: 'solid', borderWidth: r.bw, borderColor: r.bd, background: r.tileBg, animation: r.anim,
+              }}
+            >
+              <span style={{ position: 'relative', width: 26, height: 26, flex: 'none', color: r.fg }}>
+                {r.layers.map((p, i) => <span key={i} style={cssText(p)} />)}
+              </span>
+              <span style={{ fontSize: 12, lineHeight: 1, letterSpacing: '.01em', color: r.fg }}>{r.label}</span>
+              {r.hasBadge && (
+                <span style={{
+                  position: 'absolute', top: -5, right: -3, minWidth: 18, height: 18, padding: '0 4px', boxSizing: 'border-box',
+                  borderRadius: 9, background: C.paper, border: '1px solid rgba(74,64,56,.16)',
+                  font: `9.5px ${MONO}`, color: C.sub2, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>{r.badge}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Album y={y} />
+      <Panels y={y} />
+    </div>
+  );
+}
+
+// ── 조각들 ──────────────────────────────────────────────────────────────
+
+/** 시안이 타일 아이콘을 CSS 한 줄로 적어 두었다. 그 줄을 React 스타일 객체로 옮긴다. */
+function cssText(text: string): React.CSSProperties {
+  const out: Record<string, string> = { position: 'absolute' };
+  for (const part of text.split(';')) {
+    const i = part.indexOf(':');
+    if (i < 0) continue;
+    const k = part.slice(0, i).trim().replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+    out[k] = part.slice(i + 1).trim();
+  }
+  return out as React.CSSProperties;
+}
+
+function Hud({ y }: { y: Yeoul }) {
+  const { v, actions } = y;
+  return (
+    <>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 20px 5px' }}>
+        <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 22, lineHeight: 1, color: C.ink }}>여울</span>
+      </div>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7, padding: '0 20px 8px' }}>
+        <span style={{ fontSize: 14.5, color: C.ink }}>{v.pet.name}</span>
+        <span style={{ fontSize: 12, color: '#8B8279' }}>·</span>
+        <span style={{ fontSize: 14, color: '#635A52' }}>{v.pet.dayText}</span>
+        <span style={{ fontSize: 12, color: '#8B8279' }}>·</span>
+        <span style={{ fontSize: 14, color: '#635A52' }}>친밀도 {v.pet.bond}%</span>
+        <span style={{ flex: 1 }} />
+        <button
+          onClick={actions.openSettings} data-part="pet-info"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5, flex: 'none', padding: '5px 11px',
+            borderRadius: radius.pill, border: '1px solid #E9E1D4', background: '#FDF8EE',
+            fontSize: 11.5, lineHeight: 1, color: '#7B6F63',
+          }}
+        >
+          <span style={{ position: 'relative', width: 13, height: 13, display: 'block' }}>
+            <span style={{ position: 'absolute', left: 0, top: 5.5, width: 13, height: 2, borderRadius: 2, background: 'currentColor' }} />
+            <span style={{ position: 'absolute', left: 5.5, top: 0, width: 2, height: 13, borderRadius: 2, background: 'currentColor', transform: 'rotate(45deg)' }} />
+          </span>
+          아이 정보
+        </button>
+        {v.shards.show && (
+          <span style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+            {v.shards.cells.map((c, i) => (
+              <span key={i} style={{ width: 9, height: 9, borderRadius: 2, border: '1px solid rgba(74,64,56,.22)', background: c.bg, transform: 'rotate(45deg)' }} />
+            ))}
+          </span>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** 여울 샘플 방의 위쪽 띠 — 왼쪽은 정보 수정으로 돌아가기, 오른쪽은 내 알의 부화 진행. */
+function SampleBar({ y }: { y: Yeoul }) {
+  const { v } = y;
+  return (
+    <div style={{ position: 'absolute', left: 12, right: 12, top: 10, zIndex: 4, display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+      <button
+        onClick={(e) => { e.stopPropagation(); v.sample.exit(); }}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 13px 8px 11px', borderRadius: radius.pill, border: 'none', background: 'rgba(74,64,56,.82)', color: '#FBF6EC', fontSize: 11.5, backdropFilter: 'blur(4px)', whiteSpace: 'nowrap' }}
+      >‹ 정보 수정</button>
+      <span style={{ flex: 1 }} />
+      <button
+        onClick={(e) => { e.stopPropagation(); v.sample.forceHatch(); }}
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, border: 'none', background: 'none', padding: 0 }}
+      >
+        <span style={{ position: 'relative', width: 60, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ position: 'absolute', inset: -6, borderRadius: '50%', background: '#F4C9A8', opacity: v.sample.haloOpacity, animation: 'yHalo 1.6s ease-in-out infinite' }} />
+          <span style={{ position: 'relative', width: 60, height: 60, borderRadius: '50%', background: v.sample.ring, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ width: 48, height: 48, borderRadius: '50%', background: C.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={EGG_IMG.idle} alt="" style={{ width: 30, height: 34, objectFit: 'contain', display: 'block', animation: v.sample.eggAnim }} />
+            </span>
+          </span>
+        </span>
+        <span style={{ padding: '3px 10px', borderRadius: radius.pill, background: v.sample.noteBg, color: '#FBF6EC', fontSize: 10.5, whiteSpace: 'nowrap' }}>{v.sample.eggNote}</span>
       </button>
     </div>
   );
 }
 
-// ── 전면 판(해금 폭죽 · 아침 도착 · 태어남 · 확인 · 동작 한 칸) ───────────
-export function Modal({ y }: { y: Yeoul }) {
-  const { s, actions } = y;
-  const f = s.modal;
-  if (!f) return null;
+/** 튜토리얼 카드 — 샘플 방에서는 이전·다음으로 넘기고, 진짜 방에서는 직접 해야 넘어간다. */
+function TutorCard({ y }: { y: Yeoul }) {
+  const { v } = y;
+  const b = v.bub;
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(74,64,56,.52)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yeoulFadeIn .2s ease' }}>
-      <div onClick={f.tapAny ? actions.closeModal : undefined} style={{ position: 'absolute', inset: 0 }} />
-      <div data-part="modal" data-kind={f.kind} style={{ position: 'relative', width: '100%', maxWidth: 380, padding: '24px 22px', borderRadius: 24, background: C.paperHi, ...col(12), alignItems: 'center', animation: 'yeoulPop .3s ease', boxSizing: 'border-box' }}>
-        {f.kind === 'unlock' && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={ASSET.firework.src} alt="" style={{ position: 'absolute', inset: 0, zIndex: 0, width: '100%', height: '100%', objectFit: 'contain', opacity: .5, pointerEvents: 'none', animation: 'yeoulBurst 1.6s ease forwards' }} />
-        )}
-
-        {f.polaroid && (
-          <div style={{ width: '100%', padding: '11px 11px 16px', background: '#FFFFFF', border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.14)', ...col(9), boxSizing: 'border-box' }}>
-            <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', overflow: 'hidden', background: '#EBD3C7' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={f.polaroid.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={yeoulImg(f.polaroid.char ?? 'roll')} alt="" style={{ position: 'absolute', left: '50%', bottom: '8%', width: '52%', marginLeft: '-26%', objectFit: 'contain', display: 'block' }} />
-              {!!f.polaroid.prop && (
-                <span style={{ position: 'absolute', left: 8, bottom: 8, padding: '3px 8px', borderRadius: radius.pill, background: 'rgba(255,251,244,.86)', border: `1px solid ${C.line}`, fontSize: 10.5, color: C.sub }}>{f.polaroid.prop} 자리</span>
-              )}
-            </div>
-            <span style={{ fontFamily: GAEGU, fontSize: 18, lineHeight: 1.35, color: C.ink, textAlign: 'center' }}>{f.polaroid.caption}</span>
-            {!!f.polaroid.sub && <span style={{ fontFamily: MONO, fontSize: 11, color: C.faint, textAlign: 'center' }}>{f.polaroid.sub}</span>}
-          </div>
-        )}
-
-        {/* 해금은 **인과 문장이 먼저** 온다. "축하합니다" 는 쓰지 않는다. */}
-        {!!f.cause && <span style={{ ...note, textAlign: 'center', color: C.sub, position: 'relative', zIndex: 1 }}>{f.cause}</span>}
-        <span style={{ ...title, fontSize: 26, lineHeight: 1.2, textAlign: 'center', position: 'relative', zIndex: 1 }}>{f.title}</span>
-        {!!f.body && <span style={{ ...note, textAlign: 'center', position: 'relative', zIndex: 1 }}>{f.body}</span>}
-        {!!f.lines && (
-          <div style={{ ...col(4), alignItems: 'center', position: 'relative', zIndex: 1 }}>
-            {f.lines.map((l) => <span key={l} style={{ ...note, textAlign: 'center' }}>{l}</span>)}
-          </div>
-        )}
-
-        {f.actions.length > 0 && (
-          <div style={{ ...col(8), width: '100%', marginTop: 2, position: 'relative', zIndex: 1 }}>
-            {f.actions.map((a, i) => (
-              <button
-                key={a.label} data-modal-action={i} data-action={a.primary ? 'modal-primary' : undefined} onClick={a.tap}
-                style={a.primary ? { ...cta, padding: 13, fontSize: 13.5, borderRadius: radius.md } : { ...ghost, textAlign: 'center' }}
-              >{a.label}</button>
-            ))}
-          </div>
-        )}
-        {f.tapAny && f.actions.length === 0 && (
-          <span style={{ fontFamily: MONO, fontSize: 10, color: C.faint, position: 'relative', zIndex: 1 }}>아무 데나 누르면 닫혀요</span>
-        )}
+    <div style={{
+      position: 'absolute', left: 12, right: 12, top: b.tutTop, zIndex: 3,
+      display: 'flex', flexDirection: 'column', gap: 9, padding: '11px 13px', borderRadius: radius.md,
+      background: 'rgba(255,253,248,.95)', border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)',
+      animation: 'yPop .24s ease',
+    }}>
+      <span style={{ fontFamily: GAEGU, fontSize: 17, lineHeight: 1.3, color: C.ink }}>{b.tutText}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        {b.hasPrev && <button onClick={(e) => { e.stopPropagation(); b.prev(); }} style={{ padding: '7px 13px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 12.5, color: C.sub2 }}>이전</button>}
+        <span style={{ flex: 1 }} />
+        <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          {b.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 5, borderRadius: 3, background: d.bg }} />)}
+        </span>
+        <span style={{ flex: 1 }} />
+        {b.hasNext && <button onClick={(e) => { e.stopPropagation(); b.chipTap(); }} style={{ padding: '7px 14px', borderRadius: radius.pill, border: 'none', background: C.accent, color: C.accentInk, fontSize: 12.5, whiteSpace: 'nowrap' }}>{b.chipLabel}</button>}
+        {b.hasHint && <span style={{ fontSize: 11, color: 'rgba(74,64,56,.45)', whiteSpace: 'nowrap' }}>{b.hintText}</span>}
+        {b.hasSkip && <button onClick={(e) => { e.stopPropagation(); b.skipStep(); }} style={{ padding: '7px 11px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11.5, color: C.sub2, whiteSpace: 'nowrap' }}>나중에</button>}
       </div>
     </div>
   );
 }
 
-// ── 게임 창 — 시트가 아니라 **무대 위 작은 모달**(9/6 2차 결정) ──────────
-//
-// 왜 모달인가 — 시트로 올리면 캐릭터가 가려져서 "같이 논다" 가 아니라 "메뉴를 고른다" 가 된다.
-// 무대 가운데에 작은 창으로 뜨면 뒤로 아이가 계속 보인다.
-export function GameModal({ y }: { y: Yeoul }) {
-  const { s, derived, actions } = y;
-  if (s.game === 'none') return null;
-  const g = s.guess;
-  const run = s.game === 'run';
-
+function ChatFab({ y }: { y: Yeoul }) {
+  const { v, actions } = y;
   return (
-    // 무대를 감싼 칸 안에 놓인다 — 화면 전체가 아니라 **무대 위 가운데**에 뜬다.
-    <div style={{ position: 'absolute', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, animation: 'yeoulFadeIn .18s ease' }}>
-      <div onClick={actions.closeGame} style={{ position: 'absolute', inset: 0, background: 'rgba(74,64,56,.34)', borderRadius: radius.lg }} />
-      <div
-        data-part="game" data-game={s.game}
-        style={{ position: 'relative', width: '100%', maxWidth: 300, padding: '15px 16px 13px', borderRadius: 20, background: C.paperHi, border: `1px solid ${C.line}`, boxShadow: '0 12px 34px rgba(74,64,56,.22)', ...col(9), alignItems: 'center', animation: 'yeoulPop .26s ease', boxSizing: 'border-box' }}
-      >
-        <div style={{ ...row(9), width: '100%' }}>
-          <span style={{ ...title, fontSize: 19 }}>{run ? '달리기' : '좌우 맞히기'}</span>
-          <span style={{ flex: 1 }} />
-          <button data-action="game-close" onClick={actions.closeGame} style={{ border: `1px solid ${C.line}`, background: C.slot, borderRadius: radius.pill, width: 26, height: 26, fontSize: 12, color: C.sub, cursor: 'pointer', lineHeight: 1 }}>✕</button>
-        </div>
-
-        {run ? (
-          <div style={{ ...col(8), width: '100%', padding: 15, borderRadius: radius.md, background: '#F1EBE0', border: '1px dashed rgba(74,64,56,.18)', boxSizing: 'border-box' }}>
-            <span style={{ fontSize: 13.5, color: C.sub }}>{derived.runLocked ? '아직 잠겨 있어요' : '곧 열려요'}</span>
-            <span style={note}>{derived.runLocked ? derived.runCond : '한 버튼으로 뛰어넘어요. 30초를 버티면 이겨요. (게임 화면은 다음 판에서)'}</span>
-          </div>
-        ) : (
-          <>
-            {/* 캐릭터 얼굴 — 누구와 노는지가 보여야 한다. */}
-            <div style={{ width: 74, height: 74, flex: 'none', borderRadius: '50%', overflow: 'hidden', background: C.slotDim, border: `1px solid ${C.line}` }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={s.imgUrl ?? yeoulImg(g.over ? (g.win >= g.lose ? 'joy' : 'sad') : 'base')} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
-            </div>
-
-            <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.3, color: C.ink, textAlign: 'center' }}>
-              {g.msg || '어느 손에 있을까요?'}
-            </span>
-            <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.sub }}>
-              {GUESS_ROUNDS}번 중 {Math.min(g.round + (g.over ? 0 : 1), GUESS_ROUNDS)}번째 · 맞힌 수 {g.win}
-            </span>
-
-            {g.over ? (
-              <div style={{ ...col(8), width: '100%' }}>
-                <button data-action="game-again" onClick={actions.againGame} style={{ ...cta, padding: 13, fontSize: 13.5, borderRadius: radius.md }}>한 판 더</button>
-                <button data-action="game-done" onClick={actions.closeGame} style={{ ...ghost, textAlign: 'center' }}>닫기</button>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, width: '100%' }}>
-                <button data-action="game-left" onClick={actions.guessSide} style={{ ...ghost, padding: '20px 6px', textAlign: 'center', fontSize: 15 }}>왼쪽</button>
-                <button data-action="game-right" onClick={actions.guessSide} style={{ ...ghost, padding: '20px 6px', textAlign: 'center', fontSize: 15 }}>오른쪽</button>
-              </div>
-            )}
-            <span style={{ fontSize: 11, color: C.faint }}>오늘 남은 판 {s.plays}</span>
-          </>
-        )}
-      </div>
-    </div>
+    <button
+      onClick={(e) => { e.stopPropagation(); actions.openChat(); }}
+      data-part="chat-fab"
+      style={{
+        position: 'absolute', right: 14, bottom: 116, zIndex: 4, width: 48, height: 48, borderRadius: '50%',
+        borderStyle: 'solid', borderWidth: v.fab.bw, borderColor: v.fab.bd, background: C.paper,
+        boxShadow: '0 4px 14px rgba(74,64,56,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        animation: v.fab.anim,
+      }}
+      aria-label="대화하기"
+    >
+      <span style={{ position: 'relative', width: 24, height: 24, color: '#5A554E' }}>
+        <span style={{ position: 'absolute', left: 1, top: 3, width: 22, height: 15, border: '2px solid currentColor', borderRadius: 8 }} />
+        <span style={{ position: 'absolute', left: 6, top: 17, width: 7, height: 5, background: 'currentColor', borderRadius: '0 0 3px 3px', transform: 'skewX(-18deg)' }} />
+        <span style={{ position: 'absolute', left: 7, top: 9, width: 3, height: 3, borderRadius: '50%', background: 'currentColor' }} />
+        <span style={{ position: 'absolute', left: 13, top: 9, width: 3, height: 3, borderRadius: '50%', background: 'currentColor' }} />
+      </span>
+      {v.fab.dot && <span style={{ position: 'absolute', top: 1, right: 1, width: 11, height: 11, borderRadius: '50%', background: C.accent, border: `2px solid ${C.paper}` }} />}
+    </button>
   );
 }
 
-// ── 방 화면 ─────────────────────────────────────────────────────────────
-export default function Room({ y }: { y: Yeoul }) {
-  const { s, derived, actions, pc } = y;
-  const [pTitle, pSub] = panelMeta(s.panel, y);
-  const sample = s.screen === 'sample';
-
-  const sysRow = s.sys ? <div data-part="sys" style={sysLine}>{s.sys}</div> : null;
-
-  const panelHead = (
-    <div style={{ ...row(9), alignItems: 'baseline' }}>
-      <span style={title}>{pTitle}</span>
-      <span style={{ fontSize: 12, color: C.sub }}>{pSub}</span>
-      <span style={{ flex: 1 }} />
-      {pc
-        ? <span style={{ fontFamily: MONO, fontSize: 10.5, color: C.faint }}>Esc</span>
-        : <button data-action="sheet-close" onClick={actions.closeSheet} style={{ border: `1px solid ${C.line}`, background: C.slot, borderRadius: radius.pill, width: 27, height: 27, fontSize: 12, color: C.sub, cursor: 'pointer', lineHeight: 1 }}>✕</button>}
-    </div>
-  );
-
-  // ── PC : 3단 (모바일 우선이라 이번 판에서는 배치를 손대지 않았다) ─────
-  if (pc) {
-    return (
-      <div style={{ ...col(14), padding: '16px 20px 24px' }}>
-        {sample && <SampleBar y={y} />}
-        <Header y={y} />
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 18 }}>
-          <div style={{ flex: '1 1 240px', maxWidth: 300, minWidth: 230, order: 3, ...col(14) }}>
-            <div style={card}>
-              <div style={row(11)}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.imgUrl ?? yeoulImg('base')} alt="" style={{ width: 44, height: 44, objectFit: 'contain', flex: 'none' }} />
-                <span style={col(2)}>
-                  <span style={{ fontSize: 15 }}>{s.petName || '아이'}</span>
-                  <span style={{ fontSize: 12, color: C.sub }}>{s.day}일째 · 동작 {s.unlocked.length}/{derived.motionCells.length}</span>
-                </span>
-              </div>
-              <div style={col(5)}>
-                <span style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.sub }}>
-                  친밀도<span style={{ fontFamily: MONO, color: C.ink }}>{s.bond}%</span>
-                </span>
-                <span style={{ display: 'block', height: 7, borderRadius: 4, background: '#EFE7DA', overflow: 'hidden' }}>
-                  <span style={{ display: 'block', height: '100%', width: `${s.bond}%`, background: C.accent }} />
-                </span>
-              </div>
-            </div>
-
-            <div style={card}>
-              <span style={{ fontSize: 11.5, color: C.faint }}>지금 기다리는 일</span>
-              {derived.calls.length === 0 && <span style={{ padding: '10px 0', textAlign: 'center', fontSize: 12.5, color: C.sub }}>지금은 기다리는 게 없어요</span>}
-              {derived.calls.map((c, i) => (
-                <button key={i} onClick={() => actions.answerCall(c.hint)} style={{ ...row(9), padding: '10px 11px', borderRadius: 11, border: `1px solid ${C.line}`, background: C.paperHi, textAlign: 'left', width: '100%', cursor: 'pointer' }}>
-                  <span style={{ width: 8, height: 8, flex: 'none', borderRadius: '50%', background: C.accent }} />
-                  <span style={{ flex: 1, fontSize: 12.5, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.text}</span>
-                </button>
-              ))}
-            </div>
-
-            <div style={{ ...card, background: '#F6F0E5', gap: 7 }}>
-              <span style={{ fontSize: 11.5, color: C.faint }}>키보드</span>
-              {[['1~5', '방 옮기기'], ['Space', '쓰다듬기'], ['Esc', '닫기'], ['← →', '좌우 맞히기']].map(([k, t]) => (
-                <span key={k} style={{ ...row(8), fontSize: 12, color: C.sub }}>
-                  <span style={{ minWidth: 44, padding: '3px 7px', boxSizing: 'border-box', borderRadius: 6, border: `1px solid rgba(74,64,56,.18)`, background: C.paperHi, fontFamily: MONO, fontSize: 11, color: C.ink, textAlign: 'center' }}>{k}</span>
-                  {t}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ flex: '6 1 420px', minWidth: 'min(100%,380px)', order: 1, ...col(12) }}>
-            <div style={{ position: 'relative' }}>
-              <Stage y={y} height="min(58vh,470px)" />
-              <GameModal y={y} />
-            </div>
-            <RoomButtons y={y} />
-            {sysRow}
-          </div>
-
-          <div style={{ flex: '3 1 320px', minWidth: 300, order: 2, ...card, gap: 12, padding: 18 }} data-part="panel" data-panel={s.panel}>
-            {panelHead}
-            <PanelBody y={y} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── 폰 : 한 폭 + 바텀시트 ────────────────────────────────────────────
+/** 왼쪽 아래 작은 카드 — 튜토리얼 중엔 부름, 아니면 "다음에 배울 것". */
+function MiniCard({ y }: { y: Yeoul }) {
+  const m = y.v.mini;
   return (
-    <div style={{ ...col(10), padding: '12px 12px 20px', maxWidth: 460, margin: '0 auto', position: 'relative', minHeight: '100%', boxSizing: 'border-box' }}>
-      {sample && <SampleBar y={y} />}
-      <Header y={y} />
-      <div style={{ position: 'relative' }}>
-        <Stage y={y} height="min(48vh,360px)" />
-        <GameModal y={y} />
-      </div>
-      <RoomButtons y={y} />
-      {sysRow}
-
-      {s.sheetOpen && (
-        <>
-          <div onClick={actions.closeSheet} style={{ position: 'fixed', inset: 0, background: 'rgba(74,64,56,.22)', zIndex: 40, animation: 'yeoulFadeIn .2s ease' }} />
-          <div
-            data-part="panel" data-panel={s.panel}
-            style={{
-              // 시트는 **내용만큼만** 올라온다 — 무대의 캐릭터가 계속 보여야 한다(카드 2 판단 4).
-              position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, maxHeight: SHEET_H[s.panel],
-              display: 'flex', flexDirection: 'column',
-              background: C.paperHi, borderRadius: '24px 24px 0 0', boxShadow: '0 -10px 30px rgba(74,64,56,.16)',
-              animation: 'yeoulSheetIn .26s cubic-bezier(.2,.8,.2,1)',
-            }}
-          >
-            <div style={{ flex: 'none', padding: '14px 20px 11px', borderBottom: `1px solid ${C.lineSoft}` }}>{panelHead}</div>
-            <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '14px 20px 26px' }}>
-              <PanelBody y={y} />
-              {!!s.sys && <div style={{ ...sysLine, marginTop: 10 }}>{s.sys}</div>}
-            </div>
-          </div>
-        </>
+    <div style={{
+      position: 'absolute', left: 14, bottom: 116, zIndex: 4, maxWidth: 210,
+      display: 'flex', flexDirection: 'column', gap: 6, padding: '9px 12px', borderRadius: radius.md,
+      background: 'rgba(255,253,248,.95)', border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)',
+    }}>
+      {m.isTut && (
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontFamily: GAEGU, fontSize: 15, lineHeight: 1.3, color: C.ink }}>{m.tutText}</span>
+          <button
+            onClick={(e) => { e.stopPropagation(); y.actions.skipTutorStep(); }}
+            style={{ alignSelf: 'flex-start', minHeight: 36, padding: '8px 14px', borderRadius: radius.pill, border: '1px solid rgba(74,64,56,.16)', background: C.slot, fontSize: 12.5, color: C.sub }}
+          >나중에</button>
+        </span>
       )}
-
+      {m.hasGoal && (
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 11, color: '#6E655C' }}>다음에 배울 것</span>
+          <span style={{ fontSize: 13, color: C.ink }}>{m.name}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(74,64,56,.14)', overflow: 'hidden' }}>
+              <span style={{ display: 'block', height: '100%', width: m.barW, background: C.accent }} />
+            </span>
+            <span style={{ fontSize: 12, color: C.sub, whiteSpace: 'nowrap' }}>{m.cond}</span>
+          </span>
+        </span>
+      )}
     </div>
+  );
+}
+
+/** 여울이 하나씩 묻는 설문. 온보딩 칸이 아니라 샘플 방 안에서 묻는다(시안 확정). */
+function AskCard({ y }: { y: Yeoul }) {
+  const a = y.v.ask;
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: '100%', boxSizing: 'border-box', padding: '13px 14px', borderRadius: radius.lg,
+        background: C.paper, border: `1px solid ${C.lineSoft}`, boxShadow: '0 8px 24px rgba(74,64,56,.16)',
+        display: 'flex', flexDirection: 'column', gap: 10, animation: 'yPopIn .2s cubic-bezier(.2,.9,.25,1)',
+      }}
+    >
+      <span style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+        <span style={{ fontSize: 10.5, color: 'rgba(74,64,56,.45)' }}>여울이 물어봐요</span>
+        <span style={{ flex: 1 }} />
+        <span style={{ font: `10px ${MONO}`, color: 'rgba(74,64,56,.4)' }}>{a.step}</span>
+      </span>
+      <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.3, color: C.ink }}>{a.text}</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {a.opts.map((o) => (
+          <button key={o.text} onClick={o.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 12.5, color: C.ink }}>{o.text}</button>
+        ))}
+        <button onClick={a.skip} style={{ padding: '9px 12px', borderRadius: radius.pill, border: 'none', background: 'none', fontSize: 12, color: 'rgba(74,64,56,.45)' }}>나중에</button>
+      </div>
+    </div>
+  );
+}
+
+/** 대화 — 시트가 아니라 타일 위에 뜨는 한 줄(9/6 상훈님 결정: 대화는 놀이 밖 독립). */
+function ChatBar({ y }: { y: Yeoul }) {
+  const { v, actions } = y;
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 7, animation: v.chat.anim }}
+    >
+      {v.chat.hasMine && (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 7, maxWidth: '82%', padding: '7px 13px', borderRadius: radius.pill, background: 'rgba(156,66,50,.1)', border: '1px solid rgba(156,66,50,.22)', animation: 'yMineIn 4.2s ease forwards' }}>
+          <span style={{ fontFamily: GAEGU, fontSize: 16, lineHeight: 1.2, color: '#8B3A2C' }}>{v.chat.mine}</span>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(156,66,50,.45)' }} />
+        </span>
+      )}
+      <div style={{ width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 7px 7px 15px', borderRadius: radius.pill, background: C.paper, border: `1.5px solid ${C.ink}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)' }}>
+        <input
+          value={v.chat.draft} onChange={(e) => actions.onDraft(e.target.value)} maxLength={40}
+          placeholder={v.chat.hint}
+          onKeyDown={(e) => { if (e.key === 'Enter') actions.onSend(); }}
+          style={{ flex: 1, minWidth: 0, border: 'none', background: 'none', fontSize: 13.5, color: C.ink, outline: 'none' }}
+        />
+        <button onClick={actions.closeChat} style={{ width: 28, height: 28, flex: 'none', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11.5, color: C.sub2, lineHeight: 1 }} aria-label="대화 닫기">✕</button>
+        <button onClick={actions.onSend} style={{ flex: 'none', padding: '9px 15px', borderRadius: radius.pill, border: 'none', background: C.accent, color: C.accentInk, fontSize: 12.5 }}>보내기</button>
+      </div>
+    </div>
+  );
+}
+
+/** 팝오버 — 누른 타일 바로 위에 뜨고, 꼬리가 그 타일을 가리킨다. */
+function Popover({ y, popRef }: { y: Yeoul; popRef: (el: HTMLDivElement | null) => void }) {
+  const p = y.v.pop;
+  return (
+    <div
+      ref={popRef} data-part="pop"
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        position: 'relative', width: 'min(252px,92%)', left: p.leftPct, transform: `translateX(${p.tx})`,
+        padding: '12px 13px', boxSizing: 'border-box', borderRadius: radius.lg,
+        background: C.paper, border: `1px solid ${C.lineSoft}`, boxShadow: '0 8px 24px rgba(74,64,56,.16)',
+        display: 'flex', flexDirection: 'column', gap: 11, animation: p.anim,
+      }}
+    >
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+          <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.25, color: C.ink }}>{p.say}</span>
+          <span style={{ flex: 1 }} />
+          <span style={{ font: `10.5px ${MONO}`, color: C.faint }}>{p.count}</span>
+        </span>
+        {p.hasBar && (
+          <span style={{ display: 'flex', gap: 5 }}>
+            {p.bar.map((g, i) => <span key={i} style={{ flex: 1, height: 11, borderRadius: 5, background: g.bg }} />)}
+          </span>
+        )}
+      </span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {p.hasHint && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', borderRadius: radius.sm, background: C.accentSoft }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent }} />
+            <span style={{ fontSize: 11.5, lineHeight: 1.4, color: C.accent }}>{p.hint}</span>
+          </span>
+        )}
+        {p.a && <PopButton b={p.a} />}
+        {p.hasB && p.b && <PopButton b={p.b} />}
+      </span>
+      <span style={{ position: 'absolute', left: p.tailPct, bottom: -6, width: 12, height: 12, background: C.paper, borderRight: `1px solid ${C.lineSoft}`, borderBottom: `1px solid ${C.lineSoft}`, transform: 'translateX(-50%) rotate(45deg)' }} />
+    </div>
+  );
+}
+
+function PopButton({ b }: { b: NonNullable<Yeoul['v']['pop']['a']> }) {
+  return (
+    <button
+      onClick={b.tap} data-action={b.label}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 14px', borderRadius: radius.md, border: b.bd, background: b.bg, color: b.fg, textAlign: 'left', animation: b.anim }}
+    >
+      <span style={{ fontSize: 15.5 }}>{b.label}</span>
+      <span style={{ flex: 1 }} />
+      <span style={{ fontSize: 11.5, color: b.subFg }}>{b.count}</span>
+    </button>
   );
 }

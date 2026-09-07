@@ -1,318 +1,313 @@
-// 방 안의 내용 여섯 가지 — 식탁 · 욕실 · 놀이 · 침실 · 앨범 · 아이 정보.
+// 시트와 전면 판.
 //
-// 무엇 — 폰에서는 바텀시트 안에, PC 에서는 오른쪽 고정 칸 안에 들어가는 **안쪽만** 그린다.
-//        껍데기(시트·패널)와 높이는 Room.tsx 가 정한다.
-// 왜   — 같은 내용을 두 배치가 나눠 쓰기 때문이다. 여기서 배치를 알면 두 벌이 어긋난다.
+// 시트 = 아래에서 올라오는 창. **깊은 화면만** 여기에 남겼다 —
+//   식탁·욕실·침실(자세히) · 놀이(대화/맞히기/달리기) · 앨범 · 알림 · 아이 정보.
+//   가벼운 돌보기는 시트가 아니라 타일 위 팝오버가 맡는다(→ `Room.tsx`).
 //
-// 9/6 결정 —
-//   · `알림`·`설정` 패널 삭제. 설정은 헤더 이름 탭 → **아이 정보** 한 칸으로 합쳤다.
-//   · 식탁의 규칙 설명문 삭제. 다음 밥 시각은 **재고 0인 밥을 눌렀을 때만** 시스템 한 줄로.
-//   · 빠른 답 칩 삭제(정본은 자유 입력 1회). 채팅 입력창은 **부름이 있을 때만** 열린다.
-//
-// ★ 버튼의 `data-action` 은 엔진(useTamagotchi)의 ActionKey 와 같은 이름이다.
-//   나중에 엔진에 붙일 때 이 이름을 그대로 두면 e2e 검사가 따라온다.
+// 전면 판(fire) = 해금·엽서·잠긴 액자처럼 **한 번 크게 알릴 것**. 시안이 한 벌로 묶어 두었고,
+//   내용(제목·본문·버튼)은 부르는 쪽이 넘긴다.
 'use client';
 
-import type { CSSProperties } from 'react';
-import Album from './Album';
-import ChipNote from './Fields';
-import {
-  CALLS_PER_DAY, CELLS, CHAT_MAX, CLOCK, GENRES, GUESS_ROUNDS, GUESS_WIN, LV, MOTION_CELLS,
-  NEED_STYLES, NOTE_PLACEHOLDER, PERSONALITIES, ROOM_KEYS, TONES, WORLDS, type PanelKey,
-} from './constants';
-import { C, GAUGE_COLOR, SANS, gaugeCell, input, label, note, pill, radius, slotBtn } from './ui';
+import { C, GAEGU, MONO, radius } from './ui';
 import type { Yeoul } from './useYeoul';
 
-const col = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap });
-const grid = (n: number, gap = 9): CSSProperties => ({ display: 'grid', gridTemplateColumns: `repeat(${n},1fr)`, gap });
-
-/** 4칸 게이지 한 줄. 게이지는 상단 HUD 가 아니라 **그걸 쓰는 방 안**에만 있다. */
-function Gauge({ name, on, color }: { name: string; on: boolean[]; color: string }) {
+export default function Panels({ y }: { y: Yeoul }) {
+  const { v } = y;
   return (
-    <div style={col(7)} data-gauge={name} data-value={on.filter(Boolean).length}>
-      <span style={label}>{name}</span>
-      <div style={grid(CELLS, 6)}>
-        {on.map((v, i) => <div key={i} style={gaugeCell(v, color)} />)}
-      </div>
-    </div>
+    <>
+      {v.sheet.show && <Sheet y={y} />}
+      {y.s.fire && <Fire y={y} />}
+    </>
   );
 }
 
-/** 패널 제목과 부제. 방 이름은 한 곳에서만 정한다. */
-export function panelMeta(k: PanelKey, y: Yeoul): [string, string] {
-  const { s } = y;
-  switch (k) {
-    case 'table': return ['식탁', '배부름과 밥'];
-    case 'bath': return ['욕실', '흔적과 몸단장'];
-    case 'play': return ['놀이', `오늘 남은 판 ${s.plays}`];
-    case 'bed': return ['침실', s.nap === 'none' ? '재우기' : '낮잠'];
-    case 'album': return ['앨범', `동작 ${s.unlocked.length}/${MOTION_CELLS.length}`];
-    case 'pet': return [s.petName || '아이', '아이 정보'];
-    case 'chat': return ['대화', `오늘 부름 ${s.calls}/${CALLS_PER_DAY}`];
-  }
-}
-
-// ── 식탁 ────────────────────────────────────────────────────────────────
-function Table({ y }: { y: Yeoul }) {
-  const { s, derived, actions } = y;
-  const riceOff = s.full >= CELLS || s.stock <= 0;
+function Sheet({ y }: { y: Yeoul }) {
+  const { v, actions } = y;
+  const sh = v.sheet;
   return (
-    <div style={col(13)}>
-      <Gauge name="배부름" on={derived.fullCells} color={GAUGE_COLOR.full} />
-      <div style={grid(2, 10)}>
-        <button data-action="feed" onClick={actions.onRice} style={{ ...slotBtn, ...col(4), background: riceOff ? C.slotDim : C.slot }}>
-          <span style={{ fontSize: 15 }}>밥</span>
-          <span style={{ fontSize: 12, color: C.sub }}>재고 {s.stock}</span>
-        </button>
-        <button
-          data-action="snack" onClick={actions.onSnack}
-          style={{ ...slotBtn, ...col(4), background: s.sick ? C.slotDim : C.slot, color: s.sick ? C.sub : C.ink }}
-        >
-          <span style={{ fontSize: 15 }}>간식</span>
-          <span style={{ fontSize: 12, color: C.sub }}>{s.sick ? '아플 땐 안 먹어요' : `오늘 ${s.snacks}개`}</span>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── 욕실 ────────────────────────────────────────────────────────────────
-function Bath({ y }: { y: Yeoul }) {
-  const { s, derived, actions } = y;
-  return (
-    <div style={col(13)}>
-      <Gauge name="청결" on={derived.cleanCells} color={GAUGE_COLOR.clean} />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 15px', borderRadius: radius.md, background: C.slot, border: `1px solid ${C.lineSoft}` }}>
-        <span style={{ fontSize: 14 }}>흔적</span>
-        <span style={{ fontSize: 13, color: C.sub }}>{s.trace}개</span>
-      </div>
-      {/* ★ 약은 여기 없다 — 아플 때만 말풍선의 `약 주기` 와 무대의 약병으로 나타난다(9/6 3차 결정). */}
-      <div style={grid(2, 10)}>
-        <button data-action="clean" onClick={actions.onClean} style={{ ...slotBtn, textAlign: 'center' }}>청소</button>
-        <button data-action="bath" onClick={actions.onBath} style={{ ...slotBtn, textAlign: 'center', background: s.bathUsed ? C.slotDim : C.slot, color: s.bathUsed ? C.sub : C.ink }}>
-          목욕<br /><span style={{ fontSize: 11, opacity: .8 }}>{s.bathUsed ? '오늘 완료' : '오늘 1회'}</span>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── 놀이 — 게임은 시트가 아니라 무대 위 모달로 뜬다(9/6 2차 결정) ───────
-function Play({ y }: { y: Yeoul }) {
-  const { s, derived, actions } = y;
-  return (
-    <div style={col(12)}>
-      <Gauge name="행복" on={derived.happyCells} color={GAUGE_COLOR.happy} />
-
-      <button
-        data-action="game-start" onClick={() => actions.openGame('guess')}
-        style={{ ...slotBtn, ...col(4), background: s.plays > 0 ? C.slot : C.slotDim }}
+    <>
+      <div onClick={actions.closeSheet} style={{ position: 'absolute', inset: 0, background: 'rgba(74,64,56,.32)', animation: sh.dimAnim }} />
+      <div
+        data-part="sheet" data-sheet={sh.key ?? ''}
+        style={{
+          position: 'absolute', left: 0, right: 0, bottom: 0, height: sh.height,
+          display: 'flex', flexDirection: 'column', background: C.paper,
+          borderRadius: '24px 24px 44px 44px', boxShadow: '0 -10px 30px rgba(74,64,56,.16)', animation: sh.anim,
+        }}
       >
-        <span style={{ fontSize: 15 }}>좌우 맞히기 시작</span>
-        <span style={{ fontSize: 12, color: C.sub }}>{GUESS_ROUNDS}번 중 {GUESS_WIN}번 맞히면 이겨요</span>
-      </button>
-
-      {derived.runLocked ? (
-        <div data-part="run-lock" style={{ ...col(6), padding: 15, borderRadius: radius.md, background: '#F1EBE0', border: '1px dashed rgba(74,64,56,.18)' }}>
-          <span style={{ fontSize: 14, color: C.sub }}>달리기 · 아직 잠겨 있어요</span>
-          <span style={note}>{derived.runCond}</span>
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 11px', borderBottom: '1px solid rgba(74,64,56,.07)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+            <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 22, lineHeight: 1, color: C.ink }}>{sh.title}</span>
+            <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.45)' }}>{sh.sub}</span>
+          </div>
+          <button onClick={actions.closeSheet} style={{ border: '1px solid rgba(74,64,56,.13)', background: C.slot, borderRadius: radius.pill, width: 27, height: 27, fontSize: 12, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
         </div>
-      ) : (
-        <button data-action="game-run" onClick={() => actions.openGame('run')} style={{ ...slotBtn, ...col(4) }}>
-          <span style={{ fontSize: 15 }}>달리기 시작</span>
-          <span style={{ fontSize: 12, color: C.sub }}>30초를 버티면 이겨요</span>
-        </button>
-      )}
 
-      <span style={label}>오늘 남은 판 {s.plays}</span>
-    </div>
+        <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '14px 20px 30px', display: 'flex', flexDirection: 'column', gap: 13 }}>
+          {sh.key === 'table' && <TableSheet y={y} />}
+          {sh.key === 'bath' && <BathSheet y={y} />}
+          {sh.key === 'play' && <PlaySheet y={y} />}
+          {sh.key === 'bed' && <BedSheet y={y} />}
+          {sh.key === 'album' && <AlbumSheet y={y} />}
+          {sh.key === 'notify' && <NotifySheet y={y} />}
+          {sh.key === 'settings' && <SettingsSheet y={y} />}
+        </div>
+      </div>
+    </>
   );
 }
 
-// ── 대화 — 놀이에서 빠져나온 독립 칸(9/6 2차 결정) ───────────────────────
-function Chat({ y }: { y: Yeoul }) {
-  const { s, derived, actions } = y;
-  /** 입력창은 **부름이 있을 때만** 열린다(정본 §10 — 하루 3회의 부름에 한 번 답한다). */
-  const open = !s.resolved.chat && s.calls > 0;
-  return (
-    <div style={col(11)}>
-      <span style={label}>오늘 남은 부름 {s.calls}/{CALLS_PER_DAY} · 한 번에 {CHAT_MAX}자</span>
+// ── 칸별 내용 ───────────────────────────────────────────────────────────
 
-      <div style={{ ...col(9), maxHeight: 220, overflow: 'auto', paddingRight: 3 }}>
-        {s.log.length === 0 && <span style={note}>아직 나눈 이야기가 없어요.</span>}
-        {s.log.map((l, i) => (
-          <div
-            key={i}
-            style={{
-              alignSelf: l.who === 'pet' ? 'flex-start' : 'flex-end', maxWidth: '88%',
-              padding: '11px 14px', fontSize: 13.5, lineHeight: 1.6,
-              borderRadius: l.who === 'pet' ? '16px 16px 16px 5px' : '16px 16px 5px 16px',
-              background: l.who === 'pet' ? '#F1EBE0' : C.accent,
-              color: l.who === 'pet' ? C.ink : C.accentInk,
-            }}
-          >{l.text}</div>
+function TableSheet({ y }: { y: Yeoul }) {
+  const { v, actions } = y;
+  return (
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        <span style={{ fontSize: 11.5, color: C.faint }}>배부름</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
+          {v.fullCells.map((c, i) => <div key={i} style={{ height: 14, borderRadius: 5, border: `1px solid ${C.lineSoft}`, background: c.bg }} />)}
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
+        <button onClick={actions.onRice} data-action="밥" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, padding: '14px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: v.food.riceBg, textAlign: 'left' }}>
+          <span style={{ fontSize: 14.5, color: C.ink }}>밥</span>
+          <span style={{ fontSize: 11, color: C.faint }}>재고 {v.food.stock}</span>
+        </button>
+        <button onClick={actions.onSnack} data-action="간식" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, padding: '14px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.slot, textAlign: 'left' }}>
+          <span style={{ fontSize: 14.5, color: C.ink }}>간식</span>
+          <span style={{ fontSize: 11, color: C.faint }}>{v.food.snackNote}</span>
+        </button>
+      </div>
+      <span style={{ fontSize: 11.5, lineHeight: 1.65, color: C.faint }}>가득이면 밥은 거절해요. 간식은 가득이어도 받아요.</span>
+    </>
+  );
+}
+
+function BathSheet({ y }: { y: Yeoul }) {
+  const { v, actions } = y;
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 15px', borderRadius: radius.md, background: C.slot, border: '1px solid rgba(74,64,56,.09)' }}>
+        <span style={{ fontSize: 13.5, color: C.ink }}>흔적</span>
+        <span style={{ font: `12.5px ${MONO}`, color: C.sub2 }}>{v.bath.trace}개</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 9 }}>
+        <button onClick={actions.onClean} data-action="청소" style={{ padding: '14px 6px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.slot, fontSize: 13.5, color: C.ink }}>청소</button>
+        <button onClick={actions.onBath} data-action="목욕" style={{ padding: '14px 6px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: v.bath.bathBg, fontSize: 13.5, color: v.bath.bathFg, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          목욕<span style={{ fontSize: 10, opacity: 0.75 }}>{v.bath.bathNote}</span>
+        </button>
+        <button onClick={actions.onMed} data-action="약" style={{ padding: '14px 6px', borderRadius: radius.md, border: `1px solid ${v.bath.medBd}`, background: v.bath.medBg, fontSize: 13.5, color: v.bath.medFg }}>약</button>
+      </div>
+      {v.bath.sick && <span style={{ fontSize: 12.5, lineHeight: 1.65, color: '#A9483A' }}>아파요 · 약을 주면 바로 나아요</span>}
+    </>
+  );
+}
+
+function PlaySheet({ y }: { y: Yeoul }) {
+  const { v, actions } = y;
+  const p = v.play;
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {p.tabs.map((t) => (
+          <button key={t.label} onClick={t.pick} style={{ flex: 1, padding: '9px 4px', borderRadius: radius.pill, border: `1px solid ${t.bd}`, fontSize: 12.5, background: t.bg, color: t.fg }}>{t.label}</button>
         ))}
       </div>
 
-      {open ? (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
-            data-action="chat-input"
-            value={s.draft}
-            maxLength={CHAT_MAX}
-            placeholder={`${CHAT_MAX}자까지 · 한 번만 답할 수 있어요`}
-            aria-label={`${s.petName || '아이'}에게 답하기`}
-            onChange={(e) => actions.setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); actions.onSend(); } }}
-            style={{ ...input, flex: 1, borderRadius: radius.pill, background: C.slot }}
-          />
-          <button data-action="chat-send" onClick={actions.onSend} style={{ padding: '11px 17px', borderRadius: radius.pill, border: 'none', background: C.ink, color: '#FBF6EC', fontSize: 13, cursor: 'pointer', fontFamily: SANS }}>보내기</button>
-        </div>
-      ) : (
-        <div data-part="chat-closed" style={{ padding: '13px 15px', borderRadius: radius.md, background: C.slotDim, ...col(4) }}>
-          <span style={{ fontSize: 13, color: C.ink }}>다음 부름은 {derived.nextCallAt}에 와요</span>
-          <span style={note}>답하지 못한 부름은 조용히 지나가요. 아무 일도 생기지 않아요.</span>
-        </div>
-      )}
-
-      {s.memories.length > 0 && (
-        <div style={col(6)}>
-          <span style={label}>기억해 둔 것</span>
+      {p.isTalk && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <span style={{ fontSize: 11.5, color: C.faint }}>오늘 부름 {p.callsLeft} · 40자 답 · 기억 {p.memCount}</span>
+          {p.log.map((l, i) => (
+            <div key={i} style={{ alignSelf: l.align, maxWidth: '84%', padding: '11px 14px', borderRadius: l.radius, background: l.bg, color: l.fg, fontSize: 13.5, lineHeight: 1.55 }}>{l.text}</div>
+          ))}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {p.quick.map((q) => (
+              <button key={q.text} onClick={q.pick} style={{ padding: '6px 11px', borderRadius: radius.pill, border: '1px solid #EFDFD9', background: '#FDF1EE', fontSize: 11.5, color: '#9C5145' }}>{q.text}</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+            <input
+              value={p.draft} onChange={(e) => actions.onDraft(e.target.value)} maxLength={40} placeholder="40자까지"
+              onKeyDown={(e) => { if (e.key === 'Enter') actions.onSend(); }}
+              style={{ flex: 1, padding: '11px 14px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 13.5, color: C.ink, outline: 'none' }}
+            />
+            <button onClick={actions.onSend} style={{ padding: '11px 16px', borderRadius: radius.pill, border: 'none', background: C.ink, color: '#FBF6EC', fontSize: 12.5 }}>보내기</button>
+          </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-            {s.memories.map((m, i) => (
-              <span key={i} style={{ padding: '5px 11px', borderRadius: radius.pill, background: '#F1EBE0', border: `1px solid ${C.lineSoft}`, fontSize: 11.5, color: C.sub }}>{m}</span>
+            {p.memories.map((m, i) => (
+              <span key={i} style={{ padding: '5px 10px', borderRadius: radius.pill, background: '#F1EBE0', border: '1px solid rgba(74,64,56,.08)', fontSize: 11, color: C.sub2 }}>{m.text}</span>
             ))}
           </div>
         </div>
       )}
+
+      {p.isGuess && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <span style={{ fontSize: 11.5, color: C.faint }}>행복</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
+              {v.happyCells.map((c, i) => <div key={i} style={{ height: 14, borderRadius: 5, border: `1px solid ${C.lineSoft}`, background: c.bg }} />)}
+            </div>
+          </div>
+          <span style={{ fontFamily: GAEGU, fontSize: 19, color: C.ink }}>{p.guessNote}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
+            <button onClick={actions.onGuess} style={{ padding: '22px 6px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.slot, fontSize: 15, color: C.ink }}>왼쪽</button>
+            <button onClick={actions.onGuess} style={{ padding: '22px 6px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.slot, fontSize: 15, color: C.ink }}>오른쪽</button>
+          </div>
+          <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.45)' }}>오늘 남은 판 {p.playsLeft}</span>
+        </div>
+      )}
+
+      {p.isRun && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 17, borderRadius: radius.md, background: '#F1EBE0', border: '1px dashed rgba(74,64,56,.18)' }}>
+          <span style={{ fontSize: 14, color: C.sub2 }}>달리기 · 잠겨 있어요</span>
+          <span style={{ fontSize: 12.5, lineHeight: 1.65, color: 'rgba(74,64,56,.55)' }}>{p.runCond}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+function BedSheet({ y }: { y: Yeoul }) {
+  const { v, actions } = y;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+      <span style={{ fontSize: 13.5, lineHeight: 1.65, color: 'rgba(74,64,56,.62)' }}>{v.bed.note}</span>
+      <button onClick={actions.onSleep} style={{ padding: 16, borderRadius: radius.md, border: `1px solid ${v.bed.bd}`, background: v.bed.bg, color: v.bed.fg, fontSize: 15, opacity: v.bed.opacity }}>{v.bed.label}</button>
     </div>
   );
 }
 
-// ── 침실 ────────────────────────────────────────────────────────────────
-function Bed({ y }: { y: Yeoul }) {
-  const { s, derived, actions } = y;
-  const b = derived.bed;
+function AlbumSheet({ y }: { y: Yeoul }) {
+  const a = y.v.album;
   return (
-    <div style={col(13)}>
-      <span style={note}>{b.note}</span>
-      <button
-        data-action="sleep"
-        onClick={actions.onSleep}
-        aria-label={b.label}
-        style={{
-          padding: 16, borderRadius: radius.md, fontSize: 15, cursor: 'pointer', fontFamily: SANS,
-          border: `1px solid ${b.on ? '#C2CBE2' : '#DFD9D0'}`,
-          background: b.on ? '#DFE5F2' : C.slotDim,
-          color: b.on ? '#33416B' : C.sub,
-          opacity: b.on ? 1 : .75,
-        }}
-      >{b.label}</button>
-      {!s.sleeping && s.nap === 'none' && <span style={{ ...note, color: C.faint }}>{CLOCK.reward}</span>}
-      {s.overslept && <span style={{ ...note, color: C.faint }}>{CLOCK.lateWake}</span>}
-    </div>
-  );
-}
-
-// ── 아이 정보(옛 설정) ───────────────────────────────────────────────────
-function Pet({ y }: { y: Yeoul }) {
-  const { s, derived, actions } = y;
-  return (
-    <div style={col(15)}>
-      {/* 기다리는 일 — 옛 알림 패널이 하던 일을 여기서 한다(말풍선 +N 이 데려온다). */}
-      <div style={col(7)}>
-        <span style={label}>지금 기다리는 일</span>
-        {derived.calls.length === 0 && <span style={note}>지금은 기다리는 게 없어요.</span>}
-        {derived.calls.map((c, i) => (
-          <button key={i} onClick={() => actions.answerCall(c.hint)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paperHi, textAlign: 'left', width: '100%', cursor: 'pointer', fontFamily: SANS }}>
-            <span style={{ width: 8, height: 8, flex: 'none', borderRadius: '50%', background: C.accent }} />
-            <span style={{ flex: 1, fontSize: 12.5, color: C.ink }}>{c.text}</span>
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 7 }}>
+        {a.cells.map((c, i) => (
+          <button key={i} onClick={c.tap} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4, borderRadius: radius.sm, border: `1px solid ${c.bd}`, background: c.bg, padding: '8px 9px 9px', textAlign: 'left' }}>
+            <span style={{ width: '100%', height: 34, borderRadius: 7, background: c.thumb, backgroundImage: c.stripe }} />
+            <span style={{ fontSize: 12, lineHeight: 1.25, color: c.fg }}>{c.name}</span>
+            <span style={{ fontSize: 11, lineHeight: 1.3, color: c.condFg }}>{c.cond}</span>
           </button>
         ))}
       </div>
-
-      <ChipNote
-        name="persona" title="성격 · 언제든 바꿔요" chips={PERSONALITIES.map((p) => p.label)}
-        picked={PERSONALITIES.find((p) => p.key === s.persona)?.label ?? null}
-        onPick={(v) => actions.setPersona(PERSONALITIES.find((p) => p.label === v)?.key ?? v)}
-        note={s.personaNote} onNote={actions.setPersonaNote} placeholder={NOTE_PLACEHOLDER.persona}
-      />
-      <ChipNote name="tone" title="말투" chips={TONES} picked={s.tone} onPick={actions.setTone}
-        note={s.toneNote} onNote={actions.setToneNote} placeholder={NOTE_PLACEHOLDER.tone} />
-      <ChipNote name="genre" title="장르" chips={GENRES} picked={s.genre} onPick={actions.setGenre}
-        note={s.genreNote} onNote={actions.setGenreNote} placeholder={NOTE_PLACEHOLDER.genre} />
-      <ChipNote name="world" title="세계관" chips={WORLDS} picked={s.worldChip} onPick={actions.setWorldChip}
-        note={s.world} onNote={actions.setWorld} placeholder={NOTE_PLACEHOLDER.world} />
-
-      <div style={col(7)}>
-        <span style={label}>버튼 표기 · 색만으로 가르지 않기</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {NEED_STYLES.map((o) => (
-            <button key={o} onClick={() => actions.pickNeedStyle(o)} style={pill(s.needStyle === o)}>{o}</button>
-          ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
+        {a.actions.map((x) => (
+          <button key={x.label} onClick={x.tap} style={{ padding: '12px 4px', borderRadius: radius.sm, border: `1px solid ${x.bd}`, background: x.bg, fontSize: 12, color: x.fg }}>{x.label}</button>
+        ))}
+      </div>
+      {a.deco && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span style={{ fontSize: 11.5, color: C.faint }}>방 꾸미기 · 벽지</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+            {a.walls.map((w) => (
+              <button key={w.name} onClick={w.pick} style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', padding: '7px 4px', borderRadius: radius.sm, border: `${w.bw} solid ${w.bd}`, background: C.paper }}>
+                <span style={{ width: '100%', height: 30, borderRadius: 7, background: w.color }} />
+                <span style={{ fontSize: 10.5, color: C.sub2 }}>{w.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
+      )}
+    </>
+  );
+}
+
+function NotifySheet({ y }: { y: Yeoul }) {
+  const n = y.v.notif;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+      {n.items.map((x, i) => (
+        <button key={i} onClick={x.tap} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '13px 15px', borderRadius: radius.md, border: `1px solid ${x.bd}`, background: x.bg, textAlign: 'left' }}>
+          <span style={{ width: 9, height: 9, flex: 'none', borderRadius: '50%', background: x.dot }} />
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+            <span style={{ fontSize: 13.5, color: C.ink }}>{x.text}</span>
+            <span style={{ fontSize: 11, color: C.faint }}>{x.note}</span>
+          </span>
+          <span style={{ fontSize: 11.5, color: '#9C5145' }}>{x.action}</span>
+        </button>
+      ))}
+      {n.empty && <div style={{ padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center', fontSize: 13, color: 'rgba(74,64,56,.55)' }}>지금은 기다리는 게 없어요</div>}
+    </div>
+  );
+}
+
+/** 아이 정보 — 이름·성격 네 묶음·그 밖에·떠남. 온보딩의 캐릭터 칸과 같은 표를 쓴다. */
+function SettingsSheet({ y }: { y: Yeoul }) {
+  const { s, v, actions } = y;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        <span style={{ fontSize: 11.5, color: C.faint }}>이름 · 12자까지</span>
+        <input value={s.petName} onChange={(e) => actions.onName(e.target.value)} maxLength={12} placeholder="보리"
+          style={{ padding: '13px 15px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: 15, color: C.ink, outline: 'none' }} />
       </div>
 
-      <div style={col(7)}>
-        <span style={label}>떠남</span>
-        <button onClick={actions.toggleLeave} style={pill(s.leaveOff)}>{s.leaveOff ? '떠나지 않아요' : '오래 비우면 여행을 가요'}</button>
-        <span style={{ ...note, color: C.faint }}>떠나도 도감과 배운 동작은 그대로예요.</span>
+      {v.charGroups.map((g) => (
+        <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
+          <span style={{ fontSize: 13.5, color: C.ink }}>{g.title}</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {g.opts.map((o) => (
+              <button key={o.text} onClick={o.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: 12.5, color: o.fg }}>{o.text}</button>
+            ))}
+          </div>
+          <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={60} placeholder={g.ph}
+            style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: 13, color: C.ink, outline: 'none' }} />
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        <span style={{ fontSize: 11.5, color: C.faint }}>그 밖에 알려주고 싶은 것</span>
+        <input value={v.onb.extraVal} onChange={(e) => v.onb.onExtra(e.target.value)} maxLength={60}
+          placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나"
+          style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: 13, color: C.ink, outline: 'none' }} />
+      </div>
+
+      {v.settings.groups.map((g) => (
+        <div key={g.label} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <span style={{ fontSize: 11.5, color: C.faint }}>{g.label}</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {g.opts.map((o) => (
+              <button key={o.text} onClick={o.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: 12.5, color: o.fg }}>{o.text}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        <span style={{ fontSize: 11.5, color: C.faint }}>떠남</span>
+        <button onClick={v.settings.toggleLeave} style={{ alignSelf: 'flex-start', padding: '9px 14px', borderRadius: radius.pill, border: `${v.settings.leaveBw} solid ${v.settings.leaveBd}`, background: v.settings.leaveBg, fontSize: 12.5, color: v.settings.leaveFg }}>{v.settings.leaveLabel}</button>
+        <span style={{ fontSize: 12, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>떠나도 앨범과 배운 동작은 그대로예요.</span>
       </div>
     </div>
   );
 }
 
-/** 지금 열린 칸의 내용. */
-export default function PanelBody({ y }: { y: Yeoul }) {
-  switch (y.s.panel) {
-    case 'table': return <Table y={y} />;
-    case 'bath': return <Bath y={y} />;
-    case 'play': return <Play y={y} />;
-    case 'bed': return <Bed y={y} />;
-    case 'album': return <Album y={y} />;
-    case 'pet': return <Pet y={y} />;
-    case 'chat': return <Chat y={y} />;
-  }
-}
+// ── 전면 판 ─────────────────────────────────────────────────────────────
 
-/** 방 다섯 칸 버튼. 색 + 모양 + 글자로 급함을 말한다. */
-export function RoomButtons({ y }: { y: Yeoul }) {
-  const { s, derived, actions } = y;
-  const names: Record<string, string> = { table: '식탁', bath: '욕실', play: '놀이', bed: '침실', album: '앨범' };
-  const badges: Record<string, string> = {
-    table: String(s.stock), bath: String(s.trace), play: String(s.plays), bed: '', album: `${s.unlocked.length}/${MOTION_CELLS.length}`,
-  };
+function Fire({ y }: { y: Yeoul }) {
+  const f = y.s.fire!;
+  const backdrop = f.tapAny ? y.actions.closeFire : undefined;
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${ROOM_KEYS.length},1fr)`, gap: 8 }} data-part="rooms">
-      {ROOM_KEYS.map((k, i) => {
-        const lv = LV[derived.levels[k]];
-        // 튜토리얼은 잠그지 않는다 — 눌러야 할 버튼이 **깜빡일 뿐**이다(정본 §12).
-        const hint = derived.tutorStep?.hint === k;
-        const hot = derived.call?.hint === k;
-        const here = s.panel === k;
-        return (
-          <button
-            key={k} data-room={k} data-level={derived.levels[k]} data-hint={hint ? '1' : undefined}
-            onClick={() => actions.openPanel(k)}
-            style={{
-              position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-              padding: '11px 2px 9px', borderRadius: radius.md, cursor: 'pointer', fontFamily: SANS,
-              background: lv.bg, color: lv.fg,
-              border: `${hot || here ? 2 : 1}px solid ${hot || here ? C.accent : lv.bd}`,
-              animation: hint ? 'yeoulBlink 1.1s ease-in-out infinite' : hot ? 'yeoulNudge .5s ease 1' : undefined,
-            }}
-          >
-            <span style={{ fontSize: 13.5 }}>{names[k]}</span>
-            <span style={{ fontSize: 9.5, opacity: .92, whiteSpace: 'nowrap' }}>
-              {k === 'album' ? '' : derived.statusText(derived.levels[k])}
-            </span>
-            {y.pc && <span style={{ position: 'absolute', bottom: 3, right: 6, fontSize: 9, opacity: .6 }}>{i + 1}</span>}
-            {!!badges[k] && (
-              <span style={{ position: 'absolute', top: -6, right: -3, minWidth: 18, height: 18, padding: '0 4px', boxSizing: 'border-box', borderRadius: 9, background: C.paperHi, border: `1px solid ${C.line}`, fontSize: 9.5, color: C.sub, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{badges[k]}</span>
-            )}
-          </button>
-        );
-      })}
+    <div data-part="fire" style={{ position: 'absolute', inset: 0, background: 'rgba(74,64,56,.52)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yFadeIn .2s ease' }}>
+      <div onClick={backdrop} style={{ position: 'absolute', inset: 0 }} />
+      <div style={{ position: 'relative', width: '100%', padding: '24px 22px', borderRadius: radius.xl, background: C.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, animation: 'yPop .3s ease', boxSizing: 'border-box' }}>
+        {f.polaroid && (
+          <div style={{ width: '100%', padding: '11px 11px 16px', background: '#FFFFFF', border: `1px solid ${C.lineSoft}`, boxShadow: '0 4px 14px rgba(74,64,56,.14)', display: 'flex', flexDirection: 'column', gap: 9 }}>
+            <div style={{ width: '100%', aspectRatio: '1/1', backgroundColor: f.shot, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.07) 0 6px,transparent 6px 14px)', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `10px ${MONO}`, color: 'rgba(74,64,56,.45)' }}>{f.shotLabel}</div>
+            <span style={{ fontFamily: GAEGU, fontSize: 18, lineHeight: 1.35, color: C.ink, textAlign: 'center' }}>{f.caption}</span>
+          </div>
+        )}
+        <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 26, lineHeight: 1.2, color: C.ink, textAlign: 'center' }}>{f.title}</span>
+        <span style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.62)', textAlign: 'center' }}>{f.body}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', marginTop: 2 }}>
+          {f.actions.map((a) => (
+            <button key={a.label} onClick={a.tap} style={{ padding: 13, borderRadius: radius.md, border: `1px solid ${a.primary ? C.accent : C.line}`, background: a.primary ? C.accent : C.slot, color: a.primary ? C.accentInk : C.ink, fontSize: 13.5 }}>{a.label}</button>
+          ))}
+        </div>
+        <span style={{ font: `10px ${MONO}`, color: 'rgba(74,64,56,.33)' }}>{f.hint}</span>
+      </div>
     </div>
   );
 }

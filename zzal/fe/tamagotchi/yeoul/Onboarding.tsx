@@ -1,249 +1,181 @@
-// 온보딩 다섯 칸 — 랜딩 → 가입/로그인 → 그림 올리기 → 캐릭터 정보 → 유저 정보.
+// 온보딩 — 첫 화면 → 올리기 → 캐릭터 → (여울 샘플) → 태어남.
 //
-// 무엇 — 지시서 흐름 11단계의 앞 다섯. 이 뒤에 여울 샘플(6) → 알(7) → 태어남(8)이 온다.
-// 왜   — 정본 §15 는 "만지는 건 로그인부터"이고, 그림이 없으면 아이가 없다. 그래서
-//        가입과 그림은 **막고**(다음 비활성), 캐릭터·유저 정보는 전부 **선택**으로 둔다.
+// 네 칸뿐이다. 예전 다섯 칸에 있던 **가입**은 칸이 아니라 첫 화면에서 무언가 하려 할 때 뜨는
+// 모달로 옮겼고(→ `AuthModal.tsx`), **유저 설문**은 샘플 방에서 여울이 하나씩 묻는 것으로
+// 옮겼다(→ `Room.tsx` 의 AskCard). 둘 다 2026-09-07 확정.
 //
-// ★ 올린 그림은 학습에 쓰지 않는다는 보증 문장을 뺄 수 없다(자캐 커뮤니티 규범 처방 3).
-//   그래서 문장만이 아니라 **동의 체크**까지 가입 칸에 둔다.
+// 캐릭터 칸은 "이름만 필수" 다. 나머지는 칩 한 줄 + 긴 글 한 줄이고, 안 채워도 넘어간다.
 'use client';
 
-import { useRef, type CSSProperties } from 'react';
-import ChipNote from './Fields';
-import {
-  AUTH, GENRES, LANDING, NAME_MAX, NOTE_PLACEHOLDER, PERSONALITIES, STEPS, TONES, UPLOAD_BAD,
-  UPLOAD_GOOD, UPLOAD_NOTE, USER_FIELDS, USER_LEAD, WORLDS, yeoulImg,
-} from './constants';
-import { C, GAEGU, SANS, cta, ghost, input, label, note, pill, radius, sysLine } from './ui';
+import { KIND_IMG, ONB_COPY, GOOD_EX, BAD_EX } from './constants';
+import { C, GAEGU, MONO, radius } from './ui';
 import type { Yeoul } from './useYeoul';
 
-const col = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap });
-const grid = (n: number, gap = 8): CSSProperties => ({ display: 'grid', gridTemplateColumns: `repeat(${n},1fr)`, gap });
-
-const COPY: Record<string, [string, string]> = {
-  landing: [LANDING.head, ''],
-  auth: ['시작할까요', '여기서부터는 아이가 생겨요. 짧게 한 번만.'],
-  upload: ['아이 그림을 올려요', UPLOAD_NOTE],
-  char: ['어떤 아이인가요', '전부 선택이에요. 나중에 언제든 바꿔요.'],
-  user: ['당신은 어떤 분인가요', USER_LEAD],
-};
-
-/** 랜딩 무대 — 여울이 4초마다 다른 동작을 한다. 알 그림은 여기서 쓰지 않는다(9/6). */
-function LandingStage({ i }: { i: number }) {
-  const motion = LANDING.loop[i % LANDING.loop.length];
-  return (
-    <div
-      data-part="landing-stage" data-motion={motion}
-      style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', maxHeight: 300, borderRadius: radius.lg, overflow: 'hidden', border: `1px solid ${C.line}`, background: C.slotDim }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        key={motion} src={yeoulImg(motion)} alt=""
-        style={{ position: 'absolute', left: '50%', bottom: '10%', width: '52%', marginLeft: '-26%', aspectRatio: '313 / 350', objectFit: 'contain', display: 'block', animation: 'yeoulPop .5s ease' }}
-      />
-    </div>
-  );
-}
-
-export default function Onboarding({ y, tick }: { y: Yeoul; tick: number }) {
-  const { s, derived, actions } = y;
-  const k = derived.stepKey;
-  const file = useRef<HTMLInputElement>(null);
-  const [head, sub] = COPY[k];
-
-  const ctaLabel =
-    k === 'landing' ? LANDING.cta
-      : k === 'auth' ? (s.authTab === 'join' ? '가입하고 시작하기' : '로그인')
-        : k === 'upload' ? '다음'
-          : k === 'char' ? '다음'
-            : '다 됐어요';
-
-  const ctaOff = (k === 'auth' && !s.agreed) || (k === 'upload' && !s.imgUrl);
+export default function Onboarding({ y }: { y: Yeoul }) {
+  const { s, v, actions } = y;
+  const o = v.onb;
+  const key = o.stepKey;
+  const [title, sub] = ONB_COPY[key];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', maxWidth: 520, margin: '0 auto' }} data-part="onboarding" data-step={k}>
-      {/* 위 — 뒤로 · 진행 점 */}
+    <div data-part="onb" data-step={key} style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, background: key === 'born' ? C.bornBg : C.onbBg }}>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 22px 6px' }}>
-        {s.step > 0 && (
-          <button data-action="onb-back" onClick={actions.onBack} style={{ border: `1px solid ${C.line}`, background: C.paperHi, borderRadius: radius.pill, width: 28, height: 28, fontSize: 13, color: C.sub, cursor: 'pointer', lineHeight: 1 }}>‹</button>
+        {o.canBack && (
+          <button onClick={actions.onBack} style={{ border: '1px solid rgba(74,64,56,.13)', background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: 13, color: C.sub2, lineHeight: 1 }} aria-label="뒤로">‹</button>
         )}
         <span style={{ flex: 1 }} />
-        {STEPS.map((_, i) => (
-          <span key={i} style={{ width: i === s.step ? 20 : 6, height: 6, borderRadius: 3, background: i === s.step ? C.accent : i < s.step ? '#E7CFC5' : '#E3DBCD' }} />
-        ))}
+        {o.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 6, borderRadius: 3, background: d.bg }} />)}
       </div>
 
-      {/* 가운데 — 칸마다 다른 내용 */}
-      <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '18px 24px 10px', ...col(14) }}>
-        <div style={col(7)}>
-          <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 30, lineHeight: 1.25, color: C.ink, whiteSpace: 'pre-line' }}>{head}</span>
-          {!!sub && <span style={{ ...note, fontSize: 13 }}>{sub}</span>}
+      <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '18px 24px 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 30, lineHeight: 1.25, color: C.ink, whiteSpace: 'pre-line' }}>{title}</span>
+          <span style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.58)' }}>{sub}</span>
         </div>
 
-        {/* 1. 랜딩 — 내용은 상훈님이 구상 중이라 **자리만** 잡아 둔다. */}
-        {k === 'landing' && (
-          <div style={col(14)}>
-            <LandingStage i={tick} />
-            <div style={col(8)}>
-              {LANDING.lines.map((l) => (
-                <span key={l} style={{ ...row(9), alignItems: 'flex-start', fontSize: 13.5, color: C.sub, lineHeight: 1.6 }}>
-                  <span style={{ width: 5, height: 5, flex: 'none', borderRadius: '50%', background: C.accent, marginTop: 8 }} />
-                  {l}
-                </span>
+        {key === 'landing' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '14px 0 0' }}>
+            {/* 알 일러스트 자리. 실물이 나오면 이 칸에 그대로 끼운다(214 × 214). */}
+            <div style={{
+              width: 214, height: 214, borderRadius: 34, backgroundColor: '#F6E7DF',
+              backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.07) 0 7px,transparent 7px 16px)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+              animation: 'yBob 5s ease-in-out infinite',
+            }}>
+              <span style={{ font: `11px ${MONO}`, color: C.sub }}>알 일러스트</span>
+              <span style={{ font: `10.5px ${MONO}`, color: '#645B52' }}>214 × 214</span>
+            </div>
+          </div>
+        )}
+
+        {key === 'upload' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림이면 좋아요</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+              {GOOD_EX.map(([lbl, color]) => (
+                <div key={lbl} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+                  <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: color, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.05) 0 6px,transparent 6px 14px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `8.5px ${MONO}`, color: 'rgba(74,64,56,.42)' }}>
+                    그림
+                    <span style={{ position: 'absolute', left: 8, top: 8, width: 12, height: 12, borderRadius: '50%', border: '1.5px solid #5C8452' }} />
+                  </div>
+                  <span style={{ fontSize: 11, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{lbl}</span>
+                </div>
               ))}
             </div>
-            <span style={{ ...note, color: C.faint }}>여기에 서비스 소개가 들어갑니다 — 내용은 정해지는 대로 채웁니다.</span>
-          </div>
-        )}
 
-        {/* 2. 가입/로그인 — 프론트 전용 가짜 폼. 동의는 뺄 수 없다. */}
-        {k === 'auth' && (
-          <div style={col(14)}>
-            <div style={{ display: 'flex', gap: 7 }}>
-              {AUTH.tabs.map(([id, t]) => (
-                <button
-                  key={id} data-auth-tab={id} onClick={() => actions.setAuthTab(id)}
-                  style={{ ...pill(s.authTab === id), flex: 1, padding: '11px 4px', borderRadius: radius.md, fontSize: 14 }}
-                >{t}</button>
+            <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림은 어려워요</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
+              {BAD_EX.map(([lbl, color]) => (
+                <div key={lbl} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+                  <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: color, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.05) 0 5px,transparent 5px 12px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `8px ${MONO}`, color: 'rgba(74,64,56,.34)' }}>
+                    그림
+                    <span style={{ position: 'absolute', left: 6, top: 5, fontSize: 12, lineHeight: 1, color: C.accent }}>✕</span>
+                  </div>
+                  <span style={{ fontSize: 10.5, color: C.faint, textAlign: 'center' }}>{lbl}</span>
+                </div>
               ))}
             </div>
-            <div style={col(9)}>
-              <span style={label}>이메일</span>
-              <input data-field="email" type="email" value={s.email} placeholder="you@example.com" onChange={(e) => actions.setEmail(e.target.value)} style={input} />
-              <span style={label}>비밀번호</span>
-              <input data-field="pw" type="password" value={s.pw} placeholder="••••••••" onChange={(e) => actions.setPw(e.target.value)} style={input} />
-            </div>
+
             <button
-              data-action="agree" onClick={actions.toggleAgree}
-              style={{ ...row(11), alignItems: 'flex-start', padding: 14, borderRadius: radius.md, cursor: 'pointer', textAlign: 'left', fontFamily: SANS, border: `1px solid ${s.agreed ? C.accent : C.line}`, background: s.agreed ? C.accentSoft : C.paperHi }}
+              onClick={actions.onUpload} data-action="upload"
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '30px 20px', borderRadius: radius.lg, border: `2px dashed ${o.upBd}`, background: o.upBg }}
             >
-              <span style={{ width: 19, height: 19, flex: 'none', marginTop: 1, borderRadius: 6, border: `1.5px solid ${s.agreed ? C.accent : '#CFC6B8'}`, background: s.agreed ? C.accent : 'transparent', color: '#FFF6F2', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{s.agreed ? '✓' : ''}</span>
-              <span style={col(4)}>
-                <span style={{ fontSize: 13.5, color: C.ink }}>{AUTH.consentCheck}</span>
-                <span style={{ fontSize: 12, lineHeight: 1.6, color: C.sub }}>{AUTH.consent}</span>
-              </span>
+              <span style={{ fontFamily: GAEGU, fontSize: 20, color: C.ink }}>{o.upLabel}</span>
+              <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.48)' }}>{o.upNote}</span>
             </button>
+            <span style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
           </div>
         )}
 
-        {/* 3. 그림 올리기 — 되는 예시와 안 되는 예시를 나란히. 그림 없이는 못 넘어간다. */}
-        {k === 'upload' && (
-          <div style={col(14)}>
-            <div style={col(8)}>
-              <span style={label}>이런 그림이면 좋아요</span>
-              <div style={grid(3)}>
-                {UPLOAD_GOOD.map(([t, motion]) => (
-                  <div key={t} style={{ ...col(5), alignItems: 'center' }}>
-                    <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', borderRadius: 12, background: '#EEF4E9', border: '1px solid #CFE0C4', overflow: 'hidden' }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={yeoulImg(motion)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-                      <span style={{ position: 'absolute', top: 4, left: 5, fontSize: 11, color: '#3A5A33' }}>○</span>
-                    </div>
-                    <span style={{ fontSize: 10.5, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{t}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={col(8)}>
-              <span style={label}>이런 그림은 어려워요</span>
-              <div style={grid(4)}>
-                {UPLOAD_BAD.map(([t, motion]) => (
-                  <div key={t} style={{ ...col(5), alignItems: 'center' }}>
-                    <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', borderRadius: 12, background: '#F4EDEB', border: '1px solid #E4CCC5', overflow: 'hidden' }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={yeoulImg(motion)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: .45, filter: 'grayscale(.5)' }} />
-                      <span style={{ position: 'absolute', top: 4, left: 5, fontSize: 11, color: '#8E3A2B' }}>✕</span>
-                    </div>
-                    <span style={{ fontSize: 10.5, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{t}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <input ref={file} type="file" accept="image/*" hidden onChange={(e) => actions.onPickImg(e.target.files?.[0] ?? null)} />
-            <button
-              data-action="pick-image" onClick={() => file.current?.click()}
-              style={{ ...col(6), alignItems: 'center', justifyContent: 'center', padding: 26, borderRadius: radius.lg, cursor: 'pointer', fontFamily: SANS, border: `2px dashed ${s.imgUrl ? C.accent : 'rgba(74,64,56,.18)'}`, background: s.imgUrl ? C.accentSoft : C.paperHi }}
-            >
-              {s.imgUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={s.imgUrl} alt="올린 그림" style={{ maxHeight: 120, objectFit: 'contain', display: 'block' }} />
-              )}
-              <span style={{ fontSize: 14.5, color: C.ink }}>{s.imgUrl ? '그림을 올렸어요' : '그림 올리기'}</span>
-              <span style={{ fontSize: 11.5, color: C.faint }}>{s.imgUrl ? '다시 누르면 바꿀 수 있어요' : '여기에 끌어다 놓거나 눌러서 고르기 · 1장'}</span>
-            </button>
-          </div>
-        )}
-
-        {/* 4. 캐릭터 정보 — 항목마다 **칩 한 줄 + 그 아래 긴 글**(9/6 2차 결정). */}
-        {k === 'char' && (
-          <div style={col(16)}>
-            <div style={col(7)}>
-              <span style={label}>이름 · {NAME_MAX}자까지</span>
-              <div style={row(8)}>
-                <input data-field="name" value={s.petName} maxLength={NAME_MAX} placeholder="보리" onChange={(e) => actions.setName(e.target.value)} style={{ ...input, flex: 1, fontSize: 15 }} />
-                <button data-action="name-random" onClick={actions.randomName} style={{ ...ghost, flex: 'none', padding: '12px 15px' }}>랜덤</button>
-              </div>
-            </div>
-
-            {/* 성격만 칩에 한 줄 설명이 따로 붙는다 — 다섯 중 무엇을 고르는지가 톤을 정하기 때문이다. */}
-            <ChipNote
-              name="persona" title="성격 · 다섯 중 하나" chips={PERSONALITIES.map((p) => p.label)}
-              picked={PERSONALITIES.find((p) => p.key === s.persona)?.label ?? null}
-              onPick={(v) => actions.setPersona(PERSONALITIES.find((p) => p.label === v)?.key ?? v)}
-              note={s.personaNote} onNote={actions.setPersonaNote} placeholder={NOTE_PLACEHOLDER.persona}
-            />
-            {!!s.persona && (
-              <span style={{ ...note, marginTop: -10, color: C.faint }}>
-                {PERSONALITIES.find((p) => p.key === s.persona)?.desc}
-              </span>
-            )}
-
-            <ChipNote name="tone" title="말투" chips={TONES} picked={s.tone} onPick={actions.setTone}
-              note={s.toneNote} onNote={actions.setToneNote} placeholder={NOTE_PLACEHOLDER.tone} />
-            <ChipNote name="genre" title="장르" chips={GENRES} picked={s.genre} onPick={actions.setGenre}
-              note={s.genreNote} onNote={actions.setGenreNote} placeholder={NOTE_PLACEHOLDER.genre} />
-            <ChipNote name="world" title="세계관" chips={WORLDS} picked={s.worldChip} onPick={actions.setWorldChip}
-              note={s.world} onNote={actions.setWorld} placeholder={NOTE_PLACEHOLDER.world} />
-            {/* 이 칸만 칩이 없다 — 방향을 미리 잡아 주면 오히려 안 쓰게 된다. */}
-            <ChipNote name="free" title="그 밖에 알려주고 싶은 것"
-              note={s.free} onNote={actions.setFree} placeholder={NOTE_PLACEHOLDER.free} />
-          </div>
-        )}
-
-        {/* 5. 유저 정보 — 대놓고 묻지 않고 "알려주면 아이가 더 살갑게 대해요". */}
-        {k === 'user' && (
-          <div style={col(15)}>
-            {USER_FIELDS.map((f) => (
-              <div key={f.key} style={col(7)}>
-                <span style={label}>{f.label}</span>
+        {key === 'user' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+            {o.userFields.map((f) => (
+              <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontSize: 11.5, color: C.faint }}>{f.label}</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {f.opts.map((o) => (
-                    <button key={o} data-user-opt={o} onClick={() => actions.pickUser(f.key, o)} style={pill(s.user[f.key] === o)}>{o}</button>
+                  {f.opts.map((x) => (
+                    <button key={x.text} onClick={x.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: 12.5, color: x.fg }}>{x.text}</button>
                   ))}
                 </div>
               </div>
             ))}
+            <span style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>전부 선택이에요. 나중에 설정에서 바꿀 수 있어요.</span>
+          </div>
+        )}
+
+        {key === 'char' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 17 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11.5, color: C.faint }}>이름 · 12자까지</span>
+                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: C.accentSoft, color: C.accent, fontSize: 10 }}>필수</span>
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={s.petName} onChange={(e) => actions.onName(e.target.value)} maxLength={12} placeholder="여울"
+                  data-part="pet-name"
+                  style={{ flex: 1, minWidth: 0, padding: '13px 15px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: 15, color: C.ink, outline: 'none' }}
+                />
+                <button onClick={actions.randomName} style={{ flex: 'none', padding: '0 17px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 13, color: C.sub2 }}>랜덤</button>
+              </div>
+              {o.nameError && <span style={{ fontSize: 11.5, color: C.accent }}>이름을 지어 주면 시작할 수 있어요.</span>}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '11px 13px', borderRadius: radius.md, background: C.slot }}>
+              <span style={{ width: 5, height: 5, flex: 'none', marginTop: 7, borderRadius: '50%', background: C.frameWood }} />
+              <span style={{ fontSize: 12, lineHeight: 1.65, color: 'rgba(74,64,56,.62)' }}>아래는 전부 선택이에요. 지금 안 정해도 나중에 여울이 방에서 물어봐요.</span>
+            </div>
+
+            {v.charGroups.map((g) => (
+              <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13.5, color: C.ink }}>{g.title}</span>
+                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'rgba(74,64,56,.07)', color: C.faint, fontSize: 10 }}>선택</span>
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {g.opts.map((x) => (
+                      <button key={x.text} onClick={x.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: 12.5, color: x.fg }}>{x.text}</button>
+                    ))}
+                  </div>
+                  <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={60} placeholder={g.ph}
+                    style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: 13, color: C.ink, outline: 'none' }} />
+                </div>
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${C.lineSoft}`, background: C.paper }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13.5, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
+                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'rgba(74,64,56,.07)', color: C.faint, fontSize: 10 }}>선택</span>
+              </span>
+              <input value={o.extraVal} onChange={(e) => o.onExtra(e.target.value)} maxLength={60}
+                placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요"
+                style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: 13, color: C.ink, outline: 'none' }} />
+            </div>
+          </div>
+        )}
+
+        {key === 'born' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, padding: '10px 0 0' }}>
+            <div style={{ width: 209, height: 209, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'yPop .5s ease' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={KIND_IMG.idle} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 26, color: C.ink }}>{o.bornName}</span>
+              <span style={{ fontSize: 12.5, color: 'rgba(74,64,56,.55)' }}>{o.bornTraits}</span>
+            </div>
           </div>
         )}
       </div>
 
-      {/* 아래 — 다음 */}
-      <div style={{ flex: 'none', padding: '10px 24px 30px', ...col(9) }}>
-        <button
-          data-action="onb-next" onClick={actions.onNext} aria-disabled={ctaOff}
-          style={{ ...cta, ...(ctaOff ? { background: '#DED6C9', color: '#8B8175', boxShadow: 'none' } : {}) }}
-        >{ctaLabel}</button>
-        {k === 'user' && (
-          <button data-action="onb-skip" onClick={actions.skipUser} style={{ padding: 4, border: 'none', background: 'none', fontSize: 12, color: C.faint, cursor: 'pointer', fontFamily: SANS }}>건너뛰기</button>
+      <div style={{ flex: 'none', padding: '10px 24px 30px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+        <button onClick={actions.onNext} data-action="onb-next" style={{ padding: 16, borderRadius: radius.md, border: 'none', background: C.accent, color: C.accentInk, fontSize: 15.5, boxShadow: '0 4px 12px rgba(192,104,92,.22)' }}>{o.cta}</button>
+        {o.hasSkip && (
+          <button onClick={actions.onNext} style={{ padding: 4, border: 'none', background: 'none', fontSize: 12, color: 'rgba(74,64,56,.45)' }}>나중에 할게요</button>
         )}
-        {!!s.sys && <span data-part="sys" style={sysLine}>{s.sys}</span>}
       </div>
     </div>
   );
-}
-
-function row(gap: number): CSSProperties {
-  return { display: 'flex', alignItems: 'center', gap };
 }

@@ -1,134 +1,180 @@
-// 스킨 B — 여울. 9/6 지시서(`~/.claude/soma/lore/tools/ux-brief-0906.md`)의 흐름 11단계를 담은 판.
+// 스킨 B — 여울. 2026-09-07 클로드 디자인 최종본(`여울 반응형.dc.html`)을 그대로 옮긴 판.
 //
-// 무엇 — 랜딩 → 가입 → 올리기 → 캐릭터 → 유저 → 여울 샘플 → 알 → 태어남 → 튜토리얼 →
-//        보통 게임 → 도감. 화면 넷(온보딩·샘플·알·방)이 그 열한 걸음을 나눠 맡는다.
-// 왜   — 서버를 부르지 않고 **프론트 상태로만** 돈다. 지금 확인할 것은 화면·흐름·버튼·문구이고,
-//        서버를 붙이면 한 번 볼 때마다 목 서버·시계까지 맞춰야 해서 확인이 느려진다(9/6 지시서).
-//        그래서 숫자·초기값은 아무래도 좋다.
+// 껍데기가 하는 일은 셋뿐이다.
+//   1) 헤더 아래 남은 높이를 **한 통**으로 채운다. 페이지는 스크롤하지 않는다.
+//   2) 가운데 560px 로 세운다. 태블릿·데스크톱도 같은 한 벌이다(시안 확정 — PC 2단 배치는 폐기).
+//   3) 화면 넷(온보딩·방·알)을 갈아 끼우고, 가입 모달을 그 위에 얹는다.
 //
-// 위의 **개발용 이동 띠**는 상훈님이 아무 지점으로나 건너뛰며 판정하시라고 둔 것이다.
-// 실서비스로 낼 때 지운다. 색·여백을 손보실 자리는 `yeoul/ui.ts` 한 곳이다.
+// ★ 개발용 이동 띠는 **떠 있는 창**이다. 예전처럼 위에 자리를 차지하면 무대 높이가 줄어
+//   판정한 화면과 실제 화면이 달라진다 — 배경 그림을 무대 크기에 맞춰 만들 예정이라 특히 그렇다.
+//   기본은 닫혀 있고 오른쪽 가장자리의 세로 '이동' 탭을 누르면 열린다.
+//   실서비스로 낼 때 이 파일에서 통째로 지운다.
+//
+// 색·여백을 손보실 자리는 `yeoul/ui.ts` 한 곳이다.
 'use client';
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useState } from 'react';
+import AuthModal from '../yeoul/AuthModal';
 import Egg from '../yeoul/Egg';
 import Onboarding from '../yeoul/Onboarding';
-import Room, { Modal } from '../yeoul/Room';
-import { LANDING, TUTOR } from '../yeoul/constants';
-import { C, KEYFRAMES, MONO, SANS, radius } from '../yeoul/ui';
+import Room from '../yeoul/Room';
+import { STEPS, WEB_KEYS } from '../yeoul/constants';
+import { C, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, radius } from '../yeoul/ui';
 import { useYeoul } from '../yeoul/useYeoul';
 import type { SkinProps } from './Scrapbook';
 
-export default function Yeoul({ mode = 'phone' }: SkinProps) {
-  const pc = mode === 'pc';
-  const y = useYeoul({ pc });
-  const { s, derived, actions } = y;
-
-  /** 랜딩 무대의 4초 순환. 화면이 하나뿐이라 여기서 한 번만 돌린다. */
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    if (s.screen !== 'onb' || derived.stepKey !== 'landing') return;
-    const t = setInterval(() => setTick((v) => v + 1), LANDING.loopMs);
-    return () => clearInterval(t);
-  }, [s.screen, derived.stepKey]);
-
-  const chip = (on: boolean): CSSProperties => ({
-    border: `1px solid ${on ? C.ink : '#E3DBCD'}`, borderRadius: radius.pill, padding: '5px 10px',
-    fontSize: 11, fontFamily: SANS, cursor: 'pointer',
-    background: on ? C.ink : '#FBF6EC', color: on ? '#FBF6EC' : C.sub,
-  });
-
-  const onb = s.screen === 'onb';
-  const room = s.screen === 'room';
-
-  interface Jump { label: string; on: boolean; pick: () => void }
-  const journey: { n: string; label: string; items: Jump[] }[] = [
-    {
-      n: '1~5', label: '온보딩',
-      items: (['랜딩', '가입', '올리기', '캐릭터', '유저'] as const).map((l, i): Jump => ({
-        label: l, on: onb && s.step === i, pick: () => actions.goStep(i),
-      })),
-    },
-    {
-      n: '6~8', label: '부화',
-      items: [
-        { label: '여울 샘플', on: s.screen === 'sample', pick: actions.enterSample },
-        { label: '알(대기)', on: s.screen === 'egg' && !s.basicReady && s.hatchFail === 'none', pick: () => { actions.goEgg(); actions.setBasicReady(false); actions.setHatchFail('none'); } },
-        { label: '알(준비됨)', on: s.screen === 'egg' && s.basicReady, pick: () => { actions.goEgg(); actions.setBasicReady(true); } },
-        { label: '실패·지연', on: s.hatchFail === 'slow', pick: () => { actions.goEgg(); actions.setHatchFail('slow'); } },
-        { label: '실패·거부', on: s.hatchFail === 'reject', pick: () => { actions.goEgg(); actions.setHatchFail('reject'); } },
-      ],
-    },
-    {
-      n: '9', label: '튜토리얼',
-      items: [
-        { label: derived.inTutor ? `부름 ${(s.tutor ?? 0) + 1}/${TUTOR.length}` : '튜토리얼 시작', on: derived.inTutor, pick: () => { actions.goRoom(); if (!derived.inTutor) actions.patch({ tutor: 0 }); } },
-        { label: '다음 부름', on: false, pick: actions.skipTutor },
-        { label: '튜토리얼 끝', on: room && s.tutor === null, pick: () => { actions.goRoom(); actions.patch({ tutor: null }); } },
-      ],
-    },
-    {
-      n: '10', label: '게임',
-      items: ([['day', '낮'], ['night', '밤(재우기)'], ['sleep', '자는 중'], ['morning', '아침(깨우기)'], ['late', '아침(늦잠)']] as const).map(([k, l]): Jump => ({
-        label: l,
-        on: room && (
-          k === 'late' ? s.overslept
-            : k === 'morning' ? s.morning && !s.overslept
-              : k === 'sleep' ? s.sleeping && !s.morning
-                : k === 'night' ? s.night && !s.sleeping
-                  : derived.mode === 'day'),
-        pick: () => { actions.goRoom(); actions.patch({ tutor: null }); actions.setTime(k); },
-      })).concat([
-        { label: '아픔', on: room && derived.mode === 'sick', pick: () => { actions.goRoom(); actions.patch({ tutor: null }); if (!s.sick) actions.toggleSick(); } },
-        { label: '시간 흘리기', on: false, pick: actions.passTime },
-      ]),
-    },
-    {
-      n: '11', label: '도감·모달',
-      items: [
-        { label: '도감 열기', on: room && s.panel === 'album' && s.sheetOpen, pick: () => { actions.goRoom(); actions.openPanel('album'); } },
-        { label: '대화 열기', on: room && s.panel === 'chat' && s.sheetOpen, pick: () => { actions.goRoom(); actions.openPanel('chat'); } },
-        { label: '게임 창', on: s.game !== 'none', pick: () => { actions.goRoom(); actions.openGame('guess'); } },
-        { label: '해금 보기', on: false, pick: actions.showUnlockDemo },
-        { label: '아침 도착 보기', on: false, pick: actions.showMorning },
-        { label: '아이 정보', on: room && s.panel === 'pet' && s.sheetOpen, pick: () => { actions.goRoom(); actions.openPanel('pet'); } },
-        { label: '처음부터', on: false, pick: actions.restart },
-      ],
-    },
-  ];
+export default function Yeoul(_props: SkinProps) {
+  const y = useYeoul();
+  const { v } = y;
 
   return (
     <div
       className="yeoul"
       style={{
-        position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden',
-        background: C.ground, color: C.ink, fontFamily: SANS, WebkitFontSmoothing: 'antialiased',
+        position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center',
+        background: 'radial-gradient(120% 80% at 50% 0%,#F7F1E6,#E9E2D6)',
+        color: C.ink, fontFamily: SANS, WebkitFontSmoothing: 'antialiased',
       }}
     >
       <style>{KEYFRAMES}</style>
 
-      {/* 개발용 이동 띠 — 실서비스에서는 지운다.
-          ★ 아이 정보(옛 설정)의 진입 위치는 **미정**이다. 지금은 헤더의 이름을 탭하는 기본값. */}
-      <div data-part="journey" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '9px 12px', background: '#F6F1E6', borderBottom: `1px solid ${C.line}` }}>
-        {journey.map((g) => (
-          <div key={g.n} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5, width: 74, flex: 'none', paddingTop: 3 }}>
-              <span style={{ minWidth: 26, height: 17, padding: '0 4px', boxSizing: 'border-box', borderRadius: 9, background: g.items.some((i) => i.on) ? C.accent : '#E3DBCD', color: g.items.some((i) => i.on) ? C.accentInk : C.sub, fontFamily: MONO, fontSize: 9.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{g.n}</span>
-              <span style={{ fontSize: 11, color: C.sub }}>{g.label}</span>
-            </span>
-            <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {g.items.map((i) => <button key={i.label} data-jump={i.label} onClick={i.pick} style={chip(i.on)}>{i.label}</button>)}
-            </div>
-          </div>
-        ))}
+      <div
+        data-part="shell"
+        style={{
+          position: 'relative', width: `min(100%,${SHELL_MAX}px)`, height: '100%',
+          overflow: 'hidden', background: C.shell,
+          borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}`,
+          boxShadow: '0 10px 30px rgba(74,64,56,.14)',
+          display: 'flex', flexDirection: 'column',
+        }}
+      >
+        {v.screen.room && <Room y={y} />}
+        {v.screen.egg && <Egg y={y} />}
+        {v.screen.onb && <Onboarding y={y} />}
+        <AuthModal y={y} />
       </div>
 
-      {s.screen === 'onb' && <Onboarding y={y} tick={tick} />}
-      {s.screen === 'egg' && <Egg y={y} />}
-      {(s.screen === 'room' || s.screen === 'sample') && <Room y={y} />}
+      <DevJump y={y} />
+    </div>
+  );
+}
 
-      {/* 전면 판은 화면 넷 어디서나 뜬다(온보딩의 "이대로 갈까요?" 확인도 이 판을 쓴다). */}
-      <Modal y={y} />
+// ── 개발용 이동 창 — 실서비스에서는 이 아래를 통째로 지운다 ──────────────
+
+function DevJump({ y }: { y: ReturnType<typeof useYeoul> }) {
+  const [open, setOpen] = useState(false);
+  const { s, actions } = y;
+
+  const onb = s.screen === 'onb';
+  const room = s.screen === 'room';
+
+  interface Jump { label: string; on: boolean; pick: () => void }
+  const groups: { n: string; label: string; items: Jump[] }[] = [
+    {
+      n: '1', label: '랜딩',
+      items: [{ label: '첫 화면', on: onb && s.step === 0, pick: () => actions.goStep(0) }],
+    },
+    {
+      n: '2', label: '온보딩',
+      items: [
+        { label: '올리기', on: onb && s.step === 1, pick: () => actions.goStep(1) },
+        { label: '캐릭터', on: onb && s.step === 2, pick: () => actions.goStep(2) },
+        { label: '여울 샘플', on: s.sampleMode, pick: actions.enterSample },
+        { label: '알', on: s.screen === 'egg', pick: actions.goEgg },
+        { label: '태어남', on: onb && s.step === STEPS.indexOf('born'), pick: () => actions.goStep(STEPS.indexOf('born')) },
+      ],
+    },
+    {
+      n: '3', label: '튜토리얼',
+      items: [
+        { label: s.tutorOn && !s.sampleMode ? `부름 ${s.tutor + 1}/8` : '튜토리얼 시작', on: s.tutorOn && !s.sampleMode, pick: actions.startTutor },
+        { label: '다음 부름', on: false, pick: actions.skipTutorStep },
+        { label: '튜토리얼 끝', on: room && !s.tutorOn && !s.sampleMode, pick: actions.endTutor },
+      ],
+    },
+    {
+      n: '4', label: '게임',
+      items: ([['day', '낮 방'], ['night', '밤 창'], ['sleep', '자는 중'], ['sick', '아픔']] as const)
+        .map(([k, label]): Jump => ({
+          label, on: room && y.v.mode === k && !s.sampleMode, pick: actions.setMode(k),
+        })),
+    },
+    {
+      n: '5', label: '그 밖에',
+      items: [
+        { label: '앨범 벽', on: s.wallOpen, pick: actions.openWall },
+        { label: '알림', on: s.sheet === 'notify', pick: actions.openNotify },
+        { label: '아이 정보', on: s.sheet === 'settings', pick: actions.openSettings },
+        { label: '다음 날', on: false, pick: actions.nextDay },
+        { label: '가입 모달', on: s.authOpen, pick: actions.openAuth('join') },
+        { label: '처음부터', on: false, pick: actions.restart },
+      ],
+    },
+  ];
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)} data-part="dev-toggle"
+        style={{
+          // 오른쪽 가장자리 가운데 — 타일도 헤더도 안 가리는 유일한 빈자리다.
+          position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', zIndex: 30,
+          padding: '9px 4px', borderRadius: '8px 0 0 8px', border: `1px solid ${C.line}`, borderRight: 'none',
+          background: 'rgba(255,251,244,.86)', font: `10px ${MONO}`, color: C.sub,
+          writingMode: 'vertical-rl', letterSpacing: '.08em',
+        }}
+      >이동</button>
+    );
+  }
+
+  return (
+    <div
+      data-part="dev"
+      style={{
+        position: 'absolute', right: 10, bottom: 10, zIndex: 30, width: 'min(414px,calc(100% - 20px))',
+        maxHeight: '70%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 9,
+        padding: '11px 13px', borderRadius: radius.lg,
+        background: 'rgba(255,251,244,.96)', border: `1px solid ${C.line}`, boxShadow: '0 8px 24px rgba(74,64,56,.18)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ font: `10.5px ${MONO}`, color: C.sub }}>개발용 이동 · 실서비스에서는 지운다</span>
+        <span style={{ flex: 1 }} />
+        <button onClick={() => setOpen(false)} style={{ width: 24, height: 24, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
+      </div>
+
+      {groups.map((g) => (
+        <div key={g.n} style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, width: 66, flex: 'none', paddingTop: 3 }}>
+            <span style={{
+              width: 18, height: 18, borderRadius: '50%',
+              background: g.items.some((i) => i.on) ? C.accent : '#E3DBCD',
+              color: g.items.some((i) => i.on) ? '#FFF6F2' : C.sub,
+              font: `11px ${MONO}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>{g.n}</span>
+            <span style={{ fontSize: 11.5, color: C.sub }}>{g.label}</span>
+          </span>
+          <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {g.items.map((i) => {
+              const t = chipTone(i.on);
+              return (
+                <button key={i.label} data-jump={i.label} onClick={i.pick}
+                  style={{ border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11, background: t.bg, color: t.fg }}
+                >{i.label}</button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingTop: 2 }}>
+        {WEB_KEYS.map(([k, text]) => (
+          <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: C.sub }}>
+            <span style={{ padding: '3px 7px', borderRadius: 7, border: '1px solid rgba(74,64,56,.18)', background: C.paper, font: `10.5px ${MONO}`, color: C.ink }}>{k}</span>
+            {text}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
