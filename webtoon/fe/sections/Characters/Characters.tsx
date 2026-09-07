@@ -66,22 +66,30 @@ export default function Characters({ onUse }: {
   const mine = got?.characters.filter((c) => c.mine) ?? [];
   const builtin = got?.characters.filter((c) => c.builtin) ?? [];
 
-  const mineBlock = (
-    <ul className="char-grid">
-      {mine.map((c) => (
-        <CharCard key={c.id} c={c} onUse={onUse} onDrop={drop} />
-      ))}
-      {/* **만드는 문을 목록 안에 둔다.** 구석에 단추 하나만 두면 빈
-          화면에서 갈 곳이 안 보인다. */}
-      <li>
-        <button type="button" className="char-new" onClick={() => setMaking(true)}>
-          <b>+</b>
-          새 캐릭터
-          <span>사진 없이 설명만으로도</span>
-        </button>
-      </li>
-    </ul>
+  /* **만드는 문을 목록 안에 둔다.** 구석에 단추 하나만 두면 빈 화면에서
+     갈 곳이 안 보인다. 만든 것이 있으면 내 목록 끝에, 없으면 둘러보기용
+     목록 끝에 붙는다 — 어느 쪽이든 사람이 보고 있는 목록 안에 있어야 한다. */
+  const newTile = (
+    <li key="new">
+      <button type="button" className="char-new" onClick={() => setMaking(true)}>
+        <b>+</b>
+        새 캐릭터
+        <span>사진 없이 설명만으로도</span>
+      </button>
+    </li>
   );
+
+  const mineBlock = mine.length > 0 ? (
+    <div className="chars-mine">
+      <h3 className="chars-section">내 캐릭터</h3>
+      <ul className="char-grid">
+        {mine.map((c) => (
+          <CharCard key={c.id} c={c} onUse={onUse} onDrop={drop} />
+        ))}
+        {newTile}
+      </ul>
+    </div>
+  ) : null;
 
   const builtinBlock = builtin.length > 0 ? (
     <div className="chars-builtin">
@@ -89,6 +97,9 @@ export default function Characters({ onUse }: {
       <p className="chars-lede">만들 것이 없을 때 바로 써 볼 수 있어요.</p>
       <ul className="char-grid">
         {builtin.map((c) => <CharCard key={c.id} c={c} onUse={onUse} />)}
+        {/* 만든 것이 없으면 만드는 문이 여기 붙는다 — 지금 보고 있는 목록의
+            끝자리다. 아래에 따로 두면 목록을 다 지나쳐야 보인다. */}
+        {mine.length === 0 && newTile}
       </ul>
     </div>
   ) : null;
@@ -126,9 +137,11 @@ export default function Characters({ onUse }: {
 
           만들어 둔 것이 있으면 예전 순서 그대로다. 그 사람에게는 자기
           캐릭터가 목적이고 둘러보기용은 보조다. */}
-      {got && mine.length === 0 && builtinBlock}
+      {/* 만든 것이 있으면 **내 것이 위**다 — 그 사람에게는 자기 캐릭터가
+          목적이고 둘러보기용은 보조다. 없으면 둘러보기용만 뜨고, 만드는
+          문은 그 목록 끝에 붙는다(위 builtinBlock). */}
       {got && mineBlock}
-      {got && mine.length > 0 && builtinBlock}
+      {got && builtinBlock}
     </section>
   );
 }

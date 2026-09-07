@@ -1409,6 +1409,10 @@ def editor_data(run_id: str, episode: int = 1) -> dict[str, Any]:
         "character": str(input_doc.get("name") or ""),
         "title": title_of(run_id, pick),
         "genre": str(pick.get("genre") or input_doc.get("genre") or ""),
+        # 줄거리. 편집실 머리(#edLogline)가 이 값을 그리는데 여태 안 보내서
+        # 그 자리가 늘 비어 있었다 — 결과 화면은 result_by_run 에서 받아
+        # 그리고 있었으므로, 같은 작품인데 편집실에서만 줄거리가 없었다.
+        "logline": str(direction_of(run_id, pick).get("plot") or ""),
         "episode": 1,
         "scenes": scenes,
         "page_count": len(numbers),

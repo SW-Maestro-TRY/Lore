@@ -267,6 +267,15 @@ export function mountEditor(
     return u + (u.includes("?") ? "&" : "?") + "raw=1";
   }
 
+  /* 이 장이 그린 장면 한 줄. 서버가 cuts[0].description 에 실어 준다
+     (newharness_pipeline.editor_data). 그림만 늘어놓으면 "이 장이 무엇을
+     그린 것인지" 를 다시 그리기 전에 확인할 길이 없다 — 특히 전개가
+     어색해서 고치려 할 때 원래 무엇을 그리라고 했는지가 필요하다. */
+  function sceneNote(s) {
+    const d = ((s.cuts || [])[0] || {}).description || "";
+    return d === "표지" ? "" : d;      // 표지는 장면이 아니다
+  }
+
   function render() {
     const ep = data.episode || EPISODE;
     $("#edTitle").textContent = data.title;
@@ -422,6 +431,8 @@ export function mountEditor(
         <img src="${rawImg(s)}" alt="${s.no}번째 장" width="${s.w}" height="${s.h}" loading="lazy">
         <div class="overlay" data-overlay></div>
       </div>
+
+      ${sceneNote(s) ? `<p class="scene-note">${esc(sceneNote(s))}</p>` : ""}
 
       <div class="scene-tools">
         <button type="button" class="btn btn-quiet btn-sm" data-act="regen">
