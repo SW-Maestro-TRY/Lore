@@ -1,111 +1,122 @@
-// 여울 시안의 색·글꼴·공통 스타일 — **UI 를 입힐 자리는 여기 한 곳이다.**
+// 여울 시안의 색·글꼴·키프레임 — **UI 를 입힐 자리는 여기 한 곳이다.**
 //
-// 지금 값은 클로드 디자인 시안이 쓰던 인라인 스타일을 그대로 옮긴 것이다.
-// 상훈님이 디자인에서 다듬으신 값을 나중에 여기만 갈아 끼우면 화면 전체가 따라 바뀐다.
-// 부품(Room·Panels·Onboarding)은 색을 직접 쓰지 않고 이 파일의 토큰만 쓴다.
+// 출처 = 클로드 디자인 `여울 반응형.dc.html`(2026-09-07 상훈님 최종본).
+// 시안이 인라인으로 들고 있던 값을 토큰으로 끌어올린 것이라, 색을 바꾸려면 여기만 고친다.
+// 부품(Room·Panels·Onboarding·Album·Egg)은 색을 직접 적지 않고 이 파일의 토큰만 쓴다.
+//
+// ★ 값을 시안과 다르게 바꾸면 대조 스크린샷이 어긋난다. 바꿀 땐 시안도 같이 올린다.
 import type { CSSProperties } from 'react';
 
-export const GAEGU = "'Gaegu','Gowun Dodum',cursive";
-export const SANS = "'Gowun Dodum','Apple SD Gothic Neo',system-ui,sans-serif";
+export const GAEGU = "var(--font-gaegu),'Gaegu','Gowun Dodum',cursive";
+export const SANS = "var(--font-gowun),'Gowun Dodum','Apple SD Gothic Neo',system-ui,sans-serif";
 export const MONO = 'ui-monospace,Menlo,monospace';
 
 export const C = {
-  /** 바탕(앱 밖) */
-  ground: '#EDE7DF',
-  /** 종이(카드·시트) */
-  paper: '#FFFBF4',
-  paperHi: '#FFFDF8',
+  /** 셸 밖 바탕 */
+  ground: '#E9E2D6',
+  /** 셸(앱 한 통) */
+  shell: '#FFFBF4',
+  /** 종이(팝오버·시트·카드) */
+  paper: '#FFFDF8',
   /** 눌리는 칸 */
   slot: '#F8F2E7',
   slotDim: '#F4EEE3',
+  off: '#EDE9E2',
   ink: '#4A4038',
   sub: '#5C544B',
-  faint: 'rgba(74,64,56,.45)',
+  sub2: '#6B6058',
+  faint: 'rgba(74,64,56,.5)',
+  faint2: 'rgba(74,64,56,.45)',
   line: 'rgba(74,64,56,.12)',
-  lineSoft: 'rgba(74,64,56,.08)',
+  lineSoft: 'rgba(74,64,56,.1)',
+  lineHard: 'rgba(74,64,56,.14)',
   accent: '#9C4232',
   accentInk: '#FFF6F2',
   accentSoft: '#FBEAE5',
+  accentDim: '#E7CFC5',
+  onbBg: '#FBF7EF',
+  bornBg: '#FBEFE2',
+  eggBg: '#F7EFE2',
+  wallBg: '#EFE0CC',
+  frameWood: '#C9A98D',
 } as const;
 
-export const radius = { sm: 10, md: 14, lg: 18, pill: 999 } as const;
+export const ACCENT = C.accent;
 
-/** 카드 한 장. */
-export const card: CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 11,
-  padding: 16, borderRadius: radius.md,
-  background: C.paper, border: `1px solid ${C.line}`, boxSizing: 'border-box',
-};
+/** 셸 폭. 시안이 태블릿·데스크톱에서도 이 한 벌을 가운데 두는 것으로 확정했다. */
+export const SHELL_MAX = 560;
 
-/** 눌리는 네모(밥·간식·청소…). */
-export const slotBtn: CSSProperties = {
-  padding: '15px 16px', borderRadius: radius.md,
-  border: `1px solid ${C.line}`, background: C.slot,
-  color: C.ink, fontFamily: SANS, fontSize: 14, cursor: 'pointer', textAlign: 'left',
-};
+export const radius = { sm: 12, md: 15, lg: 20, xl: 24, pill: 999 } as const;
 
-/** 알약 버튼(탭·칩). */
-export const pill = (on: boolean): CSSProperties => ({
-  padding: '8px 13px', borderRadius: radius.pill, cursor: 'pointer', fontFamily: SANS, fontSize: 12.5,
-  border: `${on ? 2 : 1}px solid ${on ? C.accent : C.line}`,
-  background: on ? C.accentSoft : C.paperHi,
-  color: on ? C.accent : C.ink,
-});
+/**
+ * 급함의 단계. **색만으로 가르지 않는다** — 모양(shape)·글자(word)를 함께 둔 이유가 이것이다.
+ * 아이 정보에서 "색+모양+글자 / 색+글자 / 색+모양" 셋 중 하나를 고른다.
+ */
+export const LV = {
+  ok:    { bg: '#E4F0DC', fg: '#41633A', bd: '#C6DFB9', shape: '◌', word: '괜찮음' },
+  soon:  { bg: '#FBEFCF', fg: '#7C6218', bd: '#EDD9A0', shape: '◑', word: '슬슬' },
+  now:   { bg: '#FADCD6', fg: '#9C4232', bd: '#EFBDB2', shape: '●', word: '지금' },
+  off:   { bg: '#EDE9E2', fg: '#655C53', bd: '#DFD9D0', shape: '–', word: '—' },
+  gray:  { bg: '#EDE9E2', fg: '#655C53', bd: '#DFD9D0', shape: '◌', word: '못 놀아요' },
+  sleep: { bg: '#DFE5F2', fg: '#3B4A6E', bd: '#C2CBE2', shape: '●', word: '자는 중' },
+  ready: { bg: '#FBEFCF', fg: '#7C6218', bd: '#EDD9A0', shape: '◑', word: '준비됐어요' },
+  plain: { bg: '#F4EEE3', fg: '#6B6058', bd: '#E3DBCD', shape: '', word: '' },
+} as const;
+export type LvKey = keyof typeof LV;
 
-/** 어두운 탭(대화/맞히기/달리기). */
-export const tab = (on: boolean): CSSProperties => ({
-  flex: 1, padding: '9px 4px', borderRadius: radius.pill, fontFamily: SANS, fontSize: 12.5, cursor: 'pointer',
-  border: `1px solid ${on ? C.ink : '#E3DBCD'}`,
-  background: on ? C.ink : C.slot,
-  color: on ? '#FBF6EC' : C.sub,
-});
+/** 고른 상태 / 안 고른 상태의 칩 테두리 한 벌(시안 `sel()`). */
+export interface Sel { bg: string; bd: string; bw: string; fg: string }
+export const sel = (on: boolean): Sel => (on
+  ? { bg: C.accentSoft, bd: C.accent, bw: '2px', fg: '#9C5145' }
+  : { bg: C.paper, bd: C.lineHard, bw: '1px', fg: C.ink });
 
-/** 큰 확인 버튼(온보딩 CTA·모달 주버튼). */
+/** 개발용 이동 띠의 칩(어두운 쪽이 현재 위치). */
+export const chipTone = (on: boolean) => (on
+  ? { bg: C.ink, fg: '#FBF6EC', bd: C.ink }
+  : { bg: '#FBF6EC', fg: C.sub, bd: '#E3DBCD' });
+
+export const label: CSSProperties = { fontSize: 11.5, color: C.faint };
+export const headline: CSSProperties = { fontFamily: GAEGU, fontWeight: 700, color: C.ink };
+
+/** 큰 확인 버튼(온보딩 CTA·알 화면). */
 export const cta: CSSProperties = {
-  padding: 16, borderRadius: radius.lg, border: 'none',
-  background: C.accent, color: C.accentInk, fontFamily: SANS, fontSize: 15.5, cursor: 'pointer',
-  boxShadow: '0 4px 12px rgba(156,66,50,.22)',
+  padding: 16, borderRadius: radius.md, border: 'none',
+  background: C.accent, color: C.accentInk, fontSize: 15.5, cursor: 'pointer',
+  boxShadow: '0 4px 12px rgba(192,104,92,.22)',
 };
-
-export const ghost: CSSProperties = {
-  padding: 13, borderRadius: radius.md, border: `1px solid ${C.line}`,
-  background: C.slot, color: C.ink, fontFamily: SANS, fontSize: 13.5, cursor: 'pointer',
-};
-
-export const label: CSSProperties = { fontFamily: SANS, fontSize: 11.5, color: C.faint };
-export const title: CSSProperties = { fontFamily: GAEGU, fontWeight: 700, fontSize: 23, lineHeight: 1, color: C.ink };
-export const note: CSSProperties = { fontFamily: SANS, fontSize: 12, lineHeight: 1.7, color: C.sub };
 
 export const input: CSSProperties = {
-  padding: '12px 15px', borderRadius: radius.md, border: `1px solid rgba(74,64,56,.14)`,
-  background: C.paperHi, color: C.ink, fontFamily: SANS, fontSize: 14, outline: 'none', minWidth: 0,
+  padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`,
+  background: C.paper, fontSize: 13, color: C.ink, outline: 'none', minWidth: 0,
 };
 
-/** 게이지 한 칸(4칸짜리). */
-export const gaugeCell = (on: boolean, color: string): CSSProperties => ({
-  height: 16, borderRadius: 5, border: `1px solid ${C.lineSoft}`,
-  background: on ? color : C.slotDim,
-});
-
-export const GAUGE_COLOR = { full: '#F2C3A8', happy: '#C9DFB4', clean: '#AFCBDD' } as const;
-
-/** 시안이 쓰던 키프레임. tamagotchi.css 대신 이 스킨만 쓰는 것이라 컴포넌트에서 <style> 로 심는다. */
+/** 시안이 쓰던 키프레임 전부. 스킨 안에서만 쓰므로 컴포넌트가 <style> 로 심는다. */
 export const KEYFRAMES = `
-@keyframes yeoulNudge{0%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}62%{transform:translateY(-1px)}}
-@keyframes yeoulFloatUp{0%{opacity:0;transform:translate(-50%,8px) scale(.86)}20%{opacity:1;transform:translate(-50%,-6px) scale(1)}100%{opacity:0;transform:translate(-50%,-30px) scale(1)}}
-@keyframes yeoulSheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}
-@keyframes yeoulFadeIn{from{opacity:0}to{opacity:1}}
-@keyframes yeoulBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-@keyframes yeoulPop{0%{transform:scale(.94);opacity:0}62%{transform:scale(1.03);opacity:1}100%{transform:scale(1);opacity:1}}
-@keyframes yeoulBlink{0%,100%{box-shadow:0 0 0 0 rgba(156,66,50,0)}50%{box-shadow:0 0 0 5px rgba(156,66,50,.28)}}
-@keyframes yeoulShake{0%,100%{transform:rotate(0)}20%{transform:rotate(-5deg)}40%{transform:rotate(5deg)}60%{transform:rotate(-3deg)}80%{transform:rotate(3deg)}}
-@keyframes yeoulBurst{0%{opacity:0;transform:scale(.5)}30%{opacity:1;transform:scale(1.08)}100%{opacity:0;transform:scale(1.25)}}
+@keyframes yPopIn{0%{opacity:0;transform:translateY(8px) scale(.97)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes yPopOut{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(6px) scale(.97)}}
+@keyframes yWallUp{0%{opacity:0;transform:translateY(28px)}100%{opacity:1;transform:translateY(0)}}
+@keyframes yWallDown{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(24px)}}
+@keyframes yFrameZoom{0%{opacity:0;transform:scale(.86)}100%{opacity:1;transform:scale(1)}}
+@keyframes yFrameOut{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.9)}}
+@keyframes ySheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes ySheetOut{0%{transform:translateY(0)}100%{transform:translateY(100%)}}
+@keyframes yFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes yFadeOut{0%{opacity:1}100%{opacity:0}}
+@keyframes yNudge{0%,58%,100%{transform:translateY(0)}68%{transform:translateY(-7px)}78%{transform:translateY(0)}86%{transform:translateY(-3px)}94%{transform:translateY(0)}}
+@keyframes yBlink{0%,100%{box-shadow:0 0 0 0 rgba(156,66,50,0)}50%{box-shadow:0 0 0 5px rgba(156,66,50,.26)}}
+@keyframes yRipple{0%{transform:scale(.82);opacity:.55}70%{transform:scale(1.12);opacity:0}100%{transform:scale(1.12);opacity:0}}
+@keyframes yTapdot{0%,100%{transform:translateY(0);opacity:.9}50%{transform:translateY(-5px);opacity:1}}
+@keyframes yFloatup{0%{opacity:0;transform:translate(-50%,6px) scale(.86)}20%{opacity:1;transform:translate(-50%,-4px) scale(1)}100%{opacity:0;transform:translate(-50%,-24px) scale(1)}}
+@keyframes yBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes yWander{0%,10%{transform:translateX(-30px)}46%,54%{transform:translateX(30px)}90%,100%{transform:translateX(-30px)}}
+@keyframes yFace{0%,49.9%{transform:scaleX(1)}50%,100%{transform:scaleX(-1)}}
+@keyframes yHop{0%,62%{transform:translateY(0)}67%{transform:translateY(-30px)}72%{transform:translateY(0)}75%{transform:translateY(-13px)}79%,100%{transform:translateY(0)}}
+@keyframes yWiggle{0%,72%,100%{transform:rotate(0)}78%{transform:rotate(-9deg)}84%{transform:rotate(8deg)}90%{transform:rotate(-4deg)}}
+@keyframes yCrack{0%,100%{transform:rotate(0) translateY(0) scale(1)}20%{transform:rotate(-11deg) translateY(-2px) scale(1.04)}40%{transform:rotate(10deg) translateY(-5px) scale(1.06)}60%{transform:rotate(-7deg) translateY(-1px) scale(1.03)}80%{transform:rotate(5deg) translateY(-3px) scale(1.05)}}
+@keyframes yMineIn{0%{opacity:0;transform:translateY(6px)}10%{opacity:1;transform:translateY(0)}72%{opacity:1}100%{opacity:0;transform:translateY(-4px)}}
+@keyframes yHalo{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.18);opacity:.12}}
+@keyframes yPop{0%{transform:scale(.92);opacity:0}62%{transform:scale(1.04);opacity:1}100%{transform:scale(1);opacity:1}}
+.yeoul button{font-family:inherit;cursor:pointer;transition:transform .12s ease, background .18s ease, border-color .18s ease}
+.yeoul button:active{transform:scale(.96)}
+.yeoul input{font-family:inherit}
 `;
-
-/** 튜토리얼이 "여기를 눌러 주세요" 라고 말하는 방식 — 잠그지 않고 눈에 띄게만 한다(정본 §12). */
-export const blink: CSSProperties = { animation: 'yeoulBlink 1.1s ease-in-out infinite' };
-
-/** 버튼 아래 작은 시스템 한 줄. 거절은 캐릭터 말이 아니다(9/6 결정 — 원망처럼 읽히지 않게). */
-export const sysLine: CSSProperties = {
-  fontFamily: SANS, fontSize: 11.5, lineHeight: 1.5, color: C.faint, textAlign: 'center',
-};

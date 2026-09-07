@@ -1,149 +1,79 @@
-// 도감(앨범) — 동작 18칸 · 엽서 · 장면 · 방 꾸미기.
+// 앨범 벽과 액자 하나.
 //
-// 무엇 — 흐름 11번. **앨범의 정체는 동작 도감**이다(정본 §6·§13·§16 — 열린 동작 도감 + 엽서 + 장면).
-//        열린 칸 = 그림 + 다운로드·공유 / 잠긴 칸 = 여울이 그 동작을 하는 모습 반투명 + 이름 + 조건 진행.
-// 왜   — 잠긴 칸을 회색 네모로 두면 "아직 없는 것" 이 되고, 여울을 반투명으로 깔면
-//        "저렇게 될 수 있다" 가 된다(8/26 결정 3). 다운로드·공유는 처음부터 열려 있어야 한다(§0 원칙 12).
+// 벽 = 방 위로 통째로 올라오는 판(18칸). 열린 칸만 또렷하고 잠긴 칸은 흐리다 —
+//      "아직 못 배운 모습" 이 보여야 다음에 뭘 할지 알 수 있다.
+// 액자 = 벽에서 한 칸을 누르면 크게. 열린 칸은 저장·공유, 잠긴 칸은 조건만 알려 준다.
 'use client';
 
-import type { CSSProperties } from 'react';
-import { DECO_UNLOCK, EMPTY, FEATURE_LOCK, MOTION_CELLS, POSTCARD_MOCK, SCENE_MOCK, WALLS, yeoulImg } from './constants';
-import { C, GAEGU, SANS, ghost, label, note, radius, tab } from './ui';
+import { C, GAEGU, radius } from './ui';
 import type { Yeoul } from './useYeoul';
 
-const col = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap });
-const grid = (n: number, gap = 8): CSSProperties => ({ display: 'grid', gridTemplateColumns: `repeat(${n},1fr)`, gap });
-
-const floorName = (f: 1 | 2 | 3) => (f === 1 ? '처음부터' : f === 2 ? '조건' : '선물');
-
 export default function Album({ y }: { y: Yeoul }) {
-  const { s, derived, actions } = y;
-
+  const { v } = y;
   return (
-    <div style={col(13)}>
-      <div style={{ display: 'flex', gap: 7 }}>
-        {derived.albumTabs.map(([k, t]) => (
-          <button key={k} data-album-tab={k} onClick={() => actions.pickAlbumTab(k)} style={tab(s.albumTab === k)}>{t}</button>
+    <>
+      {v.wall.show && <Wall y={y} />}
+      {v.frame.show && <FrameView y={y} />}
+    </>
+  );
+}
+
+function Wall({ y }: { y: Yeoul }) {
+  const w = y.v.wall;
+  return (
+    <div data-part="wall" style={{ position: 'absolute', inset: 0, zIndex: 9, background: C.wallBg, display: 'flex', flexDirection: 'column', animation: w.anim }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'baseline', gap: 9, padding: '14px 18px 10px' }}>
+        <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 21, color: C.ink }}>함께한 순간</span>
+        <span style={{ fontSize: 11.5, color: C.faint }}>{w.count}</span>
+        <span style={{ flex: 1 }} />
+        <button onClick={w.close} style={{ width: 28, height: 28, borderRadius: radius.pill, border: '1px solid rgba(74,64,56,.16)', background: 'rgba(255,253,248,.9)', fontSize: 12, color: C.sub, lineHeight: 1 }} aria-label="닫기">✕</button>
+      </div>
+
+      <div style={{
+        flex: '1 1 auto', overflow: 'auto', padding: '6px 18px 18px',
+        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 14px',
+        alignContent: 'start', alignItems: 'start',
+        backgroundImage: 'repeating-linear-gradient(90deg,rgba(74,64,56,.05) 0 2px,transparent 2px 22px)',
+      }}>
+        {w.frames.map((f, i) => (
+          <span key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignSelf: 'start', margin: '0 0 22px' }}>
+            <button
+              onClick={f.tap}
+              style={{ position: 'relative', width: '100%', height: 0, padding: '0 0 133%', boxSizing: 'content-box', border: `5px solid ${f.bd}`, borderRadius: 3, background: f.bg, boxShadow: f.shadow, overflow: 'hidden' }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={f.img} alt="" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: f.opacity, filter: f.filter }} />
+            </button>
+            <span style={{ fontSize: 10.5, lineHeight: 1.35, textAlign: 'center', color: f.labelFg }}>{f.label}</span>
+          </span>
         ))}
       </div>
 
-      {/* ── 동작 18칸 ── */}
-      {s.albumTab === 'motion' && (
-        <div style={col(11)}>
-          <span style={label}>동작 {s.unlocked.length} / {MOTION_CELLS.length} · 1층 8 · 2층 8 · 선물 2</span>
-          <div style={grid(2, 9)}>
-            {derived.motionCells.map((m) => (
-              <div
-                key={m.key} data-motion-cell={m.key} data-open={m.open ? '1' : '0'}
-                style={{
-                  ...col(6), padding: '9px 10px 11px', borderRadius: 12, boxSizing: 'border-box',
-                  border: `1px solid ${m.open ? '#E7CFC5' : C.line}`,
-                  background: m.open ? '#F6E7DF' : C.slotDim,
-                }}
-              >
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', borderRadius: 9, overflow: 'hidden', background: m.open ? '#EBD3C7' : '#E6DFD3' }}>
-                  {/* 잠긴 칸도 회색이 아니라 **여울이 그 동작을 하는 모습**이 반투명으로 깔린다. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={yeoulImg(m.key)} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: m.open ? 1 : .22, filter: m.open ? 'none' : 'grayscale(.4)' }} />
-                </div>
-                <span style={{ fontSize: 12.5, lineHeight: 1.25, color: m.open ? '#5A3D32' : C.ink }}>{m.label}</span>
-                <span style={{ fontSize: 10.5, lineHeight: 1.35, color: m.open ? '#7A5445' : C.sub }}>
-                  {m.open ? floorName(m.floor) : m.progress ? `${m.cond} · ${m.progress}` : m.cond}
-                </span>
-                {m.open && (
-                  <div style={grid(2, 6)}>
-                    <button data-action="download" onClick={() => actions.onDownload(m.label)} style={{ ...ghost, padding: '7px 2px', fontSize: 11.5, textAlign: 'center' }}>다운로드</button>
-                    <button data-action="share" onClick={() => actions.onShare(m.label)} style={{ ...ghost, padding: '7px 2px', fontSize: 11.5, textAlign: 'center' }}>공유</button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <span style={{ flex: 'none', padding: '0 18px 16px', fontSize: 11, color: C.faint }}>
+        액자를 누르면 크게 볼 수 있어요 · 흐린 액자는 아직 못 배운 모습이에요
+      </span>
+    </div>
+  );
+}
 
-      {/* ── 엽서(여행) — 정본 §9. 하루 한 장, 최대 3장. ── */}
-      {s.albumTab === 'card' && (
-        s.cards > 0 ? (
-          <div style={col(10)}>
-            {POSTCARD_MOCK.slice(0, s.cards).map((c, i) => (
-              <button
-                key={c.day} data-card={i} onClick={() => actions.showCard(i)}
-                style={{ padding: '11px 11px 15px', background: '#FFFFFF', border: `1px solid ${C.line}`, boxShadow: '0 3px 12px rgba(74,64,56,.12)', cursor: 'pointer', textAlign: 'center', ...col(8), width: '100%', boxSizing: 'border-box' }}
-              >
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', overflow: 'hidden', background: '#EBD3C7' }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={WALLS.find((w) => w.id === c.bg)?.img ?? WALLS[0].img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={yeoulImg('call')} alt="" style={{ position: 'absolute', left: '50%', bottom: '5%', width: '34%', marginLeft: '-17%', objectFit: 'contain', display: 'block' }} />
-                </div>
-                <span style={{ fontFamily: GAEGU, fontSize: 17, lineHeight: 1.4, color: C.ink }}>{c.line}</span>
-                <span style={{ fontSize: 11, color: C.faint }}>{c.day}</span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div style={{ ...col(9), padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center' }}>
-            <span style={{ fontFamily: GAEGU, fontSize: 19, color: C.ink }}>{EMPTY.card}</span>
-            <span style={note}>자리를 오래 비우면 여행을 떠나고, 그때 보낸 엽서가 여기 쌓여요.</span>
-          </div>
-        )
-      )}
-
-      {/* ── 장면(혼자 논 모습) — 정본 §11 레시피 5값을 한 장으로 조립한다. ── */}
-      {s.albumTab === 'scene' && (
-        s.scenes > 0 ? (
-          <div style={col(10)}>
-            {SCENE_MOCK.slice(0, s.scenes).map((c, i) => (
-              <button
-                key={c.line} data-scene={i} onClick={() => actions.showScene(i)}
-                style={{ ...col(8), padding: 11, borderRadius: radius.md, background: C.paper, border: `1px solid ${C.line}`, cursor: 'pointer', textAlign: 'left', width: '100%', boxSizing: 'border-box' }}
-              >
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', borderRadius: 9, overflow: 'hidden', background: '#EBD3C7' }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={WALLS.find((w) => w.id === c.bg)?.img ?? WALLS[0].img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={s.imgUrl ?? yeoulImg(c.motion)} alt="" style={{ position: 'absolute', left: '50%', bottom: '5%', height: '80%', width: '34%', marginLeft: '-17%', objectFit: 'contain', display: 'block' }} />
-                  {/* 소품은 하루 하나(§11). 그림이 없어 자리만 표시한다. */}
-                  {!!c.prop && (
-                    <span style={{ position: 'absolute', left: 8, bottom: 8, padding: '3px 8px', borderRadius: radius.pill, background: 'rgba(255,251,244,.86)', border: `1px solid ${C.line}`, fontSize: 10.5, color: C.sub }}>{c.prop} 자리</span>
-                  )}
-                </div>
-                <span style={{ fontFamily: GAEGU, fontSize: 16, lineHeight: 1.4, color: C.ink }}>{c.line}</span>
-                <span style={{ fontSize: 11, color: C.faint }}>{c.time}</span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div style={{ ...col(9), padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center' }}>
-            <span style={{ fontFamily: GAEGU, fontSize: 19, color: C.ink }}>{EMPTY.scene}</span>
-          </div>
-        )
-      )}
-
-      {/* ── 방 꾸미기(배경 16종) — 고른 배경은 **기본 방**에만 걸린다 ── */}
-      {s.albumTab === 'deco' && (
-        <div style={col(9)}>
-          <span style={label}>배경 {WALLS.length}종 · 고른 배경은 기본 방에 걸려요</span>
-          {derived.decoLocked && (
-            <div style={{ padding: '11px 13px', borderRadius: radius.md, background: '#F1EBE0', border: '1px dashed rgba(74,64,56,.18)', fontFamily: SANS, fontSize: 12.5, color: C.sub }}>
-              {FEATURE_LOCK.deco} · 지금 {derived.open2}/{DECO_UNLOCK}
-            </div>
-          )}
-          <div style={grid(4, 8)}>
-            {WALLS.map((w) => (
-              <button
-                key={w.id} data-wall={w.id} onClick={() => actions.pickWall(w.id)}
-                style={{ ...col(5), alignItems: 'center', padding: '7px 4px', borderRadius: 12, background: C.paperHi, cursor: 'pointer', opacity: derived.decoLocked ? .5 : 1, border: `${s.wallId === w.id ? 2 : 1}px solid ${s.wallId === w.id ? C.accent : C.line}` }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={w.img} alt="" style={{ width: '100%', height: 30, objectFit: 'cover', borderRadius: 7, display: 'block' }} />
-                <span style={{ fontSize: 10.5, color: C.sub }}>{w.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+function FrameView({ y }: { y: Yeoul }) {
+  const f = y.v.frame;
+  return (
+    <div onClick={f.close} data-part="frame" style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(74,64,56,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22, animation: 'yFadeIn .18s ease' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%', animation: f.anim }}>
+        <span style={{ position: 'relative', width: 'min(190px,70%)', height: 0, padding: '0 0 93%', boxSizing: 'content-box', border: `7px solid ${C.frameWood}`, borderRadius: 4, background: C.paper, overflow: 'hidden', boxShadow: '0 12px 28px rgba(46,42,38,.32)' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={f.img} alt="" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: f.opacity }} />
+        </span>
+        <span style={{ fontFamily: GAEGU, fontSize: 20, color: '#FBF6EC' }}>{f.name}</span>
+        {f.locked && <span style={{ padding: '7px 14px', borderRadius: radius.pill, background: 'rgba(255,253,248,.16)', fontSize: 12, color: '#F3E9DC' }}>{f.cond}</span>}
+        {f.open && (
+          <span style={{ display: 'flex', gap: 8 }}>
+            <button onClick={f.save} style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: 12.5, color: C.ink }}>저장</button>
+            <button onClick={f.save} style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: 12.5, color: C.ink }}>공유</button>
+          </span>
+        )}
+      </div>
     </div>
   );
 }

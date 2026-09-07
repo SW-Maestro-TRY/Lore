@@ -11,7 +11,16 @@
 //   하이드레이션 경고가 뜨고, e2e 가 그 경고를 실패로 센다.
 //
 // 옛 랜딩(Hero·HowItWorks·CharacterCreator)은 /zzal/landing 에 남아 있다.
+//
+// 글꼴 — 여울 시안은 손글씨(Gaegu)와 고운돋움 두 벌을 쓴다.
+// ★ CSS 의 `@import` 로는 못 받는다. Next 가 여러 CSS 를 이어 붙이면서 @import 가 파일 맨 위를
+//   벗어나면 브라우저가 통째로 무시한다(2026-09-07 실측: 폰트 요청이 아예 안 나갔다).
+//   그래서 next/font 로 받아 CSS 변수로 내려 준다.
+import { Gaegu, Gowun_Dodum } from 'next/font/google';
 import TamagotchiScreen, { type SkinName } from '@zzal/tamagotchi/TamagotchiScreen';
+
+const gaegu = Gaegu({ subsets: ['latin'], weight: ['400', '700'], variable: '--font-gaegu', display: 'swap' });
+const gowun = Gowun_Dodum({ subsets: ['latin'], weight: '400', variable: '--font-gowun', display: 'swap' });
 
 export default async function Page({
   searchParams,
@@ -20,5 +29,9 @@ export default async function Page({
 }) {
   const sp = await searchParams;
   const skin: SkinName = sp.skin === 'scrapbook' ? 'scrapbook' : 'yeoul';
-  return <TamagotchiScreen name={skin} />;
+  return (
+    <div className={`${gaegu.variable} ${gowun.variable}`}>
+      <TamagotchiScreen name={skin} />
+    </div>
+  );
 }
