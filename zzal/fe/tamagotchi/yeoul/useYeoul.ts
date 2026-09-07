@@ -60,10 +60,7 @@ export interface YeoulState {
   sampleMode: boolean; hatch: number; snapshot: Partial<YeoulState> | null;
   tutor: number; tutorOn: boolean;
   cracking: boolean; eggMsg: string; nameErr: boolean;
-  hintI: number;
-  /** 팝오버가 무대를 덮은 양 중 **지금까지 본 가장 큰 값**. 캐릭터를 상시 이만큼 들어 둔다. */
-  popRise: number;
-  leaveOff: boolean;
+  hintI: number; leaveOff: boolean;
   /**
    * 가입·로그인 모달. 랜딩에서 무언가 하려 할 때 뜬다(상훈님 9/7 결정).
    * 창 자체는 공통 부품(`@common/auth/AuthModal`)이고 여기서는 여닫기만 든다.
@@ -95,7 +92,7 @@ const INITIAL: YeoulState = {
   saved: 0, wishes: 0, cardIdx: 0,
   sampleMode: false, hatch: 0, snapshot: null,
   tutor: 0, tutorOn: false, cracking: false, eggMsg: '', nameErr: false,
-  hintI: 0, popRise: 0, leaveOff: false,
+  hintI: 0, leaveOff: false,
   authOpen: false, authTab: 'signup',
 };
 
@@ -182,33 +179,6 @@ export function useYeoul() {
     const timers = T.current;
     return () => { Object.values(timers).forEach((t) => clearTimeout(t)); };
   }, []);
-
-  // 무대 아래끝과 팝오버 윗끝의 겹침을 재서 캐릭터를 그만큼 들어 올린다(시안 measureLift).
-  //
-  // ★ 잰 값 중 **가장 큰 것만 남긴다.** 겹침을 그때그때 따라가면 팝오버를 여닫을 때마다,
-  //   그리고 방을 바꿔 누를 때마다(침실은 게이지·둘째 버튼이 없어 낮고 주방은 높다)
-  //   캐릭터가 오르내린다. 상훈님이 거슬려 하신 게 그 움직임이라, 부드럽게 만드는 대신
-  //   **한 번 들린 높이에 그대로 둔다**(2026-09-07 결정).
-  //   첫 화면은 팝오버가 열린 채로 시작하므로(popOpen: true) 곧바로 값이 잡힌다.
-  const stageEl = useRef<HTMLDivElement | null>(null);
-  const popEl = useRef<HTMLDivElement | null>(null);
-  const measure = useCallback(() => {
-    const st = stageEl.current;
-    if (!st) return;
-    const p = popEl.current;
-    if (!p) return;   // 닫혀 있으면 잴 것이 없다 — 이전 최대값을 그대로 쓴다
-    const rise = Math.max(0, Math.round(st.getBoundingClientRect().bottom - p.getBoundingClientRect().top));
-    setS((v) => (rise > v.popRise + 2 ? { ...v, popRise: rise } : v));
-  }, []);
-  const stageRef = useCallback((el: HTMLDivElement | null) => { stageEl.current = el; measure(); }, [measure]);
-  const popRef = useCallback((el: HTMLDivElement | null) => { popEl.current = el; measure(); }, [measure]);
-  useEffect(() => { measure(); });
-  useEffect(() => {
-    // 창 크기가 바뀌면 무대 높이가 달라져 옛 최대값이 과하게 크다. 0 으로 놓고 다시 쌓는다.
-    const on = () => { setS((v) => (v.popRise === 0 ? v : { ...v, popRise: 0 })); measure(); };
-    window.addEventListener('resize', on);
-    return () => window.removeEventListener('resize', on);
-  }, [measure]);
 
   const mode: Mode = s.sleeping ? 'sleep' : s.sick ? 'sick' : s.night ? 'night' : 'day';
   const needStyle: NeedStyle = s.needStyleLocal ?? '색+모양+글자';
@@ -1084,7 +1054,6 @@ export function useYeoul() {
         bornName: `${s.petName} · 1일째`,
         bornTraits: [s.picks.persona, s.picks.tone].filter(Boolean).join(' · ') || '성격은 지내면서 알게 돼요',
       },
-      lift: { char: `${s.popRise + 34}px`, shadow: `${s.popRise + 4}px` },
       statusText,
     };
   }, [
@@ -1112,7 +1081,7 @@ export function useYeoul() {
     openAuth, closeAuth, passAuth,
   ]);
 
-  return { s, v, actions, stageRef, popRef };
+  return { s, v, actions };
 }
 
 export type Yeoul = ReturnType<typeof useYeoul>;
