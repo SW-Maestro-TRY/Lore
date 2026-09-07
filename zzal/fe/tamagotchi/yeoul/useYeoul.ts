@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KINDS, KIND_IMG, LEARN_GOALS, LINE,
   NAME_POOL, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE, STEPS, TUTOR, TUTOR_MAIN,
-  USER_Q, WALLS,
+  SHARDS, USER_Q, WALLS,
   type FrameKind, type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
@@ -50,6 +50,12 @@ export interface YeoulState {
   picks: Record<string, string | null>; texts: Record<string, string>;
   user: Record<string, string | null>; uq: number;
   petName: string; uploaded: boolean; authed: string;
+  /** 오늘 찍힌 조각 수(0~4). 정본상 **잠들 때 판정·리셋**된다. 지금은 프론트 목이라 손으로 바꾼다. */
+  shards: number;
+  /** 튜토리얼 완주 축하를 이미 띄웠는가. 한 번만 뜬다. */
+  tutorDone: boolean;
+  /** 구르기를 배웠는가(튜토리얼 완주 기념). */
+  rollUnlocked: boolean;
   /** 여울의 물음에 **직접 적는** 칸의 초안(지금은 호칭 문항만 쓴다). */
   askDraft: string;
   fire: Fire | null; decoOpen: boolean; albumOpen: number;
@@ -86,6 +92,7 @@ const INITIAL: YeoulState = {
   resolved: {}, calls: 3, guess: null,
   wallId: 'cream', picks: {}, texts: {}, user: {}, uq: 0,
   petName: '보리', uploaded: false, authed: '', askDraft: '',
+  shards: 2, tutorDone: false, rollUnlocked: false,
   fire: null, decoOpen: false, albumOpen: 8,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
@@ -193,19 +200,41 @@ export function useYeoul() {
   const TUT = s.sampleMode ? TUTOR : TUTOR_MAIN;
   const tut: TutorStep | null = (s.sampleMode || s.tutorOn) && s.tutor < TUT.length ? TUT[s.tutor] : null;
 
+  /**
+   * 튜토리얼을 끝까지 마친 순간. 2층 해금과 **같은 전면 판**으로 한 번만 축하한다.
+   *
+   * ★ 담는 것 셋 — 끝냈다 · 기념으로 구르기를 배웠다 · 내일 또 만나자.
+   * ★ "내일 꼭 오세요" 같은 압박도, 아이가 서운해하는 말도 쓰지 않는다. 초대이지 숙제가 아니다.
+   *   "내일" 의 근거는 **밤사이 새 동작을 배워 아침에 보여 준다**는 이 게임의 구조에서 온다.
+   *   (자캐 커뮤니티에서 캐릭터가 사용자를 원망하는 말은 가장 싫어하는 결이다)
+   */
+  const finishTutor = (v: YeoulState): YeoulState => ({
+    ...v, tutor: 0, tutorOn: false,
+    ...(v.tutorDone ? {} : {
+      tutorDone: true, rollUnlocked: true,
+      fire: {
+        title: '오늘 몫은 다 했어요',
+        body: `${v.petName}가 둘러보는 법을 다 익혔어요. 기념으로 구르기를 하나 배웠고,\n오늘 밤에 또 하나를 연습해 볼 참이에요. 아침에 보여 드릴게요.`,
+        hint: '', tapAny: true,
+        actions: [{ label: '좋아요', tap: () => setS((w) => ({ ...w, fire: null })), primary: true }],
+      },
+    }),
+  });
+
   const tutorDone = useCallback((what: string) => {
     setS((v) => {
       if (!v.tutorOn || v.sampleMode) return v;
       const st = TUTOR_MAIN[v.tutor];
       if (!st || (st.done !== what && st.done !== 'any')) return v;
       const next = v.tutor + 1;
-      return next >= TUTOR_MAIN.length ? { ...v, tutor: 0, tutorOn: false } : { ...v, tutor: next };
+      return next >= TUTOR_MAIN.length ? finishTutor(v) : { ...v, tutor: next };
     });
   }, []);
   const skipTutorStep = useCallback(() => {
     setS((v) => {
       const next = v.tutor + 1;
-      return next >= TUT.length ? { ...v, tutor: 0, tutorOn: false } : { ...v, tutor: next };
+      if (next < TUT.length) return { ...v, tutor: next };
+      return v.sampleMode ? { ...v, tutor: 0, tutorOn: false } : finishTutor(v);
     });
   }, [TUT.length]);
   const nextTutor = useCallback(() => setS((v) => ({ ...v, tutor: v.tutor + 1, hatch: Math.min(4, v.hatch + 1) })), []);
@@ -574,6 +603,12 @@ export function useYeoul() {
     later('postcard', 500, popPostcard);
   }, [flash, later, popPostcard]);
   const restart = useCallback(() => setS(() => ({ ...INITIAL })), []);
+  /** 개발용 — 2층 로드맵을 다 배운 것으로 만든다(= 3층 시작 = 조각 등장). */
+  const finishRoadmap = useCallback(() => patch({ cChat: 4, cBath: 3, cSleep: 3, cGame: 3 }), [patch]);
+  /** 개발용 — 조각 도장을 0·2·4 로 바꿔 본다. 실제로는 잠들 때 판정·리셋된다(정본). */
+  const setShards = useCallback((n: number) => () => patch({ shards: n }), [patch]);
+  /** 개발용 — 튜토리얼 완주 축하 판을 다시 띄운다. */
+  const showTutorEnd = useCallback(() => setS((v) => finishTutor({ ...v, tutorDone: false })), []);
   const openPlay = useCallback((tab: 'talk' | 'guess' | 'run') => () => patch({ sheet: 'play', playTab: tab, toast: '' }), [patch]);
   const pickTab = useCallback((t: 'talk' | 'guess' | 'run') => () => patch({ playTab: t }), [patch]);
 
@@ -828,7 +863,10 @@ export function useYeoul() {
     });
 
     // ── 앨범 벽 ──
-    const frames = ALBUM.map(([name, open], i) => {
+    // ★ 구르기는 18칸 **밖의 선물**이다(정본 §"첫 심화 행동 동작 = 카탈로그 밖 특별 1종").
+    //   그래서 칸 수(N/18)를 건드리지 않고 맨 앞에 따로 붙인다.
+    const gift: ReadonlyArray<readonly [string, number]> = s.rollUnlocked ? [['구르기 · 선물', 1]] : [];
+    const frames = [...gift, ...ALBUM].map(([name, open], i) => {
       const parts = name.split(' · ');
       const kind = FRAME_KINDS[i % FRAME_KINDS.length];
       const f: FrameData = { name: parts[0], open: !!open, cond: open ? '' : (parts[1] || '조건 미정'), kind };
@@ -857,7 +895,6 @@ export function useYeoul() {
       screen: { room: s.screen === 'room', onb: s.screen === 'onb', egg: s.screen === 'egg' },
       hud: { show: !s.sampleMode },
       pet: { name: s.petName, dayText: `${s.day}일째`, bond: s.bond },
-      shards: { show: s.floorLv >= 3, cells: cells(2, C.accentDim, '#F1EBE0') },
       chat: {
         show: s.screen === 'room' && (s.chatOpen || s.chatClosing) && !s.sheet,
         anim: s.chatClosing ? 'yPopOut .17s ease forwards' : 'yPopIn .2s cubic-bezier(.2,.9,.25,1)',
@@ -872,6 +909,10 @@ export function useYeoul() {
         anim: tut && tut.room === 'chat' ? 'yNudge 1.9s ease-in-out infinite' : 'none',
       },
       medFab: { show: s.screen === 'room' && s.sick && !s.chatOpen && !s.popOpen && !s.sheet && !s.sleeping },
+      // 좌측 하단 카드. 세 얼굴을 차례로 갖는다 —
+      //   튜토리얼 중엔 부름 / 2층을 배우는 동안엔 로드맵 / 다 배우면 **조각 도장 4칸**.
+      // ★ 로드맵이 끝나도 카드가 사라지지 않는다(2026-09-07 상훈님 지시). 정본상 2층 8종을
+      //   다 열면 3층이 시작되고 그때 조각 4칸이 등장하므로, 그 자리를 그대로 이어받는다.
       mini: {
         show: s.screen === 'room' && !s.sampleMode && !s.chatOpen && !s.popOpen && !s.sheet && !s.sleeping,
         isTut: showTutMini, tutText: tut?.text ?? '',
@@ -879,6 +920,12 @@ export function useYeoul() {
         name: goal?.name ?? '',
         cond: goal ? `${goal.cond} ${Math.min(goal.have, goal.need)} / ${goal.need}` : '',
         barW: goal ? `${Math.round(Math.min(1, goal.have / goal.need) * 100)}%` : '0%',
+        // 배울 것이 남지 않았으면 조각으로 넘어간다.
+        hasShards: !showTutMini && !goal,
+        shards: SHARDS.map((x, i) => ({
+          label: x.label, cond: x.cond, on: i < s.shards,
+        })),
+        shardCount: `${Math.min(4, s.shards)} / 4`,
       },
       ask: (() => {
         const q = s.sampleMode && s.uq < USER_Q.length ? USER_Q[s.uq] : null;
@@ -1069,7 +1116,7 @@ export function useYeoul() {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings,
-    setMode, nextDay, restart, startTutor, endTutor, skipTutorStep, openPlay,
+    setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay,
     openAuth, closeAuth, passAuth,
     backToSample: () => patch({ screen: 'room' }),
   }), [
@@ -1077,7 +1124,7 @@ export function useYeoul() {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings,
-    setMode, nextDay, restart, startTutor, endTutor, skipTutorStep, openPlay,
+    setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay,
     openAuth, closeAuth, passAuth,
   ]);
 
