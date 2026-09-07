@@ -8,8 +8,8 @@ import {
   type RunCard,
 } from "../../lib/nhApi";
 import { creditBalance } from "@common/api/credits";
-import CreditHistory from "./CreditHistory";
-import CreditCharge from "./CreditCharge";
+import CreditHistory from "@common/mypage/CreditHistory";
+import CreditCharge from "@common/mypage/CreditCharge";
 import { louArt } from "../../lib/louArt";
 import { WorkCard } from "../Works/Works";
 
