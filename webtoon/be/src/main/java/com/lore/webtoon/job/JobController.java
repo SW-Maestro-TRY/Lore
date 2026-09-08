@@ -1,9 +1,11 @@
 package com.lore.webtoon.job;
 
+import com.lore.webtoon.credit.CreditGate;
+import com.lore.webtoon.credit.GuestGate;
+import com.lore.webtoon.usage.SpendGuard;
+import com.lore.webtoon.harness.WebtoonController;
+import com.lore.webtoon.WebtoonApi;
 import com.lore.common.exception.BusinessException;
-import com.lore.webtoon.CreditGate;
-import com.lore.webtoon.GuestGate;
-import com.lore.webtoon.SpendGuard;
 import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,7 +41,7 @@ import java.util.Map;
  * </pre>
  *
  * 켰을 때 이 길이 이기는 이유: 스프링은 <b>더 구체적인 매핑</b>을 먼저 고른다.
- * {@code WebtoonController} 는 {@code /api/webtoon/**} 라는 넓은 그물이고,
+ * {@code WebtoonController} 는 {@code /api/webtoon/v1/**} 라는 넓은 그물이고,
  * 여기는 주소를 하나씩 적었다.
  *
  * <h2>응답 모양은 그대로다</h2>
@@ -54,7 +56,7 @@ import java.util.Map;
 @ConditionalOnProperty(name = "lore.webtoon.python.direct", havingValue = "true")
 public class JobController {
 
-    static final String PREFIX = "/api/webtoon/nh";
+    static final String PREFIX = WebtoonApi.V1 + "/nh";
 
     private final JobService jobs;
     private final RunArt art;
@@ -168,11 +170,72 @@ public class JobController {
         return Map.of("ok", true);
     }
 
-    @Operation(summary = "캐릭터 시트 확인")
-    @PostMapping("/jobs/{id}/sheet")
-    public Map<String, Object> sheet(@PathVariable String id) {
-        jobs.approveSheet(id);
+    /**
+     * 넷 다 마음에 안 들 때 — 후보를 다시 짓는다.
+     *
+     * <b>없으면 그냥 새는 자리였다.</b> 화면은 처음부터 이 주소를 불렀는데
+     * (nhApi.ts 의 {@code retryDirections}) 여기에 없어서, 아래 넓은 그물
+     * ({@code WebtoonController})로 떨어져 파이썬 서버까지 갔다. 파이썬은
+     * 스프링이 만든 작업을 모르니 「그런 작업이 없습니다」를 냈다 — 시트
+     * 주소가 어긋나 있던 것과 같은 종류의 구멍이다.
+     */
+    @Operation(summary = "이야기 후보 다시 짓기",
+            description = "고르는 차례일 때만 된다. note 를 적어 보내면 이번에만 반영한다.")
+    @PostMapping("/jobs/{id}/pick-retry")
+    public Map<String, Object> retryPick(@PathVariable String id,
+                                         @RequestBody(required = false) NoteRequest body) {
+        jobs.retryPick(id, body == null ? null : body.note());
         return Map.of("ok", true);
+    }
+
+    /**
+     * 그만둔다.
+     *
+     * <b>돈이 나가는 것을 사람이 멈출 수 있는 유일한 자리다.</b> 이 길에는
+     * 그동안 이게 없어서, 화면의 「그만두기」가 파이썬 서버로 새고 아무 일도
+     * 일어나지 않았다 — 사람은 눌렀는데 그림은 계속 그려지고 값은 계속
+     * 나갔다.
+     *
+     * 이미 끝난 작업에도 200 을 준다. 화면은 0.8초마다 묻기 때문에, 다 만든
+     * 순간에 누른 것을 오류로 돌려주면 사람은 자기가 뭘 잘못한 줄 안다.
+     */
+    @Operation(summary = "만들기 그만두기",
+            description = "도는 것을 멈추고, 낸 것(크레딧·무료 횟수)을 돌려준다.")
+    @PostMapping("/jobs/{id}/cancel")
+    public Map<String, Object> cancel(@PathVariable String id) {
+        jobs.cancel(id);
+        return Map.of("ok", true);
+    }
+
+    /** 사람이 적어 보낸 한 마디. 본문 없이 부를 수도 있다. */
+    public record NoteRequest(String note) {
+    }
+
+    /**
+     * 캐릭터 시트를 보고 정한다 — 이대로 가거나(approve), 다시 그리거나(retry).
+     *
+     * <b>주소 이름이 화면과 어긋나 있었다.</b> 화면은 처음부터
+     * {@code /sheet-decision} 을 불렀는데 여기에는 {@code /sheet} 만 있어서,
+     * 그 요청이 아래 프록시로 새어 파이썬 서버까지 갔다. 파이썬은 스프링이
+     * 만든 작업을 모르므로 「그런 작업이 없습니다」를 냈다 — 시트에서 더
+     * 나아갈 수 없었다. 옛 이름도 남겨 둔다(둘 다 받는다).
+     */
+    @Operation(summary = "캐릭터 시트 확인",
+            description = "decision=approve 면 그대로 진행, retry 면 시트를 다시 그린다.")
+    @PostMapping({"/jobs/{id}/sheet-decision", "/jobs/{id}/sheet"})
+    public Map<String, Object> sheet(@PathVariable String id,
+                                     @RequestBody(required = false) SheetDecision body) {
+        String decision = body == null ? null : body.decision();
+        if ("retry".equalsIgnoreCase(decision)) {
+            jobs.retrySheet(id, body.note());
+        } else {
+            jobs.approveSheet(id);
+        }
+        return Map.of("ok", true);
+    }
+
+    /** 본문이 없으면(옛 이름으로 부르면) 그대로 진행으로 본다. */
+    public record SheetDecision(String decision, String note) {
     }
 
     /**

@@ -64,8 +64,17 @@ export const SHARE_TARGETS: ShareTarget[] = [
 export async function copyLink(url: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url);
-      return true;
+      /* **안 끝날 수 있다.** 권한을 묻는 동안 이 약속이 영영 안 풀리는
+         경우가 있어서(창이 뒤에 있을 때 특히), 기다리는 쪽을 못 믿는다.
+         2초 안에 답이 없으면 아래 옛 방식으로 넘어간다 — 부르는 쪽이
+         여기서 멈추면 메뉴가 안 닫히고 화면이 고장난 것으로 보인다. */
+      const done = await Promise.race([
+        navigator.clipboard.writeText(url).then(() => true),
+        new Promise<false>((r) => setTimeout(() => r(false), 2000)),
+      ]);
+      if (done) {
+        return true;
+      }
     }
   } catch {
     /* 아래 옛 방식으로 */

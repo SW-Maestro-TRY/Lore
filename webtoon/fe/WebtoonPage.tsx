@@ -4,7 +4,7 @@
 // 화면 여섯(홈 · 위자드 · 진행 · 결과 · 둘러보기 · 마이페이지)과 편집실.
 //
 // **만들기는 이제 진짜로 돈다.** 위자드에서 「웹툰 만들기」를 누르면
-// `/api/webtoon/nh/create` 로 나가고(그 앞에 스프링이 서서 생성 하네스로
+// `/api/webtoon/v1/nh/create` 로 나가고(그 앞에 스프링이 서서 생성 하네스로
 // 넘긴다 — webtoon/be 참고), 진행 화면이 그 작업을 0.8초마다 받아 그린다.
 // 사람이 멈춰 서는 자리 둘(시트 확인 · 이야기 고르기)도 실제 검수다.
 //
@@ -41,6 +41,7 @@ import Editor from "./sections/Editor/Editor";
 import Characters from "./sections/Characters/Characters";
 import { STYLE_INFO, type WizardForm } from "./lib/wizardData";
 import { createJob, linkThisBrowser } from "./lib/nhApi";
+import { uploadDataUrls } from "@common/api/uploads";
 import type { Character } from "./lib/charApi";
 
 type View = "landing" | "create" | "running" | "result" | "works" | "mypage"
@@ -80,8 +81,9 @@ function WebtoonScreens() {
      전부라, 뒤로가기가 안 되면 들어간 곳마다 갇힌다.
 
      민 주소는 아래 useEffect 가 다시 읽어 화면을 맞춘다 — 그래서 앞으로가기도
-     같이 산다. 만들던 중(running)만 주소에 안 싣는다: 주소만으로는 어느
-     작업인지 알 수 없어서, 뒤로 갔다 오면 빈 진행 화면이 뜬다. */
+     같이 산다. 만들던 중(running)은 `?view=running&job=<번호>` 로 싣는다 —
+     번호가 있어야 서버에 무엇을 묻는지 알 수 있고, 그래야 새로고침해도
+     하던 데로 돌아온다. */
   const router = useRouter();
   const go = (next: Exclude<View, "running">, id?: string) => {
     const q = next === "result" && id ? `?run=${encodeURIComponent(id)}`
@@ -125,6 +127,15 @@ function WebtoonScreens() {
   useEffect(() => {
     const run = search.get("run");
     if (run) setRunId(run);
+
+    /* **만들던 중이면 그 작업으로 돌아간다.**
+       진행 상황은 서버가 들고 있는데(작업 번호로 묻는다) 그 번호가 화면
+       상태에만 있어서, 새로고침 한 번이면 만들던 데로 돌아갈 길이 없었다.
+       자주 묻는 것에 "나중에 다시 들어오면 하던 데서 이어집니다" 라고
+       적어 둔 그 약속이 안 지켜지고 있었다. 번호를 주소에 실어 지킨다. */
+    const job = search.get("job");
+    if (job) { setJobId(job); setView("running"); return; }
+
     const asked = search.get("view");
     // view 를 먼저 본다 — 편집실은 `?view=editor&run=x` 처럼 둘 다 달고 오므로,
     // run 을 먼저 보면 편집실로 못 가고 늘 완성본이 뜬다.
@@ -179,6 +190,26 @@ function WebtoonScreens() {
      삼키지 않고 그대로 던진다 — 진행 화면으로 넘어가 버리면 무엇이
      잘못됐는지 볼 자리가 없다(원본 startRun 과 같은 이유). */
   const start = async (form: WizardForm) => {
+    /* **사진은 S3 로 먼저 올린다** (팀 공용 presign). 본문에 data URL 로
+       실으면 넷이면 요청이 20MB 를 넘어서 서버가 그걸 다 받아 들고 있어야
+       한다 — t3.micro 에서 그게 제일 먼저 막힌다. 브라우저가 S3 로 바로
+       올리고 우리는 키만 넘긴다.
+
+       **로그인한 사람만** 이 길로 간다. presign 은 티켓을 계정에 묶어
+       남의 키를 적어 넣는 것을 막는데, 게스트는 계정이 없다. 게스트는
+       예전처럼 data URL 로 보낸다 — 서버가 둘 다 받는다.
+
+       올리다 실패하면 data URL 로 되돌린다. 사진 올리는 길이 잠깐 막혔다고
+       만들기가 통째로 죽으면 안 된다. */
+    let keys: string[] | undefined;
+    if (authStatus === "authenticated" && form.photos.length) {
+      try {
+        keys = await uploadDataUrls(form.photos, "webtoon");
+      } catch {
+        keys = undefined;
+      }
+    }
+
     const got = await createJob({
       name: form.name.trim(),
       character: form.character.trim(),
@@ -190,7 +221,9 @@ function WebtoonScreens() {
       // 사람은 자기가 적은 것이 반영된 줄 안다.
       story: form.story.trim(),
       style: form.style,
-      photos_data: form.photos,
+      // 키로 올렸으면 사진은 안 싣는다 — 두 벌을 보내는 셈이 된다.
+      photos_data: keys ? [] : form.photos,
+      photo_keys: keys,
       // 고른 캐릭터가 있으면 번호만 보낸다 — 그림은 서버가 붙인다.
       character_id: form.characterId,
       agree_ip: form.agreeIp,
@@ -202,6 +235,10 @@ function WebtoonScreens() {
     setStyleLabel(STYLE_INFO.find(([key]) => key === form.style)?.[1] || "");
     setJobId(got.id);
     setView("running");
+    /* 작업 번호를 주소에 싣는다 — 새로고침하거나 창을 닫았다 다시 와도
+       하던 데로 돌아온다. replace 로 미는 이유: 뒤로가기가 방금 떠난
+       만들기 화면으로 가야지, 만들던 중으로 되돌아오면 안 된다. */
+    router.replace(`/webtoon?view=running&job=${encodeURIComponent(got.id)}`);
   };
 
   return (
@@ -213,6 +250,23 @@ function WebtoonScreens() {
     >
       {/* 홈은 한 겹으로 묶는다 — 원본의 #landing 자리다. 폭·배경 규칙이
           그 덩어리에 걸려 있어서, 안 묶으면 넓은 화면에서 홈만 틀에 갇힌다. */}
+      {/* **만들던 것이 있으면 돌아갈 길을 늘 띄운다.**
+          기다리는 동안 둘러보러 나갈 수 있게 해 놓고 돌아올 단추가 없으면,
+          나간 사람은 만들던 것이 어디 갔는지 모른다 — 주소를 외워 둘 리도
+          없다. 진행 화면 자신에게는 안 띄운다(이미 거기다). */}
+      {jobId && view !== "running" && (
+        <button type="button" className="back-to-run"
+                onClick={() => { setView("running"); router.replace(
+                  `/webtoon?view=running&job=${encodeURIComponent(jobId)}`); }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/static/lou/react/idle/01.webp" alt="" aria-hidden="true" />
+          <span>
+            <b>루가 웹툰을 만들고 있어요</b>
+            <small>눌러서 돌아가기</small>
+          </span>
+        </button>
+      )}
+
       {view === "landing" && (
         <div className="landing">
           <Hero onStart={() => go("create")} onBrowse={() => go("works")} />
@@ -234,9 +288,16 @@ function WebtoonScreens() {
       {view === "running" && jobId && (
         <Progress
           jobId={jobId}
+          onBrowse={() => go("works")}
           styleLabel={styleLabel}
-          onExit={goHome}
-          onDone={(id) => go("result", id)}
+          onExit={() => { setJobId(null); goHome(); }}
+          onDone={(id) => {
+            /* **다 만들었으면 돌아갈 것이 없다.** 안 지우면 결과 화면에서도
+               「루가 웹툰을 만들고 있어요」 띠가 그대로 떠 있고, 눌러 보면
+               이미 끝난 작업의 진행 화면으로 되돌아간다. */
+            setJobId(null);
+            go("result", id);
+          }}
         />
       )}
       {view === "result" && (

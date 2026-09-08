@@ -24,7 +24,7 @@ export interface Allowance {
   blocked?: string | null;
 }
 
-const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon";
+const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
 export function useAllowance(): Allowance | null {
   const [got, setGot] = useState<Allowance | null>(null);

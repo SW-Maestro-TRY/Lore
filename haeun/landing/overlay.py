@@ -114,6 +114,16 @@ def clean_item(raw: Any) -> dict[str, Any] | None:
     if kind == "bubble" and variant not in BUBBLE_VARIANTS:
         variant = "normal"
     tail = str(raw.get("tail") or "").strip().lower()
+    if tail not in ("left", "right", "none"):
+        tail = "left"
+    # 꼬리 끝을 사람이 직접 끌어다 놓은 자리. 풍선 크기에 대한 %(가로·세로)라
+    # 그림 크기가 달라져도 같은 곳을 가리킨다. 없으면 옛 규칙(왼쪽/오른쪽)에서
+    # 만든다 — 예전에 저장한 것이 그대로 열려야 한다.
+    has_tip = raw.get("tx") is not None and raw.get("ty") is not None
+    tx = _clamp(raw.get("tx"), -300, 400, 22.0 if tail != "right" else 78.0)
+    ty = _clamp(raw.get("ty"), -300, 400, 152.0)
+    if not has_tip and tail == "none":
+        tx, ty = 22.0, 152.0
     return {
         "type": kind,
         "variant": variant,
@@ -123,7 +133,9 @@ def clean_item(raw: Any) -> dict[str, Any] | None:
         "w": _clamp(raw.get("w"), 3, 100, 40.0),
         "size": _clamp(raw.get("size"), 4, 200, 15.0),
         "rot": _clamp(raw.get("rot"), -180, 180, 0.0),
-        "tail": tail if tail in ("left", "right", "none") else "left",
+        "tail": tail,
+        "tx": tx,
+        "ty": ty,
     }
 
 
@@ -262,86 +274,182 @@ def _dashed_ellipse(draw, box, ink, width, on=14, off=10):
         a += step
 
 
-def _bubble_tile(item: dict[str, Any], box_w: int, scale: float):
-    """말풍선 하나를 투명 타일에 그린다. (타일, 높이) 를 돌려준다.
+def _silhouette(size, shapes, stroke: int, dashed_box=None, tail_box=None):
+    """채운 자리와 <b>테두리</b>를 함께 만든다. -> (fill_mask, outline_mask)
 
-    편집실 CSS 를 그대로 옮긴다: padding .55em/.85em, 글자는 가운데(나레이션만
-    왼쪽), 테두리 2.5px. em 은 글자 크기이므로 배율이 저절로 따라간다.
+    <b>왜 이렇게까지 하나.</b> 예전에는 몸통과 꼬리를 따로 그렸다. 그래서 둘이
+    만나는 자리에 선이 그대로 남았고(꼬리 위에 가로줄), 타원은 가장자리가
+    안으로 휘므로 꼬리가 <b>공중에 떠 보였다</b>. 사람이 보기에 그건 말풍선이
+    아니라 아래에 세모가 하나 놓인 것이다.
+
+    그래서 몸통과 꼬리를 <b>한 덩어리로 칠한 뒤</b>, 그 덩어리를 한 겹 깎아
+    (침식) 원본에서 빼서 테두리를 얻는다. 이러면 이어진 자리에는 선이 없고,
+    꼬리는 몸통에서 자란 것처럼 붙는다.
+
+    `dashed_box` 가 있으면 몸통 테두리만 점선으로 바꾼다 — 꼬리는 그대로
+    이어져 있어야 해서 실선으로 둔다(화면 CSS 도 그렇다).
+    """
+    Image, ImageDraw, _ = _pil()
+    from PIL import ImageChops, ImageFilter
+
+    fill = Image.new("L", size, 0)
+    d = ImageDraw.Draw(fill)
+    for kind, args in shapes:
+        getattr(d, kind)(*args, fill=255)
+
+    # 한 겹 깎아서 뺀다 — 이어진 덩어리의 바깥선만 남는다.
+    eaten = fill.filter(ImageFilter.MinFilter(max(3, stroke * 2 + 1)))
+    outline = ImageChops.subtract(fill, eaten)
+
+    if dashed_box is not None:
+        dash = Image.new("L", size, 0)
+        _dashed_ellipse(ImageDraw.Draw(dash), dashed_box, 255,
+                        max(2, stroke + 1), on=7, off=8)
+        dash = dash.filter(ImageFilter.MaxFilter(3))
+        keep = ImageChops.multiply(outline, dash)
+        if tail_box is not None:                 # 꼬리는 끊기면 안 된다
+            solid = Image.new("L", size, 0)
+            ImageDraw.Draw(solid).rectangle(tail_box, fill=255)
+            keep = ImageChops.lighter(keep, ImageChops.multiply(outline, solid))
+        outline = keep
+    return fill, outline
+
+
+def _fit(probe, text: str, font, box_w: int, pad_x: int, pad_y: int,
+         spread: float, target: float):
+    """글을 어디서 끊을지 <b>모양을 보고</b> 고른다. -> (폭, 높이, 줄들)
+
+    한 줄로 다 들어간다고 한 줄로 두면, 대사가 길수록 풍선이 국수 가락이 된다
+    (웹툰에서 그렇게 생긴 풍선은 없다). 그래서 몇 가지 폭으로 끊어 보고
+    <b>가로세로 비가 가장 보기 좋은 것</b>을 고른다. 사람이 정한 폭은 넘지
+    않는다 — 그건 한계지 목표가 아니다.
+    """
+    best = None
+    for frac in (1.0, 0.82, 0.68, 0.56, 0.46, 0.38):
+        inner = max(10, int(box_w * frac / spread) - pad_x * 2)
+        lines, tw, th = _lines_and_box(probe, text, font, inner)
+        w = min(box_w, int(tw * spread) + pad_x * 2)
+        h = int(th * spread) + pad_y * 2
+        score = abs(w / max(1, h) - target)
+        if best is None or score < best[0]:
+            best = (score, w, h, lines)
+    return best[1], best[2], best[3]
+
+
+def _tail_shape(cx, cy, a, b, tip, root_half):
+    """풍선 <b>가장자리에서 자라나</b> 끝점을 가리키는 세모.
+
+    뿌리를 타원 위에서 잡는 것이 요점이다. 예전처럼 아래쪽 고정 자리에 세모를
+    두면, 타원은 가장자리가 안으로 휘므로 <b>붙어 있지 않은 것처럼</b> 보였다.
+    여기서는 끝점 방향의 타원 위 한 점을 찾고, 그 좌우로 조금 벌린 두 점을
+    뿌리로 쓴다 — 어느 쪽으로 끌든 선이 이어진다.
+    """
+    t = math.atan2((tip[1] - cy) / max(1e-6, b), (tip[0] - cx) / max(1e-6, a))
+    spread = root_half / max(8.0, (a + b) / 2)
+    p1 = (cx + a * math.cos(t - spread), cy + b * math.sin(t - spread))
+    p2 = (cx + a * math.cos(t + spread), cy + b * math.sin(t + spread))
+    return [p1, p2, tip]
+
+
+def _bubble_tile(item: dict[str, Any], box_w: int, scale: float):
+    """말풍선 하나를 투명 타일에 그린다.
+
+    <b>풍선은 글에 맞게 줄어든다.</b> 예전에는 사람이 정한 폭을 그대로 타원의
+    가로로 썼다 — 짧은 대사 한 줄이면 납작한 국수 가락이 됐다. 지금은 글을
+    감쌀 만큼만 잡고, 정한 폭은 <b>넘지 않는 한계</b>로만 쓴다.
+
+    타원에 글을 넣을 때는 가로세로를 √2 만큼 키운다. 글 상자의 <b>모서리</b>가
+    타원 안에 들어가야 하는데, 상자 크기를 그대로 타원 크기로 쓰면 네 모서리가
+    선 밖으로 나간다 — 예전 풍선이 유난히 넓적했던 진짜 이유가 이것이다.
+
+    <b>꼬리는 사람이 끌어다 놓은 곳을 가리킨다</b>({@code tx}·{@code ty}).
+    말한 사람이 왼쪽 아래에 있으면 꼬리도 그리로 간다 — 왼쪽/오른쪽 둘 중
+    하나로는 가리킬 수 없는 자리가 대부분이다. 끝이 밖으로 나가면 타일을
+    그만큼 넓히고, 몸통이 있던 자리는 그대로 두도록 <b>얼마나 밀렸는지</b>를
+    같이 알려 준다({@code tile.info["off"]}).
     """
     Image, ImageDraw, _ = _pil()
     variant = item["variant"]
     fs = max(7, int(item["size"] * scale))
-    bold = variant in ("shout",)
-    font = _strip._font(fs, bold=bold)
+    font = _strip._font(fs, bold=(variant == "shout"))
     pad_x, pad_y = int(fs * 0.85), int(fs * 0.55)
     stroke = max(2, int(2.5 * scale))
+    round_ = variant != "narration"
+    # 외침은 뾰족한 만큼 안쪽이 좁다(안쪽 반지름이 바깥의 0.8).
+    spread = math.sqrt(2) / (0.8 if variant == "shout" else 1.0) if round_ else 1.0
 
     probe = ImageDraw.Draw(Image.new("RGBA", (8, 8)))
-    inner_w = max(10, box_w - pad_x * 2)
-    lines, _tw, th = _lines_and_box(probe, item["text"], font, inner_w)
-    box_h = th + pad_y * 2
-    # 외침은 삐죽삐죽한 만큼 안쪽이 좁아진다 — CSS 도 padding 을 두 배로 준다.
-    if variant == "shout":
-        box_h += int(fs * 1.1)
-        box_w_draw = box_w
-    else:
-        box_w_draw = box_w
+    body_w, body_h, lines = _fit(probe, item["text"], font, box_w,
+                                 pad_x, pad_y, spread,
+                                 4.0 if variant == "narration" else 2.4)
 
-    tail_h = int(fs * 0.95) if (variant in TAILED and item["tail"] != "none") else 0
-    tile = Image.new("RGBA", (box_w_draw, box_h + tail_h + stroke * 2), (0, 0, 0, 0))
-    d = ImageDraw.Draw(tile)
-    b = (stroke, stroke, box_w_draw - stroke, box_h - stroke)
+    tailed = variant in TAILED and item["tail"] != "none"
+    tip = (body_w * item["tx"] / 100.0, body_h * item["ty"] / 100.0)
 
+    # 끝이 몸통 밖으로 나가면 타일을 넓힌다. off 는 몸통이 얼마나 밀렸는가.
+    m = stroke + 2
+    x0 = min(0.0, tip[0]) - m
+    y0 = min(0.0, tip[1]) - m
+    x1 = max(float(body_w), tip[0]) + m
+    y1 = max(float(body_h), tip[1]) + m
+    if not tailed:
+        x0, y0, x1, y1 = -m, -m, body_w + m, body_h + m
+    off = (int(-x0), int(-y0))
+    size = (int(x1 - x0), int(y1 - y0))
+    tip = (tip[0] + off[0], tip[1] + off[1])
+    box = (off[0], off[1], off[0] + body_w, off[1] + body_h)
+    cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    a, b = body_w / 2, body_h / 2
+
+    shapes = []
     if variant == "narration":
-        d.rounded_rectangle(b, radius=max(2, int(3 * scale)), fill=PAPER,
-                            outline=INK, width=max(2, int(2 * scale)))
+        shapes.append(("rounded_rectangle", (box, max(2, int(3 * scale)))))
     elif variant == "shout":
-        cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
-        rw, rh = (b[2] - b[0]) / 2, (b[3] - b[1]) / 2
         pts, spikes = [], 12
         for i in range(spikes * 2):
             ang = math.pi * i / spikes - math.pi / 2
             f = 1.0 if i % 2 == 0 else 0.80
-            pts.append((cx + math.cos(ang) * rw * f, cy + math.sin(ang) * rh * f))
-        d.polygon(pts, fill=PAPER, outline=INK)
-    elif variant == "whisper":
-        d.ellipse(b, fill=PAPER)
-        _dashed_ellipse(d, b, INK, max(2, int(2 * scale)), on=5, off=7)
-    elif variant == "flash":
-        d.ellipse(b, fill=(255, 255, 255, 210))
-        _dashed_ellipse(d, b, (17, 17, 17, 210), max(2, int(2 * scale)), on=16, off=11)
-    elif variant == "thought":
-        d.ellipse(b, fill=PAPER, outline=INK, width=stroke)
-    else:                                        # normal
-        d.ellipse(b, fill=PAPER, outline=INK, width=stroke)
+            pts.append((cx + math.cos(ang) * a * f, cy + math.sin(ang) * b * f))
+        shapes.append(("polygon", (pts,)))
+    else:
+        shapes.append(("ellipse", (box,)))
 
-    # 꼬리 — 누가 말했는가를 가리키는 유일한 표시. 왼쪽 22% 또는 오른쪽 22%.
-    if tail_h:
-        at = box_w_draw * (0.22 if item["tail"] == "left" else 0.78)
-        if variant == "thought":
-            # 속마음은 삼각형이 아니라 점점 작아지는 동그라미 둘이다.
-            r1 = max(4, int(fs * 0.30))
-            r2 = max(3, int(fs * 0.19))
-            cy1 = box_h + r1 * 0.4
-            d.ellipse((at - r1, cy1 - r1, at + r1, cy1 + r1),
-                      fill=PAPER, outline=INK, width=max(1, stroke - 1))
-            cy2 = cy1 + r1 + r2 * 1.2
-            d.ellipse((at - r2, cy2 - r2, at + r2, cy2 + r2),
-                      fill=PAPER, outline=INK, width=max(1, stroke - 1))
-        else:
-            half = max(3, int(fs * 0.36))
-            d.polygon([(at - half, box_h - stroke * 2), (at + half, box_h - stroke * 2),
-                       (at - half * 0.2, box_h + tail_h)], fill=PAPER, outline=INK)
+    tail_box = None
+    if tailed and variant == "thought":
+        # 속마음은 세모가 아니라 <b>점점 작아지는 동그라미</b>다. 끝점까지
+        # 가는 길 위에 둘을 놓는다 — 어느 쪽으로 끌든 그 방향으로 이어진다.
+        # 가장자리에서 출발해야 "이 풍선의 속마음" 으로 읽힌다. 몸통 한가운데를
+        # 기준으로 나누면 큰 풍선일수록 첫 동그라미가 멀찍이 떨어져 뜬다.
+        t = math.atan2((tip[1] - cy) / max(1e-6, b), (tip[0] - cx) / max(1e-6, a))
+        ex, ey = cx + a * math.cos(t), cy + b * math.sin(t)
+        dx, dy = tip[0] - ex, tip[1] - ey
+        for f, r in ((0.16, max(6, int(fs * 0.42))), (0.56, max(4, int(fs * 0.26)))):
+            px, py = ex + dx * f, ey + dy * f
+            shapes.append(("ellipse", ((px - r, py - r, px + r, py + r),)))
+    elif tailed:
+        root_half = max(5, int(fs * 0.62))
+        shapes.append(("polygon", (_tail_shape(cx, cy, a, b, tip, root_half),)))
+        tail_box = (min(tip[0], cx) - root_half * 2, min(tip[1], cy),
+                    max(tip[0], cx) + root_half * 2, max(tip[1], cy))
 
-    # 글자 — 나레이션만 왼쪽 정렬이다 (CSS 의 text-align: left).
+    dashed = box if variant in ("whisper", "flash") else None
+    fill, outline = _silhouette(size, shapes, stroke, dashed, tail_box)
+
+    tile = Image.new("RGBA", size, (0, 0, 0, 0))
+    paper = PAPER if variant != "flash" else (255, 255, 255, 214)
+    ink = INK if variant != "flash" else (17, 17, 17, 214)
+    tile.paste(Image.new("RGBA", size, paper), (0, 0), fill)
+    tile.paste(Image.new("RGBA", size, ink), (0, 0), outline)
+
+    # 글 — 나레이션만 왼쪽 정렬이다 (CSS 의 text-align: left).
+    d = ImageDraw.Draw(tile)
     lh = max(1, int(font.size * 1.35))
-    top = (box_h - lh * len(lines)) / 2
-    if variant == "shout":
-        top = (box_h - lh * len(lines)) / 2
+    top = box[1] + (body_h - lh * len(lines)) / 2
     for i, line in enumerate(lines):
         lw = d.textlength(line, font=font)
-        x = pad_x if variant == "narration" else (box_w_draw - lw) / 2
+        x = box[0] + pad_x if variant == "narration" else box[0] + (body_w - lw) / 2
         d.text((x, top + i * lh), line, font=font, fill=INK)
+    tile.info["off"] = off
     return tile
 
 
@@ -371,17 +479,26 @@ def _sticker_tile(item: dict[str, Any], scale: float):
 
 
 def _sfx_tile(item: dict[str, Any], scale: float):
-    """효과음 — 흰 글자에 검은 테두리. 레터링이라 굵게 그린다."""
+    """효과음 — 흰 글자에 굵은 검은 테두리, 그 아래 그림자.
+
+    레터링은 그림의 일부다. 선이 가늘면 밝은 배경에서 글자가 그냥 사라진다 —
+    그림자를 한 겹 깔아 어디에 있든 떠 보이게 한다(화면 CSS 의
+    {@code text-shadow: 0 3px 0} 과 같은 자리).
+    """
     Image, ImageDraw, _ = _pil()
     fs = max(8, int(item["size"] * 2 * scale))
     font = _strip._font(fs, bold=True)
-    sw = max(2, int(3 * scale))
+    sw = max(3, int(fs * 0.13))                 # 글자 크기에 따라 같이 굵어진다
+    drop = max(2, int(fs * 0.09))
     probe = ImageDraw.Draw(Image.new("RGBA", (8, 8)))
     tw = int(probe.textlength(item["text"], font=font))
-    tile = Image.new("RGBA", (tw + sw * 4, int(fs * 1.5) + sw * 4), (0, 0, 0, 0))
+    tile = Image.new("RGBA", (tw + sw * 4, int(fs * 1.6) + sw * 4 + drop), (0, 0, 0, 0))
     d = ImageDraw.Draw(tile)
-    d.text((sw * 2, sw * 2), item["text"], font=font, fill=PAPER,
-           stroke_width=sw, stroke_fill=INK)
+    at = (sw * 2, sw * 2)
+    # 그림자 먼저 — 같은 글자를 아래로 밀어 검게만 찍는다.
+    d.text((at[0], at[1] + drop), item["text"], font=font, fill=(17, 17, 17, 90),
+           stroke_width=sw, stroke_fill=(17, 17, 17, 90))
+    d.text(at, item["text"], font=font, fill=PAPER, stroke_width=sw, stroke_fill=INK)
     return tile.crop(tile.getbbox() or (0, 0, 1, 1))
 
 
@@ -417,6 +534,12 @@ def render_scene(base, spec: dict[str, Any]):
         # 자리 — 편집실은 왼쪽 위를 x%·y% 에 두고 가운데를 기준으로 돌린다.
         left = img.width * it["x"] / 100.0
         top = img.height * it["y"] / 100.0
+        # 꼬리가 밖으로 뻗어 타일이 커졌으면 그만큼 되민다 — 안 그러면 꼬리를
+        # 끌 때마다 풍선 몸통까지 따라 움직인다.
+        off = tile.info.get("off") if hasattr(tile, "info") else None
+        if off:
+            left -= off[0]
+            top -= off[1]
         cx, cy = left + tile.width / 2, top + tile.height / 2
         if abs(it["rot"]) > 0.01:
             tile = tile.rotate(-it["rot"], expand=True, resample=Image.BICUBIC)

@@ -15,7 +15,7 @@ import StageRail from "./StageRail";
 /* 기다리는 화면 — haeun/landing/web 의 #progress 를 옮겼다.
  *
  * **이제 흉내가 아니다.** 예전에는 백엔드가 없어서 로컬 타이머로 진행을
- * 흉내 냈는데(useFakeProgress), 지금은 `/api/webtoon/nh/jobs/{id}` 를 0.8초
+ * 흉내 냈는데(useFakeProgress), 지금은 `/api/webtoon/v1/nh/jobs/{id}` 를 0.8초
  * 마다 받아 실제 작업을 그린다 — 원본 app.js 의 nhTick 과 같은 방식이다.
  *
  * 사람이 멈춰 서는 자리는 **둘뿐**이다. 시트 확인 → 이야기 고르기, 그
@@ -33,12 +33,15 @@ export default function Progress({
   styleLabel,
   onExit,
   onDone,
+  onBrowse,
 }: {
   jobId: string;
   /** 만들 때 고른 그림체 이름. 서버도 style_label 을 주지만 첫 폴링 전까지 비어 있다. */
   styleLabel?: string;
   onExit: () => void;
   onDone: (runId: string) => void;
+  /** 기다리는 동안 둘러보기로. 만들기는 서버에서 계속 돈다. */
+  onBrowse: () => void;
 }) {
   const { job, offline, busy, send } = useNhJob(jobId);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -47,11 +50,26 @@ export default function Progress({
   const [sheetVersion, setSheetVersion] = useState(() => Date.now());
   const [failed, setFailed] = useState<string | null>(null);
 
+  /** 사람이 답할 차례인가. */
+  const waiting = job?.status === "awaiting_sheet" || job?.status === "awaiting_pick";
+  /** 루 놀이터가 지금 화면에 있는가 — 아래 렌더 조건과 **똑같아야 한다.** */
+  const playOpen = !!job && !waiting;
+
+  /* 루 놀이터는 **확인 차례에는 DOM 에 없다**(아래 `{!waiting && ...}`).
+     그런데 붙이는 일을 마운트 때 한 번만 하면, 확인 차례에 이 화면이 뜬
+     경우 붙일 대상이 없어서 그냥 지나가고 — 확인이 끝나 놀이터가 나타나도
+     **영영 아무 반응이 없다.** 실제로 그랬다: 시트 확인 중에 새로고침하면
+     그 뒤로 루를 눌러도 안 움직였다.
+
+     그래서 놀이터가 나타나고 사라질 때마다 다시 붙인다. 조건을 `waiting`
+     하나로 두면 안 된다 — 첫 폴링 전에는 job 이 없어 화면 자체가 안 그려지는데
+     `waiting` 은 그때도 false 라, 곧바로 진행 중으로 오면 효과가 다시 안 돈다. */
   useEffect(() => {
+    if (!playOpen) return;
     const disposeLou = setupLou();
     const disposeTips = setupTips();
     return () => { disposeLou(); disposeTips(); };
-  }, []);
+  }, [playOpen]);
 
   /* 다 되면 결과 화면으로. **내 작품으로 남기는 것을 잊으면 안 된다** —
      안 남기면 앱이 남의 작품으로 보고 완성본 화면의 내려받기·편집실·저장·
@@ -75,23 +93,59 @@ export default function Progress({
               </p>
             )}
           </header>
+
+        {/* **기다리는 동안 다른 걸 봐도 된다.**
+            한 편에 십 분 안팎이 걸리는데 이 화면이 그동안 사람을 붙들고
+            있었다. 만들기는 서버에서 도는 것이라 창을 닫아도 안 멈춘다 —
+            그 말을 같이 적는다.
+
+            **진행 카드 바로 아래**에 둔다. 맨 밑에 두었더니 스크롤을 한참
+            내려야 보여서, 나갈 수 있다는 것 자체를 모르고 붙들려 있었다.
+
+            확인 차례에는 안 띄운다: 그때는 사람이 답해야 앞으로 간다. */}
+        {!waiting && (
+          <div className="wait-away">
+            <button type="button" className="btn btn-quiet btn-sm" onClick={onBrowse}>
+              기다리는 동안 웹툰 보기
+            </button>
+            <span>만들기는 서버에서 계속 돌아요. 나갔다 와도 이어집니다.</span>
+          </div>
+        )}
         </div>
       </section>
     );
   }
 
   if (job.status === "error") {
+    /* **무엇을 돌려줬는지 서버가 말해 준 대로만 적는다.**
+     *
+     * 로그인한 사람에게는 크레딧을, 게스트에게는 오늘의 무료 횟수를
+     * 돌려주므로 같은 말을 쓸 수 없다 — 크레딧이 없는 사람에게 "크레딧을
+     * 환불했어요" 는 없는 것을 돌려줬다는 말이라 아무 뜻이 없다.
+     *
+     * 화면이 로그인 여부를 보고 **짐작해서** 적지 않는다. 돌려주는 일은
+     * 조용히 실패할 수 있고, 그때 "돌려드렸어요" 가 떠 있으면 그건 거짓말이다.
+     * 서버가 실제로 돌려준 것만 말하고(`refunded`), 없거나 못 돌려줬으면 그
+     * 줄을 **안 그린다** — 틀린 말보다 없는 편이 낫다. */
+    const back =
+      job.refunded === "credit" ? "사용된 크레딧은 자동으로 환불되었어요."
+      : job.refunded === "free" ? "사용한 무료 생성 횟수는 자동으로 복구되었어요."
+      : "";
+
     return (
       <section className="progress">
         <div className="progress-inner">
           <header className="progress-head">
             <p className="eyebrow">멈췄습니다</p>
-            <h2>만들지 못했습니다</h2>
+            <h2>웹툰 생성에 실패했어요</h2>
             {/* 하네스가 사유를 한글로 적어 보낸다 — 그대로 보여준다. */}
-            <p className="progress-sub">{job.error || "알 수 없는 이유로 멈췄습니다."}</p>
+            <p className="progress-sub">
+              {job.error || "생성하는 동안 문제가 발생해 웹툰을 완성하지 못했어요."}
+            </p>
+            {back && <p className="progress-back">{back}</p>}
           </header>
           <button type="button" className="btn btn-primary" style={{ width: "100%" }} onClick={onExit}>
-            홈으로
+            홈으로 가기
           </button>
         </div>
       </section>
@@ -100,7 +154,6 @@ export default function Progress({
 
   const head = headLine(job.status, job.style_label || styleLabel || "");
   const line = mascotLine(job.status, job.stage, job.say, job.art);
-  const waiting = job.status === "awaiting_sheet" || job.status === "awaiting_pick";
 
   /** 검수 답 보내기 — 실패하면 그 자리에서 말한다(조용히 삼키면 사람이 또 누른다). */
   const answer = (fn: () => Promise<unknown>) => {
@@ -221,12 +274,10 @@ export default function Progress({
           </div>
         )}
 
-        {/* 서버가 찍는 줄을 그대로 보여준다 — 무엇을 하고 있는지 숨기지
-            않는 것이 이 화면의 약속이다. */}
-        <details className="console">
-          <summary>자세히 보기 <small>파이프라인 로그</small></summary>
-          <pre>{(job.log || []).join("\n")}</pre>
-        </details>
+        {/* 파이프라인 로그(「자세히 보기」)를 뺐다 — 무엇을 하고 있는지는
+            위 「지금 하고 있는 일 자세히」가 사람 말로 다 보여 준다. 서버가
+            찍는 줄은 그 위에 한 겹 더 쌓여 화면만 길어졌다. 로그가 필요하면
+            서버 쪽에서 본다(job.log 는 API 로 계속 나간다). */}
 
         {/* 통신이 잠깐 끊긴 것은 작업 실패가 아니다 — 서버에서는 계속 돈다. */}
         {offline && (

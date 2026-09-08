@@ -72,11 +72,18 @@ public class WebSecurityConfig {
                         //    있다.** 프리토타이핑 단계라 이대로 두지만, 실제로 돈이 나가는
                         //    생성이므로 계정을 붙일 때 여기부터 같이 잠가야 한다.
                         //
-                        // 딱 하나 예외 — `/api/webtoon/my/**` 는 "내" 것을 다루므로
+                        // 딱 하나 예외 — `/api/webtoon/v1/my/**` 는 "내" 것을 다루므로
                         // 로그인이 있어야 뜻이 성립한다. permitAll **앞에** 둔다:
                         // 규칙은 위에서부터 먼저 맞는 것이 이기므로, 순서가 바뀌면
                         // 이 줄이 영영 안 걸린다.
-                        .requestMatchers("/api/webtoon/my/**").authenticated()
+                        //
+                        // ⚠️ 주소 앞자리는 webtoon/be 의 `WebtoonApi.V1` 이 정한다.
+                        //    거기를 고치면 **여기도 같이 고쳐야 한다.** 어긋나면
+                        //    막히는 게 아니라 아래 permitAll 로 흘러 조용히 열린다 —
+                        //    실패가 눈에 안 보이는 쪽이라 더 위험하다.
+                        //    (common 은 webtoon 을 import 하지 않으므로 상수를 그대로
+                        //     쓸 수 없다. 그래서 글자로 두고 이 주석으로 묶는다.)
+                        .requestMatchers("/api/webtoon/v1/my/**").authenticated()
 
                         // `/api/webtoon/internal/**`(비용 적재)은 반대로 열어 둔다.
                         // 브라우저가 부를 주소가 아니므로 로그인으로 막지 않는다 —
@@ -84,6 +91,9 @@ public class WebSecurityConfig {
                         // 한 마디를 컨트롤러가 확인한다(UsageService.checkToken).
                         // 열어 두고 안에서 막는 셈인데, 그러지 않으면 아무나 가짜
                         // 비용을 심어 지출 상한을 무의미하게 만들 수 있다.
+                        // 버전이 없는 옛 주소(`/api/webtoon/...`)는 이제 아무 컨트롤러도
+                        // 안 받는다 — 404 로 떨어진다. 이 규칙을 `/**` 로 남겨 두는 것은
+                        // 앞으로 v2 가 생겨도 그대로 열리게 하려는 것이다.
                         .requestMatchers("/api/webtoon/**").permitAll()
 
                         // ★ 행동 기록은 로그인 전에도 받아야 한다 — 가장 알고 싶은 것이

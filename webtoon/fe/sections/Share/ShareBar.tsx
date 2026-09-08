@@ -51,18 +51,32 @@ export default function ShareBar({
   };
 
   const pick = async (key: string, href?: (u: string, t: string) => string) => {
-    // 어디로 보내든 링크를 먼저 복사해 둔다. 붙여넣기로 끝나는 곳(포스타입)이
-    // 있고, 나머지에서도 복사돼 있어서 손해 보는 일이 없다.
+    /* **기다리기 전에 할 것을 먼저 한다.**
+     *
+     * 예전에는 `await copyLink(url)` 이 맨 앞이었는데 그게 둘을 망쳤다.
+     *
+     * 1. 클립보드는 **안 끝날 수 있다.** 권한을 묻는 동안 창이 멈추면 그
+     *    await 가 안 풀리고, 메뉴가 안 닫히고 아무 말도 안 뜬다 — 누른
+     *    사람에게는 그냥 고장난 단추다(실측으로 확인).
+     * 2. `window.open` 이 await **뒤에** 있으면 그 사이에 사용자 활성화가
+     *    풀려서 **팝업 차단에 걸린다.** 새 창으로 여는 것은 누른 그 순간에
+     *    해야 한다.
+     *
+     * 그래서 창 열기와 메뉴 닫기를 먼저 하고, 복사는 그 뒤에 기다린다.
+     * 어디로 보내든 링크를 복사해 두는 것은 그대로다 — 붙여넣기로 끝나는
+     * 곳(포스타입)이 있고, 나머지에서도 복사돼 있어서 손해가 없다. */
+    if (href) {
+      // 이 창을 바꿔 버리면 읽던 자리를 잃는다.
+      window.open(href(url, text), "_blank", "noopener,noreferrer");
+    }
+    setOpen(false);
+
     const copied = await copyLink(url);
     if (!href) {
       setSaid(copied ? "링크를 복사했어요" : "복사하지 못했어요 — 주소창을 그대로 쓰세요");
-      setOpen(false);
       return;
     }
-    // 새 창으로 연다. 이 창을 바꿔 버리면 읽던 자리를 잃는다.
-    window.open(href(url, text), "_blank", "noopener,noreferrer");
-    setSaid(key === "postype" ? "링크를 복사했어요 — 글에 붙여 넣으세요" : "");
-    setOpen(false);
+    setSaid(key === "postype" && copied ? "링크를 복사했어요 — 글에 붙여 넣으세요" : "");
   };
 
   return (

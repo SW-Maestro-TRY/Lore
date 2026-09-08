@@ -1658,14 +1658,32 @@ class Handler(BaseHTTPRequestHandler):
             uid = str(form.pop("uid", "") or "")
             if not credits.valid_uid(uid):
                 return self._error(400, "uid 가 없습니다")
-            billed = self.headers.get("X-Lore-Account-Billed")
+            # **게스트도 앞에서 셌으면 여기서 또 안 센다.**
+            #
+            # 로그인 안 한 사람은 앞 서버가 하루 몇 편으로 센다(GuestGate —
+            # IP 로 세므로 uid 처럼 지워서 새 사람이 될 수 없다). 그런데 여기서
+            # uid 잔액까지 보고 있어서 게스트가 두 겹으로 막혀 있었다: 화면은
+            # 「오늘 무료 3편」이라 적는데 여기서 「크레딧이 모자랍니다」로 튕길
+            # 수 있다 — 한 사람에게 서로 다른 두 진실을 말하는 상태다.
+            #
+            # 게스트에게는 장부가 필요 없다. 필요한 것은 「오늘 몇 번 썼나」
+            # 하나고 그건 앞 서버가 안다. 잔액·환원·내역 같은 금전 장부는
+            # 계정이 있는 사람 것이다 — 지어낼 수 없는 식별자에만 돈을 붙인다.
+            #
+            # **다만 여기서 지우지는 않는다.** 이 서버는 앞 서버 없이 혼자도
+            # 뜨고(프로토타입 화면이 그렇게 쓴다) 그때는 uid 크레딧이 유일한
+            # 담장이다. 앞에서 셌다고 말할 때만 비켜선다.
+            billed = (self.headers.get("X-Lore-Account-Billed")
+                      or self.headers.get("X-Lore-Guest-Gated"))
             cost = credits.creation_cost(False, "fast")
             if billed:
                 job = nh_runner.create(form, photos)
                 accounts.log_ip_consent(uid, job.id)
+                # 잔액은 **묻지도 않는다.** credits.balance() 는 처음 보는 uid 를
+                # 보면 시작 잔액을 새로 만들어 준다 — 부르는 것만으로 게스트에게
+                # 장부가 생긴다. 앞 서버가 세는 사람에게는 그 장부가 없어야 한다.
                 return self._json({"id": job.id,
-                                   "queue_position": nh_runner.position(job.id),
-                                   "credit_balance": credits.balance(uid)})
+                                   "queue_position": nh_runner.position(job.id)})
 
             bal = credits.balance(uid)
             if bal < cost:

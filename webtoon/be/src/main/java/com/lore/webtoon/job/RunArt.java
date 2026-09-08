@@ -1,5 +1,6 @@
 package com.lore.webtoon.job;
 
+import com.lore.webtoon.art.PageStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 

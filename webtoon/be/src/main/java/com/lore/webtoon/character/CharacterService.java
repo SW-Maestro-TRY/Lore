@@ -1,9 +1,12 @@
 package com.lore.webtoon.character;
 
+import com.lore.webtoon.art.PageStore;
+import com.lore.webtoon.art.PrivateArt;
+import com.lore.webtoon.credit.CreditGate;
+import com.lore.webtoon.credit.GuestGate;
+import com.lore.webtoon.usage.SpendGuard;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
-import com.lore.webtoon.CreditGate;
-import com.lore.webtoon.PrivateArt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +29,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -66,28 +70,29 @@ public class CharacterService {
     private final Path workDir;
     private final int freePerDay;
     private final int cost;
+    /** 공개 그림을 내주는 앞자리. PageStore 와 같은 값을 본다. */
+    private final String cdn;
     private final Clock clock;
     /* 한 줄로 세운다 — 그림 호출을 한꺼번에 여러 개 띄우면 값이 몰려 나간다. */
     private final ExecutorService line =
             Executors.newSingleThreadExecutor(r -> Thread.ofVirtual()
                     .name("webtoon-character").unstarted(r));
 
-    /* 생성자가 둘이다(아래 하나는 검사에서 시계를 갈아 끼우려고 둔 것) — 표시가
-       없으면 스프링이 인자 없는 생성자를 찾다가 서버가 아예 안 뜬다. 이 저장소에서
-       GuestGate · SpendGuard · CreditService 가 같은 자리에서 걸렸다. 검사만으로는
-       안 잡힌다: 검사는 이 클래스를 손으로 만들어서 스프링이 고를 일이 없다. */
+    /* 생성자가 둘이다(아래 하나는 검사에서 시계를 갈아 끼우려고 둔 것) */
     @Autowired
     public CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
                             PrivateArt art, CreditGate credits,
                             @Value("${lore.webtoon.character.work-dir:}") String workDir,
                             @Value("${lore.webtoon.character.free-per-day:5}") int freePerDay,
-                            @Value("${lore.webtoon.character.credit-cost:1}") int cost) {
-        this(characters, maker, art, credits, workDir, freePerDay, cost, Clock.system(ZONE));
+                            @Value("${lore.webtoon.character.credit-cost:1}") int cost,
+                            @Value("${lore.webtoon.cdn-base:}") String cdn) {
+        this(characters, maker, art, credits, workDir, freePerDay, cost, cdn,
+             Clock.system(ZONE));
     }
 
     CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
                      PrivateArt art, CreditGate credits, String workDir,
-                     int freePerDay, int cost, Clock clock) {
+                     int freePerDay, int cost, String cdn, Clock clock) {
         this.characters = characters;
         this.maker = maker;
         this.art = art;
@@ -96,20 +101,21 @@ public class CharacterService {
                 ? "haeun/landing/characters" : workDir).toAbsolutePath().normalize();
         this.freePerDay = freePerDay;
         this.cost = cost;
+        this.cdn = cdn == null ? "" : cdn.replaceAll("/+$", "");
         this.clock = clock;
     }
 
     /** 이 사람이 고를 수 있는 것 — 내 것과 기본 제공. */
     @Transactional(readOnly = true)
-    public List<WebtoonCharacter> pickable(Long userId) {
-        return characters.pickableBy(userId);
+    public List<WebtoonCharacter> pickable(Long userId, Collection<String> uids) {
+        return characters.pickableBy(userId, uids);
     }
 
     @Transactional(readOnly = true)
-    public WebtoonCharacter byPublicId(String publicId, Long userId) {
+    public WebtoonCharacter byPublicId(String publicId, Long userId, Collection<String> uids) {
         WebtoonCharacter one = characters.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다"));
-        if (!one.isBuiltin() && !one.ownedBy(userId)) {
+        if (!one.isBuiltin() && !one.madeBy(userId, uids)) {
             // 있는 것을 "권한 없음" 으로 알리면 남의 번호를 하나씩 찔러 볼 수 있다.
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다");
         }
@@ -118,12 +124,16 @@ public class CharacterService {
 
     /** 오늘 이 사람이 몇 개 더 공짜로 만들 수 있나. */
     @Transactional(readOnly = true)
-    public int freeLeft(Long userId) {
-        if (userId == null || freePerDay <= 0) {
+    public int freeLeft(Long userId, Collection<String> uids) {
+        if (freePerDay <= 0) {
             return 0;
         }
+        /* **게스트도 센다.** 전에는 로그인 안 했으면 그냥 0 이었는데, 그건
+           "오늘 몫을 다 썼다" 와 화면에서 구별이 안 된다 — 만들 수 있는데도
+           못 만드는 줄 안다. 이제 게스트도 브라우저로 세므로 남은 몫을 말할
+           수 있다. */
         Instant since = LocalDate.now(clock).atStartOfDay(ZONE).toInstant();
-        return (int) Math.max(0, freePerDay - characters.madeSince(userId, since));
+        return (int) Math.max(0, freePerDay - characters.madeSince(userId, uids, since));
     }
 
     /**
@@ -133,11 +143,18 @@ public class CharacterService {
      * @return 만든 캐릭터
      */
     @Transactional
-    public WebtoonCharacter create(Long userId, String name, String description,
-                                   String photoDataUrl, String style) {
-        if (userId == null) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED,
-                    "캐릭터를 만들려면 로그인해 주세요 — 만든 캐릭터는 계정에 남습니다.");
+    public WebtoonCharacter create(Long userId, String browserUid, String name,
+                                   String description, String photoDataUrl, String style) {
+        /* **로그인은 안 시킨다.** 이 제품은 회원가입 없이 한번 써 보게 하는
+           것이 목적이고, 웹툰 만들기가 이미 그렇다 — 캐릭터만 로그인을
+           요구하면 "캐릭터로 웹툰 만들기" 로 가는 길이 거기서 끊긴다.
+
+           대신 **누가 만든 것인지는 반드시 적는다.** 계정이 없으면 브라우저
+           uid 로 적는다. 이것 없이 만들면 주인 없는 줄이 되어 남의 목록에
+           뜨고, 우리가 심은 것을 거두는 자리에 쓸려 지워진다. */
+        if (userId == null && (browserUid == null || browserUid.isBlank())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "브라우저를 알 수 없어 만들 수 없습니다 — 새로고침 후 다시 시도해 주세요.");
         }
         boolean hasPhoto = photoDataUrl != null && !photoDataUrl.isBlank();
         if (!hasPhoto && (description == null || description.isBlank())) {
@@ -154,8 +171,16 @@ public class CharacterService {
         }
 
         // **값은 만들기 전에 본다.** 그린 뒤에 모자라다고 하면 돈은 이미 나갔다.
-        boolean free = freeLeft(userId) > 0;
+        boolean free = freeLeft(userId, List.of(browserUid == null ? "" : browserUid)) > 0;
         if (!free) {
+            /* 게스트는 낼 크레딧이 없다 — 계정 쪽 확인은 통과해 버리므로
+               여기서 따로 막는다. 없는 잔액을 보고 "모자랍니다" 라고 하면
+               충전하러 가라는 말이 되는데, 게스트에게는 갈 곳이 없다. */
+            if (userId == null) {
+                throw new BusinessException(CreditGate.notEnough(),
+                        "오늘 무료로 만들 수 있는 캐릭터를 다 쓰셨어요 — "
+                        + "로그인하시면 이어서 만들 수 있어요.");
+            }
             String blocked = credits.whyBlocked(userId, cost);
             if (blocked != null) {
                 throw new BusinessException(CreditGate.notEnough(), blocked);
@@ -177,7 +202,7 @@ public class CharacterService {
 
         Instant now = Instant.now(clock);
         WebtoonCharacter saved = characters.save(WebtoonCharacter.drawing(
-                publicId, userId, called.isEmpty() ? "이름 없는 캐릭터" : called,
+                publicId, userId, browserUid, called.isEmpty() ? "이름 없는 캐릭터" : called,
                 description, now));
 
         if (!free) {
@@ -247,9 +272,10 @@ public class CharacterService {
     }
 
     @Transactional
-    public WebtoonCharacter rename(String publicId, Long userId, String name, String description) {
-        WebtoonCharacter one = byPublicId(publicId, userId);
-        if (!one.ownedBy(userId)) {
+    public WebtoonCharacter rename(String publicId, Long userId, Collection<String> uids,
+                                   String name, String description) {
+        WebtoonCharacter one = byPublicId(publicId, userId, uids);
+        if (!one.madeBy(userId, uids)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "기본 캐릭터는 고칠 수 없습니다");
         }
         one.rename(name, description, Instant.now(clock));
@@ -264,22 +290,43 @@ public class CharacterService {
      * 안 쓰이는 그림을 치우는 것은 따로 할 일이다.
      */
     @Transactional
-    public void remove(String publicId, Long userId) {
-        WebtoonCharacter one = byPublicId(publicId, userId);
-        if (!one.ownedBy(userId)) {
+    public void remove(String publicId, Long userId, Collection<String> uids) {
+        WebtoonCharacter one = byPublicId(publicId, userId, uids);
+        if (!one.madeBy(userId, uids)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "기본 캐릭터는 지울 수 없습니다");
         }
         characters.delete(one);
     }
 
-    /** 화면이 그림을 볼 주소. 없으면 {@code null}. */
+    /**
+     * 화면이 그림을 볼 주소. 없으면 {@code null}.
+     *
+     * <b>공개 자리에 있는 것은 CDN 주소를 그대로 준다.</b> 예전에는 무엇이든
+     * 서명 주소(presigned)로 만들었는데 그게 셋을 망쳤다:
+     *
+     * <ul>
+     *   <li>서명 주소는 <b>시간이 지나면 만료된다.</b> 화면을 열어 둔 채로
+     *       두면 그림이 사라진다</li>
+     *   <li>CDN 을 건너뛰고 S3 에서 바로 받는다 — 누구나 봐도 되는 그림에
+     *       매번 S3 대역폭을 쓴다</li>
+     *   <li>S3 를 못 잡으면 <b>주소가 아예 null 이 되어 그림이 통째로
+     *       사라진다.</b> 정작 그림은 CDN 에 멀쩡히 있는데도 그렇다</li>
+     * </ul>
+     *
+     * 가르는 규칙은 {@code PageStore.urlOf} 와 같다 — 비공개 자리는 CloudFront
+     * 가 안 내주므로 그때만 잠깐 열리는 주소를 만든다. 둘 중 하나를 고치면
+     * 다른 쪽도 같이 본다.
+     */
     @Transactional(readOnly = true)
     public String artUrl(WebtoonCharacter one) {
         String key = one.getArtKey();
-        if (key == null || key.isBlank() || !art.ready()) {
+        if (key == null || key.isBlank()) {
             return null;
         }
-        return art.temporaryUrl(key);
+        if (!PrivateArt.isPrivate(key)) {
+            return cdn.isEmpty() ? "/" + key : cdn + "/" + key;
+        }
+        return art.ready() ? art.temporaryUrl(key) : null;
     }
 
     int cost() {

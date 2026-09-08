@@ -2,14 +2,10 @@ package com.lore.common.credit;
 
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -20,34 +16,17 @@ import java.util.List;
 
 /**
  * 크레딧 — 잔액 · 지급 · 차감 · 환원 · 내역.
- *
- * <b>결제는 여기 없다</b>(#155). 여기가 하는 일은 "지금 얼마인가" 와 "왜 그
- * 숫자인가" 뿐이고, 그 값이 어디서 들어왔는지(결제인지 무료인지)는 이유
- * ({@link CreditReason}) 하나로만 구분한다. 그래서 나중에 PG 를 붙일 때
- * 이쪽은 안 고쳐도 된다 — 충전 줄을 하나 더 적으면 그만이다.
- *
- * <h2>계정에만 붙는다</h2>
- *
- * 지금 제품의 크레딧은 브라우저가 만든 uid 로 센다
- * ({@code haeun/landing/credits.py}). 그건 지우면 새 사람이 되고 값을 지어낼
- * 수도 있어서, <b>로그인 안 한 사람에게만</b> 쓸 수 있는 방식이다. 여기는
- * 계정 것이라 지어낼 수 없다.
- *
- * 둘을 억지로 합치지 않는다 — 게스트는 지금처럼 uid 로 세고(그리고 하루 몫이
- * IP 로 한 번 더 막히고, #228), 로그인하면 이쪽으로 넘어온다. 합치려면 지어낼
- * 수 있는 값을 계정 잔액에 더해야 하는데, 그 순간 계정 쪽도 지어낼 수 있게
- * 된다.
  */
 @Service
 public class CreditService {
 
-    private static final Logger log = LoggerFactory.getLogger(CreditService.class);
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
     /** 한 번에 돌려줄 내역 줄 수의 위. 화면이 더 달라고 해도 여기서 끊는다. */
     private static final int MAX_HISTORY = 200;
 
     private final CreditEventRepository events;
+    private final CreditLedger ledger;
     private final int welcome;
     private final int daily;
     private final Clock clock;
@@ -57,14 +36,16 @@ public class CreditService {
        서버가 아예 안 뜬다. 검사로는 안 잡힌다: 검사는 이 클래스를 손으로
        만들므로 스프링이 고를 일이 없다. */
     @Autowired
-    public CreditService(CreditEventRepository events,
+    public CreditService(CreditEventRepository events, CreditLedger ledger,
                          @Value("${lore.credit.welcome:12}") int welcome,
                          @Value("${lore.credit.daily:20}") int daily) {
-        this(events, welcome, daily, Clock.system(ZONE));
+        this(events, ledger, welcome, daily, Clock.system(ZONE));
     }
 
-    CreditService(CreditEventRepository events, int welcome, int daily, Clock clock) {
+    CreditService(CreditEventRepository events, CreditLedger ledger,
+                  int welcome, int daily, Clock clock) {
         this.events = events;
+        this.ledger = ledger;
         this.welcome = welcome;
         this.daily = daily;
         this.clock = clock;
@@ -100,10 +81,17 @@ public class CreditService {
      */
     @Transactional
     public int grantOnce(Long userId, int amount, CreditReason reason, String refId) {
+        return grantOnce(userId, amount, reason, CreditDomain.COMMON, refId);
+    }
+
+    /** 어디서 준 것인지까지 적는다. 가입 축하·오늘의 무료는 {@code COMMON} 이다. */
+    @Transactional
+    public int grantOnce(Long userId, int amount, CreditReason reason,
+                         CreditDomain domain, String refId) {
         if (amount <= 0) {
             return 0;                       // 0 이면 그 몫을 안 주는 설정이다
         }
-        return write(userId, amount, reason, refId, reason.label()) ? amount : 0;
+        return ledger.write(userId, amount, reason, domain, refId, reason.label()) ? amount : 0;
     }
 
     /**
@@ -119,10 +107,24 @@ public class CreditService {
      */
     @Transactional
     public int spend(Long userId, int amount, String refId) {
+        return spend(userId, CreditDomain.COMMON, amount, refId, null);
+    }
+
+    /**
+     * 어느 서비스에서 무엇에 썼는지까지 적는다.
+     *
+     * @param domain 웹툰인지 짤인지. 내역 화면이 이것으로 갈라 보여 주고,
+     *               도메인별 지출도 이것으로 센다
+     * @param memo   사람이 읽을 한 줄(작품 이름 등). 비우면 이유의 기본 문구
+     */
+    @Transactional
+    public int spend(Long userId, CreditDomain domain, int amount, String refId, String memo) {
         if (amount <= 0) {
             return 0;
         }
-        if (events.existsByUserIdAndReasonAndRefId(userId, CreditReason.SPEND, refId)) {
+        CreditDomain where = domain == null ? CreditDomain.COMMON : domain;
+        if (events.existsByUserIdAndReasonAndDomainAndRefId(
+                userId, CreditReason.SPEND, where, refId)) {
             return 0;                       // 이미 낸 것 — 두 번 받지 않는다
         }
         int have = events.balanceOf(userId);
@@ -130,8 +132,8 @@ public class CreditService {
             throw new BusinessException(ErrorCode.CREDIT_NOT_ENOUGH,
                     "크레딧이 모자랍니다 (필요 " + amount + " · 보유 " + have + ")");
         }
-        return write(userId, -amount, CreditReason.SPEND, refId, CreditReason.SPEND.label())
-                ? amount : 0;
+        String line = memo == null || memo.isBlank() ? where.label() + "에서 사용" : memo;
+        return ledger.write(userId, -amount, CreditReason.SPEND, where, refId, line) ? amount : 0;
     }
 
     /**
@@ -141,19 +143,25 @@ public class CreditService {
      * 사라진다. 낸 적이 없으면 아무 일도 안 한다(안 낸 것을 돌려주면 그게 곧
      * 무한 크레딧이다).
      *
+     * @param domain 어느 서비스에서 낸 것을 돌려주나. <b>낸 줄을 찾는 기준</b>
+     *               이라 낸 쪽과 같아야 한다 — 다르면 낸 적이 없는 것으로 읽혀
+     *               조용히 0 이 된다
      * @return 돌려준 양 (돌려줄 것이 없으면 0)
      */
     @Transactional
-    public int refund(Long userId, String refId, String why) {
-        List<CreditEvent> mine = events.historyOf(userId, PageRequest.of(0, MAX_HISTORY));
-        int paid = mine.stream()
-                .filter(e -> e.getReason() == CreditReason.SPEND && e.getRefId().equals(refId))
-                .mapToInt(e -> -e.getDelta())
-                .sum();
+    public int refund(Long userId, CreditDomain domain, String refId, String why) {
+        /* **최근 몇 줄이 아니라 DB 에 직접 묻는다.** 전에는 내역 200줄을 받아
+           그 안에서 골랐는데, 낸 뒤로 줄이 그만큼 쌓인 사람은 낸 기록이 목록
+           밖으로 밀려나 환원이 조용히 0 이 됐다 — 만들기가 실패했는데 아무
+           말 없이 안 돌려주는 상태다. */
+        CreditDomain where = domain == null ? CreditDomain.COMMON : domain;
+        List<CreditEvent> paidRows = events.findByUserIdAndReasonAndDomainAndRefId(
+                userId, CreditReason.SPEND, where, refId);
+        int paid = paidRows.stream().mapToInt(e -> -e.getDelta()).sum();
         if (paid <= 0) {
             return 0;
         }
-        return write(userId, paid, CreditReason.REFUND, refId,
+        return ledger.write(userId, paid, CreditReason.REFUND, where, refId,
                 why == null || why.isBlank() ? CreditReason.REFUND.label() : why) ? paid : 0;
     }
 
@@ -164,32 +172,4 @@ public class CreditService {
         return events.historyOf(userId, PageRequest.of(0, size));
     }
 
-    /**
-     * 한 줄 적는다. 이미 있으면 조용히 넘어간다.
-     *
-     * 있는지 <b>보고</b> 나서 <b>적는</b> 사이에 남이 먼저 적을 수 있다. 그
-     * 틈은 DB 의 유일키가 막아 주는데, 그때 올라오는 예외를 안 잡으면 멀쩡한
-     * 요청이 500 으로 떨어진다 — 이미 원하던 대로 되어 있는데도.
-     *
-     * <b>이 트랜잭션은 따로 연다.</b> 유일키 위반은 지금 트랜잭션 전체를
-     * 되돌릴 수 없는 상태로 만들기 때문에, 같은 트랜잭션 안에서 잡아 봐야
-     * 뒤이은 조회가 다시 터진다(잔액을 못 읽는다).
-     *
-     * @return 이번에 새로 적었으면 true
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    boolean write(Long userId, int delta, CreditReason reason, String refId, String memo) {
-        if (events.existsByUserIdAndReasonAndRefId(userId, reason, refId)) {
-            return false;
-        }
-        try {
-            events.saveAndFlush(CreditEvent.of(
-                    userId, delta, reason, refId, memo, Instant.now(clock)));
-            return true;
-        } catch (DataIntegrityViolationException race) {
-            log.debug("같은 크레딧 기록이 거의 동시에 들어왔습니다 (user={}, {} {})",
-                    userId, reason, refId);
-            return false;
-        }
-    }
 }

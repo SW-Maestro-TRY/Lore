@@ -60,7 +60,10 @@ WORDMARK = "LORE"
 TAGLINE = "루와 함께 만든 웹툰"
 
 # 띠 왼쪽에 앉는 루. 없으면 글자만 나간다 — 그림 하나 때문에 내려받기가 막히면 안 된다.
-LOU_MARK = HERE / "web" / "lou" / "react" / "idle" / "01.webp"
+#
+# **png 를 쓴다.** 같은 띠를 자바도 그리는데(webtoon 의 EpisodeExport) 자바는
+# webp 를 못 읽는다. 둘이 다른 그림을 쓰면 어디서 받았느냐에 따라 띠가 달라진다.
+LOU_MARK = HERE / "web" / "lou" / "react" / "idle" / "01.png"
 
 
 class WatermarkError(RuntimeError):

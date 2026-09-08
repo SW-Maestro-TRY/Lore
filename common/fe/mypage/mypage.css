@@ -1,0 +1,506 @@
+/* LORE 마이페이지 — 세 도메인이 같이 쓰는 화면.
+ *
+ * webtoon/fe/webtoon.app.css 에서 옮겨 왔다. 옮기면서 웹툰 전용 변수를
+ * 공통 토큰으로 갈아 끼웠다(--line-2 → --border-strong, --muted →
+ * --text-muted, --paper → --bg, --accent → --accent-webtoon) — 그 변수들은
+ * 웹툰 화면에만 있어서, 짤이나 예고편에서 이 화면을 열면 색이 통째로
+ * 사라진다. 값은 common/fe/styles/tokens.css 에 있다.
+ *
+ * `.webtoon-page` 종속도 뗐다. 이 화면은 웹툰 안이 아니라 어디서든 뜬다.
+ */
+
+/* ── 크레딧 (마이페이지) ──────────────────────────────────────────────
+   원본 프로토타입에 없던 자리라 여기서 새로 그린다.
+
+   내역을 잔액 아래에 늘 펴 두지 않는다 — 스무 줄이 쌓이는 목록이라 마이
+   페이지의 절반이 내역이 되고, 정작 보러 온 「내가 만든 웹툰」이 아래로
+   밀린다. 궁금할 때만 여는 창으로 둔다. */
+.me-credit-acts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── 뜨는 창 (내역 · 충전) ────────────────────────────────────────── */
+.credit-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* 뒤를 덮는 판. 단추로 만들어 **눌러서 닫히게** 한다 — 폰에서 제일 자주
+   쓰는 닫는 법이고, 닫는 ✕ 는 손이 안 닿는 위쪽에 있다. */
+.credit-modal-veil {
+  position: absolute;
+  inset: 0;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: rgba(9, 22, 28, .45);
+  cursor: pointer;
+}
+
+.credit-modal-box {
+  position: relative;
+  z-index: 1;
+  width: min(460px, 100%);
+  /* 화면보다 길어지면 창 자체가 넘친다. 폰 주소창까지 감안해 dvh 로 잡고,
+     넘치는 것은 안에서 굴린다. */
+  max-height: min(640px, 88dvh);
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 18px 48px rgba(15, 51, 63, .28);
+  overflow: hidden;
+}
+
+.credit-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 12px;
+}
+
+.credit-modal-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.credit-modal-x {
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.credit-modal-x:hover {
+  background: var(--border-strong);
+}
+
+/* 창 안에서만 굴린다. 뒤 페이지가 같이 움직이면 읽던 자리를 잃는다. */
+.credit-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 18px 18px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 탭 ─────────────────────────────────────────────────────────── */
+.credit-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 18px 12px;
+}
+
+.credit-tab {
+  appearance: none;
+  flex: 1 1 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.credit-tab.is-on {
+  border-color: var(--accent-webtoon);
+  background: var(--accent-webtoon);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* ── 내역 한 줄 ──────────────────────────────────────────────────
+   설명과 날짜를 세로로 쌓고 금액을 오른쪽 끝에 세운다. 한 줄에 셋을 나란히
+   두면 사유가 길 때 날짜가 밀려 잘린다. 금액은 세로로 줄이 맞아야 훑으면서
+   더하고 뺄 수 있다. */
+.credit-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.credit-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 14px;
+}
+
+.credit-line-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.credit-line-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.credit-line-at {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.credit-line-delta {
+  flex: none;
+  min-width: 56px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent-webtoon);
+}
+
+/* 쓴 것은 색을 뺀다. 받은 것과 같은 색이면 훑을 때 방향이 안 보인다. */
+.credit-line-delta.is-spent {
+  color: var(--text-muted);
+}
+
+.credit-empty {
+  margin: 28px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* ── 충전 ───────────────────────────────────────────────────────── */
+.credit-notice {
+  margin: 0 18px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  /* 이 팔레트는 이름이 뒤집혀 있다 — `--ink*` 가 **바탕**이고 글자는
+     `--text` · `--muted` · `--dim` 이다(style.css 머리말 참고). 처음에
+     --ink-2 를 글자색으로 썼다가 흰 바탕에 흰 글씨가 됐다. */
+  background: var(--sea-sand);
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.credit-packs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.credit-pack {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+}
+
+.credit-pack-amount {
+  flex: none;
+  font-size: 15px;
+}
+
+.credit-pack-amount b {
+  font-size: 20px;
+}
+
+.credit-pack-price {
+  flex: 1 1 auto;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.credit-pack-note {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.credit-hint {
+  margin: 14px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* 폰 — 창을 아래에서 올라오는 판으로. 가운데 띄우면 위아래 여백만 먹고
+   손이 닿는 자리(아래쪽)에서 멀어진다. */
+@media (max-width: 560px) {
+  .credit-modal {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .credit-modal-box {
+    width: 100%;
+    max-height: 86dvh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  /* 상품 한 줄이 좁아서 넘친다 — 이름과 값을 위에, 단추를 아래에. */
+  .credit-pack {
+    flex-wrap: wrap;
+  }
+
+  .credit-pack .btn {
+    flex: 1 1 100%;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   마이페이지 — 작업실 (A안)
+   ═══════════════════════════════════════════════════════════════════════
+
+   **여기만 LORE 토큰을 쓴다.**
+
+   마이페이지는 웹툰만의 화면이 아니라 LORE 가 공통으로 쓰는 자리다. 여태
+   웹툰 청록(--accent)으로 칠해져 있어서, 짤이나 예고편에서 들어온 사람에게는
+   남의 집으로 읽혔다. 그래서 이 절은 common/fe/styles/tokens.css 의 값만
+   참조한다 — --webtoon(보라) · --text · --surface-2 · --font-display(Archivo).
+   앱 껍데기(apps/web/app/layout.tsx)가 이미 그 파일을 불러 둔다.
+
+   구조는 **왼쪽 레일 + 오른쪽 본문** 하나다. 전에는 프로필 카드 · 크레딧
+   카드 · 캐릭터 줄 · 작품 목록이 위에서부터 쌓여 있었는데, 그 구조에는 짤과
+   예고편이 들어올 자리가 없었다. 레일이면 한 줄만 늘면 된다.
+
+   **모바일이 기본이다**(webtoon.css 「반응형」 절). 좁은 화면에서는 레일이
+   위로 눕고, 넓어질 때만 왼쪽에 선다. */
+
+.me {
+  display: grid;
+  gap: 18px;
+  padding: 18px 16px 96px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ko);
+}
+
+.me-loading {
+  margin: 0; padding: 40px 4px; color: var(--text-subtle); font-size: .9rem;
+}
+
+/* ---- 레일 ------------------------------------------------------------- */
+
+/* 좁은 화면에서는 레일이 **눕는다.**
+ *
+ * 세로로 그대로 쌓으면 나·잔액·갈 곳이 첫 화면을 다 먹고, 정작 보러 온
+ * 작품 목록이 스크롤 아래로 밀린다. 그래서 폰에서는 한 줄에 나와 잔액,
+ * 그 아래 한 줄에 갈 곳을 늘어놓는다. 넓어지면(860px) 왼쪽에 선다. */
+.me-rail {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.me-who { flex: 1 1 auto; }
+.me-credit { flex: 0 0 auto; }
+.me-nav { flex: 1 0 100%; }
+.me-rail-foot {
+  flex: 1 0 100%;
+  grid-auto-flow: column; justify-content: start; align-items: center;
+}
+
+.me-who { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.me-face {
+  width: 38px; height: 38px; flex: none; border-radius: 50%;
+  background: var(--tint-webtoon); color: var(--accent-webtoon);
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 700; font-size: .95rem;
+}
+.me-who-txt { min-width: 0; display: grid; }
+.me-who-txt b {
+  font-size: .95rem; font-weight: 700; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.me-who-txt span {
+  font-size: .72rem; color: var(--text-subtle);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* 크레딧 — 숫자만 크게, 그 아래 단위와 갈 자리. */
+.me-credit {
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 7px 11px 8px;
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+}
+.me-credit-n {
+  margin: 0; line-height: 1.1;
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: 1.15rem; font-weight: 500; letter-spacing: -.02em;
+}
+.me-credit-n small {
+  font-size: .72rem; color: var(--text-subtle); margin-left: .2em; font-weight: 400;
+}
+.me-credit-u { margin: 0; font-size: .7rem; color: var(--text-subtle); }
+.me-credit-acts { margin-left: auto; }
+
+/* 갈 곳. 짤·예고편이 생기면 여기 한 줄씩 는다. */
+.me-nav {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  border-top: 1px solid var(--border); padding-top: 9px;
+}
+/* 「만든 것 / 재료」 는 세로로 설 때만 뜻이 있다. 가로 줄에서는 칸 사이에
+   끼어들어 오히려 못 읽게 만든다. */
+.me-nav-grp { display: none; }
+.me-nav-grp {
+  margin: 6px 0 3px; padding: 0 2px;
+  font-family: var(--font-mono); font-size: .62rem; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-subtle);
+}
+.me-nav-grp:first-child { margin-top: 0; }
+.me-nav-a {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border: 1px solid var(--border-strong);
+  border-radius: 99px; background: var(--bg); cursor: pointer;
+  font-family: inherit; font-size: .82rem; color: var(--text-muted); text-align: left;
+  transition: background .14s ease, color .14s ease, border-color .14s ease;
+}
+.me-nav-a span {
+  font-family: var(--font-mono); font-size: .7rem; color: var(--text-subtle);
+}
+.me-nav-a:hover { border-color: var(--accent-webtoon); color: var(--text); }
+.me-nav-a.on {
+  background: var(--accent-webtoon); border-color: transparent;
+  color: #fff; font-weight: 700;
+}
+.me-nav-a.on span { color: rgba(255, 255, 255, .72); }
+
+.me-rail-foot { display: grid; gap: 8px 12px; }
+.me-quit {
+  border: 0; background: transparent; cursor: pointer; padding: 4px;
+  font-family: inherit; font-size: .76rem; color: var(--text-subtle);
+  justify-self: start; text-decoration: underline; text-underline-offset: 3px;
+}
+.me-quit:hover { color: var(--text-muted); }
+
+/* ---- 단추 — LORE 쪽 모양 ---------------------------------------------- */
+
+.me-btn {
+  font-family: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
+  padding: 8px 13px; border-radius: 5px;
+  border: 1px solid var(--border-strong); background: var(--bg); color: var(--text);
+  transition: border-color .14s ease, background .14s ease;
+}
+.me-btn:hover { border-color: var(--accent-webtoon); color: var(--accent-webtoon); }
+.me-btn-go {
+  background: var(--btn-primary-bg); color: var(--btn-primary-fg);
+  border-color: transparent;
+}
+.me-btn-go:hover {
+  background: var(--accent-webtoon); color: #fff; border-color: transparent;
+}
+.me-btn-xs { padding: 5px 10px; font-size: .74rem; }
+.me-credit-acts .me-btn-xs { flex: 1 1 0; }
+
+/* ---- 본문 ------------------------------------------------------------- */
+
+.me-main { min-width: 0; }
+
+.me-top {
+  display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap;
+  padding-bottom: 12px; margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.me-top h2 {
+  margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: -.01em;
+  color: var(--text);
+}
+.me-top-sub { margin: 0; font-size: .76rem; color: var(--text-subtle); }
+.me-top .me-btn { margin-left: auto; }
+.me-top-acts { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.me-top-acts .me-btn { margin-left: 0; }
+
+/* 작품 칸은 원본(.works-grid)을 그대로 쓴다 — 둘러보기와 같은 카드여야
+   한다. 여기서는 칸 폭만 이 화면에 맞춘다. */
+.me-works { margin: 0; }
+
+/* ---- 로그인 안 했을 때 ------------------------------------------------- */
+
+.me-guest {
+  max-width: 34rem; padding: 44px 4px;
+}
+.me-eyebrow {
+  margin: 0 0 8px; font-family: var(--font-mono); font-size: .66rem;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--text-subtle);
+}
+.me-guest h2 {
+  margin: 0 0 8px; font-size: 1.4rem; font-weight: 700; color: var(--text);
+}
+.me-guest-sub { margin: 0 0 20px; color: var(--text-muted); font-size: .9rem; }
+.me-guest-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---- 내 캐릭터 줄 — 새 팔레트에 맞춘다 --------------------------------- */
+
+.me-chars { margin: 0; }
+.me-chars-head h3 { color: var(--text); }
+
+/* ---- 넓어지면 레일이 왼쪽에 선다 --------------------------------------- */
+
+@media (min-width: 860px) {
+  .me {
+    grid-template-columns: 208px minmax(0, 1fr);
+    gap: 28px;
+    padding: 28px 24px 110px;
+    max-width: 1180px; margin: 0 auto;
+    align-items: start;
+  }
+  /* 레일은 따라다닌다 — 잔액이 늘 보이는 것이 이 구조를 고른 이유다. */
+  .me-rail {
+    position: sticky;
+    top: calc(var(--lore-header-h, 0px) + 20px);
+    display: grid; gap: 16px; align-content: start; padding: 16px;
+  }
+  .me-credit {
+    display: block; padding: 11px 13px 12px;
+  }
+  .me-credit-n { font-size: 1.5rem; }
+  .me-credit-u { margin-top: 1px; }
+  .me-credit-acts { margin: 9px 0 0; }
+
+  .me-nav {
+    display: grid; gap: 1px; border-top: 0; padding-top: 0;
+  }
+  .me-nav-grp { display: block; }
+  .me-nav-a {
+    width: 100%; justify-content: space-between; gap: 8px;
+    padding: 8px 10px; border: 0; border-left: 2px solid transparent;
+    border-radius: 4px; font-size: .87rem;
+  }
+  .me-nav-a:hover { background: var(--surface-hover); }
+  .me-nav-a.on {
+    background: var(--bg); color: var(--text); border-left-color: var(--accent-webtoon);
+  }
+  .me-nav-a.on span { color: var(--text-subtle); }
+
+  .me-rail-foot { grid-auto-flow: row; justify-content: stretch; }
+  .me-top h2 { font-size: 1.3rem; }
+}

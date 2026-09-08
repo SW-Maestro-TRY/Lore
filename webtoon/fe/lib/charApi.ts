@@ -5,7 +5,9 @@
  * 웹툰 쪽(nhApi)과 같은 규칙이다 — 봉투를 안 씌운 응답을 그대로 읽고, 실패는
  * `{error: "사람이 읽을 한 줄"}` 로 온다. */
 
-const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon";
+import { getUid } from "./nhApi";
+
+const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
 export interface Character {
   id: string;
@@ -36,7 +38,21 @@ export interface CharacterList {
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(BASE + path, init);
+  /* **이 브라우저가 누구인지 늘 같이 보낸다.**
+   *
+   * 캐릭터는 로그인 없이도 만들 수 있어서, 게스트가 만든 것은 계정이 아니라
+   * 이 값으로만 자기 것임을 말할 수 있다. 안 보내면 방금 만든 캐릭터가 다음
+   * 목록에서 사라진다 — 서버가 남의 것으로 보기 때문이다.
+   *
+   * 웹툰 쪽과 **같은 값**을 쓴다(`nhApi.getUid` — localStorage 의 lore_uid).
+   * 따로 만들면 같은 브라우저인데 캐릭터와 작품의 주인이 갈린다.
+   *
+   * 네 가지 부름(목록·만들기·고치기·지우기)이 다 여기를 지나므로 한 곳에서
+   * 붙인다. 본문에 실으면 본문이 없는 GET·DELETE 가 빠진다. */
+  const res = await fetch(BASE + path, {
+    ...init,
+    headers: { ...(init?.headers || {}), "X-Lore-Uid": getUid() },
+  });
   let body: unknown = null;
   try { body = await res.json(); } catch { /* JSON 이 아닐 수 있다 */ }
   if (!res.ok) {

@@ -79,6 +79,15 @@ public class JobStore {
         });
     }
 
+    /** 고른 것을 지운다. 후보를 다시 지었을 때 부른다. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void unpick(Long id) {
+        jobs.findById(id).ifPresent(job -> {
+            job.unpick(Instant.now());
+            jobs.save(job);
+        });
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void done(Long id) {
         jobs.findById(id).ifPresent(job -> {
@@ -88,9 +97,9 @@ public class JobStore {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void failed(Long id, String why) {
+    public void failed(Long id, String why, Refunded refunded) {
         jobs.findById(id).ifPresent(job -> {
-            job.failed(why, Instant.now());
+            job.failed(why, refunded, Instant.now());
             jobs.save(job);
         });
         directions.remove(id);

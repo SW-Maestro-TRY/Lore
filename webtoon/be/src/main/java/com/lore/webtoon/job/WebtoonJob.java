@@ -121,6 +121,14 @@ public class WebtoonJob {
     @Column(length = 300)
     private String error;
 
+    /**
+     * 실패했을 때 실제로 돌려준 것. 화면이 안내의 마지막 한 줄을 고른다.
+     * 끝나지 않았거나 잘 끝난 작업에서는 비어 있다.
+     */
+    @Column(name = "refunded", length = 10)
+    @Enumerated(EnumType.STRING)
+    private Refunded refunded;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -158,9 +166,10 @@ public class WebtoonJob {
         this.updatedAt = at;
     }
 
-    void failed(String why, Instant at) {
+    void failed(String why, Refunded refunded, Instant at) {
         this.status = JobStatus.ERROR;
         this.error = why == null ? null : why.substring(0, Math.min(why.length(), 300));
+        this.refunded = refunded;
         this.updatedAt = at;
     }
 
@@ -173,6 +182,17 @@ public class WebtoonJob {
 
     void pick(int n, Instant at) {
         this.picked = n;
+        this.updatedAt = at;
+    }
+
+    /**
+     * 고른 것을 지운다 — 후보를 <b>다시</b> 지었을 때.
+     *
+     * 안 지우면 지난번에 고른 번호가 그대로 남아, 새 후보를 보여 주는 화면이
+     * 셋째 칸에 이미 고른 표시를 달고 뜬다. 사람은 고른 적이 없다.
+     */
+    void unpick(Instant at) {
+        this.picked = null;
         this.updatedAt = at;
     }
 
@@ -226,6 +246,10 @@ public class WebtoonJob {
 
     public String getError() {
         return error;
+    }
+
+    public Refunded getRefunded() {
+        return refunded;
     }
 
     public Instant getCreatedAt() {

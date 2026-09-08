@@ -1,7 +1,7 @@
 /* 생성 하네스에 말 거는 자리.
  *
  * 원본(haeun/landing/web/app.js)이 `/api/nh/...` 를 직접 부르는 것을, 여기서는
- * `/api/webtoon/nh/...` 로 부른다 — 그 앞에 스프링이 서 있고(webtoon/be),
+ * `/api/webtoon/v1/nh/...` 로 부른다 — 그 앞에 스프링이 서 있고(webtoon/be),
  * 접두사만 갈아 끼워 같은 하네스로 넘긴다. **응답 모양은 원본과 같다.**
  * 그래서 이 파일이 하는 일은 주소 앞에 접두사를 붙이고 타입을 적는 것뿐이다.
  *
@@ -22,7 +22,7 @@
  *  않는다. 배포에서는 같은 도메인이라 그 스위치가 필요 없다.) */
 import { request as appRequest } from "@common/api/client";
 
-const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon";
+const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
 /** 이 브라우저를 가리키는 값. 원본(app.js 의 getUid)과 **같은 키**를 쓴다 —
  *  프로토타입에서 만든 작품과 이식본에서 만든 작품이 같은 사람 것이 되어야
@@ -89,6 +89,8 @@ export interface NhJob {
   status: NhStatus;
   run_id: string | null;
   error: string | null;
+  /** 실패했을 때 **실제로** 돌려준 것. 파이썬 서버는 안 보낸다(undefined). */
+  refunded?: "credit" | "free" | "none" | null;
   directions: NhDirection[];
   pick: number | null;
   style: string;
@@ -117,6 +119,9 @@ export interface NhCreateRequest {
   style: string;
   /** data URL 목록. 원본과 같은 이름(photos_data)으로 보낸다. */
   photos_data: string[];
+  /** presign 으로 먼저 올린 사진의 키. 있으면 서버가 이쪽을 쓰고 본문에
+   *  사진이 안 실린다 — 넷이면 20MB 넘던 요청이 몇백 바이트가 된다. */
+  photo_keys?: string[];
   agree_ip: boolean;
   /** 사람이 보고 넘어가는 자리(시트 확인 · 이야기 고르기)를 둘 것인가.
    *  갈림길에서 「2번 확인하며」를 고르면 참, 「빠르게 결과부터」면 거짓이다.
@@ -298,23 +303,14 @@ export function coverUrl(runId: string, page: number, episode = 1): string {
 /** 이 브라우저를 내 계정에 잇는다. **로그인할 때마다** 부른다 — 기기를 바꾸면
  *  uid 가 새로 생겨서, 한 번만 잇는 것으로는 두 번째 기기가 안 붙는다. */
 export function linkThisBrowser(): Promise<{ linked: boolean }> {
-  return appRequest<{ linked: boolean }>("/api/webtoon/my/link", {
+  return appRequest<{ linked: boolean }>("/api/webtoon/v1/my/link", {
     method: "POST", body: { uid: getUid() },
   });
 }
 
 /** 내 계정에 이어진 브라우저들이 만든 작품 전부. 나만 보기로 내려 둔 것도 온다. */
 export function myAccountRuns(): Promise<RunCard[]> {
-  return appRequest<RunCard[]>("/api/webtoon/my/runs");
-}
-
-/** 이 브라우저의 크레딧 잔액.
- *
- *  ⚠ 계정이 아니라 **uid** 로 센다. 로그인해도 지금은 이 값이 안 따라온다 —
- *  계정에 붙이는 것은 #223, 가격·결제는 #16 · #155 다. 그래도 **실제 잔액**
- *  이다(만들 때 여기서 깎인다). 화면에 지어낸 숫자를 쓰지 않는다. */
-export function creditBalance(): Promise<{ balance: number }> {
-  return call<{ balance: number }>(`/credits?uid=${encodeURIComponent(getUid())}`);
+  return appRequest<RunCard[]>("/api/webtoon/v1/my/runs");
 }
 
 /** 둘러보기에 거는가 내리는가. 실패하면 화면도 되돌려야 한다 — 껐다고
@@ -326,7 +322,7 @@ export function creditBalance(): Promise<{ balance: number }> {
  *  이어진 브라우저의 작품인지 보고 넘긴다. */
 export function setVisibility(runId: string, isPublic: boolean) {
   return appRequest<{ runId: string; public: boolean }>(
-    `/api/webtoon/my/runs/${encodeURIComponent(runId)}/visibility`,
+    `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/visibility`,
     { method: "POST", body: { public: isPublic } });
 }
 

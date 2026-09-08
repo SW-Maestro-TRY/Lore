@@ -1,5 +1,6 @@
 package com.lore.webtoon.job;
 
+import com.lore.webtoon.art.WebtoonPage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,16 @@ class CreateRequestTest {
         assertThat(form.name()).isEqualTo("차사");
         assertThat(form.style()).isEqualTo("romance");
         assertThat(form.checkpoints()).isFalse();
+    }
+
+    @Test
+    @DisplayName("사진에 붙인 한 마디도 받는다 — 안 받으면 그 말이 어디에도 안 닿는다")
+    void readsPhotoNote() throws Exception {
+        JobService.CreateRequest form = JSON.readValue("""
+                {"name":"차사","photo_note":"왼쪽이 주인공이에요","agree_ip":true}""",
+                JobService.CreateRequest.class);
+
+        assertThat(form.photoNote()).isEqualTo("왼쪽이 주인공이에요");
     }
 
     @Test

@@ -7,7 +7,7 @@ import { louArt } from "../../lib/louArt";
 /* 둘러보기 — haeun/landing/web 의 #works 를 옮겼다.
  *
  * **이제 진짜 목록이다.** 예전에는 백엔드가 없어 목업 한 편만 얹어 뒀는데,
- * 지금은 `/api/webtoon/runs` 로 실제로 만들어진 작품을 받아 건다.
+ * 지금은 `/api/webtoon/v1/runs` 로 실제로 만들어진 작품을 받아 건다.
  *
  * 빈 화면·오류 화면에도 루를 세운다 — 글자만 있으면 고장난 것처럼 읽힌다.
  */

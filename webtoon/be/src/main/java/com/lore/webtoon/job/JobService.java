@@ -1,13 +1,17 @@
 package com.lore.webtoon.job;
 
+import com.lore.common.s3.S3Service;
+import com.lore.common.s3.S3Storage;
+import com.lore.webtoon.art.PrivateArt;
+import com.lore.webtoon.harness.WebtoonController;
+import com.lore.webtoon.work.WorkLedger;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
-import com.lore.webtoon.PrivateArt;
-import com.lore.webtoon.WorkLedger;
+import com.lore.webtoon.character.CharacterOwner;
 import com.lore.webtoon.character.CharacterService;
 import com.lore.webtoon.character.WebtoonCharacter;
 import com.lore.webtoon.story.StoryStore;
@@ -49,25 +53,9 @@ public class JobService {
     private static final int PHOTO_WIDTH = 1400;
 
     /** 그림체 고른 값 -> 하네스가 아는 이름. 파이썬 쪽 STYLE_CHOICES 와 같아야 한다. */
-    private static final Map<String, String> STYLE = Map.of(
-            "romance", "romance_fantasy",
-            "webtoon", "webtoon_lock_bg",
-            "frost", "frost",
-            "cinematic", "cinematic",
-            "pastel", "pastel",
-            "noir", "noir",
-            "shoujo", "shoujo",
-            "game", "game");
-
-    private static final Map<String, String> STYLE_LABEL = Map.of(
-            "romance_fantasy", "로맨스 판타지",
-            "webtoon_lock_bg", "일반 웹툰",
-            "frost", "세미리얼 · 성인향",
-            "cinematic", "시네마틱 반실사",
-            "pastel", "일상툰 감성",
-            "noir", "다크 느와르",
-            "shoujo", "순정 · BL",
-            "game", "게임 원화");
+    /* 그림체 표는 여기 두지 않는다 — 둘러보기·완성본도 같은 값을 읽어야 해서
+       한 곳({@link WebtoonStyles})으로 모았다. */
+    private static final Map<String, String> STYLE = WebtoonStyles.STYLE;
 
     private static final Map<String, String> STAGE_LABEL = Map.of(
             "story", "이야기 짓기",
@@ -75,7 +63,7 @@ public class JobService {
             "board", "장면 나누기",
             "pages", "페이지 그림");
 
-    private static final String DEFAULT_STYLE = "webtoon_lock_bg";
+    private static final String DEFAULT_STYLE = WebtoonStyles.DEFAULT_STYLE;
 
     private final WebtoonJobRepository jobs;
     private final JobStore store;
@@ -84,18 +72,25 @@ public class JobService {
     private final StoryStore stories;
     private final WorkLedger works;
     private final CharacterService characters;
+    private final CharacterOwner owner;
     private final PrivateArt art;
+    private final S3Service uploads;
+    private final S3Storage storage;
     private final Path jobsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobService(WebtoonJobRepository jobs, JobStore store, JobRunner runner,
                       JobProgress progress, StoryStore stories, WorkLedger works,
-                      CharacterService characters, PrivateArt art,
+                      CharacterService characters, CharacterOwner owner, PrivateArt art,
+                      S3Service uploads, S3Storage storage,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
         this.works = works;
         this.characters = characters;
+        this.owner = owner;
         this.art = art;
+        this.uploads = uploads;
+        this.storage = storage;
         this.store = store;
         this.runner = runner;
         this.progress = progress;
@@ -130,8 +125,15 @@ public class JobService {
         Path dir = jobsDir.resolve(publicId);
         try {
             Files.createDirectories(dir);
-            List<Path> photos = savePhotos(dir, form.photosData());
-            Path fromCharacter = characterArt(dir, form.characterId(), userId);
+            /* **키가 오면 그쪽을 쓴다.** presign 으로 올리면 사진이 요청 본문에
+               안 실리므로 넷이면 20MB 넘던 create 가 몇백 바이트가 된다.
+               data URL 도 계속 받는다 — 화면이 한 번에 갈아타지 않아도 되고,
+               게스트는 계정이 없어서 티켓을 못 받는다(presign 은 로그인이
+               필요하다). 둘 다 오면 키가 이긴다. */
+            List<Path> photos = form.photoKeys() != null && !form.photoKeys().isEmpty()
+                    ? pullPhotos(dir, form.photoKeys(), userId)
+                    : savePhotos(dir, form.photosData());
+            Path fromCharacter = characterArt(dir, form.characterId(), userId, form.uid());
             /* 캐릭터를 골라 왔으면 그 그림을 참조로 붙인다.
              *
              * 화면은 **번호만** 보낸다. 그림은 S3 의 안 열리는 자리에 있고,
@@ -196,7 +198,7 @@ public class JobService {
         WebtoonJob job = store.byPublicId(publicId);
         return JobView.of(job, progress.of(job.getId()),
                 store.directionsOf(job.getId()),
-                STYLE_LABEL.getOrDefault(job.getStyle(), ""),
+                WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()));
     }
 
@@ -215,6 +217,36 @@ public class JobService {
         runner.resumeAfterPick(job.getId());
     }
 
+    /**
+     * 넷 다 마음에 안 든다 — 후보를 다시 짓는다.
+     *
+     * <b>고르는 차례일 때만 된다.</b> 그리는 중에 이걸 받으면 같은 작품이 줄에
+     * 두 번 서서, 하네스가 같은 폴더를 동시에 고쳐 쓴다(파이썬 쪽
+     * {@code _require} 가 막던 것과 같은 자리다).
+     */
+    public void retryPick(String publicId, String note) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_PICK) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 고를 차례가 아닙니다");
+        }
+        runner.retryDirections(job.getId(), note == null ? "" : note.trim());
+    }
+
+    /**
+     * 그만둔다.
+     *
+     * <b>끝난 것은 그냥 둔다.</b> 화면이 다 만들어진 순간에 취소를 눌렀을 수
+     * 있는데(0.8초마다 묻는 사이), 그때 「취소했습니다」로 덮으면 다 나온
+     * 작품이 실패로 보인다.
+     */
+    public void cancel(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus().isOver()) {
+            return;
+        }
+        runner.cancel(job.getId());
+    }
+
     /** 사람이 캐릭터 시트를 확인했다. */
     public void approveSheet(String publicId) {
         WebtoonJob job = store.byPublicId(publicId);
@@ -222,6 +254,39 @@ public class JobService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 확인할 차례가 아닙니다");
         }
         runner.resumeAfterSheet(job.getId());
+    }
+
+    /**
+     * 시트를 <b>다시 그린다.</b> 사람이 적어 보낸 말은 그리는 프롬프트 뒤에 붙는다.
+     *
+     * 그리기 전에 이미 있는 시트를 지운다 — {@code run.py} 의 {@code stage_sheet}
+     * 이 "사양·그림이 이미 있으면 다시 안 그린다"로 정해 놨기 때문이다. 안 지우면
+     * 다시 만들기를 눌러도 같은 그림이 그대로 있고, 사람은 눌렀는데 아무 일도
+     * 안 일어난 것으로 본다. (파이썬 쪽 `_clear_sheet` 과 같은 규칙이다.)
+     */
+    public void retrySheet(String publicId, String note) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SHEET) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 확인할 차례가 아닙니다");
+        }
+        clearSheet(job.getRunId());
+        runner.redrawSheet(job.getId(), note == null ? "" : note.trim());
+    }
+
+    /** 시트를 다시 그리려면 먼저 지운다. 못 지운 것이 있어도 계속 간다. */
+    private void clearSheet(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return;
+        }
+        Path dir = runner.runDir(runId);
+        for (String name : new String[]{"sheet.png", "sheet_spec.json",
+                                        "sheet_prompt.txt", "sheet_spec_prompt.txt"}) {
+            try {
+                Files.deleteIfExists(dir.resolve(name));
+            } catch (IOException e) {         // noqa: 하나 못 지워도 나머지를 지운다
+                log.warn("시트를 못 지웠습니다 ({})", name, e);
+            }
+        }
     }
 
     /* ---- 준비 ------------------------------------------------------------- */
@@ -242,12 +307,17 @@ public class JobService {
      * 그것만으로도 그릴 수 있다 — 여기서 막으면 S3 가 잠깐 흔들릴 때 만들기가
      * 통째로 죽는다.
      */
-    private Path characterArt(Path dir, String characterId, Long userId) {
+    private Path characterArt(Path dir, String characterId, Long userId, String uid) {
         if (characterId == null || characterId.isBlank()) {
             return null;
         }
         try {
-            WebtoonCharacter one = characters.byPublicId(characterId, userId);
+            /* 브라우저도 같이 넘긴다 — 로그인 안 하고 만든 캐릭터는 계정이
+               아니라 이 값으로만 자기 것임을 말할 수 있다. 안 넘기면 방금
+               자기가 만든 캐릭터로 웹툰을 만들려는 순간 "그런 캐릭터가
+               없습니다" 가 뜬다. */
+            WebtoonCharacter one = characters.byPublicId(
+                    characterId, userId, owner.uidsOf(userId, uid));
             byte[] bytes = art.read(one.getArtKey());
             if (bytes == null || bytes.length == 0) {
                 return null;
@@ -259,6 +329,48 @@ public class JobService {
             log.warn("고른 캐릭터의 그림을 못 붙였습니다 (character={})", characterId, e);
             return null;
         }
+    }
+
+    /**
+     * presign 으로 S3 에 올라간 사진을 작업 폴더로 내린다.
+     *
+     * <b>티켓을 먼저 태운다</b>({@code S3Service.consume}) — 남의 키를 적어 보내거나
+     * 같은 키를 두 번 쓰는 것을 그 안에서 막는다. 태우지 않고 내려받으면 키만 알면
+     * 남이 올린 사진을 자기 작업에 붙일 수 있다.
+     *
+     * 내린 뒤에는 {@code photo1.png} … 로 두어 예전 길과 같은 모양이 되게 한다 —
+     * 하네스는 그 이름만 안다.
+     */
+    private List<Path> pullPhotos(Path dir, List<String> keys, Long userId) throws IOException {
+        List<Path> saved = new ArrayList<>();
+        if (keys == null || keys.isEmpty()) {
+            return saved;
+        }
+        if (keys.size() > MAX_PHOTOS) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "사진은 " + MAX_PHOTOS + "장까지 올릴 수 있습니다");
+        }
+        int i = 0;
+        for (String key : keys) {
+            i++;
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            uploads.consume(userId, key, Instant.now());
+            Path raw = dir.resolve("upload" + i);
+            storage.download(key, raw);
+            BufferedImage image = ImageIO.read(raw.toFile());
+            if (image == null) {
+                Files.deleteIfExists(raw);
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        i + "번째 사진을 열지 못했습니다. 아이폰 사진(HEIC)이면 JPG 나 PNG 로 바꿔서 올려 주세요.");
+            }
+            Path to = dir.resolve("photo" + i + ".png");
+            ImageIO.write(shrink(image), "png", to.toFile());
+            Files.deleteIfExists(raw);
+            saved.add(to);
+        }
+        return saved;
     }
 
     private List<Path> savePhotos(Path dir, List<String> dataUrls) throws IOException {
@@ -332,6 +444,10 @@ public class JobService {
             });
         }
         doc.put("fields", fields);
+        /* **사진에 붙인 한 마디를 빠뜨리지 않는다.** 하네스는 사진을 읽을 때
+           이 값을 같이 본다 — 안 적어 주면 사람이 "왼쪽이 주인공이에요" 라고
+           썼는데 그 말이 어디에도 안 닿는다(화면은 받아서 보내고 있었다). */
+        doc.put("photo_note", blank(form.photoNote()));
         doc.put("genre", blank(form.genre()));
         doc.put("world", Map.of("preset", "", "text", ""));
         doc.put("story", blank(form.story()));
@@ -354,6 +470,10 @@ public class JobService {
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("name", blank(form.name()));
         doc.put("character", blank(form.character()));
+        /* **사진에 붙인 한 마디를 빠뜨리지 않는다.** 하네스는 사진을 읽을 때
+           이 값을 같이 본다 — 안 적어 주면 사람이 "왼쪽이 주인공이에요" 라고
+           썼는데 그 말이 어디에도 안 닿는다(화면은 받아서 보내고 있었다). */
+        doc.put("photo_note", blank(form.photoNote()));
         doc.put("genre", blank(form.genre()));
         doc.put("story", blank(form.story()));
         doc.put("style", blank(form.style()));
@@ -400,6 +520,11 @@ public class JobService {
                                 String style, Map<String, String> fields,
                                 @JsonProperty("photos_data") @JsonAlias("photosData")
                                 List<String> photosData,
+                                /* presign 으로 올린 사진의 키. photos_data 대신 이것을
+                                   보내면 본문에 사진이 안 실린다 — 넷이면 20MB 가 넘던
+                                   요청이 몇백 바이트가 된다. 둘 다 오면 키를 먼저 쓴다. */
+                                @JsonProperty("photo_keys") @JsonAlias("photoKeys")
+                                List<String> photoKeys,
                                 @JsonProperty("agree_ip") @JsonAlias("agreeIp")
                                 Boolean agreeIp,
                                 Boolean checkpoints, String uid,
@@ -407,7 +532,12 @@ public class JobService {
                                    여기서 붙인다 — 화면이 그림을 내려받아 다시 올릴
                                    이유가 없다. */
                                 @JsonProperty("character_id") @JsonAlias("characterId")
-                                String characterId) {
+                                String characterId,
+                                /* 사진에 대해 사람이 덧붙인 한 마디("왼쪽이 주인공" 등).
+                                   하네스가 사진을 읽을 때 그대로 붙여 준다
+                                   (new_harness/run.py 의 "첨부한 사진 n장을 보라(…)"). */
+                                @JsonProperty("photo_note") @JsonAlias("photoNote")
+                                String photoNote) {
 
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;

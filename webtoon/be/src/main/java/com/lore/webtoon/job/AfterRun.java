@@ -1,10 +1,10 @@
 package com.lore.webtoon.job;
 
+import com.lore.webtoon.art.PageUploader;
+import com.lore.webtoon.usage.UsageService;
+import com.lore.webtoon.work.WorkLedger;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lore.webtoon.PageStore;
-import com.lore.webtoon.UsageService;
-import com.lore.webtoon.WorkLedger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,30 +42,27 @@ public class AfterRun {
     private static final Logger log = LoggerFactory.getLogger(AfterRun.class);
 
     private final UsageService usage;
-    private final PageStore pages;
+    private final PageUploader uploader;
     private final WorkLedger works;
     private final HarnessProcess harness;
     private final Path runsDir;
-    private final String bucket;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public AfterRun(UsageService usage, PageStore pages, WorkLedger works,
+    public AfterRun(UsageService usage, PageUploader uploader, WorkLedger works,
                     HarnessProcess harness,
-                    @Value("${lore.webtoon.python.runs-dir:}") String runsDir,
-                    @Value("${app.s3.content-bucket:}") String bucket) {
+                    @Value("${lore.webtoon.python.runs-dir:}") String runsDir) {
         this.usage = usage;
-        this.pages = pages;
+        this.uploader = uploader;
         this.works = works;
         this.harness = harness;
         this.runsDir = (runsDir == null || runsDir.isBlank()
                 ? harness.dir().resolve("runs")
                 : Path.of(runsDir)).toAbsolutePath().normalize();
-        this.bucket = bucket == null ? "" : bucket;
     }
 
     /** 다 끝났다. 남길 것을 남긴다. */
     public void finish(String runId, java.util.function.Consumer<String> onLine) {
-        recordCost(runId);
+        cost(runId);
         uploadArt(runId, onLine);
     }
 
@@ -75,8 +72,24 @@ public class AfterRun {
      * 하네스가 {@code meta.json} 에 아주 촘촘히 적어 둔다 — 단계 · 모델 ·
      * 토큰(입력/출력/캐시) · 달러 · 원 · 걸린 초. 그걸 그대로 읽어 올린다.
      * 다시 올려도 (작품, 몇 번째) 로 겹치는 것이 걸러진다.
+     *
+     * <h2>다 만든 뒤에만 부르면 안 된다</h2>
+     *
+     * 이건 <b>걸음마다</b> 부르라고 밖으로 열어 둔 것이다. 끝에서 한 번만
+     * 부르면 <b>끝까지 못 간 작품의 값이 영영 안 잡힌다</b> — 죽어도 돈은 이미
+     * 나간 뒤다. 그러면 일일 상한이 성공한 것만 세게 되고, 실패가 잦을수록
+     * 상한이 헐거워진다. 파이썬 서버는 이걸 알고 단계마다 올렸다
+     * ({@code newharness_pipeline._run} 의 {@code usage_report.push}).
+     *
+     * 사람이 이야기·시트 앞에서 멈춰 서 있는 동안에도 마찬가지다. 그 사람은
+     * 실패한 것도 성공한 것도 아니지만 <b>거기까지 그린 값은 나갔다.</b>
+     *
+     * 여러 번 불러도 된다 — 겹치는 것은 서버가 (작품, 몇 번째) 로 거른다.
      */
-    private void recordCost(String runId) {
+    public void cost(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return;
+        }
         Path meta = runsDir.resolve(runId).resolve("meta.json");
         if (!Files.isRegularFile(meta)) {
             log.warn("비용 기록이 없습니다 (run={})", runId);
@@ -110,37 +123,25 @@ public class AfterRun {
     /**
      * 그림을 S3 로.
      *
-     * 올리는 일 자체는 파이썬이 한다({@code s3_upload.py}) — 원본을 줄이고
-     * 올리는 코드가 이미 거기 있고, 자바로 다시 쓰면 두 벌이 된다. 스프링은
-     * 그것을 프로그램으로 부르고, <b>주소를 DB 에 적는 것은 그 스크립트가
-     * 이 서버에게 도로 알려 준다</b>(내부 주소).
+     * <b>줄이는 것은 파이썬, 올리고 적는 것은 여기.</b> 파이썬이 폭마다 줄여
+     * 디스크에 놓고 경로만 알려 주면({@code s3_upload.py --prepare}), 그
+     * 파일을 공통 저장소로 올리고 그 자리에서 바로 DB 에 적는다.
+     *
+     * 전에는 올리는 것까지 파이썬이 하고 <b>주소를 이 서버에 HTTP 로 도로
+     * 알려</b> 줬다. 그래서 알리는 쪽만 조용히 실패하면(내부 토큰이 없으면
+     * 그랬다 — 실제로 겪었다) 그림은 S3 에 있는데 DB 는 비고, 화면에는
+     * "올렸습니다" 가 찍혔다. 지금은 올린 그 자리에서 적으므로 둘이 갈릴 수가
+     * 없다 — 그 실패 모드와 그것을 찾으려고 두던 확인이 함께 없어졌다.
      *
      * 버킷을 안 정해 뒀으면 그냥 넘어간다 — 로컬에서는 안 올려도 된다.
      */
     private void uploadArt(String runId, java.util.function.Consumer<String> onLine) {
-        if (bucket.isEmpty()) {
+        if (!uploader.ready()) {
             return;
         }
         try {
-            int code = harness.upload(runId, onLine);
-            if (code != 0) {
-                log.error("그림을 S3 에 못 올렸습니다 (run={}, exit={})", runId, code);
-                return;
-            }
-            /* **올린 것과 적힌 것은 다른 일이다.**
-             *
-             * 스크립트는 S3 에 올린 다음 그 주소를 이 서버에 도로 알려 주는데,
-             * 알리는 쪽만 조용히 실패할 수 있다(내부 토큰이 없으면 그렇다 —
-             * 실제로 겪었다). 그러면 화면에는 "올렸습니다" 가 찍히는데 DB 는
-             * 비어 있고, 나중에 작품을 DB 로 찾으면 그림이 없는 줄만 나온다.
-             *
-             * 올린 직후에 한 번 세어 본다. 여기서 크게 남겨 두지 않으면 이걸
-             * 배포에서 다시 찾게 된다. */
-            if (!pages.has(runId)) {
-                log.error("그림은 S3 에 올라갔는데 주소가 DB 에 없습니다 (run={}). "
-                        + "LORE_WEBTOON_INTERNAL_TOKEN 을 확인하세요 — 없으면 "
-                        + "s3_upload.py 가 알리는 단계를 건너뜁니다.", runId);
-            }
+            String prepared = harness.prepareUpload(runId, onLine);
+            uploader.uploadPrepared(runId, prepared, onLine);
         } catch (Exception e) {                     // noqa: 여기서 만들기를 실패시키지 않는다
             log.error("그림을 S3 에 못 올렸습니다 (run={})", runId, e);
         }

@@ -3208,47 +3208,48 @@
    여기 색을 앱 팔레트로 바꾸면 화면과 구운 그림이 갈린다 — 그래서 흰 바탕에
    검은 선 그대로 둔다. */
 .webtoon-page .bub {
-  position: relative; background: #fff; color: #111; text-align: center;
+  position: relative; color: #111; text-align: center;
   padding: .55em .85em; font-weight: 600; box-sizing: border-box;
-  border: 2.5px solid #111; word-break: keep-all;
+  word-break: keep-all; width: fit-content; max-width: 100%;
 }
-.webtoon-page .bub-normal   { border-radius: 50% / 42%; }
-.webtoon-page .bub-normal::after {
-  content: ""; position: absolute; left: 22%; bottom: -14px;
-  border: 9px solid transparent; border-top-color: #111; border-bottom: 0;
-}
-.webtoon-page .bub-shout {
-  border-radius: 4px; border-width: 3px; font-weight: 800;
-  clip-path: polygon(0% 12%, 7% 0%, 20% 10%, 33% 1%, 46% 11%, 60% 1%, 74% 10%, 88% 0%,
-                     100% 13%, 93% 27%, 100% 43%, 92% 58%, 100% 74%, 88% 88%, 74% 79%,
-                     60% 92%, 46% 80%, 33% 93%, 20% 81%, 7% 92%, 0% 76%, 8% 60%, 0% 44%,
-                     8% 28%);
-  padding: 1.1em 1.2em;
-}
-.webtoon-page .bub-whisper { border-style: dotted; border-width: 2px; border-radius: 44% / 40%; opacity: .95; }
-.webtoon-page .bub-thought { border-radius: 46% / 44%; }
-.webtoon-page .bub-thought::after {
-  content: "○ ○"; position: absolute; left: 16%; bottom: -1.5em;
-  font-size: .5em; color: #111; letter-spacing: .3em;
-}
-.webtoon-page .bub-narration { border-radius: 3px; border-width: 2px; text-align: left; }
 
-/* ---- 꼬리 방향 ------------------------------------------------------------
-   꼬리는 "누가 말했는가" 를 가리키는 유일한 표시다. 한 컷에 풍선이 둘이면
-   좌우가 갈려야 누가 먼저 말했는지, 어느 것이 누구 것인지 읽힌다.
-   기본은 왼쪽이고, 나레이션·회상에는 애초에 꼬리가 없다.                     */
-.webtoon-page .bub-whisper::after {
-  content: ""; position: absolute; left: 22%; bottom: -11px;
-  border: 7px dotted transparent; border-top: 7px solid #111; border-bottom: 0;
+/* 몸통과 꼬리는 **한 덩어리**로 그린다 (editorCore 의 paintShape).
+   CSS 로 따로 그리면 둘이 만나는 자리에 틈이 남고, 꼬리를 아무 방향으로나
+   뻗을 수도 없다. 여기서는 색과 선 굵기만 정하고 모양은 SVG 가 만든다. */
+.webtoon-page .bub-svg {
+  position: absolute; pointer-events: none; overflow: visible; z-index: 0;
 }
-.webtoon-page .bub-shout::after {
-  content: ""; position: absolute; left: 20%; bottom: -13px;
-  border: 9px solid transparent; border-top-color: #111; border-bottom: 0;
+.webtoon-page .bub-svg .bs > * { fill: #fff; stroke: #111; stroke-width: 2.5; }
+.webtoon-page .bub-svg .bs-shout > * { stroke-width: 3; }
+.webtoon-page .bub-svg .bs-narration > * { stroke-width: 2; }
+.webtoon-page .bub-svg .bs-whisper > * { stroke-width: 2; stroke-dasharray: 2 5; stroke-linecap: round; }
+.webtoon-page .bub-svg .bs-flash > * { stroke-dasharray: 9 6; opacity: .86; }
+/* 점선은 몸통만이다 — 꼬리까지 끊기면 붙어 있는 것으로 안 읽힌다. */
+.webtoon-page .bub-svg .bs-whisper > polygon,
+.webtoon-page .bub-svg .bs-flash > polygon { stroke-dasharray: none; }
+
+/* 윤곽을 두 배로 긋고 속을 덮는다 — 위 paintShape 의 두 번 그리기. */
+.webtoon-page .bub-svg .bs > * { stroke-width: 5; }
+.webtoon-page .bub-svg .bs-shout > * { stroke-width: 6; }
+.webtoon-page .bub-svg .bs-narration > * { stroke-width: 4; }
+.webtoon-page .bub-svg .bs-whisper > * { stroke-width: 4; }
+.webtoon-page .bub-svg .bs-fill > * { fill: #fff; stroke: none; }
+.webtoon-page .bub-svg .bs-flash ~ .bs-fill > * { fill: rgba(255,255,255,.9); }
+
+.webtoon-page .bub { position: relative; z-index: 1; }
+.webtoon-page .bub-shout { font-weight: 800; padding: 1.1em 1.2em; }
+.webtoon-page .bub-narration { text-align: left; }
+
+/* 꼬리 끝 손잡이 — 끌면 말하는 사람을 가리킨다. */
+.webtoon-page .item .handle-tail {
+  position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+  border-radius: 50%; background: #fff; border: 2px solid #111;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35); cursor: grab; z-index: 3;
+  opacity: 0; transition: opacity .12s;
 }
-.webtoon-page .bub.tail-right::after { left: auto; right: 22%; }
-.webtoon-page .bub-thought.tail-right::after { left: auto; right: 16%; }
-.webtoon-page .bub.tail-none::after { display: none; }
-.webtoon-page .bub-flash { border-radius: 46% / 42%; border-style: dashed; opacity: .82; filter: blur(.2px); }
+.webtoon-page .item.sel .handle-tail { opacity: 1; }
+.webtoon-page .item .handle-tail.is-off { border-style: dashed; opacity: .55; }
+.webtoon-page .item.sel .handle-tail.is-off { opacity: .7; }
 
 /* 스티커 · 효과음 */
 .webtoon-page .stk { line-height: 1; }
@@ -3384,7 +3385,9 @@
 .webtoon-page .dock-hint { order: -2; margin: 0; color: var(--dim); font-size: .78rem; }
 .webtoon-page .dock-hint b { color: var(--accent-d); }
 
-.webtoon-page .dock-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.webtoon-page /* 두 칸씩 놓는다 — 말풍선 미리보기가 실제 모양으로 그려지면서 세 칸으로는
+   서로 겹치고 딱지를 덮었다. 고르는 것은 여섯 개뿐이라 두 줄이면 다 보인다. */
+.webtoon-page .dock-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .webtoon-page .dock-item {
   background: var(--ink-2); border: 1px solid var(--line-2); border-radius: 12px;
   padding: 10px 6px; cursor: pointer; display: grid; gap: 6px; place-items: center;
@@ -3394,7 +3397,13 @@
 .webtoon-page .dock-item:active { transform: translateY(1px); }
 .webtoon-page .dock-item span { font-size: .7rem; color: var(--muted); }
 .webtoon-page .dock-item .prev { pointer-events: none; }
-.webtoon-page .dock-item .prev .bub { font-size: 10px; padding: .4em .6em; border-width: 1.5px; }
+/* 도구 패널 미리보기 — 그림 위와 같은 모양을 작게 그린다. 꼬리가 칸 밖으로
+   조금 나가므로 넘치는 것을 감추지 않는다. */
+.webtoon-page .dock-item .prev { position: relative; overflow: visible; min-height: 34px;
+                   display: flex; align-items: center; justify-content: center; }
+.webtoon-page .dock-item .prev .bub { font-size: 10px; padding: .4em .6em; }
+.webtoon-page .dock-item .prev .bub-svg .bs > * { stroke-width: 3.4; }
+.webtoon-page .dock-item .prev .handle-tail { display: none; }
 .webtoon-page .dock-item .prev .stk { font-size: 26px; }
 .webtoon-page .dock-item .prev .sfx { font-size: 17px; -webkit-text-stroke-width: 2px; }
 
@@ -3794,323 +3803,6 @@
   font-size: .72rem; color: #b5453c; font-weight: 600;
 }
 
-/* ── 크레딧 내역 (마이페이지) ─────────────────────────────────────────
-   원본 프로토타입에 없던 자리라 여기서 새로 그린다(port-css.mjs 가 옮기는
-   것은 원본에 있는 것뿐이다).
-
-   한 줄에 셋을 세로로 안 쌓고 가로로 둔다 — 스무 줄이 쌓이는 목록이라
-   한 줄이 3층이 되면 화면이 통째로 내역으로 덮인다. 무엇에(왼쪽) · 언제
-   (가운데) · 얼마(오른쪽) 순서인데, **얼마**가 오른쪽 끝에 세로로 줄
-   맞춰 서야 훑으면서 더하고 뺄 수 있다. */
-.webtoon-page .credit-lines {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--line-2);
-}
-
-.webtoon-page .credit-line {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 10px 2px;
-  border-bottom: 1px solid var(--line-2);
-  font-size: 14px;
-}
-
-/* 무엇에 — 길면 줄인다. 사유가 길다고 날짜와 금액이 밀리면 안 된다. */
-.webtoon-page .credit-line-label {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.webtoon-page .credit-line-at {
-  flex: none;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-/* 얼마 — 폭을 고정하고 숫자 폭을 고르게 해서 자릿수가 달라도 세로로 맞는다. */
-.webtoon-page .credit-line-delta {
-  flex: none;
-  min-width: 52px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-/* 쓴 것은 색을 뺀다. 받은 것과 같은 색이면 훑을 때 방향이 안 보인다. */
-.webtoon-page .credit-line-delta.is-spent {
-  color: var(--muted);
-}
-
-/* ── 크레딧 (마이페이지) ──────────────────────────────────────────────
-   원본 프로토타입에 없던 자리라 여기서 새로 그린다.
-
-   내역을 잔액 아래에 늘 펴 두지 않는다 — 스무 줄이 쌓이는 목록이라 마이
-   페이지의 절반이 내역이 되고, 정작 보러 온 「내가 만든 웹툰」이 아래로
-   밀린다. 궁금할 때만 여는 창으로 둔다. */
-.webtoon-page .me-credit-acts {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* ── 뜨는 창 (내역 · 충전) ────────────────────────────────────────── */
-.webtoon-page .credit-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-/* 뒤를 덮는 판. 단추로 만들어 **눌러서 닫히게** 한다 — 폰에서 제일 자주
-   쓰는 닫는 법이고, 닫는 ✕ 는 손이 안 닿는 위쪽에 있다. */
-.webtoon-page .credit-modal-veil {
-  position: absolute;
-  inset: 0;
-  appearance: none;
-  border: 0;
-  padding: 0;
-  background: rgba(9, 22, 28, .45);
-  cursor: pointer;
-}
-
-.webtoon-page .credit-modal-box {
-  position: relative;
-  z-index: 1;
-  width: min(460px, 100%);
-  /* 화면보다 길어지면 창 자체가 넘친다. 폰 주소창까지 감안해 dvh 로 잡고,
-     넘치는 것은 안에서 굴린다. */
-  max-height: min(640px, 88dvh);
-  display: flex;
-  flex-direction: column;
-  border-radius: 18px;
-  background: var(--paper);
-  color: var(--text);
-  box-shadow: 0 18px 48px rgba(15, 51, 63, .28);
-  overflow: hidden;
-}
-
-.webtoon-page .credit-modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px 12px;
-}
-
-.webtoon-page .credit-modal-head h3 {
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-.webtoon-page .credit-modal-x {
-  appearance: none;
-  width: 32px;
-  height: 32px;
-  flex: none;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 15px;
-  cursor: pointer;
-}
-
-.webtoon-page .credit-modal-x:hover {
-  background: var(--line-2);
-}
-
-/* 창 안에서만 굴린다. 뒤 페이지가 같이 움직이면 읽던 자리를 잃는다. */
-.webtoon-page .credit-modal-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0 18px 18px;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* ── 탭 ─────────────────────────────────────────────────────────── */
-.webtoon-page .credit-tabs {
-  display: flex;
-  gap: 6px;
-  padding: 0 18px 12px;
-}
-
-.webtoon-page .credit-tab {
-  appearance: none;
-  flex: 1 1 0;
-  padding: 9px 10px;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.webtoon-page .credit-tab.is-on {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
-  font-weight: 700;
-}
-
-/* ── 내역 한 줄 ──────────────────────────────────────────────────
-   설명과 날짜를 세로로 쌓고 금액을 오른쪽 끝에 세운다. 한 줄에 셋을 나란히
-   두면 사유가 길 때 날짜가 밀려 잘린다. 금액은 세로로 줄이 맞아야 훑으면서
-   더하고 뺄 수 있다. */
-.webtoon-page .credit-lines {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.webtoon-page .credit-line {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 2px;
-  border-bottom: 1px solid var(--line-2);
-  font-size: 14px;
-}
-
-.webtoon-page .credit-line-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.webtoon-page .credit-line-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.webtoon-page .credit-line-at {
-  color: var(--muted);
-  font-size: 12.5px;
-}
-
-.webtoon-page .credit-line-delta {
-  flex: none;
-  min-width: 56px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-/* 쓴 것은 색을 뺀다. 받은 것과 같은 색이면 훑을 때 방향이 안 보인다. */
-.webtoon-page .credit-line-delta.is-spent {
-  color: var(--muted);
-}
-
-.webtoon-page .credit-empty {
-  margin: 28px 0;
-  text-align: center;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-/* ── 충전 ───────────────────────────────────────────────────────── */
-.webtoon-page .credit-notice {
-  margin: 0 18px 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  /* 이 팔레트는 이름이 뒤집혀 있다 — `--ink*` 가 **바탕**이고 글자는
-     `--text` · `--muted` · `--dim` 이다(style.css 머리말 참고). 처음에
-     --ink-2 를 글자색으로 썼다가 흰 바탕에 흰 글씨가 됐다. */
-  background: var(--sea-sand);
-  color: var(--text);
-  font-size: 13.5px;
-  line-height: 1.5;
-}
-
-.webtoon-page .credit-packs {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.webtoon-page .credit-pack {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--line-2);
-  border-radius: 14px;
-}
-
-.webtoon-page .credit-pack-amount {
-  flex: none;
-  font-size: 15px;
-}
-
-.webtoon-page .credit-pack-amount b {
-  font-size: 20px;
-}
-
-.webtoon-page .credit-pack-price {
-  flex: 1 1 auto;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.webtoon-page .credit-pack-note {
-  flex: none;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--line-2);
-  color: var(--muted);
-  font-size: 11.5px;
-}
-
-.webtoon-page .credit-hint {
-  margin: 14px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  text-align: center;
-}
-
-/* 폰 — 창을 아래에서 올라오는 판으로. 가운데 띄우면 위아래 여백만 먹고
-   손이 닿는 자리(아래쪽)에서 멀어진다. */
-@media (max-width: 560px) {
-  .webtoon-page .credit-modal {
-    align-items: flex-end;
-    padding: 0;
-  }
-
-  .webtoon-page .credit-modal-box {
-    width: 100%;
-    max-height: 86dvh;
-    border-radius: 20px 20px 0 0;
-  }
-
-  /* 상품 한 줄이 좁아서 넘친다 — 이름과 값을 위에, 단추를 아래에. */
-  .webtoon-page .credit-pack {
-    flex-wrap: wrap;
-  }
-
-  .webtoon-page .credit-pack .btn {
-    flex: 1 1 100%;
-  }
-}
 
 /* ── 결과 화면 머리 ───────────────────────────────────────────────────
    표지 카드가 제 내용만큼만 좁게 서서 아래 그림과 왼쪽 끝이 안 맞았다.
@@ -4737,234 +4429,97 @@
 .webtoon-page .chars-builtin { margin-top: 28px; }
 .webtoon-page .chars-builtin:first-of-type { margin-top: 16px; }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   마이페이지 — 작업실 (A안)
-   ═══════════════════════════════════════════════════════════════════════
 
-   **여기만 LORE 토큰을 쓴다.**
-
-   마이페이지는 웹툰만의 화면이 아니라 LORE 가 공통으로 쓰는 자리다. 여태
-   웹툰 청록(--accent)으로 칠해져 있어서, 짤이나 예고편에서 들어온 사람에게는
-   남의 집으로 읽혔다. 그래서 이 절은 common/fe/styles/tokens.css 의 값만
-   참조한다 — --webtoon(보라) · --text · --surface-2 · --font-display(Archivo).
-   앱 껍데기(apps/web/app/layout.tsx)가 이미 그 파일을 불러 둔다.
-
-   구조는 **왼쪽 레일 + 오른쪽 본문** 하나다. 전에는 프로필 카드 · 크레딧
-   카드 · 캐릭터 줄 · 작품 목록이 위에서부터 쌓여 있었는데, 그 구조에는 짤과
-   예고편이 들어올 자리가 없었다. 레일이면 한 줄만 늘면 된다.
-
-   **모바일이 기본이다**(webtoon.css 「반응형」 절). 좁은 화면에서는 레일이
-   위로 눕고, 넓어질 때만 왼쪽에 선다. */
-
-.webtoon-page .me {
-  display: grid;
-  gap: 18px;
-  padding: 18px 16px 96px;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-ko);
-}
-
-.webtoon-page .me-loading {
-  margin: 0; padding: 40px 4px; color: var(--text-subtle); font-size: .9rem;
-}
-
-/* ---- 레일 ------------------------------------------------------------- */
-
-/* 좁은 화면에서는 레일이 **눕는다.**
+/* ---- 만들던 것으로 돌아가는 띠 -------------------------------------------
  *
- * 세로로 그대로 쌓으면 나·잔액·갈 곳이 첫 화면을 다 먹고, 정작 보러 온
- * 작품 목록이 스크롤 아래로 밀린다. 그래서 폰에서는 한 줄에 나와 잔액,
- * 그 아래 한 줄에 갈 곳을 늘어놓는다. 넓어지면(860px) 왼쪽에 선다. */
-.webtoon-page .me-rail {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
+ * 기다리는 동안 둘러보러 나갈 수 있게 해 놓고 돌아올 단추가 없으면, 나간
+ * 사람은 만들던 것이 어디 갔는지 모른다. 화면 어디에 있든 같은 자리에
+ * 떠 있어야 해서 화면에 고정한다.
+ *
+ * 오른쪽 아래에 두는 이유: 왼쪽 아래는 루 마스코트 자리이고(둘이 겹친다),
+ * 위쪽은 앱 헤더가 쓴다. */
+
+.webtoon-page .back-to-run {
+  position: fixed; right: 16px; bottom: 16px; z-index: 40;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px 8px 8px; border: 1px solid var(--line-2);
+  border-radius: 999px; background: var(--card); cursor: pointer;
+  box-shadow: 0 2px 0 rgba(15,51,63,.06), 0 10px 28px rgba(15,51,63,.16);
+  font-family: inherit; text-align: left;
+  transition: transform .16s ease, box-shadow .16s ease;
 }
-.webtoon-page .me-who { flex: 1 1 auto; }
-.webtoon-page .me-credit { flex: 0 0 auto; }
-.webtoon-page .me-nav { flex: 1 0 100%; }
-.webtoon-page .me-rail-foot {
-  flex: 1 0 100%;
-  grid-auto-flow: column; justify-content: start; align-items: center;
+.webtoon-page .back-to-run:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 0 rgba(15,51,63,.06), 0 16px 36px rgba(15,51,63,.22);
+}
+.webtoon-page .back-to-run img {
+  width: 34px; height: 34px; flex: none; border-radius: 50%;
+  background: var(--card-2); object-fit: cover;
+  /* 만드는 중이라는 것이 멈춘 화면과 구별되게 숨 쉬듯 옅어졌다 진해진다. */
+  animation: back-to-run-breathe 1.8s ease-in-out infinite;
+}
+@keyframes back-to-run-breathe { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) {
+  .webtoon-page .back-to-run img { animation: none; }
+}
+.webtoon-page .back-to-run span { display: grid; }
+.webtoon-page .back-to-run b { font-size: .82rem; color: var(--accent-d); }
+.webtoon-page .back-to-run small { font-size: .7rem; color: var(--dim); }
+
+/* ---- 기다리는 동안 나가는 줄 ---------------------------------------------- */
+
+.webtoon-page .wait-away {
+  display: grid; justify-items: center; gap: 6px; margin: 18px 0 4px;
+}
+.webtoon-page .wait-away span {
+  font-size: .76rem; color: var(--dim); text-align: center;
 }
 
-.webtoon-page .me-who { display: flex; align-items: center; gap: 11px; min-width: 0; }
-.webtoon-page .me-face {
-  width: 38px; height: 38px; flex: none; border-radius: 50%;
-  background: var(--tint-webtoon); color: var(--accent-webtoon);
-  display: grid; place-items: center;
-  font-family: var(--font-display); font-weight: 700; font-size: .95rem;
-}
-.webtoon-page .me-who-txt { min-width: 0; display: grid; }
-.webtoon-page .me-who-txt b {
-  font-size: .95rem; font-weight: 700; line-height: 1.3;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.webtoon-page .me-who-txt span {
-  font-size: .72rem; color: var(--text-subtle);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+/* ---- 편집실 「도구」 손잡이를 단추줄로 되돌린다 ---------------------------
+ *
+ * PC 에서 화면 오른쪽 아래에 동그란 단추로 떠 있었다(webtoon.css 의
+ * `position: fixed; right:24px; bottom:24px`). 그런데 그 자리는 **작품과
+ * 아무 관계가 없어 보이는 자리**다 — 「이미지로 뽑기」·공유는 제목 아래
+ * 단추줄에 모여 있는데 도구만 화면 구석에 혼자 떠 있으니, 무엇을 여는
+ * 단추인지도 어디에 걸린 것인지도 안 읽힌다.
+ *
+ * 제목 아래 단추줄(`.ed-top-right`)의 한 칸으로 되돌린다. DOM 에서는 원래
+ * 거기에 있다(Editor.tsx) — 떠 있게 만든 것이 이 규칙뿐이라 그것만 푼다. */
 
-/* 크레딧 — 숫자만 크게, 그 아래 단위와 갈 자리. */
-.webtoon-page .me-credit {
-  background: var(--bg);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 7px 11px 8px;
-  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-}
-.webtoon-page .me-credit-n {
-  margin: 0; line-height: 1.1;
-  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
-  font-size: 1.15rem; font-weight: 500; letter-spacing: -.02em;
-}
-.webtoon-page .me-credit-n small {
-  font-size: .72rem; color: var(--text-subtle); margin-left: .2em; font-weight: 400;
-}
-.webtoon-page .me-credit-u { margin: 0; font-size: .7rem; color: var(--text-subtle); }
-.webtoon-page .me-credit-acts { margin-left: auto; }
-
-/* 갈 곳. 짤·예고편이 생기면 여기 한 줄씩 는다. */
-.webtoon-page .me-nav {
-  display: flex; gap: 6px; flex-wrap: wrap;
-  border-top: 1px solid var(--border); padding-top: 9px;
-}
-/* 「만든 것 / 재료」 는 세로로 설 때만 뜻이 있다. 가로 줄에서는 칸 사이에
-   끼어들어 오히려 못 읽게 만든다. */
-.webtoon-page .me-nav-grp { display: none; }
-.webtoon-page .me-nav-grp {
-  margin: 6px 0 3px; padding: 0 2px;
-  font-family: var(--font-mono); font-size: .62rem; letter-spacing: .14em;
-  text-transform: uppercase; color: var(--text-subtle);
-}
-.webtoon-page .me-nav-grp:first-child { margin-top: 0; }
-.webtoon-page .me-nav-a {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 12px; border: 1px solid var(--border-strong);
-  border-radius: 99px; background: var(--bg); cursor: pointer;
-  font-family: inherit; font-size: .82rem; color: var(--text-muted); text-align: left;
-  transition: background .14s ease, color .14s ease, border-color .14s ease;
-}
-.webtoon-page .me-nav-a span {
-  font-family: var(--font-mono); font-size: .7rem; color: var(--text-subtle);
-}
-.webtoon-page .me-nav-a:hover { border-color: var(--accent-webtoon); color: var(--text); }
-.webtoon-page .me-nav-a.on {
-  background: var(--accent-webtoon); border-color: transparent;
-  color: #fff; font-weight: 700;
-}
-.webtoon-page .me-nav-a.on span { color: rgba(255, 255, 255, .72); }
-
-.webtoon-page .me-rail-foot { display: grid; gap: 8px 12px; }
-.webtoon-page .me-quit {
-  border: 0; background: transparent; cursor: pointer; padding: 4px;
-  font-family: inherit; font-size: .76rem; color: var(--text-subtle);
-  justify-self: start; text-decoration: underline; text-underline-offset: 3px;
-}
-.webtoon-page .me-quit:hover { color: var(--text-muted); }
-
-/* ---- 단추 — LORE 쪽 모양 ---------------------------------------------- */
-
-.webtoon-page .me-btn {
-  font-family: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
-  padding: 8px 13px; border-radius: 5px;
-  border: 1px solid var(--border-strong); background: var(--bg); color: var(--text);
-  transition: border-color .14s ease, background .14s ease;
-}
-.webtoon-page .me-btn:hover { border-color: var(--accent-webtoon); color: var(--accent-webtoon); }
-.webtoon-page .me-btn-go {
-  background: var(--btn-primary-bg); color: var(--btn-primary-fg);
-  border-color: transparent;
-}
-.webtoon-page .me-btn-go:hover {
-  background: var(--accent-webtoon); color: #fff; border-color: transparent;
-}
-.webtoon-page .me-btn-xs { padding: 5px 10px; font-size: .74rem; }
-.webtoon-page .me-credit-acts .me-btn-xs { flex: 1 1 0; }
-
-/* ---- 본문 ------------------------------------------------------------- */
-
-.webtoon-page .me-main { min-width: 0; }
-
-.webtoon-page .me-top {
-  display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap;
-  padding-bottom: 12px; margin-bottom: 16px;
-  border-bottom: 1px solid var(--border);
-}
-.webtoon-page .me-top h2 {
-  margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: -.01em;
-  color: var(--text);
-}
-.webtoon-page .me-top-sub { margin: 0; font-size: .76rem; color: var(--text-subtle); }
-.webtoon-page .me-top .me-btn { margin-left: auto; }
-.webtoon-page .me-top-acts { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
-.webtoon-page .me-top-acts .me-btn { margin-left: 0; }
-
-/* 작품 칸은 원본(.works-grid)을 그대로 쓴다 — 둘러보기와 같은 카드여야
-   한다. 여기서는 칸 폭만 이 화면에 맞춘다. */
-.webtoon-page .me-works { margin: 0; }
-
-/* ---- 로그인 안 했을 때 ------------------------------------------------- */
-
-.webtoon-page .me-guest {
-  max-width: 34rem; padding: 44px 4px;
-}
-.webtoon-page .me-eyebrow {
-  margin: 0 0 8px; font-family: var(--font-mono); font-size: .66rem;
-  letter-spacing: .16em; text-transform: uppercase; color: var(--text-subtle);
-}
-.webtoon-page .me-guest h2 {
-  margin: 0 0 8px; font-size: 1.4rem; font-weight: 700; color: var(--text);
-}
-.webtoon-page .me-guest-sub { margin: 0 0 20px; color: var(--text-muted); font-size: .9rem; }
-.webtoon-page .me-guest-acts { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* ---- 내 캐릭터 줄 — 새 팔레트에 맞춘다 --------------------------------- */
-
-.webtoon-page .me-chars { margin: 0; }
-.webtoon-page .me-chars-head h3 { color: var(--text); }
-
-/* ---- 넓어지면 레일이 왼쪽에 선다 --------------------------------------- */
-
-@media (min-width: 860px) {
-  .webtoon-page .me {
-    grid-template-columns: 208px minmax(0, 1fr);
-    gap: 28px;
-    padding: 28px 24px 110px;
-    max-width: 1180px; margin: 0 auto;
-    align-items: start;
+@media (min-width: 880px) {
+  .webtoon-page .ed #dockOpen {
+    position: static;
+    width: auto; height: auto; border-radius: 999px;
+    padding: 8px 16px; min-height: 40px;
+    display: inline-flex; align-items: center; gap: 6px;
+    box-shadow: 0 1px 0 rgba(15,51,63,.06);
   }
-  /* 레일은 따라다닌다 — 잔액이 늘 보이는 것이 이 구조를 고른 이유다. */
-  .webtoon-page .me-rail {
-    position: sticky;
-    top: calc(var(--lore-header-h, 0px) + 20px);
-    display: grid; gap: 16px; align-content: start; padding: 16px;
-  }
-  .webtoon-page .me-credit {
-    display: block; padding: 11px 13px 12px;
-  }
-  .webtoon-page .me-credit-n { font-size: 1.5rem; }
-  .webtoon-page .me-credit-u { margin-top: 1px; }
-  .webtoon-page .me-credit-acts { margin: 9px 0 0; }
+  /* 단추줄 안에서는 글자가 보여야 무엇인지 안다 — 동그란 단추일 때만
+     아이콘 하나로 줄여 뒀던 것을 되돌린다. */
+  .webtoon-page .ed #dockOpen .dock-open-label { display: inline; }
+}
 
-  .webtoon-page .me-nav {
-    display: grid; gap: 1px; border-top: 0; padding-top: 0;
-  }
-  .webtoon-page .me-nav-grp { display: block; }
-  .webtoon-page .me-nav-a {
-    width: 100%; justify-content: space-between; gap: 8px;
-    padding: 8px 10px; border: 0; border-left: 2px solid transparent;
-    border-radius: 4px; font-size: .87rem;
-  }
-  .webtoon-page .me-nav-a:hover { background: var(--surface-hover); }
-  .webtoon-page .me-nav-a.on {
-    background: var(--bg); color: var(--text); border-left-color: var(--accent-webtoon);
-  }
-  .webtoon-page .me-nav-a.on span { color: var(--text-subtle); }
+/* ---- 편집실: 장면 한 줄 ---------------------------------------------------
+ *
+ * 그림만 늘어놓으면 "이 장이 무엇을 그린 것인지" 를 다시 그리기 전에 확인할
+ * 길이 없다. 전개가 어색해서 고치려 할 때 원래 무엇을 그리라고 했는지가
+ * 필요하다. 그림 아래에 둔다 — 머리줄은 번호·컷·판본이 이미 차 있다. */
 
-  .webtoon-page .me-rail-foot { grid-auto-flow: row; justify-content: stretch; }
-  .webtoon-page .me-top h2 { font-size: 1.3rem; }
+.webtoon-page .ed .scene-note {
+  margin: 8px 2px 0; font-size: .82rem; line-height: 1.6;
+  color: var(--muted); word-break: keep-all;
+}
+
+/* 내 캐릭터 덩어리 — 만든 것이 있으면 둘러보기용 위에 선다. */
+.webtoon-page .chars-mine { margin-top: 16px; }
+
+/* ---- 실패 안내: 돌려준 것 한 줄 -------------------------------------------
+ *
+ * 사유 아래에 붙는다. 사유는 "왜 멈췄나"고 이 줄은 "그래서 어떻게 됐나"라,
+ * 같은 회색으로 흘려 두면 못 읽고 넘어간다 — 사람이 실제로 궁금해하는 쪽은
+ * 이쪽이다. 글자색을 본문으로 올리고 위에 한 칸 띄운다. */
+
+.webtoon-page .progress-back {
+  margin: 12px 0 0; font-size: .88rem; line-height: 1.6;
+  color: var(--ink); word-break: keep-all;
 }

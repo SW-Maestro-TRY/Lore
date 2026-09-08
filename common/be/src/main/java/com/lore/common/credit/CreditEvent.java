@@ -14,41 +14,18 @@ import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 
 /**
- * 크레딧이 움직인 한 번.
- *
- * <h2>잔액을 칸 하나로 안 들고 있는다</h2>
- *
- * 흔한 방법은 계정마다 잔액 칸 하나를 두고 더하고 빼는 것이다. 그런데 그러면
- * <b>"왜 지금 4인가" 에 답할 수가 없다.</b> 어긋나도(두 번 뺐다거나, 실패한
- * 생성에서 안 돌려줬다거나) 알아챌 방법이 없고, 알아채도 무엇을 되돌려야
- * 하는지 모른다. 돈에 준하는 값에서는 그게 제일 나쁘다.
- *
- * 그래서 <b>움직임만 쌓고 잔액은 그 합계</b>로 낸다. 지운 줄이 없으니 언제든
- * 처음부터 다시 세어 맞출 수 있고, 화면의 「내역」과 잔액이 같은 자료에서
- * 나오므로 둘이 어긋날 수가 없다.
- *
- * 합계를 매번 세는 것이 느려지면 그때 계정마다 요약 줄을 따로 둔다 — 지금
- * 규모(한 계정에 수십 줄)에서 미리 할 일이 아니고, 요약을 먼저 두면 그 요약이
- * 틀렸을 때 고칠 근거가 없어진다.
- *
- * <h2>같은 일을 두 번 적지 않는다</h2>
- *
- * {@code (user_id, reason, ref_id)} 가 유일하다. 만들기가 같은 작품으로 두 번
- * 차감을 시도해도 한 번만 빠진다 — 재시도·중복 클릭·네트워크 되풀이가 다
- * 여기서 걸린다. 부르는 쪽이 "이미 뺐던가" 를 기억할 필요가 없다.
- *
- * <h2>돌려줄 때도 지우지 않는다</h2>
- *
- * 환원은 뺀 줄을 지우는 것이 아니라 <b>반대 줄을 하나 더 적는 것</b>이다.
- * 지우면 "원래 얼마였나" 가 사라진다. 같은 {@code ref_id} 에 이유만 다르게
- * 적으므로, 한 번 낸 것을 두 번 돌려주는 일도 유일키가 막는다.
  */
 @Entity
 @Table(
         name = "credit_event",
+        /* 「같은 일인가」의 기준. 이 넷이 같으면 한 번만 적힌다.
+           **domain 이 여기 있어야 한다.** refId 는 서비스마다 자기 방식으로
+           짓는 값이라(작품 id · 결제 id …) 웹툰의 것과 짤의 것이 우연히 같을
+           수 있다. 도메인이 빠져 있으면 그때 뒤엣것이 "이미 적힌 일" 로 밀려
+           조용히 사라진다 — 낸 사람은 냈는데 장부에 없는 상태다. */
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_credit_event_once",
-                columnNames = {"user_id", "reason", "ref_id"}),
+                columnNames = {"user_id", "reason", "domain", "ref_id"}),
         indexes = @Index(name = "idx_credit_event_user", columnList = "user_id, id"))
 public class CreditEvent {
 
@@ -74,6 +51,16 @@ public class CreditEvent {
     private CreditReason reason;
 
     /**
+     * 어느 서비스에서 일어난 일인가. 이유(reason)가 "무슨 성격의 움직임인가"
+     */
+    /* **안 비운다.** 유일키에 들어가는 칸인데, 포스트그레스는 유일키에서
+       NULL 을 서로 다른 값으로 친다 — 비어 있으면 같은 일이 몇 번이고 다시
+       적힌다. 아래 refId 에 적힌 것과 같은 이유다. */
+    @Column(nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    private CreditDomain domain;
+
+    /**
      * 무엇 때문인가 — 작품 id, 결제 id 같은 것.
      *
      * 이유별로 하나뿐인 일(가입 축하 등)에는 이유 이름을 그대로 넣는다.
@@ -93,19 +80,20 @@ public class CreditEvent {
     protected CreditEvent() {
     }
 
-    private CreditEvent(Long userId, int delta, CreditReason reason,
+    private CreditEvent(Long userId, int delta, CreditReason reason, CreditDomain domain,
                         String refId, String memo, Instant createdAt) {
         this.userId = userId;
         this.delta = delta;
         this.reason = reason;
+        this.domain = domain == null ? CreditDomain.COMMON : domain;
         this.refId = refId;
         this.memo = memo;
         this.createdAt = createdAt;
     }
 
-    static CreditEvent of(Long userId, int delta, CreditReason reason,
+    static CreditEvent of(Long userId, int delta, CreditReason reason, CreditDomain domain,
                           String refId, String memo, Instant at) {
-        return new CreditEvent(userId, delta, reason, refId, memo, at);
+        return new CreditEvent(userId, delta, reason, domain, refId, memo, at);
     }
 
     public Long getId() {
@@ -122,6 +110,11 @@ public class CreditEvent {
 
     public CreditReason getReason() {
         return reason;
+    }
+
+    /** 어디서 일어난 일인가. 이 칸이 생기기 전 줄은 {@code COMMON} 으로 읽는다. */
+    public CreditDomain getDomain() {
+        return domain == null ? CreditDomain.COMMON : domain;
     }
 
     public String getRefId() {
