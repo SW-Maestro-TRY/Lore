@@ -114,43 +114,58 @@ public class HarnessProcess {
     }
 
     /**
-     * 다 그린 그림을 S3 로 올린다.
+     * 올릴 그림을 <b>만들어만</b> 둔다. -> 파일 목록 JSON
      *
-     * 올리는 코드는 파이썬에 이미 있다({@code landing/s3_upload.py}) — 원본을
-     * 줄이고 올리고 주소를 이 서버에 알리는 일까지 그 안에 있다. 자바로 다시
-     * 쓰면 같은 일이 두 벌이 되고, 두 벌은 반드시 어긋난다.
+     * 원본을 폭마다 줄이는 코드는 파이썬에 있고 잘 돈다. 자바로 옮기면 그거야
+     * 말로 두 벌이 되므로 그대로 둔다. 다만 <b>올리는 일은 안 시킨다</b> —
+     * 버킷 이름과 키 규칙과 캐시 헤더를 파이썬이 한 벌 더 알고 있어야 했고,
+     * 그 두 벌이 어긋나면 올라가긴 하는데 읽을 때 403 이 났다. 지금은 만든
+     * 파일의 경로만 받아서 {@code PageUploader} 가 올린다.
+     *
+     * 둘은 같은 기계에 있다(이 서버가 그 스크립트를 띄운다). 그래서 파일이
+     * 네트워크를 타지 않고, 경로만 오가면 된다.
      *
      * 이건 하네스 폴더가 아니라 <b>랜딩 폴더</b>에 있어서 자리가 다르다.
+     *
+     * <p>표준출력은 통째로 JSON 이다 — 진행 상황은 파이썬이 표준오류로 낸다.
      */
-    public int upload(String runId, Consumer<String> onLine)
+    public String prepareUpload(String runId, Consumer<String> onLine)
             throws IOException, InterruptedException {
         Path landing = harnessDir.getParent().resolve("landing");
-        ProcessBuilder pb = new ProcessBuilder(python, "-u", "s3_upload.py", runId);
+        ProcessBuilder pb = new ProcessBuilder(python, "-u", "s3_upload.py",
+                                               "--prepare", runId);
         pb.directory(landing.toFile());
-        pb.redirectErrorStream(true);
+        // 섞으면 안 된다 — 한쪽은 JSON 이고 한쪽은 사람이 읽는 줄이다.
+        pb.redirectErrorStream(false);
 
         Process p = pb.start();
-        Thread reader = Thread.ofVirtual().start(() -> {
+        Thread notes = Thread.ofVirtual().start(() -> {
             try (BufferedReader in = new BufferedReader(
-                    new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                    new InputStreamReader(p.getErrorStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = in.readLine()) != null) {
-                    if (!line.isBlank()) {
+                    if (!line.isBlank() && onLine != null) {
                         onLine.accept(line);
                     }
                 }
             } catch (IOException e) {
-                log.warn("올리기 출력을 읽다 끊겼습니다", e);
+                log.warn("올릴 것을 만드는 중 출력을 읽다 끊겼습니다", e);
             }
         });
+
+        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         boolean done = p.waitFor(600, TimeUnit.SECONDS);
         if (!done) {
             p.destroyForcibly();
-            reader.join(3_000);
-            throw new IllegalStateException("그림 올리기가 너무 오래 걸립니다");
+            notes.join(3_000);
+            throw new IllegalStateException("올릴 그림을 만드는 데 너무 오래 걸립니다");
         }
-        reader.join(5_000);
-        return p.exitValue();
+        notes.join(5_000);
+        if (p.exitValue() != 0) {
+            throw new IllegalStateException(
+                    "올릴 그림을 만들지 못했습니다 (exit=" + p.exitValue() + ")");
+        }
+        return out;
     }
 
     /** 이어 붙이기. 한 걸음이라기보다 마무리라 따로 둔다. */

@@ -18,6 +18,8 @@
 환경변수. 그래서 이 파일에는 열쇠가 한 줄도 없다.
 
     python3 s3_upload.py <run_id> [<run_id> ...]      # 손으로 올릴 때
+    python3 s3_upload.py --prepare <run_id>           # 앱 서버가 부르는 길
+                                                      #  (안 올리고 경로만 알림)
 """
 
 from __future__ import annotations
@@ -68,6 +70,46 @@ def _put(s3, path: Path) -> str:
     s3.upload_file(str(path), BUCKET, key,
                    ExtraArgs={"ContentType": kind, "CacheControl": CACHE})
     return key
+
+
+def prepare_run(run_id: str, on_log=None) -> list[dict]:
+    """올릴 파일을 **만들어만** 둔다. -> [{page_no, width, path, bytes}, ...]
+
+    S3 에 손을 안 댄다. 폭마다 줄인 파일을 디스크에 놓고 그 경로를 돌려줄
+    뿐이다 — 올리는 일은 앱 서버가 한다({@code webtoon/be} 의 PageUploader).
+
+    **왜 나눴나.** 버킷 이름과 키 규칙(`images/<도메인>/<uuid>`)과 캐시
+    헤더를, 자바(common 의 S3Service·S3Storage)와 여기가 **각자 한 벌씩**
+    적어 두고 있었다. 두 벌은 반드시 어긋나고, 어긋나면 올라가긴 하는데
+    읽을 때 403 이 난다 — 그 규칙을 한쪽만 고쳐서 겪은 사고가 두 파일 주석에
+    똑같이 적혀 있다.
+
+    나누고 나면 규칙을 아는 곳이 자바 한 군데다. 덤으로 이 파일이 boto3 도
+    AWS 자격증명도 안 보게 된다 — 여기서 하는 일은 그림을 만드는 것뿐이다.
+
+    앱 서버와 같은 기계에서 도는 것을 전제로 한다(앱 서버가 이 스크립트를
+    프로세스로 띄운다). 그래서 파일을 네트워크로 넘길 일이 없고, 경로만
+    알려 주면 된다.
+    """
+    from serve import thumbnail                     # 아래 upload_run 과 같은 이유
+
+    out: list[dict] = []
+    cache_dir = nh.run_dir(run_id) / "cache"
+
+    for no in nh.page_numbers(run_id):
+        src = nh.final_unit(run_id, no)             # 얹은 것이 있으면 구운 것
+        if not src:
+            continue
+        out.append({"page_no": no, "width": 0,
+                    "path": str(src), "bytes": src.stat().st_size})
+        for width in WIDTHS:
+            small = thumbnail(src, cache_dir / f"s3_p{no}_w{width}.jpg", width)
+            out.append({"page_no": no, "width": width,
+                        "path": str(small), "bytes": small.stat().st_size})
+        if on_log:
+            on_log(f"[S3] {no}장 준비")
+
+    return out
 
 
 def upload_run(run_id: str, on_log=None) -> list[dict]:
@@ -169,6 +211,17 @@ def main(argv: list[str]) -> int:
     if not argv:
         print(__doc__)
         return 1
+
+    # 앱 서버가 부르는 길. 올리지 않고 **만들어만** 두고 경로를 알려 준다.
+    # 진행 상황은 stderr 로 낸다 — stdout 은 통째로 JSON 이어야 한다.
+    if argv[0] == "--prepare":
+        got: dict[str, list[dict]] = {}
+        for run_id in argv[1:]:
+            got[run_id] = prepare_run(
+                run_id, on_log=lambda line: print(line, file=sys.stderr))
+        json.dump(got, sys.stdout, ensure_ascii=False)
+        return 0
+
     if not BUCKET:
         print("CONTENT_S3_BUCKET 이 비어 있습니다.", file=sys.stderr)
         return 1

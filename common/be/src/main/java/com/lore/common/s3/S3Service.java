@@ -92,14 +92,7 @@ public class S3Service {
                     "지원하지 않는 도메인입니다: %s (가능한 값: %s)".formatted(domain, ALLOWED_DOMAINS));
         }
 
-        // 키 = images/ + 도메인 폴더 + 랜덤 UUID. UUID 는 파일명 충돌·추측을 막는다.
-        //
-        // ★ images/ 접두사는 장식이 아니라 CloudFront 와 맺은 계약이다.
-        //   CloudFront 는 `/images/*` 요청만 S3 로 보내고, 그때 경로를 그대로 S3 키로 쓴다.
-        //   따라서 키가 `images/` 로 시작하지 않으면 올리기는 되지만 읽을 때 403 이 난다.
-        //   (2026-08-25 실제 사고: 키가 `comic/<uuid>` 라 CloudFront 가 `images/comic/<uuid>`
-        //    를 찾다가 못 찾았다. 규칙을 바꾸려면 CloudFront 동작도 같이 바꿔야 한다.)
-        String key = "%s/%s/%s".formatted(KEY_PREFIX, domain, UUID.randomUUID());
+        String key = newKey(domain);
 
         PutObjectRequest objectRequest = PutObjectRequest.builder()
                 .bucket(bucket)
@@ -117,6 +110,37 @@ public class S3Service {
         ticketRepository.save(UploadTicket.issue(userId, key, domain, contentType, Instant.now()));
 
         return new PresignedUpload(key, presigned.url().toString());
+    }
+
+    /**
+     * 새 키 하나. {@code images/<도메인>/<uuid>}
+     *
+     * <h2>왜 밖에서도 부를 수 있게 뒀나</h2>
+     *
+     * 파일이 S3 로 가는 길이 둘이다 — 사람이 올리는 것(presign, 위)과
+     * <b>서버가 만들어 낸 것</b>(예: 생성된 그림. {@link S3Storage} 로 올린다).
+     * 둘이 같은 자리에 같은 규칙으로 놓여야 하는데, 규칙을 각자 적어 두면
+     * 한쪽만 고쳐졌을 때 조용히 어긋난다. 실제로 웹툰 페이지를 올리는 코드가
+     * 이 규칙을 파이썬에 한 벌 더 적어 두고 있었다.
+     *
+     * <h2>★ {@code images/} 는 장식이 아니라 CloudFront 와 맺은 계약이다</h2>
+     *
+     * CloudFront 는 {@code /images/*} 요청만 S3 로 보내고, 그때 경로를 그대로
+     * S3 키로 쓴다. 따라서 키가 {@code images/} 로 시작하지 않으면 <b>올리기는
+     * 되는데 읽을 때 403 이 난다.</b> (2026-08-25 실제 사고: 키가
+     * {@code comic/<uuid>} 라 CloudFront 가 {@code images/comic/<uuid>} 를
+     * 찾다가 못 찾았다.) 규칙을 바꾸려면 CloudFront 동작도 같이 바꾼다.
+     *
+     * @param domain 키 폴더. {@link #ALLOWED_DOMAINS} 안의 값이어야 한다 —
+     *               오타 하나면 아무도 모르는 경로에 파일이 쌓이고 나중에 찾을
+     *               수도 지울 수도 없다
+     */
+    public static String newKey(String domain) {
+        if (!ALLOWED_DOMAINS.contains(domain)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "지원하지 않는 도메인입니다: %s (가능한 값: %s)".formatted(domain, ALLOWED_DOMAINS));
+        }
+        return "%s/%s/%s".formatted(KEY_PREFIX, domain, UUID.randomUUID());
     }
 
     /**
