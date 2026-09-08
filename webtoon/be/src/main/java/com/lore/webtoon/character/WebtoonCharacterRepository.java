@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,23 +24,23 @@ public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharact
      */
     @Query("""
            select c from WebtoonCharacter c
-            where c.ownerId = :userId or c.ownerId is null
-            order by case when c.ownerId is null then 1 else 0 end, c.id desc
+            where c.source = com.lore.webtoon.character.CharacterSource.BUILTIN
+               or c.ownerId = :userId
+               or c.browserUid in :uids
+            order by case when c.source
+                     = com.lore.webtoon.character.CharacterSource.BUILTIN
+                     then 1 else 0 end, c.id desc
            """)
-    List<WebtoonCharacter> pickableBy(@Param("userId") Long userId);
+    List<WebtoonCharacter> pickableBy(@Param("userId") Long userId,
+                                      @Param("uids") Collection<String> uids);
 
-    /** 이 이름의 기본 제공 캐릭터가 이미 있나. 서버가 다시 떠도 안 늘게 하는 자리. */
-    boolean existsByOwnerIdIsNullAndName(String name);
-
-    default boolean existsBuiltinNamed(String name) {
-        return existsByOwnerIdIsNullAndName(name);
-    }
-
-    /** 이 이름의 기본 제공 캐릭터. 그림이 비었으면 채워 넣을 때 쓴다. */
-    Optional<WebtoonCharacter> findFirstByOwnerIdIsNullAndName(String name);
-
-    /** 기본 제공 전부. 목록에서 빠진 것을 거둘 때 쓴다. */
-    List<WebtoonCharacter> findByOwnerIdIsNull();
+    /**
+     * 이 이름의 기본 제공 캐릭터. 그림이 비었으면 채워 넣을 때 쓴다.
+     *
+     * <b>심은 표시로 찾는다.</b> 주인이 비었나로 찾으면 게스트가 같은 이름을
+     * 쓴 캐릭터를 집어서 우리가 그 사람 것을 고쳐 버린다.
+     */
+    Optional<WebtoonCharacter> findFirstBySourceAndName(CharacterSource source, String name);
 
     /**
      * 우리가 심은 것만.
@@ -53,7 +54,10 @@ public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharact
     /** 오늘 이 사람이 몇 개나 만들었나 — 하루 무료 몫을 세는 자리. */
     @Query("""
            select count(c) from WebtoonCharacter c
-            where c.ownerId = :userId and c.createdAt >= :since
+            where (c.ownerId = :userId or c.browserUid in :uids)
+              and c.createdAt >= :since
            """)
-    long madeSince(@Param("userId") Long userId, @Param("since") Instant since);
+    long madeSince(@Param("userId") Long userId,
+                   @Param("uids") Collection<String> uids,
+                   @Param("since") Instant since);
 }

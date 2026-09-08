@@ -11,6 +11,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.character.CharacterOwner;
 import com.lore.webtoon.character.CharacterService;
 import com.lore.webtoon.character.WebtoonCharacter;
 import com.lore.webtoon.story.StoryStore;
@@ -87,6 +88,7 @@ public class JobService {
     private final StoryStore stories;
     private final WorkLedger works;
     private final CharacterService characters;
+    private final CharacterOwner owner;
     private final PrivateArt art;
     private final S3Service uploads;
     private final S3Storage storage;
@@ -95,12 +97,13 @@ public class JobService {
 
     public JobService(WebtoonJobRepository jobs, JobStore store, JobRunner runner,
                       JobProgress progress, StoryStore stories, WorkLedger works,
-                      CharacterService characters, PrivateArt art,
+                      CharacterService characters, CharacterOwner owner, PrivateArt art,
                       S3Service uploads, S3Storage storage,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
         this.works = works;
         this.characters = characters;
+        this.owner = owner;
         this.art = art;
         this.uploads = uploads;
         this.storage = storage;
@@ -146,7 +149,7 @@ public class JobService {
             List<Path> photos = form.photoKeys() != null && !form.photoKeys().isEmpty()
                     ? pullPhotos(dir, form.photoKeys(), userId)
                     : savePhotos(dir, form.photosData());
-            Path fromCharacter = characterArt(dir, form.characterId(), userId);
+            Path fromCharacter = characterArt(dir, form.characterId(), userId, form.uid());
             /* 캐릭터를 골라 왔으면 그 그림을 참조로 붙인다.
              *
              * 화면은 **번호만** 보낸다. 그림은 S3 의 안 열리는 자리에 있고,
@@ -290,12 +293,17 @@ public class JobService {
      * 그것만으로도 그릴 수 있다 — 여기서 막으면 S3 가 잠깐 흔들릴 때 만들기가
      * 통째로 죽는다.
      */
-    private Path characterArt(Path dir, String characterId, Long userId) {
+    private Path characterArt(Path dir, String characterId, Long userId, String uid) {
         if (characterId == null || characterId.isBlank()) {
             return null;
         }
         try {
-            WebtoonCharacter one = characters.byPublicId(characterId, userId);
+            /* 브라우저도 같이 넘긴다 — 로그인 안 하고 만든 캐릭터는 계정이
+               아니라 이 값으로만 자기 것임을 말할 수 있다. 안 넘기면 방금
+               자기가 만든 캐릭터로 웹툰을 만들려는 순간 "그런 캐릭터가
+               없습니다" 가 뜬다. */
+            WebtoonCharacter one = characters.byPublicId(
+                    characterId, userId, owner.uidsOf(userId, uid));
             byte[] bytes = art.read(one.getArtKey());
             if (bytes == null || bytes.length == 0) {
                 return null;

@@ -143,6 +143,7 @@ public class JobRunner {
                     args.add(note);
                 }
                 int code = harness.run(args, env(job), l -> progress.line(jobId, l));
+                after.cost(job.getRunId());      // 다시 그리는 것도 값이 나간다
                 if (code != 0) {
                     throw new IllegalStateException("캐릭터 시트를 다시 만들지 못했습니다");
                 }
@@ -167,6 +168,10 @@ public class JobRunner {
         int code = harness.run(
                 List.of("--character", jobDir.resolve("character.json").toString()),
                 env(job), line -> progress.line(jobId, line));
+        /* **성공을 보기 전에 값부터 적는다.** 이 걸음이 죽어도 이야기 넷을 쓴
+           값은 이미 나갔다. 아직 작품 번호를 모르니(그건 아래에서 읽는다)
+           방금 값이 적힌 폴더에서 찾는다. */
+        after.cost(latestMeta());
         if (code != 0) {
             throw new IllegalStateException("이야기 후보를 만들지 못했습니다");
         }
@@ -218,6 +223,7 @@ public class JobRunner {
 
         int code = harness.run(List.of("--run-id", job.getRunId(), "--sheet"),
                 env(job), line -> progress.line(jobId, line));
+        after.cost(job.getRunId());          // 시트는 그림이다 — 죽어도 값은 나갔다
         if (code != 0) {
             throw new IllegalStateException("캐릭터 시트를 만들지 못했습니다");
         }
@@ -238,6 +244,9 @@ public class JobRunner {
 
         int code = harness.run(List.of("--run-id", job.getRunId(), "--detail-pages"),
                 env(job), line -> progress.line(jobId, line));
+        /* **한 편에서 돈이 제일 많이 나가는 자리다.** 여기서 죽으면 그린
+           만큼은 이미 값이 나갔는데, 끝에서만 적으면 그게 통째로 0원이 된다. */
+        after.cost(job.getRunId());
         if (code != 0) {
             throw new IllegalStateException("그림을 만들지 못했습니다");
         }
@@ -292,12 +301,37 @@ public class JobRunner {
      * 않는다 — 여럿을 같이 돌리기 시작하면 이 방법부터 못 쓴다.
      */
     private String latestRun() throws IOException {
+        return newestRunWith("directions.json");
+    }
+
+    /**
+     * 방금 <b>값이 나간</b> 작품 번호. 이야기 걸음이 죽었을 때 쓴다.
+     *
+     * {@link #latestRun()} 은 못 쓴다 — 그건 이야기 후보 파일
+     * ({@code directions.json})이 있는 폴더를 찾는데, 죽은 작품에는 그게 없다.
+     * 값을 적는 파일({@code meta.json})은 <b>첫 호출부터</b> 쌓이므로 이쪽을
+     * 본다.
+     *
+     * 하네스가 폴더도 못 만들고 죽었으면 <b>앞 작품</b>이 잡힐 수 있다. 그래도
+     * 해롭지 않다 — 그건 이미 다 적힌 것이라 서버가 통째로 걸러 아무 줄도 안
+     * 남는다.
+     */
+    private String latestMeta() {
+        try {
+            return newestRunWith("meta.json");
+        } catch (IOException e) {
+            log.warn("나간 값을 적을 작품을 못 찾았습니다", e);
+            return null;
+        }
+    }
+
+    private String newestRunWith(String marker) throws IOException {
         if (!Files.isDirectory(runsDir)) {
             return null;
         }
         try (var kids = Files.list(runsDir)) {
             return kids.filter(Files::isDirectory)
-                    .filter(p -> Files.isRegularFile(p.resolve("directions.json")))
+                    .filter(p -> Files.isRegularFile(p.resolve(marker)))
                     .max((a, b) -> {
                         try {
                             return Files.getLastModifiedTime(a)
@@ -376,9 +410,33 @@ public class JobRunner {
      */
     private void fail(Long jobId, Exception e) {
         log.error("만들기가 실패했습니다 (job={})", jobId, e);
+        spentSoFar(jobId);
         Refunded back = refund(jobId);
         store.failed(jobId, humanReason(e), back);
         progress.forget(jobId);
+    }
+
+    /**
+     * 실패한 작품에 <b>여기까지 나간 값</b>을 적는다.
+     *
+     * <b>돌려주는 것과 다른 이야기다.</b> 낸 사람에게 크레딧을 돌려주는 것은
+     * 우리 사정이고(만들어진 게 없으니 받으면 안 된다), 모델에 이미 낸 돈은
+     * 그래도 나갔다. 그 둘을 같은 것으로 보면 실패한 편은 하루 상한에서
+     * <b>0원</b>이 되고, 실패가 잦을수록 상한이 헐거워진다.
+     *
+     * 걸음마다 이미 적고 있지만(각 걸음의 {@code after.cost} 참고) 그 사이에서
+     * 죽는 자리가 있다 — 이어 붙이기, 후보를 하나도 못 읽은 때. 여기가 그
+     * 그물이다. 겹쳐도 서버가 거른다.
+     */
+    private void spentSoFar(Long jobId) {
+        try {
+            WebtoonJob job = store.byId(jobId);
+            if (job != null) {
+                after.cost(job.getRunId());
+            }
+        } catch (RuntimeException ex) {   // noqa: 여기서 죽으면 실패를 아예 못 적는다
+            log.error("실패한 작품의 값을 못 적었습니다 (job={})", jobId, ex);
+        }
     }
 
     /**

@@ -11,6 +11,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.Collection;
 
 /**
  * 사람이 가지고 노는 캐릭터.
@@ -35,6 +36,27 @@ public class WebtoonCharacter {
     /** 만든 사람. <b>비어 있으면 기본 제공</b>이다. */
     @Column(name = "owner_id")
     private Long ownerId;
+
+    /**
+     * 로그인 안 하고 만들었으면 그 브라우저를 가리키는 값({@code lore_uid}).
+     * 로그인하고 만든 것과 우리가 심은 것에는 없다.
+     *
+     * <h2>왜 필요한가</h2>
+     *
+     * 캐릭터는 <b>로그인 없이도 만들 수 있다.</b> 그런데 주인 칸만 있으면
+     * 게스트가 만든 것은 주인이 빈 채로 남고, 그건 우리가 심은 기본 제공과
+     * 구별이 안 된다 — 실제로 남의 목록에 뜨고, 거두는 자리에 쓸려 지워졌다.
+     *
+     * <h2>⚠️ 이것으로 소유를 증명하지는 못한다</h2>
+     *
+     * uid 는 브라우저가 만들어 들고 다니는 값이라 <b>마음먹으면 남의 것을
+     * 적어 보낼 수 있다.</b> 작품 쪽이 같은 한계를 안고 같은 방식을 쓰고
+     * 있다 — 왜 그래도 이 길인지는 {@code BrowserLink} 머리 주석에 있다.
+     * 요약하면, 로그인을 필수로 만들지 않는 한 게스트를 가리킬 다른 값이
+     * 없고, 로그인 전에 만든 것이 로그인 뒤에도 따라와야 하기 때문이다.
+     */
+    @Column(name = "browser_uid", length = 64)
+    private String browserUid;
 
     @Column(nullable = false, length = 60)
     private String name;
@@ -77,11 +99,13 @@ public class WebtoonCharacter {
     protected WebtoonCharacter() {
     }
 
-    private WebtoonCharacter(String publicId, Long ownerId, String name, String description,
+    private WebtoonCharacter(String publicId, Long ownerId, String browserUid,
+                             String name, String description,
                              CharacterSource source, CharacterStatus status, Instant at) {
         this.publicId = publicId;
         this.status = status;
         this.ownerId = ownerId;
+        this.browserUid = blankToNull(browserUid);
         this.name = name;
         this.description = description;
         this.source = source;
@@ -90,16 +114,16 @@ public class WebtoonCharacter {
     }
 
     /** 만들어 놓고 그리기 시작한다. 그림은 아직 없다. */
-    public static WebtoonCharacter drawing(String publicId, Long ownerId, String name,
-                                           String description, Instant at) {
-        return new WebtoonCharacter(publicId, ownerId, name, description,
+    public static WebtoonCharacter drawing(String publicId, Long ownerId, String browserUid,
+                                           String name, String description, Instant at) {
+        return new WebtoonCharacter(publicId, ownerId, browserUid, name, description,
                 CharacterSource.PROMPT, CharacterStatus.DRAWING, at);
     }
 
     /** 기본 제공. 주인이 없다 — 누구나 골라 쓴다. */
     public static WebtoonCharacter builtin(String publicId, String name, String description,
                                            Instant at) {
-        return new WebtoonCharacter(publicId, null, name, description,
+        return new WebtoonCharacter(publicId, null, null, name, description,
                 CharacterSource.BUILTIN, CharacterStatus.READY, at);
     }
 
@@ -132,8 +156,38 @@ public class WebtoonCharacter {
         return userId != null && userId.equals(ownerId);
     }
 
+    /**
+     * 이 사람 것인가 — 계정으로든 브라우저로든.
+     *
+     * 로그인 안 하고 만든 것은 계정이 없으므로 브라우저 uid 로만 가릴 수
+     * 있다. 로그인한 사람에게도 uid 를 같이 본다 — 로그인 전에 만든 것이
+     * 로그인 뒤에 남의 것이 되면 안 된다.
+     */
+    public boolean madeBy(Long userId, Collection<String> uids) {
+        if (ownedBy(userId)) {
+            return true;
+        }
+        return browserUid != null && uids != null && uids.contains(browserUid);
+    }
+
+    /**
+     * 우리가 심은 것인가.
+     *
+     * <b>주인이 비었나로 보면 안 된다.</b> 로그인 안 하고 만든 것도 주인이
+     * 비어 있어서, 그렇게 보면 남이 만든 캐릭터가 「기본 제공」이 되어 모두의
+     * 목록에 뜨고 거두는 자리에 쓸려 지워진다 — 실제로 그랬다.
+     */
     public boolean isBuiltin() {
-        return ownerId == null;
+        return source == CharacterSource.BUILTIN;
+    }
+
+    public String getBrowserUid() {
+        return browserUid;
+    }
+
+    /** 빈 문자열은 없는 것과 같다 — 그 값이 들어오면 아무나 자기 것이 된다. */
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s;
     }
 
     public Long getId() {

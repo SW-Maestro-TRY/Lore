@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -106,15 +107,15 @@ public class CharacterService {
 
     /** 이 사람이 고를 수 있는 것 — 내 것과 기본 제공. */
     @Transactional(readOnly = true)
-    public List<WebtoonCharacter> pickable(Long userId) {
-        return characters.pickableBy(userId);
+    public List<WebtoonCharacter> pickable(Long userId, Collection<String> uids) {
+        return characters.pickableBy(userId, uids);
     }
 
     @Transactional(readOnly = true)
-    public WebtoonCharacter byPublicId(String publicId, Long userId) {
+    public WebtoonCharacter byPublicId(String publicId, Long userId, Collection<String> uids) {
         WebtoonCharacter one = characters.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다"));
-        if (!one.isBuiltin() && !one.ownedBy(userId)) {
+        if (!one.isBuiltin() && !one.madeBy(userId, uids)) {
             // 있는 것을 "권한 없음" 으로 알리면 남의 번호를 하나씩 찔러 볼 수 있다.
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다");
         }
@@ -123,12 +124,16 @@ public class CharacterService {
 
     /** 오늘 이 사람이 몇 개 더 공짜로 만들 수 있나. */
     @Transactional(readOnly = true)
-    public int freeLeft(Long userId) {
-        if (userId == null || freePerDay <= 0) {
+    public int freeLeft(Long userId, Collection<String> uids) {
+        if (freePerDay <= 0) {
             return 0;
         }
+        /* **게스트도 센다.** 전에는 로그인 안 했으면 그냥 0 이었는데, 그건
+           "오늘 몫을 다 썼다" 와 화면에서 구별이 안 된다 — 만들 수 있는데도
+           못 만드는 줄 안다. 이제 게스트도 브라우저로 세므로 남은 몫을 말할
+           수 있다. */
         Instant since = LocalDate.now(clock).atStartOfDay(ZONE).toInstant();
-        return (int) Math.max(0, freePerDay - characters.madeSince(userId, since));
+        return (int) Math.max(0, freePerDay - characters.madeSince(userId, uids, since));
     }
 
     /**
@@ -138,11 +143,18 @@ public class CharacterService {
      * @return 만든 캐릭터
      */
     @Transactional
-    public WebtoonCharacter create(Long userId, String name, String description,
-                                   String photoDataUrl, String style) {
-        if (userId == null) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED,
-                    "캐릭터를 만들려면 로그인해 주세요 — 만든 캐릭터는 계정에 남습니다.");
+    public WebtoonCharacter create(Long userId, String browserUid, String name,
+                                   String description, String photoDataUrl, String style) {
+        /* **로그인은 안 시킨다.** 이 제품은 회원가입 없이 한번 써 보게 하는
+           것이 목적이고, 웹툰 만들기가 이미 그렇다 — 캐릭터만 로그인을
+           요구하면 "캐릭터로 웹툰 만들기" 로 가는 길이 거기서 끊긴다.
+
+           대신 **누가 만든 것인지는 반드시 적는다.** 계정이 없으면 브라우저
+           uid 로 적는다. 이것 없이 만들면 주인 없는 줄이 되어 남의 목록에
+           뜨고, 우리가 심은 것을 거두는 자리에 쓸려 지워진다. */
+        if (userId == null && (browserUid == null || browserUid.isBlank())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "브라우저를 알 수 없어 만들 수 없습니다 — 새로고침 후 다시 시도해 주세요.");
         }
         boolean hasPhoto = photoDataUrl != null && !photoDataUrl.isBlank();
         if (!hasPhoto && (description == null || description.isBlank())) {
@@ -159,8 +171,16 @@ public class CharacterService {
         }
 
         // **값은 만들기 전에 본다.** 그린 뒤에 모자라다고 하면 돈은 이미 나갔다.
-        boolean free = freeLeft(userId) > 0;
+        boolean free = freeLeft(userId, List.of(browserUid == null ? "" : browserUid)) > 0;
         if (!free) {
+            /* 게스트는 낼 크레딧이 없다 — 계정 쪽 확인은 통과해 버리므로
+               여기서 따로 막는다. 없는 잔액을 보고 "모자랍니다" 라고 하면
+               충전하러 가라는 말이 되는데, 게스트에게는 갈 곳이 없다. */
+            if (userId == null) {
+                throw new BusinessException(CreditGate.notEnough(),
+                        "오늘 무료로 만들 수 있는 캐릭터를 다 쓰셨어요 — "
+                        + "로그인하시면 이어서 만들 수 있어요.");
+            }
             String blocked = credits.whyBlocked(userId, cost);
             if (blocked != null) {
                 throw new BusinessException(CreditGate.notEnough(), blocked);
@@ -182,7 +202,7 @@ public class CharacterService {
 
         Instant now = Instant.now(clock);
         WebtoonCharacter saved = characters.save(WebtoonCharacter.drawing(
-                publicId, userId, called.isEmpty() ? "이름 없는 캐릭터" : called,
+                publicId, userId, browserUid, called.isEmpty() ? "이름 없는 캐릭터" : called,
                 description, now));
 
         if (!free) {
@@ -252,9 +272,10 @@ public class CharacterService {
     }
 
     @Transactional
-    public WebtoonCharacter rename(String publicId, Long userId, String name, String description) {
-        WebtoonCharacter one = byPublicId(publicId, userId);
-        if (!one.ownedBy(userId)) {
+    public WebtoonCharacter rename(String publicId, Long userId, Collection<String> uids,
+                                   String name, String description) {
+        WebtoonCharacter one = byPublicId(publicId, userId, uids);
+        if (!one.madeBy(userId, uids)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "기본 캐릭터는 고칠 수 없습니다");
         }
         one.rename(name, description, Instant.now(clock));
@@ -269,9 +290,9 @@ public class CharacterService {
      * 안 쓰이는 그림을 치우는 것은 따로 할 일이다.
      */
     @Transactional
-    public void remove(String publicId, Long userId) {
-        WebtoonCharacter one = byPublicId(publicId, userId);
-        if (!one.ownedBy(userId)) {
+    public void remove(String publicId, Long userId, Collection<String> uids) {
+        WebtoonCharacter one = byPublicId(publicId, userId, uids);
+        if (!one.madeBy(userId, uids)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "기본 캐릭터는 지울 수 없습니다");
         }
         characters.delete(one);

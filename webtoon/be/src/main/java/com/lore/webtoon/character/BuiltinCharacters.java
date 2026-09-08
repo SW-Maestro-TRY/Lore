@@ -112,7 +112,7 @@ public class BuiltinCharacters implements ApplicationRunner {
              * 그 순간 S3 설정이 없었고, 뒤에 설정을 채워도 안 고쳐졌다.
              *
              * 그래서 이름이 있어도 **그림이 비어 있으면 다시 채운다.** */
-            WebtoonCharacter old = characters.findFirstByOwnerIdIsNullAndName(seed.name())
+            WebtoonCharacter old = characters.findFirstBySourceAndName(CharacterSource.BUILTIN, seed.name())
                     .orElse(null);
             if (old != null && old.getArtKey() != null && !old.getArtKey().isBlank()) {
                 continue;

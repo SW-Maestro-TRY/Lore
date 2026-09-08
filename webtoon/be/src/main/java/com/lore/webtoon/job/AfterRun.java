@@ -62,7 +62,7 @@ public class AfterRun {
 
     /** 다 끝났다. 남길 것을 남긴다. */
     public void finish(String runId, java.util.function.Consumer<String> onLine) {
-        recordCost(runId);
+        cost(runId);
         uploadArt(runId, onLine);
     }
 
@@ -72,8 +72,24 @@ public class AfterRun {
      * 하네스가 {@code meta.json} 에 아주 촘촘히 적어 둔다 — 단계 · 모델 ·
      * 토큰(입력/출력/캐시) · 달러 · 원 · 걸린 초. 그걸 그대로 읽어 올린다.
      * 다시 올려도 (작품, 몇 번째) 로 겹치는 것이 걸러진다.
+     *
+     * <h2>다 만든 뒤에만 부르면 안 된다</h2>
+     *
+     * 이건 <b>걸음마다</b> 부르라고 밖으로 열어 둔 것이다. 끝에서 한 번만
+     * 부르면 <b>끝까지 못 간 작품의 값이 영영 안 잡힌다</b> — 죽어도 돈은 이미
+     * 나간 뒤다. 그러면 일일 상한이 성공한 것만 세게 되고, 실패가 잦을수록
+     * 상한이 헐거워진다. 파이썬 서버는 이걸 알고 단계마다 올렸다
+     * ({@code newharness_pipeline._run} 의 {@code usage_report.push}).
+     *
+     * 사람이 이야기·시트 앞에서 멈춰 서 있는 동안에도 마찬가지다. 그 사람은
+     * 실패한 것도 성공한 것도 아니지만 <b>거기까지 그린 값은 나갔다.</b>
+     *
+     * 여러 번 불러도 된다 — 겹치는 것은 서버가 (작품, 몇 번째) 로 거른다.
      */
-    private void recordCost(String runId) {
+    public void cost(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return;
+        }
         Path meta = runsDir.resolve(runId).resolve("meta.json");
         if (!Files.isRegularFile(meta)) {
             log.warn("비용 기록이 없습니다 (run={})", runId);
