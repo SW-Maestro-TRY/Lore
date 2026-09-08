@@ -42,10 +42,11 @@ public class HarnessProcess {
 
     public HarnessProcess(@Value("${lore.webtoon.python.bin:python3}") String python,
                           @Value("${lore.webtoon.python.harness-dir:}") String harnessDir,
-                          @Value("${lore.webtoon.python.timeout-seconds:3600}") int timeoutSeconds) {
+                          @Value("${lore.webtoon.python.timeout-seconds:3600}") int timeoutSeconds,
+                          AiHarnessResources resources) {
         this.python = python;
-        this.harnessDir = Path.of(harnessDir == null || harnessDir.isBlank()
-                ? "haeun/new_harness" : harnessDir).toAbsolutePath().normalize();
+        this.harnessDir = (harnessDir == null || harnessDir.isBlank()
+                ? resources.newHarnessDir() : Path.of(harnessDir).toAbsolutePath().normalize());
         this.timeoutSeconds = timeoutSeconds;
     }
 

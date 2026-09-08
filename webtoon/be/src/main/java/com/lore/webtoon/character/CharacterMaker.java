@@ -2,6 +2,7 @@ package com.lore.webtoon.character;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.webtoon.job.AiHarnessResources;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,10 +42,11 @@ public class CharacterMaker {
 
     public CharacterMaker(@Value("${lore.webtoon.python.bin:python3}") String python,
                           @Value("${lore.webtoon.python.harness-dir:}") String harnessDir,
-                          @Value("${lore.webtoon.character.timeout-seconds:300}") int timeoutSeconds) {
+                          @Value("${lore.webtoon.character.timeout-seconds:300}") int timeoutSeconds,
+                          AiHarnessResources resources) {
         this.python = python;
-        this.harnessDir = Path.of(harnessDir == null || harnessDir.isBlank()
-                ? "haeun/new_harness" : harnessDir).toAbsolutePath().normalize();
+        this.harnessDir = (harnessDir == null || harnessDir.isBlank()
+                ? resources.newHarnessDir() : Path.of(harnessDir).toAbsolutePath().normalize());
         this.timeoutSeconds = timeoutSeconds;
     }
 

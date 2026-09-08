@@ -39,7 +39,7 @@ class HarnessProcessTest {
     }
 
     private HarnessProcess process(int timeoutSeconds) {
-        return new HarnessProcess("python3", HARNESS.toString(), timeoutSeconds);
+        return new HarnessProcess("python3", HARNESS.toString(), timeoutSeconds, null);
     }
 
     @Test
@@ -53,7 +53,7 @@ class HarnessProcessTest {
     @Test
     @DisplayName("없는 자리를 가리키면 준비 안 된 것으로 답한다 — 부르고 나서 죽지 않는다")
     void 없으면_없다고_한다() {
-        assertThat(new HarnessProcess("python3", "/없는/자리", 60).ready()).isFalse();
+        assertThat(new HarnessProcess("python3", "/없는/자리", 60, null).ready()).isFalse();
     }
 
     @Test
@@ -88,7 +88,7 @@ class HarnessProcessTest {
            여기서 보려는 전부다. */
         Files.writeString(fake.resolve("run.py"), "import time\ntime.sleep(600)\n");
 
-        HarnessProcess slow = new HarnessProcess("python3", fake.toString(), 1);
+        HarnessProcess slow = new HarnessProcess("python3", fake.toString(), 1, null);
         assertThatThrownBy(() -> slow.run(List.of(), Map.of(), line -> { }))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("오래");
