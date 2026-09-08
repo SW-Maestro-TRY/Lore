@@ -29,37 +29,6 @@ import java.util.regex.Pattern;
 
 /**
  * Webtoon 도메인 진입점.
- *
- * <h2>지금은 프록시 한 자리뿐이다</h2>
- *
- * {@code /api/webtoon/v1/**} 로 온 것을 생성 하네스(serve.py)의 {@code /api/**}
- * 로 그대로 넘긴다.
- *
- * <pre>
- *   POST /api/webtoon/v1/nh/create                -&gt; POST http://…:8800/api/nh/create
- *   GET  /api/webtoon/v1/nh/jobs/{id}             -&gt; GET  …/api/nh/jobs/{id}
- *   GET  /api/webtoon/v1/runs/{id}/result         -&gt; GET  …/api/runs/{id}/result
- *   POST /api/webtoon/v1/runs/{id}/scenes/3/regen -&gt; …/api/runs/{id}/scenes/3/regen
- * </pre>
- *
- * 주소를 하나하나 안 적는 이유는, 화면이 부르는 주소가 아직 움직이고 있어서다.
- * 여기에 목록을 박아 두면 프로토타입에 주소가 하나 늘 때마다 자바도 같이
- * 고쳐야 하고, 빠뜨리면 그 화면만 조용히 404 가 된다. 넘길 것을 고르는 일은
- * <b>자바가 뜻을 갖고 판단할 것이 생겼을 때</b> 시작한다.
- *
- * <h2>왜 {@code /api/webtoon} 아래인가</h2>
- *
- * 공용 API 와 섞이지 않게 도메인 이름을 앞에 둔다({@code /api/v1/uploads} 처럼).
- * 프론트는 상대경로로 부르고, 운영에서는 CloudFront 가 {@code /api/*} 만
- * 백엔드로 보낸다 — 그래서 CORS 가 없다.
- *
- * <h2>딱 하나, 만들기는 그냥 안 지나간다</h2>
- *
- * {@code POST /api/webtoon/v1/nh/create} 는 <b>여기서부터 실제로 돈이 나가는</b>
- * 유일한 자리다(실측 한 편 1,148원). 그래서 이 주소만 넘기기 전에 두 번
- * 멈춰 세운다 — 오늘 <b>전체</b> 몫이 남았는지({@link SpendGuard}), 그리고
- * 로그인 안 한 <b>이 사람</b>의 몫이 남았는지({@link GuestGate}). 나머지는
- * 그대로 흘러간다.
  */
 @RestController
 public class WebtoonController {
@@ -187,16 +156,10 @@ public class WebtoonController {
 
         byte[] body = request.getInputStream().readAllBytes();
 
-        /* 하네스에 **몫은 여기서 이미 셌다**고 알린다.
-         *
-         * 안 알리면 하네스가 자기 uid 크레딧에서 또 받는다. 로그인한 사람은
-         * 계정과 uid 두 곳에서 두 번 내고, 게스트는 위 {@link GuestGate} 의
-         * 하루 몇 편과 uid 잔액에 **두 겹으로** 막힌다 — 화면은 「오늘 무료
-         * 3편」이라 적는데 하네스가 「크레딧이 모자랍니다」로 튕길 수 있다.
-         *
-         * 이 표시를 하네스가 믿어도 되는 이유는 하네스가 밖에 안 열려 있기
-         * 때문이다. 브라우저는 늘 이 스프링을 거치고, 하네스 주소는 서버
-         * 안에서만 닿는다. 그 전제가 깨지면 이 표시부터 다시 봐야 한다. */
+        // 계정에서 냈거나 게스트 몫을 이미 셌으면 하네스에 "여기서 이미
+        // 받았다" 고 알린다. 안 알리면 하네스가 자기 uid 크레딧에서 또 받아
+        // 로그인한 사람은 두 번 내고, 게스트는 하루 몫과 uid 잔액에 두 겹으로
+        // 막힌다.
         HttpHeaders out = headers;
         if (me != null || counted) {
             out = new HttpHeaders();

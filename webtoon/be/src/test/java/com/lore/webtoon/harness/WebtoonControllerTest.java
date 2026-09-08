@@ -102,6 +102,23 @@ class WebtoonControllerTest {
     }
 
     @Test
+    @DisplayName("게스트 몫을 여기서 이미 셌으면 하네스에 알린다 — 안 알리면 두 겹으로 막힌다")
+    void 게스트몫을_알린다() throws Exception {
+        // whyBlocked 류는 기본이 null(=통과)이라 SpendGuard·CreditGate 는
+        // 따로 안 세운다 — 여기서 보는 것은 "셌으면(counted) 알리는가" 뿐이다.
+        when(guestGate.useOrBlock(any())).thenReturn(null);   // null = 안 막혔고, 셌다
+        when(gateway.forward(any(), any(), any(), any(), any()))
+                .thenReturn(ResponseEntity.ok().body("{\"id\":\"j1\"}".getBytes()));
+
+        mvc.perform(post("/api/webtoon/v1/nh/create")).andExpect(status().isOk());
+
+        ArgumentCaptor<HttpHeaders> headers = ArgumentCaptor.forClass(HttpHeaders.class);
+        verify(gateway).forward(any(), any(), any(), any(), headers.capture());
+        assertThat(headers.getValue().getFirst(GuestGate.GATED_HEADER)).isEqualTo("1");
+        assertThat(headers.getValue().getFirst(CreditGate.BILLED_HEADER)).isNull();
+    }
+
+    @Test
     @DisplayName("하네스가 준 실패 상태와 사유를 삼키지 않는다")
     void 실패도그대로() throws Exception {
         // "크레딧이 모자랍니다" 같은 사유가 여기서 사라지면 화면은

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -20,23 +21,15 @@ import java.util.function.Consumer;
 /**
  * 생성 하네스를 <b>프로그램으로 부른다.</b> 서버로 띄우지 않는다.
  *
- * <h2>왜 서버가 아니라 프로그램인가</h2>
+ * <h2>run · prepareUpload · stitch, 같은 뼈대</h2>
  *
- * 지금까지는 파이썬 서버를 따로 띄우고 HTTP 로 넘겼다. 그건 설계가 아니라
- * 역사다 — 그 서버가 스프링보다 먼저 있었을 뿐이다. 서버가 둘이면 상태가
- * 두 곳으로 갈리고, 한쪽이 죽으면 다른 쪽은 무슨 일이 있었는지 모른다.
+ * 셋 다 "프로세스를 띄우고, 출력을 별도 스레드로 흘려 읽고, timeout 을 걸어
+ * 기다리다 안 되면 죽인다" 는 같은 일을 한다({@link #streamLines} ·
+ * {@link #waitWithTimeout}).
  *
- * 옆 도메인(zzal)이 이미 이 방식이다({@code PythonPostProcessor}).
- *
- * <h2>출력을 흘려 읽는다</h2>
- *
- * zzal 은 출력을 파일로 돌리고 끝나기를 기다리는데, 여기서는 <b>도는 동안</b>
- * 진행률을 알아야 한다(한 편에 몇 분씩 걸린다 — 화면이 그동안 아무것도 못
- * 보여주면 멈춘 줄 안다). 그래서 한 줄씩 읽어 넘긴다.
- *
- * 다만 zzal 이 겪은 함정은 그대로 피한다: <b>읽기가 프로세스를 붙들면 시간
- * 초과가 영영 안 걸린다.</b> 여기서는 읽는 쪽이 스트림 끝을 만나면 끝나고,
- * 그 뒤에 시간을 걸어 기다린다. 시간이 지나면 <b>먼저 죽이고</b> 나서 판정한다.
+ * <b>읽기와 기다리기를 반드시 나눠야 한다.</b> 같은 스레드에서 읽으면서
+ * 기다리면 읽기가 스트림 끝날 때까지 프로세스를 붙들어, waitFor 의 timeout 이
+ * 영영 안 걸린다(옆 도메인 zzal 이 겪은 함정 — {@code PythonPostProcessor}).
  */
 @Component
 public class HarnessProcess {
@@ -70,7 +63,8 @@ public class HarnessProcess {
      *
      * 하나만 두는 이유는 하나만 돌기 때문이다 — 부르는 쪽이 한 줄로 세운다
      * ({@code JobRunner} 의 single thread). 여럿을 같이 돌리기 시작하면 이
-     * 칸부터 작업별로 나눠야 한다.
+     * 칸부터 작업별로 나눠야 한다. stitch · prepareUpload 는 취소 대상이
+     * 아니라서(이미 다 그린 것을 잇거나 올리는 마무리 걸음) 여기에 안 실린다.
      */
     private volatile Process current;
 
@@ -129,36 +123,13 @@ public class HarnessProcess {
         log.info("하네스 실행: {}", String.join(" ", cmd));
         Process p = pb.start();
         current = p;                            // 취소가 이걸 보고 멈춘다
-
-        // 읽는 것과 기다리는 것을 나눈다. 읽기가 프로세스를 붙들면 아래
-        // waitFor 가 한 번도 시간 초과를 못 낸다(zzal 이 겪은 함정).
-        Thread reader = Thread.ofVirtual().start(() -> {
-            try (BufferedReader in = new BufferedReader(
-                    new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = in.readLine()) != null) {
-                    if (!line.isBlank()) {
-                        onLine.accept(line);
-                    }
-                }
-            } catch (IOException e) {
-                log.warn("하네스 출력을 읽다 끊겼습니다", e);
-            }
-        });
-
         try {
-            boolean done = p.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-            if (!done) {
-                p.destroyForcibly();
-                reader.join(3_000);
-                throw new IllegalStateException(
-                        "만들기가 너무 오래 걸립니다 (%d초)".formatted(timeoutSeconds));
-            }
-            reader.join(5_000);
-            return p.exitValue();
+            Thread reader = streamLines(p.getInputStream(), onLine, "하네스 출력을 읽다 끊겼습니다");
+            return waitWithTimeout(p, reader, timeoutSeconds,
+                    "만들기가 너무 오래 걸립니다 (%d초)".formatted(timeoutSeconds));
         } finally {
-            /* 끝난 것을 가리키고 있으면 안 된다 — 다음 사람의 취소가 이미
-               죽은 것을 멈추고는 「멈췄다」고 답한다. */
+            // 끝난 것을 가리키고 있으면 안 된다 — 다음 사람의 취소가 이미
+            // 죽은 것을 멈추고는 「멈췄다」고 답한다.
             current = null;
         }
     }
@@ -166,18 +137,17 @@ public class HarnessProcess {
     /**
      * 올릴 그림을 <b>만들어만</b> 둔다. -> 파일 목록 JSON
      *
-     * 원본을 폭마다 줄이는 코드는 파이썬에 있고 잘 돈다. 자바로 옮기면 그거야
-     * 말로 두 벌이 되므로 그대로 둔다. 다만 <b>올리는 일은 안 시킨다</b> —
-     * 버킷 이름과 키 규칙과 캐시 헤더를 파이썬이 한 벌 더 알고 있어야 했고,
-     * 그 두 벌이 어긋나면 올라가긴 하는데 읽을 때 403 이 났다. 지금은 만든
-     * 파일의 경로만 받아서 {@code PageUploader} 가 올린다.
+     * 줄이는 코드는 파이썬에 있고 잘 돈다(자바로 옮기면 두 벌이 된다). 다만
+     * <b>올리는 일은 안 시킨다</b> — 버킷 이름 · 키 규칙 · 캐시 헤더를 파이썬이
+     * 한 벌 더 알면 그 두 벌이 어긋났을 때 올라가긴 하는데 읽을 때 403 이 났다.
+     * 지금은 만든 파일의 경로만 받아서 {@code PageUploader} 가 올린다.
      *
-     * 둘은 같은 기계에 있다(이 서버가 그 스크립트를 띄운다). 그래서 파일이
-     * 네트워크를 타지 않고, 경로만 오가면 된다.
-     *
-     * 이건 하네스 폴더가 아니라 <b>랜딩 폴더</b>에 있어서 자리가 다르다.
+     * 둘은 같은 기계에 있어(이 서버가 이 스크립트를 띄운다) 경로만 오가면 된다.
+     * 하네스 폴더가 아니라 <b>랜딩 폴더</b>에 있어서 자리가 다르다.
      *
      * <p>표준출력은 통째로 JSON 이다 — 진행 상황은 파이썬이 표준오류로 낸다.
+     * 그래서 stdout 은 통째로 읽고 stderr 만 흘려 읽는다({@code redirectErrorStream(false)}) —
+     * 섞으면 한쪽은 JSON, 한쪽은 사람이 읽는 줄이라 파싱이 깨진다.
      */
     public String prepareUpload(String runId, Consumer<String> onLine)
             throws IOException, InterruptedException {
@@ -185,35 +155,16 @@ public class HarnessProcess {
         ProcessBuilder pb = new ProcessBuilder(python, "-u", "s3_upload.py",
                                                "--prepare", runId);
         pb.directory(landing.toFile());
-        // 섞으면 안 된다 — 한쪽은 JSON 이고 한쪽은 사람이 읽는 줄이다.
         pb.redirectErrorStream(false);
 
         Process p = pb.start();
-        Thread notes = Thread.ofVirtual().start(() -> {
-            try (BufferedReader in = new BufferedReader(
-                    new InputStreamReader(p.getErrorStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = in.readLine()) != null) {
-                    if (!line.isBlank() && onLine != null) {
-                        onLine.accept(line);
-                    }
-                }
-            } catch (IOException e) {
-                log.warn("올릴 것을 만드는 중 출력을 읽다 끊겼습니다", e);
-            }
-        });
+        Thread notes = streamLines(p.getErrorStream(), onLine,
+                "올릴 것을 만드는 중 출력을 읽다 끊겼습니다");
 
         String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        boolean done = p.waitFor(600, TimeUnit.SECONDS);
-        if (!done) {
-            p.destroyForcibly();
-            notes.join(3_000);
-            throw new IllegalStateException("올릴 그림을 만드는 데 너무 오래 걸립니다");
-        }
-        notes.join(5_000);
-        if (p.exitValue() != 0) {
-            throw new IllegalStateException(
-                    "올릴 그림을 만들지 못했습니다 (exit=" + p.exitValue() + ")");
+        int code = waitWithTimeout(p, notes, 600, "올릴 그림을 만드는 데 너무 오래 걸립니다");
+        if (code != 0) {
+            throw new IllegalStateException("올릴 그림을 만들지 못했습니다 (exit=" + code + ")");
         }
         return out;
     }
@@ -228,24 +179,42 @@ public class HarnessProcess {
         pb.environment().putAll(env);
 
         Process p = pb.start();
-        Thread reader = Thread.ofVirtual().start(() -> {
-            try (BufferedReader in = new BufferedReader(
-                    new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+        Thread reader = streamLines(p.getInputStream(), onLine, "이어 붙이기 출력을 읽다 끊겼습니다");
+        return waitWithTimeout(p, reader, 300, "이어 붙이기가 너무 오래 걸립니다");
+    }
+
+    /** 스트림을 한 줄씩 읽어 {@code onLine} 으로 흘린다. 빈 줄은 거른다. */
+    private Thread streamLines(InputStream in, Consumer<String> onLine, String failMessage) {
+        return Thread.ofVirtual().start(() -> {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(in, StandardCharsets.UTF_8))) {
                 String line;
-                while ((line = in.readLine()) != null) {
-                    if (!line.isBlank()) {
+                while ((line = reader.readLine()) != null) {
+                    if (!line.isBlank() && onLine != null) {
                         onLine.accept(line);
                     }
                 }
             } catch (IOException e) {
-                log.warn("이어 붙이기 출력을 읽다 끊겼습니다", e);
+                log.warn(failMessage, e);
             }
         });
-        boolean done = p.waitFor(300, TimeUnit.SECONDS);
+    }
+
+    /**
+     * 시간을 걸어 끝나기를 기다린다. 시간이 지나면 <b>먼저 죽이고</b> 나서
+     * 판정한다 — 그래야 좀비 프로세스가 안 남는다.
+     *
+     * @param reader 출력을 읽고 있는 스레드. 끝난 뒤 합류시켜 마지막 줄까지 받는다
+     * @return 끝난 코드
+     * @throws IllegalStateException 시간을 넘겼을 때. {@code tooLongMessage} 를 그대로 싣는다
+     */
+    private int waitWithTimeout(Process p, Thread reader, int timeoutSeconds, String tooLongMessage)
+            throws IOException, InterruptedException {
+        boolean done = p.waitFor(timeoutSeconds, TimeUnit.SECONDS);
         if (!done) {
             p.destroyForcibly();
             reader.join(3_000);
-            throw new IllegalStateException("이어 붙이기가 너무 오래 걸립니다");
+            throw new IllegalStateException(tooLongMessage);
         }
         reader.join(5_000);
         return p.exitValue();
