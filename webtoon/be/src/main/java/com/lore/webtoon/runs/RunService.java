@@ -134,7 +134,7 @@ public class RunService {
         Map<String, Object> card = new LinkedHashMap<>();
         card.put("run_id", runId);
         card.put("character", characterOf(job));
-        card.put("title", chosen.map(WebtoonStory::getTitle).filter(s -> !s.isBlank())
+        card.put("title", chosen.map(WebtoonStory::displayTitle).filter(s -> !s.isBlank())
                 .orElse(NO_TITLE));
         card.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         // 한 편짜리다 — 이어그리기가 붙으면 여기가 늘어난다.
@@ -182,7 +182,7 @@ public class RunService {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("run_id", runId);
         out.put("character", characterOf(job));
-        out.put("title", chosen.map(WebtoonStory::getTitle).filter(s -> !s.isBlank())
+        out.put("title", chosen.map(WebtoonStory::displayTitle).filter(s -> !s.isBlank())
                 .orElse(NO_TITLE));
         out.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));

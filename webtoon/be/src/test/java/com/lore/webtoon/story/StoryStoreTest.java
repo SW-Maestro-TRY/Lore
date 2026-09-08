@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -174,5 +175,43 @@ class StoryStoreTest {
     @DisplayName("번호가 없는 후보는 건너뛴다 — 고를 수 없는 줄이다")
     void 번호_없는_것은_건너뛴다() {
         assertThat(store.save("run-1", List.of(Map.of("title", "번호 없음")))).isZero();
+    }
+
+    @Test
+    @DisplayName("편집실에서 제목을 고치면 그 뒤로 그 이름이 뜬다 — 모델이 지은 이름은 안 지운다")
+    void 제목을_고친다() {
+        store.save("run-1", 후보넷());
+        store.choose("run-1", 2);
+
+        String got = store.editTitle("run-1", "  내가   고친   제목  ");
+
+        assertThat(got).isEqualTo("내가 고친 제목");
+        assertThat(store.chosenOf("run-1")).get()
+                .extracting(WebtoonStory::displayTitle).isEqualTo("내가 고친 제목");
+        // 모델이 지은 이름은 그대로 있다 — "왜 이 이야기를 골랐나" 를 볼 때 필요하다.
+        assertThat(store.chosenOf("run-1")).get()
+                .extracting(WebtoonStory::getTitle).isEqualTo("제목 2");
+    }
+
+    @Test
+    @DisplayName("빈 값으로 고치면 모델이 지은 이름으로 되돌아간다")
+    void 제목을_지우면_원래대로() {
+        store.save("run-1", 후보넷());
+        store.choose("run-1", 1);
+        store.editTitle("run-1", "내가 고친 제목");
+
+        String got = store.editTitle("run-1", "   ");
+
+        assertThat(got).isEqualTo("제목 1");
+        assertThat(store.chosenOf("run-1")).get()
+                .extracting(WebtoonStory::displayTitle).isEqualTo("제목 1");
+    }
+
+    @Test
+    @DisplayName("아직 안 고른 작품은 제목을 못 고친다")
+    void 안_고르면_못_고친다() {
+        store.save("run-1", 후보넷());
+        assertThatThrownBy(() -> store.editTitle("run-1", "아무 제목"))
+                .isInstanceOf(java.util.NoSuchElementException.class);
     }
 }

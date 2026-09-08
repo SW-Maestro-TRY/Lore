@@ -85,6 +85,19 @@ public class WebtoonStory {
     @Column(nullable = false)
     private boolean chosen;
 
+    /**
+     * 사람이 편집실에서 고쳐 둔 제목. 없으면(NULL) 위 {@link #title}(모델이
+     * 지은 이름)을 그대로 쓴다.
+     *
+     * <b>{@link #title} 을 덮어쓰지 않는다.</b> 그건 "이 후보가 지어진 그
+     * 이름" 이라는 기록이라, 지우면 나중에 "왜 이 후보를 골랐는지" 를 볼 때
+     * 원래 이름이 사라진다. 사람이 지우면(빈 제목으로 저장하면) 이 칸을
+     * 다시 비워서 모델이 지은 이름으로 돌아간다 — 파이썬(set_user_title)과
+     * 같은 규칙이다.
+     */
+    @Column(name = "user_title", length = 60)
+    private String userTitle;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -111,6 +124,16 @@ public class WebtoonStory {
 
     void choose(boolean value) {
         this.chosen = value;
+    }
+
+    /** 빈 값이면 도로 비운다 — 모델이 지은 이름으로 돌아간다. */
+    void editTitle(String value) {
+        this.userTitle = (value == null || value.isBlank()) ? null : value.trim();
+    }
+
+    /** 화면에 보일 제목. 사람이 고친 것이 있으면 그것이 이긴다. */
+    public String displayTitle() {
+        return (userTitle == null || userTitle.isBlank()) ? title : userTitle;
     }
 
     public Long getId() {

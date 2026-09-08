@@ -125,6 +125,19 @@ public class BakeService {
                         () -> baked.save(BakedPage.of(runId, no, width, key, Instant.now())));
     }
 
+    /**
+     * 이 장의 밑그림이 바뀌었다 — 구운 것을 지운다.
+     *
+     * 다시 그리기(regen)가 부른다. 밑그림이 새로 나왔는데 <b>옛 밑그림 위에
+     * 구운 말풍선</b>이 그대로 남아 있으면, 보는 자리는 새 그림에 옛 말풍선을
+     * 얹은 것을 계속 보여준다 — 둘이 안 맞는 그림이다. 다시 구우려면 편집실이
+     * 다시 열어야 한다.
+     */
+    @Transactional
+    public void invalidate(String runId, int pageNo) {
+        dropBaked(runId, pageNo);
+    }
+
     /** 이번에 얹은 것이 하나도 없으면 구운 줄을 거둔다 — 옛 말풍선이 되살아나면 안 된다. */
     private void dropBaked(String runId, int no) {
         baked.findByRunIdOrderByPageNoAscWidthAsc(runId).stream()

@@ -104,6 +104,18 @@ public class JobRunner {
                 ? "haeun/landing/jobs_spring" : jobsDir).toAbsolutePath().normalize();
     }
 
+    /**
+     * 웹툰 만들기가 아닌 다른 이미지 호출도 <b>같은 줄</b>에 세운다.
+     *
+     * 지금은 편집실의 다시 그리기({@code RegenService})가 쓴다. 만들기와
+     * 다시 그리기가 같은 하네스 프로세스를 동시에 돌리면 요금과 rate limit이
+     * 같이 터진다 — 파이썬도 같은 큐를 썼다({@code NHRunner._enqueue} 가
+     * job 과 regen 을 구분하지 않는다).
+     */
+    public void enqueue(Runnable step) {
+        line.submit(step);
+    }
+
     /** 차례에 넣는다. 곧바로 돌지 않을 수 있다 — 앞에 밀린 것이 있으면 기다린다. */
     public void enqueue(Long jobId, Path jobDir) {
         line.submit(() -> {

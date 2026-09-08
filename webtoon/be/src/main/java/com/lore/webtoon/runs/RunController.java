@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.webtoon.art.PageStore;
+import com.lore.webtoon.story.StoryStore;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import io.swagger.v3.oas.annotations.Operation;
@@ -54,6 +55,8 @@ public class RunController {
     private final EpisodeExport export;
     private final OverlayStore overlays;
     private final BakeService bakery;
+    private final StoryStore stories;
+    private final RegenService regen;
     /* **경계에서는 Map 으로 주고받는다.**
      *
      * 이 앱의 HTTP 변환기는 Jackson 3(tools.jackson) 인데, 얹은 것을 다루는
@@ -64,12 +67,34 @@ public class RunController {
     private final ObjectMapper mapper = new ObjectMapper();
 
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
-                         OverlayStore overlays, BakeService bakery) {
+                         OverlayStore overlays, BakeService bakery, StoryStore stories,
+                         RegenService regen) {
         this.runs = runs;
         this.pages = pages;
         this.export = export;
         this.overlays = overlays;
         this.bakery = bakery;
+        this.stories = stories;
+        this.regen = regen;
+    }
+
+    /**
+     * 제목을 고친다. <b>빈 값으로 부르면 지운다</b> — 모델이 지은 이름으로
+     * 돌아간다.
+     *
+     * 아직 이야기를 안 고른 작품(만드는 중)이면 404 다 — 편집실은 다 만든
+     * 작품에서만 연다.
+     */
+    @Operation(summary = "제목 고치기", description = "title 이 비어 있으면 원래 이름으로 되돌린다.")
+    @PostMapping("/{runId}/title")
+    public ResponseEntity<Map<String, Object>> title(@PathVariable String runId,
+                                                      @RequestBody Map<String, Object> body) {
+        try {
+            String got = stories.editTitle(runId, String.valueOf(body.getOrDefault("title", "")));
+            return ResponseEntity.ok(Map.of("title", got));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
+        }
     }
 
     /* ---- 편집실 ----------------------------------------------------------- */
@@ -191,6 +216,67 @@ public class RunController {
         Object name = meta.get("character");
         String who = name == null ? "" : String.valueOf(name).trim();
         return who.isEmpty() ? "1화" : who + " · 1화";
+    }
+
+    /* ---- 다시 그리기 ------------------------------------------------------- */
+
+    /**
+     * 이 장을 다시 그린다. <b>여기서부터 실제로 돈이 나간다.</b>
+     *
+     * 곧바로 그리지 않는다 — 이미지 호출이라 줄을 선다({@link RegenService}).
+     * 화면은 돌려받은 번호로 {@link #regenStatus} 를 2초 간격으로 물어야 한다.
+     */
+    @Operation(summary = "장 다시 그리기", description = "곧바로 안 그린다 — id 로 진행을 물어야 한다.")
+    @PostMapping("/{runId}/scenes/{no}/regen")
+    public ResponseEntity<Map<String, Object>> regen(@PathVariable String runId,
+                                                      @PathVariable int no,
+                                                      @RequestBody(required = false)
+                                                      Map<String, Object> body) {
+        try {
+            String note = body == null ? "" : String.valueOf(body.getOrDefault("feedback", ""));
+            String id = regen.start(runId, no, note);
+            return ResponseEntity.ok(regen.statusOf(id));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * 지난 판 목록. 편집실이 되돌리기 목록을 그릴 때 쓴다.
+     */
+    @Operation(summary = "지난 판 목록")
+    @GetMapping("/{runId}/scenes/{no}/versions")
+    public Map<String, Object> versions(@PathVariable String runId, @PathVariable int no) {
+        return Map.of("versions", regen.versionsOf(runId, no));
+    }
+
+    /** 지난 판 그림 하나. 목록 썸네일 크기(w)로 줄여 준다. */
+    @Operation(summary = "지난 판 그림")
+    @GetMapping(value = "/{runId}/scenes/{no}/versions/{v}", produces = MediaType.IMAGE_JPEG_VALUE)
+    public ResponseEntity<byte[]> versionImage(@PathVariable String runId, @PathVariable int no,
+                                               @PathVariable int v,
+                                               @RequestParam(defaultValue = "1080") int w) {
+        byte[] img = regen.versionImage(runId, no, v, w);
+        return img == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok().contentType(MediaType.IMAGE_JPEG).body(img);
+    }
+
+    /** 지난 판으로 되돌린다. 되돌리기 전 그림도 판본으로 남는다. */
+    @Operation(summary = "지난 판으로 되돌리기")
+    @PostMapping("/{runId}/scenes/{no}/revert")
+    public ResponseEntity<Map<String, Object>> revert(@PathVariable String runId,
+                                                       @PathVariable int no,
+                                                       @RequestBody Map<String, Object> body) {
+        try {
+            int version = Integer.parseInt(String.valueOf(body.get("version")));
+            List<Map<String, Object>> versions = regen.revert(runId, no, version);
+            return ResponseEntity.ok(Map.of("ok", true, "versions", versions));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.status(400).body(Map.of("error", "version 이 필요합니다"));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
     }
 
     /**

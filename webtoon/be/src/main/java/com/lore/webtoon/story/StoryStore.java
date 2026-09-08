@@ -120,6 +120,24 @@ public class StoryStore {
     }
 
     /**
+     * 편집실에서 제목을 고친다. -> 화면에 <b>앞으로</b> 보일 이름
+     *
+     * 빈 값으로 부르면 지운다 — 모델이 지은 이름으로 돌아간다(파이썬의
+     * {@code set_user_title} 과 같은 규칙).
+     *
+     * @throws java.util.NoSuchElementException 고른 이야기가 없을 때
+     *         (아직 방향을 안 고른 작품 — 제목을 고칠 화면 자체가 없다)
+     */
+    @Transactional
+    public String editTitle(String runId, String title) {
+        WebtoonStory chosen = stories.findByRunIdAndChosenTrue(runId).orElseThrow();
+        String clean = title == null ? "" : String.join(" ", title.trim().split("\s+"));
+        chosen.editTitle(clean.isBlank() ? null : clean.substring(0, Math.min(60, clean.length())));
+        stories.save(chosen);
+        return chosen.displayTitle();
+    }
+
+    /**
      * 장면 목록. 완성본에서 그림을 누르면 뜨는 설명이 여기서 나온다.
      *
      * 못 읽으면 빈 목록 — 설명이 안 뜰 뿐이고 읽는 데는 지장이 없다.
