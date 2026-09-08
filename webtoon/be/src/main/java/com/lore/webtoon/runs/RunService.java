@@ -105,6 +105,22 @@ public class RunService {
         return out;
     }
 
+    /**
+     * 작품 번호 하나로 카드 하나. 아직 DB 에 안 옮겨 온 작품이면 {@code null}
+     * — 그때는 부르는 쪽이 예전처럼 하네스에게 묻는다.
+     *
+     * 목록을 거치지 않고 한 편만 필요한 자리가 있다(마이페이지가 계정에 이어진
+     * 브라우저별로 모을 때). 카드 만드는 규칙이 두 벌이 되면 같은 작품이
+     * 둘러보기와 마이페이지에서 다르게 보인다 — 실제로 마이페이지 카드에는
+     * 캐릭터 이름과 그림체 딱지가 늘 비어 있었다.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> cardOf(String runId) {
+        return works.findFirstByRunId(runId)
+                .map(work -> card(work, false))
+                .orElse(null);
+    }
+
     /** 카드 하나. 그림이 없으면 {@code null} — 목록에 안 올린다. */
     private Map<String, Object> card(WebtoonWork work, boolean withPublic) {
         String runId = work.getRunId();
@@ -123,6 +139,7 @@ public class RunService {
         card.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         // 한 편짜리다 — 이어그리기가 붙으면 여기가 늘어난다.
         card.put("episodes", List.of(1));
+        card.put("cover_episode", 1);
         card.put("cover_page", numbers.getFirst());
         card.put("page_count", numbers.size());
         card.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
