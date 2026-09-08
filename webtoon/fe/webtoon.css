@@ -3208,47 +3208,40 @@
    여기 색을 앱 팔레트로 바꾸면 화면과 구운 그림이 갈린다 — 그래서 흰 바탕에
    검은 선 그대로 둔다. */
 .webtoon-page .bub {
-  position: relative; background: #fff; color: #111; text-align: center;
+  position: relative; color: #111; text-align: center;
   padding: .55em .85em; font-weight: 600; box-sizing: border-box;
-  border: 2.5px solid #111; word-break: keep-all;
+  word-break: keep-all; width: fit-content; max-width: 100%;
 }
-.webtoon-page .bub-normal   { border-radius: 50% / 42%; }
-.webtoon-page .bub-normal::after {
-  content: ""; position: absolute; left: 22%; bottom: -14px;
-  border: 9px solid transparent; border-top-color: #111; border-bottom: 0;
-}
-.webtoon-page .bub-shout {
-  border-radius: 4px; border-width: 3px; font-weight: 800;
-  clip-path: polygon(0% 12%, 7% 0%, 20% 10%, 33% 1%, 46% 11%, 60% 1%, 74% 10%, 88% 0%,
-                     100% 13%, 93% 27%, 100% 43%, 92% 58%, 100% 74%, 88% 88%, 74% 79%,
-                     60% 92%, 46% 80%, 33% 93%, 20% 81%, 7% 92%, 0% 76%, 8% 60%, 0% 44%,
-                     8% 28%);
-  padding: 1.1em 1.2em;
-}
-.webtoon-page .bub-whisper { border-style: dotted; border-width: 2px; border-radius: 44% / 40%; opacity: .95; }
-.webtoon-page .bub-thought { border-radius: 46% / 44%; }
-.webtoon-page .bub-thought::after {
-  content: "○ ○"; position: absolute; left: 16%; bottom: -1.5em;
-  font-size: .5em; color: #111; letter-spacing: .3em;
-}
-.webtoon-page .bub-narration { border-radius: 3px; border-width: 2px; text-align: left; }
 
-/* ---- 꼬리 방향 ------------------------------------------------------------
-   꼬리는 "누가 말했는가" 를 가리키는 유일한 표시다. 한 컷에 풍선이 둘이면
-   좌우가 갈려야 누가 먼저 말했는지, 어느 것이 누구 것인지 읽힌다.
-   기본은 왼쪽이고, 나레이션·회상에는 애초에 꼬리가 없다.                     */
-.webtoon-page .bub-whisper::after {
-  content: ""; position: absolute; left: 22%; bottom: -11px;
-  border: 7px dotted transparent; border-top: 7px solid #111; border-bottom: 0;
+/* 몸통과 꼬리는 **한 덩어리**로 그린다 (editorCore 의 paintShape).
+   CSS 로 따로 그리면 둘이 만나는 자리에 틈이 남고, 꼬리를 아무 방향으로나
+   뻗을 수도 없다. 여기서는 색과 선 굵기만 정하고 모양은 SVG 가 만든다. */
+.webtoon-page .bub-svg {
+  position: absolute; pointer-events: none; overflow: visible; z-index: 0;
 }
-.webtoon-page .bub-shout::after {
-  content: ""; position: absolute; left: 20%; bottom: -13px;
-  border: 9px solid transparent; border-top-color: #111; border-bottom: 0;
+.webtoon-page .bub-svg .bs > * { fill: #fff; stroke: #111; stroke-width: 2.5; }
+.webtoon-page .bub-svg .bs-shout > * { stroke-width: 3; }
+.webtoon-page .bub-svg .bs-narration > * { stroke-width: 2; }
+.webtoon-page .bub-svg .bs-whisper > * { stroke-width: 2; stroke-dasharray: 2 5; stroke-linecap: round; }
+.webtoon-page .bub-svg .bs-flash > * { stroke-dasharray: 9 6; opacity: .86; }
+/* 점선은 몸통만이다 — 꼬리까지 끊기면 붙어 있는 것으로 안 읽힌다. */
+.webtoon-page .bub-svg .bs-whisper > polygon,
+.webtoon-page .bub-svg .bs-flash > polygon { stroke-dasharray: none; }
+
+.webtoon-page .bub { position: relative; z-index: 1; }
+.webtoon-page .bub-shout { font-weight: 800; padding: 1.1em 1.2em; }
+.webtoon-page .bub-narration { text-align: left; }
+
+/* 꼬리 끝 손잡이 — 끌면 말하는 사람을 가리킨다. */
+.webtoon-page .item .handle-tail {
+  position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+  border-radius: 50%; background: #fff; border: 2px solid #111;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35); cursor: grab; z-index: 3;
+  opacity: 0; transition: opacity .12s;
 }
-.webtoon-page .bub.tail-right::after { left: auto; right: 22%; }
-.webtoon-page .bub-thought.tail-right::after { left: auto; right: 16%; }
-.webtoon-page .bub.tail-none::after { display: none; }
-.webtoon-page .bub-flash { border-radius: 46% / 42%; border-style: dashed; opacity: .82; filter: blur(.2px); }
+.webtoon-page .item.sel .handle-tail { opacity: 1; }
+.webtoon-page .item .handle-tail.is-off { border-style: dashed; opacity: .55; }
+.webtoon-page .item.sel .handle-tail.is-off { opacity: .7; }
 
 /* 스티커 · 효과음 */
 .webtoon-page .stk { line-height: 1; }

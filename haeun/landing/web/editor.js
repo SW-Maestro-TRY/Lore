@@ -639,9 +639,17 @@ function itemHTML(it) {
   // contenteditable 은 **켤 때만** 붙인다. 늘 켜 두면 브라우저가 그 위의 누름을
   // 글자 고르기로 먹어서, 말풍선을 잡아 끌 수도 고를 수도 없다(실제로 그랬다).
   const ed = it.type !== "sticker" ? ` data-edit spellcheck="false"` : "";
+  /* 말풍선은 **SVG 한 장**으로 그린다.
+     CSS 로는 몸통과 꼬리를 따로 그릴 수밖에 없어서 둘이 만나는 자리에 늘 틈이
+     보였다 — 타원은 가장자리가 안으로 휘므로 세모가 공중에 뜬 것처럼 보인다.
+     한 덩어리로 그리면 그 틈이 없고, 꼬리를 아무 방향으로나 뻗을 수 있다. */
   const inner =
     it.type === "bubble"
-      ? `<div class="bub bub-${it.variant} tail-${tailOf(it)}" style="font-size:${it.size}px"${ed}>${esc(it.text)}</div>`
+      ? `<svg class="bub-svg" aria-hidden="true"></svg>` +
+        `<div class="bub bub-${it.variant}" style="font-size:${it.size}px"${ed}>${esc(it.text)}</div>` +
+        (TAILED.has(it.variant)
+          ? `<div class="handle handle-tail" data-tail-drag title="꼬리를 끌어 말하는 사람을 가리키세요"></div>`
+          : "")
       : it.type === "sticker"
         ? `<div class="stk" style="font-size:${it.size * 2.2}px">${it.text}</div>`
         : `<div class="sfx" style="font-size:${it.size * 2}px"${ed}>${esc(it.text)}</div>`;
@@ -653,12 +661,116 @@ function itemHTML(it) {
     <div class="handle handle-size" title="폭"></div></div>`;
 }
 
+/* 말풍선 모양을 **실제 글 크기에 맞춰** 그린다.
+
+   글이 몇 줄인지는 브라우저가 글을 놓아 본 뒤에야 안다. 그래서 그리는 것은
+   항상 놓은 뒤다 — 글을 고치거나 폭을 끌 때마다 다시 부른다. */
+function paintShape(el) {
+  const svg = $(".bub-svg", el), bub = $(".bub", el);
+  if (!svg || !bub) return;
+  const it = itemOf(el);
+  if (!it) return;
+  const v = it.variant;
+  const round = v !== "narration";
+
+  /* **어디서 줄을 바꿀지 모양을 보고 고른다.**
+     한 줄로 다 들어간다고 그냥 두면 대사가 길수록 풍선이 국수 가락이 된다.
+     몇 가지 폭으로 놓아 보고 가로세로 비가 가장 보기 좋은 것을 고른다 —
+     굽는 쪽(overlay.py 의 _fit)과 같은 규칙이라 화면과 결과가 안 갈린다. */
+  const full = el.clientWidth || bub.offsetWidth;
+  const target = v === "narration" ? 4.0 : 2.4;
+  let best = null;
+  for (const f of [1, 0.82, 0.68, 0.56, 0.46, 0.38]) {
+    bub.style.maxWidth = `${Math.max(40, full * f)}px`;
+    const bw = bub.offsetWidth, bh = bub.offsetHeight;
+    const score = Math.abs(bw / Math.max(1, bh) - target);
+    if (!best || score < best.score) best = { score, f, bw, bh };
+  }
+  bub.style.maxWidth = `${Math.max(40, full * best.f)}px`;
+
+  /* 타원은 글 상자보다 √2 만큼 크다. 글 상자를 그대로 타원 크기로 쓰면
+     네 모서리가 선 밖으로 나간다 — 그걸 피하려고 폭을 키우다 보니 예전
+     풍선이 그렇게 넓적했다. */
+  const spread = round ? Math.SQRT2 / (v === "shout" ? 0.8 : 1) : 1;
+  const w = best.bw, h = best.bh;
+  const sw = 2.5;
+  const ew = w * spread, eh = h * spread;
+  const cx = w / 2, cy = h / 2, a = (ew - sw) / 2, b = (eh - sw) / 2;
+
+  let body;
+  if (v === "narration") {
+    body = `<rect x="${sw / 2}" y="${sw / 2}" width="${w - sw}" height="${h - sw}" rx="3"/>`;
+  } else if (v === "shout") {
+    const pts = [];
+    for (let i = 0; i < 24; i++) {
+      const ang = Math.PI * i / 12 - Math.PI / 2, f = i % 2 === 0 ? 1 : 0.8;
+      pts.push(`${cx + Math.cos(ang) * a * f},${cy + Math.sin(ang) * b * f}`);
+    }
+    body = `<polygon points="${pts.join(" ")}"/>`;
+  } else {
+    body = `<ellipse cx="${cx}" cy="${cy}" rx="${a}" ry="${b}"/>`;
+  }
+
+  /* 꼬리는 <b>가장자리에서 자란다</b>. 끝점 방향의 타원 위 한 점을 찾고 그
+     좌우로 조금 벌린 두 점을 뿌리로 쓴다 — 굽는 쪽(overlay.py 의
+     _tail_shape)과 같은 계산이라 화면과 구운 그림이 안 갈린다. */
+  let tail = "";
+  if (TAILED.has(v) && it.tail !== "none") {
+    /* 꼬리 끝은 <b>타원 상자</b>에 대한 %다 — 굽는 쪽이 그렇게 잰다
+       (overlay.py 는 타원 크기가 곧 몸통 크기다). 글 상자를 기준으로 재면
+       화면에서만 꼬리가 짧아진다. */
+    const ex0 = cx - ew / 2, ey0 = cy - eh / 2;
+    const tipX = ex0 + ew * it.tx / 100, tipY = ey0 + eh * it.ty / 100;
+    const t = Math.atan2((tipY - cy) / Math.max(1e-6, b), (tipX - cx) / Math.max(1e-6, a));
+    const fs = it.size;
+    if (v === "thought") {
+      const ex = cx + a * Math.cos(t), ey = cy + b * Math.sin(t);
+      const dx = tipX - ex, dy = tipY - ey;
+      tail = [[0.16, fs * 0.42], [0.56, fs * 0.26]].map(([f, r]) =>
+        `<circle cx="${ex + dx * f}" cy="${ey + dy * f}" r="${Math.max(3, r)}"/>`).join("");
+    } else {
+      const half = Math.max(5, fs * 0.62);
+      const spread = half / Math.max(8, (a + b) / 2);
+      const p1 = [cx + a * Math.cos(t - spread), cy + b * Math.sin(t - spread)];
+      const p2 = [cx + a * Math.cos(t + spread), cy + b * Math.sin(t + spread)];
+      tail = `<polygon points="${p1} ${p2} ${tipX},${tipY}"/>`;
+    }
+  }
+
+  // 꼬리를 먼저, 몸통을 나중에 — 나중 것이 이어진 자리의 선을 덮는다.
+  const pad = 400;                    // 밖으로 뻗은 꼬리가 잘리지 않게
+  svg.setAttribute("viewBox", `${-pad} ${-pad} ${w + pad * 2} ${h + pad * 2}`);
+  svg.style.left = `${-pad}px`; svg.style.top = `${-pad}px`;
+  svg.style.width = `${w + pad * 2}px`; svg.style.height = `${h + pad * 2}px`;
+  svg.innerHTML = `<g class="bs bs-${v}">${tail}${body}</g>`;
+
+  const grip = $(".handle-tail", el);
+  if (grip) {
+    // %로 두면 풍선 상자(글에 맞춰 줄어든 것)가 아니라 <b>항목 상자</b>가
+    // 기준이 돼서, 손잡이가 꼬리 끝에서 비켜 앉는다.
+    grip.style.left = `${bub.offsetLeft + cx - ew / 2 + ew * it.tx / 100}px`;
+    grip.style.top = `${bub.offsetTop + cy - eh / 2 + eh * it.ty / 100}px`;
+    grip.classList.toggle("is-off", it.tail === "none");
+  }
+}
+
+function itemOf(el) {
+  const holder = el.closest("[id^=scene-]");
+  const no = holder ? Number(holder.id.slice(6)) : null;
+  return no == null ? null : sc(no).items.find(i => i.id === el.dataset.id);
+}
+
+function paintShapes(no) {
+  $$(`#scene-${no} .item[data-type=bubble]`).forEach(paintShape);
+}
+
 function paintItems(no) {
   const layer = $(`#scene-${no} [data-overlay]`);
   if (!layer) return;
   layer.innerHTML = sc(no).items.map(itemHTML).join("");
   layer.classList.toggle("is-hidden", !$("#showOverlay").checked);
   $$(".item", layer).forEach(el => wireItem(no, el));
+  paintShapes(no);
   paintProps();
 }
 
@@ -669,6 +781,8 @@ function addItem(type, variant, text) {
     x: 22, y: 30 + (st.items.length % 5) * 9, w: type === "bubble" ? 44 : 16,
     size: type === "bubble" ? 15 : 16, rot: type === "sfx" ? -7 : 0,
     tail: type === "bubble" ? "left" : "none",
+    // 꼬리 끝. 사람이 끌어 옮기는 값이라 처음 자리는 흔한 자리(왼쪽 아래)다.
+    tx: 22, ty: 152,
   };
   st.items.push(it); save();
   sel = { sceneNo: no, id: it.id };
@@ -731,9 +845,14 @@ function wireItem(no, el) {
     const it = sc(no).items.find(i => i.id === id);
     const box = wrap.getBoundingClientRect();
     const rot = ev.target.dataset.rot !== undefined;
-    const resizing = !rot && ev.target.classList.contains("handle");
+    const tailing = ev.target.dataset.tailDrag !== undefined;
+    const resizing = !rot && !tailing && ev.target.classList.contains("handle");
     const sx = ev.clientX, sy = ev.clientY;
     const ox = it.x, oy = it.y, ow = it.w, orot = it.rot;
+    const otx = it.tx, oty = it.ty;
+    // 꼬리 자리는 <b>풍선 자기 크기</b>에 대한 %다 — 그림이 커지거나 폭을
+    // 바꿔도 같은 곳을 계속 가리킨다.
+    const bubBox = tailing ? $(".bub", el).getBoundingClientRect() : null;
     // 돌리기는 요소의 **가운데를 축으로** 잰다 — 끄는 점과 가운데가 이루는
     // 각이 곧 기울기다. 손이 가는 대로 돌아간다.
     const r0 = el.getBoundingClientRect();
@@ -759,12 +878,25 @@ function wireItem(no, el) {
         return;
       }
       if (Math.abs(dx) > 0.4 || Math.abs(dy) > 0.4) moved = true;
+      if (tailing) {
+        // 화면 픽셀 -> 타원 상자 % (paintShape 와 같은 기준)
+        const sp = it.variant === "narration" ? 1
+          : Math.SQRT2 / (it.variant === "shout" ? 0.8 : 1);
+        it.tx = Math.max(-300, Math.min(400,
+          otx + (e.clientX - sx) / Math.max(1, bubBox.width * sp) * 100));
+        it.ty = Math.max(-300, Math.min(400,
+          oty + (e.clientY - sy) / Math.max(1, bubBox.height * sp) * 100));
+        // 꼬리를 끌어내면 꺼 뒀던 꼬리가 다시 켜진다.
+        if (it.tail === "none") it.tail = "left";
+        paintShape(el);
+        return;
+      }
       if (resizing) it.w = Math.max(5, Math.min(96, ow + dx));
       else { it.x = Math.max(-6, Math.min(98, ox + dx)); it.y = Math.max(-4, Math.min(97, oy + dy)); }
       el.style.left = `${it.x}%`; el.style.top = `${it.y}%`; el.style.width = `${it.w}%`;
     };
     const up = () => {
-      el.classList.remove("dragging"); save(); paintProps();
+      el.classList.remove("dragging"); paintShape(el); save(); paintProps();
       // 끌지 않고 그냥 누른 것이면 글을 고치러 들어간다.
       if (again && !moved) enterEdit();
       el.removeEventListener("pointermove", move);
@@ -777,7 +909,7 @@ function wireItem(no, el) {
   if (text) {
     text.addEventListener("input", () => {
       const it = sc(no).items.find(i => i.id === id);
-      if (it) { it.text = text.innerText; save(); }
+      if (it) { it.text = text.innerText; paintShape(el); save(); }
     });
     text.addEventListener("keydown", e => {
       // Enter 는 줄바꿈이다 (말풍선은 두세 줄이 예사다). 끝내는 것은 Esc.
@@ -986,7 +1118,11 @@ function bumpSize(d) {
 
 function setTail(v) {
   const it = findItem(); if (!it) return;
-  it.tail = v; save(); paintItems(sel.sceneNo);
+  it.tail = v;
+  // 단추는 이제 <b>빠른 자리 잡기</b>다 — 끌어서 미세 조정하는 것이 본길이다.
+  if (v === "left") { it.tx = 22; it.ty = 152; }
+  if (v === "right") { it.tx = 78; it.ty = 152; }
+  save(); paintItems(sel.sceneNo);
 }
 
 function clearSel() {
