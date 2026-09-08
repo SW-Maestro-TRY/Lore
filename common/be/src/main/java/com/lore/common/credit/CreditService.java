@@ -122,7 +122,9 @@ public class CreditService {
         if (amount <= 0) {
             return 0;
         }
-        if (events.existsByUserIdAndReasonAndRefId(userId, CreditReason.SPEND, refId)) {
+        CreditDomain where = domain == null ? CreditDomain.COMMON : domain;
+        if (events.existsByUserIdAndReasonAndDomainAndRefId(
+                userId, CreditReason.SPEND, where, refId)) {
             return 0;                       // 이미 낸 것 — 두 번 받지 않는다
         }
         int have = events.balanceOf(userId);
@@ -130,10 +132,8 @@ public class CreditService {
             throw new BusinessException(ErrorCode.CREDIT_NOT_ENOUGH,
                     "크레딧이 모자랍니다 (필요 " + amount + " · 보유 " + have + ")");
         }
-        String line = memo == null || memo.isBlank()
-                ? (domain == null ? CreditDomain.COMMON : domain).label() + "에서 사용"
-                : memo;
-        return ledger.write(userId, -amount, CreditReason.SPEND, domain, refId, line) ? amount : 0;
+        String line = memo == null || memo.isBlank() ? where.label() + "에서 사용" : memo;
+        return ledger.write(userId, -amount, CreditReason.SPEND, where, refId, line) ? amount : 0;
     }
 
     /**
@@ -143,25 +143,25 @@ public class CreditService {
      * 사라진다. 낸 적이 없으면 아무 일도 안 한다(안 낸 것을 돌려주면 그게 곧
      * 무한 크레딧이다).
      *
+     * @param domain 어느 서비스에서 낸 것을 돌려주나. <b>낸 줄을 찾는 기준</b>
+     *               이라 낸 쪽과 같아야 한다 — 다르면 낸 적이 없는 것으로 읽혀
+     *               조용히 0 이 된다
      * @return 돌려준 양 (돌려줄 것이 없으면 0)
      */
     @Transactional
-    public int refund(Long userId, String refId, String why) {
+    public int refund(Long userId, CreditDomain domain, String refId, String why) {
         /* **최근 몇 줄이 아니라 DB 에 직접 묻는다.** 전에는 내역 200줄을 받아
            그 안에서 골랐는데, 낸 뒤로 줄이 그만큼 쌓인 사람은 낸 기록이 목록
            밖으로 밀려나 환원이 조용히 0 이 됐다 — 만들기가 실패했는데 아무
            말 없이 안 돌려주는 상태다. */
-        List<CreditEvent> paidRows =
-                events.findByUserIdAndReasonAndRefId(userId, CreditReason.SPEND, refId);
+        CreditDomain where = domain == null ? CreditDomain.COMMON : domain;
+        List<CreditEvent> paidRows = events.findByUserIdAndReasonAndDomainAndRefId(
+                userId, CreditReason.SPEND, where, refId);
         int paid = paidRows.stream().mapToInt(e -> -e.getDelta()).sum();
         if (paid <= 0) {
             return 0;
         }
-        /* **도메인은 낸 줄에서 물려받는다.** 돌려주는 쪽이 따로 정하게 두면
-           웹툰에서 낸 것을 짤로 돌려준 것처럼 적힐 수 있고, 그러면 도메인별
-           합계가 어긋난다. 금액을 부르는 쪽이 안 정하는 것과 같은 이유다. */
-        CreditDomain domain = paidRows.get(0).getDomain();
-        return ledger.write(userId, paid, CreditReason.REFUND, domain, refId,
+        return ledger.write(userId, paid, CreditReason.REFUND, where, refId,
                 why == null || why.isBlank() ? CreditReason.REFUND.label() : why) ? paid : 0;
     }
 

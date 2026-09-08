@@ -133,15 +133,23 @@ public class CreditGate {
         }
     }
 
-    /** 시작조차 못 했으면 돌려준다. 낸 적이 없으면 아무 일도 안 한다. */
-    public void refund(Long userId, String jobId) {
+    /**
+     * 시작조차 못 했으면 돌려준다. 낸 적이 없으면 아무 일도 안 한다.
+     *
+     * @return 실제로 돌려준 양. <b>0 이면 안 돌려준 것이다</b> — 화면이
+     *         "환불했어요" 를 적을지 여기서 갈린다. 돌려줄 사람이 있었는지가
+     *         아니라 돌려줬는지를 말해야 한다
+     */
+    public int refund(Long userId, String jobId) {
         if (userId == null || jobId == null || jobId.isBlank()) {
-            return;
+            return 0;
         }
         try {
-            credits.refund(userId, jobId, "만들기를 시작하지 못했습니다");
+            return credits.refund(userId, CreditDomain.WEBTOON, jobId,
+                                  "만들기를 시작하지 못했습니다");
         } catch (RuntimeException e) {
             log.error("크레딧을 못 돌려줬습니다 (user={}, job={})", userId, jobId, e);
+            return 0;
         }
     }
 

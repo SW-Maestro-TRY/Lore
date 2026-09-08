@@ -49,20 +49,24 @@ class CreditServiceTest {
         when(repo.balanceOf(anyLong())).thenAnswer(c ->
                 rows.stream().filter(e -> e.getUserId().equals(c.<Long>getArgument(0)))
                         .mapToInt(CreditEvent::getDelta).sum());
-        when(repo.existsByUserIdAndReasonAndRefId(anyLong(), any(), any())).thenAnswer(c ->
-                rows.stream().anyMatch(e -> e.getUserId().equals(c.<Long>getArgument(0))
-                        && e.getReason() == c.getArgument(1)
-                        && e.getRefId().equals(c.getArgument(2))));
+        when(repo.existsByUserIdAndReasonAndDomainAndRefId(anyLong(), any(), any(), any()))
+                .thenAnswer(c -> rows.stream().anyMatch(
+                        e -> e.getUserId().equals(c.<Long>getArgument(0))
+                                && e.getReason() == c.getArgument(1)
+                                && e.getDomain() == c.getArgument(2)
+                                && e.getRefId().equals(c.getArgument(3))));
         when(repo.saveAndFlush(any(CreditEvent.class))).thenAnswer(c -> {
             CreditEvent e = c.getArgument(0);
             setId(e, ids.incrementAndGet());
             rows.add(e);
             return e;
         });
-        when(repo.findByUserIdAndReasonAndRefId(anyLong(), any(), any())).thenAnswer(c ->
-                rows.stream().filter(e -> e.getUserId().equals(c.<Long>getArgument(0))
-                        && e.getReason() == c.getArgument(1)
-                        && e.getRefId().equals(c.getArgument(2))).toList());
+        when(repo.findByUserIdAndReasonAndDomainAndRefId(anyLong(), any(), any(), any()))
+                .thenAnswer(c -> rows.stream().filter(
+                        e -> e.getUserId().equals(c.<Long>getArgument(0))
+                                && e.getReason() == c.getArgument(1)
+                                && e.getDomain() == c.getArgument(2)
+                                && e.getRefId().equals(c.getArgument(3))).toList());
         when(repo.historyOf(anyLong(), any(Pageable.class))).thenAnswer(c -> {
             long who = c.getArgument(0);
             Pageable page = c.getArgument(1);
@@ -172,16 +176,36 @@ class CreditServiceTest {
     }
 
     @Test
-    @DisplayName("돌려줄 때 도메인을 낸 줄에서 물려받는다 — 부르는 쪽이 정하면 합계가 어긋난다")
-    void 환원은_도메인을_물려받는다() {
+    @DisplayName("돌려준 줄은 낸 줄과 같은 도메인으로 적힌다 — 안 그러면 도메인별 합계가 어긋난다")
+    void 환원은_낸_곳으로_적힌다() {
         CreditService credits = service(12, 20, DAY1);
         credits.balanceWithDaily(ME);
         credits.spend(ME, CreditDomain.WEBTOON, 12, "run-1", "남은 시간만큼");
-        assertThat(credits.refund(ME, "run-1", "못 만들었습니다")).isEqualTo(12);
+        assertThat(credits.refund(ME, CreditDomain.WEBTOON, "run-1", "못 만들었습니다"))
+                .isEqualTo(12);
 
         CreditEvent back = credits.history(ME, 10).stream()
                 .filter(e -> e.getReason() == CreditReason.REFUND).findFirst().orElseThrow();
         assertThat(back.getDomain()).isEqualTo(CreditDomain.WEBTOON);
+    }
+
+    @Test
+    @DisplayName("서비스가 다르면 같은 이름이어도 다른 일이다 — refId 는 서비스마다 자기 방식으로 짓는다")
+    void 도메인이_다르면_따로_센다() {
+        CreditService credits = service(12, 20, DAY1);
+        credits.balanceWithDaily(ME);
+
+        /* 웹툰의 작품 번호와 짤의 것이 우연히 같을 수 있다. 「같은 일인가」의
+           기준에서 도메인이 빠져 있으면 뒤엣것이 "이미 낸 것" 으로 밀려 조용히
+           안 빠진다 — 만든 사람은 두 편을 받는데 낸 것은 한 편이다. */
+        assertThat(credits.spend(ME, CreditDomain.WEBTOON, 12, "1", null)).isEqualTo(12);
+        assertThat(credits.spend(ME, CreditDomain.ZZAL, 12, "1", null)).isEqualTo(12);
+        assertThat(credits.balance(ME)).isEqualTo(8);
+
+        // 돌려주는 것도 그 서비스 것만 돌아온다.
+        assertThat(credits.refund(ME, CreditDomain.ZZAL, "1", null)).isEqualTo(12);
+        assertThat(credits.balance(ME)).isEqualTo(20);
+        assertThat(credits.refund(ME, CreditDomain.ZZAL, "1", null)).isZero();   // 두 번은 없다
     }
 
     @Test
@@ -191,7 +215,7 @@ class CreditServiceTest {
         credits.balanceWithDaily(ME);
         credits.spend(ME, 12, "run-1");
 
-        assertThat(credits.refund(ME, "run-1", "그리지 못했습니다")).isEqualTo(12);
+        assertThat(credits.refund(ME, CreditDomain.COMMON, "run-1", "그리지 못했습니다")).isEqualTo(12);
         assertThat(credits.balance(ME)).isEqualTo(32);
         assertThat(rows).anyMatch(e -> e.getReason() == CreditReason.SPEND);   // 안 지웠다
     }
@@ -202,9 +226,9 @@ class CreditServiceTest {
         CreditService credits = service(12, 20, DAY1);
         credits.balanceWithDaily(ME);
         credits.spend(ME, 12, "run-1");
-        credits.refund(ME, "run-1", null);
+        credits.refund(ME, CreditDomain.COMMON, "run-1", null);
 
-        assertThat(credits.refund(ME, "run-1", null)).isZero();
+        assertThat(credits.refund(ME, CreditDomain.COMMON, "run-1", null)).isZero();
         assertThat(credits.balance(ME)).isEqualTo(32);
     }
 
@@ -222,7 +246,7 @@ class CreditServiceTest {
             credits.grantOnce(ME, 1, CreditReason.REWARD, "덤-" + i);
         }
 
-        assertThat(credits.refund(ME, "run-1", "그리지 못했습니다")).isEqualTo(12);
+        assertThat(credits.refund(ME, CreditDomain.COMMON, "run-1", "그리지 못했습니다")).isEqualTo(12);
     }
 
     @Test
@@ -230,7 +254,7 @@ class CreditServiceTest {
     void 안_낸_것은_안_돌려준다() {
         CreditService credits = service(12, 20, DAY1);
         credits.balanceWithDaily(ME);
-        assertThat(credits.refund(ME, "없는-작품", null)).isZero();
+        assertThat(credits.refund(ME, CreditDomain.COMMON, "없는-작품", null)).isZero();
         assertThat(credits.balance(ME)).isEqualTo(32);
     }
 

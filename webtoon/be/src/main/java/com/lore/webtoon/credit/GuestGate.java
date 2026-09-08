@@ -52,27 +52,6 @@ public class GuestGate {
     private static final Logger log = LoggerFactory.getLogger(GuestGate.class);
 
     /**
-     * "이 사람 몫은 여기서 이미 셌다" 는 표시. 하네스가 이것을 보면 자기 uid
-     * 크레딧을 건드리지 않는다.
-     *
-     * <h2>왜 필요한가</h2>
-     *
-     * 하네스에도 크레딧이 있다({@code landing/credits.py} — 브라우저가 만든
-     * uid 로 세는 것). 그래서 로그인 안 한 사람이 <b>두 겹으로</b> 막혀
-     * 있었다: 여기서 하루 몇 편, 하네스에서 uid 잔액. 화면은 앞엣것을 보고
-     * 「오늘 무료 3편」이라 적는데 뒤엣것이 「크레딧이 모자랍니다」로 튕길 수
-     * 있다 — 한 사람에게 서로 다른 두 진실을 말하는 상태다.
-     *
-     * 게스트에게는 장부가 필요 없다. 필요한 것은 <b>오늘 몇 번 썼나</b>
-     * 하나뿐이고, 그것은 여기가 안다. 잔액·지급·환원·내역 같은 금전 장부는
-     * 계정이 있는 사람 것이다({@code CreditService}) — 지어낼 수 없는
-     * 식별자에만 돈을 붙인다.
-     *
-     * <h2>왜 하네스에서 아예 지우지 않나</h2>
-     *
-     * 하네스는 이 스프링 없이 혼자도 뜬다(프로토타입 화면이 그렇게 쓴다).
-     * 그때는 uid 크레딧이 <b>유일한</b> 담장이라 지우면 아무 담장이 없어진다.
-     * 그래서 없애는 대신, 앞에 선 서버가 이미 셌다고 말할 때만 비켜서게 한다.
      */
     public static final String GATED_HEADER = "X-Lore-Guest-Gated";
 
@@ -131,23 +110,9 @@ public class GuestGate {
 
     /**
      * 방금 센 한 편을 도로 물린다 — <b>시작조차 못 했을 때만</b>.
-     *
-     * 몫은 넘기기 전에 먼저 센다(그래야 같은 순간에 몰려도 덜 샌다). 그런데
-     * 넘긴 뒤에 생성 서버가 안 받으면 만들어진 것은 없는데 몫만 줄어 있다.
-     * 그대로 두면 아무것도 못 만든 사람에게 <b>"오늘 2편 다 쓰셨어요"</b> 가
-     * 뜬다 — 만든 적이 없으니 그 말은 그냥 거짓말이고, 고칠 방법도 없어
-     * 보인다(로그인해도 오늘은 안 되는 줄 안다).
-     *
-     * 지금 서버에는 생성 하네스가 아예 없어서 만들기가 늘 실패한다. 이 되돌림이
-     * 없으면 <b>배포하자마자</b> 그 거짓말이 뜬다.
      */
     /**
-     * 오늘 몇 편 더 만들 수 있나. 로그인했으면 {@code null}(그쪽은 크레딧으로 센다).
-     *
-     * <b>물어볼 자리가 없어서 화면이 아무 말도 못 했다.</b> 로그인 안 한 사람에게
-     * 「−12크레딧」이라고 적혀 있었는데, 그 사람에게는 크레딧이 아예 없다 —
-     * 없는 값을 낸다고 적어 두고, 정작 무료 몇 편이 남았는지는 안 알려 줬다.
-     * 다 쓰고 나서야 "오늘 2편 다 쓰셨어요" 를 처음 본다.
+     * 오늘 몇 편 더 만들 수 있나. 로그인했으면 {@code null}(그쪽은 크레딧으로 센다)
      */
     @Transactional(readOnly = true)
     public Integer freeLeft(HttpServletRequest request) {
@@ -173,18 +138,25 @@ public class GuestGate {
         return loggedIn() || freePerDay <= 0 ? null : hash(clientIp(request));
     }
 
-    /** 열쇠로 되돌린다. 만들기가 <b>한참 뒤에</b> 실패했을 때 쓴다. */
+    /**
+     * 열쇠로 되돌린다. 만들기가 <b>한참 뒤에</b> 실패했을 때 쓴다.
+     *
+     * @return 실제로 되돌렸으면 참. <b>거짓이면 안 되돌린 것이다</b> — 화면이
+     *         "무료 횟수를 복구했어요" 를 적을지 여기서 갈린다
+     */
     @Transactional
-    public void refundKey(String key) {
+    public boolean refundKey(String key) {
         if (key == null || key.isBlank() || freePerDay <= 0) {
-            return;
+            return false;
         }
-        quotas.findByIpHashAndDay(key, LocalDate.now(clock))
+        return quotas.findByIpHashAndDay(key, LocalDate.now(clock))
                 .filter(q -> q.getUsed() > 0)
-                .ifPresent(q -> {
+                .map(q -> {
                     q.giveBack();
                     quotas.save(q);
-                });
+                    return true;
+                })
+                .orElse(false);
     }
 
     @Transactional

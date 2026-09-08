@@ -89,6 +89,8 @@ export interface NhJob {
   status: NhStatus;
   run_id: string | null;
   error: string | null;
+  /** 실패했을 때 **실제로** 돌려준 것. 파이썬 서버는 안 보낸다(undefined). */
+  refunded?: "credit" | "free" | "none" | null;
   directions: NhDirection[];
   pick: number | null;
   style: string;

@@ -19,6 +19,17 @@ public record JobView(
         String status,
         String run_id,
         String error,
+        /* 실패했을 때 **실제로** 돌려준 것 — "credit" · "free" · "none".
+           안 끝났거나 잘 끝난 작업에서는 없다.
+
+           화면이 실패 안내의 마지막 한 줄을 이걸로 고른다. 크레딧이 없는
+           게스트에게 "크레딧을 환불했어요" 라고 적으면 없는 것을 돌려줬다는
+           말이 되고, 로그인한 사람에게 "무료 횟수를 복구했어요" 도 마찬가지다.
+
+           **파이썬 서버는 이 칸을 안 보낸다.** 화면은 없으면 그 줄을 그냥 안
+           그린다 — 위 머리말의 "한 글자도 다르면 안 된다" 는 있는 이름을 두고
+           하는 말이고, 무는 쪽은 더해도 된다. */
+        String refunded,
         List<Map<String, Object>> directions,
         Integer pick,
         String style,
@@ -52,6 +63,7 @@ public record JobView(
                 job.getStatus().wire(),
                 job.getRunId(),
                 job.getError(),
+                job.getRefunded() == null ? null : job.getRefunded().wire(),
                 directions,
                 job.getPicked(),
                 job.getStyle(),

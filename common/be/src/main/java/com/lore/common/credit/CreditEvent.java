@@ -18,9 +18,14 @@ import java.time.Instant;
 @Entity
 @Table(
         name = "credit_event",
+        /* 「같은 일인가」의 기준. 이 넷이 같으면 한 번만 적힌다.
+           **domain 이 여기 있어야 한다.** refId 는 서비스마다 자기 방식으로
+           짓는 값이라(작품 id · 결제 id …) 웹툰의 것과 짤의 것이 우연히 같을
+           수 있다. 도메인이 빠져 있으면 그때 뒤엣것이 "이미 적힌 일" 로 밀려
+           조용히 사라진다 — 낸 사람은 냈는데 장부에 없는 상태다. */
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_credit_event_once",
-                columnNames = {"user_id", "reason", "ref_id"}),
+                columnNames = {"user_id", "reason", "domain", "ref_id"}),
         indexes = @Index(name = "idx_credit_event_user", columnList = "user_id, id"))
 public class CreditEvent {
 
@@ -48,7 +53,10 @@ public class CreditEvent {
     /**
      * 어느 서비스에서 일어난 일인가. 이유(reason)가 "무슨 성격의 움직임인가"
      */
-    @Column(length = 20)
+    /* **안 비운다.** 유일키에 들어가는 칸인데, 포스트그레스는 유일키에서
+       NULL 을 서로 다른 값으로 친다 — 비어 있으면 같은 일이 몇 번이고 다시
+       적힌다. 아래 refId 에 적힌 것과 같은 이유다. */
+    @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private CreditDomain domain;
 

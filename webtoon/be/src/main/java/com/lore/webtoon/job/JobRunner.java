@@ -376,24 +376,35 @@ public class JobRunner {
      */
     private void fail(Long jobId, Exception e) {
         log.error("만들기가 실패했습니다 (job={})", jobId, e);
-        boolean paidBack = refund(jobId);
-        store.failed(jobId, humanReason(e, paidBack));
+        Refunded back = refund(jobId);
+        store.failed(jobId, humanReason(e), back);
         progress.forget(jobId);
     }
 
-    /** 낸 것을 돌려준다. -> 실제로 돌려줬으면 참(화면에 그렇게 적으려고). */
-    private boolean refund(Long jobId) {
+    /**
+     * 낸 것을 돌려준다. -> <b>실제로</b> 돌려준 것.
+     *
+     * 전에는 "돌려줄 사람이 있었나"(로그인했나 · 게스트 열쇠가 있나)를 그대로
+     * 돌려줬는데, 그건 돌려줬다는 뜻이 아니다 — 돌려주는 일이 조용히 실패해도
+     * 화면에는 "돌려드렸어요" 가 그대로 떴다. 돌려주는 쪽이 알려 주는 값으로
+     * 정한다.
+     */
+    private Refunded refund(Long jobId) {
         try {
             WebtoonJob job = store.byId(jobId);
             if (job == null) {
-                return false;
+                return Refunded.NONE;
             }
-            credits.refund(job.getUserId(), job.getPublicId());
-            guests.refundKey(job.getGuestKey());
-            return job.getUserId() != null || job.getGuestKey() != null;
+            if (credits.refund(job.getUserId(), job.getPublicId()) > 0) {
+                return Refunded.CREDIT;
+            }
+            if (guests.refundKey(job.getGuestKey())) {
+                return Refunded.FREE;
+            }
+            return Refunded.NONE;
         } catch (RuntimeException ex) {      // noqa: 돌려주다 죽어서 실패를 못 적으면 더 나쁘다
             log.error("낸 것을 못 돌려줬습니다 (job={}) — 사람이 맞춰야 합니다", jobId, ex);
-            return false;
+            return Refunded.NONE;
         }
     }
 
@@ -405,14 +416,16 @@ public class JobRunner {
      * 그 문구는 사람에게 아무 도움이 안 된다 — 무슨 일인지만 말하고 사유는
      * 로그에 둔다.
      */
-    private static String humanReason(Exception e, boolean paidBack) {
+    private static String humanReason(Exception e) {
         String said = e.getMessage();
-        String head = said != null && hasHangul(said)
+        /* **돌려준 이야기는 여기에 안 붙인다.** 로그인한 사람에게는 크레딧을,
+           게스트에게는 무료 횟수를 돌려주므로 같은 말을 쓸 수 없다 — 크레딧이
+           없는 사람에게 "크레딧을 돌려드렸어요" 는 없는 것을 돌려줬다는 말이라
+           아무 뜻이 없다. 무엇을 돌려줬는지는 따로 보내고(Refunded), 문장은
+           화면이 고른다. 여기는 **왜 멈췄는가**만 말한다. */
+        return said != null && hasHangul(said)
                 ? said
                 : "그리는 도중에 문제가 생겼습니다.";
-        return paidBack
-                ? head + " 크레딧은 돌려드렸어요 — 다시 시도해 주세요."
-                : head + " 다시 시도해 주세요.";
     }
 
     /** 한글이 섞여 있는가 — 우리가 사람에게 하려고 쓴 말인지 가르는 자리. */

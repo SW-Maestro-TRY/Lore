@@ -121,6 +121,14 @@ public class WebtoonJob {
     @Column(length = 300)
     private String error;
 
+    /**
+     * 실패했을 때 실제로 돌려준 것. 화면이 안내의 마지막 한 줄을 고른다.
+     * 끝나지 않았거나 잘 끝난 작업에서는 비어 있다.
+     */
+    @Column(name = "refunded", length = 10)
+    @Enumerated(EnumType.STRING)
+    private Refunded refunded;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -158,9 +166,10 @@ public class WebtoonJob {
         this.updatedAt = at;
     }
 
-    void failed(String why, Instant at) {
+    void failed(String why, Refunded refunded, Instant at) {
         this.status = JobStatus.ERROR;
         this.error = why == null ? null : why.substring(0, Math.min(why.length(), 300));
+        this.refunded = refunded;
         this.updatedAt = at;
     }
 
@@ -226,6 +235,10 @@ public class WebtoonJob {
 
     public String getError() {
         return error;
+    }
+
+    public Refunded getRefunded() {
+        return refunded;
     }
 
     public Instant getCreatedAt() {

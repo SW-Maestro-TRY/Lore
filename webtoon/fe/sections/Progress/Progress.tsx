@@ -117,17 +117,35 @@ export default function Progress({
   }
 
   if (job.status === "error") {
+    /* **무엇을 돌려줬는지 서버가 말해 준 대로만 적는다.**
+     *
+     * 로그인한 사람에게는 크레딧을, 게스트에게는 오늘의 무료 횟수를
+     * 돌려주므로 같은 말을 쓸 수 없다 — 크레딧이 없는 사람에게 "크레딧을
+     * 환불했어요" 는 없는 것을 돌려줬다는 말이라 아무 뜻이 없다.
+     *
+     * 화면이 로그인 여부를 보고 **짐작해서** 적지 않는다. 돌려주는 일은
+     * 조용히 실패할 수 있고, 그때 "돌려드렸어요" 가 떠 있으면 그건 거짓말이다.
+     * 서버가 실제로 돌려준 것만 말하고(`refunded`), 없거나 못 돌려줬으면 그
+     * 줄을 **안 그린다** — 틀린 말보다 없는 편이 낫다. */
+    const back =
+      job.refunded === "credit" ? "사용된 크레딧은 자동으로 환불되었어요."
+      : job.refunded === "free" ? "사용한 무료 생성 횟수는 자동으로 복구되었어요."
+      : "";
+
     return (
       <section className="progress">
         <div className="progress-inner">
           <header className="progress-head">
             <p className="eyebrow">멈췄습니다</p>
-            <h2>만들지 못했습니다</h2>
+            <h2>웹툰 생성에 실패했어요</h2>
             {/* 하네스가 사유를 한글로 적어 보낸다 — 그대로 보여준다. */}
-            <p className="progress-sub">{job.error || "알 수 없는 이유로 멈췄습니다."}</p>
+            <p className="progress-sub">
+              {job.error || "생성하는 동안 문제가 발생해 웹툰을 완성하지 못했어요."}
+            </p>
+            {back && <p className="progress-back">{back}</p>}
           </header>
           <button type="button" className="btn btn-primary" style={{ width: "100%" }} onClick={onExit}>
-            홈으로
+            홈으로 가기
           </button>
         </div>
       </section>

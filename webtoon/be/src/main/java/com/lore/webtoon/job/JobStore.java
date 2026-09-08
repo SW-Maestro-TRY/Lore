@@ -88,9 +88,9 @@ public class JobStore {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void failed(Long id, String why) {
+    public void failed(Long id, String why, Refunded refunded) {
         jobs.findById(id).ifPresent(job -> {
-            job.failed(why, Instant.now());
+            job.failed(why, refunded, Instant.now());
             jobs.save(job);
         });
         directions.remove(id);

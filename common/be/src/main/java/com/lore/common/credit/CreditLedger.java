@@ -57,12 +57,17 @@ public class CreditLedger {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean write(Long userId, int delta, CreditReason reason, CreditDomain domain,
                          String refId, String memo) {
-        if (events.existsByUserIdAndReasonAndRefId(userId, reason, refId)) {
+        /* **비었으면 여기서 채운다.** domain 은 유일키에 들어가는데, 비운 채로
+           찾으면 어떤 줄과도 안 맞아서 「이미 적혔나」가 늘 아니오가 된다 —
+           같은 일이 몇 번이고 다시 적힌다. 적을 때만 채우고 찾을 때는 안 채우면
+           찾는 값과 적힌 값이 갈린다. */
+        CreditDomain where = domain == null ? CreditDomain.COMMON : domain;
+        if (events.existsByUserIdAndReasonAndDomainAndRefId(userId, reason, where, refId)) {
             return false;
         }
         try {
             events.saveAndFlush(CreditEvent.of(
-                    userId, delta, reason, domain, refId, memo, Instant.now(clock)));
+                    userId, delta, reason, where, refId, memo, Instant.now(clock)));
             return true;
         } catch (DataIntegrityViolationException race) {
             log.debug("같은 크레딧 기록이 거의 동시에 들어왔습니다 (user={}, {} {})",
