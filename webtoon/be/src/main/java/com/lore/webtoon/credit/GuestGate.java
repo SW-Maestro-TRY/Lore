@@ -32,7 +32,7 @@ import java.util.HexFormat;
  *
  * <h2>얼마나 막는가</h2>
  *
- * 기본 하루 2회다. 한 편에 실측 1,148원이고, "한번 만들어 보고 마음에 들면
+ * 기본 하루 3회다. 한 편에 실측 1,148원이고, "한번 만들어 보고 마음에 들면
  * 로그인" 이 이 제품이 바라는 흐름이라 그 한 번을 넉넉히 두 번으로 잡았다.
  * 이 숫자는 {@code lore.webtoon.spend.guest-free} 로 바꾼다.
  *
@@ -51,6 +51,31 @@ public class GuestGate {
 
     private static final Logger log = LoggerFactory.getLogger(GuestGate.class);
 
+    /**
+     * "이 사람 몫은 여기서 이미 셌다" 는 표시. 하네스가 이것을 보면 자기 uid
+     * 크레딧을 건드리지 않는다.
+     *
+     * <h2>왜 필요한가</h2>
+     *
+     * 하네스에도 크레딧이 있다({@code landing/credits.py} — 브라우저가 만든
+     * uid 로 세는 것). 그래서 로그인 안 한 사람이 <b>두 겹으로</b> 막혀
+     * 있었다: 여기서 하루 몇 편, 하네스에서 uid 잔액. 화면은 앞엣것을 보고
+     * 「오늘 무료 3편」이라 적는데 뒤엣것이 「크레딧이 모자랍니다」로 튕길 수
+     * 있다 — 한 사람에게 서로 다른 두 진실을 말하는 상태다.
+     *
+     * 게스트에게는 장부가 필요 없다. 필요한 것은 <b>오늘 몇 번 썼나</b>
+     * 하나뿐이고, 그것은 여기가 안다. 잔액·지급·환원·내역 같은 금전 장부는
+     * 계정이 있는 사람 것이다({@code CreditService}) — 지어낼 수 없는
+     * 식별자에만 돈을 붙인다.
+     *
+     * <h2>왜 하네스에서 아예 지우지 않나</h2>
+     *
+     * 하네스는 이 스프링 없이 혼자도 뜬다(프로토타입 화면이 그렇게 쓴다).
+     * 그때는 uid 크레딧이 <b>유일한</b> 담장이라 지우면 아무 담장이 없어진다.
+     * 그래서 없애는 대신, 앞에 선 서버가 이미 셌다고 말할 때만 비켜서게 한다.
+     */
+    public static final String GATED_HEADER = "X-Lore-Guest-Gated";
+
     /** 사람이 "오늘" 이라고 부르는 날과 같아야 한다. */
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
@@ -59,14 +84,9 @@ public class GuestGate {
     private final String salt;
     private final Clock clock;
 
-    /* 생성자가 둘이라(아래 하나는 검사에서 시계를 갈아 끼우려고 둔 것)
-       스프링이 어느 것으로 만들지 못 고른다 — 표시가 없으면 인자 없는
-       생성자를 찾다가 서버가 아예 안 뜬다. 검사만으로는 안 잡힌다: 검사는
-       이 클래스를 손으로 만들거나 가짜로 바꿔치기하므로 스프링이 고를 일이
-       없다. 실제 DB 로 띄워 보고서야 나왔다. */
     @Autowired
     public GuestGate(GuestQuotaRepository quotas,
-                     @Value("${lore.webtoon.spend.guest-free:2}") long freePerDay,
+                     @Value("${lore.webtoon.spend.guest-free:3}") long freePerDay,
                      @Value("${lore.webtoon.spend.ip-salt:}") String salt) {
         this(quotas, freePerDay, salt, Clock.system(ZONE));
     }

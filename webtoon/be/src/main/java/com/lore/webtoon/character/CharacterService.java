@@ -77,10 +77,7 @@ public class CharacterService {
             Executors.newSingleThreadExecutor(r -> Thread.ofVirtual()
                     .name("webtoon-character").unstarted(r));
 
-    /* 생성자가 둘이다(아래 하나는 검사에서 시계를 갈아 끼우려고 둔 것) — 표시가
-       없으면 스프링이 인자 없는 생성자를 찾다가 서버가 아예 안 뜬다. 이 저장소에서
-       GuestGate · SpendGuard · CreditService 가 같은 자리에서 걸렸다. 검사만으로는
-       안 잡힌다: 검사는 이 클래스를 손으로 만들어서 스프링이 고를 일이 없다. */
+    /* 생성자가 둘이다(아래 하나는 검사에서 시계를 갈아 끼우려고 둔 것) */
     @Autowired
     public CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
                             PrivateArt art, CreditGate credits,

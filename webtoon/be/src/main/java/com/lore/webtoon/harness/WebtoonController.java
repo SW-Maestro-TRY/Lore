@@ -187,13 +187,25 @@ public class WebtoonController {
 
         byte[] body = request.getInputStream().readAllBytes();
 
-        // 계정에서 낼 사람이면 하네스에 "이미 받았다" 고 알린다. 안 알리면
-        // 하네스가 자기 uid 크레딧에서 또 받아 두 번 내게 된다.
+        /* 하네스에 **몫은 여기서 이미 셌다**고 알린다.
+         *
+         * 안 알리면 하네스가 자기 uid 크레딧에서 또 받는다. 로그인한 사람은
+         * 계정과 uid 두 곳에서 두 번 내고, 게스트는 위 {@link GuestGate} 의
+         * 하루 몇 편과 uid 잔액에 **두 겹으로** 막힌다 — 화면은 「오늘 무료
+         * 3편」이라 적는데 하네스가 「크레딧이 모자랍니다」로 튕길 수 있다.
+         *
+         * 이 표시를 하네스가 믿어도 되는 이유는 하네스가 밖에 안 열려 있기
+         * 때문이다. 브라우저는 늘 이 스프링을 거치고, 하네스 주소는 서버
+         * 안에서만 닿는다. 그 전제가 깨지면 이 표시부터 다시 봐야 한다. */
         HttpHeaders out = headers;
-        if (me != null) {
+        if (me != null || counted) {
             out = new HttpHeaders();
             out.addAll(headers);
-            out.set(CreditGate.BILLED_HEADER, String.valueOf(credits.cost()));
+            if (me != null) {
+                out.set(CreditGate.BILLED_HEADER, String.valueOf(credits.cost()));
+            } else {
+                out.set(GuestGate.GATED_HEADER, "1");
+            }
         }
 
         ResponseEntity<byte[]> answer = gateway.forward(
