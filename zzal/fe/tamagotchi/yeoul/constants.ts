@@ -205,6 +205,13 @@ export const FRAME_KEYS = ['joy', 'eat', 'wash', 'base', 'sad', 'practice', 'shy
 export type FrameKey = (typeof FRAME_KEYS)[number];
 
 /**
+ * 기본 8종. **방에 들어왔다는 것은 이 여덟이 다 만들어졌다는 뜻**이다 —
+ * 부화가 끝나야 '태어났어요' 가 뜨고, 그걸 눌러야 방에 들어온다.
+ * 그래서 진짜 방에서 이 중 하나라도 없으면 그건 폴백할 일이 아니라 **고장**이다.
+ */
+export const BASIC_KEYS = ['base', 'eat', 'joy', 'sad', 'sick', 'practice', 'shy', 'call'] as const;
+
+/**
  * 발밑 투명 여백. 그림 한 장은 313 × 350 인데 배경을 지우고 나면 **아래 54px 이 빈칸**이라,
  * 칸을 바닥선에 맞추면 아이가 그만큼 떠 보인다(2026-09-07 상훈님 지적).
  *

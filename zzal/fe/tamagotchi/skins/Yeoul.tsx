@@ -79,14 +79,14 @@ export default function Yeoul(_props: SkinProps) {
       </div>
       </LiveProvider>
 
-      <DevJump y={y} />
+      <DevJump y={y} missingBasics={live.missingBasics} />
     </div>
   );
 }
 
 // ── 개발용 이동 창 — 실서비스에서는 이 아래를 통째로 지운다 ──────────────
 
-function DevJump({ y }: { y: ReturnType<typeof useYeoul> }) {
+function DevJump({ y, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; missingBasics?: string[] }) {
   const [open, setOpen] = useState(false);
   const { s, actions } = y;
 
@@ -196,6 +196,15 @@ function DevJump({ y }: { y: ReturnType<typeof useYeoul> }) {
           </div>
         </div>
       ))}
+
+      {/* ★ 기본 8종 중 서버가 그림을 안 준 것. **방에 들어온 시점에 비어 있어야 한다.**
+          지금 가짜 생성은 6종만 만들어서 sick·call 이 늘 뜬다 — 정상적인 경고다. */}
+      {missingBasics.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 9px', borderRadius: radius.sm, background: C.accentSoft }}>
+          <span style={{ font: `10px ${MONO}`, color: C.accent }}>기본 8종 중 그림 없음</span>
+          <span style={{ font: `10px ${MONO}`, color: C.accent }}>{missingBasics.join(' · ')}</span>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingTop: 2 }}>
         {WEB_KEYS.map(([k, text]) => (

@@ -13,6 +13,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { assetUrl } from '../../lib/assets';
 import { MOTION_FALLBACK, YEOUL_MOTION } from '../constants';
+import { BASIC_KEYS } from './constants';
 import { createPet, getPet, type PetDetail } from '../../lib/pet';
 import { uploadImage } from '../../lib/upload';
 
@@ -30,6 +31,12 @@ export interface Live {
   failed: boolean;
   /** 부화 중 지금 하는 일 한 줄(서버 문구). */
   step: string | null;
+  /**
+   * 기본 8종 중 **서버가 그림을 안 준 것**. 있으면 안 되는 상태다(→ `BASIC_KEYS` 주석).
+   * ⚠️ 지금 개발 중에는 가짜 생성이 6종만 만들어서 `sick`·`call` 이 늘 여기 담긴다 —
+   *   **정상적인 경고**다. 진짜 생성으로 바꾸면 비어야 한다. 이 경고를 지우지 말 것.
+   */
+  missingBasics: string[];
   /** 서버가 준 내 아이 그림(카탈로그 key). 아직 없으면 null → 화면은 여울로 폴백한다. */
   img: (key: string) => string | null;
   /** 파일 하나를 올린다. 실패하면 error 에 한국어 한 줄이 남는다. */
@@ -41,7 +48,7 @@ export interface Live {
 
 const EMPTY: Live = {
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null,
-  ready: false, failed: false, step: null,
+  ready: false, failed: false, step: null, missingBasics: [],
   img: () => null, upload: async () => {}, start: async () => {}, reset: () => {},
 };
 
@@ -131,6 +138,9 @@ export function useHatchState(): Live {
     ready: pet?.phase === 'ALIVE',
     failed: pet?.phase === 'FAILED' || pet?.phase === 'DEAD',
     step: pet?.step ?? null,
+    missingBasics: pet?.phase === 'ALIVE'
+      ? BASIC_KEYS.filter((k) => !pet.motions?.some((m) => m.key === k && m.basicImageKey))
+      : [],
     img, upload, start, reset,
   };
 }
@@ -205,21 +215,38 @@ export function useFootPad(src: string, fallback: number): number {
 /**
  * **어떤 그림을 그릴지 정하는 단 한 곳.** 축이 둘이고, 각각 순서가 있다.
  *
- *   누구를  :  서버가 준 내 아이 그림  →  없으면 여울 폴백
+ *   누구를  :  내 아이 그림  →  (여울 샘플 방에서만) 여울
  *   무엇을  :  지금 하는 동작  →  없으면 상태(아픔·잠·배고픔…)  →  기본
  *
  * '무엇을' 은 화면이 `key` 로 정해 넘기고(→ `useYeoul` 의 `spriteKey`), 여기서는 '누구를' 만 푼다.
  *
- * ★ **잠긴 동작은 대신 그린다.** 2층 동작(`wash`·`sleep`·`nod` …)은 아직 안 열렸을 수 있어,
- *   그 자리를 비우면 아무 그림도 안 나온다. `MOTION_FALLBACK` 이 그때 무엇을 대신 그릴지 적은 표다.
- *   순서는 **열린 진짜 동작 → 폴백 동작 → 여울**. 이 판정을 여기 한 곳에서만 한다 —
- *   화면마다 따로 하면 어느 한 곳이 빠지고, 빠진 자리는 빈 그림이라 조용히 티가 안 난다.
+ * ★ **진짜 방에서는 여울로 내려가지 않는다**(상훈님 2026-09-08).
+ *   방에 들어왔다는 것은 기본 8종이 다 만들어졌다는 뜻이라(→ `BASIC_KEYS`), 거기서 여울이 보이면
+ *   그건 폴백이 아니라 **고장을 덮은 것**이다. 그래서 진짜 방의 폴백은 **기본 8종 안에서** 끝난다:
+ *     2층 동작(`wash`·`sleep`·`nod` …) → `MOTION_FALLBACK` → 기본 8종. 사슬은 전부 기본 8종에서 끝난다(실측).
+ *   그래도 없으면 `base` 로 버티되 **콘솔에 경고**를 남긴다 — 조용히 넘어가면 생성이 8종을 못 채워도 아무도 모른다.
+ *
+ * ★ 여울은 **샘플 방 전용**이다. 거기서는 여울이 주인공이라 그게 맞다.
+ *   펫이 아예 없는데 진짜 방에 있는 경우는 **개발용 '이동' 으로 건너뛴 때뿐**이라, 그때만 여울로 버틴다.
  */
-export function spriteUrl(live: Live, key: string): string {
+const warned = new Set<string>();
+
+export function spriteUrl(live: Live, key: string, sample = false): string {
   const alt = MOTION_FALLBACK[key];
-  return live.img(key)
-    ?? (alt ? live.img(alt) : null)
-    ?? YEOUL_MOTION[key]
-    ?? (alt ? YEOUL_MOTION[alt] : undefined)
-    ?? YEOUL_MOTION.base;
+  const yeoul = YEOUL_MOTION[key] ?? (alt ? YEOUL_MOTION[alt] : undefined) ?? YEOUL_MOTION.base;
+
+  // 여울 샘플 방 · 펫이 없는 개발용 경로 — 여울로 그린다.
+  if (sample || !live.petId) return yeoul;
+
+  const mine = live.img(key) ?? (alt ? live.img(alt) : null);
+  if (mine) return mine;
+
+  const base = live.img('base');
+  if (!warned.has(key)) {
+    warned.add(key);
+    // eslint-disable-next-line no-console
+    console.warn(`[여울] 내 아이 그림이 없습니다 — key=${key}${alt ? ` (폴백 ${alt} 도 없음)` : ''}. `
+      + `${base ? 'base 로 버팁니다.' : 'base 마저 없어 여울로 버팁니다.'} 기본 8종은 방에 들어온 시점에 다 있어야 합니다.`);
+  }
+  return base ?? yeoul;
 }
