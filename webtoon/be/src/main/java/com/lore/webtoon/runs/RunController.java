@@ -2,6 +2,8 @@ package com.lore.webtoon.runs;
 
 import com.lore.webtoon.WebtoonApi;
 import com.lore.webtoon.art.PageStore;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -32,8 +34,8 @@ import java.util.Map;
  * <h2>주소를 하나씩 적는 이유</h2>
  *
  * 스프링은 더 구체적인 매핑을 먼저 고른다. 여기 적힌 것만 이 클래스가 받고,
- * 안 적은 것(예: 한 편 통째로 내려받는 {@code /runs/{id}/episode.png})은
- * 그대로 넓은 그물로 떨어져 하네스가 받는다 — <b>한 번에 다 안 옮겨도 된다.</b>
+ * 안 적은 것(편집실이 쓰는 {@code raw=1} 처럼)은 그대로 넓은 그물로 떨어져
+ * 하네스가 받는다 — <b>한 번에 다 안 옮겨도 된다.</b>
  */
 @Tag(name = "Webtoon", description = "웹툰 스튜디오")
 @RestController
@@ -45,10 +47,12 @@ public class RunController {
 
     private final RunService runs;
     private final PageStore pages;
+    private final EpisodeExport export;
 
-    public RunController(RunService runs, PageStore pages) {
+    public RunController(RunService runs, PageStore pages, EpisodeExport export) {
         this.runs = runs;
         this.pages = pages;
+        this.export = export;
     }
 
     /**
@@ -77,6 +81,48 @@ public class RunController {
     }
 
     /**
+     * 한 편을 통째로 내려받는다 — <b>LORE 표시가 붙는 유일한 길이다.</b>
+     *
+     * 만든 사람은 결과물을 SNS 에 올린다. 그때 그림만 돌아다니고 어디서 만든
+     * 것인지가 안 남으면 퍼질수록 우리는 아무것도 못 얻는다. 반대로 표시가
+     * 있으면 그림 한 장이 그대로 유입 경로가 된다.
+     *
+     * 화면에서 보는 그림에는 안 붙는다({@link #page}) — 표시는 밖으로 나가는
+     * 파일의 성질이지 저장물의 성질이 아니다.
+     */
+    @Operation(summary = "한 편 내려받기",
+            description = "낱장을 이어 붙이고 LORE 표시를 찍어서 준다.")
+    @GetMapping(value = "/{runId}/episode.png", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> episode(@PathVariable String runId) {
+        Map<String, Object> meta = runs.result(runId);
+        if (meta == null) {
+            return ResponseEntity.notFound().build();
+        }
+        byte[] png = export.png(runId, captionOf(meta));
+        if (png == null) {
+            return ResponseEntity.notFound().build();
+        }
+        /* 받는 파일 이름은 작품 번호다. 제목을 쓰면 한글·따옴표가 섞여 브라우저마다
+           다르게 저장되고, 같은 작품을 두 번 받으면 이름이 겹친다. */
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + runId + ".png\"")
+                .contentType(MediaType.IMAGE_PNG)
+                .body(png);
+    }
+
+    /** 띠 오른쪽에 적을 한 줄 — 파이썬의 {@code episode_caption} 과 같은 모양. */
+    private static String captionOf(Map<String, Object> meta) {
+        Object name = meta.get("character");
+        String who = name == null ? "" : String.valueOf(name).trim();
+        return who.isEmpty() ? "1화" : who + " · 1화";
+    }
+
+    /* {@code raw=1} 은 안 받는다 — 그건 <b>얹은 것(말풍선) 없는 밑그림</b>을
+       달라는 뜻이고 편집실만 쓴다. 편집실은 아직 하네스에 있으므로(얹는 것을
+       그 폴더에 저장한다) 그 요청은 넓은 그물로 그냥 흘려 보낸다. 여기서
+       받아 S3 것을 주면 이미 구워진 그림 위에 또 얹게 된다. */
+    /**
      * 완성본의 한 장. <b>그림을 실어 보내지 않고 있는 자리를 알려 준다.</b>
      *
      * 그림은 이미 S3 에 있고 공개된 것은 CloudFront 가 내준다 — 그걸 이
@@ -84,13 +130,9 @@ public class RunController {
      * KB 인 것이 목록 한 화면에 수십 장이다. 비공개 자리에 있는 것은 잠깐
      * 열리는 주소를 만들어 준다({@code PageStore.urlOf}).
      *
-     * 아직 안 올라간 작품은 404 가 아니라 <b>넓은 그물로 넘긴다</b> — 옛
-     * 작품은 그림이 하네스 디스크에만 있어서 파이썬만 낼 수 있다.
+     * 여기 그림에는 <b>LORE 표시가 안 붙는다</b> — 표시는 밖으로 나가는 파일에만
+     * 붙는다({@link #episode}).
      */
-    /* {@code raw=1} 은 안 받는다 — 그건 <b>얹은 것(말풍선) 없는 밑그림</b>을
-       달라는 뜻이고 편집실만 쓴다. 편집실은 아직 하네스에 있으므로(얹는 것을
-       그 폴더에 저장한다) 그 요청은 넓은 그물로 그냥 흘려 보낸다. 여기서
-       받아 S3 것을 주면 이미 구워진 그림 위에 또 얹게 된다. */
     @Operation(summary = "완성본의 한 장",
             description = "S3(또는 잠깐 열리는 주소)로 넘긴다. 없으면 404.")
     @GetMapping(value = "/{runId}/page/{no}", params = "!raw")

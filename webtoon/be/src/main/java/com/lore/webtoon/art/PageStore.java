@@ -162,6 +162,31 @@ public class PageStore {
                 .toList();
     }
 
+    /**
+     * 장 번호 -> S3 키. <b>가장 큰 폭</b>의 것을 준다.
+     *
+     * 한 편을 통째로 내보낼 때 쓴다 — 그때는 화면에 맞춰 줄인 것이 아니라
+     * 가진 것 중 제일 큰 것을 이어야 한다. 목록 썸네일(320)로 이으면 받은
+     * 파일이 뿌옇다.
+     *
+     * 장 번호 순서를 지킨 채로 준다({@code LinkedHashMap}) — 순서가 흐트러지면
+     * 한 편이 뒤죽박죽으로 이어진다.
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, String> keysOf(String runId) {
+        Map<Integer, String> out = new LinkedHashMap<>();
+        Map<Integer, Integer> best = new LinkedHashMap<>();
+        // 폭 오름차순으로 오므로 나중 것이 늘 더 크다 — 그대로 덮어쓰면 된다.
+        for (WebtoonPage page : pages.findByRunIdOrderByPageNoAscWidthAsc(runId)) {
+            Integer had = best.get(page.getPageNo());
+            if (had == null || page.getWidth() >= had) {
+                best.put(page.getPageNo(), page.getWidth());
+                out.put(page.getPageNo(), page.getS3Key());
+            }
+        }
+        return out;
+    }
+
     /** S3 에 올라와 있는 작품인가. */
     @Transactional(readOnly = true)
     public boolean has(String runId) {
