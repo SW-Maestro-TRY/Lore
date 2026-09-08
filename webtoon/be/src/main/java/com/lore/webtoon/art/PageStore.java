@@ -187,6 +187,33 @@ public class PageStore {
         return out;
     }
 
+    /**
+     * 키 하나를 읽을 수 있는 주소로. 키가 없으면 {@code null}.
+     *
+     * 구운 그림처럼 <b>이 표에 없는 것</b>을 내보낼 때 쓴다 — 자리(공개/비공개)에
+     * 따라 CloudFront 주소나 잠깐 열리는 주소를 고르는 규칙은 같아야 한다.
+     */
+    @Transactional(readOnly = true)
+    public String urlOfKey(String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        return PrivateArt.isPrivate(key) ? art.temporaryUrl(key) : url(key);
+    }
+
+    /** 장 번호 -> 가진 것 중 가장 큰 폭. 구운 것을 같은 폭으로 적을 때 쓴다. */
+    @Transactional(readOnly = true)
+    public Map<Integer, Integer> widthsOf(String runId) {
+        Map<Integer, Integer> out = new LinkedHashMap<>();
+        for (WebtoonPage page : pages.findByRunIdOrderByPageNoAscWidthAsc(runId)) {
+            Integer had = out.get(page.getPageNo());
+            if (had == null || page.getWidth() >= had) {
+                out.put(page.getPageNo(), page.getWidth());
+            }
+        }
+        return out;
+    }
+
     /** S3 에 올라와 있는 작품인가. */
     @Transactional(readOnly = true)
     public boolean has(String runId) {

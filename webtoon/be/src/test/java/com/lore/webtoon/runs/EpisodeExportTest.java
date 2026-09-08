@@ -36,12 +36,16 @@ import static org.mockito.Mockito.when;
 class EpisodeExportTest {
 
     private PageStore pages;
+    private BakeService bakery;
     private EpisodeExport export;
     private final Map<Integer, BufferedImage> sheets = new LinkedHashMap<>();
 
     @BeforeEach
     void 세운다() {
         pages = mock(PageStore.class);
+        // 구운 것이 없는 작품 — 여기서 보는 것은 잇기와 표시다.
+        bakery = mock(BakeService.class);
+        when(bakery.keysOf(anyString())).thenReturn(new LinkedHashMap<>());
         S3Storage storage = mock(S3Storage.class);
         // "S3 에서 받는다" 를 대신한다 — 키가 곧 몇 번째 장인가다.
         doAnswer(c -> {
@@ -52,7 +56,7 @@ class EpisodeExportTest {
             Files.deleteIfExists(tmp);
             return null;
         }).when(storage).download(anyString(), any(Path.class));
-        export = new EpisodeExport(pages, storage);
+        export = new EpisodeExport(pages, bakery, storage);
     }
 
     /** 한 장 짜 넣는다. 키는 장 번호를 글자로 쓴 것이다. */

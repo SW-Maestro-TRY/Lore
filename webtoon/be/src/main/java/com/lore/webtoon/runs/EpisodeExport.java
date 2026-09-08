@@ -78,11 +78,13 @@ public class EpisodeExport {
     };
 
     private final PageStore pages;
+    private final BakeService bakery;
     private final S3Storage storage;
     private Font base;
 
-    public EpisodeExport(PageStore pages, S3Storage storage) {
+    public EpisodeExport(PageStore pages, BakeService bakery, S3Storage storage) {
         this.pages = pages;
+        this.bakery = bakery;
         this.storage = storage;
     }
 
@@ -110,10 +112,17 @@ public class EpisodeExport {
 
     /* ---- 낱장 가져오기 ---------------------------------------------------- */
 
-    /** S3 에 있는 낱장을 장 번호 순서로. 못 읽은 장은 건너뛴다. */
+    /**
+     * S3 에 있는 낱장을 장 번호 순서로. 못 읽은 장은 건너뛴다.
+     *
+     * <b>구운 것이 있으면 그것을 쓴다.</b> 얹어 놓고 받았더니 말풍선이 없더라는
+     * 것이 가장 알아채기 어려운 실패다 — 화면에서 본 것과 받은 파일이 다르면
+     * 사람은 자기가 저장을 안 한 줄 안다.
+     */
     private List<BufferedImage> load(String runId) {
         List<BufferedImage> out = new ArrayList<>();
-        Map<Integer, String> keys = pages.keysOf(runId);
+        Map<Integer, String> keys = new java.util.LinkedHashMap<>(pages.keysOf(runId));
+        keys.putAll(bakery.keysOf(runId));
         for (Map.Entry<Integer, String> one : keys.entrySet()) {
             Path tmp = null;
             try {

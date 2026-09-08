@@ -1,5 +1,7 @@
 package com.lore.webtoon.runs;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.webtoon.art.PageStore;
 import org.springframework.http.HttpHeaders;
@@ -11,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -48,11 +52,73 @@ public class RunController {
     private final RunService runs;
     private final PageStore pages;
     private final EpisodeExport export;
+    private final OverlayStore overlays;
+    private final BakeService bakery;
+    /* **경계에서는 Map 으로 주고받는다.**
+     *
+     * 이 앱의 HTTP 변환기는 Jackson 3(tools.jackson) 인데, 얹은 것을 다루는
+     * 코드는 저장소의 다른 곳과 같은 Jackson 2 를 쓴다. 그 타입을 그대로
+     * 내보내면 변환기가 못 읽어서, 읽기는 <b>속살(array·boolean…)이 그대로
+     * 나가고</b> 쓰기는 500 이 났다 — 실제로 그랬다. 안에서는 JsonNode 로,
+     * 밖에서는 Map 으로 오간다. */
+    private final ObjectMapper mapper = new ObjectMapper();
 
-    public RunController(RunService runs, PageStore pages, EpisodeExport export) {
+    public RunController(RunService runs, PageStore pages, EpisodeExport export,
+                         OverlayStore overlays, BakeService bakery) {
         this.runs = runs;
         this.pages = pages;
         this.export = export;
+        this.overlays = overlays;
+        this.bakery = bakery;
+    }
+
+    /* ---- 편집실 ----------------------------------------------------------- */
+
+    /**
+     * 이 작품에 얹어 둔 것 — 말풍선 · 스티커 · 효과음.
+     *
+     * 편집실이 열릴 때 한 번 부른다. 없으면 빈 것을 준다 — 화면은 그것을
+     * "아직 안 얹었다" 로 읽는다.
+     */
+    @Operation(summary = "얹은 것 읽기")
+    @GetMapping("/{runId}/overlay")
+    public Map<String, Object> overlay(@PathVariable String runId,
+                                       @RequestParam(defaultValue = "1") int ep) {
+        return asMap(overlays.read(runId, ep));
+    }
+
+    /**
+     * 얹은 것을 담는다. <b>편집실이 글을 고칠 때마다 부른다</b>(자동 저장).
+     *
+     * 통째로 덮어쓴다 — 무엇이 지워졌는지를 따로 알려 주지 않아도 되고,
+     * 마지막으로 본 화면이 곧 저장된 것이 된다.
+     */
+    @Operation(summary = "얹은 것 저장")
+    @PostMapping("/{runId}/overlay")
+    public Map<String, Object> saveOverlay(@PathVariable String runId,
+                                           @RequestParam(defaultValue = "1") int ep,
+                                           @RequestBody(required = false) Map<String, Object> body) {
+        return Map.of("ok", true, "items", overlays.save(runId, ep, asNode(body)));
+    }
+
+    /**
+     * 얹은 것을 그림에 굽는다 — 그리고 받을 주소를 알려 준다.
+     *
+     * 화면은 굽자마자 그 주소로 파일을 받는다. 원본은 안 건드리므로 편집실은
+     * 계속 밑그림을 보고, 몇 번을 구워도 말풍선이 겹쳐 쌓이지 않는다.
+     */
+    @Operation(summary = "구워서 파일로",
+            description = "본문에 얹은 것이 실려 오면 먼저 저장하고 굽는다.")
+    @PostMapping("/{runId}/bake")
+    public Map<String, Object> bake(@PathVariable String runId,
+                                    @RequestParam(defaultValue = "1") int ep,
+                                    @RequestBody(required = false) Map<String, Object> body) {
+        int items = body != null && body.get("scenes") != null
+                ? overlays.save(runId, ep, asNode(body))
+                : overlays.count(overlays.read(runId, ep));
+        int sheets = bakery.bake(runId, ep);
+        return Map.of("ok", true, "items", items, "pages", sheets,
+                "url", PREFIX + "/" + runId + "/episode.png");
     }
 
     /**
@@ -111,6 +177,15 @@ public class RunController {
                 .body(png);
     }
 
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> asMap(JsonNode node) {
+        return mapper.convertValue(node, Map.class);
+    }
+
+    private JsonNode asNode(Map<String, Object> body) {
+        return body == null ? null : mapper.valueToTree(body);
+    }
+
     /** 띠 오른쪽에 적을 한 줄 — 파이썬의 {@code episode_caption} 과 같은 모양. */
     private static String captionOf(Map<String, Object> meta) {
         Object name = meta.get("character");
@@ -118,27 +193,31 @@ public class RunController {
         return who.isEmpty() ? "1화" : who + " · 1화";
     }
 
-    /* {@code raw=1} 은 안 받는다 — 그건 <b>얹은 것(말풍선) 없는 밑그림</b>을
-       달라는 뜻이고 편집실만 쓴다. 편집실은 아직 하네스에 있으므로(얹는 것을
-       그 폴더에 저장한다) 그 요청은 넓은 그물로 그냥 흘려 보낸다. 여기서
-       받아 S3 것을 주면 이미 구워진 그림 위에 또 얹게 된다. */
     /**
-     * 완성본의 한 장. <b>그림을 실어 보내지 않고 있는 자리를 알려 준다.</b>
+     * 완성본의 한 장. <b>구운 것이 있으면 그것</b>을 준다.
      *
-     * 그림은 이미 S3 에 있고 공개된 것은 CloudFront 가 내준다 — 그걸 이
-     * 서버가 받아서 다시 흘려보내면 같은 파일이 두 번 오가고, 한 장에 수백
-     * KB 인 것이 목록 한 화면에 수십 장이다. 비공개 자리에 있는 것은 잠깐
-     * 열리는 주소를 만들어 준다({@code PageStore.urlOf}).
+     * 그림을 실어 보내지 않고 있는 자리를 알려 준다 — 그림은 이미 S3 에 있고
+     * 공개된 것은 CloudFront 가 내준다. 이 서버가 받아서 다시 흘려보내면 같은
+     * 파일이 두 번 오가고, 한 장에 수백 KB 인 것이 목록 한 화면에 수십 장이다.
+     *
+     * {@code raw=1} 은 <b>얹은 것 없는 밑그림</b>을 달라는 뜻이고 편집실만
+     * 쓴다 — 편집실은 말풍선을 따로 그려 얹으므로, 밑그림에까지 구워져 있으면
+     * 두 겹으로 보인다.
      *
      * 여기 그림에는 <b>LORE 표시가 안 붙는다</b> — 표시는 밖으로 나가는 파일에만
      * 붙는다({@link #episode}).
      */
     @Operation(summary = "완성본의 한 장",
-            description = "S3(또는 잠깐 열리는 주소)로 넘긴다. 없으면 404.")
-    @GetMapping(value = "/{runId}/page/{no}", params = "!raw")
+            description = "구운 것이 있으면 그것. raw=1 이면 밑그림. 없으면 404.")
+    @GetMapping("/{runId}/page/{no}")
     public ResponseEntity<Void> page(@PathVariable String runId, @PathVariable int no,
-                                     @RequestParam(defaultValue = "1080") int w) {
-        String where = pages.urlOf(runId, no, w);
+                                     @RequestParam(defaultValue = "1080") int w,
+                                     @RequestParam(required = false) String raw) {
+        boolean wantRaw = raw != null && !raw.isBlank() && !"0".equals(raw);
+        String where = wantRaw ? null : pages.urlOfKey(bakery.keyOf(runId, no));
+        if (where == null) {
+            where = pages.urlOf(runId, no, w);
+        }
         return where == null
                 ? ResponseEntity.notFound().build()
                 : ResponseEntity.status(302).location(URI.create(where)).build();
