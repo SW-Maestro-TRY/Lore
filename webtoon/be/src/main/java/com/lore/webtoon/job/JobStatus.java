@@ -37,10 +37,6 @@ public enum JobStatus {
         return wire;
     }
 
-    public boolean isAwaiting() {
-        return this == AWAITING_SHEET || this == AWAITING_PICK;
-    }
-
     public boolean isOver() {
         return this == DONE || this == ERROR;
     }

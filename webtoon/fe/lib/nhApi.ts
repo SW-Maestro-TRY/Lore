@@ -313,15 +313,6 @@ export function myAccountRuns(): Promise<RunCard[]> {
   return appRequest<RunCard[]>("/api/webtoon/v1/my/runs");
 }
 
-/** 이 브라우저의 크레딧 잔액.
- *
- *  ⚠ 계정이 아니라 **uid** 로 센다. 로그인해도 지금은 이 값이 안 따라온다 —
- *  계정에 붙이는 것은 #223, 가격·결제는 #16 · #155 다. 그래도 **실제 잔액**
- *  이다(만들 때 여기서 깎인다). 화면에 지어낸 숫자를 쓰지 않는다. */
-export function creditBalance(): Promise<{ balance: number }> {
-  return call<{ balance: number }>(`/credits?uid=${encodeURIComponent(getUid())}`);
-}
-
 /** 둘러보기에 거는가 내리는가. 실패하면 화면도 되돌려야 한다 — 껐다고
  *  보이는데 실제로는 걸려 있는 것이 제일 나쁘다.
  *
