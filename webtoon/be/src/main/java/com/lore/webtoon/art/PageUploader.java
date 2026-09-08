@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.s3.S3Service;
 import com.lore.common.s3.S3Storage;
+import com.lore.webtoon.work.WorkLedger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,30 +19,6 @@ import java.util.function.Consumer;
 
 /**
  * 다 그린 그림을 S3 로 올리고 그 자리를 적는다.
- *
- * <h2>왜 자바가 올리나</h2>
- *
- * 전에는 파이썬이 다 했다 — 폭을 줄이고, boto3 로 올리고, 올린 주소를 이
- * 서버에 <b>HTTP 로 도로 알려</b> 줬다. 그래서 두 가지가 어긋났다.
- *
- * <b>하나.</b> 버킷 이름 · 키 규칙({@code images/<도메인>/<uuid>}) · 캐시
- * 헤더를 자바(common 의 {@link S3Service} · {@link S3Storage})와 파이썬이
- * 각자 한 벌씩 적어 두고 있었다. 두 벌은 반드시 어긋나고, 어긋나면 <b>올라
- * 가긴 하는데 읽을 때 403 이 난다</b> — 그 사고가 두 파일 주석에 똑같이
- * 적혀 있다. 이제 규칙을 아는 곳은 {@link S3Service#newKey} 하나다.
- *
- * <b>둘.</b> 올리는 것과 적는 것이 다른 일이었다. 알리는 쪽만 조용히 실패
- * 하면(내부 토큰이 없으면 그랬다 — 실제로 겪었다) 그림은 S3 에 있는데 DB 는
- * 비고, 화면에는 "올렸습니다" 가 찍힌다. 이제 올린 그 자리에서 바로 적으므로
- * 둘이 갈릴 수가 없다. 알림용 내부 주소도, 그 토큰도 필요 없다.
- *
- * <h2>줄이는 일은 그대로 파이썬이 한다</h2>
- *
- * 원본을 폭마다 줄이는 코드는 이미 파이썬에 있고 잘 돈다. 자바로 옮길 이유가
- * 없다 — 옮기면 그거야말로 두 벌이 된다. 파이썬은 만들어서 디스크에 놓고
- * <b>경로만</b> 알려 주고({@code s3_upload.py --prepare}), 여기서 그 파일을
- * 읽어 올린다. 둘은 같은 기계에 있으므로(이 서버가 그 스크립트를 프로세스로
- * 띄운다) 파일이 네트워크를 타지 않는다.
  */
 @Service
 public class PageUploader {
@@ -55,12 +32,14 @@ public class PageUploader {
 
     private final S3Storage storage;
     private final PageStore pages;
+    private final WorkLedger ledger;
     private final String bucket;
 
-    public PageUploader(S3Storage storage, PageStore pages,
+    public PageUploader(S3Storage storage, PageStore pages, WorkLedger ledger,
                         @Value("${app.s3.content-bucket:}") String bucket) {
         this.storage = storage;
         this.pages = pages;
+        this.ledger = ledger;
         this.bucket = bucket == null ? "" : bucket.trim();
     }
 
@@ -117,7 +96,15 @@ public class PageUploader {
         if (done.isEmpty()) {
             return 0;
         }
-        int fresh = pages.record(runId, done);
+        /* **공개 여부를 보고 적는다.**
+         *
+         * 올릴 때는 늘 열리는 자리에 올린다 — 올리는 쪽은 이 작품이 공개인지
+         * 모르고, 알 필요도 없다. 비공개면 적으면서 CloudFront 가 안 내주는
+         * 자리로 옮긴다.
+         *
+         * 이 한 줄을 빠뜨리면 <b>비공개 작품의 그림이 주소만 알면 누구나
+         * 보이는 자리에 남는다.</b> 목록에서 가려질 뿐 파일은 열려 있다. */
+        int fresh = pages.record(runId, done, ledger.isPublic(runId));
         if (onLine != null) {
             onLine.accept("[S3] 그림 " + done.size() + "개를 올리고 적었습니다");
         }
