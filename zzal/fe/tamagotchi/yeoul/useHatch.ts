@@ -67,7 +67,12 @@ export function useHatchState(): Live {
       // ★ 한 key 는 한 번만 쓸 수 있다. 실패하면 presign 부터 다시 — 같은 key 로 재시도하지 않는다.
       setImageKey(await uploadImage(file, 'zzal'));
     } catch (e) {
+      // ★ 실패하면 미리보기도 함께 지운다(상훈님 판정 19). 그림만 크게 남아 있으면
+      //   작은 오류 한 줄보다 그림이 먼저 읽혀 성공한 줄 안다.
       setImageKey(null);
+      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+      objectUrl.current = null;
+      setPreviewUrl(null);
       setError(e instanceof Error ? e.message : '그림을 올리지 못했어요');
     } finally {
       setBusy(false);

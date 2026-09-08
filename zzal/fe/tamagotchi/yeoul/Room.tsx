@@ -137,9 +137,13 @@ export default function Room({ y }: { y: Yeoul }) {
         {v.st.curtain && (
           <>
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg,rgba(43,52,82,.6),rgba(43,52,82,.3))', animation: 'yFadeIn .5s ease' }} />
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '34%', background: 'linear-gradient(90deg,#3E4A72,#5A6894)', backgroundImage: 'repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 3px,transparent 3px 26px)', borderRight: '3px solid #2C3557', boxShadow: '6px 0 16px rgba(28,34,58,.45)' }} />
-            <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '34%', background: 'linear-gradient(270deg,#3E4A72,#5A6894)', backgroundImage: 'repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 3px,transparent 3px 26px)', borderLeft: '3px solid #2C3557', boxShadow: '-6px 0 16px rgba(28,34,58,.45)' }} />
-            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 24, textAlign: 'center', fontFamily: GAEGU, fontSize: 22, color: '#F6EEDD', textShadow: '0 1px 6px rgba(28,34,58,.6)' }}>자고 있어요</div>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '27%', background: 'linear-gradient(90deg,#3E4A72,#5A6894)', backgroundImage: 'repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 3px,transparent 3px 26px)', borderRight: '3px solid #2C3557', boxShadow: '6px 0 16px rgba(28,34,58,.45)' }} />
+            <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '27%', background: 'linear-gradient(270deg,#3E4A72,#5A6894)', backgroundImage: 'repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 3px,transparent 3px 26px)', borderLeft: '3px solid #2C3557', boxShadow: '-6px 0 16px rgba(28,34,58,.45)' }} />
+            {/* ★ 글씨에 바탕을 깔았다(판정 22) — 흰 글씨만 얹으면 커튼 무늬에 묻힌다.
+                이름을 넣어 누가 자는지 분명히 한다(판정 13). */}
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 22, display: 'flex', justifyContent: 'center' }}>
+              <span style={{ padding: '6px 16px', borderRadius: radius.pill, background: 'rgba(28,34,58,.55)', fontFamily: GAEGU, fontSize: 20, color: '#F6EEDD' }}>{v.sleepLine}</span>
+            </div>
           </>
         )}
         {v.st.sick && <div style={{ position: 'absolute', inset: 0, background: 'rgba(130,132,138,.2)', animation: 'yFadeIn .4s ease' }} />}
@@ -204,6 +208,8 @@ export default function Room({ y }: { y: Yeoul }) {
                 position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
                 padding: '11px 4px 10px', borderRadius: radius.md,
                 borderStyle: 'solid', borderWidth: r.bw, borderColor: r.bd, background: r.tileBg, animation: r.anim,
+                // 자는 동안은 눌러도 안 열린다(판정 13). 눌리는 것처럼 보이지 않게 흐리게.
+                opacity: r.dim ? 0.45 : 1,
               }}
             >
               <span style={{ position: 'relative', width: 26, height: 26, flex: 'none', color: r.fg }}>

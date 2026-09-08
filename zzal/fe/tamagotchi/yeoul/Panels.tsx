@@ -45,7 +45,10 @@ function Sheet({ y }: { y: Yeoul }) {
           <button onClick={actions.closeSheet} style={{ border: '1px solid rgba(74,64,56,.13)', background: C.slot, borderRadius: radius.pill, width: 27, height: 27, fontSize: 12, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
         </div>
 
-        <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '14px 20px 30px', display: 'flex', flexDirection: 'column', gap: 13 }}>
+        {/* ★ 아래 여백이 120px 인 이유 — 시트는 화면 아래끝까지 오는데 그 위에 하단 타일(층 6)이
+            얹혀 있어, 30px 만 주면 **마지막 내용 92px 이 타일 뒤에 영구히 가린다**(상훈님 판정 2).
+            타일 줄 높이(70) + 위아래 여백(10·22) + 숨 쉴 틈만큼 비운다. */}
+        <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '14px 20px 120px', display: 'flex', flexDirection: 'column', gap: 13 }}>
           {sh.key === 'table' && <TableSheet y={y} />}
           {sh.key === 'bath' && <BathSheet y={y} />}
           {sh.key === 'play' && <PlaySheet y={y} />}
@@ -290,7 +293,9 @@ function SettingsSheet({ y }: { y: Yeoul }) {
 
 function Fire({ y }: { y: Yeoul }) {
   const f = y.s.fire!;
-  const backdrop = f.tapAny ? y.actions.closeFire : undefined;
+  // ★ 배경을 누르면 **어느 판이든** 닫힌다(상훈님 판정 22). 예전엔 tapAny 를 준 판만 닫혀서
+  //   같은 모양인데 어떤 건 닫히고 어떤 건 안 닫혔다 — 사용자가 규칙을 세울 수 없다.
+  const backdrop = y.actions.closeFire;
   return (
     <div data-part="fire" style={{ position: 'absolute', inset: 0, zIndex: 12, background: 'rgba(74,64,56,.52)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yFadeIn .2s ease' }}>
       <div onClick={backdrop} style={{ position: 'absolute', inset: 0 }} />

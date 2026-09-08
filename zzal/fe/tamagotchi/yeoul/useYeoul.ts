@@ -97,7 +97,9 @@ const INITIAL: YeoulState = {
   memories: ['빵 좋아함', '비 싫어함', '왼쪽을 잘 맞힘', '늦잠', '파란색'],
   resolved: {}, calls: 3, guess: null,
   wallId: 'cream', picks: {}, texts: {}, user: {}, uq: 0,
-  petName: '보리', uploaded: false, authed: '', askDraft: '',
+  // ★ 이름은 **비워 둔다**(상훈님 판정 3). 미리 채워 두면 지우지 않고 넘긴 사람의 아이가
+  //   남의 이름으로 만들어진다. 자리표시자('여울')만 보여 주고 값은 빈 칸이다.
+  petName: '', uploaded: false, authed: '', askDraft: '',
   shards: 2, tutorDone: false, rollUnlocked: false, acting: null,
   fire: null, decoOpen: false, albumOpen: 8,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
@@ -117,7 +119,9 @@ function levelsOf(s: YeoulState, m: Mode): Record<RoomKey, LvKey> {
   const table: LvKey = s.full <= 1 ? 'now' : s.full <= 2 ? 'soon' : 'ok';
   let bath: LvKey = s.trace >= 3 ? 'now' : s.trace >= 1 ? 'soon' : 'ok';
   let play: LvKey = s.plays <= 0 ? 'off' : s.happy <= 1 ? 'now' : s.happy <= 2 ? 'soon' : 'ok';
-  if (m === 'sick') { bath = 'now'; play = 'gray'; }
+  // ★ 아플 때 욕실 타일을 붉게(now) 만들지 않는다(상훈님 판정 6). 아픈 것은 씻길 일이 아니고,
+  //   알리는 일은 무대의 약 아이콘 깜빡임 하나가 맡는다. 놀이는 실제로 막히므로 회색 그대로.
+  if (m === 'sick') { play = 'gray'; }
   return { table, bath, play, bed: m === 'night' ? 'ready' : 'off', album: 'plain' };
 }
 
@@ -144,7 +148,7 @@ const cells = (n: number, on: string, off: string) => [0, 1, 2, 3].map((i) => ({
 export interface Tile {
   key: RoomKey; label: string; layers: string[];
   fg: string; tileBg: string; bw: string; bd: string; anim: string;
-  badge: string; hasBadge: boolean; pick: () => void;
+  badge: string; hasBadge: boolean; pick: () => void; dim: boolean;
 }
 export interface PopBtn {
   label: string; count: string; tap: () => void; anim: string;
@@ -718,6 +722,7 @@ export function useYeoul() {
       const on = selK === k && s.popOpen;
       const hl = hlRoom === k;
       const l = LV[key];
+      const asleep = mode === 'sleep';
       return {
         key: k, label: ROOM_NAME[k],
         layers: [...LINE[k]],
@@ -726,12 +731,18 @@ export function useYeoul() {
         bw: hl ? '2.5px' : '0',
         bd: hl ? ACCENT : 'transparent',
         anim: hl ? 'yNudge 1.9s ease-in-out infinite' : 'none',
-        badge, hasBadge, pick: selRoom(k),
+        badge, hasBadge: hasBadge && !asleep,
+        // 자는 동안은 어느 방도 안 열린다 — 눌러도 한 줄만 말한다.
+        pick: asleep ? () => flash(`${s.petName || '아이'}가 자고 있어요`) : selRoom(k),
+        dim: asleep,
       };
     });
 
     // ── 팝오버 ──
-    const lockMsg = mode === 'sleep' ? '자는 동안은 쉬게 해 주세요'
+    // ★ 자는 동안은 **전부 잠근다**(상훈님 판정 13). 방마다 깨어 있는 말을 하던 것이 문제였다.
+    //   커튼을 치고 타일·팝오버를 통째로 막고, 하는 말은 한 줄뿐이다.
+    const sleepLine = `${s.petName || '아이'}가 자고 있어요`;
+    const lockMsg = mode === 'sleep' ? sleepLine
       : (mode === 'sick' && selK === 'play') ? '아플 땐 못 놀아요' : '';
     const locked = !!lockMsg && selK !== 'bed';
 
@@ -743,7 +754,9 @@ export function useYeoul() {
         b: { label: '간식 주기', count: `${Math.max(0, 3 - s.snacks)}번 남음`, tap: onSnack, soft: true },
       },
       bath: {
-        say: mode === 'sick' ? '아파요 · 약을 주면 바로 나아요' : (SAY.bath[lv.bath as keyof typeof SAY.bath] ?? SAY.bath.ok),
+        // ★ 아프다고 욕실 팝오버가 빨개지지는 않는다(상훈님 판정 6) — 알리는 일은 무대의
+        //   약 아이콘 깜빡임이 맡는다. 여기서는 말만 바꾼다.
+        say: mode === 'sick' ? '약을 주면 바로 나아요' : (SAY.bath[lv.bath as keyof typeof SAY.bath] ?? SAY.bath.ok),
         n: 4, on: Math.max(0, 4 - s.trace), tint: '#7FA8A0',
         a: { label: '청소하기', count: `흔적 ${s.trace}개`, tap: onClean },
         b: { label: '목욕', count: s.bathUsed ? '0번 남음' : '1번 남음', tap: onBath },
@@ -751,8 +764,10 @@ export function useYeoul() {
       play: {
         say: mode === 'sick' ? '아파서 못 놀아요' : (SAY.play[lv.play as keyof typeof SAY.play] ?? SAY.play.ok),
         n: 4, on: s.happy, tint: '#C98B93',
+        // ★ '대화하기' 는 뺐다(상훈님 판정 11) — 대화는 오른쪽 아래 말풍선이 맡고,
+        //   마당에는 게임을 하나둘 붙일 예정이라 그 자리를 비워 둔다.
         a: { label: '좌우 맞히기', count: `${s.plays}판 남음`, tap: openPlay('guess') },
-        b: { label: '대화하기', count: `${s.calls}번 남음`, tap: openChat },
+        b: null,
       },
       bed: {
         say: mode === 'sleep' ? '자고 있어요' : mode === 'night' ? '슬슬 졸려요' : '저녁 7시는 넘어야 졸려요',
@@ -797,7 +812,7 @@ export function useYeoul() {
     const slot = ROOM_KEYS.indexOf(selK);
     const isTutTarget = !!tut && tut.act === 'a' && tut.room === selK;
     const pop: Pop = {
-      show: s.screen === 'room' && !s.sheet && (s.popOpen || s.popClosing) && !s.chatOpen,
+      show: s.screen === 'room' && !s.sheet && (s.popOpen || s.popClosing) && !s.chatOpen && mode !== 'sleep',
       anim: s.popClosing ? 'yPopOut .17s ease forwards' : 'yPopIn .2s cubic-bezier(.2,.9,.25,1)',
       name: ROOM_NAME[selK], say: cur.say, bar,
       hasBar: selK !== 'bed' && selK !== 'album',
@@ -881,7 +896,7 @@ export function useYeoul() {
     const notifItems: NotifItem[] = calls.map((c): NotifItem => ({
       text: c.text,
       note: c.kind === 'chat' ? '대화 · 답을 기다려요'
-        : `${({ table: '식탁', bath: '욕실', bed: '침실', play: '놀이' } as Record<string, string>)[c.room]} · 지금 할 수 있어요`,
+        : `${ROOM_NAME[c.room]} · 지금 할 수 있어요`,
       action: c.kind === 'chat' ? '답하기' : '들어가기',
       tap: c.kind === 'chat' ? openPlay('talk') : openSheet(c.room),
       dot: ACCENT, bg: C.paper, bd: C.line,
@@ -934,6 +949,9 @@ export function useYeoul() {
     return {
       lv, calls, top, mode, tut, TUT, unlimited, selK,
       tiles, pop, st, bub, sheet, charGroups, frames, spriteKey,
+      // 자는 동안은 방을 아예 못 연다(판정 13). 화면이 이 값 하나만 보면 되게 둔다.
+      asleep: mode === 'sleep',
+      sleepLine: `${s.petName || '아이'}가 자고 있어요`,
       screen: { room: s.screen === 'room', onb: s.screen === 'onb', egg: s.screen === 'egg' },
       hud: { show: !s.sampleMode },
       pet: { name: s.petName, dayText: `${s.day}일째`, bond: s.bond },

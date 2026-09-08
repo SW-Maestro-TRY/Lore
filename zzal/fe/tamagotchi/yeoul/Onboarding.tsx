@@ -26,7 +26,11 @@ export default function Onboarding({ y }: { y: Yeoul }) {
   // ★ 판정 기준은 목 상태(`s.uploaded`)가 아니라 **실제로 올라간 키**(`live.imageKey`)다.
   //   파일만 고르고 업로드가 실패한 경우(네트워크·CORS)에도 s.uploaded 는 true 가 되므로,
   //   그것으로 막으면 재료 없이 통과한다.
+  // ★ 두 칸의 '못 넘어감' 표현을 맞춘다(상훈님 판정 22). 예전엔 올리기는 버튼이 잠기고,
+  //   캐릭터는 눌러야 오류가 떴다 — 같은 뜻인데 배우는 법이 둘이었다. 둘 다 **잠그는 쪽**으로.
   const uploadBlocked = key === 'upload' && !live.imageKey;
+  const nameBlocked = key === 'char' && !s.petName.trim();
+  const blocked = uploadBlocked || nameBlocked;
   const ctaLabel = key === 'upload'
     ? (live.busy ? '올리는 중…' : live.imageKey ? '다음' : '그림을 먼저 올려 주세요')
     : o.cta;
@@ -34,7 +38,9 @@ export default function Onboarding({ y }: { y: Yeoul }) {
   return (
     <div data-part="onb" data-step={key} style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, background: key === 'born' ? C.bornBg : C.onbBg }}>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 22px 6px' }}>
-        {o.canBack && (
+        {/* ★ 태어남 칸에는 뒤로가 없다(상훈님 판정 4). 이미 태어난 아이가 있는데 되돌아가면
+            여울 샘플로 가고 부화가 0/4 로 지워졌다 — 되돌릴 수 없는 지점은 되돌아가지지 않아야 한다. */}
+        {o.canBack && key !== 'born' && (
           <button onClick={actions.onBack} style={{ border: '1px solid rgba(74,64,56,.13)', background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: 13, color: C.sub2, lineHeight: 1 }} aria-label="뒤로">‹</button>
         )}
         <span style={{ flex: 1 }} />
@@ -80,6 +86,7 @@ export default function Onboarding({ y }: { y: Yeoul }) {
               onClick={() => file.current?.click()} data-action="upload" disabled={live.busy}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: radius.lg, border: `2px dashed ${live.imageKey ? C.accent : 'rgba(74,64,56,.18)'}`, background: live.imageKey ? C.accentSoft : C.paper }}
             >
+              {/* 실패하면 useHatch 가 미리보기를 지운다 — 실패한 그림이 크게 남으면 성공처럼 읽힌다(판정 19). */}
               {live.previewUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={live.previewUrl} alt="" style={{ width: 132, height: 132, objectFit: 'contain', display: 'block' }} />
@@ -94,7 +101,12 @@ export default function Onboarding({ y }: { y: Yeoul }) {
                 {live.imageKey ? '다시 누르면 바꿀 수 있어요' : 'PNG · JPG · 10MB까지'}
               </span>
             </button>
-            {live.error && <span style={{ fontSize: 12, lineHeight: 1.6, color: C.accent }}>{live.error}</span>}
+            {live.error && (
+              <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '10px 12px', borderRadius: radius.sm, background: C.accentSoft }}>
+                <span style={{ width: 5, height: 5, flex: 'none', marginTop: 6, borderRadius: '50%', background: C.accent }} />
+                <span style={{ fontSize: 12, lineHeight: 1.6, color: C.accent }}>{live.error}</span>
+              </span>
+            )}
             {/* 가장 먼저 읽혀야 하는 한 줄 — 자캐를 맡기는 사람이 제일 먼저 의심하는 지점이다. */}
             <span style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
 
@@ -217,13 +229,13 @@ export default function Onboarding({ y }: { y: Yeoul }) {
             actions.onNext();
           }}
           data-action="onb-next"
-          disabled={uploadBlocked}
+          disabled={blocked}
           style={{
             padding: 16, borderRadius: radius.md, border: 'none', fontSize: 15.5,
-            background: uploadBlocked ? C.off : C.accent,
-            color: uploadBlocked ? '#8B8175' : C.accentInk,
-            cursor: uploadBlocked ? 'default' : 'pointer',
-            boxShadow: uploadBlocked ? 'none' : '0 4px 12px rgba(192,104,92,.22)',
+            background: blocked ? C.off : C.accent,
+            color: blocked ? '#8B8175' : C.accentInk,
+            cursor: blocked ? 'default' : 'pointer',
+            boxShadow: blocked ? 'none' : '0 4px 12px rgba(192,104,92,.22)',
           }}
         >{ctaLabel}</button>
       </div>

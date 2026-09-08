@@ -16,11 +16,15 @@ export const ROOM_NAME: Record<RoomKey, string> = {
   table: '주방', bath: '욕실', play: '마당', bed: '침실', album: '앨범',
 };
 
-/** 시트 제목은 타일 이름과 다르다(시안 `sheetTitles`). */
+/**
+ * 시트 제목.
+ * ★ 방 이름은 **주방·욕실·마당·침실** 로 통일한다(상훈님 2026-09-08). 시안 초기의 '식탁'·'놀이' 를
+ *   여기저기 섞어 쓰면 같은 방을 두 이름으로 부르게 된다. 조각 이름('놀이 조각')은 정본 것이라 그대로다.
+ */
 export const SHEET_TITLE: Record<string, readonly [string, string]> = {
-  table: ['식탁', '배부름과 밥'],
+  table: ['주방', '배부름과 밥'],
   bath: ['욕실', '흔적과 몸단장'],
-  play: ['놀이', '대화 · 맞히기 · 달리기'],
+  play: ['마당', '맞히기 · 달리기'],
   bed: ['침실', '재우기'],
   notify: ['알림', '기다리는 일'],
 };
