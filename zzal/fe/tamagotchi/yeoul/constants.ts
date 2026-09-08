@@ -193,15 +193,12 @@ export const ALBUM: ReadonlyArray<readonly [string, number]> = [
   ['먼 여행 · 3층 해금', 0], ['졸업 · 60일째', 0],
 ];
 
-/** 액자에 걸리는 동작 여덟 종(여울 실물이 이 여덟뿐이라 순환시킨다). */
-export const FRAME_KINDS = ['happy', 'eat', 'clean', 'idle', 'sad', 'train', 'pet', 'sick'] as const;
-export type FrameKind = (typeof FRAME_KINDS)[number];
-
-/** 동작 → 여울 그림. 시안이 쓰던 매핑 그대로. */
-export const KIND_IMG: Record<FrameKind, string> = {
-  idle: demoUrl('idle'), eat: demoUrl('eat'), happy: demoUrl('happy'), sad: demoUrl('sad'),
-  sick: demoUrl('hungry'), train: demoUrl('train'), pet: demoUrl('pet'), clean: demoUrl('clean'),
-};
+/**
+ * 앨범 벽에 걸리는 동작 여덟 종. **카탈로그 key** 로 적는다(서버 `Motion.key` 와 같은 이름).
+ * 여울 실물이 여덟 장뿐이라 그만큼만 돌린다.
+ */
+export const FRAME_KEYS = ['joy', 'eat', 'wash', 'base', 'sad', 'practice', 'shy', 'sick'] as const;
+export type FrameKey = (typeof FRAME_KEYS)[number];
 
 /**
  * 발밑 투명 여백. 그림 한 장은 313 × 350 인데 배경을 지우고 나면 **아래 54px 이 빈칸**이라,

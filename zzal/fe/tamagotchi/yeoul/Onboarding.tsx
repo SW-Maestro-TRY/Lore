@@ -8,9 +8,9 @@
 'use client';
 
 import { useRef } from 'react';
-import { KIND_IMG, ONB_COPY, GOOD_EX, BAD_EX } from './constants';
+import { ONB_COPY, GOOD_EX, BAD_EX } from './constants';
 import { C, GAEGU, MONO, radius } from './ui';
-import { useLive } from './useHatch';
+import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
 export default function Onboarding({ y }: { y: Yeoul }) {
@@ -199,7 +199,7 @@ export default function Onboarding({ y }: { y: Yeoul }) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, padding: '10px 0 0' }}>
             <div style={{ width: 209, height: 209, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'yPop .5s ease' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={live.img('idle') ?? KIND_IMG.idle} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+              <img src={spriteUrl(live, 'base')} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
               <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 26, color: C.ink }}>{o.bornName}</span>

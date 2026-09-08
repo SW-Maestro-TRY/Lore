@@ -10,10 +10,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KINDS, KIND_IMG, LEARN_GOALS, LINE,
+  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LEARN_GOALS, LINE,
   NAME_POOL, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE, STEPS, TUTOR, TUTOR_MAIN,
   SHARDS, USER_Q, WALLS,
-  type FrameKind, type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
+  type FrameKey, type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
 
@@ -22,7 +22,7 @@ import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
 export type Mode = 'day' | 'night' | 'sleep' | 'sick';
 export type SheetKey = RoomKey | 'notify' | 'settings';
 export interface LogLine { who: 'pet' | 'me'; text: string }
-export interface FrameData { name: string; open: boolean; cond: string; kind: FrameKind }
+export interface FrameData { name: string; open: boolean; cond: string; key: FrameKey }
 export interface FireAction { label: string; tap: () => void; primary: boolean }
 export interface Fire {
   title: string; body: string; hint?: string; tapAny?: boolean;
@@ -52,6 +52,12 @@ export interface YeoulState {
   petName: string; uploaded: boolean; authed: string;
   /** 오늘 찍힌 조각 수(0~4). 정본상 **잠들 때 판정·리셋**된다. 지금은 프론트 목이라 손으로 바꾼다. */
   shards: number;
+  /**
+   * **잠깐 하는 동작**. 밥을 주면 먹는 그림, 청소하면 씻는 그림처럼 행동에 맞춰 잠시 바뀌었다가
+   * 스스로 돌아온다(상훈님 2026-09-08). 재우기처럼 **상태로 남는 것**은 여기 안 넣는다 —
+   * 그건 `sleeping` 이 이미 들고 있고, 시간이 지나도 안 풀려야 한다.
+   */
+  acting: string | null;
   /** 튜토리얼 완주 축하를 이미 띄웠는가. 한 번만 뜬다. */
   tutorDone: boolean;
   /** 구르기를 배웠는가(튜토리얼 완주 기념). */
@@ -92,7 +98,7 @@ const INITIAL: YeoulState = {
   resolved: {}, calls: 3, guess: null,
   wallId: 'cream', picks: {}, texts: {}, user: {}, uq: 0,
   petName: '보리', uploaded: false, authed: '', askDraft: '',
-  shards: 2, tutorDone: false, rollUnlocked: false,
+  shards: 2, tutorDone: false, rollUnlocked: false, acting: null,
   fire: null, decoOpen: false, albumOpen: 8,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
@@ -190,6 +196,15 @@ export function useYeoul() {
 
   const mode: Mode = s.sleeping ? 'sleep' : s.sick ? 'sick' : s.night ? 'night' : 'day';
   const needStyle: NeedStyle = s.needStyleLocal ?? '색+모양+글자';
+
+  /**
+   * 행동 하나를 화면에 잠깐 보여 준다.
+   * ★ 2.5초 — 눌러 보고 정했다. 1.5초는 눈이 따라가기 전에 사라지고, 4초는 다음 행동이 막혀 답답하다.
+   */
+  const act = useCallback((key: string) => {
+    setS((v) => ({ ...v, acting: key }));
+    later('acting', 2500, () => setS((v) => ({ ...v, acting: null })));
+  }, [later]);
 
   const flash = useCallback((t: string) => {
     setS((v) => ({ ...v, toast: t, hatch: v.sampleMode ? Math.min(4, v.hatch + 1) : v.hatch }));
@@ -332,49 +347,56 @@ export function useYeoul() {
       pets: Math.min(3, s.pets + 1), hearts: counted,
       bond: counted ? Math.min(100, s.bond + 1) : s.bond,
     });
+    act('shy');
     if (counted) later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
     else flash('오늘 쓰다듬기는 다 했어요');
     tutorDone('pet');
-  }, [s.chatOpen, s.popOpen, s.sleeping, s.sampleMode, s.pets, s.bond, patch, flash, later, tutorDone]);
+  }, [s.chatOpen, s.popOpen, s.sleeping, s.sampleMode, s.pets, s.bond, patch, act, flash, later, tutorDone]);
 
   const onRice = useCallback(() => {
     if (s.sampleMode) {
       patch({ full: Math.min(4, s.full + 1), bond: Math.min(100, s.bond + 1) });
+      act('eat');
       flash('맛있게 먹었어요');
       return;
     }
     if (s.full >= 4) { flash('배가 가득이라 거절했어요'); return; }
     if (s.stock <= 0) { flash('밥 재고가 없어요'); return; }
     patch({ full: s.full + 1, stock: s.stock - 1, bond: Math.min(100, s.bond + 1) });
+    act('eat');
     flash('맛있게 먹었어요');
     tutorDone('feed');
-  }, [s.sampleMode, s.full, s.stock, s.bond, patch, flash, tutorDone]);
+  }, [s.sampleMode, s.full, s.stock, s.bond, patch, act, flash, tutorDone]);
 
   const onSnack = useCallback(() => {
     const n = s.snacks + 1;
     patch({ snacks: n, full: Math.min(4, s.full + 1) });
+    act('eat');
     flash(n >= 4 ? '조금 많아요' : '간식은 언제나 좋아요');
-  }, [s.snacks, s.full, patch, flash]);
+  }, [s.snacks, s.full, patch, act, flash]);
 
   const onClean = useCallback(() => {
     if (s.trace <= 0 && !s.sampleMode) { flash('이미 깨끗해요'); return; }
     patch({ trace: 0 });
+    act('wash');
     flash('깨끗해졌어요');
     tutorDone('clean');
-  }, [s.trace, s.sampleMode, patch, flash, tutorDone]);
+  }, [s.trace, s.sampleMode, patch, act, flash, tutorDone]);
 
   const onBath = useCallback(() => {
     if (s.bathUsed && !s.sampleMode) { flash('오늘 목욕은 했어요'); return; }
     patch({ bathUsed: true, trace: 0, bond: Math.min(100, s.bond + 2), cBath: s.cBath + 1 });
+    act('wash');
     flash('반짝반짝해졌어요');
-  }, [s.bathUsed, s.sampleMode, s.bond, s.cBath, patch, flash]);
+  }, [s.bathUsed, s.sampleMode, s.bond, s.cBath, patch, act, flash]);
 
   const onMed = useCallback(() => {
     lastSel.current = Date.now();
     if (!s.sick) { flash('지금은 약이 필요 없어요'); return; }
     patch({ sick: false });
+    act('joy');
     flash('바로 나았어요');
-  }, [s.sick, patch, flash]);
+  }, [s.sick, patch, act, flash]);
 
   const onSleep = useCallback(() => {
     if (s.sleeping) {
@@ -399,7 +421,8 @@ export function useYeoul() {
       guess: win ? '맞았어요!' : '아쉬워요, 반대쪽이었어요',
       bond: win ? Math.min(100, s.bond + 1) : s.bond,
     });
-  }, [s.plays, s.sampleMode, s.cGame, s.happy, s.bond, patch, flash]);
+    act(win ? 'joy' : 'sad');
+  }, [s.plays, s.sampleMode, s.cGame, s.happy, s.bond, patch, act, flash]);
 
   // ── 대화 ──
   const pushReply = useCallback((text: string) => {
@@ -418,8 +441,9 @@ export function useYeoul() {
       };
     });
     later('mine', 4200, () => setS((v) => ({ ...v, mine: '' })));
+    act('nod');
     tutorDone('chat');
-  }, [later, tutorDone]);
+  }, [later, act, tutorDone]);
   const onSend = useCallback(() => { lastSel.current = Date.now(); pushReply(s.draft.trim()); }, [pushReply, s.draft]);
   const onDraft = useCallback((t: string) => patch({ draft: t.slice(0, 40) }), [patch]);
 
@@ -800,11 +824,18 @@ export function useYeoul() {
       play: mode === 'sleep' || mode === 'sick' ? 'paused' : 'running',
     };
 
-    const spriteKind: FrameKind = s.sleeping ? 'idle'
-      : s.sick ? 'sick'
-        : s.hearts ? 'pet'
+    /**
+     * **무엇을 그릴지** — 순서가 곧 우선순위다.
+     *   지금 하는 동작(act) → 상태(잠·아픔·배고픔·대화) → 기본
+     * 값은 **카탈로그 key**이고, 그 key 를 그림 주소로 바꾸는 일은 `spriteUrl` 한 곳이 맡는다
+     * (잠긴 동작을 무엇으로 대신 그릴지도 거기서 정한다).
+     * ★ 재우기는 여기 `sleeping` 으로 남는다 — 잠깐 하는 동작이 아니라 자는 동안 계속이라서다.
+     */
+    const spriteKey: string = s.acting ? s.acting
+      : s.sleeping ? 'sleep'
+        : s.sick ? 'sick'
           : (s.full <= 0 || s.happy <= 0) ? 'sad'
-            : s.chatOpen ? 'happy' : 'idle';
+            : s.chatOpen ? 'joy' : 'base';
 
     // ── 말풍선 ──
     const chatLine = s.chatOpen ? (s.petLine || '오늘은 뭐 했어요?') : null;
@@ -879,10 +910,10 @@ export function useYeoul() {
     const gift: ReadonlyArray<readonly [string, number]> = s.rollUnlocked ? [['구르기 · 선물', 1]] : [];
     const frames = [...gift, ...ALBUM].map(([name, open], i) => {
       const parts = name.split(' · ');
-      const kind = FRAME_KINDS[i % FRAME_KINDS.length];
-      const f: FrameData = { name: parts[0], open: !!open, cond: open ? '' : (parts[1] || '조건 미정'), kind };
+      const key = FRAME_KEYS[i % FRAME_KEYS.length];
+      const f: FrameData = { name: parts[0], open: !!open, cond: open ? '' : (parts[1] || '조건 미정'), key };
       return {
-        ...f, img: KIND_IMG[kind],
+        ...f,
         label: open ? f.name : (parts[1] || '조건 미정'),
         labelFg: open ? '#5A4A3C' : C.faint,
         bd: open ? C.frameWood : 'rgba(201,169,141,.45)',
@@ -902,7 +933,7 @@ export function useYeoul() {
 
     return {
       lv, calls, top, mode, tut, TUT, unlimited, selK,
-      tiles, pop, st, bub, sheet, charGroups, frames, spriteKind,
+      tiles, pop, st, bub, sheet, charGroups, frames, spriteKey,
       screen: { room: s.screen === 'room', onb: s.screen === 'onb', egg: s.screen === 'egg' },
       hud: { show: !s.sampleMode },
       pet: { name: s.petName, dayText: `${s.day}일째`, bond: s.bond },
@@ -990,7 +1021,7 @@ export function useYeoul() {
       frame: {
         show: !!s.frame,
         anim: s.frameClosing ? 'yFrameOut .17s ease forwards' : 'yFrameZoom .22s cubic-bezier(.2,.9,.25,1)',
-        name: s.frame?.name ?? '', img: s.frame ? KIND_IMG[s.frame.kind] : '',
+        name: s.frame?.name ?? '', key: s.frame?.key ?? 'base',
         open: !!s.frame?.open, locked: !!s.frame && !s.frame.open,
         cond: s.frame?.cond ?? '', opacity: s.frame?.open ? 1 : 0.24,
         close: closeFrame, save: saveShot,

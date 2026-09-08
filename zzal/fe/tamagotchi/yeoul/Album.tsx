@@ -6,7 +6,7 @@
 'use client';
 
 import { C, GAEGU, radius } from './ui';
-import { useLive } from './useHatch';
+import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
 export default function Album({ y }: { y: Yeoul }) {
@@ -44,7 +44,7 @@ function Wall({ y }: { y: Yeoul }) {
               style={{ position: 'relative', width: '100%', height: 0, padding: '0 0 133%', boxSizing: 'content-box', border: `5px solid ${f.bd}`, borderRadius: 3, background: f.bg, boxShadow: f.shadow, overflow: 'hidden' }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={live.img(f.kind) ?? f.img} alt="" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: f.opacity, filter: f.filter }} />
+              <img src={spriteUrl(live, f.key)} alt="" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: f.opacity, filter: f.filter }} />
             </button>
             <span style={{ fontSize: 10.5, lineHeight: 1.35, textAlign: 'center', color: f.labelFg }}>{f.label}</span>
           </span>
@@ -61,7 +61,7 @@ function Wall({ y }: { y: Yeoul }) {
 function FrameView({ y }: { y: Yeoul }) {
   const f = y.v.frame;
   const live = useLive();
-  const src = (y.s.frame ? live.img(y.s.frame.kind) : null) ?? f.img;
+  const src = spriteUrl(live, f.key);
   return (
     <div onClick={f.close} data-part="frame" style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(74,64,56,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22, animation: 'yFadeIn .18s ease' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%', animation: f.anim }}>

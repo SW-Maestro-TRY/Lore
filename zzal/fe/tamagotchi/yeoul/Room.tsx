@@ -18,18 +18,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { EGG_IMG, KIND_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
+import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
 import Panels from './Panels';
-import { useFootPad, useLive } from './useHatch';
+import { spriteUrl, useFootPad, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { v, actions } = y;
-  // 서버가 내 아이 그림을 줬으면 그걸 쓰고, 아직 없으면 여울로 버틴다.
+  // 무엇을 그릴지는 `v.spriteKey`(useYeoul)가, 누구를 그릴지는 `spriteUrl`(useHatch)이 정한다.
   const live = useLive();
-  const charSrc = live.img(v.spriteKind) ?? KIND_IMG[v.spriteKind];
+  const charSrc = spriteUrl(live, v.spriteKey);
   // 발밑 여백은 그림마다 다르다 — 상수로 두면 어떤 아이는 뜨고 어떤 아이는 잠긴다.
   const footPad = useFootPad(charSrc, SPRITE_FOOT_PAD);
 

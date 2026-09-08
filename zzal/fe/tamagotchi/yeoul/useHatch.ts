@@ -12,15 +12,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { assetUrl } from '../../lib/assets';
+import { MOTION_FALLBACK, YEOUL_MOTION } from '../constants';
 import { createPet, getPet, type PetDetail } from '../../lib/pet';
 import { uploadImage } from '../../lib/upload';
-import type { FrameKind } from './constants';
-
-/** 우리 그림 여덟 종 ↔ 서버 동작 키. 서버는 1층 여덟 칸을 이 이름으로 부른다. */
-const KIND_TO_SERVER: Record<FrameKind, string> = {
-  idle: 'base', eat: 'eat', happy: 'joy', sad: 'sad',
-  sick: 'sick', train: 'practice', pet: 'shy', clean: 'wash',
-};
 
 export interface Live {
   /** 고른 그림(미리보기용). 서버에 올리기 전에도 화면에 보여 준다. */
@@ -36,8 +30,8 @@ export interface Live {
   failed: boolean;
   /** 부화 중 지금 하는 일 한 줄(서버 문구). */
   step: string | null;
-  /** 서버가 준 내 아이 그림. 아직 없으면 null → 화면은 여울로 폴백한다. */
-  img: (kind: FrameKind) => string | null;
+  /** 서버가 준 내 아이 그림(카탈로그 key). 아직 없으면 null → 화면은 여울로 폴백한다. */
+  img: (key: string) => string | null;
   /** 파일 하나를 올린다. 실패하면 error 에 한국어 한 줄이 남는다. */
   upload: (file: File) => Promise<void>;
   /** 부화 시작. 그림을 안 올렸으면 아무 일도 안 한다(목으로 계속 간다). */
@@ -112,8 +106,11 @@ export function useHatchState(): Live {
     return () => { alive = false; clearInterval(t); };
   }, [petId, done]);
 
-  const img = useCallback((kind: FrameKind) => {
-    const key = KIND_TO_SERVER[kind];
+  /**
+   * 카탈로그 key 하나를 **내 아이 그림 주소**로. 아직 못 받았으면 null.
+   * ★ 18 동작 전부를 받는다 — 서버 `Motion.key` 와 우리 key 는 같은 이름이라 표가 필요 없다.
+   */
+  const img = useCallback((key: string) => {
     const m = pet?.motions?.find((x) => x.key === key);
     return m?.basicImageKey ? assetUrl(m.basicImageKey) : null;
   }, [pet]);
@@ -198,4 +195,26 @@ export function useFootPad(src: string, fallback: number): number {
   }, [src, fallback]);
 
   return pad;
+}
+
+/**
+ * **어떤 그림을 그릴지 정하는 단 한 곳.** 축이 둘이고, 각각 순서가 있다.
+ *
+ *   누구를  :  서버가 준 내 아이 그림  →  없으면 여울 폴백
+ *   무엇을  :  지금 하는 동작  →  없으면 상태(아픔·잠·배고픔…)  →  기본
+ *
+ * '무엇을' 은 화면이 `key` 로 정해 넘기고(→ `useYeoul` 의 `spriteKey`), 여기서는 '누구를' 만 푼다.
+ *
+ * ★ **잠긴 동작은 대신 그린다.** 2층 동작(`wash`·`sleep`·`nod` …)은 아직 안 열렸을 수 있어,
+ *   그 자리를 비우면 아무 그림도 안 나온다. `MOTION_FALLBACK` 이 그때 무엇을 대신 그릴지 적은 표다.
+ *   순서는 **열린 진짜 동작 → 폴백 동작 → 여울**. 이 판정을 여기 한 곳에서만 한다 —
+ *   화면마다 따로 하면 어느 한 곳이 빠지고, 빠진 자리는 빈 그림이라 조용히 티가 안 난다.
+ */
+export function spriteUrl(live: Live, key: string): string {
+  const alt = MOTION_FALLBACK[key];
+  return live.img(key)
+    ?? (alt ? live.img(alt) : null)
+    ?? YEOUL_MOTION[key]
+    ?? (alt ? YEOUL_MOTION[alt] : undefined)
+    ?? YEOUL_MOTION.base;
 }
