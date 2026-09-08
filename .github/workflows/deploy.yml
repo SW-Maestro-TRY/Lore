@@ -126,6 +126,16 @@ jobs:
           aws s3 cp infra/setup-python.sh \
             "s3://$S3_BUCKET/builds/setup-python-${GITHUB_SHA}.sh" --region "$AWS_REGION"
 
+      # 웹툰 생성 하네스(new_harness)도 파이썬을 쓴다(openai·google-genai·PyYAML·requests).
+      # 짤과 필요한 패키지가 달라 가상환경도 스크립트도 따로 둔다(webtoon/be/setup-python.sh) —
+      # 위 zzal 스텝과 같은 이유, 다른 자리.
+      - name: 웹툰 하네스 파이썬 준비물 업로드
+        run: |
+          aws s3 cp haeun/landing/requirements.txt \
+            "s3://$S3_BUCKET/builds/webtoon-requirements-${GITHUB_SHA}.txt" --region "$AWS_REGION"
+          aws s3 cp webtoon/be/setup-python.sh \
+            "s3://$S3_BUCKET/builds/webtoon-setup-python-${GITHUB_SHA}.sh" --region "$AWS_REGION"
+
       - name: SSM 으로 배포 (포트 안 엶)
         run: |
           CMD_ID=$(aws ssm send-command \

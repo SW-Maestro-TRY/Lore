@@ -60,29 +60,6 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/zzal/v1/public/**").permitAll()
 
                         // 웹툰 스튜디오는 **로그인 없이 끝까지 만들 수 있는 화면**이다.
-                        // 사진 한 장과 이름만으로 한 편이 나오는 것이 이 제품의 약속이고,
-                        // 화면에도 "로그인 없이도 게스트로 끝까지 만들 수 있어요" 라고 적혀
-                        // 있다. 여기를 안 열면 만들기·둘러보기·편집실이 전부 401 이 된다.
-                        //
-                        // 이 주소들은 생성 하네스로 그대로 넘어간다(webtoon/be 의
-                        // HarnessGateway). 사람 구분은 계정이 아니라 브라우저가 들고 있는
-                        // uid 이고, 크레딧도 그 uid 로 센다.
-                        //
-                        // ⚠️ 그래서 지금은 **누구나 부를 수 있고 uid 도 스스로 지어낼 수
-                        //    있다.** 프리토타이핑 단계라 이대로 두지만, 실제로 돈이 나가는
-                        //    생성이므로 계정을 붙일 때 여기부터 같이 잠가야 한다.
-                        //
-                        // 딱 하나 예외 — `/api/webtoon/v1/my/**` 는 "내" 것을 다루므로
-                        // 로그인이 있어야 뜻이 성립한다. permitAll **앞에** 둔다:
-                        // 규칙은 위에서부터 먼저 맞는 것이 이기므로, 순서가 바뀌면
-                        // 이 줄이 영영 안 걸린다.
-                        //
-                        // ⚠️ 주소 앞자리는 webtoon/be 의 `WebtoonApi.V1` 이 정한다.
-                        //    거기를 고치면 **여기도 같이 고쳐야 한다.** 어긋나면
-                        //    막히는 게 아니라 아래 permitAll 로 흘러 조용히 열린다 —
-                        //    실패가 눈에 안 보이는 쪽이라 더 위험하다.
-                        //    (common 은 webtoon 을 import 하지 않으므로 상수를 그대로
-                        //     쓸 수 없다. 그래서 글자로 두고 이 주석으로 묶는다.)
                         .requestMatchers("/api/webtoon/v1/my/**").authenticated()
 
                         // `/api/webtoon/internal/**`(비용 적재)은 반대로 열어 둔다.
@@ -104,6 +81,9 @@ public class WebSecurityConfig {
                         //    한 번에 받을 개수 상한, 허용된 키만 통과, 본문에 담긴 익명 번호는
                         //    믿지 않고 쿠키만 신뢰(본문을 믿으면 남의 번호로 기록을 심을 수 있다).
                         .requestMatchers(HttpMethod.POST, "/api/v1/events").permitAll()
+
+                        // SMTP 테스트용 임시 API
+                        .requestMatchers("/api/test/email").permitAll()
 
                         // 나머지는 로그인 필요.
                         // ★ 관리자 주소를 여기서 role 로 가르지 않는다 — 지금 JWT 에는 role 이

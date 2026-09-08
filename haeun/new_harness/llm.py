@@ -55,6 +55,15 @@ def load_dotenv(path: Path) -> None:
 # 이미 있는 story-harness/.env 것을 그대로 물려받는다.
 load_dotenv(HERE / ".env")
 
+# 운영 서버(EC2)는 Parameter Store 에서 키 하나(WEBTOON_API_KEY)만 받는다
+# (/opt/lore/load-secrets.sh → systemd EnvironmentFile → 자바 프로세스 →
+# 이 스크립트를 자식 프로세스로 부르며 환경을 그대로 물려준다).
+# story.py 는 프로바이더별 이름(OPENAI_API_KEY 등)만 본다 — 실제로 쓰는
+# 프로바이더(NH_PROVIDER=openai)의 키 이름으로 풀어 준다. 이미 그 이름의
+# 값이 있으면(로컬 .env) 안 덮어쓴다.
+if os.environ.get("WEBTOON_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = os.environ["WEBTOON_API_KEY"]
+
 if str(STORY_HARNESS) not in sys.path:
     sys.path.insert(0, str(STORY_HARNESS))
 

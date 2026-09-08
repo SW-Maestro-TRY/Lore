@@ -32,7 +32,17 @@ spring:
     properties:
       hibernate:
         format_sql: true
-
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 # Swagger UI 주소: http://localhost:8080/api/swagger-ui.html (문서·정의 모두 /api 아래 — CloudFront→ALB 가 /api/* 만 백엔드로 보내므로)
 # 운영에서 끄려면 SPRINGDOC_ENABLED=false (UI·정의 둘 다 내려간다)
 springdoc:
@@ -54,6 +64,16 @@ management:
   endpoint:
     health:
       show-details: never
+
+# 웹툰 만들기 — 파이썬 서버(serve.py)를 안 거치고 스프링이 직접 실행한다.
+# 켜면 JobController/RunController/RegenController/ConfigController 가 뜨고,
+# 요청마다 new_harness/run.py 등을 자식 프로세스로 직접 띄운다 — serve.py 를
+# 상시 띄워둘 필요가 없어진다(꺼져 있으면 이 주소들은 WebtoonController 가
+# 그대로 127.0.0.1:8800 으로 프록시한다).
+lore:
+  webtoon:
+    python:
+      direct: ${LORE_WEBTOON_PYTHON_DIRECT:true}
 
 # 콘텐츠 이미지 S3 (presigned 업로드).
 # 실제 업로드는 브라우저 → S3 직접(presigned PUT)이라 서버(t3.micro)를 안 거친다.
