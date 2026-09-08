@@ -252,16 +252,26 @@ function cssText(text: string): React.CSSProperties {
   return out as React.CSSProperties;
 }
 
+/**
+ * 진짜 방의 머리줄.
+ *
+ * ★ 윗줄은 **아이 이름**이다(상훈님 2026-09-08). 예전엔 서비스 이름('여울')이 그 자리를 쓰고
+ *   아이 이름은 아랫줄에 함께 있었다 — 이름이 두 줄로 나뉘어 어느 쪽이 이 아이인지 흐렸다.
+ *   글꼴·크기는 그대로 둔다(손글씨 22px 이 이름에 더 어울린다).
+ * ★ 아랫줄은 **며칠째 · 친밀도**만. 이름과 그 뒤 가운뎃점은 뺐다.
+ */
 function Hud({ y }: { y: Yeoul }) {
   const { v, actions } = y;
   return (
     <>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 20px 5px' }}>
-        <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 22, lineHeight: 1, color: C.ink }}>여울</span>
+        {/* 이름이 길어도(12자) 아래 버튼과 부딪히지 않게 한 줄로 자른다. */}
+        <span data-part="pet-title" style={{
+          fontFamily: GAEGU, fontWeight: 700, fontSize: 22, lineHeight: 1.2, color: C.ink,
+          maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{v.pet.name}</span>
       </div>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7, padding: '0 20px 8px' }}>
-        <span style={{ fontSize: 14.5, color: C.ink }}>{v.pet.name}</span>
-        <span style={{ fontSize: 12, color: '#8B8279' }}>·</span>
         <span style={{ fontSize: 14, color: '#635A52' }}>{v.pet.dayText}</span>
         <span style={{ fontSize: 12, color: '#8B8279' }}>·</span>
         <span style={{ fontSize: 14, color: '#635A52' }}>친밀도 {v.pet.bond}%</span>
@@ -280,6 +290,7 @@ function Hud({ y }: { y: Yeoul }) {
           </span>
           아이 정보
         </button>
+        {/* 조각 도장은 여기 없다 — 좌측 하단 카드가 맡는다(2026-09-07 지시). */}
       </div>
     </>
   );
