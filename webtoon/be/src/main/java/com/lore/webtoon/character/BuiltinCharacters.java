@@ -169,7 +169,17 @@ public class BuiltinCharacters implements ApplicationRunner {
      */
     private void retire() {
         Set<String> keep = SEEDS.stream().map(Seed::name).collect(Collectors.toSet());
-        List<WebtoonCharacter> gone = characters.findByOwnerIdIsNull().stream()
+        /* **우리가 심은 것만 본다.**
+         *
+         * 전에는 주인이 빈 것(`findByOwnerIdIsNull`)을 다 훑었다. 그런데
+         * 로그인 안 하고 만든 캐릭터도 주인이 비어 있다 — 캐릭터 만들기는
+         * 로그인을 안 따지고(`CreditGate.currentUser()` 가 그냥 null 이 된다),
+         * 그 줄은 주인 없이 저장된다.
+         *
+         * 그래서 **게스트가 만든 캐릭터가 서버를 다시 띄울 때마다 지워졌다.**
+         * 무료 횟수를 써서 만들었는데 다음 기동에 사라진다. 심은 표시
+         * (`source = BUILTIN`)로 좁힌다. */
+        List<WebtoonCharacter> gone = characters.findBySource(CharacterSource.BUILTIN).stream()
                 .filter(one -> !keep.contains(one.getName()))
                 .toList();
         if (gone.isEmpty()) {
