@@ -20,7 +20,11 @@ import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
 // ── 상태 ────────────────────────────────────────────────────────────────
 
 export type Mode = 'day' | 'night' | 'sleep' | 'sick';
-export type SheetKey = RoomKey | 'notify' | 'settings';
+/**
+ * 시트로 남는 넷. **주방·욕실·침실은 시트가 없다**(상훈님 2026-09-08 판정 12) —
+ * 그 셋은 팝오버로 할 일이 다 되고, 알림에서만 열리는 큰 창을 남길 이유가 없었다.
+ */
+export type SheetKey = 'play' | 'album' | 'notify' | 'settings';
 export interface LogLine { who: 'pet' | 'me'; text: string }
 export interface FrameData { name: string; open: boolean; cond: string; key: FrameKey }
 export interface FireAction { label: string; tap: () => void; primary: boolean }
@@ -132,12 +136,19 @@ function callQueueOf(s: YeoulState, m: Mode): CallItem[] {
   const r = s.resolved;
   const out: CallItem[] = [];
   if (m === 'sleep') return out;
-  const last = s.log[s.log.length - 1];
-  if (!r.chat && s.calls > 0) out.push({ kind: 'chat', text: last?.who === 'pet' ? last.text : '방금 얘기 좋았어요', room: 'play' });
+
+  // ★ 순서 = **아픔 → 밤(재우기) → 배고픔 → 청소 → 대화**(상훈님 2026-09-08 판정 7).
+  //   예전엔 대화가 늘 1순위라 밤에도 아플 때도 잡담이 먼저 떴다. 급한 것이 먼저 말해야 한다.
+  //   첫 부름의 방이 흔들리므로 이 순서가 곧 **강조되는 타일의 순서**이기도 하다.
   if (m === 'sick') out.push({ kind: 'call', text: '몸이 무거워요…', room: 'bath' });
+  if (m === 'night' && !r.bed) out.push({ kind: 'call', text: '이제 졸려요', room: 'bed' });
   if (s.full <= 2 && !r.table) out.push({ kind: 'call', text: '배고파요', room: 'table' });
   if (s.trace >= 2 && !r.bath) out.push({ kind: 'call', text: '여기 좀 치워 주세요', room: 'bath' });
-  if (m === 'night' && !r.bed) out.push({ kind: 'call', text: '이제 졸려요', room: 'bed' });
+
+  const last = s.log[s.log.length - 1];
+  if (!r.chat && s.calls > 0) {
+    out.push({ kind: 'chat', text: last?.who === 'pet' ? last.text : '방금 얘기 좋았어요', room: 'play' });
+  }
   return out;
 }
 
@@ -303,10 +314,10 @@ export function useYeoul() {
   }, [later]);
 
   const openSheet = useCallback((k: SheetKey) => () => {
-    if (s.sleeping && k !== 'bed') { flash('자는 중엔 들어갈 수 없어요'); return; }
+    if (s.sleeping) { flash(`${s.petName || '아이'}가 자고 있어요`); return; }
     if (s.sick && k === 'play') { flash('아플 땐 못 놀아요'); return; }
     setS((v) => ({ ...v, sheet: k, resolved: { ...v.resolved, [k]: true }, decoOpen: false }));
-  }, [s.sleeping, s.sick, flash]);
+  }, [s.sleeping, s.sick, s.petName, flash]);
   const closeSheet = useCallback(() => {
     setS((v) => {
       if (!v.sheet || v.sheetClosing) return v;
@@ -451,12 +462,23 @@ export function useYeoul() {
   const onSend = useCallback(() => { lastSel.current = Date.now(); pushReply(s.draft.trim()); }, [pushReply, s.draft]);
   const onDraft = useCallback((t: string) => patch({ draft: t.slice(0, 40) }), [patch]);
 
+  /** 알림에서 대화로. 대화의 입구는 **말풍선 하나**다(판정 14) — 시트로 가지 않는다. */
+  const openChatFromNotify = useCallback(() => { patch({ sheet: null }); openChat(); }, [patch, openChat]);
+  /**
+   * 알림에서 그 방으로. **시트를 닫고 타일 팝오버를 연다**(판정 12) —
+   * 주방·욕실·침실은 시트가 없어졌으므로 알림만 열어 두면 막다른 길이 된다.
+   */
+  const goRoomFromNotify = useCallback((k: RoomKey) => () => {
+    lastSel.current = Date.now();
+    patch({ sheet: null, sheetClosing: false, roomSel: k, popOpen: true, popClosing: false, toast: '' });
+  }, [patch]);
+
   const onAnswerCall = useCallback(() => {
     const top = callQueueOf(s, mode)[0];
     if (!top) return;
     if (top.kind === 'chat') { openChat(); return; }
-    openSheet(top.room)();
-  }, [s, mode, openChat, openSheet]);
+    selRoom(top.room)();
+  }, [s, mode, openChat, selRoom]);
 
   // ── 앨범·엽서 ──
   const saveShot = useCallback(() => { setS((v) => ({ ...v, saved: v.saved + 1, fire: null })); flash('앨범에 저장했어요'); }, [flash]);
@@ -848,7 +870,9 @@ export function useYeoul() {
      */
     const spriteKey: string = s.acting ? s.acting
       : s.sleeping ? 'sleep'
-        : s.sick ? 'sick'
+        // ⚠️ **임시 대체 · 배포 전 진짜 그림으로 교체**(상훈님 2026-09-08 판정 5).
+        //   아픈 그림이 아직 없어 슬픈 자세로 대신한다. `~/.claude/tasks.md` 에 배포 전 필수로 올라가 있다.
+        : s.sick ? 'sad'
           : (s.full <= 0 || s.happy <= 0) ? 'sad'
             : s.chatOpen ? 'joy' : 'base';
 
@@ -898,7 +922,9 @@ export function useYeoul() {
       note: c.kind === 'chat' ? '대화 · 답을 기다려요'
         : `${ROOM_NAME[c.room]} · 지금 할 수 있어요`,
       action: c.kind === 'chat' ? '답하기' : '들어가기',
-      tap: c.kind === 'chat' ? openPlay('talk') : openSheet(c.room),
+      // ★ 시트가 없어진 방(주방·욕실·침실)으로도 갈 수 있어야 한다 — **타일 팝오버를 연다**
+      //   (상훈님 2026-09-08 판정 12). 시트를 열면 그 방은 이제 막다른 길이다.
+      tap: c.kind === 'chat' ? openChatFromNotify : goRoomFromNotify(c.room),
       dot: ACCENT, bg: C.paper, bd: C.line,
     })).concat(s.saved > 0 ? [{
       text: `폴라로이드 ${s.saved}장`, note: '앨범에 저장돼 있어요', action: '보기',
@@ -951,6 +977,9 @@ export function useYeoul() {
       tiles, pop, st, bub, sheet, charGroups, frames, spriteKey,
       // 자는 동안은 방을 아예 못 연다(판정 13). 화면이 이 값 하나만 보면 되게 둔다.
       asleep: mode === 'sleep',
+      // ⚠️ **임시 대체 · 배포 전 진짜 그림으로 교체**(판정 5). 자는 그림이 없어 커튼 뒤로 감춘다 —
+      //   깨어 있는 그림을 커튼 밑에 두면 자는 것으로 안 읽힌다(판정 13과 같은 방향).
+      hidePet: mode === 'sleep',
       sleepLine: `${s.petName || '아이'}가 자고 있어요`,
       screen: { room: s.screen === 'room', onb: s.screen === 'onb', egg: s.screen === 'egg' },
       hud: { show: !s.sampleMode },
@@ -962,6 +991,9 @@ export function useYeoul() {
         hint: `${CHAT_HINTS[s.hintI % CHAT_HINTS.length]}처럼 · 40자까지`,
       },
       fab: {
+        // ★ 대화의 **유일한 입구**다(상훈님 2026-09-08 판정 14). 마당 팝오버에서 대화를 뺐고,
+        //   아파도 눌린다 — 아플 때 말이 막히면 아이가 제일 필요한 순간에 말을 못 한다.
+        //   자는 동안만 안 뜬다.
         show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.sleeping,
         dot: s.calls > 0,
         bw: tut && tut.room === 'chat' ? '2.5px' : '1px',

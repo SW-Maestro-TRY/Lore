@@ -95,9 +95,12 @@ export default function Room({ y }: { y: Yeoul }) {
           <span style={{ display: 'block', width: 'min(236px,62%)', height: '100%', borderRadius: '50%', background: 'rgba(74,64,56,.15)', filter: 'blur(7px)' }} />
         </div>
 
-        {/* 아이 — 좌우로 오가고(wander) 가끔 뛴다(hop). 눌러서 쓰다듬는다. */}
+        {/* 아이 — 좌우로 오가고(wander) 가끔 뛴다(hop). 눌러서 쓰다듬는다.
+            ⚠️ 자는 동안은 **감춘다**(임시) — 자는 그림이 아직 없어 깨어 있는 그림이 커튼 밑에
+            비치면 자는 것으로 안 읽힌다. 진짜 그림이 오면 이 감춤을 걷어낸다(판정 5). */}
         <div
           data-part="pet"
+          hidden={v.hidePet}
           onClick={(e) => { e.stopPropagation(); actions.onPet(); }}
           style={{
             position: 'absolute', left: 0, right: 0,

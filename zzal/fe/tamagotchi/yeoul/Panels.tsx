@@ -49,10 +49,8 @@ function Sheet({ y }: { y: Yeoul }) {
             얹혀 있어, 30px 만 주면 **마지막 내용 92px 이 타일 뒤에 영구히 가린다**(상훈님 판정 2).
             타일 줄 높이(70) + 위아래 여백(10·22) + 숨 쉴 틈만큼 비운다. */}
         <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '14px 20px 120px', display: 'flex', flexDirection: 'column', gap: 13 }}>
-          {sh.key === 'table' && <TableSheet y={y} />}
-          {sh.key === 'bath' && <BathSheet y={y} />}
+          {/* 주방·욕실·침실은 시트가 없다 — 팝오버로 다 된다(상훈님 판정 12). */}
           {sh.key === 'play' && <PlaySheet y={y} />}
-          {sh.key === 'bed' && <BedSheet y={y} />}
           {sh.key === 'album' && <AlbumSheet y={y} />}
           {sh.key === 'notify' && <NotifySheet y={y} />}
           {sh.key === 'settings' && <SettingsSheet y={y} />}
@@ -63,51 +61,6 @@ function Sheet({ y }: { y: Yeoul }) {
 }
 
 // ── 칸별 내용 ───────────────────────────────────────────────────────────
-
-function TableSheet({ y }: { y: Yeoul }) {
-  const { v, actions } = y;
-  return (
-    <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        <span style={{ fontSize: 11.5, color: C.faint }}>배부름</span>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
-          {v.fullCells.map((c, i) => <div key={i} style={{ height: 14, borderRadius: 5, border: `1px solid ${C.lineSoft}`, background: c.bg }} />)}
-        </div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
-        <button onClick={actions.onRice} data-action="밥" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, padding: '14px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: v.food.riceBg, textAlign: 'left' }}>
-          <span style={{ fontSize: 14.5, color: C.ink }}>밥</span>
-          <span style={{ fontSize: 11, color: C.faint }}>재고 {v.food.stock}</span>
-        </button>
-        <button onClick={actions.onSnack} data-action="간식" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, padding: '14px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.slot, textAlign: 'left' }}>
-          <span style={{ fontSize: 14.5, color: C.ink }}>간식</span>
-          <span style={{ fontSize: 11, color: C.faint }}>{v.food.snackNote}</span>
-        </button>
-      </div>
-      <span style={{ fontSize: 11.5, lineHeight: 1.65, color: C.faint }}>가득이면 밥은 거절해요. 간식은 가득이어도 받아요.</span>
-    </>
-  );
-}
-
-function BathSheet({ y }: { y: Yeoul }) {
-  const { v, actions } = y;
-  return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 15px', borderRadius: radius.md, background: C.slot, border: '1px solid rgba(74,64,56,.09)' }}>
-        <span style={{ fontSize: 13.5, color: C.ink }}>흔적</span>
-        <span style={{ font: `12.5px ${MONO}`, color: C.sub2 }}>{v.bath.trace}개</span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 9 }}>
-        <button onClick={actions.onClean} data-action="청소" style={{ padding: '14px 6px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.slot, fontSize: 13.5, color: C.ink }}>청소</button>
-        <button onClick={actions.onBath} data-action="목욕" style={{ padding: '14px 6px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: v.bath.bathBg, fontSize: 13.5, color: v.bath.bathFg, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-          목욕<span style={{ fontSize: 10, opacity: 0.75 }}>{v.bath.bathNote}</span>
-        </button>
-        <button onClick={actions.onMed} data-action="약" style={{ padding: '14px 6px', borderRadius: radius.md, border: `1px solid ${v.bath.medBd}`, background: v.bath.medBg, fontSize: 13.5, color: v.bath.medFg }}>약</button>
-      </div>
-      {v.bath.sick && <span style={{ fontSize: 12.5, lineHeight: 1.65, color: '#A9483A' }}>아파요 · 약을 주면 바로 나아요</span>}
-    </>
-  );
-}
 
 function PlaySheet({ y }: { y: Yeoul }) {
   const { v, actions } = y;
@@ -171,16 +124,6 @@ function PlaySheet({ y }: { y: Yeoul }) {
         </div>
       )}
     </>
-  );
-}
-
-function BedSheet({ y }: { y: Yeoul }) {
-  const { v, actions } = y;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
-      <span style={{ fontSize: 13.5, lineHeight: 1.65, color: 'rgba(74,64,56,.62)' }}>{v.bed.note}</span>
-      <button onClick={actions.onSleep} style={{ padding: 16, borderRadius: radius.md, border: `1px solid ${v.bed.bd}`, background: v.bed.bg, color: v.bed.fg, fontSize: 15, opacity: v.bed.opacity }}>{v.bed.label}</button>
-    </div>
   );
 }
 
