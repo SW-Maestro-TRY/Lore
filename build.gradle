@@ -78,6 +78,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
 
     // 서버가 살아 있는지 알려주는 상태 확인 엔드포인트(/actuator/health).
     // 배포 직후 "떴는가" 확인, 앞단 게이트웨이(Nginx)·나중의 로드밸런서 헬스체크, CI/CD 배포 성공 판정에 쓴다.
