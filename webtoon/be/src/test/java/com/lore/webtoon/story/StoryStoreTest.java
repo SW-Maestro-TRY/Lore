@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -46,6 +47,11 @@ class StoryStoreTest {
             return got;
         });
         when(repo.save(any(WebtoonStory.class))).thenAnswer(c -> c.getArgument(0));
+        doAnswer(c -> {
+            Iterable<WebtoonStory> gone = c.getArgument(0);
+            gone.forEach(rows::remove);
+            return null;
+        }).when(repo).deleteAll(any());
         store = new StoryStore(repo);
     }
 
@@ -122,6 +128,46 @@ class StoryStoreTest {
         assertThat(store.save(null, 후보넷())).isZero();
         assertThat(store.save("  ", 후보넷())).isZero();
         assertThat(rows).isEmpty();
+    }
+
+    @Test
+    @DisplayName("다시 지으면 갈아 끼운다 — 안 그러면 고른 적 없는 제목이 작품에 남는다")
+    void 갈아_끼운다() {
+        store.save("run-1", 후보넷());
+        store.choose("run-1", 2);
+
+        List<Map<String, Object>> 새후보 = new ArrayList<>();
+        for (int n = 1; n <= 4; n++) {
+            새후보.add(Map.of("n", n, "title", "새 제목 " + n, "genre", "무협",
+                    "plot", "새 줄거리 " + n, "scenes", List.of("새 장면"),
+                    "cast", List.of(Map.of("name", "무명"))));
+        }
+
+        assertThat(store.replace("run-1", 새후보)).isEqualTo(4);
+        assertThat(rows).hasSize(4);                       // 옛 넷이 남아 있으면 여덟이다
+        assertThat(store.candidatesOf("run-1"))
+                .extracting(WebtoonStory::getTitle)
+                .containsExactly("새 제목 1", "새 제목 2", "새 제목 3", "새 제목 4");
+        // 옛 후보에 찍혀 있던 "고름" 표시도 같이 사라진다 — 새 넷은 아직 안 골랐다.
+        assertThat(store.chosenOf("run-1")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("갈아 끼울 것이 없으면 그냥 적는다 — 처음 짓는 것과 같다")
+    void 없으면_그냥_적는다() {
+        assertThat(store.replace("run-1", 후보넷())).isEqualTo(4);
+        assertThat(rows).hasSize(4);
+    }
+
+    @Test
+    @DisplayName("빈 것으로는 안 갈아 끼운다 — 있던 이야기가 통째로 사라진다")
+    void 빈_것으로는_안_지운다() {
+        store.save("run-1", 후보넷());
+
+        assertThat(store.replace("run-1", List.of())).isZero();
+        assertThat(store.replace("run-1", null)).isZero();
+
+        assertThat(rows).hasSize(4);
     }
 
     @Test

@@ -66,6 +66,48 @@ public class HarnessProcess {
     }
 
     /**
+     * 지금 도는 것. <b>취소가 여기로 손을 뻗는다.</b>
+     *
+     * 하나만 두는 이유는 하나만 돌기 때문이다 — 부르는 쪽이 한 줄로 세운다
+     * ({@code JobRunner} 의 single thread). 여럿을 같이 돌리기 시작하면 이
+     * 칸부터 작업별로 나눠야 한다.
+     */
+    private volatile Process current;
+
+    /**
+     * 도는 것을 멈춘다. -> <b>정말 멈출 것을 멈췄나</b>
+     *
+     * <h2>왜 곧바로 죽이지 않는가</h2>
+     *
+     * 먼저 부드럽게 부탁하고(SIGTERM), 5초를 줘도 안 죽으면 그때 죽인다.
+     * 하네스는 죽는 순간까지 <b>나간 값을 파일에 적고 있다</b>
+     * ({@code meta.json}). 쓰는 도중에 통째로 죽이면 그 파일이 반 토막
+     * JSON 이 되어 <b>그때까지 나간 돈을 통째로 못 읽는다</b> — 취소는
+     * 흔한 일이라 그 손실이 매번 쌓인다.
+     *
+     * 기다리는 것은 여기서 안 한다 — 취소를 누른 사람은 즉시 답을 받아야 한다.
+     */
+    public boolean stopCurrent() {
+        Process p = current;
+        if (p == null || !p.isAlive()) {
+            return false;
+        }
+        log.info("하네스를 멈춥니다 (pid={})", p.pid());
+        p.destroy();
+        Thread.ofVirtual().start(() -> {
+            try {
+                if (!p.waitFor(5, TimeUnit.SECONDS)) {
+                    log.warn("하네스가 안 멈춰서 끊습니다 (pid={})", p.pid());
+                    p.destroyForcibly();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        return true;
+    }
+
+    /**
      * 한 걸음 돌린다.
      *
      * @param args   {@code run.py} 뒤에 붙는 것들
@@ -86,6 +128,7 @@ public class HarnessProcess {
 
         log.info("하네스 실행: {}", String.join(" ", cmd));
         Process p = pb.start();
+        current = p;                            // 취소가 이걸 보고 멈춘다
 
         // 읽는 것과 기다리는 것을 나눈다. 읽기가 프로세스를 붙들면 아래
         // waitFor 가 한 번도 시간 초과를 못 낸다(zzal 이 겪은 함정).
@@ -103,14 +146,21 @@ public class HarnessProcess {
             }
         });
 
-        boolean done = p.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-        if (!done) {
-            p.destroyForcibly();
-            reader.join(3_000);
-            throw new IllegalStateException("만들기가 너무 오래 걸립니다 (%d초)".formatted(timeoutSeconds));
+        try {
+            boolean done = p.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            if (!done) {
+                p.destroyForcibly();
+                reader.join(3_000);
+                throw new IllegalStateException(
+                        "만들기가 너무 오래 걸립니다 (%d초)".formatted(timeoutSeconds));
+            }
+            reader.join(5_000);
+            return p.exitValue();
+        } finally {
+            /* 끝난 것을 가리키고 있으면 안 된다 — 다음 사람의 취소가 이미
+               죽은 것을 멈추고는 「멈췄다」고 답한다. */
+            current = null;
         }
-        reader.join(5_000);
-        return p.exitValue();
     }
 
     /**

@@ -40,6 +40,27 @@ public interface WebtoonWorkRepository extends JpaRepository<WebtoonWork, Long> 
            """)
     List<WebtoonWork> ownedBy(@Param("userId") Long userId);
 
+    /**
+     * 둘러보기에 걸린 작품 — 새 것부터.
+     *
+     * 작품 번호가 없는 줄(만드는 중이거나 중간에 죽은 것)은 뺀다 — 목록에서
+     * 눌러도 열 수 없는 줄이다.
+     */
+    @Query("""
+           select w from WebtoonWork w
+            where w.runId is not null and w.isPublic = true
+            order by w.id desc
+           """)
+    List<WebtoonWork> onGallery();
+
+    /** 이 브라우저가 만든 것 — 새 것부터. <b>비공개도 준다</b>(내 목록이라서). */
+    @Query("""
+           select w from WebtoonWork w
+            where w.runId is not null and w.browserUid = :browserUid
+            order by w.id desc
+           """)
+    List<WebtoonWork> madeBy(@Param("browserUid") String browserUid);
+
     /** 이 작품의 주인. 권한을 물을 때 쓴다. */
     Optional<WebtoonWork> findFirstByRunId(String runId);
 }

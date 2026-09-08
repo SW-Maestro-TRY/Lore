@@ -53,25 +53,9 @@ public class JobService {
     private static final int PHOTO_WIDTH = 1400;
 
     /** 그림체 고른 값 -> 하네스가 아는 이름. 파이썬 쪽 STYLE_CHOICES 와 같아야 한다. */
-    private static final Map<String, String> STYLE = Map.of(
-            "romance", "romance_fantasy",
-            "webtoon", "webtoon_lock_bg",
-            "frost", "frost",
-            "cinematic", "cinematic",
-            "pastel", "pastel",
-            "noir", "noir",
-            "shoujo", "shoujo",
-            "game", "game");
-
-    private static final Map<String, String> STYLE_LABEL = Map.of(
-            "romance_fantasy", "로맨스 판타지",
-            "webtoon_lock_bg", "일반 웹툰",
-            "frost", "세미리얼 · 성인향",
-            "cinematic", "시네마틱 반실사",
-            "pastel", "일상툰 감성",
-            "noir", "다크 느와르",
-            "shoujo", "순정 · BL",
-            "game", "게임 원화");
+    /* 그림체 표는 여기 두지 않는다 — 둘러보기·완성본도 같은 값을 읽어야 해서
+       한 곳({@link WebtoonStyles})으로 모았다. */
+    private static final Map<String, String> STYLE = WebtoonStyles.STYLE;
 
     private static final Map<String, String> STAGE_LABEL = Map.of(
             "story", "이야기 짓기",
@@ -79,7 +63,7 @@ public class JobService {
             "board", "장면 나누기",
             "pages", "페이지 그림");
 
-    private static final String DEFAULT_STYLE = "webtoon_lock_bg";
+    private static final String DEFAULT_STYLE = WebtoonStyles.DEFAULT_STYLE;
 
     private final WebtoonJobRepository jobs;
     private final JobStore store;
@@ -214,7 +198,7 @@ public class JobService {
         WebtoonJob job = store.byPublicId(publicId);
         return JobView.of(job, progress.of(job.getId()),
                 store.directionsOf(job.getId()),
-                STYLE_LABEL.getOrDefault(job.getStyle(), ""),
+                WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()));
     }
 
@@ -231,6 +215,36 @@ public class JobService {
         store.pick(job.getId(), n);
         stories.choose(job.getRunId(), n);       // 무엇을 골랐는지도 DB 에 남는다
         runner.resumeAfterPick(job.getId());
+    }
+
+    /**
+     * 넷 다 마음에 안 든다 — 후보를 다시 짓는다.
+     *
+     * <b>고르는 차례일 때만 된다.</b> 그리는 중에 이걸 받으면 같은 작품이 줄에
+     * 두 번 서서, 하네스가 같은 폴더를 동시에 고쳐 쓴다(파이썬 쪽
+     * {@code _require} 가 막던 것과 같은 자리다).
+     */
+    public void retryPick(String publicId, String note) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_PICK) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 고를 차례가 아닙니다");
+        }
+        runner.retryDirections(job.getId(), note == null ? "" : note.trim());
+    }
+
+    /**
+     * 그만둔다.
+     *
+     * <b>끝난 것은 그냥 둔다.</b> 화면이 다 만들어진 순간에 취소를 눌렀을 수
+     * 있는데(0.8초마다 묻는 사이), 그때 「취소했습니다」로 덮으면 다 나온
+     * 작품이 실패로 보인다.
+     */
+    public void cancel(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus().isOver()) {
+            return;
+        }
+        runner.cancel(job.getId());
     }
 
     /** 사람이 캐릭터 시트를 확인했다. */

@@ -65,6 +65,36 @@ public class StoryStore {
         return fresh.size();
     }
 
+    /**
+     * 후보 넷을 <b>갈아 끼운다.</b> 「다시 만들기」로 새로 지었을 때 쓴다.
+     *
+     * {@link #save} 는 이미 적힌 작품이면 아무 일도 안 한다 — 한 작품에 두
+     * 벌이 남으면 어느 것이 진짜인지 알 수 없기 때문이다. 그런데 다시 지으면
+     * <b>진짜가 실제로 바뀐다.</b> 그대로 두면 화면에는 새 이야기가 뜨고 DB 에는
+     * 옛 이야기가 남아, 다 만든 뒤 「내가 만든 웹툰」에 <b>고른 적 없는 제목</b>이
+     * 뜬다.
+     *
+     * 지우고 적는 것이 한 트랜잭션이다 — 지운 채로 죽으면 그 작품의 이야기가
+     * 통째로 없어진다.
+     *
+     * @return 새로 적은 줄 수
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int replace(String runId, List<?> directions) {
+        if (runId == null || runId.isBlank() || directions == null || directions.isEmpty()) {
+            return 0;
+        }
+        List<WebtoonStory> old = stories.findByRunIdOrderByNAsc(runId);
+        if (!old.isEmpty()) {
+            stories.deleteAll(old);
+            // 적기 전에 지운 것을 굳힌다 — 안 그러면 save 의 "이미 있나" 가
+            // 아직 남아 있는 옛 줄을 보고 그냥 돌아간다.
+            stories.flush();
+            log.info("옛 이야기를 지웠습니다 (run={}, {}개)", runId, old.size());
+        }
+        return save(runId, directions);
+    }
+
     /** 사람이 고른 것을 표시한다. 이미 다른 것이 표시돼 있으면 옮긴다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void choose(String runId, int n) {

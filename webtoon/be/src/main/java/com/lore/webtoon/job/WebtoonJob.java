@@ -185,6 +185,17 @@ public class WebtoonJob {
         this.updatedAt = at;
     }
 
+    /**
+     * 고른 것을 지운다 — 후보를 <b>다시</b> 지었을 때.
+     *
+     * 안 지우면 지난번에 고른 번호가 그대로 남아, 새 후보를 보여 주는 화면이
+     * 셋째 칸에 이미 고른 표시를 달고 뜬다. 사람은 고른 적이 없다.
+     */
+    void unpick(Instant at) {
+        this.picked = null;
+        this.updatedAt = at;
+    }
+
     public Long getId() {
         return id;
     }

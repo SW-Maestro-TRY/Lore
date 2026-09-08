@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -53,6 +55,21 @@ public class JobRunner {
         t.setDaemon(true);
         return t;
     });
+
+    /** 사람이 화면에서 그만두라고 했을 때 남는 말. */
+    static final String CANCELLED = "만들기를 취소했습니다";
+
+    /**
+     * 그만두라는 말을 들은 작업들.
+     *
+     * <b>돌고 있는 것을 죽이는 것만으로는 모자라다.</b> 죽이면 그 걸음이
+     * 「그림을 만들지 못했습니다」로 끝나서, 사람이 스스로 그만둔 것을 우리
+     * 잘못처럼 보여 준다. 그래서 표시를 따로 남기고, 걸음마다 그것부터 본다.
+     */
+    private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
+
+    /** 지금 하네스 안에 들어가 있는 작업. 취소가 이걸 보고 죽일지 정한다. */
+    private volatile Long inHarness;
 
     private final HarnessProcess harness;
     private final JobProgress progress;
@@ -109,6 +126,47 @@ public class JobRunner {
         });
     }
 
+    /**
+     * 넷 다 마음에 안 든다 — <b>이야기 후보를 다시 짓는다.</b>
+     *
+     * 콘티 검수가 없어진 뒤로 「다시 만들기」가 갈 곳은 여기뿐이다. 사람이
+     * 적어 보낸 말은 이번 시도에만 반영할 요청으로 하네스에 넘긴다
+     * ({@code --note}) — 파이썬 쪽 {@code _run_restory_phase} 와 같은 인자다.
+     */
+    public void retryDirections(Long jobId, String note) {
+        line.submit(() -> {
+            try {
+                restory(jobId, note);
+            } catch (Exception e) {
+                fail(jobId, e);
+            }
+        });
+    }
+
+    /**
+     * 그만둔다. -> 도는 것을 실제로 멈췄나
+     *
+     * <h2>두 갈래다</h2>
+     *
+     * <b>돌고 있으면</b> 표시만 남기고 하네스를 멈춘다 — 뒷정리(값 적기 ·
+     * 돌려주기 · 실패 적기)는 그 걸음이 한다. 여기서도 같이 하면 같은 작업을
+     * 두 곳에서 끝내게 되고, 로그인 안 한 사람의 하루 몫이 <b>두 번</b>
+     * 돌아온다({@code GuestGate.refundKey} 는 부를 때마다 하나씩 돌려준다).
+     *
+     * <b>안 돌고 있으면</b> — 줄에서 기다리거나, 사람이 볼 차례로 멈춰 서
+     * 있거나 — 여기서 바로 끝낸다. 줄에 넣어 두면 앞의 것이 몇 분씩 걸리는
+     * 동안 취소를 누른 사람이 계속 기다리게 된다. 그 사이에 그 작업의 차례가
+     * 오더라도 첫 걸음에서 표시를 보고 그냥 물러난다.
+     */
+    public void cancel(Long jobId) {
+        cancelled.add(jobId);
+        if (jobId.equals(inHarness) && harness.stopCurrent()) {
+            log.info("만들기를 멈춥니다 (job={})", jobId);
+            return;
+        }
+        stop(jobId, CANCELLED);
+    }
+
     /** 사람이 시트를 확인했다. 마지막 걸음으로. */
     public void resumeAfterSheet(Long jobId) {
         line.submit(() -> {
@@ -142,8 +200,9 @@ public class JobRunner {
                     args.add("--note");
                     args.add(note);
                 }
-                int code = harness.run(args, env(job), l -> progress.line(jobId, l));
+                int code = callHarness(jobId, job, args);
                 after.cost(job.getRunId());      // 다시 그리는 것도 값이 나간다
+                stopIfCancelled(jobId);
                 if (code != 0) {
                     throw new IllegalStateException("캐릭터 시트를 다시 만들지 못했습니다");
                 }
@@ -161,17 +220,54 @@ public class JobRunner {
 
     /* ---- 걸음 셋 ---------------------------------------------------------- */
 
+    /**
+     * 하네스를 부른다 — <b>취소가 손을 뻗을 수 있게 표시해 두고.</b>
+     *
+     * 부르기 전에 한 번 본다(줄에서 기다리는 동안 그만뒀을 수 있다), 부르는
+     * 동안 어느 작업인지 남겨 둔다({@link #cancel} 이 이걸 보고 죽인다),
+     * 끝나면 지운다 — 안 지우면 다음 사람의 취소가 엉뚱한 걸음을 죽인다.
+     */
+    private int callHarness(Long jobId, WebtoonJob job, List<String> args)
+            throws IOException, InterruptedException {
+        stopIfCancelled(jobId);
+        inHarness = jobId;
+        try {
+            return harness.run(args, env(job), out -> progress.line(jobId, out));
+        } finally {
+            inHarness = null;
+        }
+    }
+
+    /** 그만두라고 했으면 여기서 멈춘다. 버그가 아니므로 따로 던진다. */
+    private void stopIfCancelled(Long jobId) {
+        if (cancelled.contains(jobId)) {
+            throw new Cancelled();
+        }
+    }
+
+    /**
+     * 사람이 그만뒀다는 표시.
+     *
+     * 실패와 <b>같은 길로 끝나되</b>(값을 적고, 낸 것을 돌려주고, 끝났다고
+     * 적는다) 로그에는 오류로 안 남는다 — 우리가 뭘 잘못한 게 아니다.
+     */
+    private static final class Cancelled extends RuntimeException {
+        Cancelled() {
+            super(CANCELLED);
+        }
+    }
+
     private void story(Long jobId, Path jobDir) throws Exception {
         WebtoonJob job = store.running(jobId, JobStage.STORY);
         progress.say(jobId, "루가 이야기를 짓고 있어요");
 
-        int code = harness.run(
-                List.of("--character", jobDir.resolve("character.json").toString()),
-                env(job), line -> progress.line(jobId, line));
+        int code = callHarness(jobId, job,
+                List.of("--character", jobDir.resolve("character.json").toString()));
         /* **성공을 보기 전에 값부터 적는다.** 이 걸음이 죽어도 이야기 넷을 쓴
            값은 이미 나갔다. 아직 작품 번호를 모르니(그건 아래에서 읽는다)
            방금 값이 적힌 폴더에서 찾는다. */
         after.cost(latestMeta());
+        stopIfCancelled(jobId);
         if (code != 0) {
             throw new IllegalStateException("이야기 후보를 만들지 못했습니다");
         }
@@ -205,6 +301,42 @@ public class JobRunner {
         sheet(jobId);
     }
 
+    /**
+     * 이야기 후보를 <b>다시</b> 짓는다. 그리고 다시 고르기를 기다린다.
+     *
+     * 첫 걸음과 달리 작품 번호가 이미 있다 — 같은 폴더 안에서 후보만 갈아
+     * 끼운다({@code --restory}).
+     */
+    private void restory(Long jobId, String note) throws Exception {
+        WebtoonJob job = store.running(jobId, JobStage.STORY);
+        progress.say(jobId, "루가 이야기를 다시 짓고 있어요");
+
+        List<String> args = new ArrayList<>(
+                List.of("--run-id", job.getRunId(), "--restory"));
+        if (note != null && !note.isBlank()) {
+            args.add("--note");
+            args.add(note.trim());
+        }
+        int code = callHarness(jobId, job, args);
+        after.cost(job.getRunId());          // 다시 짓는 것도 값이 나간다
+        stopIfCancelled(jobId);
+        if (code != 0) {
+            throw new IllegalStateException("이야기 후보를 다시 만들지 못했습니다");
+        }
+
+        List<Map<String, Object>> directions = directionsOf(job.getRunId());
+        if (directions.isEmpty()) {
+            throw new IllegalStateException("이야기 후보를 하나도 못 읽었습니다");
+        }
+        store.directions(jobId, directions);
+        /* **갈아 끼운다.** 그냥 적으면(save) 이미 적힌 작품이라 아무 일도 안
+           일어나서, 화면에는 새 이야기가 뜨고 DB 에는 옛 이야기가 남는다 —
+           다 만든 뒤 「내가 만든 웹툰」에 고른 적 없는 제목이 뜬다. */
+        stories.replace(job.getRunId(), directions);
+        store.unpick(jobId);                 // 옛 번호를 지운다 — 후보가 바뀌었다
+        store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
+    }
+
     private void sheet(Long jobId) throws Exception {
         WebtoonJob job = store.running(jobId, JobStage.SHEET);
         progress.say(jobId, "루가 캐릭터를 그리고 있어요");
@@ -213,17 +345,16 @@ public class JobRunner {
            (0.5 초면 끝난다), 실제로 시트를 그리는 것은 `--sheet` 다. 처음에
            하나로 알고 `--pick-save` 만 불렀더니 시트 없이 다음 걸음으로
            넘어가 거기서 죽었다 — 그때도 이야기 짓는 값은 이미 나간 뒤였다. */
-        int picked = harness.run(
+        int picked = callHarness(jobId, job,
                 List.of("--run-id", job.getRunId(),
-                        "--pick", String.valueOf(job.getPicked()), "--pick-save"),
-                env(job), line -> progress.line(jobId, line));
+                        "--pick", String.valueOf(job.getPicked()), "--pick-save"));
         if (picked != 0) {
             throw new IllegalStateException("고른 이야기를 저장하지 못했습니다");
         }
 
-        int code = harness.run(List.of("--run-id", job.getRunId(), "--sheet"),
-                env(job), line -> progress.line(jobId, line));
+        int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--sheet"));
         after.cost(job.getRunId());          // 시트는 그림이다 — 죽어도 값은 나갔다
+        stopIfCancelled(jobId);
         if (code != 0) {
             throw new IllegalStateException("캐릭터 시트를 만들지 못했습니다");
         }
@@ -242,11 +373,12 @@ public class JobRunner {
         WebtoonJob job = store.running(jobId, JobStage.PAGES);
         progress.say(jobId, "루가 그림을 그리고 있어요");
 
-        int code = harness.run(List.of("--run-id", job.getRunId(), "--detail-pages"),
-                env(job), line -> progress.line(jobId, line));
+        int code = callHarness(jobId, job,
+                List.of("--run-id", job.getRunId(), "--detail-pages"));
         /* **한 편에서 돈이 제일 많이 나가는 자리다.** 여기서 죽으면 그린
            만큼은 이미 값이 나갔는데, 끝에서만 적으면 그게 통째로 0원이 된다. */
         after.cost(job.getRunId());
+        stopIfCancelled(jobId);
         if (code != 0) {
             throw new IllegalStateException("그림을 만들지 못했습니다");
         }
@@ -409,11 +541,34 @@ public class JobRunner {
      * </ul>
      */
     private void fail(Long jobId, Exception e) {
+        if (e instanceof Cancelled) {
+            log.info("사람이 만들기를 그만뒀습니다 (job={})", jobId);
+            stop(jobId, CANCELLED);
+            return;
+        }
         log.error("만들기가 실패했습니다 (job={})", jobId, e);
+        stop(jobId, humanReason(e));
+    }
+
+    /**
+     * 여기서 끝낸다 — 값을 적고, 낸 것을 돌려주고, 왜 끝났는지 적는다.
+     *
+     * <b>이미 끝난 것은 다시 안 끝낸다.</b> 취소는 두 곳에서 들어올 수 있다
+     * (그만두라고 한 자리와, 그 말을 본 걸음). 그냥 두면 로그인 안 한 사람의
+     * 하루 몫이 두 번 돌아온다 — {@code GuestGate.refundKey} 는 부를 때마다
+     * 하나씩 돌려주기 때문이다.
+     */
+    private void stop(Long jobId, String why) {
+        WebtoonJob job = store.byId(jobId);
+        if (job == null || job.getStatus().isOver()) {
+            cancelled.remove(jobId);
+            return;
+        }
         spentSoFar(jobId);
         Refunded back = refund(jobId);
-        store.failed(jobId, humanReason(e), back);
+        store.failed(jobId, why, back);
         progress.forget(jobId);
+        cancelled.remove(jobId);
     }
 
     /**
