@@ -444,6 +444,10 @@ public class JobService {
             });
         }
         doc.put("fields", fields);
+        /* **사진에 붙인 한 마디를 빠뜨리지 않는다.** 하네스는 사진을 읽을 때
+           이 값을 같이 본다 — 안 적어 주면 사람이 "왼쪽이 주인공이에요" 라고
+           썼는데 그 말이 어디에도 안 닿는다(화면은 받아서 보내고 있었다). */
+        doc.put("photo_note", blank(form.photoNote()));
         doc.put("genre", blank(form.genre()));
         doc.put("world", Map.of("preset", "", "text", ""));
         doc.put("story", blank(form.story()));
@@ -466,6 +470,10 @@ public class JobService {
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("name", blank(form.name()));
         doc.put("character", blank(form.character()));
+        /* **사진에 붙인 한 마디를 빠뜨리지 않는다.** 하네스는 사진을 읽을 때
+           이 값을 같이 본다 — 안 적어 주면 사람이 "왼쪽이 주인공이에요" 라고
+           썼는데 그 말이 어디에도 안 닿는다(화면은 받아서 보내고 있었다). */
+        doc.put("photo_note", blank(form.photoNote()));
         doc.put("genre", blank(form.genre()));
         doc.put("story", blank(form.story()));
         doc.put("style", blank(form.style()));
@@ -524,7 +532,12 @@ public class JobService {
                                    여기서 붙인다 — 화면이 그림을 내려받아 다시 올릴
                                    이유가 없다. */
                                 @JsonProperty("character_id") @JsonAlias("characterId")
-                                String characterId) {
+                                String characterId,
+                                /* 사진에 대해 사람이 덧붙인 한 마디("왼쪽이 주인공" 등).
+                                   하네스가 사진을 읽을 때 그대로 붙여 준다
+                                   (new_harness/run.py 의 "첨부한 사진 n장을 보라(…)"). */
+                                @JsonProperty("photo_note") @JsonAlias("photoNote")
+                                String photoNote) {
 
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;
