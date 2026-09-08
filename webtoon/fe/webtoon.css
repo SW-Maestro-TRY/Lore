@@ -3228,6 +3228,14 @@
 .webtoon-page .bub-svg .bs-whisper > polygon,
 .webtoon-page .bub-svg .bs-flash > polygon { stroke-dasharray: none; }
 
+/* 윤곽을 두 배로 긋고 속을 덮는다 — 위 paintShape 의 두 번 그리기. */
+.webtoon-page .bub-svg .bs > * { stroke-width: 5; }
+.webtoon-page .bub-svg .bs-shout > * { stroke-width: 6; }
+.webtoon-page .bub-svg .bs-narration > * { stroke-width: 4; }
+.webtoon-page .bub-svg .bs-whisper > * { stroke-width: 4; }
+.webtoon-page .bub-svg .bs-fill > * { fill: #fff; stroke: none; }
+.webtoon-page .bub-svg .bs-flash ~ .bs-fill > * { fill: rgba(255,255,255,.9); }
+
 .webtoon-page .bub { position: relative; z-index: 1; }
 .webtoon-page .bub-shout { font-weight: 800; padding: 1.1em 1.2em; }
 .webtoon-page .bub-narration { text-align: left; }
@@ -3377,7 +3385,9 @@
 .webtoon-page .dock-hint { order: -2; margin: 0; color: var(--dim); font-size: .78rem; }
 .webtoon-page .dock-hint b { color: var(--accent-d); }
 
-.webtoon-page .dock-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.webtoon-page /* 두 칸씩 놓는다 — 말풍선 미리보기가 실제 모양으로 그려지면서 세 칸으로는
+   서로 겹치고 딱지를 덮었다. 고르는 것은 여섯 개뿐이라 두 줄이면 다 보인다. */
+.webtoon-page .dock-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .webtoon-page .dock-item {
   background: var(--ink-2); border: 1px solid var(--line-2); border-radius: 12px;
   padding: 10px 6px; cursor: pointer; display: grid; gap: 6px; place-items: center;
@@ -3387,7 +3397,13 @@
 .webtoon-page .dock-item:active { transform: translateY(1px); }
 .webtoon-page .dock-item span { font-size: .7rem; color: var(--muted); }
 .webtoon-page .dock-item .prev { pointer-events: none; }
-.webtoon-page .dock-item .prev .bub { font-size: 10px; padding: .4em .6em; border-width: 1.5px; }
+/* 도구 패널 미리보기 — 그림 위와 같은 모양을 작게 그린다. 꼬리가 칸 밖으로
+   조금 나가므로 넘치는 것을 감추지 않는다. */
+.webtoon-page .dock-item .prev { position: relative; overflow: visible; min-height: 34px;
+                   display: flex; align-items: center; justify-content: center; }
+.webtoon-page .dock-item .prev .bub { font-size: 10px; padding: .4em .6em; }
+.webtoon-page .dock-item .prev .bub-svg .bs > * { stroke-width: 3.4; }
+.webtoon-page .dock-item .prev .handle-tail { display: none; }
 .webtoon-page .dock-item .prev .stk { font-size: 26px; }
 .webtoon-page .dock-item .prev .sfx { font-size: 17px; -webkit-text-stroke-width: 2px; }
 

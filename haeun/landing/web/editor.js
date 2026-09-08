@@ -665,10 +665,10 @@ function itemHTML(it) {
 
    글이 몇 줄인지는 브라우저가 글을 놓아 본 뒤에야 안다. 그래서 그리는 것은
    항상 놓은 뒤다 — 글을 고치거나 폭을 끌 때마다 다시 부른다. */
-function paintShape(el) {
+function paintShape(el, given) {
   const svg = $(".bub-svg", el), bub = $(".bub", el);
   if (!svg || !bub) return;
-  const it = itemOf(el);
+  const it = given || itemOf(el);
   if (!it) return;
   const v = it.variant;
   const round = v !== "narration";
@@ -737,12 +737,18 @@ function paintShape(el) {
     }
   }
 
-  // 꼬리를 먼저, 몸통을 나중에 — 나중 것이 이어진 자리의 선을 덮는다.
+  /* **두 번 그린다 — 선을 굵게 한 번, 그 위에 속을 채워 한 번.**
+
+     꼬리와 몸통을 그냥 겹쳐 그리면 이어진 자리에 <b>선이 그대로 남는다</b>.
+     나중에 그린 몸통의 테두리가 꼬리를 가로지르기 때문이다. 그래서 먼저 두 배
+     굵기로 윤곽을 잡고, 같은 모양을 선 없이 흰색으로 덮는다 — 안쪽 선은 덮여
+     사라지고 바깥 윤곽만 제 굵기로 남는다. */
   const pad = 400;                    // 밖으로 뻗은 꼬리가 잘리지 않게
   svg.setAttribute("viewBox", `${-pad} ${-pad} ${w + pad * 2} ${h + pad * 2}`);
   svg.style.left = `${-pad}px`; svg.style.top = `${-pad}px`;
   svg.style.width = `${w + pad * 2}px`; svg.style.height = `${h + pad * 2}px`;
-  svg.innerHTML = `<g class="bs bs-${v}">${tail}${body}</g>`;
+  svg.innerHTML = `<g class="bs bs-${v}">${tail}${body}</g>`
+                  + `<g class="bs-fill">${tail}${body}</g>`;
 
   const grip = $(".handle-tail", el);
   if (grip) {
@@ -761,7 +767,10 @@ function itemOf(el) {
 }
 
 function paintShapes(no) {
-  $$(`#scene-${no} .item[data-type=bubble]`).forEach(paintShape);
+  /* `forEach(paintShape)` 로 넘기면 안 된다 — forEach 는 두 번째 인자로
+     **몇 번째인가**를 같이 준다. 그 숫자가 "그릴 항목" 자리로 들어가서, 첫
+     번째(0 은 거짓값이라 무사했다) 말고는 전부 모양이 통째로 어긋났다. */
+  $$(`#scene-${no} .item[data-type=bubble]`).forEach(el => paintShape(el));
 }
 
 function paintItems(no) {
@@ -943,7 +952,8 @@ function paintDock() {
     grid.innerHTML = BUBBLES.map(([v, label, sample]) => `
       <button type="button" class="dock-item" data-add="bubble" data-variant="${v}"
               data-text="${esc(sample)}">
-        <div class="prev"><div class="bub bub-${v}">${esc(sample.slice(0, 7))}</div></div>
+        <div class="prev item" data-prev-variant="${v}"><svg class="bub-svg"></svg>` +
+          `<div class="bub bub-${v}">${esc(sample.slice(0, 7))}</div></div>
         <span>${label}</span>
       </button>`).join("");
   } else if (tab === "sticker") {
@@ -957,6 +967,12 @@ function paintDock() {
         <div class="prev"><div class="sfx">${esc(s)}</div></div>
       </button>`).join("");
   }
+    /* 미리보기도 **그림과 같은 모양**으로 그린다. 예전에는 CSS 로만 그려서
+     대충 비슷했는데, 모양을 SVG 가 만들게 된 뒤로는 그리는 사람이 없어서
+     글자만 덩그러니 남았다 — 무엇을 고르는지 알 수 없다. */
+  $$(".prev[data-prev-variant]", grid).forEach(el => paintShape(el, {
+    variant: el.dataset.prevVariant, size: 10, tail: "left", tx: 20, ty: 126,
+  }));
   $$("[data-add]", grid).forEach(b => b.addEventListener("click", () =>
     addItem(b.dataset.add, b.dataset.variant || "", b.dataset.text)));
 }
