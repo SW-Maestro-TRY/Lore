@@ -32,6 +32,16 @@ export interface Live {
   /** 부화 중 지금 하는 일 한 줄(서버 문구). */
   step: string | null;
   /**
+   * 알 화면의 네 칸(0~4). **아이가 있으면 이것이 진행의 유일한 근거**다.
+   *
+   * ★ 시간으로 재지 않는다 — 그림 굽는 데 몇 분이 걸릴지 우리가 모르므로 시계로 칸을 채우면
+   *   거짓말이 된다. 대신 서버가 알려 주는 **지금 하는 일(step)이 바뀐 횟수**를 센다.
+   *   단계가 실제로 넘어가야 칸이 찬다.
+   * ★ 4 는 서버가 `ALIVE` 라고 답했을 때에만 나온다. 그 전에는 3 에서 멈춘다 —
+   *   아직 안 끝났는데 '다 됐어요' 가 뜨면 눌러도 안 열리는 문이 된다.
+   */
+  progress: number;
+  /**
    * 기본 8종 중 **서버가 그림을 안 준 것**. 있으면 안 되는 상태다(→ `BASIC_KEYS` 주석).
    * ⚠️ 지금 개발 중에는 가짜 생성이 6종만 만들어서 `sick`·`call` 이 늘 여기 담긴다 —
    *   **정상적인 경고**다. 진짜 생성으로 바꾸면 비어야 한다. 이 경고를 지우지 말 것.
@@ -48,7 +58,7 @@ export interface Live {
 
 const EMPTY: Live = {
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null,
-  ready: false, failed: false, step: null, missingBasics: [],
+  ready: false, failed: false, step: null, progress: 0, missingBasics: [],
   img: () => null, upload: async () => {}, start: async () => {}, reset: () => {},
 };
 
@@ -60,6 +70,8 @@ export function useHatchState(): Live {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const objectUrl = useRef<string | null>(null);
+  // 지금까지 본 단계 이름들. 같은 이름이 다시 와도 한 번만 센다.
+  const [seenSteps, setSeenSteps] = useState<string[]>([]);
 
   // 미리보기 주소는 브라우저 메모리를 잡으므로 바뀌거나 떠날 때 놓아 준다.
   useEffect(() => () => { if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }, []);
@@ -118,6 +130,13 @@ export function useHatchState(): Live {
     return () => { alive = false; clearInterval(t); };
   }, [petId, done]);
 
+  // 단계가 넘어갈 때마다 한 칸. 서버가 말해 준 것만 센다.
+  const stepName = pet?.step ?? null;
+  useEffect(() => {
+    if (!stepName) return;
+    setSeenSteps((v) => (v.includes(stepName) ? v : [...v, stepName]));
+  }, [stepName]);
+
   /**
    * 카탈로그 key 하나를 **내 아이 그림 주소**로. 아직 못 받았으면 null.
    * ★ 18 동작 전부를 받는다 — 서버 `Motion.key` 와 우리 key 는 같은 이름이라 표가 필요 없다.
@@ -131,6 +150,7 @@ export function useHatchState(): Live {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
     setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null);
+    setSeenSteps([]);
   }, []);
 
   return {
@@ -138,6 +158,7 @@ export function useHatchState(): Live {
     ready: pet?.phase === 'ALIVE',
     failed: pet?.phase === 'FAILED' || pet?.phase === 'DEAD',
     step: pet?.step ?? null,
+    progress: pet?.phase === 'ALIVE' ? 4 : Math.min(3, seenSteps.length),
     missingBasics: pet?.phase === 'ALIVE'
       ? BASIC_KEYS.filter((k) => !pet.motions?.some((m) => m.key === k && m.basicImageKey))
       : [],

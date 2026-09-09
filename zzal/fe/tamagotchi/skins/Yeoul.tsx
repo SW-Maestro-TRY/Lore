@@ -27,7 +27,11 @@ import { useYeoul } from '../yeoul/useYeoul';
 import type { SkinProps } from './Scrapbook';
 
 export default function Yeoul(_props: SkinProps) {
-  const y = useYeoul();
+  // 진짜 부화(그림을 올린 경우)만 여기 붙는다. 안 올렸으면 통째로 잠자고 화면은 목으로 돈다.
+  // ★ `useYeoul` 보다 먼저 부른다 — 부화 진행을 목이 아니라 **서버가 말하게** 하려면
+  //   목이 만들어질 때 이미 손에 들려 있어야 한다(판정 1).
+  const live = useHatchState();
+  const y = useYeoul(live);
   const { s, v, actions } = y;
 
   // 이미 로그인한 채로 들어온 사람에게는 문을 열어 둔다 — 첫 화면에서 다시 묻지 않는다.
@@ -36,14 +40,6 @@ export default function Yeoul(_props: SkinProps) {
   useEffect(() => {
     if (isAuthenticated) passAuth('session');
   }, [isAuthenticated, passAuth]);
-
-  // 진짜 부화(그림을 올린 경우)만 여기 붙는다. 안 올렸으면 통째로 잠자고 화면은 목으로 돈다.
-  const live = useHatchState();
-  const { patch } = actions;
-  useEffect(() => {
-    // 서버가 다 구웠으면 목의 부화 칸도 가득 채워 '지금 만나러 가기' 를 연다.
-    if (live.ready) patch({ hatch: 4 });
-  }, [live.ready, patch]);
 
   return (
     <div

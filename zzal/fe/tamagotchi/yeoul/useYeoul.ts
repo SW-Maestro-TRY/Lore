@@ -17,6 +17,7 @@ import {
 } from './constants';
 import { josa } from '../constants';
 import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
+import type { Live } from './useHatch';
 
 /**
  * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
@@ -206,9 +207,28 @@ export interface CharGroup {
 
 // ── 본체 ────────────────────────────────────────────────────────────────
 
-export function useYeoul() {
+export function useYeoul(live?: Live) {
   const [s, setS] = useState<YeoulState>(INITIAL);
   const patch = useCallback((p: Partial<YeoulState>) => setS((v) => ({ ...v, ...p })), []);
+
+  /**
+   * 부화 진행. **아이가 있으면 서버 말만 듣는다**(상훈님 2026-09-09 판정 1).
+   *
+   * 목의 `s.hatch` 는 그림을 안 올린 사람이 시안을 눌러 볼 때 쓰는 가짜 계수기다. 그런데
+   * 그것이 튜토리얼을 넘기거나 토스트가 뜰 때마다 올라가서, 서버는 아직 굽고 있는데 알 화면이
+   * '다 됐어요' 를 띄웠다. 눌러도 안 열리는 문이 된다.
+   * 그래서 진짜 아이가 있으면 `live.progress`(단계가 넘어간 횟수, 다 되면 4)만 본다.
+   *
+   * ref 로 들고 있는 이유 = 아래 `setS` 안에서 읽는데, 값이 바뀔 때마다 콜백을 새로 만들면
+   * 타이머가 걸린 손잡이들이 통째로 다시 태어난다.
+   */
+  const realHatch = !!live?.petId;
+  const hatchN = realHatch ? (live?.progress ?? 0) : s.hatch;
+  const realRef = useRef(false);
+  realRef.current = realHatch;
+  // setS 콜백 안에서도 '지금 몇 칸인지' 를 읽어야 한다(exitSample).
+  const hatchRef = useRef(0);
+  hatchRef.current = hatchN;
 
   // 타이머는 정리해야 하므로 한곳에 모아 둔다.
   const T = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
@@ -235,7 +255,7 @@ export function useYeoul() {
   }, [later]);
 
   const flash = useCallback((t: string) => {
-    setS((v) => ({ ...v, toast: t, hatch: v.sampleMode ? Math.min(4, v.hatch + 1) : v.hatch }));
+    setS((v) => ({ ...v, toast: t, hatch: v.sampleMode && !realRef.current ? Math.min(4, v.hatch + 1) : v.hatch }));
     later('toast', 1700, () => setS((v) => ({ ...v, toast: '' })));
   }, [later]);
 
@@ -291,7 +311,7 @@ export function useYeoul() {
       return v.sampleMode ? { ...v, tutor: 0, tutorOn: false } : finishTutor(v);
     });
   }, [TUT.length]);
-  const nextTutor = useCallback(() => setS((v) => ({ ...v, tutor: v.tutor + 1, hatch: Math.min(4, v.hatch + 1) })), []);
+  const nextTutor = useCallback(() => setS((v) => ({ ...v, tutor: v.tutor + 1, hatch: realRef.current ? v.hatch : Math.min(4, v.hatch + 1) })), []);
   const prevTutor = useCallback(() => setS((v) => ({ ...v, tutor: Math.max(0, v.tutor - 1) })), []);
   const startTutor = useCallback(() => patch({ screen: 'room', sampleMode: false, tutorOn: true, tutor: 0, sheet: null, popOpen: false, chatOpen: false }), [patch]);
   const endTutor = useCallback(() => patch({ screen: 'room', sampleMode: false, tutorOn: false, tutor: 0, sheet: null }), [patch]);
@@ -569,13 +589,13 @@ export function useYeoul() {
     setS((v) => ({
       ...v, ...(v.snapshot ?? {}),
       sampleMode: false, snapshot: null, screen: 'onb',
-      step: STEPS.indexOf(v.hatch >= 4 ? 'born' : 'char'),
+      step: STEPS.indexOf(hatchRef.current >= 4 ? 'born' : 'char'),
       sheet: null, toast: '', fire: null, hatch: v.hatch,
     }));
   }, []);
 
   const tapEgg = useCallback(() => {
-    if (s.hatch < 4) {
+    if (hatchN < 4) {
       patch({ eggMsg: '아직 부화 중이에요. 조금만 더 기다려 주세요.' });
       later('eggMsg', 2400, () => setS((w) => ({ ...w, eggMsg: '' })));
       return;
@@ -592,7 +612,7 @@ export function useYeoul() {
       calls: 3, resolved: {}, sleeping: false, night: false, sick: false, albumOpen: 8,
       popOpen: false, chatOpen: false, sheet: null, toast: '',
     })));
-  }, [s.hatch, s.cracking, patch, later]);
+  }, [hatchN, s.cracking, patch, later]);
 
   const goStep = useCallback((i: number) => patch({ screen: 'onb', step: i, sheet: null }), [patch]);
 
@@ -1068,13 +1088,13 @@ export function useYeoul() {
       },
       sample: {
         show: s.sampleMode,
-        ring: `conic-gradient(${ACCENT} 0 ${Math.min(100, s.hatch * 25)}%, rgba(74,64,56,.14) ${Math.min(100, s.hatch * 25)}% 100%)`,
-        eggAnim: s.hatch >= 4 ? 'yCrack 1.5s ease-in-out infinite'
-          : s.hatch === 3 ? 'yWiggle 2.4s ease-in-out infinite' : 'yBob 2.8s ease-in-out infinite',
-        eggNote: s.hatch >= 4 ? '부화 완료' : '부화 중',
-        eggCount: `${Math.min(4, s.hatch)} / 4`,
-        noteBg: s.hatch >= 4 ? ACCENT : 'rgba(74,64,56,.82)',
-        haloOpacity: s.hatch >= 4 ? 1 : 0,
+        ring: `conic-gradient(${ACCENT} 0 ${Math.min(100, hatchN * 25)}%, rgba(74,64,56,.14) ${Math.min(100, hatchN * 25)}% 100%)`,
+        eggAnim: hatchN >= 4 ? 'yCrack 1.5s ease-in-out infinite'
+          : hatchN === 3 ? 'yWiggle 2.4s ease-in-out infinite' : 'yBob 2.8s ease-in-out infinite',
+        eggNote: hatchN >= 4 ? '부화 완료' : '부화 중',
+        eggCount: `${Math.min(4, hatchN)} / 4`,
+        noteBg: hatchN >= 4 ? ACCENT : 'rgba(74,64,56,.82)',
+        haloOpacity: hatchN >= 4 ? 1 : 0,
         exit: exitSample, forceHatch: goEgg,
       },
       hearts: { show: s.hearts, text: s.pets >= 3 ? '♥♥♥' : s.pets === 2 ? '♥♥♡' : '♥♡♡' },
@@ -1174,14 +1194,14 @@ export function useYeoul() {
         leaveBg: s.leaveOff ? C.accentSoft : C.paper, leaveFg: s.leaveOff ? '#9C5145' : C.ink,
       },
       egg: {
-        title: s.cracking ? '지금 나오고 있어요' : (s.hatch >= 4 ? '다 됐어요' : '부화 중이에요'),
-        sub: s.cracking ? '잠시만요.' : (s.hatch >= 4 ? '이제 만나러 가도 돼요.' : '여울과 놀며 기다려도 돼요.'),
-        isCrack: s.cracking, isReady: !s.cracking && s.hatch >= 4, isWait: !s.cracking && s.hatch < 4,
-        dots: [0, 1, 2, 3].map((i) => ({ bg: i < s.hatch ? ACCENT : '#EBD3C7' })),
-        stage: s.hatch >= 4 ? '다 됐어요' : ['그림을 살펴보는 중', '그리는 중', '움직이는 중', '거의 다 됐어요'][Math.min(3, s.hatch)],
+        title: s.cracking ? '지금 나오고 있어요' : (hatchN >= 4 ? '다 됐어요' : '부화 중이에요'),
+        sub: s.cracking ? '잠시만요.' : (hatchN >= 4 ? '이제 만나러 가도 돼요.' : '여울과 놀며 기다려도 돼요.'),
+        isCrack: s.cracking, isReady: !s.cracking && hatchN >= 4, isWait: !s.cracking && hatchN < 4,
+        dots: [0, 1, 2, 3].map((i) => ({ bg: i < hatchN ? ACCENT : '#EBD3C7' })),
+        stage: hatchN >= 4 ? '다 됐어요' : ['그림을 살펴보는 중', '그리는 중', '움직이는 중', '거의 다 됐어요'][Math.min(3, hatchN)],
         cta: s.cracking ? '지금 나오고 있어요' : '지금 만나러 가기',
-        ctaBg: s.hatch >= 4 && !s.cracking ? ACCENT : '#DED6C9',
-        ctaFg: s.hatch >= 4 && !s.cracking ? C.accentInk : '#8B8175',
+        ctaBg: hatchN >= 4 && !s.cracking ? ACCENT : '#DED6C9',
+        ctaFg: hatchN >= 4 && !s.cracking ? C.accentInk : '#8B8175',
         hasMsg: !!s.eggMsg, msg: s.eggMsg,
       },
       onb: {
@@ -1217,7 +1237,8 @@ export function useYeoul() {
       statusText,
     };
   }, [
-    s, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
+    // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
+    s, hatchN, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,
