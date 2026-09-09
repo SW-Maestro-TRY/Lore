@@ -23,8 +23,13 @@
 # 형제 폴더로 보고 import 한다(STORY_HARNESS = HERE.parent / "story-harness").
 # new_harness 만 옮기면 import 가 그 자리에서 깨진다.
 #
-# 만들어지는 자리(webtoon/be/src/main/resources/webtoon/ai)는 .gitignore 에
-# 있다 — 저장소에는 원본 한 벌만 둔다.
+# 기본 제공 캐릭터 견본 그림(haeun/landing/web/samples)도 같은 이유로 담는다 —
+# BuiltinCharacters 가 서버 기동 때마다 이 그림들을 S3 에 올려 캐릭터 탭을
+# 채우는데, 원본이 배포 서버에 없으면 "그림이 없다" 며 아무것도 안 심고
+# 조용히 건너뛴다(#274 — 운영 캐릭터 탭이 통째로 비어 있던 원인).
+#
+# 만들어지는 자리(webtoon/be/src/main/resources/webtoon/{ai,character-samples})는
+# .gitignore 에 있다 — 저장소에는 원본 한 벌만 둔다.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,6 +52,9 @@ sync_one() {
     --exclude='runs_backup/' \
     --exclude='.git' \
     --exclude='.gitignore' \
+    --exclude='input/' \
+    --exclude='characters/photos/' \
+    --exclude='style_compare.html' \
     "$src/" "$dst/"
 }
 
@@ -54,3 +62,11 @@ sync_one "new_harness"
 sync_one "story-harness"
 
 echo "하네스 동기화: haeun/{new_harness,story-harness} -> $DST"
+
+SAMPLES_SRC="$ROOT/haeun/landing/web/samples"
+SAMPLES_DST="$HERE/src/main/resources/webtoon/character-samples"
+[ -d "$SAMPLES_SRC" ] || { echo "원본이 없습니다: $SAMPLES_SRC" >&2; exit 1; }
+mkdir -p "$SAMPLES_DST"
+rsync -a --delete --exclude='.DS_Store' "$SAMPLES_SRC/" "$SAMPLES_DST/"
+
+echo "기본 캐릭터 견본 동기화: haeun/landing/web/samples -> $SAMPLES_DST"

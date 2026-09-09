@@ -52,6 +52,10 @@ apps/web/public/static/
 # 원본이 아니다 — webtoon/be/sync-harness.sh 가 만들며 processResources 가 그걸 부른다.
 webtoon/be/src/main/resources/webtoon/ai/
 
+# 기본 제공 캐릭터 견본 그림(haeun/landing/web/samples)의 배포용 사본.
+# 원본이 아니다 — webtoon/be/sync-harness.sh 가 만들며 processResources 가 그걸 부른다.
+webtoon/be/src/main/resources/webtoon/character-samples/
+
 # zzal 정적 에셋(여울 8상태·루프·공통 에셋·배경 16종)은 레포가 아니라 S3 에 둔다.
 #   images/zzal/demo/    여울 8상태 + 30.7초 루프
 #   images/zzal/assets/  알·쓰레기·커튼·폭죽 등 공통 에셋

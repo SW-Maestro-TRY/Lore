@@ -1,3 +1,30 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// 레포 루트 .env 자동 주입 (Next 는 apps/web/.env 만 보고, 부모 폴더는 안 본다).
+//
+// 백엔드(build.gradle)는 이미 레포 루트의 .env 를 bootRun 에 심어 준다.
+// 프론트도 같은 파일 하나만 보고 뜨도록, 여기서 루트 .env 를 읽어
+// process.env 에 없는 키만 채운다(셸에 진짜로 설정된 값이 이긴다 — 규칙은
+// build.gradle 의 dotenv 주입과 동일).
+const rootEnvFile = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../.env');
+if (fs.existsSync(rootEnvFile)) {
+  for (const raw of fs.readFileSync(rootEnvFile, 'utf8').split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || !line.includes('=')) continue;
+    const idx = line.indexOf('=');
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+    if (value.length >= 2 && (value[0] === '"' || value[0] === "'") && value.at(-1) === value[0]) {
+      value = value.slice(1, -1);
+    }
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
 /** @type {import('next').NextConfig} */
 //
 // output: 'standalone'
