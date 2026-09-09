@@ -18,7 +18,7 @@ import {
 import { josa } from '../constants';
 import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
 import type { Live } from './useHatch';
-import type { CareAction } from '../../lib/pet';
+import type { CareAction, ChatState } from '../../lib/pet';
 
 /**
  * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
@@ -171,6 +171,31 @@ function callQueueOf(s: YeoulState, m: Mode): CallItem[] {
 const SNACK_MAX = 4;
 /** 하루에 세어지는 쓰다듬기 수. 서버 규칙(`today.pets === 3`)과 같은 숫자다. */
 const PET_MAX = 3;
+
+/**
+ * 오늘 오간 말을 화면 순서대로 편다. 부름 하나가 최대 세 줄이 된다 —
+ * 아이가 건넨 말 · 내가 한 답 · 아이가 돌려준 말. **전부 서버 문구 그대로다.**
+ */
+function serverLog(c: ChatState | null): { who: 'me' | 'pet'; text: string }[] {
+  if (!c) return [];
+  const out: { who: 'me' | 'pet'; text: string }[] = [];
+  for (const call of c.calls) {
+    out.push({ who: 'pet', text: call.line });
+    if (call.answer) out.push({ who: 'me', text: call.answer });
+    if (call.replyLine) out.push({ who: 'pet', text: call.replyLine });
+  }
+  return out;
+}
+
+/** 부름이 닫혀 있을 때 입력칸에 두는 **화면의 안내**(아이 대사가 아니다). */
+function nextCallHint(nextAt: string | null): string {
+  if (!nextAt) return '오늘 부름은 다 끝났어요';
+  const t = new Date(nextAt);
+  if (Number.isNaN(t.getTime())) return '다음 부름을 기다려요';
+  const hh = String(t.getHours()).padStart(2, '0');
+  const mm = String(t.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}쯤 다시 불러요`;
+}
 
 const cells = (n: number, on: string, off: string) => [0, 1, 2, 3].map((i) => ({ bg: i < n ? on : off }));
 
@@ -577,6 +602,19 @@ export function useYeoul(live?: Live) {
   // ── 대화 ──
   const pushReply = useCallback((text: string) => {
     if (!text) return;
+    if (onServerRef.current) {
+      // ★ 보내면 잠그고 기다린다(계약 10절). 아이가 돌려주는 말도, 그때 짓는 자세도 서버가 정한다.
+      //   화면이 미리 답을 띄우지 않는다 — 그러면 서버 말이 왔을 때 두 번 말한 꼴이 된다.
+      patch({ draft: '', mine: text });
+      later('mine', 4200, () => setS((w) => ({ ...w, mine: '' })));
+      void (async () => {
+        const r = await liveRef.current?.sendChat(text);
+        if (!r) return;
+        if (r.error) { flash(r.error); return; }
+        if (r.reply?.reactionKey) act(r.reply.reactionKey);
+      })();
+      return;
+    }
     setS((v) => {
       const reply = CHAT_REPLY[v.log.length % CHAT_REPLY.length];
       return {
@@ -593,7 +631,7 @@ export function useYeoul(live?: Live) {
     later('mine', 4200, () => setS((v) => ({ ...v, mine: '' })));
     act('nod');
     tutorDone('chat');
-  }, [later, act, tutorDone]);
+  }, [later, act, tutorDone, patch, flash]);
   const onSend = useCallback(() => { lastSel.current = Date.now(); pushReply(s.draft.trim()); }, [pushReply, s.draft]);
   const onDraft = useCallback((t: string) => patch({ draft: t.slice(0, 40) }), [patch]);
 
@@ -1036,13 +1074,30 @@ export function useYeoul(live?: Live) {
           : (es.full <= 0 || es.happy <= 0) ? 'sad'
             : s.chatOpen ? 'joy' : 'base';
 
+    // ── 대화 ──
+    //
+    // ★ **대사는 전부 서버가 준다**(상훈님 지시). 화면은 고르지도 지어내지도 않는다 —
+    //   부름 한 줄도, 답에 대한 대답도 서버 문구 그대로다. 화면이 만드는 글은 안내(다음 부름
+    //   시각 같은 것)뿐이고, 그건 아이가 하는 말이 아니라 화면의 말이라 자리를 나눠 둔다.
+    const sc = live?.chat ?? null;
+    const openCall = sc?.calls.find((c) => c.slot === sc.openSlot && !c.answered) ?? null;
+    const lastAnswered = sc ? [...sc.calls].reverse().find((c) => c.answered) ?? null : null;
+    /** 지금 아이가 걸어 둔 말. 열린 부름이 없으면 마지막으로 돌려준 말. 둘 다 없으면 없음. */
+    const svPetLine = openCall?.line ?? lastAnswered?.replyLine ?? null;
+    const canAnswer = onServer ? !!openCall : true;
+
     // ── 말풍선 ──
-    const chatLine = s.chatOpen ? (s.petLine || '오늘은 뭐 했어요?') : null;
+    const chatLine = s.chatOpen
+      ? (onServer ? svPetLine : (s.petLine || '오늘은 뭐 했어요?'))
+      : null;
     const bub: Bubble = {
       isTut: !!tut && s.sampleMode && !s.sleeping && !s.chatOpen,
       top: s.sampleMode ? '96px' : '12px',
       tutText: tut?.text ?? '',
-      show: !tut && (!!top || !!chatLine) && !s.sleeping,
+      // ★ 튜토리얼 중에는 부름 말풍선을 접어 둔다 — 그 자리 안내는 좌측 하단 카드가 맡는다.
+      //   다만 **대화를 열어 아이가 건넨 말이 있으면 그건 보여야 한다**. 안 그러면 서버가 준
+      //   대사가 화면에 한 번도 안 나온다(2026-09-09 실측으로 그랬다).
+      show: (!tut || !!chatLine) && (!!top || !!chatLine) && !s.sleeping,
       text: chatLine || (top?.text ?? ''),
       chipLabel: tut ? (s.tutor === TUT.length - 1 ? '알았어요' : '다음') : '답하기',
       hasPrev: !!tut && s.sampleMode && s.tutor > 0,
@@ -1158,14 +1213,19 @@ export function useYeoul(live?: Live) {
         show: s.screen === 'room' && (s.chatOpen || s.chatClosing) && !s.sheet,
         anim: s.chatClosing ? 'yPopOut .17s ease forwards' : 'yPopIn .2s cubic-bezier(.2,.9,.25,1)',
         hasMine: !!s.mine, mine: s.mine, draft: s.draft,
-        hint: `${CHAT_HINTS[s.hintI % CHAT_HINTS.length]}처럼 · 40자까지`,
+        // 열린 부름이 없으면 적을 곳을 잠그고 **언제 다시 부르는지**만 알려 준다.
+        // 이건 아이의 말이 아니라 화면의 안내라, 아이 말풍선이 아니라 입력칸에 둔다.
+        can: canAnswer && !live?.chatting,
+        hint: !canAnswer
+          ? nextCallHint(sv?.chatSummary?.nextAt ?? null)
+          : `${CHAT_HINTS[s.hintI % CHAT_HINTS.length]}처럼 · 40자까지`,
       },
       fab: {
         // ★ 대화의 **유일한 입구**다(상훈님 2026-09-08 판정 14). 마당 팝오버에서 대화를 뺐고,
         //   아파도 눌린다 — 아플 때 말이 막히면 아이가 제일 필요한 순간에 말을 못 한다.
         //   자는 동안만 안 뜬다.
         show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.sleeping,
-        dot: s.calls > 0,
+        dot: onServer ? !!openCall : s.calls > 0,
         bw: tut && tut.room === 'chat' ? '2.5px' : '1px',
         bd: tut && tut.room === 'chat' ? ACCENT : C.line,
         anim: tut && tut.room === 'chat' ? 'yNudge 1.9s ease-in-out infinite' : 'none',
@@ -1269,13 +1329,16 @@ export function useYeoul(live?: Live) {
           ...(s.playTab === k ? { bg: C.ink, fg: '#FBF6EC', bd: C.ink } : { bg: C.slot, fg: C.sub2, bd: '#E3DBCD' }),
         })),
         isTalk: s.playTab === 'talk', isGuess: s.playTab === 'guess', isRun: s.playTab === 'run',
-        callsLeft: s.calls, memCount: s.memories.length,
-        log: s.log.map((l) => (l.who === 'pet'
+        callsLeft: onServer ? (openCall ? 1 : 0) : s.calls,
+        memCount: onServer ? (sc?.memories.length ?? 0) : s.memories.length,
+        // 오늘 오간 말. 서버가 부름마다 [건넨 말 · 내가 한 답 · 돌려준 말] 셋을 들고 있다.
+        log: (onServer ? serverLog(sc) : s.log).map((l) => (l.who === 'pet'
           ? { text: l.text, align: 'flex-start', radius: '15px 15px 15px 5px', bg: '#F1EBE0', fg: C.ink }
           : { text: l.text, align: 'flex-end', radius: '15px 15px 5px 15px', bg: ACCENT, fg: C.accentInk })),
+        // 빠른 답은 **내가 하는 말**이라 화면이 갖고 있어도 된다(아이 대사가 아니다).
         quick: CHAT_QUICK.map((t) => ({ text: t, pick: () => pushReply(t) })),
         draft: s.draft,
-        memories: s.memories.map((t) => ({ text: t })),
+        memories: (onServer ? (sc?.memories ?? []) : s.memories).map((t) => ({ text: t })),
         guessNote: s.guess ?? '어느 손에 있을까요?',
         playsLeft: s.plays,
         runCond: `2층 해금 + 친밀도 50% 이상이면 열려요. 지금 ${s.floorLv}층 · 친밀도 ${s.bond}%`,
@@ -1377,7 +1440,7 @@ export function useYeoul(live?: Live) {
     };
   }, [
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
-    s, es, sv, onServer, live?.careing, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
+    s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,

@@ -21,8 +21,9 @@ import { assetUrl } from '../../lib/assets';
 import { MOTION_FALLBACK, YEOUL_MOTION } from '../constants';
 import { BASIC_KEYS } from './constants';
 import {
-  care, draftPet, getHatchProgress, getPet, listPets, setCharacter,
-  type CareAction, type CharacterInput, type HatchProgress, type PetDetail,
+  answerChat, care, draftPet, getChat, getHatchProgress, getPet, listPets, setCharacter,
+  type CareAction, type ChatReply, type ChatState, type CharacterInput,
+  type HatchProgress, type PetDetail,
 } from '../../lib/pet';
 import { uploadImage } from '../../lib/upload';
 
@@ -86,6 +87,18 @@ export interface Live {
    * @returns 성공이면 null, 거절이면 화면에 띄울 한 줄.
    */
   doCare: (action: CareAction) => Promise<string | null>;
+  /**
+   * 오늘의 부름과 기억. **대사는 전부 여기서 온다** — 화면이 지어내지 않는다(상훈님 지시).
+   * 아직 안 읽었거나 서버에 안 붙었으면 null.
+   */
+  chat: ChatState | null;
+  /** 답을 보내는 중. 보내기 버튼을 잠근다. */
+  chatting: boolean;
+  /**
+   * 부름에 답한다. 열린 부름이 없으면 아무 일도 안 한다.
+   * @returns `error` 가 있으면 띄울 한 줄, 없으면 `reply` 에 아이가 돌려준 말과 반응 동작.
+   */
+  sendChat: (text: string) => Promise<{ error: string | null; reply: ChatReply | null }>;
   /** 두고 간 아이가 있는지 서버에 물어본다. 로그인한 뒤에 한 번만 부른다. */
   resume: () => Promise<'draft' | 'hatching' | 'alive' | null>;
   reset: () => void;
@@ -93,10 +106,11 @@ export interface Live {
 
 const EMPTY: Live = {
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null,
-  draftOnly: false, resumedDraft: false, careing: null, ready: false, failed: false, step: null,
+  draftOnly: false, resumedDraft: false, careing: null, chat: null, chatting: false, ready: false, failed: false, step: null,
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
   img: () => null,
   upload: async () => {}, setChar: async () => {}, doCare: async () => null,
+  sendChat: async () => ({ error: null, reply: null }),
   resume: async () => null, reset: () => {},
 };
 
@@ -113,6 +127,8 @@ export function useHatchState(): Live {
   const [hatch, setHatch] = useState<HatchProgress | null>(null);
   const [resumedDraft, setResumedDraft] = useState(false);
   const [careing, setCareing] = useState<CareAction | null>(null);
+  const [chat, setChat] = useState<ChatState | null>(null);
+  const [chatting, setChatting] = useState(false);
 
   // 미리보기 주소는 브라우저 메모리를 잡으므로 바뀌거나 떠날 때 놓아 준다.
   useEffect(() => () => { if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }, []);
@@ -193,6 +209,31 @@ export function useHatchState(): Live {
   }, [petId, careing]);
 
   /**
+   * 부름에 답하기.
+   *
+   * ★ 응답 모양이 다른 유일한 행동이다 — `lib/pet.ts` 가 `{pet, chatReply}` 를 풀어 주므로
+   *   여기서는 다른 행동과 똑같이 `PetDetail` 하나로 받는다.
+   * ★ 답한 뒤 오늘의 부름을 다시 읽는다 — 방금 한 말과 아이가 돌려준 말이 거기 쌓인다.
+   */
+  const sendChat = useCallback(async (text: string) => {
+    const slot = chat?.openSlot ?? pet?.chatSummary?.openSlot ?? null;
+    if (!petId || !slot || chatting || !text) return { error: null, reply: null };
+    setChatting(true);
+    try {
+      const next = await answerChat(petId, slot, text);
+      // `pet` 이 바뀌면 아래 효과가 오늘의 부름을 다시 읽는다 — 여기서 또 부르면 두 번 나간다.
+      setPet(next);
+      return { error: null, reply: next.chatReply };
+    } catch (e) {
+      // 슬롯이 닫혔거나(다른 기기에서 답함) 시간이 지난 경우. 지금 참인 것을 다시 받아 그린다.
+      try { setChat(await getChat(petId)); } catch { /* 그래도 안 되면 화면은 그대로 */ }
+      return { error: e instanceof Error ? e.message : '지금은 말을 걸 수 없어요', reply: null };
+    } finally {
+      setChatting(false);
+    }
+  }, [petId, chat?.openSlot, pet, chatting]);
+
+  /**
    * 두고 간 아이 찾기. 로그인 직후 한 번 부른다.
    *
    * `DRAFT` = 그림만 올리고 이름을 안 지은 아이 → 캐릭터 칸부터 이어서.
@@ -248,6 +289,21 @@ export function useHatchState(): Live {
     return () => { alive = false; };
   }, [phase, petId, pet]);
 
+  // 오늘의 부름 읽기. 아이가 살아난 뒤, 그리고 **무언가 한 뒤마다** 다시 읽는다.
+  //
+  // ⚠️ `Detail.chatSummary.openSlot` 을 못 믿는다 — 튜토리얼 부름(BABY)이 열려 있어도
+  //   거기는 계속 null 이다(2026-09-09 실측: 밥·쓰다듬 뒤 `GET /chat` 은 openSlot=BABY 인데
+  //   같은 순간 `GET /pets/{id}` 는 null). 그래서 부름이 왔는지 알려면 `/chat` 을 읽어야 한다.
+  //   가벼운 응답이고 돌보기 한 번에 한 번뿐이라 그만한 값은 한다. 서버가 요약을 맞춰 주면
+  //   그때 이 자리를 `chatSummary` 로 되돌린다.
+  const living = pet?.phase === 'ALIVE';
+  useEffect(() => {
+    if (!petId || !living) return;
+    let alive = true;
+    void getChat(petId).then((c) => { if (alive) setChat(c); }).catch(() => {});
+    return () => { alive = false; };
+  }, [petId, living, pet]);
+
   /**
    * 카탈로그 key 하나를 **내 아이 그림 주소**로. 아직 못 받았으면 null.
    * ★ 18 동작 전부를 받는다 — 서버 `Motion.key` 와 우리 key 는 같은 이름이라 표가 필요 없다.
@@ -261,7 +317,7 @@ export function useHatchState(): Live {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
     setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null);
-    setCharSet(false); setHatch(null); setResumedDraft(false);
+    setCharSet(false); setHatch(null); setResumedDraft(false); setChat(null);
   }, []);
 
   return {
@@ -279,8 +335,8 @@ export function useHatchState(): Live {
     missingBasics: pet?.phase === 'ALIVE'
       ? BASIC_KEYS.filter((k) => !pet.motions?.some((m) => m.key === k && m.basicImageKey))
       : [],
-    careing,
-    img, upload, setChar, doCare, resume, reset,
+    careing, chat, chatting,
+    img, upload, setChar, doCare, sendChat, resume, reset,
   };
 }
 

@@ -598,6 +598,7 @@ function ChatBar({ y }: { y: Yeoul }) {
   const { v, actions } = y;
   return (
     <div
+      data-part="chat-bar"
       onClick={(e) => e.stopPropagation()}
       style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 7, animation: v.chat.anim }}
     >
@@ -608,14 +609,21 @@ function ChatBar({ y }: { y: Yeoul }) {
         </span>
       )}
       <div style={{ width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 7px 7px 15px', borderRadius: radius.pill, background: C.paper, border: `1.5px solid ${C.ink}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)' }}>
+        {/* 열린 부름이 없거나 보내는 중이면 적을 수 없다 — 자리표시글이 이유를 말한다. */}
         <input
           value={v.chat.draft} onChange={(e) => actions.onDraft(e.target.value)} maxLength={40}
-          placeholder={v.chat.hint}
+          placeholder={v.chat.hint} disabled={!v.chat.can} data-part="chat-input"
           onKeyDown={(e) => { if (e.key === 'Enter') actions.onSend(); }}
           style={{ flex: 1, minWidth: 0, border: 'none', background: 'none', fontSize: 13.5, color: C.ink, outline: 'none' }}
         />
         <button onClick={actions.closeChat} style={{ width: 28, height: 28, flex: 'none', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11.5, color: C.sub2, lineHeight: 1 }} aria-label="대화 닫기">✕</button>
-        <button onClick={actions.onSend} style={{ flex: 'none', padding: '9px 15px', borderRadius: radius.pill, border: 'none', background: C.accent, color: C.accentInk, fontSize: 12.5 }}>보내기</button>
+        <button
+          onClick={actions.onSend} disabled={!v.chat.can} data-action="chat-send"
+          style={{
+            flex: 'none', padding: '9px 15px', borderRadius: radius.pill, border: 'none',
+            background: v.chat.can ? C.accent : C.off, color: v.chat.can ? C.accentInk : '#8B8175', fontSize: 12.5,
+          }}
+        >보내기</button>
       </div>
     </div>
   );
