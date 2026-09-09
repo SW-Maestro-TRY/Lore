@@ -228,6 +228,19 @@ export function useYeoul(live?: Live) {
    * ref 로 들고 있는 이유 = 아래 `setS` 안에서 읽는데, 값이 바뀔 때마다 콜백을 새로 만들면
    * 타이머가 걸린 손잡이들이 통째로 다시 태어난다.
    */
+  /**
+   * ── 서버가 준 지금 상태 ─────────────────────────────────────────
+   *
+   * `sv` 가 있으면 **그 값이 정본**이고 목(`s.*`)은 쓰지 않는다. 둘을 섞으면 어느 숫자가
+   * 진짜인지 알 수 없어지므로, 값마다 `onServer ? 서버 : 목` 한 줄로만 가른다.
+   *
+   * ★ 여울 샘플 방은 예외다 — 거긴 연습 상대라 처음부터 끝까지 목이 맞다.
+   * ★ 아직 안 옮긴 값(게이지·재고·부름·조각·앨범 칸 수…)은 그대로 목이다. 옮길 때마다
+   *   이 갈림길을 하나씩 늘린다.
+   */
+  const sv = live?.pet ?? null;
+  const onServer = !!sv && sv.phase === 'ALIVE' && !s.sampleMode;
+
   const realHatch = !!live?.petId;
   const hatchTotal = live?.total ?? 0;
   const hatchRatio = hatchTotal > 0 ? Math.min(1, (live?.progress ?? 0) / hatchTotal) : 0;
@@ -595,6 +608,15 @@ export function useYeoul(live?: Live) {
       memories: ['연습용 기억'],
     }));
   }, []);
+
+  /**
+   * 이미 함께 사는 아이가 있을 때 곧장 방으로. 온보딩을 다시 태우지 않는다.
+   * 튜토리얼은 켜지 않는다 — 어디까지 했는지는 서버(`tutorial.step`)가 알고 있다.
+   */
+  const enterRoom = useCallback(() => patch({
+    screen: 'room', sampleMode: false, sheet: null, popOpen: false, chatOpen: false,
+    toast: '', fire: null, cracking: false,
+  }), [patch]);
 
   const goEgg = useCallback(() => {
     lastSel.current = Date.now();
@@ -1032,7 +1054,17 @@ export function useYeoul(live?: Live) {
       sleepLine: sleepingLine(s.petName),
       screen: { room: s.screen === 'room', onb: s.screen === 'onb', egg: s.screen === 'egg' },
       hud: { show: !s.sampleMode },
-      pet: { name: s.petName, dayText: `${s.day}일째`, bond: s.bond },
+      /**
+       * 머리줄. 서버가 붙으면 **이름·N일째·친밀도 셋 다 서버 값**이다.
+       * ★ `intimacy.percent` 만 쓴다 — `score`(0~999)는 내부 점수라 화면에 그대로 못 쓴다.
+       */
+      pet: onServer
+        ? {
+          name: sv.name,
+          dayText: `${sv.daysTogether ?? 1}일째`,
+          bond: sv.intimacy?.percent ?? 0,
+        }
+        : { name: s.petName, dayText: `${s.day}일째`, bond: s.bond },
       chat: {
         show: s.screen === 'room' && (s.chatOpen || s.chatClosing) && !s.sheet,
         anim: s.chatClosing ? 'yPopOut .17s ease forwards' : 'yPopIn .2s cubic-bezier(.2,.9,.25,1)',
@@ -1256,7 +1288,7 @@ export function useYeoul(live?: Live) {
     };
   }, [
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
-    s, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
+    s, sv, onServer, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,
@@ -1267,7 +1299,7 @@ export function useYeoul(live?: Live) {
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
-    tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings,
+    tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay,
     openAuth, closeAuth, passAuth,
     backToSample: () => patch({ screen: 'room' }),
@@ -1275,7 +1307,7 @@ export function useYeoul(live?: Live) {
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
-    tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings,
+    tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay,
     openAuth, closeAuth, passAuth,
   ]);

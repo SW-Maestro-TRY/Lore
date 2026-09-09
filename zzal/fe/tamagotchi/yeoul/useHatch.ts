@@ -75,7 +75,7 @@ export interface Live {
   /** 이름·성격을 보낸다. 이 순간부터 격자 생성이 돈다. */
   setChar: (input: CharacterInput) => Promise<void>;
   /** 두고 간 아이가 있는지 서버에 물어본다. 로그인한 뒤에 한 번만 부른다. */
-  resume: () => Promise<'draft' | 'hatching' | null>;
+  resume: () => Promise<'draft' | 'hatching' | 'alive' | null>;
   reset: () => void;
 }
 
@@ -162,13 +162,21 @@ export function useHatchState(): Live {
    * `HATCHING` = 이름까지 지어 굽는 중인 아이 → 알 화면으로. 이걸 안 받아 주면 다시 올리려다
    *   `ZZAL_PET_ALREADY_HATCHING` 에 막혀 갈 데가 없어진다.
    */
-  const resume = useCallback(async (): Promise<'draft' | 'hatching' | null> => {
+  const resume = useCallback(async (): Promise<'draft' | 'hatching' | 'alive' | null> => {
     try {
       const mine = await listPets();
       const draft = mine.find((p) => p.phase === 'DRAFT');
       if (draft) { setPetId(draft.petId); setResumedDraft(true); return 'draft'; }
       const baking = mine.find((p) => p.phase === 'HATCHING');
       if (baking) { setPetId(baking.petId); setCharSet(true); return 'hatching'; }
+      // 이미 함께 살고 있는 아이. 온보딩을 다시 태우지 않고 방으로 보낸다.
+      // ★ 이걸 안 하면 다시 들어올 때마다 머리줄이 목 값(12일째·친밀도 40%)으로 돌아간다.
+      const living = mine.find((p) => p.phase === 'ALIVE');
+      if (living) {
+        setPetId(living.petId); setCharSet(true); setPet(living);
+        setHatch({ phase: 'ALIVE', label: null, progress: 0, total: 0, estimatedSeconds: 0, message: null });
+        return 'alive';
+      }
     } catch {
       // 못 물어본 것으로 화면을 막지 않는다. 처음부터 시작하면 된다.
     }

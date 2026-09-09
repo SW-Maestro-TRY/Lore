@@ -36,7 +36,7 @@ export default function Yeoul(_props: SkinProps) {
 
   // 이미 로그인한 채로 들어온 사람에게는 문을 열어 둔다 — 첫 화면에서 다시 묻지 않는다.
   const { isAuthenticated } = useAuth();
-  const { passAuth, goStep, goEgg } = actions;
+  const { passAuth, goStep, goEgg, enterRoom } = actions;
   useEffect(() => {
     if (isAuthenticated) passAuth('session');
   }, [isAuthenticated, passAuth]);
@@ -48,6 +48,8 @@ export default function Yeoul(_props: SkinProps) {
    * 모르면 처음부터 다시 올리게 되고, 이미 구운 시트를 버리는 셈이 된다.
    * 굽는 중(HATCHING)인 아이도 받아 준다 — 안 그러면 다시 올리려다
    * `ZZAL_PET_ALREADY_HATCHING` 에 막혀 갈 데가 없어진다.
+   * 이미 함께 사는 아이(ALIVE)면 방으로 곧장 보낸다 — 온보딩을 다시 태울 이유가 없고,
+   * 안 그러면 머리줄이 다시 목 값으로 돌아간다.
    */
   const asked = useRef(false);
   const { resume } = live;
@@ -57,8 +59,9 @@ export default function Yeoul(_props: SkinProps) {
     void resume().then((r) => {
       if (r === 'draft') goStep(STEPS.indexOf('char'));
       else if (r === 'hatching') goEgg();
+      else if (r === 'alive') enterRoom();
     });
-  }, [isAuthenticated, resume, goStep, goEgg]);
+  }, [isAuthenticated, resume, goStep, goEgg, enterRoom]);
 
   return (
     <div
