@@ -1038,7 +1038,10 @@ export function useYeoul() {
         }),
       },
       ask: (() => {
-        const q = s.sampleMode && s.uq < USER_Q.length ? USER_Q[s.uq] : null;
+        // ★ 튜토리얼이 도는 동안엔 묻지 않는다(상훈님 2026-09-09 판정 4).
+        //   같이 띄우면 첫 화면에 여울의 카드가 둘, 진행 표시가 셋이라 어느 쪽을 하라는 건지 모른다.
+        //   여울의 안내를 끝까지 따라간 뒤(`tut` 이 비면) 그때부터 하나씩 묻는다.
+        const q = s.sampleMode && !tut && s.uq < USER_Q.length ? USER_Q[s.uq] : null;
         const draft = s.askDraft.trim();
         return {
           show: s.screen === 'room' && !!q && !s.chatOpen && !s.sheet && !s.popOpen,
