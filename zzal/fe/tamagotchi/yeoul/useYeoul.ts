@@ -18,6 +18,7 @@ import {
 import { josa } from '../constants';
 import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
 import type { Live } from './useHatch';
+import type { CareAction } from '../../lib/pet';
 
 /**
  * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
@@ -166,6 +167,11 @@ function callQueueOf(s: YeoulState, m: Mode): CallItem[] {
   return out;
 }
 
+/** 하루에 줄 수 있는 간식 수. 서버 규칙(`today.snackStreak === 4` 에서 배탈)과 같은 숫자다. */
+const SNACK_MAX = 4;
+/** 하루에 세어지는 쓰다듬기 수. 서버 규칙(`today.pets === 3`)과 같은 숫자다. */
+const PET_MAX = 3;
+
 const cells = (n: number, on: string, off: string) => [0, 1, 2, 3].map((i) => ({ bg: i < n ? on : off }));
 
 // ── 표(view) 타입 ────────────────────────────────────────────────────────
@@ -241,6 +247,34 @@ export function useYeoul(live?: Live) {
   const sv = live?.pet ?? null;
   const onServer = !!sv && sv.phase === 'ALIVE' && !s.sampleMode;
 
+  /**
+   * **지금 값** — 목 상태 위에 서버 값을 덮은 것. 아래 계산은 전부 이걸 본다.
+   *
+   * ★ 화면은 스스로 게이지를 올리지 않는다(계약 10절). 여기 있는 숫자는 전부 서버가 준 것이고,
+   *   버튼을 누르면 응답으로 온 새 값이 그대로 다음 화면이 된다.
+   * ★ 아직 안 옮긴 것(놀이 횟수 `plays`·부름 `calls`·앨범 칸 수·조각)은 그대로 목이다.
+   */
+  const es: YeoulState = onServer ? {
+    ...s,
+    full: sv.gauges?.fullness ?? s.full,
+    happy: sv.gauges?.happiness ?? s.happy,
+    trace: sv.gauges?.trash ?? s.trace,
+    stock: sv.food?.count ?? s.stock,
+    snacks: sv.today?.snackStreak ?? s.snacks,
+    bathUsed: !!sv.today?.bathDone,
+    pets: sv.today?.pets ?? s.pets,
+    sick: sv.sick != null,
+    sleeping: !!sv.clock?.sleeping,
+  } : s;
+
+  /** `setS` 안이나 손잡이 안에서 읽을 것들. 값이 바뀔 때마다 손잡이를 새로 만들지 않으려고 ref 로 둔다. */
+  const liveRef = useRef<Live | undefined>(undefined);
+  liveRef.current = live;
+  const onServerRef = useRef(false);
+  onServerRef.current = onServer;
+  const esRef = useRef(es);
+  esRef.current = es;
+
   const realHatch = !!live?.petId;
   const hatchTotal = live?.total ?? 0;
   const hatchRatio = hatchTotal > 0 ? Math.min(1, (live?.progress ?? 0) / hatchTotal) : 0;
@@ -271,7 +305,7 @@ export function useYeoul(live?: Live) {
     return () => { Object.values(timers).forEach((t) => clearTimeout(t)); };
   }, []);
 
-  const mode: Mode = s.sleeping ? 'sleep' : s.sick ? 'sick' : s.night ? 'night' : 'day';
+  const mode: Mode = es.sleeping ? 'sleep' : es.sick ? 'sick' : s.night ? 'night' : 'day';
   const needStyle: NeedStyle = s.needStyleLocal ?? '색+모양+글자';
 
   /**
@@ -376,10 +410,10 @@ export function useYeoul(live?: Live) {
   }, [later]);
 
   const openSheet = useCallback((k: SheetKey) => () => {
-    if (s.sleeping) { flash(sleepingLine(s.petName)); return; }
-    if (s.sick && k === 'play') { flash('아플 땐 못 놀아요'); return; }
+    if (esRef.current.sleeping) { flash(sleepingLine(s.petName)); return; }
+    if (esRef.current.sick && k === 'play') { flash('아플 땐 못 놀아요'); return; }
     setS((v) => ({ ...v, sheet: k, resolved: { ...v.resolved, [k]: true }, decoOpen: false }));
-  }, [s.sleeping, s.sick, s.petName, flash]);
+  }, [s.petName, flash]);
   const closeSheet = useCallback(() => {
     setS((v) => {
       if (!v.sheet || v.sheetClosing) return v;
@@ -415,10 +449,41 @@ export function useYeoul(live?: Live) {
   //
   // 판단(되는지 안 되는지)은 **여기 바깥**에서 하고, setS 안에서는 값만 바꾼다.
   // setS 콜백은 React 가 두 번 부를 수 있어서 그 안에서 알림을 띄우면 두 번 뜬다.
+  //
+  // ★ 서버에 붙어 있으면(`onServerRef`) **화면은 값을 하나도 안 만진다**(계약 10절).
+  //   눌러 → 서버가 정하고 → 응답으로 온 상태가 곧 다음 화면이다. 되감기는 없다.
+  //   연출(먹는 자세·하트)은 응답이 온 뒤에 시작한다 — 되돌릴 일이 없어진다.
+  //   눌린 반응은 즉시 준다: 누르는 순간 버튼이 잠기고(`live.careing`) 흐려진다.
+  /**
+   * 돌보기 한 번을 서버에 맡긴다.
+   * @param motion 성공했을 때 지을 자세. 거절이면 짓지 않는다.
+   */
+  const serverCare = useCallback(async (action: CareAction, motion: string, ok: string) => {
+    const msg = await liveRef.current?.doCare(action);
+    if (msg) { flash(msg); return; }
+    act(motion);
+    flash(ok);
+  }, [flash, act]);
+
   const onPet = useCallback(() => {
     if (s.chatOpen) { patch({ chatOpen: false, draft: '' }); return; }
     if (s.popOpen) { patch({ popOpen: false }); return; }
-    if (s.sleeping) { flash('자고 있어요'); return; }
+    if (esRef.current.sleeping) { flash('자고 있어요'); return; }
+    if (onServerRef.current) {
+      // ★ 오늘 몫을 다 썼으면 **서버를 부르지 않는다**(계약 10절 `today.pets === 3`).
+      //   그래도 쓰다듬는 시늉은 그대로 둔다 — 하루 세 번이 지났다고 아이를 못 만지게 하면
+      //   그건 잠금이 아니라 벌이다. 세어지지 않을 뿐이라고 말해 준다.
+      if (esRef.current.pets >= PET_MAX) { act('shy'); flash('오늘 쓰다듬기는 다 했어요'); return; }
+      // 쓰다듬기도 돌보기 하나다(`PET`). 하트는 서버가 세어 준 오늘 횟수로 판단한다.
+      void (async () => {
+        const msg = await liveRef.current?.doCare('PET');
+        if (msg) { flash(msg); return; }
+        act('shy');
+        patch({ hearts: true });
+        later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
+      })();
+      return;
+    }
     const counted = s.sampleMode || s.pets < 3;
     patch({
       pets: Math.min(3, s.pets + 1), hearts: counted,
@@ -428,7 +493,7 @@ export function useYeoul(live?: Live) {
     if (counted) later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
     else flash('오늘 쓰다듬기는 다 했어요');
     tutorDone('pet');
-  }, [s.chatOpen, s.popOpen, s.sleeping, s.sampleMode, s.pets, s.bond, patch, act, flash, later, tutorDone]);
+  }, [s.chatOpen, s.popOpen, s.sampleMode, s.pets, s.bond, patch, act, flash, later, tutorDone]);
 
   const onRice = useCallback(() => {
     if (s.sampleMode) {
@@ -437,43 +502,51 @@ export function useYeoul(live?: Live) {
       flash('맛있게 먹었어요');
       return;
     }
+    if (onServerRef.current) { void serverCare('FEED', 'eat', '맛있게 먹었어요'); return; }
     if (s.full >= 4) { flash('배가 가득이라 거절했어요'); return; }
     if (s.stock <= 0) { flash('밥 재고가 없어요'); return; }
     patch({ full: s.full + 1, stock: s.stock - 1, bond: Math.min(100, s.bond + 1) });
     act('eat');
     flash('맛있게 먹었어요');
     tutorDone('feed');
-  }, [s.sampleMode, s.full, s.stock, s.bond, patch, act, flash, tutorDone]);
+  }, [s.sampleMode, s.full, s.stock, s.bond, patch, act, flash, tutorDone, serverCare]);
 
   const onSnack = useCallback(() => {
+    if (onServerRef.current) {
+      void serverCare('SNACK', 'eat', esRef.current.snacks >= SNACK_MAX - 1 ? '조금 많아요' : '간식은 언제나 좋아요');
+      return;
+    }
     const n = s.snacks + 1;
     patch({ snacks: n, full: Math.min(4, s.full + 1) });
     act('eat');
     flash(n >= 4 ? '조금 많아요' : '간식은 언제나 좋아요');
-  }, [s.snacks, s.full, patch, act, flash]);
+  }, [s.snacks, s.full, patch, act, flash, serverCare]);
 
   const onClean = useCallback(() => {
+    if (onServerRef.current) { void serverCare('CLEAN', 'wash', '깨끗해졌어요'); return; }
     if (s.trace <= 0 && !s.sampleMode) { flash('이미 깨끗해요'); return; }
     patch({ trace: 0 });
     act('wash');
     flash('깨끗해졌어요');
     tutorDone('clean');
-  }, [s.trace, s.sampleMode, patch, act, flash, tutorDone]);
+  }, [s.trace, s.sampleMode, patch, act, flash, tutorDone, serverCare]);
 
   const onBath = useCallback(() => {
+    if (onServerRef.current) { void serverCare('BATH', 'wash', '반짝반짝해졌어요'); return; }
     if (s.bathUsed && !s.sampleMode) { flash('오늘 목욕은 했어요'); return; }
     patch({ bathUsed: true, trace: 0, bond: Math.min(100, s.bond + 2), cBath: s.cBath + 1 });
     act('wash');
     flash('반짝반짝해졌어요');
-  }, [s.bathUsed, s.sampleMode, s.bond, s.cBath, patch, act, flash]);
+  }, [s.bathUsed, s.sampleMode, s.bond, s.cBath, patch, act, flash, serverCare]);
 
   const onMed = useCallback(() => {
     lastSel.current = Date.now();
+    if (onServerRef.current) { void serverCare('MEDICINE', 'joy', '바로 나았어요'); return; }
     if (!s.sick) { flash('지금은 약이 필요 없어요'); return; }
     patch({ sick: false });
     act('joy');
     flash('바로 나았어요');
-  }, [s.sick, patch, act, flash]);
+  }, [s.sick, patch, act, flash, serverCare]);
 
   const onSleep = useCallback(() => {
     if (s.sleeping) {
@@ -536,11 +609,11 @@ export function useYeoul(live?: Live) {
   }, [patch]);
 
   const onAnswerCall = useCallback(() => {
-    const top = callQueueOf(s, mode)[0];
+    const top = callQueueOf(esRef.current, mode)[0];
     if (!top) return;
     if (top.kind === 'chat') { openChat(); return; }
     selRoom(top.room)();
-  }, [s, mode, openChat, selRoom]);
+  }, [mode, openChat, selRoom]);
 
   // ── 앨범·엽서 ──
   const saveShot = useCallback(() => { setS((v) => ({ ...v, saved: v.saved + 1, fire: null })); flash('앨범에 저장했어요'); }, [flash]);
@@ -794,15 +867,15 @@ export function useYeoul(live?: Live) {
   }, [needStyle]);
 
   const v = useMemo(() => {
-    const lv = levelsOf(s, mode);
-    const calls = callQueueOf(s, mode);
+    const lv = levelsOf(es, mode);
+    const calls = callQueueOf(es, mode);
     const top = calls[0] ?? null;
     const wl = WALLS.find((x) => x.id === s.wallId) ?? WALLS[0];
     const unlimited = s.sampleMode;
 
     const roomDefs: ReadonlyArray<readonly [RoomKey, LvKey, string, boolean]> = [
-      ['table', lv.table, String(s.stock), !unlimited],
-      ['bath', lv.bath, String(s.trace), !unlimited && s.trace > 0],
+      ['table', lv.table, String(es.stock), !unlimited],
+      ['bath', lv.bath, String(es.trace), !unlimited && es.trace > 0],
       ['play', lv.play, String(s.plays), !unlimited && s.plays > 0],
       ['bed', lv.bed, '', false],
       ['album', lv.album, `${s.albumOpen}/18`, !unlimited],
@@ -839,24 +912,33 @@ export function useYeoul(live?: Live) {
       : (mode === 'sick' && selK === 'play') ? '아플 땐 못 놀아요' : '';
     const locked = !!lockMsg && selK !== 'bed';
 
-    interface Raw { label: string; count: string; tap: () => void; soft?: boolean }
+    /** `no` = 눌러도 거절될 이유. 비어 있지 않으면 **미리 잠근다**(계약 10절). */
+    interface Raw { label: string; count: string; tap: () => void; soft?: boolean; no?: string }
     const P: Record<RoomKey, { say: string; n: number; on: number; tint: string; a: Raw; b: Raw | null }> = {
       table: {
-        say: SAY.table[lv.table as keyof typeof SAY.table] ?? SAY.table.ok, n: 4, on: s.full, tint: '#C08552',
-        a: { label: '밥 주기', count: `밥 ${s.stock}개 남음`, tap: onRice },
-        b: { label: '간식 주기', count: `${Math.max(0, 3 - s.snacks)}번 남음`, tap: onSnack, soft: true },
+        say: SAY.table[lv.table as keyof typeof SAY.table] ?? SAY.table.ok, n: 4, on: es.full, tint: '#C08552',
+        // ★ 거절될 버튼은 미리 잠근다(계약 10절). 조건이 전부 응답에 있으므로,
+        //   정상적으로 쓰는 사람은 거절 문구를 볼 일이 없다.
+        a: { label: '밥 주기', count: `밥 ${es.stock}개 남음`, tap: onRice,
+          no: es.full >= 4 ? '배가 불러요' : es.stock <= 0 ? '밥이 다 떨어졌어요' : '' },
+        // ★ 남은 횟수와 잠기는 자리는 **같은 숫자**여야 한다. 서버 규칙은 `snackStreak === 4`
+        //   에서 배탈이므로 네 번까지 되고, 남은 횟수도 4 에서 뺀다(예전엔 3 에서 빼서
+        //   '0번 남음' 인데 한 번 더 눌리는 어긋남이 있었다 — 2026-09-09 실측).
+        b: { label: '간식 주기', count: `${Math.max(0, SNACK_MAX - es.snacks)}번 남음`, tap: onSnack, soft: true,
+          no: es.snacks >= SNACK_MAX ? '더 주면 배탈이 나요' : '' },
       },
       bath: {
         // ★ 아프다고 욕실 팝오버가 빨개지지는 않는다(상훈님 판정 6) — 알리는 일은 무대의
         //   약 아이콘 깜빡임이 맡는다. 여기서는 말만 바꾼다.
         say: mode === 'sick' ? '약을 주면 바로 나아요' : (SAY.bath[lv.bath as keyof typeof SAY.bath] ?? SAY.bath.ok),
-        n: 4, on: Math.max(0, 4 - s.trace), tint: '#7FA8A0',
-        a: { label: '청소하기', count: `흔적 ${s.trace}개`, tap: onClean },
-        b: { label: '목욕', count: s.bathUsed ? '0번 남음' : '1번 남음', tap: onBath },
+        n: 4, on: Math.max(0, 4 - es.trace), tint: '#7FA8A0',
+        a: { label: '청소하기', count: `흔적 ${es.trace}개`, tap: onClean, no: es.trace <= 0 ? '이미 깨끗해요' : '' },
+        b: { label: '목욕', count: es.bathUsed ? '0번 남음' : '1번 남음', tap: onBath,
+          no: es.bathUsed ? '오늘 목욕은 했어요' : '' },
       },
       play: {
         say: mode === 'sick' ? '아파서 못 놀아요' : (SAY.play[lv.play as keyof typeof SAY.play] ?? SAY.play.ok),
-        n: 4, on: s.happy, tint: '#C98B93',
+        n: 4, on: es.happy, tint: '#C98B93',
         // ★ '대화하기' 는 뺐다(상훈님 판정 11) — 대화는 오른쪽 아래 말풍선이 맡고,
         //   마당에는 게임을 하나둘 붙일 예정이라 그 자리를 비워 둔다.
         a: { label: '좌우 맞히기', count: `${s.plays}판 남음`, tap: openPlay('guess') },
@@ -886,12 +968,19 @@ export function useYeoul(live?: Live) {
 
     const pbtn = (r: Raw | null, isTutTarget: boolean): PopBtn | null => {
       if (!r) return null;
-      const off = locked || (mode === 'sick' && selK === 'table' && !!r.soft);
+      const sickSnack = mode === 'sick' && selK === 'table' && !!r.soft;
+      // 서버가 이미 아는 거절 이유. 여울 샘플 방에서는 안 건다 — 거긴 연습이라 늘 눌려야 한다.
+      const pre = unlimited ? '' : (r.no ?? '');
+      // 돌보기가 도는 동안엔 전부 잠근다 — 두 번 눌러 두 번 나가는 일을 막는다.
+      const waiting = !!live?.careing;
+      const why = locked ? lockMsg : sickSnack ? '아플 땐 간식을 안 먹어요' : pre;
+      const off = !!why || waiting;
       return {
         label: r.label, count: unlimited ? '' : r.count,
         tap: () => {
           lastSel.current = Date.now();
-          if (off) flash(mode === 'sick' && r.soft ? '아플 땐 간식을 안 먹어요' : lockMsg);
+          if (waiting) return;          // 기다리는 중엔 아무 말도 안 한다 — 눌린 표시로 충분하다
+          if (why) flash(why);
           else r.tap();
         },
         anim: isTutTarget ? 'yBlink 1.2s ease-in-out infinite' : 'none',
@@ -940,11 +1029,11 @@ export function useYeoul(live?: Live) {
      * ★ 재우기는 여기 `sleeping` 으로 남는다 — 잠깐 하는 동작이 아니라 자는 동안 계속이라서다.
      */
     const spriteKey: string = s.acting ? s.acting
-      : s.sleeping ? 'sleep'
+      : es.sleeping ? 'sleep'
         // ⚠️ **임시 대체 · 배포 전 진짜 그림으로 교체**(상훈님 2026-09-08 판정 5).
         //   아픈 그림이 아직 없어 슬픈 자세로 대신한다. `~/.claude/tasks.md` 에 배포 전 필수로 올라가 있다.
-        : s.sick ? 'sad'
-          : (s.full <= 0 || s.happy <= 0) ? 'sad'
+        : es.sick ? 'sad'
+          : (es.full <= 0 || es.happy <= 0) ? 'sad'
             : s.chatOpen ? 'joy' : 'base';
 
     // ── 말풍선 ──
@@ -1081,7 +1170,7 @@ export function useYeoul(live?: Live) {
         bd: tut && tut.room === 'chat' ? ACCENT : C.line,
         anim: tut && tut.room === 'chat' ? 'yNudge 1.9s ease-in-out infinite' : 'none',
       },
-      medFab: { show: s.screen === 'room' && s.sick && !s.chatOpen && !s.popOpen && !s.sheet && !s.sleeping },
+      medFab: { show: s.screen === 'room' && es.sick && !s.chatOpen && !s.popOpen && !s.sheet && !es.sleeping },
       // 좌측 하단 카드. 세 얼굴을 차례로 갖는다 —
       //   튜토리얼 중엔 부름 / 2층을 배우는 동안엔 로드맵 / 다 배우면 **조각 도장 4칸**.
       // ★ 로드맵이 끝나도 카드가 사라지지 않는다(2026-09-07 상훈님 지시). 정본상 2층 8종을
@@ -1288,7 +1377,7 @@ export function useYeoul(live?: Live) {
     };
   }, [
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
-    s, sv, onServer, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
+    s, es, sv, onServer, live?.careing, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,

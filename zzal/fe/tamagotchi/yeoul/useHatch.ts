@@ -21,8 +21,8 @@ import { assetUrl } from '../../lib/assets';
 import { MOTION_FALLBACK, YEOUL_MOTION } from '../constants';
 import { BASIC_KEYS } from './constants';
 import {
-  draftPet, getHatchProgress, getPet, listPets, setCharacter,
-  type CharacterInput, type HatchProgress, type PetDetail,
+  care, draftPet, getHatchProgress, getPet, listPets, setCharacter,
+  type CareAction, type CharacterInput, type HatchProgress, type PetDetail,
 } from '../../lib/pet';
 import { uploadImage } from '../../lib/upload';
 
@@ -74,6 +74,18 @@ export interface Live {
   upload: (file: File) => Promise<void>;
   /** 이름·성격을 보낸다. 이 순간부터 격자 생성이 돈다. */
   setChar: (input: CharacterInput) => Promise<void>;
+  /**
+   * 지금 도는 돌보기. 있으면 **버튼을 전부 잠근다** — 계약 10절 "누르면 잠그고 기다린다".
+   */
+  careing: CareAction | null;
+  /**
+   * 돌보기 한 번. 응답으로 온 상태가 곧 새 화면이다.
+   *
+   * ★ 되감기를 만들지 않는다(계약 10절 · 백엔드도 같은 의견). 먼저 올려 두고 틀리면 되돌리는
+   *   방식은 되돌리는 순간이 사람 눈에 '깎였다' 로 읽힌다. 그래서 **응답을 받고 나서** 그린다.
+   * @returns 성공이면 null, 거절이면 화면에 띄울 한 줄.
+   */
+  doCare: (action: CareAction) => Promise<string | null>;
   /** 두고 간 아이가 있는지 서버에 물어본다. 로그인한 뒤에 한 번만 부른다. */
   resume: () => Promise<'draft' | 'hatching' | 'alive' | null>;
   reset: () => void;
@@ -81,10 +93,11 @@ export interface Live {
 
 const EMPTY: Live = {
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null,
-  draftOnly: false, resumedDraft: false, ready: false, failed: false, step: null,
+  draftOnly: false, resumedDraft: false, careing: null, ready: false, failed: false, step: null,
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
   img: () => null,
-  upload: async () => {}, setChar: async () => {}, resume: async () => null, reset: () => {},
+  upload: async () => {}, setChar: async () => {}, doCare: async () => null,
+  resume: async () => null, reset: () => {},
 };
 
 export function useHatchState(): Live {
@@ -99,6 +112,7 @@ export function useHatchState(): Live {
   const [charSet, setCharSet] = useState(false);
   const [hatch, setHatch] = useState<HatchProgress | null>(null);
   const [resumedDraft, setResumedDraft] = useState(false);
+  const [careing, setCareing] = useState<CareAction | null>(null);
 
   // 미리보기 주소는 브라우저 메모리를 잡으므로 바뀌거나 떠날 때 놓아 준다.
   useEffect(() => () => { if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }, []);
@@ -154,6 +168,29 @@ export function useHatchState(): Live {
       setBusy(false);
     }
   }, [petId, charSet]);
+
+  /**
+   * 돌보기 한 번.
+   *
+   * ★ 거절이 나도 **되감지 않는다.** 화면이 값을 올린 적이 없으니 되돌릴 것도 없다.
+   *   대신 지금 진짜 상태를 다시 받아 그리고(폰·PC 를 같이 켜 둔 경우가 여기다) 문구만 띄운다.
+   * ★ 401 은 여기서 다루지 않는다 — 공통 클라이언트가 갱신을 시도하고, 그래도 안 되면
+   *   로그인 창을 여는 것은 바깥의 일이다.
+   */
+  const doCare = useCallback(async (action: CareAction): Promise<string | null> => {
+    if (!petId || careing) return null;
+    setCareing(action);
+    try {
+      setPet(await care(petId, action));
+      return null;
+    } catch (e) {
+      // 거절당했으면 서버가 지금 무엇을 참인지 알고 있다. 그걸 받아 다시 그린다.
+      try { setPet(await getPet(petId)); } catch { /* 이것마저 실패하면 화면은 그대로 둔다 */ }
+      return e instanceof Error ? e.message : '지금은 할 수 없어요';
+    } finally {
+      setCareing(null);
+    }
+  }, [petId, careing]);
 
   /**
    * 두고 간 아이 찾기. 로그인 직후 한 번 부른다.
@@ -242,7 +279,8 @@ export function useHatchState(): Live {
     missingBasics: pet?.phase === 'ALIVE'
       ? BASIC_KEYS.filter((k) => !pet.motions?.some((m) => m.key === k && m.basicImageKey))
       : [],
-    img, upload, setChar, resume, reset,
+    careing,
+    img, upload, setChar, doCare, resume, reset,
   };
 }
 
