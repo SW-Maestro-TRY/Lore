@@ -44,11 +44,15 @@ public class AuthController {
     }
 
     @Operation(summary = "회원가입", description = """
-            이메일·비밀번호로 가입하고 **바로 로그인 상태**가 된다(토큰 2종이 쿠키로 발급됨).
+            이메일·비밀번호로 가입한다. **토큰을 발급하지 않으므로 로그인 상태가 되지 않는다.**
+            화면은 가입 뒤 로그인 화면으로 보낸다.
 
-            - access_token 쿠키 = 모든 요청에 붙어 신분을 증명. 30분
-            - refresh_token 쿠키 = access 를 새로 받을 때만 사용. 14일. Path 가 /api/v1/auth 로 좁혀져 있다
-            - 두 쿠키 모두 HttpOnly 라 자바스크립트로 읽을 수 없다""")
+            방금 정한 비밀번호를 한 번 더 입력하게 하는 셈이지만, 그 자리에서 비밀번호가
+            맞는지 확인된다. 오타를 낸 채 가입한 사용자가 다음 접속에서야 들어오지 못하는
+            상황을 막는다.
+
+            필수 동의는 AGE_14 · TERMS · PRIVACY 세 가지다. MARKETING 은 선택이며
+            false 도 기록으로 남긴다 — 묻지 않은 것과 거부한 것은 다른 사실이다.""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "가입 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
@@ -56,14 +60,9 @@ public class AuthController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "이미 가입된 이메일(EMAIL_ALREADY_EXISTS)")})
     @PostMapping("/signup")
-    public ApiResponse<Void> signUp(@Valid @RequestBody AuthRequests.SignUp request,
-                                    @RequestHeader(value = "User-Agent", required = false) String userAgent,
-                                    HttpServletResponse response) {
-        Instant now = Instant.now();
-        AuthService.Tokens tokens = authService.signUp(
-                request.email(), request.password(), request.agreements(),
-                CURRENT_TERMS_VERSION, userAgent, now);
-        writeCookies(response, tokens);
+    public ApiResponse<Void> signUp(@Valid @RequestBody AuthRequests.SignUp request) {
+        authService.signUp(request.email(), request.password(), request.agreements(),
+                CURRENT_TERMS_VERSION, Instant.now());
         return ApiResponse.ok();
     }
 
