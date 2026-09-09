@@ -398,6 +398,21 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean todayBathDone;
 
+    /**
+     * 오늘 돌보기를 한 번이라도 했나(밥·간식·쓰다듬·청소·목욕·약).
+     *
+     * <h3>★ 왜 따로 두나 — "잘 돌본 날" 이 방치한 날에도 잡혔다</h3>
+     * 케어 미스는 게이지가 <b>채워졌다 다시 0 이 되어야</b> 다음 +1 이 붙는다(원조 다마고치와 같다).
+     * 그래서 게이지가 이미 전부 0 인 날에는 새 케어 미스가 안 쌓이고, "그날 새로 쌓인 케어 미스가 0"
+     * 이라는 조건만으로는 <b>아무것도 안 한 날이 "잘 돌본 날" 로 집계</b>된다.
+     * 그러면 웃는 대기(15번)가 방치만으로 열린다. 정본 1.7 에서 "그날 돌봤는가" 를 함께 보게 했다.
+     *
+     * ★ 기존 카운터로는 못 대신한다 — 약은 하루 카운터가 없고, {@code todayCareIntimacy} 는
+     *   하루 30 상한에 걸리면 더 안 오르며 간식은 친밀도를 주지 않는다.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean todayCared;
+
     // ── 조각 (정본 6·16장) — 오늘 무엇을 했나. 잠들 때 판정하고 리셋 ─────
 
     /** 오늘 밥을 몇 번 줬나(밥 조각 = 2회). */
@@ -1459,7 +1474,9 @@ public class ZzalPet {
                 pendingNightSick = isSick();        // ★ 잠들 때의 상태를 함께 적는다(아침 것이 아니라)
                 pendingNightMood = mood().name();
             }
-            if (todayCareMiss == 0) {
+            // ★ "그날 새로 쌓인 케어 미스가 0" + "그날 한 번이라도 돌봤다"(정본 1.7).
+            //   뒤 조건이 없으면 게이지가 이미 0 인 방치한 날이 "잘 돌본 날" 로 집계된다.
+            if (todayCareMiss == 0 && todayCared) {
                 zeroMissDays += 1;
             }
             lastNightCareMiss = todayCareMiss;      // 밤 큐 판정 재료(리셋 전 스냅샷)
@@ -1483,6 +1500,7 @@ public class ZzalPet {
             todayPetCount = 0;
             todayCareIntimacy = 0;
             todayBathDone = false;
+            todayCared = false;
             todayFeeds = 0;
             todaySnacks = 0;
             todayCleans = 0;
@@ -1556,6 +1574,7 @@ public class ZzalPet {
         happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.SNACK_HAPPINESS);
         snackStreak += 1;
         todaySnacks += 1;
+        todayCared = true;      // ★ 간식도 돌보기다(정본 1.7)
         lastCaredAt = now;
         if (snackStreak >= ZzalRules.SNACK_STREAK_SICK_AT) {
             // ★★ 튜토리얼 동안에는 병이 없다(정본 12장 "케어 미스·병·감점 없음" · 16장).
@@ -1617,6 +1636,7 @@ public class ZzalPet {
     /** 간식이 아닌 행동 — 연속 간식이 끊긴다(api-v2.md 해석 2). */
     private void afterNonSnack(Instant now) {
         snackStreak = 0;
+        todayCared = true;      // ★ "잘 돌본 날" 판정에 쓴다(정본 1.7)
         if (now != null) {
             lastCaredAt = now;
         }
