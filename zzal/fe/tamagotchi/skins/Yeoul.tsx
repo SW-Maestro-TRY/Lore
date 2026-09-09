@@ -70,7 +70,10 @@ export default function Yeoul(_props: SkinProps) {
           open={s.authOpen}
           onClose={actions.closeAuth}
           initialTab={s.authTab}
-          onSuccess={(how) => actions.passAuth(how)}
+          // ★ **로그인일 때만** 문을 연다. develop 의 AuthModal 은 가입에서도 이 손잡이를 부르는데
+          //   (창을 안 닫고 로그인 탭으로 옮기려고), 그걸 그대로 받으면 가입만 한 사람이
+          //   로그인도 안 한 채 올리기 칸으로 넘어간다 — 실측으로 그랬다(2026-09-09).
+          onSuccess={(how) => { if (how === 'login') actions.passAuth(how); }}
         />
       </div>
       </LiveProvider>
