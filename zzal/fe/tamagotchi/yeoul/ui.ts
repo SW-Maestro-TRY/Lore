@@ -122,6 +122,17 @@ export const KEYFRAMES = `
    overflow-wrap 을 같이 주는 이유 = keep-all 만 걸면 한 줄에 못 담는 긴 영문/URL 이
    상자 밖으로 삐져나온다. 그런 낱말일 때만 끊어 준다. */
 .yeoul{word-break:keep-all;overflow-wrap:break-word}
+/* 질문 카드 — 세로가 짧은 화면(360x640 등)에서만 살을 뺀다.
+   호칭 문항은 칩 넉 줄에 직접 적는 칸까지 붙어 카드가 제일 크고, 그만큼 아이의 발을 덮었다
+   (상훈님 2026-09-09 판정 5. 360x640 에서 발이 11px 가려짐).
+   여백만 줄이고 글자 크기·문항 수는 그대로 둔다 — 읽는 부담을 늘리지 않으려는 것.
+   844 처럼 넉넉한 화면은 이미 안 가리므로 건드리지 않는다.
+   inline style 을 이기려면 important 가 필요하다. */
+@media (max-height: 720px){
+  .yeoul-ask{padding:13px 13px 9px!important;gap:8px!important}
+  .yeoul-ask .yeoul-ask-opt{padding:7px 12px!important}
+  .yeoul-ask input{padding:8px 12px!important}
+}
 .yeoul button{font-family:inherit;cursor:pointer;transition:transform .12s ease, background .18s ease, border-color .18s ease}
 .yeoul button:active{transform:scale(.96)}
 .yeoul input{font-family:inherit}

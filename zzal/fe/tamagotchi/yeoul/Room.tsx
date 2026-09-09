@@ -537,6 +537,7 @@ function AskCard({ y }: { y: Yeoul }) {
   return (
     <div
       data-part="ask"
+      className="yeoul-ask"
       onClick={(e) => e.stopPropagation()}
       style={{
         width: '100%', boxSizing: 'border-box', padding: '15px 15px 11px', borderRadius: radius.lg,
@@ -548,7 +549,7 @@ function AskCard({ y }: { y: Yeoul }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {a.opts.map((o) => (
           <button
-            key={o.text} onClick={o.pick} data-ask-opt={o.text}
+            key={o.text} onClick={o.pick} data-ask-opt={o.text} className="yeoul-ask-opt"
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
               padding: o.note ? '7px 13px' : '9px 14px', borderRadius: radius.pill,
