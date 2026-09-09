@@ -15,7 +15,20 @@ import {
   SHARDS, USER_Q, WALLS,
   type FrameKey, type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
+import { josa } from '../constants';
 import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
+
+/**
+ * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
+ * 조사를 문장에 박아 두면 '노을가' 같은 말이 나온다(랜덤 후보에 노을·도담이 있어 버튼만 눌러도 재현된다).
+ * 조사 판정은 공용 `josa()` 가 이미 한다 — 여기서는 이름이 빈 경우까지 함께 막는다.
+ */
+const sleepingLine = (name: string) => `${petWith(name, '이', '가')} 자고 있어요`;
+
+const petWith = (name: string, withFinal: string, withoutFinal: string) => {
+  const n = name || '아이';
+  return `${n}${josa(n, withFinal, withoutFinal)}`;
+};
 
 // ── 상태 ────────────────────────────────────────────────────────────────
 
@@ -250,7 +263,7 @@ export function useYeoul() {
       tutorDone: true, rollUnlocked: true,
       fire: {
         title: '첫날을 함께 마쳤어요',
-        body: `${v.petName}가 둘러보는 법을 다 익혔어요. 기념으로 구르기를 하나 배웠고, 앨범에서 바로 볼 수 있어요.\n오늘 밤에는 새 동작을 하나 연습해 볼 참이라, 내일 오시면 ${v.petName}의 새로운 모습을 보실 수 있어요.`,
+        body: `${petWith(v.petName, '이', '가')} 둘러보는 법을 다 익혔어요. 기념으로 구르기를 하나 배웠고, 앨범에서 바로 볼 수 있어요.\n오늘 밤에는 새 동작을 하나 연습해 볼 참이라, 내일 오시면 ${v.petName || '아이'}의 새로운 모습을 보실 수 있어요.`,
         hint: '', tapAny: true,
         actions: [
           // 정본이 선물 화면에 붙이라고 한 둘. 지금은 프론트 목이라 눌리기만 한다.
@@ -314,7 +327,7 @@ export function useYeoul() {
   }, [later]);
 
   const openSheet = useCallback((k: SheetKey) => () => {
-    if (s.sleeping) { flash(`${s.petName || '아이'}가 자고 있어요`); return; }
+    if (s.sleeping) { flash(sleepingLine(s.petName)); return; }
     if (s.sick && k === 'play') { flash('아플 땐 못 놀아요'); return; }
     setS((v) => ({ ...v, sheet: k, resolved: { ...v.resolved, [k]: true }, decoOpen: false }));
   }, [s.sleeping, s.sick, s.petName, flash]);
@@ -496,7 +509,7 @@ export function useYeoul() {
       return;
     }
     setS((v) => ({ ...v, fire: {
-      title: parts[0], body: `${v.petName}와 남긴 장면이에요.`,
+      title: parts[0], body: `${petWith(v.petName, '과', '와')} 남긴 장면이에요.`,
       polaroid: true, caption: `${parts[0]} — ${v.day}일째`,
       shot: '#EBD3C7', shotLabel: '장면 이미지', hint: '',
       actions: [{ label: '앨범에 저장', tap: saveShot, primary: true }, { label: '닫기', tap: closeFire, primary: false }],
@@ -755,7 +768,7 @@ export function useYeoul() {
         anim: hl ? 'yNudge 1.9s ease-in-out infinite' : 'none',
         badge, hasBadge: hasBadge && !asleep,
         // 자는 동안은 어느 방도 안 열린다 — 눌러도 한 줄만 말한다.
-        pick: asleep ? () => flash(`${s.petName || '아이'}가 자고 있어요`) : selRoom(k),
+        pick: asleep ? () => flash(sleepingLine(s.petName)) : selRoom(k),
         dim: asleep,
       };
     });
@@ -763,7 +776,7 @@ export function useYeoul() {
     // ── 팝오버 ──
     // ★ 자는 동안은 **전부 잠근다**(상훈님 판정 13). 방마다 깨어 있는 말을 하던 것이 문제였다.
     //   커튼을 치고 타일·팝오버를 통째로 막고, 하는 말은 한 줄뿐이다.
-    const sleepLine = `${s.petName || '아이'}가 자고 있어요`;
+    const sleepLine = sleepingLine(s.petName);
     const lockMsg = mode === 'sleep' ? sleepLine
       : (mode === 'sick' && selK === 'play') ? '아플 땐 못 놀아요' : '';
     const locked = !!lockMsg && selK !== 'bed';
@@ -980,7 +993,7 @@ export function useYeoul() {
       // ⚠️ **임시 대체 · 배포 전 진짜 그림으로 교체**(판정 5). 자는 그림이 없어 커튼 뒤로 감춘다 —
       //   깨어 있는 그림을 커튼 밑에 두면 자는 것으로 안 읽힌다(판정 13과 같은 방향).
       hidePet: mode === 'sleep',
-      sleepLine: `${s.petName || '아이'}가 자고 있어요`,
+      sleepLine: sleepingLine(s.petName),
       screen: { room: s.screen === 'room', onb: s.screen === 'onb', egg: s.screen === 'egg' },
       hud: { show: !s.sampleMode },
       pet: { name: s.petName, dayText: `${s.day}일째`, bond: s.bond },
@@ -1185,7 +1198,7 @@ export function useYeoul() {
           upload: '다음',
           user: '다 됐어요',
           char: s.petName ? '이 아이로 시작하기' : '이름부터 지어 줘요',
-          born: `${s.petName}의 방으로 들어가기`,
+          born: `${s.petName || '아이'}의 방으로 들어가기`,
         } as Record<StepKey, string>)[STEPS[s.step] as StepKey],
         // 옛 온보딩 'user' 칸의 잔재다. STEPS 에 'user' 가 없어 **지금은 도달할 수 없는 길**이고,
         // 되살리려면 문구부터 다시 봐야 한다 — USER_Q.label 은 항목 이름이 아니라 여울의 말이다.
