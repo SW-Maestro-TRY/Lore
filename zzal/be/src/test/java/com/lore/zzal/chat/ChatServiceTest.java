@@ -1,11 +1,13 @@
 package com.lore.zzal.chat;
 
+import com.lore.zzal.PetFixture;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.pet.PetService;
 import com.lore.zzal.pet.Personality;
 import com.lore.zzal.pet.ZzalPet;
+import com.lore.zzal.pet.ZzalRules;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,8 +58,13 @@ class ChatServiceTest {
                 store.stream().filter(ZzalChatCall::isAnswered)
                         .sorted((a, b) -> b.getAnsweredAt().compareTo(a.getAnsweredAt())).limit(5).toList());
 
-        pet = ZzalPet.hatch(USER, "여울", null, "k", T0);
+        pet = PetFixture.hatching(USER, "여울", null, "k", T0);
         pet.markAlive("s", "i", T0);
+        // ★ 튜토리얼 3칸(채팅) 차례까지 와 있는 상태로 둔다 — BABY 부름이 열리는 자리다.
+        //   시계는 켜 둔다(하루 3회 부름을 함께 보기 위해). 실제 사용자는 9칸을 다 눌러야 하지만
+        //   여기서 보려는 것은 부름 규칙이지 튜토리얼 진행이 아니다.
+        ReflectionTestUtils.setField(pet, "tutorialStep", ZzalRules.TUTORIAL_CHAT_AFTER);
+        pet.skipTutorial(T0);
         ReflectionTestUtils.setField(pet, "id", PET);   // JPA 가 줄 번호를 테스트가 대신 준다
         PetService pets = mock(PetService.class);
         when(pets.alive(any(), any(), any())).thenAnswer(inv -> {
@@ -83,13 +90,11 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("★ 부화 8분에 BABY, 기상+1h 에 MORNING, +7h 에 NOON, 19:00 에 EVENING 이 차례로 생긴다")
+    @DisplayName("★ 튜토리얼 3칸에서 BABY, 기상+1h 에 MORNING, +7h 에 NOON, 19:00 에 EVENING 이 차례로 생긴다")
     void slotsAppearOnTime() {
-        assertThat(service.calls(USER, PET, T0.plus(Duration.ofMinutes(7))).calls()).isEmpty();
-        assertThat(service.calls(USER, PET, T0.plus(Duration.ofMinutes(8))).calls()).extracting(ZzalChatCall::getSlot)
+        // ★ 1.4 — BABY 는 "부화 +8분" 이 아니라 앞의 두 칸을 끝낸 그 자리에서 열린다(시간이 아니라 순서).
+        assertThat(service.calls(USER, PET, T0.plus(Duration.ofMinutes(1))).calls()).extracting(ZzalChatCall::getSlot)
                 .containsExactly(ChatSlot.BABY);
-        // 아기 60분 안에는 하루 부름이 안 온다(13:00 이 기상+1h 지만 babyUntil 과 같다 → 13:00 부터)
-        assertThat(service.calls(USER, PET, T0.plus(Duration.ofMinutes(59))).calls()).hasSize(1);
         ChatService.View v = service.calls(USER, PET, kst("2026-09-05 13:00"));
         assertThat(v.calls()).extracting(ZzalChatCall::getSlot).containsExactly(ChatSlot.BABY, ChatSlot.MORNING);
         assertThat(v.openSlot()).isEqualTo("MORNING");                 // 하루 부름이 BABY 보다 먼저
@@ -131,8 +136,10 @@ class ChatServiceTest {
     @DisplayName("18:30 부화 — MORNING(19:30)·NOON 은 19:00 뒤라 없고 EVENING 만(해석 23 확장, 리뷰 하-5)")
     void lateHatchSkipsMorningAndNoon() {
         Instant hatched = kst("2026-09-05 18:30");
-        pet = ZzalPet.hatch(USER, "여울", null, "k", hatched);
+        pet = PetFixture.hatching(USER, "여울", null, "k", hatched);
         pet.markAlive("s", "i", hatched);
+        ReflectionTestUtils.setField(pet, "tutorialStep", ZzalRules.TUTORIAL_CHAT_AFTER);
+        pet.skipTutorial(hatched);
         ReflectionTestUtils.setField(pet, "id", PET);
         // 아기 60분(19:30)이 끝나야 하루 부름이 온다. 19:30 은 밤이 아니라 깨어 있다.
         ChatService.View v = service.calls(USER, PET, kst("2026-09-05 19:35"));

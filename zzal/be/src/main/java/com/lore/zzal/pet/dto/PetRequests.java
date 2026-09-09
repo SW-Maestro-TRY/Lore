@@ -14,18 +14,35 @@ public final class PetRequests {
     private PetRequests() {
     }
 
-    @Schema(description = "펫 생성 요청 — 그림을 S3 에 올린 뒤 받은 key 로 부화를 시작한다")
-    public record Create(
-
-            @Schema(description = "펫 이름. 12자(정본 15장)", example = "여울")
-            @NotBlank @Size(max = ZzalRules.NAME_MAX_CHARS) String name,
-
-            @Schema(description = "세부사항. 성격·말버릇·설정 무엇이든. 대사에 쓰인다", example = "왼쪽 눈에 흉터")
-            @Size(max = 200) String note,
+    @Schema(description = "그림 등록 — 이것 하나로 캐릭터 시트 굽기가 시작된다")
+    public record Draft(
 
             @Schema(description = "업로드한 그림의 S3 key. presign 으로 발급받은 것이어야 한다",
                     example = "images/zzal/a1b2c3d4-e5f6-7890-abcd-ef1234567890")
             @NotBlank @Size(max = 300) String imageKey) {
+    }
+
+    /**
+     * 캐릭터 정보. <b>이름 말고는 전부 선택</b>이다.
+     *
+     * ★ 그림 생성에 들어가는 것은 {@code note} 뿐이다(정본 1.6). 성격·말투·장르·세계관은
+     *   <b>대사 톤에만</b> 쓰인다.
+     */
+    @Schema(description = "캐릭터 정보 — 이것을 보내면 격자 생성이 시작된다")
+    public record Character(
+
+            @Schema(description = "펫 이름. 12자(정본 15장)", example = "여울")
+            @NotBlank @Size(max = ZzalRules.NAME_MAX_CHARS) String name,
+
+            @Schema(description = "성격. 대사 톤에 쓰인다", example = "LIVELY")
+            Personality personality,
+
+            @Schema(description = "세계관·설정. 자유 입력", example = "비 오는 도시의 탐정")
+            @Size(max = 100) String world,
+
+            @Schema(description = "그 밖에 알려 주고 싶은 것. ★ 이것만 그림 생성에 참고된다",
+                    example = "왼쪽 눈에 흉터")
+            @Size(max = 200) String note) {
     }
 
     @Schema(description = "돌봄 요청 — 무엇을 눌렀는지만 보낸다. 수치가 얼마나 오르는지는 서버가 정한다")

@@ -1,5 +1,6 @@
 package com.lore.zzal.pet;
 
+import com.lore.zzal.PetFixture;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
@@ -27,7 +28,7 @@ class PetDetailTest {
     private static final MotionCatalog CATALOG = new MotionCatalog("", "", "v1");
 
     private static ZzalPet baby() {
-        ZzalPet pet = ZzalPet.hatch(1L, "여울", "메모", "k", T0);
+        ZzalPet pet = PetFixture.hatching(1L, "여울", "메모", "k", T0);
         pet.markAlive("s", "i", T0);
         return pet;
     }
@@ -35,7 +36,7 @@ class PetDetailTest {
     @Test
     @DisplayName("부화 중이면 ALIVE 블록은 전부 null, serverNow 는 있다")
     void hatchingHasNoAliveBlocks() {
-        ZzalPet egg = ZzalPet.hatch(1L, "알", null, "k", T0);
+        ZzalPet egg = PetFixture.hatching(1L, "알", null, "k", T0);
         PetResponses.Detail d = PetResponses.Detail.from(egg, "그리는 중", T0.plusSeconds(30), CATALOG);
         assertThat(d.phase()).isEqualTo("HATCHING");
         assertThat(d.ready()).isFalse();
@@ -109,26 +110,32 @@ class PetDetailTest {
     void blocks() {
         ZzalPet pet = baby();
         PetResponses.Detail d = PetResponses.Detail.from(pet, null, T0.plus(Duration.ofMinutes(1)), CATALOG);
-        assertThat(d.clock().babyUntil()).isEqualTo(T0.plus(Duration.ofMinutes(60)));
+        assertThat(d.clock().clockStartedAt()).isNull();                        // ★ 튜토리얼 중 = 시계 안 켜짐
         assertThat(d.clock().sleeping()).isFalse();
-        assertThat(d.clock().canSleep()).isTrue();                              // 아기 낮잠
-        assertThat(d.clock().autoSleepAt()).isEqualTo(kst("2026-09-05 23:00"));
-        assertThat(d.clock().sleepWindowOpensAt()).isEqualTo(T0.plus(Duration.ofMinutes(1)));   // 낮잠 가능 → 지금(해석·2절)
+        assertThat(d.clock().autoSleepAt()).isNull();                           // ★ 튜토리얼 중엔 자동 취침 없음
+        // ★ 첫 칸(밥) 차례에는 아직 안 졸리다 — 재우기가 안 열린다
+        assertThat(d.clock().canSleep()).isFalse();
+        assertThat(d.clock().sleepWindowOpensAt()).isNull();
+
+        // 8칸(낮잠) 차례가 되면 "지금" 잘 수 있다
+        com.lore.zzal.PetFixture.readyForNap(pet);
+        assertThat(PetResponses.Detail.from(pet, null, T0.plus(Duration.ofMinutes(1)), CATALOG)
+                .clock().sleepWindowOpensAt()).isEqualTo(T0.plus(Duration.ofMinutes(1)));
         pet.sleep(T0.plus(Duration.ofMinutes(1)));
-        pet.settle(T0.plus(Duration.ofMinutes(12)));                              // 낮잠 씀
+        pet.wake(T0.plus(Duration.ofMinutes(2)));                                 // ★ 낮잠은 사용자가 깨운다
+        // 낮잠을 썼고 아직 튜토리얼 중 — 열릴 창이 없다(밤잠은 시계가 켜져야 생긴다)
         assertThat(PetResponses.Detail.from(pet, null, T0.plus(Duration.ofMinutes(12)), CATALOG)
-                .clock().sleepWindowOpensAt()).isEqualTo(kst("2026-09-05 19:00"));
+                .clock().sleepWindowOpensAt()).isNull();
         assertThat(d.daysTogether()).isEqualTo(1);
-        assertThat(d.gauges()).isEqualTo(new PetResponses.Gauges(1, 3, 4, 0));
+        assertThat(d.gauges()).isEqualTo(new PetResponses.Gauges(0, 3, 4, 0));     // ★ 배부름 0 으로 시작
         assertThat(d.food()).isEqualTo(new PetResponses.Food(3, null));
-        assertThat(d.mood()).isEqualTo("NORMAL");
+        assertThat(d.mood()).isEqualTo("HUNGRY");   // ★ 배부름 0 으로 시작한다(튜토리얼 첫 칸이 밥)
         assertThat(d.features()).isEqualTo(new PetResponses.Features(true, true, false, false, false, false, false));
         assertThat(d.firstGift()).isEqualTo(new PetResponses.FirstGift("LOCKED", 2));
         assertThat(d.chatSummary().nextAt()).isEqualTo(T0.plus(Duration.ofHours(1)));   // 기상(부화)+1h
         assertThat(d.tutorial().active()).isTrue();
         assertThat(d.tutorial().steps().get(0).current()).isTrue();
         assertThat(d.justUnlocked()).isEmpty();
-        assertThat(d.settings().leaveEnabled()).isTrue();
         assertThat(d.sick()).isNull();
         assertThat(d.pieces()).isNull();
     }
@@ -137,6 +144,7 @@ class PetDetailTest {
     @DisplayName("자는 중엔 wakeWindowOpensAt·autoWakeAt 이 채워지고 sleepWindowOpensAt 은 비운다")
     void sleepingClock() {
         ZzalPet pet = baby();
+        pet.skipTutorial(T0);                       // ★ 시계가 켜져야 자동 취침이 있다
         Instant t = kst("2026-09-06 00:00");
         pet.settle(t);
         PetResponses.Detail d = PetResponses.Detail.from(pet, null, t, CATALOG);

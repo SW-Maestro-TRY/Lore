@@ -73,7 +73,7 @@ test.describe('server mode', () => {
 
     // 5) 재우기 창 18:59 → 19:00. ★ 시계는 **앞으로만** 민다 — dev 도구가 부화 이전 시각을 거부하고,
     //    지금 몇 시에 돌리든 같은 결과가 나와야 하므로 "내일 18:59"(KST)라는 절대 시각을 만든다.
-    const dev = (path: string, body: unknown) => page.request.post(`/api/zzal/v2/dev/pets/${petId}/${path}`, { data: body });
+    const dev = (path: string, body: unknown) => page.request.post(`/api/zzal/v1/dev/pets/${petId}/${path}`, { data: body });
     const tomorrowKst = (hh: number, mm: number) => {
       const d = new Date(Date.now() + 24 * 3_600_000);          // 내일
       const kstMidnightUtc = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - 9 * 3_600_000;
@@ -100,7 +100,7 @@ test.describe('server mode', () => {
 
     // 6) 아침까지 밀고 깨운다 — 07~10시가 깨우기 창이라 12시간 30분 뒤(07:30)에 깨울 수 있다.
     expect((await dev('advance-clock', { minutes: 12 * 60 + 30 })).ok()).toBeTruthy();
-    const woke = await page.request.post(`/api/zzal/v2/me/pets/${petId}/wake`);
+    const woke = await page.request.post(`/api/zzal/v1/me/pets/${petId}/wake`);
     expect(woke.ok(), await woke.text()).toBeTruthy();
 
     // 7) 채팅 — 아침 부름은 기상 +1시간에 도래한다(계약 1.5).

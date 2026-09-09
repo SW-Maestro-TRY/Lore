@@ -114,15 +114,11 @@ public final class ZzalRules {
     /** 흔적이 이만큼이면 대기 동작이 '더러움'(파리·쓰레기). 11장 우선순위 병 > 배부름 > 행복 > 청결. */
     public static final int DIRTY_TRASH_AT = 3;
 
-    // ── 4장 첫 1시간(아기) ──────────────────────────────────────────────
-
-    /** 부화 순간부터 실시간 60분. 앱을 닫아도 흐른다. 케어 미스·병·자동 취침 없음(16장). */
-    public static final Duration BABY_DURATION = Duration.ofMinutes(60);
-
-    /** 아기 속도 — 원조 아기 속도. 60분 뒤 어린이 속도로. */
-    public static final Duration BABY_FULLNESS_DROP = Duration.ofMinutes(3);
-    public static final Duration BABY_HAPPINESS_DROP = Duration.ofMinutes(4);
-    public static final Duration BABY_TRASH_RISE = Duration.ofMinutes(15);
+    // ── 12장 튜토리얼 ────────────────────────────────────────────────────
+    //
+    // ★ 1.5 에서 "아기 속도(3분·4분·15분)" 가 통째로 사라졌다.
+    //   튜토리얼 동안 시계가 멈추면서 <b>속도라는 개념 자체가 성립하지 않게</b> 됐기 때문이다.
+    //   게이지는 시간이 아니라 각 칸이 만든다. 속도는 이제 하나뿐이다.
 
     // ── 5장 병 ────────────────────────────────────────────────────────────
 
@@ -247,13 +243,36 @@ public final class ZzalRules {
     // ── 12장 아기 시간표(튜토리얼) ────────────────────────────────────────
 
     /** 부화 뒤 몇 분에 무엇을 부르는가. 순서 = 밥·쓰다듬·채팅·성격·청소·게임·공유·낮잠·끝. */
-    public static final int[] BABY_CALL_MINUTES = {0, 3, 8, 12, 15, 20, 25, 40, 60};
+    /**
+     * 튜토리얼 채팅 부름이 열리는 칸 — 앞의 두 칸(밥·쓰다듬)을 끝낸 뒤.
+     *
+     * ★ 1.4 이전에는 "부화 +8분" 이었다. 시간이 아니라 순서로 바뀌었다.
+     */
+    public static final int TUTORIAL_CHAT_AFTER = 2;
 
-    /** 낮잠 — 재우면 5분 커튼, 5분 뒤 깨우기 켜짐, 10분 뒤 자동 기상. 재우기·깨우기 횟수에 포함. */
-    public static final Duration NAP_WAKE_AFTER = Duration.ofMinutes(5);
-    public static final Duration NAP_AUTO_WAKE_AFTER = Duration.ofMinutes(10);
+    /**
+     * 5칸("바닥을 치워 주세요")에 들어갈 때 놓아 두는 흔적 개수.
+     *
+     * ★ 시계가 멈춰 있어 흔적이 시간으로 생기지 않는다. 앞 칸이 끝날 때 직접 만든다.
+     */
+    public static final int TUTORIAL_FIRST_TRASH = 1;
 
-    /** 아기 60분 동안 낮잠은 한 번만(api-v2.md 해석 3). */
+    /**
+     * 낮잠(정본 12장 8칸) — 재우면 커튼이 내려오고 <b>곧바로</b> 깨울 수 있다.
+     *
+     * ★ 1.4 이전에는 5분 대기·10분 자동 기상이었다. 튜토리얼에서 시계가 멈추면서
+     *   <b>분 단위 대기가 성립하지 않게</b> 되어 0 이 됐다. 자동 기상도 없다 —
+     *   시계가 안 도는데 "10분 뒤" 가 올 수 없다. 깨우는 사람은 사용자뿐이다.
+     */
+    public static final Duration NAP_WAKE_AFTER = Duration.ZERO;
+
+    /**
+     * 낮잠 자동 기상까지. 사실상 오지 않는다 — 튜토리얼 중에는 {@code settle} 이 시간을 안 걷는다.
+     * 값만 남겨 둔 것은 {@code AwakeClock} 이 창을 계산할 때 null 을 다루지 않게 하기 위해서다.
+     */
+    public static final Duration NAP_AUTO_WAKE_AFTER = Duration.ofDays(365);
+
+    /** 낮잠은 튜토리얼 중 한 번만(정본 16장). */
     public static final int NAP_MAX = 1;
 
     // ── 15장 온보딩 ───────────────────────────────────────────────────────
@@ -262,7 +281,13 @@ public final class ZzalRules {
     public static final int NAME_MAX_CHARS = 12;
 
     /** 부화 초기값(api-v2.md 해석 11) — 12장 0분 "배가 고픈가 봐요" 가 성립해야 한다. */
-    public static final int HATCH_FULLNESS = 1;
+    /**
+     * 부화 직후 배부름 — <b>0</b>.
+     *
+     * ★ 튜토리얼 첫 칸이 "배가 고픈가 봐요" 라서 비어 있어야 한다. 튜토리얼 동안 게이지는
+     *   시간이 아니라 각 칸이 만든다(정본 1.5).
+     */
+    public static final int TUTORIAL_START_FULLNESS = 0;
     public static final int HATCH_HAPPINESS = 3;
     public static final int HATCH_TRASH = 0;
     public static final int HATCH_FOOD = FOOD_MAX;

@@ -1,5 +1,6 @@
 package com.lore.zzal.scene;
 
+import com.lore.zzal.PetFixture;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.pet.SleepKind;
 import com.lore.zzal.pet.ZzalPet;
@@ -60,8 +61,9 @@ class SceneServiceTest {
     /** 11:00 에 부화해 정오에 어린이가 된 펫(ZzalPetTest 와 같은 모양). */
     private ZzalPet child() {
         Instant hatched = T0.minus(Duration.ofMinutes(60));
-        ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "images/zzal/abc", hatched);
+        ZzalPet pet = PetFixture.hatching(1L, "여울", null, "images/zzal/abc", hatched);
         pet.markAlive("images/zzal/sheet", "생김새", hatched);
+        pet.skipTutorial(hatched);
         ReflectionTestUtils.setField(pet, "id", PET_ID);
         pet.settle(T0);
         // 아기 60분을 그냥 보내 게이지가 바닥이므로 정오에 한 번 채워 둔다(ZzalPetTest.child 와 같은 모양)

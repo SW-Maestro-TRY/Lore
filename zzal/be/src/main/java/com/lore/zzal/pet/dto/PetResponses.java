@@ -33,6 +33,28 @@ public final class PetResponses {
     private PetResponses() {
     }
 
+    /** 그림을 등록한 결과. 이 번호로 다음 화면이 캐릭터 정보를 보낸다. */
+    @Schema(description = "초안 번호")
+    public record Drafted(@Schema(example = "7") Long petId) {
+    }
+
+    /**
+     * 부화 진행. 알 화면이 몇 초마다 되풀이해 묻는다.
+     *
+     * ★ 가볍게 유지한다 — 여기에 게이지·동작 16종까지 실으면 폴링이 그만큼 무거워진다.
+     *
+     * @param phase             DRAFT · HATCHING · ALIVE · FAILED
+     * @param label             지금 무엇을 하는 중인지("그리는 중" · "움직임 배우는 중" · "거의 다")
+     * @param progress          끝난 단계 수
+     * @param total             전체 단계 수
+     * @param estimatedSeconds  남은 시간(초). 지났으면 0
+     * @param message           실패했을 때 사용자에게 보일 말. 성공 중이면 null
+     */
+    @Schema(description = "부화 진행")
+    public record Hatch(String phase, String label, int progress, int total,
+                        long estimatedSeconds, String message) {
+    }
+
     @Schema(description = "펫 생성 결과")
     public record Created(
             @Schema(example = "7") Long petId,
@@ -50,7 +72,13 @@ public final class PetResponses {
 
     // ── PetDetail v2 블록들 ───────────────────────────────────────────────
 
-    public record Clock(Instant babyUntil, boolean sleeping, String sleepKind, Instant sleptAt, Instant wokeAt,
+    /**
+     * 시계.
+     *
+     * ★ {@code clockStartedAt} 이 null 이면 <b>아직 튜토리얼 중</b>이라 시간이 흐르지 않는다 —
+     *   게이지도, 자동 취침도 없다. 화면은 이 값 하나로 "지금 튜토리얼인가"를 알 수 있다.
+     */
+    public record Clock(Instant clockStartedAt, boolean sleeping, String sleepKind, Instant sleptAt, Instant wokeAt,
                         boolean canSleep, boolean canWake, Instant sleepWindowOpensAt, Instant autoSleepAt,
                         Instant wakeWindowOpensAt, Instant autoWakeAt, boolean overslept) {
     }
@@ -142,6 +170,16 @@ public final class PetResponses {
     public record Learned(int seq, String key, String label, String imageKey, Instant revealedAt) {
     }
 
+    /**
+     * 공유 버튼을 누른 결과.
+     *
+     * ★ 링크만 주지 않고 {@code pet} 을 함께 주는 이유 — 공유는 횟수를 올리고 그것이 튜토리얼 진행과
+     *   해금 조건에 걸린다. 화면이 "서버가 준 값으로만 그린다"는 규칙을 지키려면 바뀐 상태가 같이 와야 한다.
+     */
+    @Schema(description = "공유 링크 + 바뀐 상태")
+    public record Shared(String token, String url, Detail pet) {
+    }
+
     public record FirstGift(String status, int daysLeft) {
     }
 
@@ -189,10 +227,8 @@ public final class PetResponses {
         }
     }
 
-    public record Settings(boolean leaveEnabled) {
-    }
-
-    public record TutorialStep(String key, Instant dueAt, boolean done, boolean current) {
+    /** 튜토리얼 한 칸. ★ 시각이 없다 — 순서로 가기 때문이다(정본 1.4). */
+    public record TutorialStep(String key, boolean done, boolean current) {
     }
 
     /** 앨범(api-v2.md 1.6) — 도감 18칸 + 엽서·장면(PR-9·11 전엔 빈 목록) + 첫 심화 기념. */
@@ -200,7 +236,12 @@ public final class PetResponses {
     public record Album(List<Motion> motions, List<Postcard> postcards, List<Scene> scenes, FirstGift firstGift) {
     }
 
-    public record Tutorial(boolean active, long minutesSince, List<TutorialStep> steps) {
+    /**
+     * 튜토리얼. 끝났으면 이 블록 자체가 null 이고, 그때 {@code clock.clockStartedAt} 이 채워진다.
+     *
+     * @param step 끝낸 칸 수(0~9). 화면은 이 값으로 "지금 몇 번째" 를 그린다
+     */
+    public record Tutorial(boolean active, int step, List<TutorialStep> steps) {
     }
 
     /**
@@ -260,7 +301,6 @@ public final class PetResponses {
             Features features,
             Leaving leaving,
             Trip trip,
-            Settings settings,
             @Schema(description = "아기 시간표. 9단계가 다 끝나면 null") Tutorial tutorial) {
 
         /** 조회 응답 — {@code justUnlocked} 없음, 동작 행 없음(심화 상태 전부 NONE). 테스트·간이용. */
@@ -309,17 +349,23 @@ public final class PetResponses {
                         // ★ 리스트는 null 이 아니라 빈 목록(해석 20) — 화면이 길이만 보고 그리게. null 이 프론트를 깨뜨렸다.
                         null, null, null, null, null, null, false, null, null, null, false, null,
                         List.of(), List.of(), false, List.of(),
-                        null, null, null, null, null, null, null, null, null, null, null);
+                        null, null, null, null, null, null, null, null, null, null);
             }
 
             boolean sleeping = pet.isSleeping();
             SleepKind kind = pet.getSleepKind();
             Clock clock = new Clock(
-                    pet.babyUntil(), sleeping, sleeping ? kind.name() : null, pet.getSleptAt(), pet.getWokeAt(),
+                    pet.getClockStartedAt(), sleeping, sleeping ? kind.name() : null, pet.getSleptAt(), pet.getWokeAt(),
                     pet.canSleep(now), pet.canWake(now),
-                    // 낮잠을 지금 잘 수 있으면 창은 "지금"(api-v2.md 2절)
-                    sleeping ? null : (pet.sleepKindAvailable(now) == SleepKind.NAP ? now : AwakeClock.sleepWindowOpensAt(now)),
-                    sleeping ? null : AwakeClock.nextAutoSleep(now, pet.babyUntil()),
+                    // 낮잠을 지금 잘 수 있으면 창은 "지금"(api-v2.md 2절).
+                    // ★ 튜토리얼 중에 낮잠을 이미 썼으면 열릴 창이 없다 — 밤잠은 시계가 켜져야 생긴다.
+                    //   여기서 19:00 을 주면 화면이 "저녁에 재울 수 있어요" 라고 잘못 안내한다.
+                    sleeping ? null
+                            : pet.sleepKindAvailable(now) == SleepKind.NAP ? now
+                            : pet.isInTutorial() ? null
+                            : AwakeClock.sleepWindowOpensAt(now),
+                    // 튜토리얼 중이면 자동 취침이 없다 — 시계가 안 돌기 때문이다(정본 1.4).
+                    sleeping || pet.isInTutorial() ? null : AwakeClock.nextAutoSleep(now, null),
                     sleeping ? AwakeClock.wakeWindowOpensAt(kind, pet.getSleptAt()) : null,
                     sleeping ? AwakeClock.autoWakeAt(kind, pet.getSleptAt()) : null,
                     pet.isOverslept());
@@ -334,9 +380,9 @@ public final class PetResponses {
                     "OPEN".equals(firstGift.status()),                       // 앨범 = 첫 심화가 도착하면 같이 열린다(정본 6장)
                     pet.isPiecesEnabled());                                 // 조각
 
-            TutorialSchedule.State t = TutorialSchedule.of(pet, now);
-            Tutorial tutorial = t == null ? null : new Tutorial(t.active(), t.minutesSince(),
-                    t.steps().stream().map(s -> new TutorialStep(s.key().name(), s.dueAt(), s.done(), s.current())).toList());
+            TutorialSchedule.State t = TutorialSchedule.of(pet);
+            Tutorial tutorial = t == null ? null : new Tutorial(t.active(), t.step(),
+                    t.steps().stream().map(s -> new TutorialStep(s.key().name(), s.done(), s.current())).toList());
 
             return new Detail(
                     pet.getId(), pet.getName(), pet.getNote(), pet.getPhase().name(),
@@ -370,7 +416,6 @@ public final class PetResponses {
                     features,
                     leaving(pet),
                     pet.isTraveling() ? new Trip(pet.getTripStartedAt(), pet.getPostcardCount()) : null,
-                    new Settings(pet.isLeaveEnabled()),
                     tutorial);
         }
 

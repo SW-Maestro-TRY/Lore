@@ -77,20 +77,26 @@ public class ChatService {
     /** 지금까지 도래한 슬롯의 행이 없으면 만든다. 기상일(BABY 는 부화일) 기준으로 하루에 슬롯 하나. */
     private List<ZzalChatCall> materialize(ZzalPet pet, Instant now) {
         List<ZzalChatCall> out = new ArrayList<>();
-        // BABY — 부화+8분. 답하거나 첫 밤 경계까지.
-        Instant babyAt = pet.getHatchedAt().plusSeconds(8 * 60);
-        if (!now.isBefore(babyAt)) {
+        // ★ 튜토리얼 부름(BABY) — 정본 12장 3번 칸 "뭐라고 말을 거네요".
+        //   1.4 이전에는 "부화 +8분" 이었다. 지금은 시간이 아니라 순서다 — 앞의 두 칸(밥·쓰다듬)을
+        //   끝내면 그 자리에서 부른다. 며칠 뒤에 와도 이 부름은 그대로 기다리고 있다.
+        Instant babyAt = pet.getHatchedAt();
+        if (pet.getTutorialStep() >= ZzalRules.TUTORIAL_CHAT_AFTER) {
             LocalDate babyDay = AwakeClock.dateOf(pet.getHatchedAt());
             ZzalChatCall baby = callRepository.findByPetIdAndDayOfAndSlot(pet.getId(), babyDay, ChatSlot.BABY)
                     .orElseGet(() -> callRepository.save(ZzalChatCall.call(pet.getId(), babyDay, ChatSlot.BABY,
                             BanFilter.clean(ChatTemplates.call(pet.getPersonality(), ChatSlot.BABY, pet.getName())),
-                            babyAt, AwakeClock.nextAutoSleep(pet.babyUntil(), pet.babyUntil()))));
+                            // ★ 튜토리얼 부름은 만료가 없다 — 시계가 안 돌기 때문이다. 답할 때까지 기다린다.
+                            babyAt, null)));
             // 답했거나 만료된 BABY 는 부화 당일에만 보인다 — 이후 날의 "오늘의 부름" 에 영구히 끼지 않게(리뷰 반영).
             if (baby.isOpen(now) || AwakeClock.dateOf(now).equals(babyDay)) {
                 out.add(baby);
             }
         }
-        // 하루 3회 — 기상 시각 기준. 아기 60분 안에서는 안 부른다(튜토리얼 부름이 따로 있다).
+        // 하루 3회 — 기상 시각 기준. 튜토리얼 중에는 안 부른다(튜토리얼 부름이 따로 있다).
+        if (pet.isInTutorial()) {
+            return out;
+        }
         Instant woke = pet.getWokeAt() == null ? pet.getHatchedAt() : pet.getWokeAt();
         LocalDate day = AwakeClock.dateOf(woke);
         Instant morning = woke.plus(ZzalRules.CHAT_MORNING_AFTER_WAKE);
@@ -103,7 +109,7 @@ public class ChatService {
         // 떨어지면 그 부름은 없다(해석 23). 평일은 10:00 자동 기상이라 NOON 이 17:00 을 넘지 않고, 부화 당일은 BABY 부름이 따로 있다.
         for (Due d : List.of(new Due(ChatSlot.MORNING, morning, min(noon, evening)), new Due(ChatSlot.NOON, noon, evening),
                 new Due(ChatSlot.EVENING, evening, nightEnd))) {
-            if (!d.at().isBefore(d.until()) || now.isBefore(d.at()) || now.isBefore(pet.babyUntil())) {
+            if (!d.at().isBefore(d.until()) || now.isBefore(d.at())) {
                 continue;
             }
             out.add(callRepository.findByPetIdAndDayOfAndSlot(pet.getId(), day, d.slot())

@@ -18,6 +18,10 @@ import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.MotionGridStep;
 import com.lore.zzal.generation.steps.MotionPostStep;
 import org.springframework.beans.factory.annotation.Value;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -149,9 +153,73 @@ public class GenerationConfig {
         hatchStates(env, configuredVersion);
         hatchStates(env, "v1");
         if (real) {
+            requirePythonPackages(pythonBin);
+            requireFakeGridWhenImagesAreFake(env);
             return new PythonPostProcessor(storage, scripts, pythonBin, timeout, v -> hatchStates(env, v));
         }
         return new FakePostProcessor(500);
+    }
+
+    /**
+     * 그림은 가짜인데 후처리는 진짜인 조합을 <b>기동할 때</b> 막는다.
+     *
+     * ★ 가짜 이미지 클라이언트는 격자 키를 안 내놓는다. 그 상태로 실제 후처리를 돌리면
+     *   S3 에서 빈 키를 받으려다 {@code Key cannot be empty} 로 죽는데, 그게 <b>부화 마지막 단계</b>라
+     *   설정을 잘못 준 사실이 몇 분 뒤에야 드러난다(2026-09-09 실제로 겪음).
+     *
+     * ★ 과금 없이 후처리를 검증하려면 진짜 격자 파일 하나가 필요하다 — {@code app.zzal.generation.fake-grid-key}.
+     */
+    private static void requireFakeGridWhenImagesAreFake(Environment env) {
+        boolean fakeImages = !env.getProperty("app.zzal.generation.real", Boolean.class, false);
+        String fakeGrid = env.getProperty("app.zzal.generation.fake-grid-key", "");
+        if (fakeImages && fakeGrid.isBlank()) {
+            throw new IllegalStateException("""
+                    그림은 가짜인데(real=false) 후처리만 진짜(real-postprocess=true)입니다 — 이 조합은 돌 수 없습니다.
+                      가짜 이미지 클라이언트는 격자를 안 내놓는데 후처리는 그 격자를 S3 에서 찾습니다.
+                    둘 중 하나를 고르세요.
+                      · 후처리도 가짜로  → ZZAL_REAL_POSTPROCESS=false
+                      · 과금 없이 후처리를 검증 → ZZAL_FAKE_GRID_KEY 에 진짜 격자 파일의 S3 key""");
+        }
+    }
+
+    /**
+     * 후처리 파이썬이 쓸 수 있는 상태인지 <b>기동할 때</b> 확인한다.
+     *
+     * <h3>★ 왜 여기서 미리 보나 — 실패 지점이 파이프라인 맨 끝이라서</h3>
+     * 후처리는 시트·문단·격자 2장을 <b>다 굽고 난 뒤</b>에 돈다. 패키지가 없으면 그때 죽는데,
+     * 그림값은 이미 다 나간 뒤다. 2026-09-09 에 {@code numpy} 가 없어 <b>$0.25 를 쓰고</b>
+     * 마지막 줄에서 실패했다.
+     *
+     * <h3>★ 기동을 막는다 — 경고로 끝내지 않는다</h3>
+     * 경고는 로그에 묻힌다. 실제 생성을 켠 서버가 후처리를 못 하는 상태로 떠 있으면
+     * 그 서버는 <b>돈만 쓰고 결과를 못 내는 서버</b>다. 뜨지 않는 편이 낫다.
+     */
+    private static void requirePythonPackages(String pythonBin) {
+        List<String> need = List.of("numpy", "scipy", "PIL");
+        String probe = need.stream().map("import %s"::formatted).collect(Collectors.joining("; "));
+        try {
+            Process p = new ProcessBuilder(pythonBin, "-c", probe)
+                    .redirectErrorStream(true).start();
+            if (!p.waitFor(30, TimeUnit.SECONDS)) {
+                p.destroyForcibly();
+                throw new IllegalStateException("후처리 파이썬이 30초 안에 답하지 않습니다 — app.zzal.python.bin=" + pythonBin);
+            }
+            if (p.exitValue() != 0) {
+                String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+                throw new IllegalStateException("""
+                        후처리 파이썬에 필요한 패키지가 없습니다 — 실제 생성을 켤 수 없습니다.
+                          app.zzal.python.bin = %s
+                          필요 = %s (버전은 zzal/pipeline/*/requirements.txt)
+                          파이썬이 남긴 말: %s
+                        이대로 두면 시트·격자를 다 굽고 마지막 단계에서 죽어 그림값만 나갑니다."""
+                        .formatted(pythonBin, need, out));
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("후처리 파이썬을 실행할 수 없습니다 — app.zzal.python.bin=" + pythonBin, e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("후처리 파이썬 확인이 중단됐습니다", e);
+        }
     }
 
     /**

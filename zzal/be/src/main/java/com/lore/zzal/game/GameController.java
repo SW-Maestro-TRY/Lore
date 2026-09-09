@@ -24,7 +24,7 @@ import java.time.Instant;
  */
 @Tag(name = "미니게임", description = "좌·우 맞히기 + 달리기 — 합쳐 하루 3판, 잠들 때 리셋")
 @RestController
-@RequestMapping("/api/zzal/v2/me/pets/{petId}/games")
+@RequestMapping("/api/zzal/v1/me/pets/{petId}/games")
 public class GameController {
 
     private final GameService gameService;
@@ -64,20 +64,6 @@ public class GameController {
                                                   @Valid @RequestBody GameRequests.Guess request) {
         GameService.GuessResult r = gameService.guess(userId, petId, gameId, request.pick().code(), Instant.now());
         return ApiResponse.ok(GameResponses.Guess.of(r, remaining(userId, petId)));
-    }
-
-    @Operation(summary = "달리기 끝", description = "살아남은 ms. 30,000 이상이면 승리(행복 +1). 서버는 상한 60,000 만 검증.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "끝"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ZZAL_GAME_NOT_FOUND"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "ZZAL_GAME_FINISHED")})
-    @PostMapping("/{gameId}/finish")
-    public ApiResponse<GameResponses.RunResult> finish(@LoginUser Long userId, @PathVariable Long petId,
-                                                       @PathVariable Long gameId,
-                                                       @Valid @RequestBody GameRequests.Finish request) {
-        GameService.RunResult r = gameService.finish(userId, petId, gameId, request.survivedMs(), Instant.now());
-        return ApiResponse.ok(new GameResponses.RunResult(r.game().getId(), r.game().getSurvivedMs(), r.win(),
-                remaining(userId, petId), r.justUnlocked(), r.runUnlocked()));
     }
 
     @Operation(summary = "치던 판 잇기", description = "새로고침 복구용. 치던 판이 없으면 playing=false.")

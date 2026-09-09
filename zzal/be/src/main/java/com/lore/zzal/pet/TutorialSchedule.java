@@ -1,82 +1,84 @@
 package com.lore.zzal.pet;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 
 /**
- * 아기 시간표(정본 12장) — <b>전부 서버 카운터에서 파생</b>한다. 브라우저에 저장하지 않는다.
+ * 튜토리얼 9칸(정본 12장) — <b>시각이 아니라 순서</b>로 간다.
  *
- * <h3>★ "어디까지 했나" 를 저장하지 않는 이유</h3>
- * v1 은 튜토리얼 위치를 브라우저에 두었다가 새로고침·기기 변경에서 어긋났다(플랜 T2 결정 2).
- * 여기서는 "도래" = 부화 뒤 N분, "완료" = 그 행동의 누적 카운터로 매번 계산한다. 나갔다 와도 밀린 부름이
- * 순서대로 나오고, 부름은 버튼을 잠그지 않는다(정본 0장 7).
+ * <h3>★ 1.4 에서 시간이 사라졌다</h3>
+ * 옛 규칙은 "부화 뒤 0·3·8·12·15·20·25·40·60분" 이었다. 그런데 부화에 2~7분이 걸려,
+ * 그 사이 자리를 뜬 사람은 돌아왔을 때 <b>이미 세 칸이 지나 있고 아이는 배가 고팠다.</b>
+ * 첫인상이 사람마다 달라지는 것이다. 지금은 <b>사용자가 직접 눌러야</b> 다음 칸으로 간다 —
+ * 며칠 뒤에 돌아와도 튜토리얼은 처음부터 온전히 굴러간다.
  *
- * <h3>「해석」 9</h3>
- * 9단계가 모두 done 이면 블록 자체가 null. 60분이 지나도 남은 단계가 있으면 {@code active=false} 인 채로 남는다.
+ * <h3>★ "어디까지 했나"는 서버가 갖는다</h3>
+ * v1 은 브라우저에 두었다가 새로고침·기기 변경에서 어긋났다. {@code ZzalPet.tutorialStep} 한 칸이 정본이다.
+ *
+ * <h3>★ 화면이 따로 알려 주지 않는다</h3>
+ * 각 칸의 행동에는 이미 제 API 가 있다(밥 = care, 채팅 = answer …). 그 API 가 들어올 때
+ * <b>지금 칸의 조건과 맞으면 서버가 스스로 넘긴다.</b> 화면이 "1칸 끝났어요"를 따로 부르지 않으므로,
+ * 그 호출을 빠뜨려 튜토리얼이 멈추는 일이 생길 수 없다.
+ * 누를 것이 없는 마지막 칸만 {@code POST …/tutorial/done} 으로 받는다 — 그것이 시계를 켜는 순간이다.
  */
 public final class TutorialSchedule {
 
     private TutorialSchedule() {
     }
 
-    /** 부름 하나. 순서 = 정본 12장. */
+    /** 9칸. 순서 = 정본 12장 표. */
     public enum Step {
-        FEED, PET, CHAT, PERSONALITY, CLEAN, GAME, SHARE, NAP, DONE
+
+        /** 1 배가 고픈가 봐요 — 밥 */
+        FEED,
+        /** 2 쓰다듬어 주세요 */
+        PET,
+        /** 3 뭐라고 말을 거네요 — 채팅 답(갸웃 즉시 해금) */
+        CHAT,
+        /** 4 이 성격이 맞나요 — 확인·수정 */
+        PERSONALITY,
+        /** 5 바닥을 치워 주세요 — 첫 똥은 이 칸이 만든다 */
+        CLEAN,
+        /** 6 같이 놀아 볼까요 — 좌우 맞히기 한 판(승패 무관) */
+        GAME,
+        /** 7 이 모습 가져가실래요 — 앱 밖으로 나가는 첫 결과물 */
+        SHARE,
+        /** 8 졸린가 봐요 — 낮잠. 재우고 곧바로 깨울 수 있다 */
+        NAP,
+        /** 9 이제 혼자서도 괜찮아요 — 누를 것이 없다. 여기서 시계가 켜진다 */
+        DONE
     }
 
-    public record StepState(Step key, Instant dueAt, boolean done, boolean current) {
+    public static final List<Step> STEPS = List.of(Step.values());
+
+    public static final int TOTAL = Step.values().length;
+
+    /** 지금 사용자가 해야 할 칸. 다 끝났으면 null. */
+    public static Step currentOf(int tutorialStep) {
+        return tutorialStep >= TOTAL ? null : Step.values()[tutorialStep];
     }
 
-    public record State(boolean active, long minutesSince, List<StepState> steps) {
+    public record StepState(Step key, boolean done, boolean current) {
     }
 
-    /** 이 펫의 시간표. 전부 끝났으면 null. */
-    public static State of(ZzalPet pet, Instant now) {
-        Instant hatched = pet.getHatchedAt();
-        if (hatched == null) {
+    /** 화면에 그릴 9칸. 전부 끝났으면 null — 그때부터 튜토리얼 블록 자체가 응답에서 사라진다. */
+    public record State(boolean active, int step, List<StepState> steps) {
+    }
+
+    /**
+     * 이 펫의 튜토리얼 상태.
+     *
+     * ★ 시계가 켜진 뒤에는 null 이다. "끝났는데 아직 남은 칸이 있다"는 상태가 없다 —
+     *   시계를 켜는 유일한 길이 마지막 칸을 끝내는 것이기 때문이다.
+     */
+    public static State of(ZzalPet pet) {
+        if (!pet.isInTutorial()) {
             return null;
         }
-        Step[] steps = Step.values();
-        int[] minutes = ZzalRules.BABY_CALL_MINUTES;
-        long minutesSince = Duration.between(hatched, now).toMinutes();
-
-        boolean[] done = new boolean[steps.length];
-        boolean allDone = true;
-        for (int i = 0; i < steps.length; i++) {
-            done[i] = isDone(pet, steps[i], minutesSince);
-            allDone &= done[i];
+        int at = pet.getTutorialStep();
+        StepState[] out = new StepState[TOTAL];
+        for (int i = 0; i < TOTAL; i++) {
+            out[i] = new StepState(Step.values()[i], i < at, i == at);
         }
-        if (allDone) {
-            return null;
-        }
-
-        boolean currentFound = false;
-        StepState[] out = new StepState[steps.length];
-        for (int i = 0; i < steps.length; i++) {
-            Instant dueAt = hatched.plus(Duration.ofMinutes(minutes[i]));
-            boolean due = !now.isBefore(dueAt);
-            boolean current = !currentFound && due && !done[i];
-            if (current) {
-                currentFound = true;
-            }
-            out[i] = new StepState(steps[i], dueAt, done[i], current);
-        }
-        return new State(pet.isBaby(now), minutesSince, List.of(out));
-    }
-
-    /** 완료 판정 — 전부 누적 카운터(api-v2.md 2절). */
-    static boolean isDone(ZzalPet pet, Step step, long minutesSince) {
-        return switch (step) {
-            case FEED -> pet.getFeeds() >= 1;
-            case PET -> pet.getPets() >= 1;
-            case CHAT -> pet.getChatAnswers() >= 1;
-            case PERSONALITY -> pet.getPersonality() != null;
-            case CLEAN -> pet.getCleans() >= 1;
-            case GAME -> pet.getGameStarts() >= 1;
-            case SHARE -> pet.getShares() >= 1;
-            case NAP -> pet.getNapCount() >= 1;
-            case DONE -> minutesSince >= ZzalRules.BABY_DURATION.toMinutes();
-        };
+        return new State(true, at, List.of(out));
     }
 }

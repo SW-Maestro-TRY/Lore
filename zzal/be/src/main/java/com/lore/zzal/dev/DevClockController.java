@@ -42,7 +42,7 @@ import java.time.format.DateTimeParseException;
  */
 @Tag(name = "개발용", description = "시연·확인 전용. 운영에서는 꺼져 있어 존재하지 않는다")
 @RestController
-@RequestMapping("/api/zzal/v2/dev/pets")
+@RequestMapping("/api/zzal/v1/dev/pets")
 @ConditionalOnProperty(name = "app.zzal.dev-tools", havingValue = "true")
 public class DevClockController {
 

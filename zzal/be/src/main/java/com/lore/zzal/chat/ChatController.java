@@ -25,7 +25,7 @@ import java.time.Instant;
  */
 @Tag(name = "채팅", description = "하루 3회의 부름 + 아기 8분")
 @RestController
-@RequestMapping("/api/zzal/v2/me/pets/{petId}/chat")
+@RequestMapping("/api/zzal/v1/me/pets/{petId}/chat")
 public class ChatController {
 
     private final ChatService chatService;

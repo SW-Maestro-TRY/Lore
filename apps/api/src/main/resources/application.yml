@@ -23,11 +23,36 @@ spring:
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
+  # ── 스키마 이력 ───────────────────────────────────────────────────────
+  #
+  # ★ 역할을 나눈다 — 표·칸을 더하는 일은 아래 ddl-auto 가, <b>제약을 고치거나 칸을 지우는 일</b>은
+  #   여기 SQL 이 맡는다. ddl-auto 는 후자를 못 하는데, 그 사실이 실제 호출에서만 드러난다.
+  #
+  # ★ baseline-on-migrate — 이미 표가 있는 DB(로컬·테스트 서버)에 나중에 붙였기 때문에 필요하다.
+  #   이 값이 없으면 "빈 DB 가 아니다" 라며 기동이 멈춘다.
+  #
+  # ★ 순서 — Flyway 가 먼저 돌고 그다음 Hibernate 가 표를 맞춘다(스프링 기본). 그래서 새 enum 값을
+  #   허용하는 제약이 먼저 깔리고, 그 뒤에 칸이 생긴다.
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    # ★ 이미 표가 있는 DB(기존 로컬·테스트 서버)에 Flyway 가 처음 붙을 때
+    #   "V1(기준선)까지는 적용된 것으로 친다" 고 표시하고 V2 부터 적용한다.
+    #   빈 DB 에는 이 표시를 안 찍으므로 V1 부터 전부 실행된다 — 양쪽이 같은 결과가 된다.
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
+
   jpa:
     hibernate:
-      # update = 엔티티를 보고 테이블을 자동 생성/변경. 개발 초기에만 쓴다.
-      # 운영에서는 데이터가 날아갈 수 있으므로 validate 또는 none 으로 바꾼다.
-      ddl-auto: update
+      # ★ validate = 표를 만들지 않는다. 엔티티와 DB 가 다르면 <b>기동을 막는다</b>.
+      #
+      #   표를 만드는 일은 위 Flyway(db/migration/*.sql)가 맡는다. 스키마를 바꾸려면
+      #   엔티티와 함께 V4, V5… 파일을 하나 추가한다.
+      #
+      # ★ 왜 update 를 버렸나 — update 는 "칸 더하기" 만 하고 제약 변경·칸 삭제는 안 하는데,
+      #   그 사실이 빌드·배포·기동을 전부 통과한 뒤 <b>실제 호출에서만</b> 드러난다.
+      #   2026-09-09 회원가입·그림 등록이 그 이유로 500 이 났다. 이제는 어긋나면 기동이 멈춘다.
+      ddl-auto: ${DDL_AUTO:validate}
     show-sql: true
     properties:
       hibernate:
@@ -96,8 +121,12 @@ app:
     # ── 파이프라인 버전 ──────────────────────────────────────────────────
     #
     # ★ 부화(HATCH)와 심화 행동(MOTION)의 버전 축이 따로다(PipelineRegistry 주석).
-    #   v2 부화 = 격자 2장 → 기본 행동 16종. 프롬프트가 아직 v1 뿐이면 v1 로 둔다.
-    pipeline-version: ${ZZAL_PIPELINE_VERSION:v1}
+    #   v2 부화 = 격자 2장 → 기본 행동 16종(정본 13장). v2 프롬프트 4종이 다 있어야 v2 로 뜬다 —
+    #   하나라도 없으면 PipelineRegistry 가 경고를 남기고 v1 로 내려간다.
+    #
+    # ★ 2026-09-09 기본값을 v2 로 올렸다. v1 은 격자 1장이라 <b>8종만</b> 만들어지는데,
+    #   정본은 16종이고 2층 해금이 전부 그 위에 얹혀 있다. 기본값이 v1 이면 조용히 절반만 생긴다.
+    pipeline-version: ${ZZAL_PIPELINE_VERSION:v2}
     motion-pipeline-version: ${ZZAL_MOTION_PIPELINE_VERSION:v1}
     max-hatch-attempts: 2
     # 심화 행동 API 굽기 시도 횟수. ★ 정본 6장은 API 1회 → 실패면 로컬(맥미니) 재생성 2회다.
@@ -152,7 +181,7 @@ app:
     chat:
       mode: ${ZZAL_CHAT_MODE:template}
 
-    # 개발용 시계 API(/api/zzal/v2/dev/**).
+    # 개발용 시계 API(/api/zzal/v1/dev/**).
     #
     # ★★ 기본이 꺼짐이고, 꺼져 있으면 컨트롤러가 빈으로 올라오지 않아 주소 자체가 없다(404).
     #    주소에 /dev/ 가 들어가는 것은 방어가 아니다 — 코드가 올라와 있으면 언젠가 불린다.
@@ -160,13 +189,27 @@ app:
     #   기다림으로 이루어진 이 게임의 규칙이 통째로 무의미해진다.
     dev-tools: ${ZZAL_DEV_TOOLS:false}
 
-    # 관리자 화면(/api/zzal/v2/admin/**).
+    # 관리자 화면(/api/zzal/v1/admin/**).
     #
     # ★★ dev-tools 와 같은 방식으로 막는다 — 꺼져 있으면 빈이 안 올라와 주소가 없다.
     #    여기에 더해 (1) 관리자 계정인지 DB 로 확인하고 (2) 화면에 noindex 를 건다.
     #    셋 중 하나만으로는 부족하다. 검색에 걸려 발견되는 것이 실제로 가장 흔한 경로다.
     admin:
       enabled: ${ZZAL_ADMIN:false}
+
+    # 후기(/api/zzal/v1/me/pets/{petId}/feedback).
+    #
+    # ★ 2차로 미뤘다 — 보상이 안 정해져 기록만 남는 상태다. 스웨거에 떠 있으면
+    #   "동작하는 API"로 읽히므로 dev-tools·admin 과 같은 방식으로 빈을 안 올린다.
+    feedback:
+      enabled: ${ZZAL_FEEDBACK:false}
+
+    # 공유 링크의 앞부분. 발급할 때 이 값 뒤에 토큰을 붙여 통째로 내려준다.
+    #
+    # ★ 서버가 만들어 주는 이유 — 화면이 조립하면 환경마다(로컬·테스트·운영) 다른 규칙이 생기고,
+    #   그중 하나가 틀려도 배포는 통과한다. 실제로 눌러 보기 전까지 안 드러난다.
+    share:
+      base-url: ${ZZAL_SHARE_BASE_URL:http://localhost:3100/zzal/s}
 
     # 무언가 하면 무엇을 줄 것인가.
     #

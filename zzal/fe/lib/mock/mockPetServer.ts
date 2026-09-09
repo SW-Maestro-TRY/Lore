@@ -20,8 +20,9 @@
 
 import { ApiError } from '../api';
 import type {
-  Album, BakingState, ChatCall, ChatReply, ChatSlot, ChatState, Clock, CreatePetInput, Features, FirstGift, Motion, PetCreated, Pieces, SickKind,
-  PetDetail, PetPhase, Personality, Settings, ShareKind, Sick, Today, Tutorial, TutorialStep,
+  Album, BakingState, ChatCall, ChatReply, ChatSlot, ChatState, Clock, Features, FirstGift, Motion, PetCreated, Pieces, SickKind,
+  PetDetail, PetPhase, Personality, Settings, Shared, ShareKind, Sick, Today, Tutorial, TutorialStep,
+  CharacterInput, Drafted, HatchProgress,
   TutorialStepKey, CareAction,
 } from '../pet';
 import type { GameKind, GameState, GuessResult, RunResult, Side } from '../game';
@@ -269,19 +270,50 @@ export class MockPetServer implements PetSource {
 
   // ── PetSource ─────────────────────────────────────────────────────────
 
-  async createPet(input: CreatePetInput): Promise<PetCreated> {
+  /** 그림 등록 → 초안. 실서버와 같이 **이미 초안이 있으면 그것을 그대로 준다.** */
+  async draftPet(imageKey: string): Promise<Drafted> {
     await this.wait();
     const now = this.now();
-    if (this.row && (this.row.phase === 'HATCHING')) throw err(409, 'ZZAL_PET_ALREADY_HATCHING', '아직 부화 중이에요');
-    if (this.row && this.row.phase === 'ALIVE') throw err(409, 'ZZAL_PET_LIMIT_REACHED', '더 키울 수 있는 자리가 없어요');
+    if (this.row?.phase === 'DRAFT') return { petId: this.row.id };
+    if (this.row?.phase === 'HATCHING') throw err(409, 'ZZAL_PET_ALREADY_HATCHING', '아직 부화 중이에요');
+    if (this.row?.phase === 'ALIVE') throw err(409, 'ZZAL_PET_LIMIT_REACHED', '더 키울 수 있는 자리가 없어요');
+    if (!imageKey) throw err(400, 'INVALID_UPLOAD_KEY', '올린 그림을 찾지 못했어요');
+    this.row = this.newRow('', null, now, null);
+    this.row.phase = 'DRAFT';
+    return { petId: this.row.id };
+  }
+
+  /** 캐릭터 정보 등록 → 격자 생성 시작. 여기서 알이 흔들리기 시작한다. */
+  async setCharacter(petId: number, input: CharacterInput): Promise<PetCreated> {
+    await this.wait();
+    const now = this.now();
+    const r = this.mine(petId);
+    if (r.phase !== 'DRAFT') throw err(409, 'ZZAL_PET_NOT_DRAFT', '이미 이름을 지은 아이예요');
     const name = input.name.trim();
     // ★ 12자의 기준은 UTF-16 길이(String.length)다 — 서버 @Size(max = 12) 와 같은 자.
     if (!name || name.length > NAME_MAX_CHARS) throw err(400, 'INVALID_INPUT', `이름은 ${NAME_MAX_CHARS}자까지예요`);
-    if (!input.imageKey) throw err(400, 'INVALID_UPLOAD_KEY', '올린 그림을 찾지 못했어요');
-    this.row = this.newRow(name, input.note?.trim() || null, now, null);
+    r.name = name;
+    r.note = input.note?.trim() || null;
+    r.phase = 'HATCHING';
+    r.hatchStartedAt = now;
     return {
-      petId: this.row.id, name, phase: 'HATCHING', hatchStartedAt: iso(now),
+      petId: r.id, name, phase: 'HATCHING', hatchStartedAt: iso(now),
       estimatedSeconds: Math.ceil(HATCH_MS / 1000),
+    };
+  }
+
+  async getHatchProgress(petId: number): Promise<HatchProgress> {
+    await this.wait();
+    const r = this.mine(petId);
+    const spent = this.now() - r.hatchStartedAt;
+    const total = 5;
+    return {
+      phase: r.phase,
+      label: null,
+      progress: Math.min(total, Math.floor((spent / HATCH_MS) * total)),
+      total,
+      estimatedSeconds: Math.max(0, Math.ceil((HATCH_MS - spent) / 1000)),
+      message: r.phase === 'FAILED' ? '이 그림은 어려워요. 다른 그림을 올려 주세요' : null,
     };
   }
 
@@ -414,14 +446,16 @@ export class MockPetServer implements PetSource {
     return this.detail(r, now);
   }
 
-  async share(petId: number, motionKey: string, _kind: ShareKind): Promise<PetDetail> {
+  async share(petId: number, motionKey: string, _kind: ShareKind): Promise<Shared> {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
     const m = r.motions.find((x) => x.key === motionKey);
     if (!m || m.unlockedAt === null) throw err(409, 'ZZAL_MOTION_NOT_OPEN', '아직 열리지 않은 동작이에요');
     r.counters.shareCount += 1;
-    return this.detail(r, now);
+    // ★ 목도 같은 동작에는 같은 토큰을 준다 — 실서버와 다르게 굴면 목으로 짠 화면이 실서버에서 깨진다.
+    const token = `mock-${petId}-${motionKey}`;
+    return { token, url: `http://localhost:3100/zzal/s/${token}`, pet: this.detail(r, now) };
   }
 
   async getChat(petId: number): Promise<ChatState> {
@@ -477,28 +511,6 @@ export class MockPetServer implements PetSource {
     return { motions: this.motionsOf(r), postcards: [], scenes: [], firstGift: this.firstGiftOf(r) };
   }
 
-  async callBack(petId: number): Promise<PetDetail> {
-    await this.wait();
-    this.alive(petId);
-    throw err(409, 'ZZAL_NOT_TRAVELING', '여행 중이 아니에요');
-  }
-
-  async updateSettings(petId: number, settings: Settings): Promise<PetDetail> {
-    await this.wait();
-    const r = this.alive(petId);
-    const now = this.settle(r, this.now());
-    r.settings = { leaveEnabled: !!settings.leaveEnabled };
-    return this.detail(r, now);
-  }
-
-  async release(petId: number): Promise<PetDetail> {
-    await this.wait();
-    const r = this.mine(petId);
-    if (r.phase === 'HATCHING') throw err(409, 'ZZAL_PET_RELEASE_NOT_ALLOWED', '부화가 끝난 뒤에 보낼 수 있어요');
-    r.phase = 'DEAD';
-    return this.detail(r, this.now());
-  }
-
   async startGame(petId: number, kind: GameKind = 'LEFT_RIGHT'): Promise<GameState> {
     await this.wait();
     const r = this.alive(petId);
@@ -548,27 +560,6 @@ export class MockPetServer implements PetSource {
     return {
       gameId, round, pick, answer, hit, hits: g.hits, finished: g.finished, win,
       nextRound: g.finished ? null : g.round, rounds: LEFT_RIGHT.rounds, winAt: LEFT_RIGHT.winAt,
-      remainingToday: Math.max(0, GAMES_PER_DAY - r.today.games),
-      justUnlocked: this.newlyUnlocked(r, before, now), runUnlocked: this.featuresOf(r).run,
-    };
-  }
-
-  async finishRun(petId: number, gameId: number, survivedMs: number): Promise<RunResult> {
-    await this.wait();
-    const r = this.alive(petId);
-    const now = this.settle(r, this.now());
-    const g = r.game;
-    if (!g || g.gameId !== gameId || g.kind !== 'RUN') throw err(404, 'ZZAL_GAME_NOT_FOUND', '진행 중인 놀이가 없어요');
-    if (g.finished) throw err(409, 'ZZAL_GAME_FINISHED', '이미 끝난 놀이예요');
-    if (!Number.isFinite(survivedMs) || survivedMs < 0 || survivedMs > RUN.targetMs * 2) {
-      throw err(400, 'INVALID_INPUT', '기록이 이상해요');
-    }
-    const before = this.unlockedSeqs(r);
-    g.finished = true;
-    g.win = survivedMs >= RUN.targetMs;
-    if (g.win) r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
-    return {
-      gameId, survivedMs, win: g.win,
       remainingToday: Math.max(0, GAMES_PER_DAY - r.today.games),
       justUnlocked: this.newlyUnlocked(r, before, now), runUnlocked: this.featuresOf(r).run,
     };

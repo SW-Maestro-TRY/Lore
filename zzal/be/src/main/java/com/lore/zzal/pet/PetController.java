@@ -3,6 +3,8 @@ package com.lore.zzal.pet;
 import com.lore.common.auth.jwt.LoginUser;
 import com.lore.common.response.ApiResponse;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.share.ShareService;
+import com.lore.zzal.share.dto.ShareResponses;
 import com.lore.zzal.pet.dto.PetRequests;
 import com.lore.zzal.pet.dto.PetResponses;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,15 +30,17 @@ import java.util.List;
  */
 @Tag(name = "펫", description = "펫 생성·조회·돌보기·재우기·성격·배경·공유·보내기 (v2)")
 @RestController
-@RequestMapping("/api/zzal/v2/me/pets")
+@RequestMapping("/api/zzal/v1/me/pets")
 public class PetController {
 
     private final PetService petService;
     private final MotionCatalog catalog;
+    private final ShareService shareService;
 
-    public PetController(PetService petService, MotionCatalog catalog) {
+    public PetController(PetService petService, MotionCatalog catalog, ShareService shareService) {
         this.petService = petService;
         this.catalog = catalog;
+        this.shareService = shareService;
     }
 
     private PetResponses.Detail detail(ZzalPet pet, String stepLabel, Instant real) {
@@ -51,21 +55,60 @@ public class PetController {
                 petService.scenes(pet.getId()));
     }
 
-    @Operation(summary = "펫 생성", description = """
-            그림·이름(12자)·세부사항을 받아 **부화를 시작**한다. 기다리지 않고 즉시 응답한다.
+    @Operation(summary = "이미지 등록", description = """
+            그림을 등록하고 **캐릭터 시트 굽기를 시작**한다. 기다리지 않고 즉시 응답한다.
+
+            ★ 이름은 아직 받지 않는다 — 사용자가 이름을 짓는 동안(약 74초) 시트를 미리 굽기 위해서다.
+            부화 전체가 2~7분이라 이 74초가 그대로 줄어든다.
+
+            ★ 이름을 안 짓고 나갔다가 다시 오면 **그 초안을 그대로 돌려준다.**
+            이미 구운 시트를 재사용하므로 돈이 두 번 나가지 않는다.
+
             imageKey 는 presign 으로 발급받은 **내 것이고 아직 안 쓴 키**여야 한다.""")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "부화 시작"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "초안 생성"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
                     description = "올바르지 않은 이미지(INVALID_UPLOAD_KEY) · 이미 사용한 이미지(UPLOAD_KEY_ALREADY_USED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "부화 중(ZZAL_PET_ALREADY_HATCHING) · 자리 없음(ZZAL_PET_LIMIT_REACHED)")})
-    @PostMapping
-    public ApiResponse<PetResponses.Created> create(@LoginUser Long userId,
-                                                    @Valid @RequestBody PetRequests.Create request) {
+    @PostMapping("/draft")
+    public ApiResponse<PetResponses.Drafted> draft(@LoginUser Long userId,
+                                                   @Valid @RequestBody PetRequests.Draft request) {
+        ZzalPet pet = petService.draft(userId, request.imageKey(), Instant.now());
+        return ApiResponse.ok(new PetResponses.Drafted(pet.getId()));
+    }
+
+    @Operation(summary = "캐릭터 정보 등록", description = """
+            이름과 성격·세계관을 저장하고 **격자 생성을 시작**한다. 여기서부터 알이 흔들린다.
+
+            ★ 그림 생성에 들어가는 것은 **`note`(자유 메모) 뿐**이다. 성격·세계관은 **대사 톤에만** 쓰인다 —
+            격자 프롬프트의 정체성 문단은 올린 그림에서 뽑는다.
+
+            ★ 이름 말고는 전부 선택이다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "부화 시작"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "이미 이름을 지은 아이(ZZAL_PET_NOT_DRAFT)")})
+    @PostMapping("/draft/{petId}/character")
+    public ApiResponse<PetResponses.Created> character(@LoginUser Long userId,
+                                                       @PathVariable Long petId,
+                                                       @Valid @RequestBody PetRequests.Character request) {
         Instant now = Instant.now();
-        ZzalPet pet = petService.create(userId, request.name(), request.note(), request.imageKey(), now);
+        ZzalPet pet = petService.character(userId, petId, request.name(), request.note(),
+                request.personality(), request.world(), now);
         return ApiResponse.ok(PetResponses.Created.from(pet, ZzalRules.HATCH_ESTIMATE.toSeconds()));
+    }
+
+    @Operation(summary = "부화 진행 조회", description = """
+            알 화면이 몇 초마다 되풀이해 묻는 자리다. **가볍게 유지한다** — 상태 전체 조회는 무겁다.
+
+            ★ 실패 문구는 두 가지뿐이다 — "조금 더 걸려요" / "이 그림은 어려워요, 다른 그림을 올려 주세요".
+            원인은 노출하지 않는다.""")
+    @GetMapping("/{petId}/hatch")
+    public ApiResponse<PetResponses.Hatch> hatch(@LoginUser Long userId, @PathVariable Long petId) {
+        return ApiResponse.ok(petService.hatchProgress(userId, petId, Instant.now()));
     }
 
     @Operation(summary = "내 펫 목록 조회")
@@ -163,19 +206,46 @@ public class PetController {
         return ApiResponse.ok(detail(petService.changeBackground(userId, petId, request.background(), real), real));
     }
 
-    @Operation(summary = "다운로드·공유 기록", description = """
-            열린 동작 어느 것이든. 서버는 **횟수만 기록**한다(튜토리얼 25분의 "했다" 가 되는 서버 사실).
-            파일 합성(워터마크)은 v2 판.""")
+    @Operation(summary = "튜토리얼 끝내기", description = """
+            튜토리얼 마지막 칸("이제 혼자서도 괜찮아요")에서 부른다. **이 순간 시계가 켜진다.**
+
+            ★ 1~8칸은 따로 부를 필요가 없다 — 밥·쓰다듬·채팅·성격·청소·게임·공유·낮잠은
+            각자 제 API 가 있고, 그 API 가 들어오면 서버가 알아서 다음 칸으로 넘긴다.
+            누를 것이 없는 9칸만 여기로 받는다.
+
+            ★ 시계가 켜지기 전까지는 게이지가 줄지 않고, 병도 없고, 밤이 돼도 자동으로 자지 않는다.
+            며칠 뒤에 돌아와도 튜토리얼은 그 자리에 그대로 있다.""")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "기록"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "시계가 켜졌음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "아직 남은 칸이 있음(ZZAL_TUTORIAL_NOT_FINISHED) · 이미 끝냈음(ZZAL_TUTORIAL_ALREADY_DONE)")})
+    @PostMapping("/{petId}/tutorial/done")
+    public ApiResponse<PetResponses.Detail> tutorialDone(@LoginUser Long userId, @PathVariable Long petId) {
+        Instant real = Instant.now();
+        return ApiResponse.ok(detail(petService.tutorialDone(userId, petId, real), real));
+    }
+
+    @Operation(summary = "공유 링크 발급", description = """
+            열린 동작 어느 것이든. **주소를 하나 내주고 공유 횟수를 올린다.**
+
+            ★ 같은 동작을 다시 공유하면 **있던 링크를 그대로** 준다 — 누를 때마다 주소가 바뀌면
+            어제 올린 글의 링크가 오늘 것과 달라져 무엇이 얼마나 퍼졌는지 셀 수 없다.
+
+            ★ 파일이 아니라 링크인 이유 — X·인스타 인앱 브라우저는 **다운로드를 막는다.**""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "발급"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "안 열린 동작(ZZAL_MOTION_NOT_OPEN)")})
     @PostMapping("/{petId}/share")
-    public ApiResponse<PetResponses.Detail> share(@LoginUser Long userId,
+    public ApiResponse<PetResponses.Shared> share(@LoginUser Long userId,
                                                   @PathVariable Long petId,
                                                   @Valid @RequestBody PetRequests.Share request) {
         Instant real = Instant.now();
-        return ApiResponse.ok(detail(petService.share(userId, petId, request.motionKey(), real), real));
+        // ★ 순서가 중요하다 — 열린 동작인지 먼저 본다. 링크를 먼저 내면 안 열린 동작에도
+        //   주소가 생겨 남는다(예외로 롤백되지 않는 경로가 있다).
+        PetResponses.Detail pet = detail(petService.share(userId, petId, request.motionKey(), real), real);
+        ShareResponses.Issued issued = shareService.issue(petId, request.motionKey(), real);
+        return ApiResponse.ok(new PetResponses.Shared(issued.token(), issued.url(), pet));
     }
 
     // ── 동작 (정본 2·16장) ───────────────────────────────────────────────
@@ -216,56 +286,5 @@ public class PetController {
                 // 혼자 논 장면 보관 3개(정본 16장). 최근 것부터
                 petService.scenes(petId).stream().map(PetResponses.Scene::of).toList(),
                 d.firstGift()));
-    }
-
-    // ── 떠남·재회 (정본 9장) ──────────────────────────────────────────────
-
-    @Operation(summary = "부르기(재회)", description = """
-            여행 중인 아이를 **즉시 데려온다**. 모아 둔 엽서도 이때 한꺼번에 전달된다.
-
-            - 게이지 전부 2칸 · 케어 미스 0 · 친밀도는 떠나기 전 **최고치의 50%**
-            - 도감·조각·3층 진행은 그대로 보존된다(정본 16장)
-            - 여행 중이 아니면 409(ZZAL_NOT_TRAVELING) — 데려오는 데 값을 매기지 않는다""")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "돌아왔음"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
-                    description = "없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
-                    description = "여행 중이 아님(ZZAL_NOT_TRAVELING)")})
-    @PostMapping("/{petId}/call-back")
-    public ApiResponse<PetResponses.Detail> callBack(@LoginUser Long userId, @PathVariable Long petId) {
-        Instant real = Instant.now();
-        return ApiResponse.ok(detail(petService.callBack(userId, petId, real), real));
-    }
-
-    @Operation(summary = "설정(떠남 끄기)", description = """
-            떠남을 켜고 끈다(정본 9장). 끄면 예고 중이던 짐 가방도 즉시 사라진다.
-
-            ★ 이미 여행 중인 아이는 이 스위치로 돌아오지 않는다 — **부르기**로 데려온다.""")
-    @PostMapping("/{petId}/settings")
-    public ApiResponse<PetResponses.Detail> settings(@LoginUser Long userId,
-                                                     @PathVariable Long petId,
-                                                     @Valid @RequestBody PetRequests.Settings request) {
-        Instant real = Instant.now();
-        return ApiResponse.ok(detail(
-                petService.changeSettings(userId, petId, request.leaveEnabled(), real), real));
-    }
-
-    // ── 보내기 ────────────────────────────────────────────────────────────
-
-    @Operation(summary = "펫 보내기(놓아주기)", description = """
-            지금 함께 지내는 아이를 보내고 **자리를 비운다**. 되돌릴 수 없다. 지우지는 않는다.
-            부화 중에는 보낼 수 없고, 이미 떠난 아이에게 다시 불러도 성공으로 답한다.""")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "보냈음"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
-                    description = "없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
-                    description = "부화 중이라 아직 보낼 수 없음(ZZAL_PET_RELEASE_NOT_ALLOWED)")})
-    @PostMapping("/{petId}/release")
-    public ApiResponse<PetResponses.Detail> release(@LoginUser Long userId, @PathVariable Long petId) {
-        Instant real = Instant.now();
-        ZzalPet pet = petService.release(userId, petId, real);
-        return ApiResponse.ok(detail(pet, null, real));
     }
 }

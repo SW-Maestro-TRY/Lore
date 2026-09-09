@@ -46,7 +46,7 @@ const PASSWORD_MAX = 72;
 const FALLBACK_MESSAGE = "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요";
 
 interface AgreementState {
-  /** 화면에서만 막는다. 서버 스키마(AgreementType)에 없는 값이라 보내지 않는다. */
+  /** 만 14세 이상. 법이 요구하는 별도 사실이라 서버에도 따로 기록된다(AGE_14). */
   age: boolean;
   terms: boolean;
   privacy: boolean;
@@ -242,11 +242,14 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       await signUpAndSignIn({
         email: trimmedEmail,
         password,
-        // 서버는 Map<AgreementType, Boolean> 을 받는다. 연령 확인은 여기 없다 —
-        // 서버 스키마에 없는 값이라 보내면 400 이 된다.
+        // 서버는 Map<AgreementType, Boolean> 을 받는다.
+        // ★ 연령(AGE_14)도 함께 보낸다 — 약관을 한 문서로 합치더라도 나이는 법이 요구하는
+        //   별도 사실이라, 이용약관 동의에 묻히면 "언제 무엇에 동의했나" 를 답할 수 없다.
         // MARKETING 은 안 눌러도 false 를 담아 보낸다. 안 물어본 것과 거부한 것은 다른 사실이고,
         // 서버가 그 차이를 기록한다.
-        agreements: { TERMS: agree.terms, PRIVACY: agree.privacy, MARKETING: agree.marketing },
+        agreements: {
+          AGE_14: agree.age, TERMS: agree.terms, PRIVACY: agree.privacy, MARKETING: agree.marketing,
+        },
       });
       track("auth_signup_succeeded");
       onSuccess?.("signup");

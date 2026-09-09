@@ -1,5 +1,6 @@
 package com.lore.zzal.pet;
 
+import com.lore.zzal.PetFixture;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.UnlockRule;
 import org.junit.jupiter.api.DisplayName;
@@ -18,8 +19,9 @@ class UnlockRulesTest {
     private static final MotionCatalog CATALOG = new MotionCatalog("", "", "v1");
 
     private static ZzalPet baby() {
-        ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", T0);
+        ZzalPet pet = PetFixture.hatching(1L, "여울", null, "k", T0);
         pet.markAlive("s", "i", T0);
+        pet.skipTutorial(T0);
         return pet;
     }
 
@@ -47,14 +49,18 @@ class UnlockRulesTest {
     }
 
     @Test
-    @DisplayName("재우기·깨우기 합쳐 3회 → 자기(11). 낮잠도 센다")
+    @DisplayName("★ 재우기·깨우기 합쳐 3회 → 자기(11). 튜토리얼 낮잠도 센다 — 첫날 밤에 한 번이면 열린다")
     void sleepWakeCounts() {
-        ZzalPet pet = baby();
-        pet.sleep(T0.plusSeconds(60));                              // 낮잠 1
-        pet.wake(T0.plusSeconds(60 * 6));                           // 2
+        ZzalPet pet = PetFixture.hatching(1L, "여울", null, "s", T0);
+        pet.markAlive("s", "i", T0);                                // 튜토리얼 중
+        PetFixture.readyForNap(pet);                                // 8칸 차례
+        pet.sleep(T0);                                              // 낮잠 1
+        pet.wake(T0);                                               // 2
         assertThat(UnlockRules.isUnlocked(pet, CATALOG.bySeq(11).orElseThrow(), CATALOG)).isFalse();
+
+        pet.skipTutorial(T0);                                       // 시계가 켜진다
         pet.settle(kst("2026-09-05 19:00"));
-        pet.sleep(kst("2026-09-05 19:00"));                         // 3
+        pet.sleep(kst("2026-09-05 19:00"));                         // 3 — 첫날 밤
         assertThat(UnlockRules.isUnlocked(pet, CATALOG.bySeq(11).orElseThrow(), CATALOG)).isTrue();
     }
 
