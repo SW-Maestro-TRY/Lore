@@ -22,14 +22,14 @@ public final class ChatResponses {
         }
     }
 
-    @Schema(description = "오늘의 부름들. openSlot 이 null 이면 지금 답할 부름이 없다")
+    @Schema(description = "오늘의 대화 목록. openSlot 이 null 이면 현재 응답 가능한 대화가 없다")
     public record Chat(String openSlot, List<Call> calls, List<String> memories) {
     }
 
     public record Reply(String line, String reactionKey) {
     }
 
-    @Schema(description = "답한 결과 — 펫 최신 상태 + 캐릭터 대사(해석 22)")
+    @Schema(description = "대화 응답 결과. 변경된 캐릭터 상태와 대사·반응 동작으로 구성한다")
     public record Answered(PetResponses.Detail pet, Reply chatReply) {
     }
 }

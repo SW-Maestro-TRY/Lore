@@ -13,25 +13,25 @@ public final class ProfileRequests {
      *
      * ★ 선택지 문구는 화면이 정한다. 서버는 길이만 본다.
      */
-    @Schema(description = "부화 대기 중 여울이 묻는 6문항. 한 문항씩 보내도 되고 한꺼번에 보내도 된다")
+    @Schema(description = "사용자 정보 6문항. 전달한 항목만 저장하며 나머지는 기존 값을 유지한다")
     public record Patch(
 
-            @Schema(description = "아이가 나를 부르는 말. 게임 내내 대사에 쓰인다", example = "주인님")
+            @Schema(description = "캐릭터가 사용자를 부르는 호칭. 대사 전반에 사용한다", example = "주인님")
             @Size(max = 20) String callMe,
 
-            @Schema(description = "주로 오는 시각", example = "밤")
+            @Schema(description = "주로 방문하는 시간대", example = "밤")
             @Size(max = 20) String visitTime,
 
-            @Schema(description = "이 아이와의 사이", example = "내 자캐")
+            @Schema(description = "캐릭터와의 관계", example = "내 자캐")
             @Size(max = 20) String relation,
 
-            @Schema(description = "그림을 그리는지", example = "가끔")
+            @Schema(description = "그림 창작 여부", example = "가끔")
             @Size(max = 20) String draws,
 
-            @Schema(description = "나이대", example = "20대")
+            @Schema(description = "연령대", example = "20대")
             @Size(max = 20) String ageBand,
 
-            @Schema(description = "서비스를 알게 된 경로", example = "엑스(트위터)")
+            @Schema(description = "서비스 유입 경로", example = "엑스(트위터)")
             @Size(max = 40) String cameFrom) {
     }
 }

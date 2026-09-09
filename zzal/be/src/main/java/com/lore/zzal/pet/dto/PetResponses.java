@@ -34,7 +34,7 @@ public final class PetResponses {
     }
 
     /** 그림을 등록한 결과. 이 번호로 다음 화면이 캐릭터 정보를 보낸다. */
-    @Schema(description = "초안 번호")
+    @Schema(description = "초안 식별자. 캐릭터 정보 등록 API 에 이 값을 사용한다")
     public record Drafted(@Schema(example = "7") Long petId) {
     }
 
@@ -50,18 +50,23 @@ public final class PetResponses {
      * @param estimatedSeconds  남은 시간(초). 지났으면 0
      * @param message           실패했을 때 사용자에게 보일 말. 성공 중이면 null
      */
-    @Schema(description = "부화 진행")
-    public record Hatch(String phase, String label, int progress, int total,
-                        long estimatedSeconds, String message) {
+    @Schema(description = "부화 진행 상태. 폴링 응답이므로 게이지·동작 목록은 포함하지 않는다")
+    public record Hatch(
+            @Schema(description = "DRAFT · HATCHING · ALIVE · FAILED", example = "HATCHING") String phase,
+            @Schema(description = "현재 수행 중인 단계 설명. 진행 중이 아니면 null") String label,
+            @Schema(description = "완료된 단계 수", example = "2") int progress,
+            @Schema(description = "전체 단계 수", example = "5") int total,
+            @Schema(description = "예상 잔여 시간(초). 예상 시간을 넘겼으면 0", example = "180") long estimatedSeconds,
+            @Schema(description = "실패 시 사용자에게 표시할 문구. 진행 중이면 null") String message) {
     }
 
-    @Schema(description = "펫 생성 결과")
+    @Schema(description = "캐릭터 정보 등록 결과")
     public record Created(
             @Schema(example = "7") Long petId,
             @Schema(example = "여울") String name,
             @Schema(description = "HATCHING", example = "HATCHING") String phase,
             Instant hatchStartedAt,
-            @Schema(description = "예상 소요 시간(초). 대개 이보다 훨씬 빨리 끝난다", example = "600")
+            @Schema(description = "예상 소요 시간(초). 실제로는 이보다 짧게 완료되는 경우가 많다", example = "600")
             long estimatedSeconds) {
 
         public static Created from(ZzalPet pet, long estimatedSeconds) {
@@ -162,7 +167,7 @@ public final class PetResponses {
         }
     }
 
-    @Schema(description = "동작 한 칸 — 18개 고정, seq 오름차순")
+    @Schema(description = "동작 1건. 18건 고정이며 seq 오름차순으로 반환한다")
     public record Motion(int seq, String key, String label, String layer, boolean unlocked,
                          String basicImageKey, String hint, Progress progress, Advanced advanced) {
     }
@@ -176,7 +181,7 @@ public final class PetResponses {
      * ★ 링크만 주지 않고 {@code pet} 을 함께 주는 이유 — 공유는 횟수를 올리고 그것이 튜토리얼 진행과
      *   해금 조건에 걸린다. 화면이 "서버가 준 값으로만 그린다"는 규칙을 지키려면 바뀐 상태가 같이 와야 한다.
      */
-    @Schema(description = "공유 링크 + 바뀐 상태")
+    @Schema(description = "공유 링크와 변경된 캐릭터 상태. 공유 횟수가 해금 조건에 반영되므로 상태를 함께 반환한다")
     public record Shared(String token, String url, Detail pet) {
     }
 
@@ -232,7 +237,7 @@ public final class PetResponses {
     }
 
     /** 앨범(api-v2.md 1.6) — 도감 18칸 + 엽서·장면(PR-9·11 전엔 빈 목록) + 첫 심화 기념. */
-    @Schema(description = "앨범 — 열린 동작 도감(기본/심화)·엽서·혼자 논 장면·첫 심화 기념")
+    @Schema(description = "앨범. 동작 도감과 엽서·장면·첫 심화 동작 정보로 구성한다")
     public record Album(List<Motion> motions, List<Postcard> postcards, List<Scene> scenes, FirstGift firstGift) {
     }
 
@@ -248,48 +253,50 @@ public final class PetResponses {
      * 펫 상태(api-v2.md 2절). 부화 중이든 함께 지내는 중이든 이 하나로 답한다.
      * {@code phase != ALIVE} 면 ALIVE 전용 블록은 전부 null.
      */
-    @Schema(description = "펫 상태 — PetDetail v2. api-v2.md 2절이 정본")
+    @Schema(description = """
+            캐릭터 상태 전체. 부화 중과 진행 중을 구분하지 않고 이 응답 하나로 화면을 구성한다.
+            phase 가 ALIVE 가 아니면 진행 중 전용 블록은 모두 null 이다""")
     public record Detail(
             Long petId,
             String name,
             String note,
-            @Schema(description = "HATCHING · ALIVE · FAILED · DEAD") String phase,
-            @Schema(description = "부화가 끝났는가") boolean ready,
-            @Schema(description = "지금 하는 일. 부화 중일 때만") String step,
-            @Schema(description = "부화 시작 후 지난 시간(초)") Long elapsedSeconds,
-            @Schema(description = "FAILED·DEAD 일 때만") String deathReason,
+            @Schema(description = "DRAFT · HATCHING · ALIVE · FAILED · DEAD") String phase,
+            @Schema(description = "부화 완료 여부") boolean ready,
+            @Schema(description = "현재 수행 중인 생성 단계. 부화 중에만 채워진다") String step,
+            @Schema(description = "부화 시작 후 경과 시간(초)") Long elapsedSeconds,
+            @Schema(description = "종료 사유. FAILED·DEAD 일 때만 채워진다") String deathReason,
             Instant hatchStartedAt,
             Instant hatchedAt,
-            @Schema(description = "★ 필수. 이 펫의 시계(dev 오프셋 포함). 화면은 기기 시계를 쓰지 않는다") Instant serverNow,
+            @Schema(description = "서버 기준 현재 시각. 화면은 기기 시계 대신 이 값을 사용한다") Instant serverNow,
 
             // ── 이하 ALIVE 전용 ────────────────────────────────────────────
             Clock clock,
             Integer daysTogether,
             Gauges gauges,
             Food food,
-            @Schema(description = "SICK > HUNGRY > SAD > DIRTY > NORMAL") String mood,
+            @Schema(description = "표시 우선순위: SICK > HUNGRY > SAD > DIRTY > NORMAL") String mood,
             Sick sick,
             @Schema(description = """
-                    ★ 행동 응답에만. 방금 약을 먹고 나았는가 — 화면이 "나은 동작(기쁜 자세 + 반짝)" 을 한 번 보여준다.
-                    상태만으로는 "방금 나음" 과 "원래 안 아픔" 을 못 가른다""")
+                    투약으로 방금 회복했는지 여부. 행동 응답에만 채워진다.
+                    상태값만으로는 방금 회복한 경우와 원래 정상인 경우를 구분할 수 없으므로 별도로 내려준다""")
             boolean justHealed,
             Intimacy intimacy,
             Today today,
-            @Schema(description = "3층 전엔 null") Pieces pieces,
+            @Schema(description = "오늘 모은 조각. 심화 단계 진입 전에는 null") Pieces pieces,
             @Schema(description = """
-                    오늘이 "기분 좋은 날" 인가(정본 6장) — 어젯밤 벌점 0 + 세 게이지 2칸 이상.
-                    조각 하나를 미리 받고 첫 부름이 살가워진다. 3층 전에는 항상 false""")
+                    직전 취침 시점에 케어 미스가 없고 게이지 3종이 모두 2 이상이었는지 여부.
+                    조건을 만족하면 조각 1개를 선지급한다. 심화 단계 진입 전에는 항상 false""")
             boolean goodDay,
             @Schema(description = """
-                    지금 뭔가 굽고 있나 — NONE(없음) · QUEUED(오늘 밤에 굽는다) · PRACTICING(연습 중).
-                    화면은 PRACTICING 일 때 "아직 연습 중이에요" 한 줄을 띄운다(정본 16장)""",
+                    심화 동작 생성 상태. NONE(대기 없음) · QUEUED(당일 야간 생성 예정) · PRACTICING(생성·검수 중).
+                    검수 대기와 재생성은 모두 PRACTICING 으로 표시하며 내부 상태를 노출하지 않는다""",
                     example = "NONE")
             String baking,
             List<Motion> motions,
-            @Schema(description = "행동 응답에만. 이번 행동으로 열린 2층 seq") List<Integer> justUnlocked,
+            @Schema(description = "이번 행동으로 해금된 동작 seq. 행동 응답에만 채워진다") List<Integer> justUnlocked,
             @Schema(description = """
-                    이번 조회에서 혼자 논 장면이 새로 남았는가 — 귀환 첫 화면이 이걸 보고 한 번 띄운다.
-                    다음 조회에는 false""")
+                    이번 조회에서 새 장면이 기록되었는지 여부. 재방문 첫 화면이 1회 표시하는 데 사용한다.
+                    다음 조회부터는 false 다""")
             boolean sceneNew,
             List<Learned> learnedToday,
             FirstGift firstGift,
@@ -301,7 +308,10 @@ public final class PetResponses {
             Features features,
             Leaving leaving,
             Trip trip,
-            @Schema(description = "아기 시간표. 9단계가 다 끝나면 null") Tutorial tutorial) {
+            @Schema(description = """
+                    튜토리얼 진행 상태. 9단계를 모두 완료하면 null 이 되고 clock.clockStartedAt 이 채워진다.
+                    진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다""")
+            Tutorial tutorial) {
 
         /** 조회 응답 — {@code justUnlocked} 없음, 동작 행 없음(심화 상태 전부 NONE). 테스트·간이용. */
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog) {

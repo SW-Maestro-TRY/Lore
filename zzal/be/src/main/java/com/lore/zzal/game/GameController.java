@@ -22,7 +22,7 @@ import java.time.Instant;
 /**
  * 미니게임 API v2(api-v2.md 1.7). 응답은 펫 상태가 아니라 게임 상태(결정기록 C17).
  */
-@Tag(name = "미니게임", description = "좌·우 맞히기 + 달리기 — 합쳐 하루 3판, 잠들 때 리셋")
+@Tag(name = "미니게임", description = "좌우 맞히기와 달리기. 두 게임 합산 하루 3매치이며 취침 시 초기화한다")
 @RestController
 @RequestMapping("/api/zzal/v1/me/pets/{petId}/games")
 public class GameController {
@@ -39,11 +39,17 @@ public class GameController {
         return gameService.remainingToday(petService.get(userId, petId));
     }
 
-    @Operation(summary = "판 시작", description = """
-            `kind` = LEFT_RIGHT · RUN. 진행 중인 판이 있으면 새로 만들지 않고 그것을 돌려준다.
-            하루 3판은 두 게임 합산·시작한 판 기준·잠들 때 리셋. RUN 은 좌우 5승 뒤.""")
+    @Operation(summary = "매치 시작", description = """
+            kind 로 게임 종류를 지정한다. LEFT_RIGHT(좌우 맞히기)는 처음부터 사용할 수 있고,
+            RUN(달리기)은 좌우 맞히기 5승 이후 해금된다.
+
+            좌우 맞히기는 5회 중 3회를 맞히면 승리한다. 정답은 매치 시작 시 서버가 결정해
+            보관하며 응답에 포함하지 않는다. 승리 시 행복 +1 을 부여한다.
+
+            진행 중인 매치가 있으면 새로 생성하지 않고 해당 매치를 반환한다.
+            일일 3매치는 두 게임 합산이며 시작 시점에 차감하고 취침 시 초기화한다.""")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "시작(또는 치던 판)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "매치 시작 또는 진행 중인 매치 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "ZZAL_GAME_DAILY_LIMIT · ZZAL_SICK_REFUSES · ZZAL_FEATURE_LOCKED(RUN) · ZZAL_PET_SLEEPING")})
     @PostMapping
@@ -53,9 +59,13 @@ public class GameController {
         return ApiResponse.ok(GameResponses.State.of(s, remaining(userId, petId)));
     }
 
-    @Operation(summary = "좌우 한 판 치기", description = "응답에 방금 친 판의 답만 담긴다. 다섯 판을 다 치면 finished·win.")
+    @Operation(summary = "좌우 맞히기 1회 진행", description = """
+            선택한 방향을 전달하면 정답 여부를 서버가 판정한다. 응답에는 방금 진행한 회차의
+            정답만 포함하며 남은 회차의 정답은 노출하지 않는다.
+
+            5회를 모두 진행하면 finished 가 true 가 되고 그때 win 이 채워진다.""")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "한 판 침"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "진행 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ZZAL_GAME_NOT_FOUND"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING")})
     @PostMapping("/{gameId}/guess")
@@ -66,7 +76,12 @@ public class GameController {
         return ApiResponse.ok(GameResponses.Guess.of(r, remaining(userId, petId)));
     }
 
-    @Operation(summary = "치던 판 잇기", description = "새로고침 복구용. 치던 판이 없으면 playing=false.")
+    @Operation(summary = "진행 중인 매치 조회", description = """
+            새로고침 등으로 화면이 초기화된 경우 진행 중인 매치를 이어받는다.
+            진행 중인 매치가 없으면 playing 이 false 다.
+
+            일일 매치 수는 시작 시점에 차감하므로, 이 API 가 없으면 새로고침 시
+            차감된 매치를 이어서 진행할 수 없다.""")
     @GetMapping("/current")
     public ApiResponse<GameResponses.State> current(@LoginUser Long userId, @PathVariable Long petId) {
         // current() 가 정산을 먼저 하므로 남은 판수는 그 뒤에 읽는다(정산 전 값 방지 — 리뷰 반영).
