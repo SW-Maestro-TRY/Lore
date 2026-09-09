@@ -1,46 +1,62 @@
-// 진짜 서버에 붙는 **한 줄기**만 담당한다 — 그림 올리기 → 부화 시작 → 다 될 때까지 지켜보기 →
+// 진짜 서버에 붙는 **한 줄기**만 담당한다 — 그림 올리기 → 초안 → 이름 → 다 될 때까지 지켜보기 →
 // 방 화면에 내 아이 그림 끼우기.
 //
 // ★ 왜 `useYeoul` 안에 넣지 않았나
 //   `useYeoul` 은 시안을 눌러 보기 위한 **프론트 전용 목**이다. 거기에 서버를 섞으면
 //   "화면이 이상한 것" 과 "서버가 이상한 것" 이 한 덩어리가 되어 판정이 안 된다.
-//   그래서 서버는 이 파일 하나에 가두고, 목에는 결과(그림 주소·부화 완료)만 건넨다.
+//   그래서 서버는 이 파일 하나에 가두고, 목에는 결과(그림 주소·부화 진행)만 건넨다.
 //   그림을 안 올리고 넘어가면 이 훅은 통째로 잠자고 화면은 지금까지처럼 여울로 돈다.
 //
 // ★ 지금 잇는 것은 **부화까지**다. 돌보기 수치·채팅·앨범은 아직 목이다(2026-09-07 상훈님 결정).
+//
+// ★ 2026-09-09 새 계약(`프론트-연동-계약-0909.md` 4절) — 펫 만들기가 **두 번으로 갈렸다**.
+//     1) 그림을 올린 **그 순간** `draft` → 서버가 캐릭터 시트를 미리 굽기 시작한다
+//     2) 이름을 받은 순간 `character` → 격자 생성 시작(알이 흔들리는 자리)
+//   사용자가 이름을 짓는 약 74초를 그대로 버는 것이 이 분리의 목적이다.
+//   예전처럼 이름까지 다 받고 한 번에 만들면 그 시간이 통째로 버려진다.
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { assetUrl } from '../../lib/assets';
 import { MOTION_FALLBACK, YEOUL_MOTION } from '../constants';
 import { BASIC_KEYS } from './constants';
-import { createPet, getPet, type PetDetail } from '../../lib/pet';
+import {
+  draftPet, getHatchProgress, getPet, setCharacter,
+  type CharacterInput, type HatchProgress, type PetDetail,
+} from '../../lib/pet';
 import { uploadImage } from '../../lib/upload';
 
 export interface Live {
   /** 고른 그림(미리보기용). 서버에 올리기 전에도 화면에 보여 준다. */
   previewUrl: string | null;
-  /** 올리기가 끝나 받은 키. 이게 있어야 부화를 시작할 수 있다. */
+  /** 올리기가 끝나 받은 키. */
   imageKey: string | null;
+  /** 초안이 잡힌 순간부터 있다. 그림을 올리면 바로 생긴다(이름은 아직 없다). */
   petId: number | null;
   pet: PetDetail | null;
   busy: boolean;
   error: string | null;
-  /** 부화가 끝났는가. */
+  /**
+   * 그림만 올려 둔 채 이름이 아직 없는 아이가 서버에 있다 — "이어서 이름을 지어 주세요".
+   * 계약 4절: 이름을 안 짓고 나갔다 오면 `draft` 가 **같은 petId** 를 준다. 이미 구운
+   * 시트를 다시 쓰므로 돈이 두 번 안 나간다. 화면은 처음부터 다시 올리게 하면 안 된다.
+   */
+  draftOnly: boolean;
+  /** 부화가 끝났는가(`ALIVE`). */
   ready: boolean;
   failed: boolean;
   /** 부화 중 지금 하는 일 한 줄(서버 문구). */
   step: string | null;
   /**
-   * 알 화면의 네 칸(0~4). **아이가 있으면 이것이 진행의 유일한 근거**다.
-   *
-   * ★ 시간으로 재지 않는다 — 그림 굽는 데 몇 분이 걸릴지 우리가 모르므로 시계로 칸을 채우면
-   *   거짓말이 된다. 대신 서버가 알려 주는 **지금 하는 일(step)이 바뀐 횟수**를 센다.
-   *   단계가 실제로 넘어가야 칸이 찬다.
-   * ★ 4 는 서버가 `ALIVE` 라고 답했을 때에만 나온다. 그 전에는 3 에서 멈춘다 —
-   *   아직 안 끝났는데 '다 됐어요' 가 뜨면 눌러도 안 열리는 문이 된다.
+   * 끝난 단계 수와 전체 단계 수 — **둘 다 서버가 준 숫자 그대로**다.
+   * 예전에는 "라벨이 바뀐 횟수" 를 셌는데, 그건 전용 API 가 없던 시절의 임시방편이었다.
    */
   progress: number;
+  total: number;
+  /** 남은 시간(초). 서버가 모르면 0. */
+  etaSeconds: number;
+  /** 실패했을 때 서버가 보낸 말. */
+  message: string | null;
   /**
    * 기본 8종 중 **서버가 그림을 안 준 것**. 있으면 안 되는 상태다(→ `BASIC_KEYS` 주석).
    * ⚠️ 지금 개발 중에는 가짜 생성이 6종만 만들어서 `sick`·`call` 이 늘 여기 담긴다 —
@@ -49,17 +65,19 @@ export interface Live {
   missingBasics: string[];
   /** 서버가 준 내 아이 그림(카탈로그 key). 아직 없으면 null → 화면은 여울로 폴백한다. */
   img: (key: string) => string | null;
-  /** 파일 하나를 올린다. 실패하면 error 에 한국어 한 줄이 남는다. */
+  /** 파일 하나를 올린다 — 성공하면 **그 자리에서 초안까지** 잡는다. */
   upload: (file: File) => Promise<void>;
-  /** 부화 시작. 그림을 안 올렸으면 아무 일도 안 한다(목으로 계속 간다). */
-  start: (name: string, note: string) => Promise<void>;
+  /** 이름·성격을 보낸다. 이 순간부터 격자 생성이 돈다. */
+  setChar: (input: CharacterInput) => Promise<void>;
   reset: () => void;
 }
 
 const EMPTY: Live = {
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null,
-  ready: false, failed: false, step: null, progress: 0, missingBasics: [],
-  img: () => null, upload: async () => {}, start: async () => {}, reset: () => {},
+  draftOnly: false, ready: false, failed: false, step: null,
+  progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
+  img: () => null,
+  upload: async () => {}, setChar: async () => {}, reset: () => {},
 };
 
 export function useHatchState(): Live {
@@ -70,8 +88,9 @@ export function useHatchState(): Live {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const objectUrl = useRef<string | null>(null);
-  // 지금까지 본 단계 이름들. 같은 이름이 다시 와도 한 번만 센다.
-  const [seenSteps, setSeenSteps] = useState<string[]>([]);
+  /** 이름을 보냈는가. 이게 켜져야 굽기가 도는 것이므로 그때부터 진행을 묻는다. */
+  const [charSet, setCharSet] = useState(false);
+  const [hatch, setHatch] = useState<HatchProgress | null>(null);
 
   // 미리보기 주소는 브라우저 메모리를 잡으므로 바뀌거나 떠날 때 놓아 준다.
   useEffect(() => () => { if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }, []);
@@ -84,11 +103,16 @@ export function useHatchState(): Live {
     setPreviewUrl(objectUrl.current);
     try {
       // ★ 한 key 는 한 번만 쓸 수 있다. 실패하면 presign 부터 다시 — 같은 key 로 재시도하지 않는다.
-      setImageKey(await uploadImage(file, 'zzal'));
+      const key = await uploadImage(file, 'zzal');
+      setImageKey(key);
+      // ★ 여기서 곧바로 초안을 잡는다. 이 한 줄이 이름 짓는 시간(약 74초)을 버는 자리다.
+      const { petId: id } = await draftPet(key);
+      setPetId(id);
     } catch (e) {
       // ★ 실패하면 미리보기도 함께 지운다(상훈님 판정 19). 그림만 크게 남아 있으면
       //   작은 오류 한 줄보다 그림이 먼저 읽혀 성공한 줄 안다.
       setImageKey(null);
+      setPetId(null);
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
       objectUrl.current = null;
       setPreviewUrl(null);
@@ -98,29 +122,42 @@ export function useHatchState(): Live {
     }
   }, []);
 
-  const start = useCallback(async (name: string, note: string) => {
-    if (!imageKey || petId) return;
+  /**
+   * 이름·성격을 보낸다 = 격자 생성 시작.
+   *
+   * ★ 계약 4절 — **그림 생성에 들어가는 것은 `note` 뿐**이다. `personality`·`world` 는
+   *   대사 톤에만 쓰이고, 격자 프롬프트의 정체성 문단은 올린 그림에서 뽑는다.
+   *   그래서 말투·장르 칩은 여기 안 싣는다(보낼 자리가 없고, 실어도 그림엔 영향이 없다).
+   */
+  const setChar = useCallback(async (input: CharacterInput) => {
+    if (!petId || charSet) return;
     setBusy(true);
     setError(null);
     try {
-      const created = await createPet({ name, note: note || undefined, imageKey });
-      setPetId(created.petId);
+      const created = await setCharacter(petId, input);
+      setCharSet(true);
+      setHatch({
+        phase: created.phase, label: null, progress: 0, total: 0,
+        estimatedSeconds: created.estimatedSeconds, message: null,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : '부화를 시작하지 못했어요');
     } finally {
       setBusy(false);
     }
-  }, [imageKey, petId]);
+  }, [petId, charSet]);
 
-  // 부화가 끝날 때까지 3초마다 들여다본다. 끝나면 스스로 멈춘다.
-  const done = pet?.phase === 'ALIVE' || pet?.phase === 'FAILED' || pet?.phase === 'DEAD';
+  // ── 부화 지켜보기 ──────────────────────────────────────────────
+  // 무거운 `getPet` 대신 **전용 API** 를 3초마다. 끝나면 스스로 멈춘다.
+  const phase = hatch?.phase ?? null;
+  const watching = !!petId && charSet && phase !== 'ALIVE' && phase !== 'FAILED' && phase !== 'DEAD';
   useEffect(() => {
-    if (!petId || done) return;
+    if (!watching || !petId) return;
     let alive = true;
     const look = async () => {
       try {
-        const next = await getPet(petId);
-        if (alive) setPet(next);
+        const next = await getHatchProgress(petId);
+        if (alive) setHatch(next);
       } catch {
         // 한 번 못 읽은 것으로 화면을 깨뜨리지 않는다. 다음 차례에 다시 묻는다.
       }
@@ -128,14 +165,15 @@ export function useHatchState(): Live {
     look();
     const t = setInterval(look, 3000);
     return () => { alive = false; clearInterval(t); };
-  }, [petId, done]);
+  }, [watching, petId]);
 
-  // 단계가 넘어갈 때마다 한 칸. 서버가 말해 준 것만 센다.
-  const stepName = pet?.step ?? null;
+  // 다 됐을 때 **한 번만** 무거운 쪽을 부른다 — 그림 주소(`motions[].basicImageKey`)가 거기 있다.
   useEffect(() => {
-    if (!stepName) return;
-    setSeenSteps((v) => (v.includes(stepName) ? v : [...v, stepName]));
-  }, [stepName]);
+    if (phase !== 'ALIVE' || !petId || pet) return;
+    let alive = true;
+    void getPet(petId).then((d) => { if (alive) setPet(d); }).catch(() => {});
+    return () => { alive = false; };
+  }, [phase, petId, pet]);
 
   /**
    * 카탈로그 key 하나를 **내 아이 그림 주소**로. 아직 못 받았으면 null.
@@ -150,19 +188,24 @@ export function useHatchState(): Live {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
     setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null);
-    setSeenSteps([]);
+    setCharSet(false); setHatch(null);
   }, []);
 
   return {
     previewUrl, imageKey, petId, pet, busy, error,
-    ready: pet?.phase === 'ALIVE',
-    failed: pet?.phase === 'FAILED' || pet?.phase === 'DEAD',
-    step: pet?.step ?? null,
-    progress: pet?.phase === 'ALIVE' ? 4 : Math.min(3, seenSteps.length),
+    // 초안은 아직 부화가 아니다 — 이름을 받아야 굽기가 시작된다.
+    draftOnly: !!petId && !charSet,
+    ready: phase === 'ALIVE',
+    failed: phase === 'FAILED' || phase === 'DEAD',
+    step: hatch?.label ?? null,
+    progress: hatch?.progress ?? 0,
+    total: hatch?.total ?? 0,
+    etaSeconds: hatch?.estimatedSeconds ?? 0,
+    message: hatch?.message ?? null,
     missingBasics: pet?.phase === 'ALIVE'
       ? BASIC_KEYS.filter((k) => !pet.motions?.some((m) => m.key === k && m.basicImageKey))
       : [],
-    img, upload, start, reset,
+    img, upload, setChar, reset,
   };
 }
 
@@ -173,6 +216,8 @@ export const LiveProvider = LiveContext.Provider;
 export function useLive(): Live {
   return useContext(LiveContext);
 }
+
+
 
 // ── 발밑 여백 재기 ──────────────────────────────────────────────────────
 //

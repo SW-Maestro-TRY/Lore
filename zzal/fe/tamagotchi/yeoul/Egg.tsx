@@ -5,7 +5,7 @@
 'use client';
 
 import { EGG_IMG } from './constants';
-import { C, GAEGU, radius } from './ui';
+import { C, GAEGU, MONO, radius } from './ui';
 import { useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
@@ -14,7 +14,14 @@ export default function Egg({ y }: { y: Yeoul }) {
   const live = useLive();
   const e = v.egg;
   // 진짜로 굽고 있으면 서버가 지금 하는 일을 그대로 보여 준다. 기다림을 감추지 않는다.
-  const stage = live.petId ? (live.failed ? '이 그림은 좀 어렵네요' : live.step ?? e.stage) : e.stage;
+  // 실패도 서버가 보낸 말(`message`)을 그대로 쓴다 — 우리가 지어내면 진짜 이유가 가려진다.
+  const stage = live.petId
+    ? (live.failed ? (live.message ?? '이 그림은 좀 어렵네요') : live.step ?? e.stage)
+    : e.stage;
+  // 남은 시간. 서버가 모르면(0) 아무 말도 안 한다 — 모르는 걸 아는 척하지 않는다.
+  const left = live.petId && !live.ready && !live.failed && live.etaSeconds > 0
+    ? (live.etaSeconds >= 60 ? `약 ${Math.ceil(live.etaSeconds / 60)}분 남았어요` : '곧 끝나요')
+    : '';
   const img = e.isCrack ? EGG_IMG.crack : e.isReady ? EGG_IMG.hatch : EGG_IMG.idle;
   const anim = e.isCrack ? 'yCrack .4s ease-in-out infinite'
     : e.isReady ? 'yWiggle 1.1s ease-in-out infinite' : 'yWiggle 2.2s ease-in-out infinite';
@@ -34,7 +41,10 @@ export default function Egg({ y }: { y: Yeoul }) {
             {e.dots.map((d, i) => <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: d.bg }} />)}
           </span>
           <span style={{ fontSize: 12, color: 'rgba(74,64,56,.55)' }}>{stage}</span>
+          {/* 몇 단계 중 몇 번째인지 — 서버가 준 숫자 그대로다(총 단계가 넷이 아닐 수 있다). */}
+          <span style={{ font: `10px ${MONO}`, color: 'rgba(74,64,56,.38)' }}>{e.count}</span>
         </span>
+        {left && <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.42)' }}>{left}</span>}
       </div>
 
       <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>

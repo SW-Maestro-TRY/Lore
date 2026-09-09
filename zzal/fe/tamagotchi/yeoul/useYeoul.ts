@@ -217,18 +217,34 @@ export function useYeoul(live?: Live) {
    * 목의 `s.hatch` 는 그림을 안 올린 사람이 시안을 눌러 볼 때 쓰는 가짜 계수기다. 그런데
    * 그것이 튜토리얼을 넘기거나 토스트가 뜰 때마다 올라가서, 서버는 아직 굽고 있는데 알 화면이
    * '다 됐어요' 를 띄웠다. 눌러도 안 열리는 문이 된다.
-   * 그래서 진짜 아이가 있으면 `live.progress`(단계가 넘어간 횟수, 다 되면 4)만 본다.
+   *
+   * ★ 2026-09-09 새 계약 — 진행이 **서버 숫자**로 온다(`progress / total`). 전에는 '라벨이
+   *   바뀐 횟수' 를 셌는데 그건 전용 API 가 없던 시절의 임시방편이었다. 이제 세지 않는다.
+   *   알 그림의 칸은 넷으로 고정이므로 서버 비율을 넷에 옮겨 칠하고, **글자는 서버 숫자 그대로**
+   *   보여 준다(총 단계가 넷이 아닐 수 있어 'N / 4' 라고 쓰면 거짓말이 된다).
+   * ★ '다 됐어요' 의 근거는 칸 수가 아니라 **`phase === 'ALIVE'`** 다. 칸이 다 차 보여도
+   *   서버가 아직 안 끝났다고 하면 문을 열지 않는다.
    *
    * ref 로 들고 있는 이유 = 아래 `setS` 안에서 읽는데, 값이 바뀔 때마다 콜백을 새로 만들면
    * 타이머가 걸린 손잡이들이 통째로 다시 태어난다.
    */
   const realHatch = !!live?.petId;
-  const hatchN = realHatch ? (live?.progress ?? 0) : s.hatch;
+  const hatchTotal = live?.total ?? 0;
+  const hatchRatio = hatchTotal > 0 ? Math.min(1, (live?.progress ?? 0) / hatchTotal) : 0;
+  const hatchReady = realHatch ? !!live?.ready : s.hatch >= 4;
+  // 채워진 칸(0~4). 다 되기 전에는 3 에서 멈춘다 — 가득 찬 칸은 '이제 열린다' 로 읽힌다.
+  const hatchN = realHatch
+    ? (hatchReady ? 4 : Math.min(3, Math.floor(hatchRatio * 4)))
+    : s.hatch;
+  const hatchPct = realHatch ? Math.round(hatchRatio * 100) : Math.min(100, s.hatch * 25);
+  const hatchText = realHatch
+    ? (hatchTotal > 0 ? `${live?.progress ?? 0} / ${hatchTotal}` : '시작하는 중')
+    : `${Math.min(4, s.hatch)} / 4`;
   const realRef = useRef(false);
   realRef.current = realHatch;
-  // setS 콜백 안에서도 '지금 몇 칸인지' 를 읽어야 한다(exitSample).
-  const hatchRef = useRef(0);
-  hatchRef.current = hatchN;
+  // setS 콜백 안에서도 '다 됐는지' 를 읽어야 한다(exitSample).
+  const readyRef = useRef(false);
+  readyRef.current = hatchReady;
 
   // 타이머는 정리해야 하므로 한곳에 모아 둔다.
   const T = useRef<Record<string, ReturnType<typeof setTimeout> | undefined>>({});
@@ -589,13 +605,13 @@ export function useYeoul(live?: Live) {
     setS((v) => ({
       ...v, ...(v.snapshot ?? {}),
       sampleMode: false, snapshot: null, screen: 'onb',
-      step: STEPS.indexOf(hatchRef.current >= 4 ? 'born' : 'char'),
+      step: STEPS.indexOf(readyRef.current ? 'born' : 'char'),
       sheet: null, toast: '', fire: null, hatch: v.hatch,
     }));
   }, []);
 
   const tapEgg = useCallback(() => {
-    if (hatchN < 4) {
+    if (!hatchReady) {
       patch({ eggMsg: '아직 부화 중이에요. 조금만 더 기다려 주세요.' });
       later('eggMsg', 2400, () => setS((w) => ({ ...w, eggMsg: '' })));
       return;
@@ -612,7 +628,7 @@ export function useYeoul(live?: Live) {
       calls: 3, resolved: {}, sleeping: false, night: false, sick: false, albumOpen: 8,
       popOpen: false, chatOpen: false, sheet: null, toast: '',
     })));
-  }, [hatchN, s.cracking, patch, later]);
+  }, [hatchReady, s.cracking, patch, later]);
 
   const goStep = useCallback((i: number) => patch({ screen: 'onb', step: i, sheet: null }), [patch]);
 
@@ -1088,13 +1104,13 @@ export function useYeoul(live?: Live) {
       },
       sample: {
         show: s.sampleMode,
-        ring: `conic-gradient(${ACCENT} 0 ${Math.min(100, hatchN * 25)}%, rgba(74,64,56,.14) ${Math.min(100, hatchN * 25)}% 100%)`,
-        eggAnim: hatchN >= 4 ? 'yCrack 1.5s ease-in-out infinite'
+        ring: `conic-gradient(${ACCENT} 0 ${hatchPct}%, rgba(74,64,56,.14) ${hatchPct}% 100%)`,
+        eggAnim: hatchReady ? 'yCrack 1.5s ease-in-out infinite'
           : hatchN === 3 ? 'yWiggle 2.4s ease-in-out infinite' : 'yBob 2.8s ease-in-out infinite',
-        eggNote: hatchN >= 4 ? '부화 완료' : '부화 중',
-        eggCount: `${Math.min(4, hatchN)} / 4`,
-        noteBg: hatchN >= 4 ? ACCENT : 'rgba(74,64,56,.82)',
-        haloOpacity: hatchN >= 4 ? 1 : 0,
+        eggNote: hatchReady ? '부화 완료' : '부화 중',
+        eggCount: hatchText,
+        noteBg: hatchReady ? ACCENT : 'rgba(74,64,56,.82)',
+        haloOpacity: hatchReady ? 1 : 0,
         exit: exitSample, forceHatch: goEgg,
       },
       hearts: { show: s.hearts, text: s.pets >= 3 ? '♥♥♥' : s.pets === 2 ? '♥♥♡' : '♥♡♡' },
@@ -1194,14 +1210,16 @@ export function useYeoul(live?: Live) {
         leaveBg: s.leaveOff ? C.accentSoft : C.paper, leaveFg: s.leaveOff ? '#9C5145' : C.ink,
       },
       egg: {
-        title: s.cracking ? '지금 나오고 있어요' : (hatchN >= 4 ? '다 됐어요' : '부화 중이에요'),
-        sub: s.cracking ? '잠시만요.' : (hatchN >= 4 ? '이제 만나러 가도 돼요.' : '여울과 놀며 기다려도 돼요.'),
-        isCrack: s.cracking, isReady: !s.cracking && hatchN >= 4, isWait: !s.cracking && hatchN < 4,
+        title: s.cracking ? '지금 나오고 있어요' : (hatchReady ? '다 됐어요' : '부화 중이에요'),
+        sub: s.cracking ? '잠시만요.' : (hatchReady ? '이제 만나러 가도 돼요.' : '여울과 놀며 기다려도 돼요.'),
+        isCrack: s.cracking, isReady: !s.cracking && hatchReady, isWait: !s.cracking && !hatchReady,
         dots: [0, 1, 2, 3].map((i) => ({ bg: i < hatchN ? ACCENT : '#EBD3C7' })),
-        stage: hatchN >= 4 ? '다 됐어요' : ['그림을 살펴보는 중', '그리는 중', '움직이는 중', '거의 다 됐어요'][Math.min(3, hatchN)],
+        // 목 전용 문구. 진짜 아이면 Egg 화면이 서버가 준 말(`live.step`)로 덮어쓴다.
+        stage: hatchReady ? '다 됐어요' : ['그림을 살펴보는 중', '그리는 중', '움직이는 중', '거의 다 됐어요'][Math.min(3, hatchN)],
+        count: hatchText,
         cta: s.cracking ? '지금 나오고 있어요' : '지금 만나러 가기',
-        ctaBg: hatchN >= 4 && !s.cracking ? ACCENT : '#DED6C9',
-        ctaFg: hatchN >= 4 && !s.cracking ? C.accentInk : '#8B8175',
+        ctaBg: hatchReady && !s.cracking ? ACCENT : '#DED6C9',
+        ctaFg: hatchReady && !s.cracking ? C.accentInk : '#8B8175',
         hasMsg: !!s.eggMsg, msg: s.eggMsg,
       },
       onb: {
@@ -1238,7 +1256,7 @@ export function useYeoul(live?: Live) {
     };
   }, [
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
-    s, hatchN, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
+    s, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,

@@ -12,6 +12,19 @@ import { ONB_COPY, GOOD_EX, BAD_EX } from './constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
+import type { Personality } from '../../lib/pet';
+
+/**
+ * 성격 칩 → 서버 값. 우리 칩 다섯과 서버 `Personality` 다섯이 하나씩 맞는다.
+ * 표에 없는 값(고르지 않았을 때)은 undefined 로 떨어져 아예 안 보낸다 — 성격은 선택이다.
+ */
+const PERSONALITY_OF: Record<string, Personality | undefined> = {
+  온순: 'GENTLE', 활발: 'LIVELY', 수줍음: 'SHY', 응석: 'CLINGY', 시크: 'COOL',
+};
+
+/** 세계관은 고른 칩과 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
+const worldOf = (chip: string | null | undefined, text: string | undefined) =>
+  [chip, (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, 100);
 
 export default function Onboarding({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
@@ -224,8 +237,20 @@ export default function Onboarding({ y }: { y: Yeoul }) {
       <div style={{ flex: 'none', padding: '10px 24px 30px', display: 'flex', flexDirection: 'column', gap: 9 }}>
         <button
           onClick={() => {
-            // 그림을 올렸으면 이 순간이 **부화 시작**이다(이름·세부사항이 다 모인 시점).
-            if (key === 'char' && s.petName) void live.start(s.petName, s.texts.extra ?? '');
+            // 그림을 올렸으면 이 순간이 **격자 생성 시작**이다(계약 4절의 두 번째 걸음).
+            // 첫 걸음(초안 잡기)은 이미 그림을 올린 순간에 끝났다 — 그래서 여기까지 오는 동안
+            // 서버가 캐릭터 시트를 미리 구워 두었다.
+            //
+            // ★ 그림에 들어가는 것은 `note` 뿐이다. `personality`·`world` 는 대사 톤에만 쓰인다.
+            //   말투·장르 칩은 보낼 자리가 없어(그리고 그림에 영향도 없어) 아직 화면에만 남는다.
+            if (key === 'char' && s.petName) {
+              void live.setChar({
+                name: s.petName,
+                personality: PERSONALITY_OF[s.picks.persona ?? ''],
+                world: worldOf(s.picks.world, s.texts.world) || undefined,
+                note: (s.texts.extra ?? '').trim() || undefined,
+              });
+            }
             actions.onNext();
           }}
           data-action="onb-next"
