@@ -124,10 +124,15 @@ export async function signIn(input: LoginInput): Promise<void> {
   await load(true);
 }
 
-/** 가입. 서버가 가입과 동시에 쿠키를 내주므로 그 자리에서 로그인 상태가 된다. */
-export async function signUpAndSignIn(input: SignUpInput): Promise<void> {
+/**
+ * 가입. **로그인 상태가 되지 않는다** — 서버가 토큰을 주지 않기 때문이다.
+ *
+ * ★ 화면은 가입 뒤 로그인 화면으로 보낸다. 방금 정한 비밀번호를 한 번 더 치게 하는 셈이지만,
+ *   그 자리에서 비밀번호가 맞는지 확인된다. 오타를 낸 채 가입한 사람이 다음 접속에서야
+ *   못 들어오는 일을 막는다.
+ */
+export async function signUp(input: SignUpInput): Promise<void> {
   await signUpApi(input);
-  await load(true);
 }
 
 /**
@@ -146,7 +151,7 @@ export interface UseAuthResult extends AuthState {
   /** 아직 첫 확인이 안 끝났다. 이때는 로그인/비로그인 어느 쪽도 단정하면 안 된다. */
   isLoading: boolean;
   signIn: typeof signIn;
-  signUp: typeof signUpAndSignIn;
+  signUp: typeof signUp;
   signOut: typeof signOut;
   reload: typeof reloadMe;
 }
@@ -160,7 +165,7 @@ export function useAuth(): UseAuthResult {
     isAuthenticated: snapshot.status === "authenticated",
     isLoading: snapshot.status === "loading",
     signIn,
-    signUp: signUpAndSignIn,
+    signUp,
     signOut,
     reload: reloadMe,
   };

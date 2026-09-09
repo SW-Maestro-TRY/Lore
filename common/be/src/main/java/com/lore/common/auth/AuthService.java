@@ -53,12 +53,17 @@ public class AuthService {
     /**
      * 회원가입. 필수 약관에 동의하지 않으면 성립하지 않는다.
      *
+     * <h3>★ 가입은 로그인시키지 않는다</h3>
+     * 토큰을 주지 않으므로 화면은 가입 뒤 <b>로그인 화면으로 보낸다.</b> 방금 정한 비밀번호를
+     * 한 번 더 치게 하는 것이라 번거로워 보이지만, 그 자리에서 비밀번호가 맞는지 확인된다.
+     * 오타를 낸 채 가입한 사람이 다음 접속에서야 못 들어오는 일을 막는다.
+     *
      * @param agreements 항목별 동의 여부. 선택 항목(마케팅)은 false 도 기록으로 남긴다 —
      *                   "안 물어본 것"과 "거부한 것"은 다르기 때문이다.
      */
     @Transactional
-    public Tokens signUp(String email, String rawPassword, Map<AgreementType, Boolean> agreements,
-                         String termsVersion, String userAgent, Instant now) {
+    public void signUp(String email, String rawPassword, Map<AgreementType, Boolean> agreements,
+                       String termsVersion, Instant now) {
         if (userRepository.existsByEmail(email)) {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
@@ -72,8 +77,6 @@ public class AuthService {
         credentialRepository.save(UserCredential.local(user, passwordEncoder.encode(rawPassword)));
         agreements.forEach((type, agreed) ->
                 agreementRepository.save(UserAgreement.of(user, type, termsVersion, Boolean.TRUE.equals(agreed), now)));
-
-        return issueTokens(user, userAgent, now);
     }
 
     /**

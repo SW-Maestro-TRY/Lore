@@ -236,6 +236,21 @@
   line-height: 1.5;
 }
 
+/*
+ * 오류가 아닌 안내(가입 완료 등).
+ *
+ * ★ 오류와 색을 달리한다 — 가입이 성공했는데 빨간 칸이 뜨면 실패로 읽힌다.
+ */
+.info {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-zzal-deep) 10%, transparent);
+  color: var(--accent-zzal-deep);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .submit {
   margin-top: 4px;
   padding: 13px 18px;
