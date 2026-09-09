@@ -116,6 +116,12 @@ export const KEYFRAMES = `
 @keyframes yMineIn{0%{opacity:0;transform:translateY(6px)}10%{opacity:1;transform:translateY(0)}72%{opacity:1}100%{opacity:0;transform:translateY(-4px)}}
 @keyframes yHalo{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.18);opacity:.12}}
 @keyframes yPop{0%{transform:scale(.92);opacity:0}62%{transform:scale(1.04);opacity:1}100%{transform:scale(1);opacity:1}}
+/* 한글은 낱말 중간에서 끊으면 안 된다 — 기본값(break-word 아님)으로 두면
+   '나올 동/안', '천천히 둘러봐/도 돼요' 처럼 쪼개진다. 스킨 뿌리에 한 번만 걸고
+   (word-break 는 상속된다) 곳곳에 흩뿌리지 않는다.
+   overflow-wrap 을 같이 주는 이유 = keep-all 만 걸면 한 줄에 못 담는 긴 영문/URL 이
+   상자 밖으로 삐져나온다. 그런 낱말일 때만 끊어 준다. */
+.yeoul{word-break:keep-all;overflow-wrap:break-word}
 .yeoul button{font-family:inherit;cursor:pointer;transition:transform .12s ease, background .18s ease, border-color .18s ease}
 .yeoul button:active{transform:scale(.96)}
 .yeoul input{font-family:inherit}
