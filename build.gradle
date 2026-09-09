@@ -103,16 +103,16 @@ dependencies {
     //   500 이 난다(2026-09-09 회원가입에서 실제로 겪음). 사람이 SQL 을 기억해 치는 방식으로는
     //   팀이 셋만 돼도 한 번은 빠뜨린다.
     // ★ 스프링 부트 4 는 자동설정이 모듈별로 쪼개져 있어, flyway-core 만 넣으면
-    //   라이브러리는 클래스패스에 있는데 <b>아무 일도 안 일어난다</b>(로그조차 없다).
+    //   라이브러리는 클래스패스에 있는데 아무 일도 안 일어난다(로그조차 없다).
     //   자동설정 모듈을 같이 넣어야 기동할 때 마이그레이션이 돈다.
     implementation 'org.springframework.boot:spring-boot-flyway'
     implementation 'org.flywaydb:flyway-database-postgresql'
 
     implementation 'software.amazon.awssdk:s3'
-    // SSO 프로필(~/.aws/sso/cache)을 직접 읽게 한다. 없으면 로컬에서 2 시간마다
-    // 임시 자격증명을 손으로 넣어야 하고, 만료되면 S3 가 403 InvalidAccessKeyId 로 죽는다.
-    implementation 'software.amazon.awssdk:sso'
-    implementation 'software.amazon.awssdk:ssooidc'
+    // ★ SSO 라이브러리는 넣지 않는다 — 서버(EC2)는 IAM 역할로 자격증명을 얻으므로 쓸 일이 없고,
+    //   로컬 편의를 위해 서버 배포물에 코드를 더할 이유가 없다.
+    //   로컬에서는 AWS CLI 가 SSO 프로필을 읽어 임시 키를 환경변수로 내주는 방식을 쓴다
+    //   (_local/run.sh 참조 — 개인 스크립트라 레포에 올라가지 않는다).
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
