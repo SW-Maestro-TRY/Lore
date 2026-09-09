@@ -21,7 +21,7 @@ import { assetUrl } from '../../lib/assets';
 import { MOTION_FALLBACK, YEOUL_MOTION } from '../constants';
 import { BASIC_KEYS } from './constants';
 import {
-  draftPet, getHatchProgress, getPet, setCharacter,
+  draftPet, getHatchProgress, getPet, listPets, setCharacter,
   type CharacterInput, type HatchProgress, type PetDetail,
 } from '../../lib/pet';
 import { uploadImage } from '../../lib/upload';
@@ -42,6 +42,11 @@ export interface Live {
    * 시트를 다시 쓰므로 돈이 두 번 안 나간다. 화면은 처음부터 다시 올리게 하면 안 된다.
    */
   draftOnly: boolean;
+  /**
+   * 이번 방문에서 **두고 간 초안을 찾아 이어붙였다.** 방금 올린 사람과 구분하려고 따로 둔다 —
+   * 화면이 "이어서 이름을 지어 주세요" 를 띄울 근거이고, 갓 올린 사람에겐 그 말이 어색하다.
+   */
+  resumedDraft: boolean;
   /** 부화가 끝났는가(`ALIVE`). */
   ready: boolean;
   failed: boolean;
@@ -69,15 +74,17 @@ export interface Live {
   upload: (file: File) => Promise<void>;
   /** 이름·성격을 보낸다. 이 순간부터 격자 생성이 돈다. */
   setChar: (input: CharacterInput) => Promise<void>;
+  /** 두고 간 아이가 있는지 서버에 물어본다. 로그인한 뒤에 한 번만 부른다. */
+  resume: () => Promise<'draft' | 'hatching' | null>;
   reset: () => void;
 }
 
 const EMPTY: Live = {
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null,
-  draftOnly: false, ready: false, failed: false, step: null,
+  draftOnly: false, resumedDraft: false, ready: false, failed: false, step: null,
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
   img: () => null,
-  upload: async () => {}, setChar: async () => {}, reset: () => {},
+  upload: async () => {}, setChar: async () => {}, resume: async () => null, reset: () => {},
 };
 
 export function useHatchState(): Live {
@@ -91,6 +98,7 @@ export function useHatchState(): Live {
   /** 이름을 보냈는가. 이게 켜져야 굽기가 도는 것이므로 그때부터 진행을 묻는다. */
   const [charSet, setCharSet] = useState(false);
   const [hatch, setHatch] = useState<HatchProgress | null>(null);
+  const [resumedDraft, setResumedDraft] = useState(false);
 
   // 미리보기 주소는 브라우저 메모리를 잡으므로 바뀌거나 떠날 때 놓아 준다.
   useEffect(() => () => { if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }, []);
@@ -147,6 +155,26 @@ export function useHatchState(): Live {
     }
   }, [petId, charSet]);
 
+  /**
+   * 두고 간 아이 찾기. 로그인 직후 한 번 부른다.
+   *
+   * `DRAFT` = 그림만 올리고 이름을 안 지은 아이 → 캐릭터 칸부터 이어서.
+   * `HATCHING` = 이름까지 지어 굽는 중인 아이 → 알 화면으로. 이걸 안 받아 주면 다시 올리려다
+   *   `ZZAL_PET_ALREADY_HATCHING` 에 막혀 갈 데가 없어진다.
+   */
+  const resume = useCallback(async (): Promise<'draft' | 'hatching' | null> => {
+    try {
+      const mine = await listPets();
+      const draft = mine.find((p) => p.phase === 'DRAFT');
+      if (draft) { setPetId(draft.petId); setResumedDraft(true); return 'draft'; }
+      const baking = mine.find((p) => p.phase === 'HATCHING');
+      if (baking) { setPetId(baking.petId); setCharSet(true); return 'hatching'; }
+    } catch {
+      // 못 물어본 것으로 화면을 막지 않는다. 처음부터 시작하면 된다.
+    }
+    return null;
+  }, []);
+
   // ── 부화 지켜보기 ──────────────────────────────────────────────
   // 무거운 `getPet` 대신 **전용 API** 를 3초마다. 끝나면 스스로 멈춘다.
   const phase = hatch?.phase ?? null;
@@ -188,13 +216,14 @@ export function useHatchState(): Live {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
     setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null);
-    setCharSet(false); setHatch(null);
+    setCharSet(false); setHatch(null); setResumedDraft(false);
   }, []);
 
   return {
     previewUrl, imageKey, petId, pet, busy, error,
     // 초안은 아직 부화가 아니다 — 이름을 받아야 굽기가 시작된다.
     draftOnly: !!petId && !charSet,
+    resumedDraft: resumedDraft && !charSet,
     ready: phase === 'ALIVE',
     failed: phase === 'FAILED' || phase === 'DEAD',
     step: hatch?.label ?? null,
@@ -205,7 +234,7 @@ export function useHatchState(): Live {
     missingBasics: pet?.phase === 'ALIVE'
       ? BASIC_KEYS.filter((k) => !pet.motions?.some((m) => m.key === k && m.basicImageKey))
       : [],
-    img, upload, setChar, reset,
+    img, upload, setChar, resume, reset,
   };
 }
 

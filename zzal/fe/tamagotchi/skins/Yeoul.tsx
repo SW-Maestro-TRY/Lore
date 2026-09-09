@@ -14,7 +14,7 @@
 // 색·여백을 손보실 자리는 `yeoul/ui.ts` 한 곳이다.
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AuthModal from '@common/auth/AuthModal';
 import { useAuth } from '@common/auth/useAuth';
 import Egg from '../yeoul/Egg';
@@ -36,10 +36,29 @@ export default function Yeoul(_props: SkinProps) {
 
   // 이미 로그인한 채로 들어온 사람에게는 문을 열어 둔다 — 첫 화면에서 다시 묻지 않는다.
   const { isAuthenticated } = useAuth();
-  const { passAuth } = actions;
+  const { passAuth, goStep, goEgg } = actions;
   useEffect(() => {
     if (isAuthenticated) passAuth('session');
   }, [isAuthenticated, passAuth]);
+
+  /**
+   * 두고 간 아이 찾기 — 로그인한 뒤 **딱 한 번**.
+   *
+   * 계약 4절: 이름을 안 짓고 나갔다 오면 `draft` 가 같은 petId 를 준다. 그런데 화면이 그걸
+   * 모르면 처음부터 다시 올리게 되고, 이미 구운 시트를 버리는 셈이 된다.
+   * 굽는 중(HATCHING)인 아이도 받아 준다 — 안 그러면 다시 올리려다
+   * `ZZAL_PET_ALREADY_HATCHING` 에 막혀 갈 데가 없어진다.
+   */
+  const asked = useRef(false);
+  const { resume } = live;
+  useEffect(() => {
+    if (!isAuthenticated || asked.current) return;
+    asked.current = true;
+    void resume().then((r) => {
+      if (r === 'draft') goStep(STEPS.indexOf('char'));
+      else if (r === 'hatching') goEgg();
+    });
+  }, [isAuthenticated, resume, goStep, goEgg]);
 
   return (
     <div

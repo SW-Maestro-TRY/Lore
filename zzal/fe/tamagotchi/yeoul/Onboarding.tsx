@@ -183,6 +183,13 @@ export default function Onboarding({ y }: { y: Yeoul }) {
                 <button onClick={actions.randomName} style={{ flex: 'none', padding: '0 17px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 13, color: C.sub2 }}>랜덤</button>
               </div>
               {o.nameError && <span style={{ fontSize: 11.5, color: C.accent }}>이름을 지어 주면 시작할 수 있어요.</span>}
+              {/* 두고 간 초안을 이어붙였을 때. 그림을 다시 올리라고 하면 이미 구운 시트를 버리는
+                  셈이라(계약 4절), 여기서 이름만 받아 이어 간다. */}
+              {live.resumedDraft && (
+                <span style={{ fontSize: 11.5, lineHeight: 1.6, color: C.faint }}>
+                  올려 두신 그림이 있어요. 이름만 지어 주면 이어서 시작해요.
+                </span>
+              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '11px 13px', borderRadius: radius.md, background: C.slot }}>
