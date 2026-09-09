@@ -92,7 +92,7 @@ export interface TamagotchiServer {
   wake: () => Promise<PetDetail | null>;
   setPersonality: (p: Personality, world?: string) => Promise<PetDetail | null>;
   setBackground: (bg: string) => Promise<PetDetail | null>;
-  share: (motionKey: string, kind: ShareKind) => Promise<PetDetail | null>;
+  share: (motionKey: string, kind: ShareKind) => Promise<{ token: string; url: string } | null>;
   answerChat: (slot: ChatSlot, text: string) => Promise<PetDetail | null>;
   markSeen: (seq: number) => Promise<PetDetail | null>;
 

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
@@ -26,6 +27,9 @@ import java.time.Instant;
  * <h3>★ 이메일을 받지 않는다</h3>
  * 가입할 때 이미 받았다. 두 곳에 두면 지켜야 할 곳이 늘고 파기 시점도 따로 관리해야 한다.
  */
+// ★ 2차로 미룬다(2026-09-08). 보상이 안 정해져 기록만 남고 아무 일도 안 일어나는 상태라,
+// 스웨거에 떠 있으면 "동작하는 API"로 읽힌다. 코드는 그대로 두고 켜는 스위치만 껐다.
+@ConditionalOnProperty(name = "app.zzal.feedback.enabled", havingValue = "true")
 @Tag(name = "후기", description = "결과물에 대한 후기 — 한 사람이 한 펫에 한 번")
 @RestController
 @RequestMapping("/api/zzal/v1/me/pets/{petId}/feedback")

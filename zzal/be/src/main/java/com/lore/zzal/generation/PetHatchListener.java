@@ -24,4 +24,10 @@ public class PetHatchListener {
     public void on(PetHatchRequested event) {
         hatchService.hatch(event.jobId(), event.petId(), event.version());
     }
+
+    /** 그림 등록 직후 — 캐릭터 시트만 미리 굽는다. */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void on(PetSheetRequested event) {
+        hatchService.sheet(event.jobId(), event.petId(), event.version());
+    }
 }

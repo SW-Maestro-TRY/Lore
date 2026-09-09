@@ -41,7 +41,7 @@ import java.util.List;
  */
 @Tag(name = "관리자", description = "밤에 구운 움짤 검수. 운영에서는 꺼져 있어 존재하지 않는다")
 @RestController
-@RequestMapping("/api/zzal/v2/admin/motions")
+@RequestMapping("/api/zzal/v1/admin/motions")
 @ConditionalOnProperty(name = "app.zzal.admin.enabled", havingValue = "true")
 public class AdminController {
 

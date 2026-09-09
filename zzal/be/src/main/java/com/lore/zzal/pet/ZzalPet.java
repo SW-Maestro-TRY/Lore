@@ -96,9 +96,32 @@ public class ZzalPet {
     @Column(nullable = false)
     private Instant hatchStartedAt;
 
-    /** 생성이 끝난 시각 = <b>시계가 켜진 순간</b>(정본 15장 6). 아기 60분의 출발점. */
+    /** 생성이 끝난 시각. 튜토리얼이 시작되는 순간이다 — <b>시계는 아직 안 켜진다</b>(정본 1.4). */
     @Column
     private Instant hatchedAt;
+
+    /**
+     * 시계가 켜진 순간. <b>null 이면 아직 튜토리얼 중</b>이다(정본 12·15·16장, 1.4).
+     *
+     * <h3>★ 왜 부화가 아니라 튜토리얼 완료인가</h3>
+     * 부화에 2~7분이 걸린다. 그 사이 자리를 뜬 사람은 돌아왔을 때 <b>이미 배고픈 아이</b>를 처음 만난다.
+     * 첫인상이 사람마다 달라지는 것이다. 시계를 튜토리얼 끝에 켜면 며칠 뒤에 돌아와도
+     * 튜토리얼이 처음부터 온전히 굴러가고, 첫인상이 모두에게 같아진다.
+     *
+     * <h3>★ 이 값 하나가 아래 전부를 결정한다</h3>
+     * null 인 동안 게이지가 안 줄고, 케어 미스·병이 없고, 자동 취침이 없고, 재우기는 낮잠뿐이다.
+     * {@link #settle} 이 맨 앞에서 이 값만 보고 통째로 빠져나가기 때문이다.
+     */
+    @Column
+    private Instant clockStartedAt;
+
+    /**
+     * 튜토리얼에서 끝낸 칸 수(0~9). 9 면 다 끝났다.
+     *
+     * ★ v1 은 "어디까지 했나" 를 브라우저에 두었다가 새로고침·기기 변경에서 어긋났다. 서버가 갖는다.
+     */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int tutorialStep;
 
     // ── 시계 (정본 2·12·16장) ─────────────────────────────────────────────
 
@@ -462,26 +485,6 @@ public class ZzalPet {
     private String background;
 
     // ── v1 잔재: DB 에 NOT NULL 로 남아 있는 세 칸 ────────────────────────
-    //
-    // ★ 엔티티에서 빼면 새 펫 INSERT 가 "null 불가" 로 터지는데, 그건 서버가 정상 기동한 뒤
-    //   실제 부화 때만 드러난다. PR-12 에서 컬럼을 drop 하기 전까지 0 으로만 채우는 매핑을 남긴다.
-    //   새 코드는 절대 읽지 않는다.
-
-    /** @deprecated v1 훈련. PR-12 drop. */
-    @Deprecated
-    @Column(nullable = false, columnDefinition = "integer default 0")
-    private int trainStack;
-
-    /** @deprecated v1 훈련. PR-12 drop. */
-    @Deprecated
-    @Column(nullable = false, columnDefinition = "integer default 0")
-    private int trainGain;
-
-    /** @deprecated v1 해금 수. PR-12 drop. v2 는 zzal_motion 행이 정본. */
-    @Deprecated
-    @Column(nullable = false, columnDefinition = "integer default 0")
-    private int unlockedCount;
-
     /** 마지막으로 돌본 시각(방치 지표). 보내기는 돌봄이 아니라 안 찍는다. */
     @Column
     private Instant lastCaredAt;
@@ -500,21 +503,52 @@ public class ZzalPet {
     // ── 생애 ──────────────────────────────────────────────────────────────
 
     /** 그림을 받아 알을 앉힌다. 아직 시계는 안 켜졌다(ALIVE 가 아니므로). */
-    public static ZzalPet hatch(Long userId, String name, String note, String sourceImageKey, Instant now) {
+    /**
+     * 그림만 받은 <b>초안</b>. 이름은 아직 없다.
+     *
+     * ★ 이 순간 캐릭터 시트 굽기가 시작된다 — 사용자가 이름을 짓는 동안(약 74초) 미리 굽는다.
+     */
+    public static ZzalPet draft(Long userId, String sourceImageKey, Instant now) {
         ZzalPet pet = new ZzalPet();
         pet.userId = userId;
-        pet.name = name;
-        pet.note = note;
+        pet.name = "";                      // 아직 없다. character() 에서 채운다
         pet.sourceImageKey = sourceImageKey;
-        pet.phase = PetPhase.HATCHING;
+        pet.phase = PetPhase.DRAFT;
         pet.hatchStartedAt = now;
         pet.background = "room";
         return pet;
     }
 
     /**
-     * 생성이 끝났다. <b>이 순간 시계가 켜진다</b>(정본 15장 6 — 튜토리얼 끝이 아니라 부화 순간).
-     * 아기 60분은 케어 미스·병·자동 취침이 없으니 먼저 켜도 손해가 없다.
+     * 초안에 캐릭터 정보를 채운다. <b>이 순간 격자 생성이 시작된다.</b>
+     *
+     * ★ 그림 생성에 들어가는 것은 {@code note}(자유 메모) 뿐이다(정본 1.6). 성격·말투·장르·세계관은
+     *   <b>대사 톤에만</b> 쓰인다 — 격자 프롬프트의 정체성 문단은 그림에서 뽑는다.
+     */
+    public void character(String name, String note, Personality personality, String world, Instant now) {
+        if (phase != PetPhase.DRAFT) {
+            throw new IllegalStateException("초안이 아니다");
+        }
+        this.name = name;
+        this.note = note;
+        this.personality = personality;
+        this.world = world == null || world.isBlank() ? null : world;
+        this.phase = PetPhase.HATCHING;
+        this.hatchStartedAt = now;          // 남은 시간 안내의 기준을 여기로 다시 잡는다
+    }
+
+    /** 이름을 아직 안 지은 초안인가. */
+    public boolean isDraft() {
+        return phase == PetPhase.DRAFT;
+    }
+
+    /**
+     * 생성이 끝났다. 아이가 나타나고 <b>튜토리얼이 시작된다</b>.
+     *
+     * ★ 시계는 여기서 켜지지 않는다(정본 1.4). 튜토리얼 마지막 칸에서 켜진다 — {@link #startClock}.
+     *
+     * ★ 배부름을 0 으로 시작한다 — 튜토리얼 첫 칸이 "배가 고픈가 봐요" 이기 때문이다.
+     *   게이지는 시간이 아니라 <b>튜토리얼 각 칸이 만든다</b>(정본 1.5).
      */
     public void markAlive(String sheetImageKey, String identityText, Instant now) {
         if (phase != PetPhase.HATCHING) {
@@ -523,9 +557,9 @@ public class ZzalPet {
         this.phase = PetPhase.ALIVE;
         this.sheetImageKey = sheetImageKey;
         this.identityText = identityText;
-        // ★ 초 단위로 — 정산이 초 단위라 babyUntil 에 밀리초가 남으면 "60분 끝나는 정각" 조회가 한 호출 늦어진다.
+        // ★ 초 단위로 — 정산이 초 단위라 밀리초가 남으면 정각 조회가 한 호출 늦어진다.
         this.hatchedAt = now.truncatedTo(ChronoUnit.SECONDS);
-        this.fullness = ZzalRules.HATCH_FULLNESS;
+        this.fullness = ZzalRules.TUTORIAL_START_FULLNESS;
         this.happiness = ZzalRules.HATCH_HAPPINESS;
         this.trash = ZzalRules.HATCH_TRASH;
         this.food = ZzalRules.HATCH_FOOD;
@@ -546,7 +580,7 @@ public class ZzalPet {
      *   비어 있으면 아무 말도 못 한다. 여기서 한 번 지나가면 그 행도 따라온다.
      */
     public void markHatchFailed() {
-        if (phase == PetPhase.HATCHING) {
+        if (phase == PetPhase.HATCHING || phase == PetPhase.DRAFT) {
             this.phase = PetPhase.FAILED;
         }
         if (this.phase == PetPhase.FAILED && this.deathReason == null) {
@@ -605,13 +639,80 @@ public class ZzalPet {
         devClockOffsetSeconds = d.getNano() > 0 ? d.getSeconds() + 1 : d.getSeconds();
     }
 
-    /** 아기 60분이 끝나는 시각. 부화 순간부터 실시간(앱을 닫아도 흐른다, 16장). */
-    public Instant babyUntil() {
-        return hatchedAt == null ? null : hatchedAt.plus(ZzalRules.BABY_DURATION);
+    /**
+     * 아직 튜토리얼 중인가 — 시계가 안 켜졌는가.
+     *
+     * ★ 1.4 이전에는 "부화 뒤 60분"이라는 시간이었다. 지금은 시간이 아니라 <b>사용자가 끝냈는가</b>이다.
+     *   며칠이 지나도, 새벽 3시에 부화해도, 끝내지 않았으면 튜토리얼 중이다.
+     */
+    public boolean isInTutorial() {
+        return phase == PetPhase.ALIVE && clockStartedAt == null;
     }
 
-    public boolean isBaby(Instant now) {
-        return hatchedAt != null && now.isBefore(babyUntil());
+    /** 시계가 켜진 순간. 아직이면 null. */
+    public Instant getClockStartedAt() {
+        return clockStartedAt;
+    }
+
+    public int getTutorialStep() {
+        return tutorialStep;
+    }
+
+    /**
+     * 지금 칸의 조건이 되는 행동이 들어오면 다음 칸으로 넘긴다.
+     *
+     * <h3>★ 순서가 저절로 강제된다</h3>
+     * "지금 칸과 같을 때만" 넘긴다. 5칸(청소) 차례에 밥을 줘도 밥은 정상으로 처리되지만
+     * 튜토리얼은 안 움직인다 — 버튼을 잠그지 않으면서도 순서는 지켜진다(정본 12장).
+     *
+     * <h3>★ 4칸이 끝나면 첫 똥이 떨어진다</h3>
+     * 5칸이 "바닥을 치워 주세요" 인데, 시계가 멈춰 있어 흔적이 시간으로 생기지 않는다.
+     * 그래서 <b>이 칸이 직접 만든다</b>(정본 1.5 — 게이지는 시간이 아니라 각 칸이 만든다).
+     */
+    public void advanceTutorial(TutorialSchedule.Step done) {
+        if (!isInTutorial() || TutorialSchedule.currentOf(tutorialStep) != done) {
+            return;
+        }
+        tutorialStep += 1;
+        if (done == TutorialSchedule.Step.PERSONALITY) {
+            trash = Math.max(trash, ZzalRules.TUTORIAL_FIRST_TRASH);
+        }
+    }
+
+    /**
+     * 튜토리얼을 건너뛰고 시계만 켠다.
+     *
+     * <h3>★ 사용자 경로가 아니다</h3>
+     * 실제로 시계를 켜는 길은 {@link #startClock} 하나뿐이다. 이것은
+     * <b>개발용 시계 API와 테스트</b>만 쓴다 — 시계 규칙을 보려는데 매번 아홉 칸을 눌러야 하면
+     * 그 아홉 줄이 테스트마다 복사되고, 튜토리얼이 바뀔 때 전부 깨진다.
+     */
+    public void skipTutorial(Instant now) {
+        if (!isInTutorial()) {
+            return;
+        }
+        tutorialStep = TutorialSchedule.TOTAL - 1;
+        startClock(now);
+    }
+
+    /**
+     * 튜토리얼 마지막 칸 — <b>여기서 시계가 켜진다</b>.
+     *
+     * ★ 켠 시각부터 세기 시작한다({@code settledAt}). 안 그러면 튜토리얼에 머문 시간이
+     *   통째로 밀린 빚이 되어, 끝낸 순간 배가 고파 있다.
+     *
+     * ★ 켠 시각이 밤(23:00~07:00)이면 다음 정산이 그 자리에서 밤잠에 들게 한다(정본 16장).
+     *   여기서 따로 재우지 않는다 — 잠드는 길이 둘이 되면 하루 정산이 두 번 돌 수 있다.
+     */
+    public void startClock(Instant now) {
+        if (!isInTutorial() || tutorialStep < TutorialSchedule.TOTAL - 1) {
+            throw new IllegalStateException("아직 튜토리얼이 안 끝났다");
+        }
+        tutorialStep = TutorialSchedule.TOTAL;
+        Instant at = now.truncatedTo(ChronoUnit.SECONDS);
+        clockStartedAt = at;
+        settledAt = at;
+        wokeAt = at;
     }
 
     public boolean isSleeping() {
@@ -619,9 +720,11 @@ public class ZzalPet {
     }
 
     private AwakeClock.State clockState() {
+        // ★ 옛 인자는 "아기 60분이 끝나는 시각" 이었다(그때까지 자동 취침을 막는 용도).
+        //   지금은 튜토리얼 중이면 settle 이 아예 안 걷으므로 막을 것이 없다.
         return sleepKind == null
-                ? AwakeClock.State.awake(babyUntil())
-                : AwakeClock.State.asleep(sleepKind, sleptAt, babyUntil());
+                ? AwakeClock.State.awake(null)
+                : AwakeClock.State.asleep(sleepKind, sleptAt, null);
     }
 
     /**
@@ -654,6 +757,18 @@ public class ZzalPet {
             return;
         }
 
+        // ★★ 튜토리얼 동안에는 시계가 아예 안 돈다(정본 1.4 · 12·16장).
+        //
+        //   여기 한 줄이 게이지 감소·케어 미스·병·자동 취침·밥 충전을 <b>통째로</b> 멈춘다.
+        //   각 규칙마다 "튜토리얼이면 빼고" 를 흩어 두면 언젠가 한 곳을 빠뜨리는데, 그 한 곳은
+        //   며칠 뒤에 돌아온 사용자에게만 드러나서 거의 안 잡힌다.
+        //
+        //   시각만 옮겨 둔다 — 시계가 켜지는 순간 그때부터 세기 시작하게.
+        if (isInTutorial()) {
+            settledAt = now;
+            return;
+        }
+
         AwakeClock.Walk walk = AwakeClock.walk(clockState(), settledAt, now);
         for (AwakeClock.Segment seg : walk.segments()) {
             if (seg.isAwake()) {
@@ -671,21 +786,21 @@ public class ZzalPet {
         settledAt = now;
     }
 
-    /** 깨어 있는 구간 하나. 아기 60분의 끝에서 속도가 바뀌므로 거기서 한 번 가른다. */
+    /**
+     * 깨어 있는 구간 하나.
+     *
+     * ★ 1.5 이전에는 "아기 60분은 빠른 속도" 라는 두 번째 속도가 있어 여기서 구간을 갈랐다.
+     *   튜토리얼 동안 시계가 멈추면서 <b>속도라는 개념 자체가 성립하지 않게</b> 되어 사라졌다.
+     *   지금 속도는 하나뿐이다.
+     */
     private void advanceAwake(Instant from, Instant to) {
         // ★ 여행 중에는 게이지·흔적·병·케어 미스·부재가 전부 멈춘다(정본 9·16장 "여행 중·잠든 동안은
         //   어떤 카운터도 안 돈다"). 자는 동안과 같은 대접이라, 여기 한 줄이면 아래 전부가 따라 멈춘다.
         if (isTraveling()) {
             return;
         }
-        Instant baby = babyUntil();
-        if (baby != null && from.isBefore(baby)) {
-            Instant babyEnd = to.isBefore(baby) ? to : baby;
-            tick(Duration.between(from, babyEnd).getSeconds(), true, from);
-            from = babyEnd;
-        }
         if (from.isBefore(to)) {
-            tick(Duration.between(from, to).getSeconds(), false, from);
+            tick(Duration.between(from, to).getSeconds(), from);
         }
     }
 
@@ -694,12 +809,11 @@ public class ZzalPet {
      *
      * <p>한 번에 다 더하지 않고 <b>다음 칸이 떨어지는 순간까지만</b> 잘라 가며 간다 — 케어 미스 타이머는
      * "게이지가 0인 동안" 만 세야 하는데, 0 이 되는 순간이 구간 한가운데일 수 있기 때문이다.
-     * 아기 속도에서는 케어 미스가 없다(4장).
      */
-    private void tick(long seconds, boolean baby, Instant from) {
-        long fullnessEvery = (baby ? ZzalRules.BABY_FULLNESS_DROP : ZzalRules.FULLNESS_DROP_AWAKE).getSeconds();
-        long happinessEvery = (baby ? ZzalRules.BABY_HAPPINESS_DROP : ZzalRules.HAPPINESS_DROP_AWAKE).getSeconds();
-        long trashEvery = (baby ? ZzalRules.BABY_TRASH_RISE : ZzalRules.TRASH_RISE_AWAKE).getSeconds();
+    private void tick(long seconds, Instant from) {
+        long fullnessEvery = ZzalRules.FULLNESS_DROP_AWAKE.getSeconds();
+        long happinessEvery = ZzalRules.HAPPINESS_DROP_AWAKE.getSeconds();
+        long trashEvery = ZzalRules.TRASH_RISE_AWAKE.getSeconds();
 
         long remaining = seconds;
         // ★ 병이 난 "그 순간" 을 적으려면 구간 안에서 시각도 같이 걸어야 한다. settledAt 은 아직 옛 시각이다.
@@ -708,7 +822,7 @@ public class ZzalPet {
             long step = Math.min(remaining, fullnessEvery - fullnessAwakeSec);
             step = Math.min(step, happinessEvery - happinessAwakeSec);
             step = Math.min(step, trashEvery - trashAwakeSec);
-            if (!baby) {
+            {
                 // ★★ 병·케어 미스도 게이지와 같은 대접을 받아야 한다 — "다음 사건까지만" 걷는다.
                 //   안 그러면 사건이 구간 한가운데서 일어나도 <b>구간 끝</b>에 일어난 것으로 적히고,
                 //   같은 하루라도 몇 번 조회했느냐에 따라 발병 시각이 최대 3시간 달라진다(#225 리뷰 중-1).
@@ -717,12 +831,11 @@ public class ZzalPet {
             step = Math.max(step, 1);
 
             at = at.plusSeconds(step);
-            // 부재 시계는 아기 때도 흐른다 — 아기 60분에 앱을 닫고 네 시간 뒤 오면 그 사이도 혼자 있던 것이다.
             // ★ 여행 중에는 안 센다 — 방에 없으니 "혼자 방에서 논" 시간이 아니다(PR-11 대비).
             if (!isTraveling()) {
                 absenceAwakeSec += step;
             }
-            if (!baby) {
+            {
                 // ★★ "이 step 을 걷기 전에 이미 아팠나" 를 먼저 잡는다. accumulateZero 가 이 step 안에서
                 //   병을 낼 수 있는데, 그 뒤에 step 을 통째로 병 시간에 더하면 <b>아프기도 전의 시간이
                 //   병 시간으로 적힌다</b>(#225 재확인 — 한 번에 정산 21600초 vs 1분씩 14460초, 실제 14400초).
@@ -1280,11 +1393,19 @@ public class ZzalPet {
         if (!isAlive() || isSleeping()) {
             return null;
         }
-        // ★ 아기 60분은 시계와 완전 논외(상훈님 2026-09-05 결정) — 새벽 1시에 부화해도 60분은 그대로 진행.
-        //   그 안의 재우기 버튼은 낮잠뿐이고(한 번), 밤잠은 없다. 60분이 끝난 시각이 밤이면 그 순간 저절로
-        //   밤잠에 든다(AwakeClock.nextAutoSleep), 19~23시면 보통대로(재우기 가능·23시 자동).
-        if (isBaby(now)) {
-            return napCount < ZzalRules.NAP_MAX ? SleepKind.NAP : null;
+        // ★ 튜토리얼은 시계와 완전 논외(정본 16장) — 새벽 1시에 부화해도 그대로 진행된다.
+        //   그 안의 재우기 버튼은 낮잠뿐이고(한 번), 밤잠은 없다. 튜토리얼을 끝낸 시각이 밤이면
+        //   그 순간 저절로 밤잠에 든다, 19~23시면 보통대로(재우기 가능·23시 자동).
+        if (isInTutorial()) {
+            // ★★ 8칸("졸린가 봐요") 차례일 때만 재울 수 있다.
+            //
+            //   그 전에도 재울 수 있게 두면 낮잠 한 번을 미리 써 버릴 수 있고(NAP_MAX = 1),
+            //   그러면 정작 8칸에서 재울 수가 없어 <b>튜토리얼이 영영 막힌다.</b>
+            //   실제로 순서를 어기고 눌러 재현했다(2026-09-09).
+            //
+            //   아이가 아직 안 졸린 것이라 사용자에게도 설명이 된다.
+            return TutorialSchedule.currentOf(tutorialStep) == TutorialSchedule.Step.NAP
+                    && napCount < ZzalRules.NAP_MAX ? SleepKind.NAP : null;
         }
         return AwakeClock.inSleepWindow(now) ? SleepKind.NIGHT : null;
     }
@@ -1319,7 +1440,7 @@ public class ZzalPet {
         // ★ 낮잠에서 깬 순간이 이미 밤(23:00~07:00)이고 아기 60분도 끝났으면 그 자리에서 밤잠에 든다.
         //   안 그러면 "깨어 있음" 으로 답하고 다음 조회에서 잠드는데, 그건 "행동 응답 = 최신 상태" 를 어긴다
         //   (리뷰 재현: 22:35 부화 → 23:30 낮잠 → 23:36 깨우기).
-        if (!isSleeping() && !isBaby(now) && AwakeClock.isNight(now)) {
+        if (!isSleeping() && !isInTutorial() && AwakeClock.isNight(now)) {
             onSleep(now, SleepKind.NIGHT, false);
         }
     }
@@ -1399,10 +1520,13 @@ public class ZzalPet {
             }
         } else if (was == SleepKind.NAP) {
             napCount += 1;
+            // ★ 8칸은 "재우기 → 깨우기" 한 쌍이다. 깨운 순간에만 넘긴다 — 재우기만 하고 나간 사람은
+            //   돌아왔을 때 다시 깨우는 자리에서 이어간다.
+            advanceTutorial(TutorialSchedule.Step.NAP);
         }
         if (manual) {
             sleepWakeCount += 1;
-            // 보상은 밤잠에만(api-v2.md 해석 16). 낮잠은 재우기·깨우기 둘 다 0 — 아기 시간에 친밀도를 파밍하지 않게.
+            // 보상은 밤잠에만(정본 16장). 낮잠은 재우기·깨우기 둘 다 0 — 튜토리얼에서 친밀도를 파밍하지 않게.
             if (was == SleepKind.NIGHT) {
                 addIntimacy(ZzalRules.WAKE_INTIMACY);
             }
@@ -1423,6 +1547,7 @@ public class ZzalPet {
         }
         feeds += 1;
         careIntimacy();
+        advanceTutorial(TutorialSchedule.Step.FEED);
         afterNonSnack(now);
     }
 
@@ -1433,10 +1558,10 @@ public class ZzalPet {
         todaySnacks += 1;
         lastCaredAt = now;
         if (snackStreak >= ZzalRules.SNACK_STREAK_SICK_AT) {
-            // ★★ 아기 60분 동안에는 병이 없다(정본 12장 "케어 미스·병·감점 없음" · 16장).
+            // ★★ 튜토리얼 동안에는 병이 없다(정본 12장 "케어 미스·병·감점 없음" · 16장).
             //   튜토리얼에서 시키는 대로 눌러 보다가 아프면, 배우는 자리가 벌 받는 자리가 된다.
-            //   연속은 그래도 0 으로 끊는다 — 안 끊으면 60분이 끝나자마자 여섯 개째에 곧바로 아프다.
-            if (!isBaby(now)) {
+            //   연속은 그래도 0 으로 끊는다 — 안 끊으면 튜토리얼이 끝나자마자 여섯 개째에 곧바로 아프다.
+            if (!isInTutorial()) {
                 fallSick(SickKind.UPSET, now);
             }
             snackStreak = 0;
@@ -1450,6 +1575,7 @@ public class ZzalPet {
             todayPetCount += 1;
             addIntimacy(ZzalRules.PET_INTIMACY);
         }
+        advanceTutorial(TutorialSchedule.Step.PET);
         afterNonSnack(now);
     }
 
@@ -1459,6 +1585,7 @@ public class ZzalPet {
         cleans += 1;
         todayCleans += 1;
         careIntimacy();
+        advanceTutorial(TutorialSchedule.Step.CLEAN);
         afterNonSnack(now);
     }
 
@@ -1546,6 +1673,10 @@ public class ZzalPet {
     public void choosePersonality(Personality personality, String world) {
         this.personality = personality;
         this.world = world == null || world.isBlank() ? null : world;
+        // ★ 4칸("이 성격이 맞나요")은 <b>고쳤는지</b>가 아니라 <b>확인했는지</b>를 본다.
+        //   성격은 부화 전에 이미 받으므로 값이 있는지로 판단하면 들어오자마자 참이 되어
+        //   이 칸이 저절로 건너뛰어진다. 그래서 "확인 버튼이 이 API 를 부른 사실" 로 센다.
+        advanceTutorial(TutorialSchedule.Step.PERSONALITY);
     }
 
     /** 배경 바꾸기. 열렸는지는 서비스가 묻는다(2층 4종). 값은 검증하지 않는다(해석 6). */
@@ -1553,9 +1684,10 @@ public class ZzalPet {
         this.background = background;
     }
 
-    /** 다운로드·공유 — 서버는 횟수만 센다(튜토리얼 25분의 "했다" 가 되는 사실). 돌봄이 아니라 lastCaredAt 은 안 찍는다. */
+    /** 공유 — 서버는 횟수만 센다. 돌봄이 아니라 lastCaredAt 은 안 찍는다. */
     public void share() {
         shares += 1;
+        advanceTutorial(TutorialSchedule.Step.SHARE);
     }
 
     // ── 미니게임·채팅 카운터 (정본 7·10장) ────────────────────────────────
@@ -1564,6 +1696,7 @@ public class ZzalPet {
     public void startGame() {
         todayGames += 1;
         gameStarts += 1;
+        advanceTutorial(TutorialSchedule.Step.GAME);
         afterNonSnack(null);
     }
 
@@ -1573,11 +1706,12 @@ public class ZzalPet {
         todayGameWins += 1;
     }
 
-    /** 채팅에 답했다. 친밀도 +40, 2층 9·10·14번 조건 카운터(BABY 포함, 16장). */
+    /** 채팅에 답했다. 친밀도 +40, 2층 9·10·14번 조건 카운터(튜토리얼에서 답한 것도 포함, 정본 16장). */
     public void answerChat() {
         chatAnswers += 1;
         todayChatAnswers += 1;
         addIntimacy(ZzalRules.CHAT_INTIMACY);
+        advanceTutorial(TutorialSchedule.Step.CHAT);
         snackStreak = 0;
     }
 

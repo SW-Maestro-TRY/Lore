@@ -1,5 +1,6 @@
 package com.lore.zzal.night;
 
+import com.lore.zzal.PetFixture;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
@@ -37,8 +38,9 @@ class NightPlannerTest {
 
     @BeforeEach
     void setUp() {
-        pet = ZzalPet.hatch(1L, "여울", null, "k", T0);
+        pet = PetFixture.hatching(1L, "여울", null, "k", T0);
         pet.markAlive("s", "i", T0);
+        pet.skipTutorial(T0);
         ReflectionTestUtils.setField(pet, "id", 7L);
         rows = realCatalog.all().stream().map(s -> ZzalMotion.forCatalog(7L, s, T0)).toList();
         repo = mock(ZzalMotionRepository.class);

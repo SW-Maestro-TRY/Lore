@@ -94,7 +94,26 @@ dependencies {
     // 실제 업로드는 브라우저 → S3 직접(presigned PUT)이라 서버(t3.micro)를 안 거친다.
     // BOM 으로 버전을 한 곳에서 관리한다.
     implementation platform('software.amazon.awssdk:bom:2.28.16')
+    // ── 스키마 이력(Flyway) ────────────────────────────────────────────
+    //
+    // ★ ddl-auto: update 는 그대로 둔다. 표·칸을 더하는 일은 계속 자동으로 맡기고,
+    //   Flyway 는 <b>update 가 못 하는 것</b>만 맡는다 — CHECK 제약 고치기·칸 지우기·값 채우기.
+    //
+    // ★ 왜 필요한가 — enum 에 값을 더하면 Hibernate 가 만들어 둔 CHECK 제약이 새 값을 막는데,
+    //   update 는 그 제약을 갱신하지 않는다. 빌드·배포·기동이 전부 통과하고 <b>실제 호출에서만</b>
+    //   500 이 난다(2026-09-09 회원가입에서 실제로 겪음). 사람이 SQL 을 기억해 치는 방식으로는
+    //   팀이 셋만 돼도 한 번은 빠뜨린다.
+    // ★ 스프링 부트 4 는 자동설정이 모듈별로 쪼개져 있어, flyway-core 만 넣으면
+    //   라이브러리는 클래스패스에 있는데 아무 일도 안 일어난다(로그조차 없다).
+    //   자동설정 모듈을 같이 넣어야 기동할 때 마이그레이션이 돈다.
+    implementation 'org.springframework.boot:spring-boot-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
     implementation 'software.amazon.awssdk:s3'
+    // ★ SSO 라이브러리는 넣지 않는다 — 서버(EC2)는 IAM 역할로 자격증명을 얻으므로 쓸 일이 없고,
+    //   로컬 편의를 위해 서버 배포물에 코드를 더할 이유가 없다.
+    //   로컬에서는 AWS CLI 가 SSO 프로필을 읽어 임시 키를 환경변수로 내주는 방식을 쓴다
+    //   (_local/run.sh 참조 — 개인 스크립트라 레포에 올라가지 않는다).
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'

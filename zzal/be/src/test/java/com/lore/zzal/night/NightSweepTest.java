@@ -1,5 +1,6 @@
 package com.lore.zzal.night;
 
+import com.lore.zzal.PetFixture;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionService;
 import com.lore.zzal.motion.MotionStatus;
@@ -305,8 +306,9 @@ class NightSweepTest {
     }
 
     private static ZzalPet pet(long id, int zeroMissDays, int intimacy) {
-        ZzalPet p = ZzalPet.hatch(1L, "p" + id, null, "k", T23);
+        ZzalPet p = PetFixture.hatching(1L, "p" + id, null, "k", T23);
         p.markAlive("s", "i", T23);
+        p.skipTutorial(T23);
         ReflectionTestUtils.setField(p, "id", id);
         ReflectionTestUtils.setField(p, "zeroMissDays", zeroMissDays);
         ReflectionTestUtils.setField(p, "intimacy", intimacy);

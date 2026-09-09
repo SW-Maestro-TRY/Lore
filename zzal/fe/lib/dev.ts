@@ -9,7 +9,7 @@
 import { request } from './api';
 import { PET_BASE, type PetDetail } from './pet';
 
-/** `/api/zzal/v2/me/pets` → `/api/zzal/v2/dev/pets`. 기준 경로는 한 곳(PET_BASE)에서만 온다(C41). */
+/** `/api/zzal/v1/me/pets` → `/api/zzal/v1/dev/pets`. 기준 경로는 한 곳(PET_BASE)에서만 온다(C41). */
 const DEV_BASE = PET_BASE.replace('/me/pets', '/dev/pets');
 
 /** 그 펫의 시계를 앞으로 민다(오프셋). 규칙은 한 글자도 안 바뀐다. */

@@ -14,20 +14,25 @@
 // ★ 목은 페이지당 하나(모듈 싱글턴). 훅이 여러 번 만들면 각자 다른 시계를 갖게 된다.
 
 import {
-  answerChat, callBack, care, createPet, getAlbum, getChat, getPet, listPets, markMotionSeen, release, setBackground,
-  setPersonality, share, sleep, updateSettings, wake,
-  type Album, type CareAction, type ChatSlot, type ChatState, type CreatePetInput,
-  type PetCreated, type PetDetail, type Personality, type Settings, type ShareKind,
+  answerChat, care, draftPet, setCharacter, getHatchProgress, getAlbum, getChat, getPet, listPets, markMotionSeen, setBackground,
+  setPersonality, share, sleep, wake,
+  type Album, type CareAction, type ChatSlot, type ChatState, type CharacterInput, type Drafted, type HatchProgress,
+  type PetCreated, type PetDetail, type Personality, type Shared, type ShareKind,
 } from './pet';
 import {
-  finishRun, getCurrentGame, guess, startGame,
-  type GameKind, type GameState, type GuessResult, type RunResult, type Side,
+  getCurrentGame, guess, startGame,
+  type GameKind, type GameState, type GuessResult, type Side,
 } from './game';
 
 export interface PetSource {
   readonly kind: 'http' | 'mock';
 
-  createPet(input: CreatePetInput): Promise<PetCreated>;
+  /** 그림 등록 → 초안. 시트 굽기가 여기서 시작된다 */
+  draftPet(imageKey: string): Promise<Drafted>;
+  /** 캐릭터 정보 등록 → 격자 생성 시작 */
+  setCharacter(petId: number, input: CharacterInput): Promise<PetCreated>;
+  /** 부화 진행. 알 화면이 되풀이해 부른다 */
+  getHatchProgress(petId: number, signal?: AbortSignal): Promise<HatchProgress>;
   listPets(signal?: AbortSignal): Promise<PetDetail[]>;
   getPet(petId: number, signal?: AbortSignal): Promise<PetDetail>;
 
@@ -36,7 +41,7 @@ export interface PetSource {
   wake(petId: number): Promise<PetDetail>;
   setPersonality(petId: number, personality: Personality, world?: string): Promise<PetDetail>;
   setBackground(petId: number, background: string): Promise<PetDetail>;
-  share(petId: number, motionKey: string, kind: ShareKind): Promise<PetDetail>;
+  share(petId: number, motionKey: string, kind: ShareKind): Promise<Shared>;
 
   getChat(petId: number, signal?: AbortSignal): Promise<ChatState>;
   /** 응답은 PetDetail + chatReply. */
@@ -45,22 +50,17 @@ export interface PetSource {
   markMotionSeen(petId: number, seq: number): Promise<PetDetail>;
   getAlbum(petId: number, signal?: AbortSignal): Promise<Album>;
 
-  callBack(petId: number): Promise<PetDetail>;
-  updateSettings(petId: number, settings: Settings): Promise<PetDetail>;
-  release(petId: number): Promise<PetDetail>;
-
   startGame(petId: number, kind?: GameKind): Promise<GameState>;
   guess(petId: number, gameId: number, pick: Side): Promise<GuessResult>;
-  finishRun(petId: number, gameId: number, survivedMs: number): Promise<RunResult>;
   getCurrentGame(petId: number, signal?: AbortSignal): Promise<GameState>;
 }
 
 /** 실서버. pet.ts·game.ts 의 함수를 그대로 묶은 것이라 여기엔 규칙이 없다. */
 export const httpPetSource: PetSource = {
   kind: 'http',
-  createPet, listPets, getPet, care, sleep, wake, setPersonality, setBackground, share,
-  getChat, answerChat, markMotionSeen, getAlbum, callBack, updateSettings, release,
-  startGame, guess, finishRun, getCurrentGame,
+  draftPet, setCharacter, getHatchProgress, listPets, getPet, care, sleep, wake, setPersonality, setBackground, share,
+  getChat, answerChat, markMotionSeen, getAlbum,
+  startGame, guess, getCurrentGame,
 };
 
 let mockSingleton: PetSource | null = null;

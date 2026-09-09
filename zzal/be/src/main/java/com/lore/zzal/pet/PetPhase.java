@@ -8,7 +8,18 @@ package com.lore.zzal.pet;
  */
 public enum PetPhase {
 
-    /** 알. 그림은 받았고 생성이 도는 중. */
+    /**
+     * 초안. 그림만 받았고 <b>이름이 아직 없다</b>. 캐릭터 시트를 굽는 중이거나 다 구웠다.
+     *
+     * ★ 왜 이 단계가 따로 있나 — 부화 전체가 2~7분이라, 사용자가 이름을 짓는 동안(약 74초)
+     *   시트를 미리 구워 그만큼 앞당긴다. 이름이 들어오면 HATCHING 으로 넘어간다.
+     *
+     * ★ 이름을 안 짓고 나갔다가 다시 오면 이 초안을 이어간다 — 이미 구운 시트를 재사용하므로
+     *   돈이 두 번 나가지 않는다.
+     */
+    DRAFT,
+
+    /** 알. 이름까지 받았고 격자 생성이 도는 중. */
     HATCHING,
 
     /** 함께 지내는 중. 수치가 흐르는 유일한 단계. */
@@ -36,5 +47,6 @@ public enum PetPhase {
      * DEAD 는 들어가지 않는다 — 주인이 보낸(RELEASED) 아이의 행은 남기되 자리는 비워 줘야
      * 다른 그림으로 새로 시작할 수 있다. FAILED 도 태어나지 못했으니 자리를 먹지 않는다.
      */
-    public static final java.util.List<PetPhase> OCCUPYING_SLOT = java.util.List.of(HATCHING, ALIVE);
+    // ★ DRAFT 도 자리를 먹는다 — 초안을 이어가는 규칙이라 한 사람에게 초안은 하나뿐이어야 한다.
+    public static final java.util.List<PetPhase> OCCUPYING_SLOT = java.util.List.of(DRAFT, HATCHING, ALIVE);
 }

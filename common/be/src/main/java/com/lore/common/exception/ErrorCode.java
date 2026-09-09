@@ -64,6 +64,12 @@ public enum ErrorCode {
     ZZAL_TRAVELING(HttpStatus.CONFLICT, "여행 중이에요"),
     ZZAL_NOT_TRAVELING(HttpStatus.CONFLICT, "여행 중이 아니에요"),
     ZZAL_MOTION_NOT_OPEN(HttpStatus.CONFLICT, "아직 배우지 않은 동작이에요"),
+    // ★ 없는 토큰·지워진 펫·모르는 동작을 전부 이 하나로 답한다. 구분해 주면
+    //   토큰을 찍어 보는 사람에게 "여기까지는 맞다"는 단서가 된다.
+    ZZAL_SHARE_NOT_FOUND(HttpStatus.NOT_FOUND, "링크를 찾을 수 없어요"),
+    ZZAL_PET_NOT_DRAFT(HttpStatus.CONFLICT, "이미 이름을 지은 아이예요"),
+    ZZAL_TUTORIAL_NOT_FINISHED(HttpStatus.CONFLICT, "아직 배울 것이 남았어요"),
+    ZZAL_TUTORIAL_ALREADY_DONE(HttpStatus.CONFLICT, "이미 다 배웠어요"),
     ZZAL_REGEN_NOT_REQUESTED(HttpStatus.CONFLICT, "다시 굽기를 요청한 동작이 아니에요"),
     ZZAL_NOT_IN_REVIEW(HttpStatus.CONFLICT, "검수 대기 중인 동작이 아니에요"),
 

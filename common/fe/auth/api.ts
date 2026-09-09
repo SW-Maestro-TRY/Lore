@@ -11,7 +11,7 @@
 import { ApiError, request } from '../api/client';
 
 /** 동의 항목. common/be 의 AgreementType 과 같은 이름이어야 한다. */
-export type AgreementType = 'TERMS' | 'PRIVACY' | 'MARKETING';
+export type AgreementType = 'AGE_14' | 'TERMS' | 'PRIVACY' | 'MARKETING';
 
 /**
  * 약관 동의. TERMS·PRIVACY 가 true 가 아니면 서버가 가입을 거부한다

@@ -62,7 +62,8 @@ public class AuthService {
         if (userRepository.existsByEmail(email)) {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
-        if (!Boolean.TRUE.equals(agreements.get(AgreementType.TERMS))
+        if (!Boolean.TRUE.equals(agreements.get(AgreementType.AGE_14))
+                || !Boolean.TRUE.equals(agreements.get(AgreementType.TERMS))
                 || !Boolean.TRUE.equals(agreements.get(AgreementType.PRIVACY))) {
             throw new BusinessException(ErrorCode.REQUIRED_AGREEMENT_MISSING);
         }

@@ -94,15 +94,15 @@ public class AwakeClockTest {
         }
 
         @Test
-        @DisplayName("낮잠은 10분 뒤 저절로 깬다")
-        void napAutoWake() {
-            AwakeClock.State nap = AwakeClock.State.asleep(SleepKind.NAP, kst("2026-09-05 12:00"), kst("2026-09-05 12:40"));
+        @DisplayName("★ 낮잠은 저절로 깨지 않는다 — 깨우는 사람은 사용자뿐이다(정본 1.4)")
+        void napNeverAutoWakes() {
+            AwakeClock.State nap = AwakeClock.State.asleep(SleepKind.NAP, kst("2026-09-05 12:00"), null);
             AwakeClock.Walk w = AwakeClock.walk(nap, kst("2026-09-05 12:00"), kst("2026-09-05 12:30"));
 
-            assertThat(w.segments()).hasSize(2);
-            assertThat(w.segments().get(0).to()).isEqualTo(kst("2026-09-05 12:10"));
-            assertThat(w.segments().get(0).endEvent()).isEqualTo(AwakeClock.Event.NAP_AUTO_WAKE);
-            assertThat(w.segments().get(1).isAwake()).isTrue();
+            // 자는 구간 하나로 끝난다 — 자동 기상이 끼지 않는다
+            assertThat(w.segments()).hasSize(1);
+            assertThat(w.segments().get(0).isAwake()).isFalse();
+            assertThat(w.segments().get(0).endEvent()).isNull();
         }
 
         @Test
@@ -178,14 +178,15 @@ public class AwakeClockTest {
         void autoWake() {
             assertThat(AwakeClock.autoWakeAt(SleepKind.NIGHT, kst("2026-09-05 23:00"))).isEqualTo(kst("2026-09-06 10:00"));
             assertThat(AwakeClock.autoWakeAt(SleepKind.NIGHT, kst("2026-09-06 00:30"))).isEqualTo(kst("2026-09-06 10:00"));
-            assertThat(AwakeClock.autoWakeAt(SleepKind.NAP, kst("2026-09-05 12:00"))).isEqualTo(kst("2026-09-05 12:10"));
+            // ★ 낮잠은 사실상 자동 기상이 없다 — 튜토리얼 중에는 시간이 안 걷히기 때문이다(정본 1.4)
+            assertThat(AwakeClock.autoWakeAt(SleepKind.NAP, kst("2026-09-05 12:00"))).isAfter(kst("2027-01-01 00:00"));
         }
 
         @Test
-        @DisplayName("깨우기 창 시작 — 밤잠은 그날 07:00, 낮잠은 5분 뒤")
+        @DisplayName("깨우기 창 시작 — 밤잠은 그날 07:00, 낮잠은 ★ 곧바로")
         void wakeWindowOpens() {
             assertThat(AwakeClock.wakeWindowOpensAt(SleepKind.NIGHT, kst("2026-09-05 19:30"))).isEqualTo(kst("2026-09-06 07:00"));
-            assertThat(AwakeClock.wakeWindowOpensAt(SleepKind.NAP, kst("2026-09-05 12:00"))).isEqualTo(kst("2026-09-05 12:05"));
+            assertThat(AwakeClock.wakeWindowOpensAt(SleepKind.NAP, kst("2026-09-05 12:00"))).isEqualTo(kst("2026-09-05 12:00"));
         }
 
         @Test

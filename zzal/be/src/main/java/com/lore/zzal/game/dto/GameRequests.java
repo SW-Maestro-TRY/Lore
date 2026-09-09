@@ -39,20 +39,20 @@ public final class GameRequests {
         }
     }
 
-    @Schema(description = "한 판 치기 — 어느 쪽을 골랐는지만 보낸다. 맞았는지는 서버가 정한다")
+    @Schema(description = "좌우 맞히기 요청. 선택한 방향만 전달하고 정답 여부는 서버가 판정한다")
     public record Guess(
 
             @Schema(description = "LEFT(왼쪽) · RIGHT(오른쪽)", example = "LEFT")
             @NotNull Side pick) {
     }
 
-    @Schema(description = "판 시작 — 어느 게임인가")
+    @Schema(description = "매치 시작 요청")
     public record Start(
-            @Schema(description = "LEFT_RIGHT(좌우 맞히기) · RUN(달리기, 좌우 5승 뒤)", example = "LEFT_RIGHT")
+            @Schema(description = "LEFT_RIGHT(좌우 맞히기) · RUN(달리기, 좌우 5승 이후 해금)", example = "LEFT_RIGHT")
             @NotNull GameKind kind) {
     }
 
-    @Schema(description = "달리기 끝 — 살아남은 ms. 30,000 이상이면 승리. 서버는 상한(60,000)만 검증")
+    @Schema(description = "달리기 종료 요청. 생존 시간 30,000ms 이상이면 승리하며 서버는 상한 60,000ms 만 검증한다")
     public record Finish(
             @Schema(example = "31200") @NotNull @Min(0) @Max(60_000) Long survivedMs) {
     }

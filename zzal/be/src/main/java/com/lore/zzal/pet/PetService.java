@@ -10,8 +10,11 @@ import com.lore.zzal.generation.GenJobRepository;
 import com.lore.zzal.generation.GenKind;
 import com.lore.zzal.generation.GenStatus;
 import com.lore.zzal.generation.GenStepRecordRepository;
+import com.lore.zzal.pet.dto.PetResponses;
+import com.lore.zzal.generation.PetSheetRequested;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
+import com.lore.zzal.generation.PetSheetRequested;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSeeder;
@@ -93,12 +96,21 @@ public class PetService {
     }
 
     /**
-     * 펫을 만들고 부화를 시작한다. 기다리지 않고 즉시 돌아온다 — 생성은 2분 넘게 걸리고,
-     * 그걸 HTTP 응답으로 붙들면 브라우저와 ALB 가 먼저 끊어 다 만들어 놓고도 실패로 보인다.
-     * 검사는 싼 것부터 — 부화 중인지 → 자리 → 이미지 키(가장 비싸고 통과하면 소모).
+     * 그림을 등록한다 — <b>초안</b>을 만들고 캐릭터 시트 굽기를 시작한다.
+     *
+     * <h3>★ 왜 이름을 나중에 받나</h3>
+     * 부화 전체가 2~7분이다. 사용자가 이름을 짓는 동안(약 74초) 시트를 미리 구우면 그만큼 앞당겨진다.
+     *
+     * <h3>★ 이름을 안 짓고 나갔다가 다시 오면 그 초안을 이어간다</h3>
+     * 시트는 이미 구웠고 돈도 나갔다. 새 그림으로 시작하고 싶으면 초안을 버리는 길을 따로 둔다.
+     * 여기서 매번 새로 만들면 <b>나갔다 올 때마다 시트 값이 나간다.</b>
      */
     @Transactional
-    public ZzalPet create(Long userId, String name, String note, String imageKey, Instant now) {
+    public ZzalPet draft(Long userId, String imageKey, Instant now) {
+        ZzalPet existing = petRepository.findFirstByUserIdAndPhase(userId, PetPhase.DRAFT).orElse(null);
+        if (existing != null) {
+            return existing;
+        }
         petRepository.findFirstByUserIdAndPhase(userId, PetPhase.HATCHING)
                 .ifPresent(hatching -> {
                     throw new BusinessException(ErrorCode.ZZAL_PET_ALREADY_HATCHING,
@@ -107,7 +119,6 @@ public class PetService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        // 자리를 차지하는 것은 HATCHING·ALIVE 뿐. 떠난 아이(DEAD)·태어나지 못한 알(FAILED)은 자리를 비운다.
         long occupied = petRepository.countByUserIdAndPhaseIn(userId, PetPhase.OCCUPYING_SLOT);
         if (occupied >= user.getPetSlots()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_LIMIT_REACHED);
@@ -115,11 +126,34 @@ public class PetService {
 
         s3Service.consume(userId, imageKey, now);
 
-        ZzalPet pet = petRepository.save(ZzalPet.hatch(userId, name, note, imageKey, now));
+        ZzalPet pet = petRepository.save(ZzalPet.draft(userId, imageKey, now));
         String version = hatchService.currentVersion();
         pet.setHatchPipelineVersion(version);
         GenJob job = jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, version, now));
-        events.publishEvent(new PetHatchRequested(job.getId(), pet.getId(), version));
+        events.publishEvent(new PetSheetRequested(job.getId(), pet.getId(), version));
+        return pet;
+    }
+
+    /**
+     * 초안에 캐릭터 정보를 채운다 — <b>격자 생성이 여기서 시작된다.</b>
+     *
+     * ★ 시트는 이미 구워져 있으므로 실행기가 그 단계를 건너뛴다. 아직 굽는 중이면
+     *   같은 작업이 이어서 돌기를 기다렸다가 다음 단계로 넘어간다.
+     */
+    @Transactional
+    public ZzalPet character(Long userId, Long petId, String name, String note,
+                             Personality personality, String world, Instant now) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isDraft()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_DRAFT);
+        }
+        pet.character(name, note, personality, world, now);
+
+        String version = pet.getHatchPipelineVersion() != null
+                ? pet.getHatchPipelineVersion() : hatchService.currentVersion();
+        long attempts = jobRepository.countByPetIdAndKind(petId, GenKind.HATCH);
+        GenJob job = jobRepository.save(GenJob.start(petId, GenKind.HATCH, (int) attempts + 1, version, now));
+        events.publishEvent(new PetHatchRequested(job.getId(), petId, version));
         return pet;
     }
 
@@ -429,7 +463,10 @@ public class PetService {
         ZzalPet pet = awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
         if (pet.sleepKindAvailable(now) == null) {
-            throw new BusinessException(ErrorCode.ZZAL_NOT_SLEEP_TIME, "저녁 7시가 되면 재워 주세요");
+            // ★ 튜토리얼 중에는 8칸 차례가 오기 전까지 아이가 안 졸리다 — 시각과 무관하므로
+            //   "저녁 7시" 라고 말하면 사용자가 저녁까지 기다린다.
+            throw new BusinessException(ErrorCode.ZZAL_NOT_SLEEP_TIME,
+                    pet.isInTutorial() ? "아직 안 졸린가 봐요" : "저녁 7시가 되면 재워 주세요");
         }
         Action a = withUnlockDiff(pet, () -> pet.sleep(now));
         // ★ 재우는 그 응답에 밤 연습 장면이 실리게 한다(touch 는 잠들기 전에 돌았다).
@@ -470,6 +507,29 @@ public class PetService {
         //   "행동 응답 = 최신 상태" 원칙을 어기고, 화면은 깨우자마자 새로고침해야 배워 온 것을 본다.
         reveal(pet, now);
         return action;
+    }
+
+    /**
+     * 튜토리얼 마지막 칸 — <b>시계를 켠다</b>(정본 12장 9칸 · 1.4).
+     *
+     * <h3>★ 왜 이것 하나만 API 인가</h3>
+     * 1~8칸은 각자 제 API 가 있어서(밥 = care, 채팅 = answer …) 서버가 알아서 넘긴다.
+     * 9칸("이제 혼자서도 괜찮아요")은 <b>누를 것이 없어서</b> 서버가 알 방법이 없다.
+     * 화면의 "알겠어요" 가 이 자리다.
+     *
+     * <h3>★ 이 순간부터 게임이 진짜로 시작된다</h3>
+     * 게이지가 줄기 시작하고, 병이 나고, 밤 11시에 자동으로 잔다. 그 전까지는 아무 일도 없다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action tutorialDone(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        if (!pet.isInTutorial()) {
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_ALREADY_DONE);
+        }
+        if (pet.getTutorialStep() < TutorialSchedule.TOTAL - 1) {
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_NOT_FINISHED);
+        }
+        return withUnlockDiff(pet, () -> pet.startClock(pet.now(realNow)));
     }
 
     // ── 성격·배경·공유 (정본 6·10·15장) ───────────────────────────────────
@@ -650,7 +710,38 @@ public class PetService {
     }
 
     /** 지금 하는 일을 사람 말로. 부화 중이 아니면 비어 있다. */
+
+        /**
+     * 부화 진행 — 알 화면이 되풀이해 묻는 자리.
+     *
+     * <h3>★ 진행률은 "성공한 단계 수" 로 센다</h3>
+     * 시간으로 재면 오래 걸리는 판에서 100%를 넘거나 멈춘 것처럼 보인다. 단계 수는
+     * 실제로 무엇이 끝났는지를 그대로 말한다.
+     *
+     * <h3>★ 실패 문구는 두 가지뿐이다</h3>
+     * 원인(거부·시간 초과·모델 오류)을 노출하면 사용자는 자기 그림이 무엇에 걸렸는지 추측하게 되고,
+     * 그 추측은 대개 틀린다. 다시 해 볼 만한지 아닌지만 말한다.
+     */
     @Transactional(readOnly = true)
+    public PetResponses.Hatch hatchProgress(Long userId, Long petId, Instant now) {
+        ZzalPet pet = get(userId, petId);
+        String version = pet.getHatchPipelineVersion() != null
+                ? pet.getHatchPipelineVersion() : hatchService.currentVersion();
+        int total = hatchService.stepsTotal(version);
+        int done = hatchService.stepsDone(petId, version);
+
+        long left = 0;
+        if (pet.getHatchStartedAt() != null) {
+            long spent = Duration.between(pet.getHatchStartedAt(), now).toSeconds();
+            left = Math.max(0, ZzalRules.HATCH_ESTIMATE.toSeconds() - spent);
+        }
+        String message = pet.getPhase() == PetPhase.FAILED
+                ? "이 그림은 어려워요. 다른 그림을 올려 주세요"
+                : null;
+        return new PetResponses.Hatch(pet.getPhase().name(), currentStepLabel(petId),
+                Math.min(done, total), total, left, message);
+    }
+
     public String currentStepLabel(Long petId) {
         return jobRepository.findFirstByPetIdOrderByIdDesc(petId)
                 .flatMap(job -> stepRepository.findByJobIdOrderBySeqAsc(job.getId()).stream()

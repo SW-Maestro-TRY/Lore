@@ -1,5 +1,6 @@
 package com.lore.zzal.game;
 
+import com.lore.zzal.PetFixture;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.zzal.pet.PetService;
@@ -47,8 +48,9 @@ class GameServiceTest {
         when(gameRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(anyLong())).thenReturn(Optional.empty());
 
-        pet = ZzalPet.hatch(USER, "여울", null, "k", T0);
+        pet = PetFixture.hatching(USER, "여울", null, "k", T0);
         pet.markAlive("s", "i", T0);
+        pet.skipTutorial(T0);
         ReflectionTestUtils.setField(pet, "id", PET);   // JPA 가 줄 번호를 테스트가 대신 준다
         petService = mock(PetService.class);
         when(petService.awake(any(), any(), any())).thenAnswer(inv -> {

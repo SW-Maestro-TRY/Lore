@@ -1,5 +1,6 @@
 package com.lore.zzal.pet;
 
+import com.lore.zzal.PetFixture;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.common.s3.S3Service;
@@ -117,20 +118,37 @@ class PetServiceTest {
                 new com.lore.zzal.leave.LeaveService(postcardRepository));
     }
 
-    /** T0(정오) 에 부화한 아기. */
-    private ZzalPet baby() {
-        ZzalPet pet = ZzalPet.hatch(USER_ID, "여울", null, "images/zzal/abc", T0);
+    /** T0(정오) 에 부화해 <b>튜토리얼 중</b>인 펫 — 시계가 아직 안 켜졌다. 낮잠 테스트용. */
+    private ZzalPet inTutorial() {
+        ZzalPet pet = PetFixture.hatching(USER_ID, "여울", null, "images/zzal/abc", T0);
         pet.markAlive("images/zzal/sheet", "생김새", T0);
         when(petRepository.findById(PET_ID)).thenReturn(Optional.of(pet));
         when(petRepository.findByIdForUpdate(PET_ID)).thenReturn(Optional.of(pet));
         return pet;
     }
 
-    /** 11:00 에 부화해 정오에 어린이가 된 펫. 배부름 0·행복 0·흔적 4 인 채다(돌봄 테스트용). */
+    /** T0(정오) 에 부화해 <b>튜토리얼을 건너뛴</b> 펫 — 시계가 켜져 있다. */
+    private ZzalPet baby() {
+        ZzalPet pet = PetFixture.hatching(USER_ID, "여울", null, "images/zzal/abc", T0);
+        pet.markAlive("images/zzal/sheet", "생김새", T0);
+        pet.skipTutorial(T0);
+        when(petRepository.findById(PET_ID)).thenReturn(Optional.of(pet));
+        when(petRepository.findByIdForUpdate(PET_ID)).thenReturn(Optional.of(pet));
+        return pet;
+    }
+
+    /**
+     * T0(정오) 에 배부름 0·행복 0·흔적 4 인 펫(돌봄 테스트용).
+     *
+     * ★ 하루 전 정오에 부화시켜 <b>깨어 있는 16시간</b>(정오~23:00 + 07:00~정오)을 흘린다 —
+     *   배부름 3시간·행복 4시간·흔적 4시간이라 정확히 0/0/4 가 된다.
+     *   1.5 이전에는 "아기 속도로 60분" 이면 됐지만 그 속도가 폐기됐다.
+     */
     private ZzalPet child() {
-        Instant hatched = T0.minus(Duration.ofMinutes(60));
-        ZzalPet pet = ZzalPet.hatch(USER_ID, "여울", null, "images/zzal/abc", hatched);
+        Instant hatched = T0.minus(Duration.ofHours(24));
+        ZzalPet pet = PetFixture.hatching(USER_ID, "여울", null, "images/zzal/abc", hatched);
         pet.markAlive("images/zzal/sheet", "생김새", hatched);
+        pet.skipTutorial(hatched);
         pet.settle(T0);
         when(petRepository.findById(PET_ID)).thenReturn(Optional.of(pet));
         when(petRepository.findByIdForUpdate(PET_ID)).thenReturn(Optional.of(pet));
@@ -138,7 +156,7 @@ class PetServiceTest {
     }
 
     private ZzalPet egg() {
-        ZzalPet pet = ZzalPet.hatch(USER_ID, "여울", null, "images/zzal/abc", T0);
+        ZzalPet pet = PetFixture.hatching(USER_ID, "여울", null, "images/zzal/abc", T0);
         when(petRepository.findById(PET_ID)).thenReturn(Optional.of(pet));
         when(petRepository.findByIdForUpdate(PET_ID)).thenReturn(Optional.of(pet));
         return pet;
@@ -255,14 +273,14 @@ class PetServiceTest {
         }
 
         @Test
-        @DisplayName("아기 때 낮잠 — 창 밖이어도 한 번 되고, 4분 뒤 깨우기는 ZZAL_NOT_WAKE_TIME")
+        @DisplayName("★ 튜토리얼 낮잠 — 창 밖이어도 한 번 되고, 곧바로 깨울 수 있고, 두 번째는 없다")
         void nap() {
-            ZzalPet pet = baby();
+            ZzalPet pet = inTutorial();
+            PetFixture.readyForNap(pet);
             Instant t = T0.plus(Duration.ofMinutes(40));
             service.sleep(USER_ID, PET_ID, t);
             assertThat(pet.getSleepKind()).isEqualTo(SleepKind.NAP);
-            assertCode(() -> service.wake(USER_ID, PET_ID, t.plus(Duration.ofMinutes(4))), ErrorCode.ZZAL_NOT_WAKE_TIME);
-            service.wake(USER_ID, PET_ID, t.plus(Duration.ofMinutes(5)));
+            service.wake(USER_ID, PET_ID, t);                   // ★ 1.4 — 기다림 없음
             assertThat(pet.getNapCount()).isEqualTo(1);
             assertCode(() -> service.sleep(USER_ID, PET_ID, t.plus(Duration.ofMinutes(6))), ErrorCode.ZZAL_NOT_SLEEP_TIME);
         }
@@ -362,12 +380,14 @@ class PetServiceTest {
         @Test
         @DisplayName("★ 재우기·깨우기 합쳐 3회가 되는 그 행동에 '자기'(11)가 실린다. 그 전엔 비어 있다")
         void sleepWakeThreeTimes() {
-            ZzalPet pet = baby();
+            ZzalPet pet = inTutorial();
+            PetFixture.readyForNap(pet);
             Instant t40 = T0.plus(Duration.ofMinutes(40));
-            PetService.Action a1 = service.sleep(USER_ID, PET_ID, t40);                       // 1
+            PetService.Action a1 = service.sleep(USER_ID, PET_ID, t40);                       // 1 낮잠
             assertThat(a1.justUnlocked()).isEmpty();
-            PetService.Action a2 = service.wake(USER_ID, PET_ID, t40.plus(Duration.ofMinutes(5)));   // 2
+            PetService.Action a2 = service.wake(USER_ID, PET_ID, t40);                        // 2 곧바로
             assertThat(a2.justUnlocked()).isEmpty();
+            pet.skipTutorial(t40);                                                            // 시계가 켜진다
             PetService.Action a3 = service.sleep(USER_ID, PET_ID, kst("2026-09-05 19:00"));  // 3 → 자기
             assertThat(a3.justUnlocked()).containsExactly(11);
             assertThat(UnlockRules.isUnlocked(pet, new MotionCatalog("", "", "v1").bySeq(11).orElseThrow(),
@@ -484,17 +504,18 @@ class PetServiceTest {
         }
 
         @Test
-        @DisplayName("★ 자리를 셀 때 HATCHING·ALIVE 만 센다 — DEAD 가 끼면 보내도 자리가 안 빈다")
+        @DisplayName("★ 자리를 셀 때 DRAFT·HATCHING·ALIVE 만 센다 — DEAD 가 끼면 보내도 자리가 안 빈다")
         void countsOnlyOccupyingPhases() {
             allowCreate();
             when(petRepository.countByUserIdAndPhaseIn(eq(USER_ID), any())).thenReturn(0L);
 
-            service.create(USER_ID, "여울", null, "images/zzal/abc", T0);
+            service.draft(USER_ID, "images/zzal/abc", T0);
 
             @SuppressWarnings("unchecked")
             ArgumentCaptor<Collection<PetPhase>> phases = ArgumentCaptor.forClass(Collection.class);
             verify(petRepository).countByUserIdAndPhaseIn(eq(USER_ID), phases.capture());
-            assertThat(phases.getValue()).containsExactlyInAnyOrder(PetPhase.HATCHING, PetPhase.ALIVE);
+            assertThat(phases.getValue())
+                    .containsExactlyInAnyOrder(PetPhase.DRAFT, PetPhase.HATCHING, PetPhase.ALIVE);
             assertThat(phases.getValue()).doesNotContain(PetPhase.DEAD, PetPhase.FAILED);
         }
 
@@ -504,17 +525,17 @@ class PetServiceTest {
             allowCreate();
             when(petRepository.countByUserIdAndPhaseIn(eq(USER_ID), any())).thenReturn(1L);
 
-            assertCode(() -> service.create(USER_ID, "여울", null, "images/zzal/abc", T0), ErrorCode.ZZAL_PET_LIMIT_REACHED);
+            assertCode(() -> service.draft(USER_ID, "images/zzal/abc", T0), ErrorCode.ZZAL_PET_LIMIT_REACHED);
             verify(s3Service, org.mockito.Mockito.never()).consume(anyLong(), any(), any());
         }
 
         @Test
         @DisplayName("부화 중이면 ZZAL_PET_ALREADY_HATCHING")
         void alreadyHatching() {
-            ZzalPet hatching = ZzalPet.hatch(USER_ID, "알", null, "k", T0);
+            ZzalPet hatching = PetFixture.hatching(USER_ID, "알", null, "k", T0);
             when(petRepository.findFirstByUserIdAndPhase(eq(USER_ID), eq(PetPhase.HATCHING)))
                     .thenReturn(Optional.of(hatching));
-            assertCode(() -> service.create(USER_ID, "여울", null, "images/zzal/abc", T0), ErrorCode.ZZAL_PET_ALREADY_HATCHING);
+            assertCode(() -> service.draft(USER_ID, "images/zzal/abc", T0), ErrorCode.ZZAL_PET_ALREADY_HATCHING);
         }
 
         @Test
@@ -538,7 +559,8 @@ class PetServiceTest {
     class Scenes {
 
         private ZzalPet withId() {
-            ZzalPet pet = child();
+            // ★ 부재 시계가 0 인 상태에서 재야 한다 — child() 는 하루를 흘려 만든 펫이라 이미 쌓여 있다.
+            ZzalPet pet = baby();
             org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
             return pet;
         }
