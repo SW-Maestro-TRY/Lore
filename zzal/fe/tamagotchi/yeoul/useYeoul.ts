@@ -13,12 +13,13 @@ import {
   ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LEARN_GOALS, LINE,
   NAME_POOL, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE, STEPS, TUTOR, TUTOR_MAIN,
   SHARDS, USER_Q, WALLS,
-  type FrameKey, type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
+  type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
 import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
 import type { Live } from './useHatch';
 import type { CareAction, ChatState } from '../../lib/pet';
+import type { GuessResult, Side } from '../../lib/game';
 
 /**
  * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
@@ -41,7 +42,13 @@ export type Mode = 'day' | 'night' | 'sleep' | 'sick';
  */
 export type SheetKey = 'play' | 'album' | 'notify' | 'settings';
 export interface LogLine { who: 'pet' | 'me'; text: string }
-export interface FrameData { name: string; open: boolean; cond: string; key: FrameKey }
+/**
+ * 벽에 걸린 액자 하나.
+ *
+ * ★ `key` 는 **카탈로그 key 문자열**이다(옛 `FrameKey` 8종에서 넓혔다). 서버 도감은 18칸이고
+ *   2층 동작 key 까지 오므로 8종으로는 못 담는다. 무엇을 그릴지는 `spriteUrl` 한 곳이 정한다.
+ */
+export interface FrameData { name: string; open: boolean; cond: string; key: string }
 export interface FireAction { label: string; tap: () => void; primary: boolean }
 export interface Fire {
   title: string; body: string; hint?: string; tapAny?: boolean;
@@ -63,6 +70,8 @@ export interface YeoulState {
   hearts: boolean; toast: string;
   sheet: SheetKey | null; sheetClosing: boolean;
   playTab: 'talk' | 'guess' | 'run'; draft: string;
+  /** 방금 친 좌우 맞히기 결과(서버가 준 것). 한 줄 문구를 그리는 데만 쓴다. */
+  lastGuess: GuessResult | null;
   log: LogLine[]; memories: string[];
   resolved: Record<string, boolean>; calls: number; guess: string | null;
   wallId: string;
@@ -111,7 +120,7 @@ const INITIAL: YeoulState = {
   full: 2, happy: 2, stock: 3, trace: 2, plays: 3, snacks: 0,
   bathUsed: false, pets: 1, sick: false, sleeping: false, night: false,
   hearts: false, toast: '',
-  sheet: null, sheetClosing: false, playTab: 'talk', draft: '',
+  sheet: null, sheetClosing: false, playTab: 'talk', draft: '', lastGuess: null,
   log: [{ who: 'pet', text: '있잖아, 오늘은 뭐 했어요?' }],
   memories: ['빵 좋아함', '비 싫어함', '왼쪽을 잘 맞힘', '늦잠', '파란색'],
   resolved: {}, calls: 3, guess: null,
@@ -299,6 +308,8 @@ export function useYeoul(live?: Live) {
   onServerRef.current = onServer;
   const esRef = useRef(es);
   esRef.current = es;
+  const sRef = useRef(s);
+  sRef.current = s;
 
   const realHatch = !!live?.petId;
   const hatchTotal = live?.total ?? 0;
@@ -449,6 +460,8 @@ export function useYeoul(live?: Live) {
 
   const openWall = useCallback(() => {
     lastSel.current = Date.now();
+    // 벽을 열 때 도감을 다시 읽는다 — 그사이 밤에 배운 것이 도착해 있을 수 있다.
+    if (onServerRef.current) void liveRef.current?.loadAlbum();
     tutorDone('album');
     patch({ wallOpen: true, wallClosing: false, popOpen: false, sheet: null, chatOpen: false, toast: '' });
   }, [patch, tutorDone]);
@@ -585,8 +598,31 @@ export function useYeoul(live?: Live) {
     tutorDone('sleep');
   }, [s.sleeping, s.night, s.day, s.resolved, s.cSleep, patch, flash, tutorDone]);
 
-  /** 좌우 맞히기 한 판. 어느 쪽을 골랐든 결과는 반반이다(목이라 그렇다). */
-  const onGuess = useCallback(() => {
+  /**
+   * 좌우 맞히기 한 판.
+   *
+   * ★ 서버에 붙어 있으면 **답은 서버가 쥔다.** 화면이 혼자 이겼다고 정할 수 없어서 한 판에
+   *   한 번씩 왕복하고, 그게 의도다(`lib/game.ts` 머리말). 판이 없으면 먼저 시작한다.
+   * ★ 목일 때는 어느 쪽을 골랐든 반반이다.
+   */
+  const onGuess = useCallback((side: Side = 'LEFT') => {
+    if (onServerRef.current) {
+      void (async () => {
+        const lv = liveRef.current;
+        if (!lv) return;
+        if (!lv.game?.playing) {
+          const err = await lv.startPlay();
+          if (err) { flash(err); return; }
+          patch({ lastGuess: null });
+        }
+        const { error, result } = await lv.pickSide(side);
+        if (error) { flash(error); return; }
+        if (!result) return;
+        patch({ lastGuess: result });
+        act(result.hit ? 'joy' : 'sad');
+      })();
+      return;
+    }
     if (s.plays <= 0 && !s.sampleMode) { flash('오늘 남은 판이 없어요'); return; }
     const win = Math.random() < 0.5;
     patch({
@@ -598,6 +634,7 @@ export function useYeoul(live?: Live) {
     });
     act(win ? 'joy' : 'sad');
   }, [s.plays, s.sampleMode, s.cGame, s.happy, s.bond, patch, act, flash]);
+  const onGuessSide = useCallback((side: Side) => () => onGuess(side), [onGuess]);
 
   // ── 대화 ──
   const pushReply = useCallback((text: string) => {
@@ -655,6 +692,29 @@ export function useYeoul(live?: Live) {
 
   // ── 앨범·엽서 ──
   const saveShot = useCallback(() => { setS((v) => ({ ...v, saved: v.saved + 1, fire: null })); flash('앨범에 저장했어요'); }, [flash]);
+
+  /**
+   * 액자 하나를 공유한다. 서버가 주소를 만들어 주고, 같은 동작을 다시 공유하면 있던 주소가 온다.
+   *
+   * ★ 파일이 아니라 **주소**를 준다 — X·인스타 인앱 브라우저가 다운로드를 막기 때문이다.
+   *   그래서 여기서 하는 일은 주소를 복사해 손에 쥐여 드리는 것까지다.
+   */
+  const shareFrame = useCallback(() => {
+    const key = sRef.current.frame?.key;
+    if (!onServerRef.current || !key) { flash('공유는 아이가 태어난 뒤에 돼요'); return; }
+    void (async () => {
+      const { error, url } = await liveRef.current?.shareMotion(key) ?? { error: null, url: null };
+      if (error) { flash(error); return; }
+      if (!url) return;
+      try {
+        await navigator.clipboard.writeText(url);
+        flash('링크를 복사했어요');
+      } catch {
+        // 복사를 막는 브라우저가 있다. 그때는 주소를 그대로 보여 드린다.
+        flash(url);
+      }
+    })();
+  }, [flash]);
   const addWish = useCallback(() => { setS((v) => ({ ...v, wishes: v.wishes + 1, fire: null })); flash('기록해 뒀어요'); }, [flash]);
 
   const tapAlbumCell = useCallback((open: number, name: string) => () => {
@@ -905,6 +965,11 @@ export function useYeoul(live?: Live) {
   }, [needStyle]);
 
   const v = useMemo(() => {
+    // ── 앨범 칸 수 ──
+    const albumMotions = onServer ? (live?.album?.motions ?? sv.motions ?? []) : [];
+    const albumAll = onServer ? (albumMotions.length || 18) : 18;
+    const albumOpen = onServer ? albumMotions.filter((m) => m.unlocked).length : s.albumOpen;
+
     const lv = levelsOf(es, mode);
     const calls = callQueueOf(es, mode);
     const top = calls[0] ?? null;
@@ -916,7 +981,7 @@ export function useYeoul(live?: Live) {
       ['bath', lv.bath, String(es.trace), !unlimited && es.trace > 0],
       ['play', lv.play, String(s.plays), !unlimited && s.plays > 0],
       ['bed', lv.bed, '', false],
-      ['album', lv.album, `${s.albumOpen}/18`, !unlimited],
+      ['album', lv.album, `${albumOpen}/${albumAll}`, !unlimited],
     ];
 
     const selK: RoomKey = ROOM_KEYS.includes(s.roomSel) ? s.roomSel : 'table';
@@ -993,8 +1058,8 @@ export function useYeoul(live?: Live) {
         b: null,
       },
       album: {
-        say: `함께한 순간이 ${s.albumOpen}개예요`, n: 18, on: s.albumOpen, tint: '#B08968',
-        a: { label: '벽 보기', count: `${s.albumOpen}개 열림`, tap: openWall },
+        say: `함께한 순간이 ${albumOpen}개예요`, n: albumAll, on: albumOpen, tint: '#B08968',
+        a: { label: '벽 보기', count: `${albumOpen}개 열림`, tap: openWall },
         b: { label: '방 꾸미기', count: `${s.floorLv > 1 ? '4' : '1'}개 열림`, tap: openSheet('album') },
       },
     };
@@ -1118,7 +1183,7 @@ export function useYeoul(live?: Live) {
     // ── 시트 ──
     const sk = s.sheet;
     const sheetTitle: readonly [string, string] = sk === 'album'
-      ? ['앨범', `${s.albumOpen} / 18`]
+      ? ['앨범', `${albumOpen} / ${albumAll}`]
       : sk === 'settings'
         ? [s.petName || '아이', '아이 정보']
         : sk ? SHEET_TITLE[sk] : ['', ''];
@@ -1160,17 +1225,39 @@ export function useYeoul(live?: Live) {
       };
     });
 
+    // ── 좌우 맞히기 한 줄 ──
+    // 결과·진행은 **서버 숫자**로 적는다. 이건 아이 대사가 아니라 화면의 말이라 여기서 만든다.
+    const gm = live?.game ?? null;
+    const gr = s.lastGuess;
+    const guessNote = live?.guessing ? '어느 쪽일까…'
+      : gr
+        ? (gr.finished
+          ? (gr.win ? `${gr.hits} / ${gr.rounds} 맞혔어요. 이겼어요!` : `${gr.hits} / ${gr.rounds} 맞혔어요. 다음엔 이겨요.`)
+          : `${gr.hit ? '맞았어요!' : '아쉬워요.'} ${gr.hits} / ${gr.winAt} · ${(gr.nextRound ?? 0) + 1}번째`)
+        : (gm?.playing ? `${(gm.round ?? 0) + 1}번째 · 어느 손에 있을까요?` : '어느 손에 있을까요?');
+
     // ── 앨범 벽 ──
     // ★ 구르기는 18칸 **밖의 선물**이다(정본 §"첫 심화 행동 동작 = 카탈로그 밖 특별 1종").
     //   그래서 칸 수(N/18)를 건드리지 않고 맨 앞에 따로 붙인다.
     const gift: ReadonlyArray<readonly [string, number]> = s.rollUnlocked ? [['구르기 · 선물', 1]] : [];
-    const frames = [...gift, ...ALBUM].map(([name, open], i) => {
-      const parts = name.split(' · ');
-      const key = FRAME_KEYS[i % FRAME_KEYS.length];
-      const f: FrameData = { name: parts[0], open: !!open, cond: open ? '' : (parts[1] || '조건 미정'), key };
+    /**
+     * 벽에 걸 액자들.
+     *
+     * ★ 서버에 붙으면 **도감 18칸을 서버가 준다**(`album.motions`, 없으면 펫 상태의 같은 목록).
+     *   이름·잠금·조건이 전부 거기 있고, 그림 주소도 `key` 로 `spriteUrl` 이 찾아간다.
+     */
+    const svMotions = onServer ? (live?.album?.motions ?? sv.motions ?? []) : [];
+    const svFrames: ReadonlyArray<readonly [string, number, string, string]> = svMotions
+      .map((m) => [m.label, m.unlocked ? 1 : 0, m.hint ?? '', m.key] as const);
+    const mockFrames = [...gift, ...ALBUM].map(([name, open], i) => {
+      const parts = String(name).split(' · ');
+      return [parts[0], open ? 1 : 0, parts[1] || '조건 미정', FRAME_KEYS[i % FRAME_KEYS.length]] as const;
+    });
+    const frames = (onServer ? svFrames : mockFrames).map(([name, open, cond, key]) => {
+      const f: FrameData = { name, open: !!open, cond: open ? '' : (cond || '조건 미정'), key };
       return {
         ...f,
-        label: open ? f.name : (parts[1] || '조건 미정'),
+        label: open ? f.name : (cond || '조건 미정'),
         labelFg: open ? '#5A4A3C' : C.faint,
         bd: open ? C.frameWood : 'rgba(201,169,141,.45)',
         bg: open ? C.paper : 'rgba(255,253,248,.5)',
@@ -1243,7 +1330,9 @@ export function useYeoul(live?: Live) {
         cond: goal ? `${goal.cond} ${Math.min(goal.have, goal.need)} / ${goal.need}` : '',
         barW: goal ? `${Math.round(Math.min(1, goal.have / goal.need) * 100)}%` : '0%',
         // 배울 것이 남지 않았으면 조각으로 넘어간다.
-        hasShards: !showTutMini && !goal,
+        // ★ 서버가 `pieces: null` 이라고 하면 **아예 안 그린다**(백엔드 2026-09-09 지시).
+        //   3층 전에는 조각이라는 개념이 없어서, 빈 도장 넷이 보이면 "내가 못 채운 것" 으로 읽힌다.
+        hasShards: !showTutMini && !goal && (!onServer || !!sv.pieces),
         shards: SHARDS.map((x, i) => ({
           label: x.label, cond: x.cond, on: i < s.shards,
         })),
@@ -1299,7 +1388,7 @@ export function useYeoul(live?: Live) {
       wall: {
         show: s.screen === 'room' && (s.wallOpen || s.wallClosing),
         anim: s.wallClosing ? 'yWallDown .22s ease forwards' : 'yWallUp .3s cubic-bezier(.2,.85,.25,1)',
-        count: `${s.albumOpen} / 18`, close: closeWall, frames,
+        count: `${albumOpen} / ${albumAll}`, close: closeWall, frames,
       },
       frame: {
         show: !!s.frame,
@@ -1307,13 +1396,13 @@ export function useYeoul(live?: Live) {
         name: s.frame?.name ?? '', key: s.frame?.key ?? 'base',
         open: !!s.frame?.open, locked: !!s.frame && !s.frame.open,
         cond: s.frame?.cond ?? '', opacity: s.frame?.open ? 1 : 0.24,
-        close: closeFrame, save: saveShot,
+        close: closeFrame, save: saveShot, share: shareFrame,
       },
-      fullCells: cells(s.full, '#F2C3A8', C.slotDim),
-      happyCells: cells(s.happy, '#C9DFB4', C.slotDim),
+      fullCells: cells(es.full, '#F2C3A8', C.slotDim),
+      happyCells: cells(es.happy, '#C9DFB4', C.slotDim),
       food: {
-        stock: s.stock,
-        riceBg: s.full >= 4 || s.stock <= 0 ? C.off : C.slot,
+        stock: es.stock,
+        riceBg: es.full >= 4 || es.stock <= 0 ? C.off : C.slot,
         snackNote: s.snacks >= 3 ? '조금 많아요' : '가득이어도 받아요',
       },
       bath: {
@@ -1339,9 +1428,16 @@ export function useYeoul(live?: Live) {
         quick: CHAT_QUICK.map((t) => ({ text: t, pick: () => pushReply(t) })),
         draft: s.draft,
         memories: (onServer ? (sc?.memories ?? []) : s.memories).map((t) => ({ text: t })),
-        guessNote: s.guess ?? '어느 손에 있을까요?',
-        playsLeft: s.plays,
-        runCond: `2층 해금 + 친밀도 50% 이상이면 열려요. 지금 ${s.floorLv}층 · 친밀도 ${s.bond}%`,
+        guessNote: onServer ? guessNote : (s.guess ?? '어느 손에 있을까요?'),
+        // 오늘 남은 판은 **두 게임 합산**이고 지금 치는 판은 빠져 있다(서버 규칙).
+        playsLeft: onServer ? (live?.game?.remainingToday ?? 0) : s.plays,
+        canGuess: onServer
+          ? !live?.guessing && (live?.game?.playing || (live?.game?.remainingToday ?? 0) > 0)
+          : true,
+        // ★ 달리기는 2차다. 서버가 열렸다고 해도 화면은 아직 없으므로 잠긴 채로 둔다.
+        runCond: onServer
+          ? '달리기는 아직 준비 중이에요. 좌우 맞히기부터 함께해요.'
+          : `2층 해금 + 친밀도 50% 이상이면 열려요. 지금 ${s.floorLv}층 · 친밀도 ${s.bond}%`,
       },
       bed: (() => {
         const on = s.sleeping || s.night;
@@ -1440,7 +1536,7 @@ export function useYeoul(live?: Live) {
     };
   }, [
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
-    s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
+    s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,
@@ -1449,18 +1545,18 @@ export function useYeoul(live?: Live) {
 
   const actions = useMemo(() => ({
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
-    closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed,
+    closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay,
+    setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
     openAuth, closeAuth, passAuth,
     backToSample: () => patch({ screen: 'room' }),
   }), [
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
-    closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed,
+    closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay,
+    setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
     openAuth, closeAuth, passAuth,
   ]);
 

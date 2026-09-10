@@ -21,10 +21,12 @@ import { assetUrl } from '../../lib/assets';
 import { MOTION_FALLBACK, YEOUL_MOTION } from '../constants';
 import { BASIC_KEYS } from './constants';
 import {
-  answerChat, care, draftPet, getChat, getHatchProgress, getPet, listPets, setCharacter,
-  type CareAction, type ChatReply, type ChatState, type CharacterInput,
+  answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
+  setCharacter, share,
+  type Album, type CareAction, type ChatReply, type ChatState, type CharacterInput,
   type HatchProgress, type PetDetail,
 } from '../../lib/pet';
+import { getCurrentGame, guess, startGame, type GameState, type GuessResult, type Side } from '../../lib/game';
 import { uploadImage } from '../../lib/upload';
 
 export interface Live {
@@ -99,6 +101,26 @@ export interface Live {
    * @returns `error` 가 있으면 띄울 한 줄, 없으면 `reply` 에 아이가 돌려준 말과 반응 동작.
    */
   sendChat: (text: string) => Promise<{ error: string | null; reply: ChatReply | null }>;
+  /**
+   * 지금 치고 있는 좌우 맞히기 한 판. 새로고침으로 들어와도 서버가 같은 모양으로 답해서
+   * 화면은 "지금 어느 쪽이지" 를 판단하지 않아도 된다.
+   */
+  game: GameState | null;
+  /** 한 번 친 답이 도는 중. 좌·우 버튼을 잠근다. */
+  guessing: boolean;
+  /** 판 시작(또는 치던 판 잇기). 두 번 불러도 안전하다. */
+  startPlay: () => Promise<string | null>;
+  /**
+   * 한 판 친다. **답은 서버가 쥐고 있다** — 화면이 혼자 이겼다고 정할 수 없다.
+   * @returns `error` 면 띄울 한 줄, 아니면 방금 친 결과.
+   */
+  pickSide: (side: Side) => Promise<{ error: string | null; result: GuessResult | null }>;
+  /** 앨범(도감 18칸 · 엽서 · 장면 · 첫 선물). 아직 안 읽었으면 null. */
+  album: Album | null;
+  /** 앨범을 (다시) 읽는다. 벽을 열 때 부른다. */
+  loadAlbum: () => Promise<void>;
+  /** 동작 하나를 공유한다. 같은 동작을 다시 공유하면 있던 링크가 그대로 온다. */
+  shareMotion: (motionKey: string) => Promise<{ error: string | null; url: string | null }>;
   /** 두고 간 아이가 있는지 서버에 물어본다. 로그인한 뒤에 한 번만 부른다. */
   resume: () => Promise<'draft' | 'hatching' | 'alive' | null>;
   reset: () => void;
@@ -106,11 +128,15 @@ export interface Live {
 
 const EMPTY: Live = {
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null,
-  draftOnly: false, resumedDraft: false, careing: null, chat: null, chatting: false, ready: false, failed: false, step: null,
+  draftOnly: false, resumedDraft: false, careing: null, chat: null, chatting: false,
+  game: null, guessing: false, album: null, ready: false, failed: false, step: null,
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
   img: () => null,
   upload: async () => {}, setChar: async () => {}, doCare: async () => null,
   sendChat: async () => ({ error: null, reply: null }),
+  startPlay: async () => null,
+  pickSide: async () => ({ error: null, result: null }),
+  loadAlbum: async () => {}, shareMotion: async () => ({ error: null, url: null }),
   resume: async () => null, reset: () => {},
 };
 
@@ -129,6 +155,9 @@ export function useHatchState(): Live {
   const [careing, setCareing] = useState<CareAction | null>(null);
   const [chat, setChat] = useState<ChatState | null>(null);
   const [chatting, setChatting] = useState(false);
+  const [game, setGame] = useState<GameState | null>(null);
+  const [guessing, setGuessing] = useState(false);
+  const [album, setAlbum] = useState<Album | null>(null);
 
   // 미리보기 주소는 브라우저 메모리를 잡으므로 바뀌거나 떠날 때 놓아 준다.
   useEffect(() => () => { if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }, []);
@@ -233,6 +262,48 @@ export function useHatchState(): Live {
     }
   }, [petId, chat?.openSlot, pet, chatting]);
 
+  // ── 놀이 · 앨범 · 공유 ──────────────────────────────────────────
+  const startPlay = useCallback(async (): Promise<string | null> => {
+    if (!petId) return null;
+    try { setGame(await startGame(petId, 'LEFT_RIGHT')); return null; }
+    catch (e) { return e instanceof Error ? e.message : '지금은 못 놀아요'; }
+  }, [petId]);
+
+  const pickSide = useCallback(async (side: Side) => {
+    const id = game?.gameId;
+    if (!petId || !id || guessing) return { error: null, result: null };
+    setGuessing(true);
+    try {
+      const r = await guess(petId, id, side);
+      // 판이 끝났으면 `playing` 이 꺼진 새 상태를 받아 둔다 — 다음 판은 다시 시작해야 한다.
+      setGame((g) => (g ? { ...g, round: r.nextRound, hits: r.hits, playing: !r.finished, remainingToday: r.remainingToday, runUnlocked: r.runUnlocked } : g));
+      // 이긴 판은 기분이 오른다. 그 값은 펫 상태에 있으므로 다시 읽어 화면을 맞춘다.
+      if (r.finished) { try { setPet(await getPet(petId)); } catch { /* 못 읽어도 판 결과는 보여 준다 */ } }
+      return { error: null, result: r };
+    } catch (e) {
+      try { setGame(await getCurrentGame(petId)); } catch { /* 화면은 그대로 둔다 */ }
+      return { error: e instanceof Error ? e.message : '지금은 못 쳐요', result: null };
+    } finally {
+      setGuessing(false);
+    }
+  }, [petId, game?.gameId, guessing]);
+
+  const loadAlbum = useCallback(async () => {
+    if (!petId) return;
+    try { setAlbum(await getAlbum(petId)); } catch { /* 못 읽으면 도감은 펫 상태의 18칸으로 그린다 */ }
+  }, [petId]);
+
+  const shareMotion = useCallback(async (motionKey: string) => {
+    if (!petId) return { error: null, url: null };
+    try {
+      const r = await share(petId, motionKey, 'SHARE');
+      setPet(r.pet);
+      return { error: null, url: r.url };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : '지금은 공유할 수 없어요', url: null };
+    }
+  }, [petId]);
+
   /**
    * 두고 간 아이 찾기. 로그인 직후 한 번 부른다.
    *
@@ -304,6 +375,16 @@ export function useHatchState(): Live {
     return () => { alive = false; };
   }, [petId, living, pet]);
 
+  // 치던 판과 앨범은 아이가 살아난 뒤 한 번만 읽는다 — 돌보기마다 다시 읽을 값이 아니다.
+  // (판은 칠 때마다 응답으로 갱신되고, 앨범은 벽을 열 때 `loadAlbum` 으로 다시 읽는다)
+  useEffect(() => {
+    if (!petId || !living) return;
+    let alive = true;
+    void getCurrentGame(petId).then((g) => { if (alive) setGame(g); }).catch(() => {});
+    void getAlbum(petId).then((a) => { if (alive) setAlbum(a); }).catch(() => {});
+    return () => { alive = false; };
+  }, [petId, living]);
+
   /**
    * 카탈로그 key 하나를 **내 아이 그림 주소**로. 아직 못 받았으면 null.
    * ★ 18 동작 전부를 받는다 — 서버 `Motion.key` 와 우리 key 는 같은 이름이라 표가 필요 없다.
@@ -317,7 +398,8 @@ export function useHatchState(): Live {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
     setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null);
-    setCharSet(false); setHatch(null); setResumedDraft(false); setChat(null);
+    setCharSet(false); setHatch(null); setResumedDraft(false);
+    setChat(null); setGame(null); setAlbum(null);
   }, []);
 
   return {
@@ -335,8 +417,8 @@ export function useHatchState(): Live {
     missingBasics: pet?.phase === 'ALIVE'
       ? BASIC_KEYS.filter((k) => !pet.motions?.some((m) => m.key === k && m.basicImageKey))
       : [],
-    careing, chat, chatting,
-    img, upload, setChar, doCare, sendChat, resume, reset,
+    careing, chat, chatting, game, guessing, album,
+    img, upload, setChar, doCare, sendChat, startPlay, pickSide, loadAlbum, shareMotion, resume, reset,
   };
 }
 

@@ -73,8 +73,9 @@ function FrameView({ y }: { y: Yeoul }) {
         {f.locked && <span style={{ padding: '7px 14px', borderRadius: radius.pill, background: 'rgba(255,253,248,.16)', fontSize: 12, color: '#F3E9DC' }}>{f.cond}</span>}
         {f.open && (
           <span style={{ display: 'flex', gap: 8 }}>
-            <button onClick={f.save} style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: 12.5, color: C.ink }}>저장</button>
-            <button onClick={f.save} style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: 12.5, color: C.ink }}>공유</button>
+            <button onClick={f.save} data-action="frame-save" style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: 12.5, color: C.ink }}>저장</button>
+            {/* 서버가 주소를 만들어 준다. 파일이 아니라 링크인 이유는 lib/pet.ts share() 머리말에. */}
+            <button onClick={f.share} data-action="frame-share" style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: 12.5, color: C.ink }}>공유</button>
           </span>
         )}
       </div>

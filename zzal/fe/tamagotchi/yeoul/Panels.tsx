@@ -110,8 +110,15 @@ function PlaySheet({ y }: { y: Yeoul }) {
           </div>
           <span style={{ fontFamily: GAEGU, fontSize: 19, color: C.ink }}>{p.guessNote}</span>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
-            <button onClick={actions.onGuess} style={{ padding: '22px 6px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.slot, fontSize: 15, color: C.ink }}>왼쪽</button>
-            <button onClick={actions.onGuess} style={{ padding: '22px 6px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.slot, fontSize: 15, color: C.ink }}>오른쪽</button>
+            {/* 어느 쪽을 골랐는지 서버에 보낸다 — 답은 서버가 쥐고 있다. */}
+            <button
+              onClick={actions.onGuessSide('LEFT')} disabled={!p.canGuess} data-action="guess-left"
+              style={{ padding: '22px 6px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: p.canGuess ? C.slot : C.off, fontSize: 15, color: p.canGuess ? C.ink : '#8B8175' }}
+            >왼쪽</button>
+            <button
+              onClick={actions.onGuessSide('RIGHT')} disabled={!p.canGuess} data-action="guess-right"
+              style={{ padding: '22px 6px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: p.canGuess ? C.slot : C.off, fontSize: 15, color: p.canGuess ? C.ink : '#8B8175' }}
+            >오른쪽</button>
           </div>
           <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.45)' }}>오늘 남은 판 {p.playsLeft}</span>
         </div>
