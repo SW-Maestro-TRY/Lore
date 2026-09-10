@@ -526,10 +526,14 @@ export function useYeoul(live?: Live) {
     if (s.popOpen) { patch({ popOpen: false }); return; }
     if (esRef.current.sleeping) { flash('자고 있어요'); return; }
     if (onServerRef.current) {
-      // ★ 오늘 몫을 다 썼으면 **서버를 부르지 않는다**(계약 10절 `today.pets === 3`).
-      //   그래도 쓰다듬는 시늉은 그대로 둔다 — 하루 세 번이 지났다고 아이를 못 만지게 하면
-      //   그건 잠금이 아니라 벌이다. 세어지지 않을 뿐이라고 말해 준다.
-      if (esRef.current.pets >= PET_MAX) { act('shy'); flash('오늘 쓰다듬기는 다 했어요'); return; }
+      // ★ 4회째부터 — **반응 동작만 나온다.** 하트도 안 뜨고, 문구도 안 뜬다(상훈님 2026-09-10 판정).
+      //   하루 세 번이 지났다고 아이를 못 만지게 하면 그건 잠금이 아니라 벌이다. 그래서 막지 않고,
+      //   대신 "세어졌다" 는 표시(하트)만 거둔다 — 말로 설명할 것도 없다.
+      //   서버 규칙도 같은 결이다(`PetService.doCare`: "쓰다듬기는 거절이 없다 — 하루 3회를 넘어도
+      //   반응 동작은 나온다. 친밀도만 안 오른다").
+      // 4회째부터는 서버를 안 부른다. 누적 `pets` 를 쓰는 해금이 생기면 여기를 되살릴 것
+      // (2026-09-10 확인: `ZzalPet.pet()` 이 올리는 평생 누적 `pets` 를 읽는 곳이 아직 아무 데도 없다).
+      if (esRef.current.pets >= PET_MAX) { act('shy'); return; }
       // 돌보기가 도는 중엔 아무 일도 안 한다 — 같은 요청이 두 번 나가지 않게(계약 10절).
       if (liveRef.current?.careing) return;
       // 쓰다듬기도 돌보기 하나다(`PET`). 하트는 서버가 세어 준 오늘 횟수로 판단한다.
@@ -548,8 +552,9 @@ export function useYeoul(live?: Live) {
       bond: counted ? Math.min(100, s.bond + 1) : s.bond,
     });
     act('shy');
+    // 4회째부터는 하트를 안 띄운다(위 서버 경로와 같은 규칙). 목 화면도 같은 결이어야
+    // 시안을 눌러 본 것과 실제가 어긋나지 않는다.
     if (counted) later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
-    else flash('오늘 쓰다듬기는 다 했어요');
     tutorDone('pet');
   }, [s.chatOpen, s.popOpen, s.sampleMode, s.pets, s.bond, patch, act, flash, later, tutorDone]);
 
@@ -1360,18 +1365,6 @@ export function useYeoul(live?: Live) {
       medFab: {
         show: s.screen === 'room' && es.sick && !s.chatOpen && !s.popOpen && !s.sheet && !es.sleeping,
         off: !!live?.careing,
-      },
-      /**
-       * 쓰다듬기 자물쇠. **아이는 계속 만질 수 있다** — 하루 세 번이 지났다고 못 만지게 하는 것은
-       * 잠금이 아니라 벌이다(2026-09-08 결정). 대신 **서버를 부르지 않고**, 왜 안 세어지는지
-       * 한 줄로 미리 보여 준다(전에는 눌러 봐야 알 수 있었다).
-       * ⚠️ 서버는 `PET` 을 거절하지 않는다(`PetService.doCare` — "쓰다듬기는 거절이 없다").
-       *   계약 10절이 여섯 거절에 넣어 둔 것과 실제 서버가 다르다. 화면 쪽에서만 세어 막는다.
-       */
-      petLock: {
-        show: s.screen === 'room' && onServer && es.pets >= PET_MAX
-          && !es.sleeping && !s.chatOpen && !s.popOpen && !s.sheet,
-        text: '오늘 쓰다듬기는 다 했어요',
       },
       // 좌측 하단 카드. 세 얼굴을 차례로 갖는다 —
       //   튜토리얼 중엔 부름 / 2층을 배우는 동안엔 로드맵 / 다 배우면 **조각 도장 4칸**.

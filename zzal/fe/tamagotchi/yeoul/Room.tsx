@@ -100,6 +100,8 @@ export default function Room({ y }: { y: Yeoul }) {
             비치면 자는 것으로 안 읽힌다. 진짜 그림이 오면 이 감춤을 걷어낸다(판정 5). */}
         <div
           data-part="pet"
+          // 지금 어떤 자세를 짓고 있는지. 화면을 밖에서 확인할 때 쓰는 손잡이다(`data-room`·`data-action` 과 같은 쓰임).
+          data-sprite={v.spriteKey}
           hidden={v.hidePet}
           onClick={(e) => { e.stopPropagation(); actions.onPet(); }}
           style={{
@@ -124,16 +126,6 @@ export default function Room({ y }: { y: Yeoul }) {
                   {v.guide.label}
                 </span>
               </>
-            )}
-            {/* ★ 오늘 쓰다듬기를 다 쓴 자리. **누르는 것은 계속 되고**(만지지 못하게 하면 벌이 된다)
-                왜 더 안 세어지는지만 미리 알려 준다 — 전에는 눌러 봐야 알 수 있었다. */}
-            {v.petLock.show && (
-              <span data-part="pet-lock" style={{
-                position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
-                padding: '5px 12px', borderRadius: radius.pill, background: 'rgba(255,253,248,.9)',
-                border: `1px solid ${C.line}`, fontSize: 11.5, color: C.faint,
-                whiteSpace: 'nowrap', pointerEvents: 'none',
-              }}>{v.petLock.text}</span>
             )}
             <div style={{ width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play }}>
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
@@ -176,7 +168,7 @@ export default function Room({ y }: { y: Yeoul }) {
         )}
 
         {v.hearts.show && (
-          <div style={{ position: 'absolute', left: '50%', bottom: '44%', animation: 'yFloatup 1.1s ease forwards', fontSize: 24, letterSpacing: 3, color: '#D97386', textShadow: '0 1px 5px rgba(255,255,255,.8)' }}>
+          <div data-part="hearts" style={{ position: 'absolute', left: '50%', bottom: '44%', animation: 'yFloatup 1.1s ease forwards', fontSize: 24, letterSpacing: 3, color: '#D97386', textShadow: '0 1px 5px rgba(255,255,255,.8)' }}>
             {v.hearts.text}
           </div>
         )}
