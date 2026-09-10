@@ -282,3 +282,31 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* 낮은 화면(360×640 같은 작은 폰)에서 가입 탭은 내용이 길어 **주 버튼이 화면 밖으로 78px** 밀렸다
+ * (상훈님 판정 10). 오버레이가 스크롤을 맡고 있어 닿기는 하지만, 잘렸다는 표시가 없어 못 찾는다.
+ * 여백을 조여 한 화면에 들어오게 한다 — 넓은 화면은 그대로다. */
+@media (max-height: 700px) {
+  .overlay {
+    padding: 10px 14px;
+    align-items: flex-start;
+  }
+
+  .dialog {
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .form {
+    gap: 10px;
+  }
+
+  .agreements {
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .tabs {
+    margin-bottom: 2px;
+  }
+}

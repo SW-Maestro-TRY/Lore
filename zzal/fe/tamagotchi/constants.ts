@@ -231,3 +231,9 @@ export type BackgroundKey = (typeof BACKGROUNDS)[number]['key'];
 export const DEFAULT_BACKGROUND: BackgroundKey = 'room';
 
 export const bgUrl = (key: string) => `${CDN}/zzal/bg/${key}.webp`;
+
+/** 여울 시연 그림(idle·eat·happy·sad·hungry·train·pet·clean·loop). */
+export const demoUrl = (key: string) => `${CDN}/zzal/demo/${key}.webp`;
+
+/** 소품 그림(알·커튼·쓰레기·달·폭죽·zzz). */
+export const assetUrl = (key: string) => `${CDN}/zzal/assets/${key}.webp`;
