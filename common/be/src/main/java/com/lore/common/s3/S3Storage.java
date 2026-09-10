@@ -7,6 +7,9 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -34,7 +37,22 @@ public class S3Storage {
         this.bucket = bucket;
     }
 
+    /**
+     * S3 에서 받아 이 경로에 쓴다.
+     *
+     * ★ {@code to} 가 이미 있어도(예: {@code Files.createTempFile} 로 미리
+     *   만들어 둔 자리) 그대로 덮어쓴다. SDK 의 {@code getObject(request, path)}
+     *   는 파일이 이미 있으면 쓰기를 거부하는데, 그때 예외가 "Unable to
+     *   unmarshall response" 로만 나와서 원인(파일이 이미 있어서)을
+     *   알아채기 어렵다 — 실제로 한 편 내려받기가 이 때문에 장마다 전부
+     *   실패했다. 먼저 지워 두면 SDK 가 새로 만들어 쓴다.
+     */
     public void download(String key, Path to) {
+        try {
+            Files.deleteIfExists(to);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
         client.getObject(GetObjectRequest.builder().bucket(bucket).key(key).build(), to);
     }
 
