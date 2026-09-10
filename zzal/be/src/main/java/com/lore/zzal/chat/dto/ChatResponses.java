@@ -13,6 +13,7 @@ public final class ChatResponses {
     private ChatResponses() {
     }
 
+    @Schema(name = "ChatCall", description = "오늘 온 대화 한 건")
     public record Call(String slot, String line, Instant calledAt, Instant expiresAt, boolean answered,
                        String answer, String replyLine, String reactionKey) {
 

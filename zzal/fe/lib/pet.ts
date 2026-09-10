@@ -86,8 +86,13 @@ export type ShareKind = 'DOWNLOAD' | 'SHARE';
  *   `*At` 값은 카운트다운·경계 폴링(usePet)에만 쓴다.
  */
 export interface Clock {
-  /** 아기 60분이 끝나는 시각. 지났으면 과거 시각이 그대로 온다. */
-  babyUntil: string;
+  /**
+   * 시계가 켜진 시각. **튜토리얼 중에는 null** 이다.
+   *
+   * ★ 튜토리얼은 시각이 아니라 순서로 간다 — 9칸을 다 끝낸 그 순간 시계가 켜지고,
+   *   그때부터 게이지·케어 미스·하루가 흐른다. 그 전에는 아무것도 줄지 않는다.
+   */
+  clockStartedAt: string | null;
   sleeping: boolean;
   /** 자고 있을 때만. */
   sleepKind: SleepKind | null;
@@ -271,6 +276,8 @@ export interface Features {
 export interface Leaving {
   noticedAt: string;
   departsAt: string;
+  /** 이번 응답으로 떠남이 취소됐는가. 행동 응답에만 true 가 실린다. */
+  justCancelled: boolean;
 }
 
 export interface Trip {
@@ -278,29 +285,26 @@ export interface Trip {
   postcards: number;
 }
 
-export interface Settings {
-  leaveEnabled: boolean;
-}
-
 export interface TutorialStep {
   key: TutorialStepKey;
-  /** 부름이 도래하는 시각(부화 + N분). */
-  dueAt: string;
   /** 서버 카운터로 판정한 완료 여부. 브라우저에 저장하지 않는다. */
   done: boolean;
-  /** 지금 강조할 칸인가(도래했고 아직 안 한 첫 칸). */
+  /** 지금 강조할 칸인가(앞 칸을 다 끝낸 첫 칸). */
   current: boolean;
 }
 
 /**
- * 아기 시간표(튜토리얼). 전부 서버 카운터에서 파생된다.
- * 60분이 지나도 남은 부름은 큐에 남아 순서대로 나온다(정본 16장) — 그때 active 는 false 다.
- * 9단계가 모두 done 이면 블록 자체가 null.
+ * 튜토리얼. 전부 서버 카운터에서 파생된다.
+ *
+ * ★ **시각이 아니라 순서다.** 기다려서 열리는 칸은 없다 — 앞 칸을 끝내야 다음 칸이 온다.
+ *   나갔다 며칠 뒤에 들어와도 멈춰 있던 그 칸부터 이어진다.
+ * 9칸이 모두 done 이면 블록 자체가 null 이고, 그 순간 시계가 켜진다.
  */
 export interface Tutorial {
-  /** babyUntil 전인가. */
+  /** 아직 튜토리얼 중인가. 끝났으면 서버가 이 블록을 null 로 준다. */
   active: boolean;
-  minutesSince: number;
+  /** 지금 몇 번째 칸인가(0부터). steps[step] 이 강조할 칸이다. */
+  step: number;
   steps: TutorialStep[];
 }
 
@@ -369,6 +373,8 @@ export interface PetDetail {
   justUnlocked: number[] | null;
   /** 밤에 합격해 아침에 도착한 심화 행동(아직 seen 이 아닌 것). */
   learnedToday: LearnedMotion[] | null;
+  /** 아직 안 본 장면 기록이 있는가(앨범에 빨간 점). */
+  sceneNew: boolean | null;
   /** 채팅 답 응답에만. 그 밖엔 null. */
   chatReply: ChatReply | null;
   /**
@@ -390,7 +396,6 @@ export interface PetDetail {
   features: Features | null;
   leaving: Leaving | null;
   trip: Trip | null;
-  settings: Settings | null;
   tutorial: Tutorial | null;
 }
 
@@ -469,9 +474,10 @@ export interface ChatState {
 
 export interface Postcard {
   seq: number;
-  imageKey: string | null;
+  /** 어디서 보냈는가(배경 key). */
+  place: string;
+  at: string;
   line: string;
-  createdAt: string;
 }
 
 /** 앨범. 첫 심화 행동이 열리기 전엔 ZZAL_FEATURE_LOCKED. */
@@ -544,6 +550,17 @@ export function sleep(petId: number): Promise<PetDetail> {
 /** 깨우기(07~10시, 낮잠은 5분 뒤). 창 밖이면 ZZAL_NOT_WAKE_TIME. */
 export function wake(petId: number): Promise<PetDetail> {
   return request<PetDetail>(`${PET_BASE}/${petId}/wake`, { method: 'POST' });
+}
+
+/**
+ * 튜토리얼 9칸을 다 마쳤음을 알린다 — **마지막 칸(DONE)을 누르는 자리다.**
+ *
+ * ★ 이 호출이 시계를 켠다. 여기까지는 게이지가 줄지도, 케어 미스가 쌓이지도 않는다.
+ *   그래서 튜토리얼 도중에 나가 며칠 뒤에 들어와도 아이는 그대로다.
+ * ★ 앞 8칸을 다 안 했으면 서버가 거절한다 — 화면이 순서를 다시 판정하지 않는다.
+ */
+export function tutorialDone(petId: number): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/done`, { method: 'POST' });
 }
 
 /** 성격·세계관. 언제든 바꿀 수 있다(정본 0장 6). */

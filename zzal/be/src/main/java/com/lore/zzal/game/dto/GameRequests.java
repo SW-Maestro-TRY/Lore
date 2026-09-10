@@ -39,7 +39,8 @@ public final class GameRequests {
         }
     }
 
-    @Schema(description = "좌우 맞히기 요청. 선택한 방향만 전달하고 정답 여부는 서버가 판정한다")
+    @Schema(name = "GuessRequest",
+            description = "좌우 맞히기 요청. 선택한 방향만 전달하고 정답 여부는 서버가 판정한다")
     public record Guess(
 
             @Schema(description = "LEFT(왼쪽) · RIGHT(오른쪽)", example = "LEFT")

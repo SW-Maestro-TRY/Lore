@@ -67,7 +67,8 @@ public final class GameResponses {
         }
     }
 
-    @Schema(description = "좌우 맞히기 1회 진행 결과. 방금 진행한 회차의 정답만 포함한다")
+    @Schema(name = "GuessResult",
+            description = "좌우 맞히기 1회 진행 결과. 방금 진행한 회차의 정답만 포함한다")
     public record Guess(
 
             @Schema(example = "12") Long gameId,

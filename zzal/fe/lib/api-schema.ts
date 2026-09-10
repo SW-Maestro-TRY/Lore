@@ -25,7 +25,10 @@ export interface paths {
         put?: never;
         /**
          * 깨우기
-         * @description KST 07:00~10:00 에 깨운다(10:00 엔 저절로 깬다 = 늦잠). 낮잠은 5분 뒤. 깨우면 친밀도 +10.
+         * @description KST 07:00~10:00 구간에 수행한다. 10:00 까지 수행하지 않으면 자동으로 기상 처리되며,
+         *     이 경우 overslept 가 true 로 표시되고 보상이 없다. 수동 기상은 친밀도 +10 을 부여한다.
+         *
+         *     튜토리얼 낮잠은 시간 제약 없이 즉시 기상할 수 있으며 보상은 없다.
          */
         post: operations["wake"];
         delete?: never;
@@ -44,15 +47,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 튜토리얼 끝내기
-         * @description 튜토리얼 마지막 칸("이제 혼자서도 괜찮아요")에서 부른다. **이 순간 시계가 켜진다.**
+         * 튜토리얼 완료
+         * @description 튜토리얼 마지막 단계에서 호출한다. 이 호출로 게임 시계가 시작된다.
          *
-         *     ★ 1~8칸은 따로 부를 필요가 없다 — 밥·쓰다듬·채팅·성격·청소·게임·공유·낮잠은
-         *     각자 제 API 가 있고, 그 API 가 들어오면 서버가 알아서 다음 칸으로 넘긴다.
-         *     누를 것이 없는 9칸만 여기로 받는다.
+         *     튜토리얼은 시간이 아니라 순서로 진행한다. 1~8단계는 각 행동 API(돌보기·채팅 응답·
+         *     성격 등록·미니게임·공유·취침)가 호출될 때 서버가 순서를 확인하고 다음 단계로 넘긴다.
+         *     별도 호출이 필요한 단계는 사용자 입력이 없는 9단계뿐이다.
          *
-         *     ★ 시계가 켜지기 전까지는 게이지가 줄지 않고, 병도 없고, 밤이 돼도 자동으로 자지 않는다.
-         *     며칠 뒤에 돌아와도 튜토리얼은 그 자리에 그대로 있다.
+         *     시계가 시작되기 전에는 게이지 감소·질병·자동 취침이 발생하지 않는다.
+         *     따라서 이탈 후 며칠이 지나도 튜토리얼 진행 상태는 그대로 유지된다.
          */
         post: operations["tutorialDone"];
         delete?: never;
@@ -72,8 +75,14 @@ export interface paths {
         put?: never;
         /**
          * 재우기
-         * @description KST 19:00~23:00 에 재운다(23:00 엔 저절로 잠든다). 아기 60분 안에는 낮잠 한 번.
-         *     재우면 행복 +1·친밀도 +10. 자는 동안 수치는 멈추고 밥만 찬다. 밤잠은 하루의 경계다.
+         * @description KST 19:00~23:00 구간에 수행한다. 23:00 까지 수행하지 않으면 자동으로 수면 상태가 되며,
+         *     자동 취침에는 보상이 없다. 수동 취침은 행복 +1, 친밀도 +10 을 부여한다.
+         *
+         *     수면 중에는 게이지 감소가 멈추고 재고만 충전된다. 야간 취침은 하루의 경계이며
+         *     이 시점에 일일 카운터 초기화와 케어 미스 판정이 함께 수행된다.
+         *
+         *     튜토리얼 진행 중에는 8단계 차례에만 수행할 수 있고 낮잠으로 처리한다.
+         *     낮잠은 대기 없이 즉시 기상할 수 있으며 보상은 없다.
          */
         post: operations["sleep"];
         delete?: never;
@@ -93,12 +102,14 @@ export interface paths {
         put?: never;
         /**
          * 공유 링크 발급
-         * @description 열린 동작 어느 것이든. **주소를 하나 내주고 공유 횟수를 올린다.**
+         * @description 해금된 동작에 대해 공유 주소를 발급하고 공유 횟수를 증가시킨다.
+         *     응답에는 링크와 변경된 상태가 함께 담긴다.
          *
-         *     ★ 같은 동작을 다시 공유하면 **있던 링크를 그대로** 준다 — 누를 때마다 주소가 바뀌면
-         *     어제 올린 글의 링크가 오늘 것과 달라져 무엇이 얼마나 퍼졌는지 셀 수 없다.
+         *     같은 동작을 다시 공유하면 기존 링크를 그대로 반환한다. 호출마다 주소가 바뀌면
+         *     이전에 배포한 링크와 달라져 확산 경로를 집계할 수 없기 때문이다.
          *
-         *     ★ 파일이 아니라 링크인 이유 — X·인스타 인앱 브라우저는 **다운로드를 막는다.**
+         *     파일이 아니라 링크로 제공하는 이유는 주요 SNS 인앱 브라우저가 파일 다운로드를
+         *     차단하기 때문이다. 링크는 해당 환경에서도 열린다.
          */
         post: operations["share"];
         delete?: never;
@@ -117,8 +128,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 성격 고르기
-         * @description 온순·활발·수줍음·응석·시크 + 세계관 한 줄(40자). 언제든, 자는 중에도.
+         * 성격 등록·수정
+         * @description 성격 5종(온순·활발·수줍음·응석·시크)과 세계관 한 줄을 저장한다.
+         *     수면 중을 포함해 언제든 변경할 수 있다.
+         *
+         *     성격은 대사 톤에만 반영되며 그림 생성에는 사용하지 않는다.
+         *     튜토리얼 4단계는 이 API 호출로 완료 처리된다.
          */
         post: operations["personality"];
         delete?: never;
@@ -137,11 +152,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * "배워왔어요" 확인
-         * @description 아침에 도착한 심화 행동을 봤다고 표시한다. `learnedToday` 에서 빠진다.
+         * 신규 동작 확인 처리
+         * @description 새로 도착한 동작을 확인했음을 기록한다. 처리 후 learnedToday 목록에서 제외된다.
          *
-         *     - 아직 **도착하지 않은** 동작이면 409(ZZAL_MOTION_NOT_OPEN) — 검수 중인 것을 미리 지울 수 없다
-         *     - 자는 중에도 된다(확인은 돌보기가 아니다)
+         *     서버가 확인 여부를 기록하지 않으면 화면에 진입할 때마다 해금 연출이 반복된다.
+         *     수면 중에도 호출할 수 있다.
+         *
+         *     아직 도착하지 않은 동작은 409(ZZAL_MOTION_NOT_OPEN)를 반환한다.
          */
         post: operations["seen"];
         delete?: never;
@@ -160,9 +177,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 판 시작
-         * @description `kind` = LEFT_RIGHT · RUN. 진행 중인 판이 있으면 새로 만들지 않고 그것을 돌려준다.
-         *     하루 3판은 두 게임 합산·시작한 판 기준·잠들 때 리셋. RUN 은 좌우 5승 뒤.
+         * 매치 시작
+         * @description kind 로 게임 종류를 지정한다. LEFT_RIGHT(좌우 맞히기)는 처음부터 사용할 수 있고,
+         *     RUN(달리기)은 좌우 맞히기 5승 이후 해금된다.
+         *
+         *     좌우 맞히기는 5회 중 3회를 맞히면 승리한다. 정답은 매치 시작 시 서버가 결정해
+         *     보관하며 응답에 포함하지 않는다. 승리 시 행복 +1 을 부여한다.
+         *
+         *     진행 중인 매치가 있으면 새로 생성하지 않고 해당 매치를 반환한다.
+         *     일일 3매치는 두 게임 합산이며 시작 시점에 차감하고 취침 시 초기화한다.
          */
         post: operations["start"];
         delete?: never;
@@ -181,8 +204,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 좌우 한 판 치기
-         * @description 응답에 방금 친 판의 답만 담긴다. 다섯 판을 다 치면 finished·win.
+         * 좌우 맞히기 1회 진행
+         * @description 선택한 방향을 전달하면 정답 여부를 서버가 판정한다. 응답에는 방금 진행한 회차의
+         *     정답만 포함하며 남은 회차의 정답은 노출하지 않는다.
+         *
+         *     5회를 모두 진행하면 finished 가 true 가 되고 그때 win 이 채워진다.
          */
         post: operations["guess"];
         delete?: never;
@@ -201,9 +227,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 부름에 답하기
-         * @description 자유 입력 40자 1회. 대사 1줄 + 반응 동작 1개 + 친밀도 +40.
-         *     응답 = `{pet: PetDetail, chatReply{line, reactionKey}}`(해석 22).
+         * 대화 응답
+         * @description 슬롯당 1회, 자유 입력 40자로 응답한다. 응답 시 친밀도 +40 을 부여하며,
+         *     이는 단일 행동으로 얻는 가장 큰 값이다.
+         *
+         *     응답은 변경된 캐릭터 상태(pet)와 대사·반응 동작(chatReply)으로 구성한다.
+         *     입력한 내용은 기억으로 저장되어 이후 대화에서 다시 언급된다.
+         *
+         *     누적 응답 횟수는 동작 해금 조건(1회·4회·12회)에 사용한다.
          */
         post: operations["answer"];
         delete?: never;
@@ -223,8 +254,21 @@ export interface paths {
         put?: never;
         /**
          * 돌보기
-         * @description 밥·간식·쓰다듬기·청소·목욕·약. **무엇을 눌렀는지만** 보내면 결과는 서버가 정한다.
-         *     응답의 `justUnlocked` 에 이번 행동으로 열린 2층 동작 seq 가 실린다(폭죽).
+         * @description 수행할 행동만 전달하면 수치 변화와 수행 가능 여부를 서버가 판정한다.
+         *     응답은 변경된 전체 상태이므로 화면은 별도 재조회 없이 그대로 반영한다.
+         *
+         *     | action | 효과 | 거부 조건 |
+         *     |---|---|---|
+         *     | FEED | 배부름 +1, 재고 -1 | 배부름이 최대치일 때 |
+         *     | SNACK | 행복 +1 | 질병 상태 · 연속 5회 시 배탈 발생 |
+         *     | PET | 친밀도 +5 (하루 3회까지) | 없음 |
+         *     | CLEAN | 흔적 제거 | 이미 청결한 상태일 때 |
+         *     | BATH | 흔적 제거, 행복 +1 | 하루 1회 초과 |
+         *     | MEDICINE | 질병 즉시 치료 | 질병 상태가 아닐 때 |
+         *
+         *     FEED·CLEAN·BATH·MEDICINE 은 친밀도 +5 를 부여하며 하루 합산 30 이 상한이다.
+         *
+         *     응답의 justUnlocked 에 이번 행동으로 해금된 동작 seq 가 담긴다.
          */
         post: operations["care"];
         delete?: never;
@@ -243,8 +287,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 배경 바꾸기
-         * @description 2층 4종이 열린 뒤. 그 전엔 ZZAL_FEATURE_LOCKED.
+         * 배경 변경
+         * @description 해금 동작 4종이 열린 뒤부터 사용할 수 있다. 그 전에는 ZZAL_FEATURE_LOCKED 를 반환한다.
+         *
+         *     배경 key 값은 화면이 정의하며 서버는 값을 검증하지 않는다.
          */
         post: operations["background"];
         delete?: never;
@@ -264,15 +310,17 @@ export interface paths {
         put?: never;
         /**
          * 이미지 등록
-         * @description 그림을 등록하고 **캐릭터 시트 굽기를 시작**한다. 기다리지 않고 즉시 응답한다.
+         * @description 그림을 등록하고 캐릭터 시트 생성을 시작한다. 생성은 백그라운드에서
+         *     수행되며 요청은 즉시 응답한다.
          *
-         *     ★ 이름은 아직 받지 않는다 — 사용자가 이름을 짓는 동안(약 74초) 시트를 미리 굽기 위해서다.
-         *     부화 전체가 2~7분이라 이 74초가 그대로 줄어든다.
+         *     캐릭터 정보(이름·성격)는 별도 API로 등록한다. 부화 전체가 2~7분
+         *     소요되므로, 사용자가 이름을 입력하는 동안 시트를 선행 생성하여
+         *     체감 시간을 단축한다.
          *
-         *     ★ 이름을 안 짓고 나갔다가 다시 오면 **그 초안을 그대로 돌려준다.**
-         *     이미 구운 시트를 재사용하므로 돈이 두 번 나가지 않는다.
+         *     이름을 입력하지 않고 이탈한 뒤 재진입하면 기존 초안을 반환한다.
+         *     생성이 완료된 시트를 재사용하여 중복 비용을 방지한다.
          *
-         *     imageKey 는 presign 으로 발급받은 **내 것이고 아직 안 쓴 키**여야 한다.
+         *     imageKey 는 presign API 로 발급받은 미사용 키여야 한다.
          */
         post: operations["draft"];
         delete?: never;
@@ -292,12 +340,13 @@ export interface paths {
         put?: never;
         /**
          * 캐릭터 정보 등록
-         * @description 이름과 성격·세계관을 저장하고 **격자 생성을 시작**한다. 여기서부터 알이 흔들린다.
+         * @description 이름과 성격·세계관을 저장하고 격자 생성을 시작한다. 이미지 등록에 이어지는
+         *     두 번째 단계이며, 이 시점부터 부화 진행 상태가 갱신된다.
          *
-         *     ★ 그림 생성에 들어가는 것은 **`note`(자유 메모) 뿐**이다. 성격·세계관은 **대사 톤에만** 쓰인다 —
-         *     격자 프롬프트의 정체성 문단은 올린 그림에서 뽑는다.
+         *     그림 생성에 반영되는 입력은 note(자유 메모) 하나뿐이다. 격자 프롬프트가 사용하는
+         *     외형 정보는 등록한 그림에서 추출하며, 성격·세계관은 대사 생성에만 사용한다.
          *
-         *     ★ 이름 말고는 전부 선택이다.
+         *     이름을 제외한 항목은 모두 선택이다.
          */
         post: operations["character"];
         delete?: never;
@@ -390,6 +439,219 @@ export interface paths {
          *     - 내 펫만(남의 펫은 404) · 운영에서는 이 API 가 존재하지 않는다
          */
         post: operations["advanceClock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/title": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 제목 고치기
+         * @description title 이 비어 있으면 원래 이름으로 되돌린다.
+         */
+        post: operations["title"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/scenes/{no}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 지난 판으로 되돌리기 */
+        post: operations["revert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/scenes/{no}/regen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 장 다시 그리기
+         * @description 곧바로 안 그린다 — id 로 진행을 물어야 한다.
+         */
+        post: operations["regen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/overlay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 얹은 것 읽기 */
+        get: operations["overlay"];
+        put?: never;
+        /** 얹은 것 저장 */
+        post: operations["saveOverlay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/bake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 구워서 파일로
+         * @description 본문에 얹은 것이 실려 오면 먼저 저장하고 굽는다.
+         */
+        post: operations["bake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/sheet-decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 캐릭터 시트 확인
+         * @description decision=approve 면 그대로 진행, retry 면 시트를 다시 그린다.
+         */
+        post: operations["sheet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 캐릭터 시트 확인
+         * @description decision=approve 면 그대로 진행, retry 면 시트를 다시 그린다.
+         */
+        post: operations["sheet_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/pick": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 이야기 고르기 */
+        post: operations["pick"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/pick-retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 이야기 후보 다시 짓기
+         * @description 고르는 차례일 때만 된다. note 를 적어 보내면 이번에만 반영한다.
+         */
+        post: operations["retryPick"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 만들기 그만두기
+         * @description 도는 것을 멈추고, 낸 것(크레딧·무료 횟수)을 돌려준다.
+         */
+        post: operations["cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 웹툰 만들기 시작
+         * @description **돈이 나가는 유일한 자리다.** 넘기기 전에 세 번 멈춰 세운다 —
+         *     오늘 전체 몫 · 로그인 안 한 사람의 하루 몫 · 계정 크레딧.
+         */
+        post: operations["create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -509,7 +771,7 @@ export interface paths {
          *
          *     하루 몫이 남아 있으면 공짜, 아니면 크레딧을 받는다.
          */
-        post: operations["create"];
+        post: operations["create_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -655,11 +917,15 @@ export interface paths {
         put?: never;
         /**
          * 회원가입
-         * @description 이메일·비밀번호로 가입하고 **바로 로그인 상태**가 된다(토큰 2종이 쿠키로 발급됨).
+         * @description 이메일·비밀번호로 가입한다. **토큰을 발급하지 않으므로 로그인 상태가 되지 않는다.**
+         *     화면은 가입 뒤 로그인 화면으로 보낸다.
          *
-         *     - access_token 쿠키 = 모든 요청에 붙어 신분을 증명. 30분
-         *     - refresh_token 쿠키 = access 를 새로 받을 때만 사용. 14일. Path 가 /api/v1/auth 로 좁혀져 있다
-         *     - 두 쿠키 모두 HttpOnly 라 자바스크립트로 읽을 수 없다
+         *     방금 정한 비밀번호를 한 번 더 입력하게 하는 셈이지만, 그 자리에서 비밀번호가
+         *     맞는지 확인된다. 오타를 낸 채 가입한 사용자가 다음 접속에서야 들어오지 못하는
+         *     상황을 막는다.
+         *
+         *     필수 동의는 AGE_14 · TERMS · PRIVACY 세 가지다. MARKETING 은 선택이며
+         *     false 도 기록으로 남긴다 — 묻지 않은 것과 거부한 것은 다른 사실이다.
          */
         post: operations["signUp"];
         delete?: never;
@@ -747,7 +1013,9 @@ export interface paths {
         };
         /**
          * 사용자 정보 조회
-         * @description 지금까지 답한 것. 아직 안 답한 칸은 null 이다.
+         * @description 현재까지 저장된 응답을 반환한다. 아직 응답하지 않은 항목은 null 이다.
+         *
+         *     응답 이력이 없으면 빈 값으로 구성한 결과를 반환한다.
          */
         get: operations["get"];
         put?: never;
@@ -757,9 +1025,12 @@ export interface paths {
         head?: never;
         /**
          * 사용자 정보 등록
-         * @description 6문항 중 **보낸 것만** 저장한다. 한 문항씩 보내도 되고 한꺼번에 보내도 된다.
+         * @description 6문항 중 전달한 항목만 저장한다. 한 항목씩 보내도 되고 한 번에 보내도 된다.
          *
-         *     ★ 안 보낸 칸은 지워지지 않는다 — null 은 "지워 달라"가 아니라 "이번엔 안 보냈다"로 읽는다.
+         *     PATCH 를 사용하는 이유는 부분 저장을 보장하기 위해서다. 문항을 순차로 제시하는
+         *     구조이므로 중도 이탈이 발생하며, 전체 저장 방식이면 그때까지의 응답이 모두 사라진다.
+         *
+         *     전달하지 않은 항목은 기존 값을 유지한다. null 은 삭제 요청이 아니라 미전달로 처리한다.
          */
         patch: operations["patch"];
         trace?: never;
@@ -793,10 +1064,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 공유 링크 열기
-         * @description 움짤 하나와 아이 이름을 준다. **로그인이 필요 없다.**
+         * 공유 링크 조회
+         * @description 공유된 동작 1건과 캐릭터 이름, 공유 시각을 반환한다. 인증이 필요 없다.
          *
-         *     없는 토큰이면 404(ZZAL_SHARE_NOT_FOUND) — 있는데 못 보는 것과 구분하지 않는다.
+         *     응답에 포함되는 항목이 외부에 노출되는 전부이며 계정 정보·다른 동작·진행 상황은
+         *     포함하지 않는다.
+         *
+         *     존재하지 않는 토큰은 404(ZZAL_SHARE_NOT_FOUND)를 반환한다. 조회 권한이 없는 경우와
+         *     구분하지 않는데, 구분하면 토큰 추측에 단서를 제공하기 때문이다.
          */
         get: operations["open"];
         put?: never;
@@ -814,7 +1089,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 내 펫 목록 조회 */
+        /**
+         * 내 캐릭터 목록 조회
+         * @description 로그인한 사용자의 캐릭터 목록을 반환한다. 슬롯이 1개이므로 통상 0건 또는 1건이다.
+         *
+         *     목록이 비어 있으면 온보딩으로, 비어 있지 않으면 캐릭터 화면으로 분기한다.
+         */
         get: operations["list_1"];
         put?: never;
         post?: never;
@@ -832,9 +1112,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 펫 상태 조회
-         * @description 부화 중이든 함께 지내는 중이든 **이 API 하나로** 답한다. 조회 = 정산 + 그날 첫 조회면 함께한 날 +1.
-         *     23:00 이 지났으면 잠들어 있고 10:00 이 지났으면 깨어 있다.
+         * 캐릭터 상태 조회
+         * @description 부화 중과 진행 중을 구분하지 않고 이 API 하나로 응답한다. 화면 구성에 필요한
+         *     시계·게이지·동작 목록·튜토리얼 진행이 모두 포함된다.
+         *
+         *     조회 시점에 경과 시간을 정산한다. 취침 시각이 지났으면 수면 상태로,
+         *     기상 시각이 지났으면 기상 상태로 갱신된 결과가 반환된다.
+         *     그날 첫 조회이면 함께한 날이 1 증가한다.
          */
         get: operations["detail"];
         put?: never;
@@ -854,10 +1138,10 @@ export interface paths {
         };
         /**
          * 부화 진행 조회
-         * @description 알 화면이 몇 초마다 되풀이해 묻는 자리다. **가볍게 유지한다** — 상태 전체 조회는 무겁다.
+         * @description 부화 대기 화면이 주기적으로 폴링하는 API 다. 응답을 가볍게 유지하기 위해
+         *     게이지·동작 목록은 포함하지 않는다. 전체 상태가 필요하면 상태 조회 API 를 사용한다.
          *
-         *     ★ 실패 문구는 두 가지뿐이다 — "조금 더 걸려요" / "이 그림은 어려워요, 다른 그림을 올려 주세요".
-         *     원인은 노출하지 않는다.
+         *     실패 시 message 에는 재시도 가능 여부만 담고 실패 원인은 노출하지 않는다.
          */
         get: operations["hatch"];
         put?: never;
@@ -876,8 +1160,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 치던 판 잇기
-         * @description 새로고침 복구용. 치던 판이 없으면 playing=false.
+         * 진행 중인 매치 조회
+         * @description 새로고침 등으로 화면이 초기화된 경우 진행 중인 매치를 이어받는다.
+         *     진행 중인 매치가 없으면 playing 이 false 다.
+         *
+         *     일일 매치 수는 시작 시점에 차감하므로, 이 API 가 없으면 새로고침 시
+         *     차감된 매치를 이어서 진행할 수 없다.
          */
         get: operations["current"];
         put?: never;
@@ -896,9 +1184,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 오늘의 부름
-         * @description 지금까지 도래한 부름들과 지금 답할 수 있는 슬롯(`openSlot`), 기억(최근 답 5개).
-         *     자는 중에도 조회는 되지만 `openSlot` 은 null 이다.
+         * 오늘의 대화 조회
+         * @description 현재 시점까지 발생한 대화 목록과 응답 가능한 슬롯(openSlot), 최근 응답 5건을 반환한다.
+         *
+         *     대화는 기상 후 1시간, 기상 후 7시간, 19:00 에 발생한다. 응답하지 않은 채 다음 시각이
+         *     지나면 해당 대화는 만료되며 별도 감점은 없다.
+         *
+         *     수면 중에도 조회는 가능하지만 openSlot 은 null 이다.
          */
         get: operations["calls"];
         put?: never;
@@ -917,11 +1209,219 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 앨범
-         * @description 도감 18칸(기본/심화 표시, 잠긴 칸도 이름+조건) + 여행 엽서 + 혼자 논 장면 + 첫 심화 기념.
-         *     엽서·장면·첫 심화는 뒤 PR 에서 채워진다(지금은 빈 목록·LOCKED). v0 에서는 앨범 조회가 항상 된다(해석 25).
+         * 앨범 조회
+         * @description 동작 도감 18칸과 엽서·장면·첫 심화 동작 정보를 반환한다.
+         *     잠긴 칸도 이름과 해금 조건을 포함해 내려간다.
+         *
+         *     앨범은 처음부터 열려 있으며 해금 여부와 무관하게 조회할 수 있다.
+         *     엽서·장면은 해당 기능이 구현되기 전까지 빈 목록으로 반환한다.
          */
         get: operations["album"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 작품 목록
+         * @description mine=1 이면 uid 가 만든 것만 (비공개 포함).
+         */
+        get: operations["list_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/scenes/{no}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 지난 판 목록 */
+        get: operations["versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/scenes/{no}/versions/{v}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 지난 판 그림 */
+        get: operations["versionImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 완성본 한 편 */
+        get: operations["result"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/page/{no}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 완성본의 한 장
+         * @description 구운 것이 있으면 그것. raw=1 이면 밑그림. 없으면 404.
+         */
+        get: operations["page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/episode.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 한 편 내려받기
+         * @description 낱장을 이어 붙이고 LORE 표시를 찍어서 준다.
+         */
+        get: operations["episode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/regens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 다시 그리기 진행
+         * @description 2초 간격으로 물으면 된다.
+         */
+        get: operations["status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 진행 상황
+         * @description 진행 화면이 0.8 초마다 부른다. 파이썬 서버가 내보내던 것과 **같은 모양**이다.
+         */
+        get: operations["job"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/sheet.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 만드는 중인 캐릭터 시트 */
+        get: operations["sheetImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/page/{no}.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 만드는 중인 한 장 */
+        get: operations["pageImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/allowance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 지금 만들면 무엇이 드나
+         * @description 게스트면 남은 무료 편수, 로그인했으면 크레딧 값과 잔액.
+         */
+        get: operations["allowance"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1001,6 +1501,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 편집실 설정
+         * @description 지금은 다시 그리기 창의 feedback_tags 뿐이다.
+         */
+        get: operations["config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me": {
         parameters: {
             query?: never;
@@ -1058,6 +1578,22 @@ export interface paths {
          * @description 최근 것부터. 잔액과 같은 자료에서 나오므로 둘이 어긋날 수 없다.
          */
         get: operations["events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/test/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["sendTestEmail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1125,24 +1661,27 @@ export interface components {
             autoWakeAt?: string;
             overslept?: boolean;
         };
-        /** @description 펫 상태 — PetDetail v2. api-v2.md 2절이 정본 */
+        /**
+         * @description 캐릭터 상태 전체. 부화 중과 진행 중을 구분하지 않고 이 응답 하나로 화면을 구성한다.
+         *     phase 가 ALIVE 가 아니면 진행 중 전용 블록은 모두 null 이다
+         */
         Detail: {
             /** Format: int64 */
             petId?: number;
             name?: string;
             note?: string;
-            /** @description HATCHING · ALIVE · FAILED · DEAD */
+            /** @description DRAFT · HATCHING · ALIVE · FAILED · DEAD */
             phase?: string;
-            /** @description 부화가 끝났는가 */
+            /** @description 부화 완료 여부 */
             ready?: boolean;
-            /** @description 지금 하는 일. 부화 중일 때만 */
+            /** @description 현재 수행 중인 생성 단계. 부화 중에만 채워진다 */
             step?: string;
             /**
              * Format: int64
-             * @description 부화 시작 후 지난 시간(초)
+             * @description 부화 시작 후 경과 시간(초)
              */
             elapsedSeconds?: number;
-            /** @description FAILED·DEAD 일 때만 */
+            /** @description 종료 사유. FAILED·DEAD 일 때만 채워진다 */
             deathReason?: string;
             /** Format: date-time */
             hatchStartedAt?: string;
@@ -1150,7 +1689,7 @@ export interface components {
             hatchedAt?: string;
             /**
              * Format: date-time
-             * @description ★ 필수. 이 펫의 시계(dev 오프셋 포함). 화면은 기기 시계를 쓰지 않는다
+             * @description 서버 기준 현재 시각. 화면은 기기 시계 대신 이 값을 사용한다
              */
             serverNow?: string;
             clock?: components["schemas"]["Clock"];
@@ -1158,35 +1697,35 @@ export interface components {
             daysTogether?: number;
             gauges?: components["schemas"]["Gauges"];
             food?: components["schemas"]["Food"];
-            /** @description SICK > HUNGRY > SAD > DIRTY > NORMAL */
+            /** @description 표시 우선순위: SICK > HUNGRY > SAD > DIRTY > NORMAL */
             mood?: string;
             sick?: components["schemas"]["Sick"];
             /**
-             * @description ★ 행동 응답에만. 방금 약을 먹고 나았는가 — 화면이 "나은 동작(기쁜 자세 + 반짝)" 을 한 번 보여준다.
-             *     상태만으로는 "방금 나음" 과 "원래 안 아픔" 을 못 가른다
+             * @description 투약으로 방금 회복했는지 여부. 행동 응답에만 채워진다.
+             *     상태값만으로는 방금 회복한 경우와 원래 정상인 경우를 구분할 수 없으므로 별도로 내려준다
              */
             justHealed?: boolean;
             intimacy?: components["schemas"]["Intimacy"];
-            today?: components["schemas"]["Today"];
-            /** @description 3층 전엔 null */
+            today?: components["schemas"]["ZzalToday"];
+            /** @description 오늘 모은 조각. 심화 단계 진입 전에는 null */
             pieces?: components["schemas"]["Pieces"];
             /**
-             * @description 오늘이 "기분 좋은 날" 인가(정본 6장) — 어젯밤 벌점 0 + 세 게이지 2칸 이상.
-             *     조각 하나를 미리 받고 첫 부름이 살가워진다. 3층 전에는 항상 false
+             * @description 직전 취침 시점에 케어 미스가 없고 게이지 3종이 모두 2 이상이었는지 여부.
+             *     조건을 만족하면 조각 1개를 선지급한다. 심화 단계 진입 전에는 항상 false
              */
             goodDay?: boolean;
             /**
-             * @description 지금 뭔가 굽고 있나 — NONE(없음) · QUEUED(오늘 밤에 굽는다) · PRACTICING(연습 중).
-             *     화면은 PRACTICING 일 때 "아직 연습 중이에요" 한 줄을 띄운다(정본 16장)
+             * @description 심화 동작 생성 상태. NONE(대기 없음) · QUEUED(당일 야간 생성 예정) · PRACTICING(생성·검수 중).
+             *     검수 대기와 재생성은 모두 PRACTICING 으로 표시하며 내부 상태를 노출하지 않는다
              * @example NONE
              */
             baking?: string;
             motions?: components["schemas"]["Motion"][];
-            /** @description 행동 응답에만. 이번 행동으로 열린 2층 seq */
+            /** @description 이번 행동으로 해금된 동작 seq. 행동 응답에만 채워진다 */
             justUnlocked?: number[];
             /**
-             * @description 이번 조회에서 혼자 논 장면이 새로 남았는가 — 귀환 첫 화면이 이걸 보고 한 번 띄운다.
-             *     다음 조회에는 false
+             * @description 이번 조회에서 새 장면이 기록되었는지 여부. 재방문 첫 화면이 1회 표시하는 데 사용한다.
+             *     다음 조회부터는 false 다
              */
             sceneNew?: boolean;
             learnedToday?: components["schemas"]["Learned"][];
@@ -1199,7 +1738,10 @@ export interface components {
             features?: components["schemas"]["Features"];
             leaving?: components["schemas"]["Leaving"];
             trip?: components["schemas"]["Trip"];
-            /** @description 아기 시간표. 9단계가 다 끝나면 null */
+            /**
+             * @description 튜토리얼 진행 상태. 9단계를 모두 완료하면 null 이 되고 clock.clockStartedAt 이 채워진다.
+             *     진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다
+             */
             tutorial?: components["schemas"]["Tutorial"];
         };
         ErrorBody: {
@@ -1259,7 +1801,7 @@ export interface components {
             departsAt?: string;
             justCancelled?: boolean;
         };
-        /** @description 동작 한 칸 — 18개 고정, seq 오름차순 */
+        /** @description 동작 1건. 18건 고정이며 seq 오름차순으로 반환한다 */
         Motion: {
             /** Format: int32 */
             seq?: number;
@@ -1306,17 +1848,6 @@ export interface components {
             since?: string;
             kind?: string;
         };
-        Today: {
-            /** Format: int32 */
-            games?: number;
-            /** Format: int32 */
-            pets?: number;
-            /** Format: int32 */
-            careIntimacy?: number;
-            /** Format: int32 */
-            snackStreak?: number;
-            bathDone?: boolean;
-        };
         Trip: {
             /** Format: date-time */
             startedAt?: string;
@@ -1334,15 +1865,27 @@ export interface components {
             done?: boolean;
             current?: boolean;
         };
-        /** @description 다운로드·공유 — 서버는 횟수만 센다 */
+        /** @description 오늘 한 일 — 자정에 0 으로 돌아간다 */
+        ZzalToday: {
+            /** Format: int32 */
+            games?: number;
+            /** Format: int32 */
+            pets?: number;
+            /** Format: int32 */
+            careIntimacy?: number;
+            /** Format: int32 */
+            snackStreak?: number;
+            bathDone?: boolean;
+        };
+        /** @description 공유 링크 발급 요청 */
         Share: {
             /**
-             * @description 열린 동작의 key
+             * @description 해금된 동작의 key
              * @example base
              */
             motionKey: string;
             /**
-             * @description DOWNLOAD · SHARE
+             * @description DOWNLOAD(저장) · SHARE(공유). 집계 구분에만 사용한다
              * @example DOWNLOAD
              * @enum {string}
              */
@@ -1354,13 +1897,13 @@ export interface components {
             message?: string;
             error?: components["schemas"]["ErrorBody"];
         };
-        /** @description 공유 링크 + 바뀐 상태 */
+        /** @description 공유 링크와 변경된 캐릭터 상태. 공유 횟수가 해금 조건에 반영되므로 상태를 함께 반환한다 */
         Shared: {
             token?: string;
             url?: string;
             pet?: components["schemas"]["Detail"];
         };
-        /** @description 성격 고르기 — 12장 12분에 캐릭터가 묻는다. 언제든 바꾼다 */
+        /** @description 성격 등록·수정 요청. 수면 중을 포함해 언제든 변경할 수 있다 */
         PersonalityChoice: {
             /**
              * @description GENTLE(온순) · LIVELY(활발) · SHY(수줍음) · CLINGY(응석) · COOL(시크)
@@ -1369,15 +1912,15 @@ export interface components {
              */
             personality: "GENTLE" | "LIVELY" | "SHY" | "CLINGY" | "COOL";
             /**
-             * @description 세계관 한 줄. 비워도 된다
+             * @description 세계관 한 줄. 생략할 수 있다
              * @example 구름 위 마을에 사는 고양이
              */
             world?: string;
         };
-        /** @description 판 시작 — 어느 게임인가 */
+        /** @description 매치 시작 요청 */
         Start: {
             /**
-             * @description LEFT_RIGHT(좌우 맞히기) · RUN(달리기, 좌우 5승 뒤)
+             * @description LEFT_RIGHT(좌우 맞히기) · RUN(달리기, 좌우 5승 이후 해금)
              * @example LEFT_RIGHT
              * @enum {string}
              */
@@ -1389,9 +1932,9 @@ export interface components {
             message?: string;
             error?: components["schemas"]["ErrorBody"];
         };
-        /** @description 지금 치고 있는 판. 답은 들어 있지 않다 */
+        /** @description 진행 중인 매치 상태. 정답은 포함하지 않는다 */
         State: {
-            /** @description 치고 있는 판이 있는가. false 면 아래 세 칸이 비어 있다 */
+            /** @description 진행 중인 매치 존재 여부. false 이면 gameId·kind·round 가 비어 있다 */
             playing?: boolean;
             /**
              * Format: int64
@@ -1405,41 +1948,41 @@ export interface components {
             kind?: string;
             /**
              * Format: int32
-             * @description 지금 몇 번째 판인가(0부터). 0 이면 아직 한 번도 안 쳤다. 달리기는 0
+             * @description 현재 회차(0부터). 0 이면 아직 진행 이력이 없다. 달리기는 항상 0
              * @example 0
              */
             round?: number;
             /**
              * Format: int32
-             * @description 지금까지 몇 번 맞혔나
+             * @description 현재까지 맞힌 횟수
              * @example 0
              */
             hits?: number;
             /**
              * Format: int32
-             * @description 한 판에 몇 번 겨루나
+             * @description 한 매치의 총 회차
              * @example 5
              */
             rounds?: number;
             /**
              * Format: int32
-             * @description 몇 번 이상 맞히면 이기나
+             * @description 승리에 필요한 정답 수
              * @example 3
              */
             winAt?: number;
             /**
              * Format: int32
-             * @description 오늘 더 할 수 있는 판 수(지금 치고 있는 판은 뺀 값)
+             * @description 오늘 남은 매치 수. 진행 중인 매치는 제외한 값이다
              * @example 4
              */
             remainingToday?: number;
-            /** @description 이번 시작으로 열린 2층 동작 seq(13번 놀라기 = 3판). 행동 응답 = 상태 */
+            /** @description 이번 시작으로 해금된 동작 seq */
             justUnlocked?: number[];
-            /** @description 달리기가 열려 있는가(좌우 5승) */
+            /** @description 달리기 해금 여부. 좌우 맞히기 5승이 조건이다 */
             runUnlocked?: boolean;
         };
-        /** @description 한 판 치기 — 어느 쪽을 골랐는지만 보낸다. 맞았는지는 서버가 정한다 */
-        Guess: {
+        /** @description 좌우 맞히기 요청. 선택한 방향만 전달하고 정답 여부는 서버가 판정한다 */
+        GuessRequest: {
             /**
              * @description LEFT(왼쪽) · RIGHT(오른쪽)
              * @example LEFT
@@ -1447,18 +1990,84 @@ export interface components {
              */
             pick: "LEFT" | "RIGHT";
         };
-        ApiResponseGuess: {
+        ApiResponseGuessResult: {
             success?: boolean;
-            data?: components["schemas"]["Guess"];
+            data?: components["schemas"]["GuessResult"];
             message?: string;
             error?: components["schemas"]["ErrorBody"];
         };
-        /** @description 부름에 답하기 — 자유 입력 40자 1회 */
+        /** @description 좌우 맞히기 1회 진행 결과. 방금 진행한 회차의 정답만 포함한다 */
+        GuessResult: {
+            /**
+             * Format: int64
+             * @example 12
+             */
+            gameId?: number;
+            /**
+             * Format: int32
+             * @description 방금 진행한 회차(0부터)
+             * @example 0
+             */
+            round?: number;
+            /**
+             * @description 선택한 방향
+             * @example LEFT
+             * @enum {string}
+             */
+            pick?: "LEFT" | "RIGHT";
+            /**
+             * @description 방금 진행한 회차의 정답. 남은 회차의 정답은 응답에 포함하지 않는다
+             * @example RIGHT
+             * @enum {string}
+             */
+            answer?: "LEFT" | "RIGHT";
+            /** @description 정답 여부 */
+            hit?: boolean;
+            /**
+             * Format: int32
+             * @description 현재까지 맞힌 횟수
+             * @example 1
+             */
+            hits?: number;
+            /** @description 5회를 모두 진행했는지 여부 */
+            finished?: boolean;
+            /** @description 승리 여부. 매치가 끝났을 때만 채워지며 진행 중에는 null 이다. 정답 수가 이미 승리 조건을 넘겼더라도 남은 회차를 진행할 유인을 유지하기 위해 미리 알리지 않는다 */
+            win?: boolean;
+            /**
+             * Format: int32
+             * @description 다음 회차(0부터). 매치가 끝났으면 null
+             * @example 1
+             */
+            nextRound?: number;
+            /**
+             * Format: int32
+             * @description 한 매치의 총 회차
+             * @example 5
+             */
+            rounds?: number;
+            /**
+             * Format: int32
+             * @description 승리에 필요한 정답 수
+             * @example 3
+             */
+            winAt?: number;
+            /**
+             * Format: int32
+             * @description 오늘 남은 매치 수
+             * @example 4
+             */
+            remainingToday?: number;
+            /** @description 이번 회차로 해금된 동작 seq */
+            justUnlocked?: number[];
+            /** @description 달리기 해금 여부. 이번 승리로 5승에 도달하면 true 로 바뀐다 */
+            runUnlocked?: boolean;
+        };
+        /** @description 대화 응답 요청. 슬롯당 1회, 최대 40자 */
         Answer: {
             /** @example 오늘 학교 갔다 왔어 */
             text: string;
         };
-        /** @description 답한 결과 — 펫 최신 상태 + 캐릭터 대사(해석 22) */
+        /** @description 대화 응답 결과. 변경된 캐릭터 상태와 대사·반응 동작으로 구성한다 */
         Answered: {
             pet?: components["schemas"]["Detail"];
             chatReply?: components["schemas"]["Reply"];
@@ -1473,24 +2082,24 @@ export interface components {
             line?: string;
             reactionKey?: string;
         };
-        /** @description 돌봄 요청 — 무엇을 눌렀는지만 보낸다. 수치가 얼마나 오르는지는 서버가 정한다 */
+        /** @description 돌보기 요청. 수행할 행동만 전달하고 수치 변화는 서버가 결정한다 */
         Care: {
             /**
-             * @description FEED(밥) · SNACK(간식) · PET(쓰다듬기) · CLEAN(청소) · BATH(목욕) · MEDICINE(약)
+             * @description FEED(급식) · SNACK(간식) · PET(쓰다듬기) · CLEAN(청소) · BATH(목욕) · MEDICINE(투약)
              * @example FEED
              * @enum {string}
              */
             action: "FEED" | "SNACK" | "PET" | "CLEAN" | "BATH" | "MEDICINE";
         };
-        /** @description 배경 바꾸기 — 프론트 배경 16종 key. 서버는 값을 검증하지 않는다(해석 6) */
+        /** @description 배경 변경 요청. 배경 key 는 화면이 정의하며 서버는 값을 검증하지 않는다 */
         Background: {
             /** @example window_day */
             background: string;
         };
-        /** @description 그림 등록 — 이것 하나로 캐릭터 시트 굽기가 시작된다 */
+        /** @description 이미지 등록 요청. 이 요청으로 캐릭터 시트 생성이 시작된다 */
         Draft: {
             /**
-             * @description 업로드한 그림의 S3 key. presign 으로 발급받은 것이어야 한다
+             * @description 업로드한 그림의 S3 key. presign API 로 발급받은 미사용 키여야 한다
              * @example images/zzal/a1b2c3d4-e5f6-7890-abcd-ef1234567890
              */
             imageKey: string;
@@ -1501,7 +2110,7 @@ export interface components {
             message?: string;
             error?: components["schemas"]["ErrorBody"];
         };
-        /** @description 초안 번호 */
+        /** @description 초안 식별자. 캐릭터 정보 등록 API 에 이 값을 사용한다 */
         Drafted: {
             /**
              * Format: int64
@@ -1509,26 +2118,26 @@ export interface components {
              */
             petId?: number;
         };
-        /** @description 캐릭터 정보 — 이것을 보내면 격자 생성이 시작된다 */
+        /** @description 캐릭터 정보 등록 요청. 이 요청으로 격자 생성이 시작된다. 이름 외 항목은 선택이다 */
         Character: {
             /**
-             * @description 펫 이름. 12자(정본 15장)
+             * @description 캐릭터 이름. 최대 12자
              * @example 여울
              */
             name: string;
             /**
-             * @description 성격. 대사 톤에 쓰인다
+             * @description 성격. 대사 생성에만 사용한다
              * @example LIVELY
              * @enum {string}
              */
             personality?: "GENTLE" | "LIVELY" | "SHY" | "CLINGY" | "COOL";
             /**
-             * @description 세계관·설정. 자유 입력
+             * @description 세계관·설정. 자유 입력이며 대사 생성에만 사용한다
              * @example 비 오는 도시의 탐정
              */
             world?: string;
             /**
-             * @description 그 밖에 알려 주고 싶은 것. ★ 이것만 그림 생성에 참고된다
+             * @description 추가 정보. 그림 생성에 반영되는 유일한 입력이다
              * @example 왼쪽 눈에 흉터
              */
             note?: string;
@@ -1539,7 +2148,7 @@ export interface components {
             message?: string;
             error?: components["schemas"]["ErrorBody"];
         };
-        /** @description 펫 생성 결과 */
+        /** @description 캐릭터 정보 등록 결과 */
         Created: {
             /**
              * Format: int64
@@ -1557,7 +2166,7 @@ export interface components {
             hatchStartedAt?: string;
             /**
              * Format: int64
-             * @description 예상 소요 시간(초). 대개 이보다 훨씬 빨리 끝난다
+             * @description 예상 소요 시간(초). 실제로는 이보다 짧게 완료되는 경우가 많다
              * @example 600
              */
             estimatedSeconds?: number;
@@ -1596,6 +2205,34 @@ export interface components {
              * @example 240
              */
             minutes?: number;
+        };
+        SheetDecision: {
+            decision?: string;
+            note?: string;
+        };
+        PickRequest: {
+            /** Format: int32 */
+            n?: number;
+        };
+        NoteRequest: {
+            note?: string;
+        };
+        CreateRequest: {
+            name?: string;
+            character?: string;
+            genre?: string;
+            story?: string;
+            style?: string;
+            fields?: {
+                [key: string]: string;
+            };
+            photos_data?: string[];
+            photo_keys?: string[];
+            agree_ip?: boolean;
+            checkpoints?: boolean;
+            uid?: string;
+            character_id?: string;
+            photo_note?: string;
         };
         VisibilityRequest: {
             public?: boolean;
@@ -1669,12 +2306,6 @@ export interface components {
             key?: string;
             /** Format: int64 */
             bytes?: number;
-        };
-        CreateRequest: {
-            name?: string;
-            description?: string;
-            photo_data?: string;
-            style?: string;
         };
         AgreeRequest: {
             /** @enum {string} */
@@ -1857,35 +2488,35 @@ export interface components {
              */
             password: string;
         };
-        /** @description 부화 대기 중 여울이 묻는 6문항. 한 문항씩 보내도 되고 한꺼번에 보내도 된다 */
+        /** @description 사용자 정보 6문항. 전달한 항목만 저장하며 나머지는 기존 값을 유지한다 */
         Patch: {
             /**
-             * @description 아이가 나를 부르는 말. 게임 내내 대사에 쓰인다
+             * @description 캐릭터가 사용자를 부르는 호칭. 대사 전반에 사용한다
              * @example 주인님
              */
             callMe?: string;
             /**
-             * @description 주로 오는 시각
+             * @description 주로 방문하는 시간대
              * @example 밤
              */
             visitTime?: string;
             /**
-             * @description 이 아이와의 사이
+             * @description 캐릭터와의 관계
              * @example 내 자캐
              */
             relation?: string;
             /**
-             * @description 그림을 그리는지
+             * @description 그림 창작 여부
              * @example 가끔
              */
             draws?: string;
             /**
-             * @description 나이대
+             * @description 연령대
              * @example 20대
              */
             ageBand?: string;
             /**
-             * @description 서비스를 알게 된 경로
+             * @description 서비스 유입 경로
              * @example 엑스(트위터)
              */
             cameFrom?: string;
@@ -1896,7 +2527,7 @@ export interface components {
             message?: string;
             error?: components["schemas"]["ErrorBody"];
         };
-        /** @description 저장된 6문항 */
+        /** @description 저장된 사용자 정보. 미응답 항목은 null 이다 */
         Profile: {
             callMe?: string;
             visitTime?: string;
@@ -1911,26 +2542,26 @@ export interface components {
             message?: string;
             error?: components["schemas"]["ErrorBody"];
         };
-        /** @description 공유 링크로 보이는 것 */
+        /** @description 공유 링크로 노출되는 정보 전체 */
         Public: {
             /**
-             * @description 아이 이름
+             * @description 캐릭터 이름
              * @example 이두나
              */
             petName?: string;
             /**
-             * @description 무슨 동작인가
+             * @description 동작 이름
              * @example 손 흔들며 인사
              */
             motionLabel?: string;
             /**
-             * @description 움짤 주소
+             * @description 이미지 주소
              * @example images/zzal/pets/12/basic/wave.webp
              */
             imageKey?: string;
             /**
              * Format: date-time
-             * @description 언제 공유됐나
+             * @description 공유 시각
              */
             sharedAt?: string;
         };
@@ -1946,16 +2577,34 @@ export interface components {
             message?: string;
             error?: components["schemas"]["ErrorBody"];
         };
-        /** @description 부화 진행 */
+        /** @description 부화 진행 상태. 폴링 응답이므로 게이지·동작 목록은 포함하지 않는다 */
         Hatch: {
+            /**
+             * @description DRAFT · HATCHING · ALIVE · FAILED
+             * @example HATCHING
+             */
             phase?: string;
+            /** @description 현재 수행 중인 단계 설명. 진행 중이 아니면 null */
             label?: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description 완료된 단계 수
+             * @example 2
+             */
             progress?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description 전체 단계 수
+             * @example 5
+             */
             total?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description 예상 잔여 시간(초). 예상 시간을 넘겼으면 0
+             * @example 180
+             */
             estimatedSeconds?: number;
+            /** @description 실패 시 사용자에게 표시할 문구. 진행 중이면 null */
             message?: string;
         };
         ApiResponseChat: {
@@ -1964,13 +2613,26 @@ export interface components {
             message?: string;
             error?: components["schemas"]["ErrorBody"];
         };
-        /** @description 오늘의 부름들. openSlot 이 null 이면 지금 답할 부름이 없다 */
+        /** @description 오늘의 대화 목록. openSlot 이 null 이면 현재 응답 가능한 대화가 없다 */
         Chat: {
             openSlot?: string;
-            calls?: components["schemas"]["Call"][];
+            calls?: components["schemas"]["ChatCall"][];
             memories?: string[];
         };
-        /** @description 앨범 — 열린 동작 도감(기본/심화)·엽서·혼자 논 장면·첫 심화 기념 */
+        /** @description 오늘 온 대화 한 건 */
+        ChatCall: {
+            slot?: string;
+            line?: string;
+            /** Format: date-time */
+            calledAt?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            answered?: boolean;
+            answer?: string;
+            replyLine?: string;
+            reactionKey?: string;
+        };
+        /** @description 앨범. 동작 도감과 엽서·장면·첫 심화 동작 정보로 구성한다 */
         Album: {
             motions?: components["schemas"]["Motion"][];
             postcards?: components["schemas"]["Postcard"][];
@@ -1990,6 +2652,39 @@ export interface components {
             /** Format: date-time */
             at?: string;
             line?: string;
+        };
+        Art: {
+            /** Format: int32 */
+            done?: number;
+            /** Format: int32 */
+            total?: number;
+        };
+        JobView: {
+            id?: string;
+            status?: string;
+            run_id?: string;
+            error?: string;
+            refunded?: string;
+            directions?: {
+                [key: string]: unknown;
+            }[];
+            /** Format: int32 */
+            pick?: number;
+            style?: string;
+            style_label?: string;
+            stage?: string;
+            /** Format: int32 */
+            stage_index?: number;
+            stages?: string[];
+            stage_label?: string;
+            say?: string;
+            checkpoints?: boolean;
+            /** Format: int32 */
+            pct?: number;
+            art?: components["schemas"]["Art"];
+            log?: string[];
+            /** Format: double */
+            elapsed?: number;
         };
         ApiResponseListMapStringObject: {
             success?: boolean;
@@ -2121,48 +2816,27 @@ export interface components {
             name?: string;
             filename?: string;
             charset?: string;
-            inline?: boolean;
-            attachment?: boolean;
             formData?: boolean;
+            attachment?: boolean;
+            inline?: boolean;
         };
         HttpHeaders: {
-            acceptLanguageAsLocales?: string[];
-            accessControlAllowHeaders?: string[];
-            accessControlAllowMethods?: components["schemas"]["HttpMethod"][];
-            accessControlAllowOrigin?: string;
-            accessControlExposeHeaders?: string[];
-            accessControlRequestHeaders?: string[];
-            accessControlRequestMethod?: components["schemas"]["HttpMethod"];
-            acceptLanguage?: {
-                range?: string;
-                /** Format: double */
-                weight?: number;
-            }[];
-            /** Format: int64 */
-            accessControlMaxAge?: number;
-            acceptCharset?: string[];
-            contentDisposition?: components["schemas"]["ContentDisposition"];
-            contentLanguage?: string;
-            /** Format: int64 */
-            ifUnmodifiedSince?: number;
-            cacheControl?: string;
-            /** Format: int64 */
-            contentLength?: number;
-            allow?: components["schemas"]["HttpMethod"][];
-            connection?: string[];
+            basicAuth?: string;
             accept?: components["schemas"]["MediaType"][];
-            bearerAuth?: string;
-            contentType?: components["schemas"]["MediaType"];
-            /** Format: int64 */
-            ifModifiedSince?: number;
             acceptPatch?: components["schemas"]["MediaType"][];
-            origin?: string;
+            allow?: components["schemas"]["HttpMethod"][];
+            bearerAuth?: string;
+            connection?: string[];
+            etag?: string;
             /** Format: int64 */
             expires?: number;
-            etag?: string;
+            ifMatch?: string[];
+            ifNoneMatch?: string[];
+            origin?: string;
+            pragma?: string;
             range?: components["schemas"]["HttpRange"][];
-            /** Format: uri */
-            location?: string;
+            upgrade?: string;
+            vary?: string[];
             host?: {
                 hostString?: string;
                 address?: {
@@ -2187,13 +2861,34 @@ export interface components {
                 unresolved?: boolean;
                 hostName?: string;
             };
-            basicAuth?: string;
+            contentType?: components["schemas"]["MediaType"];
+            /** Format: uri */
+            location?: string;
             accessControlAllowCredentials?: boolean;
-            ifMatch?: string[];
-            ifNoneMatch?: string[];
-            pragma?: string;
-            upgrade?: string;
-            vary?: string[];
+            /** Format: int64 */
+            contentLength?: number;
+            /** Format: int64 */
+            ifModifiedSince?: number;
+            contentDisposition?: components["schemas"]["ContentDisposition"];
+            acceptCharset?: string[];
+            contentLanguage?: string;
+            cacheControl?: string;
+            acceptLanguageAsLocales?: string[];
+            accessControlAllowHeaders?: string[];
+            accessControlAllowMethods?: components["schemas"]["HttpMethod"][];
+            accessControlAllowOrigin?: string;
+            accessControlExposeHeaders?: string[];
+            accessControlRequestHeaders?: string[];
+            accessControlRequestMethod?: components["schemas"]["HttpMethod"];
+            acceptLanguage?: {
+                range?: string;
+                /** Format: double */
+                weight?: number;
+            }[];
+            /** Format: int64 */
+            accessControlMaxAge?: number;
+            /** Format: int64 */
+            ifUnmodifiedSince?: number;
             empty?: boolean;
             all?: {
                 [key: string]: string;
@@ -2213,11 +2908,11 @@ export interface components {
             };
             /** Format: double */
             qualityValue?: number;
-            wildcardSubtype?: boolean;
-            subtypeSuffix?: string;
-            charset?: string;
             wildcardType?: boolean;
             concrete?: boolean;
+            charset?: string;
+            wildcardSubtype?: boolean;
+            subtypeSuffix?: string;
         };
     };
     responses: never;
@@ -2241,7 +2936,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 깨어남 */
+            /** @description 기상 처리 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2250,7 +2945,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDetail"];
                 };
             };
-            /** @description 자고 있지 않음(ZZAL_PET_NOT_SLEEPING) · 창 밖(ZZAL_NOT_WAKE_TIME) */
+            /** @description 수면 상태가 아님(ZZAL_PET_NOT_SLEEPING) · 허용 구간이 아님(ZZAL_NOT_WAKE_TIME) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2274,7 +2969,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 시계가 켜졌음 */
+            /** @description 시계 시작 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2283,7 +2978,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDetail"];
                 };
             };
-            /** @description 아직 남은 칸이 있음(ZZAL_TUTORIAL_NOT_FINISHED) · 이미 끝냈음(ZZAL_TUTORIAL_ALREADY_DONE) */
+            /** @description 미완료 단계 존재(ZZAL_TUTORIAL_NOT_FINISHED) · 이미 완료됨(ZZAL_TUTORIAL_ALREADY_DONE) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2307,7 +3002,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 재움 */
+            /** @description 취침 처리 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2316,7 +3011,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDetail"];
                 };
             };
-            /** @description 창 밖(ZZAL_NOT_SLEEP_TIME) · 이미 자는 중(ZZAL_PET_SLEEPING) */
+            /** @description 허용 구간이 아님(ZZAL_NOT_SLEEP_TIME) · 이미 수면 중(ZZAL_PET_SLEEPING) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2344,7 +3039,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 발급 */
+            /** @description 발급 완료 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2353,7 +3048,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseShared"];
                 };
             };
-            /** @description 안 열린 동작(ZZAL_MOTION_NOT_OPEN) */
+            /** @description 미해금 동작(ZZAL_MOTION_NOT_OPEN) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2406,7 +3101,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 확인함 */
+            /** @description 확인 처리 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2415,7 +3110,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDetail"];
                 };
             };
-            /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2424,7 +3119,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDetail"];
                 };
             };
-            /** @description 아직 도착하지 않은 동작(ZZAL_MOTION_NOT_OPEN) */
+            /** @description 미도착 동작(ZZAL_MOTION_NOT_OPEN) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2452,7 +3147,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 시작(또는 치던 판) */
+            /** @description 매치 시작 또는 진행 중인 매치 반환 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2486,17 +3181,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Guess"];
+                "application/json": components["schemas"]["GuessRequest"];
             };
         };
         responses: {
-            /** @description 한 판 침 */
+            /** @description 진행 완료 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseGuess"];
+                    "*/*": components["schemas"]["ApiResponseGuessResult"];
                 };
             };
             /** @description ZZAL_GAME_NOT_FOUND */
@@ -2505,7 +3200,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseGuess"];
+                    "*/*": components["schemas"]["ApiResponseGuessResult"];
                 };
             };
             /** @description ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING */
@@ -2514,7 +3209,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseGuess"];
+                    "*/*": components["schemas"]["ApiResponseGuessResult"];
                 };
             };
         };
@@ -2537,7 +3232,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 답함 */
+            /** @description 응답 완료 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2546,7 +3241,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseAnswered"];
                 };
             };
-            /** @description 안 열린·만료된 부름(ZZAL_CHAT_SLOT_CLOSED) · 자는 중(ZZAL_PET_SLEEPING) */
+            /** @description 미개방·만료된 슬롯(ZZAL_CHAT_SLOT_CLOSED) · 수면 중(ZZAL_PET_SLEEPING) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2574,7 +3269,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 돌봄 완료 */
+            /** @description 돌보기 완료 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2583,7 +3278,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDetail"];
                 };
             };
-            /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2620,7 +3315,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 바꿈 */
+            /** @description 변경 완료 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2629,7 +3324,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDetail"];
                 };
             };
-            /** @description 아직 안 열림(ZZAL_FEATURE_LOCKED) */
+            /** @description 미해금 기능(ZZAL_FEATURE_LOCKED) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2664,7 +3359,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDrafted"];
                 };
             };
-            /** @description 올바르지 않은 이미지(INVALID_UPLOAD_KEY) · 이미 사용한 이미지(UPLOAD_KEY_ALREADY_USED) */
+            /** @description 유효하지 않은 이미지 키(INVALID_UPLOAD_KEY) · 사용 완료된 키(UPLOAD_KEY_ALREADY_USED) */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2673,7 +3368,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDrafted"];
                 };
             };
-            /** @description 부화 중(ZZAL_PET_ALREADY_HATCHING) · 자리 없음(ZZAL_PET_LIMIT_REACHED) */
+            /** @description 부화 진행 중(ZZAL_PET_ALREADY_HATCHING) · 슬롯 부족(ZZAL_PET_LIMIT_REACHED) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2710,7 +3405,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseCreated"];
                 };
             };
-            /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2719,7 +3414,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseCreated"];
                 };
             };
-            /** @description 이미 이름을 지은 아이(ZZAL_PET_NOT_DRAFT) */
+            /** @description 이미 캐릭터 정보가 등록됨(ZZAL_PET_NOT_DRAFT) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2871,6 +3566,350 @@ export interface operations {
             };
         };
     };
+    title: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    revert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    regen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    overlay: {
+        parameters: {
+            query?: {
+                ep?: number;
+            };
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    saveOverlay: {
+        parameters: {
+            query?: {
+                ep?: number;
+            };
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    bake: {
+        parameters: {
+            query?: {
+                ep?: number;
+            };
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    sheet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SheetDecision"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    sheet_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SheetDecision"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    pick: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    retryPick: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["NoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     visibility: {
         parameters: {
             query: {
@@ -3001,7 +4040,7 @@ export interface operations {
             };
         };
     };
-    create: {
+    create_1: {
         parameters: {
             query?: never;
             header?: {
@@ -3180,9 +4219,7 @@ export interface operations {
     signUp: {
         parameters: {
             query?: never;
-            header?: {
-                "User-Agent"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -3481,7 +4518,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDetail"];
                 };
             };
-            /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3588,6 +4625,267 @@ export interface operations {
             };
         };
     };
+    list_2: {
+        parameters: {
+            query?: {
+                mine?: string;
+                uid?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    versions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    versionImage: {
+        parameters: {
+            query?: {
+                w?: number;
+            };
+            header?: never;
+            path: {
+                runId: string;
+                no: number;
+                v: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+        };
+    };
+    result: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    page: {
+        parameters: {
+            query?: {
+                w?: number;
+                raw?: string;
+            };
+            header?: never;
+            path: {
+                runId: string;
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    episode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+        };
+    };
+    status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["JobView"];
+                };
+            };
+        };
+    };
+    sheetImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+        };
+    };
+    pageImage: {
+        parameters: {
+            query?: {
+                w?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    allowance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     runs: {
         parameters: {
             query: {
@@ -3648,6 +4946,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseSpendView"];
+                };
+            };
+        };
+    };
+    config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -3737,6 +5057,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseListCreditEventLine"];
+                };
+            };
+        };
+    };
+    sendTestEmail: {
+        parameters: {
+            query: {
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
                 };
             };
         };

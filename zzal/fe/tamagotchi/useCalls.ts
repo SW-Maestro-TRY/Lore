@@ -3,14 +3,17 @@
 // 화면(CallBanner)은 "지금 무엇을 띄울까" 하나만 알면 된다. 두 출처를 화면이 각각 보면
 // 튜토리얼 8분 칸("뭐라고 말을 거네요")과 채팅 BABY 슬롯이 같은 순간 두 개로 뜬다 — 그건 하나다.
 //
-// 순서 = 밀린 튜토리얼 부름(§12 시각순) → 채팅 부름. 나갔다 와도 밀린 것이 순서대로 나온다(§16).
+// 순서 = 튜토리얼 부름 → 채팅 부름.
+//
+// ★ 튜토리얼은 순서로 가므로 **한 번에 한 칸만** 떠 있다. "밀린 부름"이라는 것이 없다 —
+//   한 칸을 해야 다음 칸이 오기 때문이다. 나갔다 와도 멈춰 있던 그 칸이 그대로 떠 있다.
 // 부름은 버튼을 잠그지 않는다. 강조만(§0 원칙 7).
 'use client';
 
 import { useMemo } from 'react';
 import type { ChatSlot, ChatState, PetDetail } from '../lib/pet';
 import { sanitizeLine } from './chat';
-import { dueCalls, type BabyWant } from './tutorial';
+import { currentCall, type BabyWant } from './tutorial';
 
 export interface Call {
   /** 'baby' = 아기 시간표 칸 · 'chat' = 하루 3회 부름. */
@@ -48,14 +51,15 @@ export function useCalls(pet: PetDetail | null, chat: ChatState | null, nowMs: n
     const openCall = openSlot ? chat?.calls.find((c) => c.slot === openSlot) ?? null : null;
 
     const queue: Call[] = [];
-    for (const d of dueCalls(pet.tutorial, nowMs)) {
-      // 8분 칸은 채팅 BABY 부름과 같은 사건이다. 서버 대사가 있으면 그것을 쓴다.
-      const isChat = d.key === 'CHAT';
+    const baby = currentCall(pet.tutorial);
+    if (baby) {
+      // CHAT 칸은 채팅 BABY 부름과 같은 사건이다. 서버 대사가 있으면 그것을 쓴다.
+      const isChat = baby.key === 'CHAT';
       queue.push({
         kind: 'baby',
-        key: `baby:${d.key}`,
-        line: isChat && openCall ? sanitizeLine(openCall.line) : d.line,
-        want: d.want,
+        key: `baby:${baby.key}`,
+        line: isChat && openCall ? sanitizeLine(openCall.line) : baby.line,
+        want: baby.want,
         slot: isChat ? (openSlot ?? 'BABY') : null,
       });
     }

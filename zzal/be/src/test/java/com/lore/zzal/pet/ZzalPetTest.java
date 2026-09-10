@@ -460,6 +460,31 @@ class ZzalPetTest {
         }
 
         @Test
+        @DisplayName("★★ 돌보지 않은 날은 \"잘 돌본 날\" 이 아니다 — 케어 미스가 0 이어도 안 센다 (정본 1.7)")
+        void neglectedDayIsNotAZeroMissDay() {
+            ZzalPet pet = child();
+            // child() 가 게이지를 맞추느라 밥을 먹였다. 그 흔적을 지워 "오늘 아직 안 돌본" 상태로 둔다.
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "todayCared", false);
+            int before = pet.getZeroMissDays();
+
+            // 아무것도 안 하고 저녁에 재운다. 일곱 시간이라 케어 미스는 안 쌓인다.
+            pet.sleep(at("2026-09-05 19:00"));
+
+            assertThat(pet.getTodayCareMiss()).isZero();          // 새로 쌓인 케어 미스는 없지만
+            assertThat(pet.getZeroMissDays()).isEqualTo(before);  // ★ 돌본 적이 없으니 안 센다
+        }
+
+        @Test
+        @DisplayName("한 번이라도 돌본 날은 잘 돌본 날로 센다")
+        void caredDayCounts() {
+            ZzalPet pet = child();
+            int before = pet.getZeroMissDays();
+            pet.pet(T0);                                    // 쓰다듬 한 번
+            pet.sleep(at("2026-09-05 19:00"));
+            assertThat(pet.getZeroMissDays()).isEqualTo(before + 1);
+        }
+
+        @Test
         @DisplayName("케어 미스 0인 날 — 잠드는 순간 판정, 오늘 카운터 리셋")
         void zeroMissDayJudgedAtSleep() {
             ZzalPet pet = child();
