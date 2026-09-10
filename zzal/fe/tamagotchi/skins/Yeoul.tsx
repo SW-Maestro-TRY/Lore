@@ -63,6 +63,17 @@ export default function Yeoul(_props: SkinProps) {
     });
   }, [isAuthenticated, resume, goStep, goEgg, enterRoom]);
 
+  /**
+   * 서버가 아는 이름을 목에도 넣어 둔다.
+   *
+   * 화면 곳곳(잠꼬대·앨범 설명·아이 정보 머리글)이 아직 목의 `petName` 을 읽는데, 다시 들어온
+   * 사람은 그 칸이 비어 있어 '아이' 로 떴다(2026-09-09 실측). 이름은 한 곳에서만 흘러야 한다.
+   */
+  const svName = live.pet?.name ?? '';
+  useEffect(() => {
+    if (svName && svName !== s.petName) actions.patch({ petName: svName });
+  }, [svName, s.petName, actions]);
+
   return (
     <div
       className="yeoul"

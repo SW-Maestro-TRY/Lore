@@ -965,6 +965,9 @@ export function useYeoul(live?: Live) {
   }, [needStyle]);
 
   const v = useMemo(() => {
+    // 오늘 남은 판 — 서버에 붙으면 서버가 센다.
+    const playsLeft = onServer ? (live?.game?.remainingToday ?? 0) : s.plays;
+
     // ── 앨범 칸 수 ──
     const albumMotions = onServer ? (live?.album?.motions ?? sv.motions ?? []) : [];
     const albumAll = onServer ? (albumMotions.length || 18) : 18;
@@ -979,7 +982,7 @@ export function useYeoul(live?: Live) {
     const roomDefs: ReadonlyArray<readonly [RoomKey, LvKey, string, boolean]> = [
       ['table', lv.table, String(es.stock), !unlimited],
       ['bath', lv.bath, String(es.trace), !unlimited && es.trace > 0],
-      ['play', lv.play, String(s.plays), !unlimited && s.plays > 0],
+      ['play', lv.play, String(playsLeft), !unlimited && playsLeft > 0],
       ['bed', lv.bed, '', false],
       ['album', lv.album, `${albumOpen}/${albumAll}`, !unlimited],
     ];
@@ -1044,7 +1047,8 @@ export function useYeoul(live?: Live) {
         n: 4, on: es.happy, tint: '#C98B93',
         // ★ '대화하기' 는 뺐다(상훈님 판정 11) — 대화는 오른쪽 아래 말풍선이 맡고,
         //   마당에는 게임을 하나둘 붙일 예정이라 그 자리를 비워 둔다.
-        a: { label: '좌우 맞히기', count: `${s.plays}판 남음`, tap: openPlay('guess') },
+        // 오늘 남은 판은 서버가 센다(두 게임 합산 · 지금 치는 판은 빠져 있다).
+        a: { label: '좌우 맞히기', count: `${playsLeft}판 남음`, tap: openPlay('guess') },
         b: null,
       },
       bed: {
@@ -1430,7 +1434,7 @@ export function useYeoul(live?: Live) {
         memories: (onServer ? (sc?.memories ?? []) : s.memories).map((t) => ({ text: t })),
         guessNote: onServer ? guessNote : (s.guess ?? '어느 손에 있을까요?'),
         // 오늘 남은 판은 **두 게임 합산**이고 지금 치는 판은 빠져 있다(서버 규칙).
-        playsLeft: onServer ? (live?.game?.remainingToday ?? 0) : s.plays,
+        playsLeft,
         canGuess: onServer
           ? !live?.guessing && (live?.game?.playing || (live?.game?.remainingToday ?? 0) > 0)
           : true,
