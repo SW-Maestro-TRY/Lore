@@ -24,6 +24,22 @@ export default function Works({
   const [runs, setRuns] = useState<RunCard[] | null>(null);
   const [failed, setFailed] = useState(false);
 
+  // 예시 작품(루가 미리 구워 둔 것)을 뺄지. 기본은 켜서 다 보여준다 —
+  // 실제 작품이 아직 적을 때 둘러보기가 텅 비어 보이면 안 된다. 고른 값은
+  // 다음에 와도 그대로이게 저장해 둔다.
+  const [showExamples, setShowExamples] = useState(true);
+  useEffect(() => {
+    try {
+      setShowExamples(localStorage.getItem("lore_hide_example_works") !== "1");
+    } catch { /* 비공개 창 — 기본값(다 보여주기)으로 둔다 */ }
+  }, []);
+  const toggleExamples = (show: boolean) => {
+    setShowExamples(show);
+    try {
+      localStorage.setItem("lore_hide_example_works", show ? "0" : "1");
+    } catch { /* 저장 안 돼도 이번 화면은 바뀐 대로 보인다 */ }
+  };
+
   useEffect(() => {
     let alive = true;
     listRuns()
@@ -31,6 +47,9 @@ export default function Works({
       .catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
   }, []);
+
+  const hasExamples = !!runs?.some((r) => r.example);
+  const shown = showExamples ? runs : runs?.filter((r) => !r.example);
 
   return (
     <section className="works">
@@ -44,6 +63,16 @@ export default function Works({
             내 캐릭터로 웹툰 만들기
           </button>
         </div>
+        {/* 실제 작품이 하나도 없을 때 이 스위치를 끄면 둘러보기가 텅 비어
+            버린다 — 그때는 안 보여준다. */}
+        {hasExamples && (
+          <label className={`works-pub works-examples-toggle${showExamples ? "" : " is-off"}`}>
+            <input type="checkbox" role="switch" className="works-pub-box"
+                   checked={!showExamples} disabled={showExamples && runs?.every((r) => r.example)}
+                   onChange={(e) => toggleExamples(!e.target.checked)} />
+            <span>예시 작품 빼기</span>
+          </label>
+        )}
       </header>
 
       <div className="works-grid">
@@ -56,19 +85,31 @@ export default function Works({
           </div>
         )}
         {!failed && !runs && <p className="works-empty">불러오는 중…</p>}
-        {runs?.length === 0 && (
+        {shown?.length === 0 && (
           <div className="works-empty">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={louArt("empty")} alt="" aria-hidden="true" />
-            <b>아직 구경할 웹툰이 없어요</b>
-            첫 작품이 이 자리에 걸립니다.
-            <br />
-            <button type="button" className="inline-link" onClick={onCreate}>
-              내 캐릭터로 웹툰 만들기 →
-            </button>
+            {runs?.length ? (
+              // 예시를 뺐더니 빈 것 — 작품이 없는 게 아니라 스위치를 켠 탓이다.
+              <>
+                <b>예시를 빼니 볼 게 없어요</b>
+                <button type="button" className="inline-link" onClick={() => toggleExamples(true)}>
+                  예시 작품 다시 보기 →
+                </button>
+              </>
+            ) : (
+              <>
+                <b>아직 구경할 웹툰이 없어요</b>
+                첫 작품이 이 자리에 걸립니다.
+                <br />
+                <button type="button" className="inline-link" onClick={onCreate}>
+                  내 캐릭터로 웹툰 만들기 →
+                </button>
+              </>
+            )}
           </div>
         )}
-        {runs?.map((r) => <WorkCard key={r.run_id} run={r} onOpen={onOpen} />)}
+        {shown?.map((r) => <WorkCard key={r.run_id} run={r} onOpen={onOpen} />)}
       </div>
     </section>
   );
@@ -99,10 +140,11 @@ export function WorkCard({
       >
         {run.cover_page ? (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt="" />
+          <img src={coverUrl(run.run_id, run.cover_page, run.cover_episode || first, run.example)} alt="" />
         ) : (
           <span className="works-cover-empty" aria-hidden="true">🖼</span>
         )}
+        {run.example && <span className="works-example-badge">예시</span>}
       </button>
       <div className="works-body">
         {/* **제목이 먼저다.** 예전에는 캐릭터 이름이 제목 자리에 있었는데,

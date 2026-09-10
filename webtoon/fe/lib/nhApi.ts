@@ -274,35 +274,46 @@ export interface RunCard {
   style_label?: string;
   /** 내 작품 목록에서만 온다 — 둘러보기에 걸려 있는가. */
   public?: boolean;
+  /** 루가 미리 구워 둔 예시 작품인가 — 실제로 누가 만든 것이 아니다.
+   *  둘러보기의 "예시 작품 빼기" 스위치가 이 값으로 거른다. */
+  example?: boolean;
+}
+
+/** 예시 스냅샷만. 실패하면(첫 배포 직후처럼 아직 하나도 안 구웠을 때) 빈 목록. */
+function exampleRuns(): Promise<RunCard[]> {
+  return snapshot<{ runs: RunCard[] }>("/runs.json")
+    .then((got) => (got.runs || []).map((r) => ({ ...r, example: true })))
+    .catch(() => []);
 }
 
 export function listRuns(mine = false): Promise<{ runs: RunCard[] }> {
   const q = mine ? `?mine=1&uid=${encodeURIComponent(getUid())}` : "";
+  if (mine) {
+    // 「내가 만든 것」은 예시로 안 채운다 — 구워 둔 것은 남의 작품이라,
+    // 내 목록에 끼워 넣으면 만든 적 없는 작품이 내 것으로 보인다.
+    return call<{ runs: RunCard[] }>(`/runs${q}`);
+  }
+  // ★ 둘러보기는 **실제 작품 + 예시를 늘 같이** 보여준다. 예전에는 실제
+  //   작품이 하나라도 있으면 예시를 통째로 안 보여줬는데, 그러면 실제
+  //   작품이 막 하나 생긴 순간 그 전까지 걸려 있던 예시들이 전부 사라져
+  //   "둘러보기가 텅 빈 것처럼" 보였다. 실제 작품이 앞에, 예시가 뒤에
+  //   붙는다 — 진짜 작품이 먼저 읽히는 게 맞다.
   return call<{ runs: RunCard[] }>(`/runs${q}`)
-    .then((got) => {
-      // ★ 서버는 이제 실제로 뜬다(#243 이후). 켜져 있지만 **공개 작품이 아직
-      //   하나도 없으면** 200 에 빈 배열이 온다 — 이건 실패가 아니라서 아래
-      //   .catch 로는 안 걸린다. 그런데 이때도 둘러보기가 텅 비면 스냅샷을
-      //   만든 이유(#274 — 걸린 작품이 하나도 없어 보이는 문제)가 그대로
-      //   되살아난다. 그래서 성공했어도 빈 목록이면 스냅샷으로 채운다.
-      if (!mine && (!got.runs || got.runs.length === 0)) {
-        return snapshot<{ runs: RunCard[] }>("/runs.json");
-      }
-      return got;
-    })
-    .catch((e) => {
-      // 「내가 만든 것」은 스냅샷으로 메우지 않는다 — 구워 둔 것은 남의 작품이라,
-      // 내 목록에 끼워 넣으면 만든 적 없는 작품이 내 것으로 보인다.
-      if (mine) throw e;
-      return snapshot<{ runs: RunCard[] }>("/runs.json");
-    });
+    .then((got) => (got.runs || []).map((r) => ({ ...r, example: false })))
+    .catch(() => [] as RunCard[])
+    .then((real) => exampleRuns().then((examples) => ({ runs: [...real, ...examples] })));
 }
 
 /** 카드 표지. 목록은 화면을 바꿔 끼우며 그리므로 loading="lazy" 를 안 쓴다 —
  *  그 경로에서는 브라우저가 "화면에 들어왔다" 를 다시 안 재서 표지가 영영 안
- *  뜬다. ?w=320 으로 줄여 받아 한 장에 60KB 안쪽이다. */
-export function coverUrl(runId: string, page: number, episode = 1): string {
-  if (onSnapshot) return `${DEMO}/${encodeURIComponent(runId)}/cover.jpg`;
+ *  뜬다. ?w=320 으로 줄여 받아 한 장에 60KB 안쪽이다.
+ *
+ * @param example 이 카드가 예시인지 **호출하는 쪽이 안다면** 직접 넘긴다
+ *   (둘러보기 목록처럼 실제 작품과 예시가 한 화면에 섞여 있을 때 — 전역
+ *   `onSnapshot` 깃발 하나로는 어느 카드가 어느 쪽인지 구분이 안 된다).
+ *   안 넘기면 예전처럼 `onSnapshot` 을 본다(작품 하나만 여는 화면들). */
+export function coverUrl(runId: string, page: number, episode = 1, example?: boolean): string {
+  if (example ?? onSnapshot) return `${DEMO}/${encodeURIComponent(runId)}/cover.jpg`;
   return `${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`;
 }
 

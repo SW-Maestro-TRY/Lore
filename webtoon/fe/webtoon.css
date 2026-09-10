@@ -3803,6 +3803,21 @@
   font-size: .72rem; color: #b5453c; font-weight: 600;
 }
 
+/* 둘러보기 머리에 붙는 "예시 작품 빼기" 스위치 — .works-pub 을 그대로
+   빌려 쓰고(모양이 같은 스위치라서) 자리만 다르다. */
+.webtoon-page .works-examples-toggle {
+  margin-top: 14px;
+}
+
+/* 예시 카드의 표지 구석 딱지 — 실제로 누가 만든 것과 헷갈리지 않게. */
+.webtoon-page .works-example-badge {
+  position: absolute; top: 8px; left: 8px; z-index: 1;
+  padding: .2em .55em; border-radius: 999px;
+  background: rgba(15,51,63,.55); color: #fff;
+  font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+  backdrop-filter: blur(2px);
+}
+
 
 /* ── 결과 화면 머리 ───────────────────────────────────────────────────
    표지 카드가 제 내용만큼만 좁게 서서 아래 그림과 왼쪽 끝이 안 맞았다.
