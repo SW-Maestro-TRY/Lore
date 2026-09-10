@@ -3809,12 +3809,19 @@
   margin-top: 14px;
 }
 
-/* 예시 카드의 표지 구석 딱지 — 실제로 누가 만든 것과 헷갈리지 않게. */
+/* 예시 카드의 표지 구석 딱지 — 실제로 누가 만든 것과 헷갈리지 않게.
+ * ⚠ .works-cover 의 직계 자식은 전부 표지를 꽉 채우게 되어 있다
+ *   (.works-cover > * { inset:0; width:100%; height:100% }). 이 딱지도
+ *   그 자식이라 top·left 만 새로 주면 나머지 넷(right·bottom·width·height)은
+ *   여전히 그 규칙을 물려받아 표지 전체를 뒤덮는 거대한 "예시" 가 된다
+ *   (실제로 그렇게 떴다) — 네 값을 전부 auto 로 되돌려야 제 크기로 줄어든다. */
 .webtoon-page .works-example-badge {
-  position: absolute; top: 8px; left: 8px; z-index: 1;
+  position: absolute; top: 8px; left: 8px; right: auto; bottom: auto;
+  width: auto; height: auto; z-index: 1;
   padding: .2em .55em; border-radius: 999px;
-  background: rgba(15,51,63,.55); color: #fff;
+  background: rgba(15,51,63,.72); color: #fff;
   font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+  line-height: 1.4;
   backdrop-filter: blur(2px);
 }
 
