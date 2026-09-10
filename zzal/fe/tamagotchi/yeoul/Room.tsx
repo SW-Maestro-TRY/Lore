@@ -125,6 +125,16 @@ export default function Room({ y }: { y: Yeoul }) {
                 </span>
               </>
             )}
+            {/* ★ 오늘 쓰다듬기를 다 쓴 자리. **누르는 것은 계속 되고**(만지지 못하게 하면 벌이 된다)
+                왜 더 안 세어지는지만 미리 알려 준다 — 전에는 눌러 봐야 알 수 있었다. */}
+            {v.petLock.show && (
+              <span data-part="pet-lock" style={{
+                position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
+                padding: '5px 12px', borderRadius: radius.pill, background: 'rgba(255,253,248,.9)',
+                border: `1px solid ${C.line}`, fontSize: 11.5, color: C.faint,
+                whiteSpace: 'nowrap', pointerEvents: 'none',
+              }}>{v.petLock.text}</span>
+            )}
             <div style={{ width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play }}>
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -179,6 +189,7 @@ export default function Room({ y }: { y: Yeoul }) {
         {v.medFab.show && (
           <button
             onClick={(e) => { e.stopPropagation(); actions.onMed(); }}
+            disabled={v.medFab.off} data-action="med"
             style={{
               position: 'absolute', right: 72, bottom: 116, zIndex: 4, width: 48, height: 48, borderRadius: '50%',
               border: `2px solid ${C.accent}`, background: C.paper, boxShadow: '0 4px 14px rgba(74,64,56,.14)',
@@ -682,9 +693,13 @@ function Popover({ y }: { y: Yeoul }) {
 
 function PopButton({ b }: { b: NonNullable<Yeoul['v']['pop']['a']> }) {
   return (
+    // ★ 진짜 `disabled` 다(계약 10절 "거절될 버튼은 미리 잠가 둔다"). 회색으로만 칠하고 눌리게 두면
+    //   눌러 봐야 왜 안 되는지 알 수 있고, 서버에는 나갈 필요 없던 요청이 나간다.
+    //   ⚠️ `aria-disabled` 를 늘 달지 않는다 — `"false"` 도 검사 도구에 '비활성' 으로 읽힌다.
     <button
-      onClick={b.tap} data-action={b.label}
-      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 14px', borderRadius: radius.md, border: b.bd, background: b.bg, color: b.fg, textAlign: 'left', animation: b.anim }}
+      onClick={b.tap} data-action={b.label} disabled={b.off}
+      data-off={b.off ? '1' : undefined} data-why={b.why || undefined}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 14px', borderRadius: radius.md, border: b.bd, background: b.bg, color: b.fg, textAlign: 'left', animation: b.anim, cursor: b.off ? 'default' : 'pointer' }}
     >
       <span style={{ fontSize: 15.5 }}>{b.label}</span>
       <span style={{ flex: 1 }} />

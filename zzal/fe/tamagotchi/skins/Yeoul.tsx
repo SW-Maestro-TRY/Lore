@@ -74,6 +74,17 @@ export default function Yeoul(_props: SkinProps) {
     if (svName && svName !== s.petName) actions.patch({ petName: svName });
   }, [svName, s.petName, actions]);
 
+  /**
+   * ★ 서버가 준 상태를 손에 쥐기 전에는 **방을 안 그린다**(2026-09-10 상훈님 지시).
+   *
+   * 전에는 방을 먼저 그리고 상태가 나중에 도착했다. 그동안 게이지는 목 값으로 그려졌고
+   * 응답이 오는 순간 `0 → 3` 으로 튀었다. 목 폴백을 걷어냈으니 이제 안 기다리면 빈 게이지가
+   * 잠깐 보이는데, 그것도 틀린 그림이다 — 아예 안 그리는 편이 정직하다.
+   *
+   * 여울 샘플 방(`sampleMode`)과 아이가 아직 없는 시안 미리보기는 처음부터 목이라 그대로 그린다.
+   */
+  const waitingRoom = !s.sampleMode && !!live.petId && !live.petReady;
+
   return (
     <div
       className="yeoul"
@@ -96,7 +107,7 @@ export default function Yeoul(_props: SkinProps) {
           display: 'flex', flexDirection: 'column',
         }}
       >
-        {v.screen.room && <Room y={y} />}
+        {v.screen.room && (waitingRoom ? <RoomWait /> : <Room y={y} />)}
         {v.screen.egg && <Egg y={y} />}
         {v.screen.onb && <Onboarding y={y} />}
         <AuthModal
@@ -112,6 +123,29 @@ export default function Yeoul(_props: SkinProps) {
       </LiveProvider>
 
       <DevJump y={y} missingBasics={live.missingBasics} />
+    </div>
+  );
+}
+
+/**
+ * 방을 열기 전 한 박자. **조용해야 한다** — 알 화면과 같은 결로, 도는 것 하나와 한 줄뿐이다.
+ * 여기 게이지나 타일의 뼈대를 그려 두면 그것이 곧 "목 값" 이 되어 원래 문제로 돌아간다.
+ */
+function RoomWait() {
+  return (
+    <div
+      data-part="room-wait"
+      style={{
+        flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 13, background: C.shell,
+      }}
+    >
+      <span style={{
+        width: 26, height: 26, borderRadius: '50%',
+        border: `2px solid ${C.line}`, borderTopColor: C.accentDim,
+        animation: 'ySpin .9s linear infinite',
+      }} />
+      <span style={{ fontSize: 12, color: C.faint }}>방을 여는 중이에요</span>
     </div>
   );
 }

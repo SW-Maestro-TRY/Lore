@@ -29,6 +29,77 @@ import {
 import { getCurrentGame, guess, startGame, type GameState, type GuessResult, type Side } from '../../lib/game';
 import { uploadImage } from '../../lib/upload';
 
+/**
+ * 눌린 순간 **먼저 얹는 값**(낙관적 갱신). 서버 응답이 오면 그 자리에서 사라지고,
+ * 화면은 응답이 준 값으로 다시 그려진다 — 그래서 되감기가 아니라 **덮어쓰기**다.
+ *
+ * ★ 여기 담는 숫자는 상상이 아니라 **서버 규칙 그대로**다(`PetService.doCare` · `ZzalPet`):
+ *   밥 = 배부름 +1·재고 -1 / 간식 = 기분 +1·연속 +1 / 쓰다듬 = 오늘 횟수 +1(3 상한) /
+ *   청소 = 흔적 0 / 목욕 = 흔적 0·기분 +1·오늘 목욕함 / 약 = 나음.
+ *   간식이 아닌 행동은 전부 **연속 간식을 0 으로 끊는다**(`afterNonSnack`).
+ *   그래서 응답이 와도 숫자가 안 바뀌는 것이 정상이고, 다르면 서버 값이 조용히 이긴다.
+ *
+ * ★ 되감기는 **거절일 때만** 한다. 거절될 버튼은 미리 잠가 두므로(계약 10절) 정상적으로 쓰면
+ *   여기까지 오지 않는다. 그래도 다른 기기에서 먼저 눌렀을 수 있어 길을 남긴다.
+ */
+export interface CareOptimistic {
+  action: CareAction;
+  fullness?: number;
+  happiness?: number;
+  trash?: number;
+  foodCount?: number;
+  snackStreak?: number;
+  pets?: number;
+  bathDone?: boolean;
+  /** 아픔이 나은 것으로 먼저 그린다. */
+  healed?: boolean;
+}
+
+/**
+ * 돌보기 한 번의 결과.
+ *
+ * ★ `ok` 와 `message` 를 나눈 이유 — **"잠겨서 안 보냈다" 와 "보냈는데 거절당했다" 는 다르다.**
+ *   전에는 둘 다 `null`(성공)로 읽혀서, 연타로 두 번째 눌렀을 때 서버에 나가지도 않은 채
+ *   "맛있게 먹었어요" 가 떴다. 안 보낸 것은 `ok:false · message:null` 이라 아무 말도 안 한다.
+ */
+export interface CareResult {
+  ok: boolean;
+  /** 거절이면 화면에 띄울 한 줄. 안 보냈으면 null. */
+  message: string | null;
+}
+
+const GAUGE_MAX = 4;
+const PET_PER_DAY = 3;
+const up = (n: number) => Math.min(GAUGE_MAX, n + 1);
+
+/** 누른 순간 화면에 먼저 얹을 값. 아직 상태를 못 받았으면 아무것도 안 얹는다. */
+function optimisticOf(action: CareAction, pet: PetDetail | null): CareOptimistic | null {
+  const g = pet?.gauges ?? null;
+  const t = pet?.today ?? null;
+  // 간식이 아닌 행동은 연속 간식을 끊는다 — 그 자리도 같이 먼저 그린다.
+  const cut = { snackStreak: 0 };
+  switch (action) {
+    case 'FEED':
+      if (!g || !pet?.food) return null;
+      return { action, ...cut, fullness: up(g.fullness), foodCount: Math.max(0, pet.food.count - 1) };
+    case 'SNACK':
+      if (!g || !t) return null;
+      return { action, happiness: up(g.happiness), snackStreak: t.snackStreak + 1 };
+    case 'PET':
+      if (!t) return null;
+      return { action, ...cut, pets: Math.min(PET_PER_DAY, t.pets + 1) };
+    case 'CLEAN':
+      return { action, ...cut, trash: 0 };
+    case 'BATH':
+      if (!g) return null;
+      return { action, ...cut, trash: 0, happiness: up(g.happiness), bathDone: true };
+    case 'MEDICINE':
+      return { action, ...cut, healed: true };
+    default:
+      return null;
+  }
+}
+
 export interface Live {
   /** 고른 그림(미리보기용). 서버에 올리기 전에도 화면에 보여 준다. */
   previewUrl: string | null;
@@ -52,6 +123,14 @@ export interface Live {
   resumedDraft: boolean;
   /** 부화가 끝났는가(`ALIVE`). */
   ready: boolean;
+  /**
+   * **방을 그려도 되는가** — 서버가 준 지금 상태를 손에 쥐었는가.
+   *
+   * ★ 2026-09-10 — 이게 없으면 방이 먼저 그려지고 상태가 나중에 도착해서 게이지가 `0→3` 으로
+   *   튄다(상훈님 지적). 목으로 폴백해 메우던 자리라 더 안 보였다. 이제 **폴백을 없애고**
+   *   대신 이 값이 켜질 때까지 방을 안 그린다.
+   */
+  petReady: boolean;
   failed: boolean;
   /** 부화 중 지금 하는 일 한 줄(서버 문구). */
   step: string | null;
@@ -82,13 +161,21 @@ export interface Live {
    */
   careing: CareAction | null;
   /**
+   * 눌린 순간 화면에 먼저 얹은 값. 응답이 오면 null 로 돌아간다.
+   * 화면(`useYeoul.es`)은 이것을 서버 값 **위에** 얹어 그린다.
+   */
+  optimistic: CareOptimistic | null;
+  /**
    * 돌보기 한 번. 응답으로 온 상태가 곧 새 화면이다.
    *
-   * ★ 되감기를 만들지 않는다(계약 10절 · 백엔드도 같은 의견). 먼저 올려 두고 틀리면 되돌리는
-   *   방식은 되돌리는 순간이 사람 눈에 '깎였다' 로 읽힌다. 그래서 **응답을 받고 나서** 그린다.
-   * @returns 성공이면 null, 거절이면 화면에 띄울 한 줄.
+   * ★ 2026-09-10 — **먼저 그리고 응답으로 덮는다**(상훈님 지시). 누른 그 순간 게이지가 움직여야
+   *   눌린 줄 안다. 계약 10절의 "서버가 준 값으로만 그린다" 와 부딪히지 않게 절충을 이렇게 잡았다:
+   *     1) **거절될 버튼은 아예 못 누르게 잠근다** — 거절 자체가 안 나오면 되감을 일이 없다
+   *     2) 응답이 오면 낙관값을 버리고 **서버 값으로 덮는다**(다르면 조용히 맞춰진다)
+   *     3) 그럼에도 거절이 오면 낙관값을 버리고 서버가 준 말을 띄운다
+   * @returns 보냈고 받아들여졌으면 `ok`, 거절이면 `message`, 잠겨서 안 보냈으면 둘 다 비어 있다.
    */
-  doCare: (action: CareAction) => Promise<string | null>;
+  doCare: (action: CareAction) => Promise<CareResult>;
   /**
    * 오늘의 부름과 기억. **대사는 전부 여기서 온다** — 화면이 지어내지 않는다(상훈님 지시).
    * 아직 안 읽었거나 서버에 안 붙었으면 null.
@@ -128,11 +215,11 @@ export interface Live {
 
 const EMPTY: Live = {
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null,
-  draftOnly: false, resumedDraft: false, careing: null, chat: null, chatting: false,
-  game: null, guessing: false, album: null, ready: false, failed: false, step: null,
+  draftOnly: false, resumedDraft: false, careing: null, optimistic: null, chat: null, chatting: false,
+  game: null, guessing: false, album: null, ready: false, petReady: false, failed: false, step: null,
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
   img: () => null,
-  upload: async () => {}, setChar: async () => {}, doCare: async () => null,
+  upload: async () => {}, setChar: async () => {}, doCare: async () => ({ ok: false, message: null }),
   sendChat: async () => ({ error: null, reply: null }),
   startPlay: async () => null,
   pickSide: async () => ({ error: null, result: null }),
@@ -145,6 +232,9 @@ export function useHatchState(): Live {
   const [imageKey, setImageKey] = useState<string | null>(null);
   const [petId, setPetId] = useState<number | null>(null);
   const [pet, setPet] = useState<PetDetail | null>(null);
+  /** 손잡이 안에서 "지금 서버가 말한 값" 을 읽을 자리. 값이 바뀔 때마다 손잡이를 새로 만들지 않는다. */
+  const petRef = useRef<PetDetail | null>(null);
+  petRef.current = pet;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const objectUrl = useRef<string | null>(null);
@@ -153,11 +243,28 @@ export function useHatchState(): Live {
   const [hatch, setHatch] = useState<HatchProgress | null>(null);
   const [resumedDraft, setResumedDraft] = useState(false);
   const [careing, setCareing] = useState<CareAction | null>(null);
+  /**
+   * ★ 연타를 막는 **진짜** 자물쇠. `careing`(상태)만으로는 못 막는다 — 두 번째 클릭이
+   *   다시 그려지기 전에 들어오면 그 손잡이는 아직 `careing === null` 인 옛 껍데기를 들고 있어
+   *   같은 요청이 두 번 나간다. ref 는 그 자리에서 바뀌므로 같은 틱 안에서도 막힌다.
+   */
+  const careingRef = useRef<CareAction | null>(null);
+  const [optimistic, setOptimistic] = useState<CareOptimistic | null>(null);
   const [chat, setChat] = useState<ChatState | null>(null);
   const [chatting, setChatting] = useState(false);
   const [game, setGame] = useState<GameState | null>(null);
   const [guessing, setGuessing] = useState(false);
   const [album, setAlbum] = useState<Album | null>(null);
+  /**
+   * 방이 기다려야 하는 **첫 한 벌**이 다 왔는가.
+   *
+   * ★ 상태(`getPet`)만으로는 모자랐다 — 마당 뱃지(오늘 남은 판)는 `games/current`, 말풍선·부름점은
+   *   `chat` 에서 온다. 상태만 기다리고 방을 그렸더니 마당 뱃지가 `(없음) → 2` 로 **281ms 뒤에 튀었다**
+   *   (2026-09-10 실측). 늦게 오는 값이 하나라도 있으면 그게 곧 그 자리의 '튐' 이다.
+   *   실패해도 켠다 — 못 받은 것 때문에 방이 영영 안 열리면 그건 더 나쁘다.
+   */
+  const [gameLoaded, setGameLoaded] = useState(false);
+  const [chatLoaded, setChatLoaded] = useState(false);
 
   // 미리보기 주소는 브라우저 메모리를 잡으므로 바뀌거나 떠날 때 놓아 준다.
   useEffect(() => () => { if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }, []);
@@ -217,25 +324,35 @@ export function useHatchState(): Live {
   /**
    * 돌보기 한 번.
    *
-   * ★ 거절이 나도 **되감지 않는다.** 화면이 값을 올린 적이 없으니 되돌릴 것도 없다.
-   *   대신 지금 진짜 상태를 다시 받아 그리고(폰·PC 를 같이 켜 둔 경우가 여기다) 문구만 띄운다.
+   * ★ 누른 순간 **낙관값을 먼저 얹고**, 응답이 오면 서버 값으로 덮는다(2026-09-10 상훈님 지시).
+   *   덮는 것과 낙관값을 버리는 것은 **같은 틱**에서 한다 — 나눠서 하면 그 사이 한 프레임 동안
+   *   옛 값이 비쳐 오히려 깜빡인다.
+   * ★ 거절이면 낙관값을 버리고, 서버가 지금 무엇을 참으로 아는지 다시 받아 그린다
+   *   (폰·PC 를 같이 켜 둔 경우가 여기다). 그리고 서버가 준 말을 그대로 돌려준다.
    * ★ 401 은 여기서 다루지 않는다 — 공통 클라이언트가 갱신을 시도하고, 그래도 안 되면
    *   로그인 창을 여는 것은 바깥의 일이다.
    */
-  const doCare = useCallback(async (action: CareAction): Promise<string | null> => {
-    if (!petId || careing) return null;
+  const doCare = useCallback(async (action: CareAction): Promise<CareResult> => {
+    if (!petId) return { ok: false, message: null };
+    // 도는 동안 들어온 두 번째 클릭 — **아무 말도 하지 않는다.** 잠긴 버튼이 이미 말하고 있다.
+    if (careingRef.current) return { ok: false, message: null };
+    careingRef.current = action;
     setCareing(action);
+    setOptimistic(optimisticOf(action, petRef.current));
     try {
-      setPet(await care(petId, action));
-      return null;
+      const next = await care(petId, action);
+      setPet(next);
+      setOptimistic(null);
+      return { ok: true, message: null };
     } catch (e) {
-      // 거절당했으면 서버가 지금 무엇을 참인지 알고 있다. 그걸 받아 다시 그린다.
+      setOptimistic(null);
       try { setPet(await getPet(petId)); } catch { /* 이것마저 실패하면 화면은 그대로 둔다 */ }
-      return e instanceof Error ? e.message : '지금은 할 수 없어요';
+      return { ok: false, message: e instanceof Error ? e.message : '지금은 할 수 없어요' };
     } finally {
+      careingRef.current = null;
       setCareing(null);
     }
-  }, [petId, careing]);
+  }, [petId]);
 
   /**
    * 부름에 답하기.
@@ -322,7 +439,21 @@ export function useHatchState(): Live {
       // ★ 이걸 안 하면 다시 들어올 때마다 머리줄이 목 값(12일째·친밀도 40%)으로 돌아간다.
       const living = mine.find((p) => p.phase === 'ALIVE');
       if (living) {
-        setPetId(living.petId); setCharSet(true); setPet(living);
+        // ★ 2026-09-10 상훈님 지시 — **목록을 받은 김에 그 자리에서 상태까지 받는다.**
+        //   방을 그리기 전에 손에 쥐고 있어야 게이지가 튀지 않는다. 목록도 같은 `Detail` 이지만
+        //   방이 보는 값의 출처를 `getPet` 한 곳으로 모아 둔다 — 나중에 둘이 갈라져도
+        //   "방은 무엇을 보고 그렸나" 가 한 줄로 남는다. 못 받으면 목록 값으로 간다.
+        //   ★ 한 벌을 **한꺼번에** 받는다(병렬). 하나씩 받으면 받는 순서대로 화면이 한 칸씩 채워져
+        //     결국 같은 튐이 된다.
+        const [detail, g, c] = await Promise.all([
+          getPet(living.petId).catch(() => living),
+          getCurrentGame(living.petId).catch(() => null),
+          getChat(living.petId).catch(() => null),
+        ]);
+        setPetId(living.petId); setCharSet(true); setPet(detail);
+        if (g) setGame(g);
+        if (c) setChat(c);
+        setGameLoaded(true); setChatLoaded(true);
         setHatch({ phase: 'ALIVE', label: null, progress: 0, total: 0, estimatedSeconds: 0, message: null });
         return 'alive';
       }
@@ -352,12 +483,18 @@ export function useHatchState(): Live {
     return () => { alive = false; clearInterval(t); };
   }, [watching, petId]);
 
-  // 다 됐을 때 **한 번만** 무거운 쪽을 부른다 — 그림 주소(`motions[].basicImageKey`)가 거기 있다.
+  // 다 됐을 때 무거운 쪽을 부른다 — 그림 주소(`motions[].basicImageKey`)가 거기 있다.
+  //
+  // ★ 한 번 실패하면 다시 부른다(2026-09-10). 전에는 한 번만 부르고 실패를 삼켰는데,
+  //   방을 그 값이 올 때까지 안 그리기로 한 뒤로는 **그 한 번을 놓치면 방이 영영 안 열린다.**
+  //   (지연·실패를 주입해 보고 알았다.) 3초 간격으로 다시 묻고, 받으면 스스로 멈춘다.
   useEffect(() => {
     if (phase !== 'ALIVE' || !petId || pet) return;
     let alive = true;
-    void getPet(petId).then((d) => { if (alive) setPet(d); }).catch(() => {});
-    return () => { alive = false; };
+    const look = () => { void getPet(petId).then((d) => { if (alive) setPet(d); }).catch(() => {}); };
+    look();
+    const t = setInterval(look, 3000);
+    return () => { alive = false; clearInterval(t); };
   }, [phase, petId, pet]);
 
   // 오늘의 부름 읽기. 아이가 살아난 뒤, 그리고 **무언가 한 뒤마다** 다시 읽는다.
@@ -371,7 +508,10 @@ export function useHatchState(): Live {
   useEffect(() => {
     if (!petId || !living) return;
     let alive = true;
-    void getChat(petId).then((c) => { if (alive) setChat(c); }).catch(() => {});
+    void getChat(petId)
+      .then((c) => { if (alive) setChat(c); })
+      .catch(() => {})
+      .finally(() => { if (alive) setChatLoaded(true); });
     return () => { alive = false; };
   }, [petId, living, pet]);
 
@@ -380,7 +520,11 @@ export function useHatchState(): Live {
   useEffect(() => {
     if (!petId || !living) return;
     let alive = true;
-    void getCurrentGame(petId).then((g) => { if (alive) setGame(g); }).catch(() => {});
+    void getCurrentGame(petId)
+      .then((g) => { if (alive) setGame(g); })
+      .catch(() => {})
+      .finally(() => { if (alive) setGameLoaded(true); });
+    // 앨범은 기다리지 않는다 — 못 받아도 펫 상태의 같은 18칸으로 **같은 숫자**가 나온다(튀지 않는다).
     void getAlbum(petId).then((a) => { if (alive) setAlbum(a); }).catch(() => {});
     return () => { alive = false; };
   }, [petId, living]);
@@ -398,7 +542,8 @@ export function useHatchState(): Live {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
     setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null);
-    setCharSet(false); setHatch(null); setResumedDraft(false);
+    setCharSet(false); setHatch(null); setResumedDraft(false); setOptimistic(null);
+    setGameLoaded(false); setChatLoaded(false);
     setChat(null); setGame(null); setAlbum(null);
   }, []);
 
@@ -408,6 +553,8 @@ export function useHatchState(): Live {
     draftOnly: !!petId && !charSet,
     resumedDraft: resumedDraft && !charSet,
     ready: phase === 'ALIVE',
+    // 방을 그려도 되는 순간 = 서버가 준 지금 상태(게이지 포함)를 들고 있을 때.
+    petReady: pet?.phase === 'ALIVE' && !!pet.gauges && gameLoaded && chatLoaded,
     failed: phase === 'FAILED' || phase === 'DEAD',
     step: hatch?.label ?? null,
     progress: hatch?.progress ?? 0,
@@ -417,7 +564,7 @@ export function useHatchState(): Live {
     missingBasics: pet?.phase === 'ALIVE'
       ? BASIC_KEYS.filter((k) => !pet.motions?.some((m) => m.key === k && m.basicImageKey))
       : [],
-    careing, chat, chatting, game, guessing, album,
+    careing, optimistic, chat, chatting, game, guessing, album,
     img, upload, setChar, doCare, sendChat, startPlay, pickSide, loadAlbum, shareMotion, resume, reset,
   };
 }

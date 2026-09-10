@@ -218,6 +218,13 @@ export interface Tile {
 export interface PopBtn {
   label: string; count: string; tap: () => void; anim: string;
   bg: string; fg: string; subFg: string; bd: string;
+  /**
+   * 지금 누를 수 없는가. **진짜 `disabled`** 로 내려간다(계약 10절 "거절될 버튼은 미리 잠가 둔다").
+   * 예전에는 회색으로만 칠하고 눌리게 두어, 눌러 봐야 왜 안 되는지 알 수 있었다.
+   */
+  off: boolean;
+  /** 왜 못 누르는지 한 줄. 잠겨 있을 때 남은 횟수 자리에 대신 뜬다. 눌릴 때는 빈 문자열. */
+  why: string;
 }
 export interface Pop {
   show: boolean; anim: string; name: string; say: string;
@@ -282,22 +289,32 @@ export function useYeoul(live?: Live) {
   const onServer = !!sv && sv.phase === 'ALIVE' && !s.sampleMode;
 
   /**
-   * **지금 값** — 목 상태 위에 서버 값을 덮은 것. 아래 계산은 전부 이걸 본다.
+   * 눌린 순간 먼저 얹은 값(낙관적 갱신). 응답이 오면 `useHatch` 가 이걸 버리고 서버 값으로 덮는다.
+   * 없으면(`null`) 그냥 서버 값이다.
+   */
+  const og = live?.optimistic ?? null;
+
+  /**
+   * **지금 값** — 목 상태 위에 서버 값(그리고 방금 누른 낙관값)을 덮은 것. 아래 계산은 전부 이걸 본다.
    *
-   * ★ 화면은 스스로 게이지를 올리지 않는다(계약 10절). 여기 있는 숫자는 전부 서버가 준 것이고,
-   *   버튼을 누르면 응답으로 온 새 값이 그대로 다음 화면이 된다.
+   * ★ 숫자는 전부 서버가 준 것이다. 화면이 스스로 올리는 것은 **방금 누른 한 번뿐**이고,
+   *   그것도 응답이 오는 순간 서버 값으로 덮인다(계약 10절 + 2026-09-10 절충 → `useHatch.doCare`).
    * ★ 아직 안 옮긴 것(놀이 횟수 `plays`·부름 `calls`·앨범 칸 수·조각)은 그대로 목이다.
    */
   const es: YeoulState = onServer ? {
     ...s,
-    full: sv.gauges?.fullness ?? s.full,
-    happy: sv.gauges?.happiness ?? s.happy,
-    trace: sv.gauges?.trash ?? s.trace,
-    stock: sv.food?.count ?? s.stock,
-    snacks: sv.today?.snackStreak ?? s.snacks,
-    bathUsed: !!sv.today?.bathDone,
-    pets: sv.today?.pets ?? s.pets,
-    sick: sv.sick != null,
+    // ★ 2026-09-10 — **목으로 폴백하지 않는다.** `?? s.full` 로 메우던 자리가 방 입장 때
+    //   게이지를 튀게 하던 범인이었다(목 값으로 먼저 그려졌다가 서버 값이 도착하며 0→3).
+    //   방은 `live.petReady` 전에는 아예 안 그리므로(Yeoul.tsx) 여기서 비어 있을 일이 없고,
+    //   그래도 비면 0 으로 둔다 — 목 숫자를 섞느니 빈 게이지가 정직하다.
+    full: og?.fullness ?? sv.gauges?.fullness ?? 0,
+    happy: og?.happiness ?? sv.gauges?.happiness ?? 0,
+    trace: og?.trash ?? sv.gauges?.trash ?? 0,
+    stock: og?.foodCount ?? sv.food?.count ?? 0,
+    snacks: og?.snackStreak ?? sv.today?.snackStreak ?? 0,
+    bathUsed: og?.bathDone ?? !!sv.today?.bathDone,
+    pets: og?.pets ?? sv.today?.pets ?? 0,
+    sick: og?.healed ? false : sv.sick != null,
     sleeping: !!sv.clock?.sleeping,
   } : s;
 
@@ -497,8 +514,9 @@ export function useYeoul(live?: Live) {
    * @param motion 성공했을 때 지을 자세. 거절이면 짓지 않는다.
    */
   const serverCare = useCallback(async (action: CareAction, motion: string, ok: string) => {
-    const msg = await liveRef.current?.doCare(action);
-    if (msg) { flash(msg); return; }
+    const r = await liveRef.current?.doCare(action);
+    // 잠겨서 안 보낸 경우(`ok:false · message:null`)는 **아무 말도 안 한다** — 잠긴 버튼이 이미 말한다.
+    if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
     act(motion);
     flash(ok);
   }, [flash, act]);
@@ -512,10 +530,12 @@ export function useYeoul(live?: Live) {
       //   그래도 쓰다듬는 시늉은 그대로 둔다 — 하루 세 번이 지났다고 아이를 못 만지게 하면
       //   그건 잠금이 아니라 벌이다. 세어지지 않을 뿐이라고 말해 준다.
       if (esRef.current.pets >= PET_MAX) { act('shy'); flash('오늘 쓰다듬기는 다 했어요'); return; }
+      // 돌보기가 도는 중엔 아무 일도 안 한다 — 같은 요청이 두 번 나가지 않게(계약 10절).
+      if (liveRef.current?.careing) return;
       // 쓰다듬기도 돌보기 하나다(`PET`). 하트는 서버가 세어 준 오늘 횟수로 판단한다.
       void (async () => {
-        const msg = await liveRef.current?.doCare('PET');
-        if (msg) { flash(msg); return; }
+        const r = await liveRef.current?.doCare('PET');
+        if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
         act('shy');
         patch({ hearts: true });
         later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
@@ -579,7 +599,13 @@ export function useYeoul(live?: Live) {
 
   const onMed = useCallback(() => {
     lastSel.current = Date.now();
-    if (onServerRef.current) { void serverCare('MEDICINE', 'joy', '바로 나았어요'); return; }
+    if (onServerRef.current) {
+      // ★ 약 단추는 **아플 때만 그려진다**(`v.medFab.show`) — 그것이 "안 아픔" 거절의 미리 잠금이다.
+      //   여기서는 도는 중 연타만 막는다.
+      if (liveRef.current?.careing) return;
+      void serverCare('MEDICINE', 'joy', '바로 나았어요');
+      return;
+    }
     if (!s.sick) { flash('지금은 약이 필요 없어요'); return; }
     patch({ sick: false });
     act('joy');
@@ -1083,12 +1109,17 @@ export function useYeoul(live?: Live) {
       const why = locked ? lockMsg : sickSnack ? '아플 땐 간식을 안 먹어요' : pre;
       const off = !!why || waiting;
       return {
-        label: r.label, count: unlimited ? '' : r.count,
+        label: r.label,
+        // ★ 잠겨 있으면 남은 횟수 대신 **왜 못 누르는지**를 그 자리에 쓴다(상훈님 2026-09-10).
+        //   '0번 남음' 은 사실이지만 이유가 아니다 — 사람은 "왜?" 를 먼저 묻는다.
+        //   기다리는 중(`waiting`)은 이유를 안 쓴다. 곧 풀릴 것이라 한 줄이 깜빡이기만 한다.
+        count: unlimited ? '' : (why || r.count),
+        off, why: waiting ? '' : why,
         tap: () => {
           lastSel.current = Date.now();
-          if (waiting) return;          // 기다리는 중엔 아무 말도 안 한다 — 눌린 표시로 충분하다
-          if (why) flash(why);
-          else r.tap();
+          // 잠긴 버튼은 `disabled` 라 여기까지 오지 않는다. 와도 아무 일도 안 한다.
+          if (off) return;
+          r.tap();
         },
         anim: isTutTarget ? 'yBlink 1.2s ease-in-out infinite' : 'none',
         bg: off ? C.off : C.paper,
@@ -1321,7 +1352,27 @@ export function useYeoul(live?: Live) {
         bd: tut && tut.room === 'chat' ? ACCENT : C.line,
         anim: tut && tut.room === 'chat' ? 'yNudge 1.9s ease-in-out infinite' : 'none',
       },
-      medFab: { show: s.screen === 'room' && es.sick && !s.chatOpen && !s.popOpen && !s.sheet && !es.sleeping },
+      /**
+       * 약 단추. **아플 때만 그린다** — 계약 10절의 여섯 거절 중 "안 아픔" 은 버튼을 잠그는 대신
+       * 아예 안 내는 것으로 막는다(안 아플 때 회색 약병이 떠 있으면 아픈 줄 안다).
+       * 돌보기가 도는 동안에는 잠근다(연타 방지).
+       */
+      medFab: {
+        show: s.screen === 'room' && es.sick && !s.chatOpen && !s.popOpen && !s.sheet && !es.sleeping,
+        off: !!live?.careing,
+      },
+      /**
+       * 쓰다듬기 자물쇠. **아이는 계속 만질 수 있다** — 하루 세 번이 지났다고 못 만지게 하는 것은
+       * 잠금이 아니라 벌이다(2026-09-08 결정). 대신 **서버를 부르지 않고**, 왜 안 세어지는지
+       * 한 줄로 미리 보여 준다(전에는 눌러 봐야 알 수 있었다).
+       * ⚠️ 서버는 `PET` 을 거절하지 않는다(`PetService.doCare` — "쓰다듬기는 거절이 없다").
+       *   계약 10절이 여섯 거절에 넣어 둔 것과 실제 서버가 다르다. 화면 쪽에서만 세어 막는다.
+       */
+      petLock: {
+        show: s.screen === 'room' && onServer && es.pets >= PET_MAX
+          && !es.sleeping && !s.chatOpen && !s.popOpen && !s.sheet,
+        text: '오늘 쓰다듬기는 다 했어요',
+      },
       // 좌측 하단 카드. 세 얼굴을 차례로 갖는다 —
       //   튜토리얼 중엔 부름 / 2층을 배우는 동안엔 로드맵 / 다 배우면 **조각 도장 4칸**.
       // ★ 로드맵이 끝나도 카드가 사라지지 않는다(2026-09-07 상훈님 지시). 정본상 2층 8종을
@@ -1387,7 +1438,9 @@ export function useYeoul(live?: Live) {
         haloOpacity: hatchReady ? 1 : 0,
         exit: exitSample, forceHatch: goEgg,
       },
-      hearts: { show: s.hearts, text: s.pets >= 3 ? '♥♥♥' : s.pets === 2 ? '♥♥♡' : '♥♡♡' },
+      // 하트 개수는 **오늘 쓰다듬은 횟수**다. 서버에 붙었으면 서버가 센 값(`es.pets`)을 쓴다 —
+      // 목의 `s.pets` 는 서버 모드에서 영영 0 이라 늘 ♥♡♡ 만 떴다(2026-09-10).
+      hearts: { show: s.hearts, text: es.pets >= 3 ? '♥♥♥' : es.pets === 2 ? '♥♥♡' : '♥♡♡' },
       toast: { show: !!s.toast, text: s.toast },
       wall: {
         show: s.screen === 'room' && (s.wallOpen || s.wallClosing),
