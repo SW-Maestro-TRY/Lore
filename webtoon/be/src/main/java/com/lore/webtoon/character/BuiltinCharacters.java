@@ -6,11 +6,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.ApplicationArguments;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -90,9 +95,66 @@ public class BuiltinCharacters implements ApplicationRunner {
                              @Value("${lore.webtoon.character.seed-builtin:true}") boolean on) {
         this.characters = characters;
         this.art = art;
-        this.samples = Path.of(samples == null || samples.isBlank()
-                ? "haeun/landing/web/samples" : samples).toAbsolutePath().normalize();
+        this.samples = resolveSamplesDir(samples);
         this.on = on;
+    }
+
+    /**
+     * 견본 그림이 있는 자리를 찾는다 — 셋 중 먼저 되는 것을 쓴다.
+     *
+     * <ol>
+     *   <li>{@code samples-dir} 로 직접 지정한 자리 (있으면 최우선)</li>
+     *   <li>저장소 원본 {@code haeun/landing/web/samples} (로컬 개발 — 되풀이 켤
+     *       때마다 최신 그림을 바로 본다)</li>
+     *   <li>jar 리소스({@code webtoon/character-samples} — {@code sync-harness.sh}
+     *       가 빌드마다 뜬 사본)를 임시 폴더로 풀어서 쓴다. <b>배포 서버가 이
+     *       길이다</b> — 서버엔 haeun/ 원본이 없다(#274 — 그래서 운영 캐릭터
+     *       탭이 통째로 비어 있었다).</li>
+     * </ol>
+     */
+    private static Path resolveSamplesDir(String samples) {
+        if (samples != null && !samples.isBlank()) {
+            return Path.of(samples).toAbsolutePath().normalize();
+        }
+        Path repo = Path.of("haeun/landing/web/samples").toAbsolutePath().normalize();
+        if (Files.isDirectory(repo)) {
+            return repo;
+        }
+        return extractFromClasspath();
+    }
+
+    /** {@code webtoon/character-samples} 리소스를 임시 폴더로 푼다({@code AiHarnessResources} 와 같은 방식). */
+    private static Path extractFromClasspath() {
+        try {
+            Path root = Files.createTempDirectory("webtoon-character-samples-");
+            root.toFile().deleteOnExit();
+            String prefix = "webtoon/character-samples/";
+            Resource[] files = new PathMatchingResourcePatternResolver()
+                    .getResources("classpath*:" + prefix + "**/*");
+            int count = 0;
+            for (Resource r : files) {
+                String uri = r.getURI().toString();
+                int at = uri.indexOf(prefix);
+                if (at < 0) {
+                    continue;
+                }
+                String rel = uri.substring(at + prefix.length());
+                if (rel.isBlank() || rel.endsWith("/")) {
+                    continue;
+                }
+                Path dst = root.resolve(rel);
+                Files.createDirectories(dst.getParent());
+                try (InputStream in = r.getInputStream()) {
+                    Files.copy(in, dst, StandardCopyOption.REPLACE_EXISTING);
+                }
+                count++;
+            }
+            log.info("기본 캐릭터 견본 {}개를 jar 리소스에서 {} 에 풀었습니다", count, root);
+            return root;
+        } catch (IOException e) {
+            log.error("기본 캐릭터 견본을 jar 리소스에서 풀지 못했습니다", e);
+            return Path.of("haeun/landing/web/samples").toAbsolutePath().normalize();
+        }
     }
 
     @Override

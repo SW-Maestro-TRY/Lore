@@ -278,12 +278,24 @@ export interface RunCard {
 
 export function listRuns(mine = false): Promise<{ runs: RunCard[] }> {
   const q = mine ? `?mine=1&uid=${encodeURIComponent(getUid())}` : "";
-  return call<{ runs: RunCard[] }>(`/runs${q}`).catch((e) => {
-    // 「내가 만든 것」은 스냅샷으로 메우지 않는다 — 구워 둔 것은 남의 작품이라,
-    // 내 목록에 끼워 넣으면 만든 적 없는 작품이 내 것으로 보인다.
-    if (mine) throw e;
-    return snapshot<{ runs: RunCard[] }>("/runs.json");
-  });
+  return call<{ runs: RunCard[] }>(`/runs${q}`)
+    .then((got) => {
+      // ★ 서버는 이제 실제로 뜬다(#243 이후). 켜져 있지만 **공개 작품이 아직
+      //   하나도 없으면** 200 에 빈 배열이 온다 — 이건 실패가 아니라서 아래
+      //   .catch 로는 안 걸린다. 그런데 이때도 둘러보기가 텅 비면 스냅샷을
+      //   만든 이유(#274 — 걸린 작품이 하나도 없어 보이는 문제)가 그대로
+      //   되살아난다. 그래서 성공했어도 빈 목록이면 스냅샷으로 채운다.
+      if (!mine && (!got.runs || got.runs.length === 0)) {
+        return snapshot<{ runs: RunCard[] }>("/runs.json");
+      }
+      return got;
+    })
+    .catch((e) => {
+      // 「내가 만든 것」은 스냅샷으로 메우지 않는다 — 구워 둔 것은 남의 작품이라,
+      // 내 목록에 끼워 넣으면 만든 적 없는 작품이 내 것으로 보인다.
+      if (mine) throw e;
+      return snapshot<{ runs: RunCard[] }>("/runs.json");
+    });
 }
 
 /** 카드 표지. 목록은 화면을 바꿔 끼우며 그리므로 loading="lazy" 를 안 쓴다 —
