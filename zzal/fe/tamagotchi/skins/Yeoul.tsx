@@ -64,10 +64,21 @@ export default function Yeoul(_props: SkinProps) {
     // 이름도 함께 지운다 — 안 지우면 로그아웃한 화면에 **앞사람 아이의 이름**이 그대로 남는다.
     patch({ petName: '' });
   }, [isAuthenticated, reset, patch]);
+  /**
+   * ★ 화면을 옮기는 것도 **지금 세대의 답일 때만** 한다(2026-09-10).
+   *   `asked` 를 되돌리는 것은 *다음* 로그인이 다시 묻게 할 뿐, **이미 날아간 요청**은 못 막는다.
+   *   A 로 로그인 → 답이 오기 전에 로그아웃 → B 로 로그인 하면, 늦게 온 A 의 답이
+   *   그대로 `enterRoom()` 을 불러 **앞사람의 방이 열렸다.**
+   *   (`useHatch.resume` 도 같은 기준으로 제 상태를 안 건드린다 — 두 곳 다 막아야 한다.)
+   */
+  const era = useRef(0);
+  useEffect(() => { era.current += 1; }, [isAuthenticated]);
   useEffect(() => {
     if (!isAuthenticated || asked.current) return;
     asked.current = true;
+    const mine = era.current;
     void resume().then((r) => {
+      if (mine !== era.current) return;   // 그사이 로그인 상태가 바뀌었다 — 남의 답이다
       if (r === 'draft') goStep(STEPS.indexOf('char'));
       else if (r === 'hatching') goEgg();
       else if (r === 'alive') enterRoom();

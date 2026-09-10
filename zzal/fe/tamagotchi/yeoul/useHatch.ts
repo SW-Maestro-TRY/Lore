@@ -282,7 +282,18 @@ export function useHatchState(): Live {
   const [chat, setChat] = useState<ChatState | null>(null);
   const [chatting, setChatting] = useState(false);
   const [game, setGame] = useState<GameState | null>(null);
+  /**
+   * ★ 판을 **그 자리에서** 읽을 자리. `startPlay()` 로 판을 만든 직후 `pickSide` 를 부르면
+   *   `game`(상태)은 아직 옛것이라 `gameId` 가 없어 조용히 빠져나갔다 — 그래서
+   *   **처음 좌우 맞히기를 누르면 아무 일도 안 일어나고 한 번 더 눌러야 했다**(튜토리얼 6칸이 그 자리다).
+   *   상태가 다시 그려지길 기다리는 방식은 같은 함정을 또 밟는다. ref 는 같은 틱에 바뀐다.
+   */
+  const gameRef = useRef<GameState | null>(null);
   const [guessing, setGuessing] = useState(false);
+  /** 좌우 맞히기 연타 자물쇠. `guessing`(상태)만으로는 같은 틱의 두 번째 클릭을 못 막는다. */
+  const guessingRef = useRef(false);
+  /** 판 응답도 늦게 온 옛것이 최신을 덮지 않게. 펫과 같은 순번표를 쓴다. */
+  const appliedGame = useRef(0);
   const [album, setAlbum] = useState<Album | null>(null);
   /**
    * 방이 기다려야 하는 **첫 한 벌**이 다 왔는가.
@@ -310,6 +321,14 @@ export function useHatchState(): Live {
    */
   const issued = useRef(0);
   const applied = useRef(0);
+  /**
+   * 지금 보고 있는 **로그인 세대**. 로그아웃·초기화 때마다 하나 올라간다.
+   *
+   * ★ 왜 필요한가 — A 로 로그인해 조회가 날아간 뒤 로그아웃하고 B 로 로그인하면,
+   *   **늦게 도착한 A 의 응답**이 그대로 적용돼 앞사람의 아이가 열렸다. 다시 물어보게 하는 것만으로는
+   *   이미 날아간 요청을 못 막는다. 세대가 바뀌면 그 응답은 남의 것이므로 버린다.
+   */
+  const session = useRef(0);
   /** 보낼 때 순번을 받는다. */
   const takeSeq = useCallback(() => ++issued.current, []);
   /** 받은 상태를 얹는다. 옛 응답이면 **버린다.** @returns 얹었으면 true */
@@ -317,6 +336,14 @@ export function useHatchState(): Live {
     if (seq <= applied.current) return false;
     applied.current = seq;
     setPet(next);
+    return true;
+  }, []);
+  /** 판도 같은 규칙으로. ref 를 함께 바꿔 **같은 틱에** 읽을 수 있게 한다. */
+  const putGame = useCallback((seq: number, next: GameState | null) => {
+    if (seq <= appliedGame.current) return false;
+    appliedGame.current = seq;
+    gameRef.current = next;
+    setGame(next);
     return true;
   }, []);
 
@@ -494,7 +521,8 @@ export function useHatchState(): Live {
   const startPlay = useCallback(async (): Promise<string | null> => {
     if (!petId) return null;
     try {
-      setGame(await startGame(petId, 'LEFT_RIGHT'));
+      // ★ `putGame` 이 ref 도 함께 바꾼다 — 바로 뒤에 `pickSide` 를 불러도 판을 찾을 수 있다.
+      putGame(takeSeq(), await startGame(petId, 'LEFT_RIGHT'));
       // ★ 판을 **시작하는 것만으로** 튜토리얼 6칸이 넘어간다(2026-09-10 실측).
       //   그런데 이 응답은 `GameState` 라 펫이 안 들어 있어, 다시 읽지 않으면 화면의 칸이 안 넘어간다.
       //   ⚠️ 치던 판이 있으면 서버가 그 판을 그대로 주고 칸을 **안** 넘긴다 — 그것도 실측이다.
@@ -502,26 +530,36 @@ export function useHatchState(): Live {
       try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 판은 시작됐다 */ }
       return null;
     } catch (e) { return e instanceof Error ? e.message : '지금은 못 놀아요'; }
-  }, [petId, takeSeq, putPet]);
+  }, [petId, takeSeq, putPet, putGame]);
 
   const pickSide = useCallback(async (side: Side) => {
-    const id = game?.gameId;
-    if (!petId || !id || guessing) return { error: null, result: null };
+    // ★ 상태가 아니라 ref 를 본다 — 방금 시작한 판도 여기서 바로 잡힌다.
+    const id = gameRef.current?.gameId;
+    if (!petId || !id) return { error: null, result: null };
+    // ★ 같은 틱에 두 번 눌러도 한 번만 나간다. 상태(`guessing`)는 다시 그려진 뒤에야 바뀌어서
+    //   두 번째 클릭이 그대로 통과했고, 한 번 누른 셈인데 라운드가 두 칸 갔다.
+    if (guessingRef.current) return { error: null, result: null };
+    guessingRef.current = true;
     setGuessing(true);
     try {
       const r = await guess(petId, id, side);
       // 판이 끝났으면 `playing` 이 꺼진 새 상태를 받아 둔다 — 다음 판은 다시 시작해야 한다.
-      setGame((g) => (g ? { ...g, round: r.nextRound, hits: r.hits, playing: !r.finished, remainingToday: r.remainingToday, runUnlocked: r.runUnlocked } : g));
+      const g = gameRef.current;
+      if (g) {
+        putGame(takeSeq(), { ...g, round: r.nextRound, hits: r.hits, playing: !r.finished, remainingToday: r.remainingToday, runUnlocked: r.runUnlocked });
+      }
       // 이긴 판은 기분이 오른다. 그 값은 펫 상태에 있으므로 다시 읽어 화면을 맞춘다.
       if (r.finished) { const seq = takeSeq(); try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 판 결과는 보여 준다 */ } }
       return { error: null, result: r };
     } catch (e) {
-      try { setGame(await getCurrentGame(petId)); } catch { /* 화면은 그대로 둔다 */ }
+      const seq = takeSeq();
+      try { putGame(seq, await getCurrentGame(petId)); } catch { /* 화면은 그대로 둔다 */ }
       return { error: e instanceof Error ? e.message : '지금은 못 쳐요', result: null };
     } finally {
+      guessingRef.current = false;
       setGuessing(false);
     }
-  }, [petId, game?.gameId, guessing]);
+  }, [petId, takeSeq, putPet, putGame]);
 
   const loadAlbum = useCallback(async () => {
     if (!petId) return;
@@ -548,8 +586,12 @@ export function useHatchState(): Live {
    *   `ZZAL_PET_ALREADY_HATCHING` 에 막혀 갈 데가 없어진다.
    */
   const resume = useCallback(async (): Promise<'draft' | 'hatching' | 'alive' | null> => {
+    // 물어본 시점의 세대. 답이 오는 사이에 로그아웃했으면 이 답은 **남의 것**이다.
+    const era = session.current;
+    const mineStill = () => era === session.current;
     try {
       const mine = await listPets();
+      if (!mineStill()) return null;
       const draft = mine.find((p) => p.phase === 'DRAFT');
       if (draft) { setPetId(draft.petId); setResumedDraft(true); return 'draft'; }
       const baking = mine.find((p) => p.phase === 'HATCHING');
@@ -569,8 +611,9 @@ export function useHatchState(): Live {
           getCurrentGame(living.petId).catch(() => null),
           getChat(living.petId).catch(() => null),
         ]);
+        if (!mineStill()) return null;
         setPetId(living.petId); setCharSet(true); putPet(takeSeq(), detail);
-        if (g) setGame(g);
+        if (g) putGame(takeSeq(), g);
         if (c) setChat(c);
         setGameLoaded(true); setChatLoaded(true);
         setHatch({ phase: 'ALIVE', label: null, progress: 0, total: 0, estimatedSeconds: 0, message: null });
@@ -580,7 +623,7 @@ export function useHatchState(): Live {
       // 못 물어본 것으로 화면을 막지 않는다. 처음부터 시작하면 된다.
     }
     return null;
-  }, []);
+  }, [takeSeq, putPet, putGame]);
 
   // ── 부화 지켜보기 ──────────────────────────────────────────────
   // 무거운 `getPet` 대신 **전용 API** 를 3초마다. 끝나면 스스로 멈춘다.
@@ -642,14 +685,15 @@ export function useHatchState(): Live {
   useEffect(() => {
     if (!petId || !living) return;
     let alive = true;
+    const seq = takeSeq();
     void getCurrentGame(petId)
-      .then((g) => { if (alive) setGame(g); })
+      .then((g) => { if (alive) putGame(seq, g); })
       .catch(() => {})
       .finally(() => { if (alive) setGameLoaded(true); });
     // 앨범은 기다리지 않는다 — 못 받아도 펫 상태의 같은 18칸으로 **같은 숫자**가 나온다(튀지 않는다).
     void getAlbum(petId).then((a) => { if (alive) setAlbum(a); }).catch(() => {});
     return () => { alive = false; };
-  }, [petId, living]);
+  }, [petId, living, takeSeq, putGame]);
 
   /**
    * 기본 8종을 미리 받아 둔다(상훈님 2026-09-10 승인).
@@ -686,12 +730,16 @@ export function useHatchState(): Live {
   const reset = useCallback(() => {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
-    issued.current = 0; applied.current = 0;
+    // ★ 번호를 0 으로 되돌리지 않는다. **지금까지 나간 것을 전부 지난 것으로 만든다** —
+    //   되돌리면 날아가 있던 옛 응답이 다시 '최신' 이 되어 들어온다.
+    applied.current = issued.current;
+    appliedGame.current = issued.current;
+    session.current += 1;
     setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null);
     setCharSet(false); setHatch(null); setResumedDraft(false); setOptimistic(null);
     setGameLoaded(false); setChatLoaded(false);
-    setChat(null); setGame(null); setAlbum(null);
-  }, []);
+    setChat(null); putGame(takeSeq(), null); setAlbum(null);
+  }, [takeSeq, putGame]);
 
   return {
     previewUrl, imageKey, petId, pet, busy, error,
