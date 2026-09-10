@@ -231,7 +231,6 @@ export interface Pop {
   show: boolean; anim: string; name: string; say: string;
   bar: { bg: string }[]; hasBar: boolean; count: string;
   a: PopBtn | null; b: PopBtn | null; hasB: boolean;
-  leftPct: string; tx: string; tailPct: string;
 }
 export interface Stage {
   wall: string; floor: string; frame: string; sky: string; pattern: string;
@@ -1240,7 +1239,6 @@ export function useYeoul(live?: Live) {
       };
     };
 
-    const slot = ROOM_KEYS.indexOf(selK);
     const isTutTarget = !!tut && tut.act === 'a' && tut.room === selK;
     const pop: Pop = {
       // 자는 동안은 팝오버를 안 띄운다 — 다만 **침실은 띄운다.** 거기서 깨워야 하기 때문이다.
@@ -1252,9 +1250,6 @@ export function useYeoul(live?: Live) {
       count: selK === 'bed' || selK === 'album' ? ''
         : `${({ table: '배부름', bath: '단정함', play: '기분' } as Record<string, string>)[selK]} ${cur.on}/${cur.n}`,
       a: pbtn(cur.a, isTutTarget), b: pbtn(cur.b, false), hasB: !!cur.b,
-      leftPct: `${(slot + 0.5) * 20}%`,
-      tx: slot === 0 ? '-16%' : slot === 4 ? '-84%' : '-50%',
-      tailPct: slot === 0 ? '16%' : slot === 4 ? '84%' : '50%',
     };
 
     // ── 무대 ──

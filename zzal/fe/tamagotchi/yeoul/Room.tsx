@@ -17,7 +17,7 @@
 //   `useFootPad` 가 그림에서 직접 잰다(못 재면 여울 기준값으로 되돌아간다).
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
@@ -644,9 +644,54 @@ function ChatBar({ y }: { y: Yeoul }) {
   );
 }
 
-/** 팝오버 — 누른 타일 바로 위에 뜨고, 꼬리가 그 타일을 가리킨다. */
+/**
+ * 팝오버 — 누른 타일 바로 위에 뜨고, 꼬리가 그 타일을 가리킨다.
+ *
+ * ★ 자리는 **실제 타일을 재서** 정한다(2026-09-10). 예전에는 칸 번호로 `left: 50%` 를 주고
+ *   `translateX(-50%)` 로 당기면서, 넘칠 때의 물림(clamp)을 **첫 칸과 마지막 칸에만** 걸어 두었다.
+ *   그래서 2번째(욕실)는 왼쪽으로, 4번째(침실)는 오른쪽으로 대칭으로 잘렸다
+ *   (360px 에서 각각 13px · 390px 에서 4px. 430 이상은 넉넉해서 안 드러났다).
+ *   칸 번호로 예외를 더 두면 타일이 늘거나 순서가 바뀔 때 같은 자리에서 또 깨진다.
+ *   그래서 **모든 팝오버를 무대 안으로 물린다** — 예외 없는 규칙 하나로.
+ *
+ * ★ 재는 것은 `useLayoutEffect` 다. 그려지기 **전에** 자리를 잡아야 눈에 띄는 튐이 없다.
+ * ★ 겉(자리)과 속(나타나는 동작)을 두 겹으로 나눈 것은 그대로다 — 한 요소에 인라인 `transform` 과
+ *   `animation` 을 같이 걸면 키프레임이 인라인 값을 덮어 팝오버가 엉뚱한 자리에 떴다가
+ *   끝나는 순간 튀어 들어온다(2026-09-07 실측: 앨범 타일에서 215px 순간이동).
+ */
 function Popover({ y }: { y: Yeoul }) {
   const p = y.v.pop;
+  const room = y.v.selK;
+  const box = useRef<HTMLDivElement>(null);
+  const [geo, setGeo] = useState<{ left: number; tail: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    const host = el?.parentElement;
+    if (!el || !host) return undefined;
+    const place = () => {
+      const tile = document.querySelector(`[data-room="${room}"]`);
+      const c = host.clientWidth;
+      const w = el.offsetWidth;
+      if (!c || !w) return;
+      // 가리킬 곳 = 그 타일의 한가운데(무대 좌표). 못 찾으면 한가운데로 둔다.
+      const hostL = host.getBoundingClientRect().left;
+      const center = tile
+        ? (tile.getBoundingClientRect().left + tile.getBoundingClientRect().width / 2) - hostL
+        : c / 2;
+      // 무대 밖으로 나가지 않게 물린다. 무대가 팝오버보다 좁으면 왼쪽에 붙인다.
+      const left = Math.max(0, Math.min(center - w / 2, Math.max(0, c - w)));
+      // 꼬리는 타일을 계속 가리키되, 모서리를 넘어가지 않게 안쪽으로 물린다.
+      const tail = Math.max(14, Math.min(center - left, w - 14));
+      setGeo({ left, tail });
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(host);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [room]);
+
   return (
     // ★ 자리 잡기(겉)와 나타나는 동작(속)을 **두 겹으로 나눈다.**
     //   한 요소에 인라인 `transform: translateX` 와 `animation: yPopIn` 을 같이 걸면,
@@ -655,10 +700,13 @@ function Popover({ y }: { y: Yeoul }) {
     //   실측: 앨범 타일에서 left 344 → 129 로 215px 순간이동(2026-09-07).
     //   키프레임에 translateX 를 박는 방법은 안 쓴다 — 타일마다 값이 달라 키프레임이 다섯 벌 된다.
     <div
+      ref={box}
       data-part="pop"
       onClick={(e) => e.stopPropagation()}
       style={{
-        position: 'relative', width: 'min(252px,92%)', left: p.leftPct, transform: `translateX(${p.tx})`,
+        position: 'relative', width: 'min(252px,92%)',
+        // 재기 전 첫 그림은 한가운데. `useLayoutEffect` 가 그려지기 전에 제자리로 옮긴다.
+        left: geo ? geo.left : 0,
       }}
     >
     <div
@@ -689,7 +737,7 @@ function Popover({ y }: { y: Yeoul }) {
         {p.a && <PopButton b={p.a} />}
         {p.hasB && p.b && <PopButton b={p.b} />}
       </span>
-      <span style={{ position: 'absolute', left: p.tailPct, bottom: -6, width: 12, height: 12, background: C.paper, borderRight: `1px solid ${C.lineSoft}`, borderBottom: `1px solid ${C.lineSoft}`, transform: 'translateX(-50%) rotate(45deg)' }} />
+      <span data-part="pop-tail" style={{ position: 'absolute', left: geo ? geo.tail : '50%', bottom: -6, width: 12, height: 12, background: C.paper, borderRight: `1px solid ${C.lineSoft}`, borderBottom: `1px solid ${C.lineSoft}`, transform: 'translateX(-50%) rotate(45deg)' }} />
     </div>
     </div>
   );
