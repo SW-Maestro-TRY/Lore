@@ -811,7 +811,7 @@ export function mountEditor(
        나중에 그린 몸통의 테두리가 꼬리를 가로지르기 때문이다. 그래서 먼저
        두 배 굵기로 윤곽을 잡고, 같은 모양을 선 없이 흰색으로 덮는다 — 안쪽
        선은 덮여 사라지고 바깥 윤곽만 제 굵기로 남는다. 굽는 쪽도 같은 결과를
-       낸다(overlay.py 는 덩어리를 깎아서 윤곽을 얻는다).
+       낸다(overlay.py 는 덩어리를 깎아서 윤곽을 얻는다). */
     const pad = 400;                    // 밖으로 뻗은 꼬리가 잘리지 않게
     svg.setAttribute("viewBox", `${-pad} ${-pad} ${w + pad * 2} ${h + pad * 2}`);
     svg.style.left = `${-pad}px`; svg.style.top = `${-pad}px`;

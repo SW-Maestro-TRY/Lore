@@ -14,19 +14,27 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * 생성 하네스(new_harness · story-harness)를 실행 가능한 자리에 풀어 놓는다.
+ * 생성 하네스(new_harness · story-harness · webtoon-harness · landing)를 실행 가능한
+ * 자리에 풀어 놓는다.
  *
  * <h2>왜 필요한가</h2>
  *
- * 하네스는 jar 안에 리소스({@code webtoon/ai/new_harness}, {@code webtoon/ai/story-harness} —
- * {@code webtoon/be/sync-harness.sh} 가 build.gradle 의 {@code processResources} 마다
- * {@code haeun/} 원본에서 최신 사본을 만든다)로 실려 배포된다. 그런데 파이썬은 jar 속
- * 파일을 실행할 수 없다(경로가 없다). 그래서 서버가 뜰 때 임시 폴더로 꺼내 두고,
- * 그 경로를 {@link HarnessProcess} · {@code CharacterMaker} 에 넘긴다.
+ * 하네스는 jar 안에 리소스({@code webtoon/ai/{new_harness,story-harness,webtoon-harness,
+ * landing}} — {@code webtoon/be/sync-harness.sh} 가 build.gradle 의
+ * {@code processResources} 마다 {@code haeun/} 원본에서 최신 사본을 만든다)로 실려
+ * 배포된다. 그런데 파이썬은 jar 속 파일을 실행할 수 없다(경로가 없다). 그래서 서버가
+ * 뜰 때 임시 폴더로 꺼내 두고, 그 경로를 {@link HarnessProcess} · {@code CharacterMaker}
+ * 에 넘긴다.
  *
- * new_harness 는 story-harness 를 형제 폴더로 보고 import 한다
- * ({@code STORY_HARNESS = HERE.parent / "story-harness"}) — 그래서 둘을 같은
- * 임시 폴더 아래 형제로 함께 푼다.
+ * new_harness 는 나머지 셋을 형제 폴더로 보고 import·실행한다 —
+ * {@code STORY_HARNESS = HERE.parent / "story-harness"}, {@code WEBTOON_HARNESS =
+ * HERE.parent / "webtoon-harness"}(run.py 가 {@code directing} 모듈을 빌려 쓴다),
+ * {@code HarnessProcess.prepareUpload} 가 {@code harnessDir.getParent().resolve("landing")}
+ * 에서 {@code s3_upload.py --prepare} 를 돌린다(다 그린 그림을 S3 로 올리는 마지막
+ * 걸음). 넷 중 하나만 빠져도 그 자리에서 실패한다 — webtoon-harness 가 빠지면 이야기
+ * 짓기 첫 걸음부터, landing 이 빠지면 다 만들고 나서 S3 업로드에서만
+ * {@code ModuleNotFoundError}/{@code IOException} 으로 실패한다(#274 — 배포 서버에
+ * 실려 있지 않아 둘 다 실제로 그랬다).
  *
  * (zzal 의 {@code PipelineScripts} 와 같은 방식·같은 이유다.)
  */
@@ -51,6 +59,8 @@ public class AiHarnessResources {
         int count = 0;
         count += extractOne(root, "new_harness");
         count += extractOne(root, "story-harness");
+        count += extractOne(root, "webtoon-harness");
+        count += extractOne(root, "landing");
 
         newHarnessDir = root.resolve("new_harness");
         log.info("생성 하네스 {}개 파일을 {} 에 풀었습니다", count, root);

@@ -200,6 +200,22 @@ export default function Progress({
           )}
         </header>
 
+        {/* **기다리는 동안 다른 걸 봐도 된다.** 진행 카드 바로 아래에 둔다 —
+            맨 밑에 두면 스크롤을 한참 내려야 보여서, 나갈 수 있다는 것 자체를
+            모르고 붙들려 있었다. 확인 차례(waiting)에는 안 띄운다: 그때는
+            사람이 답해야 앞으로 간다.
+
+            ★ `!job` 일 때(첫 폴링 전)의 같은 블록과 짝이다 — 여기 없으면
+            로딩이 끝나는 순간 이 버튼이 화면에서 통째로 사라진다. */}
+        {!waiting && (
+          <div className="wait-away">
+            <button type="button" className="btn btn-quiet btn-sm" onClick={onBrowse}>
+              기다리는 동안 웹툰 보기
+            </button>
+            <span>만들기는 서버에서 계속 돌아요. 나갔다 와도 이어집니다.</span>
+          </div>
+        )}
+
         {/* ---- 사람이 멈춰 서는 자리 둘 ---- */}
         {job.status === "awaiting_sheet" && (
           <SheetApproval
