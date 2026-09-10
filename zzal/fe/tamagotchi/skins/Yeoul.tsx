@@ -51,8 +51,19 @@ export default function Yeoul(_props: SkinProps) {
    * 이미 함께 사는 아이(ALIVE)면 방으로 곧장 보낸다 — 온보딩을 다시 태울 이유가 없고,
    * 안 그러면 머리줄이 다시 목 값으로 돌아간다.
    */
+  // ★ 로그아웃하면 다시 물어봐야 한다(2026-09-10). 전에는 한 번 켜면 그 마운트에서 영영 꺼지지 않아,
+  //   같은 탭에서 계정을 바꾸면 **앞사람의 아이가 그대로 남아 보였다.** 로그인 상태가 꺼질 때 되돌린다.
   const asked = useRef(false);
-  const { resume } = live;
+  const { resume, reset } = live;
+  const { patch } = actions;
+  useEffect(() => {
+    if (isAuthenticated) return;
+    if (!asked.current) return;
+    asked.current = false;
+    reset();
+    // 이름도 함께 지운다 — 안 지우면 로그아웃한 화면에 **앞사람 아이의 이름**이 그대로 남는다.
+    patch({ petName: '' });
+  }, [isAuthenticated, reset, patch]);
   useEffect(() => {
     if (!isAuthenticated || asked.current) return;
     asked.current = true;

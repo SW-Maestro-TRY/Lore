@@ -219,6 +219,19 @@ function SettingsSheet({ y }: { y: Yeoul }) {
           style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: 13, color: C.ink, outline: 'none' }} />
       </div>
 
+      {/* ★ 성격을 서버에 보내는 유일한 자리. 튜토리얼 4칸(PERSONALITY)도 이 버튼으로 넘어간다. */}
+      {v.settings.save.show && (
+        <button
+          onClick={v.settings.save.tap} data-action="save-persona" disabled={v.settings.save.off}
+          style={{
+            padding: 14, borderRadius: radius.md, border: 'none', fontSize: 14.5,
+            background: v.settings.save.off ? C.off : C.accent,
+            color: v.settings.save.off ? '#8B8175' : C.accentInk,
+            cursor: v.settings.save.off ? 'default' : 'pointer',
+          }}
+        >{v.settings.save.off ? v.settings.save.why : v.settings.save.label}</button>
+      )}
+
       {v.settings.groups.map((g) => (
         <div key={g.label} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           <span style={{ fontSize: 11.5, color: C.faint }}>{g.label}</span>

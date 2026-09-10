@@ -280,10 +280,13 @@ function Hud({ y }: { y: Yeoul }) {
         <span style={{ fontSize: 14, color: '#635A52' }}>친밀도 {v.pet.bond}%</span>
         <span style={{ flex: 1 }} />
         <button
-          onClick={actions.openSettings} data-part="pet-info"
+          onClick={actions.openSettings} data-part="pet-info" data-hl={v.hud.hl ? '1' : undefined}
           style={{
             display: 'flex', alignItems: 'center', gap: 5, flex: 'none', padding: '5px 11px',
-            borderRadius: radius.pill, border: '1px solid #E9E1D4', background: '#FDF8EE',
+            borderRadius: radius.pill,
+            // 튜토리얼 4칸(성격)은 이 버튼 안에서 하는 일이라, 타일 대신 여기가 깜빡인다.
+            border: v.hud.hl ? `2px solid ${C.accent}` : '1px solid #E9E1D4',
+            background: '#FDF8EE', animation: v.hud.hl ? 'yNudge 1.9s ease-in-out infinite' : 'none',
             fontSize: 11.5, lineHeight: 1, color: '#7B6F63',
           }}
         >
@@ -465,11 +468,20 @@ function MiniCard({ y }: { y: Yeoul }) {
     >
       {m.isTut && (
         <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={{ fontFamily: GAEGU, fontSize: 15, lineHeight: 1.3, color: C.ink }}>{m.tutText}</span>
-          <button
-            onClick={(e) => { e.stopPropagation(); y.actions.skipTutorStep(); }}
-            style={{ alignSelf: 'flex-start', minHeight: 36, padding: '8px 14px', borderRadius: radius.pill, border: '1px solid rgba(74,64,56,.16)', background: C.slot, fontSize: 12.5, color: C.sub }}
-          >나중에</button>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+            <span style={{ fontFamily: GAEGU, fontSize: 15, lineHeight: 1.3, color: C.ink }}>{m.tutText}</span>
+            <span style={{ flex: 1 }} />
+            <span data-part="tut-step" style={{ font: `9.5px ${MONO}`, color: C.faint2, whiteSpace: 'nowrap' }}>{m.tutStep}</span>
+          </span>
+          {/* ★ 서버 튜토리얼에는 '나중에' 가 없다 — 건너뛸 방법이 서버에 없어서, 눌러도 아무 일이
+              안 나면 고장으로 읽힌다. 마지막 칸에서만 "이제 시작할게요" 가 나온다. */}
+          {m.tutBtn.show && (
+            <button
+              onClick={(e) => { e.stopPropagation(); m.tutBtn.tap(); }}
+              data-action="tut-btn"
+              style={{ alignSelf: 'flex-start', minHeight: 36, padding: '8px 14px', borderRadius: radius.pill, border: '1px solid rgba(74,64,56,.16)', background: C.slot, fontSize: 12.5, color: C.sub }}
+            >{m.tutBtn.label}</button>
+          )}
         </span>
       )}
 

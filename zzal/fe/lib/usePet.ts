@@ -234,11 +234,14 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
     let alive = true;
     const controller = new AbortController();
     setLoading(true);
+    // ★ 순번은 **보낼 때** 받는다(2026-09-10). 전에는 도착할 때 `applied = ++issued` 로 찍어서,
+    //   이 첫 조회가 늦게 도착하기만 하면 그사이 사용자가 누른 행동의 최신 상태를 **되돌려 놓았다.**
+    //   `apply` 를 건너뛰고 `setPet` 을 직접 부른 것도 같은 문제였다 — 그 길만 자물쇠가 없었다.
+    const seq = ++issued.current;
     s.getPet(petId, controller.signal)
       .then((next) => {
         if (!alive) return;
-        applied.current = ++issued.current;
-        setPet(next);
+        apply(seq, next);
       })
       .catch((e: unknown) => {
         if (!alive) return;

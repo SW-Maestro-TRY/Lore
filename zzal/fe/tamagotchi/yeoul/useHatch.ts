@@ -22,9 +22,9 @@ import { MOTION_FALLBACK, YEOUL_MOTION } from '../constants';
 import { BASIC_KEYS } from './constants';
 import {
   answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
-  setCharacter, share,
+  setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, wake as wakePet,
   type Album, type CareAction, type ChatReply, type ChatState, type CharacterInput,
-  type HatchProgress, type PetDetail,
+  type HatchProgress, type PetDetail, type Personality,
 } from '../../lib/pet';
 import { getCurrentGame, guess, startGame, type GameState, type GuessResult, type Side } from '../../lib/game';
 import { uploadImage } from '../../lib/upload';
@@ -154,8 +154,11 @@ export interface Live {
   img: (key: string) => string | null;
   /** 파일 하나를 올린다 — 성공하면 **그 자리에서 초안까지** 잡는다. */
   upload: (file: File) => Promise<void>;
-  /** 이름·성격을 보낸다. 이 순간부터 격자 생성이 돈다. */
-  setChar: (input: CharacterInput) => Promise<void>;
+  /**
+   * 이름·성격을 보낸다. 이 순간부터 격자 생성이 돈다.
+   * @returns 서버가 받아들였으면 true. **false 면 알 화면으로 넘어가면 안 된다** — 굽고 있지 않다.
+   */
+  setChar: (input: CharacterInput) => Promise<boolean>;
   /**
    * 지금 도는 돌보기. 있으면 **버튼을 전부 잠근다** — 계약 10절 "누르면 잠그고 기다린다".
    */
@@ -176,6 +179,29 @@ export interface Live {
    * @returns 보냈고 받아들여졌으면 `ok`, 거절이면 `message`, 잠겨서 안 보냈으면 둘 다 비어 있다.
    */
   doCare: (action: CareAction) => Promise<CareResult>;
+  /** 재우거나 깨우는 중. 그동안 침실 버튼을 잠근다. */
+  resting: boolean;
+  /**
+   * 재우기·깨우기 한 번. **지금 자고 있으면 깨우고, 아니면 재운다** — 버튼이 하나라 여기서 가른다.
+   *
+   * ★ 언제 되는지는 **서버가 정한다**(`clock.canSleep` · `canWake`). 화면이 시각을 다시 세지 않는다.
+   *   실측(2026-09-10)으로 이 둘은 튜토리얼 낮잠 칸(NAP)과 정확히 맞아떨어졌다 —
+   *   NAP 칸에서만 `canSleep`, 재운 뒤 곧바로 `canWake`, 그 밖의 칸에서는 둘 다 false.
+   *   그래서 침실 버튼은 `tutorial.step` 을 안 봐도 되고, 졸업 뒤 19~23시 창까지 같은 값으로 덮인다.
+   * ★ 낮잠은 튜토리얼 8칸을 넘기는 유일한 길이다(`sleep` **과** `wake` 둘 다 해야 넘어간다 — 실측).
+   *   그 전에 미리 써 버리면 튜토리얼이 영영 안 끝나므로 서버가 409 로 막는다.
+   */
+  doRest: () => Promise<CareResult>;
+  /**
+   * 성격·세계관 저장. **튜토리얼 4칸(PERSONALITY)을 넘기는 호출**이기도 하다.
+   * 언제든 다시 바꿀 수 있다(정본 0장 6).
+   */
+  savePersonality: (personality: Personality, world?: string) => Promise<CareResult>;
+  /**
+   * 튜토리얼 마지막 칸. **이 호출이 시계를 켠다** — 이때부터 게이지가 줄고 하루가 흐른다.
+   * 9칸을 다 하기 전에 부르면 409 `ZZAL_TUTORIAL_NOT_FINISHED`.
+   */
+  finishTutorial: () => Promise<CareResult>;
   /**
    * 오늘의 부름과 기억. **대사는 전부 여기서 온다** — 화면이 지어내지 않는다(상훈님 지시).
    * 아직 안 읽었거나 서버에 안 붙었으면 null.
@@ -215,11 +241,14 @@ export interface Live {
 
 const EMPTY: Live = {
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null,
-  draftOnly: false, resumedDraft: false, careing: null, optimistic: null, chat: null, chatting: false,
+  draftOnly: false, resumedDraft: false, careing: null, optimistic: null, resting: false, chat: null, chatting: false,
   game: null, guessing: false, album: null, ready: false, petReady: false, failed: false, step: null,
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
   img: () => null,
-  upload: async () => {}, setChar: async () => {}, doCare: async () => ({ ok: false, message: null }),
+  upload: async () => {}, setChar: async () => false, doCare: async () => ({ ok: false, message: null }),
+  doRest: async () => ({ ok: false, message: null }),
+  savePersonality: async () => ({ ok: false, message: null }),
+  finishTutorial: async () => ({ ok: false, message: null }),
   sendChat: async () => ({ error: null, reply: null }),
   startPlay: async () => null,
   pickSide: async () => ({ error: null, result: null }),
@@ -265,6 +294,31 @@ export function useHatchState(): Live {
    */
   const [gameLoaded, setGameLoaded] = useState(false);
   const [chatLoaded, setChatLoaded] = useState(false);
+  const [resting, setResting] = useState(false);
+  const restingRef = useRef(false);
+
+  /**
+   * ── 응답 순서 자물쇠 ─────────────────────────────────────────────
+   *
+   * ★ 순번은 **보낼 때** 받는다. 도착할 때 받으면 늦게 온 옛 응답도 "가장 최신" 이 되어
+   *   방금 받은 새 상태를 조용히 덮어쓴다(그리고 아무 소리도 안 난다).
+   *   여기서 겹치는 조합이 실제로 있다 — 살아난 뒤 도는 `getPet` 재시도와 돌보기,
+   *   게임을 끝낸 뒤의 `getPet` 과 그 사이에 누른 돌보기.
+   *
+   * ★ `putPet` 을 거치지 않고 `setPet` 을 직접 부르는 자리를 남기지 말 것.
+   *   한 곳만 새면 그 한 곳이 늘 이긴다.
+   */
+  const issued = useRef(0);
+  const applied = useRef(0);
+  /** 보낼 때 순번을 받는다. */
+  const takeSeq = useCallback(() => ++issued.current, []);
+  /** 받은 상태를 얹는다. 옛 응답이면 **버린다.** @returns 얹었으면 true */
+  const putPet = useCallback((seq: number, next: PetDetail) => {
+    if (seq <= applied.current) return false;
+    applied.current = seq;
+    setPet(next);
+    return true;
+  }, []);
 
   // 미리보기 주소는 브라우저 메모리를 잡으므로 바뀌거나 떠날 때 놓아 준다.
   useEffect(() => () => { if (objectUrl.current) URL.revokeObjectURL(objectUrl.current); }, []);
@@ -303,8 +357,10 @@ export function useHatchState(): Live {
    *   대사 톤에만 쓰이고, 격자 프롬프트의 정체성 문단은 올린 그림에서 뽑는다.
    *   그래서 말투·장르 칩은 여기 안 싣는다(보낼 자리가 없고, 실어도 그림엔 영향이 없다).
    */
-  const setChar = useCallback(async (input: CharacterInput) => {
-    if (!petId || charSet) return;
+  const setChar = useCallback(async (input: CharacterInput): Promise<boolean> => {
+    // 이미 보냈으면 성공으로 친다 — 두 번 보내지 않되 화면은 앞으로 가야 한다.
+    if (charSet) return true;
+    if (!petId) return false;
     setBusy(true);
     setError(null);
     try {
@@ -314,8 +370,10 @@ export function useHatchState(): Live {
         phase: created.phase, label: null, progress: 0, total: 0,
         estimatedSeconds: created.estimatedSeconds, message: null,
       });
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : '부화를 시작하지 못했어요');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -339,20 +397,72 @@ export function useHatchState(): Live {
     careingRef.current = action;
     setCareing(action);
     setOptimistic(optimisticOf(action, petRef.current));
+    const seq = takeSeq();
     try {
       const next = await care(petId, action);
-      setPet(next);
+      putPet(seq, next);
       setOptimistic(null);
       return { ok: true, message: null };
     } catch (e) {
       setOptimistic(null);
-      try { setPet(await getPet(petId)); } catch { /* 이것마저 실패하면 화면은 그대로 둔다 */ }
+      const back = takeSeq();
+      try { putPet(back, await getPet(petId)); } catch { /* 이것마저 실패하면 화면은 그대로 둔다 */ }
       return { ok: false, message: e instanceof Error ? e.message : '지금은 할 수 없어요' };
     } finally {
       careingRef.current = null;
       setCareing(null);
     }
-  }, [petId]);
+  }, [petId, takeSeq, putPet]);
+
+  /**
+   * 재우기·깨우기. 지금 자고 있으면 깨우고, 아니면 재운다.
+   *
+   * ★ **언제 되는지는 서버가 정한다**(`clock.canSleep`·`canWake`). 화면이 "저녁 7시" 를 다시 세지 않는다 —
+   *   튜토리얼 중에는 시계가 아예 안 흐르므로 시각으로 판단하면 반드시 틀린다.
+   * ★ 낮잠은 튜토리얼 8칸(NAP)을 넘기는 유일한 길이고, **재우기만으로는 안 넘어간다.
+   *   깨워야 넘어간다**(2026-09-10 실측 — 계약 문서와 다른 자리다).
+   * ★ 되감기는 없다. 다른 돌보기와 달리 낙관값도 안 얹는다 — 잠드는 연출은 방 전체가 바뀌는 일이라
+   *   틀렸을 때 되돌리면 커튼이 열렸다 닫힌다.
+   */
+  const doRest = useCallback(async (): Promise<CareResult> => {
+    if (!petId) return { ok: false, message: null };
+    if (restingRef.current) return { ok: false, message: null };
+    restingRef.current = true;
+    setResting(true);
+    const seq = takeSeq();
+    const asleep = !!petRef.current?.clock?.sleeping;
+    try {
+      putPet(seq, await (asleep ? wakePet(petId) : sleepPet(petId)));
+      return { ok: true, message: null };
+    } catch (e) {
+      const back = takeSeq();
+      try { putPet(back, await getPet(petId)); } catch { /* 못 읽으면 화면은 그대로 */ }
+      return { ok: false, message: e instanceof Error ? e.message : '지금은 재울 수 없어요' };
+    } finally {
+      restingRef.current = false;
+      setResting(false);
+    }
+  }, [petId, takeSeq, putPet]);
+
+  /** 서버로 보내고 응답(=최신 상태)을 얹는 작은 틀. 성격 저장·튜토리얼 마무리가 같은 모양이라 묶었다. */
+  const send = useCallback(async (call: () => Promise<PetDetail>, fallback: string): Promise<CareResult> => {
+    if (!petId) return { ok: false, message: null };
+    const seq = takeSeq();
+    try {
+      putPet(seq, await call());
+      return { ok: true, message: null };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : fallback };
+    }
+  }, [petId, takeSeq, putPet]);
+
+  const savePersonality = useCallback((personality: Personality, world?: string) => (
+    send(() => setPersonality(petId as number, personality, world), '성격을 저장하지 못했어요')
+  ), [petId, send]);
+
+  const finishTutorial = useCallback(() => (
+    send(() => tutorialDone(petId as number), '아직 배울 것이 남았어요')
+  ), [petId, send]);
 
   /**
    * 부름에 답하기.
@@ -365,10 +475,11 @@ export function useHatchState(): Live {
     const slot = chat?.openSlot ?? pet?.chatSummary?.openSlot ?? null;
     if (!petId || !slot || chatting || !text) return { error: null, reply: null };
     setChatting(true);
+    const seq = takeSeq();
     try {
       const next = await answerChat(petId, slot, text);
       // `pet` 이 바뀌면 아래 효과가 오늘의 부름을 다시 읽는다 — 여기서 또 부르면 두 번 나간다.
-      setPet(next);
+      putPet(seq, next);
       return { error: null, reply: next.chatReply };
     } catch (e) {
       // 슬롯이 닫혔거나(다른 기기에서 답함) 시간이 지난 경우. 지금 참인 것을 다시 받아 그린다.
@@ -382,9 +493,16 @@ export function useHatchState(): Live {
   // ── 놀이 · 앨범 · 공유 ──────────────────────────────────────────
   const startPlay = useCallback(async (): Promise<string | null> => {
     if (!petId) return null;
-    try { setGame(await startGame(petId, 'LEFT_RIGHT')); return null; }
-    catch (e) { return e instanceof Error ? e.message : '지금은 못 놀아요'; }
-  }, [petId]);
+    try {
+      setGame(await startGame(petId, 'LEFT_RIGHT'));
+      // ★ 판을 **시작하는 것만으로** 튜토리얼 6칸이 넘어간다(2026-09-10 실측).
+      //   그런데 이 응답은 `GameState` 라 펫이 안 들어 있어, 다시 읽지 않으면 화면의 칸이 안 넘어간다.
+      //   ⚠️ 치던 판이 있으면 서버가 그 판을 그대로 주고 칸을 **안** 넘긴다 — 그것도 실측이다.
+      const seq = takeSeq();
+      try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 판은 시작됐다 */ }
+      return null;
+    } catch (e) { return e instanceof Error ? e.message : '지금은 못 놀아요'; }
+  }, [petId, takeSeq, putPet]);
 
   const pickSide = useCallback(async (side: Side) => {
     const id = game?.gameId;
@@ -395,7 +513,7 @@ export function useHatchState(): Live {
       // 판이 끝났으면 `playing` 이 꺼진 새 상태를 받아 둔다 — 다음 판은 다시 시작해야 한다.
       setGame((g) => (g ? { ...g, round: r.nextRound, hits: r.hits, playing: !r.finished, remainingToday: r.remainingToday, runUnlocked: r.runUnlocked } : g));
       // 이긴 판은 기분이 오른다. 그 값은 펫 상태에 있으므로 다시 읽어 화면을 맞춘다.
-      if (r.finished) { try { setPet(await getPet(petId)); } catch { /* 못 읽어도 판 결과는 보여 준다 */ } }
+      if (r.finished) { const seq = takeSeq(); try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 판 결과는 보여 준다 */ } }
       return { error: null, result: r };
     } catch (e) {
       try { setGame(await getCurrentGame(petId)); } catch { /* 화면은 그대로 둔다 */ }
@@ -413,8 +531,9 @@ export function useHatchState(): Live {
   const shareMotion = useCallback(async (motionKey: string) => {
     if (!petId) return { error: null, url: null };
     try {
+      const seq = takeSeq();
       const r = await share(petId, motionKey, 'SHARE');
-      setPet(r.pet);
+      putPet(seq, r.pet);
       return { error: null, url: r.url };
     } catch (e) {
       return { error: e instanceof Error ? e.message : '지금은 공유할 수 없어요', url: null };
@@ -450,7 +569,7 @@ export function useHatchState(): Live {
           getCurrentGame(living.petId).catch(() => null),
           getChat(living.petId).catch(() => null),
         ]);
-        setPetId(living.petId); setCharSet(true); setPet(detail);
+        setPetId(living.petId); setCharSet(true); putPet(takeSeq(), detail);
         if (g) setGame(g);
         if (c) setChat(c);
         setGameLoaded(true); setChatLoaded(true);
@@ -491,7 +610,10 @@ export function useHatchState(): Live {
   useEffect(() => {
     if (phase !== 'ALIVE' || !petId || pet) return;
     let alive = true;
-    const look = () => { void getPet(petId).then((d) => { if (alive) setPet(d); }).catch(() => {}); };
+    const look = () => {
+      const seq = takeSeq();
+      void getPet(petId).then((d) => { if (alive) putPet(seq, d); }).catch(() => {});
+    };
     look();
     const t = setInterval(look, 3000);
     return () => { alive = false; clearInterval(t); };
@@ -530,6 +652,29 @@ export function useHatchState(): Live {
   }, [petId, living]);
 
   /**
+   * 기본 8종을 미리 받아 둔다(상훈님 2026-09-10 승인).
+   *
+   * ★ 왜 — 지금은 그 동작을 **처음 지을 때** 그제야 받아와서 첫 재생이 한 박자 늦는다.
+   *   밥을 주면 먹는 자세로 바뀌어야 하는데 그림이 그때 도착한다.
+   * ★ 헛되이 받는 것이 없다 — 기본 8종은 방에 들어온 시점에 전부 있는 것이 보장이고
+   *   (`missingBasics` 가 그걸 감시한다), 여덟 장 다 쓰인다. 한 장 27KB 남짓.
+   * ★ 응답에 `Cache-Control: max-age=31536000, immutable` 이 붙어 있어 두 번 받지 않는다.
+   * ★ **실패해도 조용히 넘어간다.** 미리 받기는 편의일 뿐이라 화면을 막으면 안 된다.
+   */
+  // ⚠️ `pet` 객체가 아니라 **그림 키 목록**에 반응해야 한다. 돌보기 응답마다 `pet` 이 새 객체가 되는데,
+  //   거기 매달면 밥 한 번에 미리 받기가 통째로 다시 돌고, 받던 것을 끊어 오히려 느려진다.
+  const basicKeys = pet?.phase === 'ALIVE'
+    ? BASIC_KEYS.map((k) => pet.motions?.find((m) => m.key === k)?.basicImageKey ?? '').join('|')
+    : '';
+  const preloaded = useRef('');
+  useEffect(() => {
+    if (!basicKeys || preloaded.current === basicKeys) return;
+    preloaded.current = basicKeys;
+    // 받아만 두면 브라우저 캐시에 남는다. 끊지 않는다 — 끊으면 미리 받은 의미가 없다.
+    basicKeys.split('|').filter(Boolean).forEach((k) => { new Image().src = assetUrl(k); });
+  }, [basicKeys]);
+
+  /**
    * 카탈로그 key 하나를 **내 아이 그림 주소**로. 아직 못 받았으면 null.
    * ★ 18 동작 전부를 받는다 — 서버 `Motion.key` 와 우리 key 는 같은 이름이라 표가 필요 없다.
    */
@@ -541,6 +686,7 @@ export function useHatchState(): Live {
   const reset = useCallback(() => {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
+    issued.current = 0; applied.current = 0;
     setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null);
     setCharSet(false); setHatch(null); setResumedDraft(false); setOptimistic(null);
     setGameLoaded(false); setChatLoaded(false);
@@ -564,8 +710,8 @@ export function useHatchState(): Live {
     missingBasics: pet?.phase === 'ALIVE'
       ? BASIC_KEYS.filter((k) => !pet.motions?.some((m) => m.key === k && m.basicImageKey))
       : [],
-    careing, optimistic, chat, chatting, game, guessing, album,
-    img, upload, setChar, doCare, sendChat, startPlay, pickSide, loadAlbum, shareMotion, resume, reset,
+    careing, optimistic, resting, chat, chatting, game, guessing, album,
+    img, upload, setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, loadAlbum, shareMotion, resume, reset,
   };
 }
 

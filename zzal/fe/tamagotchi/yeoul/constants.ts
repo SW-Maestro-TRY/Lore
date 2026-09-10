@@ -6,6 +6,7 @@
 // ★ 여기 값은 **프론트 전용 목**이다. 서버가 붙으면 rules.ts·서버 응답이 정본을 들고 오고
 //   이 표는 문구(카피)만 남는다. 지금 숫자는 화면을 눌러 보기 위한 자리표시다.
 import { assetUrl, demoUrl } from '../constants';
+import type { Personality as PersonalityValue } from '../../lib/pet';
 
 /** 방 다섯 칸. key 는 상태 저장·검사의 손잡이라 함부로 안 바꾼다. */
 export const ROOM_KEYS = ['table', 'bath', 'play', 'bed', 'album'] as const;
@@ -71,6 +72,18 @@ export const WALLS = [
 
 /** 성격 다섯 갈래 → 캐릭터 칸의 칩. */
 export const PERSONA = ['온순', '활발', '수줍음', '응석', '시크'] as const;
+/**
+ * 성격 칩 → 서버 값. 우리 칩 다섯과 서버 `Personality` 다섯이 하나씩 맞는다.
+ * 표에 없는 값(안 골랐을 때)은 undefined 로 떨어져 아예 안 보낸다 — 만들 때는 선택이다.
+ * ★ 온보딩과 아이 정보 시트가 **같은 표**를 써야 한다. 두 벌이면 한쪽만 고쳐져도 안 보인다.
+ */
+export const PERSONALITY_OF: Record<string, PersonalityValue | undefined> = {
+  온순: 'GENTLE', 활발: 'LIVELY', 수줍음: 'SHY', 응석: 'CLINGY', 시크: 'COOL',
+};
+/** 거꾸로 — 서버가 준 성격을 우리 칩 이름으로. 아이 정보 시트가 지금 값을 골라 보이려고 쓴다. */
+export const PERSONA_LABEL: Record<string, string> = {
+  GENTLE: '온순', LIVELY: '활발', SHY: '수줍음', CLINGY: '응석', COOL: '시크',
+};
 export const TONE = ['반말', '존댓말', '사투리', '어린아이', '어른스러움', '무뚝뚝', '애교'] as const;
 export const GENRE = ['일상', '판타지', 'SF', '학원', '역사', '로맨스', '무협'] as const;
 export const WORLD = ['현대', '중세', '미래', '자연', '도시', '우주', '학교'] as const;
@@ -258,6 +271,31 @@ export const CHAT_QUICK = ['잘 지냈어', '빵 만들었어', '조금 피곤�
 export const CHAT_REPLY = ['그 얘기 기억해 둘게요.', '오늘도 들려줘서 좋아요.', '나도 그런 날이 있어요.', '음, 그랬구나.'] as const;
 
 /** 다음에 배울 동작 — 왼쪽 아래 작은 카드가 이 표를 보고 하나를 고른다. */
+/**
+ * ★ **서버가 세는 튜토리얼 9칸**(2026-09-10). 위 `TUTOR_MAIN` 8부름을 대신한다.
+ *
+ * 순서·개수는 서버 `TutorialStepKey` 와 **한 칸도 어긋나면 안 된다** — 서버가 준 `tutorial.step` 이
+ * 곧 이 배열의 첨자다. 어긋나면 엉뚱한 방을 가리키고, 아무 소리도 안 난다.
+ * 문구는 `tamagotchi/tutorial.ts` 의 `BABY_CALLS`(정본 §12) 를 이 화면 말로 편 것이다.
+ *
+ * `at` 은 이제 뜻이 없다(시각 개념이 사라졌다). 자리만 지키고 칸 번호를 적어 둔다.
+ * `done` 도 서버가 판정하므로 여기서는 안 쓴다 — 키를 그대로 넣어 대조만 되게 둔다.
+ *
+ * `room` 이 가리키는 곳:
+ *   table·bath·play·bed·album = 아래 타일 / chat = 오른쪽 아래 말풍선 / info = 머리줄의 '아이 정보'
+ */
+export const TUTOR_SERVER: readonly TutorStep[] = [
+  { at: '1칸', room: 'table', act: 'a', done: 'FEED', text: '배가 고픈가 봐요. 주방에서 밥을 주세요.' },
+  { at: '2칸', room: null, act: 'pet', done: 'PET', text: '쓰다듬어 주세요. 아이를 톡 누르면 돼요.' },
+  { at: '3칸', room: 'chat', act: null, done: 'CHAT', text: '뭐라고 말을 거네요. 오른쪽 아래 말풍선을 눌러 답해 주세요.' },
+  { at: '4칸', room: 'info', act: null, done: 'PERSONALITY', text: '어떤 아이인가요. 아이 정보에서 성격을 골라 주세요.' },
+  { at: '5칸', room: 'bath', act: 'a', done: 'CLEAN', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요.' },
+  { at: '6칸', room: 'play', act: 'a', done: 'GAME', text: '같이 놀아 볼까요. 마당에서 좌우 맞히기를 한 판 시작해 주세요.' },
+  { at: '7칸', room: 'album', act: 'a', done: 'SHARE', text: '이 모습 가져가실래요. 앨범 벽에서 액자를 열어 공유해 보세요.' },
+  { at: '8칸', room: 'bed', act: 'a', done: 'NAP', text: '졸린가 봐요. 침실에서 재우고, 다시 깨워 주세요.' },
+  { at: '9칸', room: null, act: null, done: 'DONE', text: '이제 혼자서도 괜찮아요. 여기부터는 시간이 흐르기 시작해요.' },
+];
+
 export const LEARN_GOALS = [
   { name: '손 흔들며 인사', cond: '대화 답하기', need: 4, counter: 'cChat' },
   { name: '씻기', cond: '목욕하기', need: 3, counter: 'cBath' },

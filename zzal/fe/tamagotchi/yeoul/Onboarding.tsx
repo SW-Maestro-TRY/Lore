@@ -8,19 +8,11 @@
 'use client';
 
 import { useRef } from 'react';
-import { ONB_COPY, GOOD_EX, BAD_EX } from './constants';
+import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF } from './constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
-import type { Personality } from '../../lib/pet';
 
-/**
- * 성격 칩 → 서버 값. 우리 칩 다섯과 서버 `Personality` 다섯이 하나씩 맞는다.
- * 표에 없는 값(고르지 않았을 때)은 undefined 로 떨어져 아예 안 보낸다 — 성격은 선택이다.
- */
-const PERSONALITY_OF: Record<string, Personality | undefined> = {
-  온순: 'GENTLE', 활발: 'LIVELY', 수줍음: 'SHY', 응석: 'CLINGY', 시크: 'COOL',
-};
 
 /** 세계관은 고른 칩과 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
 const worldOf = (chip: string | null | undefined, text: string | undefined) =>
@@ -43,10 +35,13 @@ export default function Onboarding({ y }: { y: Yeoul }) {
   //   캐릭터는 눌러야 오류가 떴다 — 같은 뜻인데 배우는 법이 둘이었다. 둘 다 **잠그는 쪽**으로.
   const uploadBlocked = key === 'upload' && !live.imageKey;
   const nameBlocked = key === 'char' && !s.petName.trim();
-  const blocked = uploadBlocked || nameBlocked;
+  // ★ 보내는 동안에도 잠근다(2026-09-10). 안 잠그면 두 번 눌려 같은 이름을 두 번 보내고,
+  //   그사이 화면은 아무 반응이 없어 사람이 계속 누른다.
+  const sending = live.busy && (key === 'upload' || key === 'char');
+  const blocked = uploadBlocked || nameBlocked || sending;
   const ctaLabel = key === 'upload'
     ? (live.busy ? '올리는 중…' : live.imageKey ? '다음' : '그림을 먼저 올려 주세요')
-    : o.cta;
+    : (key === 'char' && live.busy ? '준비하는 중…' : o.cta);
 
   return (
     <div data-part="onb" data-step={key} style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, background: key === 'born' ? C.bornBg : C.onbBg }}>
@@ -250,13 +245,20 @@ export default function Onboarding({ y }: { y: Yeoul }) {
             //
             // ★ 그림에 들어가는 것은 `note` 뿐이다. `personality`·`world` 는 대사 톤에만 쓰인다.
             //   말투·장르 칩은 보낼 자리가 없어(그리고 그림에 영향도 없어) 아직 화면에만 남는다.
+            // ★ **끝나기를 기다린다**(2026-09-10). 전에는 `void` 로 던져 두고 곧바로 넘어가서,
+            //   이름 짓기가 실패해도 알이 흔들리기 시작했다 — 굽지도 않는 알을 사람이 지켜본다.
             if (key === 'char' && s.petName) {
-              void live.setChar({
-                name: s.petName,
-                personality: PERSONALITY_OF[s.picks.persona ?? ''],
-                world: worldOf(s.picks.world, s.texts.world) || undefined,
-                note: (s.texts.extra ?? '').trim() || undefined,
-              });
+              void (async () => {
+                const ok = await live.setChar({
+                  name: s.petName,
+                  personality: PERSONALITY_OF[s.picks.persona ?? ''],
+                  world: worldOf(s.picks.world, s.texts.world) || undefined,
+                  note: (s.texts.extra ?? '').trim() || undefined,
+                });
+                // 실패하면 이 자리에 머문다. 오류 한 줄은 이미 화면에 떠 있고, 다시 누를 수 있다.
+                if (ok) actions.onNext();
+              })();
+              return;
             }
             actions.onNext();
           }}
