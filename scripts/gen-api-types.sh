@@ -14,7 +14,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_TS="$ROOT/zzal/fe/lib/api-schema.ts"
 OUT_JSON="$HOME/.claude/soma/lore/contract/openapi.json"
 
-if ! curl -sf --max-time 5 "http://localhost:$PORT/actuator/health" >/dev/null; then
+# ★ 살아 있는지는 명세 그 자체로 확인한다 — actuator/health 는 계약과 상관없는 이유(메일·디스크)로도
+#   DOWN 이 되는데, 그때 "서버가 없다" 고 하면 멀쩡한 서버를 두고 헤매게 된다.
+if ! curl -sf --max-time 5 "http://localhost:$PORT/api/v3/api-docs" -o /dev/null; then
   echo "서버가 $PORT 에 없습니다. 먼저 띄우세요 — 계약은 돌아가는 서버가 정본입니다." >&2
   exit 1
 fi

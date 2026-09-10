@@ -113,6 +113,7 @@ public final class PetResponses {
         }
     }
 
+    @Schema(name = "ZzalToday", description = "오늘 한 일 — 자정에 0 으로 돌아간다")
     public record Today(int games, int pets, int careIntimacy, int snackStreak, boolean bathDone) {
     }
 

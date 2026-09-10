@@ -37,7 +37,7 @@ public final class AdminRequests {
      * ★ presign 으로 올린 <b>자기 키</b>여야 한다({@code S3Service.consume} 가 주인·재사용을 판정).
      *   키를 그냥 받아 적으면 아무 문자열이나 그림 자리에 들어간다.
      */
-    @Schema(description = "맥미니 재생성 결과 등록")
+    @Schema(name = "AdminUpload", description = "맥미니 재생성 결과 등록")
     public record Upload(
 
             @Schema(description = "presign 으로 올린 이미지 키", example = "images/zzal/tmp/ab12.webp")
