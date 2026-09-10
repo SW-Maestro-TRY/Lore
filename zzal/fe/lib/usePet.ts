@@ -89,11 +89,12 @@ export interface UsePetResult {
 export function nextBoundaryAt(pet: PetDetail, nowMs: number = ms(pet.serverNow) ?? Date.now()): number | null {
   if (pet.phase !== 'ALIVE' || !pet.clock) return null;
   const c = pet.clock;
+  // ★ 튜토리얼 칸은 여기 없다 — 순서로 가므로 기다려서 열리는 칸이 없고, 물어볼 경계도 없다.
+  //   튜토리얼 중에는 시계가 아예 멈춰 있어(clockStartedAt 이 null) 게이지·잠 경계도 오지 않는다.
   const candidates: (number | null)[] = [
-    ms(c.babyUntil), ms(c.autoSleepAt), ms(c.autoWakeAt), ms(c.sleepWindowOpensAt), ms(c.wakeWindowOpensAt),
+    ms(c.autoSleepAt), ms(c.autoWakeAt), ms(c.sleepWindowOpensAt), ms(c.wakeWindowOpensAt),
     ms(pet.chatSummary?.nextAt),
     pet.food?.nextInSeconds != null ? nowMs + pet.food.nextInSeconds * 1000 : null,
-    ...(pet.tutorial?.steps.filter((s) => !s.done).map((s) => ms(s.dueAt)) ?? []),
   ];
   const future = candidates.filter((t): t is number => t !== null && t > nowMs);
   return future.length ? Math.min(...future) : null;

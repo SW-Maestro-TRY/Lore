@@ -15,7 +15,7 @@
 
 import {
   answerChat, care, draftPet, setCharacter, getHatchProgress, getAlbum, getChat, getPet, listPets, markMotionSeen, setBackground,
-  setPersonality, share, sleep, wake,
+  setPersonality, share, sleep, tutorialDone, wake,
   type Album, type CareAction, type ChatSlot, type ChatState, type CharacterInput, type Drafted, type HatchProgress,
   type PetCreated, type PetDetail, type Personality, type Shared, type ShareKind,
 } from './pet';
@@ -39,6 +39,8 @@ export interface PetSource {
   care(petId: number, action: CareAction): Promise<PetDetail>;
   sleep(petId: number): Promise<PetDetail>;
   wake(petId: number): Promise<PetDetail>;
+  /** 튜토리얼 마지막 칸 — 시계가 켜진다. */
+  tutorialDone(petId: number): Promise<PetDetail>;
   setPersonality(petId: number, personality: Personality, world?: string): Promise<PetDetail>;
   setBackground(petId: number, background: string): Promise<PetDetail>;
   share(petId: number, motionKey: string, kind: ShareKind): Promise<Shared>;
@@ -58,7 +60,8 @@ export interface PetSource {
 /** 실서버. pet.ts·game.ts 의 함수를 그대로 묶은 것이라 여기엔 규칙이 없다. */
 export const httpPetSource: PetSource = {
   kind: 'http',
-  draftPet, setCharacter, getHatchProgress, listPets, getPet, care, sleep, wake, setPersonality, setBackground, share,
+  draftPet, setCharacter, getHatchProgress, listPets, getPet, care, sleep, wake, tutorialDone, setPersonality,
+  setBackground, share,
   getChat, answerChat, markMotionSeen, getAlbum,
   startGame, guess, getCurrentGame,
 };

@@ -37,15 +37,11 @@ export const DROP_MS = {
   trash: 4 * HOUR,
 } as const;
 
-/** 첫 1시간(아기)만 원조 아기 속도. 처벌 없음. §4·§12 */
-export const BABY_DROP_MS = {
-  fullness: 3 * MIN,
-  happiness: 4 * MIN,
-  trash: 15 * MIN,
-} as const;
-
-/** 아기 60분. 부화 순간부터 실시간. §12·§16 */
-export const BABY_MS = 60 * MIN;
+/**
+ * 튜토리얼 첫 똥 — "바닥을 치워 주세요" 칸이 만든다. §12
+ * ★ 치울 것이 없으면 그 칸을 할 수가 없어 튜토리얼이 거기서 멈춘다.
+ */
+export const TUTORIAL_FIRST_TRASH = 1;
 
 /** 간식 연속 5개면 배탈(병 100%). §4·§5 */
 export const SNACK_STREAK_SICK = 5;
