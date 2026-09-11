@@ -179,7 +179,7 @@ public class MotionService {
 
         // ★ 이어받기는 반드시 이 모션 것만. 펫으로 묶으면 다른 동작의 격자를 물려받는다.
         RunResult r = runner.run(job.getId(), ctx,
-                registry.steps(GenKind.MOTION, version),
+                registry.stages(GenKind.MOTION, version),
                 stepRepository.findSucceededByMotion(motionId));
         if (!r.success()) {
             return false;

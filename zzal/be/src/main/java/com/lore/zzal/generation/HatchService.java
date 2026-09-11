@@ -46,34 +46,6 @@ public class HatchService {
         this.motionSeeder = motionSeeder;
     }
 
-    /**
-     * 캐릭터 시트만 굽는다 — 그림을 등록한 직후.
-     *
-     * <h3>★ 파이프라인을 둘로 나누지 않는다</h3>
-     * 같은 5단계 목록에서 <b>앞의 한 개만 잘라</b> 넘긴다. 나머지는 이름이 들어온 뒤
-     * {@link #hatch} 가 전체 목록으로 다시 부르는데, 실행기가 "이미 성공한 단계" 를 건너뛰므로
-     * 시트는 두 번 구워지지 않는다. 재시도·실패 복구 규칙도 그대로 산다.
-     *
-     * <h3>★ 여기서 실패해도 초안을 죽이지 않는다</h3>
-     * 이름을 짓는 중이라 사용자는 아직 아무것도 못 본다. 이름이 들어와 전체를 돌릴 때
-     * 그 자리에서 다시 시도하고, 그때도 안 되면 그 판정이 사용자에게 간다.
-     */
-    @Async("hatchExecutor")
-    public void sheet(Long jobId, Long petId, String version) {
-        ZzalPet pet = petRepository.findById(petId).orElse(null);
-        if (pet == null) {
-            log.warn("펫이 없습니다 — petId={}", petId);
-            return;
-        }
-        StepContext ctx = new StepContext(petId, pet.getName(), pet.getNote(), version);
-        ctx.putImage("source", pet.getSourceImageKey());
-
-        List<GenerationStep> all = registry.steps(GenKind.HATCH, version);
-        RunResult r = runner.run(jobId, ctx, all.subList(0, 1),
-                recorder.loadSucceeded(petId, GenKind.HATCH, version));
-        log.info("시트 미리 굽기 {} — petId={} 비용=${}", r.success() ? "완료" : "실패", petId, r.costUsd());
-    }
-
     @Async("hatchExecutor")
     public void hatch(Long jobId, Long petId, String version) {
         if (runAttempt(jobId, petId, version)) {
@@ -126,17 +98,60 @@ public class HatchService {
         ctx.putImage("source", pet.getSourceImageKey());
 
         RunResult r = runner.run(jobId, ctx,
-                registry.steps(GenKind.HATCH, version),
+                registry.stages(GenKind.HATCH, version),
                 recorder.loadSucceeded(petId, GenKind.HATCH, version));
         if (!r.success()) {
             return false;
         }
-        Instant now = Instant.now();
-        recorder.markPetAlive(petId, ctx.image("sheet"), ctx.text("identity"), now);
-        // ★ 부화 완료 = 동작 18행(정본 13장). 1층 8종은 이 순간이 열린 시각. 심화 행동은 아직(NONE).
-        motionSeeder.seed(petId, now);
-        log.info("부화 완료 — petId={} version={} 비용=${}", petId, version, r.costUsd());
+        log.info("굽기 완료 — petId={} version={} 비용=${}", petId, version, r.costUsd());
+        // ★ 굽기가 끝났다고 바로 살리지 않는다 — 이름이 아직 없을 수 있다(아래).
+        completeIfReady(petId, version);
         return true;
+    }
+
+    /**
+     * <b>굽기가 끝났고 이름도 들어왔으면</b> 살린다. 둘 중 하나라도 없으면 아무 일도 안 한다.
+     *
+     * <h3>★ 왜 두 조건인가</h3>
+     * 그림을 올리는 순간부터 끝까지 굽기 때문에, 사용자가 이름을 짓는 동안 굽기가 먼저 끝날 수 있다.
+     * 그때 바로 살리면 <b>이름 없는 펫이 방에 나타난다.</b> 반대로 이름이 먼저 들어올 수도 있다.
+     * 그래서 <b>둘 다 갖춰진 순간</b>에 살리고, 그 순간이 어느 쪽인지는 상관하지 않는다.
+     *
+     * <h3>★ 두 길에서 불린다</h3>
+     * 굽기가 끝난 직후(여기)와, 이름이 들어와 커밋된 직후({@code PetNamed} 알림)다.
+     * 먼저 도착한 쪽은 조건이 모자라 그냥 돌아가고, 나중에 도착한 쪽이 살린다.
+     *
+     * @return 이번 호출로 살아났으면 true
+     */
+    public boolean completeIfReady(Long petId, String version) {
+        ZzalPet pet = petRepository.findById(petId).orElse(null);
+        if (pet == null || pet.getName() == null || pet.getName().isBlank()) {
+            return false;               // 이름을 아직 안 지었다 — 굽기만 끝난 상태로 기다린다
+        }
+        List<GenStepRecord> done = recorder.loadSucceeded(petId, GenKind.HATCH, version);
+        if (done.stream().map(GenStepRecord::getName).distinct().count() < stepsTotal(version)) {
+            return false;               // 아직 굽는 중이다
+        }
+        String sheetKey = outputOf(done, com.lore.zzal.generation.steps.SheetStep.NAME, GenStepRecord::getOutputKey);
+        String identity = outputOf(done, IdentityStep.NAME, GenStepRecord::getOutputText);
+
+        Instant now = Instant.now();
+        recorder.markPetAlive(petId, sheetKey, identity, now);
+        // ★ 부화 완료 = 동작 18행(정본 13장). 1층 8종은 이 순간이 열린 시각. 심화 행동은 아직(NONE).
+        //   두 번 불려도 이미 있는 seq 는 건너뛴다(MotionSeeder).
+        motionSeeder.seed(petId, now);
+        log.info("부화 완료 — petId={} version={}", petId, version);
+        return true;
+    }
+
+    private static String outputOf(List<GenStepRecord> done, String stepName,
+                                   java.util.function.Function<GenStepRecord, String> field) {
+        return done.stream()
+                .filter(r -> stepName.equals(r.getName()))
+                .map(field)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     /** 이 펫의 부화가 몇 단계까지 끝났나. 진행률 표시에 쓴다. */

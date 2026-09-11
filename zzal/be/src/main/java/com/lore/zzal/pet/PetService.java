@@ -12,10 +12,9 @@ import com.lore.zzal.generation.GenStatus;
 import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.pet.dto.PetResponses;
 import com.lore.zzal.piece.PieceEvent;
-import com.lore.zzal.generation.PetSheetRequested;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
-import com.lore.zzal.generation.PetSheetRequested;
+import com.lore.zzal.generation.PetNamed;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSeeder;
@@ -100,10 +99,18 @@ public class PetService {
     }
 
     /**
-     * 그림을 등록한다 — <b>초안</b>을 만들고 캐릭터 시트 굽기를 시작한다.
+     * 그림을 등록한다 — <b>초안</b>을 만들고 <b>부화를 끝까지</b> 굽기 시작한다.
      *
-     * <h3>★ 왜 이름을 나중에 받나</h3>
-     * 부화 전체가 2~7분이다. 사용자가 이름을 짓는 동안(약 74초) 시트를 미리 구우면 그만큼 앞당겨진다.
+     * <h3>★ 왜 여기서 끝까지 굽나 (2026-09-11)</h3>
+     * 전에는 시트 한 장만 굽고 이름이 올 때까지 멈춰 있었다. 실측에서 그 공백이 <b>2분 54초</b>였고,
+     * 그동안 서버는 아무것도 안 했다. 그림 생성에 들어가는 사용자 입력은 없으므로
+     * (자유 메모마저 1.9에서 빠졌다 — {@code IdentityStep} 주석) 기다릴 이유가 없다.
+     * 목표는 <b>사용자가 이름을 다 지었을 때 이미 끝나 있는 것</b>이다.
+     *
+     * <h3>★ 그래도 이름 없이는 안 살아난다</h3>
+     * 굽기가 먼저 끝나면 펫은 초안인 채로 기다린다. 살아나는 조건은
+     * <b>굽기 완료 + 이름 제출</b> 둘 다이고, 나중에 갖춰지는 쪽이 살린다
+     * ({@code HatchService.completeIfReady}).
      *
      * <h3>★ 이름을 안 짓고 나갔다가 다시 오면 그 초안을 이어간다</h3>
      * 시트는 이미 구웠고 돈도 나갔다. 새 그림으로 시작하고 싶으면 초안을 버리는 길을 따로 둔다.
@@ -134,15 +141,17 @@ public class PetService {
         String version = hatchService.currentVersion();
         pet.setHatchPipelineVersion(version);
         GenJob job = jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, version, now));
-        events.publishEvent(new PetSheetRequested(job.getId(), pet.getId(), version));
+        events.publishEvent(new PetHatchRequested(job.getId(), pet.getId(), version));
         return pet;
     }
 
     /**
-     * 초안에 캐릭터 정보를 채운다 — <b>격자 생성이 여기서 시작된다.</b>
+     * 초안에 캐릭터 정보를 채운다.
      *
-     * ★ 시트는 이미 구워져 있으므로 실행기가 그 단계를 건너뛴다. 아직 굽는 중이면
-     *   같은 작업이 이어서 돌기를 기다렸다가 다음 단계로 넘어간다.
+     * <h3>★ 여기서 굽기를 시작하지 않는다 (2026-09-11)</h3>
+     * 굽기는 그림을 올릴 때 이미 시작했다. 이 호출이 하는 일은 <b>이름을 채우는 것</b>과,
+     * 그 사이 굽기가 끝나 있었다면 <b>그 자리에서 살리는 것</b>뿐이다.
+     * 굽는 중이면 아무 일도 일어나지 않고, 굽기가 끝나는 쪽이 살린다.
      */
     @Transactional
     public ZzalPet character(Long userId, Long petId, String name, String note,
@@ -155,9 +164,7 @@ public class PetService {
 
         String version = pet.getHatchPipelineVersion() != null
                 ? pet.getHatchPipelineVersion() : hatchService.currentVersion();
-        long attempts = jobRepository.countByPetIdAndKind(petId, GenKind.HATCH);
-        GenJob job = jobRepository.save(GenJob.start(petId, GenKind.HATCH, (int) attempts + 1, version, now));
-        events.publishEvent(new PetHatchRequested(job.getId(), petId, version));
+        events.publishEvent(new PetNamed(petId, version));
         return pet;
     }
 
@@ -757,6 +764,11 @@ public class PetService {
      * <h3>★ 실패 문구는 두 가지뿐이다</h3>
      * 원인(거부·시간 초과·모델 오류)을 노출하면 사용자는 자기 그림이 무엇에 걸렸는지 추측하게 되고,
      * 그 추측은 대개 틀린다. 다시 해 볼 만한지 아닌지만 말한다.
+     *
+     * <h3>★ phase 와 progress 가 서로 다른 것을 말한다 (1.9)</h3>
+     * {@code progress} 는 <b>굽기가 몇 단계까지 됐나</b>이고, {@code phase} 는 <b>살아났나</b>이다.
+     * 그림을 올린 순간부터 끝까지 굽기 때문에 <b>DRAFT 인데 진행이 5/5</b> 인 상태가 생긴다 —
+     * "굽기는 끝났고 이름을 기다리는 중" 이라는 뜻이다. 이름을 안 낸 사람에게 ALIVE 를 주지 않는다.
      */
     @Transactional(readOnly = true)
     public PetResponses.Hatch hatchProgress(Long userId, Long petId, Instant now) {

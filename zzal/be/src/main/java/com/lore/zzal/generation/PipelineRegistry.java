@@ -18,7 +18,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 버전 → 단계 목록.
+ * 버전 → 단계 목록. <b>단계는 묶음(stage) 단위로 돈다.</b>
+ *
+ * <h3>★ 묶음이 곧 "나란히 돌려도 되는가"의 선언이다</h3>
+ * 한 묶음 안의 단계들은 <b>동시에</b> 돌고, 묶음과 묶음 사이는 순서대로다.
+ * v2 의 {@code [grid, grid2]} 가 그 예다 — 두 장은 서로를 안 보고 둘 다 {@code identity} 하나만 쓰므로
+ * 겹쳐 구우면 한 장 값(실측 41초)이 통째로 빠진다.
+ *
+ * ★ 나란히 돌 수 있는지를 단계가 스스로 말하게 하지 않은 이유 — 그러면 기본값이 필요하고,
+ *   새 단계를 만들며 그 선언을 빠뜨리면 <b>엉뚱한 것이 같이 돌아도 아무도 모른다.</b>
+ *   파이프라인의 모양은 여기 한 곳에 있으므로, 묶음도 여기서 눈으로 보이게 둔다.
  *
  * ★ 파이프라인이 계속 바뀔 예정이라(2026-09-02 상훈님 확인) 단계 구성을 여기 한 곳에 모은다.
  *
@@ -36,7 +45,7 @@ import java.util.Map;
 @Component
 public class PipelineRegistry {
 
-    private final Map<GenKind, Map<String, List<GenerationStep>>> versions;
+    private final Map<GenKind, Map<String, List<List<GenerationStep>>>> versions;
     private final Map<GenKind, String> currentVersions;
 
     private static final Logger log = LoggerFactory.getLogger(PipelineRegistry.class);
@@ -58,10 +67,11 @@ public class PipelineRegistry {
                      String hatchVersion, String motionVersion, java.util.function.Predicate<String> resourceExists) {
         this.versions = Map.of(
                 GenKind.HATCH, Map.of(
-                        "v1", List.of(sheet, identity, grid, post),
+                        "v1", List.of(List.of(sheet), List.of(identity), List.of(grid), List.of(post)),
                         // v2 = 격자 2장(1층·2층) → 기본 행동 16종(정본 13장). 프롬프트 prompt/v2/{sheet,identity,grid,grid2}.txt
-                        "v2", List.of(sheet, identity, grid, grid2, post)),
-                GenKind.MOTION, Map.of("v1", List.of(motionGrid, motionPost)));
+                        // ★ [grid, grid2] 가 한 묶음 = 나란히 굽는다. identity 는 앞 묶음이라 반드시 먼저 끝난다.
+                        "v2", List.of(List.of(sheet), List.of(identity), List.of(grid, grid2), List.of(post))),
+                GenKind.MOTION, Map.of("v1", List.of(List.of(motionGrid), List.of(motionPost))));
         this.currentVersions = Map.of(
                 GenKind.HATCH, resolveHatchVersion(hatchVersion, resourceExists),
                 GenKind.MOTION, motionVersion);
@@ -88,15 +98,21 @@ public class PipelineRegistry {
         return "v1";
     }
 
-    public List<GenerationStep> steps(GenKind kind, String version) {
-        List<GenerationStep> steps = versions.getOrDefault(kind, Map.of()).get(version);
-        if (steps == null) {
+    /** 돌릴 묶음들. 묶음 안은 동시에, 묶음 사이는 순서대로. */
+    public List<List<GenerationStep>> stages(GenKind kind, String version) {
+        List<List<GenerationStep>> stages = versions.getOrDefault(kind, Map.of()).get(version);
+        if (stages == null) {
             // 없는 버전으로 굽기 시작하면 조용히 기본값으로 가지 않는다 — 그러면 기록에는
             // v9 라고 남고 실제로는 v1 로 구워진, 설명이 안 되는 결과가 생긴다.
             throw new IllegalArgumentException(
                     "모르는 파이프라인 버전입니다: %s %s".formatted(kind, version));
         }
-        return steps;
+        return stages;
+    }
+
+    /** 묶음을 펼친 목록 — 몇 단계인지 세거나 순서를 볼 때. 돌릴 때는 {@link #stages} 를 쓴다. */
+    public List<GenerationStep> steps(GenKind kind, String version) {
+        return stages(kind, version).stream().flatMap(List::stream).toList();
     }
 
     /** 지금 새로 구울 것에 쓸 버전. */

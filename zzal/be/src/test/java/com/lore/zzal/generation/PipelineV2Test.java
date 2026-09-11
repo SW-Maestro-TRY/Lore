@@ -47,6 +47,23 @@ class PipelineV2Test {
     }
 
     @Test
+    @DisplayName("★ v2 묶음 — 격자 두 장만 한 묶음(나란히), identity 는 그 앞 묶음이라 반드시 먼저 끝난다")
+    void v2RunsBothGridsTogether() {
+        PipelineRegistry r = registry("v2", true);
+        List<List<GenerationStep>> stages = r.stages(GenKind.HATCH, "v2");
+
+        assertThat(stages).hasSize(4);
+        assertThat(stages.get(2)).hasSize(2);                     // grid · grid2
+        assertThat(stages).allSatisfy(stage -> assertThat(stage).isNotEmpty());
+        assertThat(stages.get(0)).hasSize(1);                     // sheet
+        assertThat(stages.get(1)).hasSize(1);                     // identity — 격자보다 앞
+        assertThat(stages.get(3)).hasSize(1);                     // post — 격자 뒤
+
+        // v1 은 격자가 한 장이라 나란히 돌 것이 없다
+        assertThat(r.stages(GenKind.HATCH, "v1")).allSatisfy(stage -> assertThat(stage).hasSize(1));
+    }
+
+    @Test
     @DisplayName("★ v2 를 켰는데 prompt/v2/*.txt 가 없으면 v1 로 기동 — 기록도 v1")
     void fallsBackToV1WhenPromptsMissing() {
         PipelineRegistry r = registry("v2", false);

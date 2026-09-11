@@ -550,7 +550,8 @@ public class ZzalPet {
         this.personality = personality;
         this.world = world == null || world.isBlank() ? null : world;
         this.phase = PetPhase.HATCHING;
-        this.hatchStartedAt = now;          // 남은 시간 안내의 기준을 여기로 다시 잡는다
+        // ★ hatchStartedAt 은 여기서 다시 잡지 않는다(1.9) — 굽기는 그림을 올릴 때 이미 시작했다.
+        //   여기로 당기면 거의 끝난 부화에 "10분 남음" 이 다시 뜨고, 멈춘 알 복구도 12분을 더 기다린다.
     }
 
     /** 이름을 아직 안 지은 초안인가. */

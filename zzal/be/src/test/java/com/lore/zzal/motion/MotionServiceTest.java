@@ -92,7 +92,7 @@ class MotionServiceTest {
         when(petRepository.findById(any())).thenReturn(Optional.of(pet));
 
         when(jobRepository.save(any(GenJob.class))).thenAnswer(i -> i.getArgument(0));
-        when(registry.steps(eq(GenKind.MOTION), anyString())).thenReturn(List.<GenerationStep>of());
+        when(registry.stages(eq(GenKind.MOTION), anyString())).thenReturn(List.<List<GenerationStep>>of());
         when(catalog.block(MOTION_NAME)).thenReturn("TASK: 머리를 쓰다듬는다");
         when(stepRepository.findSucceededByMotion(anyLong())).thenReturn(List.<GenStepRecord>of());
 

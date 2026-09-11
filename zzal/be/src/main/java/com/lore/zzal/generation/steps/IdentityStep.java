@@ -55,12 +55,15 @@ public class IdentityStep implements GenerationStep {
 
     @Override
     public StepResult run(StepContext ctx) throws Exception {
+        // ★★ 자유 메모(note)는 여기 안 들어간다 — 2026-09-11 상훈님 결정.
+        //   원문: "자유 메모는 움짤보다는 나중에 채팅 기능 넣을 때 퀄리티를 높이기 위한 방법이었어.
+        //   메모는 일단 백엔드에 저장이 될 거 아냐. 나중에 쓰는 쪽으로 하자 채팅 때"
+        //
+        //   ★ 빠뜨린 것이 아니라 <b>뺀 것</b>이다. 메모는 zzal_pet.note 에 그대로 저장되고,
+        //     채팅(특히 LLM 을 붙일 때) 재료로 쓴다. 되돌리지 말 것.
+        //   ★ 그림이 이름을 기다릴 이유가 사라진 것도 이 변경 때문이다 — 메모가 마지막 남은
+        //     "캐릭터 정보에서 그림으로 가는 줄" 이었다. 지금은 그림 등록 즉시 끝까지 굽는다.
         String prompt = prompts.prompt(ctx.version(), NAME);
-        if (ctx.note() != null && !ctx.note().isBlank()) {
-            // 사용자가 직접 쓴 세부사항을 덧붙인다. 남이 정한 설정이 아니라 본인 말이라
-            // 자캐 커뮤니티의 '캐조종' 문제가 성립하지 않는다.
-            prompt = prompt + "\n\n[주인이 알려준 것]\n" + ctx.note();
-        }
 
         ModelSpec spec = prompts.model(ctx.version(), NAME);
         TextClient.Result r = textClient.generate(prompt, List.of(ctx.image(SheetStep.NAME)), spec);
