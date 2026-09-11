@@ -5,8 +5,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -126,6 +132,63 @@ class HatchFailureIsToldTest {
             ZzalPet other = ZzalPet.draft(999L, "images/zzal/other", T0);
             assertThatCode(() -> other.character("여울", null, List.of(Personality.GENTLE), null, T0))
                     .doesNotThrowAnyException();
+        }
+
+        /**
+         * ★★ 위 시험은 객체 수준이라 <b>DB 제약을 못 잡는다.</b>
+         *
+         * 마이그레이션으로 {@code unique(name)} 을 걸어도 위 시험은 그대로 통과하고,
+         * 막히는 것은 배포 뒤 실제 저장 시점이다. 그래서 마이그레이션 글을 직접 읽는다.
+         *
+         * ★ 지금 없는 것이 <b>우연이 아니라 결정</b>이다 — 걸면 두 길이 함께 막힌다.
+         * 굽기가 실패한 사람이 같은 이름으로 다시 만드는 길과, 서로 다른 사용자가 같은 이름을 쓰는 길.
+         */
+        @Test
+        @DisplayName("★★ 마이그레이션에도 이름 유일 제약이 없다 — 걸면 사용자가 갇힌다")
+        void noUniqueConstraintInMigrations() throws IOException {
+            Path dir = repoRoot().resolve("apps/api/src/main/resources/db/migration");
+            // zzal_pet 과 name 과 unique 가 한 문장(;) 안에 함께 있으면 잡는다.
+            Pattern suspicious = Pattern.compile("[^;]*unique[^;]*;", Pattern.DOTALL);
+
+            try (Stream<Path> files = Files.list(dir)) {
+                List<String> offenders = files
+                        .filter(f -> f.toString().endsWith(".sql"))
+                        .filter(f -> {
+                            String sql = read(f).toLowerCase(Locale.ROOT);
+                            return suspicious.matcher(sql).results()
+                                    .map(java.util.regex.MatchResult::group)
+                                    .anyMatch(stmt -> stmt.contains("zzal_pet") && stmt.contains("name"));
+                        })
+                        .map(f -> f.getFileName().toString())
+                        .toList();
+
+                assertThat(offenders)
+                        .as("""
+                                펫 이름에 유일 제약이 생겼습니다. 지우기 전에 두 가지를 먼저 정하세요 —
+                                굽기가 실패한 사람이 같은 이름으로 다시 만들 수 있는가,
+                                서로 다른 사용자가 같은 이름을 쓸 수 있는가. 둘 다 사용자가 갇히는 자리입니다.""")
+                        .isEmpty();
+            }
+        }
+
+        private String read(Path path) {
+            try {
+                return Files.readString(path);
+            } catch (IOException e) {
+                throw new IllegalStateException(path.toString(), e);
+            }
+        }
+
+        /** 시험이 레포 어디서 돌든 루트를 찾는다. */
+        private Path repoRoot() {
+            Path p = Path.of("").toAbsolutePath();
+            while (p != null && !Files.exists(p.resolve("settings.gradle"))) {
+                p = p.getParent();
+            }
+            if (p == null) {
+                throw new IllegalStateException("레포 루트를 못 찾았습니다");
+            }
+            return p;
         }
     }
 }
