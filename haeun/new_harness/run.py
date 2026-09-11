@@ -1115,7 +1115,7 @@ def _distinct_structures(genre: str, first: dict, n: int = DIRECTIONS_PER_RUN) -
 
 
 def _pick_engines(n: int = DIRECTIONS_PER_RUN) -> list[dict]:
-    """압력 — "주인공이 왜 가만히 있을 수 없는가". 방향마다 서로 다르게.
+    """문제가 옮겨 가는 길 — "처음 문제가 마지막에 무엇이 되어 있는가".
 
     축(어디에 서 있는가)·구조(어떤 순서로 보여주는가)와 다른 층이다. 축과
     구조를 방향별로 갈라도 4개가 전부 "상대에게 숨겨진 감정이 있고
@@ -1141,10 +1141,21 @@ def _pick_engines(n: int = DIRECTIONS_PER_RUN) -> list[dict]:
 
 
 def _engine_block(engine: dict) -> str:
+    """배정된 값 한 덩어리. `시작`·`도착`이 있으면 경로로, 없으면 예전 형식으로.
+
+    옛 `story_engines.json`(핵심동사만 있는 것)을 그대로 두고 돌려도 읽힌다 —
+    이 파일은 손으로 갈아 끼우는 자리라, 한쪽 형식만 읽으면 갈아 끼운 순간
+    방향별 값이 통째로 사라진다.
+    """
     if not engine:
         return ""
-    lines = [f"[압력] {engine.get('이름', '')} — 핵심 동사: "
-             f"{engine.get('핵심동사', '')}"]
+    name = engine.get("이름", "")
+    if str(engine.get("시작") or "").strip():
+        lines = [f"[문제가 옮겨 가는 길] {name}",
+                 f"  시작 — {engine['시작']}",
+                 f"  도착 — {engine.get('도착', '')}"]
+    else:
+        lines = [f"[압력] {name} — 핵심 동사: {engine.get('핵심동사', '')}"]
     for key in ("설명", "전개"):
         if str(engine.get(key) or "").strip():
             lines.append(f"  {engine[key]}")
@@ -1239,16 +1250,18 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     count = max(len(axes_list), len(structures), len(engines))
     if not count:
         return ""
-    head = "## 방향별 압력" + (" · 이야기 변수 · 회차 구조" if use_axes else "") \
+    head = "## 방향별 「문제가 옮겨 가는 길」" \
+           + (" · 이야기 변수 · 회차 구조" if use_axes else "") \
            + " — 참고가 아니라 지시다"
     parts = [
         "", head, "",
         "아래 값은 방향 번호에 그대로 대응한다. **방향 N 은 N 번 값으로 쓴다.** "
         "4개가 서로 다른 이야기가 되게 하는 장치가 이것이다 — 값을 무시하고 그 "
         "장르에서 가장 흔한 설정으로 돌아가면 넷이 비슷해진다.", "",
-        "**압력은 '주인공이 왜 가만히 있을 수 없는가'다.** 소재와 무대가 달라도 "
-        "압력이 같으면 넷이 같은 이야기로 읽힌다. 장르가 익숙한 공식으로 끌어당겨도 "
-        "배정된 압력 쪽으로 간다 — 넷이 전부 '알아내는 이야기'가 되면 실패다.",
+        "**이것은 소재가 아니라 경로다.** 무엇에 대한 이야기인지가 아니라, 처음 "
+        "문제가 마지막에 무엇이 되어 있는지를 정한 것이다. 배정된 시작점과 도착점을 "
+        "먼저 잡고 그 사이를 채워라 — 소재는 장르에서 고른다. 도착점이 시작점과 "
+        "같은 종류의 문제면 실패고, 넷의 도착점이 서로 비슷해도 실패다.",
     ]
     if use_axes:
         parts += ["", "이야기 변수는 인물이 어디에 서서 무엇과 부딪히는지를, 회차 "
