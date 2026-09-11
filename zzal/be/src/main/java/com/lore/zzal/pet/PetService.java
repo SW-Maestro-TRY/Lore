@@ -155,12 +155,12 @@ public class PetService {
      */
     @Transactional
     public ZzalPet character(Long userId, Long petId, String name, String note,
-                             Personality personality, String world, Instant now) {
+                             java.util.List<Personality> personalities, String world, Instant now) {
         ZzalPet pet = findMine(userId, petId);
         if (!pet.isDraft()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_DRAFT);
         }
-        pet.character(name, note, personality, world, now);
+        pet.character(name, note, personalities, world, now);
 
         String version = pet.getHatchPipelineVersion() != null
                 ? pet.getHatchPipelineVersion() : hatchService.currentVersion();
@@ -579,9 +579,37 @@ public class PetService {
 
     /** 성격·세계관. 언제든, 자는 중에도(정본 10장 "언제든 변경"). */
     @Transactional(noRollbackFor = BusinessException.class)
-    public Action choosePersonality(Long userId, Long petId, Personality personality, String world, Instant realNow) {
+    public Action choosePersonality(Long userId, Long petId, java.util.List<Personality> personalities,
+                                    String world, Instant realNow) {
+        if (personalities == null || personalities.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "성격을 하나는 골라 주세요");
+        }
         ZzalPet pet = alive(userId, petId, realNow);
-        return withUnlockDiff(pet, () -> pet.choosePersonality(personality, world));
+        return withUnlockDiff(pet, () -> pet.choosePersonality(personalities, world));
+    }
+
+    /**
+     * 튜토리얼 4칸("이 성격이 맞나요") — <b>아이 정보를 확인만 해도</b> 넘어간다(상훈님 2026-09-11).
+     *
+     * <h3>★ 왜 화면 혼자 넘기면 안 되나</h3>
+     * 두 군데서 막힌다. 서버가 4칸에 남아 있으면 그다음 행동(청소)이 와도 {@code != done} 으로
+     * 무시돼 <b>튜토리얼이 영영 막히고</b>, <b>첫 흔적이 이 칸을 넘길 때 생기므로</b> 화면만
+     * 넘기면 바닥이 깨끗해 5칸(청소)에서 또 막힌다.
+     *
+     * ★ 성격을 한 번도 안 고른 사람은 {@code null} 인 채 지나간다 — 상훈님이 그래도 된다고 하셨다
+     *   ("괜찮아. 튜토리얼에서도 한 번 더 받으니까"). 기본 톤으로 가고 언제든 바꿀 수 있다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action tutorialSeen(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        if (!pet.isInTutorial()) {
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_ALREADY_DONE);
+        }
+        if (TutorialSchedule.currentOf(pet.getTutorialStep()) != TutorialSchedule.Step.PERSONALITY) {
+            // ★ 아무 칸에서나 밀면 순서가 무너진다 — 지금 칸이 아니면 아무 일도 하지 않는다.
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+        }
+        return withUnlockDiff(pet, () -> pet.advanceTutorial(TutorialSchedule.Step.PERSONALITY));
     }
 
     /** 배경 바꾸기 — 2층 4종이 열린 뒤(정본 6장). 값은 검증하지 않는다(해석 6). */

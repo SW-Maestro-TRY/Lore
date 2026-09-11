@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 /**
  * 펫 한 마리 — 플레이 정본 v1.2(#192).
@@ -494,6 +495,20 @@ public class ZzalPet {
     @Column(length = 10)
     private Personality personality;
 
+    /**
+     * 대표 말고 <b>함께 고른</b> 성격들 — 쉼표로 이어 둔다. 없으면 null.
+     *
+     * <h3>★ 왜 표를 안 만드나 (1.9)</h3>
+     * 지금 이 값을 <b>읽는 곳이 없다.</b> 상훈님 지시는 "데이터는 많으면 많을수록 좋아. 당장 채팅
+     * 구현이 안 되어 있으니까 일단은 이렇게 진행하자" 였다. 조건으로 걸러 찾을 일도, 하나씩 지울 일도
+     * 아직 없고 <b>통째로 읽어 쓰는</b> 값이라, 표를 따로 만들면 그 표를 유지하는 값만 먼저 치른다.
+     * 채팅에서 톤을 섞는 방식이 정해지면 그때 모양을 정하는 편이 낫다.
+     *
+     * ★ 대표는 여전히 {@code personality} 한 칸이다. 대사 톤은 그 하나만 본다.
+     */
+    @Column(length = 64)
+    private String personalityExtra;
+
     @Column(length = 40)
     private String world;
 
@@ -541,13 +556,13 @@ public class ZzalPet {
      * ★ 그림 생성에 들어가는 것은 {@code note}(자유 메모) 뿐이다(정본 1.6). 성격·말투·장르·세계관은
      *   <b>대사 톤에만</b> 쓰인다 — 격자 프롬프트의 정체성 문단은 그림에서 뽑는다.
      */
-    public void character(String name, String note, Personality personality, String world, Instant now) {
+    public void character(String name, String note, List<Personality> personalities, String world, Instant now) {
         if (phase != PetPhase.DRAFT) {
             throw new IllegalStateException("초안이 아니다");
         }
         this.name = name;
         this.note = note;
-        this.personality = personality;
+        setPersonalities(personalities);
         this.world = world == null || world.isBlank() ? null : world;
         this.phase = PetPhase.HATCHING;
         // ★ hatchStartedAt 은 여기서 다시 잡지 않는다(1.9) — 굽기는 그림을 올릴 때 이미 시작했다.
@@ -1668,8 +1683,45 @@ public class ZzalPet {
     }
 
     /** 성격 그룹·세계관 한 줄. 언제든 바꾼다(정본 10장). */
-    public void choosePersonality(Personality personality, String world) {
-        this.personality = personality;
+    /**
+     * 고른 성격을 앉힌다 — <b>맨 앞이 대표</b>, 나머지는 저장만.
+     *
+     * ★ 빈 목록이면 아무것도 안 바꾼다(이름만 짓고 성격을 안 고른 사람). 성격은 언제든 바꿀 수 있고
+     *   (정본 0장 6) 튜토리얼 4칸에서 한 번 더 묻는다.
+     * ★ 중복은 지운다 — 같은 것을 두 번 고른 것이 데이터에 남을 이유가 없다.
+     */
+    private void setPersonalities(List<Personality> personalities) {
+        if (personalities == null || personalities.isEmpty()) {
+            return;
+        }
+        List<Personality> picked = personalities.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (picked.isEmpty()) {
+            return;
+        }
+        this.personality = picked.getFirst();
+        List<Personality> extra = picked.subList(1, picked.size());
+        this.personalityExtra = extra.isEmpty() ? null
+                : extra.stream().map(Enum::name).collect(java.util.stream.Collectors.joining(","));
+    }
+
+    /** 대표를 맨 앞에 둔, 고른 성격 전부. 아무것도 안 골랐으면 빈 목록. */
+    public List<Personality> getPersonalities() {
+        if (personality == null) {
+            return List.of();
+        }
+        if (personalityExtra == null || personalityExtra.isBlank()) {
+            return List.of(personality);
+        }
+        List<Personality> all = new java.util.ArrayList<>();
+        all.add(personality);
+        for (String name : personalityExtra.split(",")) {
+            all.add(Personality.valueOf(name.trim()));
+        }
+        return List.copyOf(all);
+    }
+
+    public void choosePersonality(List<Personality> personalities, String world) {
+        setPersonalities(personalities);
         this.world = world == null || world.isBlank() ? null : world;
         // ★ 4칸("이 성격이 맞나요")은 <b>고쳤는지</b>가 아니라 <b>확인했는지</b>를 본다.
         //   성격은 부화 전에 이미 받으므로 값이 있는지로 판단하면 들어오자마자 참이 되어

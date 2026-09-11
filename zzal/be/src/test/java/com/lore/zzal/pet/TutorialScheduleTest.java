@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import static com.lore.zzal.pet.AwakeClockTest.kst;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import java.util.List;
 
 /**
  * 튜토리얼 — <b>시각이 아니라 순서</b>(정본 12장 · 1.4).
@@ -80,7 +81,7 @@ class TutorialScheduleTest {
             pet.pet(T0);
             pet.answerChat();
             assertThat(pet.getTrash()).isZero();
-            pet.choosePersonality(Personality.LIVELY, null);
+            pet.choosePersonality(List.of(Personality.LIVELY), null);
             assertThat(pet.getTrash()).isEqualTo(1);          // ★ 5칸("치워 주세요")을 위한 첫 똥
             pet.clean(T0);
             pet.startGame();
@@ -90,6 +91,38 @@ class TutorialScheduleTest {
 
             assertThat(pet.getTutorialStep()).isEqualTo(TutorialSchedule.TOTAL - 1);
             assertThat(pet.isInTutorial()).isTrue();          // 아직 — 마지막 칸이 남았다
+        }
+
+        @Test
+        @DisplayName("★ 4칸은 성격을 안 고쳐도 넘어간다 — 확인만 하면 된다. 첫 똥도 그때 떨어진다")
+        void personalityStepPassesOnSeeing() {
+            ZzalPet pet = born();
+            pet.feed(T0);
+            pet.pet(T0);
+            pet.answerChat();
+            assertThat(TutorialSchedule.currentOf(pet.getTutorialStep()))
+                    .isEqualTo(TutorialSchedule.Step.PERSONALITY);
+
+            pet.advanceTutorial(TutorialSchedule.Step.PERSONALITY);   // tutorial/seen 이 하는 일
+
+            assertThat(TutorialSchedule.currentOf(pet.getTutorialStep()))
+                    .isEqualTo(TutorialSchedule.Step.CLEAN);
+            assertThat(pet.getTrash()).isEqualTo(1);                  // ★ 5칸을 할 수 있어야 한다
+            assertThat(pet.getPersonality()).isNull();                // 안 골라도 넘어간다(기본 톤)
+        }
+
+        @Test
+        @DisplayName("★ 지금 칸이 아니면 아무 일도 안 일어난다 — 아무 칸에서나 밀면 순서가 무너진다")
+        void seeingOutOfTurnDoesNothing() {
+            ZzalPet pet = born();
+            assertThat(TutorialSchedule.currentOf(pet.getTutorialStep()))
+                    .isEqualTo(TutorialSchedule.Step.FEED);
+
+            pet.advanceTutorial(TutorialSchedule.Step.PERSONALITY);
+
+            assertThat(TutorialSchedule.currentOf(pet.getTutorialStep()))
+                    .isEqualTo(TutorialSchedule.Step.FEED);
+            assertThat(pet.getTrash()).isZero();                      // 똥도 안 생긴다
         }
     }
 
@@ -102,7 +135,7 @@ class TutorialScheduleTest {
             pet.feed(T0);
             pet.pet(T0);
             pet.answerChat();
-            pet.choosePersonality(Personality.LIVELY, null);
+            pet.choosePersonality(List.of(Personality.LIVELY), null);
             pet.clean(T0);
             pet.startGame();
             pet.share();
@@ -177,7 +210,7 @@ class TutorialScheduleTest {
             pet.feed(T0);
             pet.pet(T0);
             pet.answerChat();
-            pet.choosePersonality(Personality.LIVELY, null);
+            pet.choosePersonality(List.of(Personality.LIVELY), null);
             pet.clean(T0);
             pet.startGame();
             pet.share();

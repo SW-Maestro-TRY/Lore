@@ -347,12 +347,44 @@ class PetServiceTest {
         @DisplayName("성격은 언제든, 자는 중에도")
         void personalityAnytime() {
             ZzalPet pet = baby();
-            service.choosePersonality(USER_ID, PET_ID, Personality.LIVELY, "구름 위 마을", kst("2026-09-06 00:00"));
+            service.choosePersonality(USER_ID, PET_ID, List.of(Personality.LIVELY), "구름 위 마을", kst("2026-09-06 00:00"));
             assertThat(pet.isSleeping()).isTrue();
             assertThat(pet.getPersonality()).isEqualTo(Personality.LIVELY);
             assertThat(pet.getWorld()).isEqualTo("구름 위 마을");
-            service.choosePersonality(USER_ID, PET_ID, Personality.COOL, "  ", kst("2026-09-06 00:01"));
+            service.choosePersonality(USER_ID, PET_ID, List.of(Personality.COOL), "  ", kst("2026-09-06 00:01"));
             assertThat(pet.getWorld()).isNull();
+        }
+
+        @Test
+        @DisplayName("★ 성격을 하나도 안 보내면 INVALID_INPUT — 빈 요청이 조용히 지나가지 않는다")
+        void personalityRequiresAtLeastOne() {
+            baby();
+            assertCode(() -> service.choosePersonality(USER_ID, PET_ID, List.of(), null, T0),
+                    ErrorCode.INVALID_INPUT);
+            assertCode(() -> service.choosePersonality(USER_ID, PET_ID, null, null, T0),
+                    ErrorCode.INVALID_INPUT);
+        }
+
+        @Test
+        @DisplayName("★ tutorial/seen 은 4칸에서만 통한다 — 다른 칸이면 409")
+        void tutorialSeenOnlyAtPersonalityStep() {
+            ZzalPet pet = PetFixture.hatching(USER_ID, "여울", null, "images/zzal/abc", T0);
+            pet.markAlive("images/zzal/sheet", "생김새", T0);
+            when(petRepository.findById(PET_ID)).thenReturn(Optional.of(pet));
+            when(petRepository.findByIdForUpdate(PET_ID)).thenReturn(Optional.of(pet));
+
+            // 1칸(FEED)에서 누르면 아무 일도 없다
+            assertCode(() -> service.tutorialSeen(USER_ID, PET_ID, T0), ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+            assertThat(TutorialSchedule.currentOf(pet.getTutorialStep())).isEqualTo(TutorialSchedule.Step.FEED);
+
+            PetFixture.atTutorialStep(pet, TutorialSchedule.Step.PERSONALITY);
+            service.tutorialSeen(USER_ID, PET_ID, T0);
+            assertThat(TutorialSchedule.currentOf(pet.getTutorialStep())).isEqualTo(TutorialSchedule.Step.CLEAN);
+            assertThat(pet.getTrash()).isEqualTo(1);          // 5칸(청소)을 할 수 있어야 한다
+
+            // 튜토리얼이 끝난 뒤에는 이미 끝났다고 말한다
+            pet.skipTutorial(T0);
+            assertCode(() -> service.tutorialSeen(USER_ID, PET_ID, T0), ErrorCode.ZZAL_TUTORIAL_ALREADY_DONE);
         }
 
         @Test

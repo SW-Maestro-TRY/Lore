@@ -70,6 +70,7 @@ public enum ErrorCode {
     ZZAL_PET_NOT_DRAFT(HttpStatus.CONFLICT, "이미 이름을 지은 아이예요"),
     ZZAL_TUTORIAL_NOT_FINISHED(HttpStatus.CONFLICT, "아직 배울 것이 남았어요"),
     ZZAL_TUTORIAL_ALREADY_DONE(HttpStatus.CONFLICT, "이미 다 배웠어요"),
+    ZZAL_TUTORIAL_STEP_MISMATCH(HttpStatus.CONFLICT, "지금 배울 차례가 아니에요"),
     ZZAL_REGEN_NOT_REQUESTED(HttpStatus.CONFLICT, "다시 굽기를 요청한 동작이 아니에요"),
     ZZAL_NOT_IN_REVIEW(HttpStatus.CONFLICT, "검수 대기 중인 동작이 아니에요"),
 

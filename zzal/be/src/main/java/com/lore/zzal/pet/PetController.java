@@ -101,7 +101,7 @@ public class PetController {
                                                        @Valid @RequestBody PetRequests.Character request) {
         Instant now = Instant.now();
         ZzalPet pet = petService.character(userId, petId, request.name(), request.note(),
-                request.personality(), request.world(), now);
+                request.picked(), request.world(), now);
         return ApiResponse.ok(PetResponses.Created.from(pet, ZzalRules.HATCH_ESTIMATE.toSeconds()));
     }
 
@@ -228,7 +228,26 @@ public class PetController {
                                                         @PathVariable Long petId,
                                                         @Valid @RequestBody PetRequests.PersonalityChoice request) {
         Instant real = Instant.now();
-        return ApiResponse.ok(detail(petService.choosePersonality(userId, petId, request.personality(), request.world(), real), real));
+        return ApiResponse.ok(detail(
+                petService.choosePersonality(userId, petId, request.picked(), request.world(), real), real));
+    }
+
+    @Operation(summary = "아이 정보 확인(튜토리얼 4칸)", description = """
+            튜토리얼 4칸("이 성격이 맞나요")을 넘긴다. 성격을 고치지 않고 아이 정보를 열어 보기만 해도
+            넘어간다.
+
+            화면이 혼자 넘기면 안 된다. 서버가 4칸에 남아 있으면 그다음 행동(청소)이 무시돼
+            튜토리얼이 막히고, 첫 흔적이 이 칸을 넘길 때 생기므로 바닥이 깨끗해 5칸(청소)에서 또 막힌다.
+
+            지금 칸이 4칸이 아니면 ZZAL_TUTORIAL_STEP_MISMATCH 다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "다음 칸으로"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "지금 칸이 아님(ZZAL_TUTORIAL_STEP_MISMATCH) · 이미 끝남(ZZAL_TUTORIAL_ALREADY_DONE)")})
+    @PostMapping("/{petId}/tutorial/seen")
+    public ApiResponse<PetResponses.Detail> tutorialSeen(@LoginUser Long userId, @PathVariable Long petId) {
+        Instant real = Instant.now();
+        return ApiResponse.ok(detail(petService.tutorialSeen(userId, petId, real), real));
     }
 
     @Operation(summary = "배경 변경", description = """
