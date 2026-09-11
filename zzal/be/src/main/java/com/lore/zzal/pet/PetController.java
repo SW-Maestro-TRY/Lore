@@ -45,14 +45,15 @@ public class PetController {
 
     private PetResponses.Detail detail(ZzalPet pet, String stepLabel, Instant real) {
         return PetResponses.Detail.from(pet, stepLabel, pet.now(real), catalog,
-                petService.motionRows(pet.getId()), List.of(), false, petService.scenes(pet.getId()));
+                petService.motionRows(pet.getId()), List.of(), false, petService.scenes(pet.getId()),
+                petService.pieces(pet.getId()));
     }
 
     private PetResponses.Detail detail(PetService.Action action, Instant real) {
         ZzalPet pet = action.pet();
         return PetResponses.Detail.from(pet, null, pet.now(real), catalog,
                 petService.motionRows(pet.getId()), action.justUnlocked(), action.justHealed(),
-                petService.scenes(pet.getId()));
+                petService.scenes(pet.getId()), petService.pieces(pet.getId()));
     }
 
     @Operation(summary = "이미지 등록", description = """

@@ -66,7 +66,8 @@ class GameServiceTest {
         });
 
         RewardService rewards = new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS);
-        service = new GameService(gameRepository, petService, rewards, 3);
+        service = new GameService(gameRepository, petService, rewards,
+                com.lore.zzal.PieceFixture.inMemory(), 3);
     }
 
     @Test

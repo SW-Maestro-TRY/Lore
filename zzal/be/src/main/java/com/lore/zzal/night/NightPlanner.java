@@ -8,6 +8,8 @@ import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.motion.ZzalMotionRepository;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
+import com.lore.zzal.piece.PieceService;
+import com.lore.zzal.piece.ZzalPiece;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -43,10 +45,12 @@ public class NightPlanner {
 
     private final ZzalMotionRepository motionRepository;
     private final MotionCatalog catalog;
+    private final PieceService pieceService;
 
-    public NightPlanner(ZzalMotionRepository motionRepository, MotionCatalog catalog) {
+    public NightPlanner(ZzalMotionRepository motionRepository, MotionCatalog catalog, PieceService pieceService) {
         this.motionRepository = motionRepository;
         this.catalog = catalog;
+        this.pieceService = pieceService;
     }
 
     /**
@@ -96,13 +100,17 @@ public class NightPlanner {
                         pet.getId(), gift.getName());
             }
         }
-        // 3) 3층 — 조각 4개를 <b>이틀 연속</b> 모았으면 다음 심화 하나(정본 6장)
-        if (pet.isPiecesEnabled() && pet.getLastNightPieceStreak() >= ZzalRules.PIECES_STREAK_TO_BAKE
+        // 3) 3층 — 조각 네 칸이 다 찼으면 다음 심화 하나(정본 6장 · 1.9)
+        //
+        // ★ 1.9 에서 "이틀 연속" 이 없어졌다. 요구량 자체가 이틀치라 연속을 셀 이유가 없다.
+        // ★★ 정본 1.8 은 "네 칸이 차는 그 순간" 굽는다고 정했다. 이 밤 스위프는 그 전 모델이 남긴 자리이고,
+        //    조건 달성 즉시 굽기로 옮기는 것은 다음 단계다. 여기서는 <b>같은 조건을 같은 뜻으로</b> 읽도록만 맞춘다.
+        ZzalPiece piece = pieceService.find(pet.getId());
+        if (pet.isPiecesEnabled() && piece != null && piece.isComplete()
                 && nightOf.equals(pet.getLastNightOf())) {
             ZzalMotion next = nextAdvanced(rows);
             if (next != null) {
                 next.queue(nightOf);
-                pet.consumePieceStreak();
                 queued++;
                 log.info("3층 심화 큐 등록 — petId={} nightOf={} seq={} key={}",
                         pet.getId(), nightOf, next.getSeq(), next.getName());

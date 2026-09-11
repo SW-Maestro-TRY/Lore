@@ -82,7 +82,8 @@ class ChatServiceTest {
             ((Runnable) inv.getArgument(1)).run();
             return new PetService.Action(pet, List.of());
         });
-        service = new ChatService(repo, pets, new MotionCatalog("", "", "v1"));
+        service = new ChatService(repo, pets, new MotionCatalog("", "", "v1"),
+                com.lore.zzal.PieceFixture.inMemory());
     }
 
     private Optional<ZzalChatCall> call(ChatSlot slot) {

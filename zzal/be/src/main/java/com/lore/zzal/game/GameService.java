@@ -3,6 +3,7 @@ package com.lore.zzal.game;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.zzal.pet.PetService;
+import com.lore.zzal.piece.PieceEvent;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,15 +38,18 @@ public class GameService {
     private final ZzalGameRepository gameRepository;
     private final PetService petService;
     private final RewardService rewardService;
+    private final com.lore.zzal.piece.PieceService pieceService;
     private final int dailyLimit;
 
     public GameService(ZzalGameRepository gameRepository,
                        PetService petService,
                        RewardService rewardService,
+                       com.lore.zzal.piece.PieceService pieceService,
                        @Value("${app.zzal.game.daily-limit:3}") int dailyLimit) {
         this.gameRepository = gameRepository;
         this.petService = petService;
         this.rewardService = rewardService;
+        this.pieceService = pieceService;
         this.dailyLimit = dailyLimit;
     }
 
@@ -91,6 +95,8 @@ public class GameService {
             throw new BusinessException(ErrorCode.ZZAL_GAME_DAILY_LIMIT);
         }
         PetService.Action a = petService.withUnlockDiff(pet, pet::startGame);   // 13번 놀라기(3판)가 여기서 열린다
+        // ★ 놀이 조각은 <b>시작한 매치</b>로 센다(승패 무관) — 2층 13번과 같은 기준(정본 6·16장).
+        pieceService.count(pet, PieceEvent.GAME);
         String answers = kind == GameKind.LEFT_RIGHT ? drawAnswers() : "";
         ZzalGame game = gameRepository.save(ZzalGame.start(userId, pet.getId(), kind, answers, now));
         return new Started(game, a.justUnlocked(), runUnlocked(pet));

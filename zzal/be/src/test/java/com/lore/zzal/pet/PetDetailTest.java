@@ -234,8 +234,9 @@ class PetDetailTest {
         assertThat(after.pieces()).isNotNull();
         assertThat(after.features().pieces()).isTrue();
         assertThat(after.pieces().count()).isZero();
-        assertThat(after.pieces().streak()).isZero();
         assertThat(after.pieces().bonus()).isFalse();
+        // ★ 조각 줄을 안 넘긴 갈래라 빈 판으로 그린다(3층이 막 열린 펫이 실제로 그렇다)
+        assertThat(after.pieces().foodProgress().current()).isZero();
     }
 
     @Test

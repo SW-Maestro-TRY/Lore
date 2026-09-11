@@ -11,6 +11,8 @@ import com.lore.zzal.pet.TutorialSchedule;
 import com.lore.zzal.pet.UnlockRules;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
+import com.lore.zzal.piece.PieceKind;
+import com.lore.zzal.piece.ZzalPiece;
 import com.lore.zzal.leave.LeaveService;
 import com.lore.zzal.leave.ZzalPostcard;
 import com.lore.zzal.scene.SceneService;
@@ -114,21 +116,50 @@ public final class PetResponses {
     }
 
     @Schema(name = "ZzalToday", description = "오늘 한 일 — 자정에 0 으로 돌아간다")
-    public record Today(int games, int pets, int careIntimacy, int snackStreak, boolean bathDone) {
+    /**
+     * 오늘 한 일 — 잠드는 순간 리셋된다(정본 16장).
+     *
+     * ★ {@code snacks} 는 <b>그날 준 간식 수</b>다(정본 1.9). 1.8 까지는 "연속으로 몇 개"
+     *   ({@code snackStreak})였는데, 사이에 밥을 한 번만 끼워도 끊겨 하루에 열 개도 먹일 수 있었다.
+     *   지금은 연속을 보지 않고 그날 5개째부터 배탈이다.
+     */
+    public record Today(int games, int pets, int careIntimacy, int snacks, boolean bathDone) {
     }
 
     /**
-     * 오늘 모은 조각(정본 6장) — 3층 전에는 이 블록 자체가 null.
+     * 조각 네 칸(정본 6장 · 세는 법은 1.9) — 3층 전에는 이 블록 자체가 null.
      *
-     * ★ {@code streak} 는 "조각 4개를 며칠 연속 모았나". 2가 되는 밤에 다음 심화 하나가 큐에 오른다.
-     * ★ {@code bonus} 는 기분 좋은 날의 선물 조각 — 네 칸 중 <b>가장 앞의 빈 칸</b>을 채운 것으로 친다.
+     * <h3>★ "며칠 연속" 이 없어졌다 (1.8)</h3>
+     * 요구량 자체가 이틀치라 연속을 셀 이유가 없다. 옛 {@code streak} 칸은 뺐다.
+     *
+     * <h3>★ 칸마다 "몇 번 중 몇 번" 을 같이 준다</h3>
+     * 도장만 주면 화면이 "얼마나 남았나" 를 말할 수 없다. 길이 둘인 칸(놀이 = 게임 또는 간식)에서는
+     * <b>가장 많이 간 길</b>의 진행을 준다 — 이미 걸어온 길을 보여 주는 편이 "조금만 더" 로 읽힌다.
+     *
+     * ★ {@code bonus} 는 기분 좋은 날의 선물 조각을 오늘 받았나.
      */
     public record Pieces(boolean food, boolean play, boolean clean, boolean bond,
-                         int count, int streak, boolean bonus) {
+                         int count, boolean bonus,
+                         Progress foodProgress, Progress playProgress,
+                         Progress cleanProgress, Progress bondProgress) {
 
-        static Pieces of(ZzalPet pet) {
-            return new Pieces(pet.pieceFood(), pet.piecePlay(), pet.pieceClean(), pet.pieceBond(),
-                    pet.pieceCount(), pet.getPieceStreak(), pet.isBonusPiece());
+        static Pieces of(ZzalPet pet, ZzalPiece piece) {
+            if (piece == null) {
+                // 3층이 열렸는데 줄이 아직 없다 — 첫 정산에서 만들어진다. 그때까지는 빈 판으로 보인다.
+                Progress zero = new Progress(0, 1);
+                return new Pieces(false, false, false, false, 0, pet.isBonusPiece(), zero, zero, zero, zero);
+            }
+            Map<PieceKind, int[]> p = piece.progress();
+            return new Pieces(
+                    piece.isDone(PieceKind.FOOD), piece.isDone(PieceKind.PLAY),
+                    piece.isDone(PieceKind.CLEAN), piece.isDone(PieceKind.BOND),
+                    piece.doneCount(), pet.isBonusPiece(),
+                    progress(p.get(PieceKind.FOOD)), progress(p.get(PieceKind.PLAY)),
+                    progress(p.get(PieceKind.CLEAN)), progress(p.get(PieceKind.BOND)));
+        }
+
+        private static Progress progress(int[] pair) {
+            return new Progress(pair[0], pair[1]);
         }
     }
 
@@ -319,6 +350,13 @@ public final class PetResponses {
             return from(pet, stepLabel, now, catalog, Map.of(), List.of());
         }
 
+        /**
+         * ★ 조각 줄({@code zzal_piece})을 안 받는 갈래는 조각 진행을 <b>빈 판</b>으로 그린다.
+         *   3층이 아직 아니거나(블록 자체가 null) 아직 첫 정산을 안 한 펫이라 실제로 빈 판이 맞다.
+         *   3층 사용자에게 쓰는 자리라면 줄을 받는 갈래를 쓴다.
+         */
+        private static final ZzalPiece NO_PIECE = null;
+
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
                                   List<Integer> justUnlocked) {
             return from(pet, stepLabel, now, catalog, Map.of(), justUnlocked);
@@ -331,13 +369,13 @@ public final class PetResponses {
          */
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
                                   Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked) {
-            return from(pet, stepLabel, now, catalog, rows, justUnlocked, false, List.of());
+            return from(pet, stepLabel, now, catalog, rows, justUnlocked, false, List.of(), NO_PIECE);
         }
 
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
                                   Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
                                   boolean justHealed) {
-            return from(pet, stepLabel, now, catalog, rows, justUnlocked, justHealed, List.of());
+            return from(pet, stepLabel, now, catalog, rows, justUnlocked, justHealed, List.of(), NO_PIECE);
         }
 
         /**
@@ -347,6 +385,13 @@ public final class PetResponses {
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
                                   Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
                                   boolean justHealed, List<ZzalScene> scenes) {
+            return from(pet, stepLabel, now, catalog, rows, justUnlocked, justHealed, scenes, NO_PIECE);
+        }
+
+        /** @param piece 조각 줄. 3층 전이거나 아직 안 만들어졌으면 null */
+        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
+                                  Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
+                                  boolean justHealed, List<ZzalScene> scenes, ZzalPiece piece) {
             boolean hatching = pet.isHatching();
             boolean alive = pet.isAlive();
             if (!alive) {
@@ -409,8 +454,8 @@ public final class PetResponses {
                     justHealed,
                     Intimacy.of(pet.getIntimacy()),
                     new Today(pet.getTodayGames(), pet.getTodayPetCount(), pet.getTodayCareIntimacy(),
-                            pet.getSnackStreak(), pet.isTodayBathDone()),
-                    pet.isPiecesEnabled() ? Pieces.of(pet) : null,
+                            pet.getTodaySnacks(), pet.isTodayBathDone()),
+                    pet.isPiecesEnabled() ? Pieces.of(pet, piece) : null,
                     pet.isGoodDayToday(),
                     baking(rows),
                     motions(pet, catalog, rows),

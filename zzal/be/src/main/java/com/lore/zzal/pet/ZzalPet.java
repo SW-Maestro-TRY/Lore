@@ -318,13 +318,18 @@ public class ZzalPet {
     @Column
     private Instant piecesEnabledAt;
 
-    /** 조각 4개를 모은 밤이 며칠 연속인가. 하루라도 빠지면 0(정본 16장 "이틀 연속"). */
-    @Column(nullable = false, columnDefinition = "integer default 0")
-    private int pieceStreak;
+    /**
+     * 기상에 조각 네 칸을 되돌릴 때가 됐다는 쪽지(정본 1.9).
+     *
+     * ★ 조각은 제 표({@code zzal_piece})에 있고 엔티티는 표를 모른다. 그래서 여기서는 쪽지만 남기고
+     *   실제 줄은 서비스가 만진다 — {@code pendingNightSceneAt} 과 같은 방식이다.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean pieceResetPending;
 
-    /** 마지막 밤잠에 든 순간의 연속 일수(리셋 전 스냅샷). 밤 큐가 잠든 뒤에 읽는다. */
-    @Column(nullable = false, columnDefinition = "integer default 0")
-    private int lastNightPieceStreak;
+    /** 기분 좋은 날의 선물 조각을 얹을 때가 됐다는 쪽지(정본 6장). 위와 같은 이유로 쪽지다. */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean pieceBonusPending;
 
     /** 오늘 밤 "기분 좋은 날" 판정을 통과했나 → 내일 아침에 선물(정본 6장). */
     @Column(nullable = false, columnDefinition = "boolean default false")
@@ -438,10 +443,6 @@ public class ZzalPet {
     /** 기분 좋은 날의 선물 — 오늘 조각 하나를 미리 받았나(정본 6장). */
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean bonusPiece;
-
-    /** 다른 행동 없이 연달아 준 간식. 5면 배탈. 잠들 때도 0. */
-    @Column(nullable = false, columnDefinition = "integer default 0")
-    private int snackStreak;
 
     // ── 누적 카운터 (부화 순간부터, 해금·튜토리얼 판정) ────────────────────
 
@@ -1205,37 +1206,6 @@ public class ZzalPet {
 
     // ── 조각과 3층 (정본 6·16장) ──────────────────────────────────────────
 
-    /** 밥 조각 — 오늘 밥 2회. */
-    public boolean pieceFood() {
-        return todayFeeds >= ZzalRules.PIECE_FEEDS;
-    }
-
-    /** 놀이 조각 — 간식 1회 <b>또는</b> 게임 1승. */
-    public boolean piecePlay() {
-        return todaySnacks >= 1 || todayGameWins >= 1;
-    }
-
-    /** 청결 조각 — 청소 1회 <b>또는</b> 목욕 1회. */
-    public boolean pieceClean() {
-        return todayCleans >= 1 || todayBathDone;
-    }
-
-    /** 교감 조각 — 채팅 응답 1회 <b>또는</b> 쓰다듬기 2회. */
-    public boolean pieceBond() {
-        return todayChatAnswers >= 1 || todayPetCount >= ZzalRules.PIECE_PETS;
-    }
-
-    /**
-     * 오늘 모은 조각 수(0~4). 기분 좋은 날의 선물 조각은 <b>가장 앞의 빈 칸</b>을 채운 것으로 친다.
-     *
-     * ★ "어느 칸을 채웠나" 를 따로 저장하지 않는 이유 — 선물은 하루짜리이고, 사용자가 보는 것은
-     *   "네 칸 중 몇 개" 다. 어느 칸인지까지 저장하면 칸이 하나 늘고 리셋할 것도 하나 는다.
-     */
-    public int pieceCount() {
-        int earned = (pieceFood() ? 1 : 0) + (piecePlay() ? 1 : 0) + (pieceClean() ? 1 : 0) + (pieceBond() ? 1 : 0);
-        return bonusPiece ? Math.min(4, earned + 1) : earned;
-    }
-
     /** 3층(조각)이 열렸나 — 2층 8종이 다 열린 뒤 처음 맞는 기상(정본 16장). */
     public boolean isPiecesEnabled() {
         return piecesEnabledAt != null;
@@ -1267,24 +1237,25 @@ public class ZzalPet {
         }
     }
 
-    /** 기분 좋은 날의 선물 조각을 오늘 받았나. */
+    /** 기분 좋은 날의 선물 조각을 오늘 받았나(화면 표시용). */
     public boolean isBonusPiece() {
         return bonusPiece;
     }
 
-    public int getPieceStreak() {
-        return pieceStreak;
+    /** 기상에 조각 네 칸을 되돌려야 하나. 서비스가 보고 {@code zzal_piece} 줄을 만진다. */
+    public boolean isPieceResetPending() {
+        return pieceResetPending;
     }
 
-    /** 잠든 순간의 연속 일수(밤 큐 판정 재료). */
-    public int getLastNightPieceStreak() {
-        return lastNightPieceStreak;
+    /** 기분 좋은 날의 선물 조각을 얹어야 하나. */
+    public boolean isPieceBonusPending() {
+        return pieceBonusPending;
     }
 
-    /** 이 밤의 몫을 큐에 올렸다 — 연속을 소모한다(실패해도 그 행은 FAILED 로 다음 밤에 다시 오른다). */
-    public void consumePieceStreak() {
-        pieceStreak = 0;
-        lastNightPieceStreak = 0;
+    /** 서비스가 쪽지를 처리했다. */
+    public void clearPiecePending() {
+        pieceResetPending = false;
+        pieceBonusPending = false;
     }
 
     /** 오늘이 기분 좋은 날인가(살가운 첫 부름·웃는 대기). */
@@ -1482,12 +1453,8 @@ public class ZzalPet {
             lastNightCareMiss = todayCareMiss;      // 밤 큐 판정 재료(리셋 전 스냅샷)
             lastNightOf = AwakeClock.dateOf(at);
 
-            // ★ 조각 판정은 <b>리셋보다 먼저</b>(정본 2장 "잠드는 순간 하는 일" 첫 줄).
-            //   3층 전에는 아예 안 센다 — 조각 칸이 화면에 없는데 뒤에서 연속이 쌓이면 안 된다.
-            if (isPiecesEnabled()) {
-                pieceStreak = pieceCount() >= 4 ? pieceStreak + 1 : 0;
-            }
-            lastNightPieceStreak = pieceStreak;      // 밤 큐가 잠든 뒤에 읽는다(케어 미스와 같은 방식)
+            // ★ 조각은 여기서 아무것도 하지 않는다(정본 1.8·1.9) — 하루로 끊지 않고 쌓이고,
+            //   네 칸이 다 찬 판은 <b>다음 기상</b>에 되돌린다. 잠드는 순간은 그 자리가 아니다.
 
             // 기분 좋은 날 — 오늘 벌점 0 + 세 게이지가 2칸 이상이면 <b>내일 아침</b>에 선물(정본 6장)
             goodDayPending = isPiecesEnabled() && todayCareMiss == 0
@@ -1508,7 +1475,6 @@ public class ZzalPet {
             todayChatAnswers = 0;
             bonusPiece = false;
             goodDayToday = false;
-            snackStreak = 0;
             overslept = false;
         }
         if (manual) {
@@ -1530,11 +1496,14 @@ public class ZzalPet {
             wokeAt = at;
             overslept = !manual;
             judgeLeaving(at);
+            // ★ 네 칸이 다 찼던 판은 이 기상에 0 으로 돌아간다(정본 1.9). 실제 줄은 서비스가 만진다.
+            pieceResetPending = true;
             // 어젯밤 판정을 통과했으면 오늘은 기분 좋은 날 — 조각 하나를 미리 받고 첫 부름이 살가워진다
             if (goodDayPending) {
                 goodDayPending = false;
                 goodDayToday = true;
                 bonusPiece = true;
+                pieceBonusPending = true;
             }
         } else if (was == SleepKind.NAP) {
             napCount += 1;
@@ -1572,19 +1541,28 @@ public class ZzalPet {
     /** 간식. 행복 +1. 다른 행동 없이 <b>연속 5개면 배탈</b>(정본 5장, 100%). */
     public void snack(Instant now) {
         happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.SNACK_HAPPINESS);
-        snackStreak += 1;
         todaySnacks += 1;
         todayCared = true;      // ★ 간식도 돌보기다(정본 1.7)
         lastCaredAt = now;
-        if (snackStreak >= ZzalRules.SNACK_STREAK_SICK_AT) {
+        // ★★ 그날 5개째부터 배탈(정본 1.9). "연속" 은 보지 않는다 — 옛 규칙은 사이에 밥을 한 번만
+        //   끼워도 연속이 끊겨 하루에 열 개도 먹일 수 있었다.
+        if (todaySnacks >= ZzalRules.SNACK_DAILY_SICK_AT) {
             // ★★ 튜토리얼 동안에는 병이 없다(정본 12장 "케어 미스·병·감점 없음" · 16장).
             //   튜토리얼에서 시키는 대로 눌러 보다가 아프면, 배우는 자리가 벌 받는 자리가 된다.
-            //   연속은 그래도 0 으로 끊는다 — 안 끊으면 튜토리얼이 끝나자마자 여섯 개째에 곧바로 아프다.
             if (!isInTutorial()) {
                 fallSick(SickKind.UPSET, now);
             }
-            snackStreak = 0;
         }
+    }
+
+    /**
+     * 이번 간식이 <b>배탈이 나는 그 간식</b>인가 — 조각에 세면 안 되는 것(정본 1.9).
+     *
+     * ★ {@link #snack} 을 부르기 <b>전에</b> 묻는다. 세어 주면 아픈 것을 감수하고 하루에
+     *   놀이 조각을 끝낼 수 있어, 조각이 이틀 걸린다는 규칙이 무너진다.
+     */
+    public boolean nextSnackUpsets() {
+        return todaySnacks + 1 >= ZzalRules.SNACK_DAILY_SICK_AT;
     }
 
     /** 쓰다듬기. 행복 0, 친밀도 +5(하루 3회까지). 넘어도 반응 동작은 나온다(16장) — 그래서 거절하지 않는다. */
@@ -1633,9 +1611,8 @@ public class ZzalPet {
         return sickSince != null;
     }
 
-    /** 간식이 아닌 행동 — 연속 간식이 끊긴다(api-v2.md 해석 2). */
+    /** 간식이 아닌 돌보기 뒤의 공통 처리. ★ 1.9 에서 "연속 간식 끊기" 가 없어져 이름만 남았다. */
     private void afterNonSnack(Instant now) {
-        snackStreak = 0;
         todayCared = true;      // ★ "잘 돌본 날" 판정에 쓴다(정본 1.7)
         if (now != null) {
             lastCaredAt = now;
@@ -1732,7 +1709,6 @@ public class ZzalPet {
         todayChatAnswers += 1;
         addIntimacy(ZzalRules.CHAT_INTIMACY);
         advanceTutorial(TutorialSchedule.Step.CHAT);
-        snackStreak = 0;
     }
 
     // ── 보상 (후기·미니게임) ──────────────────────────────────────────────
@@ -1948,8 +1924,9 @@ public class ZzalPet {
         return todayBathDone;
     }
 
-    public int getSnackStreak() {
-        return snackStreak;
+    /** 그날 준 간식 수. 5개째부터 배탈(정본 1.9). */
+    public int getTodaySnacks() {
+        return todaySnacks;
     }
 
     public int getFeeds() {

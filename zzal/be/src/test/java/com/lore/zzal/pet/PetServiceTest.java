@@ -115,7 +115,8 @@ class PetServiceTest {
                 seeder,
                 mock(com.lore.zzal.night.NightPlanner.class),
                 new com.lore.zzal.scene.SceneService(sceneRepository, new MotionCatalog("", "", "v1")),
-                new com.lore.zzal.leave.LeaveService(postcardRepository));
+                new com.lore.zzal.leave.LeaveService(postcardRepository),
+                com.lore.zzal.PieceFixture.inMemory());
     }
 
     /** T0(정오) 에 부화해 <b>튜토리얼 중</b>인 펫 — 시계가 아직 안 켜졌다. 낮잠 테스트용. */
@@ -686,7 +687,7 @@ class PetServiceTest {
         void nothingBakesWhileTraveling() {
             ZzalPet pet = traveling();
             com.lore.zzal.night.NightPlanner realPlanner = new com.lore.zzal.night.NightPlanner(
-                    motionRepository, new MotionCatalog("", "", "v1"));
+                    motionRepository, new MotionCatalog("", "", "v1"), com.lore.zzal.PieceFixture.inMemory());
 
             assertThat(realPlanner.plan(pet, java.time.LocalDate.of(2026, 9, 6))).isZero();
         }

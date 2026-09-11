@@ -11,6 +11,7 @@ import com.lore.zzal.generation.GenKind;
 import com.lore.zzal.generation.GenStatus;
 import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.pet.dto.PetResponses;
+import com.lore.zzal.piece.PieceEvent;
 import com.lore.zzal.generation.PetSheetRequested;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
@@ -64,6 +65,7 @@ public class PetService {
     private final NightPlanner nightPlanner;
     private final com.lore.zzal.scene.SceneService sceneService;
     private final com.lore.zzal.leave.LeaveService leaveService;
+    private final com.lore.zzal.piece.PieceService pieceService;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -78,13 +80,15 @@ public class PetService {
                       MotionSeeder motionSeeder,
                       NightPlanner nightPlanner,
                       com.lore.zzal.scene.SceneService sceneService,
-                      com.lore.zzal.leave.LeaveService leaveService) {
+                      com.lore.zzal.leave.LeaveService leaveService,
+                      com.lore.zzal.piece.PieceService pieceService) {
         this.catalog = catalog;
         this.motionRepository = motionRepository;
         this.motionSeeder = motionSeeder;
         this.nightPlanner = nightPlanner;
         this.sceneService = sceneService;
         this.leaveService = leaveService;
+        this.pieceService = pieceService;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -263,6 +267,8 @@ public class PetService {
         pet.visit(now);
         reveal(pet, now);
         openPieces(pet, windowStart, now);
+        // ★ 기상에 네 칸을 되돌리고 기분 좋은 날의 선물을 얹는다(정본 1.9). 엔티티가 남긴 쪽지를 본다.
+        pieceService.settle(pet);
     }
 
     /**
@@ -305,7 +311,14 @@ public class PetService {
         }
         if (pet.readyForPieces(now)) {
             pet.enablePieces(now);
+            pieceService.open(pet.getId());   // 3층이 열리는 이 순간부터 센다(그 전 돌보기는 소급 없음)
         }
+    }
+
+    /** 그 펫의 조각 줄. 3층 전이면 null. */
+    @Transactional(readOnly = true)
+    public com.lore.zzal.piece.ZzalPiece pieces(Long petId) {
+        return pieceService.find(petId);
     }
 
     /** 그 펫의 혼자 논 장면(최근 것부터, 최대 3). */
@@ -408,6 +421,12 @@ public class PetService {
         return wasSick && !pet.isSick() ? result.healed() : result;
     }
 
+    /**
+     * 돌보기 하나를 실제로 적용하고, <b>성공했을 때만</b> 조각을 센다(정본 6장 · 1.9).
+     *
+     * ★ 거절("배가 불러요" · "이미 깨끗해요" · "오늘은 목욕했어요")은 여기서 예외로 끝나므로
+     *   조각을 세는 줄에 닿지 않는다 — 세지 않으려고 따로 막을 것이 없다.
+     */
     private void doCare(ZzalPet pet, CareAction action, Instant now) {
         switch (action) {
             case FEED -> {
@@ -419,6 +438,7 @@ public class PetService {
                             "%s 배가 불러요".formatted(Josa.nameTopic(pet.getName())));
                 }
                 pet.feed(now);
+                pieceService.count(pet, PieceEvent.FEED);
             }
             // ★ 간식은 행복이 가득이어도 받는다(상훈님 2026-09-05 결정 — 원조도 간식은 항상 먹고 과다 시 병).
             //   밥만 가득이면 거절. 연속 5개 배탈은 PR-8.
@@ -426,21 +446,37 @@ public class PetService {
                 if (pet.isSick()) {
                     throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
                 }
+                // ★ 배탈이 나는 그 간식(그날 5개째부터)은 조각에 세지 않는다(정본 1.9).
+                //   묻는 것이 먹이기 <b>전</b>이어야 한다 — 먹인 뒤에는 이미 숫자가 올라가 있다.
+                boolean upsets = pet.nextSnackUpsets();
                 pet.snack(now);
+                if (!upsets) {
+                    pieceService.count(pet, PieceEvent.SNACK);
+                }
             }
             // 쓰다듬기는 거절이 없다 — 하루 3회를 넘어도 반응 동작은 나온다(16장). 친밀도만 안 오른다.
-            case PET -> pet.pet(now);
+            case PET -> {
+                // ★ 쓰다듬기는 하루 3회까지만 센다. 거절이 없어 그대로 두면 연타로 채울 수 있다(정본 6장).
+                //   친밀도가 멈추는 선과 같은 선을 쓴다 — todayPetCount 가 실제로 올랐을 때만 센다.
+                int before = pet.getTodayPetCount();
+                pet.pet(now);
+                if (pet.getTodayPetCount() > before) {
+                    pieceService.count(pet, PieceEvent.PET);
+                }
+            }
             case CLEAN -> {
                 if (pet.getTrash() <= 0) {
                     throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED, "바닥이 이미 깨끗해요");
                 }
                 pet.clean(now);
+                pieceService.count(pet, PieceEvent.CLEAN);
             }
             case BATH -> {
                 if (pet.isTodayBathDone()) {
                     throw new BusinessException(ErrorCode.ZZAL_BATH_DONE_TODAY);
                 }
                 pet.bath(now);
+                pieceService.count(pet, PieceEvent.BATH);
             }
             case MEDICINE -> {
                 if (!pet.isSick()) {
