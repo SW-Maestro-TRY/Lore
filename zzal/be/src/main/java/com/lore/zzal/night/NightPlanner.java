@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
  *
  * <h3>여기서 오르는 것</h3>
  * <ul>
- *   <li><b>지난 밤 실패(FAILED)</b> — 조각을 소모하지 않고 다시(16장)</li>
+ *   <li><b>지난 밤 실패(FAILED)</b> — 조각을 소모하지 않고 다시(16장). <b>밤에만</b>({@link Occasion})</li>
  *   <li><b>첫 심화 행동(뒤로 넘어짐)</b> — 함께한 날 3 이상 + 그날 케어 미스 0. 놓치면 다음에 같은 판정(16장)</li>
  *   <li><b>3층 차례</b> — 조각 네 칸이 다 찼을 때(정본 6장 · 1.9)</li>
  * </ul>
@@ -61,12 +61,31 @@ public class NightPlanner {
     }
 
     /**
+     * <b>어느 자리에서 불렸나.</b> 실패한 줄을 다시 굽는 블록이 이것으로 갈린다.
+     *
+     * <h3>★★ 왜 자리를 구분하나 — 재시도는 설계지만 리듬은 하루 한 번이다</h3>
+     * 같은 지시문으로 구워도 나오는 것이 매번 다르다. 어떤 판은 부드럽고 어떤 판은 박살난다.
+     * 그래서 <b>같은 것을 여러 번 굽는 것이 이 시스템의 작동 원리</b>다 — 실패했다고 멈추면 안 된다.
+     *
+     * 다만 1.8 부터 이 계획이 잠들 때뿐 아니라 <b>조각이 찰 때마다</b> 돈다. 실패 재큐를 거기서도
+     * 돌리면 사용자가 하루에 조각을 세 번 채울 때 <b>재시도도 세 번</b> 나간다 — 의도한 리듬이 아니다.
+     * 그래서 재시도는 밤에만 둔다.
+     */
+    public enum Occasion {
+        /** 밤 리듬 — 재우기(하루 한 번)와 23:00 스위프. 실패한 줄을 다시 굽는 자리는 여기뿐이다. */
+        NIGHT,
+        /** 조각이 찬 그 순간 — 낮에도 돈다. <b>방금 찬 조각의 새 동작만</b> 올린다. */
+        PIECE
+    }
+
+    /**
      * 이 펫의 이 밤 계획. 잠든 뒤(onSleep 훅이 돈 뒤)에 부른다 — {@code lastNightCareMiss} 가 그때 스냅샷된다.
      *
+     * @param occasion 어느 자리에서 불렸나 — 실패 재큐가 이것으로 갈린다({@link Occasion})
      * @return 새로 큐에 올린 행 수
      */
     @Transactional
-    public int plan(ZzalPet pet, LocalDate nightOf) {
+    public int plan(ZzalPet pet, LocalDate nightOf, Occasion occasion) {
         if (!pet.isAlive()) {
             return 0;
         }
@@ -85,10 +104,26 @@ public class NightPlanner {
         int queued = 0;
 
         // 1) 지난 밤 실패 → 다시(같은 동작). 어느 밤이든 상관없다.
-        for (ZzalMotion m : rows.values()) {
-            if (m.getStatus() == MotionStatus.FAILED && catalog.isBakeable(m.getName())) {
-                m.queue(nightOf);
-                queued++;
+        //
+        // ★★★ <b>재시도가 이 시스템의 작동 원리다.</b> 같은 지시문으로 구워도 나오는 것이 매번 다르다 —
+        //    어떤 판은 부드럽고 어떤 판은 박살난다. 그래서 실패한 줄을 조건 없이 다시 올리는 것이 맞다.
+        //    "몇 번 실패했으니 그만" 은 여기에 없다. 그렇게 하면 몇 번 실패한 동작이 영영 안 나온다.
+        //
+        // ★★ 다만 <b>리듬은 밤 한 번</b>이다. 1.8 부터 이 계획이 잠들 때뿐 아니라 조각이 찰 때마다 도는데,
+        //    재시도까지 거기 얹으면 사용자가 하루에 조각을 세 번 채울 때 재시도도 세 번 나간다.
+        //    한 판이 약 $0.086 이라 그 차이가 그대로 돈이고, 무엇보다 의도한 리듬이 아니다.
+        //    그래서 이 블록은 {@code NIGHT}(재우기·23:00 스위프)에서만 돈다.
+        //
+        // ★ 사람이 일곱 판을 다 물린 {@code HOLD} 는 여기 안 온다 — {@code queue()} 가 안 열어 준다.
+        //   <b>생성이 실패한 것</b>과 <b>사람이 물린 것</b>은 다르다. 앞은 다시 굽고, 뒤는 멈춘다.
+        if (occasion == Occasion.NIGHT) {
+            for (ZzalMotion m : rows.values()) {
+                if (m.getStatus() != MotionStatus.FAILED || !catalog.isBakeable(m.getName())) {
+                    continue;
+                }
+                if (m.queue(nightOf)) {
+                    queued++;
+                }
             }
         }
 
@@ -105,8 +140,9 @@ public class NightPlanner {
                 && pet.getLastNightCareMiss() == 0
                 && nightOf.equals(pet.getLastNightOf())) {
             if (catalog.isBakeable(gift2.getName())) {
-                gift2.queue(nightOf);
-                queued++;
+                if (gift2.queue(nightOf)) {
+                    queued++;
+                }
                 log.info("첫 심화 행동 큐 등록 — petId={} nightOf={} key={} ({}일째)",
                         pet.getId(), nightOf, gift2.getName(), pet.getDaysTogether());
             } else {
@@ -131,8 +167,7 @@ public class NightPlanner {
         ZzalPiece piece = pieceService.find(pet.getId());
         if (pet.isPiecesEnabled() && piece != null && piece.isComplete() && !piece.isConsumed()) {
             ZzalMotion next = nextAdvanced(rows);
-            if (next != null) {
-                next.queue(nightOf);
+            if (next != null && next.queue(nightOf)) {
                 piece.consume();
                 queued++;
                 log.info("3층 심화 큐 등록 — petId={} nightOf={} seq={} key={}",

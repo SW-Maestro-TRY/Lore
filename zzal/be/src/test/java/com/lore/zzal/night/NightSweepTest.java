@@ -185,7 +185,7 @@ class NightSweepTest {
         NightSweep.Result again = s.run(NIGHT, T23.plusSeconds(600), "boot-recovery");
         assertThat(again.ran()).isFalse();
         assertThat(baked).hasSize(1);
-        verify(planner, times(0)).plan(any(), any());   // 펫이 없어 계획 호출 0 — 두 번째는 계획 자체를 안 한다
+        verify(planner, times(0)).plan(any(), any(), any());   // 펫이 없어 계획 호출 0 — 두 번째는 계획 자체를 안 한다
     }
 
     @Test
@@ -202,7 +202,7 @@ class NightSweepTest {
         NightSweep.Result r = sweep(true, 200).run(NIGHT, T23.plusSeconds(120), "boot-recovery");
         assertThat(r.ran()).isTrue();
         // ★ 계획 도중에 죽었을 수 있다 — 건너뛰면 뒤쪽 펫이 그 밤을 통째로 빠진다(리뷰 중-2)
-        verify(planner, times(1)).plan(alive, NIGHT);
+        verify(planner, times(1)).plan(alive, NIGHT, NightPlanner.Occasion.NIGHT);
         assertThat(baked).containsExactly(2L);           // BAKING(1) 은 안 잡고 QUEUED(2) 만
         assertThat(runs.get(NIGHT).isFinished()).isTrue();
     }

@@ -1,5 +1,7 @@
 package com.lore.zzal.motion;
 
+import com.lore.zzal.night.NightPlanner;
+import com.lore.zzal.piece.PieceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -175,6 +177,66 @@ class LateBakeLosesTest {
 
             motion.failNight();
             assertThat(motion.queue(night)).as("FAILED").isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("실패한 줄의 재시도 리듬")
+    class RetryRhythm {
+
+        private NightPlanner planner;
+        private com.lore.zzal.pet.ZzalPet pet;
+
+        @BeforeEach
+        void setUp() {
+            MotionCatalog catalog = mock(MotionCatalog.class);
+            when(catalog.isBakeable(any())).thenReturn(true);
+            when(catalog.gifts()).thenReturn(List.of());
+
+            ZzalMotionRepository repo = mock(ZzalMotionRepository.class);
+            when(repo.findByPetIdOrderBySeqAsc(anyLong())).thenReturn(List.of(motion));
+
+            planner = new NightPlanner(repo, catalog, mock(PieceService.class));
+            motion.failNight();
+
+            // 밤 계획은 살아 있고 여행 중이 아닌 펫에만 돈다
+            pet = com.lore.zzal.PetFixture.hatching(1L, "여울", null, "k", T0);
+            pet.markAlive("s", "i", T0);
+            pet.skipTutorial(T0);
+            ReflectionTestUtils.setField(pet, "id", 7L);
+        }
+
+        @Test
+        @DisplayName("★★ 밤(재우기·스위프)에는 실패한 줄이 다시 큐에 오른다 — 여러 번 굽는 것이 설계다")
+        void nightRequeuesFailedRows() {
+            // 같은 지시문으로 구워도 나오는 것이 매번 다르다. 실패는 끝이 아니라 다음 판의 신호다.
+            assertThat(planner.plan(pet, LocalDate.of(2026, 9, 12), NightPlanner.Occasion.NIGHT))
+                    .isEqualTo(1);
+            assertThat(motion.getStatus()).isEqualTo(MotionStatus.QUEUED);
+        }
+
+        @Test
+        @DisplayName("★★ 조각이 찬 순간에는 실패한 줄을 안 건드린다 — 리듬은 하루 한 번이다")
+        void pieceTriggerLeavesFailedRowsAlone() {
+            // 조각은 낮에 여러 번 찬다. 여기서 재시도까지 돌면 하루에 몇 번이고 다시 구워진다.
+            assertThat(planner.plan(pet, LocalDate.of(2026, 9, 12), NightPlanner.Occasion.PIECE))
+                    .as("방금 찬 조각의 새 동작만 올린다 — 여기 실패한 줄은 없다")
+                    .isZero();
+            assertThat(motion.getStatus())
+                    .as("실패한 채로 밤을 기다린다")
+                    .isEqualTo(MotionStatus.FAILED);
+        }
+
+        @Test
+        @DisplayName("★ 사람이 물린 줄(보류함)은 밤에도 안 올라온다 — 생성 실패와 사람의 물림은 다르다")
+        void heldRowsStayHeldEvenAtNight() {
+            motion.hold();
+
+            assertThat(planner.plan(pet, LocalDate.of(2026, 9, 12), NightPlanner.Occasion.NIGHT))
+                    .isZero();
+            assertThat(motion.getStatus())
+                    .as("일곱 판이 다 아니면 판이 아니라 지시문·원본 문제다 — 사람이 고친 뒤 꺼낸다")
+                    .isEqualTo(MotionStatus.HOLD);
         }
     }
 }

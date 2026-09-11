@@ -92,7 +92,9 @@ public class BakeTrigger {
                     pet.getId(), gift.getName());
             return;
         }
-        gift.queue(AwakeClock.dateOf(now));
+        if (!gift.queue(AwakeClock.dateOf(now))) {
+            return;     // 이미 굽는 중이거나 판정을 지난 자리 — 되돌리면 두 번 굽는다
+        }
         log.info("튜토리얼 완주 보상 큐 등록 — petId={} key={}", pet.getId(), gift.getName());
         claimAndBake(List.of(gift), now);
     }
@@ -105,7 +107,8 @@ public class BakeTrigger {
      */
     @Transactional
     public void onSleep(ZzalPet pet, Instant now) {
-        int queued = planner.plan(pet, AwakeClock.dateOf(now));
+        // ★ 밤 리듬 — 여기가 실패한 줄을 다시 굽는 하루 한 번의 자리다(NightPlanner.Occasion).
+        int queued = planner.plan(pet, AwakeClock.dateOf(now), NightPlanner.Occasion.NIGHT);
         if (queued > 0) {
             claimAndBake(freshlyQueued(pet.getId()), now);
         }
@@ -129,7 +132,9 @@ public class BakeTrigger {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onPieceComplete(ZzalPet pet, Instant now) {
-        int queued = planner.plan(pet, AwakeClock.dateOf(now));
+        // ★★ 여기는 낮에도 돈다 — 방금 찬 조각의 새 동작만 올리고, <b>실패한 줄은 건드리지 않는다.</b>
+        //   같은 지시문으로 여러 번 굽는 것이 설계지만 그 리듬은 밤 한 번이다(NightPlanner.Occasion).
+        int queued = planner.plan(pet, AwakeClock.dateOf(now), NightPlanner.Occasion.PIECE);
         if (queued > 0) {
             claimAndBake(freshlyQueued(pet.getId()), now);
         }

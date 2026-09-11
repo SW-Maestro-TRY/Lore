@@ -721,7 +721,7 @@ class PetServiceTest {
             com.lore.zzal.night.NightPlanner realPlanner = new com.lore.zzal.night.NightPlanner(
                     motionRepository, new MotionCatalog("", "", "v1"), com.lore.zzal.PieceFixture.inMemory());
 
-            assertThat(realPlanner.plan(pet, java.time.LocalDate.of(2026, 9, 6))).isZero();
+            assertThat(realPlanner.plan(pet, java.time.LocalDate.of(2026, 9, 6), com.lore.zzal.night.NightPlanner.Occasion.NIGHT)).isZero();
         }
 
         @Test
