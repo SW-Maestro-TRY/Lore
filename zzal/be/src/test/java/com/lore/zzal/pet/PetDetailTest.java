@@ -162,6 +162,8 @@ class PetDetailTest {
         ZzalPet pet = baby();
         ZzalMotion base = ZzalMotion.forCatalog(7L, CATALOG.bySeq(1).orElseThrow(), T0);
         ZzalMotion roll = ZzalMotion.forCatalog(7L, CATALOG.bySeq(101).orElseThrow(), T0);
+        // ★ 굽는 중이던 줄만 검수 대기로 간다(1.9). 운영은 claim 이 DB 에서 BAKING 으로 집는다.
+        org.springframework.test.util.ReflectionTestUtils.setField(roll, "status", com.lore.zzal.motion.MotionStatus.BAKING);
         roll.toReview("images/zzal/pets/7/motions/101/motion.webp", com.lore.zzal.motion.MotionSource.API,
                 com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
 

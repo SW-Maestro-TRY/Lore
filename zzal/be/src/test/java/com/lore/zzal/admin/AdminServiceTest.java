@@ -108,6 +108,8 @@ class AdminServiceTest {
         ZzalMotion m = ZzalMotion.forCatalog(7L, catalog.bySeq(seq).orElseThrow(), T0);
         ReflectionTestUtils.setField(m, "id", id);
         m.queue(NIGHT);
+        // ★ 굽는 중이던 줄만 검수 대기로 간다(1.9). 운영에서는 claim 이 DB 에서 BAKING 으로 집는다.
+        ReflectionTestUtils.setField(m, "status", MotionStatus.BAKING);
         m.toReview("images/zzal/pets/7/motions/%d/motion.webp".formatted(id),
                 MotionSource.API, GateVerdict.REVIEW, "게이트 미적용", "g0");
         motions.put(id, m);
@@ -177,11 +179,14 @@ class AdminServiceTest {
 
         // ★ 보류함에서 꺼내는 것은 사람이 한다(지시문·원본을 고친 뒤). 꺼내면 처음 조건으로 돌아가야
         //   한다 — 안 그러면 꺼내자마자 한 판 실패로 곧바로 다시 보류함이 되어 그 동작은 영영 못 배운다.
-        m.queue(NIGHT.plusDays(1));
+        // ★★ 자동 경로가 쓰는 queue() 로는 안 열린다 — 그게 "자동으로 안 풀린다" 를 지키는 방법이다.
+        assertThat(m.queue(NIGHT.plusDays(1))).isFalse();
+        assertThat(m.releaseFromHold(NIGHT.plusDays(1))).isTrue();
         assertThat(m.getRegenRound()).isZero();
         assertThat(m.getNightOf()).isEqualTo(NIGHT.plusDays(1));
 
         // ★ 숫자만 0 이 아니라 실제로 두 번을 다시 쓸 수 있어야 한다
+        ReflectionTestUtils.setField(m, "status", MotionStatus.BAKING);
         m.toReview("images/zzal/pets/7/motions/16/motion.webp",
                 MotionSource.API, GateVerdict.REVIEW, "게이트 미적용", "g0");
         service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "다음 밤 1", null);

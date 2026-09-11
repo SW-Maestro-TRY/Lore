@@ -45,15 +45,24 @@ public class MotionRecorder {
      *
      * ★ 판을 <b>후보로도 남긴다.</b> 모션 행의 그림 키는 "지금 대표" 라 다음 판이 덮어쓰지만,
      *   후보 줄은 남아서 판정 화면이 <b>나온 판을 전부</b> 보여 줄 수 있다(정본 1.9).
+     *
+     * ★★ <b>굽는 중이던 줄만 받는다.</b> 늦게 끝난 굽기가 이미 판정된 줄을 되돌리면, 아침에 받은 동작이
+     *   다시 "연습 중" 으로 사라지고 판정을 다시 해야 한다({@link ZzalMotion#toReview}).
+     *   진 쪽은 <b>후보도 안 남긴다</b> — 같은 굽기의 결과라 남기면 한 판이 둘로 보인다.
+     *
+     * @return 실제로 검수 대기로 옮겼으면 true
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void toReview(Long motionId, String gridKey, String imageKey, MotionGate.Verdict v) {
-        repository.findById(motionId).ifPresent(m -> {
-            m.toReview(imageKey, MotionSource.API, v.verdict(), v.note(), v.version());
-            candidateRepository.save(ZzalMotionCandidate.of(
-                    motionId, m.getRegenRound(), gridKey, imageKey, MotionSource.API,
-                    v.verdict(), v.note(), v.version(), null, Instant.now()));
-        });
+    public boolean toReview(Long motionId, String gridKey, String imageKey, MotionGate.Verdict v) {
+        // ★ 행을 잠그고 읽는다 — 상태를 보고 바꾸는 사이에 다른 굽기가 끼면 둘 다 통과한다.
+        ZzalMotion m = repository.findByIdForUpdate(motionId).orElse(null);
+        if (m == null || !m.toReview(imageKey, MotionSource.API, v.verdict(), v.note(), v.version())) {
+            return false;   // 진 쪽 — 후보도 남기지 않는다. 남기면 같은 판이 둘로 보인다
+        }
+        candidateRepository.save(ZzalMotionCandidate.of(
+                motionId, m.getRegenRound(), gridKey, imageKey, MotionSource.API,
+                v.verdict(), v.note(), v.version(), null, Instant.now()));
+        return true;
     }
 
 
