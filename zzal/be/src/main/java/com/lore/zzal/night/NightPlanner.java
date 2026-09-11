@@ -117,14 +117,19 @@ public class NightPlanner {
         // 3) 3층 — 조각 네 칸이 다 찼으면 다음 심화 하나(정본 6장 · 1.9)
         //
         // ★ 1.9 에서 "이틀 연속" 이 없어졌다. 요구량 자체가 이틀치라 연속을 셀 이유가 없다.
-        // ★★ 정본 1.8 은 "네 칸이 차는 그 순간" 굽는다고 정했다. 이 밤 스위프는 그 전 모델이 남긴 자리이고,
-        //    조건 달성 즉시 굽기로 옮기는 것은 다음 단계다. 여기서는 <b>같은 조건을 같은 뜻으로</b> 읽도록만 맞춘다.
         // ★★★ 완성을 <b>소모</b>한다(piece.consume). 옛 코드의 consumePieceStreak 이 하던 일이다.
         //    안 그러면 직접 재워 한 번 걸고 같은 밤 스위프(NightSweep.planAll)가 또 걸어
         //    <b>심화 둘이 구워진다</b> — 판은 다음 기상에야 비워지므로 그때까지 isComplete 가 계속 참이다.
+        //
+        // ★★ 여기에는 <b>"그 밤이 지금 밤인가"({@code nightOf.equals(lastNightOf)}) 조건이 없다.</b>
+        //    2)번과 달라 보이지만 그게 맞다 — 2)번은 <b>잠들 때 스냅샷된</b> lastNightCareMiss 를 읽으므로
+        //    그 스냅샷이 이 밤 것인지 확인해야 하고, 3)번이 읽는 것은 조각 네 칸뿐이라 밤과 무관하다.
+        //    실제로 그 조건이 여기 붙어 있던 동안 <b>낮에는 절대 굽지 않았다</b>: 조각은 낮에 차고
+        //    {@code dateOf(지금)} 은 오늘인데 {@code lastNightOf} 는 <b>어젯밤</b>이라 영원히 같지 않다.
+        //    (2026-09-11 실측 — 네 칸을 다 채웠는데 큐가 비어 있었다. 시험은 목으로 밤 시각을 주고 있어 못 봤다.)
+        //    두 번 굽는 길은 {@code consume()} 이 막는다 — 날짜가 아니라 소모가 막는 것이 맞다.
         ZzalPiece piece = pieceService.find(pet.getId());
-        if (pet.isPiecesEnabled() && piece != null && piece.isComplete() && !piece.isConsumed()
-                && nightOf.equals(pet.getLastNightOf())) {
+        if (pet.isPiecesEnabled() && piece != null && piece.isComplete() && !piece.isConsumed()) {
             ZzalMotion next = nextAdvanced(rows);
             if (next != null) {
                 next.queue(nightOf);

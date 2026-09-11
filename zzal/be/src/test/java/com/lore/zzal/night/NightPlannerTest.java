@@ -102,6 +102,22 @@ class NightPlannerTest {
     }
 
     @Test
+    @DisplayName("★★★ 낮에 네 칸이 차도 오른다 — 조각은 낮에 차고 그때 lastNightOf 는 어젯밤이다")
+    void tierThreeQueuesDuringTheDay() {
+        tierThreeReady(true);
+        when(catalog.isBakeable(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        // 어젯밤을 자고 일어난 낮 — 조각이 차는 진짜 순간의 모습이다.
+        ReflectionTestUtils.setField(pet, "lastNightOf", NIGHT.minusDays(1));
+
+        int queued = planner.plan(pet, NIGHT);
+
+        assertThat(queued)
+                .as("★ 밤 날짜를 맞춰 보는 조건이 여기 있으면 낮에는 영영 0 이다(2026-09-11 실측)")
+                .isEqualTo(1);
+        assertThat(row(1).getStatus()).isEqualTo(MotionStatus.QUEUED);
+    }
+
+    @Test
     @DisplayName("★★ 네 칸이 다 안 찼으면 안 오른다 (1.9 — 옛 '이틀 연속' 자리)")
     void tierThreeNeedsAllFour() {
         tierThreeReady(false);
