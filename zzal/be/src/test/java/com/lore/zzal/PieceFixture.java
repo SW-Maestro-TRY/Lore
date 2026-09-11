@@ -29,6 +29,12 @@ public final class PieceFixture {
     }
 
     public static PieceService inMemory(Map<Long, ZzalPiece> store) {
+        return inMemory(store, mock(org.springframework.context.ApplicationEventPublisher.class));
+    }
+
+    /** 알림까지 보고 싶을 때 — "네 칸이 찼다" 를 누가 듣는지가 굽기의 시작이라 시험이 필요하다. */
+    public static PieceService inMemory(Map<Long, ZzalPiece> store,
+                                        org.springframework.context.ApplicationEventPublisher events) {
         ZzalPieceRepository repository = mock(ZzalPieceRepository.class);
         when(repository.findById(anyLong()))
                 .thenAnswer(i -> Optional.ofNullable(store.get(i.getArgument(0, Long.class))));
@@ -37,6 +43,6 @@ public final class PieceFixture {
             store.put(row.getPetId(), row);
             return row;
         });
-        return new PieceService(repository, mock(org.springframework.context.ApplicationEventPublisher.class));
+        return new PieceService(repository, events);
     }
 }

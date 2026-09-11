@@ -80,6 +80,12 @@ public class PieceService {
             PieceKind kind = row.firstOpen();
             if (kind != null && row.grant(kind)) {
                 log.debug("기분 좋은 날 선물 조각 — petId={} kind={}", pet.getId(), kind);
+                // ★★ 선물이 <b>마지막 칸</b>을 채울 수 있다. 그때도 굽기가 시작돼야 한다 —
+                //   count() 에서만 알리면, 선물로 찬 판은 다음 돌보기(또는 꺼져 있는 23:00 스위프)까지
+                //   아무 일도 안 일어난다. 사용자는 네 칸이 다 찬 화면을 보면서 굽기를 기다리게 된다.
+                if (row.isComplete()) {
+                    events.publishEvent(new PieceCompleted(pet.getId()));
+                }
             }
         }
         pet.clearPiecePending();

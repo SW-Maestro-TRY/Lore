@@ -3,6 +3,7 @@ package com.lore.zzal.piece;
 import com.lore.zzal.PetFixture;
 import com.lore.zzal.PieceFixture;
 import com.lore.zzal.pet.ZzalPet;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -114,6 +115,33 @@ class PieceServiceTest {
                 .isEqualTo(1);
         assertThat(row.isDone(PieceKind.FOOD)).as("앞선 칸부터").isTrue();
         assertThat(pet.isPieceResetPending()).as("쪽지는 치운다").isFalse();
+    }
+
+    @Test
+    @DisplayName("★★ 선물이 마지막 칸을 채우면 그때도 굽기가 시작된다 — 돌보기만 알리면 놓친다")
+    void bonusCompletingLastPiecePublishes() {
+        ApplicationEventPublisher events = org.mockito.Mockito.mock(ApplicationEventPublisher.class);
+        PieceService service = PieceFixture.inMemory(new java.util.HashMap<>(), events);
+        ZzalPet pet = child();
+        pet.enablePieces(T0);
+        // 세 칸을 채워 두고 마지막 한 칸만 남긴다 — 선물이 바로 그 칸을 채운다.
+        ZzalPiece row = service.open(pet.getId());
+        row.grant(PieceKind.FOOD);
+        row.grant(PieceKind.PLAY);
+        row.grant(PieceKind.CLEAN);
+
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "fullness", 4);
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "happiness", 4);
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "trash", 0);
+        pet.sleep(at("2026-09-05 20:00"));
+        pet.wake(at("2026-09-06 08:00"));
+
+        service.settle(pet);
+
+        assertThat(service.find(pet.getId()).isComplete())
+                .as("선물이 마지막 칸(교감)을 채웠다").isTrue();
+        org.mockito.Mockito.verify(events)
+                .publishEvent(org.mockito.ArgumentMatchers.any(PieceCompleted.class));
     }
 
     @Test
