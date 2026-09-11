@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -115,8 +116,18 @@ public class BakeTrigger {
      *
      * ★ 조각은 밥·게임·청소·채팅 안에서 차오른다. 그러니 굽기 시작도 그 안에서 일어나야
      *   "그 순간" 이 된다. 따로 훑는 배치를 두면 그 배치 주기만큼 늦어진다.
+     *
+     * <h3>★★★ 왜 여기만 {@code REQUIRES_NEW} 인가</h3>
+     * 이 메서드는 {@link PieceCompletedListener} 가 <b>커밋 뒤에</b> 부른다. 그 시점의 트랜잭션은
+     * 이미 끝나는 중이라, 보통의 {@code @Transactional}(REQUIRED) 로는 그것에 얹혀서
+     * <b>바꾸는 질의가 "No active transaction" 으로 터진다</b> — 2026-09-11 실측에서 실제로 터졌다.
+     * 큐 등록까지는 되고 집기(claim)에서 터져서, <b>QUEUED 인 채 아무도 안 굽는</b> 모습이 됐다.
+     * 커밋이 이미 끝났으므로 여기서 새 트랜잭션을 여는 것은 잠금이 겹칠 일도 없다.
+     *
+     * ★ {@code onSleep}·{@code onTutorialDone} 은 반대다 — 돌보기 트랜잭션 <b>안에서</b> 불리므로
+     *   그 트랜잭션에 얹혀야 하고, 여기서 새 트랜잭션을 열면 아직 커밋 안 된 펫을 못 본다.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onPieceComplete(ZzalPet pet, Instant now) {
         int queued = planner.plan(pet, AwakeClock.dateOf(now));
         if (queued > 0) {
