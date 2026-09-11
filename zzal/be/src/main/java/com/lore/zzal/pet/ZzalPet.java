@@ -419,27 +419,15 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean todayCared;
 
-    // ── 조각 (정본 6·16장) — 오늘 무엇을 했나. 잠들 때 판정하고 리셋 ─────
-
-    /** 오늘 밥을 몇 번 줬나(밥 조각 = 2회). */
-    @Column(nullable = false, columnDefinition = "integer default 0")
-    private int todayFeeds;
-
-    /** 오늘 간식을 몇 번 줬나(놀이 조각 = 간식 1회 또는 게임 1승). */
+    /**
+     * 오늘 간식을 몇 번 줬나 — <b>그날 5개째부터 배탈</b>(정본 1.9).
+     *
+     * ★ 조각을 세는 칸이 아니다. 조각은 {@code zzal_piece} 가 따로 센다 — 한 개념을 두 곳에 두면
+     *   한쪽만 고쳐도 아무 오류가 안 나고 언젠가 조용히 갈린다. 옛 조각 칸 넷(밥·청소·게임승·채팅)은
+     *   쓰이지 않은 채 남아 있다가 1.9 에서 지웠다.
+     */
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int todaySnacks;
-
-    /** 오늘 청소를 몇 번 했나(청결 조각 = 청소 1회 또는 목욕 1회). */
-    @Column(nullable = false, columnDefinition = "integer default 0")
-    private int todayCleans;
-
-    /** 오늘 미니게임을 몇 번 이겼나(놀이 조각). */
-    @Column(nullable = false, columnDefinition = "integer default 0")
-    private int todayGameWins;
-
-    /** 오늘 채팅에 몇 번 답했나(교감 조각 = 채팅 1회 또는 쓰다듬기 2회). */
-    @Column(nullable = false, columnDefinition = "integer default 0")
-    private int todayChatAnswers;
 
     /** 기분 좋은 날의 선물 — 오늘 조각 하나를 미리 받았나(정본 6장). */
     @Column(nullable = false, columnDefinition = "boolean default false")
@@ -1487,11 +1475,7 @@ public class ZzalPet {
             todayCareIntimacy = 0;
             todayBathDone = false;
             todayCared = false;
-            todayFeeds = 0;
             todaySnacks = 0;
-            todayCleans = 0;
-            todayGameWins = 0;
-            todayChatAnswers = 0;
             bonusPiece = false;
             goodDayToday = false;
             overslept = false;
@@ -1547,7 +1531,6 @@ public class ZzalPet {
         boolean wasFull = food >= ZzalRules.FOOD_MAX;
         fullness = Math.min(ZzalRules.GAUGE_MAX, fullness + ZzalRules.FEED_FULLNESS);
         food -= 1;
-        todayFeeds += 1;
         if (wasFull) {
             foodAt = now;   // 가득이라 멈춰 있던 충전 시계를 다시 켠다
         }
@@ -1599,7 +1582,6 @@ public class ZzalPet {
     public void clean(Instant now) {
         trash = 0;
         cleans += 1;
-        todayCleans += 1;
         careIntimacy();
         advanceTutorial(TutorialSchedule.Step.CLEAN);
         afterNonSnack(now);
@@ -1756,13 +1738,11 @@ public class ZzalPet {
     /** 좌우 맞히기 승리 — 달리기 해금(5승)의 재료. */
     public void winLeftRight() {
         leftRightWins += 1;
-        todayGameWins += 1;
     }
 
     /** 채팅에 답했다. 친밀도 +40, 2층 9·10·14번 조건 카운터(튜토리얼에서 답한 것도 포함, 정본 16장). */
     public void answerChat() {
         chatAnswers += 1;
-        todayChatAnswers += 1;
         addIntimacy(ZzalRules.CHAT_INTIMACY);
         advanceTutorial(TutorialSchedule.Step.CHAT);
     }
