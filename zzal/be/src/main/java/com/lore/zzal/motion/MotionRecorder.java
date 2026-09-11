@@ -20,9 +20,12 @@ import java.time.Instant;
 public class MotionRecorder {
 
     private final ZzalMotionRepository repository;
+    private final ZzalMotionCandidateRepository candidateRepository;
 
-    public MotionRecorder(ZzalMotionRepository repository) {
+    public MotionRecorder(ZzalMotionRepository repository,
+                          ZzalMotionCandidateRepository candidateRepository) {
         this.repository = repository;
+        this.candidateRepository = candidateRepository;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -37,12 +40,22 @@ public class MotionRecorder {
                 m.done(imageKey, MotionSource.API, v.verdict(), v.note(), v.version()));
     }
 
-    /** 다 구워졌다 → 검수 대기. 사용자에게는 아직 안 보인다(PR-7 에서 "검수 전 지급" 을 없앴다). */
+    /**
+     * 다 구워졌다 → 검수 대기. 사용자에게는 아직 안 보인다(PR-7 에서 "검수 전 지급" 을 없앴다).
+     *
+     * ★ 판을 <b>후보로도 남긴다.</b> 모션 행의 그림 키는 "지금 대표" 라 다음 판이 덮어쓰지만,
+     *   후보 줄은 남아서 판정 화면이 <b>나온 판을 전부</b> 보여 줄 수 있다(정본 1.9).
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void toReview(Long motionId, String imageKey, MotionGate.Verdict v) {
-        repository.findById(motionId).ifPresent(m ->
-                m.toReview(imageKey, MotionSource.API, v.verdict(), v.note(), v.version()));
+    public void toReview(Long motionId, String gridKey, String imageKey, MotionGate.Verdict v) {
+        repository.findById(motionId).ifPresent(m -> {
+            m.toReview(imageKey, MotionSource.API, v.verdict(), v.note(), v.version());
+            candidateRepository.save(ZzalMotionCandidate.of(
+                    motionId, m.getRegenRound(), gridKey, imageKey, MotionSource.API,
+                    v.verdict(), v.note(), v.version(), null, Instant.now()));
+        });
     }
+
 
     /**
      * API 몫이 끝났다 → 맥미니에게 넘기거나(한도 안) 그 밤은 포기한다(한도 밖).
@@ -56,7 +69,9 @@ public class MotionRecorder {
             return false;
         }
         if (m.getRegenRound() >= max) {
-            m.markFailed();     // 다음 밤에 같은 동작이 다시 오른다(정본 16장 — 조각은 소모하지 않는다)
+            // ★ 라운드를 다 썼다 = 후보 일곱 판이 전부 아니었다는 뜻이다. 같은 조건으로 또 구우면
+            //   또 같은 것이 나온다(상훈님). 다음 밤에 자동으로 다시 올리지 않고 보류함에 둔다.
+            m.hold();
             return false;
         }
         m.requestLocalRegen();

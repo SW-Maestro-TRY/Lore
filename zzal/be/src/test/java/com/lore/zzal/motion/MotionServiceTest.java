@@ -118,7 +118,7 @@ class MotionServiceTest {
 
         service.bake(MOTION_ID);
 
-        verify(motionRecorder).toReview(eq(MOTION_ID), anyString(), any());
+        verify(motionRecorder).toReview(eq(MOTION_ID), any(), anyString(), any());
         verify(motionRecorder, never()).markFailed(anyLong());
     }
 
@@ -176,7 +176,7 @@ class MotionServiceTest {
         service.bake(MOTION_ID);
 
         verify(runner, times(1)).run(any(), any(), any(), any());   // 정본 = API 1회
-        verify(motionRecorder, never()).toReview(anyLong(), anyString(), any());
+        verify(motionRecorder, never()).toReview(anyLong(), any(), anyString(), any());
         verify(motionRecorder).recordGate(eq(MOTION_ID), anyString(), any());   // 판정은 남긴다
         verify(motionRecorder).requestLocalRegen(MOTION_ID, 2);
     }
@@ -205,7 +205,7 @@ class MotionServiceTest {
         service.bakeNow(MOTION_ID);         // 예외가 이 밖으로 새어 나오면 안 된다
 
         verify(motionRecorder).markFailed(MOTION_ID);
-        verify(motionRecorder, never()).toReview(anyLong(), anyString(), any());
+        verify(motionRecorder, never()).toReview(anyLong(), any(), anyString(), any());
     }
 
     @Test
@@ -252,7 +252,7 @@ class MotionServiceTest {
         twice.bakeNow(MOTION_ID);
 
         verify(runner, times(2)).run(any(), any(), any(), any());
-        verify(motionRecorder).toReview(eq(MOTION_ID), anyString(), any());
+        verify(motionRecorder).toReview(eq(MOTION_ID), any(), anyString(), any());
         verify(motionRecorder, never()).markFailed(anyLong());
     }
 }

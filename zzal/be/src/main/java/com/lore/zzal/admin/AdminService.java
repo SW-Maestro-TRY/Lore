@@ -3,13 +3,19 @@ package com.lore.zzal.admin;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.common.s3.S3Service;
+import com.lore.zzal.admin.dto.AdminRequests;
 import com.lore.zzal.admin.dto.AdminResponses;
+import com.lore.zzal.generation.GenJob;
 import com.lore.zzal.generation.GenJobRepository;
+import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.motion.HumanVerdict;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionSource;
 import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
+import com.lore.zzal.motion.ZzalMotionCandidate;
+import com.lore.zzal.motion.ZzalMotionCandidateRepository;
 import com.lore.zzal.motion.ZzalMotionRepository;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalPetRepository;
@@ -48,23 +54,29 @@ public class AdminService {
 
     private final AdminGuard adminGuard;
     private final ZzalMotionRepository motionRepository;
+    private final ZzalMotionCandidateRepository candidateRepository;
     private final ZzalPetRepository petRepository;
     private final GenJobRepository jobRepository;
+    private final GenStepRecordRepository stepRepository;
     private final MotionCatalog catalog;
     private final S3Service s3Service;
     private final int localRegenMax;
 
     public AdminService(AdminGuard adminGuard,
                         ZzalMotionRepository motionRepository,
+                        ZzalMotionCandidateRepository candidateRepository,
                         ZzalPetRepository petRepository,
                         GenJobRepository jobRepository,
+                        GenStepRecordRepository stepRepository,
                         MotionCatalog catalog,
                         S3Service s3Service,
                         @Value("${app.zzal.night.local-regen-max:2}") int localRegenMax) {
         this.adminGuard = adminGuard;
         this.motionRepository = motionRepository;
+        this.candidateRepository = candidateRepository;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
+        this.stepRepository = stepRepository;
         this.catalog = catalog;
         this.s3Service = s3Service;
         this.localRegenMax = localRegenMax;
@@ -79,8 +91,21 @@ public class AdminService {
     @Transactional(readOnly = true)
     public List<AdminResponses.Pending> pending(Long userId) {
         adminGuard.require(userId);
-        return motionRepository.findByStatusOrderByIdAsc(MotionStatus.REVIEW).stream()
-                .map(m -> AdminResponses.Pending.from(m, label(m)))
+        List<ZzalMotion> rows = motionRepository.findByStatusOrderByIdAsc(MotionStatus.REVIEW);
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        // ★ 판정 화면은 넷을 나란히 본다 — 원본 그림 · 시트 · 격자 · 완성본.
+        //   원본과 시트는 펫에, 격자와 완성본은 후보 줄에 있다.
+        Map<Long, ZzalPet> pets = petRepository
+                .findAllById(rows.stream().map(ZzalMotion::getPetId).distinct().toList())
+                .stream().collect(java.util.stream.Collectors.toMap(ZzalPet::getId, p -> p));
+        Map<Long, List<ZzalMotionCandidate>> byMotion = candidateRepository
+                .findByMotionIdInOrderByRoundAscIdAsc(rows.stream().map(ZzalMotion::getId).toList())
+                .stream().collect(java.util.stream.Collectors.groupingBy(ZzalMotionCandidate::getMotionId));
+        return rows.stream()
+                .map(m -> AdminResponses.Pending.from(m, label(m), pets.get(m.getPetId()),
+                        byMotion.getOrDefault(m.getId(), List.of())))
                 .toList();
     }
 
@@ -99,7 +124,7 @@ public class AdminService {
      *   다시 REVIEW 가 된 뒤에 한다.
      */
     @Transactional
-    public void review(Long userId, Long motionId, HumanVerdict verdict, String note) {
+    public void review(Long userId, Long motionId, HumanVerdict verdict, String note, Long candidateId) {
         adminGuard.require(userId);
         ZzalMotion motion = motionRepository.findByIdForUpdate(motionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그 모션을 찾을 수 없어요"));
@@ -115,17 +140,54 @@ public class AdminService {
         motion.review(verdict, note, now);
 
         if (verdict == HumanVerdict.OK) {
+            chooseCandidate(motion, candidateId);
             motion.approve(now);
-            log.info("검수 통과 — motionId={} 동작={} (아침 공개 대기)", motionId, motion.getName());
+            log.info("검수 통과 — motionId={} 동작={} candidateId={} (아침 공개 대기)",
+                    motionId, motion.getName(), candidateId);
             return;
         }
         if (motion.getRegenRound() >= localRegenMax) {
-            motion.markFailed();
-            log.warn("재생성 한도({})를 다 썼다 — motionId={} 그 밤은 실패, 다음 밤에 다시", localRegenMax, motionId);
+            // ★ 후보 일곱 판이 전부 아니었다는 뜻이다. 같은 지시문·같은 원본으로 또 구우면 또 같은 것이 나온다.
+            //   자동 재시도는 돈만 쓰고 같은 자리로 돌아오므로 보류함에 둔다(상훈님 2026-09-11).
+            motion.hold();
+            log.warn("재생성 한도({})를 다 썼다 — motionId={} 보류함으로(자동 재시도 없음)", localRegenMax, motionId);
             return;
         }
         motion.requestLocalRegen();
         log.info("재생성 요청 — motionId={} {}번째", motionId, motion.getRegenRound());
+    }
+
+    /**
+     * 고른 판으로 대표를 갈아 끼운다.
+     *
+     * ★★ 여기를 빠뜨리면 <b>고르지 않은 판이 공개된다.</b> 사용자에게 나가는 그림은 모션 행의 키이고,
+     *   후보 줄에 표시만 하는 것으로는 아무것도 안 바뀐다.
+     *
+     * ★ 번호를 안 주면 지금 대표로 올라와 있는 판을 고른 것으로 본다 — 후보가 하나뿐인 흔한 경우에
+     *   번호를 강제하면 판정이 느려진다.
+     * ★ 남의 모션의 판은 못 고른다. 안 보면 관리자 계정 하나가 아무 그림이나 아무 도감에 넣을 수 있다.
+     */
+    private void chooseCandidate(ZzalMotion motion, Long candidateId) {
+        List<ZzalMotionCandidate> rows = candidateRepository
+                .findByMotionIdOrderByRoundAscIdAsc(motion.getId());
+        if (rows.isEmpty()) {
+            return;     // 옛 행(후보 표가 생기기 전에 구운 것) — 대표가 이미 그 그림이다
+        }
+        ZzalMotionCandidate picked;
+        if (candidateId == null) {
+            picked = rows.stream()
+                    .filter(c -> c.getImageKey().equals(motion.getImageKey()))
+                    .findFirst()
+                    .orElse(rows.get(rows.size() - 1));
+        } else {
+            picked = rows.stream()
+                    .filter(c -> c.getId().equals(candidateId))
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그 판을 찾을 수 없어요"));
+        }
+        rows.forEach(ZzalMotionCandidate::unchoose);
+        picked.choose();
+        motion.useCandidate(picked.getImageKey(), picked.getSource());
     }
 
     /**
@@ -137,6 +199,21 @@ public class AdminService {
     @Transactional(readOnly = true)
     public List<AdminResponses.RegenRequest> regenRequests(Long userId) {
         adminGuard.require(userId);
+        return regenRequestRows();
+    }
+
+    /**
+     * 맥미니 전용 — 열쇠로 이미 신원을 확인했으므로 관리자 판정을 다시 하지 않는다.
+     *
+     * ★ 열쇠에 묶인 사용자는 <b>관리자일 필요가 없다.</b> 기계는 판정 화면을 안 보고 일감만 가져간다.
+     *   관리자 권한을 요구하면 그 열쇠가 새는 순간 관리자 화면까지 열리므로, 오히려 나쁘다.
+     */
+    @Transactional(readOnly = true)
+    public List<AdminResponses.RegenRequest> regenRequestsForAgent(Long agentUserId) {
+        return regenRequestRows();
+    }
+
+    private List<AdminResponses.RegenRequest> regenRequestRows() {
         List<ZzalMotion> rows = motionRepository.findByStatusOrderByIdAsc(MotionStatus.LOCAL_REQUESTED);
         Map<Long, ZzalPet> pets = petRepository.findAllById(rows.stream().map(ZzalMotion::getPetId).distinct().toList())
                 .stream().collect(java.util.stream.Collectors.toMap(ZzalPet::getId, p -> p));
@@ -165,20 +242,62 @@ public class AdminService {
      *   그림을 밀어 넣을 수 있으면 관리자 계정 하나가 도감을 통째로 바꿔 쓸 수 있다.
      */
     @Transactional
-    public void upload(Long userId, Long motionId, String imageKey) {
+    public void upload(Long userId, Long motionId, List<AdminRequests.Candidate> candidates) {
         adminGuard.require(userId);
+        uploadRows(userId, motionId, candidates);
+    }
+
+    /** 맥미니 전용 — 열쇠로 신원이 확인됐다. 올린 그림의 주인은 그 열쇠에 묶인 사용자다. */
+    @Transactional
+    public void uploadForAgent(Long agentUserId, Long motionId, List<AdminRequests.Candidate> candidates) {
+        uploadRows(agentUserId, motionId, candidates);
+    }
+
+    private void uploadRows(Long userId, Long motionId, List<AdminRequests.Candidate> candidates) {
         ZzalMotion motion = motionRepository.findByIdForUpdate(motionId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그 모션을 찾을 수 없어요"));
         if (motion.getStatus() != MotionStatus.LOCAL_REQUESTED) {
             throw new BusinessException(ErrorCode.ZZAL_REGEN_NOT_REQUESTED);
         }
-        // 부화 때와 같은 문 — 내 키인지·이미 쓴 키인지 여기서 판정된다.
-        s3Service.consume(userId, imageKey, Instant.now());
-        motion.uploadedLocal(imageKey);
-        log.info("맥미니 재생성 등록 — motionId={} {}번째 (검수 대기)", motionId, motion.getRegenRound());
+        // ★ 부화 때와 같은 문 — 내 키인지·이미 쓴 키인지 여기서 판정된다. 판마다 따로 본다.
+        //   한 판이라도 남의 키면 통째로 거절된다(트랜잭션이 하나라 앞의 소비도 되돌아간다).
+        // ★★ 여기서 MotionRecorder(REQUIRES_NEW)를 부르면 안 된다 — 위에서 findByIdForUpdate 로
+        //   이 줄을 이미 잠갔으므로, 새 트랜잭션이 같은 줄을 건드리면 <b>서로를 기다리며 멈춘다.</b>
+        //   같은 트랜잭션 안에서 끝낸다.
+        Instant now = Instant.now();
+        for (AdminRequests.Candidate c : candidates) {
+            s3Service.consume(userId, c.imageKey(), now);
+            if (c.gridKey() != null && !c.gridKey().isBlank()) {
+                s3Service.consume(userId, c.gridKey(), now);
+            }
+            candidateRepository.save(ZzalMotionCandidate.of(
+                    motionId, motion.getRegenRound(), c.gridKey(), c.imageKey(), MotionSource.LOCAL,
+                    null, null, null, c.gateScore(), now));
+        }
+        // ★ 대표는 맨 앞 판. 판정 화면은 후보 전부를 보므로 대표가 무엇이든 보이는 것은 같고,
+        //   사람이 고르는 순간 고른 판으로 갈아 끼운다.
+        motion.uploadedLocal(candidates.get(0).imageKey());
+        log.info("맥미니 재생성 등록 — motionId={} {}번째 판 {}개 (검수 대기)",
+                motionId, motion.getRegenRound(), candidates.size());
     }
 
     /** 그 밤 현황 — 모션 행을 직접 센다(밤 기록의 숫자는 "집기 완료" 라 실제와 다르다, B52). */
+    /**
+     * 한 펫의 생성 단계별 소요·비용 — 프론트 요청으로 연 창구(2026-09-11).
+     *
+     * ★ 데이터는 처음부터 쌓이고 있었다. <b>없던 것은 창구뿐</b>이라 서버 로그를 SSM 으로 읽어야 했다.
+     * ★ 시도 순·단계 순으로 준다. 재시도가 섞이면 어느 판의 몇 초인지 알 수 없다.
+     */
+    @Transactional(readOnly = true)
+    public List<AdminResponses.GenStep> genSteps(Long userId, Long petId) {
+        adminGuard.require(userId);
+        List<GenJob> jobs = jobRepository.findByPetIdOrderByIdAsc(petId);
+        return jobs.stream()
+                .flatMap(job -> stepRepository.findByJobIdOrderBySeqAsc(job.getId()).stream()
+                        .map(r -> AdminResponses.GenStep.from(job, r)))
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public AdminResponses.NightSummary nightSummary(Long userId, LocalDate nightOf) {
         adminGuard.require(userId);
@@ -193,6 +312,7 @@ public class AdminService {
                 count(rows, MotionStatus.LOCAL_REQUESTED),
                 count(rows, MotionStatus.OPEN),
                 count(rows, MotionStatus.FAILED),
+                count(rows, MotionStatus.HOLD),
                 cost);
     }
 

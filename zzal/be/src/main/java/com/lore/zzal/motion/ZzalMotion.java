@@ -331,6 +331,28 @@ public class ZzalMotion {
         this.status = MotionStatus.FAILED;
     }
 
+    /**
+     * 후보가 전부 아니었다 → 보류함. 사람이 꺼내기 전까지 아무도 안 집는다.
+     *
+     * ★ 밤 계획({@code NightPlanner})과 스위프는 {@code NONE}·{@code FAILED}·{@code QUEUED} 만 본다.
+     *   그래서 이 상태로 두면 <b>자동 재시도가 물리적으로 일어나지 않는다</b> — 조건이 아니라
+     *   상태로 막는 것이 안전하다. 조건은 나중에 누가 한 줄 더하면 뚫린다.
+     */
+    public void hold() {
+        this.status = MotionStatus.HOLD;
+    }
+
+    /**
+     * 사람이 고른 판으로 대표를 갈아 끼운다(정본 1.9 — 나온 판 중에서 고른다).
+     *
+     * ★ 대표를 바꿔야 하는 이유 — 사용자에게 나가는 그림은 모션 행의 {@code imageKey} 다.
+     *   후보 줄에만 표시하고 여기를 안 바꾸면 <b>고르지 않은 판이 공개된다.</b>
+     */
+    public void useCandidate(String imageKey, MotionSource source) {
+        this.imageKey = imageKey;
+        this.source = source;
+    }
+
     /** 상훈님 판정을 받아 적는다. 게이트 판정은 그대로 남는다(둘을 비교해야 하므로). */
     public void review(HumanVerdict verdict, String note, Instant now) {
         this.humanVerdict = verdict;

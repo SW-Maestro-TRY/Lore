@@ -125,7 +125,7 @@ public class MotionService {
             if (motionRecorder.requestLocalRegen(motionId, localRegenMax)) {
                 log.info("맥미니 재생성 요청 — motionId={} (관리자 GET /regen-requests 로 나간다)", motionId);
             } else {
-                log.warn("로컬 재생성 한도({})를 다 썼다 — motionId={} 그 밤은 실패, 다음 밤에 다시", localRegenMax, motionId);
+                log.warn("로컬 재생성 한도({})를 다 썼다 — motionId={} 보류함으로(자동 재시도 없음)", localRegenMax, motionId);
             }
         } catch (RuntimeException | Error e) {
             log.error("재생성 요청 기록 실패 — motionId={} (기동 복구가 회수합니다)", motionId, e);
@@ -186,6 +186,7 @@ public class MotionService {
         }
 
         String imageKey = ctx.image(MotionPostStep.NAME);
+        String gridKey = ctx.image(MotionGridStep.NAME);
         MotionGate.Verdict v = gate.judge(imageKey);
 
         if (v.verdict() == GateVerdict.FAIL) {
@@ -203,7 +204,8 @@ public class MotionService {
 
         // ★★ 검수 대기까지가 서버 몫이다. 사용자 화면은 상훈님이 OK 를 누르고, 그다음
         //   펫이 깨어 있는 첫 정산에 도착한다(정본 2장 "기상 첫 화면").
-        motionRecorder.toReview(motionId, imageKey, v);
+        // ★ 격자도 같이 남긴다 — 판정 화면이 "원본 그림 · 시트 · 격자 · 완성본" 넷을 나란히 본다.
+        motionRecorder.toReview(motionId, gridKey, imageKey, v);
         log.info("모션 구움 — motionId={} 동작={} 게이트={} 비용=${} (검수 대기)",
                 motionId, motion.getName(), v.verdict(), r.costUsd());
         return true;

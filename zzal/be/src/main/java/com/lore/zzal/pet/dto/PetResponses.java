@@ -180,6 +180,7 @@ public final class PetResponses {
      *   NONE  · FAILED                        → NONE        아직 아무 일도 없다
      *   QUEUED                                → QUEUED      오늘 밤에 굽는다
      *   BAKING · REVIEW · LOCAL_REQUESTED     → PRACTICING  아직 연습 중이에요
+     *   HOLD                                  → PRACTICING  사람이 고쳐서 다시 꺼낼 자리다
      *   OPEN(도착 전)                          → PRACTICING  판정은 끝났지만 아직 안 왔다
      *   OPEN(도착)                             → OPEN        배웠다
      * </pre>
@@ -195,7 +196,10 @@ public final class PetResponses {
         static String userStatus(ZzalMotion row) {
             return switch (row.getStatus()) {
                 case QUEUED -> "QUEUED";
-                case BAKING, REVIEW, LOCAL_REQUESTED, PENDING -> "PRACTICING";
+                // ★ HOLD 도 "연습 중" 이다. 사람이 지시문을 고쳐 다시 꺼낼 자리라 언젠가 온다 —
+                //   상훈님: "어떻게든 노출시킬 거야." NONE 으로 내리면 조각을 쓴 자리가
+                //   아무 일도 없던 것처럼 보이고, "실패" 라고 말하면 아이의 흠으로 읽힌다(정본 0장).
+                case BAKING, REVIEW, LOCAL_REQUESTED, HOLD, PENDING -> "PRACTICING";
                 case OPEN -> row.isRevealed() ? "OPEN" : "PRACTICING";
                 case NONE, FAILED -> "NONE";
             };

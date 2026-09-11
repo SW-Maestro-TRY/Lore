@@ -12,6 +12,10 @@ import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSource;
 import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
+import com.lore.zzal.motion.ZzalMotionCandidate;
+import com.lore.zzal.motion.ZzalMotionCandidateRepository;
+import com.lore.zzal.generation.GenStepRecordRepository;
+import com.lore.zzal.admin.dto.AdminRequests;
 import com.lore.zzal.motion.ZzalMotionRepository;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalPetRepository;
@@ -25,6 +29,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -60,7 +65,11 @@ class AdminServiceTest {
     private ZzalPetRepository petRepository;
     private GenJobRepository jobRepository;
     private S3Service s3Service;
+    private ZzalMotionCandidateRepository candidateRepository;
+    private GenStepRecordRepository stepRepository;
     private AdminService service;
+    private final Map<Long, List<ZzalMotionCandidate>> candidates = new HashMap<>();
+    private long nextCandidateId = 1000L;
 
     @BeforeEach
     void setUp() {
@@ -69,12 +78,29 @@ class AdminServiceTest {
         petRepository = mock(ZzalPetRepository.class);
         jobRepository = mock(GenJobRepository.class);
         s3Service = mock(S3Service.class);
+        candidateRepository = mock(ZzalMotionCandidateRepository.class);
+        stepRepository = mock(GenStepRecordRepository.class);
+        candidates.clear();
+        nextCandidateId = 1000L;
+        when(candidateRepository.save(any())).thenAnswer(i -> {
+            ZzalMotionCandidate c = i.getArgument(0);
+            ReflectionTestUtils.setField(c, "id", nextCandidateId++);
+            candidates.computeIfAbsent(c.getMotionId(), k -> new java.util.ArrayList<>()).add(c);
+            return c;
+        });
+        when(candidateRepository.findByMotionIdOrderByRoundAscIdAsc(anyLong()))
+                .thenAnswer(i -> candidates.getOrDefault(i.<Long>getArgument(0), List.of()));
+        when(candidateRepository.findByMotionIdInOrderByRoundAscIdAsc(any()))
+                .thenAnswer(i -> i.<List<Long>>getArgument(0).stream()
+                        .flatMap(id -> candidates.getOrDefault(id, List.<ZzalMotionCandidate>of()).stream())
+                        .toList());
         when(motionRepository.findById(anyLong())).thenAnswer(i -> Optional.ofNullable(motions.get(i.<Long>getArgument(0))));
         when(motionRepository.findByIdForUpdate(anyLong())).thenAnswer(i -> Optional.ofNullable(motions.get(i.<Long>getArgument(0))));
         when(motionRepository.findByStatusOrderByIdAsc(any())).thenAnswer(i ->
                 motions.values().stream().filter(m -> m.getStatus() == i.getArgument(0)).toList());
         when(jobRepository.sumCostByMotionIds(any())).thenReturn(new BigDecimal("0.1970"));
-        service = new AdminService(guard, motionRepository, petRepository, jobRepository, catalog, s3Service, 2);
+        service = new AdminService(guard, motionRepository, candidateRepository, petRepository,
+                jobRepository, stepRepository, catalog, s3Service, 2);
     }
 
     /** 검수 대기(REVIEW) 상태의 모션 하나. */
@@ -95,7 +121,7 @@ class AdminServiceTest {
     void okOpensButDoesNotArrive() {
         ZzalMotion m = reviewing(10L, 101);
 
-        service.review(ADMIN, 10L, HumanVerdict.OK, "좋아요");
+        service.review(ADMIN, 10L, HumanVerdict.OK, "좋아요", null);
 
         assertThat(m.getStatus()).isEqualTo(MotionStatus.OPEN);
         assertThat(m.getHumanVerdict()).isEqualTo(HumanVerdict.OK);
@@ -104,51 +130,53 @@ class AdminServiceTest {
     }
 
     @Test
-    @DisplayName("★★ REGENERATE → 맥미니 재생성(LOCAL_REQUESTED), 두 번 쓰면 그 밤은 FAILED")
-    void regenerateTwiceThenFailed() {
+    @DisplayName("★★ REGENERATE → 맥미니 재생성, 두 번 다 쓰면 HOLD — 자동으로 안 풀린다")
+    void regenerateTwiceThenHold() {
         ZzalMotion m = reviewing(11L, 101);
 
-        service.review(ADMIN, 11L, HumanVerdict.REGENERATE, "발이 잘림");
+        service.review(ADMIN, 11L, HumanVerdict.REGENERATE, "발이 잘림", null);
         assertThat(m.getStatus()).isEqualTo(MotionStatus.LOCAL_REQUESTED);
         assertThat(m.getRegenRound()).isEqualTo(1);
 
         // 맥미니가 올림 → 다시 검수 대기
-        service.upload(ADMIN, 11L, "images/zzal/tmp/a.webp");
+        service.upload(ADMIN, 11L, List.of(new AdminRequests.Candidate("images/zzal/tmp/a.webp", null, null)));
         assertThat(m.getStatus()).isEqualTo(MotionStatus.REVIEW);
 
-        service.review(ADMIN, 11L, HumanVerdict.REGENERATE, "여전히 잘림");
+        service.review(ADMIN, 11L, HumanVerdict.REGENERATE, "여전히 잘림", null);
         assertThat(m.getStatus()).isEqualTo(MotionStatus.LOCAL_REQUESTED);
         assertThat(m.getRegenRound()).isEqualTo(2);
 
-        service.upload(ADMIN, 11L, "images/zzal/tmp/b.webp");
-        service.review(ADMIN, 11L, HumanVerdict.REGENERATE, "세 번째도 아님");
+        service.upload(ADMIN, 11L, List.of(new AdminRequests.Candidate("images/zzal/tmp/b.webp", null, null)));
+        service.review(ADMIN, 11L, HumanVerdict.REGENERATE, "세 번째도 아님", null);
 
-        // 한도(2)를 다 썼다 — 그 밤은 실패. 조각은 소모하지 않고 다음 밤에 같은 동작이 다시 오른다(정본 16장)
-        assertThat(m.getStatus()).isEqualTo(MotionStatus.FAILED);
+        // ★★ 한도(2)를 다 썼다 = 후보 일곱 판이 전부 아니었다는 뜻이다 → 보류함(상훈님 2026-09-11).
+        //   옛 규칙은 FAILED 로 내려 <b>다음 밤에 자동으로 다시 굽게</b> 했는데, 같은 지시문·같은 원본으로
+        //   또 구우면 또 같은 것이 나온다. 돈만 쓰고 같은 자리로 돌아온다.
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.HOLD);
         assertThat(m.getNightOf()).isEqualTo(NIGHT);     // 밤은 지운다고 좋을 게 없다(이월 우선권)
         assertThat(m.getRevealedAt()).isNull();
 
-        // ★★ 다음 밤에 다시 오르면 재생성 기회도 처음으로 돌아온다 — 안 그러면 그 동작은 영영 못 배운다(#224 중-1)
-        m.queue(NIGHT.plusDays(1));
-        assertThat(m.getStatus()).isEqualTo(MotionStatus.QUEUED);
-        assertThat(m.getRegenRound()).isZero();
+        // ★ 자동으로는 안 풀린다 — 밤 계획과 스위프는 NONE·FAILED·QUEUED 만 본다.
+        //   사람이 지시문이나 원본을 고친 뒤 다시 꺼낸다("어떻게든 노출시킬 거야").
+        assertThat(MotionStatus.HOLD).isNotIn(MotionStatus.NONE, MotionStatus.FAILED, MotionStatus.QUEUED);
     }
 
     @Test
-    @DisplayName("★★ 지난 밤에 재생성을 다 쓴 행도 다음 밤에는 기회가 돌아온다 — 안 그러면 그 동작은 영영 못 배운다")
-    void regenChanceComesBackNextNight() {
+    @DisplayName("★ 사람이 보류함에서 꺼내면 재생성 기회가 처음으로 돌아온다")
+    void regenChanceComesBackWhenReleased() {
         ZzalMotion m = reviewing(16L, 101);
 
         // 첫째 밤 — 재생성 두 번을 다 쓰고 실패로 끝난다
-        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "1");
-        service.upload(ADMIN, 16L, "images/zzal/tmp/n1.webp");
-        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "2");
-        service.upload(ADMIN, 16L, "images/zzal/tmp/n2.webp");
-        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "3");
-        assertThat(m.getStatus()).isEqualTo(MotionStatus.FAILED);
+        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "1", null);
+        service.upload(ADMIN, 16L, List.of(new AdminRequests.Candidate("images/zzal/tmp/n1.webp", null, null)));
+        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "2", null);
+        service.upload(ADMIN, 16L, List.of(new AdminRequests.Candidate("images/zzal/tmp/n2.webp", null, null)));
+        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "3", null);
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.HOLD);
         assertThat(m.getRegenRound()).isEqualTo(2);
 
-        // 둘째 밤 — 계획이 FAILED 를 다시 큐에 올린다(정본 16장 "조각을 소모하지 않는다")
+        // ★ 보류함에서 꺼내는 것은 사람이 한다(지시문·원본을 고친 뒤). 꺼내면 처음 조건으로 돌아가야
+        //   한다 — 안 그러면 꺼내자마자 한 판 실패로 곧바로 다시 보류함이 되어 그 동작은 영영 못 배운다.
         m.queue(NIGHT.plusDays(1));
         assertThat(m.getRegenRound()).isZero();
         assertThat(m.getNightOf()).isEqualTo(NIGHT.plusDays(1));
@@ -156,24 +184,71 @@ class AdminServiceTest {
         // ★ 숫자만 0 이 아니라 실제로 두 번을 다시 쓸 수 있어야 한다
         m.toReview("images/zzal/pets/7/motions/16/motion.webp",
                 MotionSource.API, GateVerdict.REVIEW, "게이트 미적용", "g0");
-        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "다음 밤 1");
+        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "다음 밤 1", null);
         assertThat(m.getStatus()).isEqualTo(MotionStatus.LOCAL_REQUESTED);
         assertThat(m.getRegenRound()).isEqualTo(1);
-        service.upload(ADMIN, 16L, "images/zzal/tmp/n3.webp");
-        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "다음 밤 2");
+        service.upload(ADMIN, 16L, List.of(new AdminRequests.Candidate("images/zzal/tmp/n3.webp", null, null)));
+        service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "다음 밤 2", null);
         assertThat(m.getStatus()).isEqualTo(MotionStatus.LOCAL_REQUESTED);
         assertThat(m.getRegenRound()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("★★ 나온 판이 전부 남는다 — 덮어쓰면 고를 수가 없다")
+    void everyCandidateIsKept() {
+        ZzalMotion m = reviewing(70L, 101);
+        service.review(ADMIN, 70L, HumanVerdict.REGENERATE, "다시", null);
+
+        // 맥미니가 한 라운드에 3판을 나란히 올린다
+        service.upload(ADMIN, 70L, List.of(
+                new AdminRequests.Candidate("images/zzal/tmp/c1.webp", "images/zzal/tmp/g1.png", 0.91),
+                new AdminRequests.Candidate("images/zzal/tmp/c2.webp", "images/zzal/tmp/g2.png", 0.73),
+                new AdminRequests.Candidate("images/zzal/tmp/c3.webp", null, null)));
+
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.REVIEW);
+        assertThat(candidates.get(70L)).hasSize(3);
+        assertThat(candidates.get(70L)).extracting(ZzalMotionCandidate::getImageKey)
+                .containsExactly("images/zzal/tmp/c1.webp", "images/zzal/tmp/c2.webp", "images/zzal/tmp/c3.webp");
+    }
+
+    @Test
+    @DisplayName("★★ 고른 판이 대표가 된다 — 여기를 빠뜨리면 고르지 않은 판이 공개된다")
+    void chosenCandidateBecomesTheOneShown() {
+        ZzalMotion m = reviewing(71L, 101);
+        service.review(ADMIN, 71L, HumanVerdict.REGENERATE, "다시", null);
+        service.upload(ADMIN, 71L, List.of(
+                new AdminRequests.Candidate("images/zzal/tmp/a.webp", null, null),
+                new AdminRequests.Candidate("images/zzal/tmp/b.webp", null, null)));
+
+        ZzalMotionCandidate second = candidates.get(71L).get(1);
+        service.review(ADMIN, 71L, HumanVerdict.OK, "이게 낫다", second.getId());
+
+        assertThat(m.getStatus()).isEqualTo(MotionStatus.OPEN);
+        assertThat(m.getImageKey()).isEqualTo("images/zzal/tmp/b.webp");
+        assertThat(second.isChosen()).isTrue();
+        assertThat(candidates.get(71L).get(0).isChosen()).as("한 모션에 고른 판은 하나뿐").isFalse();
+    }
+
+    @Test
+    @DisplayName("남의 모션의 판은 못 고른다 — 아무 그림이나 아무 도감에 들어가면 안 된다")
+    void cannotChooseForeignCandidate() {
+        reviewing(72L, 101);
+        service.review(ADMIN, 72L, HumanVerdict.REGENERATE, "다시", null);
+        service.upload(ADMIN, 72L, List.of(new AdminRequests.Candidate("images/zzal/tmp/z.webp", null, null)));
+
+        assertThatThrownBy(() -> service.review(ADMIN, 72L, HumanVerdict.OK, null, 9999L))
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test
     @DisplayName("★★ 반려해 둔 자리(LOCAL_REQUESTED)에 OK → 409 — 퇴짜 맞은 옛 그림이 공개되면 안 된다")
     void okOnRejectedRowIsRefused() {
         ZzalMotion m = reviewing(12L, 101);
-        service.review(ADMIN, 12L, HumanVerdict.REGENERATE, "발이 잘림");
+        service.review(ADMIN, 12L, HumanVerdict.REGENERATE, "발이 잘림", null);
         assertThat(m.getStatus()).isEqualTo(MotionStatus.LOCAL_REQUESTED);
         String rejected = m.getImageKey();          // 반려된 그림이 아직 붙어 있다
 
-        assertThatThrownBy(() -> service.review(ADMIN, 12L, HumanVerdict.OK, "역시 괜찮네"))
+        assertThatThrownBy(() -> service.review(ADMIN, 12L, HumanVerdict.OK, "역시 괜찮네", null))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_NOT_IN_REVIEW);
 
@@ -195,7 +270,7 @@ class AdminServiceTest {
         motions.put(15L, untouched);
 
         for (long id : new long[]{13L, 14L, 15L}) {
-            assertThatThrownBy(() -> service.review(ADMIN, id, HumanVerdict.OK, null))
+            assertThatThrownBy(() -> service.review(ADMIN, id, HumanVerdict.OK, null, null))
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_NOT_IN_REVIEW);
         }
         assertThat(arrived.getStatus()).isEqualTo(MotionStatus.OPEN);
@@ -206,7 +281,7 @@ class AdminServiceTest {
     @Test
     @DisplayName("없는 모션에 판정하면 404")
     void reviewMissing() {
-        assertThatThrownBy(() -> service.review(ADMIN, 999L, HumanVerdict.OK, null))
+        assertThatThrownBy(() -> service.review(ADMIN, 999L, HumanVerdict.OK, null, null))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -241,8 +316,8 @@ class AdminServiceTest {
         MotionCatalog withPrompt = mock(MotionCatalog.class);
         when(withPrompt.block("roll")).thenReturn("TASK: 구른다");
         when(withPrompt.byKey(any())).thenReturn(Optional.empty());
-        AdminService svc = new AdminService(guard, motionRepository, petRepository, jobRepository,
-                withPrompt, s3Service, 2);
+        AdminService svc = new AdminService(guard, motionRepository, candidateRepository, petRepository,
+                jobRepository, stepRepository, withPrompt, s3Service, 2);
 
         List<AdminResponses.RegenRequest> requests = svc.regenRequests(ADMIN);
 
@@ -265,8 +340,8 @@ class AdminServiceTest {
         when(petRepository.findAllById(any())).thenReturn(List.of(pet()));
         MotionCatalog broken = mock(MotionCatalog.class);
         when(broken.block("roll")).thenThrow(new java.io.UncheckedIOException(new java.io.IOException("없음")));
-        AdminService svc = new AdminService(guard, motionRepository, petRepository, jobRepository,
-                broken, s3Service, 2);
+        AdminService svc = new AdminService(guard, motionRepository, candidateRepository, petRepository,
+                jobRepository, stepRepository, broken, s3Service, 2);
 
         assertThat(svc.regenRequests(ADMIN)).isEmpty();
     }
@@ -278,7 +353,7 @@ class AdminServiceTest {
     void uploadOnlyWhenRequested() {
         reviewing(40L, 101);       // REVIEW 인 채로
 
-        assertThatThrownBy(() -> service.upload(ADMIN, 40L, "images/zzal/tmp/x.webp"))
+        assertThatThrownBy(() -> service.upload(ADMIN, 40L, List.of(new AdminRequests.Candidate("images/zzal/tmp/x.webp", null, null))))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_REGEN_NOT_REQUESTED);
         verify(s3Service, never()).consume(anyLong(), any(), any());
@@ -291,7 +366,7 @@ class AdminServiceTest {
         m.requestLocalRegen();
         int before = m.getAttempts();
 
-        service.upload(ADMIN, 41L, "images/zzal/tmp/y.webp");
+        service.upload(ADMIN, 41L, List.of(new AdminRequests.Candidate("images/zzal/tmp/y.webp", null, null)));
 
         assertThat(m.getStatus()).isEqualTo(MotionStatus.REVIEW);
         assertThat(m.getSource()).isEqualTo(MotionSource.LOCAL);
@@ -328,9 +403,9 @@ class AdminServiceTest {
         reviewing(60L, 101);
 
         assertThatThrownBy(() -> service.pending(2L)).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.review(2L, 60L, HumanVerdict.OK, null)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.review(2L, 60L, HumanVerdict.OK, null, null)).isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.regenRequests(2L)).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.upload(2L, 60L, "k")).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.upload(2L, 60L, List.of(new AdminRequests.Candidate("k", null, null)))).isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.nightSummary(2L, NIGHT)).isInstanceOf(BusinessException.class);
         assertThat(motions.get(60L).getStatus()).isEqualTo(MotionStatus.REVIEW);   // 아무것도 안 바뀐다
     }
