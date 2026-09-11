@@ -6,8 +6,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * 이름 짓는 동안 굽기가 실패하면 <b>죽는다. 대신 그 사실이 제대로 전해져야 한다</b>(1.9).
@@ -91,6 +93,39 @@ class HatchFailureIsToldTest {
             pet.markHatchFailed();
 
             assertThat(pet.isDraft()).isFalse();
+        }
+
+        /**
+         * ★★ 이름에는 중복 제약이 없다. <b>그게 의도다.</b>
+         *
+         * <h3>왜 이 시험이 있나</h3>
+         * 실패했을 때 사용자가 친 이름을 서버가 들고 있지 않기로 했다(상훈님 결정 — 화면이 들고 있다가
+         * 새 그림과 함께 다시 보낸다). 그러면 <b>방금 실패한 그 이름이 그대로 다시 들어온다.</b>
+         * 여기에 "이름은 유일해야지" 를 걸면 <b>다시 만들 길이 막힌다.</b>
+         *
+         * <p>서로 다른 사용자가 같은 이름을 쓰는 것도 막으면 안 된다 —
+         * 상훈님: <i>"사용자마다 이름이 같을 수 있어 충분히."</i> 흔한 이름을 먼저 쓴 사람이 가져가는 구조는
+         * 자기 캐릭터에 제 이름을 못 붙이게 하는 것이다.
+         *
+         * <p>이 시험은 <b>제약이 없다는 사실</b>을 지킨다. 누가 유일 제약을 걸면 여기가 먼저 깨진다.
+         */
+        @Test
+        @DisplayName("★★ 이름은 겹쳐도 된다 — 실패한 그 이름으로 다시 만들 수 있어야 한다")
+        void sameNameCanBeUsedAgain() {
+            ZzalPet failed = draft();
+            failed.character("여울", null, List.of(Personality.GENTLE), null, T0);
+            failed.markHatchFailed();
+
+            // 같은 사람이 같은 이름으로 새 초안을 만든다
+            ZzalPet again = draft();
+            assertThatCode(() -> again.character("여울", null, List.of(Personality.GENTLE), null, T0))
+                    .doesNotThrowAnyException();
+            assertThat(again.getName()).isEqualTo("여울");
+
+            // 다른 사람이 같은 이름을 쓰는 것도 막지 않는다
+            ZzalPet other = ZzalPet.draft(999L, "images/zzal/other", T0);
+            assertThatCode(() -> other.character("여울", null, List.of(Personality.GENTLE), null, T0))
+                    .doesNotThrowAnyException();
         }
     }
 }
