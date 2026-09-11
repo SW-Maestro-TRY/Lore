@@ -189,5 +189,68 @@ class GameServiceTest {
         when(gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(anyLong())).thenReturn(Optional.of(playing));
         assertThat(service.start(USER, PET, GameKind.LEFT_RIGHT, T0).game()).isSameAs(playing);
         assertThat(pet.getTodayGames()).isZero();
+        assertThat(pet.getGameStarts()).isZero();
+    }
+
+    @Test
+    @DisplayName("★★ 이어치기에서도 튜토리얼 6칸은 넘어간다 — 하루 횟수·2층 조건·조각은 그대로")
+    void resumingAdvancesTutorialOnly() {
+        ZzalPet baby = PetFixture.hatching(USER, "여울", null, "k", T0);
+        baby.markAlive("s", "i", T0);
+        PetFixture.atTutorialStep(baby, com.lore.zzal.pet.TutorialSchedule.Step.GAME);
+        ReflectionTestUtils.setField(baby, "id", PET);
+        swapPet(baby);
+
+        ZzalGame playing = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
+        when(gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(anyLong())).thenReturn(Optional.of(playing));
+
+        // 판을 시작했다가 나갔다 온 사람이 버튼을 다시 누른 것
+        assertThat(service.start(USER, PET, GameKind.LEFT_RIGHT, T0).game()).isSameAs(playing);
+
+        assertThat(com.lore.zzal.pet.TutorialSchedule.currentOf(baby.getTutorialStep()))
+                .isEqualTo(com.lore.zzal.pet.TutorialSchedule.Step.SHARE);   // ★ 칸은 넘어갔다
+        assertThat(baby.getTodayGames()).isZero();                            // ★ 하루 3판은 안 깎였다
+        assertThat(baby.getGameStarts()).isZero();                            // ★ 2층 13번도 안 올랐다
+
+        // 이미 넘어간 칸을 또 누른다고 더 가지 않는다
+        service.start(USER, PET, GameKind.LEFT_RIGHT, T0);
+        assertThat(com.lore.zzal.pet.TutorialSchedule.currentOf(baby.getTutorialStep()))
+                .isEqualTo(com.lore.zzal.pet.TutorialSchedule.Step.SHARE);
+    }
+
+    @Test
+    @DisplayName("놀이 조각은 새 판을 시작할 때만 오른다 — 이어치기는 안 센다")
+    void resumingDoesNotCountPiece() {
+        java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> store = new java.util.HashMap<>();
+        service = new GameService(gameRepository, petService,
+                new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS),
+                com.lore.zzal.PieceFixture.inMemory(store), 3);
+        ReflectionTestUtils.setField(pet, "piecesEnabledAt", T0);   // 3층부터만 센다
+
+        service.start(USER, PET, GameKind.LEFT_RIGHT, T0);          // 새 판 — 센다
+        int counted = store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME);
+        assertThat(counted).isEqualTo(1);
+
+        ZzalGame playing = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
+        when(gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(anyLong())).thenReturn(Optional.of(playing));
+        service.start(USER, PET, GameKind.LEFT_RIGHT, T0);          // 이어치기 — 안 센다
+        assertThat(store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME)).isEqualTo(counted);
+    }
+
+    /**
+     * 이 시험만 다른 펫을 보게 한다 — setUp 의 펫은 튜토리얼을 이미 지났다.
+     *
+     * ★ {@code when(mock.foo(..))} 로 다시 스텁하면 <b>그 순간 앞의 스텁이 한 번 돈다</b>(인자가 전부 null 인 채로).
+     *   그래서 doAnswer 로 건다.
+     */
+    private void swapPet(ZzalPet other) {
+        org.mockito.Mockito.doAnswer(inv -> {
+            other.settle(other.now(inv.getArgument(2)));
+            return other;
+        }).when(petService).awake(any(), any(), any());
+        org.mockito.Mockito.doAnswer(inv -> {
+            ((Runnable) inv.getArgument(1)).run();
+            return new PetService.Action(other, List.of());
+        }).when(petService).withUnlockDiff(any(), any());
     }
 }

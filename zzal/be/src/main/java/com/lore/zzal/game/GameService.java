@@ -5,6 +5,7 @@ import com.lore.common.exception.ErrorCode;
 import com.lore.zzal.pet.PetService;
 import com.lore.zzal.piece.PieceEvent;
 import com.lore.zzal.pet.ZzalPet;
+import com.lore.zzal.pet.TutorialSchedule;
 import com.lore.zzal.pet.ZzalRules;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -80,6 +81,14 @@ public class GameService {
             //   달리기도 못 연다(리뷰 실측). 오늘 기상 전에 시작한 판은 접고(패) 새로 시작한다.
             Instant woke = pet.getWokeAt() == null ? pet.getHatchedAt() : pet.getWokeAt();
             if (!old.getStartedAt().isBefore(woke)) {
+                // ★★ 이어치기에서도 튜토리얼 6칸(GAME)은 넘어간다.
+                //   이 return 이 아래 startGame() 보다 위에 있어서, 판을 시작했다가 나갔다 온 사람은
+                //   버튼을 눌러도 칸이 안 넘어갔다(프론트 실측: 여덟 번을 불러도 GAME 에 머물렀다).
+                //   "게임 1판" 은 <b>새 판을 시작해야</b>가 아니라 <b>놀았으면 된다</b>는 뜻이다.
+                // ★ 다만 칸 넘기기만 떼어낸다 — todayGames(하루 3판)·gameStarts(2층 13번)·놀이 조각은
+                //   startGame() 안에 그대로 두어 <b>새 판을 시작할 때만</b> 오른다. 여기서 또 세면
+                //   하루 한도가 잘못 깎이고 조각이 공짜로 찬다.
+                pet.advanceTutorial(TutorialSchedule.Step.GAME);
                 return new Started(old, List.of(), runUnlocked(pet));
             }
             old.abandon(now);
