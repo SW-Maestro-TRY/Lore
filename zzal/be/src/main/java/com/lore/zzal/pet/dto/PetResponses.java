@@ -145,7 +145,10 @@ public final class PetResponses {
 
         static Pieces of(ZzalPet pet, ZzalPiece piece) {
             if (piece == null) {
-                // 3층이 열렸는데 줄이 아직 없다 — 첫 정산에서 만들어진다. 그때까지는 빈 판으로 보인다.
+                // ★ 여기 오는 진짜 이유는 <b>조각 줄을 안 넘긴 갈래로 불렸다</b>는 것이다
+                //   ({@code fromWithoutPieces}). 3층이 열리는 순간 줄이 만들어지므로
+                //   (PetService.openPieces → pieceService.open) "아직 안 만들어졌다" 는 경우는 사실상 없다.
+                //   사용자에게 나가는 자리에서 이 갈래를 쓰면 3층 진행이 통째로 0 으로 보인다.
                 Progress zero = new Progress(0, 1);
                 return new Pieces(false, false, false, false, 0, pet.isBonusPiece(), zero, zero, zero, zero);
             }
@@ -345,47 +348,25 @@ public final class PetResponses {
                     진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다""")
             Tutorial tutorial) {
 
-        /** 조회 응답 — {@code justUnlocked} 없음, 동작 행 없음(심화 상태 전부 NONE). 테스트·간이용. */
-        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog) {
-            return from(pet, stepLabel, now, catalog, Map.of(), List.of());
-        }
-
         /**
-         * ★ 조각 줄({@code zzal_piece})을 안 받는 갈래는 조각 진행을 <b>빈 판</b>으로 그린다.
-         *   3층이 아직 아니거나(블록 자체가 null) 아직 첫 정산을 안 한 펫이라 실제로 빈 판이 맞다.
-         *   3층 사용자에게 쓰는 자리라면 줄을 받는 갈래를 쓴다.
+         * <b>조각 판을 빼고</b> 그린다 — 이름이 그 사실을 말한다.
+         *
+         * <h3>★★ 왜 이름을 바꿨나</h3>
+         * 전에는 조각 줄을 안 받는 짧은 갈래가 넷이었고, 전부 조용히 {@code null} 을 넘겼다.
+         * 새 호출처가 실수로 그 갈래를 쓰면 <b>3층 사용자에게 빈 도장판이 나가고 아무 오류도 안 난다.</b>
+         * 이름에 드러나면 적어도 "왜 조각을 빼지?" 를 묻게 된다.
+         *
+         * ⚠️ <b>사용자에게 나가는 자리에는 쓰지 않는다.</b> 3층 사용자의 진행이 통째로 0 으로 보인다.
+         *    쓰는 곳은 조각과 무관한 것을 확인하는 시험과, 3층이 아닌 것이 확실한 자리뿐이다.
          */
-        private static final ZzalPiece NO_PIECE = null;
-
-        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
-                                  List<Integer> justUnlocked) {
-            return from(pet, stepLabel, now, catalog, Map.of(), justUnlocked);
+        public static Detail fromWithoutPieces(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog) {
+            return fromWithoutPieces(pet, stepLabel, now, catalog, Map.of(), List.of());
         }
 
-        /**
-         * @param now          이 펫의 시각({@link ZzalPet#now}). 실제 시각이 아니다
-         * @param rows         zzal_motion 행(seq → 행). 심화 행동 상태의 재료. 없으면 NONE
-         * @param justUnlocked 행동 응답에만 — 이번 행동으로 열린 2층 seq
-         */
-        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
-                                  Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked) {
-            return from(pet, stepLabel, now, catalog, rows, justUnlocked, false, List.of(), NO_PIECE);
-        }
-
-        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
-                                  Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
-                                  boolean justHealed) {
-            return from(pet, stepLabel, now, catalog, rows, justUnlocked, justHealed, List.of(), NO_PIECE);
-        }
-
-        /**
-         * @param justHealed 방금 약을 먹고 나았는가(행동 응답에만 — "나은 동작" 을 한 번만 보여주려고)
-         * @param scenes     혼자 논 장면, 최근 것부터(최대 3). 맨 앞 하나가 {@code scenes.latest}
-         */
-        public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
-                                  Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
-                                  boolean justHealed, List<ZzalScene> scenes) {
-            return from(pet, stepLabel, now, catalog, rows, justUnlocked, justHealed, scenes, NO_PIECE);
+        /** {@link #fromWithoutPieces(ZzalPet, String, Instant, MotionCatalog)} 와 같다 — 동작 행까지 준다. */
+        public static Detail fromWithoutPieces(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
+                                               Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked) {
+            return from(pet, stepLabel, now, catalog, rows, justUnlocked, false, List.of(), null);
         }
 
         /** @param piece 조각 줄. 3층 전이거나 아직 안 만들어졌으면 null */

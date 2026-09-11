@@ -823,7 +823,7 @@ class PetServiceTest {
             ZzalPet pet = sickPet();
             assertThat(pet.getCareMiss()).isPositive();          // 실제로 쌓여 있는데도
 
-            PetResponses.Detail detail = PetResponses.Detail.from(
+            PetResponses.Detail detail = PetResponses.Detail.fromWithoutPieces(
                     pet, null, kst("2026-09-06 21:00"), new MotionCatalog("", "", "v1"));
             String json = new com.fasterxml.jackson.databind.ObjectMapper()
                     .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
