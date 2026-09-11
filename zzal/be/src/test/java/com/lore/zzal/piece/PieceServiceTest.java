@@ -95,6 +95,9 @@ class PieceServiceTest {
             service.open(pet.getId()).grant(kind);
         }
         assertThat(service.find(pet.getId()).isComplete()).isTrue();
+        // ★ 그날 밤 굽기가 이 완성을 가져갔다고 둔다(1.9). 안 쓰인 완성은 기상에 안 비워진다 —
+        //   비우면 이틀 걸려 채운 조각이 아무것도 남기지 않고 사라진다.
+        service.find(pet.getId()).consume();
 
         // 게이지를 채워 두고 자면 "기분 좋은 날" 이 되어 선물 쪽지도 함께 남는다
         org.springframework.test.util.ReflectionTestUtils.setField(pet, "fullness", 4);

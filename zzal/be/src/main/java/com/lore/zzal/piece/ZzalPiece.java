@@ -80,6 +80,24 @@ public class ZzalPiece {
     @Column(nullable = false)
     private boolean bondDone;
 
+    /**
+     * 이 완성이 <b>실제로 쓰였나</b>(굽기가 걸렸나).
+     *
+     * <h3>★★ 왜 필요한가</h3>
+     * 네 칸이 찬 판을 비우는 자리는 다음 기상이다. 그런데 굽기를 거는 자리는 밤이라,
+     * <b>둘 사이가 벌어지면 양쪽으로 샌다.</b>
+     * <ul>
+     *   <li><b>두 번 걸린다</b> — 직접 재워 한 번 걸고, 밤 스위프({@code NightSweep})가 같은 밤에 또 건다.
+     *       판이 아직 안 비워져 있어 {@code isComplete()} 가 여전히 참이다. 옛 코드는 streak 을
+     *       <b>소모</b>해서 막았는데 그 자리가 사라졌다 — 심화 둘이 구워지고 돈도 검수도 두 배다</li>
+     *   <li><b>한 번도 안 걸린다</b> — 직접 재우지 않아 23:00 자동 취침으로 넘어가고 스위프도 꺼져 있으면,
+     *       아무것도 안 걸린 채 다음 기상에 판이 비워진다. <b>이틀 걸려 채운 조각이 조용히 사라진다</b></li>
+     * </ul>
+     * 그래서 <b>쓰인 완성만</b> 비운다. 즉시 굽기가 붙으면 굽기 시작 지점에서 이 칸을 찍으면 된다.
+     */
+    @Column(nullable = false)
+    private boolean consumed;
+
     protected ZzalPiece() {
     }
 
@@ -133,16 +151,37 @@ public class ZzalPiece {
     }
 
     /**
-     * 다음 기상 — 네 칸이 다 찍혀 있었으면 전부 0 으로 돌린다(1.9).
+     * 굽기가 이 완성을 가져갔다. 다음 기상에 판을 비워도 된다는 표시다.
+     *
+     * @return 이번에 새로 찍었으면 true — 이미 쓰인 완성이면 false(두 번 걸지 않는다)
+     */
+    public boolean consume() {
+        if (!isComplete() || consumed) {
+            return false;
+        }
+        consumed = true;
+        return true;
+    }
+
+    public boolean isConsumed() {
+        return consumed;
+    }
+
+    /**
+     * 다음 기상 — 네 칸이 다 찼고 <b>그 완성이 실제로 쓰였으면</b> 전부 0 으로 돌린다(1.9).
      *
      * ★ 다 안 찼으면 그대로 둔다. 요구량이 이틀치라 하루마다 지우면 영원히 못 채운다.
+     *
+     * ★★ <b>안 쓰인 완성도 그대로 둔다.</b> 굽기가 한 번도 안 걸린 판을 여기서 비우면
+     *   이틀 걸려 채운 조각이 아무것도 남기지 않고 사라진다 — 다음 밤에 걸릴 수 있게 남겨 둔다.
      *
      * @return 실제로 되돌렸으면 true
      */
     public boolean resetOnWakeIfComplete() {
-        if (!isComplete()) {
+        if (!isComplete() || !consumed) {
             return false;
         }
+        consumed = false;
         for (PieceKind kind : PieceKind.values()) {
             setDone(kind, false);
         }

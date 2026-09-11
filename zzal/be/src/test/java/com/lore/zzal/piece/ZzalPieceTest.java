@@ -137,6 +137,10 @@ class ZzalPieceTest {
             count(piece, PieceEvent.CHAT, 5);
             count(piece, PieceEvent.PET, 2);        // 교감은 이미 찍혀서 안 세어진다
 
+            // ★ 굽기가 이 완성을 가져간 뒤에만 비운다(1.9) — 안 쓰인 완성을 비우면
+            //   이틀 걸려 채운 조각이 아무것도 남기지 않고 사라진다.
+            piece.consume();
+
             assertThat(piece.resetOnWakeIfComplete()).isTrue();
             assertThat(piece.doneCount()).isZero();
             for (PieceEvent event : PieceEvent.values()) {

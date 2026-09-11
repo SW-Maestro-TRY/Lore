@@ -105,12 +105,16 @@ public class NightPlanner {
         // ★ 1.9 에서 "이틀 연속" 이 없어졌다. 요구량 자체가 이틀치라 연속을 셀 이유가 없다.
         // ★★ 정본 1.8 은 "네 칸이 차는 그 순간" 굽는다고 정했다. 이 밤 스위프는 그 전 모델이 남긴 자리이고,
         //    조건 달성 즉시 굽기로 옮기는 것은 다음 단계다. 여기서는 <b>같은 조건을 같은 뜻으로</b> 읽도록만 맞춘다.
+        // ★★★ 완성을 <b>소모</b>한다(piece.consume). 옛 코드의 consumePieceStreak 이 하던 일이다.
+        //    안 그러면 직접 재워 한 번 걸고 같은 밤 스위프(NightSweep.planAll)가 또 걸어
+        //    <b>심화 둘이 구워진다</b> — 판은 다음 기상에야 비워지므로 그때까지 isComplete 가 계속 참이다.
         ZzalPiece piece = pieceService.find(pet.getId());
-        if (pet.isPiecesEnabled() && piece != null && piece.isComplete()
+        if (pet.isPiecesEnabled() && piece != null && piece.isComplete() && !piece.isConsumed()
                 && nightOf.equals(pet.getLastNightOf())) {
             ZzalMotion next = nextAdvanced(rows);
             if (next != null) {
                 next.queue(nightOf);
+                piece.consume();
                 queued++;
                 log.info("3층 심화 큐 등록 — petId={} nightOf={} seq={} key={}",
                         pet.getId(), nightOf, next.getSeq(), next.getName());
