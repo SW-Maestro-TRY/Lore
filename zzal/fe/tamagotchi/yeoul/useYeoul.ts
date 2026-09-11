@@ -76,7 +76,12 @@ export interface YeoulState {
   log: LogLine[]; memories: string[];
   resolved: Record<string, boolean>; calls: number; guess: string | null;
   wallId: string;
-  picks: Record<string, string | null>; texts: Record<string, string>;
+  /**
+   * 캐릭터 칸에서 고른 칩들. **한 묶음에 여러 개**를 고를 수 있다(상훈님 2026-09-11).
+   * 배열 순서 = 고른 순서이고, **맨 앞이 대표**다 — 서버가 성격을 하나만 받으므로
+   * `POST …/personality` 에는 `picks.persona[0]` 만 나간다(나머지는 화면에만 남는다).
+   */
+  picks: Record<string, string[]>; texts: Record<string, string>;
   user: Record<string, string | null>; uq: number;
   petName: string; uploaded: boolean; authed: string;
   /** 오늘 찍힌 조각 수(0~4). 정본상 **잠들 때 판정·리셋**된다. 지금은 프론트 목이라 손으로 바꾼다. */
@@ -249,8 +254,19 @@ export interface Bubble {
 export interface Opt extends Sel { text: string; pick: () => void }
 export interface CharGroup {
   key: string; title: string; ph: string; value: string;
+  /** "여러 개 고를 수 있어요" 같은 한 줄 안내. 칩 위에 작게 붙는다. */
+  note: string;
   onInput: (v: string) => void; cardBd: string; cardBg: string; opts: Opt[];
 }
+
+/**
+ * 「지금 만나러 가기」를 누른 뒤 방으로 넘어가기까지(ms).
+ * 깨지는 동작 1.45초(`Egg.tsx` 의 `yCrack`) + 숨 0.25초. **한 벌로 고칠 것.**
+ */
+export const EGG_CRACK_MS = 1700;
+
+/** 대화 한 마디의 글자 수 한도(서버와 같은 값). 입력칸 `maxLength` 도 이걸 쓴다. */
+export const CHAT_MAX = 40;
 
 // ── 본체 ────────────────────────────────────────────────────────────────
 
@@ -640,11 +656,20 @@ export function useYeoul(live?: Live) {
   /**
    * 성격·세계관을 서버에 저장한다. **튜토리얼 4칸을 넘기는 자리**이기도 하다.
    * 성격을 안 고르면 보낼 것이 없다 — 서버가 성격을 필수로 받는다.
+   *
+   * ★ 화면에서는 성격을 여러 개 고를 수 있지만 **서버는 하나만 받는다**
+   *   (`PersonalityChoice.personality` 는 enum 하나 · `@NotNull`). 그래서 **맨 앞(처음 고른 것)**
+   *   만 보내고 나머지는 화면에만 남긴다. 서버가 여러 개를 받게 되면 여기만 고치면 된다.
    */
   const onSavePersona = useCallback(() => {
-    const persona = PERSONALITY_OF[sRef.current.picks.persona ?? ''];
-    if (!persona) { flash('성격을 하나 골라 주세요'); return; }
-    const world = [sRef.current.picks.world, (sRef.current.texts.world ?? '').trim()]
+    // 화면에 켜져 보이는 것과 **같은 기준**이다. 아무것도 안 건드렸으면 서버가 아는 성격을 그대로
+    // 다시 보낸다 — 4칸은 "고쳤는가" 가 아니라 "확인했는가" 를 세는 칸이라 그래야 넘어간다.
+    const svName = PERSONA_LABEL[liveRef.current?.pet?.personality ?? ''] ?? '';
+    const chosen = sRef.current.picks.persona ?? (svName ? [svName] : []);
+    const persona = PERSONALITY_OF[chosen[0] ?? ''];
+    if (!persona) { flash('성격을 하나 이상 골라 주세요'); return; }
+    // 세계관은 칩 여러 개 + 직접 적은 한 줄을 이어 붙인다(서버 100자 제한).
+    const world = [...(sRef.current.picks.world ?? []), (sRef.current.texts.world ?? '').trim()]
       .filter(Boolean).join(' · ').slice(0, 100);
     void (async () => {
       const r = await liveRef.current?.savePersonality(persona, world || undefined);
@@ -759,8 +784,21 @@ export function useYeoul(live?: Live) {
     act('nod');
     tutorDone('chat');
   }, [later, act, tutorDone, patch, flash]);
-  const onSend = useCallback(() => { lastSel.current = Date.now(); pushReply(s.draft.trim()); }, [pushReply, s.draft]);
-  const onDraft = useCallback((t: string) => patch({ draft: t.slice(0, 40) }), [patch]);
+  /**
+   * 보내기.
+   *
+   * ★ **입력칸이 지금 들고 있는 글자**(`text`)를 받아서 보낸다(2026-09-11).
+   *   전에는 리액트 상태(`s.draft`)만 보냈는데, 한글은 **조합이 끝나야** 상태에 닿는다.
+   *   조합 중에 Enter 를 누르면(= 마지막 글자를 확정하려고 누른 그 Enter) 상태는 한 글자
+   *   뒤처져 있고, 그 뒤처진 값이 그대로 나갔다. 화면에 보이는 것과 보내는 것이 갈리면
+   *   **아무 소리도 안 난다** — 사용자만 잘린 말을 본다. 그래서 눈에 보이는 값이 기준이다.
+   *   `text` 를 안 주면 예전처럼 상태를 쓴다(목 화면·빠른 답).
+   */
+  const onSend = useCallback((text?: string) => {
+    lastSel.current = Date.now();
+    pushReply((text ?? sRef.current.draft).trim().slice(0, CHAT_MAX));
+  }, [pushReply]);
+  const onDraft = useCallback((t: string) => patch({ draft: t.slice(0, CHAT_MAX) }), [patch]);
 
   /** 알림에서 대화로. 대화의 입구는 **말풍선 하나**다(판정 14) — 시트로 가지 않는다. */
   const openChatFromNotify = useCallback(() => { patch({ sheet: null }); openChat(); }, [patch, openChat]);
@@ -901,8 +939,10 @@ export function useYeoul(live?: Live) {
     }
     if (s.cracking) return;
     patch({ cracking: true });
-    // 껍질이 깨지는 2.6초 뒤 '태어남' 칸으로. 샘플 전 상태를 스냅샷에서 되돌린다.
-    later('crack', 2600, () => setS((w) => ({
+    // 껍질이 **한 번** 깨지고 나면 '태어남' 칸으로. 샘플 전 상태를 스냅샷에서 되돌린다.
+    // ★ 대기는 깨지는 동작 길이(Egg.tsx 의 `yCrack 1.45s`)에 숨 한 번(0.25초)을 더한 값이다.
+    //   전에는 2.6초를 기다리면서 동작은 0.4초짜리를 무한 반복했다 — 깨지다 마는 알을 여섯 번 봤다.
+    later('crack', EGG_CRACK_MS, () => setS((w) => ({
       ...w, ...(w.snapshot ?? {}),
       cracking: false, sampleMode: false, snapshot: null, eggMsg: '',
       screen: 'onb', step: STEPS.indexOf('born'),
@@ -939,7 +979,18 @@ export function useYeoul(live?: Live) {
   const onUpload = useCallback(() => patch({ uploaded: true }), [patch]);
   const onName = useCallback((t: string) => patch({ petName: t.slice(0, 12), nameErr: false }), [patch]);
   const randomName = useCallback(() => patch({ petName: NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)] }), [patch]);
-  const pickChip = useCallback((k: string, v: string) => () => setS((w) => ({ ...w, picks: { ...w.picks, [k]: w.picks[k] === v ? null : v } })), []);
+  /**
+   * 칩 하나를 켜고 끈다. **여러 개를 켤 수 있다.** 다시 누르면 그것만 빠진다.
+   * 새로 고른 것은 **뒤에 붙는다** — 맨 앞(대표)이 흔들리면 서버에 저장되는 성격이 바뀐다.
+   *
+   * @param shown 지금 **켜져 보이는** 칩들. 아직 이 묶음을 한 번도 안 건드렸으면 여기서 시작한다 —
+   *   서버가 아는 성격은 켜진 채로 뜨는데, 그걸 빈 손에서 토글하면 **켜진 칩을 눌렀는데 또 켜진다.**
+   */
+  const pickChip = useCallback((k: string, v: string, shown: readonly string[] = []) => () => setS((w) => {
+    const cur = w.picks[k] ?? [...shown];
+    const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
+    return { ...w, picks: { ...w.picks, [k]: next } };
+  }), []);
   const onGroupText = useCallback((k: string) => (t: string) => setS((w) => ({ ...w, texts: { ...w.texts, [k]: t.slice(0, 60) } })), []);
   const pickUser = useCallback((k: string, v: string) => () => setS((w) => ({ ...w, user: { ...w.user, [k]: w.user[k] === v ? null : v } })), []);
   /**
@@ -1358,16 +1409,28 @@ export function useYeoul(live?: Live) {
     // 서버가 아는 성격을 칩 이름으로. 아직 아무것도 안 고른 사람에게 **지금 값**을 보여 준다
     // (전에는 저장돼 있어도 아무것도 안 골라진 채로 떴다).
     const svPersona = onServer ? (PERSONA_LABEL[sv.personality ?? ''] ?? '') : '';
+    // 지금 **켜져 보이는** 성격들. 저장 버튼의 잠금도 이것으로 판단해야 화면과 어긋나지 않는다
+    //   (전에는 칩을 다 꺼도 서버 값 때문에 버튼이 열려 있었고, 누르면 아무 일 없이 잔소리만 떴다).
+    const personaShown = s.picks.persona ?? (svPersona ? [svPersona] : []);
     const charGroups: CharGroup[] = CHAR_GROUPS.map((g) => {
-      const picked = (s.picks[g.key] ?? '') || (g.key === 'persona' ? svPersona : '');
+      // ★ **안 건드린 것**(undefined)과 **전부 끈 것**([])은 다르다. 안 건드렸을 때만 서버가 아는
+      //   성격을 켜 보인다. `?? []` 로 뭉뚱그리면 마지막 칩을 꺼도 도로 켜져서 **끌 수가 없다**.
+      const picked = s.picks[g.key] ?? (g.key === 'persona' && svPersona ? [svPersona] : []);
       const noteVal = s.texts[g.key] ?? '';
-      const done = !!picked || !!noteVal;
+      const done = picked.length > 0 || !!noteVal;
       return {
         key: g.key, title: g.label.split(' · ')[0], ph: g.ph, value: noteVal,
+        // 여러 개 고를 수 있다는 것은 **글로 말해 준다** — 칩만 보면 하나만 되는 줄 안다.
+        //   성격은 서버가 하나만 받으므로 어느 것이 저장되는지까지 적는다.
+        note: g.key === 'persona'
+          ? (picked.length > 1
+            ? `여러 개 고를 수 있어요 · 대표는 '${picked[0]}'`
+            : '여러 개 고를 수 있어요 · 처음 고른 것이 대표예요')
+          : '여러 개 고를 수 있어요',
         onInput: onGroupText(g.key),
         cardBd: done ? C.accentDim : C.lineSoft,
         cardBg: done ? '#FFFBF4' : C.paper,
-        opts: g.opts.map((o) => ({ text: o, pick: pickChip(g.key, o), ...sel(picked === o) })),
+        opts: g.opts.map((o) => ({ text: o, pick: pickChip(g.key, o, picked), ...sel(picked.includes(o)) })),
       };
     });
 
@@ -1662,8 +1725,8 @@ export function useYeoul(live?: Live) {
           label: '성격 저장하기',
           tap: onSavePersona,
           // 고르지 않았으면 보낼 것이 없다. 서버가 성격을 필수로 받는다.
-          off: !((s.picks.persona ?? '') || svPersona),
-          why: '성격을 하나 골라 주세요',
+          off: !personaShown[0],
+          why: '성격을 하나 이상 골라 주세요',
         },
         toggleLeave,
         leaveLabel: s.leaveOff ? '떠나지 않아요' : '오래 비우면 여행을 가요',
@@ -1711,7 +1774,7 @@ export function useYeoul(live?: Live) {
         extraVal: s.texts.extra ?? '',
         onExtra: onGroupText('extra'),
         bornName: `${s.petName} · 1일째`,
-        bornTraits: [s.picks.persona, s.picks.tone].filter(Boolean).join(' · ') || '성격은 지내면서 알게 돼요',
+        bornTraits: [...(s.picks.persona ?? []), ...(s.picks.tone ?? [])].join(' · ') || '성격은 지내면서 알게 돼요',
       },
       statusText,
     };

@@ -8,8 +8,9 @@
 //   내용(제목·본문·버튼)은 부르는 쪽이 넘긴다.
 'use client';
 
+import { useRef } from 'react';
 import { C, GAEGU, MONO, radius } from './ui';
-import type { Yeoul } from './useYeoul';
+import { CHAT_MAX, type Yeoul } from './useYeoul';
 
 export default function Panels({ y }: { y: Yeoul }) {
   const { v } = y;
@@ -65,6 +66,15 @@ function Sheet({ y }: { y: Yeoul }) {
 function PlaySheet({ y }: { y: Yeoul }) {
   const { v, actions } = y;
   const p = v.play;
+  // ★ 방의 대화 한 줄(`Room.tsx` ChatBar)과 **같은 이유로** 리액트가 입력칸을 붙들지 않는다 —
+  //   한글 조합 중에 값을 되돌려쓰면 마지막 한 글자만 남는다. 자세한 사연은 그쪽 주석에.
+  const box = useRef<HTMLInputElement>(null);
+  const composing = useRef(false);
+  const send = () => {
+    const el = box.current;
+    actions.onSend(el?.value ?? '');
+    if (el) el.value = '';
+  };
   return (
     <>
       <div style={{ display: 'flex', gap: 6 }}>
@@ -86,11 +96,18 @@ function PlaySheet({ y }: { y: Yeoul }) {
           </div>
           <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
             <input
-              value={p.draft} onChange={(e) => actions.onDraft(e.target.value)} maxLength={40} placeholder="40자까지"
-              onKeyDown={(e) => { if (e.key === 'Enter') actions.onSend(); }}
+              ref={box} defaultValue="" onChange={(e) => actions.onDraft(e.target.value)} maxLength={CHAT_MAX}
+              placeholder={`${CHAT_MAX}자까지`} data-part="play-chat-input"
+              onCompositionStart={() => { composing.current = true; }}
+              onCompositionEnd={(e) => { composing.current = false; actions.onDraft(e.currentTarget.value); }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                if (composing.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
+                send();
+              }}
               style={{ flex: 1, padding: '11px 14px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 13.5, color: C.ink, outline: 'none' }}
             />
-            <button onClick={actions.onSend} style={{ padding: '11px 16px', borderRadius: radius.pill, border: 'none', background: C.ink, color: '#FBF6EC', fontSize: 12.5 }}>보내기</button>
+            <button onClick={send} data-action="play-chat-send" style={{ padding: '11px 16px', borderRadius: radius.pill, border: 'none', background: C.ink, color: '#FBF6EC', fontSize: 12.5 }}>보내기</button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
             {p.memories.map((m, i) => (
@@ -201,7 +218,11 @@ function SettingsSheet({ y }: { y: Yeoul }) {
 
       {v.charGroups.map((g) => (
         <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
-          <span style={{ fontSize: 13.5, color: C.ink }}>{g.title}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13.5, color: C.ink }}>{g.title}</span>
+            {/* 칩만 보면 하나만 고르는 줄 안다 — 여러 개가 된다는 것은 글로 말해 준다. */}
+            <span data-part="chip-note" style={{ fontSize: 10.5, color: C.faint }}>{g.note}</span>
+          </span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {g.opts.map((o) => (
               <button key={o.text} onClick={o.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: 12.5, color: o.fg }}>{o.text}</button>

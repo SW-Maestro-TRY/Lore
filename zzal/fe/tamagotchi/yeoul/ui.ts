@@ -113,6 +113,20 @@ export const KEYFRAMES = `
 @keyframes yHop{0%,62%{transform:translateY(0)}67%{transform:translateY(-30px)}72%{transform:translateY(0)}75%{transform:translateY(-13px)}79%,100%{transform:translateY(0)}}
 @keyframes yWiggle{0%,72%,100%{transform:rotate(0)}78%{transform:rotate(-9deg)}84%{transform:rotate(8deg)}90%{transform:rotate(-4deg)}}
 @keyframes yCrack{0%,100%{transform:rotate(0) translateY(0) scale(1)}20%{transform:rotate(-11deg) translateY(-2px) scale(1.04)}40%{transform:rotate(10deg) translateY(-5px) scale(1.06)}60%{transform:rotate(-7deg) translateY(-1px) scale(1.03)}80%{transform:rotate(5deg) translateY(-3px) scale(1.05)}}
+/* 다 됐어요 상태에서 계속 도는 **큰** 흔들림(상훈님 2026-09-11). 기다리는 동안 알이 부른다.
+   ★ 각도·이동을 더 키우지 말 것 — 390px 화면에서 알 상자가 무대 밖으로 나간다(측정해서 잡은 값).
+   뒤쪽 30% 는 쉼이다. 쉬지 않고 계속 떨면 진동이 되고, 한 번씩 크게 몸부림쳐야 '나오려 한다' 로 읽힌다. */
+@keyframes yShakeBig{
+  0%{transform:rotate(0) translate(0,0) scale(1)}
+  6%{transform:rotate(-13deg) translate(-9px,-3px) scale(1.05)}
+  16%{transform:rotate(13deg) translate(9px,-7px) scale(1.06)}
+  26%{transform:rotate(-12deg) translate(-8px,-2px) scale(1.05)}
+  36%{transform:rotate(11deg) translate(7px,-6px) scale(1.05)}
+  46%{transform:rotate(-8deg) translate(-5px,-1px) scale(1.03)}
+  54%{transform:rotate(5deg) translate(3px,-3px) scale(1.02)}
+  62%{transform:rotate(-2deg) translate(-1px,0) scale(1.01)}
+  70%,100%{transform:rotate(0) translate(0,0) scale(1)}
+}
 @keyframes yMineIn{0%{opacity:0;transform:translateY(6px)}10%{opacity:1;transform:translateY(0)}72%{opacity:1}100%{opacity:0;transform:translateY(-4px)}}
 @keyframes yHalo{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.18);opacity:.12}}
 @keyframes yPop{0%{transform:scale(.92);opacity:0}62%{transform:scale(1.04);opacity:1}100%{transform:scale(1);opacity:1}}

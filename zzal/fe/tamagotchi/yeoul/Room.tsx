@@ -23,7 +23,7 @@ import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
 import Panels from './Panels';
 import { spriteUrl, useFootPad, useLive } from './useHatch';
-import type { Yeoul } from './useYeoul';
+import { CHAT_MAX, type Yeoul } from './useYeoul';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { v, actions } = y;
@@ -584,7 +584,14 @@ function AskCard({ y }: { y: Yeoul }) {
           <input
             value={a.draft} onChange={(e) => a.onDraft(e.target.value)} maxLength={a.inputMax}
             placeholder={a.inputPh} data-ask-input
-            onKeyDown={(e) => { if (e.key === 'Enter' && a.hasConfirm) a.confirm(); }}
+            // 조합이 끝나는 순간 한 번 더 적어 둔다 — 조합 중에 상태가 한 글자 뒤처져도 여기서 맞춰진다.
+            onCompositionEnd={(e) => a.onDraft(e.currentTarget.value)}
+            // 마지막 한글을 확정하려고 누른 Enter 는 '넘기기' 가 아니다(대화 입력칸과 같은 규칙).
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+              if (a.hasConfirm) a.confirm();
+            }}
             style={{
               flex: 1, minWidth: 0, padding: '9px 13px', borderRadius: radius.pill,
               border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: 12.5, color: C.ink, outline: 'none',
@@ -608,9 +615,31 @@ function AskCard({ y }: { y: Yeoul }) {
   );
 }
 
-/** 대화 — 시트가 아니라 타일 위에 뜨는 한 줄(9/6 상훈님 결정: 대화는 놀이 밖 독립). */
+/**
+ * 대화 — 시트가 아니라 타일 위에 뜨는 한 줄(9/6 상훈님 결정: 대화는 놀이 밖 독립).
+ *
+ * ★★ 입력칸을 **리액트가 붙들지 않는다**(2026-09-11, 상훈님 "'그냥하고 있어' 를 쳤는데 '어' 만 갔다").
+ *   한글은 자판을 누를 때마다 글자가 확정되는 게 아니라 **조합(IME)** 을 거친다. 조합 중에는
+ *   브라우저가 입력칸 안에 아직 확정되지 않은 글자를 들고 있는데, 리액트가 `value` 로 그 칸을
+ *   붙들고 있으면 조합 도중의 **되돌려쓰기 한 번**에 조합 버퍼가 끊긴다. 그러면 앞 글자가 날아가고
+ *   마지막으로 조합하던 한 글자만 남는다 — 정확히 상훈님이 보신 모습이다.
+ *   그래서 값은 브라우저에 맡기고(`defaultValue`), 리액트는 **읽기만** 한다.
+ *   상태(`draft`)는 그대로 따라 적어 둔다 — 다른 곳에서 쓰던 값이라 끊지 않는다.
+ *
+ * ★ 보낼 때도 **칸이 지금 들고 있는 글자**를 그대로 집어 보낸다. 화면에 보이는 것과 보내는 것이
+ *   다르면 아무 소리도 안 나고 사용자만 잘린 말을 본다.
+ * ★ Enter 는 **조합 중이면 무시**한다. 한글에서 마지막 글자를 확정하려고 누른 Enter 까지
+ *   보내기로 받으면, 확정 전의 글자로 보내 버린다.
+ */
 function ChatBar({ y }: { y: Yeoul }) {
   const { v, actions } = y;
+  const box = useRef<HTMLInputElement>(null);
+  const composing = useRef(false);
+  const send = () => {
+    const el = box.current;
+    actions.onSend(el?.value ?? '');
+    if (el) el.value = '';
+  };
   return (
     <div
       data-part="chat-bar"
@@ -626,14 +655,21 @@ function ChatBar({ y }: { y: Yeoul }) {
       <div style={{ width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 7px 7px 15px', borderRadius: radius.pill, background: C.paper, border: `1.5px solid ${C.ink}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)' }}>
         {/* 열린 부름이 없거나 보내는 중이면 적을 수 없다 — 자리표시글이 이유를 말한다. */}
         <input
-          value={v.chat.draft} onChange={(e) => actions.onDraft(e.target.value)} maxLength={40}
+          ref={box} defaultValue="" onChange={(e) => actions.onDraft(e.target.value)} maxLength={CHAT_MAX}
           placeholder={v.chat.hint} disabled={!v.chat.can} data-part="chat-input"
-          onKeyDown={(e) => { if (e.key === 'Enter') actions.onSend(); }}
+          onCompositionStart={() => { composing.current = true; }}
+          onCompositionEnd={(e) => { composing.current = false; actions.onDraft(e.currentTarget.value); }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            // 조합을 확정하려고 누른 Enter 다 — 보내기가 아니다(브라우저마다 신호가 달라 셋 다 본다).
+            if (composing.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
+            send();
+          }}
           style={{ flex: 1, minWidth: 0, border: 'none', background: 'none', fontSize: 13.5, color: C.ink, outline: 'none' }}
         />
         <button onClick={actions.closeChat} style={{ width: 28, height: 28, flex: 'none', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11.5, color: C.sub2, lineHeight: 1 }} aria-label="대화 닫기">✕</button>
         <button
-          onClick={actions.onSend} disabled={!v.chat.can} data-action="chat-send"
+          onClick={send} disabled={!v.chat.can} data-action="chat-send"
           style={{
             flex: 'none', padding: '9px 15px', borderRadius: radius.pill, border: 'none',
             background: v.chat.can ? C.accent : C.off, color: v.chat.can ? C.accentInk : '#8B8175', fontSize: 12.5,
