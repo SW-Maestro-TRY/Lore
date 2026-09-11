@@ -3,6 +3,7 @@ package com.lore.zzal.piece;
 import com.lore.zzal.pet.ZzalPet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 /**
@@ -24,9 +25,11 @@ public class PieceService {
     private static final Logger log = LoggerFactory.getLogger(PieceService.class);
 
     private final ZzalPieceRepository repository;
+    private final ApplicationEventPublisher events;
 
-    public PieceService(ZzalPieceRepository repository) {
+    public PieceService(ZzalPieceRepository repository, ApplicationEventPublisher events) {
         this.repository = repository;
+        this.events = events;
     }
 
     /**
@@ -44,7 +47,13 @@ public class PieceService {
             return false;
         }
         log.debug("조각 도장 — petId={} kind={} ({}개째)", pet.getId(), stamped, row.doneCount());
-        return row.isComplete();
+        if (!row.isComplete()) {
+            return false;
+        }
+        // ★ 네 칸이 방금 찼다 = 굽기를 시작할 순간(정본 1.8). 커밋 뒤에 시작한다 —
+        //   돌보기가 롤백되면 굽지 않아야 하고, 굽는 스레드가 아직 없는 줄을 읽으면 안 된다.
+        events.publishEvent(new PieceCompleted(pet.getId()));
+        return true;
     }
 
     /**

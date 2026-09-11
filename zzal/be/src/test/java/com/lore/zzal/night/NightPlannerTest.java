@@ -49,7 +49,8 @@ class NightPlannerTest {
         when(repo.findByPetIdOrderBySeqAsc(anyLong())).thenReturn(rows);
         catalog = mock(MotionCatalog.class);
         when(catalog.gifts()).thenReturn(realCatalog.gifts());
-        when(catalog.isBakeable("roll")).thenReturn(true);
+        // ★ 이 계획이 맡는 선물은 뒤로 넘어짐(102)이다. 구르기(101)는 튜토리얼 완주 쪽으로 갔다(1.7).
+        when(catalog.isBakeable("fall_back")).thenReturn(true);
         pieceRepo = new java.util.HashMap<>();
         pieceService = mock(com.lore.zzal.piece.PieceService.class);
         when(pieceService.find(anyLong())).thenAnswer(i -> pieceRepo.get(i.getArgument(0, Long.class)));
@@ -159,18 +160,19 @@ class NightPlannerTest {
     }
 
     @Test
-    @DisplayName("★ 두 번째 선물은 3층 8종이 열린 뒤에 오른다")
-    void secondGiftAfterEightAdvanced() {
+    @DisplayName("★★ 구르기(101)는 여기서 안 오른다 — 튜토리얼 완주 보상이라 잠과 무관하다")
+    void rollNeverQueuedHere() {
+        // 3층까지 다 열어 두고 잠들어도 구르기는 안 오른다. 그 자리는 BakeTrigger.onTutorialDone 이다(1.7).
         tierThreeReady(false);
         when(catalog.isBakeable(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
-        for (int seq = 1; seq <= 7; seq++) {
+        for (int seq = 1; seq <= 8; seq++) {
             ReflectionTestUtils.setField(row(seq), "status", MotionStatus.OPEN);
         }
-        assertThat(planner.plan(pet, NIGHT)).as("7종으로는 아직").isZero();
-
-        ReflectionTestUtils.setField(row(8), "status", MotionStatus.OPEN);
         planner.plan(pet, NIGHT);
-        assertThat(row(102).getStatus()).isEqualTo(MotionStatus.QUEUED);
+
+        assertThat(row(101).getStatus())
+                .as("구르기는 튜토리얼을 끝낸 순간에만 오른다")
+                .isEqualTo(MotionStatus.NONE);
     }
 
     private ZzalMotion row(int seq) {
@@ -186,13 +188,15 @@ class NightPlannerTest {
     }
 
     @Test
-    @DisplayName("★ 함께한 날 3 + 그날 케어 미스 0 → 구르기(101) QUEUED. 조건 미달이면 NONE 그대로")
+    @DisplayName("★ 함께한 날 3 + 그날 케어 미스 0 → 뒤로 넘어짐(102) QUEUED. 조건 미달이면 NONE 그대로")
     void firstGiftWhenThreeDaysAndZeroMiss() {
         thirdDayNightSleep(0);
         assertThat(planner.plan(pet, NIGHT)).isEqualTo(1);
-        assertThat(row(101).getStatus()).isEqualTo(MotionStatus.QUEUED);
-        assertThat(row(101).getNightOf()).isEqualTo(NIGHT);
-        assertThat(row(1).getStatus()).isEqualTo(MotionStatus.NONE);      // 3층은 PR-10
+        // ★ 1.7 정정 — 이 조건은 <b>뒤로 넘어짐</b>의 것이다. 구르기는 튜토리얼 완주 보상이라
+        //   여기가 아니라 BakeTrigger.onTutorialDone 이 맡는다.
+        assertThat(row(102).getStatus()).isEqualTo(MotionStatus.QUEUED);
+        assertThat(row(102).getNightOf()).isEqualTo(NIGHT);
+        assertThat(row(101).getStatus()).as("구르기는 여기서 안 오른다").isEqualTo(MotionStatus.NONE);
     }
 
     @Test
@@ -201,7 +205,7 @@ class NightPlannerTest {
         thirdDayNightSleep(1);
         assertThat(pet.getLastNightCareMiss()).isEqualTo(1);
         assertThat(planner.plan(pet, NIGHT)).isZero();
-        assertThat(row(101).getStatus()).isEqualTo(MotionStatus.NONE);
+        assertThat(row(102).getStatus()).isEqualTo(MotionStatus.NONE);
     }
 
     @Test
@@ -216,10 +220,10 @@ class NightPlannerTest {
     @Test
     @DisplayName("★ 지시문이 없으면(gift-motions 미등록) 조건이 차도 안 오른다 — 로그만")
     void notWhenNoPrompt() {
-        when(catalog.isBakeable("roll")).thenReturn(false);
+        when(catalog.isBakeable("fall_back")).thenReturn(false);
         thirdDayNightSleep(0);
         assertThat(planner.plan(pet, NIGHT)).isZero();
-        assertThat(row(101).getStatus()).isEqualTo(MotionStatus.NONE);
+        assertThat(row(102).getStatus()).isEqualTo(MotionStatus.NONE);
     }
 
     @Test
@@ -228,7 +232,7 @@ class NightPlannerTest {
         thirdDayNightSleep(0);
         assertThat(planner.plan(pet, NIGHT)).isEqualTo(1);
         assertThat(planner.plan(pet, NIGHT)).isZero();
-        assertThat(row(101).getStatus()).isEqualTo(MotionStatus.QUEUED);
+        assertThat(row(102).getStatus()).isEqualTo(MotionStatus.QUEUED);
     }
 
     @Test

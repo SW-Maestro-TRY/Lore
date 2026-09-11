@@ -132,7 +132,8 @@ class PieceServiceTest {
     /** 3층 전에는 줄을 만들지도 않는지 보려고 — 저장소가 비어 있는 진짜 서비스. */
     private static class PieceServiceProbe extends PieceService {
         PieceServiceProbe() {
-            super(org.mockito.Mockito.mock(ZzalPieceRepository.class));
+            super(org.mockito.Mockito.mock(ZzalPieceRepository.class),
+                    org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
         }
     }
 }

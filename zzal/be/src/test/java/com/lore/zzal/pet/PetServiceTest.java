@@ -113,7 +113,7 @@ class PetServiceTest {
                 new MotionCatalog("", "", "v1"),
                 motionRepository,
                 seeder,
-                mock(com.lore.zzal.night.NightPlanner.class),
+                mock(com.lore.zzal.night.BakeTrigger.class),
                 new com.lore.zzal.scene.SceneService(sceneRepository, new MotionCatalog("", "", "v1")),
                 new com.lore.zzal.leave.LeaveService(postcardRepository),
                 com.lore.zzal.PieceFixture.inMemory());

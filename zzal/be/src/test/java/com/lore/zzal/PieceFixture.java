@@ -37,6 +37,6 @@ public final class PieceFixture {
             store.put(row.getPetId(), row);
             return row;
         });
-        return new PieceService(repository);
+        return new PieceService(repository, mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 }

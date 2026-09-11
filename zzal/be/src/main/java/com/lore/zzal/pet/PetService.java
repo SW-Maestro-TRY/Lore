@@ -22,7 +22,7 @@ import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.motion.ZzalMotionRepository;
-import com.lore.zzal.night.NightPlanner;
+import com.lore.zzal.night.BakeTrigger;
 import com.lore.zzal.text.Josa;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -61,7 +61,7 @@ public class PetService {
     private final MotionCatalog catalog;
     private final ZzalMotionRepository motionRepository;
     private final MotionSeeder motionSeeder;
-    private final NightPlanner nightPlanner;
+    private final BakeTrigger bakeTrigger;
     private final com.lore.zzal.scene.SceneService sceneService;
     private final com.lore.zzal.leave.LeaveService leaveService;
     private final com.lore.zzal.piece.PieceService pieceService;
@@ -77,14 +77,14 @@ public class PetService {
                       MotionCatalog catalog,
                       ZzalMotionRepository motionRepository,
                       MotionSeeder motionSeeder,
-                      NightPlanner nightPlanner,
+                      BakeTrigger bakeTrigger,
                       com.lore.zzal.scene.SceneService sceneService,
                       com.lore.zzal.leave.LeaveService leaveService,
                       com.lore.zzal.piece.PieceService pieceService) {
         this.catalog = catalog;
         this.motionRepository = motionRepository;
         this.motionSeeder = motionSeeder;
-        this.nightPlanner = nightPlanner;
+        this.bakeTrigger = bakeTrigger;
         this.sceneService = sceneService;
         this.leaveService = leaveService;
         this.pieceService = pieceService;
@@ -522,9 +522,10 @@ public class PetService {
         if (sceneService.recordNight(pet) > 0) {
             pet.markSceneMade();
         }
-        // ★ 밤잠에 든 순간 = 굽기 큐 등록(정본 2장 "잠드는 순간 하는 일"). 23:00 자동 취침은 스위프가 같은 일을 한다.
+        // ★ 밤잠에 든 순간 = 첫 심화 행동 판정(그날 케어 미스 0 이 여기서 확정된다)과 3층 차례.
+        //   1.8 부터는 예약만 하지 않고 <b>그 자리에서 굽기 시작</b>한다.
         if (pet.getSleepKind() == SleepKind.NIGHT) {
-            nightPlanner.plan(pet, AwakeClock.dateOf(now));
+            bakeTrigger.onSleep(pet, now);
         }
         return a;
     }
@@ -578,7 +579,11 @@ public class PetService {
         if (pet.getTutorialStep() < TutorialSchedule.TOTAL - 1) {
             throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_NOT_FINISHED);
         }
-        return withUnlockDiff(pet, () -> pet.startClock(pet.now(realNow)));
+        Action a = withUnlockDiff(pet, () -> pet.startClock(pet.now(realNow)));
+        // ★ 튜토리얼 완주 보상(구르기)을 <b>그 순간</b> 굽는다(정본 1.7·1.8).
+        //   첫날에 손에 쥐는 결과물이 있어야 다음 날 다시 온다.
+        bakeTrigger.onTutorialDone(pet, pet.now(realNow));
+        return a;
     }
 
     // ── 성격·배경·공유 (정본 6·10·15장) ───────────────────────────────────

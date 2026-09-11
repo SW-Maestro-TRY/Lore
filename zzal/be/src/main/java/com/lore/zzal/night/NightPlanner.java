@@ -24,12 +24,19 @@ import java.util.stream.Collectors;
 /**
  * 잠드는 순간 "이 밤에 무엇을 굽나" 를 정해 큐(QUEUED)에 올린다(정본 2·6·16장).
  *
- * <h3>지금 오르는 것(PR-6)</h3>
+ * <h3>여기서 오르는 것</h3>
  * <ul>
- *   <li><b>첫 심화 행동(seq 101 구르기)</b> — 함께한 날 3 이상 + 그날 케어 미스 0. 놓치면 다음 밤에 같은 판정(16장)</li>
- *   <li><b>지난 밤 실패(FAILED)</b> — 조각을 소모하지 않고 다음 밤에 다시(16장 "굽기 실패는 조각을 소모하지 않는다")</li>
+ *   <li><b>지난 밤 실패(FAILED)</b> — 조각을 소모하지 않고 다시(16장)</li>
+ *   <li><b>첫 심화 행동(뒤로 넘어짐)</b> — 함께한 날 3 이상 + 그날 케어 미스 0. 놓치면 다음에 같은 판정(16장)</li>
+ *   <li><b>3층 차례</b> — 조각 네 칸이 다 찼을 때(정본 6장 · 1.9)</li>
  * </ul>
- * 3층 조각(4개 이틀 연속 → 13장 순서)은 PR-10, 두 번째 선물은 3층 8번째 뒤.
+ *
+ * <h3>★ 구르기는 여기 없다</h3>
+ * 튜토리얼 9칸 완주 보상이라 잠과 무관하다 — {@code BakeTrigger.onTutorialDone} 이 맡는다(1.7).
+ *
+ * <h3>★ 부르는 자리가 바뀌었다</h3>
+ * 판정은 그대로지만, 이제 <b>조건을 채운 그 순간</b> {@code BakeTrigger} 가 부른다(1.8).
+ * 23:00 스위프도 여전히 부르지만 그건 놓친 것을 줍는 그물이다.
  *
  * <h3>★ 지시문이 있는 것만 오른다</h3>
  * {@code app.zzal.advanced-motions}·{@code gift-motions} 에 없는 key 는 굽지 않는다(카탈로그 B12). 조건이 찼는데
@@ -85,19 +92,26 @@ public class NightPlanner {
             }
         }
 
-        // 2) 첫 심화 행동 — 함께한 날 3 + 그날 케어 미스 0 (16장). 이미 오른/구운 것이면 건너뛴다.
-        ZzalMotion gift = rows.get(catalog.gifts().get(0).seq());
-        if (gift != null && gift.getStatus() == MotionStatus.NONE
+        // 2) 첫 심화 행동(뒤로 넘어짐) — 함께한 날 3 + 그날 케어 미스 0 (정본 6·16장).
+        //
+        // ★★ 1.7 정정 — 여기가 오래 <b>구르기</b>(선물 0번)를 주고 있었다. 정본은 구르기를
+        //    <b>튜토리얼 9칸 완주</b> 보상으로 정했고(1.2 결정 · 1.7 표 반영), 함께한 날 3일 조건은
+        //    <b>뒤로 넘어짐</b>(선물 1번) 것이다. 옛 코드대로면 튜토리얼 완주 보상이 첫날이 아니라
+        //    사흘 뒤에 오고, 그 사람은 그런 것이 있는 줄도 모른 채 이틀을 보낸다.
+        //    구르기는 이제 {@code BakeTrigger.onTutorialDone} 이 맡는다.
+        ZzalMotion gift2 = catalog.gifts().size() > 1 ? rows.get(catalog.gifts().get(1).seq()) : null;
+        if (gift2 != null && gift2.getStatus() == MotionStatus.NONE
                 && pet.getDaysTogether() >= ZzalRules.FIRST_GIFT_DAYS
                 && pet.getLastNightCareMiss() == 0
                 && nightOf.equals(pet.getLastNightOf())) {
-            if (catalog.isBakeable(gift.getName())) {
-                gift.queue(nightOf);
+            if (catalog.isBakeable(gift2.getName())) {
+                gift2.queue(nightOf);
                 queued++;
-                log.info("첫 심화 행동 큐 등록 — petId={} nightOf={} ({}일째)", pet.getId(), nightOf, pet.getDaysTogether());
+                log.info("첫 심화 행동 큐 등록 — petId={} nightOf={} key={} ({}일째)",
+                        pet.getId(), nightOf, gift2.getName(), pet.getDaysTogether());
             } else {
                 log.info("첫 심화 조건은 찼지만 지시문이 없어 안 굽는다 — petId={} key={} (app.zzal.gift-motions)",
-                        pet.getId(), gift.getName());
+                        pet.getId(), gift2.getName());
             }
         }
         // 3) 3층 — 조각 네 칸이 다 찼으면 다음 심화 하나(정본 6장 · 1.9)
@@ -123,18 +137,9 @@ public class NightPlanner {
             }
         }
 
-        // 4) 두 번째 선물(뒤로 넘어짐) — 3층 심화가 8종 열린 뒤(정본 6·16장)
-        // ★ 3층 블록과 같은 가드 안에 둔다 — 3층이 열리지 않았거나 이 밤에 잠들지 않은 펫에게는
-        //   어떤 심화도 오르면 안 된다(#234 리뷰 하).
-        if (pet.isPiecesEnabled() && nightOf.equals(pet.getLastNightOf())
-                && openedAdvanced(rows) >= ZzalRules.SECOND_GIFT_AFTER_ADVANCED && catalog.gifts().size() > 1) {
-            ZzalMotion gift2 = rows.get(catalog.gifts().get(1).seq());
-            if (gift2 != null && gift2.getStatus() == MotionStatus.NONE && catalog.isBakeable(gift2.getName())) {
-                gift2.queue(nightOf);
-                queued++;
-                log.info("두 번째 선물 큐 등록 — petId={} nightOf={} key={}", pet.getId(), nightOf, gift2.getName());
-            }
-        }
+        // ★ 옛 4)번 "두 번째 선물 — 3층 심화 8종 뒤" 블록은 없앴다(1.7).
+        //   선물은 둘뿐이고 각자 제 조건이 있다 — 구르기는 튜토리얼 완주, 뒤로 넘어짐은 위 2)번이다.
+        //   8종 뒤에 또 주면 한 사람이 뒤로 넘어짐을 두 번 받는다.
         return queued;
     }
 
@@ -152,14 +157,6 @@ public class NightPlanner {
                 .filter(m -> catalog.isBakeable(m.getName()))
                 .min(java.util.Comparator.comparingInt(ZzalMotion::getSeq))
                 .orElse(null);
-    }
-
-    /** 3층 심화가 몇 종 열렸나(선물 제외). 두 번째 선물의 조건. */
-    private static long openedAdvanced(Map<Integer, ZzalMotion> rows) {
-        return rows.values().stream()
-                .filter(m -> m.getLayer() != MotionLayer.GIFT)
-                .filter(m -> m.getStatus() == MotionStatus.OPEN)
-                .count();
     }
 
     /** 첫 선물 spec(구르기). 순서는 16장 기본값 "구르기 먼저". */
