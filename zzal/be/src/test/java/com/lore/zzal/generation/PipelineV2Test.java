@@ -31,9 +31,9 @@ import static org.mockito.Mockito.verify;
 class PipelineV2Test {
 
     private PipelineRegistry registry(String hatchVersion, boolean v2PromptsExist) {
-        GridStep grid = mock(GridStep.class);
-        GridStep grid2 = mock(GridStep.class);
-        return new PipelineRegistry(mock(SheetStep.class), mock(IdentityStep.class), grid, grid2, mock(PostProcessStep.class),
+        GridStep grid = StepMocks.grid();
+        GridStep grid2 = StepMocks.grid2();
+        return new PipelineRegistry(mock(SheetStep.class), StepMocks.identity(), grid, grid2, mock(PostProcessStep.class),
                 mock(MotionGridStep.class), mock(MotionPostStep.class), hatchVersion, "v1", path -> v2PromptsExist);
     }
 

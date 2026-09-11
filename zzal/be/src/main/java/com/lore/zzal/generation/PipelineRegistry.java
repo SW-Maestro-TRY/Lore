@@ -85,6 +85,7 @@ public class PipelineRegistry {
         this.currentVersions = Map.of(
                 GenKind.HATCH, resolveHatchVersion(hatchVersion, resourceExists),
                 GenKind.MOTION, motionVersion);
+        verifyIdentityDependents();
     }
 
     /**
@@ -143,11 +144,26 @@ public class PipelineRegistry {
      *    애초에 도달하지 못해 성공 기록이 남지 않는다.
      */
     public List<String> identityDependents(GenKind kind, String version) {
-        List<String> declared = IDENTITY_DEPENDENTS.getOrDefault(kind, Map.of())
-                .getOrDefault(version, List.of());
-        // 그 버전에 실제로 있는 단계만 남긴다 — 없는 이름을 지우라고 하면 조용히 아무 일도 안 한다.
-        List<String> present = steps(kind, version).stream().map(GenerationStep::name).toList();
-        return declared.stream().filter(present::contains).toList();
+        return IDENTITY_DEPENDENTS.getOrDefault(kind, Map.of()).getOrDefault(version, List.of());
+    }
+
+    /**
+     * 선언한 이름이 그 버전에 <b>실제로 있는지</b> 기동할 때 확인한다.
+     *
+     * ★★ 거르지 않고 <b>터뜨리는</b> 이유 — 이름이 어긋난 것을 조용히 걸러 내면, 거부 재시도가
+     *   아무것도 폐기하지 않은 채 "폐기했다" 고 로그를 남기고 <b>어긋난 격자가 그대로 사용자에게 간다.</b>
+     *   그림을 열어 봐야만 드러나는 종류라, 배포 전에 기동이 막히는 편이 낫다.
+     */
+    private void verifyIdentityDependents() {
+        IDENTITY_DEPENDENTS.forEach((kind, byVersion) -> byVersion.forEach((version, declared) -> {
+            List<String> present = steps(kind, version).stream().map(GenerationStep::name).toList();
+            List<String> missing = declared.stream().filter(name -> !present.contains(name)).toList();
+            if (!missing.isEmpty()) {
+                throw new IllegalStateException(
+                        "문단에 기대는 단계로 적힌 이름이 %s %s 에 없습니다: %s (IDENTITY_DEPENDENTS 를 고치세요)"
+                                .formatted(kind, version, missing));
+            }
+        }));
     }
 
     /** 지금 새로 구울 것에 쓸 버전. */

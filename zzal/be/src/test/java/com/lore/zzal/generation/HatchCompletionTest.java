@@ -59,8 +59,8 @@ class HatchCompletionTest {
         when(recorder.loadSucceeded(anyLong(), any(), anyString())).thenReturn(succeeded);
 
         PipelineRegistry registry = new PipelineRegistry(
-                mock(SheetStep.class), mock(IdentityStep.class),
-                mock(GridStep.class), mock(GridStep.class), mock(PostProcessStep.class),
+                mock(SheetStep.class), StepMocks.identity(),
+                StepMocks.grid(), StepMocks.grid2(), mock(PostProcessStep.class),
                 mock(MotionGridStep.class), mock(MotionPostStep.class), "v2", "v1", path -> true);
 
         service = new HatchService(mock(GenerationRunner.class), recorder, mock(GenJobRepository.class),
