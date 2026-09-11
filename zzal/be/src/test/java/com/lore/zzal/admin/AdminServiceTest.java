@@ -217,6 +217,29 @@ class AdminServiceTest {
     }
 
     @Test
+    @DisplayName("★★ 한 라운드에 세 판까지 — 문서가 말하는 상한을 코드가 지킨다")
+    void perRoundCapIsEnforced() {
+        reviewing(72L, 101);
+        service.review(ADMIN, 72L, HumanVerdict.REGENERATE, "다시", null);
+
+        // 러너가 우리 것이라 지금은 안 터지지만, 막지 않으면 "API 1 + 7 + 7 = 15판" 이 들어간다.
+        assertThatThrownBy(() -> service.upload(ADMIN, 72L, List.of(
+                new AdminRequests.Candidate("images/zzal/tmp/x1.webp", null, null),
+                new AdminRequests.Candidate("images/zzal/tmp/x2.webp", null, null),
+                new AdminRequests.Candidate("images/zzal/tmp/x3.webp", null, null),
+                new AdminRequests.Candidate("images/zzal/tmp/x4.webp", null, null))))
+                .isInstanceOf(BusinessException.class);
+
+        assertThat(candidates.getOrDefault(72L, List.of()))
+                .as("거절된 요청은 한 판도 안 남긴다")
+                .isEmpty();
+
+        // ★ 라운드 상한과 재생성 라운드 상한(2)이 곱해져 총량이 일곱으로 묶인다.
+        //   총량을 따로 세지 않는 이유는 보류함에서 꺼낸 자리를 막지 않기 위해서다(서비스 주석).
+        assertThat(AdminService.PER_ROUND_MAX).isEqualTo(3);
+    }
+
+    @Test
     @DisplayName("★★ 고른 판이 대표가 된다 — 여기를 빠뜨리면 고르지 않은 판이 공개된다")
     void chosenCandidateBecomesTheOneShown() {
         ZzalMotion m = reviewing(71L, 101);

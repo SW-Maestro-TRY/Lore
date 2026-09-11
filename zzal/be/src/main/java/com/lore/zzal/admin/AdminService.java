@@ -62,6 +62,14 @@ public class AdminService {
     private final S3Service s3Service;
     private final int localRegenMax;
 
+    /**
+     * 한 라운드에 올릴 수 있는 판 — 러너는 3판을 나란히 굽는다(정본 1.9).
+     *
+     * ★ 이것과 {@code localRegenMax}(2) 가 곱해져 한 판 굽는 동안 남는 판이 <b>1 + 3 x 2 = 7</b> 로 묶인다.
+     *   주석에만 두면 언젠가 달라진다. 여기서 막고 시험이 지킨다.
+     */
+    static final int PER_ROUND_MAX = 3;
+
     public AdminService(AdminGuard adminGuard,
                         ZzalMotionRepository motionRepository,
                         ZzalMotionCandidateRepository candidateRepository,
@@ -264,6 +272,23 @@ public class AdminService {
         // ★★ 여기서 MotionRecorder(REQUIRES_NEW)를 부르면 안 된다 — 위에서 findByIdForUpdate 로
         //   이 줄을 이미 잠갔으므로, 새 트랜잭션이 같은 줄을 건드리면 <b>서로를 기다리며 멈춘다.</b>
         //   같은 트랜잭션 안에서 끝낸다.
+        // ★★ 한 라운드의 상한을 서버가 잡는다. DTO 의 {@code @Size(max = 7)} 는 <b>요청 하나</b>의 상한이라
+        //   그대로 두면 "API 1 + 7 + 7 = 15판" 이 들어간다. 정본은 최대 일곱이다(API 1 + 러너 3 x 2라운드).
+        //
+        // ★ 여기만 막으면 총량도 따라온다 — 재생성 라운드는 {@code localRegenMax}(2)가 이미 막으므로
+        //   한 판 굽는 동안 남는 판은 <b>1 + 3 x 2 = 7</b> 을 넘을 수 없다. 총량을 따로 세지 않는 이유는
+        //   아래와 같다.
+        //
+        // ★★ <b>총량을 세면 보류함에서 꺼낸 자리가 막힌다.</b> 사람이 꺼내면 라운드가 0 부터 다시 시작하는데,
+        //   지난 밤의 후보는 (게이트 보정 재료라) 그대로 남아 있다. 그 둘을 합쳐 세면 두 번째 밤은
+        //   시작하자마자 상한에 걸린다 — 고치라고 꺼내 준 자리를 우리가 다시 잠그는 셈이다.
+        //   같은 이유로 "이 라운드는 이미 올렸나" 도 세지 않는다. 라운드 번호는 밤마다 0 으로 돌아가
+        //   밤을 가로질러 같은 것을 가리키지 않는다. 한 라운드를 두 번 올리는 것은
+        //   <b>상태 잠금</b>이 막는다 — 올리는 순간 REVIEW 가 되어 다음 업로드는 ZZAL_REGEN_NOT_REQUESTED 다.
+        if (candidates.size() > PER_ROUND_MAX) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "한 라운드에는 %d판까지 올릴 수 있어요".formatted(PER_ROUND_MAX));
+        }
         Instant now = Instant.now();
         for (AdminRequests.Candidate c : candidates) {
             s3Service.consume(userId, c.imageKey(), now);
