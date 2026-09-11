@@ -45,6 +45,16 @@ import java.util.Map;
 @Component
 public class PipelineRegistry {
 
+    /**
+     * 버전마다 <b>정체성 문단을 재료로 쓰는 단계 이름</b>. 거부 재시도에서 함께 폐기한다.
+     * 단계 구성({@link #versions})과 같은 파일에 두어 한쪽만 고치는 일이 없게 한다.
+     */
+    private static final Map<GenKind, Map<String, List<String>>> IDENTITY_DEPENDENTS = Map.of(
+            GenKind.HATCH, Map.of(
+                    "v1", List.of(IdentityStep.NAME, GridStep.NAME),
+                    "v2", List.of(IdentityStep.NAME, GridStep.NAME, PostProcessStep.GRID2)),
+            GenKind.MOTION, Map.of("v1", List.of()));
+
     private final Map<GenKind, Map<String, List<List<GenerationStep>>>> versions;
     private final Map<GenKind, String> currentVersions;
 
@@ -113,6 +123,31 @@ public class PipelineRegistry {
     /** 묶음을 펼친 목록 — 몇 단계인지 세거나 순서를 볼 때. 돌릴 때는 {@link #stages} 를 쓴다. */
     public List<GenerationStep> steps(GenKind kind, String version) {
         return stages(kind, version).stream().flatMap(List::stream).toList();
+    }
+
+    /**
+     * <b>정체성 문단을 재료로 쓰는 단계들</b> — 거부(MODERATION)로 문단을 새로 만들 때 함께 폐기할 목록.
+     *
+     * <h3>★★ 왜 문단만 지우면 안 되나</h3>
+     * 재시도는 <b>성공한 단계를 건너뛴다.</b> 그래서 문단만 지우면 1층 격자는 <b>옛 문단</b>으로 구운
+     * 그림을 그대로 쓰고, 2층 격자만 <b>새 문단</b>으로 구워진다. 같은 아이인데 두 격자의 묘사 근거가
+     * 달라져, 1층과 2층의 생김새가 어긋난 채로 사용자에게 간다.
+     *
+     * <h3>★ 왜 단계가 스스로 말하게 하지 않나</h3>
+     * 단계마다 "나는 문단을 쓴다" 를 선언하게 하면 <b>기본값이 필요하고, 새 단계가 그 선언을 빠뜨리면
+     * 조용히 틀린다.</b> 어긋난 격자는 예외를 내지 않으므로 아무도 모른 채 배포된다.
+     * 파이프라인의 모양이 이 파일 한 곳에 있으므로, 이 의존도 바로 옆에 적어 둔다.
+     *
+     * ⚠️ 새 단계가 {@code ctx.text(IdentityStep.NAME)} 을 읽는다면 <b>{@link #IDENTITY_DEPENDENTS} 에
+     *    이름을 더해야 한다.</b> 후처리는 여기 없다 — 격자 <b>그림</b>만 보고, 앞 단계가 실패하면
+     *    애초에 도달하지 못해 성공 기록이 남지 않는다.
+     */
+    public List<String> identityDependents(GenKind kind, String version) {
+        List<String> declared = IDENTITY_DEPENDENTS.getOrDefault(kind, Map.of())
+                .getOrDefault(version, List.of());
+        // 그 버전에 실제로 있는 단계만 남긴다 — 없는 이름을 지우라고 하면 조용히 아무 일도 안 한다.
+        List<String> present = steps(kind, version).stream().map(GenerationStep::name).toList();
+        return declared.stream().filter(present::contains).toList();
     }
 
     /** 지금 새로 구울 것에 쓸 버전. */

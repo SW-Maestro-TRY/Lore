@@ -157,6 +157,12 @@ public class PetService {
     public ZzalPet character(Long userId, Long petId, String name, String note,
                              java.util.List<Personality> personalities, String world, Instant now) {
         ZzalPet pet = findMine(userId, petId);
+        // ★★ 굽기가 실패한 펫을 "이미 이름을 지었다" 로 답하면 안 된다 — 이름을 방금 처음 지은
+        //   사람에게 사실과 정반대로 말하게 되고, 다음에 무엇을 해야 하는지도 알 수 없다.
+        //   그림을 올리는 순간부터 굽기 때문에, 이름을 짓는 2~3분 사이에 실패가 끝나 있을 수 있다.
+        if (pet.getPhase() == PetPhase.FAILED) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_HATCH_FAILED);
+        }
         if (!pet.isDraft()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_DRAFT);
         }
@@ -811,8 +817,10 @@ public class PetService {
             long spent = Duration.between(pet.getHatchStartedAt(), now).toSeconds();
             left = Math.max(0, ZzalRules.HATCH_ESTIMATE.toSeconds() - spent);
         }
+        // ★ 제출 순간의 오류(ZZAL_PET_HATCH_FAILED)와 <b>같은 말</b>이어야 한다. 두 화면이 다르게
+        //   말하면 사용자는 서로 다른 두 가지 일이 일어난 줄로 읽는다.
         String message = pet.getPhase() == PetPhase.FAILED
-                ? "이 그림은 어려워요. 다른 그림을 올려 주세요"
+                ? ErrorCode.ZZAL_PET_HATCH_FAILED.getDefaultMessage()
                 : null;
         return new PetResponses.Hatch(pet.getPhase().name(), currentStepLabel(petId),
                 Math.min(done, total), total, left, message);

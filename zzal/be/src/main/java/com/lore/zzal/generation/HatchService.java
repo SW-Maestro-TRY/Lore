@@ -68,8 +68,7 @@ public class HatchService {
         //   거부는 입력이 막힌 것이라 같은 문단을 또 보내면 또 막힌다. 성공 기록을 지워야
         //   재시도가 그 단계를 건너뛰지 않는다.
         if (job.getErrorCode() == GenErrorCode.MODERATION_BLOCKED) {
-            int discarded = recorder.discardSucceeded(petId, GenKind.HATCH, IdentityStep.NAME);
-            log.info("거부로 실패 — 정체성 문단 {}건을 폐기하고 다시 만든다 (petId={})", discarded, petId);
+            discardModerationInputs(petId, version);
         }
 
         // 다시 한 번. 나머지 성공한 단계는 그대로 이어받으므로 실패한 지점부터 시작된다.
@@ -142,6 +141,25 @@ public class HatchService {
         motionSeeder.seed(petId, now);
         log.info("부화 완료 — petId={} version={}", petId, version);
         return true;
+    }
+
+    /**
+     * 거부(MODERATION)로 다시 굽기 전에 <b>문단과 그 문단을 재료로 쓴 단계들</b>을 함께 폐기한다.
+     *
+     * <h3>★★ 문단만 지우면 격자 두 장의 근거가 갈린다</h3>
+     * 재시도는 성공한 단계를 건너뛴다. 1층 격자가 성공하고 2층만 거부된 경우, 문단만 지우면
+     * <b>1층은 옛 문단으로 구운 그림을 그대로 쓰고 2층만 새 문단으로</b> 구워진다.
+     * 같은 아이인데 두 격자의 묘사 근거가 달라, 1층과 2층의 생김새가 어긋난 채 사용자에게 간다.
+     * 예외가 안 나므로 아무도 모른다 — 그림을 열어 봐야만 드러난다.
+     *
+     * ★ 무엇이 문단에 기대는지는 {@link PipelineRegistry#identityDependents} 한 곳에 적혀 있다.
+     */
+    private void discardModerationInputs(Long petId, String version) {
+        int discarded = 0;
+        for (String step : registry.identityDependents(GenKind.HATCH, version)) {
+            discarded += recorder.discardSucceeded(petId, GenKind.HATCH, step);
+        }
+        log.info("거부로 실패 — 문단과 그것을 쓴 단계 {}건을 폐기하고 다시 만든다 (petId={})", discarded, petId);
     }
 
     private static String outputOf(List<GenStepRecord> done, String stepName,

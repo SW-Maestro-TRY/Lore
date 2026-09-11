@@ -612,6 +612,9 @@ public class ZzalPet {
      *   비어 있으면 아무 말도 못 한다. 여기서 한 번 지나가면 그 행도 따라온다.
      */
     public void markHatchFailed() {
+        // ★ 이름을 짓는 중(DRAFT)에 실패해도 죽는다. 이름은 그림 생성에 안 들어가므로
+        //   기다렸다 다시 굽는 것은 돈을 늦게 쓸 뿐 이득이 없다(상훈님 2026-09-11).
+        //   대신 <b>그 사실이 사용자에게 제대로 전해져야</b> 한다 — PetService.character 가 갈라 말한다.
         if (phase == PetPhase.HATCHING || phase == PetPhase.DRAFT) {
             this.phase = PetPhase.FAILED;
         }

@@ -68,6 +68,10 @@ public enum ErrorCode {
     //   토큰을 찍어 보는 사람에게 "여기까지는 맞다"는 단서가 된다.
     ZZAL_SHARE_NOT_FOUND(HttpStatus.NOT_FOUND, "링크를 찾을 수 없어요"),
     ZZAL_PET_NOT_DRAFT(HttpStatus.CONFLICT, "이미 이름을 지은 아이예요"),
+    // ★ 이름을 짓는 동안 굽기가 실패한 경우. NOT_DRAFT 와 갈라야 한다 — 합치면 이름을 방금 처음
+    //   지은 사람에게 "이미 이름을 지었다" 고 말하게 되고, 무슨 일이 일어났는지 알 길이 없다.
+    // ★ 문구는 우리가 못 그린 것으로 말한다. 사용자의 그림을 탓하지 않는다(자캐 커뮤니티 규범).
+    ZZAL_PET_HATCH_FAILED(HttpStatus.CONFLICT, "이 그림으로는 그리기가 어려웠어요. 다른 그림으로 다시 해 볼까요?"),
     ZZAL_TUTORIAL_NOT_FINISHED(HttpStatus.CONFLICT, "아직 배울 것이 남았어요"),
     ZZAL_TUTORIAL_ALREADY_DONE(HttpStatus.CONFLICT, "이미 다 배웠어요"),
     ZZAL_TUTORIAL_STEP_MISMATCH(HttpStatus.CONFLICT, "지금 배울 차례가 아니에요"),
