@@ -81,7 +81,7 @@ class PipelineV2Test {
     void postProcessSplitsTwoGridsWithKeys() throws Exception {
         PostProcessor post = mock(PostProcessor.class);
         MotionCatalog catalog = new MotionCatalog("", "", "v1");
-        PostProcessStep step = new PostProcessStep(post, catalog);
+        PostProcessStep step = new PostProcessStep(post, catalog, new HatchPostures());
 
         StepContext v2 = new StepContext(7L, "여울", null, "v2");
         v2.putImage(GridStep.NAME, "images/zzal/pets/7/grid.png");
@@ -96,7 +96,7 @@ class PipelineV2Test {
         PostProcessor postV1 = mock(PostProcessor.class);
         StepContext v1 = new StepContext(7L, "여울", null, "v1");
         v1.putImage(GridStep.NAME, "images/zzal/pets/7/grid.png");
-        new PostProcessStep(postV1, catalog).run(v1);
+        new PostProcessStep(postV1, catalog, new HatchPostures()).run(v1);
         verify(postV1).split("images/zzal/pets/7/grid.png", "images/zzal/pets/7", "v1");   // ★ job 의 버전을 넘긴다(폴백 안전)
         verify(postV1, never()).split(anyString(), anyString(), anyString(), anyList());
     }

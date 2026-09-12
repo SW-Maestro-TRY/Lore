@@ -53,8 +53,8 @@ public class PipelineRegistry {
             GenKind.HATCH, Map.of(
                     "v1", List.of(IdentityStep.NAME, GridStep.NAME),
                     "v2", List.of(IdentityStep.NAME, GridStep.NAME, PostProcessStep.GRID2),
-                    // v4 도 문단을 재료로 쓴다(단계 구성이 v2 와 같다). 2층(grid2)은 아직 목록에 없다.
-                    "v4", List.of(IdentityStep.NAME, GridStep.NAME)),
+                    // v4 도 문단을 재료로 쓴다 — 단계 구성이 v2 와 같으므로 목록도 같다.
+                    "v4", List.of(IdentityStep.NAME, GridStep.NAME, PostProcessStep.GRID2)),
             GenKind.MOTION, Map.of("v1", List.of()));
 
     private final Map<GenKind, Map<String, List<List<GenerationStep>>>> versions;
@@ -83,11 +83,13 @@ public class PipelineRegistry {
                         // v2 = 격자 2장(1층·2층) → 기본 행동 16종(정본 13장). 프롬프트 prompt/v2/{sheet,identity,grid,grid2}.txt
                         // ★ [grid, grid2] 가 한 묶음 = 나란히 굽는다. identity 는 앞 묶음이라 반드시 먼저 끝난다.
                         "v2", List.of(List.of(sheet), List.of(identity), List.of(grid, grid2), List.of(post)),
-                        // v4 = 1층 격자 1장 → 기본 행동 8종. 프롬프트 prompt/v4/{sheet,identity,grid}.txt,
-                        // 후처리 pipeline/v4/service_post.py(= 2026-09-12 판정 확정 조합 state8_v5 + 격자 게이트).
-                        // ★ 2층(grid2)은 아직 없다 — 확정되면 prompt/v4/grid2.txt 를 넣고 이 목록에 grid2 를 끼운다.
-                        //   그 순간 PostProcessStep 이 v2 와 같은 길(카탈로그 key 16종)로 자동으로 넘어간다.
-                        "v4", List.of(List.of(sheet), List.of(identity), List.of(grid), List.of(post))),
+                        // v4 = 격자 2장(1층·2층) → 기본 행동 16종. 2026-09-12 판정 확정 조합
+                        //   (1층 "다 완벽이야 v02" · 2층 "해금 8종은 이제 다 좋다 합격").
+                        //   프롬프트 prompt/v4/{sheet,identity,grid,grid2}.txt,
+                        //   후처리 pipeline/v4/service_post.py(state8_v5 + 격자 게이트 + 칸별 자세 매핑).
+                        // ★ v2 와 단계 구성은 같고 내용물이 다르다 — 프롬프트도 후처리 스크립트도 버전 폴더로 갈린다.
+                        //   묶음도 v2 와 같다 — 두 격자는 서로를 안 보고 identity 하나만 쓰므로 나란히 굽는다.
+                        "v4", List.of(List.of(sheet), List.of(identity), List.of(grid, grid2), List.of(post))),
                 GenKind.MOTION, Map.of("v1", List.of(List.of(motionGrid), List.of(motionPost))));
         this.currentVersions = Map.of(
                 GenKind.HATCH, resolveHatchVersion(hatchVersion, resourceExists),

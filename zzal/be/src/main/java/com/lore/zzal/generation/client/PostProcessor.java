@@ -24,4 +24,17 @@ public interface PostProcessor {
      * 출력 = {@code {outputPrefix}/{key}.webp}. 두 장(grid·grid2)이면 두 번 부른다.
      */
     void split(String gridImageKey, String outputPrefix, String version, List<String> keys) throws Exception;
+
+    /**
+     * v4 — 위와 같되 <b>칸의 자세 유형</b>을 함께 넘긴다({@code --postures}).
+     *
+     * ★ 왜 따로인가 — 후처리는 서 있는 칸과 앉은·누운 칸을 다르게 정렬한다. 어느 칸이 어느 자세인지는
+     *   층마다 다르고(1층은 sick·sleep, 2층은 wash), 그걸 안 넘기면 파이썬이 <b>1층 기본값</b>으로
+     *   되돌아가 2층의 reply·wake_up 을 앉기·눕기로 맞춘다. 통과는 하고 그림만 조용히 틀어진다.
+     * ★ v1·v2 의 후처리 스크립트는 이 인자를 모른다 — 그래서 빈 문자열이면 안 넘긴다.
+     *
+     * @param postures {@code "base=standing,...,sick=crouch,...,sleep=lying"}. 이름은 {@code keys} 의 것.
+     */
+    void split(String gridImageKey, String outputPrefix, String version, List<String> keys, String postures)
+            throws Exception;
 }

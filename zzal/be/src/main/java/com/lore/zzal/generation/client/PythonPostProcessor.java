@@ -73,10 +73,22 @@ public class PythonPostProcessor implements PostProcessor {
     /** v2 — {@code --keys} 로 카탈로그 key 를 넘기고 그 이름의 파일을 기대한다. */
     @Override
     public void split(String gridImageKey, String outputPrefix, String version, List<String> keys) throws Exception {
+        split(gridImageKey, outputPrefix, version, keys, "");
+    }
+
+    /** v4 — 위에 더해 칸의 자세 유형({@code --postures})까지 넘긴다. */
+    @Override
+    public void split(String gridImageKey, String outputPrefix, String version, List<String> keys, String postures)
+            throws Exception {
         if (keys == null || keys.isEmpty()) {
-            throw new IllegalArgumentException("--keys 가 비었습니다(v2 후처리는 카탈로그 key 8개가 필요)");
+            throw new IllegalArgumentException("--keys 가 비었습니다(v2 이후 후처리는 카탈로그 key 8개가 필요)");
         }
-        split(gridImageKey, outputPrefix, version, keys, List.of("--keys", String.join(",", keys)));
+        List<String> args = new ArrayList<>(List.of("--keys", String.join(",", keys)));
+        if (postures != null && !postures.isBlank()) {
+            // ★ 빈 값이면 아예 안 넘긴다 — v1·v2 스크립트는 이 인자를 모르고, 넘기면 argparse 가 죽는다.
+            args.addAll(List.of("--postures", postures));
+        }
+        split(gridImageKey, outputPrefix, version, keys, args);
     }
 
     private void split(String gridImageKey, String outputPrefix, String version, List<String> expected,

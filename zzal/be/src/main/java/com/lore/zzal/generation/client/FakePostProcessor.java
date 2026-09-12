@@ -22,7 +22,15 @@ public class FakePostProcessor implements PostProcessor {
 
     @Override
     public void split(String gridImageKey, String outputPrefix, String version, java.util.List<String> keys) throws InterruptedException {
-        log.info("[가짜] 후처리 {} — grid={} → {}/{{{}}}.webp", version, gridImageKey, outputPrefix, String.join(",", keys));
+        split(gridImageKey, outputPrefix, version, keys, "");
+    }
+
+    @Override
+    public void split(String gridImageKey, String outputPrefix, String version, java.util.List<String> keys,
+                      String postures) throws InterruptedException {
+        log.info("[가짜] 후처리 {} — grid={} → {}/{{{}}}.webp (자세 {})",
+                version, gridImageKey, outputPrefix, String.join(",", keys),
+                postures == null || postures.isBlank() ? "기본" : postures);
         Thread.sleep(delayMillis);
     }
 }

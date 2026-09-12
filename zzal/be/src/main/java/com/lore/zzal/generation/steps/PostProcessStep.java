@@ -1,6 +1,7 @@
 package com.lore.zzal.generation.steps;
 
 import com.lore.zzal.generation.GenerationStep;
+import com.lore.zzal.generation.HatchPostures;
 import com.lore.zzal.generation.StepContext;
 import com.lore.zzal.generation.StepResult;
 import com.lore.zzal.generation.client.PostProcessor;
@@ -25,10 +26,12 @@ public class PostProcessStep implements GenerationStep {
 
     private final PostProcessor postProcessor;
     private final MotionCatalog catalog;
+    private final HatchPostures postures;
 
-    public PostProcessStep(PostProcessor postProcessor, MotionCatalog catalog) {
+    public PostProcessStep(PostProcessor postProcessor, MotionCatalog catalog, HatchPostures postures) {
         this.postProcessor = postProcessor;
         this.catalog = catalog;
+        this.postures = postures;
     }
 
     @Override
@@ -48,7 +51,8 @@ public class PostProcessStep implements GenerationStep {
     }
 
     /**
-     * 1층만 굽되 출력은 <b>16종과 같은 자리</b>(basic/)에 두는 버전.
+     * 격자가 한 장뿐인 판(2층 프롬프트가 없던 때의 v4·중간에 멈췄다 이어 도는 job)을 위해 남겨 둔다.
+     * 출력은 <b>16종과 같은 자리</b>(basic/)에 둔다.
      *
      * ★ 왜 v1 과 자리가 다른가 — 화면이 기본 행동을 {@code .../basic/{key}.webp} 로 조립한다(api-v2.md 2절).
      *   v1 은 그 규약 이전의 8상태라 한 단 위에 떨어뜨리지만, v4 의 8종은 <b>16종의 앞 절반</b>이다.
@@ -57,6 +61,16 @@ public class PostProcessStep implements GenerationStep {
      *   아직 진행 중이라, 카탈로그를 여기서 같이 건드리면 두 곳이 서로를 기다리게 된다.
      */
     private static final java.util.Set<String> LAYER1_ONLY_TO_BASIC = java.util.Set.of("v4");
+
+    /**
+     * 칸의 자세 유형을 후처리에 넘기는 버전.
+     *
+     * ★ v4 의 후처리(state8_v5)는 서 있는 칸을 <b>발</b> 기준으로, 앉은·누운 칸을 <b>본체</b> 기준으로
+     *   맞춘다. 어느 칸이 어느 자세인지는 층마다 다르다 — 1층은 5번 sick·8번 sleep, 2층은 4번 wash.
+     *   안 넘기면 파이썬이 1층 기본값으로 되돌아가 <b>2층의 reply·wake_up 을 앉기·눕기로</b> 맞춘다.
+     * ★ v1·v2 의 스크립트는 이 인자를 모른다 — 그래서 버전으로 가른다.
+     */
+    private static final java.util.Set<String> POSTURE_AWARE = java.util.Set.of("v4");
 
     @Override
     public StepResult run(StepContext ctx) throws Exception {
@@ -72,8 +86,17 @@ public class PostProcessStep implements GenerationStep {
             postProcessor.split(ctx.image(GridStep.NAME), "images/zzal/pets/%d".formatted(ctx.petId()), ctx.version());
             return StepResult.free(NAME);
         }
-        // v2 — 격자 2장 → 기본 행동 16종. 출력 = basic/{key}.webp (api-v2.md 2절 규약), 이름은 카탈로그 key.
+        // 격자 2장 → 기본 행동 16종. 출력 = basic/{key}.webp (api-v2.md 2절 규약), 이름은 카탈로그 key.
         String prefix = "images/zzal/pets/%d/basic".formatted(ctx.petId());
+        if (POSTURE_AWARE.contains(ctx.version())) {
+            // v4 — 칸의 자세 유형까지 넘긴다(pipeline/v4/postures.txt).
+            postProcessor.split(ctx.image(GridStep.NAME), prefix, ctx.version(), keysOf(MotionLayer.BASIC_1),
+                    postures.forStep(ctx.version(), GridStep.NAME));
+            postProcessor.split(grid2, prefix, ctx.version(), keysOf(MotionLayer.BASIC_2),
+                    postures.forStep(ctx.version(), GRID2));
+            return StepResult.free(NAME);
+        }
+        // v2 — 그 버전의 스크립트는 --postures 를 모른다.
         postProcessor.split(ctx.image(GridStep.NAME), prefix, ctx.version(), keysOf(MotionLayer.BASIC_1));
         postProcessor.split(grid2, prefix, ctx.version(), keysOf(MotionLayer.BASIC_2));
         return StepResult.free(NAME);
