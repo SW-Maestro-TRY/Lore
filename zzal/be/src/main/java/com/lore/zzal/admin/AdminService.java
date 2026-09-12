@@ -63,6 +63,14 @@ public class AdminService {
     private final int localRegenMax;
 
     /**
+     * 러너에게 일감을 빌려주는 시간 — {@code StuckMotionRecovery} 의 회수 유예와 <b>같은 값</b>이다.
+     *
+     * ★ 같아야 하는 이유 — 이 값보다 오래된 집기는 여기서 다시 내주고, 그만큼 오래된 주문은
+     *   기동 복구가 큐로 되돌린다. 값이 갈리면 한쪽이 내주는 중인 것을 다른 쪽이 회수한다.
+     */
+    private final java.time.Duration agentLease;
+
+    /**
      * 한 라운드에 올릴 수 있는 판 — 러너는 3판을 나란히 굽는다(정본 1.9).
      *
      * ★ 이것과 {@code localRegenMax}(2) 가 곱해져 한 판 굽는 동안 남는 판이 <b>1 + 3 x 2 = 7</b> 로 묶인다.
@@ -78,7 +86,8 @@ public class AdminService {
                         GenStepRecordRepository stepRepository,
                         MotionCatalog catalog,
                         S3Service s3Service,
-                        @Value("${app.zzal.night.local-regen-max:2}") int localRegenMax) {
+                        @Value("${app.zzal.night.local-regen-max:2}") int localRegenMax,
+                        @Value("${app.zzal.recovery.local-grace-minutes:60}") int agentLeaseMinutes) {
         this.adminGuard = adminGuard;
         this.motionRepository = motionRepository;
         this.candidateRepository = candidateRepository;
@@ -88,6 +97,7 @@ public class AdminService {
         this.catalog = catalog;
         this.s3Service = s3Service;
         this.localRegenMax = localRegenMax;
+        this.agentLease = java.time.Duration.ofMinutes(agentLeaseMinutes);
     }
 
     /**
@@ -207,7 +217,8 @@ public class AdminService {
     @Transactional(readOnly = true)
     public List<AdminResponses.RegenRequest> regenRequests(Long userId) {
         adminGuard.require(userId);
-        return regenRequestRows();
+        // ★ 사람이 보는 목록은 <b>집지 않는다</b> — 관리자가 화면을 열었다고 러너의 일감을 뺏으면 안 된다.
+        return describe(motionRepository.findByStatusOrderByIdAsc(MotionStatus.LOCAL_REQUESTED));
     }
 
     /**
@@ -215,14 +226,30 @@ public class AdminService {
      *
      * ★ 열쇠에 묶인 사용자는 <b>관리자일 필요가 없다.</b> 기계는 판정 화면을 안 보고 일감만 가져간다.
      *   관리자 권한을 요구하면 그 열쇠가 새는 순간 관리자 화면까지 열리므로, 오히려 나쁘다.
+     *
+     * <h3>★★ 내주면서 <b>집는다</b> — 같은 판을 다시 안 내주기 위한 유일한 장치</h3>
+     * 예전에는 읽기만 하고 상태를 한 글자도 안 바꿨다. 그래서 맥미니가 10분짜리 재생성을 굽는 동안
+     * 러너의 폴링이 <b>매번 같은 motionId</b> 를 받았고, 러너가 둘이면 둘 다 같은 판을 구웠다 —
+     * codex 구독 한도를 같은 그림에 N배로 태운다. 두 번째 업로드는 {@code ZZAL_REGEN_NOT_REQUESTED} 로
+     * 거절되지만 <b>그림은 이미 다 구운 뒤다.</b>
+     *
+     * ★ 빌려주는 것이지 영영 주는 것이 아니다 — {@code agentLease} 보다 오래된 집기는 없는 것으로 치고
+     *   다시 내준다(러너가 중간에 죽으면 아무도 안 올린다). 그보다 더 오래 묵으면 기동 복구가 큐로 되돌린다.
+     *
+     * ⚠️ {@code readOnly} 가 아니다 — 여기서 집기를 찍는다. 읽기 전용으로 두면 집는 시늉만 하고 아무것도 안 남는다.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public List<AdminResponses.RegenRequest> regenRequestsForAgent(Long agentUserId) {
-        return regenRequestRows();
+        Instant now = Instant.now();
+        Instant leaseCutoff = now.minus(agentLease);
+        List<ZzalMotion> mine = motionRepository.findByStatusOrderByIdAsc(MotionStatus.LOCAL_REQUESTED).stream()
+                .filter(m -> m.claimByAgent(now, leaseCutoff))
+                .toList();
+        return describe(mine);
     }
 
-    private List<AdminResponses.RegenRequest> regenRequestRows() {
-        List<ZzalMotion> rows = motionRepository.findByStatusOrderByIdAsc(MotionStatus.LOCAL_REQUESTED);
+    /** 주문 줄을 러너가 읽을 모양으로 바꾼다. 펫이 없거나 지시문을 못 읽는 줄은 빼고 로그만 남긴다. */
+    private List<AdminResponses.RegenRequest> describe(List<ZzalMotion> rows) {
         Map<Long, ZzalPet> pets = petRepository.findAllById(rows.stream().map(ZzalMotion::getPetId).distinct().toList())
                 .stream().collect(java.util.stream.Collectors.toMap(ZzalPet::getId, p -> p));
         return rows.stream().map(m -> {

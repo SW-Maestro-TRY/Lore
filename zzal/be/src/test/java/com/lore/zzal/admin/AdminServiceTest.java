@@ -100,7 +100,7 @@ class AdminServiceTest {
                 motions.values().stream().filter(m -> m.getStatus() == i.getArgument(0)).toList());
         when(jobRepository.sumCostByMotionIds(any())).thenReturn(new BigDecimal("0.1970"));
         service = new AdminService(guard, motionRepository, candidateRepository, petRepository,
-                jobRepository, stepRepository, catalog, s3Service, 2);
+                jobRepository, stepRepository, catalog, s3Service, 2, 60);
     }
 
     /** 검수 대기(REVIEW) 상태의 모션 하나. */
@@ -240,6 +240,51 @@ class AdminServiceTest {
     }
 
     @Test
+    @DisplayName("★★ 러너에게 한 번 내준 일감은 다시 안 내준다 — 같은 판을 N번 굽던 것 (P-14)")
+    void agentJobsAreClaimedOnce() {
+        ZzalMotion m = reviewing(80L, 7);
+        when(petRepository.findAllById(any())).thenReturn(List.of(pet()));
+        service.review(ADMIN, 80L, HumanVerdict.REGENERATE, "다시", null);
+
+        assertThat(service.regenRequestsForAgent(ADMIN)).hasSize(1);
+        assertThat(m.getAgentClaimedAt()).as("가져간 시각이 찍힌다").isNotNull();
+
+        // 맥미니가 굽는 10분 동안 러너가 계속 폴링한다 — 예전에는 매번 같은 판을 받았다
+        assertThat(service.regenRequestsForAgent(ADMIN)).isEmpty();
+        assertThat(service.regenRequestsForAgent(ADMIN)).isEmpty();
+
+        // ★ 사람이 보는 목록은 집기와 무관하다 — 관리자 화면이 러너의 일감을 뺏지 않고, 가려지지도 않는다
+        assertThat(service.regenRequests(ADMIN)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("★ 결과가 올라오면 집기를 지운다 — 다음 라운드가 유예만큼 막히지 않게")
+    void uploadClearsTheAgentClaim() {
+        ZzalMotion m = reviewing(81L, 7);
+        when(petRepository.findAllById(any())).thenReturn(List.of(pet()));
+        service.review(ADMIN, 81L, HumanVerdict.REGENERATE, "다시", null);
+        assertThat(service.regenRequestsForAgent(ADMIN)).hasSize(1);
+
+        service.uploadForAgent(ADMIN, 81L, List.of(new AdminRequests.Candidate("images/zzal/tmp/r.webp", null, null)));
+
+        assertThat(m.getAgentClaimedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("★ 빌려주는 것이지 영영 주는 것이 아니다 — 유예를 넘긴 집기는 없는 것으로 치고 다시 내준다")
+    void staleClaimIsHandedOutAgain() {
+        ZzalMotion m = reviewing(82L, 7);
+        when(petRepository.findAllById(any())).thenReturn(List.of(pet()));
+        service.review(ADMIN, 82L, HumanVerdict.REGENERATE, "다시", null);
+        assertThat(service.regenRequestsForAgent(ADMIN)).hasSize(1);
+
+        // 러너가 가져간 뒤 죽었다 — 유예(60분)를 넘겼다
+        ReflectionTestUtils.setField(m, "agentClaimedAt", Instant.now().minus(java.time.Duration.ofMinutes(61)));
+
+        assertThat(service.regenRequestsForAgent(ADMIN)).hasSize(1);
+    }
+
+    @Test
     @DisplayName("★★ 빈 후보 목록은 400 계열로 거절한다 — 500 이 아니다 (P-8)")
     void emptyCandidateListIsRejected() {
         reviewing(73L, 101);
@@ -367,7 +412,7 @@ class AdminServiceTest {
         when(withPrompt.block("roll")).thenReturn("TASK: 구른다");
         when(withPrompt.byKey(any())).thenReturn(Optional.empty());
         AdminService svc = new AdminService(guard, motionRepository, candidateRepository, petRepository,
-                jobRepository, stepRepository, withPrompt, s3Service, 2);
+                jobRepository, stepRepository, withPrompt, s3Service, 2, 60);
 
         List<AdminResponses.RegenRequest> requests = svc.regenRequests(ADMIN);
 
@@ -391,7 +436,7 @@ class AdminServiceTest {
         MotionCatalog broken = mock(MotionCatalog.class);
         when(broken.block("roll")).thenThrow(new java.io.UncheckedIOException(new java.io.IOException("없음")));
         AdminService svc = new AdminService(guard, motionRepository, candidateRepository, petRepository,
-                jobRepository, stepRepository, broken, s3Service, 2);
+                jobRepository, stepRepository, broken, s3Service, 2, 60);
 
         assertThat(svc.regenRequests(ADMIN)).isEmpty();
     }
