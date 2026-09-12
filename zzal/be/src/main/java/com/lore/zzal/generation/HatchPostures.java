@@ -1,12 +1,7 @@
 package com.lore.zzal.generation;
 
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -59,29 +54,7 @@ public class HatchPostures {
     }
 
     private static Map<String, String> load(String version) {
-        ClassPathResource r = new ClassPathResource(PATH.formatted(version));
-        if (!r.exists()) {
-            return Map.of();   // v1·v2 — 그 버전 후처리는 --postures 를 모른다
-        }
-        Map<String, String> byStep = new LinkedHashMap<>();
-        try {
-            String text = new String(r.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            for (String raw : text.split("\n")) {
-                String line = raw.strip();
-                if (line.isEmpty() || line.startsWith("#")) {
-                    continue;
-                }
-                int eq = line.indexOf('=');
-                if (eq < 0) {
-                    throw new IllegalStateException(
-                            "%s 의 형식 오류: '%s' — `단계 = 키=자세,...` 로 쓸 것"
-                                    .formatted(PATH.formatted(version), line));
-                }
-                byStep.put(line.substring(0, eq).strip(), line.substring(eq + 1).strip());
-            }
-        } catch (IOException e) {
-            throw new UncheckedIOException("자세 매핑을 읽을 수 없습니다: " + PATH.formatted(version), e);
-        }
-        return Map.copyOf(byStep);
+        // 파일이 없으면 빈 표 — v1·v2 의 후처리 스크립트는 --postures 를 모른다.
+        return ResourceTable.load(PATH.formatted(version));
     }
 }

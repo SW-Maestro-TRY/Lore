@@ -14,7 +14,12 @@ public interface MotionPostProcessor {
     /**
      * @param gridImageKey 16프레임 격자의 S3 키
      * @param outputPrefix 결과를 올릴 폴더
+     * @param profile      이 동작의 후처리 프로파일({@code script=state16_v3, align=seat, ...}).
+     *                     표는 {@code pipeline/{버전}/motion_post_profiles.txt} 에 있다.
+     *                     ★비어 있으면 스크립트가 <b>멈춘다</b> — 기본 후처리로 떨어지지 않는다.
+     *                     동작마다 무엇을 기준으로 칸을 맞추는지가 다르고(구르기=발·넘어짐=접지앵커),
+     *                     엉뚱한 기준으로 구워진 그림은 화면을 봐야만 드러난다
      * @return 완성된 움짤의 S3 키
      */
-    String build(String gridImageKey, String outputPrefix) throws Exception;
+    String build(String gridImageKey, String outputPrefix, String profile) throws Exception;
 }

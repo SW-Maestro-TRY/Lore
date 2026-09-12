@@ -12,7 +12,7 @@ public class FakeMotionPostProcessor implements MotionPostProcessor {
     }
 
     @Override
-    public String build(String gridImageKey, String outputPrefix) throws Exception {
+    public String build(String gridImageKey, String outputPrefix, String profile) throws Exception {
         Thread.sleep(delayMs);
         return outputPrefix + "/motion.webp";
     }

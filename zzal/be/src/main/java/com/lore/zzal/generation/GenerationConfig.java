@@ -136,8 +136,8 @@ public class GenerationConfig {
     }
 
     @Bean
-    public MotionPostStep motionPostStep(MotionPostProcessor motionPostProcessor) {
-        return new MotionPostStep(motionPostProcessor);
+    public MotionPostStep motionPostStep(MotionPostProcessor motionPostProcessor, MotionPostProfiles profiles) {
+        return new MotionPostStep(motionPostProcessor, profiles);
     }
 
     @Bean

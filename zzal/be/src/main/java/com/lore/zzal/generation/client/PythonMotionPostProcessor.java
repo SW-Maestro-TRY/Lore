@@ -42,14 +42,20 @@ public class PythonMotionPostProcessor implements MotionPostProcessor {
     }
 
     @Override
-    public String build(String gridImageKey, String outputPrefix) throws Exception {
+    public String build(String gridImageKey, String outputPrefix, String profile) throws Exception {
+        if (profile == null || profile.isBlank()) {
+            // 설정이 원인일 때는 설정 이름을 그대로 말한다. 여기서 멈추면 그림값은 이미 나간 뒤지만,
+            // 판정받지 않은 후처리로 구운 것을 지급하는 것보다는 낫다.
+            throw new IllegalStateException(
+                    "후처리 프로파일이 비었습니다 — pipeline/{버전}/motion_post_profiles.txt 를 확인하세요");
+        }
         Path work = Files.createTempDirectory("zzal-motion-post-");
         try {
             Path grid = work.resolve("grid.png");
             storage.download(gridImageKey, grid);
 
             Path out = work.resolve("out");
-            run(grid, out);
+            run(grid, out, profile);
 
             Path file = out.resolve(OUTPUT);
             if (!Files.exists(file)) {
@@ -57,16 +63,16 @@ public class PythonMotionPostProcessor implements MotionPostProcessor {
             }
             String key = "%s/%s".formatted(outputPrefix, OUTPUT);
             storage.upload(key, file, "image/webp");
-            log.info("모션 후처리 완료 — {} → {}", gridImageKey, key);
+            log.info("모션 후처리 완료 — {} → {} (프로파일 {})", gridImageKey, key, profile);
             return key;
         } finally {
             deleteQuietly(work);
         }
     }
 
-    private void run(Path grid, Path out) throws IOException, InterruptedException {
+    private void run(Path grid, Path out, String profile) throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(
-                pythonPath, scriptPath, grid.toString(), out.toString());
+                pythonPath, scriptPath, grid.toString(), out.toString(), "--profile", profile);
         pb.redirectErrorStream(true);
         // ★ readAllBytes 로 먼저 읽으면 프로세스가 끝날 때까지 막혀 waitFor(timeout) 이 무력해진다(Codex 리뷰 6).
         java.nio.file.Path logFile = java.nio.file.Files.createTempFile("zzal-motion-post-", ".log");

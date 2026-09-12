@@ -2,10 +2,20 @@
 """
 서비스용 모션 후처리 — 16프레임 격자 한 장을 움짤 하나(webp)로 만든다.
 
-  python3 service_motion_post.py <격자.png> <출력폴더>
+  python3 service_motion_post.py <격자.png> <출력폴더> --profile "script=state16_v3, align=seat, ..."
   → 출력폴더/motion.webp
 
-★ 자르기·키잉·정렬은 state16_v2.py 를 그대로 쓴다. 절단·초록 키잉·침범 제거·
+  --profile  ★필수. 이 동작의 후처리 프로파일(pipeline/v1/motion_post_profiles.txt 의 한 줄).
+             `script=<모듈>` 로 어느 후처리를 탈지 고르고, 나머지는 그 모듈 main() 의 인자다.
+
+★ 어느 후처리를 탈지는 **동작마다 다르다** — 자바가 `--profile` 로 넘긴다.
+  16프레임은 한 칸이 독립이 아니라 한 동작이 이어지는 루프라, "무엇을 기준으로 칸을 맞추나" 가
+  동작의 성질을 탄다. 구르기는 발 기준(state16_v2), 뒤로넘어짐은 접지앵커 기준(state16_v3)으로
+  판정을 받았다. 표는 `motion_post_profiles.txt` 에 있고 코드에는 없다.
+  ⚠️**프로파일이 안 넘어오면 멈춘다.** 조용히 아무 후처리로 떨어지면 판정받지 않은 그림이
+    그대로 나가는데, 그건 화면을 봐야만 드러난다.
+
+★ 자르기·키잉·정렬은 state16_v2.py / state16_v3.py 를 그대로 쓴다. 절단·초록 키잉·침범 제거·
   발 중앙값 정렬은 실험에서 여러 사고를 잡아 가며 다듬은 것이라 손대지 않는다.
   이 파일은 그 결과(프레임 16장)를 **서비스가 쓰는 이름과 형식으로 묶기만** 한다.
   부화 쪽 service_post.py 가 state8_v5 를 쓰는 방식과 같은 구조다.
@@ -26,17 +36,23 @@
   실험은 판정용으로 투명 GIF 를 냈지만, 서비스가 지급하는 것은 애니메이션 webp 다.
   프레임 간격(120ms)은 실험과 같게 둔다 — 간격이 달라지면 판정받은 그 움직임이 아니다.
 
-⚠️ state16_v2.main() 은 판정용 부산물(애니.gif · 시트.png · cut/)을 작업 폴더에 같이
+⚠️ 후처리 main() 은 판정용 부산물(애니.gif · 시트.png · cut/)을 작업 폴더에 같이
   남긴다. 서비스에는 필요 없지만, 그 계산을 피하려고 로직을 갈라 쓰면 실험과 서비스가
   다른 코드를 타게 된다. 부산물은 작업 폴더째 지운다.
 """
-import sys
+import argparse
+import importlib
+import inspect
 import shutil
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-import state16_v2  # noqa: E402
 from PIL import Image  # noqa: E402
+
+# 프로파일이 고를 수 있는 후처리. **여기 적힌 것만** 부를 수 있다 —
+# 임의의 모듈 이름을 그대로 import 하면 표의 오타가 엉뚱한 파일을 실행시킨다.
+ALLOWED_SCRIPTS = ("state16_v2", "state16_v3")
 
 # 화면이 찾는 이름. 자바 PythonMotionPostProcessor.OUTPUT 과 짝이다.
 OUTPUT_NAME = "motion.webp"
@@ -44,15 +60,8 @@ OUTPUT_NAME = "motion.webp"
 # 16칸이 한 동작으로 이어지는 간격. 실험(state16_v2 의 duration 기본값)과 같은 값.
 FRAME_MS = 120
 
-# ★ 16칸을 발 좌표 중앙값에 맞춘다(= v1 state16_post 와 같은 정렬).
-#   state16_v2 자체의 기본값은 "none"(정렬 안 함)이다 — 구르거나 눕는 프레임이 많은 동작에서는
-#   발 기준이 매 프레임 다른 신체 부위를 가리켜 바닥선이 널뛰기 때문이다(상훈님 2026-08-18
-#   *"마지막에 땅이 엄청 위로 우뚝 솟아"*).
-#   그런데 **지금까지 판정받은 16프레임 결과물은 전부 foot 정렬로 나왔다** — 교감·청소는 v1 이
-#   늘 발 정렬을 했고, 선물 2종 v02·v4 도 `--align foot` 으로 돌렸다. 그래서 서비스는 판정받은
-#   그 조건을 쓴다. 자세별 프로파일(state8_v5 의 POSTURES 같은 것)이 16프레임에도 생기면
-#   그때 동작마다 갈라 준다 — 그 전에 여기만 "none" 으로 바꾸면 판정받지 않은 그림이 나간다.
-ALIGN = "foot"
+# ★ 정렬 방식은 여기 없다 — 동작마다 다르므로 motion_post_profiles.txt 가 정한다.
+#   (2026-09-12 v6b 까지: 구르기 = state16_v2 발 정렬 · 뒤로넘어짐 = state16_v3 접지앵커 정렬)
 
 FRAMES = 16
 
@@ -62,7 +71,46 @@ FRAMES = 16
 WEBP_QUALITY = 80
 
 
-def build(grid_path: str, out_dir: str) -> str:
+def resolve_profile(profile: str):
+    """`script=state16_v3, cut=marks, align=seat, seat-lock=global` → (모듈, main 인자)."""
+    if not profile or not profile.strip():
+        # 설정이 원인일 때는 설정 이름을 그대로 말한다.
+        raise ValueError(
+            "--profile 이 없습니다 — pipeline/v1/motion_post_profiles.txt 의 그 동작 줄을 넘기세요. "
+            "기본값으로 굽지 않습니다(판정받지 않은 후처리로 구워진 그림은 화면을 봐야만 드러납니다)")
+
+    parsed = {}
+    for part in profile.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "=" not in part:
+            raise ValueError(f"--profile 형식 오류: '{part}' — `이름=값` 으로 쓸 것")
+        k, v = (t.strip() for t in part.split("=", 1))
+        parsed[k.replace("-", "_")] = v
+
+    name = parsed.pop("script", None)
+    if name not in ALLOWED_SCRIPTS:
+        raise ValueError(
+            f"--profile 의 script 가 '{name}' 입니다 — 가능한 값: {', '.join(ALLOWED_SCRIPTS)}")
+    module = importlib.import_module(name)
+
+    # ★ main() 이 실제로 받는 인자인지 본다. 오타("aling=foot")를 그대로 넘기면 TypeError 가
+    #   나기는 하지만, 무엇을 고쳐야 하는지는 말해 주지 않는다.
+    accepted = set(inspect.signature(module.main).parameters) - {"grid", "cols", "rows", "duration"}
+    unknown = [k for k in parsed if k not in accepted]
+    if unknown:
+        raise ValueError(
+            f"--profile 에 {name}.main() 이 모르는 옵션이 있습니다: {', '.join(unknown)} — "
+            f"가능한 옵션: {', '.join(sorted(accepted))}")
+    return module, parsed
+
+
+def build(grid_path: str, out_dir: str, profile: str) -> str:
+    # ★ 폴더를 만들기 **전에** 프로파일부터 본다. 반쯤 만들어진 출력 폴더를 남기면
+    #   다음 사람이 "돌다 만 것" 과 "아예 안 돈 것" 을 구별하지 못한다.
+    module, options = resolve_profile(profile)
+
     grid = Path(grid_path)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -74,7 +122,7 @@ def build(grid_path: str, out_dir: str) -> str:
     work_grid = work / "grid.png"
     shutil.copy(grid, work_grid)
 
-    state16_v2.main(str(work_grid), align=ALIGN, duration=FRAME_MS)
+    module.main(str(work_grid), duration=FRAME_MS, **options)
 
     cut = work / "cut"
     frames = []
@@ -97,7 +145,13 @@ def build(grid_path: str, out_dir: str) -> str:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("사용법: service_motion_post.py <격자.png> <출력폴더>", file=sys.stderr)
-        sys.exit(2)
-    print(build(sys.argv[1], sys.argv[2]))
+    ap = argparse.ArgumentParser(description="16프레임 격자 1장 → 움짤 하나(webp)")
+    ap.add_argument("grid")
+    ap.add_argument("out")
+    ap.add_argument("--profile", help="pipeline/v1/motion_post_profiles.txt 의 그 동작 줄")
+    ns = ap.parse_args()
+    try:
+        print(build(ns.grid, ns.out, ns.profile))
+    except ValueError as e:
+        print(f"✗ {e}", file=sys.stderr)
+        sys.exit(1)

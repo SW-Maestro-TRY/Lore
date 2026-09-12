@@ -83,25 +83,26 @@ class MotionCatalogTest {
     @Test
     @DisplayName("★ 실패 주입 — 지시문 파일이 없으면 굽기 직전이 아니라 부팅 때 막힌다")
     void missingPromptFailsBoot() {
-        // v1 프롬프트 폴더에는 아직 '뒤로넘어짐.txt' 가 없다(v4 판정 진행 중 — 확정되면 들어온다).
-        assertThatThrownBy(() -> new MotionCatalog("", "fall_back", "v1"))
-                .hasMessageContaining("zzal/prompt/v1/motions/뒤로넘어짐.txt")
-                .hasMessageContaining("gift-motions");
+        // 3층 심화 동작의 지시문은 아직 하나도 안 들어왔다(기본 행동 16종 = 판정 대기).
+        assertThatThrownBy(() -> new MotionCatalog("base", "", "v1"))
+                .hasMessageContaining("zzal/prompt/v1/motions/기본자세.txt")
+                .hasMessageContaining("advanced-motions");
     }
 
     @Test
-    @DisplayName("★ 구르기 — 지시문이 들어왔으므로 gift-motions 에 올려도 부팅이 되고 블록이 읽힌다")
-    void rollIsBakeable() {
-        // 2026-09-12 상훈님 "구르기 확정 가고". 지시문 = prompt/v1/motions/구르기.txt
-        MotionCatalog catalog = new MotionCatalog("", "roll", "v1");
+    @DisplayName("★ 선물 2종 — 지시문이 들어왔으므로 gift-motions 에 올려도 부팅이 되고 블록이 읽힌다")
+    void giftMotionsAreBakeable() {
+        // 2026-09-12 상훈님 "구르기 확정 가고" · 뒤로넘어짐 v6b 확정.
+        // 지시문 = prompt/v1/motions/{구르기,뒤로넘어짐}.txt
+        MotionCatalog catalog = new MotionCatalog("", "roll,fall_back", "v1");
 
-        assertThat(catalog.giftKeys()).containsExactly("roll");
+        assertThat(catalog.giftKeys()).containsExactly("roll", "fall_back");
         assertThat(catalog.isBakeable("roll")).isTrue();
+        assertThat(catalog.isBakeable("fall_back")).isTrue();
         // 16프레임 골격이 {MOTION} 자리에 끼울 블록 — 형식이 깨지면 모델이 16칸을 제멋대로 채운다.
         assertThat(catalog.block("roll"))
-                .startsWith("TASK:")
-                .contains("MUST CHANGE")
-                .contains("NEVER CHANGE");
+                .startsWith("TASK:").contains("MUST CHANGE").contains("NEVER CHANGE");
+        assertThat(catalog.block("fall_back")).startsWith("TASK:");
     }
 
     @Test

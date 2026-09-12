@@ -176,6 +176,9 @@ public class MotionService {
         ctx.putImage(MotionGridStep.SHEET_IN, pet.getSheetImageKey());
         ctx.putText(MotionGridStep.IDENTITY_IN, pet.getIdentityText());
         ctx.putText(MotionGridStep.MOTION_IN, catalog.block(motion.getName()));
+        // ★ 후처리가 "어느 동작인가" 를 알아야 한다 — 정렬 기준이 동작마다 다르다
+        //   (구르기=발 · 뒤로넘어짐=접지앵커). 표는 pipeline/{버전}/motion_post_profiles.txt.
+        ctx.putText(MotionPostStep.MOTION_KEY_IN, motion.getName());
 
         // ★ 이어받기는 반드시 이 모션 것만. 펫으로 묶으면 다른 동작의 격자를 물려받는다.
         RunResult r = runner.run(job.getId(), ctx,
