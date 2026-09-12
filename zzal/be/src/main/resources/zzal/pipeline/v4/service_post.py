@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-서비스용 후처리 v4 — 격자 한 장을 1층 기본 행동 8종(webp)으로 만든다.
+서비스용 후처리 v4 — 격자 한 장을 기본 행동 8종(webp)으로 만든다(1층·2층 같은 스크립트).
 
   python3 service_post.py <격자.png> <출력폴더> [--keys a,b,..] [--postures sick=crouch,..]
   → 출력폴더/<key>.webp x 8
 
   --keys      자바 카탈로그(또는 app.zzal.hatch.states.v4)의 이름을 격자 칸 순서로 넘길 때.
               생략하면 state8_v5.KEYS(= base,eat,joy,sad,sick,pet,hello,sleep)를 쓴다.
-  --postures  칸 이름 → 자세 유형 매핑. 생략하면 state8_v5.DEFAULT_POSTURE(1층 v4 매핑).
+  --postures  칸 이름 → 자세 유형 매핑. ★이름은 **`--keys` 로 넘긴 그 이름**이다.
+              2층이면 `wash=crouch,...` 처럼 2층 key 로 쓴다(1층 이름으로 옮겨 적지 않는다).
+              주면 **여덟 칸을 모두** 적어야 한다. 생략하면 state8_v5.DEFAULT_POSTURE(1층 v4 매핑).
 
 종료코드
   0  정상
@@ -48,6 +50,13 @@ v2 대비 바뀐 것 셋
 ★ 키 이름이 곧 파일 이름이고, 화면과 카탈로그가 이 이름으로 찾는다. 한쪽만 바꾸면
   **엉뚱한 그림이 엉뚱한 상태로** 들어가는데 그건 화면을 봐야만 드러난다.
   그래서 자바가 이름을 넘길 길(--keys)을 열어 두고, 기본값은 state8_v5 한 곳에서만 온다.
+
+★ 층마다 자세가 다른 칸에 온다 — 그래서 `--postures` 가 인자다(코드 아님).
+  1층 v4 : 5번 `sick` 웅크림 · 8번 `sleep` 눕기 · 나머지 서 있음 (= state8_v5.DEFAULT_POSTURE)
+  2층 v3 : 4번 `wash`(목욕) 웅크림 · 나머지 일곱 칸 서 있음
+  ⚠️2층에 1층 기본값이 그대로 실리면 5번(`reply`)이 웅크림, 8번(`wake_up`)이 눕기로 후처리된다.
+    통과는 하는데 결과가 조용히 틀어지므로, `--postures` 를 주면 **여덟 칸 전부** 요구한다.
+    빠뜨리거나 `--keys` 에 없는 이름을 쓰면 **설정 이름을 말하는 예외**로 멈춘다.
 
 ★ webp 저장 규격(2프레임 · 450ms · q80)은 state8_v5 의 상수를 그대로 쓴다. 값을 다시 적으면
   판정본과 인코딩이 달라져 '같은 그림인데 파일이 다른' 상태가 된다.
@@ -143,6 +152,51 @@ def drop_floor_specks(frame: Image.Image, label: str) -> Image.Image:
     return Image.fromarray(a, "RGBA")
 
 
+def resolve_postures(keys, spec):
+    """`--postures` 를 state8_v5 가 아는 표로 푼다.
+
+    ★키가 **두 벌**이다 — 자바(화면·카탈로그)는 층마다 다른 이름(`wash`·`reply`…)을 쓰고,
+      state8_v5 는 1층 이름(`base`…`sleep`)을 칸 번호처럼 쓴다. 여기서 **자리로** 옮긴다.
+      `--keys` 의 n 번째 이름 = state8_v5.KEYS 의 n 번째.
+    ⚠️주면 여덟 칸을 다 요구한다. 일부만 받고 나머지를 1층 기본값으로 채우면 2층에서
+      `reply` 가 웅크림, `wake_up` 이 눕기로 후처리되는데 그건 화면을 봐야만 드러난다.
+      ⚠️`state8_v5.parse_devnull` 류에 빈 표를 넘겨 대신 시킬 수 없다 —
+        `parse_postures(spec, base={})` 의 `base or DEFAULT_POSTURE` 가 빈 dict 를 거짓으로 읽어
+        **조용히 1층 기본값으로 되돌린다**(실패 주입에서 실제로 통과해 버렸다). 그래서 여기서 센다.
+    """
+    if not spec:
+        return state8_v5.parse_postures(None)
+    at = {k: i for i, k in enumerate(keys)}
+    moved = []
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "=" not in part:
+            raise ValueError(f"--postures 형식 오류: '{part}' — `키=자세` 로 쓸 것")
+        k, v = (t.strip() for t in part.split("=", 1))
+        if k not in at:
+            # 설정이 원인일 때는 설정 이름을 그대로 말한다.
+            raise ValueError(
+                f"--postures 의 '{k}' 가 --keys 에 없습니다 — --keys = {', '.join(keys)}")
+        moved.append(f"{state8_v5.KEYS[at[k]]}={v}")
+    given = {m.split("=", 1)[0] for m in moved}
+    missing = [keys[i] for i, k in enumerate(state8_v5.KEYS) if k not in given]
+    if missing:
+        raise ValueError(
+            f"--postures 에 빠진 칸: {', '.join(missing)} — 여덟 칸을 모두 적을 것 "
+            f"(--keys = {', '.join(keys)})")
+    try:
+        return state8_v5.parse_postures(",".join(moved), base={})
+    except ValueError as e:
+        # state8_v5 는 1층 이름으로 말한다. 자바가 넘긴 이름으로 되돌려 말해 준다.
+        back = {a: b for a, b in zip(state8_v5.KEYS, keys)}
+        msg = str(e)
+        for a, b in back.items():
+            msg = msg.replace(a, b)
+        raise ValueError(msg) from e
+
+
 def build(grid_path: str, out_dir: str, keys, postures) -> list:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -185,11 +239,13 @@ def build(grid_path: str, out_dir: str, keys, postures) -> list:
 
 
 def main(argv) -> int:
-    ap = argparse.ArgumentParser(description="격자 1장 → 1층 기본 행동 8종 webp")
+    ap = argparse.ArgumentParser(description="격자 1장 → 기본 행동 8종 webp(1층·2층)")
     ap.add_argument("grid")
     ap.add_argument("out")
     ap.add_argument("--keys", help="쉼표로 구분한 이름 8개(격자 칸 순서). 생략 시 state8_v5.KEYS")
-    ap.add_argument("--postures", help="예: sick=crouch,sleep=lying. 생략 시 1층 v4 기본 매핑")
+    ap.add_argument("--postures",
+                    help="예(1층): base=standing,...,sick=crouch,...,sleep=lying / "
+                         "예(2층): ...,wash=crouch,... — 이름은 --keys 의 것, 여덟 칸 전부")
     a = ap.parse_args(argv)
 
     grid = Path(a.grid)
@@ -203,7 +259,7 @@ def main(argv) -> int:
         print(f"✗ --keys 는 정확히 {len(state8_v5.KEYS)}개여야 합니다(격자 4x4 = 8쌍): {keys}", file=sys.stderr)
         return EXIT_FAIL
     try:
-        pmap = state8_v5.parse_postures(a.postures)
+        pmap = resolve_postures(keys, a.postures)
     except ValueError as e:
         print(f"✗ {e}", file=sys.stderr)
         return EXIT_FAIL

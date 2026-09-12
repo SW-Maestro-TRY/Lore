@@ -220,6 +220,89 @@ MARK_R_POINT = 36      # 실제 검출된 마크 둘레 반경(px). 실측 마�
 #     의 기본 인자일 뿐이다 — 값을 바꾸려면 프로파일 쪽을 고칠 것.
 SEED_RNG = 12
 
+# ★2026-09-12 — **발 띠에서 빗자루를 뺀다** (`foot_ref_clean`)
+#   근거 = 과정/2026-09-12_2층v3_준비/청소_원인측정.md
+#   무슨 일이 있었나 — 2층 v2 `sweep`(청소)에서 상훈님:
+#     *"발이 고정되고 빗자루가 쓸리는 게 아니고 빗자루가 고정되고 발이 움직이는 것 같은 느낌"*
+#   실측 — `foot_ref` 가 쓰는 **아래 4% 띠**에 빗자루 솔이 바닥까지 내려와 함께 들어왔다.
+#     띠의 덩어리가 다른 14칸은 전부 2개(소닉은 발이 붙어 1개)인데 `sweep` 두 칸만 **3개**였고
+#     (여울·흑연·이두나 3판), 그 세 번째가 빗자루다. 솔의 아래 끝이 신발 밑창과 **같은 줄**이라
+#     "가장 낮은 줄에 닿았나"로는 못 가른다. 크기(124~317px)도 신발(185~345px)과 겹쳐 못 가른다.
+#     띠 폭이 66~75px(다른 칸) → **118~127px**(sweep)로 벌어졌고, 좌우 끝 중점이 그만큼 밀렸다.
+#   결과 — 층1 dx 가 신발 기준보다 4·4·6px 어긋나, 정렬을 마친 뒤에도 **발이 4.0~6.0px 움직였다.**
+#     띠가 안 더러워진 두 판(블룸·소닉)은 같은 조건에서 **0.0~0.5px** 였다. 흔들림은 전부 이 오염이다.
+#   ★어떻게 가르나 = **색.** 두 신발은 한 켤레라 평균색이 거의 같고(색거리 L1 5~12),
+#     빗자루는 어느 신발과도 멀다(77~284). 6배 이상 갈린다.
+#     → 띠 덩어리가 **3개 이상일 때만** 작동한다(다른 78칸은 전부 1~2개라 손도 안 댄다).
+#       가장 닮은 짝을 발로 보고, 그 짝의 평균색에서 먼 덩어리만 버린다. 버릴 때 로그에 찍는다.
+#   ⚠️왜 '띠를 좁힌다'·'가장 낮은 것만 남긴다'로 안 했나 — 둘 다 실측에서 못 가른다(위 참조).
+#   ⚠️이 함수는 `state8_v3.foot_ref` 를 **안 건드린다.** v3·v4 로 뽑은 판정본은 그대로 재현된다.
+FOOT_MIN_BLOBS = 3      # 이 개수 미만이면 아무것도 안 한다 (정상 칸 = 1~2개)
+FOOT_COLOR_ABS = 40.0   # 신발 짝 평균색과의 L1 거리가 이보다 멀면 발이 아니다 (실측 77~284 대 5~12)
+FOOT_COLOR_REL = 5.0    # 그리고 짝끼리의 거리보다 이 배수 넘게 멀 때만 버린다
+
+
+def _band_blobs(im, frac=0.04):
+    """`state8_v3.foot_ref` 와 **같은 절차**로 아래 띠 덩어리를 구한다(+평균색)."""
+    arr = np.array(im)
+    b = S8.mk_char(im)
+    ys, xs = np.nonzero(b)
+    if not len(ys):
+        return None, None, []
+    bot = int(ys.max())
+    h = bot - int(ys.min())
+    fm = b.copy()
+    fm[:int(bot - h * frac), :] = False
+    if not fm.any():
+        return (float(xs.min() + xs.max()) / 2, float(bot)), bot, []
+    lab, n = ndimage.label(fm)
+    sizes = ndimage.sum(fm, lab, range(1, n + 1))
+    blobs = []
+    for i in range(n):
+        if sizes[i] < sizes.max() * 0.25:        # v3 의 25% 규칙 그대로
+            continue
+        m = lab == i + 1
+        cx = np.nonzero(m.any(axis=0))[0]
+        blobs.append(dict(size=float(sizes[i]), x0=int(cx.min()), x1=int(cx.max()),
+                          rgb=np.asarray(arr[:, :, :3][m], dtype=float).mean(axis=0)))
+    blobs.sort(key=lambda d: d["x0"])
+    return None, bot, blobs
+
+
+def foot_ref_clean(im, frac=0.04, tag=""):
+    """발 기준점 — **한 켤레가 아닌 덩어리를 버린 뒤** 좌우 끝 중점을 낸다.
+
+    덩어리가 2개 이하면 `state8_v3.foot_ref` 와 **완전히 같은 값**을 돌려준다."""
+    fb, bot, blobs = _band_blobs(im, frac)
+    if fb is not None:
+        return fb
+    if len(blobs) < FOOT_MIN_BLOBS:
+        return S8.foot_ref(im, frac)
+    best = None
+    for i in range(len(blobs)):
+        for j in range(i + 1, len(blobs)):
+            d = float(np.abs(blobs[i]["rgb"] - blobs[j]["rgb"]).sum())
+            if best is None or d < best[0]:
+                best = (d, i, j)
+    d0, i, j = best
+    ref = (blobs[i]["rgb"] + blobs[j]["rgb"]) / 2
+    feet, drop = [], []
+    for k, c in enumerate(blobs):
+        dd = float(np.abs(c["rgb"] - ref).sum())
+        if k in (i, j) or not (dd > FOOT_COLOR_ABS and dd > FOOT_COLOR_REL * max(d0, 1.0)):
+            feet.append(c)
+        else:
+            drop.append((c, dd))
+    if not drop:
+        return S8.foot_ref(im, frac)
+    lo = min(c["x0"] for c in feet); hi = max(c["x1"] for c in feet)
+    old = S8.foot_ref(im, frac)[0]
+    print(f"    발 띠 정화{tag} — 덩어리 {len(blobs)}개 중 "
+          + ", ".join(f"x{c['x0']}~{c['x1']}({int(c['size'])}px·색거리 {dd:.0f})" for c, dd in drop)
+          + f" 를 발이 아닌 것으로 버림 (짝 색거리 {d0:.0f}) · 기준 {old:.1f}→{(lo+hi)/2:.1f}")
+    return (lo + hi) / 2, float(bot)
+
+
 
 def _cut_by_drop(blobs, lo=8, hi=40, thr=0.6):
     """크기 급락 지점에서 자른다 — `frame_cut.find_marks_by_color` 와 같은 방식.
@@ -548,7 +631,8 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
                 print(f"    ⚠️ 층1 탐색 한계 — 시드 둘레 ±{rng}px 의 **끝값**이 최적이다. "
                       f"정답이 구간 밖일 수 있으니 시드(본체 bbox 중심)를 의심할 것")
         elif P["l1"] == "foot":
-            ax, _ = S8.foot_ref(cells[k*2]); bx, _ = S8.foot_ref(cells[k*2+1])
+            ax, _ = foot_ref_clean(cells[k*2], tag=f" f{k*2+1:02d}")
+            bx, _ = foot_ref_clean(cells[k*2+1], tag=f" f{k*2+2:02d}")
             dx = int(round(ax - bx))
             tmp = S8.move(cells[k*2+1], dx, 0)
             v, _, dy = S8.best(S8.mk_char(cells[k*2]), S8.mk_char(tmp), rng)
@@ -565,7 +649,7 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
     # ── 층2: 쌍 사이 — 발 좌표 중앙값에 맞춘다(v3 그대로).
     #   foot_ref 의 y 는 실루엣 최하단 y 이므로, 눕기 칸은 세로만 맞춰도
     #   "몸 최하단선 = 바닥선"이 그대로 성립한다.
-    refs = [S8.foot_ref(c) for c in cells]
+    refs = [foot_ref_clean(c) for c in cells]
     rx = float(np.median([r[0] for r in refs]))
     ry = float(np.median([r[1] for r in refs]))
     for k in range(npairs):

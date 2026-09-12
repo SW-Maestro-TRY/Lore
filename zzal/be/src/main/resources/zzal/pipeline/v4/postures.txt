@@ -1,0 +1,25 @@
+# 격자 단계 → 칸의 자세 유형. service_post.py 의 --postures 에 이 줄이 그대로 실린다.
+#
+# ★ 왜 코드가 아니라 파일인가 (2026-09-12 상훈님 지시)
+#   후처리는 서 있는 칸·앉은 칸·누운 칸을 **다르게** 정렬한다(발 기준 / 본체 중심 / 칸 중앙).
+#   어느 칸이 어느 자세인지는 **프롬프트가 정하는 것**이지 코드가 정하는 것이 아니다.
+#   층이 늘거나 칸 순서가 바뀌면 이 파일 한 줄만 고친다 — 자바도 파이썬도 안 고친다.
+#
+# ★ 왜 여덟 칸을 다 적는가
+#   빠뜨리면 service_post.py 가 1층 기본값(sick=웅크림 · sleep=눕기)으로 채우는데,
+#   2층에서는 그 자리가 reply·wake_up 이라 **선 채로 있어야 할 칸이 눕기로** 후처리된다.
+#   통과는 하고 결과만 조용히 틀어지므로, 하나라도 빠지면 스크립트가 멈춘다.
+#
+# ★ 이름은 자바가 --keys 로 넘기는 이름(= MotionCatalog 의 key)이다. 1층 이름으로 옮겨 적지 않는다.
+#   여기 이름과 카탈로그가 어긋나면 후처리가 "--postures 의 'x' 가 --keys 에 없습니다" 로 멈춘다.
+#
+# 자세 유형은 셋 — standing(서 있음) · crouch(앉음·웅크림) · lying(눕기).
+
+# 1층 8종 — 2026-09-12 판정 확정(상훈님 "다 완벽이야 v02").
+#   5번 sick 웅크림 · 8번 sleep 눕기 · 나머지 여섯 칸 서 있음.
+grid = base=standing,eat=standing,joy=standing,sad=standing,sick=crouch,pet=standing,hello=standing,sleep=lying
+
+# 2층 8종 — 2026-09-12 판정 확정(상훈님 "해금 8종은 이제 다 좋다 합격").
+#   4번 wash(목욕) 만 웅크림. 나머지 일곱 칸은 서 있음 —
+#   2층에는 눕는 칸이 없다(자는 그림은 1층 sleep 이고, 2층 wake_up 은 일어나는 그림이라 서 있다).
+grid2 = eat_rice=standing,eat_snack=standing,sweep=standing,wash=crouch,reply=standing,petted=standing,startle=standing,wake_up=standing
