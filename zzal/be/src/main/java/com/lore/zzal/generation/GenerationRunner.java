@@ -95,7 +95,10 @@ public class GenerationRunner {
             total = total.add(outcome.cost());
             if (outcome.error() != null) {
                 recorder.failJob(jobId, outcome.error(), total);
-                return RunResult.failed(ctx, total, outcome.error());
+                // ★ 격자 구조 게이트가 막은 것이면 같은 격자로 다시 해 봐야 소용없다 — 부르는 쪽에 알린다.
+                return outcome.gridRejected()
+                        ? RunResult.gridRejected(ctx, total, outcome.error())
+                        : RunResult.failed(ctx, total, outcome.error());
             }
         }
 
@@ -112,8 +115,14 @@ public class GenerationRunner {
     private record Running(GenerationStep step, Long stepId, Future<StepResult> future, long deadlineNanos) {
     }
 
-    /** 한 묶음의 결과. {@code error} 가 있으면 그 묶음에서 멈춘다. */
-    private record StageOutcome(BigDecimal cost, GenErrorCode error) {
+    /**
+     * 한 묶음의 결과. {@code error} 가 있으면 그 묶음에서 멈춘다.
+     *
+     * ★ {@code gridRejected} 는 "이 격자는 못 쓴다" 는 별도의 신호다. 실패 코드와 따로 두는 이유는
+     *   {@link GenErrorCode} 가 DB 컬럼의 CHECK 제약에 묶여 있어 값을 늘리려면 마이그레이션이
+     *   필요하기 때문이다(→ {@link RunResult#gridRejected}).
+     */
+    private record StageOutcome(BigDecimal cost, GenErrorCode error, boolean gridRejected) {
     }
 
     /**
@@ -142,6 +151,7 @@ public class GenerationRunner {
 
         BigDecimal cost = BigDecimal.ZERO;
         GenErrorCode error = null;
+        boolean gridRejected = false;
         List<StepResult> done = new ArrayList<>(running.size());
 
         for (Running r : running) {
@@ -158,7 +168,10 @@ public class GenerationRunner {
                 recorder.failStep(r.stepId(), GenErrorCode.TIMEOUT, BigDecimal.ZERO);
                 error = worse(error, GenErrorCode.TIMEOUT);
             } catch (Exception e) {
-                GenErrorCode code = classify(e instanceof ExecutionException ? e.getCause() : e);
+                Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
+                GenErrorCode code = classify(cause);
+                // ★ 나란히 도는 묶음에서 한 장만 게이트에 막혀도 그 격자는 버려야 한다 — 누적한다.
+                gridRejected |= gridRejected(cause);
                 // ★★ 실패해도 <b>이미 나간 돈</b>은 적는다. 유료 호출은 200 이 돌아온 순간 과금이 끝나므로,
                 //   응답 파싱·S3 업로드에서 터진 실패는 공짜가 아니다. 여기서 안 더하면 원가가
                 //   실제보다 낮게 보여 중복 과금이나 급증을 못 본다.
@@ -181,7 +194,7 @@ public class GenerationRunner {
                 ctx.putText(result.name(), result.text());
             }
         }
-        return new StageOutcome(cost, error);
+        return new StageOutcome(cost, error, gridRejected);
     }
 
     /**
@@ -209,4 +222,19 @@ public class GenerationRunner {
         }
         return GenErrorCode.UNKNOWN;
     }
+
+    /**
+     * 격자 구조 게이트가 "이 격자는 4x4 가 아니다" 로 막았는가.
+     *
+     * ★ 이 표식은 후처리 스크립트({@code zzal/pipeline/v4/service_post.py})가 찍고,
+     *   {@code PythonPostProcessor} 가 스크립트가 남긴 말을 예외 메시지에 그대로 붙여 올린다.
+     *   판정은 <b>코드가 결정적으로</b> 한다 — 표식이 있으면 격자를 버리고, 없으면 평범한 재시도다.
+     * ★ 표식이 없는 버전(v1·v2)의 스크립트는 이 표식을 찍지 않으므로 예전 동작 그대로다.
+     */
+    private static boolean gridRejected(Throwable e) {
+        return e != null && String.valueOf(e.getMessage()).contains(GRID_STRUCTURE_MARK);
+    }
+
+    /** 후처리 스크립트가 격자 구조 이상을 알릴 때 찍는 표식. 스크립트와 글자가 같아야 한다. */
+    static final String GRID_STRUCTURE_MARK = "GRID_STRUCTURE_INVALID";
 }

@@ -47,10 +47,27 @@ public class PostProcessStep implements GenerationStep {
         return "깨어날 준비를 하는 중";
     }
 
+    /**
+     * 1층만 굽되 출력은 <b>16종과 같은 자리</b>(basic/)에 두는 버전.
+     *
+     * ★ 왜 v1 과 자리가 다른가 — 화면이 기본 행동을 {@code .../basic/{key}.webp} 로 조립한다(api-v2.md 2절).
+     *   v1 은 그 규약 이전의 8상태라 한 단 위에 떨어뜨리지만, v4 의 8종은 <b>16종의 앞 절반</b>이다.
+     *   같은 자리에 놓아야 2층이 확정돼 붙을 때 앞 절반을 다시 굽지 않아도 된다.
+     * ★ 이름은 카탈로그가 아니라 설정({@code app.zzal.hatch.states.v4})에서 온다 — 1층 8종의 key 정리가
+     *   아직 진행 중이라, 카탈로그를 여기서 같이 건드리면 두 곳이 서로를 기다리게 된다.
+     */
+    private static final java.util.Set<String> LAYER1_ONLY_TO_BASIC = java.util.Set.of("v4");
+
     @Override
     public StepResult run(StepContext ctx) throws Exception {
         String grid2 = ctx.image(GRID2);
         if (grid2 == null) {
+            if (LAYER1_ONLY_TO_BASIC.contains(ctx.version())) {
+                // v4 — 1층 격자 1장 → 기본 행동 8종. 출력 이름은 설정 hatch.states.v4.
+                postProcessor.split(ctx.image(GridStep.NAME),
+                        "images/zzal/pets/%d/basic".formatted(ctx.petId()), ctx.version());
+                return StepResult.free(NAME);
+            }
             // v1 — 격자 1장 → 8상태(idle·eat·…). 출력 이름은 설정 hatch.states.v1.
             postProcessor.split(ctx.image(GridStep.NAME), "images/zzal/pets/%d".formatted(ctx.petId()), ctx.version());
             return StepResult.free(NAME);
