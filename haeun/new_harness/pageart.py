@@ -31,6 +31,17 @@ log, warn = story.log, story.warn
 PAGE_DIR = "pages"
 STAGE = "PAGE_IMAGE"
 
+# 그리다 실패해도(안전 필터 거절·네트워크 오류 등 — make_sheet_painter 가
+# 그런 실패를 예외로 던진다) 한 장 때문에 편 전체를 죽이지 않는다. 여기까지
+# 왔으면 이미 돈이 나가기 시작한 작품이라, 죽이면 사람은 "그림을 만들지
+# 못했습니다" 만 보고 무엇 때문인지도 모른 채 크레딧만 날린다. 다시 그려서
+# 되는 실패(거절·일시적 오류)라면 여기서 넘어가는 편이 훨씬 싸다.
+#
+# 무한정 다시 시도하지는 않는다 — 한 장마다 실제 돈이 나가므로, 계속 안 되는
+# 요청(예: 프롬프트 자체가 늘 걸리는 내용)을 무한히 재시도하면 그 한 장이
+# 편 전체보다 비싸질 수 있다.
+PAGE_RETRIES = 2
+
 
 def page_path(run_dir: Path, n: int) -> Path:
     return run_dir / PAGE_DIR / f"page{n:02d}.png"
@@ -121,13 +132,24 @@ def draw(run_dir: Path, dry_run: bool = False, only: list[int] | None = None,
         refs = sheets + ([prev] if i > 1 and prev.exists() else [])
 
         log(f"[페이지 {i}/{len(pages)}] 컷 {len(page)}개 · 참조 {len(refs)}장 …")
-        meta = imagegen.paint(STAGE, prompt, out, refs=refs, kind=imagegen.PAGE_KIND)
+        meta = None
+        for attempt in range(1, PAGE_RETRIES + 2):   # 원래 시도 1 + 재시도 PAGE_RETRIES
+            try:
+                meta = imagegen.paint(STAGE, prompt, out, refs=refs, kind=imagegen.PAGE_KIND)
+                break
+            except Exception as e:                    # noqa: 재시도할지는 여기서만 정한다
+                if attempt > PAGE_RETRIES:
+                    raise
+                # landing(JobProgress.java)이 이 모양을 그대로 읽고 "N번째 장을
+                # 다시 그리고 있어요" 로 바꿔 보여준다 — 문구를 바꾸려면 거기도
+                # 같이 바꿔야 한다.
+                log(f"[페이지 {i}/{len(pages)}] 다시 그리는 중 ({attempt}/{PAGE_RETRIES}) — {e}")
         meta["page"] = i
         meta["cuts"] = len(page)
         made.append(meta)
         if on_page:
             on_page(meta)
-        log(f"  -> {out}")
+        log(f"[페이지 완료 {i}/{len(pages)}] -> {out}")
 
     if dry_run:
         log(f"[페이지] 프롬프트 {len(pages)}장만 썼습니다 -> {out_dir}")

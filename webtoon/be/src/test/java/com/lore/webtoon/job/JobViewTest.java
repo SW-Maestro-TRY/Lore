@@ -39,7 +39,7 @@ class JobViewTest {
     @DisplayName("파이썬이 쓰던 이름을 그대로 쓴다 — 낙타표기로 바꾸면 화면이 못 읽는다")
     void 이름이_같다() throws Exception {
         String json = JSON.writeValueAsString(
-                view(job(JobStatus.RUNNING, JobStage.STORY), new JobProgress.Snapshot(List.of(), "", 0, 0)));
+                view(job(JobStatus.RUNNING, JobStage.STORY), new JobProgress.Snapshot(List.of(), "", 0, 0, 0)));
         Map<String, Object> got = JSON.readValue(json, new TypeReference<>() { });
 
         assertThat(got).containsKeys("id", "status", "run_id", "error", "directions", "pick",
@@ -64,14 +64,14 @@ class JobViewTest {
         assertThat(List.of(JobStage.values()).stream().map(JobStage::wire).toList())
                 .containsExactly("story", "sheet", "board", "pages");
         assertThat(view(job(JobStatus.RUNNING, JobStage.STORY),
-                new JobProgress.Snapshot(List.of(), "", 0, 0)).stages())
+                new JobProgress.Snapshot(List.of(), "", 0, 0, 0)).stages())
                 .containsExactly("story", "sheet", "board", "pages");
     }
 
     @Test
     @DisplayName("걸음이 넘어갈수록 진행률이 오른다")
     void 진행률() {
-        var 없음 = new JobProgress.Snapshot(List.of(), "", 0, 0);
+        var 없음 = new JobProgress.Snapshot(List.of(), "", 0, 0, 0);
         assertThat(view(job(JobStatus.RUNNING, JobStage.STORY), 없음).pct()).isZero();
         assertThat(view(job(JobStatus.RUNNING, JobStage.SHEET), 없음).pct()).isEqualTo(25);
         assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 없음).pct()).isEqualTo(75);
@@ -80,7 +80,7 @@ class JobViewTest {
     @Test
     @DisplayName("그리는 중이면 그 걸음 안에서도 진행률이 오른다")
     void 그리는_중_진행률() {
-        var 절반 = new JobProgress.Snapshot(List.of(), "", 3, 6);
+        var 절반 = new JobProgress.Snapshot(List.of(), "", 3, 6, 0);
         // pages 는 네 걸음 중 마지막(3/4=75%). 그 안에서 절반이면 75 + 12.5
         assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 절반).pct()).isEqualTo(88);
     }
@@ -89,26 +89,26 @@ class JobViewTest {
     @DisplayName("끝나면 무조건 100 — 걸음이 어디든")
     void 끝나면_백() {
         assertThat(view(job(JobStatus.DONE, JobStage.PAGES),
-                new JobProgress.Snapshot(List.of(), "", 1, 6)).pct()).isEqualTo(100);
+                new JobProgress.Snapshot(List.of(), "", 1, 6, 0)).pct()).isEqualTo(100);
     }
 
     @Test
     @DisplayName("몇 장인지 모르면 art 를 아예 안 보낸다 — 0/0 을 보내면 화면이 「0장 중 0장」을 그린다")
     void 모르면_안_보낸다() {
         assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES),
-                new JobProgress.Snapshot(List.of(), "", 0, 0)).art()).isNull();
+                new JobProgress.Snapshot(List.of(), "", 0, 0, 0)).art()).isNull();
         assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES),
-                new JobProgress.Snapshot(List.of(), "", 2, 6)).art())
-                .isEqualTo(new JobView.Art(2, 6));
+                new JobProgress.Snapshot(List.of(), "", 2, 6, 0)).art())
+                .isEqualTo(new JobView.Art(2, 6, 0));
     }
 
     @Test
     @DisplayName("끝난 작업의 걸린 시간은 더 이상 안 늘어난다")
     void 걸린_시간() {
         WebtoonJob done = job(JobStatus.DONE, JobStage.PAGES);
-        double once = view(done, new JobProgress.Snapshot(List.of(), "", 0, 0)).elapsed();
+        double once = view(done, new JobProgress.Snapshot(List.of(), "", 0, 0, 0)).elapsed();
         assertThat(once).isEqualTo(60.0);          // 00:00 -> 00:01
-        assertThat(view(done, new JobProgress.Snapshot(List.of(), "", 0, 0)).elapsed())
+        assertThat(view(done, new JobProgress.Snapshot(List.of(), "", 0, 0, 0)).elapsed())
                 .isEqualTo(once);
     }
 }
