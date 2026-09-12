@@ -261,6 +261,27 @@ class GameServiceTest {
         assertThat(pet.isSick()).isTrue();
     }
 
+    @Test
+    @DisplayName("★★ 아픈 펫은 달리기를 끝내지도 못 한다 — finish 도 ZZAL_SICK_REFUSES, 판은 그대로 남는다 (P-4)")
+    void sickRefusesFinishingRun() {
+        for (int i = 0; i < 5; i++) {
+            pet.winLeftRight();
+        }
+        ZzalGame run = service.start(USER, PET, GameKind.RUN, T0).game();   // 건강할 때 시작한 달리기
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(run));
+        fallSick();
+        int happiness = pet.getHappiness();
+
+        // 병든 뒤에 그 판을 끝낸다 — 예전에는 그대로 받아 주고 승리 보상까지 줬다
+        assertThatThrownBy(() -> service.finish(USER, PET, 99L, 60_000, T0))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_SICK_REFUSES);
+
+        assertThat(run.isFinished()).isFalse();                // ★ 판은 접지 않는다 — 나으면 이어서 끝낸다
+        assertThat(pet.getHappiness()).isEqualTo(happiness);   // ★ 승리 행복이 병을 스스로 풀지 못한다
+        assertThat(pet.isSick()).isTrue();
+    }
+
     private void fallSick() {
         ReflectionTestUtils.setField(pet, "sickSince", T0);
         ReflectionTestUtils.setField(pet, "sickKind", com.lore.zzal.pet.SickKind.NEGLECT);

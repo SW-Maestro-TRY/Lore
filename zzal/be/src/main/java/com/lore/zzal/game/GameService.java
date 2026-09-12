@@ -162,6 +162,14 @@ public class GameService {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
         ZzalGame game = myGame(userId, pet, gameId);
+        // ★ 달리기는 시작 한 번·끝내기 한 번이라, start 만 막으면 <b>끝내기가 통째로 빠져나간다</b> —
+        //   건강할 때 시작한 달리기를 병든 뒤에 끝내 승리 보상(행복 +1)으로 병을 스스로 푸는 길이 남는다.
+        //   guess 와 같은 이유·같은 오류로 거절한다(정본 16장 "아프면 놀지 않는다").
+        // ★ 잠근 뒤·상태를 바꾸기 전에 본다. 이미 시작된 판은 <b>그대로 둔다</b> — 여기서 접어 버리면
+        //   깎인 하루 한 판이 사라지고, 나으면 이어서 끝내는 길도 함께 사라진다.
+        if (pet.isSick()) {
+            throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
+        }
         if (game.getKind() != GameKind.RUN) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "좌우 맞히기는 guess 로 쳐요");
         }
