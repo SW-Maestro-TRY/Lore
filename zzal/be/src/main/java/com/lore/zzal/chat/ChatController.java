@@ -72,7 +72,8 @@ public class ChatController {
         Instant real = Instant.now();
         ChatService.Answered a = chatService.answer(userId, petId, slot, request.text(), real);
         PetResponses.Detail pet = PetResponses.Detail.from(a.action().pet(), null, a.action().pet().now(real), catalog,
-                petService.motionRows(petId), a.action().justUnlocked());
+                petService.motionRows(petId), a.action().justUnlocked(), false,
+                petService.scenes(petId), petService.pieces(petId));
         return ApiResponse.ok(new ChatResponses.Answered(pet, new ChatResponses.Reply(a.replyLine(), a.reactionKey())));
     }
 }

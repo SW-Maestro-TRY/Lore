@@ -113,9 +113,10 @@ class PetServiceTest {
                 new MotionCatalog("", "", "v1"),
                 motionRepository,
                 seeder,
-                mock(com.lore.zzal.night.NightPlanner.class),
+                mock(com.lore.zzal.night.BakeTrigger.class),
                 new com.lore.zzal.scene.SceneService(sceneRepository, new MotionCatalog("", "", "v1")),
-                new com.lore.zzal.leave.LeaveService(postcardRepository));
+                new com.lore.zzal.leave.LeaveService(postcardRepository),
+                com.lore.zzal.PieceFixture.inMemory());
     }
 
     /** T0(정오) 에 부화해 <b>튜토리얼 중</b>인 펫 — 시계가 아직 안 켜졌다. 낮잠 테스트용. */
@@ -346,12 +347,44 @@ class PetServiceTest {
         @DisplayName("성격은 언제든, 자는 중에도")
         void personalityAnytime() {
             ZzalPet pet = baby();
-            service.choosePersonality(USER_ID, PET_ID, Personality.LIVELY, "구름 위 마을", kst("2026-09-06 00:00"));
+            service.choosePersonality(USER_ID, PET_ID, List.of(Personality.LIVELY), "구름 위 마을", kst("2026-09-06 00:00"));
             assertThat(pet.isSleeping()).isTrue();
             assertThat(pet.getPersonality()).isEqualTo(Personality.LIVELY);
             assertThat(pet.getWorld()).isEqualTo("구름 위 마을");
-            service.choosePersonality(USER_ID, PET_ID, Personality.COOL, "  ", kst("2026-09-06 00:01"));
+            service.choosePersonality(USER_ID, PET_ID, List.of(Personality.COOL), "  ", kst("2026-09-06 00:01"));
             assertThat(pet.getWorld()).isNull();
+        }
+
+        @Test
+        @DisplayName("★ 성격을 하나도 안 보내면 INVALID_INPUT — 빈 요청이 조용히 지나가지 않는다")
+        void personalityRequiresAtLeastOne() {
+            baby();
+            assertCode(() -> service.choosePersonality(USER_ID, PET_ID, List.of(), null, T0),
+                    ErrorCode.INVALID_INPUT);
+            assertCode(() -> service.choosePersonality(USER_ID, PET_ID, null, null, T0),
+                    ErrorCode.INVALID_INPUT);
+        }
+
+        @Test
+        @DisplayName("★ tutorial/seen 은 4칸에서만 통한다 — 다른 칸이면 409")
+        void tutorialSeenOnlyAtPersonalityStep() {
+            ZzalPet pet = PetFixture.hatching(USER_ID, "여울", null, "images/zzal/abc", T0);
+            pet.markAlive("images/zzal/sheet", "생김새", T0);
+            when(petRepository.findById(PET_ID)).thenReturn(Optional.of(pet));
+            when(petRepository.findByIdForUpdate(PET_ID)).thenReturn(Optional.of(pet));
+
+            // 1칸(FEED)에서 누르면 아무 일도 없다
+            assertCode(() -> service.tutorialSeen(USER_ID, PET_ID, T0), ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+            assertThat(TutorialSchedule.currentOf(pet.getTutorialStep())).isEqualTo(TutorialSchedule.Step.FEED);
+
+            PetFixture.atTutorialStep(pet, TutorialSchedule.Step.PERSONALITY);
+            service.tutorialSeen(USER_ID, PET_ID, T0);
+            assertThat(TutorialSchedule.currentOf(pet.getTutorialStep())).isEqualTo(TutorialSchedule.Step.CLEAN);
+            assertThat(pet.getTrash()).isEqualTo(1);          // 5칸(청소)을 할 수 있어야 한다
+
+            // 튜토리얼이 끝난 뒤에는 이미 끝났다고 말한다
+            pet.skipTutorial(T0);
+            assertCode(() -> service.tutorialSeen(USER_ID, PET_ID, T0), ErrorCode.ZZAL_TUTORIAL_ALREADY_DONE);
         }
 
         @Test
@@ -686,9 +719,9 @@ class PetServiceTest {
         void nothingBakesWhileTraveling() {
             ZzalPet pet = traveling();
             com.lore.zzal.night.NightPlanner realPlanner = new com.lore.zzal.night.NightPlanner(
-                    motionRepository, new MotionCatalog("", "", "v1"));
+                    motionRepository, new MotionCatalog("", "", "v1"), com.lore.zzal.PieceFixture.inMemory());
 
-            assertThat(realPlanner.plan(pet, java.time.LocalDate.of(2026, 9, 6))).isZero();
+            assertThat(realPlanner.plan(pet, java.time.LocalDate.of(2026, 9, 6), com.lore.zzal.night.NightPlanner.Occasion.NIGHT)).isZero();
         }
 
         @Test
@@ -790,7 +823,7 @@ class PetServiceTest {
             ZzalPet pet = sickPet();
             assertThat(pet.getCareMiss()).isPositive();          // 실제로 쌓여 있는데도
 
-            PetResponses.Detail detail = PetResponses.Detail.from(
+            PetResponses.Detail detail = PetResponses.Detail.fromWithoutPieces(
                     pet, null, kst("2026-09-06 21:00"), new MotionCatalog("", "", "v1"));
             String json = new com.fasterxml.jackson.databind.ObjectMapper()
                     .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
@@ -855,6 +888,7 @@ class PetServiceTest {
 
             com.lore.zzal.motion.ZzalMotion gift = com.lore.zzal.motion.ZzalMotion.forCatalog(
                     PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
+            org.springframework.test.util.ReflectionTestUtils.setField(gift, "status", com.lore.zzal.motion.MotionStatus.BAKING);
             gift.toReview("k", com.lore.zzal.motion.MotionSource.API,
                     com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
             gift.approve(T0);
@@ -890,6 +924,7 @@ class PetServiceTest {
         private com.lore.zzal.motion.ZzalMotion approvedGift() {
             com.lore.zzal.motion.ZzalMotion m = com.lore.zzal.motion.ZzalMotion.forCatalog(
                     PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
+            org.springframework.test.util.ReflectionTestUtils.setField(m, "status", com.lore.zzal.motion.MotionStatus.BAKING);
             m.toReview("images/zzal/pets/7/motions/9/motion.webp", com.lore.zzal.motion.MotionSource.API,
                     com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
             m.approve(T0);

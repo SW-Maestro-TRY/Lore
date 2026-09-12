@@ -43,6 +43,15 @@ public interface ZzalPetRepository extends JpaRepository<ZzalPet, Long> {
     List<ZzalPet> findByPhaseAndHatchStartedAtBefore(PetPhase phase, java.time.Instant before);
 
     /**
+     * 멈춘 알 복구용 — 여러 단계를 한 번에 집는다.
+     *
+     * ★ 이름을 받기 전(DRAFT)에도 굽는다(1.8 — 그림을 올리는 순간 시작). 그래서
+     *   HATCHING 만 집으면 <b>이름 짓는 동안 서버가 죽은 사람</b>이 복구에서 빠진다.
+     */
+    List<ZzalPet> findByPhaseInAndHatchStartedAtBefore(java.util.Collection<PetPhase> phases,
+                                                       java.time.Instant before);
+
+    /**
      * 이 펫을 <b>잠그고</b> 꺼낸다.
      *
      * ★ 한 펫에 대해 "동시에 하나만" 이어야 하는 일을 시작할 때 쓴다. 검사와 저장 사이에

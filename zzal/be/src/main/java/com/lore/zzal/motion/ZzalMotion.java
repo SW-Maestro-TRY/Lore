@@ -215,14 +215,40 @@ public class ZzalMotion {
      *   곧바로 {@code FAILED} 가 돼, <b>재생성 기회가 영구히 사라진다</b>(#224 리뷰 중-1).
      *   정본 16장은 "굽기 실패는 조각을 소모하지 않는다 — 다음 밤에 같은 동작을 다시 굽는다" 이므로
      *   다음 밤은 처음과 같은 조건이어야 한다. 평생 누적이 필요해지면 별도 칸을 만든다.
+     *
+     * <h3>★★ 조건부다 — 집어 둔 줄을 되돌리면 같은 것을 두 번 굽는다</h3>
+     * 집기({@code ZzalMotionRepository.claim})는 {@code WHERE status='QUEUED'} 로 지키는데, 여기가
+     * 조건 없이 {@code QUEUED} 를 쓰면 그 문이 뚫린다:
+     * <pre>
+     *   T1  queue → claim(BAKING) → 커밋 → 굽기 제출
+     *   T2  (오래된 값을 들고) queue → BAKING 을 QUEUED 로 덮어씀 → claim 성공 → 또 굽기 제출
+     * </pre>
+     * 돌보기·재우기는 펫 행 잠금으로 줄을 서지만, <b>조각 완성 트리거는 커밋 뒤 새 트랜잭션</b>이라
+     * 그 잠금 밖에서 돈다. 그래서 창이 실제로 열린다. 한 판이 $0.086 이다.
+     *
+     * @return 실제로 큐에 올렸으면 true
      */
-    public void queue(LocalDate nightOf) {
+    public boolean queue(LocalDate nightOf) {
+        // ★★ 이미 굽고 있거나 판정을 지난 줄은 큐로 되돌리지 않는다. 아래 설명 참조.
+        if (!QUEUEABLE.contains(this.status)) {
+            return false;
+        }
         this.status = MotionStatus.QUEUED;
         this.nightOf = nightOf;
         this.claimedAt = null;
         this.claimedBy = null;
         this.regenRound = 0;
+        return true;
     }
+
+    /**
+     * 큐에 올릴 수 있는 자리.
+     *
+     * ★ {@code QUEUED} 를 포함하는 이유 — 아직 아무도 안 집은 줄을 다시 올리는 것은 해가 없다(밤만 갱신된다).
+     * ★ {@code HOLD} 가 빠진 이유 — 보류함은 <b>사람이 꺼내기 전까지 아무도 안 집는 자리</b>다(1.9).
+     */
+    private static final java.util.Set<MotionStatus> QUEUEABLE =
+            java.util.EnumSet.of(MotionStatus.NONE, MotionStatus.FAILED, MotionStatus.QUEUED);
 
     /** 그 밤 실패 — 조각은 소모하지 않고 다음 밤에 다시 오른다(16장). */
     public void failNight() {
@@ -270,6 +296,20 @@ public class ZzalMotion {
     /**
      * 다 구워졌다 → <b>검수 대기</b>. 사용자에게는 아직 안 보인다.
      *
+     * <h3>★★ 굽는 중({@code BAKING})이던 줄만 받는다 — 늦게 끝난 굽기가 끝난 판정을 지우면 안 된다</h3>
+     * 굽기가 느려 {@code StuckMotionRecovery} 의 유예를 넘기면 그 줄은 큐로 되돌아가 <b>다른 판이 다시 구워진다.</b>
+     * 그런데 처음 굽던 스레드는 죽은 것이 아니라 느릴 뿐이라, 나중에 결과를 들고 돌아온다. 그때 무조건 받으면
+     * <pre>
+     *   느린 굽기 A 시작 → 유예 초과 → 복구가 큐로 → 굽기 B → 검수 → 상훈님 OK → OPEN
+     *   그제서야 A 도착 → OPEN 이 REVIEW 로 되돌아가고 humanVerdict 가 지워진다
+     * </pre>
+     * 사용자에게는 <b>아침에 받은 동작이 다시 "연습 중" 으로 사라진다.</b> 검수도 다시 해야 한다.
+     *
+     * ★ 판정을 지우는 것({@code humanVerdict = null}) 자체는 맞다 — 다시 구운 <b>새 그림</b>이 옛 판정을 달고
+     *   나가면 안 된다. 문제는 <b>이미 끝난 줄에까지</b> 그러는 것이라, 상태로 문을 잠근다.
+     *
+     * @return 이 호출이 실제로 검수 대기로 옮겼으면 true. false 면 <b>진 쪽</b>이다 — 조용히 물러난다
+     *
      * ★★ v1 은 여기서 바로 열었다("검수 전 지급"). PR-7 에서 <b>없앴다</b> — 정본 6장·2장은
      *   "밤에 굽고 → 판정하고 → <b>아침에</b> 배워 온다" 이고, 그 순서가 지켜지려면 검수를 통과하기 전의 그림이
      *   사용자 화면에 뜨면 안 된다. 밤에 재운 사용자가 갇히는 문제는 "아침 공개" 로 이미 풀린다 —
@@ -277,13 +317,18 @@ public class ZzalMotion {
      *
      * ★ 다시 구운 것이면 사람 판정을 지운다. 안 지우면 새 그림이 옛 판정을 달고 검수 목록에서 사라진다.
      */
-    public void toReview(String imageKey, MotionSource source,
-                         GateVerdict verdict, String note, String gateVersion) {
+    public boolean toReview(String imageKey, MotionSource source,
+                            GateVerdict verdict, String note, String gateVersion) {
+        // ★★ 굽는 중이던 줄만 받는다. 아래 설명 참조.
+        if (this.status != MotionStatus.BAKING) {
+            return false;
+        }
         done(imageKey, source, verdict, note, gateVersion);
         this.status = MotionStatus.REVIEW;
         this.humanVerdict = null;
         this.humanNote = null;
         this.reviewedAt = null;
+        return true;
     }
 
     /**
@@ -329,6 +374,53 @@ public class ZzalMotion {
 
     public void markFailed() {
         this.status = MotionStatus.FAILED;
+    }
+
+    /**
+     * <b>사람이</b> 보류함에서 꺼낸다 — 지시문이나 원본을 고친 뒤.
+     *
+     * <h3>★★ 왜 {@code queue()} 와 다른 문인가</h3>
+     * {@code queue()} 는 자동 경로(밤 계획·스위프·트리거)가 쓰는 문이고, 거기서 {@code HOLD} 를 못 집는 것이
+     * <b>"자동으로 안 풀린다" 를 지키는 방법</b>이다(1.9). 그런데 사람은 꺼낼 수 있어야 하므로 문을 따로 낸다.
+     * 한 문으로 합치면 조건 한 줄이 사라지는 순간 자동 재시도가 되살아난다 — 그때 돈은 이미 나간 뒤다.
+     *
+     * ★ 꺼내면 <b>처음 조건으로</b> 돌아간다({@code regenRound = 0}). 안 그러면 꺼내자마자 한 판 실패로
+     *   곧바로 다시 보류함이 되어 그 동작은 영영 못 배운다.
+     *
+     * @return 보류함에 있던 것을 꺼냈으면 true
+     */
+    public boolean releaseFromHold(LocalDate nightOf) {
+        if (this.status != MotionStatus.HOLD) {
+            return false;
+        }
+        this.status = MotionStatus.QUEUED;
+        this.nightOf = nightOf;
+        this.claimedAt = null;
+        this.claimedBy = null;
+        this.regenRound = 0;
+        return true;
+    }
+
+    /**
+     * 후보가 전부 아니었다 → 보류함. 사람이 꺼내기 전까지 아무도 안 집는다.
+     *
+     * ★ 밤 계획({@code NightPlanner})과 스위프는 {@code NONE}·{@code FAILED}·{@code QUEUED} 만 본다.
+     *   그래서 이 상태로 두면 <b>자동 재시도가 물리적으로 일어나지 않는다</b> — 조건이 아니라
+     *   상태로 막는 것이 안전하다. 조건은 나중에 누가 한 줄 더하면 뚫린다.
+     */
+    public void hold() {
+        this.status = MotionStatus.HOLD;
+    }
+
+    /**
+     * 사람이 고른 판으로 대표를 갈아 끼운다(정본 1.9 — 나온 판 중에서 고른다).
+     *
+     * ★ 대표를 바꿔야 하는 이유 — 사용자에게 나가는 그림은 모션 행의 {@code imageKey} 다.
+     *   후보 줄에만 표시하고 여기를 안 바꾸면 <b>고르지 않은 판이 공개된다.</b>
+     */
+    public void useCandidate(String imageKey, MotionSource source) {
+        this.imageKey = imageKey;
+        this.source = source;
     }
 
     /** 상훈님 판정을 받아 적는다. 게이트 판정은 그대로 남는다(둘을 비교해야 하므로). */

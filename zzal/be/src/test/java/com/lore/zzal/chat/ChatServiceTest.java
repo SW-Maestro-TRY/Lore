@@ -82,7 +82,8 @@ class ChatServiceTest {
             ((Runnable) inv.getArgument(1)).run();
             return new PetService.Action(pet, List.of());
         });
-        service = new ChatService(repo, pets, new MotionCatalog("", "", "v1"));
+        service = new ChatService(repo, pets, new MotionCatalog("", "", "v1"),
+                com.lore.zzal.PieceFixture.inMemory());
     }
 
     private Optional<ZzalChatCall> call(ChatSlot slot) {
@@ -160,7 +161,7 @@ class ChatServiceTest {
     @Test
     @DisplayName("답하면 대사 1줄 + 반응 동작 + 친밀도 +40 + 채팅 카운터. 같은 부름에 두 번은 닫힘")
     void answerRewards() {
-        pet.choosePersonality(Personality.LIVELY, null);
+        pet.choosePersonality(List.of(Personality.LIVELY), null);
         Instant t = kst("2026-09-05 13:30");
         ChatService.Answered a = service.answer(USER, PET, ChatSlot.MORNING, "학교 갔다 왔어", t);
         assertThat(a.replyLine()).isNotBlank();
@@ -184,7 +185,7 @@ class ChatServiceTest {
     @Test
     @DisplayName("기억 — 최근 답 5개, 세 번째 답마다 재언급")
     void memories() {
-        pet.choosePersonality(Personality.GENTLE, null);
+        pet.choosePersonality(List.of(Personality.GENTLE), null);
         service.answer(USER, PET, ChatSlot.BABY, "첫째", T0.plus(Duration.ofMinutes(9)));
         service.answer(USER, PET, ChatSlot.MORNING, "둘째", kst("2026-09-05 13:30"));
         ChatService.Answered third = service.answer(USER, PET, ChatSlot.EVENING, "셋째", kst("2026-09-05 19:30"));

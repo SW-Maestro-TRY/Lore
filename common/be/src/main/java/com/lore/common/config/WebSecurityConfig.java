@@ -59,6 +59,14 @@ public class WebSecurityConfig {
                         // 조회만 열어 두는 것 — 랜딩·공개 목록이 여기 걸린다
                         .requestMatchers(HttpMethod.GET, "/api/zzal/v1/public/**").permitAll()
 
+                        // ★★ 맥미니(codex 러너) 전용 문 — 사람 로그인이 아니라 **전용 열쇠**로 지킨다.
+                        //   여기를 로그인 뒤로 두면 러너가 새벽에 혼자 못 올린다(사람 토큰은 몇 시간이면 만료).
+                        //   비어 있는 문이 아니다 — 세 겹으로 잠겨 있다.
+                        //     1. app.zzal.agent.enabled 가 false 면 컨트롤러 빈 자체가 없어 주소가 404
+                        //     2. AgentGuard 가 X-Zzal-Agent-Key 를 시간이 일정한 비교로 판정(없으면 401)
+                        //     3. 열쇠는 사용자 하나에 묶여, 올린 그림도 그 사람의 presign 키여야 한다
+                        .requestMatchers("/api/zzal/v1/agent/**").permitAll()
+
                         // 웹툰 스튜디오는 **로그인 없이 끝까지 만들 수 있는 화면**이다.
                         .requestMatchers("/api/webtoon/v1/my/**").authenticated()
 

@@ -82,7 +82,7 @@ public class AdminController {
     public ApiResponse<Void> verdict(@LoginUser Long userId,
                                      @PathVariable Long motionId,
                                      @Valid @RequestBody AdminRequests.Verdict request) {
-        adminService.review(userId, motionId, request.verdict(), request.note());
+        adminService.review(userId, motionId, request.verdict(), request.note(), request.candidateId());
         return ApiResponse.ok();
     }
 
@@ -112,8 +112,19 @@ public class AdminController {
     public ApiResponse<Void> upload(@LoginUser Long userId,
                                     @PathVariable Long motionId,
                                     @Valid @RequestBody AdminRequests.Upload request) {
-        adminService.upload(userId, motionId, request.imageKey());
+        adminService.upload(userId, motionId, request.candidates());
         return ApiResponse.ok();
+    }
+
+    @Operation(summary = "단계별 소요·비용", description = """
+            한 펫의 생성이 **단계마다 몇 초 걸렸고 얼마가 들었나**. 시도 순·단계 순.
+
+            데이터는 처음부터 쌓이고 있었고 **없던 것은 창구뿐**이라, 그동안 이걸 보려면
+            서버 로그를 직접 읽어야 했다. 예상 시간을 다시 잡을 때도 이 값을 쓴다.""")
+    @GetMapping("/gen-steps")
+    public ApiResponse<List<AdminResponses.GenStep>> genSteps(@LoginUser Long userId,
+                                                              @RequestParam Long petId) {
+        return ApiResponse.ok(adminService.genSteps(userId, petId));
     }
 
     @Operation(summary = "그 밤 현황", description = """
