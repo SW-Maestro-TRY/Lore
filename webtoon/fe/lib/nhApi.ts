@@ -102,7 +102,8 @@ export interface NhJob {
   /** 검수가 도는 동안 띄울 한 줄. 비어 있으면 단계 기본 문구를 쓴다. */
   say: string;
   pct: number;
-  art: { done: number; total: number } | null;
+  /** retry_page: 지금 걸려서 다시 그리는 중인 장 번호. 0(또는 없음)이면 없다. */
+  art: { done: number; total: number; retry_page?: number } | null;
   log: string[];
   elapsed: number;
 }
@@ -279,9 +280,23 @@ export interface RunCard {
   example?: boolean;
 }
 
-/** 예시 스냅샷만. 실패하면(첫 배포 직후처럼 아직 하나도 안 구웠을 때) 빈 목록. */
+/** 예시 스냅샷만. 실패하면(첫 배포 직후처럼 아직 하나도 안 구웠을 때) 빈 목록.
+ *
+ * **`snapshot()` 을 안 쓴다.** 그 함수는 부르면 전역 `onSnapshot` 을 켠다 —
+ * "진짜 서버가 죽어서 이 화면 전체가 예시로 대신한다" 는 뜻으로 켜는 것인데,
+ * 여기는 그런 자리가 아니다. 둘러보기는 **실제 작품이 있어도 예시를 늘 같이**
+ * 보여주므로(위 listRuns 주석), 이 호출은 정상적으로 매번 성공한다. 그런데
+ * `snapshot()` 을 그대로 썼더니 둘러보기에 한 번만 들어가도 `onSnapshot` 이
+ * 영영 켜진 채로 남아서, 그 뒤에 여는 **진짜** 작품의 완성본(`Result.tsx` 의
+ * `pageUrl`)까지 예시 자리(`/static/gallery/...`)에서 그림을 찾다가 404 가
+ * 났다 — 새로고침해야 고쳐진 것은 이 표시가 이 브라우저 탭이 살아있는 동안
+ * 안 꺼졌기 때문이다(실측으로 확인). */
 function exampleRuns(): Promise<RunCard[]> {
-  return snapshot<{ runs: RunCard[] }>("/runs.json")
+  return fetch(`${DEMO}/runs.json`)
+    .then((res) => {
+      if (!res.ok) throw new Error("예시를 못 불러왔습니다");
+      return res.json() as Promise<{ runs: RunCard[] }>;
+    })
     .then((got) => (got.runs || []).map((r) => ({ ...r, example: true })))
     .catch(() => []);
 }
@@ -366,16 +381,28 @@ export interface RunResult {
   page_count: number;
   planned_pages: number;
   preview: boolean;
+  /** 진짜 서버가 실패해서 예시 스냅샷으로 대신 연 것인가. `Result.tsx` 가
+   *  이 값을 `pageUrl` 에 그대로 넘긴다 — 전역 `onSnapshot` 에 기대면,
+   *  이 작품 하나가 스냅샷으로 열렸다는 사실이 그 뒤에 여는 **다른**(진짜)
+   *  작품에까지 새어 나간다(exampleRuns 주석과 같은 사고). */
+  example?: boolean;
 }
 
 export function readResult(runId: string): Promise<RunResult> {
   return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`)
-    .catch(() => snapshot<RunResult>(`/${encodeURIComponent(runId)}/result.json`));
+    .then((r) => ({ ...r, example: false }))
+    .catch(() => snapshot<RunResult>(`/${encodeURIComponent(runId)}/result.json`)
+      .then((r) => ({ ...r, example: true })));
 }
 
 /** 완성본의 한 장. `raw` 는 얹은 것(말풍선) 없이 밑그림만 — 편집실이 쓴다. */
-export function pageUrl(runId: string, no: number, width = 1080, raw = false): string {
-  if (onSnapshot && !raw) {
+/** @param example 이 작품이 예시 스냅샷인지 **호출하는 쪽이 안다면** 직접
+ *   넘긴다(`coverUrl` 과 같은 이유 — `readResult` 가 돌려주는 `example` 을
+ *   그대로 쓴다). 안 넘기면 예전처럼 전역 `onSnapshot` 을 본다. */
+export function pageUrl(
+  runId: string, no: number, width = 1080, raw = false, example?: boolean,
+): string {
+  if ((example ?? onSnapshot) && !raw) {
     return `${DEMO}/${encodeURIComponent(runId)}/p${String(no).padStart(2, "0")}.jpg`;
   }
   return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`;
