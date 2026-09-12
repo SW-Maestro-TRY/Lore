@@ -240,6 +240,28 @@ class AdminServiceTest {
     }
 
     @Test
+    @DisplayName("★★ 빈 후보 목록은 400 계열로 거절한다 — 500 이 아니다 (P-8)")
+    void emptyCandidateListIsRejected() {
+        reviewing(73L, 101);
+        service.review(ADMIN, 73L, HumanVerdict.REGENERATE, "다시", null);
+
+        // @Valid 를 안 거치는 호출자(러너 경로 재사용 등)가 빈 목록으로 부르는 자리다.
+        // 고치기 전에는 candidates.get(0) 이 IndexOutOfBoundsException 으로 터져 500 이었다.
+        assertThatThrownBy(() -> service.upload(ADMIN, 73L, List.of()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
+        assertThatThrownBy(() -> service.uploadForAgent(ADMIN, 73L, List.of()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
+
+        assertThat(candidates.getOrDefault(73L, List.of())).isEmpty();
+
+        // 실패 뒤에 정상 한 판을 다시 올리면 성공한다 — 거절이 자리를 잠그지 않는다
+        service.upload(ADMIN, 73L, List.of(new AdminRequests.Candidate("images/zzal/tmp/ok.webp", null, null)));
+        assertThat(candidates.get(73L)).hasSize(1);
+    }
+
+    @Test
     @DisplayName("★★ 고른 판이 대표가 된다 — 여기를 빠뜨리면 고르지 않은 판이 공개된다")
     void chosenCandidateBecomesTheOneShown() {
         ZzalMotion m = reviewing(71L, 101);

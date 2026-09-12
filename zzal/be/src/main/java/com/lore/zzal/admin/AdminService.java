@@ -285,6 +285,14 @@ public class AdminService {
         //   같은 이유로 "이 라운드는 이미 올렸나" 도 세지 않는다. 라운드 번호는 밤마다 0 으로 돌아가
         //   밤을 가로질러 같은 것을 가리키지 않는다. 한 라운드를 두 번 올리는 것은
         //   <b>상태 잠금</b>이 막는다 — 올리는 순간 REVIEW 가 되어 다음 업로드는 ZZAL_REGEN_NOT_REQUESTED 다.
+        //
+        // ★★ 하한도 서버가 잡는다 — {@code @Size(min = 1)} 은 <b>DTO 에만</b> 있어서, {@code @Valid} 를 안 거치는
+        //   호출자(러너 경로 재사용 등)가 빈 목록으로 부르면 아래 {@code candidates.get(0)} 이
+        //   {@code IndexOutOfBoundsException} 으로 터져 곧바로 <b>500</b> 이었다. 만료 없는 열쇠를 쥔 기계가
+        //   새벽에 혼자 부르는 자리라 아무도 안 본다. 상한만 재고 하한을 안 재면 이런 모양이 남는다.
+        if (candidates.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "올릴 판이 한 판도 없어요");
+        }
         if (candidates.size() > PER_ROUND_MAX) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "한 라운드에는 %d판까지 올릴 수 있어요".formatted(PER_ROUND_MAX));
