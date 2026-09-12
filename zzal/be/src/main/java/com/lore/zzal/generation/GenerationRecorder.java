@@ -70,10 +70,19 @@ public class GenerationRecorder {
                 .ifPresent(s -> s.succeed(r.imageKey(), r.text(), r.model(), r.costUsd(), Instant.now()));
     }
 
+    /**
+     * 이 단계를 실패로 남긴다. <b>실패해도 나간 돈은 적는다.</b>
+     *
+     * ★★ 예전에는 비용 자리가 {@code BigDecimal.ZERO} 상수였다. 유료 호출은 응답이 200 으로 돌아온
+     *   순간 과금이 끝나므로, 그 뒤의 응답 파싱·S3 업로드에서 실패하면 그 돈이 단계 기록에도
+     *   job 합계에도 비용 알림에도 <b>안 잡혔다</b> — 원가가 실제보다 낮게 보여 중복 과금이나
+     *   급증을 못 본다. 얼마가 나갔는지는 클라이언트가 {@code BilledFailureException} 에 실어 보낸다.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void failStep(Long stepId, GenErrorCode code) {
+    public void failStep(Long stepId, GenErrorCode code, BigDecimal costUsd) {
+        BigDecimal spent = costUsd == null ? BigDecimal.ZERO : costUsd;
         stepRepository.findById(stepId)
-                .ifPresent(s -> s.fail(code, BigDecimal.ZERO, Instant.now()));
+                .ifPresent(s -> s.fail(code, spent, Instant.now()));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

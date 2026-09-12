@@ -93,17 +93,24 @@ public class OpenAiImageClient implements ImageClient {
                         "이미지 생성 실패(HTTP %d): %s".formatted(res.statusCode(), res.body()));
             }
 
+            // ★★ 여기서부터는 <b>돈이 이미 나간 뒤</b>다 — 200 이 돌아온 순간 과금이 끝난다.
+            //   그래서 비용을 먼저 계산해 두고, 이 아래에서 터지는 모든 실패에 그 값을 실어 보낸다.
+            //   안 그러면 응답 파싱·S3 업로드 실패가 "비용 0" 으로 기록돼 원가가 실제보다 낮게 보인다.
             JsonNode payload = json.readTree(res.body());
-            String b64 = payload.path("data").path(0).path("b64_json").asText(null);
-            if (b64 == null || b64.isBlank()) {
-                throw new IllegalStateException("응답에 이미지가 없습니다: " + res.body());
+            BigDecimal cost = cost(payload);
+            try {
+                String b64 = payload.path("data").path(0).path("b64_json").asText(null);
+                if (b64 == null || b64.isBlank()) {
+                    throw new IllegalStateException("응답에 이미지가 없습니다: " + res.body());
+                }
+
+                Path out = work.resolve("out.png");
+                Files.write(out, Base64.getDecoder().decode(b64));
+                storage.upload(outputKey, out, "image/png");
+            } catch (Exception e) {
+                throw new BilledFailureException(cost, e);
             }
 
-            Path out = work.resolve("out.png");
-            Files.write(out, Base64.getDecoder().decode(b64));
-            storage.upload(outputKey, out, "image/png");
-
-            BigDecimal cost = cost(payload);
             log.info("이미지 생성 — {} · {} · ${}", outputKey, spec.model(), cost);
             return new Result(outputKey, cost);
         } finally {

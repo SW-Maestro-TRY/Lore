@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.generation.client.BilledFailureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -153,12 +154,19 @@ public class GenerationRunner {
             } catch (TimeoutException e) {
                 r.future().cancel(true);
                 log.warn("시간 초과 — jobId={} step={}", jobId, r.step().name());
-                recorder.failStep(r.stepId(), GenErrorCode.TIMEOUT);
+                // ★ 끊은 호출은 얼마가 나갔는지 알 길이 없다(응답을 못 받았다). 0 이 맞다.
+                recorder.failStep(r.stepId(), GenErrorCode.TIMEOUT, BigDecimal.ZERO);
                 error = worse(error, GenErrorCode.TIMEOUT);
             } catch (Exception e) {
                 GenErrorCode code = classify(e instanceof ExecutionException ? e.getCause() : e);
-                log.warn("단계 실패 — jobId={} step={} code={} : {}", jobId, r.step().name(), code, String.valueOf(e));
-                recorder.failStep(r.stepId(), code);
+                // ★★ 실패해도 <b>이미 나간 돈</b>은 적는다. 유료 호출은 200 이 돌아온 순간 과금이 끝나므로,
+                //   응답 파싱·S3 업로드에서 터진 실패는 공짜가 아니다. 여기서 안 더하면 원가가
+                //   실제보다 낮게 보여 중복 과금이나 급증을 못 본다.
+                BigDecimal billed = BilledFailureException.billed(e);
+                log.warn("단계 실패 — jobId={} step={} code={} 비용=${} : {}",
+                        jobId, r.step().name(), code, billed, String.valueOf(e));
+                recorder.failStep(r.stepId(), code, billed);
+                cost = cost.add(billed);
                 error = worse(error, code);
             }
         }

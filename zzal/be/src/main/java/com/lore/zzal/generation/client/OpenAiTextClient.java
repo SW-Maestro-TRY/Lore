@@ -99,13 +99,19 @@ public class OpenAiTextClient implements TextClient {
                         "문단 생성 실패(HTTP %d): %s".formatted(res.statusCode(), res.body()));
             }
 
+            // ★★ 여기서부터는 돈이 이미 나간 뒤다 — 이미지 쪽과 같은 이유로 비용을 먼저 계산해 둔다.
             JsonNode payload = json.readTree(res.body());
-            String text = payload.path("choices").path(0).path("message").path("content").asText("").trim();
-            if (text.isBlank()) {
-                throw new IllegalStateException("응답에 글이 없습니다: " + res.body());
+            BigDecimal cost = cost(payload);
+            String text;
+            try {
+                text = payload.path("choices").path(0).path("message").path("content").asText("").trim();
+                if (text.isBlank()) {
+                    throw new IllegalStateException("응답에 글이 없습니다: " + res.body());
+                }
+            } catch (Exception e) {
+                throw new BilledFailureException(cost, e);
             }
 
-            BigDecimal cost = cost(payload);
             log.info("정체성 문단 — {}자 · {} · ${}", text.length(), spec.model(), cost);
             return new Result(text, cost);
         } finally {
