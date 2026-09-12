@@ -105,7 +105,13 @@ export async function shareNative(url: string, title: string): Promise<boolean> 
     return false;
   }
   try {
-    await navigator.share({ title, text: title, url });
+    /* **url 을 따로 안 싣는다.** `{ text, url }` 을 둘 다 주면 받는 쪽(카카오톡 등)이
+     * 둘을 자기 마음대로 이어 붙이는데, 그때 title 을 url **뒤에** 붙이는 자리가
+     * 있었다 — 그러면 한글 제목이 주소의 일부처럼 보여(공백이 없어서) 링크를
+     * 열 때 그 제목까지 run id 로 들어가 깨졌다(실측으로 확인). 줄바꿈으로 직접
+     * 이어 하나의 글로 보내고, url 을 **맨 뒤**에 둔다 — 그러면 뒤에 아무것도
+     * 안 붙으므로 어떤 앱이 이어 붙이든 안전하다. */
+    await navigator.share({ title, text: `${title}\n${url}` });
     return true;
   } catch (e) {
     // **닫은 것과 못 연 것을 가른다.** 사람이 닫았으면(AbortError) 그것으로
