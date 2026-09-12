@@ -172,6 +172,24 @@ public class RunController {
     }
 
     /**
+     * 편집실이 여는 자리(#281). {@code ep} 는 지금 늘 1이다 — 한 편짜리라
+     * 다른 값을 줘도 같은 작품이 열린다(이어그리기가 붙으면 여기서 갈린다).
+     *
+     * 이 주소가 없어서 편집실이 죽은 파이썬 프록시(8800)로 떨어져 502 가
+     * 났다 — 만들기·완성본 읽기는 스프링으로 옮겨 왔는데 이 자리만 빠져
+     * 있었다.
+     */
+    @Operation(summary = "편집실 데이터", description = "컷은 페이지당 하나다 — 파이프라인이 컷 경계를 안 남긴다.")
+    @GetMapping("/{runId}/episode")
+    public ResponseEntity<Map<String, Object>> episode(@PathVariable String runId,
+                                                        @RequestParam(defaultValue = "1") int ep) {
+        Map<String, Object> found = runs.episode(runId, ep);
+        return found == null
+                ? ResponseEntity.status(404).body(Map.of("error", "그 회차에 그려진 장이 없습니다"))
+                : ResponseEntity.ok(found);
+    }
+
+    /**
      * 한 편을 통째로 내려받는다 — <b>LORE 표시가 붙는 유일한 길이다.</b>
      *
      * 만든 사람은 결과물을 SNS 에 올린다. 그때 그림만 돌아다니고 어디서 만든

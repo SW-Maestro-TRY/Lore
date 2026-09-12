@@ -199,6 +199,116 @@ public class RunService {
     }
 
     /**
+     * 편집실 화면이 그대로 먹는 모양 — 죽은 파이썬 프록시가 맡던
+     * {@code newharness_pipeline.editor_data} 를 그대로 옮긴다(#281).
+     *
+     * <h2>컷은 왜 늘 하나뿐인가</h2>
+     *
+     * 편집실은 원래 "장(scene) 하나 = 컷 여럿"을 다루게 만들어졌지만, 지금
+     * 그림 파이프라인은 <b>페이지 하나를 한 번에 그린다</b> — 컷을 몇 개로
+     * 나눌지, 대사를 어디에 앉힐지는 전부 이미지 모델이 그림 안에서 스스로
+     * 정하고, 하네스는 그 경계를 따로 기록하지 않는다(디테일 직행 흐름,
+     * {@code detailart.py} 참고). 그래서 컷 목록에 실을 것이 원래 없다 —
+     * 페이지당 컷을 하나로 두고, 그 안에 이 페이지가 그린 장면 한 줄만
+     * {@code description} 에 실어 대사 패널이 완전히 비지는 않게 한다. 나머지
+     * 칸(shot·beat·speaker·dialogue…)은 파이썬 쪽도 늘 빈 채로 내보내던
+     * 것과 같다 — 화면이 그 칸이 있다고 가정하고 읽는 자리가 있어서, 아예
+     * 없애면 그 자리가 깨진다.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> episode(String runId, int ep) {
+        List<Integer> numbers = pages.pageNumbersOf(runId);
+        if (numbers.isEmpty()) {
+            return null;
+        }
+        WebtoonWork work = works.findFirstByRunId(runId).orElse(null);
+        WebtoonJob job = work == null ? null
+                : jobs.findByPublicId(work.getJobId()).orElse(null);
+        Optional<WebtoonStory> chosen = stories.chosenOf(runId);
+        List<String> scenes = stories.scenesOf(runId);
+        Map<Integer, String> keys = pages.keysOf(runId);
+
+        List<Map<String, Object>> sceneList = new ArrayList<>();
+        for (int no : numbers) {
+            int[] dim = dimensionsOf(pages.urlOfKey(keys.get(no)));
+            String note = no == 1 ? "표지" : captionOf(scenes, no);
+
+            Map<String, Object> cut = new LinkedHashMap<>();
+            cut.put("no", 1);
+            cut.put("shot", "");
+            cut.put("beat", "");
+            cut.put("speaker", "");
+            cut.put("dialogue", "");
+            cut.put("narration", "");
+            cut.put("thought", "");
+            cut.put("sfx", "");
+            cut.put("description", note);
+            cut.put("lines", List.of());
+
+            Map<String, Object> scene = new LinkedHashMap<>();
+            scene.put("no", no);
+            // 편집실 코드(editorCore.ts 의 atApi)가 알아보는 짧은 모양 그대로
+            // 준다 — 스프링 접두사(/api/webtoon/v1)를 여기서 붙이면 편집실이
+            // 그 앞에 또 한 번 붙여 주소가 두 겹이 된다.
+            scene.put("image", "/api/runs/" + runId + "/page/" + no + "?w=1080");
+            scene.put("w", dim[0]);
+            scene.put("h", dim[1]);
+            scene.put("cuts", List.of(cut));
+            sceneList.add(scene);
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("run_id", runId);
+        out.put("character", characterOf(job));
+        out.put("title", chosen.map(WebtoonStory::displayTitle).filter(s -> !s.isBlank())
+                .orElse(NO_TITLE));
+        out.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
+        out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
+        out.put("logline", chosen.map(WebtoonStory::getPlot).orElse(""));
+        // 한 편짜리다 — 이어그리기가 붙으면 여기가 늘어난다(카드가 쓰는 것과 같은 값).
+        out.put("episode", 1);
+        out.put("episodes", List.of(1));
+        // gap·width 개념이 없는 것과 같은 이유(result() 머리말) — 편집실도
+        // 손볼 여백이 없으니 빈 채로 준다.
+        out.put("gap_scale", Map.of());
+        out.put("scenes", sceneList);
+        out.put("page_count", numbers.size());
+        return out;
+    }
+
+    /**
+     * 그림의 가로·세로. 없거나 못 읽으면 {0, 0} — 편집실은 얹은 것의 좌표를
+     * 퍼센트로 다루므로, 이 값을 몰라도 그림 자체는 그대로 뜬다(레이아웃
+     * 비율만 못 맞춘다).
+     *
+     * 전체를 내려받지 않는다 — {@link javax.imageio.ImageReader} 는 머리에서
+     * 크기를 읽고 그친다. 장마다 한 번씩(편집실을 열 때) 부르는 자리라
+     * 전체를 받으면 그만큼 열리는 것이 느려진다.
+     */
+    private static int[] dimensionsOf(String url) {
+        if (url == null || url.isBlank()) {
+            return new int[]{0, 0};
+        }
+        try (var in = javax.imageio.ImageIO.createImageInputStream(
+                java.net.URI.create(url).toURL().openStream())) {
+            var readers = javax.imageio.ImageIO.getImageReaders(in);
+            if (!readers.hasNext()) {
+                return new int[]{0, 0};
+            }
+            var reader = readers.next();
+            try {
+                reader.setInput(in);
+                return new int[]{reader.getWidth(0), reader.getHeight(0)};
+            } finally {
+                reader.dispose();
+            }
+        } catch (Exception e) {          // noqa: 크기 하나 때문에 편집실이 안 열리면 안 된다
+            log.warn("그림 크기를 못 읽었습니다 ({})", url, e);
+            return new int[]{0, 0};
+        }
+    }
+
+    /**
      * 이 장이 그린 장면 한 줄.
      *
      * <b>1장은 표지다.</b> 장면을 그리지 않고 제목만 얹으므로 캡션이 없다 —
