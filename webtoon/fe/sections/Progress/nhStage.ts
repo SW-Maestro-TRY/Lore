@@ -86,11 +86,16 @@ export const NH_STAGE_NAME: Record<string, string> = {
   pages: "페이지 그림",
 };
 
-/** 단계마다 이 화면이 보여줄 수 있는 것. 없으면 펼칠 것이 없다. */
+/** 단계마다 이 화면이 보여줄 수 있는 것. 없으면 펼칠 것이 없다.
+ *
+ * `board` 는 없다 — **확정된 회차 보기를 없앴다.** 거기 있던 「이번 화에서
+ * 일부러 안 밝히고 남겨 둘 것」이 다음 화를 위해 감춰 둔 것을 사용자에게
+ * 먼저 까발리는 꼴이었다(사용자 피드백). 장면 순서·함께 나오는 인물도 같은
+ * 자리에서만 보이던 것이라 굳이 나눠 남길 이유가 없어 통째로 뺐다 — 회차
+ * 짜기 단계 자체는(진행 막대의 그 줄) 그대로 돈다. */
 export const NH_STAGE_RESULT: Record<string, string> = {
   story: "지어낸 이야기 4개 보기",
   sheet: "캐릭터 시트 보기",
-  board: "확정된 회차 보기",
 };
 
 /**
@@ -104,11 +109,25 @@ export function mascotLine(
   status: string,
   stage: string,
   say: string,
-  art: { done: number; total: number } | null,
+  art: { done: number; total: number; retry_page?: number } | null,
 ): string {
   if (status === "running" && say) return say;
   if (status === "running" && stage === "pages" && art?.total) {
-    return `루가 그림을 그리고 있어요 (${art.done}/${art.total})`;
+    // `art.done` 은 "지금 몇 번째 장을 그리기 시작했나" 다(하네스가 그 장을
+    // 그리기 **전에** 이 줄을 찍는다) — 그래서 이미 그 번호 자체가 "지금
+    // 그리는 장" 이다. +1 을 하면 한 장 앞서 말하게 된다.
+    if (art.retry_page) {
+      // 그 장이 안전 필터 등에 걸려 다시 그리는 중이다(pageart.py 의
+      // PAGE_RETRIES). 사람에게는 "왜 갑자기 멈췄지" 로 보일 수 있는 자리라
+      // 이유를 짧게라도 말해 준다.
+      return `${art.retry_page}번째 장이 걸려서 다시 그리고 있어요`;
+    }
+    // 다 그렸는데 아직 안 끝났으면(이어붙이기·S3 올리기가 도는 동안) 그냥
+    // "그리고 있어요" 를 계속 띄우면 사람 눈에는 다 그려 놓고 안 끝나는
+    // 것으로 보인다(사용자 피드백: "그림이 다 나왔는데 왜 안 끝나지?").
+    return art.done >= art.total
+      ? "루가 그림을 마무리하고 있어요"
+      : `루가 ${art.done}번째 장을 그리고 있어요 (${art.done}/${art.total})`;
   }
   return NH_STAGE_SAY[stage] || "루가 만들고 있어요";
 }
