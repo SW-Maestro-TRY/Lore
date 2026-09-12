@@ -103,8 +103,11 @@ class PipelineV4Test {
     }
 
     @Test
-    @DisplayName("★ 격자 2장 다 굽기 전에 멈춘 판 — 1층만 있으면 예전 길(설정 이름)로 자른다")
-    void v4WithOnlyTheFirstGridStillWorks() throws Exception {
+    @DisplayName("격자가 1장뿐인 옛 v4 기록 — 예전 길(설정 이름)로 간다")
+    void v4WithOnlyTheFirstGridTakesTheOldPath() throws Exception {
+        // ★ 여기로 오는 것은 2층이 붙기 전에 굽다 만 기록뿐이다(새 job 은 grid2 를 반드시 거친다).
+        //   그때 설정 hatch.states.v4 는 16종이므로 후처리가 8장만 내고 "후처리 결과가 없습니다:
+        //   eat_rice.webp" 로 **크게** 실패한다 — 절반짜리 펫을 성공으로 치는 것보다 낫다.
         PostProcessor post = mock(PostProcessor.class);
         PostProcessStep step = new PostProcessStep(post, new MotionCatalog("", "", "v1"), new HatchPostures());
 
