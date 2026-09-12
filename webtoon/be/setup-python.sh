@@ -20,7 +20,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
 VENV=/opt/lore/venv-webtoon
-REQ=${1:-"$ROOT/haeun/landing/requirements.txt"}
+REQ=${1:-"$ROOT/webtoon/ai/requirements.txt"}
 
 if [[ ! -f "$REQ" ]]; then
   echo "requirements.txt 가 없습니다: $REQ" >&2
