@@ -244,6 +244,8 @@ DIRECTION_RE = re.compile(rf"^##{S}방향{S}(\d+){S}[—–\-:]?{S}(.*)$", re.M)
 SECTION_RE = re.compile(rf"^###{S}(.+?){S}$", re.M)
 GENRE_RE = re.compile(rf"^{S}장르{S}[:：]{S}(.+?){S}$", re.M)
 BULLET_RE = re.compile(rf"^{S}(?:[-*·]|\d+[.)]){S}(.+?){S}$", re.M)
+# 가로줄(`---` `***` `___`)과 코드펜스(```). 불릿으로 읽히면 안 되는 줄들.
+_RULE_RE = re.compile(r"^\s*(?:([-*_])\1{2,}|`{3,}\w*)\s*$")
 
 
 def _sections(body: str) -> dict:
@@ -256,11 +258,22 @@ def _sections(body: str) -> dict:
 
 
 def _bullets(text: str) -> list[str]:
-    """번호나 - 로 시작하는 줄. 없으면 빈 줄로 나눈 문단."""
-    hits = [m.group(1).strip() for m in BULLET_RE.finditer(text)]
+    """번호나 - 로 시작하는 줄. 없으면 빈 줄로 나눈 문단.
+
+    가로줄(`---`)과 코드펜스(```)는 먼저 걷어낸다. 방향과 방향 사이에 가로줄이
+    들어가는데, 그것이 마지막 절(「밝히지 않은 것」)의 본문에 딸려 들어온다.
+    `BULLET_RE` 는 `---` 을 "`-` 불릿 + 내용 `--`" 로 읽고, 불릿이 하나라도
+    잡히면 문단 fallback 을 안 쓴다 — 그래서 모델이 그 칸을 불릿 없이 문장으로
+    적으면 **내용이 통째로 버려지고 `["--"]` 만 남았다**(2026-09-12 실측:
+    run 20260912T091730-87fd7b 의 네 후보 중 셋). 그러면 storycheck 의
+    "「밝히지 않은 것」에 적힌 것은 빼라" 예외가 안 걸려서, 일부러 남긴
+    미스터리가 전부 「처음 등장한다」 지적으로 돌아온다.
+    """
+    body = "\n".join(ln for ln in text.splitlines() if not _RULE_RE.match(ln))
+    hits = [m.group(1).strip() for m in BULLET_RE.finditer(body)]
     if hits:
         return hits
-    return [ln.strip() for ln in text.splitlines() if ln.strip()]
+    return [ln.strip() for ln in body.splitlines() if ln.strip()]
 
 
 def _cast_bullets(text: str) -> list[dict]:
