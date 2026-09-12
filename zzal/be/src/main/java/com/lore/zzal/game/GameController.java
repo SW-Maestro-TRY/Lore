@@ -67,7 +67,8 @@ public class GameController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "진행 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ZZAL_GAME_NOT_FOUND"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING")})
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "ZZAL_GAME_FINISHED · ZZAL_SICK_REFUSES · ZZAL_PET_SLEEPING")})
     @PostMapping("/{gameId}/guess")
     public ApiResponse<GameResponses.Guess> guess(@LoginUser Long userId, @PathVariable Long petId,
                                                   @PathVariable Long gameId,
@@ -90,7 +91,7 @@ public class GameController {
                     description = "survivedMs 가 없거나 0~60,000 밖(INVALID_INPUT) · 좌우 맞히기 판(INVALID_INPUT)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ZZAL_GAME_NOT_FOUND"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
-                    description = "ZZAL_GAME_FINISHED · ZZAL_SICK_REFUSES · ZZAL_PET_SLEEPING")})
+                    description = "ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING")})
     @PostMapping("/{gameId}/finish")
     public ApiResponse<GameResponses.RunResult> finish(@LoginUser Long userId, @PathVariable Long petId,
                                                        @PathVariable Long gameId,
