@@ -74,6 +74,15 @@ public class GameService {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
 
+        // ★★ 아픔은 <b>이어치기에도</b> 걸린다 — 이 검사가 아래 이어치기 return 보다 아래에 있었을 때,
+        //   건강할 때 시작한 판을 병든 뒤에도 계속 눌러 5판을 다 치고 <b>승리 보상(행복 +1)</b>까지 받았다.
+        //   그 행복이 병든 상태를 스스로 풀어 "아프면 놀지 않는다"(정본 16장)가 통째로 무력화됐다.
+        // ★ 하루 3판·달리기 해금은 아래에 그대로 둔다 — 그 둘은 <b>새 판을 시작하는 것</b>에 걸리는 조건이고,
+        //   이어치기는 이미 깎인 판을 잇는 것이라 다시 걸면 시작한 판을 못 끝낸다.
+        if (pet.isSick()) {
+            throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
+        }
+
         Optional<ZzalGame> playing = gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(pet.getId());
         if (playing.isPresent()) {
             ZzalGame old = playing.get();
@@ -92,9 +101,6 @@ public class GameService {
                 return new Started(old, List.of(), runUnlocked(pet));
             }
             old.abandon(now);
-        }
-        if (pet.isSick()) {
-            throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
         }
         if (kind == GameKind.RUN && pet.getLeftRightWins() < ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS) {
             throw new BusinessException(ErrorCode.ZZAL_FEATURE_LOCKED,
@@ -120,6 +126,11 @@ public class GameService {
     public GuessResult guess(Long userId, Long petId, Long gameId, char pick, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
+        // ★ 시작만 막으면 소용이 없다 — 판은 한 번 시작하고 다섯 번 친다. 치는 자리에서도 봐야
+        //   건강할 때 시작한 판이 병든 뒤에 끝까지 굴러가 승리 보상으로 병을 푸는 길이 막힌다.
+        if (pet.isSick()) {
+            throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
+        }
         ZzalGame game = myGame(userId, pet, gameId);
         if (game.getKind() != GameKind.LEFT_RIGHT) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "달리기는 finish 로 끝내요");
