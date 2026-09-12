@@ -68,8 +68,14 @@ public class GameService {
     /**
      * 새 판. 진행 중인 판이 있으면 그것을 돌려준다(두 번 눌러도 안전, 하루 횟수도 안 먹는다).
      * 펫은 {@link PetService#awake} 로 잠근다 — 검사와 저장 사이에 다른 요청이 끼면 판이 둘 생긴다.
+     *
+     * ★★ 거절이 나도 <b>정산은 되돌리지 않는다</b> — {@code PetService} 12개 메서드와 같은 규약이다(#225 리뷰 하-1).
+     *   이 클래스의 네 메서드는 전부 {@code petService.awake}/{@code alive} 를 부르고, 그 안의 {@code touch()} 가
+     *   흐른 시간을 반영하며 <b>장면을 저장하고 엽서를 채우고 도착을 찍는다.</b> 그러고 나서 "할 수 있나" 를 묻는다.
+     *   기본값대로 롤백하면 하루 3판 초과·아픔으로 거절될 때마다 그 요청이 만든 장면 행·엽서 행·{@code revealedAt}
+     *   이 통째로 사라진다 — 사용자 눈에는 "거절당했더니 시간이 되감겼다" 로 보인다.
      */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Started start(Long userId, Long petId, GameKind kind, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
@@ -122,7 +128,7 @@ public class GameService {
     }
 
     /** 좌우 한 판. 화면이 보낸 gameId 를 믿지 않고 펫과 사람이 모두 맞는지 확인한다. */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public GuessResult guess(Long userId, Long petId, Long gameId, char pick, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
@@ -151,7 +157,7 @@ public class GameService {
     }
 
     /** 달리기 끝. 30초 이상이면 승리. */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public RunResult finish(Long userId, Long petId, Long gameId, long survivedMs, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
@@ -172,7 +178,7 @@ public class GameService {
     }
 
     /** 치던 판. 새로고침 복구용. 자는 중이어도 조회는 된다. */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Optional<ZzalGame> current(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = petService.alive(userId, petId, realNow);
         return gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(pet.getId());
