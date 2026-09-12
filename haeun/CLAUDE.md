@@ -6,18 +6,25 @@ OneDrive로 동기화되는 실제 파일이라 기기(윈도우 노트북/맥�
 
 ## 구조
 
-**생성 파이프라인은 2026-09-12에 `webtoon/ai/` 로 옮겼습니다.** 이 폴더에
-있던 `new_harness`·`story-harness`·`webtoon-harness`·`landing` 은 전부 거기
-있습니다 — 아래 규칙들도 그 경로를 가리킵니다.
+**생성 파이프라인은 2026-09-12에 `webtoon/ai/` 로 옮겼습니다.** 예전에 이
+폴더에 있던 `new_harness`·`story-harness`·`webtoon-harness`·`landing` 은
+여기 없습니다. 아래 규칙들도 전부 새 경로를 가리킵니다.
 
-- `webtoon/ai/new_harness/` — 지금 제품이 쓰는 이야기·그림 파이프라인
-- `webtoon/ai/story-harness/` — 캐릭터·이야기·콘티(대본). new_harness 가
-  모델 호출 계층(`llm.py`)과 시트 생성을 여기서 빌려 쓴다
-- `webtoon/ai/webtoon-harness/` — 이미지 생성. `directing` 모듈을 빌려 쓴다
-- `webtoon/ai/landing/` — 옛 프로토타입 웹서버. 지금은 **S3 업로드 걸음
-  (`s3_upload.py`)만 제품이 쓴다** — 서버로 띄우지 않는다
+```
+webtoon/ai/
+  new_harness/      지금 제품이 쓰는 이야기·그림 파이프라인
+  story-harness/    모델 호출 계층(llm.py)·캐릭터 시트. new_harness 가 빌려 쓴다
+  webtoon-harness/  이미지·연출(directing). new_harness 가 빌려 쓴다
+  upload/           다 그린 그림을 S3 로 올리는 걸음 (s3_upload · overlay · runpaths)
+  assets/           기본 캐릭터 견본(samples) · 마스코트(lou)
+  work/             실행하며 쌓이는 것 (jobs · characters) + legacy-data(보관용)
+```
 
-haeun/ 에 남은 것은 실험·문서·자료다:
+**자바가 실제로 실행하는 파이썬은 넷뿐입니다** — `run.py` · `character.py` ·
+`stitch.py`(new_harness) · `s3_upload.py`(upload). 그 밖의 파이썬을 새로
+띄우는 구조를 만들지 마세요.
+
+haeun/ 에 남은 것은 실험·문서·자료입니다:
 - `char-harness/` — 캐릭터 레퍼런스 관련
 - `arc-first/` · `dspy-experiment/` · `bg-experiment/` — 실험 기록
 - `docs/` — 리서치·작업 기록
@@ -54,15 +61,22 @@ haeun/ 에 남은 것은 실험·문서·자료다:
 그대로 렌더링하는 프록시 파일 하나(`page.tsx`)뿐이고, `webtoon/be` 의 API를
 부릅니다. 그래서 그 라우트를 고칠 일은 거의 없습니다.
 
-## landing 은 버리는 중입니다
+## 파이썬을 서버로 띄우지 않습니다
 
-`webtoon/ai/landing/` 은 옛 프로토타입 웹서버입니다. **더 이상 띄우지
-않습니다** — 제품은 `apps/web`(화면) + `webtoon/be`(API) + `webtoon/ai`(생성)
-로 갑니다. 파이썬은 서버가 아니라 **CLI 파이프라인**으로만 씁니다.
+옛 프로토타입 웹서버(`landing/serve.py`)는 **2026-09-12에 지웠습니다.**
+제품은 `apps/web`(화면) → `webtoon/be`(API) → `webtoon/ai`(생성)로 갑니다.
+자바가 요청마다 파이썬을 자식 프로세스로 부르고, 끝나면 죽습니다.
 
-지금 이 폴더에서 제품이 실제로 쓰는 것은 **S3 업로드 걸음(`s3_upload.py`)**
-하나뿐이고, 나머지(`serve.py`·`web/`·`pipeline.py` 등)는 걷어내는 중입니다.
-그러니 여기에 새 기능을 넣지 마세요.
+- 파이썬 서버를 미리 띄워 둘 필요가 없습니다. `127.0.0.1:8800` 도 없습니다.
+- 그 시절의 HTTP 프록시(`HarnessGateway`·`WebtoonController`)도 같이
+  지웠습니다. `/api/webtoon/v1/**` 를 통째로 받던 그물이라, 주소를 조금만
+  잘못 써도 "serve.py 가 떠 있는지 확인해 주세요" 라는 엉뚱한 답이 돌아왔습니다.
+- 옛 랜딩 화면(lorecomic.com/webtoon 프로토타입)은 버렸습니다. 화면은
+  `webtoon/fe` 가 전부입니다.
+
+**그러니 파이썬 쪽에 웹서버·상태·세션을 다시 만들지 마세요.** 파이썬은
+프롬프트를 조립해 모델을 부르고 결과를 파일로 남기는 **CLI 파이프라인**이고,
+그 바깥(인증·크레딧·DB·공개여부·업로드 결과 관리)은 전부 자바가 합니다.
 
 **2. `webtoon/` · `haeun/` 밖을 건드렸으면 흔적을 남기세요.**
 허락을 먼저 받는 것은 아래 "작업 권한 범위" 에 있습니다. 여기서 더할 것은
@@ -76,7 +90,8 @@ haeun/ 에 남은 것은 실험·문서·자료다:
 조용히 고치면, 나중에 그 사람이 자기 코드가 왜 바뀌었는지 찾느라 시간을 씁니다.
 
 **3. 크레딧은 목업입니다. 실제 가격이 아닙니다.**
-`credits.py` 의 숫자는 전부 프리토타이핑용 자리표시자입니다.
+숫자는 전부 프리토타이핑용 자리표시자입니다. (옛 `landing/credits.py` 는
+2026-09-12에 지웠고, 지금은 자바가 관리합니다 — `com.lore.webtoon.credit`.)
 
 - 한 편 12크레딧(`CREDIT_FULL`), 처음 주는 잔액 12(`START_BALANCE`),
   하루 무료 20(`DAILY_FREE_CREDITS`), 패키지 9,900 / 19,900 / 39,900원.
@@ -184,7 +199,7 @@ ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webt
     통째로 사라짐). `git merge` 로 가져오는 건 커밋된 코드뿐이지 이
     파일들이 아니다. 그러니 정리하기 **직전에** 그 워크트리 안에
     남겨야 할 결과물(비교 페이지, 참고할 run 등)이 있는지 먼저 확인하고,
-    있으면 원본 `haeun/` 쪽으로 복사해 둔 뒤에 지운다.
+    있으면 원본 저장소 쪽으로 복사해 둔 뒤에 지운다.
   - **충돌이 나면 지우지 않는다.** worktree와 브랜치를 그대로 둔 채 어떤
     파일의 어느 부분이 충돌했는지 사용자에게 보여주고 판단을 구한다 —
     이건 worktree로도 못 없애는 유일한 지점이다(worktree가 없애는 건
@@ -195,7 +210,7 @@ ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webt
 
 ### git이 안 보는 것 (`runs/`, `outputs/`, `jobs/`, `.env`)
 
-`webtoon/ai/story-harness/runs/`, `webtoon/ai/webtoon-harness/outputs/`, `webtoon/ai/landing/jobs/`는 전부
+`webtoon/ai/*/runs/`, `webtoon/ai/webtoon-harness/outputs/`, `webtoon/ai/work/`는 전부
 gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않는다 —
 새 worktree는 이 폴더들이 **비어서 시작한다.** 이건 기본적으로 안전한
 방향이다(격리가 저절로 됨, 두 에이전트가 같은 run_id 폴더에 동시에 못 씀).
@@ -216,10 +231,11 @@ gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않�
 
 ## 작업 권한 범위
 
-- **`haeun/` 폴더 내부**(이 폴더와 그 하위 전부)는 파일 편집·Bash 명령을 **허락 없이
-  자유롭게** 실행합니다. `haeun/.claude/settings.local.json`에 흔한 git/python/npm
-  명령을 자동 허용으로 등록해 뒀습니다 (force push · reset --hard · rm -rf 같은
-  파괴적 명령은 제외 — 이런 건 항상 확인받습니다).
+- **`haeun/` 과 `webtoon/` 안**(각 폴더와 그 하위 전부)은 파일 편집·Bash 명령을
+  **허락 없이 자유롭게** 실행합니다. 생성 파이프라인이 `webtoon/ai/` 로 옮겨
+  갔으므로 실제 작업 자리는 대부분 거기입니다. `haeun/.claude/settings.local.json`
+  에 흔한 git/python/npm 명령을 자동 허용으로 등록해 뒀습니다 (force push ·
+  reset --hard · rm -rf 같은 파괴적 명령은 제외 — 이런 건 항상 확인받습니다).
 - **`haeun/` 과 `webtoon/` 바깥**(Lore 저장소의 `comic/`, `common/`, `infra/`,
   `trailer/`, `apps/`, `build/`, 루트 파일 등)을 편집하거나 그 경로를 대상으로
   하는 작업은 **항상 먼저 물어봅니다.** 자동 허용 목록에 일부러 안 넣었습니다.
@@ -373,6 +389,28 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
 (둘 다 잘 동작하지만 정션이 더 이상 필요조건이 아님).
 
 ## 최근 작업 로그
+- 2026-09-12 — **생성 파이프라인을 `haeun/` 에서 `webtoon/ai/` 로 옮기고,
+  파이썬 서버(serve.py)를 걷어냈다.** 제품 코드와 실험 자료가 한 폴더에
+  섞여 있어 "제품이 지금 무엇을 쓰는가" 가 늘 헷갈리던 것을 끊었다.
+  - 복사 스크립트(`sync-harness.sh`) 제거 — 원본이 `webtoon/ai` 라 gradle 이
+    바로 jar 리소스로 담는다. 그 복사 과정에서 `.env` 가 빠져 하네스가
+    gemini 로 붙어 죽던 사고(서버에서 이야기 생성이 통째로 실패)가 있었다.
+    `llm.py` 에 `DEFAULT_PROVIDER = "openai"` 를 둬서 설정 없이도 실제로
+    가진 키 쪽으로 가게 했다.
+  - HTTP 프록시(`HarnessGateway`·`WebtoonController`·`HarnessProperties`)와
+    「내 작품」의 하네스 호출 3곳 제거 → 파이썬은 이제 **CLI 파이프라인**으로만
+    돈다. 자바가 실행하는 파이썬은 `run.py`·`character.py`·`stitch.py`·
+    `s3_upload.py` 넷뿐이다.
+  - 랜딩 프로토타입 삭제. `s3_upload.py` 가 랜딩 서버 전체를 import 하던
+    고리는 `upload/runpaths.py`(run_dir·page_numbers·final_unit)로 끊었다.
+    옛 사용자 기록(크레딧·동의)은 `webtoon/ai/work/legacy-data/` 에 보관.
+  - jar 에 싣는 파일 384 → 212개.
+- 2026-09-12 — **이야기 후보 프롬프트를 여러 판 다시 썼다** (이슈 #28/#29).
+  「좋은 이야기의 조건」 나열에서 **「문제가 달라지는 것」**으로 중심을 옮기고,
+  방향을 가르는 값을 상태(압력)가 아니라 **경로**(시작→도착)로 바꿨다.
+  인과·연속성 규칙과 "결과를 생략한 채 끝내지 마라" 를 더했다.
+  실측으로 확인한 것: 결말이 **구체적이다**와 **재미있다**는 다른 축이다 —
+  구체성은 규칙으로 잡히지만 소재의 평이함은 안 잡힌다. 다음에 볼 자리.
 - 2026-09-01 — **그림 한 장이 되는 단위를 장면에서 사건으로** 내렸다 (이슈
   #23/#29/#171). 장면 한 줄에 "깨어난다 / 시간을 본다 / 방을 나선다 /
   마주친다 / 인사한다 / 일과를 시작한다 / 뜻밖의 말을 듣는다" 가 다 들어
