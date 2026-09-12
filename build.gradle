@@ -152,13 +152,13 @@ tasks.named('processResources') {
         exclude '**/__pycache__/**', '**/*.pyc'
         exclude '**/runs/**', '**/runs_backup/**', '**/outputs/**'
         exclude '**/jobs/**', '**/jobs_nh/**', '**/jobs_spring/**'
-        exclude '**/characters/**', '**/input/**'
+        exclude '**/work/**', '**/input/**'
         exclude '**/test_*.py'
     }
     // 기본 제공 캐릭터 견본 그림. BuiltinCharacters 가 서버 기동 때마다 이
     // 그림들을 S3 에 올려 캐릭터 탭을 채운다 — 배포 서버에 없으면 탭이 통째로
     // 빈다(#274).
-    from("${rootDir}/webtoon/ai/landing/web/samples") {
+    from("${rootDir}/webtoon/ai/assets/samples") {
         into 'webtoon/character-samples'
         exclude '**/.DS_Store'
     }

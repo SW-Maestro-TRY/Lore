@@ -152,10 +152,10 @@ public class HarnessProcess {
      */
     public String prepareUpload(String runId, Consumer<String> onLine)
             throws IOException, InterruptedException {
-        Path landing = harnessDir.getParent().resolve("landing");
+        Path upload = harnessDir.getParent().resolve("upload");
         ProcessBuilder pb = new ProcessBuilder(python, "-u", "s3_upload.py",
                                                "--prepare", runId);
-        pb.directory(landing.toFile());
+        pb.directory(upload.toFile());
         pb.redirectErrorStream(false);
 
         Process p = pb.start();

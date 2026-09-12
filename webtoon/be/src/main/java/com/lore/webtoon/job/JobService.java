@@ -95,7 +95,7 @@ public class JobService {
         this.progress = progress;
         this.stories = stories;
         this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
-                ? "webtoon/ai/landing/jobs_spring" : jobsDir).toAbsolutePath().normalize();
+                ? "webtoon/ai/work/jobs" : jobsDir).toAbsolutePath().normalize();
     }
 
     /**

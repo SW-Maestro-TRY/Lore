@@ -33,7 +33,9 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-import newharness_pipeline as nh
+import runpaths as nh              # 작품 폴더 안에서 무엇이 어디 있는지만 아는 모듈
+                                  # (예전엔 landing/newharness_pipeline — 랜딩 웹서버를
+                                  #  통째로 끌고 왔다, 2026-09-12에 끊었다)
 
 HERE = Path(__file__).resolve().parent
 

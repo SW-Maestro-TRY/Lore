@@ -1,0 +1,55 @@
+{"ts": 1787575210.2071328, "event": "charge_click", "uid": "umt77qo65sn73u86m"}
+{"ts": 1787575213.9747462, "event": "charge_success", "uid": "umt77qo65sn73u86m", "package_id": "starter", "credits": 20, "price": 3900}
+{"ts": 1787637580.892728, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787637586.148622, "event": "charge_success", "uid": "umt7c5ggr5d6cenaw", "package_id": "basic", "credits": 60, "price": 9900}
+{"ts": 1787643137.624994, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787644172.584952, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787644174.706385, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787644225.964421, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787644230.9077141, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787644500.904802, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787644675.5624142, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787644938.162668, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787646310.623316, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787646642.441907, "event": "charge_click", "uid": "umt7c5ggr5d6cenaw"}
+{"ts": 1787718333.110614, "event": "charge_click", "uid": "umt9lc3bu9bfigo1e"}
+{"ts": 1787718344.536701, "event": "charge_success", "uid": "umt9lc3bu9bfigo1e", "package_id": "mega", "credits": 300, "price": 39900}
+{"ts": 1787718500.526752, "event": "charge_click", "uid": "umt9lc3bu9bfigo1e"}
+{"ts": 1787719568.178463, "event": "charge_click", "uid": "umt9lc3bu9bfigo1e"}
+{"ts": 1787719595.930832, "event": "charge_click", "uid": "umt9lc3bu9bfigo1e"}
+{"ts": 1787720861.4656389, "event": "charge_click", "uid": "umt747mfwy4k8hbj8"}
+{"ts": 1787720909.817487, "event": "charge_click", "uid": "umt747mfwy4k8hbj8"}
+{"ts": 1787720918.0147772, "event": "daily_claim", "uid": "umt747mfwy4k8hbj8", "credits": 20}
+{"ts": 1787720934.6156218, "event": "charge_click", "uid": "umt747mfwy4k8hbj8"}
+{"ts": 1787720947.065525, "event": "charge_success", "uid": "umt747mfwy4k8hbj8", "package_id": "basic", "credits": 60, "price": 9900}
+{"ts": 1787721012.4813561, "event": "charge_click", "uid": "umt747mfwy4k8hbj8"}
+{"ts": 1787721071.85392, "event": "charge_click", "uid": "umt9lc3bu9bfigo1e"}
+{"ts": 1787743765.266067, "event": "charge_click", "uid": "umt9zw5i0v5ir894m"}
+{"ts": 1787743768.341227, "event": "charge_success", "uid": "umt9zw5i0v5ir894m", "package_id": "mega", "credits": 300, "price": 39900}
+{"ts": 1787743861.377076, "event": "daily_claim", "uid": "umt747mfwy4k8hbj8", "credits": 20}
+{"ts": 1787747421.820995, "event": "charge_click", "uid": "umt747mfwy4k8hbj8"}
+{"ts": 1787789230.681206, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1787789233.162708, "event": "daily_claim", "uid": "umtaqsjjmyk4zuyx0", "credits": 20}
+{"ts": 1787892252.715295, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1787893578.304162, "event": "spend", "uid": "umt9lc3bu9bfigo1e", "amount": 12, "balance": 300, "job_id": "20260828-140618-51ac", "reason": "create"}
+{"ts": 1787898461.019691, "event": "spend", "uid": "umtaqsjjmyk4zuyx0", "amount": 12, "balance": 20, "job_id": "20260828-152741-18bf", "reason": "create"}
+{"ts": 1787898668.269886, "event": "spend", "uid": "umtaqsjjmyk4zuyx0", "amount": 12, "balance": 8, "job_id": "20260828-153108-55c8", "reason": "create"}
+{"ts": 1788091452.765175, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1788093178.1727328, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1788093405.944236, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1788093409.456672, "event": "charge_success", "uid": "umtaqsjjmyk4zuyx0", "package_id": "mega", "credits": 300, "price": 39900}
+{"ts": 1788093414.4101892, "event": "spend", "uid": "umtaqsjjmyk4zuyx0", "amount": 12, "balance": 296, "job_id": "20260830-213654-ad95", "reason": "create"}
+{"ts": 1788095855.7572632, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1788095856.2798789, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1788155473.1519492, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1788158647.6772878, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1788158827.122724, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1788158865.170984, "event": "charge_click", "uid": "umtaqsjjmyk4zuyx0"}
+{"ts": 1788264507.651941, "event": "charge_click", "uid": "umtimgynu9riftloz"}
+{"ts": 1788334962.460665, "event": "spend", "uid": "umt9lc3bu9bfigo1e", "amount": 12, "balance": 288, "job_id": "20260902-164242-e203", "reason": "create"}
+{"ts": 1788425016.495559, "event": "spend", "uid": "umtl9kas2g7ewxfnj", "amount": 12, "balance": 0, "job_id": "57c485d68f29", "reason": "create"}
+{"ts": 1788425114.78719, "event": "daily_claim", "uid": "umtl9kas2g7ewxfnj", "credits": 20}
+{"ts": 1788425124.101604, "event": "spend", "uid": "umtl9kas2g7ewxfnj", "amount": 12, "balance": 8, "job_id": "aa374a2b6188", "reason": "create"}
+{"ts": 1788522833.280763, "event": "spend", "uid": "umt7c5ggr5d6cenaw", "amount": 12, "balance": 60, "job_id": "97fc377bd026", "reason": "create"}
+{"ts": 1788568121.157258, "event": "spend", "uid": "umt747mfwy4k8hbj8", "amount": 12, "balance": 26, "job_id": "ba05842a73f8", "reason": "create"}
+{"ts": 1788578011.0861099, "event": "spend", "uid": "umtnt61sx5kupnsve", "amount": 12, "balance": 0, "job_id": "230616f4c2cb", "reason": "create"}
