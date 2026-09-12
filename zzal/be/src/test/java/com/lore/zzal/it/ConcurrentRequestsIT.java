@@ -166,6 +166,69 @@ class ConcurrentRequestsIT extends ZzalItSupport {
                 .isEqualTo(2);
     }
 
+    // ══ M-12(다). 같은 달리기를 동시에 끝내기 ══════════════════════════
+
+    @Test
+    @DisplayName("★★ 같은 달리기를 동시에 두 번 끝내면 <b>한 번만</b> 정산된다 — 승리 보상이 두 번 나가면 안 된다")
+    void onlyOneFinishSettlesTheRun() {
+        Long userId = newUserId();
+        Long petId = playablePet(userId);
+        transactions.executeWithoutResult(status -> ReflectionTestUtils.setField(
+                petRepository.findByIdForUpdate(petId).orElseThrow(),
+                "leftRightWins", com.lore.zzal.pet.ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS));
+        Instant now = Instant.now();
+        Long gameId = gameService.start(userId, petId, GameKind.RUN, now).game().getId();
+
+        List<Object> results = bothAtOnce(
+                () -> gameService.finish(userId, petId, gameId, 30_000, now),
+                () -> gameService.finish(userId, petId, gameId, 29_999, now));
+
+        Throwable refused = errorIn(results);
+        assertThat(refused)
+                .as("늦은 쪽은 ZZAL_GAME_FINISHED 로 거절돼야 한다")
+                .isInstanceOf(BusinessException.class);
+        assertThat(((BusinessException) refused).getErrorCode().name()).isEqualTo("ZZAL_GAME_FINISHED");
+
+        ZzalGame game = games.findById(gameId).orElseThrow();
+        assertThat(game.isFinished()).isTrue();
+        assertThat(game.getSurvivedMs())
+                .as("두 값이 섞이지 않고 이긴 쪽 하나만 남는다")
+                .isIn(30_000L, 29_999L);
+    }
+
+    // ══ M-5(나). 같은 사람이 그림을 동시에 두 번 올리기 ═════════════════
+
+    @Test
+    @org.junit.jupiter.api.Disabled("결함 — 같은 사람의 draft 두 건이 동시에 들어오면 초안이 둘 생기고 굽기도 두 번 나간다")
+    @DisplayName("★★ 그림을 동시에 두 번 올려도 초안은 하나 — 두 개면 한 번의 실수에 한 판 값이 두 배다")
+    void twoDraftsAtOnceMakeOnePet() {
+        Long userId = newUserId();
+        String keyA = newUploadedImageKey(userId);
+        String keyB = newUploadedImageKey(userId);
+        Instant now = Instant.now();
+
+        bothAtOnce(
+                () -> petService.draft(userId, keyA, now),
+                () -> petService.draft(userId, keyB, now));
+
+        assertThat(petRepository.findByUserIdOrderByIdDesc(userId))
+                .as("초안이 둘이면 굽기도 둘이라 $0.25 가 그대로 두 배다")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("★ 순서대로 두 번 올리면 먼저 만든 초안을 그대로 준다 — 나갔다 올 때마다 굽지 않는다")
+    void asecondDraftReusesTheFirst() {
+        Long userId = newUserId();
+        Instant now = Instant.now();
+
+        ZzalPet first = petService.draft(userId, newUploadedImageKey(userId), now);
+        ZzalPet second = petService.draft(userId, newUploadedImageKey(userId), now.plusSeconds(600));
+
+        assertThat(second.getId()).isEqualTo(first.getId());
+        assertThat(petRepository.findByUserIdOrderByIdDesc(userId)).hasSize(1);
+    }
+
     // ══ M-3. 집기는 <b>한 번만</b> 이긴다 ═══════════════════════════════
 
     @Test
