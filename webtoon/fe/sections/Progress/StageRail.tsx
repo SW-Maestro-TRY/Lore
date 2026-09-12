@@ -26,14 +26,11 @@ export default function StageRail({ job, jobId, sheetVersion, onZoom }: {
 }) {
   const [open, setOpen] = useState<string | null>(null);
 
-  const chosen = job.directions.find((d) => d.n === job.pick) || null;
-
   /** 이 단계에 보여줄 것이 있나. 아직 안 지나온 단계는 없다. */
   const hasResult = (key: string, i: number): boolean => {
     if (i > job.stage_index) return false;
     if (key === "story") return job.directions.length > 0;
     if (key === "sheet") return job.stage_index > job.stages.indexOf("sheet");
-    if (key === "board") return chosen !== null;
     return false;
   };
 
@@ -80,8 +77,6 @@ export default function StageRail({ job, jobId, sheetVersion, onZoom }: {
                   <p className="stage-hint">눌러서 크게 보기</p>
                 </div>
               )}
-
-              {isOpen && key === "board" && chosen && <BoardResult direction={chosen} />}
             </div>
           </li>
         );
@@ -107,33 +102,6 @@ function StoryResult({ directions, pick }: { directions: NhDirection[]; pick: nu
       </ul>
       {/* 왜 다시 못 고르는지 적는다. 안 적으면 "고장났나" 로 읽힌다. */}
       <p className="stage-hint">이미 이 이야기로 그리는 중이라 다시 고를 수 없어요.</p>
-    </div>
-  );
-}
-
-/** 확정된 회차 — 장면 순서 · 함께 나오는 인물 · 남겨 둔 것. */
-function BoardResult({ direction }: { direction: NhDirection }) {
-  const scenes = direction.scenes || [];
-  const cast = direction.cast || [];
-  const hidden = (direction.hidden || []).filter((h) => h && h.trim() && h.trim() !== "--");
-
-  return (
-    <div className="stage-result">
-      {scenes.length > 0 && (
-        <ol className="board-scenes">
-          {scenes.map((s, i) => <li key={i}>{s}</li>)}
-        </ol>
-      )}
-      {cast.length > 0 && (
-        <p className="stage-hint">
-          <b>함께 나오는 인물</b> — {cast.map((c) => c.name).join(" · ")}
-        </p>
-      )}
-      {hidden.length > 0 && (
-        <p className="stage-hint">
-          <b>이번 화에서 안 밝히는 것</b> — {hidden.join(" / ")}
-        </p>
-      )}
     </div>
   );
 }

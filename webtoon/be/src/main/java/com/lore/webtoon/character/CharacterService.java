@@ -98,7 +98,7 @@ public class CharacterService {
         this.art = art;
         this.credits = credits;
         this.workDir = Path.of(workDir == null || workDir.isBlank()
-                ? "haeun/landing/characters" : workDir).toAbsolutePath().normalize();
+                ? "webtoon/ai/work/characters" : workDir).toAbsolutePath().normalize();
         this.freePerDay = freePerDay;
         this.cost = cost;
         this.cdn = cdn == null ? "" : cdn.replaceAll("/+$", "");

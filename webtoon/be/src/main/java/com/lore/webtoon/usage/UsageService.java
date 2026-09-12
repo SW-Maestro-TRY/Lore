@@ -119,7 +119,7 @@ public class UsageService {
      *
      * <b>한 마디를 확인하고 준다.</b> 여기 담긴 것은 단계별·모델별 원가라
      * 우리 원가 구조가 그대로 드러난다. 화면에서 부르지 않고 손에서 부른다
-     * (haeun/landing/spend_report.py) — 브라우저에 한 마디를 심으면 그것을
+     * (옛 랜딩의 spend_report.py, 2026-09-12 제거) — 브라우저에 한 마디를 심으면 그것을
      * 심는 순간 더 이상 비밀이 아니다.
      */
     @Transactional(readOnly = true)

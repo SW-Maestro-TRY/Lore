@@ -104,11 +104,11 @@ public class BuiltinCharacters implements ApplicationRunner {
      *
      * <ol>
      *   <li>{@code samples-dir} 로 직접 지정한 자리 (있으면 최우선)</li>
-     *   <li>저장소 원본 {@code haeun/landing/web/samples} (로컬 개발 — 되풀이 켤
+     *   <li>저장소 원본 {@code webtoon/ai/assets/samples} (로컬 개발 — 되풀이 켤
      *       때마다 최신 그림을 바로 본다)</li>
      *   <li>jar 리소스({@code webtoon/character-samples} — {@code sync-harness.sh}
      *       가 빌드마다 뜬 사본)를 임시 폴더로 풀어서 쓴다. <b>배포 서버가 이
-     *       길이다</b> — 서버엔 haeun/ 원본이 없다(#274 — 그래서 운영 캐릭터
+     *       길이다</b> — 서버엔 저장소 원본이 없다(#274 — 그래서 운영 캐릭터
      *       탭이 통째로 비어 있었다).</li>
      * </ol>
      */
@@ -116,7 +116,7 @@ public class BuiltinCharacters implements ApplicationRunner {
         if (samples != null && !samples.isBlank()) {
             return Path.of(samples).toAbsolutePath().normalize();
         }
-        Path repo = Path.of("haeun/landing/web/samples").toAbsolutePath().normalize();
+        Path repo = Path.of("webtoon/ai/assets/samples").toAbsolutePath().normalize();
         if (Files.isDirectory(repo)) {
             return repo;
         }
@@ -153,7 +153,7 @@ public class BuiltinCharacters implements ApplicationRunner {
             return root;
         } catch (IOException e) {
             log.error("기본 캐릭터 견본을 jar 리소스에서 풀지 못했습니다", e);
-            return Path.of("haeun/landing/web/samples").toAbsolutePath().normalize();
+            return Path.of("webtoon/ai/assets/samples").toAbsolutePath().normalize();
         }
     }
 

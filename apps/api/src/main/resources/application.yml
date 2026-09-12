@@ -92,9 +92,9 @@ management:
 
 # 웹툰 만들기 — 파이썬 서버(serve.py)를 안 거치고 스프링이 직접 실행한다.
 # 켜면 JobController/RunController/RegenController/ConfigController 가 뜨고,
-# 요청마다 new_harness/run.py 등을 자식 프로세스로 직접 띄운다 — serve.py 를
-# 상시 띄워둘 필요가 없어진다(꺼져 있으면 이 주소들은 WebtoonController 가
-# 그대로 127.0.0.1:8800 으로 프록시한다).
+# 요청마다 new_harness/run.py 등을 자식 프로세스로 직접 띄운다.
+# **파이썬 서버(serve.py)는 더 이상 안 쓴다** — 2026-09-12에 프록시 경로를
+# 걷어냈다. 파이썬은 서버가 아니라 CLI 파이프라인으로만 쓴다.
 lore:
   webtoon:
     python:

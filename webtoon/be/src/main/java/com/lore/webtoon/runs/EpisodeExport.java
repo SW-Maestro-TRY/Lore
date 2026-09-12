@@ -40,7 +40,7 @@ import java.util.Map;
  *
  * <h2>파이썬과 같은 값을 쓴다</h2>
  *
- * 색·비율·문구를 {@code haeun/landing/watermark.py} 에서 그대로 가져왔다.
+ * 색·비율·문구를 옛 랜딩의 {@code watermark.py} 에서 그대로 가져왔다(그 파일은 2026-09-12에 지웠다).
  * 한쪽을 바꾸면 같은 작품이 어디서 받느냐에 따라 다르게 나온다.
  */
 @Service
@@ -65,7 +65,7 @@ public class EpisodeExport {
     private static final int MARK_ALPHA = 150;
 
     /** 띠 왼쪽에 앉는 루. 없으면 글자만 나간다 — 그림 하나 때문에 막히면 안 된다. */
-    private static final String LOU = "haeun/landing/web/lou/react/idle/01.png";
+    private static final String LOU = "webtoon/ai/assets/lou/react/idle/01.png";
 
     /**
      * 한글 글꼴 후보. 하네스({@code webtoon-harness/strip.py})가 찾는 곳과

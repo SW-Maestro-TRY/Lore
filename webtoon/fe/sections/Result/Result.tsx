@@ -176,7 +176,7 @@ export default function Result({
                   onClick={() => setOpenPage(openPage === pg.no ? null : pg.no)}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className="cut-img" src={pageUrl(runId, pg.no)}
+                  <img className="cut-img" src={pageUrl(runId, pg.no, 1080, false, data.example)}
                        alt={pg.caption} loading="lazy" />
                   {openPage === pg.no && (
                     <span className="page-caption">{pg.caption}</span>
@@ -184,7 +184,7 @@ export default function Result({
                 </button>
               ) : (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img className="cut-img" src={pageUrl(runId, pg.no)}
+                <img className="cut-img" src={pageUrl(runId, pg.no, 1080, false, data.example)}
                      alt={`${pg.no}번째 장`} loading="lazy" />
               )}
             </div>

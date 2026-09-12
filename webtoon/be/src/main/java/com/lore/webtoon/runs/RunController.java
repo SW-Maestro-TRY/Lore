@@ -29,7 +29,7 @@ import java.util.Map;
  * <h2>여기가 켜지면 하네스가 목록에서 빠진다</h2>
  *
  * 만들기는 이미 스프링이 직접 한다({@code JobController}). 그런데 <b>읽는
- * 쪽은 그대로 파이썬으로 새고 있었다</b> — 넓은 그물({@code WebtoonController})이
+ * 쪽은 그대로 파이썬으로 새고 있었다</b> — 넓은 그물(옛 프록시)이
  * {@code /runs} 를 통째로 하네스로 넘긴다. 그래서 만든 것은 DB 에 다 있는데
  * 목록과 완성본만 하네스 폴더에 매여 있었다.
  *
@@ -168,6 +168,24 @@ public class RunController {
         Map<String, Object> found = runs.result(runId);
         return found == null
                 ? ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"))
+                : ResponseEntity.ok(found);
+    }
+
+    /**
+     * 편집실이 여는 자리(#281). {@code ep} 는 지금 늘 1이다 — 한 편짜리라
+     * 다른 값을 줘도 같은 작품이 열린다(이어그리기가 붙으면 여기서 갈린다).
+     *
+     * 이 주소가 없어서 편집실이 죽은 파이썬 프록시(8800)로 떨어져 502 가
+     * 났다 — 만들기·완성본 읽기는 스프링으로 옮겨 왔는데 이 자리만 빠져
+     * 있었다.
+     */
+    @Operation(summary = "편집실 데이터", description = "컷은 페이지당 하나다 — 파이프라인이 컷 경계를 안 남긴다.")
+    @GetMapping("/{runId}/episode")
+    public ResponseEntity<Map<String, Object>> episode(@PathVariable String runId,
+                                                        @RequestParam(defaultValue = "1") int ep) {
+        Map<String, Object> found = runs.episode(runId, ep);
+        return found == null
+                ? ResponseEntity.status(404).body(Map.of("error", "그 회차에 그려진 장이 없습니다"))
                 : ResponseEntity.ok(found);
     }
 

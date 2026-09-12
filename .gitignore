@@ -48,13 +48,14 @@ $RECYCLE.BIN/
 # webtoon/fe/sync-landing.sh 가 만들며 predev·prebuild 가 그걸 부른다.
 apps/web/public/static/
 
-# 생성 하네스(haeun/new_harness · haeun/story-harness)의 배포용 사본.
-# 원본이 아니다 — webtoon/be/sync-harness.sh 가 만들며 processResources 가 그걸 부른다.
-webtoon/be/src/main/resources/webtoon/ai/
-
-# 기본 제공 캐릭터 견본 그림(haeun/landing/web/samples)의 배포용 사본.
-# 원본이 아니다 — webtoon/be/sync-harness.sh 가 만들며 processResources 가 그걸 부른다.
-webtoon/be/src/main/resources/webtoon/character-samples/
+# 생성 하네스(webtoon/ai)가 돌면서 쌓는 것. 코드가 아니라 실행 결과다.
+# jar 에도 안 담긴다(build.gradle 의 processResources 에서 제외).
+webtoon/ai/*/runs/
+webtoon/ai/*/runs_backup/
+webtoon/ai/*/outputs/
+webtoon/ai/work/jobs/
+webtoon/ai/work/characters/
+webtoon/ai/work/runs/
 
 # zzal 정적 에셋(여울 8상태·루프·공통 에셋·배경 16종)은 레포가 아니라 S3 에 둔다.
 #   images/zzal/demo/    여울 8상태 + 30.7초 루프

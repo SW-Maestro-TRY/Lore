@@ -159,6 +159,51 @@ class RunServiceTest {
     }
 
     @Test
+    @DisplayName("편집실 데이터 — 페이지당 컷 하나, 1장은 표지")
+    void 편집실_데이터() {
+        작품("run-1", true);
+        when(pages.pageNumbersOf("run-1")).thenReturn(List.of(1, 2, 3));
+        when(stories.scenesOf("run-1")).thenReturn(List.of("첫 장면", "둘째 장면"));
+
+        Map<String, Object> out = runs.episode("run-1", 1);
+
+        assertThat(out).containsEntry("run_id", "run-1")
+                .containsEntry("character", "유리엘")
+                .containsEntry("title", "얼음 왕자의 계약")
+                .containsEntry("episode", 1)
+                .containsEntry("episodes", List.of(1))
+                .containsEntry("gap_scale", Map.of())
+                .containsEntry("page_count", 3);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> scenes = (List<Map<String, Object>>) out.get("scenes");
+        assertThat(scenes).hasSize(3);
+        assertThat(scenes).extracting(s -> s.get("no")).containsExactly(1, 2, 3);
+        assertThat(scenes).extracting(s -> s.get("image"))
+                .containsExactly(
+                        "/api/runs/run-1/page/1?w=1080",
+                        "/api/runs/run-1/page/2?w=1080",
+                        "/api/runs/run-1/page/3?w=1080");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> firstCuts = (List<Map<String, Object>>) scenes.get(0).get("cuts");
+        assertThat(firstCuts).singleElement().satisfies(cut ->
+                assertThat(cut).containsEntry("no", 1).containsEntry("description", "표지"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> secondCuts = (List<Map<String, Object>>) scenes.get(1).get("cuts");
+        assertThat(secondCuts).singleElement().satisfies(cut ->
+                assertThat(cut).containsEntry("description", "첫 장면"));
+    }
+
+    @Test
+    @DisplayName("그림이 없으면 편집실도 없다 — 부르는 쪽이 404 를 낸다")
+    void 없는_편집실() {
+        when(pages.pageNumbersOf(anyString())).thenReturn(List.of());
+        assertThat(runs.episode("없는작품", 1)).isNull();
+    }
+
+    @Test
     @DisplayName("이야기를 아직 못 옮겨 온 옛 작품도 열린다 — 제목만 기본값이다")
     void 이야기가_없어도_열린다() {
         WebtoonWork work = mock(WebtoonWork.class);

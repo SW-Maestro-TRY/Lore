@@ -97,11 +97,19 @@ public class JobRunner {
         this.works = works;
         this.credits = credits;
         this.guests = guests;
-        this.runsDir = (runsDir == null || runsDir.isBlank()
-                ? harness.dir().resolve("runs")
-                : Path.of(runsDir)).toAbsolutePath().normalize();
+        /* **임시 폴더가 아니라 고정 경로다.**
+         *
+         * 예전에는 하네스를 푼 임시 폴더 안(`harness.dir()/runs`)에 쌓았다.
+         * 그 폴더는 서버가 뜰 때마다 새로 생기므로, 재시작하면 만든 작품이
+         * 통째로 사라지고 진행 중이던 작업도 이어받을 수 없었다 —
+         * 2026-09-12에 그리는 도중 서버를 다시 띄웠더니 그 작업이 영원히
+         * "running" 으로 남았다(파이썬은 부모 없이 한 장 더 그리고 멈췄다).
+         *
+         * 배포에서 다른 자리를 쓰려면 `lore.webtoon.python.runs-dir` 로 준다. */
+        this.runsDir = Path.of(runsDir == null || runsDir.isBlank()
+                ? "webtoon/ai/work/runs" : runsDir).toAbsolutePath().normalize();
         this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
-                ? "haeun/landing/jobs_spring" : jobsDir).toAbsolutePath().normalize();
+                ? "webtoon/ai/work/jobs" : jobsDir).toAbsolutePath().normalize();
     }
 
     /**
@@ -399,21 +407,33 @@ public class JobRunner {
             throw new IllegalStateException("이어 붙이기가 실패했습니다");
         }
 
-        store.done(jobId);
-
-        /* **다 만든 뒤에 남길 것을 남긴다** — 나간 돈과 그림.
-           안 하면 비용이 파일에만 남아 일일 상한이 무의미해지고(아무리 만들어도
-           "오늘 0원"), 그림은 하네스 디스크에만 남아 그 폴더가 없으면 못 본다.
-           여기서 실패해도 만들기는 성공이다 — 그림은 이미 있고 사람은 볼 수 있다. */
+        /* **"다 됐다" 고 하기 전에 그림부터 S3 에 올리고 적는다.**
+           화면은 0.8초마다 상태를 묻다가 done 을 보는 즉시 완성본으로 건너가
+           그 폭(1080)의 그림 주소를 묻는다(RunController#page). 여기서 순서를
+           바꿔 store.done 을 먼저 부르면, 화면이 이미 완성본으로 넘어간 뒤에야
+           S3 업로드와 PageStore 기록이 끝나는 틈이 생긴다 — 그 틈에 들어간
+           요청은 그림이 아직 안 적혀 있어 404 를 받는다(새로고침하면 그새
+           끝나 있어 멀쩡해 보였다 — 실측으로 확인).
+           after.finish 는 안에서 실패를 전부 삼키므로(여기서 실패해도 만들기는
+           성공이다) 먼저 불러도 이 메서드가 죽지 않는다 — 순서만 바뀐다. */
         after.finish(job.getRunId(), line -> progress.line(jobId, line));
+        store.done(jobId);
         progress.forget(jobId);
     }
 
     /* ---- 곁가지 ----------------------------------------------------------- */
 
+    /**
+     * 하네스에 넘기는 환경변수.
+     *
+     * 그림체 하나뿐이다. 프로바이더·모델은 <b>하네스 코드의 기본값</b>이
+     * 정한다({@code new_harness/llm.py} 의 {@code DEFAULT_PROVIDER}) —
+     * 설정이 자바와 파이썬 두 군데로 갈리면 한쪽만 고치는 사고가 난다.
+     */
     private Map<String, String> env(WebtoonJob job) {
         Map<String, String> env = new HashMap<>();
         env.put("NH_STYLE", job.getStyle());
+        // NH_RUNS_DIR 은 HarnessProcess 가 띄우는 모든 파이썬에 한자리에서 넣는다.
         return env;
     }
 

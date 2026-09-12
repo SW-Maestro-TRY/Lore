@@ -27,8 +27,7 @@ package com.lore.webtoon;
  *       로그인을 요구하므로, 앞자리가 어긋나면 그 규칙이 안 걸려 조용히
  *       열린다(막히는 게 아니라 열리는 쪽이라 더 위험하다)</li>
  *   <li>{@code webtoon/fe} 의 {@code lib/nhApi.ts} · {@code lib/editorCore.ts}</li>
- *   <li>{@code haeun/landing} 의 {@code s3_upload.py} · {@code usage_report.py}
- *       · {@code spend_report.py} — 다 그린 뒤 서버에 되짚어 알리는 쪽</li>
+ *   <li>{@code webtoon/ai/upload} 의 {@code s3_upload.py} — 다 그린 그림을 S3 로 올리는 쪽</li>
  * </ul>
  */
 public final class WebtoonApi {

@@ -271,20 +271,26 @@ export default function Progress({
         )}
 
         {/* 그려진 장은 나오는 대로 보여준다 — 몇 분을 기다리는 사람에게
-            가장 큰 정보다. */}
+            가장 큰 정보다.
+
+            **작은 격자가 아니라 완성본과 같은 폭으로 세로로 이어 보여준다**
+            (`.reader` 는 `Result.tsx` 가 쓰는 것과 같은 자리). 손바닥만 한
+            카드 여섯 개보다, 실제로 읽게 될 크기로 한 장씩 내려가며 보는 쪽이
+            "지금 이런 웹툰이 만들어지고 있다" 를 훨씬 잘 보여준다(사용자
+            피드백). */}
         {job.art && job.art.done > 0 && (
           <div className="cutstrip">
             <div className="cutstrip-head">
               <span>그려진 장</span>
               <span>{job.art.done} / {job.art.total}장</span>
             </div>
-            <div className="cutstrip-grid">
+            <div className="reader">
               {Array.from({ length: job.art.done }, (_, i) => i + 1).map((n) => (
-                <figure key={n}>
+                <div className="page" key={n}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={jobPageUrl(jobId, n)} alt={`${n}번째 장`} loading="lazy" />
-                  <figcaption>{n}</figcaption>
-                </figure>
+                  <img className="cut-img" src={jobPageUrl(jobId, n, 1080)}
+                       alt={`${n}번째 장`} loading="lazy" />
+                </div>
               ))}
             </div>
           </div>

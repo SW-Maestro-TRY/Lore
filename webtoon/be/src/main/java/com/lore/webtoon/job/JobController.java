@@ -3,7 +3,6 @@ package com.lore.webtoon.job;
 import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.credit.GuestGate;
 import com.lore.webtoon.usage.SpendGuard;
-import com.lore.webtoon.harness.WebtoonController;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.common.exception.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,7 +32,7 @@ import java.util.Map;
  * <h2>스위치로 켠다</h2>
  *
  * 기본은 꺼져 있다. 켜지 않으면 이 컨트롤러가 아예 안 뜨고, 같은 주소를
- * {@code WebtoonController} 가 지금처럼 파이썬 서버로 넘긴다. <b>한 번에
+ * 옛 프록시 가 지금처럼 파이썬 서버로 넘긴다. <b>한 번에
  * 갈아타지 않는다</b> — 갈아타는 동안 만들기가 통째로 멈추면 안 된다.
  *
  * <pre>
@@ -41,7 +40,7 @@ import java.util.Map;
  * </pre>
  *
  * 켰을 때 이 길이 이기는 이유: 스프링은 <b>더 구체적인 매핑</b>을 먼저 고른다.
- * {@code WebtoonController} 는 {@code /api/webtoon/v1/**} 라는 넓은 그물이고,
+ * 옛 프록시 는 {@code /api/webtoon/v1/**} 라는 넓은 그물이고,
  * 여기는 주소를 하나씩 적었다.
  *
  * <h2>응답 모양은 그대로다</h2>
@@ -113,7 +112,7 @@ public class JobController {
 
         /* **여기도 문지기가 서야 한다.**
          *
-         * 프록시 길(WebtoonController)에는 이 셋이 이미 서 있는데, 이 길은
+         * 프록시 길(옛 프록시)에는 이 셋이 이미 서 있는데, 이 길은
          * 그걸 안 거친다 — 처음 만들 때 그대로 뒀더니 크레딧 0 으로도 그냥
          * 만들어졌다. 스위치를 켜는 순간 아무나 무한히 만들 수 있게 된다.
          *
@@ -175,7 +174,7 @@ public class JobController {
      *
      * <b>없으면 그냥 새는 자리였다.</b> 화면은 처음부터 이 주소를 불렀는데
      * (nhApi.ts 의 {@code retryDirections}) 여기에 없어서, 아래 넓은 그물
-     * ({@code WebtoonController})로 떨어져 파이썬 서버까지 갔다. 파이썬은
+     * (옛 프록시)로 떨어져 파이썬 서버까지 갔다. 파이썬은
      * 스프링이 만든 작업을 모르니 「그런 작업이 없습니다」를 냈다 — 시트
      * 주소가 어긋나 있던 것과 같은 종류의 구멍이다.
      */

@@ -3,7 +3,6 @@ package com.lore.webtoon.job;
 import com.lore.common.s3.S3Service;
 import com.lore.common.s3.S3Storage;
 import com.lore.webtoon.art.PrivateArt;
-import com.lore.webtoon.harness.WebtoonController;
 import com.lore.webtoon.work.WorkLedger;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -96,7 +95,7 @@ public class JobService {
         this.progress = progress;
         this.stories = stories;
         this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
-                ? "haeun/landing/jobs_spring" : jobsDir).toAbsolutePath().normalize();
+                ? "webtoon/ai/work/jobs" : jobsDir).toAbsolutePath().normalize();
     }
 
     /**
@@ -157,7 +156,7 @@ public class JobService {
 
         /* **장부에도 적는다.**
          *
-         * 프록시 길은 하네스 응답을 보고 적는데(WebtoonController), 이 길은
+         * 프록시 길은 하네스 응답을 보고 적는데(옛 프록시), 이 길은
          * 그 응답을 안 지나간다. 그래서 여기로 만든 작품이 장부에 한 줄도 안
          * 남았고, 만든 사람이 마이페이지에서 자기 작품을 못 봤다 — 비용도
          * 그림도 다 남았는데 <b>주인만 없었다.</b> */

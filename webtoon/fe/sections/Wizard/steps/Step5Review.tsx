@@ -26,7 +26,7 @@ export default function Step5Review({
     ["이야기", cut(form.story, 34) ?? auto],
     ["장르", form.genre.trim() || auto],
     ["그림체", styleLabel ?? auto],
-    ["보는 방식", form.mode === "expert" ? "3번만 확인하며" : "빠르게 결과부터"],
+    ["보는 방식", form.mode === "expert" ? "2번 확인하며" : "빠르게 결과부터"],
   ];
 
   const pick = (mode: WizardMode) => onChange({ mode });

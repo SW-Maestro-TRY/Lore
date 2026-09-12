@@ -45,8 +45,14 @@ public record JobView(
         List<String> log,
         double elapsed) {
 
-    /** @param total 0 이면 아직 몇 장인지 모른다 — 그때는 통째로 안 보낸다. */
-    public record Art(int done, int total) {
+    /**
+     * @param total      0 이면 아직 몇 장인지 모른다 — 그때는 통째로 안 보낸다.
+     * @param retry_page 지금 걸려서 다시 그리는 중인 장 번호. 0 이면 없다. 새로
+     *                   더한 칸이라 옛 프로토타입 서버는 안 보낸다 — 화면은 없는
+     *                   값으로 읽고 그냥 무시한다(위 머리말의 "무는 쪽은 더해도
+     *                   된다"). 다른 칸과 같이 밑줄 이름을 그대로 쓴다.
+     */
+    public record Art(int done, int total, int retry_page) {
     }
 
     static JobView of(WebtoonJob job, JobProgress.Snapshot now,
@@ -75,7 +81,7 @@ public record JobView(
                 now.say(),
                 job.isCheckpoints(),
                 Math.max(0, Math.min(100, pct)),
-                now.total() > 0 ? new Art(now.done(), now.total()) : null,
+                now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage()) : null,
                 now.log(),
                 elapsed(job));
     }
