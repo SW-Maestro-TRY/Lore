@@ -267,6 +267,29 @@ public class ZzalMotion {
         this.claimedBy = null;
     }
 
+    /**
+     * 맥미니에 넘긴 채 <b>응답이 영영 안 오는 자리</b>를 큐로 되돌린다.
+     *
+     * <h3>★★ 왜 필요한가 — {@code LOCAL_REQUESTED} 는 아무도 안 보는 상태였다</h3>
+     * 밤 계획도 스위프의 집기도 {@code NONE}·{@code FAILED}·{@code QUEUED} 만 본다. 기동 복구가 보던 것도
+     * {@code BAKING}·{@code PENDING} 둘뿐이었다. 그래서 맥미니가 죽거나(전원·네트워크) 러너가 결과를
+     * 안 올리면 그 동작은 <b>영구 고착</b>이었다 — 아무도 안 줍는다.
+     *
+     * <h3>★ {@code regenRound} 를 그대로 둔다 — 되돌리면 무한 반복이 된다</h3>
+     * {@code queue()} 는 라운드를 0 으로 되돌리는데, 여기서 그러면 "API 로 굽고 → 실패 → 맥미니 →
+     * 고착 → 회수 → 라운드 0" 이 끝없이 돌아 <b>유료 호출이 계속 나간다.</b> 라운드를 지키면
+     * {@code local-regen-max}(2)를 다 쓴 뒤 보류함({@code HOLD})으로 내려가 멈춘다.
+     *
+     * @return 실제로 되돌렸으면 true
+     */
+    public boolean releaseLocalRequest() {
+        if (this.status != MotionStatus.LOCAL_REQUESTED) {
+            return false;
+        }
+        this.status = MotionStatus.QUEUED;
+        return true;
+    }
+
     public void markSeen(Instant at) {
         if (seenAt == null) {
             seenAt = at;

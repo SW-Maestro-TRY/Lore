@@ -25,7 +25,15 @@ import java.util.List;
  *   <li>{@code BAKING} — 밤 스위프가 집어 갔는데(claim) 굽다 죽은 자리. <b>큐로 되돌린다</b>({@code QUEUED}).
  *       다시 굽는 것은 스위프가 우선순위·상한(K)을 보고 정한다</li>
  *   <li>{@code PENDING} — v1(재우기 때 굽던 시절) 잔재. 그 자리에서 이어 굽는다</li>
+ *   <li>{@code LOCAL_REQUESTED} — 맥미니(codex)에 넘겼는데 <b>응답이 영영 안 온 자리</b>. 큐로 되돌린다</li>
  * </ol>
+ *
+ * <h3>★★ 왜 LOCAL_REQUESTED 도 여기서 집어야 하나</h3>
+ * 이 상태도 <b>아무도 안 보는 상태였다</b> — 밤 계획도 집기도 {@code NONE}·{@code FAILED}·{@code QUEUED} 만
+ * 본다. 맥미니가 죽거나(전원·네트워크) 러너가 결과를 안 올리면 그 동작은 <b>영구 고착</b>이고,
+ * 그 사용자는 그 자리를 영영 못 배운다. 유예는 따로 둔다({@code app.zzal.recovery.local-grace-minutes}) —
+ * 맥미니 한 라운드가 API 한 판보다 훨씬 오래 걸리므로 같은 값을 쓰면 <b>굽고 있는 중에 뺏어 온다.</b>
+ * 되돌릴 때 {@code regenRound} 는 그대로 둔다(ZzalMotion.releaseLocalRequest 참고).
  *
  * <h3>★ 왜 BAKING 을 여기서 집어야 하나(2026-09-05 리뷰 주입 INJ-B·C)</h3>
  * {@code BAKING} 은 <b>아무도 안 보는 상태였다</b> — 다음 밤 계획은 {@code NONE}·{@code FAILED} 만 보고,
@@ -56,13 +64,16 @@ public class StuckMotionRecovery {
     private final ZzalMotionRepository motionRepository;
     private final MotionService motionService;
     private final Duration gracePeriod;
+    private final Duration localGracePeriod;
 
     public StuckMotionRecovery(ZzalMotionRepository motionRepository,
                                MotionService motionService,
-                               @Value("${app.zzal.recovery.motion-grace-minutes:15}") int graceMinutes) {
+                               @Value("${app.zzal.recovery.motion-grace-minutes:15}") int graceMinutes,
+                               @Value("${app.zzal.recovery.local-grace-minutes:60}") int localGraceMinutes) {
         this.motionRepository = motionRepository;
         this.motionService = motionService;
         this.gracePeriod = Duration.ofMinutes(graceMinutes);
+        this.localGracePeriod = Duration.ofMinutes(localGraceMinutes);
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -84,6 +95,15 @@ public class StuckMotionRecovery {
         if (!stuck.isEmpty()) {
             log.info("굽다 만 모션 {}개를 이어서 굽습니다(v1 잔재)", stuck.size());
             stuck.forEach(m -> motionService.bake(m.getId()));
+        }
+
+        // 3) 맥미니에 넘겼는데 응답이 영영 안 온 자리 → 큐로 되돌린다. 유예는 맥미니 한 라운드보다 넉넉히.
+        List<ZzalMotion> abandoned = motionRepository.findByStatusAndUpdatedAtBefore(
+                MotionStatus.LOCAL_REQUESTED, Instant.now().minus(localGracePeriod));
+        List<ZzalMotion> released = abandoned.stream().filter(ZzalMotion::releaseLocalRequest).toList();
+        if (!released.isEmpty()) {
+            log.warn("맥미니가 안 가져간 모션 {}개를 큐로 되돌립니다 — seq={}", released.size(),
+                    released.stream().map(ZzalMotion::getSeq).toList());
         }
     }
 }

@@ -41,7 +41,7 @@ class StuckMotionRecoveryTest {
         motionRepository = mock(ZzalMotionRepository.class);
         motionService = mock(MotionService.class);
         when(motionRepository.findByStatusAndUpdatedAtBefore(any(), any())).thenReturn(List.of());
-        recovery = new StuckMotionRecovery(motionRepository, motionService, 15);
+        recovery = new StuckMotionRecovery(motionRepository, motionService, 15, 60);
     }
 
     private ZzalMotion motion(long id, int seq, MotionStatus status) {
@@ -84,12 +84,49 @@ class StuckMotionRecoveryTest {
     }
 
     @Test
+    @DisplayName("★★ 맥미니가 안 가져간 자리(LOCAL_REQUESTED)를 큐로 되돌린다 — 안 그러면 영구 고착 (P-13)")
+    void releasesAbandonedLocalRequest() {
+        ZzalMotion abandoned = motion(3L, 101, MotionStatus.LOCAL_REQUESTED);
+        ReflectionTestUtils.setField(abandoned, "regenRound", 2);
+        when(motionRepository.findByStatusAndUpdatedAtBefore(eq(MotionStatus.LOCAL_REQUESTED), any()))
+                .thenReturn(List.of(abandoned));
+
+        recovery.recover();
+
+        assertThat(abandoned.getStatus()).isEqualTo(MotionStatus.QUEUED);
+        // ★ 라운드는 그대로 — 0 으로 되돌리면 "굽고 → 실패 → 맥미니 → 고착 → 회수" 가 끝없이 돌아 유료 호출이 계속 나간다
+        assertThat(abandoned.getRegenRound()).isEqualTo(2);
+        assertThat(abandoned.getNightOf()).isEqualTo(NIGHT);
+        verify(motionService, never()).bake(anyLong());
+        verify(motionService, never()).bakeNow(anyLong());
+    }
+
+    @Test
+    @DisplayName("★ 맥미니 유예는 서버 유예와 다른 값이다 — 같은 값을 쓰면 굽는 중에 뺏어 온다")
+    void localGraceIsItsOwnValue() {
+        recovery.recover();
+        java.time.Instant after = java.time.Instant.now();
+
+        org.mockito.ArgumentCaptor<java.time.Instant> baking = org.mockito.ArgumentCaptor.forClass(java.time.Instant.class);
+        org.mockito.ArgumentCaptor<java.time.Instant> local = org.mockito.ArgumentCaptor.forClass(java.time.Instant.class);
+        verify(motionRepository).findByStatusAndUpdatedAtBefore(eq(MotionStatus.BAKING), baking.capture());
+        verify(motionRepository).findByStatusAndUpdatedAtBefore(eq(MotionStatus.LOCAL_REQUESTED), local.capture());
+
+        // 15분 · 60분 — 맥미니 쪽이 더 넉넉하다(cutoff 는 호출 시각 기준이라 그 사이에 흐른 시간만큼 여유를 둔다)
+        assertThat(java.time.Duration.between(baking.getValue(), after).toSeconds())
+                .isBetween(15 * 60L, 15 * 60L + 30);
+        assertThat(java.time.Duration.between(local.getValue(), after).toSeconds())
+                .isBetween(60 * 60L, 60 * 60L + 30);
+    }
+
+    @Test
     @DisplayName("★ 유예 안에 있는 것은 안 건드린다 — 정상적으로 굽고 있는 것을 두 번 구우면 돈이 두 배다")
     void gracePeriodIsAsked() {
         recovery.recover();
         // 조회 자체가 "유예보다 오래된 것" 으로만 나간다(cutoff 는 지금 - 15분)
         verify(motionRepository).findByStatusAndUpdatedAtBefore(eq(MotionStatus.BAKING), any());
         verify(motionRepository).findByStatusAndUpdatedAtBefore(eq(MotionStatus.PENDING), any());
+        verify(motionRepository).findByStatusAndUpdatedAtBefore(eq(MotionStatus.LOCAL_REQUESTED), any());
         verify(motionService, never()).bake(anyLong());
     }
 }
