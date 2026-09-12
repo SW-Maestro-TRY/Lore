@@ -1,0 +1,36 @@
+package com.lore.zzal;
+
+import com.lore.zzal.pet.ZzalPet;
+import java.time.Instant;
+
+/**
+ * 테스트에서 펫을 만드는 자리.
+ *
+ * <h3>★ 왜 필요한가</h3>
+ * 실제 경로는 두 호출로 나뉜다 — 그림을 등록해 초안을 만들고(74초 벌기), 그다음 이름을 받는다.
+ * 그런데 대부분의 테스트가 보려는 것은 <b>그 뒤의 규칙</b>(시계·돌봄·해금)이라, 두 줄을 매번
+ * 적으면 부화 절차가 바뀔 때마다 테스트 수십 개가 함께 깨진다. 여기 한 곳만 고치면 되게 둔다.
+ */
+public final class PetFixture {
+
+    private PetFixture() {
+    }
+
+    /**
+     * 튜토리얼 8칸("졸린가 봐요") 차례로 맞춘다 — <b>그때만 재울 수 있다.</b>
+     *
+     * ★ 그 전에도 재울 수 있게 두면 낮잠 한 번(NAP_MAX = 1)을 미리 써 버려 정작 8칸에서
+     *   재울 수가 없고, 튜토리얼이 영영 막힌다. 낮잠을 보는 테스트는 여기를 지나야 한다.
+     */
+    public static void readyForNap(ZzalPet pet) {
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                pet, "tutorialStep", com.lore.zzal.pet.TutorialSchedule.Step.NAP.ordinal());
+    }
+
+    /** 이름까지 받은, 격자를 굽는 중인 펫. */
+    public static ZzalPet hatching(Long userId, String name, String note, String imageKey, Instant now) {
+        ZzalPet pet = ZzalPet.draft(userId, imageKey, now);
+        pet.character(name, note, null, null, now);
+        return pet;
+    }
+}

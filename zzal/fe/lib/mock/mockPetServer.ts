@@ -20,16 +20,17 @@
 
 import { ApiError } from '../api';
 import type {
-  Album, BakingState, ChatCall, ChatReply, ChatSlot, ChatState, Clock, CreatePetInput, Features, FirstGift, Motion, PetCreated, Pieces, SickKind,
-  PetDetail, PetPhase, Personality, Settings, ShareKind, Sick, Today, Tutorial, TutorialStep,
+  Album, BakingState, ChatCall, ChatReply, ChatSlot, ChatState, Clock, Features, FirstGift, Motion, PetCreated, Pieces, SickKind,
+  PetDetail, PetPhase, Personality, Shared, ShareKind, Sick, Today, Tutorial, TutorialStep,
+  CharacterInput, Drafted, HatchProgress,
   TutorialStepKey, CareAction,
 } from '../pet';
 import type { GameKind, GameState, GuessResult, RunResult, Side } from '../game';
 import {
-  BABY_DROP_MS, BABY_MS, CARE_MISS_ZERO_MS, CHAT_MEMORY, CHAT_SLOTS, CHAT_MAX_CHARS, DROP_MS, FEATURE_UNLOCK,
+  CARE_MISS_ZERO_MS, CHAT_MEMORY, CHAT_SLOTS, CHAT_MAX_CHARS, DROP_MS, FEATURE_UNLOCK,
   FOOD_CHARGE_MS, GAMES_PER_DAY, INTIMACY, INTIMACY_TIERS, LEFT_RIGHT, MAX_FOOD, MAX_GAUGE, MAX_TRASH, NAME_MAX_CHARS,
   NAP, RUN, SLEEP_WINDOW, SNACK_STREAK_SICK, UNLOCK_CONDITIONS, WAKE_WINDOW, WORLD_MAX_CHARS, moodOf,
-  GIFT_SEQ, FIRST_GIFT_DAYS, HIDDEN_PROGRESS_SEQ,
+  GIFT_SEQ, FIRST_GIFT_DAYS, HIDDEN_PROGRESS_SEQ, TUTORIAL_FIRST_TRASH,
 } from '../../tamagotchi/rules';
 import { BACKGROUNDS, DEFAULT_BACKGROUND, MOTIONS, SPECIAL_ADV } from '../../tamagotchi/constants';
 import { BABY_CALLS } from '../../tamagotchi/tutorial';
@@ -104,7 +105,13 @@ interface Row {
   hatchedAt: number | null;
 
   settledAt: number;
-  babyUntil: number;
+  /**
+   * 시계가 켜진 시각. **null 이면 아직 튜토리얼 중**이고, 그동안은 아무것도 흐르지 않는다.
+   * ★ 튜토리얼이 시각이 아니라 순서로 바뀌면서 "아기 60분(babyUntil)" 이 사라진 자리다.
+   */
+  clockStartedAt: number | null;
+  /** 튜토리얼 몇 번째 칸인가(0부터). 9 면 끝. 서버 ZzalPet.tutorialStep 과 같은 뜻. */
+  tutorialStep: number;
   sleeping: boolean;
   sleepKind: 'NIGHT' | 'NAP' | null;
   sleptAt: number;
@@ -152,7 +159,6 @@ interface Row {
   personality: Personality | null;
   world: string | null;
   background: string;
-  settings: Settings;
 
   chatAnswered: Set<string>;
   /** 답한 부름의 내용 — 서버 ChatCall 이 answer·replyLine·reactionKey 를 함께 주므로 목도 남긴다. */
@@ -269,19 +275,50 @@ export class MockPetServer implements PetSource {
 
   // ── PetSource ─────────────────────────────────────────────────────────
 
-  async createPet(input: CreatePetInput): Promise<PetCreated> {
+  /** 그림 등록 → 초안. 실서버와 같이 **이미 초안이 있으면 그것을 그대로 준다.** */
+  async draftPet(imageKey: string): Promise<Drafted> {
     await this.wait();
     const now = this.now();
-    if (this.row && (this.row.phase === 'HATCHING')) throw err(409, 'ZZAL_PET_ALREADY_HATCHING', '아직 부화 중이에요');
-    if (this.row && this.row.phase === 'ALIVE') throw err(409, 'ZZAL_PET_LIMIT_REACHED', '더 키울 수 있는 자리가 없어요');
+    if (this.row?.phase === 'DRAFT') return { petId: this.row.id };
+    if (this.row?.phase === 'HATCHING') throw err(409, 'ZZAL_PET_ALREADY_HATCHING', '아직 부화 중이에요');
+    if (this.row?.phase === 'ALIVE') throw err(409, 'ZZAL_PET_LIMIT_REACHED', '더 키울 수 있는 자리가 없어요');
+    if (!imageKey) throw err(400, 'INVALID_UPLOAD_KEY', '올린 그림을 찾지 못했어요');
+    this.row = this.newRow('', null, now, null);
+    this.row.phase = 'DRAFT';
+    return { petId: this.row.id };
+  }
+
+  /** 캐릭터 정보 등록 → 격자 생성 시작. 여기서 알이 흔들리기 시작한다. */
+  async setCharacter(petId: number, input: CharacterInput): Promise<PetCreated> {
+    await this.wait();
+    const now = this.now();
+    const r = this.mine(petId);
+    if (r.phase !== 'DRAFT') throw err(409, 'ZZAL_PET_NOT_DRAFT', '이미 이름을 지은 아이예요');
     const name = input.name.trim();
     // ★ 12자의 기준은 UTF-16 길이(String.length)다 — 서버 @Size(max = 12) 와 같은 자.
     if (!name || name.length > NAME_MAX_CHARS) throw err(400, 'INVALID_INPUT', `이름은 ${NAME_MAX_CHARS}자까지예요`);
-    if (!input.imageKey) throw err(400, 'INVALID_UPLOAD_KEY', '올린 그림을 찾지 못했어요');
-    this.row = this.newRow(name, input.note?.trim() || null, now, null);
+    r.name = name;
+    r.note = input.note?.trim() || null;
+    r.phase = 'HATCHING';
+    r.hatchStartedAt = now;
     return {
-      petId: this.row.id, name, phase: 'HATCHING', hatchStartedAt: iso(now),
+      petId: r.id, name, phase: 'HATCHING', hatchStartedAt: iso(now),
       estimatedSeconds: Math.ceil(HATCH_MS / 1000),
+    };
+  }
+
+  async getHatchProgress(petId: number): Promise<HatchProgress> {
+    await this.wait();
+    const r = this.mine(petId);
+    const spent = this.now() - r.hatchStartedAt;
+    const total = 5;
+    return {
+      phase: r.phase,
+      label: null,
+      progress: Math.min(total, Math.floor((spent / HATCH_MS) * total)),
+      total,
+      estimatedSeconds: Math.max(0, Math.ceil((HATCH_MS - spent) / 1000)),
+      message: r.phase === 'FAILED' ? '이 그림은 어려워요. 다른 그림을 올려 주세요' : null,
     };
   }
 
@@ -313,6 +350,7 @@ export class MockPetServer implements PetSource {
         if (r.food < MAX_FOOD && r.foodAcc === 0) r.foodAcc = 0;
         r.fullness += 1;
         r.counters.feedCount += 1;
+        this.advanceTutorial(r, 'FEED');
         r.pieceDay.feeds += 1;
         r.today.snackStreak = 0;
         this.careIntimacy(r);
@@ -324,14 +362,15 @@ export class MockPetServer implements PetSource {
         r.pieceDay.snacks += 1;
         r.today.snackStreak += 1;
         if (r.today.snackStreak >= SNACK_STREAK_SICK) {
-          // ★ 아기 60분 안에는 병이 없다(해석 39). 연속 카운터는 5에서 0으로 끊는다 —
-          //   안 끊으면 60분이 끝나자마자 여섯 개째에 곧바로 아프게 된다.
-          if (now >= r.babyUntil) this.fallSick(r, 'UPSET', now);
+          // ★ 튜토리얼 중에는 병이 없다(해석 39). 연속 카운터는 5에서 0으로 끊는다 —
+          //   안 끊으면 튜토리얼이 끝나자마자 여섯 개째에 곧바로 아프게 된다.
+          if (r.clockStartedAt !== null) this.fallSick(r, 'UPSET', now);
           r.today.snackStreak = 0;
         }
         break;
       case 'PET':
         r.counters.petCount += 1;
+        this.advanceTutorial(r, 'PET');
         if (r.today.pets < INTIMACY.petPerDay) {
           r.today.pets += 1;
           r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.pet);
@@ -342,6 +381,7 @@ export class MockPetServer implements PetSource {
         if (r.trash <= 0) throw err(409, 'ZZAL_CARE_NOT_NEEDED', '이미 깨끗해요');
         r.trash = 0;
         r.counters.cleanCount += 1;
+        this.advanceTutorial(r, 'CLEAN');
         r.pieceDay.cleans += 1;
         r.today.snackStreak = 0;
         this.careIntimacy(r);
@@ -376,7 +416,7 @@ export class MockPetServer implements PetSource {
     const clock = this.clockOf(r, now);
     if (!clock.canSleep) throw err(409, 'ZZAL_NOT_SLEEP_TIME', '아직 잘 시간이 아니에요');
     const before = this.unlockedSeqs(r);
-    this.doSleep(r, now, now < r.babyUntil ? 'NAP' : 'NIGHT', false);
+    this.doSleep(r, now, r.clockStartedAt === null ? 'NAP' : 'NIGHT', false);
     return this.detail(r, now, this.newlyUnlocked(r, before, now));
   }
 
@@ -400,8 +440,31 @@ export class MockPetServer implements PetSource {
       throw err(400, 'INVALID_INPUT', `세계관은 ${WORLD_MAX_CHARS}자까지예요`);
     }
     r.personality = personality;
+    this.advanceTutorial(r, 'PERSONALITY');
     if (world !== undefined) r.world = world.trim() || null;
     return this.detail(r, now);
+  }
+
+  /**
+   * 튜토리얼 마지막 칸 — **여기서 시계가 켜진다.**
+   *
+   * ★ 앞 8칸을 다 안 했으면 거절한다. 화면이 순서를 다시 판정하지 않게 하려는 것이다.
+   * ★ 켜지는 시각이 곧 하루의 기준(dayBase)이다 — 그 전에는 하루라는 것이 없었다.
+   */
+  async tutorialDone(petId: number): Promise<PetDetail> {
+    await this.wait();
+    const r = this.alive(petId);
+    const now = this.settle(r, this.now());
+    if (r.clockStartedAt !== null) throw err(409, 'ZZAL_TUTORIAL_ALREADY_DONE', '이미 다 배웠어요');
+    if (this.currentStepKey(r) !== 'DONE') throw err(409, 'ZZAL_TUTORIAL_NOT_READY', '아직 남은 것이 있어요');
+    const before = this.unlockedSeqs(r);
+    r.tutorialStep += 1;
+    r.clockStartedAt = now;
+    r.settledAt = now;
+    r.dayBase = now;
+    r.sleptAt = now;
+    r.lastVisitDay = dayIndex(now);
+    return this.detail(r, now, this.newlyUnlocked(r, before, now));
   }
 
   async setBackground(petId: number, background: string): Promise<PetDetail> {
@@ -414,14 +477,17 @@ export class MockPetServer implements PetSource {
     return this.detail(r, now);
   }
 
-  async share(petId: number, motionKey: string, _kind: ShareKind): Promise<PetDetail> {
+  async share(petId: number, motionKey: string, _kind: ShareKind): Promise<Shared> {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
     const m = r.motions.find((x) => x.key === motionKey);
     if (!m || m.unlockedAt === null) throw err(409, 'ZZAL_MOTION_NOT_OPEN', '아직 열리지 않은 동작이에요');
     r.counters.shareCount += 1;
-    return this.detail(r, now);
+    this.advanceTutorial(r, 'SHARE');
+    // ★ 목도 같은 동작에는 같은 토큰을 준다 — 실서버와 다르게 굴면 목으로 짠 화면이 실서버에서 깨진다.
+    const token = `mock-${petId}-${motionKey}`;
+    return { token, url: `http://localhost:3100/zzal/s/${token}`, pet: this.detail(r, now) };
   }
 
   async getChat(petId: number): Promise<ChatState> {
@@ -445,6 +511,7 @@ export class MockPetServer implements PetSource {
     const before = this.unlockedSeqs(r);
     r.chatAnswered.add(this.slotKey(r, slot));
     r.counters.chatAnswers += 1;
+    this.advanceTutorial(r, 'CHAT');
     r.pieceDay.chats += 1;
     r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.chat);
     r.today.snackStreak = 0;
@@ -477,28 +544,6 @@ export class MockPetServer implements PetSource {
     return { motions: this.motionsOf(r), postcards: [], scenes: [], firstGift: this.firstGiftOf(r) };
   }
 
-  async callBack(petId: number): Promise<PetDetail> {
-    await this.wait();
-    this.alive(petId);
-    throw err(409, 'ZZAL_NOT_TRAVELING', '여행 중이 아니에요');
-  }
-
-  async updateSettings(petId: number, settings: Settings): Promise<PetDetail> {
-    await this.wait();
-    const r = this.alive(petId);
-    const now = this.settle(r, this.now());
-    r.settings = { leaveEnabled: !!settings.leaveEnabled };
-    return this.detail(r, now);
-  }
-
-  async release(petId: number): Promise<PetDetail> {
-    await this.wait();
-    const r = this.mine(petId);
-    if (r.phase === 'HATCHING') throw err(409, 'ZZAL_PET_RELEASE_NOT_ALLOWED', '부화가 끝난 뒤에 보낼 수 있어요');
-    r.phase = 'DEAD';
-    return this.detail(r, this.now());
-  }
-
   async startGame(petId: number, kind: GameKind = 'LEFT_RIGHT'): Promise<GameState> {
     await this.wait();
     const r = this.alive(petId);
@@ -511,6 +556,7 @@ export class MockPetServer implements PetSource {
     const before = this.unlockedSeqs(r);
     r.today.games += 1;
     r.counters.gameStarts += 1;
+    this.advanceTutorial(r, 'GAME');
     r.today.snackStreak = 0;
     r.game = {
       gameId: this.nextGameId++, kind, round: 0, hits: 0, finished: false, win: null,
@@ -553,27 +599,6 @@ export class MockPetServer implements PetSource {
     };
   }
 
-  async finishRun(petId: number, gameId: number, survivedMs: number): Promise<RunResult> {
-    await this.wait();
-    const r = this.alive(petId);
-    const now = this.settle(r, this.now());
-    const g = r.game;
-    if (!g || g.gameId !== gameId || g.kind !== 'RUN') throw err(404, 'ZZAL_GAME_NOT_FOUND', '진행 중인 놀이가 없어요');
-    if (g.finished) throw err(409, 'ZZAL_GAME_FINISHED', '이미 끝난 놀이예요');
-    if (!Number.isFinite(survivedMs) || survivedMs < 0 || survivedMs > RUN.targetMs * 2) {
-      throw err(400, 'INVALID_INPUT', '기록이 이상해요');
-    }
-    const before = this.unlockedSeqs(r);
-    g.finished = true;
-    g.win = survivedMs >= RUN.targetMs;
-    if (g.win) r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
-    return {
-      gameId, survivedMs, win: g.win,
-      remainingToday: Math.max(0, GAMES_PER_DAY - r.today.games),
-      justUnlocked: this.newlyUnlocked(r, before, now), runUnlocked: this.featuresOf(r).run,
-    };
-  }
-
   async getCurrentGame(petId: number): Promise<GameState> {
     await this.wait();
     const r = this.alive(petId);
@@ -591,6 +616,12 @@ export class MockPetServer implements PetSource {
     }
     if (r.phase !== 'ALIVE') return now;
 
+    // ★★ 튜토리얼 중에는 시계가 멈춰 있다 — 게이지도, 케어 미스도, 자동 취침도 없다.
+    //    시각을 그냥 따라잡기만 하고 나간다. 서버 ZzalPet.settle() 의 첫 줄과 같은 판단이다.
+    if (r.clockStartedAt === null) {
+      r.settledAt = now;
+      return now;
+    }
     let guard = 0;
     while (r.settledAt < now && guard++ < 10_000) {
       const t = r.settledAt;
@@ -602,20 +633,18 @@ export class MockPetServer implements PetSource {
         if (end === wakeAt) this.doWake(r, end, true);
         continue;
       }
-      const baby = t < r.babyUntil;
-      const boundary = baby ? r.babyUntil : this.autoSleepAt(t);
+      const boundary = this.autoSleepAt(t);
       const end = Math.min(now, boundary);
       if (end > t) {
-        this.tickAwake(r, t, end, baby);
+        this.tickAwake(r, t, end);
         this.chargeFood(r, end - t);
       }
       r.settledAt = end;
-      if (!baby && end === boundary) this.doSleep(r, end, 'NIGHT', true);
+      if (end === boundary) this.doSleep(r, end, 'NIGHT', true);
     }
-    // 경계 정각(now === babyUntil 그 밀리초)엔 위 루프가 "아기 끝" 만 처리하고 끝난다 — 끝난 시각이 밤 구간(23~07시)이면
-    // 그 자리에서 밤잠에 든다(상훈님 9/5 결정: 튜토리얼은 시계와 논외, 끝나면 즉시 밤잠). 1ms 뒤엔 루프가 알아서 하지만
-    // Playwright 처럼 정각으로 시간을 밀면 이 한 호출이 어긋났다.
-    if (!r.sleeping && r.settledAt >= r.babyUntil && this.autoSleepAt(r.settledAt) === r.settledAt) {
+    // 시계가 켜진 그 순간이 밤 구간(23~07시)이면 그 자리에서 밤잠에 든다
+    // (상훈님 9/5 결정: 튜토리얼은 시계와 논외, 끝나면 즉시 밤잠).
+    if (!r.sleeping && this.autoSleepAt(r.settledAt) === r.settledAt) {
       this.doSleep(r, r.settledAt, 'NIGHT', true);
     }
     return now;
@@ -635,9 +664,9 @@ export class MockPetServer implements PetSource {
     return r.sleptAt < sameDay ? sameDay : sameDay + DAY_MS;
   }
 
-  private tickAwake(r: Row, from: number, to: number, baby: boolean): void {
+  private tickAwake(r: Row, from: number, to: number): void {
     const dt = to - from;
-    const rate = baby ? BABY_DROP_MS : DROP_MS;
+    const rate = DROP_MS;
     for (const g of ['fullness', 'happiness'] as const) {
       r.acc[g] += dt;
       while (r.acc[g] >= rate[g]) {
@@ -659,8 +688,7 @@ export class MockPetServer implements PetSource {
     const fullMs = r.trash < MAX_TRASH ? 0
       : needToFull === 0 ? dt
         : Math.max(0, (trashSteps - needToFull) * rate.trash + r.acc.trash);
-    // 케어 미스 — 아기 60분엔 없다(§12). 구간 끝 상태로 근사한다.
-    if (baby) return;
+    // 케어 미스 — 구간 끝 상태로 근사한다. (튜토리얼 중에는 여기까지 오지 않는다 — settle 이 먼저 나간다.)
     // ★ 병 DIRTY — 흔적이 가득한 채로 **깨어 있는** 6시간(해석 35, 100%).
     //   NEGLECT(확률 30%)·NATURAL(확률·서버 비밀 씨앗)은 목이 만들지 않는다 — 아래 fallSick 주석.
     if (fullMs > 0) {
@@ -771,7 +799,10 @@ export class MockPetServer implements PetSource {
       r.bonusPiece = r.goodDayNext;
       r.goodDayNext = false;
     }
-    if (kind === 'NAP') r.counters.napCount += 1;
+    if (kind === 'NAP') {
+      r.counters.napCount += 1;
+      this.advanceTutorial(r, 'NAP');
+    }
     if (!auto) {
       r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.wake);
       r.counters.sleepWakeCount += 1;
@@ -864,12 +895,13 @@ export class MockPetServer implements PetSource {
   // ── 안쪽: 파생 블록 ─────────────────────────────────────────────────
 
   private clockOf(r: Row, now: number): Clock {
-    const baby = now < r.babyUntil;
+    const inTutorial = r.clockStartedAt === null;
+    const startedAt = r.clockStartedAt === null ? null : iso(r.clockStartedAt);
     if (r.sleeping) {
       const autoWake = this.autoWakeAt(r);
       const opens = r.sleepKind === 'NAP' ? r.sleptAt + NAP.wakeAfterMs : autoWake - (WAKE_WINDOW.to - WAKE_WINDOW.from) * HOUR_MS;
       return {
-        babyUntil: iso(r.babyUntil), sleeping: true, sleepKind: r.sleepKind, sleptAt: iso(r.sleptAt), wokeAt: iso(r.dayBase),
+        clockStartedAt: startedAt, sleeping: true, sleepKind: r.sleepKind, sleptAt: iso(r.sleptAt), wokeAt: iso(r.dayBase),
         canSleep: false, canWake: now >= opens,
         sleepWindowOpensAt: null, autoSleepAt: null, wakeWindowOpensAt: iso(opens), autoWakeAt: iso(autoWake),
         overslept: r.overslept,
@@ -877,14 +909,17 @@ export class MockPetServer implements PetSource {
     }
     const h = tod(now);
     const inWindow = h >= SLEEP_WINDOW.from * HOUR_MS && h < SLEEP_WINDOW.to * HOUR_MS;
-    // 낮잠은 아기 60분 안 한 번만(해석 3).
-    const napOk = baby && r.counters.napCount === 0;
+    // ★ 낮잠은 튜토리얼 8번째 칸(NAP)에서 한 번만. 그 전에 미리 재우면 8번 칸을 할 수가 없어
+    //   튜토리얼이 영영 안 끝난다 — 그래서 칸이 왔을 때만 열어 준다.
+    const napOk = inTutorial && this.currentStepKey(r) === 'NAP' && r.counters.napCount === 0;
     const opens = h < SLEEP_WINDOW.from * HOUR_MS ? at(now, SLEEP_WINDOW.from) : at(now, SLEEP_WINDOW.from) + DAY_MS;
-    const autoSleep = baby ? Math.max(r.babyUntil, this.autoSleepAt(r.babyUntil)) : this.autoSleepAt(now);
     return {
-      babyUntil: iso(r.babyUntil), sleeping: false, sleepKind: null, sleptAt: null, wokeAt: iso(r.dayBase),
-      canSleep: napOk || inWindow, canWake: false,
-      sleepWindowOpensAt: iso(napOk ? now : inWindow ? at(now, SLEEP_WINDOW.from) : opens), autoSleepAt: iso(autoSleep),
+      clockStartedAt: startedAt, sleeping: false, sleepKind: null, sleptAt: null, wokeAt: iso(r.dayBase),
+      canSleep: napOk || (!inTutorial && inWindow), canWake: false,
+      // 튜토리얼 중에는 밤이 오지 않는다 — 자동 취침도, 열릴 창도 없다.
+      sleepWindowOpensAt: inTutorial ? (napOk ? iso(now) : null)
+        : iso(inWindow ? at(now, SLEEP_WINDOW.from) : opens),
+      autoSleepAt: inTutorial ? null : iso(this.autoSleepAt(now)),
       wakeWindowOpensAt: null, autoWakeAt: null, overslept: r.overslept,
     };
   }
@@ -1029,30 +1064,38 @@ export class MockPetServer implements PetSource {
       : { answer: null, replyLine: null, reactionKey: null };
   }
 
-  private tutorialOf(r: Row, now: number): Tutorial | null {
-    const hatched = r.hatchedAt ?? r.hatchStartedAt;
-    const done: Record<TutorialStepKey, boolean> = {
-      FEED: r.counters.feedCount >= 1,
-      PET: r.counters.petCount >= 1,
-      CHAT: r.chatAnswered.has('BABY') || r.counters.chatAnswers >= 1,
-      PERSONALITY: r.personality !== null,
-      CLEAN: r.counters.cleanCount >= 1,
-      GAME: r.counters.gameStarts >= 1,
-      SHARE: r.counters.shareCount >= 1,
-      NAP: r.counters.napCount >= 1,
-      DONE: now >= r.babyUntil,
-    };
-    let currentSet = false;
-    const steps: TutorialStep[] = BABY_CALLS.map((c) => {
-      const dueMs = hatched + c.minute * 60_000;
-      const isDone = done[c.key];
-      const current = !isDone && !currentSet && dueMs <= now;
-      if (current) currentSet = true;
-      return { key: c.key, dueAt: iso(dueMs), done: isDone, current };
-    });
-    // 9단계 모두 done 이면 블록이 사라진다(해석 9). active = 아기 60분 전인가.
-    if (steps.every((s) => s.done)) return null;
-    return { active: now < r.babyUntil, minutesSince: Math.floor((now - hatched) / 60_000), steps };
+  /**
+   * 튜토리얼 블록. **끝났으면 null** — 시계가 켜졌다는 것이 곧 끝났다는 뜻이다(해석 9).
+   * "끝났는데 아직 남은 칸이 있다" 는 상태는 없다.
+   */
+  private tutorialOf(r: Row): Tutorial | null {
+    if (r.clockStartedAt !== null) return null;
+    // ★ 완료 여부를 카운터로 되짚지 않는다 — **몇 번째 칸인가** 하나가 정본이다(서버 tutorialStep).
+    //   카운터로 다시 판정하면, 칸이 오기 전에 미리 누른 사람의 칸이 저절로 done 이 되어 순서가 무너진다.
+    const steps: TutorialStep[] = BABY_CALLS.map((c, i) => ({
+      key: c.key,
+      done: i < r.tutorialStep,
+      current: i === r.tutorialStep,
+    }));
+    return { active: true, step: r.tutorialStep, steps };
+  }
+
+  /** 지금 해야 할 칸. 튜토리얼이 끝났으면 null. */
+  private currentStepKey(r: Row): TutorialStepKey | null {
+    return r.tutorialStep < BABY_CALLS.length ? BABY_CALLS[r.tutorialStep].key : null;
+  }
+
+  /**
+   * 그 칸의 행동이 들어왔으면 다음 칸으로 넘긴다.
+   *
+   * ★ 화면이 "칸을 끝냈어요" 를 따로 부르지 않는다 — 밥·채팅·게임에는 이미 제 API 가 있고,
+   *   그 API 가 들어올 때 서버가 스스로 넘긴다. 그래야 부르기를 빠뜨려 멈추는 일이 없다.
+   */
+  private advanceTutorial(r: Row, done: TutorialStepKey): void {
+    if (r.clockStartedAt !== null || this.currentStepKey(r) !== done) return;
+    r.tutorialStep += 1;
+    // 첫 똥은 "바닥을 치워 주세요" 칸이 만든다 — 치울 것이 없으면 그 칸을 할 수가 없다.
+    if (done === 'PERSONALITY') r.trash = Math.max(r.trash, TUTORIAL_FIRST_TRASH);
   }
 
   /**
@@ -1116,11 +1159,12 @@ export class MockPetServer implements PetSource {
       // ★ v0 백엔드(PR #216)는 chatSummary.openSlot 을 null 로 준다 — 열린 슬롯은 GET /chat 으로 읽는다. 목도 같은 모양.
       chatSummary: alive ? { openSlot: null, nextAt: this.chatOf(r, now).nextAt } : null,
       scenes: alive ? { enabled: false, latest: null } : null,
+      // 장면 기록은 3층 기능이라 목에서는 늘 꺼져 있다 — 안 본 것도 없다.
+      sceneNew: alive ? false : null,
       personality: r.personality, world: r.world, background: alive ? r.background : null,
       features: alive ? this.featuresOf(r) : null,
       leaving: null, trip: null,
-      settings: alive ? { ...r.settings } : null,
-      tutorial: alive ? this.tutorialOf(r, now) : null,
+      tutorial: alive ? this.tutorialOf(r) : null,
     };
   }
 
@@ -1132,7 +1176,7 @@ export class MockPetServer implements PetSource {
     });
     const r: Row = {
       id: this.nextId++, name, note, phase: 'HATCHING', hatchStartedAt, hatchedAt: null,
-      settledAt: hatchStartedAt, babyUntil: hatchStartedAt + BABY_MS,
+      settledAt: hatchStartedAt, clockStartedAt: null, tutorialStep: 0,
       sleeping: false, sleepKind: null, sleptAt: hatchStartedAt, dayBase: hatchStartedAt, nightCount: 0, overslept: false,
       fullness: 1, happiness: 3, trash: 0,
       acc: { fullness: 0, happiness: 0, trash: 0 }, zeroAcc: { fullness: 0, happiness: 0, trash: 0 },
@@ -1146,7 +1190,7 @@ export class MockPetServer implements PetSource {
         feedCount: 0, petCount: 0, cleanCount: 0, shareCount: 0, napCount: 0,
       },
       motions: [...MOTIONS.map(mk), ...SPECIAL_ADV.map(mk)],
-      personality: null, world: null, background: DEFAULT_BACKGROUND, settings: { leaveEnabled: true },
+      personality: null, world: null, background: DEFAULT_BACKGROUND,
       chatAnswered: new Set(), chatLog: new Map(), memory: [],
       daysTogether: 0, lastVisitDay: -1,
       game: null, seenAdv: new Set(),
@@ -1155,12 +1199,18 @@ export class MockPetServer implements PetSource {
     return r;
   }
 
-  /** 부화 = 시계가 켜지는 순간(§15). 1층 8종이 즉시 열린다. */
+  /**
+   * 부화 = **튜토리얼이 시작되는** 순간. 1층 8종이 즉시 열린다.
+   *
+   * ★ 시계는 여기서 켜지지 않는다 — 9칸을 다 끝낸 뒤 {@link tutorialDone} 이 켠다.
+   *   그래서 부화만 시켜 두고 며칠 뒤에 들어와도 아이는 배고프지도 아프지도 않다.
+   */
   private hatch(r: Row, t: number): void {
     r.phase = 'ALIVE';
     r.hatchedAt = t;
     r.settledAt = t;
-    r.babyUntil = t + BABY_MS;
+    r.clockStartedAt = null;
+    r.tutorialStep = 0;
     r.dayBase = t;
     r.sleptAt = t;
     for (const m of r.motions) if (m.layer === 'BASIC_1') m.unlockedAt = t;
@@ -1168,9 +1218,16 @@ export class MockPetServer implements PetSource {
     r.lastVisitDay = dayIndex(t);
   }
 
+  /** 프리셋용 — 튜토리얼을 다 지난 것으로 놓고 시계를 켠다. */
+  private finishTutorial(r: Row, at: number): void {
+    r.tutorialStep = BABY_CALLS.length;
+    r.clockStartedAt = at;
+  }
+
   private seedPreset(preset: 'baby' | 'child' | 'grown' | 'layer3'): void {
     const now = this.now();
     if (preset === 'baby') {
+      // 갓 부화 — 튜토리얼 첫 칸. 시계는 아직 안 켜져 있다.
       this.row = this.newRow('여울', '조용하지만 고집이 세요', now - HATCH_MS, now);
       return;
     }
@@ -1186,6 +1243,7 @@ export class MockPetServer implements PetSource {
       g.daysTogether = 5;
       const ten3 = at(now, 10);
       g.dayBase = ten3 <= now ? ten3 : ten3 - DAY_MS;
+      this.finishTutorial(g, g.hatchedAt ?? now);
       g.settledAt = now;
       g.lastVisitDay = dayIndex(now);
       this.newlyUnlocked(g, new Set(), now - 2 * HOUR_MS);   // 두 시간 전에 마지막 칸이 열렸다
@@ -1205,6 +1263,7 @@ export class MockPetServer implements PetSource {
       // 오늘 10:00 기상. ★ 아직 10시 전이면 어제 10:00 이다 — 기상 시각이 미래면 시계가 뒤집힌다.
       const ten = at(now, 10);
       g.dayBase = ten <= now ? ten : ten - DAY_MS;
+      this.finishTutorial(g, g.hatchedAt ?? now);
       g.settledAt = now;
       g.lastVisitDay = dayIndex(now);
       this.newlyUnlocked(g, new Set(), g.hatchedAt ?? now);
@@ -1217,6 +1276,7 @@ export class MockPetServer implements PetSource {
     r.chatAnswered.add('BABY');
     r.personality = 'GENTLE';
     r.fullness = 3; r.happiness = 3; r.trash = 1; r.food = 2; r.intimacy = 90;
+    this.finishTutorial(r, r.hatchedAt ?? now);
     r.settledAt = now;
     this.newlyUnlocked(r, new Set(), r.hatchedAt ?? now);
     this.row = r;

@@ -1,5 +1,6 @@
 package com.lore.zzal.pet;
 
+import com.lore.zzal.PetFixture;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -28,33 +29,32 @@ class ZzalPetTest {
 
     private static final Instant T0 = kst("2026-09-05 12:00");
 
-    /** 방금 부화한 아기(T0). 배부름 1·행복 3·흔적 0·밥 3. */
+    /**
+     * 방금 부화해 <b>튜토리얼을 시작한</b> 펫(T0). 배부름 0·행복 3·흔적 0·밥 3.
+     *
+     * ★ 시계가 아직 안 켜져 있다 — 게이지가 줄지 않고, 케어 미스·병·자동 취침이 없다(정본 1.4).
+     * ★ 배부름이 0 인 것은 튜토리얼 첫 칸이 "배가 고픈가 봐요" 이기 때문이다(정본 1.5).
+     */
     private static ZzalPet baby() {
-        ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "images/zzal/abc", T0.minus(Duration.ofMinutes(3)));
+        ZzalPet pet = PetFixture.hatching(1L, "여울", null, "images/zzal/abc", T0.minus(Duration.ofMinutes(3)));
         pet.markAlive("images/zzal/sheet", "생김새", T0);
         return pet;
     }
 
     /**
-     * 어린이(아기 60분이 끝난 펫). T0 에 배부름 3·행복 3·흔적 0·밥 0(충전 시계 T0 에서 시작)·누적초 0.
+     * 시계가 켜진 뒤 T0 에 배부름 3·행복 3·흔적 0·밥 0(충전 시계 T0 에서 시작)·누적초 0 인 펫.
      *
-     * 11:00 에 부화해 아기 한 시간을 그냥 보내면(배부름 20칸·행복 15칸·흔적 4개가 떨어져 0/0/4),
-     * 정오에 밥 3·간식 3·청소 1 로 채운 상태다. 아기 60분은 3600초라 세 누적초가 정확히 0 으로 떨어진다.
+     * ★ 튜토리얼은 {@code skipTutorial} 로 건너뛴다 — 아홉 칸을 실제로 누르면 밥·쓰다듬·채팅
+     *   누적 카운터가 함께 올라, 시계 규칙을 보는 테스트들이 엉뚱한 수를 보게 된다.
+     *   튜토리얼 자체는 {@link TutorialScheduleTest} 가 눌러 가며 본다.
      */
     private static ZzalPet child() {
-        Instant hatched = T0.minus(Duration.ofMinutes(60));
-        ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "images/zzal/abc", hatched);
-        pet.markAlive("images/zzal/sheet", "생김새", hatched);
-        pet.settle(T0);
-        assertThat(pet.getFullness()).isZero();
-        assertThat(pet.getTrash()).isEqualTo(4);
+        ZzalPet pet = baby();
+        pet.skipTutorial(T0);
+        assertThat(pet.getClockStartedAt()).isEqualTo(T0);
         pet.feed(T0);
         pet.feed(T0);
         pet.feed(T0);
-        pet.snack(T0);
-        pet.snack(T0);
-        pet.snack(T0);
-        pet.clean(T0);
         assertThat(pet.getFullness()).isEqualTo(3);
         assertThat(pet.getHappiness()).isEqualTo(3);
         assertThat(pet.getTrash()).isZero();
@@ -107,34 +107,6 @@ class ZzalPetTest {
             pet.feed(at("2026-09-05 14:59"));                 // 4
             pet.settle(at("2026-09-05 15:00"));
             assertThat(pet.getFullness()).isEqualTo(3);
-        }
-
-        @Test
-        @DisplayName("★ 아기 60분은 원조 아기 속도 — 배부름 3분·행복 4분·흔적 15분")
-        void babySpeed() {
-            ZzalPet pet = baby();
-            pet.settle(T0.plus(Duration.ofMinutes(3)));
-            assertThat(pet.getFullness()).isZero();           // 1 → 0
-            assertThat(pet.getHappiness()).isEqualTo(3);
-            pet.settle(T0.plus(Duration.ofMinutes(4)));
-            assertThat(pet.getHappiness()).isEqualTo(2);
-            pet.settle(T0.plus(Duration.ofMinutes(15)));
-            assertThat(pet.getTrash()).isEqualTo(1);           // 12장 15분 "첫 똥"
-            pet.settle(T0.plus(Duration.ofMinutes(60)));
-            assertThat(pet.getTrash()).isEqualTo(4);
-        }
-
-        @Test
-        @DisplayName("60분이 지나면 어린이 속도 — 그 뒤 3시간에야 한 칸")
-        void afterBabyChildSpeed() {
-            ZzalPet pet = baby();
-            pet.settle(T0.plus(Duration.ofMinutes(60)));
-            pet.grantFood(T0.plus(Duration.ofMinutes(60)));
-            pet.feed(T0.plus(Duration.ofMinutes(60)));        // 배부름 1
-            pet.settle(T0.plus(Duration.ofMinutes(60 + 179)));
-            assertThat(pet.getFullness()).isEqualTo(1);
-            pet.settle(T0.plus(Duration.ofMinutes(60 + 180)));
-            assertThat(pet.getFullness()).isZero();
         }
 
         @Test
@@ -254,14 +226,16 @@ class ZzalPetTest {
         }
 
         @Test
-        @DisplayName("★ 아기 60분 중 23:00 을 넘기면 60분이 끝나는 순간 잠든다")
-        void babyCrossingEleven() {
+        @DisplayName("★ 튜토리얼을 밤(23:00~07:00)에 끝내면 그 순간부터 밤잠에 든다 (정본 16장)")
+        void finishingTutorialAtNightSleeps() {
             Instant hatched = at("2026-09-05 22:30");
-            ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", hatched);
+            ZzalPet pet = PetFixture.hatching(1L, "여울", null, "k", hatched);
             pet.markAlive("s", "i", hatched);
 
             pet.settle(at("2026-09-05 23:15"));
-            assertThat(pet.isSleeping()).isFalse();
+            assertThat(pet.isSleeping()).isFalse();                  // 튜토리얼 중 — 시계가 안 돈다
+
+            pet.skipTutorial(at("2026-09-05 23:30"));                // 여기서 시계가 켜진다
             pet.settle(at("2026-09-05 23:45"));
             assertThat(pet.isSleeping()).isTrue();
             assertThat(pet.getSleptAt()).isEqualTo(at("2026-09-05 23:30"));
@@ -302,34 +276,34 @@ class ZzalPetTest {
         }
 
         @Test
-        @DisplayName("★ 낮잠(12장 40분) — 아기 때 한 번, 5분 뒤 깨우기, 10분 뒤 자동 기상, 횟수에 포함")
+        @DisplayName("★ 낮잠(12장 8칸) — 튜토리얼 중 한 번, 곧바로 깨울 수 있다, 보상 0, 횟수에는 포함")
         void nap() {
             ZzalPet pet = baby();
-            Instant t40 = T0.plus(Duration.ofMinutes(40));
-            pet.settle(t40);
-            assertThat(pet.sleepKindAvailable(t40)).isEqualTo(SleepKind.NAP);
-            pet.sleep(t40);
+            PetFixture.readyForNap(pet);                         // 8칸 차례여야 재울 수 있다
+            assertThat(pet.sleepKindAvailable(T0)).isEqualTo(SleepKind.NAP);
+            pet.sleep(T0);
             assertThat(pet.getSleepKind()).isEqualTo(SleepKind.NAP);
             assertThat(pet.getSleepWakeCount()).isEqualTo(1);
 
-            assertThat(pet.canWake(t40.plus(Duration.ofMinutes(4)))).isFalse();
-            assertThat(pet.canWake(t40.plus(Duration.ofMinutes(5)))).isTrue();
+            // ★ 1.4 — 시계가 멈춰 있어 기다림이 없다. 재운 그 순간 깨울 수 있다
+            assertThat(pet.canWake(T0)).isTrue();
 
             int intimacy = pet.getIntimacy();
-            pet.settle(t40.plus(Duration.ofMinutes(11)));      // 안 깨움 → 10분 뒤 자동
+            pet.wake(T0);
             assertThat(pet.isSleeping()).isFalse();
             assertThat(pet.getNapCount()).isEqualTo(1);
-            assertThat(pet.getIntimacy()).isEqualTo(intimacy);   // 낮잠은 재우기·깨우기 둘 다 보상 0(해석 16)
+            assertThat(pet.getIntimacy()).isEqualTo(intimacy);   // 낮잠은 재우기·깨우기 둘 다 보상 0(정본 16장)
             assertThat(pet.getWokeAt()).isEqualTo(T0);          // 낮잠은 기상 시각이 아니다
 
-            // 두 번째 낮잠은 없다(해석 3). 아직 아기지만 창 밖.
-            assertThat(pet.sleepKindAvailable(t40.plus(Duration.ofMinutes(12)))).isNull();
+            // 두 번째 낮잠은 없다(정본 16장) — 튜토리얼 중 한 번뿐
+            assertThat(pet.sleepKindAvailable(T0)).isNull();
         }
 
         @Test
         @DisplayName("낮잠 보상 없음 — 수동으로 깨워도 친밀도 0, 밤잠만 +10 (해석 16)")
         void napGivesNoReward() {
             ZzalPet pet = baby();
+            PetFixture.readyForNap(pet);
             Instant t = T0.plus(Duration.ofMinutes(40));
             pet.settle(t);
             pet.sleep(t);
@@ -340,45 +314,40 @@ class ZzalPetTest {
         }
 
         @Test
-        @DisplayName("★ 낮잠에서 깬 순간이 이미 밤이고 아기 60분도 끝났으면 그 자리에서 밤잠에 든다 — 행동 응답 = 최신 상태")
-        void wakingFromNapIntoNightSleepsImmediately() {
+        @DisplayName("★ 튜토리얼 중 낮잠에서 깨면 밤이어도 깨어 있는다 — 시계가 아직 안 켜졌으므로")
+        void napDuringTutorialNeverBecomesNight() {
             Instant hatched = at("2026-09-05 22:35");
-            ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", hatched);
+            ZzalPet pet = PetFixture.hatching(1L, "여울", null, "k", hatched);
             pet.markAlive("s", "i", hatched);
-            pet.settle(at("2026-09-05 23:30"));
-            pet.sleep(at("2026-09-05 23:30"));                   // 낮잠(아기 60분 안)
-            pet.settle(at("2026-09-05 23:36"));
-            pet.wake(at("2026-09-05 23:36"));                    // 60분(23:35) 지났고 밤
-            assertThat(pet.isSleeping()).isTrue();
-            assertThat(pet.getSleepKind()).isEqualTo(SleepKind.NIGHT);
-            assertThat(pet.getSleptAt()).isEqualTo(at("2026-09-05 23:36"));
+            PetFixture.readyForNap(pet);
+            pet.sleep(at("2026-09-05 23:30"));                   // 낮잠
+            pet.wake(at("2026-09-05 23:36"));                    // 밤이지만 튜토리얼 중
+            assertThat(pet.isSleeping()).isFalse();
             assertThat(pet.getNapCount()).isEqualTo(1);
-            // 아직 아기면 깨어 있는다 — 유예(16장)
-            ZzalPet late = ZzalPet.hatch(1L, "여울", null, "k", at("2026-09-05 22:50"));
-            late.markAlive("s", "i", at("2026-09-05 22:50"));
-            late.sleep(at("2026-09-05 23:30"));
-            late.settle(at("2026-09-05 23:36"));
-            late.wake(at("2026-09-05 23:36"));
-            assertThat(late.isSleeping()).isFalse();
+            assertThat(pet.getSleepWakeCount()).isEqualTo(2);    // 2층 11번 조건에는 든다
         }
 
         @Test
-        @DisplayName("★ 새벽 1시 부화 — 60분은 그대로 진행, 02:00 에 즉시 밤잠, 07:00 깨우기 가능, 10:00 자동 기상 (상훈님 9/5 결정 6)")
+        @DisplayName("★ 새벽 1시 부화 — 튜토리얼은 시계와 논외. 끝낸 순간(02:00)이 밤이면 그 자리로 밤잠")
         void hatchedAtOneAm() {
             Instant hatched = at("2026-09-06 01:00");
-            ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", hatched);
+            ZzalPet pet = PetFixture.hatching(1L, "여울", null, "k", hatched);
             pet.markAlive("s", "i", hatched);
             pet.settle(at("2026-09-06 01:59"));
-            assertThat(pet.isSleeping()).isFalse();                 // 밤이지만 아기 60분은 시계 논외
+            assertThat(pet.isSleeping()).isFalse();                 // 밤이지만 튜토리얼은 시계 논외
+            PetFixture.readyForNap(pet);
             assertThat(pet.sleepKindAvailable(at("2026-09-06 01:59"))).isEqualTo(SleepKind.NAP);
-            pet.settle(at("2026-09-06 02:00"));
-            assertThat(pet.isSleeping()).isTrue();                  // 60분 끝 = 밤 → 그 순간 밤잠
+
+            pet.skipTutorial(at("2026-09-06 02:00"));
+            pet.settle(at("2026-09-06 02:01"));
+            assertThat(pet.isSleeping()).isTrue();                  // 끝낸 시각이 밤 → 밤잠
             assertThat(pet.getSleepKind()).isEqualTo(SleepKind.NIGHT);
-            assertThat(pet.getSleptAt()).isEqualTo(at("2026-09-06 02:00"));
             assertThat(pet.canWake(at("2026-09-06 06:59"))).isFalse();
             assertThat(pet.canWake(at("2026-09-06 07:00"))).isTrue();
-            ZzalPet other = ZzalPet.hatch(1L, "여울", null, "k", hatched);
+
+            ZzalPet other = PetFixture.hatching(1L, "여울", null, "k", hatched);
             other.markAlive("s", "i", hatched);
+            other.skipTutorial(at("2026-09-06 02:00"));
             other.settle(at("2026-09-06 10:30"));                   // 안 깨움
             assertThat(other.isSleeping()).isFalse();
             assertThat(other.isOverslept()).isTrue();
@@ -386,52 +355,42 @@ class ZzalPetTest {
         }
 
         @Test
-        @DisplayName("★ 아기 60분 안에는 재우기 = 낮잠만. 낮잠을 썼으면 19~23시라도 재우기 불가, 23시 자동 취침도 없다")
-        void babyHasNoNightSleep() {
+        @DisplayName("★ 튜토리얼 중에는 재우기 = 낮잠만(한 번). 19~23시라도 밤잠은 없고 23시 자동 취침도 없다")
+        void tutorialHasNoNightSleep() {
             Instant hatched = at("2026-09-05 22:30");
-            ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", hatched);
+            ZzalPet pet = PetFixture.hatching(1L, "여울", null, "k", hatched);
             pet.markAlive("s", "i", hatched);
+            PetFixture.readyForNap(pet);
             pet.sleep(at("2026-09-05 22:35"));                     // 낮잠
-            pet.settle(at("2026-09-05 22:46"));
+            pet.wake(at("2026-09-05 22:36"));
             assertThat(pet.getNapCount()).isEqualTo(1);
-            assertThat(pet.sleepKindAvailable(at("2026-09-05 22:50"))).isNull();   // 창 안이지만 아기 → 밤잠 없음
+            assertThat(pet.sleepKindAvailable(at("2026-09-05 22:50"))).isNull();   // 낮잠은 한 번뿐
             pet.settle(at("2026-09-05 23:20"));
             assertThat(pet.isSleeping()).isFalse();                  // 23:00 자동 취침 없음
-            pet.settle(at("2026-09-05 23:30"));
-            assertThat(pet.getSleepKind()).isEqualTo(SleepKind.NIGHT); // 60분 끝(23:30) = 밤 → 즉시
         }
 
         @Test
-        @DisplayName("★ 아기 60분이 끝나는 정각(0ms)·+1초 둘 다 같은 호출에서 밤잠 전이 — 부화 시각에 밀리초가 있어도")
-        void exactBabyEndTransitions() {
-            Instant hatchedWithMillis = at("2026-09-06 01:00").plusMillis(257);
-            ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "k", hatchedWithMillis);
-            pet.markAlive("s", "i", hatchedWithMillis);
-            assertThat(pet.babyUntil()).isEqualTo(at("2026-09-06 02:00"));          // hatchedAt 은 초 단위
-            pet.settle(at("2026-09-06 01:59").plusMillis(900));
+        @DisplayName("★ 튜토리얼 중에는 밤이 몇 번 지나도 자동 취침이 없다 (정본 1.4)")
+        void tutorialHasNoAutoSleep() {
+            ZzalPet pet = baby();
+            pet.settle(at("2026-09-07 03:00"));                 // 밤을 두 번 지났다
             assertThat(pet.isSleeping()).isFalse();
-            pet.settle(pet.babyUntil());                                             // 정각
-            assertThat(pet.isSleeping()).isTrue();
-            assertThat(pet.getSleptAt()).isEqualTo(at("2026-09-06 02:00"));
-
-            ZzalPet other = ZzalPet.hatch(1L, "여울", null, "k", hatchedWithMillis);
-            other.markAlive("s", "i", hatchedWithMillis);
-            other.settle(other.babyUntil().plusSeconds(1));                          // +1초
-            assertThat(other.isSleeping()).isTrue();
-            assertThat(other.getSleptAt()).isEqualTo(at("2026-09-06 02:00"));
+            assertThat(pet.isInTutorial()).isTrue();
         }
 
         @Test
-        @DisplayName("낮잠 동안 게이지 정지")
+        @DisplayName("★ 튜토리얼 낮잠 동안에도, 그 앞뒤에도 게이지는 안 준다 — 시계가 아예 안 돌기 때문")
         void napFreezes() {
             ZzalPet pet = baby();
-            pet.settle(T0.plus(Duration.ofMinutes(2)));         // 배부름 나머지 2분
-            pet.sleep(T0.plus(Duration.ofMinutes(2)));
-            pet.settle(T0.plus(Duration.ofMinutes(7)));         // 낮잠 5분
+            PetFixture.readyForNap(pet);
+            pet.feed(T0);                                        // 배부름 1
+            pet.settle(T0.plus(Duration.ofHours(5)));            // 다섯 시간을 흘려도
             assertThat(pet.getFullness()).isEqualTo(1);
-            pet.wake(T0.plus(Duration.ofMinutes(7)));
-            pet.settle(T0.plus(Duration.ofMinutes(8)));         // 나머지 2분 + 1분 = 3분
-            assertThat(pet.getFullness()).isZero();
+            pet.sleep(T0.plus(Duration.ofHours(5)));
+            pet.settle(T0.plus(Duration.ofHours(9)));
+            assertThat(pet.getFullness()).isEqualTo(1);
+            pet.wake(T0.plus(Duration.ofHours(9)));
+            assertThat(pet.getFullness()).isEqualTo(1);
         }
     }
 
@@ -464,6 +423,26 @@ class ZzalPetTest {
         }
 
         @Test
+        @DisplayName("★★ 배부름과 행복이 둘 다 0 인 채 6시간이면 +2 — 판정은 게이지마다 따로 한다(정본 1.5)")
+        void twoGaugesAtZeroGiveTwo() {
+            ZzalPet pet = child();
+            // 배부름과 행복을 같은 순간에 0 으로 놓는다 — 자연히 흘려 맞추면 밤잠이 끼어
+            // 두 게이지의 0 이 되는 시각이 갈리고, 여기서 보려는 "동시에 0" 이 성립하지 않는다.
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "fullness", 0);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "happiness", 0);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "fullnessMissArmed", true);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "happinessMissArmed", true);
+
+            pet.settle(T0.plus(Duration.ofHours(5)));
+            assertThat(pet.getCareMiss()).isZero();             // 아직 6시간이 안 지났다
+
+            pet.settle(T0.plus(Duration.ofHours(6)));           // 둘 다 0 인 채 6시간
+            // ★ 카운터는 하나지만 무장은 게이지별이라, 같은 순간에 둘이 함께 오른다(정본 1.5).
+            //   원조 다마고치도 배고픔·행복 미터가 각각 케어 미스를 만든다.
+            assertThat(pet.getCareMiss()).isEqualTo(2);
+        }
+
+        @Test
         @DisplayName("채워졌다 다시 0 이 되어야 그 게이지로 다음 +1")
         void rearmsAfterRefill() {
             ZzalPet pet = child();
@@ -481,13 +460,28 @@ class ZzalPetTest {
         }
 
         @Test
-        @DisplayName("★ 아기 60분 동안은 없다 — 0 이 된 지 6시간이 지나도 60분 뒤부터 센다")
-        void noneDuringBaby() {
-            ZzalPet pet = baby();                               // 12:00 부화 → 12:03 배부름 0
-            pet.settle(at("2026-09-05 18:59"));                 // 아기 포함이면 18:03 에 +1 이었을 것
-            assertThat(pet.getCareMiss()).isZero();
-            pet.settle(at("2026-09-05 19:00"));                 // 13:00 부터 6h — 셋 다 0 이라 한꺼번에 3
-            assertThat(pet.getCareMiss()).isEqualTo(3);
+        @DisplayName("★★ 돌보지 않은 날은 \"잘 돌본 날\" 이 아니다 — 케어 미스가 0 이어도 안 센다 (정본 1.7)")
+        void neglectedDayIsNotAZeroMissDay() {
+            ZzalPet pet = child();
+            // child() 가 게이지를 맞추느라 밥을 먹였다. 그 흔적을 지워 "오늘 아직 안 돌본" 상태로 둔다.
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "todayCared", false);
+            int before = pet.getZeroMissDays();
+
+            // 아무것도 안 하고 저녁에 재운다. 일곱 시간이라 케어 미스는 안 쌓인다.
+            pet.sleep(at("2026-09-05 19:00"));
+
+            assertThat(pet.getTodayCareMiss()).isZero();          // 새로 쌓인 케어 미스는 없지만
+            assertThat(pet.getZeroMissDays()).isEqualTo(before);  // ★ 돌본 적이 없으니 안 센다
+        }
+
+        @Test
+        @DisplayName("한 번이라도 돌본 날은 잘 돌본 날로 센다")
+        void caredDayCounts() {
+            ZzalPet pet = child();
+            int before = pet.getZeroMissDays();
+            pet.pet(T0);                                    // 쓰다듬 한 번
+            pet.sleep(at("2026-09-05 19:00"));
+            assertThat(pet.getZeroMissDays()).isEqualTo(before + 1);
         }
 
         @Test
@@ -535,6 +529,7 @@ class ZzalPetTest {
         @DisplayName("낮잠은 경계가 아니다 — 카운터가 남는다")
         void napIsNotBoundary() {
             ZzalPet pet = baby();
+            PetFixture.readyForNap(pet);
             pet.pet(T0);
             pet.sleep(T0.plus(Duration.ofMinutes(1)));
             assertThat(pet.getTodayPetCount()).isEqualTo(1);
@@ -686,13 +681,14 @@ class ZzalPetTest {
     class Life {
 
         @Test
-        @DisplayName("부화 = 시계 켜짐. 초기값 배부름 1·행복 3·흔적 0·밥 3(해석 11)")
-        void hatchStartsClock() {
+        @DisplayName("★ 부화 = 튜토리얼 시작. 시계는 아직 안 켜진다. 배부름 0·행복 3·흔적 0·밥 3")
+        void hatchStartsTutorial() {
             ZzalPet pet = baby();
             assertThat(pet.getSettledAt()).isEqualTo(T0);
             assertThat(pet.getWokeAt()).isEqualTo(T0);
-            assertThat(pet.babyUntil()).isEqualTo(T0.plus(Duration.ofMinutes(60)));
-            assertThat(pet.getFullness()).isEqualTo(1);
+            assertThat(pet.getClockStartedAt()).isNull();       // ★ 1.4 — 시계는 튜토리얼 끝에 켜진다
+            assertThat(pet.isInTutorial()).isTrue();
+            assertThat(pet.getFullness()).isZero();             // ★ 첫 칸이 "배가 고픈가 봐요"
             assertThat(pet.getHappiness()).isEqualTo(3);
             assertThat(pet.getTrash()).isZero();
             assertThat(pet.getFood()).isEqualTo(3);
@@ -708,7 +704,7 @@ class ZzalPetTest {
             pet.release(T0);
             assertThat(pet.getPhase()).isEqualTo(PetPhase.DEAD);
 
-            ZzalPet egg = ZzalPet.hatch(1L, "알", null, "k", T0);
+            ZzalPet egg = PetFixture.hatching(1L, "알", null, "k", T0);
             egg.release(T0);
             assertThat(egg.getPhase()).isEqualTo(PetPhase.HATCHING);
         }
@@ -716,7 +712,7 @@ class ZzalPetTest {
         @Test
         @DisplayName("ALIVE 가 아니면 정산해도 아무 일 없다")
         void settleIgnoresNonAlive() {
-            ZzalPet egg = ZzalPet.hatch(1L, "알", null, "k", T0);
+            ZzalPet egg = PetFixture.hatching(1L, "알", null, "k", T0);
             egg.settle(at("2026-09-08 12:00"));
             assertThat(egg.isSleeping()).isFalse();
             assertThat(egg.getSettledAt()).isNull();
@@ -1102,14 +1098,16 @@ class ZzalPetTest {
         @Test
         @DisplayName("★★ 흔적 4개인 채 깨어 있는 6시간 → 100% 병(DIRTY). 그 전에는 안 아프다")
         void dirtyForSixHours() {
-            ZzalPet pet = child();                       // 정오, 흔적 0(청소 끝)
-            // 흔적은 깨어 있는 4시간마다 1개 — 12:00~23:00(11h) + 이튿날 10:00~15:00(5h) = 16h 에 4개가 찬다
-            pet.settle(at("2026-09-06 15:00"));
+            ZzalPet pet = child();                       // 정오, 배부름 3·행복 3·흔적 0
+            // ★ 흔적이 4가 차기를 기다리면(깨어 있는 16시간) 그 전에 배부름이 0 이 되어 방치 병이 먼저 난다.
+            //   여기서 보려는 것은 "흔적 4인 채 6시간" 하나이므로 흔적만 4로 놓고 잰다.
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "trash", 4);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "cleanMissArmed", true);
+            pet.settle(T0.plus(Duration.ofHours(5)));
             assertThat(pet.getTrash()).isEqualTo(4);
             assertThat(pet.isSick()).isFalse();           // 아직 6시간이 안 지났다
 
-            // 흔적 4가 된 뒤 깨어 있는 6시간(15:00~21:00)
-            pet.settle(at("2026-09-06 21:00"));
+            pet.settle(T0.plus(Duration.ofHours(6)));
             assertThat(pet.isSick()).isTrue();
             assertThat(pet.getSickKind()).isEqualTo(SickKind.DIRTY);
             assertThat(pet.mood()).isEqualTo(ZzalPet.Mood.SICK);   // 우선순위 병 > 배부름 > …
@@ -1221,11 +1219,13 @@ class ZzalPetTest {
         @DisplayName("★ 먼저 난 병이 이긴다 — 아픈 채로 간식 5개를 줘도 원인이 안 바뀐다")
         void firstCauseWins() {
             ZzalPet pet = child();
-            pet.settle(at("2026-09-06 21:00"));
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "trash", 4);
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "cleanMissArmed", true);
+            pet.settle(T0.plus(Duration.ofHours(6)));
             assertThat(pet.getSickKind()).isEqualTo(SickKind.DIRTY);
 
             for (int i = 0; i < 5; i++) {
-                pet.snack(at("2026-09-06 21:00"));
+                pet.snack(T0.plus(Duration.ofHours(6)));
             }
             assertThat(pet.getSickKind()).isEqualTo(SickKind.DIRTY);
         }
@@ -1343,13 +1343,13 @@ class ZzalPetTest {
         @Test
         @DisplayName("★ 부화 실패 사유는 비지 않는다 — 사유 칸이 생기기 전 행도 지나갈 때 채워진다")
         void hatchFailureAlwaysHasReason() {
-            ZzalPet egg = ZzalPet.hatch(1L, "여울", null, "images/zzal/abc", T0);
+            ZzalPet egg = PetFixture.hatching(1L, "여울", null, "images/zzal/abc", T0);
             egg.markHatchFailed();
             assertThat(egg.getPhase()).isEqualTo(PetPhase.FAILED);
             assertThat(egg.getDeathReason()).isEqualTo(DeathReason.HATCH_FAILED);
 
             // 사유가 비어 있는 옛 행(사유 칸이 생기기 전에 실패한 것)
-            ZzalPet legacy = ZzalPet.hatch(1L, "여울", null, "images/zzal/abc", T0);
+            ZzalPet legacy = PetFixture.hatching(1L, "여울", null, "images/zzal/abc", T0);
             org.springframework.test.util.ReflectionTestUtils.setField(legacy, "phase", PetPhase.FAILED);
             legacy.markHatchFailed();
             assertThat(legacy.getDeathReason()).isEqualTo(DeathReason.HATCH_FAILED);

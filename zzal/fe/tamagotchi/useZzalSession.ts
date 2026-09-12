@@ -163,7 +163,12 @@ export function useZzalSession(): ZzalSession {
       try {
         // 목이면 S3 를 안 거친다(presign 은 실서버 몫). 키만 흉내 낸다.
         const imageKey = source.kind === 'mock' ? `images/zzal/mock/${Date.now()}` : await uploadImage(file, 'zzal');
-        const created = await source.createPet({ name: name.trim(), note: note.trim() || undefined, imageKey });
+        // ★ 두 번에 나눠 부른다 — 그림을 먼저 등록하면 이름을 짓는 동안 서버가 시트를 미리 굽는다.
+        //   지금 화면은 이름을 이미 들고 있어 곧바로 이어 부르지만, 화면이 갈리면 그 사이가 벌이가 된다.
+        const drafted = await source.draftPet(imageKey);
+        const created = await source.setCharacter(drafted.petId, {
+          name: name.trim(), note: note.trim() || undefined,
+        });
         setEstimateSec(created.estimatedSeconds > 0 ? created.estimatedSeconds : HATCH_VISUAL_SPAN_SEC);
         setPetId(created.petId);
         track('zzal_pet_create_succeeded');

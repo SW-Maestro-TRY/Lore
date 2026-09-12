@@ -17,7 +17,7 @@ import { createPortal } from "react-dom";
 import { ApiError } from "../api/client";
 import { track } from "../analytics";
 import { LEGAL_LINKS } from "../links";
-import { signIn, signUpAndSignIn } from "./useAuth";
+import { signIn, signUp } from "./useAuth";
 import styles from "./AuthModal.module.css";
 
 export type AuthTab = "login" | "signup";
@@ -46,7 +46,7 @@ const PASSWORD_MAX = 72;
 const FALLBACK_MESSAGE = "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요";
 
 interface AgreementState {
-  /** 화면에서만 막는다. 서버 스키마(AgreementType)에 없는 값이라 보내지 않는다. */
+  /** 만 14세 이상. 법이 요구하는 별도 사실이라 서버에도 따로 기록된다(AGE_14). */
   age: boolean;
   terms: boolean;
   privacy: boolean;
@@ -79,6 +79,8 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [agree, setAgree] = useState<AgreementState>(NO_AGREEMENT);
   const [formError, setFormError] = useState<string | null>(null);
+  /** 오류가 아닌 안내(가입 완료 등). 탭을 옮길 때 지운다. */
+  const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // 포털은 DOM 이 있어야 쏜다. 서버 렌더에는 document 가 없다.
@@ -112,6 +114,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     setPasswordConfirm("");
     setAgree(NO_AGREEMENT);
     setFormError(null);
+    setInfo(null);
     setSubmitting(false);
     submittedRef.current = false;
     track("auth_modal_opened", { tab: initialTab });
@@ -176,8 +179,9 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     track("auth_tab_switched", { from: tab, to: next });
     setTab(next);
     // 이메일·비밀번호는 남긴다. 로그인에 실패해 가입으로 넘어오는 흐름이 가장 흔한데
-    // 거기서 다시 치게 하면 그 자리에서 그만둔다. 오류 문구만 지운다.
+    // 거기서 다시 치게 하면 그 자리에서 그만둔다. 문구만 지운다.
     setFormError(null);
+    setInfo(null);
   };
 
   const toggleAll = () => {
@@ -238,19 +242,29 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
 
     setSubmitting(true);
     setFormError(null);
+    setInfo(null);
     try {
-      await signUpAndSignIn({
+      await signUp({
         email: trimmedEmail,
         password,
-        // 서버는 Map<AgreementType, Boolean> 을 받는다. 연령 확인은 여기 없다 —
-        // 서버 스키마에 없는 값이라 보내면 400 이 된다.
+        // 서버는 Map<AgreementType, Boolean> 을 받는다.
+        // ★ 연령(AGE_14)도 함께 보낸다 — 약관을 한 문서로 합치더라도 나이는 법이 요구하는
+        //   별도 사실이라, 이용약관 동의에 묻히면 "언제 무엇에 동의했나" 를 답할 수 없다.
         // MARKETING 은 안 눌러도 false 를 담아 보낸다. 안 물어본 것과 거부한 것은 다른 사실이고,
         // 서버가 그 차이를 기록한다.
-        agreements: { TERMS: agree.terms, PRIVACY: agree.privacy, MARKETING: agree.marketing },
+        agreements: {
+          AGE_14: agree.age, TERMS: agree.terms, PRIVACY: agree.privacy, MARKETING: agree.marketing,
+        },
       });
       track("auth_signup_succeeded");
+      // ★ 가입은 로그인시키지 않는다(서버가 토큰을 주지 않는다). 창을 닫지 말고
+      //   로그인 탭으로 옮겨, 방금 만든 계정으로 바로 들어갈 수 있게 한다.
+      //   이메일은 그대로 두고 비밀번호만 비운다 — 그 자리에서 오타를 걸러낸다.
+      setTab("login");
+      setPassword("");
+      setPasswordConfirm("");
+      setInfo("가입됐어요. 방금 만든 비밀번호로 로그인해 주세요");
       onSuccess?.("signup");
-      onClose();
     } catch (e) {
       track("auth_signup_failed", { code: errorCodeOf(e) });
       setFormError(messageOf(e));
@@ -449,6 +463,13 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
           {formError && (
             <p className={styles.error} role="alert">
               {formError}
+            </p>
+          )}
+
+          {/* 오류가 아닌 안내(가입 완료). status 로 읽어 주되 오류처럼 다급하게 읽지 않는다. */}
+          {!formError && info && (
+            <p className={styles.info} role="status">
+              {info}
             </p>
           )}
 

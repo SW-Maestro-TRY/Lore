@@ -1,5 +1,6 @@
 package com.lore.zzal.motion;
 
+import com.lore.zzal.PetFixture;
 import com.lore.zzal.generation.GenJob;
 import com.lore.zzal.generation.GenJobRepository;
 import com.lore.zzal.generation.GenKind;
@@ -84,8 +85,10 @@ class MotionServiceTest {
         motion = ZzalMotion.start(PET_ID, 3, MOTION_NAME, "v1");
         when(motionRepository.findById(MOTION_ID)).thenReturn(Optional.of(motion));
 
-        ZzalPet pet = ZzalPet.hatch(1L, "여울", null, "images/zzal/src", Instant.now());
-        pet.markAlive("images/zzal/sheet", "생김새 문단", Instant.now());
+        ZzalPet pet = PetFixture.hatching(1L, "여울", null, "images/zzal/src", Instant.now());
+        Instant aliveAt = Instant.now();
+        pet.markAlive("images/zzal/sheet", "생김새 문단", aliveAt);
+        pet.skipTutorial(aliveAt);
         when(petRepository.findById(any())).thenReturn(Optional.of(pet));
 
         when(jobRepository.save(any(GenJob.class))).thenAnswer(i -> i.getArgument(0));

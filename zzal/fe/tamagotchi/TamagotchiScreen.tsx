@@ -6,22 +6,25 @@
 //   3) 헤더 높이를 실측해 --tama-header-h 로 넘긴다 — 앱이 그 아래 남은 높이를 정확히 채우도록
 //
 // 헤더를 덮지 않는다. 이 화면에서도 헤더로 webtoon·trailer 로 건너갈 수 있어야 한다.
+//
+// 2026-09-06: 시안이 둘이 되어(스크랩북 · 여울) 이름 → 스킨 표를 여기서 든다.
+//   화면을 고르는 것은 주소창(`?skin=`)이고, 고르는 자리는 서버 컴포넌트(app/(domains)/zzal/page.tsx)다.
+//   여기서 window 를 보지 않는 이유 — 서버가 그린 것과 브라우저가 그린 것이 달라지면
+//   하이드레이션 경고가 콘솔에 뜨고, e2e 가 그 경고를 실패로 센다.
 'use client';
 
 import { useEffect, useRef, type ComponentType } from 'react';
 import { useIsWide } from './useIsWide';
-import type { SkinProps } from './skins/Scrapbook';
+import Scrapbook, { type SkinProps } from './skins/Scrapbook';
+import Yeoul from './skins/Yeoul';
 import './skin-header.css';
 
-export type SkinName = 'scrapbook';
+export type SkinName = 'scrapbook' | 'yeoul';
 
-export default function TamagotchiScreen({
-  skin: Skin,
-  name,
-}: {
-  skin: ComponentType<SkinProps>;
-  name: SkinName;
-}) {
+const SKINS: Record<SkinName, ComponentType<SkinProps>> = { scrapbook: Scrapbook, yeoul: Yeoul };
+
+export default function TamagotchiScreen({ name }: { name: SkinName }) {
+  const Skin = SKINS[name];
   const wide = useIsWide();
   const box = useRef<HTMLDivElement>(null);
 

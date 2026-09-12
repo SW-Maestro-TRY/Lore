@@ -1,4 +1,4 @@
-// 미니게임 API v2. zzal/be 의 GameController(`/api/zzal/v2/me/pets/{id}/games`)와 짝이다.
+// 미니게임 API v2. zzal/be 의 GameController(`/api/zzal/v1/me/pets/{id}/games`)와 짝이다.
 //
 // ★ 2026-09-05 실서버 왕복으로 대조 완료(정본판 경로 동작). 그때 드러난 것 두 가지:
 //    - 시작·잇기 응답에는 `finished`·`win` 칸이 **없다**. 판이 끝났는가는 친 결과(Guess)로만 안다.
@@ -100,11 +100,6 @@ export function startGame(petId: number, kind: GameKind = 'LEFT_RIGHT'): Promise
 /** 한 판 치기(LEFT_RIGHT). 실패 코드 — ZZAL_GAME_NOT_FOUND(404), ZZAL_GAME_FINISHED(409). */
 export function guess(petId: number, gameId: number, pick: Side): Promise<GuessResult> {
   return request<GuessResult>(`${base(petId)}/${gameId}/guess`, { method: 'POST', body: { pick } });
-}
-
-/** 달리기 끝(RUN). 30,000ms 이상이면 승리 = 행복 +1. 서버는 상한(60,000)만 검증. */
-export function finishRun(petId: number, gameId: number, survivedMs: number): Promise<RunResult> {
-  return request<RunResult>(`${base(petId)}/${gameId}/finish`, { method: 'POST', body: { survivedMs } });
 }
 
 /** 치던 판 잇기(새로고침 복구). 치던 판이 없어도 에러가 아니다 — playing 이 false 로 온다. */

@@ -1,4 +1,4 @@
-// 펫 API v2. zzal/be 의 v2 PetController(`/api/zzal/v2/me/pets`)와 짝이다.
+// 펫 API v2. zzal/be 의 v2 PetController(`/api/zzal/v1/me/pets`)와 짝이다.
 //
 // ★ 이 파일의 타입은 서버의 PetResponses.Detail(v2)을 그대로 옮긴 것이다. 화면이 쓰기 편하게
 //   이름을 바꾸거나 값을 계산해 넣지 않는다 — 서버가 정본이고, 중간에서 손대는 순간
@@ -18,7 +18,13 @@
 import { request } from './api';
 
 /** 지금 어느 단계인가. 프론트의 'none'(아직 아무도 없음)은 서버에 없다 — 그건 행이 없는 것. */
-export type PetPhase = 'HATCHING' | 'ALIVE' | 'FAILED' | 'DEAD';
+/**
+ * 펫이 지금 어느 단계인가.
+ *
+ * ★ `DRAFT` = 그림만 올렸고 **이름이 아직 없다**. 시트를 미리 굽는 중이거나 다 구웠다.
+ *   이름을 안 짓고 나갔다가 다시 오면 이 초안을 이어간다.
+ */
+export type PetPhase = 'DRAFT' | 'HATCHING' | 'ALIVE' | 'FAILED' | 'DEAD';
 
 /** 왜 태어나지 못했나 / 왜 떠났나. */
 export type DeathReason = 'HATCH_FAILED' | 'NEGLECTED' | 'RELEASED';
@@ -80,8 +86,13 @@ export type ShareKind = 'DOWNLOAD' | 'SHARE';
  *   `*At` 값은 카운트다운·경계 폴링(usePet)에만 쓴다.
  */
 export interface Clock {
-  /** 아기 60분이 끝나는 시각. 지났으면 과거 시각이 그대로 온다. */
-  babyUntil: string;
+  /**
+   * 시계가 켜진 시각. **튜토리얼 중에는 null** 이다.
+   *
+   * ★ 튜토리얼은 시각이 아니라 순서로 간다 — 9칸을 다 끝낸 그 순간 시계가 켜지고,
+   *   그때부터 게이지·케어 미스·하루가 흐른다. 그 전에는 아무것도 줄지 않는다.
+   */
+  clockStartedAt: string | null;
   sleeping: boolean;
   /** 자고 있을 때만. */
   sleepKind: SleepKind | null;
@@ -265,6 +276,8 @@ export interface Features {
 export interface Leaving {
   noticedAt: string;
   departsAt: string;
+  /** 이번 응답으로 떠남이 취소됐는가. 행동 응답에만 true 가 실린다. */
+  justCancelled: boolean;
 }
 
 export interface Trip {
@@ -272,29 +285,26 @@ export interface Trip {
   postcards: number;
 }
 
-export interface Settings {
-  leaveEnabled: boolean;
-}
-
 export interface TutorialStep {
   key: TutorialStepKey;
-  /** 부름이 도래하는 시각(부화 + N분). */
-  dueAt: string;
   /** 서버 카운터로 판정한 완료 여부. 브라우저에 저장하지 않는다. */
   done: boolean;
-  /** 지금 강조할 칸인가(도래했고 아직 안 한 첫 칸). */
+  /** 지금 강조할 칸인가(앞 칸을 다 끝낸 첫 칸). */
   current: boolean;
 }
 
 /**
- * 아기 시간표(튜토리얼). 전부 서버 카운터에서 파생된다.
- * 60분이 지나도 남은 부름은 큐에 남아 순서대로 나온다(정본 16장) — 그때 active 는 false 다.
- * 9단계가 모두 done 이면 블록 자체가 null.
+ * 튜토리얼. 전부 서버 카운터에서 파생된다.
+ *
+ * ★ **시각이 아니라 순서다.** 기다려서 열리는 칸은 없다 — 앞 칸을 끝내야 다음 칸이 온다.
+ *   나갔다 며칠 뒤에 들어와도 멈춰 있던 그 칸부터 이어진다.
+ * 9칸이 모두 done 이면 블록 자체가 null 이고, 그 순간 시계가 켜진다.
  */
 export interface Tutorial {
-  /** babyUntil 전인가. */
+  /** 아직 튜토리얼 중인가. 끝났으면 서버가 이 블록을 null 로 준다. */
   active: boolean;
-  minutesSince: number;
+  /** 지금 몇 번째 칸인가(0부터). steps[step] 이 강조할 칸이다. */
+  step: number;
   steps: TutorialStep[];
 }
 
@@ -310,6 +320,15 @@ export interface Tutorial {
  *   - FAILED/DEAD 일 때만: deathReason
  *   - 행동 응답에만: justUnlocked 가 비어 있지 않을 수 있다
  */
+/** 공유 링크 + 바뀐 상태. 공유는 횟수를 올리므로 pet 이 함께 온다. */
+export interface Shared {
+  /** 주소에 실리는 값 */
+  token: string;
+  /** 그대로 붙여넣어 쓰는 전체 주소 */
+  url: string;
+  pet: PetDetail;
+}
+
 export interface PetDetail {
   petId: number;
   name: string;
@@ -354,6 +373,8 @@ export interface PetDetail {
   justUnlocked: number[] | null;
   /** 밤에 합격해 아침에 도착한 심화 행동(아직 seen 이 아닌 것). */
   learnedToday: LearnedMotion[] | null;
+  /** 아직 안 본 장면 기록이 있는가(앨범에 빨간 점). */
+  sceneNew: boolean | null;
   /** 채팅 답 응답에만. 그 밖엔 null. */
   chatReply: ChatReply | null;
   /**
@@ -375,7 +396,6 @@ export interface PetDetail {
   features: Features | null;
   leaving: Leaving | null;
   trip: Trip | null;
-  settings: Settings | null;
   tutorial: Tutorial | null;
 }
 
@@ -389,13 +409,40 @@ export interface PetCreated {
   estimatedSeconds: number;
 }
 
-export interface CreatePetInput {
+/** 그림 등록 결과. 이 번호로 다음 화면이 캐릭터 정보를 보낸다. */
+export interface Drafted {
+  petId: number;
+}
+
+/**
+ * 캐릭터 정보. **이름 말고는 전부 선택**이다.
+ *
+ * ★ 그림 생성에 들어가는 것은 `note` 뿐이다 — 성격·세계관은 대사 톤에만 쓰인다.
+ */
+export interface CharacterInput {
   /** 12자 이하(정본 15장). */
   name: string;
-  /** 세부사항(설정). 200자 이하. 선택. */
+  /** 성격. 대사 톤에 쓰인다. 선택 */
+  personality?: Personality;
+  /** 세계관·설정. 100자 이하. 선택 */
+  world?: string;
+  /** 그 밖에 알려 주고 싶은 것. 200자 이하. 선택. ★ 이것만 그림 생성에 참고된다 */
   note?: string;
-  /** upload.ts 의 uploadImage() 가 돌려준 key. 내 것이고 아직 안 쓴 키여야 한다. */
-  imageKey: string;
+}
+
+/** 부화 진행 — 알 화면이 몇 초마다 되풀이해 묻는다. */
+export interface HatchProgress {
+  phase: PetPhase;
+  /** 지금 무엇을 하는 중인지. 없으면 null */
+  label: string | null;
+  /** 끝난 단계 수 */
+  progress: number;
+  /** 전체 단계 수 */
+  total: number;
+  /** 남은 시간(초) */
+  estimatedSeconds: number;
+  /** 실패했을 때 보일 말. 진행 중이면 null */
+  message: string | null;
 }
 
 /** 오늘의 부름 하나. */
@@ -427,9 +474,10 @@ export interface ChatState {
 
 export interface Postcard {
   seq: number;
-  imageKey: string | null;
+  /** 어디서 보냈는가(배경 key). */
+  place: string;
+  at: string;
   line: string;
-  createdAt: string;
 }
 
 /** 앨범. 첫 심화 행동이 열리기 전엔 ZZAL_FEATURE_LOCKED. */
@@ -446,7 +494,7 @@ export interface Album {
  * (밖으로 보이는 이름을 v1 로 통일하기로 해서 서버 경로가 곧 `/api/zzal/v1/…` 로 바뀐다.
  *  그때 바꿀 곳이 이 한 줄이어야 한다.)
  */
-export const PET_BASE = '/api/zzal/v2/me/pets';
+export const PET_BASE = '/api/zzal/v1/me/pets';
 
 /**
  * 펫 생성 = 부화 시작. 기다리지 않고 즉시 돌아온다.
@@ -454,8 +502,24 @@ export const PET_BASE = '/api/zzal/v2/me/pets';
  * 실패 코드 — INVALID_UPLOAD_KEY · UPLOAD_KEY_ALREADY_USED(400),
  * ZZAL_PET_ALREADY_HATCHING · ZZAL_PET_LIMIT_REACHED(409).
  */
-export function createPet(input: CreatePetInput): Promise<PetCreated> {
-  return request<PetCreated>(PET_BASE, { method: 'POST', body: input });
+/**
+ * 그림 등록 — 이것 하나로 **캐릭터 시트 굽기가 시작된다.**
+ *
+ * ★ 이름은 아직 보내지 않는다. 사용자가 이름을 짓는 동안(약 74초) 서버가 시트를 미리 굽는다.
+ * ★ 이름을 안 짓고 나갔다가 다시 오면 **같은 초안이 돌아온다** — 시트 값이 두 번 안 나간다.
+ */
+export function draftPet(imageKey: string): Promise<Drafted> {
+  return request<Drafted>(`${PET_BASE}/draft`, { method: 'POST', body: { imageKey } });
+}
+
+/** 캐릭터 정보 등록 — 여기서 **격자 생성이 시작된다.** 알이 흔들리기 시작하는 자리. */
+export function setCharacter(petId: number, input: CharacterInput): Promise<PetCreated> {
+  return request<PetCreated>(`${PET_BASE}/draft/${petId}/character`, { method: 'POST', body: input });
+}
+
+/** 부화 진행. 알 화면이 몇 초마다 되풀이해 부른다 — 가벼운 응답이다. */
+export function getHatchProgress(petId: number, signal?: AbortSignal): Promise<HatchProgress> {
+  return request<HatchProgress>(`${PET_BASE}/${petId}/hatch`, { signal });
 }
 
 /** 내 펫 목록. 한 사람이 한 마리라 사실상 0개 아니면 1개다. */
@@ -488,6 +552,17 @@ export function wake(petId: number): Promise<PetDetail> {
   return request<PetDetail>(`${PET_BASE}/${petId}/wake`, { method: 'POST' });
 }
 
+/**
+ * 튜토리얼 9칸을 다 마쳤음을 알린다 — **마지막 칸(DONE)을 누르는 자리다.**
+ *
+ * ★ 이 호출이 시계를 켠다. 여기까지는 게이지가 줄지도, 케어 미스가 쌓이지도 않는다.
+ *   그래서 튜토리얼 도중에 나가 며칠 뒤에 들어와도 아이는 그대로다.
+ * ★ 앞 8칸을 다 안 했으면 서버가 거절한다 — 화면이 순서를 다시 판정하지 않는다.
+ */
+export function tutorialDone(petId: number): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/done`, { method: 'POST' });
+}
+
 /** 성격·세계관. 언제든 바꿀 수 있다(정본 0장 6). */
 export function setPersonality(petId: number, personality: Personality, world?: string): Promise<PetDetail> {
   return request<PetDetail>(`${PET_BASE}/${petId}/personality`, {
@@ -501,9 +576,14 @@ export function setBackground(petId: number, background: string): Promise<PetDet
   return request<PetDetail>(`${PET_BASE}/${petId}/background`, { method: 'POST', body: { background } });
 }
 
-/** 다운로드·공유했다는 사실을 남긴다(튜토리얼 25분의 서버 사실). 실제 파일 받기는 download.ts. */
-export function share(petId: number, motionKey: string, kind: ShareKind): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/share`, { method: 'POST', body: { motionKey, kind } });
+/**
+ * 공유 링크를 받는다. 같은 동작을 다시 공유하면 **있던 링크를 그대로** 준다.
+ *
+ * ★ 파일이 아니라 링크인 이유 — X·인스타 인앱 브라우저는 다운로드를 막는다.
+ *   실제 파일 받기(PC·모바일 기본 브라우저)는 download.ts 가 따로 한다.
+ */
+export function share(petId: number, motionKey: string, kind: ShareKind): Promise<Shared> {
+  return request<Shared>(`${PET_BASE}/${petId}/share`, { method: 'POST', body: { motionKey, kind } });
 }
 
 export function getChat(petId: number, signal?: AbortSignal): Promise<ChatState> {
@@ -536,16 +616,3 @@ export function getAlbum(petId: number, signal?: AbortSignal): Promise<Album> {
   return request<Album>(`${PET_BASE}/${petId}/album`, { signal });
 }
 
-/** 여행 간 아이를 부른다(재회). 여행 중이 아니면 ZZAL_NOT_TRAVELING. */
-export function callBack(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/call-back`, { method: 'POST' });
-}
-
-export function updateSettings(petId: number, settings: Settings): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/settings`, { method: 'POST', body: settings });
-}
-
-/** 보내기. 되돌릴 수 없다 — 화면이 두 번 물어야 한다. 응답은 phase DEAD 인 PetDetail. */
-export function release(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/release`, { method: 'POST' });
-}

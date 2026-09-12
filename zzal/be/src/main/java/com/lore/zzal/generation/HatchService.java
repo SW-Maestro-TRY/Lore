@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * 부화 한 마리를 끝까지 책임진다 — 돌리고, 실패하면 다시 하고, 그래도 안 되면 실패로 끝낸다.
@@ -43,6 +44,34 @@ public class HatchService {
         this.petRepository = petRepository;
         this.maxAttempts = maxAttempts;
         this.motionSeeder = motionSeeder;
+    }
+
+    /**
+     * 캐릭터 시트만 굽는다 — 그림을 등록한 직후.
+     *
+     * <h3>★ 파이프라인을 둘로 나누지 않는다</h3>
+     * 같은 5단계 목록에서 <b>앞의 한 개만 잘라</b> 넘긴다. 나머지는 이름이 들어온 뒤
+     * {@link #hatch} 가 전체 목록으로 다시 부르는데, 실행기가 "이미 성공한 단계" 를 건너뛰므로
+     * 시트는 두 번 구워지지 않는다. 재시도·실패 복구 규칙도 그대로 산다.
+     *
+     * <h3>★ 여기서 실패해도 초안을 죽이지 않는다</h3>
+     * 이름을 짓는 중이라 사용자는 아직 아무것도 못 본다. 이름이 들어와 전체를 돌릴 때
+     * 그 자리에서 다시 시도하고, 그때도 안 되면 그 판정이 사용자에게 간다.
+     */
+    @Async("hatchExecutor")
+    public void sheet(Long jobId, Long petId, String version) {
+        ZzalPet pet = petRepository.findById(petId).orElse(null);
+        if (pet == null) {
+            log.warn("펫이 없습니다 — petId={}", petId);
+            return;
+        }
+        StepContext ctx = new StepContext(petId, pet.getName(), pet.getNote(), version);
+        ctx.putImage("source", pet.getSourceImageKey());
+
+        List<GenerationStep> all = registry.steps(GenKind.HATCH, version);
+        RunResult r = runner.run(jobId, ctx, all.subList(0, 1),
+                recorder.loadSucceeded(petId, GenKind.HATCH, version));
+        log.info("시트 미리 굽기 {} — petId={} 비용=${}", r.success() ? "완료" : "실패", petId, r.costUsd());
     }
 
     @Async("hatchExecutor")
@@ -108,6 +137,19 @@ public class HatchService {
         motionSeeder.seed(petId, now);
         log.info("부화 완료 — petId={} version={} 비용=${}", petId, version, r.costUsd());
         return true;
+    }
+
+    /** 이 펫의 부화가 몇 단계까지 끝났나. 진행률 표시에 쓴다. */
+    public int stepsDone(Long petId, String version) {
+        return (int) recorder.loadSucceeded(petId, GenKind.HATCH, version).stream()
+                .map(GenStepRecord::getName)
+                .distinct()
+                .count();
+    }
+
+    /** 부화가 모두 몇 단계인가. */
+    public int stepsTotal(String version) {
+        return registry.steps(GenKind.HATCH, version).size();
     }
 
     public String currentVersion() {

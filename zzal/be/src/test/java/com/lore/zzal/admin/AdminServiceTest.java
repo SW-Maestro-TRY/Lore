@@ -1,5 +1,6 @@
 package com.lore.zzal.admin;
 
+import com.lore.zzal.PetFixture;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.common.s3.S3Service;
@@ -335,8 +336,9 @@ class AdminServiceTest {
     }
 
     private static ZzalPet pet() {
-        ZzalPet p = ZzalPet.hatch(1L, "여울", null, "images/zzal/src", T0);
+        ZzalPet p = PetFixture.hatching(1L, "여울", null, "images/zzal/src", T0);
         p.markAlive("images/zzal/sheet", "생김새 문단", T0);
+        p.skipTutorial(T0);
         ReflectionTestUtils.setField(p, "id", 7L);
         return p;
     }

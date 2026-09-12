@@ -75,7 +75,8 @@ export interface UsePetResult {
   wake: () => Promise<PetDetail | null>;
   setPersonality: (personality: Personality, world?: string) => Promise<PetDetail | null>;
   setBackground: (background: string) => Promise<PetDetail | null>;
-  share: (motionKey: string, kind: ShareKind) => Promise<PetDetail | null>;
+  /** 공유 링크. 상태는 pet 으로 자동 갱신되고, 여기서는 붙여넣을 주소만 돌아온다. */
+  share: (motionKey: string, kind: ShareKind) => Promise<{ token: string; url: string } | null>;
   answerChat: (slot: ChatSlot, text: string) => Promise<PetDetail | null>;
   markSeen: (seq: number) => Promise<PetDetail | null>;
 }
@@ -88,11 +89,12 @@ export interface UsePetResult {
 export function nextBoundaryAt(pet: PetDetail, nowMs: number = ms(pet.serverNow) ?? Date.now()): number | null {
   if (pet.phase !== 'ALIVE' || !pet.clock) return null;
   const c = pet.clock;
+  // ★ 튜토리얼 칸은 여기 없다 — 순서로 가므로 기다려서 열리는 칸이 없고, 물어볼 경계도 없다.
+  //   튜토리얼 중에는 시계가 아예 멈춰 있어(clockStartedAt 이 null) 게이지·잠 경계도 오지 않는다.
   const candidates: (number | null)[] = [
-    ms(c.babyUntil), ms(c.autoSleepAt), ms(c.autoWakeAt), ms(c.sleepWindowOpensAt), ms(c.wakeWindowOpensAt),
+    ms(c.autoSleepAt), ms(c.autoWakeAt), ms(c.sleepWindowOpensAt), ms(c.wakeWindowOpensAt),
     ms(pet.chatSummary?.nextAt),
     pet.food?.nextInSeconds != null ? nowMs + pet.food.nextInSeconds * 1000 : null,
-    ...(pet.tutorial?.steps.filter((s) => !s.done).map((s) => ms(s.dueAt)) ?? []),
   ];
   const future = candidates.filter((t): t is number => t !== null && t > nowMs);
   return future.length ? Math.min(...future) : null;
@@ -175,7 +177,24 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
     [act],
   );
   const setBackground = useCallback((bg: string) => act((s, id) => s.setBackground(id, bg)), [act]);
-  const share = useCallback((key: string, kind: ShareKind) => act((s, id) => s.share(id, key, kind)), [act]);
+  /**
+   * 공유. 서버가 링크를 내주고 상태도 같이 바뀐다.
+   *
+   * ★ 상태 갱신은 act 에 맡기고(다른 행동과 같은 길), 링크는 따로 꺼내 돌려준다 —
+   *   화면이 그 주소를 복사·공유 시트에 넘겨야 하기 때문이다.
+   */
+  const share = useCallback(
+    async (key: string, kind: ShareKind): Promise<{ token: string; url: string } | null> => {
+      let issued: { token: string; url: string } | null = null;
+      await act(async (s, id) => {
+        const r = await s.share(id, key, kind);
+        issued = { token: r.token, url: r.url };
+        return r.pet;
+      });
+      return issued;
+    },
+    [act],
+  );
   const answerChat = useCallback(
     async (slot: ChatSlot, text: string) => {
       const next = await act((s, id) => s.answerChat(id, slot, text));
@@ -215,11 +234,14 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
     let alive = true;
     const controller = new AbortController();
     setLoading(true);
+    // ★ 순번은 **보낼 때** 받는다(2026-09-10). 전에는 도착할 때 `applied = ++issued` 로 찍어서,
+    //   이 첫 조회가 늦게 도착하기만 하면 그사이 사용자가 누른 행동의 최신 상태를 **되돌려 놓았다.**
+    //   `apply` 를 건너뛰고 `setPet` 을 직접 부른 것도 같은 문제였다 — 그 길만 자물쇠가 없었다.
+    const seq = ++issued.current;
     s.getPet(petId, controller.signal)
       .then((next) => {
         if (!alive) return;
-        applied.current = ++issued.current;
-        setPet(next);
+        apply(seq, next);
       })
       .catch((e: unknown) => {
         if (!alive) return;
