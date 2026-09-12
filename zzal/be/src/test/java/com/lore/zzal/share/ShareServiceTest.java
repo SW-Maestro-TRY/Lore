@@ -12,6 +12,7 @@ import com.lore.zzal.share.dto.ShareResponses;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
@@ -19,6 +20,7 @@ import java.util.Optional;
 
 import static com.lore.zzal.pet.AwakeClockTest.kst;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -79,6 +81,25 @@ class ShareServiceTest {
         when(shareRepository.findByToken("tok")).thenReturn(Optional.of(ZzalShare.issue(PET, "shy", T0)));
 
         assertThat(service.open("tok").imageKey()).isEqualTo("images/zzal/pets/7/basic/shy.webp");
+    }
+
+    @Test
+    @DisplayName("★★ 연타로 같은 순간에 두 번 발급해도 500 이 아니라 먼저 들어온 링크를 준다 (P-6)")
+    void concurrentIssueReusesTheWinnersLink() {
+        ZzalShare winner = ZzalShare.issue(PET, "shy", T0);
+        // 조회는 두 번 — 처음엔 없다, 제약에 걸린 뒤엔 이긴 쪽이 넣어 둔 줄이 보인다
+        when(shareRepository.findByPetIdAndMotionKey(PET, "shy"))
+                .thenReturn(Optional.empty(), Optional.of(winner));
+        // 늦게 도착한 쪽은 uk_zzal_shares_pet_motion 에 걸린다
+        when(shareRepository.save(any())).thenThrow(new DataIntegrityViolationException("uk_zzal_shares_pet_motion"));
+        when(shareRepository.saveAndFlush(any()))
+                .thenThrow(new DataIntegrityViolationException("uk_zzal_shares_pet_motion"));
+
+        assertThatCode(() -> {
+            ShareResponses.Issued issued = service.issue(PET, "shy", T0);
+            assertThat(issued.token()).isEqualTo(winner.getToken());
+            assertThat(issued.url()).isEqualTo("https://lorecomic.com/s/" + winner.getToken());
+        }).doesNotThrowAnyException();
     }
 
     /**
