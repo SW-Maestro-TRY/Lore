@@ -40,10 +40,26 @@ public class HarnessProcess {
     private final Path harnessDir;
     private final int timeoutSeconds;
 
+    /**
+     * 작품이 쌓이는 자리. **여기서 띄우는 모든 파이썬에 같은 값을 넘긴다.**
+     *
+     * 안 넘기면 파이썬은 제가 풀린 자리(임시 폴더) 옆에 쌓는데, 그 폴더는
+     * 서버가 뜰 때마다 새로 생긴다 — 재시작하면 만든 작품이 통째로 사라지고
+     * 진행 중이던 작업도 이어받을 수 없다(2026-09-12에 실제로 겪었다).
+     *
+     * 걸음마다 따로 넣지 않고 여기 모은 이유는, 한 걸음이라도 빠뜨리면 그
+     * 걸음만 다른 폴더를 보기 때문이다 — 다 그려 놓고 올릴 때가 되어서야
+     * "그림이 없다" 로 터진다.
+     */
+    private final Path runsDir;
+
     public HarnessProcess(@Value("${lore.webtoon.python.bin:python3}") String python,
                           @Value("${lore.webtoon.python.harness-dir:}") String harnessDir,
                           @Value("${lore.webtoon.python.timeout-seconds:3600}") int timeoutSeconds,
+                          @Value("${lore.webtoon.python.runs-dir:}") String runsDir,
                           AiHarnessResources resources) {
+        this.runsDir = Path.of(runsDir == null || runsDir.isBlank()
+                ? "webtoon/ai/work/runs" : runsDir).toAbsolutePath().normalize();
         this.python = python;
         this.harnessDir = (harnessDir == null || harnessDir.isBlank()
                 ? resources.newHarnessDir() : Path.of(harnessDir).toAbsolutePath().normalize());
@@ -119,6 +135,7 @@ public class HarnessProcess {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(harnessDir.toFile());
         pb.redirectErrorStream(true);           // 오류도 같은 줄기로 — 원인이 거기 있다
+        pb.environment().put("NH_RUNS_DIR", runsDir.toString());
         pb.environment().putAll(env);
 
         log.info("하네스 실행: {}", String.join(" ", cmd));
@@ -156,6 +173,7 @@ public class HarnessProcess {
         ProcessBuilder pb = new ProcessBuilder(python, "-u", "s3_upload.py",
                                                "--prepare", runId);
         pb.directory(upload.toFile());
+        pb.environment().put("NH_RUNS_DIR", runsDir.toString());
         pb.redirectErrorStream(false);
 
         Process p = pb.start();
@@ -177,6 +195,7 @@ public class HarnessProcess {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(harnessDir.toFile());
         pb.redirectErrorStream(true);
+        pb.environment().put("NH_RUNS_DIR", runsDir.toString());
         pb.environment().putAll(env);
 
         Process p = pb.start();

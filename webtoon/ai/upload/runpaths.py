@@ -20,6 +20,7 @@ import 한다. 그래서 그림 파일 경로 하나를 얻으려고 웹서버�
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -29,9 +30,14 @@ import overlay
 HERE = Path(__file__).resolve().parent
 NEW_HARNESS = HERE.parent / "new_harness"
 
+# 작품이 쌓이는 자리. 서버(webtoon/be)는 고정 경로를 NH_RUNS_DIR 로 넘긴다 —
+# 하네스가 풀린 임시 폴더에 쌓으면 서버를 다시 띄우는 순간 사라지기 때문이다.
+# 넘어온 값이 없으면 사람이 직접 돌리는 경우라, 예전처럼 하네스 옆 runs/ 를 쓴다.
+RUNS_DIR = Path(os.environ.get("NH_RUNS_DIR") or (NEW_HARNESS / "runs"))
+
 
 def run_dir(run_id: str) -> Path:
-    return NEW_HARNESS / "runs" / run_id
+    return RUNS_DIR / run_id
 
 
 def _read_json_safe(base: Path, name: str) -> dict[str, Any]:

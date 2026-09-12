@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import json
 import sys
-import os
 from pathlib import Path
 
 from PIL import Image
@@ -123,10 +122,7 @@ def main(argv=None) -> int:
     ap.add_argument("--run-id", required=True, help="new_harness/runs/<run-id>")
     args = ap.parse_args(argv)
 
-    # NH_RUNS_DIR — 서버가 넘기는 고정 경로(임시 폴더에 쌓으면 재시작 때 사라진다).
-    runs = Path(os.environ.get("NH_RUNS_DIR")
-                or (Path(__file__).resolve().parent / "runs"))
-    run_dir = runs / args.run_id
+    run_dir = Path(__file__).resolve().parent / "runs" / args.run_id
     if not run_dir.exists():
         raise SystemExit(f"그런 run 이 없습니다: {run_dir}")
 

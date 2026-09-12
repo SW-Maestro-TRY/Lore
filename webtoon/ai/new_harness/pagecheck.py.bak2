@@ -43,24 +43,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 
 import llm
 from llm import story
 
 HERE = Path(__file__).resolve().parent
-# 작품이 쌓이는 자리.
-#
-# **환경변수로 덮을 수 있어야 한다.** 서버(webtoon/be)는 이 하네스를 jar 에서
-# 임시 폴더로 풀어서 돌리는데, 그 폴더는 서버가 뜰 때마다 새로 생긴다. 그래서
-# 여기가 `HERE/"runs"` 로 고정되면 **재시작하는 순간 만든 작품이 통째로
-# 사라지고, 진행 중이던 작업도 이어받을 수 없다**(2026-09-12에 실제로 겪었다 —
-# 그리는 도중 서버를 다시 띄우자 그 작업이 영원히 "running" 으로 남았다).
-#
-# 서버는 NH_RUNS_DIR 로 고정 경로를 넘긴다. 사람이 직접 돌릴 때는 안 주므로
-# 예전처럼 하네스 옆 runs/ 를 쓴다.
-RUNS_DIR = Path(os.environ.get("NH_RUNS_DIR") or (HERE / "runs"))
+RUNS_DIR = HERE / "runs"
 PROMPT_DIR = HERE / "prompt"
 PAGE_DIR = "pages"
 STAGE = "PAGE_REVIEW"

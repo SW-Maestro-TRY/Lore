@@ -55,6 +55,7 @@ webtoon/ai/*/runs_backup/
 webtoon/ai/*/outputs/
 webtoon/ai/work/jobs/
 webtoon/ai/work/characters/
+webtoon/ai/work/runs/
 
 # zzal 정적 에셋(여울 8상태·루프·공통 에셋·배경 16종)은 레포가 아니라 S3 에 둔다.
 #   images/zzal/demo/    여울 8상태 + 30.7초 루프

@@ -97,9 +97,17 @@ public class JobRunner {
         this.works = works;
         this.credits = credits;
         this.guests = guests;
-        this.runsDir = (runsDir == null || runsDir.isBlank()
-                ? harness.dir().resolve("runs")
-                : Path.of(runsDir)).toAbsolutePath().normalize();
+        /* **임시 폴더가 아니라 고정 경로다.**
+         *
+         * 예전에는 하네스를 푼 임시 폴더 안(`harness.dir()/runs`)에 쌓았다.
+         * 그 폴더는 서버가 뜰 때마다 새로 생기므로, 재시작하면 만든 작품이
+         * 통째로 사라지고 진행 중이던 작업도 이어받을 수 없었다 —
+         * 2026-09-12에 그리는 도중 서버를 다시 띄웠더니 그 작업이 영원히
+         * "running" 으로 남았다(파이썬은 부모 없이 한 장 더 그리고 멈췄다).
+         *
+         * 배포에서 다른 자리를 쓰려면 `lore.webtoon.python.runs-dir` 로 준다. */
+        this.runsDir = Path.of(runsDir == null || runsDir.isBlank()
+                ? "webtoon/ai/work/runs" : runsDir).toAbsolutePath().normalize();
         this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
                 ? "webtoon/ai/work/jobs" : jobsDir).toAbsolutePath().normalize();
     }
@@ -425,6 +433,7 @@ public class JobRunner {
     private Map<String, String> env(WebtoonJob job) {
         Map<String, String> env = new HashMap<>();
         env.put("NH_STYLE", job.getStyle());
+        // NH_RUNS_DIR 은 HarnessProcess 가 띄우는 모든 파이썬에 한자리에서 넣는다.
         return env;
     }
 
