@@ -3,6 +3,7 @@ package com.lore.zzal.generation;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
 import com.lore.zzal.generation.steps.PostProcessStep;
+import com.lore.zzal.generation.steps.SheetStep;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -24,6 +25,20 @@ final class StepMocks {
     static IdentityStep identity() {
         IdentityStep step = mock(IdentityStep.class);
         when(step.name()).thenReturn(IdentityStep.NAME);
+        return step;
+    }
+
+    /** 시트 단계 목. */
+    static SheetStep sheet() {
+        SheetStep step = mock(SheetStep.class);
+        when(step.name()).thenReturn(SheetStep.NAME);
+        return step;
+    }
+
+    /** 후처리 단계 목. */
+    static PostProcessStep post() {
+        PostProcessStep step = mock(PostProcessStep.class);
+        when(step.name()).thenReturn(PostProcessStep.NAME);
         return step;
     }
 

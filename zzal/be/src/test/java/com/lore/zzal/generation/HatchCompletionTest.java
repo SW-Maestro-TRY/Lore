@@ -59,8 +59,8 @@ class HatchCompletionTest {
         when(recorder.loadSucceeded(anyLong(), any(), anyString())).thenReturn(succeeded);
 
         PipelineRegistry registry = new PipelineRegistry(
-                mock(SheetStep.class), StepMocks.identity(),
-                StepMocks.grid(), StepMocks.grid2(), mock(PostProcessStep.class),
+                StepMocks.sheet(), StepMocks.identity(),
+                StepMocks.grid(), StepMocks.grid2(), StepMocks.post(),
                 mock(MotionGridStep.class), mock(MotionPostStep.class), "v2", "v1", path -> true);
 
         service = new HatchService(mock(GenerationRunner.class), recorder, mock(GenJobRepository.class),
@@ -157,5 +157,41 @@ class HatchCompletionTest {
         assertThat(service.completeIfReady(PET, V)).isTrue();
         service.completeIfReady(PET, V);                           // 두 번째는 markAlive 가 무시한다
         assertThat(pet.getPhase()).isEqualTo(PetPhase.ALIVE);
+    }
+
+    @Test
+    @DisplayName("★★ 이름이 어긋나면 개수가 맞아도 안 살린다 — sheetKey 가 null 인 채로 ALIVE 되던 것 (P-11)")
+    void wrongStepNamesDoNotCompleteEvenWhenCountMatches() {
+        ZzalPet pet = draft();
+        pet.character("여울", null, null, null, T0);
+        bakingDone();
+
+        // sheet 가 빠지고 엉뚱한 이름이 하나 들어왔다 — 개수는 그대로 다섯이다
+        succeeded.removeIf(r -> "sheet".equals(r.getName()));
+        GenStepRecord stray = GenStepRecord.start(1L, 9, "unknown", T0);
+        stray.succeed("unknown.png", null, "m", BigDecimal.ZERO, T0);
+        succeeded.add(stray);
+        assertThat(succeeded).hasSize(5);
+
+        assertThat(service.completeIfReady(PET, V)).isFalse();
+        assertThat(pet.getPhase()).isEqualTo(PetPhase.HATCHING);
+        verify(recorder, never()).markPetAlive(anyLong(), any(), any(), any());
+        verify(seeder, never()).seed(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("★ 같은 이름이 두 번 성공해도 빠진 단계를 메우지 못한다")
+    void duplicateNamesDoNotFillTheGap() {
+        ZzalPet pet = draft();
+        pet.character("여울", null, null, null, T0);
+        bakingDone();
+
+        succeeded.removeIf(r -> "postprocess".equals(r.getName()));
+        GenStepRecord again = GenStepRecord.start(1L, 9, "grid", T0);
+        again.succeed("grid-again.png", null, "m", BigDecimal.ZERO, T0);
+        succeeded.add(again);
+
+        assertThat(service.completeIfReady(PET, V)).isFalse();
+        assertThat(pet.getPhase()).isEqualTo(PetPhase.HATCHING);
     }
 }
