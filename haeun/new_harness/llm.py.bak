@@ -107,25 +107,10 @@ def _pick(stage: str, suffix: str, fallbacks: tuple) -> tuple[str, str]:
     return "", ""
 
 
-# 아무 설정도 없을 때 쓸 프로바이더.
-#
-# **gemini 가 아니라 openai 다.** 이 값이 실제로 쓰이는 자리는 배포·서버에서
-# 자바가 이 하네스를 자식 프로세스로 부를 때다 — 그 환경에는 키가
-# WEBTOON_API_KEY(OpenAI) 하나뿐이고, 모델 설정이 들어 있는 new_harness/.env 는
-# webtoon/be/sync-harness.sh 가 **일부러 뺀다**(키가 jar 에 실리면 안 되니까).
-# 그래서 기본값이 gemini 이면 서버에서만 키 없음으로 즉시 죽었다 — 화면에는
-# "이야기 후보를 만들지 못했습니다" 로만 보이고, --dry-run 은 호출을 안 해서
-# 멀쩡히 통과하는 탓에 경로 문제로 오해하기 쉬웠다(2026-09-12).
-#
-# 로컬에서 gemini 로 돌리고 싶으면 .env 에 NH_PROVIDER=gemini 를 적으면 된다 —
-# 설정이 있는 쪽이 언제나 이긴다.
-DEFAULT_PROVIDER = "openai"
-
-
 def provider_for(stage: str) -> str:
     """이 단계가 쓸 프로바이더. 모르는 이름이면 거기서 멈춘다."""
     name, where = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
-    name = (name or DEFAULT_PROVIDER).lower()
+    name = (name or "gemini").lower()
     allowed = IMAGE_PROVIDERS if stage.upper() in IMAGE_STAGES else PROVIDERS
     if name not in allowed:
         raise SystemExit(

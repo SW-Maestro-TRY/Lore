@@ -26,6 +26,42 @@ OneDrive로 동기화되는 실제 파일이라 기기(윈도우 노트북/맥�
 `landing/` 은 제품 레이어라 이 제약이 없습니다. 다만 배포되는 화면이라
 아래 "landing 을 고치기 전에" 를 먼저 보세요.
 
+## haeun/ 을 고쳤을 때 어디까지 해야 실제로 반영되는가
+
+`new_harness`·`story-harness`·`webtoon-harness` 를 쓰는 화면이 두 갈래이고,
+반영되는 경로가 완전히 다릅니다. **한쪽만 보고 "반영됐다"고 판단하지
+마세요** (2026-09-12, 이 착각으로 병합만 해 놓고 끝낸 적이 있음).
+
+**1. `haeun/landing`(`serve.py`, 로컬 확인용)** — `new_harness` 를 형제
+폴더로 바로 import 합니다. 파일을 고치고 저장하면 다음 호출부터 그대로
+반영됩니다 — 프롬프트는 매 호출마다 파일에서 새로 읽어서, 이미 떠 있는
+서버도 재시작이 필요 없습니다.
+
+**2. `webtoon/be` + `webtoon/fe`(로컬 `localhost:8080`/`:3000`, 그리고
+lorecomic.com/webtoon 배포도 이 경로)** — `new_harness` 를 **직접 안
+씁니다.** `webtoon/be` 가 빌드 시점에 `webtoon/be/sync-harness.sh` 로
+`haeun/{new_harness, story-harness, webtoon-harness, landing}` 을 통째로
+복사해 jar 리소스로 굽고(`AiHarnessResources`), 서버가 뜰 때 임시 폴더에
+풀어 그 **사본**으로 파이썬을 돌립니다(`HarnessProcess`).
+
+**`haeun/` 원본을 고치고 커밋해도, `webtoon/be` 를 다시 빌드·기동하기
+전까지는 옛 사본 그대로 돕니다.** `sync-harness.sh` 는 손으로 돌릴 필요가
+없습니다 — 저장소 루트 `build.gradle` 의 `processResources` 가 빌드 때마다
+자동으로 부릅니다(`syncWebtoonHarness` 태스크). 그러니 **webtoon 백엔드를
+다시 빌드하거나 `bootRun` 하면 그걸로 충분**하지만, "다시 실행해야 반영된다"
+는 것 자체를 잊기 쉽습니다 — 이미 떠 있는 서버는 재시작 전까지 기동 시점의
+사본을 계속 씁니다.
+
+(`apps/web` 의 `/webtoon` 라우트는 화면 코드가 따로 없습니다 — `webtoon/fe`
+를 그대로 렌더링하는 프록시 파일 하나(`page.tsx`)뿐이고, `webtoon/be` 의
+API를 부릅니다. 그래서 이 라우트 자체를 고칠 일은 거의 없고, 반영 여부는
+전부 2번에 달려 있습니다.)
+
+**정리 — `haeun/new_harness` 등을 고쳤을 때:**
+- `landing/serve.py` 로 로컬 확인 중이면 → 끝. 더 할 것 없음.
+- `webtoon/be`·`apps/web` 쪽(로컬 8080/3000이든 배포든)에 반영하려면 →
+  `webtoon/be` 를 다시 빌드·기동해야 합니다. 그 전까지는 반영되지 않습니다.
+
 ## landing 을 고치기 전에
 
 **1. 지금 랜딩은 임시본이자 실제 운영본입니다.**
@@ -150,6 +186,14 @@ ln -s "$(pwd)/haeun/webtoon-harness/.env" agent-<슬러그>/webtoon-harness/.env
     git worktree remove ../agent-<미션명>
     git branch -d agent/<미션명>
     ```
+    **다만 `git worktree remove` 는 그 안의 `runs/`·`outputs/`·`jobs/`
+    (gitignore된 것들)를 git 이력 없이 그대로 디스크에서 지운다 — 휴지통도
+    안 거친다, 복구 불가능** (2026-09-12 실제로 겪음: 미션 세션에서 만든
+    테스트 run들과 그걸로 만든 HTML 비교 페이지가 정리 명령 한 줄에
+    통째로 사라짐). `git merge` 로 가져오는 건 커밋된 코드뿐이지 이
+    파일들이 아니다. 그러니 정리하기 **직전에** 그 워크트리 안에
+    남겨야 할 결과물(비교 페이지, 참고할 run 등)이 있는지 먼저 확인하고,
+    있으면 원본 `haeun/` 쪽으로 복사해 둔 뒤에 지운다.
   - **충돌이 나면 지우지 않는다.** worktree와 브랜치를 그대로 둔 채 어떤
     파일의 어느 부분이 충돌했는지 사용자에게 보여주고 판단을 구한다 —
     이건 worktree로도 못 없애는 유일한 지점이다(worktree가 없애는 건

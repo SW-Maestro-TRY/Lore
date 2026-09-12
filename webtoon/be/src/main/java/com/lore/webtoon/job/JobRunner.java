@@ -415,6 +415,13 @@ public class JobRunner {
 
     /* ---- 곁가지 ----------------------------------------------------------- */
 
+    /**
+     * 하네스에 넘기는 환경변수.
+     *
+     * 그림체 하나뿐이다. 프로바이더·모델은 <b>하네스 코드의 기본값</b>이
+     * 정한다({@code new_harness/llm.py} 의 {@code DEFAULT_PROVIDER}) —
+     * 설정이 자바와 파이썬 두 군데로 갈리면 한쪽만 고치는 사고가 난다.
+     */
     private Map<String, String> env(WebtoonJob job) {
         Map<String, String> env = new HashMap<>();
         env.put("NH_STYLE", job.getStyle());
