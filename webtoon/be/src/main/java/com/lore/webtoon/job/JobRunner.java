@@ -101,7 +101,7 @@ public class JobRunner {
                 ? harness.dir().resolve("runs")
                 : Path.of(runsDir)).toAbsolutePath().normalize();
         this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
-                ? "haeun/landing/jobs_spring" : jobsDir).toAbsolutePath().normalize();
+                ? "webtoon/ai/landing/jobs_spring" : jobsDir).toAbsolutePath().normalize();
     }
 
     /**

@@ -5,10 +5,22 @@ OneDrive로 동기화되는 실제 파일이라 기기(윈도우 노트북/맥�
 상세 내용은 `docs/`를 참고하세요.
 
 ## 구조
-- `story-harness/` — 캐릭터·이야기·콘티(대본) 파이프라인
-- `webtoon-harness/` — 이미지 생성 파이프라인
+
+**생성 파이프라인은 2026-09-12에 `webtoon/ai/` 로 옮겼습니다.** 이 폴더에
+있던 `new_harness`·`story-harness`·`webtoon-harness`·`landing` 은 전부 거기
+있습니다 — 아래 규칙들도 그 경로를 가리킵니다.
+
+- `webtoon/ai/new_harness/` — 지금 제품이 쓰는 이야기·그림 파이프라인
+- `webtoon/ai/story-harness/` — 캐릭터·이야기·콘티(대본). new_harness 가
+  모델 호출 계층(`llm.py`)과 시트 생성을 여기서 빌려 쓴다
+- `webtoon/ai/webtoon-harness/` — 이미지 생성. `directing` 모듈을 빌려 쓴다
+- `webtoon/ai/landing/` — 옛 프로토타입 웹서버. 지금은 **S3 업로드 걸음
+  (`s3_upload.py`)만 제품이 쓴다** — 서버로 띄우지 않는다
+
+haeun/ 에 남은 것은 실험·문서·자료다:
 - `char-harness/` — 캐릭터 레퍼런스 관련
-- `landing/` — 위 하네스들을 감싸는 제품(웹 서버 + 프론트)
+- `arc-first/` · `dspy-experiment/` · `bg-experiment/` — 실험 기록
+- `docs/` — 리서치·작업 기록
 
 ## 지켜야 할 규칙
 
@@ -19,59 +31,38 @@ OneDrive로 동기화되는 실제 파일이라 기기(윈도우 노트북/맥�
    예: 새 게이트 함수는 새 입력 필드가 없으면 항상 통과시켜서, 예전 run을 다시
    돌려도 결과가 안 바뀌게 한다).
 3. 고친 뒤 반드시 테스트를 돌려 `ALL PASS` 확인한다:
-   - `cd story-harness && python test_gates.py`
-   - `cd webtoon-harness && python test_charsheet.py`
+   - `cd webtoon/ai/story-harness && python test_gates.py`
+   - `cd webtoon/ai/webtoon-harness && python test_charsheet.py`
    (둘 다 pytest 아님 — 그냥 스크립트, 마지막 줄에 ALL PASS 또는 FAILED: ... 가 찍힘)
 
-`landing/` 은 제품 레이어라 이 제약이 없습니다. 다만 배포되는 화면이라
+`webtoon/ai/landing/` 은 제품 레이어라 이 제약이 없습니다. 다만 배포되는 화면이라
 아래 "landing 을 고치기 전에" 를 먼저 보세요.
 
-## haeun/ 을 고쳤을 때 어디까지 해야 실제로 반영되는가
+## 파이프라인을 고쳤을 때 어디까지 해야 실제로 반영되는가
 
-`new_harness`·`story-harness`·`webtoon-harness` 를 쓰는 화면이 두 갈래이고,
-반영되는 경로가 완전히 다릅니다. **한쪽만 보고 "반영됐다"고 판단하지
-마세요** (2026-09-12, 이 착각으로 병합만 해 놓고 끝낸 적이 있음).
+`webtoon/ai/` 를 고쳐도 **`webtoon/be` 를 다시 빌드·기동하기 전까지는 반영되지
+않습니다.** 파이썬은 jar 안에서 실행할 수 없어서, 빌드가 `webtoon/ai` 를 jar
+리소스로 담고 서버가 뜰 때 임시 폴더로 풀어(`AiHarnessResources`) 그 사본으로
+돌리기 때문입니다(`HarnessProcess`).
 
-**1. `haeun/landing`(`serve.py`, 로컬 확인용)** — `new_harness` 를 형제
-폴더로 바로 import 합니다. 파일을 고치고 저장하면 다음 호출부터 그대로
-반영됩니다 — 프롬프트는 매 호출마다 파일에서 새로 읽어서, 이미 떠 있는
-서버도 재시작이 필요 없습니다.
+    webtoon/ai/**  →  (빌드) jar 리소스  →  (기동) 임시 폴더  →  python3 run.py
 
-**2. `webtoon/be` + `webtoon/fe`(로컬 `localhost:8080`/`:3000`, 그리고
-lorecomic.com/webtoon 배포도 이 경로)** — `new_harness` 를 **직접 안
-씁니다.** `webtoon/be` 가 빌드 시점에 `webtoon/be/sync-harness.sh` 로
-`haeun/{new_harness, story-harness, webtoon-harness, landing}` 을 통째로
-복사해 jar 리소스로 굽고(`AiHarnessResources`), 서버가 뜰 때 임시 폴더에
-풀어 그 **사본**으로 파이썬을 돌립니다(`HarnessProcess`).
+그래서 파일만 고쳐 놓고 "반영됐다" 고 판단하면 안 됩니다 — 이미 떠 있는
+서버는 기동 시점의 사본을 계속 씁니다(2026-09-12에 실제로 이 착각을 했음).
 
-**`haeun/` 원본을 고치고 커밋해도, `webtoon/be` 를 다시 빌드·기동하기
-전까지는 옛 사본 그대로 돕니다.** `sync-harness.sh` 는 손으로 돌릴 필요가
-없습니다 — 저장소 루트 `build.gradle` 의 `processResources` 가 빌드 때마다
-자동으로 부릅니다(`syncWebtoonHarness` 태스크). 그러니 **webtoon 백엔드를
-다시 빌드하거나 `bootRun` 하면 그걸로 충분**하지만, "다시 실행해야 반영된다"
-는 것 자체를 잊기 쉽습니다 — 이미 떠 있는 서버는 재시작 전까지 기동 시점의
-사본을 계속 씁니다.
+`apps/web` 의 `/webtoon` 라우트는 화면 코드가 따로 없습니다 — `webtoon/fe` 를
+그대로 렌더링하는 프록시 파일 하나(`page.tsx`)뿐이고, `webtoon/be` 의 API를
+부릅니다. 그래서 그 라우트를 고칠 일은 거의 없습니다.
 
-(`apps/web` 의 `/webtoon` 라우트는 화면 코드가 따로 없습니다 — `webtoon/fe`
-를 그대로 렌더링하는 프록시 파일 하나(`page.tsx`)뿐이고, `webtoon/be` 의
-API를 부릅니다. 그래서 이 라우트 자체를 고칠 일은 거의 없고, 반영 여부는
-전부 2번에 달려 있습니다.)
+## landing 은 버리는 중입니다
 
-**정리 — `haeun/new_harness` 등을 고쳤을 때:**
-- `landing/serve.py` 로 로컬 확인 중이면 → 끝. 더 할 것 없음.
-- `webtoon/be`·`apps/web` 쪽(로컬 8080/3000이든 배포든)에 반영하려면 →
-  `webtoon/be` 를 다시 빌드·기동해야 합니다. 그 전까지는 반영되지 않습니다.
+`webtoon/ai/landing/` 은 옛 프로토타입 웹서버입니다. **더 이상 띄우지
+않습니다** — 제품은 `apps/web`(화면) + `webtoon/be`(API) + `webtoon/ai`(생성)
+로 갑니다. 파이썬은 서버가 아니라 **CLI 파이프라인**으로만 씁니다.
 
-## landing 을 고치기 전에
-
-**1. 지금 랜딩은 임시본이자 실제 운영본입니다.**
-`landing/web/` 은 프로토타입이지만 동시에 lorecomic.com/webtoon 에 나가는
-화면입니다. develop 에 머지되면 그대로 뜹니다. "테스트니까 대충" 이 안 되는
-자리입니다. 나중에 팀과 본작업을 시작할 때 여기서 검증된 최종본만
-`webtoon/` 으로 옮겨 진짜 제품 코드를 만듭니다 — 그때까지는 이 상태가
-의도된 것이므로 구조를 정리하자고 제안하지 마세요.
-(`apps/web/public/static/` 은 빌드 산출물입니다. `.gitignore` 라 고쳐 봐야
-덮입니다. 원본은 `landing/web/` 입니다.)
+지금 이 폴더에서 제품이 실제로 쓰는 것은 **S3 업로드 걸음(`s3_upload.py`)**
+하나뿐이고, 나머지(`serve.py`·`web/`·`pipeline.py` 등)는 걷어내는 중입니다.
+그러니 여기에 새 기능을 넣지 마세요.
 
 **2. `webtoon/` · `haeun/` 밖을 건드렸으면 흔적을 남기세요.**
 허락을 먼저 받는 것은 아래 "작업 권한 범위" 에 있습니다. 여기서 더할 것은
@@ -100,7 +91,7 @@ API를 부릅니다. 그래서 이 라우트 자체를 고칠 일은 거의 없�
 실제 과금이 아니라 가짜 결제입니다.
 
 **4. 실측 원가는 `a9e9983`(2026-08-26) 이후에 새로 돌린 run 부터입니다.**
-그 커밋에서 `webtoon-harness/config.yaml` 의 `pricing.rates` 를 채우기 전에는
+그 커밋에서 `webtoon/ai/webtoon-harness/config.yaml` 의 `pricing.rates` 를 채우기 전에는
 요금표가 비어 있어서, 모든 호출이 장당 고정 어림값(`cost_basis: "flat"`)으로
 잡혔습니다.
 
@@ -156,8 +147,8 @@ git worktree add ../agent-feedback -b agent/feedback haeun
 
 ```
 # 4. .env 심링크 (아래 "git이 안 보는 것" 절 참고 — 안 하면 실제 생성 때 키 없음으로 죽는다)
-ln -s "$(pwd)/haeun/story-harness/.env" agent-<슬러그>/story-harness/.env
-ln -s "$(pwd)/haeun/webtoon-harness/.env" agent-<슬러그>/webtoon-harness/.env
+ln -s "$(pwd)/webtoon/ai/story-harness/.env" agent-<슬러그>/webtoon/ai/story-harness/.env
+ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webtoon-harness/.env
 ```
 
 그 다음부터 이 세션의 모든 파일 읽기·수정·Bash 작업 기준 경로는
@@ -204,7 +195,7 @@ ln -s "$(pwd)/haeun/webtoon-harness/.env" agent-<슬러그>/webtoon-harness/.env
 
 ### git이 안 보는 것 (`runs/`, `outputs/`, `jobs/`, `.env`)
 
-`story-harness/runs/`, `webtoon-harness/outputs/`, `landing/jobs/`는 전부
+`webtoon/ai/story-harness/runs/`, `webtoon/ai/webtoon-harness/outputs/`, `webtoon/ai/landing/jobs/`는 전부
 gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않는다 —
 새 worktree는 이 폴더들이 **비어서 시작한다.** 이건 기본적으로 안전한
 방향이다(격리가 저절로 됨, 두 에이전트가 같은 run_id 폴더에 동시에 못 씀).
@@ -213,8 +204,8 @@ gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않�
   공유해도 쓰기 충돌이 안 나고, 안 하면 새 worktree에서 story.py/run.py가
   키 없음으로 바로 죽는다:
   ```
-  ln -s "$(pwd)/haeun/story-harness/.env" ../agent-<미션명>/story-harness/.env
-  ln -s "$(pwd)/haeun/webtoon-harness/.env" ../agent-<미션명>/webtoon-harness/.env
+  ln -s "$(pwd)/webtoon/ai/story-harness/.env" ../agent-<미션명>/webtoon/ai/story-harness/.env
+  ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" ../agent-<미션명>/webtoon/ai/webtoon-harness/.env
   ```
 - **`runs/`·`outputs/`·`jobs/`는 심링크로 공유하지 않는다** — 공유하는 순간
   오늘 겪은 것과 같은 동시쓰기 충돌이 git 밖에서 재현된다. 각 worktree가
@@ -372,7 +363,7 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
 
 ## 환경 관련 주의사항
 
-~~`landing/pipeline.py` 와 두 테스트 스크립트가 `C:\lore\...` 경로를
+~~`webtoon/ai/landing/pipeline.py` 와 두 테스트 스크립트가 `C:\lore\...` 경로를
 하드코딩하고 있어서 맥에서 막히던 문제~~ — **2026-08-23에 근본 수정 완료**
 (이슈 [#86](https://github.com/SW-Maestro-TRY/Lore/issues/86)). `pipeline.py`의
 `STORY`/`WEBTOON`, `make_episode.py`의 `STORY`, `run.py`의 `story_runs_root`,
@@ -393,12 +384,12 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
   사건 하나로 읽혀서, 다시 돌려도 프롬프트가 한 글자도 안 바뀐다**(실측
   으로 확인: 옛 run 의 페이지 프롬프트 6장이 바이트까지 동일).
 - 2026-08-30 — **그림체가 AI티 난다** 는 피드백을 붙들고 그림체 문구를 다섯 번
-  고쳐 여섯 장을 뽑았다 (이슈 #63/#23). `new_harness/prompt/style/` 을
+  고쳐 여섯 장을 뽑았다 (이슈 #63/#23). `webtoon/ai/new_harness/prompt/style/` 을
   `frost`(일러스트 마감) · `romance`(같은 밀도 + 장르 색감) · `webtoon`(평면)
   셋으로 갈랐다. 구도·배경 밀도·머리카락 가닥은 문구로 움직였지만 **얼굴
   구조와 채도는 문구로 안 움직인다** 는 데서 멈췄다.
   **이어서 작업하기 전에 반드시 읽을 것:**
-  [`new_harness/STYLE_FINDINGS.md`](new_harness/STYLE_FINDINGS.md) — 여섯 장이
+  [`webtoon/ai/new_harness/STYLE_FINDINGS.md`](new_harness/STYLE_FINDINGS.md) — 여섯 장이
   각각 무엇을 바꾼 것인지, 확정된 것, 다음에 무엇부터 가르면 되는지,
   그리고 이미 네 번 실패한 방법이 정리돼 있다.
 - 2026-08-29 — **1화를 재미있게 만드는 실험** (이슈 #28/#29): 1화가 매번 같은
@@ -414,10 +405,10 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
 - 2026-08-23 — 편집실에서 얹은 말풍선·스티커를 **저장하고 그림으로 굽는다**
   (이슈 #58/#64): 얹은 것이 브라우저에만 있어서 가져갈 길이 없던 것을 작품
   폴더(`overlay.json`)에 저장하고, 「이미지로 뽑기」로 `baked/scene{n}.png` ·
-  `episode_baked.png` 를 만들어 내려받게 함 (`landing/overlay.py` 신설,
-  검사는 `landing/test_overlay.py`) · 지난 판을 눌러 보기만 해도 판본이
+  `episode_baked.png` 를 만들어 내려받게 함 (`webtoon/ai/landing/overlay.py` 신설,
+  검사는 `webtoon/ai/landing/test_overlay.py`) · 지난 판을 눌러 보기만 해도 판본이
   v7·v8 로 늘어나던 버그 수정 (`archive_scene` 이 같은 그림을 또 뜨던 것).
-- 2026-08-21 — `story-harness/docs/user_feedback_summary.md` P0 6건 전부 구현 +
+- 2026-08-21 — `webtoon/ai/story-harness/docs/user_feedback_summary.md` P0 6건 전부 구현 +
   다른 장르(헌터·게이트/아이돌/마법학교/오컬트 미스터리/좀비 아포칼립스) 트로프
   라우팅 감사 + 무협 템플릿 신설 + 판타지/일상 landing UI 추가.
   자세한 내용: [`docs/p0-fixes-2026-08-21.md`](docs/p0-fixes-2026-08-21.md)

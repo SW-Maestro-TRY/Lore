@@ -20,9 +20,8 @@ import java.nio.file.StandardCopyOption;
  * <h2>왜 필요한가</h2>
  *
  * 하네스는 jar 안에 리소스({@code webtoon/ai/{new_harness,story-harness,webtoon-harness,
- * landing}} — {@code webtoon/be/sync-harness.sh} 가 build.gradle 의
- * {@code processResources} 마다 {@code haeun/} 원본에서 최신 사본을 만든다)로 실려
- * 배포된다. 그런데 파이썬은 jar 속 파일을 실행할 수 없다(경로가 없다). 그래서 서버가
+ * landing}} — 원본이 그대로 {@code webtoon/ai} 에 있고 build.gradle 의
+ * {@code processResources} 가 그 폴더를 바로 담는다)로 실려 배포된다. 그런데 파이썬은 jar 속 파일을 실행할 수 없다(경로가 없다). 그래서 서버가
  * 뜰 때 임시 폴더로 꺼내 두고, 그 경로를 {@link HarnessProcess} · {@code CharacterMaker}
  * 에 넘긴다.
  *

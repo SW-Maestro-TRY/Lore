@@ -7,14 +7,14 @@ import java.time.Duration;
 /**
  * 웹툰 생성 하네스가 어디에 떠 있는가.
  *
- * 기본값은 로컬에서 {@code haeun/landing/serve.py} 를 띄웠을 때의 주소다.
+ * 기본값은 로컬에서 {@code webtoon/ai/landing/serve.py} 를 띄웠을 때의 주소다.
  * 그래서 <b>application.yml 을 안 고쳐도</b> 바로 뜬다 — 그 파일은 공용
  * 자리(apps/api)라 도메인 하나 때문에 건드리지 않는다. 배포에서 주소가
  * 다르면 환경변수 {@code LORE_WEBTOON_HARNESS_BASEURL} 로 덮는다.
  *
  * <h2>왜 프록시인가</h2>
  *
- * 생성 파이프라인은 파이썬이다({@code haeun/new_harness}). 그 앞에
+ * 생성 파이프라인은 파이썬이다({@code webtoon/ai/new_harness}). 그 앞에
  * {@code serve.py} 가 이미 서서 줄 세우기 · 검수 진행 표시 · 판본 ·
  * 오버레이 · 굽기 · 워터마크를 다 하고 있고, 그것들은 실제 한 편을 만들어
  * 보며 검증된 코드다. 같은 것을 자바로 다시 쓰면 검증을 처음부터 다시

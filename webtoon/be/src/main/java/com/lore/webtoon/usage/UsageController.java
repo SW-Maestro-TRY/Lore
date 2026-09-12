@@ -74,7 +74,7 @@ public class UsageController {
 
             **한 마디가 있어야 준다.** 단계별·모델별 원가는 우리 원가 구조가
             그대로 드러나는 값이다. 브라우저가 아니라 손에서 부른다 —
-            haeun/landing/spend_report.py.""")
+            webtoon/ai/landing/spend_report.py.""")
     @GetMapping("/spend")
     public ApiResponse<UsageService.SpendView> spend(
             @RequestHeader(name = TOKEN_HEADER, required = false) String token) {

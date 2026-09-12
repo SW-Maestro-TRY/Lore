@@ -107,7 +107,7 @@ public class HarnessGateway {
             return ResponseEntity.status(502)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(("{\"error\":\"웹툰 생성 서버에 닿지 못했습니다. "
-                            + "haeun/landing/serve.py 가 떠 있는지 확인해 주세요.\"}")
+                            + "webtoon/ai/landing/serve.py 가 떠 있는지 확인해 주세요.\"}")
                             .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         }
     }
