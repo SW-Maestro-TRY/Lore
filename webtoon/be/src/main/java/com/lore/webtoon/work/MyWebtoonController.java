@@ -1,7 +1,6 @@
 package com.lore.webtoon.work;
 
 import com.lore.webtoon.WebtoonApi;
-import com.lore.webtoon.harness.WebtoonController;
 import com.lore.common.auth.jwt.LoginUser;
 import com.lore.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,7 +22,7 @@ import java.util.Map;
  *
  * <h2>여기는 응답을 감싼다</h2>
  *
- * 프록시({@link WebtoonController})는 하네스가 준 것을 그대로 흘려보내지만,
+ * 옛 프록시는 하네스가 준 것을 그대로 흘려보냈지만(2026-09-12 제거),
  * 이 주소들은 <b>자바가 뜻을 갖고 판단하는 것</b>이라 저장소 규약대로
  * {@code ApiResponse} 로 감싼다 — 로그인이 필요하고, 계정과 브라우저를 잇는
  * 판단이 여기서 일어난다.

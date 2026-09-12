@@ -1,7 +1,6 @@
 package com.lore.webtoon.work;
 
 import com.lore.webtoon.credit.BrowserLinkRepository;
-import com.lore.webtoon.harness.WebtoonController;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -20,7 +19,7 @@ import java.util.List;
  *
  * 하네스는 자기 폴더에만 남기고 계정을 모른다(게스트도 만들 수 있어서 알 수가
  * 없다). 계정을 아는 것은 이 앞에 선 자바뿐이고, 만들기 요청과 진행 조회가
- * 둘 다 여기를 지나간다({@link WebtoonController}). 그래서 지나가는 김에 적는다.
+ * 둘 다 여기를 지나간다. 그래서 지나가는 김에 적는다.
  *
  * <h2>여기서 실패해도 만들기는 안 막는다</h2>
  *
