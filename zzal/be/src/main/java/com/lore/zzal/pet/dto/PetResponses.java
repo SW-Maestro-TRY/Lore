@@ -544,7 +544,7 @@ public final class PetResponses {
 
         /** 18칸. 잠긴 칸도 이름+조건(플랜 T2 결정 4). 심화 행동 상태는 zzal_motion 행에서(없으면 NONE). */
         public static List<Motion> motions(ZzalPet pet, MotionCatalog catalog, Map<Integer, ZzalMotion> rows) {
-            boolean v2 = "v2".equals(pet.getHatchPipelineVersion());
+            boolean v2 = basicLayout(pet.getHatchPipelineVersion());
             return catalog.all().stream().map(spec -> {
                 boolean unlocked = UnlockRules.isUnlocked(pet, spec, catalog);
                 UnlockRule rule = spec.unlockRule();
@@ -569,6 +569,18 @@ public final class PetResponses {
          * 기본 행동 그림 — v2 부화는 {@code basic/{key}.webp}, v1 부화는 8상태 파일명으로 폴백(api-v2.md 2절).
          * 잠겼거나(2층) 선물이거나 v1 에 없는 자세(아픔·부르기)면 null → 화면 폴백.
          */
+        /**
+         * 이 펫이 {@code basic/{key}.webp} 규약으로 구워졌는가.
+         *
+         * ★ <b>옛 이름 규약을 쓰는 것은 v1 하나뿐</b>이다. 그래서 "v1 이 아닌가" 로 묻는다 —
+         *   {@code "v2".equals(...)} 로 물으면 v4 처럼 나중에 생긴 버전이 <b>조용히 옛 폴백</b>으로 떨어져
+         *   그림이 하나도 안 뜬다. 그 어긋남은 빌드·기동·부화가 전부 성공한 뒤 화면에서만 드러난다.
+         * ★ 버전이 비어 있는 옛 기록은 예전대로 폴백을 쓴다(그 펫들은 실제로 v1 로 구워졌다).
+         */
+        static boolean basicLayout(String hatchPipelineVersion) {
+            return hatchPipelineVersion != null && !"v1".equals(hatchPipelineVersion);
+        }
+
         static String basicImageKey(ZzalPet pet, MotionSpec spec, boolean unlocked, boolean v2) {
             if (!unlocked || spec.isGift()) {
                 return null;

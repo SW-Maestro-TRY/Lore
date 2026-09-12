@@ -94,6 +94,19 @@ class PetDetailTest {
     }
 
     @Test
+    @DisplayName("★ v4 부화 펫도 basic/{key}.webp 규약 — 옛 폴백으로 조용히 떨어지지 않는다")
+    void v4ImageKeys() {
+        ZzalPet pet = baby();
+        pet.setHatchPipelineVersion("v4");
+        PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
+
+        // "v2" 만 보고 판단하면 v4 펫은 옛 8상태 파일명으로 떨어져 그림이 하나도 안 뜬다 —
+        // 빌드·기동·부화가 전부 성공한 뒤 화면에서만 드러나는 종류의 어긋남이다.
+        assertThat(d.motions().get(0).basicImageKey()).endsWith("/basic/base.webp");
+        assertThat(d.motions().get(4).basicImageKey()).endsWith("/basic/sick.webp");
+    }
+
+    @Test
     @DisplayName("친밀도 percent 는 10 단위 내림, tier 는 LOW ≤30 · MID 40~70 · HIGH ≥80 (해석 10)")
     void intimacyTiers() {
         assertThat(PetResponses.Intimacy.of(0)).isEqualTo(new PetResponses.Intimacy(0, 0, "LOW"));
