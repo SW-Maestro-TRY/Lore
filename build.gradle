@@ -95,6 +95,12 @@ dependencies {
     // BOM 으로 버전을 한 곳에서 관리한다.
     implementation platform('software.amazon.awssdk:bom:2.28.16')
     implementation 'software.amazon.awssdk:s3'
+    // SSO 프로필(`aws sso login`)로 자격증명을 받을 때만 필요하다 — s3 모듈만으로는
+    // SSO 토큰을 못 읽고 "the 'sso' service module must be on the class path" 로 죽는다.
+    // 운영은 인스턴스 역할로 뜨므로 이 모듈이 없어도 됐지만, 로컬에서 SSO 프로필을
+    // 쓰는 사람은 이게 없으면 S3 관련 기능이 전부 막힌다.
+    implementation 'software.amazon.awssdk:sso'
+    implementation 'software.amazon.awssdk:ssooidc'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
