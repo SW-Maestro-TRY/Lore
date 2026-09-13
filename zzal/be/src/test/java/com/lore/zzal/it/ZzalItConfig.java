@@ -1,6 +1,7 @@
 package com.lore.zzal.it;
 
 import com.lore.common.s3.S3Storage;
+import com.lore.zzal.generation.MotionPostProfiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +15,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -65,6 +68,34 @@ public class ZzalItConfig {
     @Primary
     public S3Presigner noopS3Presigner() {
         return mock(S3Presigner.class);
+    }
+
+    /**
+     * 대역 후처리 프로파일 — <b>굽기 배선을 끝까지 보는 시험에만</b> 쓴다.
+     *
+     * <h3>★ 왜 필요한가</h3>
+     * 후처리 프로파일 표({@code pipeline/{버전}/motion_post_profiles.txt})에는 <b>검수를 마친 동작만</b>
+     * 적히고, 표에 없는 동작은 굽지 않는다 — 검수를 거치지 않은 후처리로 구워진 그림은 화면을 봐야만
+     * 드러나기 때문이다. 지금 표에 있는 것은 선물 둘(구르기·뒤로넘어짐)뿐이고, <b>3층 심화는 아직
+     * 하나도 확정되지 않았다.</b> 그런데 선물은 3층 차례에 안 들어가므로
+     * ({@code NightPlanner.nextAdvanced} 가 선물을 뺀다) 조각이 차서 굽는 길은 선물로 시험할 수 없다.
+     *
+     * <h3>★ 무엇을 대신하나 — 대역 동작 하나뿐</h3>
+     * {@code app.zzal.advanced-motions} 에 적힌 대역 동작에만 확정본(구르기)의 프로파일을 빌려준다.
+     * 그 밖의 동작은 진짜 표를 그대로 지난다 — "표에 없으면 멈춘다" 는 규칙은 시험에서도 살아 있다
+     * (그 규칙 자체는 {@code MotionPipelineV1Test} 가 따로 못 박는다).
+     */
+    @Bean
+    @Primary
+    public MotionPostProfiles standInMotionPostProfiles(
+            @Value("${app.zzal.advanced-motions:}") String standIns) {
+        List<String> keys = Arrays.stream(standIns.split("\\s*,\\s*")).filter(s -> !s.isBlank()).toList();
+        return new MotionPostProfiles() {
+            @Override
+            public String forMotion(String version, String motionKey) {
+                return super.forMotion(version, keys.contains(motionKey) ? "roll" : motionKey);
+            }
+        };
     }
 
     @Bean
