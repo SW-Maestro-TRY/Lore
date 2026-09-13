@@ -1,5 +1,6 @@
 package com.lore.webtoon.job;
 
+import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PageUploader;
 import com.lore.webtoon.usage.UsageService;
 import com.lore.webtoon.work.WorkLedger;
@@ -37,20 +38,24 @@ class AfterRunTest {
     Path runs;
 
     private UsageService usage;
+    private PageUploader uploader;
+    private PageStore pages;
+    private HarnessProcess harness;
     private AfterRun after;
 
     @BeforeEach
     void setUp() {
         usage = mock(UsageService.class);
-        PageUploader uploader = mock(PageUploader.class);
+        uploader = mock(PageUploader.class);
         when(uploader.ready()).thenReturn(false);        // 여기서는 그림을 안 올린다
+        pages = mock(PageStore.class);
         /* 작품이 쌓이는 자리는 HarnessProcess 하나가 정하고, AfterRun 은 그걸
            받아 쓴다. 예전에는 여기에 따로 넘겨서 둘이 다른 자리를 볼 수
            있었고, 배포에서 실제로 그랬다 — meta.json 은 멀쩡한데 없는 자리를
            보고 "비용 기록이 없습니다" 만 찍었다. */
-        HarnessProcess harness = mock(HarnessProcess.class);
+        harness = mock(HarnessProcess.class);
         when(harness.runsDir()).thenReturn(runs);
-        after = new AfterRun(usage, uploader, mock(WorkLedger.class), harness);
+        after = new AfterRun(usage, uploader, pages, mock(WorkLedger.class), harness);
     }
 
     /** 하네스가 적는 모양 그대로. 값은 {@code cost.total_krw} 에 있다. */
@@ -107,5 +112,74 @@ class AfterRunTest {
         after.cost("run-2");
 
         verify(usage, org.mockito.Mockito.times(2)).ingest(eq("run-2"), any());
+    }
+
+    /* ---- 스스로 낫기 --------------------------------------------------------
+     *
+     * 다 그려 놓고 올리는 데서 실패한 작품은 결과 화면이 404 다. 게스트는
+     * 주인이 될 수 없어서(uid 는 지어낼 수 있다) 되살려 달라고 할 수도 없다.
+     * 그래서 여는 것만으로 낫게 한다 — 대신 **언제 움직이는지**가 정확해야
+     * 한다. 결과 화면은 0.8초마다 묻는 자리다. */
+
+    /** 그린 그림이 디스크에 있는 상태를 만든다. */
+    private void 그림이_디스크에(String runId) throws IOException {
+        Files.createDirectories(runs.resolve(runId).resolve("pages"));
+    }
+
+    @Test
+    @DisplayName("안 적혔는데 디스크에 그림이 있으면 그 자리에서 적는다")
+    void 안_적힌_것을_되살린다() throws Exception {
+        그림이_디스크에("run-9");
+        when(pages.has("run-9")).thenReturn(false);
+        when(uploader.ready()).thenReturn(true);
+        when(harness.prepareUpload(eq("run-9"), any())).thenReturn("{}");
+        when(uploader.uploadPrepared(eq("run-9"), eq("{}"), any())).thenReturn(6);
+
+        assertThat(after.healIfMissing("run-9")).isTrue();
+        verify(uploader).uploadPrepared(eq("run-9"), eq("{}"), any());
+    }
+
+    @Test
+    @DisplayName("이미 적혀 있으면 아무 일도 안 한다 — 폴링마다 파이썬을 띄우면 안 된다")
+    void 이미_적혀_있으면_안_움직인다() throws Exception {
+        그림이_디스크에("run-9");
+        when(pages.has("run-9")).thenReturn(true);
+
+        assertThat(after.healIfMissing("run-9")).isFalse();
+        verify(harness, never()).prepareUpload(any(), any());
+    }
+
+    @Test
+    @DisplayName("그린 그림이 없으면 손대지 않는다 — 아직 만드는 중이거나 없는 작품이다")
+    void 그림이_없으면_안_움직인다() throws Exception {
+        when(pages.has("아직")).thenReturn(false);        // 폴더 자체가 없다
+
+        assertThat(after.healIfMissing("아직")).isFalse();
+        verify(harness, never()).prepareUpload(any(), any());
+    }
+
+    @Test
+    @DisplayName("한 번 해 보고 안 되면 다시 안 한다 — 망가진 작품에 매번 띄우지 않는다")
+    void 한_번만_해_본다() throws Exception {
+        그림이_디스크에("run-9");
+        when(pages.has("run-9")).thenReturn(false);
+        when(uploader.ready()).thenReturn(true);
+        when(harness.prepareUpload(eq("run-9"), any()))
+                .thenThrow(new IllegalStateException("올릴 그림을 만들지 못했습니다 (exit=1)"));
+
+        assertThat(after.healIfMissing("run-9")).isFalse();
+        assertThat(after.healIfMissing("run-9")).isFalse();
+        verify(harness, org.mockito.Mockito.times(1)).prepareUpload(eq("run-9"), any());
+    }
+
+    @Test
+    @DisplayName("되살리다 죽어도 화면까지 막지는 않는다")
+    void 되살리기_실패가_화면을_막지_않는다() throws Exception {
+        그림이_디스크에("run-9");
+        when(pages.has("run-9")).thenReturn(false);
+        when(uploader.ready()).thenReturn(true);
+        when(harness.prepareUpload(eq("run-9"), any())).thenThrow(new IOException("파이썬 없음"));
+
+        assertThatCode(() -> after.healIfMissing("run-9")).doesNotThrowAnyException();
     }
 }
