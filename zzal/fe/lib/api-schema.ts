@@ -2,8 +2,9 @@
 /**
  * ★ 자동 생성 파일 — 손으로 고치지 마세요.
  *
- * 만드는 법:  ./scripts/gen-api-types.sh [포트]
- * 원본: 돌아가는 서버의 /api/v3/api-docs (백엔드가 갱신한다)
+ * 만드는 법:  ./scripts/gen-api-types.sh        (레포 스냅샷 common/docs/openapi.json 에서)
+ *             ./scripts/gen-api-types.sh --server (돌아가는 서버에서)
+ * 원본: common/docs/openapi.json — **백엔드가 갱신해 커밋한다.**
  *
  * ★ 이 파일이 계약이다. 백엔드가 응답을 바꾸면 여기가 바뀌고,
  *   그 값을 쓰던 화면이 빌드에서 깨진다 — 실행해 보고 알게 되는 일이 없다.
