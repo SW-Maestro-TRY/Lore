@@ -13,6 +13,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -136,5 +137,46 @@ class StuckHatchRecoveryTest {
 
         verify(hatch, never()).hatch(any(), any(), anyString());
         verify(recorder).markPetFailed(any());
+    }
+
+    @Test
+    @DisplayName("★ 상한을 넘긴 값(3)도 다시 굽지 않는다 — 부등호가 == 이면 여기가 새어 계속 다시 굽는다 (M-8)")
+    void beyondTheAttemptLimitAlsoStops() {
+        stuck(hatching(), 3, 3);
+
+        recovery.recover();
+
+        verify(hatch, never()).hatch(any(), any(), anyString());
+        verify(recorder).markPetFailed(any());
+    }
+
+    @Test
+    @DisplayName("★★ 유예만큼 지난 것만 묻는다 — 지금 굽고 있는 알을 집으면 같은 그림에 돈이 두 번 (M-10)")
+    void asksOnlyForWhatIsOlderThanTheGrace() {
+        when(pets.findByPhaseInAndHatchStartedAtBefore(any(Collection.class), any())).thenReturn(List.of());
+
+        recovery.recover();
+        Instant after = Instant.now();
+
+        org.mockito.ArgumentCaptor<Instant> cutoff = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        verify(pets).findByPhaseInAndHatchStartedAtBefore(any(Collection.class), cutoff.capture());
+        // 12분 — app.zzal.recovery.grace-minutes 기본값. cutoff 는 호출 시각 기준이라
+        // 그 사이에 흐른 시간만큼만 여유를 둔다(graceMinutes 를 0 으로 바꾸면 여기서 깨진다).
+        assertThat(java.time.Duration.between(cutoff.getValue(), after).toSeconds())
+                .isBetween(12 * 60L, 12 * 60L + 30);
+    }
+
+    @Test
+    @DisplayName("★ 무엇을 찾는지 — DRAFT 와 HATCHING 둘뿐이다(ALIVE 를 집으면 살아 있는 아이를 다시 굽는다)")
+    void looksOnlyForDraftAndHatching() {
+        when(pets.findByPhaseInAndHatchStartedAtBefore(any(Collection.class), any())).thenReturn(List.of());
+
+        recovery.recover();
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<Collection<PetPhase>> phases =
+                org.mockito.ArgumentCaptor.forClass(Collection.class);
+        verify(pets).findByPhaseInAndHatchStartedAtBefore(phases.capture(), any());
+        assertThat(phases.getValue()).containsExactlyInAnyOrder(PetPhase.DRAFT, PetPhase.HATCHING);
     }
 }

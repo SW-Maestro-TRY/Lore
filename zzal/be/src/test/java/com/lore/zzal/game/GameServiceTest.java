@@ -282,6 +282,110 @@ class GameServiceTest {
         assertThat(pet.isSick()).isTrue();
     }
 
+    // ── 거절 경로 전수 (M-14) ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("★★ 달리기가 잠긴 채 kind=RUN 을 보내도, 진행 중 좌우 판이 있으면 <b>그 좌우 판</b>이 돌아온다")
+    void resumingIgnoresTheRequestedKind() {
+        ZzalGame playing = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
+        when(gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(anyLong())).thenReturn(Optional.of(playing));
+        assertThat(pet.getLeftRightWins()).isZero();      // 달리기는 아직 잠겨 있다
+
+        GameService.Started started = service.start(USER, PET, GameKind.RUN, T0);
+
+        // ★ 이어치기 판정이 해금 검사보다 <b>위</b>에 있어서, 요청한 종류와 다른 판이 200 으로 나간다.
+        //   시작한 판을 못 끝내게 하지 않으려는 것이지만, 화면은 달리기를 기대하고 좌우 판을 받는다.
+        assertThat(started.game()).isSameAs(playing);
+        assertThat(started.game().getKind()).isEqualTo(GameKind.LEFT_RIGHT);
+        assertThat(started.runUnlocked()).isFalse();
+        assertThat(pet.getTodayGames()).isZero();
+    }
+
+    @Test
+    @DisplayName("★ 자는 중 · 여행 중이면 펫 쪽 거절이 그대로 올라오고 판은 한 글자도 안 바뀐다")
+    void sleepingAndTravelingRefusalsPassThrough() {
+        ZzalGame playing = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
+        when(gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(anyLong())).thenReturn(Optional.of(playing));
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(playing));
+
+        for (ErrorCode refusal : List.of(ErrorCode.ZZAL_PET_SLEEPING, ErrorCode.ZZAL_TRAVELING)) {
+            org.mockito.Mockito.doThrow(new BusinessException(refusal))
+                    .when(petService).awake(any(), any(), any());
+
+            assertThatThrownBy(() -> service.start(USER, PET, GameKind.LEFT_RIGHT, T0))
+                    .hasFieldOrPropertyWithValue("errorCode", refusal);
+            assertThatThrownBy(() -> service.guess(USER, PET, 1L, 'L', T0))
+                    .hasFieldOrPropertyWithValue("errorCode", refusal);
+            assertThatThrownBy(() -> service.finish(USER, PET, 1L, 30_000, T0))
+                    .hasFieldOrPropertyWithValue("errorCode", refusal);
+
+            assertThat(playing.isFinished()).isFalse();
+            assertThat(playing.round()).isZero();
+            assertThat(pet.getTodayGames()).isZero();
+        }
+    }
+
+    @Test
+    @DisplayName("★ 없는 판 번호 · 남의 판이면 ZZAL_GAME_NOT_FOUND — 화면이 보낸 gameId 를 믿지 않는다")
+    void someoneElsesGameIsNotFound() {
+        ZzalGame mine = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
+        ZzalGame theirs = ZzalGame.start(999L, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
+
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.guess(USER, PET, 404L, 'L', T0))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_GAME_NOT_FOUND);
+
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(theirs));
+        assertThatThrownBy(() -> service.guess(USER, PET, 1L, 'L', T0))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_GAME_NOT_FOUND);
+
+        assertThat(theirs.round()).as("남의 판은 한 글자도 안 바뀐다").isZero();
+        assertThat(mine.isFinished()).isFalse();
+    }
+
+    @Test
+    @DisplayName("★ 종류가 어긋난 호출은 INVALID_INPUT — 좌우 판에 finish, 달리기에 guess")
+    void wrongKindIsRefused() {
+        ZzalGame leftRight = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(leftRight));
+
+        assertThatThrownBy(() -> service.finish(USER, PET, 1L, 30_000, T0))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
+        assertThat(leftRight.isFinished()).isFalse();
+
+        for (int i = 0; i < 5; i++) {
+            pet.winLeftRight();
+        }
+        ZzalGame run = ZzalGame.start(USER, PET, GameKind.RUN, "", T0);
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(run));
+
+        assertThatThrownBy(() -> service.guess(USER, PET, 2L, 'L', T0))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
+        assertThat(run.isFinished()).isFalse();
+    }
+
+    @Test
+    @DisplayName("★ 하루 3판을 다 쓴 뒤의 거절은 펫도 조각도 안 건드린다")
+    void dailyLimitRefusalChangesNothing() {
+        java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> store = new java.util.HashMap<>();
+        service = new GameService(gameRepository, petService,
+                new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS),
+                com.lore.zzal.PieceFixture.inMemory(store), 3);
+        ReflectionTestUtils.setField(pet, "piecesEnabledAt", T0);
+        for (int i = 0; i < 3; i++) {
+            service.start(USER, PET, GameKind.LEFT_RIGHT, T0);
+        }
+        int counted = store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME);
+        int starts = pet.getGameStarts();
+
+        assertThatThrownBy(() -> service.start(USER, PET, GameKind.LEFT_RIGHT, T0))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_GAME_DAILY_LIMIT);
+
+        assertThat(pet.getTodayGames()).isEqualTo(3);
+        assertThat(pet.getGameStarts()).isEqualTo(starts);
+        assertThat(store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME)).isEqualTo(counted);
+    }
+
     private void fallSick() {
         ReflectionTestUtils.setField(pet, "sickSince", T0);
         ReflectionTestUtils.setField(pet, "sickKind", com.lore.zzal.pet.SickKind.NEGLECT);

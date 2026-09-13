@@ -505,6 +505,30 @@ class AdminServiceTest {
         assertThat(motions.get(60L).getStatus()).isEqualTo(MotionStatus.REVIEW);   // 아무것도 안 바뀐다
     }
 
+    @Test
+    @DisplayName("★★ 단계 조회도 같은 문을 지난다 — 막히면 표를 한 번도 안 읽는다 (M-26)")
+    void genStepsIsGuardedToo() {
+        org.mockito.Mockito.doThrow(new BusinessException(ErrorCode.ADMIN_ONLY)).when(guard).require(anyLong());
+
+        assertThatThrownBy(() -> service.genSteps(2L, 7L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ADMIN_ONLY);
+
+        // ★ "거절했다" 만으로는 부족하다 — 거절 전에 이미 읽었다면 그 내용이 로그·오류에 실려 나갈 수 있다.
+        verify(jobRepository, never()).findByPetIdOrderByIdAsc(anyLong());
+        verify(stepRepository, never()).findByJobIdOrderBySeqAsc(anyLong());
+    }
+
+    @Test
+    @DisplayName("관리자면 단계가 시도 순·단계 순으로 나온다 — 위 시험이 '언제나 거절' 로 통과하지 않게")
+    void genStepsReturnsRowsForAdmin() {
+        when(jobRepository.findByPetIdOrderByIdAsc(7L)).thenReturn(List.of());
+
+        assertThat(service.genSteps(ADMIN, 7L)).isEmpty();
+
+        verify(jobRepository).findByPetIdOrderByIdAsc(7L);
+    }
+
     private static ZzalPet pet() {
         ZzalPet p = PetFixture.hatching(1L, "여울", null, "images/zzal/src", T0);
         p.markAlive("images/zzal/sheet", "생김새 문단", T0);

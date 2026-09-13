@@ -54,6 +54,9 @@ class HatchNamingOrderIT extends ZzalItSupport {
         assertThat(named.getResponse().getStatus()).isEqualTo(200);
 
         await("이름이 들어온 뒤 살아나는 것", () -> phaseOf(petId) == PetPhase.ALIVE);
+        // ★ 살아나는 것(markPetAlive)과 18행 심기(motionSeeder)는 <b>따로 커밋된다</b> —
+        //   ALIVE 를 본 순간 아직 행이 없을 수 있다. 곧바로 세면 부하가 있는 날만 빨개진다.
+        await("동작 18행이 심기는 것", () -> motions.findByPetIdOrderBySeqAsc(petId).size() == 18);
         assertThat(motions.findByPetIdOrderBySeqAsc(petId))
                 .as("부화 완료 = 동작 18행")
                 .hasSize(18);
@@ -82,6 +85,7 @@ class HatchNamingOrderIT extends ZzalItSupport {
         hatchService.hatch(job.getId(), petId, version);
 
         await("굽기가 끝난 뒤 살아나는 것", () -> phaseOf(petId) == PetPhase.ALIVE);
+        await("동작 18행이 심기는 것", () -> motions.findByPetIdOrderBySeqAsc(petId).size() == 18);
         assertThat(motions.findByPetIdOrderBySeqAsc(petId)).hasSize(18);
     }
 
