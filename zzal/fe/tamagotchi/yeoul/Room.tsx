@@ -17,7 +17,7 @@
 //   `useFootPad` 가 그림에서 직접 잰다(못 재면 여울 기준값으로 되돌아간다).
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
 import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, GAEGU, MONO, radius } from './ui';
@@ -26,8 +26,9 @@ import Panels from './Panels';
 import { spriteUrl, useFootPad, useLive } from './useHatch';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
+import { charFit, HEAD_SAFE, K_SCREEN_TARGET } from '../props/layout';
 import PropLayer, { ScreenPropLayer } from '../props/PropLayer';
-import { SITUATION_TABLE, activeSituations } from '../props/situations';
+import { SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose } from '../props/situations';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { v, actions } = y;
@@ -49,7 +50,14 @@ export default function Room({ y }: { y: Yeoul }) {
   //   그러면 연습방에서도 **진짜 앵커로 그리는 경로**를 눈으로 확인할 수 있다(폴백 띠가 꺼진다).
   const anchors = useAnchors(live.pet?.anchorsKey, v.sample.show ? YEOUL_ANCHORS_URL : undefined);
   const propTable = SITUATION_TABLE;
-  const scene = { pose: v.spriteKey, active: activeSituations(v.scene), stages: { trash: v.scene.trash } };
+  // ★ 개발용(연습방) 고르기 — 손으로 고른 상황이 있으면 **그것만**, 자세만 골랐으면 **그 자세의 상황 전부**를 켠다.
+  //   자세와 무관하게 깔리는 줄(바닥 흔적 같은 것)은 어느 쪽이든 그대로 둔다.
+  const always = useMemo(() => alwaysSituationIds(propTable), [propTable]);
+  const auto = activeSituations(v.scene);
+  const active = v.sitPick ? [v.sitPick, ...auto.filter((id) => always.has(id))]
+    : v.posePick ? [...situationsOfPose(propTable, v.posePick), ...auto.filter((id) => always.has(id))]
+      : auto;
+  const scene = { pose: v.spriteKey, active, stages: { trash: v.scene.trash } };
 
   // ── 아이를 어디에 얼마나 크게 세울 것인가 ──────────────────────────────
   //
@@ -64,12 +72,29 @@ export default function Room({ y }: { y: Yeoul }) {
   //   그 높이가 무대에 비해 과해 아이 머리가 잘렸다. 그래서 **무대의 62% 로도 한 번 깎는다.**
   //   62% 는 무대가 384px 아래로 내려갈 때만 걸리고, 그 아래에서도 발끝이 팝오버 윗변(최대
   //   `POP_LIFT`)보다 위로 남는다. 화면 높이로만 정해지는 값이라 1)을 깨지 않는다.
-  // ★ 키(`CHAR_H`) — 58% 로도 모자라면 **남은 머리 공간에 맞춰 더 줄인다.**
-  //   머리끝 = 발끝 + 키 × (1 − 발밑여백) 이므로, 그 식을 뒤집어 키의 상한을 잡았다.
-  //   `HEAD_SAFE` 는 반올림에 먹히지 않도록 두는 최소 여유다.
-  const HEAD_SAFE = 8;
+  // ★ 키(`CHAR_H`) — 규격값 `K_SCREEN_TARGET`(296px)이 기본이고, 무대가 짧으면 **남은 머리 공간에
+  //   맞춰 깎는다.** 머리끝 = 발끝 + 화면키 × (가장 큰 실루엣 ÷ K) 이므로 그 식을 뒤집었다.
+  //   깎는 기준을 **가장 큰 자세**로 잡는 이유 — 자세마다 깎으면 자세를 바꿀 때 아이가 출렁여
+  //   1)이 깨진다. `HEAD_SAFE` 는 반올림에 먹히지 않도록 두는 최소 여유다.
   const LIFT = `max(min(212px,34%),min(${POP_LIFT + 34}px,62%))`;
-  const CHAR_H = `min(350px,58%,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${(1 - footPad).toFixed(4)}))`;
+
+  // ★ 크기는 **실루엣 키(K)로 정한다** — 상자를 먼저 정하고 그 안에 그림을 넣지 않는다.
+  //   규격의 모든 ratio 가 "화면 키 = K_screen(296px)" 을 전제하기 때문이다(→ `props/layout.ts` 머리말).
+  //   상자 폭으로 잡던 옛 방식에서는 K 가 220.6px 밖에 안 나와 규격이 통째로 1.34배 어긋났고,
+  //   그 탓에 하트 같은 작은 소품이 비율(41.2px)이 아니라 **하한 40px 에 걸려** 그려졌다.
+  //   상자 크기·세로 자리는 여기서 **따라 나오는 값**이다.
+  // ★ 앵커를 못 받았으면(옛 펫) K 를 모른다 → 예전처럼 **상자 기준**으로 되돌아간다. 두 길 다 돈다.
+  const fit = useMemo(() => charFit(anchors.anchors, v.spriteKey), [anchors.anchors, v.spriteKey]);
+  const byK = anchors.source === 'server' || v.sample.show;
+
+  // 화면에서의 실루엣 키. 규격값(296)이 기본이고, 무대가 짧으면 **머리가 잘리지 않을 만큼**만 깎는다.
+  const K_SCREEN = `min(${K_SCREEN_TARGET}px,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${fit.tallestPerK.toFixed(4)}))`;
+  const CHAR_H = byK
+    ? `calc(${K_SCREEN} * ${fit.boxHPerK.toFixed(4)})`
+    : `min(350px,58%,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${(1 - footPad).toFixed(4)}))`;
+  // 발끝이 발끝선(`LIFT`)에 오게 상자를 내린다. 앵커가 있으면 **그 자세의 발끝**을, 없으면 잰 여백을 쓴다.
+  const BELOW_FOOT = byK ? fit.belowFoot : footPad;
+  const CHAR_ASPECT = byK ? `${fit.aspect.toFixed(6)}` : '313/350';
 
   return (
     <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
@@ -123,12 +148,15 @@ export default function Room({ y }: { y: Yeoul }) {
           onClick={(e) => { e.stopPropagation(); actions.onPet(); }}
           style={{
             position: 'absolute', left: 0, right: 0,
-            bottom: `calc(${LIFT} - ${CHAR_H} * ${footPad})`,
+            bottom: `calc(${LIFT} - ${CHAR_H} * ${BELOW_FOOT.toFixed(4)})`,
             height: CHAR_H, display: 'flex', justifyContent: 'center', zIndex: 2,
             animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
           }}
         >
-          <div style={{ position: 'relative', height: '100%', aspectRatio: '313/350', maxWidth: '88%' }}>
+          {/* ★ 가로는 캔버스 비율로 **따라 나온다**. 여백까지 포함한 판이라 무대보다 넓어질 수 있는데,
+              넘치는 몫은 전부 투명 여백이다(여울 base 는 좌우 각 122px). 그래서 안 줄인다 —
+              줄이면 그만큼 아이가 작아져 방금 맞춘 K 가 다시 어긋난다. */}
+          <div style={{ position: 'relative', height: '100%', aspectRatio: CHAR_ASPECT, maxWidth: byK ? 'none' : '88%', flex: 'none' }}>
             {v.guide.tap && (
               <>
                 <span style={{ position: 'absolute', left: '50%', top: '52%', marginLeft: -70, width: 140, height: 140, borderRadius: '50%', border: '2px solid rgba(156,66,50,.5)', animation: 'yRipple 1.9s ease-out infinite', pointerEvents: 'none' }} />

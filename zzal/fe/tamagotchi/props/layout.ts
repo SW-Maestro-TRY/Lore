@@ -8,7 +8,7 @@
 // ★ 캐릭터 쪽은 앵커가 **스프라이트 캔버스(312x349) px** 로 오므로, 렌더된 상자 폭으로 환산한다.
 //   그래서 화면이 커지든 작아지든 소품이 아이와 같은 자리에 붙는다.
 
-import { PROP_STAGE } from './catalog';
+import { PROP_REFERENCE, PROP_STAGE } from './catalog';
 import {
   bubbleSide, offsetPx, propSide, propWidthPx, rawWidthPx, shouldMirror,
   type CharAnchors, type PoseAnchors, type PropSpec, type PropStage, type Side, type UnitPx,
@@ -52,6 +52,60 @@ export function poseAnchors(anchors: CharAnchors, pose: string): PoseAnchors {
     if (p) return p;
   }
   return anchors.poses.base;
+}
+
+// ── 캐릭터 상자 — **실루엣 키로 정한다** ────────────────────────────────
+//
+// ★ 규격의 모든 ratio 는 "화면에서의 키가 `K_screen` 일 때" 를 전제한다
+//   (`contract/소품-규격-v1.2.json` 의 `reference.K_screen`). 그러니 **키를 먼저 정하고
+//   상자가 따라와야** 규격 비율이 그대로 맞는다.
+//
+// 옛 방식(상자 폭을 먼저 정하고 그림을 그 안에 넣기)이 왜 틀렸나 — 실측:
+//   상자 288 x 322 · 스프라이트 312 x 349 → 배율 288/312 = 0.9231
+//   K = 239 x 0.9231 = 220.6px 인데 규격 전제는 296.0px → **1.342배 작다**
+//   Hw 도 87.7 vs 117.6 으로 **똑같이 1.34배** 어긋났다(자가 아니라 그림이 작았다는 뜻).
+// 원인은 여백이다. `K_screen = 296` 은 여백이 적던 **옛 idle.webp** 로 잰 값이고,
+// v4/v6 스프라이트는 후처리가 위아래 여백을 더 넣어 같은 상자에서 실루엣이 더 작게 그려진다.
+// 그래서 **상자 폭이 아니라 K 로 배율을 잡는다** — 그러면 캐릭터가 달라도 화면 키가 같아진다.
+
+/** 규격이 전제한 **화면에서의 실루엣 키**(px). 출처 = 소품-규격-v1.2 `reference.K_screen`. */
+export const K_SCREEN_TARGET = PROP_REFERENCE.K_screen;
+
+/** 머리끝이 무대 위끝에 닿지 않게 남겨 두는 최소 여유(px). 반올림에 먹히지 않을 만큼만. */
+export const HEAD_SAFE = 8;
+
+/** 캐릭터 상자를 잡는 데 필요한 비율들. 전부 **스프라이트 캔버스 기준**이라 화면 크기와 무관하다. */
+export interface CharFit {
+  /** `상자 세로 = 화면 K x 이 값`. (= 캔버스 세로 / K) */
+  boxHPerK: number;
+  /** 상자 가로 / 상자 세로. 캔버스 비율 그대로다. */
+  aspect: number;
+  /** `상자를 발끝선보다 이만큼 내린다 = 상자 세로 x 이 값`. (= 발끝 아래 여백 / 캔버스 세로) */
+  belowFoot: number;
+  /** 가장 키 큰 자세의 실루엣 / K. 짧은 화면에서 **머리가 안 잘리게** 깎는 데 쓴다. */
+  tallestPerK: number;
+}
+
+/**
+ * 그 아이·그 자세의 상자 비율.
+ *
+ * ★ 배율(= 화면 K)은 자세를 안 본다 — 웅크렸다고 아이가 작아진 게 아니다(규격 `읽는_법`).
+ * ★ **세로 자리만 자세를 본다.** v6 2층 그림은 발끝이 캔버스 267px(1층은 289px)에 있어,
+ *   base 로만 맞추면 2층 자세가 발끝선 위 27px 에 뜬다(실측).
+ * ★ `tallestPerK` 는 **모든 자세 중 가장 큰 실루엣**으로 잡는다. 자세마다 깎으면 자세를 바꿀 때
+ *   아이 크기가 출렁인다 — 크기는 화면 크기만의 함수여야 한다.
+ */
+export function charFit(anchors: CharAnchors, pose: string): CharFit {
+  const [canvasW, canvasH] = anchors.canvas;
+  const p = poseAnchors(anchors, pose);
+  let tallest = 0;
+  for (const q of Object.values(anchors.poses)) tallest = Math.max(tallest, q.bbox.h);
+  return {
+    boxHPerK: canvasH / anchors.K,
+    aspect: canvasW / canvasH,
+    belowFoot: (canvasH - p.feet.y) / canvasH,
+    tallestPerK: (tallest > 0 ? tallest : anchors.K) / anchors.K,
+  };
 }
 
 /** 지금 화면에서의 자 — K·Hw 를 캐릭터 상자 안 px 로. */
