@@ -83,7 +83,7 @@ class MotionCatalogTest {
     @Test
     @DisplayName("★ 실패 주입 — 지시문 파일이 없으면 굽기 직전이 아니라 부팅 때 막힌다")
     void missingPromptFailsBoot() {
-        // 3층 심화 동작의 지시문은 아직 하나도 안 들어왔다(기본 행동 16종 = 판정 대기).
+        // 3층 심화 동작의 지시문은 아직 하나도 안 들어왔다(기본 행동 16종 = 검수 대기).
         assertThatThrownBy(() -> new MotionCatalog("base", "", "v1"))
                 .hasMessageContaining("zzal/prompt/v1/motions/기본자세.txt")
                 .hasMessageContaining("advanced-motions");
@@ -92,7 +92,7 @@ class MotionCatalogTest {
     @Test
     @DisplayName("★ 선물 2종 — 지시문이 들어왔으므로 gift-motions 에 올려도 부팅이 되고 블록이 읽힌다")
     void giftMotionsAreBakeable() {
-        // 2026-09-12 상훈님 "구르기 확정 가고" · 뒤로넘어짐 v6b 확정.
+        // 2026-09-12 구르기 확정 · 뒤로넘어짐 v6b 확정.
         // 지시문 = prompt/v1/motions/{구르기,뒤로넘어짐}.txt
         MotionCatalog catalog = new MotionCatalog("", "roll,fall_back", "v1");
 

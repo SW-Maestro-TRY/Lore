@@ -31,7 +31,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 /**
- * 부화 파이프라인 v4 — 1층·2층 각 8종(2026-09-12 판정 확정 조합) 이식분.
+ * 부화 파이프라인 v4 — 1층·2층 각 8종(2026-09-12 검수 확정 조합) 이식분.
  *
  * <h3>★ 이 테스트가 지키는 것 = 이름이 어긋나 조용히 죽는 길을 막는 것</h3>
  * 계정·파일·버전을 옮기면 이름(설정·상수·경로)이 어긋나는데, 빌드·배포·기동이 전부 통과한 채
@@ -39,7 +39,7 @@ import static org.mockito.Mockito.verify;
  *   1) 게이트 사양(pipeline/v4/grid_spec.txt) ↔ 실제 프롬프트(prompt/v4/grid.txt) 첫 줄
  *   2) 스크립트가 찍는 표식 ↔ 자바가 찾는 표식
  *   3) 후처리가 내놓는 파일 이름(state8_v5.KEYS) ↔ 설정에 적어야 하는 hatch.states.v4
- *   4) 칸의 자세 매핑(pipeline/v4/postures.txt) ↔ 판정받은 그 조합 · ↔ 2층 key 순서
+ *   4) 칸의 자세 매핑(pipeline/v4/postures.txt) ↔ 확정된 그 조합 · ↔ 2층 key 순서
  */
 @DisplayName("부화 파이프라인 v4 — 1층·2층 16종")
 class PipelineV4Test {
@@ -54,7 +54,7 @@ class PipelineV4Test {
             List.of("base", "eat", "joy", "sad", "sick", "pet", "hello", "sleep");
 
     /**
-     * 2층 8종의 정본 순서 = 격자 칸 순서 = 파일 이름.
+     * 2층 8종의 기준 순서 = 격자 칸 순서 = 파일 이름.
      *
      * ★ {@code MotionCatalog} 의 BASIC_2 도 이 순서·이 이름이어야 한다(다른 갈래가 맞춘다).
      *   어긋나면 후처리가 {@code --postures 의 'wash' 가 --keys 에 없습니다} 로 멈춘다 —
@@ -132,18 +132,18 @@ class PipelineV4Test {
     }
 
     @Test
-    @DisplayName("★ 자세 매핑 — 1층은 판정받은 그 조합(sick 웅크림·sleep 눕기), 2층은 wash 만 웅크림")
+    @DisplayName("★ 자세 매핑 — 1층은 확정된 그 조합(sick 웅크림·sleep 눕기), 2층은 wash 만 웅크림")
     void posturesMatchTheJudgedCombination() {
         HatchPostures postures = new HatchPostures();
 
         assertThat(split(postures.forStep("v4", GridStep.NAME)))
-                .as("1층 판정본(v02)을 만든 그 매핑 — state8_v5.DEFAULT_POSTURE 와 같다")
+                .as("1층 확정본(v02)을 만든 그 매핑 — state8_v5.DEFAULT_POSTURE 와 같다")
                 .containsExactly("base=standing", "eat=standing", "joy=standing", "sad=standing",
                         "sick=crouch", "pet=standing", "hello=standing", "sleep=lying");
 
         List<String> layer2 = split(postures.forStep("v4", PostProcessStep.GRID2));
         assertThat(layer2.stream().map(e -> e.split("=")[0]).toList())
-                .as("이름·순서가 2층 정본 key 와 같아야 --keys 와 짝이 맞는다")
+                .as("이름·순서가 2층 기준 key 와 같아야 --keys 와 짝이 맞는다")
                 .containsExactlyElementsOf(V4_LAYER2);
         assertThat(layer2.stream().filter(e -> !e.endsWith("=standing")).toList())
                 .as("2층에서 서 있지 않은 칸은 목욕 하나뿐이다(눕는 칸은 없다)")

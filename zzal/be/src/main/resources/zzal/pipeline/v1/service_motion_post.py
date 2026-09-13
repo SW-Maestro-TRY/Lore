@@ -11,8 +11,8 @@
 ★ 어느 후처리를 탈지는 **동작마다 다르다** — 자바가 `--profile` 로 넘긴다.
   16프레임은 한 칸이 독립이 아니라 한 동작이 이어지는 루프라, "무엇을 기준으로 칸을 맞추나" 가
   동작의 성질을 탄다. 구르기는 발 기준(state16_v2), 뒤로넘어짐은 접지앵커 기준(state16_v3)으로
-  판정을 받았다. 표는 `motion_post_profiles.txt` 에 있고 코드에는 없다.
-  ⚠️**프로파일이 안 넘어오면 멈춘다.** 조용히 아무 후처리로 떨어지면 판정받지 않은 그림이
+  확정됐다. 표는 `motion_post_profiles.txt` 에 있고 코드에는 없다.
+  ⚠️**프로파일이 안 넘어오면 멈춘다.** 조용히 아무 후처리로 떨어지면 검수를 거치지 않은 그림이
     그대로 나가는데, 그건 화면을 봐야만 드러난다.
 
 ★ 자르기·키잉·정렬은 state16_v2.py / state16_v3.py 를 그대로 쓴다. 절단·초록 키잉·침범 제거·
@@ -20,23 +20,23 @@
   이 파일은 그 결과(프레임 16장)를 **서비스가 쓰는 이름과 형식으로 묶기만** 한다.
   부화 쪽 service_post.py 가 state8_v5 를 쓰는 방식과 같은 구조다.
 
-★ 2026-09-12 — state16_post(v1) 에서 state16_v2 로 올렸다. 상훈님 판정:
-  *"뒤로 넘어짐 소닉, 블룸, 흑연 오른쪽 하단에 검은 점 관측 됨. 구르기 흑연, 여울
-  오른쪽 아래 검은 점 관측됨."* v1 은 격자점 씨앗을 극도로 순수한 마젠타/시안만 인정하고
+★ 2026-09-12 — state16_post(v1) 에서 state16_v2 로 올렸다. 검수에서 뒤로넘어짐 3판·
+  구르기 2판의 오른쪽 아래에 검은 점이 남은 것이 잡혔다.
+  v1 은 격자점 씨앗을 극도로 순수한 마젠타/시안만 인정하고
   균등분할 칸의 네 모서리만 봐서, 모델이 마크를 몇~수십 px 어긋나게 그린 판에서는
   격자점이 통째로 남았다. v2 는 그 처방(hue 판정 + 실제 마크 좌표 둘레)을 8종 쪽
   state8_v5 에서 그대로 가져온다. 본체 미연결 격자점 잔여 210px → 0px · 본체 픽셀 감소 0.
-  v1(state16_post.py)은 지우지 않고 남겨 둔다 — 옛 판정본이 어떤 코드로 나왔는지를
+  v1(state16_post.py)은 지우지 않고 남겨 둔다 — 옛 확정본이 어떤 코드로 나왔는지를
   설명하는 것이 그 파일이다.
 
 ★ 파일 이름이 motion.webp 로 고정인 이유 — 자바(PythonMotionPostProcessor)가 정확히
   이 이름을 찾는다. 한쪽만 바꾸면 굽기는 성공했는데 결과가 없다고 실패한다.
 
 ★ GIF 가 아니라 WebP 인 이유 — 화면이 webp 를 쓰고 있고 용량이 훨씬 작다.
-  실험은 판정용으로 투명 GIF 를 냈지만, 서비스가 지급하는 것은 애니메이션 webp 다.
-  프레임 간격(120ms)은 실험과 같게 둔다 — 간격이 달라지면 판정받은 그 움직임이 아니다.
+  실험은 검수용으로 투명 GIF 를 냈지만, 서비스가 지급하는 것은 애니메이션 webp 다.
+  프레임 간격(120ms)은 실험과 같게 둔다 — 간격이 달라지면 확정된 그 움직임이 아니다.
 
-⚠️ 후처리 main() 은 판정용 부산물(애니.gif · 시트.png · cut/)을 작업 폴더에 같이
+⚠️ 후처리 main() 은 검수용 부산물(애니.gif · 시트.png · cut/)을 작업 폴더에 같이
   남긴다. 서비스에는 필요 없지만, 그 계산을 피하려고 로직을 갈라 쓰면 실험과 서비스가
   다른 코드를 타게 된다. 부산물은 작업 폴더째 지운다.
 """
@@ -77,7 +77,7 @@ def resolve_profile(profile: str):
         # 설정이 원인일 때는 설정 이름을 그대로 말한다.
         raise ValueError(
             "--profile 이 없습니다 — pipeline/v1/motion_post_profiles.txt 의 그 동작 줄을 넘기세요. "
-            "기본값으로 굽지 않습니다(판정받지 않은 후처리로 구워진 그림은 화면을 봐야만 드러납니다)")
+            "기본값으로 굽지 않습니다(검수를 거치지 않은 후처리로 구워진 그림은 화면을 봐야만 드러납니다)")
 
     parsed = {}
     for part in profile.split(","):
@@ -115,7 +115,7 @@ def build(grid_path: str, out_dir: str, profile: str) -> str:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    # state16_post 는 격자와 **같은 폴더**에 cut/ 과 판정용 부산물을 만든다.
+    # state16_post 는 격자와 **같은 폴더**에 cut/ 과 검수용 부산물을 만든다.
     # 원본 폴더를 어지럽히지 않도록 작업용 폴더로 옮겨 놓고 돌린다.
     work = out / "_work"
     work.mkdir(exist_ok=True)
@@ -140,7 +140,7 @@ def build(grid_path: str, out_dir: str, profile: str) -> str:
         duration=FRAME_MS, loop=0, format="WEBP",
         lossless=False, quality=WEBP_QUALITY, method=6)
 
-    shutil.rmtree(work, ignore_errors=True)   # 중간물·판정용 부산물은 남기지 않는다
+    shutil.rmtree(work, ignore_errors=True)   # 중간물·검수용 부산물은 남기지 않는다
     return str(dst)
 
 

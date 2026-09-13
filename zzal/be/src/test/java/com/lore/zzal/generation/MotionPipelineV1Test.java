@@ -21,8 +21,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 그림만 이상해진다. 그 길들을 여기서 묶는다.
  *   1) 카탈로그가 만드는 지시문 경로 ↔ 실제 파일 자리
  *   2) 골격의 {IDENT}·{MOTION} 자리 ↔ MotionGridStep 이 갈아끼우는 자리
- *   3) 서비스 후처리가 부르는 스크립트 ↔ 판정본을 만든 그 스크립트·그 옵션
- *   4) 동작별 후처리 프로파일 표 ↔ 판정받은 그 조건 (표에 없는 동작은 굽지 않는다)
+ *   3) 서비스 후처리가 부르는 스크립트 ↔ 확정본을 만든 그 스크립트·그 옵션
+ *   4) 동작별 후처리 프로파일 표 ↔ 확정된 그 조건 (표에 없는 동작은 굽지 않는다)
  */
 @DisplayName("모션 파이프라인 v1 — 16프레임 골격·선물 2종 지시문·동작별 후처리")
 class MotionPipelineV1Test {
@@ -59,7 +59,7 @@ class MotionPipelineV1Test {
     }
 
     @Test
-    @DisplayName("★ 조립 결과 = 판정받은 전달본 — 골격에 구르기 블록을 끼운 그 글자 그대로")
+    @DisplayName("★ 조립 결과 = 확정된 전달본 — 골격에 구르기 블록을 끼운 그 글자 그대로")
     void assembledPromptMatchesTheJudgedShape() throws Exception {
         String skeleton = resource("zzal/prompt/v1/grid16.txt");
         String block = new MotionCatalog("", "roll,fall_back", VERSION).block("roll");
@@ -68,7 +68,7 @@ class MotionPipelineV1Test {
         String assembled = skeleton.replace("{IDENT}", "IDENT_HERE").replace("{MOTION}", block.trim());
 
         assertThat(assembled).doesNotContain("{IDENT}").doesNotContain("{MOTION}");
-        // 판정본 5판의 실제 전달본은 이 조립과 글자 단위로 같았다(2026-09-12 실측).
+        // 확정본 5판의 실제 전달본은 이 조립과 글자 단위로 같았다(2026-09-12 실측).
         // 블록이 통째로 들어갔는지만 여기서 지킨다 — 길이가 줄면 문장이 잘린 것이다.
         assertThat(assembled).contains("ROLL ANCHOR").contains("THE BALL (cells 3-13)");
         assertThat(assembled.length()).isEqualTo(skeleton.length() - "{IDENT}".length() - "{MOTION}".length()
@@ -76,7 +76,7 @@ class MotionPipelineV1Test {
     }
 
     @Test
-    @DisplayName("★ 후처리 프로파일 = 판정받은 그 스크립트·그 옵션 (구르기=발 · 넘어짐=접지앵커)")
+    @DisplayName("★ 후처리 프로파일 = 확정된 그 스크립트·그 옵션 (구르기=발 · 넘어짐=접지앵커)")
     void profilesMatchTheJudgedConditions() {
         MotionPostProfiles profiles = new MotionPostProfiles();
 
@@ -93,7 +93,7 @@ class MotionPipelineV1Test {
     void unlistedMotionRefusesToBake() {
         MotionPostProfiles profiles = new MotionPostProfiles();
 
-        // 기본 프로파일을 두면, 새 동작을 확정하고 줄을 깜빡했을 때 판정받지 않은 후처리로
+        // 기본 프로파일을 두면, 새 동작을 확정하고 줄을 깜빡했을 때 검수를 거치지 않은 후처리로
         // 구워진 그림이 그대로 나간다. 굽기는 성공하고 로그도 깨끗하다.
         assertThatThrownBy(() -> profiles.forMotion(VERSION, "sit"))
                 .isInstanceOf(IllegalStateException.class)
@@ -106,7 +106,7 @@ class MotionPipelineV1Test {
     void motionPostRequiresAProfile() throws Exception {
         String service = resource("zzal/pipeline/v1/service_motion_post.py");
 
-        // v1(state16_post)은 격자점을 다 못 지워 상훈님이 '오른쪽 아래 검은 점'을 잡으셨다.
+        // v1(state16_post)은 격자점을 다 못 지워 '오른쪽 아래 검은 점'이 검수에서 잡혔다.
         // 여기가 도로 v1 을 부르거나 기본값으로 떨어지면 그 점이 되살아나는데,
         // 그건 화면을 확대해 봐야만 드러난다.
         assertThat(service).contains("ALLOWED_SCRIPTS = (\"state16_v2\", \"state16_v3\")");

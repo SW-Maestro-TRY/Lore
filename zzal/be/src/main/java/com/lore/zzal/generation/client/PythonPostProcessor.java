@@ -39,7 +39,7 @@ public class PythonPostProcessor implements PostProcessor {
      * 버전 → 스크립트가 만들어야 하는 파일 이름들(설정 {@code app.zzal.hatch.states.{버전}}).
      *
      * ★ 코드에 박지 않고 설정에서 받는다 — v1 은 8종(idle·eat·…·train), v2 는 카탈로그 key 16종으로 <b>버전마다 다르고</b>,
-     *   출력 이름은 생성 세션(파이썬)과 백엔드가 같이 지켜야 하는 약속이라 한 곳(yml)에 둔다.
+     *   출력 이름은 후처리 스크립트(파이썬)와 백엔드가 같이 지켜야 하는 약속이라 한 곳(yml)에 둔다.
      * ★ 버전은 <b>호출마다</b> 받는다 — 빈이 만들어질 때의 설정(v2)이 아니라 그 job 의 버전(폴백으로 v1 일 수 있다).
      */
     private final Function<String, List<String>> statesByVersion;

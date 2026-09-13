@@ -13,7 +13,7 @@ import com.lore.zzal.generation.client.MotionPostProcessor;
  * 다른 것은 정렬 방식뿐이고, 그 이유는 {@link MotionPostProcessor} 에 적어 두었다.
  *
  * <h3>★ 정렬 기준이 동작마다 다르다</h3>
- * 구르기는 발, 뒤로넘어짐은 접지앵커(엉덩이·등이 닿는 자리)로 판정을 받았다. 어느 쪽인지는
+ * 구르기는 발, 뒤로넘어짐은 접지앵커(엉덩이·등이 닿는 자리)로 확정됐다. 어느 쪽인지는
  * 코드가 아니라 {@link MotionPostProfiles} 의 표가 정한다 — 표에 없는 동작은 굽지 않는다.
  */
 public class MotionPostStep implements GenerationStep {

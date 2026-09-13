@@ -17,7 +17,7 @@ import java.util.stream.Stream;
  * ★ 자바로 다시 쓰지 않는 이유는 부화 후처리와 같다 — 절단·키잉·정렬 로직은 실험에서
  *   여러 사고를 잡아 가며 다듬은 것이고, 되살아난 사고는 <b>화면에서 봐야만 드러난다.</b>
  *
- * ⚠️ 실행할 스크립트({@code service_motion_post.py})는 상훈님이 승인해 승격할 때 레포에 들어온다.
+ * ⚠️ 실행할 스크립트({@code service_motion_post.py})는 검수를 마치고 승격할 때 레포에 들어온다.
  *    켜져 있는데 스크립트가 없으면 <b>부팅을 막는다</b> — 조용히 넘어가면 "실제 후처리를
  *    켰다고 생각했는데 안 켜진" 상태가 실제 호출 때까지 안 드러난다.
  */
@@ -45,7 +45,7 @@ public class PythonMotionPostProcessor implements MotionPostProcessor {
     public String build(String gridImageKey, String outputPrefix, String profile) throws Exception {
         if (profile == null || profile.isBlank()) {
             // 설정이 원인일 때는 설정 이름을 그대로 말한다. 여기서 멈추면 그림값은 이미 나간 뒤지만,
-            // 판정받지 않은 후처리로 구운 것을 지급하는 것보다는 낫다.
+            // 검수를 거치지 않은 후처리로 구운 것을 지급하는 것보다는 낫다.
             throw new IllegalStateException(
                     "후처리 프로파일이 비었습니다 — pipeline/{버전}/motion_post_profiles.txt 를 확인하세요");
         }
