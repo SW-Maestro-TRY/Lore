@@ -89,14 +89,18 @@ public class HarnessProcess {
     }
 
     /**
-     * 지금 도는 것. <b>취소가 여기로 손을 뻗는다.</b>
+     * 지금 도는 것들. <b>취소가 여기로 손을 뻗는다.</b>
      *
-     * 하나만 두는 이유는 하나만 돌기 때문이다 — 부르는 쪽이 한 줄로 세운다
-     * ({@code JobRunner} 의 single thread). 여럿을 같이 돌리기 시작하면 이
-     * 칸부터 작업별로 나눠야 한다. stitch · prepareUpload 는 취소 대상이
-     * 아니라서(이미 다 그린 것을 잇거나 올리는 마무리 걸음) 여기에 안 실린다.
+     * <b>작업마다 따로 담는다.</b> 예전에는 칸이 하나였다 — 한 줄로 세워 한
+     * 편씩만 돌았기 때문이다. 동시에 둘을 돌리기 시작하면 그 칸은 <b>나중에
+     * 시작한 것으로 덮인다.</b> 그러면 먼저 시작한 사람이 취소를 눌렀을 때
+     * 엉뚱한 사람의 그림이 죽고, 정작 취소한 사람 것은 계속 돈다.
+     *
+     * stitch · prepareUpload 는 취소 대상이 아니라서(이미 다 그린 것을 잇거나
+     * 올리는 마무리 걸음) 여기에 안 실린다.
      */
-    private volatile Process current;
+    private final java.util.concurrent.ConcurrentMap<Long, Process> running =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * 도는 것을 멈춘다. -> <b>정말 멈출 것을 멈췄나</b>
@@ -111,8 +115,8 @@ public class HarnessProcess {
      *
      * 기다리는 것은 여기서 안 한다 — 취소를 누른 사람은 즉시 답을 받아야 한다.
      */
-    public boolean stopCurrent() {
-        Process p = current;
+    public boolean stopCurrent(Long jobId) {
+        Process p = jobId == null ? null : running.get(jobId);
         if (p == null || !p.isAlive()) {
             return false;
         }
@@ -134,13 +138,16 @@ public class HarnessProcess {
     /**
      * 한 걸음 돌린다.
      *
+     * @param jobId  <b>누구 것인가.</b> 취소가 이 번호로 자기 프로세스만 찾아 죽인다 —
+     *               동시에 둘이 돌 수 있으므로 반드시 있어야 한다.
+     *               {@code null} 이면 취소가 손을 못 뻗는다(편집실의 다시 그리기)
      * @param args   {@code run.py} 뒤에 붙는 것들
      * @param env    더 넘길 환경변수 (그림체 등). 나머지는 서버 것을 물려받는다 —
      *               API 키가 거기 있다
      * @param onLine 나오는 줄마다. 진행률을 여기서 읽는다
      * @return 끝난 코드. 0 이 아니면 실패다
      */
-    public int run(List<String> args, Map<String, String> env, Consumer<String> onLine)
+    public int run(Long jobId, List<String> args, Map<String, String> env, Consumer<String> onLine)
             throws IOException, InterruptedException {
         List<String> cmd = new ArrayList<>(List.of(python, "-u", "run.py"));
         cmd.addAll(args);
@@ -153,15 +160,19 @@ public class HarnessProcess {
 
         log.info("하네스 실행: {}", String.join(" ", cmd));
         Process p = pb.start();
-        current = p;                            // 취소가 이걸 보고 멈춘다
+        if (jobId != null) {
+            running.put(jobId, p);              // 취소가 이걸 보고 멈춘다
+        }
         try {
             Thread reader = streamLines(p.getInputStream(), onLine, "하네스 출력을 읽다 끊겼습니다");
             return waitWithTimeout(p, reader, timeoutSeconds,
                     "만들기가 너무 오래 걸립니다 (%d초)".formatted(timeoutSeconds));
         } finally {
-            // 끝난 것을 가리키고 있으면 안 된다 — 다음 사람의 취소가 이미
-            // 죽은 것을 멈추고는 「멈췄다」고 답한다.
-            current = null;
+            // 끝난 것을 담고 있으면 안 된다 — 다음 사람의 취소가 이미 죽은
+            // 것을 멈추고는 「멈췄다」고 답한다.
+            if (jobId != null) {
+                running.remove(jobId);
+            }
         }
     }
 

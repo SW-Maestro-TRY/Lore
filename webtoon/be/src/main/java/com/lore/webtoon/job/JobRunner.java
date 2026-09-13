@@ -30,11 +30,32 @@ import java.util.concurrent.Executors;
 /**
  * 한 편을 실제로 만든다 — 걸음마다 파이썬을 부른다.
  *
- * <h2>한 번에 하나씩</h2>
+ * <h2>한 번에 둘씩</h2>
  *
- * 그림 만들기는 CPU 와 바깥 모델을 동시에 쓴다. 여럿을 같이 돌리면 다 같이
- * 느려지고, 무엇보다 <b>돈이 동시에 여러 갈래로 나간다</b>. 파이썬 서버가
- * 그랬듯 여기서도 한 줄로 세운다.
+ * 한 줄로 세워 한 편씩만 돌렸다. 그런데 실측해 보니 <b>한 장 37초 중 대부분이
+ * 모델 응답을 기다리는 시간</b>이고 CPU 는 거의 안 쓴다 — 나란히 돌리면 거의
+ * 그대로 두 배가 나오는 모양이다. 반면 기다리는 쪽은 아팠다: 2026-09-13 에
+ * 세 편을 걸어 보니 셋째가 <b>15분 16초</b>를 기다렸다(실측).
+ *
+ * <b>그래서 둘까지만 나란히 돌린다.</b> 무제한이 아닌 이유:
+ *
+ * <ul>
+ *   <li><b>메모리</b> — 이어붙이기가 1024×9216 캔버스를 만든다. 배포 서버
+ *       (t3.small)의 여유는 899MB 다. 둘까지가 재 보지 않고 걸 수 있는 선이다.</li>
+ *   <li><b>rate limit</b> — 같은 열쇠로 동시 요청이 늘면 429 가 난다.</li>
+ *   <li><b>돈</b> — 동시에 시작하면 하루 상한을 넘겨서 시작할 수 있다
+ *       ({@code SpendGuard} 는 시작할 때만 본다).</li>
+ * </ul>
+ *
+ * 넷·다섯으로 먼저 올리지 않는다. <b>둘로 재 보고</b>({@code started_at} ·
+ * {@code finished_at}) 그 숫자가 괜찮다고 하면 그때 올린다.
+ *
+ * <h2>둘이 되면서 같이 고쳐야 했던 것</h2>
+ *
+ * 한 줄일 때만 맞던 것들이 있었다 — 작품 번호를 「가장 최근 폴더」로 되찾던
+ * 것({@link #newRunId} 로 옮김)과, 도는 프로세스를 하나만 기억하던 것
+ * ({@code HarnessProcess} 가 작업마다 담는다). 둘 다 <b>오류를 내지 않고
+ * 조용히 틀리는</b> 자리였다.
  *
  * <h2>사람이 멈춰 서는 자리 둘</h2>
  *
@@ -51,13 +72,22 @@ public class JobRunner {
 
     private static final Logger log = LoggerFactory.getLogger(JobRunner.class);
 
-    /** 한 줄로 세운다. 하나가 끝나야 다음이 돈다. */
-    private final ExecutorService line = Executors.newSingleThreadExecutor(r -> {
-        Thread t = Thread.ofPlatform().unstarted(r);
-        t.setName("webtoon-job");
-        t.setDaemon(true);
-        return t;
-    });
+    /**
+     * 나란히 도는 수. <b>기본 둘.</b>
+     *
+     * 배포에서 줄여야 하면 {@code lore.webtoon.workers} 로 1 을 주면 예전처럼
+     * 한 줄이 된다 — 배포 후에 rate limit 이나 메모리가 터지면 코드를 되돌리지
+     * 않고 이 값만 내린다.
+     */
+    static final int DEFAULT_WORKERS = 2;
+
+    private final int workers;
+    private final ExecutorService line;
+
+    /** 나란히 도는 수. 줄 예상이 이 값으로 나눈다({@link JobQueue}). */
+    public int workers() {
+        return workers;
+    }
 
     /** 사람이 화면에서 그만두라고 했을 때 남는 말. */
     static final String CANCELLED = "만들기를 취소했습니다";
@@ -72,7 +102,6 @@ public class JobRunner {
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
 
     /** 지금 하네스 안에 들어가 있는 작업. 취소가 이걸 보고 죽일지 정한다. */
-    private volatile Long inHarness;
 
     private final HarnessProcess harness;
     private final JobProgress progress;
@@ -90,7 +119,19 @@ public class JobRunner {
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
                      StoryStore stories, AfterRun after, WorkLedger works,
                      CreditGate credits, GuestGate guests,
+                     @Value("${lore.webtoon.workers:2}") int workers,
                      @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
+        /* 0 이나 음수를 주면 만들기가 통째로 멈춘다 — 설정 실수로 서비스가
+           죽지 않게 최소 하나는 돈다. */
+        this.workers = Math.max(1, workers);
+        java.util.concurrent.atomic.AtomicInteger seq = new java.util.concurrent.atomic.AtomicInteger();
+        this.line = Executors.newFixedThreadPool(this.workers, r -> {
+            Thread t = Thread.ofPlatform().unstarted(r);
+            t.setName("webtoon-job-" + seq.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        });
+        log.info("만들기를 {}편씩 나란히 돌립니다", this.workers);
         this.harness = harness;
         this.progress = progress;
         this.store = store;
@@ -176,7 +217,7 @@ public class JobRunner {
      */
     public void cancel(Long jobId) {
         cancelled.add(jobId);
-        if (jobId.equals(inHarness) && harness.stopCurrent()) {
+        if (harness.stopCurrent(jobId)) {
             log.info("만들기를 멈춥니다 (job={})", jobId);
             return;
         }
@@ -249,12 +290,7 @@ public class JobRunner {
     private int callHarness(Long jobId, WebtoonJob job, List<String> args)
             throws IOException, InterruptedException {
         stopIfCancelled(jobId);
-        inHarness = jobId;
-        try {
-            return harness.run(args, env(job), out -> progress.line(jobId, out));
-        } finally {
-            inHarness = null;
-        }
+        return harness.run(jobId, args, env(job), out -> progress.line(jobId, out));
     }
 
     /** 그만두라고 했으면 여기서 멈춘다. 버그가 아니므로 따로 던진다. */

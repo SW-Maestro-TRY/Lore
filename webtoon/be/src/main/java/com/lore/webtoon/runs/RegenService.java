@@ -238,7 +238,9 @@ public class RegenService {
             env.put("OPENAI_IMAGE_QUALITY",
                     com.lore.webtoon.job.WebtoonQuality.harnessValue(qualityOf(runId)));
 
-            int code = harness.run(args, env, line -> { });
+            /* 다시 그리기는 취소 대상이 아니라 번호를 안 준다 — 작업이 아니라
+               편집실에서 한 장을 고치는 일이고, 멈추는 길이 따로 없다. */
+            int code = harness.run(null, args, env, line -> { });
             if (code != 0 || !Files.isRegularFile(dest)) {
                 fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
                 return;

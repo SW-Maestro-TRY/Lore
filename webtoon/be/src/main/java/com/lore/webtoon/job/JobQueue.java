@@ -13,11 +13,13 @@ import java.util.Map;
  *
  * <h2>왜 필요한가</h2>
  *
- * 만들기는 한 번에 한 편씩 돈다({@link JobRunner} 의 단일 스레드). 그래서
- * 앞에 세 명이 있으면 내 차례는 40분 뒤인데, <b>화면은 그동안 「루가 그림을
- * 그리고 있어요」만 보여 줬다.</b> 내 그림이 그려지고 있는 줄 알고 40분을
- * 기다린다. 모르는 40분과 아는 40분은 다르다 — 아는 사람은 기다리거나, 더
- * 빠른 화질로 바꾸거나, 나갔다 온다. 지금은 셋 다 못 한다.
+ * 만들기는 나란히 둘까지만 돈다({@link JobRunner}). 그래서 앞에 사람이 있으면
+ * 내 차례가 그만큼 늦는데, <b>화면은 그동안 「루가 그림을 그리고 있어요」만
+ * 보여 줬다.</b> 내 그림이 그려지고 있는 줄 알고 기다린다. 2026-09-13 에 세
+ * 편을 걸어 보니 셋째가 <b>15분 16초</b>를 기다렸다(실측).
+ *
+ * 모르는 15분과 아는 15분은 다르다 — 아는 사람은 기다리거나, 더 빠른 화질로
+ * 바꾸거나, 나갔다 온다. 그 줄이 없을 때는 셋 다 못 했다.
  *
  * <h2>DB 를 보는 이유</h2>
  *
@@ -42,19 +44,33 @@ public class JobQueue {
     private final WebtoonJobRepository jobs;
 
     /**
-     * 화질별 한 편 예상 시간(초). 2026-09-13 실측이다.
+     * 화질별 한 편 예상 시간(초).
      *
-     * <b>평균이 아니라 한 편을 끝까지 잰 값</b>이라 표본이 적다. 줄이 쌓이면
-     * {@code started_at}·{@code finished_at} 으로 진짜 평균을 낼 수 있고,
-     * 그때 이 표를 지우고 DB 에서 계산하면 된다 — 그 전까지는 없는 것보다 낫다.
+     * <h3>이 숫자는 임시다</h3>
+     *
+     * 처음에는 배포 서버에서 잰 한 편(너울 14분 39초)에서 환산해 적었다.
+     * 그런데 로컬에서 파도로 세 편을 돌려 보니 <b>실제는 5분 27초~6분 7초</b>
+     * 였다 — 적어 둔 8분 6초보다 <b>40% 짧다.</b> 표본이 다른 기계였기
+     * 때문이다(배포 서버 t3.small 대 로컬 맥). 그래서 화면에 적어 준 예상도
+     * 같은 만큼 컸다: 「약 13분」 이라 해 놓고 실제로는 9분 52초였다.
+     *
+     * <b>여기 숫자를 다시 박는 것은 답이 아니다.</b> 기계가 바뀌면 또 틀린다.
+     * {@code started_at}·{@code finished_at}·{@code quality} 가 쌓이고 있으니,
+     * 표본이 모이면 <b>DB 평균으로 갈아 끼우고 이 표를 지운다.</b> 그 전까지는
+     * 없는 것보다 낫다는 이유로만 둔다.
+     *
+     * 아래 값은 <b>로컬 실측</b>(파도 347초)과 그 비율로 맞춘 것이다.
      */
     private static final Map<String, Integer> SECONDS = Map.of(
-            "wave",  6 * 60 + 24,
-            "surf",  8 * 60 + 6,
-            "swell", 14 * 60 + 39);
+            "wave",  4 * 60 + 34,       // 파도 × (384/486)
+            "surf",  5 * 60 + 47,       // 실측 평균 347초 (3편)
+            "swell", 10 * 60 + 28);     // 파도 × (879/486)
 
-    public JobQueue(WebtoonJobRepository jobs) {
+    private final JobRunner runner;
+
+    public JobQueue(WebtoonJobRepository jobs, JobRunner runner) {
         this.jobs = jobs;
+        this.runner = runner;
     }
 
     /** 일꾼을 잡고 있거나 잡으러 갈 것들. */
@@ -92,15 +108,18 @@ public class JobQueue {
         List<WebtoonJob> line = jobs.findByStatusInOrderByCreatedAtAsc(IN_LINE);
 
         int ahead = 0;
-        long secs = 0;
+        long work = 0;
         for (WebtoonJob one : line) {
             if (one.getId().equals(job.getId())) {
                 break;
             }
             ahead++;
-            secs += remainingOf(one);
+            work += remainingOf(one);
         }
-        return new Spot(ahead, secs);
+        /* **나란히 도는 수로 나눈다.** 앞에 둘이 있어도 둘이 같이 돌면 내
+           차례는 한 편 뒤다. 안 나누면 기다리는 사람에게 실제의 두 배를
+           적어 주게 되고, 그건 더 빨리 나가게 만든다. */
+        return new Spot(ahead, work / Math.max(1, runner.workers()));
     }
 
     /**
