@@ -293,6 +293,7 @@ public class JobRunner {
         // 장부에도 채운다 — 이게 없으면 「내가 만든 웹툰」이 이 작품을 못 찾는다.
         works.learnedRun(job.getPublicId(), runId, job.getUserId());
         writeStyle(runId, job.getStyle());
+        writeQuality(runId, job.getQuality());
 
         List<Map<String, Object>> directions = directionsOf(runId);
         if (directions.isEmpty()) {
@@ -419,13 +420,22 @@ public class JobRunner {
     /**
      * 하네스에 넘기는 환경변수.
      *
-     * 그림체 하나뿐이다. 프로바이더·모델은 <b>하네스 코드의 기본값</b>이
-     * 정한다({@code new_harness/llm.py} 의 {@code DEFAULT_PROVIDER}) —
-     * 설정이 자바와 파이썬 두 군데로 갈리면 한쪽만 고치는 사고가 난다.
+     * <b>사람이 고른 것만</b> 넘긴다 — 그림체와 화질 둘이다. 프로바이더·모델
+     * 같은 <b>우리가 정하는 값</b>은 하네스 코드의 기본값이 정한다
+     * ({@code llm.py} 의 {@code DEFAULT_PROVIDER}, {@code imagegen.py} 의
+     * {@code DEFAULT_IMAGE_QUALITY}) — 그런 값을 자바와 파이썬 두 군데에 적으면
+     * 한쪽만 고치는 사고가 난다.
+     *
+     * 가르는 기준은 <b>요청마다 달라지느냐</b>다. 달라지는 값은 여기로 넘기고,
+     * 안 달라지는 값은 하네스에 박는다.
      */
     private Map<String, String> env(WebtoonJob job) {
         Map<String, String> env = new HashMap<>();
         env.put("NH_STYLE", job.getStyle());
+        /* 사람이 고른 화질. 그림체와 <b>같은 성격</b>이라 같이 넘긴다 —
+           요청마다 다른 값이므로 코드 기본값으로는 못 정한다.
+           안 넘어가면 하네스가 자기 기본값(medium)으로 그린다. */
+        env.put("OPENAI_IMAGE_QUALITY", WebtoonQuality.harnessValue(job.getQuality()));
         // NH_RUNS_DIR 은 HarnessProcess 가 띄우는 모든 파이썬에 한자리에서 넣는다.
         return env;
     }
@@ -447,6 +457,24 @@ public class JobRunner {
             Files.writeString(runsDir.resolve(runId).resolve("style.txt"), style);
         } catch (IOException e) {
             log.warn("그림체를 남기지 못했습니다 (run={}, style={})", runId, style, e);
+        }
+    }
+
+    /**
+     * 어느 화질로 그렸는지 작품 폴더에 남긴다.
+     *
+     * <b>한 장만 다시 그릴 때 읽는다</b>({@code RegenService}). 이게 없으면 그
+     * 장만 하네스 기본값으로 나와서 한 편 안에서 밀도가 갈린다 — 그림체를
+     * 남기는 것과 같은 이유이고, 같은 자리에 같은 방식으로 남긴다.
+     *
+     * 못 남겨도 만들기는 안 막는다 — 다시 그릴 때 기본값으로 떨어질 뿐이다.
+     */
+    private void writeQuality(String runId, String quality) {
+        try {
+            Files.writeString(runsDir.resolve(runId).resolve("quality.txt"),
+                    WebtoonQuality.normalize(quality));
+        } catch (IOException e) {
+            log.warn("화질을 남기지 못했습니다 (run={}, quality={})", runId, quality, e);
         }
     }
 

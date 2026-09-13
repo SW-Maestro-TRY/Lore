@@ -149,8 +149,9 @@ public class JobService {
         }
 
         String style = STYLE.getOrDefault(blank(form.style()), DEFAULT_STYLE);
+        String quality = WebtoonQuality.normalize(form.quality());
         WebtoonJob job = jobs.save(WebtoonJob.queued(
-                publicId, userId, browserUid, guestKey, style,
+                publicId, userId, browserUid, guestKey, style, quality,
                 form.checkpoints() == null || form.checkpoints(),
                 inputOf(form), Instant.now()));
 
@@ -536,7 +537,10 @@ public class JobService {
                                    하네스가 사진을 읽을 때 그대로 붙여 준다
                                    (new_harness/run.py 의 "첨부한 사진 n장을 보라(…)"). */
                                 @JsonProperty("photo_note") @JsonAlias("photoNote")
-                                String photoNote) {
+                                String photoNote,
+                                /* 얼마나 촘촘히 그릴까 — wave · surf · swell.
+                                   안 보내면 기본(파도)이다. */
+                                String quality) {
 
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;

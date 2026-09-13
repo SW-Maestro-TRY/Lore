@@ -91,6 +91,19 @@ public class WebtoonJob {
     private String style;
 
     /**
+     * 얼마나 촘촘히. 파이썬에 {@code OPENAI_IMAGE_QUALITY} 로 넘어간다.
+     *
+     * <b>작업에 남겨 둬야 하는 이유</b> — 한 장 다시 그릴 때 같은 화질로
+     * 그려야 한다. 안 남기면 그 장만 다른 화질로 나와서 한 편 안에서 밀도가
+     * 갈린다. 그림체를 {@code style.txt} 에 남기는 것과 같은 이유다.
+     *
+     * 옛 작업에는 값이 없다 — 그래서 nullable 이고, 읽는 쪽이
+     * {@link WebtoonQuality#normalize} 로 기본값으로 돌린다.
+     */
+    @Column(length = 20)
+    private String quality;
+
+    /**
      * 사람이 중간에 멈춰 서서 볼 것인가.
      *
      * 거짓이면 시트도 이야기도 서버가 알아서 고르고 끝까지 간다
@@ -139,12 +152,14 @@ public class WebtoonJob {
     }
 
     private WebtoonJob(String publicId, Long userId, String browserUid, String guestKey,
-                       String style, boolean checkpoints, String inputJson, Instant at) {
+                       String style, String quality, boolean checkpoints,
+                       String inputJson, Instant at) {
         this.publicId = publicId;
         this.guestKey = guestKey;
         this.userId = userId;
         this.browserUid = browserUid;
         this.style = style;
+        this.quality = quality;
         this.checkpoints = checkpoints;
         this.inputJson = inputJson;
         this.status = JobStatus.QUEUED;
@@ -154,10 +169,10 @@ public class WebtoonJob {
     }
 
     public static WebtoonJob queued(String publicId, Long userId, String browserUid,
-                                    String guestKey, String style, boolean checkpoints,
-                                    String inputJson, Instant at) {
+                                    String guestKey, String style, String quality,
+                                    boolean checkpoints, String inputJson, Instant at) {
         return new WebtoonJob(publicId, userId, browserUid, guestKey,
-                style, checkpoints, inputJson, at);
+                style, quality, checkpoints, inputJson, at);
     }
 
     void moveTo(JobStatus status, JobStage stage, Instant at) {
@@ -232,6 +247,11 @@ public class WebtoonJob {
         return style;
     }
 
+
+    /** 어느 화질로. 옛 작업은 비어 있다 — 읽는 쪽이 기본값으로 돌린다. */
+    public String getQuality() {
+        return quality;
+    }
     public boolean isCheckpoints() {
         return checkpoints;
     }

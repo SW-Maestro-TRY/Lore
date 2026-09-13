@@ -55,6 +55,45 @@ export const MAX_PHOTOS = 4;
 
 export type WizardMode = "simple" | "expert";
 
+/** 얼마나 촘촘히 그릴까. 값은 서버(WebtoonQuality)가 아는 이름과 같아야 한다. */
+export type WizardQuality = "wave" | "surf" | "swell";
+
+/* 화질 셋 — 이름 · 한 줄 · 설명.
+ *
+ * **크레딧 값은 여기 안 적는다.** 서버가 `/nh/allowance` 의 `qualities` 로
+ * 내려 준다(WebtoonQuality). 여기에도 적어 두면 한쪽만 고치는 순간 화면이
+ * 적은 값과 실제로 빠지는 크레딧이 어긋나고, 그건 사람에게 거짓말이 된다.
+ *
+ * 시간은 **줄이 비었을 때** 기준이다. 만들기가 한 번에 한 편씩 돌기 때문에
+ * 앞에 사람이 있으면 그만큼 더 걸린다 — 그래서 "약" 을 붙인다. */
+export const QUALITY_INFO: {
+  key: WizardQuality;
+  label: string;
+  lede: string;
+  desc: string[];
+}[] = [
+  {
+    key: "wave",
+    label: "물결",
+    lede: "약 6분 · 가장 빠른 생성",
+    desc: ["굵고 단순한 선으로 가볍게 표현해요.", "배경과 소품은 필요한 만큼만 담아요."],
+  },
+  {
+    key: "surf",
+    label: "파도",
+    lede: "약 8분 · 자연스러운 디테일",
+    desc: ["인물과 배경을 가장 자연스럽게 표현해요."],
+  },
+  {
+    key: "swell",
+    label: "너울",
+    lede: "약 15분 · 가장 섬세한 표현",
+    desc: ["가는 선과 풍부한 디테일로 표현해요.", "배경과 소품까지 깊이 있게 담아내요."],
+  },
+];
+
+export const QUALITY_DEFAULT: WizardQuality = "surf";
+
 export interface WizardForm {
   photos: string[]; // data URL
   /** 「이 캐릭터로 웹툰 만들기」로 들어왔을 때. 서버가 이 번호로 그림을 붙인다 —
@@ -67,6 +106,7 @@ export interface WizardForm {
   story: string;
   genre: string;
   style: string;
+  quality: WizardQuality;
   mode: WizardMode;
   agreeIp: boolean;
 }
@@ -80,6 +120,7 @@ export const emptyWizardForm = (): WizardForm => ({
   story: "",
   genre: "",
   style: "",
+  quality: QUALITY_DEFAULT,
   mode: "simple",
   agreeIp: false,
 });

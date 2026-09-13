@@ -221,6 +221,9 @@ function WebtoonScreens() {
       // 사람은 자기가 적은 것이 반영된 줄 안다.
       story: form.story.trim(),
       style: form.style,
+      // 5걸음에서 고른 화질. 값이 여기서 빠지면 서버가 기본(파도)으로 그리고,
+      // 화면에는 「너울」이라고 적혀 있는 채로 파도가 나온다.
+      quality: form.quality,
       // 키로 올렸으면 사진은 안 싣는다 — 두 벌을 보내는 셈이 된다.
       photos_data: keys ? [] : form.photos,
       photo_keys: keys,

@@ -118,6 +118,8 @@ export interface NhCreateRequest {
   /** 「어떤 이야기를 만들까요?」에 적은 것. 비면 하네스가 알아서 만든다. */
   story: string;
   style: string;
+  /** 얼마나 촘촘히 그릴까 — wave · surf · swell. 안 보내면 서버가 기본(파도). */
+  quality: string;
   /** data URL 목록. 원본과 같은 이름(photos_data)으로 보낸다. */
   photos_data: string[];
   /** presign 으로 먼저 올린 사진의 키. 있으면 서버가 이쪽을 쓰고 본문에

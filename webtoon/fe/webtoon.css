@@ -1653,6 +1653,24 @@
    그래서 카드마다 무슨 일이 일어나는지를 맨 아래 한 줄로 못박는다. */
 
 .webtoon-page .fork { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+/* 화질 셋. 좁아지면 한 줄씩 쌓는다 — 셋을 폰 너비에 나란히 두면 글자가
+   두 자씩 끊겨서 이름도 설명도 안 읽힌다. */
+.webtoon-page .fork-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 640px) { .webtoon-page .fork-3 { grid-template-columns: 1fr; } }
+/* 값과 시간 — 이름 바로 밑에 붙여 한 눈에 읽히게 한다. 고르는 근거가
+   대부분 여기다(설명보다 시간과 크레딧을 먼저 본다). */
+.webtoon-page .fork-meta {
+  margin: 0; font-size: .82rem; color: var(--muted);
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+}
+.webtoon-page .fork-credit {
+  font-weight: 700; color: var(--accent-d);
+  background: var(--paper-2); border-radius: 99px; padding: 1px 8px; font-size: .78rem;
+}
+/* 한 걸음 안에서 갈림길이 둘이라, 둘째 물음을 한 줄로 갈라 준다. */
+.webtoon-page .wiz-subtitle {
+  margin: 26px 0 0; font-size: 1.02rem; font-weight: 700; color: var(--text);
+}
 .webtoon-page .fork-card {
   text-align: left; font: inherit; color: var(--text); cursor: pointer;
   background: var(--card); border: 1.5px solid var(--line-2);
@@ -2559,6 +2577,7 @@
   /* 오른쪽 기둥 — 채우는 것과 누르는 것만 여기 있다. */
   .webtoon-page .wiz-card,
 .webtoon-page .fork,
+.webtoon-page .wiz-subtitle,
 .webtoon-page .wiz-after,
 .webtoon-page .ip-agree,
 .webtoon-page .wiz-actions { grid-column: 2; }

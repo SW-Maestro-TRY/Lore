@@ -90,6 +90,11 @@ public class JobController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("logged_in", me != null);
         out.put("credit_cost", credits.cost());
+        /* 화질 셋과 각각의 값. **화면이 여기서 받아 간다** — 같은 표를 화면에도
+           적어 두면, 한쪽만 고치는 순간 적힌 값과 실제로 빠지는 크레딧이
+           어긋난다. 사람에게 그건 거짓말이다. */
+        out.put("qualities", WebtoonQuality.choices());
+        out.put("quality_default", WebtoonQuality.DEFAULT_QUALITY);
         if (me == null) {
             Integer left = guests.freeLeft(request);
             out.put("free_left", left);
@@ -130,8 +135,12 @@ public class JobController {
                 guestKey = guests.keyOf(request);
             }
         }
+        /* **고른 화질만큼 받는다.** 너울(high)은 원가가 파도의 2.4배라 같은
+           값으로 팔면 한 편마다 손해다 — 실제로 그렇게 한 달 가까이 돌았다.
+           값은 WebtoonQuality 한 곳만 안다. */
+        int need = WebtoonQuality.creditsOf(form.quality());
         if (blocked == null) {
-            blocked = credits.whyBlocked(me);
+            blocked = credits.whyBlocked(me, need);
             if (blocked != null) {
                 code = 402;                     // 기다려도 안 풀린다 — 충전해야 한다
             }
@@ -151,7 +160,8 @@ public class JobController {
             }
             throw e;
         }
-        credits.charge(me, id);                 // 만들어진 뒤에 받는다
+        // 만들어진 뒤에 받는다. 같은 작업으로 두 번 불려도 한 번만 빠진다.
+        credits.charge(me, need, id, WebtoonQuality.labelOf(form.quality()));
         return ResponseEntity.ok(Map.of("id", id, "queue_position", 0));
     }
 

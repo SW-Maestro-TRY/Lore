@@ -232,6 +232,11 @@ public class RegenService {
             if (!style.isBlank()) {
                 env.put("NH_STYLE", style);
             }
+            /* **같은 화질로 다시 그린다.** 안 넘기면 이 장만 하네스 기본값으로
+               나와서 한 편 안에서 밀도가 갈린다 — 그림체를 맞추는 것과 같은
+               이유다. 옛 작업은 화질이 없어서 기본값으로 돌아간다. */
+            env.put("OPENAI_IMAGE_QUALITY",
+                    com.lore.webtoon.job.WebtoonQuality.harnessValue(qualityOf(runId)));
 
             int code = harness.run(args, env, line -> { });
             if (code != 0 || !Files.isRegularFile(dest)) {
@@ -275,6 +280,15 @@ public class RegenService {
 
     private Path versionsDir(String runId) {
         return runner.runDir(runId).resolve("pages").resolve("versions");
+    }
+
+    /** 남겨 둔 화질. 없으면(옛 작품) 기본값으로 떨어진다. */
+    private String qualityOf(String runId) {
+        try {
+            return Files.readString(runner.runDir(runId).resolve("quality.txt")).strip();
+        } catch (IOException e) {
+            return "";
+        }
     }
 
     /** 남겨 둔 그림체. 없으면 하네스 기본값으로 떨어진다. */

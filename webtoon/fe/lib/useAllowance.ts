@@ -22,6 +22,10 @@ export interface Allowance {
   balance?: number;
   /** 오늘 전체 몫이 찼으면 그 이유. 이건 로그인해도 안 풀린다. */
   blocked?: string | null;
+  /** 화질 셋과 각각의 크레딧. **서버가 정한다** — 화면에 따로 적어 두면
+   *  적힌 값과 실제로 빠지는 값이 어긋난다. 못 받아 오면 값을 안 그린다. */
+  qualities?: { key: string; label: string; credits: number }[];
+  quality_default?: string;
 }
 
 const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
