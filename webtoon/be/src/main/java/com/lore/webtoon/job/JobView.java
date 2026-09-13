@@ -40,6 +40,13 @@ public record JobView(
         String stage_label,
         String say,
         boolean checkpoints,
+        /**
+         * 줄에서의 자리. <b>내 차례면 {@code null}</b> — 적을 것이 없다.
+         *
+         * 이게 없을 때 화면은 「루가 그림을 그리고 있어요」만 보여 줬고,
+         * 앞에 세 명이 있어도 내 그림이 그려지는 줄 알았다.
+         */
+        Queue queue,
         int pct,
         Art art,
         List<String> log,
@@ -52,12 +59,20 @@ public record JobView(
      *                   값으로 읽고 그냥 무시한다(위 머리말의 "무는 쪽은 더해도
      *                   된다"). 다른 칸과 같이 밑줄 이름을 그대로 쓴다.
      */
+    /**
+     * @param ahead   앞에 몇 명
+     * @param minutes 내 차례까지 예상 분 (줄에 선 것만 센 값)
+     * @param line    화면이 그대로 적는 한 줄
+     */
+    public record Queue(int ahead, int minutes, String line) {
+    }
+
     public record Art(int done, int total, int retry_page) {
     }
 
     static JobView of(WebtoonJob job, JobProgress.Snapshot now,
                       List<Map<String, Object>> directions, String styleLabel,
-                      String stageLabel) {
+                      String stageLabel, JobQueue.Spot spot) {
         int stageIndex = job.getStage().order();
         double frac = now.total() > 0 ? (double) now.done() / now.total() : 0.0;
         int pct = job.getStatus() == JobStatus.DONE
@@ -80,6 +95,8 @@ public record JobView(
                 stageLabel,
                 now.say(),
                 job.isCheckpoints(),
+                spot == null ? null
+                        : new Queue(spot.ahead(), spot.minutes(), spot.line()),
                 Math.max(0, Math.min(100, pct)),
                 now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage()) : null,
                 now.log(),

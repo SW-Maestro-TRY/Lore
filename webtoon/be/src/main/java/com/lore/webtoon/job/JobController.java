@@ -58,14 +58,16 @@ public class JobController {
     static final String PREFIX = WebtoonApi.V1 + "/nh";
 
     private final JobService jobs;
+    private final JobQueue queue;
     private final RunArt art;
     private final SpendGuard guard;
     private final GuestGate guests;
     private final CreditGate credits;
 
-    public JobController(JobService jobs, RunArt art, SpendGuard guard, GuestGate guests,
-                         CreditGate credits) {
+    public JobController(JobService jobs, JobQueue queue, RunArt art, SpendGuard guard,
+                         GuestGate guests, CreditGate credits) {
         this.jobs = jobs;
+        this.queue = queue;
         this.art = art;
         this.guard = guard;
         this.guests = guests;
@@ -149,6 +151,11 @@ public class JobController {
             return ResponseEntity.status(code).body(Map.of("error", blocked));
         }
 
+        /* **줄 선 자리를 만들기 직전에 센다.** 여기서 센 값이 화면에 「앞에
+           3명」으로 적히고, 그대로 작업에 남는다 — 나중에 실제로 기다린
+           시간과 맞춰 보면 우리 예상이 맞았는지 알 수 있다. */
+        int ahead = queue.ahead();
+
         String id;
         try {
             id = jobs.create(form, me, form.uid(), guestKey);
@@ -162,7 +169,8 @@ public class JobController {
         }
         // 만들어진 뒤에 받는다. 같은 작업으로 두 번 불려도 한 번만 빠진다.
         credits.charge(me, need, id, WebtoonQuality.labelOf(form.quality()));
-        return ResponseEntity.ok(Map.of("id", id, "queue_position", 0));
+        queue.remember(id, ahead);
+        return ResponseEntity.ok(Map.of("id", id, "queue_position", ahead));
     }
 
     @Operation(summary = "진행 상황", description = """

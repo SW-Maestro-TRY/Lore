@@ -33,7 +33,8 @@ class JobViewTest {
     }
 
     private JobView view(WebtoonJob job, JobProgress.Snapshot now) {
-        return JobView.of(job, now, List.of(), "로맨스 판타지", "이야기 짓기");
+        // 줄 정보는 여기서 볼 것이 아니다(JobQueueTest 가 본다) — 내 차례라고 둔다.
+        return JobView.of(job, now, List.of(), "로맨스 판타지", "이야기 짓기", null);
     }
 
     @Test

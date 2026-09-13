@@ -101,6 +101,9 @@ export interface NhJob {
   stage_label: string;
   /** 검수가 도는 동안 띄울 한 줄. 비어 있으면 단계 기본 문구를 쓴다. */
   say: string;
+  /** 줄에서의 자리. **내 차례면 없다(null)** — 그때는 적을 것이 없다.
+   *  서버가 DB 를 보고 센다(JobQueue) — 화면이 세지 않는다. */
+  queue: { ahead: number; minutes: number; line: string } | null;
   pct: number;
   /** retry_page: 지금 걸려서 다시 그리는 중인 장 번호. 0(또는 없음)이면 없다. */
   art: { done: number; total: number; retry_page?: number } | null;
