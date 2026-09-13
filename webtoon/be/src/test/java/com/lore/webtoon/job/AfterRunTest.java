@@ -42,6 +42,7 @@ class AfterRunTest {
     private PageUploader uploader;
     private PageStore pages;
     private HarnessProcess harness;
+    private WebtoonJobRepository jobs;
     private AfterRun after;
 
     @BeforeEach
@@ -50,14 +51,17 @@ class AfterRunTest {
         uploader = mock(PageUploader.class);
         when(uploader.ready()).thenReturn(false);        // 여기서는 그림을 안 올린다
         pages = mock(PageStore.class);
+        jobs = mock(WebtoonJobRepository.class);
+        // 기본은 "만들고 있는 작업이 없다" — 다 그려 놓고 못 올린 상황이다.
+        when(jobs.existsByRunIdAndStatusIn(any(), any())).thenReturn(false);
         /* 작품이 쌓이는 자리는 HarnessProcess 하나가 정하고, AfterRun 은 그걸
            받아 쓴다. 예전에는 여기에 따로 넘겨서 둘이 다른 자리를 볼 수
            있었고, 배포에서 실제로 그랬다 — meta.json 은 멀쩡한데 없는 자리를
            보고 "비용 기록이 없습니다" 만 찍었다. */
         harness = mock(HarnessProcess.class);
         when(harness.runsDir()).thenReturn(runs);
-        after = new AfterRun(usage, uploader, pages, mock(WorkLedger.class), harness,
-                mock(RunFiles.class));
+        after = new AfterRun(usage, uploader, pages, jobs, mock(WorkLedger.class),
+                harness, mock(RunFiles.class));
     }
 
     /** 하네스가 적는 모양 그대로. 값은 {@code cost.total_krw} 에 있다. */
@@ -224,5 +228,20 @@ class AfterRunTest {
 
         // 파이썬은 한 번만 띄운다.
         verify(harness, org.mockito.Mockito.times(1)).prepareUpload(eq("run-9"), any());
+    }
+
+    @Test
+    @DisplayName("아직 만들고 있으면 손대지 않는다 — 반만 그린 것을 올리면 안 된다")
+    void 만드는_중에는_안_건드린다() throws Exception {
+        그림이_디스크에("run-9");
+        when(pages.has("run-9")).thenReturn(false);
+        when(uploader.ready()).thenReturn(true);
+        /* 그리는 중에도 pages/ 에는 지금까지 그린 것이 들어 있다. 그때
+           되살리기가 끼어들면 반만 그린 작품이 둘러보기에 뜨고, 더 나쁘게는
+           하네스가 지금 쓰고 있는 원본이 지워진다. */
+        when(jobs.existsByRunIdAndStatusIn(eq("run-9"), any())).thenReturn(true);
+
+        assertThat(after.healIfMissing("run-9")).isFalse();
+        verify(harness, never()).prepareUpload(any(), any());
     }
 }

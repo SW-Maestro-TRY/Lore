@@ -46,6 +46,7 @@ public class AfterRun {
     private final UsageService usage;
     private final PageUploader uploader;
     private final PageStore pages;
+    private final WebtoonJobRepository jobs;
     private final RunFiles files;
     private final WorkLedger works;
     private final HarnessProcess harness;
@@ -58,13 +59,20 @@ public class AfterRun {
      * 서버를 다시 띄우면 비워지므로, 고친 뒤 배포하면 저절로 한 번 더 해 본다.
      */
     private final ConcurrentMap<String, Boolean> healed = new ConcurrentHashMap<>();
+
+    /** 아직 안 끝난 작업. 이 중 하나라도 이 작품을 잡고 있으면 되살리지 않는다. */
+    private static final java.util.List<JobStatus> UNFINISHED = java.util.List.of(
+            JobStatus.QUEUED, JobStatus.RUNNING,
+            JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK);
     private final ObjectMapper mapper = new ObjectMapper();
 
     public AfterRun(UsageService usage, PageUploader uploader, PageStore pages,
-                    WorkLedger works, HarnessProcess harness, RunFiles files) {
+                    WebtoonJobRepository jobs, WorkLedger works, HarnessProcess harness,
+                    RunFiles files) {
         this.usage = usage;
         this.uploader = uploader;
         this.pages = pages;
+        this.jobs = jobs;
         this.files = files;
         this.works = works;
         this.harness = harness;
@@ -158,7 +166,20 @@ public class AfterRun {
             return false;               // 거의 매번 여기서 돌아간다
         }
         if (!Files.isDirectory(runsDir.resolve(runId).resolve("pages"))) {
-            return false;               // 그린 것이 없다 — 아직 만드는 중이거나 없는 작품
+            return false;               // 그린 것이 없다 — 없는 작품이다
+        }
+        /* **아직 만들고 있으면 손대지 않는다.**
+         *
+         * 그리는 중에도 pages/ 폴더에는 지금까지 그린 것이 들어 있다. 그때
+         * 되살리기가 끼어들면 <b>반만 그린 작품을 올려서</b> 둘러보기에 띄우고,
+         * 더 나쁘게는 {@code RunFiles.sweepUploaded} 가 <b>하네스가 지금 쓰고
+         * 있는 원본을 지운다</b> — 하네스는 "파일이 있으면 안 그린다" 로 도는데
+         * 그 파일이 사라지는 것이다.
+         *
+         * 되살릴 것은 <b>다 그려 놓고 못 올린 작품</b>뿐이다. 그건 작업이 이미
+         * 끝나 있다. */
+        if (jobs.existsByRunIdAndStatusIn(runId, UNFINISHED)) {
+            return false;
         }
         /* 작품 하나당 한 번만 돌고, 도는 동안 같은 작품을 물은 요청은 여기서
            기다린다(computeIfAbsent 가 그 열쇠를 잡고 있다). 끝나면 그 결과를

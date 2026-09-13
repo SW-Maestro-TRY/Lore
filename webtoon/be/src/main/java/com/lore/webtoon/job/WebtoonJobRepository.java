@@ -15,6 +15,14 @@ public interface WebtoonJobRepository extends JpaRepository<WebtoonJob, Long> {
     /** 지금 돌고 있는 것이 있나. 한 번에 하나씩만 돌리려고 본다. */
     boolean existsByStatus(JobStatus status);
 
+    /**
+     * 이 작품을 <b>아직 만들고 있는</b> 작업이 있나.
+     *
+     * 되살리기가 끼어들지 않게 막는 자리다 — 만드는 중에 끼어들면 아직 그리는
+     * 중인 그림을 올리고, 원본까지 치워 버린다.
+     */
+    boolean existsByRunIdAndStatusIn(String runId, java.util.Collection<JobStatus> statuses);
+
     /** 지금 줄에 있는 것의 수 — 일꾼을 잡고 있거나 잡으러 갈 것들. */
     long countByStatusIn(java.util.Collection<JobStatus> statuses);
 

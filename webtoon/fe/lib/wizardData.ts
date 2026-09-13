@@ -64,7 +64,7 @@ export type WizardQuality = "wave" | "surf" | "swell";
  * 내려 준다(WebtoonQuality). 여기에도 적어 두면 한쪽만 고치는 순간 화면이
  * 적은 값과 실제로 빠지는 크레딧이 어긋나고, 그건 사람에게 거짓말이 된다.
  *
- * 시간은 **줄이 비었을 때** 기준이다. 만들기가 한 번에 한 편씩 돌기 때문에
+ * 시간은 **줄이 비었을 때** 기준이다. 만들기가 한 번에 두 편까지만 돌기 때문에
  * 앞에 사람이 있으면 그만큼 더 걸린다 — 그래서 "약" 을 붙인다. */
 export const QUALITY_INFO: {
   key: WizardQuality;
