@@ -56,7 +56,8 @@ class AfterRunTest {
            보고 "비용 기록이 없습니다" 만 찍었다. */
         harness = mock(HarnessProcess.class);
         when(harness.runsDir()).thenReturn(runs);
-        after = new AfterRun(usage, uploader, pages, mock(WorkLedger.class), harness);
+        after = new AfterRun(usage, uploader, pages, mock(WorkLedger.class), harness,
+                mock(RunFiles.class));
     }
 
     /** 하네스가 적는 모양 그대로. 값은 {@code cost.total_krw} 에 있다. */

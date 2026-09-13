@@ -91,6 +91,19 @@ public class WebtoonJob {
     private String style;
 
     /**
+     * 얼마나 촘촘히. 파이썬에 {@code OPENAI_IMAGE_QUALITY} 로 넘어간다.
+     *
+     * <b>작업에 남겨 둬야 하는 이유</b> — 한 장 다시 그릴 때 같은 화질로
+     * 그려야 한다. 안 남기면 그 장만 다른 화질로 나와서 한 편 안에서 밀도가
+     * 갈린다. 그림체를 {@code style.txt} 에 남기는 것과 같은 이유다.
+     *
+     * 옛 작업에는 값이 없다 — 그래서 nullable 이고, 읽는 쪽이
+     * {@link WebtoonQuality#normalize} 로 기본값으로 돌린다.
+     */
+    @Column(length = 20)
+    private String quality;
+
+    /**
      * 사람이 중간에 멈춰 서서 볼 것인가.
      *
      * 거짓이면 시트도 이야기도 서버가 알아서 고르고 끝까지 간다
@@ -129,6 +142,37 @@ public class WebtoonJob {
     @Enumerated(EnumType.STRING)
     private Refunded refunded;
 
+    /**
+     * <b>줄에서 빠져나와 실제로 돌기 시작한 때.</b>
+     *
+     * 만든 때({@code createdAt})와의 차이가 <b>기다린 시간</b>이다. 이걸 안
+     * 적으면 "얼마나 기다렸나" 를 영영 못 잰다 — 만들기는 한 번에 한 편씩
+     * 도는데 그게 실제로 얼마나 밀리는지 아무 데도 안 남아 있었다. 병렬로
+     * 갈지 말지는 <b>이 숫자를 보고</b> 정할 일이다(추측 말고).
+     */
+    @Column(name = "started_at")
+    private Instant startedAt;
+
+    /**
+     * 끝난 때 — 다 됐거나 실패했거나.
+     *
+     * {@code startedAt} 과의 차이가 실제로 만든 시간이다. 다만 사람이 시트·
+     * 이야기 앞에서 멈춰 선 시간이 여기 섞인다({@code AWAITING_*}) — 순수
+     * 기계 시간은 {@code meta.json} 의 걸음별 초를 봐야 한다.
+     */
+    @Column(name = "finished_at")
+    private Instant finishedAt;
+
+    /**
+     * 줄 설 때 <b>앞에 몇 개</b> 있었나. 화면에 「앞에 3명」이라고 적은 그 숫자다.
+     *
+     * 나중에 이 값과 실제로 기다린 시간을 맞춰 보면 <b>우리가 적어 준 예상이
+     * 맞았는지</b> 알 수 있다. 예상이 틀리면 사람은 두 번 속는다 — 기다린 것과
+     * 속은 것.
+     */
+    @Column(name = "queued_ahead")
+    private Integer queuedAhead;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -139,12 +183,14 @@ public class WebtoonJob {
     }
 
     private WebtoonJob(String publicId, Long userId, String browserUid, String guestKey,
-                       String style, boolean checkpoints, String inputJson, Instant at) {
+                       String style, String quality, boolean checkpoints,
+                       String inputJson, Instant at) {
         this.publicId = publicId;
         this.guestKey = guestKey;
         this.userId = userId;
         this.browserUid = browserUid;
         this.style = style;
+        this.quality = quality;
         this.checkpoints = checkpoints;
         this.inputJson = inputJson;
         this.status = JobStatus.QUEUED;
@@ -154,19 +200,36 @@ public class WebtoonJob {
     }
 
     public static WebtoonJob queued(String publicId, Long userId, String browserUid,
-                                    String guestKey, String style, boolean checkpoints,
-                                    String inputJson, Instant at) {
+                                    String guestKey, String style, String quality,
+                                    boolean checkpoints, String inputJson, Instant at) {
         return new WebtoonJob(publicId, userId, browserUid, guestKey,
-                style, checkpoints, inputJson, at);
+                style, quality, checkpoints, inputJson, at);
     }
 
     void moveTo(JobStatus status, JobStage stage, Instant at) {
+        /* **처음 돌기 시작한 때만 적는다.** 사람이 시트 앞에서 멈췄다가 다시
+           가면 RUNNING 이 또 되는데, 그때 덮어쓰면 기다린 시간이 0 에 가깝게
+           찍혀서 "아무도 안 기다렸다" 가 된다. */
+        if (status == JobStatus.RUNNING && this.startedAt == null) {
+            this.startedAt = at;
+        }
+        if (status.isOver() && this.finishedAt == null) {
+            this.finishedAt = at;
+        }
         this.status = status;
         this.stage = stage;
         this.updatedAt = at;
     }
 
+    /** 줄 설 때 앞에 몇 개 있었는지 적어 둔다. */
+    void queuedBehind(int ahead) {
+        this.queuedAhead = ahead;
+    }
+
     void failed(String why, Refunded refunded, Instant at) {
+        if (this.finishedAt == null) {
+            this.finishedAt = at;
+        }
         this.status = JobStatus.ERROR;
         this.error = why == null ? null : why.substring(0, Math.min(why.length(), 300));
         this.refunded = refunded;
@@ -232,6 +295,11 @@ public class WebtoonJob {
         return style;
     }
 
+
+    /** 어느 화질로. 옛 작업은 비어 있다 — 읽는 쪽이 기본값으로 돌린다. */
+    public String getQuality() {
+        return quality;
+    }
     public boolean isCheckpoints() {
         return checkpoints;
     }
@@ -250,6 +318,21 @@ public class WebtoonJob {
 
     public Refunded getRefunded() {
         return refunded;
+    }
+
+    /** 줄에서 빠져나와 돌기 시작한 때. 아직 줄에 있으면 {@code null}. */
+    public Instant getStartedAt() {
+        return startedAt;
+    }
+
+    /** 끝난 때. 아직 도는 중이면 {@code null}. */
+    public Instant getFinishedAt() {
+        return finishedAt;
+    }
+
+    /** 줄 설 때 앞에 몇 개 있었나. 옛 작업은 {@code null}. */
+    public Integer getQueuedAhead() {
+        return queuedAhead;
     }
 
     public Instant getCreatedAt() {

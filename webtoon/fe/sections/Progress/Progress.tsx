@@ -165,6 +165,20 @@ export default function Progress({
     <section className="progress">
       <div className="progress-inner">
         <header className="progress-head">
+          {/* **줄을 보여 준다.**
+              만들기는 한 번에 한 편씩 돈다. 앞에 세 명이 있으면 내 차례는
+              40분 뒤인데, 이 줄이 없을 때 화면은 그동안 「루가 그림을 그리고
+              있어요」만 보여 줬다 — 내 그림이 그려지는 줄 알고 기다린다.
+              모르는 40분과 아는 40분은 다르다.
+
+              서버가 DB 를 보고 센다(JobQueue). 내 차례가 오면 서버가 null 을
+              주고 이 띠는 사라진다 — 화면이 판단하지 않는다. */}
+          {job.queue && job.queue.ahead > 0 && (
+            <p className="queue-line" role="status">
+              <span className="queue-dot" aria-hidden="true" />
+              {job.queue.line}
+            </p>
+          )}
           <div className="stage-now">
             <div className="stage-art" data-stage={NH_STAGE_ART[job.stage] || job.stage} />
             <p className="stage-say">{line}</p>

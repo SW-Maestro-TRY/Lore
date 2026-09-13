@@ -157,7 +157,9 @@ export default function Wizard({
           {step === 2 && <Step2Story form={form} onChange={patch} />}
           {step === 3 && <Step3Genre form={form} onChange={patch} />}
           {step === 4 && <Step4Style form={form} onChange={patch} />}
-          {step === 5 && <Step5Review form={form} onChange={patch} />}
+          {step === 5 && (
+            <Step5Review form={form} onChange={patch} qualities={allowance?.qualities} />
+          )}
 
           <div className="wiz-actions">
             <div className="wiz-foot">

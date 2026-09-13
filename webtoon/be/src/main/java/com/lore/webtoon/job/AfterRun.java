@@ -46,6 +46,7 @@ public class AfterRun {
     private final UsageService usage;
     private final PageUploader uploader;
     private final PageStore pages;
+    private final RunFiles files;
     private final WorkLedger works;
     private final HarnessProcess harness;
     private final Path runsDir;
@@ -60,10 +61,11 @@ public class AfterRun {
     private final ObjectMapper mapper = new ObjectMapper();
 
     public AfterRun(UsageService usage, PageUploader uploader, PageStore pages,
-                    WorkLedger works, HarnessProcess harness) {
+                    WorkLedger works, HarnessProcess harness, RunFiles files) {
         this.usage = usage;
         this.uploader = uploader;
         this.pages = pages;
+        this.files = files;
         this.works = works;
         this.harness = harness;
         /* **자리는 HarnessProcess 하나가 정한다.** 여기서 기본값을 또 적으면
@@ -110,7 +112,12 @@ public class AfterRun {
             return 0;
         }
         String prepared = harness.prepareUpload(runId, onLine);
-        return uploader.uploadPrepared(runId, prepared, onLine);
+        int recorded = uploader.uploadPrepared(runId, prepared, onLine);
+        /* 올렸으면 서버 사본을 치운다 — 편당 31MB 가 안 지워지고 쌓이던 것
+           (여유 12GB / 31MB = 약 390편이면 디스크가 찬다). 적힌 그림이 있을
+           때만 지우므로 올리기가 실패한 작품은 그대로 남는다. */
+        files.sweepUploaded(runId);
+        return recorded;
     }
 
 

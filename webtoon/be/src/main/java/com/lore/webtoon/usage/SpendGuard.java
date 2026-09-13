@@ -59,21 +59,57 @@ public class SpendGuard {
      */
     @Transactional(readOnly = true)
     public String whyBlocked() {
+        return whyBlocked(Reserved.NONE);
+    }
+
+    /**
+     * 지금 새로 만들어도 되는가 — <b>아직 안 적힌 몫까지 세어서.</b>
+     *
+     * <h2>왜 예약이 필요한가</h2>
+     *
+     * 여기서 보는 것은 DB 에 <b>적힌</b> 지출이다. 그런데 지출은 걸음이 끝나야
+     * 적힌다 — 지금 도는 작업이 쓸 돈은 아직 어디에도 없다. 한 줄로 한 편씩만
+     * 돌 때는 그 틈이 한 편이라 눈감을 수 있었다.
+     *
+     * <b>나란히 둘을 돌리기 시작하면 눈감을 수 없다.</b> 상한까지 한 편이 남았을
+     * 때 둘이 같이 물으면 <b>둘 다 통과한다</b> — 둘 다 아직 아무것도 안 썼기
+     * 때문이다. 그러면 상한을 넘겨서 시작하고, 우리는 그걸 다 쓴 뒤에야 안다.
+     *
+     * 그래서 아직 안 끝난 작업이 쓸 돈을 <b>미리 잡아 둔다.</b> 도는 중인 작업은
+     * 이미 쓴 만큼이 적혔을 수 있어 조금 겹쳐 세지만, 상한은 <b>안전선</b>이므로
+     * 넉넉히 막는 쪽이 맞다.
+     *
+     * @param reserved 아직 안 끝난 작업들이 쓸 몫
+     */
+    @Transactional(readOnly = true)
+    public String whyBlocked(Reserved reserved) {
         Instant from = startOfToday();
         Instant now = Instant.now(clock);
 
-        long runs = usage.runsBetween(from, now);
+        long runs = usage.runsBetween(from, now) + reserved.runs();
         if (dailyRuns > 0 && runs >= dailyRuns) {
-            log.warn("일일 편수 상한에 걸렸습니다 ({}/{}편)", runs, dailyRuns);
+            log.warn("일일 편수 상한에 걸렸습니다 ({}/{}편 · 예약 {}편)",
+                    runs, dailyRuns, reserved.runs());
             return "오늘 만들 수 있는 몫이 다 찼어요 — 내일 다시 와 주세요.";
         }
 
-        long krw = usage.krwBetween(from, now);
+        long krw = usage.krwBetween(from, now) + reserved.krw();
         if (dailyKrw > 0 && krw >= dailyKrw) {
-            log.warn("일일 금액 상한에 걸렸습니다 ({}/{}원)", krw, dailyKrw);
+            log.warn("일일 금액 상한에 걸렸습니다 ({}/{}원 · 예약 {}원)",
+                    krw, dailyKrw, reserved.krw());
             return "오늘 만들 수 있는 몫이 다 찼어요 — 내일 다시 와 주세요.";
         }
         return null;
+    }
+
+    /**
+     * 아직 안 끝난 작업이 쓸 몫.
+     *
+     * @param runs 몇 편
+     * @param krw  얼마(원)
+     */
+    public record Reserved(long runs, long krw) {
+        public static final Reserved NONE = new Reserved(0, 0);
     }
 
     /** 오늘 여기까지 왔다. 화면에 보여 줄 값. */

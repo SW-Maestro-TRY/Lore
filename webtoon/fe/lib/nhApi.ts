@@ -101,6 +101,9 @@ export interface NhJob {
   stage_label: string;
   /** 검수가 도는 동안 띄울 한 줄. 비어 있으면 단계 기본 문구를 쓴다. */
   say: string;
+  /** 줄에서의 자리. **내 차례면 없다(null)** — 그때는 적을 것이 없다.
+   *  서버가 DB 를 보고 센다(JobQueue) — 화면이 세지 않는다. */
+  queue: { ahead: number; minutes: number; line: string } | null;
   pct: number;
   /** retry_page: 지금 걸려서 다시 그리는 중인 장 번호. 0(또는 없음)이면 없다. */
   art: { done: number; total: number; retry_page?: number } | null;
@@ -118,6 +121,8 @@ export interface NhCreateRequest {
   /** 「어떤 이야기를 만들까요?」에 적은 것. 비면 하네스가 알아서 만든다. */
   story: string;
   style: string;
+  /** 얼마나 촘촘히 그릴까 — wave · surf · swell. 안 보내면 서버가 기본(파도). */
+  quality: string;
   /** data URL 목록. 원본과 같은 이름(photos_data)으로 보낸다. */
   photos_data: string[];
   /** presign 으로 먼저 올린 사진의 키. 있으면 서버가 이쪽을 쓰고 본문에

@@ -1,4 +1,7 @@
-import { STYLE_INFO, type WizardForm, type WizardMode } from "../../../lib/wizardData";
+import {
+  QUALITY_INFO, STYLE_INFO,
+  type WizardForm, type WizardMode, type WizardQuality,
+} from "../../../lib/wizardData";
 
 const cut = (v: string, n: number) => {
   const t = v.trim();
@@ -12,12 +15,23 @@ const cut = (v: string, n: number) => {
 export default function Step5Review({
   form,
   onChange,
+  qualities,
 }: {
   form: WizardForm;
   onChange: (patch: Partial<WizardForm>) => void;
+  /** 화질별 크레딧. **서버가 정한다**(WebtoonQuality) — 못 받아 오면 값을
+   *  안 그린다. 틀린 값을 적느니 안 적는 게 낫다. */
+  qualities?: { key: string; label: string; credits: number }[];
 }) {
   const styleLabel = STYLE_INFO.find(([key]) => key === form.style)?.[1];
   const auto = <i className="wiz-auto">루가 정합니다</i>;
+
+  const creditsOf = (key: string) => qualities?.find((q) => q.key === key)?.credits;
+  const chosen = QUALITY_INFO.find((q) => q.key === form.quality) ?? QUALITY_INFO[1];
+  const chosenCredits = creditsOf(chosen.key);
+  const qualityRow = chosenCredits == null
+    ? chosen.label
+    : `${chosen.label} · ${chosenCredits}크레딧`;
 
   const rows: [string, React.ReactNode][] = [
     ["캐릭터", form.name.trim() || auto],
@@ -26,10 +40,12 @@ export default function Step5Review({
     ["이야기", cut(form.story, 34) ?? auto],
     ["장르", form.genre.trim() || auto],
     ["그림체", styleLabel ?? auto],
+    ["그림 밀도", qualityRow],
     ["보는 방식", form.mode === "expert" ? "2번 확인하며" : "빠르게 결과부터"],
   ];
 
   const pick = (mode: WizardMode) => onChange({ mode });
+  const pickQuality = (quality: WizardQuality) => onChange({ quality });
 
   return (
     <section className="wiz-step wiz-step-fork" data-step="5">
@@ -38,8 +54,42 @@ export default function Step5Review({
           이 덩어리가 왼쪽 칸으로 간다(webtoon.css 의 .wiz-say). */}
       <div className="wiz-say">
         <p className="wiz-eyebrow">바닥 · STEP 5 / 5</p>
-        <h3 className="wiz-title">어떻게 볼까요?</h3>
+        <h3 className="wiz-title">어떻게 그릴까요?</h3>
       </div>
+
+      {/* 얼마나 촘촘히 — 시간과 크레딧이 같이 움직인다.
+          시간은 **줄이 비었을 때** 기준이라 "약" 을 붙인다(만들기는 한 번에
+          한 편씩 돈다 — 앞에 사람이 있으면 그만큼 더 걸린다). */}
+      <div className="fork fork-3">
+        {QUALITY_INFO.map((q) => {
+          const credits = creditsOf(q.key);
+          return (
+            <button
+              type="button"
+              key={q.key}
+              className="fork-card"
+              aria-pressed={form.quality === q.key}
+              onClick={() => pickQuality(q.key)}
+            >
+              <h4>{q.label}</h4>
+              <p className="fork-meta">
+                {q.lede}
+                {credits != null && <span className="fork-credit">{credits}크레딧</span>}
+              </p>
+              <p className="fork-lede">
+                {q.desc.map((line, i) => (
+                  <span key={line}>
+                    {i > 0 && <br />}
+                    {line}
+                  </span>
+                ))}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="wiz-subtitle">그리고 어떻게 볼까요?</p>
 
       <div className="fork">
         <button

@@ -15,7 +15,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.UUID;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,11 +30,32 @@ import java.util.concurrent.Executors;
 /**
  * 한 편을 실제로 만든다 — 걸음마다 파이썬을 부른다.
  *
- * <h2>한 번에 하나씩</h2>
+ * <h2>한 번에 둘씩</h2>
  *
- * 그림 만들기는 CPU 와 바깥 모델을 동시에 쓴다. 여럿을 같이 돌리면 다 같이
- * 느려지고, 무엇보다 <b>돈이 동시에 여러 갈래로 나간다</b>. 파이썬 서버가
- * 그랬듯 여기서도 한 줄로 세운다.
+ * 한 줄로 세워 한 편씩만 돌렸다. 그런데 실측해 보니 <b>한 장 37초 중 대부분이
+ * 모델 응답을 기다리는 시간</b>이고 CPU 는 거의 안 쓴다 — 나란히 돌리면 거의
+ * 그대로 두 배가 나오는 모양이다. 반면 기다리는 쪽은 아팠다: 2026-09-13 에
+ * 세 편을 걸어 보니 셋째가 <b>15분 16초</b>를 기다렸다(실측).
+ *
+ * <b>그래서 둘까지만 나란히 돌린다.</b> 무제한이 아닌 이유:
+ *
+ * <ul>
+ *   <li><b>메모리</b> — 이어붙이기가 1024×9216 캔버스를 만든다. 배포 서버
+ *       (t3.small)의 여유는 899MB 다. 둘까지가 재 보지 않고 걸 수 있는 선이다.</li>
+ *   <li><b>rate limit</b> — 같은 열쇠로 동시 요청이 늘면 429 가 난다.</li>
+ *   <li><b>돈</b> — 동시에 시작하면 하루 상한을 넘겨서 시작할 수 있다
+ *       ({@code SpendGuard} 는 시작할 때만 본다).</li>
+ * </ul>
+ *
+ * 넷·다섯으로 먼저 올리지 않는다. <b>둘로 재 보고</b>({@code started_at} ·
+ * {@code finished_at}) 그 숫자가 괜찮다고 하면 그때 올린다.
+ *
+ * <h2>둘이 되면서 같이 고쳐야 했던 것</h2>
+ *
+ * 한 줄일 때만 맞던 것들이 있었다 — 작품 번호를 「가장 최근 폴더」로 되찾던
+ * 것({@link #newRunId} 로 옮김)과, 도는 프로세스를 하나만 기억하던 것
+ * ({@code HarnessProcess} 가 작업마다 담는다). 둘 다 <b>오류를 내지 않고
+ * 조용히 틀리는</b> 자리였다.
  *
  * <h2>사람이 멈춰 서는 자리 둘</h2>
  *
@@ -48,13 +72,22 @@ public class JobRunner {
 
     private static final Logger log = LoggerFactory.getLogger(JobRunner.class);
 
-    /** 한 줄로 세운다. 하나가 끝나야 다음이 돈다. */
-    private final ExecutorService line = Executors.newSingleThreadExecutor(r -> {
-        Thread t = Thread.ofPlatform().unstarted(r);
-        t.setName("webtoon-job");
-        t.setDaemon(true);
-        return t;
-    });
+    /**
+     * 나란히 도는 수. <b>기본 둘.</b>
+     *
+     * 배포에서 줄여야 하면 {@code lore.webtoon.workers} 로 1 을 주면 예전처럼
+     * 한 줄이 된다 — 배포 후에 rate limit 이나 메모리가 터지면 코드를 되돌리지
+     * 않고 이 값만 내린다.
+     */
+    static final int DEFAULT_WORKERS = 2;
+
+    private final int workers;
+    private final ExecutorService line;
+
+    /** 나란히 도는 수. 줄 예상이 이 값으로 나눈다({@link JobQueue}). */
+    public int workers() {
+        return workers;
+    }
 
     /** 사람이 화면에서 그만두라고 했을 때 남는 말. */
     static final String CANCELLED = "만들기를 취소했습니다";
@@ -69,7 +102,6 @@ public class JobRunner {
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
 
     /** 지금 하네스 안에 들어가 있는 작업. 취소가 이걸 보고 죽일지 정한다. */
-    private volatile Long inHarness;
 
     private final HarnessProcess harness;
     private final JobProgress progress;
@@ -87,7 +119,19 @@ public class JobRunner {
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
                      StoryStore stories, AfterRun after, WorkLedger works,
                      CreditGate credits, GuestGate guests,
+                     @Value("${lore.webtoon.workers:2}") int workers,
                      @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
+        /* 0 이나 음수를 주면 만들기가 통째로 멈춘다 — 설정 실수로 서비스가
+           죽지 않게 최소 하나는 돈다. */
+        this.workers = Math.max(1, workers);
+        java.util.concurrent.atomic.AtomicInteger seq = new java.util.concurrent.atomic.AtomicInteger();
+        this.line = Executors.newFixedThreadPool(this.workers, r -> {
+            Thread t = Thread.ofPlatform().unstarted(r);
+            t.setName("webtoon-job-" + seq.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        });
+        log.info("만들기를 {}편씩 나란히 돌립니다", this.workers);
         this.harness = harness;
         this.progress = progress;
         this.store = store;
@@ -173,7 +217,7 @@ public class JobRunner {
      */
     public void cancel(Long jobId) {
         cancelled.add(jobId);
-        if (jobId.equals(inHarness) && harness.stopCurrent()) {
+        if (harness.stopCurrent(jobId)) {
             log.info("만들기를 멈춥니다 (job={})", jobId);
             return;
         }
@@ -204,6 +248,9 @@ public class JobRunner {
     public void redrawSheet(Long jobId, String note) {
         line.submit(() -> {
             try {
+                if (!startable(jobId)) {
+                    return;         // 줄에서 기다리는 동안 그만뒀다
+                }
                 WebtoonJob job = store.running(jobId, JobStage.SHEET);
                 progress.say(jobId, "루가 캐릭터를 다시 그리고 있어요");
 
@@ -243,12 +290,7 @@ public class JobRunner {
     private int callHarness(Long jobId, WebtoonJob job, List<String> args)
             throws IOException, InterruptedException {
         stopIfCancelled(jobId);
-        inHarness = jobId;
-        try {
-            return harness.run(args, env(job), out -> progress.line(jobId, out));
-        } finally {
-            inHarness = null;
-        }
+        return harness.run(jobId, args, env(job), out -> progress.line(jobId, out));
     }
 
     /** 그만두라고 했으면 여기서 멈춘다. 버그가 아니므로 따로 던진다. */
@@ -256,6 +298,31 @@ public class JobRunner {
         if (cancelled.contains(jobId)) {
             throw new Cancelled();
         }
+    }
+
+    /**
+     * <b>이 작업을 시작해도 되나.</b> 줄에서 차례가 온 걸음이 제일 먼저 묻는다.
+     *
+     * <h2>왜 메모리가 아니라 DB 를 보나</h2>
+     *
+     * 취소 표시({@link #cancelled})는 {@link #stop} 이 <b>끝내면서 지운다.</b>
+     * 그래서 아직 줄에 있는 작업을 취소하면, 표시가 지워진 뒤에 그 작업의
+     * 차례가 와서 <b>표시를 못 보고 그냥 돈다.</b> 2026-09-13 에 실제로 그랬다 —
+     * 취소하고 값을 돌려받은 작품이 되살아나 끝까지 그려졌다. 돈은 두 번 나가고
+     * 환불은 한 번 됐다.
+     *
+     * 끝났다는 사실은 DB 에 남으므로 그걸 본다. 표시는 <b>도는 것을 멈추는</b>
+     * 용도로만 남기고, <b>시작하지 않는</b> 판단은 여기서 한다.
+     *
+     * @return 시작해도 되면 true. 이미 끝난 것이면 false — 조용히 물러난다
+     */
+    private boolean startable(Long jobId) {
+        WebtoonJob job = store.byId(jobId);
+        if (job == null || job.getStatus().isOver()) {
+            log.info("이미 끝난 작업이라 시작하지 않습니다 (job={})", jobId);
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -271,28 +338,37 @@ public class JobRunner {
     }
 
     private void story(Long jobId, Path jobDir) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
         WebtoonJob job = store.running(jobId, JobStage.STORY);
         progress.say(jobId, "루가 이야기를 짓고 있어요");
 
-        int code = callHarness(jobId, job,
-                List.of("--character", jobDir.resolve("character.json").toString()));
+        /* **번호를 여기서 정해서 넘긴다.**
+         *
+         * 예전에는 하네스가 짓고 자바가 <b>가장 최근에 생긴 폴더</b>로 그걸
+         * 되찾았다. 한 줄로 세워 돌 때만 우연히 맞는 방법이고, 두 편을 같이
+         * 돌리는 순간 <b>두 사람의 작품이 뒤바뀐다</b> — 그리고 그 다음에
+         * 이어지는 것이 전부 어긋난다(소유권·크레딧·공개 여부·비용 귀속).
+         *
+         * 이제 번호는 자바 것이다. 되찾을 일이 없으니 가릴 것도 없다. */
+        String runId = newRunId();
+        int code = callHarness(jobId, job, List.of(
+                "--run-id", runId,
+                "--character", jobDir.resolve("character.json").toString()));
         /* **성공을 보기 전에 값부터 적는다.** 이 걸음이 죽어도 이야기 넷을 쓴
-           값은 이미 나갔다. 아직 작품 번호를 모르니(그건 아래에서 읽는다)
-           방금 값이 적힌 폴더에서 찾는다. */
-        after.cost(latestMeta());
+           값은 이미 나갔다. 이제 어느 작품인지 알고 있으므로 짐작하지 않는다. */
+        after.cost(runId);
         stopIfCancelled(jobId);
         if (code != 0) {
             throw new IllegalStateException("이야기 후보를 만들지 못했습니다");
         }
 
-        String runId = latestRun();
-        if (runId == null) {
-            throw new IllegalStateException("작품 번호를 읽지 못했습니다");
-        }
         store.learnRun(jobId, runId);
         // 장부에도 채운다 — 이게 없으면 「내가 만든 웹툰」이 이 작품을 못 찾는다.
         works.learnedRun(job.getPublicId(), runId, job.getUserId());
         writeStyle(runId, job.getStyle());
+        writeQuality(runId, job.getQuality());
 
         List<Map<String, Object>> directions = directionsOf(runId);
         if (directions.isEmpty()) {
@@ -351,6 +427,9 @@ public class JobRunner {
     }
 
     private void sheet(Long jobId) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
         WebtoonJob job = store.running(jobId, JobStage.SHEET);
         progress.say(jobId, "루가 캐릭터를 그리고 있어요");
 
@@ -383,6 +462,9 @@ public class JobRunner {
     }
 
     private void pages(Long jobId) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
         WebtoonJob job = store.running(jobId, JobStage.PAGES);
         progress.say(jobId, "루가 그림을 그리고 있어요");
 
@@ -419,13 +501,22 @@ public class JobRunner {
     /**
      * 하네스에 넘기는 환경변수.
      *
-     * 그림체 하나뿐이다. 프로바이더·모델은 <b>하네스 코드의 기본값</b>이
-     * 정한다({@code new_harness/llm.py} 의 {@code DEFAULT_PROVIDER}) —
-     * 설정이 자바와 파이썬 두 군데로 갈리면 한쪽만 고치는 사고가 난다.
+     * <b>사람이 고른 것만</b> 넘긴다 — 그림체와 화질 둘이다. 프로바이더·모델
+     * 같은 <b>우리가 정하는 값</b>은 하네스 코드의 기본값이 정한다
+     * ({@code llm.py} 의 {@code DEFAULT_PROVIDER}, {@code imagegen.py} 의
+     * {@code DEFAULT_IMAGE_QUALITY}) — 그런 값을 자바와 파이썬 두 군데에 적으면
+     * 한쪽만 고치는 사고가 난다.
+     *
+     * 가르는 기준은 <b>요청마다 달라지느냐</b>다. 달라지는 값은 여기로 넘기고,
+     * 안 달라지는 값은 하네스에 박는다.
      */
     private Map<String, String> env(WebtoonJob job) {
         Map<String, String> env = new HashMap<>();
         env.put("NH_STYLE", job.getStyle());
+        /* 사람이 고른 화질. 그림체와 <b>같은 성격</b>이라 같이 넘긴다 —
+           요청마다 다른 값이므로 코드 기본값으로는 못 정한다.
+           안 넘어가면 하네스가 자기 기본값(medium)으로 그린다. */
+        env.put("OPENAI_IMAGE_QUALITY", WebtoonQuality.harnessValue(job.getQuality()));
         // NH_RUNS_DIR 은 HarnessProcess 가 띄우는 모든 파이썬에 한자리에서 넣는다.
         return env;
     }
@@ -451,56 +542,43 @@ public class JobRunner {
     }
 
     /**
+     * 어느 화질로 그렸는지 작품 폴더에 남긴다.
+     *
+     * <b>한 장만 다시 그릴 때 읽는다</b>({@code RegenService}). 이게 없으면 그
+     * 장만 하네스 기본값으로 나와서 한 편 안에서 밀도가 갈린다 — 그림체를
+     * 남기는 것과 같은 이유이고, 같은 자리에 같은 방식으로 남긴다.
+     *
+     * 못 남겨도 만들기는 안 막는다 — 다시 그릴 때 기본값으로 떨어질 뿐이다.
+     */
+    private void writeQuality(String runId, String quality) {
+        try {
+            Files.writeString(runsDir.resolve(runId).resolve("quality.txt"),
+                    WebtoonQuality.normalize(quality));
+        } catch (IOException e) {
+            log.warn("화질을 남기지 못했습니다 (run={}, quality={})", runId, quality, e);
+        }
+    }
+
+    /**
      * 방금 만들어진 작품 번호.
      *
      * 파이썬이 시각으로 폴더 이름을 지으므로 <b>가장 최근에 생긴 것</b>이
      * 방금 것이다. 한 줄로 세워 돌리기 때문에 그 사이에 다른 것이 끼어들지
      * 않는다 — 여럿을 같이 돌리기 시작하면 이 방법부터 못 쓴다.
      */
-    private String latestRun() throws IOException {
-        return newestRunWith("directions.json");
-    }
-
     /**
-     * 방금 <b>값이 나간</b> 작품 번호. 이야기 걸음이 죽었을 때 쓴다.
+     * 새 작품 번호. <b>하네스가 짓던 것과 같은 모양</b>이다
+     * ({@code story.new_run_id} — 시각 + 여섯 자리).
      *
-     * {@link #latestRun()} 은 못 쓴다 — 그건 이야기 후보 파일
-     * ({@code directions.json})이 있는 폴더를 찾는데, 죽은 작품에는 그게 없다.
-     * 값을 적는 파일({@code meta.json})은 <b>첫 호출부터</b> 쌓이므로 이쪽을
-     * 본다.
-     *
-     * 하네스가 폴더도 못 만들고 죽었으면 <b>앞 작품</b>이 잡힐 수 있다. 그래도
-     * 해롭지 않다 — 그건 이미 다 적힌 것이라 서버가 통째로 걸러 아무 줄도 안
-     * 남는다.
+     * 같은 초에 둘이 시작해도 뒤가 달라서 안 겹친다. 시각을 앞에 두는 것은
+     * 폴더를 늘어놓았을 때 사람이 순서를 읽을 수 있게 하려는 것이다.
      */
-    private String latestMeta() {
-        try {
-            return newestRunWith("meta.json");
-        } catch (IOException e) {
-            log.warn("나간 값을 적을 작품을 못 찾았습니다", e);
-            return null;
-        }
+    private String newRunId() {
+        String when = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss")
+                .withZone(ZoneId.systemDefault()).format(Instant.now());
+        return when + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
     }
 
-    private String newestRunWith(String marker) throws IOException {
-        if (!Files.isDirectory(runsDir)) {
-            return null;
-        }
-        try (var kids = Files.list(runsDir)) {
-            return kids.filter(Files::isDirectory)
-                    .filter(p -> Files.isRegularFile(p.resolve(marker)))
-                    .max((a, b) -> {
-                        try {
-                            return Files.getLastModifiedTime(a)
-                                    .compareTo(Files.getLastModifiedTime(b));
-                        } catch (IOException e) {
-                            return 0;
-                        }
-                    })
-                    .map(p -> p.getFileName().toString())
-                    .orElse(null);
-        }
-    }
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> directionsOf(String runId) {
@@ -627,7 +705,7 @@ public class JobRunner {
      * 화면에는 "돌려드렸어요" 가 그대로 떴다. 돌려주는 쪽이 알려 주는 값으로
      * 정한다.
      */
-    private Refunded refund(Long jobId) {
+    Refunded refund(Long jobId) {
         try {
             WebtoonJob job = store.byId(jobId);
             if (job == null) {

@@ -172,6 +172,28 @@ public class PageStore {
      * 장 번호 순서를 지킨 채로 준다({@code LinkedHashMap}) — 순서가 흐트러지면
      * 한 편이 뒤죽박죽으로 이어진다.
      */
+    /**
+     * 장 번호 -> <b>원본</b>(폭 0) S3 키.
+     *
+     * {@link #keysOf} 는 <b>제일 큰 폭</b>을 주므로 1080 짜리 jpg 가 나온다 —
+     * 보여 주는 데는 그게 맞다. 그런데 <b>다시 그리기</b>는 다르다: 파이프라인이
+     * 직전 장 그림을 참조로 붙여 이어 그리므로, 화면용으로 줄이고 jpg 로 구운
+     * 것이 아니라 그려진 그대로의 PNG 가 있어야 한다.
+     *
+     * 서버 디스크의 원본은 S3 에 올린 뒤 지운다(편당 31MB 가 안 지워지고
+     * 쌓이던 것). 그래서 다시 그릴 때 <b>여기서 받은 키로 되살린다.</b>
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, String> originalKeys(String runId) {
+        Map<Integer, String> out = new LinkedHashMap<>();
+        for (WebtoonPage page : pages.findByRunIdOrderByPageNoAscWidthAsc(runId)) {
+            if (page.getWidth() == 0) {
+                out.put(page.getPageNo(), page.getS3Key());
+            }
+        }
+        return out;
+    }
+
     @Transactional(readOnly = true)
     public Map<Integer, String> keysOf(String runId) {
         Map<Integer, String> out = new LinkedHashMap<>();

@@ -6,6 +6,7 @@ import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.credit.GuestGate;
 import com.lore.webtoon.job.AfterRun;
 import com.lore.webtoon.job.JobController;
+import com.lore.webtoon.job.JobQueue;
 import com.lore.webtoon.job.JobService;
 import com.lore.webtoon.job.RunArt;
 import com.lore.webtoon.runs.BakeService;
@@ -67,6 +68,7 @@ class WebtoonGuestAccessTest {
        가짜로 채운다. 가짜는 기본으로 null 을 주므로 문지기는 전부 통과로
        읽히고, 막는 쪽 동작은 SpendGuardTest·GuestGateTest 가 본다. */
     @MockitoBean JobService jobService;
+    @MockitoBean JobQueue jobQueue;
     @MockitoBean RunArt runArt;
     @MockitoBean SpendGuard spendGuard;
     @MockitoBean GuestGate guestGate;

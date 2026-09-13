@@ -26,13 +26,15 @@ class JobViewTest {
     private WebtoonJob job(JobStatus status, JobStage stage) {
         // 게스트 열쇠는 로그인한 사람에게 없다 — 여기 7L 은 계정이다.
         WebtoonJob job = WebtoonJob.queued("job-1", 7L, "uid-a", null, "romance_fantasy",
-                true, "{}", Instant.parse("2026-09-06T00:00:00Z"));
+                WebtoonQuality.DEFAULT_QUALITY, true, "{}",
+                Instant.parse("2026-09-06T00:00:00Z"));
         job.moveTo(status, stage, Instant.parse("2026-09-06T00:01:00Z"));
         return job;
     }
 
     private JobView view(WebtoonJob job, JobProgress.Snapshot now) {
-        return JobView.of(job, now, List.of(), "로맨스 판타지", "이야기 짓기");
+        // 줄 정보는 여기서 볼 것이 아니다(JobQueueTest 가 본다) — 내 차례라고 둔다.
+        return JobView.of(job, now, List.of(), "로맨스 판타지", "이야기 짓기", null);
     }
 
     @Test

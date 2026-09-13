@@ -58,14 +58,16 @@ public class JobController {
     static final String PREFIX = WebtoonApi.V1 + "/nh";
 
     private final JobService jobs;
+    private final JobQueue queue;
     private final RunArt art;
     private final SpendGuard guard;
     private final GuestGate guests;
     private final CreditGate credits;
 
-    public JobController(JobService jobs, RunArt art, SpendGuard guard, GuestGate guests,
-                         CreditGate credits) {
+    public JobController(JobService jobs, JobQueue queue, RunArt art, SpendGuard guard,
+                         GuestGate guests, CreditGate credits) {
         this.jobs = jobs;
+        this.queue = queue;
         this.art = art;
         this.guard = guard;
         this.guests = guests;
@@ -90,6 +92,11 @@ public class JobController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("logged_in", me != null);
         out.put("credit_cost", credits.cost());
+        /* 화질 셋과 각각의 값. **화면이 여기서 받아 간다** — 같은 표를 화면에도
+           적어 두면, 한쪽만 고치는 순간 적힌 값과 실제로 빠지는 크레딧이
+           어긋난다. 사람에게 그건 거짓말이다. */
+        out.put("qualities", WebtoonQuality.choices());
+        out.put("quality_default", WebtoonQuality.DEFAULT_QUALITY);
         if (me == null) {
             Integer left = guests.freeLeft(request);
             out.put("free_left", left);
@@ -118,7 +125,10 @@ public class JobController {
          *
          * 순서는 프록시 길과 같다: 전체 몫이 먼저다. 오늘 다 찼으면 로그인해도
          * 못 만드는데 "로그인하면 됩니다" 라고 말하면 거짓말이 된다. */
-        String blocked = guard.whyBlocked();
+        /* **아직 안 적힌 몫까지 세어서 묻는다.** 나란히 둘을 돌리면 상한까지
+           한 편 남았을 때 둘이 같이 물어 둘 다 통과할 수 있다 — 둘 다 아직
+           아무것도 안 썼기 때문이다. 줄에 선 것들이 쓸 돈을 미리 잡아 준다. */
+        String blocked = guard.whyBlocked(queue.reserved());
         int code = 429;
         boolean counted = false;
         String guestKey = null;
@@ -130,8 +140,12 @@ public class JobController {
                 guestKey = guests.keyOf(request);
             }
         }
+        /* **고른 화질만큼 받는다.** 너울(high)은 원가가 파도의 2.4배라 같은
+           값으로 팔면 한 편마다 손해다 — 실제로 그렇게 한 달 가까이 돌았다.
+           값은 WebtoonQuality 한 곳만 안다. */
+        int need = WebtoonQuality.creditsOf(form.quality());
         if (blocked == null) {
-            blocked = credits.whyBlocked(me);
+            blocked = credits.whyBlocked(me, need);
             if (blocked != null) {
                 code = 402;                     // 기다려도 안 풀린다 — 충전해야 한다
             }
@@ -139,6 +153,11 @@ public class JobController {
         if (blocked != null) {
             return ResponseEntity.status(code).body(Map.of("error", blocked));
         }
+
+        /* **줄 선 자리를 만들기 직전에 센다.** 여기서 센 값이 화면에 「앞에
+           3명」으로 적히고, 그대로 작업에 남는다 — 나중에 실제로 기다린
+           시간과 맞춰 보면 우리 예상이 맞았는지 알 수 있다. */
+        int ahead = queue.ahead();
 
         String id;
         try {
@@ -151,8 +170,10 @@ public class JobController {
             }
             throw e;
         }
-        credits.charge(me, id);                 // 만들어진 뒤에 받는다
-        return ResponseEntity.ok(Map.of("id", id, "queue_position", 0));
+        // 만들어진 뒤에 받는다. 같은 작업으로 두 번 불려도 한 번만 빠진다.
+        credits.charge(me, need, id, WebtoonQuality.labelOf(form.quality()));
+        queue.remember(id, ahead);
+        return ResponseEntity.ok(Map.of("id", id, "queue_position", ahead));
     }
 
     @Operation(summary = "진행 상황", description = """

@@ -66,6 +66,7 @@ public class JobService {
 
     private final WebtoonJobRepository jobs;
     private final JobStore store;
+    private final JobQueue queue;
     private final JobRunner runner;
     private final JobProgress progress;
     private final StoryStore stories;
@@ -78,7 +79,8 @@ public class JobService {
     private final Path jobsDir;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public JobService(WebtoonJobRepository jobs, JobStore store, JobRunner runner,
+    public JobService(WebtoonJobRepository jobs, JobStore store, JobQueue queue,
+                      JobRunner runner,
                       JobProgress progress, StoryStore stories, WorkLedger works,
                       CharacterService characters, CharacterOwner owner, PrivateArt art,
                       S3Service uploads, S3Storage storage,
@@ -91,6 +93,7 @@ public class JobService {
         this.uploads = uploads;
         this.storage = storage;
         this.store = store;
+        this.queue = queue;
         this.runner = runner;
         this.progress = progress;
         this.stories = stories;
@@ -149,8 +152,9 @@ public class JobService {
         }
 
         String style = STYLE.getOrDefault(blank(form.style()), DEFAULT_STYLE);
+        String quality = WebtoonQuality.normalize(form.quality());
         WebtoonJob job = jobs.save(WebtoonJob.queued(
-                publicId, userId, browserUid, guestKey, style,
+                publicId, userId, browserUid, guestKey, style, quality,
                 form.checkpoints() == null || form.checkpoints(),
                 inputOf(form), Instant.now()));
 
@@ -198,7 +202,8 @@ public class JobService {
         return JobView.of(job, progress.of(job.getId()),
                 store.directionsOf(job.getId()),
                 WebtoonStyles.labelOf(job.getStyle()),
-                STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()));
+                STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
+                queue.spotOf(job));
     }
 
     /** 사람이 이야기를 골랐다. */
@@ -536,7 +541,10 @@ public class JobService {
                                    하네스가 사진을 읽을 때 그대로 붙여 준다
                                    (new_harness/run.py 의 "첨부한 사진 n장을 보라(…)"). */
                                 @JsonProperty("photo_note") @JsonAlias("photoNote")
-                                String photoNote) {
+                                String photoNote,
+                                /* 얼마나 촘촘히 그릴까 — wave · surf · swell.
+                                   안 보내면 기본(파도)이다. */
+                                String quality) {
 
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;

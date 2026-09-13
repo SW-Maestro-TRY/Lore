@@ -61,7 +61,7 @@ class HarnessProcessTest {
     @DisplayName("파이썬을 실제로 돌리고 나오는 줄을 읽는다 (--plan, 돈 안 나감)")
     void 실제로_돈다() throws Exception {
         List<String> lines = new ArrayList<>();
-        int code = process(120).run(List.of("--plan"), Map.of(), lines::add);
+        int code = process(120).run(1L, List.of("--plan"), Map.of(), lines::add);
 
         assertThat(code).isZero();
         assertThat(lines).isNotEmpty();
@@ -74,7 +74,7 @@ class HarnessProcessTest {
     @DisplayName("넘긴 환경변수가 파이썬에 닿는다 — 그림체가 이 길로 간다")
     void 환경변수가_닿는다() throws Exception {
         List<String> lines = new ArrayList<>();
-        process(120).run(List.of("--plan"), Map.of("NH_STYLE", "romance_fantasy"), lines::add);
+        process(120).run(1L, List.of("--plan"), Map.of("NH_STYLE", "romance_fantasy"), lines::add);
 
         assertThat(lines).isNotEmpty();
     }
@@ -89,7 +89,7 @@ class HarnessProcessTest {
         Files.writeString(fake.resolve("run.py"), "import time\ntime.sleep(600)\n");
 
         HarnessProcess slow = new HarnessProcess("python3", fake.toString(), 1, "", null);
-        assertThatThrownBy(() -> slow.run(List.of(), Map.of(), line -> { }))
+        assertThatThrownBy(() -> slow.run(1L, List.of(), Map.of(), line -> { }))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("오래");
     }

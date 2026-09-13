@@ -2236,7 +2236,9 @@ def main(argv=None) -> int:
     p.add_argument("--desc", default="", help="설명 (선택)")
     p.add_argument("--genre", default="", help="장르 (선택)")
 
-    p.add_argument("--run-id", help="이어서 할 run")
+    p.add_argument("--run-id",
+                   help="이어서 할 run. 없는 번호를 주고 --character 를 같이 "
+                        "주면 그 번호로 새로 만든다 (앱 서버가 번호를 쥔다)")
     p.add_argument("--pick", type=int, help="고를 방향 번호 (없으면 물어본다)")
     p.add_argument("--detail", action="store_true",
                    help="스토리 구체화만 (콘티로 이어가지 않는다)")
@@ -2324,20 +2326,28 @@ def main(argv=None) -> int:
               "(.env.example 참고).")
         return 0
 
-    if args.run_id:
+    if args.run_id and (RUNS_DIR / args.run_id).exists():
         run_dir = RUNS_DIR / args.run_id
-        if not run_dir.exists():
-            raise SystemExit(f"그런 run 이 없습니다: {run_dir}")
         char = read_input(run_dir)
         new_run = False
+    elif args.run_id and not (args.character or args.name):
+        # 이어서 하라고 했는데 이어 갈 것이 없다.
+        raise SystemExit(f"그런 run 이 없습니다: {RUNS_DIR / args.run_id}")
     else:
+
         char = (read_character(args.character) if args.character
                 else normalize({"name": args.name, "description": args.desc,
                                 "genre": args.genre, "photos": args.photo}))
         bad = gate_input(char)
         if bad:
             raise SystemExit("입력이 모자랍니다:\n  - " + "\n  - ".join(bad))
-        run_dir = RUNS_DIR / story.new_run_id()
+        # **번호는 부르는 쪽이 정할 수 있다.**
+        #
+        # 안 주면 예전처럼 여기서 짓는다(사람이 손으로 돌릴 때). 주면 그 번호를
+        # 쓴다 — 앱 서버가 여러 편을 **동시에** 돌리기 시작하면 "방금 생긴 폴더"
+        # 로는 어느 것이 누구 것인지 못 가린다. 부르는 쪽이 번호를 쥐고 있으면
+        # 가릴 것도 없다.
+        run_dir = RUNS_DIR / (args.run_id or story.new_run_id())
         write_json(run_dir / "input.json", char)
         new_run = True
         log(f"run: {run_dir}")

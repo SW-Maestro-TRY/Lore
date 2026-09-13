@@ -3,6 +3,7 @@ package com.lore.webtoon.runs;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PageUploader;
 import com.lore.webtoon.job.HarnessProcess;
+import com.lore.webtoon.job.RunFiles;
 import com.lore.webtoon.job.JobRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,15 +67,18 @@ public class RegenService {
     private final HarnessProcess harness;
     private final PageUploader uploader;
     private final JobRunner runner;
+    private final RunFiles files;
 
     public RegenService(PageRegenRepository regens, PageStore pages, BakeService bakery,
-                        HarnessProcess harness, PageUploader uploader, JobRunner runner) {
+                        HarnessProcess harness, PageUploader uploader, JobRunner runner,
+                        RunFiles files) {
         this.regens = regens;
         this.pages = pages;
         this.bakery = bakery;
         this.harness = harness;
         this.uploader = uploader;
         this.runner = runner;
+        this.files = files;
     }
 
     /**
@@ -207,6 +211,10 @@ public class RegenService {
         Path dest = pageFile(runId, no);
 
         try {
+            /* **참조할 그림부터 되살린다.** 이어그리기는 직전 장 그림을 붙여
+               그리는데, 올린 뒤 서버 사본을 치우므로 그 그림이 디스크에 없을
+               수 있다(RunFiles). 없으면 그 장만 앞뒤가 안 맞게 나온다. */
+            files.restore(runId, no);
             archive(runId, no);
             Files.deleteIfExists(dest);           // run.py 는 파일이 있으면 안 그린다
 
@@ -224,8 +232,15 @@ public class RegenService {
             if (!style.isBlank()) {
                 env.put("NH_STYLE", style);
             }
+            /* **같은 화질로 다시 그린다.** 안 넘기면 이 장만 하네스 기본값으로
+               나와서 한 편 안에서 밀도가 갈린다 — 그림체를 맞추는 것과 같은
+               이유다. 옛 작업은 화질이 없어서 기본값으로 돌아간다. */
+            env.put("OPENAI_IMAGE_QUALITY",
+                    com.lore.webtoon.job.WebtoonQuality.harnessValue(qualityOf(runId)));
 
-            int code = harness.run(args, env, line -> { });
+            /* 다시 그리기는 취소 대상이 아니라 번호를 안 준다 — 작업이 아니라
+               편집실에서 한 장을 고치는 일이고, 멈추는 길이 따로 없다. */
+            int code = harness.run(null, args, env, line -> { });
             if (code != 0 || !Files.isRegularFile(dest)) {
                 fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
                 return;
@@ -267,6 +282,15 @@ public class RegenService {
 
     private Path versionsDir(String runId) {
         return runner.runDir(runId).resolve("pages").resolve("versions");
+    }
+
+    /** 남겨 둔 화질. 없으면(옛 작품) 기본값으로 떨어진다. */
+    private String qualityOf(String runId) {
+        try {
+            return Files.readString(runner.runDir(runId).resolve("quality.txt")).strip();
+        } catch (IOException e) {
+            return "";
+        }
     }
 
     /** 남겨 둔 그림체. 없으면 하네스 기본값으로 떨어진다. */

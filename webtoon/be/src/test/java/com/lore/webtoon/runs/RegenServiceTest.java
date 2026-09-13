@@ -75,7 +75,8 @@ class RegenServiceTest {
         runner = mock(JobRunner.class);
         when(runner.runDir("run-1")).thenReturn(Files.createDirectories(runsDir.resolve("run-1")));
 
-        service = new RegenService(regens, pages, bakery, harness, uploader, runner);
+        service = new RegenService(regens, pages, bakery, harness, uploader, runner,
+                mock(com.lore.webtoon.job.RunFiles.class));
     }
 
     private void 페이지파일(int no, byte[] content) throws IOException {
@@ -114,7 +115,7 @@ class RegenServiceTest {
     @DisplayName("성공하면 지금 그림을 판본으로 남기고, 다시 올리고, 구운 것을 지운다")
     void 성공하면_판본을_남긴다() throws Exception {
         페이지파일(1, "옛 그림".getBytes());
-        when(harness.run(any(), anyMap(), any())).thenAnswer(inv -> {
+        when(harness.run(any(), any(), anyMap(), any())).thenAnswer(inv -> {
             // run.py 가 새 그림을 떨어뜨리는 것을 흉내 낸다.
             페이지파일(1, "새 그림".getBytes());
             return 0;
@@ -135,7 +136,7 @@ class RegenServiceTest {
     @DisplayName("실패하면 원본을 지키고 사유를 남긴다 — 이미 낸 그림값은 안 돌려준다는 말과는 별개다")
     void 실패하면_원본을_지킨다() throws Exception {
         페이지파일(1, "지켜야 할 그림".getBytes());
-        when(harness.run(any(), anyMap(), any())).thenReturn(1);   // exit != 0
+        when(harness.run(any(), any(), anyMap(), any())).thenReturn(1);   // exit != 0
 
         String id = service.start("run-1", 1, "");
         큐를_바로_돌린다();
@@ -152,13 +153,13 @@ class RegenServiceTest {
     @DisplayName("콘티(pages.json)가 있는 옛 작품은 --detail-pages 를 안 붙인다")
     void 옛_작품은_옛_방식으로() throws Exception {
         Files.writeString(runsDir.resolve("run-1/pages.json"), "[]");
-        when(harness.run(any(), anyMap(), any())).thenReturn(1);
+        when(harness.run(any(), any(), anyMap(), any())).thenReturn(1);
 
         service.start("run-1", 1, "");
         큐를_바로_돌린다();
 
         ArgumentCaptor<List<String>> args = ArgumentCaptor.forClass(List.class);
-        verify(harness).run(args.capture(), anyMap(), any());
+        verify(harness).run(any(), args.capture(), anyMap(), any());
         assertThat(args.getValue()).doesNotContain("--detail-pages");
     }
 
