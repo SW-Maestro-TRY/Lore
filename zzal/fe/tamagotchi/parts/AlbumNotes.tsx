@@ -28,7 +28,9 @@ function giftLine(g: PetDetail['firstGift'], name: string): string | null {
     case 'OPEN': return `${name}의 첫 선물이 도착했어요`;
     case 'BAKING': return '첫 선물을 준비하고 있어요';
     case 'WAITING': return '오늘 잘 지내면 밤에 첫 선물을 준비해요';
-    case 'LOCKED': return g.daysLeft > 0 ? `첫 선물까지 ${g.daysLeft}일` : null;
+    // ★ `daysLeft` 는 **늘 0 이다**(2026-09-13 서버 변경 — 첫 선물이 날짜가 아니라 튜토리얼 완주로 바뀜).
+    //   그래서 옛 코드(`daysLeft > 0` 일 때만 말하기)는 **아무 말도 안 하게** 됐다. 조건을 지우고 문구로 바꾼다.
+    case 'LOCKED': return '조금 더 함께하면 첫 선물이 와요';
     default: return null;
   }
 }
