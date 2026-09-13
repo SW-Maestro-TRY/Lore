@@ -42,7 +42,7 @@ public class PythonMotionPostProcessor implements MotionPostProcessor {
     }
 
     @Override
-    public String build(String gridImageKey, String outputPrefix, String profile) throws Exception {
+    public Built build(String gridImageKey, String outputPrefix, String profile) throws Exception {
         if (profile == null || profile.isBlank()) {
             // 설정이 원인일 때는 설정 이름을 그대로 말한다. 여기서 멈추면 그림값은 이미 나간 뒤지만,
             // 검수를 거치지 않은 후처리로 구운 것을 지급하는 것보다는 낫다.
@@ -61,10 +61,14 @@ public class PythonMotionPostProcessor implements MotionPostProcessor {
             if (!Files.exists(file)) {
                 throw new IllegalStateException("후처리 결과가 없습니다: " + OUTPUT);
             }
+            // ★ 올리기 전에 잰다 — 이 파일이 크기를 아는 유일한 자리다. S3 에 올린 뒤에 재려면
+            //   다시 받아야 하고, 그 왕복은 크기를 안 쓰는 날에도 매번 든다.
+            WebpSize.Size size = WebpSize.read(file);
             String key = "%s/%s".formatted(outputPrefix, OUTPUT);
             storage.upload(key, file, "image/webp");
-            log.info("모션 후처리 완료 — {} → {} (프로파일 {})", gridImageKey, key, profile);
-            return key;
+            log.info("모션 후처리 완료 — {} → {} ({}x{}, 프로파일 {})",
+                    gridImageKey, key, size.width(), size.height(), profile);
+            return new Built(key, size.width(), size.height());
         } finally {
             deleteQuietly(work);
         }

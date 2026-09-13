@@ -28,23 +28,35 @@ public class MotionRecorder {
         this.candidateRepository = candidateRepository;
     }
 
+    /**
+     * 이번 굽기를 시작한다 — 시도 횟수가 하나 오른다.
+     *
+     * ★ <b>오른 값을 돌려준다</b> — 그 값이 곧 그림 주소의 판 번호다({@code motions/{id}/{판}/motion.webp}).
+     *   부르는 쪽이 스스로 +1 을 계산하면 여기와 갈리는 순간 <b>앞 판을 덮어쓴다</b>. 업로드도 DB 도
+     *   성공하는데 CDN 1년 캐시 때문에 옛 그림이 계속 나간다.
+     *
+     * @return 이번 시도가 몇 번째인가(행이 없으면 0)
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void beginAttempt(Long motionId) {
-        repository.findById(motionId).ifPresent(ZzalMotion::beginAttempt);
+    public int beginAttempt(Long motionId) {
+        return repository.findById(motionId).map(m -> {
+            m.beginAttempt();
+            return m.getAttempts();
+        }).orElse(0);
     }
 
     /** 구웠지만 게이트에 걸렸다. 판정만 남기고 열지 않는다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordGate(Long motionId, String imageKey, MotionGate.Verdict v) {
+    public void recordGate(Long motionId, String imageKey, Integer width, Integer height, MotionGate.Verdict v) {
         repository.findById(motionId).ifPresent(m ->
-                m.done(imageKey, MotionSource.API, v.verdict(), v.note(), v.version()));
+                m.done(imageKey, width, height, MotionSource.API, v.verdict(), v.note(), v.version()));
     }
 
     /**
      * 다 구워졌다 → 검수 대기. 사용자에게는 아직 안 보인다(PR-7 에서 "검수 전 지급" 을 없앴다).
      *
      * ★ 판을 <b>후보로도 남긴다.</b> 모션 행의 그림 키는 "지금 대표" 라 다음 판이 덮어쓰지만,
-     *   후보 줄은 남아서 판정 화면이 <b>나온 판을 전부</b> 보여 줄 수 있다(정본 1.9).
+     *   후보 줄은 남아서 판정 화면이 <b>나온 판을 전부</b> 보여 줄 수 있다(설계 규칙).
      *
      * ★★ <b>굽는 중이던 줄만 받는다.</b> 늦게 끝난 굽기가 이미 판정된 줄을 되돌리면, 아침에 받은 동작이
      *   다시 "연습 중" 으로 사라지고 판정을 다시 해야 한다({@link ZzalMotion#toReview}).
@@ -53,10 +65,11 @@ public class MotionRecorder {
      * @return 실제로 검수 대기로 옮겼으면 true
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean toReview(Long motionId, String gridKey, String imageKey, MotionGate.Verdict v) {
+    public boolean toReview(Long motionId, String gridKey, String imageKey, Integer width, Integer height,
+                            MotionGate.Verdict v) {
         // ★ 행을 잠그고 읽는다 — 상태를 보고 바꾸는 사이에 다른 굽기가 끼면 둘 다 통과한다.
         ZzalMotion m = repository.findByIdForUpdate(motionId).orElse(null);
-        if (m == null || !m.toReview(imageKey, MotionSource.API, v.verdict(), v.note(), v.version())) {
+        if (m == null || !m.toReview(imageKey, width, height, MotionSource.API, v.verdict(), v.note(), v.version())) {
             return false;   // 진 쪽 — 후보도 남기지 않는다. 남기면 같은 판이 둘로 보인다
         }
         candidateRepository.save(ZzalMotionCandidate.of(
@@ -79,7 +92,7 @@ public class MotionRecorder {
         }
         if (m.getRegenRound() >= max) {
             // ★ 라운드를 다 썼다 = 후보 일곱 판이 전부 아니었다는 뜻이다. 같은 조건으로 또 구우면
-            //   또 같은 것이 나온다(상훈님). 다음 밤에 자동으로 다시 올리지 않고 보류함에 둔다.
+            //   또 같은 것이 나온다(확정 규칙). 다음 밤에 자동으로 다시 올리지 않고 보류함에 둔다.
             m.hold();
             return false;
         }

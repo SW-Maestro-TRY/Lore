@@ -242,7 +242,7 @@ public class PetService {
     /**
      * 조회하면서 흐른 시간을 반영한다. 읽기 전용이 아니다 — 조회용 계산과 행동용 반영을 따로 두면
      * 언젠가 두 식이 어긋나고, 그때는 화면과 판정이 다른 값을 말한다.
-     * 그날 처음 열었으면 함께한 날 +1(정본 3장). 떠남 예고 취소는 PR-11.
+     * 그날 처음 열었으면 함께한 날 +1(설계 규칙). 떠남 예고 취소는 PR-11.
      */
     @Transactional
     public ZzalPet refresh(Long userId, Long petId, Instant realNow) {
@@ -281,12 +281,12 @@ public class PetService {
         pet.visit(now);
         reveal(pet, now);
         openPieces(pet, windowStart, now);
-        // ★ 기상에 네 칸을 되돌리고 기분 좋은 날의 선물을 얹는다(정본 1.9). 엔티티가 남긴 쪽지를 본다.
+        // ★ 기상에 네 칸을 되돌리고 기분 좋은 날의 선물을 얹는다(설계 규칙). 엔티티가 남긴 쪽지를 본다.
         pieceService.settle(pet);
     }
 
     /**
-     * 조각 4칸 등장 — 2층 8종이 다 열린 뒤 <b>처음 맞는 기상</b>(정본 6·16장).
+     * 조각 4칸 등장 — 2층 8종이 다 열린 뒤 <b>처음 맞는 기상</b>(설계 규칙).
      *
      * ★ 여기(서비스)에서 판정하는 이유 — "2층 8종이 다 열렸나" 는 카탈로그와 해금 규칙을 알아야 답할 수 있고,
      *   엔티티는 그 둘을 모른다. 엔티티는 "언제 다 열렸는지" 와 "언제 열어 줬는지" 만 기억한다.
@@ -342,11 +342,11 @@ public class PetService {
     }
 
     /**
-     * 아침 공개 — 검수를 통과한(OPEN) 동작을 <b>펫이 깨어 있는 첫 정산</b>에 도착시킨다(정본 2장 "기상 첫 화면").
+     * 아침 공개 — 검수를 통과한(OPEN) 동작을 <b>펫이 깨어 있는 첫 정산</b>에 도착시킨다(설계 규칙 "기상 첫 화면").
      *
      * <h3>★ 왜 시각이 아니라 "깨어 있는 첫 정산" 인가</h3>
      * "아침 7시에 준다" 로 못 박으면 두 가지가 어긋난다 — (1) 판정이 10:00 을 넘기면 그날은 못 준다.
-     * 정본 16장은 그 경우 <b>낮에 도착</b>하라고 한다. (2) 늦잠 자는 펫에게 자는 동안 도착하면
+     * 설계 규칙은 그 경우 <b>낮에 도착</b>하라고 한다. (2) 늦잠 자는 펫에게 자는 동안 도착하면
      * "일어나 보니 이미 알고 있던 일" 이 된다. 그래서 <b>깨어 있는 첫 정산</b> 하나로 둘 다 만족시킨다.
      * 자는 동안에는 아무것도 안 찍히고, 깨는 순간(사용자가 깨우든 10:00 자동이든) 그 정산에서 도착한다.
      *
@@ -361,7 +361,7 @@ public class PetService {
                 pet.getId(), MotionStatus.OPEN);
         arrived.forEach(m -> m.reveal(now));
         if (!arrived.isEmpty()) {
-            // ★ 자연 발병은 심화 행동이 열린 뒤에만 예약된다(정본 16장). 1·2층 기간엔 방치 발병만 있다.
+            // ★ 자연 발병은 심화 행동이 열린 뒤에만 예약된다(설계 규칙). 1·2층 기간엔 방치 발병만 있다.
             //   "받은 순간" 을 기준으로 삼는 이유 — 검수 통과 시각은 사용자가 모르는 서버 사정이다.
             pet.scheduleNaturalSickness();
         }
@@ -392,7 +392,7 @@ public class PetService {
      *   (영구 손실은 아니지만 다음 조회에서 시간이 되감긴 것처럼 보인다 — #225 리뷰 하-1).
      *   거절은 검사 단계에서 나므로 중간까지 바뀐 값이 남을 자리가 없다.
      *
-     * ★ {@code justHealed} 를 응답에 싣는 이유 — 정본 5장의 "나은 동작(기쁜 자세 + 반짝) 1회" 는
+     * ★ {@code justHealed} 를 응답에 싣는 이유 — 설계 규칙의 "나은 동작(기쁜 자세 + 반짝) 1회" 는
      *   <b>한 번만</b> 나와야 한다. 상태(안 아픔)로는 "방금 나은 것" 과 "원래 안 아팠던 것" 을 못 가른다.
      */
     public record Action(ZzalPet pet, List<Integer> justUnlocked, boolean justHealed) {
@@ -423,7 +423,7 @@ public class PetService {
         return new Action(pet, opened);
     }
 
-    // ── 돌봄 6종 (정본 4·5장) ─────────────────────────────────────────────
+    // ── 돌봄 6종 (설계 규칙) ─────────────────────────────────────────────
 
     @Transactional(noRollbackFor = BusinessException.class)
     public Action care(Long userId, Long petId, CareAction action, Instant realNow) {
@@ -431,12 +431,12 @@ public class PetService {
         Instant now = pet.now(realNow);
         boolean wasSick = pet.isSick();
         Action result = withUnlockDiff(pet, () -> doCare(pet, action, now));
-        // 약을 먹고 나은 그 응답에만 "나은 동작" 연출이 실린다(정본 5장).
+        // 약을 먹고 나은 그 응답에만 "나은 동작" 연출이 실린다(설계 규칙).
         return wasSick && !pet.isSick() ? result.healed() : result;
     }
 
     /**
-     * 돌보기 하나를 실제로 적용하고, <b>성공했을 때만</b> 조각을 센다(정본 6장 · 1.9).
+     * 돌보기 하나를 실제로 적용하고, <b>성공했을 때만</b> 조각을 센다(설계 규칙).
      *
      * ★ 거절("배가 불러요" · "이미 깨끗해요" · "오늘은 목욕했어요")은 여기서 예외로 끝나므로
      *   조각을 세는 줄에 닿지 않는다 — 세지 않으려고 따로 막을 것이 없다.
@@ -454,13 +454,13 @@ public class PetService {
                 pet.feed(now);
                 pieceService.count(pet, PieceEvent.FEED);
             }
-            // ★ 간식은 행복이 가득이어도 받는다(상훈님 2026-09-05 결정 — 원조도 간식은 항상 먹고 과다 시 병).
+            // ★ 간식은 행복이 가득이어도 받는다(2026-09-05 확정 — 원조도 간식은 항상 먹고 과다 시 병).
             //   밥만 가득이면 거절. 연속 5개 배탈은 PR-8.
             case SNACK -> {
                 if (pet.isSick()) {
                     throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
                 }
-                // ★ 배탈이 나는 그 간식(그날 5개째부터)은 조각에 세지 않는다(정본 1.9).
+                // ★ 배탈이 나는 그 간식(그날 5개째부터)은 조각에 세지 않는다(설계 규칙).
                 //   묻는 것이 먹이기 <b>전</b>이어야 한다 — 먹인 뒤에는 이미 숫자가 올라가 있다.
                 boolean upsets = pet.nextSnackUpsets();
                 pet.snack(now);
@@ -468,9 +468,9 @@ public class PetService {
                     pieceService.count(pet, PieceEvent.SNACK);
                 }
             }
-            // 쓰다듬기는 거절이 없다 — 하루 3회를 넘어도 반응 동작은 나온다(16장). 친밀도만 안 오른다.
+            // 쓰다듬기는 거절이 없다 — 하루 3회를 넘어도 반응 동작은 나온다. 친밀도만 안 오른다.
             case PET -> {
-                // ★ 쓰다듬기는 하루 3회까지만 센다. 거절이 없어 그대로 두면 연타로 채울 수 있다(정본 6장).
+                // ★ 쓰다듬기는 하루 3회까지만 센다. 거절이 없어 그대로 두면 연타로 채울 수 있다(설계 규칙).
                 //   친밀도가 멈추는 선과 같은 선을 쓴다 — todayPetCount 가 실제로 올랐을 때만 센다.
                 int before = pet.getTodayPetCount();
                 pet.pet(now);
@@ -502,7 +502,7 @@ public class PetService {
         }
     }
 
-    // ── 잠 (정본 2·12장) ──────────────────────────────────────────────────
+    // ── 잠 (설계 규칙) ──────────────────────────────────────────────────
 
     /**
      * 재운다. 19:00~23:00 밤잠, 아기 60분 안에는 낮잠 한 번.
@@ -561,7 +561,7 @@ public class PetService {
     }
 
     /**
-     * 튜토리얼 마지막 칸 — <b>시계를 켠다</b>(정본 12장 9칸 · 1.4).
+     * 튜토리얼 마지막 칸 — <b>시계를 켠다</b>(설계 규칙 9칸 · 1.4).
      *
      * <h3>★ 왜 이것 하나만 API 인가</h3>
      * 1~8칸은 각자 제 API 가 있어서(밥 = care, 채팅 = answer …) 서버가 알아서 넘긴다.
@@ -581,15 +581,15 @@ public class PetService {
             throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_NOT_FINISHED);
         }
         Action a = withUnlockDiff(pet, () -> pet.startClock(pet.now(realNow)));
-        // ★ 튜토리얼 완주 보상(구르기)을 <b>그 순간</b> 굽는다(정본 1.7·1.8).
+        // ★ 튜토리얼 완주 보상(구르기)을 <b>그 순간</b> 굽는다(설계 규칙).
         //   첫날에 손에 쥐는 결과물이 있어야 다음 날 다시 온다.
         bakeTrigger.onTutorialDone(pet, pet.now(realNow));
         return a;
     }
 
-    // ── 성격·배경·공유 (정본 6·10·15장) ───────────────────────────────────
+    // ── 성격·배경·공유 (설계 규칙) ───────────────────────────────────
 
-    /** 성격·세계관. 언제든, 자는 중에도(정본 10장 "언제든 변경"). */
+    /** 성격·세계관. 언제든, 자는 중에도(설계 규칙 "언제든 변경"). */
     @Transactional(noRollbackFor = BusinessException.class)
     public Action choosePersonality(Long userId, Long petId, java.util.List<Personality> personalities,
                                     String world, Instant realNow) {
@@ -601,14 +601,14 @@ public class PetService {
     }
 
     /**
-     * 튜토리얼 4칸("이 성격이 맞나요") — <b>아이 정보를 확인만 해도</b> 넘어간다(상훈님 2026-09-11).
+     * 튜토리얼 4칸("이 성격이 맞나요") — <b>아이 정보를 확인만 해도</b> 넘어간다(2026-09-11 확정).
      *
      * <h3>★ 왜 화면 혼자 넘기면 안 되나</h3>
      * 두 군데서 막힌다. 서버가 4칸에 남아 있으면 그다음 행동(청소)이 와도 {@code != done} 으로
      * 무시돼 <b>튜토리얼이 영영 막히고</b>, <b>첫 흔적이 이 칸을 넘길 때 생기므로</b> 화면만
      * 넘기면 바닥이 깨끗해 5칸(청소)에서 또 막힌다.
      *
-     * ★ 성격을 한 번도 안 고른 사람은 {@code null} 인 채 지나간다 — 상훈님이 그래도 된다고 하셨다
+     * ★ 성격을 한 번도 안 고른 사람은 {@code null} 인 채 지나간다 — 그래도 된다고 확정됐다
      *   ("괜찮아. 튜토리얼에서도 한 번 더 받으니까"). 기본 톤으로 가고 언제든 바꿀 수 있다.
      */
     @Transactional(noRollbackFor = BusinessException.class)
@@ -624,7 +624,7 @@ public class PetService {
         return withUnlockDiff(pet, () -> pet.advanceTutorial(TutorialSchedule.Step.PERSONALITY));
     }
 
-    /** 배경 바꾸기 — 2층 4종이 열린 뒤(정본 6장). 값은 검증하지 않는다(해석 6). */
+    /** 배경 바꾸기 — 2층 4종이 열린 뒤(설계 규칙). 값은 검증하지 않는다(해석 6). */
     @Transactional(noRollbackFor = BusinessException.class)
     public Action changeBackground(Long userId, Long petId, String background, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
@@ -637,7 +637,7 @@ public class PetService {
     }
 
     /**
-     * 다운로드·공유 기록. 대상 = 지금 열린 동작 어느 것이든 — 기본 행동(해금)과 <b>도착한 심화 행동</b> 둘 다(16장).
+     * 다운로드·공유 기록. 대상 = 지금 열린 동작 어느 것이든 — 기본 행동(해금)과 <b>도착한 심화 행동</b> 둘 다.
      * 모르는 key 도 "안 열린 동작" 으로 답한다 — 카탈로그 밖 이름을 구분해 주면 key 목록을 훑는 수단이 된다.
      */
     @Transactional(noRollbackFor = BusinessException.class)
@@ -645,7 +645,7 @@ public class PetService {
         ZzalPet pet = alive(userId, petId, realNow);
         Map<Integer, ZzalMotion> rows = rowsOf(petId);
         boolean open = catalog.byKey(motionKey)
-                // 기본 행동은 해금 규칙으로, 심화 행동(선물 포함)은 "도착했나" 로 판정한다(정본 16장).
+                // 기본 행동은 해금 규칙으로, 심화 행동(선물 포함)은 "도착했나" 로 판정한다(설계 규칙).
                 .map(spec -> UnlockRules.isUnlocked(pet, spec, catalog)
                         || (rows.get(spec.seq()) != null && rows.get(spec.seq()).isRevealed()))
                 .orElse(false);
@@ -655,7 +655,7 @@ public class PetService {
         return withUnlockDiff(pet, pet::share);
     }
 
-    // ── 떠남·재회 (정본 9장) ──────────────────────────────────────────────
+    // ── 떠남·재회 (설계 규칙) ──────────────────────────────────────────────
 
     /**
      * 부르기 — 여행 중인 아이를 즉시 데려온다. 엽서도 이때 한꺼번에 전달된다.
@@ -683,7 +683,7 @@ public class PetService {
         });
     }
 
-    /** 떠남 켜기·끄기(정본 9장). 끄면 예고 중이던 것도 즉시 사라진다. */
+    /** 떠남 켜기·끄기(설계 규칙). 끄면 예고 중이던 것도 즉시 사라진다. */
     @Transactional(noRollbackFor = BusinessException.class)
     public Action changeSettings(Long userId, Long petId, boolean leaveEnabled, Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
@@ -726,7 +726,11 @@ public class PetService {
         Instant now = pet.now(realNow);
         ZzalMotion row = motionRepository.findByPetIdAndSeq(petId, seq)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_MOTION_NOT_OPEN));
-        row.toReview("images/zzal/pets/%d/motions/%d/motion.webp".formatted(petId, row.getId()),
+        // ★ 실제로 구운 것이 아니라 주소만 만든다 — 판은 지금까지의 시도 횟수를 그대로 쓴다.
+        //   크기는 재지 않았으므로 null 이다. 모르는 것을 숫자로 채우면 화면이 그 값을 믿는다.
+        row.toReview(
+                com.lore.zzal.motion.MotionImageKeys.advanced(petId, row.getId(), row.getAttempts()),
+                null, null,
                 com.lore.zzal.motion.MotionSource.API,
                 com.lore.zzal.motion.GateVerdict.REVIEW, "dev force-open", "dev");
         row.approve(now);

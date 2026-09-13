@@ -1,6 +1,7 @@
 package com.lore.zzal.pet.dto;
 
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionImageKeys;
 import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.UnlockRule;
 import com.lore.zzal.motion.ZzalMotion;
@@ -26,7 +27,7 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * 펫 API 가 돌려주는 것들 — {@code zzal/docs/api-v2.md} 2절 `PetDetail` v2 가 정본.
+ * 펫 API 가 돌려주는 것들 — {@code zzal/docs/api-v2.md} 2절 `PetDetail` v2 가 설계 규칙.
  *
  * ★ 프론트 `lib/pet.ts` 가 이 record 와 필드명 단위로 대조한다. 필드를 바꾸면 계약 문서부터 고친다.
  */
@@ -68,7 +69,8 @@ public final class PetResponses {
             @Schema(example = "여울") String name,
             @Schema(description = "HATCHING", example = "HATCHING") String phase,
             Instant hatchStartedAt,
-            @Schema(description = "예상 소요 시간(초). 실제로는 이보다 짧게 완료되는 경우가 많다", example = "600")
+            @Schema(description = "예상 소요 시간(초). 서버가 ZzalRules.HATCH_ESTIMATE 로 계산해 내려준다",
+                    example = "240")
             long estimatedSeconds) {
 
         public static Created from(ZzalPet pet, long estimatedSeconds) {
@@ -97,9 +99,9 @@ public final class PetResponses {
     }
 
     /**
-     * 아픈 상태(정본 5장). 안 아프면 이 블록 자체가 null.
+     * 아픈 상태(설계 규칙). 안 아프면 이 블록 자체가 null.
      *
-     * ★ {@code kind} 는 원인이지만 화면은 대개 안 쓴다 — 정본은 "아픈 자세 + 해골" 하나로만 보인다.
+     * ★ {@code kind} 는 원인이지만 화면은 대개 안 쓴다 — 설계 규칙은 "아픈 자세 + 해골" 하나로만 보인다.
      *   그래도 내려보내는 이유는 나중에 문구를 나눌 여지를 남기고(배탈 vs 방치), 지원 문의 때 원인을 짚기 위해서다.
      */
     public record Sick(Instant since, String kind) {
@@ -117,9 +119,9 @@ public final class PetResponses {
 
     @Schema(name = "ZzalToday", description = "오늘 한 일 — 자정에 0 으로 돌아간다")
     /**
-     * 오늘 한 일 — 잠드는 순간 리셋된다(정본 16장).
+     * 오늘 한 일 — 잠드는 순간 리셋된다(설계 규칙).
      *
-     * ★ {@code snacks} 는 <b>그날 준 간식 수</b>다(정본 1.9). 1.8 까지는 "연속으로 몇 개"
+     * ★ {@code snacks} 는 <b>그날 준 간식 수</b>다(설계 규칙). 1.8 까지는 "연속으로 몇 개"
      *   ({@code snackStreak})였는데, 사이에 밥을 한 번만 끼워도 끊겨 하루에 열 개도 먹일 수 있었다.
      *   지금은 연속을 보지 않고 그날 5개째부터 배탈이다.
      */
@@ -127,7 +129,7 @@ public final class PetResponses {
     }
 
     /**
-     * 조각 네 칸(정본 6장 · 세는 법은 1.9) — 3층 전에는 이 블록 자체가 null.
+     * 조각 네 칸(설계 규칙 · 세는 법은 1.9) — 3층 전에는 이 블록 자체가 null.
      *
      * <h3>★ "며칠 연속" 이 없어졌다 (1.8)</h3>
      * 요구량 자체가 이틀치라 연속을 셀 이유가 없다. 옛 {@code streak} 칸은 뺐다.
@@ -173,7 +175,7 @@ public final class PetResponses {
      * 심화 행동(16프레임) 한 칸이 사용자 눈에 어떻게 보이나.
      *
      * ★★ {@code status} 는 <b>DB 상태 그대로가 아니다.</b> 검수 대기(REVIEW)·맥미니 재생성(LOCAL_REQUESTED)은
-     *   운영 사정이고, 사용자에게는 셋 다 "아직 연습 중" 이다(정본 16장 "사용자 화면은 '아직 연습 중이에요' 한 줄").
+     *   운영 사정이고, 사용자에게는 셋 다 "아직 연습 중" 이다(설계 규칙 "사용자 화면은 '아직 연습 중이에요' 한 줄").
      *   내부 상태를 그대로 내려보내면 화면이 운영 사정을 알게 되고, 나중에 상태를 하나 더 만들 때마다 화면이 깨진다.
      *
      * <pre>
@@ -185,11 +187,22 @@ public final class PetResponses {
      *   OPEN(도착)                             → OPEN        배웠다
      * </pre>
      */
-    public record Advanced(String status, String imageKey, Instant revealedAt, boolean seen) {
-        static final Advanced NONE = new Advanced("NONE", null, null, false);
+    public record Advanced(String status, String imageKey, Instant revealedAt, boolean seen,
+                           @Schema(description = """
+                                   움짤 캔버스 가로(px). 판마다 다르므로 화면이 상수로 가정하면 안 된다.
+                                   맥미니가 올린 재생성본은 서버가 크기를 재지 않아 null 이다""")
+                           Integer width,
+                           @Schema(description = "움짤 캔버스 세로(px). width 와 같은 규칙") Integer height) {
+        static final Advanced NONE = new Advanced("NONE", null, null, false, null, null);
 
+        /**
+         * ★ 크기는 <b>도착한 뒤에만</b> 나간다 — 주소와 짝이어야 한다. 아직 안 보여 주는 그림의
+         *   크기만 흘리면 화면이 "그림은 없는데 자리는 있다" 는 어중간한 상태를 그리게 된다.
+         */
         static Advanced of(ZzalMotion row) {
-            return new Advanced(userStatus(row), row.advancedImageKey(), row.getRevealedAt(), row.getSeenAt() != null);
+            boolean arrived = row.isRevealed();
+            return new Advanced(userStatus(row), row.advancedImageKey(), row.getRevealedAt(), row.getSeenAt() != null,
+                    arrived ? row.getImageWidth() : null, arrived ? row.getImageHeight() : null);
         }
 
         /** 사용자 말로 옮긴 상태 — 위 표. */
@@ -197,8 +210,8 @@ public final class PetResponses {
             return switch (row.getStatus()) {
                 case QUEUED -> "QUEUED";
                 // ★ HOLD 도 "연습 중" 이다. 사람이 지시문을 고쳐 다시 꺼낼 자리라 언젠가 온다 —
-                //   상훈님: "어떻게든 노출시킬 거야." NONE 으로 내리면 조각을 쓴 자리가
-                //   아무 일도 없던 것처럼 보이고, "실패" 라고 말하면 아이의 흠으로 읽힌다(정본 0장).
+                //   확정 방침은 "어떻게든 노출시킨다" 다. NONE 으로 내리면 조각을 쓴 자리가
+                //   아무 일도 없던 것처럼 보이고, "실패" 라고 말하면 아이의 흠으로 읽힌다(설계 규칙).
                 case BAKING, REVIEW, LOCAL_REQUESTED, HOLD, PENDING -> "PRACTICING";
                 case OPEN -> row.isRevealed() ? "OPEN" : "PRACTICING";
                 case NONE, FAILED -> "NONE";
@@ -211,7 +224,9 @@ public final class PetResponses {
                          String basicImageKey, String hint, Progress progress, Advanced advanced) {
     }
 
-    public record Learned(int seq, String key, String label, String imageKey, Instant revealedAt) {
+    /** 아침에 도착한 동작 한 건. 가로·세로 규칙은 {@link Advanced} 와 같다. */
+    public record Learned(int seq, String key, String label, String imageKey, Instant revealedAt,
+                          Integer width, Integer height) {
     }
 
     /**
@@ -237,7 +252,7 @@ public final class PetResponses {
     }
 
     /**
-     * 혼자 논 장면 한 컷 — <b>레시피</b>다(정본 11·16장). 화면이 이 다섯 값으로 그림을 조립한다.
+     * 혼자 논 장면 한 컷 — <b>레시피</b>다(설계 규칙). 화면이 이 다섯 값으로 그림을 조립한다.
      *
      * ★ 그림 주소가 아니라 재료를 준다. 배경을 바꾸거나 소품 그림이 좋아지면 옛 장면도 같이 좋아진다.
      */
@@ -257,7 +272,7 @@ public final class PetResponses {
     }
 
     /**
-     * 짐 싸기 예고(정본 9장) — <b>케어 미스의 유일한 겉모습</b>이다(정본 4장 "보이는 신호는 짐 가방뿐").
+     * 짐 싸기 예고(설계 규칙) — <b>케어 미스의 유일한 겉모습</b>이다(설계 규칙 "보이는 신호는 짐 가방뿐").
      *
      * ★ {@code justCancelled} 는 "방금 돌아와서 취소됐다" — 이번 응답에만 실린다. 그러지 않으면
      *   사용자는 자기가 무엇을 막았는지 영영 모른다(짐 가방이 그냥 사라진다).
@@ -265,7 +280,7 @@ public final class PetResponses {
     public record Leaving(Instant noticedAt, Instant departsAt, boolean justCancelled) {
     }
 
-    /** 여행 중(정본 9장). {@code postcards} 는 지금까지 온 엽서 수(최대 3) — 내용은 재회 때 전달된다. */
+    /** 여행 중(설계 규칙). {@code postcards} 는 지금까지 온 엽서 수(최대 3) — 내용은 재회 때 전달된다. */
     public record Trip(Instant startedAt, int postcards) {
     }
 
@@ -277,7 +292,7 @@ public final class PetResponses {
         }
     }
 
-    /** 튜토리얼 한 칸. ★ 시각이 없다 — 순서로 가기 때문이다(정본 1.4). */
+    /** 튜토리얼 한 칸. ★ 시각이 없다 — 순서로 가기 때문이다(설계 규칙). */
     public record TutorialStep(String key, boolean done, boolean current) {
     }
 
@@ -349,7 +364,14 @@ public final class PetResponses {
             Scenes scenes,
             String personality,
             String world,
+            @Schema(description = "말투. 대사 톤에만 쓰이고 그림 생성에는 들어가지 않는다") String tone,
+            @Schema(description = "장르. 말투와 같이 대사 톤에만 쓰인다") String genre,
             String background,
+            @Schema(description = """
+                    자세 앵커 파일의 S3 키. 화면이 소품을 얹을 좌표가 들어 있다.
+                    전체 URL 이 아니라 키다(다른 imageKey 들과 같은 형식).
+                    앵커를 내지 않는 부화 버전이거나 아직 한 판도 안 구웠으면 null""")
+            String anchorsKey,
             Features features,
             Leaving leaving,
             Trip trip,
@@ -396,7 +418,9 @@ public final class PetResponses {
                         // ★ 리스트는 null 이 아니라 빈 목록(해석 20) — 화면이 길이만 보고 그리게. null 이 프론트를 깨뜨렸다.
                         null, null, null, null, null, null, false, null, null, null, false, null,
                         List.of(), List.of(), false, List.of(),
-                        null, null, null, null, null, null, null, null, null, null);
+                        // firstGift · chatSummary · scenes · personality · world · tone · genre
+                        // · background · anchorsKey · features · leaving · trip · tutorial
+                        null, null, null, null, null, null, null, null, null, null, null, null, null);
             }
 
             boolean sleeping = pet.isSleeping();
@@ -411,7 +435,7 @@ public final class PetResponses {
                             : pet.sleepKindAvailable(now) == SleepKind.NAP ? now
                             : pet.isInTutorial() ? null
                             : AwakeClock.sleepWindowOpensAt(now),
-                    // 튜토리얼 중이면 자동 취침이 없다 — 시계가 안 돌기 때문이다(정본 1.4).
+                    // 튜토리얼 중이면 자동 취침이 없다 — 시계가 안 돌기 때문이다(설계 규칙).
                     sleeping || pet.isInTutorial() ? null : AwakeClock.nextAutoSleep(now, null),
                     sleeping ? AwakeClock.wakeWindowOpensAt(kind, pet.getSleptAt()) : null,
                     sleeping ? AwakeClock.autoWakeAt(kind, pet.getSleptAt()) : null,
@@ -424,7 +448,7 @@ public final class PetResponses {
                     pet.getLeftRightWins() >= ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS,
                     pet.isScenesEnabled(),                                  // 장면 — 첫 부재 4시간 뒤 자동
                     layerTwoOpen >= ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN,
-                    "OPEN".equals(firstGift.status()),                       // 앨범 = 첫 심화가 도착하면 같이 열린다(정본 6장)
+                    "OPEN".equals(firstGift.status()),                       // 앨범 = 첫 심화가 도착하면 같이 열린다(설계 규칙)
                     pet.isPiecesEnabled());                                 // 조각
 
             TutorialSchedule.State t = TutorialSchedule.of(pet);
@@ -459,7 +483,10 @@ public final class PetResponses {
                             scenes.isEmpty() ? null : Scene.of(scenes.get(0))),
                     pet.getPersonality() == null ? null : pet.getPersonality().name(),
                     pet.getWorld(),
+                    pet.getTone(),
+                    pet.getGenre(),
                     pet.getBackground(),
+                    anchorsKey(pet),
                     features,
                     leaving(pet),
                     pet.isTraveling() ? new Trip(pet.getTripStartedAt(), pet.getPostcardCount()) : null,
@@ -478,7 +505,8 @@ public final class PetResponses {
                         MotionSpec spec = catalog.bySeq(m.getSeq()).orElse(null);
                         return new Learned(m.getSeq(), m.getName(),
                                 spec == null ? m.getName() : spec.label(),
-                                m.advancedImageKey(), m.getRevealedAt());
+                                m.advancedImageKey(), m.getRevealedAt(),
+                                m.getImageWidth(), m.getImageHeight());
                     })
                     .toList();
         }
@@ -553,14 +581,14 @@ public final class PetResponses {
             return pet.isLeavingJustCancelled() ? new Leaving(null, null, true) : null;
         }
 
-        /** 18칸. 잠긴 칸도 이름+조건(플랜 T2 결정 4). 심화 행동 상태는 zzal_motion 행에서(없으면 NONE). */
+        /** 18칸. 잠긴 칸도 이름+조건(설계 결정). 심화 행동 상태는 zzal_motion 행에서(없으면 NONE). */
         public static List<Motion> motions(ZzalPet pet, MotionCatalog catalog, Map<Integer, ZzalMotion> rows) {
             boolean v2 = basicLayout(pet.getHatchPipelineVersion());
             return catalog.all().stream().map(spec -> {
                 boolean unlocked = UnlockRules.isUnlocked(pet, spec, catalog);
                 UnlockRule rule = spec.unlockRule();
                 // ★★ "케어 미스 0인 날" 진행도는 안 내려간다(15번 웃는 대기). 그 숫자는 곧 <b>케어 미스</b>를
-                //   되짚게 해 주는데, 케어 미스는 정본 4장이 "숨은 수치" 로 못 박은 값이다(#225 리뷰 결정).
+                //   되짚게 해 주는데, 케어 미스는 설계 규칙이 "숨은 수치" 로 못 박은 값이다(#225 리뷰 결정).
                 //   힌트 문구("잘 돌본 날 3번")만 주고 몇 번째인지는 말하지 않는다.
                 boolean hidden = rule.kind() == UnlockRule.Kind.ZERO_MISS_DAYS;
                 Progress progress = !unlocked && rule.hasProgress() && !hidden
@@ -569,7 +597,7 @@ public final class PetResponses {
                 ZzalMotion row = rows.get(spec.seq());
                 Advanced advanced = row == null ? Advanced.NONE : Advanced.of(row);
                 return new Motion(spec.seq(), spec.key(), spec.label(), spec.layer().name(), unlocked,
-                        basicImageKey(pet, spec, unlocked, v2),
+                        basicImageKey(pet, spec, v2),
                         unlocked ? null : rule.hint(),
                         progress,
                         advanced);
@@ -577,11 +605,21 @@ public final class PetResponses {
         }
 
         /**
-         * 기본 행동 그림 — v2 부화는 {@code basic/{key}.webp}, v1 부화는 8상태 파일명으로 폴백(api-v2.md 2절).
-         * 잠겼거나(2층) 선물이거나 v1 에 없는 자세(아픔·부르기)면 null → 화면 폴백.
+         * 자세 앵커 파일의 키 — 그림과 <b>같은 판</b>을 가리킨다.
+         *
+         * ★ 전체 URL 이 아니라 키다. 이 응답의 다른 그림 칸이 전부 키라, 하나만 URL 이면
+         *   화면이 그 칸만 다르게 다뤄야 하고 그 어긋남은 조용히 넘어간다.
+         * ★ 판을 따로 계산하지 않는다 — 그림과 같은 {@code basicRound} 를 쓴다. 갈리면
+         *   앵커가 다른 판의 그림을 설명하게 되고, 소품이 어긋난 채로 화면에만 드러난다.
          */
+        static String anchorsKey(ZzalPet pet) {
+            return MotionImageKeys.hasAnchors(pet.getHatchPipelineVersion(), pet.getBasicRound())
+                    ? MotionImageKeys.anchors(pet.getId(), pet.getBasicRound())
+                    : null;
+        }
+
         /**
-         * 이 펫이 {@code basic/{key}.webp} 규약으로 구워졌는가.
+         * 이 펫이 {@code basic/{판}/{key}.webp} 규약으로 구워졌는가.
          *
          * ★ <b>옛 이름 규약을 쓰는 것은 v1 하나뿐</b>이다. 그래서 "v1 이 아닌가" 로 묻는다 —
          *   {@code "v2".equals(...)} 로 물으면 v4 처럼 나중에 생긴 버전이 <b>조용히 옛 폴백</b>으로 떨어져
@@ -592,15 +630,32 @@ public final class PetResponses {
             return hatchPipelineVersion != null && !"v1".equals(hatchPipelineVersion);
         }
 
-        static String basicImageKey(ZzalPet pet, MotionSpec spec, boolean unlocked, boolean v2) {
-            if (!unlocked || spec.isGift()) {
+        /**
+         * 기본 행동 그림 — v2 이후는 {@code basic/{판}/{key}.webp}, v1 부화는 8상태 파일명으로 폴백.
+         * 선물이거나 v1 에 없는 자세(아픔·부르기)면 null → 화면 폴백.
+         *
+         * <h3>★★ 잠겨 있어도 주소를 준다(명세 7-3)</h3>
+         * 2층 8종은 <b>부화 때 1층과 함께</b> 구워지므로, 잠겨 있어도 그림은 이미 있다.
+         * 그런데 잠겼다고 {@code null} 을 주면 화면은 <b>"그림이 없다" 와 "아직 안 배웠다" 를
+         * 구분할 수 없다.</b> 화면이 "2층을 안 배웠으니 1층 + 소품으로 그리자" 를 고르려면
+         * 잠겼다는 것({@code unlocked:false})과 그 그림을 <b>둘 다</b> 알아야 한다.
+         *
+         * ★ 선물만 여전히 null 이다 — 선물은 기본 그림이 아니라 16프레임 움짤이고,
+         *   그 주소는 {@code advanced.imageKey} 로 나간다. 여기서 기본 자리를 가리키면
+         *   <b>없는 파일</b>을 주게 된다.
+         *
+         * ★ 조립은 {@link MotionImageKeys} 한 곳에서만 한다 — 여기와 공유가 따로 만들던 때
+         *   심화 공유가 기본 그림 경로를 가리키는 버그가 났다.
+         */
+        static String basicImageKey(ZzalPet pet, MotionSpec spec, boolean v2) {
+            if (spec.isGift()) {
                 return null;
             }
             if (v2) {
-                return "images/zzal/pets/%d/basic/%s.webp".formatted(pet.getId(), spec.key());
+                return MotionImageKeys.basic(pet.getId(), pet.getBasicRound(), spec.key());
             }
             return spec.hasLegacyFile()
-                    ? "images/zzal/pets/%d/%s.webp".formatted(pet.getId(), spec.legacyFile())
+                    ? MotionImageKeys.legacyState(pet.getId(), spec.legacyFile())
                     : null;
         }
 

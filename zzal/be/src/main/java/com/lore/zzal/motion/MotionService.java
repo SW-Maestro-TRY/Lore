@@ -28,13 +28,13 @@ import java.util.List;
  * <h3>언제 도는가</h3>
  * 재우는 순간 시작해서 자는 동안(6시간) 돈다. 깨우면 이미 준비돼 있다.
  * 이 구조가 세 가지를 한꺼번에 푼다 — 생성 대기가 "자는 중" 으로 흡수되고,
- * 실패해서 다시 굽는 시간이 사용자에게 안 보이고, 상훈님 확인 시간도 그 안에 들어간다.
+ * 실패해서 다시 굽는 시간이 사용자에게 안 보이고, 사람 검수 시간도 그 안에 들어간다.
  *
  * <h3>★ 한 장씩 굽는다</h3>
  * 여러 장을 굽고 그중 고르는 방식도 있지만, 동작 하나가 격자 한 장이라 장수만큼 돈이 곱해진다.
  * 원장 통과율이 95.7% 라 기대 장수는 약 1.05장이다 — <b>한 장 굽고 실패하면 다시</b> 가 싸다.
  *
- * ★ 정본 6장은 <b>API 1회</b>다({@code app.zzal.max-motion-attempts: 1}). API 로 반복하면 같은 돈이 두세 배로 나가고,
+ * ★ 설계 규칙은 <b>API 1회</b>다({@code app.zzal.max-motion-attempts: 1}). API 로 반복하면 같은 돈이 두세 배로 나가고,
  *   재생성은 돈이 안 드는 맥미니(codex)가 맡는다 — 그 배선은 PR-7.
  */
 @Service
@@ -53,7 +53,7 @@ public class MotionService {
     private final MotionCatalog catalog;
     private final MotionGate gate;
     private final int maxAttempts;
-    /** 맥미니 재생성 상한(정본 6장 = 2). */
+    /** 맥미니 재생성 상한(설계 규칙 = 2). */
     private final int localRegenMax;
 
     public MotionService(GenerationRunner runner, GenerationRecorder recorder,
@@ -95,7 +95,7 @@ public class MotionService {
      * 그 행은 스위프가 이미 {@code BAKING} 으로 집어 둔 상태라 <b>영영 그 자리에 남는다</b> —
      * 다음 밤 계획은 {@code NONE}·{@code FAILED} 만 보고, 스위프의 claim 은 {@code QUEUED} 만 본다.
      * 실제로 지시문 파일 하나가 없어서 이 일이 났다(2026-09-05 리뷰 주입 INJ-C).
-     * 그래서 {@code try/catch} 로 감싸 <b>무엇이 터지든 {@code FAILED}</b> 로 내린다 — 다음 밤에 다시 오른다(정본 16장).
+     * 그래서 {@code try/catch} 로 감싸 <b>무엇이 터지든 {@code FAILED}</b> 로 내린다 — 다음 밤에 다시 오른다(설계 규칙).
      */
     public void bakeNow(Long motionId) {
         try {
@@ -112,13 +112,13 @@ public class MotionService {
             markFailedQuietly(motionId);
             return;
         }
-        // API 몫이 끝났다. 다시 만드는 일은 돈이 안 드는 맥미니가 맡는다(정본 6장).
+        // API 몫이 끝났다. 다시 만드는 일은 돈이 안 드는 맥미니가 맡는다(설계 규칙).
         handOverToLocal(motionId);
     }
 
     /**
      * API 가 못 만든 자리를 맥미니(codex)에게 넘긴다. 한도({@code night.local-regen-max})를 다 썼으면
-     * 그 밤은 포기하고 {@code FAILED} — 조각은 소모하지 않고 다음 밤에 같은 동작이 다시 오른다(정본 16장).
+     * 그 밤은 포기하고 {@code FAILED} — 조각은 소모하지 않고 다음 밤에 같은 동작이 다시 오른다(설계 규칙).
      */
     private void handOverToLocal(Long motionId) {
         try {
@@ -165,11 +165,16 @@ public class MotionService {
                 : registry.currentVersion(GenKind.MOTION);
         GenJob job = jobRepository.save(
                 GenJob.startMotion(pet.getId(), motionId, attempt, version, Instant.now()));
-        motionRecorder.beginAttempt(motionId);
+        // ★★ 시도 횟수가 곧 그림 주소의 판 번호다. 판이 주소에 들어가야 다시 구운 그림이
+        //   앞 판을 덮어쓰지 않는다 — 덮어쓰면 업로드도 DB 도 성공하는데 CDN 1년 캐시가
+        //   옛 그림을 계속 내보낸다. 판을 여기서 따로 계산하지 않고 <b>올린 쪽이 돌려준 값</b>을 쓴다.
+        // ★ regenRound 가 아니라 attempts 인 이유 — queue() 가 regenRound 를 0 으로 되돌려
+        //   다음 밤이 같은 주소를 덮어쓴다(ZzalMotion.queue 주석).
+        int round = motionRecorder.beginAttempt(motionId);
 
         StepContext ctx = new StepContext(
                 pet.getId(), pet.getName(), pet.getNote(), version,
-                "images/zzal/pets/%d/motions/%d".formatted(pet.getId(), motionId));
+                MotionImageKeys.advancedPrefix(pet.getId(), motionId, round));
 
         // ★ 시트와 정체성 문단은 부화 때 만든 것을 그대로 쓴다. 다시 만들면 돈이 더 들고,
         //   무엇보다 캐릭터가 조금씩 달라진다.
@@ -190,12 +195,17 @@ public class MotionService {
 
         String imageKey = ctx.image(MotionPostStep.NAME);
         String gridKey = ctx.image(MotionGridStep.NAME);
+        // ★ 캔버스 크기는 후처리 단계가 같이 남긴다("295x321"). 판마다 달라 화면이 상수로 가정하면 안 된다.
+        //   모양이 아니면 null 이다 — 모르는 것을 0 으로 적으면 화면이 그 값을 믿고 0px 로 그린다.
+        int[] size = MotionPostStep.parseSize(ctx.text(MotionPostStep.NAME));
+        Integer width = size == null ? null : size[0];
+        Integer height = size == null ? null : size[1];
         MotionGate.Verdict v = gate.judge(imageKey);
 
         if (v.verdict() == GateVerdict.FAIL) {
-            // 게이트가 실패라 하면 API 몫은 여기서 끝이다(정본 6장 — 다시 만드는 것은 맥미니).
+            // 게이트가 실패라 하면 API 몫은 여기서 끝이다(설계 규칙 — 다시 만드는 것은 맥미니).
             // 판정은 기록에 남겨 기계 판정과 사람 판정을 비교할 수 있게 한다.
-            motionRecorder.recordGate(motionId, imageKey, v);
+            motionRecorder.recordGate(motionId, imageKey, width, height, v);
 
             // ★★ 성공 기록을 지운다. 재시도(설정으로 2 이상을 줬을 때)는 성공한 단계를 건너뛰는데,
             //   격자도 후처리도 "성공" 으로 남아 있으면 실행기가 둘 다 건너뛰고
@@ -205,13 +215,13 @@ public class MotionService {
             return false;
         }
 
-        // ★★ 검수 대기까지가 서버 몫이다. 사용자 화면은 상훈님이 OK 를 누르고, 그다음
-        //   펫이 깨어 있는 첫 정산에 도착한다(정본 2장 "기상 첫 화면").
+        // ★★ 검수 대기까지가 서버 몫이다. 사용자 화면은 검수자가 OK 를 누르고, 그다음
+        //   펫이 깨어 있는 첫 정산에 도착한다(설계 규칙 "기상 첫 화면").
         // ★ 격자도 같이 남긴다 — 판정 화면이 "원본 그림 · 시트 · 격자 · 완성본" 넷을 나란히 본다.
         // ★★ 늦게 도착하면 진다 — 그 사이 복구가 다른 판을 띄우고 그 판이 이미 판정됐을 수 있다.
         //   진 쪽은 조용히 물러난다. 늦게 끝난 굽기가 잘못한 것은 없고, 돈은 이미 나갔으므로
         //   여기서 예외를 던져 봐야 되돌릴 것도 없다. 돈이 어디로 갔는지는 로그와 GenJob 에 남는다.
-        if (!motionRecorder.toReview(motionId, gridKey, imageKey, v)) {
+        if (!motionRecorder.toReview(motionId, gridKey, imageKey, width, height, v)) {
             log.warn("늦게 끝난 굽기 — motionId={} 는 이미 다른 판으로 넘어갔다. 이 판은 버린다(비용=${})",
                     motionId, r.costUsd());
             return true;

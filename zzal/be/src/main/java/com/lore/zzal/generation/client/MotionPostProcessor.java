@@ -12,6 +12,21 @@ package com.lore.zzal.generation.client;
 public interface MotionPostProcessor {
 
     /**
+     * 다 만든 움짤 하나.
+     *
+     * ★ 키만 돌려주지 않는 이유 — 캔버스 크기가 <b>판마다 다르다</b>(실측 295~301 x 321~339).
+     *   그 값을 아는 유일한 자리가 방금 만든 이 파일이고, 여기서 안 들고 나오면 나중에는
+     *   S3 에서 다시 받아야만 알 수 있다. 화면이 상수로 가정하면 어떤 판에서만 그림이 어긋나는데
+     *   오류가 안 나서 눈으로 봐야만 드러난다.
+     *
+     * @param imageKey 완성된 움짤의 S3 키
+     * @param width    캔버스 가로(px)
+     * @param height   캔버스 세로(px)
+     */
+    record Built(String imageKey, int width, int height) {
+    }
+
+    /**
      * @param gridImageKey 16프레임 격자의 S3 키
      * @param outputPrefix 결과를 올릴 폴더
      * @param profile      이 동작의 후처리 프로파일({@code script=state16_v3, align=seat, ...}).
@@ -19,7 +34,7 @@ public interface MotionPostProcessor {
      *                     ★비어 있으면 스크립트가 <b>멈춘다</b> — 기본 후처리로 떨어지지 않는다.
      *                     동작마다 무엇을 기준으로 칸을 맞추는지가 다르고(구르기=발·넘어짐=접지앵커),
      *                     엉뚱한 기준으로 구워진 그림은 화면을 봐야만 드러난다
-     * @return 완성된 움짤의 S3 키
+     * @return 완성된 움짤의 키와 캔버스 크기
      */
-    String build(String gridImageKey, String outputPrefix, String profile) throws Exception;
+    Built build(String gridImageKey, String outputPrefix, String profile) throws Exception;
 }
