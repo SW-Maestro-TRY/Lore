@@ -54,9 +54,14 @@ export default function Room({ y }: { y: Yeoul }) {
   //   자세와 무관하게 깔리는 줄(바닥 흔적 같은 것)은 어느 쪽이든 그대로 둔다.
   const always = useMemo(() => alwaysSituationIds(propTable), [propTable]);
   const auto = activeSituations(v.scene);
-  const active = v.sitPick ? [v.sitPick, ...auto.filter((id) => always.has(id))]
+  const picked = v.sitPick ? [v.sitPick, ...auto.filter((id) => always.has(id))]
     : v.posePick ? [...situationsOfPose(propTable, v.posePick), ...auto.filter((id) => always.has(id))]
       : auto;
+  // ★ 개발용으로 손수 켠 줄(가방·재회 하트·하루 소품)은 자세를 골랐든 말든 **그대로 얹힌다.**
+  //   서버 신호가 생기는 날 `activeSituations` 가 대신 켜면 여기서 빼면 된다.
+  const active = v.scene.extra.length || v.scene.daily
+    ? [...picked, ...v.scene.extra, ...(v.scene.daily ? ['daily_prop'] : [])]
+    : picked;
   /**
    * 단계가 있는 소품은 **바퀴마다 한 단계씩** 넘어간다(밥 3->2->1). 몇 번째 바퀴인지는 두뇌가 세고,
    * 그 숫자를 **표가 적어 둔 차례**에 대입하는 일만 여기서 한다 — 차례를 코드가 지어내지 않는다.
@@ -69,6 +74,8 @@ export default function Room({ y }: { y: Yeoul }) {
       trash: v.scene.trash,
       ...(actPlan ? { [actPlan.prop]: actPlan.stages[Math.min(v.scene.actStep, actPlan.stages.length - 1)] } : {}),
     },
+    // `daily_prop` 은 표가 `prop_ball|prop_book|prop_cup|prop_plant` 로 적어 둔 줄이라 **고른 것**을 말해 줘야 한다.
+    ...(v.scene.daily ? { choices: { daily_prop: v.scene.daily } } : {}),
   };
 
   // ── 아이를 어디에 얼마나 크게 세울 것인가 ──────────────────────────────

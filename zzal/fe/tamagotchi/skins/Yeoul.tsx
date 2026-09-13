@@ -22,10 +22,13 @@ import Onboarding from '../yeoul/Onboarding';
 import Room from '../yeoul/Room';
 import { STEPS, WEB_KEYS } from '../yeoul/constants';
 import { C, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, radius } from '../yeoul/ui';
-import { LiveProvider, useHatchState } from '../yeoul/useHatch';
+import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { SITUATION_TABLE } from '../props/situations';
+import { ApiError } from '../../lib/api';
+import { advanceClock, forceOpen, nextLocalAt, nightSweep, setClockAt } from '../../lib/dev';
+import { isMockRequested } from '../../lib/petSource';
 import type { SkinProps } from './Scrapbook';
 
 export default function Yeoul(_props: SkinProps) {
@@ -146,7 +149,7 @@ export default function Yeoul(_props: SkinProps) {
       </div>
       </LiveProvider>
 
-      <DevJump y={y} missingBasics={live.missingBasics} />
+      <DevJump y={y} live={live} missingBasics={live.missingBasics} />
     </div>
   );
 }
@@ -174,72 +177,215 @@ function RoomWait() {
   );
 }
 
-// ── 개발용 이동 창 — 실서비스에서는 이 아래를 통째로 지운다 ──────────────
 
-function DevJump({ y, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; missingBasics?: string[] }) {
+// ── 개발용 이동 창 — 실서비스에서는 이 아래를 통째로 지운다 ──────────────
+//
+// ★ 원칙 하나 — **버튼은 그 상황을 강제한다**(상훈님 2026-09-13).
+//   *"잠자기 누르면 7든 1시든 12시든 간에 잠 자기 모션만 볼 수 있으면 돼."*
+//   시각·서버 값·튜토리얼 단계와 무관하게, 누르면 그 상태가 화면에 즉시 나온다.
+//
+// ★ 예전 판이 헷갈렸던 까닭 셋과, 각각을 어디서 없앴는지.
+//   1) 「튜토리얼 끝」이 연습방까지 껐다 → `useYeoul.endTutor` 가 `sampleMode` 를 안 건드린다.
+//   2) 버튼이 화면 값(`s`)만 바꿔서 **진짜 아이가 있으면 서버 값에 덮였다**
+//      → 모든 개발 버튼이 `s.dev`(덮어쓰기 한 겹)에만 쓰고, 그 겹을 `es` 만드는 자리에서 얹는다.
+//   3) 켜짐 표시가 `&& !s.sampleMode` 로 **거꾸로** 붙어 있었다
+//      → 불은 이제 `v.now`(지금 화면이 실제로 쓰는 값) 하나만 본다.
+//
+// ★ 그래서 **연습방/진짜 방을 가르지 않는다.** 회색으로 죽는 칸도 없다.
+//   서버가 쥔 것(시계·선물 도착·밤 큐)만 따로 한 줄로 모아 두고, 나머지는 "화면에만" 이라고 적는다.
+
+/**
+ * 이 창을 그려도 되는가. **운영 도메인에서만 안 그린다**(`lorecomic.com`·`www`).
+ *
+ * ★ 왜 `NODE_ENV` 가 아닌가 — 지금 `dev.lorecomic.com` 과 운영이 **같은 배포**를 본다(STATUS).
+ *   빌드 환경으로는 둘을 못 가른다. 주소로 가르면 상훈님이 쓰시는 테스트 서버에서는 그대로 뜨고
+ *   운영 주소에서만 사라진다. `?dev=1` 이 있으면 어디서든 뜬다.
+ * ★ 첫 렌더에서는 늘 `false` 다 — 서버가 그린 것과 브라우저가 그린 것이 달라지면
+ *   하이드레이션 경고가 뜨고 e2e 가 그걸 실패로 센다(TamagotchiScreen 머리말과 같은 이유).
+ */
+function useDevVisible(): boolean {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const host = window.location.hostname;
+    const prod = host === 'lorecomic.com' || host === 'www.lorecomic.com';
+    setShow(new URLSearchParams(window.location.search).has('dev') || !prod);
+  }, []);
+  return show;
+}
+
+/** 칩 하나. `on` 은 **지금 화면이 그렇다**는 뜻이다(누르면 그렇게 된다는 뜻이 아니다). */
+interface Chip { label: string; on: boolean; pick: () => void; id?: string; dim?: boolean; title?: string }
+/** 줄 하나. `note` 는 "화면에만" 처럼 어디까지 닿는지를 적는 자리다. */
+interface Row { n: string; label: string; note?: string; items: Chip[] }
+
+/** 하루 소품 넷 — 표(`daily_prop`)가 `|` 로 적어 둔 그대로. */
+const DAILY: ReadonlyArray<readonly [string, string]> = [
+  ['prop_ball', '공'], ['prop_book', '책'], ['prop_cup', '컵'], ['prop_plant', '화분'],
+];
+
+function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; live: Live; missingBasics?: string[] }) {
   const [open, setOpen] = useState(false);
-  const { s, actions } = y;
+  const visible = useDevVisible();
+  const { s, v, actions } = y;
+  const d = v.dev;
+  const now = v.now;
 
   const onb = s.screen === 'onb';
   const room = s.screen === 'room';
   /** 상황 칸이 보여 줄 자세 — 손으로 고른 것이 있으면 그것, 없으면 지금 짓고 있는 자세. */
-  const pose = y.v.posePick ?? y.v.spriteKey;
+  const pose = v.posePick ?? v.spriteKey;
+  const unlocked = (k: string) => d.floor2 || !!d.unlocked[k];
 
-  interface Jump { label: string; on: boolean; pick: () => void; id?: string; dim?: boolean }
-  const groups: { n: string; label: string; items: Jump[] }[] = [
+  const poseChips = (keys: readonly string[]): Chip[] => keys.map((k) => ({
+    label: POSE_LABEL[k] ?? k, id: `pose:${k}`,
+    on: v.posePick === k,
+    pick: actions.pickScene(k, null),
+  }));
+
+  // 지금 자세에 붙은 줄만. **표를 그대로 낸다** — 여기서 소품을 고르지 않는다.
+  const sitRows = SITUATION_TABLE.filter((r) => r.pose === pose);
+
+  const rows: Row[] = [
     {
-      n: '1', label: '랜딩',
-      items: [{ label: '첫 화면', on: onb && s.step === 0, pick: () => actions.goStep(0) }],
-    },
-    {
-      n: '2', label: '온보딩',
+      n: '1', label: '화면',
       items: [
+        { label: '랜딩', on: onb && s.step === 0, pick: () => actions.goStep(0) },
         { label: '올리기', on: onb && s.step === 1, pick: () => actions.goStep(1) },
         { label: '캐릭터', on: onb && s.step === 2, pick: () => actions.goStep(2) },
-        { label: '여울 샘플', on: s.sampleMode, pick: actions.enterSample },
         { label: '알', on: s.screen === 'egg', pick: actions.goEgg },
         { label: '태어남', on: onb && s.step === STEPS.indexOf('born'), pick: () => actions.goStep(STEPS.indexOf('born')) },
+        { label: '연습방', on: room && s.sampleMode, pick: actions.enterSample },
+        { label: '진짜 방', on: room && !s.sampleMode, pick: actions.enterRoom },
       ],
     },
     {
-      n: '3', label: '튜토리얼',
+      n: '2', label: '튜토리얼',
       items: [
-        { label: s.tutorOn && !s.sampleMode ? `부름 ${s.tutor + 1}/8` : '튜토리얼 시작', on: s.tutorOn && !s.sampleMode, pick: actions.startTutor },
-        { label: '다음 부름', on: false, pick: actions.skipTutorStep },
-        { label: '튜토리얼 끝', on: room && !s.tutorOn && !s.sampleMode, pick: actions.endTutor },
+        { label: s.tutorOn ? `부름 ${s.tutor + 1}/8` : '시작', on: s.tutorOn, pick: actions.startTutor },
+        { label: '다음 칸', on: false, pick: actions.skipTutorStep },
+        { label: '끝', on: room && !s.tutorOn, pick: actions.endTutor },
+        { label: '완주 판', on: s.tutorDone, pick: actions.showTutorEnd },
       ],
     },
     {
-      n: '4', label: '게임',
-      items: ([['day', '낮 방'], ['night', '밤 창'], ['sleep', '자는 중'], ['sick', '아픔']] as const)
-        .map(([k, label]): Jump => ({
-          label, on: room && y.v.mode === k && !s.sampleMode, pick: actions.setMode(k),
-        })),
+      n: '3', label: '상황', note: '화면에만',
+      items: [
+        { label: '낮', on: v.mode === 'day', pick: actions.setMode('day') },
+        { label: '밤 창', on: v.mode === 'night', pick: actions.setMode('night') },
+        { label: '자는 중', on: v.mode === 'sleep', pick: actions.setMode('sleep') },
+        { label: '아픔', on: v.mode === 'sick' && !d.sickLong, pick: actions.setMode('sick') },
+        {
+          label: '24시간+ 방치', on: !!now.sick && d.sickLong,
+          title: '땀 대신 해골(표 sick_long)',
+          pick: () => actions.devSet({ sick: true, sleeping: false, sickLong: true }),
+        },
+        { label: '여행 중', on: d.trip, pick: () => actions.devSet({ trip: !d.trip }) },
+        { label: '되돌리기', on: false, title: '덮어쓰기를 통째로 걷어낸다', pick: actions.devReset },
+      ],
     },
-    // ── 연습방 전용 · 자세 16종 + 그 자세의 상황 ────────────────────────────
-    //
-    // ★ **연습방(여울 샘플)에만 둔다.** 진짜 방은 서버가 정하는 자리라 손으로 고정하면 안 된다.
-    // ★ 두 축인 이유 — 자세만 바꿔서는 소품이 거의 안 보인다. 연습방 기본 상태에서 뜨는 것은
-    //   바닥 흔적 하나뿐이고, 나머지는 전부 상황에 딸려 있다(꼬르륵=배고픔 · 손=쓰다듬는 중).
-    // ★ 상황 칸은 **상황표를 그대로** 낸다 — 지금 고른 자세의 줄만. 표가 바뀌면 여기도 따라 바뀐다.
-    ...(s.sampleMode ? poseGroups(y, pose) : []),
     {
-      n: s.sampleMode ? '9' : '5', label: '그 밖에',
+      n: '4', label: '배부름', note: '화면에만',
+      items: [0, 1, 2, 3, 4].map((i): Chip => ({
+        label: String(i), id: `full:${i}`, on: now.full === i, pick: () => actions.devSet({ full: i }),
+      })),
+    },
+    {
+      n: '5', label: '행복', note: '화면에만',
+      items: [0, 1, 2, 3, 4].map((i): Chip => ({
+        label: String(i), id: `happy:${i}`, on: now.happy === i, pick: () => actions.devSet({ happy: i }),
+      })),
+    },
+    {
+      n: '6', label: '똥', note: '화면에만',
+      items: [0, 1, 2, 3, 4].map((i): Chip => ({
+        label: String(i), id: `trash:${i}`, on: now.trash === i, pick: () => actions.devSet({ trash: i }),
+      })),
+    },
+    {
+      n: '7', label: '친밀도 · 조각', note: '화면에만',
+      items: [
+        ...[0, 40, 80, 100].map((i): Chip => ({
+          label: `${i}%`, id: `bond:${i}`, on: now.bond === i, pick: () => actions.devSet({ bond: i }),
+        })),
+        ...[0, 2, 4].map((i): Chip => ({
+          label: `조각 ${i}`, id: `shard:${i}`, on: now.shards === i, pick: actions.setShards(i),
+        })),
+      ],
+    },
+    {
+      n: '8', label: `자세 ${POSE_FLOORS[0][0]}`,
+      items: [
+        { label: '자동', id: 'pose:auto', on: !v.posePick && !v.sitPick, pick: actions.pickScene(null, null) },
+        ...poseChips(POSE_FLOORS[0][1]),
+      ],
+    },
+    { n: '9', label: `자세 ${POSE_FLOORS[1][0]}`, items: poseChips(POSE_FLOORS[1][1]) },
+    {
+      // 선물 2종은 **박자 밖**이다(16프레임 한 판 = 7.2초). 자세 고정이 아니라 한 번 튼다.
+      n: '10', label: '선물 재생', note: '16프레임 한 판',
+      items: ([['roll', '구르기'], ['fall_back', '뒤로 넘어지기']] as const).map(([k, label]): Chip => ({
+        label, id: `gift:${k}`, on: v.spriteKey === k, pick: () => actions.playGift(k),
+      })),
+    },
+    {
+      n: '11', label: `상황 · ${POSE_LABEL[pose] ?? pose}`,
+      items: [
+        { label: '상황 없음', id: 'sit:none', on: !v.sitPick, pick: actions.pickScene(v.posePick, null) },
+        ...sitRows.map((r): Chip => ({
+          label: `${r.id}${r.prop ? ` · ${r.prop.split('|')[0]}` : ' · (소품 없음)'}`,
+          id: `sit:${r.id}`,
+          on: v.sitPick === r.id,
+          // 확정이 아닌 줄은 눌러도 소품이 안 뜬다 — 그 까닭을 칩에 적어 둔다.
+          dim: r.status !== 'confirmed',
+          pick: actions.pickScene(r.pose === '*' ? v.posePick : r.pose, r.id),
+        })),
+      ],
+    },
+    {
+      // ★ 해금은 **행동이 어느 줄을 쓰나**를 바꾼다 — 밥 주기가 `eat`(밥그릇)에서
+      //   `eat_rice`(고기가 그림 안 · 소품 없음)로 넘어간다. 자세만 바꾸는 8·9번 줄과 하는 일이 다르다.
+      n: '12', label: '2층 해금', note: '화면에만',
+      items: [
+        { label: '전부', id: 'unlock:all', on: d.floor2, pick: actions.toggleFloor2 },
+        ...POSE_FLOORS[1][1].map((k): Chip => ({
+          label: POSE_LABEL[k] ?? k, id: `unlock:${k}`, on: unlocked(k), pick: actions.devUnlock(k),
+        })),
+      ],
+    },
+    {
+      n: '13', label: '하루 소품', note: '화면에만',
+      items: [
+        { label: '없음', id: 'daily:none', on: !d.daily, pick: () => actions.devSet({ daily: null }) },
+        ...DAILY.map(([k, label]): Chip => ({
+          label, id: `daily:${k}`, on: d.daily === k, pick: () => actions.devSet({ daily: k }),
+          // 컵은 규격이 아직 재제작 대기라 눌러도 안 뜬다. 고장이 아니라는 표시로 흐리게.
+          dim: !SITUATION_TABLE.some((r) => r.id === 'daily_prop' && (r.prop ?? '').includes(k)) || k === 'prop_cup',
+        })),
+      ],
+    },
+    {
+      n: '14', label: '떠남', note: '화면에만',
+      items: [
+        { label: '평소', id: 'leave:none', on: d.extra.length === 0 && !d.trip, pick: () => actions.devSet({ extra: [], trip: false }) },
+        { label: '예고(가방)', id: 'leave:soon', on: d.extra.includes('leaving_soon'), pick: actions.devExtra('leaving_soon') },
+        { label: '재회(하트)', id: 'leave:reunion', on: d.extra.includes('reunion'), pick: actions.devExtra('reunion') },
+      ],
+    },
+    {
+      n: '15', label: '화면 판',
       items: [
         { label: '앨범 벽', on: s.wallOpen, pick: actions.openWall },
         { label: '알림', on: s.sheet === 'notify', pick: actions.openNotify },
         { label: '아이 정보', on: s.sheet === 'settings', pick: actions.openSettings },
-        { label: '다음 날', on: false, pick: actions.nextDay },
-        { label: '튜토 완주 판', on: s.tutorDone, pick: actions.showTutorEnd },
-        { label: '로드맵 완료', on: s.cChat >= 4 && s.cBath >= 3 && s.cSleep >= 3 && s.cGame >= 3, pick: actions.finishRoadmap },
-        { label: '조각 0', on: s.shards === 0, pick: actions.setShards(0) },
-        { label: '조각 2', on: s.shards === 2, pick: actions.setShards(2) },
-        { label: '조각 4', on: s.shards === 4, pick: actions.setShards(4) },
         { label: '가입 모달', on: s.authOpen, pick: actions.openAuth('signup') },
+        { label: '로드맵 완료', on: s.cChat >= 4 && s.cBath >= 3 && s.cSleep >= 3 && s.cGame >= 3, pick: actions.finishRoadmap },
+        { label: '다음 날', on: false, pick: actions.nextDay },
         { label: '처음부터', on: false, pick: actions.restart },
       ],
     },
   ];
+
+  if (!visible) return null;
 
   if (!open) {
     return (
@@ -267,29 +413,32 @@ function DevJump({ y, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; mi
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ font: `10.5px ${MONO}`, color: C.sub }}>개발용 이동 · 실서비스에서는 지운다</span>
+        <span style={{ font: `10.5px ${MONO}`, color: C.sub }}>개발용 · 누르면 그 상황이 된다</span>
         <span style={{ flex: 1 }} />
         <button onClick={() => setOpen(false)} style={{ width: 24, height: 24, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
       </div>
 
-      {groups.map((g) => (
+      {rows.map((g) => (
         <div key={g.n} style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, width: 66, flex: 'none', paddingTop: 3 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, width: 86, flex: 'none', paddingTop: 3 }}>
             <span style={{
-              width: 18, height: 18, borderRadius: '50%',
+              width: 18, height: 18, flex: 'none', borderRadius: '50%',
               background: g.items.some((i) => i.on) ? C.accent : '#E3DBCD',
               color: g.items.some((i) => i.on) ? '#FFF6F2' : C.sub,
-              font: `11px ${MONO}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              font: `10px ${MONO}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>{g.n}</span>
-            <span style={{ fontSize: 11.5, color: C.sub }}>{g.label}</span>
+            <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+              <span style={{ fontSize: 11.5, color: C.sub }}>{g.label}</span>
+              {g.note && <span style={{ font: `9px ${MONO}`, color: C.faint }}>{g.note}</span>}
+            </span>
           </span>
           <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
             {g.items.map((i) => {
               const t = chipTone(i.on);
               return (
-                <button key={i.id ?? i.label} data-jump={i.id ?? i.label} onClick={i.pick}
+                <button key={i.id ?? i.label} data-jump={i.id ?? i.label} data-on={i.on ? '1' : '0'} onClick={i.pick}
                   // 확정이 아닌 상황은 눌러도 소품이 안 뜬다 — 고장이 아니라 결정 대기라는 뜻으로 흐리게 둔다.
-                  title={i.dim ? '아직 확정 전(decide·pending) — 눌러도 소품은 안 뜹니다' : undefined}
+                  title={i.title ?? (i.dim ? '아직 확정 전(decide·pending) — 눌러도 소품은 안 뜹니다' : undefined)}
                   style={{
                     border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11,
                     background: t.bg, color: t.fg, opacity: i.dim && !i.on ? 0.5 : 1,
@@ -300,6 +449,8 @@ function DevJump({ y, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; mi
           </div>
         </div>
       ))}
+
+      <DevClockRow live={live} />
 
       {/* ★ 기본 8종 중 서버가 그림을 안 준 것. **방에 들어온 시점에 비어 있어야 한다.**
           지금 가짜 생성은 6종만 만들어서 sick·call 이 늘 뜬다 — 정상적인 경고다. */}
@@ -323,58 +474,85 @@ function DevJump({ y, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; mi
 }
 
 /**
- * 연습방 자세·상황 고르기 두 묶음. **화면을 안 가린다** — 기존 이동 창 안에 줄로 들어간다.
+ * **서버가 쥔 것** 한 줄 — 시계 밀기 · 시각 지정 · 선물 강제 도착 · 밤 큐 돌리기.
  *
- * ★ 무엇을 띄울지는 여전히 상황표가 정한다. 여기서 고르는 것은 "어떤 자세이고 어떤 상황이 켜졌나" 까지고,
- *   그 다음(어느 소품을 어느 자리에)은 `props/situations.ts` → `props/layout.ts` 가 이어 받는다.
- * ★ 확정이 아닌 줄(`decide`·`pending`)은 **흐리게** 보여 준다. 눌러도 소품이 안 뜨는데 그 까닭이
- *   고장이 아니라 "상훈님 결정 대기" 라는 것을 눈으로 알 수 있어야 한다(예: `sick` 은 지금 둘 다 대기라
- *   아무것도 안 뜬다).
+ * ★ 위의 칩들과 달리 **화면 혼자 못 만든다.** 그래서 한 줄로 따로 묶고, 아이가 없으면 안 그린다.
+ * ★ 누른 뒤에는 `resume()` 으로 서버 상태를 다시 읽는다 — dev 호출의 응답을 여기서 따로
+ *   화면에 꽂을 길이 없어서다(`Live` 에 그 손잡이가 없다). 한 번 더 읽는 편이 정직하다.
+ * ★ 목 서버(`?mock=`)에서는 같은 버튼이 목 시계를 민다 — 규칙을 두 벌 만들지 않으려고.
  */
-function poseGroups(
-  y: ReturnType<typeof useYeoul>,
-  pose: string,
-): { n: string; label: string; items: { label: string; on: boolean; pick: () => void; id?: string; dim?: boolean }[] }[] {
-  const { v, actions } = y;
-  const poseItems = (keys: readonly string[]) => keys.map((k) => ({
-    label: POSE_LABEL[k] ?? k,
-    id: k,
-    on: v.posePick === k,
-    pick: actions.pickScene(k, null),
-  }));
+function DevClockRow({ live }: { live: Live }) {
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const petId = live.petId;
+  if (petId == null) return null;
 
-  // 지금 자세에 붙은 줄만. **표를 그대로 낸다** — 여기서 소품을 고르지 않는다.
-  const rows = SITUATION_TABLE.filter((r) => r.pose === pose);
-  const sits = [
-    { label: '상황 없음', id: 'sit:none', on: !v.sitPick, pick: actions.pickScene(v.posePick, null) },
-    ...rows.map((r) => ({
-      label: `${r.id}${r.prop ? ` · ${r.prop.split('|')[0]}` : ' · (소품 없음)'}`,
-      id: `sit:${r.id}`,
-      on: v.sitPick === r.id,
-      // 확정이 아닌 줄은 눌러도 소품이 안 뜬다 — 그 까닭을 칩에 적어 둔다.
-      dim: r.status !== 'confirmed',
-      pick: actions.pickScene(r.pose === '*' ? v.posePick : r.pose, r.id),
-    })),
-  ];
+  const run = async (j: { label: string; minutes?: number; at?: string; act?: 'force-open' | 'night-sweep' }) => {
+    if (busy) return;
+    setBusy(true); setNote(null);
+    try {
+      const mock = typeof window !== 'undefined' && isMockRequested(window.location.search);
+      if (mock) {
+        const handle = (window as unknown as {
+          __zzalMock?: { advance: (ms: number) => void; now: () => string; forceOpen: (seq: number) => void; nightSweep: () => void };
+        }).__zzalMock;
+        if (!handle) { setNote('목 서버를 찾지 못했어요'); return; }
+        if (j.act === 'force-open') handle.forceOpen(GIFT_SEQ);
+        else if (j.act === 'night-sweep') handle.nightSweep();
+        else if (j.minutes != null) handle.advance(j.minutes * 60_000);
+        else { const t = new Date(handle.now()).getTime(); handle.advance(nextLocalAt(t, j.at as string) - t); }
+      } else {
+        // 시각 이동은 **서버 시각 기준 다음 도래 시각**을 절대 시각으로 보낸다(lib/dev 머리말).
+        const base = live.pet?.serverNow ? new Date(live.pet.serverNow).getTime() : Date.now();
+        if (j.act === 'force-open') await forceOpen(petId, GIFT_SEQ);
+        else if (j.act === 'night-sweep') await nightSweep(petId);
+        else if (j.minutes != null) await advanceClock(petId, j.minutes);
+        else await setClockAt(petId, new Date(nextLocalAt(base, j.at as string)).toISOString());
+      }
+      await live.resume();
+    } catch (e) {
+      // dev 도구가 꺼진 서버에는 그 주소가 아예 없다(404) 또는 막힌다(403). 고장이 아니라 그렇게 만든 것이다.
+      const status = e instanceof ApiError ? e.status : 0;
+      if (status === 404 || status === 403) setNote('이 서버는 개발 도구가 꺼져 있어요');
+      else setNote(e instanceof ApiError && e.message ? e.message : '시계를 옮기지 못했어요');
+    } finally { setBusy(false); }
+  };
 
-  return [
-    {
-      n: '6', label: `자세 ${POSE_FLOORS[0][0]}`,
-      items: [
-        { label: '자동', id: 'pose:auto', on: !v.posePick && !v.sitPick, pick: actions.pickScene(null, null) },
-        ...poseItems(POSE_FLOORS[0][1]),
-      ],
-    },
-    {
-      n: '7', label: `자세 ${POSE_FLOORS[1][0]}`,
-      items: [
-        // ★ 자세만 바꾸는 칩들과 **하는 일이 다르다** — 이건 "행동이 어느 자세를 쓰나" 를 바꾼다.
-        //   켜면 밥 주기가 `eat`(밥그릇 소품)에서 `eat_rice`(고기가 그림 안 · 소품 없음)로 넘어간다.
-        //   ⚠️ **연습방에만 있다**(이 묶음 자체가 `sampleMode` 일 때만 나온다). 진짜 방의 해금은 서버가 쥔다.
-        { label: v.floor2 ? '2층 열림 ✓' : '2층 전부 열기', id: 'floor2', on: v.floor2, pick: actions.toggleFloor2 },
-        ...poseItems(POSE_FLOORS[1][1]),
-      ],
-    },
-    { n: '8', label: `상황 · ${pose}`, items: sits },
-  ];
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6, width: 86, flex: 'none', paddingTop: 3 }}>
+        <span style={{ width: 18, height: 18, flex: 'none', borderRadius: '50%', background: '#E3DBCD', color: C.sub, font: `10px ${MONO}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>16</span>
+        <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+          <span style={{ fontSize: 11.5, color: C.sub }}>서버 시계</span>
+          <span style={{ font: `9px ${MONO}`, color: C.faint }}>서버가 쥔 것</span>
+        </span>
+      </span>
+      <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+        {CLOCK_JUMPS.map((j) => (
+          <button key={j.label} data-jump={`clock:${j.label}`} disabled={busy} onClick={() => void run(j)}
+            style={{
+              border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11,
+              background: C.slot, color: C.ink, opacity: busy ? 0.5 : 1,
+            }}
+          >{j.label}</button>
+        ))}
+        {note && <span data-dev-note style={{ font: `10px ${MONO}`, color: C.accent, alignSelf: 'center' }}>{note}</span>}
+      </div>
+    </div>
+  );
 }
+
+/** 첫 선물(구르기)의 seq. dev 서버는 밤 굽기가 꺼져 있어 아침 도착 화면을 볼 유일한 길이다. */
+const GIFT_SEQ = 101;
+
+/** 하루를 건너뛸 자리들. 시각 이동은 **앞으로만** 간다(서버가 뒤로는 거절한다). */
+const CLOCK_JUMPS: ReadonlyArray<{ label: string; minutes?: number; at?: string; act?: 'force-open' | 'night-sweep' }> = [
+  { label: '+10분', minutes: 10 },
+  { label: '+1시간', minutes: 60 },
+  { label: '19:00', at: '19:00' },
+  { label: '23:30', at: '23:30' },
+  { label: '07:00', at: '07:00' },
+  { label: '+1일', minutes: 24 * 60 },
+  { label: '선물 강제 도착', act: 'force-open' },
+  { label: '밤 큐 돌리기', act: 'night-sweep' },
+];

@@ -22,7 +22,7 @@ import type { CareAction, ChatState, Personality } from '../../lib/pet';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
 import {
-  CYCLE_MS, GIFT_CYCLES, SITUATION_TABLE,
+  ACTION_SITUATION, CYCLE_MS, GIFT_CYCLES, SITUATION_TABLE,
   cyclesOfAction, poseOfSituation, situationOfAction, stagePlanOf, type ActionKey,
 } from '../props/situations';
 import { motionAliases } from '../constants';
@@ -77,6 +77,44 @@ export interface Fire {
   actions: FireAction[];
 }
 
+/**
+ * 개발용 덮어쓰기 한 겹. **여기 있는 값만이 서버 값을 이긴다.**
+ *
+ * ★ 운영에서는 전부 `null`·빈 값이라 `es` 가 예전과 **글자 그대로 같은 객체**다(덮을 것이 없으면
+ *   새 객체도 안 만든다). 그래서 이 겹이 운영 동작을 바꾸지 않는다.
+ */
+export interface DevState {
+  /** 자세 강제(카탈로그 key). 상황보다 먼저 화면에 반영된다. */
+  pose: string | null;
+  /** 상황 강제(상황표의 id). 고르면 그 줄이 적어 둔 자세도 같이 온다. */
+  sit: string | null;
+  /** 바닥 흔적(똥) 개수 0~4. */
+  trash: number | null;
+  /** 게이지. 화면에만 얹는다 — 서버 숫자는 안 바뀐다. */
+  full: number | null; happy: number | null; bond: number | null;
+  /** 몸 상태. `sickLong` 은 24시간+ 방치(해골). */
+  sick: boolean | null; sickLong: boolean;
+  /** 잠 · 밤 창. **시각과 무관하게** 그 상태를 만든다. */
+  sleeping: boolean | null; night: boolean | null;
+  /** 여행 중(떠남 2차). 화면에만 — 돌보기 잠금 문구까지 재현한다. */
+  trip: boolean;
+  /** 2층 8종 **전부** 열기. 개별 해금보다 먼저 본다. */
+  floor2: boolean;
+  /** 2층 8종 **각각** 열기(자세 key → 열림). 정본 §6 의 8칸을 하나씩 켤 수 있게. */
+  unlocked: Record<string, boolean>;
+  /** 하루 소품 하나 고르기(`prop_ball` 같은 소품 key). `null` 이면 안 띄운다. */
+  daily: string | null;
+  /** 그 밖에 화면에만 얹을 상황 id(가방·재회 하트 같은 것). */
+  extra: string[];
+}
+
+/** 아무것도 안 덮은 상태. 운영이 늘 이 값이다. */
+export const DEV_OFF: DevState = {
+  pose: null, sit: null, trash: null, full: null, happy: null, bond: null,
+  sick: null, sickLong: false, sleeping: null, night: null, trip: false,
+  floor2: false, unlocked: {}, daily: null, extra: [],
+};
+
 export interface YeoulState {
   screen: ScreenKey;
   step: number;
@@ -126,23 +164,16 @@ export interface YeoulState {
    */
   actStep: number;
   /**
-   * **개발용(연습방) 고정** — 손으로 고른 자세·상황. 둘 다 `null` 이면 평소대로 상태가 정한다.
+   * **개발용 덮어쓰기 한 겹**(2026-09-13 재설계). 상훈님 원칙 — **"버튼은 그 상황을 강제한다."**
    *
-   * ★ 왜 두 축인가 — 자세만 바꿔서는 소품이 거의 안 보인다. 연습방 기본 상태(`base` · 아무 상태 아님)에서
-   *   뜨는 것은 바닥 흔적 하나뿐이고, 나머지는 전부 상황에 딸려 있다(꼬르륵=배고픔 · 손=쓰다듬는 중 ·
-   *   거품=목욕 중). 그래서 **자세 + 그 자세에 붙은 상황**을 같이 고른다.
-   * ★ 무엇을 띄울지는 여전히 **상황표가 정한다** — 여기서 고르는 것은 "어떤 상황이 켜졌나" 까지다.
+   * ★ 왜 한 겹인가 — 예전 개발 버튼은 상태(`s.*`)를 직접 밀었다. 그런데 진짜 아이가 있으면
+   *   화면은 서버 값만 보므로(`es`), 눌러도 아무 일이 안 났다. 연습방/진짜 방을 가르는 조건이
+   *   여기저기 붙어 **누를 수 있는 칸과 불이 들어오는 칸이 어긋났다.**
+   *   이제 **`es` 를 만드는 바로 그 자리에서 서버 값 위에 덮는다** — 가를 필요가 없어진다.
+   * ★ `null` 은 "안 덮는다"(서버·목이 정한다), 값이 있으면 **그 값이 이긴다.**
+   * ★ 새로고침하면 사라진다(로컬 검증용). 서버에 아무것도 안 남긴다.
    */
-  posePick: string | null; sitPick: string | null;
-  /**
-   * **개발용(연습방) — 2층 8종을 다 연 것으로 친다.**
-   *
-   * ★ 왜 자세 고르기로는 부족한가 — 자세만 바꾸면 그림만 바뀐다. 상훈님이 보시려는 것은
-   *   **"해금되면 행동이 어떻게 달라지나"** 다: 밥 주기가 `eat`(밥그릇 소품)에서 `eat_rice`
-   *   (고기가 그림 안 · 소품 없음)로 넘어가는 것. 그건 행동이 고르는 **상황 줄**이 바뀌는 일이다.
-   * ★ **연습방에만 있다**(이동 창의 자세 2층 칸). 진짜 방의 해금은 서버가 쥔다.
-   */
-  floor2: boolean;
+  dev: DevState;
   /** 튜토리얼 완주 축하를 이미 띄웠는가. 한 번만 뜬다. */
   tutorDone: boolean;
   /** 구르기를 배웠는가(튜토리얼 완주 기념). */
@@ -186,7 +217,7 @@ const INITIAL: YeoulState = {
   //   남의 이름으로 만들어진다. 자리표시자('여울')만 보여 주고 값은 빈 칸이다.
   petName: '', uploaded: false, authed: '', askDraft: '',
   shards: 2, tutorDone: false, rollUnlocked: false, acting: null, actSit: null,
-  posePick: null, sitPick: null, floor2: false, actStep: 0,
+  dev: DEV_OFF, actStep: 0,
   fire: null, decoOpen: false, albumOpen: 8,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
@@ -198,6 +229,22 @@ const INITIAL: YeoulState = {
 };
 
 // ── 작은 계산들 ──────────────────────────────────────────────────────────
+
+/**
+ * 개발용 덮어쓰기를 상태 한 벌 위에 얹는다. **켜진 칸만** 이긴다.
+ * 덮을 것이 없으면 받은 것을 그대로 돌려준다 — 운영에서 새 객체를 만들지 않으려고.
+ */
+function applyDev(base: YeoulState, d: DevState): YeoulState {
+  const over: Partial<YeoulState> = {};
+  if (d.full != null) over.full = d.full;
+  if (d.happy != null) over.happy = d.happy;
+  if (d.trash != null) over.trace = d.trash;
+  if (d.bond != null) over.bond = d.bond;
+  if (d.sick != null) over.sick = d.sick;
+  if (d.sleeping != null) over.sleeping = d.sleeping;
+  if (d.night != null) over.night = d.night;
+  return Object.keys(over).length === 0 ? base : { ...base, ...over };
+}
 
 /** 급함의 단계. 시안 `levels()`. */
 function levelsOf(s: YeoulState, m: Mode): Record<RoomKey, LvKey> {
@@ -369,7 +416,7 @@ export function useYeoul(live?: Live) {
    *   그것도 응답이 오는 순간 서버 값으로 덮인다(계약 10절 + 2026-09-10 절충 → `useHatch.doCare`).
    * ★ 아직 안 옮긴 것(놀이 횟수 `plays`·부름 `calls`·앨범 칸 수·조각)은 그대로 목이다.
    */
-  const es: YeoulState = onServer ? {
+  const svEs: YeoulState = onServer ? {
     ...s,
     // ★ 2026-09-10 — **목으로 폴백하지 않는다.** `?? s.full` 로 메우던 자리가 방 입장 때
     //   게이지를 튀게 하던 범인이었다(목 값으로 먼저 그려졌다가 서버 값이 도착하며 0→3).
@@ -385,6 +432,16 @@ export function useYeoul(live?: Live) {
     sick: og?.healed ? false : sv.sick != null,
     sleeping: !!sv.clock?.sleeping,
   } : s;
+
+  /**
+   * **개발용 덮어쓰기를 여기서 얹는다** — 서버 값이 정해진 바로 그 자리다.
+   *
+   * ★ 이 한 자리 덕에 "연습방이냐 진짜 방이냐" 를 아래에서 다시 안 가른다. 개발 버튼은 전부
+   *   `s.dev` 에만 쓰고, 화면은 늘 `es` 만 읽는다. 그래서 **눌리는 칸과 불이 들어오는 칸이 같다.**
+   * ★ 덮을 것이 하나도 없으면 **원래 객체를 그대로 돌려준다**(`svEs`). 운영에서 렌더가 늘던
+   *   일이 없게, 그리고 예전과 같은 값임을 눈으로 보이게.
+   */
+  const es: YeoulState = applyDev(svEs, s.dev);
 
   /** `setS` 안이나 손잡이 안에서 읽을 것들. 값이 바뀔 때마다 손잡이를 새로 만들지 않으려고 ref 로 둔다. */
   const liveRef = useRef<Live | undefined>(undefined);
@@ -426,7 +483,7 @@ export function useYeoul(live?: Live) {
     return () => { Object.values(timers).forEach((t) => clearTimeout(t)); };
   }, []);
 
-  const mode: Mode = es.sleeping ? 'sleep' : es.sick ? 'sick' : s.night ? 'night' : 'day';
+  const mode: Mode = es.sleeping ? 'sleep' : es.sick ? 'sick' : es.night ? 'night' : 'day';
   const needStyle: NeedStyle = s.needStyleLocal ?? '색+모양+글자';
 
   /**
@@ -470,7 +527,14 @@ export function useYeoul(live?: Live) {
    * ★ 지금 2층을 여는 길은 **연습방 스위치 하나뿐**이다(`floor2`). 진짜 아이의 해금은 서버가 쥔다 —
    *   그 값이 오면 여기만 바꿔 읽으면 된다.
    */
-  const sitOf = useCallback((action: ActionKey) => situationOfAction(action, sRef.current.floor2), []);
+  const floor2Of = useCallback((action: ActionKey) => {
+    const d = sRef.current.dev;
+    if (d.floor2) return true;
+    const l2 = (ACTION_SITUATION[action] as { l2?: string }).l2;
+    const pose = l2 ? poseOfSituation(SITUATION_TABLE, l2) : null;
+    return !!(pose && d.unlocked[pose]);
+  }, []);
+  const sitOf = useCallback((action: ActionKey) => situationOfAction(action, floor2Of(action)), [floor2Of]);
 
   /**
    * **행동 한 번을 연출한다** — 상황 id 하나만 정하면 자세는 표가 따라온다.
@@ -478,13 +542,38 @@ export function useYeoul(live?: Live) {
    * ★ 자세를 여기 적지 않는 이유 — 층에 따라 자세가 갈린다(밥 주기: 1층 `eat` · 2층 `eat_rice`).
    *   코드에 자세를 박으면 표와 어긋나고, 어긋나면 **소품이 조용히 안 뜬다.**
    */
+  /**
+   * 그 행동이 **실제로 바꾸는 값**. 행동이 성공하면 그 칸의 개발 덮개를 걷는다.
+   *
+   * ★ 왜 걷어야 하나 — 안 걷으면 똥을 4로 강제해 둔 채 청소를 눌렀을 때 화면에 똥이 그대로 남는다.
+   *   "눌렀는데 아무 일도 안 난다" 가 되고, 그게 바로 이번에 고친 고장의 얼굴이다.
+   * ★ 걷는 것은 **그 행동이 건드리는 칸만**이다. 재워 놓고 밥을 줬다고 잠이 풀리면 안 된다.
+   */
+  const RELEASE: Partial<Record<ActionKey, readonly (keyof DevState)[]>> = useMemo(() => ({
+    feed_rice: ['full'], feed_snack: ['full'],
+    clean: ['trash'], bath: ['trash'],
+    medicine: ['sick', 'sickLong'],
+    game_win: ['happy'], game_lose: ['happy'],
+    wake: ['sleeping'],
+  }), []);
+
   const careAct = useCallback((action: ActionKey) => {
-    const f2 = sRef.current.floor2;
+    const f2 = floor2Of(action);
     const sit = situationOfAction(action, f2);
     // ★ 표가 그 층에 줄을 안 적어 둔 행동은 **아무것도 안 짓는다**(게임 좌·우 고르기 1층 = "변화 없음").
     if (!sit) return;
+    // ★ 그 행동이 건드리는 칸의 개발 덮개를 걷는다 — 안 그러면 눌러도 화면이 안 바뀐다.
+    const keys = RELEASE[action];
+    if (keys?.length) {
+      setS((v) => {
+        if (!keys.some((k) => v.dev[k] !== DEV_OFF[k])) return v;
+        const next = { ...v.dev };
+        for (const k of keys) (next as Record<string, unknown>)[k] = DEV_OFF[k];
+        return { ...v, dev: next };
+      });
+    }
     act(poseOfSituation(SITUATION_TABLE, sit) ?? 'base', sit, cyclesOfAction(SITUATION_TABLE, action, f2));
-  }, [act]);
+  }, [act, floor2Of, RELEASE]);
 
   /** 아무 일도 안 하는 손잡이. 안 보이는 버튼 자리를 채운다. */
   const noop = useCallback(() => {}, []);
@@ -566,7 +655,12 @@ export function useYeoul(live?: Live) {
   const nextTutor = useCallback(() => setS((v) => ({ ...v, tutor: v.tutor + 1, hatch: realRef.current ? v.hatch : Math.min(4, v.hatch + 1) })), []);
   const prevTutor = useCallback(() => setS((v) => ({ ...v, tutor: Math.max(0, v.tutor - 1) })), []);
   const startTutor = useCallback(() => patch({ screen: 'room', sampleMode: false, tutorOn: true, tutor: 0, sheet: null, popOpen: false, chatOpen: false }), [patch]);
-  const endTutor = useCallback(() => patch({ screen: 'room', sampleMode: false, tutorOn: false, tutor: 0, sheet: null }), [patch]);
+  /**
+   * 튜토리얼만 끈다. ★ 예전에는 여기서 `sampleMode: false` 까지 내렸다 —
+   * 그래서 「튜토리얼 끝」한 번에 **연습방에서 튕겨 나가고** 자세·상황 칸이 통째로 사라졌다
+   * (상훈님 "튜토리얼 끝 누르고 자는 중은 또 안눌러지고"의 첫 번째 까닭). 방은 안 건드린다.
+   */
+  const endTutor = useCallback(() => patch({ screen: 'room', tutorOn: false, tutor: 0, sheet: null }), [patch]);
 
   // ── 열고 닫기 ──
   const closePop = useCallback(() => {
@@ -710,9 +804,11 @@ export function useYeoul(live?: Live) {
       return;
     }
     if (onServerRef.current) { void serverCare('FEED', 'feed_rice', '맛있게 먹었어요'); return; }
-    if (s.full >= 4) { flash('배가 가득이라 거절했어요'); return; }
-    if (s.stock <= 0) { flash('밥 재고가 없어요'); return; }
-    patch({ full: s.full + 1, stock: s.stock - 1, bond: Math.min(100, s.bond + 1) });
+    // ★ 잠금 판정은 **화면이 실제로 쓰는 값**(`es`)으로 한다. 개발 덮개로 배부름을 0 으로
+    //   눌러 두었으면 밥이 눌려야 한다 — `s` 를 보면 덮개가 무시되어 "눌러도 아무 일이 없다" 가 된다.
+    if (esRef.current.full >= 4) { flash('배가 가득이라 거절했어요'); return; }
+    if (esRef.current.stock <= 0) { flash('밥 재고가 없어요'); return; }
+    patch({ full: esRef.current.full + 1, stock: esRef.current.stock - 1, bond: Math.min(100, s.bond + 1) });
     careAct('feed_rice');
     flash('맛있게 먹었어요');
     tutorDone('feed');
@@ -732,7 +828,7 @@ export function useYeoul(live?: Live) {
   const onClean = useCallback(() => {
     // 청소는 v4 에서 `sweep` 이다. 아직 그 그림이 없으면 별칭이 옛 `wash` 로 받쳐 준다(constants.MOTION_ALIAS).
     if (onServerRef.current) { void serverCare('CLEAN', 'clean', '깨끗해졌어요'); return; }
-    if (s.trace <= 0 && !s.sampleMode) { flash('이미 깨끗해요'); return; }
+    if (esRef.current.trace <= 0 && !s.sampleMode) { flash('이미 깨끗해요'); return; }
     patch({ trace: 0 });
     careAct('clean');
     flash('깨끗해졌어요');
@@ -741,7 +837,7 @@ export function useYeoul(live?: Live) {
 
   const onBath = useCallback(() => {
     if (onServerRef.current) { void serverCare('BATH', 'bath', '반짝반짝해졌어요'); return; }
-    if (s.bathUsed && !s.sampleMode) { flash('오늘 목욕은 했어요'); return; }
+    if (esRef.current.bathUsed && !s.sampleMode) { flash('오늘 목욕은 했어요'); return; }
     patch({ bathUsed: true, trace: 0, bond: Math.min(100, s.bond + 2), cBath: s.cBath + 1 });
     careAct('bath');
     flash('반짝반짝해졌어요');
@@ -759,7 +855,7 @@ export function useYeoul(live?: Live) {
       })();
       return;
     }
-    if (!s.sick) { flash('지금은 약이 필요 없어요'); return; }
+    if (!esRef.current.sick) { flash('지금은 약이 필요 없어요'); return; }
     patch({ sick: false });
     careAct('medicine');
     cureAfterMed();
@@ -811,6 +907,8 @@ export function useYeoul(live?: Live) {
         const r = await liveRef.current?.doRest();
         if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
         patch({ sheet: null });
+        // 서버가 재우고/깨웠으니 잠 덮개를 걷는다 — 안 걷으면 서버가 바꾼 것이 화면에 안 보인다.
+        setS((v) => ({ ...v, dev: { ...v.dev, sleeping: null } }));
         // ★ 재우기는 **상태**라 행동이 아니다(자는 동안 계속이므로 `sleeping` 이 맡는다).
         //   깨우기만 잠깐 하는 행동이라 표의 `wake_by_hand` 를 켠다 — 그 줄은 `prop: null`,
         //   즉 **표가 "이 상황에는 소품이 없다" 고 확정한 자리**다(커튼이 걷히는 것이 신호).
@@ -819,7 +917,7 @@ export function useYeoul(live?: Live) {
       })();
       return;
     }
-    if (s.sleeping) {
+    if (esRef.current.sleeping) {
       patch({ sleeping: false, night: false, pets: 0, bathUsed: false, plays: 3, day: s.day + 1, sheet: null });
       careAct('wake');
       flash('잘 잤어요');
@@ -828,7 +926,9 @@ export function useYeoul(live?: Live) {
     // ★ 연습방은 **시각을 안 본다**(상훈님 2026-09-13). 시연·검수용인데 저녁 7시를 기다려야 하면
     //   낮에는 자는 자세와 커튼을 확인할 길이 없다. 진짜 방(서버 경로)은 위에서 이미 갈라져 나갔고
     //   거기는 `clock.canSleep` 이 정본 규칙(19:00~23:00 재우기 · 23:00 자동)을 그대로 든다.
-    if (!s.night && !s.sampleMode) { flash('저녁 7시부터 재울 수 있어요'); return; }
+    if (!esRef.current.night && !s.sampleMode) { flash('저녁 7시부터 재울 수 있어요'); return; }
+    // 재우기는 행동이 아니라 상태라 `careAct` 를 안 탄다 — 잠 덮개는 여기서 직접 맞춘다.
+    setS((v) => ({ ...v, dev: { ...v.dev, sleeping: null } }));
     patch({ sleeping: true, sheet: null, resolved: { ...s.resolved, bed: true }, cSleep: s.cSleep + 1 });
     flash('잘 자요');
     tutorDone('sleep');
@@ -1169,15 +1269,43 @@ export function useYeoul(live?: Live) {
   const pickNeedStyle = useCallback((v: NeedStyle) => () => patch({ needStyleLocal: v }), [patch]);
   const toggleNotif = useCallback(() => setS((v) => ({ ...v, notifOn: !v.notifOn })), []);
   const toggleLeave = useCallback(() => setS((v) => ({ ...v, leaveOff: !v.leaveOff })), []);
-  const toggleSick = useCallback(() => { patch({ sick: !s.sick, sheet: null }); flash(s.sick ? '나았어요' : '아픈 상태로 바꿨어요'); }, [s.sick, patch, flash]);
-  const pickTime = useCallback((v: 'day' | 'night' | 'sleep') => () => {
-    patch({ night: v !== 'day', sleeping: v === 'sleep', sheet: null });
-    flash(v === 'sleep' ? '자는 중으로 바꿨어요' : v === 'night' ? '밤 창으로 바꿨어요' : '낮으로 바꿨어요');
-  }, [patch, flash]);
-  const setMode = useCallback((m: Mode) => () => patch({
-    sleeping: m === 'sleep', sick: m === 'sick', night: m === 'night' || m === 'sleep',
-    screen: 'room', sheet: null, toast: '',
-  }), [patch]);
+  // ── 개발용 덮어쓰기 손잡이 ──────────────────────────────────────────
+  //
+  // ★ **모든 개발 버튼은 `s.dev` 에만 쓴다.** 상태(`s.sick`·`s.night`…)를 직접 밀지 않는다 —
+  //   그러면 진짜 아이가 있을 때 서버 값에 덮여 아무 일도 안 났다(예전 고장의 두 번째 까닭).
+  /** 덮어쓰기 한 칸을 바꾼다. 화면이 그 자리에서 바뀐다. */
+  const devSet = useCallback((p: Partial<DevState>) => setS((v) => ({ ...v, dev: { ...v.dev, ...p } })), []);
+  /** 덮어쓰기를 통째로 걷어낸다 — 서버·목이 정하는 대로 돌아간다. */
+  const devReset = useCallback(() => setS((v) => ({ ...v, dev: DEV_OFF })), []);
+  /** 2층 한 종을 열고 닫는다(정본 §6 의 여덟 칸을 각각). */
+  const devUnlock = useCallback((pose: string) => () => setS((v) => ({
+    ...v, dev: { ...v.dev, unlocked: { ...v.dev.unlocked, [pose]: !v.dev.unlocked[pose] } },
+  })), []);
+  /** 화면에만 얹는 상황 한 줄을 켜고 끈다(가방·재회 하트처럼 서버 신호가 아직 없는 것). */
+  const devExtra = useCallback((id: string) => () => setS((v) => ({
+    ...v,
+    dev: {
+      ...v.dev,
+      extra: v.dev.extra.includes(id) ? v.dev.extra.filter((x) => x !== id) : [...v.dev.extra, id],
+    },
+  })), []);
+
+  const toggleSick = useCallback(() => devSet({ sick: !esRef.current.sick, sickLong: false }), [devSet]);
+  const pickTime = useCallback((v: 'day' | 'night' | 'sleep') => () => devSet({
+    night: v !== 'day', sleeping: v === 'sleep',
+  }), [devSet]);
+  /**
+   * 이동 창의 시간대·몸 상태 넷. **아이 정보 시트에 있던 같은 버튼과 한 벌로 합쳤다** —
+   * 예전엔 `setMode`(이동 창)와 `pickTime`·`toggleSick`(시트)이 따로 두 벌이라 서로 어긋났다.
+   */
+  const setMode = useCallback((m: Mode) => () => {
+    devSet({
+      sleeping: m === 'sleep', sick: m === 'sick',
+      night: m === 'night' || m === 'sleep',
+      sickLong: false,
+    });
+    patch({ screen: 'room', sheet: null, toast: '' });
+  }, [devSet, patch]);
   const nextDay = useCallback(() => {
     setS((v) => ({
       ...v, day: v.day + 1, full: Math.max(0, v.full - 2), trace: Math.min(4, v.trace + 2),
@@ -1195,12 +1323,12 @@ export function useYeoul(live?: Live) {
    * 개발용(연습방) — 자세·상황을 손으로 고정한다. 둘 다 `null` 이면 평소대로 돌아간다.
    * ★ 상황을 고르면 **그 줄이 적어 둔 자세**도 같이 온다(표가 짝지어 둔 것을 화면이 다시 정하지 않는다).
    */
-  const pickScene = useCallback((pose: string | null, sit: string | null = null) => () => patch({ posePick: pose, sitPick: sit }), [patch]);
+  const pickScene = useCallback((pose: string | null, sit: string | null = null) => () => devSet({ pose, sit }), [devSet]);
   /**
    * 개발용(연습방) — **2층 8종 전부 열기/닫기.** 켜면 돌보기가 2층 자세를 쓰고,
    * 그에 맞는 소품(대개 "그림 안에 있으니 소품 없음")이 따라온다.
    */
-  const toggleFloor2 = useCallback(() => setS((v) => ({ ...v, floor2: !v.floor2 })), []);
+  const toggleFloor2 = useCallback(() => setS((v) => ({ ...v, dev: { ...v.dev, floor2: !v.dev.floor2 } })), []);
   /** 개발용 — 튜토리얼 완주 축하 판을 다시 띄운다. */
   const showTutorEnd = useCallback(() => setS((v) => finishTutor({ ...v, tutorDone: false })), []);
   const openPlay = useCallback((tab: 'talk' | 'guess' | 'run') => () => patch({ sheet: 'play', playTab: tab, toast: '' }), [patch]);
@@ -1330,7 +1458,7 @@ export function useYeoul(live?: Live) {
     // ★ 여행 중에는 **돌보기가 통째로 막힌다**(서버 `ZZAL_TRAVELING`). 침실도 예외가 아니다.
     //   떠남·재회는 2차라 지금은 `trip` 이 늘 null 이지만, 값이 오기 시작하는 날
     //   화면만 모른 채 눌리는 것보다 미리 막아 두는 편이 안전하다.
-    const tripMsg = onServer && sv.trip ? `${petWith(s.petName, '이', '가')} 여행 중이에요` : '';
+    const tripMsg = (s.dev.trip || (onServer && sv.trip)) ? `${petWith(s.petName, '이', '가')} 여행 중이에요` : '';
     const lockMsg = tripMsg || (mode === 'sleep' ? sleepLine
       : (mode === 'sick' && selK === 'play') ? '아플 땐 못 놀아요' : '');
     // 여행이면 침실까지 잠근다. 그 밖의 잠금(자는 중·아픔)은 침실을 비켜 간다 — 거기서 깨워야 하므로.
@@ -1480,8 +1608,8 @@ export function useYeoul(live?: Live) {
      * (잠긴 동작을 무엇으로 대신 그릴지도 거기서 정한다).
      * ★ 재우기는 여기 `sleeping` 으로 남는다 — 잠깐 하는 동작이 아니라 자는 동안 계속이라서다.
      */
-    // ★ 개발용 고정(연습방 자세 고르기)이 있으면 그것이 이긴다. 운영에서는 늘 null 이다.
-    const spriteKey: string = s.posePick ? s.posePick
+    // ★ 개발용 고정(자세 고르기)이 있으면 그것이 이긴다. 운영에서는 늘 null 이다.
+    const spriteKey: string = s.dev.pose ? s.dev.pose
       : s.acting ? s.acting
       : es.sleeping ? 'sleep'
         // ⚠️ **임시 대체 · 배포 전 진짜 그림으로 교체**(상훈님 2026-09-08 판정 5).
@@ -1643,10 +1771,20 @@ export function useYeoul(live?: Live) {
     return {
       lv, calls, top, mode, tut, TUT, unlimited, selK,
       tiles, pop, st, bub, sheet, charGroups, frames, spriteKey,
-      /** 개발용 고정(연습방 자세·상황 고르기). 방과 이동 띠가 함께 읽는다. */
-      posePick: s.posePick, sitPick: s.sitPick,
-      /** 개발용(연습방) — 2층을 다 연 것으로 치고 있는가. 이동 창의 스위치가 읽는다. */
-      floor2: s.floor2,
+      /** 개발용 고정(자세·상황 고르기). 방과 이동 창이 함께 읽는다. */
+      posePick: s.dev.pose, sitPick: s.dev.sit,
+      /** 개발용 — 2층을 다 연 것으로 치고 있는가. 이동 창의 스위치가 읽는다. */
+      floor2: s.dev.floor2,
+      /** 개발용 덮어쓰기 한 벌 그대로. 이동 창이 불(켜짐 표시)을 이 값으로만 판단한다. */
+      dev: s.dev,
+      /**
+       * **지금 화면이 실제로 쓰고 있는 값**. 이동 창의 불은 덮어쓰기가 아니라 **이것**을 본다 —
+       * "눌렀는데 불이 안 들어온다"·"안 눌리는데 불만 들어온다" 가 거기서 생겼다(C절 3번 고장).
+       */
+      now: {
+        full: es.full, happy: es.happy, trash: es.trace, bond: es.bond,
+        sick: es.sick, sleeping: es.sleeping, night: es.night, shards: s.shards,
+      },
       /**
        * 소품 오버레이가 읽는 **지금 상태**. ★ 무엇을 띄울지는 여기서 정하지 않는다 —
        * 상황표(`contract/소품-상황표-v1.json`)가 정하고, 이 값은 그 표의 낱말로 번역될 재료다.
@@ -1664,12 +1802,20 @@ export function useYeoul(live?: Live) {
         act: s.actSit,
         /** 그 행동의 단계 소품이 지금 몇 번째 바퀴인가. 방이 표를 보고 실제 단계로 옮긴다. */
         actStep: s.actStep,
+        /** 24시간+ 방치 — 땀 대신 해골. 표의 `sick_long` 줄이다(지금은 개발용으로만 켠다). */
+        sickLong: s.dev.sickLong,
+        /** 화면에만 얹는 상황 줄(가방·재회 하트…). 서버 신호가 생기면 여기 말고 상태에서 온다. */
+        extra: s.dev.extra,
+        /** 하루 소품 하나(`prop_ball`…). 고른 것이 없으면 안 띄운다. */
+        daily: s.dev.daily,
       },
       // 자는 동안은 방을 아예 못 연다(판정 13). 화면이 이 값 하나만 보면 되게 둔다.
       asleep: mode === 'sleep',
       // ⚠️ **임시 대체 · 배포 전 진짜 그림으로 교체**(판정 5). 자는 그림이 없어 커튼 뒤로 감춘다 —
       //   깨어 있는 그림을 커튼 밑에 두면 자는 것으로 안 읽힌다(판정 13과 같은 방향).
-      hidePet: mode === 'sleep',
+      // ★ 다만 **개발용으로 재웠을 때는 감추지 않는다**(2026-09-13 상훈님 — "잠자기 누르면
+      //   7든 1시든 12시든 잠 자기 모션만 볼 수 있으면 돼"). 감춘 채로는 고쳤는지 확인할 길이 없다.
+      hidePet: mode === 'sleep' && s.dev.sleeping !== true,
       sleepLine: sleepingLine(s.petName),
       screen: { room: s.screen === 'room', onb: s.screen === 'onb', egg: s.screen === 'egg' },
       hud: {
@@ -1893,8 +2039,9 @@ export function useYeoul(live?: Live) {
       settings: {
         groups: [
           { label: '버튼 표기', opts: (['색+모양+글자', '색+글자', '색+모양'] as NeedStyle[]).map((o) => ({ text: o, pick: pickNeedStyle(o), ...sel(needStyle === o) })) },
-          { label: '시간대', opts: ([['낮', 'day'], ['밤 창', 'night'], ['자는 중', 'sleep']] as const).map(([t, k]) => ({ text: t, pick: pickTime(k), ...sel(mode === k) })) },
-          { label: '몸 상태', opts: [{ text: s.sick ? '아픈 상태 · 끄기' : '아픈 상태로 바꾸기', pick: toggleSick, bg: s.sick ? '#FADCD6' : C.paper, bd: s.sick ? '#EFBDB2' : C.lineHard, bw: '1px', fg: s.sick ? ACCENT : C.ink }] },
+          // ★ '시간대'·'몸 상태' 줄은 **여기서 뺐다**(2026-09-13). 사용자용 시트에 개발 버튼이
+          //   섞여 있었고, 같은 일을 하는 버튼이 이동 창에도 있어 **두 벌이 서로 어긋났다.**
+          //   지금은 이동 창 한 곳(`setMode`·`devSet`)만이 그 둘을 바꾼다.
           { label: '알림', opts: [{ text: s.notifOn ? '부름 알림 받는 중' : '알림 꺼짐', pick: toggleNotif, bg: s.notifOn ? C.accentSoft : C.slotDim, bd: s.notifOn ? ACCENT : C.lineHard, bw: s.notifOn ? '2px' : '1px', fg: s.notifOn ? '#9C5145' : C.sub2 }] },
         ],
         /**
@@ -1975,7 +2122,8 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, playGift,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2,
+    devSet, devReset, devUnlock, devExtra, playGift, pickTime, toggleSick,
     backToSample: () => patch({ screen: 'room' }),
   }), [
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
@@ -1983,7 +2131,8 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, playGift,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2,
+    devSet, devReset, devUnlock, devExtra, playGift, pickTime, toggleSick,
   ]);
 
   return { s, v, actions };
