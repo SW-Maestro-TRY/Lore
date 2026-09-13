@@ -81,7 +81,9 @@ import java.lang.annotation.Target;
 
                 // ★ 밤에 구울 수 있는 심화 행동 — 지시문 파일이 있는 것 하나(zzal/prompt/v1/motions/교감자세.txt).
                 //   비어 있으면 조각이 다 차도 "구울 심화가 없다" 로 끝나 굽기 경로가 한 줄도 안 돈다.
-                "app.zzal.advanced-motions=shy",
+                //   ★ 3층 심화는 아직 하나도 확정되지 않아 후처리 프로파일이 없다 —
+                //     ZzalItConfig 가 이 대역 동작에만 확정본의 프로파일을 빌려준다.
+                "app.zzal.advanced-motions=pet",
 
                 // 23:00 스위프는 끈다 — 시험이 보는 것은 "조건을 채운 그 순간" 의 굽기다.
                 "app.zzal.night.sweep-enabled=false",

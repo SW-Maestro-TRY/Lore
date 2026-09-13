@@ -169,7 +169,7 @@ class ChatServiceTest {
         ChatService.Answered a = service.answer(USER, PET, ChatSlot.MORNING, "학교 갔다 왔어", t);
         assertThat(a.replyLine()).isNotBlank();
         assertThat(BanFilter.isBanned(a.replyLine())).isFalse();
-        assertThat(a.reactionKey()).isEqualTo("shy");                    // 갸웃은 이 답으로 열리니 다음 답부터
+        assertThat(a.reactionKey()).isEqualTo("pet");                    // 답하기(2층)는 채팅 4회라 아직 잠김
         assertThat(pet.getIntimacy()).isEqualTo(40);
         assertThat(pet.getChatAnswers()).isEqualTo(1);
         assertThatThrownBy(() -> service.answer(USER, PET, ChatSlot.MORNING, "또", t.plusSeconds(1)))
@@ -177,7 +177,7 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("BABY 부름은 하루 3회와 별개 — 아기 8분에 답하면 갸웃(2층 9번) 조건 1회가 곧 찬다")
+    @DisplayName("BABY 부름은 하루 3회와 별개 — 아기 8분에 답한 것도 답하기(2층 13번) 조건에 센다")
     void babyCountsForUnlock() {
         Instant t = T0.plus(Duration.ofMinutes(9));
         service.answer(USER, PET, ChatSlot.BABY, "여울이야", t);

@@ -71,15 +71,15 @@ class PetDetailTest {
         assertThat(m.get(4).basicImageKey()).isNull();                   // v1 에 없는 자세 → 화면 폴백
         assertThat(m.get(8)).satisfies(x -> {
             assertThat(x.seq()).isEqualTo(9);
-            assertThat(x.key()).isEqualTo("tilt");
+            assertThat(x.key()).isEqualTo("eat_rice");
             assertThat(x.unlocked()).isFalse();
             assertThat(x.basicImageKey()).isNull();
-            assertThat(x.hint()).isEqualTo("채팅 응답 1회");
-            assertThat(x.progress()).isEqualTo(new PetResponses.Progress(0, 1));
+            assertThat(x.hint()).isEqualTo("밥 주기 9회");
+            assertThat(x.progress()).isEqualTo(new PetResponses.Progress(0, 9));
         });
         assertThat(m.get(16).seq()).isEqualTo(101);
         assertThat(m.get(16).layer()).isEqualTo("GIFT");
-        assertThat(m.get(16).hint()).isEqualTo("3일이나 함께해서…");
+        assertThat(m.get(16).hint()).isEqualTo("함께한 첫 선물");
         assertThat(m.get(17).seq()).isEqualTo(102);
     }
 
@@ -218,21 +218,21 @@ class PetDetailTest {
     }
 
     @Test
-    @DisplayName("★★ \"케어 미스 0인 날\" 진행도는 안 내려간다 — 힌트만(숨은 수치를 되짚게 하면 안 된다)")
-    void zeroMissProgressIsHidden() {
+    @DisplayName("★★ 잠긴 2층 여덟 칸은 <b>전부</b> 진행도를 보여준다 — 숨길 이유가 있던 조건이 없어졌다")
+    void everyLockedLayerTwoShowsProgress() {
+        // 진행도를 감추는 규칙은 "케어 미스 0인 날" 같은 숨은 수치 때문이었다. 지금 2층 여덟은
+        // 전부 사용자가 직접 한 행동(밥·간식·청소·목욕·채팅·쓰다듬·게임·깨우기)이라 감출 것이 없다.
         ZzalPet pet = baby();
-        org.springframework.test.util.ReflectionTestUtils.setField(pet, "zeroMissDays", 2);
 
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
-        PetResponses.Motion smileIdle = d.motions().stream().filter(m -> m.seq() == 15).findFirst().orElseThrow();
 
-        assertThat(smileIdle.unlocked()).isFalse();
-        assertThat(smileIdle.hint()).isNotBlank();      // 무엇을 해야 열리는지는 알려준다
-        assertThat(smileIdle.progress()).isNull();      // ★ 몇 번째인지는 말하지 않는다
-
-        // 다른 잠긴 칸은 그대로 진행도를 준다(비교군)
-        PetResponses.Motion tilt = d.motions().stream().filter(m -> m.seq() == 9).findFirst().orElseThrow();
-        assertThat(tilt.progress()).isNotNull();
+        assertThat(d.motions().stream().filter(m -> "BASIC_2".equals(m.layer())))
+                .hasSize(8)
+                .allSatisfy(m -> {
+                    assertThat(m.unlocked()).as("%s 는 아직 잠겨 있어야 한다", m.key()).isFalse();
+                    assertThat(m.hint()).as("%s 의 조건 문구", m.key()).isNotBlank();
+                    assertThat(m.progress()).as("%s 의 진행도", m.key()).isNotNull();
+                });
     }
 
     @Test

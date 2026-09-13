@@ -226,7 +226,7 @@ class RepositoryQueriesIT extends ZzalItSupport {
     private void answeredCall(Long petId, LocalDate day, String answer, Instant answeredAt) {
         transactions.executeWithoutResult(status -> {
             ZzalChatCall call = chatCalls.save(ZzalChatCall.call(petId, day, ChatSlot.MORNING, "부름", answeredAt, null));
-            call.answer(answer, "대답", "shy", answeredAt);
+            call.answer(answer, "대답", "pet", answeredAt);
         });
     }
 

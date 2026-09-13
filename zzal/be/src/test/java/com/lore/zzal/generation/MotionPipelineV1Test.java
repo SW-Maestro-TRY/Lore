@@ -95,10 +95,10 @@ class MotionPipelineV1Test {
 
         // 기본 프로파일을 두면, 새 동작을 확정하고 줄을 깜빡했을 때 검수를 거치지 않은 후처리로
         // 구워진 그림이 그대로 나간다. 굽기는 성공하고 로그도 깨끗하다.
-        assertThatThrownBy(() -> profiles.forMotion(VERSION, "sit"))
+        assertThatThrownBy(() -> profiles.forMotion(VERSION, "sweep"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("zzal/pipeline/v1/motion_post_profiles.txt")
-                .hasMessageContaining("sit");
+                .hasMessageContaining("sweep");
     }
 
     @Test

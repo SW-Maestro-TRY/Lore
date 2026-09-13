@@ -68,10 +68,10 @@ class ShareServiceTest {
     @Test
     @DisplayName("★★ 도착한 심화 행동은 그 행의 실제 키로 나간다 — basic/{key}.webp 로 조립하면 404 다 (P-2)")
     void revealedAdvancedMotionUsesItsOwnKey() {
-        MotionSpec shy = MotionCatalog.ALL.stream().filter(m -> m.key().equals("shy")).findFirst().orElseThrow();
+        MotionSpec petPose = MotionCatalog.ALL.stream().filter(m -> m.key().equals("pet")).findFirst().orElseThrow();
         String baked = "images/zzal/pets/7/motions/91/motion.webp";
-        when(motionRepository.findByPetIdAndSeq(PET, shy.seq())).thenReturn(Optional.of(revealed(shy, baked)));
-        when(shareRepository.findByToken("tok")).thenReturn(Optional.of(ZzalShare.issue(PET, "shy", T0)));
+        when(motionRepository.findByPetIdAndSeq(PET, petPose.seq())).thenReturn(Optional.of(revealed(petPose, baked)));
+        when(shareRepository.findByToken("tok")).thenReturn(Optional.of(ZzalShare.issue(PET, "pet", T0)));
 
         ShareResponses.Public open = service.open("tok");
 
@@ -82,17 +82,17 @@ class ShareServiceTest {
     @Test
     @DisplayName("아직 안 도착한 동작은 기본 행동 그림 그대로")
     void basicMotionKeepsBasicKey() {
-        when(shareRepository.findByToken("tok")).thenReturn(Optional.of(ZzalShare.issue(PET, "shy", T0)));
+        when(shareRepository.findByToken("tok")).thenReturn(Optional.of(ZzalShare.issue(PET, "pet", T0)));
 
-        assertThat(service.open("tok").imageKey()).isEqualTo("images/zzal/pets/7/basic/shy.webp");
+        assertThat(service.open("tok").imageKey()).isEqualTo("images/zzal/pets/7/basic/pet.webp");
     }
 
     @Test
     @DisplayName("★★ 연타로 같은 순간에 두 번 발급해도 500 이 아니라 먼저 들어온 링크를 준다 (P-6)")
     void concurrentIssueReusesTheWinnersLink() {
-        ZzalShare winner = ZzalShare.issue(PET, "shy", T0);
+        ZzalShare winner = ZzalShare.issue(PET, "pet", T0);
         // 조회는 두 번 — 처음엔 없다, 제약에 걸린 뒤엔 이긴 쪽이 넣어 둔 줄이 보인다
-        when(shareRepository.findByPetIdAndMotionKey(PET, "shy"))
+        when(shareRepository.findByPetIdAndMotionKey(PET, "pet"))
                 .thenReturn(Optional.empty(), Optional.of(winner));
         // 늦게 도착한 쪽은 uk_zzal_shares_pet_motion 에 걸린다
         when(shareRepository.save(any())).thenThrow(new DataIntegrityViolationException("uk_zzal_shares_pet_motion"));
@@ -100,7 +100,7 @@ class ShareServiceTest {
                 .thenThrow(new DataIntegrityViolationException("uk_zzal_shares_pet_motion"));
 
         assertThatCode(() -> {
-            ShareResponses.Issued issued = service.issue(PET, "shy", T0);
+            ShareResponses.Issued issued = service.issue(PET, "pet", T0);
             assertThat(issued.token()).isEqualTo(winner.getToken());
             assertThat(issued.url()).isEqualTo("https://lorecomic.com/s/" + winner.getToken());
         }).doesNotThrowAnyException();
@@ -121,7 +121,7 @@ class ShareServiceTest {
     @Test
     @DisplayName("★ 링크는 있는데 펫이 사라졌으면 404 — 그리고 조회수도 안 오른다")
     void missingPetIsNotFoundAndNotCounted() {
-        ZzalShare share = ZzalShare.issue(PET, "shy", T0);
+        ZzalShare share = ZzalShare.issue(PET, "pet", T0);
         when(shareRepository.findByToken("tok")).thenReturn(Optional.of(share));
         ZzalPetRepository empty = mock(ZzalPetRepository.class);
         when(empty.findById(any())).thenReturn(Optional.empty());
@@ -151,7 +151,7 @@ class ShareServiceTest {
     @Test
     @DisplayName("★ 연 만큼 센다 — 무엇이 실제로 퍼졌는지 보는 유일한 숫자다")
     void everyOpenIsCounted() {
-        ZzalShare share = ZzalShare.issue(PET, "shy", T0);
+        ZzalShare share = ZzalShare.issue(PET, "pet", T0);
         when(shareRepository.findByToken("tok")).thenReturn(Optional.of(share));
 
         for (int i = 1; i <= 5; i++) {
@@ -164,7 +164,7 @@ class ShareServiceTest {
     @DisplayName("★ 토큰은 22 글자 URL-safe — 주소에 그대로 실리고 훑어서 찾을 수 없어야 한다")
     void tokenIsUrlSafeAndLongEnough() {
         for (int i = 0; i < 50; i++) {
-            String token = ZzalShare.issue(PET, "shy", T0).getToken();
+            String token = ZzalShare.issue(PET, "pet", T0).getToken();
             assertThat(token).hasSize(22).matches("[A-Za-z0-9_-]+");
         }
     }
@@ -174,13 +174,13 @@ class ShareServiceTest {
     void urlJoinsWithExactlyOneSlash() {
         ZzalPetRepository pets = mock(ZzalPetRepository.class);
         when(pets.findById(any())).thenReturn(Optional.of(pet));
-        ZzalShare share = ZzalShare.issue(PET, "shy", T0);
-        when(shareRepository.findByPetIdAndMotionKey(PET, "shy")).thenReturn(Optional.of(share));
+        ZzalShare share = ZzalShare.issue(PET, "pet", T0);
+        when(shareRepository.findByPetIdAndMotionKey(PET, "pet")).thenReturn(Optional.of(share));
 
         for (String base : List.of("https://lorecomic.com/s", "https://lorecomic.com/s/")) {
             ShareService svc = new ShareService(shareRepository, pets, motionRepository,
                     new MotionCatalog("", "", "v1"), base);
-            assertThat(svc.issue(PET, "shy", T0).url())
+            assertThat(svc.issue(PET, "pet", T0).url())
                     .isEqualTo("https://lorecomic.com/s/" + share.getToken());
         }
     }
@@ -188,11 +188,11 @@ class ShareServiceTest {
     @Test
     @DisplayName("★ 이미 낸 링크는 그대로 준다 — 누를 때마다 주소가 달라지면 무엇이 퍼졌는지 셀 수 없다")
     void issuingTwiceGivesTheSameLink() {
-        ZzalShare share = ZzalShare.issue(PET, "shy", T0);
-        when(shareRepository.findByPetIdAndMotionKey(PET, "shy")).thenReturn(Optional.of(share));
+        ZzalShare share = ZzalShare.issue(PET, "pet", T0);
+        when(shareRepository.findByPetIdAndMotionKey(PET, "pet")).thenReturn(Optional.of(share));
 
-        ShareResponses.Issued first = service.issue(PET, "shy", T0);
-        ShareResponses.Issued second = service.issue(PET, "shy", T0.plusSeconds(600));
+        ShareResponses.Issued first = service.issue(PET, "pet", T0);
+        ShareResponses.Issued second = service.issue(PET, "pet", T0.plusSeconds(600));
 
         assertThat(second.token()).isEqualTo(first.token());
         assertThat(second.url()).isEqualTo(first.url());

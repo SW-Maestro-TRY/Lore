@@ -274,8 +274,8 @@ class ConcurrentRequestsIT extends ZzalItSupport {
         Instant now = Instant.now();
 
         List<Object> results = bothAtOnce(
-                () -> shareService.issue(petId, "shy", now),
-                () -> shareService.issue(petId, "shy", now));
+                () -> shareService.issue(petId, "pet", now),
+                () -> shareService.issue(petId, "pet", now));
 
         assertThat(errorIn(results)).isNull();
         List<String> tokens = results.stream().map(ShareResponses.Issued.class::cast)
@@ -291,8 +291,8 @@ class ConcurrentRequestsIT extends ZzalItSupport {
         Instant now = Instant.now();
 
         List<Object> results = bothAtOnce(
-                () -> shareService.issue(petId, "shy", now),
-                () -> shareService.issue(petId, "shy", now));
+                () -> shareService.issue(petId, "pet", now),
+                () -> shareService.issue(petId, "pet", now));
 
         // ★ 500 이 아닌 것이 중요하다 — DataIntegrityViolationException 이 그대로 올라가면
         //   BusinessException 이 아니라서 PetService.share 의 noRollbackFor 에 안 걸리고,
@@ -307,7 +307,7 @@ class ConcurrentRequestsIT extends ZzalItSupport {
         assertThat(shares.findAll()).as("(petId, motionKey) 한 쌍에 링크 하나").hasSize(1);
 
         // 다시 누르면 이긴 쪽의 링크를 받는다 — 사용자가 빠져나갈 길은 있다.
-        assertThat(shareService.issue(petId, "shy", now).token())
+        assertThat(shareService.issue(petId, "pet", now).token())
                 .isEqualTo(shares.findAll().get(0).getToken());
     }
 
@@ -340,7 +340,7 @@ class ConcurrentRequestsIT extends ZzalItSupport {
         motionSeeder.seed(petId, Instant.now());
         return transactions.execute(status -> {
             ZzalMotion row = motions.findByPetIdOrderBySeqAsc(petId).stream()
-                    .filter(m -> "shy".equals(m.getName()))
+                    .filter(m -> "pet".equals(m.getName()))
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException("교감 자세 행이 없다"));
             ReflectionTestUtils.setField(row, "status", MotionStatus.NONE);

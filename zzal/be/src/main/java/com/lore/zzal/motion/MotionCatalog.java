@@ -17,12 +17,14 @@ import java.util.stream.Collectors;
 
 import static com.lore.zzal.motion.UnlockRule.Kind.BATH;
 import static com.lore.zzal.motion.UnlockRule.Kind.CHAT_ANSWERS;
+import static com.lore.zzal.motion.UnlockRule.Kind.CLEANS;
+import static com.lore.zzal.motion.UnlockRule.Kind.FEEDS;
 import static com.lore.zzal.motion.UnlockRule.Kind.FIRST_GIFT;
 import static com.lore.zzal.motion.UnlockRule.Kind.GAME_STARTS;
-import static com.lore.zzal.motion.UnlockRule.Kind.LAYER2_OPEN;
+import static com.lore.zzal.motion.UnlockRule.Kind.PET_COUNT;
 import static com.lore.zzal.motion.UnlockRule.Kind.SECOND_GIFT;
-import static com.lore.zzal.motion.UnlockRule.Kind.SLEEP_WAKE;
-import static com.lore.zzal.motion.UnlockRule.Kind.ZERO_MISS_DAYS;
+import static com.lore.zzal.motion.UnlockRule.Kind.SNACKS;
+import static com.lore.zzal.motion.UnlockRule.Kind.WAKES;
 
 /**
  * 동작 카탈로그 — <b>고정 18종</b>(정본 13장: 1층 8 · 2층 8 · 선물 2).
@@ -45,27 +47,46 @@ import static com.lore.zzal.motion.UnlockRule.Kind.ZERO_MISS_DAYS;
 @Component
 public class MotionCatalog {
 
-    /** 정본 13장 그대로. 순서 = seq 오름차순 = 3층 심화 순서. */
+    /**
+     * 기본 행동 16종 + 선물 2종. 순서 = seq 오름차순 = 격자 칸 순서 = 3층 심화 순서.
+     *
+     * <h3>★★ 순서를 바꾸지 않는다 — 이 목록이 곧 격자 칸 번호다</h3>
+     * 부화 후처리가 격자 한 장을 여덟 칸으로 자를 때 <b>이 순서대로</b> 이름을 붙인다
+     * ({@code PostProcessStep} 이 {@code --keys} 로 넘긴다). 한 칸만 밀려도 예외 없이
+     * 전부 다른 자세로 저장되고, 그것은 화면을 봐야만 드러난다.
+     *
+     * <h3>★ 카탈로그에서 빠진 이름을 클래스·enum 에서 지우지 않는다</h3>
+     * {@code practice} · {@code call} · {@code tilt} · {@code nod} · {@code smile_idle} ·
+     * {@code sit} · {@code wave} · {@code shy} 는 옛 격자로 구워진 펫이 들고 있는 이름이다.
+     * 조건 종류({@code UnlockRule.Kind}) 도 마찬가지로 남긴다 — 그 펫들을 계속 설명해야 한다.
+     */
     public static final List<MotionSpec> ALL = List.of(
-            // 격자 1장 = 1층. 처음부터.
+            // 격자 1장 = 1층 8종. 처음부터 전부 열려 있다.
+            // ★ 모자란 것은 소품이 때운다 — 자세는 소품이 올 자리를 비워 두고 그린다
+            //   (eat 은 입 앞, pet 은 머리 위).
             new MotionSpec(1, "base", "기본 자세", MotionLayer.BASIC_1, UnlockRule.always(), "idle", "기본자세"),
             new MotionSpec(2, "eat", "먹기", MotionLayer.BASIC_1, UnlockRule.always(), "eat", "먹기"),
             new MotionSpec(3, "joy", "기쁜 자세", MotionLayer.BASIC_1, UnlockRule.always(), "happy", "기쁜자세"),
             new MotionSpec(4, "sad", "슬픈 자세", MotionLayer.BASIC_1, UnlockRule.always(), "sad", "슬픈자세"),
             new MotionSpec(5, "sick", "아픈 자세", MotionLayer.BASIC_1, UnlockRule.always(), null, "아픈자세"),
-            new MotionSpec(6, "practice", "훈련 자세", MotionLayer.BASIC_1, UnlockRule.always(), "train", "훈련자세"),
-            new MotionSpec(7, "shy", "교감 자세", MotionLayer.BASIC_1, UnlockRule.always(), "pet", "교감자세"),
-            new MotionSpec(8, "call", "부르기", MotionLayer.BASIC_1, UnlockRule.always(), null, "부르기"),
-            // 격자 2장 = 2층. 정본 6장 조건표.
-            new MotionSpec(9, "tilt", "갸웃", MotionLayer.BASIC_2, UnlockRule.of(CHAT_ANSWERS, 1), null, "갸웃"),
-            new MotionSpec(10, "wave", "손 흔들며 인사", MotionLayer.BASIC_2, UnlockRule.of(CHAT_ANSWERS, 4), null, "손흔들며인사"),
-            new MotionSpec(11, "sleep", "자기", MotionLayer.BASIC_2, UnlockRule.of(SLEEP_WAKE, 3), null, "자기"),
+            new MotionSpec(6, "pet", "교감 자세", MotionLayer.BASIC_1, UnlockRule.always(), "pet", "교감자세"),
+            new MotionSpec(7, "hello", "인사", MotionLayer.BASIC_1, UnlockRule.always(), null, "인사"),
+            new MotionSpec(8, "sleep", "자기", MotionLayer.BASIC_1, UnlockRule.always(), null, "자기"),
+            // 격자 2장 = 2층 8종. 여덟 개가 사용자 행동 하나씩에 붙는다.
+            //
+            // ★★ 해금은 "못 보던 행동이 열리는 것" 이 아니라 "하던 행동이 좋아지는 것" 이다.
+            //   조건은 전부 그 행동 자체다 — 다른 행동으로 열리는 자세가 하나도 없다.
+            // ★ 약 먹기는 여기 없다. 아픔은 케어를 놓쳤거나 간식을 많이 줬을 때 생기므로,
+            //   약 주기를 조건으로 걸면 아이를 아프게 해야 상을 받는 구조가 된다.
+            new MotionSpec(9, "eat_rice", "밥 먹기", MotionLayer.BASIC_2, UnlockRule.of(FEEDS, 9), null, "밥먹기"),
+            new MotionSpec(10, "eat_snack", "간식 먹기", MotionLayer.BASIC_2, UnlockRule.of(SNACKS, 9), null, "간식먹기"),
+            new MotionSpec(11, "sweep", "청소", MotionLayer.BASIC_2, UnlockRule.of(CLEANS, 13), null, "청소"),
             new MotionSpec(12, "wash", "씻기", MotionLayer.BASIC_2, UnlockRule.of(BATH, 3), null, "씻기"),
-            new MotionSpec(13, "startle", "놀라기", MotionLayer.BASIC_2, UnlockRule.of(GAME_STARTS, 3), null, "놀라기"),
-            new MotionSpec(14, "nod", "끄덕이기", MotionLayer.BASIC_2, UnlockRule.of(CHAT_ANSWERS, 12), null, "끄덕이기"),
-            new MotionSpec(15, "smile_idle", "웃는 대기", MotionLayer.BASIC_2, UnlockRule.of(ZERO_MISS_DAYS, 3), null, "웃는대기"),
-            new MotionSpec(16, "sit", "앉아 쉬기", MotionLayer.BASIC_2, UnlockRule.of(LAYER2_OPEN, 6), null, "앉아쉬기"),
-            // 선물. 카탈로그 밖 특별 1종씩. 기본 행동 없음(16장: 구르기 먼저, 뒤로 넘어짐은 3층 8번째 뒤).
+            new MotionSpec(13, "reply", "답하기", MotionLayer.BASIC_2, UnlockRule.of(CHAT_ANSWERS, 4), null, "답하기"),
+            new MotionSpec(14, "petted", "쓰다듬 받기", MotionLayer.BASIC_2, UnlockRule.of(PET_COUNT, 4), null, "쓰다듬받기"),
+            new MotionSpec(15, "startle", "놀라기", MotionLayer.BASIC_2, UnlockRule.of(GAME_STARTS, 4), null, "놀라기"),
+            new MotionSpec(16, "wake_up", "일어나기", MotionLayer.BASIC_2, UnlockRule.of(WAKES, 4), null, "일어나기"),
+            // 선물. 카탈로그 밖 특별 1종씩. 기본 행동 없음(16장: 구르기 먼저, 뒤로 넘어짐이 두 번째).
             new MotionSpec(101, "roll", "구르기", MotionLayer.GIFT, UnlockRule.of(FIRST_GIFT, 0), null, "구르기"),
             new MotionSpec(102, "fall_back", "뒤로 넘어짐", MotionLayer.GIFT, UnlockRule.of(SECOND_GIFT, 0), null, "뒤로넘어짐"));
 
@@ -139,7 +160,7 @@ public class MotionCatalog {
         return Optional.ofNullable(BY_KEY.get(key));
     }
 
-    /** 기본 행동 16종의 key, seq 순. 부화 후처리 출력 이름과 같아야 한다(application.yml hatch.states.v2). */
+    /** 기본 행동 16종의 key, seq 순. 부화 후처리 출력 이름과 같아야 한다(application.yml hatch.states.v4). */
     public List<String> basicKeys() {
         return basic().stream().map(MotionSpec::key).toList();
     }

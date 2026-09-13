@@ -71,11 +71,12 @@ class GameServiceTest {
     }
 
     @Test
-    @DisplayName("★ 두 게임 합쳐 하루 3판 — 4번째는 ZZAL_GAME_DAILY_LIMIT, 시작한 판 기준. 3번째 시작에 놀라기(13) 폭죽")
+    @DisplayName("★ 두 게임 합쳐 하루 3판 — 4번째는 ZZAL_GAME_DAILY_LIMIT, 시작한 판 기준")
     void threePerDayCombined() {
+        // ★ 놀라기(15)는 네 판이라 하루 상한(3) 안에서는 안 열린다 — 이튿날 첫 판에 열린다.
         assertThat(service.start(USER, PET, GameKind.LEFT_RIGHT, T0).justUnlocked()).isEmpty();
         service.start(USER, PET, GameKind.LEFT_RIGHT, T0);
-        assertThat(service.start(USER, PET, GameKind.LEFT_RIGHT, T0).justUnlocked()).containsExactly(13);
+        assertThat(service.start(USER, PET, GameKind.LEFT_RIGHT, T0).justUnlocked()).isEmpty();
         assertThat(pet.getTodayGames()).isEqualTo(3);
         assertThat(pet.getGameStarts()).isEqualTo(3);
         assertThat(service.remainingToday(pet)).isZero();
@@ -94,7 +95,25 @@ class GameServiceTest {
         pet.sleep(kst("2026-09-05 19:00"));
         assertThat(pet.getTodayGames()).isZero();
         assertThat(service.remainingToday(pet)).isEqualTo(3);
-        assertThat(pet.getGameStarts()).isEqualTo(3);           // 누적(2층 13번 조건)은 남는다
+        assertThat(pet.getGameStarts()).isEqualTo(3);           // 누적(2층 놀라기 조건)은 남는다
+    }
+
+    @Test
+    @DisplayName("★★ 네 번째 판을 시작하는 그 자리에서 놀라기(15)가 열린다 — 하루 3판이라 이튿날이다")
+    void theFourthGameOpensStartle() {
+        for (int i = 0; i < 3; i++) {
+            service.start(USER, PET, GameKind.LEFT_RIGHT, T0);
+        }
+        pet.settle(kst("2026-09-05 19:00"));
+        pet.sleep(kst("2026-09-05 19:00"));
+        pet.wake(kst("2026-09-06 08:00"));
+
+        GameService.Started fourth = service.start(USER, PET, GameKind.LEFT_RIGHT, kst("2026-09-06 11:00"));
+
+        assertThat(pet.getGameStarts()).isEqualTo(4);
+        assertThat(fourth.justUnlocked())
+                .as("네 판째가 조건이다 — 폭죽은 그 행동의 응답에 실려야 한다")
+                .containsExactly(15);
     }
 
     @Test

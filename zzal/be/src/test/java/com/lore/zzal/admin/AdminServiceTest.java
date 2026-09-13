@@ -104,6 +104,12 @@ class AdminServiceTest {
     }
 
     /** 검수 대기(REVIEW) 상태의 모션 하나. */
+    /**
+     * 검수 대기인 줄 하나.
+     *
+     * ★ 러너 일감(regenRequestsForAgent)을 보는 시험은 <b>지시문 파일이 있는</b> seq 를 써야 한다 —
+     *   {@code describe} 가 지시문을 못 읽는 줄을 로그만 남기고 빼기 때문이다(6 = 교감 자세).
+     */
     private ZzalMotion reviewing(long id, int seq) {
         ZzalMotion m = ZzalMotion.forCatalog(7L, catalog.bySeq(seq).orElseThrow(), T0);
         ReflectionTestUtils.setField(m, "id", id);
@@ -242,7 +248,7 @@ class AdminServiceTest {
     @Test
     @DisplayName("★★ 러너에게 한 번 내준 일감은 다시 안 내준다 — 같은 판을 N번 굽던 것 (P-14)")
     void agentJobsAreClaimedOnce() {
-        ZzalMotion m = reviewing(80L, 7);
+        ZzalMotion m = reviewing(80L, 6);
         when(petRepository.findAllById(any())).thenReturn(List.of(pet()));
         service.review(ADMIN, 80L, HumanVerdict.REGENERATE, "다시", null);
 
@@ -260,7 +266,7 @@ class AdminServiceTest {
     @Test
     @DisplayName("★ 결과가 올라오면 집기를 지운다 — 다음 라운드가 유예만큼 막히지 않게")
     void uploadClearsTheAgentClaim() {
-        ZzalMotion m = reviewing(81L, 7);
+        ZzalMotion m = reviewing(81L, 6);
         when(petRepository.findAllById(any())).thenReturn(List.of(pet()));
         service.review(ADMIN, 81L, HumanVerdict.REGENERATE, "다시", null);
         assertThat(service.regenRequestsForAgent(ADMIN)).hasSize(1);
@@ -273,7 +279,7 @@ class AdminServiceTest {
     @Test
     @DisplayName("★ 빌려주는 것이지 영영 주는 것이 아니다 — 유예를 넘긴 집기는 없는 것으로 치고 다시 내준다")
     void staleClaimIsHandedOutAgain() {
-        ZzalMotion m = reviewing(82L, 7);
+        ZzalMotion m = reviewing(82L, 6);
         when(petRepository.findAllById(any())).thenReturn(List.of(pet()));
         service.review(ADMIN, 82L, HumanVerdict.REGENERATE, "다시", null);
         assertThat(service.regenRequestsForAgent(ADMIN)).hasSize(1);

@@ -89,9 +89,9 @@ class PipelineV2Test {
         step.run(v2);
         InOrder order = inOrder(post);
         order.verify(post).split("images/zzal/pets/7/grid.png", "images/zzal/pets/7/basic", "v2",
-                List.of("base", "eat", "joy", "sad", "sick", "practice", "shy", "call"));
+                List.of("base", "eat", "joy", "sad", "sick", "pet", "hello", "sleep"));
         order.verify(post).split("images/zzal/pets/7/grid2.png", "images/zzal/pets/7/basic", "v2",
-                List.of("tilt", "wave", "sleep", "wash", "startle", "nod", "smile_idle", "sit"));
+                List.of("eat_rice", "eat_snack", "sweep", "wash", "reply", "petted", "startle", "wake_up"));
 
         PostProcessor postV1 = mock(PostProcessor.class);
         StepContext v1 = new StepContext(7L, "여울", null, "v1");

@@ -209,25 +209,25 @@
       "seq": 1, "key": "base", "label": "기본 자세", "layer": "BASIC_1",
       "unlocked": true,
       "basicImageKey": "images/zzal/pets/7/basic/base.webp",   // 잠김·선물이면 null
-      "hint": null,                      // 잠긴 칸의 조건 문구: "채팅 응답 1회"
-      "progress": null,                  // 잠긴 2층 칸: { "current": 0, "target": 1 }
+      "hint": null,                      // 잠긴 칸의 조건 문구: "밥 주기 9회"
+      "progress": null,                  // 잠긴 2층 칸: { "current": 0, "target": 9 }
       // ★ status 는 DB 상태가 아니라 **사용자 말**이다: NONE · QUEUED · PRACTICING · OPEN.
       //   REVIEW·LOCAL_REQUESTED 같은 운영 사정은 전부 PRACTICING 하나로 접힌다(해석 29).
       //   imageKey 는 **도착(revealedAt) 뒤에만** 채워진다 — 검수 중인 그림은 안 내려간다.
       "advanced": { "status": "NONE", "imageKey": null, "revealedAt": null, "seen": false }
     },
-    { "seq": 9, "key": "tilt", "label": "갸웃", "layer": "BASIC_2", "unlocked": false,
-      "basicImageKey": null, "hint": "채팅 응답 1회", "progress": { "current": 0, "target": 1 },
+    { "seq": 9, "key": "eat_rice", "label": "밥 먹기", "layer": "BASIC_2", "unlocked": false,
+      "basicImageKey": null, "hint": "밥 주기 9회", "progress": { "current": 0, "target": 9 },
       "advanced": { "status": "NONE", "imageKey": null, "revealedAt": null, "seen": false } },
     { "seq": 101, "key": "roll", "label": "구르기", "layer": "GIFT", "unlocked": false,
-      "basicImageKey": null, "hint": "3일이나 함께해서…", "progress": null,
+      "basicImageKey": null, "hint": "함께한 첫 선물", "progress": null,
       "advanced": { "status": "NONE", "imageKey": null, "revealedAt": null, "seen": false } }
   ],
   "justUnlocked": [9],                   // ★ 행동 응답에만. 이번 행동으로 열린 2층 seq(폭죽)
   "learnedToday": [                      // 밤에 합격해 아침에 도착한 심화 행동. seen 전까지
     { "seq": 101, "key": "roll", "label": "구르기", "imageKey": "images/zzal/pets/7/motions/101/motion.webp", "revealedAt": "..." }
   ],
-  "firstGift": { "status": "LOCKED", "daysLeft": 2 },   // LOCKED · WAITING(3일째, 오늘 케어 미스 0이면 밤에 굽기) · BAKING · OPEN
+  "firstGift": { "status": "LOCKED", "daysLeft": 0 },   // LOCKED(튜토리얼 중) · WAITING(완주 직후) · BAKING · OPEN. daysLeft 는 항상 0
 
   "chatSummary": { "openSlot": null, "nextAt": "2026-09-05T10:02:23Z" },  // 열린 부름 slot / 다음 부름 시각
 
@@ -276,11 +276,11 @@
 - `done` 판정(전부 누적 카운터): FEED=밥 1회 이상 / PET=쓰다듬기 1회 / CHAT=채팅 응답 1회 / PERSONALITY=성격 선택됨 / CLEAN=청소 1회 / GAME=게임 시작 1회 / SHARE=공유·다운로드 1회 / NAP=낮잠 1회 / DONE=60분 경과.
 - **「해석」** `tutorial`은 9단계가 모두 `done`이 되면 `null`. 60분이 지나도 남은 단계가 있으면 `active=false`인 채로 남아 순서대로 나온다.
 - `motions[].unlocked`는 **기본 행동(2프레임)이 열렸는가**. 1층 8종은 부화 즉시 true. `advanced.status`는 그 동작의 심화 행동(16프레임) 진행: `NONE`(안 굽음) · `QUEUED`(밤 큐) · `BAKING` · `REVIEW`(검수 대기) · `LOCAL_REQUESTED`(맥미니 재생성 요청) · `OPEN`(공개) · `FAILED`(그 밤 실패, 다음 밤 재시도).
-- `basicImageKey` 규약 = `images/zzal/pets/{petId}/basic/{key}.webp`. v1 파이프라인으로 부화한 펫은 `legacyFile` 매핑으로 채운다(`base←idle` `eat←eat` `joy←happy` `sad←sad` `shy←pet` `practice←train`, 나머지 `sick` `call`은 null → 화면 폴백).
+- `basicImageKey` 규약 = `images/zzal/pets/{petId}/basic/{key}.webp`. v1 파이프라인으로 부화한 펫은 `legacyFile` 매핑으로 채운다(`base←idle` `eat←eat` `joy←happy` `sad←sad` `pet←pet`, 나머지는 null → 화면 폴백).
 - 심화 행동 imageKey 규약 = `images/zzal/pets/{petId}/motions/{seq}/motion.webp`.
 - `mood`는 정본 4장 우선순위 그대로. 화면의 대기 동작 선택은 `mood` 하나로 한다.
 - `intimacy.percent` = `floor(score / 999 * 10) * 10`(0·10·…·100). **「해석」** tier 경계는 percent 기준 LOW ≤30 · MID 40~70 · HIGH ≥80.
-- `firstGift.daysLeft` = `max(0, 3 - daysTogether)`.
+- `firstGift.daysLeft` = **항상 0**. 첫 선물은 날짜가 아니라 튜토리얼 완주로 열린다 — 남은 날이라는 개념이 없다(필드는 화면 계약이라 남긴다).
 
 ### 부화 초기값 「해석」
 
@@ -297,24 +297,27 @@
 | 3 | `joy` | 기쁜 자세 | BASIC_1 | 처음부터 | `기쁜자세` |
 | 4 | `sad` | 슬픈 자세 | BASIC_1 | 처음부터 | `슬픈자세` |
 | 5 | `sick` | 아픈 자세 | BASIC_1 | 처음부터 | `아픈자세` |
-| 6 | `practice` | 훈련 자세 | BASIC_1 | 처음부터(밤 연습 장면 전용) | `훈련자세` |
-| 7 | `shy` | 교감 자세 | BASIC_1 | 처음부터 | `교감자세` |
-| 8 | `call` | 부르기 | BASIC_1 | 처음부터 | `부르기` |
-| 9 | `tilt` | 갸웃 | BASIC_2 | 채팅 응답 1회 | `갸웃` |
-| 10 | `wave` | 손 흔들며 인사 | BASIC_2 | 채팅 응답 4회 | `손흔들며인사` |
-| 11 | `sleep` | 자기 | BASIC_2 | 재우기·깨우기 합쳐 3회 | `자기` |
+| 6 | `pet` | 교감 자세 | BASIC_1 | 처음부터 | `교감자세` |
+| 7 | `hello` | 인사 | BASIC_1 | 처음부터 | `인사` |
+| 8 | `sleep` | 자기 | BASIC_1 | 처음부터 | `자기` |
+| 9 | `eat_rice` | 밥 먹기 | BASIC_2 | 밥 주기 9회 | `밥먹기` |
+| 10 | `eat_snack` | 간식 먹기 | BASIC_2 | 간식 9개(그날 4개까지만 셈) | `간식먹기` |
+| 11 | `sweep` | 청소 | BASIC_2 | 청소 13회 | `청소` |
 | 12 | `wash` | 씻기 | BASIC_2 | 목욕 3회 | `씻기` |
-| 13 | `startle` | 놀라기 | BASIC_2 | 미니게임 3판(승패·종류 무관, 시작 기준) | `놀라기` |
-| 14 | `nod` | 끄덕이기 | BASIC_2 | 채팅 응답 12회 | `끄덕이기` |
-| 15 | `smile_idle` | 웃는 대기 | BASIC_2 | 케어 미스 0인 날 3번 | `웃는대기` |
-| 16 | `sit` | 앉아 쉬기 | BASIC_2 | 2층 6종 열림(자기 제외) | `앉아쉬기` |
-| 101 | `roll` | 구르기 | GIFT | 첫 심화 행동 — 함께한 날 3 + 그날 케어 미스 0 | `구르기` |
-| 102 | `fall_back` | 뒤로 넘어짐 | GIFT | 3층 8번째 뒤 두 번째 선물 | `뒤로넘어짐` |
+| 13 | `reply` | 답하기 | BASIC_2 | 채팅 응답 4회 | `답하기` |
+| 14 | `petted` | 쓰다듬 받기 | BASIC_2 | 쓰다듬기 4회 | `쓰다듬받기` |
+| 15 | `startle` | 놀라기 | BASIC_2 | 미니게임 4판(승패·종류 무관, 시작 기준) | `놀라기` |
+| 16 | `wake_up` | 일어나기 | BASIC_2 | 깨우기 4회(손으로 깬 밤잠만) | `일어나기` |
+| 101 | `roll` | 구르기 | GIFT | 첫 선물 — 튜토리얼 완주 | `구르기` |
+| 102 | `fall_back` | 뒤로 넘어짐 | GIFT | 두 번째 선물 — 좌우 맞히기 첫 패배 | `뒤로넘어짐` |
+
+★ 2026-09-13 교체. 빠진 이름 여덟(`practice` `call` `tilt` `nod` `smile_idle` `sit` `wave` `shy`)은 **카탈로그에서만** 빠지고 클래스·enum 은 남는다 — 옛 격자로 구워진 펫을 계속 설명해야 한다.
+★ 해금은 "못 보던 행동이 열리는 것" 이 아니라 **"하던 행동이 좋아지는 것"** 이다. 2층 여덟은 전부 그 행동 자체를 조건으로 가진다.
 
 - 2층 조건 카운터는 **부화 순간부터 누적**(아기 60분 포함). 충족 즉시 열리고 `justUnlocked`에 실린다.
 - 3층 심화 순서 = seq 1→16(정본 16장). 선물 둘은 순서 밖.
 - **「해석」** 16프레임 지시문 파일 = `zzal/prompt/{motion-version}/motions/{파일명}.txt`. 파일명은 위 표(한글, 띄어쓰기 없음)로 고정 — 생성 세션이 이 이름으로 만든다. 설정 `app.zzal.advanced-motions`·`gift-motions`에 **key**가 적힌 것만 밤 큐에 오르고, 적힌 key의 파일이 없으면 부팅이 막힌다.
-- **「해석」** `progress`는 2층 잠긴 칸에만. 조건 종류별 `current` = 채팅 응답 수 / 재우기+깨우기 수 / 목욕 수 / 게임 시작 수 / 케어 미스 0인 날 수 / 열린 2층 수.
+- **「해석」** `progress`는 2층 잠긴 칸에만. 조건 종류별 `current` = 밥 준 수 / 간식 수(그날 4개까지) / 청소 수 / 목욕 수 / 채팅 응답 수 / 쓰다듬기 수 / 게임 시작 수 / 손으로 깨운 밤잠 수.
 
 기능 해금(정본 6장) — `features` 블록의 근거
 
@@ -398,11 +401,11 @@
 
 | 키 | 기본 | 뜻 |
 |---|---|---|
-| `pipeline-version` | v1 | 부화 파이프라인(v2 = 격자 2장·16종) |
+| `pipeline-version` | v2 | 부화 파이프라인(v2·v4 = 격자 2장·16종). v4 로 올리는 것은 환경변수로 따로 |
 | `motion-pipeline-version` | v1 | 심화 행동 파이프라인 |
-| `hatch.states.v1` / `.v2` | 8종 / 16 key | 후처리가 만들어야 하는 파일 이름(버전별) |
-| `advanced-motions` | (빈) | 3층 큐에 오를 수 있는 key 목록(지시문 있는 것만) |
-| `gift-motions` | (빈) | 선물 key 목록(`roll,fall_back`) |
+| `hatch.states.v1` / `.v2` / `.v4` | 8종 / 16 key / 16 key | 후처리가 만들어야 하는 파일 이름(버전별). `.v4` 가 교체된 16종이고 **순서가 `MotionCatalog` 와 같아야 한다** |
+| `advanced-motions` | (빈) | 3층 큐에 오를 수 있는 key 목록(지시문 있는 것만). 3층이 아직 없어 비어 있다 |
+| `gift-motions` | `roll,fall_back` | 선물 key 목록 |
 | `night.sweep-enabled` | false | 23:00 스위프 켜기(서버 여러 대면 한 대만) |
 | `night.max-bakes` | 200 | 밤 굽기 상한 K |
 | `night.local-regen-max` | 2 | 로컬 재생성 최대 횟수 |

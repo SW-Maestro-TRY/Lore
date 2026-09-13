@@ -460,6 +460,24 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int gameStarts;
 
+    /**
+     * 간식 누적 — <b>그날 4개까지만</b> 센다(2층 간식 먹기 조건).
+     *
+     * ★ 5개째부터는 배탈이라 안 센다. {@code todaySnacks} 를 그대로 누적하면 "빨리 열려면 배탈이
+     *   날 때까지 먹여라" 가 되어, 아이를 아프게 하는 쪽이 이득인 구조가 된다.
+     */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int snacks;
+
+    /**
+     * <b>손으로 깨운</b> 밤잠의 수(2층 일어나기 조건).
+     *
+     * ★ {@code sleepWakeCount} 로는 못 대신한다 — 그것은 재우기와 깨우기를 둘 다 세고 낮잠도 넣는다.
+     *   여기는 "깨우기" 라는 행동의 횟수라, 아침 자동 기상과 튜토리얼 낮잠은 빠진다.
+     */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int wakes;
+
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int leftRightWins;
 
@@ -1518,6 +1536,9 @@ public class ZzalPet {
             sleepWakeCount += 1;
             // 보상은 밤잠에만(정본 16장). 낮잠은 재우기·깨우기 둘 다 0 — 튜토리얼에서 친밀도를 파밍하지 않게.
             if (was == SleepKind.NIGHT) {
+                // ★ 2층 일어나기가 세는 것은 여기 하나다 — 손으로(manual) 깬 밤잠(NIGHT).
+                //   아침 자동 기상은 manual 이 거짓이고, 튜토리얼 낮잠은 NAP 이라 둘 다 안 들어온다.
+                wakes += 1;
                 addIntimacy(ZzalRules.WAKE_INTIMACY);
             }
             lastCaredAt = at;
@@ -1544,6 +1565,11 @@ public class ZzalPet {
     public void snack(Instant now) {
         happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.SNACK_HAPPINESS);
         todaySnacks += 1;
+        // ★★ 해금에 세는 것은 그날 4개까지다(배탈이 나는 5개째부터는 안 센다).
+        //   상한은 배탈 기준에서 끌어낸다 — 따로 상수를 두면 한쪽만 고쳐지는 날이 온다.
+        if (todaySnacks < ZzalRules.SNACK_DAILY_SICK_AT) {
+            snacks += 1;
+        }
         todayCared = true;      // ★ 간식도 돌보기다(정본 1.7)
         lastCaredAt = now;
         // ★★ 그날 5개째부터 배탈(정본 1.9). "연속" 은 보지 않는다 — 옛 규칙은 사이에 밥을 한 번만
@@ -1991,6 +2017,14 @@ public class ZzalPet {
 
     public int getBathCount() {
         return bathCount;
+    }
+
+    public int getSnacks() {
+        return snacks;
+    }
+
+    public int getWakes() {
+        return wakes;
     }
 
     public int getGameStarts() {
