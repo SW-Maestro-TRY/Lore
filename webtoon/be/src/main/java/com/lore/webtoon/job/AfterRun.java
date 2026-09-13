@@ -67,6 +67,40 @@ public class AfterRun {
     }
 
     /**
+     * <b>다시 남긴다.</b> 그림은 다 그려졌는데 남기는 데서 실패한 작품을 살린다.
+     *
+     * <h2>왜 있나</h2>
+     *
+     * {@link #finish} 는 실패를 삼킨다 — 다 만든 사람에게 "실패했습니다" 를
+     * 보여줄 수 없기 때문이다. 그런데 삼킨 다음이 문제였다: 그림이 S3 에도
+     * DB 에도 없으니 <b>결과 화면이 통째로 비었고, 되살릴 길이 없었다.</b>
+     * 돈은 이미 다 나간 작품이다(2026-09-12 배포에서 실제로 한 편이 그랬다 —
+     * {@code s3_upload.py} 가 지워진 모듈을 부르고 있었다).
+     *
+     * <h2>{@link #finish} 와 무엇이 다른가</h2>
+     *
+     * <b>실패를 삼키지 않는다.</b> 사람이 「다시 올리기」를 눌렀는데 아무 일도
+     * 안 일어나면 두 번째로 속는 것이다. 왜 안 됐는지 그대로 올려 보낸다.
+     *
+     * <h2>다시 눌러도 된다</h2>
+     *
+     * 비용은 (작품, 몇 번째)로 겹치는 것이 걸러지고, 그림은 이미 적힌 장을
+     * 건너뛴다. <b>그리는 일은 다시 하지 않으므로 돈이 안 나간다.</b>
+     *
+     * @return 이번에 새로 적은 그림 줄 수. 0 이면 이미 다 적혀 있었다는 뜻이다
+     */
+    public int recover(String runId, java.util.function.Consumer<String> onLine)
+            throws IOException, InterruptedException {
+        cost(runId);
+        if (!uploader.ready()) {
+            // 로컬에는 버킷이 없다. 하네스 디스크로 화면이 뜨므로 할 일이 없다.
+            return 0;
+        }
+        String prepared = harness.prepareUpload(runId, onLine);
+        return uploader.uploadPrepared(runId, prepared, onLine);
+    }
+
+    /**
      * 호출마다 나간 돈을 DB 로.
      *
      * 하네스가 {@code meta.json} 에 아주 촘촘히 적어 둔다 — 단계 · 모델 ·

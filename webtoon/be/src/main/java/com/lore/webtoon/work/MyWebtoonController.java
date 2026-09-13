@@ -79,6 +79,24 @@ public class MyWebtoonController {
                 new VisibilityResult(runId, service.setVisibility(userId, runId, request.isPublic())));
     }
 
+    @Operation(summary = "그림 다시 올리기", description = """
+            다 그려졌는데 결과 화면이 비어 있는 작품을 살린다.
+
+            **다시 그리지 않는다.** 이미 그려져 있는 그림을 S3 에 올리고 DB 에
+            적기만 하므로 돈이 안 나간다. 여러 번 불러도 되고, 이미 적힌 장은
+            건너뛴다(recorded=0 이면 이미 다 있었다는 뜻).
+
+            내 계정에 이어진 브라우저가 만든 작품만 된다 — 공개 전환과 같은 기준.""")
+    @PostMapping("/runs/{runId}/reupload")
+    public ApiResponse<ReuploadResult> reupload(@LoginUser Long userId,
+                                                @PathVariable String runId) {
+        return ApiResponse.ok(new ReuploadResult(runId, service.reupload(userId, runId)));
+    }
+
+    /** @param recorded 이번에 새로 적은 그림 줄 수. 0 이면 이미 다 적혀 있었다. */
+    public record ReuploadResult(String runId, int recorded) {
+    }
+
     /** @param isPublic 바뀐 뒤의 상태. 화면은 이 값으로 스위치를 맞춘다. */
     public record VisibilityResult(
             String runId,
