@@ -718,11 +718,14 @@ export function useYeoul(live?: Live) {
       flash('잘 잤어요');
       return;
     }
-    if (!s.night) { flash('저녁 7시부터 재울 수 있어요'); return; }
+    // ★ 연습방은 **시각을 안 본다**(상훈님 2026-09-13). 시연·검수용인데 저녁 7시를 기다려야 하면
+    //   낮에는 자는 자세와 커튼을 확인할 길이 없다. 진짜 방(서버 경로)은 위에서 이미 갈라져 나갔고
+    //   거기는 `clock.canSleep` 이 정본 규칙(19:00~23:00 재우기 · 23:00 자동)을 그대로 든다.
+    if (!s.night && !s.sampleMode) { flash('저녁 7시부터 재울 수 있어요'); return; }
     patch({ sleeping: true, sheet: null, resolved: { ...s.resolved, bed: true }, cSleep: s.cSleep + 1 });
     flash('잘 자요');
     tutorDone('sleep');
-  }, [s.sleeping, s.night, s.day, s.resolved, s.cSleep, patch, flash, tutorDone]);
+  }, [s.sleeping, s.night, s.sampleMode, s.day, s.resolved, s.cSleep, patch, flash, tutorDone]);
 
   /**
    * 좌우 맞히기 한 판.
@@ -1244,18 +1247,21 @@ export function useYeoul(live?: Live) {
        */
       bed: (() => {
         const asleep = onServer ? es.sleeping : mode === 'sleep';
-        const canSleep = onServer ? !!sv.clock?.canSleep : mode === 'night';
+        const canSleep = onServer ? !!sv.clock?.canSleep : mode === 'night' || s.sampleMode;
         const canWake = onServer ? !!sv.clock?.canWake : true;
         const svSay = asleep ? '자고 있어요' : canSleep ? '슬슬 졸려요' : '아직 안 졸린가 봐요';
         return {
+          // ★ 연습방은 시각을 안 보므로 **시각을 말하지 않는다** — 낮에 "저녁 7시부터" 라고 하면
+          //   눌러도 안 되는 줄 알고 안 누르게 된다(실제로는 지금 눌린다).
           say: onServer ? svSay
-            : mode === 'sleep' ? '자고 있어요' : mode === 'night' ? '슬슬 졸려요' : '저녁 7시는 넘어야 졸려요',
+            : mode === 'sleep' ? '자고 있어요' : s.sampleMode ? '언제든 재울 수 있어요'
+              : mode === 'night' ? '슬슬 졸려요' : '저녁 7시는 넘어야 졸려요',
           n: 4, on: asleep ? 4 : canSleep ? 1 : 3, tint: '#6E7BA6',
           a: {
             label: asleep ? '깨우기' : '재우기',
             count: onServer
               ? (asleep ? (canWake ? '지금 가능' : '') : canSleep ? '지금 가능' : '')
-              : mode === 'sleep' ? '아침 7~10시' : mode === 'night' ? '지금 가능' : '저녁 7시부터',
+              : mode === 'sleep' ? '아침 7~10시' : (mode === 'night' || s.sampleMode) ? '지금 가능' : '저녁 7시부터',
             tap: onSleep,
             no: !onServer ? '' : asleep
               ? (canWake ? '' : '아직 더 자야 해요')
@@ -1706,11 +1712,13 @@ export function useYeoul(live?: Live) {
           : `2층 해금 + 친밀도 50% 이상이면 열려요. 지금 ${s.floorLv}층 · 친밀도 ${s.bond}%`,
       },
       bed: (() => {
-        const on = s.sleeping || s.night;
+        const on = s.sleeping || s.night || s.sampleMode;
         return {
           label: s.sleeping ? '깨우기' : '재우기',
           note: s.sleeping ? '아침에 깨워 주세요. 07~10시엔 깨워도 돼요.'
-            : s.night ? '창 밖이 어두워요. 지금 재울 수 있어요.' : '저녁 7시부터 재울 수 있어요.',
+            : s.night ? '창 밖이 어두워요. 지금 재울 수 있어요.'
+              // 연습방은 시각을 안 본다 — 시각을 말하면 안 되는 줄 알고 안 누른다.
+              : s.sampleMode ? '연습방이라 지금 재울 수 있어요.' : '저녁 7시부터 재울 수 있어요.',
           bg: on ? '#DFE5F2' : C.off, fg: on ? '#3B4A6E' : '#8B8279',
           bd: on ? '#C2CBE2' : '#DFD9D0', opacity: on ? 1 : 0.7,
         };
