@@ -209,24 +209,33 @@
     {
       "seq": 1, "key": "base", "label": "기본 자세", "layer": "BASIC_1",
       "unlocked": true,
-      "basicImageKey": "images/zzal/pets/7/basic/base.webp",   // 잠김·선물이면 null
+      "basicImageKey": "images/zzal/pets/7/basic/2/base.webp", // 선물이면 null. **잠겨도 채워진다**
       "hint": null,                      // 잠긴 칸의 조건 문구: "밥 주기 9회"
       "progress": null,                  // 잠긴 2층 칸: { "current": 0, "target": 9 }
       // ★ status 는 DB 상태가 아니라 **사용자 말**이다: NONE · QUEUED · PRACTICING · OPEN.
       //   REVIEW·LOCAL_REQUESTED 같은 운영 사정은 전부 PRACTICING 하나로 접힌다(해석 29).
       //   imageKey 는 **도착(revealedAt) 뒤에만** 채워진다 — 검수 중인 그림은 안 내려간다.
-      "advanced": { "status": "NONE", "imageKey": null, "revealedAt": null, "seen": false }
+      // width·height 는 움짤 캔버스(px). 판마다 달라 화면이 상수로 가정하면 안 된다.
+      //   도착 전이거나 맥미니 재생성본이면 null(서버가 크기를 모른다).
+      "advanced": { "status": "NONE", "imageKey": null, "revealedAt": null, "seen": false,
+                    "width": null, "height": null }
     },
     { "seq": 9, "key": "eat_rice", "label": "밥 먹기", "layer": "BASIC_2", "unlocked": false,
-      "basicImageKey": null, "hint": "밥 주기 9회", "progress": { "current": 0, "target": 9 },
-      "advanced": { "status": "NONE", "imageKey": null, "revealedAt": null, "seen": false } },
+      // ★ 잠겨 있어도 그림 주소가 온다 — 2층 8종은 부화 때 1층과 함께 구워진다.
+      //   화면은 unlocked=false 를 보고 "1층 + 소품" 을 고르고, 열리면 이 주소로 바꾼다.
+      "basicImageKey": "images/zzal/pets/7/basic/2/eat_rice.webp",
+      "hint": "밥 주기 9회", "progress": { "current": 0, "target": 9 },
+      "advanced": { "status": "NONE", "imageKey": null, "revealedAt": null, "seen": false,
+                    "width": null, "height": null } },
     { "seq": 101, "key": "roll", "label": "구르기", "layer": "GIFT", "unlocked": false,
       "basicImageKey": null, "hint": "함께한 첫 선물", "progress": null,
-      "advanced": { "status": "NONE", "imageKey": null, "revealedAt": null, "seen": false } }
+      "advanced": { "status": "NONE", "imageKey": null, "revealedAt": null, "seen": false,
+                    "width": null, "height": null } }
   ],
   "justUnlocked": [9],                   // ★ 행동 응답에만. 이번 행동으로 열린 2층 seq(폭죽)
   "learnedToday": [                      // 밤에 합격해 아침에 도착한 심화 행동. seen 전까지
-    { "seq": 101, "key": "roll", "label": "구르기", "imageKey": "images/zzal/pets/7/motions/101/motion.webp", "revealedAt": "..." }
+    { "seq": 101, "key": "roll", "label": "구르기", "imageKey": "images/zzal/pets/7/motions/101/3/motion.webp",
+      "revealedAt": "...", "width": 295, "height": 321 }
   ],
   "firstGift": { "status": "LOCKED", "daysLeft": 0 },   // LOCKED(튜토리얼 중) · WAITING(완주 직후) · BAKING · OPEN. daysLeft 는 항상 0
 
@@ -237,7 +246,10 @@
 
   "personality": null,                   // GENTLE · LIVELY · SHY · CLINGY · COOL · null(아직 안 고름)
   "world": null,                         // 세계관 한 줄 ≤100
+  "tone": null,                          // 말투 ≤32. 대사 톤에만 쓰이고 그림에는 안 들어간다
+  "genre": null,                         // 장르 ≤32. 말투와 같은 규칙
   "background": "room",
+  "anchorsKey": "images/zzal/pets/7/basic/2/anchors.json",  // 소품 좌표. 그림과 같은 판. 없으면 null
 
   "features": {                          // 기능 해금(정본 6장)
     "download": true,                    // 처음부터
@@ -277,8 +289,11 @@
 - `done` 판정(전부 누적 카운터): FEED=밥 1회 이상 / PET=쓰다듬기 1회 / CHAT=채팅 응답 1회 / PERSONALITY=성격 선택됨 / CLEAN=청소 1회 / GAME=게임 시작 1회 / SHARE=공유·다운로드 1회 / NAP=낮잠 1회 / DONE=60분 경과.
 - **「해석」** `tutorial`은 9단계가 모두 `done`이 되면 `null`. 60분이 지나도 남은 단계가 있으면 `active=false`인 채로 남아 순서대로 나온다.
 - `motions[].unlocked`는 **기본 행동(2프레임)이 열렸는가**. 1층 8종은 부화 즉시 true. `advanced.status`는 그 동작의 심화 행동(16프레임) 진행: `NONE`(안 굽음) · `QUEUED`(밤 큐) · `BAKING` · `REVIEW`(검수 대기) · `LOCAL_REQUESTED`(맥미니 재생성 요청) · `OPEN`(공개) · `FAILED`(그 밤 실패, 다음 밤 재시도).
-- `basicImageKey` 규약 = `images/zzal/pets/{petId}/basic/{key}.webp`. v1 파이프라인으로 부화한 펫은 `legacyFile` 매핑으로 채운다(`base←idle` `eat←eat` `joy←happy` `sad←sad` `pet←pet`, 나머지는 null → 화면 폴백).
-- 심화 행동 imageKey 규약 = `images/zzal/pets/{petId}/motions/{seq}/motion.webp`.
+- `basicImageKey` 규약 = `images/zzal/pets/{petId}/basic/{판}/{key}.webp`. **`{판}`은 그 펫의 기본 그림을 구운 횟수**(첫 판은 1). 다시 구우면 판이 올라 **주소가 통째로 달라진다** — 같은 주소에 덮어쓰면 CDN 1년 캐시 때문에 옛 그림이 계속 나간다. 판 이전에 구워진 옛 펫은 `{판}` 칸 없이 `.../basic/{key}.webp` 그대로다.
+- 심화 행동 imageKey 규약 = `images/zzal/pets/{petId}/motions/{motionId}/{판}/motion.webp`. **`{판}`은 그 동작의 `attempts`**(굽기 시도 횟수)다.
+- `anchorsKey` = `images/zzal/pets/{petId}/basic/{판}/anchors.json` — 화면이 소품을 얹을 좌표. **전체 URL 이 아니라 키**이고, 그림과 **같은 판**을 가리킨다. 앵커를 내지 않는 부화 버전(v1·v2)이거나 아직 한 판도 안 구웠으면 `null`.
+- `motions[].basicImageKey` 는 **잠겨 있어도 채워진다**. 2층 8종은 부화 때 1층과 함께 구워지므로 그림이 이미 있다. `null` 은 **선물**과 v1 에 없는 자세뿐이다 — 화면은 `unlocked` 로 "아직 안 배웠다" 를 판단한다.
+- `advanced.width` · `advanced.height` · `learnedToday[].width` · `learnedToday[].height` = 움짤 캔버스(px). **판마다 다르다**(실측 295~301 x 321~339) — 상수로 가정하지 말 것. 도착 전이거나 맥미니 재생성본이면 `null`.
 - `mood`는 정본 4장 우선순위 그대로. 화면의 대기 동작 선택은 `mood` 하나로 한다.
 - `intimacy.percent` = `floor(score / 999 * 10) * 10`(0·10·…·100). **「해석」** tier 경계는 percent 기준 LOW ≤30 · MID 40~70 · HIGH ≥80.
 - `firstGift.daysLeft` = **항상 0**. 첫 선물은 날짜가 아니라 튜토리얼 완주로 열린다 — 남은 날이라는 개념이 없다(필드는 화면 계약이라 남긴다).

@@ -57,15 +57,17 @@ public class PetController {
     }
 
     @Operation(summary = "이미지 등록", description = """
-            그림을 등록하고 캐릭터 시트 생성을 시작한다. 생성은 백그라운드에서
-            수행되며 요청은 즉시 응답한다.
+            그림을 등록하고 부화를 시작한다. 시트뿐 아니라 격자와 후처리까지
+            부화 전 단계가 이 요청으로 시작되며, 생성은 백그라운드에서
+            수행되므로 요청은 즉시 응답한다.
 
-            캐릭터 정보(이름·성격)는 별도 API로 등록한다. 부화 전체가 2~7분
-            소요되므로, 사용자가 이름을 입력하는 동안 시트를 선행 생성하여
-            체감 시간을 단축한다.
+            캐릭터 정보(이름·성격)는 별도 API로 등록한다. 이름은 생성의 입력이
+            아니라 완료 조건이다 — 생성이 끝나고 이름도 들어온 순간 캐릭터가
+            깨어난다. 그래서 사용자가 이름을 입력하는 동안 생성이 함께 진행되어
+            체감 시간이 줄어든다.
 
             이름을 입력하지 않고 이탈한 뒤 재진입하면 기존 초안을 반환한다.
-            생성이 완료된 시트를 재사용하여 중복 비용을 방지한다.
+            이미 생성된 결과를 재사용하여 중복 비용을 방지한다.
 
             imageKey 는 presign API 로 발급받은 미사용 키여야 한다.""")
     @ApiResponses({
@@ -82,11 +84,13 @@ public class PetController {
     }
 
     @Operation(summary = "캐릭터 정보 등록", description = """
-            이름과 성격·세계관을 저장하고 격자 생성을 시작한다. 이미지 등록에 이어지는
-            두 번째 단계이며, 이 시점부터 부화 진행 상태가 갱신된다.
+            이름과 성격·세계관·말투·장르를 저장한다. 생성은 이 요청으로 시작되지 않는다 —
+            이미지 등록 시점에 이미 시작되어 있고, 이 요청은 이름을 채운다.
+            생성이 이미 끝나 있었다면 이 시점에 캐릭터가 깨어난다.
 
-            그림 생성에 반영되는 입력은 note(자유 메모) 하나뿐이다. 격자 프롬프트가 사용하는
-            외형 정보는 등록한 그림에서 추출하며, 성격·세계관은 대사 생성에만 사용한다.
+            그림 생성에 반영되는 입력은 없다. 격자 프롬프트가 사용하는 외형 정보는 등록한
+            그림에서만 추출하며, 성격·세계관·말투·장르·note(자유 메모)는 모두 저장만 되고
+            대사 생성에 사용한다.
 
             이름을 제외한 항목은 모두 선택이다.""")
     @ApiResponses({
@@ -146,7 +150,7 @@ public class PetController {
         return ApiResponse.ok(detail(pet, petService.currentStepLabel(petId), real));
     }
 
-    // ── 돌보기 (정본 4·5장) ───────────────────────────────────────────────
+    // ── 돌보기 (설계 규칙) ───────────────────────────────────────────────
 
     @Operation(summary = "돌보기", description = """
             수행할 행동만 전달하면 수치 변화와 수행 가능 여부를 서버가 판정한다.
@@ -179,7 +183,7 @@ public class PetController {
         return ApiResponse.ok(detail(petService.care(userId, petId, request.action(), real), real));
     }
 
-    // ── 잠 (정본 2·12장) ──────────────────────────────────────────────────
+    // ── 잠 (설계 규칙) ──────────────────────────────────────────────────
 
     @Operation(summary = "재우기", description = """
             KST 19:00~23:00 구간에 수행한다. 23:00 까지 수행하지 않으면 자동으로 수면 상태가 되며,
@@ -215,7 +219,7 @@ public class PetController {
         return ApiResponse.ok(detail(petService.wake(userId, petId, real), real));
     }
 
-    // ── 성격·배경·공유 (정본 6·10·15장) ───────────────────────────────────
+    // ── 성격·배경·공유 (설계 규칙) ───────────────────────────────────
 
     @Operation(summary = "성격 등록·수정", description = """
             성격 5종(온순·활발·수줍음·응석·시크)과 세계관 한 줄을 저장한다.
@@ -310,7 +314,7 @@ public class PetController {
         return ApiResponse.ok(new PetResponses.Shared(issued.token(), issued.url(), pet));
     }
 
-    // ── 동작 (정본 2·16장) ───────────────────────────────────────────────
+    // ── 동작 (설계 규칙) ───────────────────────────────────────────────
 
     @Operation(summary = "신규 동작 확인 처리", description = """
             새로 도착한 동작을 확인했음을 기록한다. 처리 후 learnedToday 목록에서 제외된다.
@@ -333,7 +337,7 @@ public class PetController {
         return ApiResponse.ok(detail(petService.markSeen(userId, petId, seq, real), real));
     }
 
-    // ── 앨범 (정본 16장) ─────────────────────────────────────────────────
+    // ── 앨범 (설계 규칙) ─────────────────────────────────────────────────
 
     @Operation(summary = "앨범 조회", description = """
             동작 도감 18칸과 엽서·장면·첫 심화 동작 정보를 반환한다.
@@ -350,7 +354,7 @@ public class PetController {
                 d.motions() == null ? List.of() : d.motions(),
                 // 여행 엽서 — 전달된 것만(여행 중인 엽서는 안 보인다)
                 petService.postcards(petId).stream().map(PetResponses.Postcard::of).toList(),
-                // 혼자 논 장면 보관 3개(정본 16장). 최근 것부터
+                // 혼자 논 장면 보관 3개(설계 규칙). 최근 것부터
                 petService.scenes(petId).stream().map(PetResponses.Scene::of).toList(),
                 d.firstGift()));
     }

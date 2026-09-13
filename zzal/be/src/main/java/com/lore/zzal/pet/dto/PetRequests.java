@@ -16,7 +16,7 @@ public final class PetRequests {
     private PetRequests() {
     }
 
-    @Schema(description = "이미지 등록 요청. 이 요청으로 캐릭터 시트 생성이 시작된다")
+    @Schema(description = "이미지 등록 요청. 이 요청으로 부화 전 단계가 모두 시작된다")
     public record Draft(
 
             @Schema(description = "업로드한 그림의 S3 key. presign API 로 발급받은 미사용 키여야 한다",
@@ -27,8 +27,10 @@ public final class PetRequests {
     /**
      * 캐릭터 정보. <b>이름 말고는 전부 선택</b>이다.
      *
-     * ★ 그림 생성에 들어가는 것은 {@code note} 뿐이다(정본 1.6). 성격·말투·장르·세계관은
-     *   <b>대사 톤에만</b> 쓰인다 — 그래서 저장만 하고 격자 프롬프트에는 넘기지 않는다.
+     * ★ <b>그림 생성에 들어가는 칸은 하나도 없다.</b> {@code note}(자유 메모)까지 포함해 전부
+     *   저장만 하고 대사에 쓴다 — 정체성 문단은 <b>등록한 그림에서만</b> 뽑는다
+     *   ({@code IdentityStep}). 메모가 그림에 들어간다고 적어 두면, 사용자가 외형을 적었는데
+     *   그림이 그대로인 것을 두고 <b>생성이 고장났다</b>고 읽게 된다.
      */
     @Schema(description = "캐릭터 정보 등록 요청. 이름 외 항목은 선택이다")
     public record Character(
@@ -54,7 +56,8 @@ public final class PetRequests {
                     example = "느와르")
             @Size(max = ZzalRules.GENRE_MAX_CHARS) String genre,
 
-            @Schema(description = "추가 정보. 저장만 하고 나중에 채팅에서 쓴다", example = "왼쪽 눈에 흉터")
+            @Schema(description = "추가 정보. 그림에는 들어가지 않고 저장만 하며 대사에서 쓴다",
+                    example = "왼쪽 눈에 흉터")
             @Size(max = 200) String note) {
 
         /** 고른 성격 전부. 맨 앞이 대표. 아무것도 안 골랐으면 빈 목록. */
@@ -72,7 +75,7 @@ public final class PetRequests {
     }
 
     /**
-     * 성격 등록·수정. 수면 중을 포함해 언제든 바꿀 수 있다(정본 0장 6).
+     * 성격 등록·수정. 수면 중을 포함해 언제든 바꿀 수 있다(설계 규칙).
      *
      * <h3>★ 칸이 둘인 이유 (1.9)</h3>
      * 여러 개를 받기로 했지만({@code personalities}) 화면은 아직 하나만 보낸다({@code personality}).
@@ -137,7 +140,7 @@ public final class PetRequests {
     }
 
     /**
-     * 떠남 켜기·끄기(정본 9장 "설정에서 떠남 끄기 가능").
+     * 떠남 켜기·끄기(설계 규칙 "설정에서 떠남 끄기 가능").
      *
      * ★★ 이 스위치가 있는 이유 — 떠남은 이야기지만 <b>누군가에게는 상처</b>다(자캐 커뮤니티 규범).
      *   끄면 예고도 여행도 없고, 우리가 다시 켜라고 설득하지 않는다.
