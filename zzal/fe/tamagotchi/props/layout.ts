@@ -110,8 +110,18 @@ export function charFit(anchors: CharAnchors, pose: string): CharFit {
 
 /** 지금 화면에서의 자 — K·Hw 를 캐릭터 상자 안 px 로. */
 export function unitPxOf(geom: CharGeom): UnitPx {
-  const scale = geom.boxW / geom.anchors.canvas[0];
-  return { K: geom.anchors.K * scale, Hw: geom.anchors.Hw * scale };
+  return unitPxOfWidth(geom.anchors, geom.boxW);
+}
+
+/**
+ * 상자 **폭만으로** 만드는 자. 방에 붙박인 소품이 쓴다.
+ *
+ * ★ 폭을 쓰는 이유 — 아이는 걸어 다니지만(`yWander` 는 평행이동) **상자 폭은 안 변한다.**
+ *   그래서 아이가 어디에 서 있든 같은 자가 나온다. 세로 움직임(`yHop`·`yBob`)도 마찬가지다.
+ */
+export function unitPxOfWidth(anchors: CharAnchors, boxW: number): UnitPx {
+  const scale = boxW / anchors.canvas[0];
+  return { K: anchors.K * scale, Hw: anchors.Hw * scale };
 }
 
 /**
@@ -195,6 +205,54 @@ export const FOOTLINE_FROM_BOTTOM = PROP_STAGE.footlineFromBottom;
  * 360x640 에서는 13px 만 남아 물줄기가 아니라 얼룩으로 보인다.
  */
 export const SCREEN_FX_MIN_H = 40;
+
+/**
+ * **방에 붙박인 소품**(똥·하루 소품·매트·가방)의 자리. 캐릭터를 **안 본다.**
+ *
+ * ★ 왜 따로인가(상훈님 2026-09-13) — "캐릭터가 움직인다고 똥도 같이 움직이면 안 돼."
+ *   똥은 **바닥에 있는 것이지 아이에게 붙은 것이 아니다.** 그런데 `foot_front` 앵커로 그리면
+ *   자리의 기준이 그 아이의 발이라, 아이가 걸어가면 똥이 따라가고 자세를 바꾸면 똥이 튄다.
+ * ★ 그래서 기준을 **무대**로 바꾼다 —
+ *     가로 = 무대 한가운데에서 옆으로 `offset`(규격 그대로 · 똥은 K x 0.22)
+ *     세로 = 발끝선(무대 아래 238px 고정)
+ *   자세·평행이동·좌우반전이 무엇이든 이 두 값은 안 변한다. **같은 개수면 언제나 같은 자리**라
+ *   새로고침해도 안 튄다(서버는 자리를 모르므로 화면이 결정적으로 정해야 한다).
+ * ★ 쪽(왼/오른)도 **자세를 안 본다** — 자세마다 바뀌면 그게 곧 "따라다니는 것" 이다.
+ *   그래서 `ROOM_SIDE_POSE`(기본 자세) 한 값으로만 정한다.
+ * ★ 크기 자(K)는 여전히 그 아이의 키다 — 아이가 크면 소품도 큰 것이 규격이다.
+ *   다만 그 자는 **상자 폭**에서 나오므로(→ `unitPxOfWidth`) 아이가 어디에 서 있든 안 변한다.
+ */
+export const ROOM_SIDE_POSE = 'base';
+
+export function layoutRoomProp(spec: PropSpec, stage: PropStage, st: StageGeom, u: UnitPx, boxW: number): PropBox | null {
+  const width = propWidthPx(spec, stage, u, boxW);
+  if (width === null) return null;
+
+  const raw = rawWidthPx(spec, stage, u, boxW) ?? width;
+  const aspect = stage.srcW && stage.srcH ? stage.srcH / stage.srcW : 1;
+  const height = width * aspect;
+
+  const side = propSide(spec, ROOM_SIDE_POSE);
+  const sign = side === 'left' ? -1 : 1;
+  const off = offsetPx(spec.offset, u, boxW);
+
+  let x = st.width / 2;
+  if (spec.outside) x += sign * (width / 2);
+  x += sign * off.dx;
+  const y = st.height - FOOTLINE_FROM_BOTTOM + off.dy;
+
+  return {
+    left: x - width / 2,
+    top: spec.ref === 'bottom' ? y - height : y - height / 2,
+    width,
+    height,
+    // ★ 방에 놓인 것은 **캐릭터를 따라 뒤집지 않는다.** 뒤집힘도 따라다님의 한 종류다.
+    mirrored: false,
+    side,
+    floored: width > raw + 0.01,
+    rawWidth: raw,
+  };
+}
 
 /**
  * 화면 전체에 까는 것의 자리. 이 자들은 **비율 규격을 안 쓴다** — 그림이 높이를 정한다(규격 1-3절).

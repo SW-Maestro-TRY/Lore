@@ -21,6 +21,8 @@ import type { Live } from './useHatch';
 import type { CareAction, ChatState, Personality } from '../../lib/pet';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
+import { SITUATION_TABLE, poseOfSituation, situationOfAction, type ActionKey } from '../props/situations';
+import { motionAliases } from '../constants';
 
 /**
  * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
@@ -93,6 +95,14 @@ export interface YeoulState {
    */
   acting: string | null;
   /**
+   * 지금 도는 **행동의 상황 id**(`ACTION_SITUATION` 의 값). `acting` 과 **한 몸으로 켜지고 꺼진다** —
+   * 반응 그림이 사라지면 소품도 같이 사라져야 하기 때문이다.
+   *
+   * ★ 왜 자세(`acting`)만으로는 안 되나 — `eat` 한 자세에 밥·간식·약이 같이 달려 있어서
+   *   자세만 보면 무엇을 줬는지 알 수 없다. 그래서 **행동이 제 상황을 직접 말한다.**
+   */
+  actSit: string | null;
+  /**
    * **개발용(연습방) 고정** — 손으로 고른 자세·상황. 둘 다 `null` 이면 평소대로 상태가 정한다.
    *
    * ★ 왜 두 축인가 — 자세만 바꿔서는 소품이 거의 안 보인다. 연습방 기본 상태(`base` · 아무 상태 아님)에서
@@ -101,6 +111,15 @@ export interface YeoulState {
    * ★ 무엇을 띄울지는 여전히 **상황표가 정한다** — 여기서 고르는 것은 "어떤 상황이 켜졌나" 까지다.
    */
   posePick: string | null; sitPick: string | null;
+  /**
+   * **개발용(연습방) — 2층 8종을 다 연 것으로 친다.**
+   *
+   * ★ 왜 자세 고르기로는 부족한가 — 자세만 바꾸면 그림만 바뀐다. 상훈님이 보시려는 것은
+   *   **"해금되면 행동이 어떻게 달라지나"** 다: 밥 주기가 `eat`(밥그릇 소품)에서 `eat_rice`
+   *   (고기가 그림 안 · 소품 없음)로 넘어가는 것. 그건 행동이 고르는 **상황 줄**이 바뀌는 일이다.
+   * ★ **연습방에만 있다**(이동 창의 자세 2층 칸). 진짜 방의 해금은 서버가 쥔다.
+   */
+  floor2: boolean;
   /** 튜토리얼 완주 축하를 이미 띄웠는가. 한 번만 뜬다. */
   tutorDone: boolean;
   /** 구르기를 배웠는가(튜토리얼 완주 기념). */
@@ -143,8 +162,8 @@ const INITIAL: YeoulState = {
   // ★ 이름은 **비워 둔다**(상훈님 판정 3). 미리 채워 두면 지우지 않고 넘긴 사람의 아이가
   //   남의 이름으로 만들어진다. 자리표시자('여울')만 보여 주고 값은 빈 칸이다.
   petName: '', uploaded: false, authed: '', askDraft: '',
-  shards: 2, tutorDone: false, rollUnlocked: false, acting: null,
-  posePick: null, sitPick: null,
+  shards: 2, tutorDone: false, rollUnlocked: false, acting: null, actSit: null,
+  posePick: null, sitPick: null, floor2: false,
   fire: null, decoOpen: false, albumOpen: 8,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
@@ -388,13 +407,41 @@ export function useYeoul(live?: Live) {
   const needStyle: NeedStyle = s.needStyleLocal ?? '색+모양+글자';
 
   /**
-   * 행동 하나를 화면에 잠깐 보여 준다.
+   * 행동 하나를 화면에 잠깐 보여 준다 — **자세와 상황을 한 몸으로** 켠다.
    * ★ 2.5초 — 눌러 보고 정했다. 1.5초는 눈이 따라가기 전에 사라지고, 4초는 다음 행동이 막혀 답답하다.
+   *
+   * @param key 지을 자세(카탈로그 key).
+   * @param sit 그 행동의 **상황 id**(`ACTION_SITUATION`). 주면 —
+   *   1. 자세를 **표가 그 줄에 적어 둔 자세**로 맞춘다. 둘이 어긋나면 그리는 쪽이
+   *      `row.pose === scene.pose` 를 요구하므로 **소품이 영영 안 뜬다**(2026-09-13 실제 사고).
+   *   2. 같은 타이머로 함께 꺼진다 — 반응 그림이 사라지면 소품도 같이 사라진다.
    */
-  const act = useCallback((key: string) => {
-    setS((v) => ({ ...v, acting: key }));
-    later('acting', 2500, () => setS((v) => ({ ...v, acting: null })));
+  const act = useCallback((key: string, sit: string | null = null) => {
+    const pose = (sit ? poseOfSituation(SITUATION_TABLE, sit) : null) ?? key;
+    setS((v) => ({ ...v, acting: pose, actSit: sit }));
+    later('acting', 2500, () => setS((v) => ({ ...v, acting: null, actSit: null })));
   }, [later]);
+
+  /**
+   * 그 행동이 지금 켤 **상황 id**. 2층이 열려 있으면 2층 줄을 쓴다.
+   *
+   * ★ 층에 따라 갈리는 이유 — 표가 같은 행동을 두 줄로 적어 두었다. 1층은 **소품이 대신하고**
+   *   (밥그릇·쓰다듬는 손), 2층은 **그림 안에 이미 들어 있다**(`prop: null`).
+   * ★ 지금 2층을 여는 길은 **연습방 스위치 하나뿐**이다(`floor2`). 진짜 아이의 해금은 서버가 쥔다 —
+   *   그 값이 오면 여기만 바꿔 읽으면 된다.
+   */
+  const sitOf = useCallback((action: ActionKey) => situationOfAction(action, sRef.current.floor2), []);
+
+  /**
+   * **행동 한 번을 연출한다** — 상황 id 하나만 정하면 자세는 표가 따라온다.
+   *
+   * ★ 자세를 여기 적지 않는 이유 — 층에 따라 자세가 갈린다(밥 주기: 1층 `eat` · 2층 `eat_rice`).
+   *   코드에 자세를 박으면 표와 어긋나고, 어긋나면 **소품이 조용히 안 뜬다.**
+   */
+  const careAct = useCallback((action: ActionKey) => {
+    const sit = sitOf(action);
+    act(poseOfSituation(SITUATION_TABLE, sit) ?? 'base', sit);
+  }, [act, sitOf]);
 
   /** 아무 일도 안 하는 손잡이. 안 보이는 버튼 자리를 채운다. */
   const noop = useCallback(() => {}, []);
@@ -557,15 +604,15 @@ export function useYeoul(live?: Live) {
   //   눌린 반응은 즉시 준다: 누르는 순간 버튼이 잠기고(`live.careing`) 흐려진다.
   /**
    * 돌보기 한 번을 서버에 맡긴다.
-   * @param motion 성공했을 때 지을 자세. 거절이면 짓지 않는다.
+   * @param motion 성공했을 때 연출할 **행동**(자세·소품은 상황표가 정한다). 거절이면 아무것도 안 짓는다.
    */
-  const serverCare = useCallback(async (action: CareAction, motion: string, ok: string) => {
+  const serverCare = useCallback(async (action: CareAction, motion: ActionKey, ok: string) => {
     const r = await liveRef.current?.doCare(action);
     // 잠겨서 안 보낸 경우(`ok:false · message:null`)는 **아무 말도 안 한다** — 잠긴 버튼이 이미 말한다.
     if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
-    act(motion);
+    careAct(motion);
     flash(ok);
-  }, [flash, act]);
+  }, [flash, careAct]);
 
   const onPet = useCallback(() => {
     if (s.chatOpen) { patch({ chatOpen: false, draft: '' }); return; }
@@ -579,14 +626,14 @@ export function useYeoul(live?: Live) {
       //   반응 동작은 나온다. 친밀도만 안 오른다").
       // 4회째부터는 서버를 안 부른다. 누적 `pets` 를 쓰는 해금이 생기면 여기를 되살릴 것
       // (2026-09-10 확인: `ZzalPet.pet()` 이 올리는 평생 누적 `pets` 를 읽는 곳이 아직 아무 데도 없다).
-      if (esRef.current.pets >= PET_MAX) { act('pet'); return; }
+      if (esRef.current.pets >= PET_MAX) { careAct('pet'); return; }
       // 돌보기가 도는 중엔 아무 일도 안 한다 — 같은 요청이 두 번 나가지 않게(계약 10절).
       if (liveRef.current?.careing) return;
       // 쓰다듬기도 돌보기 하나다(`PET`). 하트는 서버가 세어 준 오늘 횟수로 판단한다.
       void (async () => {
         const r = await liveRef.current?.doCare('PET');
         if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
-        act('pet');
+        careAct('pet');
         patch({ hearts: true });
         later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
       })();
@@ -597,57 +644,57 @@ export function useYeoul(live?: Live) {
       pets: Math.min(3, s.pets + 1), hearts: counted,
       bond: counted ? Math.min(100, s.bond + 1) : s.bond,
     });
-    act('pet');
+    careAct('pet');
     // 4회째부터는 하트를 안 띄운다(위 서버 경로와 같은 규칙). 목 화면도 같은 결이어야
     // 시안을 눌러 본 것과 실제가 어긋나지 않는다.
     if (counted) later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
     tutorDone('pet');
-  }, [s.chatOpen, s.popOpen, s.sampleMode, s.pets, s.bond, patch, act, flash, later, tutorDone]);
+  }, [s.chatOpen, s.popOpen, s.sampleMode, s.pets, s.bond, patch, careAct, flash, later, tutorDone]);
 
   const onRice = useCallback(() => {
     if (s.sampleMode) {
       patch({ full: Math.min(4, s.full + 1), bond: Math.min(100, s.bond + 1) });
-      act('eat');
+      careAct('feed_rice');
       flash('맛있게 먹었어요');
       return;
     }
-    if (onServerRef.current) { void serverCare('FEED', 'eat', '맛있게 먹었어요'); return; }
+    if (onServerRef.current) { void serverCare('FEED', 'feed_rice', '맛있게 먹었어요'); return; }
     if (s.full >= 4) { flash('배가 가득이라 거절했어요'); return; }
     if (s.stock <= 0) { flash('밥 재고가 없어요'); return; }
     patch({ full: s.full + 1, stock: s.stock - 1, bond: Math.min(100, s.bond + 1) });
-    act('eat');
+    careAct('feed_rice');
     flash('맛있게 먹었어요');
     tutorDone('feed');
-  }, [s.sampleMode, s.full, s.stock, s.bond, patch, act, flash, tutorDone, serverCare]);
+  }, [s.sampleMode, s.full, s.stock, s.bond, patch, careAct, flash, tutorDone, serverCare]);
 
   const onSnack = useCallback(() => {
     if (onServerRef.current) {
-      void serverCare('SNACK', 'eat', esRef.current.snacks >= SNACK_MAX - 1 ? '조금 많아요' : '간식은 언제나 좋아요');
+      void serverCare('SNACK', 'feed_snack', esRef.current.snacks >= SNACK_MAX - 1 ? '조금 많아요' : '간식은 언제나 좋아요');
       return;
     }
     const n = s.snacks + 1;
     patch({ snacks: n, full: Math.min(4, s.full + 1) });
-    act('eat');
+    careAct('feed_snack');
     flash(n >= 4 ? '조금 많아요' : '간식은 언제나 좋아요');
-  }, [s.snacks, s.full, patch, act, flash, serverCare]);
+  }, [s.snacks, s.full, patch, careAct, flash, serverCare]);
 
   const onClean = useCallback(() => {
     // 청소는 v4 에서 `sweep` 이다. 아직 그 그림이 없으면 별칭이 옛 `wash` 로 받쳐 준다(constants.MOTION_ALIAS).
-    if (onServerRef.current) { void serverCare('CLEAN', 'sweep', '깨끗해졌어요'); return; }
+    if (onServerRef.current) { void serverCare('CLEAN', 'clean', '깨끗해졌어요'); return; }
     if (s.trace <= 0 && !s.sampleMode) { flash('이미 깨끗해요'); return; }
     patch({ trace: 0 });
-    act('sweep');
+    careAct('clean');
     flash('깨끗해졌어요');
     tutorDone('clean');
-  }, [s.trace, s.sampleMode, patch, act, flash, tutorDone, serverCare]);
+  }, [s.trace, s.sampleMode, patch, careAct, flash, tutorDone, serverCare]);
 
   const onBath = useCallback(() => {
-    if (onServerRef.current) { void serverCare('BATH', 'wash', '반짝반짝해졌어요'); return; }
+    if (onServerRef.current) { void serverCare('BATH', 'bath', '반짝반짝해졌어요'); return; }
     if (s.bathUsed && !s.sampleMode) { flash('오늘 목욕은 했어요'); return; }
     patch({ bathUsed: true, trace: 0, bond: Math.min(100, s.bond + 2), cBath: s.cBath + 1 });
-    act('wash');
+    careAct('bath');
     flash('반짝반짝해졌어요');
-  }, [s.bathUsed, s.sampleMode, s.bond, s.cBath, patch, act, flash, serverCare]);
+  }, [s.bathUsed, s.sampleMode, s.bond, s.cBath, patch, careAct, flash, serverCare]);
 
   const onMed = useCallback(() => {
     lastSel.current = Date.now();
@@ -655,14 +702,14 @@ export function useYeoul(live?: Live) {
       // ★ 약 단추는 **아플 때만 그려진다**(`v.medFab.show`) — 그것이 "안 아픔" 거절의 미리 잠금이다.
       //   여기서는 도는 중 연타만 막는다.
       if (liveRef.current?.careing) return;
-      void serverCare('MEDICINE', 'joy', '바로 나았어요');
+      void serverCare('MEDICINE', 'medicine', '바로 나았어요');
       return;
     }
     if (!s.sick) { flash('지금은 약이 필요 없어요'); return; }
     patch({ sick: false });
-    act('joy');
+    careAct('medicine');
     flash('바로 나았어요');
-  }, [s.sick, patch, act, flash, serverCare]);
+  }, [s.sick, patch, careAct, flash, serverCare]);
 
   /**
    * 성격·세계관을 서버에 저장한다. **튜토리얼 4칸을 넘기는 자리**이기도 하다.
@@ -709,12 +756,17 @@ export function useYeoul(live?: Live) {
         const r = await liveRef.current?.doRest();
         if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
         patch({ sheet: null });
+        // ★ 재우기는 **상태**라 행동이 아니다(자는 동안 계속이므로 `sleeping` 이 맡는다).
+        //   깨우기만 잠깐 하는 행동이라 표의 `wake_by_hand` 를 켠다 — 그 줄은 `prop: null`,
+        //   즉 **표가 "이 상황에는 소품이 없다" 고 확정한 자리**다(커튼이 걷히는 것이 신호).
+        if (wasAsleep) careAct('wake');
         flash(wasAsleep ? '잘 잤어요' : '잘 자요');
       })();
       return;
     }
     if (s.sleeping) {
       patch({ sleeping: false, night: false, pets: 0, bathUsed: false, plays: 3, day: s.day + 1, sheet: null });
+      careAct('wake');
       flash('잘 잤어요');
       return;
     }
@@ -725,7 +777,7 @@ export function useYeoul(live?: Live) {
     patch({ sleeping: true, sheet: null, resolved: { ...s.resolved, bed: true }, cSleep: s.cSleep + 1 });
     flash('잘 자요');
     tutorDone('sleep');
-  }, [s.sleeping, s.night, s.sampleMode, s.day, s.resolved, s.cSleep, patch, flash, tutorDone]);
+  }, [s.sleeping, s.night, s.sampleMode, s.day, s.resolved, s.cSleep, patch, flash, careAct, tutorDone]);
 
   /**
    * 좌우 맞히기 한 판.
@@ -748,7 +800,7 @@ export function useYeoul(live?: Live) {
         if (error) { flash(error); return; }
         if (!result) return;
         patch({ lastGuess: result });
-        act(result.hit ? 'joy' : 'sad');
+        careAct(result.hit ? 'game_win' : 'game_lose');
       })();
       return;
     }
@@ -761,8 +813,8 @@ export function useYeoul(live?: Live) {
       guess: win ? '맞았어요!' : '아쉬워요, 반대쪽이었어요',
       bond: win ? Math.min(100, s.bond + 1) : s.bond,
     });
-    act(win ? 'joy' : 'sad');
-  }, [s.plays, s.sampleMode, s.cGame, s.happy, s.bond, patch, act, flash]);
+    careAct(win ? 'game_win' : 'game_lose');
+  }, [s.plays, s.sampleMode, s.cGame, s.happy, s.bond, patch, careAct, flash]);
   const onGuessSide = useCallback((side: Side) => () => onGuess(side), [onGuess]);
 
   // ── 대화 ──
@@ -777,7 +829,12 @@ export function useYeoul(live?: Live) {
         const r = await liveRef.current?.sendChat(text);
         if (!r) return;
         if (r.error) { flash(r.error); return; }
-        if (r.reply?.reactionKey) act(r.reply.reactionKey);
+        // ★ 자세는 **서버가 정한다**. 그 자세가 '답하기' 일 때만 표의 `reply_done` 을 같이 켠다 —
+        //   서버가 다른 자세(기쁨·놀람…)를 골랐는데 답하기 상황을 켜면 자세가 덮여 서버 뜻이 사라진다.
+        if (r.reply?.reactionKey) {
+          const key = r.reply.reactionKey;
+          act(key, motionAliases(key)[0] === 'reply' ? sitOf('reply') : null);
+        }
       })();
       return;
     }
@@ -795,9 +852,9 @@ export function useYeoul(live?: Live) {
       };
     });
     later('mine', 4200, () => setS((v) => ({ ...v, mine: '' })));
-    act('reply');
+    careAct('reply');
     tutorDone('chat');
-  }, [later, act, tutorDone, patch, flash]);
+  }, [later, act, careAct, tutorDone, patch, flash]);
   /**
    * 보내기.
    *
@@ -848,6 +905,8 @@ export function useYeoul(live?: Live) {
       const { error, url } = await liveRef.current?.shareMotion(key) ?? { error: null, url: null };
       if (error) { flash(error); return; }
       if (!url) return;
+      // 공유가 성사된 순간이다 — 복사가 되든 안 되든(막는 브라우저가 있다) 아이는 좋아한다.
+      careAct('share');
       try {
         await navigator.clipboard.writeText(url);
         flash('링크를 복사했어요');
@@ -856,7 +915,7 @@ export function useYeoul(live?: Live) {
         flash(url);
       }
     })();
-  }, [flash]);
+  }, [flash, careAct]);
   const addWish = useCallback(() => { setS((v) => ({ ...v, wishes: v.wishes + 1, fire: null })); flash('기록해 뒀어요'); }, [flash]);
 
   const tapAlbumCell = useCallback((open: number, name: string) => () => {
@@ -1070,6 +1129,11 @@ export function useYeoul(live?: Live) {
    * ★ 상황을 고르면 **그 줄이 적어 둔 자세**도 같이 온다(표가 짝지어 둔 것을 화면이 다시 정하지 않는다).
    */
   const pickScene = useCallback((pose: string | null, sit: string | null = null) => () => patch({ posePick: pose, sitPick: sit }), [patch]);
+  /**
+   * 개발용(연습방) — **2층 8종 전부 열기/닫기.** 켜면 돌보기가 2층 자세를 쓰고,
+   * 그에 맞는 소품(대개 "그림 안에 있으니 소품 없음")이 따라온다.
+   */
+  const toggleFloor2 = useCallback(() => setS((v) => ({ ...v, floor2: !v.floor2 })), []);
   /** 개발용 — 튜토리얼 완주 축하 판을 다시 띄운다. */
   const showTutorEnd = useCallback(() => setS((v) => finishTutor({ ...v, tutorDone: false })), []);
   const openPlay = useCallback((tab: 'talk' | 'guess' | 'run') => () => patch({ sheet: 'play', playTab: tab, toast: '' }), [patch]);
@@ -1512,6 +1576,8 @@ export function useYeoul(live?: Live) {
       tiles, pop, st, bub, sheet, charGroups, frames, spriteKey,
       /** 개발용 고정(연습방 자세·상황 고르기). 방과 이동 띠가 함께 읽는다. */
       posePick: s.posePick, sitPick: s.sitPick,
+      /** 개발용(연습방) — 2층을 다 연 것으로 치고 있는가. 이동 창의 스위치가 읽는다. */
+      floor2: s.floor2,
       /**
        * 소품 오버레이가 읽는 **지금 상태**. ★ 무엇을 띄울지는 여기서 정하지 않는다 —
        * 상황표(`contract/소품-상황표-v1.json`)가 정하고, 이 값은 그 표의 낱말로 번역될 재료다.
@@ -1525,6 +1591,8 @@ export function useYeoul(live?: Live) {
         unhappy: es.happy <= 0,
         chatOpen: s.chatOpen,
         trash: es.trace,
+        /** 지금 도는 행동의 상황 id. 반응 그림(`acting`)과 **같이 켜지고 같이 꺼진다**. */
+        act: s.actSit,
       },
       // 자는 동안은 방을 아예 못 연다(판정 13). 화면이 이 값 하나만 보면 되게 둔다.
       asleep: mode === 'sleep',
@@ -1836,7 +1904,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2,
     backToSample: () => patch({ screen: 'room' }),
   }), [
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
@@ -1844,7 +1912,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2,
   ]);
 
   return { s, v, actions };

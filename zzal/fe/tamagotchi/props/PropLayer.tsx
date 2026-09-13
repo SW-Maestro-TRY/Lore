@@ -12,7 +12,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { layoutProp, layoutScreenProp, type CharGeom, type StageGeom } from './layout';
+import { layoutProp, layoutRoomProp, layoutScreenProp, unitPxOfWidth, type CharGeom, type StageGeom } from './layout';
 import { isSettled, resolveScene, type PropScene, type PropSituationTable, type ResolvedProp } from './situations';
 import { stageUrl, type CharAnchors, type PropZ } from './spec';
 import { confirmedSpec } from './catalog';
@@ -27,6 +27,20 @@ const GLYPH: Record<string, string> = {
 };
 
 const DEV = process.env.NODE_ENV !== 'production';
+
+/**
+ * **방에 붙박인 것인가**(= 아이를 따라다니면 안 되는 것인가).
+ *
+ * ★ 정본은 규격의 앵커 이름 **`room_fixed`** 다(문서가 그 이름으로 바뀌는 중이다).
+ * ★ 그 이름이 아직 규격에 안 내려왔어도 **상황표의 `layer` 가 같은 말을 이미 하고 있다** —
+ *   `char` 는 아이에게 붙은 것, `floor`·`room` 은 방에 있는 것. 그래서 둘 중 하나만 맞아도 방에 고정한다.
+ *   (규격이 `room_fixed` 로 바뀌는 날 이 함수는 앞줄만 남기면 된다. 코드에 소품 이름은 적지 않는다.)
+ * ★ `unit:'screen'` 인 것(거품·먼지·커튼·달)은 애초에 무대 기준이라 여기 오지 않는다.
+ */
+function isRoomFixed(r: ResolvedProp): boolean {
+  if (r.spec.unit === 'screen') return false;
+  return r.spec.anchor === 'room_fixed' || r.row.layer === 'floor' || r.row.layer === 'room';
+}
 
 export interface PropLayerProps {
   /** 지금 무슨 일이 벌어지고 있나. **무엇을 띄울지는 표가 정한다.** */
@@ -178,8 +192,10 @@ export default function PropLayer({ scene: given, table, anchors, z = 'above_cha
   const scene = devScene(given);
 
   const items = useMemo(
+    // ★ 방에 붙박인 것(똥·하루 소품·매트·가방)은 여기서 빼고 `RoomPropLayer` 가 그린다 —
+    //   이 층은 캐릭터 상자 안이라, 남겨 두면 아이가 걸을 때마다 같이 따라 움직인다.
     () => (forced() ?? resolveScene(table, scene))
-      .filter((r) => r.spec.unit !== 'screen' && r.spec.z === z),
+      .filter((r) => r.spec.unit !== 'screen' && r.spec.z === z && !isRoomFixed(r)),
     // scene 은 매 렌더 새 객체라 내용으로 비교한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [JSON.stringify(scene), table, z],
@@ -210,6 +226,61 @@ export default function PropLayer({ scene: given, table, anchors, z = 'above_cha
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+export interface RoomPropLayerProps {
+  scene: PropScene;
+  table?: PropSituationTable | null;
+  anchors: AnchorState;
+  /** 렌더된 캐릭터 상자 — **폭만** 읽는다(크기 자 K 를 얻으려고). 자리는 안 읽는다. */
+  charBox: React.RefObject<HTMLDivElement | null>;
+  /** 아이보다 앞이냐 뒤냐. 매트만 뒤에 깔린다(규격 `z`). */
+  z?: PropZ;
+}
+
+/** 아이(무대에서 `zIndex:2`)를 사이에 두고 앞뒤로 가른다. */
+const ROOM_Z: Record<PropZ, number> = { below_char: 1, above_char: 3 };
+
+/**
+ * **방 바닥에 붙박인 소품**(똥·하루 소품·매트·가방). 무대에 직접 붙는다.
+ *
+ * ★ 상훈님 2026-09-13 — "캐릭터가 움직인다고 똥도 같이 움직이면 안 돼."
+ *   그래서 이 층은 **캐릭터 상자 밖**, 무대 안에 있다. 걸음(`yWander`)·뛰기(`yHop`)·숨쉬기(`yBob`)
+ *   어느 것도 타지 않는다 — 방에 놓인 것은 가만히 있어야 한다.
+ * ★ 캐릭터 상자에서 읽는 것은 **폭 하나**뿐이고, 그것도 크기 자(K)를 얻기 위해서다.
+ *   폭은 평행이동·자세와 무관하므로 자리가 아이를 따라가지 않는다.
+ */
+export function RoomPropLayer({ scene: given, table, anchors, charBox, z = 'above_char' }: RoomPropLayerProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { w, h } = useBoxSize(ref);
+  const { w: charW } = useBoxSize(charBox);
+  const scene = devScene(given);
+
+  const items = useMemo(
+    () => (forced() ?? resolveScene(table, scene)).filter((r) => isRoomFixed(r) && r.spec.z === z),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(scene), table, z],
+  );
+
+  const st: StageGeom = { width: w, height: h };
+  const u = charW > 0 ? unitPxOfWidth(anchors.anchors, charW) : null;
+
+  return (
+    <div ref={ref} data-part="room-props" data-prop-z={z} style={{ position: 'absolute', inset: 0, zIndex: ROOM_Z[z], pointerEvents: 'none' }}>
+      {w > 0 && u && items.map((r) => {
+        const box = layoutRoomProp(r.spec, r.stage, st, u, charW);
+        if (!box) return null;
+        return (
+          <PropImg
+            key={`${r.row.id}-${r.stage.key}`}
+            r={r}
+            mirrored={false}
+            style={{ position: 'absolute', left: box.left, top: box.top, width: box.width, height: box.height }}
+          />
+        );
+      })}
     </div>
   );
 }

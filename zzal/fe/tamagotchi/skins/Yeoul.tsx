@@ -365,7 +365,16 @@ function poseGroups(
         ...poseItems(POSE_FLOORS[0][1]),
       ],
     },
-    { n: '7', label: `자세 ${POSE_FLOORS[1][0]}`, items: poseItems(POSE_FLOORS[1][1]) },
+    {
+      n: '7', label: `자세 ${POSE_FLOORS[1][0]}`,
+      items: [
+        // ★ 자세만 바꾸는 칩들과 **하는 일이 다르다** — 이건 "행동이 어느 자세를 쓰나" 를 바꾼다.
+        //   켜면 밥 주기가 `eat`(밥그릇 소품)에서 `eat_rice`(고기가 그림 안 · 소품 없음)로 넘어간다.
+        //   ⚠️ **연습방에만 있다**(이 묶음 자체가 `sampleMode` 일 때만 나온다). 진짜 방의 해금은 서버가 쥔다.
+        { label: v.floor2 ? '2층 열림 ✓' : '2층 전부 열기', id: 'floor2', on: v.floor2, pick: actions.toggleFloor2 },
+        ...poseItems(POSE_FLOORS[1][1]),
+      ],
+    },
     { n: '8', label: `상황 · ${pose}`, items: sits },
   ];
 }

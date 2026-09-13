@@ -27,7 +27,7 @@ import { spriteUrl, useFootPad, useLive } from './useHatch';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
 import { charFit, HEAD_SAFE, K_SCREEN_TARGET } from '../props/layout';
-import PropLayer, { ScreenPropLayer } from '../props/PropLayer';
+import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
 import { SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose } from '../props/situations';
 
 export default function Room({ y }: { y: Yeoul }) {
@@ -85,6 +85,11 @@ export default function Room({ y }: { y: Yeoul }) {
   //   상자 크기·세로 자리는 여기서 **따라 나오는 값**이다.
   // ★ 앵커를 못 받았으면(옛 펫) K 를 모른다 → 예전처럼 **상자 기준**으로 되돌아간다. 두 길 다 돈다.
   const fit = useMemo(() => charFit(anchors.anchors, v.spriteKey), [anchors.anchors, v.spriteKey]);
+  /**
+   * 캐릭터 상자 — **방에 붙박인 소품이 폭만 읽는다**(크기 자 K). 자리는 안 읽는다.
+   * ★ 폭은 걸음(평행이동)·자세와 무관해서, 아이가 어디에 서 있든 똥이 안 따라간다.
+   */
+  const charBoxRef = useRef<HTMLDivElement>(null);
   const byK = anchors.source === 'server' || v.sample.show;
 
   // 화면에서의 실루엣 키. 규격값(296)이 기본이고, 무대가 짧으면 **머리가 잘리지 않을 만큼**만 깎는다.
@@ -156,7 +161,7 @@ export default function Room({ y }: { y: Yeoul }) {
           {/* ★ 가로는 캔버스 비율로 **따라 나온다**. 여백까지 포함한 판이라 무대보다 넓어질 수 있는데,
               넘치는 몫은 전부 투명 여백이다(여울 base 는 좌우 각 122px). 그래서 안 줄인다 —
               줄이면 그만큼 아이가 작아져 방금 맞춘 K 가 다시 어긋난다. */}
-          <div style={{ position: 'relative', height: '100%', aspectRatio: CHAR_ASPECT, maxWidth: byK ? 'none' : '88%', flex: 'none' }}>
+          <div ref={charBoxRef} style={{ position: 'relative', height: '100%', aspectRatio: CHAR_ASPECT, maxWidth: byK ? 'none' : '88%', flex: 'none' }}>
             {v.guide.tap && (
               <>
                 <span style={{ position: 'absolute', left: '50%', top: '52%', marginLeft: -70, width: 140, height: 140, borderRadius: '50%', border: '2px solid rgba(156,66,50,.5)', animation: 'yRipple 1.9s ease-out infinite', pointerEvents: 'none' }} />
@@ -187,6 +192,11 @@ export default function Room({ y }: { y: Yeoul }) {
             <PropLayer scene={scene} table={propTable} anchors={anchors} />
           </div>
         </div>
+
+        {/* ★ 방 바닥에 **붙박인** 것(똥·하루 소품·매트·가방). 캐릭터 상자 밖이라 아이가 걸어도 안 따라간다
+            (상훈님 2026-09-13 "캐릭터가 움직인다고 똥도 같이 움직이면 안돼"). 매트만 아이 뒤에 깔린다. */}
+        <RoomPropLayer z="below_char" scene={scene} table={propTable} anchors={anchors} charBox={charBoxRef} />
+        <RoomPropLayer scene={scene} table={propTable} anchors={anchors} charBox={charBoxRef} />
 
         {/* 화면 전체에 까는 것(거품·먼지·물줄기) — 발끝선 기준이라 무대에 직접 붙는다. */}
         <ScreenPropLayer scene={scene} table={propTable} anchors={anchors} />

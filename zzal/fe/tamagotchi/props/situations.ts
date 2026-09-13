@@ -53,27 +53,99 @@ export interface ResolvedProp {
 }
 
 /**
+ * **행동 한 번 = 상황 한 줄.** 행동이 자세를 틀 때 "그 행동이 어떤 상황인지" 도 같이 말하게 하는 한 곳.
+ *
+ * ⚠️ 값은 **소품 이름이 아니라 상황 id** 다 — 무엇을 그릴지는 표(`table.ts`)가 그대로 정한다.
+ *   여기서 하는 일은 "지금 벌어진 일" 에 표의 낱말을 붙여 주는 것까지다.
+ * ★ **그 자세의 줄을 전부 켜지 않는다.** `eat` 한 자세에 밥(`bowl`)·간식(`snack`)·약(`medicine`)이
+ *   같이 달려 있어서, 자세로 켜면 **밥을 줬는데 약병까지 뜬다.** 행동마다 한 줄씩 짝지어야 한다.
+ * ★ 짝은 **표를 읽어** 지었다(추측하지 않았다). 표에 줄이 없는 행동은 여기 없다 —
+ *   `재우기` 는 행동이 아니라 상태라 `sleeping` 이 맡고(아래), `공유하기` 는 `share_done` 이 받는다.
+ */
+export const ACTION_SITUATION = {
+  /** 쓰다듬기 — 1층 `pet_l1_hand`(pose `pet` · `pet_hand`) / 2층 `pet_l2`(pose `petted` · 손이 그림 안).
+   *  같은 자세의 `pet_l1_mood`(기분 하트)는 친밀도가 높을 때만이고 status=decide 라 아직 안 켠다. */
+  pet: { l1: 'pet_l1_hand', l2: 'pet_l2' },
+  /** 밥 주기 — 1층 `feed_rice_l1`(pose `eat` · `bowl`) / 2층 `feed_rice_l2`(pose `eat_rice` · 고기가 그림 안). */
+  feed_rice: { l1: 'feed_rice_l1', l2: 'feed_rice_l2' },
+  /** 간식 주기 — 1층 `feed_snack_l1`(pose `eat` · `snack`, **규격 pending 이라 안 뜨는 게 정상**)
+   *  / 2층 `feed_snack_l2`(pose `eat_snack` · 막대사탕이 그림 안). */
+  feed_snack: { l1: 'feed_snack_l1', l2: 'feed_snack_l2' },
+  /** 약 주기 — `give_medicine`(pose `eat` · `medicine`). **2층으로 안 간다**(표 주석: 아프게 해야 상을 받는 구조가 되므로). */
+  medicine: { l1: 'give_medicine' },
+  /** 청소하기 — 1층 `clean_l1`(pose `base` · `dust` 1~3) / 2층 `clean_l2`(pose `sweep` · 빗자루는 그림 안 · `dust` 1~2). */
+  clean: { l1: 'clean_l1', l2: 'clean_l2' },
+  /** 목욕하기 — 1층 `bath_l1_foam`(pose `base` · `bath` 1~3) / 2층 `bath_l2_foam`(pose `wash` · `bath` 1~2).
+   *  헹구는 물줄기(`bath_l1_rinse`·`bath_l2_rinse`)는 규격 pending 이라 아직 안 켠다. */
+  bath: { l1: 'bath_l1_foam', l2: 'bath_l2_foam' },
+  /** 대화 답하기 — `reply_done`(pose `reply` · `bubble_note`). ⚠️ 표에 **1층 줄이 없다** — 답하기 자세 자체가 2층이다. */
+  reply: { l1: 'reply_done' },
+  /** 게임 이김 — `game_win`(pose `joy` · `win_star`). */
+  game_win: { l1: 'game_win' },
+  /** 게임 짐 — `game_lose`(pose `sad` · `lose_dots`). 규격 pending 이라 아직 안 뜬다. */
+  game_lose: { l1: 'game_lose' },
+  /** 공유·저장 직후 — `share_done`(pose `joy` · `bubble_note`). */
+  share: { l1: 'share_done' },
+  /** 손으로 깨우기 — `wake_by_hand`(pose `wake_up`). **표가 `prop: null` 로 "소품 없음" 을 확정**했다
+   *  (커튼이 걷히는 것이 신호다). ⚠️ 1층 줄이 없다 — 깨어나는 자세 자체가 2층이다. */
+  wake: { l1: 'wake_by_hand' },
+} as const satisfies Record<string, { l1: string; l2?: string }>;
+
+export type ActionKey = keyof typeof ACTION_SITUATION;
+
+/**
+ * 그 행동이 지금 켤 **상황 id 하나**. 2층이 열려 있고 그 행동에 2층 줄이 있으면 2층, 아니면 1층.
+ *
+ * ★ 왜 층으로 갈리나 — 표가 같은 행동을 두 줄로 적어 두었다. 1층은 **소품이 대신하고**(밥그릇·쓰다듬는 손),
+ *   2층은 **그림 안에 이미 들어 있다**(`prop: null`). 그러니 층이 곧 "소품을 띄우느냐" 를 정한다.
+ */
+export function situationOfAction(action: ActionKey, floor2 = false): string {
+  const row: { l1: string; l2?: string } = ACTION_SITUATION[action];
+  return floor2 ? (row.l2 ?? row.l1) : row.l1;
+}
+
+/**
+ * 그 상황이 **표에서 어느 자세에 붙어 있나**. 없거나 자세와 무관한 줄(`'*'`)이면 `null`.
+ *
+ * ★ 왜 필요한가 — 그리는 쪽(`resolveScene`)이 `row.pose === scene.pose` 를 요구한다.
+ *   행동이 짓는 자세와 그 행동의 상황 줄이 **어긋나면 소품이 영영 안 뜬다**(2026-09-13 실제 사고).
+ *   그래서 자세를 코드가 따로 정하지 않고 **표가 적어 둔 자세를 그대로 쓴다.**
+ */
+export function poseOfSituation(table: PropSituationTable | null | undefined, id: string): string | null {
+  const row = (table ?? []).find((r) => r.id === id);
+  return row && row.pose !== '*' ? row.pose : null;
+}
+
+/**
  * **표가 쓰는 상황 id 로 옮기는 어댑터.** 화면이 아는 상태를 표의 낱말로 번역만 한다 —
  * 여기서 소품을 고르지 않는다(고르는 것은 표의 몫).
  *
- * ⚠️ 화면이 아직 모르는 상황(재회·해금·게임 승패·친밀도 80%·공유 직후)은 여기 없다.
+ * ⚠️ 화면이 아직 모르는 상황(재회·해금·친밀도 80%)은 여기 없다.
  *   그 신호가 화면에 생기면 **이 함수에 id 한 줄씩만** 더하면 된다. 표는 이미 그 줄을 들고 있다.
  */
 export function activeSituations(s: {
   pose: string;
   sick?: boolean;
   sleeping?: boolean;
+  /** ⚠️ 지금은 **안 쓴다** — 꼬르륵 소품을 뺐다(아래). 신호 자체는 남겨 둔다. */
   hungry?: boolean;
   unhappy?: boolean;
   chatOpen?: boolean;
   trash?: number;
+  /** 지금 도는 **행동**의 상황 id(`ACTION_SITUATION` 의 값). 연출이 끝나면 같이 사라진다. */
+  act?: string | null;
 }): string[] {
   const out: string[] = [];
+  // ★ 행동이 맨 앞이다 — 지금 벌어지고 있는 일이 상태보다 앞선다.
+  //   `char` 층의 같은 자리를 다투면 표의 `priority` 가 정하므로, 여기 순서는 표를 이기지 않는다.
+  if (s.act) out.push(s.act);
   if (s.sleeping) out.push('sleeping', 'sleeping_curtain', 'sleeping_moon');
   // 땀↔해골을 갈아 끼울지 같이 띄울지는 아직 결정 전(표 status=decide)이라, 표의 제안대로
   // **갈아 끼운다** — 아프기 시작하면 땀. '24시간 방치' 신호가 화면에 오면 sick_long 을 더한다.
   if (s.sick) out.push('sick_light');
-  if (s.hungry) out.push('hunger_zero');
+  // ★ 배고픔 소품(꼬르륵)은 **안 띄운다**(상훈님 2026-09-13 "지금 배고파서 꼬르륵 소품은 빼는 게 맞는 것 같아").
+  //   표의 `hunger_zero` 줄과 `growl` 그림은 **그대로 둔다** — 나중에 되살릴 수 있게. 여기서만 안 켠다.
+  //   (표 쪽 `status` 도 곧 바뀌지만, **둘 중 하나만 되어 있어도 안 뜨도록** 코드에서도 막아 둔다.)
   if (s.unhappy) out.push('happy_zero');
   if (s.chatOpen) out.push('chat_open');
   if ((s.trash ?? 0) > 0) out.push('trash_always');
