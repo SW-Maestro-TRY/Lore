@@ -919,7 +919,8 @@ class PetServiceTest {
             com.lore.zzal.motion.ZzalMotion gift = com.lore.zzal.motion.ZzalMotion.forCatalog(
                     PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
             org.springframework.test.util.ReflectionTestUtils.setField(gift, "status", com.lore.zzal.motion.MotionStatus.BAKING);
-            gift.toReview("k", com.lore.zzal.motion.MotionSource.API,
+            gift.toReview("k", null, null,
+com.lore.zzal.motion.MotionSource.API,
                     com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
             gift.approve(T0);
             when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
@@ -955,7 +956,8 @@ class PetServiceTest {
             com.lore.zzal.motion.ZzalMotion m = com.lore.zzal.motion.ZzalMotion.forCatalog(
                     PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
             org.springframework.test.util.ReflectionTestUtils.setField(m, "status", com.lore.zzal.motion.MotionStatus.BAKING);
-            m.toReview("images/zzal/pets/7/motions/9/motion.webp", com.lore.zzal.motion.MotionSource.API,
+            m.toReview("images/zzal/pets/7/motions/9/motion.webp", null, null,
+com.lore.zzal.motion.MotionSource.API,
                     com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
             m.approve(T0);
             when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(

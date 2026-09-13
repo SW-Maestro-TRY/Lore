@@ -116,7 +116,7 @@ class AdminServiceTest {
         m.queue(NIGHT);
         // ★ 굽는 중이던 줄만 검수 대기로 간다(1.9). 운영에서는 claim 이 DB 에서 BAKING 으로 집는다.
         ReflectionTestUtils.setField(m, "status", MotionStatus.BAKING);
-        m.toReview("images/zzal/pets/7/motions/%d/motion.webp".formatted(id),
+        m.toReview("images/zzal/pets/7/motions/%d/motion.webp".formatted(id), null, null,
                 MotionSource.API, GateVerdict.REVIEW, "게이트 미적용", "g0");
         motions.put(id, m);
         return m;
@@ -193,8 +193,8 @@ class AdminServiceTest {
 
         // ★ 숫자만 0 이 아니라 실제로 두 번을 다시 쓸 수 있어야 한다
         ReflectionTestUtils.setField(m, "status", MotionStatus.BAKING);
-        m.toReview("images/zzal/pets/7/motions/16/motion.webp",
-                MotionSource.API, GateVerdict.REVIEW, "게이트 미적용", "g0");
+        m.toReview("images/zzal/pets/7/motions/16/motion.webp", null, null,
+MotionSource.API, GateVerdict.REVIEW, "게이트 미적용", "g0");
         service.review(ADMIN, 16L, HumanVerdict.REGENERATE, "다음 밤 1", null);
         assertThat(m.getStatus()).isEqualTo(MotionStatus.LOCAL_REQUESTED);
         assertThat(m.getRegenRound()).isEqualTo(1);

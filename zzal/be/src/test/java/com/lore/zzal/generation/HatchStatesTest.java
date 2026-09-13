@@ -1,6 +1,7 @@
 package com.lore.zzal.generation;
 
 import com.lore.common.s3.S3Storage;
+import com.lore.zzal.generation.client.PostProcessor;
 import com.lore.zzal.generation.client.PythonPostProcessor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,15 +48,17 @@ class HatchStatesTest {
 
     @Test
     @DisplayName("★ 실패 주입 — 그 버전의 목록이 비면 내려받기 전에 막힌다(0종 완료로 조용히 성공하는 길을 막는다)")
-    void processorRejectsEmptyStates() {
+    void processorRejectsEmptyStates() throws Exception {
         PipelineScripts scripts = mock(PipelineScripts.class);
         PythonPostProcessor p = new PythonPostProcessor(mock(S3Storage.class), scripts, "python3", 60,
                 v -> v.equals("v1") ? List.of("idle") : List.of());
 
-        assertThatThrownBy(() -> p.split("images/zzal/pets/7/grid.png", "images/zzal/pets/7", "v2"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("app.zzal.hatch.states.v2");
-        assertThatThrownBy(() -> p.split("images/zzal/pets/7/grid.png", "images/zzal/pets/7", "v2", List.of()))
-                .isInstanceOf(IllegalArgumentException.class);
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7", "v2")) {
+            assertThatThrownBy(() -> s.split("images/zzal/pets/7/grid.png"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("app.zzal.hatch.states.v2");
+            assertThatThrownBy(() -> s.split("images/zzal/pets/7/grid.png", List.of()))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
     }
 }

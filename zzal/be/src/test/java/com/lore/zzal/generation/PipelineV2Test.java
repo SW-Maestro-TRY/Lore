@@ -19,6 +19,10 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -77,27 +81,44 @@ class PipelineV2Test {
     }
 
     @Test
-    @DisplayName("★ 후처리 v2 — grid·grid2 를 각각 카탈로그 key 8개로 basic/ 에 자른다. grid2 가 없으면 v1(8상태)")
+    @DisplayName("★ 후처리 v2 — grid·grid2 를 각각 카탈로그 key 8개로 basic/{판} 에 자른다. grid2 가 없으면 v1(8상태)")
     void postProcessSplitsTwoGridsWithKeys() throws Exception {
         PostProcessor post = mock(PostProcessor.class);
+        PostProcessor.Session session = mock(PostProcessor.Session.class);
+        when(post.open(anyString(), anyString())).thenReturn(session);
         MotionCatalog catalog = new MotionCatalog("", "", "v1");
-        PostProcessStep step = new PostProcessStep(post, catalog, new HatchPostures());
+        GenerationRecorder recorder = mock(GenerationRecorder.class);
+        when(recorder.nextBasicRound(7L)).thenReturn(3);
+        PostProcessStep step = new PostProcessStep(post, catalog, new HatchPostures(), recorder);
 
         StepContext v2 = new StepContext(7L, "여울", null, "v2");
         v2.putImage(GridStep.NAME, "images/zzal/pets/7/grid.png");
         v2.putImage(PostProcessStep.GRID2, "images/zzal/pets/7/grid2.png");
         step.run(v2);
-        InOrder order = inOrder(post);
-        order.verify(post).split("images/zzal/pets/7/grid.png", "images/zzal/pets/7/basic", "v2",
+        // ★ 두 층이 <b>한 세션</b>이어야 2층이 1층 앵커에 합쳐 쓴다. 층마다 세션을 열면 폴더가 갈린다.
+        verify(post, times(1)).open("images/zzal/pets/7/basic/3", "v2");
+        InOrder order = inOrder(session);
+        order.verify(session).split("images/zzal/pets/7/grid.png",
                 List.of("base", "eat", "joy", "sad", "sick", "pet", "hello", "sleep"));
-        order.verify(post).split("images/zzal/pets/7/grid2.png", "images/zzal/pets/7/basic", "v2",
+        order.verify(session).split("images/zzal/pets/7/grid2.png",
                 List.of("eat_rice", "eat_snack", "sweep", "wash", "reply", "petted", "startle", "wake_up"));
+        order.verify(session).close();
+        // ★ 판은 세션이 닫힌 <b>뒤에</b> 오른다 — 먼저 올리면 앵커가 빠진 판을 화면이 먼저 받는다.
+        verify(recorder).markBasicBaked(7L, 3);
 
         PostProcessor postV1 = mock(PostProcessor.class);
+        PostProcessor.Session sessionV1 = mock(PostProcessor.Session.class);
+        when(postV1.open(anyString(), anyString())).thenReturn(sessionV1);
+        GenerationRecorder recorderV1 = mock(GenerationRecorder.class);
+        when(recorderV1.nextBasicRound(7L)).thenReturn(1);
         StepContext v1 = new StepContext(7L, "여울", null, "v1");
         v1.putImage(GridStep.NAME, "images/zzal/pets/7/grid.png");
-        new PostProcessStep(postV1, catalog, new HatchPostures()).run(v1);
-        verify(postV1).split("images/zzal/pets/7/grid.png", "images/zzal/pets/7", "v1");   // ★ job 의 버전을 넘긴다(폴백 안전)
-        verify(postV1, never()).split(anyString(), anyString(), anyString(), anyList());
+        new PostProcessStep(postV1, catalog, new HatchPostures(), recorderV1).run(v1);
+        // ★ v1 은 basic/ 규약 이전이라 판 칸이 없다. job 의 버전을 넘긴다(폴백 안전).
+        verify(postV1).open("images/zzal/pets/7", "v1");
+        verify(sessionV1).split("images/zzal/pets/7/grid.png");
+        verify(sessionV1, never()).split(anyString(), anyList());
+        // ★ 판을 올리지 않는다 — 옛 규약에는 판이 없어서, 올려 두면 다음에 새 주소로 튄다.
+        verify(recorderV1, never()).markBasicBaked(anyLong(), anyInt());
     }
 }

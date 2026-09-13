@@ -25,9 +25,12 @@ import org.mockito.InOrder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -81,41 +84,55 @@ class PipelineV4Test {
     }
 
     @Test
-    @DisplayName("★ v4 후처리 — 격자 2장을 basic/ 아래에 자르며 칸의 자세 매핑을 함께 넘긴다")
+    @DisplayName("★ v4 후처리 — 격자 2장을 한 세션 안에서 basic/{판} 아래에 자르며 칸의 자세 매핑을 함께 넘긴다")
     void v4SplitsTwoGridsWithPostures() throws Exception {
         PostProcessor post = mock(PostProcessor.class);
+        PostProcessor.Session session = mock(PostProcessor.Session.class);
+        when(post.open(anyString(), anyString())).thenReturn(session);
         MotionCatalog catalog = new MotionCatalog("", "", "v1");
         HatchPostures postures = new HatchPostures();
-        PostProcessStep step = new PostProcessStep(post, catalog, postures);
+        GenerationRecorder recorder = mock(GenerationRecorder.class);
+        when(recorder.nextBasicRound(7L)).thenReturn(2);
+        PostProcessStep step = new PostProcessStep(post, catalog, postures, recorder);
 
         StepContext ctx = new StepContext(7L, "여울", null, "v4");
         ctx.putImage(GridStep.NAME, "images/zzal/pets/7/grid.png");
         ctx.putImage(PostProcessStep.GRID2, "images/zzal/pets/7/grid2.png");
         step.run(ctx);
 
-        // ★ 화면이 basicImageKey 를 .../basic/{key}.webp 로 조립한다 — 한 단 위에 떨어뜨리면 그림이 안 뜬다.
+        // ★ 화면이 basicImageKey 를 .../basic/{판}/{key}.webp 로 조립한다 — 자리가 어긋나면 그림이 안 뜬다.
+        // ★★ 두 층이 <b>한 세션</b>이어야 한다. 층마다 열면 작업 폴더가 갈리고, 2층이 1층 앵커에 합쳐 쓰지 못한다.
         // ★ 자세 매핑이 빠지면 후처리가 1층 기본값으로 되돌아가 2층 reply·wake_up 을 앉기·눕기로 맞춘다.
-        InOrder order = inOrder(post);
-        order.verify(post).split(eq("images/zzal/pets/7/grid.png"), eq("images/zzal/pets/7/basic"), eq("v4"),
+        verify(post, times(1)).open("images/zzal/pets/7/basic/2", "v4");
+        InOrder order = inOrder(session);
+        order.verify(session).split(eq("images/zzal/pets/7/grid.png"),
                 anyList(), eq(postures.forStep("v4", GridStep.NAME)));
-        order.verify(post).split(eq("images/zzal/pets/7/grid2.png"), eq("images/zzal/pets/7/basic"), eq("v4"),
+        order.verify(session).split(eq("images/zzal/pets/7/grid2.png"),
                 anyList(), eq(postures.forStep("v4", PostProcessStep.GRID2)));
+        order.verify(session).close();
+        verify(recorder).markBasicBaked(7L, 2);
     }
 
     @Test
-    @DisplayName("격자가 1장뿐인 옛 v4 기록 — 예전 길(설정 이름)로 간다")
+    @DisplayName("격자가 1장뿐인 옛 v4 기록 — 예전 길(설정 이름)로 가되 판은 그대로 붙는다")
     void v4WithOnlyTheFirstGridTakesTheOldPath() throws Exception {
         // ★ 여기로 오는 것은 2층이 붙기 전에 굽다 만 기록뿐이다(새 job 은 grid2 를 반드시 거친다).
         //   그때 설정 hatch.states.v4 는 16종이므로 후처리가 8장만 내고 "후처리 결과가 없습니다:
         //   eat_rice.webp" 로 **크게** 실패한다 — 절반짜리 펫을 성공으로 치는 것보다 낫다.
         PostProcessor post = mock(PostProcessor.class);
-        PostProcessStep step = new PostProcessStep(post, new MotionCatalog("", "", "v1"), new HatchPostures());
+        PostProcessor.Session session = mock(PostProcessor.Session.class);
+        when(post.open(anyString(), anyString())).thenReturn(session);
+        GenerationRecorder recorder = mock(GenerationRecorder.class);
+        when(recorder.nextBasicRound(7L)).thenReturn(1);
+        PostProcessStep step =
+                new PostProcessStep(post, new MotionCatalog("", "", "v1"), new HatchPostures(), recorder);
 
         StepContext ctx = new StepContext(7L, "여울", null, "v4");
         ctx.putImage(GridStep.NAME, "images/zzal/pets/7/grid.png");
         step.run(ctx);
 
-        verify(post).split("images/zzal/pets/7/grid.png", "images/zzal/pets/7/basic", "v4");
+        verify(post).open("images/zzal/pets/7/basic/1", "v4");
+        verify(session).split("images/zzal/pets/7/grid.png");
     }
 
     @Test

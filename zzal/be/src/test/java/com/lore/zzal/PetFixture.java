@@ -36,10 +36,19 @@ public final class PetFixture {
         org.springframework.test.util.ReflectionTestUtils.setField(pet, "tutorialStep", step.ordinal());
     }
 
-    /** 이름까지 받은, 격자를 굽는 중인 펫. */
+    /**
+     * 이름까지 받은, 격자를 굽는 중인 펫.
+     *
+     * ★ <b>번호를 넣어 둔다.</b> 운영에서 이 자리의 펫은 이미 저장돼 번호가 있고, 그림 주소는
+     *   그 번호로 조립된다({@code images/zzal/pets/{id}/...}). 번호가 없는 펫으로 시험하면
+     *   주소를 만드는 자리가 시험에서 통째로 빠지거나 {@code "null"} 이 낀 주소가 통과한다.
+     */
+    public static final Long PET_ID = 7L;
+
     public static ZzalPet hatching(Long userId, String name, String note, String imageKey, Instant now) {
         ZzalPet pet = ZzalPet.draft(userId, imageKey, now);
         pet.character(name, note, null, null, null, null, now);
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
         return pet;
     }
 }

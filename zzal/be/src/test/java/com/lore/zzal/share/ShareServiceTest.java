@@ -88,6 +88,17 @@ class ShareServiceTest {
     }
 
     @Test
+    @DisplayName("★★ 공유 주소도 펫 상세와 <b>같은 판</b>을 가리킨다 — 두 곳이 따로 조립하면 한쪽만 옛 판을 준다")
+    void basicShareUsesTheSameRoundAsTheDetail() {
+        ReflectionTestUtils.setField(pet, "basicRound", 2);
+        pet.setHatchPipelineVersion("v4");
+        when(shareRepository.findByToken("tok")).thenReturn(Optional.of(ZzalShare.issue(PET, "pet", T0)));
+
+        // ★ 같은 자리에서 조립한다는 것은 ImageKeyAssemblyTest 가 구조로 막는다. 여기서는 값이 맞는지만 본다.
+        assertThat(service.open("tok").imageKey()).isEqualTo("images/zzal/pets/7/basic/2/pet.webp");
+    }
+
+    @Test
     @DisplayName("★★ 연타로 같은 순간에 두 번 발급해도 500 이 아니라 먼저 들어온 링크를 준다 (P-6)")
     void concurrentIssueReusesTheWinnersLink() {
         ZzalShare winner = ZzalShare.issue(PET, "pet", T0);
