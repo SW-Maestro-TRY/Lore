@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -49,15 +48,16 @@ public class AfterRun {
     private final ObjectMapper mapper = new ObjectMapper();
 
     public AfterRun(UsageService usage, PageUploader uploader, WorkLedger works,
-                    HarnessProcess harness,
-                    @Value("${lore.webtoon.python.runs-dir:}") String runsDir) {
+                    HarnessProcess harness) {
         this.usage = usage;
         this.uploader = uploader;
         this.works = works;
         this.harness = harness;
-        this.runsDir = (runsDir == null || runsDir.isBlank()
-                ? harness.dir().resolve("runs")
-                : Path.of(runsDir)).toAbsolutePath().normalize();
+        /* **자리는 HarnessProcess 하나가 정한다.** 여기서 기본값을 또 적으면
+           넷이 같은 문자열을 따로 갖게 되고, 한쪽만 안 고치는 순간 그 걸음만
+           다른 폴더를 본다 — 실제로 AfterRun 이 그래서 비용을 하나도 못 적었다
+           (2026-09-12 배포에서 실측). 바꾸려면 `lore.webtoon.python.runs-dir`. */
+        this.runsDir = harness.runsDir();
     }
 
     /** 다 끝났다. 남길 것을 남긴다. */

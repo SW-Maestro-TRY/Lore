@@ -44,8 +44,13 @@ class AfterRunTest {
         usage = mock(UsageService.class);
         PageUploader uploader = mock(PageUploader.class);
         when(uploader.ready()).thenReturn(false);        // 여기서는 그림을 안 올린다
-        after = new AfterRun(usage, uploader, mock(WorkLedger.class),
-                mock(HarnessProcess.class), runs.toString());
+        /* 작품이 쌓이는 자리는 HarnessProcess 하나가 정하고, AfterRun 은 그걸
+           받아 쓴다. 예전에는 여기에 따로 넘겨서 둘이 다른 자리를 볼 수
+           있었고, 배포에서 실제로 그랬다 — meta.json 은 멀쩡한데 없는 자리를
+           보고 "비용 기록이 없습니다" 만 찍었다. */
+        HarnessProcess harness = mock(HarnessProcess.class);
+        when(harness.runsDir()).thenReturn(runs);
+        after = new AfterRun(usage, uploader, mock(WorkLedger.class), harness);
     }
 
     /** 하네스가 적는 모양 그대로. 값은 {@code cost.total_krw} 에 있다. */

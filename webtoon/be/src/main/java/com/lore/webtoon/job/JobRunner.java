@@ -87,7 +87,6 @@ public class JobRunner {
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
                      StoryStore stories, AfterRun after, WorkLedger works,
                      CreditGate credits, GuestGate guests,
-                     @Value("${lore.webtoon.python.runs-dir:}") String runsDir,
                      @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.harness = harness;
         this.progress = progress;
@@ -97,17 +96,11 @@ public class JobRunner {
         this.works = works;
         this.credits = credits;
         this.guests = guests;
-        /* **임시 폴더가 아니라 고정 경로다.**
-         *
-         * 예전에는 하네스를 푼 임시 폴더 안(`harness.dir()/runs`)에 쌓았다.
-         * 그 폴더는 서버가 뜰 때마다 새로 생기므로, 재시작하면 만든 작품이
-         * 통째로 사라지고 진행 중이던 작업도 이어받을 수 없었다 —
-         * 2026-09-12에 그리는 도중 서버를 다시 띄웠더니 그 작업이 영원히
-         * "running" 으로 남았다(파이썬은 부모 없이 한 장 더 그리고 멈췄다).
-         *
-         * 배포에서 다른 자리를 쓰려면 `lore.webtoon.python.runs-dir` 로 준다. */
-        this.runsDir = Path.of(runsDir == null || runsDir.isBlank()
-                ? "webtoon/ai/work/runs" : runsDir).toAbsolutePath().normalize();
+        /* **자리는 HarnessProcess 하나가 정한다.** 여기서 기본값을 또 적으면
+           넷이 같은 문자열을 따로 갖게 되고, 한쪽만 안 고치는 순간 그 걸음만
+           다른 폴더를 본다 — 실제로 AfterRun 이 그래서 비용을 하나도 못 적었다
+           (2026-09-12 배포에서 실측). 바꾸려면 `lore.webtoon.python.runs-dir`. */
+        this.runsDir = harness.runsDir();
         this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
                 ? "webtoon/ai/work/jobs" : jobsDir).toAbsolutePath().normalize();
     }
