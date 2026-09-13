@@ -81,6 +81,22 @@ export function activeSituations(s: {
   return out;
 }
 
+/**
+ * 개발용(연습방 고르기) — 표에서 **그 자세에 붙어 있는 상황 id** 전부.
+ *
+ * ★ 소품은 여전히 표가 고른다. 여기서 내는 것은 "그 자세에서 켤 수 있는 상황"의 목록뿐이다 —
+ *   코드에 자세별 소품을 적지 않는다는 원칙은 그대로다.
+ */
+export function situationsOfPose(table: PropSituationTable | null | undefined, pose: string): string[] {
+  if (!table) return [];
+  return table.filter((r) => r.pose === pose).map((r) => r.id);
+}
+
+/** 자세와 무관하게 깔리는 줄(`pose: '*'`)의 id. 자세를 손으로 고를 때도 이건 그대로 둔다. */
+export function alwaysSituationIds(table: PropSituationTable | null | undefined): Set<string> {
+  return new Set((table ?? []).filter((r) => r.pose === '*').map((r) => r.id));
+}
+
 const warned = new Set<string>();
 
 function warnOnce(key: string, why: string) {

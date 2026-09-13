@@ -92,6 +92,15 @@ export interface YeoulState {
    * 그건 `sleeping` 이 이미 들고 있고, 시간이 지나도 안 풀려야 한다.
    */
   acting: string | null;
+  /**
+   * **개발용(연습방) 고정** — 손으로 고른 자세·상황. 둘 다 `null` 이면 평소대로 상태가 정한다.
+   *
+   * ★ 왜 두 축인가 — 자세만 바꿔서는 소품이 거의 안 보인다. 연습방 기본 상태(`base` · 아무 상태 아님)에서
+   *   뜨는 것은 바닥 흔적 하나뿐이고, 나머지는 전부 상황에 딸려 있다(꼬르륵=배고픔 · 손=쓰다듬는 중 ·
+   *   거품=목욕 중). 그래서 **자세 + 그 자세에 붙은 상황**을 같이 고른다.
+   * ★ 무엇을 띄울지는 여전히 **상황표가 정한다** — 여기서 고르는 것은 "어떤 상황이 켜졌나" 까지다.
+   */
+  posePick: string | null; sitPick: string | null;
   /** 튜토리얼 완주 축하를 이미 띄웠는가. 한 번만 뜬다. */
   tutorDone: boolean;
   /** 구르기를 배웠는가(튜토리얼 완주 기념). */
@@ -135,6 +144,7 @@ const INITIAL: YeoulState = {
   //   남의 이름으로 만들어진다. 자리표시자('여울')만 보여 주고 값은 빈 칸이다.
   petName: '', uploaded: false, authed: '', askDraft: '',
   shards: 2, tutorDone: false, rollUnlocked: false, acting: null,
+  posePick: null, sitPick: null,
   fire: null, decoOpen: false, albumOpen: 8,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
@@ -1052,6 +1062,11 @@ export function useYeoul(live?: Live) {
   const finishRoadmap = useCallback(() => patch({ cChat: 4, cBath: 3, cSleep: 3, cGame: 3 }), [patch]);
   /** 개발용 — 조각 도장을 0·2·4 로 바꿔 본다. 실제로는 잠들 때 판정·리셋된다(정본). */
   const setShards = useCallback((n: number) => () => patch({ shards: n }), [patch]);
+  /**
+   * 개발용(연습방) — 자세·상황을 손으로 고정한다. 둘 다 `null` 이면 평소대로 돌아간다.
+   * ★ 상황을 고르면 **그 줄이 적어 둔 자세**도 같이 온다(표가 짝지어 둔 것을 화면이 다시 정하지 않는다).
+   */
+  const pickScene = useCallback((pose: string | null, sit: string | null = null) => () => patch({ posePick: pose, sitPick: sit }), [patch]);
   /** 개발용 — 튜토리얼 완주 축하 판을 다시 띄운다. */
   const showTutorEnd = useCallback(() => setS((v) => finishTutor({ ...v, tutorDone: false })), []);
   const openPlay = useCallback((tab: 'talk' | 'guess' | 'run') => () => patch({ sheet: 'play', playTab: tab, toast: '' }), [patch]);
@@ -1326,7 +1341,9 @@ export function useYeoul(live?: Live) {
      * (잠긴 동작을 무엇으로 대신 그릴지도 거기서 정한다).
      * ★ 재우기는 여기 `sleeping` 으로 남는다 — 잠깐 하는 동작이 아니라 자는 동안 계속이라서다.
      */
-    const spriteKey: string = s.acting ? s.acting
+    // ★ 개발용 고정(연습방 자세 고르기)이 있으면 그것이 이긴다. 운영에서는 늘 null 이다.
+    const spriteKey: string = s.posePick ? s.posePick
+      : s.acting ? s.acting
       : es.sleeping ? 'sleep'
         // ⚠️ **임시 대체 · 배포 전 진짜 그림으로 교체**(상훈님 2026-09-08 판정 5).
         //   아픈 그림이 아직 없어 슬픈 자세로 대신한다. `~/.claude/tasks.md` 에 배포 전 필수로 올라가 있다.
@@ -1487,6 +1504,8 @@ export function useYeoul(live?: Live) {
     return {
       lv, calls, top, mode, tut, TUT, unlimited, selK,
       tiles, pop, st, bub, sheet, charGroups, frames, spriteKey,
+      /** 개발용 고정(연습방 자세·상황 고르기). 방과 이동 띠가 함께 읽는다. */
+      posePick: s.posePick, sitPick: s.sitPick,
       /**
        * 소품 오버레이가 읽는 **지금 상태**. ★ 무엇을 띄울지는 여기서 정하지 않는다 —
        * 상황표(`contract/소품-상황표-v1.json`)가 정하고, 이 값은 그 표의 낱말로 번역될 재료다.
@@ -1809,7 +1828,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene,
     backToSample: () => patch({ screen: 'room' }),
   }), [
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
@@ -1817,7 +1836,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene,
   ]);
 
   return { s, v, actions };

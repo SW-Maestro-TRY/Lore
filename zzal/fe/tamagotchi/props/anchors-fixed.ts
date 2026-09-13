@@ -13,6 +13,22 @@
 import type { CharAnchors } from './spec';
 
 /**
+ * 자세 16종 — 앵커 정본(`소품-앵커-자세별-v1.json`)의 `포즈` 절 그대로.
+ * 1층 8 · 2층 8 이고, **순서는 배우는 순서**다. 개발용 자세 고르기가 이 순서로 보여 준다.
+ */
+export const POSE_FLOORS: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ['1층', ['base', 'eat', 'joy', 'sad', 'sick', 'pet', 'hello', 'sleep']],
+  ['2층', ['eat_rice', 'eat_snack', 'sweep', 'wash', 'reply', 'petted', 'startle', 'wake_up']],
+];
+
+/** 자세 이름 — 개발 화면에만 쓴다(운영 문구가 아니다). */
+export const POSE_LABEL: Record<string, string> = {
+  base: '기본', eat: '먹기', joy: '기쁨', sad: '슬픔', sick: '아픔', pet: '교감', hello: '인사', sleep: '자기',
+  eat_rice: '밥', eat_snack: '간식', sweep: '청소', wash: '목욕', reply: '답하기', petted: '쓰다듬받기',
+  startle: '놀람', wake_up: '일어나기',
+};
+
+/**
  * 여울 실측값. **다른 캐릭터도 이 표로 그린다** — 서버가 그 아이의 앵커를 줄 때까지의 기본값이다.
  * K(키) · Hw(머리 폭)는 `base` 자세에서 **한 번만** 잰다. 웅크렸다고 아이가 작아진 게 아니다.
  */

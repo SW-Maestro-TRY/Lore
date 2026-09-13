@@ -24,6 +24,8 @@ import { STEPS, WEB_KEYS } from '../yeoul/constants';
 import { C, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, radius } from '../yeoul/ui';
 import { LiveProvider, useHatchState } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
+import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
+import { SITUATION_TABLE } from '../props/situations';
 import type { SkinProps } from './Scrapbook';
 
 export default function Yeoul(_props: SkinProps) {
@@ -180,8 +182,10 @@ function DevJump({ y, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; mi
 
   const onb = s.screen === 'onb';
   const room = s.screen === 'room';
+  /** 상황 칸이 보여 줄 자세 — 손으로 고른 것이 있으면 그것, 없으면 지금 짓고 있는 자세. */
+  const pose = y.v.posePick ?? y.v.spriteKey;
 
-  interface Jump { label: string; on: boolean; pick: () => void }
+  interface Jump { label: string; on: boolean; pick: () => void; id?: string; dim?: boolean }
   const groups: { n: string; label: string; items: Jump[] }[] = [
     {
       n: '1', label: '랜딩',
@@ -212,8 +216,15 @@ function DevJump({ y, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; mi
           label, on: room && y.v.mode === k && !s.sampleMode, pick: actions.setMode(k),
         })),
     },
+    // ── 연습방 전용 · 자세 16종 + 그 자세의 상황 ────────────────────────────
+    //
+    // ★ **연습방(여울 샘플)에만 둔다.** 진짜 방은 서버가 정하는 자리라 손으로 고정하면 안 된다.
+    // ★ 두 축인 이유 — 자세만 바꿔서는 소품이 거의 안 보인다. 연습방 기본 상태에서 뜨는 것은
+    //   바닥 흔적 하나뿐이고, 나머지는 전부 상황에 딸려 있다(꼬르륵=배고픔 · 손=쓰다듬는 중).
+    // ★ 상황 칸은 **상황표를 그대로** 낸다 — 지금 고른 자세의 줄만. 표가 바뀌면 여기도 따라 바뀐다.
+    ...(s.sampleMode ? poseGroups(y, pose) : []),
     {
-      n: '5', label: '그 밖에',
+      n: s.sampleMode ? '9' : '5', label: '그 밖에',
       items: [
         { label: '앨범 벽', on: s.wallOpen, pick: actions.openWall },
         { label: '알림', on: s.sheet === 'notify', pick: actions.openNotify },
@@ -276,8 +287,13 @@ function DevJump({ y, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; mi
             {g.items.map((i) => {
               const t = chipTone(i.on);
               return (
-                <button key={i.label} data-jump={i.label} onClick={i.pick}
-                  style={{ border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11, background: t.bg, color: t.fg }}
+                <button key={i.id ?? i.label} data-jump={i.id ?? i.label} onClick={i.pick}
+                  // 확정이 아닌 상황은 눌러도 소품이 안 뜬다 — 고장이 아니라 결정 대기라는 뜻으로 흐리게 둔다.
+                  title={i.dim ? '아직 확정 전(decide·pending) — 눌러도 소품은 안 뜹니다' : undefined}
+                  style={{
+                    border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11,
+                    background: t.bg, color: t.fg, opacity: i.dim && !i.on ? 0.5 : 1,
+                  }}
                 >{i.label}</button>
               );
             })}
@@ -304,4 +320,52 @@ function DevJump({ y, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; mi
       </div>
     </div>
   );
+}
+
+/**
+ * 연습방 자세·상황 고르기 두 묶음. **화면을 안 가린다** — 기존 이동 창 안에 줄로 들어간다.
+ *
+ * ★ 무엇을 띄울지는 여전히 상황표가 정한다. 여기서 고르는 것은 "어떤 자세이고 어떤 상황이 켜졌나" 까지고,
+ *   그 다음(어느 소품을 어느 자리에)은 `props/situations.ts` → `props/layout.ts` 가 이어 받는다.
+ * ★ 확정이 아닌 줄(`decide`·`pending`)은 **흐리게** 보여 준다. 눌러도 소품이 안 뜨는데 그 까닭이
+ *   고장이 아니라 "상훈님 결정 대기" 라는 것을 눈으로 알 수 있어야 한다(예: `sick` 은 지금 둘 다 대기라
+ *   아무것도 안 뜬다).
+ */
+function poseGroups(
+  y: ReturnType<typeof useYeoul>,
+  pose: string,
+): { n: string; label: string; items: { label: string; on: boolean; pick: () => void; id?: string; dim?: boolean }[] }[] {
+  const { v, actions } = y;
+  const poseItems = (keys: readonly string[]) => keys.map((k) => ({
+    label: POSE_LABEL[k] ?? k,
+    id: k,
+    on: v.posePick === k,
+    pick: actions.pickScene(k, null),
+  }));
+
+  // 지금 자세에 붙은 줄만. **표를 그대로 낸다** — 여기서 소품을 고르지 않는다.
+  const rows = SITUATION_TABLE.filter((r) => r.pose === pose);
+  const sits = [
+    { label: '상황 없음', id: 'sit:none', on: !v.sitPick, pick: actions.pickScene(v.posePick, null) },
+    ...rows.map((r) => ({
+      label: `${r.id}${r.prop ? ` · ${r.prop.split('|')[0]}` : ' · (소품 없음)'}`,
+      id: `sit:${r.id}`,
+      on: v.sitPick === r.id,
+      // 확정이 아닌 줄은 눌러도 소품이 안 뜬다 — 그 까닭을 칩에 적어 둔다.
+      dim: r.status !== 'confirmed',
+      pick: actions.pickScene(r.pose === '*' ? v.posePick : r.pose, r.id),
+    })),
+  ];
+
+  return [
+    {
+      n: '6', label: `자세 ${POSE_FLOORS[0][0]}`,
+      items: [
+        { label: '자동', id: 'pose:auto', on: !v.posePick && !v.sitPick, pick: actions.pickScene(null, null) },
+        ...poseItems(POSE_FLOORS[0][1]),
+      ],
+    },
+    { n: '7', label: `자세 ${POSE_FLOORS[1][0]}`, items: poseItems(POSE_FLOORS[1][1]) },
+    { n: '8', label: `상황 · ${pose}`, items: sits },
+  ];
 }
