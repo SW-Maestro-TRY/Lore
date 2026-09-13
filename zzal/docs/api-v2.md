@@ -84,7 +84,7 @@
 
 | 호출 | 요청 | 비고 | 거절 |
 |---|---|---|---|
-| `POST /{id}/personality` | `{personality: GENTLE\|LIVELY\|SHY\|CLINGY\|COOL, world? ≤40}` | 언제든. 온순·활발·수줍음·응석·시크(정본 16장 기본 이름) | |
+| `POST /{id}/personality` | `{personality: GENTLE\|LIVELY\|SHY\|CLINGY\|COOL, world? ≤100}` | 언제든. 온순·활발·수줍음·응석·시크(정본 16장 기본 이름) | |
 | `POST /{id}/background` | `{background}` | 프론트 배경 16종 key(`room` `window_day` …). 2층 4종 열린 뒤 | `ZZAL_FEATURE_LOCKED` |
 | `POST /{id}/share` | `{motionKey, kind: DOWNLOAD\|SHARE}` | 열린 동작 어느 것이든. 서버는 **횟수만 기록**(튜토리얼 25분의 "했다"가 되는 서버 사실). 파일 합성은 v2 워터마크 때 | `ZZAL_MOTION_NOT_OPEN` |
 
@@ -235,7 +235,7 @@
   "sceneNew": false,                     // ★ 이번 조회에서 장면이 새로 남았나 — 귀환 첫 화면을 한 번만 띄우려고
 
   "personality": null,                   // GENTLE · LIVELY · SHY · CLINGY · COOL · null(아직 안 고름)
-  "world": null,                         // 세계관 한 줄 ≤40
+  "world": null,                         // 세계관 한 줄 ≤100
   "background": "room",
 
   "features": {                          // 기능 해금(정본 6장)

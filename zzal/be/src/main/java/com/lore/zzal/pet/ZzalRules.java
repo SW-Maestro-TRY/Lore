@@ -261,8 +261,8 @@ public final class ZzalRules {
     /** 기억 — 최근 답 5개를 재언급. */
     public static final int CHAT_MEMORY = 5;
 
-    /** 세계관 한 줄 40자. 성격 그룹은 5개 고정(GENTLE·LIVELY·SHY·CLINGY·COOL). */
-    public static final int WORLD_MAX_CHARS = 40;
+    /** 세계관 한 줄 100자. 성격 그룹은 5개 고정(GENTLE·LIVELY·SHY·CLINGY·COOL). */
+    public static final int WORLD_MAX_CHARS = 100;
 
     // ── 11장 장면 ─────────────────────────────────────────────────────────
 
