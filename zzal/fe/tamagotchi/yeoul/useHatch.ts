@@ -872,6 +872,15 @@ function spriteCandidates(key: string): string[] {
   return out;
 }
 
+/**
+ * 그 자세의 **여울 그림**(우리가 확실히 갖고 있는 것). 내 아이 그림이 실제로 안 열릴 때 댈 자리다.
+ * ★ `spriteUrl` 과 **같은 후보 순서**를 쓴다 — 두 곳이 갈리면 폴백이 엉뚱한 자세를 그린다.
+ */
+export function yeoulSpriteUrl(key: string): string {
+  const tries = spriteCandidates(key);
+  return tries.map((k) => YEOUL_MOTION[k]).find(Boolean) ?? YEOUL_MOTION.base;
+}
+
 export function spriteUrl(live: Live, key: string, sample = false): string {
   const tries = spriteCandidates(key);
   const yeoul = tries.map((k) => YEOUL_MOTION[k]).find(Boolean) ?? YEOUL_MOTION.base;

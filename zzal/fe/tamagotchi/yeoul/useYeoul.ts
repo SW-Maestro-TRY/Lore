@@ -519,6 +519,7 @@ export function useYeoul(live?: Live) {
    */
   const playGift = useCallback((key: string) => act(key, null, GIFT_CYCLES), [act]);
 
+
   /**
    * 그 행동이 지금 켤 **상황 id**. 2층이 열려 있으면 2층 줄을 쓴다.
    *
@@ -1612,9 +1613,12 @@ export function useYeoul(live?: Live) {
     const spriteKey: string = s.dev.pose ? s.dev.pose
       : s.acting ? s.acting
       : es.sleeping ? 'sleep'
-        // ⚠️ **임시 대체 · 배포 전 진짜 그림으로 교체**(상훈님 2026-09-08 판정 5).
-        //   아픈 그림이 아직 없어 슬픈 자세로 대신한다. `~/.claude/tasks.md` 에 배포 전 필수로 올라가 있다.
-        : es.sick ? 'sad'
+        // ★ 2026-09-13 — **임시 대체를 걷었다**(판정 5 의 전제가 사라짐).
+        //   판정 5 는 "아픈 그림이 아직 없어 슬픈 자세로 대신한다" 였는데, 확정 16종에 `sick` 이 들어왔고
+        //   서버 카탈로그도 seq 5 `sick` 을 1층(부화 즉시)으로 준다. 이제 진짜 아픈 그림이 있다.
+        //   ⚠️ 대신하고 있던 동안 **땀(`sick_light`)이 영영 안 떴다** — 표의 그 줄은 자세가 `sick` 일 때만
+        //   켜지는데 화면은 `sad` 를 짓고 있어서, 그리는 쪽이 자세 불일치로 조용히 걸렀다(2026-09-13 실측).
+        : es.sick ? 'sick'
           : (es.full <= 0 || es.happy <= 0) ? 'sad'
             : s.chatOpen ? 'joy' : 'base';
 
@@ -1811,11 +1815,12 @@ export function useYeoul(live?: Live) {
       },
       // 자는 동안은 방을 아예 못 연다(판정 13). 화면이 이 값 하나만 보면 되게 둔다.
       asleep: mode === 'sleep',
-      // ⚠️ **임시 대체 · 배포 전 진짜 그림으로 교체**(판정 5). 자는 그림이 없어 커튼 뒤로 감춘다 —
-      //   깨어 있는 그림을 커튼 밑에 두면 자는 것으로 안 읽힌다(판정 13과 같은 방향).
-      // ★ 다만 **개발용으로 재웠을 때는 감추지 않는다**(2026-09-13 상훈님 — "잠자기 누르면
-      //   7든 1시든 12시든 잠 자기 모션만 볼 수 있으면 돼"). 감춘 채로는 고쳤는지 확인할 길이 없다.
-      hidePet: mode === 'sleep' && s.dev.sleeping !== true,
+      // ★ 2026-09-13 — **감춤을 걷었다**(판정 5 의 전제가 사라짐).
+      //   판정 5 는 "자는 그림이 없어 깨어 있는 그림이 커튼 밑에 비치면 자는 것으로 안 읽힌다" 였다.
+      //   지금은 확정 16종에 `sleep`(눕기)이 있고 서버도 1층으로 준다 — 커튼 밑에 있는 것이
+      //   **자는 그림**이라 감출 이유가 없어졌다. 감춘 채로 두면 1층 8종 중 하나를 영영 못 본다.
+      //   ⚠️ 방을 못 열게 막는 판정 13(`asleep`)은 그대로다 — 그건 그림이 아니라 규칙이다.
+      hidePet: false,
       sleepLine: sleepingLine(s.petName),
       screen: { room: s.screen === 'room', onb: s.screen === 'onb', egg: s.screen === 'egg' },
       hud: {

@@ -23,7 +23,7 @@ import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
 import Panels from './Panels';
-import { spriteUrl, useFootPad, useLive } from './useHatch';
+import { spriteUrl, useFootPad, useLive, yeoulSpriteUrl } from './useHatch';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
 import { charFit, HEAD_SAFE, K_SCREEN_TARGET } from '../props/layout';
@@ -35,7 +35,22 @@ export default function Room({ y }: { y: Yeoul }) {
   // 무엇을 그릴지는 `v.spriteKey`(useYeoul)가, 누구를 그릴지는 `spriteUrl`(useHatch)이 정한다.
   const live = useLive();
   // 여울 샘플 방에서는 여울이, 진짜 방에서는 내 아이만 나온다.
-  const charSrc = spriteUrl(live, v.spriteKey, v.sample.show);
+  const wantSrc = spriteUrl(live, v.spriteKey, v.sample.show);
+  /**
+   * **주소는 받았는데 그림이 없을 때**의 마지막 안전망(2026-09-13).
+   *
+   * ★ 왜 필요한가 — 서버는 `basicImageKey` 를 **파일이 있는지 확인하지 않고 만들어서 준다**
+   *   (`PetResponses.basicImageKey`: 부화 파이프라인과 key 로 주소를 조립할 뿐이다).
+   *   그래서 아직 한 장도 안 구운 아이도 `images/zzal/pets/{id}/idle.webp` 같은 주소를 받고,
+   *   그 주소는 403 이다. `spriteUrl` 은 주소가 **있으므로** 폴백을 안 타고, 결과는
+   *   **아무것도 안 그려진 빈 무대**다(2026-09-13 실측: 1층 8종 전부 `naturalWidth === 0`).
+   * ★ 주소만 보고는 알 수 없고 **받아 봐야 안다.** 그래서 실패한 주소를 적어 두고 여울로 바꿔 단다.
+   *   같은 주소로 두 번 시도하지 않으므로 깜빡이지 않는다.
+   * ⚠️ 이것은 **덮개이지 해결이 아니다.** 진짜 고칠 자리는 "없는 그림의 주소를 주지 않는" 서버다.
+   */
+  const [brokenSrc, setBrokenSrc] = useState<ReadonlySet<string>>(() => new Set());
+  const fallbackSrc = yeoulSpriteUrl(v.spriteKey);
+  const charSrc = brokenSrc.has(wantSrc) ? fallbackSrc : wantSrc;
   // 발밑 여백은 그림마다 다르다 — 상수로 두면 어떤 아이는 뜨고 어떤 아이는 잠긴다.
   const footPad = useFootPad(charSrc, SPRITE_FOOT_PAD);
 
@@ -203,6 +218,14 @@ export default function Room({ y }: { y: Yeoul }) {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={charSrc} alt=""
+                  data-sprite-fallback={charSrc === fallbackSrc && wantSrc !== fallbackSrc ? '1' : undefined}
+                  onError={() => {
+                    if (charSrc === fallbackSrc) return;   // 여울마저 실패하면 더 갈 곳이 없다
+                    // eslint-disable-next-line no-console
+                    console.warn(`[여울] 내 아이 그림이 열리지 않습니다 — ${charSrc}. 여울 그림으로 답니다. `
+                      + '서버가 준 주소인데 파일이 없다는 뜻이라, 부화 생성이 끝났는지 확인해야 합니다.');
+                    setBrokenSrc((prev) => new Set(prev).add(charSrc));
+                  }}
                   style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', animation: 'yBob 4.6s ease-in-out infinite', filter: v.st.charFilter }}
                 />
               </div>
