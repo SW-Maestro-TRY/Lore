@@ -78,7 +78,7 @@ class WorldLengthContractTest {
     void atTheLimitPasses() {
         String world = "가".repeat(ZzalRules.WORLD_MAX_CHARS);
 
-        assertThat(violatedFields(new PetRequests.Character("여울", null, null, world, null)))
+        assertThat(violatedFields(new PetRequests.Character("여울", null, null, world, null, null, null)))
                 .as("상한 길이는 받아 줘야 합니다")
                 .isEmpty();
         assertThat(violatedFields(new PetRequests.PersonalityChoice(null, null, world)))
@@ -91,7 +91,7 @@ class WorldLengthContractTest {
     void oneOverTheLimitIsRejected() {
         String world = "가".repeat(ZzalRules.WORLD_MAX_CHARS + 1);
 
-        assertThat(violatedFields(new PetRequests.Character("여울", null, null, world, null)))
+        assertThat(violatedFields(new PetRequests.Character("여울", null, null, world, null, null, null)))
                 .as("상한을 넘겼는데 검증을 통과하면, 터지는 곳은 DB 이고 사용자는 500 만 봅니다")
                 .contains("world");
         assertThat(violatedFields(new PetRequests.PersonalityChoice(null, null, world)))

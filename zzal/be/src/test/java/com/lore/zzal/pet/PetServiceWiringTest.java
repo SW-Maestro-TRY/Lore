@@ -312,7 +312,7 @@ class PetServiceWiringTest {
             pet.markHatchFailed();
             assertThat(pet.getPhase()).isEqualTo(PetPhase.FAILED);
 
-            assertCode(() -> service.character(USER_ID, PET_ID, "여울", null, null, null, T0),
+            assertCode(() -> service.character(USER_ID, PET_ID, "여울", null, null, null, null, null, T0),
                     ErrorCode.ZZAL_PET_HATCH_FAILED);
 
             verify(events, never()).publishEvent(any(Object.class));
@@ -323,7 +323,7 @@ class PetServiceWiringTest {
         void aliveIsNotADraft() {
             baby();
 
-            assertCode(() -> service.character(USER_ID, PET_ID, "다른이름", null, null, null, T0),
+            assertCode(() -> service.character(USER_ID, PET_ID, "다른이름", null, null, null, null, null, T0),
                     ErrorCode.ZZAL_PET_NOT_DRAFT);
 
             verify(events, never()).publishEvent(any(Object.class));
@@ -335,11 +335,25 @@ class PetServiceWiringTest {
             ZzalPet pet = ZzalPet.draft(USER_ID, "images/zzal/abc", T0);
             register(pet);
 
-            service.character(USER_ID, PET_ID, "여울", null, null, null, T0);
+            service.character(USER_ID, PET_ID, "여울", null, null, null, null, null, T0);
 
             assertThat(pet.getName()).isEqualTo("여울");
             assertThat(pet.getPhase()).isEqualTo(PetPhase.HATCHING);
             verify(events, times(1)).publishEvent(any(Object.class));
+        }
+
+        @Test
+        @DisplayName("★ 말투·장르도 같이 저장된다 — 컨트롤러에서 여기까지 오는 길이 끊기면 조용히 비어 있다")
+        void toneAndGenreAreStored() {
+            ZzalPet pet = ZzalPet.draft(USER_ID, "images/zzal/abc", T0);
+            register(pet);
+
+            service.character(USER_ID, PET_ID, "여울", null, null,
+                    "비 오는 도시의 탐정", "무뚝뚝한 존댓말", "느와르", T0);
+
+            assertThat(pet.getWorld()).isEqualTo("비 오는 도시의 탐정");
+            assertThat(pet.getTone()).isEqualTo("무뚝뚝한 존댓말");
+            assertThat(pet.getGenre()).isEqualTo("느와르");
         }
     }
 

@@ -119,18 +119,18 @@ class HatchFailureIsToldTest {
         @DisplayName("★★ 이름은 겹쳐도 된다 — 실패한 그 이름으로 다시 만들 수 있어야 한다")
         void sameNameCanBeUsedAgain() {
             ZzalPet failed = draft();
-            failed.character("여울", null, List.of(Personality.GENTLE), null, T0);
+            failed.character("여울", null, List.of(Personality.GENTLE), null, null, null, T0);
             failed.markHatchFailed();
 
             // 같은 사람이 같은 이름으로 새 초안을 만든다
             ZzalPet again = draft();
-            assertThatCode(() -> again.character("여울", null, List.of(Personality.GENTLE), null, T0))
+            assertThatCode(() -> again.character("여울", null, List.of(Personality.GENTLE), null, null, null, T0))
                     .doesNotThrowAnyException();
             assertThat(again.getName()).isEqualTo("여울");
 
             // 다른 사람이 같은 이름을 쓰는 것도 막지 않는다
             ZzalPet other = ZzalPet.draft(999L, "images/zzal/other", T0);
-            assertThatCode(() -> other.character("여울", null, List.of(Personality.GENTLE), null, T0))
+            assertThatCode(() -> other.character("여울", null, List.of(Personality.GENTLE), null, null, null, T0))
                     .doesNotThrowAnyException();
         }
 

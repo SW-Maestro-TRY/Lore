@@ -155,7 +155,8 @@ public class PetService {
      */
     @Transactional
     public ZzalPet character(Long userId, Long petId, String name, String note,
-                             java.util.List<Personality> personalities, String world, Instant now) {
+                             java.util.List<Personality> personalities,
+                             String world, String tone, String genre, Instant now) {
         ZzalPet pet = findMine(userId, petId);
         // ★★ 굽기가 실패한 펫을 "이미 이름을 지었다" 로 답하면 안 된다 — 이름을 방금 처음 지은
         //   사람에게 사실과 정반대로 말하게 되고, 다음에 무엇을 해야 하는지도 알 수 없다.
@@ -166,7 +167,7 @@ public class PetService {
         if (!pet.isDraft()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_DRAFT);
         }
-        pet.character(name, note, personalities, world, now);
+        pet.character(name, note, personalities, world, tone, genre, now);
 
         String version = pet.getHatchPipelineVersion() != null
                 ? pet.getHatchPipelineVersion() : hatchService.currentVersion();

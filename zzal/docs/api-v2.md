@@ -33,13 +33,14 @@
 
 | 호출 | 요청 | 응답 | 거절 |
 |---|---|---|---|
-| `POST /` | `{name ≤12, note? ≤200, imageKey}` | `Created{petId,name,phase,hatchStartedAt,estimatedSeconds}` | `INVALID_UPLOAD_KEY` `UPLOAD_KEY_ALREADY_USED` `ZZAL_PET_ALREADY_HATCHING` `ZZAL_PET_LIMIT_REACHED` |
+| `POST /` | `{name ≤12, note? ≤200, world? ≤100, tone? ≤32, genre? ≤32, imageKey}` | `Created{petId,name,phase,hatchStartedAt,estimatedSeconds}` | `INVALID_UPLOAD_KEY` `UPLOAD_KEY_ALREADY_USED` `ZZAL_PET_ALREADY_HATCHING` `ZZAL_PET_LIMIT_REACHED` |
 | `GET /` | | `PetDetail[]` | |
 | `GET /{id}` | | `PetDetail` | `ZZAL_PET_NOT_FOUND` |
 | `POST /{id}/release` | | `PetDetail`(phase DEAD) | `ZZAL_PET_RELEASE_NOT_ALLOWED` |
 
 - 조회 = settle(흐른 시간 반영) + **그날 처음 열었으면 함께한 날 +1** + 떠남 예고 중이면 즉시 취소. 조회도 상태를 바꾸므로 읽기 전용 트랜잭션이 아니다.
 - 이름 12자(정본 15장). v1의 20자에서 줄었다.
+- **말투·장르**(2026-09-13 추가)는 자유 입력 32자. **대사 톤에만** 쓰고 그림 생성에는 넣지 않는다. 상한은 `ZzalRules.TONE_MAX_CHARS`·`GENRE_MAX_CHARS` 하나가 요청 검증·엔티티·DB 칸·이 표를 함께 정한다 — 갈리면 검증을 통과한 입력이 저장에서 터져 사용자에게 500 만 간다.
 
 ### 1.2 돌봄
 

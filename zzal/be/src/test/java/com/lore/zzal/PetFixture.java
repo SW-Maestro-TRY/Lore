@@ -39,7 +39,7 @@ public final class PetFixture {
     /** 이름까지 받은, 격자를 굽는 중인 펫. */
     public static ZzalPet hatching(Long userId, String name, String note, String imageKey, Instant now) {
         ZzalPet pet = ZzalPet.draft(userId, imageKey, now);
-        pet.character(name, note, null, null, now);
+        pet.character(name, note, null, null, null, null, now);
         return pet;
     }
 }

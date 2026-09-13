@@ -28,7 +28,7 @@ public final class PetRequests {
      * 캐릭터 정보. <b>이름 말고는 전부 선택</b>이다.
      *
      * ★ 그림 생성에 들어가는 것은 {@code note} 뿐이다(정본 1.6). 성격·말투·장르·세계관은
-     *   <b>대사 톤에만</b> 쓰인다.
+     *   <b>대사 톤에만</b> 쓰인다 — 그래서 저장만 하고 격자 프롬프트에는 넘기지 않는다.
      */
     @Schema(description = "캐릭터 정보 등록 요청. 이름 외 항목은 선택이다")
     public record Character(
@@ -45,6 +45,14 @@ public final class PetRequests {
 
             @Schema(description = "세계관·설정. 자유 입력이며 대사 생성에만 사용한다", example = "비 오는 도시의 탐정")
             @Size(max = ZzalRules.WORLD_MAX_CHARS) String world,
+
+            @Schema(description = "말투. 자유 입력이며 대사 톤에만 사용한다(그림에는 들어가지 않는다)",
+                    example = "무뚝뚝한 존댓말")
+            @Size(max = ZzalRules.TONE_MAX_CHARS) String tone,
+
+            @Schema(description = "장르. 자유 입력이며 대사 톤에만 사용한다(그림에는 들어가지 않는다)",
+                    example = "느와르")
+            @Size(max = ZzalRules.GENRE_MAX_CHARS) String genre,
 
             @Schema(description = "추가 정보. 저장만 하고 나중에 채팅에서 쓴다", example = "왼쪽 눈에 흉터")
             @Size(max = 200) String note) {

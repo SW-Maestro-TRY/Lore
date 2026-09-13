@@ -243,7 +243,7 @@ public abstract class ZzalItSupport {
         Instant now = Instant.now();
         ZzalPet pet = transactions.execute(status -> {
             ZzalPet created = petRepository.save(ZzalPet.draft(userId, newUploadedImageKey(userId), now));
-            created.character("여울", null, null, null, now);
+            created.character("여울", null, null, null, null, null, now);
             created.markAlive("images/zzal/pets/sheet.png", "(시험용 정체성 문단)", now);
             created.skipTutorial(now);
             ReflectionTestUtils.setField(created, "chatAnswers", 12);

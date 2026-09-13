@@ -245,7 +245,7 @@ class TransactionBoundariesIT extends ZzalItSupport {
         Instant now = Instant.now();
         return transactions.execute(status -> {
             ZzalPet pet = petRepository.save(ZzalPet.draft(userId, newUploadedImageKey(userId), now));
-            pet.character("여울", null, null, null, now);
+            pet.character("여울", null, null, null, null, null, now);
             pet.markAlive("images/zzal/pets/sheet.png", "(시험용 정체성 문단)", now);
             pet.skipTutorial(now);
             return pet.getId();

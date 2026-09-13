@@ -270,6 +270,21 @@ public final class ZzalRules {
     /** 세계관 한 줄 100자. 성격 그룹은 5개 고정(GENTLE·LIVELY·SHY·CLINGY·COOL). */
     public static final int WORLD_MAX_CHARS = 100;
 
+    /**
+     * 말투·장르 한 줄 32자.
+     *
+     * <h3>★ 이 상수 하나가 네 곳을 묶는다</h3>
+     * 요청 검증({@code @Size}) · 엔티티 칸 길이({@code @Column}) · DB 칸 길이(마이그레이션) · 문서.
+     * 이 넷이 갈리면 <b>검증은 통과하고 저장에서 터진다</b> — 사용자에게는 "너무 깁니다" 가 아니라
+     * 그냥 500 이 가고, 짧게 줄이면 되는 입력인데 앱이 고장 난 것처럼 보인다(세계관 칸에서 실제로 났다).
+     *
+     * ★ 둘 다 <b>대사 톤에만</b> 쓴다. 그림 생성에는 들어가지 않는다.
+     */
+    public static final int TONE_MAX_CHARS = 32;
+
+    /** 장르 한 줄 32자. {@link #TONE_MAX_CHARS} 와 같은 이유로 한 상수다. */
+    public static final int GENRE_MAX_CHARS = 32;
+
     // ── 11장 장면 ─────────────────────────────────────────────────────────
 
     /** 12분마다 동작·위치·빛을 다시 굴린다. 대기 풀 = 기본 자세 60% / 앉아 쉬기·웃는 대기 40%. */

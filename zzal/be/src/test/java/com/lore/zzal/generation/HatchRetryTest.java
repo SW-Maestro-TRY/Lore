@@ -72,7 +72,7 @@ class HatchRetryTest {
         ZzalPetRepository petRepository = mock(ZzalPetRepository.class);
 
         ZzalPet pet = ZzalPet.draft(1L, "images/zzal/src", T0);
-        pet.character("여울", null, null, null, T0);
+        pet.character("여울", null, null, null, null, null, T0);
         when(petRepository.findById(PET)).thenReturn(Optional.of(pet));
         when(recorder.loadSucceeded(anyLong(), any(), anyString())).thenReturn(List.of());
         when(recorder.discardSucceeded(anyLong(), any(), anyString())).thenReturn(1);

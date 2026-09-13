@@ -518,6 +518,19 @@ public class ZzalPet {
     @Column(length = ZzalRules.WORLD_MAX_CHARS)
     private String world;
 
+    /**
+     * 말투 — <b>대사 톤에만</b> 쓴다. 그림 생성에는 안 들어간다.
+     *
+     * ★ 상한은 {@link ZzalRules#TONE_MAX_CHARS} 하나로 묶는다 — 요청 검증·이 칸·DB 칸·문서가 갈리면
+     *   검증을 통과한 입력이 저장에서 터지고 사용자는 500 만 본다.
+     */
+    @Column(length = ZzalRules.TONE_MAX_CHARS)
+    private String tone;
+
+    /** 장르 — 말투와 같이 대사 톤에만 쓴다. */
+    @Column(length = ZzalRules.GENRE_MAX_CHARS)
+    private String genre;
+
     @Column(length = 32)
     private String background;
 
@@ -562,14 +575,17 @@ public class ZzalPet {
      * ★ 그림 생성에 들어가는 것은 {@code note}(자유 메모) 뿐이다(정본 1.6). 성격·말투·장르·세계관은
      *   <b>대사 톤에만</b> 쓰인다 — 격자 프롬프트의 정체성 문단은 그림에서 뽑는다.
      */
-    public void character(String name, String note, List<Personality> personalities, String world, Instant now) {
+    public void character(String name, String note, List<Personality> personalities,
+                          String world, String tone, String genre, Instant now) {
         if (phase != PetPhase.DRAFT) {
             throw new IllegalStateException("초안이 아니다");
         }
         this.name = name;
         this.note = note;
         setPersonalities(personalities);
-        this.world = world == null || world.isBlank() ? null : world;
+        this.world = blankToNull(world);
+        this.tone = blankToNull(tone);
+        this.genre = blankToNull(genre);
         this.phase = PetPhase.HATCHING;
         // ★ hatchStartedAt 은 여기서 다시 잡지 않는다(1.9) — 굽기는 그림을 올릴 때 이미 시작했다.
         //   여기로 당기면 거의 끝난 부화에 "10분 남음" 이 다시 뜨고, 멈춘 알 복구도 12분을 더 기다린다.
@@ -1738,6 +1754,11 @@ public class ZzalPet {
         return List.copyOf(all);
     }
 
+    /** 안 쓴 칸은 빈 문자열이 아니라 없음으로 적는다 — 화면이 "없음" 과 "빈 줄" 을 가르지 않아도 되게. */
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+
     public void choosePersonality(List<Personality> personalities, String world) {
         setPersonalities(personalities);
         this.world = world == null || world.isBlank() ? null : world;
@@ -2064,6 +2085,14 @@ public class ZzalPet {
 
     public String getWorld() {
         return world;
+    }
+
+    public String getTone() {
+        return tone;
+    }
+
+    public String getGenre() {
+        return genre;
     }
 
     public String getBackground() {

@@ -101,7 +101,7 @@ public class PetController {
                                                        @Valid @RequestBody PetRequests.Character request) {
         Instant now = Instant.now();
         ZzalPet pet = petService.character(userId, petId, request.name(), request.note(),
-                request.picked(), request.world(), now);
+                request.picked(), request.world(), request.tone(), request.genre(), now);
         return ApiResponse.ok(PetResponses.Created.from(pet, ZzalRules.HATCH_ESTIMATE.toSeconds()));
     }
 
