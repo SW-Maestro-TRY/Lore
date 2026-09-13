@@ -8,7 +8,10 @@
 //   `prop: null` 은 **"이 상황에는 소품이 없다"는 확정**이다. 값이 없어서 빈 것이 아니다.
 //   `pose: '*'` 는 자세와 무관하게 깔리는 것(흔적·하루 소품·가방·엽서틀·매트).
 //   `prop` 에 `|` 가 있으면 **그중 하나를 고른다**(하루 소품).
-//   `stages` 는 그 상황에서 쓰는 단계와 **순서**다(주먹밥 3->2->1 · 거품 1->2->3).
+//   `stages` 는 그 상황에서 쓰는 단계와 **순서**다(주먹밥 3알->1알 · 거품 조금->가득).
+//   ⚠️ **번호가 곧 양은 아니다.** `n` 이 무엇을 세는지는 소품마다 다르다 — 규격 `note` 와 manifest 비고를
+//      읽고 정한다. 주먹밥은 `n` 이 **파일 번호**라 `bowl_1` 이 3알이고 `bowl_3` 이 1알이다(줄어들려면 1->2->3).
+//      거품·먼지는 `n` 이 **진행 단계**라 1->2->3 이 그대로 차오름·흩날림이다.
 //
 // 층(`layer`) — 겹침 규칙이 여기서 갈린다
 //   floor·room·screen 은 서로 겹쳐도 된다. **char 만 한 자리(anchor)에 하나**다.
@@ -38,8 +41,17 @@ export const SITUATION_TABLE: readonly SituationRow[] = [
   { id: "bath_l1_foam", pose: "base", prop: "bath", anchor: "screen_bottom", layer: "screen", priority: null, status: "confirmed", stages: [1, 2, 3] },
   /** 목욕하기 2단계 — 물줄기가 위에서 헹군다 */
   { id: "bath_l1_rinse", pose: "base", prop: "shower", anchor: "screen_full", layer: "screen", priority: null, status: "pending" },
-  /** 밥 주기 — eat_rice 잠김. 머리 옆은 비운다 */
-  { id: "feed_rice_l1", pose: "eat", prop: "bowl", anchor: "hand_front", layer: "char", priority: null, status: "confirmed", stages: [3, 2, 1] },
+  /**
+   * 밥 주기 — eat_rice 잠김. 머리 옆은 비운다.
+   *
+   * ⚠️ **정본 JSON 은 아직 `[3, 2, 1]` 이고, 그대로 옮기면 밥이 먹을수록 늘어난다**(2026-09-13 실측).
+   *   `stages[].n` 이 **밥알 개수가 아니라 파일 번호**이기 때문이다 —
+   *   manifest.tsv: `bowl_1` = 3알(가득) · `bowl_2` = 2알 · `bowl_3` = 1알(거의 빔). 그림으로도 확인했다.
+   *   상훈님이 말씀하신 "주먹밥 3 -> 2 -> 1" 은 **밥알 개수**이므로 파일 차례로는 `1 -> 2 -> 3` 이다.
+   *   실제로 `[3,2,1]` 로 돌렸더니 58 -> 107 -> 124px 로 **커졌다.**
+   *   ★ 상황표 JSON 이 같은 값으로 고쳐지면 이 주석과 함께 그냥 옮겨 적으면 된다.
+   */
+  { id: "feed_rice_l1", pose: "eat", prop: "bowl", anchor: "hand_front", layer: "char", priority: null, status: "confirmed", stages: [1, 2, 3] },
   /** 간식 주기 — eat_snack 잠김. 머리 옆은 비운다 */
   { id: "feed_snack_l1", pose: "eat", prop: "snack", anchor: "hand_front", layer: "char", priority: null, status: "pending" },
   /** 약 주기 — 2층으로 안 간다(아프게 해야 상을 받는 구조가 되므로) */
