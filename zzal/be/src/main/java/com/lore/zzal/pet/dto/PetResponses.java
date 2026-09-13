@@ -632,7 +632,7 @@ public final class PetResponses {
 
         /**
          * 기본 행동 그림 — v2 이후는 {@code basic/{판}/{key}.webp}, v1 부화는 8상태 파일명으로 폴백.
-         * 선물이거나 v1 에 없는 자세(아픔·부르기)면 null → 화면 폴백.
+         * 선물이거나, v1 에 없는 자세(아픔·부르기)이거나, <b>아직 한 판도 굽지 않았으면</b> null.
          *
          * <h3>★★ 잠겨 있어도 주소를 준다(명세 7-3)</h3>
          * 2층 8종은 <b>부화 때 1층과 함께</b> 구워지므로, 잠겨 있어도 그림은 이미 있다.
@@ -640,7 +640,26 @@ public final class PetResponses {
          * 구분할 수 없다.</b> 화면이 "2층을 안 배웠으니 1층 + 소품으로 그리자" 를 고르려면
          * 잠겼다는 것({@code unlocked:false})과 그 그림을 <b>둘 다</b> 알아야 한다.
          *
-         * ★ 선물만 여전히 null 이다 — 선물은 기본 그림이 아니라 16프레임 움짤이고,
+         * <h3>★★ 판이 0 이면 null — {@code null} 의 뜻은 "그림이 없다" 다</h3>
+         * 그러니 이 칸의 {@code null} 은 <b>"아직 안 배웠다" 가 아니라 "올라간 파일이 없다"</b> 이고,
+         * "안 배웠다" 는 {@code unlocked:false} 가 따로 말한다. 두 뜻을 한 칸에 겹치지 않는다.
+         *
+         * <p>{@code basicRound == 0} 은 <b>한 판도 구운 적이 없다</b>는 뜻이다(첫 후처리가 1 로 올린다).
+         * 그런 펫에게 주소를 주면 S3 에 없는 파일을 가리키게 되고, 화면은 <b>주소가 왔으니 그림이
+         * 있겠지</b> 하고 대체 그림을 띄울 기회를 놓쳐 빈 무대를 그린다. 오류는 어디에서도 안 난다.
+         *
+         * <h3>⚠️ 전제 — 배포 시점에 zzal 데이터를 비운다</h3>
+         * {@code basicRound == 0} 은 사실 두 가지를 한꺼번에 뜻한다. (1) 판 번호 규약 <b>이전</b>에
+         * 만들어진 옛 펫 — 그들은 판 칸 없는 옛 주소({@code .../basic/{key}.webp})에 파일이 실제로
+         * 있다. (2) 아직 한 장도 굽지 않은 펫 — 어느 주소에도 파일이 없다. 행만 봐서는 둘을 못 가른다.
+         *
+         * <p>여기서는 (2) 를 택했다. 그래서 <b>(1) 의 옛 펫은 그림이 화면에서 사라진다</b>
+         * (이 갈래를 쓰는 옛 펫이 314 마리 있었다). 그래도 되는 이유는 이 판을 올릴 때 zzal 데이터를
+         * <b>비우기로 정해져 있기 때문</b>이다 — 비우면 판이 0 인 행은 (2) 하나만 남는다.
+         * <b>비우지 않고 배포하면 그 옛 펫들이 빈 무대가 된다.</b> 소급이 필요해지면
+         * 여기서 가르지 말고 "옛 주소에 파일이 있다" 를 말하는 칸을 따로 두어야 한다.
+         *
+         * ★ 선물은 판과 무관하게 null 이다 — 선물은 기본 그림이 아니라 16프레임 움짤이고,
          *   그 주소는 {@code advanced.imageKey} 로 나간다. 여기서 기본 자리를 가리키면
          *   <b>없는 파일</b>을 주게 된다.
          *
@@ -652,7 +671,11 @@ public final class PetResponses {
                 return null;
             }
             if (v2) {
-                return MotionImageKeys.basic(pet.getId(), pet.getBasicRound(), spec.key());
+                // ★ 앵커와 같은 기준이다 — anchorsKey 도 판이 0 이면 null 을 준다. 갈리면
+                //   "그림은 없는데 그 그림을 설명하는 앵커는 있다" 는 앞뒤 안 맞는 응답이 나간다.
+                return pet.getBasicRound() > 0
+                        ? MotionImageKeys.basic(pet.getId(), pet.getBasicRound(), spec.key())
+                        : null;
             }
             return spec.hasLegacyFile()
                     ? MotionImageKeys.legacyState(pet.getId(), spec.legacyFile())

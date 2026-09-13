@@ -84,26 +84,58 @@ class PetDetailTest {
     }
 
     @Test
-    @DisplayName("v2 부화 펫은 basic/{key}.webp 규약")
+    @DisplayName("v2 부화 펫은 basic/{판}/{key}.webp 규약")
     void v2ImageKeys() {
         ZzalPet pet = baby();
         pet.setHatchPipelineVersion("v2");
+        // ★ 판을 넣어야 하는 시험이 됐다 — 판이 0 이면 "아직 한 장도 안 구웠다" 라 키가 아예 안 나간다.
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
-        assertThat(d.motions().get(0).basicImageKey()).endsWith("/basic/base.webp");
-        assertThat(d.motions().get(4).basicImageKey()).endsWith("/basic/sick.webp");
+        assertThat(d.motions().get(0).basicImageKey()).endsWith("/basic/1/base.webp");
+        assertThat(d.motions().get(4).basicImageKey()).endsWith("/basic/1/sick.webp");
     }
 
     @Test
-    @DisplayName("★ v4 부화 펫도 basic/{key}.webp 규약 — 옛 폴백으로 조용히 떨어지지 않는다")
+    @DisplayName("★ v4 부화 펫도 basic/{판}/{key}.webp 규약 — 옛 폴백으로 조용히 떨어지지 않는다")
     void v4ImageKeys() {
         ZzalPet pet = baby();
         pet.setHatchPipelineVersion("v4");
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
 
         // "v2" 만 보고 판단하면 v4 펫은 옛 8상태 파일명으로 떨어져 그림이 하나도 안 뜬다 —
         // 빌드·기동·부화가 전부 성공한 뒤 화면에서만 드러나는 종류의 어긋남이다.
-        assertThat(d.motions().get(0).basicImageKey()).endsWith("/basic/base.webp");
-        assertThat(d.motions().get(4).basicImageKey()).endsWith("/basic/sick.webp");
+        assertThat(d.motions().get(0).basicImageKey()).endsWith("/basic/1/base.webp");
+        assertThat(d.motions().get(4).basicImageKey()).endsWith("/basic/1/sick.webp");
+    }
+
+    @Test
+    @DisplayName("★★ 한 장도 굽지 않은 펫(판 0)은 그림 주소를 안 준다 — 없는 파일을 가리키지 않는다")
+    void unbakedPetCarriesNoBasicImageKey() {
+        ZzalPet pet = baby();
+        pet.setHatchPipelineVersion("v4");
+        // 판 0 = 후처리가 한 번도 안 돌았다(첫 후처리가 1 로 올린다).
+
+        PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
+
+        // 주소를 주면 화면은 "주소가 왔으니 그림이 있겠지" 하고 대체 그림을 띄울 기회를 놓친다.
+        // 오류는 서버에도 화면에도 안 난다 — 빈 무대로만 드러난다.
+        assertThat(d.motions().get(0).key()).isEqualTo("base");
+        assertThat(d.motions().get(0).basicImageKey()).isNull();
+        assertThat(d.motions()).allSatisfy(m -> assertThat(m.basicImageKey()).isNull());
+        // 앵커도 같은 기준이다 — 그림이 없는데 그 그림을 설명하는 앵커만 있을 수는 없다.
+        assertThat(d.anchorsKey()).isNull();
+
+        // ★ 판이 한 번이라도 올라가면 그때부터 준다 — 같은 펫, 같은 버전, 판만 다르다.
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
+        PetResponses.Detail baked = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
+        assertThat(baked.motions().get(0).basicImageKey()).isEqualTo("images/zzal/pets/7/basic/1/base.webp");
+
+        // ★ 잠긴 2층도 판만 있으면 주소가 온다 — null 의 뜻은 "안 배웠다" 가 아니라 "그림이 없다" 다.
+        PetResponses.Motion lockedSecondFloor = baked.motions().get(8);
+        assertThat(lockedSecondFloor.key()).isEqualTo("eat_rice");
+        assertThat(lockedSecondFloor.unlocked()).isFalse();
+        assertThat(lockedSecondFloor.basicImageKey()).isEqualTo("images/zzal/pets/7/basic/1/eat_rice.webp");
     }
 
     @Test
