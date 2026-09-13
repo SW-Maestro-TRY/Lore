@@ -40,10 +40,12 @@ class JobCancelTest {
         credits = mock(CreditGate.class);
         guests = mock(GuestGate.class);
         harness = mock(HarnessProcess.class);
-        when(harness.dir()).thenReturn(Path.of("haeun/new_harness"));
+        when(harness.dir()).thenReturn(Path.of("webtoon/ai/new_harness"));
+        // 작품이 쌓이는 자리는 HarnessProcess 하나가 정한다 — 받아 쓰기만 한다.
+        when(harness.runsDir()).thenReturn(Path.of("runs").toAbsolutePath());
         runner = new JobRunner(harness, mock(JobProgress.class), store,
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
-                credits, guests, "runs", "jobs");
+                credits, guests, "jobs");
     }
 
     private WebtoonJob 작업(JobStatus status) {

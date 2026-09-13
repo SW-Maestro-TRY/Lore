@@ -1,6 +1,7 @@
 package com.lore.webtoon.work;
 
 import com.lore.webtoon.art.PageStore;
+import com.lore.webtoon.job.AfterRun;
 import com.lore.webtoon.runs.RunService;
 import com.lore.webtoon.art.PrivateArt;
 import com.lore.webtoon.credit.BrowserLink;
@@ -43,6 +44,7 @@ public class MyWebtoonService {
     private final WorkLedger ledger;
     private final PageStore pages;
     private final RunService runs;
+    private final AfterRun after;
 
     /**
      * 하네스가 준 JSON 을 읽을 때만 쓴다.
@@ -55,7 +57,9 @@ public class MyWebtoonService {
     private final ObjectMapper mapper = new ObjectMapper();
 
     public MyWebtoonService(BrowserLinkRepository links,
-                            WorkLedger ledger, PageStore pages, RunService runs) {
+                            WorkLedger ledger, PageStore pages, RunService runs,
+                            AfterRun after) {
+        this.after = after;
         this.links = links;
         this.ledger = ledger;
         this.pages = pages;
@@ -185,6 +189,48 @@ public class MyWebtoonService {
                     runId, isPublic, e);
         }
         return isPublic;
+    }
+
+    /**
+     * <b>그림을 다시 올린다.</b> 다 그려졌는데 결과 화면이 비어 있는 작품을 살린다.
+     *
+     * <h2>왜 필요한가</h2>
+     *
+     * 다 그린 뒤 올리는 걸음은 실패해도 만들기를 되돌리지 않는다 — 그림은 이미
+     * 나왔고, 다 만든 사람에게 "실패했습니다" 를 보여줄 수 없기 때문이다
+     * ({@link AfterRun#finish}). 그런데 그러고 나면 그림이 S3 에도 DB 에도 없어서
+     * <b>결과 화면이 통째로 비고, 되살릴 길이 없었다.</b> 돈은 이미 다 나간
+     * 작품이다(2026-09-12 배포에서 실제로 한 편이 그랬다).
+     *
+     * <h2>돈이 안 나간다</h2>
+     *
+     * 다시 <b>그리지</b> 않는다. 이미 그려져 있는 그림을 올리고 적기만 한다.
+     * 여러 번 눌러도 된다 — 이미 적힌 장과 이미 올린 비용은 건너뛴다.
+     *
+     * <h2>왜 「내」 주소에 있나</h2>
+     *
+     * 남의 작품을 올리게 둘 이유가 없고, 이 일은 S3 를 쓴다. 공개 전환과 같은
+     * 기준(내 계정에 이어진 브라우저가 만든 것)으로 가린다.
+     *
+     * @return 이번에 새로 적은 그림 줄 수. 0 이면 이미 다 적혀 있었다는 뜻이다
+     * @throws BusinessException 내 작품이 아니거나, 올릴 것을 만들지 못했을 때
+     */
+    @Transactional
+    public int reupload(Long userId, String runId) {
+        if (!ledger.mayChange(runId, userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 다시 올릴 수 있습니다");
+        }
+        try {
+            return after.recover(runId, line -> log.info("[다시 올리기] {}", line));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "그림을 다시 올리지 못했습니다");
+        } catch (Exception e) {                     // noqa: 사람에게는 한 문장, 사유는 로그로
+            /* **여기서는 삼키지 않는다.** 「다시 올리기」를 눌렀는데 아무 일도
+               안 일어나면 그 사람은 두 번째로 속는 것이다. */
+            log.error("그림을 다시 올리지 못했습니다 (run={})", runId, e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "그림을 다시 올리지 못했습니다");
+        }
     }
 
     /** 저장 전에 다듬는다 — 길이를 넘거나 이상한 글자가 섞인 값은 안 받는다. */

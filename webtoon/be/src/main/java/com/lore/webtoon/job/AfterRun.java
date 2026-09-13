@@ -1,5 +1,6 @@
 package com.lore.webtoon.job;
 
+import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PageUploader;
 import com.lore.webtoon.usage.UsageService;
 import com.lore.webtoon.work.WorkLedger;
@@ -7,7 +8,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -15,6 +15,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 
 /**
@@ -43,27 +45,118 @@ public class AfterRun {
 
     private final UsageService usage;
     private final PageUploader uploader;
+    private final PageStore pages;
     private final WorkLedger works;
     private final HarnessProcess harness;
     private final Path runsDir;
+    /**
+     * 한 번 봐 둔 작품. <b>망가진 작품에 매번 파이썬을 띄우지 않으려는 것</b>이다 —
+     * 결과 화면은 0.8초마다 묻는다. 서버를 다시 띄우면 비워지므로, 고친 뒤
+     * 배포하면 저절로 한 번 더 해 본다.
+     */
+    private final Set<String> healed = ConcurrentHashMap.newKeySet();
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public AfterRun(UsageService usage, PageUploader uploader, WorkLedger works,
-                    HarnessProcess harness,
-                    @Value("${lore.webtoon.python.runs-dir:}") String runsDir) {
+    public AfterRun(UsageService usage, PageUploader uploader, PageStore pages,
+                    WorkLedger works, HarnessProcess harness) {
         this.usage = usage;
         this.uploader = uploader;
+        this.pages = pages;
         this.works = works;
         this.harness = harness;
-        this.runsDir = (runsDir == null || runsDir.isBlank()
-                ? harness.dir().resolve("runs")
-                : Path.of(runsDir)).toAbsolutePath().normalize();
+        /* **자리는 HarnessProcess 하나가 정한다.** 여기서 기본값을 또 적으면
+           넷이 같은 문자열을 따로 갖게 되고, 한쪽만 안 고치는 순간 그 걸음만
+           다른 폴더를 본다 — 실제로 AfterRun 이 그래서 비용을 하나도 못 적었다
+           (2026-09-12 배포에서 실측). 바꾸려면 `lore.webtoon.python.runs-dir`. */
+        this.runsDir = harness.runsDir();
     }
 
     /** 다 끝났다. 남길 것을 남긴다. */
     public void finish(String runId, java.util.function.Consumer<String> onLine) {
         cost(runId);
         uploadArt(runId, onLine);
+    }
+
+    /**
+     * <b>다시 남긴다.</b> 그림은 다 그려졌는데 남기는 데서 실패한 작품을 살린다.
+     *
+     * <h2>왜 있나</h2>
+     *
+     * {@link #finish} 는 실패를 삼킨다 — 다 만든 사람에게 "실패했습니다" 를
+     * 보여줄 수 없기 때문이다. 그런데 삼킨 다음이 문제였다: 그림이 S3 에도
+     * DB 에도 없으니 <b>결과 화면이 통째로 비었고, 되살릴 길이 없었다.</b>
+     * 돈은 이미 다 나간 작품이다(2026-09-12 배포에서 실제로 한 편이 그랬다 —
+     * {@code s3_upload.py} 가 지워진 모듈을 부르고 있었다).
+     *
+     * <h2>{@link #finish} 와 무엇이 다른가</h2>
+     *
+     * <b>실패를 삼키지 않는다.</b> 사람이 「다시 올리기」를 눌렀는데 아무 일도
+     * 안 일어나면 두 번째로 속는 것이다. 왜 안 됐는지 그대로 올려 보낸다.
+     *
+     * <h2>다시 눌러도 된다</h2>
+     *
+     * 비용은 (작품, 몇 번째)로 겹치는 것이 걸러지고, 그림은 이미 적힌 장을
+     * 건너뛴다. <b>그리는 일은 다시 하지 않으므로 돈이 안 나간다.</b>
+     *
+     * @return 이번에 새로 적은 그림 줄 수. 0 이면 이미 다 적혀 있었다는 뜻이다
+     */
+    public int recover(String runId, java.util.function.Consumer<String> onLine)
+            throws IOException, InterruptedException {
+        cost(runId);
+        if (!uploader.ready()) {
+            // 로컬에는 버킷이 없다. 하네스 디스크로 화면이 뜨므로 할 일이 없다.
+            return 0;
+        }
+        String prepared = harness.prepareUpload(runId, onLine);
+        return uploader.uploadPrepared(runId, prepared, onLine);
+    }
+
+
+
+    /**
+     * <b>그림이 디스크에는 있는데 안 적혀 있으면, 그 자리에서 적는다.</b>
+     *
+     * <h2>왜 읽는 자리에서 하나</h2>
+     *
+     * 다 그려 놓고 올리는 데서 실패한 작품은 결과 화면이 404 다. 되살리려면
+     * 주인임을 보여야 하는데({@link com.lore.webtoon.work.MyWebtoonService#reupload})
+     * <b>게스트는 주인이 될 수 없다</b> — uid 는 지어낼 수 있어서 믿지 않는다.
+     * 그런데 웹툰 스튜디오는 로그인 없이 끝까지 만들 수 있는 화면이다. 즉
+     * 가장 되살려 줘야 할 사람이 되살릴 수 없었다.
+     *
+     * 그래서 <b>여는 것만으로 낫게</b> 한다. 자기 작품을 열어 보는 사람에게
+     * "로그인하고 이 버튼을 누르세요" 를 시킬 이유가 없다.
+     *
+     * <h2>안전한가</h2>
+     *
+     * 세 가지가 다 맞을 때만 움직인다 — 적힌 그림이 없고, 디스크에 그린 그림이
+     * 있고, 이 작품을 아직 안 해 봤다. 그리는 일은 하지 않으므로 <b>돈이 안
+     * 나간다</b>. 올릴 자리(공개/비공개)는 {@code PageUploader} 가 작품의 공개
+     * 여부를 보고 정하므로, 비공개 작품이 열린 자리에 남지 않는다.
+     *
+     * @return 이번에 되살렸으면 true
+     */
+    public boolean healIfMissing(String runId) {
+        if (runId == null || runId.isBlank() || pages.has(runId)) {
+            return false;
+        }
+        if (!Files.isDirectory(runsDir.resolve(runId).resolve("pages"))) {
+            return false;               // 그린 것이 없다 — 아직 만드는 중이거나 없는 작품
+        }
+        if (!healed.add(runId)) {
+            return false;               // 이미 해 봤다. 또 해도 같은 데서 걸린다
+        }
+        try {
+            int recorded = recover(runId, line -> log.info("[되살리기] {}", line));
+            log.warn("그림이 안 적혀 있어 다시 올렸습니다 (run={}, 적은 줄={})", runId, recorded);
+            return recorded > 0;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (Exception e) {         // noqa: 되살리다 죽어서 화면까지 막으면 더 나쁘다
+            log.error("그림을 되살리지 못했습니다 (run={})", runId, e);
+            return false;
+        }
     }
 
     /**

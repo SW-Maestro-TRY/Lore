@@ -4,6 +4,7 @@ import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PrivateArt;
 import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.credit.GuestGate;
+import com.lore.webtoon.job.AfterRun;
 import com.lore.webtoon.job.JobController;
 import com.lore.webtoon.job.JobService;
 import com.lore.webtoon.job.RunArt;
@@ -77,6 +78,7 @@ class WebtoonGuestAccessTest {
     @MockitoBean BakeService bakeService;
     @MockitoBean StoryStore storyStore;
     @MockitoBean RegenService regenService;
+    @MockitoBean AfterRun afterRun;
     @MockitoBean PrivateArt privateArt;
     @MockitoBean WorkLedger workLedger;
     @MockitoBean JwtProvider jwtProvider;

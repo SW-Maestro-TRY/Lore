@@ -36,6 +36,7 @@ from pathlib import Path
 import runpaths as nh              # 작품 폴더 안에서 무엇이 어디 있는지만 아는 모듈
                                   # (예전엔 landing/newharness_pipeline — 랜딩 웹서버를
                                   #  통째로 끌고 왔다, 2026-09-12에 끊었다)
+from imaging import thumbnail      # 내려보낼 크기로 줄이기 (예전엔 landing/serve)
 
 HERE = Path(__file__).resolve().parent
 
@@ -93,8 +94,6 @@ def prepare_run(run_id: str, on_log=None) -> list[dict]:
     프로세스로 띄운다). 그래서 파일을 네트워크로 넘길 일이 없고, 경로만
     알려 주면 된다.
     """
-    from serve import thumbnail                     # 아래 upload_run 과 같은 이유
-
     out: list[dict] = []
     cache_dir = nh.run_dir(run_id) / "cache"
 
@@ -125,11 +124,6 @@ def upload_run(run_id: str, on_log=None) -> list[dict]:
     """
     if not BUCKET:
         raise RuntimeError("CONTENT_S3_BUCKET 이 비어 있습니다 — 어느 버킷에 올릴지 모릅니다")
-
-    # 줄이는 함수는 **여기서** 가져온다. 파일 맨 위에서 가져오면
-    # newharness_pipeline -> s3_upload -> serve -> newharness_pipeline 으로
-    # 돌아서 서버가 아예 안 뜬다(실제로 그랬다).
-    from serve import thumbnail
 
     s3 = _client()
     out: list[dict] = []

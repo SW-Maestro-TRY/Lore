@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.webtoon.art.PageStore;
+import com.lore.webtoon.job.AfterRun;
 import com.lore.webtoon.story.StoryStore;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -57,6 +58,7 @@ public class RunController {
     private final BakeService bakery;
     private final StoryStore stories;
     private final RegenService regen;
+    private final AfterRun after;
     /* **경계에서는 Map 으로 주고받는다.**
      *
      * 이 앱의 HTTP 변환기는 Jackson 3(tools.jackson) 인데, 얹은 것을 다루는
@@ -68,7 +70,7 @@ public class RunController {
 
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
-                         RegenService regen) {
+                         RegenService regen, AfterRun after) {
         this.runs = runs;
         this.pages = pages;
         this.export = export;
@@ -76,6 +78,7 @@ public class RunController {
         this.bakery = bakery;
         this.stories = stories;
         this.regen = regen;
+        this.after = after;
     }
 
     /**
@@ -165,6 +168,11 @@ public class RunController {
     @Operation(summary = "완성본 한 편")
     @GetMapping("/{runId}/result")
     public ResponseEntity<Map<String, Object>> result(@PathVariable String runId) {
+        /* **여는 것만으로 낫게 한다.** 다 그려 놓고 올리는 데서 실패한 작품은
+           여기서 404 가 된다. 그림이 디스크에 있으면 그 자리에서 적고 간다 —
+           거의 매번 아무 일도 안 한다(적혀 있으면 바로 돌아온다). 다시 그리지
+           않으므로 돈이 안 나간다. 자세한 것은 AfterRun#healIfMissing. */
+        after.healIfMissing(runId);
         Map<String, Object> found = runs.result(runId);
         return found == null
                 ? ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"))

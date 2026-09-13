@@ -1,6 +1,7 @@
 package com.lore.webtoon.work;
 
 import com.lore.webtoon.art.PageStore;
+import com.lore.webtoon.job.AfterRun;
 import com.lore.webtoon.credit.BrowserLink;
 import com.lore.webtoon.credit.BrowserLinkRepository;
 import com.lore.common.exception.BusinessException;
@@ -15,8 +16,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -41,6 +44,7 @@ class MyWebtoonServiceTest {
     private WorkLedger ledger;
     private PageStore pageStore;
     private RunService runService;
+    private AfterRun after;
     private MyWebtoonService service;
 
     @BeforeEach
@@ -54,7 +58,10 @@ class MyWebtoonServiceTest {
         runService = mock(RunService.class);
         when(runService.cardOf(anyString())).thenReturn(null);
         when(ledger.runIdsOf(anyLong())).thenReturn(List.of());
-        service = new MyWebtoonService(links, ledger, pageStore, runService);
+        /* 다시 올리기가 실제로 무엇을 하는지는 여기서 볼 것이 아니다
+           (AfterRunTest 가 본다). 여기서 보는 것은 **누가 부를 수 있나** 다. */
+        after = mock(AfterRun.class);
+        service = new MyWebtoonService(links, ledger, pageStore, runService, after);
     }
 
     /** 이 작품이 이 사람 것이고, 카드도 만들어진다고 세워 둔다. */
@@ -167,6 +174,40 @@ class MyWebtoonServiceTest {
                 .isInstanceOf(BusinessException.class);
         verify(ledger, never()).setPublic(anyString(), anyBoolean());
         verify(pageStore, never()).moveAll(anyString(), anyBoolean());
+    }
+
+
+    @Test
+    @DisplayName("다시 올리기 — 내 작품이면 다시 그리지 않고 올리기만 한다")
+    void 다시_올리기는_내_것만() throws Exception {
+        when(ledger.mayChange("r1", 7L)).thenReturn(true);
+        when(after.recover(eq("r1"), any())).thenReturn(6);
+
+        assertThat(service.reupload(7L, "r1")).isEqualTo(6);
+        // 그리는 일은 건드리지 않는다 — 이미 돈을 치른 작품이다.
+        verify(after).recover(eq("r1"), any());
+    }
+
+    @Test
+    @DisplayName("다시 올리기 — 남의 작품은 못 부른다")
+    void 남의_작품은_못_올린다() throws Exception {
+        when(ledger.mayChange("남의것", 7L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.reupload(7L, "남의것"))
+                .isInstanceOf(BusinessException.class);
+        verify(after, never()).recover(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("다시 올리기 — 실패를 삼키지 않는다")
+    void 실패를_삼키지_않는다() throws Exception {
+        when(ledger.mayChange("r1", 7L)).thenReturn(true);
+        when(after.recover(eq("r1"), any()))
+                .thenThrow(new IllegalStateException("올릴 그림을 만들지 못했습니다 (exit=1)"));
+
+        /* 눌렀는데 조용히 아무 일도 안 일어나면 그 사람은 두 번째로 속는 것이다. */
+        assertThatThrownBy(() -> service.reupload(7L, "r1"))
+                .isInstanceOf(BusinessException.class);
     }
 
     /** JPA 없이 도는 가짜 저장소. 이 서비스가 쓰는 세 가지만 진짜처럼 군다. */

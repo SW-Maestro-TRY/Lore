@@ -50,6 +50,14 @@ public class HarnessProcess {
      * 걸음마다 따로 넣지 않고 여기 모은 이유는, 한 걸음이라도 빠뜨리면 그
      * 걸음만 다른 폴더를 보기 때문이다 — 다 그려 놓고 올릴 때가 되어서야
      * "그림이 없다" 로 터진다.
+     *
+     * <p><b>이 값을 정하는 곳은 여기 하나다.</b> 이 자리를 봐야 하는 다른
+     * 것들({@link JobRunner} · {@link RunArt} · {@link AfterRun})은 각자
+     * 기본값을 적지 않고 {@link #runsDir()} 로 물어본다 — 예전에는 넷이
+     * 같은 문자열을 따로 적고 있었고, 그중 {@code AfterRun} 하나만 임시
+     * 폴더를 가리키는 옛 기본값으로 남아 있었다. 그래서 <b>비용이 하나도
+     * 안 잡혔다</b>: meta.json 은 멀쩡히 있는데 없는 자리에서 찾으니
+     * "비용 기록이 없습니다" 만 찍고 지나갔다(2026-09-12 배포에서 실측).
      */
     private final Path runsDir;
 
@@ -73,6 +81,11 @@ public class HarnessProcess {
 
     public Path dir() {
         return harnessDir;
+    }
+
+    /** 작품이 쌓이는 자리. 이 자리를 봐야 하는 것들은 전부 여기서 받아 간다. */
+    public Path runsDir() {
+        return runsDir;
     }
 
     /**
