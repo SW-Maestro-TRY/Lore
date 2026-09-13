@@ -3,7 +3,8 @@
 서비스용 후처리 v4 — 격자 한 장을 기본 행동 8종(webp)으로 만든다(1층·2층 같은 스크립트).
 
   python3 service_post.py <격자.png> <출력폴더> [--keys a,b,..] [--postures sick=crouch,..]
-  → 출력폴더/<key>.webp x 8
+                          [--base-anchors <앵커.json> | --base-k N --base-hw N] [--no-anchors]
+  → 출력폴더/<key>.webp x 8  +  출력폴더/anchors.json (1층·2층이 **한 장에 합쳐진다**)
 
   --keys      자바 카탈로그(또는 app.zzal.hatch.states.v4)의 이름을 격자 칸 순서로 넘길 때.
               생략하면 state8_v5.KEYS(= base,eat,joy,sad,sick,pet,hello,sleep)를 쓴다.
@@ -16,7 +17,7 @@
   3  ★격자 구조 이상 — 자르기도 하지 않고 여기서 멈춘다(아래 '게이트' 참고)
   1  그 밖의 실패
 
-v2 대비 바뀐 것 셋
+v2 대비 바뀐 것 넷
 ------------------
 1. **자르기·정렬이 state8_v3 이 아니라 `state8_v5`** 다. 2026-09-12 1층 v4 5캐릭터 검수에서
    확정한 바로 그 조합이고, 이 폴더의 state8_v3/v4/v5 는 실험본과 **바이트 단위로 같다.**
@@ -46,6 +47,32 @@ v2 대비 바뀐 것 셋
      그대로 두어야 재현이 된다.
    · 지운 조각은 한 줄씩 로그에 남긴다 — 조용히 지우면 '내 머리카락'을 지워도 안 보인다.
 
+4. **`anchors.json` 을 webp 옆에 같이 낸다**(`anchors.py`).
+   화면의 머리 앵커는 캐릭터 상자 위에서 12% 고정이었다. 서 있을 때는 맞지만 `sick`(웅크림)은
+   정수리가 109px, `sleep`(눕기)은 205px 어긋나 **해골이 머리 위 허공에 떴다.**
+   상자 비율이 아니라 그 자세의 실루엣을 **실제로 재서** 내려 주는 값이 이 파일이다.
+   · 형식 정본 = `contract/소품-앵커-자세별-v1.json`. 프론트·백엔드가 이미 합의한 그 모양이다.
+   · **그림은 한 픽셀도 안 건드린다.** webp 는 이 변경 전후로 바이트까지 같다 —
+     앵커는 다 만들어진 f1 프레임을 **읽기만** 한다.
+   · 모델(RTMPose)은 안 쓴다. 부위 트래킹 실측에서 `sleep` 이 오차 27.6px 로 무너졌다.
+   · ★**1층과 2층이 같은 자리로 간다**(S3 `images/zzal/pets/<id>/basic/` — PostProcessStep 규약).
+     그냥 쓰면 나중에 도는 2층이 1층 여덟 자세를 **지운다.** 그래서 출력 폴더에 이미 있으면
+     **합쳐 쓴다**(`merge_into`) — 한 캐릭터의 앵커 한 장에 자세 16칸이 모이는 것이
+     정본의 모양이기도 하다.
+     ⚠️자바는 **호출마다 빈 임시 폴더**를 쓴다(`PythonPostProcessor`). 2층에서 합쳐지게 하려면
+       자바가 기존 `basic/anchors.json` 을 그 폴더에 **내려받아 두거나** `--base-anchors` 로
+       경로를 넘겨야 한다. 안 해 주면 2층은 K·Hw 를 못 찾아 **멈춘다**(조용히 안 틀린다).
+   · ★`K`(머리끝~발끝)·`Hw`(머리 폭)는 **base 한 자세에서만** 온다. 소품 규격이 전부 이 둘을
+     단위로 쓰는데 **2층 격자에는 base 칸이 없다.** 그래서 이 순서로 찾는다 —
+     `--base-anchors` → `--base-k`/`--base-hw` → `--keys` 안의 `base` 칸 → **출력 폴더에
+     이미 있는 anchors.json**. 넷 다 없으면 **멈춘다.**
+     '없으면 첫 칸으로 대신 재자' 는 안 넣었다 — 통과는 하고 캐릭터마다 소품이 몇 % 씩
+     어긋나는데 그건 화면을 나란히 놓고 봐야만 드러난다.
+   · 한 자세를 못 재면(본체가 없음) 그 칸만 `null` 로 두고 이름을 `"missing"` 에 적는다.
+     파일 전체는 나간다 — 나머지 일곱 자세가 살고, 프론트가 그 한 칸만 옛 폴백으로 받는다.
+     ★조용히 빼면 프론트는 '없는 자세'와 '못 잰 자세'를 구별할 길이 없다.
+   · `--no-anchors` 로 끌 수 있다. 그림만 다시 굽는 자리(재처리)를 위한 문이고, 기본은 켜짐이다.
+
 ★ 키 이름이 곧 파일 이름이고, 화면과 카탈로그가 이 이름으로 찾는다. 한쪽만 바꾸면
   **엉뚱한 그림이 엉뚱한 상태로** 들어가는데 그건 화면을 봐야만 드러난다.
   그래서 자바가 이름을 넘길 길(--keys)을 열어 두고, 기본값은 state8_v5 한 곳에서만 온다.
@@ -72,7 +99,8 @@ from scipy import ndimage
 
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
-import state8_v5  # noqa: E402
+import anchors      # noqa: E402
+import state8_v5    # noqa: E402
 
 GATE = _HERE / "check_grid.py"
 GATE_SPEC = _HERE / "grid_spec.txt"
@@ -92,6 +120,11 @@ ALPHA_ON = 8
 #   이보다 큰 것이 바닥 아래 떠 있으면 그건 티끌이 아니라 결함이므로 지우지 않고 남겨 둔다
 #   — 지워 버리면 결함이 있었다는 사실까지 사라진다.
 SPECK_MAX_RATIO = 0.005
+
+# 앵커 파일 이름. 프론트·백엔드가 이 이름으로 찾는다 — 한쪽만 바꾸면 조용히 못 읽는다.
+ANCHORS_NAME = "anchors.json"
+# K·Hw 를 재는 칸 이름(1층). 2층 --keys 에는 이 이름이 없으므로 다른 데서 받아야 한다.
+BASE_KEY = "base"
 
 
 def run_gate(grid: Path) -> int:
@@ -196,7 +229,53 @@ def resolve_postures(keys, spec):
         raise ValueError(msg) from e
 
 
-def build(grid_path: str, out_dir: str, keys, postures) -> list:
+def resolve_base_scale(a):
+    """`--base-*` 인자만 푼다. 아무것도 없으면 (None, None) — 그림에서 찾는 몫은 build 가 한다."""
+    if a.base_anchors:
+        if a.base_k is not None or a.base_hw is not None:
+            raise ValueError("--base-anchors 와 --base-k/--base-hw 를 같이 줄 수 없습니다 — 하나만")
+        try:
+            return anchors.read_base_scale(a.base_anchors)
+        except (OSError, ValueError) as e:
+            raise ValueError(f"--base-anchors 를 읽지 못했습니다({a.base_anchors}): {e}") from e
+    if (a.base_k is None) != (a.base_hw is None):
+        raise ValueError("--base-k 와 --base-hw 는 짝으로 주어야 합니다")
+    return a.base_k, a.base_hw
+
+
+def find_base_scale(out: Path, keys, base_k, base_hw):
+    """앵커의 단위 K·Hw 를 어디서 받을지 정한다. **어디서 왔는지 한 줄 남긴다.**
+
+    순서는 **명시 > 이 격자 > 옆에 있던 파일**이다.
+      1. `--base-anchors` · `--base-k`/`--base-hw` — 부르는 쪽이 말한 값.
+      2. `--keys` 에 `base` 가 있으면(=1층) **그 칸에서 잰다.** 원본이므로 가장 정확하다.
+      3. 출력 폴더에 이미 있는 `anchors.json`(=2층. 자바가 1층 결과를 내려받아 둔 것).
+      4. 넷 다 없으면 **멈춘다.**
+
+    ⚠️4에서 '그럼 첫 칸으로 대신 재자' 는 안 된다. 2층 `eat_rice` 의 실루엣 높이는 base 와
+      같지 않고, 소품 크기가 전부 K 배수라 캐릭터마다 몇 % 씩 어긋난다. 통과는 하고 결과만
+      조용히 틀어지는 길이다(→ 메모리 `silent-config-mismatch`).
+    """
+    if base_k is not None:
+        print(f"[앵커] K·Hw 는 인자에서 — K={base_k:.0f} Hw={base_hw:.0f}")
+        return base_k, base_hw
+    if BASE_KEY in keys:
+        return None, None                       # build 가 base 칸에서 잰다
+    prior = out / ANCHORS_NAME
+    if prior.exists():
+        k, hw = anchors.read_base_scale(prior)
+        print(f"[앵커] K·Hw 는 출력 폴더의 {ANCHORS_NAME} 에서 — K={k:.0f} Hw={hw:.0f}")
+        return k, hw
+    # 설정이 원인일 때는 설정 이름을 그대로 말한다.
+    raise anchors.AnchorError(
+        f"K·Hw 를 어디서도 못 얻었습니다 — --keys 에 '{BASE_KEY}' 가 없고(--keys = "
+        f"{', '.join(keys)}) {out}/{ANCHORS_NAME} 도 없습니다. 2층이면 1층을 먼저 돌리거나 "
+        f"--base-anchors <1층 결과>/{ANCHORS_NAME} · --base-k/--base-hw 를 주십시오. "
+        f"그림만 필요하면 --no-anchors.")
+
+
+def build(grid_path: str, out_dir: str, keys, postures,
+          want_anchors: bool = True, base_k=None, base_hw=None) -> list:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -211,6 +290,11 @@ def build(grid_path: str, out_dir: str, keys, postures) -> list:
     frames = work / "frames"
     cut = work / "cut"
     made = []
+    # 앵커는 **서비스에 나가는 바로 그 첫 장**에서 잰다(티끌을 지운 뒤의 a1).
+    # 원본 f01.png 에서 재면 지운 티끌이 발 아래 10px 로 남아 발끝이 그만큼 내려간다.
+    first = {}
+    if want_anchors:
+        base_k, base_hw = find_base_scale(out, keys, base_k, base_hw)
     for i, name in enumerate(keys):
         a_path = frames / f"f{i * 2 + 1:02d}.png"
         b_path = frames / f"f{i * 2 + 2:02d}.png"
@@ -232,6 +316,16 @@ def build(grid_path: str, out_dir: str, keys, postures) -> list:
             a1.save(dst, save_all=True, append_images=[b1],
                     duration=state8_v5.FRAME_MS, loop=0, quality=state8_v5.WEBP_Q)
         made.append(str(dst))
+        first[name] = a1
+
+    if want_anchors:
+        data = anchors.build(first, keys, K=base_k, Hw=base_hw, base_key=BASE_KEY)
+        data = anchors.merge_into(out / ANCHORS_NAME, data)   # 1층·2층이 같은 자리로 간다
+        path = anchors.write(data, out / ANCHORS_NAME)
+        got = sum(1 for v in data["poses"].values() if v)
+        print(f"[앵커] {path} — 자세 {got}/{len(data['poses'])} · K={data['K']} Hw={data['Hw']}"
+              + (f" · 못 잼: {', '.join(data['missing'])}" if data.get("missing") else ""))
+        made.append(str(path))
 
     shutil.rmtree(work, ignore_errors=True)   # 중간물은 남기지 않는다
     return made
@@ -245,6 +339,12 @@ def main(argv) -> int:
     ap.add_argument("--postures",
                     help="예(1층): base=standing,...,sick=crouch,...,sleep=lying / "
                          "예(2층): ...,wash=crouch,... — 이름은 --keys 의 것, 여덟 칸 전부")
+    ap.add_argument("--base-anchors",
+                    help="K·Hw 를 물려받을 anchors.json. 생략하면 base 칸 → 출력 폴더의 파일 순")
+    ap.add_argument("--base-k", type=float, help="base 머리끝~발끝(px). --base-anchors 대신 직접 줄 때")
+    ap.add_argument("--base-hw", type=float, help="base 머리 폭(px). --base-k 와 짝으로")
+    ap.add_argument("--no-anchors", action="store_true",
+                    help="anchors.json 을 내지 않는다(그림만 다시 굽는 재처리용)")
     a = ap.parse_args(argv)
 
     grid = Path(a.grid)
@@ -259,11 +359,19 @@ def main(argv) -> int:
         return EXIT_FAIL
     try:
         pmap = resolve_postures(keys, a.postures)
+        base_k, base_hw = resolve_base_scale(a)
     except ValueError as e:
         print(f"✗ {e}", file=sys.stderr)
         return EXIT_FAIL
 
-    for path in build(a.grid, a.out, keys, pmap):
+    try:
+        paths = build(a.grid, a.out, keys, pmap,
+                      want_anchors=not a.no_anchors, base_k=base_k, base_hw=base_hw)
+    except anchors.AnchorError as e:
+        # 앵커가 원인일 때는 그림 탓으로 보이지 않게 말머리를 붙인다.
+        print(f"✗ 앵커: {e}", file=sys.stderr)
+        return EXIT_FAIL
+    for path in paths:
         print(path)
     return EXIT_OK
 
