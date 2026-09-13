@@ -21,11 +21,16 @@ export const POSE_FLOORS: ReadonlyArray<readonly [string, readonly string[]]> = 
   ['2층', ['eat_rice', 'eat_snack', 'sweep', 'wash', 'reply', 'petted', 'startle', 'wake_up']],
 ];
 
-/** 자세 이름 — 개발 화면에만 쓴다(운영 문구가 아니다). */
+/**
+ * 자세 이름 — 개발 화면에만 쓴다(운영 문구가 아니다).
+ * ★ 앨범과 **같은 한 벌**로 맞춰 둔다(제안서 B절 안 1 명사형 · 서버 `MotionCatalog` 와 같은 말).
+ *   개발 화면에서 부르는 이름과 앨범에 걸리는 이름이 다르면 이야기할 때마다 통역이 든다.
+ */
 export const POSE_LABEL: Record<string, string> = {
-  base: '기본', eat: '먹기', joy: '기쁨', sad: '슬픔', sick: '아픔', pet: '교감', hello: '인사', sleep: '자기',
-  eat_rice: '밥', eat_snack: '간식', sweep: '청소', wash: '목욕', reply: '답하기', petted: '쓰다듬받기',
-  startle: '놀람', wake_up: '일어나기',
+  base: '기본', eat: '식사', joy: '기쁨', sad: '슬픔', sick: '아픔', pet: '쓰다듬', hello: '인사', sleep: '잠',
+  eat_rice: '밥 먹기', eat_snack: '간식 먹기', sweep: '청소하기', wash: '목욕하기', reply: '답하기',
+  petted: '쓰다듬 받기', startle: '놀람', wake_up: '일어나기',
+  roll: '구르기', fall_back: '뒤로 넘어지기',
 };
 
 /**

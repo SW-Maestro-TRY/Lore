@@ -214,7 +214,7 @@ export const ALBUM: ReadonlyArray<readonly [string, number]> = [
  * 앨범 벽에 걸리는 동작 여덟 종. **카탈로그 key** 로 적는다(서버 `Motion.key` 와 같은 이름).
  * 여울 실물이 여덟 장뿐이라 그만큼만 돌린다.
  */
-export const FRAME_KEYS = ['joy', 'eat', 'wash', 'base', 'sad', 'practice', 'shy', 'sick'] as const;
+export const FRAME_KEYS = ['joy', 'eat', 'wash', 'base', 'sad', 'hello', 'pet', 'sick'] as const;
 export type FrameKey = (typeof FRAME_KEYS)[number];
 
 /**
@@ -222,18 +222,12 @@ export type FrameKey = (typeof FRAME_KEYS)[number];
  * 부화가 끝나야 '태어났어요' 가 뜨고, 그걸 눌러야 방에 들어온다.
  * 그래서 진짜 방에서 이 중 하나라도 없으면 그건 폴백할 일이 아니라 **고장**이다.
  */
-export const BASIC_KEYS = ['base', 'eat', 'joy', 'sad', 'sick', 'practice', 'shy', 'call'] as const;
-
-/**
- * 같은 여덟 칸의 **v4 새 이름**(`contract/자세-16종-명세.md` 2절). 옛 이름 옆에 나란히 둔다.
- *
- * ★ `BASIC_KEYS` 를 이 값으로 **갈아 끼우지 않는다.** 서버가 아직 옛 이름을 주고 있어서,
- *   바꾸는 순간 `missingBasics` 가 여덟 개를 전부 '없음' 으로 잡아 거짓 경고가 된다.
- *   대신 그림을 찾는 자리가 `motionAliases` 로 **양쪽 이름을 다 두드린다**(useHatch.spriteUrl).
- * ⚠️ 옛 `practice`(훈련)는 v4 에서 빠지고 `sleep`(자기)이 1층으로 올라온다 —
- *   이름만 바뀐 것이 아니라 **칸이 바뀌는 유일한 자리**다. 백엔드 v4 가 올라온 뒤 여기를 정리한다.
- */
-export const BASIC_KEYS_V4 = ['base', 'eat', 'joy', 'sad', 'sick', 'pet', 'hello', 'sleep'] as const;
+// ★ 2026-09-13 — **v4 이름으로 갈아 끼웠다.** 서버가 이미 이 여덟을 주는 것을 실측으로 확인했다
+//   (`GET /me/pets/{id}` 의 `motions[]` seq 1~8 = base·eat·joy·sad·sick·pet·hello·sleep).
+//   전에 옛 이름(`practice`·`shy`·`call`)을 들고 있었던 탓에 `missingBasics` 가 서버에 아예 없는
+//   `practice` 를 **늘 '그림 없음' 으로 잡아** 개발 화면에 상시 거짓 경고를 띄웠다.
+//   ⚠️ 옛 `practice`(훈련)가 빠지고 `sleep`(잠)이 1층으로 올라온 것이 **칸이 바뀐 유일한 자리**다.
+export const BASIC_KEYS = ['base', 'eat', 'joy', 'sad', 'sick', 'pet', 'hello', 'sleep'] as const;
 
 /**
  * 발밑 투명 여백. 그림 한 장은 313 × 350 인데 배경을 지우고 나면 **아래 54px 이 빈칸**이라,

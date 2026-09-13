@@ -133,8 +133,18 @@ export const FIRST_GIFT_DAYS = 3;
 export const PIECES_STREAK = 2;
 
 /**
- * 2층 조건표(§6). key = constants.MOTIONS 의 key. counter 는 서버 카운터 이름(Motion.progress 가 같은 뜻).
- * 화면 문구("갸웃 · 채팅 응답 1/1")는 서버 hint·progress 를 그대로 쓰고, 이 표는 목 서버와 폴백 문구에만 쓴다.
+ * 2층 조건표(§6). counter 는 서버 카운터 이름(Motion.progress 가 같은 뜻).
+ * 화면 문구는 서버 hint·progress 를 그대로 쓰고, 이 표는 **목 서버와 폴백 문구에만** 쓴다.
+ *
+ * ⚠️⚠️ **이 표의 조건은 서버와 다르다**(2026-09-13 대조). 서버 `MotionCatalog` 의 실제 규칙은
+ *   `eat_rice`=밥 9회 · `eat_snack`=간식 9회 · `sweep`=청소 13회 · `wash`=목욕 3회 ·
+ *   `reply`=채팅 답 4회 · `petted`=쓰다듬 4회 · `startle`=게임 시작 4회 · `wake_up`=깨우기 4회 다.
+ *   여기 있는 `chatAnswers`·`sleepWakeCount`·`zeroMissDays`·`layer2Unlocked` 조합은 **옛 규칙**이고,
+ *   서버가 쓰는 카운터(밥·간식·청소·쓰다듬·깨우기 횟수)는 목 서버에 아직 없다.
+ * ★ **이번 판에서는 손대지 않았다.** 목 서버는 이 표를 `seq` 로만 잇고(`c.seq === m.seq`), `key` 는
+ *   아무 데서도 안 읽는다 — 그래서 조건을 고치면 목의 해금 시점과 e2e 기대값이 같이 흔들린다.
+ *   카운터를 목 서버에 먼저 심은 뒤 한 번에 맞추는 편이 안전하다(별도 이슈).
+ * ★ `key` 칸만 v4 이름으로 고쳐 두었다 — 읽는 곳이 없어 동작은 안 바뀌고, 파일이 거짓말을 안 하게 된다.
  */
 export const UNLOCK_CONDITIONS: ReadonlyArray<{
   seq: number;
@@ -143,16 +153,16 @@ export const UNLOCK_CONDITIONS: ReadonlyArray<{
   target: number;
   hint: string;
 }> = [
-  { seq: 9, key: 'tilt', counter: 'chatAnswers', target: 1, hint: '채팅 응답 1회' },
-  { seq: 10, key: 'wave', counter: 'chatAnswers', target: 4, hint: '채팅 응답 4회' },
-  { seq: 11, key: 'sleep', counter: 'sleepWakeCount', target: 3, hint: '재우기·깨우기 합쳐 3회' },
+  { seq: 9, key: 'eat_rice', counter: 'chatAnswers', target: 1, hint: '채팅 응답 1회' },
+  { seq: 10, key: 'eat_snack', counter: 'chatAnswers', target: 4, hint: '채팅 응답 4회' },
+  { seq: 11, key: 'sweep', counter: 'sleepWakeCount', target: 3, hint: '재우기·깨우기 합쳐 3회' },
   { seq: 12, key: 'wash', counter: 'bathCount', target: 3, hint: '목욕 3회' },
-  { seq: 13, key: 'startle', counter: 'gameStarts', target: 3, hint: '미니게임 3판' },
-  { seq: 14, key: 'nod', counter: 'chatAnswers', target: 12, hint: '채팅 응답 12회' },
+  { seq: 13, key: 'reply', counter: 'gameStarts', target: 3, hint: '미니게임 3판' },
+  { seq: 14, key: 'petted', counter: 'chatAnswers', target: 12, hint: '채팅 응답 12회' },
   // ★ 문구가 "케어 미스" 가 아니다. 케어 미스는 **숨은 수치**라(정본 §4) 이름을 화면에 내면
   //   사람이 그 수치를 되짚게 된다. 실서버도 "잘 돌본 날 3번" 으로 준다.
-  { seq: 15, key: 'smile_idle', counter: 'zeroMissDays', target: 3, hint: '잘 돌본 날 3번' },
-  { seq: 16, key: 'sit', counter: 'layer2Unlocked', target: 6, hint: '2층 6종 열림' },
+  { seq: 15, key: 'startle', counter: 'zeroMissDays', target: 3, hint: '잘 돌본 날 3번' },
+  { seq: 16, key: 'wake_up', counter: 'layer2Unlocked', target: 6, hint: '2층 6종 열림' },
 ];
 
 /** 기능 해금 조건(§6). 서버 features 가 정본이고, 여기는 목 서버·안내 문구용. */
@@ -169,8 +179,10 @@ export const FEATURE_UNLOCK = {
 export const GIFT_SEQ = 101;
 
 /**
- * 진행도를 **안 보여 주는** 잠긴 칸(계약 해석 40) — 15번 웃는 대기.
+ * 진행도를 **안 보여 주는** 잠긴 칸(계약 해석 40) — 15번 자리.
  * 그 진행도(`잘 돌본 날 n/3`)는 곧 케어 미스를 되짚게 해 주는데, 케어 미스는 숨은 수치다(정본 §4).
+ * ⚠️ v4 에서 15번은 `startle`(놀람)이고 서버 조건은 '게임 시작 4회' 라 숨길 이유가 없다 —
+ *   위 `UNLOCK_CONDITIONS` 와 같은 묶음의 부채다(목 서버에 카운터를 심을 때 함께 정리).
  */
 export const HIDDEN_PROGRESS_SEQ = 15;
 

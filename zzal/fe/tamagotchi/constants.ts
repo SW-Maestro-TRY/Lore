@@ -34,29 +34,49 @@ export interface MotionDef {
  * ★ 잠긴 동작의 이름도 화면에 보인다(정본 §6 조건표 "갸웃 · 채팅 응답 1/1"). v1 의 "안 연 것의 이름은
  *   쓰지 않는다" 는 정본에 밀려 폐기(플랜 T2 핵심 결정 4).
  */
+// ★ **서버 `MotionCatalog` 를 그대로 옮긴 표다**(2026-09-13 실측으로 대조 — `GET /me/pets/{id}` 의
+//   `motions[]` 18줄과 seq·key·layer 가 한 글자도 다르지 않다).
+//
+//   ⚠️ 전에는 여기가 **낡은 쪽**이었다. 서버는 이미 확정 16종(`pet`·`hello`·`eat_rice`·`eat_snack`·
+//   `sweep`·`reply`·`petted`·`wake_up`)을 주는데 화면은 옛 여덟(`practice`·`shy`·`call`·`tilt`·
+//   `wave`·`nod`·`smile_idle`·`sit`)을 들고 있었다. 그 어긋남이 **아무 소리도 안 냈다** —
+//   `motionAliases` 가 그림은 양쪽으로 두드려 주었지만, **seq 로 찾는 자리**(`motionBySeq`, 선물·심화
+//   도착 축하)는 seq 8 을 `call`, seq 11 을 `sleep` 으로 읽어 **엉뚱한 동작 이름을 띄웠다.**
+//   서버는 seq 8 이 `sleep` 이고 seq 11 이 `sweep` 이다.
+//
+// ★ 이름(label)은 **명사형 한 벌**(상훈님 2026-09-13 "명사형" · 제안서 B절 안 1 · 서버 `dbe6af8`).
+//   ⚠️ 진짜 방의 앨범은 **서버가 준 `album.motions[].label` 을 그대로 쓴다** — 이름의 정본은 서버
+//   한 곳이다. 여기 이름은 목(연습방·목 서버·오프라인)에서만 쓰인다. 서버 값을 덮지 않는다.
+//
+// ★ 그림은 **key 로만** 고른다(label 로 고르는 자리는 전수로 훑어 하나도 없음을 확인했다 —
+//   `spriteUrl`·`useHatch.img`·`useAlbum.img` 전부 key/imageKey. `useAlbum` 의 `m.label` 은
+//   내려받기 **파일 이름**에만 쓴다). 그래서 label 이 바뀌어도 그림이 비지 않는다.
 export const MOTIONS: readonly MotionDef[] = [
-  { seq: 1, key: 'base', label: '기본 자세', layer: 'BASIC_1' },
-  { seq: 2, key: 'eat', label: '먹기', layer: 'BASIC_1' },
-  { seq: 3, key: 'joy', label: '기쁜 자세', layer: 'BASIC_1' },
-  { seq: 4, key: 'sad', label: '슬픈 자세', layer: 'BASIC_1' },
-  { seq: 5, key: 'sick', label: '아픈 자세', layer: 'BASIC_1' },
-  { seq: 6, key: 'practice', label: '훈련 자세', layer: 'BASIC_1' },
-  { seq: 7, key: 'shy', label: '교감 자세', layer: 'BASIC_1' },
-  { seq: 8, key: 'call', label: '부르기', layer: 'BASIC_1' },
-  { seq: 9, key: 'tilt', label: '갸웃', layer: 'BASIC_2' },
-  { seq: 10, key: 'wave', label: '손 흔들며 인사', layer: 'BASIC_2' },
-  { seq: 11, key: 'sleep', label: '자기', layer: 'BASIC_2' },
-  { seq: 12, key: 'wash', label: '씻기', layer: 'BASIC_2' },
-  { seq: 13, key: 'startle', label: '놀라기', layer: 'BASIC_2' },
-  { seq: 14, key: 'nod', label: '끄덕이기', layer: 'BASIC_2' },
-  { seq: 15, key: 'smile_idle', label: '웃는 대기', layer: 'BASIC_2' },
-  { seq: 16, key: 'sit', label: '앉아 쉬기', layer: 'BASIC_2' },
+  // ── 1층 8종(부화 즉시) ──
+  { seq: 1, key: 'base', label: '기본', layer: 'BASIC_1' },
+  { seq: 2, key: 'eat', label: '식사', layer: 'BASIC_1' },
+  { seq: 3, key: 'joy', label: '기쁨', layer: 'BASIC_1' },
+  { seq: 4, key: 'sad', label: '슬픔', layer: 'BASIC_1' },
+  { seq: 5, key: 'sick', label: '아픔', layer: 'BASIC_1' },
+  { seq: 6, key: 'pet', label: '쓰다듬', layer: 'BASIC_1' },
+  { seq: 7, key: 'hello', label: '인사', layer: 'BASIC_1' },
+  // ⚠️ v4 에서 **칸이 바뀐 유일한 자리** — 옛 `practice`(훈련)가 빠지고 `sleep`(잠)이 1층으로 올라왔다.
+  { seq: 8, key: 'sleep', label: '잠', layer: 'BASIC_1' },
+  // ── 2층 8종(행동 조건) ── 해금은 "못 보던 행동이 열리는 것"이 아니라 "하던 행동이 좋아지는 것"이다.
+  { seq: 9, key: 'eat_rice', label: '밥 먹기', layer: 'BASIC_2' },
+  { seq: 10, key: 'eat_snack', label: '간식 먹기', layer: 'BASIC_2' },
+  { seq: 11, key: 'sweep', label: '청소하기', layer: 'BASIC_2' },
+  { seq: 12, key: 'wash', label: '목욕하기', layer: 'BASIC_2' },
+  { seq: 13, key: 'reply', label: '답하기', layer: 'BASIC_2' },
+  { seq: 14, key: 'petted', label: '쓰다듬 받기', layer: 'BASIC_2' },
+  { seq: 15, key: 'startle', label: '놀람', layer: 'BASIC_2' },
+  { seq: 16, key: 'wake_up', label: '일어나기', layer: 'BASIC_2' },
 ];
 
 /** 카탈로그 밖 특별 심화 행동 2(§6·§16). 구르기 먼저, 뒤로 넘어짐은 3층 8번째 뒤 두 번째 선물. */
 export const SPECIAL_ADV: readonly MotionDef[] = [
   { seq: 101, key: 'roll', label: '구르기', layer: 'GIFT' },
-  { seq: 102, key: 'fall_back', label: '뒤로 넘어짐', layer: 'GIFT' },
+  { seq: 102, key: 'fall_back', label: '뒤로 넘어지기', layer: 'GIFT' },
 ];
 
 export const ALL_MOTIONS: readonly MotionDef[] = [...MOTIONS, ...SPECIAL_ADV];
@@ -74,13 +94,15 @@ export function motionBySeq(seq: number): MotionDef | undefined {
  * 열리는 순간부터 진짜 동작. 화면은 `fallbackKey(key, unlocked)` 로 고른다.
  */
 export const MOTION_FALLBACK: Record<string, string> = {
-  tilt: 'base', wave: 'call', sleep: 'base', wash: 'joy', startle: 'joy', nod: 'base', smile_idle: 'joy', sit: 'base',
+  // ── v4 2층 8종 → 1층 대역. **사슬은 반드시 1층 8종에서 끝나야 한다**(useHatch.spriteUrl 머리말).
+  eat_rice: 'eat', eat_snack: 'eat', sweep: 'base', wash: 'joy',
+  reply: 'base', petted: 'pet', startle: 'joy', wake_up: 'base',
+  // ── 선물 2종은 기본 그림이 없다(심화만). 가장 가까운 것으로 버틴다.
   roll: 'joy', fall_back: 'sad',
-  // ── v4 새 이름을 옛 이름 **옆에 나란히** 더한 것(2026-09-13) ────────────────
-  // ⚠️ 옛 줄은 지우지 않는다 — 서버가 아직 옛 이름을 주고 있어서, 지우면 지금 화면이 깨진다.
-  //    프론트가 먼저 머지되고 백엔드 v4 가 뒤에 오므로 **양쪽 이름이 다 있어야** 한다.
-  pet: 'shy', hello: 'call', sweep: 'wash', reply: 'nod',
-  eat_rice: 'eat', eat_snack: 'eat', petted: 'shy', wake_up: 'base',
+  // ── 옛 이름은 **지우지 않는다.** 남의 코드(스크랩북 시안·옛 목 데이터)가 아직 이 이름으로 물어볼 수 있고,
+  //    있어서 손해가 없다(못 찾으면 안 쓰인다). 대역은 전부 v4 1층으로 댄다.
+  tilt: 'base', wave: 'hello', nod: 'base', smile_idle: 'joy', sit: 'base',
+  practice: 'base', shy: 'pet', call: 'hello',
 };
 
 /**
