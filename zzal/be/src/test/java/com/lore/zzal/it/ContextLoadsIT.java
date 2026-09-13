@@ -11,7 +11,6 @@ import com.lore.zzal.generation.client.FakeTextClient;
 import com.lore.zzal.generation.client.ImageClient;
 import com.lore.zzal.generation.client.PostProcessor;
 import com.lore.zzal.generation.client.TextClient;
-import com.lore.zzal.motion.MotionStartListener;
 import com.lore.zzal.night.BakeTrigger;
 import com.lore.zzal.night.NightSweep;
 import com.lore.zzal.night.PieceCompletedListener;
@@ -37,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       그리고 그 스키마는 Flyway 가 <b>V1 부터</b> 깐 것이라 마이그레이션 자체가 같이 검증된다</li>
  *   <li>리포지토리의 파생 질의·수기 JPQL 이 부팅 때 해석된다(이름 오타는 여기서 죽는다)</li>
  *   <li>{@code @Qualifier("nightExecutor")} 같은 <b>빈 이름</b>이 실제로 맞는다</li>
- *   <li>이벤트 리스너 세 개가 빈으로 올라온다 — 시험 코드에 이름조차 없던 것들이다</li>
+ *   <li>이벤트 리스너가 빈으로 올라온다 — 시험 코드에 이름조차 없던 것들이다</li>
  *   <li>설정 스위치가 뜻대로 걸린다(개발 시계는 켜지고, 실제 생성은 꺼진다)</li>
  * </ul>
  *
@@ -49,7 +48,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ContextLoadsIT extends ZzalItSupport {
 
     @Autowired PieceCompletedListener pieceCompletedListener;
-    @Autowired MotionStartListener motionStartListener;
     @Autowired PetHatchListener petHatchListener;
     @Autowired BakeTrigger bakeTrigger;
     @Autowired NightSweep nightSweep;
@@ -63,7 +61,6 @@ class ContextLoadsIT extends ZzalItSupport {
     @DisplayName("커밋 뒤에 도는 것들이 빈으로 올라와 있다")
     void listenersAreWired() {
         assertThat(pieceCompletedListener).isNotNull();
-        assertThat(motionStartListener).isNotNull();
         assertThat(petHatchListener).isNotNull();
         assertThat(bakeTrigger).isNotNull();
     }

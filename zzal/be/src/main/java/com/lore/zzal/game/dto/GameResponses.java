@@ -129,5 +129,12 @@ public final class GameResponses {
             @Schema(description = "오늘 남은 매치 수") int remainingToday,
             @Schema(description = "이번 매치로 해금된 동작 seq") List<Integer> justUnlocked,
             @Schema(description = "달리기 해금 여부") boolean runUnlocked) {
+
+        public static RunResult of(GameService.RunResult r, int remainingToday) {
+            ZzalGame game = r.game();
+            return new RunResult(game.getId(),
+                    game.getSurvivedMs() == null ? 0L : game.getSurvivedMs(), r.win(),
+                    remainingToday, r.justUnlocked(), r.runUnlocked());
+        }
     }
 }

@@ -135,7 +135,7 @@ class GenerationRunnerTest {
         ArgumentCaptor<StepResult> saved = ArgumentCaptor.forClass(StepResult.class);
         verify(recorder).succeedStep(anyLong(), saved.capture());
         assertThat(saved.getValue().name()).isEqualTo("grid");
-        verify(recorder).failStep(anyLong(), eq(GenErrorCode.UNKNOWN));
+        verify(recorder).failStep(anyLong(), eq(GenErrorCode.UNKNOWN), eq(BigDecimal.ZERO));
 
         // ── 다시 시도 — 성공한 grid 는 기록으로 이어받고, grid2 만 구워야 한다
         List<String> ranAgain = new ArrayList<>();
@@ -200,6 +200,35 @@ class GenerationRunnerTest {
         assertThat(r.success()).isFalse();
         assertThat(r.errorCode()).isEqualTo(GenErrorCode.TIMEOUT);
         assertThat(ctx.image("grid")).isEqualTo("grid.png");
-        verify(recorder).failStep(anyLong(), eq(GenErrorCode.TIMEOUT));
+        verify(recorder).failStep(anyLong(), eq(GenErrorCode.TIMEOUT), eq(BigDecimal.ZERO));
+    }
+
+    @Test
+    @DisplayName("★★ 실패해도 이미 나간 돈은 적는다 — 응답이 200 으로 온 순간 과금은 끝났다 (P-10)")
+    void billedFailureKeepsItsCost() {
+        BigDecimal billed = new BigDecimal("0.086");
+        GenerationStep uploadFails = step("grid2", 5, () -> {
+            // 그림은 받았는데(=돈은 나갔는데) S3 업로드에서 터진 자리
+            throw new com.lore.zzal.generation.client.BilledFailureException(
+                    billed, new IllegalStateException("s3 upload failed"));
+        });
+
+        RunResult r = runner.run(JOB, ctx(), List.of(List.of(ok("grid", "0.063"), uploadFails)), List.of());
+
+        assertThat(r.success()).isFalse();
+        // ★ 단계 기록에 실제 비용이 남는다 — 예전에는 BigDecimal.ZERO 상수였다
+        verify(recorder).failStep(anyLong(), eq(GenErrorCode.UNKNOWN), eq(billed));
+        // ★ job 합계에도 들어간다 — 성공한 시트($0.063) + 돈만 나간 격자($0.086)
+        assertThat(r.costUsd()).isEqualByComparingTo("0.149");
+        verify(recorder).failJob(eq(JOB), eq(GenErrorCode.UNKNOWN), eq(new BigDecimal("0.149")));
+    }
+
+    @Test
+    @DisplayName("★ 돈이 안 나간 실패는 그대로 0 — 아무 실패에나 값을 붙이면 원가가 부풀려진다")
+    void unbilledFailureStaysZero() {
+        RunResult r = runner.run(JOB, ctx(), List.of(List.of(boom("grid", "connection refused"))), List.of());
+
+        assertThat(r.costUsd()).isEqualByComparingTo("0");
+        verify(recorder).failStep(anyLong(), eq(GenErrorCode.UNKNOWN), eq(BigDecimal.ZERO));
     }
 }

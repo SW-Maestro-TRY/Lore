@@ -159,6 +159,18 @@ public class ZzalMotion {
     @Column(length = 60)
     private String claimedBy;
 
+    /**
+     * 맥미니(codex) 러너가 이 주문을 <b>가져간</b> 시각.
+     *
+     * <h3>★★ 왜 claimedAt 과 따로 두나</h3>
+     * {@code claimedAt}·{@code claimedBy} 는 <b>서버가 굽기를 집은 자리</b>({@code QUEUED} → {@code BAKING})다.
+     * 그 값은 굽기가 실패해 {@code LOCAL_REQUESTED} 로 내려가도 <b>지워지지 않고 남아 있어</b>, 그대로 재활용하면
+     * 모든 주문이 "이미 누가 집었다" 로 보여 러너가 영영 빈손으로 돌아간다. 두 집기는 <b>다른 사건</b>이므로
+     * 칸도 따로 둔다(V11).
+     */
+    @Column(name = "agent_claimed_at")
+    private Instant agentClaimedAt;
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -237,6 +249,7 @@ public class ZzalMotion {
         this.nightOf = nightOf;
         this.claimedAt = null;
         this.claimedBy = null;
+        this.agentClaimedAt = null;
         this.regenRound = 0;
         return true;
     }
@@ -265,6 +278,31 @@ public class ZzalMotion {
         this.status = MotionStatus.QUEUED;
         this.claimedAt = null;
         this.claimedBy = null;
+        this.agentClaimedAt = null;
+    }
+
+    /**
+     * 맥미니에 넘긴 채 <b>응답이 영영 안 오는 자리</b>를 큐로 되돌린다.
+     *
+     * <h3>★★ 왜 필요한가 — {@code LOCAL_REQUESTED} 는 아무도 안 보는 상태였다</h3>
+     * 밤 계획도 스위프의 집기도 {@code NONE}·{@code FAILED}·{@code QUEUED} 만 본다. 기동 복구가 보던 것도
+     * {@code BAKING}·{@code PENDING} 둘뿐이었다. 그래서 맥미니가 죽거나(전원·네트워크) 러너가 결과를
+     * 안 올리면 그 동작은 <b>영구 고착</b>이었다 — 아무도 안 줍는다.
+     *
+     * <h3>★ {@code regenRound} 를 그대로 둔다 — 되돌리면 무한 반복이 된다</h3>
+     * {@code queue()} 는 라운드를 0 으로 되돌리는데, 여기서 그러면 "API 로 굽고 → 실패 → 맥미니 →
+     * 고착 → 회수 → 라운드 0" 이 끝없이 돌아 <b>유료 호출이 계속 나간다.</b> 라운드를 지키면
+     * {@code local-regen-max}(2)를 다 쓴 뒤 보류함({@code HOLD})으로 내려가 멈춘다.
+     *
+     * @return 실제로 되돌렸으면 true
+     */
+    public boolean releaseLocalRequest() {
+        if (this.status != MotionStatus.LOCAL_REQUESTED) {
+            return false;
+        }
+        this.status = MotionStatus.QUEUED;
+        this.agentClaimedAt = null;
+        return true;
     }
 
     public void markSeen(Instant at) {
@@ -339,10 +377,39 @@ public class ZzalMotion {
     public void requestLocalRegen() {
         this.status = MotionStatus.LOCAL_REQUESTED;
         this.regenRound += 1;
+        // ★ 새 라운드는 아무도 안 가져간 상태로 시작한다. 앞 라운드의 집기가 남아 있으면 러너가 못 가져간다.
+        this.agentClaimedAt = null;
+    }
+
+    /**
+     * 러너가 이 주문을 가져간다 — <b>같은 판을 두 번 내주지 않기 위한 유일한 장치</b>.
+     *
+     * <h3>★★ 왜 필요한가</h3>
+     * 집기가 없으면 맥미니가 10분짜리 재생성을 굽는 동안 러너의 폴링이 <b>매번 같은 motionId</b> 를 받는다.
+     * 러너가 둘이면 둘 다 같은 판을 굽는다 — codex 구독 한도를 같은 그림에 N배로 태운다.
+     * 두 번째 업로드는 {@code ZZAL_REGEN_NOT_REQUESTED} 로 거절되지만 <b>그림은 이미 다 구운 뒤다.</b>
+     *
+     * ★ 빌려주는 것이지 영영 주는 것이 아니다 — 러너가 중간에 죽으면 아무도 안 올린다. 그래서
+     *   {@code leaseCutoff}(지금 - 유예)보다 오래된 집기는 <b>없는 것으로 친다.</b> 그 유예를 더 넘기면
+     *   {@code StuckMotionRecovery} 가 주문 자체를 큐로 되돌린다.
+     *
+     * @return 이번에 가져갔으면 true. false 면 남이 들고 있는 중이다
+     */
+    public boolean claimByAgent(Instant now, Instant leaseCutoff) {
+        if (this.status != MotionStatus.LOCAL_REQUESTED) {
+            return false;
+        }
+        if (this.agentClaimedAt != null && this.agentClaimedAt.isAfter(leaseCutoff)) {
+            return false;
+        }
+        this.agentClaimedAt = now;
+        return true;
     }
 
     /** 맥미니가 올린 그림으로 갈아 끼우고 다시 검수 대기로. */
     public void uploadedLocal(String imageKey) {
+        // 결과가 올라왔다 — 집기를 지운다. 안 지우면 보류함에서 꺼낸 뒤 같은 자리가 유예만큼 안 나간다.
+        this.agentClaimedAt = null;
         this.imageKey = imageKey;
         this.source = MotionSource.LOCAL;
         this.status = MotionStatus.REVIEW;
@@ -397,6 +464,7 @@ public class ZzalMotion {
         this.nightOf = nightOf;
         this.claimedAt = null;
         this.claimedBy = null;
+        this.agentClaimedAt = null;
         this.regenRound = 0;
         return true;
     }
@@ -539,6 +607,10 @@ public class ZzalMotion {
     /** 도착했는데 아직 "확인" 을 안 눌렀나 — {@code learnedToday} 에 실린다. */
     public boolean isUnseenArrival() {
         return isRevealed() && seenAt == null;
+    }
+
+    public Instant getAgentClaimedAt() {
+        return agentClaimedAt;
     }
 
     public Instant getCreatedAt() {

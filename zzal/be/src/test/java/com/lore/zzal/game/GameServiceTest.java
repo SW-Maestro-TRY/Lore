@@ -237,6 +237,56 @@ class GameServiceTest {
         assertThat(store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME)).isEqualTo(counted);
     }
 
+    @Test
+    @DisplayName("★★ 아픈 펫은 이어치기도 못 한다 — start·guess 둘 다 ZZAL_SICK_REFUSES (P-4)")
+    void sickRefusesEvenWhenResuming() {
+        ZzalGame playing = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
+        when(gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(anyLong())).thenReturn(Optional.of(playing));
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(playing));
+        fallSick();
+        int happiness = pet.getHappiness();
+
+        // 건강할 때 시작한 판을 병든 뒤에 다시 누른다 — 예전에는 그대로 돌려줬다
+        assertThatThrownBy(() -> service.start(USER, PET, GameKind.LEFT_RIGHT, T0))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_SICK_REFUSES);
+
+        // 그 판을 계속 친다 — 예전에는 다섯 판을 다 치고 승리 보상까지 받았다
+        assertThatThrownBy(() -> service.guess(USER, PET, 1L, 'L', T0))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_SICK_REFUSES);
+
+        assertThat(playing.isFinished()).isFalse();
+        assertThat(pet.getHappiness()).isEqualTo(happiness);   // ★ 승리 행복이 병을 스스로 풀지 못한다
+        assertThat(pet.isSick()).isTrue();
+    }
+
+    @Test
+    @DisplayName("★★ 아픈 펫은 달리기를 끝내지도 못 한다 — finish 도 ZZAL_SICK_REFUSES, 판은 그대로 남는다 (P-4)")
+    void sickRefusesFinishingRun() {
+        for (int i = 0; i < 5; i++) {
+            pet.winLeftRight();
+        }
+        ZzalGame run = service.start(USER, PET, GameKind.RUN, T0).game();   // 건강할 때 시작한 달리기
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(run));
+        fallSick();
+        int happiness = pet.getHappiness();
+
+        // 병든 뒤에 그 판을 끝낸다 — 예전에는 그대로 받아 주고 승리 보상까지 줬다
+        assertThatThrownBy(() -> service.finish(USER, PET, 99L, 60_000, T0))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_SICK_REFUSES);
+
+        assertThat(run.isFinished()).isFalse();                // ★ 판은 접지 않는다 — 나으면 이어서 끝낸다
+        assertThat(pet.getHappiness()).isEqualTo(happiness);   // ★ 승리 행복이 병을 스스로 풀지 못한다
+        assertThat(pet.isSick()).isTrue();
+    }
+
+    private void fallSick() {
+        ReflectionTestUtils.setField(pet, "sickSince", T0);
+        ReflectionTestUtils.setField(pet, "sickKind", com.lore.zzal.pet.SickKind.NEGLECT);
+    }
+
     /**
      * 이 시험만 다른 펫을 보게 한다 — setUp 의 펫은 튜토리얼을 이미 지났다.
      *

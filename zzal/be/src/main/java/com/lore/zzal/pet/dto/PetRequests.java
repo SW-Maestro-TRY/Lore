@@ -44,7 +44,7 @@ public final class PetRequests {
             List<Personality> personalities,
 
             @Schema(description = "세계관·설정. 자유 입력이며 대사 생성에만 사용한다", example = "비 오는 도시의 탐정")
-            @Size(max = 100) String world,
+            @Size(max = ZzalRules.WORLD_MAX_CHARS) String world,
 
             @Schema(description = "추가 정보. 저장만 하고 나중에 채팅에서 쓴다", example = "왼쪽 눈에 흉터")
             @Size(max = 200) String note) {

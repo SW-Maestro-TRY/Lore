@@ -45,8 +45,15 @@ public class ChatService {
         this.pieceService = pieceService;
     }
 
-    /** 오늘의 부름들. 도래했는데 없는 행은 여기서 만든다(자는 중에도 조회는 된다). */
-    @Transactional
+    /**
+     * 오늘의 부름들. 도래했는데 없는 행은 여기서 만든다(자는 중에도 조회는 된다).
+     *
+     * ★★ 거절이 나도 <b>정산은 되돌리지 않는다</b> — {@code PetService} 12개 메서드와 같은 규약이다(#225 리뷰 하-1).
+     *   이 클래스도 {@code petService.alive}/{@code awake} 를 부르고 그 안의 {@code touch()} 가 정산·장면·엽서·도착까지
+     *   끝낸 뒤에 "할 수 있나" 를 묻는다. 슬롯이 닫혔다는 거절 한 번에 그 앞의 일이 통째로 되감기면,
+     *   사용자 눈에는 시간이 되돌아간 것으로 보이고 아침에 도착했어야 할 심화 행동이 한 번 밀린다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
     public View calls(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = petService.alive(userId, petId, realNow);
         Instant now = pet.now(realNow);
@@ -55,7 +62,7 @@ public class ChatService {
     }
 
     /** 부름에 답한다. 대사 1줄 + 반응 동작 + 친밀도 +40. 자는 중엔 안 된다(모든 행동과 같다). */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Answered answer(Long userId, Long petId, ChatSlot slot, String text, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);

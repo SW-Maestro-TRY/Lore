@@ -497,7 +497,7 @@ public class ZzalPet {
     @Column(length = 64)
     private String personalityExtra;
 
-    @Column(length = 40)
+    @Column(length = ZzalRules.WORLD_MAX_CHARS)
     private String world;
 
     @Column(length = 32)

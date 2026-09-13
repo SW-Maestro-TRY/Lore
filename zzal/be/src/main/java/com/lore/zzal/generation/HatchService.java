@@ -11,7 +11,10 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 부화 한 마리를 끝까지 책임진다 — 돌리고, 실패하면 다시 하고, 그래도 안 되면 실패로 끝낸다.
@@ -128,8 +131,13 @@ public class HatchService {
             return false;               // 이름을 아직 안 지었다 — 굽기만 끝난 상태로 기다린다
         }
         List<GenStepRecord> done = recorder.loadSucceeded(petId, GenKind.HATCH, version);
-        if (done.stream().map(GenStepRecord::getName).distinct().count() < stepsTotal(version)) {
-            return false;               // 아직 굽는 중이다
+        // ★★ 개수가 아니라 <b>이름 집합</b>으로 본다. 세기만 하면 sheet 가 빠지고 엉뚱한 이름이 하나
+        //   들어와도 개수가 맞아 그대로 통과한다 — 그러면 sheetKey 나 identityText 가 null 인 채로
+        //   펫이 ALIVE 가 되고, 필수 산출물 없이 사용자에게 지급된다. 예외도 로그도 안 난다.
+        Set<String> succeeded = done.stream().map(GenStepRecord::getName).collect(Collectors.toSet());
+        Set<String> expected = stepNames(version);
+        if (!succeeded.containsAll(expected)) {
+            return false;               // 아직 굽는 중이다(또는 빠진 산출물이 있다)
         }
         String sheetKey = outputOf(done, com.lore.zzal.generation.steps.SheetStep.NAME, GenStepRecord::getOutputKey);
         String identity = outputOf(done, IdentityStep.NAME, GenStepRecord::getOutputText);
@@ -182,7 +190,19 @@ public class HatchService {
 
     /** 부화가 모두 몇 단계인가. */
     public int stepsTotal(String version) {
-        return registry.steps(GenKind.HATCH, version).size();
+        return stepNames(version).size();
+    }
+
+    /**
+     * 그 버전이 끝나려면 <b>어떤 이름들</b>이 성공해 있어야 하나.
+     *
+     * ★ 개수가 아니라 이름이다 — 완료 판정이 개수만 세면 엉뚱한 이름이 섞여도 통과한다.
+     *   {@code stepsTotal} 도 같은 집합의 크기로 답해 진행률과 판정이 어긋나지 않게 한다.
+     */
+    private Set<String> stepNames(String version) {
+        return registry.steps(GenKind.HATCH, version).stream()
+                .map(GenerationStep::name)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     public String currentVersion() {

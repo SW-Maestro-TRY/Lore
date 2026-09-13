@@ -68,11 +68,26 @@ public class GameService {
     /**
      * 새 판. 진행 중인 판이 있으면 그것을 돌려준다(두 번 눌러도 안전, 하루 횟수도 안 먹는다).
      * 펫은 {@link PetService#awake} 로 잠근다 — 검사와 저장 사이에 다른 요청이 끼면 판이 둘 생긴다.
+     *
+     * ★★ 거절이 나도 <b>정산은 되돌리지 않는다</b> — {@code PetService} 12개 메서드와 같은 규약이다(#225 리뷰 하-1).
+     *   이 클래스의 네 메서드는 전부 {@code petService.awake}/{@code alive} 를 부르고, 그 안의 {@code touch()} 가
+     *   흐른 시간을 반영하며 <b>장면을 저장하고 엽서를 채우고 도착을 찍는다.</b> 그러고 나서 "할 수 있나" 를 묻는다.
+     *   기본값대로 롤백하면 하루 3판 초과·아픔으로 거절될 때마다 그 요청이 만든 장면 행·엽서 행·{@code revealedAt}
+     *   이 통째로 사라진다 — 사용자 눈에는 "거절당했더니 시간이 되감겼다" 로 보인다.
      */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Started start(Long userId, Long petId, GameKind kind, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
+
+        // ★★ 아픔은 <b>이어치기에도</b> 걸린다 — 이 검사가 아래 이어치기 return 보다 아래에 있었을 때,
+        //   건강할 때 시작한 판을 병든 뒤에도 계속 눌러 5판을 다 치고 <b>승리 보상(행복 +1)</b>까지 받았다.
+        //   그 행복이 병든 상태를 스스로 풀어 "아프면 놀지 않는다"(정본 16장)가 통째로 무력화됐다.
+        // ★ 하루 3판·달리기 해금은 아래에 그대로 둔다 — 그 둘은 <b>새 판을 시작하는 것</b>에 걸리는 조건이고,
+        //   이어치기는 이미 깎인 판을 잇는 것이라 다시 걸면 시작한 판을 못 끝낸다.
+        if (pet.isSick()) {
+            throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
+        }
 
         Optional<ZzalGame> playing = gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(pet.getId());
         if (playing.isPresent()) {
@@ -92,9 +107,6 @@ public class GameService {
                 return new Started(old, List.of(), runUnlocked(pet));
             }
             old.abandon(now);
-        }
-        if (pet.isSick()) {
-            throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
         }
         if (kind == GameKind.RUN && pet.getLeftRightWins() < ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS) {
             throw new BusinessException(ErrorCode.ZZAL_FEATURE_LOCKED,
@@ -116,10 +128,15 @@ public class GameService {
     }
 
     /** 좌우 한 판. 화면이 보낸 gameId 를 믿지 않고 펫과 사람이 모두 맞는지 확인한다. */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public GuessResult guess(Long userId, Long petId, Long gameId, char pick, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
+        // ★ 시작만 막으면 소용이 없다 — 판은 한 번 시작하고 다섯 번 친다. 치는 자리에서도 봐야
+        //   건강할 때 시작한 판이 병든 뒤에 끝까지 굴러가 승리 보상으로 병을 푸는 길이 막힌다.
+        if (pet.isSick()) {
+            throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
+        }
         ZzalGame game = myGame(userId, pet, gameId);
         if (game.getKind() != GameKind.LEFT_RIGHT) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "달리기는 finish 로 끝내요");
@@ -140,11 +157,19 @@ public class GameService {
     }
 
     /** 달리기 끝. 30초 이상이면 승리. */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public RunResult finish(Long userId, Long petId, Long gameId, long survivedMs, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
         ZzalGame game = myGame(userId, pet, gameId);
+        // ★ 달리기는 시작 한 번·끝내기 한 번이라, start 만 막으면 <b>끝내기가 통째로 빠져나간다</b> —
+        //   건강할 때 시작한 달리기를 병든 뒤에 끝내 승리 보상(행복 +1)으로 병을 스스로 푸는 길이 남는다.
+        //   guess 와 같은 이유·같은 오류로 거절한다(정본 16장 "아프면 놀지 않는다").
+        // ★ 잠근 뒤·상태를 바꾸기 전에 본다. 이미 시작된 판은 <b>그대로 둔다</b> — 여기서 접어 버리면
+        //   깎인 하루 한 판이 사라지고, 나으면 이어서 끝내는 길도 함께 사라진다.
+        if (pet.isSick()) {
+            throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
+        }
         if (game.getKind() != GameKind.RUN) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "좌우 맞히기는 guess 로 쳐요");
         }
@@ -161,7 +186,7 @@ public class GameService {
     }
 
     /** 치던 판. 새로고침 복구용. 자는 중이어도 조회는 된다. */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public Optional<ZzalGame> current(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = petService.alive(userId, petId, realNow);
         return gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(pet.getId());

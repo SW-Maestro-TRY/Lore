@@ -67,13 +67,37 @@ public class GameController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "진행 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ZZAL_GAME_NOT_FOUND"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING")})
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "ZZAL_GAME_FINISHED · ZZAL_SICK_REFUSES · ZZAL_PET_SLEEPING")})
     @PostMapping("/{gameId}/guess")
     public ApiResponse<GameResponses.Guess> guess(@LoginUser Long userId, @PathVariable Long petId,
                                                   @PathVariable Long gameId,
                                                   @Valid @RequestBody GameRequests.Guess request) {
         GameService.GuessResult r = gameService.guess(userId, petId, gameId, request.pick().code(), Instant.now());
         return ApiResponse.ok(GameResponses.Guess.of(r, remaining(userId, petId)));
+    }
+
+    @Operation(summary = "달리기 종료", description = """
+            달리기는 화면이 물리를 돌리고 서버는 살아남은 시간만 받는다. 30,000ms 이상이면 승리이며
+            상한 60,000ms 로 잘린다. 승리 시 행복 +1 을 부여한다.
+
+            좌우 맞히기는 이 API 로 끝내지 않는다(guess 로 5회를 진행하면 그때 끝난다).
+
+            ★ 이 주소가 없으면 달리기를 시작한 사람은 그 판을 <b>끝낼 수가 없다</b> — 하루 3매치 중
+            한 판이 깎인 채 finishedAt 이 비어 있어, 다음 시작이 계속 그 판을 돌려준다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "종료 처리됨"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "survivedMs 가 없거나 0~60,000 밖(INVALID_INPUT) · 좌우 맞히기 판(INVALID_INPUT)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ZZAL_GAME_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "ZZAL_GAME_FINISHED · ZZAL_SICK_REFUSES · ZZAL_PET_SLEEPING")})
+    @PostMapping("/{gameId}/finish")
+    public ApiResponse<GameResponses.RunResult> finish(@LoginUser Long userId, @PathVariable Long petId,
+                                                       @PathVariable Long gameId,
+                                                       @Valid @RequestBody GameRequests.Finish request) {
+        GameService.RunResult r = gameService.finish(userId, petId, gameId, request.survivedMs(), Instant.now());
+        return ApiResponse.ok(GameResponses.RunResult.of(r, remaining(userId, petId)));
     }
 
     @Operation(summary = "진행 중인 매치 조회", description = """
