@@ -15,7 +15,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.UUID;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -204,6 +207,9 @@ public class JobRunner {
     public void redrawSheet(Long jobId, String note) {
         line.submit(() -> {
             try {
+                if (!startable(jobId)) {
+                    return;         // 줄에서 기다리는 동안 그만뒀다
+                }
                 WebtoonJob job = store.running(jobId, JobStage.SHEET);
                 progress.say(jobId, "루가 캐릭터를 다시 그리고 있어요");
 
@@ -259,6 +265,31 @@ public class JobRunner {
     }
 
     /**
+     * <b>이 작업을 시작해도 되나.</b> 줄에서 차례가 온 걸음이 제일 먼저 묻는다.
+     *
+     * <h2>왜 메모리가 아니라 DB 를 보나</h2>
+     *
+     * 취소 표시({@link #cancelled})는 {@link #stop} 이 <b>끝내면서 지운다.</b>
+     * 그래서 아직 줄에 있는 작업을 취소하면, 표시가 지워진 뒤에 그 작업의
+     * 차례가 와서 <b>표시를 못 보고 그냥 돈다.</b> 2026-09-13 에 실제로 그랬다 —
+     * 취소하고 값을 돌려받은 작품이 되살아나 끝까지 그려졌다. 돈은 두 번 나가고
+     * 환불은 한 번 됐다.
+     *
+     * 끝났다는 사실은 DB 에 남으므로 그걸 본다. 표시는 <b>도는 것을 멈추는</b>
+     * 용도로만 남기고, <b>시작하지 않는</b> 판단은 여기서 한다.
+     *
+     * @return 시작해도 되면 true. 이미 끝난 것이면 false — 조용히 물러난다
+     */
+    private boolean startable(Long jobId) {
+        WebtoonJob job = store.byId(jobId);
+        if (job == null || job.getStatus().isOver()) {
+            log.info("이미 끝난 작업이라 시작하지 않습니다 (job={})", jobId);
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * 사람이 그만뒀다는 표시.
      *
      * 실패와 <b>같은 길로 끝나되</b>(값을 적고, 낸 것을 돌려주고, 끝났다고
@@ -271,24 +302,32 @@ public class JobRunner {
     }
 
     private void story(Long jobId, Path jobDir) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
         WebtoonJob job = store.running(jobId, JobStage.STORY);
         progress.say(jobId, "루가 이야기를 짓고 있어요");
 
-        int code = callHarness(jobId, job,
-                List.of("--character", jobDir.resolve("character.json").toString()));
+        /* **번호를 여기서 정해서 넘긴다.**
+         *
+         * 예전에는 하네스가 짓고 자바가 <b>가장 최근에 생긴 폴더</b>로 그걸
+         * 되찾았다. 한 줄로 세워 돌 때만 우연히 맞는 방법이고, 두 편을 같이
+         * 돌리는 순간 <b>두 사람의 작품이 뒤바뀐다</b> — 그리고 그 다음에
+         * 이어지는 것이 전부 어긋난다(소유권·크레딧·공개 여부·비용 귀속).
+         *
+         * 이제 번호는 자바 것이다. 되찾을 일이 없으니 가릴 것도 없다. */
+        String runId = newRunId();
+        int code = callHarness(jobId, job, List.of(
+                "--run-id", runId,
+                "--character", jobDir.resolve("character.json").toString()));
         /* **성공을 보기 전에 값부터 적는다.** 이 걸음이 죽어도 이야기 넷을 쓴
-           값은 이미 나갔다. 아직 작품 번호를 모르니(그건 아래에서 읽는다)
-           방금 값이 적힌 폴더에서 찾는다. */
-        after.cost(latestMeta());
+           값은 이미 나갔다. 이제 어느 작품인지 알고 있으므로 짐작하지 않는다. */
+        after.cost(runId);
         stopIfCancelled(jobId);
         if (code != 0) {
             throw new IllegalStateException("이야기 후보를 만들지 못했습니다");
         }
 
-        String runId = latestRun();
-        if (runId == null) {
-            throw new IllegalStateException("작품 번호를 읽지 못했습니다");
-        }
         store.learnRun(jobId, runId);
         // 장부에도 채운다 — 이게 없으면 「내가 만든 웹툰」이 이 작품을 못 찾는다.
         works.learnedRun(job.getPublicId(), runId, job.getUserId());
@@ -352,6 +391,9 @@ public class JobRunner {
     }
 
     private void sheet(Long jobId) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
         WebtoonJob job = store.running(jobId, JobStage.SHEET);
         progress.say(jobId, "루가 캐릭터를 그리고 있어요");
 
@@ -384,6 +426,9 @@ public class JobRunner {
     }
 
     private void pages(Long jobId) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
         WebtoonJob job = store.running(jobId, JobStage.PAGES);
         progress.say(jobId, "루가 그림을 그리고 있어요");
 
@@ -485,50 +530,19 @@ public class JobRunner {
      * 방금 것이다. 한 줄로 세워 돌리기 때문에 그 사이에 다른 것이 끼어들지
      * 않는다 — 여럿을 같이 돌리기 시작하면 이 방법부터 못 쓴다.
      */
-    private String latestRun() throws IOException {
-        return newestRunWith("directions.json");
-    }
-
     /**
-     * 방금 <b>값이 나간</b> 작품 번호. 이야기 걸음이 죽었을 때 쓴다.
+     * 새 작품 번호. <b>하네스가 짓던 것과 같은 모양</b>이다
+     * ({@code story.new_run_id} — 시각 + 여섯 자리).
      *
-     * {@link #latestRun()} 은 못 쓴다 — 그건 이야기 후보 파일
-     * ({@code directions.json})이 있는 폴더를 찾는데, 죽은 작품에는 그게 없다.
-     * 값을 적는 파일({@code meta.json})은 <b>첫 호출부터</b> 쌓이므로 이쪽을
-     * 본다.
-     *
-     * 하네스가 폴더도 못 만들고 죽었으면 <b>앞 작품</b>이 잡힐 수 있다. 그래도
-     * 해롭지 않다 — 그건 이미 다 적힌 것이라 서버가 통째로 걸러 아무 줄도 안
-     * 남는다.
+     * 같은 초에 둘이 시작해도 뒤가 달라서 안 겹친다. 시각을 앞에 두는 것은
+     * 폴더를 늘어놓았을 때 사람이 순서를 읽을 수 있게 하려는 것이다.
      */
-    private String latestMeta() {
-        try {
-            return newestRunWith("meta.json");
-        } catch (IOException e) {
-            log.warn("나간 값을 적을 작품을 못 찾았습니다", e);
-            return null;
-        }
+    private String newRunId() {
+        String when = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss")
+                .withZone(ZoneId.systemDefault()).format(Instant.now());
+        return when + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
     }
 
-    private String newestRunWith(String marker) throws IOException {
-        if (!Files.isDirectory(runsDir)) {
-            return null;
-        }
-        try (var kids = Files.list(runsDir)) {
-            return kids.filter(Files::isDirectory)
-                    .filter(p -> Files.isRegularFile(p.resolve(marker)))
-                    .max((a, b) -> {
-                        try {
-                            return Files.getLastModifiedTime(a)
-                                    .compareTo(Files.getLastModifiedTime(b));
-                        } catch (IOException e) {
-                            return 0;
-                        }
-                    })
-                    .map(p -> p.getFileName().toString())
-                    .orElse(null);
-        }
-    }
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> directionsOf(String runId) {
@@ -655,7 +669,7 @@ public class JobRunner {
      * 화면에는 "돌려드렸어요" 가 그대로 떴다. 돌려주는 쪽이 알려 주는 값으로
      * 정한다.
      */
-    private Refunded refund(Long jobId) {
+    Refunded refund(Long jobId) {
         try {
             WebtoonJob job = store.byId(jobId);
             if (job == null) {
