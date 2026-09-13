@@ -67,6 +67,26 @@ public final class WebtoonQuality {
             "surf",  12,
             "swell", 18);
 
+    /**
+     * 한 편에 실제로 나가는 <b>AI 원가(원)</b>. 2026-09-13 실측이다.
+     *
+     * 크레딧(받는 값)과 다르다 — 이것은 <b>우리가 내는 값</b>이고, 하루 지출
+     * 상한을 지킬 때 쓴다({@code SpendGuard}). 아직 안 끝난 작업이 얼마를 쓸지
+     * 미리 잡아 두려면 그 작업의 화질을 알아야 한다.
+     *
+     * 파도는 세 편 평균으로 검산했다(1,183 · 1,043 · 1,108 → 평균 1,111원).
+     * 토큰 단가는 기계와 무관해서 <b>시간과 달리 잘 맞는다.</b>
+     */
+    private static final Map<String, Integer> KRW = Map.of(
+            "wave",   702,
+            "surf",  1111,
+            "swell", 2269);
+
+    /** 이 화질로 한 편 만들 때 우리가 내는 값(원). 상한을 지킬 때 쓴다. */
+    public static int expectedKrw(String key) {
+        return KRW.getOrDefault(normalize(key), KRW.get(DEFAULT_QUALITY));
+    }
+
     /** 아무도 안 고르면 이것. 하네스의 기본값과 같아야 한다. */
     public static final String DEFAULT_QUALITY = "surf";
 

@@ -125,7 +125,10 @@ public class JobController {
          *
          * 순서는 프록시 길과 같다: 전체 몫이 먼저다. 오늘 다 찼으면 로그인해도
          * 못 만드는데 "로그인하면 됩니다" 라고 말하면 거짓말이 된다. */
-        String blocked = guard.whyBlocked();
+        /* **아직 안 적힌 몫까지 세어서 묻는다.** 나란히 둘을 돌리면 상한까지
+           한 편 남았을 때 둘이 같이 물어 둘 다 통과할 수 있다 — 둘 다 아직
+           아무것도 안 썼기 때문이다. 줄에 선 것들이 쓸 돈을 미리 잡아 준다. */
+        String blocked = guard.whyBlocked(queue.reserved());
         int code = 429;
         boolean counted = false;
         String guestKey = null;

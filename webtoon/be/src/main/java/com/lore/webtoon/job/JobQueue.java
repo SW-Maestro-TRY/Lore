@@ -1,5 +1,6 @@
 package com.lore.webtoon.job;
 
+import com.lore.webtoon.usage.SpendGuard;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -84,6 +85,25 @@ public class JobQueue {
     @Transactional(readOnly = true)
     public int ahead() {
         return (int) jobs.countByStatusIn(IN_LINE);
+    }
+
+    /**
+     * 아직 안 끝난 작업들이 <b>쓸 돈</b>. 하루 상한이 이걸 미리 잡아 둔다.
+     *
+     * 지출은 걸음이 끝나야 DB 에 적힌다 — 지금 도는 것이 쓸 돈은 아직 어디에도
+     * 없다. 나란히 둘을 돌리면 상한까지 한 편 남았을 때 <b>둘 다 통과한다.</b>
+     * 그래서 여기서 미리 세어 준다({@code SpendGuard.whyBlocked}).
+     *
+     * 도는 중인 작업은 이미 쓴 만큼이 적혔을 수 있어 조금 겹쳐 세지만, 상한은
+     * <b>안전선</b>이라 넉넉히 막는 쪽이 맞다.
+     */
+    @Transactional(readOnly = true)
+    public SpendGuard.Reserved reserved() {
+        List<WebtoonJob> line = jobs.findByStatusInOrderByCreatedAtAsc(IN_LINE);
+        long krw = line.stream()
+                .mapToLong(one -> WebtoonQuality.expectedKrw(one.getQuality()))
+                .sum();
+        return new SpendGuard.Reserved(line.size(), krw);
     }
 
     /** 줄 선 자리를 작업에 적어 둔다 — 나중에 예상이 맞았는지 재려고. */
