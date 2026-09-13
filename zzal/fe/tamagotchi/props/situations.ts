@@ -89,7 +89,16 @@ export const ACTION_SITUATION = {
   /** 손으로 깨우기 — `wake_by_hand`(pose `wake_up`). **표가 `prop: null` 로 "소품 없음" 을 확정**했다
    *  (커튼이 걷히는 것이 신호다). ⚠️ 1층 줄이 없다 — 깨어나는 자세 자체가 2층이다. */
   wake: { l1: 'wake_by_hand' },
-} as const satisfies Record<string, { l1: string; l2?: string }>;
+  /** 방에 들어올 때 — `enter_room`(pose `hello` · `bubble_bang`). A절 표 "방에 들어올 때 · 인사". */
+  enter_room: { l1: 'enter_room' },
+  /** 게임에서 좌·우를 고른 순간 — **1층은 변화 없음**(그래서 `l1: null`), 2층만 `game_choose`
+   *  (pose `startle` · 머리 위 느낌표). A절 표의 "게임 좌·우 고르기" 줄 그대로다. */
+  game_choose: { l1: null, l2: 'game_choose' },
+  /** 해금 — `unlock`(pose `joy` · 폭죽). A절 표 "해금 · 나음 · 공유" 한 줄의 첫째. */
+  unlock: { l1: 'unlock' },
+  /** 나음(약을 먹고 나은 순간) — `cured`(pose `joy` · 반짝임). 같은 줄의 둘째. */
+  cured: { l1: 'cured' },
+} as const satisfies Record<string, { l1: string | null; l2?: string }>;
 
 export type ActionKey = keyof typeof ACTION_SITUATION;
 
@@ -137,10 +146,50 @@ export function stagePlanOf(
  * ★ 왜 층으로 갈리나 — 표가 같은 행동을 두 줄로 적어 두었다. 1층은 **소품이 대신하고**(밥그릇·쓰다듬는 손),
  *   2층은 **그림 안에 이미 들어 있다**(`prop: null`). 그러니 층이 곧 "소품을 띄우느냐" 를 정한다.
  */
-export function situationOfAction(action: ActionKey, floor2 = false): string {
-  const row: { l1: string; l2?: string } = ACTION_SITUATION[action];
+export function situationOfAction(action: ActionKey, floor2 = false): string | null {
+  const row: { l1: string | null; l2?: string } = ACTION_SITUATION[action];
   return floor2 ? (row.l2 ?? row.l1) : row.l1;
 }
+
+// ── 행동 한 판의 바퀴 수 ────────────────────────────────────────────────
+//
+// ★ 정본 = 제안서 A절 표(2026-09-13 상훈님 확정 "5초 괜찮아. 난 딱 적당한 거 같은데" → 3안).
+//   한 바퀴 = 4프레임 = 1.8초. 표의 '바퀴' 칸을 그대로 옮긴 것이 아래 표다.
+// ★ **단계 소품이 있는 줄은 표(`stages`)가 이긴다** — 밥 1층 3바퀴·목욕 1층 3바퀴·2층 2바퀴가
+//   거기서 저절로 나온다. 아래 표는 **단계 그림이 없는 층**을 위한 것이다:
+//   밥 2층은 소품이 없는데도 길이는 1층과 같아야 하고(A절 "같은 행동은 층이 달라도 길이를 같게"),
+//   쓰다듬은 양쪽 다 소품 단계가 없는데 표가 2바퀴라고 적었다.
+// ★ 여기 없는 행동은 **한 바퀴**다(A절 표의 1.8초 칸 전부).
+
+/** 행동별 바퀴 수. 단계 소품이 있으면 그쪽이 이긴다. */
+export const ACTION_CYCLES: Partial<Record<ActionKey, number>> = {
+  /** 쓰다듬기 — 1·2층 모두 2바퀴(8프레임 3.6초). 양쪽 다 단계 소품이 없어 표로만 정해진다. */
+  pet: 2,
+  /** 밥 주기 — 2층(`feed_rice_l2`)은 소품이 그림 안에 있어 단계가 없다. 길이는 1층과 같은 3바퀴. */
+  feed_rice: 3,
+  /** 청소하기 — 양쪽 다 `dust` 두 단계라 표에서 2가 나오지만, 규격이 줄어도 2바퀴를 지킨다. */
+  clean: 2,
+};
+
+/**
+ * 그 행동이 돌 **바퀴 수**. 단계 소품이 있으면 그 단계 수, 없으면 `ACTION_CYCLES`, 그것도 없으면 1.
+ * ★ 순서가 중요하다 — 목욕은 1층 3단계·2층 2단계로 **층마다 다르고**, 그건 표만 안다.
+ */
+export function cyclesOfAction(
+  table: PropSituationTable | null | undefined,
+  action: ActionKey,
+  floor2 = false,
+): number {
+  const sit = situationOfAction(action, floor2);
+  const plan = sit ? stagePlanOf(table, sit) : null;
+  return plan?.stages.length ?? ACTION_CYCLES[action] ?? 1;
+}
+
+/**
+ * 선물 2종(구르기·뒤로 넘어짐)의 바퀴 수. **16프레임 한 판**이라 A절 박자 밖이다 —
+ * 소품 없이 한 판을 그대로 틀고 기본으로 돌아간다(16 / 4 = 4바퀴 = 7.2초).
+ */
+export const GIFT_CYCLES = 16 / CYCLE_FRAMES;
 
 /**
  * 그 상황이 **표에서 어느 자세에 붙어 있나**. 없거나 자세와 무관한 줄(`'*'`)이면 `null`.
@@ -167,6 +216,8 @@ export function activeSituations(s: {
   sleeping?: boolean;
   /** ⚠️ 지금은 **안 쓴다** — 꼬르륵 소품을 뺐다(아래). 신호 자체는 남겨 둔다. */
   hungry?: boolean;
+  /** 24시간+ 방치 — 땀 대신 **해골**로 갈아 끼운다(표 3절의 제안). */
+  sickLong?: boolean;
   unhappy?: boolean;
   chatOpen?: boolean;
   trash?: number;
@@ -180,7 +231,7 @@ export function activeSituations(s: {
   if (s.sleeping) out.push('sleeping', 'sleeping_curtain', 'sleeping_moon');
   // 땀↔해골을 갈아 끼울지 같이 띄울지는 아직 결정 전(표 status=decide)이라, 표의 제안대로
   // **갈아 끼운다** — 아프기 시작하면 땀. '24시간 방치' 신호가 화면에 오면 sick_long 을 더한다.
-  if (s.sick) out.push('sick_light');
+  if (s.sick) out.push(s.sickLong ? 'sick_long' : 'sick_light');
   // ★ 배고픔 소품(꼬르륵)은 **안 띄운다**(상훈님 2026-09-13 "지금 배고파서 꼬르륵 소품은 빼는 게 맞는 것 같아").
   //   표의 `hunger_zero` 줄과 `growl` 그림은 **그대로 둔다** — 나중에 되살릴 수 있게. 여기서만 안 켠다.
   //   (표 쪽 `status` 도 곧 바뀌지만, **둘 중 하나만 되어 있어도 안 뜨도록** 코드에서도 막아 둔다.)

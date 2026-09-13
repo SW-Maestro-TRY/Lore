@@ -21,7 +21,10 @@ import type { Live } from './useHatch';
 import type { CareAction, ChatState, Personality } from '../../lib/pet';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
-import { CYCLE_MS, SITUATION_TABLE, poseOfSituation, situationOfAction, stagePlanOf, type ActionKey } from '../props/situations';
+import {
+  CYCLE_MS, GIFT_CYCLES, SITUATION_TABLE,
+  cyclesOfAction, poseOfSituation, situationOfAction, stagePlanOf, type ActionKey,
+} from '../props/situations';
 import { motionAliases } from '../constants';
 
 /**
@@ -31,12 +34,17 @@ import { motionAliases } from '../constants';
  */
 const sleepingLine = (name: string) => `${petWith(name, '이', '가')} 자고 있어요`;
 
-/**
- * 행동 한 번의 **가장 짧은 길이**(ms).
- * ★ 2.5초 — 눌러 보고 정했다. 1.5초는 눈이 따라가기 전에 사라지고, 4초는 다음 행동이 막혀 답답하다.
- *   단계가 있는 소품은 이것보다 길어진다(단계 수 x `CYCLE_MS`).
- */
-const ACT_MS = 2500;
+// ★ 옛 `ACT_MS = 2500`(행동 한 번의 가장 짧은 길이)은 **없앴다**(2026-09-13).
+//
+//   무엇이었나 — 눈으로 보고 정한 **연출 길이의 바닥값**이었다. 서버 왕복을 기다리는 값도,
+//   버튼을 잠가 두는 값도 아니다. 실제로 이 파일에서 `act()` 안 한 줄에서만 쓰였고,
+//   연타 잠금은 따로 있다(`live.careing`·`live.resting` → `pbtn` 의 `waiting`).
+//   낙관적 UI 도 여기 안 걸린다 — 게이지는 `og`(useHatch.doCare)가 응답 전에 얹고,
+//   연출(`careAct`)은 **응답이 온 뒤에** 시작한다.
+//   그래서 줄여도 잠금·왕복에 아무 영향이 없다.
+//
+//   왜 없앴나 — 이 바닥값이 A절 표의 "한 바퀴 1.8초" 칸을 전부 2.5초로 끌어올리고 있었다.
+//   이제 길이는 **바퀴 수 x `CYCLE_MS`** 하나로만 정해진다(A절 표 = `cyclesOfAction`).
 
 /** 바퀴 타이머를 걷어낼 때 훑을 최대 바퀴 수. 표에서 가장 긴 단계 차례(4)보다 넉넉히. */
 const ACT_MAX_CYCLES = 6;
@@ -430,21 +438,29 @@ export function useYeoul(live?: Live) {
    *      `row.pose === scene.pose` 를 요구하므로 **소품이 영영 안 뜬다**(2026-09-13 실제 사고).
    *   2. 같은 타이머로 함께 꺼진다 — 반응 그림이 사라지면 소품도 같이 사라진다.
    */
-  const act = useCallback((key: string, sit: string | null = null) => {
+  const act = useCallback((key: string, sit: string | null = null, cycles?: number) => {
     const pose = (sit ? poseOfSituation(SITUATION_TABLE, sit) : null) ?? key;
     // 단계가 있는 소품은 **단계 수만큼 바퀴를 돈다**(밥 3->2->1 = 3바퀴 = 12프레임).
+    // ★ 바퀴 수를 밖에서 주면 그것이 이긴다 — 단계 그림이 없는 층(밥 2층·쓰다듬)과
+    //   박자 밖인 선물 2종(16프레임 = 4바퀴)이 그 길로 온다.
     const plan = sit ? stagePlanOf(SITUATION_TABLE, sit) : null;
-    const cycles = plan ? plan.stages.length : 1;
+    const n = Math.max(1, Math.round(cycles ?? plan?.stages.length ?? 1));
 
     // 앞서 돌던 연출의 바퀴 타이머를 **전부** 걷어낸다 — 안 그러면 다음 행동 도중에 옛 단계가 끼어든다.
     for (let i = 1; i <= ACT_MAX_CYCLES; i++) clearTimeout(T.current[`actStep${i}`]);
     setS((v) => ({ ...v, acting: pose, actSit: sit, actStep: 0 }));
-    for (let i = 1; i < cycles; i++) {
+    for (let i = 1; i < n; i++) {
       later(`actStep${i}`, i * CYCLE_MS, () => setS((v) => ({ ...v, actStep: i })));
     }
-    // ★ 한 바퀴짜리는 **예전 길이 그대로** 둔다(2.5초). 1.8초로 줄이면 눌러 보고 정한 감각이 깨진다.
-    later('acting', Math.max(ACT_MS, cycles * CYCLE_MS), () => setS((v) => ({ ...v, acting: null, actSit: null, actStep: 0 })));
+    // ★ 길이는 **바퀴 수 하나로만** 정해진다(A절 표). 바닥값을 따로 두지 않는다.
+    later('acting', n * CYCLE_MS, () => setS((v) => ({ ...v, acting: null, actSit: null, actStep: 0 })));
   }, [later]);
+
+  /**
+   * 선물 한 판(구르기 · 뒤로 넘어짐). **A절 박자 밖**이다 — 16프레임짜리 한 판이라
+   * 소품 없이 그대로 한 번 틀고 기본으로 돌아간다(4바퀴 = 7.2초).
+   */
+  const playGift = useCallback((key: string) => act(key, null, GIFT_CYCLES), [act]);
 
   /**
    * 그 행동이 지금 켤 **상황 id**. 2층이 열려 있으면 2층 줄을 쓴다.
@@ -463,9 +479,12 @@ export function useYeoul(live?: Live) {
    *   코드에 자세를 박으면 표와 어긋나고, 어긋나면 **소품이 조용히 안 뜬다.**
    */
   const careAct = useCallback((action: ActionKey) => {
-    const sit = sitOf(action);
-    act(poseOfSituation(SITUATION_TABLE, sit) ?? 'base', sit);
-  }, [act, sitOf]);
+    const f2 = sRef.current.floor2;
+    const sit = situationOfAction(action, f2);
+    // ★ 표가 그 층에 줄을 안 적어 둔 행동은 **아무것도 안 짓는다**(게임 좌·우 고르기 1층 = "변화 없음").
+    if (!sit) return;
+    act(poseOfSituation(SITUATION_TABLE, sit) ?? 'base', sit, cyclesOfAction(SITUATION_TABLE, action, f2));
+  }, [act]);
 
   /** 아무 일도 안 하는 손잡이. 안 보이는 버튼 자리를 채운다. */
   const noop = useCallback(() => {}, []);
@@ -638,6 +657,14 @@ export function useYeoul(live?: Live) {
     flash(ok);
   }, [flash, careAct]);
 
+  /**
+   * 약을 먹인 뒤 **나음**(A절 표 "해금 · 나음 · 공유" 줄) — 약 연출 한 바퀴가 끝나면
+   * 기쁨 + 반짝임 한 바퀴가 이어진다. 표가 두 줄로 적어 둔 것을 순서대로 튼다.
+   */
+  const cureAfterMed = useCallback(() => {
+    later('cured', CYCLE_MS, () => careAct('cured'));
+  }, [later, careAct]);
+
   const onPet = useCallback(() => {
     if (s.chatOpen) { patch({ chatOpen: false, draft: '' }); return; }
     if (s.popOpen) { patch({ popOpen: false }); return; }
@@ -726,14 +753,18 @@ export function useYeoul(live?: Live) {
       // ★ 약 단추는 **아플 때만 그려진다**(`v.medFab.show`) — 그것이 "안 아픔" 거절의 미리 잠금이다.
       //   여기서는 도는 중 연타만 막는다.
       if (liveRef.current?.careing) return;
-      void serverCare('MEDICINE', 'medicine', '바로 나았어요');
+      void (async () => {
+        await serverCare('MEDICINE', 'medicine', '바로 나았어요');
+        cureAfterMed();
+      })();
       return;
     }
     if (!s.sick) { flash('지금은 약이 필요 없어요'); return; }
     patch({ sick: false });
     careAct('medicine');
+    cureAfterMed();
     flash('바로 나았어요');
-  }, [s.sick, patch, careAct, flash, serverCare]);
+  }, [s.sick, patch, careAct, flash, serverCare, cureAfterMed]);
 
   /**
    * 성격·세계관을 서버에 저장한다. **튜토리얼 4칸을 넘기는 자리**이기도 하다.
@@ -811,6 +842,14 @@ export function useYeoul(live?: Live) {
    * ★ 목일 때는 어느 쪽을 골랐든 반반이다.
    */
   const onGuess = useCallback((side: Side = 'LEFT') => {
+    // ★ A절 표 "게임 좌·우 고르기" — 고른 순간 한 바퀴(2층이면 `놀람` + 머리 위 느낌표,
+    //   1층이면 표가 "변화 없음" 이라 `careAct` 가 아무것도 안 짓는다).
+    //   결과(이김·짐) 연출은 그 한 바퀴가 끝난 뒤에 이어 붙인다 — 안 그러면 목처럼 답이
+    //   즉시 오는 자리에서 **놀람이 한 프레임도 안 보이고 지나간다.**
+    careAct('game_choose');
+    const pickedAt = Date.now();
+    const afterChoose = (fn: () => void) =>
+      later('guessAct', Math.max(0, CYCLE_MS - (Date.now() - pickedAt)), fn);
     if (onServerRef.current) {
       void (async () => {
         const lv = liveRef.current;
@@ -824,7 +863,7 @@ export function useYeoul(live?: Live) {
         if (error) { flash(error); return; }
         if (!result) return;
         patch({ lastGuess: result });
-        careAct(result.hit ? 'game_win' : 'game_lose');
+        afterChoose(() => careAct(result.hit ? 'game_win' : 'game_lose'));
       })();
       return;
     }
@@ -837,8 +876,8 @@ export function useYeoul(live?: Live) {
       guess: win ? '맞았어요!' : '아쉬워요, 반대쪽이었어요',
       bond: win ? Math.min(100, s.bond + 1) : s.bond,
     });
-    careAct(win ? 'game_win' : 'game_lose');
-  }, [s.plays, s.sampleMode, s.cGame, s.happy, s.bond, patch, careAct, flash]);
+    afterChoose(() => careAct(win ? 'game_win' : 'game_lose'));
+  }, [s.plays, s.sampleMode, s.cGame, s.happy, s.bond, patch, careAct, flash, later]);
   const onGuessSide = useCallback((side: Side) => () => onGuess(side), [onGuess]);
 
   // ── 대화 ──
@@ -1009,10 +1048,14 @@ export function useYeoul(live?: Live) {
    * 이미 함께 사는 아이가 있을 때 곧장 방으로. 온보딩을 다시 태우지 않는다.
    * 튜토리얼은 켜지 않는다 — 어디까지 했는지는 서버(`tutorial.step`)가 알고 있다.
    */
-  const enterRoom = useCallback(() => patch({
-    screen: 'room', sampleMode: false, sheet: null, popOpen: false, chatOpen: false,
-    toast: '', fire: null, cracking: false,
-  }), [patch]);
+  const enterRoom = useCallback(() => {
+    patch({
+      screen: 'room', sampleMode: false, sheet: null, popOpen: false, chatOpen: false,
+      toast: '', fire: null, cracking: false,
+    });
+    // A절 표 "방에 들어올 때 · 인사" — 한 바퀴(느낌표 말풍선) 틀고 기본으로 돌아간다.
+    careAct('enter_room');
+  }, [patch, careAct]);
 
   const goEgg = useCallback(() => {
     lastSel.current = Date.now();
@@ -1183,6 +1226,8 @@ export function useYeoul(live?: Live) {
   // 2층 해금 — 친밀도 50% 를 넘긴 순간 한 번만 축하한다(시안 componentDidUpdate).
   useEffect(() => {
     if (s.bond < 50 || s.floorLv >= 3 || s.unlockShown || s.screen !== 'room') return;
+    // A절 표 "해금 · 나음 · 공유" 줄의 첫째 — 기쁨 + 폭죽 한 바퀴.
+    careAct('unlock');
     setS((v) => ({
       ...v, unlockShown: true, floorLv: 3, sheet: null,
       fire: {
@@ -1191,7 +1236,7 @@ export function useYeoul(live?: Live) {
         actions: [{ label: '방으로 돌아가기', tap: () => setS((w) => ({ ...w, fire: null })), primary: true }],
       },
     }));
-  }, [s.bond, s.floorLv, s.unlockShown, s.screen]);
+  }, [s.bond, s.floorLv, s.unlockShown, s.screen, careAct]);
 
   // 대화창의 예시 문구가 2.6초마다 바뀐다.
   useEffect(() => {
@@ -1930,7 +1975,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, playGift,
     backToSample: () => patch({ screen: 'room' }),
   }), [
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
@@ -1938,7 +1983,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, playGift,
   ]);
 
   return { s, v, actions };
