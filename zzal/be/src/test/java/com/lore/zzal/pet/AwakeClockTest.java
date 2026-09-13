@@ -197,4 +197,74 @@ public class AwakeClockTest {
             assertThat(AwakeClock.sleepWindowOpensAt(kst("2026-09-05 20:00"))).isEqualTo(kst("2026-09-05 20:00"));
         }
     }
+    @Nested
+    @DisplayName("가장 자주 밟히는 입력 — 10:00 과 23:00 의 ±1초 (M-29)")
+    class SecondBySecond {
+
+        @Test
+        @DisplayName("★★ 09:59:59 에는 아직 자고, 10:00:00 정각에 깬다 — 부등호 하나가 하루를 가른다")
+        void autoWakeAtTheExactSecond() {
+            Instant slept = kst("2026-09-05 23:00");
+
+            assertThat(AwakeClock.walk(AwakeClock.State.asleep(SleepKind.NIGHT, slept, null),
+                    slept, kst("2026-09-06 09:59:59")).end().isAwake())
+                    .as("1초 전에는 자고 있어야 한다").isFalse();
+
+            assertThat(AwakeClock.walk(AwakeClock.State.asleep(SleepKind.NIGHT, slept, null),
+                    slept, kst("2026-09-06 10:00:00")).end().isAwake())
+                    .as("정각에 깬다 — 여기가 밀리면 아침 도착이 하루 늦는다").isTrue();
+
+            assertThat(AwakeClock.walk(AwakeClock.State.asleep(SleepKind.NIGHT, slept, null),
+                    slept, kst("2026-09-06 10:00:01")).end().isAwake()).isTrue();
+        }
+
+        @Test
+        @DisplayName("★ 10:00 정각에 깨는 구간은 AUTO_WAKE 로 끝난다 — 늦잠 표시가 여기서 켜진다")
+        void theWakeSegmentCarriesTheEvent() {
+            Instant slept = kst("2026-09-05 23:00");
+
+            AwakeClock.Walk w = AwakeClock.walk(AwakeClock.State.asleep(SleepKind.NIGHT, slept, null),
+                    slept, kst("2026-09-06 10:00:00"));
+
+            assertThat(w.segments()).hasSize(1);
+            assertThat(w.segments().get(0).endEvent()).isEqualTo(AwakeClock.Event.AUTO_WAKE);
+            assertThat(w.segments().get(0).to()).isEqualTo(kst("2026-09-06 10:00"));
+        }
+
+        @Test
+        @DisplayName("★★ 22:59:59 에는 아직 깨어 있고 23:00:00 정각에 잠든다")
+        void autoSleepAtTheExactSecond() {
+            Instant from = kst("2026-09-05 20:00");
+
+            assertThat(AwakeClock.walk(awake(), from, kst("2026-09-05 22:59:59")).end().isAwake())
+                    .as("1초 전에는 깨어 있다").isTrue();
+            assertThat(AwakeClock.walk(awake(), from, kst("2026-09-05 23:00:00")).end().isAwake())
+                    .as("정각에 잠든다 — 그 순간이 하루의 경계다").isFalse();
+            assertThat(AwakeClock.walk(awake(), from, kst("2026-09-05 23:00:01")).end().isAwake()).isFalse();
+        }
+
+        @Test
+        @DisplayName("★ 창 판정도 같은 초에 갈린다 — 재우기 22:59:59 ✓ / 23:00:00 ✗, 깨우기 09:59:59 ✓ / 10:00:00 ✗")
+        void windowsSplitAtTheSameSecond() {
+            assertThat(AwakeClock.inSleepWindow(kst("2026-09-05 22:59:59"))).isTrue();
+            assertThat(AwakeClock.inSleepWindow(kst("2026-09-05 23:00:00"))).isFalse();
+            assertThat(AwakeClock.inWakeWindow(kst("2026-09-05 09:59:59"))).isTrue();
+            assertThat(AwakeClock.inWakeWindow(kst("2026-09-05 10:00:00"))).isFalse();
+            assertThat(AwakeClock.isNight(kst("2026-09-05 22:59:59"))).isFalse();
+            assertThat(AwakeClock.isNight(kst("2026-09-05 23:00:00"))).isTrue();
+        }
+
+        @Test
+        @DisplayName("★★ 날짜는 KST 자정에 넘어간다 — UTC 14:59:59 는 아직 어제, 15:00:00 부터 오늘")
+        void dateFlipsAtSeoulMidnightNotUtc() {
+            assertThat(AwakeClock.dateOf(Instant.parse("2026-09-05T14:59:59Z")))
+                    .as("UTC 로 날짜를 세면 방문일·엽서·밤 날짜가 하루 어긋난다")
+                    .isEqualTo(java.time.LocalDate.of(2026, 9, 5));
+            assertThat(AwakeClock.dateOf(Instant.parse("2026-09-05T15:00:00Z")))
+                    .isEqualTo(java.time.LocalDate.of(2026, 9, 6));
+
+            assertThat(AwakeClock.dateOf(kst("2026-09-05 23:59:59"))).isEqualTo(java.time.LocalDate.of(2026, 9, 5));
+            assertThat(AwakeClock.dateOf(kst("2026-09-06 00:00:00"))).isEqualTo(java.time.LocalDate.of(2026, 9, 6));
+        }
+    }
 }

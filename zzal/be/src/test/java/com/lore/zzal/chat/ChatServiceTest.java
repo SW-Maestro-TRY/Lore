@@ -41,6 +41,8 @@ class ChatServiceTest {
     private static final Long PET = 7L;
 
     private final List<ZzalChatCall> store = new ArrayList<>();
+    /** ★ 조각 줄 — 지금까지 채팅이 교감 칸을 올리는지 아무도 확인하지 않았다(M-18). */
+    private final java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> pieces = new java.util.HashMap<>();
     private ZzalChatCallRepository repo;
     private ZzalPet pet;
     private ChatService service;
@@ -82,8 +84,9 @@ class ChatServiceTest {
             ((Runnable) inv.getArgument(1)).run();
             return new PetService.Action(pet, List.of());
         });
+        pieces.clear();
         service = new ChatService(repo, pets, new MotionCatalog("", "", "v1"),
-                com.lore.zzal.PieceFixture.inMemory());
+                com.lore.zzal.PieceFixture.inMemory(pieces));
     }
 
     private Optional<ZzalChatCall> call(ChatSlot slot) {
@@ -192,6 +195,69 @@ class ChatServiceTest {
         assertThat(service.calls(USER, PET, kst("2026-09-05 19:31")).memories()).containsExactly("셋째", "둘째", "첫째");
         // 세 번째 답(answerCount 가 3 이 되기 전 = 2)은 아직 재언급 아님 — 재언급은 answerCount % 3 == 0 인 답
         assertThat(third.replyLine()).doesNotContain("저번에");
+    }
+
+    @Test
+    @DisplayName("★★ 네 번째 답에서 재언급이 열린다 — 카운트를 올리기 <b>전</b> 값으로 고르기 때문이다 (M-30)")
+    void theFourthAnswerRecalls() {
+        pet.choosePersonality(List.of(Personality.GENTLE), null);
+        service.answer(USER, PET, ChatSlot.BABY, "첫째", T0.plus(Duration.ofMinutes(9)));
+        service.answer(USER, PET, ChatSlot.MORNING, "둘째", kst("2026-09-05 13:30"));
+        service.answer(USER, PET, ChatSlot.EVENING, "셋째", kst("2026-09-05 19:30"));
+        assertThat(pet.getChatAnswers()).isEqualTo(3);
+
+        // 하룻밤을 지나 다음 날 아침 부름에 답한다 — 이것이 네 번째 답이다.
+        ChatService.Answered fourth = service.answer(USER, PET, ChatSlot.MORNING, "넷째", kst("2026-09-06 11:30"));
+
+        assertThat(fourth.replyLine())
+                .as("직전 기억(가장 최근 답)을 그대로 물어봐야 한다 — 순서가 뒤집히면 첫 답을 꺼낸다")
+                .contains("셋째");
+        assertThat(pet.getChatAnswers()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("★ 재언급은 세 번에 한 번 — 다섯째·여섯째는 아니고 일곱째에 다시 열린다")
+    void recallRepeatsEveryThird() {
+        pet.choosePersonality(List.of(Personality.GENTLE), null);
+        service.answer(USER, PET, ChatSlot.BABY, "첫째", T0.plus(Duration.ofMinutes(9)));
+        service.answer(USER, PET, ChatSlot.MORNING, "둘째", kst("2026-09-05 13:30"));
+        service.answer(USER, PET, ChatSlot.EVENING, "셋째", kst("2026-09-05 19:30"));
+        service.answer(USER, PET, ChatSlot.MORNING, "넷째", kst("2026-09-06 11:30"));
+
+        ChatService.Answered fifth = service.answer(USER, PET, ChatSlot.NOON, "다섯째", kst("2026-09-06 17:30"));
+        ChatService.Answered sixth = service.answer(USER, PET, ChatSlot.EVENING, "여섯째", kst("2026-09-06 19:30"));
+        ChatService.Answered seventh = service.answer(USER, PET, ChatSlot.MORNING, "일곱째", kst("2026-09-07 11:30"));
+
+        assertThat(fifth.replyLine()).doesNotContain("넷째");
+        assertThat(sixth.replyLine()).doesNotContain("다섯째");
+        assertThat(seventh.replyLine())
+                .as("일곱째 답에서 다시 열린다(그때 카운트가 6 이다)")
+                .contains("여섯째");
+    }
+
+    @Test
+    @DisplayName("★★ 답할 때마다 교감 조각이 오른다 — 입구가 일곱인데 이 입구는 아무도 안 보고 있었다 (M-18)")
+    void answeringRaisesTheBondPiece() {
+        pet.enablePieces(T0);
+
+        service.answer(USER, PET, ChatSlot.BABY, "첫째", T0.plus(Duration.ofMinutes(9)));
+
+        com.lore.zzal.piece.ZzalPiece row = pieces.get(PET);
+        assertThat(row).as("3층이 열린 펫이 답하면 조각 줄이 생긴다").isNotNull();
+        assertThat(row.countOf(com.lore.zzal.piece.PieceEvent.CHAT)).isEqualTo(1);
+
+        service.answer(USER, PET, ChatSlot.MORNING, "둘째", kst("2026-09-05 13:30"));
+        assertThat(row.countOf(com.lore.zzal.piece.PieceEvent.CHAT)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("★ 3층 전에는 답해도 조각이 안 오른다 — 열린 날 한 칸이 공짜로 차 있으면 안 된다")
+    void answeringBeforeTierThreeCountsNothing() {
+        assertThat(pet.isPiecesEnabled()).isFalse();
+
+        service.answer(USER, PET, ChatSlot.BABY, "첫째", T0.plus(Duration.ofMinutes(9)));
+
+        assertThat(pieces).isEmpty();
     }
 
     @Test

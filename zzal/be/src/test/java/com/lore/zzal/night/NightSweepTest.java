@@ -161,6 +161,44 @@ class NightSweepTest {
     }
 
     @Test
+    @DisplayName("★★ 상한의 바로 아래·정확히·바로 위 — cap 3 에서 큐 2·3·4 (M-11)")
+    void capBoundaryTwoThreeFour() {
+        // 2건 — 상한 아래. 전부 굽고 이월 없음.
+        assertCap(2, 3, 2, 0);
+        // 3건 — 정확히 상한. 전부 굽고 이월 없음. (>= 가 > 로 바뀌면 여기는 통과하지만 아래가 깨진다)
+        assertCap(3, 3, 3, 0);
+        // 4건 — 상한 하나 초과. 셋만 굽고 하나는 이월.
+        //   ★ 여기서 한 건이 더 구워지면 그 밤에 상한 밖으로 유료 호출이 나간다.
+        assertCap(4, 3, 3, 1);
+    }
+
+    @Test
+    @DisplayName("★ cap 0 이면 한 건도 안 굽고 전량 이월 — 굽기를 멈춰야 할 때 진짜로 멈추는가")
+    void capZeroBakesNothing() {
+        assertCap(3, 0, 0, 3);
+        assertThat(motions.values()).allMatch(m -> m.getStatus() == MotionStatus.QUEUED);
+    }
+
+    /** 큐에 {@code queuedCount} 건을 놓고 상한 {@code cap} 으로 한 밤을 돌린다. */
+    private void assertCap(int queuedCount, int cap, int expectedClaimed, int expectedCarried) {
+        motions.clear();
+        runs.clear();
+        baked.clear();
+        for (long i = 1; i <= queuedCount; i++) {
+            queued(i, 1, i);
+        }
+        NightSweep.Result r = sweep(true, cap).run(NIGHT, T23, "test");
+
+        assertThat(r.claimed()).as("큐 %d · 상한 %d 에서 집은 수", queuedCount, cap).isEqualTo(expectedClaimed);
+        assertThat(r.carried()).as("큐 %d · 상한 %d 에서 이월 수", queuedCount, cap).isEqualTo(expectedCarried);
+        assertThat(baked).as("실제로 실행기에 넘어간 수").hasSize(expectedClaimed);
+        assertThat(motions.values().stream().filter(m -> m.getStatus() == MotionStatus.QUEUED))
+                .as("남아 있는 큐")
+                .hasSize(expectedCarried);
+        assertThat(runs.get(NIGHT).getCarried()).as("밤 기록에 남는 이월 수").isEqualTo(expectedCarried);
+    }
+
+    @Test
     @DisplayName("★ 우선순위 — 선물(101) > 케어 미스 0인 날 수 > 친밀도 > id")
     void priorityOrder() {
         ZzalPet lowPet = pet(1L, 0, 10);

@@ -1,5 +1,7 @@
 package com.lore.zzal.share;
 
+import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
 import com.lore.zzal.PetFixture;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSpec;
@@ -16,11 +18,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static com.lore.zzal.pet.AwakeClockTest.kst;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -100,6 +104,99 @@ class ShareServiceTest {
             assertThat(issued.token()).isEqualTo(winner.getToken());
             assertThat(issued.url()).isEqualTo("https://lorecomic.com/s/" + winner.getToken());
         }).doesNotThrowAnyException();
+    }
+
+    // ── 링크를 열 때 (M-19) ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("★ 없는 토큰은 404 한 가지 — 토큰을 찍어 보는 사람에게 단서를 주지 않는다")
+    void unknownTokenIsNotFound() {
+        when(shareRepository.findByToken("없는토큰")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.open("없는토큰"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_SHARE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("★ 링크는 있는데 펫이 사라졌으면 404 — 그리고 조회수도 안 오른다")
+    void missingPetIsNotFoundAndNotCounted() {
+        ZzalShare share = ZzalShare.issue(PET, "shy", T0);
+        when(shareRepository.findByToken("tok")).thenReturn(Optional.of(share));
+        ZzalPetRepository empty = mock(ZzalPetRepository.class);
+        when(empty.findById(any())).thenReturn(Optional.empty());
+        ShareService svc = new ShareService(shareRepository, empty, motionRepository,
+                new MotionCatalog("", "", "v1"), "https://lorecomic.com/s");
+
+        assertThatThrownBy(() -> svc.open("tok"))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_SHARE_NOT_FOUND);
+
+        assertThat(share.getViews()).as("보여 준 것이 없으니 센 것도 없다").isZero();
+    }
+
+    @Test
+    @DisplayName("카탈로그에 없는 동작 키도 404 — 다만 조회수는 이미 올라간 뒤다(판정 순서)")
+    void unknownMotionKeyIsNotFound() {
+        ZzalShare share = ZzalShare.issue(PET, "없는동작", T0);
+        when(shareRepository.findByToken("tok")).thenReturn(Optional.of(share));
+
+        assertThatThrownBy(() -> service.open("tok"))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_SHARE_NOT_FOUND);
+
+        // ★ 지금 코드는 조회수를 먼저 올리고 키를 나중에 본다. 이 줄은 <b>지금 그렇다</b>는 기록이다 —
+        //   순서를 바꾸는 날 여기가 깨져서 "왜 바꿨나" 를 다시 묻게 된다.
+        assertThat(share.getViews()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("★ 연 만큼 센다 — 무엇이 실제로 퍼졌는지 보는 유일한 숫자다")
+    void everyOpenIsCounted() {
+        ZzalShare share = ZzalShare.issue(PET, "shy", T0);
+        when(shareRepository.findByToken("tok")).thenReturn(Optional.of(share));
+
+        for (int i = 1; i <= 5; i++) {
+            service.open("tok");
+            assertThat(share.getViews()).isEqualTo(i);
+        }
+    }
+
+    @Test
+    @DisplayName("★ 토큰은 22 글자 URL-safe — 주소에 그대로 실리고 훑어서 찾을 수 없어야 한다")
+    void tokenIsUrlSafeAndLongEnough() {
+        for (int i = 0; i < 50; i++) {
+            String token = ZzalShare.issue(PET, "shy", T0).getToken();
+            assertThat(token).hasSize(22).matches("[A-Za-z0-9_-]+");
+        }
+    }
+
+    @Test
+    @DisplayName("★ 주소는 끝의 / 가 있든 없든 슬래시 하나로 이어진다")
+    void urlJoinsWithExactlyOneSlash() {
+        ZzalPetRepository pets = mock(ZzalPetRepository.class);
+        when(pets.findById(any())).thenReturn(Optional.of(pet));
+        ZzalShare share = ZzalShare.issue(PET, "shy", T0);
+        when(shareRepository.findByPetIdAndMotionKey(PET, "shy")).thenReturn(Optional.of(share));
+
+        for (String base : List.of("https://lorecomic.com/s", "https://lorecomic.com/s/")) {
+            ShareService svc = new ShareService(shareRepository, pets, motionRepository,
+                    new MotionCatalog("", "", "v1"), base);
+            assertThat(svc.issue(PET, "shy", T0).url())
+                    .isEqualTo("https://lorecomic.com/s/" + share.getToken());
+        }
+    }
+
+    @Test
+    @DisplayName("★ 이미 낸 링크는 그대로 준다 — 누를 때마다 주소가 달라지면 무엇이 퍼졌는지 셀 수 없다")
+    void issuingTwiceGivesTheSameLink() {
+        ZzalShare share = ZzalShare.issue(PET, "shy", T0);
+        when(shareRepository.findByPetIdAndMotionKey(PET, "shy")).thenReturn(Optional.of(share));
+
+        ShareResponses.Issued first = service.issue(PET, "shy", T0);
+        ShareResponses.Issued second = service.issue(PET, "shy", T0.plusSeconds(600));
+
+        assertThat(second.token()).isEqualTo(first.token());
+        assertThat(second.url()).isEqualTo(first.url());
+        org.mockito.Mockito.verify(shareRepository, org.mockito.Mockito.never()).saveAndFlush(any());
     }
 
     /**
