@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -181,5 +182,46 @@ class AfterRunTest {
         when(harness.prepareUpload(eq("run-9"), any())).thenThrow(new IOException("파이썬 없음"));
 
         assertThatCode(() -> after.healIfMissing("run-9")).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("같은 작품을 동시에 열면, 되살리기가 끝날 때까지 기다린다")
+    void 동시에_열면_기다린다() throws Exception {
+        그림이_디스크에("run-9");
+        when(pages.has("run-9")).thenReturn(false);
+        when(uploader.ready()).thenReturn(true);
+
+        /* 되살리는 동안 두 번째 요청이 들어오게 만든다. 예전에는 이 두 번째가
+           "이미 해 봤다" 로 그냥 지나가 404 를 받았고, 화면은 그것을 보고
+           「작품을 열지 못했습니다」를 띄웠다 — 되살리기는 곧 성공했는데도. */
+        java.util.concurrent.CountDownLatch 시작함 = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch 놓아준다 = new java.util.concurrent.CountDownLatch(1);
+        when(harness.prepareUpload(eq("run-9"), any())).thenAnswer(call -> {
+            시작함.countDown();
+            놓아준다.await();
+            return "{}";
+        });
+        when(uploader.uploadPrepared(eq("run-9"), eq("{}"), any())).thenReturn(18);
+
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var 먼저 = pool.submit(() -> after.healIfMissing("run-9"));
+            assertThat(시작함.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var 나중 = pool.submit(() -> after.healIfMissing("run-9"));
+
+            // 두 번째는 아직 답하면 안 된다 — 첫 번째가 도는 중이다.
+            assertThatThrownBy(() -> 나중.get(300, java.util.concurrent.TimeUnit.MILLISECONDS))
+                    .isInstanceOf(java.util.concurrent.TimeoutException.class);
+
+            놓아준다.countDown();
+            assertThat(먼저.get(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(나중.get(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        } finally {
+            놓아준다.countDown();
+            pool.shutdownNow();
+        }
+
+        // 파이썬은 한 번만 띄운다.
+        verify(harness, org.mockito.Mockito.times(1)).prepareUpload(eq("run-9"), any());
     }
 }
