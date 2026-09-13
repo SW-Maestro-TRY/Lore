@@ -1604,9 +1604,16 @@ public class ZzalPet {
         afterNonSnack(now);
     }
 
-    /** 청소. 흔적 0. */
+    /**
+     * 청소. <b>흔적을 하나</b> 없앤다(하한 0).
+     *
+     * ★★ 한 번에 전부 치우면 흔적이 다시 쌓여야 다음 청소를 누를 수 있고, 흔적은 깨어 있는
+     *   네 시간마다 하나씩 생기므로 하루 상한이 1회가 된다. 그러면 2층 청소(13회)가 13일이 되고,
+     *   흔적 1~4단계 소품도 뜻을 잃는다 — 한 번에 다 사라지면 단계를 만들 이유가 없다.
+     * ★ {@link #bath} 는 그대로 전부 없앤다(목욕 = 가득).
+     */
     public void clean(Instant now) {
-        trash = 0;
+        trash = Math.max(0, trash - 1);
         cleans += 1;
         careIntimacy();
         advanceTutorial(TutorialSchedule.Step.CLEAN);

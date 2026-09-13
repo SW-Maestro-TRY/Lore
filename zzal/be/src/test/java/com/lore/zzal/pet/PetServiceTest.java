@@ -201,10 +201,29 @@ class PetServiceTest {
         @Test
         @DisplayName("청소 — 깨끗하면 ZZAL_CARE_NOT_NEEDED · 약 — 안 아프면 ZZAL_CARE_NOT_NEEDED")
         void cleanAndMedicine() {
-            child();
-            service.care(USER_ID, PET_ID, CareAction.CLEAN, T0);
+            ZzalPet pet = child();
+            // ★ 청소는 흔적을 하나씩 없앤다 — 다 치운 뒤에야 "깨끗하다" 가 된다.
+            for (int guard = 0; pet.getTrash() > 0 && guard < ZzalRules.TRASH_MAX; guard++) {
+                service.care(USER_ID, PET_ID, CareAction.CLEAN, T0);
+            }
+            assertThat(pet.getTrash()).isZero();
             assertCode(() -> service.care(USER_ID, PET_ID, CareAction.CLEAN, T0), ErrorCode.ZZAL_CARE_NOT_NEEDED);
             assertCode(() -> service.care(USER_ID, PET_ID, CareAction.MEDICINE, T0), ErrorCode.ZZAL_CARE_NOT_NEEDED);
+        }
+
+        @Test
+        @DisplayName("★★ 흔적이 셋이면 청소를 세 번 받는다 — 한 번에 다 치우면 하루 한 번이 상한이 된다")
+        void cleaningIsAcceptedOncePerTrace() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "trash", 3);
+
+            for (int i = 3; i > 0; i--) {
+                service.care(USER_ID, PET_ID, CareAction.CLEAN, T0);
+                assertThat(pet.getTrash()).as("%d번째 청소 뒤".formatted(4 - i)).isEqualTo(i - 1);
+            }
+
+            assertThat(pet.getCleans()).as("2층 청소(13회)가 이 누적에 얹혀 있다").isEqualTo(3);
+            assertCode(() -> service.care(USER_ID, PET_ID, CareAction.CLEAN, T0), ErrorCode.ZZAL_CARE_NOT_NEEDED);
         }
 
         @Test

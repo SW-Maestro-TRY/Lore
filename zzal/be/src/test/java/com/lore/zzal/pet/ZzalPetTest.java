@@ -110,7 +110,7 @@ class ZzalPetTest {
         }
 
         @Test
-        @DisplayName("밥은 흔적을 늘리지 않는다(해석 1) · 간식은 행복만 · 청소는 흔적 0")
+        @DisplayName("밥은 흔적을 늘리지 않는다(해석 1) · 간식은 행복만 · 청소는 흔적 −1")
         void careEffects() {
             ZzalPet pet = child();
             pet.settle(at("2026-09-05 16:00"));               // 흔적 1
@@ -609,6 +609,38 @@ class ZzalPetTest {
                 pet.snack(T0);
             }
             assertThat(pet.nextSnackUpsets()).as("5개째부터 배탈").isTrue();
+        }
+
+        @Test
+        @DisplayName("★★ 청소는 흔적을 <b>하나씩</b> 없앤다 — 한 번에 다 치우면 하루 한 번이 상한이 된다")
+        void cleanRemovesOneTraceAtATime() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "trash", 3);
+
+            pet.clean(T0);
+            assertThat(pet.getTrash()).as("한 번에 하나").isEqualTo(2);
+            pet.clean(T0);
+            assertThat(pet.getTrash()).isEqualTo(1);
+            pet.clean(T0);
+            assertThat(pet.getTrash()).isZero();
+
+            // ★ 하한 0 — 깨끗한데 또 눌러도 음수로 내려가지 않는다(서비스가 막지만 엔티티도 지킨다)
+            pet.clean(T0);
+            assertThat(pet.getTrash()).isZero();
+
+            // ★ 누적은 누른 만큼 센다 — 2층 청소(13회)가 여기에 얹혀 있다
+            assertThat(pet.getCleans()).isEqualTo(4);
+        }
+
+        @Test
+        @DisplayName("★ 목욕은 그대로 <b>전부</b> 없앤다 — 청소와 다르다")
+        void bathClearsEveryTrace() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "trash", 4);
+
+            pet.bath(T0);
+
+            assertThat(pet.getTrash()).isZero();
         }
 
         @Test
