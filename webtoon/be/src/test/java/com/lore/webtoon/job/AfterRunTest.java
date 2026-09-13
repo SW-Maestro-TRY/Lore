@@ -43,6 +43,7 @@ class AfterRunTest {
     private PageStore pages;
     private HarnessProcess harness;
     private WebtoonJobRepository jobs;
+    private RunFiles files;
     private AfterRun after;
 
     @BeforeEach
@@ -60,8 +61,9 @@ class AfterRunTest {
            보고 "비용 기록이 없습니다" 만 찍었다. */
         harness = mock(HarnessProcess.class);
         when(harness.runsDir()).thenReturn(runs);
+        files = mock(RunFiles.class);
         after = new AfterRun(usage, uploader, pages, jobs, mock(WorkLedger.class),
-                harness, mock(RunFiles.class));
+                harness, files);
     }
 
     /** 하네스가 적는 모양 그대로. 값은 {@code cost.total_krw} 에 있다. */
@@ -243,5 +245,31 @@ class AfterRunTest {
 
         assertThat(after.healIfMissing("run-9")).isFalse();
         verify(harness, never()).prepareUpload(any(), any());
+    }
+
+    @Test
+    @DisplayName("정상으로 다 만든 뒤에도 서버 사본을 치운다")
+    void 다_만든_뒤에도_치운다() throws Exception {
+        /* 정리가 한동안 「되살리기」 길에만 붙어 있었다 — 정상으로 만든 작품은
+           한 번도 안 치워서 편당 20~30MB 가 그대로 쌓였다(운영에서 확인). */
+        when(uploader.ready()).thenReturn(true);
+        when(harness.prepareUpload(eq("run-9"), any())).thenReturn("{}");
+        when(uploader.uploadPrepared(eq("run-9"), eq("{}"), any())).thenReturn(18);
+
+        after.finish("run-9", line -> { });
+
+        verify(files).sweepUploaded("run-9");
+    }
+
+    @Test
+    @DisplayName("못 올렸으면 안 치운다 — 서버 사본이 유일본이 된다")
+    void 못_올렸으면_안_치운다() throws Exception {
+        when(uploader.ready()).thenReturn(true);
+        when(harness.prepareUpload(eq("run-9"), any()))
+                .thenThrow(new IllegalStateException("올릴 그림을 만들지 못했습니다"));
+
+        after.finish("run-9", line -> { });
+
+        verify(files, never()).sweepUploaded(any());
     }
 }

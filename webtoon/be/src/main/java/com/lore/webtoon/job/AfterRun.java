@@ -279,7 +279,15 @@ public class AfterRun {
             uploader.uploadPrepared(runId, prepared, onLine);
         } catch (Exception e) {                     // noqa: 여기서 만들기를 실패시키지 않는다
             log.error("그림을 S3 에 못 올렸습니다 (run={})", runId, e);
+            return;                                 // 못 올렸으면 치우면 안 된다
         }
+        /* **올렸으면 서버 사본을 치운다.**
+         *
+         * 이 한 줄이 {@link #recover} 에만 있었다 — 되살리는 길에만 붙여 놓고
+         * <b>정상으로 만든 작품은 한 번도 안 치웠다.</b> 정리는 원래 이쪽이
+         * 본체인데 거꾸로였다. 운영에서 두 편을 만들고 폴더를 열어 보고서야
+         * 알았다: episode.png 11.5MB 가 그대로 있었다. */
+        files.sweepUploaded(runId);
     }
 
     /** 하네스가 적는 에포크 초 -> 시각. 없으면 지금으로 둔다. */
