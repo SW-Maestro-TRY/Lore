@@ -3,6 +3,7 @@ package com.lore.webtoon.runs;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PageUploader;
 import com.lore.webtoon.job.HarnessProcess;
+import com.lore.webtoon.job.RunFiles;
 import com.lore.webtoon.job.JobRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,15 +67,18 @@ public class RegenService {
     private final HarnessProcess harness;
     private final PageUploader uploader;
     private final JobRunner runner;
+    private final RunFiles files;
 
     public RegenService(PageRegenRepository regens, PageStore pages, BakeService bakery,
-                        HarnessProcess harness, PageUploader uploader, JobRunner runner) {
+                        HarnessProcess harness, PageUploader uploader, JobRunner runner,
+                        RunFiles files) {
         this.regens = regens;
         this.pages = pages;
         this.bakery = bakery;
         this.harness = harness;
         this.uploader = uploader;
         this.runner = runner;
+        this.files = files;
     }
 
     /**
@@ -207,6 +211,10 @@ public class RegenService {
         Path dest = pageFile(runId, no);
 
         try {
+            /* **참조할 그림부터 되살린다.** 이어그리기는 직전 장 그림을 붙여
+               그리는데, 올린 뒤 서버 사본을 치우므로 그 그림이 디스크에 없을
+               수 있다(RunFiles). 없으면 그 장만 앞뒤가 안 맞게 나온다. */
+            files.restore(runId, no);
             archive(runId, no);
             Files.deleteIfExists(dest);           // run.py 는 파일이 있으면 안 그린다
 

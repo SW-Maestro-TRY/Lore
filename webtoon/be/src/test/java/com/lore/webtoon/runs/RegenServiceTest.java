@@ -75,7 +75,8 @@ class RegenServiceTest {
         runner = mock(JobRunner.class);
         when(runner.runDir("run-1")).thenReturn(Files.createDirectories(runsDir.resolve("run-1")));
 
-        service = new RegenService(regens, pages, bakery, harness, uploader, runner);
+        service = new RegenService(regens, pages, bakery, harness, uploader, runner,
+                mock(com.lore.webtoon.job.RunFiles.class));
     }
 
     private void 페이지파일(int no, byte[] content) throws IOException {
