@@ -18,7 +18,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { assetUrl } from '../../lib/assets';
-import { MOTION_FALLBACK, YEOUL_MOTION } from '../constants';
+import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
 import { BASIC_KEYS } from './constants';
 import {
   answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
@@ -708,7 +708,8 @@ export function useHatchState(): Live {
   // ⚠️ `pet` 객체가 아니라 **그림 키 목록**에 반응해야 한다. 돌보기 응답마다 `pet` 이 새 객체가 되는데,
   //   거기 매달면 밥 한 번에 미리 받기가 통째로 다시 돌고, 받던 것을 끊어 오히려 느려진다.
   const basicKeys = pet?.phase === 'ALIVE'
-    ? BASIC_KEYS.map((k) => pet.motions?.find((m) => m.key === k)?.basicImageKey ?? '').join('|')
+    // 이름이 바뀌는 중이라 **별칭 중 있는 것**을 집는다(→ missingBasics 주석).
+    ? BASIC_KEYS.map((k) => motionAliases(k).map((a) => pet.motions?.find((m) => m.key === a)?.basicImageKey).find(Boolean) ?? '').join('|')
     : '';
   const preloaded = useRef('');
   useEffect(() => {
@@ -755,8 +756,10 @@ export function useHatchState(): Live {
     total: hatch?.total ?? 0,
     etaSeconds: hatch?.estimatedSeconds ?? 0,
     message: hatch?.message ?? null,
+    // ★ 별칭으로 센다(2026-09-13) — 서버가 `shy`→`pet` 처럼 이름을 바꾸는 중이라, 이름 하나로만
+    //   세면 **바뀐 날부터 여덟 개가 전부 '없음'** 으로 잡혀 경고가 거짓말을 한다.
     missingBasics: pet?.phase === 'ALIVE'
-      ? BASIC_KEYS.filter((k) => !pet.motions?.some((m) => m.key === k && m.basicImageKey))
+      ? BASIC_KEYS.filter((k) => !motionAliases(k).some((a) => pet.motions?.some((m) => m.key === a && m.basicImageKey)))
       : [],
     careing, optimistic, resting, chat, chatting, game, guessing, album,
     img, upload, setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, loadAlbum, shareMotion, resume, reset,
@@ -851,21 +854,39 @@ export function useFootPad(src: string, fallback: number): number {
  */
 const warned = new Set<string>();
 
+/**
+ * 그 동작 하나를 찾을 때 **실제로 두드려 볼 이름들**(앞에서부터).
+ *
+ * ★ 별칭이 먼저다(2026-09-13) — 서버가 곧 1층·2층 key 를 새 이름으로 바꾸는데 화면에는 옛 이름이
+ *   박혀 있다. `motionAliases` 가 **있는 쪽을 먼저, 없으면 옛것으로** 모아 준다.
+ *   그 뒤에 `MOTION_FALLBACK`(잠긴 2층 → 1층 대역)이 붙는다. 순서를 바꾸면 **열려 있는 새 이름을
+ *   두고 옛 대역 그림을 쓰게** 된다.
+ */
+function spriteCandidates(key: string): string[] {
+  const out: string[] = [];
+  for (const k of motionAliases(key)) {
+    if (!out.includes(k)) out.push(k);
+    const alt = MOTION_FALLBACK[k];
+    if (alt && !out.includes(alt)) out.push(alt);
+  }
+  return out;
+}
+
 export function spriteUrl(live: Live, key: string, sample = false): string {
-  const alt = MOTION_FALLBACK[key];
-  const yeoul = YEOUL_MOTION[key] ?? (alt ? YEOUL_MOTION[alt] : undefined) ?? YEOUL_MOTION.base;
+  const tries = spriteCandidates(key);
+  const yeoul = tries.map((k) => YEOUL_MOTION[k]).find(Boolean) ?? YEOUL_MOTION.base;
 
   // 여울 샘플 방 · 펫이 없는 개발용 경로 — 여울로 그린다.
   if (sample || !live.petId) return yeoul;
 
-  const mine = live.img(key) ?? (alt ? live.img(alt) : null);
+  const mine = tries.map((k) => live.img(k)).find(Boolean) ?? null;
   if (mine) return mine;
 
   const base = live.img('base');
   if (!warned.has(key)) {
     warned.add(key);
     // eslint-disable-next-line no-console
-    console.warn(`[여울] 내 아이 그림이 없습니다 — key=${key}${alt ? ` (폴백 ${alt} 도 없음)` : ''}. `
+    console.warn(`[여울] 내 아이 그림이 없습니다 — key=${key} (시도: ${tries.join(' → ')}). `
       + `${base ? 'base 로 버팁니다.' : 'base 마저 없어 여울로 버팁니다.'} 기본 8종은 방에 들어온 시점에 다 있어야 합니다.`);
   }
   return base ?? yeoul;

@@ -569,14 +569,14 @@ export function useYeoul(live?: Live) {
       //   반응 동작은 나온다. 친밀도만 안 오른다").
       // 4회째부터는 서버를 안 부른다. 누적 `pets` 를 쓰는 해금이 생기면 여기를 되살릴 것
       // (2026-09-10 확인: `ZzalPet.pet()` 이 올리는 평생 누적 `pets` 를 읽는 곳이 아직 아무 데도 없다).
-      if (esRef.current.pets >= PET_MAX) { act('shy'); return; }
+      if (esRef.current.pets >= PET_MAX) { act('pet'); return; }
       // 돌보기가 도는 중엔 아무 일도 안 한다 — 같은 요청이 두 번 나가지 않게(계약 10절).
       if (liveRef.current?.careing) return;
       // 쓰다듬기도 돌보기 하나다(`PET`). 하트는 서버가 세어 준 오늘 횟수로 판단한다.
       void (async () => {
         const r = await liveRef.current?.doCare('PET');
         if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
-        act('shy');
+        act('pet');
         patch({ hearts: true });
         later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
       })();
@@ -587,7 +587,7 @@ export function useYeoul(live?: Live) {
       pets: Math.min(3, s.pets + 1), hearts: counted,
       bond: counted ? Math.min(100, s.bond + 1) : s.bond,
     });
-    act('shy');
+    act('pet');
     // 4회째부터는 하트를 안 띄운다(위 서버 경로와 같은 규칙). 목 화면도 같은 결이어야
     // 시안을 눌러 본 것과 실제가 어긋나지 않는다.
     if (counted) later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
@@ -622,10 +622,11 @@ export function useYeoul(live?: Live) {
   }, [s.snacks, s.full, patch, act, flash, serverCare]);
 
   const onClean = useCallback(() => {
-    if (onServerRef.current) { void serverCare('CLEAN', 'wash', '깨끗해졌어요'); return; }
+    // 청소는 v4 에서 `sweep` 이다. 아직 그 그림이 없으면 별칭이 옛 `wash` 로 받쳐 준다(constants.MOTION_ALIAS).
+    if (onServerRef.current) { void serverCare('CLEAN', 'sweep', '깨끗해졌어요'); return; }
     if (s.trace <= 0 && !s.sampleMode) { flash('이미 깨끗해요'); return; }
     patch({ trace: 0 });
-    act('wash');
+    act('sweep');
     flash('깨끗해졌어요');
     tutorDone('clean');
   }, [s.trace, s.sampleMode, patch, act, flash, tutorDone, serverCare]);
@@ -781,7 +782,7 @@ export function useYeoul(live?: Live) {
       };
     });
     later('mine', 4200, () => setS((v) => ({ ...v, mine: '' })));
-    act('nod');
+    act('reply');
     tutorDone('chat');
   }, [later, act, tutorDone, patch, flash]);
   /**
@@ -1486,6 +1487,20 @@ export function useYeoul(live?: Live) {
     return {
       lv, calls, top, mode, tut, TUT, unlimited, selK,
       tiles, pop, st, bub, sheet, charGroups, frames, spriteKey,
+      /**
+       * 소품 오버레이가 읽는 **지금 상태**. ★ 무엇을 띄울지는 여기서 정하지 않는다 —
+       * 상황표(`contract/소품-상황표-v1.json`)가 정하고, 이 값은 그 표의 낱말로 번역될 재료다.
+       * (번역은 `tamagotchi/props/situations.ts` 의 `activeSituations`.)
+       */
+      scene: {
+        pose: spriteKey,
+        sick: es.sick,
+        sleeping: es.sleeping,
+        hungry: es.full <= 0,
+        unhappy: es.happy <= 0,
+        chatOpen: s.chatOpen,
+        trash: es.trace,
+      },
       // 자는 동안은 방을 아예 못 연다(판정 13). 화면이 이 값 하나만 보면 되게 둔다.
       asleep: mode === 'sleep',
       // ⚠️ **임시 대체 · 배포 전 진짜 그림으로 교체**(판정 5). 자는 그림이 없어 커튼 뒤로 감춘다 —

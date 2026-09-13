@@ -225,6 +225,17 @@ export type FrameKey = (typeof FRAME_KEYS)[number];
 export const BASIC_KEYS = ['base', 'eat', 'joy', 'sad', 'sick', 'practice', 'shy', 'call'] as const;
 
 /**
+ * 같은 여덟 칸의 **v4 새 이름**(`contract/자세-16종-명세.md` 2절). 옛 이름 옆에 나란히 둔다.
+ *
+ * ★ `BASIC_KEYS` 를 이 값으로 **갈아 끼우지 않는다.** 서버가 아직 옛 이름을 주고 있어서,
+ *   바꾸는 순간 `missingBasics` 가 여덟 개를 전부 '없음' 으로 잡아 거짓 경고가 된다.
+ *   대신 그림을 찾는 자리가 `motionAliases` 로 **양쪽 이름을 다 두드린다**(useHatch.spriteUrl).
+ * ⚠️ 옛 `practice`(훈련)는 v4 에서 빠지고 `sleep`(자기)이 1층으로 올라온다 —
+ *   이름만 바뀐 것이 아니라 **칸이 바뀌는 유일한 자리**다. 백엔드 v4 가 올라온 뒤 여기를 정리한다.
+ */
+export const BASIC_KEYS_V4 = ['base', 'eat', 'joy', 'sad', 'sick', 'pet', 'hello', 'sleep'] as const;
+
+/**
  * 발밑 투명 여백. 그림 한 장은 313 × 350 인데 배경을 지우고 나면 **아래 54px 이 빈칸**이라,
  * 칸을 바닥선에 맞추면 아이가 그만큼 떠 보인다(2026-09-07 상훈님 지적).
  *

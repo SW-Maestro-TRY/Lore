@@ -76,7 +76,50 @@ export function motionBySeq(seq: number): MotionDef | undefined {
 export const MOTION_FALLBACK: Record<string, string> = {
   tilt: 'base', wave: 'call', sleep: 'base', wash: 'joy', startle: 'joy', nod: 'base', smile_idle: 'joy', sit: 'base',
   roll: 'joy', fall_back: 'sad',
+  // ── v4 새 이름을 옛 이름 **옆에 나란히** 더한 것(2026-09-13) ────────────────
+  // ⚠️ 옛 줄은 지우지 않는다 — 서버가 아직 옛 이름을 주고 있어서, 지우면 지금 화면이 깨진다.
+  //    프론트가 먼저 머지되고 백엔드 v4 가 뒤에 오므로 **양쪽 이름이 다 있어야** 한다.
+  pet: 'shy', hello: 'call', sweep: 'wash', reply: 'nod',
+  eat_rice: 'eat', eat_snack: 'eat', petted: 'shy', wake_up: 'base',
 };
+
+/**
+ * **옛 이름 → 새 이름**(v4 1층·2층 재편, `contract/자세-16종-명세.md` 2·3절).
+ * 서버가 이름을 바꾸는 순간 화면이 못 찾는 일이 없게, 물어보는 이름을 먼저 여기로 모은다.
+ */
+const MOTION_CANON: Record<string, string> = {
+  shy: 'pet', call: 'hello', nod: 'reply',
+};
+
+/**
+ * **그림을 찾을 때 시도할 이름 순서** — 있는 쪽(새 이름)을 먼저 쓰고 없으면 옛것으로.
+ *
+ * ★ 왜 필요한가 — 서버가 곧 1층·2층 key 를 새 이름으로 바꾸는데 화면 코드에는 옛 이름이 박혀 있다.
+ *   한쪽만 바뀌면 **그림을 못 찾고도 아무 소리가 안 난다**(여울로 조용히 폴백된다).
+ * ⚠️ 서버가 옛 이름을 다 버린 뒤에 옛 항목을 지운다. 그 전에 지우면 지금 화면이 깨진다.
+ */
+export const MOTION_ALIAS: Record<string, readonly string[]> = {
+  pet: ['pet', 'shy'],
+  hello: ['hello', 'call'],
+  // 임시: 옛 2층 wash 가 청소를 겸했다. 옛 키 제거할 때 이 줄도 삭제
+  sweep: ['sweep', 'wash'],
+  reply: ['reply', 'nod'],
+  eat_rice: ['eat_rice', 'eat'],
+  eat_snack: ['eat_snack', 'eat'],
+  petted: ['petted', 'pet', 'shy'],
+  wake_up: ['wake_up', 'base'],
+  startle: ['startle'],
+  wash: ['wash'],
+};
+
+/**
+ * 그 동작을 찾을 때 **시도할 이름들**(앞에서부터). 옛 이름으로 물어도 새 이름이 먼저 나온다.
+ * 표에 없는 이름은 그대로 하나만 돌려준다.
+ */
+export function motionAliases(key: string): readonly string[] {
+  const canon = MOTION_CANON[key] ?? key;
+  return MOTION_ALIAS[canon] ?? [canon];
+}
 
 /** 여울 기본 움짤(정지 대표컷 자리에도 쓴다). */
 export const YEOUL = `${CDN}/zzal/demo/idle.webp`;
@@ -110,6 +153,15 @@ export const YEOUL_MOTION: Record<string, string> = {
   sit: `${CDN}/zzal/demo/idle.webp`,
   roll: `${CDN}/zzal/demo/happy.webp`,
   fall_back: `${CDN}/zzal/demo/sad.webp`,
+  // ── v4 새 이름을 옛 이름 옆에 나란히(2026-09-13). 옛 줄은 안 지운다 — 위 MOTION_FALLBACK 주석 참조.
+  pet: `${CDN}/zzal/demo/pet.webp`,
+  hello: `${CDN}/zzal/demo/happy.webp`,
+  sweep: `${CDN}/zzal/demo/clean.webp`,
+  reply: `${CDN}/zzal/demo/idle.webp`,
+  eat_rice: `${CDN}/zzal/demo/eat.webp`,
+  eat_snack: `${CDN}/zzal/demo/eat.webp`,
+  petted: `${CDN}/zzal/demo/pet.webp`,
+  wake_up: `${CDN}/zzal/demo/idle.webp`,
 };
 
 /** 받침이 있으면 앞의 것, 없으면 뒤의 것. "쓰다듬을" / "청소를" */
