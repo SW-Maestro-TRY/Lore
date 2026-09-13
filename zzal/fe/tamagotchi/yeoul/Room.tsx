@@ -19,6 +19,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
+import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
 import Panels from './Panels';
@@ -44,7 +45,9 @@ export default function Room({ y }: { y: Yeoul }) {
   // ★ **상황표가 정본이다**(`contract/소품-상황표-v1.json` → `props/table.ts`). 여기서는 지금 상태를
   //   표의 낱말(상황 id)로 옮기기만 한다 — 자세별 소품을 코드에 적지 않는다.
   //   표가 없으면 아무 소품도 안 뜬다. 고장이 아니라 "아직 없음" 이다.
-  const anchors = useAnchors(live.pet?.anchorsKey);
+  // ★ 연습방(여울 샘플)은 서버 펫이 없어 `anchorsKey` 가 없다. 그래서 **여울 시연용 앵커**를 대신 쓴다 —
+  //   그러면 연습방에서도 **진짜 앵커로 그리는 경로**를 눈으로 확인할 수 있다(폴백 띠가 꺼진다).
+  const anchors = useAnchors(live.pet?.anchorsKey, v.sample.show ? YEOUL_ANCHORS_URL : undefined);
   const propTable = SITUATION_TABLE;
   const scene = { pose: v.spriteKey, active: activeSituations(v.scene), stages: { trash: v.scene.trash } };
 

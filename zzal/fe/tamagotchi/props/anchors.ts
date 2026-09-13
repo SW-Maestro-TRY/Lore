@@ -171,16 +171,19 @@ function devAnchorsOverride(): string | null {
  * 앵커 한 벌. **처음부터 고정값을 들고 시작**하므로 받는 동안에도 화면이 멀쩡하다.
  *
  * @param key 서버가 준 `anchorsKey`. 없으면 고정값으로만 간다.
+ * @param fallbackUrl 서버 키가 없을 때 대신 받아 볼 주소. **연습방(여울 샘플)이 쓴다** —
+ *   거기는 서버 펫이 없어 `anchorsKey` 가 영영 안 오는데, 그렇다고 진짜 앵커 경로를 한 번도
+ *   안 밟아 보면 그 길이 도는지 아무도 모른다.
  */
-export function useAnchors(key?: string | null): AnchorState {
+export function useAnchors(key?: string | null, fallbackUrl?: string): AnchorState {
   const [state, setState] = useState<AnchorState>(FIXED);
 
   useEffect(() => {
     const override = devAnchorsOverride();
     const src = override ?? key;
-    if (!src) { setState(FIXED); return; }
+    if (!src && !fallbackUrl) { setState(FIXED); return; }
 
-    const url = override ?? anchorsUrl(src);
+    const url = override ?? (src ? anchorsUrl(src) : fallbackUrl!);
     let alive = true;
     // 받아오는 동안에도 고정값으로 그린다 — 기다리느라 비어 있으면 안 된다.
     setState({ anchors: FIXED_ANCHORS, source: 'fixed', reason: '앵커를 받는 중' });
@@ -191,7 +194,7 @@ export function useAnchors(key?: string | null): AnchorState {
         : { anchors: FIXED_ANCHORS, source: 'fixed', reason: '앵커를 못 받았습니다(콘솔 확인)' });
     });
     return () => { alive = false; };
-  }, [key]);
+  }, [key, fallbackUrl]);
 
   return state;
 }
