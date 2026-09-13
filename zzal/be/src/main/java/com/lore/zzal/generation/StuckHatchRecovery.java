@@ -72,27 +72,39 @@ public class StuckHatchRecovery {
     @Transactional
     public void recover() {
         Instant cutoff = Instant.now().minus(graceperiod);
-        List<ZzalPet> stuck = petRepository.findByPhaseAndHatchStartedAtBefore(PetPhase.HATCHING, cutoff);
+        // ★ DRAFT 도 집는다 — 그림을 올리는 순간부터 굽기 때문에, 이름 짓는 동안 서버가 죽으면
+        //   그 굽기도 사라진다. HATCHING 만 집으면 그 사람은 이름을 낸 뒤 다음 재기동까지 멈춰 있다.
+        List<ZzalPet> stuck = petRepository.findByPhaseInAndHatchStartedAtBefore(
+                List.of(PetPhase.DRAFT, PetPhase.HATCHING), cutoff);
         if (stuck.isEmpty()) {
             return;
         }
-        log.info("멈춘 알 {}개를 이어서 굽습니다", stuck.size());
 
         for (ZzalPet pet : stuck) {
             long attempts = jobRepository.countByPetIdAndKind(pet.getId(), GenKind.HATCH);
+            // ★ 한 번도 안 구운 DRAFT 는 건드리지 않는다 — 이 규칙이 생기기 전에 만들어진 초안이
+            //   여기 걸리면 주인이 부르지도 않은 굽기에 돈이 나간다.
+            if (attempts == 0) {
+                continue;
+            }
+            // ★ 굽기가 이미 다 끝난 DRAFT 는 멈춘 것이 아니라 **이름을 기다리는 중**이다.
+            //   다시 구우면 $0.25 가 그대로 두 번 나간다.
+            String v = jobRepository.findFirstByPetIdOrderByIdDesc(pet.getId())
+                    .map(GenJob::getPipelineVersion)
+                    .orElse(hatchService.currentVersion());
+            if (hatchService.stepsDone(pet.getId(), v) >= hatchService.stepsTotal(v)) {
+                continue;
+            }
             if (attempts >= maxAttempts) {
                 log.warn("시도를 다 썼습니다 — petId={} 시도={}회 → 실패로 종료", pet.getId(), attempts);
                 recorder.markPetFailed(pet.getId());
                 continue;
             }
-            // ★ 원래 job 의 버전을 잇는다 — 설정이 그 사이 v2 로 바뀌었어도 굽던 알은 굽던 버전으로 끝낸다
-            //   (#218 리뷰: 안 그러면 v1 격자를 v2 후처리가 자르려다 어긋난다). 기록이 없으면 현재 버전.
-            String version = jobRepository.findFirstByPetIdOrderByIdDesc(pet.getId())
-                    .map(GenJob::getPipelineVersion)
-                    .orElse(hatchService.currentVersion());
+            // ★ 원래 job 의 버전(v)을 잇는다 — 설정이 그 사이 v2 로 바뀌었어도 굽던 알은 굽던 버전으로 끝낸다
+            //   (#218 리뷰: 안 그러면 v1 격자를 v2 후처리가 자르려다 어긋난다).
             GenJob job = jobRepository.save(GenJob.start(
-                    pet.getId(), GenKind.HATCH, (int) attempts + 1, version, Instant.now()));
-            log.info("이어서 굽기 — petId={} attempt={}", pet.getId(), attempts + 1);
+                    pet.getId(), GenKind.HATCH, (int) attempts + 1, v, Instant.now()));
+            log.info("이어서 굽기 — petId={} phase={} attempt={}", pet.getId(), pet.getPhase(), attempts + 1);
             hatchService.hatch(job.getId(), pet.getId(), job.getPipelineVersion());
         }
     }

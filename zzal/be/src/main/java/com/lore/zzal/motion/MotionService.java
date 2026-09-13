@@ -125,7 +125,7 @@ public class MotionService {
             if (motionRecorder.requestLocalRegen(motionId, localRegenMax)) {
                 log.info("맥미니 재생성 요청 — motionId={} (관리자 GET /regen-requests 로 나간다)", motionId);
             } else {
-                log.warn("로컬 재생성 한도({})를 다 썼다 — motionId={} 그 밤은 실패, 다음 밤에 다시", localRegenMax, motionId);
+                log.warn("로컬 재생성 한도({})를 다 썼다 — motionId={} 보류함으로(자동 재시도 없음)", localRegenMax, motionId);
             }
         } catch (RuntimeException | Error e) {
             log.error("재생성 요청 기록 실패 — motionId={} (기동 복구가 회수합니다)", motionId, e);
@@ -179,13 +179,14 @@ public class MotionService {
 
         // ★ 이어받기는 반드시 이 모션 것만. 펫으로 묶으면 다른 동작의 격자를 물려받는다.
         RunResult r = runner.run(job.getId(), ctx,
-                registry.steps(GenKind.MOTION, version),
+                registry.stages(GenKind.MOTION, version),
                 stepRepository.findSucceededByMotion(motionId));
         if (!r.success()) {
             return false;
         }
 
         String imageKey = ctx.image(MotionPostStep.NAME);
+        String gridKey = ctx.image(MotionGridStep.NAME);
         MotionGate.Verdict v = gate.judge(imageKey);
 
         if (v.verdict() == GateVerdict.FAIL) {
@@ -203,7 +204,15 @@ public class MotionService {
 
         // ★★ 검수 대기까지가 서버 몫이다. 사용자 화면은 상훈님이 OK 를 누르고, 그다음
         //   펫이 깨어 있는 첫 정산에 도착한다(정본 2장 "기상 첫 화면").
-        motionRecorder.toReview(motionId, imageKey, v);
+        // ★ 격자도 같이 남긴다 — 판정 화면이 "원본 그림 · 시트 · 격자 · 완성본" 넷을 나란히 본다.
+        // ★★ 늦게 도착하면 진다 — 그 사이 복구가 다른 판을 띄우고 그 판이 이미 판정됐을 수 있다.
+        //   진 쪽은 조용히 물러난다. 늦게 끝난 굽기가 잘못한 것은 없고, 돈은 이미 나갔으므로
+        //   여기서 예외를 던져 봐야 되돌릴 것도 없다. 돈이 어디로 갔는지는 로그와 GenJob 에 남는다.
+        if (!motionRecorder.toReview(motionId, gridKey, imageKey, v)) {
+            log.warn("늦게 끝난 굽기 — motionId={} 는 이미 다른 판으로 넘어갔다. 이 판은 버린다(비용=${})",
+                    motionId, r.costUsd());
+            return true;
+        }
         log.info("모션 구움 — motionId={} 동작={} 게이트={} 비용=${} (검수 대기)",
                 motionId, motion.getName(), v.verdict(), r.costUsd());
         return true;

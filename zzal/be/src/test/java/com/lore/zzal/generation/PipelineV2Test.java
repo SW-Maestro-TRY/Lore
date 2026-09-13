@@ -31,9 +31,9 @@ import static org.mockito.Mockito.verify;
 class PipelineV2Test {
 
     private PipelineRegistry registry(String hatchVersion, boolean v2PromptsExist) {
-        GridStep grid = mock(GridStep.class);
-        GridStep grid2 = mock(GridStep.class);
-        return new PipelineRegistry(mock(SheetStep.class), mock(IdentityStep.class), grid, grid2, mock(PostProcessStep.class),
+        GridStep grid = StepMocks.grid();
+        GridStep grid2 = StepMocks.grid2();
+        return new PipelineRegistry(mock(SheetStep.class), StepMocks.identity(), grid, grid2, mock(PostProcessStep.class),
                 mock(MotionGridStep.class), mock(MotionPostStep.class), hatchVersion, "v1", path -> v2PromptsExist);
     }
 
@@ -44,6 +44,23 @@ class PipelineV2Test {
         assertThat(r.currentVersion(GenKind.HATCH)).isEqualTo("v2");
         assertThat(r.steps(GenKind.HATCH, "v2")).hasSize(5);
         assertThat(r.steps(GenKind.HATCH, "v1")).hasSize(4);
+    }
+
+    @Test
+    @DisplayName("★ v2 묶음 — 격자 두 장만 한 묶음(나란히), identity 는 그 앞 묶음이라 반드시 먼저 끝난다")
+    void v2RunsBothGridsTogether() {
+        PipelineRegistry r = registry("v2", true);
+        List<List<GenerationStep>> stages = r.stages(GenKind.HATCH, "v2");
+
+        assertThat(stages).hasSize(4);
+        assertThat(stages.get(2)).hasSize(2);                     // grid · grid2
+        assertThat(stages).allSatisfy(stage -> assertThat(stage).isNotEmpty());
+        assertThat(stages.get(0)).hasSize(1);                     // sheet
+        assertThat(stages.get(1)).hasSize(1);                     // identity — 격자보다 앞
+        assertThat(stages.get(3)).hasSize(1);                     // post — 격자 뒤
+
+        // v1 은 격자가 한 장이라 나란히 돌 것이 없다
+        assertThat(r.stages(GenKind.HATCH, "v1")).allSatisfy(stage -> assertThat(stage).hasSize(1));
     }
 
     @Test

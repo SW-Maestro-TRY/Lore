@@ -23,8 +23,17 @@ public final class PetFixture {
      *   재울 수가 없고, 튜토리얼이 영영 막힌다. 낮잠을 보는 테스트는 여기를 지나야 한다.
      */
     public static void readyForNap(ZzalPet pet) {
-        org.springframework.test.util.ReflectionTestUtils.setField(
-                pet, "tutorialStep", com.lore.zzal.pet.TutorialSchedule.Step.NAP.ordinal());
+        atTutorialStep(pet, com.lore.zzal.pet.TutorialSchedule.Step.NAP);
+    }
+
+    /**
+     * 튜토리얼을 원하는 칸에 맞춘다.
+     *
+     * ★ 칸은 <b>순서</b>라 앞 칸을 실제로 해야 넘어간다(정본 1.4). 규칙이 아니라 그 칸에서
+     *   무슨 일이 일어나는지를 보려는 테스트는 여기로 자리만 잡는다.
+     */
+    public static void atTutorialStep(ZzalPet pet, com.lore.zzal.pet.TutorialSchedule.Step step) {
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "tutorialStep", step.ordinal());
     }
 
     /** 이름까지 받은, 격자를 굽는 중인 펫. */

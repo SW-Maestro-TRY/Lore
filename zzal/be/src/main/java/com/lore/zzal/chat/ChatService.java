@@ -35,11 +35,14 @@ public class ChatService {
     private final ZzalChatCallRepository callRepository;
     private final PetService petService;
     private final MotionCatalog catalog;
+    private final com.lore.zzal.piece.PieceService pieceService;
 
-    public ChatService(ZzalChatCallRepository callRepository, PetService petService, MotionCatalog catalog) {
+    public ChatService(ZzalChatCallRepository callRepository, PetService petService, MotionCatalog catalog,
+                       com.lore.zzal.piece.PieceService pieceService) {
         this.callRepository = callRepository;
         this.petService = petService;
         this.catalog = catalog;
+        this.pieceService = pieceService;
     }
 
     /** 오늘의 부름들. 도래했는데 없는 행은 여기서 만든다(자는 중에도 조회는 된다). */
@@ -68,6 +71,7 @@ public class ChatService {
         PetService.Action action = petService.withUnlockDiff(pet, () -> {
             call.answer(text, reply, reaction, now);
             pet.answerChat();
+            pieceService.count(pet, com.lore.zzal.piece.PieceEvent.CHAT);
         });
         return new Answered(action, reply, reaction);
     }

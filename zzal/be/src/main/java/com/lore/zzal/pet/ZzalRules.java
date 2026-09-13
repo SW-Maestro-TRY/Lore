@@ -91,8 +91,13 @@ public final class ZzalRules {
     /** 간식 한 번의 행복 회복량. */
     public static final int SNACK_HAPPINESS = 1;
 
-    /** 다른 행동 없이 간식이 이만큼 연달아 오면 배탈(5장 방치 발병 100%). */
-    public static final int SNACK_STREAK_SICK_AT = 5;
+    /**
+     * <b>그날</b> 간식이 이만큼째면 배탈(정본 1.9 · 5장 방치 발병 100%).
+     *
+     * ★ 옛 규칙은 "다른 행동 없이 연달아 5개" 였다. 사이에 밥을 한 번만 끼우면 연속이 끊겨
+     *   <b>하루에 열 개도 먹일 수 있었다.</b> "연속" 을 안 보고 그날 몇 개째인지만 본다.
+     */
+    public static final int SNACK_DAILY_SICK_AT = 5;
 
     /** 목욕 = 흔적 0 + 행복 +1. 하루 1회. */
     public static final int BATH_HAPPINESS = 1;
@@ -160,14 +165,39 @@ public final class ZzalRules {
     /** 배경 바꾸기 = 2층 4종 열림. */
     public static final int BACKGROUND_UNLOCK_LAYER2_OPEN = 4;
 
-    /** 3층 조각 — 4개를 이틀 연속 채우면 다음 밤 굽기. 굽기 실패는 조각을 소모하지 않는다. */
-    public static final int PIECES_STREAK_TO_BAKE = 2;
+    // ── 3층 조각 (정본 6장 · 세는 법은 1.9) ────────────────────────────────
+    //
+    // ★★ 숫자를 "하루에 할 수 있는 최대치보다 크게" 잡았다. 그래서 규칙에 "이틀" 이라는 말이
+    //    한 번도 안 나오는데도 자연히 이틀이 걸린다 — 채팅은 하루 3회인데 5회를 요구하는 식이다.
+    //    날짜를 세는 자리가 없으니 "하루라도 빠지면 0부터" 같은 벌도 생길 수가 없다(1.8).
+    // ★ 하루 최대는 07:00 기상~23:00 취침(16시간) 기준이다. 10:00 에 일어나 19:00 에 재우면
+    //   9시간이라 흔적이 2개밖에 안 생겨 청결 조각이 사흘 걸릴 수도 있다(1.9).
 
-    /** 밥 조각 — 하루에 밥 2회(정본 6장). */
-    public static final int PIECE_FEEDS = 2;
+    /** 밥 조각 — 밥 6회. 하루 최대 4~5회(배부름이 줄어드는 만큼만 먹일 수 있다). */
+    public static final int PIECE_FEEDS = 6;
 
-    /** 교감 조각의 쓰다듬기 쪽 — 하루 2회(채팅 응답 1회면 그것으로 충족). */
-    public static final int PIECE_PETS = 2;
+    /** 놀이 조각 — 게임 5판(매치. 승패 무관). 하루 3판. */
+    public static final int PIECE_GAMES = 5;
+
+    /** 놀이 조각 — 간식 5회. ★ 배탈이 난 간식은 안 세므로 하루 4회에서 멈춘다(1.9). */
+    public static final int PIECE_SNACKS = 5;
+
+    /** 청결 조각 — 목욕 2회. 하루 1회. */
+    public static final int PIECE_BATHS = 2;
+
+    /** 청결 조각 — 청소 5회. 흔적이 4시간마다 1개라 하루 최대 4회. */
+    public static final int PIECE_CLEANS = 5;
+
+    /** 교감 조각 — 채팅 응답 5회. 하루 3회. */
+    public static final int PIECE_CHATS = 5;
+
+    /**
+     * 교감 조각 — 쓰다듬기 5회.
+     *
+     * ★ 쓰다듬기에는 거절이 없어(16장) 그대로 두면 하루에 다섯 번 연타해 채울 수 있다.
+     *   그래서 <b>하루 3회까지만 조각에 센다</b>(친밀도가 멈추는 선과 같다).
+     */
+    public static final int PIECE_PETS = 5;
 
     /** 두 번째 선물(뒤로 넘어짐)은 3층 심화가 이만큼 열린 뒤(정본 6·16장). */
     public static final int SECOND_GIFT_AFTER_ADVANCED = 8;
@@ -299,7 +329,24 @@ public final class ZzalRules {
      *
      * ⚠️ 부화 완료 판정에 쓰지 않는다 — 완료를 정하는 것은 실제 생성이 끝났는지다.
      *    이 값은 화면에 "얼마나 남았나" 를 그리기 위한 것뿐이다.
-     *    실측 정상 경로는 143초이고(15장), 리미트를 다 쓰면 약 7분이다.
+     *
+     * <h3>★ 10분 → 4분 (1.9)</h3>
+     * 10분은 실측이 아니라 넉넉히 잡은 값이었다. 화면이 <b>실제보다 다섯 배 지루하게</b> 말하고 있었다.
+     * 운영 서버에서 실제로 돈을 쓴 두 판을 재고, 격자 두 장을 나란히 굽는 변경분을 반영했다.
+     *
+     * <pre>
+     *   펫 16   시트 44초 + 격자 경로 132초 = 176초
+     *   펫 15   시트 54초 + 격자 경로 137초 = 191초
+     *           └ 나란히 굽기로 41초가 빠진다 → 135초 · 150초
+     *   재시도 한 번의 여유를 얹어 240초
+     * </pre>
+     *
+     * ★ <b>표본이 두 판이라 잠정값이다.</b> 단계별 시각·비용은 이미 {@code zzal_gen_step} 에
+     *   전부 쌓이고 있으므로, 실사용이 스무 판쯤 모이면 <b>돈을 더 쓰지 않고</b> 90퍼센타일로 다시 잡는다.
+     *   평균으로 잡으면 절반이 예상보다 늦어지므로 평균을 쓰지 않는다.
+     *
+     * ★ 사용자가 체감하는 시간은 이보다 짧다 — 굽기가 <b>그림을 올리는 순간</b> 시작하므로,
+     *   이름을 짓고 나면 이미 상당 부분이 지나 있다(이름 짓는 데 걸린 실측 2분 54초).
      */
-    public static final Duration HATCH_ESTIMATE = Duration.ofMinutes(10);
+    public static final Duration HATCH_ESTIMATE = Duration.ofMinutes(4);
 }

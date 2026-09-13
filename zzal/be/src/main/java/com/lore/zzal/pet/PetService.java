@@ -11,10 +11,10 @@ import com.lore.zzal.generation.GenKind;
 import com.lore.zzal.generation.GenStatus;
 import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.pet.dto.PetResponses;
-import com.lore.zzal.generation.PetSheetRequested;
+import com.lore.zzal.piece.PieceEvent;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
-import com.lore.zzal.generation.PetSheetRequested;
+import com.lore.zzal.generation.PetNamed;
 import com.lore.zzal.generation.StepLabels;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.motion.MotionSeeder;
@@ -22,7 +22,7 @@ import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.motion.ZzalMotionRepository;
-import com.lore.zzal.night.NightPlanner;
+import com.lore.zzal.night.BakeTrigger;
 import com.lore.zzal.text.Josa;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -61,9 +61,10 @@ public class PetService {
     private final MotionCatalog catalog;
     private final ZzalMotionRepository motionRepository;
     private final MotionSeeder motionSeeder;
-    private final NightPlanner nightPlanner;
+    private final BakeTrigger bakeTrigger;
     private final com.lore.zzal.scene.SceneService sceneService;
     private final com.lore.zzal.leave.LeaveService leaveService;
+    private final com.lore.zzal.piece.PieceService pieceService;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -76,15 +77,17 @@ public class PetService {
                       MotionCatalog catalog,
                       ZzalMotionRepository motionRepository,
                       MotionSeeder motionSeeder,
-                      NightPlanner nightPlanner,
+                      BakeTrigger bakeTrigger,
                       com.lore.zzal.scene.SceneService sceneService,
-                      com.lore.zzal.leave.LeaveService leaveService) {
+                      com.lore.zzal.leave.LeaveService leaveService,
+                      com.lore.zzal.piece.PieceService pieceService) {
         this.catalog = catalog;
         this.motionRepository = motionRepository;
         this.motionSeeder = motionSeeder;
-        this.nightPlanner = nightPlanner;
+        this.bakeTrigger = bakeTrigger;
         this.sceneService = sceneService;
         this.leaveService = leaveService;
+        this.pieceService = pieceService;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.stepRepository = stepRepository;
@@ -96,10 +99,18 @@ public class PetService {
     }
 
     /**
-     * 그림을 등록한다 — <b>초안</b>을 만들고 캐릭터 시트 굽기를 시작한다.
+     * 그림을 등록한다 — <b>초안</b>을 만들고 <b>부화를 끝까지</b> 굽기 시작한다.
      *
-     * <h3>★ 왜 이름을 나중에 받나</h3>
-     * 부화 전체가 2~7분이다. 사용자가 이름을 짓는 동안(약 74초) 시트를 미리 구우면 그만큼 앞당겨진다.
+     * <h3>★ 왜 여기서 끝까지 굽나 (2026-09-11)</h3>
+     * 전에는 시트 한 장만 굽고 이름이 올 때까지 멈춰 있었다. 실측에서 그 공백이 <b>2분 54초</b>였고,
+     * 그동안 서버는 아무것도 안 했다. 그림 생성에 들어가는 사용자 입력은 없으므로
+     * (자유 메모마저 1.9에서 빠졌다 — {@code IdentityStep} 주석) 기다릴 이유가 없다.
+     * 목표는 <b>사용자가 이름을 다 지었을 때 이미 끝나 있는 것</b>이다.
+     *
+     * <h3>★ 그래도 이름 없이는 안 살아난다</h3>
+     * 굽기가 먼저 끝나면 펫은 초안인 채로 기다린다. 살아나는 조건은
+     * <b>굽기 완료 + 이름 제출</b> 둘 다이고, 나중에 갖춰지는 쪽이 살린다
+     * ({@code HatchService.completeIfReady}).
      *
      * <h3>★ 이름을 안 짓고 나갔다가 다시 오면 그 초안을 이어간다</h3>
      * 시트는 이미 구웠고 돈도 나갔다. 새 그림으로 시작하고 싶으면 초안을 버리는 길을 따로 둔다.
@@ -130,30 +141,36 @@ public class PetService {
         String version = hatchService.currentVersion();
         pet.setHatchPipelineVersion(version);
         GenJob job = jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, version, now));
-        events.publishEvent(new PetSheetRequested(job.getId(), pet.getId(), version));
+        events.publishEvent(new PetHatchRequested(job.getId(), pet.getId(), version));
         return pet;
     }
 
     /**
-     * 초안에 캐릭터 정보를 채운다 — <b>격자 생성이 여기서 시작된다.</b>
+     * 초안에 캐릭터 정보를 채운다.
      *
-     * ★ 시트는 이미 구워져 있으므로 실행기가 그 단계를 건너뛴다. 아직 굽는 중이면
-     *   같은 작업이 이어서 돌기를 기다렸다가 다음 단계로 넘어간다.
+     * <h3>★ 여기서 굽기를 시작하지 않는다 (2026-09-11)</h3>
+     * 굽기는 그림을 올릴 때 이미 시작했다. 이 호출이 하는 일은 <b>이름을 채우는 것</b>과,
+     * 그 사이 굽기가 끝나 있었다면 <b>그 자리에서 살리는 것</b>뿐이다.
+     * 굽는 중이면 아무 일도 일어나지 않고, 굽기가 끝나는 쪽이 살린다.
      */
     @Transactional
     public ZzalPet character(Long userId, Long petId, String name, String note,
-                             Personality personality, String world, Instant now) {
+                             java.util.List<Personality> personalities, String world, Instant now) {
         ZzalPet pet = findMine(userId, petId);
+        // ★★ 굽기가 실패한 펫을 "이미 이름을 지었다" 로 답하면 안 된다 — 이름을 방금 처음 지은
+        //   사람에게 사실과 정반대로 말하게 되고, 다음에 무엇을 해야 하는지도 알 수 없다.
+        //   그림을 올리는 순간부터 굽기 때문에, 이름을 짓는 2~3분 사이에 실패가 끝나 있을 수 있다.
+        if (pet.getPhase() == PetPhase.FAILED) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_HATCH_FAILED);
+        }
         if (!pet.isDraft()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_DRAFT);
         }
-        pet.character(name, note, personality, world, now);
+        pet.character(name, note, personalities, world, now);
 
         String version = pet.getHatchPipelineVersion() != null
                 ? pet.getHatchPipelineVersion() : hatchService.currentVersion();
-        long attempts = jobRepository.countByPetIdAndKind(petId, GenKind.HATCH);
-        GenJob job = jobRepository.save(GenJob.start(petId, GenKind.HATCH, (int) attempts + 1, version, now));
-        events.publishEvent(new PetHatchRequested(job.getId(), petId, version));
+        events.publishEvent(new PetNamed(petId, version));
         return pet;
     }
 
@@ -263,6 +280,8 @@ public class PetService {
         pet.visit(now);
         reveal(pet, now);
         openPieces(pet, windowStart, now);
+        // ★ 기상에 네 칸을 되돌리고 기분 좋은 날의 선물을 얹는다(정본 1.9). 엔티티가 남긴 쪽지를 본다.
+        pieceService.settle(pet);
     }
 
     /**
@@ -305,7 +324,14 @@ public class PetService {
         }
         if (pet.readyForPieces(now)) {
             pet.enablePieces(now);
+            pieceService.open(pet.getId());   // 3층이 열리는 이 순간부터 센다(그 전 돌보기는 소급 없음)
         }
+    }
+
+    /** 그 펫의 조각 줄. 3층 전이면 null. */
+    @Transactional(readOnly = true)
+    public com.lore.zzal.piece.ZzalPiece pieces(Long petId) {
+        return pieceService.find(petId);
     }
 
     /** 그 펫의 혼자 논 장면(최근 것부터, 최대 3). */
@@ -408,6 +434,12 @@ public class PetService {
         return wasSick && !pet.isSick() ? result.healed() : result;
     }
 
+    /**
+     * 돌보기 하나를 실제로 적용하고, <b>성공했을 때만</b> 조각을 센다(정본 6장 · 1.9).
+     *
+     * ★ 거절("배가 불러요" · "이미 깨끗해요" · "오늘은 목욕했어요")은 여기서 예외로 끝나므로
+     *   조각을 세는 줄에 닿지 않는다 — 세지 않으려고 따로 막을 것이 없다.
+     */
     private void doCare(ZzalPet pet, CareAction action, Instant now) {
         switch (action) {
             case FEED -> {
@@ -419,6 +451,7 @@ public class PetService {
                             "%s 배가 불러요".formatted(Josa.nameTopic(pet.getName())));
                 }
                 pet.feed(now);
+                pieceService.count(pet, PieceEvent.FEED);
             }
             // ★ 간식은 행복이 가득이어도 받는다(상훈님 2026-09-05 결정 — 원조도 간식은 항상 먹고 과다 시 병).
             //   밥만 가득이면 거절. 연속 5개 배탈은 PR-8.
@@ -426,21 +459,37 @@ public class PetService {
                 if (pet.isSick()) {
                     throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
                 }
+                // ★ 배탈이 나는 그 간식(그날 5개째부터)은 조각에 세지 않는다(정본 1.9).
+                //   묻는 것이 먹이기 <b>전</b>이어야 한다 — 먹인 뒤에는 이미 숫자가 올라가 있다.
+                boolean upsets = pet.nextSnackUpsets();
                 pet.snack(now);
+                if (!upsets) {
+                    pieceService.count(pet, PieceEvent.SNACK);
+                }
             }
             // 쓰다듬기는 거절이 없다 — 하루 3회를 넘어도 반응 동작은 나온다(16장). 친밀도만 안 오른다.
-            case PET -> pet.pet(now);
+            case PET -> {
+                // ★ 쓰다듬기는 하루 3회까지만 센다. 거절이 없어 그대로 두면 연타로 채울 수 있다(정본 6장).
+                //   친밀도가 멈추는 선과 같은 선을 쓴다 — todayPetCount 가 실제로 올랐을 때만 센다.
+                int before = pet.getTodayPetCount();
+                pet.pet(now);
+                if (pet.getTodayPetCount() > before) {
+                    pieceService.count(pet, PieceEvent.PET);
+                }
+            }
             case CLEAN -> {
                 if (pet.getTrash() <= 0) {
                     throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED, "바닥이 이미 깨끗해요");
                 }
                 pet.clean(now);
+                pieceService.count(pet, PieceEvent.CLEAN);
             }
             case BATH -> {
                 if (pet.isTodayBathDone()) {
                     throw new BusinessException(ErrorCode.ZZAL_BATH_DONE_TODAY);
                 }
                 pet.bath(now);
+                pieceService.count(pet, PieceEvent.BATH);
             }
             case MEDICINE -> {
                 if (!pet.isSick()) {
@@ -473,9 +522,10 @@ public class PetService {
         if (sceneService.recordNight(pet) > 0) {
             pet.markSceneMade();
         }
-        // ★ 밤잠에 든 순간 = 굽기 큐 등록(정본 2장 "잠드는 순간 하는 일"). 23:00 자동 취침은 스위프가 같은 일을 한다.
+        // ★ 밤잠에 든 순간 = 첫 심화 행동 판정(그날 케어 미스 0 이 여기서 확정된다)과 3층 차례.
+        //   1.8 부터는 예약만 하지 않고 <b>그 자리에서 굽기 시작</b>한다.
         if (pet.getSleepKind() == SleepKind.NIGHT) {
-            nightPlanner.plan(pet, AwakeClock.dateOf(now));
+            bakeTrigger.onSleep(pet, now);
         }
         return a;
     }
@@ -529,16 +579,48 @@ public class PetService {
         if (pet.getTutorialStep() < TutorialSchedule.TOTAL - 1) {
             throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_NOT_FINISHED);
         }
-        return withUnlockDiff(pet, () -> pet.startClock(pet.now(realNow)));
+        Action a = withUnlockDiff(pet, () -> pet.startClock(pet.now(realNow)));
+        // ★ 튜토리얼 완주 보상(구르기)을 <b>그 순간</b> 굽는다(정본 1.7·1.8).
+        //   첫날에 손에 쥐는 결과물이 있어야 다음 날 다시 온다.
+        bakeTrigger.onTutorialDone(pet, pet.now(realNow));
+        return a;
     }
 
     // ── 성격·배경·공유 (정본 6·10·15장) ───────────────────────────────────
 
     /** 성격·세계관. 언제든, 자는 중에도(정본 10장 "언제든 변경"). */
     @Transactional(noRollbackFor = BusinessException.class)
-    public Action choosePersonality(Long userId, Long petId, Personality personality, String world, Instant realNow) {
+    public Action choosePersonality(Long userId, Long petId, java.util.List<Personality> personalities,
+                                    String world, Instant realNow) {
+        if (personalities == null || personalities.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "성격을 하나는 골라 주세요");
+        }
         ZzalPet pet = alive(userId, petId, realNow);
-        return withUnlockDiff(pet, () -> pet.choosePersonality(personality, world));
+        return withUnlockDiff(pet, () -> pet.choosePersonality(personalities, world));
+    }
+
+    /**
+     * 튜토리얼 4칸("이 성격이 맞나요") — <b>아이 정보를 확인만 해도</b> 넘어간다(상훈님 2026-09-11).
+     *
+     * <h3>★ 왜 화면 혼자 넘기면 안 되나</h3>
+     * 두 군데서 막힌다. 서버가 4칸에 남아 있으면 그다음 행동(청소)이 와도 {@code != done} 으로
+     * 무시돼 <b>튜토리얼이 영영 막히고</b>, <b>첫 흔적이 이 칸을 넘길 때 생기므로</b> 화면만
+     * 넘기면 바닥이 깨끗해 5칸(청소)에서 또 막힌다.
+     *
+     * ★ 성격을 한 번도 안 고른 사람은 {@code null} 인 채 지나간다 — 상훈님이 그래도 된다고 하셨다
+     *   ("괜찮아. 튜토리얼에서도 한 번 더 받으니까"). 기본 톤으로 가고 언제든 바꿀 수 있다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action tutorialSeen(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        if (!pet.isInTutorial()) {
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_ALREADY_DONE);
+        }
+        if (TutorialSchedule.currentOf(pet.getTutorialStep()) != TutorialSchedule.Step.PERSONALITY) {
+            // ★ 아무 칸에서나 밀면 순서가 무너진다 — 지금 칸이 아니면 아무 일도 하지 않는다.
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+        }
+        return withUnlockDiff(pet, () -> pet.advanceTutorial(TutorialSchedule.Step.PERSONALITY));
     }
 
     /** 배경 바꾸기 — 2층 4종이 열린 뒤(정본 6장). 값은 검증하지 않는다(해석 6). */
@@ -721,6 +803,11 @@ public class PetService {
      * <h3>★ 실패 문구는 두 가지뿐이다</h3>
      * 원인(거부·시간 초과·모델 오류)을 노출하면 사용자는 자기 그림이 무엇에 걸렸는지 추측하게 되고,
      * 그 추측은 대개 틀린다. 다시 해 볼 만한지 아닌지만 말한다.
+     *
+     * <h3>★ phase 와 progress 가 서로 다른 것을 말한다 (1.9)</h3>
+     * {@code progress} 는 <b>굽기가 몇 단계까지 됐나</b>이고, {@code phase} 는 <b>살아났나</b>이다.
+     * 그림을 올린 순간부터 끝까지 굽기 때문에 <b>DRAFT 인데 진행이 5/5</b> 인 상태가 생긴다 —
+     * "굽기는 끝났고 이름을 기다리는 중" 이라는 뜻이다. 이름을 안 낸 사람에게 ALIVE 를 주지 않는다.
      */
     @Transactional(readOnly = true)
     public PetResponses.Hatch hatchProgress(Long userId, Long petId, Instant now) {
@@ -735,8 +822,10 @@ public class PetService {
             long spent = Duration.between(pet.getHatchStartedAt(), now).toSeconds();
             left = Math.max(0, ZzalRules.HATCH_ESTIMATE.toSeconds() - spent);
         }
+        // ★ 제출 순간의 오류(ZZAL_PET_HATCH_FAILED)와 <b>같은 말</b>이어야 한다. 두 화면이 다르게
+        //   말하면 사용자는 서로 다른 두 가지 일이 일어난 줄로 읽는다.
         String message = pet.getPhase() == PetPhase.FAILED
-                ? "이 그림은 어려워요. 다른 그림을 올려 주세요"
+                ? ErrorCode.ZZAL_PET_HATCH_FAILED.getDefaultMessage()
                 : null;
         return new PetResponses.Hatch(pet.getPhase().name(), currentStepLabel(petId),
                 Math.min(done, total), total, left, message);

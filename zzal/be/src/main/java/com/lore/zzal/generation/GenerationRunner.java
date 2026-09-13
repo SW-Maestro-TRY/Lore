@@ -6,8 +6,10 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -18,10 +20,14 @@ import java.util.concurrent.TimeoutException;
  * 파이프라인을 실제로 돌리는 곳. **단계가 몇 개인지, 무슨 일을 하는지 모른다.**
  *
  * 하는 일 넷
- *   1) 버전에 맞는 단계 목록을 순서대로 실행
+ *   1) 버전에 맞는 <b>묶음</b>들을 순서대로 실행 — 한 묶음 안의 단계는 나란히 돈다
  *   2) 단계마다 시간 제한을 걸고, 넘으면 끊는다
  *   3) 단계마다 결과를 기록한다(성공·실패·비용·산출물)
  *   4) 재시도면 **이미 성공한 단계는 건너뛴다** — 시트가 됐으면 $0.063 을 다시 쓰지 않는다
+ *
+ * <h3>★ 나란히 돌 때도 기록은 단계마다 따로다</h3>
+ * 한 묶음에서 한쪽이 실패해도 <b>다른 쪽의 성공 기록은 그대로 남는다</b>(기록이 단계별 커밋이라).
+ * 그래서 다시 시도하면 실패한 쪽만 구워진다 — 격자 두 장 중 한 장 값을 다시 쓰지 않는다.
  */
 @Component
 public class GenerationRunner {
@@ -42,16 +48,16 @@ public class GenerationRunner {
     }
 
     /**
-     * 단계 목록을 순서대로 돌린다.
+     * 묶음 목록을 순서대로 돌린다.
      *
      * ★ 이 메서드는 <b>무엇을 굽는지 모른다</b>. 부화인지 모션인지, 끝나면 무엇이 되어야 하는지
      *   모두 부르는 쪽의 일이다. 여기서는 돌리고, 시간을 재고, 기록하고, 결과를 돌려준다.
      *
      * @param ctx    무엇으로 굽는지가 담긴 재료(부르는 쪽이 채워서 준다)
-     * @param steps  돌릴 단계 목록
+     * @param stages 돌릴 묶음 목록. 묶음 안은 동시에, 묶음 사이는 순서대로
      * @param resume 앞선 시도에서 성공한 단계들. 이어받아 건너뛴다
      */
-    public RunResult run(Long jobId, StepContext ctx, List<GenerationStep> steps,
+    public RunResult run(Long jobId, StepContext ctx, List<List<GenerationStep>> stages,
                          List<GenStepRecord> resume) {
         String version = ctx.version();
         recorder.markJobRunning(jobId);
@@ -68,38 +74,27 @@ public class GenerationRunner {
         });
 
         BigDecimal total = BigDecimal.ZERO;
+        int seq = 0;
 
-        for (int i = 0; i < steps.size(); i++) {
-            GenerationStep step = steps.get(i);
-
-            if (ctx.image(step.name()) != null || ctx.text(step.name()) != null) {
-                log.info("건너뜀(이미 성공) — jobId={} step={}", jobId, step.name());
+        for (List<GenerationStep> stage : stages) {
+            List<Pending> todo = new ArrayList<>();
+            for (GenerationStep step : stage) {
+                if (ctx.image(step.name()) != null || ctx.text(step.name()) != null) {
+                    log.info("건너뜀(이미 성공) — jobId={} step={}", jobId, step.name());
+                } else {
+                    todo.add(new Pending(step, seq));
+                }
+                seq++;
+            }
+            if (todo.isEmpty()) {
                 continue;
             }
 
-            Long stepId = recorder.startStep(jobId, i, step.name());
-            try {
-                StepResult r = runWithLimit(step, ctx);
-                recorder.succeedStep(stepId, r);
-                if (r.imageKey() != null) {
-                    ctx.putImage(r.name(), r.imageKey());
-                }
-                if (r.text() != null) {
-                    ctx.putText(r.name(), r.text());
-                }
-                total = total.add(r.costUsd());
-            } catch (TimeoutException e) {
-                log.warn("시간 초과 — jobId={} step={} ({}초)", jobId, step.name(),
-                        limitOverrideSeconds > 0 ? limitOverrideSeconds : step.limitSeconds());
-                recorder.failStep(stepId, GenErrorCode.TIMEOUT);
-                recorder.failJob(jobId, GenErrorCode.TIMEOUT, total);
-                return RunResult.failed(ctx, total, GenErrorCode.TIMEOUT);
-            } catch (Exception e) {
-                GenErrorCode code = classify(e);
-                log.warn("단계 실패 — jobId={} step={} code={} : {}", jobId, step.name(), code, e.toString());
-                recorder.failStep(stepId, code);
-                recorder.failJob(jobId, code, total);
-                return RunResult.failed(ctx, total, code);
+            StageOutcome outcome = runStage(jobId, ctx, todo);
+            total = total.add(outcome.cost());
+            if (outcome.error() != null) {
+                recorder.failJob(jobId, outcome.error(), total);
+                return RunResult.failed(ctx, total, outcome.error());
             }
         }
 
@@ -108,23 +103,90 @@ public class GenerationRunner {
         return RunResult.ok(ctx, total);
     }
 
+    /** 아직 안 돈 단계와 그 순번. */
+    private record Pending(GenerationStep step, int seq) {
+    }
+
+    /** 돌고 있는 단계 — 기록 번호와 제 시간 제한을 함께 들고 있는다. */
+    private record Running(GenerationStep step, Long stepId, Future<StepResult> future, long deadlineNanos) {
+    }
+
+    /** 한 묶음의 결과. {@code error} 가 있으면 그 묶음에서 멈춘다. */
+    private record StageOutcome(BigDecimal cost, GenErrorCode error) {
+    }
+
     /**
-     * 단계에 시간 제한을 건다.
+     * 한 묶음을 돌린다. 단계가 하나면 그대로, 여럿이면 나란히.
      *
-     * ★ 제한이 없으면 응답이 영영 안 오는 호출 하나가 스레드를 붙들고, 그 스레드가
-     *   동시 생성 3개 중 하나이므로 다른 사람의 부화까지 막힌다.
+     * <h3>★ 다 끝난 뒤에 결과를 넣는다</h3>
+     * {@link StepContext} 는 평범한 맵이라 여러 스레드가 동시에 쓰면 깨진다. 그래서 돌고 있는 동안에는
+     * 아무도 ctx 에 쓰지 않고, <b>전부 끝난 뒤 이 스레드가</b> 한 번에 넣는다.
+     *
+     * <h3>★ 한쪽이 실패해도 끝까지 기다린다</h3>
+     * 먼저 실패했다고 바로 나가면 남은 스레드가 뒤늦게 기록을 쓰고, 그 뒤에 시작된 재시도와 겹친다.
      */
-    private StepResult runWithLimit(GenerationStep step, StepContext ctx) throws Exception {
-        Callable<StepResult> task = () -> step.run(ctx);
-        Future<StepResult> future = timeoutExecutor.submit(task);
-        // 검증용으로 제한을 줄일 수 있게 한다. 0 이하면 단계가 정한 값을 그대로 쓴다.
-        int limit = limitOverrideSeconds > 0 ? limitOverrideSeconds : step.limitSeconds();
-        try {
-            return future.get(limit, TimeUnit.SECONDS);
-        } catch (TimeoutException e) {
-            future.cancel(true);
-            throw e;
+    private StageOutcome runStage(Long jobId, StepContext ctx, List<Pending> todo) {
+        List<Running> running = new ArrayList<>(todo.size());
+        for (Pending p : todo) {
+            Long stepId = recorder.startStep(jobId, p.seq(), p.step().name());
+            int limit = limitOverrideSeconds > 0 ? limitOverrideSeconds : p.step().limitSeconds();
+            Callable<StepResult> task = () -> p.step().run(ctx);
+            running.add(new Running(p.step(), stepId, timeoutExecutor.submit(task),
+                    System.nanoTime() + TimeUnit.SECONDS.toNanos(limit)));
         }
+        if (running.size() > 1) {
+            log.info("나란히 굽기 {}개 — jobId={} steps={}", running.size(), jobId,
+                    running.stream().map(r -> r.step().name()).toList());
+        }
+
+        BigDecimal cost = BigDecimal.ZERO;
+        GenErrorCode error = null;
+        List<StepResult> done = new ArrayList<>(running.size());
+
+        for (Running r : running) {
+            try {
+                long left = Math.max(0, r.deadlineNanos() - System.nanoTime());
+                StepResult result = r.future().get(left, TimeUnit.NANOSECONDS);
+                recorder.succeedStep(r.stepId(), result);
+                done.add(result);
+                cost = cost.add(result.costUsd());
+            } catch (TimeoutException e) {
+                r.future().cancel(true);
+                log.warn("시간 초과 — jobId={} step={}", jobId, r.step().name());
+                recorder.failStep(r.stepId(), GenErrorCode.TIMEOUT);
+                error = worse(error, GenErrorCode.TIMEOUT);
+            } catch (Exception e) {
+                GenErrorCode code = classify(e instanceof ExecutionException ? e.getCause() : e);
+                log.warn("단계 실패 — jobId={} step={} code={} : {}", jobId, r.step().name(), code, String.valueOf(e));
+                recorder.failStep(r.stepId(), code);
+                error = worse(error, code);
+            }
+        }
+
+        // ★ 실패한 묶음이어도 성공한 쪽의 산출물은 넣는다 — 같은 시도 안의 뒤 단계가 쓸 수 있고,
+        //   기록에도 남아 다음 시도가 그 단계를 건너뛴다.
+        for (StepResult result : done) {
+            if (result.imageKey() != null) {
+                ctx.putImage(result.name(), result.imageKey());
+            }
+            if (result.text() != null) {
+                ctx.putText(result.name(), result.text());
+            }
+        }
+        return new StageOutcome(cost, error);
+    }
+
+    /**
+     * 두 실패 중 <b>처방이 더 무거운 쪽</b>을 남긴다.
+     *
+     * ★ 거부(MODERATION_BLOCKED)는 앞 단계(문단)부터 다시 해야 풀린다. 나란히 돈 두 장 중
+     *   한 장만 거부당했는데 그냥 "알 수 없음" 으로 남기면, 재시도가 같은 문단으로 또 거부당한다.
+     */
+    private static GenErrorCode worse(GenErrorCode current, GenErrorCode next) {
+        if (current == GenErrorCode.MODERATION_BLOCKED || next == GenErrorCode.MODERATION_BLOCKED) {
+            return GenErrorCode.MODERATION_BLOCKED;
+        }
+        return current == null ? next : current;
     }
 
     /**
@@ -132,8 +194,8 @@ public class GenerationRunner {
      *   거부당함 → 같은 걸 다시 보내면 또 막힌다. 앞 단계(문단)부터 새로
      *   그 외    → 같은 입력으로 다시 하면 대개 된다
      */
-    private GenErrorCode classify(Exception e) {
-        String msg = String.valueOf(e.getMessage()).toLowerCase();
+    private GenErrorCode classify(Throwable e) {
+        String msg = String.valueOf(e == null ? null : e.getMessage()).toLowerCase();
         if (msg.contains("moderation") || msg.contains("safety") || msg.contains("content_policy")) {
             return GenErrorCode.MODERATION_BLOCKED;
         }

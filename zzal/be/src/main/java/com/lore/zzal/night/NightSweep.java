@@ -204,7 +204,7 @@ public class NightSweep {
      */
     public Result sweepPet(ZzalPet pet, Instant petNow) {
         LocalDate nightOf = AwakeClock.dateOf(petNow);
-        int queued = planner.plan(pet, nightOf);
+        int queued = planner.plan(pet, nightOf, NightPlanner.Occasion.NIGHT);
         List<ZzalMotion> mine = motionRepository.findByPetIdAndStatus(pet.getId(), com.lore.zzal.motion.MotionStatus.QUEUED);
         int claimed = 0;
         for (ZzalMotion m : mine) {
@@ -242,7 +242,7 @@ public class NightSweep {
             try {
                 queued += tx.execute(status -> petRepository.findByIdForUpdate(id).map(pet -> {
                     pet.settle(pet.now(now));
-                    return planner.plan(pet, nightOf);
+                    return planner.plan(pet, nightOf, NightPlanner.Occasion.NIGHT);
                 }).orElse(0));
             } catch (RuntimeException e) {
                 log.error("밤 계획 실패 — petId={} (다음 펫으로)", id, e);

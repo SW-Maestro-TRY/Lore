@@ -25,9 +25,13 @@ public class PetHatchListener {
         hatchService.hatch(event.jobId(), event.petId(), event.version());
     }
 
-    /** 그림 등록 직후 — 캐릭터 시트만 미리 굽는다. */
+    /**
+     * 이름이 저장된 직후 — 굽기가 이미 끝나 있으면 그 자리에서 살린다.
+     *
+     * ★ 굽는 중이면 아무 일도 일어나지 않고, 굽기가 끝나는 쪽에서 같은 판단을 한 번 더 한다.
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void on(PetSheetRequested event) {
-        hatchService.sheet(event.jobId(), event.petId(), event.version());
+    public void on(PetNamed event) {
+        hatchService.completeIfReady(event.petId(), event.version());
     }
 }
