@@ -115,7 +115,7 @@ def gate_spec(spec: dict) -> list[str]:
     return bad
 
 
-def build_prompt(spec: dict, style: str = None) -> str:
+def build_prompt(spec: dict, style: str = None, from_photo: bool = False) -> str:
     """사양 -> 이미지 프롬프트 한 장.
 
     영역을 말로만 나누면 모델이 섞어 버린다. 그래서 자리(위·가운데·아래)와
@@ -124,54 +124,92 @@ def build_prompt(spec: dict, style: str = None) -> str:
     한국어 사양(design_details·props·expression_set)은 번역하지 않고 그대로
     싣는다. "왼쪽 소매의 노란 반사띠" 를 "yellow stripe" 로 옮기면 위치가
     사라져서 고정 요소가 고정이 아니게 된다.
+
+    `from_photo` — 사람이 올린 사진을 보고 뽑은 사양이면 True. 사진 속 인물과
+    다른 사람처럼 나오는 것(별인화)을 막는 문구와, 사진에 안 보이는 부분(뒷모습
+    등)을 보완했을 때 그걸 밝히라는 문구가 이때만 붙는다 — 이름만으로 지은
+    캐릭터에는 "원본"이 없어서 이 문구가 의미가 없다.
     """
     palette = spec["color_palette"]
     color_line = " / ".join(f"{k}: {palette[k]}" for k in PALETTE_KEYS if palette.get(k))
     n_details = len(spec["design_details"])
     props = spec["props"]
 
-    parts = [
-        COMMON_EN,
-        "",
+    parts = [COMMON_EN, ""]
+
+    if from_photo:
+        parts += [
+            "This sheet is built from a reference photo. Reproduce the face, body type, "
+            "hairstyle, hair color, eye color, apparent age, outfit and material texture "
+            "of the source as faithfully as possible — do not turn this into a "
+            "different-looking person and do not \"beautify\" away distinguishing "
+            "features. The same person must read as the same person in every region of "
+            "this sheet.",
+            "Anything not visible in the source photo (e.g. the back of the outfit, or "
+            "hair hidden from view) may be filled in only in a way that stays consistent "
+            "with what is visible, and must be labeled \"[supplemented design]\" next to "
+            "that region.",
+            "",
+        ]
+
+    parts += [
         "[CHARACTER SHEET — ONE PAGE, SEPARATE REGIONS]",
         "A single landscape sheet holding the regions below, stacked with clear empty "
         "white space between them so each region reads as its own block. "
-        "No frames, no borders, no captions, no labels.",
+        "No frames, no borders, no captions, no labels except the short region headings "
+        "named below.",
         "",
-        "REGION 1 — TOP BAND: turnaround.",
-        "  The SAME character four times in one horizontal row, left to right:",
-        "  (1) front view  (2) three-quarter view  (3) side view  (4) back view.",
-        "  Full body, standing at attention, arms relaxed at the sides, feet together,",
-        "  neutral expression, camera at eye level.",
-        "  All four stand on one shared ground line with exactly the same height and the",
-        "  same proportions. The outfit, hair length and body type do not change between",
-        "  views. The character carries nothing in these four figures.",
+        "REGION 1 — TOP BAND: turnaround, 5 views.",
+        "  The SAME character five times in one horizontal row, left to right:",
+        "  (1) front view  (2) three-quarter front view  (3) side view  "
+        "(4) three-quarter back view  (5) back view.",
+        "  Full body, head to feet, standing at attention, arms relaxed at the sides, feet",
+        "  together, neutral expression, camera at eye level.",
+        "  All five stand on one shared ground line with exactly the same height and the",
+        "  same scale. Keep the face outline, the position of each facial feature, the",
+        "  head-to-body ratio, the shoulder width and the torso-to-leg balance identical",
+        "  across all five. The outfit, hair length and body type do not change between",
+        "  views. The character carries nothing in these five figures.",
         "",
-        f"REGION 2 — MIDDLE BAND: {EXPRESSION_COUNT} expressions.",
+        "REGION 2 — face close-ups, 3 views.",
+        "  The SAME face, head and shoulders only, three times in one row: "
+        "(1) front  (2) profile (full side)  (3) three-quarter, about 45 degrees.",
+        "  Same size, same neutral expression, same lighting in all three.",
+        "",
+        f"REGION 3 — {EXPRESSION_COUNT} expressions.",
         f"  The SAME character's head and shoulders {EXPRESSION_COUNT} times in one",
         "  horizontal row, evenly spaced, all the same size, all facing the camera at the",
         "  same angle. Only the expression changes; face shape, hairstyle and hair length",
         "  are identical in all of them.",
         "",
-        f"REGION 3 — BOTTOM LEFT: {n_details} close-up insets, one per fixed design "
+        "REGION 4 — hair detail, close-up insets: the front hairline/bangs, the hair at "
+        "the sides, the hair at the back, and any hair accessory (skip whichever of these "
+        "does not apply to this character).",
+        "  The hair's parting and any accessory sit on the character's own left or right "
+        "(not the viewer's) and stay on that same side in every region of this sheet.",
+        "",
+        "REGION 5 — facial feature close-ups: eyes, eyebrows, nose, mouth — one inset "
+        "each, enlarged.",
+        "",
+        f"REGION 6 — {n_details} close-up insets, one per fixed design "
         "element, each showing only that element, enlarged.",
     ]
 
     if props:
         parts += [
             "",
-            f"REGION 4 — BOTTOM MIDDLE: {len(props)} carried items, drawn on their own as "
+            f"REGION 7 — {len(props)} carried items, drawn on their own as "
             "separate objects laid out in a row, not held by the character and with no "
             "character in this region. Each item is drawn from the angle that reads best, "
-            "at a size that makes its material and wear visible.",
+            "at a size that makes its shape, decoration and material visible.",
             "",
-            "REGION 5 — BOTTOM RIGHT: one horizontal row of flat color swatch chips, one "
+            "REGION 8 — one horizontal row of flat color swatch chips, one "
             "chip per palette entry, in the listed order.",
         ]
     else:
         parts += [
             "",
-            "REGION 4 — BOTTOM RIGHT: one horizontal row of flat color swatch chips, one "
+            "REGION 7 — one horizontal row of flat color swatch chips, one "
             "chip per palette entry, in the listed order.",
         ]
 
