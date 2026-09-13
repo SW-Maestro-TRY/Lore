@@ -5,6 +5,7 @@ import {
   episodeDownloadUrl, isMyRun, myAccountRuns, pageUrl, readResult, type RunResult,
 } from "../../lib/nhApi";
 import ShareBar from "../Share/ShareBar";
+import { setupLou } from "../../lib/mascotPlay";
 
 /* 완성본 — haeun/landing/web 의 #result 를 옮겼다.
  *
@@ -74,6 +75,23 @@ export default function Result({
     return () => { alive = false; };
   }, [runId]);
 
+  /* 기다리는 동안 루와 논다.
+     보통은 눈에 띄지도 않게 끝난다. 그런데 **다 그려 놓고 올리다 실패한
+     작품을 처음 열 때**는 서버가 그 자리에서 그림을 올리고 적느라 몇 초가
+     걸린다(AfterRun#healIfMissing). 그 몇 초에 빈 화면과 「불러오는 중…」만
+     있으면 고장 난 것처럼 보인다 — 만들 때 몇 분을 같이 기다려 준 그 루가
+     여기에도 있는 편이 맞다.
+
+     **훅은 early return 앞에 둔다** — 아래에 두면 갈래마다 훅 순서가 달라져
+     리액트가 화면을 멈춰 세운다(위 ownedByAccount 주석 참고).
+     루가 만지는 DOM 은 아래 「불러오는 중」 갈래에만 있으므로, 그 갈래일
+     때만 건다. data 가 오면 정리되고 화면이 바뀐다. */
+  const loading = Boolean(runId) && !failed && !data;
+  useEffect(() => {
+    if (!loading) return;
+    return setupLou();
+  }, [loading]);
+
   if (!runId || failed) {
     return (
       <section className="result">
@@ -91,7 +109,26 @@ export default function Result({
   if (!data) {
     return (
       <section className="result">
-        <header className="result-head"><h2>불러오는 중…</h2></header>
+        <header className="result-head">
+          <h2>작품을 여는 중이에요</h2>
+          <p className="result-logline">루와 놀면서 잠깐만 기다려 주세요.</p>
+        </header>
+        <div className="play">
+          <div className="mascot-stage" id="mascotStage">
+            <button type="button" className="mascot" id="mascot" data-mood="think"
+                    aria-label="루를 눌러 보기">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img id="mascotImg" src="/static/lou/react/idle/01.webp" alt="" draggable={false} />
+            </button>
+          </div>
+          <p className="play-say" id="playSay">루를 눌러 보세요</p>
+          <p className="play-hint" id="playHint">
+            눌러 보기 · 연달아 누르기 · 꾹 누르기 · 끌어당기기
+          </p>
+          <button type="button" className="btn btn-quiet btn-sm" id="shakeAllow" hidden>
+            흔들기 켜기
+          </button>
+        </div>
       </section>
     );
   }

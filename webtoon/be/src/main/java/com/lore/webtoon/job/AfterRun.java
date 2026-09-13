@@ -15,8 +15,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.List;
 
 /**
@@ -50,11 +50,13 @@ public class AfterRun {
     private final HarnessProcess harness;
     private final Path runsDir;
     /**
-     * 한 번 봐 둔 작품. <b>망가진 작품에 매번 파이썬을 띄우지 않으려는 것</b>이다 —
-     * 결과 화면은 0.8초마다 묻는다. 서버를 다시 띄우면 비워지므로, 고친 뒤
-     * 배포하면 저절로 한 번 더 해 본다.
+     * 한 번 봐 둔 작품과 그 결과. <b>망가진 작품에 매번 파이썬을 띄우지 않으려는
+     * 것</b>이다 — 결과 화면은 0.8초마다 묻는다. 동시에 물어도 먼저 온 하나만
+     * 돌고 나머지는 기다린다(computeIfAbsent 가 그 열쇠를 잡는다).
+     *
+     * 서버를 다시 띄우면 비워지므로, 고친 뒤 배포하면 저절로 한 번 더 해 본다.
      */
-    private final Set<String> healed = ConcurrentHashMap.newKeySet();
+    private final ConcurrentMap<String, Boolean> healed = new ConcurrentHashMap<>();
     private final ObjectMapper mapper = new ObjectMapper();
 
     public AfterRun(UsageService usage, PageUploader uploader, PageStore pages,
@@ -127,6 +129,14 @@ public class AfterRun {
      * 그래서 <b>여는 것만으로 낫게</b> 한다. 자기 작품을 열어 보는 사람에게
      * "로그인하고 이 버튼을 누르세요" 를 시킬 이유가 없다.
      *
+     * <h2>같은 작품을 동시에 열면 기다린다</h2>
+     *
+     * 화면 하나를 여는 데 요청이 여럿 간다(서버가 미리 읽는 것 · 브라우저가
+     * 읽는 것). 예전에는 먼저 온 것이 되살리는 동안 나머지가 <b>"이미 해 봤다"
+     * 로 그냥 지나가서 404</b> 를 받았고, 화면은 그 404 를 보고 「작품을 열지
+     * 못했습니다」를 띄웠다 — 되살리기는 그 직후 성공했는데도 그랬다(2026-09-13
+     * 실측). 그래서 먼저 온 것이 끝날 때까지 <b>나머지는 기다린다.</b>
+     *
      * <h2>안전한가</h2>
      *
      * 세 가지가 다 맞을 때만 움직인다 — 적힌 그림이 없고, 디스크에 그린 그림이
@@ -138,14 +148,18 @@ public class AfterRun {
      */
     public boolean healIfMissing(String runId) {
         if (runId == null || runId.isBlank() || pages.has(runId)) {
-            return false;
+            return false;               // 거의 매번 여기서 돌아간다
         }
         if (!Files.isDirectory(runsDir.resolve(runId).resolve("pages"))) {
             return false;               // 그린 것이 없다 — 아직 만드는 중이거나 없는 작품
         }
-        if (!healed.add(runId)) {
-            return false;               // 이미 해 봤다. 또 해도 같은 데서 걸린다
-        }
+        /* 작품 하나당 한 번만 돌고, 도는 동안 같은 작품을 물은 요청은 여기서
+           기다린다(computeIfAbsent 가 그 열쇠를 잡고 있다). 끝나면 그 결과를
+           같이 받는다 — 기다린 쪽도 적힌 그림을 보게 되므로 404 가 안 난다. */
+        return healed.computeIfAbsent(runId, this::heal);
+    }
+
+    private boolean heal(String runId) {
         try {
             int recorded = recover(runId, line -> log.info("[되살리기] {}", line));
             log.warn("그림이 안 적혀 있어 다시 올렸습니다 (run={}, 적은 줄={})", runId, recorded);
@@ -155,7 +169,7 @@ public class AfterRun {
             return false;
         } catch (Exception e) {         // noqa: 되살리다 죽어서 화면까지 막으면 더 나쁘다
             log.error("그림을 되살리지 못했습니다 (run={})", runId, e);
-            return false;
+            return false;               // 적어 둔다 — 또 해도 같은 데서 걸린다
         }
     }
 
