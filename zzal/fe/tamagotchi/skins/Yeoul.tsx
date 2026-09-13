@@ -14,7 +14,7 @@
 // 색·여백을 손보실 자리는 `yeoul/ui.ts` 한 곳이다.
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AuthModal from '@common/auth/AuthModal';
 import { useAuth } from '@common/auth/useAuth';
 import Egg from '../yeoul/Egg';
@@ -25,10 +25,9 @@ import { C, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, radius } from '../yeoul/
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
-import { SITUATION_TABLE } from '../props/situations';
+import { GIFT_CYCLES, SITUATION_TABLE, scenePlays } from '../props/situations';
 import { ApiError } from '../../lib/api';
 import { advanceClock, forceOpen, nextLocalAt, nightSweep, setClockAt } from '../../lib/dev';
-import { isMockRequested } from '../../lib/petSource';
 import type { SkinProps } from './Scrapbook';
 
 export default function Yeoul(_props: SkinProps) {
@@ -232,8 +231,6 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
 
   const onb = s.screen === 'onb';
   const room = s.screen === 'room';
-  /** 상황 칸이 보여 줄 자세 — 손으로 고른 것이 있으면 그것, 없으면 지금 짓고 있는 자세. */
-  const pose = v.posePick ?? v.spriteKey;
   const unlocked = (k: string) => d.floor2 || !!d.unlocked[k];
 
   const poseChips = (keys: readonly string[]): Chip[] => keys.map((k) => ({
@@ -242,8 +239,24 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
     pick: actions.pickScene(k, null),
   }));
 
-  // 지금 자세에 붙은 줄만. **표를 그대로 낸다** — 여기서 소품을 고르지 않는다.
-  const sitRows = SITUATION_TABLE.filter((r) => r.pose === pose);
+  /**
+   * **연출 목록은 상황표가 만든다**(`scenePlays`) — 손으로 나열하지 않는다.
+   * 1층 자세의 줄과 2층 자세의 줄로만 갈라 놓는다.
+   */
+  const plays = useMemo(() => scenePlays(SITUATION_TABLE, POSE_LABEL), []);
+  const play1 = plays.filter((x) => (POSE_FLOORS[0][1] as readonly string[]).includes(x.pose));
+  const play2 = plays.filter((x) => (POSE_FLOORS[1][1] as readonly string[]).includes(x.pose));
+  const sceneChip = (x: (typeof plays)[number]): Chip => ({
+    label: x.label,
+    id: `play:${x.id}`,
+    // 연출은 **한 번 돌고 끝나는 것**이라 '켜짐' 이 없다. 지금 그 자세를 짓고 있으면 불이 들어온다.
+    on: v.spriteKey === x.pose,
+    dim: !x.settled || x.propPending,
+    title: x.propPending
+      ? `${x.prop} 규격이 재제작 대기라 소품만 안 뜹니다(자세·박자는 돕니다)`
+      : !x.settled ? '표가 아직 확정 전인 줄(decide·default)입니다' : `${x.pose} · ${x.cycles}바퀴`,
+    pick: actions.playScene(x),
+  });
 
   const rows: Row[] = [
     {
@@ -313,32 +326,26 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       ],
     },
     {
-      n: '8', label: `자세 ${POSE_FLOORS[0][0]}`,
-      items: [
-        { label: '자동', id: 'pose:auto', on: !v.posePick && !v.sitPick, pick: actions.pickScene(null, null) },
-        ...poseChips(POSE_FLOORS[0][1]),
-      ],
+      // ★ **연출 줄** — 누르면 방의 행동과 똑같은 한 판이 돈다(소품·박자·돌아갈 자세까지).
+      //   다만 규칙(재고·흔적·시각)도 서버도 안 탄다. 목록은 상황표를 읽어 만든다.
+      n: '8', label: '연출 1층', note: `${play1.length}판`,
+      items: play1.map(sceneChip),
     },
-    { n: '9', label: `자세 ${POSE_FLOORS[1][0]}`, items: poseChips(POSE_FLOORS[1][1]) },
+    { n: '9', label: '연출 2층', note: `${play2.length}판`, items: play2.map(sceneChip) },
     {
-      // 선물 2종은 **박자 밖**이다(16프레임 한 판 = 7.2초). 자세 고정이 아니라 한 번 튼다.
-      n: '10', label: '선물 재생', note: '16프레임 한 판',
+      // 선물 2종은 **박자 밖**이다(16프레임 한 판 = 7.2초). 표에 줄이 없어 여기서만 든다.
+      n: '10', label: '연출 선물', note: `${GIFT_CYCLES * 4}프레임 한 판`,
       items: ([['roll', '구르기'], ['fall_back', '뒤로 넘어지기']] as const).map(([k, label]): Chip => ({
         label, id: `gift:${k}`, on: v.spriteKey === k, pick: () => actions.playGift(k),
       })),
     },
     {
-      n: '11', label: `상황 · ${POSE_LABEL[pose] ?? pose}`,
+      // 그림 자체를 오래 두고 보고 싶을 때. **연출이 아니라 고정**이라 이름으로 구분해 둔다.
+      n: '11', label: '자세 고정', note: '그림만',
       items: [
-        { label: '상황 없음', id: 'sit:none', on: !v.sitPick, pick: actions.pickScene(v.posePick, null) },
-        ...sitRows.map((r): Chip => ({
-          label: `${r.id}${r.prop ? ` · ${r.prop.split('|')[0]}` : ' · (소품 없음)'}`,
-          id: `sit:${r.id}`,
-          on: v.sitPick === r.id,
-          // 확정이 아닌 줄은 눌러도 소품이 안 뜬다 — 그 까닭을 칩에 적어 둔다.
-          dim: r.status !== 'confirmed',
-          pick: actions.pickScene(r.pose === '*' ? v.posePick : r.pose, r.id),
-        })),
+        { label: '풀기', id: 'pose:auto', on: !v.posePick && !v.sitPick, pick: actions.pickScene(null, null) },
+        ...poseChips(POSE_FLOORS[0][1]),
+        ...poseChips(POSE_FLOORS[1][1]),
       ],
     },
     {
@@ -413,7 +420,10 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ font: `10.5px ${MONO}`, color: C.sub }}>개발용 · 누르면 그 상황이 된다</span>
+        <span style={{ font: `10.5px ${MONO}`, color: C.sub, lineHeight: 1.35 }}>
+          여기 버튼은 <b>화면만</b> 바꿉니다 · 규칙(재고·흔적·시각)에 안 막힙니다
+          <br />실제로 돌보는 것은 아래 방 버튼입니다
+        </span>
         <span style={{ flex: 1 }} />
         <button onClick={() => setOpen(false)} style={{ width: 24, height: 24, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
       </div>
@@ -450,7 +460,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
         </div>
       ))}
 
-      <DevClockRow live={live} />
+      <DevServerRow live={live} />
 
       {/* ★ 기본 8종 중 서버가 그림을 안 준 것. **방에 들어온 시점에 비어 있어야 한다.**
           지금 가짜 생성은 6종만 만들어서 sick·call 이 늘 뜬다 — 정상적인 경고다. */}
@@ -474,16 +484,23 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
 }
 
 /**
- * **서버가 쥔 것** 한 줄 — 시계 밀기 · 시각 지정 · 선물 강제 도착 · 밤 큐 돌리기.
+ * **서버(dev) 줄 — 위의 칩들과 완전히 갈라 둔 자리.**
  *
- * ★ 위의 칩들과 달리 **화면 혼자 못 만든다.** 그래서 한 줄로 따로 묶고, 아이가 없으면 안 그린다.
- * ★ 누른 뒤에는 `resume()` 으로 서버 상태를 다시 읽는다 — dev 호출의 응답을 여기서 따로
- *   화면에 꽂을 길이 없어서다(`Live` 에 그 손잡이가 없다). 한 번 더 읽는 편이 정직하다.
- * ★ 목 서버(`?mock=`)에서는 같은 버튼이 목 시계를 민다 — 규칙을 두 벌 만들지 않으려고.
+ * ★ 왜 가르나 — 이동 창의 나머지는 전부 **화면만** 바꾼다(상훈님 2026-09-13 "이동으로 만지는 건
+ *   프론트만 하자"). 여기만 진짜 서버를 부르므로, 섞여 있으면 어느 버튼이 실제 상태를 건드리는지
+ *   알 수 없다. 기본으로 **접혀 있고**, 아이가 없으면 아예 안 그린다.
+ * ★ 쓸 수 있는 주소는 **넷뿐**이다(백엔드 `com.lore.zzal.dev.DevClockController` 전수 확인) —
+ *   `advance-clock` · `set-clock` · `force-open/{seq}` · `night-sweep`.
+ *   ⚠️ **해금 카운터를 올리는 주소는 없다.** 그래서 그 줄은 비워 두고 무엇이 필요한지만 적어 둔다.
+ * ★ 누른 뒤에는 `resume()` 으로 서버 상태를 다시 읽는다 — dev 호출의 응답을 화면에 꽂을 손잡이가
+ *   `Live` 에 없어서다. 한 번 더 읽는 편이 정직하다.
+ * ★ `?mock=` 은 **이 시안에 안 붙어 있다**(목은 `useZzalSession` → 스크랩북 전용이고, 여울은
+ *   `useHatch` 가 서버를 직접 부른다). 그래서 목 갈래를 두지 않는다.
  */
-function DevClockRow({ live }: { live: Live }) {
+function DevServerRow({ live }: { live: Live }) {
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   const petId = live.petId;
   if (petId == null) return null;
 
@@ -491,24 +508,12 @@ function DevClockRow({ live }: { live: Live }) {
     if (busy) return;
     setBusy(true); setNote(null);
     try {
-      const mock = typeof window !== 'undefined' && isMockRequested(window.location.search);
-      if (mock) {
-        const handle = (window as unknown as {
-          __zzalMock?: { advance: (ms: number) => void; now: () => string; forceOpen: (seq: number) => void; nightSweep: () => void };
-        }).__zzalMock;
-        if (!handle) { setNote('목 서버를 찾지 못했어요'); return; }
-        if (j.act === 'force-open') handle.forceOpen(GIFT_SEQ);
-        else if (j.act === 'night-sweep') handle.nightSweep();
-        else if (j.minutes != null) handle.advance(j.minutes * 60_000);
-        else { const t = new Date(handle.now()).getTime(); handle.advance(nextLocalAt(t, j.at as string) - t); }
-      } else {
-        // 시각 이동은 **서버 시각 기준 다음 도래 시각**을 절대 시각으로 보낸다(lib/dev 머리말).
-        const base = live.pet?.serverNow ? new Date(live.pet.serverNow).getTime() : Date.now();
-        if (j.act === 'force-open') await forceOpen(petId, GIFT_SEQ);
-        else if (j.act === 'night-sweep') await nightSweep(petId);
-        else if (j.minutes != null) await advanceClock(petId, j.minutes);
-        else await setClockAt(petId, new Date(nextLocalAt(base, j.at as string)).toISOString());
-      }
+      // 시각 이동은 **서버 시각 기준 다음 도래 시각**을 절대 시각으로 보낸다(lib/dev 머리말).
+      const base = live.pet?.serverNow ? new Date(live.pet.serverNow).getTime() : Date.now();
+      if (j.act === 'force-open') await forceOpen(petId, GIFT_SEQ);
+      else if (j.act === 'night-sweep') await nightSweep(petId);
+      else if (j.minutes != null) await advanceClock(petId, j.minutes);
+      else await setClockAt(petId, new Date(nextLocalAt(base, j.at as string)).toISOString());
       await live.resume();
     } catch (e) {
       // dev 도구가 꺼진 서버에는 그 주소가 아예 없다(404) 또는 막힌다(403). 고장이 아니라 그렇게 만든 것이다.
@@ -519,25 +524,39 @@ function DevClockRow({ live }: { live: Live }) {
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6, width: 86, flex: 'none', paddingTop: 3 }}>
-        <span style={{ width: 18, height: 18, flex: 'none', borderRadius: '50%', background: '#E3DBCD', color: C.sub, font: `10px ${MONO}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>16</span>
-        <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-          <span style={{ fontSize: 11.5, color: C.sub }}>서버 시계</span>
-          <span style={{ font: `9px ${MONO}`, color: C.faint }}>서버가 쥔 것</span>
-        </span>
-      </span>
-      <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-        {CLOCK_JUMPS.map((j) => (
-          <button key={j.label} data-jump={`clock:${j.label}`} disabled={busy} onClick={() => void run(j)}
-            style={{
-              border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11,
-              background: C.slot, color: C.ink, opacity: busy ? 0.5 : 1,
-            }}
-          >{j.label}</button>
-        ))}
-        {note && <span data-dev-note style={{ font: `10px ${MONO}`, color: C.accent, alignSelf: 'center' }}>{note}</span>}
-      </div>
+    <div data-part="dev-server" style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingTop: 4, borderTop: `1px dashed ${C.lineHard}` }}>
+      <button
+        data-jump="server:toggle" onClick={() => setOpen((x) => !x)}
+        style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'none', padding: 0 }}
+      >
+        <span style={{ font: `10.5px ${MONO}`, color: C.sub }}>{open ? '▾' : '▸'} 서버(dev) — 여기만 진짜 서버를 부릅니다</span>
+      </button>
+      {open && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+            <span style={{ width: 86, flex: 'none', fontSize: 11.5, color: C.sub, paddingTop: 4 }}>시계</span>
+            <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {CLOCK_JUMPS.map((j) => (
+                <button key={j.label} data-jump={`clock:${j.label}`} disabled={busy} onClick={() => void run(j)}
+                  style={{
+                    border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11,
+                    background: C.slot, color: C.ink, opacity: busy ? 0.5 : 1,
+                  }}
+                >{j.label}</button>
+              ))}
+            </div>
+          </div>
+          {/* ⚠️ 아직 못 하는 것 — 지어내지 않고 무엇이 없는지 적어 둔다. */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+            <span style={{ width: 86, flex: 'none', fontSize: 11.5, color: C.sub, paddingTop: 2 }}>해금 카운터</span>
+            <span style={{ flex: 1, font: `10px ${MONO}`, color: C.faint, lineHeight: 1.5 }}>
+              서버 주소 없음 — 밥·간식·청소·목욕·채팅답·쓰다듬·게임시작·깨우기 횟수를 올릴 dev 주소가
+              아직 없습니다. 2층 해금은 위 <b>2층 해금</b> 줄로 화면에서만 열어 보세요.
+            </span>
+          </div>
+          {note && <span data-dev-note style={{ font: `10px ${MONO}`, color: C.accent }}>{note}</span>}
+        </>
+      )}
     </div>
   );
 }

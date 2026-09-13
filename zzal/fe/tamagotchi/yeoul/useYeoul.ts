@@ -514,11 +514,45 @@ export function useYeoul(live?: Live) {
   }, [later]);
 
   /**
+   * 연출을 틀기 전에 **무대를 비운다** — 방 화면으로 옮기고, 자세 고정·시트·팝오버를 걷는다.
+   *
+   * ★ 왜 필요한가 — 이동 창은 랜딩·온보딩에서도 열린다. 거기서 연출 칩을 누르면 아이를 그리는
+   *   자리가 아예 없어 **아무 일도 안 일어난 것처럼 보인다**(2026-09-13 실측으로 그랬다).
+   * ★ 자세 고정(`dev.pose`)도 같이 푼다. 고정이 화면을 이기므로 안 풀면 그림이 안 바뀐다.
+   */
+  const toRoom = useCallback(() => setS((v) => ({
+    ...v, screen: 'room', sheet: null, popOpen: false, chatOpen: false, wallOpen: false, fire: null,
+    dev: { ...v.dev, pose: null, sit: null },
+  })), []);
+
+  /**
    * 선물 한 판(구르기 · 뒤로 넘어짐). **A절 박자 밖**이다 — 16프레임짜리 한 판이라
    * 소품 없이 그대로 한 번 틀고 기본으로 돌아간다(4바퀴 = 7.2초).
    */
-  const playGift = useCallback((key: string) => act(key, null, GIFT_CYCLES), [act]);
+  const playGift = useCallback((key: string) => {
+    toRoom();
+    act(key, null, GIFT_CYCLES);
+  }, [act, toRoom]);
 
+  /**
+   * **개발 창의 연출 한 판** — 규칙도 서버도 안 탄다(상훈님 2026-09-13 "이동으로 만지는 건 프론트만").
+   *
+   * ★ 왜 따로 두나 — 방의 행동 버튼(`onRice`·`onClean` …)은 재고·흔적·시각을 먼저 본다.
+   *   그게 맞다, 거긴 진짜 돌보기니까. 그런데 **연출이 제대로 도는지 보려는 사람에게는 그 검사가
+   *   벽**이다(밥 재고 0 이면 주먹밥이 줄어드는 걸 볼 길이 없다). 그래서 이 길은 바로 연출로 간다.
+   * ★ 자세 고정(`dev.pose`)이 걸려 있으면 그것이 화면을 이기므로 먼저 푼다 — 안 그러면
+   *   눌러도 그림이 안 바뀌어 "고장" 으로 읽힌다.
+   * ★ 청소는 **화면의 흔적을 하나 줄인다.** 규칙을 안 타는 대신 눈에 줄어드는 것이 보여야
+   *   "청소가 됐다" 를 확인할 수 있다(상훈님 "똥 4개로 채운 다음에 청소하려니까 흔적이 없다고 안 된다").
+   */
+  const playScene = useCallback((p: { id: string; pose: string; cycles: number }) => () => {
+    toRoom();
+    if (p.id === 'clean_l1' || p.id === 'clean_l2') {
+      const cur = sRef.current.dev.trash ?? esRef.current.trace;
+      setS((v) => ({ ...v, dev: { ...v.dev, trash: Math.max(0, cur - 1) } }));
+    }
+    act(p.pose, p.id, p.cycles);
+  }, [act, toRoom]);
 
   /**
    * 그 행동이 지금 켤 **상황 id**. 2층이 열려 있으면 2층 줄을 쓴다.
@@ -2128,7 +2162,7 @@ export function useYeoul(live?: Live) {
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
     openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2,
-    devSet, devReset, devUnlock, devExtra, playGift, pickTime, toggleSick,
+    devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
     backToSample: () => patch({ screen: 'room' }),
   }), [
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
@@ -2137,7 +2171,7 @@ export function useYeoul(live?: Live) {
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
     openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2,
-    devSet, devReset, devUnlock, devExtra, playGift, pickTime, toggleSick,
+    devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
   ]);
 
   return { s, v, actions };

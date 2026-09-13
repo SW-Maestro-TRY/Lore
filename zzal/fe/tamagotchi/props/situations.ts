@@ -191,6 +191,78 @@ export function cyclesOfAction(
  */
 export const GIFT_CYCLES = 16 / CYCLE_FRAMES;
 
+// ── 개발 화면이 쓰는 **연출 목록** ────────────────────────────────────────
+//
+// ★ 상훈님 2026-09-13 — *"이동으로 만지는 건 프론트만 하자 … 밥 먹을 때 주먹밥이 잘 작동하는 지
+//   목욕할 때는 거품이 잘 오르는 지 이런 것들을 봐야 하는데."*
+//   규칙(재고 0·흔적 0·시각)에 막혀 연출을 못 보시던 것을 푸는 자리다.
+// ★ **목록을 코드가 지어내지 않는다.** 표(`table.ts`)의 줄을 그대로 한 판씩으로 편다 —
+//   표에 줄이 생기면 칩도 저절로 생기고, 빠지면 저절로 사라진다.
+
+/** 행동의 한국어 이름. **표에는 이름이 없다** — 화면 문구라 여기서만 든다. */
+export const ACTION_LABEL: Record<ActionKey, string> = {
+  pet: '쓰다듬기', feed_rice: '밥 주기', feed_snack: '간식 주기', medicine: '약 주기',
+  clean: '청소하기', bath: '목욕하기', reply: '대화 답하기', game_win: '게임 이김',
+  game_lose: '게임 짐', share: '공유', wake: '깨우기', enter_room: '방 입장',
+  game_choose: '좌우 고르기', unlock: '해금', cured: '나음',
+};
+
+/** 상황 id → 그 줄을 쓰는 행동. 이름과 바퀴 수를 찾을 때 쓴다. */
+const ACTION_OF_SITUATION: Record<string, ActionKey> = (() => {
+  const out: Record<string, ActionKey> = {};
+  for (const [k, row] of Object.entries(ACTION_SITUATION)) {
+    const r = row as { l1: string | null; l2?: string };
+    if (r.l1) out[r.l1] = k as ActionKey;
+    if (r.l2) out[r.l2] = k as ActionKey;
+  }
+  return out;
+})();
+
+/** 연출 한 판 — 어떤 자세로 어떤 상황을 몇 바퀴 돌리나. */
+export interface ScenePlay {
+  /** 표의 상황 id. */
+  id: string;
+  /** 그 줄이 적어 둔 자세. */
+  pose: string;
+  /** 몇 바퀴(1바퀴 = 4프레임 = 1.8초). */
+  cycles: number;
+  /** 화면에 적을 이름. */
+  label: string;
+  /** 그 줄이 띄우는 소품 key(없으면 null). */
+  prop: string | null;
+  /** 표가 확정한 줄인가. 아니면 눌러도 소품이 안 뜬다(흐리게 보여 준다). */
+  settled: boolean;
+  /** 규격이 아직 재제작 대기라 **소품만** 안 뜨는 줄인가. */
+  propPending: boolean;
+}
+
+/**
+ * 표를 읽어 만든 **연출 목록**. `pose: '*'`(자세와 무관하게 깔리는 줄)은 연출이 아니라 상태라 뺀다.
+ * 이름은 행동 이름이 있으면 그것, 없으면 `자세 · 소품`.
+ */
+export function scenePlays(
+  table: PropSituationTable | null | undefined,
+  poseLabel: Record<string, string> = {},
+): ScenePlay[] {
+  return (table ?? []).filter((r) => r.pose !== '*').map((r) => {
+    const action = ACTION_OF_SITUATION[r.id];
+    const prop = r.prop ? r.prop.split('|')[0].trim() : null;
+    const spec = prop ? PROP_SPECS[prop] : undefined;
+    const plan = stagePlanOf(table, r.id);
+    return {
+      id: r.id,
+      pose: r.pose,
+      cycles: plan?.stages.length ?? (action ? ACTION_CYCLES[action] ?? 1 : 1),
+      label: action
+        ? ACTION_LABEL[action]
+        : `${poseLabel[r.pose] ?? r.pose} · ${spec?.name ?? (prop ?? '소품 없음')}`,
+      prop,
+      settled: r.status === 'confirmed',
+      propPending: !!prop && !!spec && spec.status !== 'confirmed',
+    };
+  });
+}
+
 /**
  * 그 상황이 **표에서 어느 자세에 붙어 있나**. 없거나 자세와 무관한 줄(`'*'`)이면 `null`.
  *
