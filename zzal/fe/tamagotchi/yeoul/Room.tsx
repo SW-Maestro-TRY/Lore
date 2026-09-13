@@ -24,6 +24,9 @@ import Album from './Album';
 import Panels from './Panels';
 import { spriteUrl, useFootPad, useLive } from './useHatch';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
+import { useAnchors } from '../props/anchors';
+import PropLayer, { ScreenPropLayer } from '../props/PropLayer';
+import { SITUATION_TABLE, activeSituations } from '../props/situations';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { v, actions } = y;
@@ -33,6 +36,17 @@ export default function Room({ y }: { y: Yeoul }) {
   const charSrc = spriteUrl(live, v.spriteKey, v.sample.show);
   // 발밑 여백은 그림마다 다르다 — 상수로 두면 어떤 아이는 뜨고 어떤 아이는 잠긴다.
   const footPad = useFootPad(charSrc, SPRITE_FOOT_PAD);
+
+  // ── 소품 오버레이 ─────────────────────────────────────────────────────
+  //
+  // ★ **앵커가 없어도 화면이 완성이다.** 고정 앵커표(여울 실측)로 끝까지 그려지고, 서버가
+  //   `anchorsKey` 를 주면 그때 받아서 덮어쓴다. 못 받으면 고정값 그대로 간다(개발 화면에만 표시).
+  // ★ **상황표가 정본이다**(`contract/소품-상황표-v1.json` → `props/table.ts`). 여기서는 지금 상태를
+  //   표의 낱말(상황 id)로 옮기기만 한다 — 자세별 소품을 코드에 적지 않는다.
+  //   표가 없으면 아무 소품도 안 뜬다. 고장이 아니라 "아직 없음" 이다.
+  const anchors = useAnchors(live.pet?.anchorsKey);
+  const propTable = SITUATION_TABLE;
+  const scene = { pose: v.spriteKey, active: activeSituations(v.scene), stages: { trash: v.scene.trash } };
 
   // ── 아이를 어디에 얼마나 크게 세울 것인가 ──────────────────────────────
   //
@@ -127,6 +141,8 @@ export default function Room({ y }: { y: Yeoul }) {
                 </span>
               </>
             )}
+            {/* 아이 뒤에 깔리는 것(매트). 반전 바깥이라 걸음마다 뒤집히지 않는다. */}
+            <PropLayer z="below_char" scene={scene} table={propTable} anchors={anchors} />
             <div style={{ width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play }}>
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -136,8 +152,13 @@ export default function Room({ y }: { y: Yeoul }) {
                 />
               </div>
             </div>
+            {/* 아이 앞에 얹히는 것(머리 옆 기호·손 앞 먹을 것·발치 소품). */}
+            <PropLayer scene={scene} table={propTable} anchors={anchors} />
           </div>
         </div>
+
+        {/* 화면 전체에 까는 것(거품·먼지·물줄기) — 발끝선 기준이라 무대에 직접 붙는다. */}
+        <ScreenPropLayer scene={scene} table={propTable} anchors={anchors} />
 
         {/* 자는 중 — 커튼을 친다. */}
         {v.st.curtain && (
