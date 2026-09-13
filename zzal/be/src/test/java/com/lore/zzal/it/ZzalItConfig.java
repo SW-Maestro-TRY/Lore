@@ -71,7 +71,17 @@ public class ZzalItConfig {
     }
 
     /**
-     * 대역 후처리 프로파일 — <b>굽기 배선을 끝까지 보는 시험에만</b> 쓴다.
+     * 대역 후처리 프로파일 — <b>시험 전용이다. 운영 프로파일과 아무 관계가 없다.</b>
+     *
+     * <h3>★★ 운영에서는 절대 안 뜬다 — 두 겹으로 막혀 있다</h3>
+     * <ol>
+     *   <li>이 클래스가 <b>시험 소스 트리</b>({@code src/test})에만 있다. 운영 jar 에 아예 안 들어간다</li>
+     *   <li>{@code @TestConfiguration} 은 컴포넌트 스캔에서 <b>제외</b>된다
+     *       ({@code TypeExcludeFilter}). 시험이 {@code @Import} 로 <b>직접 불러야만</b> 뜬다</li>
+     * </ol>
+     * 둘 중 하나만 있어도 막히지만 둘 다 둔다 — 이 대역은 "검수를 거치지 않은 후처리로 굽지 않는다"
+     * 는 규칙을 <b>일부러 비켜 가는</b> 물건이라, 운영에 새면 검수 안 된 그림이 사용자에게 나간다.
+     * {@code StandInBeansAreTestOnlyTest} 가 그 두 겹을 실제로 확인한다.
      *
      * <h3>★ 왜 필요한가</h3>
      * 후처리 프로파일 표({@code pipeline/{버전}/motion_post_profiles.txt})에는 <b>검수를 마친 동작만</b>
