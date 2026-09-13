@@ -71,6 +71,7 @@ public class JobService {
     private final JobProgress progress;
     private final StoryStore stories;
     private final WorkLedger works;
+    private final JobNotice notice;
     private final CharacterService characters;
     private final CharacterOwner owner;
     private final PrivateArt art;
@@ -82,11 +83,12 @@ public class JobService {
     public JobService(WebtoonJobRepository jobs, JobStore store, JobQueue queue,
                       JobRunner runner,
                       JobProgress progress, StoryStore stories, WorkLedger works,
-                      CharacterService characters, CharacterOwner owner, PrivateArt art,
+                      JobNotice notice, CharacterService characters, CharacterOwner owner, PrivateArt art,
                       S3Service uploads, S3Storage storage,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
         this.works = works;
+        this.notice = notice;
         this.characters = characters;
         this.owner = owner;
         this.art = art;
@@ -203,7 +205,34 @@ public class JobService {
                 store.directionsOf(job.getId()),
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
-                queue.spotOf(job));
+                queue.spotOf(job),
+                notice.addressOf(job), queue.minutesLeft(job));
+    }
+
+    /**
+     * 다 되면 이 주소로 알린다 — <b>게스트가 적어 넣는 자리.</b>
+     *
+     * 로그인한 사람은 안 불러도 계정 주소로 간다. 그래도 막지는 않는다 —
+     * 다른 주소로 받고 싶을 수 있다.
+     *
+     * 빈 값을 보내면 <b>안 받겠다</b>는 뜻이라 적어 둔 주소를 지운다.
+     * 주소처럼 안 생겼으면 거절한다 — 담아 두고 보낸 척하면, 화면에는
+     * 「보낼게요」가 떠 있는데 영영 아무것도 안 온다.
+     *
+     * @return 화면이 그대로 적을, 지금 보낼 주소 (없으면 {@code null})
+     */
+    public String notifyTo(String publicId, String email) {
+        WebtoonJob job = store.byPublicId(publicId);
+        boolean clearing = email == null || email.isBlank();
+        String clean = clearing ? null : JobNotice.clean(email);
+        if (!clearing && clean == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이메일 주소를 다시 확인해 주세요");
+        }
+        /* 이미 보낸 뒤면 store 가 안 바꾼다(거짓을 준다). 그때도 오류가
+           아니다 — 바꿔 봐야 그 메일은 이미 나갔을 뿐이다. 어느 쪽이든
+           **지금 실제로 보낼 주소**를 돌려준다. 화면은 그것만 적으면 된다. */
+        store.notifyTo(job.getId(), clean);
+        return notice.addressOf(store.byPublicId(publicId));
     }
 
     /** 사람이 이야기를 골랐다. */

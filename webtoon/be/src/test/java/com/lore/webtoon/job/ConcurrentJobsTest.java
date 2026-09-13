@@ -70,6 +70,7 @@ class ConcurrentJobsTest {
                 mock(com.lore.webtoon.work.WorkLedger.class),
                 mock(com.lore.webtoon.credit.CreditGate.class),
                 mock(com.lore.webtoon.credit.GuestGate.class),
+                mock(JobNotice.class),
                 workers, "jobs");
     }
 

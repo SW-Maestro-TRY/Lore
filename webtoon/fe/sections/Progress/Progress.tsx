@@ -7,6 +7,7 @@ import {
 } from "../../lib/nhApi";
 import { useNhJob } from "./useNhJob";
 import { headLine, mascotLine, mmss, NH_STAGE_ART } from "./nhStage";
+import NotifyByEmail from "./NotifyByEmail";
 import SheetApproval from "./SheetApproval";
 import PickApproval from "./PickApproval";
 import ZoomView from "./ZoomView";
@@ -229,6 +230,14 @@ export default function Progress({
             <span>만들기는 서버에서 계속 돌아요. 나갔다 와도 이어집니다.</span>
           </div>
         )}
+
+        {/* **나가도 된다고 말했으면, 언제 돌아오는지도 말해야 한다.**
+            바로 위 「나갔다 와도 이어집니다」 밑에 붙인다 — 나갈까 말까를
+            정하는 그 자리에서 "그럼 다 되면 어떻게 알지?" 가 나오기 때문이다.
+
+            확인 차례에는 안 띄운다: 그때는 사람이 답해야 앞으로 가고,
+            눌러야 할 것이 있는데 입력 칸이 하나 더 있으면 그쪽으로 눈이 간다. */}
+        {!waiting && <NotifyByEmail jobId={jobId} job={job} />}
 
         {/* ---- 사람이 멈춰 서는 자리 둘 ---- */}
         {job.status === "awaiting_sheet" && (

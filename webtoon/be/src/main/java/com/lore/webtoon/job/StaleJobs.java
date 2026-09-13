@@ -51,10 +51,12 @@ public class StaleJobs {
 
     private final WebtoonJobRepository jobs;
     private final JobRunner runner;
+    private final JobNotice notice;
 
-    public StaleJobs(WebtoonJobRepository jobs, JobRunner runner) {
+    public StaleJobs(WebtoonJobRepository jobs, JobRunner runner, JobNotice notice) {
         this.jobs = jobs;
         this.runner = runner;
+        this.notice = notice;
     }
 
     @PostConstruct
@@ -66,6 +68,15 @@ public class StaleJobs {
         for (WebtoonJob job : ghosts) {
             try {
                 bury(job);
+                /* **여기가 알림이 제일 필요한 자리다.** 다른 실패는 사람이
+                   화면 앞에 있을 때 나지만, 이건 그 사람이 이미 나간 뒤에
+                   난다 — 「나갔다 와도 이어집니다」를 믿고 나갔는데 안
+                   이어진 경우다. 말해 주지 않으면 영영 기다린다.
+
+                   트랜잭션(bury) 밖에서 부른다: 안에서 부르면 메일이 나간
+                   뒤에 트랜잭션이 되돌아갈 수 있고, 그러면 보냈다는 표시만
+                   풀려서 다음 기동에 또 보낸다. */
+                notice.failed(job.getId(), WHY, job.getRefunded());
             } catch (RuntimeException e) {      // noqa: 하나 때문에 기동을 막지 않는다
                 log.error("끊긴 작업을 못 치웠습니다 (job={})", job.getPublicId(), e);
             }

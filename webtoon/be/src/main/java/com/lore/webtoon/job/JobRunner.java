@@ -109,6 +109,8 @@ public class JobRunner {
     private final StoryStore stories;
     private final AfterRun after;
     private final WorkLedger works;
+    /** 다 되면(또는 못 만들면) 메일로 알리는 자리. 실패해도 만들기를 안 깬다. */
+    private final JobNotice notice;
     private final CreditGate credits;
     private final GuestGate guests;
     private final Path runsDir;
@@ -118,7 +120,7 @@ public class JobRunner {
 
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
                      StoryStore stories, AfterRun after, WorkLedger works,
-                     CreditGate credits, GuestGate guests,
+                     CreditGate credits, GuestGate guests, JobNotice notice,
                      @Value("${lore.webtoon.workers:2}") int workers,
                      @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         /* 0 이나 음수를 주면 만들기가 통째로 멈춘다 — 설정 실수로 서비스가
@@ -140,6 +142,7 @@ public class JobRunner {
         this.works = works;
         this.credits = credits;
         this.guests = guests;
+        this.notice = notice;
         /* **자리는 HarnessProcess 하나가 정한다.** 여기서 기본값을 또 적으면
            넷이 같은 문자열을 따로 갖게 되고, 한쪽만 안 고치는 순간 그 걸음만
            다른 폴더를 본다 — 실제로 AfterRun 이 그래서 비용을 하나도 못 적었다
@@ -494,6 +497,11 @@ public class JobRunner {
         after.finish(job.getRunId(), line -> progress.line(jobId, line));
         store.done(jobId);
         progress.forget(jobId);
+        /* **다 됐다고 적은 뒤에 알린다.** 먼저 보내면 메일의 링크를 눌러
+           들어온 사람이 아직 안 끝난 작품을 본다. 이 부름은 안에서 실패를
+           전부 삼키므로 여기서 죽지 않는다 — 메일이 안 가는 것보다 다 만든
+           작품이 실패로 적히는 것이 훨씬 나쁘다. */
+        notice.finished(jobId);
     }
 
     /* ---- 곁가지 ----------------------------------------------------------- */
@@ -672,6 +680,13 @@ public class JobRunner {
         store.failed(jobId, why, back);
         progress.forget(jobId);
         cancelled.remove(jobId);
+        /* **주소를 적어 준 사람에게 아무 말도 안 하는 것이 제일 나쁘다.**
+           기다리라고 해 놓고 영영 안 오면 돈만 받고 사라진 줄 안다.
+           다만 **사람이 스스로 그만둔 것은 안 알린다** — 자기가 누른 것을
+           메일로 또 알려 주는 것은 알림이 아니라 잔소리다. */
+        if (!CANCELLED.equals(why)) {
+            notice.failed(jobId, why, back);
+        }
     }
 
     /**

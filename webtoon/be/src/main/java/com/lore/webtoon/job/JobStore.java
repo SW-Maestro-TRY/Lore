@@ -105,6 +105,39 @@ public class JobStore {
         directions.remove(id);
     }
 
+    /**
+     * 다 되면 이 주소로 알린다고 적어 둔다. 빈 값이면 <b>안 받겠다</b>는 뜻이다.
+     *
+     * <b>이미 보낸 뒤에는 안 바꾼다.</b> 바꿔 봐야 그 메일은 이미 나갔고,
+     * 바뀐 주소로는 아무것도 안 온다 — 화면에 「보낼게요」가 떠 있는데
+     * 영영 안 오는 것이 제일 나쁘다.
+     *
+     * @return 적었으면 참. 이미 보냈거나 그런 작업이 없으면 거짓
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean notifyTo(Long id, String email) {
+        return jobs.findById(id)
+                .filter(job -> job.getNotifiedAt() == null)
+                .map(job -> {
+                    job.notifyTo(email, Instant.now());
+                    jobs.save(job);
+                    return true;
+                })
+                .orElse(false);
+    }
+
+    /**
+     * 알림을 보낼 <b>권리를 집는다.</b> 참이면 나만 보낸다.
+     *
+     * 짧은 트랜잭션을 따로 여는 이유: 이 표시는 <b>메일이 실제로 나갔는지와
+     * 무관하게</b> 굳어야 한다. 부르는 쪽 트랜잭션에 얹으면 그쪽이 뒤에서
+     * 되돌아갈 때 표시도 같이 풀려, 다음 폴링에 또 보낸다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean claimNotice(Long id) {
+        return jobs.claimNotice(id, Instant.now()) == 1;
+    }
+
     void directions(Long id, List<Map<String, Object>> got) {
         directions.put(id, got);
     }

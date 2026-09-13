@@ -1,7 +1,11 @@
 package com.lore.webtoon.job;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -33,4 +37,21 @@ public interface WebtoonJobRepository extends JpaRepository<WebtoonJob, Long> {
      * 돌아간다 — 나중에 온 사람에게 자리를 뺏기지 않는다.
      */
     List<WebtoonJob> findByStatusInOrderByCreatedAtAsc(java.util.Collection<JobStatus> statuses);
+
+    /**
+     * 알림을 보낼 <b>권리를 집는다</b> — 아직 아무도 안 보냈을 때만 1 이다.
+     *
+     * 읽고-판단하고-쓰는 대신 <b>한 문장으로</b> 하는 이유: 끝나는 자리가
+     * 여럿이고(다 됨 · 실패 · 되살리기) 나란히 두 편이 돈다. 읽은 뒤 쓰기
+     * 전까지의 틈에 둘이 같이 들어오면 같은 사람에게 메일이 두 통 나간다.
+     * {@code where notified_at is null} 을 DB 가 판정하게 두면 그 틈이 없다.
+     *
+     * @return 1 이면 내가 집었다(보내도 된다), 0 이면 이미 누가 보냈다
+     */
+    @Modifying
+    @Query("""
+            update WebtoonJob j set j.notifiedAt = :at, j.updatedAt = :at
+            where j.id = :id and j.notifiedAt is null
+            """)
+    int claimNotice(@Param("id") Long id, @Param("at") Instant at);
 }
