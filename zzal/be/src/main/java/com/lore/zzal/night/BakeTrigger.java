@@ -32,7 +32,7 @@ import java.util.concurrent.RejectedExecutionException;
  *
  * <pre>
  *   구르기        튜토리얼 9칸을 끝낸 순간
- *   뒤로 넘어짐    잠드는 순간 (그때 그날 케어 미스 0 이 확정된다)
+ *   뒤로 넘어짐    좌우 맞히기 한 판을 다 치고 못 이긴 순간
  *   3층 심화      네 번째 조각이 차는 순간 = 평소 돌보기 API 안에서
  * </pre>
  *
@@ -100,10 +100,42 @@ public class BakeTrigger {
     }
 
     /**
-     * 잠드는 순간 — 첫 심화 행동(뒤로 넘어짐)과 3층 차례를 본다.
+     * <b>좌우 맞히기에서 처음 진 순간</b> — 뒤로 넘어짐(두 번째 선물)을 굽는다.
      *
-     * ★ 이 둘만 잠에 붙는 이유 — "그날 케어 미스 0" 은 <b>잠들어 봐야 확정된다.</b>
-     *   낮에는 아직 그 값이 정해지지 않았다.
+     * <h3>★ 왜 이 자리인가</h3>
+     * 뒤로 넘어짐은 <b>패배 리액션</b>이다. 져서 충격받고 쓰러지는 그림이라, 진 그 순간에 받아야
+     * 무엇의 선물인지가 사람에게 읽힌다. 옛 조건(함께한 날 3일)은 날짜였고 그림과 아무 관계가 없었다.
+     *
+     * <h3>★ "한 판" 은 5라운드를 다 친 판이다</h3>
+     * 한 판이 곧 3선승 시리즈이므로 <b>한 라운드 패배는 패배가 아니다.</b> 부르는 쪽이
+     * {@code guess()} 안에서만 부르므로 달리기도, 밤을 넘겨 접은 판({@code abandon})도 여기 안 온다 —
+     * 접은 판이 패배로 세면 한 판도 끝까지 안 친 사람이 선물을 받고, 진 적이 없어 이유를 모른다.
+     *
+     * <h3>★ 화면 문구는 조건을 말하지 않는다</h3>
+     * 잠긴 칸의 문구는 "언젠가 깜짝 선물" 그대로다. "게임에서 지면 준다" 는 선물이 아니게 된다.
+     */
+    @Transactional
+    public void onFirstGameLoss(ZzalPet pet, Instant now) {
+        ZzalMotion gift = secondGiftRow(pet.getId());
+        if (gift == null || gift.getStatus() != MotionStatus.NONE) {
+            return;     // 이미 굽는 중이거나 받은 사람 — 두 번 주지 않는다
+        }
+        if (!catalog.isBakeable(gift.getName())) {
+            log.info("첫 패배 선물 조건은 찼지만 지시문이 없어 안 굽는다 — petId={} key={} (app.zzal.gift-motions)",
+                    pet.getId(), gift.getName());
+            return;
+        }
+        if (!gift.queue(AwakeClock.dateOf(now))) {
+            return;
+        }
+        log.info("첫 패배 선물 큐 등록 — petId={} key={}", pet.getId(), gift.getName());
+        claimAndBake(List.of(gift), now);
+    }
+
+    /**
+     * 잠드는 순간 — 3층 차례를 본다.
+     *
+     * ★ 잠에 붙는 이유 — 밤 리듬(실패한 줄 다시 굽기)이 하루 한 번 도는 자리가 여기다.
      */
     @Transactional
     public void onSleep(ZzalPet pet, Instant now) {
@@ -148,7 +180,19 @@ public class BakeTrigger {
     }
 
     private ZzalMotion firstGiftRow(Long petId) {
-        int seq = catalog.gifts().get(0).seq();
+        return giftRow(petId, 0);
+    }
+
+    private ZzalMotion secondGiftRow(Long petId) {
+        return giftRow(petId, 1);
+    }
+
+    /** 선물 {@code index} 번째의 줄. 선물이 그만큼 없으면 null(설정으로 줄일 수 있다). */
+    private ZzalMotion giftRow(Long petId, int index) {
+        if (catalog.gifts().size() <= index) {
+            return null;
+        }
+        int seq = catalog.gifts().get(index).seq();
         return motionRepository.findByPetIdOrderBySeqAsc(petId).stream()
                 .filter(m -> m.getSeq() == seq)
                 .findFirst()

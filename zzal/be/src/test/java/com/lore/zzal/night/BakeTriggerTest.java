@@ -142,25 +142,43 @@ class BakeTriggerTest {
     }
 
     @Nested
-    @DisplayName("뒤로 넘어짐 — 잠드는 순간")
+    @DisplayName("뒤로 넘어짐 — 좌우 맞히기 첫 패배")
     class FallBack {
 
         @Test
-        @DisplayName("함께한 날 3 + 그날 케어 미스 0 이면 그 자리에서 굽는다")
-        void bakesOnSleep() {
-            thirdDayNightSleep();
-
-            trigger.onSleep(pet, kst("2026-09-05 19:00"));
+        @DisplayName("★★ 진 그 순간 굽는다 — 옛 조건(함께한 날 3일)은 그림과 아무 관계가 없었다")
+        void bakesOnFirstLoss() {
+            trigger.onFirstGameLoss(pet, T0);
 
             assertThat(row(102).getStatus()).isEqualTo(MotionStatus.BAKING);
             verify(motionService).bakeNow(row(102).getId());
         }
 
         @Test
+        @DisplayName("지시문이 없으면 조건이 차도 안 굽는다")
+        void skipsWithoutPrompt() {
+            when(catalog.isBakeable("fall_back")).thenReturn(false);
+
+            trigger.onFirstGameLoss(pet, T0);
+
+            assertThat(row(102).getStatus()).isEqualTo(MotionStatus.NONE);
+            verify(motionService, never()).bakeNow(anyLong());
+        }
+
+        @Test
+        @DisplayName("★★ 두 번 져도 한 번만 굽는다 — 선물은 하나다")
+        void onlyTheFirstLossCounts() {
+            trigger.onFirstGameLoss(pet, T0);
+            trigger.onFirstGameLoss(pet, T0.plusSeconds(600));
+
+            verify(motionService).bakeNow(row(102).getId());
+            assertThat(claimed.get(row(102).getId())).isEqualTo(1);
+        }
+
+        @Test
         @DisplayName("★★ 즉시 굽기가 집은 줄은 스위프가 다시 못 집는다 — 여기가 뚫리면 돈이 두 번 나간다")
         void sweepCannotTakeWhatWeClaimed() {
-            thirdDayNightSleep();
-            trigger.onSleep(pet, kst("2026-09-05 19:00"));
+            trigger.onFirstGameLoss(pet, T0);
 
             // 스위프가 같은 줄을 집으려 한다 — 이미 BAKING 이라 0 이 돌아와야 한다.
             int won = repo.claim(row(102).getId(), Instant.now(), "sweep");
@@ -170,11 +188,18 @@ class BakeTriggerTest {
             verify(motionService).bakeNow(row(102).getId());
         }
 
-        private void thirdDayNightSleep() {
+        @Test
+        @DisplayName("★★★ 재우는 것으로는 안 열린다 — 옛 3일 조건이 남아 있으면 한 사람이 두 번 받는다")
+        void sleepingDoesNotOpenIt() {
             ReflectionTestUtils.setField(pet, "daysTogether", 3);
             ReflectionTestUtils.setField(pet, "todayCareMiss", 0);
             pet.settle(kst("2026-09-05 19:00"));
             pet.sleep(kst("2026-09-05 19:00"));
+
+            trigger.onSleep(pet, kst("2026-09-05 19:00"));
+
+            assertThat(row(102).getStatus()).isEqualTo(MotionStatus.NONE);
+            verify(motionService, never()).bakeNow(anyLong());
         }
     }
 

@@ -20,7 +20,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -41,6 +44,7 @@ class GameServiceTest {
     private PetService petService;
     private GameService service;
     private ZzalPet pet;
+    private com.lore.zzal.night.BakeTrigger bakeTrigger;
 
     @BeforeEach
     void setUp() {
@@ -66,8 +70,9 @@ class GameServiceTest {
         });
 
         RewardService rewards = new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS);
+        bakeTrigger = mock(com.lore.zzal.night.BakeTrigger.class);
         service = new GameService(gameRepository, petService, rewards,
-                com.lore.zzal.PieceFixture.inMemory(), 3);
+                com.lore.zzal.PieceFixture.inMemory(), bakeTrigger, 3);
     }
 
     @Test
@@ -181,6 +186,88 @@ class GameServiceTest {
         assertThat(last.runUnlocked()).isTrue();
     }
 
+    // ── 두 번째 선물(뒤로 넘어짐) — 좌우 맞히기 첫 패배 ──────────────────
+
+    @Test
+    @DisplayName("★★ 한 판을 다 치고 못 이기면 그 자리에서 두 번째 선물을 굽는다")
+    void losingAFullSeriesOpensTheSecondGift() {
+        playLeftRight("LLLRR", "RRRRR");        // 5라운드 · 2승 — 못 이겼다
+
+        verify(bakeTrigger).onFirstGameLoss(eq(pet), any());
+    }
+
+    @Test
+    @DisplayName("★★ 한 라운드를 져도 판을 이기면 안 준다 — 한 판이 곧 3선승 시리즈다")
+    void losingRoundsButWinningTheSeriesGivesNothing() {
+        playLeftRight("LLLRR", "LLLLL");        // 4·5라운드는 틀렸지만 3승
+
+        verify(bakeTrigger, never()).onFirstGameLoss(any(), any());
+    }
+
+    @Test
+    @DisplayName("★★ 판이 안 끝났으면 안 준다 — 네 라운드까지 다 틀려도 마지막을 쳐야 패배다")
+    void anUnfinishedSeriesGivesNothing() {
+        ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLLL", T0);
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(game));
+        pet.settle(T0);
+        for (char c : "RRRR".toCharArray()) {
+            service.guess(USER, PET, 1L, c, T0);
+        }
+
+        assertThat(game.isFinished()).isFalse();
+        verify(bakeTrigger, never()).onFirstGameLoss(any(), any());
+    }
+
+    @Test
+    @DisplayName("★★ 달리기 패배는 안 센다 — 넘어짐은 좌우 맞히기의 패배 리액션이다")
+    void losingTheRunGivesNothing() {
+        ZzalGame run = ZzalGame.start(USER, PET, GameKind.RUN, "", T0);
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(run));
+        when(petService.alive(any(), any(), any())).thenAnswer(inv -> pet);
+        for (int i = 0; i < 5; i++) {
+            pet.winLeftRight();
+        }
+
+        assertThat(service.finish(USER, PET, 1L, 1_000, T0).win()).isFalse();
+
+        verify(bakeTrigger, never()).onFirstGameLoss(any(), any());
+    }
+
+    @Test
+    @DisplayName("★★★ 포기한 판은 패배가 아니다 — 밤을 넘겨 접은 판이 선물을 당겨 오면 안 된다")
+    void anAbandonedGameIsNotALoss() {
+        ZzalGame yesterday = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", kst("2026-09-05 18:00"));
+        when(gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(anyLong())).thenReturn(Optional.of(yesterday));
+        Instant nextMorning = kst("2026-09-06 11:00");
+        service.start(USER, PET, GameKind.LEFT_RIGHT, nextMorning);
+
+        assertThat(yesterday.isFinished()).as("접힌 판은 끝난 것으로 기록된다").isTrue();
+        assertThat(yesterday.isWin()).as("그리고 이긴 판도 아니다").isFalse();
+        verify(bakeTrigger, never()).onFirstGameLoss(any(), any());
+    }
+
+    @Test
+    @DisplayName("★ 튜토리얼 중에 진 판은 안 센다 — 배우는 자리에서 지는 것은 과정이다")
+    void losingDuringTheTutorialGivesNothing() {
+        ReflectionTestUtils.setField(pet, "clockStartedAt", null);   // 튜토리얼로 되돌린다
+        assertThat(pet.isInTutorial()).isTrue();
+
+        playLeftRight("LLLRR", "RRRRR");
+
+        verify(bakeTrigger, never()).onFirstGameLoss(any(), any());
+    }
+
+    /** 좌우 한 판을 끝까지 친다. {@code answers} 가 정답, {@code picks} 가 고른 것. */
+    private void playLeftRight(String answers, String picks) {
+        ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, answers, T0);
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(game));
+        pet.settle(T0);
+        for (char c : picks.toCharArray()) {
+            service.guess(USER, PET, 1L, c, T0);
+        }
+        assertThat(game.isFinished()).as("다섯 라운드를 다 쳐야 한 판이 끝난다").isTrue();
+    }
+
     @Test
     @DisplayName("★ 밤잠 뒤 어제 판은 잇지 않는다 — 접고(패) 새 판, 달리기도 열린다 (리뷰 중-1)")
     void yesterdaysGameIsAbandoned() {
@@ -243,7 +330,7 @@ class GameServiceTest {
         java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> store = new java.util.HashMap<>();
         service = new GameService(gameRepository, petService,
                 new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS),
-                com.lore.zzal.PieceFixture.inMemory(store), 3);
+                com.lore.zzal.PieceFixture.inMemory(store), bakeTrigger, 3);
         ReflectionTestUtils.setField(pet, "piecesEnabledAt", T0);   // 3층부터만 센다
 
         service.start(USER, PET, GameKind.LEFT_RIGHT, T0);          // 새 판 — 센다
@@ -389,7 +476,7 @@ class GameServiceTest {
         java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> store = new java.util.HashMap<>();
         service = new GameService(gameRepository, petService,
                 new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS),
-                com.lore.zzal.PieceFixture.inMemory(store), 3);
+                com.lore.zzal.PieceFixture.inMemory(store), bakeTrigger, 3);
         ReflectionTestUtils.setField(pet, "piecesEnabledAt", T0);
         for (int i = 0; i < 3; i++) {
             service.start(USER, PET, GameKind.LEFT_RIGHT, T0);

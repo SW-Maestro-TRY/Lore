@@ -224,6 +224,12 @@ public final class PetResponses {
     public record Shared(String token, String url, Detail pet) {
     }
 
+    /**
+     * 첫 선물의 진행.
+     *
+     * ★ {@code daysLeft} 는 <b>항상 0</b>이다 — 첫 선물은 튜토리얼 완주로 열리므로 남은 날이 없다.
+     *   칸을 없애지 않은 것은 화면 계약이기 때문이고, 화면은 이 값으로 카운트다운을 그리면 안 된다.
+     */
     public record FirstGift(String status, int daysLeft) {
     }
 
@@ -478,27 +484,32 @@ public final class PetResponses {
         }
 
         /**
-         * 첫 심화 행동(선물 1 = 구르기)이 어디까지 왔나.
+         * 첫 선물(구르기)이 어디까지 왔나.
          *
          * <pre>
-         *   LOCKED   함께한 날 3일이 아직 안 됐다
-         *   WAITING  3일째다 — 오늘 케어 미스가 0이면 오늘 밤에 굽는다(정본 16장)
+         *   LOCKED   아직 튜토리얼 중이다
+         *   WAITING  튜토리얼을 끝냈다 — 그 순간 굽기가 시작된다
          *   BAKING   큐에 올랐거나 굽는 중이거나 검수 중
          *   OPEN     도착했다(앨범도 이때 같이 열린다)
          * </pre>
+         *
+         * <h3>★ {@code daysLeft} 는 항상 0 이다</h3>
+         * 첫 선물은 날짜가 아니라 <b>튜토리얼 완주</b>로 열린다 — "남은 날" 이라는 개념이 없다.
+         * 옛 3일 규칙으로 계산한 값을 그대로 내려보내면 화면이 <b>뜻 없는 숫자</b>로 카운트다운을
+         * 그린다("2일 남음" 인데 오늘 받는다). 칸은 화면 계약이라 남기고 값만 0 으로 고정한다.
          */
         static FirstGift firstGift(ZzalPet pet, MotionCatalog catalog, Map<Integer, ZzalMotion> rows) {
-            int daysLeft = Math.max(0, ZzalRules.FIRST_GIFT_DAYS - pet.getDaysTogether());
+            String waitingOrLocked = pet.isInTutorial() ? "LOCKED" : "WAITING";
             ZzalMotion gift = catalog.gifts().isEmpty() ? null : rows.get(catalog.gifts().get(0).seq());
             if (gift == null) {
-                return new FirstGift(daysLeft == 0 ? "WAITING" : "LOCKED", daysLeft);
+                return new FirstGift(waitingOrLocked, 0);
             }
             String status = switch (Advanced.userStatus(gift)) {
                 case "OPEN" -> "OPEN";
                 case "QUEUED", "PRACTICING" -> "BAKING";
-                default -> daysLeft == 0 ? "WAITING" : "LOCKED";
+                default -> waitingOrLocked;
             };
-            return new FirstGift(status, daysLeft);
+            return new FirstGift(status, 0);
         }
 
         /** 이 펫이 지금 뭔가 굽고 있나 — 가장 앞선 상태 하나로 줄인다(PRACTICING > QUEUED > NONE). */

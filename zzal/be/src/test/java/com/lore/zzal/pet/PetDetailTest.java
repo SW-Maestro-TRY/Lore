@@ -144,7 +144,9 @@ class PetDetailTest {
         assertThat(d.food()).isEqualTo(new PetResponses.Food(3, null));
         assertThat(d.mood()).isEqualTo("HUNGRY");   // ★ 배부름 0 으로 시작한다(튜토리얼 첫 칸이 밥)
         assertThat(d.features()).isEqualTo(new PetResponses.Features(true, true, false, false, false, false, false));
-        assertThat(d.firstGift()).isEqualTo(new PetResponses.FirstGift("LOCKED", 2));
+        // ★ daysLeft 는 항상 0 — 첫 선물은 날짜가 아니라 튜토리얼 완주로 열린다.
+        //   옛 3일 규칙으로 계산한 값을 내려보내면 화면이 뜻 없는 카운트다운을 그린다.
+        assertThat(d.firstGift()).isEqualTo(new PetResponses.FirstGift("LOCKED", 0));
         assertThat(d.chatSummary().nextAt()).isEqualTo(T0.plus(Duration.ofHours(1)));   // 기상(부화)+1h
         assertThat(d.tutorial().active()).isTrue();
         assertThat(d.tutorial().steps().get(0).current()).isTrue();
@@ -215,6 +217,21 @@ class PetDetailTest {
         PetResponses.Detail seen = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG, Map.of(1, base, 101, roll), List.of());
         assertThat(seen.learnedToday()).isEmpty();
         assertThat(seen.motions().get(16).advanced().seen()).isTrue();
+    }
+
+    @Test
+    @DisplayName("★★ 첫 선물은 튜토리얼을 끝내는 순간 LOCKED → WAITING — 날짜가 아니다")
+    void firstGiftFollowsTheTutorialNotTheCalendar() {
+        ZzalPet pet = baby();
+        assertThat(pet.isInTutorial()).isTrue();
+        assertThat(PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG).firstGift())
+                .isEqualTo(new PetResponses.FirstGift("LOCKED", 0));
+
+        pet.skipTutorial(T0);
+
+        assertThat(PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG).firstGift())
+                .as("함께한 날은 여전히 첫날이다 — 그래도 열린다")
+                .isEqualTo(new PetResponses.FirstGift("WAITING", 0));
     }
 
     @Test

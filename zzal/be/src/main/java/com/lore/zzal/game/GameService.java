@@ -2,6 +2,7 @@ package com.lore.zzal.game;
 
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.zzal.night.BakeTrigger;
 import com.lore.zzal.pet.PetService;
 import com.lore.zzal.piece.PieceEvent;
 import com.lore.zzal.pet.ZzalPet;
@@ -40,17 +41,20 @@ public class GameService {
     private final PetService petService;
     private final RewardService rewardService;
     private final com.lore.zzal.piece.PieceService pieceService;
+    private final BakeTrigger bakeTrigger;
     private final int dailyLimit;
 
     public GameService(ZzalGameRepository gameRepository,
                        PetService petService,
                        RewardService rewardService,
                        com.lore.zzal.piece.PieceService pieceService,
+                       BakeTrigger bakeTrigger,
                        @Value("${app.zzal.game.daily-limit:3}") int dailyLimit) {
         this.gameRepository = gameRepository;
         this.petService = petService;
         this.rewardService = rewardService;
         this.pieceService = pieceService;
+        this.bakeTrigger = bakeTrigger;
         this.dailyLimit = dailyLimit;
     }
 
@@ -152,6 +156,16 @@ public class GameService {
                 rewardService.forGameWin(pet, now);
             }
         });
+        // ★★ 두 번째 선물(뒤로 넘어짐)은 <b>여기</b>서 열린다 — 한 판을 다 치고 못 이긴 순간.
+        //
+        // ★ 한 판이 곧 3선승 시리즈(5라운드)라 한 라운드 패배는 패배가 아니다.
+        // ★ 이 자리를 고른 이유가 곧 안전장치다 — guess() 안에만 두면 달리기(finish)도,
+        //   밤을 넘겨 접은 판(abandon)도 여기 안 온다. 접은 판이 패배로 세면 한 판도 끝까지 안 친
+        //   사람이 선물을 받고, 진 적이 없어 그 선물의 이유를 모른다.
+        // ★ 튜토리얼을 끝낸 뒤부터다 — 튜토리얼 안에서는 지는 것도 배우는 과정이다.
+        if (game.isFinished() && !game.isWin() && !pet.isInTutorial()) {
+            bakeTrigger.onFirstGameLoss(pet, now);
+        }
         // 달리기 해금(5승)은 동작이 아니라 기능이라 justUnlocked 에 안 실린다 → runUnlocked 로 "이번에 열렸다" 를 알린다
         return new GuessResult(game, round, pick, revealed(pick, hit), hit, a.justUnlocked(), runUnlocked(pet));
     }
