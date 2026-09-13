@@ -80,6 +80,26 @@ story.CHARSHEET_SIZES.setdefault(PAGE_KIND, canvas_for("openai"))
 story.CHARSHEET_RATIOS.setdefault(PAGE_KIND, canvas_for("gemini"))
 
 
+# 아무도 안 고르면 이 값으로 그린다.
+#
+# **medium 인 이유는 실측이다**(2026-09-13, 같은 작품을 화질만 바꿔 세 번 그림):
+#
+#     화질     출력토큰   한 장    한 장 시간
+#     low         158     77원      19.5초
+#     medium    1,372    128원      37.4초      <- 기본
+#     high      5,488    301원      96.4초
+#
+# high 는 medium 의 2.4배를 내고 2.6배를 기다린다. 그만큼 좋아 보이느냐는
+# 사람이 고를 일이라 **고를 수 있게 열어 두되**, 안 고르면 medium 으로 둔다.
+#
+# ★ 기본값이 여기 있는 이유 — 이 값이 `.env` 에만 있으면 로컬과 서버가 다른
+#   제품이 된다. 실제로 그랬다: `.env` 에 medium 이 있었는데 2026-09-09 에
+#   파이썬 서버를 걷어내면서 서버로는 `.env` 가 안 실렸고(빌드가 제외한다),
+#   **아무도 모르는 채 한 달 가까이 high 로 돌며 편당 원가가 2.2배**가 됐다.
+#   `llm.py` 의 DEFAULT_PROVIDER 도 같은 사고를 겪고 같은 처방을 했다.
+DEFAULT_IMAGE_QUALITY = "medium"
+
+
 def backend_for(stage: str) -> tuple[str, str, str]:
     """(provider, model, quality). 못 쓰면 왜 못 쓰는지를 달고 멈춘다."""
     provider = llm.provider_for(stage).strip().lower()
@@ -87,7 +107,8 @@ def backend_for(stage: str) -> tuple[str, str, str]:
     if not ok:
         raise SystemExit(why)
     model = llm.model_for(stage, provider) or default_model
-    quality = (llm.env("OPENAI_IMAGE_QUALITY") or "high").strip().lower()
+    quality = (llm.env("OPENAI_IMAGE_QUALITY")
+               or DEFAULT_IMAGE_QUALITY).strip().lower()
     return provider, model, quality
 
 
