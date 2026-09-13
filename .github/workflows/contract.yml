@@ -1,0 +1,53 @@
+# 계약 검사 — 서버 명세와 프론트 타입이 어긋난 채 머지되는 것을 막는다.
+#
+# ★ 왜 배포 워크플로가 아니라 여기인가
+#   `deploy.yml` 은 `on: push: branches:[develop]` 이라 **머지된 뒤에** 돈다. 거기서 막으면
+#   어긋난 PR 은 이미 들어간 뒤고 배포만 실패한다 — 막고 싶은 것을 못 막는다. 게다가 그쪽
+#   프론트 잡은 세 도메인(zzal·webtoon·haeun)을 한 번에 빌드해서, zzal 계약이 어긋나면
+#   팀원 화면 배포까지 같이 멈춘다. 그래서 PR 에서 도는 파일을 따로 둔다.
+#
+# ★ 무엇을 보는가
+#   `common/docs/openapi.json`(백엔드가 갱신해 커밋하는 서버 명세 스냅샷)에서 타입을 다시 뽑아,
+#   커밋된 `zzal/fe/lib/api-schema.ts` 와 한 글자라도 다르면 빨간불.
+#
+#   서버를 바꾸고 스냅샷을 안 갱신  → 백엔드 스냅샷 시험이 빨개진다
+#   스냅샷은 갱신했는데 타입을 안 갱신 → 이 검사가 빨개진다
+#
+# ⚠️ 이 검사를 **통과해야 머지 가능**으로 만드는 것은 깃허브 레포 설정(Branch protection)이라
+#    워크플로 파일로는 안 된다. 설정에서 켜기 전까지는 빨간불만 뜨고 머지는 된다.
+
+name: 계약 검사
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'common/docs/openapi.json'
+      - 'zzal/fe/lib/api-schema.ts'
+      - 'scripts/gen-api-types.sh'
+      - '.github/workflows/contract.yml'
+
+jobs:
+  api-types:
+    name: 서버 명세 ↔ 프론트 타입
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 명세에서 타입 다시 뽑기
+        run: ./scripts/gen-api-types.sh
+
+      - name: 커밋된 타입과 같은지
+        run: |
+          if ! git diff --quiet -- zzal/fe/lib/api-schema.ts; then
+            echo "::error file=zzal/fe/lib/api-schema.ts::서버 명세와 프론트 타입이 어긋났습니다. 아래를 돌려 생성물을 같이 커밋하세요 — ./scripts/gen-api-types.sh"
+            echo
+            echo "── 어긋난 곳 ──"
+            git --no-pager diff -- zzal/fe/lib/api-schema.ts
+            exit 1
+          fi
+          echo "✅ 서버 명세와 프론트 타입이 같습니다."
