@@ -21,7 +21,7 @@ import type { Live } from './useHatch';
 import type { CareAction, ChatState, Personality } from '../../lib/pet';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
-import { SITUATION_TABLE, poseOfSituation, situationOfAction, type ActionKey } from '../props/situations';
+import { CYCLE_MS, SITUATION_TABLE, poseOfSituation, situationOfAction, stagePlanOf, type ActionKey } from '../props/situations';
 import { motionAliases } from '../constants';
 
 /**
@@ -30,6 +30,16 @@ import { motionAliases } from '../constants';
  * 조사 판정은 공용 `josa()` 가 이미 한다 — 여기서는 이름이 빈 경우까지 함께 막는다.
  */
 const sleepingLine = (name: string) => `${petWith(name, '이', '가')} 자고 있어요`;
+
+/**
+ * 행동 한 번의 **가장 짧은 길이**(ms).
+ * ★ 2.5초 — 눌러 보고 정했다. 1.5초는 눈이 따라가기 전에 사라지고, 4초는 다음 행동이 막혀 답답하다.
+ *   단계가 있는 소품은 이것보다 길어진다(단계 수 x `CYCLE_MS`).
+ */
+const ACT_MS = 2500;
+
+/** 바퀴 타이머를 걷어낼 때 훑을 최대 바퀴 수. 표에서 가장 긴 단계 차례(4)보다 넉넉히. */
+const ACT_MAX_CYCLES = 6;
 
 const petWith = (name: string, withFinal: string, withoutFinal: string) => {
   const n = name || '아이';
@@ -103,6 +113,11 @@ export interface YeoulState {
    */
   actSit: string | null;
   /**
+   * 그 행동의 **단계 소품이 지금 몇 번째 바퀴인가**(0부터). 주먹밥 3->2->1 이 여기서 넘어간다.
+   * 단계가 없는 행동은 늘 0 이다.
+   */
+  actStep: number;
+  /**
    * **개발용(연습방) 고정** — 손으로 고른 자세·상황. 둘 다 `null` 이면 평소대로 상태가 정한다.
    *
    * ★ 왜 두 축인가 — 자세만 바꿔서는 소품이 거의 안 보인다. 연습방 기본 상태(`base` · 아무 상태 아님)에서
@@ -163,7 +178,7 @@ const INITIAL: YeoulState = {
   //   남의 이름으로 만들어진다. 자리표시자('여울')만 보여 주고 값은 빈 칸이다.
   petName: '', uploaded: false, authed: '', askDraft: '',
   shards: 2, tutorDone: false, rollUnlocked: false, acting: null, actSit: null,
-  posePick: null, sitPick: null, floor2: false,
+  posePick: null, sitPick: null, floor2: false, actStep: 0,
   fire: null, decoOpen: false, albumOpen: 8,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
@@ -408,7 +423,6 @@ export function useYeoul(live?: Live) {
 
   /**
    * 행동 하나를 화면에 잠깐 보여 준다 — **자세와 상황을 한 몸으로** 켠다.
-   * ★ 2.5초 — 눌러 보고 정했다. 1.5초는 눈이 따라가기 전에 사라지고, 4초는 다음 행동이 막혀 답답하다.
    *
    * @param key 지을 자세(카탈로그 key).
    * @param sit 그 행동의 **상황 id**(`ACTION_SITUATION`). 주면 —
@@ -418,8 +432,18 @@ export function useYeoul(live?: Live) {
    */
   const act = useCallback((key: string, sit: string | null = null) => {
     const pose = (sit ? poseOfSituation(SITUATION_TABLE, sit) : null) ?? key;
-    setS((v) => ({ ...v, acting: pose, actSit: sit }));
-    later('acting', 2500, () => setS((v) => ({ ...v, acting: null, actSit: null })));
+    // 단계가 있는 소품은 **단계 수만큼 바퀴를 돈다**(밥 3->2->1 = 3바퀴 = 12프레임).
+    const plan = sit ? stagePlanOf(SITUATION_TABLE, sit) : null;
+    const cycles = plan ? plan.stages.length : 1;
+
+    // 앞서 돌던 연출의 바퀴 타이머를 **전부** 걷어낸다 — 안 그러면 다음 행동 도중에 옛 단계가 끼어든다.
+    for (let i = 1; i <= ACT_MAX_CYCLES; i++) clearTimeout(T.current[`actStep${i}`]);
+    setS((v) => ({ ...v, acting: pose, actSit: sit, actStep: 0 }));
+    for (let i = 1; i < cycles; i++) {
+      later(`actStep${i}`, i * CYCLE_MS, () => setS((v) => ({ ...v, actStep: i })));
+    }
+    // ★ 한 바퀴짜리는 **예전 길이 그대로** 둔다(2.5초). 1.8초로 줄이면 눌러 보고 정한 감각이 깨진다.
+    later('acting', Math.max(ACT_MS, cycles * CYCLE_MS), () => setS((v) => ({ ...v, acting: null, actSit: null, actStep: 0 })));
   }, [later]);
 
   /**
@@ -1593,6 +1617,8 @@ export function useYeoul(live?: Live) {
         trash: es.trace,
         /** 지금 도는 행동의 상황 id. 반응 그림(`acting`)과 **같이 켜지고 같이 꺼진다**. */
         act: s.actSit,
+        /** 그 행동의 단계 소품이 지금 몇 번째 바퀴인가. 방이 표를 보고 실제 단계로 옮긴다. */
+        actStep: s.actStep,
       },
       // 자는 동안은 방을 아예 못 연다(판정 13). 화면이 이 값 하나만 보면 되게 둔다.
       asleep: mode === 'sleep',

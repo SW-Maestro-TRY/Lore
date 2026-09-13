@@ -93,6 +93,44 @@ export const ACTION_SITUATION = {
 
 export type ActionKey = keyof typeof ACTION_SITUATION;
 
+// ── 행동 연출의 박자 ───────────────────────────────────────────────────
+//
+// ★ 상훈님 2026-09-13 — "지금처럼 2프레임씩 2번 = 4번마다 주먹밥 3 -> 2 -> 1. 총 12프레임."
+//   **캐릭터 프레임은 그대로 반복하고 소품만 바뀐다.** 한 바퀴가 끝날 때마다 단계가 하나 넘어간다.
+
+/**
+ * 캐릭터 움짤 **한 프레임**(ms). 확정본 16종 실측값 — `demo/v6/eat.webp` 은 2프레임 x 450ms 다.
+ * ⚠️ 그림을 다시 뽑아 프레임 간격이 바뀌면 **여기 한 줄만** 고치면 된다(박자가 전부 이 값에서 나온다).
+ */
+export const SPRITE_FRAME_MS = 450;
+
+/** 한 바퀴 = 캐릭터 2프레임 x 2번. */
+export const CYCLE_FRAMES = 4;
+
+/** 한 바퀴의 길이(ms). 소품 단계는 이 간격으로 하나씩 넘어간다. */
+export const CYCLE_MS = SPRITE_FRAME_MS * CYCLE_FRAMES;
+
+/**
+ * 그 상황이 **실제로 돌릴 수 있는 단계 차례**. 없으면 `null`(= 한 바퀴짜리 연출).
+ *
+ * ★ 차례는 표가 정한다(주먹밥 3->2->1 · 거품 1->2->3) — 코드가 순서를 지어내지 않는다.
+ * ★ ⚠️ **규격에 없는 단계는 걸러 낸다.** 표의 `clean_l1` 은 먼지를 1~3 으로 적어 두었는데 규격에는
+ *   `dust_1`·`dust_2` 둘뿐이라, 거르지 않으면 3번째 바퀴에서 **1단계로 되돌아가** 1->2->1 로 보인다
+ *   (`resolveScene` 이 못 찾은 단계를 첫 단계로 버티기 때문이다). 있는 만큼만 돈다.
+ */
+export function stagePlanOf(
+  table: PropSituationTable | null | undefined,
+  id: string,
+): { prop: string; stages: readonly number[] } | null {
+  const row = (table ?? []).find((r) => r.id === id);
+  if (!row?.prop || !row.stages?.length) return null;
+  const prop = row.prop.split('|')[0].trim();
+  const spec = confirmedSpec(prop);
+  if (!spec) return null;
+  const stages = row.stages.filter((n) => spec.stages.some((x) => x.n === n));
+  return stages.length > 1 ? { prop, stages } : null;
+}
+
 /**
  * 그 행동이 지금 켤 **상황 id 하나**. 2층이 열려 있고 그 행동에 2층 줄이 있으면 2층, 아니면 1층.
  *

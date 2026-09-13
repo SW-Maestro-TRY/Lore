@@ -28,7 +28,7 @@ import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
 import { charFit, HEAD_SAFE, K_SCREEN_TARGET } from '../props/layout';
 import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
-import { SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose } from '../props/situations';
+import { SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose, stagePlanOf } from '../props/situations';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { v, actions } = y;
@@ -57,7 +57,19 @@ export default function Room({ y }: { y: Yeoul }) {
   const active = v.sitPick ? [v.sitPick, ...auto.filter((id) => always.has(id))]
     : v.posePick ? [...situationsOfPose(propTable, v.posePick), ...auto.filter((id) => always.has(id))]
       : auto;
-  const scene = { pose: v.spriteKey, active, stages: { trash: v.scene.trash } };
+  /**
+   * 단계가 있는 소품은 **바퀴마다 한 단계씩** 넘어간다(밥 3->2->1). 몇 번째 바퀴인지는 두뇌가 세고,
+   * 그 숫자를 **표가 적어 둔 차례**에 대입하는 일만 여기서 한다 — 차례를 코드가 지어내지 않는다.
+   */
+  const actPlan = v.scene.act ? stagePlanOf(propTable, v.scene.act) : null;
+  const scene = {
+    pose: v.spriteKey,
+    active,
+    stages: {
+      trash: v.scene.trash,
+      ...(actPlan ? { [actPlan.prop]: actPlan.stages[Math.min(v.scene.actStep, actPlan.stages.length - 1)] } : {}),
+    },
+  };
 
   // ── 아이를 어디에 얼마나 크게 세울 것인가 ──────────────────────────────
   //
