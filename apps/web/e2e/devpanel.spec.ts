@@ -58,16 +58,24 @@ test('이미 지난 시각을 누르면 내일 그 시각으로 간다', async (
 });
 
 test('분 단위 건너뛰기도 시계를 민다', async ({ page }) => {
+  // ★ 게이지로 재지 않는다 — 배부름은 **깨어 있는 3시간**에 한 칸이다(`DROP_MS.fullness`).
+  //   10분으로는 아무것도 안 변하는 것이 정상이라, 게이지를 단정하면 멀쩡한 기능이 빨개진다
+  //   (옛 주석의 "아기는 3분에 한 칸" 은 어느 규칙에도 없는 값이었다). 이 칸이 보려는 것은
+  //   **시계가 분 단위로 밀리는가** 하나이므로, 위 칸과 같은 자를 쓴다.
   await page.goto('/zzal?skin=scrapbook&mock=baby&dev=1', { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[data-action="feed"]');
-  // 아기는 3분에 배부름 한 칸. 밥을 주고 +10분이면 확실히 줄어 있다.
-  await page.locator('[data-action="feed"]').click();
-  await page.waitForTimeout(400);
-  const before = (await page.locator('[data-part="gauges"]').first().getAttribute('data-gauges'))!;
+  await page.waitForSelector('[data-part="devpanel"]');
+  await page.waitForFunction(() => !!(window as unknown as { __zzalMock?: unknown }).__zzalMock);
+
+  const at = () => page.evaluate(() => (window as unknown as { __zzalMock: { now: () => string } }).__zzalMock.now());
+  const before = new Date(await at()).getTime();
+
   await page.locator('[data-dev-jump="+10분"]').click();
   await page.waitForTimeout(600);
-  const after = (await page.locator('[data-part="gauges"]').first().getAttribute('data-gauges'))!;
-  expect(Number(after.split('/')[0])).toBeLessThan(Number(before.split('/')[0]));
+  const after = new Date(await at()).getTime();
+
+  const minutes = (after - before) / 60_000;
+  expect(minutes, '10분 앞으로').toBeGreaterThan(9);
+  expect(minutes).toBeLessThan(12);
 });
 
 
