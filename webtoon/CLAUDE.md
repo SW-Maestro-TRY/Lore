@@ -40,6 +40,24 @@ webtoon/ai/
 apps/web (/webtoon)  →  webtoon/fe  →  webtoon/be  →  python3 run.py (webtoon/ai)
 ```
 
+## DB 마이그레이션은 webtoon/be 에 새로 만들지 않습니다
+
+Flyway 마이그레이션 폴더가 지금 `apps/api/src/main/resources/db/migration`과
+`webtoon/be/src/main/resources/db/migration` **둘로 나뉘어 있는데, 둘 다 같은
+DB의 같은 `flyway_schema_history`를 공유**합니다. 번호(`V숫자`)는 두 폴더를
+합쳐서 유일해야 하는데, 각 폴더가 서로 안 보고 다음 번호를 잡다 보니 겹치는
+사고가 반복됩니다 — 이번에 `webtoon/be`의 `V12__webtoon_job_notify_email.sql`이
+`apps/api`의 `V12__world_100_chars.sql`과 겹쳐서, `develop`에 머지된 뒤 배포가
+"Found more than one migration with version 12"로 죽고 자동 롤백됐습니다
+(2026-09-14, #298 → V16로 옮겨 고침). 전에도 V11로 같은 일이 있었습니다
+(#192, PR #297 "flyway-v11-clash").
+
+**그러니 webtoon 쪽에서 새 마이그레이션이 필요하면 파일을
+`apps/api/src/main/resources/db/migration`에 만드세요** — `webtoon/be`
+쪽 폴더에 새로 추가하지 않습니다. 번호를 한 곳에서만 관리하면 겹칠 일이
+없어집니다. (이미 있는 `webtoon/be`의 `V11`·`V16` 파일은 이미 적용된
+이력이라 옮기지 않습니다 — 앞으로 만들 새 파일에만 적용되는 규칙입니다.)
+
 ## 파이썬을 서버로 띄우지 않습니다
 
 옛 프로토타입 웹서버(`landing/serve.py`)는 2026-09-12에 지웠습니다. 자바가
