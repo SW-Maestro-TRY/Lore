@@ -23,12 +23,8 @@ const MY_PAGE = "/webtoon?view=mypage";
 export default function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const onZzal = pathname.startsWith("/zzal");
 
-  /* 웹툰 탭은 헤더에서 **로그인 하나만** 본다. (담당: 하은, #223)
-     「시작하기」를 여기서만 접는다 — 만들다 말고 누를 것이 아니고,
-     「시작하기」가 가리키는 곳은 다른 도메인(zzal)이라 이 탭에서는
-     나가는 문이다. 다른 탭은 한 픽셀도 안 바뀐다. */
+  /* 웹툰 탭은 헤더에서 **로그인 하나만** 본다. (담당: 하은, #223) */
   const onWebtoon = pathname.startsWith("/webtoon");
 
 
@@ -98,15 +94,6 @@ export default function SiteHeader() {
             <button type="button" className={styles.authButton} onClick={() => setAuthOpen(true)}>
               로그인
             </button>
-          )}
-
-          {/* 시작점은 Zzal 탭 (사용자 여정상 가장 가벼운 진입).
-              이미 zzal 에 들어와 있으면 가리킬 곳이 자기 자신이라 접는다 —
-              좁은 화면에서 그 자리를 탭(Trailer·Webtoon)에 내준다. */}
-          {!onZzal && !onWebtoon && (
-            <Link href="/zzal" className={styles.headerCta}>
-              시작하기
-            </Link>
           )}
         </div>
       </div>
