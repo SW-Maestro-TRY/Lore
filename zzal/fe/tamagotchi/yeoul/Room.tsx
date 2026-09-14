@@ -23,6 +23,7 @@ import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
 import Panels from './Panels';
+import FeedbackSheet from '../FeedbackSheet';
 import { spriteUrl, useFootPad, useLive, yeoulSpriteUrl } from './useHatch';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
@@ -38,7 +39,7 @@ import { confirmedSpec } from '../props/catalog';
 const SWEEP_ROW_ID = '__sweep__';
 
 export default function Room({ y }: { y: Yeoul }) {
-  const { v, actions } = y;
+  const { s, v, actions } = y;
   // 무엇을 그릴지는 `v.spriteKey`(useYeoul)가, 누구를 그릴지는 `spriteUrl`(useHatch)이 정한다.
   const live = useLive();
   // 여울 샘플 방에서는 여울이, 진짜 방에서는 내 아이만 나온다.
@@ -173,6 +174,24 @@ export default function Room({ y }: { y: Yeoul }) {
 
       {v.hud.show && <Hud y={y} />}
       {v.sample.show && <SampleHud y={y} />}
+
+      {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가 · 아기 시간표 중인가 · 받은 움직임이
+          도착했는가)는 **FeedbackSheet 이 정한다.** 여기서 판정하면 스킨이 그 규칙을 알아야 하고,
+          규칙이 바뀔 때마다 스킨이 같이 바뀐다 — 스크랩북과 같은 약속이다(skins/Scrapbook.tsx).
+          ★ 자리 — 머리줄 **아래, 무대 위**. 띠는 덮개 없이 세로 흐름에 끼어드는 한 줄이라
+            **아래 돌봄 타일을 한 번도 가리지 않는다**(예전에 돌봄 버튼을 덮어 띠로 바꾼 그 이유).
+            여울에는 도감 구역이 따로 없어서 스크랩북의 그 자리를 대신하는 곳이다.
+          ★ 목(여울 연습방·시안 미리보기)에서는 안 그린다 — 후기는 실서버 전용이다. */}
+      <FeedbackSheet
+        petId={!s.sampleMode && live.pet?.phase === 'ALIVE' ? live.petId : null}
+        // 받은 움직임이 실제로 있을 때만 "받은 움직임, 어땠어요?" 를 묻는다.
+        advancedArrived={(live.pet?.learnedToday?.length ?? 0) > 0 || live.pet?.firstGift?.status === 'OPEN'}
+        // 아기 시간표는 **서버가 센다**(계약 — 끝나면 블록이 null 이다). 화면이 다시 세지 않는다.
+        tutorialActive={live.pet?.tutorial?.active === true || s.tutorOn}
+        // 전면 판(해금 축하·선물)과 앨범 벽이 떠 있는 동안에는 저절로 안 올라온다.
+        hold={!!s.fire || v.wall.show || v.frame.show}
+        tone="yeoul"
+      />
 
       {/* ── 무대 ───────────────────────────────────────────────── */}
       <div
