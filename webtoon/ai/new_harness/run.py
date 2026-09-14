@@ -15,6 +15,7 @@
   python run.py --character ../landing/jobs/<id>/character.json
   python run.py --name 이하은 --photo a.png --desc "..." --genre 판타지
   python run.py --run-id <id> --pick 2                 # 후보 고르고 콘티까지
+  python run.py --run-id <id> --scene-link             # 디테일 (장면 이음새, 글 1회)
   python run.py --run-id <id> --sheet                  # 캐릭터 시트
   python run.py --run-id <id> --sheet-from ../story-harness/runs/<run>  # 시트 재사용
   python run.py --run-id <id> --pages                  # 페이지 그림 (페이지당 1회 호출)
@@ -50,6 +51,8 @@ import detailart                              # noqa: E402
 import storycheck                             # noqa: E402
 import episodecheck                           # noqa: E402
 import pages as pagemod                       # noqa: E402
+import runmeta                                # noqa: E402
+import scenelink                              # noqa: E402
 import sheet as sheetmod                      # noqa: E402
 from llm import story                         # noqa: E402
 import samples                                # noqa: E402  (story-harness 것을 그대로 빌린다)
@@ -363,16 +366,14 @@ def write_text(path: Path, text: str) -> None:
 
 
 def load_meta(run_dir: Path) -> dict:
-    path = run_dir / "meta.json"
-    if path.exists():
-        return json.loads(path.read_text(encoding="utf-8"))
-    return {"run_id": run_dir.name, "calls": []}
+    return runmeta.load(run_dir)
 
 
 def record(run_dir: Path, call_meta: dict) -> None:
-    meta = load_meta(run_dir)
-    meta["calls"].append(call_meta)
-    write_json(run_dir / "meta.json", meta)
+    # 쓰는 것은 runmeta 가 한다(파일 잠금) — 장면을 동시에 그리면 프로세스
+    # 여럿이 같은 meta.json 에 쓴다. 그냥 쓰면 나중에 쓴 쪽이 앞의 기록을
+    # 덮어써서, 돈은 나갔는데 정산에서만 사라진다.
+    runmeta.append_call(run_dir, call_meta)
     cost = call_meta.get("cost") or {}
     tag = "실패" if call_meta.get("error") else ""
     log(f"  {tag}{call_meta['stage']}  {call_meta['provider']}:{call_meta['model']}  "
@@ -800,6 +801,39 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
     log(f"  -> {out}")
 
 
+def direction_of(run_dir: Path) -> dict | None:
+    """이 run 에서 고른 방향. 없으면 첫 번째. 둘 다 없으면 None."""
+    pick = json.loads((run_dir / "pick.json").read_text(encoding="utf-8")) \
+        if (run_dir / "pick.json").exists() else {}
+    path = run_dir / "directions.json"
+    if not path.exists():
+        return None
+    directions = json.loads(path.read_text(encoding="utf-8"))
+    return (next((d for d in directions if d.get("n") == pick.get("n")), None)
+            or (directions[0] if directions else None))
+
+
+def stage_scene_link(run_dir: Path, dry_run: bool, force: bool = False) -> dict | None:
+    """디테일 단계 — 장면마다 **어디서 끝나는지**를 그리기 전에 정해 둔다.
+
+    그림 값이 나가기 전에 도는 글 호출 한 번이다. 여기서 정한 「마무리」가 곧
+    다음 장면의 시작이라, 그리는 쪽은 앞 장 그림을 못 봐도 어디서 이어 그릴지
+    안다 — **그래서 장면을 동시에 그릴 수 있다.**
+
+    그리기(`--detail-pages`)가 이 파일이 없으면 알아서 한 번 만든다. 다만
+    장면을 나눠 동시에 그릴 때는(프로세스마다 `--page N`) **그리기 전에 이
+    단계를 따로 한 번 돌려 두어야 한다** — 안 그러면 프로세스마다 저마다
+    이음새를 만들어 장마다 기준이 달라진다.
+    """
+    direction = direction_of(run_dir)
+    if not direction:
+        raise SystemExit(f"{run_dir / 'directions.json'} 가 없습니다. 이야기 단계를 먼저 돌리세요.")
+    char = json.loads((run_dir / "input.json").read_text(encoding="utf-8")) \
+        if (run_dir / "input.json").exists() else None
+    return scenelink.plan(run_dir, direction, char, dry_run=dry_run, force=force,
+                          on_call=lambda meta: record(run_dir, meta))
+
+
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
@@ -818,6 +852,15 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
     쓰는 자리가 `pages/` 로 같아서 둘러보기·편집실은 어느 흐름으로 만든
     것인지 몰라도 된다.
     """
+    # 이음새가 없으면 먼저 만든다 — 그림 값이 나가기 전이다.
+    #
+    # **한 장만 다시 그리는 길(`only`)에서는 안 만든다.** 그 길은 이미 그린
+    # 화의 한 장을 고치는 것이고, 장면을 나눠 동시에 그릴 때도 이 모양으로
+    # 들어온다. 거기서 이음새를 만들면 프로세스마다 다른 이음새가 생겨서,
+    # 이 단계로 없애려던 어긋남이 그대로 돌아온다.
+    if not only and not scenelink.load(run_dir):
+        stage_scene_link(run_dir, dry_run)
+
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
                                    allow_no_sheet=allow_no_sheet, review=review,
                                    note=note,
@@ -888,6 +931,13 @@ def main(argv=None) -> int:
     p.add_argument("--sheet-from", type=Path,
                    help="이미 뽑아 둔 시트를 가져온다 (story-harness run 폴더 · "
                         "new_harness run 폴더 · png 하나). 호출 0회")
+    p.add_argument("--scene-link", action="store_true",
+                   help="디테일 단계 — 장면마다 어디서 끝나는지를 그리기 전에 "
+                        "정해 둔다 (글 호출 1회). 장면을 동시에 그릴 거면 "
+                        "그리기 전에 이걸 먼저 한 번 돌린다")
+    p.add_argument("--scene-link-force", action="store_true",
+                   help="이음새가 이미 있어도 다시 정한다 (그리는 중에는 쓰지 "
+                        "마세요 — 이미 그린 장과 기준이 어긋납니다)")
     p.add_argument("--detail-pages", action="store_true",
                    help="이어그리기(최종 방식) — 구체화·콘티·컷 대본을 전부 "
                         "건너뛰고 방향 후보로 바로 페이지를 그린다 "
@@ -978,7 +1028,8 @@ def main(argv=None) -> int:
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
     if (args.story_review or args.episode_review
             or args.sheet or args.sheet_spec or args.detail_pages
-            or args.page or args.sheet_from or args.pick_save or args.restory):
+            or args.page or args.sheet_from or args.pick_save or args.restory
+            or args.scene_link or args.scene_link_force):
         if args.restory:
             # 방향 후보를 다시 만든다 — 이전 pick.json 은 더 이상 유효하지
             # 않다(방향 번호가 새로 나온 4개와 안 맞을 수 있다), 지운다.
@@ -1001,6 +1052,8 @@ def main(argv=None) -> int:
             log(f"[방향 선택] {chosen['n']}번 저장했습니다 -> {run_dir / 'pick.json'}")
         if args.sheet or args.sheet_spec:
             stage_sheet(run_dir, char, args.dry_run, spec_only=args.sheet_spec, note=args.note)
+        if args.scene_link or args.scene_link_force:
+            stage_scene_link(run_dir, args.dry_run, force=args.scene_link_force)
         if args.detail_pages:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
                                allow_no_sheet=args.no_sheet,
@@ -1016,7 +1069,9 @@ def main(argv=None) -> int:
             return 0
         show_directions(directions)
         print(f"\n골랐으면:  python run.py --run-id {run_dir.name} --pick <번호> --pick-save")
+        print(f"이음새:    python run.py --run-id {run_dir.name} --scene-link")
         print(f"그리려면:  python run.py --run-id {run_dir.name} --detail-pages")
+        print(f"           (장면마다 따로·동시에 그리려면 --detail-pages --page <번호>)")
         return 0
 
     # **구체화·콘티·컷 대본 단계는 2026-09-13에 지웠다** — 운영 서버는 이미

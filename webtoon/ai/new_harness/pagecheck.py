@@ -47,6 +47,8 @@ import os
 from pathlib import Path
 
 import llm
+import runmeta
+import scenelink
 from llm import story
 
 HERE = Path(__file__).resolve().parent
@@ -104,11 +106,11 @@ def record(run_dir: Path, call_meta: dict) -> None:
 
     검수도 돈이 나가는 호출이다. 단독으로 돌렸을 때만 기록이 빠지면, 나중에
     이 run 에 얼마가 들었는지가 어디서 돌렸느냐에 따라 달라진다.
+
+    쓰는 것은 runmeta 가 한다(파일 잠금) — 장면을 동시에 그리면 프로세스
+    여럿이 같은 meta.json 에 쓴다.
     """
-    path = run_dir / "meta.json"
-    meta = read_json(path) or {"run_id": run_dir.name, "calls": []}
-    meta["calls"].append(call_meta)
-    write_json(path, meta)
+    runmeta.append_call(run_dir, call_meta)
 
 
 def _text(x) -> str:
@@ -206,6 +208,18 @@ def story_block(direction: dict, scene_no: int) -> str:
 def prev_block(direction: dict, scene_no: int, *, has_prev: bool,
                prev_is_cover: bool, next_from: str = "") -> str:
     """직전 그림이 무엇인지. 첨부 순서 1번을 글로 설명해 준다."""
+    if not has_prev and scene_no > 1:
+        # 장면을 동시에 그리는 중이라 앞 장이 아직 없다. 여기서 "첫 장이다" 로
+        # 내려가면 검수가 이 장을 화의 시작으로 읽어, 앞에서 이어지는지를
+        # 아예 안 본다.
+        lines = ["## 직전 페이지",
+                 "아직 안 그려졌다 — 이 화는 장면을 동시에 그리는 중이라 앞 장 그림이 "
+                 "없다. 첨부한 그림은 지금 페이지 하나뿐이다."]
+        if _text(next_from):
+            lines += ["", "앞 장이 끝나기로 되어 있는 자리는 아래와 같다. 지금 그림이 "
+                          "**이 자리에서 이어지는지**를 본다.",
+                      f"\"{_text(next_from)}\""]
+        return "\n".join(lines)
     if not has_prev:
         return "## 직전 페이지\n없다. 이 화의 첫 장이다 — 첨부한 그림은 지금 페이지 하나뿐이다."
     if prev_is_cover:
@@ -425,9 +439,14 @@ def review_run(run_dir: Path, only=None, dry_run: bool = False,
             if isinstance(c, dict) and _text(c.get("name")) and _text(c.get("name")) != hero]
     scenes = [s for s in (direction.get("scenes") or []) if _text(s)]
 
+    # 이음새가 있으면 "앞 장이 어디서 끝났는가" 를 앞 장 검수에서 받아 오지
+    # 않는다 — 그리기 전에 이미 정해 둔 값이 있고, 그것이 기준이다.
+    link = scenelink.load(run_dir)
     out = []
     next_from = ""
     for scene_no in range(1, len(scenes) + 1):
+        if link:
+            next_from = scenelink.opens_at(link, scene_no)
         page_no = scene_no + 1                     # 1페이지는 표지다
         if only and page_no not in only:
             continue

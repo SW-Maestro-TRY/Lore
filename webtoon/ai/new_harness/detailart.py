@@ -54,6 +54,8 @@ import imageprompt
 import llm
 import pagecheck
 import pages
+import runmeta
+import scenelink
 
 HERE = Path(__file__).resolve().parent
 # 작품이 쌓이는 자리.
@@ -90,11 +92,11 @@ def record(run_dir: Path, call_meta: dict) -> None:
 
     run.py 의 record() 와 같은 파일·같은 모양이다 — 나중에 비용을 정산할
     때 이 run이 어느 스크립트로 그렸는지 신경 쓸 필요가 없게 한다.
+
+    쓰는 것은 runmeta 가 한다(파일 잠금) — 장면을 동시에 그리면 프로세스
+    여럿이 같은 meta.json 에 쓴다.
     """
-    path = run_dir / "meta.json"
-    meta = read_json(path) or {"run_id": run_dir.name, "calls": []}
-    meta["calls"].append(call_meta)
-    write_json(path, meta)
+    runmeta.append_call(run_dir, call_meta)
     cost = call_meta.get("cost") or {}
     tag = "실패" if call_meta.get("error") else "완료"
     log(f"  [{tag}] {call_meta.get('stage')}  {call_meta.get('provider')}:"
@@ -187,7 +189,7 @@ def page_path(run_dir: Path, page_no: int) -> Path:
 
 def build_continue_prompt(direction: dict, char: dict | None, spec: dict | None,
                           cast: list[dict], *, scene_no: int, has_prev: bool,
-                          resume_from: str = "") -> str:
+                          resume_from: str = "", link: dict | None = None) -> str:
     """실험 2 (v2): 구체화(detail.json) 없이, 방향(direction) 원본 그대로 그린다.
 
     씬 하나 = 이미지 하나로 되돌렸다 — v1(자연스럽게 이어지는 만큼 알아서
@@ -202,9 +204,14 @@ def build_continue_prompt(direction: dict, char: dict | None, spec: dict | None,
     통째로 지나치지 마라"). 장면을 한 장에 딱 맞춰 담으라고 하면 장면 끝과
     다음 장 시작 사이가 매번 뚝 끊긴다.
 
-    resume_from — 앞 장을 검수한 것이 적어 준 "다음은 여기서부터". 그림만
-    보고는 앞 장이 이야기를 어디까지 밀고 갔는지 알 수 없어서, 한 장면이 두
-    장에 걸치는 것을 허용한 대가로 생긴 빈칸을 이것으로 메운다(pagecheck).
+    link — 디테일 단계(scenelink)가 그리기 **전에** 정해 둔 장면 이음새.
+    있으면 이 장이 어디서 시작해 어디서 끝나는지가 글로 못 박힌다. 그러면
+    **앞 장 그림이 없어도 이어지므로 장면을 동시에 그릴 수 있다** — 이것이
+    지금의 기본 길이다.
+
+    resume_from — 이음새가 없는 옛 run 을 위한 길. 앞 장을 검수한 것이 적어
+    준 "다음은 여기서부터"다(pagecheck). 앞 장이 이미 그려지고 검수까지
+    끝나야 생기는 값이라 차례로 그릴 때만 쓸 수 있다.
 
     {style} 자리는 호출부(draw_continue)가 채운다.
     """
@@ -231,6 +238,52 @@ def build_continue_prompt(direction: dict, char: dict | None, spec: dict | None,
             lines.append(f"{i}. {s}{mark}")
     con = "\n".join(lines)
 
+    opens = scenelink.opens_at(link, scene_no)
+    this = scenelink.scene_of(link, scene_no)
+    ends = (this.get("ends") or "").strip()
+
+    if opens and ends:
+        # 디테일 단계가 정해 둔 두 지점. **이 장은 그 사이만 그린다.**
+        #
+        # 앞 장 그림을 참조로 붙이는 대신 이 글이 그 자리를 대신하기 때문에,
+        # 앞 장이 아직 안 그려졌어도(동시에 그리는 중이어도) 이어진다. 대신
+        # 시작과 끝을 넘어가지 않게 못 박아야 한다 — 넘어가면 옆 장과 같은
+        # 순간을 두 번 그리게 되고, 그때는 어느 쪽이 잘못됐는지 그림만 보고
+        # 가릴 수 없다.
+        lines = [f"위 목록의 {scene_no}번 장면 자리를 그린다: \"{this_scene}\"", ""]
+        if this.get("what"):
+            lines += [f"[이 장에서 벌어지는 일] {this['what']}", ""]
+        first = scene_no == 1
+        lines += [
+            (f"[이 화가 열리는 자리 — 여기서부터 그린다] {opens}" if first else
+             f"[여기서부터 그린다 — 앞 장이 끝난 자리다] {opens}"),
+            "",
+            f"[여기서 끝낸다 — 다음 장이 이어받을 자리다] {ends}",
+            "",
+            "**다른 장면들은 지금 동시에 그려지고 있다.** 위 두 지점이 앞뒤 장과 "
+            "맞물리는 자리다 — 옆 장의 그림을 보고 맞추는 것이 아니라 이 글에 "
+            "맞춘다.",
+            "",
+            ("- 「여기서부터」가 이 화의 첫 장면이다. 여기부터 그린다."
+             if first else
+             "- 「여기서부터」는 앞 장이 이미 그린 순간이다. 그 순간을 다시 그리지 "
+             "말고, 거기서 곧바로 이어지는 다음 순간부터 그린다."),
+            "- 「여기서 끝낸다」는 이 장의 마지막이다. 그 지점이 화면에 나오는 "
+            "데서 끊는다. 더 나아가면 다음 장과 같은 순간을 두 번 그리게 된다.",
+            "- 그 사이를 컷 몇 개로 어떻게 보여줄지, 무슨 대사를 넣을지는 전부 "
+            "**네가 정한다.**",
+        ]
+        scene_instr = "\n".join(lines)
+        if has_prev:
+            scene_instr += ("\n\n첨부한 직전 그림이 바로 앞 장이다 — 인물·공간·"
+                            "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
+                            "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
+        return (text
+                .replace("{people}", character_block(char, spec, cast))
+                .replace("{continuity}", con)
+                .replace("{scene}", scene_instr))
+
+    # 이음새가 없는 길(디테일 단계를 안 돌린 옛 run) — 예전 그대로다.
     goal = f"위 목록의 {scene_no}번 장면 자리를 그린다: \"{this_scene}\"\n\n" \
            "이 한 장이 이야기를 어디까지 나아가게 할지는 **네가 정한다** — 이 장면을 " \
            "한 장에 다 담아도 되고, 앞 장이 못 다한 곳을 마저 그리다가 이 장면으로 " \
@@ -247,7 +300,7 @@ def build_continue_prompt(direction: dict, char: dict | None, spec: dict | None,
             "내용(같은 순간·같은 대사)을 다시 그리지 않는다."
         )
     else:
-        scene_instr = goal + "\n\n이 화의 시작이다."
+        scene_instr = goal + "\n\n이 화의 시작이다." if scene_no == 1 else goal
 
     if has_prev and (resume_from or "").strip():
         # 앞 장을 검수한 모델이 "다음은 여기서부터" 라고 적어 둔 자리.
@@ -338,6 +391,14 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                if isinstance(c, dict) and (c.get("name") or "").strip()
                and (c.get("name") or "").strip() != hero]
 
+    # 디테일 단계가 그리기 전에 정해 둔 장면 이음새(scene_link.json).
+    #
+    # **여기서 새로 만들지는 않는다.** 장면을 동시에 그리면 이 자리에 프로세스
+    # 여럿이 같이 들어오는데, 저마다 이음새를 정하면 장마다 다른 이음새로
+    # 그려져서 이 단계로 없애려던 어긋남이 그대로 돌아온다. 만드는 것은 그리기
+    # 전에 한 번(`run.py --scene-link`), 여기서는 읽기만 한다.
+    link = scenelink.load(run_dir)
+
     sheet = run_dir / "sheet.png"
     if not sheet.exists() and not dry_run and not allow_no_sheet:
         raise SystemExit(
@@ -358,6 +419,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     tries = pagecheck.max_redraw() if do_review else 0
     log(f"[이어그리기] 표지 1장 + 장면 {len(scenes)}개 · 그림체 {style} · {provider}"
         + (f":{model}" if model else "")
+        + (" · 이음새 있음(동시에 그려도 이어진다)" if link else " · 이음새 없음(앞 그림을 보고 잇는다)")
         + (f" · 검수 켜짐(다시 그리기 {tries}회)" if do_review else " · 검수 꺼짐"))
 
     title, genre, plot = direction.get("title") or "", direction.get("genre") or "", direction.get("plot") or ""
@@ -371,10 +433,13 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                                         first={"detail": scenes[0]}, char=char, spec=spec,
                                         cast=cast, provider=provider, style=style)
         else:
-            has_prev = True  # 씬1의 직전은 표지, 그 뒤로는 항상 직전 씬이 있다
+            # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
+            # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
+            # "첨부한 직전 그림" 이라고 적으면 없는 그림을 가리키게 된다.
+            has_prev = page_path(run_dir, page_no - 1).exists()
             prompt = (build_continue_prompt(direction, char, spec, cast,
                                             scene_no=n_, has_prev=has_prev,
-                                            resume_from=resume_from)
+                                            resume_from=resume_from, link=link)
                       .replace("{style}", imageprompt.load_style(style)))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
@@ -424,7 +489,10 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         # 표지는 이야기의 한 순간이 아니라 검수 대상이 아니다.
         if not do_review or n_ == 0:
             continue
-        prev_from, last = resume_from, None
+        # 검수에게 "앞 장이 어디까지 갔는지" 를 알려 주는 자리. 이음새가 있으면
+        # 그것을 쓴다 — 앞 장 검수를 기다리지 않아도 이미 정해져 있는 값이라,
+        # 장면을 동시에 그려도 검수가 같은 기준으로 본다.
+        prev_from, last = (scenelink.opens_at(link, n_) if link else resume_from), None
         for attempt in range(tries + 1):
             got, rmeta = pagecheck.review_page(
                 run_dir, page_no, scene_no=n_, direction=direction,
@@ -476,7 +544,11 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         # 번진다(실측: 뒤 장면으로 건너뛴 그림은 "5번 장면의 마지막에서
         # 이어 그리면 된다" 를 돌려준다). 비우면 다음 장은 원래 제 장면
         # 지시로 돌아간다.
-        resume_from = last["next_from"] if (last and last["verdict"] == "통과") else ""
+        #
+        # 이음새가 있으면 물려주지 않는다 — 다음 장이 어디서 시작하는지는 이미
+        # 정해져 있고, 그 값은 앞 장이 실제로 어떻게 그려졌든 바뀌지 않는다.
+        resume_from = ("" if link else
+                       (last["next_from"] if (last and last["verdict"] == "통과") else ""))
 
     if dry_run:
         log(f"[이어그리기] 프롬프트만 썼습니다 -> {dest}")
