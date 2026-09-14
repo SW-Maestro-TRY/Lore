@@ -4335,7 +4335,10 @@
   margin: 0 0 .3em; text-align: center;
 }
 .webtoon-page .pick-way-one {
-  display: grid; gap: .3em; text-align: center; align-content: start;
+  display: grid; gap: .3em; text-align: center; align-content: center;
+  /* 설명 문구를 없앤 만큼 세로 크기가 줄지 않게, 있었을 때와 같은 높이를
+     min-height 로 지켜 준다(제목 한 줄만 있어도 가운데 놓인다). */
+  min-height: 94px;
   border: 1px solid var(--line-2); border-radius: 14px;
   background: var(--paper); padding: 18px 14px; cursor: pointer;
   font: inherit; color: var(--text);
