@@ -3,13 +3,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@common/auth/useAuth";
 import { creditBalance } from "@common/api/credits";
-import { LEGAL_LINKS } from "../links";
+import { LEGAL_LINKS, CONTACT_CHANNEL } from "../links";
 import CreditHistory from "./CreditHistory";
 import CreditCharge from "./CreditCharge";
 import "./mypage.css";
-
-/** 1:1 문의 카카오톡 채널. 도메인과 무관해 여기 한 곳에만 둔다. */
-const CONTACT_CHANNEL = "https://pf.kakao.com/_DXxjGX";
 
 /* 마이페이지 — **세 도메인이 같이 쓰는 작업실.**
  *

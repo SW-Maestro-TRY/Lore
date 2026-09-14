@@ -199,6 +199,13 @@
   font-size: 13.5px;
   line-height: 1.5;
 }
+/* 전역 a 리셋(color: inherit; text-decoration: none)이 여기서 링크를
+   글자 속에 숨겨 버린다 — 눌러야 하는 자리라 따로 드러낸다. */
+.credit-notice a {
+  color: var(--accent-webtoon);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 .credit-packs {
   list-style: none;

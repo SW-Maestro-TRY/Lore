@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { CONTACT_CHANNEL } from "../links";
 
 /* 크레딧 충전 — 상품을 보여주는 창.
  *
@@ -46,9 +47,14 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
         </header>
 
         {/* 제일 먼저 말한다. 상품을 보고 나서 "그런데 안 됩니다" 를 만나면
-            고른 시간이 통째로 헛것이 된다. */}
+            고른 시간이 통째로 헛것이 된다. PG 가 아직 없어서(#155) 결제
+            대신 계좌 입금을 문의로 안내한다 — 막다른 길 대신 갈 자리를 준다. */}
         <p className="credit-notice">
-          결제는 아직 준비 중이에요. 아래 가격도 정해진 값이 아니라 예시입니다.
+          결제는 아직 준비 중이에요! 크레딧이 필요하시면{" "}
+          <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">
+            1:1 문의하기
+          </a>
+          를 통해 계좌 입금을 안내드리겠습니다.
         </p>
 
         <div className="credit-modal-body">
