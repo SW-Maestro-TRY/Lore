@@ -13,11 +13,17 @@ import { useEffect } from "react";
  * credits.py 참고) 확정 전이고, 여기 적힌 숫자를 대외에 판매가로 말하면 안 된다.
  */
 
-/** 프로토타입의 상품표를 그대로 옮겼다. 확정 가격이 아니다. */
+/** 프로토타입의 상품표를 그대로 옮겼다. 확정 가격이 아니다.
+ *
+ * 크레딧당 단가는 일부러 균일하게(예: 1C = 200원) 맞추지 않는다 — 그러면
+ * 계산이 너무 뻔해서 아무 판매가처럼 안 보인다. 그렇다고 티어 사이 단가
+ * 차이를 너무 크게 벌리지도 않는다. 대량일수록 조금씩만 싸진다:
+ *   30C → 296.7원/C, 70C → 270원/C, 160C → 243.1원/C (약 18% 차이).
+ */
 const PACKAGES: { id: string; credits: number; won: number; note?: string }[] = [
-  { id: "small", credits: 30, won: 9_900 },
-  { id: "mid", credits: 70, won: 19_900, note: "가장 많이 고르는 것" },
-  { id: "big", credits: 160, won: 39_900 },
+  { id: "small", credits: 30, won: 8_900 },
+  { id: "mid", credits: 70, won: 18_900, note: "가장 많이 고르는 것" },
+  { id: "big", credits: 160, won: 38_900 },
 ];
 
 export default function CreditCharge({ onClose }: { onClose: () => void }) {
