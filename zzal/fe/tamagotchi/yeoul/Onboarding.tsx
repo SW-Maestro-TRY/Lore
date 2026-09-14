@@ -12,6 +12,7 @@ import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF } from './constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
+import type { HatchBlocked } from '../../lib/hatchBlocked';
 
 
 /** 세계관은 **고른 칩 전부**와 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
@@ -239,6 +240,11 @@ export default function Onboarding({ y }: { y: Yeoul }) {
       </div>
 
       <div style={{ flex: 'none', padding: '10px 24px 30px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+        {/* ★ 막힘 안내는 **버튼 바로 위**다(알 화면과 같은 규칙). 스크롤 칸 안에 두면 누른 자리와
+            답이 멀어지고, 긴 캐릭터 칸에서는 답이 화면 밖에 남는다. 여기는 안 스크롤된다.
+            ★ 두 칸(올리기·캐릭터) 어디서 막히든 같은 자리에 같은 모양으로 뜬다 — 사용자가 규칙을
+              한 번만 배우면 된다. */}
+        {live.blocked && <BlockedNotice b={live.blocked} />}
         <button
           onClick={() => {
             // 그림을 올렸으면 이 순간이 **격자 생성 시작**이다(계약 4절의 두 번째 걸음).
@@ -276,6 +282,31 @@ export default function Onboarding({ y }: { y: Yeoul }) {
           }}
         >{ctaLabel}</button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 부화가 막혔을 때의 한 장.
+ *
+ * ★ **오류처럼 안 그린다**(명세 E절 "고장으로 안 읽히게"). 붉은 강조색(`C.accent`)은 위쪽
+ *   업로드 실패 줄이 이미 쓰고 있고, 그 색을 여기서도 쓰면 "우리가 망가졌다" 로 읽힌다.
+ *   여기는 눌리는 칸과 같은 바탕(`C.slot`)에 담담한 글씨다 — 안내이지 경고가 아니다.
+ * ★ 문구는 받아서 그리기만 한다. 짓지 않는다 — 표는 `lib/hatchBlocked.ts` 한 곳이다.
+ */
+function BlockedNotice({ b }: { b: HatchBlocked }) {
+  return (
+    <div
+      data-part="hatch-blocked" data-reason={b.reason}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 5,
+        padding: '13px 15px', borderRadius: radius.md,
+        border: `1px solid ${C.line}`, background: C.slot,
+        animation: 'yPop .24s ease',
+      }}
+    >
+      <span data-part="hatch-blocked-title" style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 18, lineHeight: 1.3, color: C.ink }}>{b.title}</span>
+      <span data-part="hatch-blocked-body" style={{ fontSize: 12.5, lineHeight: 1.7, color: C.sub2 }}>{b.body}</span>
     </div>
   );
 }
