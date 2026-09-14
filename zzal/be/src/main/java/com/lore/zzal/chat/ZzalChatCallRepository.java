@@ -13,7 +13,7 @@ public interface ZzalChatCallRepository extends JpaRepository<ZzalChatCall, Long
 
     Optional<ZzalChatCall> findByPetIdAndDayOfAndSlot(Long petId, LocalDate dayOf, ChatSlot slot);
 
-    /** 아직 답을 안 받은 BABY 부름(만료 없음 — 답하거나 첫 밤잠까지). */
+    /** 아직 답을 안 받은 BABY 부름. 만료가 없어 답할 때까지 남는다. */
     Optional<ZzalChatCall> findFirstByPetIdAndSlotAndAnsweredAtIsNull(Long petId, ChatSlot slot);
 
     /** 기억 — 최근 답 5개(정본 10장). */
