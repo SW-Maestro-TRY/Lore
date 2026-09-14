@@ -3201,9 +3201,7 @@ export interface operations {
     };
     balance: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3223,8 +3221,7 @@ export interface operations {
     };
     events: {
         parameters: {
-            query: {
-                userId: number;
+            query?: {
                 limit?: number;
             };
             header?: never;
@@ -3296,9 +3293,7 @@ export interface operations {
     };
     presign: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3322,9 +3317,7 @@ export interface operations {
     };
     me: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3344,9 +3337,7 @@ export interface operations {
     };
     withdraw: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3366,9 +3357,7 @@ export interface operations {
     };
     agreements: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3388,9 +3377,7 @@ export interface operations {
     };
     agree: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3638,9 +3625,7 @@ export interface operations {
     };
     link: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3664,9 +3649,7 @@ export interface operations {
     };
     runs: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -3686,9 +3669,7 @@ export interface operations {
     };
     reupload: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 runId: string;
@@ -3710,9 +3691,7 @@ export interface operations {
     };
     visibility: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 runId: string;
@@ -4369,9 +4348,7 @@ export interface operations {
     };
     advanceClock: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4415,9 +4392,7 @@ export interface operations {
     };
     forceOpen: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4440,9 +4415,7 @@ export interface operations {
     };
     nightSweep: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4464,9 +4437,7 @@ export interface operations {
     };
     setClock: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4510,9 +4481,7 @@ export interface operations {
     };
     list_1: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -4532,9 +4501,7 @@ export interface operations {
     };
     draft: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -4576,9 +4543,7 @@ export interface operations {
     };
     character: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4622,9 +4587,7 @@ export interface operations {
     };
     detail: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4655,9 +4618,7 @@ export interface operations {
     };
     album: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4679,9 +4640,7 @@ export interface operations {
     };
     background: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4716,9 +4675,7 @@ export interface operations {
     };
     care: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4762,9 +4719,7 @@ export interface operations {
     };
     calls: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4786,9 +4741,7 @@ export interface operations {
     };
     answer: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4824,9 +4777,7 @@ export interface operations {
     };
     start: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4861,9 +4812,7 @@ export interface operations {
     };
     current: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4885,9 +4834,7 @@ export interface operations {
     };
     finish: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4941,9 +4888,7 @@ export interface operations {
     };
     guess: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -4988,9 +4933,7 @@ export interface operations {
     };
     hatch: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -5012,9 +4955,7 @@ export interface operations {
     };
     seen: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -5055,9 +4996,7 @@ export interface operations {
     };
     personality: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -5083,9 +5022,7 @@ export interface operations {
     };
     share: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -5120,9 +5057,7 @@ export interface operations {
     };
     sleep: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -5153,9 +5088,7 @@ export interface operations {
     };
     tutorialDone: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -5186,9 +5119,7 @@ export interface operations {
     };
     tutorialSeen: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -5219,9 +5150,7 @@ export interface operations {
     };
     wake: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path: {
                 petId: number;
@@ -5252,9 +5181,7 @@ export interface operations {
     };
     get: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -5274,9 +5201,7 @@ export interface operations {
     };
     patch: {
         parameters: {
-            query: {
-                userId: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
