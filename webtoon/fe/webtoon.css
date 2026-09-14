@@ -4187,13 +4187,16 @@
    빈 화면에서 갈 곳이 안 보인다. */
 .webtoon-page .char-new {
   border: 1.5px dashed var(--line-2); border-radius: 16px; background: transparent;
-  display: grid; place-items: center; gap: .3em; cursor: pointer;
-  min-height: 150px; padding: 14px; text-align: center;
+  display: grid; place-items: center; gap: 4px; cursor: pointer;
+  /* li(부모 grid item)가 이미 같은 줄의 char-card 높이로 늘어나 있다
+     (grid 의 기본 align-items: stretch). 이 버튼도 그 li 를 꽉 채워야
+     카드들과 같은 크기로 보인다 — width/height 없이는 내용 크기만큼만
+     찬다. */
+  width: 100%; height: 100%; min-height: 150px; padding: 14px; text-align: center;
   color: var(--accent-d); font-weight: 700; font-size: .9rem;
   transition: border-color .16s ease, background .16s ease;
 }
 .webtoon-page .char-new:hover { border-color: var(--accent); background: rgba(15,51,63,.03); }
-.webtoon-page .char-new span { font-size: .76rem; font-weight: 500; color: var(--dim); }
 .webtoon-page .char-new b { font-size: 1.5rem; font-weight: 400; line-height: 1; }
 
 /* ---- 캐릭터 만들기 (화면 하나) --------------------------------------------
@@ -4342,7 +4345,6 @@
   border-color: var(--accent); background: rgba(15,51,63,.03); transform: translateY(-1px);
 }
 .webtoon-page .pick-way-one b { font-size: .95rem; }
-.webtoon-page .pick-way-one span { font-size: .78rem; color: var(--dim); line-height: 1.5; }
 /* 닫기는 오른쪽 위 ✕ 로. 아래에 단추로 두면 두 갈래와 같은 무게로 읽혀서
    "세 번째 선택지" 처럼 보인다. */
 .webtoon-page .pick-way-x {
