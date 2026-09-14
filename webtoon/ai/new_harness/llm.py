@@ -218,7 +218,7 @@ class Call:
 STAGE_LABEL = {
     "STORY": "이야기 후보",
     "STORY_REVIEW": "이야기 후보 검수 (고르기 전)",
-    "DETAIL": "스토리 구체화",
+    "DETAIL": "디테일 — 장면마다 어디서 끝나는가 (동시에 그리기 위한 이음새)",
     "CUTSCRIPT": "컷 대본",
     "REVIEW": "스토리 검수",
     "FIX": "지적 반영",
