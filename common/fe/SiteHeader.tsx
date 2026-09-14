@@ -11,7 +11,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import ThemeToggle from "./theme/ThemeToggle";
 import TabLink from "./TabLink";
 import AuthModal from "./auth/AuthModal";
 import { useAuth } from "./auth/useAuth";
@@ -27,8 +26,8 @@ export default function SiteHeader() {
   const onZzal = pathname.startsWith("/zzal");
 
   /* 웹툰 탭은 헤더에서 **로그인 하나만** 본다. (담당: 하은, #223)
-     테마 토글과 「시작하기」를 여기서만 접는다 — 만들다 말고 누를 것이
-     아니고, 「시작하기」가 가리키는 곳은 다른 도메인(zzal)이라 이 탭에서는
+     「시작하기」를 여기서만 접는다 — 만들다 말고 누를 것이 아니고,
+     「시작하기」가 가리키는 곳은 다른 도메인(zzal)이라 이 탭에서는
      나가는 문이다. 다른 탭은 한 픽셀도 안 바뀐다. */
   const onWebtoon = pathname.startsWith("/webtoon");
 
@@ -65,8 +64,6 @@ export default function SiteHeader() {
         </nav>
 
         <div className={styles.headerActions}>
-          {!onWebtoon && <ThemeToggle />}
-
           {/* 로그인 여부를 아직 모르는 동안(첫 /users/me 조회)에는 같은 크기의 빈 자리를 둔다.
               "로그인" 을 먼저 그렸다가 로그인 상태로 바뀌면 헤더가 한 번 덜컹거린다.
 
