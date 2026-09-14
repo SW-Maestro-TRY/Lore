@@ -599,6 +599,23 @@
         },
         "type": "object"
       },
+      "ApiResponseSubmitted": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Submitted"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseTodayView": {
         "properties": {
           "data": {
@@ -2534,6 +2551,86 @@
             "example": 3,
             "format": "int32",
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Submit": {
+        "description": "후기 — 별점은 필수, 칩과 자유 글은 선택",
+        "properties": {
+          "rating": {
+            "description": "별점 1~5",
+            "example": 4,
+            "format": "int32",
+            "maximum": 5,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "tags": {
+            "description": "고른 칩들. 없어도 된다. 정해진 값만 받는다",
+            "example": [
+              "LOOKS_SAME",
+              "MOTION_ODD"
+            ],
+            "items": {
+              "enum": [
+                "LOOKS_SAME",
+                "LOOKS_OFF",
+                "MOTION_GOOD",
+                "MOTION_ODD",
+                "TOO_SLOW",
+                "WANT_MORE"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "text": {
+            "description": "자유롭게 쓴 말. 없어도 된다",
+            "example": "움직임이 생각보다 자연스러웠어요",
+            "maxLength": 500,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Submitted": {
+        "description": "이 펫에 남긴 후기. 아직 안 냈으면 submitted 가 false 이고 나머지가 비어 있다",
+        "properties": {
+          "createdAt": {
+            "description": "낸 시각(ISO-8601)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "rating": {
+            "description": "별점 1~5",
+            "example": 4,
+            "format": "int32",
+            "type": "integer"
+          },
+          "submitted": {
+            "description": "냈는가. false 면 아래 칸이 전부 비어 있다",
+            "type": "boolean"
+          },
+          "tags": {
+            "description": "고른 칩들. 안 골랐으면 빈 배열",
+            "items": {
+              "enum": [
+                "LOOKS_SAME",
+                "LOOKS_OFF",
+                "MOTION_GOOD",
+                "MOTION_ODD",
+                "TOO_SLOW",
+                "WANT_MORE"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "text": {
+            "description": "자유롭게 쓴 말. 안 썼으면 null",
+            "type": "string"
           }
         },
         "type": "object"
@@ -5011,7 +5108,7 @@
                 }
               }
             },
-            "description": "부화 진행 중(ZZAL_PET_ALREADY_HATCHING) · 슬롯 부족(ZZAL_PET_LIMIT_REACHED)"
+            "description": "부화 진행 중(ZZAL_PET_ALREADY_HATCHING) · 슬롯 부족(ZZAL_PET_LIMIT_REACHED)\n\n**막힘(상한)** — 상태는 전부 409 이고 화면은 `error.code` 하나로 문구를 고른다.\n- `ZZAL_HATCH_BLOCKED_PET_LIMIT` 동시 1마리 · 누적 상한\n- `ZZAL_HATCH_BLOCKED_DAILY_CAP` 사람당 하루 상한(한국 시각 자정에 초기화)\n- `ZZAL_HATCH_BLOCKED_SERVICE_CAP` 서비스 전체 하루 상한(한국 시각 자정에 초기화)\n- `ZZAL_HATCH_BLOCKED_IP_RATE` 같은 곳에서 너무 자주 시작함\n- `ZZAL_HATCH_BLOCKED_QUOTA` 그림 생성 쪽이 한도로 막는 중"
           }
         },
         "security": [
@@ -5412,6 +5509,130 @@
         "summary": "대화 응답",
         "tags": [
           "채팅"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/feedback": {
+      "get": {
+        "description": "이 펫에 **이미 냈는지**와, 냈다면 그 내용.\n\n- 안 냈어도 에러가 아니다 — `submitted` 가 false 로 온다\n- 화면은 이 값을 보고 후기 칸을 띄울지 정한다. 이미 낸 사람에게 또 띄우지 않기 위해서다\n- ★ 이 판정을 펫 상태 응답에 얹지 않은 이유는 그쪽이 3초마다 도는 폴링이기 때문이다",
+        "operationId": "mine",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseSubmitted"
+                }
+              }
+            },
+            "description": "조회 성공(안 냈으면 submitted=false)"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseSubmitted"
+                }
+              }
+            },
+            "description": "없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "내 후기 조회",
+        "tags": [
+          "후기"
+        ]
+      },
+      "post": {
+        "description": "별점(필수)·칩(선택)·자유 글(선택)을 받는다.\n\n- **한 사람이 한 펫에 한 번**이다. 두 번째는 409(ZZAL_FEEDBACK_ALREADY_SUBMITTED)\n- 응답은 조회와 **같은 모양**이다 — 낸 뒤에 다시 물어볼 필요가 없다\n- 칩은 정해진 값만 받는다. 없는 값을 보내면 400 이다\n- **보상은 지금 나가지 않는다.** 무엇을 줄지 아직 안 정해졌고, 정해지면 설정값만\n  바꾸면 붙는다. 화면에 \"무엇을 드립니다\" 라고 쓰지 말 것",
+        "operationId": "submit",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Submit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseSubmitted"
+                }
+              }
+            },
+            "description": "남겼음"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseSubmitted"
+                }
+              }
+            },
+            "description": "별점이 1~5 밖이거나 없는 칩(INVALID_INPUT)"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseSubmitted"
+                }
+              }
+            },
+            "description": "없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND)"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseSubmitted"
+                }
+              }
+            },
+            "description": "이미 냈음(ZZAL_FEEDBACK_ALREADY_SUBMITTED)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "후기 남기기",
+        "tags": [
+          "후기"
         ]
       }
     },
@@ -6225,6 +6446,10 @@
     {
       "description": "사용자 행동 수집 (팀 공용, 로그인 불필요)",
       "name": "행동 기록"
+    },
+    {
+      "description": "결과물에 대한 후기 — 한 사람이 한 펫에 한 번",
+      "name": "후기"
     }
   ]
 }
