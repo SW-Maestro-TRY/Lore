@@ -194,11 +194,15 @@ function RoomWait() {
 //   서버가 쥔 것(시계·선물 도착·밤 큐)만 따로 한 줄로 모아 두고, 나머지는 "화면에만" 이라고 적는다.
 
 /**
- * 이 창을 그려도 되는가. **운영 도메인에서만 안 그린다**(`lorecomic.com`·`www`).
+ * 이 창을 그려도 되는가.
  *
- * ★ 왜 `NODE_ENV` 가 아닌가 — 지금 `dev.lorecomic.com` 과 운영이 **같은 배포**를 본다(STATUS).
- *   빌드 환경으로는 둘을 못 가른다. 주소로 가르면 상훈님이 쓰시는 테스트 서버에서는 그대로 뜨고
- *   운영 주소에서만 사라진다. `?dev=1` 이 있으면 어디서든 뜬다.
+ * ★ **운영 도메인에서는 무슨 수를 써도 안 뜬다**(상훈님 2026-09-14 "운영 데브는 차단하고").
+ *   이 창은 규칙을 건너뛰고 상태를 강제하는 도구라, 사용자 손에 닿으면 **아이의 상태가
+ *   거짓으로 보이거나 서버 dev 주소를 두드리게 된다.** 그래서 `?dev=1` 로도 못 연다 —
+ *   주소에 한 글자 붙이는 것은 누구나 할 수 있어 자물쇠가 아니다.
+ * ★ 왜 `NODE_ENV` 가 아닌가 — 지금 `dev.lorecomic.com`(스테이징)과 운영이 **같은 배포**를
+ *   본다(STATUS). 빌드 환경으로는 둘을 못 가르고, 가를 수 있는 것은 **주소뿐**이다.
+ *   그래서 스테이징·로컬은 그냥 뜨고, 운영 두 주소만 무조건 막는다.
  * ★ 첫 렌더에서는 늘 `false` 다 — 서버가 그린 것과 브라우저가 그린 것이 달라지면
  *   하이드레이션 경고가 뜨고 e2e 가 그걸 실패로 센다(TamagotchiScreen 머리말과 같은 이유).
  */
@@ -206,8 +210,11 @@ function useDevVisible(): boolean {
   const [show, setShow] = useState(false);
   useEffect(() => {
     const host = window.location.hostname;
-    const prod = host === 'lorecomic.com' || host === 'www.lorecomic.com';
-    setShow(new URLSearchParams(window.location.search).has('dev') || !prod);
+    // ★ 운영이면 여기서 끝. **`?dev` 를 보기 전에** 잘라야 뚫리지 않는다.
+    if (host === 'lorecomic.com' || host === 'www.lorecomic.com') return;
+    // 운영이 아닌 곳(로컬·`dev.lorecomic.com`)에서는 그냥 뜬다. `?dev=1` 은 스크랩북 시안의
+    // 시계 패널(`parts/DevPanel`)이 여전히 쓰는 플래그라 남아 있지만, 이 창에는 필요 없다.
+    setShow(true);
   }, []);
   return show;
 }
