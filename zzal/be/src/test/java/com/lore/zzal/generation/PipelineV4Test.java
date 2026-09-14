@@ -32,6 +32,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 
 /**
  * 부화 파이프라인 v4 — 1층·2층 각 8종(2026-09-12 검수 확정 조합) 이식분.
@@ -77,7 +80,7 @@ class PipelineV4Test {
         //   실제로 그 버전에 있는지 확인하므로, name() 이 null 인 맨 목이면 그 확인에서 터진다.
         PipelineRegistry r = new PipelineRegistry(StepMocks.sheet(), StepMocks.identity(),
                 StepMocks.grid(), StepMocks.grid2(), StepMocks.post(),
-                mock(MotionGridStep.class), mock(MotionPostStep.class), "v4", "v1", path -> true);
+                mock(MotionGridStep.class), mock(MotionPostStep.class), "v4", "v1");
 
         assertThat(r.currentVersion(GenKind.HATCH)).isEqualTo("v4");
         assertThat(r.steps(GenKind.HATCH, "v4")).hasSize(5);
@@ -114,25 +117,24 @@ class PipelineV4Test {
     }
 
     @Test
-    @DisplayName("격자가 1장뿐인 옛 v4 기록 — 예전 길(설정 이름)로 가되 판은 그대로 붙는다")
-    void v4WithOnlyTheFirstGridTakesTheOldPath() throws Exception {
-        // ★ 여기로 오는 것은 2층이 붙기 전에 굽다 만 기록뿐이다(새 job 은 grid2 를 반드시 거친다).
-        //   그때 설정 hatch.states.v4 는 16종이므로 후처리가 8장만 내고 "후처리 결과가 없습니다:
-        //   eat_rice.webp" 로 **크게** 실패한다 — 절반짜리 펫을 성공으로 치는 것보다 낫다.
+    @DisplayName("★ 실패 주입 — 2층 격자가 없으면 반쪽으로 굽지 않고 멈춘다")
+    void missingSecondGridStopsInsteadOfBakingHalf() throws Exception {
+        // ★ 1층만 잘라 성공으로 치면 16칸 중 8칸이 빈 펫이 <b>완성</b>으로 기록된다. 오류는 어디에서도
+        //   안 나고 화면의 여덟 칸이 비어야만 드러난다 — 그럴 바엔 여기서 크게 실패하는 편이 낫다.
         PostProcessor post = mock(PostProcessor.class);
-        PostProcessor.Session session = mock(PostProcessor.Session.class);
-        when(post.open(anyString(), anyString())).thenReturn(session);
         GenerationRecorder recorder = mock(GenerationRecorder.class);
-        when(recorder.nextBasicRound(7L)).thenReturn(1);
         PostProcessStep step =
                 new PostProcessStep(post, new MotionCatalog("", "", "v1"), new HatchPostures(), recorder);
 
         StepContext ctx = new StepContext(7L, "여울", null, "v4");
         ctx.putImage(GridStep.NAME, "images/zzal/pets/7/grid.png");
-        step.run(ctx);
 
-        verify(post).open("images/zzal/pets/7/basic/1", "v4");
-        verify(session).split("images/zzal/pets/7/grid.png");
+        assertThatThrownBy(() -> step.run(ctx))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(PostProcessStep.GRID2);
+        // 판 번호도 올리지 않는다 — 올려 두면 굽지도 않은 판이 주소로 나간다.
+        verify(recorder, never()).nextBasicRound(anyLong());
+        verify(recorder, never()).markBasicBaked(anyLong(), anyInt());
     }
 
     @Test
@@ -177,8 +179,8 @@ class PipelineV4Test {
                 .hasMessageContaining("zzal/pipeline/v4/postures.txt")
                 .hasMessageContaining("grid3");
 
-        // v1·v2 의 후처리 스크립트는 --postures 를 모른다 — 매핑 파일이 없으면 빈 값이 정상이다.
-        assertThat(postures.forStep("v2", GridStep.NAME)).isEmpty();
+        // 매핑 파일이 없는 버전은 빈 값이 정상이다 — 그 버전의 후처리 스크립트는 --postures 를 모른다.
+        assertThat(postures.forStep("없는버전", GridStep.NAME)).isEmpty();
     }
 
     @Test
@@ -273,7 +275,7 @@ class PipelineV4Test {
     }
 
     @Test
-    @DisplayName("표식이 없는 평범한 실패는 격자를 버리지 않는다(v1·v2 동작 그대로)")
+    @DisplayName("표식이 없는 평범한 실패는 격자를 버리지 않는다")
     void ordinaryFailureKeepsTheGrid() {
         GenerationRunner runner = new GenerationRunner(mock(GenerationRecorder.class));
 
@@ -299,7 +301,7 @@ class PipelineV4Test {
             }
         };
 
-        RunResult r = runner.run(1L, new StepContext(7L, "여울", null, "v2"), List.of(List.of(boom)), List.of());
+        RunResult r = runner.run(1L, new StepContext(7L, "여울", null, "v4"), List.of(List.of(boom)), List.of());
         assertThat(r.success()).isFalse();
         assertThat(r.gridRejected()).isFalse();
     }

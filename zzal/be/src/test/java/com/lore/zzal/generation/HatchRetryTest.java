@@ -49,7 +49,7 @@ import static org.mockito.Mockito.when;
 class HatchRetryTest {
 
     private static final Long PET = 7L;
-    private static final String V = "v2";
+    private static final String V = "v4";
     private static final Instant T0 = Instant.parse("2026-09-11T03:00:00Z");
     private static final int MAX_ATTEMPTS = 2;
 
@@ -92,7 +92,7 @@ class HatchRetryTest {
         registry = new PipelineRegistry(
                 StepMocks.sheet(), StepMocks.identity(),
                 StepMocks.grid(), StepMocks.grid2(), StepMocks.post(),
-                mock(MotionGridStep.class), mock(MotionPostStep.class), "v2", "v1", path -> true);
+                mock(MotionGridStep.class), mock(MotionPostStep.class), "v4", "v1");
 
         service = new HatchService(runner, recorder, jobRepository, registry, petRepository,
                 MAX_ATTEMPTS, mock(MotionSeeder.class));

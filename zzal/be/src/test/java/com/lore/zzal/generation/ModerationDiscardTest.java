@@ -38,13 +38,13 @@ class ModerationDiscardTest {
                 new GridStep(null, null, GridStep.NAME),
                 new GridStep(null, null, PostProcessStep.GRID2),
                 mock(PostProcessStep.class),
-                mock(MotionGridStep.class), mock(MotionPostStep.class), hatchVersion, "v1", path -> true);
+                mock(MotionGridStep.class), mock(MotionPostStep.class), hatchVersion, "v1");
     }
 
     @Test
-    @DisplayName("★★ v2 — 문단과 격자 두 장이 함께 폐기 대상이다")
-    void v2DiscardsBothGrids() {
-        List<String> targets = registry("v2").identityDependents(GenKind.HATCH, "v2");
+    @DisplayName("★★ 문단과 격자 두 장이 함께 폐기 대상이다")
+    void discardsBothGrids() {
+        List<String> targets = registry("v4").identityDependents(GenKind.HATCH, "v4");
 
         assertThat(targets)
                 .as("2층만 거부됐을 때 1층이 남으면 두 격자의 근거가 갈린다")
@@ -52,18 +52,9 @@ class ModerationDiscardTest {
     }
 
     @Test
-    @DisplayName("v1 — 격자가 한 장뿐이라 그 한 장만 함께 폐기한다")
-    void v1DiscardsSingleGrid() {
-        List<String> targets = registry("v1").identityDependents(GenKind.HATCH, "v1");
-
-        assertThat(targets).containsExactlyInAnyOrder(IdentityStep.NAME, GridStep.NAME);
-        assertThat(targets).doesNotContain(PostProcessStep.GRID2);
-    }
-
-    @Test
     @DisplayName("★ 후처리는 폐기 대상이 아니다 — 격자 그림만 보고, 앞이 실패하면 도달하지 못한다")
     void postProcessIsNotDiscarded() {
-        List<String> targets = registry("v2").identityDependents(GenKind.HATCH, "v2");
+        List<String> targets = registry("v4").identityDependents(GenKind.HATCH, "v4");
 
         assertThat(targets).doesNotContain(PostProcessStep.NAME);
     }
@@ -71,7 +62,7 @@ class ModerationDiscardTest {
     @Test
     @DisplayName("모션은 문단을 쓰지 않는다")
     void motionHasNoIdentityDependents() {
-        assertThat(registry("v2").identityDependents(GenKind.MOTION, "v1")).isEmpty();
+        assertThat(registry("v4").identityDependents(GenKind.MOTION, "v1")).isEmpty();
     }
 
     @Test
@@ -86,7 +77,7 @@ class ModerationDiscardTest {
                 new GridStep(null, null, GridStep.NAME),
                 new GridStep(null, null, PostProcessStep.GRID2),
                 mock(PostProcessStep.class),
-                mock(MotionGridStep.class), mock(MotionPostStep.class), "v2", "v1", path -> true))
+                mock(MotionGridStep.class), mock(MotionPostStep.class), "v4", "v1"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("identity");
     }

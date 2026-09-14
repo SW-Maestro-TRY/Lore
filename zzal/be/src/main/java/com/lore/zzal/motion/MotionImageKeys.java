@@ -45,7 +45,7 @@ public final class MotionImageKeys {
      *
      * ★ 한 곳에만 적는다 — 후처리가 "내야 한다" 고 보는 버전과 응답이 "있다" 고 말하는 버전이
      *   갈리면, 화면은 있지도 않은 주소를 받거나 있는 앵커를 못 받는다. 둘 다 오류가 안 난다.
-     * ★ v1·v2 의 스크립트는 앵커를 아예 만들지 않는다.
+     * ★ 여기 없는 이름이 적힌 옛 기록은 "앵커가 없다" 로 답한다 — 옛 스크립트는 앵커를 안 냈다.
      */
     public static final java.util.Set<String> ANCHOR_VERSIONS = java.util.Set.of("v4");
 
@@ -80,20 +80,6 @@ public final class MotionImageKeys {
      */
     public static String anchors(long petId, int round) {
         return basicPrefix(petId, round) + "/anchors.json";
-    }
-
-    /**
-     * v1 부화의 8상태 파일. 그 버전은 {@code basic/} 규약 이전이라 펫 폴더 바로 아래다.
-     *
-     * ★ 판 번호가 없다 — v1 은 더 굽지 않는다(옛 펫을 설명만 한다).
-     */
-    public static String legacyState(long petId, String legacyFile) {
-        return (PET + "/%s.webp").formatted(petId, legacyFile);
-    }
-
-    /** v1 부화 후처리의 출력 자리(펫 폴더 바로 아래). */
-    public static String legacyStatePrefix(long petId) {
-        return PET.formatted(petId);
     }
 
     /** 심화 행동(16프레임) 한 판이 쌓이는 자리. */

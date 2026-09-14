@@ -64,31 +64,31 @@ public class MotionCatalog {
             // 격자 1장 = 1층 8종. 처음부터 전부 열려 있다.
             // ★ 모자란 것은 소품이 때운다 — 자세는 소품이 올 자리를 비워 두고 그린다
             //   (eat 은 입 앞, pet 은 머리 위).
-            new MotionSpec(1, "base", "기본", MotionLayer.BASIC_1, UnlockRule.always(), "idle", "기본자세"),
-            new MotionSpec(2, "eat", "식사", MotionLayer.BASIC_1, UnlockRule.always(), "eat", "먹기"),
-            new MotionSpec(3, "joy", "기쁨", MotionLayer.BASIC_1, UnlockRule.always(), "happy", "기쁜자세"),
-            new MotionSpec(4, "sad", "슬픔", MotionLayer.BASIC_1, UnlockRule.always(), "sad", "슬픈자세"),
-            new MotionSpec(5, "sick", "아픔", MotionLayer.BASIC_1, UnlockRule.always(), null, "아픈자세"),
-            new MotionSpec(6, "pet", "쓰다듬", MotionLayer.BASIC_1, UnlockRule.always(), "pet", "교감자세"),
-            new MotionSpec(7, "hello", "인사", MotionLayer.BASIC_1, UnlockRule.always(), null, "인사"),
-            new MotionSpec(8, "sleep", "잠", MotionLayer.BASIC_1, UnlockRule.always(), null, "자기"),
+            new MotionSpec(1, "base", "기본", MotionLayer.BASIC_1, UnlockRule.always(), "기본자세"),
+            new MotionSpec(2, "eat", "식사", MotionLayer.BASIC_1, UnlockRule.always(), "먹기"),
+            new MotionSpec(3, "joy", "기쁨", MotionLayer.BASIC_1, UnlockRule.always(), "기쁜자세"),
+            new MotionSpec(4, "sad", "슬픔", MotionLayer.BASIC_1, UnlockRule.always(), "슬픈자세"),
+            new MotionSpec(5, "sick", "아픔", MotionLayer.BASIC_1, UnlockRule.always(), "아픈자세"),
+            new MotionSpec(6, "pet", "쓰다듬", MotionLayer.BASIC_1, UnlockRule.always(), "교감자세"),
+            new MotionSpec(7, "hello", "인사", MotionLayer.BASIC_1, UnlockRule.always(), "인사"),
+            new MotionSpec(8, "sleep", "잠", MotionLayer.BASIC_1, UnlockRule.always(), "자기"),
             // 격자 2장 = 2층 8종. 여덟 개가 사용자 행동 하나씩에 붙는다.
             //
             // ★★ 해금은 "못 보던 행동이 열리는 것" 이 아니라 "하던 행동이 좋아지는 것" 이다.
             //   조건은 전부 그 행동 자체다 — 다른 행동으로 열리는 자세가 하나도 없다.
             // ★ 약 먹기는 여기 없다. 아픔은 케어를 놓쳤거나 간식을 많이 줬을 때 생기므로,
             //   약 주기를 조건으로 걸면 아이를 아프게 해야 상을 받는 구조가 된다.
-            new MotionSpec(9, "eat_rice", "밥 먹기", MotionLayer.BASIC_2, UnlockRule.of(FEEDS, 9), null, "밥먹기"),
-            new MotionSpec(10, "eat_snack", "간식 먹기", MotionLayer.BASIC_2, UnlockRule.of(SNACKS, 9), null, "간식먹기"),
-            new MotionSpec(11, "sweep", "청소하기", MotionLayer.BASIC_2, UnlockRule.of(CLEANS, 13), null, "청소"),
-            new MotionSpec(12, "wash", "목욕하기", MotionLayer.BASIC_2, UnlockRule.of(BATH, 3), null, "씻기"),
-            new MotionSpec(13, "reply", "답하기", MotionLayer.BASIC_2, UnlockRule.of(CHAT_ANSWERS, 4), null, "답하기"),
-            new MotionSpec(14, "petted", "쓰다듬 받기", MotionLayer.BASIC_2, UnlockRule.of(PET_COUNT, 4), null, "쓰다듬받기"),
-            new MotionSpec(15, "startle", "놀람", MotionLayer.BASIC_2, UnlockRule.of(GAME_STARTS, 4), null, "놀라기"),
-            new MotionSpec(16, "wake_up", "일어나기", MotionLayer.BASIC_2, UnlockRule.of(WAKES, 4), null, "일어나기"),
+            new MotionSpec(9, "eat_rice", "밥 먹기", MotionLayer.BASIC_2, UnlockRule.of(FEEDS, 9), "밥먹기"),
+            new MotionSpec(10, "eat_snack", "간식 먹기", MotionLayer.BASIC_2, UnlockRule.of(SNACKS, 9), "간식먹기"),
+            new MotionSpec(11, "sweep", "청소하기", MotionLayer.BASIC_2, UnlockRule.of(CLEANS, 13), "청소"),
+            new MotionSpec(12, "wash", "목욕하기", MotionLayer.BASIC_2, UnlockRule.of(BATH, 3), "씻기"),
+            new MotionSpec(13, "reply", "답하기", MotionLayer.BASIC_2, UnlockRule.of(CHAT_ANSWERS, 4), "답하기"),
+            new MotionSpec(14, "petted", "쓰다듬 받기", MotionLayer.BASIC_2, UnlockRule.of(PET_COUNT, 4), "쓰다듬받기"),
+            new MotionSpec(15, "startle", "놀람", MotionLayer.BASIC_2, UnlockRule.of(GAME_STARTS, 4), "놀라기"),
+            new MotionSpec(16, "wake_up", "일어나기", MotionLayer.BASIC_2, UnlockRule.of(WAKES, 4), "일어나기"),
             // 선물. 카탈로그 밖 특별 1종씩. 기본 행동 없음(16장: 구르기 먼저, 뒤로 넘어짐이 두 번째).
-            new MotionSpec(101, "roll", "구르기", MotionLayer.GIFT, UnlockRule.of(FIRST_GIFT, 0), null, "구르기"),
-            new MotionSpec(102, "fall_back", "뒤로 넘어지기", MotionLayer.GIFT, UnlockRule.of(SECOND_GIFT, 0), null, "뒤로넘어짐"));
+            new MotionSpec(101, "roll", "구르기", MotionLayer.GIFT, UnlockRule.of(FIRST_GIFT, 0), "구르기"),
+            new MotionSpec(102, "fall_back", "뒤로 넘어지기", MotionLayer.GIFT, UnlockRule.of(SECOND_GIFT, 0), "뒤로넘어짐"));
 
     private static final Map<Integer, MotionSpec> BY_SEQ =
             ALL.stream().collect(Collectors.toUnmodifiableMap(MotionSpec::seq, Function.identity()));

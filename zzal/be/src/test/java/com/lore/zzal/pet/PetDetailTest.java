@@ -62,7 +62,7 @@ class PetDetailTest {
             assertThat(x.key()).isEqualTo("base");
             assertThat(x.layer()).isEqualTo("BASIC_1");
             assertThat(x.unlocked()).isTrue();
-            assertThat(x.basicImageKey()).endsWith("/idle.webp");      // v1 부화 → 8상태 파일명 폴백
+            assertThat(x.basicImageKey()).isNull();                     // 아직 한 판도 안 구운 펫
             assertThat(x.hint()).isNull();
             assertThat(x.progress()).isNull();
             assertThat(x.advanced().status()).isEqualTo("NONE");
@@ -84,10 +84,10 @@ class PetDetailTest {
     }
 
     @Test
-    @DisplayName("v2 부화 펫은 basic/{판}/{key}.webp 규약")
-    void v2ImageKeys() {
+    @DisplayName("★ 부화 펫은 basic/{판}/{key}.webp 규약 — 주소는 버전이 아니라 판이 정한다")
+    void basicImageKeysUseTheRound() {
         ZzalPet pet = baby();
-        pet.setHatchPipelineVersion("v2");
+        pet.setHatchPipelineVersion("v4");
         // ★ 판을 넣어야 하는 시험이 됐다 — 판이 0 이면 "아직 한 장도 안 구웠다" 라 키가 아예 안 나간다.
         org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
@@ -96,17 +96,18 @@ class PetDetailTest {
     }
 
     @Test
-    @DisplayName("★ v4 부화 펫도 basic/{판}/{key}.webp 규약 — 옛 폴백으로 조용히 떨어지지 않는다")
-    void v4ImageKeys() {
+    @DisplayName("★★ 지금 없는 파이프라인 이름이 적힌 옛 기록 — 500 없이 답하고 앵커는 안 준다")
+    void unknownRecordedVersionIsAnsweredSafely() {
+        // 옛 펫의 행에는 지금 코드가 모르는 이름이 적혀 있다. 여기서 터지면 펫 상세 전체가 500 이 되고,
+        // 반대로 <b>아는 버전인 척</b>하면 있지도 않은 앵커 주소가 화면으로 나간다. 둘 다 안 된다.
         ZzalPet pet = baby();
-        pet.setHatchPipelineVersion("v4");
+        pet.setHatchPipelineVersion("옛파이프라인");
         org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
+
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
 
-        // "v2" 만 보고 판단하면 v4 펫은 옛 8상태 파일명으로 떨어져 그림이 하나도 안 뜬다 —
-        // 빌드·기동·부화가 전부 성공한 뒤 화면에서만 드러나는 종류의 어긋남이다.
         assertThat(d.motions().get(0).basicImageKey()).endsWith("/basic/1/base.webp");
-        assertThat(d.motions().get(4).basicImageKey()).endsWith("/basic/1/sick.webp");
+        assertThat(d.anchorsKey()).as("앵커를 내던 버전이 아니면 주소를 주지 않는다").isNull();
     }
 
     @Test
@@ -368,7 +369,7 @@ com.lore.zzal.motion.MotionSource.API,
         assertThat(d.motions().get(0).basicImageKey()).startsWith("images/zzal/pets/7/basic/3/");
 
         // 앵커를 안 내는 버전이거나 아직 한 판도 안 구웠으면 null — 없는 주소를 주지 않는다.
-        pet.setHatchPipelineVersion("v2");
+        pet.setHatchPipelineVersion("옛파이프라인");
         assertThat(PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG).anchorsKey()).isNull();
     }
 

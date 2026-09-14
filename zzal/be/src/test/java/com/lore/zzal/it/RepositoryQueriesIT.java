@@ -58,27 +58,27 @@ class RepositoryQueriesIT extends ZzalItSupport {
     // ══ M-3. 재개 조회 — 버전과 모션을 가른다 ═══════════════════════════
 
     @Test
-    @DisplayName("★★ 같은 펫에 v1·v2 를 섞어도 <b>그 버전의</b> 성공 단계만 나온다 — 섞이면 v1 격자를 v2 후처리가 자른다")
+    @DisplayName("★★ 한 펫에 두 버전이 섞여도 <b>그 버전의</b> 성공 단계만 나온다 — 섞이면 옛 격자를 새 후처리가 자른다")
     void succeededStepsAreSplitByPipelineVersion() {
         Long petId = draftPet(newUserId());
-        Long v1Job = hatchJob(petId, "v1");
-        Long v2Job = hatchJob(petId, "v2");
+        Long oldJob = hatchJob(petId, "옛버전");
+        Long newJob = hatchJob(petId, "v4");
 
-        succeeded(v1Job, 0, "sheet", "v1-sheet.png");
-        succeeded(v1Job, 1, "identity", null);
-        succeeded(v2Job, 0, "sheet", "v2-sheet.png");
-        failed(v2Job, 1, "identity");
-        running(v2Job, 2, "grid");
+        succeeded(oldJob, 0, "sheet", "old-sheet.png");
+        succeeded(oldJob, 1, "identity", null);
+        succeeded(newJob, 0, "sheet", "new-sheet.png");
+        failed(newJob, 1, "identity");
+        running(newJob, 2, "grid");
 
-        assertThat(steps.findSucceededByPetAndVersion(petId, GenKind.HATCH, "v2"))
+        assertThat(steps.findSucceededByPetAndVersion(petId, GenKind.HATCH, "v4"))
                 .extracting(GenStepRecord::getName)
-                .as("v2 에서 성공한 것은 시트 하나뿐이다")
+                .as("지금 버전에서 성공한 것은 시트 하나뿐이다")
                 .containsExactly("sheet");
-        assertThat(steps.findSucceededByPetAndVersion(petId, GenKind.HATCH, "v2"))
+        assertThat(steps.findSucceededByPetAndVersion(petId, GenKind.HATCH, "v4"))
                 .extracting(GenStepRecord::getOutputKey)
-                .containsExactly("v2-sheet.png");
+                .containsExactly("new-sheet.png");
 
-        assertThat(steps.findSucceededByPetAndVersion(petId, GenKind.HATCH, "v1"))
+        assertThat(steps.findSucceededByPetAndVersion(petId, GenKind.HATCH, "옛버전"))
                 .extracting(GenStepRecord::getName)
                 .containsExactly("sheet", "identity");
 
@@ -200,7 +200,7 @@ class RepositoryQueriesIT extends ZzalItSupport {
 
     private void finishedJob(Long petId, Instant startedAt, BigDecimal cost) {
         transactions.executeWithoutResult(status -> {
-            GenJob job = jobs.save(GenJob.start(petId, GenKind.HATCH, 1, "v2", startedAt));
+            GenJob job = jobs.save(GenJob.start(petId, GenKind.HATCH, 1, "v4", startedAt));
             job.succeed(cost, startedAt.plusSeconds(30));
         });
     }

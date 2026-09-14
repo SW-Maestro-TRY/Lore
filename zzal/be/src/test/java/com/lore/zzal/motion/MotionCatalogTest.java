@@ -139,7 +139,7 @@ class MotionCatalogTest {
     }
 
     @Test
-    @DisplayName("카탈로그에 없는 이름의 지시문은 찾지 않는다 — 가능한 값을 말하며 거절(v1 옛 이름 폴백은 PR-3 에서 제거)")
+    @DisplayName("카탈로그에 없는 이름의 지시문은 찾지 않는다 — 가능한 값을 말하며 거절")
     void unknownKeyIsRejected() {
         MotionCatalog catalog = new MotionCatalog("", "", "v1");
 
@@ -149,16 +149,4 @@ class MotionCatalogTest {
                 .hasMessageContaining("base");
     }
 
-    @Test
-    @DisplayName("v1 부화 펫의 폴백 — legacyFile 매핑은 5종, v1 에 없던 자세는 화면 폴백")
-    void legacyFileMapping() {
-        MotionCatalog catalog = new MotionCatalog("", "", "v1");
-
-        List<String> withLegacy = catalog.basic().stream()
-                .filter(MotionSpec::hasLegacyFile).map(MotionSpec::key).toList();
-        assertThat(withLegacy).containsExactly("base", "eat", "joy", "sad", "pet");
-        assertThat(catalog.byKey("base").orElseThrow().legacyFile()).isEqualTo("idle");
-        // ★ 교감 자세는 옛 shy 가 쓰던 v1 파일(pet)을 그대로 물려받는다 — v1 펫이 계속 설명된다.
-        assertThat(catalog.byKey("pet").orElseThrow().legacyFile()).isEqualTo("pet");
-    }
 }

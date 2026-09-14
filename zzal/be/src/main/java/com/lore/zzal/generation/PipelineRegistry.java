@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -51,9 +50,6 @@ public class PipelineRegistry {
      */
     private static final Map<GenKind, Map<String, List<String>>> IDENTITY_DEPENDENTS = Map.of(
             GenKind.HATCH, Map.of(
-                    "v1", List.of(IdentityStep.NAME, GridStep.NAME),
-                    "v2", List.of(IdentityStep.NAME, GridStep.NAME, PostProcessStep.GRID2),
-                    // v4 도 문단을 재료로 쓴다 — 단계 구성이 v2 와 같으므로 목록도 같다.
                     "v4", List.of(IdentityStep.NAME, GridStep.NAME, PostProcessStep.GRID2)),
             GenKind.MOTION, Map.of("v1", List.of()));
 
@@ -67,54 +63,45 @@ public class PipelineRegistry {
                             @Qualifier("gridStep") GridStep grid, @Qualifier("grid2Step") GridStep grid2,
                             PostProcessStep post,
                             MotionGridStep motionGrid, MotionPostStep motionPost,
-                            @Value("${app.zzal.pipeline-version:v1}") String hatchVersion,
+                            @Value("${app.zzal.pipeline-version:v4}") String hatchVersion,
                             @Value("${app.zzal.motion-pipeline-version:v1}") String motionVersion) {
-        this(sheet, identity, grid, grid2, post, motionGrid, motionPost, hatchVersion, motionVersion,
-                path -> new ClassPathResource(path).exists());
-    }
-
-    /** 테스트용 — 프롬프트 파일이 있는지를 밖에서 정한다. */
-    PipelineRegistry(SheetStep sheet, IdentityStep identity, GridStep grid, GridStep grid2, PostProcessStep post,
-                     MotionGridStep motionGrid, MotionPostStep motionPost,
-                     String hatchVersion, String motionVersion, java.util.function.Predicate<String> resourceExists) {
         this.versions = Map.of(
                 GenKind.HATCH, Map.of(
-                        "v1", List.of(List.of(sheet), List.of(identity), List.of(grid), List.of(post)),
-                        // v2 = 격자 2장(1층·2층) → 기본 행동 16종(정본 13장). 프롬프트 prompt/v2/{sheet,identity,grid,grid2}.txt
-                        // ★ [grid, grid2] 가 한 묶음 = 나란히 굽는다. identity 는 앞 묶음이라 반드시 먼저 끝난다.
-                        "v2", List.of(List.of(sheet), List.of(identity), List.of(grid, grid2), List.of(post)),
                         // v4 = 격자 2장(1층·2층) → 기본 행동 16종. 1층·2층 모두 검수를 마친 확정 조합이다.
                         //   프롬프트 prompt/v4/{sheet,identity,grid,grid2}.txt,
                         //   후처리 pipeline/v4/service_post.py(state8_v5 + 격자 게이트 + 칸별 자세 매핑).
-                        // ★ v2 와 단계 구성은 같고 내용물이 다르다 — 프롬프트도 후처리 스크립트도 버전 폴더로 갈린다.
-                        //   묶음도 v2 와 같다 — 두 격자는 서로를 안 보고 identity 하나만 쓰므로 나란히 굽는다.
+                        // ★ [grid, grid2] 가 한 묶음 = 나란히 굽는다 — 두 격자는 서로를 안 보고
+                        //   identity 하나만 쓰므로 겹쳐 구우면 한 장 값(실측 41초)이 통째로 빠진다.
+                        //   identity 는 앞 묶음이라 반드시 먼저 끝난다.
                         "v4", List.of(List.of(sheet), List.of(identity), List.of(grid, grid2), List.of(post))),
                 GenKind.MOTION, Map.of("v1", List.of(List.of(motionGrid), List.of(motionPost))));
-        this.currentVersions = Map.of(
-                GenKind.HATCH, resolveHatchVersion(hatchVersion, resourceExists),
-                GenKind.MOTION, motionVersion);
+        this.currentVersions = Map.of(GenKind.HATCH, hatchVersion, GenKind.MOTION, motionVersion);
         verifyIdentityDependents();
+        verifyCurrentVersions();
+        // ★★ 설정이 안 먹었을 때 조용히 옛 값으로 도는 것을 막는다 — 어느 버전으로 굽는지는
+        //    그림을 열어 봐야만 드러나므로, 기동 로그가 그것을 먼저 말해야 한다.
+        log.info("파이프라인 버전 — 부화={} (app.zzal.pipeline-version) · 모션={} (app.zzal.motion-pipeline-version)",
+                currentVersions.get(GenKind.HATCH), currentVersions.get(GenKind.MOTION));
     }
 
     /**
-     * v2 를 켰는데 프롬프트가 아직 없으면(생성 세션 PR 미머지) v1 로 기동한다 — 부팅 로그에 크게 남긴다.
+     * 설정에 적힌 버전이 <b>실제로 있는 버전인지</b> 기동할 때 확인한다.
      *
-     * ★ 조용히 v1 로 가지 않는다. 설정은 v2 인데 기록은 v1 로 남는 것이 "설명이 안 되는 결과" 이므로,
-     *   기록({@code hatchPipelineVersion})도 여기서 정한 v1 로 남고 로그가 그 이유를 말한다.
+     * ★★ 폴백을 두지 않는다. 전에는 프롬프트가 없으면 조용히 옛 버전으로 내려갔는데, 그러면
+     *   <b>설정은 새 버전인데 실제로는 옛 그림이 구워진다.</b> 오류도 404 도 안 나고 화면을 봐야만
+     *   드러나는 종류라, 뜨지 않는 편이 낫다. 무엇을 고쳐야 하는지는 예외가 설정 이름으로 말한다.
      */
-    private static String resolveHatchVersion(String configured, java.util.function.Predicate<String> resourceExists) {
-        if (!"v2".equals(configured)) {
-            return configured;
-        }
-        List<String> missing = List.of("sheet", "identity", "grid", "grid2").stream()
-                .map(n -> "zzal/prompt/v2/" + n + ".txt")
-                .filter(path -> !resourceExists.test(path))
-                .toList();
-        if (missing.isEmpty()) {
-            return "v2";
-        }
-        log.warn("★ app.zzal.pipeline-version=v2 인데 프롬프트가 없어 부화를 v1 로 기동합니다 — 없는 파일: {}", missing);
-        return "v1";
+    private void verifyCurrentVersions() {
+        currentVersions.forEach((kind, version) -> {
+            Map<String, List<List<GenerationStep>>> known = versions.getOrDefault(kind, Map.of());
+            if (!known.containsKey(version)) {
+                String property = kind == GenKind.HATCH
+                        ? "app.zzal.pipeline-version" : "app.zzal.motion-pipeline-version";
+                throw new IllegalStateException(
+                        "%s 에 모르는 파이프라인 버전이 적혀 있습니다: %s (가능한 값: %s)"
+                                .formatted(property, version, known.keySet()));
+            }
+        });
     }
 
     /** 돌릴 묶음들. 묶음 안은 동시에, 묶음 사이는 순서대로. */

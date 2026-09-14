@@ -91,7 +91,7 @@ class GenerationRunnerTest {
     }
 
     private static StepContext ctx() {
-        return new StepContext(7L, "여울", null, "v2");
+        return new StepContext(7L, "여울", null, "v4");
     }
 
     @Test

@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
 @DisplayName("멈춘 알 복구 — DRAFT 도 집되, 돈이 새는 둘은 거른다")
 class StuckHatchRecoveryTest {
 
-    private static final String V = "v2";
+    private static final String V = "v4";
     private static final Instant LONG_AGO = Instant.parse("2026-09-11T00:00:00Z");
 
     private ZzalPetRepository pets;

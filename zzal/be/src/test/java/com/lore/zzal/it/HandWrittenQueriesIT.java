@@ -75,7 +75,7 @@ class HandWrittenQueriesIT extends ZzalItSupport {
 
         // 8·9·10) 성공한 단계 — 펫 단위 · 펫+버전 단위 · 모션 단위(서브질의가 들어 있다).
         assertThat(stepRepository.findSucceededByPet(ABSENT, GenKind.HATCH)).isEmpty();
-        assertThat(stepRepository.findSucceededByPetAndVersion(ABSENT, GenKind.HATCH, "v2")).isEmpty();
+        assertThat(stepRepository.findSucceededByPetAndVersion(ABSENT, GenKind.HATCH, "v4")).isEmpty();
         assertThat(stepRepository.findSucceededByMotion(ABSENT)).isEmpty();
     }
 
