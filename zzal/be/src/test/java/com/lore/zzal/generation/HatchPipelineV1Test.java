@@ -117,6 +117,19 @@ class HatchPipelineV1Test {
     }
 
     @Test
+    @DisplayName("★★ 실패 주입 — 설정에 모르는 버전이 적히면 기동에서 막는다(폴백 없음)")
+    void unknownConfiguredVersionBlocksBoot() {
+        // 전에는 프롬프트가 없으면 조용히 옛 버전으로 내려갔다. 그러면 설정은 새것인데 그림은 옛것이
+        // 구워지고, 오류도 404 도 없이 화면을 봐야만 드러난다. 뜨지 않는 편이 낫다.
+        assertThatThrownBy(() -> new PipelineRegistry(StepMocks.sheet(), StepMocks.identity(),
+                StepMocks.grid(), StepMocks.grid2(), StepMocks.post(),
+                mock(MotionGridStep.class), mock(MotionPostStep.class), "없는버전", "v1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("app.zzal.pipeline-version")
+                .hasMessageContaining("없는버전");
+    }
+
+    @Test
     @DisplayName("★ 실패 주입 — 2층 격자가 없으면 반쪽으로 굽지 않고 멈춘다")
     void missingSecondGridStopsInsteadOfBakingHalf() throws Exception {
         // ★ 1층만 잘라 성공으로 치면 16칸 중 8칸이 빈 펫이 <b>완성</b>으로 기록된다. 오류는 어디에서도
