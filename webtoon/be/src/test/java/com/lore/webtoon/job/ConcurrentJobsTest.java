@@ -71,7 +71,7 @@ class ConcurrentJobsTest {
                 mock(com.lore.webtoon.credit.CreditGate.class),
                 mock(com.lore.webtoon.credit.GuestGate.class),
                 mock(JobNotice.class),
-                workers, "jobs");
+                workers, 1, "jobs");
     }
 
     @Test

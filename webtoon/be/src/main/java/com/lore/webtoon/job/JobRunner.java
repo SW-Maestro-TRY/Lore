@@ -81,8 +81,30 @@ public class JobRunner {
      */
     static final int DEFAULT_WORKERS = 2;
 
+    /**
+     * 한 편 안에서 <b>동시에 그리는 장 수.</b> 기본 셋.
+     *
+     * 1 이면 예전처럼 한 프로세스가 차례로 그린다 — 배포에서 rate limit 이나
+     * 메모리가 터지면 코드를 되돌리지 않고 {@code lore.webtoon.page-workers}
+     * 를 1 로 내린다.
+     *
+     * 크게 잡지 않는 이유는 편 단위로 이미 둘이 나란히 돌기 때문이다
+     * ({@link #DEFAULT_WORKERS}) — 실제 동시 그림 호출은 이 값의 두 배까지
+     * 간다. 셋이면 최대 여섯이다.
+     */
+    static final int DEFAULT_PAGE_WORKERS = 3;
+
     private final int workers;
+    private final int pageWorkers;
     private final ExecutorService line;
+    /**
+     * 장면을 동시에 그리는 자리.
+     *
+     * {@link #line} 과 따로 둔다 — 같은 줄에 넣으면 그림을 기다리는 작업이
+     * 줄을 다 차지해서, 뒤에 걸린 다른 편이 시작조차 못 한다(서로 기다리다
+     * 멈춘다).
+     */
+    private final ExecutorService paint;
 
     /** 나란히 도는 수. 줄 예상이 이 값으로 나눈다({@link JobQueue}). */
     public int workers() {
@@ -122,6 +144,7 @@ public class JobRunner {
                      StoryStore stories, AfterRun after, WorkLedger works,
                      CreditGate credits, GuestGate guests, JobNotice notice,
                      @Value("${lore.webtoon.workers:2}") int workers,
+                     @Value("${lore.webtoon.page-workers:3}") int pageWorkers,
                      @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         /* 0 이나 음수를 주면 만들기가 통째로 멈춘다 — 설정 실수로 서비스가
            죽지 않게 최소 하나는 돈다. */
@@ -133,7 +156,19 @@ public class JobRunner {
             t.setDaemon(true);
             return t;
         });
-        log.info("만들기를 {}편씩 나란히 돌립니다", this.workers);
+        /* 0 이나 음수면 예전처럼 한 프로세스에서 차례로 그린다 — 설정 실수로
+           그림이 아예 안 그려지는 일은 없게 한다. */
+        this.pageWorkers = Math.max(1, pageWorkers);
+        java.util.concurrent.atomic.AtomicInteger pseq =
+                new java.util.concurrent.atomic.AtomicInteger();
+        this.paint = Executors.newFixedThreadPool(this.pageWorkers, r -> {
+            Thread t = Thread.ofPlatform().unstarted(r);
+            t.setName("webtoon-paint-" + pseq.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        });
+        log.info("만들기를 {}편씩 나란히 돌리고, 한 편 안에서 장면을 {}장씩 동시에 그립니다",
+                this.workers, this.pageWorkers);
         this.harness = harness;
         this.progress = progress;
         this.store = store;
@@ -471,15 +506,7 @@ public class JobRunner {
         WebtoonJob job = store.running(jobId, JobStage.PAGES);
         progress.say(jobId, "루가 그림을 그리고 있어요");
 
-        int code = callHarness(jobId, job,
-                List.of("--run-id", job.getRunId(), "--detail-pages"));
-        /* **한 편에서 돈이 제일 많이 나가는 자리다.** 여기서 죽으면 그린
-           만큼은 이미 값이 나갔는데, 끝에서만 적으면 그게 통째로 0원이 된다. */
-        after.cost(job.getRunId());
-        stopIfCancelled(jobId);
-        if (code != 0) {
-            throw new IllegalStateException("그림을 만들지 못했습니다");
-        }
+        drawPages(jobId, job);
 
         if (harness.stitch(job.getRunId(), env(job), line -> progress.line(jobId, line)) != 0) {
             throw new IllegalStateException("이어 붙이기가 실패했습니다");
@@ -502,6 +529,129 @@ public class JobRunner {
            전부 삼키므로 여기서 죽지 않는다 — 메일이 안 가는 것보다 다 만든
            작품이 실패로 적히는 것이 훨씬 나쁘다. */
         notice.finished(jobId);
+    }
+
+    /**
+     * 한 화의 그림을 그린다 — <b>장면마다 프로세스를 나눠 동시에.</b>
+     *
+     * <h2>왜 나눌 수 있게 됐나</h2>
+     *
+     * 전에는 나눌 수가 없었다. 장면 N+1 을 그리려면 N 의 <b>그림</b>이 있어야
+     * 했기 때문이다(직전 그림을 참조로 붙이고, 직전 장 검수가 적어 준
+     * 「다음은 여기서부터」를 물려받았다). 지금은 그리기 전에 이음새를 한 번
+     * 정해 둔다({@code --scene-link}) — 장면마다 「어디서 끝나는가」가 글로
+     * 박히고, 그 마무리가 곧 다음 장면의 시작이다. 그래서 옆 장의 그림을 못
+     * 봐도 이어진다.
+     *
+     * <h2>이음새를 못 만들면 나누지 않는다</h2>
+     *
+     * 이음새 없이 동시에 그리면 장과 장 사이가 끊긴다 — 그럴 바에는 느리더라도
+     * 예전처럼 한 프로세스에서 차례로 그린다. 이음새 만들기는 글 호출 한 번이라
+     * 여기서 실패해도 잃는 것이 거의 없다.
+     */
+    private void drawPages(Long jobId, WebtoonJob job) throws Exception {
+        int pages = pageCount(job);             // 표지 1장 + 장면 수
+        if (pages <= 1 || pageWorkers <= 1) {
+            drawInOneProcess(jobId, job);
+            return;
+        }
+
+        int linked = callHarness(jobId, job,
+                List.of("--run-id", job.getRunId(), "--scene-link"));
+        after.cost(job.getRunId());
+        stopIfCancelled(jobId);
+        if (linked != 0) {
+            log.warn("장면 이음새를 못 만들어서 차례로 그립니다 (job={})", jobId);
+            drawInOneProcess(jobId, job);
+            return;
+        }
+
+        log.info("장면 {}장을 {}개씩 동시에 그립니다 (job={})", pages, pageWorkers, jobId);
+        java.util.concurrent.atomic.AtomicInteger drawn =
+                new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicReference<Exception> failed =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        progress.drew(jobId, 0, pages);
+
+        List<java.util.concurrent.Future<?>> waiting = new ArrayList<>();
+        for (int n = 1; n <= pages; n++) {
+            final int page = n;
+            waiting.add(paint.submit(() -> {
+                /* 이미 어긋났으면 시작하지 않는다 — 한 장이 실패했는데 남은
+                   장을 계속 그리면 어차피 못 쓸 화에 그림 값만 더 나간다. */
+                if (failed.get() != null || cancelled.contains(jobId)) {
+                    return;
+                }
+                try {
+                    int code = callHarness(jobId, job,
+                            List.of("--run-id", job.getRunId(), "--detail-pages",
+                                    "--page", String.valueOf(page)));
+                    if (code != 0) {
+                        throw new IllegalStateException(page + "번째 장을 그리지 못했습니다");
+                    }
+                    progress.drew(jobId, drawn.incrementAndGet(), pages);
+                } catch (Exception e) {         // noqa: 여기서 새면 기다리는 쪽이 영원히 기다린다
+                    failed.compareAndSet(null, e);
+                }
+            }));
+        }
+        for (java.util.concurrent.Future<?> one : waiting) {
+            one.get();                          // 다 끝나야 이어 붙일 수 있다
+        }
+
+        /* **한 편에서 돈이 제일 많이 나가는 자리다.** 여기서 죽으면 그린
+           만큼은 이미 값이 나갔는데, 끝에서만 적으면 그게 통째로 0원이 된다. */
+        after.cost(job.getRunId());
+        stopIfCancelled(jobId);
+        Exception bad = failed.get();
+        if (bad != null) {
+            throw bad instanceof Cancelled ? bad
+                    : new IllegalStateException("그림을 만들지 못했습니다", bad);
+        }
+
+        /* 화 전체를 처음부터 끝까지 한 번 읽는 검수. 차례로 그릴 때는 파이썬이
+           마지막에 스스로 불렀는데(장마다 그리는 흐름의 끝), 장면을 나눠 부르면
+           어느 프로세스도 자기가 마지막인지 모른다 — 그래서 여기서 부른다.
+           실패해도 만들기는 성공이다: 이미 다 그린 화를 읽기만 하는 걸음이다. */
+        try {
+            callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--episode-review"));
+        } catch (Cancelled e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("화 전체 검수를 하지 못했습니다 (job={})", jobId, e);
+        }
+    }
+
+    /** 예전 길 — 한 프로세스가 표지부터 마지막 장까지 차례로 그린다. */
+    private void drawInOneProcess(Long jobId, WebtoonJob job) throws Exception {
+        int code = callHarness(jobId, job,
+                List.of("--run-id", job.getRunId(), "--detail-pages"));
+        after.cost(job.getRunId());
+        stopIfCancelled(jobId);
+        if (code != 0) {
+            throw new IllegalStateException("그림을 만들지 못했습니다");
+        }
+    }
+
+    /**
+     * 이 화가 몇 장인가 — <b>표지 1장 + 장면 수.</b> 모르면 0.
+     *
+     * 고른 방향의 장면 목록에서 센다. 파이썬이 페이지를 그 순서 그대로
+     * 매긴다(1 이 표지, 2 부터가 장면).
+     */
+    private int pageCount(WebtoonJob job) {
+        Integer picked = job.getPicked();
+        if (picked == null) {
+            return 0;
+        }
+        for (Map<String, Object> one : directionsOf(job.getRunId())) {
+            if (!Integer.valueOf(picked).equals(one.get("n"))) {
+                continue;
+            }
+            Object scenes = one.get("scenes");
+            return scenes instanceof List<?> list && !list.isEmpty() ? list.size() + 1 : 0;
+        }
+        return 0;
     }
 
     /* ---- 곁가지 ----------------------------------------------------------- */

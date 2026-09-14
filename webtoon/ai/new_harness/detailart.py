@@ -446,9 +446,12 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         # 그 사람 말대로 다시 그리는 것이다.
         if note.strip():
             prompt += "\n\n" + note_block(note)
-        (dest / f"page{page_no:02d}.txt").write_text(prompt, encoding="utf-8")
+        # 프롬프트는 **그릴 장의 것만 쓴다.** 장면을 동시에 그리면 프로세스마다
+        # 이 반복문을 다 도는데, 자기가 안 그릴 장의 파일까지 쓰면 여럿이 같은
+        # 파일에 동시에 써서 반 토막이 남는다.
         if only and page_no not in only:
             continue
+        (dest / f"page{page_no:02d}.txt").write_text(prompt, encoding="utf-8")
         if dry_run:
             continue
 

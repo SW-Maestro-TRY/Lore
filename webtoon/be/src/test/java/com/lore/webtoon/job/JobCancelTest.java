@@ -46,7 +46,7 @@ class JobCancelTest {
         runner = new JobRunner(harness, mock(JobProgress.class), store,
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
                 credits, guests, mock(JobNotice.class),
-                1, "jobs");                     // 취소를 보는 검사라 한 줄로 둔다
+                1, 1, "jobs");                  // 취소를 보는 검사라 한 줄로 둔다
     }
 
     private WebtoonJob 작업(JobStatus status) {
