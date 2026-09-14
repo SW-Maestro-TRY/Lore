@@ -435,6 +435,10 @@
 | `archive.max-rows` | 50000 | 한 회차에 올릴 수 있는 줄 수의 상한 |
 | `archive.chunk` | 5000 | 한 번에 메모리로 읽는 줄 수(= 파일 하나의 최대 줄 수) |
 | `archive.settle-lag-minutes` | 10 | 이 시간보다 최근에 도착한 줄은 다음 회차로. id 는 INSERT 순서지 커밋 순서가 아니다 |
+| `alert.enabled` | false | 운영 경보 메일 켜기. **꺼져 있으면 아무 일도 안 한다** |
+| `alert.to` | (빈) | 받는 사람(쉼표로 여럿). **비면 켜져 있어도 안 보낸다** |
+| `alert.cost-step-usd` | 10 | 누적 생성 비용을 이 단위로 알린다($10·$20·…). 0 이하면 이 경보만 꺼짐 |
+| `alert.hatch-fail-streak` | 3 | 부화가 몇 번 연달아 실패하면 알릴까. 0 이하면 이 경보만 꺼짐 |
 | `dev-tools` · `admin.enabled` | false | 기존 |
 | `generation.*` · `openai.*` · `python.*` · `recovery.*` · `max-hatch-attempts` · `gate-version` | 기존 | |
 

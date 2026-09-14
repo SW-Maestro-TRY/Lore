@@ -1,6 +1,8 @@
 package com.lore.zzal.it;
 
 import com.lore.common.s3.S3Storage;
+import com.lore.zzal.alert.AlertMailer;
+import com.lore.zzal.alert.FakeAlertMailer;
 import com.lore.zzal.archive.ArchiveStorage;
 import com.lore.zzal.archive.S3ArchiveStorage;
 import com.lore.zzal.generation.MotionPostProfiles;
@@ -27,10 +29,11 @@ import static org.mockito.Mockito.mock;
 /**
  * 통합 시험에서 <b>밖으로 나가는 길만</b> 바꿔 끼운다. 나머지는 전부 진짜다.
  *
- * <h3>무엇을 바꾸나 — 셋뿐</h3>
+ * <h3>무엇을 바꾸나 — 넷뿐</h3>
  * <ul>
  *   <li>{@link S3Storage} → {@link InMemoryS3Storage}. 서버가 만든 것을 올리는 자리다</li>
  *   <li>{@link S3Client} · {@link S3Presigner} → 껍데기. 어떤 경로로도 AWS 로 나가지 못하게 덮는다</li>
+ *   <li>{@link AlertMailer} → {@link FakeAlertMailer}. 경보 메일이 SMTP 로 나가는 길이다</li>
  *   <li>{@link RealGenerationGuard} — 실제 생성이 켜져 있으면 <b>기동을 막는다</b></li>
  * </ul>
  *
@@ -120,6 +123,20 @@ public class ZzalItConfig {
                 return super.forMotion(version, keys.contains(motionKey) ? "roll" : motionKey);
             }
         };
+    }
+
+    /**
+     * 경보 메일이 <b>밖으로 나가는 길</b>을 막는다 — S3·AWS 와 같은 이유다.
+     *
+     * ★★ "시험에서는 경보 스위치가 꺼져 있으니 괜찮다" 로 두지 않는다. 스위치는 시험 한 줄로
+     *   켜지고({@code @TestPropertySource}), 그 순간 진짜 SMTP 로 붙으러 나간다. 나가는 길은
+     *   설정이 아니라 <b>타입</b>으로 막는 것이 맞다.
+     * ★ 보낸 것을 적어 두므로 시험이 "무엇을 보내려 했나" 를 그대로 읽을 수 있다.
+     */
+    @Bean
+    @Primary
+    public AlertMailer recordingAlertMailer() {
+        return new FakeAlertMailer();
     }
 
     @Bean

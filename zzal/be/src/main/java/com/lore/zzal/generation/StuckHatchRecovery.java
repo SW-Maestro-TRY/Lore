@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.pet.PetPhase;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalPetRepository;
@@ -44,6 +45,7 @@ public class StuckHatchRecovery {
     private final GenJobRepository jobRepository;
     private final HatchService hatchService;
     private final GenerationRecorder recorder;
+    private final ZzalAlerts alerts;
     private final int maxAttempts;
     private final Duration graceperiod;
 
@@ -51,12 +53,14 @@ public class StuckHatchRecovery {
                               GenJobRepository jobRepository,
                               HatchService hatchService,
                               GenerationRecorder recorder,
+                              ZzalAlerts alerts,
                               @Value("${app.zzal.max-hatch-attempts:2}") int maxAttempts,
                               @Value("${app.zzal.recovery.grace-minutes:12}") int graceMinutes) {
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.hatchService = hatchService;
         this.recorder = recorder;
+        this.alerts = alerts;
         this.maxAttempts = maxAttempts;
         this.graceperiod = Duration.ofMinutes(graceMinutes);
     }
@@ -98,6 +102,10 @@ public class StuckHatchRecovery {
             if (attempts >= maxAttempts) {
                 log.warn("시도를 다 썼습니다 — petId={} 시도={}회 → 실패로 종료", pet.getId(), attempts);
                 recorder.markPetFailed(pet.getId());
+                // ★ 여기도 "부화가 끝내 실패" 다 — 기동 복구로 정리되는 알만 빠지면 연속 실패를
+                //   잘못 세고, 하필 그 상황(서버가 죽었다 뜬 직후)이 가장 알아야 할 때다.
+                //   ⚠️ "재시작했다" 를 알리는 것이 아니다. 실제로 죽은 알이 있을 때만 나간다.
+                alerts.hatchFinallyFailed(pet.getId(), Instant.now());
                 continue;
             }
             // ★ 원래 job 의 버전(v)을 잇는다 — 설정이 그 사이 바뀌었어도 굽던 알은 굽던 버전으로 끝낸다

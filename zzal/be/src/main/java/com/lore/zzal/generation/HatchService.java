@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
 import com.lore.zzal.generation.steps.PostProcessStep;
@@ -40,6 +41,7 @@ public class HatchService {
     private final ZzalPetRepository petRepository;
     private final QuotaBreaker quotaBreaker;
     private final HatchBlockLog blockLog;
+    private final ZzalAlerts alerts;
     private final int maxAttempts;
 
     public HatchService(GenerationRunner runner, GenerationRecorder recorder,
@@ -47,6 +49,7 @@ public class HatchService {
                         ZzalPetRepository petRepository,
                         QuotaBreaker quotaBreaker,
                         HatchBlockLog blockLog,
+                        ZzalAlerts alerts,
                         @Value("${app.zzal.max-hatch-attempts:2}") int maxAttempts,
                         MotionSeeder motionSeeder) {
         this.runner = runner;
@@ -56,6 +59,7 @@ public class HatchService {
         this.petRepository = petRepository;
         this.quotaBreaker = quotaBreaker;
         this.blockLog = blockLog;
+        this.alerts = alerts;
         this.maxAttempts = maxAttempts;
         this.motionSeeder = motionSeeder;
     }
@@ -82,6 +86,7 @@ public class HatchService {
             blockLog.record(HatchBlock.QUOTA, null, ownerOf(petId), null, now);
             log.warn("바깥 한도(429) — 재시도하지 않는다 (petId={})", petId);
             recorder.markPetFailed(petId);
+            alerts.hatchFinallyFailed(petId, now);
             return;
         }
 
@@ -89,6 +94,7 @@ public class HatchService {
         if (attempts >= maxAttempts) {
             log.warn("부화 실패 확정 — petId={} 시도={}회", petId, attempts);
             recorder.markPetFailed(petId);
+            alerts.hatchFinallyFailed(petId, Instant.now());
             return;
         }
 
@@ -115,6 +121,9 @@ public class HatchService {
         RunResult second = runAttempt(retry.getId(), petId, version);
         if (second == null || !second.success()) {
             recorder.markPetFailed(petId);
+            // ★★ 알리는 것은 <b>표에 FAILED 가 적힌 뒤</b>다. 먼저 부르면 연속 실패를 세는 질의가
+            //   방금 그 알을 못 봐서 한 번씩 늦게 알린다(경보는 표를 다시 읽어서 센다).
+            alerts.hatchFinallyFailed(petId, Instant.now());
         }
     }
 

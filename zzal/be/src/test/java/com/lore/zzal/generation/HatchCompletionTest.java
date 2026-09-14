@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
 import com.lore.zzal.generation.steps.MotionGridStep;
@@ -65,7 +66,7 @@ class HatchCompletionTest {
 
         service = new HatchService(mock(GenerationRunner.class), recorder, mock(GenJobRepository.class),
                 registry, petRepository, new com.lore.zzal.guard.QuotaBreaker(),
-                mock(com.lore.zzal.guard.HatchBlockLog.class), 2, seeder);
+                mock(com.lore.zzal.guard.HatchBlockLog.class), mock(ZzalAlerts.class), 2, seeder);
     }
 
     /** 다섯 단계를 전부 성공시킨 기록 — 굽기가 끝난 상태. */

@@ -68,6 +68,12 @@ spring:
           auth: true
           starttls:
             enable: true
+          # ★★ 시간 제한을 준다 — 기본은 "무한히 기다림" 이다. 메일 서버가 조용히 안 받는 날
+          #   보내는 스레드가 영영 붙잡히고, 그러면 경보가 밀리다 통째로 사라진다.
+          #   (경보는 전용 스레드 하나로 내보내므로 서비스 스레드는 어차피 안 기다린다 — SmtpAlertMailer)
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 # Swagger UI 주소: http://localhost:8080/api/swagger-ui.html (문서·정의 모두 /api 아래 — CloudFront→ALB 가 /api/* 만 백엔드로 보내므로)
 # 운영에서 끄려면 SPRINGDOC_ENABLED=false (UI·정의 둘 다 내려간다)
 springdoc:
@@ -264,6 +270,26 @@ app:
       # ★ X-Forwarded-For 에서 진짜 접속자를 고를 때, 우리 설비가 그 뒤에 덧붙인 칸 수.
       #   CloudFront → ALB → 서버면 1(ALB 한 겹). 설비가 바뀌면 배포 없이 여기만 맞춘다(ClientIp 주석).
       xff-trusted-hops: ${ZZAL_HATCH_XFF_HOPS:1}
+
+    # 운영 경보 메일 — 돈과 고장을 제때 알게 하는 넷 (2026-09-14).
+    #
+    # ★★ 기본이 꺼짐이고, 받는 주소가 비어도 안 보낸다. 설정이 없는 채로 배포돼도 아무 일도
+    #    일어나지 않아야 한다(스위치와 주소 둘 다 있어야 한다 — AlertSettings).
+    # ★★ 보내는 것은 넷뿐이다 — 누적 비용 $10 단위 돌파 · 부화 연속 실패 · 하루 상한 도달 ·
+    #    밤 굽기 실패. <b>"서버가 떴습니다" 는 없다</b>(배포가 곧 재시작이라 하루에 여러 통이 되고,
+    #    그러면 나머지 넷도 같이 안 읽힌다). 서버가 통째로 죽은 경우는 바깥 감시의 몫이다.
+    # ★★ "어디까지 알렸나" 는 zzal_alert_state 표에 남는다 — 메모리에 두면 배포할 때마다
+    #    같은 메일이 다시 간다(V17 주석).
+    # ★ SMTP 계정은 여기가 아니라 spring.mail (MAIL_USERNAME · MAIL_PASSWORD)이 갖고 있다.
+    # ★ to 는 쉼표로 여러 명. 사람마다 한 통씩 나가고, 한 명이 실패해도 나머지는 간다.
+    # ★ 숫자 둘은 0 이하면 그 경보만 꺼진다(hatch-limits 와 같은 규칙).
+    alert:
+      enabled: ${ZZAL_ALERT_ENABLED:false}
+      to: ${ZZAL_ALERT_TO:}
+      # 누적 비용을 얼마 단위로 알릴까(달러). 잔액 $70 기준 $10 이면 일곱 번 안에 다 쓴다.
+      cost-step-usd: ${ZZAL_ALERT_COST_STEP_USD:10}
+      # 몇 번 연달아 실패하면 알릴까. 한 마리가 안에서 이미 2번 굽는다(max-hatch-attempts).
+      hatch-fail-streak: ${ZZAL_ALERT_HATCH_FAIL_STREAK:3}
 
     # 행동 기록 보관 — 하루 한 번(KST 05:10) zzal_event 를 S3 로 베껴 둔다 (2026-09-14).
     #

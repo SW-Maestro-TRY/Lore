@@ -1,6 +1,7 @@
 package com.lore.zzal.guard;
 
 import com.lore.common.exception.BusinessException;
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.common.exception.ErrorCode;
 import com.lore.zzal.generation.GenKind;
 import com.lore.zzal.generation.GenJobRepository;
@@ -57,19 +58,22 @@ public class HatchGuard {
     private final HatchLimits limits;
     private final IpRateLimiter ipRateLimiter;
     private final QuotaBreaker quotaBreaker;
+    private final ZzalAlerts alerts;
 
     public HatchGuard(HatchUserLockRepository userLocks,
                       ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
                       HatchLimits limits,
                       IpRateLimiter ipRateLimiter,
-                      QuotaBreaker quotaBreaker) {
+                      QuotaBreaker quotaBreaker,
+                      ZzalAlerts alerts) {
         this.userLocks = userLocks;
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.limits = limits;
         this.ipRateLimiter = ipRateLimiter;
         this.quotaBreaker = quotaBreaker;
+        this.alerts = alerts;
     }
 
     /**
@@ -149,6 +153,11 @@ public class HatchGuard {
         long today = jobRepository.countHatchesSince(GenKind.HATCH, startOfDay(now));
         if (today >= limits.serviceDaily()) {
             log.warn("서비스 하루 상한 — 오늘 {}회로 상한 {}회에 닿았다", today, limits.serviceDaily());
+            // ★★ 닿은 <b>순간</b>에 알린다 — 그날 한 번만(경보 쪽이 날짜로 막는다). 여기는 사용자
+            //   요청 트랜잭션 안이고 곧 거절로 끝나지만, 경보의 기록은 따로 커밋되므로(REQUIRES_NEW)
+            //   거절이 되돌려도 "알렸다" 는 사실은 남는다 — 안 그러면 요청마다 메일이 간다.
+            // ★ 알리기가 무슨 일을 겪든 거절은 그대로 나간다(ZzalAlerts 는 예외를 안 내보낸다).
+            alerts.serviceDailyCapReached(today, limits.serviceDaily(), now);
             throw blocked(HatchBlock.SERVICE_CAP,
                     "오늘 서비스 전체 몫 %d번을 다 썼어요(한국 시각 자정에 초기화)".formatted(limits.serviceDaily()));
         }

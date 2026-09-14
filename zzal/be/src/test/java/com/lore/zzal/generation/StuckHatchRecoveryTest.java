@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.PetFixture;
 import com.lore.zzal.pet.PetPhase;
 import com.lore.zzal.pet.ZzalPet;
@@ -57,7 +58,7 @@ class StuckHatchRecoveryTest {
         jobs = mock(GenJobRepository.class);
         hatch = mock(HatchService.class);
         recorder = mock(GenerationRecorder.class);
-        recovery = new StuckHatchRecovery(pets, jobs, hatch, recorder, 2, 12);
+        recovery = new StuckHatchRecovery(pets, jobs, hatch, recorder, mock(ZzalAlerts.class), 2, 12);
 
         when(hatch.currentVersion()).thenReturn(V);
         when(hatch.stepsTotal(anyString())).thenReturn(5);

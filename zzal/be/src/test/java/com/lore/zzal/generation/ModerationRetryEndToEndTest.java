@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
 import com.lore.zzal.generation.steps.PostProcessStep;
@@ -52,7 +53,7 @@ class ModerationRetryEndToEndTest {
             started.put(id, inv.getArgument(2));
             return id;
         });
-        runner = new GenerationRunner(recorder);
+        runner = new GenerationRunner(recorder, mock(ZzalAlerts.class));
     }
 
     /** 이름을 기록하며 성공하는 단계 — 무엇이 실제로 구워졌는지 세려고. */

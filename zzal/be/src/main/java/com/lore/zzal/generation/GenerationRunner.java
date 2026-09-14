@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.client.BilledFailureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,7 @@ public class GenerationRunner {
     private static final Logger log = LoggerFactory.getLogger(GenerationRunner.class);
 
     private final GenerationRecorder recorder;
+    private final ZzalAlerts alerts;
 
     /** 단계에 시간 제한을 걸기 위한 일회용 스레드. 제한을 넘기면 이 스레드를 끊는다. */
     private final ExecutorService timeoutExecutor = Executors.newCachedThreadPool();
@@ -44,8 +46,31 @@ public class GenerationRunner {
     @org.springframework.beans.factory.annotation.Value("${app.zzal.generation.limit-override-seconds:0}")
     private int limitOverrideSeconds;
 
-    public GenerationRunner(GenerationRecorder recorder) {
+    public GenerationRunner(GenerationRecorder recorder, ZzalAlerts alerts) {
         this.recorder = recorder;
+        this.alerts = alerts;
+    }
+
+    /**
+     * 한 판이 끝날 때마다 <b>누적 비용이 다음 $10 단위를 넘었는지</b> 본다.
+     *
+     * <h3>★ 왜 여기인가 — 돈이 나가는 모든 길이 이 한 곳을 지난다</h3>
+     * 부화도 심화 행동도 결국 이 메서드로 굽는다. 부화 쪽에만 달면 밤 굽기로 나간 돈은
+     * <b>한 번도 안 알린다</b>. 성공·실패·한도 막힘 어느 쪽으로 끝나도 그때까지 나간 돈은 이미
+     * job 에 적혔으므로, 나가는 길이 아니라 <b>끝나는 길 전부</b>에 건다({@code finally}).
+     *
+     * <h3>★★ 경보가 굽기를 되돌리지 않는다</h3>
+     * {@code finally} 에서 예외가 나면 원래 돌려주려던 결과가 사라지고 부화가 통째로 깨진다.
+     * 그래서 {@link ZzalAlerts} 는 어떤 경우에도 예외를 안 내보낸다(그 클래스 주석) —
+     * 여기서 한 번 더 감싸지 않는 이유가 그것이고, 그 규약은 시험이 못 박는다.
+     */
+    public RunResult run(Long jobId, StepContext ctx, List<List<GenerationStep>> stages,
+                         List<GenStepRecord> resume) {
+        try {
+            return bake(jobId, ctx, stages, resume);
+        } finally {
+            alerts.generationFinished(Instant.now());
+        }
     }
 
     /**
@@ -58,8 +83,8 @@ public class GenerationRunner {
      * @param stages 돌릴 묶음 목록. 묶음 안은 동시에, 묶음 사이는 순서대로
      * @param resume 앞선 시도에서 성공한 단계들. 이어받아 건너뛴다
      */
-    public RunResult run(Long jobId, StepContext ctx, List<List<GenerationStep>> stages,
-                         List<GenStepRecord> resume) {
+    private RunResult bake(Long jobId, StepContext ctx, List<List<GenerationStep>> stages,
+                           List<GenStepRecord> resume) {
         String version = ctx.version();
         recorder.markJobRunning(jobId);
 

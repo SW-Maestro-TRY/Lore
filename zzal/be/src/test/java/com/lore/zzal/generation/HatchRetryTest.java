@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.steps.MotionGridStep;
 import com.lore.zzal.guard.HatchBlockLog;
 import com.lore.zzal.guard.QuotaBreaker;
@@ -101,7 +102,7 @@ class HatchRetryTest {
         quotaBreaker = new QuotaBreaker();
         blockLog = mock(HatchBlockLog.class);
         service = new HatchService(runner, recorder, jobRepository, registry, petRepository,
-                quotaBreaker, blockLog, MAX_ATTEMPTS, mock(MotionSeeder.class));
+                quotaBreaker, blockLog, mock(ZzalAlerts.class), MAX_ATTEMPTS, mock(MotionSeeder.class));
     }
 
     /** 이 펫이 이미 {@code n} 번 구워진 상태로 둔다(그 job 들은 표에 있고 이 시험이 세지 않는다). */

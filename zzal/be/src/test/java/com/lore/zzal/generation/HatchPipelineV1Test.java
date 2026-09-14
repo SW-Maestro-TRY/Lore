@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.client.PostProcessor;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
@@ -251,7 +252,7 @@ class HatchPipelineV1Test {
     @DisplayName("★ 실패 주입 — 게이트가 막으면 '격자를 버리라'는 신호가 붙어 돌아온다")
     void gateFailureAsksForANewGrid() {
         GenerationRecorder recorder = mock(GenerationRecorder.class);
-        GenerationRunner runner = new GenerationRunner(recorder);
+        GenerationRunner runner = new GenerationRunner(recorder, mock(ZzalAlerts.class));
 
         GenerationStep gate = new GenerationStep() {
             @Override
@@ -290,7 +291,7 @@ class HatchPipelineV1Test {
     @Test
     @DisplayName("표식이 없는 평범한 실패는 격자를 버리지 않는다")
     void ordinaryFailureKeepsTheGrid() {
-        GenerationRunner runner = new GenerationRunner(mock(GenerationRecorder.class));
+        GenerationRunner runner = new GenerationRunner(mock(GenerationRecorder.class), mock(ZzalAlerts.class));
 
         GenerationStep boom = new GenerationStep() {
             @Override

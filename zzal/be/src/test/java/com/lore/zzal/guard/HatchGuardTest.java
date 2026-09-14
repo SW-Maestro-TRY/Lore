@@ -1,5 +1,6 @@
 package com.lore.zzal.guard;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.common.exception.ErrorCode;
 import com.lore.common.user.User;
 import com.lore.zzal.generation.GenJobRepository;
@@ -45,6 +46,8 @@ class HatchGuardTest {
     private GenJobRepository jobs;
     private IpRateLimiter ipRateLimiter;
     private QuotaBreaker quotaBreaker;
+    /** 경보는 여기서 "불렀는가" 만 본다 — 같은 날 두 번 안 보내는 것은 경보 쪽의 일이다. */
+    private ZzalAlerts alerts;
 
     /** 명세의 기본값 그대로 — 동시 1 · 누적 3 · 하루 3 · 전체 40 · IP 10/60분 · 429 멈춤 30분. */
     private HatchLimits defaults() {
@@ -54,7 +57,7 @@ class HatchGuardTest {
     private HatchGuard guardWith(HatchLimits limits) {
         HatchUserLockRepository locks = mock(HatchUserLockRepository.class);
         when(locks.lockForHatch(anyLong())).thenReturn(Optional.of(mock(User.class)));
-        return new HatchGuard(locks, pets, jobs, limits, ipRateLimiter, quotaBreaker);
+        return new HatchGuard(locks, pets, jobs, limits, ipRateLimiter, quotaBreaker, alerts);
     }
 
     private HatchGuard guard() {
@@ -67,6 +70,7 @@ class HatchGuardTest {
         jobs = mock(GenJobRepository.class);
         ipRateLimiter = new IpRateLimiter();
         quotaBreaker = new QuotaBreaker();
+        alerts = mock(ZzalAlerts.class);
         alive(0);
         totalHatches(0);
         userHatchesToday(0);
@@ -206,6 +210,23 @@ class HatchGuardTest {
     }
 
     @Test
+    @DisplayName("★★ 상한에 닿으면 운영자에게 알린다 — 오늘 몇 번 썼는지와 상한을 함께")
+    void serviceCapNotifiesTheOperator() {
+        serviceHatchesToday(40);
+        blockedBy(guard(), null, NOON);
+        org.mockito.Mockito.verify(alerts).serviceDailyCapReached(40L, 40, NOON);
+    }
+
+    @Test
+    @DisplayName("★ 39번이면 알리지 않는다 — 닿은 순간에만")
+    void noAlertBeforeTheCap() {
+        serviceHatchesToday(39);
+        guard().check(USER, null, NOON);
+        org.mockito.Mockito.verify(alerts, org.mockito.Mockito.never())
+                .serviceDailyCapReached(anyLong(), org.mockito.ArgumentMatchers.anyInt(), any());
+    }
+
+    @Test
     @DisplayName("★ 39번이면 한 번 더 된다")
     void thirtyNineStillPasses() {
         serviceHatchesToday(39);
@@ -302,7 +323,7 @@ class HatchGuardTest {
     void unknownUserStopsAtTheLock() {
         HatchUserLockRepository locks = mock(HatchUserLockRepository.class);
         when(locks.lockForHatch(anyLong())).thenReturn(Optional.empty());
-        HatchGuard guard = new HatchGuard(locks, pets, jobs, defaults(), ipRateLimiter, quotaBreaker);
+        HatchGuard guard = new HatchGuard(locks, pets, jobs, defaults(), ipRateLimiter, quotaBreaker, alerts);
         assertThat(catchThrowableOfType(com.lore.common.exception.BusinessException.class,
                 () -> guard.lockUser(USER)).getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND);
     }

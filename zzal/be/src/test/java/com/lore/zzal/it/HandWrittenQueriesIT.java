@@ -30,13 +30,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 실제 타입, 빈 {@code IN} 절, {@code @Modifying} 이 트랜잭션 없이 도는 것. 여기서는 <b>한 번씩 실제로 부른다.</b>
  *
  * <h3>★ 무엇을 세었나</h3>
- * {@code @Query} 가 붙은 메서드는 zzal 에 10개, zzal 이 쓰는 공통(common)에 3개로 <b>모두 13개</b>다.
+ * {@code @Query} 가 붙은 메서드는 zzal 에 12개, zzal 이 쓰는 공통(common)에 3개로 <b>모두 15개</b>다.
  * 목록을 손으로 적는 대신 여기 시험이 그 13개를 한 줄씩 부른다 — 새 질의가 생기면 여기 한 줄을 더한다.
  *
  * ★ 결과가 비어 있어도 된다. 이 시험이 보는 것은 "돌긴 도는가" 다.
  */
 @ZzalIntegrationTest
-@DisplayName("시나리오 2 — 수기 JPQL 13개가 전부 실제로 실행된다")
+@DisplayName("시나리오 2 — 수기 질의 15개가 전부 실제로 실행된다")
 class HandWrittenQueriesIT extends ZzalItSupport {
 
     @Autowired ZzalMotionRepository motionRepository;
@@ -51,7 +51,7 @@ class HandWrittenQueriesIT extends ZzalItSupport {
     private static final long ABSENT = 999_999L;
 
     @Test
-    @DisplayName("zzal 10개 — 집기·되돌리기·잠금 3종·비용 2종·성공 단계 3종")
+    @DisplayName("zzal 12개 — 집기·되돌리기·잠금 3종·비용 4종·성공 단계 3종")
     void everyZzalQueryRuns() {
         // 1·2) 집기와 되돌리기. @Modifying 이라 바꾼 줄 수가 돌아온다(없는 줄이면 0).
         assertThat(motionRepository.claim(ABSENT, Instant.now(), "zzal-it")).isZero();
@@ -73,7 +73,13 @@ class HandWrittenQueriesIT extends ZzalItSupport {
         BigDecimal byMotions = jobRepository.sumCostByMotionIds(List.of(ABSENT, ABSENT + 1));
         assertThat(byMotions).isNotNull().isEqualByComparingTo(BigDecimal.ZERO);
 
-        // 8·9·10) 성공한 단계 — 펫 단위 · 펫+버전 단위 · 모션 단위(서브질의가 들어 있다).
+        // 8) 지금까지 쓴 돈 전부(부화 + 심화). 비용 경보의 기준이라 한 줄도 없으면 0 이어야 한다.
+        assertThat(jobRepository.sumAllCost()).isNotNull().isEqualByComparingTo(BigDecimal.ZERO);
+
+        // 9) 종류별 합계 — 경보 본문이 "부화 얼마 · 심화 얼마" 를 가를 때 읽는다.
+        assertThat(jobRepository.sumCostByKind(GenKind.HATCH)).isNotNull().isEqualByComparingTo(BigDecimal.ZERO);
+
+        // 10·11·12) 성공한 단계 — 펫 단위 · 펫+버전 단위 · 모션 단위(서브질의가 들어 있다).
         assertThat(stepRepository.findSucceededByPet(ABSENT, GenKind.HATCH)).isEmpty();
         assertThat(stepRepository.findSucceededByPetAndVersion(ABSENT, GenKind.HATCH, "v1")).isEmpty();
         assertThat(stepRepository.findSucceededByMotion(ABSENT)).isEmpty();

@@ -69,6 +69,30 @@ public interface GenJobRepository extends JpaRepository<GenJob, Long> {
     BigDecimal sumCostSince(@Param("from") Instant from);
 
     /**
+     * <b>지금까지 쓴 돈 전부</b>(부화 + 심화). 비용 임계 경보가 이 값을 본다.
+     *
+     * <h3>★★ 왜 단계 표가 아니라 이 표인가</h3>
+     * {@code zzal_gen_step} 은 <b>지워진다</b> — 거부·격자 이상으로 다시 구울 때 성공한 단계를
+     * 폐기하기 때문이다({@code GenerationRecorder.discardSucceeded}). 그러면 이미 나간 돈이
+     * 합계에서 빠져 <b>누적이 뒤로 간다.</b> "누적 $10 단위" 알림의 기준이 뒤로 가면 같은 금액을
+     * 두 번 알리게 된다. job 줄은 시도마다 하나씩 남고 지워지지 않는다.
+     *
+     * <h3>★ 이어받은 단계는 두 번 안 세어진다</h3>
+     * 재시도는 새 job 이지만 <b>성공한 단계는 다시 굽지 않으므로</b> 그 비용이 새 job 의 합계에
+     * 들어가지 않는다({@code GenerationRunner} — 건너뛴 단계는 total 에 안 더한다).
+     *
+     * <h3>★ 부화만 세지 않는 이유</h3>
+     * 잔액은 부화와 심화가 같이 쓴다. 한 밤에 200장을 구우면 약 $20 이라 부화보다 클 수 있는데,
+     * 부화만 세면 그쪽으로 새는 돈은 <b>한 번도 안 알린다.</b> 갈라 보고 싶을 때는 아래 질의를 쓴다.
+     */
+    @Query("select coalesce(sum(j.totalCostUsd), 0) from GenJob j")
+    BigDecimal sumAllCost();
+
+    /** 그 종류(부화·심화)에만 들어간 돈 전부. 경보 본문이 "부화 얼마 · 심화 얼마" 를 가를 때 읽는다. */
+    @Query("select coalesce(sum(j.totalCostUsd), 0) from GenJob j where j.kind = :kind")
+    BigDecimal sumCostByKind(@Param("kind") GenKind kind);
+
+    /**
      * 그 모션들에 들어간 돈 전부. 관리자 "오늘 밤 현황" 이 이 값을 읽는다.
      *
      * ★ 실패한 작업도 센다 — 실패해도 API 호출은 이미 나갔다. 목록이 비면 0(빈 IN 절은 DB 마다 다르게 군다).

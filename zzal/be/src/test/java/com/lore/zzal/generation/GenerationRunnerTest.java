@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,7 @@ class GenerationRunnerTest {
             startedSteps.put(id, inv.getArgument(2));
             return id;
         });
-        runner = new GenerationRunner(recorder);
+        runner = new GenerationRunner(recorder, mock(ZzalAlerts.class));
         ReflectionTestUtils.setField(runner, "limitOverrideSeconds", 0);
     }
 
