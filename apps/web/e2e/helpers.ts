@@ -87,9 +87,13 @@ export async function doBabyStep(page: Page, key: string): Promise<void> {
     case 'PET': return press(page, 'pet');
     case 'CHAT': {
       await page.locator('[data-action="chat-input"]').fill('안녕');
-      // press() 는 축하를 바로 닫으므로 여기선 직접 눌러 "갸웃 즉시 해금" 폭죽이 뜨는 것까지 본다(정본 §12 8분 칸)
+      // ★ 전에는 여기서 "갸웃 즉시 해금" 폭죽을 기다렸다(§12 표 3번 칸의 "배우는 것"). 그 폭죽이 떴던 것은
+      //   옛 2층 조건표에서 9번이 "채팅 응답 1회" 로 열렸기 때문이다. 정본 v1.10 이 2층 목록을 코드 v4 로
+      //   갈면서 `갸웃`(tilt)이 카탈로그에서 빠졌고(§13), 답하기(`reply`)의 조건도 **채팅 답 4회**가 됐다 —
+      //   첫 답 한 번으로 열리는 동작이 이제 없다.
+      //   대신 정본 §10 이 답의 결과로 약속한 것을 본다: 「답하면 대사 1줄 + 반응 동작 1개 + 친밀도 +40」.
       await button(page, 'chat-send').click();
-      await page.waitForSelector('[data-celebration="unlock"]');
+      await page.waitForSelector('[data-bubble="reply"]');
       await dismissCelebrations(page);
       return;
     }
