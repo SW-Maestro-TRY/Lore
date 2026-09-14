@@ -237,10 +237,12 @@ app:
 
     # 후기(/api/zzal/v1/me/pets/{petId}/feedback).
     #
-    # ★ 2차로 미뤘다 — 보상이 안 정해져 기록만 남는 상태다. 스웨거에 떠 있으면
-    #   "동작하는 API"로 읽히므로 dev-tools·admin 과 같은 방식으로 빈을 안 올린다.
+    # ★ 2026-09-14 켠다 — 알파(9/18)에서 가장 알고 싶은 것이 "무엇이 좋았고 무엇이 아쉬웠나"라
+    #   기록만 남는 상태여도 켜 두는 편이 낫다. 보상은 여전히 안 나간다(app.zzal.reward.feedback=NONE).
+    # ★ 끄면 빈이 안 올라와 주소 자체가 없어진다(404) — 조용히 망가지는 것이 아니라 깔끔히 사라진다.
+    #   운영에서 다시 끌 수 있는 스위치라 켠 상태와 끈 상태를 둘 다 시험으로 두었다(FeedbackSwitchIT).
     feedback:
-      enabled: ${ZZAL_FEEDBACK:false}
+      enabled: ${ZZAL_FEEDBACK:true}
 
     # 부화 막기 — 알파 공개(9/18) 전의 비용 방벽. 부화 1회 ≈ $0.25 · 잔액 $70.
     #
