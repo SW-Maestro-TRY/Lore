@@ -599,7 +599,7 @@
   background: rgba(10,32,38,.45); cursor: pointer;
 }
 .webtoon-page .pick-way-box {
-  position: relative; width: min(560px, 100%);
+  position: relative; width: min(380px, 100%);
   background: var(--card); border-radius: 18px; padding: 20px;
   box-shadow: 0 20px 60px rgba(15,51,63,.28);
   /* 두 갈래를 **나란히** 둔다 — 위아래로 쌓으면 위쪽이 먼저 읽혀서
