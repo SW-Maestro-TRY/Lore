@@ -102,6 +102,15 @@ export interface PropSpec {
   /** 화면 최소 크기 하한(px). 0 이면 안 건다(화면 전체에 까는 것). */
   minPx: number;
   status: PropStatus;
+  /**
+   * **임시 그림으로 버티는 중**이라는 표시와 그 까닭 한 줄.
+   *
+   * ★ `status` 가 `pending` 이면 원래는 화면에 안 낸다(재제작 대기라서). 그런데 "확정은 아니지만
+   *   일단 눈으로 보자" 는 자리가 생긴다(간식 — 상훈님 2026-09-14). 그때 **여기에 까닭을 적어야만**
+   *   예외로 그려진다. `status` 는 **건드리지 않는다** — 정본은 여전히 '대기'다.
+   * ⚠️ 이 칸이 비어 있는 `pending` 은 전과 똑같이 안 그려진다. 예외가 조용히 넓어지지 않게.
+   */
+  tmp?: string;
   stages: readonly PropStage[];
   /** 좌우반전해도 글자가 안 깨지는가. 말풍선 6종 중 **느낌표만** true. */
   mirrorable?: boolean;
@@ -170,7 +179,11 @@ export function propFileName(key: string, ver?: number, file?: string): string {
 
 /** 소품 그림 주소. */
 export function propUrl(key: string, ver?: number, file?: string): string {
-  return `${CDN}/zzal/assets/${propFileName(key, ver, file)}`;
+  const name = propFileName(key, ver, file);
+  // ★ 이미 **완성된 주소**면 그대로 쓴다 — `data:`(코드에 박아 둔 임시 그림)·절대 주소·`/` 로 시작하는 길.
+  //   CDN 을 앞에 붙이면 `https://…/images/zzal/assets/data:image/webp;…` 가 되어 조용히 404 다.
+  if (/^(data:|blob:|https?:|\/)/.test(name)) return name;
+  return `${CDN}/zzal/assets/${name}`;
 }
 
 /** 단계 하나의 주소. 규격이 적어 둔 `file` 이 언제나 이긴다. */

@@ -9,6 +9,7 @@
 //   자리 = 앵커 + ref(bottom|center) + outside + offset{dx,dy,unit}
 //          dx 는 **보는 쪽이 +** · dy 는 아래가 + · offset 은 제 unit 의 **비율**(px 아님)
 //   unit:'screen' 은 비율을 안 쓴다 — `stages[].screen` 의 **무대 558 기준 px** 이 자리를 정한다
+import { SNACK_TMP_FILE, SNACK_TMP_NOTE } from './snack-tmp';
 import type { PropSpec } from './spec';
 
 /** 규격 JSON 의 판. 표가 어느 판에서 왔는지 로그가 말할 수 있게 둔다. */
@@ -325,9 +326,13 @@ export const PROP_SPECS: Record<string, PropSpec> = {
   snack: {
     key: "snack", name: "간식 한 알", anchor: "hand_front", ref: "bottom", unit: "K",
     outside: true, facing: "follow", z: "above_char", minPx: 40, status: "pending",
+    // ★ 정본의 `status` 는 **'대기' 그대로 둔다**(규격 v1.3 이 그렇게 적어 두었다).
+    //   `tmp` 가 있는 동안만 예외로 그려진다 — 확정본이 오면 이 줄과 `snack-tmp.ts` 를 지우고
+    //   `file: "snack.v1.webp"` 로 바꾸면 끝이다.
+    tmp: SNACK_TMP_NOTE,
     offset: { dx: 0.02, dy: 0.0, unit: "K" },
     stages: [
-      { n: 1, key: "snack", ver: 1, ratio: 0.13 },
+      { n: 1, key: "snack", ver: 1, ratio: 0.13, file: SNACK_TMP_FILE, srcW: 160, srcH: 361 },
     ],
   },
   /** 판정 실패 — "컵들은 좀 별로고". 원인 미상. */
@@ -386,5 +391,11 @@ export const PROP_KEYS_ALL = Object.keys(PROP_SPECS);
  */
 export function confirmedSpec(key: string): PropSpec | null {
   const s = PROP_SPECS[key];
-  return s && s.status === 'confirmed' ? s : null;
+  if (!s) return null;
+  // ★ 확정본. 여기가 본류다.
+  if (s.status === 'confirmed') return s;
+  // ★ 예외 하나 — **임시 그림으로 버티라고 적어 둔 것**(`tmp`)만 대기 상태에서도 그린다.
+  //   지금 걸리는 것은 `snack` 하나뿐이다(나머지 대기 다섯은 `tmp` 가 없어 전과 같이 안 그려진다).
+  if (s.status === 'pending' && s.tmp) return s;
+  return null;
 }
