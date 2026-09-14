@@ -13,17 +13,22 @@
 
 ## 두 갈래
 
-    --photo <파일>   사진을 읽어 외모를 글로 적고, 그 글로 그린다
-    (사진 없음)      이름과 설명만으로 적고 그린다  ← 자캐 그림이 없는 사람의 길
+    --photo <파일> [--photo <파일> ...]   사진(최대 4장)을 읽어 외모를 글로
+                                          적고, 그 글로 그린다
+    (사진 없음)                          이름과 설명만으로 적고 그린다
+                                          ← 자캐 그림이 없는 사람의 길
 
-사진을 쓰더라도 **그림에는 사진을 안 붙인다.** OpenAI 는 참조 이미지가 붙으면
-"이 그림을 고쳐라" 쪽으로 읽어서, 올린 사진이 낙서거나 화풍이 다르면 그것을
-따라가느라 사양대로 안 그린다(run.py 의 stage_sheet 주석과 같은 이유).
+여러 장을 주면 **한 사람의 여러 각도·표정**으로 보고 외모를 적는다 — 웹툰
+만들기 쪽(nhApi 의 photos_data)과 같은 방식이다. 사진을 쓰더라도 **그림에는
+사진을 안 붙인다.** OpenAI 는 참조 이미지가 붙으면 "이 그림을 고쳐라" 쪽으로
+읽어서, 올린 사진이 낙서거나 화풍이 다르면 그것을 따라가느라 사양대로 안
+그린다(run.py 의 stage_sheet 주석과 같은 이유).
 
 ## 쓰는 법
 
     python character.py --name 차사 --description "택배 배달 저승사자" \
-        --out /어디/에/그림.png [--photo /올린/사진.png] [--style game]
+        --out /어디/에/그림.png [--photo /올린/사진.png [--photo /또/하나.png]] \
+        [--style game]
 
 끝나면 만든 것을 한 줄 JSON 으로 stdout 에 찍는다 — 부르는 쪽(스프링)이 이걸
 읽는다. 진행 상황은 stderr 로 나간다.
@@ -53,8 +58,13 @@ def load_prompt(name: str) -> str:
     return (HERE / "prompt" / name).read_text(encoding="utf-8")
 
 
-def spec_of(name: str, description: str, photo: Path | None) -> dict:
-    """외모를 글로 적는다. 사진이 있으면 읽고, 없으면 설명만 본다."""
+def spec_of(name: str, description: str, photos: list[Path]) -> dict:
+    """외모를 글로 적는다. 사진이 있으면 읽고, 없으면 설명만 본다.
+
+    사진이 여러 장이면 같은 사람의 다른 각도·표정으로 보고 하나의 외모로
+    합쳐 적는다 — 한 장만으로는 안 보이는 부분(옆모습·전신 옷차림 등)이
+    다른 장에는 있을 수 있어서다.
+    """
     lines = ["# 이번 입력", ""]
     if name.strip():
         lines.append(f"캐릭터 이름: {name.strip()}")
@@ -62,8 +72,11 @@ def spec_of(name: str, description: str, photo: Path | None) -> dict:
         lines.append("캐릭터 이름: (없음 — 설명에 어울리는 한국어 이름을 네가 짓는다)")
     if description.strip():
         lines += ["", "캐릭터 설명:", description.strip()]
-    if photo is not None:
-        lines += ["", "첨부한 사진을 보고 외모를 적는다."]
+    if photos:
+        word = "첨부한 사진들을" if len(photos) > 1 else "첨부한 사진을"
+        lines += ["", f"{word} 보고 외모를 적는다."]
+        if len(photos) > 1:
+            lines.append("여러 장이면 같은 사람의 다른 각도·표정이다 — 하나의 외모로 합쳐 적는다.")
     else:
         # **사진이 없다고 멈추지 않는다.** 이 길이 이 기능의 핵심이다 —
         # 자캐 그림이 없는 사람도 캐릭터를 가질 수 있어야 한다.
@@ -73,7 +86,7 @@ def spec_of(name: str, description: str, photo: Path | None) -> dict:
 
     call = llm.Call("SHEET")
     log(f"[캐릭터] {call.describe()} 로 외모를 적습니다…")
-    images = llm.load_images([str(photo)]) if photo is not None else None
+    images = llm.load_images([str(p) for p in photos]) if photos else None
     text, meta = call(prompt, images=images, temperature=0.4)
     spec = sheetmod.parse_spec(text)
     bad = sheetmod.gate_spec(spec)
@@ -137,16 +150,17 @@ def main() -> int:
     # 이름부터 물으면 "뭐라고 부르지" 에서 멈춘다.
     ap.add_argument("--name", default="")
     ap.add_argument("--description", default="")
-    ap.add_argument("--photo", type=Path, default=None, help="있으면 읽어서 외모를 적는다")
+    ap.add_argument("--photo", type=Path, action="append", default=[],
+                    help="있으면 읽어서 외모를 적는다 — 여러 번 줄 수 있다(최대 4장)")
     ap.add_argument("--style", default=None, help="그림체. 안 주면 하네스 기본")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
-    if args.photo is not None and not args.photo.is_file():
-        log(f"[캐릭터] 사진이 없습니다: {args.photo} — 설명만으로 그립니다")
-        args.photo = None
+    photos = [p for p in args.photo if p.is_file()]
+    for missing in set(args.photo) - set(photos):
+        log(f"[캐릭터] 사진이 없습니다: {missing} — 빼고 그립니다")
 
-    spec, spec_meta = spec_of(args.name, args.description, args.photo)
+    spec, spec_meta = spec_of(args.name, args.description, photos)
 
     # **그림체는 이름이 아니라 문구를 넘긴다.** 받은 값이 그대로 STYLE 칸에
     # 실린다 — 이름을 넘기면 "romance" 다섯 글자가 그림체 설명 전부가 되고,
@@ -169,7 +183,7 @@ def main() -> int:
         # 사람이 이름을 안 적었으면 사양이 지은 것을 돌려준다.
         "named": (spec.get("name") or "").strip(),
         "name": args.name,
-        "source": "photo" if args.photo is not None else "prompt",
+        "source": "photo" if photos else "prompt",
         "calls": [spec_meta, art_meta],
     }, ensure_ascii=False), flush=True)
     return 0

@@ -28,6 +28,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
@@ -62,6 +63,9 @@ public class CharacterService {
 
     /** 카드에도 외모를 읽는 데도 이만하면 넘친다. */
     private static final int ART_WIDTH = 768;
+
+    /** 웹툰 만들기 쪽(wizardData.ts 의 MAX_PHOTOS)과 같은 값이다. */
+    private static final int MAX_PHOTOS = 4;
 
     private final WebtoonCharacterRepository characters;
     private final CharacterMaker maker;
@@ -139,12 +143,13 @@ public class CharacterService {
     /**
      * 만든다.
      *
-     * @param photoDataUrl 있으면 그것을 읽어 외모를 적는다. 없으면 이름·설명만으로
+     * @param photoDataUrls 있으면 읽어서 외모를 적는다(최대 {@value #MAX_PHOTOS}장 —
+     *              넘으면 그만큼만 쓰고 나머지는 버린다). 비었으면 이름·설명만으로
      * @return 만든 캐릭터
      */
     @Transactional
     public WebtoonCharacter create(Long userId, String browserUid, String name,
-                                   String description, String photoDataUrl, String style) {
+                                   String description, List<String> photoDataUrls, String style) {
         /* **로그인은 안 시킨다.** 이 제품은 회원가입 없이 한번 써 보게 하는
            것이 목적이고, 웹툰 만들기가 이미 그렇다 — 캐릭터만 로그인을
            요구하면 "캐릭터로 웹툰 만들기" 로 가는 길이 거기서 끊긴다.
@@ -156,7 +161,11 @@ public class CharacterService {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "브라우저를 알 수 없어 만들 수 없습니다 — 새로고침 후 다시 시도해 주세요.");
         }
-        boolean hasPhoto = photoDataUrl != null && !photoDataUrl.isBlank();
+        List<String> photos = (photoDataUrls == null ? List.<String>of() : photoDataUrls).stream()
+                .filter(s -> s != null && !s.isBlank())
+                .limit(MAX_PHOTOS)
+                .toList();
+        boolean hasPhoto = !photos.isEmpty();
         if (!hasPhoto && (description == null || description.isBlank())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "어떤 캐릭터인지 한 줄만 적어 주세요 — 사진은 없어도 됩니다.");
@@ -189,10 +198,13 @@ public class CharacterService {
 
         String publicId = UUID.randomUUID().toString().replace("-", "").substring(0, 20);
         Path dir = workDir.resolve(publicId);
-        Path photo;
+        List<Path> savedPhotos;
         try {
             Files.createDirectories(dir);
-            photo = hasPhoto ? savePhoto(dir, photoDataUrl) : null;
+            savedPhotos = new ArrayList<>();
+            for (int i = 0; i < photos.size(); i++) {
+                savedPhotos.add(savePhoto(dir, photos.get(i), i));
+            }
         } catch (BusinessException e) {
             throw e;
         } catch (IOException e) {
@@ -218,29 +230,29 @@ public class CharacterService {
          *
          * 커밋된 뒤에 시작한다 — 그리는 쪽은 다른 실타래에서 이 줄을 다시
          * 읽는다(웹툰 만들기가 같은 자리에서 걸렸다). */
-        Path finalPhoto = photo;
+        List<Path> finalPhotos = savedPhotos;
         Long id = saved.getId();
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(
                     new TransactionSynchronization() {
                         @Override
                         public void afterCommit() {
-                            line.submit(() -> draw(id, called, description, finalPhoto,
+                            line.submit(() -> draw(id, called, description, finalPhotos,
                                     style, dir));
                         }
                     });
         } else {
-            line.submit(() -> draw(id, called, description, finalPhoto, style, dir));
+            line.submit(() -> draw(id, called, description, finalPhotos, style, dir));
         }
         return saved;
     }
 
     /** 뒤에서 그린다. 여기서 죽어도 줄이 멈추면 안 된다. */
-    private void draw(Long id, String name, String description, Path photo,
+    private void draw(Long id, String name, String description, List<Path> photos,
                       String style, Path dir) {
         Path drawn = dir.resolve("art.png");
         try {
-            CharacterMaker.Made made = maker.make(name, description, photo, style, drawn);
+            CharacterMaker.Made made = maker.make(name, description, photos, style, drawn);
             String key = uploadArt(made.art());
             // 사람이 이름을 안 적었으면 사양이 지어 준 것을 쓴다.
             finish(id, key, made.source(), null,
@@ -251,7 +263,7 @@ public class CharacterService {
         } finally {
             // **어떻게 끝나든 올린 사진은 지운다.** 외모를 글로 적는 데만 쓰고,
             // 그 뒤로는 다시 안 쓴다. 사람 얼굴을 서버에 둘 이유가 없다.
-            dropPhoto(photo);
+            photos.forEach(this::dropPhoto);
         }
     }
 
@@ -339,7 +351,8 @@ public class CharacterService {
 
     // ---- 안쪽 -------------------------------------------------------------
 
-    private Path savePhoto(Path dir, String dataUrl) throws IOException {
+    /** @param index 여러 장일 때 파일 이름이 안 겹치게 붙이는 번호(0부터). */
+    private Path savePhoto(Path dir, String dataUrl, int index) throws IOException {
         String body = dataUrl.contains(",") ? dataUrl.substring(dataUrl.indexOf(',') + 1) : dataUrl;
         byte[] bytes;
         try {
@@ -350,7 +363,7 @@ public class CharacterService {
         if (bytes.length > MAX_PHOTO_BYTES) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "사진이 너무 큽니다 (6MB 까지)");
         }
-        Path out = dir.resolve("photo.png");
+        Path out = dir.resolve("photo" + index + ".png");
         Files.write(out, bytes);
         return out;
     }
