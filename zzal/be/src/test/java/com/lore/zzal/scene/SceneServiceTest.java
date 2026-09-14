@@ -265,7 +265,7 @@ class SceneServiceTest {
     }
 
     @Test
-    @DisplayName("★ 밤에 잠들면 연습 장면 한 컷 — 같은 잠에 두 번은 안 남긴다")
+    @DisplayName("★ 밤에 잠들면 밤 장면 한 컷 — 같은 잠에 두 번은 안 남긴다")
     void nightSceneOncePerSleep() {
         ZzalPet pet = child();
         pet.consumeScenes(0, T0);
@@ -277,13 +277,14 @@ class SceneServiceTest {
         assertThat(service.recordNight(pet)).isZero();         // 두 번째는 안 남는다
         assertThat(stored).singleElement().satisfies(s -> {
             assertThat(s.isNight()).isTrue();
-            assertThat(s.getMotionKey()).isEqualTo("practice");   // 훈련 자세(정본 13장)
+            // ★ 옛 훈련 자세(practice)는 카탈로그에서 빠졌다 — 밤 컷도 기본 자세를 쓴다.
+            assertThat(s.getMotionKey()).isEqualTo("base");
         });
     }
 
     @Test
-    @DisplayName("★★ 아프면 밤 연습 장면을 안 남긴다 — 아픈 아이가 밤새 연습하는 그림은 이야기가 안 맞는다")
-    void noPracticeWhileSick() {
+    @DisplayName("★★ 아프면 밤 장면을 안 남긴다 — 아픈 아이가 밤에 혼자 노는 그림은 이야기가 안 맞는다")
+    void noNightSceneWhileSick() {
         ZzalPet pet = child();
         ReflectionTestUtils.setField(pet, "scenesEnabledAt", T0);
         ReflectionTestUtils.setField(pet, "sickSince", T0);
@@ -314,27 +315,6 @@ class SceneServiceTest {
 
     // ── 대기 자세 뽑기 60 / 40 (M-28) ────────────────────────────────────
 
-    /**
-     * 2층을 넉넉히 연 펫 — <b>앉아 쉬기(16)</b>와 <b>웃는 대기(15)</b>가 둘 다 열려 있다.
-     *
-     * ★ {@link #child()} 는 부화 직후라 둘 다 잠겨 있다. 그래서 relaxed 목록이 <b>언제나 비어</b>
-     *   {@code idlePool} 이 늘 "base" 만 돌려줬고, {@code Chance.percent} 도 {@code Chance.pick} 도
-     *   한 번도 안 돌았다. 오래 잘 돌본 사용자만 그 코드에 처음 닿는다.
-     */
-    private ZzalPet relaxedUnlocked() {
-        ZzalPet pet = child();
-        ReflectionTestUtils.setField(pet, "chatAnswers", 12);     // 갸웃·손흔들기·끄덕이기
-        ReflectionTestUtils.setField(pet, "sleepWakeCount", 3);   // 자기
-        ReflectionTestUtils.setField(pet, "bathCount", 3);        // 씻기
-        ReflectionTestUtils.setField(pet, "gameStarts", 3);       // 놀라기
-        ReflectionTestUtils.setField(pet, "zeroMissDays", 3);     // 웃는 대기
-        MotionCatalog catalog = new MotionCatalog("", "", "v1");
-        assertThat(com.lore.zzal.pet.UnlockRules.unlockedKeys(pet, catalog))
-                .as("이 시험이 보려는 두 자세가 실제로 열려 있어야 한다")
-                .contains("sit", "smile_idle");
-        return pet;
-    }
-
     /** 낮 시각 여러 개에서 뽑은 자세들. 결정적이므로 시각을 바꾸는 것이 곧 다른 뽑기다. */
     private List<String> poolOverTheDay(ZzalPet pet, int samples) {
         List<String> out = new ArrayList<>();
@@ -344,40 +324,29 @@ class SceneServiceTest {
         return out;
     }
 
-    @Test
-    @DisplayName("★★ 두 자세가 열리면 기본 60% 쪽과 relaxed 40% 쪽이 <b>둘 다</b> 나온다")
-    void bothBranchesOfTheIdlePoolAreReachable() {
-        ZzalPet pet = relaxedUnlocked();
-
-        List<String> picks = poolOverTheDay(pet, 200);
-
-        assertThat(picks).as("기본 자세 쪽 분기").contains("base");
-        assertThat(picks).as("relaxed 쪽 분기 — 여기가 안 나오면 Chance.percent 가 한 번도 안 돈 것이다")
-                .containsAnyOf("sit", "smile_idle");
-        assertThat(picks).containsOnly("base", "sit", "smile_idle");
-    }
-
-    @Test
-    @DisplayName("★ relaxed 쪽은 대략 40% — 60/40 이 뒤집히면 여기서 드러난다")
-    void relaxedIsRoughlyFortyPercent() {
-        ZzalPet pet = relaxedUnlocked();
-
-        List<String> picks = poolOverTheDay(pet, 400);
-        long relaxed = picks.stream().filter(k -> !k.equals("base")).count();
-
-        // 결정적 뽑기라 정확히 40% 는 아니다. 뒤집힘(60%)·꺼짐(0%)·켜짐(100%)만 걸러낸다.
-        assertThat(relaxed * 100.0 / picks.size()).isBetween(25.0, 55.0);
-    }
-
-    @Test
-    @DisplayName("★ relaxed 가 하나만 열리면 그 하나만 나온다 — 목록 크기 1 에서 pick 이 범위를 안 넘는가")
-    void asingleRelaxedMotionIsTheOnlyChoice() {
+    /** 2층을 전부 연 펫 — 그래도 대기 자세는 하나도 없다(관상용이 3층으로 내려갔다). */
+    private ZzalPet everythingUnlocked() {
         ZzalPet pet = child();
-        ReflectionTestUtils.setField(pet, "zeroMissDays", 3);     // 웃는 대기만 연다
+        ReflectionTestUtils.setField(pet, "feeds", 99);
+        ReflectionTestUtils.setField(pet, "snacks", 99);
+        ReflectionTestUtils.setField(pet, "cleans", 99);
+        ReflectionTestUtils.setField(pet, "bathCount", 99);
+        ReflectionTestUtils.setField(pet, "chatAnswers", 99);
+        ReflectionTestUtils.setField(pet, "pets", 99);
+        ReflectionTestUtils.setField(pet, "gameStarts", 99);
+        ReflectionTestUtils.setField(pet, "wakes", 99);
         MotionCatalog catalog = new MotionCatalog("", "", "v1");
-        assertThat(com.lore.zzal.pet.UnlockRules.unlockedKeys(pet, catalog)).contains("smile_idle").doesNotContain("sit");
+        assertThat(com.lore.zzal.pet.UnlockRules.openedLayerTwo(pet, catalog))
+                .as("2층 여덟이 다 열린 상태여야 한다").isEqualTo(8);
+        return pet;
+    }
 
-        assertThat(poolOverTheDay(pet, 200)).containsOnly("base", "smile_idle");
+    @Test
+    @DisplayName("★★ 정상일 때는 언제나 기본 자세 — 1·2층에 대기용 자세가 하나도 없다")
+    void idlePoolIsAlwaysBase() {
+        // ★ 앉아 쉬기·웃는 대기·갸웃은 사용자 행동에 붙지 않는 관상용이라 3층으로 내려갔다.
+        //   그래서 2층을 다 연 사람도 정상 상태의 컷은 기본 자세뿐이다.
+        assertThat(poolOverTheDay(everythingUnlocked(), 200)).containsOnly("base");
     }
 
     @Test
@@ -387,9 +356,9 @@ class SceneServiceTest {
     }
 
     @Test
-    @DisplayName("★ 게이지 우선순위가 먼저다 — 두 자세가 열려 있어도 아프면 sick, 슬프면 sad")
+    @DisplayName("★ 게이지 우선순위가 먼저다 — 2층을 다 열어도 아프면 sick, 슬프면 sad")
     void gaugesWinOverTheIdlePool() {
-        ZzalPet pet = relaxedUnlocked();
+        ZzalPet pet = everythingUnlocked();
         Instant at = kst("2026-09-06 14:00");
 
         ReflectionTestUtils.setField(pet, "trash", ZzalRules.TRASH_MAX);

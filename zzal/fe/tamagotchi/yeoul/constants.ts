@@ -89,9 +89,13 @@ export const GENRE = ['일상', '판타지', 'SF', '학원', '역사', '로맨�
 export const WORLD = ['현대', '중세', '미래', '자연', '도시', '우주', '학교'] as const;
 export const NAME_POOL = ['여울', '보리', '단이', '모래', '노을', '서리', '하루', '도담'] as const;
 
-/** 캐릭터 칸 네 묶음 — 칩 한 줄 + 긴 글 한 줄(9/6 상훈님 2차 결정). */
+/**
+ * 캐릭터 칸 네 묶음 — 칩 한 줄 + 긴 글 한 줄(9/6 상훈님 2차 결정).
+ * ★ 네 묶음 모두 **여러 개를 고를 수 있다**(상훈님 2026-09-11). 다만 성격은 서버가 하나만 받아
+ *   맨 앞(처음 고른 것)만 저장된다 — 화면 규칙이 아니라 서버 계약이라 여기 적어 둔다.
+ */
 export const CHAR_GROUPS = [
-  { key: 'persona', label: '성격 · 다섯 중 하나', opts: PERSONA, ph: '자세히 쓰셔도 돼요. 예: 낯을 가리지만 한번 친해지면 계속 따라다녀요' },
+  { key: 'persona', label: '성격 · 여럿 고를 수 있어요', opts: PERSONA, ph: '자세히 쓰셔도 돼요. 예: 낯을 가리지만 한번 친해지면 계속 따라다녀요' },
   { key: 'tone', label: '말투', opts: TONE, ph: '입버릇이나 자주 쓰는 말이 있으면 적어 주세요' },
   { key: 'genre', label: '장르', opts: GENRE, ph: '어떤 이야기 속 아이인지 적어 주세요' },
   { key: 'world', label: '세계관', opts: WORLD, ph: '사는 곳, 시대, 함께 있는 사람들 같은 걸 적어 주세요' },
@@ -210,7 +214,7 @@ export const ALBUM: ReadonlyArray<readonly [string, number]> = [
  * 앨범 벽에 걸리는 동작 여덟 종. **카탈로그 key** 로 적는다(서버 `Motion.key` 와 같은 이름).
  * 여울 실물이 여덟 장뿐이라 그만큼만 돌린다.
  */
-export const FRAME_KEYS = ['joy', 'eat', 'wash', 'base', 'sad', 'practice', 'shy', 'sick'] as const;
+export const FRAME_KEYS = ['joy', 'eat', 'wash', 'base', 'sad', 'hello', 'pet', 'sick'] as const;
 export type FrameKey = (typeof FRAME_KEYS)[number];
 
 /**
@@ -218,7 +222,12 @@ export type FrameKey = (typeof FRAME_KEYS)[number];
  * 부화가 끝나야 '태어났어요' 가 뜨고, 그걸 눌러야 방에 들어온다.
  * 그래서 진짜 방에서 이 중 하나라도 없으면 그건 폴백할 일이 아니라 **고장**이다.
  */
-export const BASIC_KEYS = ['base', 'eat', 'joy', 'sad', 'sick', 'practice', 'shy', 'call'] as const;
+// ★ 2026-09-13 — **v4 이름으로 갈아 끼웠다.** 서버가 이미 이 여덟을 주는 것을 실측으로 확인했다
+//   (`GET /me/pets/{id}` 의 `motions[]` seq 1~8 = base·eat·joy·sad·sick·pet·hello·sleep).
+//   전에 옛 이름(`practice`·`shy`·`call`)을 들고 있었던 탓에 `missingBasics` 가 서버에 아예 없는
+//   `practice` 를 **늘 '그림 없음' 으로 잡아** 개발 화면에 상시 거짓 경고를 띄웠다.
+//   ⚠️ 옛 `practice`(훈련)가 빠지고 `sleep`(잠)이 1층으로 올라온 것이 **칸이 바뀐 유일한 자리**다.
+export const BASIC_KEYS = ['base', 'eat', 'joy', 'sad', 'sick', 'pet', 'hello', 'sleep'] as const;
 
 /**
  * 발밑 투명 여백. 그림 한 장은 313 × 350 인데 배경을 지우고 나면 **아래 54px 이 빈칸**이라,

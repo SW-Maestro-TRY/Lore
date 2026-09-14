@@ -1,0 +1,42 @@
+TASK: Draw the character SEATED CROSS-LEGGED taking a shock, then folding over backward onto the back, then lying still while a small SPIRIT drifts up out of the open mouth. This is what losing looks like in a game. Lean is at the torso: 0 sitting bolt upright, 90 lying flat. Seat it cross-legged with hands on the thighs even if the sheet shows it standing; only the pose changes.
+
+THIS IS NOT A LOOP: frame 16 ends the motion and does not lead back into frame 1. The character never gets back up.
+
+SEAT ANCHOR (this replaces the fixed-foot rule above): the point where the body meets the ground keeps the same local x and y in all 16 cells, and the body's lowest edge rests on that one baseline in every cell - the seat in cells 1-7, the back and spread hair in cells 8-16. No sliding, no sideways travel, no rising or sinking as a whole.
+
+THE FACE IS SET TWICE, THEN FROZEN (this overrides the face clause in SMOOTHNESS above - the face is not eased across cells, it is held): cell 1 calm, eyes open, mouth closed. Cell 2 the shock, eyes wide, brows up, mouth falling open. Cells 3 to 16 all carry ONE identical face - eyes shut, mouth a small round O - drawn the same fourteen times. The eyes never reopen or go half-open after cell 2, and the mouth never changes.
+
+THE SHOCK IS IN THE BODY, NOT IN THE AIR: in cell 2 the character takes a blow the picture never shows - shoulders snapping up and back, hands leaving the thighs. No stars, dust, puffs, impact bursts, shock or speed lines, no bounce, nothing added around the character.
+
+HOW THE FALL GOES: straight back, away from the viewer - the BACK lands behind, never a side, shoulders level. Not a plank: the back rounds into a shallow C, the chin tucks through the middle and opens again as the head nears the ground, the shoulders go down ahead of the hips. The pace is uneven - cells 2-4 barely give way, most of it through cells 5-7, and the last step before the ground is the smallest, settling onto the floor rather than dropping onto it. The torso never tips toward the viewer: no wind-up, no forward dip.
+
+THE SPIRIT (one symbol, cells 9-16 only): one small cartoon ghost - dome head, two dot eyes, small open mouth, lower half trailing into a wavy wisp. It drifts up out of the open mouth, a little higher and a little larger in each of the eight cells. Opaque pale white, soft dark outline, the sheet's flat look. Absent in cells 1-8, drawn in all of cells 9-16 - eight in a row, none skipped or faint. ALWAYS SEPARATED BY A CLEAR GAP: plain background runs all the way around it in each of the eight cells, so it never touches the lips, cheek, hair, a cell boundary or a grid mark. Never larger than half the head.
+
+MUST CHANGE from frame to frame:
+- cells 1-8, the torso lean angle - this is the whole fall
+- the crossed knees folding up toward the viewer with the lean
+- the arms, off the thighs at the shock, swinging loose on the way down
+- cells 9-16, only the spirit - the body and the face are already still
+
+NEVER CHANGE:
+- the seat point and the baseline, the same in all 16 cells
+- character width, head size, hair shape and proportions; never squashed or stretched
+- the legs stay crossed throughout; never uncrossed, never standing, never kneeling, never rolled onto a side
+
+POSE OF EACH FRAME
+Frame 1 - Sitting bolt upright, lean 0, hands on the thighs.
+Frame 2 - Lean 5. The shock: shoulders up and back, hands off the thighs.
+Frame 3 - Lean 13. The body begins to give way backward, arms loose.
+Frame 4 - Lean 26. Back rounding, chin tucked, knees folding up.
+Frame 5 - Lean 45. Knees higher, arms swinging out to both sides.
+Frame 6 - Lean 64. Knees near their highest, arms further out, hair swinging back.
+Frame 7 - Lean 81. The face now seen from below, shoulders close to the ground.
+Frame 8 - Lean 90. The back settles onto the ground with no bounce; hair spread flat, arms flopped out.
+Frame 9 - Lying still, and so in every cell from here. The spirit at the lips, very small, already a clear gap from the mouth.
+Frame 10 - The spirit a little larger, just above the chin.
+Frame 11 - The spirit larger again, beside the cheek.
+Frame 12 - The spirit over the face, its wisp curling free.
+Frame 13 - The spirit above the forehead.
+Frame 14 - The spirit higher, clear of the hair.
+Frame 15 - The spirit higher again.
+Frame 16 - The spirit at its highest, a clear gap above the head. The final resting state.

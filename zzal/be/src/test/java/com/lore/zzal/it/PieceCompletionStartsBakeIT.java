@@ -98,7 +98,7 @@ class PieceCompletionStartsBakeIT extends ZzalItSupport {
         ZzalMotion baked = bakedRow(petId);
         assertThat(baked.getName())
                 .as("app.zzal.advanced-motions 에 적힌 것 중 번호가 가장 앞선 동작이 오른다")
-                .isEqualTo("shy");
+                .isEqualTo("pet");
         assertThat(baked.getImageKey()).as("구운 결과물의 자리").isNotBlank();
         assertThat(candidates.findByMotionIdOrderByRoundAscIdAsc(baked.getId()))
                 .as("판정 화면이 볼 후보가 한 판 남아야 한다")

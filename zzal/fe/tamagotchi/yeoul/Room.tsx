@@ -17,22 +17,112 @@
 //   `useFootPad` 가 그림에서 직접 잰다(못 재면 여울 기준값으로 되돌아간다).
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
+import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
 import Panels from './Panels';
-import { spriteUrl, useFootPad, useLive } from './useHatch';
-import type { Yeoul } from './useYeoul';
+import { spriteUrl, useFootPad, useLive, yeoulSpriteUrl } from './useHatch';
+import { CHAT_MAX, type Yeoul } from './useYeoul';
+import { useAnchors } from '../props/anchors';
+import { charFit, HEAD_SAFE, K_SCREEN_TARGET } from '../props/layout';
+import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
+import {
+  SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose, stageAt, stagePlanOf,
+  type SituationRow,
+} from '../props/situations';
+import { confirmedSpec } from '../props/catalog';
+
+/** 걷힘 바퀴에만 잠깐 생기는 줄의 이름. 표에 없는 이름이라 다른 줄과 안 부딪힌다. */
+const SWEEP_ROW_ID = '__sweep__';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { v, actions } = y;
   // 무엇을 그릴지는 `v.spriteKey`(useYeoul)가, 누구를 그릴지는 `spriteUrl`(useHatch)이 정한다.
   const live = useLive();
   // 여울 샘플 방에서는 여울이, 진짜 방에서는 내 아이만 나온다.
-  const charSrc = spriteUrl(live, v.spriteKey, v.sample.show);
+  const wantSrc = spriteUrl(live, v.spriteKey, v.sample.show);
+  /**
+   * **주소는 받았는데 그림이 없을 때**의 마지막 안전망(2026-09-13).
+   *
+   * ★ 왜 필요한가 — 서버는 `basicImageKey` 를 **파일이 있는지 확인하지 않고 만들어서 준다**
+   *   (`PetResponses.basicImageKey`: 판 번호와 key 로 주소를 조립할 뿐이다).
+   *   그래서 아직 한 장도 안 구운 아이(`basic_round == 0`)도 주소를 받는데, 그 주소는
+   *   **판 번호가 빠진 옛 모양**이라 오늘 구운 아이 자리에서는 403 이다. `spriteUrl` 은
+   *   주소가 **있으므로** 폴백을 안 타고, 결과는 **아무것도 안 그려진 빈 무대**다
+   *   (2026-09-13 실측: 그런 아이의 1층 8종 전부 `naturalWidth === 0`).
+   * ★ 범위를 좁혀 적는다 — 구운 아이(`round >= 1`)는 멀쩡하다(308 실측: `basic/1/base.webp` 200).
+   *   빈 무대는 **굽기를 안 탄 아이에게만** 난다. 처음에 "아무 아이나" 로 적었다가 좁힌 자리다.
+   * ★ 주소만 보고는 알 수 없고 **받아 봐야 안다.** 그래서 실패한 주소를 적어 두고 여울로 바꿔 단다.
+   *   같은 주소로 두 번 시도하지 않으므로 깜빡이지 않는다.
+   * ⚠️ 이것은 **덮개이지 해결이 아니다.** 진짜 고칠 자리는 "없는 그림의 주소를 주지 않는" 서버다.
+   */
+  const [brokenSrc, setBrokenSrc] = useState<ReadonlySet<string>>(() => new Set());
+  const fallbackSrc = yeoulSpriteUrl(v.spriteKey);
+  const charSrc = brokenSrc.has(wantSrc) ? fallbackSrc : wantSrc;
   // 발밑 여백은 그림마다 다르다 — 상수로 두면 어떤 아이는 뜨고 어떤 아이는 잠긴다.
   const footPad = useFootPad(charSrc, SPRITE_FOOT_PAD);
+
+  // ── 소품 오버레이 ─────────────────────────────────────────────────────
+  //
+  // ★ **앵커가 없어도 화면이 완성이다.** 고정 앵커표(여울 실측)로 끝까지 그려지고, 서버가
+  //   `anchorsKey` 를 주면 그때 받아서 덮어쓴다. 못 받으면 고정값 그대로 간다(개발 화면에만 표시).
+  // ★ **상황표가 정본이다**(`contract/소품-상황표-v1.json` → `props/table.ts`). 여기서는 지금 상태를
+  //   표의 낱말(상황 id)로 옮기기만 한다 — 자세별 소품을 코드에 적지 않는다.
+  //   표가 없으면 아무 소품도 안 뜬다. 고장이 아니라 "아직 없음" 이다.
+  // ★ 연습방(여울 샘플)은 서버 펫이 없어 `anchorsKey` 가 없다. 그래서 **여울 시연용 앵커**를 대신 쓴다 —
+  //   그러면 연습방에서도 **진짜 앵커로 그리는 경로**를 눈으로 확인할 수 있다(폴백 띠가 꺼진다).
+  const anchors = useAnchors(live.pet?.anchorsKey, v.sample.show ? YEOUL_ANCHORS_URL : undefined);
+  const propTable = SITUATION_TABLE;
+  // ★ 개발용(연습방) 고르기 — 손으로 고른 상황이 있으면 **그것만**, 자세만 골랐으면 **그 자세의 상황 전부**를 켠다.
+  //   자세와 무관하게 깔리는 줄(바닥 흔적 같은 것)은 어느 쪽이든 그대로 둔다.
+  const always = useMemo(() => alwaysSituationIds(propTable), [propTable]);
+  const auto = activeSituations(v.scene);
+  const picked = v.sitPick ? [v.sitPick, ...auto.filter((id) => always.has(id))]
+    : v.posePick ? [...situationsOfPose(propTable, v.posePick), ...auto.filter((id) => always.has(id))]
+      : auto;
+  // ★ 개발용으로 손수 켠 줄(가방·재회 하트·하루 소품)은 자세를 골랐든 말든 **그대로 얹힌다.**
+  //   서버 신호가 생기는 날 `activeSituations` 가 대신 켜면 여기서 빼면 된다.
+  const active = v.scene.extra.length || v.scene.daily
+    ? [...picked, ...v.scene.extra, ...(v.scene.daily ? ['daily_prop'] : [])]
+    : picked;
+  /**
+   * 단계가 있는 소품은 **바퀴마다 한 단계씩** 넘어간다(밥 3->2->1). 몇 번째 바퀴인지는 두뇌가 세고,
+   * 그 숫자를 **표가 적어 둔 차례**에 대입하는 일만 여기서 한다 — 차례를 코드가 지어내지 않는다.
+   */
+  const actPlan = v.scene.act ? stagePlanOf(propTable, v.scene.act) : null;
+  /**
+   * **덮었다가 걷히는 마지막 한 바퀴.**
+   *
+   * ★ 규격이 정한 것이다 — `dust` note: *"3단계(걷힘)는 그림이 없다 — 반짝은 단계가 아니라
+   *   전환 신호다."* 그 바퀴에는 덮고 있던 소품을 **내리고** 마무리 신호만 띄운다
+   *   (먼지 → 반짝임 · 거품 → 물줄기). 상훈님 "먼지가 화면을 다 덮고 나서 짜자잔".
+   * ★ 신호 줄은 표에 없다(표는 상태를 적는 자리고 이건 **전환**이다). 그래서 여기서 한 줄을
+   *   만들어 표 뒤에 붙인다 — 자리·크기는 여전히 **그 소품의 규격**이 정한다.
+   */
+  const beat = actPlan ? stageAt(actPlan, v.scene.actStep) : null;
+  const sweeping = !!beat?.sweeping;
+  const signalSpec = sweeping && actPlan?.signal ? confirmedSpec(actPlan.signal) : null;
+  const signalRow: SituationRow | null = signalSpec && actPlan?.signal
+    ? {
+      id: SWEEP_ROW_ID, pose: '*', prop: actPlan.signal, anchor: signalSpec.anchor,
+      layer: signalSpec.unit === 'screen' ? 'screen' : 'char', priority: 1, status: 'confirmed',
+    }
+    : null;
+  const table = signalRow ? [...propTable, signalRow] : propTable;
+  const scene = {
+    pose: v.spriteKey,
+    // 걷힘 바퀴에는 **덮고 있던 줄을 끈다** — 안 끄면 첫 단계로 되돌아가 다시 덮인다.
+    active: (sweeping && v.scene.act ? active.filter((id) => id !== v.scene.act) : active)
+      .concat(signalRow ? [SWEEP_ROW_ID] : []),
+    stages: {
+      trash: v.scene.trash,
+      ...(actPlan && beat?.stage != null ? { [actPlan.prop]: beat.stage } : {}),
+    },
+    // `daily_prop` 은 표가 `prop_ball|prop_book|prop_cup|prop_plant` 로 적어 둔 줄이라 **고른 것**을 말해 줘야 한다.
+    ...(v.scene.daily ? { choices: { daily_prop: v.scene.daily } } : {}),
+  };
 
   // ── 아이를 어디에 얼마나 크게 세울 것인가 ──────────────────────────────
   //
@@ -47,12 +137,34 @@ export default function Room({ y }: { y: Yeoul }) {
   //   그 높이가 무대에 비해 과해 아이 머리가 잘렸다. 그래서 **무대의 62% 로도 한 번 깎는다.**
   //   62% 는 무대가 384px 아래로 내려갈 때만 걸리고, 그 아래에서도 발끝이 팝오버 윗변(최대
   //   `POP_LIFT`)보다 위로 남는다. 화면 높이로만 정해지는 값이라 1)을 깨지 않는다.
-  // ★ 키(`CHAR_H`) — 58% 로도 모자라면 **남은 머리 공간에 맞춰 더 줄인다.**
-  //   머리끝 = 발끝 + 키 × (1 − 발밑여백) 이므로, 그 식을 뒤집어 키의 상한을 잡았다.
-  //   `HEAD_SAFE` 는 반올림에 먹히지 않도록 두는 최소 여유다.
-  const HEAD_SAFE = 8;
+  // ★ 키(`CHAR_H`) — 규격값 `K_SCREEN_TARGET`(296px)이 기본이고, 무대가 짧으면 **남은 머리 공간에
+  //   맞춰 깎는다.** 머리끝 = 발끝 + 화면키 × (가장 큰 실루엣 ÷ K) 이므로 그 식을 뒤집었다.
+  //   깎는 기준을 **가장 큰 자세**로 잡는 이유 — 자세마다 깎으면 자세를 바꿀 때 아이가 출렁여
+  //   1)이 깨진다. `HEAD_SAFE` 는 반올림에 먹히지 않도록 두는 최소 여유다.
   const LIFT = `max(min(212px,34%),min(${POP_LIFT + 34}px,62%))`;
-  const CHAR_H = `min(350px,58%,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${(1 - footPad).toFixed(4)}))`;
+
+  // ★ 크기는 **실루엣 키(K)로 정한다** — 상자를 먼저 정하고 그 안에 그림을 넣지 않는다.
+  //   규격의 모든 ratio 가 "화면 키 = K_screen(296px)" 을 전제하기 때문이다(→ `props/layout.ts` 머리말).
+  //   상자 폭으로 잡던 옛 방식에서는 K 가 220.6px 밖에 안 나와 규격이 통째로 1.34배 어긋났고,
+  //   그 탓에 하트 같은 작은 소품이 비율(41.2px)이 아니라 **하한 40px 에 걸려** 그려졌다.
+  //   상자 크기·세로 자리는 여기서 **따라 나오는 값**이다.
+  // ★ 앵커를 못 받았으면(옛 펫) K 를 모른다 → 예전처럼 **상자 기준**으로 되돌아간다. 두 길 다 돈다.
+  const fit = useMemo(() => charFit(anchors.anchors, v.spriteKey), [anchors.anchors, v.spriteKey]);
+  /**
+   * 캐릭터 상자 — **방에 붙박인 소품이 폭만 읽는다**(크기 자 K). 자리는 안 읽는다.
+   * ★ 폭은 걸음(평행이동)·자세와 무관해서, 아이가 어디에 서 있든 똥이 안 따라간다.
+   */
+  const charBoxRef = useRef<HTMLDivElement>(null);
+  const byK = anchors.source === 'server' || v.sample.show;
+
+  // 화면에서의 실루엣 키. 규격값(296)이 기본이고, 무대가 짧으면 **머리가 잘리지 않을 만큼**만 깎는다.
+  const K_SCREEN = `min(${K_SCREEN_TARGET}px,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${fit.tallestPerK.toFixed(4)}))`;
+  const CHAR_H = byK
+    ? `calc(${K_SCREEN} * ${fit.boxHPerK.toFixed(4)})`
+    : `min(350px,58%,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${(1 - footPad).toFixed(4)}))`;
+  // 발끝이 발끝선(`LIFT`)에 오게 상자를 내린다. 앵커가 있으면 **그 자세의 발끝**을, 없으면 잰 여백을 쓴다.
+  const BELOW_FOOT = byK ? fit.belowFoot : footPad;
+  const CHAR_ASPECT = byK ? `${fit.aspect.toFixed(6)}` : '313/350';
 
   return (
     <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
@@ -106,12 +218,15 @@ export default function Room({ y }: { y: Yeoul }) {
           onClick={(e) => { e.stopPropagation(); actions.onPet(); }}
           style={{
             position: 'absolute', left: 0, right: 0,
-            bottom: `calc(${LIFT} - ${CHAR_H} * ${footPad})`,
+            bottom: `calc(${LIFT} - ${CHAR_H} * ${BELOW_FOOT.toFixed(4)})`,
             height: CHAR_H, display: 'flex', justifyContent: 'center', zIndex: 2,
             animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
           }}
         >
-          <div style={{ position: 'relative', height: '100%', aspectRatio: '313/350', maxWidth: '88%' }}>
+          {/* ★ 가로는 캔버스 비율로 **따라 나온다**. 여백까지 포함한 판이라 무대보다 넓어질 수 있는데,
+              넘치는 몫은 전부 투명 여백이다(여울 base 는 좌우 각 122px). 그래서 안 줄인다 —
+              줄이면 그만큼 아이가 작아져 방금 맞춘 K 가 다시 어긋난다. */}
+          <div ref={charBoxRef} style={{ position: 'relative', height: '100%', aspectRatio: CHAR_ASPECT, maxWidth: byK ? 'none' : '88%', flex: 'none' }}>
             {v.guide.tap && (
               <>
                 <span style={{ position: 'absolute', left: '50%', top: '52%', marginLeft: -70, width: 140, height: 140, borderRadius: '50%', border: '2px solid rgba(156,66,50,.5)', animation: 'yRipple 1.9s ease-out infinite', pointerEvents: 'none' }} />
@@ -127,17 +242,39 @@ export default function Room({ y }: { y: Yeoul }) {
                 </span>
               </>
             )}
+            {/* 아이 뒤에 깔리는 것(매트). 반전 바깥이라 걸음마다 뒤집히지 않는다. */}
+            <PropLayer z="below_char" scene={scene} table={table} anchors={anchors} />
             <div style={{ width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play }}>
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={charSrc} alt=""
+                  data-sprite-fallback={charSrc === fallbackSrc && wantSrc !== fallbackSrc ? '1' : undefined}
+                  onError={() => {
+                    if (charSrc === fallbackSrc) return;   // 여울마저 실패하면 더 갈 곳이 없다
+                    // eslint-disable-next-line no-console
+                    console.warn(`[여울] 내 아이 그림이 열리지 않습니다 — ${charSrc}. 여울 그림으로 답니다. `
+                      + '서버가 준 주소인데 파일이 없다는 뜻이라, 부화 생성이 끝났는지 확인해야 합니다.');
+                    setBrokenSrc((prev) => new Set(prev).add(charSrc));
+                  }}
                   style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', animation: 'yBob 4.6s ease-in-out infinite', filter: v.st.charFilter }}
                 />
               </div>
             </div>
+            {/* 아이 앞에 얹히는 것(머리 옆 기호·손 앞 먹을 것·발치 소품). */}
+            <PropLayer scene={scene} table={table} anchors={anchors} />
           </div>
         </div>
+
+        {/* ★ 방 바닥에 **붙박인** 것(똥·하루 소품·매트·가방). 캐릭터 상자 밖이라 아이가 걸어도 안 따라간다
+            (상훈님 2026-09-13 "캐릭터가 움직인다고 똥도 같이 움직이면 안돼"). 매트만 아이 뒤에 깔린다. */}
+        <RoomPropLayer z="below_char" scene={scene} table={table} anchors={anchors} charBox={charBoxRef} />
+        <RoomPropLayer scene={scene} table={table} anchors={anchors} charBox={charBoxRef} />
+
+        {/* 화면 전체에 까는 것(거품·먼지·물줄기·커튼·달) — 발끝선 기준이라 무대에 직접 붙는다.
+            ★ 아이 앞뒤로 **두 겹**이다. 달은 뒤(`below_char`), 먼지·거품·물줄기·커튼은 앞. */}
+        <ScreenPropLayer z="below_char" scene={scene} table={table} anchors={anchors} />
+        <ScreenPropLayer scene={scene} table={table} anchors={anchors} />
 
         {/* 자는 중 — 커튼을 친다. */}
         {v.st.curtain && (
@@ -584,7 +721,14 @@ function AskCard({ y }: { y: Yeoul }) {
           <input
             value={a.draft} onChange={(e) => a.onDraft(e.target.value)} maxLength={a.inputMax}
             placeholder={a.inputPh} data-ask-input
-            onKeyDown={(e) => { if (e.key === 'Enter' && a.hasConfirm) a.confirm(); }}
+            // 조합이 끝나는 순간 한 번 더 적어 둔다 — 조합 중에 상태가 한 글자 뒤처져도 여기서 맞춰진다.
+            onCompositionEnd={(e) => a.onDraft(e.currentTarget.value)}
+            // 마지막 한글을 확정하려고 누른 Enter 는 '넘기기' 가 아니다(대화 입력칸과 같은 규칙).
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+              if (a.hasConfirm) a.confirm();
+            }}
             style={{
               flex: 1, minWidth: 0, padding: '9px 13px', borderRadius: radius.pill,
               border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: 12.5, color: C.ink, outline: 'none',
@@ -608,9 +752,31 @@ function AskCard({ y }: { y: Yeoul }) {
   );
 }
 
-/** 대화 — 시트가 아니라 타일 위에 뜨는 한 줄(9/6 상훈님 결정: 대화는 놀이 밖 독립). */
+/**
+ * 대화 — 시트가 아니라 타일 위에 뜨는 한 줄(9/6 상훈님 결정: 대화는 놀이 밖 독립).
+ *
+ * ★★ 입력칸을 **리액트가 붙들지 않는다**(2026-09-11, 상훈님 "'그냥하고 있어' 를 쳤는데 '어' 만 갔다").
+ *   한글은 자판을 누를 때마다 글자가 확정되는 게 아니라 **조합(IME)** 을 거친다. 조합 중에는
+ *   브라우저가 입력칸 안에 아직 확정되지 않은 글자를 들고 있는데, 리액트가 `value` 로 그 칸을
+ *   붙들고 있으면 조합 도중의 **되돌려쓰기 한 번**에 조합 버퍼가 끊긴다. 그러면 앞 글자가 날아가고
+ *   마지막으로 조합하던 한 글자만 남는다 — 정확히 상훈님이 보신 모습이다.
+ *   그래서 값은 브라우저에 맡기고(`defaultValue`), 리액트는 **읽기만** 한다.
+ *   상태(`draft`)는 그대로 따라 적어 둔다 — 다른 곳에서 쓰던 값이라 끊지 않는다.
+ *
+ * ★ 보낼 때도 **칸이 지금 들고 있는 글자**를 그대로 집어 보낸다. 화면에 보이는 것과 보내는 것이
+ *   다르면 아무 소리도 안 나고 사용자만 잘린 말을 본다.
+ * ★ Enter 는 **조합 중이면 무시**한다. 한글에서 마지막 글자를 확정하려고 누른 Enter 까지
+ *   보내기로 받으면, 확정 전의 글자로 보내 버린다.
+ */
 function ChatBar({ y }: { y: Yeoul }) {
   const { v, actions } = y;
+  const box = useRef<HTMLInputElement>(null);
+  const composing = useRef(false);
+  const send = () => {
+    const el = box.current;
+    actions.onSend(el?.value ?? '');
+    if (el) el.value = '';
+  };
   return (
     <div
       data-part="chat-bar"
@@ -626,14 +792,21 @@ function ChatBar({ y }: { y: Yeoul }) {
       <div style={{ width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 7px 7px 15px', borderRadius: radius.pill, background: C.paper, border: `1.5px solid ${C.ink}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)' }}>
         {/* 열린 부름이 없거나 보내는 중이면 적을 수 없다 — 자리표시글이 이유를 말한다. */}
         <input
-          value={v.chat.draft} onChange={(e) => actions.onDraft(e.target.value)} maxLength={40}
+          ref={box} defaultValue="" onChange={(e) => actions.onDraft(e.target.value)} maxLength={CHAT_MAX}
           placeholder={v.chat.hint} disabled={!v.chat.can} data-part="chat-input"
-          onKeyDown={(e) => { if (e.key === 'Enter') actions.onSend(); }}
+          onCompositionStart={() => { composing.current = true; }}
+          onCompositionEnd={(e) => { composing.current = false; actions.onDraft(e.currentTarget.value); }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            // 조합을 확정하려고 누른 Enter 다 — 보내기가 아니다(브라우저마다 신호가 달라 셋 다 본다).
+            if (composing.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
+            send();
+          }}
           style={{ flex: 1, minWidth: 0, border: 'none', background: 'none', fontSize: 13.5, color: C.ink, outline: 'none' }}
         />
         <button onClick={actions.closeChat} style={{ width: 28, height: 28, flex: 'none', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11.5, color: C.sub2, lineHeight: 1 }} aria-label="대화 닫기">✕</button>
         <button
-          onClick={actions.onSend} disabled={!v.chat.can} data-action="chat-send"
+          onClick={send} disabled={!v.chat.can} data-action="chat-send"
           style={{
             flex: 'none', padding: '9px 15px', borderRadius: radius.pill, border: 'none',
             background: v.chat.can ? C.accent : C.off, color: v.chat.can ? C.accentInk : '#8B8175', fontSize: 12.5,

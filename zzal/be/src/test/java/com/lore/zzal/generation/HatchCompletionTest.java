@@ -95,7 +95,7 @@ class HatchCompletionTest {
     @DisplayName("★ 이름이 먼저 — 그 뒤 굽기가 끝나는 순간 ALIVE")
     void nameFirstThenBaking() {
         ZzalPet pet = draft();
-        pet.character("여울", "왼쪽 눈에 흉터", null, null, T0);
+        pet.character("여울", "왼쪽 눈에 흉터", null, null, null, null, T0);
         assertThat(pet.getPhase()).isEqualTo(PetPhase.HATCHING);
 
         assertThat(service.completeIfReady(PET, V)).isFalse();      // 아직 굽는 중
@@ -118,7 +118,7 @@ class HatchCompletionTest {
         assertThat(service.completeIfReady(PET, V)).isFalse();      // 이름이 아직 없다
         assertThat(pet.getPhase()).isEqualTo(PetPhase.DRAFT);
 
-        pet.character("여울", null, null, null, T0);
+        pet.character("여울", null, null, null, null, null, T0);
         assertThat(service.completeIfReady(PET, V)).isTrue();
         assertThat(pet.getPhase()).isEqualTo(PetPhase.ALIVE);
     }
@@ -139,7 +139,7 @@ class HatchCompletionTest {
     @DisplayName("굽기가 한 단계라도 남았으면 이름이 있어도 안 살린다")
     void partialBakingDoesNotComplete() {
         ZzalPet pet = draft();
-        pet.character("여울", null, null, null, T0);
+        pet.character("여울", null, null, null, null, null, T0);
         bakingDone();
         succeeded.removeLast();                                    // postprocess 가 아직
 
@@ -151,7 +151,7 @@ class HatchCompletionTest {
     @DisplayName("두 번 불려도 두 번 살리지 않는다 — 굽기 끝과 이름 도착이 겹칠 수 있다")
     void completingTwiceIsSafe() {
         ZzalPet pet = draft();
-        pet.character("여울", null, null, null, T0);
+        pet.character("여울", null, null, null, null, null, T0);
         bakingDone();
 
         assertThat(service.completeIfReady(PET, V)).isTrue();
@@ -163,7 +163,7 @@ class HatchCompletionTest {
     @DisplayName("★★ 이름이 어긋나면 개수가 맞아도 안 살린다 — sheetKey 가 null 인 채로 ALIVE 되던 것 (P-11)")
     void wrongStepNamesDoNotCompleteEvenWhenCountMatches() {
         ZzalPet pet = draft();
-        pet.character("여울", null, null, null, T0);
+        pet.character("여울", null, null, null, null, null, T0);
         bakingDone();
 
         // sheet 가 빠지고 엉뚱한 이름이 하나 들어왔다 — 개수는 그대로 다섯이다
@@ -183,7 +183,7 @@ class HatchCompletionTest {
     @DisplayName("★ 같은 이름이 두 번 성공해도 빠진 단계를 메우지 못한다")
     void duplicateNamesDoNotFillTheGap() {
         ZzalPet pet = draft();
-        pet.character("여울", null, null, null, T0);
+        pet.character("여울", null, null, null, null, null, T0);
         bakingDone();
 
         succeeded.removeIf(r -> "postprocess".equals(r.getName()));

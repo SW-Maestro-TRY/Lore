@@ -92,7 +92,7 @@ class LateBakeLosesTest {
         // 2. A 가 느리다 → 복구가 큐로 되돌리고, 굽기 B 가 시작돼 끝난다
         motion.releaseClaim();
         claim();
-        assertThat(recorder.toReview(MOTION, "grid-B.png", "B.webp", V)).isTrue();
+        assertThat(recorder.toReview(MOTION, "grid-B.png", "B.webp", 298, 330, V)).isTrue();
 
         // 3. 사람이 B 를 보고 통과시킨다
         motion.review(HumanVerdict.OK, "좋다", T0);
@@ -100,7 +100,7 @@ class LateBakeLosesTest {
         assertThat(motion.getStatus()).isEqualTo(MotionStatus.OPEN);
 
         // 4. 그제서야 A 가 도착한다 — 여기서 막혀야 한다
-        assertThat(recorder.toReview(MOTION, "grid-A.png", "A.webp", V)).isFalse();
+        assertThat(recorder.toReview(MOTION, "grid-A.png", "A.webp", 298, 330, V)).isFalse();
 
         assertThat(motion.getStatus())
                 .as("판정이 끝난 줄이 검수 대기로 되돌아가면 안 된다")
@@ -122,7 +122,7 @@ class LateBakeLosesTest {
         motion.queue(LocalDate.of(2026, 9, 11));
         claim();
 
-        assertThat(recorder.toReview(MOTION, "grid.png", "ok.webp", V)).isTrue();
+        assertThat(recorder.toReview(MOTION, "grid.png", "ok.webp", 298, 330, V)).isTrue();
         assertThat(motion.getStatus()).isEqualTo(MotionStatus.REVIEW);
         assertThat(candidates).hasSize(1);
     }

@@ -14,9 +14,9 @@ import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
 
-/** 세계관은 고른 칩과 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
-const worldOf = (chip: string | null | undefined, text: string | undefined) =>
-  [chip, (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, 100);
+/** 세계관은 **고른 칩 전부**와 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
+const worldOf = (chips: readonly string[] | undefined, text: string | undefined) =>
+  [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, 100);
 
 export default function Onboarding({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
@@ -197,6 +197,8 @@ export default function Onboarding({ y }: { y: Yeoul }) {
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13.5, color: C.ink }}>{g.title}</span>
                   <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'rgba(74,64,56,.07)', color: C.faint, fontSize: 10 }}>선택</span>
+                  {/* 칩만 보면 하나만 고르는 줄 안다 — 여러 개가 된다는 것은 글로 말해 준다. */}
+                  <span data-part="chip-note" style={{ fontSize: 10.5, color: C.faint }}>{g.note}</span>
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -251,7 +253,8 @@ export default function Onboarding({ y }: { y: Yeoul }) {
               void (async () => {
                 const ok = await live.setChar({
                   name: s.petName,
-                  personality: PERSONALITY_OF[s.picks.persona ?? ''],
+                  // ★ 성격은 여러 개 고를 수 있지만 **서버는 하나만 받는다** — 맨 앞(처음 고른 것)만 간다.
+                  personality: PERSONALITY_OF[(s.picks.persona ?? [])[0] ?? ''],
                   world: worldOf(s.picks.world, s.texts.world) || undefined,
                   note: (s.texts.extra ?? '').trim() || undefined,
                 });

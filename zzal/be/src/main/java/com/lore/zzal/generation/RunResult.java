@@ -12,13 +12,28 @@ import java.math.BigDecimal;
 public record RunResult(boolean success,
                         StepContext ctx,
                         BigDecimal costUsd,
-                        GenErrorCode errorCode) {
+                        GenErrorCode errorCode,
+                        boolean gridRejected) {
 
     public static RunResult ok(StepContext ctx, BigDecimal cost) {
-        return new RunResult(true, ctx, cost, null);
+        return new RunResult(true, ctx, cost, null, false);
     }
 
     public static RunResult failed(StepContext ctx, BigDecimal cost, GenErrorCode code) {
-        return new RunResult(false, ctx, cost, code);
+        return new RunResult(false, ctx, cost, code, false);
+    }
+
+    /**
+     * 격자 자체가 못 쓸 물건이어서 실패했다 — <b>같은 격자로 다시 해 봐야 같은 결과</b>다.
+     *
+     * ★ 왜 {@link GenErrorCode} 를 늘리지 않았나 — 오류 코드는 DB 에 남고 그 컬럼에
+     *   값 목록 CHECK 제약이 걸려 있다. 값을 늘리려면 마이그레이션이 필요한데,
+     *   마이그레이션 번호는 지금 여러 갈래가 동시에 쓰고 있어 충돌한다.
+     *   이 신호는 <b>한 번의 {@code hatch()} 안에서만</b> 쓰이므로 기록할 필요가 없다.
+     * ⚠️ 그래서 서버가 재시작되면 이 신호는 사라진다(그때는 평범한 재시도가 된다).
+     *   영구 기록이 필요해지면 그때 오류 코드와 마이그레이션을 함께 올린다.
+     */
+    public static RunResult gridRejected(StepContext ctx, BigDecimal cost, GenErrorCode code) {
+        return new RunResult(false, ctx, cost, code, true);
     }
 }

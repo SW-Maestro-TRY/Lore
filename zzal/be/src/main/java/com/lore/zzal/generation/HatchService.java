@@ -1,6 +1,8 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
+import com.lore.zzal.generation.steps.PostProcessStep;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.motion.MotionSeeder;
 import com.lore.zzal.pet.ZzalPetRepository;
@@ -51,7 +53,8 @@ public class HatchService {
 
     @Async("hatchExecutor")
     public void hatch(Long jobId, Long petId, String version) {
-        if (runAttempt(jobId, petId, version)) {
+        RunResult first = runAttempt(jobId, petId, version);
+        if (first != null && first.success()) {
             return;
         }
 
@@ -74,11 +77,21 @@ public class HatchService {
             discardModerationInputs(petId, version);
         }
 
+        // ★ 격자 구조 게이트가 막은 것이면 격자부터 다시 굽는다 — 거부와 같은 종류의 병이다.
+        //   재시도는 성공한 단계를 건너뛰므로, 격자를 폐기하지 않으면 **바로 그 깨진 격자**를
+        //   다시 자르게 되고 두 번째도 같은 자리에서 실패한다(시간만 쓰고 결과는 같다).
+        if (first != null && first.gridRejected()) {
+            int discarded = recorder.discardSucceeded(petId, GenKind.HATCH, GridStep.NAME)
+                    + recorder.discardSucceeded(petId, GenKind.HATCH, PostProcessStep.GRID2);
+            log.info("격자 구조 이상 — 격자 {}건을 폐기하고 다시 굽는다 (petId={})", discarded, petId);
+        }
+
         // 다시 한 번. 나머지 성공한 단계는 그대로 이어받으므로 실패한 지점부터 시작된다.
         GenJob retry = jobRepository.save(
                 GenJob.start(petId, GenKind.HATCH, (int) attempts + 1, version, Instant.now()));
         log.info("재시도 — petId={} attempt={}", petId, attempts + 1);
-        if (!runAttempt(retry.getId(), petId, version)) {
+        RunResult second = runAttempt(retry.getId(), petId, version);
+        if (second == null || !second.success()) {
             recorder.markPetFailed(petId);
         }
     }
@@ -88,12 +101,16 @@ public class HatchService {
      *
      * ★ 재료를 여기서 채워 넘긴다 — 실행기는 무엇을 굽는지 모르고, 부화가 무엇으로
      *   시작하는지(원본 그림)와 무엇으로 끝나는지(살아난 펫)는 부화의 일이다.
+     *
+     * @return 이번 시도의 결과. 펫이 없어 아예 못 돌렸으면 {@code null}.
+     *         성공 여부만이 아니라 <b>왜 실패했는가</b>(격자 자체가 못 쓸 물건인가)를
+     *         부르는 쪽이 알아야 재시도 전에 무엇을 폐기할지 정할 수 있다.
      */
-    private boolean runAttempt(Long jobId, Long petId, String version) {
+    private RunResult runAttempt(Long jobId, Long petId, String version) {
         ZzalPet pet = petRepository.findById(petId).orElse(null);
         if (pet == null) {
             log.warn("펫이 없습니다 — petId={}", petId);
-            return false;
+            return null;
         }
 
         StepContext ctx = new StepContext(petId, pet.getName(), pet.getNote(), version);
@@ -103,12 +120,12 @@ public class HatchService {
                 registry.stages(GenKind.HATCH, version),
                 recorder.loadSucceeded(petId, GenKind.HATCH, version));
         if (!r.success()) {
-            return false;
+            return r;
         }
         log.info("굽기 완료 — petId={} version={} 비용=${}", petId, version, r.costUsd());
         // ★ 굽기가 끝났다고 바로 살리지 않는다 — 이름이 아직 없을 수 있다(아래).
         completeIfReady(petId, version);
-        return true;
+        return r;
     }
 
     /**

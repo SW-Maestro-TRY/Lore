@@ -118,7 +118,7 @@ class MotionServiceTest {
 
         service.bake(MOTION_ID);
 
-        verify(motionRecorder).toReview(eq(MOTION_ID), any(), anyString(), any());
+        verify(motionRecorder).toReview(eq(MOTION_ID), any(), anyString(), any(), any(), any());
         verify(motionRecorder, never()).markFailed(anyLong());
     }
 
@@ -151,6 +151,40 @@ class MotionServiceTest {
     }
 
     @Test
+    @DisplayName("★★ 출력 경로에 판(attempts)이 들어간다 — 없으면 다시 구운 그림이 어제 것을 덮어쓴다")
+    void outputPathCarriesTheAttemptRound() {
+        runnerSucceeds();
+        when(gate.judge(anyString()))
+                .thenReturn(new MotionGate.Verdict(GateVerdict.REVIEW, "", "g0"));
+        // 굽기를 시작하면 시도 횟수가 오르고, <b>그 값이 곧 판 번호</b>다.
+        when(motionRecorder.beginAttempt(MOTION_ID)).thenReturn(3);
+
+        service.bake(MOTION_ID);
+
+        ArgumentCaptor<StepContext> ctx = ArgumentCaptor.forClass(StepContext.class);
+        verify(runner).run(any(), ctx.capture(), any(), any());
+        assertThat(ctx.getValue().outputPrefix()).endsWith("/motions/" + MOTION_ID + "/3");
+    }
+
+    @Test
+    @DisplayName("★ 판은 regenRound 가 아니라 attempts 다 — queue() 가 regenRound 를 0 으로 되돌린다")
+    void regenRoundIsResetByQueueSoItCannotBeTheRound() {
+        ZzalMotion m = ZzalMotion.start(PET_ID, 3, MOTION_NAME, "v4");
+        org.springframework.test.util.ReflectionTestUtils.setField(m, "status",
+                com.lore.zzal.motion.MotionStatus.FAILED);
+        m.beginAttempt();
+        m.requestLocalRegen();
+        assertThat(m.getRegenRound()).isEqualTo(1);
+
+        // 그 밤이 끝나면 FAILED 로 내려가고, 다음 밤 계획이 다시 큐에 올린다.
+        m.failNight();
+        m.queue(java.time.LocalDate.of(2026, 9, 13));
+
+        assertThat(m.getRegenRound()).as("되돌아가는 값을 주소에 쓰면 다음 밤이 같은 주소를 덮어쓴다").isZero();
+        assertThat(m.getAttempts()).as("시도 횟수는 되돌아가지 않는다").isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("시트와 정체성 문단은 부화 때 만든 것을 재사용한다")
     void reusesSheetAndIdentity() {
         runnerSucceeds();
@@ -176,8 +210,8 @@ class MotionServiceTest {
         service.bake(MOTION_ID);
 
         verify(runner, times(1)).run(any(), any(), any(), any());   // 정본 = API 1회
-        verify(motionRecorder, never()).toReview(anyLong(), any(), anyString(), any());
-        verify(motionRecorder).recordGate(eq(MOTION_ID), anyString(), any());   // 판정은 남긴다
+        verify(motionRecorder, never()).toReview(anyLong(), any(), anyString(), any(), any(), any());
+        verify(motionRecorder).recordGate(eq(MOTION_ID), anyString(), any(), any(), any());   // 판정은 남긴다
         verify(motionRecorder).requestLocalRegen(MOTION_ID, 2);
     }
 
@@ -205,7 +239,7 @@ class MotionServiceTest {
         service.bakeNow(MOTION_ID);         // 예외가 이 밖으로 새어 나오면 안 된다
 
         verify(motionRecorder).markFailed(MOTION_ID);
-        verify(motionRecorder, never()).toReview(anyLong(), any(), anyString(), any());
+        verify(motionRecorder, never()).toReview(anyLong(), any(), anyString(), any(), any(), any());
     }
 
     @Test
@@ -252,7 +286,7 @@ class MotionServiceTest {
         twice.bakeNow(MOTION_ID);
 
         verify(runner, times(2)).run(any(), any(), any(), any());
-        verify(motionRecorder).toReview(eq(MOTION_ID), any(), anyString(), any());
+        verify(motionRecorder).toReview(eq(MOTION_ID), any(), anyString(), any(), any(), any());
         verify(motionRecorder, never()).markFailed(anyLong());
     }
 }

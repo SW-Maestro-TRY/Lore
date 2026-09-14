@@ -162,15 +162,18 @@ public class ChatService {
                 .toList();
     }
 
-    /** 반응 동작 — 채팅 사다리(끄덕 > 인사 > 갸웃)에서 열린 것 중 가장 위, 없으면 교감 자세. */
+    /**
+     * 답한 뒤의 반응 동작 — <b>답하기</b>(2층)가 열렸으면 그것, 아직이면 <b>교감 자세</b>(1층).
+     *
+     * ★ 옛 사다리(끄덕 > 인사 > 갸웃)는 없어졌다. 채팅에 붙는 2층 자세는 이제 하나뿐이고
+     *   (해금은 "못 보던 행동이 열리는 것" 이 아니라 "하던 행동이 좋아지는 것"), 나머지 셋은
+     *   행동에 붙지 않는 관상용이라 3층으로 내려갔다.
+     */
     private String reactionKey(ZzalPet pet) {
-        List<String> unlocked = UnlockRules.unlockedKeys(pet, catalog);
-        for (String k : List.of("nod", "wave", "tilt")) {
-            if (unlocked.contains(k)) {
-                return k;
-            }
+        if (UnlockRules.unlockedKeys(pet, catalog).contains("reply")) {
+            return "reply";
         }
-        return "shy";
+        return "pet";
     }
 
     public record View(String openSlot, List<ZzalChatCall> calls, List<String> memories) {

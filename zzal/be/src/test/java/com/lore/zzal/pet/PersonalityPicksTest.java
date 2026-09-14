@@ -46,7 +46,7 @@ class PersonalityPicksTest {
             assertThat(one.picked()).containsExactly(Personality.LIVELY);
 
             PetRequests.Character character =
-                    new PetRequests.Character("여울", Personality.SHY, null, null, null);
+                    new PetRequests.Character("여울", Personality.SHY, null, null, null, null, null);
             assertThat(character.picked()).containsExactly(Personality.SHY);
         }
 

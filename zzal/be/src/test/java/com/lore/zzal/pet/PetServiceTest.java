@@ -201,10 +201,29 @@ class PetServiceTest {
         @Test
         @DisplayName("청소 — 깨끗하면 ZZAL_CARE_NOT_NEEDED · 약 — 안 아프면 ZZAL_CARE_NOT_NEEDED")
         void cleanAndMedicine() {
-            child();
-            service.care(USER_ID, PET_ID, CareAction.CLEAN, T0);
+            ZzalPet pet = child();
+            // ★ 청소는 흔적을 하나씩 없앤다 — 다 치운 뒤에야 "깨끗하다" 가 된다.
+            for (int guard = 0; pet.getTrash() > 0 && guard < ZzalRules.TRASH_MAX; guard++) {
+                service.care(USER_ID, PET_ID, CareAction.CLEAN, T0);
+            }
+            assertThat(pet.getTrash()).isZero();
             assertCode(() -> service.care(USER_ID, PET_ID, CareAction.CLEAN, T0), ErrorCode.ZZAL_CARE_NOT_NEEDED);
             assertCode(() -> service.care(USER_ID, PET_ID, CareAction.MEDICINE, T0), ErrorCode.ZZAL_CARE_NOT_NEEDED);
+        }
+
+        @Test
+        @DisplayName("★★ 흔적이 셋이면 청소를 세 번 받는다 — 한 번에 다 치우면 하루 한 번이 상한이 된다")
+        void cleaningIsAcceptedOncePerTrace() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "trash", 3);
+
+            for (int i = 3; i > 0; i--) {
+                service.care(USER_ID, PET_ID, CareAction.CLEAN, T0);
+                assertThat(pet.getTrash()).as("%d번째 청소 뒤".formatted(4 - i)).isEqualTo(i - 1);
+            }
+
+            assertThat(pet.getCleans()).as("2층 청소(13회)가 이 누적에 얹혀 있다").isEqualTo(3);
+            assertCode(() -> service.care(USER_ID, PET_ID, CareAction.CLEAN, T0), ErrorCode.ZZAL_CARE_NOT_NEEDED);
         }
 
         @Test
@@ -401,7 +420,7 @@ class PetServiceTest {
             ZzalPet pet = baby();
             service.share(USER_ID, PET_ID, "base", T0);
             assertThat(pet.getShares()).isEqualTo(1);
-            assertCode(() -> service.share(USER_ID, PET_ID, "tilt", T0), ErrorCode.ZZAL_MOTION_NOT_OPEN);
+            assertCode(() -> service.share(USER_ID, PET_ID, "eat_rice", T0), ErrorCode.ZZAL_MOTION_NOT_OPEN);
             assertCode(() -> service.share(USER_ID, PET_ID, "nope", T0), ErrorCode.ZZAL_MOTION_NOT_OPEN);
         }
     }
@@ -411,20 +430,29 @@ class PetServiceTest {
     class JustUnlocked {
 
         @Test
-        @DisplayName("★ 재우기·깨우기 합쳐 3회가 되는 그 행동에 '자기'(11)가 실린다. 그 전엔 비어 있다")
-        void sleepWakeThreeTimes() {
+        @DisplayName("★★ 네 번째로 깨우는 그 행동에 '일어나기'(16)가 실린다 — 튜토리얼 낮잠은 안 센다")
+        void manualWakesOpenWakeUp() {
             ZzalPet pet = inTutorial();
             PetFixture.readyForNap(pet);
             Instant t40 = T0.plus(Duration.ofMinutes(40));
-            PetService.Action a1 = service.sleep(USER_ID, PET_ID, t40);                       // 1 낮잠
-            assertThat(a1.justUnlocked()).isEmpty();
-            PetService.Action a2 = service.wake(USER_ID, PET_ID, t40);                        // 2 곧바로
-            assertThat(a2.justUnlocked()).isEmpty();
-            pet.skipTutorial(t40);                                                            // 시계가 켜진다
-            PetService.Action a3 = service.sleep(USER_ID, PET_ID, kst("2026-09-05 19:00"));  // 3 → 자기
-            assertThat(a3.justUnlocked()).containsExactly(11);
-            assertThat(UnlockRules.isUnlocked(pet, new MotionCatalog("", "", "v1").bySeq(11).orElseThrow(),
-                    new MotionCatalog("", "", "v1"))).isTrue();
+            service.sleep(USER_ID, PET_ID, t40);                                        // 튜토리얼 낮잠
+            PetService.Action fromNap = service.wake(USER_ID, PET_ID, t40);
+            assertThat(fromNap.justUnlocked()).as("낮잠 깨우기는 안 센다").isEmpty();
+            pet.skipTutorial(t40);                                                      // 시계가 켜진다
+
+            PetService.Action last = null;
+            for (int day = 5; day <= 8; day++) {
+                service.sleep(USER_ID, PET_ID, kst("2026-09-%02d 20:00".formatted(day)));
+                last = service.wake(USER_ID, PET_ID, kst("2026-09-%02d 08:00".formatted(day + 1)));
+                if (day < 8) {
+                    assertThat(last.justUnlocked()).as("%d번째 깨우기".formatted(day - 4)).isEmpty();
+                }
+            }
+
+            assertThat(pet.getWakes()).isEqualTo(4);
+            assertThat(last.justUnlocked()).containsExactly(16);
+            MotionCatalog catalog = new MotionCatalog("", "", "v1");
+            assertThat(UnlockRules.isUnlocked(pet, catalog.bySeq(16).orElseThrow(), catalog)).isTrue();
         }
     }
 
@@ -644,7 +672,7 @@ class PetServiceTest {
             assertThat(scenes.stream().filter(com.lore.zzal.scene.ZzalScene::isNight))
                     .singleElement()
                     .satisfies(sc -> {
-                        assertThat(sc.getMotionKey()).isEqualTo("practice");
+                        assertThat(sc.getMotionKey()).isEqualTo("base");
                         assertThat(sc.getSceneAt()).isEqualTo(kst("2026-09-05 22:00"));
                     });
             assertThat(afterSleep).isPositive();               // 재우는 응답에 이미 실렸다
@@ -755,8 +783,10 @@ class PetServiceTest {
         private ZzalPet layerTwoDone() {
             ZzalPet pet = child();
             org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", PET_ID);
-            for (String f : List.of("chatAnswers", "bathCount", "gameStarts", "sleepWakeCount", "zeroMissDays")) {
-                org.springframework.test.util.ReflectionTestUtils.setField(pet, f, 12);
+            // 2층 여덟의 카운터를 전부 넉넉히 — 여기서 보려는 것은 조각이 언제 등장하는가다.
+            for (String f : List.of("feeds", "snacks", "cleans", "bathCount",
+                    "chatAnswers", "pets", "gameStarts", "wakes")) {
+                org.springframework.test.util.ReflectionTestUtils.setField(pet, f, 20);
             }
             return pet;
         }
@@ -889,7 +919,8 @@ class PetServiceTest {
             com.lore.zzal.motion.ZzalMotion gift = com.lore.zzal.motion.ZzalMotion.forCatalog(
                     PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
             org.springframework.test.util.ReflectionTestUtils.setField(gift, "status", com.lore.zzal.motion.MotionStatus.BAKING);
-            gift.toReview("k", com.lore.zzal.motion.MotionSource.API,
+            gift.toReview("k", null, null,
+com.lore.zzal.motion.MotionSource.API,
                     com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
             gift.approve(T0);
             when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
@@ -925,7 +956,8 @@ class PetServiceTest {
             com.lore.zzal.motion.ZzalMotion m = com.lore.zzal.motion.ZzalMotion.forCatalog(
                     PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
             org.springframework.test.util.ReflectionTestUtils.setField(m, "status", com.lore.zzal.motion.MotionStatus.BAKING);
-            m.toReview("images/zzal/pets/7/motions/9/motion.webp", com.lore.zzal.motion.MotionSource.API,
+            m.toReview("images/zzal/pets/7/motions/9/motion.webp", null, null,
+com.lore.zzal.motion.MotionSource.API,
                     com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
             m.approve(T0);
             when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(

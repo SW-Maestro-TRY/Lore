@@ -26,7 +26,7 @@ import java.util.List;
  * <h3>언제 남기나</h3>
  * <ul>
  *   <li><b>부재 4시간마다 한 컷</b> — 깨어 있는 시간 기준(자는 동안은 안 센다). 조회할 때 몰아서 계산한다</li>
- *   <li><b>밤에 잠들 때 한 컷</b> — 훈련 자세의 "연습 장면"(정본 2장). 아프면 안 남긴다(16장)</li>
+ *   <li><b>밤에 잠들 때 한 컷</b> — 기본 자세의 "밤 장면"(정본 2장). 아프면 안 남긴다(16장)</li>
  * </ul>
  *
  * <h3>★★ 뽑기는 결정적이다</h3>
@@ -41,8 +41,18 @@ public class SceneService {
     /** 정본 13장 공통 에셋의 소품 4종. 하루에 하나만 뽑힌다(정본 11장 3). */
     static final List<String> PROPS = List.of("ball", "book", "cup", "plant");
 
-    /** 정상일 때의 대기 풀 — 기본 자세 60% / 앉아 쉬기·웃는 대기 40%(정본 11장 2). */
+    /** 정상일 때의 대기 풀 — 기본 자세 60% / 대기 자세 40%(정본 11장 2). */
     private static final int IDLE_BASE_PERCENT = ZzalRules.IDLE_BASE_PERCENT;
+
+    /**
+     * 정상일 때 기본 자세 대신 나올 수 있는 <b>대기 자세</b> — 지금은 <b>비어 있다</b>.
+     *
+     * ★ 앉아 쉬기·웃는 대기·갸웃은 사용자 행동에 붙지 않는 관상용이라 3층으로 내려갔고,
+     *   1·2층 16종에는 대기용 자세가 없다. 그래서 정상 상태의 컷은 언제나 기본 자세다.
+     * ★ 목록이 비면 {@code idlePool} 이 곧바로 기본 자세를 돌려준다 — 3층에서 관상용이 올라오면
+     *   여기 한 줄만 채운다(열렸는지는 카탈로그 조건이 따로 본다).
+     */
+    private static final List<String> IDLE_RELAXED = List.of();
 
     private final ZzalSceneRepository sceneRepository;
     private final MotionCatalog catalog;
@@ -83,10 +93,9 @@ public class SceneService {
     }
 
     /**
-     * 밤에 잠든 순간의 연습 장면(정본 2장 "잠드는 순간 하는 일 … 밤 장면").
+     * 밤에 잠든 순간의 밤 장면(정본 2장 "잠드는 순간 하는 일 … 밤 장면").
      *
-     * ★ 아프면 안 남긴다 — 정본 16장이 "아픈 동안 거부하는 것 = … 훈련 자세(연습 장면)" 라고 못 박았다.
-     *   아픈 아이가 밤새 연습하는 그림은 규칙 이전에 이야기가 안 맞는다.
+     * ★ 아프면 안 남긴다 — 아픈 아이가 밤에 혼자 노는 그림은 규칙 이전에 이야기가 안 맞는다.
      *
      * @return 남겼으면 1, 아니면 0
      */
@@ -104,7 +113,7 @@ public class SceneService {
         //   그 한 번의 정산이 잠들기와 깨어나기를 한꺼번에 처리해 "지금 자고 있나" 는 이미 거짓이다.
         Instant at = pet.getPendingNightSceneAt();
         // ★★ 판정도 기록도 <b>잠들 때의 상태</b>로 한다(#234 리뷰 중-2). 소비 시점(아침)의 상태를 쓰면
-        //   밤새 병이 난 경우 그 밤 장면이 통째로 버려지고, 아침에 약을 먹었으면 아팠던 밤에 연습 장면이 생긴다.
+        //   밤새 병이 난 경우 그 밤 장면이 통째로 버려지고, 아침에 약을 먹었으면 아팠던 밤에 밤 장면이 생긴다.
         boolean wasSick = pet.wasSickWhenSleeping();
         String mood = pet.nightSceneMood();
         pet.markNightScene(at);         // 아파서 안 남기더라도 쪽지는 지운다(같은 잠을 매번 다시 보지 않게)
@@ -170,7 +179,9 @@ public class SceneService {
     }
 
     private void save(ZzalPet pet, Instant at, boolean night, String mood) {
-        String motionKey = night ? "practice" : idleMotion(pet, at);
+        // ★ 밤 컷은 기본 자세다. 옛 "훈련 자세"(practice)는 카탈로그에서 빠졌다 —
+        //   훈련이라는 행동이 화면에 없어 1층에서 내렸다.
+        String motionKey = night ? "base" : idleMotion(pet, at);
         sceneRepository.save(ZzalScene.of(pet.getId(), motionKey, pet.getBackground(),
                 prop(pet, at), at, mood, night));
     }
@@ -198,7 +209,7 @@ public class SceneService {
      * <pre>
      *   병      → 아픈 자세      배부름 0 → 기본 자세(꼬르륵 에셋이 붙는다)
      *   행복 0  → 슬픈 자세      흔적 3+  → 기본 자세(파리·쓰레기가 붙는다)
-     *   정상    → 기본 자세 60% / 앉아 쉬기·웃는 대기 40%(열린 것만)
+     *   정상    → 기본 자세 60% / 대기 자세 40%(열린 것만. 지금은 대기 자세가 없어 언제나 기본 자세)
      * </pre>
      */
     String idleMotion(ZzalPet pet, Instant at) {
@@ -211,7 +222,7 @@ public class SceneService {
     }
 
     private String idlePool(ZzalPet pet, Instant at) {
-        List<String> relaxed = List.of("sit", "smile_idle").stream()
+        List<String> relaxed = IDLE_RELAXED.stream()
                 .filter(key -> catalog.byKey(key).map(spec -> UnlockRules.isUnlocked(pet, spec, catalog)).orElse(false))
                 .toList();
         if (relaxed.isEmpty() || Chance.percent("scene-idle", pet.chanceSeed(), at.getEpochSecond()) < IDLE_BASE_PERCENT) {
@@ -239,7 +250,7 @@ public class SceneService {
      *   (자캐 커뮤니티 규범 — "캐릭터가 사용자를 원망하는 대사 전면 금지"). 마지막에 금지 필터도 한 번 더 지난다.
      */
     public static String line(ZzalScene scene) {
-        String raw = scene.isNight() ? "자기 전에 혼자 연습했어요."
+        String raw = scene.isNight() ? "자기 전에 이불 위에서 뒹굴뒹굴했어요."
                 : switch (scene.getMood()) {
             case "SICK" -> "혼자 조용히 쉬고 있었어요.";
             case "HUNGRY" -> "창밖을 보며 기다렸어요.";

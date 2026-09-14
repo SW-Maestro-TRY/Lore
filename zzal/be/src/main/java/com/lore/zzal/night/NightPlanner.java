@@ -7,7 +7,6 @@ import com.lore.zzal.motion.MotionStatus;
 import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.motion.ZzalMotionRepository;
 import com.lore.zzal.pet.ZzalPet;
-import com.lore.zzal.pet.ZzalRules;
 import com.lore.zzal.piece.PieceService;
 import com.lore.zzal.piece.ZzalPiece;
 import org.slf4j.Logger;
@@ -127,29 +126,12 @@ public class NightPlanner {
             }
         }
 
-        // 2) 첫 심화 행동(뒤로 넘어짐) — 함께한 날 3 + 그날 케어 미스 0 (정본 6·16장).
-        //
-        // ★★ 1.7 정정 — 여기가 오래 <b>구르기</b>(선물 0번)를 주고 있었다. 정본은 구르기를
-        //    <b>튜토리얼 9칸 완주</b> 보상으로 정했고(1.2 결정 · 1.7 표 반영), 함께한 날 3일 조건은
-        //    <b>뒤로 넘어짐</b>(선물 1번) 것이다. 옛 코드대로면 튜토리얼 완주 보상이 첫날이 아니라
-        //    사흘 뒤에 오고, 그 사람은 그런 것이 있는 줄도 모른 채 이틀을 보낸다.
-        //    구르기는 이제 {@code BakeTrigger.onTutorialDone} 이 맡는다.
-        ZzalMotion gift2 = catalog.gifts().size() > 1 ? rows.get(catalog.gifts().get(1).seq()) : null;
-        if (gift2 != null && gift2.getStatus() == MotionStatus.NONE
-                && pet.getDaysTogether() >= ZzalRules.FIRST_GIFT_DAYS
-                && pet.getLastNightCareMiss() == 0
-                && nightOf.equals(pet.getLastNightOf())) {
-            if (catalog.isBakeable(gift2.getName())) {
-                if (gift2.queue(nightOf)) {
-                    queued++;
-                }
-                log.info("첫 심화 행동 큐 등록 — petId={} nightOf={} key={} ({}일째)",
-                        pet.getId(), nightOf, gift2.getName(), pet.getDaysTogether());
-            } else {
-                log.info("첫 심화 조건은 찼지만 지시문이 없어 안 굽는다 — petId={} key={} (app.zzal.gift-motions)",
-                        pet.getId(), gift2.getName());
-            }
-        }
+        // ★ 옛 2)번 "두 번째 선물(뒤로 넘어짐) — 함께한 날 3 + 그날 케어 미스 0" 블록은 없앴다.
+        //   뒤로 넘어짐은 <b>좌우 맞히기 첫 패배</b>에 열린다 — 넘어짐은 패배 리액션이고,
+        //   그 순간에 받아야 무엇의 선물인지가 사람에게 읽힌다. 그 자리는 GameService 의
+        //   마지막 라운드이고, 큐에 올리는 것은 {@code BakeTrigger.onFirstGameLoss} 다.
+        //   여기에 옛 블록을 같이 두면 한 사람이 뒤로 넘어짐을 두 번 받는 길이 열린다.
+
         // 3) 3층 — 조각 네 칸이 다 찼으면 다음 심화 하나(정본 6장 · 1.9)
         //
         // ★ 1.9 에서 "이틀 연속" 이 없어졌다. 요구량 자체가 이틀치라 연속을 셀 이유가 없다.

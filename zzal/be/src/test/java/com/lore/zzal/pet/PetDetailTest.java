@@ -71,26 +71,71 @@ class PetDetailTest {
         assertThat(m.get(4).basicImageKey()).isNull();                   // v1 에 없는 자세 → 화면 폴백
         assertThat(m.get(8)).satisfies(x -> {
             assertThat(x.seq()).isEqualTo(9);
-            assertThat(x.key()).isEqualTo("tilt");
+            assertThat(x.key()).isEqualTo("eat_rice");
             assertThat(x.unlocked()).isFalse();
             assertThat(x.basicImageKey()).isNull();
-            assertThat(x.hint()).isEqualTo("채팅 응답 1회");
-            assertThat(x.progress()).isEqualTo(new PetResponses.Progress(0, 1));
+            assertThat(x.hint()).isEqualTo("밥 주기 9회");
+            assertThat(x.progress()).isEqualTo(new PetResponses.Progress(0, 9));
         });
         assertThat(m.get(16).seq()).isEqualTo(101);
         assertThat(m.get(16).layer()).isEqualTo("GIFT");
-        assertThat(m.get(16).hint()).isEqualTo("3일이나 함께해서…");
+        assertThat(m.get(16).hint()).isEqualTo("함께한 첫 선물");
         assertThat(m.get(17).seq()).isEqualTo(102);
     }
 
     @Test
-    @DisplayName("v2 부화 펫은 basic/{key}.webp 규약")
+    @DisplayName("v2 부화 펫은 basic/{판}/{key}.webp 규약")
     void v2ImageKeys() {
         ZzalPet pet = baby();
         pet.setHatchPipelineVersion("v2");
+        // ★ 판을 넣어야 하는 시험이 됐다 — 판이 0 이면 "아직 한 장도 안 구웠다" 라 키가 아예 안 나간다.
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
-        assertThat(d.motions().get(0).basicImageKey()).endsWith("/basic/base.webp");
-        assertThat(d.motions().get(4).basicImageKey()).endsWith("/basic/sick.webp");
+        assertThat(d.motions().get(0).basicImageKey()).endsWith("/basic/1/base.webp");
+        assertThat(d.motions().get(4).basicImageKey()).endsWith("/basic/1/sick.webp");
+    }
+
+    @Test
+    @DisplayName("★ v4 부화 펫도 basic/{판}/{key}.webp 규약 — 옛 폴백으로 조용히 떨어지지 않는다")
+    void v4ImageKeys() {
+        ZzalPet pet = baby();
+        pet.setHatchPipelineVersion("v4");
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
+        PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
+
+        // "v2" 만 보고 판단하면 v4 펫은 옛 8상태 파일명으로 떨어져 그림이 하나도 안 뜬다 —
+        // 빌드·기동·부화가 전부 성공한 뒤 화면에서만 드러나는 종류의 어긋남이다.
+        assertThat(d.motions().get(0).basicImageKey()).endsWith("/basic/1/base.webp");
+        assertThat(d.motions().get(4).basicImageKey()).endsWith("/basic/1/sick.webp");
+    }
+
+    @Test
+    @DisplayName("★★ 한 장도 굽지 않은 펫(판 0)은 그림 주소를 안 준다 — 없는 파일을 가리키지 않는다")
+    void unbakedPetCarriesNoBasicImageKey() {
+        ZzalPet pet = baby();
+        pet.setHatchPipelineVersion("v4");
+        // 판 0 = 후처리가 한 번도 안 돌았다(첫 후처리가 1 로 올린다).
+
+        PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
+
+        // 주소를 주면 화면은 "주소가 왔으니 그림이 있겠지" 하고 대체 그림을 띄울 기회를 놓친다.
+        // 오류는 서버에도 화면에도 안 난다 — 빈 무대로만 드러난다.
+        assertThat(d.motions().get(0).key()).isEqualTo("base");
+        assertThat(d.motions().get(0).basicImageKey()).isNull();
+        assertThat(d.motions()).allSatisfy(m -> assertThat(m.basicImageKey()).isNull());
+        // 앵커도 같은 기준이다 — 그림이 없는데 그 그림을 설명하는 앵커만 있을 수는 없다.
+        assertThat(d.anchorsKey()).isNull();
+
+        // ★ 판이 한 번이라도 올라가면 그때부터 준다 — 같은 펫, 같은 버전, 판만 다르다.
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
+        PetResponses.Detail baked = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
+        assertThat(baked.motions().get(0).basicImageKey()).isEqualTo("images/zzal/pets/7/basic/1/base.webp");
+
+        // ★ 잠긴 2층도 판만 있으면 주소가 온다 — null 의 뜻은 "안 배웠다" 가 아니라 "그림이 없다" 다.
+        PetResponses.Motion lockedSecondFloor = baked.motions().get(8);
+        assertThat(lockedSecondFloor.key()).isEqualTo("eat_rice");
+        assertThat(lockedSecondFloor.unlocked()).isFalse();
+        assertThat(lockedSecondFloor.basicImageKey()).isEqualTo("images/zzal/pets/7/basic/1/eat_rice.webp");
     }
 
     @Test
@@ -131,7 +176,9 @@ class PetDetailTest {
         assertThat(d.food()).isEqualTo(new PetResponses.Food(3, null));
         assertThat(d.mood()).isEqualTo("HUNGRY");   // ★ 배부름 0 으로 시작한다(튜토리얼 첫 칸이 밥)
         assertThat(d.features()).isEqualTo(new PetResponses.Features(true, true, false, false, false, false, false));
-        assertThat(d.firstGift()).isEqualTo(new PetResponses.FirstGift("LOCKED", 2));
+        // ★ daysLeft 는 항상 0 — 첫 선물은 날짜가 아니라 튜토리얼 완주로 열린다.
+        //   옛 3일 규칙으로 계산한 값을 내려보내면 화면이 뜻 없는 카운트다운을 그린다.
+        assertThat(d.firstGift()).isEqualTo(new PetResponses.FirstGift("LOCKED", 0));
         assertThat(d.chatSummary().nextAt()).isEqualTo(T0.plus(Duration.ofHours(1)));   // 기상(부화)+1h
         assertThat(d.tutorial().active()).isTrue();
         assertThat(d.tutorial().steps().get(0).current()).isTrue();
@@ -164,7 +211,8 @@ class PetDetailTest {
         ZzalMotion roll = ZzalMotion.forCatalog(7L, CATALOG.bySeq(101).orElseThrow(), T0);
         // ★ 굽는 중이던 줄만 검수 대기로 간다(1.9). 운영은 claim 이 DB 에서 BAKING 으로 집는다.
         org.springframework.test.util.ReflectionTestUtils.setField(roll, "status", com.lore.zzal.motion.MotionStatus.BAKING);
-        roll.toReview("images/zzal/pets/7/motions/101/motion.webp", com.lore.zzal.motion.MotionSource.API,
+        roll.toReview("images/zzal/pets/7/motions/101/motion.webp", null, null,
+com.lore.zzal.motion.MotionSource.API,
                 com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
 
         // 1) 검수 대기 — 사용자에게는 "연습 중", 그림 없음
@@ -205,21 +253,36 @@ class PetDetailTest {
     }
 
     @Test
-    @DisplayName("★★ \"케어 미스 0인 날\" 진행도는 안 내려간다 — 힌트만(숨은 수치를 되짚게 하면 안 된다)")
-    void zeroMissProgressIsHidden() {
+    @DisplayName("★★ 첫 선물은 튜토리얼을 끝내는 순간 LOCKED → WAITING — 날짜가 아니다")
+    void firstGiftFollowsTheTutorialNotTheCalendar() {
         ZzalPet pet = baby();
-        org.springframework.test.util.ReflectionTestUtils.setField(pet, "zeroMissDays", 2);
+        assertThat(pet.isInTutorial()).isTrue();
+        assertThat(PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG).firstGift())
+                .isEqualTo(new PetResponses.FirstGift("LOCKED", 0));
+
+        pet.skipTutorial(T0);
+
+        assertThat(PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG).firstGift())
+                .as("함께한 날은 여전히 첫날이다 — 그래도 열린다")
+                .isEqualTo(new PetResponses.FirstGift("WAITING", 0));
+    }
+
+    @Test
+    @DisplayName("★★ 잠긴 2층 여덟 칸은 <b>전부</b> 진행도를 보여준다 — 숨길 이유가 있던 조건이 없어졌다")
+    void everyLockedLayerTwoShowsProgress() {
+        // 진행도를 감추는 규칙은 "케어 미스 0인 날" 같은 숨은 수치 때문이었다. 지금 2층 여덟은
+        // 전부 사용자가 직접 한 행동(밥·간식·청소·목욕·채팅·쓰다듬·게임·깨우기)이라 감출 것이 없다.
+        ZzalPet pet = baby();
 
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
-        PetResponses.Motion smileIdle = d.motions().stream().filter(m -> m.seq() == 15).findFirst().orElseThrow();
 
-        assertThat(smileIdle.unlocked()).isFalse();
-        assertThat(smileIdle.hint()).isNotBlank();      // 무엇을 해야 열리는지는 알려준다
-        assertThat(smileIdle.progress()).isNull();      // ★ 몇 번째인지는 말하지 않는다
-
-        // 다른 잠긴 칸은 그대로 진행도를 준다(비교군)
-        PetResponses.Motion tilt = d.motions().stream().filter(m -> m.seq() == 9).findFirst().orElseThrow();
-        assertThat(tilt.progress()).isNotNull();
+        assertThat(d.motions().stream().filter(m -> "BASIC_2".equals(m.layer())))
+                .hasSize(8)
+                .allSatisfy(m -> {
+                    assertThat(m.unlocked()).as("%s 는 아직 잠겨 있어야 한다", m.key()).isFalse();
+                    assertThat(m.hint()).as("%s 의 조건 문구", m.key()).isNotBlank();
+                    assertThat(m.progress()).as("%s 의 진행도", m.key()).isNotNull();
+                });
     }
 
     @Test
@@ -252,5 +315,101 @@ class PetDetailTest {
         roll.queue(java.time.LocalDate.of(2026, 9, 5));
         assertThat(PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG, Map.of(101, roll), List.of()).baking())
                 .isEqualTo("QUEUED");
+    }
+
+    @Test
+    @DisplayName("★★ 잠긴 2층도 그림 주소를 내려보낸다 — 화면이 '그림이 없다' 와 '아직 안 배웠다' 를 구분해야 한다")
+    void lockedBasicStillCarriesItsImageKey() {
+        ZzalPet pet = baby();
+        pet.setHatchPipelineVersion("v4");
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 2);
+
+        PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
+        PetResponses.Motion eatRice = d.motions().get(8);
+
+        // 2층 8종은 부화 때 1층과 함께 구워진다 — 잠겨 있어도 그림은 이미 있다.
+        // 잠겼다고 null 을 주면 화면이 "1층 + 소품으로 그리자" 를 고를 수 없다.
+        assertThat(eatRice.key()).isEqualTo("eat_rice");
+        assertThat(eatRice.unlocked()).isFalse();
+        assertThat(eatRice.basicImageKey()).isEqualTo("images/zzal/pets/7/basic/2/eat_rice.webp");
+
+        // ★ 선물만 여전히 null — 선물은 기본 그림이 아니라 16프레임 움짤이고 주소가 다른 자리다.
+        assertThat(d.motions().get(16).seq()).isEqualTo(101);
+        assertThat(d.motions().get(16).basicImageKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("★ 기본 그림 주소에 판이 들어간다 — 다시 구우면 같은 주소를 덮어쓰지 않는다")
+    void basicImageKeyCarriesTheRound() {
+        ZzalPet pet = baby();
+        pet.setHatchPipelineVersion("v4");
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
+        String first = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG)
+                .motions().get(0).basicImageKey();
+
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 2);
+        String second = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG)
+                .motions().get(0).basicImageKey();
+
+        assertThat(first).isEqualTo("images/zzal/pets/7/basic/1/base.webp");
+        assertThat(second).isNotEqualTo(first);
+    }
+
+    @Test
+    @DisplayName("★ anchorsKey — 전체 URL 이 아니라 키이고, 그림과 같은 판을 가리킨다")
+    void anchorsKeyIsAKeyOfTheSameRound() {
+        ZzalPet pet = baby();
+        pet.setHatchPipelineVersion("v4");
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 3);
+
+        PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
+        assertThat(d.anchorsKey()).isEqualTo("images/zzal/pets/7/basic/3/anchors.json");
+        assertThat(d.anchorsKey()).doesNotStartWith("http");
+        assertThat(d.motions().get(0).basicImageKey()).startsWith("images/zzal/pets/7/basic/3/");
+
+        // 앵커를 안 내는 버전이거나 아직 한 판도 안 구웠으면 null — 없는 주소를 주지 않는다.
+        pet.setHatchPipelineVersion("v2");
+        assertThat(PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG).anchorsKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("★ 말투·장르를 상세 응답에 싣는다 — 저장만 하고 안 내려보내면 화면이 다시 물어봐야 한다")
+    void toneAndGenreAreReturned() {
+        ZzalPet pet = ZzalPet.draft(1L, "k", T0);
+        pet.character("여울", null, null, "비 오는 도시", "무뚝뚝한 존댓말", "느와르", T0);
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "id", 7L);
+        pet.markAlive("s", "i", T0);
+
+        PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
+        assertThat(d.tone()).isEqualTo("무뚝뚝한 존댓말");
+        assertThat(d.genre()).isEqualTo("느와르");
+        assertThat(d.world()).isEqualTo("비 오는 도시");
+    }
+
+    @Test
+    @DisplayName("★ 선물 움짤의 가로·세로를 함께 내려보낸다 — 판마다 캔버스가 다르다")
+    void giftCarriesItsCanvasSize() {
+        ZzalPet pet = baby();
+        ZzalMotion roll = ZzalMotion.forCatalog(7L, CATALOG.bySeq(101).orElseThrow(), T0);
+        org.springframework.test.util.ReflectionTestUtils.setField(roll, "status", MotionStatus.BAKING);
+        roll.toReview("images/zzal/pets/7/motions/101/1/motion.webp", 295, 321,
+                com.lore.zzal.motion.MotionSource.API,
+                com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
+        roll.approve(T0);
+
+        // 도착 전에는 크기도 안 나간다 — 주소와 짝이어야 한다.
+        PetResponses.Detail before =
+                PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG, Map.of(101, roll), List.of());
+        assertThat(before.motions().get(16).advanced().width()).isNull();
+
+        roll.reveal(T0);
+        PetResponses.Detail after =
+                PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG, Map.of(101, roll), List.of());
+        assertThat(after.motions().get(16).advanced().width()).isEqualTo(295);
+        assertThat(after.motions().get(16).advanced().height()).isEqualTo(321);
+        assertThat(after.learnedToday()).singleElement().satisfies(l -> {
+            assertThat(l.width()).isEqualTo(295);
+            assertThat(l.height()).isEqualTo(321);
+        });
     }
 }

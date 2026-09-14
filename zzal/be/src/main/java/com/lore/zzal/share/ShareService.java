@@ -3,6 +3,7 @@ package com.lore.zzal.share;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionImageKeys;
 import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.ZzalMotion;
 import com.lore.zzal.motion.ZzalMotionRepository;
@@ -132,7 +133,8 @@ public class ShareService {
         if (advanced != null && !advanced.isBlank()) {
             return advanced;
         }
-        return "images/zzal/pets/%d/basic/%s.webp".formatted(pet.getId(), spec.key());
+        // ★ 조립은 MotionImageKeys 한 곳에서만 — 여기와 펫 상세가 따로 만들던 때 규약이 갈렸다.
+        return MotionImageKeys.basic(pet.getId(), pet.getBasicRound(), spec.key());
     }
 
     private String url(String token) {

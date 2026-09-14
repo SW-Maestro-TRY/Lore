@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalPetRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -99,6 +100,28 @@ public class GenerationRecorder {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markPetAlive(Long petId, String sheetKey, String identityText, Instant now) {
         petRepository.findById(petId).ifPresent(p -> p.markAlive(sheetKey, identityText, now));
+    }
+
+    /**
+     * 이번에 구울 기본 그림의 <b>판 번호</b>. 첫 판은 1 이다.
+     *
+     * ★ 판이 주소에 들어가므로 <b>자르기 전에</b> 정해져 있어야 한다. 굽고 나서 매기면
+     *   이미 올린 파일의 주소를 되돌릴 수 없다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public int nextBasicRound(Long petId) {
+        return petRepository.findById(petId).map(ZzalPet::nextBasicRound).orElse(1);
+    }
+
+    /**
+     * 그 판의 기본 그림이 다 올라갔다 — <b>이 순간부터 응답이 새 주소를 가리킨다.</b>
+     *
+     * ★ 올린 뒤에 올린다. 먼저 올리면 아직 없는 주소를 화면이 받아 빈 그림을 그리고,
+     *   그 사이에 후처리가 실패하면 그 주소는 <b>영영 안 채워진다.</b>
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markBasicBaked(Long petId, int round) {
+        petRepository.findById(petId).ifPresent(p -> p.markBasicBaked(round));
     }
 
     /** 이 시도만 실패로 남긴다. 펫을 FAILED 로 만들지는 부르는 쪽이 정한다(재시도가 남았을 수 있다). */

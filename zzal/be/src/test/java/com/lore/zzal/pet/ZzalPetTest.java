@@ -110,7 +110,7 @@ class ZzalPetTest {
         }
 
         @Test
-        @DisplayName("밥은 흔적을 늘리지 않는다(해석 1) · 간식은 행복만 · 청소는 흔적 0")
+        @DisplayName("밥은 흔적을 늘리지 않는다(해석 1) · 간식은 행복만 · 청소는 흔적 −1")
         void careEffects() {
             ZzalPet pet = child();
             pet.settle(at("2026-09-05 16:00"));               // 흔적 1
@@ -601,6 +601,37 @@ class ZzalPetTest {
         }
 
         @Test
+        @DisplayName("★★ 해금에 세는 간식은 그날 <b>4개까지</b> — 5개째부터는 배탈이라 안 센다")
+        void snackCounterStopsAtTheUpsetLine() {
+            ZzalPet pet = child();
+
+            for (int i = 0; i < 6; i++) {
+                pet.snack(T0);
+            }
+
+            assertThat(pet.getTodaySnacks()).as("먹인 수는 그대로 센다").isEqualTo(6);
+            assertThat(pet.getSnacks())
+                    .as("해금 누적은 배탈 직전까지만 — 전부 세면 아이를 아프게 하는 쪽이 이득이 된다")
+                    .isEqualTo(ZzalRules.SNACK_DAILY_SICK_AT - 1);
+        }
+
+        @Test
+        @DisplayName("★ 밤을 넘기면 하루치가 0 이 되어 다시 센다 — 사흘이면 12개")
+        void snackCounterResumesTheNextDay() {
+            ZzalPet pet = child();
+            for (int i = 0; i < 6; i++) {
+                pet.snack(T0);
+            }
+            pet.settle(at("2026-09-05 20:00"));
+            pet.sleep(at("2026-09-05 20:00"));
+            pet.wake(at("2026-09-06 08:00"));
+
+            pet.snack(at("2026-09-06 09:00"));
+
+            assertThat(pet.getSnacks()).isEqualTo(ZzalRules.SNACK_DAILY_SICK_AT);
+        }
+
+        @Test
         @DisplayName("★ 배탈이 나는 그 간식은 조각에 안 센다 — nextSnackUpsets 가 먹이기 전에 답한다")
         void nextSnackUpsetsTellsBefore() {
             ZzalPet pet = child();
@@ -609,6 +640,38 @@ class ZzalPetTest {
                 pet.snack(T0);
             }
             assertThat(pet.nextSnackUpsets()).as("5개째부터 배탈").isTrue();
+        }
+
+        @Test
+        @DisplayName("★★ 청소는 흔적을 <b>하나씩</b> 없앤다 — 한 번에 다 치우면 하루 한 번이 상한이 된다")
+        void cleanRemovesOneTraceAtATime() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "trash", 3);
+
+            pet.clean(T0);
+            assertThat(pet.getTrash()).as("한 번에 하나").isEqualTo(2);
+            pet.clean(T0);
+            assertThat(pet.getTrash()).isEqualTo(1);
+            pet.clean(T0);
+            assertThat(pet.getTrash()).isZero();
+
+            // ★ 하한 0 — 깨끗한데 또 눌러도 음수로 내려가지 않는다(서비스가 막지만 엔티티도 지킨다)
+            pet.clean(T0);
+            assertThat(pet.getTrash()).isZero();
+
+            // ★ 누적은 누른 만큼 센다 — 2층 청소(13회)가 여기에 얹혀 있다
+            assertThat(pet.getCleans()).isEqualTo(4);
+        }
+
+        @Test
+        @DisplayName("★ 목욕은 그대로 <b>전부</b> 없앤다 — 청소와 다르다")
+        void bathClearsEveryTrace() {
+            ZzalPet pet = child();
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "trash", 4);
+
+            pet.bath(T0);
+
+            assertThat(pet.getTrash()).isZero();
         }
 
         @Test

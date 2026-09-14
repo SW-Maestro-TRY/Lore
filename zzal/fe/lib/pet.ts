@@ -350,6 +350,15 @@ export interface PetDetail {
   /** ★ 항상 온다. 프론트 시계의 유일한 기준. */
   serverNow: string;
 
+  /**
+   * 이 아이의 **자세별 소품 앵커** 파일 키(예: `images/zzal/pets/23/sets/7/anchors.json`).
+   * 화면이 CDN 에서 직접 읽는다 — **판 번호가 경로에 들어가므로 주소가 곧 판**이다.
+   *
+   * ★ 아직 서버가 안 준다(2026-09-13 · 백엔드 v4 와 함께 온다). 그래서 선택 항목이고,
+   *   **없어도 화면은 고정 앵커로 끝까지 그려진다**(→ `tamagotchi/props/anchors.ts`).
+   */
+  anchorsKey?: string | null;
+
   clock: Clock | null;
   /** "N일째 함께". 앱을 연 날만 +1. */
   daysTogether: number | null;

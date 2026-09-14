@@ -27,7 +27,7 @@ import java.time.LocalDate;
  * ★★ 판정 칸이 두 개인 것이 이 표의 핵심이다.
  *
  *   {@code gateVerdict}   기계가 뭐라 했나
- *   {@code humanVerdict}  상훈님이 뭐라 하셨나
+ *   {@code humanVerdict}  사람이 뭐라 했나
  *
  *   한 칸에 몰아넣으면 덮어써져서 "기계는 통과라 했는데 사람은 재생성이라 한" 건수를
  *   셀 수 없다. 그 건수가 곧 게이트를 강화할 재료이고, 일치율이 오르면 그때
@@ -37,7 +37,7 @@ import java.time.LocalDate;
  *   판정인지 모르면, 나중에 일치율이 올랐을 때 게이트가 좋아진 건지 다른 게 바뀐 건지 못 가른다
  *   (결과물에 파이프라인 버전을 박아두는 것과 같은 이유).
  *
- * ⚠️ 이 표는 <b>운영 전용</b>이다. 실험 판정 원장(jakae-lab)과 절대 섞지 않는다 —
+ * ⚠️ 이 표는 <b>운영 전용</b>이다. 실험 판정 원장과 절대 섞지 않는다 —
  *    모양이 비슷해도 한쪽을 고칠 때 다른 쪽이 따라 바뀌면 그게 곧 섞이는 길이다(2026-09-03 지시).
  */
 @Entity
@@ -65,7 +65,7 @@ public class ZzalMotion {
     /**
      * 어떤 동작인가. 실험의 동작 블록 이름을 그대로 쓴다(예: "교감1_머리쓰다듬").
      *
-     * ★ enum 이 아니라 문자열인 이유 — 동작 목록은 상훈님이 실험 결과를 보고 계속 정하신다.
+     * ★ enum 이 아니라 문자열인 이유 — 동작 목록은 실험 결과를 보고 계속 바뀐다.
      *   enum 으로 박으면 동작을 하나 더할 때마다 코드를 고쳐야 하고, 그 순간
      *   이미 옛 이름으로 저장된 행들이 깨진다(생성 단계를 행으로 둔 것과 같은 이유).
      */
@@ -83,6 +83,23 @@ public class ZzalMotion {
     /** 어느 파이프라인 버전으로 구웠나. */
     @Column(length = 20)
     private String pipelineVersion;
+
+    /**
+     * 완성된 움짤의 캔버스 크기(px).
+     *
+     * <h3>★ 왜 응답에 실어야 하나</h3>
+     * 판마다 캔버스가 다르다(실측 295~301 x 321~339). 화면이 상수로 가정하면 어떤 판에서는
+     * 몇 px 씩 어긋난 자리에 그림이 얹히는데, <b>오류가 안 나서 눈으로 봐야만</b> 드러난다.
+     *
+     * <h3>★ 왜 nullable 인가</h3>
+     * 맥미니가 올린 재생성본은 서버가 파일을 열어 보지 않아 크기를 모른다. 모르는 것을 0 으로
+     * 적으면 화면이 그 값을 믿고 0px 로 그린다. 비워 두면 "모른다" 가 그대로 전달된다.
+     */
+    @Column(name = "image_width")
+    private Integer imageWidth;
+
+    @Column(name = "image_height")
+    private Integer imageHeight;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
@@ -105,7 +122,7 @@ public class ZzalMotion {
     @Column(name = "human_verdict", length = 20)
     private HumanVerdict humanVerdict;
 
-    /** 상훈님이 남긴 말. 판정 코멘트는 등급보다 정보가 많다(실험에서 확인된 것). */
+    /** 검수자가 남긴 말. 판정 코멘트는 등급보다 정보가 많다(실험에서 확인된 것). */
     @Column(name = "human_note", length = 500)
     private String humanNote;
 
@@ -125,7 +142,7 @@ public class ZzalMotion {
     @Column
     private Instant openedAt;
 
-    // ── v2 (정본 6장, 플랜 T1 스키마) — 추가 칸은 전부 nullable/default ─────
+    // ── v2 (설계 규칙, 설계 결정) — 추가 칸은 전부 nullable/default ─────
 
     /** 어느 층인가. v1 행은 null. */
     @Enumerated(EnumType.STRING)
@@ -220,12 +237,12 @@ public class ZzalMotion {
     }
 
     /**
-     * 밤 큐에 올린다(정본 6장).
+     * 밤 큐에 올린다(설계 규칙).
      *
      * ★★ {@code regenRound} 를 <b>0 으로 되돌린다.</b> 그 값은 "이번 밤에 맥미니를 몇 번 썼나" 이지
      *   그 동작의 평생 횟수가 아니다. 안 돌리면 지난 밤에 두 번 쓴 자리는 다음 밤에 API 한 판이 실패하는 순간
      *   곧바로 {@code FAILED} 가 돼, <b>재생성 기회가 영구히 사라진다</b>(#224 리뷰 중-1).
-     *   정본 16장은 "굽기 실패는 조각을 소모하지 않는다 — 다음 밤에 같은 동작을 다시 굽는다" 이므로
+     *   설계 규칙은 "굽기 실패는 조각을 소모하지 않는다 — 다음 밤에 같은 동작을 다시 굽는다" 이므로
      *   다음 밤은 처음과 같은 조건이어야 한다. 평생 누적이 필요해지면 별도 칸을 만든다.
      *
      * <h3>★★ 조건부다 — 집어 둔 줄을 되돌리면 같은 것을 두 번 굽는다</h3>
@@ -263,7 +280,7 @@ public class ZzalMotion {
     private static final java.util.Set<MotionStatus> QUEUEABLE =
             java.util.EnumSet.of(MotionStatus.NONE, MotionStatus.FAILED, MotionStatus.QUEUED);
 
-    /** 그 밤 실패 — 조각은 소모하지 않고 다음 밤에 다시 오른다(16장). */
+    /** 그 밤 실패 — 조각은 소모하지 않고 다음 밤에 다시 오른다. */
     public void failNight() {
         this.status = MotionStatus.FAILED;
     }
@@ -321,10 +338,12 @@ public class ZzalMotion {
         this.attempts += 1;
     }
 
-    /** 다 구워졌다. 게이트 판정을 함께 받아 적는다. */
-    public void done(String imageKey, MotionSource source,
+    /** 다 구워졌다. 게이트 판정을 함께 받아 적는다. 크기를 모르면 {@code null} 을 준다. */
+    public void done(String imageKey, Integer width, Integer height, MotionSource source,
                      GateVerdict verdict, String note, String gateVersion) {
         this.imageKey = imageKey;
+        this.imageWidth = width;
+        this.imageHeight = height;
         this.source = source;
         this.gateVerdict = verdict;
         this.gateNote = note;
@@ -338,7 +357,7 @@ public class ZzalMotion {
      * 굽기가 느려 {@code StuckMotionRecovery} 의 유예를 넘기면 그 줄은 큐로 되돌아가 <b>다른 판이 다시 구워진다.</b>
      * 그런데 처음 굽던 스레드는 죽은 것이 아니라 느릴 뿐이라, 나중에 결과를 들고 돌아온다. 그때 무조건 받으면
      * <pre>
-     *   느린 굽기 A 시작 → 유예 초과 → 복구가 큐로 → 굽기 B → 검수 → 상훈님 OK → OPEN
+     *   느린 굽기 A 시작 → 유예 초과 → 복구가 큐로 → 굽기 B → 검수 → 사람 OK → OPEN
      *   그제서야 A 도착 → OPEN 이 REVIEW 로 되돌아가고 humanVerdict 가 지워진다
      * </pre>
      * 사용자에게는 <b>아침에 받은 동작이 다시 "연습 중" 으로 사라진다.</b> 검수도 다시 해야 한다.
@@ -348,20 +367,20 @@ public class ZzalMotion {
      *
      * @return 이 호출이 실제로 검수 대기로 옮겼으면 true. false 면 <b>진 쪽</b>이다 — 조용히 물러난다
      *
-     * ★★ v1 은 여기서 바로 열었다("검수 전 지급"). PR-7 에서 <b>없앴다</b> — 정본 6장·2장은
+     * ★★ v1 은 여기서 바로 열었다("검수 전 지급"). PR-7 에서 <b>없앴다</b> — 설계 규칙은
      *   "밤에 굽고 → 판정하고 → <b>아침에</b> 배워 온다" 이고, 그 순서가 지켜지려면 검수를 통과하기 전의 그림이
      *   사용자 화면에 뜨면 안 된다. 밤에 재운 사용자가 갇히는 문제는 "아침 공개" 로 이미 풀린다 —
-     *   판정 창이 23:00~10:00 이고, 10:00 을 넘겨 판정되면 낮에 도착한다(정본 16장).
+     *   판정 창이 23:00~10:00 이고, 10:00 을 넘겨 판정되면 낮에 도착한다(설계 규칙).
      *
      * ★ 다시 구운 것이면 사람 판정을 지운다. 안 지우면 새 그림이 옛 판정을 달고 검수 목록에서 사라진다.
      */
-    public boolean toReview(String imageKey, MotionSource source,
+    public boolean toReview(String imageKey, Integer width, Integer height, MotionSource source,
                             GateVerdict verdict, String note, String gateVersion) {
         // ★★ 굽는 중이던 줄만 받는다. 아래 설명 참조.
         if (this.status != MotionStatus.BAKING) {
             return false;
         }
-        done(imageKey, source, verdict, note, gateVersion);
+        done(imageKey, width, height, source, verdict, note, gateVersion);
         this.status = MotionStatus.REVIEW;
         this.humanVerdict = null;
         this.humanNote = null;
@@ -372,7 +391,7 @@ public class ZzalMotion {
     /**
      * 맥미니(codex)에게 다시 만들어 달라고 건다. {@code regenRound} 가 하나 오른다.
      *
-     * ★ API 로 다시 굽지 않는다(정본 6장) — 한 판이 $0.10 이고, 로컬 재생성은 돈이 안 든다.
+     * ★ API 로 다시 굽지 않는다(설계 규칙) — 한 판이 $0.10 이고, 로컬 재생성은 돈이 안 든다.
      */
     public void requestLocalRegen() {
         this.status = MotionStatus.LOCAL_REQUESTED;
@@ -411,6 +430,10 @@ public class ZzalMotion {
         // 결과가 올라왔다 — 집기를 지운다. 안 지우면 보류함에서 꺼낸 뒤 같은 자리가 유예만큼 안 나간다.
         this.agentClaimedAt = null;
         this.imageKey = imageKey;
+        // ★ 새 그림의 크기는 모른다(서버가 파일을 열지 않는다). 옛 판의 크기를 남겨 두면
+        //   화면이 다른 판의 값으로 그린다 — 지우는 편이 "모른다" 를 정확히 말한다.
+        this.imageWidth = null;
+        this.imageHeight = null;
         this.source = MotionSource.LOCAL;
         this.status = MotionStatus.REVIEW;
         this.attempts += 1;
@@ -423,7 +446,7 @@ public class ZzalMotion {
      * 검수 통과 — 공개해도 된다.
      *
      * ★ 이게 곧 "사용자 화면에 떴다" 는 아니다. 실제 도착은 {@link #reveal(Instant)} 이고,
-     *   그건 <b>펫이 깨어 있는 첫 정산</b>에서 일어난다(정본 2장 "기상 첫 화면").
+     *   그건 <b>펫이 깨어 있는 첫 정산</b>에서 일어난다(설계 규칙 "기상 첫 화면").
      */
     public void approve(Instant now) {
         this.status = MotionStatus.OPEN;
@@ -481,7 +504,7 @@ public class ZzalMotion {
     }
 
     /**
-     * 사람이 고른 판으로 대표를 갈아 끼운다(정본 1.9 — 나온 판 중에서 고른다).
+     * 사람이 고른 판으로 대표를 갈아 끼운다(설계 규칙 — 나온 판 중에서 고른다).
      *
      * ★ 대표를 바꿔야 하는 이유 — 사용자에게 나가는 그림은 모션 행의 {@code imageKey} 다.
      *   후보 줄에만 표시하고 여기를 안 바꾸면 <b>고르지 않은 판이 공개된다.</b>
@@ -489,9 +512,12 @@ public class ZzalMotion {
     public void useCandidate(String imageKey, MotionSource source) {
         this.imageKey = imageKey;
         this.source = source;
+        // ★ 고른 판의 크기는 모른다. 앞 판의 값을 남기면 다른 그림의 크기로 그린다.
+        this.imageWidth = null;
+        this.imageHeight = null;
     }
 
-    /** 상훈님 판정을 받아 적는다. 게이트 판정은 그대로 남는다(둘을 비교해야 하므로). */
+    /** 사람 판정을 받아 적는다. 게이트 판정은 그대로 남는다(둘을 비교해야 하므로). */
     public void review(HumanVerdict verdict, String note, Instant now) {
         this.humanVerdict = verdict;
         this.humanNote = note;
@@ -560,6 +586,16 @@ public class ZzalMotion {
 
     public int getAttempts() {
         return attempts;
+    }
+
+    /** 움짤 캔버스 가로(px). 모르면 null. */
+    public Integer getImageWidth() {
+        return imageWidth;
+    }
+
+    /** 움짤 캔버스 세로(px). 모르면 null. */
+    public Integer getImageHeight() {
+        return imageHeight;
     }
 
     public Instant getOpenedAt() {

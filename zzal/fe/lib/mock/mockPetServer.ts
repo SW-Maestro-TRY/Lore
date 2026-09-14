@@ -174,8 +174,13 @@ interface Row {
 
 /** 여울 8상태 파일에 동작 키를 댄 서버 키(목 전용). assetUrl() 을 지나는 경로를 그대로 탄다. */
 const DEMO_KEY: Record<string, string> = {
-  base: 'idle', eat: 'eat', joy: 'happy', sad: 'sad', sick: 'hungry', practice: 'train', shy: 'pet', call: 'happy',
-  tilt: 'idle', wave: 'happy', sleep: 'idle', wash: 'clean', startle: 'hungry', nod: 'idle', smile_idle: 'happy', sit: 'idle',
+  // v4 1층 8종(서버 MotionCatalog 와 같은 key).
+  base: 'idle', eat: 'eat', joy: 'happy', sad: 'sad', sick: 'hungry', pet: 'pet', hello: 'happy', sleep: 'idle',
+  // v4 2층 8종. ★ 안 적어 두면 `?? 'idle'` 로 떨어져 **여덟 칸이 전부 같은 그림**이 된다.
+  eat_rice: 'eat', eat_snack: 'eat', sweep: 'clean', wash: 'clean',
+  reply: 'idle', petted: 'pet', startle: 'hungry', wake_up: 'idle',
+  // 옛 이름도 남겨 둔다 — 옛 목 데이터가 들어와도 그림이 안 비게.
+  practice: 'train', shy: 'pet', call: 'happy', tilt: 'idle', wave: 'happy', nod: 'idle', smile_idle: 'happy', sit: 'idle',
 };
 const demoImage = (key: string) => `images/zzal/demo/${DEMO_KEY[key] ?? 'idle'}.webp`;
 

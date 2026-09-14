@@ -8,15 +8,16 @@ import com.lore.zzal.motion.UnlockRule;
 import java.util.List;
 
 /**
- * 기본 행동(2프레임)이 열렸나 — 정본 6장 2층 조건표를 펫의 누적 카운터에 대 본다. 순수 자바.
+ * 기본 행동(2프레임)이 열렸나 — 2층 조건표를 펫의 누적 카운터에 대 본다. 순수 자바.
  *
  * <h3>★ 저장하지 않고 계산한다</h3>
  * "열렸다" 를 표에 적어 두면 카운터와 표가 어긋날 수 있다(카운터는 9인데 표는 잠김). 조건은 전부
  * 부화 순간부터 누적되는 카운터의 함수이므로 매번 계산해도 같은 답이고, 정본 표가 바뀌면
  * {@link MotionCatalog} 한 곳만 고치면 된다. "이번 행동으로 새로 열렸다"(폭죽)는 행동 전후를 비교해 얻는다.
  *
- * <h3>16번 "2층 6종 열림" 은 자기 자신을 뺀다(16장)</h3>
- * 그래서 재귀가 아니라 "나머지 2층 7종 중 몇 개" 로 센다.
+ * <h3>{@code LAYER2_OPEN} 은 자기 자신을 뺀다</h3>
+ * 그래서 재귀가 아니라 "나머지 2층 7종 중 몇 개" 로 센다. 지금 카탈로그에는 이 조건을 쓰는 동작이
+ * 없지만(여덟 종이 전부 그 행동 자체를 센다), 옛 펫을 설명하려면 계산은 남아 있어야 한다.
  */
 public final class UnlockRules {
 
@@ -28,9 +29,14 @@ public final class UnlockRules {
         return switch (kind) {
             case ALWAYS -> 0;
             case CHAT_ANSWERS -> pet.getChatAnswers();
-            case SLEEP_WAKE -> pet.getSleepWakeCount();
             case BATH -> pet.getBathCount();
             case GAME_STARTS -> pet.getGameStarts();
+            case FEEDS -> pet.getFeeds();
+            case SNACKS -> pet.getSnacks();
+            case CLEANS -> pet.getCleans();
+            case PET_COUNT -> pet.getPets();
+            case WAKES -> pet.getWakes();
+            case SLEEP_WAKE -> pet.getSleepWakeCount();
             case ZERO_MISS_DAYS -> pet.getZeroMissDays();
             case LAYER2_OPEN -> openedLayerTwoExcluding(pet, catalog, UnlockRule.Kind.LAYER2_OPEN);
             case FIRST_GIFT, SECOND_GIFT -> 0;
