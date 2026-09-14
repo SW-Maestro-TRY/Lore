@@ -173,6 +173,31 @@ public class WebtoonJob {
     @Column(name = "queued_ahead")
     private Integer queuedAhead;
 
+    /**
+     * 다 만들어지면 <b>어디로</b> 알릴 것인가. 게스트가 직접 적어 넣은 주소다.
+     *
+     * <b>로그인한 사람은 여기가 비어 있다</b> — 보낼 때 계정에서 읽는다.
+     * 베껴 두면 사람이 계정 이메일을 바꾼 뒤에도 옛 주소로 나간다.
+     *
+     * 비어 있으면 안 보낸다. 이건 <b>선택</b>이지 만들기의 조건이 아니다 —
+     * 안 적어도 만들기는 그대로 돈다.
+     */
+    @Column(name = "notify_email", length = 255)
+    private String notifyEmail;
+
+    /**
+     * 알림을 <b>보낸 때.</b> 이 칸이 두 번 보내는 것을 막는다.
+     *
+     * 끝나는 자리가 여럿이고(다 됨 · 실패 · 되살리기) 화면은 0.8초마다
+     * 묻는다. 안 적으면 같은 사람에게 같은 메일이 여러 통 나간다.
+     *
+     * <b>여기 적는 일은 자바가 아니라 DB 한 문장이 한다</b>
+     * ({@code WebtoonJobRepository.claimNotice}). 읽고-판단하고-쓰면 그
+     * 사이의 틈에 둘이 같이 들어오기 때문이다.
+     */
+    @Column(name = "notified_at")
+    private Instant notifiedAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -224,6 +249,17 @@ public class WebtoonJob {
     /** 줄 설 때 앞에 몇 개 있었는지 적어 둔다. */
     void queuedBehind(int ahead) {
         this.queuedAhead = ahead;
+    }
+
+    /**
+     * 다 되면 이 주소로 알린다. 빈 값을 주면 <b>안 받겠다</b>는 뜻이다.
+     *
+     * 아직 안 보냈으면 주소를 바꿀 수 있다 — 오타를 냈을 때 고칠 길이
+     * 없으면 그 사람은 영영 못 받는다.
+     */
+    void notifyTo(String email, Instant at) {
+        this.notifyEmail = (email == null || email.isBlank()) ? null : email.trim();
+        this.updatedAt = at;
     }
 
     void failed(String why, Refunded refunded, Instant at) {
@@ -333,6 +369,16 @@ public class WebtoonJob {
     /** 줄 설 때 앞에 몇 개 있었나. 옛 작업은 {@code null}. */
     public Integer getQueuedAhead() {
         return queuedAhead;
+    }
+
+    /** 게스트가 적어 넣은 알림 주소. 로그인한 사람은 {@code null}. */
+    public String getNotifyEmail() {
+        return notifyEmail;
+    }
+
+    /** 알림을 보낸 때. 아직 안 보냈으면 {@code null}. */
+    public Instant getNotifiedAt() {
+        return notifiedAt;
     }
 
     public Instant getCreatedAt() {

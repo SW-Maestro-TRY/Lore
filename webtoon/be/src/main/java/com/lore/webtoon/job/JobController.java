@@ -183,6 +183,38 @@ public class JobController {
         return jobs.view(id);
     }
 
+    /**
+     * 다 되면 이 주소로 알려 달라 — <b>게스트가 이메일을 적어 넣는 자리.</b>
+     *
+     * 한 편에 5~15분이 걸린다. 창을 닫으면 다 됐는지 알 길이 없고, 게스트는
+     * 자기 작품을 브라우저 uid 로만 찾으므로 <b>다른 기기로 들어오면 만든
+     * 것을 못 찾는다.</b> 메일에 담는 결과 링크가 그 사람이 자기 작품으로
+     * 돌아오는 유일한 길이다.
+     *
+     * 로그인한 사람은 이걸 안 불러도 계정 주소로 간다.
+     *
+     * <b>실패해도 만들기는 안 멈춘다</b> — 이건 곁가지다. 주소가 틀렸으면
+     * 그 자리에서 말해 준다(400): 담아 두고 보낸 척하면 화면에는
+     * 「보낼게요」가 떠 있는데 영영 아무것도 안 온다.
+     */
+    @Operation(summary = "완성 알림 받을 이메일",
+            description = "빈 값을 보내면 안 받겠다는 뜻이라 적어 둔 주소를 지운다.")
+    @PostMapping("/jobs/{id}/notify")
+    public Map<String, Object> notify(@PathVariable String id,
+                                      @RequestBody(required = false) NotifyRequest body) {
+        String to = jobs.notifyTo(id, body == null ? null : body.email());
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        // 화면이 그대로 적는다. 자기 주소를 자기에게 보여 주는 것이라 안 가린다 —
+        // 가려 놓으면 오타를 냈는지 확인할 길이 없다.
+        out.put("email", to);
+        return out;
+    }
+
+    /** 받을 주소. 본문 없이 부르면 「안 받겠다」로 읽는다. */
+    public record NotifyRequest(String email) {
+    }
+
     @Operation(summary = "이야기 고르기")
     @PostMapping("/jobs/{id}/pick")
     public Map<String, Object> pick(@PathVariable String id, @RequestBody PickRequest body) {

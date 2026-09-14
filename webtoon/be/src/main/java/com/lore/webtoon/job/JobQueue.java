@@ -143,6 +143,41 @@ public class JobQueue {
     }
 
     /**
+     * <b>이 사람이 결과를 보기까지 앞으로 몇 분.</b> 화면이 「약 4분 남았어요」로 적는다.
+     *
+     * 줄에 서 있으면 <b>앞사람들 + 내 한 편</b>을 같이 센다 — 줄 띠(「앞에 2명」)는
+     * "내 차례가 언제 오나" 를 말하지만, 기다리는 사람이 정말 알고 싶은 것은
+     * "언제 볼 수 있나" 다. 나갔다 올지 말지를 그 숫자로 정한다.
+     *
+     * <b>사람이 답할 차례면 안 센다({@code null}).</b> 그때 멈춰 있는 것은
+     * 우리가 아니라 그 사람이라, 남은 시간을 적으면 거짓말이 된다 —
+     * 시트 앞에서 십 분을 고민해도 「1분 남음」이 떠 있게 된다.
+     *
+     * @return 남은 분(최소 1). 끝났거나 사람 차례면 {@code null}
+     */
+    @Transactional(readOnly = true)
+    public Integer minutesLeft(WebtoonJob job) {
+        if (job == null || job.getStatus() == null) {
+            return null;
+        }
+        long seconds = switch (job.getStatus()) {
+            case QUEUED -> {
+                Spot spot = spotOf(job);
+                yield (spot == null ? 0 : spot.seconds()) + wholeOf(job);
+            }
+            case RUNNING -> remainingOf(job);
+            default -> -1;                  // 끝났거나(DONE·ERROR) 사람을 기다리는 중
+        };
+        return seconds < 0 ? null : (int) Math.max(1, Math.ceil(seconds / 60.0));
+    }
+
+    /** 이 화질로 한 편 만드는 데 걸리는 예상 시간(초). */
+    private long wholeOf(WebtoonJob job) {
+        return SECONDS.getOrDefault(
+                WebtoonQuality.normalize(job.getQuality()), SECONDS.get("surf"));
+    }
+
+    /**
      * 이 작업이 <b>앞으로</b> 얼마나 더 걸릴까(초).
      *
      * 도는 중이면 이미 지난 만큼을 뺀다 — 14분짜리가 13분째면 1분만 남았다.
@@ -150,8 +185,7 @@ public class JobQueue {
      * 말해 놓고 안 끝나는 것보다, 조금 남았다고 말하는 편이 덜 속인다.
      */
     private long remainingOf(WebtoonJob one) {
-        long whole = SECONDS.getOrDefault(
-                WebtoonQuality.normalize(one.getQuality()), SECONDS.get("surf"));
+        long whole = wholeOf(one);
         if (one.getStatus() != JobStatus.RUNNING || one.getStartedAt() == null) {
             return whole;
         }

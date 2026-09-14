@@ -36,7 +36,10 @@ export function headLine(status: string, styleLabel: string): HeadLine {
     return {
       eyebrow: "대기 중",
       title: "앞에 만들고 있는 작품이 있습니다",
-      sub: "한 번에 한 편씩 만듭니다.",
+      /* 동시에 둘까지 돈다(2026-09-13). 예전에는 「한 번에 한 편씩」이었는데
+         그대로 두면 화면이 옛말을 하고, 바로 위의 줄 표시(「앞에 2명 · 약 5분
+         뒤 시작」)와도 어긋난다 — 한 편씩이면 10분이어야 하니까. */
+      sub: "한 번에 두 편씩 만듭니다.",
     };
   }
   if (status === "awaiting_sheet" || status === "awaiting_pick") {

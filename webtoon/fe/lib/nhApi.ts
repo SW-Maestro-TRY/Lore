@@ -104,6 +104,13 @@ export interface NhJob {
   /** 줄에서의 자리. **내 차례면 없다(null)** — 그때는 적을 것이 없다.
    *  서버가 DB 를 보고 센다(JobQueue) — 화면이 세지 않는다. */
   queue: { ahead: number; minutes: number; line: string } | null;
+  /** 다 되면 어디로 알릴 것인가. **화면이 로그인 여부를 자기가 판단하지 않는다.**
+   *  email 이 비어 있으면 아직 받을 데가 없다는 뜻이고, 그때만 게스트에게
+   *  입력 칸을 띄운다. sent 가 참이면 이미 나간 뒤라 주소를 못 바꾼다. */
+  notice?: { logged_in: boolean; email: string | null; sent: boolean } | null;
+  /** 결과를 보기까지 남은 분. **사람이 답할 차례이거나 끝났으면 없다.**
+   *  서버가 센다 — 화면이 자기 시계로 세면 새로고침할 때마다 값이 뛴다. */
+  minutes_left?: number | null;
   pct: number;
   /** retry_page: 지금 걸려서 다시 그리는 중인 장 번호. 0(또는 없음)이면 없다. */
   art: { done: number; total: number; retry_page?: number } | null;
@@ -242,6 +249,16 @@ export function retryDirections(id: string, note = "") {
 
 export function cancelJob(id: string) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/cancel`);
+}
+
+/** 다 되면 이 주소로 알려 달라. **빈 값을 보내면 안 받겠다는 뜻이다.**
+ *
+ *  주소가 틀리면 서버가 400 과 함께 사람이 읽을 한 줄을 준다 — 담아 두고
+ *  보낸 척하면 화면에는 「보낼게요」가 떠 있는데 영영 아무것도 안 온다.
+ *
+ *  @returns 실제로 보낼 주소. 지웠으면 null. */
+export function notifyByEmail(id: string, email: string): Promise<{ email: string | null }> {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/notify`, { email });
 }
 
 /* ---- 그림 주소 ------------------------------------------------------------

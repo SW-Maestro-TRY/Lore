@@ -62,17 +62,18 @@ public class CharacterMaker {
     /**
      * 그린다.
      *
-     * @param photo 있으면 읽어서 외모를 적는다. 없으면 이름·설명만으로 —
-     *              <b>그 길이 이 기능의 핵심이다</b>(자캐 그림이 없는 사람)
+     * @param photos 있으면 읽어서 외모를 적는다(최대 4장, 같은 사람의 다른
+     *              각도·표정). 비어 있으면 이름·설명만으로 — <b>그 길이 이
+     *              기능의 핵심이다</b>(자캐 그림이 없는 사람)
      */
-    public Made make(String name, String description, Path photo, String style, Path out)
+    public Made make(String name, String description, List<Path> photos, String style, Path out)
             throws IOException, InterruptedException {
         List<String> cmd = new ArrayList<>(List.of(
                 python, "-u", "character.py",
                 "--name", name,
                 "--description", description == null ? "" : description,
                 "--out", out.toString()));
-        if (photo != null) {
+        for (Path photo : photos) {
             cmd.add("--photo");
             cmd.add(photo.toString());
         }

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { createCharacter, type Character } from "../../lib/charApi";
-import { STYLE_INFO } from "../../lib/wizardData";
+import { MAX_PHOTOS, STYLE_INFO } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
 
 /* 캐릭터 하나 만들기 — **화면 하나를 통째로 쓴다.**
@@ -23,22 +23,34 @@ export default function CharacterMake({ onClose, onMade }: {
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [style, setStyle] = useState(STYLE_INFO[0][0]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
-  const pick = (f: File | undefined) => {
-    if (!f) return;
-    if (f.size > 6 * 1024 * 1024) { setFailed("사진이 너무 큽니다 (6MB 까지)"); return; }
-    const r = new FileReader();
-    r.onload = () => { setPhoto(String(r.result)); setFailed(null); };
-    r.readAsDataURL(f);
+  /** 여러 장을 한꺼번에 골라도 된다 — 같은 사람의 다른 각도·표정. */
+  const pick = (files: FileList | null) => {
+    const list = [...(files ?? [])];
+    if (!list.length) return;
+    const room = MAX_PHOTOS - photos.length;
+    if (room <= 0) { setFailed(`사진은 ${MAX_PHOTOS}장까지 올릴 수 있습니다`); return; }
+    setFailed(null);
+    list.slice(0, room).forEach((f) => {
+      if (f.size > 6 * 1024 * 1024) { setFailed("사진이 너무 큽니다 (6MB 까지)"); return; }
+      const r = new FileReader();
+      r.onload = () => setPhotos((prev) => [...prev, String(r.result)]);
+      r.readAsDataURL(f);
+    });
+    if (file.current) file.current.value = "";
+  };
+
+  const dropPhoto = (i: number) => {
+    setPhotos((prev) => prev.filter((_, idx) => idx !== i));
   };
 
   /** 사진이든 설명이든 **하나만** 있으면 만든다. */
-  const ready = Boolean(photo || description.trim());
+  const ready = Boolean(photos.length || description.trim());
 
   const submit = async () => {
     if (!ready || busy) return;
@@ -48,7 +60,7 @@ export default function CharacterMake({ onClose, onMade }: {
       onMade(await createCharacter({
         name: name.trim(),
         description: description.trim(),
-        photo_data: photo || undefined,
+        photos_data: photos.length ? photos : undefined,
         style,
       }));
     } catch (e) {
@@ -88,28 +100,37 @@ export default function CharacterMake({ onClose, onMade }: {
           </label>
 
           <div className="char-field">
-            <span>사진 <em className="char-opt">선택</em></span>
+            <span>사진 <em className="char-opt">선택 · {photos.length}/{MAX_PHOTOS}장</em></span>
             <div className="char-photo">
-              {photo
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={photo} alt="올린 사진" />
-                : <span className="char-photo-none">없어도 됩니다 — 설명만으로 그려요</span>}
-              <input ref={file} type="file" accept="image/*" hidden disabled={busy}
-                     onChange={(e) => pick(e.target.files?.[0])} />
-              <div className="char-photo-acts">
-                <button type="button" className="btn btn-quiet btn-sm" disabled={busy}
-                        onClick={() => file.current?.click()}>
-                  {photo ? "다른 사진" : "사진 올리기"}
-                </button>
-                {photo && (
-                  <button type="button" className="btn btn-quiet btn-sm" disabled={busy}
-                          onClick={() => setPhoto(null)}>빼기</button>
+              {photos.length === 0
+                ? <span className="char-photo-none">없어도 됩니다 — 설명만으로 그려요</span>
+                : (
+                  <ul className="photo-strip">
+                    {photos.map((src, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <li className="shot" key={i}>
+                        <img src={src} alt={`${i + 1}번째 사진`} />
+                        <button type="button" className="shot-x" aria-label="지우기"
+                                disabled={busy} onClick={() => dropPhoto(i)}>✕</button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </div>
+              <input ref={file} type="file" accept="image/*" multiple hidden disabled={busy}
+                     onChange={(e) => pick(e.target.files)} />
+              {photos.length < MAX_PHOTOS && (
+                <div className="char-photo-acts">
+                  <button type="button" className="btn btn-quiet btn-sm" disabled={busy}
+                          onClick={() => file.current?.click()}>
+                    {photos.length ? "여러 각도로 더 올리기" : "사진 올리기"}
+                  </button>
+                </div>
+              )}
             </div>
             <p className="char-note">
               올린 사진은 <b>생김새를 옮겨 적는 데만</b> 쓰고, 그림이 나오면 서버에서
-              지웁니다. 남는 것은 그려진 캐릭터뿐이에요.
+              지웁니다. 남는 것은 그려진 캐릭터뿐이에요. 여러 각도·표정으로 올리면
+              더 닮게 그려요.
             </p>
           </div>
         </div>

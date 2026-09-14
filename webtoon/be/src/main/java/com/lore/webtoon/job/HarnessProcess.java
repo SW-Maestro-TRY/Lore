@@ -98,8 +98,12 @@ public class HarnessProcess {
      *
      * stitch · prepareUpload 는 취소 대상이 아니라서(이미 다 그린 것을 잇거나
      * 올리는 마무리 걸음) 여기에 안 실린다.
+     *
+     * <b>한 작업이 여러 개를 동시에 돌린다.</b> 장면을 나눠 동시에 그리기
+     * 시작하면서 그렇게 됐다 — 칸이 하나면 나중에 뜬 것이 앞의 것을 덮고,
+     * 취소가 그 하나만 죽여서 <b>나머지는 계속 그림 값을 쓴다.</b>
      */
-    private final java.util.concurrent.ConcurrentMap<Long, Process> running =
+    private final java.util.concurrent.ConcurrentMap<Long, java.util.Set<Process>> running =
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
@@ -116,23 +120,31 @@ public class HarnessProcess {
      * 기다리는 것은 여기서 안 한다 — 취소를 누른 사람은 즉시 답을 받아야 한다.
      */
     public boolean stopCurrent(Long jobId) {
-        Process p = jobId == null ? null : running.get(jobId);
-        if (p == null || !p.isAlive()) {
+        java.util.Set<Process> mine = jobId == null ? null : running.get(jobId);
+        if (mine == null) {
             return false;
         }
-        log.info("하네스를 멈춥니다 (pid={})", p.pid());
-        p.destroy();
-        Thread.ofVirtual().start(() -> {
-            try {
-                if (!p.waitFor(5, TimeUnit.SECONDS)) {
-                    log.warn("하네스가 안 멈춰서 끊습니다 (pid={})", p.pid());
-                    p.destroyForcibly();
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+        boolean stopped = false;
+        // 이 작업의 것은 **전부** 멈춘다 — 장면을 동시에 그리는 중이면 여럿이다.
+        for (Process p : mine) {
+            if (!p.isAlive()) {
+                continue;
             }
-        });
-        return true;
+            stopped = true;
+            log.info("하네스를 멈춥니다 (pid={})", p.pid());
+            p.destroy();
+            Thread.ofVirtual().start(() -> {
+                try {
+                    if (!p.waitFor(5, TimeUnit.SECONDS)) {
+                        log.warn("하네스가 안 멈춰서 끊습니다 (pid={})", p.pid());
+                        p.destroyForcibly();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+        return stopped;
     }
 
     /**
@@ -161,7 +173,8 @@ public class HarnessProcess {
         log.info("하네스 실행: {}", String.join(" ", cmd));
         Process p = pb.start();
         if (jobId != null) {
-            running.put(jobId, p);              // 취소가 이걸 보고 멈춘다
+            running.computeIfAbsent(jobId, k -> java.util.concurrent.ConcurrentHashMap.newKeySet())
+                   .add(p);                     // 취소가 이걸 보고 멈춘다
         }
         try {
             Thread reader = streamLines(p.getInputStream(), onLine, "하네스 출력을 읽다 끊겼습니다");
@@ -171,7 +184,10 @@ public class HarnessProcess {
             // 끝난 것을 담고 있으면 안 된다 — 다음 사람의 취소가 이미 죽은
             // 것을 멈추고는 「멈췄다」고 답한다.
             if (jobId != null) {
-                running.remove(jobId);
+                running.computeIfPresent(jobId, (k, mine) -> {
+                    mine.remove(p);
+                    return mine.isEmpty() ? null : mine;
+                });
             }
         }
     }
