@@ -45,6 +45,19 @@ public enum ErrorCode {
     ZZAL_PET_ALREADY_HATCHING(HttpStatus.CONFLICT, "아직 부화 중이에요"),
     ZZAL_PET_LIMIT_REACHED(HttpStatus.CONFLICT, "더 키울 수 있는 자리가 없어요"),
 
+    // 부화 막기 (zzal) — 알파 공개 전 비용 방벽(2026-09-14, #192).
+    //
+    // ★★ 사유마다 코드를 따로 두는 이유 — 상태는 전부 409 라 상태로는 안 갈린다. 409 는
+    //    "이미 부화 중" 같은 다른 이유로도 나가므로, 화면이 무엇을 띄울지는 코드 하나로 정해진다.
+    //    (화면 표 = zzal/fe/lib/hatchBlocked.ts — 여기 없는 코드는 공통 문구로 떨어진다)
+    // ★ 문구는 화면이 그대로 쓰지 않는다. 기록과 마지막 보루다 — 그래서 "무엇이 얼마나 걸렸는지" 가
+    //   보이게 쓰고, 상한 숫자가 들어가는 자리는 던지는 쪽이 실제 설정값으로 채워 넘긴다.
+    ZZAL_HATCH_BLOCKED_PET_LIMIT(HttpStatus.CONFLICT, "지금은 새 아이를 만들 수 없어요"),
+    ZZAL_HATCH_BLOCKED_DAILY_CAP(HttpStatus.CONFLICT, "오늘 몫을 다 썼어요(한국 시각 자정에 초기화)"),
+    ZZAL_HATCH_BLOCKED_SERVICE_CAP(HttpStatus.CONFLICT, "오늘은 아이가 많이 태어났어요(한국 시각 자정에 초기화)"),
+    ZZAL_HATCH_BLOCKED_IP_RATE(HttpStatus.CONFLICT, "같은 곳에서 너무 자주 시작했어요"),
+    ZZAL_HATCH_BLOCKED_QUOTA(HttpStatus.CONFLICT, "그림을 만드는 곳이 지금 받아 주지 않아요"),
+
     // 돌보기 (zzal) — 왜 안 되는지를 사용자 말로 답한다. 화면은 이 문구를 그대로 띄워도 된다.
     ZZAL_PET_NOT_ALIVE(HttpStatus.CONFLICT, "아직 함께 지낼 수 없어요"),
     ZZAL_PET_SLEEPING(HttpStatus.CONFLICT, "자고 있어요"),
