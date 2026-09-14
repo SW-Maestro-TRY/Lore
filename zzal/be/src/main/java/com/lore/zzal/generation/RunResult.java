@@ -13,14 +13,32 @@ public record RunResult(boolean success,
                         StepContext ctx,
                         BigDecimal costUsd,
                         GenErrorCode errorCode,
-                        boolean gridRejected) {
+                        boolean gridRejected,
+                        boolean quotaBlocked) {
 
     public static RunResult ok(StepContext ctx, BigDecimal cost) {
-        return new RunResult(true, ctx, cost, null, false);
+        return new RunResult(true, ctx, cost, null, false, false);
     }
 
     public static RunResult failed(StepContext ctx, BigDecimal cost, GenErrorCode code) {
-        return new RunResult(false, ctx, cost, code, false);
+        return new RunResult(false, ctx, cost, code, false, false);
+    }
+
+    /**
+     * 바깥이 <b>한도(429)</b> 로 막아서 실패했다 — <b>다시 구우면 또 막힌다.</b>
+     *
+     * <h3>★★ 왜 이 신호를 따로 두나 — 한 번 막히면 돈이 두 배로 나갔다</h3>
+     * 지금까지는 실패 원인을 안 가리고 무조건 한 번 더 구웠다. 429 는 "잔액이 없다 / 너무
+     * 빠르다" 는 뜻이라 곧바로 다시 보내면 <b>같은 자리에서 또 막히고</b>, 그 전에 이미 200 을
+     * 받은 단계의 값은 그대로 나간 뒤다({@code BilledFailureException}). 타임아웃·격자 구조
+     * 이상과는 처방이 정반대라 반드시 갈라야 한다.
+     *
+     * ★ {@link GenErrorCode} 를 늘리지 않은 이유는 {@link #gridRejected} 와 같다 — 그 값은 DB 에
+     *   남고 칼럼에 값 목록 CHECK 가 걸려 있어 마이그레이션이 필요하다. 이 신호는 한 번의
+     *   {@code hatch()} 안에서만 쓰이므로 기록할 필요가 없다(멈춤 상태는 {@code QuotaBreaker} 가 든다).
+     */
+    public static RunResult quotaBlocked(StepContext ctx, BigDecimal cost, GenErrorCode code) {
+        return new RunResult(false, ctx, cost, code, false, true);
     }
 
     /**
@@ -34,6 +52,6 @@ public record RunResult(boolean success,
      *   영구 기록이 필요해지면 그때 오류 코드와 마이그레이션을 함께 올린다.
      */
     public static RunResult gridRejected(StepContext ctx, BigDecimal cost, GenErrorCode code) {
-        return new RunResult(false, ctx, cost, code, true);
+        return new RunResult(false, ctx, cost, code, true, false);
     }
 }

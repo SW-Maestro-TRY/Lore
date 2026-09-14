@@ -20,6 +20,41 @@ public interface GenJobRepository extends JpaRepository<GenJob, Long> {
     long countByPetIdAndKind(Long petId, GenKind kind);
 
     /**
+     * 이 사람이 <b>지금까지</b> 시작한 부화 수. 누적 상한이 이 값을 본다.
+     *
+     * <h3>★★ 왜 펫 줄이 아니라 굽기 기록으로 세나</h3>
+     * 세려는 것은 "아이가 몇 마리냐" 가 아니라 <b>돈이 몇 번 나갔느냐</b>다. 둘은 다르다 —
+     * 한 마리를 굽다 실패하면 {@code HatchService} 가 한 번 더 굽는데({@code max-hatch-attempts}),
+     * 그때 <b>펫 줄은 그대로고 이 표에만</b> 줄이 하나 는다. 펫으로 세면 그 돈이 안 보인다.
+     * 반대로 이 표는 실패한 부화도, 이름을 안 짓고 버린 초안도 전부 한 줄씩 갖고 있다.
+     */
+    @Query("""
+            select count(j) from GenJob j
+             where j.kind = :kind
+               and j.petId in (select p.id from ZzalPet p where p.userId = :userId)
+            """)
+    long countHatchesOfUser(@Param("userId") Long userId, @Param("kind") GenKind kind);
+
+    /** 이 사람이 <b>그 시각 이후</b>로 시작한 부화 수. 하루 상한이 이 값을 본다(경계 = 한국 시각 자정). */
+    @Query("""
+            select count(j) from GenJob j
+             where j.kind = :kind
+               and j.startedAt >= :from
+               and j.petId in (select p.id from ZzalPet p where p.userId = :userId)
+            """)
+    long countHatchesOfUserSince(@Param("userId") Long userId, @Param("kind") GenKind kind,
+                                 @Param("from") Instant from);
+
+    /**
+     * 서비스 전체가 <b>그 시각 이후</b>로 시작한 부화 수. 잔액 방벽이 이 값을 본다.
+     *
+     * ★ 파생 질의로 적지 않고 JPQL 로 적는 이유 — 이름이 길어지면
+     *   ({@code countByKindAndStartedAtGreaterThanEqual}) 무엇을 세는지가 이름에 묻힌다.
+     */
+    @Query("select count(j) from GenJob j where j.kind = :kind and j.startedAt >= :from")
+    long countHatchesSince(@Param("kind") GenKind kind, @Param("from") Instant from);
+
+    /**
      * 진행 중인 채로 멈춘 작업. 서버가 재시작되면 메모리에서 돌던 부화가 사라지므로,
      * 다시 뜰 때 이걸로 찾아 **성공한 단계는 건너뛰고** 이어서 굽는다.
      */

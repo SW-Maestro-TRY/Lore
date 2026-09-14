@@ -104,7 +104,8 @@ class PetServiceWiringTest {
                 userRepository, s3Service, hatchService, events,
                 new MotionCatalog("", "", "v1"), motionRepository, mock(MotionSeeder.class),
                 bakeTrigger, sceneService(), new LeaveService(postcards()),
-                PieceFixture.inMemory(pieces, pieceEvents));
+                PieceFixture.inMemory(pieces, pieceEvents),
+                mock(com.lore.zzal.guard.HatchGuard.class));
     }
 
     private SceneService sceneService() {

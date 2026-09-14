@@ -64,7 +64,8 @@ class HatchCompletionTest {
                 mock(MotionGridStep.class), mock(MotionPostStep.class), "v1", "v1");
 
         service = new HatchService(mock(GenerationRunner.class), recorder, mock(GenJobRepository.class),
-                registry, petRepository, 2, seeder);
+                registry, petRepository, new com.lore.zzal.guard.QuotaBreaker(),
+                mock(com.lore.zzal.guard.HatchBlockLog.class), 2, seeder);
     }
 
     /** 다섯 단계를 전부 성공시킨 기록 — 굽기가 끝난 상태. */

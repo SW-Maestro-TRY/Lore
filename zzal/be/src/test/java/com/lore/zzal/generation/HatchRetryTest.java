@@ -1,6 +1,8 @@
 package com.lore.zzal.generation;
 
 import com.lore.zzal.generation.steps.MotionGridStep;
+import com.lore.zzal.guard.HatchBlockLog;
+import com.lore.zzal.guard.QuotaBreaker;
 import com.lore.zzal.generation.steps.MotionPostStep;
 import com.lore.zzal.motion.MotionSeeder;
 import com.lore.zzal.pet.ZzalPet;
@@ -58,6 +60,8 @@ class HatchRetryTest {
     private GenJobRepository jobRepository;
     private PipelineRegistry registry;
     private HatchService service;
+    private QuotaBreaker quotaBreaker;
+    private HatchBlockLog blockLog;
 
     /** 저장된 job 들 — 재시도가 <b>새 job 을 저장하는가</b>가 이 시험의 핵심이라 진짜 표처럼 둔다. */
     private final List<GenJob> jobs = new ArrayList<>();
@@ -94,8 +98,10 @@ class HatchRetryTest {
                 StepMocks.grid(), StepMocks.grid2(), StepMocks.post(),
                 mock(MotionGridStep.class), mock(MotionPostStep.class), "v1", "v1");
 
+        quotaBreaker = new QuotaBreaker();
+        blockLog = mock(HatchBlockLog.class);
         service = new HatchService(runner, recorder, jobRepository, registry, petRepository,
-                MAX_ATTEMPTS, mock(MotionSeeder.class));
+                quotaBreaker, blockLog, MAX_ATTEMPTS, mock(MotionSeeder.class));
     }
 
     /** 이 펫이 이미 {@code n} 번 구워진 상태로 둔다(그 job 들은 표에 있고 이 시험이 세지 않는다). */
@@ -129,6 +135,51 @@ class HatchRetryTest {
         assertThat(jobs.get(1).getAttempt()).isEqualTo(2);
         verify(runner, times(2)).run(anyLong(), any(), any(), any());
         verify(recorder).markPetFailed(PET);      // 재시도까지 실패했으므로 여기서 끝낸다
+    }
+
+    @Test
+    @DisplayName("★★ 바깥 한도(429)면 <b>다시 굽지 않는다</b> — 한 번 막힌 것이 그대로 두 배가 되던 자리")
+    void quotaBlockedIsNotRetried() {
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenAnswer(inv -> RunResult.quotaBlocked(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN));
+
+        service.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).as("재시도 job 이 생기면 안 된다 — 같은 키로 또 보내면 또 429 다").hasSize(1);
+        verify(runner, times(1)).run(anyLong(), any(), any(), any());
+        verify(recorder).markPetFailed(PET);
+    }
+
+    @Test
+    @DisplayName("★★ 429 를 본 순간 차단기가 내려간다 — 그 뒤의 새 부화는 굽기 시작 전에 막힌다")
+    void quotaBlockedTripsTheBreaker() {
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenAnswer(inv -> RunResult.quotaBlocked(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN));
+
+        assertThat(quotaBreaker.isOpen(java.time.Duration.ofMinutes(30), Instant.now())).isFalse();
+        service.hatch(job.getId(), PET, V);
+
+        assertThat(quotaBreaker.isOpen(java.time.Duration.ofMinutes(30), Instant.now()))
+                .as("차단기가 안 내려가면 다음 사람이 곧바로 또 굽는다").isTrue();
+        verify(blockLog).record(eq(com.lore.zzal.guard.HatchBlock.QUOTA), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("★ 격자 구조 이상은 <b>지금대로</b> 다시 굽는다 — 429 와 처방이 정반대다")
+    void gridRejectedStillRetries() {
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenAnswer(inv -> RunResult.gridRejected(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN));
+
+        service.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).as("다시 하면 되는 실패는 재시도가 남아 있어야 한다").hasSize(2);
+        verify(runner, times(2)).run(anyLong(), any(), any(), any());
     }
 
     @Test

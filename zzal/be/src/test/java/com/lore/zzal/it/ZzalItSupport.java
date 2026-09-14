@@ -8,6 +8,8 @@ import com.lore.common.s3.UploadTicketRepository;
 import com.lore.common.user.User;
 import com.lore.common.user.UserRepository;
 import com.lore.zzal.generation.HatchService;
+import com.lore.zzal.guard.IpRateLimiter;
+import com.lore.zzal.guard.QuotaBreaker;
 import com.lore.zzal.motion.MotionSeeder;
 import com.lore.zzal.pet.PetService;
 import com.lore.zzal.pet.ZzalPet;
@@ -74,6 +76,8 @@ public abstract class ZzalItSupport {
     @Autowired protected PetService petService;
     @Autowired protected HatchService hatchService;
     @Autowired protected MotionSeeder motionSeeder;
+    @Autowired protected IpRateLimiter ipRateLimiter;
+    @Autowired protected QuotaBreaker quotaBreaker;
 
     // ── 안전장치 ──────────────────────────────────────────────────────────
 
@@ -92,6 +96,17 @@ public abstract class ZzalItSupport {
                 .as("통합 시험은 시험 전용 DB 에서만 돕니다 — 표를 비우기 때문입니다. "
                         + "LORE_TEST_DB_URL 의 데이터베이스 이름이 _test 로 끝나야 합니다(지금: %s)", database)
                 .endsWith("_test");
+    }
+
+    /**
+     * ★★ 표만 비워서는 부족하다 — 부화 막기 장치 둘은 <b>메모리</b>에 상태를 든다
+     * (IP 자국 · 바깥 한도 차단기). 안 비우면 앞 시험이 남긴 자국이 다음 시험을 막아,
+     * <b>혼자 돌리면 초록인데 다 같이 돌리면 빨간</b> 시험이 된다 — 가장 찾기 어려운 종류다.
+     */
+    @BeforeEach
+    void forgetInMemoryGuards() {
+        ipRateLimiter.clear();
+        quotaBreaker.reset();
     }
 
     @BeforeEach
@@ -207,6 +222,32 @@ public abstract class ZzalItSupport {
                         result.getResponse().getContentAsString(StandardCharsets.UTF_8))
                 .isEqualTo(200);
         return body(result);
+    }
+
+    /**
+     * 이 펫의 시계를 <b>못 박은 시각</b>에 세운다 — 실제 시각이 몇 시든 같은 자리에 선다.
+     *
+     * <h3>★★ 왜 필요한가 — 시험이 돌린 시각에 따라 색이 바뀌었다</h3>
+     * {@code advance-clock} 은 <b>지금부터</b> 미는 것이라, 밤 11시에 돌리면 펫이 자고 있고
+     * 돌보기가 거절된다(낮에는 초록, 밤에는 빨강). 시험은 언제 돌려도 같은 답을 내야 한다.
+     *
+     * <h3>★ 운영에 있는 그 장치를 그대로 쓴다</h3>
+     * 시계는 펫마다의 오프셋 하나뿐이고({@code devClockOffsetSeconds}), 여기서는 그 오프셋을
+     * 직접 세운다. dev 컨트롤러({@code set-clock})는 <b>과거로는 못 가게</b> 막아 두었는데,
+     * 시험은 "부화 시각 + 5시간" 처럼 실제 시각보다 이른 자리에 서야 할 때가 있어서다.
+     * 규칙은 한 글자도 안 바뀐다 — 오프셋을 세우는 길이 컨트롤러와 같다.
+     */
+    protected void pinClock(Long petId, Instant target) {
+        transactions.executeWithoutResult(status ->
+                petRepository.findByIdForUpdate(petId).orElseThrow().setDevClock(target, Instant.now()));
+    }
+
+    /** 오늘(한국 시각)의 그 시각. 시험이 "낮 10시" 처럼 못 박은 자리를 만들 때 쓴다. */
+    protected static Instant kstToday(int hour, int minute) {
+        return java.time.LocalDate.now(com.lore.zzal.pet.ZzalRules.ZONE)
+                .atTime(hour, minute)
+                .atZone(com.lore.zzal.pet.ZzalRules.ZONE)
+                .toInstant();
     }
 
     // ── 재료 ──────────────────────────────────────────────────────────────

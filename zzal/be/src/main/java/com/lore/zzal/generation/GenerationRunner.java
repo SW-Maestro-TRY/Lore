@@ -95,6 +95,10 @@ public class GenerationRunner {
             total = total.add(outcome.cost());
             if (outcome.error() != null) {
                 recorder.failJob(jobId, outcome.error(), total);
+                if (outcome.quotaBlocked()) {
+                    // ★★ 바깥이 한도로 막았다 — 다시 구우면 또 막히고 돈만 두 번 나간다.
+                    return RunResult.quotaBlocked(ctx, total, outcome.error());
+                }
                 // ★ 격자 구조 게이트가 막은 것이면 같은 격자로 다시 해 봐야 소용없다 — 부르는 쪽에 알린다.
                 return outcome.gridRejected()
                         ? RunResult.gridRejected(ctx, total, outcome.error())
@@ -122,7 +126,8 @@ public class GenerationRunner {
      *   {@link GenErrorCode} 가 DB 컬럼의 CHECK 제약에 묶여 있어 값을 늘리려면 마이그레이션이
      *   필요하기 때문이다(→ {@link RunResult#gridRejected}).
      */
-    private record StageOutcome(BigDecimal cost, GenErrorCode error, boolean gridRejected) {
+    private record StageOutcome(BigDecimal cost, GenErrorCode error, boolean gridRejected,
+                               boolean quotaBlocked) {
     }
 
     /**
@@ -152,6 +157,7 @@ public class GenerationRunner {
         BigDecimal cost = BigDecimal.ZERO;
         GenErrorCode error = null;
         boolean gridRejected = false;
+        boolean quotaBlocked = false;
         List<StepResult> done = new ArrayList<>(running.size());
 
         for (Running r : running) {
@@ -172,6 +178,8 @@ public class GenerationRunner {
                 GenErrorCode code = classify(cause);
                 // ★ 나란히 도는 묶음에서 한 장만 게이트에 막혀도 그 격자는 버려야 한다 — 누적한다.
                 gridRejected |= gridRejected(cause);
+                // ★ 한 장만 한도에 걸려도 그 시도 전체가 한도에 걸린 것이다(같은 계정·같은 키).
+                quotaBlocked |= quotaBlocked(cause);
                 // ★★ 실패해도 <b>이미 나간 돈</b>은 적는다. 유료 호출은 200 이 돌아온 순간 과금이 끝나므로,
                 //   응답 파싱·S3 업로드에서 터진 실패는 공짜가 아니다. 여기서 안 더하면 원가가
                 //   실제보다 낮게 보여 중복 과금이나 급증을 못 본다.
@@ -194,7 +202,7 @@ public class GenerationRunner {
                 ctx.putText(result.name(), result.text());
             }
         }
-        return new StageOutcome(cost, error, gridRejected);
+        return new StageOutcome(cost, error, gridRejected, quotaBlocked);
     }
 
     /**
@@ -231,6 +239,33 @@ public class GenerationRunner {
      *   판정은 <b>코드가 결정적으로</b> 한다 — 표식이 있으면 격자를 버리고, 없으면 평범한 재시도다.
      * ★ 이 표식을 안 찍는 스크립트를 쓰는 버전은 예전 동작 그대로다.
      */
+    /**
+     * 바깥이 <b>한도</b>로 막았는가 — 429, 또는 잔액·분당 한도를 말하는 본문.
+     *
+     * <h3>★★ 왜 메시지를 보나</h3>
+     * 이미지·문단 클라이언트는 200 이 아니면 <b>상태와 본문을 그대로 붙여</b> 예외로 올린다
+     * ({@code OpenAiImageClient} — "본문을 그대로 붙인다 — moderation 차단인지 한도 초과인지가
+     * 여기 적혀 있고"). 그래서 판정 재료는 이미 손에 있다. 새 예외 타입을 만들지 않은 이유는
+     * 클라이언트가 여럿이고(이미지·문단·후처리) 그중 하나만 고치면 <b>나머지는 조용히 옛 길</b>로
+     * 가기 때문이다.
+     *
+     * ★ 판정은 코드가 결정적으로 한다. 여기 안 걸리는 실패는 <b>지금까지 하던 대로</b> 재시도한다 —
+     *   못 알아본 쪽이 재시도를 잃는 것보다, 잘못 알아봐 멀쩡한 실패의 재시도를 없애는 쪽이 나쁘다.
+     */
+    static boolean quotaBlocked(Throwable e) {
+        if (e == null) {
+            return false;
+        }
+        String msg = String.valueOf(e.getMessage()).toLowerCase();
+        return msg.contains("http 429")
+                || msg.contains("\"429\"")
+                || msg.contains("rate_limit")
+                || msg.contains("rate limit")
+                || msg.contains("insufficient_quota")
+                || msg.contains("quota_exceeded")
+                || msg.contains("billing_hard_limit_reached");
+    }
+
     private static boolean gridRejected(Throwable e) {
         return e != null && String.valueOf(e.getMessage()).contains(GRID_STRUCTURE_MARK);
     }

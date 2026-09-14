@@ -13,6 +13,8 @@ import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.pet.dto.PetResponses;
 import com.lore.zzal.piece.PieceEvent;
 import com.lore.zzal.generation.HatchService;
+import com.lore.zzal.guard.HatchBlock;
+import com.lore.zzal.guard.HatchGuard;
 import com.lore.zzal.generation.PetHatchRequested;
 import com.lore.zzal.generation.PetNamed;
 import com.lore.zzal.generation.StepLabels;
@@ -65,6 +67,7 @@ public class PetService {
     private final com.lore.zzal.scene.SceneService sceneService;
     private final com.lore.zzal.leave.LeaveService leaveService;
     private final com.lore.zzal.piece.PieceService pieceService;
+    private final HatchGuard hatchGuard;
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -80,7 +83,9 @@ public class PetService {
                       BakeTrigger bakeTrigger,
                       com.lore.zzal.scene.SceneService sceneService,
                       com.lore.zzal.leave.LeaveService leaveService,
-                      com.lore.zzal.piece.PieceService pieceService) {
+                      com.lore.zzal.piece.PieceService pieceService,
+                      HatchGuard hatchGuard) {
+        this.hatchGuard = hatchGuard;
         this.catalog = catalog;
         this.motionRepository = motionRepository;
         this.motionSeeder = motionSeeder;
@@ -118,6 +123,25 @@ public class PetService {
      */
     @Transactional
     public ZzalPet draft(Long userId, String imageKey, Instant now) {
+        return draft(userId, imageKey, null, now);
+    }
+
+    /**
+     * 접속자 주소까지 아는 자리 — 컨트롤러가 부른다.
+     *
+     * <h3>★ 왜 주소를 인자로 받나</h3>
+     * IP 상한({@link HatchBlock#IP_RATE})은 <b>다른 넷을 다 통과한 뒤</b>에 물어야 한다. 먼저 물으면
+     * 이미 아이가 있는 사람에게도 "같은 곳에서 자주 시작했다" 고 답하게 되어, 자기 사정으로
+     * 설명될 일이 남의 사정으로 설명된다. 그래서 판정 순서를 지키려고 주소를 여기까지 들고 온다.
+     * 주소를 모르는 자리(시험·내부 호출)는 {@code null} 을 주고, 그러면 그 문만 열려 있다.
+     */
+    @Transactional
+    public ZzalPet draft(Long userId, String imageKey, String clientIp, Instant now) {
+        // ★★ 세기 전에 이 사람의 줄을 잠근다 — 검사와 저장 사이에 같은 사람의 두 번째 요청이
+        //    끼어들면 둘 다 통과해 굽기가 두 번 나간다($0.25 가 두 배). 잠그면 그 틈이 없어지고,
+        //    뒤늦게 들어온 쪽은 아래에서 <b>먼저 만들어진 초안</b>을 보게 된다(HatchUserLockRepository).
+        hatchGuard.lockUser(userId);
+
         ZzalPet existing = petRepository.findFirstByUserIdAndPhase(userId, PetPhase.DRAFT).orElse(null);
         if (existing != null) {
             return existing;
@@ -128,6 +152,13 @@ public class PetService {
                             "%s 부화 중이에요".formatted(Josa.nameSubject(hatching.getName())));
                 });
 
+        // ★★ 돈이 나가기 직전의 마지막 문. 다섯 가지 상한이 여기서 갈린다(HatchGuard).
+        //   ★ 아래의 "칸 수(petSlots)" 검사보다 <b>먼저</b> 묻는다. 뒤에 두면 기본 칸 수가 1 이라
+        //     동시 상한이 늘 옛 코드(ZZAL_PET_LIMIT_REACHED)로 먼저 걸리고, 그러면 화면이 쓰는
+        //     새 코드도, 막힘 기록도 한 번도 안 남는다(막혔는데 아무 줄도 없는 상태).
+        hatchGuard.check(userId, clientIp, now);
+
+        // 사람마다 따로 늘려 줄 수 있는 칸 수. 상한 설정이 꺼져 있을 때의 마지막 빗장이다.
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         long occupied = petRepository.countByUserIdAndPhaseIn(userId, PetPhase.OCCUPYING_SLOT);
@@ -141,6 +172,9 @@ public class PetService {
         String version = hatchService.currentVersion();
         pet.setHatchPipelineVersion(version);
         GenJob job = jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, version, now));
+        // ★ IP 자국은 <b>시작한 것</b>에만 남긴다 — 막힌 시도까지 세면 거절당한 사람이
+        //   자기 거절로 자기를 한 시간 잠근다(IpRateLimiter).
+        hatchGuard.recordStarted(clientIp, now);
         events.publishEvent(new PetHatchRequested(job.getId(), pet.getId(), version));
         return pet;
     }
