@@ -190,6 +190,14 @@ export interface YeoulState {
   cracking: boolean; eggMsg: string; nameErr: boolean;
   hintI: number; leaveOff: boolean;
   /**
+   * **재운 직후 한 바퀴, 커튼이 무대를 덮고 있는 동안**(아이가 안 보인다).
+   *
+   * ★ 상훈님 2026-09-14 — *"잘 때 커튼도 마찬가지야"*(= 덮었다가 걷히며 짜잔).
+   *   잠은 상태라 무한 반복이므로 **들어올 때 한 번만** 덮고 걷힌다. 걷힌 뒤에는 반투명 커튼만
+   *   남고 자는 아이가 드러난 채로 유지된다 — 규격이 `curtain_sheer`(반투명)인 것과 같은 뜻이다.
+   */
+  sleepCover: boolean;
+  /**
    * 가입·로그인 모달. 랜딩에서 무언가 하려 할 때 뜬다(상훈님 9/7 결정).
    * 창 자체는 공통 부품(`@common/auth/AuthModal`)이고 여기서는 여닫기만 든다.
    */
@@ -224,7 +232,7 @@ const INITIAL: YeoulState = {
   saved: 0, wishes: 0, cardIdx: 0,
   sampleMode: false, hatch: 0, snapshot: null,
   tutor: 0, tutorOn: false, cracking: false, eggMsg: '', nameErr: false,
-  hintI: 0, leaveOff: false,
+  hintI: 0, leaveOff: false, sleepCover: false,
   authOpen: false, authTab: 'signup',
 };
 
@@ -1401,6 +1409,20 @@ export function useYeoul(live?: Live) {
     }));
   }, [s.bond, s.floorLv, s.unlockShown, s.screen, careAct]);
 
+  /**
+   * **재운 순간 한 바퀴 덮기.** 잠은 상태(무한)라 박자를 못 타므로, 들어오는 그 한 번만 여기서 센다.
+   * 깨어나면 다시 준비된다 — 다음에 재울 때 또 덮였다 걷힌다.
+   */
+  const wasAsleep = useRef(false);
+  useEffect(() => {
+    if (es.sleeping && !wasAsleep.current) {
+      setS((v) => ({ ...v, sleepCover: true }));
+      later('sleepCover', CYCLE_MS, () => setS((v) => ({ ...v, sleepCover: false })));
+    }
+    if (!es.sleeping && wasAsleep.current) setS((v) => (v.sleepCover ? { ...v, sleepCover: false } : v));
+    wasAsleep.current = es.sleeping;
+  }, [es.sleeping, later]);
+
   // 대화창의 예시 문구가 2.6초마다 바뀐다.
   useEffect(() => {
     if (!s.chatOpen) return;
@@ -1849,12 +1871,12 @@ export function useYeoul(live?: Live) {
       },
       // 자는 동안은 방을 아예 못 연다(판정 13). 화면이 이 값 하나만 보면 되게 둔다.
       asleep: mode === 'sleep',
-      // ★ 2026-09-13 — **감춤을 걷었다**(판정 5 의 전제가 사라짐).
-      //   판정 5 는 "자는 그림이 없어 깨어 있는 그림이 커튼 밑에 비치면 자는 것으로 안 읽힌다" 였다.
-      //   지금은 확정 16종에 `sleep`(눕기)이 있고 서버도 1층으로 준다 — 커튼 밑에 있는 것이
-      //   **자는 그림**이라 감출 이유가 없어졌다. 감춘 채로 두면 1층 8종 중 하나를 영영 못 본다.
+      // ★ 2026-09-14 — 감춤은 **재운 직후 한 바퀴(1.8초)만** 남는다.
+      //   덮었다가 걷히며 자는 아이가 드러나고, 그 뒤로는 반투명 커튼 아래에서 계속 보인다
+      //   (상훈님 "잘 때 커튼도 마찬가지야"). 옛 판정 5 의 "자는 그림이 없어 통째로 감춘다" 는
+      //   그림이 나오면서 전제가 사라졌다.
       //   ⚠️ 방을 못 열게 막는 판정 13(`asleep`)은 그대로다 — 그건 그림이 아니라 규칙이다.
-      hidePet: false,
+      hidePet: s.sleepCover,
       sleepLine: sleepingLine(s.petName),
       screen: { room: s.screen === 'room', onb: s.screen === 'onb', egg: s.screen === 'egg' },
       hud: {

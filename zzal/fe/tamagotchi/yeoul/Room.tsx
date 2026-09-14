@@ -28,7 +28,14 @@ import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
 import { charFit, HEAD_SAFE, K_SCREEN_TARGET } from '../props/layout';
 import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
-import { SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose, stagePlanOf } from '../props/situations';
+import {
+  SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose, stageAt, stagePlanOf,
+  type SituationRow,
+} from '../props/situations';
+import { confirmedSpec } from '../props/catalog';
+
+/** 걷힘 바퀴에만 잠깐 생기는 줄의 이름. 표에 없는 이름이라 다른 줄과 안 부딪힌다. */
+const SWEEP_ROW_ID = '__sweep__';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { v, actions } = y;
@@ -85,12 +92,33 @@ export default function Room({ y }: { y: Yeoul }) {
    * 그 숫자를 **표가 적어 둔 차례**에 대입하는 일만 여기서 한다 — 차례를 코드가 지어내지 않는다.
    */
   const actPlan = v.scene.act ? stagePlanOf(propTable, v.scene.act) : null;
+  /**
+   * **덮었다가 걷히는 마지막 한 바퀴.**
+   *
+   * ★ 규격이 정한 것이다 — `dust` note: *"3단계(걷힘)는 그림이 없다 — 반짝은 단계가 아니라
+   *   전환 신호다."* 그 바퀴에는 덮고 있던 소품을 **내리고** 마무리 신호만 띄운다
+   *   (먼지 → 반짝임 · 거품 → 물줄기). 상훈님 "먼지가 화면을 다 덮고 나서 짜자잔".
+   * ★ 신호 줄은 표에 없다(표는 상태를 적는 자리고 이건 **전환**이다). 그래서 여기서 한 줄을
+   *   만들어 표 뒤에 붙인다 — 자리·크기는 여전히 **그 소품의 규격**이 정한다.
+   */
+  const beat = actPlan ? stageAt(actPlan, v.scene.actStep) : null;
+  const sweeping = !!beat?.sweeping;
+  const signalSpec = sweeping && actPlan?.signal ? confirmedSpec(actPlan.signal) : null;
+  const signalRow: SituationRow | null = signalSpec && actPlan?.signal
+    ? {
+      id: SWEEP_ROW_ID, pose: '*', prop: actPlan.signal, anchor: signalSpec.anchor,
+      layer: signalSpec.unit === 'screen' ? 'screen' : 'char', priority: 1, status: 'confirmed',
+    }
+    : null;
+  const table = signalRow ? [...propTable, signalRow] : propTable;
   const scene = {
     pose: v.spriteKey,
-    active,
+    // 걷힘 바퀴에는 **덮고 있던 줄을 끈다** — 안 끄면 첫 단계로 되돌아가 다시 덮인다.
+    active: (sweeping && v.scene.act ? active.filter((id) => id !== v.scene.act) : active)
+      .concat(signalRow ? [SWEEP_ROW_ID] : []),
     stages: {
       trash: v.scene.trash,
-      ...(actPlan ? { [actPlan.prop]: actPlan.stages[Math.min(v.scene.actStep, actPlan.stages.length - 1)] } : {}),
+      ...(actPlan && beat?.stage != null ? { [actPlan.prop]: beat.stage } : {}),
     },
     // `daily_prop` 은 표가 `prop_ball|prop_book|prop_cup|prop_plant` 로 적어 둔 줄이라 **고른 것**을 말해 줘야 한다.
     ...(v.scene.daily ? { choices: { daily_prop: v.scene.daily } } : {}),
@@ -215,7 +243,7 @@ export default function Room({ y }: { y: Yeoul }) {
               </>
             )}
             {/* 아이 뒤에 깔리는 것(매트). 반전 바깥이라 걸음마다 뒤집히지 않는다. */}
-            <PropLayer z="below_char" scene={scene} table={propTable} anchors={anchors} />
+            <PropLayer z="below_char" scene={scene} table={table} anchors={anchors} />
             <div style={{ width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play }}>
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -234,17 +262,19 @@ export default function Room({ y }: { y: Yeoul }) {
               </div>
             </div>
             {/* 아이 앞에 얹히는 것(머리 옆 기호·손 앞 먹을 것·발치 소품). */}
-            <PropLayer scene={scene} table={propTable} anchors={anchors} />
+            <PropLayer scene={scene} table={table} anchors={anchors} />
           </div>
         </div>
 
         {/* ★ 방 바닥에 **붙박인** 것(똥·하루 소품·매트·가방). 캐릭터 상자 밖이라 아이가 걸어도 안 따라간다
             (상훈님 2026-09-13 "캐릭터가 움직인다고 똥도 같이 움직이면 안돼"). 매트만 아이 뒤에 깔린다. */}
-        <RoomPropLayer z="below_char" scene={scene} table={propTable} anchors={anchors} charBox={charBoxRef} />
-        <RoomPropLayer scene={scene} table={propTable} anchors={anchors} charBox={charBoxRef} />
+        <RoomPropLayer z="below_char" scene={scene} table={table} anchors={anchors} charBox={charBoxRef} />
+        <RoomPropLayer scene={scene} table={table} anchors={anchors} charBox={charBoxRef} />
 
-        {/* 화면 전체에 까는 것(거품·먼지·물줄기) — 발끝선 기준이라 무대에 직접 붙는다. */}
-        <ScreenPropLayer scene={scene} table={propTable} anchors={anchors} />
+        {/* 화면 전체에 까는 것(거품·먼지·물줄기·커튼·달) — 발끝선 기준이라 무대에 직접 붙는다.
+            ★ 아이 앞뒤로 **두 겹**이다. 달은 뒤(`below_char`), 먼지·거품·물줄기·커튼은 앞. */}
+        <ScreenPropLayer z="below_char" scene={scene} table={table} anchors={anchors} />
+        <ScreenPropLayer scene={scene} table={table} anchors={anchors} />
 
         {/* 자는 중 — 커튼을 친다. */}
         {v.st.curtain && (

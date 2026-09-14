@@ -290,21 +290,28 @@ export interface ScreenPropLayerProps {
   table?: PropSituationTable | null;
   /** 고정 앵커로 그리는 중인지 개발 화면에 알린다. */
   anchors: AnchorState;
+  /** 아이보다 앞이냐 뒤냐. 규격의 `z` 와 같은 값으로 갈라 그린다. */
+  z?: PropZ;
 }
 
 /**
  * 화면 전체에 까는 것(거품·먼지·물줄기·커튼·달). **발끝선(무대 아래 238px) 기준**이라 무대에 직접 붙는다.
  * 개발 화면에서는 "고정 앵커로 그리는 중" 표시도 여기서 낸다.
  */
-export function ScreenPropLayer({ scene: given, table, anchors }: ScreenPropLayerProps) {
+export function ScreenPropLayer({ scene: given, table, anchors, z = 'above_char' }: ScreenPropLayerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const { w, h } = useBoxSize(ref);
   const st: StageGeom = { width: w, height: h };
 
-  const items = (forced() ?? resolveScene(table, devScene(given))).filter((r) => r.spec.unit === 'screen');
+  // ★ **규격의 `z` 대로 아이 앞뒤를 가른다**(2026-09-14). 전에는 이 층에 `zIndex` 가 아예 없어서,
+  //   아이 상자가 `zIndex:2` 인 탓에 `above_char` 인 먼지·거품·물줄기가 **전부 아이 뒤로 깔렸다**
+  //   (상훈님 "청소하기 누르면 먼지가 캐릭터 앞에 와야 돼"). 방 붙박이 층(`ROOM_Z`)은 원래 갈라
+  //   그리고 있었는데 이 층만 빠져 있었다.
+  const items = (forced() ?? resolveScene(table, devScene(given)))
+    .filter((r) => r.spec.unit === 'screen' && r.spec.z === z);
 
   return (
-    <div ref={ref} data-part="screen-props" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+    <div ref={ref} data-part="screen-props" data-prop-z={z} style={{ position: 'absolute', inset: 0, zIndex: ROOM_Z[z], pointerEvents: 'none' }}>
       {w > 0 && items.map((r) => {
         const box = layoutScreenProp(r.spec, r.stage, st);
         if (!box) return null;

@@ -127,17 +127,63 @@ export const CYCLE_MS = SPRITE_FRAME_MS * CYCLE_FRAMES;
  *   `dust_1`·`dust_2` 둘뿐이라, 거르지 않으면 3번째 바퀴에서 **1단계로 되돌아가** 1->2->1 로 보인다
  *   (`resolveScene` 이 못 찾은 단계를 첫 단계로 버티기 때문이다). 있는 만큼만 돈다.
  */
+export interface StagePlan {
+  prop: string;
+  /** 그림이 **있는** 단계들. 한 바퀴에 하나씩 넘어간다. */
+  stages: readonly number[];
+  /**
+   * 마지막에 **걷힘 한 바퀴**가 붙는가.
+   *
+   * ★ 규격 `dust` 의 note 가 정한 것 — *"3단계(걷힘)는 그림이 없다 — 반짝은 단계가 아니라
+   *   전환 신호다."* 즉 덮는 소품은 **덮었다가 걷히며 끝난다**가 설계다.
+   *   상황표의 `clean_l1.stages = [1,2,3]` 에서 3번이 바로 그 자리인데, 규격에 그림이 없어
+   *   `stages` 필터에 걸려 **박자가 통째로 사라져 있었다**(상훈님 2026-09-14
+   *   "먼지가 화면을 다 덮고 나서 짜자잔 하는 건 어쩌다가 없어졌어").
+   * ★ 조건은 **화면을 덮는 소품인가**(`unit: 'screen'`)다. 먼지·거품이 여기 들고,
+   *   손에 드는 것(주먹밥)은 안 든다 — 밥그릇은 덮은 적이 없으니 걷힐 것도 없다.
+   */
+  sweep: boolean;
+  /** 걷힘 박자에 대신 띄우는 **마무리 신호**. 없으면 그 바퀴는 소품 없이 빈다. */
+  signal: string | null;
+}
+
+/**
+ * 걷힘 박자에 띄우는 신호. **규격 note 가 정한 것만** 적는다 — 코드가 지어내지 않는다.
+ *
+ *   `dust`  규격 note: "반짝은 단계가 아니라 **전환 신호**다"      → `sparkle`
+ *   `bath`  `shower` 규격 note: "**거품 2단계가 찬 뒤에 온다**"   → `shower`
+ */
+export const SWEEP_SIGNAL: Record<string, string> = { dust: 'sparkle', bath: 'shower' };
+
 export function stagePlanOf(
   table: PropSituationTable | null | undefined,
   id: string,
-): { prop: string; stages: readonly number[] } | null {
+): StagePlan | null {
   const row = (table ?? []).find((r) => r.id === id);
   if (!row?.prop || !row.stages?.length) return null;
   const prop = row.prop.split('|')[0].trim();
   const spec = confirmedSpec(prop);
   if (!spec) return null;
+  // ⚠️ **규격에 없는 단계는 여전히 걸러 낸다.** 안 거르면 `resolveScene` 이 못 찾은 단계를 첫 단계로
+  //   버티는 탓에 `1 -> 2 -> 1` 로 되돌아가 보인다(그래서 이 필터가 생겼다). 거르되,
+  //   **거르고 남은 자리를 '걷힘' 으로 되살린다** — 그림이 없는 것이 정상인 단계이기 때문이다.
   const stages = row.stages.filter((n) => spec.stages.some((x) => x.n === n));
-  return stages.length > 1 ? { prop, stages } : null;
+  if (stages.length < 1) return null;
+  const sweep = spec.unit === 'screen';
+  if (stages.length < 2 && !sweep) return null;
+  return { prop, stages, sweep, signal: sweep ? (SWEEP_SIGNAL[prop] ?? null) : null };
+}
+
+/** 그 계획이 도는 **총 바퀴 수**(걷힘 포함). */
+export const planCycles = (plan: StagePlan) => plan.stages.length + (plan.sweep ? 1 : 0);
+
+/**
+ * 지금 몇 번째 바퀴인가를 받아 **이 바퀴에 무엇을 그릴지** 알려 준다.
+ * `sweeping` 이면 그 줄의 소품은 안 그리고 `signal` 만 뜬다.
+ */
+export function stageAt(plan: StagePlan, cycle: number): { stage: number | null; sweeping: boolean } {
+  if (plan.sweep && cycle >= plan.stages.length) return { stage: null, sweeping: true };
+  return { stage: plan.stages[Math.min(cycle, plan.stages.length - 1)], sweeping: false };
 }
 
 /**
@@ -182,7 +228,7 @@ export function cyclesOfAction(
 ): number {
   const sit = situationOfAction(action, floor2);
   const plan = sit ? stagePlanOf(table, sit) : null;
-  return plan?.stages.length ?? ACTION_CYCLES[action] ?? 1;
+  return plan ? planCycles(plan) : ACTION_CYCLES[action] ?? 1;
 }
 
 /**
@@ -252,7 +298,7 @@ export function scenePlays(
     return {
       id: r.id,
       pose: r.pose,
-      cycles: plan?.stages.length ?? (action ? ACTION_CYCLES[action] ?? 1 : 1),
+      cycles: plan ? planCycles(plan) : (action ? ACTION_CYCLES[action] ?? 1 : 1),
       label: action
         ? ACTION_LABEL[action]
         : `${poseLabel[r.pose] ?? r.pose} · ${spec?.name ?? (prop ?? '소품 없음')}`,
