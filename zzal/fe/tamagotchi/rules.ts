@@ -133,36 +133,41 @@ export const FIRST_GIFT_DAYS = 3;
 export const PIECES_STREAK = 2;
 
 /**
- * 2층 조건표(§6). counter 는 서버 카운터 이름(Motion.progress 가 같은 뜻).
+ * 2층 조건표(§6 · 정본 v1.10). counter 는 목 서버 카운터 이름이고, 서버 `UnlockRule.Kind` 와 짝이다.
  * 화면 문구는 서버 hint·progress 를 그대로 쓰고, 이 표는 **목 서버와 폴백 문구에만** 쓴다.
  *
- * ⚠️⚠️ **이 표의 조건은 서버와 다르다**(2026-09-13 대조). 서버 `MotionCatalog` 의 실제 규칙은
- *   `eat_rice`=밥 9회 · `eat_snack`=간식 9회 · `sweep`=청소 13회 · `wash`=목욕 3회 ·
- *   `reply`=채팅 답 4회 · `petted`=쓰다듬 4회 · `startle`=게임 시작 4회 · `wake_up`=깨우기 4회 다.
- *   여기 있는 `chatAnswers`·`sleepWakeCount`·`zeroMissDays`·`layer2Unlocked` 조합은 **옛 규칙**이고,
- *   서버가 쓰는 카운터(밥·간식·청소·쓰다듬·깨우기 횟수)는 목 서버에 아직 없다.
- * ★ **이번 판에서는 손대지 않았다.** 목 서버는 이 표를 `seq` 로만 잇고(`c.seq === m.seq`), `key` 는
- *   아무 데서도 안 읽는다 — 그래서 조건을 고치면 목의 해금 시점과 e2e 기대값이 같이 흔들린다.
- *   카운터를 목 서버에 먼저 심은 뒤 한 번에 맞추는 편이 안전하다(별도 이슈).
- * ★ `key` 칸만 v4 이름으로 고쳐 두었다 — 읽는 곳이 없어 동작은 안 바뀌고, 파일이 거짓말을 안 하게 된다.
+ * ★★ 2026-09-14 — 정본 1.10 이 이 표를 **코드 v4(서버 `MotionCatalog`) 기준으로 교체**했다:
+ *   「9 밥 먹기(`eat_rice`) 밥 9회 / 10 간식 먹기(`eat_snack`) 간식 9개(그날 4개까지만 셈 —
+ *    배탈 난 5개째부터 안 셈) / 11 청소하기(`sweep`) 청소 13회 / 12 목욕하기(`wash`) 목욕 3회 /
+ *    13 답하기(`reply`) 채팅 답 4회 / 14 쓰다듬받기(`petted`) 쓰다듬 4회 /
+ *    15 놀람(`startle`) 게임 4판(승패·종류 무관) / 16 일어나기(`wake_up`) 깨우기 4회(손으로 깨운 것만 —
+ *    아침 자동 기상·튜토리얼 낮잠 제외)」
+ *   「2층은 "못 보던 행동이 열리는 것"이 아니라 **하던 행동이 좋아지는 것**이라 조건이 전부 그 행동 자체다」.
+ *
+ * ⚠️ 그 전까지 이 표는 **옛 규칙**(`chatAnswers`·`sleepWakeCount`·`zeroMissDays`·`layer2Unlocked`)을 들고
+ *   `key` 칸만 v4 이름이었다 — 즉 이름과 조건이 서로 다른 동작을 가리켰고, 그 어긋남이 아무 소리도
+ *   내지 않았다(놀람이 "잘 돌본 날 3번" 으로 열렸다). 정본이 낡아 손을 못 대던 자리를 1.10 이 풀어 줬다.
+ * ★ `hint` 문구는 서버 `UnlockRule.hint()` 를 **글자 그대로** 옮겼다 — 목과 실서버가 같은 말을 해야
+ *   "목에서만 맞는 문구" 가 생기지 않는다.
  */
 export const UNLOCK_CONDITIONS: ReadonlyArray<{
   seq: number;
   key: string;
-  counter: 'chatAnswers' | 'sleepWakeCount' | 'bathCount' | 'gameStarts' | 'zeroMissDays' | 'layer2Unlocked';
+  counter: 'feedCount' | 'snackCount' | 'cleanCount' | 'bathCount' | 'chatAnswers' | 'petCount' | 'gameStarts' | 'wakeCount';
   target: number;
   hint: string;
 }> = [
-  { seq: 9, key: 'eat_rice', counter: 'chatAnswers', target: 1, hint: '채팅 응답 1회' },
-  { seq: 10, key: 'eat_snack', counter: 'chatAnswers', target: 4, hint: '채팅 응답 4회' },
-  { seq: 11, key: 'sweep', counter: 'sleepWakeCount', target: 3, hint: '재우기·깨우기 합쳐 3회' },
+  { seq: 9, key: 'eat_rice', counter: 'feedCount', target: 9, hint: '밥 주기 9회' },
+  // ★ 그날 4개까지만 센다(서버 `UnlockRule.Kind.SNACKS`). 전부 세면 "빨리 열려면 배탈이 날 때까지
+  //   먹여라" 가 되어 아이를 아프게 하는 쪽이 이득인 구조가 된다.
+  { seq: 10, key: 'eat_snack', counter: 'snackCount', target: 9, hint: '간식 9개' },
+  { seq: 11, key: 'sweep', counter: 'cleanCount', target: 13, hint: '청소 13회' },
   { seq: 12, key: 'wash', counter: 'bathCount', target: 3, hint: '목욕 3회' },
-  { seq: 13, key: 'reply', counter: 'gameStarts', target: 3, hint: '미니게임 3판' },
-  { seq: 14, key: 'petted', counter: 'chatAnswers', target: 12, hint: '채팅 응답 12회' },
-  // ★ 문구가 "케어 미스" 가 아니다. 케어 미스는 **숨은 수치**라(정본 §4) 이름을 화면에 내면
-  //   사람이 그 수치를 되짚게 된다. 실서버도 "잘 돌본 날 3번" 으로 준다.
-  { seq: 15, key: 'startle', counter: 'zeroMissDays', target: 3, hint: '잘 돌본 날 3번' },
-  { seq: 16, key: 'wake_up', counter: 'layer2Unlocked', target: 6, hint: '2층 6종 열림' },
+  { seq: 13, key: 'reply', counter: 'chatAnswers', target: 4, hint: '채팅 응답 4회' },
+  { seq: 14, key: 'petted', counter: 'petCount', target: 4, hint: '쓰다듬기 4회' },
+  { seq: 15, key: 'startle', counter: 'gameStarts', target: 4, hint: '미니게임 4판' },
+  // ★ **손으로 깨운** 밤잠만 센다 — 아침 자동 기상·튜토리얼 낮잠은 "깨우기" 라는 행동이 아니다.
+  { seq: 16, key: 'wake_up', counter: 'wakeCount', target: 4, hint: '깨우기 4회' },
 ];
 
 /** 기능 해금 조건(§6). 서버 features 가 정본이고, 여기는 목 서버·안내 문구용. */
@@ -179,12 +184,13 @@ export const FEATURE_UNLOCK = {
 export const GIFT_SEQ = 101;
 
 /**
- * 진행도를 **안 보여 주는** 잠긴 칸(계약 해석 40) — 15번 자리.
- * 그 진행도(`잘 돌본 날 n/3`)는 곧 케어 미스를 되짚게 해 주는데, 케어 미스는 숨은 수치다(정본 §4).
- * ⚠️ v4 에서 15번은 `startle`(놀람)이고 서버 조건은 '게임 시작 4회' 라 숨길 이유가 없다 —
- *   위 `UNLOCK_CONDITIONS` 와 같은 묶음의 부채다(목 서버에 카운터를 심을 때 함께 정리).
+ * ★ 진행도를 **안 보여 주는** 잠긴 칸은 v4 에 하나도 없다.
+ *
+ * 서버는 조건 종류가 `ZERO_MISS_DAYS`("잘 돌본 날 n번")일 때만 진행도를 가린다(`PetResponses.motions`) —
+ * 그 숫자가 곧 케어 미스를 되짚게 해 주는데 케어 미스는 숨은 수치이기 때문이다(정본 §4).
+ * 정본 1.10 의 2층 여덟 줄에는 그 조건이 없다(전부 그 행동 자체를 센다). 그래서 여덟 칸 모두
+ * 이름·조건·진행도를 함께 보여 준다. 옛 `HIDDEN_PROGRESS_SEQ = 15`(웃는 대기)는 그 목록과 함께 폐기됐다.
  */
-export const HIDDEN_PROGRESS_SEQ = 15;
 
 // ── §4·§11 게이지 → 대기 동작 ─────────────────────────────────────────────
 
