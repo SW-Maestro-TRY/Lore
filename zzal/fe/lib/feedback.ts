@@ -56,11 +56,11 @@ export interface FeedbackInput {
   text: string;
 }
 
-// ★ 후기만 아직 v1 경로에 남아 있다(계약 9절 "후기는 변경 없음"). 그래도 주소를 손으로 적지 않고
-//   PET_BASE 에서 만들어 쓴다 — 밖으로 보이는 이름을 v1 로 통일하면 두 경로가 같아지고,
-//   그때 고칠 곳이 한 줄이어야 한다(결정기록 C41). 서버가 옮기기 전까지는 v2→v1 로 되돌린다.
-const FEEDBACK_BASE = PET_BASE.replace('/v2/', '/v1/');
-const base = (petId: number) => `${FEEDBACK_BASE}/${petId}/feedback`;
+// ★ 돌보기와 **같은 경로**를 쓴다 — 주소를 손으로 적지 않는 것이 규칙이라(결정기록 C41),
+//   서버가 자리를 옮기면 고칠 곳이 `PET_BASE` 한 줄이면 된다.
+//   ⚠️ 예전에는 돌보기가 v2 라 여기서 `.replace('/v2/','/v1/')` 로 되돌렸다. 지금은 둘 다 v1 이라
+//   그 되돌리기가 아무 일도 안 하므로 뺐다(2026-09-14 명세 대조: `/api/zzal/v1/me/pets/{petId}/feedback`).
+const base = (petId: number) => `${PET_BASE}/${petId}/feedback`;
 
 /**
  * 후기 남기기.
