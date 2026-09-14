@@ -14,8 +14,16 @@ import java.util.concurrent.ThreadPoolExecutor;
  * 밤 스위프의 시각 트리거와 실행기.
  *
  * <h3>{@code @EnableScheduling} 이 여기 있는 이유</h3>
- * 이 서비스의 시각 트리거는 {@link NightSweep} 하나뿐이다(플랜 T1 핵심 판단 2). 공용 설정에 두지 않고 zzal 안에
- * 둬서 "누가 타이머를 켰나" 가 한 파일에서 보이게 한다. 스위프 자체는 {@code app.zzal.night.sweep-enabled} 로 막힌다.
+ * 공용 설정에 두지 않고 zzal 안에 둬서 "누가 타이머를 켰나" 가 한 파일에서 보이게 한다.
+ * 스위프 자체는 {@code app.zzal.night.sweep-enabled} 로 막힌다.
+ *
+ * <h3>지금 켜져 있는 시각 트리거 — 둘</h3>
+ * <ul>
+ *   <li>{@link NightSweep#sweep()} — 23:00 KST. 돈이 나가는 굽기다(플랜 T1 핵심 판단 2)</li>
+ *   <li>{@code EventArchiveJob.scheduled()} — 05:10 KST. 행동 기록을 S3 로 베껴 두는 보관이다.
+ *       돈이 안 나가고, {@code app.zzal.archive.enabled} 가 기본 꺼짐이라 버킷이 생기기 전에는 안 돈다</li>
+ * </ul>
+ * 새 트리거를 더할 때는 <b>여기 목록에 적는다</b> — 적히지 않은 타이머는 아무도 모르는 채로 돈다.
  *
  * <h3>{@code nightExecutor}</h3>
  * {@code hatchExecutor}(3·큐 50·CallerRuns)에 200건을 넣으면 스케줄러 스레드가 굽기를 떠안고 부화와 자리를 다툰다.

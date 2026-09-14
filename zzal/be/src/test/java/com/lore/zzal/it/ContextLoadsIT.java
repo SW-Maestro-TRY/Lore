@@ -86,14 +86,22 @@ class ContextLoadsIT extends ZzalItSupport {
     }
 
     @Test
-    @DisplayName("시각 트리거는 하나뿐이고 23:00 KST 다")
-    void theOnlyScheduledJobIsTheNightSweep() throws Exception {
+    @DisplayName("시각 트리거는 둘 — 밤 굽기 23:00 · 기록 보관 05:10(KST)")
+    void theScheduledJobsAreTheNightSweepAndTheArchive() throws Exception {
         Method sweep = NightSweep.class.getMethod("sweep");
         Scheduled scheduled = sweep.getAnnotation(Scheduled.class);
         assertThat(scheduled).isNotNull();
         assertThat(scheduled.cron()).isEqualTo("0 0 23 * * *");
         assertThat(scheduled.zone()).isEqualTo("Asia/Seoul");
         assertThat(nightSweep).isNotNull();
+
+        // ★ 둘이 같은 시각이면 t3.micro 에서 서로를 방해한다. 겹치지 않는지를 여기서 못 박는다.
+        Scheduled archive = com.lore.zzal.archive.EventArchiveJob.class
+                .getMethod("scheduled").getAnnotation(Scheduled.class);
+        assertThat(archive).isNotNull();
+        assertThat(archive.cron()).isEqualTo("0 10 5 * * *");
+        assertThat(archive.zone()).isEqualTo("Asia/Seoul");
+        assertThat(archive.cron()).isNotEqualTo(scheduled.cron());
     }
 
     @Test

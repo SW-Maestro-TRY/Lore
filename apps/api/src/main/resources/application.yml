@@ -265,6 +265,32 @@ app:
       #   CloudFront → ALB → 서버면 1(ALB 한 겹). 설비가 바뀌면 배포 없이 여기만 맞춘다(ClientIp 주석).
       xff-trusted-hops: ${ZZAL_HATCH_XFF_HOPS:1}
 
+    # 행동 기록 보관 — 하루 한 번(KST 05:10) zzal_event 를 S3 로 베껴 둔다 (2026-09-14).
+    #
+    # ★★ DB 는 그대로 둔다. 지우는 코드가 없다 — 그 표가 알파를 재는 기준이다.
+    #    S3 는 대체가 아니라 보관층이다(실시간 판단·세기는 계속 DB 가 한다).
+    # ★★ bucket 은 **그림 버킷이 아니어야 한다.** 그림 버킷은 CloudFront 가 /images/* 를
+    #    공개로 내보내는 곳이고, 행동 기록에는 익명 번호·로그인 번호가 줄마다 들어간다.
+    #    · 비어 있으면 배치가 아예 안 돈다(준비 전에 켜지는 사고를 원천 차단)
+    #    · content-bucket 과 같으면 안 돈다
+    #    · prefix 가 images 로 시작하면 안 돈다
+    # ★ 기본이 꺼짐이다 — 보관 버킷은 새 계정(11/27 이후)에서 만든다.
+    # ★ 경로는 한 뿌리 아래 날짜로 가른다:
+    #     {prefix}/zzal/events/dt=YYYY-MM-DD/part-{처음id}-{끝id}.jsonl.gz
+    #   계정을 옮기는 날 `aws s3 sync s3://옛/{prefix}/ s3://새/{prefix}/` 한 줄이면 끝난다.
+    # ★ 서버가 두 대 이상이면 한 대만 켠다(밤 스위프와 같은 규칙).
+    archive:
+      enabled: ${ZZAL_ARCHIVE_ENABLED:false}
+      bucket: ${ZZAL_ARCHIVE_BUCKET:}
+      prefix: ${ZZAL_ARCHIVE_PREFIX:archive}
+      # 한 번 도는 동안 올릴 수 있는 줄 수의 상한.
+      max-rows: ${ZZAL_ARCHIVE_MAX_ROWS:50000}
+      # 한 번에 메모리로 읽는 줄 수. 쌓인 게 많아도 이만큼씩만 읽는다.
+      chunk: ${ZZAL_ARCHIVE_CHUNK:5000}
+      # 이 시간보다 최근에 도착한 줄은 아직 안 올린다 — id 는 INSERT 순서지 커밋 순서가 아니라,
+      # 커밋이 늦은 줄을 앞질러 기준점을 올리면 그 줄은 영영 안 올라간다.
+      settle-lag-minutes: ${ZZAL_ARCHIVE_SETTLE_LAG_MIN:10}
+
     # 공유 링크의 앞부분. 발급할 때 이 값 뒤에 토큰을 붙여 통째로 내려준다.
     #
     # ★ 서버가 만들어 주는 이유 — 화면이 조립하면 환경마다(로컬·테스트·운영) 다른 규칙이 생기고,

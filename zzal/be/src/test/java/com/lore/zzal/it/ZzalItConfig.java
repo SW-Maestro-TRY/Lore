@@ -1,6 +1,8 @@
 package com.lore.zzal.it;
 
 import com.lore.common.s3.S3Storage;
+import com.lore.zzal.archive.ArchiveStorage;
+import com.lore.zzal.archive.S3ArchiveStorage;
 import com.lore.zzal.generation.MotionPostProfiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +52,18 @@ public class ZzalItConfig {
     @Primary
     public S3Storage inMemoryS3Storage() {
         return new InMemoryS3Storage();
+    }
+
+    /**
+     * 행동 기록 보관이 올리는 자리 — <b>같은 메모리 저장소</b>를 뒤에 끼운다.
+     *
+     * ★ 운영에서는 {@code EventArchiveConfig} 가 <b>보관 버킷</b>으로 S3Storage 를 하나 더 만들어
+     *   여기에 넣는다(그림 버킷이 아니다). 시험은 그 이음매를 그대로 두고 바깥으로 나가는 길만 막는다.
+     */
+    @Bean
+    @Primary
+    public ArchiveStorage inMemoryArchiveStorage(S3Storage inMemoryS3Storage) {
+        return new S3ArchiveStorage(inMemoryS3Storage);
     }
 
     /**
@@ -178,6 +192,20 @@ public class ZzalItConfig {
         /** 시험이 "무엇이 올라갔나" 를 물을 수 있게. */
         public boolean has(String key) {
             return objects.containsKey(key);
+        }
+
+        /** 올라간 key 전부(순서 없음). */
+        public java.util.Set<String> keys() {
+            return java.util.Set.copyOf(objects.keySet());
+        }
+
+        /** 올라간 바이트 그대로. 시험이 파일 안을 열어 볼 수 있게. */
+        public byte[] bytes(String key) {
+            byte[] found = objects.get(key);
+            if (found == null) {
+                throw new IllegalStateException("메모리 S3 에 없는 key 입니다: " + key);
+            }
+            return found;
         }
 
         public int size() {

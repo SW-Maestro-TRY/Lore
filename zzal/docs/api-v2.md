@@ -429,6 +429,12 @@
 | `game.daily-limit` | 3 | 두 게임 합산 하루 판수 |
 | `reward.game-win` | HAPPINESS | 승리 보상 |
 | `reward.feedback` | NONE | 후기 보상 |
+| `archive.enabled` | false | 행동 기록 S3 보관 켜기(KST 05:10). **서버 여러 대면 한 대만** |
+| `archive.bucket` | (빈) | 보관 전용 버킷. **비면 안 돈다 · 그림 버킷(`app.s3.content-bucket`)과 같으면 안 돈다** — 그 버킷은 CloudFront 가 공개로 내보낸다 |
+| `archive.prefix` | `archive` | 보관 뿌리. `{prefix}/zzal/events/dt=YYYY-MM-DD/part-{처음id}-{끝id}.jsonl.gz`. `images` 로 시작하면 안 돈다 |
+| `archive.max-rows` | 50000 | 한 회차에 올릴 수 있는 줄 수의 상한 |
+| `archive.chunk` | 5000 | 한 번에 메모리로 읽는 줄 수(= 파일 하나의 최대 줄 수) |
+| `archive.settle-lag-minutes` | 10 | 이 시간보다 최근에 도착한 줄은 다음 회차로. id 는 INSERT 순서지 커밋 순서가 아니다 |
 | `dev-tools` · `admin.enabled` | false | 기존 |
 | `generation.*` · `openai.*` · `python.*` · `recovery.*` · `max-hatch-attempts` · `gate-version` | 기존 | |
 
