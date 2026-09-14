@@ -208,7 +208,7 @@ public class PetService {
     }
 
     /**
-     * 그 펫의 동작 행(seq → 행). v2 부화 펫은 18행, v1 펫은 옛 seq(0부터) 행이라 카탈로그 seq 와 안 겹쳐 비어 보인다.
+     * 그 펫의 동작 행(seq → 행). 지금 부화한 펫은 18행, 옛 펫은 옛 seq(0부터) 행이라 카탈로그 seq 와 안 겹쳐 비어 보인다.
      * 심화 행동 상태(`motions[].advanced`)의 재료. 읽기만 한다.
      */
     @Transactional

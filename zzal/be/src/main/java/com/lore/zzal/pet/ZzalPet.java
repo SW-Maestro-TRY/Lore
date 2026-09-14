@@ -80,7 +80,7 @@ public class ZzalPet {
     @Column(columnDefinition = "text")
     private String identityText;
 
-    /** 어느 부화 파이프라인으로 구웠나(v1 = 8상태, v2 = 격자 2장 16종). basicImageKey 폴백 판단에 쓴다. */
+    /** 어느 부화 파이프라인으로 구웠나. 앵커가 있는 판인지, 이어 구울 때 어느 스크립트를 쓸지에 쓴다. */
     @Column(length = 20)
     private String hatchPipelineVersion;
 

@@ -100,7 +100,7 @@ class ModerationRetryEndToEndTest {
                 List.of(ok(GridStep.NAME), blocked(PostProcessStep.GRID2)),
                 List.of(ok("postprocess")));
 
-        RunResult first = runner.run(JOB, new StepContext(7L, "여울", null, "v4"), stages, List.of());
+        RunResult first = runner.run(JOB, new StepContext(7L, "여울", null, "v1"), stages, List.of());
 
         assertThat(first.success()).isFalse();
         assertThat(first.errorCode())
@@ -119,7 +119,7 @@ class ModerationRetryEndToEndTest {
                 List.of(ok(IdentityStep.NAME)),
                 List.of(ok(GridStep.NAME), ok(PostProcessStep.GRID2)),
                 List.of(ok("postprocess")));
-        RunResult second = runner.run(2L, new StepContext(7L, "여울", null, "v4"), retry, resume);
+        RunResult second = runner.run(2L, new StepContext(7L, "여울", null, "v1"), retry, resume);
 
         assertThat(second.success()).isTrue();
         assertThat(baked)
@@ -141,7 +141,7 @@ class ModerationRetryEndToEndTest {
                 List.of(ok(IdentityStep.NAME)),
                 List.of(ok(GridStep.NAME), ok(PostProcessStep.GRID2)),
                 List.of(ok("postprocess")));
-        runner.run(3L, new StepContext(7L, "여울", null, "v4"), stages, resumeOldWay);
+        runner.run(3L, new StepContext(7L, "여울", null, "v1"), stages, resumeOldWay);
 
         assertThat(baked)
                 .as("1층이 안 구워진다 = 옛 문단으로 만든 그림이 새 문단의 2층과 짝이 된다")

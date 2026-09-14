@@ -27,8 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 이름을 정하는 곳이 셋이다.
  * <ul>
  *   <li>{@code MotionCatalog} — 화면이 그림 주소를 조립할 때 쓰는 이름이자, 후처리에 {@code --keys} 로 넘기는 이름</li>
- *   <li>{@code application.yml} 의 {@code app.zzal.hatch.states.v4} — 격자 한 장 폴백에서 기대하는 파일 이름</li>
- *   <li>{@code pipeline/v4/postures.txt} — 칸마다 어떻게 정렬할지를 이름으로 찾는다</li>
+ *   <li>{@code application.yml} 의 {@code app.zzal.hatch.states.v1} — 격자 한 장 폴백에서 기대하는 파일 이름</li>
+ *   <li>{@code pipeline/v1/postures.txt} — 칸마다 어떻게 정렬할지를 이름으로 찾는다</li>
  * </ul>
  * 셋이 어긋나면 <b>빌드·배포·부화가 전부 성공</b>한다. 드러나는 것은 화면에 빈 그림이 뜰 때이거나,
  * 후처리가 엉뚱한 기준으로 정렬해 발이 떠 있는 그림이 나올 때다.
@@ -41,13 +41,13 @@ class MotionNamesAreOneTruthTest {
 
     private static final MotionCatalog CATALOG = new MotionCatalog("", "", "v1");
 
-    /** {@code v4: base,eat,...} 처럼 적힌 줄. */
-    private static final Pattern STATES_V4 = Pattern.compile("(?m)^\\s*v4:\\s*(\\S+)\\s*$");
+    /** {@code v1: base,eat,...} 처럼 적힌 줄. */
+    private static final Pattern STATES = Pattern.compile("(?m)^\\s*v1:\\s*(\\S+)\\s*$");
 
     @Test
-    @DisplayName("★★ app.zzal.hatch.states.v4 가 카탈로그 16종과 순서까지 같다")
-    void hatchStatesV4MatchesCatalog() throws IOException {
-        String configured = configuredStatesV4();
+    @DisplayName("★★ app.zzal.hatch.states.v1 가 카탈로그 16종과 순서까지 같다")
+    void hatchStatesMatchCatalog() throws IOException {
+        String configured = configuredStates();
 
         assertThat(Arrays.asList(configured.split(",")))
                 .as("설정과 카탈로그가 어긋나도 정상 경로에서는 아무 소리가 안 난다 — 여기가 유일하게 잡는 자리다")
@@ -55,14 +55,14 @@ class MotionNamesAreOneTruthTest {
     }
 
     @Test
-    @DisplayName("★★ pipeline/v4/postures.txt 의 칸 이름이 1층·2층과 정확히 같다")
+    @DisplayName("★★ pipeline/v1/postures.txt 의 칸 이름이 1층·2층과 정확히 같다")
     void posturesMatchCatalog() {
         HatchPostures postures = new HatchPostures();
 
-        assertThat(keysOf(postures.forStep("v4", "grid")))
+        assertThat(keysOf(postures.forStep("v1", "grid")))
                 .as("격자 1장의 칸 이름")
                 .containsExactlyElementsOf(keysOfLayer(MotionLayer.BASIC_1));
-        assertThat(keysOf(postures.forStep("v4", "grid2")))
+        assertThat(keysOf(postures.forStep("v1", "grid2")))
                 .as("격자 2장의 칸 이름")
                 .containsExactlyElementsOf(keysOfLayer(MotionLayer.BASIC_2));
     }
@@ -95,10 +95,10 @@ class MotionNamesAreOneTruthTest {
         return CATALOG.basic().stream().filter(m -> m.layer() == layer).map(MotionSpec::key).toList();
     }
 
-    private String configuredStatesV4() throws IOException {
+    private String configuredStates() throws IOException {
         String yml = Files.readString(repoRoot().resolve("apps/api/src/main/resources/application.yml"));
-        Matcher m = STATES_V4.matcher(yml);
-        assertThat(m.find()).as("application.yml 에 app.zzal.hatch.states.v4 줄이 없습니다").isTrue();
+        Matcher m = STATES.matcher(yml);
+        assertThat(m.find()).as("application.yml 에 app.zzal.hatch.states.v1 줄이 없습니다").isTrue();
         return m.group(1);
     }
 

@@ -226,10 +226,10 @@ public class GenerationRunner {
     /**
      * 격자 구조 게이트가 "이 격자는 4x4 가 아니다" 로 막았는가.
      *
-     * ★ 이 표식은 후처리 스크립트({@code zzal/pipeline/v4/service_post.py})가 찍고,
+     * ★ 이 표식은 후처리 스크립트({@code zzal/pipeline/v1/service_post.py})가 찍고,
      *   {@code PythonPostProcessor} 가 스크립트가 남긴 말을 예외 메시지에 그대로 붙여 올린다.
      *   판정은 <b>코드가 결정적으로</b> 한다 — 표식이 있으면 격자를 버리고, 없으면 평범한 재시도다.
-     * ★ 표식이 없는 버전(v1·v2)의 스크립트는 이 표식을 찍지 않으므로 예전 동작 그대로다.
+     * ★ 이 표식을 안 찍는 스크립트를 쓰는 버전은 예전 동작 그대로다.
      */
     private static boolean gridRejected(Throwable e) {
         return e != null && String.valueOf(e.getMessage()).contains(GRID_STRUCTURE_MARK);

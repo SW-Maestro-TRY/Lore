@@ -100,8 +100,8 @@ public class StuckHatchRecovery {
                 recorder.markPetFailed(pet.getId());
                 continue;
             }
-            // ★ 원래 job 의 버전(v)을 잇는다 — 설정이 그 사이 v2 로 바뀌었어도 굽던 알은 굽던 버전으로 끝낸다
-            //   (#218 리뷰: 안 그러면 v1 격자를 v2 후처리가 자르려다 어긋난다).
+            // ★ 원래 job 의 버전(v)을 잇는다 — 설정이 그 사이 바뀌었어도 굽던 알은 굽던 버전으로 끝낸다
+            //   (#218 리뷰: 안 그러면 옛 격자를 새 후처리가 자르려다 어긋난다).
             GenJob job = jobRepository.save(GenJob.start(
                     pet.getId(), GenKind.HATCH, (int) attempts + 1, v, Instant.now()));
             log.info("이어서 굽기 — petId={} phase={} attempt={}", pet.getId(), pet.getPhase(), attempts + 1);

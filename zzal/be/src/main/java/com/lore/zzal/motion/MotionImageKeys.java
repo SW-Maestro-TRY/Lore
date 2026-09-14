@@ -47,7 +47,7 @@ public final class MotionImageKeys {
      *   갈리면, 화면은 있지도 않은 주소를 받거나 있는 앵커를 못 받는다. 둘 다 오류가 안 난다.
      * ★ 여기 없는 이름이 적힌 옛 기록은 "앵커가 없다" 로 답한다 — 옛 스크립트는 앵커를 안 냈다.
      */
-    public static final java.util.Set<String> ANCHOR_VERSIONS = java.util.Set.of("v4");
+    public static final java.util.Set<String> ANCHOR_VERSIONS = java.util.Set.of("v1");
 
     private MotionImageKeys() {
     }

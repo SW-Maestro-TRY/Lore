@@ -160,7 +160,7 @@ public class MotionCatalog {
         return Optional.ofNullable(BY_KEY.get(key));
     }
 
-    /** 기본 행동 16종의 key, seq 순. 부화 후처리 출력 이름과 같아야 한다(application.yml hatch.states.v4). */
+    /** 기본 행동 16종의 key, seq 순. 부화 후처리 출력 이름과 같아야 한다(application.yml hatch.states.v1). */
     public List<String> basicKeys() {
         return basic().stream().map(MotionSpec::key).toList();
     }

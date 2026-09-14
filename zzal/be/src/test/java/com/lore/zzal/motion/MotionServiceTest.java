@@ -169,7 +169,7 @@ class MotionServiceTest {
     @Test
     @DisplayName("★ 판은 regenRound 가 아니라 attempts 다 — queue() 가 regenRound 를 0 으로 되돌린다")
     void regenRoundIsResetByQueueSoItCannotBeTheRound() {
-        ZzalMotion m = ZzalMotion.start(PET_ID, 3, MOTION_NAME, "v4");
+        ZzalMotion m = ZzalMotion.start(PET_ID, 3, MOTION_NAME, "v1");
         org.springframework.test.util.ReflectionTestUtils.setField(m, "status",
                 com.lore.zzal.motion.MotionStatus.FAILED);
         m.beginAttempt();

@@ -100,7 +100,7 @@ class PostProcessSessionTest {
         S3Storage storage = mock(S3Storage.class);
         FakeScript p = new FakeScript(storage, scripts(), List.of(LAYER1, LAYER2), true, false);
 
-        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v4")) {
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v1")) {
             s.split("grid1.png", LAYER1, "base=standing,eat=standing");
             s.split("grid2.png", LAYER2, "sweep=standing,wash=crouch");
         }
@@ -128,7 +128,7 @@ class PostProcessSessionTest {
     void perLayerNamesInsideTheWorkDirectory() throws Exception {
         FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER1, LAYER2), true, false);
 
-        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v4")) {
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v1")) {
             s.split("grid1.png", LAYER1, "");
             s.split("grid2.png", LAYER2, "");
         }
@@ -143,7 +143,7 @@ class PostProcessSessionTest {
         FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER1), false, false);
 
         assertThatThrownBy(() -> {
-            try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v4")) {
+            try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v1")) {
                 s.split("grid1.png", LAYER1, "");
             }
         }).isInstanceOf(IllegalStateException.class).hasMessageContaining("anchors.json");
@@ -166,7 +166,7 @@ class PostProcessSessionTest {
         FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER1), true, true);
 
         assertThatThrownBy(() -> {
-            try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v4")) {
+            try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v1")) {
                 s.split("grid1.png", LAYER1, "");
             }
         }).isInstanceOf(IllegalStateException.class)

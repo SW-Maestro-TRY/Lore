@@ -87,7 +87,7 @@ class PetDetailTest {
     @DisplayName("★ 부화 펫은 basic/{판}/{key}.webp 규약 — 주소는 버전이 아니라 판이 정한다")
     void basicImageKeysUseTheRound() {
         ZzalPet pet = baby();
-        pet.setHatchPipelineVersion("v4");
+        pet.setHatchPipelineVersion("v1");
         // ★ 판을 넣어야 하는 시험이 됐다 — 판이 0 이면 "아직 한 장도 안 구웠다" 라 키가 아예 안 나간다.
         org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
@@ -114,7 +114,7 @@ class PetDetailTest {
     @DisplayName("★★ 한 장도 굽지 않은 펫(판 0)은 그림 주소를 안 준다 — 없는 파일을 가리키지 않는다")
     void unbakedPetCarriesNoBasicImageKey() {
         ZzalPet pet = baby();
-        pet.setHatchPipelineVersion("v4");
+        pet.setHatchPipelineVersion("v1");
         // 판 0 = 후처리가 한 번도 안 돌았다(첫 후처리가 1 로 올린다).
 
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
@@ -322,7 +322,7 @@ com.lore.zzal.motion.MotionSource.API,
     @DisplayName("★★ 잠긴 2층도 그림 주소를 내려보낸다 — 화면이 '그림이 없다' 와 '아직 안 배웠다' 를 구분해야 한다")
     void lockedBasicStillCarriesItsImageKey() {
         ZzalPet pet = baby();
-        pet.setHatchPipelineVersion("v4");
+        pet.setHatchPipelineVersion("v1");
         org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 2);
 
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
@@ -343,7 +343,7 @@ com.lore.zzal.motion.MotionSource.API,
     @DisplayName("★ 기본 그림 주소에 판이 들어간다 — 다시 구우면 같은 주소를 덮어쓰지 않는다")
     void basicImageKeyCarriesTheRound() {
         ZzalPet pet = baby();
-        pet.setHatchPipelineVersion("v4");
+        pet.setHatchPipelineVersion("v1");
         org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 1);
         String first = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG)
                 .motions().get(0).basicImageKey();
@@ -360,7 +360,7 @@ com.lore.zzal.motion.MotionSource.API,
     @DisplayName("★ anchorsKey — 전체 URL 이 아니라 키이고, 그림과 같은 판을 가리킨다")
     void anchorsKeyIsAKeyOfTheSameRound() {
         ZzalPet pet = baby();
-        pet.setHatchPipelineVersion("v4");
+        pet.setHatchPipelineVersion("v1");
         org.springframework.test.util.ReflectionTestUtils.setField(pet, "basicRound", 3);
 
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);

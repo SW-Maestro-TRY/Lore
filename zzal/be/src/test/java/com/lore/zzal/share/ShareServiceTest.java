@@ -91,7 +91,7 @@ class ShareServiceTest {
     @DisplayName("★★ 공유 주소도 펫 상세와 <b>같은 판</b>을 가리킨다 — 두 곳이 따로 조립하면 한쪽만 옛 판을 준다")
     void basicShareUsesTheSameRoundAsTheDetail() {
         ReflectionTestUtils.setField(pet, "basicRound", 2);
-        pet.setHatchPipelineVersion("v4");
+        pet.setHatchPipelineVersion("v1");
         when(shareRepository.findByToken("tok")).thenReturn(Optional.of(ZzalShare.issue(PET, "pet", T0)));
 
         // ★ 같은 자리에서 조립한다는 것은 ImageKeyAssemblyTest 가 구조로 막는다. 여기서는 값이 맞는지만 본다.

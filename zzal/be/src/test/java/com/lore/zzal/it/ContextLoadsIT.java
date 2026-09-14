@@ -105,10 +105,10 @@ class ContextLoadsIT extends ZzalItSupport {
     }
 
     @Test
-    @DisplayName("부화는 v2 로 뜬다 — 프롬프트 4종이 다 있어야 v2 이고, 없으면 조용히 v1 로 내려간다")
+    @DisplayName("★ 부화는 설정에 적힌 그 버전으로 뜬다 — 폴백이 없어 조용히 딴 버전으로 내려가지 않는다")
     void hatchPipelineIsV2() {
-        assertThat(pipelineRegistry.currentVersion(GenKind.HATCH)).isEqualTo("v4");
-        assertThat(pipelineRegistry.steps(GenKind.HATCH, "v4")).hasSize(5);
+        assertThat(pipelineRegistry.currentVersion(GenKind.HATCH)).isEqualTo("v1");
+        assertThat(pipelineRegistry.steps(GenKind.HATCH, "v1")).hasSize(5);
     }
 
     @Test

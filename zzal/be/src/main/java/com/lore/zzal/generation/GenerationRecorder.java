@@ -46,7 +46,7 @@ public class GenerationRecorder {
         return stepRepository.findSucceededByPet(petId, kind);
     }
 
-    /** 같은 버전의 성공 단계만 이어받는다(#218 리뷰 — v1 산출물을 v2 컨텍스트로 재사용하지 않게). */
+    /** 같은 버전의 성공 단계만 이어받는다(#218 리뷰 — 옛 산출물을 새 버전 컨텍스트로 재사용하지 않게). */
     public List<GenStepRecord> loadSucceeded(Long petId, GenKind kind, String version) {
         return stepRepository.findSucceededByPetAndVersion(petId, kind, version);
     }

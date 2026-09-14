@@ -146,7 +146,7 @@ app:
     #
     # ★★ 모르는 이름을 적으면 기동이 막힌다(폴백 없음). 전에는 프롬프트가 없으면 조용히 옛 버전으로
     #    내려갔는데, 그러면 설정은 새것인데 그림은 옛것이 구워지고 화면을 봐야만 드러난다.
-    pipeline-version: ${ZZAL_PIPELINE_VERSION:v4}
+    pipeline-version: ${ZZAL_PIPELINE_VERSION:v1}
     motion-pipeline-version: ${ZZAL_MOTION_PIPELINE_VERSION:v1}
     max-hatch-attempts: 2
     # 심화 행동 API 굽기 시도 횟수. ★ 정본 6장은 API 1회 → 실패면 로컬(맥미니) 재생성 2회다.
@@ -172,7 +172,7 @@ app:
     #   목록에 없는 이름을 자르려 하면 후처리가 내려받기 전에 멈춘다.
     hatch:
       states:
-        v4: base,eat,joy,sad,sick,pet,hello,sleep,eat_rice,eat_snack,sweep,wash,reply,petted,startle,wake_up
+        v1: base,eat,joy,sad,sick,pet,hello,sleep,eat_rice,eat_snack,sweep,wash,reply,petted,startle,wake_up
 
     # 밤에 구울 수 있는 심화 행동(16프레임) — 쉼표로 구분한 카탈로그 key.
     #

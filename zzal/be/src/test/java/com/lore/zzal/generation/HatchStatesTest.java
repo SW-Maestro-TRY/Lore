@@ -27,12 +27,12 @@ class HatchStatesTest {
     @DisplayName("버전 키로 고른다 — 그 버전 줄만 읽는다")
     void picksByVersion() {
         MockEnvironment env = new MockEnvironment()
-                .withProperty("app.zzal.hatch.states.v4",
+                .withProperty("app.zzal.hatch.states.v1",
                         "base,eat,joy,sad,sick,pet,hello,sleep,"
                                 + "eat_rice,eat_snack,sweep,wash,reply,petted,startle,wake_up")
                 .withProperty("app.zzal.hatch.states.옛것", "idle,eat,hungry,clean,happy,sad,pet,train");
 
-        assertThat(GenerationConfig.hatchStates(env, "v4")).hasSize(16).startsWith("base").endsWith("wake_up");
+        assertThat(GenerationConfig.hatchStates(env, "v1")).hasSize(16).startsWith("base").endsWith("wake_up");
         assertThat(GenerationConfig.hatchStates(env, "옛것")).hasSize(8).startsWith("idle");
     }
 
@@ -42,9 +42,9 @@ class HatchStatesTest {
         MockEnvironment env = new MockEnvironment()
                 .withProperty("app.zzal.hatch.states.옛것", "idle,eat");
 
-        assertThatThrownBy(() -> GenerationConfig.hatchStates(env, "v4"))
+        assertThatThrownBy(() -> GenerationConfig.hatchStates(env, "v1"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("app.zzal.hatch.states.v4");
+                .hasMessageContaining("app.zzal.hatch.states.v1");
     }
 
     @Test
@@ -52,7 +52,7 @@ class HatchStatesTest {
     void processorRejectsEmptyStates() throws Exception {
         PipelineScripts scripts = mock(PipelineScripts.class);
         PythonPostProcessor p = new PythonPostProcessor(mock(S3Storage.class), scripts, "python3", 60,
-                v -> v.equals("v4") ? List.of("base") : List.of());
+                v -> v.equals("v1") ? List.of("base") : List.of());
 
         try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "없는버전")) {
             assertThatThrownBy(() -> s.split("images/zzal/pets/7/grid.png", List.of("base")))

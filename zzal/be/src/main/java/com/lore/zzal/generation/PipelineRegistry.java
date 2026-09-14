@@ -21,7 +21,7 @@ import java.util.Map;
  *
  * <h3>★ 묶음이 곧 "나란히 돌려도 되는가"의 선언이다</h3>
  * 한 묶음 안의 단계들은 <b>동시에</b> 돌고, 묶음과 묶음 사이는 순서대로다.
- * v2 의 {@code [grid, grid2]} 가 그 예다 — 두 장은 서로를 안 보고 둘 다 {@code identity} 하나만 쓰므로
+ * 부화의 {@code [grid, grid2]} 가 그 예다 — 두 장은 서로를 안 보고 둘 다 {@code identity} 하나만 쓰므로
  * 겹쳐 구우면 한 장 값(실측 41초)이 통째로 빠진다.
  *
  * ★ 나란히 돌 수 있는지를 단계가 스스로 말하게 하지 않은 이유 — 그러면 기본값이 필요하고,
@@ -34,7 +34,7 @@ import java.util.Map;
  *   단계 추가   새 Step 클래스를 만들고 목록에 넣는다. 실행기는 안 바뀐다
  *   되돌리기    설정(app.zzal.pipeline-version)을 옛 버전으로
  *
- * 예) 정체성 문단을 없앤 v2 는 이렇게 된다
+ * 예) 정체성 문단을 없앤 다음 판은 이렇게 된다
  *     "v2", List.of(sheet, grid, post)
  *
  * ★★ 버전 축이 <b>종류마다 따로</b>다. 부화 v1 과 모션 v1 은 이름만 같을 뿐 다른 것이고,
@@ -50,7 +50,7 @@ public class PipelineRegistry {
      */
     private static final Map<GenKind, Map<String, List<String>>> IDENTITY_DEPENDENTS = Map.of(
             GenKind.HATCH, Map.of(
-                    "v4", List.of(IdentityStep.NAME, GridStep.NAME, PostProcessStep.GRID2)),
+                    "v1", List.of(IdentityStep.NAME, GridStep.NAME, PostProcessStep.GRID2)),
             GenKind.MOTION, Map.of("v1", List.of()));
 
     private final Map<GenKind, Map<String, List<List<GenerationStep>>>> versions;
@@ -63,17 +63,17 @@ public class PipelineRegistry {
                             @Qualifier("gridStep") GridStep grid, @Qualifier("grid2Step") GridStep grid2,
                             PostProcessStep post,
                             MotionGridStep motionGrid, MotionPostStep motionPost,
-                            @Value("${app.zzal.pipeline-version:v4}") String hatchVersion,
+                            @Value("${app.zzal.pipeline-version:v1}") String hatchVersion,
                             @Value("${app.zzal.motion-pipeline-version:v1}") String motionVersion) {
         this.versions = Map.of(
                 GenKind.HATCH, Map.of(
-                        // v4 = 격자 2장(1층·2층) → 기본 행동 16종. 1층·2층 모두 검수를 마친 확정 조합이다.
-                        //   프롬프트 prompt/v4/{sheet,identity,grid,grid2}.txt,
-                        //   후처리 pipeline/v4/service_post.py(state8_v5 + 격자 게이트 + 칸별 자세 매핑).
+                        // v1 = 격자 2장(1층·2층) → 기본 행동 16종. 1층·2층 모두 검수를 마친 확정 조합이다.
+                        //   프롬프트 prompt/v1/{sheet,identity,grid,grid2}.txt,
+                        //   후처리 pipeline/v1/service_post.py(state8_v5 + 격자 게이트 + 칸별 자세 매핑).
                         // ★ [grid, grid2] 가 한 묶음 = 나란히 굽는다 — 두 격자는 서로를 안 보고
                         //   identity 하나만 쓰므로 겹쳐 구우면 한 장 값(실측 41초)이 통째로 빠진다.
                         //   identity 는 앞 묶음이라 반드시 먼저 끝난다.
-                        "v4", List.of(List.of(sheet), List.of(identity), List.of(grid, grid2), List.of(post))),
+                        "v1", List.of(List.of(sheet), List.of(identity), List.of(grid, grid2), List.of(post))),
                 GenKind.MOTION, Map.of("v1", List.of(List.of(motionGrid), List.of(motionPost))));
         this.currentVersions = Map.of(GenKind.HATCH, hatchVersion, GenKind.MOTION, motionVersion);
         verifyIdentityDependents();

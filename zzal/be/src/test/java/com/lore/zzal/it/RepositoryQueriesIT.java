@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <h3>★ {@code HandWrittenQueriesIT} 와 무엇이 다른가</h3>
  * 그쪽은 "돌긴 도는가"(문법·타입·트랜잭션)를 본다. 여기는 <b>답이 맞는가</b>를 본다 —
- * 한 펫에 v1·v2 와 모션 A·B 의 성공·실패·진행 중을 섞어 넣고, 그 버전·그 모션의
+ * 한 펫에 두 파이프라인 버전과 모션 A·B 의 성공·실패·진행 중을 섞어 넣고, 그 버전·그 모션의
  * 성공 단계만 나오는지. 재개 조회가 틀리면 <b>다른 판의 산출물을 이어받아</b> 유료 단계를
  * 잘못 건너뛰고, 그림은 같은데 동작만 다른 결과가 사용자에게 간다.
  *
@@ -62,7 +62,7 @@ class RepositoryQueriesIT extends ZzalItSupport {
     void succeededStepsAreSplitByPipelineVersion() {
         Long petId = draftPet(newUserId());
         Long oldJob = hatchJob(petId, "옛버전");
-        Long newJob = hatchJob(petId, "v4");
+        Long newJob = hatchJob(petId, "v1");
 
         succeeded(oldJob, 0, "sheet", "old-sheet.png");
         succeeded(oldJob, 1, "identity", null);
@@ -70,11 +70,11 @@ class RepositoryQueriesIT extends ZzalItSupport {
         failed(newJob, 1, "identity");
         running(newJob, 2, "grid");
 
-        assertThat(steps.findSucceededByPetAndVersion(petId, GenKind.HATCH, "v4"))
+        assertThat(steps.findSucceededByPetAndVersion(petId, GenKind.HATCH, "v1"))
                 .extracting(GenStepRecord::getName)
                 .as("지금 버전에서 성공한 것은 시트 하나뿐이다")
                 .containsExactly("sheet");
-        assertThat(steps.findSucceededByPetAndVersion(petId, GenKind.HATCH, "v4"))
+        assertThat(steps.findSucceededByPetAndVersion(petId, GenKind.HATCH, "v1"))
                 .extracting(GenStepRecord::getOutputKey)
                 .containsExactly("new-sheet.png");
 
@@ -200,7 +200,7 @@ class RepositoryQueriesIT extends ZzalItSupport {
 
     private void finishedJob(Long petId, Instant startedAt, BigDecimal cost) {
         transactions.executeWithoutResult(status -> {
-            GenJob job = jobs.save(GenJob.start(petId, GenKind.HATCH, 1, "v4", startedAt));
+            GenJob job = jobs.save(GenJob.start(petId, GenKind.HATCH, 1, "v1", startedAt));
             job.succeed(cost, startedAt.plusSeconds(30));
         });
     }

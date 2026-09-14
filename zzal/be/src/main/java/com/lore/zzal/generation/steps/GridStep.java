@@ -20,7 +20,7 @@ import java.util.List;
  * 실측 54~60초 · $0.086
  */
 /**
- * 격자 한 장을 굽는다. v2 는 이 단계가 두 번 돈다 — {@code grid}(1층 8종)·{@code grid2}(2층 8종). 이름만 다르고
+ * 격자 한 장을 굽는다. 이 단계는 한 부화에 두 번 돈다 — {@code grid}(1층 8종)·{@code grid2}(2층 8종). 이름만 다르고
  * 프롬프트 파일({@code prompt/{버전}/{이름}.txt})과 출력 키({@code {이름}.png})가 그 이름을 따른다.
  * 빈은 {@link com.lore.zzal.generation.GenerationConfig} 에서 이름별로 만든다.
  */

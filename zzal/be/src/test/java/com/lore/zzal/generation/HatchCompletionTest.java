@@ -41,7 +41,7 @@ import static org.mockito.Mockito.when;
 class HatchCompletionTest {
 
     private static final Long PET = 7L;
-    private static final String V = "v4";
+    private static final String V = "v1";
     private static final Instant T0 = Instant.parse("2026-09-11T03:00:00Z");
 
     private ZzalPetRepository petRepository;
@@ -61,7 +61,7 @@ class HatchCompletionTest {
         PipelineRegistry registry = new PipelineRegistry(
                 StepMocks.sheet(), StepMocks.identity(),
                 StepMocks.grid(), StepMocks.grid2(), StepMocks.post(),
-                mock(MotionGridStep.class), mock(MotionPostStep.class), "v4", "v1");
+                mock(MotionGridStep.class), mock(MotionPostStep.class), "v1", "v1");
 
         service = new HatchService(mock(GenerationRunner.class), recorder, mock(GenJobRepository.class),
                 registry, petRepository, 2, seeder);

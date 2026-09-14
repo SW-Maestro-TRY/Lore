@@ -145,7 +145,7 @@ public class GenerationConfig {
             @Value("${app.zzal.generation.real-postprocess:false}") boolean real,
             S3Storage storage, PipelineScripts scripts,
             @Value("${app.zzal.python.bin:python3}") String pythonBin,
-            @Value("${app.zzal.pipeline-version:v4}") String configuredVersion,
+            @Value("${app.zzal.pipeline-version:v1}") String configuredVersion,
             @Value("${app.zzal.python.timeout-seconds:60}") int timeout,
             Environment env) {
         // ★ 부팅 때 설정된 버전의 목록이 있는지 확인한다(빠졌으면 설정 이름을 말하며 막힘). 실제 사용 버전은
@@ -224,7 +224,7 @@ public class GenerationConfig {
     /**
      * 부화 후처리가 만들어야 하는 파일 이름 — {@code app.zzal.hatch.states.{버전}}.
      *
-     * v1 은 8종(idle…train), v2 는 카탈로그 key 16종. 버전마다 다르므로 키를 버전으로 고른다.
+     * 지금은 카탈로그 key 16종. 버전마다 다를 수 있으므로 키를 버전으로 고른다.
      */
     static List<String> hatchStates(Environment env, String version) {
         String property = "app.zzal.hatch.states." + version;
