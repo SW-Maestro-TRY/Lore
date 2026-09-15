@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.client.BilledFailureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,7 @@ public class GenerationRunner {
     private static final Logger log = LoggerFactory.getLogger(GenerationRunner.class);
 
     private final GenerationRecorder recorder;
+    private final ZzalAlerts alerts;
 
     /** 단계에 시간 제한을 걸기 위한 일회용 스레드. 제한을 넘기면 이 스레드를 끊는다. */
     private final ExecutorService timeoutExecutor = Executors.newCachedThreadPool();
@@ -44,8 +46,31 @@ public class GenerationRunner {
     @org.springframework.beans.factory.annotation.Value("${app.zzal.generation.limit-override-seconds:0}")
     private int limitOverrideSeconds;
 
-    public GenerationRunner(GenerationRecorder recorder) {
+    public GenerationRunner(GenerationRecorder recorder, ZzalAlerts alerts) {
         this.recorder = recorder;
+        this.alerts = alerts;
+    }
+
+    /**
+     * 한 판이 끝날 때마다 <b>누적 비용이 다음 $10 단위를 넘었는지</b> 본다.
+     *
+     * <h3>★ 왜 여기인가 — 돈이 나가는 모든 길이 이 한 곳을 지난다</h3>
+     * 부화도 심화 행동도 결국 이 메서드로 굽는다. 부화 쪽에만 달면 밤 굽기로 나간 돈은
+     * <b>한 번도 안 알린다</b>. 성공·실패·한도 막힘 어느 쪽으로 끝나도 그때까지 나간 돈은 이미
+     * job 에 적혔으므로, 나가는 길이 아니라 <b>끝나는 길 전부</b>에 건다({@code finally}).
+     *
+     * <h3>★★ 경보가 굽기를 되돌리지 않는다</h3>
+     * {@code finally} 에서 예외가 나면 원래 돌려주려던 결과가 사라지고 부화가 통째로 깨진다.
+     * 그래서 {@link ZzalAlerts} 는 어떤 경우에도 예외를 안 내보낸다(그 클래스 주석) —
+     * 여기서 한 번 더 감싸지 않는 이유가 그것이고, 그 규약은 시험이 못 박는다.
+     */
+    public RunResult run(Long jobId, StepContext ctx, List<List<GenerationStep>> stages,
+                         List<GenStepRecord> resume) {
+        try {
+            return bake(jobId, ctx, stages, resume);
+        } finally {
+            alerts.generationFinished(Instant.now());
+        }
     }
 
     /**
@@ -58,8 +83,8 @@ public class GenerationRunner {
      * @param stages 돌릴 묶음 목록. 묶음 안은 동시에, 묶음 사이는 순서대로
      * @param resume 앞선 시도에서 성공한 단계들. 이어받아 건너뛴다
      */
-    public RunResult run(Long jobId, StepContext ctx, List<List<GenerationStep>> stages,
-                         List<GenStepRecord> resume) {
+    private RunResult bake(Long jobId, StepContext ctx, List<List<GenerationStep>> stages,
+                           List<GenStepRecord> resume) {
         String version = ctx.version();
         recorder.markJobRunning(jobId);
 
@@ -95,6 +120,10 @@ public class GenerationRunner {
             total = total.add(outcome.cost());
             if (outcome.error() != null) {
                 recorder.failJob(jobId, outcome.error(), total);
+                if (outcome.quotaBlocked()) {
+                    // ★★ 바깥이 한도로 막았다 — 다시 구우면 또 막히고 돈만 두 번 나간다.
+                    return RunResult.quotaBlocked(ctx, total, outcome.error());
+                }
                 // ★ 격자 구조 게이트가 막은 것이면 같은 격자로 다시 해 봐야 소용없다 — 부르는 쪽에 알린다.
                 return outcome.gridRejected()
                         ? RunResult.gridRejected(ctx, total, outcome.error())
@@ -122,7 +151,8 @@ public class GenerationRunner {
      *   {@link GenErrorCode} 가 DB 컬럼의 CHECK 제약에 묶여 있어 값을 늘리려면 마이그레이션이
      *   필요하기 때문이다(→ {@link RunResult#gridRejected}).
      */
-    private record StageOutcome(BigDecimal cost, GenErrorCode error, boolean gridRejected) {
+    private record StageOutcome(BigDecimal cost, GenErrorCode error, boolean gridRejected,
+                               boolean quotaBlocked) {
     }
 
     /**
@@ -152,6 +182,7 @@ public class GenerationRunner {
         BigDecimal cost = BigDecimal.ZERO;
         GenErrorCode error = null;
         boolean gridRejected = false;
+        boolean quotaBlocked = false;
         List<StepResult> done = new ArrayList<>(running.size());
 
         for (Running r : running) {
@@ -172,6 +203,8 @@ public class GenerationRunner {
                 GenErrorCode code = classify(cause);
                 // ★ 나란히 도는 묶음에서 한 장만 게이트에 막혀도 그 격자는 버려야 한다 — 누적한다.
                 gridRejected |= gridRejected(cause);
+                // ★ 한 장만 한도에 걸려도 그 시도 전체가 한도에 걸린 것이다(같은 계정·같은 키).
+                quotaBlocked |= quotaBlocked(cause);
                 // ★★ 실패해도 <b>이미 나간 돈</b>은 적는다. 유료 호출은 200 이 돌아온 순간 과금이 끝나므로,
                 //   응답 파싱·S3 업로드에서 터진 실패는 공짜가 아니다. 여기서 안 더하면 원가가
                 //   실제보다 낮게 보여 중복 과금이나 급증을 못 본다.
@@ -194,7 +227,7 @@ public class GenerationRunner {
                 ctx.putText(result.name(), result.text());
             }
         }
-        return new StageOutcome(cost, error, gridRejected);
+        return new StageOutcome(cost, error, gridRejected, quotaBlocked);
     }
 
     /**
@@ -226,11 +259,38 @@ public class GenerationRunner {
     /**
      * 격자 구조 게이트가 "이 격자는 4x4 가 아니다" 로 막았는가.
      *
-     * ★ 이 표식은 후처리 스크립트({@code zzal/pipeline/v4/service_post.py})가 찍고,
+     * ★ 이 표식은 후처리 스크립트({@code zzal/pipeline/v1/service_post.py})가 찍고,
      *   {@code PythonPostProcessor} 가 스크립트가 남긴 말을 예외 메시지에 그대로 붙여 올린다.
      *   판정은 <b>코드가 결정적으로</b> 한다 — 표식이 있으면 격자를 버리고, 없으면 평범한 재시도다.
-     * ★ 표식이 없는 버전(v1·v2)의 스크립트는 이 표식을 찍지 않으므로 예전 동작 그대로다.
+     * ★ 이 표식을 안 찍는 스크립트를 쓰는 버전은 예전 동작 그대로다.
      */
+    /**
+     * 바깥이 <b>한도</b>로 막았는가 — 429, 또는 잔액·분당 한도를 말하는 본문.
+     *
+     * <h3>★★ 왜 메시지를 보나</h3>
+     * 이미지·문단 클라이언트는 200 이 아니면 <b>상태와 본문을 그대로 붙여</b> 예외로 올린다
+     * ({@code OpenAiImageClient} — "본문을 그대로 붙인다 — moderation 차단인지 한도 초과인지가
+     * 여기 적혀 있고"). 그래서 판정 재료는 이미 손에 있다. 새 예외 타입을 만들지 않은 이유는
+     * 클라이언트가 여럿이고(이미지·문단·후처리) 그중 하나만 고치면 <b>나머지는 조용히 옛 길</b>로
+     * 가기 때문이다.
+     *
+     * ★ 판정은 코드가 결정적으로 한다. 여기 안 걸리는 실패는 <b>지금까지 하던 대로</b> 재시도한다 —
+     *   못 알아본 쪽이 재시도를 잃는 것보다, 잘못 알아봐 멀쩡한 실패의 재시도를 없애는 쪽이 나쁘다.
+     */
+    static boolean quotaBlocked(Throwable e) {
+        if (e == null) {
+            return false;
+        }
+        String msg = String.valueOf(e.getMessage()).toLowerCase();
+        return msg.contains("http 429")
+                || msg.contains("\"429\"")
+                || msg.contains("rate_limit")
+                || msg.contains("rate limit")
+                || msg.contains("insufficient_quota")
+                || msg.contains("quota_exceeded")
+                || msg.contains("billing_hard_limit_reached");
+    }
+
     private static boolean gridRejected(Throwable e) {
         return e != null && String.valueOf(e.getMessage()).contains(GRID_STRUCTURE_MARK);
     }

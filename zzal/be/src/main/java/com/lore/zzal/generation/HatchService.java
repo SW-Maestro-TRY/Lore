@@ -1,8 +1,12 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
 import com.lore.zzal.generation.steps.PostProcessStep;
+import com.lore.zzal.guard.HatchBlock;
+import com.lore.zzal.guard.HatchBlockLog;
+import com.lore.zzal.guard.QuotaBreaker;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.motion.MotionSeeder;
 import com.lore.zzal.pet.ZzalPetRepository;
@@ -35,11 +39,17 @@ public class HatchService {
     private final PipelineRegistry registry;
     private final MotionSeeder motionSeeder;
     private final ZzalPetRepository petRepository;
+    private final QuotaBreaker quotaBreaker;
+    private final HatchBlockLog blockLog;
+    private final ZzalAlerts alerts;
     private final int maxAttempts;
 
     public HatchService(GenerationRunner runner, GenerationRecorder recorder,
                         GenJobRepository jobRepository, PipelineRegistry registry,
                         ZzalPetRepository petRepository,
+                        QuotaBreaker quotaBreaker,
+                        HatchBlockLog blockLog,
+                        ZzalAlerts alerts,
                         @Value("${app.zzal.max-hatch-attempts:2}") int maxAttempts,
                         MotionSeeder motionSeeder) {
         this.runner = runner;
@@ -47,6 +57,9 @@ public class HatchService {
         this.jobRepository = jobRepository;
         this.registry = registry;
         this.petRepository = petRepository;
+        this.quotaBreaker = quotaBreaker;
+        this.blockLog = blockLog;
+        this.alerts = alerts;
         this.maxAttempts = maxAttempts;
         this.motionSeeder = motionSeeder;
     }
@@ -63,10 +76,25 @@ public class HatchService {
             return;
         }
 
+        // ★★ 바깥이 한도(429)로 막았으면 <b>다시 굽지 않는다</b>.
+        //   같은 키로 곧바로 다시 보내면 같은 자리에서 또 막히고, 그 전에 200 을 받은 단계의 값은
+        //   이미 나간 뒤다 — 한 번 막힌 것이 그대로 두 배가 된다. 타임아웃·격자 구조 이상은
+        //   다시 하면 되는 실패라 아래에서 지금까지 하던 대로 재시도한다.
+        if (first != null && first.quotaBlocked()) {
+            Instant now = Instant.now();
+            quotaBreaker.trip(now);
+            blockLog.record(HatchBlock.QUOTA, null, ownerOf(petId), null, now);
+            log.warn("바깥 한도(429) — 재시도하지 않는다 (petId={})", petId);
+            recorder.markPetFailed(petId);
+            alerts.hatchFinallyFailed(petId, now);
+            return;
+        }
+
         long attempts = jobRepository.countByPetIdAndKind(petId, GenKind.HATCH);
         if (attempts >= maxAttempts) {
             log.warn("부화 실패 확정 — petId={} 시도={}회", petId, attempts);
             recorder.markPetFailed(petId);
+            alerts.hatchFinallyFailed(petId, Instant.now());
             return;
         }
 
@@ -93,7 +121,15 @@ public class HatchService {
         RunResult second = runAttempt(retry.getId(), petId, version);
         if (second == null || !second.success()) {
             recorder.markPetFailed(petId);
+            // ★★ 알리는 것은 <b>표에 FAILED 가 적힌 뒤</b>다. 먼저 부르면 연속 실패를 세는 질의가
+            //   방금 그 알을 못 봐서 한 번씩 늦게 알린다(경보는 표를 다시 읽어서 센다).
+            alerts.hatchFinallyFailed(petId, Instant.now());
         }
+    }
+
+    /** 이 알의 주인. 막힘 기록에 누구였는지를 남기려고 본다(없으면 null — 기록은 그래도 남는다). */
+    private Long ownerOf(Long petId) {
+        return petRepository.findById(petId).map(ZzalPet::getUserId).orElse(null);
     }
 
     /**

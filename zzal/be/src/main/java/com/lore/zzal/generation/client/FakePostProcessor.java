@@ -37,12 +37,6 @@ public class FakePostProcessor implements PostProcessor {
         }
 
         @Override
-        public void split(String gridImageKey) throws InterruptedException {
-            log.info("[가짜] 후처리 {} — grid={} → {}/*.webp", version, gridImageKey, outputPrefix);
-            Thread.sleep(delayMillis);
-        }
-
-        @Override
         public void split(String gridImageKey, List<String> keys) throws InterruptedException {
             split(gridImageKey, keys, "");
         }

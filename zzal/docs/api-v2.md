@@ -417,7 +417,7 @@
 
 | 키 | 기본 | 뜻 |
 |---|---|---|
-| `pipeline-version` | v2 | 부화 파이프라인(v2·v4 = 격자 2장·16종). v4 로 올리는 것은 환경변수로 따로 |
+| `pipeline-version` | v1 | 부화 파이프라인(격자 2장 → 기본 행동 16종). 모르는 이름을 적으면 기동이 막힌다 |
 | `motion-pipeline-version` | v1 | 심화 행동 파이프라인 |
 | `hatch.states.v1` / `.v2` / `.v4` | 8종 / 16 key / 16 key | 후처리가 만들어야 하는 파일 이름(버전별). `.v4` 가 교체된 16종이고 **순서가 `MotionCatalog` 와 같아야 한다** |
 | `advanced-motions` | (빈) | 3층 큐에 오를 수 있는 key 목록(지시문 있는 것만). 3층이 아직 없어 비어 있다 |
@@ -429,6 +429,16 @@
 | `game.daily-limit` | 3 | 두 게임 합산 하루 판수 |
 | `reward.game-win` | HAPPINESS | 승리 보상 |
 | `reward.feedback` | NONE | 후기 보상 |
+| `archive.enabled` | false | 행동 기록 S3 보관 켜기(KST 05:10). **서버 여러 대면 한 대만** |
+| `archive.bucket` | (빈) | 보관 전용 버킷. **비면 안 돈다 · 그림 버킷(`app.s3.content-bucket`)과 같으면 안 돈다** — 그 버킷은 CloudFront 가 공개로 내보낸다 |
+| `archive.prefix` | `archive` | 보관 뿌리. `{prefix}/zzal/events/dt=YYYY-MM-DD/part-{처음id}-{끝id}.jsonl.gz`. `images` 로 시작하면 안 돈다 |
+| `archive.max-rows` | 50000 | 한 회차에 올릴 수 있는 줄 수의 상한 |
+| `archive.chunk` | 5000 | 한 번에 메모리로 읽는 줄 수(= 파일 하나의 최대 줄 수) |
+| `archive.settle-lag-minutes` | 10 | 이 시간보다 최근에 도착한 줄은 다음 회차로. id 는 INSERT 순서지 커밋 순서가 아니다 |
+| `alert.enabled` | false | 운영 경보 메일 켜기. **꺼져 있으면 아무 일도 안 한다** |
+| `alert.to` | (빈) | 받는 사람(쉼표로 여럿). **비면 켜져 있어도 안 보낸다** |
+| `alert.cost-step-usd` | 10 | 누적 생성 비용을 이 단위로 알린다($10·$20·…). 0 이하면 이 경보만 꺼짐 |
+| `alert.hatch-fail-streak` | 3 | 부화가 몇 번 연달아 실패하면 알릴까. 0 이하면 이 경보만 꺼짐 |
 | `dev-tools` · `admin.enabled` | false | 기존 |
 | `generation.*` · `openai.*` · `python.*` · `recovery.*` · `max-hatch-attempts` · `gate-version` | 기존 | |
 

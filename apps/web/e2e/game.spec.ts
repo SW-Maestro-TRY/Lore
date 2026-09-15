@@ -1,4 +1,7 @@
-// 미니게임: 두 게임 합산 하루 3판, 잠들 때 리셋(정본 §7·§16). 미니게임 3판이면 놀라기 해금(§6 13번).
+// 미니게임: 두 게임 합산 하루 3판, 잠들 때 리셋(정본 §7·§16).
+// 해금은 정본 v1.10 §6 조건표의 **15번 놀람(`startle`) = 게임 4판(승패·종류 무관)** 이다.
+// ★ 옛 판은 "13번 놀라기 = 미니게임 3판" 이었다 — 1.10 이 13번을 답하기(`reply`, 채팅 답 4회)로
+//   바꾸고 놀람을 15번·게임 4판으로 옮겼다.
 import { expect, test, type Page } from '@playwright/test';
 import { HOUR, advance, dismissCelebrations, gotoMock } from './helpers';
 
@@ -39,10 +42,16 @@ test('하루 3판, 4번째는 거절, 잠들면 리셋', async ({ page }) => {
   let popped = 0;
   for (let i = 0; i < 3; i++) popped += await playOne(page);
 
-  // 3판째 시작에서 놀라기가 열린다. ★ 폭죽은 **게임 응답의 justUnlocked** 로만 뜬다 —
-  //   다시 물어서는 못 띄운다(조회 응답의 justUnlocked 는 늘 비어 있다).
-  expect(popped, '놀라기 해금 폭죽이 한 번 떠야 한다').toBe(1);
+  // 조건은 **게임 4판**이고(정본 v1.10 §6 15번), child 프리셋은 튜토리얼에서 이미 한 판을 했다 —
+  // 그래서 여기 세 판째가 통산 4판이 되어 그 자리에서 놀람이 열린다.
+  // ★ 폭죽은 **게임 응답의 justUnlocked** 로만 뜬다 — 다시 물어서는 못 띄운다
+  //   (조회 응답의 justUnlocked 는 늘 비어 있다).
+  expect(popped, '놀람 해금 폭죽이 한 번 떠야 한다').toBe(1);
   await expect(page.locator('[data-dex="startle"]')).toHaveAttribute('data-open', '1');
+  // ★ 같은 판에서 13번(답하기)은 아직 잠겨 있다 — 조건이 게임이 아니라 **채팅 답 4회**이기 때문이다.
+  //   1.10 이전에는 이 칸이 게임 3판으로 열렸다. 조건이 그 행동 자체로 묶였는지를 여기서 지킨다.
+  await expect(page.locator('[data-dex="reply"]')).toHaveAttribute('data-open', '0');
+  await expect(page.locator('[data-dex="reply"]')).toContainText('채팅 응답 4회');
 
   await startGame(page);
   await expect(page.locator('[data-game="error"]')).toBeVisible();
@@ -51,7 +60,9 @@ test('하루 3판, 4번째는 거절, 잠들면 리셋', async ({ page }) => {
   await advance(page, 9 * HOUR); // 19:00
   await page.locator('[data-action="sleep"]').click();
   await advance(page, 15 * HOUR); // 10:00 자동 기상
-  // ★ 이튿날 아침에는 11번(자기)이 열려 폭죽이 늦게 도착한다 — startGame 이 그것까지 지나간 뒤 누른다.
+  // ★ 이튿날 아침에는 아무것도 새로 열리지 않는다 — 자동 기상은 "깨우기"(16번 조건)로 안 세고
+  //   (정본 v1.10 §6: "손으로 깨운 것만 — 아침 자동 기상·튜토리얼 낮잠 제외"), 옛 11번(자기)이
+  //   재우기·깨우기 합계로 열리던 규칙은 1.10 이 청소하기(청소 13회)로 갈아 치웠다.
   await playOne(page);
   await expect(page.locator('[data-game="error"]')).toHaveCount(0);
 });

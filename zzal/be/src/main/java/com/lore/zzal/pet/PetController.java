@@ -1,7 +1,11 @@
 package com.lore.zzal.pet;
 
+import com.lore.common.analytics.AnonIdResolver;
 import com.lore.common.auth.jwt.LoginUser;
 import com.lore.common.response.ApiResponse;
+import com.lore.zzal.guard.ClientIp;
+import com.lore.zzal.guard.HatchBlockLog;
+import com.lore.zzal.guard.HatchBlockedException;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.share.ShareService;
 import com.lore.zzal.share.dto.ShareResponses;
@@ -10,6 +14,8 @@ import com.lore.zzal.pet.dto.PetResponses;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,11 +42,18 @@ public class PetController {
     private final PetService petService;
     private final MotionCatalog catalog;
     private final ShareService shareService;
+    private final ClientIp clientIp;
+    private final HatchBlockLog blockLog;
+    private final AnonIdResolver anonIds;
 
-    public PetController(PetService petService, MotionCatalog catalog, ShareService shareService) {
+    public PetController(PetService petService, MotionCatalog catalog, ShareService shareService,
+                         ClientIp clientIp, HatchBlockLog blockLog, AnonIdResolver anonIds) {
         this.petService = petService;
         this.catalog = catalog;
         this.shareService = shareService;
+        this.clientIp = clientIp;
+        this.blockLog = blockLog;
+        this.anonIds = anonIds;
     }
 
     private PetResponses.Detail detail(ZzalPet pet, String stepLabel, Instant real) {
@@ -75,12 +88,31 @@ public class PetController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
                     description = "유효하지 않은 이미지 키(INVALID_UPLOAD_KEY) · 사용 완료된 키(UPLOAD_KEY_ALREADY_USED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
-                    description = "부화 진행 중(ZZAL_PET_ALREADY_HATCHING) · 슬롯 부족(ZZAL_PET_LIMIT_REACHED)")})
+                    description = """
+                            부화 진행 중(ZZAL_PET_ALREADY_HATCHING) · 슬롯 부족(ZZAL_PET_LIMIT_REACHED)
+
+                            **막힘(상한)** — 상태는 전부 409 이고 화면은 `error.code` 하나로 문구를 고른다.
+                            - `ZZAL_HATCH_BLOCKED_PET_LIMIT` 동시 1마리 · 누적 상한
+                            - `ZZAL_HATCH_BLOCKED_DAILY_CAP` 사람당 하루 상한(한국 시각 자정에 초기화)
+                            - `ZZAL_HATCH_BLOCKED_SERVICE_CAP` 서비스 전체 하루 상한(한국 시각 자정에 초기화)
+                            - `ZZAL_HATCH_BLOCKED_IP_RATE` 같은 곳에서 너무 자주 시작함
+                            - `ZZAL_HATCH_BLOCKED_QUOTA` 그림 생성 쪽이 한도로 막는 중""")})
     @PostMapping("/draft")
     public ApiResponse<PetResponses.Drafted> draft(@LoginUser Long userId,
-                                                   @Valid @RequestBody PetRequests.Draft request) {
-        ZzalPet pet = petService.draft(userId, request.imageKey(), Instant.now());
-        return ApiResponse.ok(new PetResponses.Drafted(pet.getId()));
+                                                   @Valid @RequestBody PetRequests.Draft request,
+                                                   HttpServletRequest httpRequest,
+                                                   HttpServletResponse httpResponse) {
+        Instant now = Instant.now();
+        try {
+            ZzalPet pet = petService.draft(userId, request.imageKey(), clientIp.of(httpRequest), now);
+            return ApiResponse.ok(new PetResponses.Drafted(pet.getId()));
+        } catch (HatchBlockedException e) {
+            // ★★ 기록은 여기서 남긴다 — 막기는 예외로 끝나 그 트랜잭션이 롤백되므로,
+            //   서비스 안에서 적으면 기록도 함께 지워진다(HatchBlockLog 주석).
+            blockLog.record(e.getBlock(), anonIds.resolve(httpRequest, httpResponse), userId,
+                    httpRequest.getRequestURI(), now);
+            throw e;
+        }
     }
 
     @Operation(summary = "캐릭터 정보 등록", description = """

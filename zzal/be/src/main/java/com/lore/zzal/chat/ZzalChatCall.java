@@ -26,7 +26,8 @@ import java.time.LocalDate;
  *
  * <h3>만료</h3>
  * {@code expiresAt} 이 지나면 닫힌다. EVENING 은 잠들 때 닫히므로 expiresAt 은 23:00(자동 취침 상한)이고
- * 서비스가 "자는 중" 을 함께 본다. BABY 는 60분 뒤 첫 밤 경계.
+ * 서비스가 "자는 중" 을 함께 본다. BABY 는 <b>만료가 없다</b>({@code expiresAt} 이 비어 있다) —
+ * 튜토리얼 부름이라 답할 때까지 기다린다(튜토리얼 중에는 시계가 멈춰 있다).
  */
 @Entity
 @Table(name = "zzal_chat_call",

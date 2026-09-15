@@ -30,6 +30,12 @@ import java.time.Instant;
  *
  * ★ 회전(rotation) — 갱신할 때마다 새로 발급하고 옛 것을 폐기한다. 탈취돼도 한 번만 쓰인다.
  *   이미 폐기된 토큰이 다시 들어오면 탈취 신호로 보고 그 사용자의 토큰을 전부 폐기한다.
+ *
+ * ★ 절대 만료(absoluteExpiresAt) — 회전은 쓸 때마다 expiresAt 을 14일 뒤로 미룬다. 그래서
+ *   매일 쓰는 사용자는 영원히 재로그인하지 않는다. 그 위에 <b>최초 로그인 시점부터의 상한</b>을
+ *   하나 더 둔다. 회전할 때 이 값은 <b>물려받기만</b> 하고 다시 늘리지 않으므로, 상한이 지나면
+ *   expiresAt 을 아무리 밀어도 이 선을 넘지 못해 isUsable 이 자연히 false 가 되고 재로그인으로 간다.
+ *   비어 있으면(이 기능 이전에 발급된 토큰) 상한 없음으로 관대하게 다룬다.
  */
 @Entity
 @Table(
@@ -53,6 +59,13 @@ public class UserRefreshToken {
     @Column(nullable = false)
     private Instant expiresAt;
 
+    /**
+     * 최초 로그인 시점에 찍는 <b>절대 상한</b>. 회전해도 물려받기만 하고 늘리지 않는다.
+     * 비어 있으면(이 기능 이전 토큰) 상한이 없는 것으로 본다.
+     */
+    @Column
+    private Instant absoluteExpiresAt;
+
     /** 로그아웃·회전·탈취 감지로 폐기된 시각. 비어 있으면 살아 있다. */
     @Column
     private Instant revokedAt;
@@ -68,11 +81,12 @@ public class UserRefreshToken {
     }
 
     public static UserRefreshToken issue(User user, String tokenHash, Instant expiresAt,
-                                         String userAgent, Instant now) {
+                                         Instant absoluteExpiresAt, String userAgent, Instant now) {
         UserRefreshToken t = new UserRefreshToken();
         t.user = user;
         t.tokenHash = tokenHash;
         t.expiresAt = expiresAt;
+        t.absoluteExpiresAt = absoluteExpiresAt;
         t.userAgent = userAgent;
         t.createdAt = now;
         return t;
@@ -84,9 +98,21 @@ public class UserRefreshToken {
         }
     }
 
-    /** 살아 있고 아직 안 지난 토큰인가. */
+    /**
+     * 살아 있고 아직 안 지난 토큰인가.
+     *
+     * ★ expiresAt 은 발급 때 이미 절대 상한 이하로 깎여 있어(min) 보통은 그 검사만으로 충분하다.
+     *   그럼에도 absoluteExpiresAt 을 한 번 더 본다 — 깎는 로직에 구멍이 나도 상한만은 반드시 지키게
+     *   하는 이중 방어다.
+     */
     public boolean isUsable(Instant now) {
-        return revokedAt == null && now.isBefore(expiresAt);
+        if (revokedAt != null) {
+            return false;
+        }
+        if (!now.isBefore(expiresAt)) {
+            return false;
+        }
+        return absoluteExpiresAt == null || now.isBefore(absoluteExpiresAt);
     }
 
     public boolean isRevoked() {
@@ -107,6 +133,10 @@ public class UserRefreshToken {
 
     public Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    public Instant getAbsoluteExpiresAt() {
+        return absoluteExpiresAt;
     }
 
     public Instant getRevokedAt() {

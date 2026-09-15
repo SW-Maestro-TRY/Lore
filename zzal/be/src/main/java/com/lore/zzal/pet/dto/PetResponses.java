@@ -583,7 +583,6 @@ public final class PetResponses {
 
         /** 18칸. 잠긴 칸도 이름+조건(설계 결정). 심화 행동 상태는 zzal_motion 행에서(없으면 NONE). */
         public static List<Motion> motions(ZzalPet pet, MotionCatalog catalog, Map<Integer, ZzalMotion> rows) {
-            boolean v2 = basicLayout(pet.getHatchPipelineVersion());
             return catalog.all().stream().map(spec -> {
                 boolean unlocked = UnlockRules.isUnlocked(pet, spec, catalog);
                 UnlockRule rule = spec.unlockRule();
@@ -597,7 +596,7 @@ public final class PetResponses {
                 ZzalMotion row = rows.get(spec.seq());
                 Advanced advanced = row == null ? Advanced.NONE : Advanced.of(row);
                 return new Motion(spec.seq(), spec.key(), spec.label(), spec.layer().name(), unlocked,
-                        basicImageKey(pet, spec, v2),
+                        basicImageKey(pet, spec),
                         unlocked ? null : rule.hint(),
                         progress,
                         advanced);
@@ -619,20 +618,15 @@ public final class PetResponses {
         }
 
         /**
-         * 이 펫이 {@code basic/{판}/{key}.webp} 규약으로 구워졌는가.
+         * 기본 행동 그림 — {@code basic/{판}/{key}.webp}. 선물이거나 <b>아직 한 판도 굽지
+         * 않았으면</b> null.
          *
-         * ★ <b>옛 이름 규약을 쓰는 것은 v1 하나뿐</b>이다. 그래서 "v1 이 아닌가" 로 묻는다 —
-         *   {@code "v2".equals(...)} 로 물으면 v4 처럼 나중에 생긴 버전이 <b>조용히 옛 폴백</b>으로 떨어져
-         *   그림이 하나도 안 뜬다. 그 어긋남은 빌드·기동·부화가 전부 성공한 뒤 화면에서만 드러난다.
-         * ★ 버전이 비어 있는 옛 기록은 예전대로 폴백을 쓴다(그 펫들은 실제로 v1 로 구워졌다).
-         */
-        static boolean basicLayout(String hatchPipelineVersion) {
-            return hatchPipelineVersion != null && !"v1".equals(hatchPipelineVersion);
-        }
-
-        /**
-         * 기본 행동 그림 — v2 이후는 {@code basic/{판}/{key}.webp}, v1 부화는 8상태 파일명으로 폴백.
-         * 선물이거나, v1 에 없는 자세(아픔·부르기)이거나, <b>아직 한 판도 굽지 않았으면</b> null.
+         * <h3>★★ 부화 버전으로 주소 모양을 가르지 않는다</h3>
+         * 전에는 {@code "v1 이 아닌가"} 로 물어 옛 8상태 파일명과 지금 규약을 갈랐다. 그런데 그 물음은
+         * <b>버전 이름이 바뀌는 순간 뜻이 통째로 뒤집힌다</b> — 값은 그대로인데 같은 이름이 다른
+         * 파이프라인을 가리키게 되고, 주소가 조용히 다른 자리를 가리킨다. 오류도 404 도 안 난다.
+         * 그래서 갈래를 없애고 <b>판 번호 하나</b>로만 답한다. 옛 규약으로 구워진 펫은 판이 0 이라
+         * 여기서 {@code null} 을 받고, 화면이 대체 그림을 띄운다.
          *
          * <h3>★★ 잠겨 있어도 주소를 준다(명세 7-3)</h3>
          * 2층 8종은 <b>부화 때 1층과 함께</b> 구워지므로, 잠겨 있어도 그림은 이미 있다.
@@ -653,11 +647,10 @@ public final class PetResponses {
          * 만들어진 옛 펫 — 그들은 판 칸 없는 옛 주소({@code .../basic/{key}.webp})에 파일이 실제로
          * 있다. (2) 아직 한 장도 굽지 않은 펫 — 어느 주소에도 파일이 없다. 행만 봐서는 둘을 못 가른다.
          *
-         * <p>여기서는 (2) 를 택했다. 그래서 <b>(1) 의 옛 펫은 그림이 화면에서 사라진다</b>
-         * (이 갈래를 쓰는 옛 펫이 314 마리 있었다). 그래도 되는 이유는 이 판을 올릴 때 zzal 데이터를
-         * <b>비우기로 정해져 있기 때문</b>이다 — 비우면 판이 0 인 행은 (2) 하나만 남는다.
-         * <b>비우지 않고 배포하면 그 옛 펫들이 빈 무대가 된다.</b> 소급이 필요해지면
-         * 여기서 가르지 말고 "옛 주소에 파일이 있다" 를 말하는 칸을 따로 두어야 한다.
+         * <p>여기서는 (2) 를 택했다. 그래서 <b>(1) 의 옛 펫은 그림이 화면에서 사라진다.</b>
+         * 그래도 되는 이유는 이 판을 올릴 때 zzal 데이터를 <b>비우기로 정해져 있기 때문</b>이다 —
+         * 비우면 판이 0 인 행은 (2) 하나만 남는다. <b>비우지 않고 배포하면 그 옛 펫들이 빈 무대가 된다.</b>
+         * 소급이 필요해지면 여기서 가르지 말고 "옛 주소에 파일이 있다" 를 말하는 칸을 따로 두어야 한다.
          *
          * ★ 선물은 판과 무관하게 null 이다 — 선물은 기본 그림이 아니라 16프레임 움짤이고,
          *   그 주소는 {@code advanced.imageKey} 로 나간다. 여기서 기본 자리를 가리키면
@@ -666,19 +659,14 @@ public final class PetResponses {
          * ★ 조립은 {@link MotionImageKeys} 한 곳에서만 한다 — 여기와 공유가 따로 만들던 때
          *   심화 공유가 기본 그림 경로를 가리키는 버그가 났다.
          */
-        static String basicImageKey(ZzalPet pet, MotionSpec spec, boolean v2) {
+        static String basicImageKey(ZzalPet pet, MotionSpec spec) {
             if (spec.isGift()) {
                 return null;
             }
-            if (v2) {
-                // ★ 앵커와 같은 기준이다 — anchorsKey 도 판이 0 이면 null 을 준다. 갈리면
-                //   "그림은 없는데 그 그림을 설명하는 앵커는 있다" 는 앞뒤 안 맞는 응답이 나간다.
-                return pet.getBasicRound() > 0
-                        ? MotionImageKeys.basic(pet.getId(), pet.getBasicRound(), spec.key())
-                        : null;
-            }
-            return spec.hasLegacyFile()
-                    ? MotionImageKeys.legacyState(pet.getId(), spec.legacyFile())
+            // ★ 앵커와 같은 기준이다 — anchorsKey 도 판이 0 이면 null 을 준다. 갈리면
+            //   "그림은 없는데 그 그림을 설명하는 앵커는 있다" 는 앞뒤 안 맞는 응답이 나간다.
+            return pet.getBasicRound() > 0
+                    ? MotionImageKeys.basic(pet.getId(), pet.getBasicRound(), spec.key())
                     : null;
         }
 

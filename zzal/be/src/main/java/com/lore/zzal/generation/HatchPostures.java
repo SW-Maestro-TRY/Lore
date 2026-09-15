@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * yml 에 두면 배포와 설정이 따로 놀아, 새 프롬프트가 옛 매핑으로 후처리되는 순간이 생긴다.
  *
  * <h3>★ 없으면 빈 문자열 — 있는데 안 적혀 있으면 예외</h3>
- * v1·v2 에는 이 파일이 없다(그 버전의 후처리 스크립트는 {@code --postures} 를 모른다). 그래서 파일이
+ * 이 파일이 없는 버전도 있다(그 버전의 후처리 스크립트는 {@code --postures} 를 모른다). 그래서 파일이
  * 없으면 조용히 빈 값이다. 그러나 <b>파일은 있는데 그 단계가 안 적혀 있으면</b> 매핑을 빠뜨린 것이므로
  * 무엇이 없는지 말하며 멈춘다 — 조용히 넘어가면 후처리가 1층 기본값으로 되돌아가고,
  * 그건 화면을 봐야만 드러난다.
@@ -35,7 +35,7 @@ public class HatchPostures {
     /**
      * 그 버전·그 격자 단계의 {@code --postures} 문자열. 이 버전에 매핑 파일이 없으면 빈 문자열.
      *
-     * @param version 파이프라인 버전(v1·v2·v4…)
+     * @param version 부화 파이프라인 버전
      * @param step    격자 단계 이름({@code grid}·{@code grid2})
      */
     public String forStep(String version, String step) {
@@ -54,7 +54,7 @@ public class HatchPostures {
     }
 
     private static Map<String, String> load(String version) {
-        // 파일이 없으면 빈 표 — v1·v2 의 후처리 스크립트는 --postures 를 모른다.
+        // 파일이 없으면 빈 표 — 그 버전의 후처리 스크립트는 --postures 를 모른다.
         return ResourceTable.load(PATH.formatted(version));
     }
 }

@@ -68,6 +68,12 @@ spring:
           auth: true
           starttls:
             enable: true
+          # ★★ 시간 제한을 준다 — 기본은 "무한히 기다림" 이다. 메일 서버가 조용히 안 받는 날
+          #   보내는 스레드가 영영 붙잡히고, 그러면 경보가 밀리다 통째로 사라진다.
+          #   (경보는 전용 스레드 하나로 내보내므로 서비스 스레드는 어차피 안 기다린다 — SmtpAlertMailer)
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 # Swagger UI 주소: http://localhost:8080/api/swagger-ui.html (문서·정의 모두 /api 아래 — CloudFront→ALB 가 /api/* 만 백엔드로 보내므로)
 # 운영에서 끄려면 SPRINGDOC_ENABLED=false (UI·정의 둘 다 내려간다)
 springdoc:
@@ -128,6 +134,10 @@ app:
     secret: ${JWT_SECRET:local-dev-only-secret-change-me-in-production-32bytes}
     access-expiry: 30m
     refresh-expiry: 14d
+    # ★ 절대 만료 상한 — refresh 는 쓸 때마다 위 14일이 뒤로 밀려(슬라이딩) 매일 쓰면 영원히
+    #   로그인 상태가 유지된다. 최초 로그인 시점부터 이 기간이 지나면 활동 중이어도 재로그인하게
+    #   만드는 보안 백스톱이다. 비어 있거나 0 이면 코드가 90일로 되돌린다.
+    refresh-absolute-expiry: ${JWT_REFRESH_ABSOLUTE_EXPIRY:90d}
 
   cookie:
     # 로컬은 http 라 Secure 쿠키가 브라우저에 저장되지 않는다 → 개발 시 false
@@ -141,12 +151,12 @@ app:
     # ── 파이프라인 버전 ──────────────────────────────────────────────────
     #
     # ★ 부화(HATCH)와 심화 행동(MOTION)의 버전 축이 따로다(PipelineRegistry 주석).
-    #   v2 부화 = 격자 2장 → 기본 행동 16종(정본 13장). v2 프롬프트 4종이 다 있어야 v2 로 뜬다 —
-    #   하나라도 없으면 PipelineRegistry 가 경고를 남기고 v1 로 내려간다.
+    #   부화 = 격자 2장 → 기본 행동 16종. 프롬프트 prompt/{버전}/{sheet,identity,grid,grid2}.txt,
+    #   후처리 pipeline/{버전}/service_post.py.
     #
-    # ★ 2026-09-09 기본값을 v2 로 올렸다. v1 은 격자 1장이라 <b>8종만</b> 만들어지는데,
-    #   정본은 16종이고 2층 해금이 전부 그 위에 얹혀 있다. 기본값이 v1 이면 조용히 절반만 생긴다.
-    pipeline-version: ${ZZAL_PIPELINE_VERSION:v2}
+    # ★★ 모르는 이름을 적으면 기동이 막힌다(폴백 없음). 전에는 프롬프트가 없으면 조용히 옛 버전으로
+    #    내려갔는데, 그러면 설정은 새것인데 그림은 옛것이 구워지고 화면을 봐야만 드러난다.
+    pipeline-version: ${ZZAL_PIPELINE_VERSION:v1}
     motion-pipeline-version: ${ZZAL_MOTION_PIPELINE_VERSION:v1}
     max-hatch-attempts: 2
     # 심화 행동 API 굽기 시도 횟수. ★ 정본 6장은 API 1회 → 실패면 로컬(맥미니) 재생성 2회다.
@@ -165,18 +175,14 @@ app:
 
     # 부화 후처리가 만들어야 하는 파일 이름(버전별). 스크립트가 이 이름으로 webp 를 낸다.
     #
-    # ★ v2 의 이름은 MotionCatalog 의 key 와 같아야 한다 — 화면이 basicImageKey 를
-    #   images/zzal/pets/{id}/basic/{key}.webp 로 조립한다. 다르면 그림이 안 뜨는데,
-    #   그건 실제로 화면을 봐야만 드러난다.
+    # ★★ 이름은 MotionCatalog 의 key 와 같아야 한다 — 화면이 basicImageKey 를
+    #   images/zzal/pets/{id}/basic/{판}/{key}.webp 로 조립한다. 다르면 그림이 안 뜨는데,
+    #   그건 실제로 화면을 봐야만 드러난다. 순서가 곧 격자 칸 순서다(앞 8 = 1층, 뒤 8 = 2층).
     # ★ 쓰는 버전의 목록이 비어 있으면 부팅이 막힌다(설정 이름을 말하는 예외).
+    #   목록에 없는 이름을 자르려 하면 후처리가 내려받기 전에 멈춘다.
     hatch:
       states:
-        v1: idle,eat,hungry,clean,happy,sad,pet,train
-        v2: base,eat,joy,sad,sick,practice,shy,call,tilt,wave,sleep,wash,startle,nod,smile_idle,sit
-        # ★ v4 = 기본 행동 16종 교체판. 순서가 곧 격자 칸 순서이고 MotionCatalog 와 한 칸도 어긋나면 안 된다
-        #   (HatchStatesMatchCatalogTest 가 순서까지 맞춰 본다).
-        # ★ v2 줄은 옛 이름 그대로 둔다 — v2 로 구워진 펫을 계속 설명해야 한다.
-        v4: base,eat,joy,sad,sick,pet,hello,sleep,eat_rice,eat_snack,sweep,wash,reply,petted,startle,wake_up
+        v1: base,eat,joy,sad,sick,pet,hello,sleep,eat_rice,eat_snack,sweep,wash,reply,petted,startle,wake_up
 
     # 밤에 구울 수 있는 심화 행동(16프레임) — 쉼표로 구분한 카탈로그 key.
     #
@@ -241,10 +247,79 @@ app:
 
     # 후기(/api/zzal/v1/me/pets/{petId}/feedback).
     #
-    # ★ 2차로 미뤘다 — 보상이 안 정해져 기록만 남는 상태다. 스웨거에 떠 있으면
-    #   "동작하는 API"로 읽히므로 dev-tools·admin 과 같은 방식으로 빈을 안 올린다.
+    # ★ 2026-09-14 켠다 — 알파(9/18)에서 가장 알고 싶은 것이 "무엇이 좋았고 무엇이 아쉬웠나"라
+    #   기록만 남는 상태여도 켜 두는 편이 낫다. 보상은 여전히 안 나간다(app.zzal.reward.feedback=NONE).
+    # ★ 끄면 빈이 안 올라와 주소 자체가 없어진다(404) — 조용히 망가지는 것이 아니라 깔끔히 사라진다.
+    #   운영에서 다시 끌 수 있는 스위치라 켠 상태와 끈 상태를 둘 다 시험으로 두었다(FeedbackSwitchIT).
     feedback:
-      enabled: ${ZZAL_FEEDBACK:false}
+      enabled: ${ZZAL_FEEDBACK:true}
+
+    # 부화 막기 — 알파 공개(9/18) 전의 비용 방벽. 부화 1회 ≈ $0.25 · 잔액 $70.
+    #
+    # ★★ 여기 숫자가 곧 하루에 나갈 수 있는 돈의 상한이다. service-daily 40 = 하루 약 $10.
+    # ★ 0 이하를 주면 그 상한만 꺼진다("0 = 전면 차단"으로 읽지 않는다 — 설정을 잘못 비운 날
+    #   서비스가 통째로 멈추고 그 이유가 어디에도 안 남는다. HatchLimits 주석).
+    # ★ 세는 기준은 굽기 기록(zzal_gen_job, kind=HATCH)이다 — 펫 줄이 아니라. 실패한 부화도
+    #   자동 재시도도 돈은 나갔고, 그 둘은 펫 줄에 안 보인다(HatchGuard 주석).
+    # ★ 하루의 경계는 한국 시각 자정이다(AwakeClock·ZzalRules.ZONE 과 같은 자).
+    hatch-limits:
+      max-alive: ${ZZAL_HATCH_MAX_ALIVE:1}              # 동시에 데리고 있을 수 있는 아이
+      max-total: ${ZZAL_HATCH_MAX_TOTAL:3}              # 한 사람이 평생 시작할 수 있는 부화
+      per-user-daily: ${ZZAL_HATCH_PER_USER_DAILY:3}    # 한 사람의 하루
+      service-daily: ${ZZAL_HATCH_SERVICE_DAILY:40}     # 서비스 전체의 하루(잔액 방벽)
+      ip-per-window: ${ZZAL_HATCH_IP_PER_WINDOW:10}     # 한 집에서 창 하나 동안(완화 수준)
+      ip-window-minutes: ${ZZAL_HATCH_IP_WINDOW_MIN:60}
+      # ★ 바깥이 429 로 막으면 이 시간 동안 굽기 시작을 멈춘다. 재시도도 안 한다.
+      quota-cooldown-minutes: ${ZZAL_HATCH_QUOTA_COOLDOWN_MIN:30}
+      # ★ X-Forwarded-For 에서 진짜 접속자를 고를 때, 우리 설비가 그 뒤에 덧붙인 칸 수.
+      #   CloudFront → ALB → 서버면 1(ALB 한 겹). 설비가 바뀌면 배포 없이 여기만 맞춘다(ClientIp 주석).
+      xff-trusted-hops: ${ZZAL_HATCH_XFF_HOPS:1}
+
+    # 운영 경보 메일 — 돈과 고장을 제때 알게 하는 넷 (2026-09-14).
+    #
+    # ★★ 기본이 꺼짐이고, 받는 주소가 비어도 안 보낸다. 설정이 없는 채로 배포돼도 아무 일도
+    #    일어나지 않아야 한다(스위치와 주소 둘 다 있어야 한다 — AlertSettings).
+    # ★★ 보내는 것은 넷뿐이다 — 누적 비용 $10 단위 돌파 · 부화 연속 실패 · 하루 상한 도달 ·
+    #    밤 굽기 실패. <b>"서버가 떴습니다" 는 없다</b>(배포가 곧 재시작이라 하루에 여러 통이 되고,
+    #    그러면 나머지 넷도 같이 안 읽힌다). 서버가 통째로 죽은 경우는 바깥 감시의 몫이다.
+    # ★★ "어디까지 알렸나" 는 zzal_alert_state 표에 남는다 — 메모리에 두면 배포할 때마다
+    #    같은 메일이 다시 간다(V17 주석).
+    # ★ SMTP 계정은 여기가 아니라 spring.mail (MAIL_USERNAME · MAIL_PASSWORD)이 갖고 있다.
+    # ★ to 는 쉼표로 여러 명. 사람마다 한 통씩 나가고, 한 명이 실패해도 나머지는 간다.
+    # ★ 숫자 둘은 0 이하면 그 경보만 꺼진다(hatch-limits 와 같은 규칙).
+    alert:
+      enabled: ${ZZAL_ALERT_ENABLED:false}
+      to: ${ZZAL_ALERT_TO:}
+      # 누적 비용을 얼마 단위로 알릴까(달러). 잔액 $70 기준 $10 이면 일곱 번 안에 다 쓴다.
+      cost-step-usd: ${ZZAL_ALERT_COST_STEP_USD:10}
+      # 몇 번 연달아 실패하면 알릴까. 한 마리가 안에서 이미 2번 굽는다(max-hatch-attempts).
+      hatch-fail-streak: ${ZZAL_ALERT_HATCH_FAIL_STREAK:3}
+
+    # 행동 기록 보관 — 하루 한 번(KST 05:10) zzal_event 를 S3 로 베껴 둔다 (2026-09-14).
+    #
+    # ★★ DB 는 그대로 둔다. 지우는 코드가 없다 — 그 표가 알파를 재는 기준이다.
+    #    S3 는 대체가 아니라 보관층이다(실시간 판단·세기는 계속 DB 가 한다).
+    # ★★ bucket 은 **그림 버킷이 아니어야 한다.** 그림 버킷은 CloudFront 가 /images/* 를
+    #    공개로 내보내는 곳이고, 행동 기록에는 익명 번호·로그인 번호가 줄마다 들어간다.
+    #    · 비어 있으면 배치가 아예 안 돈다(준비 전에 켜지는 사고를 원천 차단)
+    #    · content-bucket 과 같으면 안 돈다
+    #    · prefix 가 images 로 시작하면 안 돈다
+    # ★ 기본이 꺼짐이다 — 보관 버킷은 새 계정(11/27 이후)에서 만든다.
+    # ★ 경로는 한 뿌리 아래 날짜로 가른다:
+    #     {prefix}/zzal/events/dt=YYYY-MM-DD/part-{처음id}-{끝id}.jsonl.gz
+    #   계정을 옮기는 날 `aws s3 sync s3://옛/{prefix}/ s3://새/{prefix}/` 한 줄이면 끝난다.
+    # ★ 서버가 두 대 이상이면 한 대만 켠다(밤 스위프와 같은 규칙).
+    archive:
+      enabled: ${ZZAL_ARCHIVE_ENABLED:false}
+      bucket: ${ZZAL_ARCHIVE_BUCKET:}
+      prefix: ${ZZAL_ARCHIVE_PREFIX:archive}
+      # 한 번 도는 동안 올릴 수 있는 줄 수의 상한.
+      max-rows: ${ZZAL_ARCHIVE_MAX_ROWS:50000}
+      # 한 번에 메모리로 읽는 줄 수. 쌓인 게 많아도 이만큼씩만 읽는다.
+      chunk: ${ZZAL_ARCHIVE_CHUNK:5000}
+      # 이 시간보다 최근에 도착한 줄은 아직 안 올린다 — id 는 INSERT 순서지 커밋 순서가 아니라,
+      # 커밋이 늦은 줄을 앞질러 기준점을 올리면 그 줄은 영영 안 올라간다.
+      settle-lag-minutes: ${ZZAL_ARCHIVE_SETTLE_LAG_MIN:10}
 
     # 공유 링크의 앞부분. 발급할 때 이 값 뒤에 토큰을 붙여 통째로 내려준다.
     #

@@ -24,26 +24,27 @@ import static org.mockito.Mockito.when;
 class HatchStatesTest {
 
     @Test
-    @DisplayName("버전 키로 고른다 — v1 은 8종, v2 는 카탈로그 key 16종")
+    @DisplayName("버전 키로 고른다 — 그 버전 줄만 읽는다")
     void picksByVersion() {
         MockEnvironment env = new MockEnvironment()
-                .withProperty("app.zzal.hatch.states.v1", "idle,eat,hungry,clean,happy,sad,pet,train")
-                .withProperty("app.zzal.hatch.states.v2",
-                        "base,eat,joy,sad,sick,practice,shy,call,tilt,wave,sleep,wash,startle,nod,smile_idle,sit");
+                .withProperty("app.zzal.hatch.states.v1",
+                        "base,eat,joy,sad,sick,pet,hello,sleep,"
+                                + "eat_rice,eat_snack,sweep,wash,reply,petted,startle,wake_up")
+                .withProperty("app.zzal.hatch.states.옛것", "idle,eat,hungry,clean,happy,sad,pet,train");
 
-        assertThat(GenerationConfig.hatchStates(env, "v1")).hasSize(8).startsWith("idle");
-        assertThat(GenerationConfig.hatchStates(env, "v2")).hasSize(16).startsWith("base").endsWith("sit");
+        assertThat(GenerationConfig.hatchStates(env, "v1")).hasSize(16).startsWith("base").endsWith("wake_up");
+        assertThat(GenerationConfig.hatchStates(env, "옛것")).hasSize(8).startsWith("idle");
     }
 
     @Test
     @DisplayName("★ 실패 주입 — 쓰는 버전의 목록이 없으면 설정 이름을 말하며 막힌다")
     void missingListNamesTheProperty() {
         MockEnvironment env = new MockEnvironment()
-                .withProperty("app.zzal.hatch.states.v1", "idle,eat");
+                .withProperty("app.zzal.hatch.states.옛것", "idle,eat");
 
-        assertThatThrownBy(() -> GenerationConfig.hatchStates(env, "v2"))
+        assertThatThrownBy(() -> GenerationConfig.hatchStates(env, "v1"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("app.zzal.hatch.states.v2");
+                .hasMessageContaining("app.zzal.hatch.states.v1");
     }
 
     @Test
@@ -51,14 +52,31 @@ class HatchStatesTest {
     void processorRejectsEmptyStates() throws Exception {
         PipelineScripts scripts = mock(PipelineScripts.class);
         PythonPostProcessor p = new PythonPostProcessor(mock(S3Storage.class), scripts, "python3", 60,
-                v -> v.equals("v1") ? List.of("idle") : List.of());
+                v -> v.equals("v1") ? List.of("base") : List.of());
 
-        try (PostProcessor.Session s = p.open("images/zzal/pets/7", "v2")) {
-            assertThatThrownBy(() -> s.split("images/zzal/pets/7/grid.png"))
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "없는버전")) {
+            assertThatThrownBy(() -> s.split("images/zzal/pets/7/grid.png", List.of("base")))
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("app.zzal.hatch.states.v2");
+                    .hasMessageContaining("app.zzal.hatch.states.없는버전");
             assertThatThrownBy(() -> s.split("images/zzal/pets/7/grid.png", List.of()))
                     .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("★★ 실패 주입 — 자를 이름이 설정 목록에 없으면 내려받기 전에 멈춘다")
+    void keysNotDeclaredInStatesAreRejected() throws Exception {
+        // 카탈로그(자를 이름)와 설정(내놓기로 한 이름)이 갈리면 후처리는 성공하는데 화면이
+        // 조립하는 주소에 파일이 없다. 오류가 안 나는 어긋남이라 여기서 막는다.
+        PythonPostProcessor p = new PythonPostProcessor(mock(S3Storage.class), mock(PipelineScripts.class),
+                "python3", 60, v -> List.of("base", "eat"));
+
+        // ★ 앵커를 요구하지 않는 이름으로 연다 — 세션을 닫을 때의 앵커 검사가 이 시험의 관심사가 아니다.
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "옛버전")) {
+            assertThatThrownBy(() -> s.split("images/zzal/pets/7/grid.png", List.of("base", "옛이름")))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("app.zzal.hatch.states.옛버전")
+                    .hasMessageContaining("옛이름");
         }
     }
 }

@@ -45,16 +45,15 @@ public class PythonPostProcessor implements PostProcessor {
      *
      * ★ 없으면 실패로 올린다 — 그림만 올라가고 앵커만 사라지면 화면이 소품을 못 얹는데,
      *   서버에는 아무 오류가 없어 <b>화면을 봐야만</b> 드러난다.
-     * ★ v1·v2 의 스크립트는 앵커를 아예 안 낸다. 그 버전에서 없는 것은 정상이다.
      */
     private static final Set<String> ANCHORS_REQUIRED = com.lore.zzal.motion.MotionImageKeys.ANCHOR_VERSIONS;
 
     /**
      * 버전 → 스크립트가 만들어야 하는 파일 이름들(설정 {@code app.zzal.hatch.states.{버전}}).
      *
-     * ★ 코드에 박지 않고 설정에서 받는다 — v1 은 8종(idle·eat·…·train), v2 는 카탈로그 key 16종으로 <b>버전마다 다르고</b>,
-     *   출력 이름은 후처리 스크립트(파이썬)와 백엔드가 같이 지켜야 하는 약속이라 한 곳(yml)에 둔다.
-     * ★ 버전은 <b>세션마다</b> 받는다 — 빈이 만들어질 때의 설정(v2)이 아니라 그 job 의 버전(폴백으로 v1 일 수 있다).
+     * ★ 코드에 박지 않고 설정에서 받는다 — 출력 이름은 후처리 스크립트(파이썬)와 백엔드가 같이
+     *   지켜야 하는 약속이라 한 곳(yml)에 둔다.
+     * ★ 버전은 <b>세션마다</b> 받는다 — 빈이 만들어질 때의 설정이 아니라 그 job 이 적어 둔 버전이다.
      */
     private final Function<String, List<String>> statesByVersion;
 
@@ -101,18 +100,6 @@ public class PythonPostProcessor implements PostProcessor {
         }
 
         @Override
-        public void split(String gridImageKey) throws Exception {
-            List<String> states = statesByVersion.apply(version);
-            if (states == null || states.isEmpty()) {
-                // 비어 있으면 "0종 중 0종 완료" 로 조용히 성공한다. 그 펫은 그림이 하나도 없는데 부화는 끝난 것이 되고,
-                // 그건 화면을 봐야만 드러난다.
-                throw new IllegalStateException(
-                        "후처리 출력 목록이 비었습니다. app.zzal.hatch.states.%s 를 설정하세요".formatted(version));
-            }
-            run(gridImageKey, states, List.of());
-        }
-
-        @Override
         public void split(String gridImageKey, List<String> keys) throws Exception {
             split(gridImageKey, keys, "");
         }
@@ -120,14 +107,40 @@ public class PythonPostProcessor implements PostProcessor {
         @Override
         public void split(String gridImageKey, List<String> keys, String postures) throws Exception {
             if (keys == null || keys.isEmpty()) {
-                throw new IllegalArgumentException("--keys 가 비었습니다(v2 이후 후처리는 카탈로그 key 8개가 필요)");
+                throw new IllegalArgumentException("--keys 가 비었습니다(후처리는 카탈로그 key 8개가 필요)");
             }
+            requireDeclared(keys);
             List<String> args = new ArrayList<>(List.of("--keys", String.join(",", keys)));
             if (postures != null && !postures.isBlank()) {
-                // ★ 빈 값이면 아예 안 넘긴다 — v1·v2 스크립트는 이 인자를 모르고, 넘기면 argparse 가 죽는다.
+                // ★ 빈 값이면 아예 안 넘긴다 — 이 인자를 모르는 스크립트에 넘기면 argparse 가 죽는다.
                 args.addAll(List.of("--postures", postures));
             }
             run(gridImageKey, keys, args);
+        }
+
+        /**
+         * 자르려는 이름이 <b>설정에 선언된 출력 목록</b> 안에 있는가.
+         *
+         * <h3>★★ 왜 내려받기 전에 보나 — 이름을 정하는 곳이 둘이라서</h3>
+         * 자를 이름은 카탈로그({@code MotionCatalog})에서 오고, 그 버전이 내놓기로 약속한 이름은
+         * 설정({@code app.zzal.hatch.states.{버전}})에 적혀 있다. 둘이 갈리면 <b>후처리는 성공</b>하는데
+         * 화면이 조립하는 주소에 파일이 없다. 오류는 어디에서도 안 나고 화면을 봐야만 드러난다.
+         * 그래서 돈과 시간을 쓰기 전에 여기서 멈추고, 어느 설정을 고쳐야 하는지 말한다.
+         */
+        private void requireDeclared(List<String> keys) {
+            List<String> declared = statesByVersion.apply(version);
+            if (declared == null || declared.isEmpty()) {
+                // 비어 있으면 "0종 중 0종 완료" 로 조용히 성공한다. 그 펫은 그림이 하나도 없는데 부화는 끝난 것이 되고,
+                // 그건 화면을 봐야만 드러난다.
+                throw new IllegalStateException(
+                        "후처리 출력 목록이 비었습니다. app.zzal.hatch.states.%s 를 설정하세요".formatted(version));
+            }
+            List<String> unknown = keys.stream().filter(k -> !declared.contains(k)).toList();
+            if (!unknown.isEmpty()) {
+                throw new IllegalStateException(
+                        "자를 이름이 app.zzal.hatch.states.%s 에 없습니다: %s (적힌 이름: %s)"
+                                .formatted(version, unknown, declared));
+            }
         }
 
         /**

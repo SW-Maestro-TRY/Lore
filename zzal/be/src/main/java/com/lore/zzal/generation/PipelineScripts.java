@@ -56,7 +56,7 @@ public class PipelineScripts {
                 continue;
             }
             // ★ 파이썬이 만들어 둔 캐시(.pyc)는 풀지 않는다. 새 버전을 올렸을 때 옛 캐시가
-            //   섞여 들어가면, 스크립트는 v2 인데 실행은 v1 로 되는 상황이 생길 수 있다.
+            //   섞여 들어가면, 스크립트는 새 판인데 실행은 옛 판으로 되는 상황이 생길 수 있다.
             //   캐시는 파이썬이 실행 시 알아서 다시 만든다.
             if (rel.contains("__pycache__") || rel.endsWith(".pyc")) {
                 continue;

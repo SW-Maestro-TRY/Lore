@@ -23,10 +23,11 @@ import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
 import Panels from './Panels';
+import FeedbackSheet from '../FeedbackSheet';
 import { spriteUrl, useFootPad, useLive, yeoulSpriteUrl } from './useHatch';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
-import { charFit, HEAD_SAFE, K_SCREEN_TARGET } from '../props/layout';
+import { charFit, HEAD_SAFE } from '../props/layout';
 import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
 import {
   SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose, stageAt, stagePlanOf,
@@ -38,7 +39,7 @@ import { confirmedSpec } from '../props/catalog';
 const SWEEP_ROW_ID = '__sweep__';
 
 export default function Room({ y }: { y: Yeoul }) {
-  const { v, actions } = y;
+  const { s, v, actions } = y;
   // 무엇을 그릴지는 `v.spriteKey`(useYeoul)가, 누구를 그릴지는 `spriteUrl`(useHatch)이 정한다.
   const live = useLive();
   // 여울 샘플 방에서는 여울이, 진짜 방에서는 내 아이만 나온다.
@@ -133,20 +134,23 @@ export default function Room({ y }: { y: Yeoul }) {
   //   3) 팝오버가 발을 안 덮는다 — 발끝이 팝오버 윗변보다 위에.
   //   4) 그 안에서 최대한 크게.
   //
-  // ★ 발끝(`LIFT`) — 원래는 `POP_LIFT + 34` 한 값이었는데, 무대가 짧은 화면(360×640)에서는
-  //   그 높이가 무대에 비해 과해 아이 머리가 잘렸다. 그래서 **무대의 62% 로도 한 번 깎는다.**
-  //   62% 는 무대가 384px 아래로 내려갈 때만 걸리고, 그 아래에서도 발끝이 팝오버 윗변(최대
-  //   `POP_LIFT`)보다 위로 남는다. 화면 높이로만 정해지는 값이라 1)을 깨지 않는다.
-  // ★ 키(`CHAR_H`) — 규격값 `K_SCREEN_TARGET`(296px)이 기본이고, 무대가 짧으면 **남은 머리 공간에
-  //   맞춰 깎는다.** 머리끝 = 발끝 + 화면키 × (가장 큰 실루엣 ÷ K) 이므로 그 식을 뒤집었다.
+  // ★ 발끝(`LIFT`) — 무대 아래에서 발끝까지. 무대가 커지면 **발끝도 30% 지점까지 함께 올라와**
+  //   큰·긴 화면에서 발밑에 죽은 바닥이 넓게 남지 않는다(2026-09-16 art-direction: 방을 균형 있게).
+  //   하한 220px 은 팝오버(최대 `POP_LIFT`=204px)가 발을 안 덮게(여유 16px), 상한 330px 은 아주 긴
+  //   화면에서 발이 너무 높이 뜨지 않게 잡는다. 화면 높이로만 정해지는 값이라 1)을 깨지 않는다.
+  //   ★ `props/layout.ts` 의 `footlineFromBottom(stageH)` 과 **똑같은 식**이라야 똥·바닥 소품이 발에 붙는다.
+  // ★ 키(`CHAR_H`) — 이제 규격 고정값(296px)이 아니라 **무대의 약 60%(실루엣 기준)** 를 목표로 커졌다
+  //   줄었다 한다(2026-09-16: 큰 화면에서 아이가 너무 작아 보였다). 다만 머리끝이 무대 위로 넘지 않게
+  //   남은 높이(`100% - LIFT - HEAD_SAFE`)로 깎는다. 짧은 화면은 이 깎기가 걸려 60%보다 작아진다.
   //   깎는 기준을 **가장 큰 자세**로 잡는 이유 — 자세마다 깎으면 자세를 바꿀 때 아이가 출렁여
   //   1)이 깨진다. `HEAD_SAFE` 는 반올림에 먹히지 않도록 두는 최소 여유다.
-  const LIFT = `max(min(212px,34%),min(${POP_LIFT + 34}px,62%))`;
+  //   ★ 배경이 사라지지 않도록 60% 를 넘겨 키우지 말 것 — "방 안에 있다"가 유지돼야 한다(상훈님 지시).
+  const LIFT = `clamp(220px, 30%, 330px)`;
 
   // ★ 크기는 **실루엣 키(K)로 정한다** — 상자를 먼저 정하고 그 안에 그림을 넣지 않는다.
-  //   규격의 모든 ratio 가 "화면 키 = K_screen(296px)" 을 전제하기 때문이다(→ `props/layout.ts` 머리말).
-  //   상자 폭으로 잡던 옛 방식에서는 K 가 220.6px 밖에 안 나와 규격이 통째로 1.34배 어긋났고,
-  //   그 탓에 하트 같은 작은 소품이 비율(41.2px)이 아니라 **하한 40px 에 걸려** 그려졌다.
+  //   규격의 모든 ratio 가 "화면 키 = K_screen(296px)" 을 전제한다(→ `props/layout.ts` 머리말) —
+  //   그 전제는 K 를 재는 **기준**일 뿐이고, 실제 화면 키는 무대에 맞춰 이보다 커지거나 작아진다.
+  //   소품은 캐릭터 상자 폭에서 자(K)를 뽑으므로(→ `unitPxOfWidth`) 아이가 커지면 소품도 같은 비율로 커진다.
   //   상자 크기·세로 자리는 여기서 **따라 나오는 값**이다.
   // ★ 앵커를 못 받았으면(옛 펫) K 를 모른다 → 예전처럼 **상자 기준**으로 되돌아간다. 두 길 다 돈다.
   const fit = useMemo(() => charFit(anchors.anchors, v.spriteKey), [anchors.anchors, v.spriteKey]);
@@ -157,11 +161,14 @@ export default function Room({ y }: { y: Yeoul }) {
   const charBoxRef = useRef<HTMLDivElement>(null);
   const byK = anchors.source === 'server' || v.sample.show;
 
-  // 화면에서의 실루엣 키. 규격값(296)이 기본이고, 무대가 짧으면 **머리가 잘리지 않을 만큼**만 깎는다.
-  const K_SCREEN = `min(${K_SCREEN_TARGET}px,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${fit.tallestPerK.toFixed(4)}))`;
+  // 화면에서의 실루엣 키. **무대의 약 60%** 를 목표로 하되, 머리끝이 무대 위로 안 넘게 남은 높이로 깎는다.
+  //   `SIL` 은 가장 큰 자세의 실루엣이 화면에서 가질 높이다(무대 60%, 하한 150px, 머리 공간으로 상한).
+  //   K_SCREEN = SIL ÷ (가장 큰 실루엣÷K) — 이렇게 뒤집어야 어떤 자세든 무대 밖으로 안 나간다.
+  const SIL = `min(calc(100% - ${LIFT} - ${HEAD_SAFE}px), max(60%, 150px))`;
+  const K_SCREEN = `calc(${SIL} / ${fit.tallestPerK.toFixed(4)})`;
   const CHAR_H = byK
     ? `calc(${K_SCREEN} * ${fit.boxHPerK.toFixed(4)})`
-    : `min(350px,58%,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${(1 - footPad).toFixed(4)}))`;
+    : `calc(min(calc(100% - ${LIFT} - ${HEAD_SAFE}px), max(64%, 160px)) / ${(1 - footPad).toFixed(4)})`;
   // 발끝이 발끝선(`LIFT`)에 오게 상자를 내린다. 앵커가 있으면 **그 자세의 발끝**을, 없으면 잰 여백을 쓴다.
   const BELOW_FOOT = byK ? fit.belowFoot : footPad;
   const CHAR_ASPECT = byK ? `${fit.aspect.toFixed(6)}` : '313/350';
@@ -174,6 +181,24 @@ export default function Room({ y }: { y: Yeoul }) {
       {v.hud.show && <Hud y={y} />}
       {v.sample.show && <SampleHud y={y} />}
 
+      {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가 · 아기 시간표 중인가 · 받은 움직임이
+          도착했는가)는 **FeedbackSheet 이 정한다.** 여기서 판정하면 스킨이 그 규칙을 알아야 하고,
+          규칙이 바뀔 때마다 스킨이 같이 바뀐다 — 스크랩북과 같은 약속이다(skins/Scrapbook.tsx).
+          ★ 자리 — 머리줄 **아래, 무대 위**. 띠는 덮개 없이 세로 흐름에 끼어드는 한 줄이라
+            **아래 돌봄 타일을 한 번도 가리지 않는다**(예전에 돌봄 버튼을 덮어 띠로 바꾼 그 이유).
+            여울에는 도감 구역이 따로 없어서 스크랩북의 그 자리를 대신하는 곳이다.
+          ★ 목(여울 연습방·시안 미리보기)에서는 안 그린다 — 후기는 실서버 전용이다. */}
+      <FeedbackSheet
+        petId={!s.sampleMode && live.pet?.phase === 'ALIVE' ? live.petId : null}
+        // 받은 움직임이 실제로 있을 때만 "받은 움직임, 어땠어요?" 를 묻는다.
+        advancedArrived={(live.pet?.learnedToday?.length ?? 0) > 0 || live.pet?.firstGift?.status === 'OPEN'}
+        // 아기 시간표는 **서버가 센다**(계약 — 끝나면 블록이 null 이다). 화면이 다시 세지 않는다.
+        tutorialActive={live.pet?.tutorial?.active === true || s.tutorOn}
+        // 전면 판(해금 축하·선물)과 앨범 벽이 떠 있는 동안에는 저절로 안 올라온다.
+        hold={!!s.fire || v.wall.show || v.frame.show}
+        tone="yeoul"
+      />
+
       {/* ── 무대 ───────────────────────────────────────────────── */}
       <div
         data-part="stage"
@@ -185,17 +210,25 @@ export default function Room({ y }: { y: Yeoul }) {
       >
         <div style={{ position: 'absolute', inset: 0, backgroundImage: v.st.pattern, opacity: 0.5 }} />
 
-        {/* 창문 — 낮엔 해, 밤엔 달. */}
+        {/* 창문 — 낮엔 해, 밤엔 달.
+            ★ 자리·크기를 **무대 기준(%)** 으로 잡는다(2026-09-16). 예전엔 고정 px(left28·top34·98x98)라
+              큰 화면에서는 넓은 벽 구석에 작은 사각형이 홀로 떠 다른 요소와 동떨어져 보였다.
+              이제 무대에 비례해 커지고 자리도 벽의 같은 지점에 붙어 방의 일부로 읽힌다.
+              해·달은 창 안에서 %로 잡아 창이 커져도 같은 자리에 온다. */}
         <div style={{
-          position: 'absolute', left: 28, top: 34, width: 98, height: 98, borderRadius: 15,
+          position: 'absolute', left: '7%', top: '7%',
+          width: 'clamp(92px, 15%, 156px)', aspectRatio: '1 / 1', borderRadius: 15,
           border: `5px solid ${v.st.frame}`, background: v.st.sky, overflow: 'hidden',
         }}>
-          {v.st.moon && <div style={{ position: 'absolute', right: 15, top: 13, width: 27, height: 27, borderRadius: '50%', background: '#F7EDCD', boxShadow: '0 0 20px rgba(247,237,205,.75)' }} />}
-          {v.st.sun && <div style={{ position: 'absolute', right: 16, top: 15, width: 23, height: 23, borderRadius: '50%', background: '#FBE7B4' }} />}
+          {v.st.moon && <div style={{ position: 'absolute', right: '15%', top: '13%', width: '28%', height: '28%', borderRadius: '50%', background: '#F7EDCD', boxShadow: '0 0 20px rgba(247,237,205,.75)' }} />}
+          {v.st.sun && <div style={{ position: 'absolute', right: '16%', top: '15%', width: '24%', height: '24%', borderRadius: '50%', background: '#FBE7B4' }} />}
         </div>
 
-        {/* 바닥 */}
-        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 'min(266px,44%)', background: v.st.floor, borderTop: '1px solid rgba(74,64,56,.09)' }} />
+        {/* 바닥 — ★ 벽↔바닥 경계(수평선)를 **발끝선(`LIFT`) 위**에 둔다(2026-09-16).
+            예전엔 고정 `min(266px,44%)` 이라 짧은 화면(SE 378px)에서 경계(44%=167px)가 발끝선(220px)보다
+            **아래**로 내려가 아이가 바닥 위 허공에 뜨고 그 아래 바닥이 텅 비어 보였다. 이제 경계를
+            발끝선보다 한 뼘 위(무대 8%, 28~90px)로 올려 아이가 언제나 바닥에 발을 딛는다. */}
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `calc(${LIFT} + clamp(28px, 8%, 90px))`, background: v.st.floor, borderTop: '1px solid rgba(74,64,56,.09)' }} />
 
         {/* 그림자 — 캐릭터와 같은 걸음으로 움직인다. */}
         <div style={{
@@ -311,8 +344,11 @@ export default function Room({ y }: { y: Yeoul }) {
         )}
       </div>
 
-      {/* ── 아래 — 팝오버와 타일 ─────────────────────────────────── */}
-      <div onClick={actions.bottomTap} style={{ position: 'relative', flex: 'none', padding: '10px 12px 22px' }}>
+      {/* ── 아래 — 팝오버와 타일 ───────────────────────────────────
+          ★ 무대 바닥(`v.st.floor`)을 이 컨트롤 영역 위쪽으로 **이어 준다**(2026-09-16). 예전엔 이 칸이
+            셸 크림색이라 무대 바닥(탄색)과 사이에 크림 띠 seam 이 생겨 "빈 베이지 띠"로 보였다.
+            위 38px 를 바닥 톤에서 셸로 풀어 seam 을 없애고 방 바닥이 타일까지 자연스럽게 내려오게 한다. */}
+      <div onClick={actions.bottomTap} style={{ position: 'relative', flex: 'none', padding: '10px 12px 22px', background: `linear-gradient(180deg, ${v.st.floor} 0, ${C.shell} 38px)` }}>
         {v.fab.show && <ChatFab y={y} />}
         {v.mini.show && <MiniCard y={y} />}
         {v.medFab.show && (

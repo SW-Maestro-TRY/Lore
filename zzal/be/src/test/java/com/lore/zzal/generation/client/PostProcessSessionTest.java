@@ -26,7 +26,7 @@ import static org.mockito.Mockito.when;
  * 후처리 세션 — <b>1층과 2층이 같은 작업 폴더를 쓴다.</b>
  *
  * <h3>★★ 무엇을 지키나</h3>
- * v4 후처리는 그림 옆에 {@code anchors.json} 을 같이 내고, 2층이 1층이 낸 그 파일에 합쳐 쓴다.
+ * 후처리는 그림 옆에 {@code anchors.json} 을 같이 내고, 2층이 1층이 낸 그 파일에 합쳐 쓴다.
  * 예전에는 자르는 메서드가 자기 안에서 임시 폴더를 만들고 {@code finally} 로 지워서,
  * 폴더를 공유하려 해도 <b>1층이 지운 폴더를 2층이 보게</b> 됐다. 그 어긋남은 예외가 안 나고
  * 앵커만 반쪽이 되어 <b>화면에서만</b> 드러난다.
@@ -40,6 +40,8 @@ class PostProcessSessionTest {
 
     private static final List<String> LAYER1 = List.of("base", "eat");
     private static final List<String> LAYER2 = List.of("sweep", "wash");
+    /** 설정({@code app.zzal.hatch.states.{버전}})에 적혀 있는 셈 치는 이름들 — 두 층을 합친 것. */
+    private static final List<String> DECLARED = List.of("base", "eat", "sweep", "wash");
 
     /** 스크립트가 한 것처럼 파일을 남기는 대역. 호출마다 무엇을 받았는지도 적어 둔다. */
     private static final class FakeScript extends PythonPostProcessor {
@@ -54,7 +56,7 @@ class PostProcessSessionTest {
 
         FakeScript(S3Storage storage, PipelineScripts scripts, List<List<String>> made,
                    boolean writeAnchors, boolean leaveStale) {
-            super(storage, scripts, "python3", 5, v -> LAYER1);
+            super(storage, scripts, "python3", 5, v -> DECLARED);
             this.made = made;
             this.writeAnchors = writeAnchors;
             this.leaveStale = leaveStale;
@@ -98,7 +100,7 @@ class PostProcessSessionTest {
         S3Storage storage = mock(S3Storage.class);
         FakeScript p = new FakeScript(storage, scripts(), List.of(LAYER1, LAYER2), true, false);
 
-        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v4")) {
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v1")) {
             s.split("grid1.png", LAYER1, "base=standing,eat=standing");
             s.split("grid2.png", LAYER2, "sweep=standing,wash=crouch");
         }
@@ -126,7 +128,7 @@ class PostProcessSessionTest {
     void perLayerNamesInsideTheWorkDirectory() throws Exception {
         FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER1, LAYER2), true, false);
 
-        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v4")) {
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v1")) {
             s.split("grid1.png", LAYER1, "");
             s.split("grid2.png", LAYER2, "");
         }
@@ -136,23 +138,23 @@ class PostProcessSessionTest {
     }
 
     @Test
-    @DisplayName("★★ v4 에서 앵커가 없으면 실패로 올린다 — 그림만 올라가는 모양은 화면을 봐야만 드러난다")
-    void v4FailsWhenAnchorsAreMissing() {
+    @DisplayName("★★ 앵커를 내야 하는 버전인데 없으면 실패로 올린다 — 그림만 올라가는 모양은 화면을 봐야만 드러난다")
+    void failsWhenAnchorsAreMissing() {
         FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER1), false, false);
 
         assertThatThrownBy(() -> {
-            try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v4")) {
+            try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v1")) {
                 s.split("grid1.png", LAYER1, "");
             }
         }).isInstanceOf(IllegalStateException.class).hasMessageContaining("anchors.json");
     }
 
     @Test
-    @DisplayName("v1·v2 는 앵커를 안 낸다 — 그 버전에서 없는 것은 정상이다")
+    @DisplayName("앵커를 안 내던 옛 버전으로 적힌 기록 — 그 버전에서 없는 것은 정상이다")
     void olderVersionsPassWithoutAnchors() throws Exception {
         FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER1), false, false);
 
-        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v2")) {
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "옛버전")) {
             s.split("grid1.png", LAYER1);
         }
     }
@@ -164,7 +166,7 @@ class PostProcessSessionTest {
         FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER1), true, true);
 
         assertThatThrownBy(() -> {
-            try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v4")) {
+            try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v1")) {
                 s.split("grid1.png", LAYER1, "");
             }
         }).isInstanceOf(IllegalStateException.class)

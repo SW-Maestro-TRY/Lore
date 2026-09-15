@@ -17,6 +17,20 @@ public interface ZzalPetRepository extends JpaRepository<ZzalPet, Long> {
     /** 밤 스위프 — 함께 지내는 펫 전부(안 연 사람 것도 23:00 에 정산·큐 등록). */
     List<ZzalPet> findByPhase(PetPhase phase);
 
+    /**
+     * <b>끝난</b> 알을 최근 순으로. 부화 연속 실패 경보가 "연달아 몇 번인가" 를 이걸로 센다.
+     *
+     * ★★ 연속 실패를 메모리에 세지 않는 이유 — 그 숫자는 재시작하면 0 이 된다. 배포가 잦은 동안
+     *    같은 사고가 여러 번 알려지거나(0부터 다시 세어 다시 임계를 넘음) 영영 안 알려진다.
+     *    표를 다시 읽어 세면 서버가 몇 번을 뜨든 같은 답이 나온다.
+     * ★ 굽는 중(DRAFT·HATCHING)은 빼고 부르는 쪽이 ALIVE·FAILED 만 준다 — 아직 성공도 실패도
+     *   아닌 것이 사이에 끼면 "연달아" 가 끊긴 것처럼 보인다.
+     * ★ 순서는 id 다. 만들어진 순서라 끝난 순서와 아주 조금 어긋날 수 있지만, 언제나 값이 있고
+     *   절대 안 바뀌는 유일한 축이다(끝난 시각은 실패 경로에 따라 비어 있을 수 있다).
+     */
+    List<ZzalPet> findByPhaseInOrderByIdDesc(Collection<PetPhase> phases,
+                                             org.springframework.data.domain.Pageable pageable);
+
     /** 지금 부화 중인 펫이 있는가. 있으면 새로 만들지 못한다("○○이가 부화 중이에요"). */
     Optional<ZzalPet> findFirstByUserIdAndPhase(Long userId, PetPhase phase);
 

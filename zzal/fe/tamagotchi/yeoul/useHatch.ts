@@ -28,6 +28,7 @@ import {
 } from '../../lib/pet';
 import { getCurrentGame, guess, startGame, type GameState, type GuessResult, type Side } from '../../lib/game';
 import { uploadImage } from '../../lib/upload';
+import { readHatchBlocked, type HatchBlocked } from '../../lib/hatchBlocked';
 
 /**
  * 눌린 순간 **먼저 얹는 값**(낙관적 갱신). 서버 응답이 오면 그 자리에서 사라지고,
@@ -110,6 +111,15 @@ export interface Live {
   pet: PetDetail | null;
   busy: boolean;
   error: string | null;
+  /**
+   * **부화가 막혔다** — 자리·상한·바깥 한도에 걸려 서버가 거절했다.
+   *
+   * ★ `error` 와 따로 두는 이유 — 막힘은 **고장이 아니다.** 같은 칸에 담으면 화면이 붉은
+   *   오류 한 줄로 그리게 되고, 그러면 "지금은 안 돼요" 가 "망가졌어요" 로 읽힌다(명세 E절).
+   *   문구는 `lib/hatchBlocked.ts` 의 표 한 곳이 정한다 — 여기서도, 화면에서도 안 짓는다.
+   * ★ 이것이 켜지면 `error` 는 null 이다. 둘 다 켜면 같은 사건이 화면에 두 줄로 뜬다.
+   */
+  blocked: HatchBlocked | null;
   /**
    * 그림만 올려 둔 채 이름이 아직 없는 아이가 서버에 있다 — "이어서 이름을 지어 주세요".
    * 계약 4절: 이름을 안 짓고 나갔다 오면 `draft` 가 **같은 petId** 를 준다. 이미 구운
@@ -240,7 +250,7 @@ export interface Live {
 }
 
 const EMPTY: Live = {
-  previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null,
+  previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null, blocked: null,
   draftOnly: false, resumedDraft: false, careing: null, optimistic: null, resting: false, chat: null, chatting: false,
   game: null, guessing: false, album: null, ready: false, petReady: false, failed: false, step: null,
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
@@ -266,6 +276,11 @@ export function useHatchState(): Live {
   petRef.current = pet;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * 막힘 안내. 오류(`error`)와 한 짝으로 움직인다 — **한쪽을 켜면 다른 쪽은 끈다.**
+   * 같은 사건을 두 줄로 띄우지 않으려는 것이다(→ Live.blocked 머리말).
+   */
+  const [blocked, setBlocked] = useState<HatchBlocked | null>(null);
   const objectUrl = useRef<string | null>(null);
   /** 이름을 보냈는가. 이게 켜져야 굽기가 도는 것이므로 그때부터 진행을 묻는다. */
   const [charSet, setCharSet] = useState(false);
@@ -353,6 +368,7 @@ export function useHatchState(): Live {
   const upload = useCallback(async (file: File) => {
     setBusy(true);
     setError(null);
+    setBlocked(null);
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = URL.createObjectURL(file);
     setPreviewUrl(objectUrl.current);
@@ -371,7 +387,11 @@ export function useHatchState(): Live {
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
       objectUrl.current = null;
       setPreviewUrl(null);
-      setError(e instanceof Error ? e.message : '그림을 올리지 못했어요');
+      // ★ 막힘이면 **오류로 안 띄운다.** 자리가 없거나 오늘 몫을 다 쓴 것은 고장이 아니고,
+      //   붉은 한 줄로 그리면 사용자가 제 그림을 의심한다(명세 E절 "고장으로 안 읽히게").
+      const stop = readHatchBlocked(e);
+      setBlocked(stop);
+      setError(stop ? null : e instanceof Error ? e.message : '그림을 올리지 못했어요');
     } finally {
       setBusy(false);
     }
@@ -390,6 +410,7 @@ export function useHatchState(): Live {
     if (!petId) return false;
     setBusy(true);
     setError(null);
+    setBlocked(null);
     try {
       const created = await setCharacter(petId, input);
       setCharSet(true);
@@ -399,7 +420,11 @@ export function useHatchState(): Live {
       });
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : '부화를 시작하지 못했어요');
+      // 막기는 **이 호출에도** 걸린다 — 돈이 나가기 시작하는 자리가 여기라서다.
+      // 어느 걸음에서 막히든 사용자가 보는 안내는 같아야 하므로 두 자리 다 같은 표를 읽는다.
+      const stop = readHatchBlocked(e);
+      setBlocked(stop);
+      setError(stop ? null : e instanceof Error ? e.message : '부화를 시작하지 못했어요');
       return false;
     } finally {
       setBusy(false);
@@ -736,14 +761,14 @@ export function useHatchState(): Live {
     applied.current = issued.current;
     appliedGame.current = issued.current;
     session.current += 1;
-    setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null);
+    setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null); setBlocked(null);
     setCharSet(false); setHatch(null); setResumedDraft(false); setOptimistic(null);
     setGameLoaded(false); setChatLoaded(false);
     setChat(null); putGame(takeSeq(), null); setAlbum(null);
   }, [takeSeq, putGame]);
 
   return {
-    previewUrl, imageKey, petId, pet, busy, error,
+    previewUrl, imageKey, petId, pet, busy, error, blocked,
     // 초안은 아직 부화가 아니다 — 이름을 받아야 굽기가 시작된다.
     draftOnly: !!petId && !charSet,
     resumedDraft: resumedDraft && !charSet,

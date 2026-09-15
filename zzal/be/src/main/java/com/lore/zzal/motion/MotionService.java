@@ -1,5 +1,6 @@
 package com.lore.zzal.motion;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.GenJob;
 import com.lore.zzal.generation.GenJobRepository;
 import com.lore.zzal.generation.GenKind;
@@ -52,6 +53,7 @@ public class MotionService {
     private final PipelineRegistry registry;
     private final MotionCatalog catalog;
     private final MotionGate gate;
+    private final ZzalAlerts alerts;
     private final int maxAttempts;
     /** 맥미니 재생성 상한(설계 규칙 = 2). */
     private final int localRegenMax;
@@ -61,6 +63,7 @@ public class MotionService {
                          GenJobRepository jobRepository, GenStepRecordRepository stepRepository,
                          ZzalMotionRepository motionRepository, ZzalPetRepository petRepository,
                          PipelineRegistry registry, MotionCatalog catalog, MotionGate gate,
+                         ZzalAlerts alerts,
                          @Value("${app.zzal.max-motion-attempts:1}") int maxAttempts,
                          @Value("${app.zzal.night.local-regen-max:2}") int localRegenMax) {
         this.runner = runner;
@@ -73,6 +76,7 @@ public class MotionService {
         this.registry = registry;
         this.catalog = catalog;
         this.gate = gate;
+        this.alerts = alerts;
         this.maxAttempts = maxAttempts;
         this.localRegenMax = localRegenMax;
     }
@@ -110,6 +114,9 @@ public class MotionService {
             // ★ 이 길은 맥미니에게 넘기지 않는다 — 지시문·시트가 없어서 터진 것이면 맥미니도 못 만든다.
             log.error("모션 굽기 중 예외 — motionId={} 를 FAILED 로 내립니다(다음 밤에 다시 오릅니다)", motionId, e);
             markFailedQuietly(motionId);
+            // ★ 그 밤의 첫 통만 나간다(경보 쪽이 밤 날짜로 막는다) — 한 밤에 200장을 굽는데
+            //   장마다 보내면 사고 한 번에 메일이 200통이다.
+            alerts.nightBakeFailed(motionId, "굽기 도중 예외: " + e, Instant.now());
             return;
         }
         // API 몫이 끝났다. 다시 만드는 일은 돈이 안 드는 맥미니가 맡는다(설계 규칙).
@@ -126,6 +133,12 @@ public class MotionService {
                 log.info("맥미니 재생성 요청 — motionId={} (관리자 GET /regen-requests 로 나간다)", motionId);
             } else {
                 log.warn("로컬 재생성 한도({})를 다 썼다 — motionId={} 보류함으로(자동 재시도 없음)", localRegenMax, motionId);
+                // ★★ 여기가 진짜 끝이다 — API 도 맥미니도 다 썼고 자동으로 다시 시도하는 길이 없다.
+                //   사람이 손을 대야 풀리는 자리라 알린다. 맥미니로 넘어간 경우는 알리지 않는다
+                //   (그건 실패가 아니라 <b>다음 차례</b>다 — 그때마다 알리면 정상 흐름에 메일이 온다).
+                alerts.nightBakeFailed(motionId,
+                        "API 시도와 로컬 재생성(%d회)을 모두 소진 — 자동 재시도 없음".formatted(localRegenMax),
+                        Instant.now());
             }
         } catch (RuntimeException | Error e) {
             log.error("재생성 요청 기록 실패 — motionId={} (기동 복구가 회수합니다)", motionId, e);

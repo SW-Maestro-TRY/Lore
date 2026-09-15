@@ -9,7 +9,8 @@
 // ★ 개발용 이동 띠는 **떠 있는 창**이다. 예전처럼 위에 자리를 차지하면 무대 높이가 줄어
 //   판정한 화면과 실제 화면이 달라진다 — 배경 그림을 무대 크기에 맞춰 만들 예정이라 특히 그렇다.
 //   기본은 닫혀 있고 오른쪽 가장자리의 세로 '이동' 탭을 누르면 열린다.
-//   실서비스로 낼 때 이 파일에서 통째로 지운다.
+//   ★ **로컬에서만** 그려진다(`useDevVisible`). 운영·dev.lorecomic.com 등 실도메인에서는 아예 안 뜨므로
+//   실서비스로 낼 때 이 파일을 지울 필요가 없다.
 //
 // 색·여백을 손보실 자리는 `yeoul/ui.ts` 한 곳이다.
 'use client';
@@ -24,6 +25,7 @@ import { STEPS, WEB_KEYS } from '../yeoul/constants';
 import { C, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, radius } from '../yeoul/ui';
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
+import { useDevVisible } from '../useDevVisible';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { GIFT_CYCLES, SITUATION_TABLE, scenePlays } from '../props/situations';
 import { ApiError } from '../../lib/api';
@@ -116,7 +118,16 @@ export default function Yeoul(_props: SkinProps) {
       className="yeoul"
       style={{
         position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center',
-        background: 'radial-gradient(120% 80% at 50% 0%,#F7F1E6,#E9E2D6)',
+        // ★ 바깥 바탕을 **화면 전체 폭의 방**으로 깐다(2026-09-16 강화). 은은한 그라데이션만으로는
+        //   1920 에서 옆이 평평한 베이지로 남아 "좁은 기둥" 으로 읽혔다. 그래서 방의 실제 색
+        //   (벽 `#FBEFE2`·바닥 `#EFDFCC`)으로 위=벽/아래=바닥 두 띠를 나누고, 벽엔 무대와 같은 세로
+        //   줄무늬를, 바닥엔 가장자리 그림자(비네트)를 얹는다. 이제 넓은 화면 전체가 하나의 방이고
+        //   가운데 밝은 셸이 "일부러 방 가운데 둔 카드"로 명확히 읽힌다(수평선은 카드 안 무대와
+        //   대략 맞춘 52% — 카드가 그림자로 떠 있어 픽셀 단위로 안 맞아도 어색하지 않다).
+        background: `
+          repeating-linear-gradient(90deg, rgba(74,64,56,.03) 0 1px, transparent 1px 22px),
+          radial-gradient(130% 78% at 50% 112%, rgba(74,64,56,.16), rgba(74,64,56,0) 46%),
+          linear-gradient(180deg, #FBEFE2 0%, #FBEFE2 50%, #EFDFCC 55%, #E9D6BF 100%)`,
         color: C.ink, fontFamily: SANS, WebkitFontSmoothing: 'antialiased',
       }}
     >
@@ -129,7 +140,10 @@ export default function Yeoul(_props: SkinProps) {
           position: 'relative', width: `min(100%,${SHELL_MAX}px)`, height: '100%',
           overflow: 'hidden', background: C.shell,
           borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}`,
-          boxShadow: '0 10px 30px rgba(74,64,56,.14)',
+          // ★ 방 배경 위에서 셸이 **떠 있는 카드**로 읽히게 그림자를 키웠다(2026-09-16).
+          //   폰(width=100%)에서는 좌우 가장자리가 화면 밖이라 이 그림자가 안 보이고,
+          //   넓은 화면에서만 카드가 살짝 떠 보인다 — 좌우 빈 베이지가 사라진다.
+          boxShadow: '0 0 0 1px rgba(74,64,56,.04), 0 22px 60px rgba(74,64,56,.20)',
           display: 'flex', flexDirection: 'column',
         }}
       >
@@ -193,31 +207,8 @@ function RoomWait() {
 // ★ 그래서 **연습방/진짜 방을 가르지 않는다.** 회색으로 죽는 칸도 없다.
 //   서버가 쥔 것(시계·선물 도착·밤 큐)만 따로 한 줄로 모아 두고, 나머지는 "화면에만" 이라고 적는다.
 
-/**
- * 이 창을 그려도 되는가.
- *
- * ★ **운영 도메인에서는 무슨 수를 써도 안 뜬다**(상훈님 2026-09-14 "운영 데브는 차단하고").
- *   이 창은 규칙을 건너뛰고 상태를 강제하는 도구라, 사용자 손에 닿으면 **아이의 상태가
- *   거짓으로 보이거나 서버 dev 주소를 두드리게 된다.** 그래서 `?dev=1` 로도 못 연다 —
- *   주소에 한 글자 붙이는 것은 누구나 할 수 있어 자물쇠가 아니다.
- * ★ 왜 `NODE_ENV` 가 아닌가 — 지금 `dev.lorecomic.com`(스테이징)과 운영이 **같은 배포**를
- *   본다(STATUS). 빌드 환경으로는 둘을 못 가르고, 가를 수 있는 것은 **주소뿐**이다.
- *   그래서 스테이징·로컬은 그냥 뜨고, 운영 두 주소만 무조건 막는다.
- * ★ 첫 렌더에서는 늘 `false` 다 — 서버가 그린 것과 브라우저가 그린 것이 달라지면
- *   하이드레이션 경고가 뜨고 e2e 가 그걸 실패로 센다(TamagotchiScreen 머리말과 같은 이유).
- */
-function useDevVisible(): boolean {
-  const [show, setShow] = useState(false);
-  useEffect(() => {
-    const host = window.location.hostname;
-    // ★ 운영이면 여기서 끝. **`?dev` 를 보기 전에** 잘라야 뚫리지 않는다.
-    if (host === 'lorecomic.com' || host === 'www.lorecomic.com') return;
-    // 운영이 아닌 곳(로컬·`dev.lorecomic.com`)에서는 그냥 뜬다. `?dev=1` 은 스크랩북 시안의
-    // 시계 패널(`parts/DevPanel`)이 여전히 쓰는 플래그라 남아 있지만, 이 창에는 필요 없다.
-    setShow(true);
-  }, []);
-  return show;
-}
+// 이 창을 그려도 되는가 — **로컬에서만** 뜬다. 판정은 `useDevVisible`(../useDevVisible) 한 곳으로
+// 모았다(운영·dev.lorecomic.com·미리보기 도메인 모두 차단, 첫 렌더 false 로 하이드레이션 안전).
 
 /** 칩 하나. `on` 은 **지금 화면이 그렇다**는 뜻이다(누르면 그렇게 된다는 뜻이 아니다). */
 interface Chip { label: string; on: boolean; pick: () => void; id?: string; dim?: boolean; title?: string }

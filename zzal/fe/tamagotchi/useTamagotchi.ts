@@ -22,7 +22,7 @@ import type { PetSource } from '../lib/petSource';
 import { clampChat, sanitizeLine } from './chat';
 import { NAMES, YEOUL_MOTION, MOTION_FALLBACK, DEFAULT_BACKGROUND } from './constants';
 import { CARE_REACTION, MAX_GAUGE, REACTION_MS, idleBehavior, type IdleBehavior } from './rules';
-import { GROWN_LINE, takeGrownLine } from './tutorial';
+import { GROWN_LINE, currentCall, takeGrownLine } from './tutorial';
 import { useCalls, type Call } from './useCalls';
 import { useCelebrations, type Celebration } from './useCelebrations';
 import { useClock, type ClockApi } from './useClock';
@@ -320,6 +320,34 @@ export function useTamagotchi({ server = null }: TamagotchiOptions = {}) {
     srv.current?.clearNotice();
   }, [notice, say]);
 
+  // ── 튜토리얼 마지막 칸(DONE) ──────────────────────────────────────────
+  /**
+   * 정본 §12 아홉째 줄 — 「이제 혼자서도 괜찮아요 · 저녁 7시가 되면 재워 주세요 | **—** | 어린이 시작」.
+   * **누를 것이 "—"** 인 유일한 칸이다. 그래서 화면이 스스로 끝낸다 — 이 호출이 시계를 켠다.
+   *
+   * ★ v1.10 이 이 자리를 필수로 만들었다. 「지금 안내(강조)된 버튼만 누를 수 있다 — 나머지는 잠긴다」
+   *   이므로, 마지막 칸(want=null)에서는 돌봄 버튼 일곱 개가 전부 잠긴다. 끝내 주는 이가 없으면
+   *   아이가 그 자리에 영영 멈춘다.
+   * ★ 한 마리당 한 번만 보낸다 — 서버가 거절해도(이미 끝났음 등) 다시 두드리지 않는다.
+   */
+  const doneSent = useRef<number | null>(null);
+  useEffect(() => {
+    const t = pet?.tutorial;
+    if (!t?.active || pet == null || pet.phase !== 'ALIVE') return;
+    if (t.steps.find((x) => x.current)?.key !== 'DONE') return;
+    if (doneSent.current === pet.petId) return;
+    doneSent.current = pet.petId;
+    void (async () => {
+      const sv = srv.current;
+      if (!sv) return;
+      try {
+        sv.applyExternal(await sv.source.tutorialDone(pet.petId));
+      } catch {
+        // 이미 끝났거나 아직 남은 칸이 있다는 뜻이다. 다음 조회가 진실을 들고 온다.
+      }
+    })();
+  }, [pet]);
+
   // ── 부름·축하 ─────────────────────────────────────────────────────────
   const calls = useCalls(pet, server?.chat ?? null, nowMs);
   const consumeUnlocked = useCallback(() => srv.current?.clearJustUnlocked(), []);
@@ -335,7 +363,16 @@ export function useTamagotchi({ server = null }: TamagotchiOptions = {}) {
   /**
    * 지금 이 행동을 할 수 있는가. 버튼은 사라지지 않고 흐려지기만 한다.
    * ★ 서버가 준 값만으로 판정한다. rules.ts 의 숫자를 여기 섞으면 "누를 수 있는데 잠겨 있다" 가 생긴다.
-   * ★ 부름은 버튼을 잠그지 않는다(§0 원칙 7).
+   * ★ 부름은 버튼을 잠그지 않는다(§0 원칙 7) — **튜토리얼이 끝난 뒤**의 이야기다.
+   *
+   * ★★ 튜토리얼 중에는 반대다(정본 v1.10 §12):
+   *    「튜토리얼 중엔 **지금 안내(강조)된 버튼만 누를 수 있다** — 나머지는 잠긴다.
+   *      순서대로 하나씩 열리며, 케어 미스·병·감점 없음.」
+   *    「1.10 변경 — 옛 "돌봄 버튼은 처음부터 전부 열려 있다" 를 뒤집었다. 미리 재우면 낮잠 단계
+   *      (8번째 칸)를 못 밟아 튜토리얼이 안 끝나고, 순서가 꼬인다 — 안내된 버튼만 열어 순서 꼬임을
+   *      원천 차단한다.」
+   *    ★ 재우기에만 있던 특별 규칙(서버 `clock.canSleep` 이 NAP 칸에서만 true)을 **일반 규칙**으로
+   *      올린 것이다. 서버는 재우기 하나만 막아 주므로, 나머지 여섯은 여기 화면 쪽에서 막는다.
    */
   const can = useCallback((k: ActionKey): boolean => {
     const sv = srv.current;
@@ -346,6 +383,10 @@ export function useTamagotchi({ server = null }: TamagotchiOptions = {}) {
     if (p.trip) return false;
     const c = p.clock;
     if (c.sleeping) return k === 'sleep' && c.canWake;
+    // 정본 v1.10 §12 — 안내된 버튼 하나만 열고 나머지는 잠근다. 안내가 돌봄 버튼 밖(채팅·성격·게임·공유)
+    // 이거나 마지막 칸(DONE, want=null)이면 돌봄 버튼 일곱 개가 모두 잠긴다.
+    // ★ 안내된 버튼이라고 무조건 열지는 않는다 — 재고 0·이미 배부름 같은 본래 규칙은 아래에서 그대로 본다.
+    if (p.tutorial?.active === true && currentCall(p.tutorial)?.want !== k) return false;
     switch (k) {
       case 'feed': return (p.food?.count ?? 0) > 0 && p.gauges.fullness < MAX_GAUGE;
       case 'snack': return p.sick === null;

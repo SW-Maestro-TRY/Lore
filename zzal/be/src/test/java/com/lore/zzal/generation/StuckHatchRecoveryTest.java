@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.PetFixture;
 import com.lore.zzal.pet.PetPhase;
 import com.lore.zzal.pet.ZzalPet;
@@ -42,7 +43,7 @@ import static org.mockito.Mockito.when;
 @DisplayName("멈춘 알 복구 — DRAFT 도 집되, 돈이 새는 둘은 거른다")
 class StuckHatchRecoveryTest {
 
-    private static final String V = "v2";
+    private static final String V = "v1";
     private static final Instant LONG_AGO = Instant.parse("2026-09-11T00:00:00Z");
 
     private ZzalPetRepository pets;
@@ -57,7 +58,7 @@ class StuckHatchRecoveryTest {
         jobs = mock(GenJobRepository.class);
         hatch = mock(HatchService.class);
         recorder = mock(GenerationRecorder.class);
-        recovery = new StuckHatchRecovery(pets, jobs, hatch, recorder, 2, 12);
+        recovery = new StuckHatchRecovery(pets, jobs, hatch, recorder, mock(ZzalAlerts.class), 2, 12);
 
         when(hatch.currentVersion()).thenReturn(V);
         when(hatch.stepsTotal(anyString())).thenReturn(5);

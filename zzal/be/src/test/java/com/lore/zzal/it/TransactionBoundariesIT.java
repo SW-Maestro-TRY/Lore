@@ -61,7 +61,7 @@ class TransactionBoundariesIT extends ZzalItSupport {
         Long userId = newUserId();
         Long petId = draftPet(userId);
         GenJob job = transactions.execute(status ->
-                jobs.save(GenJob.start(petId, GenKind.HATCH, 1, "v2", Instant.now())));
+                jobs.save(GenJob.start(petId, GenKind.HATCH, 1, "v1", Instant.now())));
 
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive())
@@ -85,7 +85,7 @@ class TransactionBoundariesIT extends ZzalItSupport {
         Long userId = newUserId();
         Long petId = draftPet(userId);
         GenJob job = transactions.execute(status ->
-                jobs.save(GenJob.start(petId, GenKind.HATCH, 1, "v2", Instant.now())));
+                jobs.save(GenJob.start(petId, GenKind.HATCH, 1, "v1", Instant.now())));
 
         assertThatThrownBy(() -> transactions.executeWithoutResult(status -> {
             recorder.failJob(job.getId(), com.lore.zzal.generation.GenErrorCode.TIMEOUT, BigDecimal.ONE);

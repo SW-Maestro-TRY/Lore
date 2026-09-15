@@ -9,13 +9,13 @@ test('기본은 안 보이고, ?dev=1 일 때만 뜬다', async ({ page }) => {
   await gotoMock(page, 'child', '2026-09-05T10:00');
   await expect(page.locator('[data-part="devpanel"]')).toHaveCount(0);
 
-  await page.goto('/zzal?mock=child&clock=2026-09-05T10:00&dev=1', { waitUntil: 'domcontentloaded' });
+  await page.goto('/zzal?skin=scrapbook&mock=child&clock=2026-09-05T10:00&dev=1', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-action="feed"]');
   await expect(page.locator('[data-part="devpanel"]')).toBeVisible();
 });
 
 test('19:00 으로 옮기면 재우기가 열리고, 23:30 으로 옮기면 자동으로 자고 있다', async ({ page }) => {
-  await page.goto('/zzal?mock=child&clock=2026-09-05T10:00&dev=1', { waitUntil: 'domcontentloaded' });
+  await page.goto('/zzal?skin=scrapbook&mock=child&clock=2026-09-05T10:00&dev=1', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-action="feed"]');
 
   // 낮에는 재우기가 잠겨 있다.
@@ -39,7 +39,7 @@ test('19:00 으로 옮기면 재우기가 열리고, 23:30 으로 옮기면 자�
 test('이미 지난 시각을 누르면 내일 그 시각으로 간다', async ({ page }) => {
   // ★ 23시대에 "19:00으로" 를 누르면 오늘 19:00 은 이미 지났다. 서버는 localTime 을 오늘 날짜로 읽어
   //   400(부화 전 시각)을 내므로, 화면이 **다음에 그 시각이 오는 때**를 계산해 절대 시각으로 보낸다.
-  await page.goto('/zzal?mock=child&clock=2026-09-05T23:10&dev=1', { waitUntil: 'domcontentloaded' });
+  await page.goto('/zzal?skin=scrapbook&mock=child&clock=2026-09-05T23:10&dev=1', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-part="devpanel"]');
   await page.waitForFunction(() => !!(window as unknown as { __zzalMock?: unknown }).__zzalMock);
 
@@ -58,22 +58,30 @@ test('이미 지난 시각을 누르면 내일 그 시각으로 간다', async (
 });
 
 test('분 단위 건너뛰기도 시계를 민다', async ({ page }) => {
-  await page.goto('/zzal?mock=baby&dev=1', { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[data-action="feed"]');
-  // 아기는 3분에 배부름 한 칸. 밥을 주고 +10분이면 확실히 줄어 있다.
-  await page.locator('[data-action="feed"]').click();
-  await page.waitForTimeout(400);
-  const before = (await page.locator('[data-part="gauges"]').first().getAttribute('data-gauges'))!;
+  // ★ 게이지로 재지 않는다 — 배부름은 **깨어 있는 3시간**에 한 칸이다(`DROP_MS.fullness`).
+  //   10분으로는 아무것도 안 변하는 것이 정상이라, 게이지를 단정하면 멀쩡한 기능이 빨개진다
+  //   (옛 주석의 "아기는 3분에 한 칸" 은 어느 규칙에도 없는 값이었다). 이 칸이 보려는 것은
+  //   **시계가 분 단위로 밀리는가** 하나이므로, 위 칸과 같은 자를 쓴다.
+  await page.goto('/zzal?skin=scrapbook&mock=baby&dev=1', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-part="devpanel"]');
+  await page.waitForFunction(() => !!(window as unknown as { __zzalMock?: unknown }).__zzalMock);
+
+  const at = () => page.evaluate(() => (window as unknown as { __zzalMock: { now: () => string } }).__zzalMock.now());
+  const before = new Date(await at()).getTime();
+
   await page.locator('[data-dev-jump="+10분"]').click();
   await page.waitForTimeout(600);
-  const after = (await page.locator('[data-part="gauges"]').first().getAttribute('data-gauges'))!;
-  expect(Number(after.split('/')[0])).toBeLessThan(Number(before.split('/')[0]));
+  const after = new Date(await at()).getTime();
+
+  const minutes = (after - before) / 60_000;
+  expect(minutes, '10분 앞으로').toBeGreaterThan(9);
+  expect(minutes).toBeLessThan(12);
 });
 
 
 test('선물 강제 도착 — 가짜 검수 통과만 시키고, 도착은 규칙대로', async ({ page }) => {
   // 사흘째 아이. dev 서버는 밤 굽기가 꺼져 있어 이 버튼이 아침 도착을 볼 유일한 길이다.
-  await page.goto('/zzal?mock=grown&clock=2026-09-05T18:00&dev=1', { waitUntil: 'domcontentloaded' });
+  await page.goto('/zzal?skin=scrapbook&mock=grown&clock=2026-09-05T18:00&dev=1', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-action="feed"]');
   await expect(page.locator('[data-celebration]')).toHaveCount(0);
 
@@ -87,7 +95,7 @@ test('선물 강제 도착 — 가짜 검수 통과만 시키고, 도착은 규�
 });
 
 test('밤 큐 돌리기 — 굽기 자리에 올려 두면 "아직 연습 중"', async ({ page }) => {
-  await page.goto('/zzal?mock=grown&clock=2026-09-05T18:00&dev=1', { waitUntil: 'domcontentloaded' });
+  await page.goto('/zzal?skin=scrapbook&mock=grown&clock=2026-09-05T18:00&dev=1', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-action="feed"]');
   await expect(page.locator('[data-part="album-notes"]')).toHaveAttribute('data-practicing', '0');
 

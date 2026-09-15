@@ -29,6 +29,13 @@
   padding: clamp(20px, 4vw, 28px);
   color: var(--text);
   font-family: var(--font-ko);
+  /* 창을 오버레이 안쪽(padding 제외) 높이로 묶는다. 낮은 폰에서 가입 탭처럼
+   * 내용이 길거나 오류 문구가 한 줄 늘어도 창 자체는 화면을 넘지 않고,
+   * 대신 아래 .form 이 안에서 굴러 주 버튼까지 늘 닿게 한다. 넓은 화면은
+   * 내용이 이 높이보다 짧아 아무 변화가 없다. */
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .head {
@@ -108,6 +115,14 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* 창 높이가 화면에 묶였을 때(.dialog max-height) 넘치는 몫을 이 영역이 맡아
+   * 안에서 굴러간다 — head·탭은 고정된 채 폼만 스크롤돼 주 버튼이 늘 닿는다.
+   * grow:0 이라 화면이 넉넉하면 내용 높이 그대로 두고(넓은 화면은 스크롤 없음),
+   * 화면이 짧을 때만 shrink 로 줄며 스크롤이 생긴다. min-height:0 이 없으면
+   * flex 자식이 안 줄어들어 스크롤이 안 걸린다. */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .field {
@@ -181,6 +196,10 @@
   cursor: pointer;
   /* 줄이 길어져도 "보기" 링크를 밀어내지 않게. */
   min-width: 0;
+  /* 체크박스 네모(16px)만으로는 손가락으로 누르기 어렵다. 라벨 전체가 체크를
+   * 토글하므로, 라벨 자체를 44px 높이로 키워 실제 탭 영역을 넓힌다 —
+   * 네모의 시각 크기는 그대로 두고 눌리는 범위만 넓히는 것. */
+  min-height: 44px;
 }
 
 .agreeLabel input {
@@ -220,6 +239,14 @@
   color: var(--text-subtle);
   text-decoration: underline;
   text-underline-offset: 2px;
+  /* "보기" 글자(약 22×17px)는 손가락으로 누르기 너무 작다. 글자 크기는 그대로
+   * 두고 padding 으로 탭 영역만 44px 높이·약 46px 폭으로 넓힌다. 오른쪽으로
+   * 넘치지 않도록 음수 margin 으로 padding 만큼 당겨 시각 위치를 유지한다. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  margin: -8px -12px -8px 0;
 }
 
 .agreeLink:hover {
