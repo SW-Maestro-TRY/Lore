@@ -49,6 +49,7 @@ import { BACKGROUNDS, YEOUL } from '../constants';
 import { MAX_GAUGE } from '../rules';
 import { useAlbum } from '../useAlbum';
 import { useTamagotchi } from '../useTamagotchi';
+import { useDevPanelVisible } from '../useDevVisible';
 import { useZzalSession } from '../useZzalSession';
 import ActionBar from '../parts/ActionBar';
 import CallBanner from '../parts/CallBanner';
@@ -91,8 +92,10 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
   // 무대 배경 — 서버가 준 값(기본 'room'). 바꾸기는 2층 4종 뒤(features.background).
   const bg = BACKGROUNDS.some((b) => b.key === s.background) ? s.background : BACKGROUNDS[0].key;
 
-  // 개발용 시계 패널은 **주소에 `?dev=1` 이 있을 때만** 그린다. 서버 렌더에서는 주소를 모르니 안 그린다.
-  const devTools = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dev');
+  // 개발용 시계 패널은 **로컬이고 주소에 `?dev=1` 이 있을 때만** 그린다(useDevPanelVisible).
+  // 로컬 밖(운영·dev.lorecomic.com 등)에서는 `?dev=1` 을 붙여도 안 열린다 — 판정은 useDevVisible 한 곳으로 모았다.
+  // 첫 렌더는 늘 false 라 서버 렌더와 어긋나지 않는다(하이드레이션 안전).
+  const devTools = useDevPanelVisible();
 
   const go = useCallback((key: string) => {
     const el = scroller.current?.querySelector<HTMLElement>(`[data-sec="${key}"]`);
@@ -663,7 +666,8 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
 
       {!!s.toast && <div data-toast style={L.toast}>{s.toast}</div>}
 
-      {/* 개발용 시계 건너뛰기 — 주소에 `?dev=1` 이 있을 때만. 운영에서는 서버가 그 주소를 안 연다. */}
+      {/* 개발용 시계 건너뛰기 — **로컬이고** 주소에 `?dev=1` 이 있을 때만(useDevPanelVisible).
+          운영·dev 등 실도메인에서는 안 뜨고, 설령 떠도 서버가 dev 주소를 안 연다. */}
       {devTools && (
         <DevPanel
           petId={session.server?.pet?.phase === 'ALIVE' ? session.server.pet.petId : null}
