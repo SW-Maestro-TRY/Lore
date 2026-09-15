@@ -211,6 +211,11 @@ ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webt
   - 여러 미션을 합칠 때는 하나씩 순서대로 병합한다 — 한 번에 다 합치려
     하지 않는다.
 
+**API 키(`WEBTOON_API_KEY`)가 실제로 어디 있는지, 심링크할 `.env` 가 지금
+있는지는 `webtoon/CLAUDE.md`의 "이미지·텍스트 모델 API 키는 실제로 어디
+있는가" 절을 먼저 확인하세요** (2026-09-14 추가 — 이 체크아웃엔 아래
+심링크 대상 파일 자체가 없던 적이 있었습니다).
+
 ### git이 안 보는 것 (`runs/`, `outputs/`, `jobs/`, `.env`)
 
 `webtoon/ai/*/runs/`, `webtoon/ai/webtoon-harness/outputs/`, `webtoon/ai/work/`는 전부
