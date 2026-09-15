@@ -80,4 +80,8 @@ public class JwtProvider {
     public Duration refreshExpiry() {
         return props.refreshExpiry();
     }
+
+    public Duration refreshAbsoluteExpiry() {
+        return props.refreshAbsoluteExpiry();
+    }
 }
