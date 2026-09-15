@@ -224,8 +224,11 @@ export default function Room({ y }: { y: Yeoul }) {
           {v.st.sun && <div style={{ position: 'absolute', right: '16%', top: '15%', width: '24%', height: '24%', borderRadius: '50%', background: '#FBE7B4' }} />}
         </div>
 
-        {/* 바닥 */}
-        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 'min(266px,44%)', background: v.st.floor, borderTop: '1px solid rgba(74,64,56,.09)' }} />
+        {/* 바닥 — ★ 벽↔바닥 경계(수평선)를 **발끝선(`LIFT`) 위**에 둔다(2026-09-16).
+            예전엔 고정 `min(266px,44%)` 이라 짧은 화면(SE 378px)에서 경계(44%=167px)가 발끝선(220px)보다
+            **아래**로 내려가 아이가 바닥 위 허공에 뜨고 그 아래 바닥이 텅 비어 보였다. 이제 경계를
+            발끝선보다 한 뼘 위(무대 8%, 28~90px)로 올려 아이가 언제나 바닥에 발을 딛는다. */}
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `calc(${LIFT} + clamp(28px, 8%, 90px))`, background: v.st.floor, borderTop: '1px solid rgba(74,64,56,.09)' }} />
 
         {/* 그림자 — 캐릭터와 같은 걸음으로 움직인다. */}
         <div style={{
@@ -341,8 +344,11 @@ export default function Room({ y }: { y: Yeoul }) {
         )}
       </div>
 
-      {/* ── 아래 — 팝오버와 타일 ─────────────────────────────────── */}
-      <div onClick={actions.bottomTap} style={{ position: 'relative', flex: 'none', padding: '10px 12px 22px' }}>
+      {/* ── 아래 — 팝오버와 타일 ───────────────────────────────────
+          ★ 무대 바닥(`v.st.floor`)을 이 컨트롤 영역 위쪽으로 **이어 준다**(2026-09-16). 예전엔 이 칸이
+            셸 크림색이라 무대 바닥(탄색)과 사이에 크림 띠 seam 이 생겨 "빈 베이지 띠"로 보였다.
+            위 38px 를 바닥 톤에서 셸로 풀어 seam 을 없애고 방 바닥이 타일까지 자연스럽게 내려오게 한다. */}
+      <div onClick={actions.bottomTap} style={{ position: 'relative', flex: 'none', padding: '10px 12px 22px', background: `linear-gradient(180deg, ${v.st.floor} 0, ${C.shell} 38px)` }}>
         {v.fab.show && <ChatFab y={y} />}
         {v.mini.show && <MiniCard y={y} />}
         {v.medFab.show && (

@@ -247,19 +247,18 @@ export function layoutRoomProp(spec: PropSpec, stage: PropStage, st: StageGeom, 
   const height = width * aspect;
 
   const side = propSide(spec, ROOM_SIDE_POSE);
-  const sign = side === 'left' ? -1 : 1;
   const off = offsetPx(spec.offset, u, boxW);
 
-  let x = st.width / 2;
-  if (spec.outside) x += sign * (width / 2);
-  x += sign * off.dx;
+  // ★ 방에 붙박인 소품은 **가로로 캐릭터와 같은 중심(무대 한가운데)** 에 둔다(상훈님 2026-09-16 승인).
+  //   예전엔 규격 오프셋(똥은 K x 0.22)만큼 왼쪽으로 밀어 캐릭터 기준 한쪽으로 쏠려 보였다 —
+  //   상훈님이 "조화롭게 가운데" 를 명시하셔서 **가로 오프셋을 걷어냈다.** 세로 오프셋(`off.dy`)은
+  //   발끝선 미세조정이라 그대로 둔다. (걷는 중 소품이 아니라 방 고정 소품 기준이라 중앙이 맞다.)
   const y = st.height - footlineFromBottom(st.height) + off.dy;
 
-  // ★ 무대 밖으로 잘리지 않게 무대 안으로 물린다(2026-09-16). 아이·소품이 커지면서 넓은 소품(3~4단
-  //   똥·매트)이 좁은 화면의 가장자리에서 잘리고 한쪽으로 쏠려 보였다(상훈님 "균형 있게"). 오프셋은
-  //   그대로 두되, 소품이 무대보다 좁으면 가장자리 안으로만 밀고, 무대보다 넓으면 가운데에 둔다.
+  // ★ 무대 밖으로 잘리지 않게 무대 안으로 물린다(2026-09-16). 소품이 커지면서 넓은 것(3~4단 똥·매트)이
+  //   좁은 화면 가장자리에서 잘렸다. 무대보다 좁으면 가장자리 안으로, 무대보다 넓으면 가운데에 둔다.
   //   무대 폭·소품 폭만의 함수라 여전히 결정적이다(같은 개수면 언제나 같은 자리).
-  let left = x - width / 2;
+  let left = st.width / 2 - width / 2;
   left = width <= st.width ? Math.min(Math.max(left, 0), st.width - width) : (st.width - width) / 2;
 
   return {

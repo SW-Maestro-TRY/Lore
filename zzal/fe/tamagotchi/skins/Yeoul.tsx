@@ -118,14 +118,16 @@ export default function Yeoul(_props: SkinProps) {
       className="yeoul"
       style={{
         position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center',
-        // ★ 바깥 바탕을 **방을 이어받은 배경**으로 깐다(2026-09-16). 예전엔 평평한 베이지라
-        //   태블릿·PC 에서 셸 좌우가 텅 비어 미완성처럼 보였다. 이제 위(벽 톤)→아래(바닥 톤)로
-        //   흐르는 방 배경 + 위 가운데 은은한 빛무리 + 아래 가장자리 그림자(비네트)를 얹어,
-        //   넓은 화면에서도 가운데 셸이 "일부러 방 가운데 둔 카드"로 읽힌다.
+        // ★ 바깥 바탕을 **화면 전체 폭의 방**으로 깐다(2026-09-16 강화). 은은한 그라데이션만으로는
+        //   1920 에서 옆이 평평한 베이지로 남아 "좁은 기둥" 으로 읽혔다. 그래서 방의 실제 색
+        //   (벽 `#FBEFE2`·바닥 `#EFDFCC`)으로 위=벽/아래=바닥 두 띠를 나누고, 벽엔 무대와 같은 세로
+        //   줄무늬를, 바닥엔 가장자리 그림자(비네트)를 얹는다. 이제 넓은 화면 전체가 하나의 방이고
+        //   가운데 밝은 셸이 "일부러 방 가운데 둔 카드"로 명확히 읽힌다(수평선은 카드 안 무대와
+        //   대략 맞춘 52% — 카드가 그림자로 떠 있어 픽셀 단위로 안 맞아도 어색하지 않다).
         background: `
-          radial-gradient(120% 88% at 50% 6%, rgba(255,252,246,.60), rgba(255,252,246,0) 58%),
-          radial-gradient(120% 120% at 50% 118%, rgba(74,64,56,.13), rgba(74,64,56,0) 52%),
-          linear-gradient(180deg,#F6EBDB 0%,#EEDFCB 58%,#E4D2B9 100%)`,
+          repeating-linear-gradient(90deg, rgba(74,64,56,.03) 0 1px, transparent 1px 22px),
+          radial-gradient(130% 78% at 50% 112%, rgba(74,64,56,.16), rgba(74,64,56,0) 46%),
+          linear-gradient(180deg, #FBEFE2 0%, #FBEFE2 50%, #EFDFCC 55%, #E9D6BF 100%)`,
         color: C.ink, fontFamily: SANS, WebkitFontSmoothing: 'antialiased',
       }}
     >
