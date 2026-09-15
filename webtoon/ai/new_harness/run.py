@@ -435,6 +435,8 @@ def _pick_engines(n: int = DIRECTIONS_PER_RUN) -> list[dict]:
     "비밀과 추적"이 하나를 넘지 않는 것은 서로 다른 것을 뽑는 것만으로
     저절로 지켜진다.
     """
+    if not engines_enabled():
+        return []
     try:
         doc = json.loads((PROMPT_DIR / "story_engines.json").read_text(encoding="utf-8"))
         values = [v for v in (doc.get("엔진") or {}).get("값") or []
@@ -500,6 +502,20 @@ def _distinct_axes(genre: str, first: dict, n: int = DIRECTIONS_PER_RUN) -> list
     return picked
 
 
+def engines_enabled() -> bool:
+    """방향별 엔진(「문제가 옮겨 가는 길」)을 프롬프트에 박을지. **기본은 켜짐.**
+
+    끄면 `story_engines.json` 을 아예 안 읽는다 — `_pick_engines` 가 빈 리스트를
+    돌려주고, `story_variety_block` 은 이야기 변수(축)·회차 구조만으로 방향을
+    가른다(둘 다 꺼져 있으면 방향별 차이가 하나도 안 박힌다).
+
+    `.env` 에 `NH_STORY_ENGINES=0` 으로 끈다. axes_enabled 와 짝인 스위치라,
+    둘을 따로 켜고 꺼서 어느 쪽이 방향을 갈라놓는지 비교할 수 있다
+    (2026-09-15 축·엔진 On/Off 비교에서 이 스위치가 필요해 만들었다).
+    """
+    return str(llm.env("NH_STORY_ENGINES") or "1").strip().lower() in ("1", "on", "true", "yes")
+
+
 def axes_enabled() -> bool:
     """이야기 변수(축)·회차 구조를 프롬프트에 박을지. **기본은 꺼짐.**
 
@@ -540,6 +556,7 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     if axes or structure or engines:
         write_json(run_dir / "axes.json",
                    {"축": axes, "구조": structure, "축_사용": use_axes,
+                    "엔진_사용": engines_enabled(),
                     "방향별_축": axes_list, "방향별_구조": structures,
                     "방향별_엔진": engines})
     for i in range(max(len(axes_list), len(structures), len(engines))):
