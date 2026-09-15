@@ -50,7 +50,6 @@ from pathlib import Path
 
 import llm
 import runmeta
-import scenelink
 from llm import story
 
 HERE = Path(__file__).resolve().parent
@@ -437,18 +436,20 @@ def review_run(run_dir: Path, only=None, dry_run: bool = False,
 
     char = read_json(run_dir / "input.json")
     hero = _text((char or {}).get("name"))
-    cast = [c for c in (direction.get("cast") or [])
+    scene_data = read_json(run_dir / "scenes.json") or {}
+    scenes = [s for s in (scene_data.get("scenes") or []) if isinstance(s, dict)]
+    cast = [c for c in (scene_data.get("cast") or direction.get("cast") or [])
             if isinstance(c, dict) and _text(c.get("name")) and _text(c.get("name")) != hero]
-    scenes = [s for s in (direction.get("scenes") or []) if _text(s)]
 
-    # 이음새가 있으면 "앞 장이 어디서 끝났는가" 를 앞 장 검수에서 받아 오지
-    # 않는다 — 그리기 전에 이미 정해 둔 값이 있고, 그것이 기준이다.
-    link = scenelink.load(run_dir)
+    # 「직전 상태」가 있으면 "앞 장이 어디서 끝났는가" 를 앞 장 검수에서 받아
+    # 오지 않는다 — 그리기 전에 scene_prompt 가 이미 정해 둔 값이 기준이다.
     out = []
     next_from = ""
     for scene_no in range(1, len(scenes) + 1):
-        if link:
-            next_from = scenelink.opens_at(link, scene_no)
+        scene = scenes[scene_no - 1]
+        prev = _text(scene.get("prev"))
+        if prev and prev not in ("없음", "없음."):
+            next_from = prev
         page_no = scene_no + 1                     # 1페이지는 표지다
         if only and page_no not in only:
             continue
