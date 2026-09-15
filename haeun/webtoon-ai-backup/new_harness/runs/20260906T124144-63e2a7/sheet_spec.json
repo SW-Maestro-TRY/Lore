@@ -1,0 +1,32 @@
+{
+  "name": "차사",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A young man with pale skin, short silver-gray hair, and gray eyes. He wears a black hooded sweatshirt with the hood up, layered under a brown delivery vest with multiple pockets and a radio clipped to the left shoulder. His pants are black cargo style with straps and pockets, and he wears black combat boots. He is holding a medium-sized cardboard box with a shipping label attached.",
+  "design_details": [
+    "짧은 은회색 머리, 앞머리가 눈썹까지 내려옴",
+    "회색빛 눈, 쌍꺼풀 없는 눈매",
+    "검은색 후드티, 후드를 항상 뒤집어씀",
+    "갈색 택배 조끼, 왼쪽 어깨에 무전기 부착",
+    "검은색 카고 바지, 허벅지 양쪽에 포켓과 스트랩"
+  ],
+  "props": [
+    "중간 크기 골판지 상자, 송장이 붙어 있음, 손에 항상 들고 다님"
+  ],
+  "color_palette": {
+    "hair": "silver gray (#BFC1C2)",
+    "eyes": "gray (#7A7B7D)",
+    "skin": "pale beige (#D9D3CC)",
+    "outfit_main": "black (#232324)",
+    "outfit_sub": "brown (#7B6A58)",
+    "accent": "dark gray (#474747)"
+  },
+  "expression_set": [
+    "무표정 — 입을 다물고 눈썹이 거의 움직이지 않은 얼굴",
+    "당황 — 눈이 약간 커지고 입꼬리가 살짝 내려간 얼굴",
+    "평온 — 입술이 일자로 다물리고 눈꺼풀이 살짝 내려온 얼굴",
+    "집중 — 눈썹이 살짝 찌푸려지고 시선이 아래로 향한 얼굴",
+    "머쓱함 — 입꼬리가 한쪽만 올라가고 눈이 옆을 보는 얼굴",
+    "미소 — 입꼬리가 약간 올라가며 눈이 부드럽게 휘어진 얼굴"
+  ]
+}

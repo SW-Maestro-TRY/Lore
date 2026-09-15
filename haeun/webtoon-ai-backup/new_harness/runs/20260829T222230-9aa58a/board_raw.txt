@@ -1,0 +1,885 @@
+{
+  "cast": [
+    {
+      "name": "모모",
+      "appearance": "18세 여성. 연한 분홍빛 긴 곱슬머리에 큼지막한 리본, 노란 왕관 머리장식, 붉은 눈동자. 고양이 귀처럼 보이는 머리 모양. 하얀 옷과 리본, 큰 검을 들고 다닌다. 작고 명랑한 인상.",
+      "personality": "명량하고 씩씩하며, 열정이 넘친다. 장난을 잘 치지만, 심하게 장난치면 검으로 때려눕히기도 한다."
+    },
+    {
+      "name": "수상한 남자",
+      "appearance": "20대 초중반 남성. 어깨를 숙인 왜소한 체격. 갈색 가죽 두건과 헐렁한 셔츠, 검은 바지. 표정은 초조하고 늘 주위를 경계한다. 두 팔로 작은 나무상자를 꼭 쥔다.",
+      "personality": "눈치가 빠르고 조심성이 많으며, 위급 상황에서는 기민하게 행동한다. 순간적으로 판단해 도망치거나 무언가를 숨긴다."
+    },
+    {
+      "name": "불의 정령",
+      "appearance": "야구공만 한 작은 구체, 표면에서 연분홍빛 불꽃이 팔랑인다. 얼굴에는 귀엽고 둥근 눈망울과 미묘한 표정, 아기자기한 형태. 투명하고 반짝임이 있다.",
+      "personality": "호기심이 많고 장난스럽다. 사람에게 금방 다가가거나 특별한 관심을 보인다."
+    }
+  ],
+  "scenes": [
+    {
+      "id": 1,
+      "summary": "모모가 축제 장식에 장난을 치며 동료들과 신나게 뛰논다.",
+      "location": "마을 광장, 각양각색의 리본과 종이꽃, 반짝이는 등이 매달린 축제장",
+      "time": "맑은 낮, 햇빛과 화려한 장식 조명",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "large",
+          "camera": {
+            "shot": "광각",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "화려하게 꾸며진 마을 광장, 색색의 장식들, 군데군데 친구들과 주민들이 어울려 있다"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "활짝 웃는 얼굴",
+              "action": "거대한 꽃 장식 뒤에 숨어 친구들을 바라본다",
+              "moment": "직후",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "모모",
+              "type": "말",
+              "text": "야, 저기 붙는 게 더 예쁘겠어!",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "왼쪽 위",
+                "position": "모모 머리 위"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "와아—",
+              "source": "주변 아이들",
+              "position": "화면 전체",
+              "reason": "축제 분위기와 환호 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "첫 컷. 장식과 군중 속 생기 넘치는 분위기, 모모가 중심이 되게 배치"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "무릎",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "꽃 장식 뒤, 장식용 풍선이 여러 개 흩어져 있다"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "장난기 어린 미소",
+              "action": "풍선을 친구에게 던지려 기운다",
+              "moment": "도중",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "퐁!",
+              "source": "풍선",
+              "position": "오른쪽",
+              "reason": "풍선을 던지는 순간"
+            }
+          ],
+          "forbid": [],
+          "note": "풍선이 날아가는 궤적이 모모 주변 동료 쪽으로 뻗는다"
+        },
+        {
+          "id": 3,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "하이앵글",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "장식 사이로 지나가는 아이, 풍선을 맞고 깜짝 놀라 웃음을 터뜨림"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "입꼬리 올린 장난스러운 표정",
+              "action": "검집을 툭툭 두드린다",
+              "moment": "직후",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "모모",
+              "type": "말",
+              "text": "도망갈 시간 없다!",
+              "bubble": {
+                "shape": "뾰족",
+                "tail": "오른쪽 위",
+                "position": "모모 오른쪽 위"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "푸하하!",
+              "source": "지나가던 아이",
+              "position": "화면 왼쪽",
+              "reason": "아이가 놀라다 웃음을 터뜨리는 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "검집을 두드리는 동작이 강조된다"
+        },
+        {
+          "id": 4,
+          "size": "normal",
+          "camera": {
+            "shot": "광각",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "마을 광장 전체, 주변 사람들이 모모 쪽을 바라보고 있다"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "장난 끝난 뒤의 해맑은 미소",
+              "action": "동료들과 웃으며 손뼉을 친다",
+              "moment": "직후",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "키득키득",
+              "source": "주변 사람들",
+              "position": "오른쪽 아래",
+              "reason": "주변이 익숙하게 장난을 받아주는 순간"
+            }
+          ],
+          "forbid": [],
+          "note": "사람들이 미소를 짓거나 훈훈하게 바라보는 분위기"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "summary": "골목길에서 소란스러운 소리를 듣고 혼자 달려간다.",
+      "location": "마을 광장 인근의 좁은 골목 입구",
+      "time": "낮, 축제장과 연결된 그늘진 골목",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "옆모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "축제장 뒷편, 골목 입구와 장식물, 멀리 사람들"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "놀란 눈",
+              "action": "고개를 돌려 골목 쪽을 바라본다",
+              "moment": "직후",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "탕!",
+              "source": "풍선",
+              "position": "오른쪽 위",
+              "reason": "골목 쪽에서 풍선이 터지는 소리"
+            },
+            {
+              "text": "쾅!",
+              "source": "금속",
+              "position": "왼쪽 아래",
+              "reason": "금속이 부딪치는 격한 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "모모의 시선이 골목에 집중되는 순간"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "무릎",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "골목 초입, 축제장과 분리된 공간"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "결의에 찬 얼굴",
+              "action": "검을 뒤로 메고 골목으로 몸을 틀고 있다",
+              "moment": "도중",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "모모",
+              "type": "생각",
+              "text": "내가 나설 차례군!",
+              "bubble": {
+                "shape": "구름",
+                "tail": "오른쪽 위",
+                "position": "모모 옆"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "도도도",
+              "source": "발소리",
+              "position": "화면 아래",
+              "reason": "누군가가 급하게 달려가는 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "결심하고 달려나가는 모모"
+        },
+        {
+          "id": 3,
+          "size": "normal",
+          "camera": {
+            "shot": "무릎",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "골목과 축제 경계, 뒷모습으로 동료들이 멀어져 있다"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "진지한 표정",
+              "action": "달리기 시작하며 뒤를 돌아본다",
+              "moment": "직후",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "모모",
+              "type": "외침",
+              "text": "금방 올게!",
+              "bubble": {
+                "shape": "뾰족",
+                "tail": "왼쪽 아래",
+                "position": "모모 뒤쪽"
+              }
+            }
+          ],
+          "sfx": [],
+          "forbid": [],
+          "note": "동료들에게 외치며 골목으로 달려가는 연출"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "summary": "수상한 인물이 맞은편으로 튀자, 모모는 앞길을 막으며 '거기 멈춰!'라고 외친다.",
+      "location": "좁은 골목길 한복판",
+      "time": "낮, 확연히 그림자가 지는 골목 안",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "normal",
+          "camera": {
+            "shot": "광각",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "좁고 구불구불한 골목길, 벽에는 오래된 포스터, 구불구불한 길"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "진지한 얼굴",
+              "action": "길 한가운데 우뚝 서서 검자루를 쥔다",
+              "moment": "직전",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "헉…! 헉…!",
+              "source": "수상한 남자",
+              "position": "오른쪽",
+              "reason": "도망자 거친 숨소리"
+            }
+          ],
+          "forbid": [],
+          "note": "모모가 길을 막아선 자세, 긴장된 골목 분위기"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "뒷모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "골목 끝자락, 반대쪽에서 남자가 뛰어온다"
+          },
+          "characters": [
+            {
+              "name": "수상한 남자",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "초조한 얼굴",
+              "action": "작은 상자를 꼭 껴안고 허겁지겁 달린다",
+              "moment": "도중",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "척척척",
+              "source": "수상한 남자",
+              "position": "왼쪽 아래",
+              "reason": "급한 걸음 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "상자를 꼭 안은 모습이 강조된다"
+        },
+        {
+          "id": 3,
+          "size": "normal",
+          "camera": {
+            "shot": "무릎",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "골목 중간, 긴장된 대치"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "날카로운 시선",
+              "action": "검자루를 가지런히 잡고 남자를 바라본다",
+              "moment": "직후",
+              "framing": "무릎 위"
+            },
+            {
+              "name": "수상한 남자",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "놀란 얼굴",
+              "action": "갑자기 멈춰서 모모를 바라본다",
+              "moment": "직후",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "모모",
+              "type": "외침",
+              "text": "거기 멈춰!",
+              "bubble": {
+                "shape": "뾰족",
+                "tail": "오른쪽 위",
+                "position": "모모 위"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "멈칫",
+              "source": "수상한 남자",
+              "position": "오른쪽 아래",
+              "reason": "급히 멈춰 선 순간의 긴장감"
+            }
+          ],
+          "forbid": [],
+          "note": "모모와 도망자가 서로 시선을 마주침, 상자 강조"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "summary": "상대가 던진 상자가 땅에 떨어져 분홍 불꽃과 함께 불의 정령이 튀어나온다.",
+      "location": "골목길 한복판(돌바닥 위)",
+      "time": "낮, 골목 내부 그림자",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "옆모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "골목길 돌바닥, 모모와 남자 사이"
+          },
+          "characters": [
+            {
+              "name": "수상한 남자",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "겁먹은 얼굴",
+              "action": "양손으로 상자를 힘껏 던진다",
+              "moment": "도중",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "슉—",
+              "source": "상자",
+              "position": "가운데",
+              "reason": "상자가 날아가는 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "상자가 모모 쪽으로 날아가는 장면"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "부분",
+            "angle": "하이앵글",
+            "facing": "위"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "돌바닥 클로즈업"
+          },
+          "characters": [],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "쾅!",
+              "source": "상자",
+              "position": "가운데",
+              "reason": "상자가 돌바닥에 떨어질 때의 충격음"
+            }
+          ],
+          "forbid": [],
+          "note": "상자가 깨지는 순간 클로즈업"
+        },
+        {
+          "id": 3,
+          "size": "large",
+          "camera": {
+            "shot": "광각",
+            "angle": "로우앵글",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "효과",
+            "desc": "분홍빛 불꽃이 사방으로 터지는 환상적인 배경"
+          },
+          "characters": [
+            {
+              "name": "불의 정령",
+              "style": "SD",
+              "position": "가운데",
+              "expression": "호기심 가득한 표정",
+              "action": "공중에서 빙글빙글 돌며 등장",
+              "moment": "직후",
+              "framing": "전신"
+            },
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "맹한 표정",
+              "action": "상자를 들여다보며 놀람",
+              "moment": "직후",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "푸슉!",
+              "source": "불꽃",
+              "position": "가운데",
+              "reason": "분홍 불꽃이 확 피어오르는 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "정령이 폭발적인 연출로 튀어나오는 장면, 모모와 정령의 첫 만남"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "summary": "정령이 갑자기 모모의 손에 반응하자, 상자를 들고 있던 인물이 당황한다.",
+      "location": "골목길 한복판(돌바닥 위, 상자 파편 주위)",
+      "time": "낮, 골목 내부/불꽃 잔상",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "돌바닥에 상자 파편이 널브러짐"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "놀란 얼굴",
+              "action": "손바닥을 내밀어 작은 정령을 바라본다",
+              "moment": "도중",
+              "framing": "상반신"
+            },
+            {
+              "name": "불의 정령",
+              "style": "SD",
+              "position": "가운데",
+              "expression": "미소 짓는 얼굴",
+              "action": "손등 위로 내려앉는다",
+              "moment": "직후",
+              "framing": "전신"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "반짝",
+              "source": "불의 정령",
+              "position": "모모 손 위",
+              "reason": "정령이 모모의 손을 닿는 순간의 빛"
+            }
+          ],
+          "forbid": [],
+          "note": "정령이 다른 사람을 무시하고 모모에게만 반응"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "옆모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "모모와 수상한 남자, 파편이 된 상자"
+          },
+          "characters": [
+            {
+              "name": "수상한 남자",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "경악한 얼굴",
+              "action": "뒤로 물러서며 모모와 정령을 바라본다",
+              "moment": "직후",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "수상한 남자",
+              "type": "말",
+              "text": "이럴 리가...",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "왼쪽 아래",
+                "position": "수상한 남자 얼굴 옆"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "후욱",
+              "source": "수상한 남자",
+              "position": "오른쪽 아래",
+              "reason": "숨이 멎는 듯한 짧은 숨소리"
+            }
+          ],
+          "forbid": [],
+          "note": "남자가 평범한 반응이 아님을 강조"
+        },
+        {
+          "id": 3,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "모모의 얼굴과 손 위 정령이 강조됨"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "당혹+호기심",
+              "action": "작은 불덩이를 조심스럽게 들어올린다",
+              "moment": "직후",
+              "framing": "상반신"
+            },
+            {
+              "name": "불의 정령",
+              "style": "SD",
+              "position": "가운데",
+              "expression": "작은 미소",
+              "action": "한 번 깜빡이고 모모를 바라본다",
+              "moment": "직후",
+              "framing": "전신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "모모",
+              "type": "말",
+              "text": "넌 누구야?",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "아래쪽",
+                "position": "모모 위"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "깜빡",
+              "source": "불의 정령",
+              "position": "모모 손 위",
+              "reason": "정령이 깜빡이는 순간의 빛"
+            }
+          ],
+          "forbid": [],
+          "note": "정령이 모모의 존재에 반응하는 모습"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "summary": "남자는 모모에게 '네가 진짜 주인이야?'라고 묻는다.",
+      "location": "골목길 한복판(상자 파편과 불의 정령, 모모와 남자)",
+      "time": "낮, 골목 내부",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "normal",
+          "camera": {
+            "shot": "무릎",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "바닥엔 상자의 나무 파편, 곁에 불의 정령과 모모, 그 맞은 편에 남자"
+          },
+          "characters": [
+            {
+              "name": "수상한 남자",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "의심과 혼란",
+              "action": "모모와 정령을 번갈아 본다",
+              "moment": "직후",
+              "framing": "무릎 위"
+            },
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "어리둥절한 얼굴",
+              "action": "정령을 바라본다",
+              "moment": "직후",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "수상한 남자",
+              "type": "말",
+              "text": "네가 진짜 주인이야?",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "왼쪽 아래",
+                "position": "수상한 남자 얼굴 옆"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "두근",
+              "source": "모모",
+              "position": "모모 가슴팍",
+              "reason": "갑작스러운 질문에 순간적으로 느끼는 심장 박동"
+            }
+          ],
+          "forbid": [],
+          "note": "남자의 표정과 대사에서 혼란과 경계가 드러남"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "모모와 정령이 강조된 연출, 주변은 흐릿하게 처리"
+          },
+          "characters": [
+            {
+              "name": "모모",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "당황한 얼굴",
+              "action": "정령을 쳐다보고 있다",
+              "moment": "직후",
+              "framing": "상반신"
+            },
+            {
+              "name": "불의 정령",
+              "style": "SD",
+              "position": "가운데",
+              "expression": "작은 미소",
+              "action": "모모 손 위에 얌전히 있다",
+              "moment": "직후",
+              "framing": "전신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "모모",
+              "type": "말",
+              "text": "무슨 소리야, 난 그냥 지나가던... 그냥 모모야.",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "아래쪽",
+                "position": "모모 머리 위"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "멍…",
+              "source": "모모",
+              "position": "모모 얼굴 옆",
+              "reason": "모모의 어리둥절한 내면 상태"
+            }
+          ],
+          "forbid": [],
+          "note": "모모의 심경 변화가 순간적으로 드러남"
+        },
+        {
+          "id": 3,
+          "size": "normal",
+          "camera": {
+            "shot": "무릎",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "상자 파편, 모모, 남자, 정령이 모두 보임"
+          },
+          "characters": [
+            {
+              "name": "수상한 남자",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "입술을 깨문다",
+              "action": "한참 모모를 바라본다",
+              "moment": "도중",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "꽉",
+              "source": "수상한 남자",
+              "position": "오른쪽 아래",
+              "reason": "입술을 물어 꽉 다물며 긴장하는 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "세 사람의 미묘한 관계 긴장감"
+        }
+      ]
+    }
+  ]
+}

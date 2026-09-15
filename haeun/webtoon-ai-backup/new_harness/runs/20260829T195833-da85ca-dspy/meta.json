@@ -1,0 +1,194 @@
+{
+  "run_id": "20260829T195833-da85ca",
+  "calls": [
+    {
+      "stage": "STORY",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 3881,
+        "output": 1277,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.007762,
+        "output": 0.010216,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.017978
+      }
+    },
+    {
+      "stage": "BOARD",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 4694,
+        "output": 2685,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.009388,
+        "output": 0.02148,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.030868
+      }
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 2212857,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=2700, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=1164), output_tokens=1372, total_tokens=4072, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))"
+      },
+      "page": 1,
+      "cuts": 1,
+      "cost": null
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 2548714,
+      "refs": [
+        "sheet.png",
+        "page01.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=4428, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=1356), output_tokens=1372, total_tokens=5800, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))"
+      },
+      "page": 2,
+      "cuts": 2,
+      "cost": null
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 2340285,
+      "refs": [
+        "sheet.png",
+        "page02.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=4336, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=1264), output_tokens=1372, total_tokens=5708, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))"
+      },
+      "page": 3,
+      "cuts": 2,
+      "cost": null
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 2452647,
+      "refs": [
+        "sheet.png",
+        "page03.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=4407, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=1335), output_tokens=1372, total_tokens=5779, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))"
+      },
+      "page": 4,
+      "cuts": 2,
+      "cost": null
+    },
+    {
+      "stage": "BOARD",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 6126,
+        "output": 3059,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.012252,
+        "output": 0.024472,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.036724
+      }
+    },
+    {
+      "stage": "DETAIL",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 1817,
+        "output": 1742,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.003634,
+        "output": 0.013936,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.01757
+      }
+    },
+    {
+      "stage": "DETAIL",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 2327,
+        "output": 1969,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.004654,
+        "output": 0.015752,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.020406
+      }
+    },
+    {
+      "stage": "DETAIL",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 1910,
+        "output": 2333,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.00382,
+        "output": 0.018664,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.022484
+      }
+    }
+  ]
+}

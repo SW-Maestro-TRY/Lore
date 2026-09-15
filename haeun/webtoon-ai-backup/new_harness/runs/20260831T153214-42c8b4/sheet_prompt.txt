@@ -1,0 +1,113 @@
+Character reference sheet for a Korean webtoon production. Flat even lighting, pure white background (#FFFFFF), no cast shadows, no text, no labels, no watermark, no logo, no signature. Clean line art with flat colors. The character is identical in every figure on the sheet.
+
+[CHARACTER SHEET — ONE PAGE, SEPARATE REGIONS]
+A single landscape sheet holding the regions below, stacked with clear empty white space between them so each region reads as its own block. No frames, no borders, no captions, no labels.
+
+REGION 1 — TOP BAND: turnaround.
+  The SAME character four times in one horizontal row, left to right:
+  (1) front view  (2) three-quarter view  (3) side view  (4) back view.
+  Full body, standing at attention, arms relaxed at the sides, feet together,
+  neutral expression, camera at eye level.
+  All four stand on one shared ground line with exactly the same height and the
+  same proportions. The outfit, hair length and body type do not change between
+  views. The character carries nothing in these four figures.
+
+REGION 2 — MIDDLE BAND: 6 expressions.
+  The SAME character's head and shoulders 6 times in one
+  horizontal row, evenly spaced, all the same size, all facing the camera at the
+  same angle. Only the expression changes; face shape, hairstyle and hair length
+  are identical in all of them.
+
+REGION 3 — BOTTOM LEFT: 5 close-up insets, one per fixed design element, each showing only that element, enlarged.
+
+REGION 4 — BOTTOM RIGHT: one horizontal row of flat color swatch chips, one chip per palette entry, in the listed order.
+
+CHARACTER
+A woman in her mid-20s with straight black hair cut to shoulder length. She has a calm and gentle expression. She wears a casual hoodie and blue jeans. Her build is average and her skin tone is fair. Her eyes are dark brown.
+
+COLOR PALETTE (use exactly these, and these are the chips in the swatch row)
+hair: black (#222222) / eyes: dark brown (#3B2F23) / skin: light beige (#F5E2CC) / outfit_main: gray (#B0B0B0) / outfit_sub: blue (#4A7BA7) / accent: white (#FFFFFF)
+
+FIXED DESIGN ELEMENTS — visible and identical everywhere on the sheet, and one inset each in region 3. Written in Korean; follow them literally:
+  1. 어깨에 닿는 길이의 검은 생머리
+  2. 후드가 달린 회색 후드티, 앞면에 주머니 있음
+  3. 중간 파란색 계열의 일자핏 청바지
+  4. 왼쪽 손목에 검은 고무줄
+  5. 흰 운동화, 발목까지 올라오는 양말
+
+EXPRESSIONS for region 2, left to right. Written in Korean; the part after the dash describes exactly what to draw:
+  1. 평온 — 입을 다물고 눈꺼풀이 살짝 내려온, 힘이 빠진 얼굴
+  2. 미소 — 입꼬리가 살짝 올라간 부드러운 표정
+  3. 놀람 — 눈이 크게 열리고 입이 약간 벌어진 얼굴
+  4. 슬픔 — 입꼬리가 내려가고 눈썹이 안쪽으로 모인 얼굴
+  5. 당황 — 눈이 흔들리고 입술이 굳게 다문 얼굴
+  6. 집중 — 눈썹이 모이고 입술이 일자로 다문 얼굴
+
+STYLE
+  High-end Korean webtoon illustration with cinematic semi-realistic
+  rendering — the look of a premium studio title, not a quick weekly panel
+  and not a decorative cover.
+
+  WHAT MAKES IT BEAUTIFUL IS THE LIGHT, not ornament. Every panel is lit
+  like a film frame: one clear key light with a definite direction and
+  colour, a cool fill on the shadow side, and a bright rim light separating
+  the figure from the background. Light is visible in the air itself —
+  soft atmospheric haze, dust motes or particles drifting through a shaft
+  of light, gentle bloom where the light is strongest. Colour is graded like
+  film: the whole panel leans toward one palette (warm amber, cool teal,
+  dusty rose) instead of every object keeping its own local colour.
+
+  DEPTH: shallow depth of field. The subject is sharp and everything behind
+  falls into soft focus with round bokeh in the highlights. Foreground
+  elements — a shoulder, a leaf, a railing — may sit blurred at the very
+  front of frame to build depth, as a real lens would see it.
+
+  PROPORTION AND ANATOMY: realistic and grounded. Correct head-to-body
+  ratio for an adult (about 7 heads), real shoulder width, real hand size,
+  believable weight and balance in the pose. No chibi shortcuts.
+
+  HANDS are fully drawn and correctly built — right length, right joints,
+  lit by the same key light as the face. Do not hide them or crop them away
+  to avoid drawing them.
+
+  This is one panel of an ongoing episode that continues above and below it,
+  not a standalone poster: the framing and the moment come from the beat,
+  and the cinematic finish is how it is rendered, not what it is.
+
+  FACE: still a Korean webtoon face, not a photograph. The eyes are large
+  and clean with a smooth colour gradient in the iris, a soft dark rim, one
+  strong catchlight plus one or two smaller reflected ones — luminous but
+  not jewel-encrusted. Eyelashes are drawn as a few grouped strokes rather
+  than one by one. The nose is simple but has a lit bridge and a soft
+  shadow beneath it; the mouth is small with a subtle gloss. Skin shows real
+  form: a soft blush across the cheeks and nose, faint translucency at the
+  ear tips, a fine sheen on the forehead and cheekbones, and where strong
+  light rakes across the face it warms the skin from within.
+
+  HAIR: rendered in grouped strands with a soft gradient from a deeper tone
+  at the roots to a lighter tone at the tips, one broad soft highlight band
+  following the shape of the head, and loose flyaway hairs catching the rim
+  light. Hair takes the colour of whatever light is hitting it.
+
+  FABRIC AND MATERIAL: clothing hangs with real weight and has believable
+  folds. Render each material for what it is — cotton matte and slightly
+  fuzzy at the edge, denim with visible weave, leather with a broad soft
+  highlight, metal and glass with sharp small reflections.
+
+  BACKGROUND: a real place, drawn with real perspective and enough detail
+  to be believable, then pushed back with soft focus and atmosphere so the
+  figure stays dominant. No decorative motifs floating in the air, no
+  abstract sparkle field, no gold filigree — the beauty comes from light,
+  depth and colour, never from ornament pasted on top.
+
+  LINEWORK: fine and controlled with gentle width modulation, and it
+  partly dissolves where the light is brightest so the form is carried by
+  value rather than outline. Line colour takes on the local colour instead
+  of staying black.
+
+  FINISH: soft film grain over the whole image, very slight chromatic
+  fringing at the highest-contrast edges, deep but never crushed shadows.
+  Cinematic and grounded — as if this character were photographed on a real
+  set and then painted by a top Korean webtoon studio. Not a 3D render, not
+  a photograph, not a rough sketch, not a flat weekly panel, and not an
+  ornamental romance-fantasy cover.

@@ -1,0 +1,292 @@
+{
+  "run_id": "20260912T130341-615893",
+  "calls": [
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "low",
+      "bytes": 2414775,
+      "at": "2026-09-13T10:31:32+09:00",
+      "seconds": 19.94,
+      "chars": 7817,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=4853, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=3317), output_tokens=158, total_tokens=5011, output_tokens_details=UsageOutputTokensDetails(image_tokens=158, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 4853,
+          "input_tokens_details": {
+            "image_tokens": 1536,
+            "text_tokens": 3317
+          },
+          "output_tokens": 158,
+          "total_tokens": 5011,
+          "output_tokens_details": {
+            "image_tokens": 158,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 4853,
+        "tokens_out": 158,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 5011,
+        "tokens_in_text": 3317,
+        "tokens_in_image": 1536,
+        "tokens_out_image": 158,
+        "cost_basis": "tokens",
+        "total": 0.033613,
+        "total_krw": 47
+      },
+      "output_path": "/Users/mint/project/Lore/webtoon/ai/new_harness/runs/20260912T130341-615893-low/pages/page01.png",
+      "page": 1,
+      "scene": 0
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "low",
+      "bytes": 2138530,
+      "at": "2026-09-13T10:31:52+09:00",
+      "seconds": 20.6,
+      "chars": 10033,
+      "refs": [
+        "sheet.png",
+        "page01.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=8175, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=5103), output_tokens=158, total_tokens=8333, output_tokens_details=UsageOutputTokensDetails(image_tokens=158, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 8175,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 5103
+          },
+          "output_tokens": 158,
+          "total_tokens": 8333,
+          "output_tokens_details": {
+            "image_tokens": 158,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 8175,
+        "tokens_out": 158,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 8333,
+        "tokens_in_text": 5103,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 158,
+        "cost_basis": "tokens",
+        "total": 0.054831,
+        "total_krw": 77
+      },
+      "output_path": "/Users/mint/project/Lore/webtoon/ai/new_harness/runs/20260912T130341-615893-low/pages/page02.png",
+      "page": 2,
+      "scene": 1
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "low",
+      "bytes": 1455166,
+      "at": "2026-09-13T10:32:13+09:00",
+      "seconds": 19.37,
+      "chars": 10032,
+      "refs": [
+        "sheet.png",
+        "page02.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=8172, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=5100), output_tokens=158, total_tokens=8330, output_tokens_details=UsageOutputTokensDetails(image_tokens=158, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 8172,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 5100
+          },
+          "output_tokens": 158,
+          "total_tokens": 8330,
+          "output_tokens_details": {
+            "image_tokens": 158,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 8172,
+        "tokens_out": 158,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 8330,
+        "tokens_in_text": 5100,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 158,
+        "cost_basis": "tokens",
+        "total": 0.054816,
+        "total_krw": 77
+      },
+      "output_path": "/Users/mint/project/Lore/webtoon/ai/new_harness/runs/20260912T130341-615893-low/pages/page03.png",
+      "page": 3,
+      "scene": 2
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "low",
+      "bytes": 2192845,
+      "at": "2026-09-13T10:32:32+09:00",
+      "seconds": 20.6,
+      "chars": 10047,
+      "refs": [
+        "sheet.png",
+        "page03.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=8187, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=5115), output_tokens=158, total_tokens=8345, output_tokens_details=UsageOutputTokensDetails(image_tokens=158, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 8187,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 5115
+          },
+          "output_tokens": 158,
+          "total_tokens": 8345,
+          "output_tokens_details": {
+            "image_tokens": 158,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 8187,
+        "tokens_out": 158,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 8345,
+        "tokens_in_text": 5115,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 158,
+        "cost_basis": "tokens",
+        "total": 0.054891,
+        "total_krw": 77
+      },
+      "output_path": "/Users/mint/project/Lore/webtoon/ai/new_harness/runs/20260912T130341-615893-low/pages/page04.png",
+      "page": 4,
+      "scene": 3
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "low",
+      "bytes": 2145606,
+      "at": "2026-09-13T10:32:53+09:00",
+      "seconds": 18.0,
+      "chars": 10049,
+      "refs": [
+        "sheet.png",
+        "page04.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=8186, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=5114), output_tokens=158, total_tokens=8344, output_tokens_details=UsageOutputTokensDetails(image_tokens=158, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 8186,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 5114
+          },
+          "output_tokens": 158,
+          "total_tokens": 8344,
+          "output_tokens_details": {
+            "image_tokens": 158,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 8186,
+        "tokens_out": 158,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 8344,
+        "tokens_in_text": 5114,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 158,
+        "cost_basis": "tokens",
+        "total": 0.054886,
+        "total_krw": 77
+      },
+      "output_path": "/Users/mint/project/Lore/webtoon/ai/new_harness/runs/20260912T130341-615893-low/pages/page05.png",
+      "page": 5,
+      "scene": 4
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "low",
+      "bytes": 2126680,
+      "at": "2026-09-13T10:33:11+09:00",
+      "seconds": 18.72,
+      "chars": 10053,
+      "refs": [
+        "sheet.png",
+        "page05.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=8188, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=5116), output_tokens=158, total_tokens=8346, output_tokens_details=UsageOutputTokensDetails(image_tokens=158, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 8188,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 5116
+          },
+          "output_tokens": 158,
+          "total_tokens": 8346,
+          "output_tokens_details": {
+            "image_tokens": 158,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 8188,
+        "tokens_out": 158,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 8346,
+        "tokens_in_text": 5116,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 158,
+        "cost_basis": "tokens",
+        "total": 0.054896,
+        "total_krw": 77
+      },
+      "output_path": "/Users/mint/project/Lore/webtoon/ai/new_harness/runs/20260912T130341-615893-low/pages/page06.png",
+      "page": 6,
+      "scene": 5
+    }
+  ]
+}

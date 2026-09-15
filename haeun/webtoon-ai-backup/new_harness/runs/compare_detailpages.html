@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>기존 파이프라인 vs 이어그리기(detail-pages) 비교</title>
+<style>
+  body { font-family: -apple-system, "Apple SD Gothic Neo", sans-serif; background:#1b1b1f; color:#eee; margin:0; padding:24px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  p.sub { color:#999; margin:0 0 24px; font-size:13px; }
+  .head-row { display:flex; gap:24px; position:sticky; top:0; background:#1b1b1f; padding:12px 0; z-index:10; border-bottom:1px solid #333; }
+  .head-row > div { flex:1; text-align:center; font-weight:600; }
+  .head-row .old { color:#8ab4ff; }
+  .head-row .new { color:#ffb38a; }
+  .row { display:flex; gap:24px; align-items:flex-start; margin:24px 0; padding-bottom:24px; border-bottom:1px dashed #333; }
+  .col { flex:1; text-align:center; }
+  .col img { max-width:100%; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,.5); }
+  .label { font-size:12px; color:#888; margin-bottom:6px; }
+</style>
+</head>
+<body>
+<h1>20260831T194100-c6c00b — 기존 파이프라인 vs 이어그리기(--detail-pages)</h1>
+<p class="sub">왼쪽: 구체화·컷대본·콘티 거친 기존 pages/ · 오른쪽: directions 4번을 그대로 써서 컷설계·연출 디테일 생략하고 바로 그린 결과</p>
+<div class="head-row"><div class="old">기존 (전체 파이프라인)</div><div class="new">신규 (이어그리기, detail-pages)</div></div>
+<div id="rows"></div>
+<script>
+const OLD = "20260831T194100-c6c00b/pages/page";
+const NEW = "20260831T194100-c6c00b-detailpages/pages/page";
+const rows = document.getElementById("rows");
+for (let i = 1; i <= 6; i++) {
+  const n = String(i).padStart(2, "0");
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = `
+    <div class="col"><div class="label">page${n}</div><img src="${OLD}${n}.png" loading="lazy"></div>
+    <div class="col"><div class="label">page${n}</div><img src="${NEW}${n}.png" loading="lazy"></div>
+  `;
+  rows.appendChild(row);
+}
+</script>
+</body>
+</html>

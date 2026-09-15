@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>이어붙인 에피소드</title>
+<style>
+  body { font-family: -apple-system, "Apple SD Gothic Neo", sans-serif; background: #222; color: #eee; margin: 0; }
+  header { position: sticky; top: 0; background: #1a1a1a; padding: 12px 20px; display: flex; gap: 12px; align-items: center; z-index: 10; border-bottom: 1px solid #333; }
+  header b { font-size: 14px; }
+  header button { background: #333; color: #eee; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  header button.active { background: #5b7fff; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 20px 0; }
+  .wrap img { width: 100%; display: block; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <b>이어붙인 에피소드</b>
+  <button id="btn-haeun" class="active">박하은 (1페이지)</button>
+  <button id="btn-momo">모모 (11페이지)</button>
+</header>
+<div class="wrap">
+  <img id="img-haeun" src="20260829T195833-da85ca/episode.png">
+  <img id="img-momo" class="hidden" src="20260829T222230-9aa58a/episode.png">
+</div>
+<script>
+  const bh = document.getElementById('btn-haeun');
+  const bm = document.getElementById('btn-momo');
+  const ih = document.getElementById('img-haeun');
+  const im = document.getElementById('img-momo');
+  bh.onclick = () => { bh.classList.add('active'); bm.classList.remove('active'); ih.classList.remove('hidden'); im.classList.add('hidden'); };
+  bm.onclick = () => { bm.classList.add('active'); bh.classList.remove('active'); im.classList.remove('hidden'); ih.classList.add('hidden'); };
+</script>
+</body>
+</html>

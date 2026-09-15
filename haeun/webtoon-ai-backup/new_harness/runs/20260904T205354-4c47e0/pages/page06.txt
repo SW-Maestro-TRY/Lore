@@ -1,0 +1,716 @@
+세로로 읽는 웹툰 페이지를 한 장으로 연출한다.
+
+## 페이지 형식
+
+- 이 작품은 모바일 세로 스크롤 웹툰이다.
+- 최종 결과물은 가로형 만화 페이지가 아니라, 가로보다 세로가 훨씬 긴 하나의
+  긴 세로형 웹툰 페이지다.
+- 독자는 위에서 아래로 스크롤하며 읽는다.
+- 컷의 개수, 크기, 배치, 구도, 카메라 앵글은 장면에 맞게 자유롭게 결정한다.
+- 컷들은 페이지를 빈틈없이 채우지 않으며, 컷과 컷 사이에는 **실제로 그림이
+  없는 명확한 빈 여백**을 둔다.
+- 여백의 크기는 일정하게 반복하지 않고 장면의 흐름과 감정에 따라 자유롭게
+  조절한다.
+- 중요한 장면 전후에는 더 넓은 여백을 사용하여 시선과 감정의 호흡을 만든다.
+- 컷과 컷을 서로 맞닿게 배치하거나, 일반적인 가로형 만화책처럼 빽빽하게
+  배열하지 않는다.
+- 페이지 전체가 **장면 → 여백 → 장면 → 여백 → 장면**으로 이어지는 세로
+  스크롤 웹툰처럼 보여야 한다.
+- 컷 사이의 여백은 낭비되는 공간이 아니라 웹툰 연출의 일부다.
+- 컷 사이에 흰색·검은색 테두리 같은 액자형 경계를 넣지 않는다.
+- 컷 번호, 숫자 배지, 패널 번호를 넣지 않는다.
+- **서로 다른 시각적 사건을 같은 높이에 나란히 배치하지 않는다.** 사건 A가
+  사건 B보다 먼저 벌어진다면 A는 항상 B보다 위에 있어야 한다 — 좌우로 나눈
+  2단·3단 구성, 격자, 여러 칸을 한 줄에 늘어놓는 배치는 만들지 않는다.
+  진행은 언제나 위→아래 한 줄기여야 한다.
+- 전체 이야기가 스크롤 없이 한 화면에 다 들어와 한눈에 읽힌다면 잘못된
+  것이다 — 독자가 실제로 스크롤해야 다음 사건을 발견하게 만든다.
+
+## 첨부한 이미지
+
+첨부한 이미지는 참고 자료이며, 페이지를 그대로 복사하거나 재구성하는 것이 아니다.
+
+### 캐릭터 시트 — 최우선 스타일 및 캐릭터 기준
+
+캐릭터 시트는 단순한 외형 참고 자료가 아니다.
+**이 작품의 캐릭터 작화 스타일을 결정하는 최우선 시각적 기준이다.**
+
+캐릭터 시트에 나타난 실제 작화의
+선화 방식, 선의 굵기와 밀도, 얼굴의 단순화,
+눈의 형태와 표현, 머리카락의 묘사 방식,
+피부 표현, 색의 사용 방식, 명암의 단순화,
+채색 방식, 전체적인 2D 만화 느낌과 마감 방식을
+웹툰의 모든 인물에게 일관되게 적용한다.
+
+아래 「그림체」 설명은 캐릭터 시트의 스타일을 대체하는 것이 아니다.
+**캐릭터 시트의 실제 시각적 결과를 최우선으로 유지하면서,
+아래 설명은 그 스타일이 장면마다 무너지지 않도록 보조하는 규칙으로 사용한다.**
+
+웹툰 장면을 만들 때 캐릭터 시트보다 더 사실적이거나,
+더 회화적이거나, 더 영화적이거나,
+더 화려하게 렌더링하지 않는다.
+
+캐릭터 시트에서 보이는 것보다
+더 복잡한 피부 질감, 머리카락 질감,
+현실적인 광원, 과도한 명암, 사실적인 재질 표현을 추가하지 않는다.
+
+**캐릭터 시트의 작화 언어를 그대로 유지한 채 장면만 새롭게 구성한다.**
+
+단, 캐릭터 시트의 4면도, 표정 배열, 색상칩,
+시트의 배치와 레이아웃 자체는 재현하지 않는다.
+캐릭터 시트에 등장하는 인물의 외형과 작화 스타일만 참조한다.
+
+### 직전 그림
+
+직전 그림은 인물·공간·시간대·의상·사건의 연속성을 위한 참고 자료다.
+
+직전 그림의 스타일이나 렌더링 수준이 캐릭터 시트와 다를 경우,
+**항상 캐릭터 시트의 작화 스타일을 우선한다.**
+
+직전 그림이 더 사실적이거나 화려하게 표현되어 있더라도
+그 렌더링 방식을 따라 하지 않는다.
+
+## 장면 연출 핵심
+
+주어진 장면 내용을 그대로 나열하거나 각각의 정보를 별도의 설명용 컷으로
+분리하지 않는다. 반대로 그림만으로 모든 정보를 전달하려고 하지 않는다.
+**그림 + 나레이션 + 대사**를 함께 사용하여 독자가 페이지를 읽는 과정에서
+상황을 자연스럽고 명확하게 이해하도록 연출한다.
+
+이 작품과 인물을 처음 보는 독자를 기준으로 한다. 따라서 장면 초반에는
+그림과 나레이션을 활용해 장소, 시간, 인물의 현재 상황을 명확하게 전달한다.
+
+나레이션은 적극적으로 사용한다. 그림만으로 알기 어려운 시간의 흐름,
+반복되는 일상, 인물의 생각, 상황에 대한 설명과 깨달음은 자연스러운
+나레이션으로 전달한다.
+
+대사는 실제 인물들이 주고받는 대화처럼 사용한다. 대사를 통해 인물의 관계,
+성격, 현재 대화의 맥락과 미묘한 감정을 전달한다.
+
+중요한 정보는 독자가 놓치지 않도록 한다. 필요한 경우 나레이션이나 대사로
+직접 설명해도 된다. 단, 그림과 나레이션과 대사가 똑같은 내용을 반복해서
+설명하지 않는다. 각각 서로 다른 정보를 전달하면서 하나의 이야기를
+완성하도록 한다.
+
+## 웹툰의 흐름
+
+페이지를 위에서 아래로 읽을수록 이야기가 실제로 진행되어야 한다.
+
+상황과 공간을 보여준다. → 인물이 행동한다. → 다른 인물과 상호작용한다. →
+대화가 이어진다. → 작은 사건이 발생한다. → 인물이 그것을 의식한다. →
+상대방의 미묘한 반응이 나타난다. → 다음 이야기가 궁금해지는 지점에서
+장면을 마무리한다.
+
+각 컷은 독립적인 일러스트가 아니라 앞뒤 컷과 연결되는 하나의 연속된
+장면이어야 한다.
+
+같은 구도의 인물 얼굴 클로즈업을 연속적으로 배치하지 않는다. 필요한 경우
+전신, 중경, 투샷, 공간을 포함한 장면, 행동을 보여주는 구도와 클로즈업을
+적절히 섞는다.
+
+중요한 순간에는 클로즈업이나 디테일 컷을 사용할 수 있지만, 정보 하나를
+보여주기 위해 무조건 하나의 컷을 추가하는 식으로 구성하지 않는다.
+
+## 정보 전달
+
+장면의 핵심 정보와 감정 변화가 독자에게 확실히 전달되어야 한다. 특히 반복,
+시간의 흐름, 인물의 생각이나 의심처럼 그림만으로 명확하게 전달하기 어려운
+내용은 나레이션을 활용한다.
+
+인물의 행동과 표정은 나레이션과 대사를 뒷받침하고, 나레이션과 대사는
+그림에 없는 맥락을 보충한다.
+
+설명해야 할 내용이 있다면 자연스러운 웹툰 나레이션으로 설명한다. 짧은
+문장만 고집하지 말고 장면을 이해하는 데 필요한 만큼 사용한다.
+
+## 연출 방향
+
+첫 장면부터 독자가 "어디인지" "누가 등장하는지" "무슨 상황인지"를 이해할
+수 있어야 한다.
+
+이후 장면이 진행되면서 "무슨 일이 반복되고 있는지" "인물이 무엇을 느끼는지"
+"무엇이 이상한지"를 그림과 나레이션과 대사를 통해 자연스럽게 알게 한다.
+
+모든 정보를 시각적 상징으로 억지로 표현하지 않는다. 스토리에서 중요한
+정보는 명확하게 설명하고, 그림은 그 설명이 실제 장면으로 느껴지도록 행동과
+상황을 보여준다.
+
+최종 결과물은 장면을 묘사한 이미지 모음이나 콘티가 아니라, **그림·나레이션·
+대사가 함께 작동하면서 실제 이야기가 진행되는 하나의 세로 스크롤 웹툰
+페이지**여야 한다.
+
+## 글자
+
+- 말풍선·나레이션 상자 안의 글자는 **한국어**로 쓴다.
+- 말풍선은 인물의 얼굴을 가리지 않는 자리에 두고, 꼬리는 말하는 인물을
+  향하게 한다. 한 컷에 여러 개면 위에서 아래 순서로 읽히게 배치한다.
+- 나레이션은 말풍선이 아니라 네모 상자로, 컷 위쪽이나 여백에 둔다.
+- 생각은 구름 모양, 말은 둥근 타원, 외침은 뾰족한 형태로 구분한다.
+
+## 인물 (외모는 장면이 바뀌어도 그대로다)
+주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다.
+강냥이 — A young woman with short, messy black hair and large, floppy black animal ears on her head. She has bright orange eyes with slit pupils, fair skin, and visible scars on her shoulders and arms. She wears a sleeveless black high-neck top and a light blue jacket that hangs off her shoulders.
+       고정 요소: 머리 위에 큰 검은색 동물 귀 두 개가 좌우로 달려 있음 / 짧고 헝클어진 검은 머리, 목까지 오는 길이 / 양쪽 어깨와 팔에 긁힌 듯한 붉은 상처 자국 / 눈동자가 주황색이며 세로로 긴 동공 / 소매가 어깨에서 흘러내린 연한 파란색 재킷
+
+## 이 화 전체 줄거리 (지금 그릴 자리는 아래 「장면 내용」이 정한다)
+
+[작품] 《버려진 직업의 비밀》 · 게임 판타지
+
+[줄거리]
+강냥이는 모두가 무시하던 ‘은신술사’라는 평범한 직업으로 게임 속에 숨어든다. 레이드에서 한 번 처참히 패배한 뒤, 주변은 그를 ‘실력 없는 유저’로 취급하지만 그는 남들이 눈치 못 챈 시스템의 허점을 단서 삼아 조금씩 실마리를 좇는다. 누구도 몰랐던 히든 패시브와 버그성 조합을 찾아내려다, 자신이 ‘은신술사’로 위장한 이유 그 자체가 곧 이 세계의 커다란 약점과 연결돼 있다는 사실을 마주한다.
+
+[장면들 — 순서대로 일어나는 사건들이다]
+1. 강냥이가 한 명의 은신술사로 레이드에 참여해 실패한 뒤, 길드 채팅창에 ‘패배 원인’이 자신 탓으로 몰리는 상황에서 게임을 종료한다.
+2. 로그아웃 후 시스템 메일에 남겨진 알 수 없는 코드 메시지를 발견하고, 통상적인 버전과 다른 이상 신호가 있다는 단서를 확보한다.
+3. 증거를 찾기 위해 몰래 길드 창고와 거래 기록을 캡처하며, 자신이 쓴 스킬 이펙트에만 반응하는 기묘한 오류 로그를 발견한다.
+4. 해당 로그의 내용 일부를 해독하여, 누군가 자신의 직업을 ‘은신술사’로 위장시킨 것이 아니라 그 직업 자체가 애초에 ‘숨겨진 관리자용 권한’의 껍데기라는 사실에 닿는다.
+5. 이 진실을 확인한 뒤 재접속하지만, 시스템 창에 ‘비인가 접근 감지’라는 경고가 떠있고, 강냥이는 사라진 기능을 찾아 다시 움직이기로 한다. ← 이 장에서 그릴 자리
+
+## 장면 내용
+
+위 목록의 5번 장면 자리를 그린다: "이 진실을 확인한 뒤 재접속하지만, 시스템 창에 ‘비인가 접근 감지’라는 경고가 떠있고, 강냥이는 사라진 기능을 찾아 다시 움직이기로 한다."
+
+이 한 장이 이야기를 어디까지 나아가게 할지는 **네가 정한다** — 이 장면을 한 장에 다 담아도 되고, 앞 장이 못 다한 곳을 마저 그리다가 이 장면으로 넘어가도 되고, 뒤에 올 이야기의 기미를 미리 깔아도 된다.
+
+다만 **순서는 건너뛰지 않는다** — 아직 그려지지 않은 장면들을 통째로 지나쳐 한참 뒤를 그리거나, 이 화의 결말을 여기서 보여주지 않는다.
+
+첨부한 직전 그림이 바로 앞 장이다. **직전 그림이 멈춘 순간에서 자연스럽게 이어지도록** 그린다 — 인물의 자세·위치·시간대·조명이 직전 그림과 뚝 끊기지 않아야 한다. 직전 그림에 이미 그려진 내용(같은 순간·같은 대사)을 다시 그리지 않는다.
+
+[직전 그림이 그려 놓은 자리 — 여기서부터 이어 그린다] 강냥이가 이 사실을 확인한 뒤, 다음 행동(재접속 및 시스템 경고 확인)으로 넘어가면 된다.
+
+## 그림체
+
+**IMPORTANT — STYLE REFERENCE PRIORITY**
+
+The attached character sheet is the primary visual style reference for
+this entire artwork.
+
+Match the character sheet's actual visual language: line quality, line
+weight, facial simplification, eye design, hair rendering, coloring,
+shading, color organization, and overall 2D finish.
+
+Do not reinterpret the character sheet into another art style.
+
+The written style description below is a supporting constraint, not a
+replacement for the character sheet.
+
+When the written description conflicts with the actual appearance of the
+character sheet, preserve the character sheet's visual language.
+
+- LD:
+  ## STYLE
+
+  High-quality modern Korean serialized webtoon character artwork.
+
+  The final image must unmistakably look like a fictional Korean webtoon character,
+  not like a real person rendered in a webtoon style.
+
+  The strongest priority is attractive fictional character design and
+  clear 2D Korean webtoon stylization.
+
+  The character should have a deliberately designed, slightly idealized,
+  expressive appearance typical of a polished modern Korean webtoon.
+
+  This is stylized 2D webtoon artwork.
+  It is NOT a realistic portrait, NOT photorealism,
+  NOT semi-photorealism, and NOT an anime illustration.
+
+  The artwork should feel like a finished character from a professional
+  modern Korean webtoon series.
+
+  ## WEBTOON CHARACTER STYLIZATION
+
+  Use clearly stylized Korean webtoon facial proportions.
+
+  The face must look intentionally designed as a fictional character,
+  rather than naturally constructed like a real human face.
+
+  Use deliberate visual stylization:
+  slightly enlarged expressive eyes,
+  compact facial proportions,
+  short midface,
+  small simplified nose,
+  small simplified mouth,
+  clean tapered jaw,
+  and an aesthetically designed fictional face.
+
+  The character should have attractive stylized facial proportions
+  rather than anatomically realistic facial proportions.
+
+  The face should have the appealing exaggeration characteristic
+  of a polished Korean webtoon character.
+
+  The character must immediately read as a drawn fictional character.
+
+  Do not make the character resemble a photograph of a real adult man.
+
+  Do not make the character resemble a Korean actor, model,
+  fashion photograph, or real-life person.
+
+  ## FACE
+
+  The face is one of the highest visual priorities.
+
+  Use a handsome, clean, attractive fictional Korean webtoon male face.
+
+  Keep the face compact rather than long.
+
+  Use a relatively short midface.
+
+  Keep the distance between the eyes, nose, mouth, and chin compact.
+
+  Use a clean, smooth, slightly tapered jawline.
+
+  Keep the lower face relatively short.
+
+  Use a slightly tapered chin.
+
+  The facial structure should be aesthetically designed
+  rather than anatomically realistic.
+
+  Do not create realistic facial planes.
+
+  Do not create realistic cheek structure.
+
+  Do not create realistic adult male facial proportions.
+
+  Do not make the face long, narrow, or overly angular.
+
+  The face should remain clearly stylized even when viewed close up.
+
+  ## EYES
+
+  The eyes are a major character-design feature.
+
+  Eyes must be noticeably larger and more expressive
+  than realistic adult male eyes.
+
+  Do not reduce the eye size in order to create naturalism.
+
+  Use refined almond-shaped Korean webtoon eyes
+  with clearly defined upper eyelids.
+
+  Irises should be moderately large, clear, and visually prominent.
+
+  Use a simple graphic iris structure:
+  one darker outer iris edge,
+  a simple pupil,
+  and one restrained highlight.
+
+  The eyes should be attractive, expressive, and clearly illustrated.
+
+  They should feel intentionally designed for a fictional character,
+  not anatomically reproduced from a real person.
+
+  Do not make the eyes tiny.
+
+  Do not make the eyes narrow.
+
+  Do not make the eyes dull.
+
+  Do not use realistic adult male eye proportions.
+
+  Do not use oversized anime eyes.
+
+  Do not use extremely round kawaii eyes.
+
+  Do not make the eyes childish.
+
+  Do not make the eyes jewel-like, glass-like,
+  or excessively glossy.
+
+  ## NOSE
+
+  The nose must be short, small, and highly simplified.
+
+  Use only a minimal structural line and/or restrained shadow.
+
+  Keep the nose visually subordinate to the eyes.
+
+  Do not draw a realistic nose bridge.
+
+  Do not emphasize realistic nasal anatomy.
+
+  Do not render realistic nostrils or detailed nasal structure.
+
+  The nose must clearly read as simplified Korean webtoon construction.
+
+  ## MOUTH
+
+  Use a small, simple, clean webtoon mouth.
+
+  Use minimal lip definition.
+
+  Keep the mouth deliberately stylized.
+
+  The mouth should change naturally according to each expression
+  without becoming realistic or overly detailed.
+
+  Do not render realistic lips.
+
+  ## HAIR
+
+  Hair is one of the defining visual features of the character.
+
+  Use noticeably full, rich, voluminous black hair.
+
+  The hairstyle must have substantial volume around the crown,
+  sides, and back of the head.
+
+  The top of the hair must feel naturally full and slightly fluffy.
+
+  Use large, coherent, intentionally designed hair masses
+  with multiple overlapping sections.
+
+  The hairstyle should frame the face and make the face appear slightly smaller
+  and more character-like.
+
+  Use a moderate number of clean structural strand lines
+  to describe direction, layering, and flow.
+
+  Individual hairs must NOT be rendered one by one.
+
+  The hair should feel rich, dimensional, attractive,
+  and clearly designed as fictional webtoon character hair.
+
+  Use restrained graphic highlights following the major hair masses.
+
+  Do not make the hair flat.
+
+  Do not make the hair thin.
+
+  Do not make the hair sparse.
+
+  Do not plaster the hair tightly against the scalp.
+
+  Do not make the hair look like realistic photographic hair.
+
+  Do not use hyper-realistic hair rendering.
+
+  Do not use countless individual strands.
+
+  Do not use glossy plastic-looking hair.
+
+  ## SKIN
+
+  Use a bright, pale Korean webtoon skin tone.
+
+  The skin must remain visibly light, clean, soft,
+  and slightly warm.
+
+  The complexion should be clearly lighter than natural photographic skin.
+
+  Maintain the bright pale complexion consistently across the entire character.
+
+  The skin should look like clean 2D webtoon coloring,
+  not photographic skin.
+
+  Use restrained stylized cel-shaded tonal variation.
+
+  Do not make the skin tan.
+
+  Do not make the skin dark.
+
+  Do not make the skin orange.
+
+  Do not make the skin heavily flushed.
+
+  Do not make the skin glossy.
+
+  Do not make the skin photorealistic.
+
+  No pores.
+
+  No realistic skin texture.
+
+  No excessive blush.
+
+  ## LINEART
+
+  Use clean, delicate, controlled 2D digital lineart.
+
+  Lineart should be thin to medium in weight,
+  smooth, confident, elegant, and refined.
+
+  Use subtle variation in line weight.
+
+  Important facial features, eyes, hair silhouette,
+  hands, clothing silhouette, and important design elements
+  must have crisp, readable outlines.
+
+  The lineart should feel intentionally illustrated
+  and graphically designed.
+
+  The line should remain visibly 2D and drawn.
+
+  Do not make the lineart look like realistic contour tracing.
+
+  Do not use thick black comic outlines.
+
+  Do not use rough sketch lines.
+
+  Do not use messy construction lines.
+
+  Do not use careless simplified outlines.
+
+  Do not use painterly edges.
+
+  Do not use lineless painting.
+
+  ## COLOR
+
+  Use clean, harmonious, attractive 2D colors
+  with moderate saturation.
+
+  The overall palette should feel bright, soft, elegant, and pleasant.
+
+  Maintain clear separation between different materials and objects.
+
+  Use polished flat-to-cel coloring.
+
+  The image should have clear graphic color organization.
+
+  Do not make the coloring completely flat.
+
+  Do not make the coloring photorealistic.
+
+  Use clean base colors with restrained stylized tonal variation.
+
+  Keep color transitions controlled and graphic.
+
+  Do not use photographic color grading.
+
+  Do not use muddy colors.
+
+  Do not use excessive color noise.
+
+  ## CEL SHADING
+
+  Use polished, restrained 2D cel shading.
+
+  Use a clear base color with one main shadow shape
+  and occasional subtle secondary tonal variation.
+
+  Shadows should feel intentionally designed for 2D webtoon artwork.
+
+  The face should have gentle dimensional shading
+  while retaining simplified graphic facial construction.
+
+  Shading should support the character design,
+  not imitate realistic photography.
+
+  Do not use realistic skin shading.
+
+  Do not use airbrush-heavy rendering.
+
+  Do not use deep dramatic shadows.
+
+  Do not use strong realistic gradients.
+
+  Do not use painterly blending.
+
+  Do not use complex multi-layer rendering.
+
+  ## CLOTHING
+
+  Clothing should be cleanly illustrated with believable
+  but stylized folds and structure.
+
+  Preserve enough detail to make the outfit feel professionally illustrated.
+
+  Folds should communicate material, structure, pose, and movement.
+
+  Do not reduce clothing to crude geometric shapes.
+
+  Do not add microscopic fabric textures.
+
+  Do not add excessive wrinkles.
+
+  Keep clothing secondary to the face and character design.
+
+  ## BACKGROUND AND ENVIRONMENT
+
+  The background exists to tell the reader where they are. It is not a
+  painting of that place.
+
+  The character is always the most detailed, most saturated, most rendered
+  thing on screen. If the reader's eye lands on the background before the
+  character, the background has been over-rendered.
+
+  Detail in the background must be visibly less than detail on the
+  character — roughly a quarter of the rendering effort, not an equal or
+  greater amount.
+
+  Draw environmental objects as simplified masses, not as an inventory of
+  individually rendered items. Architecture reads as flat silhouette plus a
+  few large shapes. Surfaces (floors, walls, large furniture) read as broad
+  flat color fields plus a few bold lines, not as individually rendered
+  materials or textures. Anything far from the camera collapses into a
+  single flat, lighter-toned silhouette with no internal detail at all.
+
+  When a scene description lists more environmental objects than the story
+  actually needs, drop the ones that are not load-bearing for the story and
+  leave the rest as plain, undetailed color. Large empty, under-rendered
+  areas of background are correct, not a sign of an unfinished image.
+
+  Detail density must fall off from the character outward: foreground near
+  the character gets moderate detail, the middle ground is simplified, and
+  the far background is minimal. Never give every object in the frame the
+  same level of finish, and never let the background out-render the
+  character.
+
+  Do not individually render surface textures such as wood grain, fabric
+  weave, stone texture, or metallic reflection on background objects.
+
+  ## LIGHTING
+
+  Lighting is simple and graphic: a small number of large light and shadow
+  shapes with clean edges, not a fully rendered light simulation.
+
+  Do not use cinematic volumetric lighting, strong backlight halos, lens
+  flare, bloom, atmospheric haze, or photographic depth-of-field blur. Do
+  not use realistic global illumination.
+
+  Line and flat color shape read before lighting does. If the lighting is
+  the first thing the reader notices about a panel, it is too heavy for
+  this style.
+
+  ## OVERALL FINISH
+
+  The final artwork should be:
+
+  stylized,
+  fictional,
+  attractive,
+  clean,
+  delicate,
+  expressive,
+  polished,
+  elegant,
+  and distinctly Korean webtoon.
+
+  The artwork should feel sophisticated without becoming realistic.
+
+  The character should remain visibly fictional and illustrated.
+
+  Do not increase realism in order to increase quality.
+
+  Do not increase anatomical realism in order to increase detail.
+
+  Refinement must come from better stylized character design,
+  cleaner lineart, expressive eyes, attractive facial proportions,
+  rich hair masses, and polished 2D cel shading.
+
+  Detailed does NOT mean realistic.
+
+  Refined does NOT mean realistic.
+
+  Sophisticated does NOT mean realistic.
+
+  Beautiful does NOT mean realistic.
+
+  The character must remain clearly stylized as a fictional Korean webtoon character.
+
+  ## STYLE PRIORITY
+
+  When realism conflicts with webtoon character design,
+  ALWAYS prioritize webtoon character design.
+
+  When realistic facial anatomy conflicts with attractive stylized anatomy,
+  ALWAYS prioritize attractive stylized anatomy.
+
+  When realistic eye size conflicts with expressive webtoon eyes,
+  ALWAYS prioritize the larger expressive webtoon eyes.
+
+  When realistic facial length conflicts with a compact stylized face,
+  ALWAYS prioritize the compact stylized face.
+
+  When realistic nose anatomy conflicts with a short simplified nose,
+  ALWAYS prioritize the short simplified nose.
+
+  When realistic facial planes conflict with simplified graphic facial construction,
+  ALWAYS prioritize simplified graphic facial construction.
+
+  When realistic hair conflicts with rich character-designed hair,
+  ALWAYS prioritize rich voluminous character-designed hair.
+
+  When natural photographic skin conflicts with bright pale webtoon skin,
+  ALWAYS prioritize bright pale webtoon skin.
+
+  When realistic rendering conflicts with polished 2D rendering,
+  ALWAYS prioritize polished 2D rendering.
+
+  When a detailed, cinematically lit background conflicts with a simplified
+  background that keeps the character as the most detailed thing on screen,
+  ALWAYS prioritize the simplified background and the character's priority.
+
+  ## FINAL VISUAL TARGET
+
+  The intended visual result is:
+
+  handsome fictional Korean webtoon male
+  +
+  clearly stylized fictional character
+  +
+  compact attractive face
+  +
+  short midface
+  +
+  noticeably large expressive mature eyes
+  +
+  short simplified nose
+  +
+  small simplified mouth
+  +
+  clean tapered jaw
+  +
+  full rich voluminous black hair
+  +
+  bright pale Korean webtoon skin
+  +
+  natural mature adult body proportions
+  +
+  delicate refined 2D lineart
+  +
+  clean harmonious colors
+  +
+  polished restrained cel shading
+  +
+  strong fictional character design
+  +
+  a simplified, graphic background that stays visibly less detailed than
+  the character
+  +
+  simple graphic lighting with no cinematic volumetric light or lens flare
+  +
+  professional modern Korean webtoon finish.
+
+  The final character must unmistakably look like
+  a drawn Korean webtoon character.
+
+  NOT a real person.
+  NOT a photograph.
+  NOT a realistic portrait.
+  NOT a semi-realistic portrait.
+  NOT a fashion model.
+  NOT an actor.
+  NOT an anime character.
+
+  The final result must prioritize
+  stylized Korean webtoon character design
+  over realistic human appearance.
+- SD(감정이 풀리는 짧은 순간에만): 2~3등신으로 축약된 형태. 얼굴이 크고
+  몸이 작다. 선은 단순하게, 표정은 과장되게. SD여도 그 인물의 머리색·눈색·
+  옷의 주요 색은 유지한다.
+
+## 여백과 화면 호흡
+
+컷과 컷 사이에 충분한 빈 여백을 자유롭게 배치하여 세로 스크롤 웹툰 특유의
+호흡을 만든다. 빠른 행동과 대화에서는 좁은 여백을, 시간의 흐름이나 감정의
+여운이 필요한 순간에는 넓은 여백을 사용한다. 모든 컷을 빈틈없이 이어 붙이지
+않는다. **컷 사이의 실제 빈 공간이 눈에 명확하게 보여야 한다.**
+
+이 빈 공간은 말 그대로 비어 있어야 한다. 배경의 연장, 흐릿하게 번진 그림,
+장식적 무늬, 이전·다음 컷의 여운을 담은 잔상을 채워 넣지 않는다. 빈 공간을
+"휑해 보이니 뭘 채워야겠다"고 여기지 않는다 — 그 비어 있음 자체가 호흡이고
+연출이다. 같은 크기의 여백을 기계적으로 반복하지 않는다.

@@ -1,0 +1,562 @@
+{
+  "run_id": "20260912T130341-615893",
+  "calls": [
+    {
+      "stage": "STORY",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-12T13:03:41+00:00",
+      "seconds": 21.44,
+      "usage": {
+        "input": 8481,
+        "output": 1480,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.016962,
+        "output": 0.01184,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.028802,
+        "total_krw": 40
+      }
+    },
+    {
+      "stage": "STORY_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-12T13:04:03+00:00",
+      "seconds": 28.18,
+      "usage": {
+        "input": 5712,
+        "output": 4834,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011424,
+        "output": 0.038672,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.050096,
+        "total_krw": 70
+      }
+    },
+    {
+      "stage": "SHEET",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-12T13:04:51+00:00",
+      "seconds": 6.89,
+      "usage": {
+        "input": 2737,
+        "output": 528,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.005474,
+        "output": 0.004224,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.009698,
+        "total_krw": 14
+      }
+    },
+    {
+      "stage": "SHEET_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "high",
+      "bytes": 1680010,
+      "at": "2026-09-12T13:04:58+00:00",
+      "seconds": 84.63,
+      "chars": 4932,
+      "refs": [],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=1368, input_tokens_details=UsageInputTokensDetails(image_tokens=0, text_tokens=1368), output_tokens=5488, total_tokens=6856, output_tokens_details=UsageOutputTokensDetails(image_tokens=5488, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 1368,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 1368
+          },
+          "output_tokens": 5488,
+          "total_tokens": 6856,
+          "output_tokens_details": {
+            "image_tokens": 5488,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 1368,
+        "tokens_out": 5488,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 6856,
+        "tokens_in_text": 1368,
+        "tokens_in_image": 0,
+        "tokens_out_image": 5488,
+        "cost_basis": "tokens",
+        "total": 0.17148,
+        "total_krw": 240
+      },
+      "output_path": "/opt/lore/webtoon/ai/work/runs/20260912T130341-615893/sheet.png"
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "high",
+      "bytes": 2815996,
+      "at": "2026-09-12T13:07:56+00:00",
+      "seconds": 102.57,
+      "chars": 7817,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=4853, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=3317), output_tokens=5488, total_tokens=10341, output_tokens_details=UsageOutputTokensDetails(image_tokens=5488, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 4853,
+          "input_tokens_details": {
+            "image_tokens": 1536,
+            "text_tokens": 3317
+          },
+          "output_tokens": 5488,
+          "total_tokens": 10341,
+          "output_tokens_details": {
+            "image_tokens": 5488,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 4853,
+        "tokens_out": 5488,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 10341,
+        "tokens_in_text": 3317,
+        "tokens_in_image": 1536,
+        "tokens_out_image": 5488,
+        "cost_basis": "tokens",
+        "total": 0.193513,
+        "total_krw": 271
+      },
+      "output_path": "/opt/lore/webtoon/ai/work/runs/20260912T130341-615893/pages/page01.png",
+      "page": 1,
+      "scene": 0
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "high",
+      "bytes": 2147096,
+      "at": "2026-09-12T13:09:39+00:00",
+      "seconds": 93.18,
+      "chars": 10033,
+      "refs": [
+        "sheet.png",
+        "page01.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=8175, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=5103), output_tokens=5488, total_tokens=13663, output_tokens_details=UsageOutputTokensDetails(image_tokens=5488, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 8175,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 5103
+          },
+          "output_tokens": 5488,
+          "total_tokens": 13663,
+          "output_tokens_details": {
+            "image_tokens": 5488,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 8175,
+        "tokens_out": 5488,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 13663,
+        "tokens_in_text": 5103,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 5488,
+        "cost_basis": "tokens",
+        "total": 0.214731,
+        "total_krw": 301
+      },
+      "output_path": "/opt/lore/webtoon/ai/work/runs/20260912T130341-615893/pages/page02.png",
+      "page": 2,
+      "scene": 1
+    },
+    {
+      "stage": "PAGE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-12T13:11:12+00:00",
+      "seconds": 5.68,
+      "usage": {
+        "input": 5455,
+        "output": 206,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.01091,
+        "output": 0.001648,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.012558,
+        "total_krw": 18
+      },
+      "page": 2
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "high",
+      "bytes": 2240748,
+      "at": "2026-09-12T13:11:18+00:00",
+      "seconds": 89.63,
+      "chars": 10118,
+      "refs": [
+        "sheet.png",
+        "page02.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=8221, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=5149), output_tokens=5488, total_tokens=13709, output_tokens_details=UsageOutputTokensDetails(image_tokens=5488, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 8221,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 5149
+          },
+          "output_tokens": 5488,
+          "total_tokens": 13709,
+          "output_tokens_details": {
+            "image_tokens": 5488,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 8221,
+        "tokens_out": 5488,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 13709,
+        "tokens_in_text": 5149,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 5488,
+        "cost_basis": "tokens",
+        "total": 0.214961,
+        "total_krw": 301
+      },
+      "output_path": "/opt/lore/webtoon/ai/work/runs/20260912T130341-615893/pages/page03.png",
+      "page": 3,
+      "scene": 2
+    },
+    {
+      "stage": "PAGE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-12T13:12:47+00:00",
+      "seconds": 5.37,
+      "usage": {
+        "input": 5509,
+        "output": 189,
+        "cache_read": 2816,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011018,
+        "output": 0.001512,
+        "cache_read": 0.001408,
+        "cache_write": 0.0,
+        "total": 0.013938,
+        "total_krw": 20
+      },
+      "page": 3
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "high",
+      "bytes": 2553394,
+      "at": "2026-09-12T13:12:53+00:00",
+      "seconds": 100.12,
+      "chars": 10121,
+      "refs": [
+        "sheet.png",
+        "page03.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=8231, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=5159), output_tokens=5488, total_tokens=13719, output_tokens_details=UsageOutputTokensDetails(image_tokens=5488, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 8231,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 5159
+          },
+          "output_tokens": 5488,
+          "total_tokens": 13719,
+          "output_tokens_details": {
+            "image_tokens": 5488,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 8231,
+        "tokens_out": 5488,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 13719,
+        "tokens_in_text": 5159,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 5488,
+        "cost_basis": "tokens",
+        "total": 0.215011,
+        "total_krw": 301
+      },
+      "output_path": "/opt/lore/webtoon/ai/work/runs/20260912T130341-615893/pages/page04.png",
+      "page": 4,
+      "scene": 3
+    },
+    {
+      "stage": "PAGE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-12T13:14:33+00:00",
+      "seconds": 6.01,
+      "usage": {
+        "input": 5518,
+        "output": 215,
+        "cache_read": 2816,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011036,
+        "output": 0.00172,
+        "cache_read": 0.001408,
+        "cache_write": 0.0,
+        "total": 0.014164,
+        "total_krw": 20
+      },
+      "page": 4
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "high",
+      "bytes": 2504769,
+      "at": "2026-09-12T13:14:39+00:00",
+      "seconds": 94.65,
+      "chars": 10136,
+      "refs": [
+        "sheet.png",
+        "page04.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=8235, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=5163), output_tokens=5488, total_tokens=13723, output_tokens_details=UsageOutputTokensDetails(image_tokens=5488, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 8235,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 5163
+          },
+          "output_tokens": 5488,
+          "total_tokens": 13723,
+          "output_tokens_details": {
+            "image_tokens": 5488,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 8235,
+        "tokens_out": 5488,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 13723,
+        "tokens_in_text": 5163,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 5488,
+        "cost_basis": "tokens",
+        "total": 0.215031,
+        "total_krw": 301
+      },
+      "output_path": "/opt/lore/webtoon/ai/work/runs/20260912T130341-615893/pages/page05.png",
+      "page": 5,
+      "scene": 4
+    },
+    {
+      "stage": "PAGE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-12T13:16:13+00:00",
+      "seconds": 5.74,
+      "usage": {
+        "input": 5539,
+        "output": 200,
+        "cache_read": 2816,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011078,
+        "output": 0.0016,
+        "cache_read": 0.001408,
+        "cache_write": 0.0,
+        "total": 0.014086,
+        "total_krw": 20
+      },
+      "page": 5
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "high",
+      "bytes": 2528217,
+      "at": "2026-09-12T13:16:19+00:00",
+      "seconds": 97.92,
+      "chars": 10134,
+      "refs": [
+        "sheet.png",
+        "page05.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=8237, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=5165), output_tokens=5488, total_tokens=13725, output_tokens_details=UsageOutputTokensDetails(image_tokens=5488, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 8237,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 5165
+          },
+          "output_tokens": 5488,
+          "total_tokens": 13725,
+          "output_tokens_details": {
+            "image_tokens": 5488,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 8237,
+        "tokens_out": 5488,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 13725,
+        "tokens_in_text": 5165,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 5488,
+        "cost_basis": "tokens",
+        "total": 0.215041,
+        "total_krw": 301
+      },
+      "output_path": "/opt/lore/webtoon/ai/work/runs/20260912T130341-615893/pages/page06.png",
+      "page": 6,
+      "scene": 5
+    },
+    {
+      "stage": "PAGE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-12T13:17:57+00:00",
+      "seconds": 5.82,
+      "usage": {
+        "input": 5542,
+        "output": 224,
+        "cache_read": 2816,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011084,
+        "output": 0.001792,
+        "cache_read": 0.001408,
+        "cache_write": 0.0,
+        "total": 0.014284,
+        "total_krw": 20
+      },
+      "page": 6
+    },
+    {
+      "stage": "EPISODE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-12T13:18:03+00:00",
+      "seconds": 10.05,
+      "usage": {
+        "input": 7639,
+        "output": 204,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.015278,
+        "output": 0.001632,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.01691,
+        "total_krw": 24
+      },
+      "pages": 6
+    },
+    {
+      "stage": "EPISODE_MATCH",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-12T13:18:13+00:00",
+      "seconds": 2.48,
+      "usage": {
+        "input": 1459,
+        "output": 229,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.002918,
+        "output": 0.001832,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.00475,
+        "total_krw": 7
+      },
+      "pages": 0
+    }
+  ]
+}

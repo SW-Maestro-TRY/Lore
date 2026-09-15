@@ -1,0 +1,651 @@
+{
+  "run_id": "20260831T194100-c6c00b",
+  "calls": [
+    {
+      "stage": "STORY",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 9698,
+        "output": 1644,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.019396,
+        "output": 0.013152,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.032548
+      }
+    },
+    {
+      "stage": "DETAIL",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 3582,
+        "output": 2456,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.007164,
+        "output": 0.019648,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.026812
+      }
+    },
+    {
+      "stage": "BOARD",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 8150,
+        "output": 8101,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.0163,
+        "output": 0.064808,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.081108
+      }
+    },
+    {
+      "stage": "BOARD",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 9918,
+        "output": 7680,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.019836,
+        "output": 0.06144,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.081276
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 4423,
+        "output": 2486,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.008846,
+        "output": 0.019888,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.028734
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 4780,
+        "output": 2783,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.00956,
+        "output": 0.022264,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.031824
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5002,
+        "output": 2825,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.010004,
+        "output": 0.0226,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.032604
+      }
+    },
+    {
+      "stage": "BOARD",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 12744,
+        "output": 6018,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.025488,
+        "output": 0.048144,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.073632
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5533,
+        "output": 5111,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011066,
+        "output": 0.040888,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.051954
+      }
+    },
+    {
+      "stage": "BOARD",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 15530,
+        "output": 6065,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.03106,
+        "output": 0.04852,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.07958
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5797,
+        "output": 3660,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011594,
+        "output": 0.02928,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.040874
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5797,
+        "output": 3211,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011594,
+        "output": 0.025688,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.037282
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5797,
+        "output": 3107,
+        "cache_read": 5632,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011594,
+        "output": 0.024856,
+        "cache_read": 0.002816,
+        "cache_write": 0.0,
+        "total": 0.039266
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5959,
+        "output": 1292,
+        "cache_read": 5632,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011918,
+        "output": 0.010336,
+        "cache_read": 0.002816,
+        "cache_write": 0.0,
+        "total": 0.02507
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5959,
+        "output": 1546,
+        "cache_read": 5760,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011918,
+        "output": 0.012368,
+        "cache_read": 0.00288,
+        "cache_write": 0.0,
+        "total": 0.027166
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5797,
+        "output": 4078,
+        "cache_read": 4992,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011594,
+        "output": 0.032624,
+        "cache_read": 0.002496,
+        "cache_write": 0.0,
+        "total": 0.046714
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5994,
+        "output": 3636,
+        "cache_read": 5632,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011988,
+        "output": 0.029088,
+        "cache_read": 0.002816,
+        "cache_write": 0.0,
+        "total": 0.043892
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5983,
+        "output": 3603,
+        "cache_read": 5760,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011966,
+        "output": 0.028824,
+        "cache_read": 0.00288,
+        "cache_write": 0.0,
+        "total": 0.04367
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5797,
+        "output": 4008,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011594,
+        "output": 0.032064,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.043658
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 1745,
+        "output": 330,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.00349,
+        "output": 0.00264,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.00613
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5797,
+        "output": 3378,
+        "cache_read": 5632,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011594,
+        "output": 0.027024,
+        "cache_read": 0.002816,
+        "cache_write": 0.0,
+        "total": 0.041434
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 2929,
+        "output": 1529,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.005858,
+        "output": 0.012232,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.01809
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5797,
+        "output": 3348,
+        "cache_read": 5632,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011594,
+        "output": 0.026784,
+        "cache_read": 0.002816,
+        "cache_write": 0.0,
+        "total": 0.041194
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 3783,
+        "output": 1547,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.007566,
+        "output": 0.012376,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.019942
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5797,
+        "output": 2823,
+        "cache_read": 5632,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011594,
+        "output": 0.022584,
+        "cache_read": 0.002816,
+        "cache_write": 0.0,
+        "total": 0.036994
+      }
+    },
+    {
+      "stage": "CUTSCRIPT",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 2835,
+        "output": 165,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.00567,
+        "output": 0.00132,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.00699
+      }
+    },
+    {
+      "stage": "CUTSCRIPT_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 3796,
+        "output": 207,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.007592,
+        "output": 0.001656,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.009248
+      }
+    },
+    {
+      "stage": "CUTSCRIPT_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 4176,
+        "output": 194,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.008352,
+        "output": 0.001552,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.009904
+      }
+    },
+    {
+      "stage": "CUTSCRIPT_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 4758,
+        "output": 254,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.009516,
+        "output": 0.002032,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.011548
+      }
+    },
+    {
+      "stage": "CUTSCRIPT_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5329,
+        "output": 188,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.010658,
+        "output": 0.001504,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.012162
+      }
+    },
+    {
+      "stage": "CUTSCRIPT_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 5899,
+        "output": 1061,
+        "cache_read": 2944,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.011798,
+        "output": 0.008488,
+        "cache_read": 0.001472,
+        "cache_write": 0.0,
+        "total": 0.021758
+      }
+    },
+    {
+      "stage": "CUTSCRIPT_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 6415,
+        "output": 1439,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.01283,
+        "output": 0.011512,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.024342
+      }
+    },
+    {
+      "stage": "CUTSCRIPT_FIX",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 3830,
+        "output": 1684,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.00766,
+        "output": 0.013472,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.021132
+      }
+    },
+    {
+      "stage": "CUTSCRIPT_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 6961,
+        "output": 1433,
+        "cache_read": 4992,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.013922,
+        "output": 0.011464,
+        "cache_read": 0.002496,
+        "cache_write": 0.0,
+        "total": 0.027882
+      }
+    }
+  ]
+}
