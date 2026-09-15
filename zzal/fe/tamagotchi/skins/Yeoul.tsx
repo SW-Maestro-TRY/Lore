@@ -118,7 +118,14 @@ export default function Yeoul(_props: SkinProps) {
       className="yeoul"
       style={{
         position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center',
-        background: 'radial-gradient(120% 80% at 50% 0%,#F7F1E6,#E9E2D6)',
+        // ★ 바깥 바탕을 **방을 이어받은 배경**으로 깐다(2026-09-16). 예전엔 평평한 베이지라
+        //   태블릿·PC 에서 셸 좌우가 텅 비어 미완성처럼 보였다. 이제 위(벽 톤)→아래(바닥 톤)로
+        //   흐르는 방 배경 + 위 가운데 은은한 빛무리 + 아래 가장자리 그림자(비네트)를 얹어,
+        //   넓은 화면에서도 가운데 셸이 "일부러 방 가운데 둔 카드"로 읽힌다.
+        background: `
+          radial-gradient(120% 88% at 50% 6%, rgba(255,252,246,.60), rgba(255,252,246,0) 58%),
+          radial-gradient(120% 120% at 50% 118%, rgba(74,64,56,.13), rgba(74,64,56,0) 52%),
+          linear-gradient(180deg,#F6EBDB 0%,#EEDFCB 58%,#E4D2B9 100%)`,
         color: C.ink, fontFamily: SANS, WebkitFontSmoothing: 'antialiased',
       }}
     >
@@ -131,7 +138,10 @@ export default function Yeoul(_props: SkinProps) {
           position: 'relative', width: `min(100%,${SHELL_MAX}px)`, height: '100%',
           overflow: 'hidden', background: C.shell,
           borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}`,
-          boxShadow: '0 10px 30px rgba(74,64,56,.14)',
+          // ★ 방 배경 위에서 셸이 **떠 있는 카드**로 읽히게 그림자를 키웠다(2026-09-16).
+          //   폰(width=100%)에서는 좌우 가장자리가 화면 밖이라 이 그림자가 안 보이고,
+          //   넓은 화면에서만 카드가 살짝 떠 보인다 — 좌우 빈 베이지가 사라진다.
+          boxShadow: '0 0 0 1px rgba(74,64,56,.04), 0 22px 60px rgba(74,64,56,.20)',
           display: 'flex', flexDirection: 'column',
         }}
       >

@@ -197,8 +197,22 @@ export function layoutProp(spec: PropSpec, stage: PropStage, geom: CharGeom): Pr
   };
 }
 
-/** 무대 아래에서 발끝선까지(px). **여섯 화면 전부 238 고정**이라 무대 높이와 무관하다. */
+/** 무대 아래에서 발끝선까지(px) — 옛 고정값. 좁은 화면의 기준으로만 남긴다. */
 export const FOOTLINE_FROM_BOTTOM = PROP_STAGE.footlineFromBottom;
+
+/**
+ * 발끝선 — 무대 아래에서 발끝까지(px). **Room.tsx 의 캐릭터 발끝(LIFT: `clamp(210px,30%,330px)`)과
+ * 똑같은 식**이라야 똥·바닥 소품이 아이 발에 붙는다(둘이 어긋나면 소품이 공중에 뜨거나 발을 파고든다).
+ *
+ * ★ 왜 무대 높이의 함수인가(2026-09-16) — 예전엔 여섯 화면 전부 238 고정이었는데, 큰·긴 화면에서는
+ *   발밑에 죽은 바닥이 넓게 남아 방이 미완성처럼 보였다. 무대가 커지면 발끝도 30% 지점까지 함께
+ *   올라와 바닥·벽 비율이 균형을 잡는다. 팝오버(최대 `POP_LIFT`=204px)에 발이 안 덮이도록 하한 220px
+ *   (여유 16px), 아주 긴 화면에서 발이 너무 높이 뜨지 않도록 상한 330px.
+ *   ★ Room.tsx 의 캐릭터 발끝 `LIFT: clamp(220px,30%,330px)` 과 **완전히 같은 식**이어야 한다.
+ */
+export function footlineFromBottom(stageH: number): number {
+  return Math.min(330, Math.max(220, stageH * 0.3));
+}
 
 /**
  * 화면 세로 여유가 이만큼도 안 되면 **아예 안 띄운다**(샤워 물줄기).
@@ -239,10 +253,17 @@ export function layoutRoomProp(spec: PropSpec, stage: PropStage, st: StageGeom, 
   let x = st.width / 2;
   if (spec.outside) x += sign * (width / 2);
   x += sign * off.dx;
-  const y = st.height - FOOTLINE_FROM_BOTTOM + off.dy;
+  const y = st.height - footlineFromBottom(st.height) + off.dy;
+
+  // ★ 무대 밖으로 잘리지 않게 무대 안으로 물린다(2026-09-16). 아이·소품이 커지면서 넓은 소품(3~4단
+  //   똥·매트)이 좁은 화면의 가장자리에서 잘리고 한쪽으로 쏠려 보였다(상훈님 "균형 있게"). 오프셋은
+  //   그대로 두되, 소품이 무대보다 좁으면 가장자리 안으로만 밀고, 무대보다 넓으면 가운데에 둔다.
+  //   무대 폭·소품 폭만의 함수라 여전히 결정적이다(같은 개수면 언제나 같은 자리).
+  let left = x - width / 2;
+  left = width <= st.width ? Math.min(Math.max(left, 0), st.width - width) : (st.width - width) / 2;
 
   return {
-    left: x - width / 2,
+    left,
     top: spec.ref === 'bottom' ? y - height : y - height / 2,
     width,
     height,
@@ -282,9 +303,13 @@ export function layoutScreenProp(spec: PropSpec, stage: PropStage, st: StageGeom
   const k = st.width / PROP_STAGE.width;
 
   // 화면 위에서 내려오는 것(샤워 물줄기) — 아랫변이 발끝선 위 K x 0.60 에 온다.
+  // ★ 위 여백(`topFromStageTopPx`)과 발끝선 위 높이(`bottomFromFootlinePx`)는 **base(558폭) 좌표**라
+  //   무대 스케일 계수 `k` 로 함께 줄여야 한다(2026-09-16). 안 그러면 폰(무대 378px)에서 base 오프셋을
+  //   그대로 빼 높이가 음수가 되고 `SCREEN_FX_MIN_H` 미만으로 떨어져 **물줄기가 아예 안 떴다.**
+  //   bath·dust 는 아래 `heightPx x k` 분기라 이미 k 로 줄어드는데, 물줄기만 이 분기를 써서 빠져 있었다.
   if (s.topFromStageTopPx !== undefined) {
-    const top = s.topFromStageTopPx;
-    const bottomFromStageBottom = FOOTLINE_FROM_BOTTOM + (s.bottomFromFootlinePx ?? 0);
+    const top = s.topFromStageTopPx * k;
+    const bottomFromStageBottom = footlineFromBottom(st.height) + (s.bottomFromFootlinePx ?? 0) * k;
     const height = st.height - bottomFromStageBottom - top;
     // ★ 여유가 없으면 안 띄운다 — 짧은 화면에서 물줄기가 얼룩으로 보인다.
     if (height < SCREEN_FX_MIN_H) return null;
