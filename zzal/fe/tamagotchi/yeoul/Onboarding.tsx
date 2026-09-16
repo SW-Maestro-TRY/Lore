@@ -7,10 +7,12 @@
 // 캐릭터 칸은 "이름만 필수" 다. 나머지는 칩 한 줄 + 긴 글 한 줄이고, 안 채워도 넘어간다.
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF } from './constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import { spriteUrl, useLive } from './useHatch';
+import { assetUrl } from '../../lib/assets';
 import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
 
@@ -18,6 +20,34 @@ import type { HatchBlocked } from '../../lib/hatchBlocked';
 /** 세계관은 **고른 칩 전부**와 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
 const worldOf = (chips: readonly string[] | undefined, text: string | undefined) =>
   [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, 100);
+
+/**
+ * 업로드 안내의 예시 그림 한 칸.
+ *
+ * ★ 로드에 실패하면 옛 색네모 + '그림' 자리표시자로 폴백한다(상훈님 요청) —
+ *   CDN 이 죽어도 안내 자체가 무너지지 않게. `box` 는 폴백 때 쓰는 색/빗금/글자 스타일까지
+ *   담고 있고(부르는 쪽이 좋음/어려움 칸을 다르게 준다), 그림이 뜨면 그 위를 img 가 덮는다.
+ *   img 는 투명 배경이라, 캐릭터 둘레로는 칸의 색·빗금이 그대로 비쳐 종이 느낌을 살린다.
+ */
+function ExampleImg({ src, alt, box, badge }: { src: string; alt: string; box: CSSProperties; badge: ReactNode }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div style={box}>
+      {failed || !src ? (
+        '그림'
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={alt}
+          onError={() => setFailed(true)}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+        />
+      )}
+      {badge}
+    </div>
+  );
+}
 
 export default function Onboarding({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
@@ -121,12 +151,14 @@ export default function Onboarding({ y }: { y: Yeoul }) {
 
             <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림이면 좋아요</span>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-              {GOOD_EX.map(([lbl, color]) => (
+              {GOOD_EX.map(([lbl, color, key]) => (
                 <div key={lbl} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
-                  <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: color, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.05) 0 6px,transparent 6px 14px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `8.5px ${MONO}`, color: 'rgba(74,64,56,.42)' }}>
-                    그림
-                    <span style={{ position: 'absolute', left: 8, top: 8, width: 12, height: 12, borderRadius: '50%', border: '1.5px solid #5C8452' }} />
-                  </div>
+                  <ExampleImg
+                    src={assetUrl(key)}
+                    alt={`좋은 예: ${lbl}`}
+                    box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: color, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.05) 0 6px,transparent 6px 14px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `8.5px ${MONO}`, color: 'rgba(74,64,56,.42)' }}
+                    badge={<span style={{ position: 'absolute', left: 8, top: 8, width: 15, height: 15, borderRadius: '50%', border: '1.5px solid #5C8452', background: 'rgba(255,253,248,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, color: '#5C8452' }}>✓</span>}
+                  />
                   <span style={{ fontSize: 11, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{lbl}</span>
                 </div>
               ))}
@@ -134,12 +166,14 @@ export default function Onboarding({ y }: { y: Yeoul }) {
 
             <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림은 어려워요</span>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
-              {BAD_EX.map(([lbl, color]) => (
+              {BAD_EX.map(([lbl, color, key]) => (
                 <div key={lbl} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
-                  <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: color, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.05) 0 5px,transparent 5px 12px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `8px ${MONO}`, color: 'rgba(74,64,56,.34)' }}>
-                    그림
-                    <span style={{ position: 'absolute', left: 6, top: 5, fontSize: 12, lineHeight: 1, color: C.accent }}>✕</span>
-                  </div>
+                  <ExampleImg
+                    src={assetUrl(key)}
+                    alt={`어려운 예: ${lbl}`}
+                    box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: color, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.05) 0 5px,transparent 5px 12px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `8px ${MONO}`, color: 'rgba(74,64,56,.34)' }}
+                    badge={<span style={{ position: 'absolute', left: 5, top: 5, width: 14, height: 14, borderRadius: '50%', background: 'rgba(255,253,248,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, color: C.accent }}>✕</span>}
+                  />
                   <span style={{ fontSize: 10.5, color: C.faint, textAlign: 'center' }}>{lbl}</span>
                 </div>
               ))}
