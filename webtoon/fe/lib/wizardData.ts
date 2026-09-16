@@ -119,6 +119,6 @@ export const emptyWizardForm = (): WizardForm => ({
   genre: "",
   style: "",
   quality: QUALITY_DEFAULT,
-  mode: "simple",
+  mode: "expert",
   agreeIp: false,
 });

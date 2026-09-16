@@ -1,0 +1,100 @@
+Character reference sheet for a Korean webtoon production. Flat even lighting, pure white background (#FFFFFF), no cast shadows, no text, no labels, no watermark, no logo, no signature. Clean line art with flat colors. The character is identical in every figure on the sheet.
+
+[CHARACTER SHEET — ONE PAGE, SEPARATE REGIONS]
+A single landscape sheet holding the regions below, stacked with clear empty white space between them so each region reads as its own block. No frames, no borders, no captions, no labels.
+
+REGION 1 — TOP BAND: turnaround.
+  The SAME character four times in one horizontal row, left to right:
+  (1) front view  (2) three-quarter view  (3) side view  (4) back view.
+  Full body, standing at attention, arms relaxed at the sides, feet together,
+  neutral expression, camera at eye level.
+  All four stand on one shared ground line with exactly the same height and the
+  same proportions. The outfit, hair length and body type do not change between
+  views. The character carries nothing in these four figures.
+
+REGION 2 — MIDDLE BAND: 6 expressions.
+  The SAME character's head and shoulders 6 times in one
+  horizontal row, evenly spaced, all the same size, all facing the camera at the
+  same angle. Only the expression changes; face shape, hairstyle and hair length
+  are identical in all of them.
+
+REGION 3 — BOTTOM LEFT: 5 close-up insets, one per fixed design element, each showing only that element, enlarged.
+
+REGION 4 — BOTTOM RIGHT: one horizontal row of flat color swatch chips, one chip per palette entry, in the listed order.
+
+CHARACTER
+A woman in her mid-20s with straight black hair at shoulder length, wearing a casual hoodie and blue jeans. She has a calm and gentle look. Her skin is light, and her eyes are dark brown. The hoodie is light gray with a simple design, and the jeans are classic blue denim.
+
+COLOR PALETTE (use exactly these, and these are the chips in the swatch row)
+hair: black (#222222) / eyes: dark brown (#3B2C23) / skin: light beige (#F5E3D2) / outfit_main: light gray (#D8D8D8) / outfit_sub: blue (#3973B7) / accent: white (#FFFFFF)
+
+FIXED DESIGN ELEMENTS — visible and identical everywhere on the sheet, and one inset each in region 3. Written in Korean; follow them literally:
+  1. 어깨까지 오는 검은 생머리
+  2. 밝은 회색 후드티, 앞면에 주머니 있음
+  3. 청색 데님 팬츠, 스트레이트 핏
+  4. 후드티 소매와 밑단에 립 처리
+  5. 작고 둥근 귀, 머리카락에 가려져 있음
+
+EXPRESSIONS for region 2, left to right. Written in Korean; the part after the dash describes exactly what to draw:
+  1. 평온 — 입을 다물고 눈꺼풀이 약간 내려간, 힘이 빠진 얼굴
+  2. 미소 — 입꼬리가 살짝 올라가고 눈이 부드럽게 휘어진 얼굴
+  3. 놀람 — 눈이 크게 뜨이고 입이 작게 벌어진 얼굴
+  4. 당황 — 눈썹이 찡그려지고 입술이 일직선으로 굳어진 얼굴
+  5. 슬픔 — 눈동자가 아래로 향하고 입꼬리가 내려간 얼굴
+  6. 분노 — 눈썹이 아래로 모이고 입술이 굳게 다물린 얼굴
+
+STYLE
+  high-end Korean romance fantasy webtoon illustration,
+
+  delicate and highly detailed webtoon lineart,
+  extremely fine elegant linework,
+  thin colored lineart rather than black outlines,
+  pink and mauve colored outlines for pink hair,
+  soft lavender outlines for white clothing,
+  clean 2D drawing,
+
+  very light pastel coloring,
+  high-key pastel palette,
+  low contrast,
+  soft and pale colors,
+  minimal tonal gradients,
+  subtle flat cel shading,
+  small areas of gentle blush,
+
+  the lineart remains clearly visible through the coloring,
+  intricate hand-drawn details,
+  many fine hair strands drawn with elegant thin lines,
+  large flowing hair shapes with delicate internal strands,
+
+  highly detailed ornate fantasy dress,
+  fine lace,
+  pearls,
+  ribbons,
+  floral embroidery,
+  delicate jewelry,
+  intricate fabric patterns,
+  small decorative details drawn with fine linework,
+
+  delicate elegant facial features,
+  refined Korean romance webtoon face,
+  slender expressive eyes,
+  fine eyelashes,
+  simple nose,
+  small delicate mouth,
+  subtle facial shading,
+
+  beautiful elaborate fantasy character design,
+  luxurious romantic fantasy atmosphere,
+  illustration-like webtoon panel.
+
+  ## 하지 마라
+
+  - photorealistic, 3D rendering, semi-realistic rendering, painterly rendering
+  - airbrushed skin, glossy skin, plastic skin
+  - strong specular highlights, heavy gradients, dramatic realistic lighting,
+    high contrast
+  - black heavy outlines, thick outlines
+  - 3D anime character, CGI appearance, hyper-rendered face
+  - jewel-like irises, excessive eye highlights
+  - overly glossy hair, metallic hair
+  - photorealistic fabric

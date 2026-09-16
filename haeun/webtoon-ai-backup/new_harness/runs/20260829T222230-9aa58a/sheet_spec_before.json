@@ -1,0 +1,30 @@
+{
+  "name": "모모",
+  "appearance_en": "A teenage girl with long, wavy pink hair tied with a large pink bow on the right side of her head. She has cat-like ears, a small yellow crown on the left, and pink eyes with circular pupils. Her outfit is a simple pink dress with a bow at the collar, and she wears long white stockings. She holds a long, straight sword with a pink hilt and yellow guard.",
+  "design_details": [
+    "머리 오른쪽에 큰 분홍색 리본",
+    "왼쪽 머리 위에 노란색 왕관 모양 장식",
+    "고양이 귀 형태의 머리카락, 양쪽에 있음",
+    "분홍색 동공의 둥근 눈, 속눈썹이 아래로 뻗어 있음",
+    "목에 작은 분홍색 리본 장식"
+  ],
+  "props": [
+    "길고 뾰족한 분홍색 칼, 손잡이와 가드가 노란색, 금속 재질, 항상 손에 들고 있음"
+  ],
+  "color_palette": {
+    "hair": "light pink (#FFB6C1)",
+    "eyes": "pink (#FF69B4)",
+    "skin": "pale peach (#FFF5F5)",
+    "outfit_main": "light pink (#FFB6C1)",
+    "outfit_sub": "white (#FFFFFF)",
+    "accent": "yellow (#FFD700)"
+  },
+  "expression_set": [
+    "평온 — 입꼬리가 살짝 올라가고 눈이 부드럽게 반달 모양인 얼굴",
+    "기쁨 — 입을 활짝 벌리고 웃으며 눈이 크게 열린 얼굴",
+    "분노 — 눈썹이 아래로 찌푸려지고 입꼬리가 내려간 얼굴",
+    "놀람 — 눈이 크게 열리고 입이 작게 벌어진 얼굴",
+    "당황 — 눈동자가 흔들리고 입이 일자 모양으로 굳어진 얼굴",
+    "결의 — 눈이 날카롭게 빛나고 입을 다문 단호한 얼굴"
+  ]
+}

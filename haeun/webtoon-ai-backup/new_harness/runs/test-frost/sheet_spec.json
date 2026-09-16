@@ -1,0 +1,27 @@
+{
+  "name": "박하은",
+  "appearance_en": "A young woman with long, naturally loose black hair, deep dark brown round eyes, and a light beige complexion. She has a medium build visible from the waist up. She wears a light sage green windbreaker jacket, a gray sleeveless top, and partially visible black pants. Her face is covered with a black disposable mask, and she holds a smartphone decorated with various character stickers. A small earring is visible on her left ear.",
+  "design_details": [
+    "검은색 일회용 마스크를 항상 착용",
+    "연한 카키색 바람막이 점퍼",
+    "스마트폰 뒷면에 다양한 캐릭터 스티커 다수 부착",
+    "왼쪽 귀에 실버 컬러의 작은 원형 귀걸이"
+  ],
+  "props": [],
+  "color_palette": {
+    "hair": "black (#222222)",
+    "eyes": "dark brown (#4B3621)",
+    "skin": "light beige (#F5E3D3)",
+    "outfit_main": "sage green (#A3B18A)",
+    "outfit_sub": "gray (#888888)",
+    "accent": "black (#222222)"
+  },
+  "expression_set": [
+    "중립 — 마스크로 얼굴이 가려진 채, 눈만 또렷하게 정면을 바라본다",
+    "안도 — 눈꼬리가 아주 살짝 내려가며, 눈동자에 힘이 빠지는 모습",
+    "불안 — 눈동자가 흔들리고, 숨을 한 번 깊게 내쉰다",
+    "놀람 — 동공이 커지며, 손이 스마트폰을 조금 더 세게 쥔다",
+    "은폐 — 시선을 아래로 내리고 마스크를 만지작거린다",
+    "안심 — 마스크를 아래로 살짝 내리고 눈을 가늘게 웃음짓는다"
+  ]
+}

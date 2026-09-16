@@ -77,6 +77,11 @@ export interface NhDirection {
   n: number;
   title: string;
   genre: string;
+  /** 사람이 고를 때 보는 짧은 요약(2~3문장) — 지금 story_prompt 가 실제로 낸다. */
+  intro: string;
+  /** 고른 뒤 scene_prompt 로 그대로 넘어가는 본문(5~8문장). 목록 화면에는 안 띄운다. */
+  body: string;
+  /** 옛 story_prompt(### 줄거리 절) 형식 run 과의 호환용 — 지금 형식에는 항상 빈 문자열. */
   plot: string;
   scenes: string[];
   cast?: { name: string; appearance?: string }[];
@@ -237,9 +242,12 @@ export function decideSheet(id: string, decision: "approve" | "retry", note = ""
               note ? { decision, note } : { decision });
 }
 
-/** 이야기 고르기 — 넷 중 하나. */
-export function pickDirection(id: string, n: number) {
-  return post(`/nh/jobs/${encodeURIComponent(id)}/pick`, { n });
+/** 이야기 고르기 — 넷 중 하나. `editedBody` 를 주면 그 방향의 본문을
+ * 사람이 고친 내용으로 바꿔서 다음 단계(장면 나누기)부터 그 내용을
+ * 쓴다 — 안 주거나 원래 본문과 같으면 서버가 아무것도 안 건드린다. */
+export function pickDirection(id: string, n: number, editedBody?: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/pick`,
+              editedBody ? { n, body: editedBody } : { n });
 }
 
 /** 넷 다 마음에 안 들 때 — 후보를 다시 만든다. */

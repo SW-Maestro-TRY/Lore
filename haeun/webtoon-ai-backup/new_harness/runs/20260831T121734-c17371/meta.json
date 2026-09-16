@@ -1,0 +1,121 @@
+{
+  "run_id": "20260831T121734-c17371",
+  "calls": [
+    {
+      "stage": "STORY",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 4501,
+        "output": 1151,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.009002,
+        "output": 0.009208,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.01821
+      }
+    },
+    {
+      "stage": "DETAIL",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 3600,
+        "output": 2065,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.0072,
+        "output": 0.01652,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.02372
+      }
+    },
+    {
+      "stage": "BOARD",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 7257,
+        "output": 7091,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.014514,
+        "output": 0.056728,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.071242
+      }
+    },
+    {
+      "stage": "SHEET",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 1959,
+        "output": 442,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.003918,
+        "output": 0.003536,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.007454
+      }
+    },
+    {
+      "stage": "SHEET_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "high",
+      "bytes": 1480286,
+      "refs": [],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=2480, input_tokens_details=UsageInputTokensDetails(image_tokens=0, text_tokens=2480), output_tokens=5488, total_tokens=7968, output_tokens_details=UsageOutputTokensDetails(image_tokens=5488, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 2480,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 2480
+          },
+          "output_tokens": 5488,
+          "total_tokens": 7968,
+          "output_tokens_details": {
+            "image_tokens": 5488,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 2480,
+        "tokens_out": 5488,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 7968,
+        "tokens_in_text": 2480,
+        "tokens_in_image": 0,
+        "tokens_out_image": 5488,
+        "cost_basis": "tokens",
+        "total": 0.17704,
+        "total_krw": 248
+      },
+      "output_path": "/Users/mint/project/Lore/agent-nh-review/haeun/new_harness/runs/20260831T121734-c17371/sheet.png"
+    }
+  ]
+}

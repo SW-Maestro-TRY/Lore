@@ -1,0 +1,880 @@
+{
+  "cast": [
+    {
+      "name": "윤도경",
+      "appearance": "30대 초반 남성, 단정한 검은 머리, 짧은 앞머리, 희미한 미소가 떠 있는 편안한 얼굴, 슬림한 체격, 밝은색 니트와 앞치마 차림",
+      "personality": "타인의 이야기를 잘 들어주며, 따뜻하고 위트 있다."
+    },
+    {
+      "name": "단골 손님",
+      "appearance": "30대 초반 남성, 흐트러진 듯 단정한 카키색 트렌치코트, 검은 머리, 약간 창백한 얼굴, 얇은 테 안경, 말수가 적고 수줍어 보임",
+      "personality": "조용하고 내성적이나, 신뢰하는 사람 앞에서는 마음을 조금 연다."
+    }
+  ],
+  "scenes": [
+    {
+      "id": 1,
+      "summary": "도경이 카페 문에 ‘휴무’ 팻말을 걸고 커피 한 잔을 내리며 소파에 기대어 앉는다.",
+      "location": "동네 골목의 작은 카페 실내",
+      "time": "오전, 창 너머로 잔잔한 빛이 들어옴",
+      "camera_plan": "광각, 무릎, 상반신, 클로즈업",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "normal",
+          "camera": {
+            "shot": "광각",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "카페 입구 유리문, 밖에 흐린 골목 풍경, 안쪽은 아늑한 조명 아래 깔끔히 정돈된 실내"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "기분 좋은 미소",
+              "action": "‘휴무’ 팻말을 유리문에 단다",
+              "moment": "도중",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "찰칵",
+              "source": "팻말",
+              "position": "팻말 옆",
+              "reason": "문에 팻말 거는 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "카페 안팎 모두 보이게 프레임, 팻말에 ‘휴무’가 잘 읽히도록"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "무릎",
+            "angle": "정면",
+            "facing": "옆모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "카페 내부, 커피머신과 깨끗한 바"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "차분한 표정",
+              "action": "원두를 갈아 커피를 내린다",
+              "moment": "도중",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "드르륵",
+              "source": "커피 그라인더",
+              "position": "오른쪽 아래",
+              "reason": "원두 가는 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "도경 손동작과 커피머신이 동시에 보이게 구성"
+        },
+        {
+          "id": 3,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "조용한 카페 소파와 탁자, 옆에 커피잔, 조명이 부드럽게 비침"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "여유로운 미소",
+              "action": "스팀이 오르는 커피잔을 들고 소파에 기대 앉음",
+              "moment": "직후",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "윤도경",
+              "type": "생각",
+              "text": "오늘은 정말 나만의 시간이다.",
+              "bubble": {
+                "shape": "구름",
+                "tail": "도경 머리 위",
+                "position": "왼쪽 위"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "하아…",
+              "source": "윤도경",
+              "position": "도경 옆",
+              "reason": "여유로운 숨"
+            }
+          ],
+          "forbid": [],
+          "note": "인물의 표정에 여유로움이 잘 드러나게"
+        },
+        {
+          "id": 4,
+          "size": "normal",
+          "camera": {
+            "shot": "클로즈업",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "효과",
+            "desc": "따스한 색감의 그라데이션, 잔잔한 음악의 분위기를 상징"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "미소",
+              "action": "소파에 기대 눈을 살짝 감는다",
+              "moment": "도중",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "윤도경",
+              "type": "생각",
+              "text": "이 시간엔 아무도 오지 않겠지.",
+              "bubble": {
+                "shape": "구름",
+                "tail": "도경 머리 옆",
+                "position": "오른쪽 위"
+              }
+            }
+          ],
+          "sfx": [],
+          "forbid": [],
+          "note": "눈을 반쯤 감고, 음악 감상에 빠진 듯한 연출"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "summary": "갑작스레 문이 열리고, 평소 말수가 적던 단골 손님이 조심스레 들어온다.",
+      "location": "동네 골목의 작은 카페 실내",
+      "time": "오전 후반, 카페 내부는 조용한 조명",
+      "camera_plan": "광각, 클로즈업, 무릎, 상반신",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "normal",
+          "camera": {
+            "shot": "광각",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "카페 소파에서 입구 쪽을 바라본 실내"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "평온한 표정",
+              "action": "소파에 기대 커피잔을 들고 있음",
+              "moment": "직전",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [],
+          "forbid": [],
+          "note": "조용한 공간, 정적 강조"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "클로즈업",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "효과",
+            "desc": "정적을 상징하는 푸른 계열의 그라데이션"
+          },
+          "characters": [],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "덜컹",
+              "source": "문손잡이",
+              "position": "왼쪽 위",
+              "reason": "문이 열리며 손잡이가 도는 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "소리로 정적이 깨어지는 장면 강조"
+        },
+        {
+          "id": 3,
+          "size": "normal",
+          "camera": {
+            "shot": "무릎",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "카페 입구, 유리문이 열리며 주문대 너머 도경과 문틈에 선 손님이 함께 보임"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "놀라움",
+              "action": "입구 쪽을 돌아본다",
+              "moment": "도중",
+              "framing": "상반신"
+            },
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "조심스럽고 머뭇거림",
+              "action": "살짝 얼굴만 내민다",
+              "moment": "도중",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "윤도경",
+              "type": "생각",
+              "text": "문이 분명 잠겼었는데…?",
+              "bubble": {
+                "shape": "구름",
+                "tail": "도경 머리 위",
+                "position": "오른쪽 위"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "쨍그랑",
+              "source": "문 위 팻말",
+              "position": "문 위",
+              "reason": "문이 열려 흔들리는 팻말 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "손님의 얼굴이 잘 보이게, 도경은 놀람/경계"
+        },
+        {
+          "id": 4,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "효과",
+            "desc": "연한 분홍과 하늘색이 번지는 배경, 두 인물의 감정적 거리 강조"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "살짝 경계, 동시에 반가움이 섞임",
+              "action": "커피잔을 내려놓으며 입구 쪽을 주시",
+              "moment": "직후",
+              "framing": "상반신"
+            },
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "머쓱하고 어색한 표정, 고개를 살짝 숙임",
+              "action": "조심스레 가게 안으로 한 발짝 들어선다",
+              "moment": "직후",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "윤도경",
+              "type": "생각",
+              "text": "이 시간에, 저 손님이…?",
+              "bubble": {
+                "shape": "구름",
+                "tail": "도경 머리 옆",
+                "position": "오른쪽 위"
+              }
+            }
+          ],
+          "sfx": [],
+          "forbid": [],
+          "note": "두 인물의 시선이 처음 교차, 손님의 조심스런 태도 강조"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "summary": "손님이 오늘만큼은 커피보단 도경의 이야기를 듣고 싶다고 말한다.",
+      "location": "동네 골목의 작은 카페 실내",
+      "time": "오전 후반, 흐릿한 봄비와 실내 조명",
+      "camera_plan": "무릎, 상반신, 클로즈업",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "normal",
+          "camera": {
+            "shot": "무릎",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "카페 소파 맞은편 자리에 마주 앉은 두 인물"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "약간 놀란 눈동자",
+              "action": "손님을 바라보며 커피잔을 내려놓는다",
+              "moment": "도중",
+              "framing": "무릎 위"
+            },
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "살짝 망설이는 표정",
+              "action": "테이블 위에 손을 모으고 앉음",
+              "moment": "직전",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [],
+          "forbid": [],
+          "note": "두 사람의 거리와 긴장감을 동시에 보여줌"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "효과",
+            "desc": "조용한 공기, 연한 하늘색 그라데이션"
+          },
+          "characters": [
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "조심스럽고 머뭇거림",
+              "action": "작은 목소리로 입을 뗸다",
+              "moment": "도중",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "단골 손님",
+              "type": "말",
+              "text": "오늘은… 커피보다,",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "단골 손님 쪽",
+                "position": "왼쪽 위"
+              }
+            },
+            {
+              "order": 2,
+              "speaker": "단골 손님",
+              "type": "말",
+              "text": "도경 씨 얘기가 듣고 싶어요.",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "단골 손님 쪽",
+                "position": "왼쪽"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "두근",
+              "source": "단골 손님",
+              "position": "단골 손님 옆",
+              "reason": "조심스럽게 말하는 긴장"
+            }
+          ],
+          "forbid": [],
+          "note": "단골 손님의 표정과 떨림에 집중"
+        },
+        {
+          "id": 3,
+          "size": "normal",
+          "camera": {
+            "shot": "클로즈업",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "효과",
+            "desc": "따뜻한 주황 계열의 그라데이션, 분위기 전환"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "살짝 미소 띤 표정",
+              "action": "소파 반대편을 손짓으로 가리킨다",
+              "moment": "직후",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "윤도경",
+              "type": "말",
+              "text": "저요? 제 이야기가 재미있을지 모르겠는데요.",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "도경 쪽",
+                "position": "오른쪽"
+              }
+            }
+          ],
+          "sfx": [],
+          "forbid": [],
+          "note": "도경의 위트가 묻어나는 미소 강조"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "summary": "둘이 창밖을 바라보며 서로의 소소한 일상을 나누고, 손님이 자신의 고민을 어렵게 꺼낸다.",
+      "location": "동네 골목의 작은 카페 실내, 창가 자리",
+      "time": "낮, 창밖으로 봄비 내림",
+      "camera_plan": "광각, 클로즈업, 상반신, 클로즈업",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "normal",
+          "camera": {
+            "shot": "광각",
+            "angle": "정면",
+            "facing": "옆모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "창가 소파에 나란히 앉아, 창밖으로 흐릿한 골목과 봄비"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "부드러운 미소",
+              "action": "손님 옆에 앉아 창밖을 바라봄",
+              "moment": "도중",
+              "framing": "무릎 위"
+            },
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "약간 긴장했으나 이완되어 감",
+              "action": "가볍게 어깨 힘이 풀림",
+              "moment": "도중",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "윤도경",
+              "type": "말",
+              "text": "지난주에 커피콩을 다 엎었어요! 손님 앞에서 얼마나 당황했던지…",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "도경 쪽",
+                "position": "왼쪽 위"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "툭",
+              "source": "테이블 위 컵",
+              "position": "테이블 옆",
+              "reason": "농담하며 컵을 살짝 내려놓는 소리"
+            }
+          ],
+          "forbid": [],
+          "note": "일상적인 대화와 창밖 배경의 조화"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "클로즈업",
+            "angle": "정면",
+            "facing": "옆모습"
+          },
+          "background": {
+            "type": "효과",
+            "desc": "흐릿한 봄비가 스며드는 연한 파랑 그라데이션"
+          },
+          "characters": [
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "살짝 미소, 쑥스러움",
+              "action": "입가에 미소가 번짐",
+              "moment": "직후",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "단골 손님",
+              "type": "말",
+              "text": "그런 일도 겪으시는구나…",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "단골 손님 쪽",
+                "position": "오른쪽"
+              }
+            }
+          ],
+          "sfx": [],
+          "forbid": [],
+          "note": "손님 표정에 온기가 돌고 어색함이 풀리는 연출"
+        },
+        {
+          "id": 3,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "창밖은 비 내리고, 카페 실내는 은은한 조명"
+          },
+          "characters": [
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "망설임, 약간 떨림",
+              "action": "두 손을 맞쥐고 입술을 깨문다",
+              "moment": "직전",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "흠칫",
+              "source": "단골 손님",
+              "position": "손님 옆",
+              "reason": "고민을 꺼내려다 망설이며 움찔"
+            }
+          ],
+          "forbid": [],
+          "note": "손끝 불안/입술 깨무는 행동이 잘 보이도록"
+        },
+        {
+          "id": 4,
+          "size": "normal",
+          "camera": {
+            "shot": "클로즈업",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "효과",
+            "desc": "연한 회색과 푸른빛, 망설임의 분위기"
+          },
+          "characters": [
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "살짝 떨리는 눈빛",
+              "action": "아주 작은 목소리로 말한다",
+              "moment": "도중",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "단골 손님",
+              "type": "말",
+              "text": "요즘 좀 힘들었어요. 누구한테 말할 용기가 잘 안 났었는데…",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "단골 손님 쪽",
+                "position": "오른쪽 아래"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "후—",
+              "source": "단골 손님",
+              "position": "단골 손님 옆",
+              "reason": "살짝 내쉬는 한숨, 긴장감의 해소"
+            }
+          ],
+          "forbid": [],
+          "note": "손님의 떨림·솔직함 강조"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "summary": "도경이 조용히 공감과 위트로 답하며, 손님이 한결 가벼워진 표정으로 카페를 나선다.",
+      "location": "동네 골목의 작은 카페 실내, 출입구와 창가",
+      "time": "오후, 비가 그친 밝은 거리",
+      "camera_plan": "상반신, 클로즈업, 무릎, 광각",
+      "cuts": [
+        {
+          "id": 1,
+          "size": "normal",
+          "camera": {
+            "shot": "상반신",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "카페 소파, 창가 쪽"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "공감하는 미소와 장난기",
+              "action": "손님의 말을 조용히 듣고 있다",
+              "moment": "도중",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "윤도경",
+              "type": "말",
+              "text": "사실 저도 예전에 비슷했어요.",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "도경 쪽",
+                "position": "왼쪽"
+              }
+            },
+            {
+              "order": 2,
+              "speaker": "윤도경",
+              "type": "말",
+              "text": "그땐 매일 커피콩이 다 탈출해버릴까봐 걱정했거든요.",
+              "bubble": {
+                "shape": "구름",
+                "tail": "도경 머리 위",
+                "position": "왼쪽 위"
+              }
+            }
+          ],
+          "sfx": [
+            {
+              "text": "피식",
+              "source": "단골 손님",
+              "position": "단골 손님 옆",
+              "reason": "손님이 웃음을 참다 내뱉음"
+            }
+          ],
+          "forbid": [],
+          "note": "도경의 진심과 위트, 손님 표정의 변화 포착"
+        },
+        {
+          "id": 2,
+          "size": "normal",
+          "camera": {
+            "shot": "클로즈업",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "효과",
+            "desc": "밝고 따뜻한 노란빛, 감정의 전달 강조"
+          },
+          "characters": [
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "환한 미소, 가벼워진 표정",
+              "action": "머리를 숙여 인사한다",
+              "moment": "도중",
+              "framing": "상반신"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "단골 손님",
+              "type": "말",
+              "text": "고마워요. 덕분에 마음이 한결 편해진 것 같아요.",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "단골 손님 쪽",
+                "position": "오른쪽 아래"
+              }
+            }
+          ],
+          "sfx": [],
+          "forbid": [],
+          "note": "손님의 진심 어린 인사에 집중"
+        },
+        {
+          "id": 3,
+          "size": "normal",
+          "camera": {
+            "shot": "무릎",
+            "angle": "정면",
+            "facing": "앞모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "카페 출입문과 실내, 문 앞"
+          },
+          "characters": [
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "장난기",
+              "action": "엄지척하며 웃는다",
+              "moment": "직후",
+              "framing": "상반신"
+            },
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "오른쪽",
+              "expression": "미소, 뿌듯함",
+              "action": "문 쪽으로 걸어간다",
+              "moment": "직후",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [
+            {
+              "order": 1,
+              "speaker": "윤도경",
+              "type": "말",
+              "text": "다음엔 커피 두 잔 값 내고 이야기 두 배로 들려주세요!",
+              "bubble": {
+                "shape": "둥근 타원",
+                "tail": "도경 쪽",
+                "position": "왼쪽 위"
+              }
+            }
+          ],
+          "sfx": [],
+          "forbid": [],
+          "note": "가벼워진 분위기, 익살스러운 마무리"
+        },
+        {
+          "id": 4,
+          "size": "normal",
+          "camera": {
+            "shot": "광각",
+            "angle": "정면",
+            "facing": "뒷모습"
+          },
+          "background": {
+            "type": "실제공간",
+            "desc": "카페 출입구와 봄비가 멈춘 골목길"
+          },
+          "characters": [
+            {
+              "name": "단골 손님",
+              "style": "LD",
+              "position": "가운데",
+              "expression": "후련한 뒷모습",
+              "action": "유리문을 밀고 나간다",
+              "moment": "도중",
+              "framing": "전신"
+            },
+            {
+              "name": "윤도경",
+              "style": "LD",
+              "position": "왼쪽",
+              "expression": "잔잔한 미소",
+              "action": "창밖을 바라본다",
+              "moment": "직후",
+              "framing": "무릎 위"
+            }
+          ],
+          "dialogue": [],
+          "sfx": [
+            {
+              "text": "딩동",
+              "source": "출입문 초인종",
+              "position": "문 위",
+              "reason": "손님이 문을 나서며 초인종이 울림"
+            }
+          ],
+          "forbid": [],
+          "note": "봄빛 잔잔한 골목, 카페에 남은 여운 강조"
+        }
+      ]
+    }
+  ]
+}

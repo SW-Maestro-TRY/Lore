@@ -1,0 +1,32 @@
+{
+  "name": "이올",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A young man with pale skin and straight, dark blue hair parted to the side, reaching just above the shoulders. He has sharp, gray eyes and a slim, tall build. He wears a long, navy blue coat with gold trim and shoulder epaulets over a matching vest and trousers, a white dress shirt, and a dark tie. His left sleeve is rolled up, revealing a leather bracer on his forearm. Multiple metallic seals and medallions hang from his belt and coat, and he holds a large, ornate book with red markings and metallic embellishments.",
+  "design_details": [
+    "왼쪽 소매를 팔꿈치까지 걷어 올린 긴 코트",
+    "코트 오른쪽 어깨에 사각형 금속 견장과 장식 체인",
+    "허리띠와 코트 앞자락에 여러 개의 금속 인장과 메달이 매달림",
+    "왼팔에 가죽 팔토시를 착용",
+    "코트와 바지, 구두까지 모두 어두운 남색 계열로 통일"
+  ],
+  "props": [
+    "붉은 마법진과 금속 장식이 박힌 두꺼운 장부, 세로 약 35cm, 가죽 표지, 모서리가 닳아 있음"
+  ],
+  "color_palette": {
+    "hair": "dark blue (#232a36)",
+    "eyes": "gray (#6d6e72)",
+    "skin": "pale beige (#e7dcd1)",
+    "outfit_main": "navy (#232a36)",
+    "outfit_sub": "gold (#bfa14a)",
+    "accent": "red (#a13c2f)"
+  },
+  "expression_set": [
+    "무표정 — 입을 다물고 눈꺼풀을 살짝 내린, 감정이 드러나지 않는 얼굴",
+    "냉담 — 눈썹을 약간 찌푸리고 입꼬리가 내려간, 차가운 시선",
+    "집중 — 눈동자가 약간 모이고 입술이 살짝 다문 채 책이나 장부를 보는 얼굴",
+    "경계 — 눈을 조금 크게 뜨고 입술을 얇게 다문, 주변을 살피는 얼굴",
+    "곤란 — 눈썹이 안쪽으로 모이고 입꼬리가 살짝 내려간, 난처한 표정",
+    "놀람 — 눈이 크게 열리고 입이 약간 벌어진, 예상치 못한 상황의 얼굴"
+  ]
+}

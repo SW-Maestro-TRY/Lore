@@ -1,0 +1,113 @@
+{
+  "run_id": "action-page6-frost",
+  "calls": [
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 2799488,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=7105, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=5569), output_tokens=1372, total_tokens=8477, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))"
+      },
+      "page": 6,
+      "cuts": 2,
+      "cost": null
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 3951555,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=4816, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=3280), output_tokens=1372, total_tokens=6188, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))"
+      },
+      "page": 6,
+      "cuts": 2,
+      "cost": null
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 3949633,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=4813, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=3277), output_tokens=1372, total_tokens=6185, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))"
+      },
+      "page": 6,
+      "cuts": 2,
+      "cost": null
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 3634594,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=4889, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=3353), output_tokens=1372, total_tokens=6261, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))"
+      },
+      "page": 6,
+      "cuts": 2,
+      "cost": null
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 3162190,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=5224, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=3688), output_tokens=1372, total_tokens=6596, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))"
+      },
+      "page": 6,
+      "cuts": 2,
+      "cost": null
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 3033996,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=5956, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=4420), output_tokens=1372, total_tokens=7328, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))"
+      },
+      "page": 6,
+      "cuts": 2,
+      "cost": null
+    }
+  ]
+}

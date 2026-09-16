@@ -1,0 +1,252 @@
+Character reference sheet for a Korean webtoon production. Flat even lighting, pure white background (#FFFFFF), no cast shadows, no text, no labels, no watermark, no logo, no signature. Clean line art with flat colors. The character is identical in every figure on the sheet.
+
+[CHARACTER SHEET — ONE PAGE, SEPARATE REGIONS]
+A single landscape sheet holding the regions below, stacked with clear empty white space between them so each region reads as its own block. No frames, no borders, no captions, no labels.
+
+REGION 1 — TOP BAND: turnaround.
+  The SAME character four times in one horizontal row, left to right:
+  (1) front view  (2) three-quarter view  (3) side view  (4) back view.
+  Full body, standing at attention, arms relaxed at the sides, feet together,
+  neutral expression, camera at eye level.
+  All four stand on one shared ground line with exactly the same height and the
+  same proportions. The outfit, hair length and body type do not change between
+  views. The character carries nothing in these four figures.
+
+REGION 2 — MIDDLE BAND: 6 expressions.
+  The SAME character's head and shoulders 6 times in one
+  horizontal row, evenly spaced, all the same size, all facing the camera at the
+  same angle. Only the expression changes; face shape, hairstyle and hair length
+  are identical in all of them.
+
+REGION 3 — BOTTOM LEFT: 5 close-up insets, one per fixed design element, each showing only that element, enlarged.
+
+REGION 4 — BOTTOM MIDDLE: 1 carried items, drawn on their own as separate objects laid out in a row, not held by the character and with no character in this region. Each item is drawn from the angle that reads best, at a size that makes its material and wear visible.
+
+REGION 5 — BOTTOM RIGHT: one horizontal row of flat color swatch chips, one chip per palette entry, in the listed order.
+
+CHARACTER
+A young man with pale skin, short silver-gray hair, and gray eyes. He wears a black hooded sweatshirt with the hood up, layered under a brown delivery vest with multiple pockets and a radio clipped to the left shoulder. His pants are black cargo style with straps and pockets, and he wears black combat boots. He is holding a medium-sized cardboard box with a shipping label attached.
+
+COLOR PALETTE (use exactly these, and these are the chips in the swatch row)
+hair: silver gray (#BFC1C2) / eyes: gray (#7A7B7D) / skin: pale beige (#D9D3CC) / outfit_main: black (#232324) / outfit_sub: brown (#7B6A58) / accent: dark gray (#474747)
+
+FIXED DESIGN ELEMENTS — visible and identical everywhere on the sheet, and one inset each in region 3. Written in Korean; follow them literally:
+  1. 짧은 은회색 머리, 앞머리가 눈썹까지 내려옴
+  2. 회색빛 눈, 쌍꺼풀 없는 눈매
+  3. 검은색 후드티, 후드를 항상 뒤집어씀
+  4. 갈색 택배 조끼, 왼쪽 어깨에 무전기 부착
+  5. 검은색 카고 바지, 허벅지 양쪽에 포켓과 스트랩
+
+CARRIED ITEMS to draw as separate objects. Written in Korean; the size, material and wear described are what to draw:
+  1. 중간 크기 골판지 상자, 송장이 붙어 있음, 손에 항상 들고 다님
+
+EXPRESSIONS for region 2, left to right. Written in Korean; the part after the dash describes exactly what to draw:
+  1. 무표정 — 입을 다물고 눈썹이 거의 움직이지 않은 얼굴
+  2. 당황 — 눈이 약간 커지고 입꼬리가 살짝 내려간 얼굴
+  3. 평온 — 입술이 일자로 다물리고 눈꺼풀이 살짝 내려온 얼굴
+  4. 집중 — 눈썹이 살짝 찌푸려지고 시선이 아래로 향한 얼굴
+  5. 머쓱함 — 입꼬리가 한쪽만 올라가고 눈이 옆을 보는 얼굴
+  6. 미소 — 입꼬리가 약간 올라가며 눈이 부드럽게 휘어진 얼굴
+
+STYLE
+  **Korean Shoujo × BL Manga Visual Style**
+
+  The artwork combines the elegant visual language of classic Korean shoujo manga with the refined bishōnen aesthetics of high-quality BL manga.
+
+  The defining quality is **beautiful, delicate, sophisticated, and emotionally intimate**. The characters should look like carefully inked manga artwork rather than painted digital illustrations, generic anime, or glossy modern webtoon art.
+
+  ### LINEWORK
+
+  Use highly refined traditional manga linework.
+
+  Thin, clean, confident ink lines with controlled variation in line weight. Facial features, eyelashes, hair strands, fingers, and small details use especially delicate lines, while silhouettes, clothing edges, jawlines, and important contours receive slightly stronger lines.
+
+  Lines must feel graceful, intentional, and professionally inked.
+
+  Never rough, sketchy, fuzzy, overly thick, or cartoon-like.
+
+  ### CHARACTER AESTHETIC
+
+  Characters have the elegant proportions associated with shoujo manga and bishōnen BL characters.
+
+  Tall, slender, elongated anatomy with relatively small heads, long necks, elegant shoulders, narrow waists, long limbs, slender hands, and graceful posture.
+
+  The body is **slim and beautiful but unmistakably male**.
+
+  Do not make male characters muscular or bulky. Instead, show subtle masculine structure through the jaw, neck, shoulders, chest, hands, wrists, and overall bone structure.
+
+  The ideal is **beautiful male anatomy rather than feminine anatomy**.
+
+  Male characters should feel like sophisticated bishōnen: refined, attractive, slender, slightly androgynous in beauty, but clearly male.
+
+  ### MALE FACE
+
+  Faces are refined and slightly elongated with elegant jawlines, defined but slender chins, high cheekbones, straight narrow noses, and small defined mouths.
+
+  The face should be beautiful rather than rugged.
+
+  Avoid extremely sharp triangular chins or excessively feminine facial proportions.
+
+  The jaw and cheek structure should retain subtle masculine definition.
+
+  Brows are elegant and clearly structured, contributing to a mature male appearance.
+
+  ### EYES
+
+  Eyes are long, narrow, almond-shaped, and expressive.
+
+  Use elegant upper eyelids, restrained eyelashes, slightly lifted outer corners, and deep understated expressions.
+
+  Eyes should feel **beautiful and sensual rather than cute**.
+
+  Irises are relatively simple with restrained detail and one or two small highlights.
+
+  Avoid oversized circular anime eyes, jewel-like irises, excessive sparkle, or glossy realistic eyes.
+
+  ### HAIR
+
+  Hair consists of large elegant masses with flowing tapered strands.
+
+  Use clean graphic shapes first, followed by a limited number of precise individual strands.
+
+  Hair should naturally frame and partially overlap the face, creating a beautiful bishōnen silhouette.
+
+  Highlights are graphic white shapes or thin ink strokes.
+
+  Never use glossy painted gradients or photorealistic hair rendering.
+
+  ### MALE BODY
+
+  Male bodies are slender, elegant, and elongated.
+
+  Use:
+
+  * narrow but clearly structured shoulders
+  * long necks with subtle masculine anatomy
+  * defined collarbones
+  * restrained chest definition
+  * slim waist
+  * long arms and legs
+  * long wrists and fingers
+  * elegant but clearly male hands
+
+  Avoid bodybuilding proportions, exaggerated muscles, extremely broad shoulders, or rugged masculine anatomy.
+
+  The body should feel **graceful, lean, youthful, and physically attractive**.
+
+  ### HANDS
+
+  Hands are long, slender, and elegant.
+
+  Clearly articulated fingers, subtle knuckles, delicate joints, and controlled anatomy.
+
+  Hands should retain believable male proportions while remaining beautiful and expressive.
+
+  Gestures should communicate intimacy, tension, hesitation, attraction, restraint, or emotional distance.
+
+  ### MANGA RENDERING
+
+  Rendering is based primarily on traditional manga techniques:
+
+  clean black ink, white space, flat black shapes, and mechanical screentone.
+
+  Use fine halftone dots and controlled screentone gradients to describe volume.
+
+  Screentone must have crisp graphic boundaries and visible manga structure.
+
+  Use white space deliberately.
+
+  Do not use airbrushed shading, soft digital gradients, volumetric lighting, realistic skin rendering, painterly blending, or glossy cel shading.
+
+  ### TONAL BALANCE
+
+  The overall image remains light, elegant, and sophisticated.
+
+  Black is used selectively for hair, clothing, silhouettes, and emphasis.
+
+  Do not turn the artwork into heavy noir.
+
+  White space remains an important part of the composition.
+
+  ### COLOR
+
+  When color is present, keep it restrained and desaturated.
+
+  Use pale ivory, very light neutral skin tones, dusty rose, muted beige, muted grey, faded blue, and subdued colors.
+
+  Color remains secondary to the ink drawing and screentone.
+
+  Avoid saturated colors and glossy full-color rendering.
+
+  ### SHOUJO VISUAL ELEMENTS
+
+  Use decorative shoujo manga elements sparingly:
+
+  delicate flowers, falling petals, thin ribbons, small four-pointed sparkle marks, subtle screentone textures, and restrained graphic motifs.
+
+  These elements must remain flat ink-and-tone graphic elements.
+
+  Never realistic flowers, glowing particles, bokeh, 3D decoration, ornate fantasy ornamentation, or excessive romantic effects.
+
+  ### BL ATMOSPHERE
+
+  The BL influence should come primarily from **character beauty, male anatomy, intimacy, and emotional tension**, not from stereotypical romance decoration.
+
+  Favor:
+
+  quiet eye contact, subtle physical proximity, restrained expressions, lingering gazes, tension between characters, delicate gestures, asymmetry in body language, emotional vulnerability, longing, attraction, and understated sensuality.
+
+  Avoid exaggerated erotic posing or melodramatic romance-cover aesthetics.
+
+  The emotional atmosphere should feel intimate, sophisticated, restrained, and psychologically charged.
+
+  ### EXPRESSION
+
+  Expressions remain subtle.
+
+  Emotion is communicated through small changes in:
+
+  eyes, eyebrows, lips, gaze direction, head angle, posture, and distance between characters.
+
+  Favor longing, tension, intimacy, melancholy, restraint, vulnerability, attraction, and emotional conflict.
+
+  Avoid exaggerated comedy, childish expressions, or overly dramatic facial distortion.
+
+  ### OVERALL STYLE
+
+  The final artwork should look like a **high-quality Korean shoujo manga artist drawing beautiful male characters with refined BL bishōnen aesthetics**.
+
+  The result should combine:
+
+  **classic shoujo elegance
+
+  * refined bishōnen beauty
+  * subtle masculine anatomy
+  * delicate traditional manga linework
+  * restrained screentone
+  * sophisticated emotional intimacy**
+
+  The characters should be beautiful enough to feel distinctly shoujo/BL, while their anatomy and facial structure remain convincingly male.
+
+  NOT photorealistic.
+  NOT 3D.
+  NOT digital painting.
+  NOT realistic rendering.
+  NOT generic anime.
+  NOT chibi.
+  NOT cute round anime.
+  NOT feminine female anatomy.
+  NOT muscular superhero anatomy.
+  NOT rugged masculine character design.
+  NOT thick cartoon outlines.
+  NOT glossy cel shading.
+  NOT airbrushed gradients.
+  NOT jewel-like eyes.
+  NOT oversized circular eyes.
+  NOT excessive eye sparkles.
+  NOT heavy noir.
+  NOT horror.
+  NOT dark gritty comic rendering.
+  NOT ornate fantasy illustration.
+  NOT romance-fantasy cover art.
+  NOT glossy full-color webtoon rendering.

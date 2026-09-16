@@ -1,0 +1,325 @@
+[
+  [
+    {
+      "location": "폐공장 게이트 입구, 임시 통제선 앞",
+      "time": "이른 오후, 흐린 실외광",
+      "id": 1,
+      "size": "large",
+      "camera": {
+        "shot": "상반신",
+        "angle": "정면",
+        "facing": "앞모습"
+      },
+      "background": {
+        "type": "단색",
+        "desc": "연한 회색톤 배경에 흐릿한 붉은 경고 테이프"
+      },
+      "characters": [
+        {
+          "name": "박하은",
+          "style": "LD",
+          "position": "가운데",
+          "expression": "차분하게 집중한 표정",
+          "action": "스마트폰 화면을 들여다본다",
+          "moment": "도중",
+          "framing": "상반신"
+        }
+      ],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": "박하은",
+          "type": "생각",
+          "text": "열화상 기록… 명부하고 틀리는데?",
+          "bubble": {
+            "shape": "구름",
+            "tail": "하은 쪽",
+            "position": "오른쪽 위"
+          }
+        }
+      ],
+      "sfx": [
+        {
+          "text": "띡",
+          "source": "스마트폰",
+          "position": "박하은 손 근처",
+          "reason": "출입 기록 자료를 넘기는 소리"
+        }
+      ],
+      "forbid": [],
+      "note": "첫 등장이므로 단색 배경, 분위기를 단번에 보여준다",
+      "scene": 1,
+      "cut": 1
+    }
+  ],
+  [
+    {
+      "location": "게이트 내부, 어둑한 폐공장 통로",
+      "time": "실내, 희미한 조명과 어둠",
+      "id": 1,
+      "size": "normal",
+      "camera": {
+        "shot": "광각",
+        "angle": "정면",
+        "facing": "앞모습"
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "좁고 긴 통로, 금속 파편, 먼지와 깨진 유리 조각"
+      },
+      "characters": [
+        {
+          "name": "박하은",
+          "style": "LD",
+          "position": "왼쪽",
+          "expression": "의심하며 관찰하는 표정",
+          "action": "바닥의 희미한 발자국을 내려다본다",
+          "moment": "직후",
+          "framing": "무릎 위"
+        }
+      ],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": "박하은",
+          "type": "생각",
+          "text": "분명… 이건 명부에 없는 발자국.",
+          "bubble": {
+            "shape": "구름",
+            "tail": "하은 쪽",
+            "position": "인물 위"
+          }
+        }
+      ],
+      "sfx": [
+        {
+          "text": "사각",
+          "source": "박하은",
+          "position": "발 근처",
+          "reason": "먼지를 밟으며 발자국을 관찰함"
+        }
+      ],
+      "forbid": [],
+      "note": "시선이 바닥 흔적에 집중되도록",
+      "scene": 2,
+      "cut": 1
+    },
+    {
+      "location": "게이트 내부, 어둑한 폐공장 통로",
+      "time": "실내, 희미한 조명과 어둠",
+      "id": 2,
+      "size": "normal",
+      "camera": {
+        "shot": "무릎",
+        "angle": "하이앵글",
+        "facing": "뒷모습"
+      },
+      "background": {
+        "type": "효과",
+        "desc": "주변은 어둡고, 바닥의 발자국만 밝게 비춰짐"
+      },
+      "characters": [
+        {
+          "name": "박하은",
+          "style": "LD",
+          "position": "왼쪽",
+          "expression": "결연한 눈빛",
+          "action": "주먹을 가볍게 쥔다",
+          "moment": "직후",
+          "framing": "무릎 위"
+        }
+      ],
+      "dialogue": [
+        {
+          "order": 2,
+          "speaker": "박하은",
+          "type": "생각",
+          "text": "…쫓아가 본다.",
+          "bubble": {
+            "shape": "구름",
+            "tail": "하은 쪽",
+            "position": "왼쪽 위"
+          }
+        }
+      ],
+      "sfx": [
+        {
+          "text": "꽉",
+          "source": "박하은",
+          "position": "손 근처",
+          "reason": "결의하며 주먹을 쥔 소리"
+        }
+      ],
+      "forbid": [],
+      "note": "그림자를 깊게 써서 불안한 기운 강조",
+      "scene": 2,
+      "cut": 2
+    }
+  ],
+  [
+    {
+      "location": "게이트 내부, 더 깊은 어둠 속 통로",
+      "time": "실내, 조명 거의 없음",
+      "id": 1,
+      "size": "normal",
+      "camera": {
+        "shot": "부분",
+        "angle": "로우앵글",
+        "facing": "옆모습"
+      },
+      "background": {
+        "type": "효과",
+        "desc": "짙은 그림자와 점멸 효과, 통신기 신호 아이콘(끊긴 표시)만 부각"
+      },
+      "characters": [
+        {
+          "name": "박하은",
+          "style": "LD",
+          "position": "가운데",
+          "expression": "입을 굳게 다문 표정",
+          "action": "귀 옆의 통신기를 만진다",
+          "moment": "도중",
+          "framing": "상반신"
+        }
+      ],
+      "dialogue": [],
+      "sfx": [
+        {
+          "text": "지직…",
+          "source": "통신기",
+          "position": "인물 귀 옆",
+          "reason": "신호가 끊기며 나는 잡음"
+        }
+      ],
+      "forbid": [],
+      "note": "통신 두절의 불안감 강조",
+      "scene": 3,
+      "cut": 1
+    },
+    {
+      "location": "게이트 내부, 더 깊은 어둠 속 통로",
+      "time": "실내, 조명 거의 없음",
+      "id": 2,
+      "size": "normal",
+      "camera": {
+        "shot": "부분",
+        "angle": "정면",
+        "facing": "앞모습"
+      },
+      "background": {
+        "type": "효과",
+        "desc": "깊은 어둠 속, 빛나는 발자국 라인 효과"
+      },
+      "characters": [
+        {
+          "name": "박하은",
+          "style": "LD",
+          "position": "오른쪽",
+          "expression": "집중한 눈빛",
+          "action": "몸을 낮추고 바닥에 귀 기울인다",
+          "moment": "직후",
+          "framing": "부분"
+        }
+      ],
+      "dialogue": [],
+      "sfx": [
+        {
+          "text": "타닥",
+          "source": "정체불명 인물",
+          "position": "왼쪽 위",
+          "reason": "미세하게 들리는 발소리"
+        }
+      ],
+      "forbid": [],
+      "note": "소리에만 집중하도록, 불안정한 시점 연출",
+      "scene": 3,
+      "cut": 2
+    }
+  ],
+  [
+    {
+      "location": "게이트 내부, 넓은 장치실 입구",
+      "time": "실내, 희미한 비상등 불빛",
+      "id": 1,
+      "size": "normal",
+      "camera": {
+        "shot": "광각",
+        "angle": "부감",
+        "facing": "뒷모습"
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "천장 고철 셔터, 어둠에 곧 삼켜지는 통로"
+      },
+      "characters": [
+        {
+          "name": "박하은",
+          "style": "LD",
+          "position": "오른쪽",
+          "expression": "놀라며 긴장한 표정",
+          "action": "몸을 움츠리며 벽 뒤로 숨는다",
+          "moment": "직후",
+          "framing": "무릎 위"
+        }
+      ],
+      "dialogue": [],
+      "sfx": [
+        {
+          "text": "쾅!",
+          "source": "셔터",
+          "position": "화면 전체",
+          "reason": "셔터가 급하게 닫히는 소리"
+        }
+      ],
+      "forbid": [],
+      "note": "셔터의 속도감과 긴급함 강조",
+      "scene": 4,
+      "cut": 1
+    },
+    {
+      "location": "게이트 내부, 장치실 벽 뒤 그늘",
+      "time": "실내, 어둠과 비상등 광선이 부분적으로 비추는 공간",
+      "id": 1,
+      "size": "normal",
+      "camera": {
+        "shot": "클로즈업",
+        "angle": "로우앵글",
+        "facing": "옆모습"
+      },
+      "background": {
+        "type": "효과",
+        "desc": "검은 그림자와 붉은 기류, 긴장감을 고조하는 추상 효과"
+      },
+      "characters": [
+        {
+          "name": "박하은",
+          "style": "LD",
+          "position": "오른쪽",
+          "expression": "눈을 부릅뜨고 날카롭게 주위를 살핀다",
+          "action": "숨을 멈춘 채 벽에 완전히 붙어 있음",
+          "moment": "도중",
+          "framing": "부분"
+        }
+      ],
+      "dialogue": [],
+      "sfx": [
+        {
+          "text": "후욱—",
+          "source": "박하은",
+          "position": "입 근처",
+          "reason": "긴장한 숨소리"
+        },
+        {
+          "text": "스산…",
+          "source": "주변 공기",
+          "position": "화면 전체",
+          "reason": "불길한 기척"
+        }
+      ],
+      "forbid": [],
+      "note": "정체가 보이지 않도록, 눈빛과 분위기로만 위협을 암시",
+      "scene": 5,
+      "cut": 1
+    }
+  ]
+]

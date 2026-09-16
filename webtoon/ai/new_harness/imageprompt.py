@@ -261,6 +261,20 @@ def cast_lines(cast, page=None, skip=()) -> list[str]:
 DEFAULT_STYLE = "webtoon_lock_bg"
 
 
+def load_negative() -> str:
+    """모든 그림체에 공통으로 붙는 네거티브 프롬프트. prompt/negative_prompt 에 있다.
+
+    **그림체 파일마다 따로 넣지 않는다.** 사실적 렌더링·뻣뻣한 손발·워터마크
+    같은 것은 어느 그림체를 고르든 똑같이 피해야 하는 것이라, 여기 한 곳에만
+    적고 load_style() 이 매번 붙인다 — 그림체 8개에 같은 줄을 여덟 번
+    복사해 두면 하나 고칠 때 일곱 곳을 놓친다.
+    """
+    path = PROMPT_DIR / "negative_prompt"
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
+
+
 def load_style(name: str = "") -> str:
     """그림체 문구. prompt/style/<이름> 에 있다.
 
@@ -268,6 +282,8 @@ def load_style(name: str = "") -> str:
     줄이고, 새 그림체를 만드는 것은 prompt/style/ 에 파일 하나를 더 놓는
     일이다. 여기가 비어 있으면 매번 다른 그림이 나온다 — 선 굵기·채색·명암·
     색조가 안 적힌 프롬프트는 모델에게 아무 말도 안 한 것과 같다.
+
+    끝에는 공통 네거티브 프롬프트(load_negative)를 매번 붙인다.
     """
     name = (name or "").strip() or DEFAULT_STYLE
     path = PROMPT_DIR / "style" / name
@@ -278,6 +294,9 @@ def load_style(name: str = "") -> str:
     text = path.read_text(encoding="utf-8").strip()
     if not text:
         raise SystemExit(f"그림체가 비어 있습니다: {path}")
+    negative = load_negative()
+    if negative:
+        text += "\n\n## 하지 마라 (공통, 모든 그림체)\n" + negative
     return "\n".join("  " + ln if ln.strip() else ln for ln in text.splitlines())
 
 

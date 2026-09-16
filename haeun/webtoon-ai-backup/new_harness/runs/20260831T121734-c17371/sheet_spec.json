@@ -1,0 +1,30 @@
+{
+  "name": "윤도경",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A man in his early 30s with a gentle face and average build. He has short, slightly wavy black hair and dark brown eyes. His skin tone is light beige. He usually wears a simple button-up shirt in light blue, dark trousers, and a brown apron, fitting his role as a café owner.",
+  "design_details": [
+    "앞머리가 이마 오른쪽으로 살짝 넘겨진 짧은 검은 머리",
+    "왼쪽 뺨에 작은 점 하나",
+    "밝은 파란색 셔츠 소매를 두 번 접어 올림",
+    "진갈색 앞치마를 항상 착용",
+    "왼손 약지에 얇은 은색 반지"
+  ],
+  "props": [],
+  "color_palette": {
+    "hair": "black (#222222)",
+    "eyes": "dark brown (#3B2F23)",
+    "skin": "light beige (#F5E1D3)",
+    "outfit_main": "light blue (#A7C7E7)",
+    "outfit_sub": "dark brown (#6B4F2B)",
+    "accent": "silver (#C0C0C0)"
+  },
+  "expression_set": [
+    "평온 — 입꼬리가 살짝 올라간, 부드럽게 미소 짓는 얼굴",
+    "경청 — 입을 다물고 눈을 상대방에 맞춘, 진지하게 듣는 표정",
+    "놀람 — 눈이 크게 뜨이고 입이 약간 벌어진 얼굴",
+    "당황 — 눈썹이 살짝 찌푸려지고 입이 옅게 벌어진 얼굴",
+    "기쁨 — 눈이 반달 모양으로 휘어지고 활짝 웃는 얼굴",
+    "걱정 — 입술이 일자로 굳어지고 눈썹이 안쪽으로 모인 얼굴"
+  ]
+}

@@ -1,0 +1,159 @@
+세로로 읽는 웹툰 페이지를 그린다.
+
+## 이 페이지의 크기
+- 세로가 가로의 1.5배인 한 장이다. 아래 컷들이 이 한 장을 위에서 아래로 나눠 쓴다.
+
+## 첨부한 이미지
+
+첨부한 이미지는 참고 자료이며, 페이지를 그대로 복사하거나 재구성하는 것이 아니다.
+
+### 캐릭터 시트 — 최우선 스타일 및 캐릭터 기준
+
+캐릭터 시트는 단순한 외형 참고 자료가 아니다.
+**이 작품의 캐릭터 작화 스타일을 결정하는 최우선 시각적 기준이다.**
+
+캐릭터 시트에 나타난 실제 작화의
+선화 방식, 선의 굵기와 밀도, 얼굴의 단순화,
+눈의 형태와 표현, 머리카락의 묘사 방식,
+피부 표현, 색의 사용 방식, 명암의 단순화,
+채색 방식, 전체적인 2D 만화 느낌과 마감 방식을
+웹툰의 모든 인물에게 일관되게 적용한다.
+
+아래 「그림체」 설명은 캐릭터 시트의 스타일을 대체하는 것이 아니다.
+**캐릭터 시트의 실제 시각적 결과를 최우선으로 유지하면서,
+아래 설명은 그 스타일이 장면마다 무너지지 않도록 보조하는 규칙으로 사용한다.**
+
+웹툰 장면을 만들 때 캐릭터 시트보다 더 사실적이거나,
+더 회화적이거나, 더 영화적이거나,
+더 화려하게 렌더링하지 않는다.
+
+캐릭터 시트에서 보이는 것보다
+더 복잡한 피부 질감, 머리카락 질감,
+현실적인 광원, 과도한 명암, 사실적인 재질 표현을 추가하지 않는다.
+
+**캐릭터 시트의 작화 언어를 그대로 유지한 채 장면만 새롭게 구성한다.**
+
+단, 캐릭터 시트의 4면도, 표정 배열, 색상칩,
+시트의 배치와 레이아웃 자체는 재현하지 않는다.
+캐릭터 시트에 등장하는 인물의 외형과 작화 스타일만 참조한다.
+
+### 직전 페이지
+
+직전 페이지는 인물·공간·시간대·의상·사건의 연속성을 위한 참고 자료다.
+
+직전 페이지의 스타일이나 렌더링 수준이 캐릭터 시트와 다를 경우,
+**항상 캐릭터 시트의 작화 스타일을 우선한다.**
+
+직전 페이지가 더 사실적이거나 화려하게 표현되어 있더라도
+그 렌더링 방식을 따라 하지 않는다.
+
+CHARACTER SHEET PRIORITY:
+
+The attached character sheet's actual rendered art is the primary style
+reference for this character — not just its appearance.
+
+Match the character sheet's real visual language:
+- line quality and line weight
+- facial simplification
+- eye design and eye rendering
+- hair rendering
+- skin and coloring
+- shading and shading density
+- overall 2D finish and rendering density
+
+Do not reinterpret the character sheet into a different art style.
+
+Do not render the character more realistically, more painterly, more
+cinematically, or with more finish than the character sheet shows.
+
+The written style description below (see 그림체 section) is a supporting
+constraint that keeps this style consistent across scenes. It does not
+replace or override the character sheet's actual visual language.
+
+When the written description and the character sheet's actual appearance
+conflict, the character sheet's actual appearance wins.
+
+The final character must look as if the same Korean webtoon artist who
+drew the character sheet drew this page too.
+
+## 페이지 구성
+- 컷을 위에서 아래로 배치한다.
+- 컷 사이에 흰 테두리·검은 테두리 같은 액자 틀을 넣지 않는다. 컷 번호
+  배지(흰 사각형 안에 숫자)도 넣지 않는다 — 어떤 그림체·어떤 그림이든
+  둘 다 넣지 않는다. 컷 구분은 장면 전환 자체(구도·배경 변화)로만
+  드러난다.
+- 컷 높이는 아래 지정된 비율을 따른다.
+
+## 그림체
+
+**IMPORTANT — STYLE REFERENCE PRIORITY**
+
+The attached character sheet is the primary visual style reference for
+this entire artwork.
+
+Match the character sheet's actual visual language: line quality, line
+weight, facial simplification, eye design, hair rendering, coloring,
+shading, color organization, and overall 2D finish.
+
+Do not reinterpret the character sheet into another art style.
+
+The written style description below is a supporting constraint, not a
+replacement for the character sheet.
+
+When the written description conflicts with the actual appearance of the
+character sheet, preserve the character sheet's visual language.
+
+- LD:
+  HIGH-END 2D ANIME MOBILE GAME ILLUSTRATION STYLE Premium commercial 2D anime game artwork. A refined, elegant, luminous Japanese/Korean mobile game illustration aesthetic. The artwork should look like official high-budget 2D mobile RPG character art. The visual identity should come primarily from refined anime drawing, delicate linework, beautiful color design, soft luminous rendering, precise facial construction, clean shapes, and sophisticated lighting. NOT romance fantasy webtoon art. NOT manhwa. NOT webtoon. NOT visual novel romance art. NOT comic art. NOT painterly fantasy art. NOT 3D. LINEART Delicate, thin, clean anime lineart. Soft and controlled contours. Elegant line weight variation. Lines should feel naturally integrated with the coloring rather than appearing as strong graphic outlines. Very subtle outlines around skin and facial features. Slightly more defined contours around important silhouettes. Soft line transitions. Clean confident drawing. No rough sketch appearance. No thick black outlines. The lineart should remain delicate and understated. ANIME DRAWING STYLE Sophisticated modern anime game character drawing. Refined mature anime aesthetic. Beautifully constructed anime facial features. Elegant eyes with clean shapes. Precise facial proportions. Delicate nose and mouth rendering. Clean anatomical construction. Graceful stylized anatomy. The character should feel professionally drawn rather than generically generated. Avoid exaggerated webtoon facial proportions. Avoid overly simplified anime features. Avoid realistic human rendering. COLORING Soft, luminous 2D anime game coloring. Clean but slightly soft color transitions. Large areas of harmonious color. Subtle cel shading combined with gentle gradients. Smooth tonal transitions. Soft secondary shadows. Controlled highlights. Moderate rendering density. Bright, clean overall color impression. Colors should feel slightly translucent and luminous rather than heavy or muddy. Maintain clear local colors underneath the shading. The image should remain distinctly 2D. LIGHTING Soft atmospheric daylight. Gentle ambient illumination. Subtle rim lighting. Soft reflected light. Light should naturally blend across the character and environment. Gentle highlights rather than sharp specular effects. Soft luminous edges. Moderate contrast. The lighting should create a delicate glowing atmosphere without becoming magical or overly dramatic. No excessive bloom. No intense lens flare. No harsh cinematic lighting. SKIN RENDERING Very clean, pale anime-style skin rendering. Smooth soft gradients. Extremely subtle shadows. Gentle tonal variation. Soft natural blush. Clean luminous skin surfaces. No realistic pores. No photographic skin texture. No heavy contour shadows. The skin should look softly illustrated rather than airbrushed or realistic. HAIR RENDERING Hair should be constructed from large, elegant anime shapes. Clear major hair masses. Smooth flowing forms. Controlled layering. Natural overlapping sections. Selective fine strands only around important edges and tips. Hair detail should gradually decrease toward the interior. The overall hair silhouette must remain clean and readable. Hair should feel soft and illustrated. The impression of detail should come from shape design, layering, lighting, and selective strand accents. NOT from thousands of individual strands. CLOTHING RENDERING Clean, professionally designed 2D game-art clothing. Large readable fabric shapes. Smooth material transitions. Controlled folds. Selective folds only where necessary to describe form. Soft fabric shading. Clear silhouette. Simple large-scale design language. Decorative details should be sparse and intentional. The clothing should look sophisticated without becoming visually busy. Avoid excessive tiny details. DETAIL DENSITY Moderate detail density. High polish without micro-detail overload. Use detail selectively. Large shapes should remain visually dominant. Fine details should only appear in focal areas. Do not distribute equal amounts of detail across the entire image. The illustration should look expensive because of drawing quality, shape design, color harmony, lighting, and rendering control. NOT because of excessive ornaments or microscopic details. COLOR PALETTE Elegant sophisticated color relationships. Softly saturated colors. Rich but controlled colors. Clean midtones. Gentle highlights. Subtle shadow colors. Slightly luminous overall palette. Avoid muddy colors. Avoid excessively dark rendering. Avoid neon colors. Avoid extreme saturation. Avoid excessive black. BACKGROUND STYLE Softly rendered 2D anime game background. Large readable environmental shapes. Atmospheric depth. Simplified architectural forms. Background detail should be lower than character detail. Use soft lighting and subtle depth separation. The environment should support the character rather than compete with it. Avoid hyper-detailed concept-art backgrounds. Avoid hundreds of tiny environmental objects. OVERALL VISUAL FEEL Delicate. Luminous. Elegant. Sophisticated. Refined. Clean. Soft. Polished. Premium. Modern anime game aesthetic. The illustration should have the delicate visual quality of a high-budget mobile game character CG. The artwork should feel carefully illustrated and art-directed. It should have a soft, beautiful, slightly luminous finish. The image should feel detailed at first glance, but remain structurally simple when examined closely. The visual complexity should come from: drawing quality, anatomy, shape language, line quality, color harmony, soft shading, lighting, and composition. Never increase visual quality by adding unnecessary decoration. NEVER make the artwork visually busy. NEVER make it look like a webtoon. NEVER make it look like a romance fantasy illustration. NEVER make it look painterly. NEVER make it look 3D. The final result should read immediately as: PREMIUM 2D ANIME MOBILE GAME CHARACTER ART. 네거티브 webtoon, Korean webtoon, manhwa, romance fantasy webtoon, romance fantasy illustration, visual novel romance, comic, comic panel, comic page, storybook art, 3D, 3D render, 3D model, CGI, PBR, photorealistic, hyperrealistic, realistic human, photography, live action, oil painting, watercolor, painterly, traditional painting, concept art painting, visible brush strokes, thick black outlines, heavy outlines, bold graphic outlines, rough lineart, sketchy lineart, messy linework, excessive detail, micro-detail, extreme detail density, visual clutter, busy composition, overdesigned, overdecorated, excessive ornaments, excessive jewelry, excessive embroidery, intricate embroidery, excessive lace, intricate lace, tiny decorative patterns, decorative patterns everywhere, excessive accessories, giant ornaments, excessive gemstones, excessive filigree, excessive gold, thousands of hair strands, individual hair fibers, realistic hair fibers, photographic hair texture, hair texture overload, excessive strand separation, messy tangled hair, excessive fabric folds, excessive seams, excessive clothing layers, micro folds, muddy colors, dirty colors, crushed blacks, extremely dark rendering, oversaturated colors, neon colors, harsh contrast, harsh shadows, hard lighting, excessive bloom, excessive glow, lens flare, sparkles everywhere, particle overload, flat primitive coloring, flat cel shading, muddy shading, rough shading, over-rendered shading, realistic skin texture, generic anime, western cartoon, chibi, super deformed, cartoon, AI collage, visual noise, low quality, low resolution, blurry, muddy image
+
+## 말풍선
+- 지정된 한국어 대사를 말풍선 안에 정확히 그려 넣는다. 글자를 바꾸거나 빼지 않는다.
+- 말풍선은 인물의 얼굴을 가리지 않는 위치에 둔다.
+- 꼬리는 말하는 인물을 향한다. 지정이 있으면 그 방향을 따른다.
+- 한 컷에 말풍선이 여러 개면 위에서 아래 순서로 읽히게 배치한다.
+- 말풍선 모양:
+  - 말: 둥근 타원
+  - 생각: 구름 모양
+  - 외침: 뾰족한 형태
+  - 화면밖: 꼬리를 컷 바깥으로 향하게 하거나 꼬리를 없앤다
+  - 전화·라디오: 각진 형태
+  - 나레이션: 말풍선이 아니라 네모 상자. 컷 위쪽 모서리에 붙인다
+  - 효과음: 말풍선 없이 글자만 그린다
+- 글로 오가는 것(메일, 메시지, 문서)은 말풍선으로 그리지 않는다.
+  화면이나 종이를 그리고 그 안에 글자를 넣는다.
+
+## 지키기
+- 첨부한 캐릭터 시트의 외관을 그대로 따른다.
+- 그리지 말라고 지정된 것은 그리지 않는다.
+- 지정되지 않은 인물을 추가하지 않는다.
+- 인물의 자세는 그 컷에 적힌 동작(표정·행동)을 실제로 하고 있는, 확실히
+  정해진 자세여야 한다. 몸을 애매하게 살짝만 틀고 마는 어정쩡한 자세,
+  뭘 하는지 불분명한 엉거주춤한 자세는 안 된다 — 이건 그림체가 아니라
+  모든 컷에 적용되는 규칙이다.
+
+## 이 그림은 표지다 (중요 — 위의 '페이지 구성'보다 이 절이 우선한다)
+
+컷을 나누지 않는다. **한 장짜리 그림 하나**를 그린다. 말풍선·나레이션 상자·
+효과음도 넣지 않는다.
+
+- 이 화를 아직 안 읽은 사람이 보고 "무슨 이야기지?" 하고 눌러 보고 싶어지는
+  그림이어야 한다.
+- 주인공이 어떤 처지에 있는 사람인지, 여기가 어떤 세계인지가 한 장에서
+  읽혀야 한다. 이 화의 특정 사건을 설명하지는 않는다.
+- 제목을 그림 안에 글자로 넣는다. 인물의 얼굴을 가리지 않는 자리에 두고,
+  아래 적힌 제목을 **글자 그대로** 쓴다.
+
+## 인물 (외모는 장면이 바뀌어도 그대로다)
+주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다.
+이올 — A young man with pale skin and straight, dark blue hair parted to the side, reaching just above the shoulders. He has sharp, gray eyes and a slim, tall build. He wears a long, navy blue coat with gold trim and shoulder epaulets over a matching vest and trousers, a white dress shirt, and a dark tie. His left sleeve is rolled up, revealing a leather bracer on his forearm. Multiple metallic seals and medallions hang from his belt and coat, and he holds a large, ornate book with red markings and metallic embellishments.
+       고정 요소: 왼쪽 소매를 팔꿈치까지 걷어 올린 긴 코트 / 코트 오른쪽 어깨에 사각형 금속 견장과 장식 체인 / 허리띠와 코트 앞자락에 여러 개의 금속 인장과 메달이 매달림 / 왼팔에 가죽 팔토시를 착용 / 코트와 바지, 구두까지 모두 어두운 남색 계열로 통일
+       소지품: 붉은 마법진과 금속 장식이 박힌 두꺼운 장부, 세로 약 35cm, 가죽 표지, 모서리가 닳아 있음
+전 길드 마스터(노인) — 백발, 길고 헝클어진 수염, 해진 붉은 로브, 작은 안경
+
+## 이 작품
+제목(이 글자 그대로 그린다): 남은 시간만큼
+장르: 게임 판타지
+줄거리:
+이올은 청산 업무 중 3년 전 자신이 있던 길드의 마지막 장비 회수를 담당하게 된다. 제한 시간 안에 남은 장비를 모두 찾아야 하지만, 당시 길드 마스터였던 노인이 일부러 숨긴 듯한 흔적을 발견한다. 그는 업무의 실패를 두려워하지 않고, 과거 자신이 노인에게서 배웠던 방식을 뒤집어 새로운 방법으로 재도전을 시도한다. 이올은 정해진 시간 안에 실패를 딛고 다시 한 번 남겨진 흔적을 추적한다.
+이 화가 시작되는 자리(분위기 참고용 — 이 장면을 그대로 그리는 것이 아니다):
+이올은 이미 반쯤 무너진 길드 내부에서 장부에 없는 장비 한 점을 찾으려고 빠듯한 마감 시간을 확인한다.

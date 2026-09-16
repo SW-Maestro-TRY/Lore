@@ -15,7 +15,7 @@
   python run.py --character ../landing/jobs/<id>/character.json
   python run.py --name 이하은 --photo a.png --desc "..." --genre 판타지
   python run.py --run-id <id> --pick 2                 # 후보 고르고 콘티까지
-  python run.py --run-id <id> --scene-link             # 디테일 (장면 이음새, 글 1회)
+  python run.py --run-id <id> --pick 2 --scenes        # 줄거리 없이 곧장 장면 분리 (글 1회)
   python run.py --run-id <id> --sheet                  # 캐릭터 시트
   python run.py --run-id <id> --sheet-from ../story-harness/runs/<run>  # 시트 재사용
   python run.py --run-id <id> --pages                  # 페이지 그림 (페이지당 1회 호출)
@@ -49,10 +49,9 @@ import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
 import detailart                              # noqa: E402
 import storycheck                             # noqa: E402
-import episodecheck                           # noqa: E402
+import fullreview                             # noqa: E402
 import pages as pagemod                       # noqa: E402
 import runmeta                                # noqa: E402
-import scenelink                              # noqa: E402
 import sheet as sheetmod                      # noqa: E402
 from llm import story                         # noqa: E402
 import samples                                # noqa: E402  (story-harness 것을 그대로 빌린다)
@@ -256,6 +255,8 @@ S = r"[ \t]*"
 DIRECTION_RE = re.compile(rf"^##{S}방향{S}(\d+){S}[—–\-:]?{S}(.*)$", re.M)
 SECTION_RE = re.compile(rf"^###{S}(.+?){S}$", re.M)
 GENRE_RE = re.compile(rf"^{S}장르{S}[:：]{S}(.+?){S}$", re.M)
+INTRO_LABEL_RE = re.compile(rf"^{S}소개{S}[:：]{S}$", re.M)
+BODY_LABEL_RE = re.compile(rf"^{S}본문{S}[:：]{S}$", re.M)
 BULLET_RE = re.compile(rf"^{S}(?:[-*·]|\d+[.)]){S}(.+?){S}$", re.M)
 # 가로줄(`---` `***` `___`)과 코드펜스(```). 불릿으로 읽히면 안 되는 줄들.
 _RULE_RE = re.compile(r"^\s*(?:([-*_])\1{2,}|`{3,}\w*)\s*$")
@@ -308,19 +309,45 @@ def _cast_bullets(text: str) -> list[dict]:
     return out
 
 
+def _labeled(body: str, label_re: re.Pattern, stop_res: list[re.Pattern]) -> str:
+    """`label_re` 줄 다음부터, `stop_res` 중 가장 먼저 나오는 줄 전까지."""
+    m = label_re.search(body)
+    if not m:
+        return ""
+    end = len(body)
+    for stop_re in stop_res:
+        sm = stop_re.search(body, m.end())
+        if sm and sm.start() < end:
+            end = sm.start()
+    return body[m.end():end].strip()
+
+
 def parse_directions(md: str) -> list[dict]:
-    """story_prompt 의 응답에서 방향 4개를 잘라 읽는다."""
+    """story_prompt 의 응답에서 방향 4개를 잘라 읽는다.
+
+    지금 story_prompt 는 제목 + 장르 한 줄 + 소개(2~3문장) + 본문(5~8문장)만
+    낸다(장면 목록·등장인물은 없다 — 그건 방향을 고른 **뒤에** scene_prompt 가
+    만든다). `intro` 는 사람이 고를 때 보는 짧은 요약, `body` 는 그 뒤
+    scene_prompt 에 「선택된 스토리」로 그대로 넘기는 본문이다. `plot`·
+    `scenes`·`cast` 는 옛 형식(### 하위 절)을 쓰던 run 과의 호환을 위해
+    남겨 둔다 — 지금 형식에는 없으니 비어 있는 게 정상이다.
+    """
     marks = list(DIRECTION_RE.finditer(md))
     out = []
     for i, m in enumerate(marks):
         end = marks[i + 1].start() if i + 1 < len(marks) else len(md)
         body = md[m.end():end]
         sec = _sections(body)
-        genre = GENRE_RE.search(body.split("###")[0])
+        genre_m = GENRE_RE.search(body.split("###")[0])
+        genre = genre_m.group(1).strip() if genre_m else ""
+        intro = _labeled(body, INTRO_LABEL_RE, [BODY_LABEL_RE])
+        body_text = _labeled(body, BODY_LABEL_RE, [])
         out.append({
             "n": int(m.group(1)),
             "title": m.group(2).strip(),
-            "genre": genre.group(1).strip() if genre else "",
+            "genre": genre,
+            "intro": intro,
+            "body": body_text,
             "plot": sec.get("줄거리", "").strip(),
             "scenes": _bullets(sec.get("장면 목록", "")),
             "cast": _cast_bullets(sec.get("등장인물", "")),
@@ -353,6 +380,10 @@ def _wide(text: str) -> int:
 
 def _pad(text: str, width: int) -> str:
     return str(text) + " " * max(0, width - _wide(text))
+
+
+def read_json(path: Path):
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
 def write_json(path: Path, obj) -> None:
@@ -435,6 +466,8 @@ def _pick_engines(n: int = DIRECTIONS_PER_RUN) -> list[dict]:
     "비밀과 추적"이 하나를 넘지 않는 것은 서로 다른 것을 뽑는 것만으로
     저절로 지켜진다.
     """
+    if not engines_enabled():
+        return []
     try:
         doc = json.loads((PROMPT_DIR / "story_engines.json").read_text(encoding="utf-8"))
         values = [v for v in (doc.get("엔진") or {}).get("값") or []
@@ -500,20 +533,36 @@ def _distinct_axes(genre: str, first: dict, n: int = DIRECTIONS_PER_RUN) -> list
     return picked
 
 
-def axes_enabled() -> bool:
-    """이야기 변수(축)·회차 구조를 프롬프트에 박을지. **기본은 꺼짐.**
+def engines_enabled() -> bool:
+    """방향별 엔진(「문제가 옮겨 가는 길」)을 프롬프트에 박을지. **기본은 꺼짐**
+    (2026-09-16부터 — axes_enabled 와 기본값을 맞바꿨다. 아래 참고).
 
-    2026-09-12 이전에는 늘 켜져 있었다. 껐다 — 켜 둔 채로도 후보 넷이
-    "이상한 것을 발견하고 확인해 나간다"로 수렴하는 것이 실측으로 나와서
-    (run 20260907T214656-c31cff), 효과가 확인되지 않은 채 프롬프트 무게의
-    절반을 쓰고 있었다. 지금 story_prompt 는 압력 하나만 방향별로 박고,
-    나머지 분량은 이야기를 굴리는 원칙에 쓴다.
+    끄면 `story_engines.json` 을 아예 안 읽는다 — `_pick_engines` 가 빈 리스트를
+    돌려주고, `story_variety_block` 은 이야기 변수(축)·회차 구조만으로 방향을
+    가른다(둘 다 꺼져 있으면 방향별 차이가 하나도 안 박힌다).
 
-    **지운 것이 아니라 끈 것이다.** 되돌리려면 `.env` 에 `NH_STORY_AXES=1`.
-    끈 상태에서도 `axes.json` 은 그대로 쌓인다 — 무엇이 배정됐는지는 나중에
-    비교할 때 필요하다.
+    `.env` 에 `NH_STORY_ENGINES=1` 로 켠다. axes_enabled 와 짝인 스위치라,
+    둘을 따로 켜고 꺼서 어느 쪽이 방향을 갈라놓는지 비교할 수 있다
+    (2026-09-15 축·엔진 On/Off 비교에서 이 스위치가 필요해 만들었다).
     """
-    return str(llm.env("NH_STORY_AXES") or "").strip().lower() in ("1", "on", "true", "yes")
+    return str(llm.env("NH_STORY_ENGINES") or "").strip().lower() in ("1", "on", "true", "yes")
+
+
+def axes_enabled() -> bool:
+    """이야기 변수(축)·회차 구조를 프롬프트에 박을지. **기본은 켜짐**
+    (2026-09-16부터 — engines_enabled 와 기본값을 맞바꿨다).
+
+    2026-09-12에 한 번 기본을 껐다 — 켜 둔 채로도 후보 넷이 "이상한 것을
+    발견하고 확인해 나간다"로 수렴하는 것이 실측으로 나와서(run
+    20260907T214656-c31cff), 효과가 확인되지 않은 채 프롬프트 무게의
+    절반을 쓰고 있었기 때문이다. 그런데 이후 축·엔진을 실제로 켜고 꺼
+    가며 비교해 보니 축 쪽이 더 나은 결과를 줘서, 2026-09-16에 기본을
+    다시 켜짐으로 되돌렸다(엔진은 반대로 기본 꺼짐이 됐다).
+
+    `.env` 에 `NH_STORY_AXES=0` 으로 끈다. 켠 상태에서도 `axes.json` 은
+    그대로 쌓인다 — 무엇이 배정됐는지는 나중에 비교할 때 필요하다.
+    """
+    return str(llm.env("NH_STORY_AXES") or "1").strip().lower() in ("1", "on", "true", "yes")
 
 
 def story_variety_block(run_dir: Path, char: dict) -> str:
@@ -540,6 +589,7 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     if axes or structure or engines:
         write_json(run_dir / "axes.json",
                    {"축": axes, "구조": structure, "축_사용": use_axes,
+                    "엔진_사용": engines_enabled(),
                     "방향별_축": axes_list, "방향별_구조": structures,
                     "방향별_엔진": engines})
     for i in range(max(len(axes_list), len(structures), len(engines))):
@@ -637,7 +687,9 @@ def show_directions(directions: list[dict]) -> None:
     for d in directions:
         genre = f"  [{d['genre']}]" if d["genre"] else ""
         print(f"\n── {d['n']}. {d['title']}{genre}")
-        if d["plot"]:
+        if d.get("intro"):
+            print(f"   {d['intro']}")
+        elif d["plot"]:
             print(f"   {d['plot'].splitlines()[0]}")
         for s in d["scenes"]:
             print(f"     · {s}")
@@ -734,6 +786,88 @@ def picked_direction(run_dir: Path, pick: int | None) -> dict:
     return choose(json.loads(path.read_text(encoding="utf-8")), n)
 
 
+# ------------------------------------------------------------- 장면 (scene_prompt)
+#
+# story_prompt 는 이제 방향 4개(제목+본문)만 낸다. 장면은 그중 **고른 뒤에**
+# scene_prompt 가 따로 만든다 — 줄거리를 풀고, 장면으로 쪼개고, 장면마다
+# 「직전 상태」·「끝나는 상태」를 적어서 동시에 그릴 수 있게 한다.
+
+SCENE_RE = re.compile(rf"^{S}장면{S}(\d+){S}[:：]?{S}$", re.M)
+SCENE_FIELD_RE = re.compile(
+    rf"^{S}(직전 상태|장소와 상황|벌어지는 일|인물의 행동과 표정|끝나는 상태){S}[:：]{S}(.*)$")
+PLOT_LABEL_RE = re.compile(rf"^{S}줄거리{S}[:：]{S}$", re.M)
+CAST_LABEL_RE = re.compile(rf"^{S}등장인물{S}[:：]{S}$", re.M)
+
+
+def scene_input_block(char: dict, direction: dict) -> str:
+    """scene_prompt 뒤에 붙는 이번 입력 — 고른 스토리 + 캐릭터."""
+    lines = ["# 이번 입력", "", "[선택된 스토리]", direction.get("title", ""), ""]
+    lines.append(direction.get("body") or direction.get("raw", ""))
+    lines += ["", "[캐릭터]", f"{char['name']} — {char.get('description') or ''}".rstrip(" —")]
+    for k, v in (char.get("fields") or {}).items():
+        lines.append(f"- {k}: {v}")
+    return "\n".join(lines) + "\n"
+
+
+def parse_scenes(text: str) -> dict:
+    """scene_prompt 응답 -> {"plot", "scenes":[{"n","prev","where","what","acting","ends"}], "cast"}."""
+    plot_m = PLOT_LABEL_RE.search(text)
+    scene_marks = list(SCENE_RE.finditer(text))
+    cast_m = CAST_LABEL_RE.search(text)
+    plot = ""
+    if plot_m:
+        end = scene_marks[0].start() if scene_marks else len(text)
+        plot = text[plot_m.end():end].strip()
+
+    scenes = []
+    for i, m in enumerate(scene_marks):
+        end = scene_marks[i + 1].start() if i + 1 < len(scene_marks) else len(text)
+        if cast_m and cast_m.start() < end and cast_m.start() > m.start():
+            end = cast_m.start()
+        body = text[m.end():end]
+        fields = {}
+        for line in body.splitlines():
+            fm = SCENE_FIELD_RE.match(line)
+            if fm:
+                fields[fm.group(1)] = fm.group(2).strip()
+        scenes.append({
+            "n": int(m.group(1)),
+            "prev": fields.get("직전 상태", ""),
+            "where": fields.get("장소와 상황", ""),
+            "what": fields.get("벌어지는 일", ""),
+            "acting": fields.get("인물의 행동과 표정", ""),
+            "ends": fields.get("끝나는 상태", ""),
+        })
+    cast = _cast_bullets(text[cast_m.end():]) if cast_m else []
+    return {"plot": plot, "scenes": scenes, "cast": cast}
+
+
+def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> dict | None:
+    """선택된 방향 -> 줄거리 + 장면(직전 상태·끝나는 상태 포함). `scenes.json` 에 쓴다."""
+    prompt = compose("scene_prompt", scene_input_block(char, direction))
+    write_text(run_dir / "scene_prompt.txt", prompt)
+    if dry_run:
+        log(f"[장면] 프롬프트만 썼습니다 -> {run_dir / 'scene_prompt.txt'}")
+        return None
+
+    call = llm.Call("SCENE")
+    log(f"[장면] {call.describe()} 로 줄거리와 장면을 만듭니다…")
+    try:
+        text, meta = call(prompt)
+    except Exception as exc:                                          # noqa: BLE001
+        record_error(run_dir, "SCENE", call.provider, call.model, exc)
+        raise
+    write_text(run_dir / "scene.md", text)
+    record(run_dir, meta)
+
+    parsed = parse_scenes(text)
+    if len(parsed["scenes"]) < 4:
+        warn(f"장면을 {len(parsed['scenes'])}개만 읽었습니다 (4개 이상이어야 합니다). "
+             f"원문은 {run_dir / 'scene.md'} 에 그대로 있습니다.")
+    write_json(run_dir / "scenes.json", parsed)
+    return parsed
+
+
 def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
                 spec_only: bool = False, note: str = "") -> None:
     photos = char["photos"]
@@ -813,53 +947,36 @@ def direction_of(run_dir: Path) -> dict | None:
             or (directions[0] if directions else None))
 
 
-def stage_scene_link(run_dir: Path, dry_run: bool, force: bool = False) -> dict | None:
-    """디테일 단계 — 장면마다 **어디서 끝나는지**를 그리기 전에 정해 둔다.
-
-    그림 값이 나가기 전에 도는 글 호출 한 번이다. 여기서 정한 「마무리」가 곧
-    다음 장면의 시작이라, 그리는 쪽은 앞 장 그림을 못 봐도 어디서 이어 그릴지
-    안다 — **그래서 장면을 동시에 그릴 수 있다.**
-
-    그리기(`--detail-pages`)가 이 파일이 없으면 알아서 한 번 만든다. 다만
-    장면을 나눠 동시에 그릴 때는(프로세스마다 `--page N`) **그리기 전에 이
-    단계를 따로 한 번 돌려 두어야 한다** — 안 그러면 프로세스마다 저마다
-    이음새를 만들어 장마다 기준이 달라진다.
-    """
-    direction = direction_of(run_dir)
-    if not direction:
-        raise SystemExit(f"{run_dir / 'directions.json'} 가 없습니다. 이야기 단계를 먼저 돌리세요.")
-    char = json.loads((run_dir / "input.json").read_text(encoding="utf-8")) \
-        if (run_dir / "input.json").exists() else None
-    return scenelink.plan(run_dir, direction, char, dry_run=dry_run, force=force,
-                          on_call=lambda meta: record(run_dir, meta))
-
-
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
-                       episode_review: bool | None = None,
                        note: str = "") -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
-    story 단계(방향 후보) 산출물만으로 표지+전체 씬을 그린다.
+    scene_prompt 산출물(scenes.json)만으로 표지+전체 씬을 그린다.
 
     2026-09-02 이전에는 이 함수가 `detailart.draw()`(구체화 후 씬 단위)를
     불렀다 — 이제는 `detailart.draw_continue()`를 부른다. 씬 하나가 페이지
     하나가 되는 것은 같지만, 무엇을 그릴지 결정하는 재료가 detail.json이
-    아니라 directions.json(+pick.json)이다. `detailart.draw()`·`build_prompt()`
+    아니라 scenes.json(+pick.json)이다. `detailart.draw()`·`build_prompt()`
     등 구체화 버전 코드는 지우지 않고 그대로 남겨 뒀다 — 나중에 다시 비교할
     수 있게.
 
     쓰는 자리가 `pages/` 로 같아서 둘러보기·편집실은 어느 흐름으로 만든
     것인지 몰라도 된다.
     """
-    # 이음새가 없으면 먼저 만든다 — 그림 값이 나가기 전이다.
+    # scenes.json 이 없으면 먼저 만든다 — 그림 값이 나가기 전이다.
     #
     # **한 장만 다시 그리는 길(`only`)에서는 안 만든다.** 그 길은 이미 그린
     # 화의 한 장을 고치는 것이고, 장면을 나눠 동시에 그릴 때도 이 모양으로
-    # 들어온다. 거기서 이음새를 만들면 프로세스마다 다른 이음새가 생겨서,
+    # 들어온다. 거기서 새로 장면을 쪼개면 프로세스마다 다른 장면이 생겨서,
     # 이 단계로 없애려던 어긋남이 그대로 돌아온다.
-    if not only and not scenelink.load(run_dir):
-        stage_scene_link(run_dir, dry_run)
+    if not only and not read_json(run_dir / "scenes.json"):
+        direction = direction_of(run_dir)
+        if not direction:
+            raise SystemExit(f"{run_dir / 'directions.json'} 가 없습니다. 이야기 단계를 먼저 돌리세요.")
+        char = json.loads((run_dir / "input.json").read_text(encoding="utf-8")) \
+            if (run_dir / "input.json").exists() else None
+        stage_scenes(run_dir, char, direction, dry_run)
 
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
                                    allow_no_sheet=allow_no_sheet, review=review,
@@ -868,37 +985,11 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
 
-    # 다 그렸으면 처음부터 끝까지 한 번 읽는다(episodecheck). 장마다 보는
-    # 검수는 인접한 두 장만 보므로, "다 읽고 나서 무슨 이야기였는지 모르겠다"
-    # 는 거기서 안 잡힌다.
-    #
-    # `only` 가 있으면(한 장만 다시 그리기) 안 부른다 — 화 전체를 보는
-    # 검수라 일부만 새로 그린 상태에서는 볼 것이 못 되고, 한 장 고칠 때마다
-    # 화 전체 값이 또 나간다.
-    if only or dry_run or not made:
-        return
-    if not (episodecheck.enabled() if episode_review is None else episode_review):
-        return
-    pick = json.loads((run_dir / "pick.json").read_text(encoding="utf-8")) \
-        if (run_dir / "pick.json").exists() else {}
-    directions = json.loads((run_dir / "directions.json").read_text(encoding="utf-8")) \
-        if (run_dir / "directions.json").exists() else []
-    direction = (next((d for d in directions if d.get("n") == pick.get("n")), None)
-                 or (directions[0] if directions else None))
-    if not direction:
-        return
-    char = json.loads((run_dir / "input.json").read_text(encoding="utf-8")) \
-        if (run_dir / "input.json").exists() else None
-    hero = ((char or {}).get("name") or "").strip()
-    cast = [c for c in (direction.get("cast") or [])
-            if isinstance(c, dict) and (c.get("name") or "").strip()
-            and (c.get("name") or "").strip() != hero]
-    # 이제 두 번 부른다 (블라인드 읽기 + 견주기) — 기록도 여럿이다.
-    _, rcalls = episodecheck.review_episode(run_dir, direction=direction,
-                                            char=char, cast=cast)
-    for rmeta in rcalls:
-        if rmeta:
-            record(run_dir, rmeta)
+    # 화 전체 검수(fullreview)는 여기서 자동으로 안 부른다. 2026-09-16부터
+    # 그 트리거·재생성 루프·한도는 JobRunner.java 가 쥔다(webtoon/docs/
+    # full-review-design.md §6.1) — 파이썬은 그리기와 판정만 하고, "언제
+    # 다시 검수를 돌리고 언제 멈출지"는 상태 머신을 가진 자바 쪽 책임이다.
+    # 단독으로 보고 싶으면 `--full-review`(아래 CLI)를 따로 부른다.
 
 
 # --------------------------------------------------------------------- CLI
@@ -922,22 +1013,19 @@ def main(argv=None) -> int:
                    help="이미 만든 이야기 후보를 검수만 한다 (기본 흐름에서 이미 "
                         "자동으로 도는 단계 — 단독 재실행용. 후보는 안 건드리고 "
                         "story_review.json 만 쓴다)")
-    p.add_argument("--episode-review", action="store_true",
-                   help="이미 그린 화를 처음부터 끝까지 읽어 검수만 한다 "
-                        "(다시 그리지 않는다. episode_review.json 만 쓴다)")
     p.add_argument("--sheet", action="store_true", help="캐릭터 시트만")
     p.add_argument("--sheet-spec", action="store_true",
                    help="시트 사양(글)만. 그림은 안 그린다")
     p.add_argument("--sheet-from", type=Path,
                    help="이미 뽑아 둔 시트를 가져온다 (story-harness run 폴더 · "
                         "new_harness run 폴더 · png 하나). 호출 0회")
-    p.add_argument("--scene-link", action="store_true",
-                   help="디테일 단계 — 장면마다 어디서 끝나는지를 그리기 전에 "
-                        "정해 둔다 (글 호출 1회). 장면을 동시에 그릴 거면 "
-                        "그리기 전에 이걸 먼저 한 번 돌린다")
-    p.add_argument("--scene-link-force", action="store_true",
-                   help="이음새가 이미 있어도 다시 정한다 (그리는 중에는 쓰지 "
-                        "마세요 — 이미 그린 장과 기준이 어긋납니다)")
+    p.add_argument("--scenes", action="store_true",
+                   help="고른 방향(본문) -> 장면(직전 상태·끝나는 상태·등장인물 "
+                        "포함, 글 호출 1회). scene_prompt 를 쓴다 — --pick 으로 "
+                        "고른 뒤(또는 pick.json 이 있을 때) 쓴다. 그리기 "
+                        "(`--detail-pages`)가 이 파일이 없으면 알아서 한 번 "
+                        "만든다 — 장면을 나눠 동시에 그릴 거면 그리기 전에 이걸 "
+                        "먼저 한 번 따로 돌려 둔다")
     p.add_argument("--detail-pages", action="store_true",
                    help="이어그리기(최종 방식) — 구체화·콘티·컷 대본을 전부 "
                         "건너뛰고 방향 후보로 바로 페이지를 그린다 "
@@ -959,9 +1047,9 @@ def main(argv=None) -> int:
     p.add_argument("--no-story-review", action="store_true",
                    help="이야기 후보를 만든 뒤 검수를 하지 않는다 (기본은 켜짐 — "
                         ".env 의 NH_STORY_REVIEW=0 과 같다)")
-    p.add_argument("--no-episode-review", action="store_true",
-                   help="다 그린 뒤 화 전체 검수를 하지 않는다 (기본은 켜짐 — "
-                        ".env 의 NH_EPISODE_REVIEW=0 과 같다)")
+    p.add_argument("--full-review", action="store_true",
+                   help="이미 그린 화를 처음부터 끝까지 읽어 검수만 한다 "
+                        "(다시 그리지 않는다. full_review.json 만 쓴다)")
     p.add_argument("--dry-run", action="store_true", help="프롬프트만 쓰고 호출하지 않는다")
     p.add_argument("--note", default="", help="다시 만들기에서 이번 시도에만 추가로 "
                                               "반영할 요청 (이야기·시트 단계에서 씀)")
@@ -1026,10 +1114,10 @@ def main(argv=None) -> int:
     # --sheet-from 만 준 것도 여기서 끝난다 — 시트를 가져다 놓는 것이 그
     # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
-    if (args.story_review or args.episode_review
+    if (args.story_review or args.full_review
             or args.sheet or args.sheet_spec or args.detail_pages
             or args.page or args.sheet_from or args.pick_save or args.restory
-            or args.scene_link or args.scene_link_force):
+            or args.scenes):
         if args.restory:
             # 방향 후보를 다시 만든다 — 이전 pick.json 은 더 이상 유효하지
             # 않다(방향 번호가 새로 나온 4개와 안 맞을 수 있다), 지운다.
@@ -1042,9 +1130,9 @@ def main(argv=None) -> int:
         if args.story_review:
             storycheck.review_run(run_dir, dry_run=args.dry_run,
                                   on_call=lambda meta: record(run_dir, meta))
-        if args.episode_review:
-            episodecheck.review_run(run_dir, dry_run=args.dry_run,
-                                    on_call=lambda meta: record(run_dir, meta))
+        if args.full_review:
+            fullreview.review_run(run_dir, dry_run=args.dry_run,
+                                  on_call=lambda meta: record(run_dir, meta))
         if args.pick_save:
             chosen = picked_direction(run_dir, args.pick)
             write_json(run_dir / "pick.json", {"n": chosen["n"], "title": chosen["title"],
@@ -1052,13 +1140,13 @@ def main(argv=None) -> int:
             log(f"[방향 선택] {chosen['n']}번 저장했습니다 -> {run_dir / 'pick.json'}")
         if args.sheet or args.sheet_spec:
             stage_sheet(run_dir, char, args.dry_run, spec_only=args.sheet_spec, note=args.note)
-        if args.scene_link or args.scene_link_force:
-            stage_scene_link(run_dir, args.dry_run, force=args.scene_link_force)
+        if args.scenes:
+            direction = picked_direction(run_dir, args.pick)
+            stage_scenes(run_dir, char, direction, args.dry_run)
         if args.detail_pages:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
                                allow_no_sheet=args.no_sheet,
                                review=False if args.no_page_review else None,
-                               episode_review=False if args.no_episode_review else None,
                                note=args.note)
         return 0
 
@@ -1069,7 +1157,7 @@ def main(argv=None) -> int:
             return 0
         show_directions(directions)
         print(f"\n골랐으면:  python run.py --run-id {run_dir.name} --pick <번호> --pick-save")
-        print(f"이음새:    python run.py --run-id {run_dir.name} --scene-link")
+        print(f"장면:      python run.py --run-id {run_dir.name} --pick <번호> --scenes")
         print(f"그리려면:  python run.py --run-id {run_dir.name} --detail-pages")
         print(f"           (장면마다 따로·동시에 그리려면 --detail-pages --page <번호>)")
         return 0

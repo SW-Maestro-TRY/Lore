@@ -377,3 +377,24 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
 - `AWS_PROFILE` 이 없으면 자바 SDK 가 `default` 프로파일을 찾다가 S3 관련
   기능이 전부 실패합니다(캐릭터 목록부터 막힘).
 - 화면은 `apps/web` 개발 서버(3000), API 는 8080 입니다.
+
+### 이미지·텍스트 모델 API 키는 실제로 어디 있는가
+
+**실제 키는 저장소 루트 `.env`의 `WEBTOON_API_KEY`(OpenAI) 하나뿐입니다.**
+`webtoon/ai/{new_harness,story-harness,webtoon-harness}/.env` 는 이 체크아웃에는
+**없습니다**(`.env.example` 만 있음) — 위 "병렬 에이전트 작업" 절의 심링크
+안내는 그 파일들이 실제로 있는 걸 전제로 합니다. 없다면 먼저 만들거나(아래
+export 방식으로 대신 씀) worktree 를 팔 때 심링크할 원본부터 채워야 합니다.
+
+- **`./gradlew bootRun` 으로 돌릴 때**는 자동입니다. 루트 `.env` 의
+  `WEBTOON_API_KEY` 가 자바 프로세스 환경으로 들어가고, 자바가 파이썬을
+  자식 프로세스로 부르며 환경을 그대로 물려주고, `llm.py` 가 그 값을
+  `OPENAI_API_KEY` 로 풀어 씁니다(`llm.py` 의 `WEBTOON_API_KEY` 변환 로직).
+- **`python3 run.py` 를 터미널에서 직접 돌릴 때는 이 변환이 안 일어납니다**
+  — 셸에 `WEBTOON_API_KEY` 가 없으면 `OPENAI_API_KEY 가 없습니다` 로 바로
+  멈춥니다(2026-09-14 실측). 돌리기 전에 루트 `.env` 에서 값을 꺼내 셸에
+  얹으세요:
+  ```
+  export WEBTOON_API_KEY=$(grep '^WEBTOON_API_KEY=' <저장소 루트>/.env | cut -d= -f2-)
+  ```
+  (`<저장소 루트>` 는 지금 위치가 `webtoon/ai/new_harness` 면 `../../..`.)

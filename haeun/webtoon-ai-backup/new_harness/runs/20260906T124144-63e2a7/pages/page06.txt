@@ -1,0 +1,418 @@
+세로로 읽는 웹툰 페이지를 한 장으로 연출한다.
+
+## 페이지 형식
+
+- 이 작품은 모바일 세로 스크롤 웹툰이다.
+- 최종 결과물은 가로형 만화 페이지가 아니라, 가로보다 세로가 훨씬 긴 하나의
+  긴 세로형 웹툰 페이지다.
+- 독자는 위에서 아래로 스크롤하며 읽는다.
+- 컷의 개수, 크기, 배치, 구도, 카메라 앵글은 장면에 맞게 자유롭게 결정한다.
+- 컷들은 페이지를 빈틈없이 채우지 않으며, 컷과 컷 사이에는 **실제로 그림이
+  없는 명확한 빈 여백**을 둔다.
+- 여백의 크기는 일정하게 반복하지 않고 장면의 흐름과 감정에 따라 자유롭게
+  조절한다.
+- 중요한 장면 전후에는 더 넓은 여백을 사용하여 시선과 감정의 호흡을 만든다.
+- 컷과 컷을 서로 맞닿게 배치하거나, 일반적인 가로형 만화책처럼 빽빽하게
+  배열하지 않는다.
+- 페이지 전체가 **장면 → 여백 → 장면 → 여백 → 장면**으로 이어지는 세로
+  스크롤 웹툰처럼 보여야 한다.
+- 컷 사이의 여백은 낭비되는 공간이 아니라 웹툰 연출의 일부다.
+- 컷 사이에 흰색·검은색 테두리 같은 액자형 경계를 넣지 않는다.
+- 컷 번호, 숫자 배지, 패널 번호를 넣지 않는다.
+- **서로 다른 시각적 사건을 같은 높이에 나란히 배치하지 않는다.** 사건 A가
+  사건 B보다 먼저 벌어진다면 A는 항상 B보다 위에 있어야 한다 — 좌우로 나눈
+  2단·3단 구성, 격자, 여러 칸을 한 줄에 늘어놓는 배치는 만들지 않는다.
+  진행은 언제나 위→아래 한 줄기여야 한다.
+- 전체 이야기가 스크롤 없이 한 화면에 다 들어와 한눈에 읽힌다면 잘못된
+  것이다 — 독자가 실제로 스크롤해야 다음 사건을 발견하게 만든다.
+
+## 첨부한 이미지
+
+첨부한 이미지는 참고 자료이며, 페이지를 그대로 복사하거나 재구성하는 것이 아니다.
+
+### 캐릭터 시트 — 최우선 스타일 및 캐릭터 기준
+
+캐릭터 시트는 단순한 외형 참고 자료가 아니다.
+**이 작품의 캐릭터 작화 스타일을 결정하는 최우선 시각적 기준이다.**
+
+캐릭터 시트에 나타난 실제 작화의
+선화 방식, 선의 굵기와 밀도, 얼굴의 단순화,
+눈의 형태와 표현, 머리카락의 묘사 방식,
+피부 표현, 색의 사용 방식, 명암의 단순화,
+채색 방식, 전체적인 2D 만화 느낌과 마감 방식을
+웹툰의 모든 인물에게 일관되게 적용한다.
+
+아래 「그림체」 설명은 캐릭터 시트의 스타일을 대체하는 것이 아니다.
+**캐릭터 시트의 실제 시각적 결과를 최우선으로 유지하면서,
+아래 설명은 그 스타일이 장면마다 무너지지 않도록 보조하는 규칙으로 사용한다.**
+
+웹툰 장면을 만들 때 캐릭터 시트보다 더 사실적이거나,
+더 회화적이거나, 더 영화적이거나,
+더 화려하게 렌더링하지 않는다.
+
+캐릭터 시트에서 보이는 것보다
+더 복잡한 피부 질감, 머리카락 질감,
+현실적인 광원, 과도한 명암, 사실적인 재질 표현을 추가하지 않는다.
+
+**캐릭터 시트의 작화 언어를 그대로 유지한 채 장면만 새롭게 구성한다.**
+
+단, 캐릭터 시트의 4면도, 표정 배열, 색상칩,
+시트의 배치와 레이아웃 자체는 재현하지 않는다.
+캐릭터 시트에 등장하는 인물의 외형과 작화 스타일만 참조한다.
+
+### 직전 그림
+
+직전 그림은 인물·공간·시간대·의상·사건의 연속성을 위한 참고 자료다.
+
+직전 그림의 스타일이나 렌더링 수준이 캐릭터 시트와 다를 경우,
+**항상 캐릭터 시트의 작화 스타일을 우선한다.**
+
+직전 그림이 더 사실적이거나 화려하게 표현되어 있더라도
+그 렌더링 방식을 따라 하지 않는다.
+
+## 장면 연출 핵심
+
+주어진 장면 내용을 그대로 나열하거나 각각의 정보를 별도의 설명용 컷으로
+분리하지 않는다. 반대로 그림만으로 모든 정보를 전달하려고 하지 않는다.
+**그림 + 나레이션 + 대사**를 함께 사용하여 독자가 페이지를 읽는 과정에서
+상황을 자연스럽고 명확하게 이해하도록 연출한다.
+
+이 작품과 인물을 처음 보는 독자를 기준으로 한다. 따라서 장면 초반에는
+그림과 나레이션을 활용해 장소, 시간, 인물의 현재 상황을 명확하게 전달한다.
+
+나레이션은 적극적으로 사용한다. 그림만으로 알기 어려운 시간의 흐름,
+반복되는 일상, 인물의 생각, 상황에 대한 설명과 깨달음은 자연스러운
+나레이션으로 전달한다.
+
+대사는 실제 인물들이 주고받는 대화처럼 사용한다. 대사를 통해 인물의 관계,
+성격, 현재 대화의 맥락과 미묘한 감정을 전달한다.
+
+중요한 정보는 독자가 놓치지 않도록 한다. 필요한 경우 나레이션이나 대사로
+직접 설명해도 된다. 단, 그림과 나레이션과 대사가 똑같은 내용을 반복해서
+설명하지 않는다. 각각 서로 다른 정보를 전달하면서 하나의 이야기를
+완성하도록 한다.
+
+## 웹툰의 흐름
+
+페이지를 위에서 아래로 읽을수록 이야기가 실제로 진행되어야 한다.
+
+상황과 공간을 보여준다. → 인물이 행동한다. → 다른 인물과 상호작용한다. →
+대화가 이어진다. → 작은 사건이 발생한다. → 인물이 그것을 의식한다. →
+상대방의 미묘한 반응이 나타난다. → 다음 이야기가 궁금해지는 지점에서
+장면을 마무리한다.
+
+각 컷은 독립적인 일러스트가 아니라 앞뒤 컷과 연결되는 하나의 연속된
+장면이어야 한다.
+
+같은 구도의 인물 얼굴 클로즈업을 연속적으로 배치하지 않는다. 필요한 경우
+전신, 중경, 투샷, 공간을 포함한 장면, 행동을 보여주는 구도와 클로즈업을
+적절히 섞는다.
+
+중요한 순간에는 클로즈업이나 디테일 컷을 사용할 수 있지만, 정보 하나를
+보여주기 위해 무조건 하나의 컷을 추가하는 식으로 구성하지 않는다.
+
+## 정보 전달
+
+장면의 핵심 정보와 감정 변화가 독자에게 확실히 전달되어야 한다. 특히 반복,
+시간의 흐름, 인물의 생각이나 의심처럼 그림만으로 명확하게 전달하기 어려운
+내용은 나레이션을 활용한다.
+
+인물의 행동과 표정은 나레이션과 대사를 뒷받침하고, 나레이션과 대사는
+그림에 없는 맥락을 보충한다.
+
+설명해야 할 내용이 있다면 자연스러운 웹툰 나레이션으로 설명한다. 짧은
+문장만 고집하지 말고 장면을 이해하는 데 필요한 만큼 사용한다.
+
+## 연출 방향
+
+첫 장면부터 독자가 "어디인지" "누가 등장하는지" "무슨 상황인지"를 이해할
+수 있어야 한다.
+
+이후 장면이 진행되면서 "무슨 일이 반복되고 있는지" "인물이 무엇을 느끼는지"
+"무엇이 이상한지"를 그림과 나레이션과 대사를 통해 자연스럽게 알게 한다.
+
+모든 정보를 시각적 상징으로 억지로 표현하지 않는다. 스토리에서 중요한
+정보는 명확하게 설명하고, 그림은 그 설명이 실제 장면으로 느껴지도록 행동과
+상황을 보여준다.
+
+최종 결과물은 장면을 묘사한 이미지 모음이나 콘티가 아니라, **그림·나레이션·
+대사가 함께 작동하면서 실제 이야기가 진행되는 하나의 세로 스크롤 웹툰
+페이지**여야 한다.
+
+## 글자
+
+- 말풍선·나레이션 상자 안의 글자는 **한국어**로 쓴다.
+- 말풍선은 인물의 얼굴을 가리지 않는 자리에 두고, 꼬리는 말하는 인물을
+  향하게 한다. 한 컷에 여러 개면 위에서 아래 순서로 읽히게 배치한다.
+- 나레이션은 말풍선이 아니라 네모 상자로, 컷 위쪽이나 여백에 둔다.
+- 생각은 구름 모양, 말은 둥근 타원, 외침은 뾰족한 형태로 구분한다.
+
+## 인물 (외모는 장면이 바뀌어도 그대로다)
+주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다.
+차사 — A young man with pale skin, short silver-gray hair, and gray eyes. He wears a black hooded sweatshirt with the hood up, layered under a brown delivery vest with multiple pockets and a radio clipped to the left shoulder. His pants are black cargo style with straps and pockets, and he wears black combat boots. He is holding a medium-sized cardboard box with a shipping label attached.
+       고정 요소: 짧은 은회색 머리, 앞머리가 눈썹까지 내려옴 / 회색빛 눈, 쌍꺼풀 없는 눈매 / 검은색 후드티, 후드를 항상 뒤집어씀 / 갈색 택배 조끼, 왼쪽 어깨에 무전기 부착 / 검은색 카고 바지, 허벅지 양쪽에 포켓과 스트랩
+       소지품: 중간 크기 골판지 상자, 송장이 붙어 있음, 손에 항상 들고 다님
+노인 — 흰 머리, 깊은 주름, 카키색 니트와 검은 슬랙스, 휠체어에 앉는 모습.
+
+## 이 화 전체 줄거리 (지금 그릴 자리는 아래 「장면 내용」이 정한다)
+
+[작품] "대신 전하는 마음" · 일상
+
+[줄거리]
+차사는 오늘도 누군가 대신 마지막 상자를 배달한다. 평범한 하루였지만, 오늘의 상자는 살아 있는 수신자, 그리고 200년 전 영영 이별한 줄 알았던 얼굴이 보낸 것이다. 상자를 건네려다, 노인이 이미 누군가를 기다리고 있었음을 알게 된 차사는, "어떤 진실을 알려줄 것인가, 어떤 마음은 숨길 것인가"의 갈림길에서 한쪽을 택한다.
+
+[장면들 — 순서대로 일어나는 사건들이다]
+1. 차사는 늘 해오던 대로 상자를 들고 노인의 집을 찾는다 → 수신인이 살아 있다는 점에 잠깐 멈칫한다.
+2. 초인종을 누르자, 노인이 반가운 얼굴로 문을 열며 "기다리고 있었다"고 말한다 → 둘 사이엔 공식적인 대화만 오가다가, 노인이 상자에 적힌 보낸 이의 이름에 반응한다.
+3. 노인이 조심스럽게 차사에게 상자 속 사연을 묻지만, 차사는 규정상 내용을 밝힐 수 없다고 답한다 → 대신 짧게, 보낸 이의 안부만 전한다.
+4. 노인이 상자에 손을 얹으며 "지금 네가 들고 온 마음을 내가 지켜도 되겠니?"라고 묻는다 → 차사는 곧바로 대답하지 못하고 망설인다.
+5. 차사는 결국, 상자와 함께 아주 짧은 메모 한 장을 건넨다 → 문이 닫힌 뒤에도 둘 사이에 밝혀지지 않은 말이 남는다. ← 이 장에서 그릴 자리
+
+## 장면 내용
+
+위 목록의 5번 장면 자리를 그린다: "차사는 결국, 상자와 함께 아주 짧은 메모 한 장을 건넨다 → 문이 닫힌 뒤에도 둘 사이에 밝혀지지 않은 말이 남는다."
+
+이 한 장이 이야기를 어디까지 나아가게 할지는 **네가 정한다** — 이 장면을 한 장에 다 담아도 되고, 앞 장이 못 다한 곳을 마저 그리다가 이 장면으로 넘어가도 되고, 뒤에 올 이야기의 기미를 미리 깔아도 된다.
+
+다만 **순서는 건너뛰지 않는다** — 아직 그려지지 않은 장면들을 통째로 지나쳐 한참 뒤를 그리거나, 이 화의 결말을 여기서 보여주지 않는다.
+
+첨부한 직전 그림이 바로 앞 장이다. **직전 그림이 멈춘 순간에서 자연스럽게 이어지도록** 그린다 — 인물의 자세·위치·시간대·조명이 직전 그림과 뚝 끊기지 않아야 한다. 직전 그림에 이미 그려진 내용(같은 순간·같은 대사)을 다시 그리지 않는다.
+
+[직전 그림이 그려 놓은 자리 — 여기서부터 이어 그린다] 차사가 망설인 뒤, 상자와 메모를 건네는 장면부터 이어 그리면 된다.
+
+## 그림체
+
+**IMPORTANT — STYLE REFERENCE PRIORITY**
+
+The attached character sheet is the primary visual style reference for
+this entire artwork.
+
+Match the character sheet's actual visual language: line quality, line
+weight, facial simplification, eye design, hair rendering, coloring,
+shading, color organization, and overall 2D finish.
+
+Do not reinterpret the character sheet into another art style.
+
+The written style description below is a supporting constraint, not a
+replacement for the character sheet.
+
+When the written description conflicts with the actual appearance of the
+character sheet, preserve the character sheet's visual language.
+
+- LD:
+  **Korean Shoujo × BL Manga Visual Style**
+
+  The artwork combines the elegant visual language of classic Korean shoujo manga with the refined bishōnen aesthetics of high-quality BL manga.
+
+  The defining quality is **beautiful, delicate, sophisticated, and emotionally intimate**. The characters should look like carefully inked manga artwork rather than painted digital illustrations, generic anime, or glossy modern webtoon art.
+
+  ### LINEWORK
+
+  Use highly refined traditional manga linework.
+
+  Thin, clean, confident ink lines with controlled variation in line weight. Facial features, eyelashes, hair strands, fingers, and small details use especially delicate lines, while silhouettes, clothing edges, jawlines, and important contours receive slightly stronger lines.
+
+  Lines must feel graceful, intentional, and professionally inked.
+
+  Never rough, sketchy, fuzzy, overly thick, or cartoon-like.
+
+  ### CHARACTER AESTHETIC
+
+  Characters have the elegant proportions associated with shoujo manga and bishōnen BL characters.
+
+  Tall, slender, elongated anatomy with relatively small heads, long necks, elegant shoulders, narrow waists, long limbs, slender hands, and graceful posture.
+
+  The body is **slim and beautiful but unmistakably male**.
+
+  Do not make male characters muscular or bulky. Instead, show subtle masculine structure through the jaw, neck, shoulders, chest, hands, wrists, and overall bone structure.
+
+  The ideal is **beautiful male anatomy rather than feminine anatomy**.
+
+  Male characters should feel like sophisticated bishōnen: refined, attractive, slender, slightly androgynous in beauty, but clearly male.
+
+  ### MALE FACE
+
+  Faces are refined and slightly elongated with elegant jawlines, defined but slender chins, high cheekbones, straight narrow noses, and small defined mouths.
+
+  The face should be beautiful rather than rugged.
+
+  Avoid extremely sharp triangular chins or excessively feminine facial proportions.
+
+  The jaw and cheek structure should retain subtle masculine definition.
+
+  Brows are elegant and clearly structured, contributing to a mature male appearance.
+
+  ### EYES
+
+  Eyes are long, narrow, almond-shaped, and expressive.
+
+  Use elegant upper eyelids, restrained eyelashes, slightly lifted outer corners, and deep understated expressions.
+
+  Eyes should feel **beautiful and sensual rather than cute**.
+
+  Irises are relatively simple with restrained detail and one or two small highlights.
+
+  Avoid oversized circular anime eyes, jewel-like irises, excessive sparkle, or glossy realistic eyes.
+
+  ### HAIR
+
+  Hair consists of large elegant masses with flowing tapered strands.
+
+  Use clean graphic shapes first, followed by a limited number of precise individual strands.
+
+  Hair should naturally frame and partially overlap the face, creating a beautiful bishōnen silhouette.
+
+  Highlights are graphic white shapes or thin ink strokes.
+
+  Never use glossy painted gradients or photorealistic hair rendering.
+
+  ### MALE BODY
+
+  Male bodies are slender, elegant, and elongated.
+
+  Use:
+
+  * narrow but clearly structured shoulders
+  * long necks with subtle masculine anatomy
+  * defined collarbones
+  * restrained chest definition
+  * slim waist
+  * long arms and legs
+  * long wrists and fingers
+  * elegant but clearly male hands
+
+  Avoid bodybuilding proportions, exaggerated muscles, extremely broad shoulders, or rugged masculine anatomy.
+
+  The body should feel **graceful, lean, youthful, and physically attractive**.
+
+  ### HANDS
+
+  Hands are long, slender, and elegant.
+
+  Clearly articulated fingers, subtle knuckles, delicate joints, and controlled anatomy.
+
+  Hands should retain believable male proportions while remaining beautiful and expressive.
+
+  Gestures should communicate intimacy, tension, hesitation, attraction, restraint, or emotional distance.
+
+  ### MANGA RENDERING
+
+  Rendering is based primarily on traditional manga techniques:
+
+  clean black ink, white space, flat black shapes, and mechanical screentone.
+
+  Use fine halftone dots and controlled screentone gradients to describe volume.
+
+  Screentone must have crisp graphic boundaries and visible manga structure.
+
+  Use white space deliberately.
+
+  Do not use airbrushed shading, soft digital gradients, volumetric lighting, realistic skin rendering, painterly blending, or glossy cel shading.
+
+  ### TONAL BALANCE
+
+  The overall image remains light, elegant, and sophisticated.
+
+  Black is used selectively for hair, clothing, silhouettes, and emphasis.
+
+  Do not turn the artwork into heavy noir.
+
+  White space remains an important part of the composition.
+
+  ### COLOR
+
+  When color is present, keep it restrained and desaturated.
+
+  Use pale ivory, very light neutral skin tones, dusty rose, muted beige, muted grey, faded blue, and subdued colors.
+
+  Color remains secondary to the ink drawing and screentone.
+
+  Avoid saturated colors and glossy full-color rendering.
+
+  ### SHOUJO VISUAL ELEMENTS
+
+  Use decorative shoujo manga elements sparingly:
+
+  delicate flowers, falling petals, thin ribbons, small four-pointed sparkle marks, subtle screentone textures, and restrained graphic motifs.
+
+  These elements must remain flat ink-and-tone graphic elements.
+
+  Never realistic flowers, glowing particles, bokeh, 3D decoration, ornate fantasy ornamentation, or excessive romantic effects.
+
+  ### BL ATMOSPHERE
+
+  The BL influence should come primarily from **character beauty, male anatomy, intimacy, and emotional tension**, not from stereotypical romance decoration.
+
+  Favor:
+
+  quiet eye contact, subtle physical proximity, restrained expressions, lingering gazes, tension between characters, delicate gestures, asymmetry in body language, emotional vulnerability, longing, attraction, and understated sensuality.
+
+  Avoid exaggerated erotic posing or melodramatic romance-cover aesthetics.
+
+  The emotional atmosphere should feel intimate, sophisticated, restrained, and psychologically charged.
+
+  ### EXPRESSION
+
+  Expressions remain subtle.
+
+  Emotion is communicated through small changes in:
+
+  eyes, eyebrows, lips, gaze direction, head angle, posture, and distance between characters.
+
+  Favor longing, tension, intimacy, melancholy, restraint, vulnerability, attraction, and emotional conflict.
+
+  Avoid exaggerated comedy, childish expressions, or overly dramatic facial distortion.
+
+  ### OVERALL STYLE
+
+  The final artwork should look like a **high-quality Korean shoujo manga artist drawing beautiful male characters with refined BL bishōnen aesthetics**.
+
+  The result should combine:
+
+  **classic shoujo elegance
+
+  * refined bishōnen beauty
+  * subtle masculine anatomy
+  * delicate traditional manga linework
+  * restrained screentone
+  * sophisticated emotional intimacy**
+
+  The characters should be beautiful enough to feel distinctly shoujo/BL, while their anatomy and facial structure remain convincingly male.
+
+  NOT photorealistic.
+  NOT 3D.
+  NOT digital painting.
+  NOT realistic rendering.
+  NOT generic anime.
+  NOT chibi.
+  NOT cute round anime.
+  NOT feminine female anatomy.
+  NOT muscular superhero anatomy.
+  NOT rugged masculine character design.
+  NOT thick cartoon outlines.
+  NOT glossy cel shading.
+  NOT airbrushed gradients.
+  NOT jewel-like eyes.
+  NOT oversized circular eyes.
+  NOT excessive eye sparkles.
+  NOT heavy noir.
+  NOT horror.
+  NOT dark gritty comic rendering.
+  NOT ornate fantasy illustration.
+  NOT romance-fantasy cover art.
+  NOT glossy full-color webtoon rendering.
+- SD(감정이 풀리는 짧은 순간에만): 2~3등신으로 축약된 형태. 얼굴이 크고
+  몸이 작다. 선은 단순하게, 표정은 과장되게. SD여도 그 인물의 머리색·눈색·
+  옷의 주요 색은 유지한다.
+
+## 여백과 화면 호흡
+
+컷과 컷 사이에 충분한 빈 여백을 자유롭게 배치하여 세로 스크롤 웹툰 특유의
+호흡을 만든다. 빠른 행동과 대화에서는 좁은 여백을, 시간의 흐름이나 감정의
+여운이 필요한 순간에는 넓은 여백을 사용한다. 모든 컷을 빈틈없이 이어 붙이지
+않는다. **컷 사이의 실제 빈 공간이 눈에 명확하게 보여야 한다.**
+
+이 빈 공간은 말 그대로 비어 있어야 한다. 배경의 연장, 흐릿하게 번진 그림,
+장식적 무늬, 이전·다음 컷의 여운을 담은 잔상을 채워 넣지 않는다. 빈 공간을
+"휑해 보이니 뭘 채워야겠다"고 여기지 않는다 — 그 비어 있음 자체가 호흡이고
+연출이다. 같은 크기의 여백을 기계적으로 반복하지 않는다.
