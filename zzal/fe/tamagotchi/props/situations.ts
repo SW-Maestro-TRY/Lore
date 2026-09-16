@@ -199,26 +199,32 @@ export function situationOfAction(action: ActionKey, floor2 = false): string | n
 
 // ── 행동 한 판의 바퀴 수 ────────────────────────────────────────────────
 //
-// ★ 정본 = 제안서 A절 표(2026-09-13 상훈님 확정 "5초 괜찮아. 난 딱 적당한 거 같은데" → 3안).
-//   한 바퀴 = 4프레임 = 1.8초. 표의 '바퀴' 칸을 그대로 옮긴 것이 아래 표다.
+// ★ 정본 = 제안서 A절 표 + 상훈님 2026-09-16 확정("비단계 행동은 너무 빨리 끝난다 → 4바퀴로").
+//   한 바퀴 = 4프레임 = 1.8초. 비단계 행동(간식·채팅답·놀람·기상·쓰다듬 등)의 기본이 1 -> 4로 올랐다.
 // ★ **단계 소품이 있는 줄은 표(`stages`)가 이긴다** — 밥 1층 3바퀴·목욕 1층 3바퀴·2층 2바퀴가
 //   거기서 저절로 나온다. 아래 표는 **단계 그림이 없는 층**을 위한 것이다:
 //   밥 2층은 소품이 없는데도 길이는 1층과 같아야 하고(A절 "같은 행동은 층이 달라도 길이를 같게"),
-//   쓰다듬은 양쪽 다 소품 단계가 없는데 표가 2바퀴라고 적었다.
-// ★ 여기 없는 행동은 **한 바퀴**다(A절 표의 1.8초 칸 전부).
+//   쓰다듬은 양쪽 다 소품 단계가 없어 표가 4바퀴로 정한다.
+// ★ 여기 없는 비단계 행동은 **네 바퀴**다(`cyclesOfAction`·`scenePlays` 의 기본값 4 = 7.2초).
 
 /** 행동별 바퀴 수. 단계 소품이 있으면 그쪽이 이긴다. */
 export const ACTION_CYCLES: Partial<Record<ActionKey, number>> = {
-  /** 쓰다듬기 — 1·2층 모두 2바퀴(8프레임 3.6초). 양쪽 다 단계 소품이 없어 표로만 정해진다. */
-  pet: 2,
-  /** 밥 주기 — 2층(`feed_rice_l2`)은 소품이 그림 안에 있어 단계가 없다. 길이는 1층과 같은 3바퀴. */
+  /** 쓰다듬기 — 1·2층 모두 4바퀴(16프레임 7.2초). 양쪽 다 단계 소품이 없어 표로만 정해진다.
+   *  (상훈님 2026-09-16 확정 — 비단계 행동은 4바퀴가 기본.) */
+  pet: 4,
+  /** 밥 주기 — 2층(`feed_rice_l2`)은 소품이 그림 안에 있어 단계가 없다. 길이는 1층과 같은 3바퀴.
+   *  ⚠️ 비단계 기본이 4로 올랐어도 **밥은 3층 그대로** — 1층이 주먹밥 3단계(3->2->1)라 2층도 3에 맞춘다. */
   feed_rice: 3,
-  /** 청소하기 — 양쪽 다 `dust` 두 단계라 표에서 2가 나오지만, 규격이 줄어도 2바퀴를 지킨다. */
+  /** 청소하기 — 단계형이라 실전에서는 `planCycles`(먼지 2단계 + 걷힘 1 = 3바퀴)가 이긴다.
+   *  이 2는 규격이 줄어 단계가 사라졌을 때만 쓰는 안전값이라 그대로 둔다. */
   clean: 2,
 };
 
+/** 비단계 행동의 기본 바퀴 수 = 4바퀴(7.2초). 상훈님 2026-09-16 확정 — 1바퀴는 너무 빨리 끝났다. */
+export const DEFAULT_ACTION_CYCLES = 4;
+
 /**
- * 그 행동이 돌 **바퀴 수**. 단계 소품이 있으면 그 단계 수, 없으면 `ACTION_CYCLES`, 그것도 없으면 1.
+ * 그 행동이 돌 **바퀴 수**. 단계 소품이 있으면 그 단계 수, 없으면 `ACTION_CYCLES`, 그것도 없으면 4.
  * ★ 순서가 중요하다 — 목욕은 1층 3단계·2층 2단계로 **층마다 다르고**, 그건 표만 안다.
  */
 export function cyclesOfAction(
@@ -228,7 +234,7 @@ export function cyclesOfAction(
 ): number {
   const sit = situationOfAction(action, floor2);
   const plan = sit ? stagePlanOf(table, sit) : null;
-  return plan ? planCycles(plan) : ACTION_CYCLES[action] ?? 1;
+  return plan ? planCycles(plan) : ACTION_CYCLES[action] ?? DEFAULT_ACTION_CYCLES;
 }
 
 /**
@@ -298,7 +304,7 @@ export function scenePlays(
     return {
       id: r.id,
       pose: r.pose,
-      cycles: plan ? planCycles(plan) : (action ? ACTION_CYCLES[action] ?? 1 : 1),
+      cycles: plan ? planCycles(plan) : (action ? ACTION_CYCLES[action] ?? DEFAULT_ACTION_CYCLES : DEFAULT_ACTION_CYCLES),
       label: action
         ? ACTION_LABEL[action]
         : `${poseLabel[r.pose] ?? r.pose} · ${spec?.name ?? (prop ?? '소품 없음')}`,
