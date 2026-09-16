@@ -101,16 +101,20 @@ export const CHAR_GROUPS = [
   { key: 'world', label: '세계관', opts: WORLD, ph: '사는 곳, 시대, 함께 있는 사람들 같은 걸 적어 주세요' },
 ] as const;
 
-export const GOOD_EX: ReadonlyArray<readonly [string, string]> = [
-  ['얼굴이 크게 나온 정면', '#E8F0E2'],
-  ['선이 또렷한 그림', '#E8F0E2'],
-  ['한 마리만 · 배경 없이', '#E8F0E2'],
+// 업로드 안내의 예시 그림. 튜플은 [설명(라벨), 폴백 색, 이미지 키] 다.
+//   · 이미지 키는 서버 키 규칙(앞머리 images/ 없이)으로 적는다 — 화면은 assetUrl() 로 CDN 주소를 만든다.
+//   · 그림은 Codex(무과금)로 그린 가상의 샘플 캐릭터(실존/기존 IP 아님)를 S3
+//     images/zzal/onboarding/ 에 올린 것이다. 로드 실패 시 색+'그림' 자리표시자로 폴백한다.
+export const GOOD_EX: ReadonlyArray<readonly [string, string, string]> = [
+  ['얼굴이 크게 나온 정면', '#E8F0E2', 'zzal/onboarding/good_front.webp'],
+  ['선이 또렷한 그림', '#E8F0E2', 'zzal/onboarding/good_lines.webp'],
+  ['한 마리만 · 배경 없이', '#E8F0E2', 'zzal/onboarding/good_solo.webp'],
 ];
-export const BAD_EX: ReadonlyArray<readonly [string, string]> = [
-  ['여러 명', '#F6E7E4'],
-  ['뒷모습', '#F6E7E4'],
-  ['너무 작음', '#F6E7E4'],
-  ['배경이 복잡', '#F6E7E4'],
+export const BAD_EX: ReadonlyArray<readonly [string, string, string]> = [
+  ['여러 명', '#F6E7E4', 'zzal/onboarding/bad_multi.webp'],
+  ['뒷모습', '#F6E7E4', 'zzal/onboarding/bad_back.webp'],
+  ['너무 작음', '#F6E7E4', 'zzal/onboarding/bad_small.webp'],
+  ['배경이 복잡', '#F6E7E4', 'zzal/onboarding/bad_busy.webp'],
 ];
 
 /**
