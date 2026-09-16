@@ -123,9 +123,10 @@ export const CYCLE_MS = SPRITE_FRAME_MS * CYCLE_FRAMES;
  * 그 상황이 **실제로 돌릴 수 있는 단계 차례**. 없으면 `null`(= 한 바퀴짜리 연출).
  *
  * ★ 차례는 표가 정한다(주먹밥 3->2->1 · 거품 1->2->3) — 코드가 순서를 지어내지 않는다.
- * ★ ⚠️ **규격에 없는 단계는 걸러 낸다.** 표의 `clean_l1` 은 먼지를 1~3 으로 적어 두었는데 규격에는
- *   `dust_1`·`dust_2` 둘뿐이라, 거르지 않으면 3번째 바퀴에서 **1단계로 되돌아가** 1->2->1 로 보인다
- *   (`resolveScene` 이 못 찾은 단계를 첫 단계로 버티기 때문이다). 있는 만큼만 돈다.
+ * ★ ⚠️ **규격에 그림이 없는 단계는 걸러 낸다.** 표가 규격보다 많은 단계를 적어 두면(예전 `clean_l1`
+ *   은 먼지를 1~3 으로 적었는데 규격엔 `dust_1`·`dust_2` 둘뿐이었다), 거르지 않으면 못 찾은 단계에서
+ *   **1단계로 되돌아가** 1->2->1 로 보인다(`resolveScene` 이 첫 단계로 버티기 때문). 있는 만큼만 돈다.
+ *   (2026-09-16 부터 먼지는 `dust_3` 까지 그림이 생겨 `clean_l1` 이 1->2->3 을 온전히 돈다.)
  */
 export interface StagePlan {
   prop: string;
@@ -134,13 +135,14 @@ export interface StagePlan {
   /**
    * 마지막에 **걷힘 한 바퀴**가 붙는가.
    *
-   * ★ 규격 `dust` 의 note 가 정한 것 — *"3단계(걷힘)는 그림이 없다 — 반짝은 단계가 아니라
-   *   전환 신호다."* 즉 덮는 소품은 **덮었다가 걷히며 끝난다**가 설계다.
-   *   상황표의 `clean_l1.stages = [1,2,3]` 에서 3번이 바로 그 자리인데, 규격에 그림이 없어
-   *   `stages` 필터에 걸려 **박자가 통째로 사라져 있었다**(상훈님 2026-09-14
-   *   "먼지가 화면을 다 덮고 나서 짜자잔 하는 건 어쩌다가 없어졌어").
-   * ★ 조건은 **화면을 덮는 소품인가**(`unit: 'screen'`)다. 먼지·거품이 여기 들고,
-   *   손에 드는 것(주먹밥)은 안 든다 — 밥그릇은 덮은 적이 없으니 걷힐 것도 없다.
+   * ★ 덮는 소품은 **덮었다가 걷히며 끝난다**가 설계다(상훈님 2026-09-14
+   *   "먼지가 화면을 다 덮고 나서 짜자잔 하는 건 어쩌다가 없어졌어"). 그 걷힘을
+   *   **그림으로 그리느냐, 신호로 대신하느냐**가 소품마다 다르다.
+   * ★ 조건은 **그 소품에 걷힘 전환 신호(`SWEEP_SIGNAL`)가 있는가**다.
+   *   - `bath` 는 헹굼 물줄기가 별도 소품(`shower`)이라 신호가 있다 → 걷힘 바퀴가 붙는다.
+   *   - `dust` 는 2026-09-16 부터 걷힘을 **그림(`dust_3`)**으로 그린다 → 신호가 없어
+   *     걷힘 바퀴를 안 붙이고 `dust_3` 으로 끝난다(옛날엔 그림이 없어 `sparkle` 로 대신했다).
+   *   손에 드는 것(주먹밥)은 애초에 덮은 적이 없으니 걷힐 것도 없다.
    */
   sweep: boolean;
   /** 걷힘 박자에 대신 띄우는 **마무리 신호**. 없으면 그 바퀴는 소품 없이 빈다. */
@@ -150,10 +152,14 @@ export interface StagePlan {
 /**
  * 걷힘 박자에 띄우는 신호. **규격 note 가 정한 것만** 적는다 — 코드가 지어내지 않는다.
  *
- *   `dust`  규격 note: "반짝은 단계가 아니라 **전환 신호**다"      → `sparkle`
  *   `bath`  `shower` 규격 note: "**거품 2단계가 찬 뒤에 온다**"   → `shower`
+ *
+ * ★ 2026-09-16 — `dust` 를 뺐다. 먼지의 걷힘은 이제 **그림(`dust_3`, 먼지가 가장자리로 걷히며 주변에 별)**
+ *   이라 머리 위 반짝임(`sparkle`)을 대신 띄우지 않는다. 신호가 없으면 `stagePlanOf` 가 걷힘 바퀴를
+ *   붙이지 않아 **마지막 바퀴가 `dust_3` 그림으로 끝난다.** `bath` 는 헹굼 물줄기가 별도 소품(`shower`)
+ *   이라 신호가 그대로 남는다.
  */
-export const SWEEP_SIGNAL: Record<string, string> = { dust: 'sparkle', bath: 'shower' };
+export const SWEEP_SIGNAL: Record<string, string> = { bath: 'shower' };
 
 export function stagePlanOf(
   table: PropSituationTable | null | undefined,
@@ -169,9 +175,14 @@ export function stagePlanOf(
   //   **거르고 남은 자리를 '걷힘' 으로 되살린다** — 그림이 없는 것이 정상인 단계이기 때문이다.
   const stages = row.stages.filter((n) => spec.stages.some((x) => x.n === n));
   if (stages.length < 1) return null;
-  const sweep = spec.unit === 'screen';
+  // ★ 걷힘 바퀴는 **전환 신호(`SWEEP_SIGNAL`)가 있는 화면 소품만** 붙인다(2026-09-16).
+  //   먼지는 걷힘이 이제 그림(`dust_3`)이라 신호가 없다 → 걷힘 바퀴 없이 `dust_3` 으로 끝난다
+  //   (옛날엔 3단계 그림이 없어 `sparkle` 머리 별로 대신했다). 목욕은 헹굼(`shower`)이 별도
+  //   신호로 남아 있어 그대로 걷힘 바퀴가 붙는다.
+  const signal = spec.unit === 'screen' ? (SWEEP_SIGNAL[prop] ?? null) : null;
+  const sweep = signal !== null;
   if (stages.length < 2 && !sweep) return null;
-  return { prop, stages, sweep, signal: sweep ? (SWEEP_SIGNAL[prop] ?? null) : null };
+  return { prop, stages, sweep, signal };
 }
 
 /** 그 계획이 도는 **총 바퀴 수**(걷힘 포함). */
@@ -215,7 +226,8 @@ export const ACTION_CYCLES: Partial<Record<ActionKey, number>> = {
   /** 밥 주기 — 2층(`feed_rice_l2`)은 소품이 그림 안에 있어 단계가 없다. 길이는 1층과 같은 3바퀴.
    *  ⚠️ 비단계 기본이 4로 올랐어도 **밥은 3층 그대로** — 1층이 주먹밥 3단계(3->2->1)라 2층도 3에 맞춘다. */
   feed_rice: 3,
-  /** 청소하기 — 단계형이라 실전에서는 `planCycles`(먼지 2단계 + 걷힘 1 = 3바퀴)가 이긴다.
+  /** 청소하기 — 단계형이라 실전에서는 `planCycles`(먼지 3단계 + 걷힘 0 = 3바퀴)가 이긴다.
+   *  2026-09-16 부터 걷힘도 그림(dust_3)이라 걷힘 바퀴가 없어졌다(총 3바퀴는 그대로).
    *  이 2는 규격이 줄어 단계가 사라졌을 때만 쓰는 안전값이라 그대로 둔다. */
   clean: 2,
 };
