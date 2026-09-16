@@ -20,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -93,6 +94,44 @@ public class JobRunner {
      * 간다. 셋이면 최대 여섯이다.
      */
     static final int DEFAULT_PAGE_WORKERS = 3;
+
+    /**
+     * 화 전체 검수(fullreview)에서 critical 로 걸린 페이지를 자동으로
+     * 다시 그리는 <b>최대 라운드 수.</b>
+     *
+     * 라운드마다 다른 페이지가 걸릴 수 있어서(1차 [7,12,18] → 2차 [7] →
+     * 3차 [12]처럼) 이 값만으로 "한 페이지가 몇 번 고쳐졌는지"를 잴 수는
+     * 없다 — 그건 {@link #MAX_PAGE_REDRAWS}가 따로 잰다.
+     *
+     * <b>작품 만들기를 시작하는 순간, 이 한도까지는 사전 승인된 것으로
+     * 본다</b>(webtoon/docs/full-review-design.md §6.3, 2026-09-16 확정).
+     * 실제 재생성 하나하나마다 다시 승인을 묻지 않는다 — 라운드 수를
+     * 늘리려면 이 상수를 고쳐야 하고, 그 자체가 새 승인이 필요한 일이다.
+     */
+    static final int MAX_FULL_REVIEW_ROUNDS = 3;
+
+    /**
+     * 같은 페이지를 이 루프 안에서 최대 몇 번 다시 그리는가.
+     *
+     * {@link #MAX_FULL_REVIEW_ROUNDS}와 독립적으로 페이지마다 따로 센다.
+     * 한도를 넘긴 페이지는 <b>그 페이지만 포기하고 그대로 둔다</b> — 전체
+     * 루프를 죽이지 않는다.
+     */
+    static final int MAX_PAGE_REDRAWS = 2;
+
+    /**
+     * 화 전체 검수를 도는 동안 진행 화면에 뜨는 말. <b>문자열을 한 글자도
+     * 안 바꿔야 한다</b> — FE(`webtoon/fe/sections/Progress/nhStage.ts`)가
+     * 이 문자열을 그대로 보고 마스코트 그림을 검수 중 그림(`bind.webp`)으로
+     * 바꾼다. 라운드·페이지 번호를 넣지 않는 것도 그래서다(값이 바뀌면
+     * 매칭이 깨진다).
+     */
+    static final String FULL_REVIEW_SAY = "루가 그림을 검수하고 있어요!";
+
+    /** 그리는 단계의 기본 말 — {@code nhStage.ts}의 {@code NH_STAGE_SAY.pages}
+     * 와 정확히 같아야 한다. 검수(bind 그림)에서 다시 그리기(art 그림)로
+     * 넘어갈 때 이 문자열로 되돌려서 마스코트 그림도 같이 돌아가게 한다. */
+    static final String PAGES_SAY = "루가 그림을 그리고 있어요";
 
     private final int workers;
     private final int pageWorkers;
@@ -508,6 +547,12 @@ public class JobRunner {
 
         drawPages(jobId, job);
 
+        /* 화 전체 검수 + critical 만 자동으로 다시 그리는 루프
+           (webtoon/docs/full-review-design.md §6). **실패해도 만들기는
+           성공이다** — 이미 다 그린 페이지가 있으니, 검수가 못 돌거나
+           한도를 넘겨도 지금까지 그린 것으로 그대로 진행한다. */
+        runFullReviewLoop(jobId, job);
+
         if (harness.stitch(job.getRunId(), env(job), line -> progress.line(jobId, line)) != 0) {
             throw new IllegalStateException("이어 붙이기가 실패했습니다");
         }
@@ -608,18 +653,6 @@ public class JobRunner {
             throw bad instanceof Cancelled ? bad
                     : new IllegalStateException("그림을 만들지 못했습니다", bad);
         }
-
-        /* 화 전체를 처음부터 끝까지 한 번 읽는 검수. 차례로 그릴 때는 파이썬이
-           마지막에 스스로 불렀는데(장마다 그리는 흐름의 끝), 장면을 나눠 부르면
-           어느 프로세스도 자기가 마지막인지 모른다 — 그래서 여기서 부른다.
-           실패해도 만들기는 성공이다: 이미 다 그린 화를 읽기만 하는 걸음이다. */
-        try {
-            callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--episode-review"));
-        } catch (Cancelled e) {
-            throw e;
-        } catch (Exception e) {
-            log.warn("화 전체 검수를 하지 못했습니다 (job={})", jobId, e);
-        }
     }
 
     /** 예전 길 — 한 프로세스가 표지부터 마지막 장까지 차례로 그린다. */
@@ -630,6 +663,178 @@ public class JobRunner {
         stopIfCancelled(jobId);
         if (code != 0) {
             throw new IllegalStateException("그림을 만들지 못했습니다");
+        }
+    }
+
+    /**
+     * 화 전체 검수(fullreview) → critical 만 자동 재생성 → 다시 전체 검수,
+     * 를 한도 안에서 도는 루프.
+     *
+     * <h2>책임 분리 — 자바가 상태 머신, 파이썬은 실행 단위</h2>
+     *
+     * {@code fullreview.py}는 판정만 내고, {@code run.py --detail-pages
+     * --page N}은 그 페이지를 다시 그리기만 한다(그 안에서 {@code
+     * pagecheck}가 자동으로 같이 돈다 — 여기서 따로 또 부르지 않는다).
+     * <b>언제 다시 검수를 돌리고, 몇 번까지 다시 그리고, 언제 멈추고
+     * 사람에게 넘길지</b>는 전부 여기서 정한다
+     * (webtoon/docs/full-review-design.md §6.1, 2026-09-16 확정).
+     *
+     * <h2>major/minor 는 자동 재생성하지 않는다</h2>
+     *
+     * {@code fullreview}가 이미 {@code severity}가 critical 이 아니면
+     * {@code redraw}를 강제로 false 로 눌러서 내려준다
+     * ({@code fullreview.parse}). 여기서는 그 값을 그대로 믿는다 — major·
+     * minor 는 기록만 되고(진행 로그에 통과로 표시), 자동으로 값을 더
+     * 쓰지 않는다.
+     *
+     * <h2>루프가 멈춰도 작품은 실패가 아니다</h2>
+     *
+     * 검수 호출이 죽거나, 결과를 못 읽거나, 한도를 넘겨도 <b>예외를 밖으로
+     * 던지지 않는다</b> — 이미 그린 페이지로 그대로 진행한다. 대신 진행
+     * 로그({@link JobProgress#say})에 사람이 읽을 말을 남긴다. 화면은 이미
+     * 이 채널을 그대로 보여준다(STORY·SHEET 단계의 "루가 …하고 있어요"와
+     * 같은 자리) — 조용히 오류로 끝나는 대신, "루가 최대한 다듬었어요"
+     * 같은 말로 마지막 상태를 알린다.
+     *
+     * <b>취소는 예외다.</b> {@link Cancelled}는 여기서 안 삼킨다 — 취소
+     * 표시가 있으면 곧바로 돌아가고, {@code callHarness}가 던지는
+     * {@code Cancelled}도 그대로 위로 흘려보낸다. 취소된 작품이 "다
+     * 됐다"로 끝나면 안 된다.
+     */
+    private void runFullReviewLoop(Long jobId, WebtoonJob job) {
+        // 페이지 -> 이 루프 안에서 다시 그린 횟수.
+        Map<Integer, Integer> redrawn = new HashMap<>();
+        for (int round = 1; round <= MAX_FULL_REVIEW_ROUNDS; round++) {
+            if (cancelled.contains(jobId)) {
+                return;
+            }
+            /* 문구를 정확히 이 문자열로 고정한다 — FE(nhStage.ts) 가 이
+               문자열을 보고 마스코트 그림을 "검수 중" 그림(bind.webp)으로
+               바꾼다. 라운드 번호·페이지 번호처럼 매번 달라지는 값을 넣으면
+               그 매칭이 깨진다. */
+            progress.say(jobId, FULL_REVIEW_SAY);
+
+            int code;
+            try {
+                code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--full-review"));
+            } catch (IOException | InterruptedException e) {
+                log.warn("전체 검수 호출이 실패했습니다 (job={}, round={})", jobId, round, e);
+                return;
+            }
+            after.cost(job.getRunId());
+            if (cancelled.contains(jobId)) {
+                return;
+            }
+            if (code != 0) {
+                log.warn("전체 검수를 하지 못했습니다 — 이미 그린 페이지로 진행합니다 "
+                        + "(job={}, round={})", jobId, round);
+                return;
+            }
+
+            JsonNode review = readFullReview(job.getRunId());
+            if (review == null) {
+                return;                  // 읽지 못했다 — readFullReview 가 이미 로그를 남긴다
+            }
+            JsonNode issues = review.path("issues");
+            if (!issues.isArray() || issues.isEmpty()) {
+                return;                  // 지적이 하나도 없다 — 끝
+            }
+
+            // 페이지별 한도(MAX_PAGE_REDRAWS) 안에서만 이번 라운드에 다시 그릴
+            // 대상을 추린다. 같은 페이지가 이슈 여러 개에 걸리면 사유를 모은다.
+            Map<Integer, String> target = new LinkedHashMap<>();
+            List<Integer> gaveUp = new ArrayList<>();
+            for (JsonNode issue : issues) {
+                if (!issue.path("redraw").asBoolean(false)) {
+                    continue;             // critical 이 아니거나(major/minor) 구조적 문제 — 자동 재생성 안 함
+                }
+                String why = issue.path("why").asText("");
+                for (JsonNode pageNode : issue.path("redraw_pages")) {
+                    int page = pageNode.asInt(-1);
+                    if (page <= 0) {
+                        continue;
+                    }
+                    int used = redrawn.getOrDefault(page, 0);
+                    if (used >= MAX_PAGE_REDRAWS) {
+                        gaveUp.add(page);
+                        continue;
+                    }
+                    target.merge(page, why, (a, b) -> a + "\n" + b);
+                }
+            }
+            if (!gaveUp.isEmpty()) {
+                log.info("페이지별 재생성 한도({}회)를 넘겨 그대로 둡니다: {} (job={})",
+                        MAX_PAGE_REDRAWS, gaveUp, jobId);
+            }
+            if (target.isEmpty()) {
+                // critical 로 걸린 페이지가 전부 한도를 넘겼거나(재시도 소진),
+                // 걸린 게 전부 major/minor 였다 — 더 자동으로 할 게 없다.
+                return;
+            }
+
+            /* 그리는 단계의 기본 문구로 되돌린다 — 그래야 FE 마스코트 그림도
+               "검수 중"(bind.webp)에서 "그리는 중"(art.webp) 으로 같이
+               돌아간다(nhStage.ts 의 기본 매핑, NH_STAGE_SAY.pages 와
+               한 글자도 같아야 한다). */
+            progress.say(jobId, PAGES_SAY);
+            for (Map.Entry<Integer, String> entry : target.entrySet()) {
+                if (cancelled.contains(jobId)) {
+                    return;
+                }
+                int page = entry.getKey();
+                redrawn.merge(page, 1, Integer::sum);
+                redrawPage(jobId, job, page, entry.getValue());
+            }
+            // 라운드 끝 — for 가 다음 회차로 넘어가 전체 검수를 다시 돈다.
+        }
+        log.info("전체 검수 자동 수정 한도({}라운드)를 다 썼습니다 — 남은 문제가 있어도 "
+                + "여기서 멈춥니다 (job={})", MAX_FULL_REVIEW_ROUNDS, jobId);
+        progress.say(jobId, "루가 최대한 다듬었어요 — 일부는 더 못 고쳤지만 완성으로 넘어가요");
+    }
+
+    /**
+     * 페이지 하나를 다시 그린다 — 검수가 찾은 이유를 {@code --note}로 같이
+     * 넘긴다(그리는 프롬프트 뒤에 붙어 "이 문제를 반영해서 다시 그려라"가
+     * 된다, {@code detailart.note_block}). 그 안에서 {@code pagecheck}도
+     * 자동으로 같이 돈다 — 여기서 따로 또 부르지 않는다.
+     *
+     * 실패해도 예외를 던지지 않는다 — 원래 그림이 그대로 있으니 그 페이지만
+     * 포기하고 나머지 루프는 계속된다. {@link Cancelled}(취소)만은 그대로
+     * 위로 흘려보낸다 — 여기서 잡지 않는다(IOException·InterruptedException
+     * 만 잡는다).
+     */
+    private void redrawPage(Long jobId, WebtoonJob job, int page, String why) {
+        Path png = runsDir.resolve(job.getRunId()).resolve("pages")
+                .resolve("page%02d.png".formatted(page));
+        try {
+            Files.deleteIfExists(png);   // run.py 는 파일이 있으면 안 다시 그린다
+        } catch (IOException e) {
+            log.warn("{}페이지 원본을 못 지웠습니다 — 그대로 둡니다 (job={})", page, jobId, e);
+            return;
+        }
+        List<String> args = List.of("--run-id", job.getRunId(), "--detail-pages",
+                "--page", String.valueOf(page), "--note", why);
+        try {
+            int code = callHarness(jobId, job, args);
+            after.cost(job.getRunId());
+            if (code != 0) {
+                log.warn("{}페이지를 다시 그리지 못했습니다 (job={})", page, jobId);
+            }
+        } catch (IOException | InterruptedException e) {
+            log.warn("{}페이지를 다시 그리다 실패했습니다 (job={})", page, jobId, e);
+        }
+    }
+
+    /** {@code full_review.json}을 읽는다. 없거나 못 읽으면 {@code null}
+     * (읽는 쪽이 로그만 남기고 그대로 진행한다 — {@link #directionsOf}와
+     * 같은 관례). */
+    private JsonNode readFullReview(String runId) {
+        Path file = runsDir.resolve(runId).resolve("full_review.json");
+        try {
+            return mapper.readTree(file.toFile());
+        } catch (IOException e) {
+            log.warn("전체 검수 결과를 못 읽었습니다 (run={})", runId, e);
+            return null;
         }
     }
 

@@ -6,7 +6,7 @@ import {
   cancelJob, decideSheet, jobPageUrl, pickDirection, rememberMyRun, retryDirections,
 } from "../../lib/nhApi";
 import { useNhJob } from "./useNhJob";
-import { headLine, mascotLine, mmss, NH_STAGE_ART } from "./nhStage";
+import { headLine, mascotLine, mmss, stageArt } from "./nhStage";
 import NotifyByEmail from "./NotifyByEmail";
 import SheetApproval from "./SheetApproval";
 import PickApproval from "./PickApproval";
@@ -181,7 +181,7 @@ export default function Progress({
             </p>
           )}
           <div className="stage-now">
-            <div className="stage-art" data-stage={NH_STAGE_ART[job.stage] || job.stage} />
+            <div className="stage-art" data-stage={stageArt(job.stage, job.say)} />
             <p className="stage-say">{line}</p>
             <div className="lou-progress" role="progressbar"
                  aria-valuemin={0} aria-valuemax={100} aria-valuenow={job.pct}>

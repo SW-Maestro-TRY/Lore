@@ -49,7 +49,7 @@ import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
 import detailart                              # noqa: E402
 import storycheck                             # noqa: E402
-import episodecheck                           # noqa: E402
+import fullreview                             # noqa: E402
 import pages as pagemod                       # noqa: E402
 import runmeta                                # noqa: E402
 import sheet as sheetmod                      # noqa: E402
@@ -948,7 +948,6 @@ def direction_of(run_dir: Path) -> dict | None:
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
-                       episode_review: bool | None = None,
                        note: str = "") -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     scene_prompt 산출물(scenes.json)만으로 표지+전체 씬을 그린다.
@@ -984,37 +983,11 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
 
-    # 다 그렸으면 처음부터 끝까지 한 번 읽는다(episodecheck). 장마다 보는
-    # 검수는 인접한 두 장만 보므로, "다 읽고 나서 무슨 이야기였는지 모르겠다"
-    # 는 거기서 안 잡힌다.
-    #
-    # `only` 가 있으면(한 장만 다시 그리기) 안 부른다 — 화 전체를 보는
-    # 검수라 일부만 새로 그린 상태에서는 볼 것이 못 되고, 한 장 고칠 때마다
-    # 화 전체 값이 또 나간다.
-    if only or dry_run or not made:
-        return
-    if not (episodecheck.enabled() if episode_review is None else episode_review):
-        return
-    pick = json.loads((run_dir / "pick.json").read_text(encoding="utf-8")) \
-        if (run_dir / "pick.json").exists() else {}
-    directions = json.loads((run_dir / "directions.json").read_text(encoding="utf-8")) \
-        if (run_dir / "directions.json").exists() else []
-    direction = (next((d for d in directions if d.get("n") == pick.get("n")), None)
-                 or (directions[0] if directions else None))
-    if not direction:
-        return
-    char = json.loads((run_dir / "input.json").read_text(encoding="utf-8")) \
-        if (run_dir / "input.json").exists() else None
-    hero = ((char or {}).get("name") or "").strip()
-    cast = [c for c in (direction.get("cast") or [])
-            if isinstance(c, dict) and (c.get("name") or "").strip()
-            and (c.get("name") or "").strip() != hero]
-    # 이제 두 번 부른다 (블라인드 읽기 + 견주기) — 기록도 여럿이다.
-    _, rcalls = episodecheck.review_episode(run_dir, direction=direction,
-                                            char=char, cast=cast)
-    for rmeta in rcalls:
-        if rmeta:
-            record(run_dir, rmeta)
+    # 화 전체 검수(fullreview)는 여기서 자동으로 안 부른다. 2026-09-16부터
+    # 그 트리거·재생성 루프·한도는 JobRunner.java 가 쥔다(webtoon/docs/
+    # full-review-design.md §6.1) — 파이썬은 그리기와 판정만 하고, "언제
+    # 다시 검수를 돌리고 언제 멈출지"는 상태 머신을 가진 자바 쪽 책임이다.
+    # 단독으로 보고 싶으면 `--full-review`(아래 CLI)를 따로 부른다.
 
 
 # --------------------------------------------------------------------- CLI
@@ -1038,9 +1011,6 @@ def main(argv=None) -> int:
                    help="이미 만든 이야기 후보를 검수만 한다 (기본 흐름에서 이미 "
                         "자동으로 도는 단계 — 단독 재실행용. 후보는 안 건드리고 "
                         "story_review.json 만 쓴다)")
-    p.add_argument("--episode-review", action="store_true",
-                   help="이미 그린 화를 처음부터 끝까지 읽어 검수만 한다 "
-                        "(다시 그리지 않는다. episode_review.json 만 쓴다)")
     p.add_argument("--sheet", action="store_true", help="캐릭터 시트만")
     p.add_argument("--sheet-spec", action="store_true",
                    help="시트 사양(글)만. 그림은 안 그린다")
@@ -1075,9 +1045,9 @@ def main(argv=None) -> int:
     p.add_argument("--no-story-review", action="store_true",
                    help="이야기 후보를 만든 뒤 검수를 하지 않는다 (기본은 켜짐 — "
                         ".env 의 NH_STORY_REVIEW=0 과 같다)")
-    p.add_argument("--no-episode-review", action="store_true",
-                   help="다 그린 뒤 화 전체 검수를 하지 않는다 (기본은 켜짐 — "
-                        ".env 의 NH_EPISODE_REVIEW=0 과 같다)")
+    p.add_argument("--full-review", action="store_true",
+                   help="이미 그린 화를 처음부터 끝까지 읽어 검수만 한다 "
+                        "(다시 그리지 않는다. full_review.json 만 쓴다)")
     p.add_argument("--dry-run", action="store_true", help="프롬프트만 쓰고 호출하지 않는다")
     p.add_argument("--note", default="", help="다시 만들기에서 이번 시도에만 추가로 "
                                               "반영할 요청 (이야기·시트 단계에서 씀)")
@@ -1142,7 +1112,7 @@ def main(argv=None) -> int:
     # --sheet-from 만 준 것도 여기서 끝난다 — 시트를 가져다 놓는 것이 그
     # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
-    if (args.story_review or args.episode_review
+    if (args.story_review or args.full_review
             or args.sheet or args.sheet_spec or args.detail_pages
             or args.page or args.sheet_from or args.pick_save or args.restory
             or args.scenes):
@@ -1158,9 +1128,9 @@ def main(argv=None) -> int:
         if args.story_review:
             storycheck.review_run(run_dir, dry_run=args.dry_run,
                                   on_call=lambda meta: record(run_dir, meta))
-        if args.episode_review:
-            episodecheck.review_run(run_dir, dry_run=args.dry_run,
-                                    on_call=lambda meta: record(run_dir, meta))
+        if args.full_review:
+            fullreview.review_run(run_dir, dry_run=args.dry_run,
+                                  on_call=lambda meta: record(run_dir, meta))
         if args.pick_save:
             chosen = picked_direction(run_dir, args.pick)
             write_json(run_dir / "pick.json", {"n": chosen["n"], "title": chosen["title"],
@@ -1175,7 +1145,6 @@ def main(argv=None) -> int:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
                                allow_no_sheet=args.no_sheet,
                                review=False if args.no_page_review else None,
-                               episode_review=False if args.no_episode_review else None,
                                note=args.note)
         return 0
 
