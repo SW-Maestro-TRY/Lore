@@ -4,6 +4,8 @@ import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.credit.GuestGate;
 import com.lore.webtoon.work.WorkLedger;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lore.webtoon.story.StoryStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -545,6 +547,14 @@ public class JobRunner {
         WebtoonJob job = store.running(jobId, JobStage.PAGES);
         progress.say(jobId, "루가 그림을 그리고 있어요");
 
+        /* **장면부터 먼저 나눠 둔다.** `pageCount()`가 몇 장인지 알아야 순차로
+           그릴지 동시에 그릴지 정하는데, 지금 story_prompt 는 이야기 후보의
+           `scenes`를 항상 빈 배열로 낸다(장면은 고른 뒤 scene_prompt 가 따로
+           만든다) — 그래서 이 걸음 없이는 `pageCount()`가 항상 0으로 읽혀
+           `drawPages()`가 매번 순차 경로로만 빠졌다(2026-09-16 실측: 실제
+           job에서 "3장씩 동시에"가 한 번도 안 탄 것을 확인). */
+        ensureScenes(jobId, job);
+
         drawPages(jobId, job);
 
         /* 화 전체 검수 + critical 만 자동으로 다시 그리는 루프
@@ -583,30 +593,23 @@ public class JobRunner {
      *
      * 전에는 나눌 수가 없었다. 장면 N+1 을 그리려면 N 의 <b>그림</b>이 있어야
      * 했기 때문이다(직전 그림을 참조로 붙이고, 직전 장 검수가 적어 준
-     * 「다음은 여기서부터」를 물려받았다). 지금은 그리기 전에 이음새를 한 번
-     * 정해 둔다({@code --scene-link}) — 장면마다 「어디서 끝나는가」가 글로
-     * 박히고, 그 마무리가 곧 다음 장면의 시작이다. 그래서 옆 장의 그림을 못
-     * 봐도 이어진다.
+     * 「다음은 여기서부터」를 물려받았다). 지금은 그리기 전에 {@link #ensureScenes}
+     * 가 이음새를 한 번 정해 둔다 — 장면마다 「어디서 끝나는가」가 글로 박히고,
+     * 그 마무리가 곧 다음 장면의 시작이다. 그래서 옆 장의 그림을 못 봐도 이어진다.
      *
-     * <h2>이음새를 못 만들면 나누지 않는다</h2>
+     * <h2>이 메서드가 불릴 때는 이미 장면이 나뉘어 있다</h2>
      *
-     * 이음새 없이 동시에 그리면 장과 장 사이가 끊긴다 — 그럴 바에는 느리더라도
-     * 예전처럼 한 프로세스에서 차례로 그린다. 이음새 만들기는 글 호출 한 번이라
-     * 여기서 실패해도 잃는 것이 거의 없다.
+     * {@code pages()}가 이 메서드를 부르기 전에 {@link #ensureScenes}를 먼저
+     * 불러 둔다 — {@link #pageCount}가 실제 장면 수를 읽으려면 `scenes.json`이
+     * 이미 있어야 하기 때문이다. 예전에는 여기서 `--scene-link`(존재하지 않는
+     * 플래그였다)를 불러 실패하면 순차로 빠지게 해 뒀는데, `pageCount()`가
+     * 그 전부터 이미 0을 돌려주고 있어서(§아래) 그 안전장치는 한 번도 실제로
+     * 안 탔다 — 실측으로 확인(2026-09-16, 첫 실사용 job이 계속 순차로만
+     * 돌았다). 지금은 `ensureScenes()`가 그 자리를 대신한다.
      */
     private void drawPages(Long jobId, WebtoonJob job) throws Exception {
         int pages = pageCount(job);             // 표지 1장 + 장면 수
         if (pages <= 1 || pageWorkers <= 1) {
-            drawInOneProcess(jobId, job);
-            return;
-        }
-
-        int linked = callHarness(jobId, job,
-                List.of("--run-id", job.getRunId(), "--scene-link"));
-        after.cost(job.getRunId());
-        stopIfCancelled(jobId);
-        if (linked != 0) {
-            log.warn("장면 이음새를 못 만들어서 차례로 그립니다 (job={})", jobId);
             drawInOneProcess(jobId, job);
             return;
         }
@@ -663,6 +666,28 @@ public class JobRunner {
         stopIfCancelled(jobId);
         if (code != 0) {
             throw new IllegalStateException("그림을 만들지 못했습니다");
+        }
+    }
+
+    /**
+     * 고른 방향을 장면으로 나눠 둔다 — {@code scenes.json}을 미리 만든다.
+     *
+     * <b>{@link #pageCount}가 실제 장면 수를 읽으려면 이게 먼저 있어야 한다.</b>
+     * `run.py --detail-pages`도 `scenes.json`이 없으면 알아서 한 번 만들지만,
+     * 그건 그리기 호출 <i>안에서</i> 일어나는 일이라 자바가 그 전에 미리 몇
+     * 장인지 알 방법이 없다 — 그래서 순차/동시 그리기를 정하기 전에 이 걸음을
+     * 먼저 따로 뗀다. 이미 있으면(재시도 등) 그냥 넘어간다 — `run.py` 자체가
+     * 있으면 다시 안 만든다(글 호출·돈이 두 번 안 나간다는 뜻).
+     */
+    private void ensureScenes(Long jobId, WebtoonJob job) throws Exception {
+        if (Files.isRegularFile(runsDir.resolve(job.getRunId()).resolve("scenes.json"))) {
+            return;
+        }
+        int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--scenes"));
+        after.cost(job.getRunId());
+        stopIfCancelled(jobId);
+        if (code != 0) {
+            throw new IllegalStateException("장면을 나누지 못했습니다");
         }
     }
 
@@ -841,22 +866,25 @@ public class JobRunner {
     /**
      * 이 화가 몇 장인가 — <b>표지 1장 + 장면 수.</b> 모르면 0.
      *
-     * 고른 방향의 장면 목록에서 센다. 파이썬이 페이지를 그 순서 그대로
-     * 매긴다(1 이 표지, 2 부터가 장면).
+     * 파이썬이 페이지를 그 순서 그대로 매긴다(1 이 표지, 2 부터가 장면).
+     *
+     * <b>{@code scenes.json}에서 센다 — {@code directions.json}의 `scenes`가
+     * 아니다.</b> 이야기 후보(story_prompt)는 제목·소개·본문만 내고 장면
+     * 목록은 항상 빈 배열이다(장면은 고른 뒤 scene_prompt 가 따로 만든다) —
+     * 예전에는 여기서 그 빈 배열을 읽어서 <b>항상 0을 돌려줬고</b>, 그래서
+     * {@link #drawPages}가 매번 "표지·장면 1장뿐"으로 오판해 순차 경로로만
+     * 빠졌다(2026-09-16 실측, 첫 실사용 job으로 확인). 호출 전에
+     * {@link #ensureScenes}가 `scenes.json`을 먼저 만들어 둔다.
      */
     private int pageCount(WebtoonJob job) {
-        Integer picked = job.getPicked();
-        if (picked == null) {
+        Path file = runsDir.resolve(job.getRunId()).resolve("scenes.json");
+        try {
+            JsonNode scenes = mapper.readTree(file.toFile()).path("scenes");
+            return scenes.isArray() && !scenes.isEmpty() ? scenes.size() + 1 : 0;
+        } catch (IOException e) {
+            log.warn("장면 수를 못 읽었습니다 (run={})", job.getRunId(), e);
             return 0;
         }
-        for (Map<String, Object> one : directionsOf(job.getRunId())) {
-            if (!Integer.valueOf(picked).equals(one.get("n"))) {
-                continue;
-            }
-            Object scenes = one.get("scenes");
-            return scenes instanceof List<?> list && !list.isEmpty() ? list.size() + 1 : 0;
-        }
-        return 0;
     }
 
     /* ---- 곁가지 ----------------------------------------------------------- */
@@ -958,13 +986,53 @@ public class JobRunner {
     }
 
     /**
-     * 서버가 고른다 — 「빠르게 결과부터」를 고른 사람 몫.
+     * 사람이 확인 화면에서 이야기 본문을 직접 고쳐 보냈을 때, 실제
+     * `directions.json`의 그 방향 번호 `body`를 덮어쓴다.
+     *
+     * <b>이 파일이 진짜 재료다.</b> 장면을 나누는 단계(`run.py --scenes`,
+     * {@link #ensureScenes})가 이 파일에서 고른 방향의 본문을 그대로
+     * 읽어 간다 — 화면에서만 고치고 이 파일을 안 건드리면 "고친 게
+     * 반영 안 됐다"는 사고가 난다.
+     *
+     * 실패해도 예외를 던지지 않는다 — 못 고쳤어도 원래 본문으로 그대로
+     * 진행하는 것이 아무것도 안 만드는 것보다 낫다. 대신 로그를 남긴다.
+     */
+    void overwriteDirectionBody(String runId, int n, String body) {
+        Path file = runsDir.resolve(runId).resolve("directions.json");
+        try {
+            JsonNode root = mapper.readTree(file.toFile());
+            if (!(root instanceof ArrayNode array)) {
+                log.warn("이야기 후보 파일 모양이 예상과 다릅니다 (run={})", runId);
+                return;
+            }
+            boolean changed = false;
+            for (JsonNode one : array) {
+                if (one.path("n").asInt(-1) == n && one instanceof ObjectNode obj) {
+                    obj.put("body", body);
+                    changed = true;
+                }
+            }
+            if (!changed) {
+                log.warn("고칠 방향을 못 찾았습니다 (run={}, n={})", runId, n);
+                return;
+            }
+            mapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), array);
+            log.info("이야기 본문을 사람이 고친 대로 반영했습니다 (run={}, n={})", runId, n);
+        } catch (IOException e) {
+            log.warn("이야기 본문을 못 고쳤습니다 — 원래 본문으로 진행합니다 (run={}, n={})",
+                    runId, n, e);
+        }
+    }
+
+    /**
+     * 서버가 고른다 — 「빠르게 결과부터」를 고른 사람 몫, 그리고
+     * {@link CheckpointTimeouts}가 체크포인트 시간 초과로 대신 고를 때도 쓴다.
      *
      * <b>아무거나 고르지 않는다.</b> 하네스가 후보마다 검수를 남기는데
      * ({@code story_review.json}), 통과한 것 중에서 고른다. 통과한 것이 없으면
      * 전부에서 고른다 — 그때는 무엇을 골라도 같은 처지다.
      */
-    private int autoPick(String runId, int howMany) {
+    int autoPick(String runId, int howMany) {
         List<Integer> passed = new ArrayList<>();
         Path review = runsDir.resolve(runId).resolve("story_review.json");
         try {

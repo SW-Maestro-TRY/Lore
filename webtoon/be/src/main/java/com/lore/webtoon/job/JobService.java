@@ -237,6 +237,19 @@ public class JobService {
 
     /** 사람이 이야기를 골랐다. */
     public void pick(String publicId, int n) {
+        pick(publicId, n, null);
+    }
+
+    /**
+     * 사람이 이야기를 고르면서 본문을 직접 고쳐 보냈을 수도 있다.
+     *
+     * <b>고친 내용은 실제로 다음 단계(장면 나누기)의 재료가 된다.</b>
+     * 화면에서만 보여주고 끝나면 "고쳐도 그만 안 고쳐도 그만"이라는 말이
+     * 거짓이 된다 — 그래서 {@link JobRunner#overwriteDirectionBody}로
+     * 실제 `directions.json`의 본문을 덮어쓴 뒤에야 다음 단계로 넘어간다.
+     * 비어 있거나 원래 본문과 같으면 아무것도 안 건드린다.
+     */
+    public void pick(String publicId, int n, String editedBody) {
         WebtoonJob job = store.byPublicId(publicId);
         if (job.getStatus() != JobStatus.AWAITING_PICK) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 고를 차례가 아닙니다");
@@ -244,6 +257,15 @@ public class JobService {
         List<Map<String, Object>> got = store.directionsOf(job.getId());
         if (n < 1 || n > got.size()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 이야기가 없습니다");
+        }
+        String clean = editedBody == null ? "" : editedBody.strip();
+        if (!clean.isEmpty()) {
+            Object original = got.stream()
+                    .filter(one -> Integer.valueOf(n).equals(one.get("n")))
+                    .findFirst().map(one -> one.get("body")).orElse(null);
+            if (!clean.equals(original)) {
+                runner.overwriteDirectionBody(job.getRunId(), n, clean);
+            }
         }
         store.pick(job.getId(), n);
         stories.choose(job.getRunId(), n);       // 무엇을 골랐는지도 DB 에 남는다

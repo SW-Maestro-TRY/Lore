@@ -534,33 +534,35 @@ def _distinct_axes(genre: str, first: dict, n: int = DIRECTIONS_PER_RUN) -> list
 
 
 def engines_enabled() -> bool:
-    """방향별 엔진(「문제가 옮겨 가는 길」)을 프롬프트에 박을지. **기본은 켜짐.**
+    """방향별 엔진(「문제가 옮겨 가는 길」)을 프롬프트에 박을지. **기본은 꺼짐**
+    (2026-09-16부터 — axes_enabled 와 기본값을 맞바꿨다. 아래 참고).
 
     끄면 `story_engines.json` 을 아예 안 읽는다 — `_pick_engines` 가 빈 리스트를
     돌려주고, `story_variety_block` 은 이야기 변수(축)·회차 구조만으로 방향을
     가른다(둘 다 꺼져 있으면 방향별 차이가 하나도 안 박힌다).
 
-    `.env` 에 `NH_STORY_ENGINES=0` 으로 끈다. axes_enabled 와 짝인 스위치라,
+    `.env` 에 `NH_STORY_ENGINES=1` 로 켠다. axes_enabled 와 짝인 스위치라,
     둘을 따로 켜고 꺼서 어느 쪽이 방향을 갈라놓는지 비교할 수 있다
     (2026-09-15 축·엔진 On/Off 비교에서 이 스위치가 필요해 만들었다).
     """
-    return str(llm.env("NH_STORY_ENGINES") or "1").strip().lower() in ("1", "on", "true", "yes")
+    return str(llm.env("NH_STORY_ENGINES") or "").strip().lower() in ("1", "on", "true", "yes")
 
 
 def axes_enabled() -> bool:
-    """이야기 변수(축)·회차 구조를 프롬프트에 박을지. **기본은 꺼짐.**
+    """이야기 변수(축)·회차 구조를 프롬프트에 박을지. **기본은 켜짐**
+    (2026-09-16부터 — engines_enabled 와 기본값을 맞바꿨다).
 
-    2026-09-12 이전에는 늘 켜져 있었다. 껐다 — 켜 둔 채로도 후보 넷이
-    "이상한 것을 발견하고 확인해 나간다"로 수렴하는 것이 실측으로 나와서
-    (run 20260907T214656-c31cff), 효과가 확인되지 않은 채 프롬프트 무게의
-    절반을 쓰고 있었다. 지금 story_prompt 는 압력 하나만 방향별로 박고,
-    나머지 분량은 이야기를 굴리는 원칙에 쓴다.
+    2026-09-12에 한 번 기본을 껐다 — 켜 둔 채로도 후보 넷이 "이상한 것을
+    발견하고 확인해 나간다"로 수렴하는 것이 실측으로 나와서(run
+    20260907T214656-c31cff), 효과가 확인되지 않은 채 프롬프트 무게의
+    절반을 쓰고 있었기 때문이다. 그런데 이후 축·엔진을 실제로 켜고 꺼
+    가며 비교해 보니 축 쪽이 더 나은 결과를 줘서, 2026-09-16에 기본을
+    다시 켜짐으로 되돌렸다(엔진은 반대로 기본 꺼짐이 됐다).
 
-    **지운 것이 아니라 끈 것이다.** 되돌리려면 `.env` 에 `NH_STORY_AXES=1`.
-    끈 상태에서도 `axes.json` 은 그대로 쌓인다 — 무엇이 배정됐는지는 나중에
-    비교할 때 필요하다.
+    `.env` 에 `NH_STORY_AXES=0` 으로 끈다. 켠 상태에서도 `axes.json` 은
+    그대로 쌓인다 — 무엇이 배정됐는지는 나중에 비교할 때 필요하다.
     """
-    return str(llm.env("NH_STORY_AXES") or "").strip().lower() in ("1", "on", "true", "yes")
+    return str(llm.env("NH_STORY_AXES") or "1").strip().lower() in ("1", "on", "true", "yes")
 
 
 def story_variety_block(run_dir: Path, char: dict) -> str:
