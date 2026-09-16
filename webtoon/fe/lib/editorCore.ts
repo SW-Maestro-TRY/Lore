@@ -451,6 +451,15 @@ export function mountEditor(
 
       el.addEventListener("pointerdown", () => setActive(no), true);
 
+      // 「N번째 장」배지 — 고르기만 하지 않고 도구까지 바로 연다. 폰에서는
+      // 이게 ☰ 도구 단추를 대신한다(화면 아래 단추가 그림에서 멀다). 넓은
+      // 화면은 도구가 이미 늘 떠 있어서 눌러도 그냥 고르는 것과 같다.
+      $(".scene-no", el)?.addEventListener("click", e => {
+        e.stopPropagation();
+        setActive(no);
+        setDock(true);
+      });
+
       // 두 단추 다 확인 창을 거친다 — 굽는 데 1~2분과 실제 비용이 들어서, 잘못
       // 누른 것을 되돌릴 길이 없다. 다른 점은 창을 열 때 무엇이 채워져 있느냐뿐이다.
       $("[data-act='regen']", el).addEventListener("click", e =>
@@ -1068,6 +1077,37 @@ export function mountEditor(
      눌렀는데 말풍선 목록이 같이 나왔다. 심지어 힌트("누르면 1번째 장에
      올라갑니다")가 내역 위에 남아서 무엇을 누르라는 건지도 어긋났다.
      여는 동안에는 얹는 도구를 통째로 접는다. */
+  /* 바텀시트 손잡이를 잡아 아래로 끌면 닫는다. 오른쪽 패널·헤더 밑 띠일
+     때는 세로로 끌어내릴 자리가 아니라서(webtoon.css 가 손잡이 자체를
+     숨긴다) 이 핸들러도 880px 미만에서만 움직인다 — 넓은 화면에서는
+     pointerdown 이 그냥 무시된다. */
+  function wireDockDrag() {
+    const handle = $("#dockHandle"), dock = $("#edDock");
+    if (!handle || !dock) return;
+    let startY = 0, dragging = false;
+
+    handle.addEventListener("pointerdown", ev => {
+      if (matchMedia("(min-width: 880px)").matches) return;
+      dragging = true; startY = ev.clientY;
+      dock.style.transition = "none";
+      handle.setPointerCapture(ev.pointerId);
+    });
+    handle.addEventListener("pointermove", ev => {
+      if (!dragging) return;
+      const dy = Math.max(0, ev.clientY - startY);   // 위로는 안 끌린다 — 이미 다 열려 있다
+      dock.style.transform = `translateY(${dy}px)`;
+    });
+    const end = ev => {
+      if (!dragging) return;
+      dragging = false;
+      dock.style.transition = "";
+      dock.style.transform = "";
+      if (ev.clientY - startY > 80) setDock(false);   // 80px 넘게 끌면 닫는다
+    };
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }
+
   function setLedger(open) {
     $("#dockLedger").hidden = !open;
     for (const sel of ["#dockTabs", "#dockHint", "#dockGrid"]) {
@@ -1548,6 +1588,7 @@ export function mountEditor(
     $("#dockFold")?.addEventListener("click", () => setDock(false));
     $("#dockOpen")?.addEventListener("click", () => setDock(true));
     $("#dockScrim")?.addEventListener("click", () => setDock(false));
+    wireDockDrag();
     // 그림 바깥을 누르면 선택이 풀린다. 손잡이 줄이 그림 위에 떠 있어서, 풀
     // 길이 없으면 다 끝낸 뒤에도 줄이 계속 그림을 가린다.
     on(document, "pointerdown", e => {

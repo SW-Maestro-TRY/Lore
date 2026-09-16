@@ -2714,33 +2714,37 @@
 .webtoon-page .dock-bar { max-width: 820px; margin-inline: auto; }
 }
 
-/* 편집실 — 넓은 화면에서는 도구를 **상시 오른쪽 패널**로 둔다.
+/* 편집실 — 넓은 화면에서는 도구를 **헤더 바로 밑, 가로 띠**로 둔다.
 
-   editor.css 에 이미 1200px 이상에서 오른쪽 서랍이 되는 규칙이 있는데, 그
-   계산은 캔버스가 480px 이던 시절 것이다("컬럼 오른쪽 끝이 (vw+480)/2").
-   지금 캔버스는 820px 이라 같은 폭에서 서랍이 그림을 덮는다.
+   전에는 오른쪽 세로 서랍이었는데, 그림 옆 좁은 기둥에 있어 눈이 그림과
+   서랍 사이를 계속 오가야 했다. 지금은 그림 위쪽, 헤더 바로 아래에 가로로
+   붙여 그림을 내려다보는 한 시선 안에 둔다. PC 는 늘 열어 두고(JS 의
+   880px 자동 setDock(true)) 열고 닫을 것이 없으니 폰의 끌어내리는 손잡이도
+   여기서는 뺀다 — 닫을 때는 ✕ 를 누른다.
 
-   그래서 덮는 대신 **자리를 나눈다** — 본문에 패널 폭만큼 오른쪽 여백을 주고
-   패널은 늘 열어 둔다. 열고 닫을 것이 없으니 손잡이도 지운다. 데스크톱
-   편집기가 캔버스 옆에 도구를 붙여 두는 것과 같은 모양이다.
-
-   PC 기준(880px)부터 바로 적용한다. 좁으면 패널이 캔버스를 덮을까 걱정할
-   수 있는데, 캔버스는 max-width 820px 이라 남은 폭에 맞춰 알아서 줄어든다
-   (880px 화면이면 캔버스 ~520px). 폰에서만 바텀시트로 올라온다. */
+   PC 기준(880px)부터 바로 적용한다. 폰에서만 바텀시트로 올라온다. */
 @media (min-width: 880px) {
   .webtoon-page .ed .ed-dock {
-    position: fixed; top: 0; right: 0; bottom: 0; left: auto;
-    width: 340px; max-height: none; margin: 0;
-    border: none; border-left: 1px solid var(--line); border-radius: 0;
-    box-shadow: -14px 0 34px rgba(15,51,63,.10);
+    position: fixed; top: var(--lore-header-h, 0px); left: 0; right: 0; bottom: auto;
+    width: auto; max-height: 44vh; margin: 0;
+    border: none; border-bottom: 1px solid var(--line); border-radius: 0;
+    box-shadow: 0 14px 34px rgba(15,51,63,.10);
     overflow-y: auto;
-    transform: translateX(100%);           /* 닫으면 오른쪽으로 밀려난다 */
+    /* 닫으면 헤더 뒤로 밀려 올라간다. top 이 헤더 높이만큼 이미 내려와
+       있어서 -100% 만으로는 그 높이만큼 아래쪽이 화면에 계속 걸쳐
+       보인다(실측) — 헤더 높이까지 더 올려야 완전히 가려진다. */
+    transform: translateY(calc(-100% - var(--lore-header-h, 0px)));
+    z-index: 61;
   }
   .webtoon-page .ed .ed-dock.is-open { transform: none; }
-  .webtoon-page .ed .ed-dock::before { display: none; }
-  .webtoon-page .ed .dock-scrim { display: none; }   /* 옆에 붙어 있어 뒤를 가리지 않는다 */
+  .webtoon-page .ed .ed-dock::before,
+  .webtoon-page .ed .dock-handle { display: none; }   /* 위쪽 띠에서는 끌어내릴 게 없다 */
+  .webtoon-page .ed .dock-scrim { display: none; }    /* 위에 붙어 있어 뒤를 가리지 않는다 */
 
-  /* 손잡이는 **닫혔을 때만** 나온다 — 열려 있으면 패널 안의 ✕ 가 그 일을
+  .webtoon-page .ed .ed-dock .dock-bar,
+  .webtoon-page .ed .ed-dock .dock-body { max-width: 820px; margin-inline: auto; }
+
+  /* 손잡이는 **닫혔을 때만** 나온다 — 열려 있으면 띠 안의 ✕ 가 그 일을
      한다. 둘 다 떠 있으면 무엇을 눌러야 할지 알 수 없다. */
   .webtoon-page .ed #dockOpen {
     position: fixed; right: 24px; bottom: 24px; top: auto; left: auto;
@@ -2751,9 +2755,10 @@
   }
   .webtoon-page .ed.dock-open-on #dockOpen { display: none; }
 
-  /* 패널이 열린 만큼만 본문 자리를 비운다. 닫으면 그림이 가운데로 돌아온다. */
-  .webtoon-page .ed.dock-open-on .ed-body,
-.webtoon-page .ed.dock-open-on .ed-top { padding-right: 356px; }
+  /* 위에서 덮은 만큼 본문을 아래로 민다. 실측 높이(탭 줄 + 안내글 + 한
+     줄 팔레트)에 맞춘 값이라, 팔레트가 두 줄 이상으로 늘어나면 (max-height
+     44vh 라 스크롤은 되지만) 그림 맨 위가 잠깐 가릴 수 있다. */
+  .webtoon-page .ed.dock-open-on .ed-body { padding-top: 230px; }
 }
 
 /* ---- 그림을 그냥 저장해 가지 못하게 ------------------------------------ *
@@ -3176,10 +3181,14 @@
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 10px 2px 8px; font-size: .78rem; color: var(--dim);
 }
+/* 눌러서 이 장을 고르고, 폰에서는 도구 바텀시트까지 바로 연다(editorCore.ts
+   의 wireScenes) — 화면 아래 ☰ 도구 단추까지 따로 안 눌러도 된다. */
 .webtoon-page .scene-no {
   background: rgba(14,143,181,.16); color: var(--accent-d);
   padding: .22em .7em; border-radius: 999px; font-weight: 700;
+  cursor: pointer; border: none; font: inherit;
 }
+.webtoon-page .scene-no:hover { background: rgba(14,143,181,.26); }
 .webtoon-page .ver { color: var(--gold); font-family: var(--mono); font-size: .74rem; }
 .webtoon-page .flag {
   border: 1px solid var(--line-2); border-radius: 6px;
@@ -3419,9 +3428,17 @@
 @media (min-width: 481px) {
   .webtoon-page .ed-dock { left: 50%; right: auto; margin-left: -240px; width: 480px; }
 }
-/* 올라온 서랍 맨 위의 손잡이 막대 — 여기를 잡아 내린다는 것이 보여야 한다. */
-.webtoon-page .ed-dock::before {
-  content: ""; display: block; width: 40px; height: 4px; margin: 0 auto 8px;
+/* 올라온 서랍 맨 위의 손잡이 — 잡아 내리면 실제로 닫힌다(editorCore.ts 의
+   wireDockDrag). 막대만 4px 지만 손가락은 그보다 굵으니, 누르는 영역은
+   위아래로 넉넉히 잡는다(터치 타깃은 최소 44px 가 기본이다). */
+.webtoon-page .dock-handle {
+  display: flex; align-items: center; justify-content: center;
+  margin: -6px -14px 4px; padding: 10px 0;
+  cursor: grab; touch-action: none;
+}
+.webtoon-page .dock-handle:active { cursor: grabbing; }
+.webtoon-page .dock-handle::before {
+  content: ""; display: block; width: 40px; height: 4px;
   border-radius: 999px; background: var(--line-2);
 }
 
@@ -3652,31 +3669,10 @@
 .webtoon-page .ask-actions .btn { flex: 1; min-height: 46px; }
 
 /* ------------------------------------------------------------------ 큰 화면
-   480px 컬럼은 그대로 둔다(다른 화면과 같아야 한다). 다만 넓은 화면에서는
-   서랍이 컬럼 옆 빈 자리에 서므로 뒤를 덮을 이유가 없다 — 막을 걷고, 서랍을
-   연 채로 그림을 계속 만질 수 있게 한다. */
-/* 단추줄은 **어느 폭에서도** 아래에 둔다. 넓은 화면이면 머리로 돌려도 될 것
-   같지만 아니다 — body 는 어느 폭에서든 480px 컬럼이라, 머리줄에 넣는 순간
-   590px 가 필요해지고 단추가 컬럼 밖으로 나가는 원래 문제가 그대로 돌아온다.
-   화면이 넓어져도 컬럼은 안 넓어진다.
-
-   서랍만 아주 넓은 화면에서 오른쪽으로 돌린다. 기준이 1200px 인 것은 산수다 —
-   컬럼 오른쪽 끝이 (vw+480)/2, 서랍 왼쪽 끝이 vw-360 이므로 서랍이 그림을
-   안 가리려면 vw ≥ 1200 이어야 한다. 그 아래에서는 오른쪽 서랍이 캔버스를
-   덮으므로 바텀시트가 낫다. */
-@media (min-width: 1200px) {
-  .webtoon-page .dock-scrim { display: none; }
-  .webtoon-page .ed-dock {
-    top: 0; right: 0; bottom: 0; left: auto; margin-left: 0;
-    width: 360px; max-height: none;
-    border: none; border-left: 1px solid var(--line); border-radius: 0;
-    box-shadow: -14px 0 34px rgba(15,51,63,.16);
-    padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
-    transform: translateX(100%);
-  }
-  .webtoon-page .ed-dock.is-open { transform: translateX(0); }
-  .webtoon-page .ed-dock::before { display: none; }   /* 끌어내리는 손잡이는 바텀시트 것이다 */
-}
+   1200px 이상에서 도구를 다시 오른쪽 세로 서랍으로 돌리던 옛 규칙은 지웠다
+   — 캔버스가 480px 이던 시절 계산(컬럼 오른쪽 끝 (vw+480)/2)이라 지금
+   820px 캔버스에서는 서랍이 그림을 덮었다. 880px 이상은 위 "편집실 — 넓은
+   화면" 절의 헤더 밑 가로 띠 하나로 통일한다(2026-09-16). */
 
 /* 구운 결과 창의 워터마크 안내. 창에 적힌 크기는 **작품**의 크기라, 실제로
    받는 파일은 표시 띠만큼 더 길다 — 그 차이를 여기서 말해 둔다. */
