@@ -131,11 +131,12 @@ public class JobService {
             Files.createDirectories(dir);
             /* **키가 오면 그쪽을 쓴다.** presign 으로 올리면 사진이 요청 본문에
                안 실리므로 넷이면 20MB 넘던 create 가 몇백 바이트가 된다.
-               data URL 도 계속 받는다 — 화면이 한 번에 갈아타지 않아도 되고,
-               게스트는 계정이 없어서 티켓을 못 받는다(presign 은 로그인이
-               필요하다). 둘 다 오면 키가 이긴다. */
+               data URL 도 계속 받는다 — 화면이 한 번에 갈아타지 않아도 된다.
+               게스트도 이제 presign 을 쓸 수 있다(guestKey 로 묶은 티켓 —
+               2026-09-17, WAF 의 SizeRestrictions_BODY 가 게스트의 큰 사진
+               요청을 403 으로 막던 것을 고치며 추가). 둘 다 오면 키가 이긴다. */
             List<Path> photos = form.photoKeys() != null && !form.photoKeys().isEmpty()
-                    ? pullPhotos(dir, form.photoKeys(), userId)
+                    ? pullPhotos(dir, form.photoKeys(), userId, guestKey)
                     : savePhotos(dir, form.photosData());
             Path fromCharacter = characterArt(dir, form.characterId(), userId, form.uid());
             /* 캐릭터를 골라 왔으면 그 그림을 참조로 붙인다.
@@ -396,7 +397,7 @@ public class JobService {
      * 내린 뒤에는 {@code photo1.png} … 로 두어 예전 길과 같은 모양이 되게 한다 —
      * 하네스는 그 이름만 안다.
      */
-    private List<Path> pullPhotos(Path dir, List<String> keys, Long userId) throws IOException {
+    private List<Path> pullPhotos(Path dir, List<String> keys, Long userId, String guestKey) throws IOException {
         List<Path> saved = new ArrayList<>();
         if (keys == null || keys.isEmpty()) {
             return saved;
@@ -411,7 +412,13 @@ public class JobService {
             if (key == null || key.isBlank()) {
                 continue;
             }
-            uploads.consume(userId, key, Instant.now());
+            // 로그인했으면 계정으로, 게스트면 GuestGate 가 준 열쇠(IP 해시)로 —
+            // 이 티켓이 정말 이 사람이 방금 받은 것인지 확인한다.
+            if (userId != null) {
+                uploads.consume(userId, key, Instant.now());
+            } else {
+                uploads.consumeGuest(guestKey, key, Instant.now());
+            }
             Path raw = dir.resolve("upload" + i);
             storage.download(key, raw);
             BufferedImage image = ImageIO.read(raw.toFile());

@@ -232,6 +232,33 @@ export function createJob(form: NhCreateRequest): Promise<{ id: string; credit_b
   return post("/nh/create", { ...form, uid: getUid() });
 }
 
+/** 게스트(비로그인)용 사진 업로드 주소. 로그인한 사람은 `@common/api/uploads`
+ *  의 `presign`(팀 공용, 계정에 묶인 티켓)을 그대로 쓴다 — 이 길은 게스트만 쓴다. */
+function guestPhotoPresign(contentType: string): Promise<{ key: string; url: string }> {
+  return post("/nh/photo-presign", { contentType });
+}
+
+/**
+ * 게스트가 들고 있는 data URL 사진들을 S3 로 올리고 key 를 돌려준다.
+ *
+ * `uploadDataUrls`(팀 공용, `@common/api/uploads`)와 하는 일은 같지만 로그인이
+ * 필요 없는 주소로 올린다 — 게스트는 본문에 사진을 그대로 실어 보내다가
+ * CloudFront 앞단 WAF(SizeRestrictions_BODY)에 막혀 있었다(2026-09-17).
+ */
+export async function uploadDataUrlsAsGuest(dataUrls: string[]): Promise<string[]> {
+  const keys: string[] = [];
+  for (const url of dataUrls) {
+    if (typeof url !== "string" || !url.startsWith("data:")) continue;
+    const blob = await (await fetch(url)).blob();
+    const type = blob.type || "image/png";
+    const { key, url: putUrl } = await guestPhotoPresign(type);
+    const res = await fetch(putUrl, { method: "PUT", headers: { "Content-Type": type }, body: blob });
+    if (!res.ok) throw new Error(`사진을 올리지 못했습니다 (${res.status})`);
+    keys.push(key);
+  }
+  return keys;
+}
+
 export function readJob(id: string): Promise<NhJob> {
   return call<NhJob>(`/nh/jobs/${encodeURIComponent(id)}`);
 }
