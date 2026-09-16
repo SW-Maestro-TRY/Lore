@@ -258,7 +258,7 @@ export default function Progress({
           <PickApproval
             directions={job.directions}
             busy={busy}
-            onPick={(n) => answer(() => pickDirection(jobId, n))}
+            onPick={(n, editedBody) => answer(() => pickDirection(jobId, n, editedBody))}
             onRetry={(note) => answer(() => retryDirections(jobId, note))}
           />
         )}
