@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  copyLink, shareNative, SHARE_TARGETS, shareUrl,
+  copyLink, shareNative, SHARE_TARGETS, shareUrl, type ShareTarget,
 } from "../../lib/share";
 
 /* 「공유하기」 한 줄.
@@ -50,7 +50,7 @@ export default function ShareBar({
     setOpen((was) => !was);
   };
 
-  const pick = async (key: string, href?: (u: string, t: string) => string) => {
+  const pick = async (t: ShareTarget) => {
     /* **기다리기 전에 할 것을 먼저 한다.**
      *
      * 예전에는 `await copyLink(url)` 이 맨 앞이었는데 그게 둘을 망쳤다.
@@ -65,18 +65,27 @@ export default function ShareBar({
      * 그래서 창 열기와 메뉴 닫기를 먼저 하고, 복사는 그 뒤에 기다린다.
      * 어디로 보내든 링크를 복사해 두는 것은 그대로다 — 붙여넣기로 끝나는
      * 곳(포스타입)이 있고, 나머지에서도 복사돼 있어서 손해가 없다. */
-    if (href) {
+    if (t.href) {
       // 이 창을 바꿔 버리면 읽던 자리를 잃는다.
-      window.open(href(url, text), "_blank", "noopener,noreferrer");
-    }
-    setOpen(false);
-
-    const copied = await copyLink(url);
-    if (!href) {
-      setSaid(copied ? "링크를 복사했어요" : "복사하지 못했어요 — 주소창을 그대로 쓰세요");
+      window.open(t.href(url, text), "_blank", "noopener,noreferrer");
+      setOpen(false);
+      const copied = await copyLink(url);
+      setSaid(t.key === "postype" && copied ? "링크를 복사했어요 — 글에 붙여 넣으세요" : "");
       return;
     }
-    setSaid(key === "postype" && copied ? "링크를 복사했어요 — 글에 붙여 넣으세요" : "");
+
+    // 카카오톡처럼 새 창이 아니라 SDK 가 직접 공유 창을 띄우는 것들.
+    if (t.run) {
+      setOpen(false);
+      const ok = await t.run(url, text);
+      setSaid(ok ? "" : "카카오톡 공유를 열지 못했어요");
+      return;
+    }
+
+    // 남은 것은 「링크 복사」뿐이다.
+    setOpen(false);
+    const copied = await copyLink(url);
+    setSaid(copied ? "링크를 복사했어요" : "복사하지 못했어요 — 주소창을 그대로 쓰세요");
   };
 
   return (
@@ -103,13 +112,16 @@ export default function ShareBar({
         <span className="share-list">
           {SHARE_TARGETS.map((t) => (
             <button key={t.key} type="button" className="share-one"
-                    onClick={() => pick(t.key, t.href)}>
+                    onClick={() => pick(t)}>
               {t.label}
             </button>
           ))}
         </span>
       )}
-      {said && <span className="share-said" role="status">{said}</span>}
+      {/* 공유 단추 옆이 아니라 화면 위쪽에 떴다가 사라진다 — 옆에 붙이면
+          그 줄이 비좁은 자리(편집실 단추줄 등)에서는 글자가 밀리거나
+          잘렸다. 화면 아무 데서나 눌러도 같은 자리에서 뜬다. */}
+      {said && <span className="share-toast" role="status">{said}</span>}
     </span>
   );
 }

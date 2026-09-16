@@ -74,6 +74,7 @@ public class CharacterController {
 
     @Operation(summary = "캐릭터 만들기", description = """
             사진을 주면 그것을 읽어 외모를 적고, 안 주면 이름·설명만으로 적는다.
+            사진은 여러 장(최대 4장, 같은 사람의 다른 각도·표정) 줄 수 있다.
             **올린 사진은 그림이 나오면 지운다** — 보관하는 것은 그린 것뿐이다.
 
             하루 몫이 남아 있으면 공짜, 아니면 크레딧을 받는다.""")
@@ -83,7 +84,7 @@ public class CharacterController {
             @RequestHeader(value = UID_HEADER, required = false) String uid) {
         Long me = CreditGate.currentUser();
         WebtoonCharacter made = characters.create(
-                me, uid, form.name(), form.description(), form.photoData(), form.style());
+                me, uid, form.name(), form.description(), form.photosData(), form.style());
         return view(made, me, who.uidsOf(me, uid));
     }
 
@@ -135,9 +136,9 @@ public class CharacterController {
     }
 
     public record CreateRequest(String name, String description,
-                                @com.fasterxml.jackson.annotation.JsonProperty("photo_data")
-                                @com.fasterxml.jackson.annotation.JsonAlias("photoData")
-                                String photoData,
+                                @com.fasterxml.jackson.annotation.JsonProperty("photos_data")
+                                @com.fasterxml.jackson.annotation.JsonAlias("photosData")
+                                List<String> photosData,
                                 String style) {
     }
 }

@@ -1,0 +1,34 @@
+{
+  "name": "소미",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A young woman with fair skin, round face, and large brown eyes. She has medium-length dark brown hair tied up in a messy bun with loose strands framing her face. She wears a loose, light gray hoodie and sits at a desk with open notebooks and stacked books. Her cheeks are slightly flushed, and she has a relaxed, thoughtful expression.",
+  "design_details": [
+    "앞머리가 눈썹을 덮는 길이로 자연스럽게 내려옴",
+    "머리는 전체적으로 올려 묶은 헝클어진 번 스타일",
+    "연한 회색 후드티, 소매가 손등을 덮을 만큼 큼",
+    "볼이 살짝 붉게 상기된 얼굴",
+    "눈동자가 크고 동그란 형태"
+  ],
+  "props": [
+    "도톰한 무지 노트, 연한 아이보리색, 펼쳐져 있음",
+    "진한 갈색 세라믹 머그컵, 손잡이 있음, 책상 위에 놓임",
+    "파란색 표지의 두꺼운 책, 모서리가 약간 닳음"
+  ],
+  "color_palette": {
+    "hair": "dark brown (#4B3A2F)",
+    "eyes": "brown (#8C6C4A)",
+    "skin": "peach (#F4D6C4)",
+    "outfit_main": "light gray (#C9C7C1)",
+    "outfit_sub": "white (#F6F3EF)",
+    "accent": "blush pink (#F3B6A7)"
+  },
+  "expression_set": [
+    "평온 — 입을 다물고 눈꺼풀이 살짝 내려온, 힘이 빠진 얼굴",
+    "생각 — 턱을 괴고 먼 곳을 바라보는, 입꼬리가 살짝 내려간 얼굴",
+    "놀람 — 눈이 크게 열리고 입이 약간 벌어진 얼굴",
+    "미소 — 입꼬리가 살짝 올라가고 눈이 부드럽게 휘어진 얼굴",
+    "지침 — 눈 밑에 살짝 그늘이 지고 입이 일자로 굳어진 얼굴",
+    "집중 — 눈썹을 살짝 찌푸리고 노트에 시선을 둔 얼굴"
+  ]
+}

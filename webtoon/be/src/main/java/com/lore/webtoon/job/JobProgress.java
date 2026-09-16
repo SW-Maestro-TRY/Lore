@@ -49,6 +49,12 @@ public class JobProgress {
             while (state.log.size() > MAX_LINES) {
                 state.log.removeFirst();
             }
+            if (state.counted) {
+                /* 몇 장 그렸는지는 자바가 센다({@link #drew}) — 장면을 동시에
+                   그리는 중이다. 파이썬 줄은 그린 순서대로 오지 않아서, 그대로
+                   받으면 진행 막대가 5 에서 2 로 되돌아간다. */
+                return;
+            }
             Matcher retry = RETRY.matcher(line);
             if (retry.find()) {
                 // 다시 그리는 줄도 "[페이지 N/M]" 모양이라 아래 ART 에도 걸리는데,
@@ -64,6 +70,23 @@ public class JobProgress {
                 // 정상적으로 다음 걸음을 알리는 줄이 왔다 — 걸렸던 것은 풀렸다.
                 state.retryPage = 0;
             }
+        }
+    }
+
+    /**
+     * 몇 장 중 몇 장을 그렸는지를 <b>부르는 쪽이 정한다.</b>
+     *
+     * 장면을 동시에 그릴 때 쓴다 — 그림은 여러 프로세스에서 제각기 끝나므로
+     * 파이썬이 내는 「장면 N/M」 줄로는 순서를 셀 수 없다. 한 번이라도 이걸
+     * 부르면 그 작업은 그때부터 자바가 센 값만 쓴다.
+     */
+    public void drew(Long jobId, int done, int total) {
+        State state = byJob.computeIfAbsent(jobId, k -> new State());
+        synchronized (state) {
+            state.counted = true;
+            state.done = done;
+            state.total = total;
+            state.retryPage = 0;
         }
     }
 
@@ -98,6 +121,8 @@ public class JobProgress {
         private int total;
         /** 지금 다시 그리는 중인 장 번호. 0 이면 없다. */
         private int retryPage;
+        /** 몇 장 그렸는지를 자바가 세고 있는가(장면을 동시에 그리는 중). */
+        private boolean counted;
     }
 
     /**

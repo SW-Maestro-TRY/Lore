@@ -1,0 +1,29 @@
+{
+  "name": "스타일검증-webtoon",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A woman in her mid-20s with straight black hair at shoulder length, wearing a casual hoodie and blue jeans. She has a calm and gentle demeanor. Her skin is fair, and her eyes are dark brown. The hoodie is loose-fitting, and the jeans are classic blue denim.",
+  "design_details": [
+    "어깨까지 오는 검은 생머리",
+    "진청색 일자 청바지",
+    "연회색 루즈핏 후드티",
+    "왼쪽 손목에 얇은 검은 실팔찌"
+  ],
+  "props": [],
+  "color_palette": {
+    "hair": "black (#222222)",
+    "eyes": "dark brown (#3B2F1B)",
+    "skin": "light beige (#F6E3CE)",
+    "outfit_main": "light gray (#D3D3D3)",
+    "outfit_sub": "blue (#3576B8)",
+    "accent": "black (#222222)"
+  },
+  "expression_set": [
+    "평온 — 입을 다물고 눈꺼풀이 살짝 내려온, 힘이 빠진 얼굴",
+    "미소 — 입꼬리가 살짝 올라간, 다정한 표정",
+    "놀람 — 눈이 크게 열리고 입이 작게 벌어진 얼굴",
+    "당황 — 눈썹이 찌푸려지고 입이 옅게 일자 형태인 얼굴",
+    "진지 — 입을 다물고 눈이 또렷하게 뜬 얼굴",
+    "슬픔 — 입꼬리가 내려가고 눈에 힘이 빠진 얼굴"
+  ]
+}

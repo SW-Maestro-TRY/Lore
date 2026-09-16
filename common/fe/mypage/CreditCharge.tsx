@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { CONTACT_CHANNEL } from "../links";
 
 /* 크레딧 충전 — 상품을 보여주는 창.
  *
@@ -13,11 +14,17 @@ import { useEffect } from "react";
  * credits.py 참고) 확정 전이고, 여기 적힌 숫자를 대외에 판매가로 말하면 안 된다.
  */
 
-/** 프로토타입의 상품표를 그대로 옮겼다. 확정 가격이 아니다. */
+/** 프로토타입의 상품표를 그대로 옮겼다. 확정 가격이 아니다.
+ *
+ * 크레딧당 단가는 일부러 균일하게(예: 1C = 200원) 맞추지 않는다 — 그러면
+ * 계산이 너무 뻔해서 아무 판매가처럼 안 보인다. 그렇다고 티어 사이 단가
+ * 차이를 너무 크게 벌리지도 않는다. 대량일수록 조금씩만 싸진다:
+ *   30C → 296.7원/C, 70C → 270원/C, 160C → 243.1원/C (약 18% 차이).
+ */
 const PACKAGES: { id: string; credits: number; won: number; note?: string }[] = [
-  { id: "small", credits: 30, won: 9_900 },
-  { id: "mid", credits: 70, won: 19_900, note: "가장 많이 고르는 것" },
-  { id: "big", credits: 160, won: 39_900 },
+  { id: "small", credits: 30, won: 8_900 },
+  { id: "mid", credits: 70, won: 18_900, note: "가장 많이 고르는 것" },
+  { id: "big", credits: 160, won: 38_900 },
 ];
 
 export default function CreditCharge({ onClose }: { onClose: () => void }) {
@@ -40,9 +47,14 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
         </header>
 
         {/* 제일 먼저 말한다. 상품을 보고 나서 "그런데 안 됩니다" 를 만나면
-            고른 시간이 통째로 헛것이 된다. */}
+            고른 시간이 통째로 헛것이 된다. PG 가 아직 없어서(#155) 결제
+            대신 계좌 입금을 문의로 안내한다 — 막다른 길 대신 갈 자리를 준다. */}
         <p className="credit-notice">
-          결제는 아직 준비 중이에요. 아래 가격도 정해진 값이 아니라 예시입니다.
+          결제는 아직 준비 중이에요! 크레딧이 필요하시면{" "}
+          <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">
+            1:1 문의하기
+          </a>
+          를 통해 계좌 입금을 안내드리겠습니다.
         </p>
 
         <div className="credit-modal-body">

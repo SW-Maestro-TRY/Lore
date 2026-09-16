@@ -13,6 +13,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
@@ -26,13 +27,15 @@ class StaleJobsTest {
     private WebtoonJobRepository jobs;
     private JobRunner runner;
     private StaleJobs stale;
+    private JobNotice notice;
 
     @BeforeEach
     void setUp() {
         jobs = mock(WebtoonJobRepository.class);
         runner = mock(JobRunner.class);
         when(runner.refund(anyLong())).thenReturn(Refunded.NONE);
-        stale = new StaleJobs(jobs, runner);
+        notice = mock(JobNotice.class);
+        stale = new StaleJobs(jobs, runner, notice);
     }
 
     private WebtoonJob running(String id) {
@@ -97,5 +100,19 @@ class StaleJobsTest {
 
         // 첫 번째가 터져도 두 번째는 치워진다 — 여기서 죽으면 서버가 안 뜬다.
         assertThat(ok.getStatus()).isEqualTo(JobStatus.ERROR);
+    }
+
+    /* **이 자리의 알림이 제일 중요하다.** 다른 실패는 사람이 화면 앞에
+       있을 때 나지만, 이건 그 사람이 이미 나간 뒤에 난다 — 「나갔다 와도
+       이어집니다」를 믿고 나갔는데 안 이어진 경우다. */
+    @Test
+    @DisplayName("끊긴 작업도 알린다 — 그 사람은 이미 나간 뒤다")
+    void 끊긴_것도_알린다() {
+        WebtoonJob job = running("job-1");
+        when(jobs.findByStatusOrderByIdAsc(JobStatus.RUNNING)).thenReturn(List.of(job));
+
+        stale.sweep();
+
+        verify(notice).failed(any(), eq(StaleJobs.WHY), any());
     }
 }

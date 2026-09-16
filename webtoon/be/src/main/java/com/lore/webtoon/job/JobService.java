@@ -71,6 +71,7 @@ public class JobService {
     private final JobProgress progress;
     private final StoryStore stories;
     private final WorkLedger works;
+    private final JobNotice notice;
     private final CharacterService characters;
     private final CharacterOwner owner;
     private final PrivateArt art;
@@ -82,11 +83,12 @@ public class JobService {
     public JobService(WebtoonJobRepository jobs, JobStore store, JobQueue queue,
                       JobRunner runner,
                       JobProgress progress, StoryStore stories, WorkLedger works,
-                      CharacterService characters, CharacterOwner owner, PrivateArt art,
+                      JobNotice notice, CharacterService characters, CharacterOwner owner, PrivateArt art,
                       S3Service uploads, S3Storage storage,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
         this.works = works;
+        this.notice = notice;
         this.characters = characters;
         this.owner = owner;
         this.art = art;
@@ -129,11 +131,12 @@ public class JobService {
             Files.createDirectories(dir);
             /* **키가 오면 그쪽을 쓴다.** presign 으로 올리면 사진이 요청 본문에
                안 실리므로 넷이면 20MB 넘던 create 가 몇백 바이트가 된다.
-               data URL 도 계속 받는다 — 화면이 한 번에 갈아타지 않아도 되고,
-               게스트는 계정이 없어서 티켓을 못 받는다(presign 은 로그인이
-               필요하다). 둘 다 오면 키가 이긴다. */
+               data URL 도 계속 받는다 — 화면이 한 번에 갈아타지 않아도 된다.
+               게스트도 이제 presign 을 쓸 수 있다(guestKey 로 묶은 티켓 —
+               2026-09-17, WAF 의 SizeRestrictions_BODY 가 게스트의 큰 사진
+               요청을 403 으로 막던 것을 고치며 추가). 둘 다 오면 키가 이긴다. */
             List<Path> photos = form.photoKeys() != null && !form.photoKeys().isEmpty()
-                    ? pullPhotos(dir, form.photoKeys(), userId)
+                    ? pullPhotos(dir, form.photoKeys(), userId, guestKey)
                     : savePhotos(dir, form.photosData());
             Path fromCharacter = characterArt(dir, form.characterId(), userId, form.uid());
             /* 캐릭터를 골라 왔으면 그 그림을 참조로 붙인다.
@@ -203,11 +206,51 @@ public class JobService {
                 store.directionsOf(job.getId()),
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
-                queue.spotOf(job));
+                queue.spotOf(job),
+                notice.addressOf(job), queue.minutesLeft(job));
+    }
+
+    /**
+     * 다 되면 이 주소로 알린다 — <b>게스트가 적어 넣는 자리.</b>
+     *
+     * 로그인한 사람은 안 불러도 계정 주소로 간다. 그래도 막지는 않는다 —
+     * 다른 주소로 받고 싶을 수 있다.
+     *
+     * 빈 값을 보내면 <b>안 받겠다</b>는 뜻이라 적어 둔 주소를 지운다.
+     * 주소처럼 안 생겼으면 거절한다 — 담아 두고 보낸 척하면, 화면에는
+     * 「보낼게요」가 떠 있는데 영영 아무것도 안 온다.
+     *
+     * @return 화면이 그대로 적을, 지금 보낼 주소 (없으면 {@code null})
+     */
+    public String notifyTo(String publicId, String email) {
+        WebtoonJob job = store.byPublicId(publicId);
+        boolean clearing = email == null || email.isBlank();
+        String clean = clearing ? null : JobNotice.clean(email);
+        if (!clearing && clean == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이메일 주소를 다시 확인해 주세요");
+        }
+        /* 이미 보낸 뒤면 store 가 안 바꾼다(거짓을 준다). 그때도 오류가
+           아니다 — 바꿔 봐야 그 메일은 이미 나갔을 뿐이다. 어느 쪽이든
+           **지금 실제로 보낼 주소**를 돌려준다. 화면은 그것만 적으면 된다. */
+        store.notifyTo(job.getId(), clean);
+        return notice.addressOf(store.byPublicId(publicId));
     }
 
     /** 사람이 이야기를 골랐다. */
     public void pick(String publicId, int n) {
+        pick(publicId, n, null);
+    }
+
+    /**
+     * 사람이 이야기를 고르면서 본문을 직접 고쳐 보냈을 수도 있다.
+     *
+     * <b>고친 내용은 실제로 다음 단계(장면 나누기)의 재료가 된다.</b>
+     * 화면에서만 보여주고 끝나면 "고쳐도 그만 안 고쳐도 그만"이라는 말이
+     * 거짓이 된다 — 그래서 {@link JobRunner#overwriteDirectionBody}로
+     * 실제 `directions.json`의 본문을 덮어쓴 뒤에야 다음 단계로 넘어간다.
+     * 비어 있거나 원래 본문과 같으면 아무것도 안 건드린다.
+     */
+    public void pick(String publicId, int n, String editedBody) {
         WebtoonJob job = store.byPublicId(publicId);
         if (job.getStatus() != JobStatus.AWAITING_PICK) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 고를 차례가 아닙니다");
@@ -215,6 +258,15 @@ public class JobService {
         List<Map<String, Object>> got = store.directionsOf(job.getId());
         if (n < 1 || n > got.size()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 이야기가 없습니다");
+        }
+        String clean = editedBody == null ? "" : editedBody.strip();
+        if (!clean.isEmpty()) {
+            Object original = got.stream()
+                    .filter(one -> Integer.valueOf(n).equals(one.get("n")))
+                    .findFirst().map(one -> one.get("body")).orElse(null);
+            if (!clean.equals(original)) {
+                runner.overwriteDirectionBody(job.getRunId(), n, clean);
+            }
         }
         store.pick(job.getId(), n);
         stories.choose(job.getRunId(), n);       // 무엇을 골랐는지도 DB 에 남는다
@@ -345,7 +397,7 @@ public class JobService {
      * 내린 뒤에는 {@code photo1.png} … 로 두어 예전 길과 같은 모양이 되게 한다 —
      * 하네스는 그 이름만 안다.
      */
-    private List<Path> pullPhotos(Path dir, List<String> keys, Long userId) throws IOException {
+    private List<Path> pullPhotos(Path dir, List<String> keys, Long userId, String guestKey) throws IOException {
         List<Path> saved = new ArrayList<>();
         if (keys == null || keys.isEmpty()) {
             return saved;
@@ -360,7 +412,13 @@ public class JobService {
             if (key == null || key.isBlank()) {
                 continue;
             }
-            uploads.consume(userId, key, Instant.now());
+            // 로그인했으면 계정으로, 게스트면 GuestGate 가 준 열쇠(IP 해시)로 —
+            // 이 티켓이 정말 이 사람이 방금 받은 것인지 확인한다.
+            if (userId != null) {
+                uploads.consume(userId, key, Instant.now());
+            } else {
+                uploads.consumeGuest(guestKey, key, Instant.now());
+            }
             Path raw = dir.resolve("upload" + i);
             storage.download(key, raw);
             BufferedImage image = ImageIO.read(raw.toFile());

@@ -80,6 +80,26 @@ public class S3Service {
      */
     @Transactional
     public PresignedUpload createUploadUrl(Long userId, String domain, String contentType) {
+        return createUploadUrl(domain, contentType,
+                key -> UploadTicket.issue(userId, key, domain, contentType, Instant.now()));
+    }
+
+    /**
+     * 게스트(비로그인)용 발급. 계정이 없으므로 {@code guestKey}(IP 해시 등,
+     * 부르는 쪽이 정한다)로 묶는다 — 로그인 사람과 같은 "발급받은 사람만
+     * 그 키를 쓸 수 있다" 보호를 게스트에게도 그대로 적용한다.
+     */
+    @Transactional
+    public PresignedUpload createUploadUrlForGuest(String guestKey, String domain, String contentType) {
+        if (!StringUtils.hasText(guestKey)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "게스트 열쇠가 없습니다");
+        }
+        return createUploadUrl(domain, contentType,
+                key -> UploadTicket.issueForGuest(guestKey, key, domain, contentType, Instant.now()));
+    }
+
+    private PresignedUpload createUploadUrl(String domain, String contentType,
+                                            java.util.function.Function<String, UploadTicket> ticketOf) {
         // AWS SDK 가 내는 "Bucket cannot be empty" 는 어디를 고쳐야 할지 안 알려준다.
         // 설정이 원인일 때는 설정 이름을 그대로 말해준다.
         if (!StringUtils.hasText(bucket)) {
@@ -107,7 +127,7 @@ public class S3Service {
 
         PresignedPutObjectRequest presigned = presigner.presignPutObject(presignRequest);
 
-        ticketRepository.save(UploadTicket.issue(userId, key, domain, contentType, Instant.now()));
+        ticketRepository.save(ticketOf.apply(key));
 
         return new PresignedUpload(key, presigned.url().toString());
     }
@@ -151,9 +171,19 @@ public class S3Service {
      */
     @Transactional
     public void consume(Long userId, String s3Key, Instant now) {
+        consume(s3Key, now, ticket -> ticket.isOwnedBy(userId));
+    }
+
+    /** 게스트가 자기 티켓을 쓸 때. {@code guestKey} 는 발급받을 때 쓴 것과 같아야 한다. */
+    @Transactional
+    public void consumeGuest(String guestKey, String s3Key, Instant now) {
+        consume(s3Key, now, ticket -> ticket.isOwnedByGuest(guestKey));
+    }
+
+    private void consume(String s3Key, Instant now, java.util.function.Predicate<UploadTicket> ownedByCaller) {
         UploadTicket ticket = ticketRepository.findByS3Key(s3Key)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_UPLOAD_KEY));
-        if (!ticket.isOwnedBy(userId)) {
+        if (!ownedByCaller.test(ticket)) {
             // 남의 키를 넣은 것이지만, 그렇다고 알려주지 않는다 — 알려주면 남의 키가
             // 존재한다는 사실 자체가 확인된다. 없는 키와 같은 응답을 준다.
             throw new BusinessException(ErrorCode.INVALID_UPLOAD_KEY);

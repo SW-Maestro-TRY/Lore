@@ -59,7 +59,7 @@ export default function Step5Review({
 
       {/* 얼마나 촘촘히 — 시간과 크레딧이 같이 움직인다.
           시간은 **줄이 비었을 때** 기준이라 "약" 을 붙인다(만들기는 한 번에
-          한 편씩 돈다 — 앞에 사람이 있으면 그만큼 더 걸린다). */}
+          두 편까지만 돈다 — 앞에 사람이 있으면 그만큼 더 걸린다). */}
       <div className="fork fork-3">
         {QUALITY_INFO.map((q) => {
           const credits = creditsOf(q.key);

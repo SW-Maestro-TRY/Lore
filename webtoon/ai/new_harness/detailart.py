@@ -54,6 +54,7 @@ import imageprompt
 import llm
 import pagecheck
 import pages
+import runmeta
 
 HERE = Path(__file__).resolve().parent
 # 작품이 쌓이는 자리.
@@ -90,11 +91,11 @@ def record(run_dir: Path, call_meta: dict) -> None:
 
     run.py 의 record() 와 같은 파일·같은 모양이다 — 나중에 비용을 정산할
     때 이 run이 어느 스크립트로 그렸는지 신경 쓸 필요가 없게 한다.
+
+    쓰는 것은 runmeta 가 한다(파일 잠금) — 장면을 동시에 그리면 프로세스
+    여럿이 같은 meta.json 에 쓴다.
     """
-    path = run_dir / "meta.json"
-    meta = read_json(path) or {"run_id": run_dir.name, "calls": []}
-    meta["calls"].append(call_meta)
-    write_json(path, meta)
+    runmeta.append_call(run_dir, call_meta)
     cost = call_meta.get("cost") or {}
     tag = "실패" if call_meta.get("error") else "완료"
     log(f"  [{tag}] {call_meta.get('stage')}  {call_meta.get('provider')}:"
@@ -141,101 +142,6 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
             + "\n".join(lines))
 
 
-def scene_text(scene: dict) -> str:
-    """그릴 내용 — 사건 하나의 디테일 항목을 **빠짐없이** 편다.
-
-    본문만 주면 그림이 '무슨 장면인지'는 알아도 '무엇이 보여야 하는지'를
-    모른다. learns.how·guesses.from 은 눈에 보이는 근거가 적힌 칸이라
-    그림에 그대로 쓸 값이다.
-    """
-    out = []
-    if scene.get("function"):
-        out.append(f"[이 장면이 하는 일] {scene['function']}")
-    body = (scene.get("detail") or scene.get("source") or "").strip()
-    if body:
-        out += ["", body]
-
-    learns = [x for x in (scene.get("learns") or []) if isinstance(x, dict)]
-    if learns:
-        out += ["", "[독자가 이 장면에서 알게 되는 것 — 화면에 보여야 한다]"]
-        for x in learns:
-            out.append(f"- {x.get('what', '')}  ← {x.get('how', '')}")
-
-    guesses = [x for x in (scene.get("guesses") or []) if isinstance(x, dict)]
-    if guesses:
-        out += ["", "[인물이 짐작하는 것 — 확정이 아니라 그렇게 보이기만 한다]"]
-        for x in guesses:
-            out.append(f"- {x.get('what', '')}  ← {x.get('from', '')}")
-
-    if scene.get("leads_to"):
-        out += ["", f"[이 장면 뒤로 이어지는 방향 — 마지막 컷을 여기로 끊는다] "
-                    f"{scene['leads_to']}"]
-    return "\n".join(out).strip()
-
-
-def episode_overview(scenes: list[dict], current_id) -> str:
-    """이 화 전체 장면 목록 — 지금 장면이 전체 흐름 중 어디인지 보여준다.
-
-    실험: 장면별 요약(글)만으로 이어 붙이던 것과 달리, 전체 줄거리를 매
-    호출에 다 준다. 대신 지금 장면보다 뒤에 있는 사건을 미리 그리지 말라고
-    명시한다 — 안 박으면 다음 장면 내용이 지금 그림에 새어 들어온다.
-    """
-    lines = ["## 이 화 전체 줄거리 (참고용 — 지금 그릴 것은 아래 「지금 장면」 하나뿐이다)",
-             "",
-             "아래는 이 화 전체 흐름이다. **지금 장면보다 뒤에 있는 사건은 지금 "
-             "이 그림에 그리지 않는다** — 그 사건들은 나중 페이지에서 따로 그려진다. "
-             "지금 이 그림은 오직 「지금 그릴 장면」한 칸만 그린다.",
-             ""]
-    for i, s in enumerate(scenes, 1):
-        mark = " ← 지금 그릴 장면" if s.get("id") == current_id else ""
-        summary = (s.get("function") or s.get("source") or "").strip()
-        lines.append(f"{i}. {summary}{mark}")
-    return "\n".join(lines)
-
-
-def continuity_block(scene: dict, prev: dict | None) -> str:
-    """이어짐 — 앞 사건과 이 사건 **사이**를 메운다.
-
-    앞 장면을 통째로 다시 주면 이 그림에 앞 내용까지 그려 넣어 산만해진다.
-    그래서 이어지는 데 필요한 것만 준다. 특히 `transition`(두 장면 사이에
-    실제로 일어난 일)이 없으면 그림이 순간이동한다 — 앞은 식탁에서 끝났는데
-    다음이 책상 청소부터 시작하면, 사람은 알아서 메우지만 그림 모델은 전혀
-    다른 공간으로 건너뛴다(실측).
-    """
-    con = scene.get("continuity") or {}
-    lines = []
-
-    prev_end = (con.get("previous_ending") or "").strip()
-    if not prev_end and prev:
-        # 옛 run(이어짐 칸이 없는 디테일)을 위한 대비 — 앞 장면의 끝 상태를
-        # 그쪽 continuity 에서, 그것도 없으면 본문 마지막 문장에서 가져온다.
-        prev_con = prev.get("continuity") or {}
-        prev_end = (prev_con.get("ending_state") or "").strip()
-        if not prev_end:
-            body = (prev.get("detail") or "").replace("\n", " ")
-            tail = [s.strip() for s in body.split(".") if s.strip()]
-            prev_end = (tail[-1] + ".") if tail else ""
-    if prev_end:
-        lines.append(f"- 직전 장면이 끝난 자리: {prev_end}")
-    if con.get("transition"):
-        lines.append(f"- 그 뒤 이 장면까지 사이에 일어난 일: {con['transition']}")
-    if con.get("opening_state"):
-        lines.append(f"- 이 장면이 시작되는 순간: {con['opening_state']}")
-    for x in con.get("persistent_elements") or []:
-        lines.append(f"- 그대로 유지되는 것: {x}")
-    for x in con.get("visual_anchors") or []:
-        lines.append(f"- 앞 그림과 이어지는 것: {x}")
-    if not lines:
-        return ""
-
-    return ("## 앞 장면에서 이어지는 것 (여기 적힌 것은 그리는 내용이 아니라 "
-            "이어 붙이는 기준이다)\n" + "\n".join(lines)
-            + "\n\n첨부한 직전 그림과 같은 인물·같은 그림체·같은 세계다. 위 "
-              "'그대로 유지되는 것'은 직전 그림과 같게 그리고, 나머지는 아래 "
-              "「이 장면」이 정한다. **직전 그림의 내용을 다시 그리지 마라** — "
-              "이 장면의 첫 컷이 직전 그림의 다음 순간이 되게 이어 그린다.")
-
-
 def build_cover_prompt(*, title: str, genre: str, plot: str, first: dict,
                        char: dict | None, spec: dict | None, cast: list[dict],
                        provider: str, style: str) -> str:
@@ -270,69 +176,6 @@ def build_cover_prompt(*, title: str, genre: str, plot: str, first: dict,
     return "\n\n".join(b for b in blocks if b) + "\n"
 
 
-def build_prompt(scene: dict, prev: dict | None, *, n: int, total: int,
-                 title: str, genre: str, plot: str,
-                 char: dict | None, spec: dict | None, cast: list[dict],
-                 provider: str, style: str,
-                 all_scenes: list[dict] | None = None) -> str:
-    """장면 하나 -> 그림 호출 하나에 보낼 프롬프트.
-
-    고정 구조는 prompt/detail_image_prompt 에 있다(코드가 아니라 데이터).
-    여기서는 그 자리에 인물·이어짐·장면·그림체만 끼워 넣는다.
-
-    all_scenes 를 주면 전체 줄거리 개요(`episode_overview`)를 같이 넣는다 —
-    장면 요약 한 줄 이어붙이기 대신 화 전체 흐름을 준다는 실험. 안 주면
-    기존과 동일하게 직전 장면 상태만 넘긴다(하위호환, 기본은 꺼짐 아님 —
-    호출부에서 all_scenes 를 안 넘기면 이 블록이 그냥 안 붙는다).
-    """
-    path = PROMPT_DIR / "detail_image_prompt"
-    if not path.exists():
-        raise SystemExit(f"프롬프트가 없습니다: {path}")
-    text = path.read_text(encoding="utf-8")
-
-    if prev is None:
-        # 첫 장면은 도입부 설명이 **필수**다. 그림으로 짐작하게 두면 독자는
-        # 인물이 누구인지도 모른 채 읽는다 — 실측: 주인공이 하녀라는 것도,
-        # 여기가 어디인지도 안 나온 페이지가 나왔다. 그 사실은 줄거리에만
-        # 있고 장면 본문에는 없어서 그림 모델이 알 방법이 없었다. 그래서
-        # 전제를 여기서 같이 준다.
-        lines = [f"## 이 화의 첫 장면이다 (전체 {total}장면 중 {n}번째) — 도입부 설명은 필수다",
-                 "",
-                 "독자는 이 작품을 지금 처음 본다. 아래 세 가지를 **페이지 위쪽의 첫 컷 "
-                 "한두 개 안에서 나레이션(네모 상자)으로 반드시 글자로 밝힌다.** 그림으로 "
-                 "짐작하게 두지 마라 — 안 적으면 독자는 이 인물이 누구인지, 여기가 "
-                 "어디인지 모르는 채로 읽게 된다.",
-                 "",
-                 "1. 여기가 어디인가 (장소와 세계)",
-                 "2. 이 인물이 누구이고, 여기서 무엇을 하는 사람인가 (신분·처지)",
-                 "3. 지금이 어떤 상황인가 (이 일이 얼마나 되풀이돼 왔는지 포함)",
-                 "",
-                 "이 세 가지를 밝힌 **뒤에** 장면의 사건으로 들어간다. 사건이나 인물의 "
-                 "반응부터 던지지 않는다.",
-                 ""]
-        if title or genre:
-            lines.append(f"[작품] {title}" + (f" · {genre}" if genre else ""))
-        if plot:
-            lines += ["", "[이 화의 전제 — 위 나레이션에 쓸 사실은 여기 있다. "
-                          "이 줄거리를 그리라는 뜻이 아니다]", plot]
-        lines += ["", "첨부한 그림은 이 화의 표지다. 인물의 외모와 세계의 분위기만 "
-                      "참고하고, 표지의 구도를 따라 그리지는 않는다."]
-        con = "\n".join(lines)
-    else:
-        con = continuity_block(scene, prev)
-        con = (con + f"\n\n(전체 {total}장면 중 {n}번째)") if con else \
-              f"(전체 {total}장면 중 {n}번째)"
-
-    if all_scenes:
-        con = episode_overview(all_scenes, scene.get("id")) + "\n\n" + con
-
-    return (text
-            .replace("{people}", character_block(char, spec, cast))
-            .replace("{continuity}", con)
-            .replace("{scene}", scene_text(scene))
-            .replace("{style}", imageprompt.load_style(style)))
-
-
 def page_path(run_dir: Path, page_no: int) -> Path:
     """페이지 번호는 1부터다 — **1 이 표지**, 2 부터가 장면이다.
 
@@ -343,26 +186,28 @@ def page_path(run_dir: Path, page_no: int) -> Path:
     return run_dir / PAGE_DIR / f"page{page_no:02d}.png"
 
 
-def build_continue_prompt(direction: dict, char: dict | None, spec: dict | None,
-                          cast: list[dict], *, scene_no: int, has_prev: bool,
-                          resume_from: str = "") -> str:
-    """실험 2 (v2): 구체화(detail.json) 없이, 방향(direction) 원본 그대로 그린다.
+def opens_at(scenes: list[dict], scene_no: int) -> str:
+    """장면 `scene_no` 가 시작하는 자리 — 그 장면 자신의 「직전 상태」.
 
-    씬 하나 = 이미지 하나로 되돌렸다 — v1(자연스럽게 이어지는 만큼 알아서
-    그려라)은 모델이 순서를 안 지키고 뒤 장면(결말)으로 건너뛰는 문제가
-    실측으로 나왔다(2번째 호출이 5번 장면을 그림). 그래서 **어디쯤을 그릴지는
-    코드가 정한다.**
+    1번 장면은 「직전 상태」가 "없음" 이라, 대신 그 장면 자체의 장소·상황을
+    쓴다(scenelink.opens_at 과 같은 역할, scenes.json 형태에 맞춘 것).
+    """
+    scene = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
+    opens = (scene.get("prev") or "").strip()
+    if opens and opens not in ("없음", "없음."):
+        return opens
+    return " — ".join(x for x in (scene.get("where"), scene.get("what")) if x)
 
-    다만 **한 장이 장면 하나를 정확히 담아야 하는 것은 아니다.** 장면을 다
-    못 담아도 되고, 앞 장이 못 다한 곳을 마저 그리다 다음 장면으로 넘어가도
-    되고, 뒤에 올 이야기의 기미를 미리 깔아도 된다 — 이야기가 끊기지 않고
-    앞으로만 가면 된다. 못 박는 것은 **순서 하나**다("아직 안 그린 장면을
-    통째로 지나치지 마라"). 장면을 한 장에 딱 맞춰 담으라고 하면 장면 끝과
-    다음 장 시작 사이가 매번 뚝 끊긴다.
 
-    resume_from — 앞 장을 검수한 것이 적어 준 "다음은 여기서부터". 그림만
-    보고는 앞 장이 이야기를 어디까지 밀고 갔는지 알 수 없어서, 한 장면이 두
-    장에 걸치는 것을 허용한 대가로 생긴 빈칸을 이것으로 메운다(pagecheck).
+def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
+                          spec: dict | None, cast: list[dict], *, scene_no: int,
+                          has_prev: bool) -> str:
+    """scenes.json(scene_prompt 의 산출물)만으로 씬 하나를 그린다.
+
+    씬 하나 = 이미지 하나. 각 장면 dict 에 이미 「직전 상태」·「끝나는 상태」가
+    있다(scene_prompt 가 선택된 스토리를 장면으로 쪼갤 때 같이 정해 둔다) —
+    그래서 이 함수는 그것을 그대로 읽기만 한다. 앞 장 그림이 없어도(장면을
+    동시에 그려도) 이 두 지점이 이어짐을 대신한다.
 
     {style} 자리는 호출부(draw_continue)가 채운다.
     """
@@ -373,47 +218,68 @@ def build_continue_prompt(direction: dict, char: dict | None, spec: dict | None,
 
     title = (direction.get("title") or "").strip()
     genre = (direction.get("genre") or "").strip()
-    plot = (direction.get("plot") or "").strip()
-    scenes = [s for s in (direction.get("scenes") or []) if isinstance(s, str) and s.strip()]
-    this_scene = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else ""
 
     lines = ["## 이 화 전체 줄거리 (지금 그릴 자리는 아래 「장면 내용」이 정한다)", ""]
     if title or genre:
         lines.append(f"[작품] {title}" + (f" · {genre}" if genre else ""))
-    if plot:
-        lines += ["", "[줄거리]", plot]
     if scenes:
         lines += ["", "[장면들 — 순서대로 일어나는 사건들이다]"]
         for i, s in enumerate(scenes, 1):
             mark = " ← 이 장에서 그릴 자리" if i == scene_no else ""
-            lines.append(f"{i}. {s}{mark}")
+            summary = s.get("what") or ""
+            lines.append(f"{i}. {summary}{mark}")
     con = "\n".join(lines)
 
-    goal = f"위 목록의 {scene_no}번 장면 자리를 그린다: \"{this_scene}\"\n\n" \
-           "이 한 장이 이야기를 어디까지 나아가게 할지는 **네가 정한다** — 이 장면을 " \
-           "한 장에 다 담아도 되고, 앞 장이 못 다한 곳을 마저 그리다가 이 장면으로 " \
-           "넘어가도 되고, 뒤에 올 이야기의 기미를 미리 깔아도 된다.\n\n" \
-           "다만 **순서는 건너뛰지 않는다** — 아직 그려지지 않은 장면들을 통째로 " \
-           "지나쳐 한참 뒤를 그리거나, 이 화의 결말을 여기서 보여주지 않는다."
+    scene = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
+    first = scene_no == 1
+    last = scene_no == len(scenes)
+    ends = (scene.get("ends") or "").strip()
+    opens = opens_at(scenes, scene_no)
 
-    if has_prev:
-        scene_instr = (
-            goal + "\n\n"
-            "첨부한 직전 그림이 바로 앞 장이다. **직전 그림이 멈춘 순간에서 "
-            "자연스럽게 이어지도록** 그린다 — 인물의 자세·위치·시간대·조명이 "
-            "직전 그림과 뚝 끊기지 않아야 한다. 직전 그림에 이미 그려진 "
-            "내용(같은 순간·같은 대사)을 다시 그리지 않는다."
-        )
+    # 이 장면이 화 전체에서 어느 자리인지 — 프롬프트 맨 위, 실제 장면
+    # 데이터 바로 옆에 짧게 박는다. 같은 말이 파일 앞쪽(4-1 등)에도
+    # 있지만, 실측으로 확인된 문제는 그 설명이 실제 데이터와 너무 멀리
+    # 떨어져 있으면 지켜지지 않는다는 것이었다 — 그래서 여기서 한 번
+    # 더 짧게 못박는다.
+    if first:
+        role = ("이 화의 첫 장면 — 독자가 이 작품을 처음 여는 순간이다. "
+                "인물의 이름·장소·상황을 나레이션·대사·시각 단서 중 하나로 "
+                "반드시 드러낸다.")
+    elif last:
+        role = "이 화의 마지막 장면 — 지금 장면을 마무리하며, 다음 화가 궁금해지는 여운으로 끝낸다."
     else:
-        scene_instr = goal + "\n\n이 화의 시작이다."
+        role = "중간 장면 — 앞 장면에서 자연스럽게 이어받아 진행한다."
 
-    if has_prev and (resume_from or "").strip():
-        # 앞 장을 검수한 모델이 "다음은 여기서부터" 라고 적어 둔 자리.
-        # 그림만으로는 앞 장이 이야기를 어디까지 밀고 갔는지 알 수 없다 —
-        # 한 장면이 두 장에 걸치는 것을 허용한 순간부터 생긴 빈칸이다.
-        scene_instr += ("\n\n[직전 그림이 그려 놓은 자리 — 여기서부터 이어 그린다] "
-                        + resume_from.strip())
-
+    lines = [f"[이 페이지의 역할] {role}", "",
+             f"위 목록의 {scene_no}번 장면 자리를 그린다: \"{scene.get('what', '')}\"", ""]
+    if scene.get("where"):
+        lines += [f"[장소와 상황] {scene['where']}", ""]
+    if scene.get("acting"):
+        lines += [f"[인물의 행동과 표정] {scene['acting']}", ""]
+    lines += [
+        (f"[이 화가 열리는 자리 — 여기서부터 그린다] {opens}" if first else
+         f"[여기서부터 그린다 — 앞 장이 끝난 자리다] {opens}"),
+        "",
+        f"[여기서 끝낸다 — 다음 장이 이어받을 자리다] {ends}",
+        "",
+        "**다른 장면들은 지금 동시에 그려지고 있다.** 위 두 지점이 앞뒤 장과 "
+        "맞물리는 자리다 — 옆 장의 그림을 보고 맞추는 것이 아니라 이 글에 "
+        "맞춘다.",
+        "",
+        ("- 「여기서부터」가 이 화의 첫 장면이다. 여기부터 그린다."
+         if first else
+         "- 「여기서부터」는 앞 장이 이미 그린 순간이다. 그 순간을 다시 그리지 "
+         "말고, 거기서 곧바로 이어지는 다음 순간부터 그린다."),
+        "- 「여기서 끝낸다」는 이 장의 마지막이다. 그 지점이 화면에 나오는 "
+        "데서 끊는다. 더 나아가면 다음 장과 같은 순간을 두 번 그리게 된다.",
+        "- 그 사이를 컷 몇 개로 어떻게 보여줄지, 무슨 대사를 넣을지는 전부 "
+        "**네가 정한다.**",
+    ]
+    scene_instr = "\n".join(lines)
+    if has_prev:
+        scene_instr += ("\n\n첨부한 직전 그림이 바로 앞 장이다 — 인물·공간·"
+                        "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
+                        "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
     return (text
             .replace("{people}", character_block(char, spec, cast))
             .replace("{continuity}", con)
@@ -476,20 +342,27 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     if not direction:
         raise SystemExit(f"{run_dir / 'directions.json'} 가 없습니다. 이야기 단계를 먼저 돌리세요.")
 
-    scenes = [s for s in (direction.get("scenes") or []) if isinstance(s, str) and s.strip()]
+    # 장면 -- scene_prompt 가 고른 방향을 쪼개 만든 scenes.json 에서 읽는다
+    # (직전 상태·끝나는 상태가 장면마다 이미 있다 — run.py --scenes 로 만든다).
+    scene_data = read_json(run_dir / "scenes.json") or {}
+    scenes = [s for s in (scene_data.get("scenes") or []) if isinstance(s, dict)]
     if not scenes:
-        raise SystemExit(f"{run_dir / 'directions.json'} 의 {n}번 방향에 장면이 없습니다.")
+        raise SystemExit(f"{run_dir / 'scenes.json'} 가 없습니다. "
+                        "run.py --pick <번호> --scenes 를 먼저 돌리세요.")
 
     char = read_json(run_dir / "input.json")
     spec = read_json(run_dir / "sheet_spec.json")
     hero = (char.get("name") or "").strip() if char else ""
-    # cast — story 단계(방향 후보)가 직접 뽑는다(story_prompt 의 "등장인물").
-    # board.json·detail.json 을 안 만드는 흐름이라 그 둘에서 가져올 수 없다.
-    # 옛 run(story_prompt 가 등장인물을 안 뽑던 시절)을 위해 board.json 이
-    # 있으면 그쪽도 여전히 봐준다 — 없으면 그냥 빈 목록이다.
-    cast = [c for c in (direction.get("cast") or [])
+    # cast — scene_prompt 가 장면을 쪼개면서 직접 뽑는다(scenes.json 의
+    # "등장인물"). 옛 run(story_prompt 가 등장인물을 직접 뽑던 시절)을 위해
+    # direction['cast']·board.json 도 순서대로 봐준다.
+    cast = [c for c in (scene_data.get("cast") or [])
            if isinstance(c, dict) and (c.get("name") or "").strip()
            and (c.get("name") or "").strip() != hero]
+    if not cast:
+        cast = [c for c in (direction.get("cast") or [])
+               if isinstance(c, dict) and (c.get("name") or "").strip()
+               and (c.get("name") or "").strip() != hero]
     if not cast:
         board = read_json(run_dir / "board.json") or {}
         cast = [c for c in (board.get("cast") or [])
@@ -516,32 +389,39 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     tries = pagecheck.max_redraw() if do_review else 0
     log(f"[이어그리기] 표지 1장 + 장면 {len(scenes)}개 · 그림체 {style} · {provider}"
         + (f":{model}" if model else "")
+        + " · 이음새 있음(동시에 그려도 이어진다)"
         + (f" · 검수 켜짐(다시 그리기 {tries}회)" if do_review else " · 검수 꺼짐"))
 
-    title, genre, plot = direction.get("title") or "", direction.get("genre") or "", direction.get("plot") or ""
+    title, genre = direction.get("title") or "", direction.get("genre") or ""
+    plot = scene_data.get("plot") or direction.get("plot") or ""
+    first_detail = " — ".join(x for x in (scenes[0].get("where"), scenes[0].get("what")) if x)
 
     made = []
-    resume_from = ""          # 앞 장 검수가 적어 준 "다음은 여기서부터"
     for n_ in range(0, len(scenes) + 1):  # 0 = 표지, 1..len(scenes) = 씬
         page_no = n_ + 1
         if n_ == 0:
             prompt = build_cover_prompt(title=title, genre=genre, plot=plot,
-                                        first={"detail": scenes[0]}, char=char, spec=spec,
+                                        first={"detail": first_detail}, char=char, spec=spec,
                                         cast=cast, provider=provider, style=style)
         else:
-            has_prev = True  # 씬1의 직전은 표지, 그 뒤로는 항상 직전 씬이 있다
-            prompt = (build_continue_prompt(direction, char, spec, cast,
-                                            scene_no=n_, has_prev=has_prev,
-                                            resume_from=resume_from)
+            # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
+            # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
+            # "첨부한 직전 그림" 이라고 적으면 없는 그림을 가리키게 된다.
+            has_prev = page_path(run_dir, page_no - 1).exists()
+            prompt = (build_continue_prompt(direction, scenes, char, spec, cast,
+                                            scene_no=n_, has_prev=has_prev)
                       .replace("{style}", imageprompt.load_style(style)))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
         # 그 사람 말대로 다시 그리는 것이다.
         if note.strip():
             prompt += "\n\n" + note_block(note)
-        (dest / f"page{page_no:02d}.txt").write_text(prompt, encoding="utf-8")
+        # 프롬프트는 **그릴 장의 것만 쓴다.** 장면을 동시에 그리면 프로세스마다
+        # 이 반복문을 다 도는데, 자기가 안 그릴 장의 파일까지 쓰면 여럿이 같은
+        # 파일에 동시에 써서 반 토막이 남는다.
         if only and page_no not in only:
             continue
+        (dest / f"page{page_no:02d}.txt").write_text(prompt, encoding="utf-8")
         if dry_run:
             continue
 
@@ -582,7 +462,10 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         # 표지는 이야기의 한 순간이 아니라 검수 대상이 아니다.
         if not do_review or n_ == 0:
             continue
-        prev_from, last = resume_from, None
+        # 검수에게 "앞 장이 어디까지 갔는지" 를 알려 주는 자리. scenes.json 에
+        # 이미 정해져 있는 값이라, 앞 장 검수를 기다리지 않아도 되고 장면을
+        # 동시에 그려도 검수가 같은 기준으로 본다.
+        prev_from, last = opens_at(scenes, n_), None
         for attempt in range(tries + 1):
             got, rmeta = pagecheck.review_page(
                 run_dir, page_no, scene_no=n_, direction=direction,
@@ -627,139 +510,9 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             if on_page:
                 on_page(meta)
             log(f"  -> {out}  (${meta['cost'].get('total', 0):.4f})")
-        # 다음 장이 어디서부터 이어 그릴지. **통과한 장의 것만 물려준다.**
-        # 검수를 못 했거나(판정 없음) 다시 그릴 횟수를 다 쓰고 어긋난 채로
-        # 남았으면 비운다 — 어긋난 그림의 "여기서부터" 를 그대로 넘기면 그
-        # 다음 장도 거기에 맞춰 그려져서, 한 장의 실수가 남은 화 전체로
-        # 번진다(실측: 뒤 장면으로 건너뛴 그림은 "5번 장면의 마지막에서
-        # 이어 그리면 된다" 를 돌려준다). 비우면 다음 장은 원래 제 장면
-        # 지시로 돌아간다.
-        resume_from = last["next_from"] if (last and last["verdict"] == "통과") else ""
 
     if dry_run:
         log(f"[이어그리기] 프롬프트만 썼습니다 -> {dest}")
-    elif made:
-        total = sum(m["cost"].get("total", 0) for m in made)
-        log(f"끝났습니다 — {len(made)}장 · ${total:.4f} -> {dest}")
-    return made
-
-
-def draw(run_dir: Path, dry_run: bool = False, only=None,
-         allow_no_sheet: bool = False, on_page=None,
-         episode_context: bool = False) -> list[dict]:
-    """디테일 -> 페이지 그림. **표지가 1페이지, 사건이 2페이지부터다.**
-
-    결과를 기존 콘티 흐름과 같은 자리(`pages/pageNN.png` · `pages.json`)에
-    쓴다 — 둘러보기·편집실·굽기가 그대로 읽는다.
-
-    **순서대로 그리는 것이 요점이다.** 직전 페이지를 참조로 붙이려면 그것이
-    이미 있어야 한다(pageart.draw 와 같은 이유로 병렬로 안 돌린다).
-
-    on_page(meta) : 한 장이 끝날 때마다 바로 부른다 — 중간에 죽어도 이미
-    나간 돈이 기록에 남게 하는 자리다.
-    """
-    detail = read_json(run_dir / "detail.json")
-    if not detail or not detail.get("scenes"):
-        raise SystemExit(f"{run_dir / 'detail.json'} 가 없습니다. 구체화를 먼저 돌리세요.")
-
-    char = read_json(run_dir / "input.json")
-    spec = read_json(run_dir / "sheet_spec.json")
-    pick = read_json(run_dir / "pick.json") or {}
-    title, genre = (pick.get("title") or ""), (pick.get("genre") or "")
-    cast = cast_of(detail, run_dir)
-
-    # 표지에는 줄거리를 준다 — 특정 장면이 아니라 이 화 전체를 대표해야 한다.
-    plot = ""
-    for d in read_json(run_dir / "directions.json") or []:
-        if d.get("n") == pick.get("n"):
-            plot = d.get("plot") or ""
-            break
-
-    sheet = run_dir / "sheet.png"
-    refs_base = [sheet] if sheet.exists() else []
-    if not refs_base and not dry_run and not allow_no_sheet:
-        # 경고가 아니라 멈춘다 — 시트 없이 그리면 장면마다 다른 사람이 나오고,
-        # 그렇게 나온 것은 다시 그려야 하므로 호출값이 통째로 낭비된다.
-        raise SystemExit(
-            f"캐릭터 시트가 없습니다: {sheet}\n"
-            "        시트 없이 그리면 장면마다 다른 사람이 나옵니다.\n"
-            "        run.py --sheet 로 만들거나 --sheet-from 으로 가져오세요.\n"
-            "        정말 없이 그리려면 --no-sheet 를 붙이세요.")
-
-    provider = llm.provider_for(STAGE)
-    style = (llm.env("NH_STYLE") or llm.env("PAGE_STYLE")
-             or imageprompt.DEFAULT_STYLE)
-
-    # 그림 한 장 = 사건 하나. 장면 경계를 넘어 이어 편다 — 이어짐도 그림
-    # 참조도 "바로 앞 사건" 이 기준이라, 장면이 바뀌는 자리에서 끊으면 안 된다.
-    units = pages.flatten_events(detail["scenes"])
-    dest = run_dir / PAGE_DIR
-    dest.mkdir(parents=True, exist_ok=True)
-    log(f"[디테일 직행] 표지 1장 + 사건 {len(units)}개"
-        f"(장면 {len(detail['scenes'])}개) · 그림체 {style} · {provider}")
-
-    # pages.json — 둘러보기가 페이지 수를 여기서 읽는다. 컷 대본을 안 거치는
-    # 흐름이라 컷 목록이 없으므로, 페이지마다 무엇이 들어갔는지만 적는다.
-    #
-    # **dry-run 에서는 안 쓴다.** 프롬프트만 보려고 돌린 것이 이미 있는
-    # 페이지 구성을 덮어쓰면, 콘티 흐름으로 만들어 둔 run 의 페이지 수가
-    # 조용히 바뀐다(실측: 2026-09-01, dry-run 이 콘티 기반 pages.json 을
-    # 갈아치웠다 — `--repage` 로 되돌릴 수 있었지만 알아채기 어려웠다).
-    if not dry_run:
-        pages_doc = [[{"source": "표지", "size": "full"}]]
-        for u in units:
-            pages_doc.append([{"scene": u.get("scene"), "event": u.get("event"),
-                               "source": u.get("source", ""), "size": "full"}])
-        write_json(run_dir / "pages.json", pages_doc)
-
-    # 0 = 표지, 1..N = 사건. 표지를 따로 두는 이유: 표지는 컷을 안 나누는
-    # 한 장짜리 그림이라 지시가 다르고, 첫 사건이 표지를 겸하면 둘 다
-    # 어중간해진다. 페이지 번호는 여기에 1 을 더한 값이다.
-    jobs = [(0, None, None)] + [(i, u, (units[i - 2] if i > 1 else None))
-                                for i, u in enumerate(units, 1)]
-
-    made = []
-    for n, unit, prev_unit in jobs:
-        page_no = n + 1
-        if n == 0:
-            prompt = build_cover_prompt(title=title, genre=genre, plot=plot,
-                                        first=units[0], char=char, spec=spec,
-                                        cast=cast, provider=provider, style=style)
-        else:
-            prompt = build_prompt(unit, prev_unit, n=n, total=len(units),
-                                  title=title, genre=genre, plot=plot,
-                                  char=char, spec=spec, cast=cast,
-                                  provider=provider, style=style,
-                                  all_scenes=detail["scenes"] if episode_context else None)
-        (dest / f"page{page_no:02d}.txt").write_text(prompt, encoding="utf-8")
-        if only and page_no not in only:
-            continue
-        if dry_run:
-            continue
-
-        out = page_path(run_dir, page_no)
-        label = "표지" if n == 0 else f"사건 {n}/{len(units)}"
-        if out.exists():
-            log(f"  {label}: 이미 있습니다 (다시 그리려면 지우세요)")
-            continue
-
-        # 직전 그림을 마지막 참조로. 장면 1의 직전은 표지다(인물·세계의
-        # 인상만 이어받는다).
-        prev_img = page_path(run_dir, page_no - 1)
-        refs = refs_base + ([prev_img] if page_no > 1 and prev_img.exists() else [])
-        log(f"[{label}] 참조 {len(refs)}장 …")
-        meta = imagegen.paint(STAGE, prompt, out, refs=refs, kind=imagegen.PAGE_KIND)
-        meta["page"] = page_no
-        # 어느 장면의 몇 번째 사건이었는지. 표지는 둘 다 없다.
-        meta["scene"] = unit.get("scene") if unit else None
-        meta["event"] = unit.get("event") if unit else None
-        made.append(meta)
-        if on_page:
-            on_page(meta)
-        log(f"  -> {out}  (${meta['cost'].get('total', 0):.4f})")
-
-    if dry_run:
-        log(f"[디테일 직행] 프롬프트만 썼습니다 -> {dest}")
     elif made:
         total = sum(m["cost"].get("total", 0) for m in made)
         log(f"끝났습니다 — {len(made)}장 · ${total:.4f} -> {dest}")
@@ -775,30 +528,19 @@ def main(argv=None) -> int:
     p.add_argument("--dry-run", action="store_true", help="프롬프트만 쓰고 호출하지 않는다")
     p.add_argument("--no-sheet", action="store_true",
                    help="캐릭터 시트 없이 진행 (인물이 장면마다 달라진다)")
-    p.add_argument("--episode-context", action="store_true",
-                   help="장면 하나 요약 대신 이 화 전체 줄거리를 매 호출에 준다 (실험)")
     p.add_argument("--no-review", action="store_true",
                    help="그린 뒤 검수를 하지 않는다 (기본은 켜짐 — .env 의 "
                         "NH_PAGE_REVIEW=0 과 같다)")
-    p.add_argument("--continue-pages", action="store_true",
-                   help="이어그리기(최종 방식): detail.json·board.json 없이 "
-                        "direction 원본으로 표지+전체 씬을 그린다 (pages/ 에 씀)")
     args = p.parse_args(argv)
-    if args.continue_pages:
-        run_dir = RUNS_DIR / args.run_id
-        draw_continue(run_dir, dry_run=args.dry_run, only=args.only or None,
-                     allow_no_sheet=args.no_sheet,
-                     review=False if args.no_review else None,
-                     on_page=lambda meta: record(run_dir, meta))
-        return 0
     # on_page 를 안 넘기면 이 스크립트로 그린 판은 meta.json 에 한 줄도 안
     # 남는다 — 실제로 그렇게 그려져 png 만 있고 비용 기록이 통째로 빠진 run
     # 이 있다(20260831T121734-c17371 · 20260831T194100-c6c00b). 같은 그림을
     # 어느 명령으로 그렸느냐에 따라 정산이 달라지면 안 된다.
     run_dir = RUNS_DIR / args.run_id
-    draw(run_dir, dry_run=args.dry_run, only=args.only or None,
-         allow_no_sheet=args.no_sheet, episode_context=args.episode_context,
-         on_page=lambda meta: record(run_dir, meta))
+    draw_continue(run_dir, dry_run=args.dry_run, only=args.only or None,
+                 allow_no_sheet=args.no_sheet,
+                 review=False if args.no_review else None,
+                 on_page=lambda meta: record(run_dir, meta))
     return 0
 
 

@@ -40,7 +40,7 @@ import MyPage from "./sections/MyPage/MyPage";
 import Editor from "./sections/Editor/Editor";
 import Characters from "./sections/Characters/Characters";
 import { STYLE_INFO, type WizardForm } from "./lib/wizardData";
-import { createJob, linkThisBrowser } from "./lib/nhApi";
+import { createJob, linkThisBrowser, uploadDataUrlsAsGuest } from "./lib/nhApi";
 import { uploadDataUrls } from "@common/api/uploads";
 import type { Character } from "./lib/charApi";
 
@@ -190,21 +190,24 @@ function WebtoonScreens() {
      삼키지 않고 그대로 던진다 — 진행 화면으로 넘어가 버리면 무엇이
      잘못됐는지 볼 자리가 없다(원본 startRun 과 같은 이유). */
   const start = async (form: WizardForm) => {
-    /* **사진은 S3 로 먼저 올린다** (팀 공용 presign). 본문에 data URL 로
-       실으면 넷이면 요청이 20MB 를 넘어서 서버가 그걸 다 받아 들고 있어야
-       한다 — t3.micro 에서 그게 제일 먼저 막힌다. 브라우저가 S3 로 바로
-       올리고 우리는 키만 넘긴다.
+    /* **사진은 S3 로 먼저 올린다.** 본문에 data URL 로 실으면 사진 한 장만
+       커져도 요청이 1MB 를 넘고, CloudFront 앞단 WAF(SizeRestrictions_BODY)가
+       그 크기를 보고 요청을 통째로 막는다 — 로그인 여부와 무관하게 겪는다
+       (2026-09-17 dev 실측: 403). 브라우저가 S3 로 바로 올리고 우리는 키만
+       넘긴다.
 
-       **로그인한 사람만** 이 길로 간다. presign 은 티켓을 계정에 묶어
-       남의 키를 적어 넣는 것을 막는데, 게스트는 계정이 없다. 게스트는
-       예전처럼 data URL 로 보낸다 — 서버가 둘 다 받는다.
+       로그인한 사람은 팀 공용 presign(계정에 묶인 티켓)을, 게스트는
+       webtoon 전용 presign(GuestGate 의 IP 해시로 묶은 티켓)을 쓴다 — 둘 다
+       "발급받은 사람만 그 키를 쓸 수 있다" 는 같은 보호를 받는다.
 
        올리다 실패하면 data URL 로 되돌린다. 사진 올리는 길이 잠깐 막혔다고
        만들기가 통째로 죽으면 안 된다. */
     let keys: string[] | undefined;
-    if (authStatus === "authenticated" && form.photos.length) {
+    if (form.photos.length) {
       try {
-        keys = await uploadDataUrls(form.photos, "webtoon");
+        keys = authStatus === "authenticated"
+          ? await uploadDataUrls(form.photos, "webtoon")
+          : await uploadDataUrlsAsGuest(form.photos);
       } catch {
         keys = undefined;
       }

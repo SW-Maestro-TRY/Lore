@@ -199,6 +199,13 @@
   font-size: 13.5px;
   line-height: 1.5;
 }
+/* 전역 a 리셋(color: inherit; text-decoration: none)이 여기서 링크를
+   글자 속에 숨겨 버린다 — 눌러야 하는 자리라 따로 드러낸다. */
+.credit-notice a {
+  color: var(--accent-webtoon);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 .credit-packs {
   list-style: none;
@@ -322,10 +329,6 @@
 .me-who { flex: 1 1 auto; }
 .me-credit { flex: 0 0 auto; }
 .me-nav { flex: 1 0 100%; }
-.me-rail-foot {
-  flex: 1 0 100%;
-  grid-auto-flow: column; justify-content: start; align-items: center;
-}
 
 .me-who { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .me-face {
@@ -393,14 +396,6 @@
   color: #fff; font-weight: 700;
 }
 .me-nav-a.on span { color: rgba(255, 255, 255, .72); }
-
-.me-rail-foot { display: grid; gap: 8px 12px; }
-.me-quit {
-  border: 0; background: transparent; cursor: pointer; padding: 4px;
-  font-family: inherit; font-size: .76rem; color: var(--text-subtle);
-  justify-self: start; text-decoration: underline; text-underline-offset: 3px;
-}
-.me-quit:hover { color: var(--text-muted); }
 
 /* ---- 단추 — LORE 쪽 모양 ---------------------------------------------- */
 
@@ -501,6 +496,5 @@
   }
   .me-nav-a.on span { color: var(--text-subtle); }
 
-  .me-rail-foot { grid-auto-flow: row; justify-content: stretch; }
   .me-top h2 { font-size: 1.3rem; }
 }

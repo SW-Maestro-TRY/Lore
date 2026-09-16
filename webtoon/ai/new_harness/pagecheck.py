@@ -22,8 +22,10 @@
 `이어짐` / `제자리`(같은 순간을 다시 그림) / `건너뜀`(안 그린 이야기를
 통째로 지나침) / `되돌아감` 넷으로 판정한다.
 
-연출(컷 수·구도·카메라·여백·대사)은 **판정 대상이 아니다.** 그것까지 보면
-검수가 곧 컷 지정이 되어, 컷 대본을 없앤 이유가 사라진다.
+연출(컷 수·구도·카메라·여백)은 **판정 대상이 아니다.** 그것까지 보면
+검수가 곧 컷 지정이 되어, 컷 대본을 없앤 이유가 사라진다. 대사는
+2026-09-14부터 예외다 — 장면과 모순되거나 알아볼 수 없이 깨진 경우만
+critical 로 본다(문체·표현 취향은 여전히 안 본다).
 
 ## 어떻게 쓰는가
 
@@ -47,6 +49,7 @@ import os
 from pathlib import Path
 
 import llm
+import runmeta
 from llm import story
 
 HERE = Path(__file__).resolve().parent
@@ -66,14 +69,14 @@ PAGE_DIR = "pages"
 STAGE = "PAGE_REVIEW"
 
 SEVERITY = ("critical", "major", "minor")
-KINDS = ("연속성", "제자리", "건너뜀", "되돌아감", "인물", "공간",
+KINDS = ("장면구현", "연속성", "제자리", "건너뜀", "되돌아감", "인물", "공간",
          # 말풍선이 딴 사람을 가리키거나 효과음이 말풍선에 들어간 것.
          # 둘 다 critical 이라 아래 fail 판정이 그대로 다시 그리게 한다.
-         "말풍선", "효과음",
+         "말풍선", "대사", "효과음",
          # 세로 스크롤인데 컷이 가로로 납작한 것. **경고만** 한다 —
          # 프롬프트가 critical 로 못 올리게 막아 두었다(다시 그려도 같은
          # 캔버스라 같은 결과가 나오기 쉽다).
-         "세로형")
+         "세로형", "웹툰연출")
 FLOWS = ("이어짐", "제자리", "건너뜀", "되돌아감")
 
 # 다시 그리게 만드는 흐름. `이어짐` 만 통과다 — 나머지 셋은 독자가 그 장에서
@@ -104,11 +107,11 @@ def record(run_dir: Path, call_meta: dict) -> None:
 
     검수도 돈이 나가는 호출이다. 단독으로 돌렸을 때만 기록이 빠지면, 나중에
     이 run 에 얼마가 들었는지가 어디서 돌렸느냐에 따라 달라진다.
+
+    쓰는 것은 runmeta 가 한다(파일 잠금) — 장면을 동시에 그리면 프로세스
+    여럿이 같은 meta.json 에 쓴다.
     """
-    path = run_dir / "meta.json"
-    meta = read_json(path) or {"run_id": run_dir.name, "calls": []}
-    meta["calls"].append(call_meta)
-    write_json(path, meta)
+    runmeta.append_call(run_dir, call_meta)
 
 
 def _text(x) -> str:
@@ -206,6 +209,18 @@ def story_block(direction: dict, scene_no: int) -> str:
 def prev_block(direction: dict, scene_no: int, *, has_prev: bool,
                prev_is_cover: bool, next_from: str = "") -> str:
     """직전 그림이 무엇인지. 첨부 순서 1번을 글로 설명해 준다."""
+    if not has_prev and scene_no > 1:
+        # 장면을 동시에 그리는 중이라 앞 장이 아직 없다. 여기서 "첫 장이다" 로
+        # 내려가면 검수가 이 장을 화의 시작으로 읽어, 앞에서 이어지는지를
+        # 아예 안 본다.
+        lines = ["## 직전 페이지",
+                 "아직 안 그려졌다 — 이 화는 장면을 동시에 그리는 중이라 앞 장 그림이 "
+                 "없다. 첨부한 그림은 지금 페이지 하나뿐이다."]
+        if _text(next_from):
+            lines += ["", "앞 장이 끝나기로 되어 있는 자리는 아래와 같다. 지금 그림이 "
+                          "**이 자리에서 이어지는지**를 본다.",
+                      f"\"{_text(next_from)}\""]
+        return "\n".join(lines)
     if not has_prev:
         return "## 직전 페이지\n없다. 이 화의 첫 장이다 — 첨부한 그림은 지금 페이지 하나뿐이다."
     if prev_is_cover:
@@ -421,13 +436,20 @@ def review_run(run_dir: Path, only=None, dry_run: bool = False,
 
     char = read_json(run_dir / "input.json")
     hero = _text((char or {}).get("name"))
-    cast = [c for c in (direction.get("cast") or [])
+    scene_data = read_json(run_dir / "scenes.json") or {}
+    scenes = [s for s in (scene_data.get("scenes") or []) if isinstance(s, dict)]
+    cast = [c for c in (scene_data.get("cast") or direction.get("cast") or [])
             if isinstance(c, dict) and _text(c.get("name")) and _text(c.get("name")) != hero]
-    scenes = [s for s in (direction.get("scenes") or []) if _text(s)]
 
+    # 「직전 상태」가 있으면 "앞 장이 어디서 끝났는가" 를 앞 장 검수에서 받아
+    # 오지 않는다 — 그리기 전에 scene_prompt 가 이미 정해 둔 값이 기준이다.
     out = []
     next_from = ""
     for scene_no in range(1, len(scenes) + 1):
+        scene = scenes[scene_no - 1]
+        prev = _text(scene.get("prev"))
+        if prev and prev not in ("없음", "없음."):
+            next_from = prev
         page_no = scene_no + 1                     # 1페이지는 표지다
         if only and page_no not in only:
             continue

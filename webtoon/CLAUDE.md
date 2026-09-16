@@ -16,18 +16,47 @@ webtoon/
 ```
 webtoon/ai/
   new_harness/      지금 제품이 쓰는 이야기·그림 파이프라인
-  story-harness/    모델 호출 계층(llm.py)·캐릭터 시트. new_harness 가 빌려 쓴다
-  webtoon-harness/  이미지·연출(directing). new_harness 가 빌려 쓴다
+  story-harness/    story.py(모델 호출·제미나이 시트) · samples.py(장르 샘플) 만 남은
+                     라이브러리. new_harness 가 import 해서 빌려 쓴다
+  webtoon-harness/  directing.py·scenegen.py·strip.py(레이아웃/연출) ·
+                     config.yaml(단가표) · episode.py(업로드용) · providers/
+                     (제미나이 이미지) 만 남은 라이브러리. new_harness/upload 가 빌려 쓴다
   upload/           다 그린 그림을 S3 로 올리는 걸음 (s3_upload · overlay · runpaths)
   assets/           기본 캐릭터 견본(samples) · 마스코트(lou)
   work/             실행하며 쌓이는 것 (jobs · characters) + legacy-data(보관용)
 ```
+
+**story-harness · webtoon-harness 는 2026-09-13에 new_harness 가 실제로 import
+하는 파일만 남기고 다 지웠습니다** (자체 CLI · README/docs · 옛 테스트 ·
+.bak 여러 세대 · 프롬프트 단계 파일 등 — new_harness 실행 경로 어디서도 안
+읽힌다는 걸 `test_imports.py`(정적 import 검사)와 실제 실행으로 확인한
+것들). 지우기 전 전체를 `haeun/webtoon-ai-backup/` 에 백업해 뒀습니다. 이
+두 폴더에 파일을 새로 추가하기 전에 — 그게 정말 new_harness 가 부르는
+것인지부터 확인하세요.
 
 한 편이 만들어지는 길:
 
 ```
 apps/web (/webtoon)  →  webtoon/fe  →  webtoon/be  →  python3 run.py (webtoon/ai)
 ```
+
+## DB 마이그레이션은 webtoon/be 에 새로 만들지 않습니다
+
+Flyway 마이그레이션 폴더가 지금 `apps/api/src/main/resources/db/migration`과
+`webtoon/be/src/main/resources/db/migration` **둘로 나뉘어 있는데, 둘 다 같은
+DB의 같은 `flyway_schema_history`를 공유**합니다. 번호(`V숫자`)는 두 폴더를
+합쳐서 유일해야 하는데, 각 폴더가 서로 안 보고 다음 번호를 잡다 보니 겹치는
+사고가 반복됩니다 — 이번에 `webtoon/be`의 `V12__webtoon_job_notify_email.sql`이
+`apps/api`의 `V12__world_100_chars.sql`과 겹쳐서, `develop`에 머지된 뒤 배포가
+"Found more than one migration with version 12"로 죽고 자동 롤백됐습니다
+(2026-09-14, #298 → V16로 옮겨 고침). 전에도 V11로 같은 일이 있었습니다
+(#192, PR #297 "flyway-v11-clash").
+
+**그러니 webtoon 쪽에서 새 마이그레이션이 필요하면 파일을
+`apps/api/src/main/resources/db/migration`에 만드세요** — `webtoon/be`
+쪽 폴더에 새로 추가하지 않습니다. 번호를 한 곳에서만 관리하면 겹칠 일이
+없어집니다. (이미 있는 `webtoon/be`의 `V11`·`V16` 파일은 이미 적용된
+이력이라 옮기지 않습니다 — 앞으로 만들 새 파일에만 적용되는 규칙입니다.)
 
 ## 파이썬을 서버로 띄우지 않습니다
 
@@ -70,11 +99,17 @@ webtoon/ai/**  →  (빌드) jar 리소스  →  (기동) 임시 폴더  →  py
 2. 기존 동작이 그대로 재현되게, **순수 추가**로만 고친다 (기본값 변경 금지 —
    예: 새 게이트 함수는 새 입력 필드가 없으면 항상 통과시켜서, 예전 run 을
    다시 돌려도 결과가 안 바뀌게 한다).
-3. 고친 뒤 반드시 테스트를 돌려 `ALL PASS` 확인한다:
-   - `cd webtoon/ai/story-harness && python3 test_gates.py`
-   - `cd webtoon/ai/webtoon-harness && python3 test_charsheet.py`
-   - `cd webtoon/ai/new_harness && python3 test_parse.py`
-   (pytest 아님 — 그냥 스크립트, 마지막 줄에 ALL PASS 또는 FAILED 가 찍힘)
+3. 고친 뒤 `cd webtoon/ai && python3 test_imports.py` 로 `ALL PASS` 확인한다
+   (java 가 실행하는 4개 스크립트 + 그 의존 전체가 여전히 import 되는지 보는
+   정적 검사).
+
+**2026-09-13에 `test_gates.py`(story-harness) · `test_charsheet.py`
+(webtoon-harness) · `test_parse.py`(new_harness)를 전부 지웠습니다** — 셋 다
+new_harness 가 실제로 안 쓰는 옛 파이프라인(구체화·콘티·컷대본·화면 캐릭터시트
+CLI 등)까지 같이 테스트하고 있었고, 그 옛 파이프라인 자체를 지우는 김에
+테스트도 같이 정리했습니다. 지금은 `test_imports.py`(위 3.)가 유일한
+회귀 확인 도구입니다 — 동작 자체를 검증하진 않고, "실행에 필요한 파일이
+다 있는가"만 봅니다.
 
 `new_harness` · `be` · `fe` 는 제품 레이어라 이 제약이 없습니다.
 
@@ -160,8 +195,8 @@ ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webt
   **원본 저장소 폴더에 있는 세션**이 실행한다.
 - **병합은 사용자 확인 없이 바로 한다** — 아직 `push` 전(로컬)이라 원격에
   영향이 없고, `git reflog`로 언제든 되돌릴 수 있다 (이 프로젝트의 기존
-  "커밋은 자동, push는 항상 확인" 원칙과 같은 선). 테스트(`test_gates.py`/
-  `test_charsheet.py` ALL PASS)만 확인되면 곧장 진행한다:
+  "커밋은 자동, push는 항상 확인" 원칙과 같은 선). 테스트(`test_imports.py`
+  ALL PASS)만 확인되면 곧장 진행한다:
   ```
   git checkout haeun
   git merge agent/<미션명>
@@ -342,3 +377,24 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
 - `AWS_PROFILE` 이 없으면 자바 SDK 가 `default` 프로파일을 찾다가 S3 관련
   기능이 전부 실패합니다(캐릭터 목록부터 막힘).
 - 화면은 `apps/web` 개발 서버(3000), API 는 8080 입니다.
+
+### 이미지·텍스트 모델 API 키는 실제로 어디 있는가
+
+**실제 키는 저장소 루트 `.env`의 `WEBTOON_API_KEY`(OpenAI) 하나뿐입니다.**
+`webtoon/ai/{new_harness,story-harness,webtoon-harness}/.env` 는 이 체크아웃에는
+**없습니다**(`.env.example` 만 있음) — 위 "병렬 에이전트 작업" 절의 심링크
+안내는 그 파일들이 실제로 있는 걸 전제로 합니다. 없다면 먼저 만들거나(아래
+export 방식으로 대신 씀) worktree 를 팔 때 심링크할 원본부터 채워야 합니다.
+
+- **`./gradlew bootRun` 으로 돌릴 때**는 자동입니다. 루트 `.env` 의
+  `WEBTOON_API_KEY` 가 자바 프로세스 환경으로 들어가고, 자바가 파이썬을
+  자식 프로세스로 부르며 환경을 그대로 물려주고, `llm.py` 가 그 값을
+  `OPENAI_API_KEY` 로 풀어 씁니다(`llm.py` 의 `WEBTOON_API_KEY` 변환 로직).
+- **`python3 run.py` 를 터미널에서 직접 돌릴 때는 이 변환이 안 일어납니다**
+  — 셸에 `WEBTOON_API_KEY` 가 없으면 `OPENAI_API_KEY 가 없습니다` 로 바로
+  멈춥니다(2026-09-14 실측). 돌리기 전에 루트 `.env` 에서 값을 꺼내 셸에
+  얹으세요:
+  ```
+  export WEBTOON_API_KEY=$(grep '^WEBTOON_API_KEY=' <저장소 루트>/.env | cut -d= -f2-)
+  ```
+  (`<저장소 루트>` 는 지금 위치가 `webtoon/ai/new_harness` 면 `../../..`.)

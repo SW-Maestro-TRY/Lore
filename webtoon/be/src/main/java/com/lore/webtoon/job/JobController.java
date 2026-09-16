@@ -5,6 +5,8 @@ import com.lore.webtoon.credit.GuestGate;
 import com.lore.webtoon.usage.SpendGuard;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
+import com.lore.common.s3.S3Service;
 import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -63,15 +65,17 @@ public class JobController {
     private final SpendGuard guard;
     private final GuestGate guests;
     private final CreditGate credits;
+    private final S3Service uploads;
 
     public JobController(JobService jobs, JobQueue queue, RunArt art, SpendGuard guard,
-                         GuestGate guests, CreditGate credits) {
+                         GuestGate guests, CreditGate credits, S3Service uploads) {
         this.jobs = jobs;
         this.queue = queue;
         this.art = art;
         this.guard = guard;
         this.guests = guests;
         this.credits = credits;
+        this.uploads = uploads;
     }
 
     /**
@@ -108,6 +112,41 @@ public class JobController {
         out.put("blocked", guard.whyBlocked());
         return out;
     }
+
+    /**
+     * 게스트(비로그인)용 사진 업로드 주소 발급.
+     *
+     * 팀 공용 presign({@code /api/v1/uploads/presign})은 로그인이 필요하다 —
+     * 티켓을 계정에 묶어야 남의 키를 적어 넣는 것을 막을 수 있어서다. 게스트는
+     * 계정이 없어 그 길을 못 쓰고, 그래서 사진을 data URL(base64)로 요청
+     * 본문에 그대로 실어 보내고 있었다. 사진이 조금만 커도 본문이 1MB 를
+     * 넘는데, CloudFront 앞단 WAF(SizeRestrictions_BODY)가 그 크기를 보고
+     * 403 으로 막는다 — 로그인 여부와 무관하게 사진만 올리면 늘 이랬다
+     * (2026-09-17 dev 에서 실측).
+     *
+     * 계정 대신 {@link GuestGate#keyOf}(IP 해시)로 티켓을 묶는다 — 로그인
+     * 사람과 같은 "발급받은 사람만 그 키를 쓸 수 있다" 보호를 그대로 적용한다.
+     */
+    @Operation(summary = "게스트 사진 업로드 주소 발급",
+            description = "로그인 없이 S3 에 직접 올릴 임시 주소를 받는다. 10분간 유효.")
+    @PostMapping("/photo-presign")
+    public S3Service.PresignedUpload photoPresign(HttpServletRequest request,
+                                                   @RequestBody PhotoPresignRequest form) {
+        if (CreditGate.currentUser() != null) {
+            // 로그인한 사람은 팀 공용 presign(/api/v1/uploads/presign)을 쓴다 —
+            // 거기 티켓이 계정에 묶여 더 오래(계정이 있는 한) 추적·회수된다.
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "로그인한 사람은 /api/v1/uploads/presign 을 쓰세요");
+        }
+        String guestKey = guests.keyOf(request);
+        if (guestKey == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "게스트 열쇠를 만들 수 없습니다");
+        }
+        return uploads.createUploadUrlForGuest(guestKey, "webtoon", form.contentType());
+    }
+
+    /** 올릴 파일의 MIME 타입(image/png 등). */
+    public record PhotoPresignRequest(String contentType) {}
 
     @Operation(summary = "웹툰 만들기 시작", description = """
             **돈이 나가는 유일한 자리다.** 넘기기 전에 세 번 멈춰 세운다 —
@@ -183,10 +222,44 @@ public class JobController {
         return jobs.view(id);
     }
 
-    @Operation(summary = "이야기 고르기")
+    /**
+     * 다 되면 이 주소로 알려 달라 — <b>게스트가 이메일을 적어 넣는 자리.</b>
+     *
+     * 한 편에 5~15분이 걸린다. 창을 닫으면 다 됐는지 알 길이 없고, 게스트는
+     * 자기 작품을 브라우저 uid 로만 찾으므로 <b>다른 기기로 들어오면 만든
+     * 것을 못 찾는다.</b> 메일에 담는 결과 링크가 그 사람이 자기 작품으로
+     * 돌아오는 유일한 길이다.
+     *
+     * 로그인한 사람은 이걸 안 불러도 계정 주소로 간다.
+     *
+     * <b>실패해도 만들기는 안 멈춘다</b> — 이건 곁가지다. 주소가 틀렸으면
+     * 그 자리에서 말해 준다(400): 담아 두고 보낸 척하면 화면에는
+     * 「보낼게요」가 떠 있는데 영영 아무것도 안 온다.
+     */
+    @Operation(summary = "완성 알림 받을 이메일",
+            description = "빈 값을 보내면 안 받겠다는 뜻이라 적어 둔 주소를 지운다.")
+    @PostMapping("/jobs/{id}/notify")
+    public Map<String, Object> notify(@PathVariable String id,
+                                      @RequestBody(required = false) NotifyRequest body) {
+        String to = jobs.notifyTo(id, body == null ? null : body.email());
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        // 화면이 그대로 적는다. 자기 주소를 자기에게 보여 주는 것이라 안 가린다 —
+        // 가려 놓으면 오타를 냈는지 확인할 길이 없다.
+        out.put("email", to);
+        return out;
+    }
+
+    /** 받을 주소. 본문 없이 부르면 「안 받겠다」로 읽는다. */
+    public record NotifyRequest(String email) {
+    }
+
+    @Operation(summary = "이야기 고르기",
+            description = "body 를 같이 보내면 그 방향의 본문을 사람이 고친 내용으로 바꿔서 " +
+                    "다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.")
     @PostMapping("/jobs/{id}/pick")
-    public Map<String, Object> pick(@PathVariable String id, @RequestBody PickRequest body) {
-        jobs.pick(id, body.n());
+    public Map<String, Object> pick(@PathVariable String id, @RequestBody PickRequest req) {
+        jobs.pick(id, req.n(), req.body());
         return Map.of("ok", true);
     }
 
@@ -308,6 +381,6 @@ public class JobController {
                 .body(Map.of("error", e.getMessage()));
     }
 
-    public record PickRequest(int n) {
+    public record PickRequest(int n, String body) {
     }
 }

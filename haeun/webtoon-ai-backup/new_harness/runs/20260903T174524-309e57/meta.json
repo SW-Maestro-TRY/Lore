@@ -1,0 +1,494 @@
+{
+  "run_id": "20260903T174524-309e57",
+  "calls": [
+    {
+      "stage": "STORY",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-03T17:45:24+09:00",
+      "seconds": 14.17,
+      "usage": {
+        "input": 9984,
+        "output": 1844,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.019968,
+        "output": 0.014752,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.03472,
+        "total_krw": 49
+      }
+    },
+    {
+      "stage": "SHEET",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-03T17:45:39+09:00",
+      "seconds": 4.22,
+      "usage": {
+        "input": 1974,
+        "output": 413,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.003948,
+        "output": 0.003304,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.007252,
+        "total_krw": 10
+      }
+    },
+    {
+      "stage": "SHEET_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 1508192,
+      "at": "2026-09-03T17:45:43+09:00",
+      "seconds": 40.97,
+      "chars": 4376,
+      "refs": [],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=1161, input_tokens_details=UsageInputTokensDetails(image_tokens=0, text_tokens=1161), output_tokens=1372, total_tokens=2533, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 1161,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 1161
+          },
+          "output_tokens": 1372,
+          "total_tokens": 2533,
+          "output_tokens_details": {
+            "image_tokens": 1372,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 1161,
+        "tokens_out": 1372,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 2533,
+        "tokens_in_text": 1161,
+        "tokens_in_image": 0,
+        "tokens_out_image": 1372,
+        "cost_basis": "tokens",
+        "total": 0.046965,
+        "total_krw": 66
+      },
+      "output_path": "/Users/mint/project/Lore/haeun/new_harness/runs/20260903T174524-309e57/sheet.png"
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 3177852,
+      "at": "2026-09-03T17:47:22+09:00",
+      "seconds": 51.95,
+      "chars": 6441,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=3987, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=2451), output_tokens=1372, total_tokens=5359, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 3987,
+          "input_tokens_details": {
+            "image_tokens": 1536,
+            "text_tokens": 2451
+          },
+          "output_tokens": 1372,
+          "total_tokens": 5359,
+          "output_tokens_details": {
+            "image_tokens": 1372,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 3987,
+        "tokens_out": 1372,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 5359,
+        "tokens_in_text": 2451,
+        "tokens_in_image": 1536,
+        "tokens_out_image": 1372,
+        "cost_basis": "tokens",
+        "total": 0.065703,
+        "total_krw": 92
+      },
+      "output_path": "/Users/mint/project/Lore/haeun/new_harness/runs/20260903T174524-309e57/pages/page01.png",
+      "page": 1,
+      "scene": 0
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 1768033,
+      "at": "2026-09-03T17:48:14+09:00",
+      "seconds": 54.54,
+      "chars": 7959,
+      "refs": [
+        "sheet.png",
+        "page01.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=6842, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=3770), output_tokens=1372, total_tokens=8214, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 6842,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 3770
+          },
+          "output_tokens": 1372,
+          "total_tokens": 8214,
+          "output_tokens_details": {
+            "image_tokens": 1372,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 6842,
+        "tokens_out": 1372,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 8214,
+        "tokens_in_text": 3770,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 1372,
+        "cost_basis": "tokens",
+        "total": 0.084586,
+        "total_krw": 118
+      },
+      "output_path": "/Users/mint/project/Lore/haeun/new_harness/runs/20260903T174524-309e57/pages/page02.png",
+      "page": 2,
+      "scene": 1
+    },
+    {
+      "stage": "PAGE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-03T17:49:09+09:00",
+      "seconds": 7.9,
+      "usage": {
+        "input": 4149,
+        "output": 146,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.008298,
+        "output": 0.001168,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.009466,
+        "total_krw": 13
+      },
+      "page": 2
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 1797912,
+      "at": "2026-09-03T17:49:17+09:00",
+      "seconds": 43.75,
+      "chars": 8021,
+      "refs": [
+        "sheet.png",
+        "page02.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=6877, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=3805), output_tokens=1372, total_tokens=8249, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 6877,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 3805
+          },
+          "output_tokens": 1372,
+          "total_tokens": 8249,
+          "output_tokens_details": {
+            "image_tokens": 1372,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 6877,
+        "tokens_out": 1372,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 8249,
+        "tokens_in_text": 3805,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 1372,
+        "cost_basis": "tokens",
+        "total": 0.084761,
+        "total_krw": 119
+      },
+      "output_path": "/Users/mint/project/Lore/haeun/new_harness/runs/20260903T174524-309e57/pages/page03.png",
+      "page": 3,
+      "scene": 2
+    },
+    {
+      "stage": "PAGE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-03T17:50:00+09:00",
+      "seconds": 4.82,
+      "usage": {
+        "input": 4205,
+        "output": 209,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.00841,
+        "output": 0.001672,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.010082,
+        "total_krw": 14
+      },
+      "page": 3
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 1933192,
+      "at": "2026-09-03T17:50:05+09:00",
+      "seconds": 50.96,
+      "chars": 8072,
+      "refs": [
+        "sheet.png",
+        "page03.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=6900, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=3828), output_tokens=1372, total_tokens=8272, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 6900,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 3828
+          },
+          "output_tokens": 1372,
+          "total_tokens": 8272,
+          "output_tokens_details": {
+            "image_tokens": 1372,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 6900,
+        "tokens_out": 1372,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 8272,
+        "tokens_in_text": 3828,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 1372,
+        "cost_basis": "tokens",
+        "total": 0.084876,
+        "total_krw": 119
+      },
+      "output_path": "/Users/mint/project/Lore/haeun/new_harness/runs/20260903T174524-309e57/pages/page04.png",
+      "page": 4,
+      "scene": 3
+    },
+    {
+      "stage": "PAGE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-03T17:50:56+09:00",
+      "seconds": 5.44,
+      "usage": {
+        "input": 4224,
+        "output": 235,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.008448,
+        "output": 0.00188,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.010328,
+        "total_krw": 14
+      },
+      "page": 4
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 2127818,
+      "at": "2026-09-03T17:51:02+09:00",
+      "seconds": 48.81,
+      "chars": 8074,
+      "refs": [
+        "sheet.png",
+        "page04.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=6910, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=3838), output_tokens=1372, total_tokens=8282, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 6910,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 3838
+          },
+          "output_tokens": 1372,
+          "total_tokens": 8282,
+          "output_tokens_details": {
+            "image_tokens": 1372,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 6910,
+        "tokens_out": 1372,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 8282,
+        "tokens_in_text": 3838,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 1372,
+        "cost_basis": "tokens",
+        "total": 0.084926,
+        "total_krw": 119
+      },
+      "output_path": "/Users/mint/project/Lore/haeun/new_harness/runs/20260903T174524-309e57/pages/page05.png",
+      "page": 5,
+      "scene": 4
+    },
+    {
+      "stage": "PAGE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-03T17:51:55+09:00",
+      "seconds": 6.53,
+      "usage": {
+        "input": 4241,
+        "output": 288,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.008482,
+        "output": 0.002304,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.010786,
+        "total_krw": 15
+      },
+      "page": 5
+    },
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 1668608,
+      "at": "2026-09-03T17:52:03+09:00",
+      "seconds": 32.95,
+      "chars": 8088,
+      "refs": [
+        "sheet.png",
+        "page05.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=6918, input_tokens_details=UsageInputTokensDetails(image_tokens=3072, text_tokens=3846), output_tokens=1372, total_tokens=8290, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 6918,
+          "input_tokens_details": {
+            "image_tokens": 3072,
+            "text_tokens": 3846
+          },
+          "output_tokens": 1372,
+          "total_tokens": 8290,
+          "output_tokens_details": {
+            "image_tokens": 1372,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 6918,
+        "tokens_out": 1372,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 8290,
+        "tokens_in_text": 3846,
+        "tokens_in_image": 3072,
+        "tokens_out_image": 1372,
+        "cost_basis": "tokens",
+        "total": 0.084966,
+        "total_krw": 119
+      },
+      "output_path": "/Users/mint/project/Lore/haeun/new_harness/runs/20260903T174524-309e57/pages/page06.png",
+      "page": 6,
+      "scene": 5
+    },
+    {
+      "stage": "PAGE_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-03T17:52:49+09:00",
+      "seconds": 5.86,
+      "usage": {
+        "input": 4259,
+        "output": 254,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.008518,
+        "output": 0.002032,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.01055,
+        "total_krw": 15
+      },
+      "page": 6
+    }
+  ]
+}

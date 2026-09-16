@@ -43,3 +43,7 @@ export const LEGAL_LINKS = {
   terms: "/legal/terms",
   privacy: "/legal/privacy",
 } as const;
+
+/** 1:1 문의 카카오톡 채널. 마이페이지의 「1:1 문의하기」와 크레딧 충전 창
+ *  둘 다 이걸 가리키므로 한 곳에 둔다. */
+export const CONTACT_CHANNEL = "https://pf.kakao.com/_DXxjGX";

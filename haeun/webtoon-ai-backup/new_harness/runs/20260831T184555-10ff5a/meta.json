@@ -1,0 +1,24 @@
+{
+  "run_id": "20260831T184555-10ff5a",
+  "calls": [
+    {
+      "stage": "STORY",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 1218,
+        "output": 1348,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.002436,
+        "output": 0.010784,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.01322
+      }
+    }
+  ]
+}

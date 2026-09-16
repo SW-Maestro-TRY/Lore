@@ -6,7 +6,8 @@ import {
   cancelJob, decideSheet, jobPageUrl, pickDirection, rememberMyRun, retryDirections,
 } from "../../lib/nhApi";
 import { useNhJob } from "./useNhJob";
-import { headLine, mascotLine, mmss, NH_STAGE_ART } from "./nhStage";
+import { headLine, mascotLine, mmss, stageArt } from "./nhStage";
+import NotifyByEmail from "./NotifyByEmail";
 import SheetApproval from "./SheetApproval";
 import PickApproval from "./PickApproval";
 import ZoomView from "./ZoomView";
@@ -166,10 +167,10 @@ export default function Progress({
       <div className="progress-inner">
         <header className="progress-head">
           {/* **줄을 보여 준다.**
-              만들기는 한 번에 한 편씩 돈다. 앞에 세 명이 있으면 내 차례는
-              40분 뒤인데, 이 줄이 없을 때 화면은 그동안 「루가 그림을 그리고
+              만들기는 한 번에 두 편까지만 돈다. 앞에 사람이 있으면 내 차례가
+              그만큼 늦는데, 이 줄이 없을 때 화면은 그동안 「루가 그림을 그리고
               있어요」만 보여 줬다 — 내 그림이 그려지는 줄 알고 기다린다.
-              모르는 40분과 아는 40분은 다르다.
+              모르는 15분과 아는 15분은 다르다.
 
               서버가 DB 를 보고 센다(JobQueue). 내 차례가 오면 서버가 null 을
               주고 이 띠는 사라진다 — 화면이 판단하지 않는다. */}
@@ -180,7 +181,7 @@ export default function Progress({
             </p>
           )}
           <div className="stage-now">
-            <div className="stage-art" data-stage={NH_STAGE_ART[job.stage] || job.stage} />
+            <div className="stage-art" data-stage={stageArt(job.stage, job.say)} />
             <p className="stage-say">{line}</p>
             <div className="lou-progress" role="progressbar"
                  aria-valuemin={0} aria-valuemax={100} aria-valuenow={job.pct}>
@@ -230,6 +231,14 @@ export default function Progress({
           </div>
         )}
 
+        {/* **나가도 된다고 말했으면, 언제 돌아오는지도 말해야 한다.**
+            바로 위 「나갔다 와도 이어집니다」 밑에 붙인다 — 나갈까 말까를
+            정하는 그 자리에서 "그럼 다 되면 어떻게 알지?" 가 나오기 때문이다.
+
+            확인 차례에는 안 띄운다: 그때는 사람이 답해야 앞으로 가고,
+            눌러야 할 것이 있는데 입력 칸이 하나 더 있으면 그쪽으로 눈이 간다. */}
+        {!waiting && <NotifyByEmail jobId={jobId} job={job} />}
+
         {/* ---- 사람이 멈춰 서는 자리 둘 ---- */}
         {job.status === "awaiting_sheet" && (
           <SheetApproval
@@ -249,7 +258,7 @@ export default function Progress({
           <PickApproval
             directions={job.directions}
             busy={busy}
-            onPick={(n) => answer(() => pickDirection(jobId, n))}
+            onPick={(n, editedBody) => answer(() => pickDirection(jobId, n, editedBody))}
             onRetry={(note) => answer(() => retryDirections(jobId, note))}
           />
         )}
