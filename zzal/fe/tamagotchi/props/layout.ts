@@ -84,6 +84,11 @@ export interface CharFit {
   belowFoot: number;
   /** 가장 키 큰 자세의 실루엣 / K. 짧은 화면에서 **머리가 안 잘리게** 깎는 데 쓴다. */
   tallestPerK: number;
+  /**
+   * 이 자세의 **머리끝→발끝 높이 ÷ 캔버스 세로**. 상자 세로(`CHAR_H`)에 곱하면 화면에서의 실루엣 키가 되고,
+   * `발끝선(LIFT) + CHAR_H×이 값` 이 곧 **머리끝 자리**다 — 말풍선을 머리 위로 띄우는 데 쓴다.
+   */
+  headSpanPerBoxH: number;
 }
 
 /**
@@ -105,6 +110,7 @@ export function charFit(anchors: CharAnchors, pose: string): CharFit {
     aspect: canvasW / canvasH,
     belowFoot: (canvasH - p.feet.y) / canvasH,
     tallestPerK: (tallest > 0 ? tallest : anchors.K) / anchors.K,
+    headSpanPerBoxH: (p.feet.y - p.head_top.y) / canvasH,
   };
 }
 
@@ -247,18 +253,20 @@ export function layoutRoomProp(spec: PropSpec, stage: PropStage, st: StageGeom, 
   const height = width * aspect;
 
   const side = propSide(spec, ROOM_SIDE_POSE);
+  const sign = side === 'left' ? -1 : 1;
   const off = offsetPx(spec.offset, u, boxW);
 
-  // ★ 방에 붙박인 소품은 **가로로 캐릭터와 같은 중심(무대 한가운데)** 에 둔다(상훈님 2026-09-16 승인).
-  //   예전엔 규격 오프셋(똥은 K x 0.22)만큼 왼쪽으로 밀어 캐릭터 기준 한쪽으로 쏠려 보였다 —
-  //   상훈님이 "조화롭게 가운데" 를 명시하셔서 **가로 오프셋을 걷어냈다.** 세로 오프셋(`off.dy`)은
-  //   발끝선 미세조정이라 그대로 둔다. (걷는 중 소품이 아니라 방 고정 소품 기준이라 중앙이 맞다.)
+  // ★ 방에 붙박인 소품은 **무대 한가운데에서 규격 오프셋(`offset.dx`)만큼 옆으로** 둔다(2026-09-16 개정).
+  //   한때 오프셋을 통째로 걷어 정중앙에 뒀더니 **똥이 캐릭터 발/신발을 정면으로 덮었다** — 아이와 소품이
+  //   같은 중심에 서서 겹친 것이다. 그래서 규격이 정한 옆 오프셋을 되살려 소품을 발 옆 바닥에 놓는다.
+  //   (예전 "완전히 왼쪽" 쏠림은 오프셋이 과했던 것이라, 값은 규격에서 조율한다 — 여기서는 그 값을 따를 뿐.)
+  //   세로 오프셋(`off.dy`)은 발끝선 미세조정이라 그대로 둔다. 자세·평행이동과 무관해 여전히 결정적이다.
   const y = st.height - footlineFromBottom(st.height) + off.dy;
 
   // ★ 무대 밖으로 잘리지 않게 무대 안으로 물린다(2026-09-16). 소품이 커지면서 넓은 것(3~4단 똥·매트)이
   //   좁은 화면 가장자리에서 잘렸다. 무대보다 좁으면 가장자리 안으로, 무대보다 넓으면 가운데에 둔다.
   //   무대 폭·소품 폭만의 함수라 여전히 결정적이다(같은 개수면 언제나 같은 자리).
-  let left = st.width / 2 - width / 2;
+  let left = st.width / 2 + sign * off.dx - width / 2;
   left = width <= st.width ? Math.min(Math.max(left, 0), st.width - width) : (st.width - width) / 2;
 
   return {

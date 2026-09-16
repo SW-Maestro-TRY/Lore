@@ -25,6 +25,7 @@ import Album from './Album';
 import Panels from './Panels';
 import FeedbackSheet from '../FeedbackSheet';
 import { spriteUrl, useFootPad, useLive, yeoulSpriteUrl } from './useHatch';
+import { useIsWide } from '../useIsWide';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
 import { charFit, HEAD_SAFE } from '../props/layout';
@@ -37,6 +38,9 @@ import { confirmedSpec } from '../props/catalog';
 
 /** 걷힘 바퀴에만 잠깐 생기는 줄의 이름. 표에 없는 이름이라 다른 줄과 안 부딪힌다. */
 const SWEEP_ROW_ID = '__sweep__';
+
+/** 좁은 폰(SE 등) — 머리 띠·인사 카드를 콤팩트하게 줄여 무대 세로를 아이에게 돌려주는 기준. */
+const NARROW_Q = '(max-width: 640px)';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
@@ -172,6 +176,15 @@ export default function Room({ y }: { y: Yeoul }) {
   // 발끝이 발끝선(`LIFT`)에 오게 상자를 내린다. 앵커가 있으면 **그 자세의 발끝**을, 없으면 잰 여백을 쓴다.
   const BELOW_FOOT = byK ? fit.belowFoot : footPad;
   const CHAR_ASPECT = byK ? `${fit.aspect.toFixed(6)}` : '313/350';
+
+  // ★ 말풍선은 **머리끝 자리**를 계산해 그 위에 띄운다(2026-09-16). 예전엔 무대 위끝에서 고정 px
+  //   (샘플 96 · 진짜 12)이라, 화면이 짧거나 아이가 뛰면(`yHop` 최대 30px) 머리가 그 자리로 올라와
+  //   얼굴을 덮었다. 이제 자세·화면 크기에 따라 머리끝을 따라가므로 어느 폭에서도 얼굴을 안 덮는다.
+  //   머리끝(무대 아래 기준) = 발끝선(LIFT) + 상자세로(CHAR_H) × (그 자세 머리끝→발끝 / 캔버스세로).
+  //   그 위로 여유(뜀·흔들림 흡수)를 두고 **아래를 그 자리에 붙여** 위로 자란다(짧은 화면에서 위가 잘려도
+  //   얼굴은 안 덮는 쪽을 고른다). 여유 14px = 흔들림(yBob 4px)을 늘 덮고 뜀의 첫 구간까지 받는다.
+  const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${fit.headSpanPerBoxH.toFixed(4)})`;
+  const BUBBLE_BOTTOM = `calc(${headTopFromBottom} + 14px)`;
 
   return (
     <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
@@ -325,8 +338,8 @@ export default function Room({ y }: { y: Yeoul }) {
         {v.st.sick && <div style={{ position: 'absolute', inset: 0, background: 'rgba(130,132,138,.2)', animation: 'yFadeIn .4s ease' }} />}
 
         {v.bub.show && (
-          <div style={{
-            position: 'absolute', left: '50%', top: v.bub.top, zIndex: 3, width: 280, marginLeft: -140,
+          <div data-part="bubble" style={{
+            position: 'absolute', left: '50%', bottom: BUBBLE_BOTTOM, zIndex: 3, width: 280, marginLeft: -140,
             display: 'flex', justifyContent: 'center',
             animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
           }}>
@@ -438,16 +451,18 @@ function cssText(text: string): React.CSSProperties {
  */
 function Hud({ y }: { y: Yeoul }) {
   const { v, actions } = y;
+  // 좁은 폰에서는 머리 띠(이름 줄·며칠째 줄)를 얇게 줄여 무대에 세로를 돌려준다(데스크톱은 그대로).
+  const narrow = useIsWide(NARROW_Q);
   return (
     <>
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 20px 5px' }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: narrow ? '6px 16px 2px' : '11px 20px 5px' }}>
         {/* 이름이 길어도(12자) 아래 버튼과 부딪히지 않게 한 줄로 자른다. */}
         <span data-part="pet-title" style={{
-          fontFamily: GAEGU, fontWeight: 700, fontSize: 22, lineHeight: 1.2, color: C.ink,
+          fontFamily: GAEGU, fontWeight: 700, fontSize: narrow ? 19 : 22, lineHeight: 1.2, color: C.ink,
           maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{v.pet.name}</span>
       </div>
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7, padding: '0 20px 8px' }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7, padding: narrow ? '0 16px 5px' : '0 20px 8px' }}>
         <span style={{ fontSize: 14, color: '#635A52' }}>{v.pet.dayText}</span>
         <span style={{ fontSize: 12, color: '#8B8279' }}>·</span>
         <span style={{ fontSize: 14, color: '#635A52' }}>친밀도 {v.pet.bond}%</span>
@@ -487,9 +502,11 @@ function Hud({ y }: { y: Yeoul }) {
  */
 function SampleHud({ y }: { y: Yeoul }) {
   const { v } = y;
+  // 좁은 폰에서는 띠 여백을 줄여 무대에 세로를 돌려준다(데스크톱은 그대로).
+  const narrow = useIsWide(NARROW_Q);
   return (
     // 띠는 무대를 그만큼 잡아먹는다 — 아이가 주인공이라 여백을 최소로 잡았다.
-    <div data-part="sample-hud" style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 20px 7px' }}>
+    <div data-part="sample-hud" style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: narrow ? 4 : 6, padding: narrow ? '4px 14px 4px' : '8px 20px 7px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           onClick={v.sample.exit} data-part="sample-exit"
@@ -531,6 +548,8 @@ function TutorCard({ y }: { y: Yeoul }) {
   const { v } = y;
   const b = v.bub;
   const [folded, setFolded] = useState(false);
+  // 좁은 폰에서는 인사 카드의 여백·글씨를 줄여 무대에 세로를 돌려준다(데스크톱은 그대로).
+  const narrow = useIsWide(NARROW_Q);
   useEffect(() => { setFolded(false); }, [b.stepText]);
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
@@ -556,7 +575,7 @@ function TutorCard({ y }: { y: Yeoul }) {
 
   return (
     <div data-part="tutor" style={{
-      position: 'relative', padding: '6px 22px 6px 10px', borderRadius: radius.md,
+      position: 'relative', padding: narrow ? '4px 20px 4px 9px' : '6px 22px 6px 10px', borderRadius: radius.md,
       background: C.slot, border: `1px solid ${C.line}`,
       animation: 'yPop .24s ease',
     }}>
@@ -568,7 +587,7 @@ function TutorCard({ y }: { y: Yeoul }) {
 
       {/* 글과 손잡이들을 한 흐름에 둔다. 글이 끝난 자리에 이어 붙어 줄을 더 쓰지 않는다. */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 6px' }}>
-        <span style={{ fontFamily: GAEGU, fontSize: 15, lineHeight: 1.22, color: C.ink }}>{b.tutText}</span>
+        <span style={{ fontFamily: GAEGU, fontSize: narrow ? 13.5 : 15, lineHeight: 1.22, color: C.ink }}>{b.tutText}</span>
         <span style={{ font: `9.5px ${MONO}`, color: C.faint2 }}>{b.stepText}</span>
         {b.hasPrev && (
           <button onClick={stop(b.prev)} data-tutor-prev style={{ ...pill, border: `1px solid ${C.lineHard}`, background: C.slot, color: C.sub2 }}>이전</button>
