@@ -88,6 +88,7 @@ v2 대비 바뀐 것 넷
   확정본과 인코딩이 달라져 '같은 그림인데 파일이 다른' 상태가 된다.
 """
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -125,6 +126,150 @@ SPECK_MAX_RATIO = 0.005
 ANCHORS_NAME = "anchors.json"
 # K·Hw 를 재는 칸 이름(1층). 2층 --keys 에는 이 이름이 없으므로 다른 데서 받아야 한다.
 BASE_KEY = "base"
+
+# ── 캐릭터 크기 정규화(--normalize) ─────────────────────────────────────────
+# ★무엇을 위한 것인가 — 모델이 2층 격자를 1층보다 몇 % 크게 그린다(실측: 여울 머리폭 +9%,
+#   소닉 +13%). 화면은 K 하나로만 그리므로(자세별 배율 금지가 설계 원칙) 2층 스프라이트가
+#   크면 화면에서도 그대로 크다. 여기서 **이미 만들어진 칸을 다시 리사이즈**해 층을 맞춘다.
+#   OpenAI 재호출이 아니라 픽셀 리사이즈 + 캔버스 고정만이다.
+#
+# ★자 = 머리 폭 Hw. 자세·층이 바뀌어도 거의 안 변한다(실루엣 높이는 sick·sleep 이 낮아 못 씀).
+#   `anchors.measure` 와 **같은 방식**(위 HEAD_BAND 구간의 최대 가로폭)으로 잰다.
+# ★기준(1층)은 그대로 두고 2층만 맞춘다 — 기준 격자에는 정규화 기준(1층 앵커)이 없으므로
+#   `normalize_grid` 가 스스로 건너뛴다(=no-op). 1층은 --normalize 를 켜도 한 픽셀도 안 변한다.
+# ★배율은 **격자 하나당 하나**다(칸마다 다른 배율을 주지 않는다 — 자세별 배율 금지 원칙).
+#   서 있는 칸들의 머리 폭 중앙값으로 이 격자의 머리 폭을 잡는다.
+# ★발끝선 — 리사이즈는 각 칸의 **발끝(본체 최하단) 기준**으로 돌려 자체 리사이즈로는 발이 안 밀리게
+#   하고, 그런 다음 발끝을 **1층 발끝선**에 맞춰 층 사이 발끝을 일치시킨다. 화면의 바닥선이
+#   층마다 어긋나던 것(실측 여울 22px)을 여기서 없앤다.
+HEAD_BAND = anchors.HEAD_BAND     # 머리 폭을 재는 위 구간(실루엣 높이의 22%) — 앵커와 같은 값
+NORM_SCALE_EPS = 0.002            # 배율이 이만큼 안이면 리사이즈 자체를 건너뛴다(반올림 오염 방지)
+
+
+def _largest_blob(mask):
+    """가장 큰 덩어리만 True 로. 티끌·유령이 bbox·머리폭을 오염시키지 않게 한다
+    (정규화는 티끌 제거 **전**에 도므로 본체로 한정해서 잰다)."""
+    lab, n = ndimage.label(mask)
+    if n <= 1:
+        return mask
+    sizes = ndimage.sum(mask, lab, range(1, n + 1))
+    return lab == int(np.argmax(sizes)) + 1
+
+
+def measure_body(img: Image.Image):
+    """정규화용 실측 — 본체(가장 큰 덩어리)의 머리폭·발끝 y·가로중심·높이. 본체가 없으면 None.
+
+    ★`anchors.measure` 와 같은 HEAD_BAND 로 머리폭을 재되, 티끌 제거 전이라 **본체로 한정**한다."""
+    m = _largest_blob(np.array(img.convert("RGBA").split()[3]) > ALPHA_ON)
+    ys, xs = np.where(m)
+    if not len(xs):
+        return None
+    x0, x1 = int(xs.min()), int(xs.max())
+    y0, y1 = int(ys.min()), int(ys.max())
+    h = y1 - y0 + 1
+    hw = 0
+    for r in m[y0:y0 + max(1, int(h * HEAD_BAND))]:
+        x = np.where(r)[0]
+        if len(x):
+            hw = max(hw, int(x.max() - x.min() + 1))
+    return {"hw": hw, "foot_y": y1 + 1, "cx": (x0 + x1) / 2.0, "h": h,
+            "x0": x0, "x1": x1, "y0": y0}
+
+
+def read_norm_ref(path):
+    """정규화 기준(1층)을 앵커 파일에서 읽는다 — (Hw_target, foot_y_target).
+
+    ★새 필드를 만들지 않는다 — 이미 있는 `Hw` 와 자세별 `feet.y` 만 읽는다(스키마 불변).
+      발끝선은 한 격자 안에서 자세가 달라도 거의 같으므로(실측 288~289) 자세들의 중앙값을 쓴다.
+    """
+    d = json.loads(Path(path).read_text(encoding="utf-8"))
+    if "Hw" not in d:
+        raise anchors.AnchorError(f"정규화 기준에 Hw 가 없습니다: {path}")
+    foot_ys = [p["feet"]["y"] for p in (d.get("poses") or {}).values()
+               if p and isinstance(p.get("feet"), dict) and "y" in p["feet"]]
+    foot_y = float(np.median(foot_ys)) if foot_ys else None
+    return float(d["Hw"]), foot_y
+
+
+def _place_scaled(img: Image.Image, scale: float, cx: float, foot_y: float, dst_foot_y: float):
+    """칸 하나를 `scale` 로 리사이즈해 **같은 크기 캔버스**에 다시 앉힌다.
+    가로중심 cx 는 제자리, 발끝은 dst_foot_y 로. (리사이즈 중심이 (cx, foot_y) 라 자체로는 발이 안 밀린다.)"""
+    W, H = img.size
+    rw, rh = max(1, round(W * scale)), max(1, round(H * scale))
+    resized = img.resize((rw, rh), Image.LANCZOS)
+    off_x = round(cx - cx * scale)
+    off_y = round(dst_foot_y - foot_y * scale)
+    out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    out.paste(resized, (off_x, off_y))
+    # 캔버스 밖으로 나간 **본체 픽셀**이 있으면(클리핑) 조용히 넘기지 않는다.
+    #   ★리사이즈 사각형이 아니라 **알파 내용의 bbox**로만 본다 — 투명 여백이 경계를 넘는 것은
+    #     클리핑이 아니다(안 그러면 온 칸이 거짓 경고를 낸다).
+    clipped = []
+    ra = np.array(resized.split()[3]) > ALPHA_ON
+    ys, xs = np.where(ra)
+    if len(xs):
+        if off_x + int(xs.min()) < 0:
+            clipped.append("좌")
+        if off_y + int(ys.min()) < 0:
+            clipped.append("위")
+        if off_x + int(xs.max()) > W - 1:
+            clipped.append("우")
+        if off_y + int(ys.max()) > H - 1:
+            clipped.append("아래")
+    return out, clipped
+
+
+def normalize_grid(frames_dir: Path, keys, postures, ref_path) -> bool:
+    """이 격자의 16칸을 1층 기준에 맞춰 리사이즈한다(자리에서 fNN.png 를 덮어쓴다).
+
+    돌려주는 값 = 실제로 손댔는가(True/False). 기준이 없으면(=기준 격자·1층) False.
+    """
+    if ref_path is None or not Path(ref_path).exists():
+        print("[정규화] 기준(1층 앵커)이 없어 이 격자는 건너뜁니다 — 이 격자가 기준입니다(1층).")
+        return False
+    hw_target, foot_y_target = read_norm_ref(ref_path)
+
+    n = len(keys) * 2
+    frame_paths = [frames_dir / f"f{i:02d}.png" for i in range(1, n + 1)]
+    imgs = [Image.open(p).convert("RGBA") for p in frame_paths]
+
+    # ── 이 격자의 머리 폭 = **서 있는 칸들**의 머리폭 중앙값(자세·층 불변인 자).
+    hws = []
+    for k in range(len(keys)):
+        if postures.get(state8_v5.KEYS[k]) == "standing":
+            mb = measure_body(imgs[2 * k])       # 각 자세의 f1(첫 프레임)로 잰다
+            if mb:
+                hws.append(mb["hw"])
+    if not hws:                                  # 서 있는 칸이 없으면 전 칸으로 폴백
+        for k in range(len(keys)):
+            mb = measure_body(imgs[2 * k])
+            if mb:
+                hws.append(mb["hw"])
+    if not hws:
+        raise anchors.AnchorError("정규화 — 머리폭을 잴 본체가 한 칸도 없습니다")
+    hw_current = float(np.median(hws))
+    scale = hw_target / hw_current
+
+    print(f"[정규화] 기준 Hw={hw_target:.1f} · 이 격자 머리폭(서있는 칸 중앙값)={hw_current:.1f} "
+          f"→ 배율 {scale:.4f} · 발끝선 {('%.0f' % foot_y_target) if foot_y_target is not None else '유지'}")
+    if abs(scale - 1.0) < NORM_SCALE_EPS and foot_y_target is None:
+        print("[정규화] 배율이 1 에 가깝고 발끝 기준도 없어 손대지 않습니다(no-op).")
+        return False
+
+    warned = []
+    for idx, img in enumerate(imgs):
+        mb = measure_body(img)
+        if not mb:
+            continue
+        dst = foot_y_target if foot_y_target is not None else float(mb["foot_y"])
+        out, clipped = _place_scaled(img, scale, mb["cx"], mb["foot_y"], dst)
+        out.save(frame_paths[idx])
+        if clipped:
+            warned.append(f"f{idx + 1:02d}({','.join(clipped)})")
+    if warned:
+        print(f"    ⚠️ 정규화 클리핑 — 캔버스를 벗어난 칸: {', '.join(warned)} "
+              f"(배율 {scale:.3f} 로 커졌거나 발끝선이 멀다는 뜻. 확인 필요)")
+    return True
 
 
 def run_gate(grid: Path) -> int:
@@ -275,7 +420,8 @@ def find_base_scale(out: Path, keys, base_k, base_hw):
 
 
 def build(grid_path: str, out_dir: str, keys, postures,
-          want_anchors: bool = True, base_k=None, base_hw=None) -> list:
+          want_anchors: bool = True, base_k=None, base_hw=None,
+          normalize: bool = False, base_anchors=None) -> list:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -288,6 +434,16 @@ def build(grid_path: str, out_dir: str, keys, postures,
     state8_v5.main(str(work_grid), str(work), postures=postures)
 
     frames = work / "frames"
+
+    # ── 크기 정규화(--normalize) — 티끌 제거·앵커 측정 **전에** 칸을 다시 리사이즈한다.
+    #   기준(1층)은 `--base-anchors` 또는 출력 폴더의 기존 anchors.json(자바가 1층을 먼저 돌려 둔 것).
+    #   기준이 없으면 이 격자가 곧 기준이므로 normalize_grid 가 스스로 건너뛴다(1층 불변).
+    normalized = False
+    if normalize:
+        ref = base_anchors if base_anchors else (
+            str(out / ANCHORS_NAME) if (out / ANCHORS_NAME).exists() else None)
+        normalized = normalize_grid(frames, keys, postures, ref)
+
     cut = work / "cut"
     made = []
     # 앵커는 **서비스에 나가는 바로 그 첫 장**에서 잰다(티끌을 지운 뒤의 a1).
@@ -307,7 +463,10 @@ def build(grid_path: str, out_dir: str, keys, postures,
         b1 = drop_floor_specks(b0, f"{name} f{i * 2 + 2:02d}")
 
         dst = out / f"{name}.webp"
-        src = cut / f"{state8_v5.KEYS[i]}.webp" if i < len(state8_v5.KEYS) else None
+        # ★정규화를 한 격자는 state8_v5 의 cut/*.webp 가 **정규화 전** 그림이라 지름길을 못 쓴다.
+        #   (frames 만 다시 리사이즈했고 cut 은 그대로다.)
+        src = (cut / f"{state8_v5.KEYS[i]}.webp"
+               if (not normalized and i < len(state8_v5.KEYS)) else None)
         if a1 is a0 and b1 is b0 and src is not None and src.exists():
             # 지운 것이 없으면 state8_v5 가 만든 파일을 그대로 쓴다 — 다시 인코딩하지 않는다.
             # 확정본과 **바이트까지** 같아야 "확정된 그 그림" 이라고 말할 수 있다.
@@ -345,6 +504,10 @@ def main(argv) -> int:
     ap.add_argument("--base-hw", type=float, help="base 머리 폭(px). --base-k 와 짝으로")
     ap.add_argument("--no-anchors", action="store_true",
                     help="anchors.json 을 내지 않는다(그림만 다시 굽는 재처리용)")
+    ap.add_argument("--normalize", action="store_true",
+                    help="크기 정규화 — 모델이 2층을 1층보다 크게 그리는 것을 머리폭 기준으로 맞춘다. "
+                         "기준(1층)은 --base-anchors 또는 출력 폴더의 기존 anchors.json. "
+                         "기준이 없으면 이 격자가 기준이라 손대지 않는다(1층 불변).")
     a = ap.parse_args(argv)
 
     grid = Path(a.grid)
@@ -366,7 +529,8 @@ def main(argv) -> int:
 
     try:
         paths = build(a.grid, a.out, keys, pmap,
-                      want_anchors=not a.no_anchors, base_k=base_k, base_hw=base_hw)
+                      want_anchors=not a.no_anchors, base_k=base_k, base_hw=base_hw,
+                      normalize=a.normalize, base_anchors=a.base_anchors)
     except anchors.AnchorError as e:
         # 앵커가 원인일 때는 그림 탓으로 보이지 않게 말머리를 붙인다.
         print(f"✗ 앵커: {e}", file=sys.stderr)
