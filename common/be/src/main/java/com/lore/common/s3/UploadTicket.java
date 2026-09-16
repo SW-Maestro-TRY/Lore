@@ -39,9 +39,15 @@ public class UploadTicket {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 발급받은 사람. users 를 참조하지만 외래키는 걸지 않는다(공통 모듈이 계정에 강하게 묶이지 않게). */
-    @Column(name = "user_id", nullable = false)
+    /** 발급받은 사람. users 를 참조하지만 외래키는 걸지 않는다(공통 모듈이 계정에 강하게 묶이지 않게).
+     *  게스트가 받았으면 이 값은 비고 {@link #guestKey} 가 대신 찬다. */
+    @Column(name = "user_id")
     private Long userId;
+
+    /** 로그인 안 한 사람이 받았을 때만 찬다(IP 해시 등 — 발급한 쪽이 정한다).
+     *  {@link #userId} 와 정확히 하나만 찬다(DB 의 ck_upload_ticket_owner 가 강제한다). */
+    @Column(name = "guest_key", length = 64)
+    private String guestKey;
 
     @Column(name = "s3_key", nullable = false, length = 300)
     private String s3Key;
@@ -73,13 +79,30 @@ public class UploadTicket {
         return t;
     }
 
+    /** 로그인 안 한 사람에게 발급할 때. {@code guestKey} 는 발급한 쪽(GuestGate 등)이 정한다. */
+    public static UploadTicket issueForGuest(String guestKey, String s3Key, String domain,
+                                             String contentType, Instant now) {
+        UploadTicket t = new UploadTicket();
+        t.guestKey = guestKey;
+        t.s3Key = s3Key;
+        t.domain = domain;
+        t.contentType = contentType;
+        t.issuedAt = now;
+        return t;
+    }
+
     /** 한 번 쓰면 다시 못 쓴다. 같은 그림으로 펫을 여러 마리 만드는 것을 막는다. */
     public void markUsed(Instant now) {
         this.usedAt = now;
     }
 
     public boolean isOwnedBy(Long userId) {
-        return this.userId.equals(userId);
+        return userId != null && userId.equals(this.userId);
+    }
+
+    /** 게스트 티켓인지, 그리고 그 게스트가 맞는지. */
+    public boolean isOwnedByGuest(String guestKey) {
+        return guestKey != null && guestKey.equals(this.guestKey);
     }
 
     public boolean isUsed() {

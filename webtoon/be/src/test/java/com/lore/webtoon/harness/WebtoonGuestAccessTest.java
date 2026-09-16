@@ -22,6 +22,7 @@ import com.lore.webtoon.work.MyWebtoonService;
 import com.lore.webtoon.work.WorkLedger;
 import com.lore.common.auth.jwt.JwtProvider;
 import com.lore.common.config.WebSecurityConfig;
+import com.lore.common.s3.S3Service;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,6 +86,7 @@ class WebtoonGuestAccessTest {
     @MockitoBean WorkLedger workLedger;
     @MockitoBean JwtProvider jwtProvider;
     @MockitoBean MyWebtoonService myWebtoonService;
+    @MockitoBean S3Service s3Service;
 
     @Test
     @DisplayName("「내」 것을 다루는 주소는 로그인이 있어야 한다")
