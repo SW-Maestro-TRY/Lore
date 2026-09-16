@@ -202,6 +202,15 @@ export interface YeoulState {
    * 창 자체는 공통 부품(`@common/auth/AuthModal`)이고 여기서는 여닫기만 든다.
    */
   authOpen: boolean; authTab: 'login' | 'signup';
+  /**
+   * **개발용 후기 미리보기.** 이동 창에서 켜면 방이 `FeedbackSheet` 을 mock 상태로 강제로 띄운다.
+   *
+   * ★ 왜 `dev`(DevState)가 아니라 여기인가 — `dev` 는 무대에 얹는 **장면 덮어쓰기**(자세·게이지·소품)라
+   *   `applyDev` 로 `es` 에 녹아든다. 후기 판은 장면이 아니라 그 위에 뜨는 **UI 오버레이**라 결이 다르다.
+   *   `sampleMode` 처럼 최상위 한 칸으로 두어 방이 곧장 읽게 한다(서버·목 어느 쪽이든 그대로 얹힌다).
+   * ★ 새로고침하면 꺼진다(로컬 검증용). 공개 도메인에선 이동 창이 없어 켜질 길이 없다.
+   */
+  fbPreview: boolean;
 }
 
 /**
@@ -233,7 +242,7 @@ const INITIAL: YeoulState = {
   sampleMode: false, hatch: 0, snapshot: null,
   tutor: 0, tutorOn: false, cracking: false, eggMsg: '', nameErr: false,
   hintI: 0, leaveOff: false, sleepCover: false,
-  authOpen: false, authTab: 'signup',
+  authOpen: false, authTab: 'signup', fbPreview: false,
 };
 
 // ── 작은 계산들 ──────────────────────────────────────────────────────────
@@ -1372,6 +1381,8 @@ export function useYeoul(live?: Live) {
    * 그에 맞는 소품(대개 "그림 안에 있으니 소품 없음")이 따라온다.
    */
   const toggleFloor2 = useCallback(() => setS((v) => ({ ...v, dev: { ...v.dev, floor2: !v.dev.floor2 } })), []);
+  /** 개발용 — 후기 판(FeedbackSheet)을 mock 상태로 강제로 띄운다/끈다. 실서버는 안 탄다. */
+  const toggleFbPreview = useCallback(() => setS((v) => ({ ...v, fbPreview: !v.fbPreview })), []);
   /** 개발용 — 튜토리얼 완주 축하 판을 다시 띄운다. */
   const showTutorEnd = useCallback(() => setS((v) => finishTutor({ ...v, tutorDone: false })), []);
   const openPlay = useCallback((tab: 'talk' | 'guess' | 'run') => () => patch({ sheet: 'play', playTab: tab, toast: '' }), [patch]);
@@ -1840,6 +1851,8 @@ export function useYeoul(live?: Live) {
       posePick: s.dev.pose, sitPick: s.dev.sit,
       /** 개발용 — 2층을 다 연 것으로 치고 있는가. 이동 창의 스위치가 읽는다. */
       floor2: s.dev.floor2,
+      /** 개발용 — 후기 판을 mock 으로 강제로 띄우는 중인가. 방과 이동 창이 함께 읽는다. */
+      fbPreview: s.fbPreview,
       /** 개발용 덮어쓰기 한 벌 그대로. 이동 창이 불(켜짐 표시)을 이 값으로만 판단한다. */
       dev: s.dev,
       /**
@@ -2189,7 +2202,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
     backToSample: () => patch({ screen: 'room' }),
   }), [
@@ -2198,7 +2211,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
   ]);
 
