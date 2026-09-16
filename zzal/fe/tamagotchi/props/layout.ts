@@ -261,7 +261,9 @@ export function layoutRoomProp(spec: PropSpec, stage: PropStage, st: StageGeom, 
   //   같은 중심에 서서 겹친 것이다. 그래서 규격이 정한 옆 오프셋을 되살려 소품을 발 옆 바닥에 놓는다.
   //   (예전 "완전히 왼쪽" 쏠림은 오프셋이 과했던 것이라, 값은 규격에서 조율한다 — 여기서는 그 값을 따를 뿐.)
   //   세로 오프셋(`off.dy`)은 발끝선 미세조정이라 그대로 둔다. 자세·평행이동과 무관해 여전히 결정적이다.
-  const y = st.height - footlineFromBottom(st.height) + off.dy;
+  // ★ 단계별 하강(`stage.sinkK`) — 넓고 큰 단계(3~4단 똥)를 발끝선 아래 앞쪽 바닥으로 더 내려
+  //   캐릭터 발/신발을 안 덮게 한다(2026-09-16). K 비율이라 아이가 커지면 같이 커진다. 없으면 0.
+  const y = st.height - footlineFromBottom(st.height) + off.dy + (stage.sinkK ?? 0) * u.K;
 
   // ★ 무대 밖으로 잘리지 않게 무대 안으로 물린다(2026-09-16). 소품이 커지면서 넓은 것(3~4단 똥·매트)이
   //   좁은 화면 가장자리에서 잘렸다. 무대보다 좁으면 가장자리 안으로, 무대보다 넓으면 가운데에 둔다.

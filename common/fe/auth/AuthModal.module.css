@@ -149,8 +149,14 @@
   transition: border-color 150ms ease;
 }
 
-.input:focus {
-  border-color: var(--accent-webtoon);
+/* 포커스 표시는 브라우저 기본 파랑/보라 링을 끄고, 웜 크림·브라운 팔레트에 맞춰 다시 그린다
+ * (zzal 의 따뜻한 톤에 파란 링이 튀었다). border 는 진한 벽돌색, 그 밖으로 옅은 웜 링을 둘러
+ * 접근성상 포커스가 또렷하게 보이게 한다. */
+.input:focus,
+.input:focus-visible {
+  outline: none;
+  border-color: var(--accent-zzal-deep);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-zzal) 30%, transparent);
 }
 
 /* 크롬 자동완성은 입력 칸을 제 마음대로 연노란색으로 칠한다. 다크 테마에서는
@@ -194,6 +200,9 @@
   font-size: 13.5px;
   color: var(--text-muted);
   cursor: pointer;
+  /* 한글은 어절(띄어쓰기) 단위로만 줄바꿈한다 — 안 그러면 "…동의합니다"의 "다" 한 글자만
+   * 다음 줄로 떨어진다(2026-09-16). 어절이 통째로 내려가 깨져 보이지 않는다. */
+  word-break: keep-all;
   /* 줄이 길어져도 "보기" 링크를 밀어내지 않게. */
   min-width: 0;
   /* 체크박스 네모(16px)만으로는 손가락으로 누르기 어렵다. 라벨 전체가 체크를
@@ -290,6 +299,12 @@
   font-weight: 700;
   cursor: pointer;
   transition: opacity 150ms ease;
+  /* ★ 폼이 안에서 굴러도(짧은 화면·가입 탭) 주 버튼은 **늘 보이게** 스크롤포트 바닥에 붙인다
+   * (2026-09-16 — 780·740 높이에서 버튼이 폼 밑단에 가려 스크롤을 모르면 못 찾았다). 위로 뻗는
+   * box-shadow 로 카드색 띠를 깔아, 굴러 지나가는 입력칸이 버튼 뒤로 비쳐 보이지 않게 막는다. */
+  position: sticky;
+  bottom: 0;
+  box-shadow: 0 -14px 0 var(--card);
 }
 
 .submit:disabled {

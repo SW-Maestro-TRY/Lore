@@ -1644,14 +1644,19 @@ export function useYeoul(live?: Live) {
     };
 
     // ── 무대 ──
+    // ★ 아픔은 **벽을 갈아엎지 않는다**(2026-09-16). 예전엔 벽을 단색 회색(#EDEAE4)으로 덮고
+    //   창문 해·달까지 꺼서, 방이 아니라 "화면이 깨진 회색 슬래브"로 보였다. 이제 벽·바닥·창문은
+    //   평소 방 그대로 두고, **채도만** 낮춰(아래 무대의 `st.sick` 오버레이가 backdrop 로 탈색)
+    //   앓는 방으로 읽히게 한다. 창문 해/달도 낮/밤(es.night)을 따라 그대로 뜬다.
     const st: Stage = {
-      wall: mode === 'sleep' ? '#DDE3F0' : mode === 'sick' ? '#EDEAE4' : wl.wall,
+      wall: mode === 'sleep' ? '#DDE3F0' : wl.wall,
       floor: mode === 'sleep' ? '#C9D1E3' : wl.floor,
       frame: C.paper,
-      sky: mode === 'day' ? '#DCEBF5' : mode === 'night' || mode === 'sleep' ? '#33406B' : '#E4E7EC',
+      sky: mode === 'day' || (mode === 'sick' && !es.night) ? '#DCEBF5'
+        : mode === 'night' || mode === 'sleep' || (mode === 'sick' && es.night) ? '#33406B' : '#E4E7EC',
       pattern: 'repeating-linear-gradient(90deg,rgba(74,64,56,.035) 0 1px,transparent 1px 22px)',
-      moon: mode === 'night' || mode === 'sleep',
-      sun: mode === 'day',
+      moon: mode === 'night' || mode === 'sleep' || (mode === 'sick' && es.night),
+      sun: mode === 'day' || (mode === 'sick' && !es.night),
       curtain: mode === 'sleep',
       sick: mode === 'sick',
       charFilter: mode === 'sleep' ? 'saturate(.65) brightness(.9)' : mode === 'sick' ? 'saturate(.5)' : 'none',
@@ -2162,7 +2167,8 @@ export function useYeoul(live?: Live) {
         })),
         extraVal: s.texts.extra ?? '',
         onExtra: onGroupText('extra'),
-        bornName: `${s.petName} · 1일째`,
+        // 이름이 아직 없으면 매달린 가운뎃점("· 1일째")이 남지 않게 점째 뺀다.
+        bornName: s.petName ? `${s.petName} · 1일째` : '1일째',
         bornTraits: [...(s.picks.persona ?? []), ...(s.picks.tone ?? [])].join(' · ') || '성격은 지내면서 알게 돼요',
       },
       statusText,

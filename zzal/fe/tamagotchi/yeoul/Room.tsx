@@ -44,6 +44,8 @@ const NARROW_Q = '(max-width: 640px)';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
+  // 좁은 폰(SE)에서 말풍선이 떴을 때만, 머리 위 공간을 벌기 위해 아이를 소폭 낮춘다(아래 SIL).
+  const narrow = useIsWide(NARROW_Q);
   // 무엇을 그릴지는 `v.spriteKey`(useYeoul)가, 누구를 그릴지는 `spriteUrl`(useHatch)이 정한다.
   const live = useLive();
   // 여울 샘플 방에서는 여울이, 진짜 방에서는 내 아이만 나온다.
@@ -165,14 +167,20 @@ export default function Room({ y }: { y: Yeoul }) {
   const charBoxRef = useRef<HTMLDivElement>(null);
   const byK = anchors.source === 'server' || v.sample.show;
 
+  // ★ 말풍선 공간 예약(2026-09-16) — SE(좁은 폰)에서 짧은 무대는 머리끝이 무대 위끝 바로 아래에
+  //   서서, 머리 위에 말풍선 한 줄도 안 들어가 윗부분이 잘렸다(실측 SE: 머리 위 44px뿐). **말풍선이
+  //   떴을 때만** 남은 높이에서 이만큼을 더 빼 아이를 낮춰, 서브헤더~머리 사이에 말풍선(2~3줄)이
+  //   전부 들어오게 한다. 메시지 가독이 최우선이라 아이를 소폭 양보한다. 넓은/긴 화면은 아래
+  //   `max(60%,150px)` 가 이겨 예약이 무시되므로 아이가 안 줄어든다(짧은 화면에서만 적용).
+  const BUBBLE_RESERVE = narrow && v.bub.show ? 76 : 0;
   // 화면에서의 실루엣 키. **무대의 약 60%** 를 목표로 하되, 머리끝이 무대 위로 안 넘게 남은 높이로 깎는다.
   //   `SIL` 은 가장 큰 자세의 실루엣이 화면에서 가질 높이다(무대 60%, 하한 150px, 머리 공간으로 상한).
   //   K_SCREEN = SIL ÷ (가장 큰 실루엣÷K) — 이렇게 뒤집어야 어떤 자세든 무대 밖으로 안 나간다.
-  const SIL = `min(calc(100% - ${LIFT} - ${HEAD_SAFE}px), max(60%, 150px))`;
+  const SIL = `min(calc(100% - ${LIFT} - ${HEAD_SAFE}px - ${BUBBLE_RESERVE}px), max(60%, 150px))`;
   const K_SCREEN = `calc(${SIL} / ${fit.tallestPerK.toFixed(4)})`;
   const CHAR_H = byK
     ? `calc(${K_SCREEN} * ${fit.boxHPerK.toFixed(4)})`
-    : `calc(min(calc(100% - ${LIFT} - ${HEAD_SAFE}px), max(64%, 160px)) / ${(1 - footPad).toFixed(4)})`;
+    : `calc(min(calc(100% - ${LIFT} - ${HEAD_SAFE}px - ${BUBBLE_RESERVE}px), max(64%, 160px)) / ${(1 - footPad).toFixed(4)})`;
   // 발끝이 발끝선(`LIFT`)에 오게 상자를 내린다. 앵커가 있으면 **그 자세의 발끝**을, 없으면 잰 여백을 쓴다.
   const BELOW_FOOT = byK ? fit.belowFoot : footPad;
   const CHAR_ASPECT = byK ? `${fit.aspect.toFixed(6)}` : '313/350';
@@ -266,6 +274,8 @@ export default function Room({ y }: { y: Yeoul }) {
             position: 'absolute', left: 0, right: 0,
             bottom: `calc(${LIFT} - ${CHAR_H} * ${BELOW_FOOT.toFixed(4)})`,
             height: CHAR_H, display: 'flex', justifyContent: 'center', zIndex: 2,
+            // 말풍선이 뜰 때 아이가 소폭 낮아지는데(BUBBLE_RESERVE), 툭 튀지 않게 부드럽게 잇는다.
+            transition: 'height .28s ease, bottom .28s ease',
             animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
           }}
         >
@@ -335,7 +345,10 @@ export default function Room({ y }: { y: Yeoul }) {
             </div>
           </>
         )}
-        {v.st.sick && <div style={{ position: 'absolute', inset: 0, background: 'rgba(130,132,138,.2)', animation: 'yFadeIn .4s ease' }} />}
+        {/* 아픔 — 벽·창문은 그대로 두고 **채도만** 낮춘다(2026-09-16). backdrop 로 뒤(벽·무늬·창문·바닥)를
+            탈색하되 아이(zIndex:2)는 제 필터(saturate .5)를 그대로 쓴다. 예전의 단색 회색 슬래브(질감·창문이
+            사라져 "화면 깨짐"으로 읽힘)를 걷어냈다. backdrop 을 못 그리는 곳에서도 옅은 냉기 톤은 남는다. */}
+        {v.st.sick && <div style={{ position: 'absolute', inset: 0, backdropFilter: 'saturate(.45)', WebkitBackdropFilter: 'saturate(.45)', background: 'rgba(140,144,156,.12)', animation: 'yFadeIn .4s ease', pointerEvents: 'none' }} />}
 
         {v.bub.show && (
           <div data-part="bubble" style={{

@@ -210,10 +210,11 @@ export const PROP_SPECS: Record<string, PropSpec> = {
     outside: false, facing: "follow", z: "above_char", minPx: 40, status: "confirmed",
     offset: { dx: 0.22, dy: 0.0, unit: "K" },
     stages: [
+      // 3~4단계는 넓어 발끝선에 맞추면 발/정강이를 덮는다 → 그 단계만 앞쪽 바닥으로 더 내린다(sinkK).
       { n: 1, key: "trash_1", ver: 1, file: "trash_1.v1.webp", ratio: 0.301, srcW: 178, srcH: 247 },
       { n: 2, key: "trash_2", ver: 1, file: "trash_2.v1.webp", ratio: 0.735, srcW: 435, srcH: 315 },
-      { n: 3, key: "trash_3", ver: 1, file: "trash_3.v1.webp", ratio: 0.9408, srcW: 557, srcH: 362 },
-      { n: 4, key: "trash_4", ver: 1, file: "trash_4.v1.webp", ratio: 1.169, srcW: 692, srcH: 273 },
+      { n: 3, key: "trash_3", ver: 1, file: "trash_3.v1.webp", ratio: 0.9408, srcW: 557, srcH: 362, sinkK: 0.60 },
+      { n: 4, key: "trash_4", ver: 1, file: "trash_4.v1.webp", ratio: 1.169, srcW: 692, srcH: 273, sinkK: 0.45 },
     ],
   },
   /** 아이 밑에 깔린다 — 캐릭터보다 먼저 그린다. 아랫변이 발끝선보다 K×0.02 아래. */
