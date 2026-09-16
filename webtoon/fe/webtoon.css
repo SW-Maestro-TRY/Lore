@@ -2826,14 +2826,16 @@
 .webtoon-page .nh-card-actions { display: flex; gap: 8px; margin-top: 10px; }
 .webtoon-page .nh-card-actions .btn { flex: 0 0 auto; }
 
-/* 고른 이야기를 확인·수정하는 자리 — nh-retry-note 와 같은 모양을 쓴다. */
+/* 고른 이야기를 확인·수정하는 자리 — nh-retry-note 와 같은 모양을 쓴다.
+   본문 전체를 여기서 다시 읽고 고치는 자리라, 다른 짧은 메모칸(nh-retry-note)
+   보다 훨씬 크게 잡는다 — 몇 줄만 보이면 고치기 전에 내용부터 다 못 본다. */
 .webtoon-page .nh-story-edit {
-  margin-top: 10px; padding: 12px; border: 1px dashed var(--line-2, #ccc);
+  margin-top: 10px; padding: 14px; border: 1px dashed var(--line-2, #ccc);
   border-radius: 8px; background: var(--ink-2, #fafafa);
 }
 .webtoon-page .nh-story-edit textarea {
-  width: 100%; min-height: 160px; padding: 10px 12px; border: 1px solid #ccc;
-  border-radius: 6px; font: inherit; font-size: 14px; line-height: 1.6;
+  width: 100%; min-height: 320px; padding: 12px 14px; border: 1px solid #ccc;
+  border-radius: 6px; font: inherit; font-size: 15px; line-height: 1.7;
   box-sizing: border-box; resize: vertical;
 }
 
@@ -2936,6 +2938,11 @@
   .webtoon-page .nh-card { padding: 12px; }
   .webtoon-page .nh-card h3 { font-size: 14px; }
   .webtoon-page .nh-approval { padding: 12px; }
+  .webtoon-page .nh-story-edit textarea { min-height: 240px; }
+  /* 「← 다른 이야기 보기」·「이대로 진행하기」를 한 줄에 나란히 두면
+     글자가 잘린다(320px 폭 실측) — 세로로 쌓는다. */
+  .webtoon-page .nh-approval-actions { flex-direction: column; }
+  .webtoon-page .nh-approval-actions .btn { width: 100%; }
 }
 
 /* ---- 시트를 눌러서 크게 보기 -------------------------------------------- *
