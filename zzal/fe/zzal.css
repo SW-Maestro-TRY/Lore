@@ -74,7 +74,7 @@
 }
 
 @media (max-width: 768px) {
-  .zt-banner-wrap { padding: 18px 14px 4px; }
+  .zt-banner-wrap { padding: 18px 16px 4px; }
   .zt-banner-frame { padding: 8px 8px 6px; }
   .zt-hero-wrap { padding: 34px 20px 46px; }
   .zt-hero-grid { grid-template-columns: 1fr; gap: 26px; }
