@@ -28,7 +28,7 @@ import { spriteUrl, useFootPad, useLive, yeoulSpriteUrl } from './useHatch';
 import { useIsWide } from '../useIsWide';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
-import { charFit, HEAD_SAFE } from '../props/layout';
+import { charFit, HEAD_SAFE, FOOT_FLOOR, FOOT_FLOOR_SHORT, NARROW_Q, SHORT_Q } from '../props/layout';
 import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
 import {
   SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose, stageAt, stagePlanOf,
@@ -39,13 +39,17 @@ import { confirmedSpec } from '../props/catalog';
 /** 걷힘 바퀴에만 잠깐 생기는 줄의 이름. 표에 없는 이름이라 다른 줄과 안 부딪힌다. */
 const SWEEP_ROW_ID = '__sweep__';
 
-/** 좁은 폰(SE 등) — 머리 띠·인사 카드를 콤팩트하게 줄여 무대 세로를 아이에게 돌려주는 기준. */
-const NARROW_Q = '(max-width: 640px)';
+// `NARROW_Q`(좁은 폰)·`SHORT_Q`(짧은 화면)는 `../props/layout` 에서 가져온다 — 소품 층과 **같은 기준**이라야
+// 캐릭터 발끝선과 소품이 어긋나지 않는다. 좁고 짧은 화면(SE 등)만 `compact` 로 아이를 키우고 팝오버를 줄인다.
 
 export default function Room({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
   // 좁은 폰(SE)에서 말풍선이 떴을 때만, 머리 위 공간을 벌기 위해 아이를 소폭 낮춘다(아래 SIL).
   const narrow = useIsWide(NARROW_Q);
+  // ★ 좁고 **짧은** 화면(SE 667 등)만 — 팝오버를 콤팩트하게 줄이고 발끝선 예약(LIFT 하한)을 낮춰 아이를 키운다.
+  //   폭·높이 둘 다 걸어야 390x844(긴 폰)·1280x720(넓은 창)이 안 딸려 온다(그 화면들은 이미 마음에 드심).
+  const short = useIsWide(SHORT_Q);
+  const compact = narrow && short;
   // 무엇을 그릴지는 `v.spriteKey`(useYeoul)가, 누구를 그릴지는 `spriteUrl`(useHatch)이 정한다.
   const live = useLive();
   // 여울 샘플 방에서는 여울이, 진짜 방에서는 내 아이만 나온다.
@@ -142,16 +146,19 @@ export default function Room({ y }: { y: Yeoul }) {
   //
   // ★ 발끝(`LIFT`) — 무대 아래에서 발끝까지. 무대가 커지면 **발끝도 30% 지점까지 함께 올라와**
   //   큰·긴 화면에서 발밑에 죽은 바닥이 넓게 남지 않는다(2026-09-16 art-direction: 방을 균형 있게).
-  //   하한 220px 은 팝오버(최대 `POP_LIFT`=204px)가 발을 안 덮게(여유 16px), 상한 330px 은 아주 긴
+  //   하한(보통 220px)은 팝오버가 발을 안 덮게(여유 16px), 상한 330px 은 아주 긴
   //   화면에서 발이 너무 높이 뜨지 않게 잡는다. 화면 높이로만 정해지는 값이라 1)을 깨지 않는다.
-  //   ★ `props/layout.ts` 의 `footlineFromBottom(stageH)` 과 **똑같은 식**이라야 똥·바닥 소품이 발에 붙는다.
+  //   ★ 짧은 화면(`compact`)은 팝오버가 콤팩트해져(아래 `Popover compact`) 더 낮은 자리에서도 발을 안
+  //     덮으므로, 하한을 `FOOT_FLOOR_SHORT`(178px)로 낮춰 짧은 무대에서 아이에게 자리를 돌려준다.
+  //   ★ `props/layout.ts` 의 `footlineFromBottom(stageH, floor)` 과 **똑같은 식·같은 하한**이라야 똥·바닥
+  //     소품이 발에 붙는다(소품 층은 `StageGeom.footFloor` 로 같은 하한을 받는다).
   // ★ 키(`CHAR_H`) — 이제 규격 고정값(296px)이 아니라 **무대의 약 60%(실루엣 기준)** 를 목표로 커졌다
   //   줄었다 한다(2026-09-16: 큰 화면에서 아이가 너무 작아 보였다). 다만 머리끝이 무대 위로 넘지 않게
   //   남은 높이(`100% - LIFT - HEAD_SAFE`)로 깎는다. 짧은 화면은 이 깎기가 걸려 60%보다 작아진다.
   //   깎는 기준을 **가장 큰 자세**로 잡는 이유 — 자세마다 깎으면 자세를 바꿀 때 아이가 출렁여
   //   1)이 깨진다. `HEAD_SAFE` 는 반올림에 먹히지 않도록 두는 최소 여유다.
   //   ★ 배경이 사라지지 않도록 60% 를 넘겨 키우지 말 것 — "방 안에 있다"가 유지돼야 한다(상훈님 지시).
-  const LIFT = `clamp(220px, 30%, 330px)`;
+  const LIFT = `clamp(${compact ? FOOT_FLOOR_SHORT : FOOT_FLOOR}px, 30%, 330px)`;
 
   // ★ 크기는 **실루엣 키(K)로 정한다** — 상자를 먼저 정하고 그 안에 그림을 넣지 않는다.
   //   규격의 모든 ratio 가 "화면 키 = K_screen(296px)" 을 전제한다(→ `props/layout.ts` 머리말) —
@@ -172,7 +179,10 @@ export default function Room({ y }: { y: Yeoul }) {
   //   떴을 때만** 남은 높이에서 이만큼을 더 빼 아이를 낮춰, 서브헤더~머리 사이에 말풍선(2~3줄)이
   //   전부 들어오게 한다. 메시지 가독이 최우선이라 아이를 소폭 양보한다. 넓은/긴 화면은 아래
   //   `max(60%,150px)` 가 이겨 예약이 무시되므로 아이가 안 줄어든다(짧은 화면에서만 적용).
-  const BUBBLE_RESERVE = narrow && v.bub.show ? 76 : 0;
+  // ★ 짧은 화면(`compact`)은 발끝선을 낮춰 머리도 그만큼 내려와 머리 위 공간이 이미 늘었다 →
+  //   말풍선 예약을 76→50px 로 줄여 아이를 덜 깎는다(말풍선 2~3줄은 여전히 무대 안에 들어온다 — 실측
+  //   SE 2줄에서 무대 위끝 안쪽 여유 확보). 좁지만 긴 폰(390x844 등)은 예전대로 76px — 안 건드린다.
+  const BUBBLE_RESERVE = v.bub.show ? (compact ? 50 : narrow ? 76 : 0) : 0;
   // 화면에서의 실루엣 키. **무대의 약 60%** 를 목표로 하되, 머리끝이 무대 위로 안 넘게 남은 높이로 깎는다.
   //   `SIL` 은 가장 큰 자세의 실루엣이 화면에서 가질 높이다(무대 60%, 하한 150px, 머리 공간으로 상한).
   //   K_SCREEN = SIL ÷ (가장 큰 실루엣÷K) — 이렇게 뒤집어야 어떤 자세든 무대 밖으로 안 나간다.
@@ -402,7 +412,7 @@ export default function Room({ y }: { y: Yeoul }) {
               <span style={{ background: 'rgba(74,64,56,.92)', color: '#FBF6EC', borderRadius: radius.pill, padding: '7px 16px', fontSize: 12, animation: 'yFadeIn .2s ease' }}>{v.toast.text}</span>
             </div>
           )}
-          {v.pop.show && <Popover y={y} />}
+          {v.pop.show && <Popover y={y} compact={compact} />}
         </div>
 
         <div data-part="tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 6 }}>
@@ -900,7 +910,7 @@ function ChatBar({ y }: { y: Yeoul }) {
  *   `animation` 을 같이 걸면 키프레임이 인라인 값을 덮어 팝오버가 엉뚱한 자리에 떴다가
  *   끝나는 순간 튀어 들어온다(2026-09-07 실측: 앨범 타일에서 215px 순간이동).
  */
-function Popover({ y }: { y: Yeoul }) {
+function Popover({ y, compact = false }: { y: Yeoul; compact?: boolean }) {
   const p = y.v.pop;
   const room = y.v.selK;
   const box = useRef<HTMLDivElement>(null);
@@ -952,31 +962,33 @@ function Popover({ y }: { y: Yeoul }) {
     >
     <div
       data-part="pop-card"
+      // ★ 짧은 화면(`compact`)은 여백·글자를 조금씩 줄여 팝오버 높이를 낮춘다(색·모양·구성은 그대로).
+      //   낮아진 만큼 발끝선 예약(`FOOT_FLOOR_SHORT`)도 낮춰 아이가 커진다. 버튼 터치 타깃은 유지한다.
       style={{
         position: 'relative', width: '100%',
-        padding: '12px 13px', boxSizing: 'border-box', borderRadius: radius.lg,
+        padding: compact ? '8px 12px' : '12px 13px', boxSizing: 'border-box', borderRadius: radius.lg,
         background: C.paper, border: `1px solid ${C.lineSoft}`, boxShadow: '0 8px 24px rgba(74,64,56,.16)',
-        display: 'flex', flexDirection: 'column', gap: 11, animation: p.anim,
+        display: 'flex', flexDirection: 'column', gap: compact ? 7 : 11, animation: p.anim,
       }}
     >
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: compact ? 5 : 7 }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-          <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.25, color: C.ink }}>{p.say}</span>
+          <span style={{ fontFamily: GAEGU, fontSize: compact ? 16.5 : 19, lineHeight: compact ? 1.15 : 1.25, color: C.ink }}>{p.say}</span>
           <span style={{ flex: 1 }} />
           <span style={{ font: `10.5px ${MONO}`, color: C.faint }}>{p.count}</span>
         </span>
         {p.hasBar && (
           <span style={{ display: 'flex', gap: 5 }}>
-            {p.bar.map((g, i) => <span key={i} style={{ flex: 1, height: 11, borderRadius: 5, background: g.bg }} />)}
+            {p.bar.map((g, i) => <span key={i} style={{ flex: 1, height: compact ? 9 : 11, borderRadius: 5, background: g.bg }} />)}
           </span>
         )}
       </span>
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: compact ? 5 : 7 }}>
         {/* ★ '여기서 ○○ 누르기' 안내 줄은 없앴다(2026-09-07 상훈님 지시).
             같은 말을 세 번 하고 있었다 — 위 안내 카드가 무엇을 할지 말하고, 대상 버튼이 깜빡인다.
             깜빡임(yBlink)은 남긴다. 글자 없이 가리킬 수 있는 유일한 수단이라 그것까지 없애면 못 찾는다. */}
-        {p.a && <PopButton b={p.a} />}
-        {p.hasB && p.b && <PopButton b={p.b} />}
+        {p.a && <PopButton b={p.a} compact={compact} />}
+        {p.hasB && p.b && <PopButton b={p.b} compact={compact} />}
       </span>
       <span data-part="pop-tail" style={{ position: 'absolute', left: geo ? geo.tail : '50%', bottom: -6, width: 12, height: 12, background: C.paper, borderRight: `1px solid ${C.lineSoft}`, borderBottom: `1px solid ${C.lineSoft}`, transform: 'translateX(-50%) rotate(45deg)' }} />
     </div>
@@ -984,15 +996,16 @@ function Popover({ y }: { y: Yeoul }) {
   );
 }
 
-function PopButton({ b }: { b: NonNullable<Yeoul['v']['pop']['a']> }) {
+function PopButton({ b, compact = false }: { b: NonNullable<Yeoul['v']['pop']['a']>; compact?: boolean }) {
   return (
     // ★ 진짜 `disabled` 다(계약 10절 "거절될 버튼은 미리 잠가 둔다"). 회색으로만 칠하고 눌리게 두면
     //   눌러 봐야 왜 안 되는지 알 수 있고, 서버에는 나갈 필요 없던 요청이 나간다.
     //   ⚠️ `aria-disabled` 를 늘 달지 않는다 — `"false"` 도 검사 도구에 '비활성' 으로 읽힌다.
+    //   ★ 짧은 화면(`compact`)은 세로 여백만 살짝 줄인다(13→10px). 글자·터치 폭은 그대로라 여전히 잘 눌린다.
     <button
       onClick={b.tap} data-action={b.label} disabled={b.off}
       data-off={b.off ? '1' : undefined} data-why={b.why || undefined}
-      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 14px', borderRadius: radius.md, border: b.bd, background: b.bg, color: b.fg, textAlign: 'left', animation: b.anim, cursor: b.off ? 'default' : 'pointer' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: compact ? '10px 14px' : '13px 14px', borderRadius: radius.md, border: b.bd, background: b.bg, color: b.fg, textAlign: 'left', animation: b.anim, cursor: b.off ? 'default' : 'pointer' }}
     >
       <span style={{ fontSize: 15.5 }}>{b.label}</span>
       <span style={{ flex: 1 }} />

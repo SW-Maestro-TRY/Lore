@@ -12,7 +12,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { layoutProp, layoutRoomProp, layoutScreenProp, unitPxOfWidth, type CharGeom, type StageGeom } from './layout';
+import { layoutProp, layoutRoomProp, layoutScreenProp, unitPxOfWidth, FOOT_FLOOR, FOOT_FLOOR_SHORT, NARROW_Q, SHORT_Q, type CharGeom, type StageGeom } from './layout';
+import { useIsWide } from '../useIsWide';
 import { isSettled, resolveScene, type PropScene, type PropSituationTable, type ResolvedProp } from './situations';
 import { stageUrl, type CharAnchors, type PropZ } from './spec';
 import { confirmedSpec } from './catalog';
@@ -244,6 +245,16 @@ export interface RoomPropLayerProps {
 const ROOM_Z: Record<PropZ, number> = { below_char: 1, above_char: 3 };
 
 /**
+ * 발끝선 하한 — **Room.tsx 의 캐릭터 LIFT 하한과 반드시 같은 기준으로 갈라야** 소품이 발에 붙는다.
+ * 짧고 좁은 화면(SE 등)은 팝오버가 콤팩트해져 발끝선이 낮아지므로 소품도 같이 낮춘다.
+ */
+function useFootFloor(): number {
+  const narrow = useIsWide(NARROW_Q);
+  const short = useIsWide(SHORT_Q);
+  return narrow && short ? FOOT_FLOOR_SHORT : FOOT_FLOOR;
+}
+
+/**
  * **방 바닥에 붙박인 소품**(똥·하루 소품·매트·가방). 무대에 직접 붙는다.
  *
  * ★ 상훈님 2026-09-13 — "캐릭터가 움직인다고 똥도 같이 움직이면 안 돼."
@@ -257,6 +268,7 @@ export function RoomPropLayer({ scene: given, table, anchors, charBox, z = 'abov
   const { w, h } = useBoxSize(ref);
   const { w: charW } = useBoxSize(charBox);
   const scene = devScene(given);
+  const footFloor = useFootFloor();
 
   const items = useMemo(
     () => (forced() ?? resolveScene(table, scene)).filter((r) => isRoomFixed(r) && r.spec.z === z),
@@ -264,7 +276,7 @@ export function RoomPropLayer({ scene: given, table, anchors, charBox, z = 'abov
     [JSON.stringify(scene), table, z],
   );
 
-  const st: StageGeom = { width: w, height: h };
+  const st: StageGeom = { width: w, height: h, footFloor };
   const u = charW > 0 ? unitPxOfWidth(anchors.anchors, charW) : null;
 
   return (
@@ -301,7 +313,8 @@ export interface ScreenPropLayerProps {
 export function ScreenPropLayer({ scene: given, table, anchors, z = 'above_char' }: ScreenPropLayerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const { w, h } = useBoxSize(ref);
-  const st: StageGeom = { width: w, height: h };
+  const footFloor = useFootFloor();
+  const st: StageGeom = { width: w, height: h, footFloor };
 
   // ★ **규격의 `z` 대로 아이 앞뒤를 가른다**(2026-09-14). 전에는 이 층에 `zIndex` 가 아예 없어서,
   //   아이 상자가 `zIndex:2` 인 탓에 `above_char` 인 먼지·거품·물줄기가 **전부 아이 뒤로 깔렸다**
