@@ -203,6 +203,17 @@ def parse(text: str) -> dict:
     if not isinstance(obj, dict):
         raise story.ParseFailure("검수 결과가 JSON 객체가 아닙니다.")
 
+    read = []
+    for one in obj.get("read") or []:
+        if not isinstance(one, dict):
+            continue
+        try:
+            page = int(one.get("page"))
+        except (TypeError, ValueError):
+            continue
+        read.append({"page": page, "what": _text(one.get("what")),
+                     "understood": bool(one.get("understood"))})
+
     issues = []
     for one in obj.get("issues") or []:
         if not isinstance(one, dict):
@@ -229,10 +240,22 @@ def parse(text: str) -> dict:
         })
     issues.sort(key=lambda i: (SEVERITIES.index(i["severity"]), i["rank"]))
 
+    # 모델이 "이해 안 됨"이라고 스스로 적어 놓고 issues 를 빈 배열로 내는
+    # 모순 — 예전에 issues:[] 만 뱉고 진짜로는 하나도 안 읽은 것 같은
+    # 응답이 실제로 나온 적이 있어서(2026-09-16 실측, 출력 토큰 7개),
+    # 그 증상을 잡아내려고 둔 확인이다. 여기서 막지는 않는다 — read 자체가
+    # 모델이 사실대로 안 적었을 수도 있어서, 코드가 issues 를 대신 만들어
+    # 내지는 않는다. 대신 로그에 남겨서 사람이 실제 run 을 다시 볼 수 있게
+    # 한다.
+    not_understood = [r["page"] for r in read if not r["understood"]]
+    suspicious = bool(not_understood) and not issues
+
     redraw_pages = sorted({p for i in issues if i["redraw"] for p in i["redraw_pages"]})
     return {"verdict": "재생성" if redraw_pages else ("주의" if issues else "통과"),
             "redraw_pages": redraw_pages,
-            "issues": issues}
+            "issues": issues,
+            "read": read,
+            "suspicious": suspicious}
 
 
 def summary(review: dict) -> str:
