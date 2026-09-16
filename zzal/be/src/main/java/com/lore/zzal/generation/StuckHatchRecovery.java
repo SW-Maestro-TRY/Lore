@@ -96,7 +96,22 @@ public class StuckHatchRecovery {
             String v = jobRepository.findFirstByPetIdOrderByIdDesc(pet.getId())
                     .map(GenJob::getPipelineVersion)
                     .orElse(hatchService.currentVersion());
-            if (hatchService.stepsDone(pet.getId(), v) >= hatchService.stepsTotal(v)) {
+            // ★★ 이 펫이 저장해 둔 파이프라인 버전을 지금 레지스트리가 모를 수 있다(옛 v2/v3 초안 등).
+            //    그때 PipelineRegistry 는 기동을 막으려고 일부러 예외를 던진다 — 정상 경로에서는 옳다.
+            //    하지만 여기는 @EventListener(ApplicationReadyEvent) 안이라, 그 예외가 올라오면
+            //    복구 스캔 전체가 죽어 **앱 자체가 안 뜬다**. 옛 버전 초안 한 줄이 재기동을 막는 셈이다.
+            //    그래서 <b>펫 단위로</b> 감싸, 모르는 버전이면 그 펫만 건너뛰고 경고만 남긴다.
+            //    (stepsTotal → registry.steps 가 유일한 동기 호출 지점이다. hatch() 는 @Async 라
+            //     여기서 던지지 않고, v 가 여기서 알려진 버전으로 확인되면 뒤의 hatch 도 안전하다.)
+            int stepsTotal;
+            try {
+                stepsTotal = hatchService.stepsTotal(v);
+            } catch (IllegalArgumentException e) {
+                log.warn("모르는 파이프라인 버전이라 기동 복구에서 이 펫만 건너뜁니다 — petId={} version={}",
+                        pet.getId(), v, e);
+                continue;
+            }
+            if (hatchService.stepsDone(pet.getId(), v) >= stepsTotal) {
                 continue;
             }
             if (attempts >= maxAttempts) {
