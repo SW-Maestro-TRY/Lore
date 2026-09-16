@@ -3440,9 +3440,12 @@
 .webtoon-page .dock-hint { order: -2; margin: 0; color: var(--dim); font-size: .78rem; }
 .webtoon-page .dock-hint b { color: var(--accent-d); }
 
-.webtoon-page /* 두 칸씩 놓는다 — 말풍선 미리보기가 실제 모양으로 그려지면서 세 칸으로는
-   서로 겹치고 딱지를 덮었다. 고르는 것은 여섯 개뿐이라 두 줄이면 다 보인다. */
-.webtoon-page .dock-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+/* 세 칸씩 놓는다. 전에는 ".webtoon-page" 접두어가 이 주석 줄에도 잘못
+   붙어서 실제 선택자가 ".webtoon-page .webtoon-page .dock-grid"가 되는
+   바람에(주석은 파싱에서 지워지고 이어 붙는다) 이 규칙 전체가 한 번도
+   안 먹혔다 — grid 가 아니라 그냥 세로로 쌓이고 있었다. 2026-09-16 실측
+   확인 후 고침. */
+.webtoon-page .dock-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .webtoon-page .dock-item {
   background: var(--ink-2); border: 1px solid var(--line-2); border-radius: 12px;
   padding: 10px 6px; cursor: pointer; display: grid; gap: 6px; place-items: center;
