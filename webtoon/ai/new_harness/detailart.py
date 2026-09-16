@@ -232,10 +232,26 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
 
     scene = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
     first = scene_no == 1
+    last = scene_no == len(scenes)
     ends = (scene.get("ends") or "").strip()
     opens = opens_at(scenes, scene_no)
 
-    lines = [f"위 목록의 {scene_no}번 장면 자리를 그린다: \"{scene.get('what', '')}\"", ""]
+    # 이 장면이 화 전체에서 어느 자리인지 — 프롬프트 맨 위, 실제 장면
+    # 데이터 바로 옆에 짧게 박는다. 같은 말이 파일 앞쪽(4-1 등)에도
+    # 있지만, 실측으로 확인된 문제는 그 설명이 실제 데이터와 너무 멀리
+    # 떨어져 있으면 지켜지지 않는다는 것이었다 — 그래서 여기서 한 번
+    # 더 짧게 못박는다.
+    if first:
+        role = ("이 화의 첫 장면 — 독자가 이 작품을 처음 여는 순간이다. "
+                "인물의 이름·장소·상황을 나레이션·대사·시각 단서 중 하나로 "
+                "반드시 드러낸다.")
+    elif last:
+        role = "이 화의 마지막 장면 — 지금 장면을 마무리하며, 다음 화가 궁금해지는 여운으로 끝낸다."
+    else:
+        role = "중간 장면 — 앞 장면에서 자연스럽게 이어받아 진행한다."
+
+    lines = [f"[이 페이지의 역할] {role}", "",
+             f"위 목록의 {scene_no}번 장면 자리를 그린다: \"{scene.get('what', '')}\"", ""]
     if scene.get("where"):
         lines += [f"[장소와 상황] {scene['where']}", ""]
     if scene.get("acting"):
