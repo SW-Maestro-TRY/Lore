@@ -1399,6 +1399,9 @@
 }
 .webtoon-page .foot-brand { display: flex; flex-direction: column; gap: 4px; }
 .webtoon-page .foot-note b { color: var(--muted); }
+.webtoon-page .foot-legal { display: flex; gap: 14px; margin-top: 4px; }
+.webtoon-page .foot-legal a { color: var(--dim); text-decoration: none; }
+.webtoon-page .foot-legal a:hover { color: var(--muted); text-decoration: underline; }
 /* 만든 곳 표시 — 본문보다 한 단 조용하게(오른쪽, 더 옅은 글자) 둔다.
    신뢰를 주려고 넣는 것이지 브랜드 대신 앞세우려는 것이 아니다. */
 .webtoon-page .foot-org { text-align: right; }

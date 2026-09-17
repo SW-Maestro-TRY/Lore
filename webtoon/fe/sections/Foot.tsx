@@ -4,6 +4,7 @@
 // 사업자등록번호는 없다 — AI SW 마에스트로 과정의 프로젝트라 별도 법인이
 // 아니고, 있지도 않은 번호를 지어 넣지 않는다.
 
+import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 
 const ORGS: [src: string, label: string, brand: boolean][] = [
   ["/static/badges/asm-icon.png", "AI SW MAESTRO", true],
@@ -19,6 +20,11 @@ export default function Foot() {
         <span className="foot-note">
           고래 <b>루</b>가 안내합니다 · 사진 한 장이 웹툰 한 화가 됩니다
         </span>
+        <nav className="foot-legal">
+          <a href={LEGAL_LINKS.terms} target="_blank" rel="noopener noreferrer">이용약관</a>
+          <a href={LEGAL_LINKS.privacy} target="_blank" rel="noopener noreferrer">개인정보처리방침</a>
+          <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">1:1 문의</a>
+        </nav>
       </div>
       <div className="foot-org">
         {ORGS.map(([src, label, brand]) => (
