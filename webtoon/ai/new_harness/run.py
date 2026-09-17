@@ -215,12 +215,14 @@ def story_input_block(char: dict) -> str:
     if not genre:
         return block + "\n" + user_story_block(char)
     lines = [block]
-    lore = genre_lore_for(genre)
-    if lore:
-        lines += ["", "## 이 장르의 모티프·캐릭터유형·전개패턴 (참고 자료)", "", lore]
     world = world_text_for(genre)
     if world:
         lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
+    cards = genre_samples_for(genre)
+    if cards:
+        lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
+                  "", GENRE_SAMPLE_NOTE, "", cards]
+    lines += genre_lore_section(genre)
     return "\n".join(lines) + "\n" + user_story_block(char)
 
 
@@ -715,13 +717,32 @@ def choose(directions: list[dict], pick: int | None) -> dict:
 # 프리셋 라벨의 키워드. 여러 개 걸리면 첫 번째로 매칭된 것을 쓴다. 장르가
 # 이 목록에 없으면(오컬트 미스터리·좀비 아포칼립스 등) 조용히 건너뛴다 —
 # 세계관 문장 없이도 지금까지처럼 돌아간다.
+# **순서가 곧 우선순위다.** 합성 장르명("게임 판타지"·"로맨스 판타지")이 넓은
+# 쪽("판타지")에 먼저 걸리면 엉뚱한 세계관이 붙으므로 좁은 쪽을 위에 둔다
+# (samples.guess_genre 의 표와 같은 이유·같은 순서).
+#
+# 예전에는 여섯 줄뿐이라 화면이 고르게 해 둔 장르 14개 중 9개(로맨스 판타지·
+# 판타지·게임 판타지·센티넬·오메가버스·스릴러·액션·개그·일상)가 세계관 문장을
+# 한 줄도 못 받았다 — 장르를 골라도 그 장르의 규칙이 프롬프트에 없었다는 뜻이다
+# (2026-09-17, 사용자 지적으로 확인).
 _WORLD_KEYWORDS = {
+    # 합성 장르 — '판타지' 보다 먼저
+    "game_system": ("게임 판타지", "게임판타지", "랭커", "가상현실"),
+    "romance_novel": ("로맨스 판타지", "로판", "빙의", "회귀", "영애"),
     "hunter_gate": ("헌터", "게이트"),
     "academy_magic": ("마법학교", "마법", "학원"),
     "idol_agency": ("아이돌", "연습생"),
+    "sentinel_center": ("센티넬", "가이드버스"),
+    "omegaverse_grade": ("오메가버스", "옴버"),
     "hero_city": ("히어로", "능력자", "빌런"),
     "post_disaster": ("재난", "좀비", "아포칼립스"),
     "royal_court": ("궁정", "왕궁", "무협"),
+    "thriller_record": ("스릴러", "서스펜스"),
+    "action_contract": ("액션", "격투"),
+    "comedy_mixup": ("개그", "코미디"),
+    "daily_korea": ("일상",),
+    # 넓은 쪽은 맨 아래 — 위에서 아무것도 안 걸렸을 때만 쓴다
+    "fantasy_continent": ("판타지",),
 }
 
 
@@ -746,6 +767,86 @@ def genre_lore_for(genre: str) -> str:
         return story.genre_template_block(names)
     except Exception:
         return ""
+
+
+# 기준 샘플을 프롬프트에 붙일 때 같이 주는 경고. 샘플은 정답지가 아니라
+# 기준선이라(samples.py 첫 줄) 이 말을 빼면 모델이 카드 소재를 그대로
+# 베낀다 — story-harness 쪽 P1 도 같은 문장을 달고 쓴다.
+GENRE_SAMPLE_NOTE = (
+    "아래는 이 장르가 실제로 어떤 소재·어떤 밀도로 쓰이는지 보여 주는 "
+    "기준선이다. **베끼지 마라** — 같은 소재가 다시 나오면 베낀 것이 "
+    "바로 보인다. 이 장르의 이야기가 무엇을 다루는지, 어느 정도로 "
+    "구체적인지만 읽고 네 캐릭터의 이야기를 써라."
+)
+
+
+def genre_samples_for(genre: str) -> str:
+    """장르에 맞는 story-harness 의 검수된 기준 샘플 카드. 없으면 빈 문자열.
+
+    samples/ 에는 장르 14종마다 사람이 검수해 실제로 서비스에 나간 카드가
+    6장씩 있고, `samples.guess_genre` 가 "아이돌"·"헌터·게이트" 같은 한글
+    장르명을 그 풀로 정확히 민다. 그런데 new_harness 는 이 풀을 **한 번도
+    안 쓰고** 있었다 — axes·structure(무엇을 쓰는가의 '자리')만 빌려 쓰고,
+    정작 그 장르가 무엇을 다루는지(소재)는 안 빌렸다.
+
+    그래서 소재 쪽 입력이 worlds.json 한 문단뿐이었고, 장르 템플릿은
+    전개 문법(일상·로맨스 …)만 주는 축이라 — 아이돌을 골라도 연습생·무대가
+    한 번도 안 나오고 그냥 학원물이 됐다(2026-09-17, 사용자 지적).
+
+    못 찾으면 빈 문자열이다. 안 맞는 장르 카드를 억지로 붙이지 않는다
+    (resolve_genre_templates 와 같은 원칙).
+    """
+    genre = (genre or "").strip()
+    if not genre:
+        return ""
+    try:
+        key = samples.guess_genre(genre)
+        if not key:
+            return ""
+        return samples.exemplars(key)
+    except Exception:
+        return ""
+
+
+# 장르 템플릿을 **빌려 쓸 때** 같이 주는 틀.
+#
+# genre_template.json 의 _preset_map 은 일부러 두 축을 나눠 뒀다 — 프리셋
+# (아이돌·헌터·마법학교·히어로)은 **소재** 축이고, 템플릿(일상·로맨스·판타지…)은
+# **전개 문법** 축이다. 그래서 아이돌은 "일상+로맨스" 를 빌린다.
+#
+# 문제는 빌려온 템플릿의 '소재모티프배경'·'사례분석' 칸이 그 템플릿 장르의
+# 소재("학교, 회사, 가정, 카페")로 차 있다는 것이다. 틀 없이 그대로 주면
+# 모델이 그것을 이번 화의 소재로 읽는다 — 아이돌을 골랐는데 예술고등학교
+# 복도와 교복이 나온 실제 경로가 이것이다(2026-09-17).
+#
+# 그래서 빌려 쓸 때는 "여기서 가져갈 것은 전개 문법뿐, 소재는 위 세계관과
+# 샘플을 따른다"를 명시한다. 템플릿을 덜어내지 않는 이유는 전개 문법 쪽은
+# 그대로 쓸모가 있고, story.py 의 렌더링은 다른 하네스와 공유라서다.
+GENRE_LORE_NOTE_BORROWED = (
+    "아래 템플릿은 이 장르의 **전개 문법**(분위기·인물 관계·사건이 굴러가는 "
+    "방식)을 빌려 오려고 붙인 것이지, 이 화의 소재가 아니다. 템플릿에 적힌 "
+    "장소·소품·직업(학교·회사·카페 같은 것)을 이번 화의 무대로 가져오지 마라 "
+    "— 무대와 소재는 위의 세계관과 기준 샘플이 정한다."
+)
+
+
+def genre_lore_section(genre: str) -> list[str]:
+    """장르 문법 블록 + (빌려 쓴 것이면) 그 사실을 밝히는 틀.
+
+    이야기 단계와 장면 단계가 **같은 문구**를 쓰도록 여기 하나로 모은다.
+    """
+    lore = genre_lore_for(genre)
+    if not lore:
+        return []
+    try:
+        names = story.resolve_genre_templates(genre)
+    except Exception:
+        names = []
+    borrowed = bool(names) and genre.strip() not in names
+    head = ["", "## 이 장르의 전개 문법 (참고 자료)"]
+    if borrowed:
+        head += ["", GENRE_LORE_NOTE_BORROWED]
+    return head + ["", lore]
 
 
 def world_text_for(genre: str) -> str:
@@ -800,12 +901,42 @@ CAST_LABEL_RE = re.compile(rf"^{S}등장인물{S}[:：]{S}$", re.M)
 
 
 def scene_input_block(char: dict, direction: dict) -> str:
-    """scene_prompt 뒤에 붙는 이번 입력 — 고른 스토리 + 캐릭터."""
+    """scene_prompt 뒤에 붙는 이번 입력 — 고른 스토리 + 캐릭터 + **장르**.
+
+    **장르를 여기에도 준다.** 예전에는 제목·본문·캐릭터만 넘겼는데, 장면
+    단계는 무엇을 실제로 그릴지(장소·상황·옷차림)를 정하는 자리라 장르를
+    모르면 가장 무난한 해석으로 번역해 버린다 — "데뷔조 막내"를 받고
+    「예술고등학교 복도 · 교복」으로 적어서, 아이돌을 골랐는데 다 그리고
+    나면 그냥 학원물이 되어 있었다(2026-09-17, 실측 확인: 그 run 의
+    scene_prompt.txt 10KB 안에 '아이돌·연습생·데뷔·기획사' 가 0번).
+
+    이야기 단계와 **같은 자료**를 준다(genre_lore_for · world_text_for ·
+    genre_samples_for) — 단계마다 다른 것을 주면 고른 이야기와 그려지는
+    장면이 갈라진다. 장르가 없으면 지금까지처럼 아무것도 안 붙는다.
+    """
     lines = ["# 이번 입력", "", "[선택된 스토리]", direction.get("title", ""), ""]
     lines.append(direction.get("body") or direction.get("raw", ""))
     lines += ["", "[캐릭터]", f"{char['name']} — {char.get('description') or ''}".rstrip(" —")]
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
+
+    # 고른 방향이 스스로 밝힌 장르가 먼저다. 사람이 장르를 안 고르면
+    # story_prompt 가 방향마다 장르를 정하므로, 그때는 캐릭터의 장르 칸이
+    # 비어 있고 방향 쪽에만 있다.
+    genre = (direction.get("genre") or char.get("genre") or "").strip()
+    if genre:
+        lines += ["", f"[장르] {genre}",
+                  "", "이 화는 위 장르의 작품이다. 장소·소품·옷차림·인물들이 하는 "
+                  "일이 그 장르의 것이어야 한다 — 장르를 지우고 아무 데서나 "
+                  "일어날 수 있는 장면으로 옮기지 마라."]
+        world = world_text_for(genre)
+        if world:
+            lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
+        cards = genre_samples_for(genre)
+        if cards:
+            lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
+                      "", GENRE_SAMPLE_NOTE, "", cards]
+        lines += genre_lore_section(genre)
     return "\n".join(lines) + "\n"
 
 
