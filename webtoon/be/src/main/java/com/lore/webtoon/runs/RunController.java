@@ -334,4 +334,30 @@ public class RunController {
                 ? ResponseEntity.notFound().build()
                 : ResponseEntity.status(302).location(URI.create(where)).build();
     }
+
+    /**
+     * 컷 하나만 내려받는다 — 위 {@link #page} 는 302 로 S3/CloudFront 주소를
+     * 가리킬 뿐이라 {@code download} 속성이 안 먹는다(다른 도메인이라 파일
+     * 이름도 못 정한다). 결과 화면에서 컷을 체크박스로 몇 장만 골라 받을 때
+     * 쓴다 — 위 「한 편 내려받기」와 같은 이유로 <b>이 길에도 LORE 표시가
+     * 붙는다</b>: 낱장으로 나가도 어디서 만든 것인지 남아야 한다.
+     */
+    @Operation(summary = "컷 하나 내려받기",
+            description = "그 장 하나에 LORE 표시를 찍어서 준다.")
+    @GetMapping(value = "/{runId}/page/{no}/download", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> pageDownload(@PathVariable String runId, @PathVariable int no) {
+        Map<String, Object> meta = runs.result(runId);
+        if (meta == null) {
+            return ResponseEntity.notFound().build();
+        }
+        byte[] png = export.pagePng(runId, no, captionOf(meta));
+        if (png == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + runId + "-" + no + ".png\"")
+                .contentType(MediaType.IMAGE_PNG)
+                .body(png);
+    }
 }

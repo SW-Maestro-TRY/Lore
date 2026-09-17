@@ -470,6 +470,13 @@ export function episodeDownloadUrl(runId: string): string {
   return `${BASE}/runs/${encodeURIComponent(runId)}/episode.png`;
 }
 
+/** 컷 하나만 내려받는 주소. `pageUrl` 은 302 로 S3 주소를 가리킬 뿐이라 화면에
+ *  보여 줄 때만 쓴다 — 여기 표시가 붙는 파일을 직접 주는 것은 이 주소다
+ *  (episodeDownloadUrl 과 같은 이유로 LORE 표시가 붙는다). */
+export function pageDownloadUrl(runId: string, no: number): string {
+  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}/download`;
+}
+
 /** 이 브라우저가 만든 작품인가. 아니면 내려받기·편집실·저장·공유를 감춘다. */
 export function isMyRun(runId: string): boolean {
   return !!runId && myRuns().includes(runId);
