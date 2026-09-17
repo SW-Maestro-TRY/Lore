@@ -875,6 +875,10 @@ export function mountEditor(
     sel = { sceneNo: no, id: it.id };
     paintItems(no); paintProps();
     document.getElementById(`scene-${no}`).scrollIntoView({ behavior: "smooth", block: "center" });
+    // 부드러운 스크롤이 끝날 즈음 도구 띠에 덮여 있으면 그만큼 더 내린다
+    // (revealFromDock 주석 참고 — 여기는 즉시 반응할 필요가 없어 기다려도 된다).
+    const el = document.querySelector(`#scene-${no} .item[data-id="${it.id}"]`);
+    setTimeout(() => revealFromDock(el), 400);
   }
 
   function findItem() {
@@ -897,6 +901,9 @@ export function mountEditor(
       $$(".item", el.parentElement).forEach(n =>
         n.classList.toggle("sel", n.dataset.id === id));
       paintProps();
+      // 여기서 즉시(동기) 스크롤해야 한다 — 아래에서 곧바로 el 의 위치를
+      // 다시 재서(box·r0·cx·cy) 끌기·돌리기 계산의 기준으로 삼는다.
+      revealFromDock(el);
     };
 
     const text = $("[data-edit]", el);
@@ -1070,6 +1077,69 @@ export function mountEditor(
     if (scrim) scrim.hidden = !open;
     if (opener) opener.setAttribute("aria-expanded", open ? "true" : "false");
     if (close) close.setAttribute("aria-label", "도구 닫기");
+    syncDockHeight();
+  }
+
+  /* PC 는 도구 띠가 헤더 밑에 상시 깔리고(`position:fixed`), 본문은
+     `--ed-dock-h` 만큼 padding-top 으로 비켜선다(webtoon.css 참고). 이 값을
+     실제 띠 높이로 채우지 않으면 — 팔레트가 두 줄로 늘어나거나 창이
+     낮아 44vh 한도까지 커지면 — 띠가 캔버스 위쪽을 그만큼 덮어서 그
+     자리의 말풍선을 못 잡고 크기 조절 손잡이도 안 눌린다(2026-09-17,
+     "말풍선 크기조절이 안 된다" 로 실측 확인 — 고정값 230px 가 실제
+     높이보다 작을 때만 재현된다). transform 은 레이아웃 높이를 안 바꾸므로
+     닫혀 있어도 같은 값을 그대로 잰다. */
+  function syncDockHeight() {
+    const dock = $("#edDock"), ed = document.querySelector(".ed");
+    if (!dock || !ed) return;
+    const rect = dock.getBoundingClientRect();
+    ed.style.setProperty("--ed-dock-h", `${Math.ceil(rect.height)}px`);
+    // `--ed-dock-clear` 는 띠의 **화면(뷰포트) 기준** 아래쪽 끝이다 — 헤더
+    // 높이까지 이미 포함돼 있다. `.item` 의 scroll-margin-top(아래
+    // revealFromDock 주석)이 이 값을 그대로 써야 한다: `--ed-dock-h`(띠
+    // 자기 높이)만 쓰면 헤더 높이만큼 모자라서, "충분히 내려왔다" 는 판단이
+    // 실제 띠 아래보다 헤더 높이만큼 일찍 나 버린다(2026-09-17 실측 — 처음
+    // 이 값으로 시도했을 때 정확히 헤더 높이만큼 손잡이가 계속 띠 밑에
+    // 남았다). position:fixed 라 스크롤과 무관하게 같은 값이다.
+    ed.style.setProperty("--ed-dock-clear", `${Math.ceil(rect.bottom)}px`);
+  }
+
+  /* 항목이 **도구 띠 밑에 깔려 있으면** 그만큼 화면을 밀어 드러낸다.
+     PC(880px 이상)는 이 띠가 `position:fixed`라 스크롤해도 늘 화면 맨 위에
+     남는다 — `--ed-dock-h` 를 실측해도(위 syncDockHeight) 그건 처음 스크롤
+     자리를 맞출 뿐이고, 그 뒤로 스크롤해서 어떤 말풍선이든 화면 위쪽
+     그 자리에 걸리면 몸통이 띠 뒤로 숨고 손잡이만 삐죽 남는다("이상하게
+     떠 있다" — 2026-09-17 실측). 즉시(behavior 없이) 스크롤한다 — 이 함수는
+     회전 계산이 el 의 위치를 다시 재기 **전에** 끝나야 하고, 애니메이션이
+     끝나기를 기다리면 그사이 사람이 이미 손잡이를 눌러 버린다. */
+  function revealFromDock(el) {
+    if (!el || !matchMedia("(min-width: 880px)").matches) return;
+    const dock = $("#edDock");
+    if (!dock || !dock.classList.contains("is-open")) return;
+    const dockBottom = dock.getBoundingClientRect().bottom;
+    if (el.getBoundingClientRect().top < dockBottom) {
+      // `.item` 의 `scroll-margin-top`(webtoon.css, 띠 높이 + 16px)을
+      // scrollIntoView 가 그대로 존중한다 — 직접 픽셀을 계산해 스크롤하는
+      // 것보다 화면 배율·DPI 에 덜 흔들린다.
+      el.scrollIntoView({ block: "nearest", behavior: "instant" });
+    }
+  }
+
+  let dockRO = null;
+  function watchDockHeight() {
+    const dock = $("#edDock");
+    if (!dock) return;
+    syncDockHeight();
+    if (typeof ResizeObserver !== "undefined") {
+      dockRO = new ResizeObserver(syncDockHeight);
+      dockRO.observe(dock);
+    }
+    // 여닫는 것은 `transform`(translateY) 애니메이션이다 — 박스 **크기**는
+    // 안 바뀌므로 ResizeObserver 가 안 걸린다. 그런데 그 사이에 잰
+    // `getBoundingClientRect()` 는 애니메이션 도중의 값이라 실제보다
+    // 작게 잡힌다(2026-09-17 실측 — `--ed-dock-clear` 가 226px 로 잡혀
+    // 실제 349px 보다 한참 낮았다). 다 여닫힌 뒤(transitionend)에 다시 잰다.
+    on(dock, "transitionend", e => { if (e.propertyName === "transform") syncDockHeight(); });
+    on(window, "resize", syncDockHeight);
   }
 
   /* 크레딧 내역은 **다른 모드**다 — 그림에 얹는 자리가 아니라 얼마 썼는지
@@ -1589,6 +1659,7 @@ export function mountEditor(
     $("#dockOpen")?.addEventListener("click", () => setDock(true));
     $("#dockScrim")?.addEventListener("click", () => setDock(false));
     wireDockDrag();
+    watchDockHeight();
     // 그림 바깥을 누르면 선택이 풀린다. 손잡이 줄이 그림 위에 떠 있어서, 풀
     // 길이 없으면 다 끝낸 뒤에도 줄이 계속 그림을 가린다.
     on(document, "pointerdown", e => {
@@ -1660,5 +1731,6 @@ export function mountEditor(
   return () => {
     for (const [t, type, fn] of bound) t.removeEventListener(type, fn);
     clearTimeout(pushT);
+    dockRO?.disconnect();
   };
 }
