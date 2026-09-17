@@ -128,3 +128,6 @@
  * (색은 tamagotchi/yeoul/ui.ts 의 C.shell — 바꿀 땐 두 곳을 같이 고친다.) */
 .zzal-page.zt-v2 { background: #FFFBF4; }
 .zzal-page.zt-v2::before { display: none; }
+/* 한 화면 — .zzal-page 의 기본 min-height:100vh 를 v2 에선 끈다. 높이는 .zt-v2root 가
+ * calc(100dvh - 헤더) 로 직접 잡는다(안 끄면 헤더 높이만큼 헛스크롤이 생긴다). */
+.zzal-page.zt-v2 { min-height: 0; }
