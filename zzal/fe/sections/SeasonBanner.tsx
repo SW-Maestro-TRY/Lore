@@ -1,4 +1,10 @@
+// 사계절 배너 — 기존은 테이프·기울임 콜라주 파노라마. 적용후(season-banner ON)는 숨긴다.
+//   방향서 C-1 새 랜딩 스펙(마스코트 히어로 → 3컷 → CTA → 푸터)에 사계절 배너는 없다.
+//   season-panorama.webp 원본 여부 미확인이라, 적용후 경로에선 아예 쓰지 않는다(숨김).
+"use client";
+
 import seasonPanorama from "../assets/season-panorama.webp";
+import { useDevFlag } from "../landingDev";
 
 const tapeBase = {
   position: "absolute" as const,
@@ -11,6 +17,9 @@ const tapeBase = {
 };
 
 export default function SeasonBanner() {
+  const hidden = useDevFlag("season-banner");
+  if (hidden) return null;
+
   return (
     <div className="zt-banner-wrap" style={{ maxWidth: 1180, margin: "0 auto" }}>
       <div
