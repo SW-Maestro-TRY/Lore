@@ -72,19 +72,38 @@ export const CHANGE_UNITS: ChangeUnit[] = [
 
 type Flags = Record<string, boolean>;
 
+/**
+ * 랜딩을 어떤 판으로 그릴지.
+ *   legacy = 옛 자캐툰 랜딩(변경 전) — 지금 공개 사이트가 보는 것과 같다.
+ *   v1     = 방향서 변경들을 **개별 토글**로 하나씩 켜 보는 판(sections/* + 변경 목록 패널).
+ *   v2     = impeccable 로 다시 지은 **하나의 응집된 랜딩**(LandingV2).
+ */
+export type LandingVersion = "legacy" | "v1" | "v2";
+
+export const LANDING_VERSIONS: { id: LandingVersion; label: string; hint: string }[] = [
+  { id: "legacy", label: "기존", hint: "변경 전 옛 랜딩(공개 사이트와 동일)" },
+  { id: "v1", label: "v1", hint: "방향서 변경 개별 토글" },
+  { id: "v2", label: "v2", hint: "impeccable 응집 디자인" },
+];
+
 interface Ctx {
+  version: LandingVersion;
+  setVersion: (v: LandingVersion) => void;
   flags: Flags;
   setFlag: (id: string, v: boolean) => void;
   setAll: (v: boolean) => void;
 }
 
 const DevFlagsCtx = createContext<Ctx>({
+  version: "legacy",
+  setVersion: () => {},
   flags: {},
   setFlag: () => {},
   setAll: () => {},
 });
 
 const LS_KEY = "zzal.landing.devflags.v1";
+const LS_VERSION_KEY = "zzal.landing.version.v1";
 
 function save(next: Flags) {
   try {
@@ -96,6 +115,9 @@ function save(next: Flags) {
 
 export function LandingDevProvider({ children }: { children: ReactNode }) {
   const [flags, setFlags] = useState<Flags>({});
+  // 첫 렌더는 늘 legacy — 서버·브라우저 렌더가 갈리면 하이드레이션 경고가 나므로(useDevVisible 과
+  // 같은 이유) useEffect 로 뒤늦게 불러온다. 공개 사이트엔 선택기가 없어 legacy 그대로 보인다.
+  const [version, setVersionState] = useState<LandingVersion>("legacy");
 
   useEffect(() => {
     try {
@@ -104,7 +126,22 @@ export function LandingDevProvider({ children }: { children: ReactNode }) {
     } catch {
       /* 읽기 실패 시 전부 OFF(기존) 로 둔다. */
     }
+    try {
+      const v = localStorage.getItem(LS_VERSION_KEY);
+      if (v === "legacy" || v === "v1" || v === "v2") setVersionState(v);
+    } catch {
+      /* 읽기 실패 시 legacy 로 둔다. */
+    }
   }, []);
+
+  const setVersion = (v: LandingVersion) => {
+    setVersionState(v);
+    try {
+      localStorage.setItem(LS_VERSION_KEY, v);
+    } catch {
+      /* 저장만 못 할 뿐 화면은 정상 동작한다. */
+    }
+  };
 
   const setFlag = (id: string, v: boolean) =>
     setFlags((prev) => {
@@ -120,18 +157,30 @@ export function LandingDevProvider({ children }: { children: ReactNode }) {
       return next;
     });
 
-  const toy = !!flags["toy-palette"];
+  // .zt-toy(여울 저채도 팔레트)는 v1 에서 토이 팔레트를 켰을 때만. v2 는 C 토큰을 직접 써서 무관.
+  const toy = version === "v1" && !!flags["toy-palette"];
+  const cls =
+    "zzal-page" + (toy ? " zt-toy" : "") + (version === "v2" ? " zt-v2" : "");
 
   return (
-    <DevFlagsCtx.Provider value={{ flags, setFlag, setAll }}>
-      <div className={"zzal-page" + (toy ? " zt-toy" : "")}>{children}</div>
+    <DevFlagsCtx.Provider value={{ version, setVersion, flags, setFlag, setAll }}>
+      <div className={cls}>{children}</div>
     </DevFlagsCtx.Provider>
   );
 }
 
-/** 이 변경 단위가 "적용후"인가(ON). 기본 OFF=기존. */
+/** 지금 고른 랜딩 판(legacy/v1/v2). ZzalPage 가 이걸로 무엇을 그릴지 가른다. */
+export function useLandingVersion(): LandingVersion {
+  return useContext(DevFlagsCtx).version;
+}
+
+/**
+ * 이 변경 단위가 "적용후"인가(ON). v1 판에서만 의미가 있다.
+ * legacy 판에선 늘 false(옛 화면), v2 판에선 sections/* 자체가 안 그려지므로 값이 쓰이지 않는다.
+ */
 export function useDevFlag(id: string): boolean {
-  return !!useContext(DevFlagsCtx).flags[id];
+  const { version, flags } = useContext(DevFlagsCtx);
+  return version === "v1" && !!flags[id];
 }
 
 /**
@@ -140,12 +189,13 @@ export function useDevFlag(id: string): boolean {
  */
 export function DevChangeList() {
   const visible = useDevVisible();
-  const { flags, setFlag, setAll } = useContext(DevFlagsCtx);
+  const { version, setVersion, flags, setFlag, setAll } = useContext(DevFlagsCtx);
   const [open, setOpen] = useState(true);
 
   if (!visible) return null;
 
   const onCount = CHANGE_UNITS.filter((u) => flags[u.id]).length;
+  const versionLabel = LANDING_VERSIONS.find((v) => v.id === version)?.label ?? version;
 
   if (!open) {
     return (
@@ -170,7 +220,7 @@ export function DevChangeList() {
           cursor: "pointer",
         }}
       >
-        변경 {onCount}/{CHANGE_UNITS.length}
+        랜딩 {versionLabel}
       </button>
     );
   }
@@ -198,10 +248,7 @@ export function DevChangeList() {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 16, color: C.ink }}>
-          변경 목록
-        </span>
-        <span style={{ font: `10px ${MONO}`, color: C.faint }}>
-          {onCount}/{CHANGE_UNITS.length} 적용후
+          랜딩 미리보기
         </span>
         <span style={{ flex: 1 }} />
         <button
@@ -224,6 +271,56 @@ export function DevChangeList() {
         </button>
       </div>
 
+      {/* 버전 선택기 — 기존 / v1(개별 토글) / v2(impeccable). 상태는 localStorage 유지. */}
+      <div
+        role="radiogroup"
+        aria-label="랜딩 버전"
+        data-part="landing-version"
+        style={{
+          display: "flex",
+          gap: 4,
+          padding: 4,
+          borderRadius: radius.pill,
+          background: C.slot,
+          border: `1px solid ${C.lineHard}`,
+        }}
+      >
+        {LANDING_VERSIONS.map((v) => {
+          const on = version === v.id;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              title={v.hint}
+              data-part="landing-version-opt"
+              data-version={v.id}
+              data-on={on ? "1" : "0"}
+              onClick={() => setVersion(v.id)}
+              style={{
+                flex: 1,
+                padding: "7px 0",
+                borderRadius: radius.pill,
+                border: "none",
+                background: on ? C.accent : "transparent",
+                color: on ? C.accentInk : C.sub,
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ font: `9px ${MONO}`, color: C.faint, lineHeight: 1.4 }}>
+        {LANDING_VERSIONS.find((v) => v.id === version)?.hint}
+      </div>
+
+      {version === "v1" && (
+      <>
       <div style={{ display: "flex", gap: 6 }}>
         <button
           type="button"
@@ -286,6 +383,11 @@ export function DevChangeList() {
           );
         })}
       </div>
+      <div style={{ font: `9px ${MONO}`, color: C.faint, lineHeight: 1.4 }}>
+        {onCount}/{CHANGE_UNITS.length} 적용후
+      </div>
+      </>
+      )}
 
       <div style={{ font: `9px ${MONO}`, color: C.faint, lineHeight: 1.4 }}>
         이 패널은 로컬·테일넷 dev 에서만 보입니다. 공개 사이트엔 안 뜹니다.
