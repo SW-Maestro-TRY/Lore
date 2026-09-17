@@ -25,9 +25,14 @@ import java.util.Optional;
  * 지금까지 도래한 슬롯 중 없는 행을 만든다. 도래 시각과 만료 시각은 기상 시각에서 계산한다.
  *
  * <h3>슬롯 시각(16장)</h3>
- * BABY 부화+8분(만료 = 60분 뒤 첫 밤 경계) / MORNING 기상+1h(만료 NOON) / NOON 기상+7h(만료 EVENING) /
+ * MORNING 기상+1h(만료 NOON) / NOON 기상+7h(만료 EVENING) /
  * EVENING 19:00 고정(만료 23:00 — 그 전에 잠들면 "자는 중" 으로 닫힘).
  * 놓친 부름은 패널티 0. BABY 는 하루 3회에 안 세지만 친밀도·2층 카운터에는 센다.
+ *
+ * <h3>★ BABY 는 시각이 아니라 <b>순서</b>다</h3>
+ * 튜토리얼 앞의 두 칸(밥·쓰다듬)을 끝내면({@link ZzalRules#TUTORIAL_CHAT_AFTER}) 그 자리에서 부른다.
+ * <b>만료가 없다</b> — 며칠 뒤에 와도 그대로 기다린다. 튜토리얼 중에는 시계가 멈춰 있어
+ * "몇 분 뒤" 로는 아무 일도 일어나지 않기 때문이다(옛 실시간 규칙은 1.4 에서 폐기).
  */
 @Service
 public class ChatService {

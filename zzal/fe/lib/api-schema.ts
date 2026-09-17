@@ -1346,6 +1346,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내 후기 조회
+         * @description 이 펫에 **이미 냈는지**와, 냈다면 그 내용.
+         *
+         *     - 안 냈어도 에러가 아니다 — `submitted` 가 false 로 온다
+         *     - 화면은 이 값을 보고 후기 칸을 띄울지 정한다. 이미 낸 사람에게 또 띄우지 않기 위해서다
+         *     - ★ 이 판정을 펫 상태 응답에 얹지 않은 이유는 그쪽이 3초마다 도는 폴링이기 때문이다
+         */
+        get: operations["mine"];
+        put?: never;
+        /**
+         * 후기 남기기
+         * @description 별점(필수)·칩(선택)·자유 글(선택)을 받는다.
+         *
+         *     - **한 사람이 한 펫에 한 번**이다. 두 번째는 409(ZZAL_FEEDBACK_ALREADY_SUBMITTED)
+         *     - 응답은 조회와 **같은 모양**이다 — 낸 뒤에 다시 물어볼 필요가 없다
+         *     - 칩은 정해진 값만 받는다. 없는 값을 보내면 400 이다
+         *     - **보상은 지금 나가지 않는다.** 무엇을 줄지 아직 안 정해졌고, 정해지면 설정값만
+         *       바꾸면 붙는다. 화면에 "무엇을 드립니다" 라고 쓰지 말 것
+         */
+        post: operations["submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/games": {
         parameters: {
             query?: never;
@@ -1926,6 +1960,12 @@ export interface components {
         };
         ApiResponseState: {
             data?: components["schemas"]["State"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseSubmitted: {
+            data?: components["schemas"]["Submitted"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -2950,6 +2990,48 @@ export interface components {
              * @example 3
              */
             winAt?: number;
+        };
+        /** @description 후기 — 별점은 필수, 칩과 자유 글은 선택 */
+        Submit: {
+            /**
+             * Format: int32
+             * @description 별점 1~5
+             * @example 4
+             */
+            rating?: number;
+            /**
+             * @description 고른 칩들. 없어도 된다. 정해진 값만 받는다
+             * @example [
+             *       "LOOKS_SAME",
+             *       "MOTION_ODD"
+             *     ]
+             */
+            tags?: ("LOOKS_SAME" | "LOOKS_OFF" | "MOTION_GOOD" | "MOTION_ODD" | "TOO_SLOW" | "WANT_MORE")[];
+            /**
+             * @description 자유롭게 쓴 말. 없어도 된다
+             * @example 움직임이 생각보다 자연스러웠어요
+             */
+            text?: string;
+        };
+        /** @description 이 펫에 남긴 후기. 아직 안 냈으면 submitted 가 false 이고 나머지가 비어 있다 */
+        Submitted: {
+            /**
+             * Format: date-time
+             * @description 낸 시각(ISO-8601)
+             */
+            createdAt?: string;
+            /**
+             * Format: int32
+             * @description 별점 1~5
+             * @example 4
+             */
+            rating?: number;
+            /** @description 냈는가. false 면 아래 칸이 전부 비어 있다 */
+            submitted?: boolean;
+            /** @description 고른 칩들. 안 골랐으면 빈 배열 */
+            tags?: ("LOOKS_SAME" | "LOOKS_OFF" | "MOTION_GOOD" | "MOTION_ODD" | "TOO_SLOW" | "WANT_MORE")[];
+            /** @description 자유롭게 쓴 말. 안 썼으면 null */
+            text?: string;
         };
         TodayView: {
             canCreate?: boolean;
@@ -4530,7 +4612,16 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDrafted"];
                 };
             };
-            /** @description 부화 진행 중(ZZAL_PET_ALREADY_HATCHING) · 슬롯 부족(ZZAL_PET_LIMIT_REACHED) */
+            /**
+             * @description 부화 진행 중(ZZAL_PET_ALREADY_HATCHING) · 슬롯 부족(ZZAL_PET_LIMIT_REACHED)
+             *
+             *     **막힘(상한)** — 상태는 전부 409 이고 화면은 `error.code` 하나로 문구를 고른다.
+             *     - `ZZAL_HATCH_BLOCKED_PET_LIMIT` 동시 1마리 · 누적 상한
+             *     - `ZZAL_HATCH_BLOCKED_DAILY_CAP` 사람당 하루 상한(한국 시각 자정에 초기화)
+             *     - `ZZAL_HATCH_BLOCKED_SERVICE_CAP` 서비스 전체 하루 상한(한국 시각 자정에 초기화)
+             *     - `ZZAL_HATCH_BLOCKED_IP_RATE` 같은 곳에서 너무 자주 시작함
+             *     - `ZZAL_HATCH_BLOCKED_QUOTA` 그림 생성 쪽이 한도로 막는 중
+             */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4771,6 +4862,90 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseAnswered"];
+                };
+            };
+        };
+    };
+    mine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 조회 성공(안 냈으면 submitted=false) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSubmitted"];
+                };
+            };
+            /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSubmitted"];
+                };
+            };
+        };
+    };
+    submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Submit"];
+            };
+        };
+        responses: {
+            /** @description 남겼음 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSubmitted"];
+                };
+            };
+            /** @description 별점이 1~5 밖이거나 없는 칩(INVALID_INPUT) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSubmitted"];
+                };
+            };
+            /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSubmitted"];
+                };
+            };
+            /** @description 이미 냈음(ZZAL_FEEDBACK_ALREADY_SUBMITTED) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSubmitted"];
                 };
             };
         };

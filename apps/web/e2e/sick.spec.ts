@@ -57,13 +57,28 @@ test('간식을 연달아 다섯 개 주면 배탈(UPSET)', async ({ page }) => 
   expect(await sickKind(page)).toBe('UPSET');
 });
 
-test('아기 60분 안에는 간식을 다섯 개 줘도 안 아프다(해석 39)', async ({ page }) => {
+// ★ 이 칸은 "아기 60분 안에는 간식을 다섯 개 줘도 안 아프다" 였다 — 간식을 다섯 개 먹여 배탈을
+//   건드려 보는 길이었다. 정본 v1.10 §12 가 그 길 자체를 막았다:
+//   「튜토리얼 중엔 **지금 안내(강조)된 버튼만 누를 수 있다** — 나머지는 잠긴다.」
+//   간식은 아홉 칸 어디에서도 안내되지 않으므로 튜토리얼 내내 잠겨 있다. 지우지 않고 **새 규칙을
+//   단정하도록** 고친다 — 결론(튜토리얼 중에 아이가 아플 일은 없다)은 그대로이고, 이제는 더 앞에서
+//   막힌다. "버튼이 잠긴다" 가 사라지면 그 규칙은 아무도 안 지킨다.
+//   ⚠️ 서버 쪽 안전망(해석 39 — 튜토리얼 중에는 배탈을 안 낸다)은 그대로 살아 있다
+//   (`mockPetServer.care` SNACK · 백엔드 `ZzalPet`). 화면에서 닿을 길이 없어져 여기서는 못 민다.
+test('튜토리얼 중에는 간식 버튼이 잠겨 배탈이 날 길이 없다(정본 §12 v1.10 · 해석 39)', async ({ page }) => {
   await gotoMock(page, 'baby');
-  for (let i = 0; i < 5; i++) await press(page, 'snack');
-  expect(await status(page)).not.toBe('sick');
-  // 연속 카운터가 5에서 끊기므로, 60분이 끝나자마자 여섯 개째로 아프지도 않는다.
+  // 첫 칸은 밥이다 — 밥만 열리고 간식은 잠긴다.
+  expect(await isLocked(page, 'feed'), '안내된 칸은 눌린다').toBe(false);
+  expect(await isLocked(page, 'snack'), '안내 안 된 간식은 잠긴다').toBe(true);
+
+  // 시계를 밀어도 튜토리얼은 순서로 가므로(v1.4) 칸이 바뀌지 않는다 — 간식은 계속 잠긴 채다.
   await advance(page, 61 * MIN);
-  await press(page, 'snack');
+  expect(await isLocked(page, 'snack')).toBe(true);
+  expect(await status(page)).not.toBe('sick');
+
+  // 밥을 줘 둘째 칸(쓰다듬)으로 넘어가도 간식은 여전히 잠겨 있다 — 아홉 칸 내내 그렇다.
+  await press(page, 'feed');
+  expect(await isLocked(page, 'snack')).toBe(true);
   expect(await status(page)).not.toBe('sick');
 });
 

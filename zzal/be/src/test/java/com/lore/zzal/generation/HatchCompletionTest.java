@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
 import com.lore.zzal.generation.steps.MotionGridStep;
@@ -41,7 +42,7 @@ import static org.mockito.Mockito.when;
 class HatchCompletionTest {
 
     private static final Long PET = 7L;
-    private static final String V = "v2";
+    private static final String V = "v1";
     private static final Instant T0 = Instant.parse("2026-09-11T03:00:00Z");
 
     private ZzalPetRepository petRepository;
@@ -61,10 +62,11 @@ class HatchCompletionTest {
         PipelineRegistry registry = new PipelineRegistry(
                 StepMocks.sheet(), StepMocks.identity(),
                 StepMocks.grid(), StepMocks.grid2(), StepMocks.post(),
-                mock(MotionGridStep.class), mock(MotionPostStep.class), "v2", "v1", path -> true);
+                mock(MotionGridStep.class), mock(MotionPostStep.class), "v1", "v1");
 
         service = new HatchService(mock(GenerationRunner.class), recorder, mock(GenJobRepository.class),
-                registry, petRepository, 2, seeder);
+                registry, petRepository, new com.lore.zzal.guard.QuotaBreaker(),
+                mock(com.lore.zzal.guard.HatchBlockLog.class), mock(ZzalAlerts.class), 2, seeder);
     }
 
     /** 다섯 단계를 전부 성공시킨 기록 — 굽기가 끝난 상태. */

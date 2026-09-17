@@ -210,10 +210,11 @@ export const PROP_SPECS: Record<string, PropSpec> = {
     outside: false, facing: "follow", z: "above_char", minPx: 40, status: "confirmed",
     offset: { dx: 0.22, dy: 0.0, unit: "K" },
     stages: [
+      // 3~4단계는 넓어 발끝선에 맞추면 발/정강이를 덮는다 → 그 단계만 앞쪽 바닥으로 더 내린다(sinkK).
       { n: 1, key: "trash_1", ver: 1, file: "trash_1.v1.webp", ratio: 0.301, srcW: 178, srcH: 247 },
       { n: 2, key: "trash_2", ver: 1, file: "trash_2.v1.webp", ratio: 0.735, srcW: 435, srcH: 315 },
-      { n: 3, key: "trash_3", ver: 1, file: "trash_3.v1.webp", ratio: 0.9408, srcW: 557, srcH: 362 },
-      { n: 4, key: "trash_4", ver: 1, file: "trash_4.v1.webp", ratio: 1.169, srcW: 692, srcH: 273 },
+      { n: 3, key: "trash_3", ver: 1, file: "trash_3.v1.webp", ratio: 0.9408, srcW: 557, srcH: 362, sinkK: 0.60 },
+      { n: 4, key: "trash_4", ver: 1, file: "trash_4.v1.webp", ratio: 1.169, srcW: 692, srcH: 273, sinkK: 0.45 },
     ],
   },
   /** 아이 밑에 깔린다 — 캐릭터보다 먼저 그린다. 아랫변이 발끝선보다 K×0.02 아래. */
@@ -276,14 +277,15 @@ export const PROP_SPECS: Record<string, PropSpec> = {
       { n: 3, key: "bath_3", ver: 1, file: "bath_3.v1.webp", srcW: 1116, srcH: 1332, screen: { widthPx: 558.0, leftPx: 0.0, heightPx: 665.9, bottomFromStageBottomPx: 0.0, topFromFootlinePx: 427.9, fillTopFromFootlinePx: 338.5 } },
     ],
   },
-  /** 3단계(걷힘)는 그림이 없다 — 반짝은 단계가 아니라 전환 신호다. */
+  /** 3단계 = 먼지가 가장자리로 걷히며 주변에 별(cand_02, 2026-09-16). 이제 걷힘도 그림이 있어 머리 위 반짝임(전환 신호)을 대신한다 — 청소 마무리가 dust_3 으로 끝난다. */
   dust: {
-    key: "dust", name: "먼지 1~2단계", anchor: "screen_bottom", ref: "bottom", unit: "screen",
+    key: "dust", name: "먼지 1~3단계", anchor: "screen_bottom", ref: "bottom", unit: "screen",
     outside: false, facing: "follow", z: "above_char", minPx: 0, status: "confirmed",
     offset: { dx: 0.0, dy: 0.0, unit: "screen" },
     stages: [
       { n: 1, key: "dust_1", ver: 1, file: "dust_1.v1.webp", srcW: 1116, srcH: 584, screen: { widthPx: 558.0, leftPx: 0.0, heightPx: 291.8, bottomFromStageBottomPx: 0.0, topFromFootlinePx: 53.8, fillTopFromFootlinePx: -40.7 } },
       { n: 2, key: "dust_2", ver: 1, file: "dust_2.v1.webp", srcW: 1116, srcH: 1488, screen: { widthPx: 558.0, leftPx: 0.0, heightPx: 744.0, bottomFromStageBottomPx: 0.0, topFromFootlinePx: 506.0, fillTopFromFootlinePx: 500.3 } },
+      { n: 3, key: "dust_3", ver: 1, file: "dust_3.v1.webp", srcW: 1116, srcH: 1488, screen: { widthPx: 558.0, leftPx: 0.0, heightPx: 744.0, bottomFromStageBottomPx: 0.0, topFromFootlinePx: 506.0, fillTopFromFootlinePx: 491.6 } },
     ],
   },
   /** 거품 2단계가 찬 뒤에 온다. 위에서 내려오므로 무대 위끝에 붙이고 아랫변을 발끝선 위 K×0.60 에 맞춘다(세로로 늘린다). ⚠ 무대가 429px 로 낮은 360×640 화면에서는 남는 세로가 13px 뿐이다 — 낮은 화면 처리는 아직 안 정했다. */

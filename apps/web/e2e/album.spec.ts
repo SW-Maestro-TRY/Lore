@@ -52,24 +52,35 @@ test('사흘째 밤 → 아침에 첫 선물이 도착하고, 확인하면 도�
   await expect(page.locator('[data-celebration]')).toHaveCount(0);
 });
 
-test('잠긴 칸도 이름과 조건이 보인다(정본 §6)', async ({ page }) => {
+// ★ 이 칸은 옛 2층 목록(`nod` 끄덕이기 · `smile_idle` 웃는 대기)을 단정하고 있었다. 정본 v1.10 이
+//   2층 조건표를 **코드 v4 기준으로 교체**하면서 그 이름들이 카탈로그에서 사라졌다 —
+//   「격자 2장 = 2층: 9 밥 먹기(`eat_rice`) / 10 간식 먹기(`eat_snack`) / 11 청소하기(`sweep`) /
+//    12 목욕하기(`wash`) / 13 답하기(`reply`) / 14 쓰다듬받기(`petted`) / 15 놀람(`startle`) /
+//    16 일어나기(`wake_up`)」. 보려던 것(잠긴 칸도 이름·조건·진행이 함께 보이는가)은 그대로 두고
+//   **새 목록의 칸을 단정하도록** 고친다.
+test('잠긴 칸도 이름과 조건이 보인다(정본 §6 · v1.10 조건표)', async ({ page }) => {
   await gotoMock(page, 'child', '2026-09-05T10:00');
-  // 1층 8종은 부화 즉시 열려 있고, 2층은 조건이 남아 있다.
+  // 1층 8종은 부화 즉시 열려 있고, 2층 8종은 조건이 남아 있다.
   await expect(page.locator('[data-dex="base"]')).toHaveAttribute('data-open', '1');
-  const locked = page.locator('[data-dex="nod"]');
+  const locked = page.locator('[data-dex="petted"]');
   await expect(locked).toHaveAttribute('data-open', '0');
-  // "채팅 응답 12회 · 1/12" 처럼 이름과 조건과 진행이 함께 보인다.
-  await expect(locked).toContainText('끄덕이기');
-  await expect(locked).toContainText('채팅 응답 12회');
-  await expect(locked).toContainText('/12');
+  // "쓰다듬기 4회 · 1/4" 처럼 이름과 조건과 진행이 함께 보인다(정본 §6: 14 쓰다듬받기 = 쓰다듬 4회).
+  await expect(locked).toContainText('쓰다듬 받기');
+  await expect(locked).toContainText('쓰다듬기 4회');
+  await expect(locked).toContainText('/4');
 
-  // ★ 15번(웃는 대기)만 다르다 — 이름과 조건은 보여 주되 **진행도는 안 준다**(계약 해석 40).
-  //   그 숫자는 곧 케어 미스를 되짚게 해 주는데, 케어 미스는 숨은 수치다(정본 §4).
-  const hidden = page.locator('[data-dex="smile_idle"]');
-  await expect(hidden).toContainText('웃는 대기');
-  await expect(hidden).toContainText('잘 돌본 날 3번');
-  await expect(hidden, '진행도(n/3)가 보이면 안 된다').not.toContainText('/3');
-  await expect(hidden, '내부 용어가 새면 안 된다').not.toContainText('케어 미스');
+  // ★ 조건은 **전부 그 행동 자체다**(정본 §6: "2층은 못 보던 행동이 열리는 것이 아니라 하던 행동이
+  //   좋아지는 것이라 조건이 전부 그 행동 자체다"). 청소 자세는 청소로, 놀람은 게임으로 열린다.
+  await expect(page.locator('[data-dex="sweep"]')).toContainText('청소 13회');
+  await expect(page.locator('[data-dex="startle"]')).toContainText('미니게임 4판');
+
+  // ★ v4 에는 **진행도를 가리는 칸이 하나도 없다.** 서버가 가리는 조건은 "잘 돌본 날 n번"
+  //   (ZERO_MISS_DAYS) 하나인데(케어 미스는 숨은 수치라 — 정본 §4 · 계약 해석 40), 1.10 의 여덟 줄에는
+  //   그 조건이 없다. 옛 15번(웃는 대기)이 그 자리였고 지금은 놀람(게임 4판)이다.
+  await expect(page.locator('[data-dex="startle"]'), '이제 진행도가 보인다').toContainText('/4');
+  for (const key of ['eat_rice', 'eat_snack', 'sweep', 'wash', 'reply', 'petted', 'startle', 'wake_up']) {
+    await expect(page.locator(`[data-dex="${key}"]`), `${key} — 내부 용어가 새면 안 된다`).not.toContainText('케어 미스');
+  }
 });
 
 test('배경 바꾸기는 2층 4종 뒤에 열린다', async ({ page }) => {

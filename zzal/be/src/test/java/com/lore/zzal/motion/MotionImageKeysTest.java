@@ -64,9 +64,10 @@ class MotionImageKeysTest {
     @Test
     @DisplayName("앵커가 있는 펫인가 — 내는 버전이고 판이 한 번이라도 올라갔을 때만")
     void anchorsExistOnlyForVersionsThatEmitThem() {
-        assertThat(MotionImageKeys.hasAnchors("v4", 1)).isTrue();
-        assertThat(MotionImageKeys.hasAnchors("v4", 0)).as("아직 한 판도 안 구웠다").isFalse();
-        assertThat(MotionImageKeys.hasAnchors("v2", 1)).as("v2 스크립트는 앵커를 안 만든다").isFalse();
+        assertThat(MotionImageKeys.hasAnchors("v1", 1)).isTrue();
+        assertThat(MotionImageKeys.hasAnchors("v1", 0)).as("아직 한 판도 안 구웠다").isFalse();
+        assertThat(MotionImageKeys.hasAnchors("옛파이프라인", 1))
+                .as("앵커를 안 내던 버전으로 적힌 옛 기록").isFalse();
         assertThat(MotionImageKeys.hasAnchors(null, 1)).isFalse();
     }
 }

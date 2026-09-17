@@ -116,7 +116,10 @@ class PetServiceTest {
                 mock(com.lore.zzal.night.BakeTrigger.class),
                 new com.lore.zzal.scene.SceneService(sceneRepository, new MotionCatalog("", "", "v1")),
                 new com.lore.zzal.leave.LeaveService(postcardRepository),
-                com.lore.zzal.PieceFixture.inMemory());
+                com.lore.zzal.PieceFixture.inMemory(),
+                // ★ 상한 다섯은 여기서 보지 않는다 — 목이라 전부 통과한다.
+                //   진짜 판정은 HatchGuardTest(단위)와 HatchLimitsIT(진짜 DB)가 본다.
+                mock(com.lore.zzal.guard.HatchGuard.class));
     }
 
     /** T0(정오) 에 부화해 <b>튜토리얼 중</b>인 펫 — 시계가 아직 안 켜졌다. 낮잠 테스트용. */

@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
 import com.lore.zzal.generation.steps.PostProcessStep;
@@ -52,7 +53,7 @@ class ModerationRetryEndToEndTest {
             started.put(id, inv.getArgument(2));
             return id;
         });
-        runner = new GenerationRunner(recorder);
+        runner = new GenerationRunner(recorder, mock(ZzalAlerts.class));
     }
 
     /** 이름을 기록하며 성공하는 단계 — 무엇이 실제로 구워졌는지 세려고. */
@@ -100,7 +101,7 @@ class ModerationRetryEndToEndTest {
                 List.of(ok(GridStep.NAME), blocked(PostProcessStep.GRID2)),
                 List.of(ok("postprocess")));
 
-        RunResult first = runner.run(JOB, new StepContext(7L, "여울", null, "v2"), stages, List.of());
+        RunResult first = runner.run(JOB, new StepContext(7L, "여울", null, "v1"), stages, List.of());
 
         assertThat(first.success()).isFalse();
         assertThat(first.errorCode())
@@ -119,7 +120,7 @@ class ModerationRetryEndToEndTest {
                 List.of(ok(IdentityStep.NAME)),
                 List.of(ok(GridStep.NAME), ok(PostProcessStep.GRID2)),
                 List.of(ok("postprocess")));
-        RunResult second = runner.run(2L, new StepContext(7L, "여울", null, "v2"), retry, resume);
+        RunResult second = runner.run(2L, new StepContext(7L, "여울", null, "v1"), retry, resume);
 
         assertThat(second.success()).isTrue();
         assertThat(baked)
@@ -141,7 +142,7 @@ class ModerationRetryEndToEndTest {
                 List.of(ok(IdentityStep.NAME)),
                 List.of(ok(GridStep.NAME), ok(PostProcessStep.GRID2)),
                 List.of(ok("postprocess")));
-        runner.run(3L, new StepContext(7L, "여울", null, "v2"), stages, resumeOldWay);
+        runner.run(3L, new StepContext(7L, "여울", null, "v1"), stages, resumeOldWay);
 
         assertThat(baked)
                 .as("1층이 안 구워진다 = 옛 문단으로 만든 그림이 새 문단의 2층과 짝이 된다")

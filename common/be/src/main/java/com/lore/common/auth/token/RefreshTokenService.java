@@ -39,15 +39,36 @@ public class RefreshTokenService {
         this.jwtProvider = jwtProvider;
     }
 
-    /** 새 refresh 토큰을 발급하고 원문을 돌려준다(저장되는 것은 해시). */
+    /**
+     * 로그인 시 새 refresh 토큰을 발급하고 원문을 돌려준다(저장되는 것은 해시).
+     *
+     * ★ 여기서만 <b>절대 상한을 새로 찍는다</b>(now + 90일). 회전은 이 값을 물려받기만 한다.
+     */
     @Transactional
     public String issue(User user, String userAgent, Instant now) {
+        return issueInternal(user, userAgent, now, now.plus(jwtProvider.refreshAbsoluteExpiry()));
+    }
+
+    /**
+     * 실제 발급. expiresAt 은 <b>슬라이딩 만료(now + 14일)와 절대 상한 중 이른 쪽</b>으로 깎는다.
+     * 그래서 절대 상한이 가까우면 이번 refresh 수명이 그만큼 짧아지고, 상한이 지나면 expiresAt 도
+     * 이미 지난 값이 되어 isUsable 이 false 가 된다.
+     *
+     * @param absoluteExpiresAt 로그인은 now+90일을 새로 넣고, 회전은 옛 토큰 값을 그대로 넘긴다.
+     *                          null 이면(레거시 토큰 회전) 상한 없이 슬라이딩 만료만 적용한다.
+     */
+    private String issueInternal(User user, String userAgent, Instant now, Instant absoluteExpiresAt) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 
+        Instant sliding = now.plus(jwtProvider.refreshExpiry());
+        Instant expiresAt = (absoluteExpiresAt != null && absoluteExpiresAt.isBefore(sliding))
+                ? absoluteExpiresAt
+                : sliding;
+
         repository.save(UserRefreshToken.issue(
-                user, hash(raw), now.plus(jwtProvider.refreshExpiry()), userAgent, now));
+                user, hash(raw), expiresAt, absoluteExpiresAt, userAgent, now));
         return raw;
     }
 
@@ -75,7 +96,9 @@ public class RefreshTokenService {
 
         found.revoke(now);
         User user = found.getUser();
-        return new Rotated(user, issue(user, userAgent, now));
+        // ★ 절대 상한은 옛 토큰에서 물려받는다 — 회전으로 90일을 다시 주면 상한이 무의미해진다.
+        //   null(레거시)이면 그대로 null 을 넘겨 상한 없이 슬라이딩만 적용한다.
+        return new Rotated(user, issueInternal(user, userAgent, now, found.getAbsoluteExpiresAt()));
     }
 
     /** 로그아웃. 그 토큰만 폐기한다(다른 기기는 유지). */

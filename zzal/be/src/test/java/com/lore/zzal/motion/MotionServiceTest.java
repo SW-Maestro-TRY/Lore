@@ -1,5 +1,6 @@
 package com.lore.zzal.motion;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.PetFixture;
 import com.lore.zzal.generation.GenJob;
 import com.lore.zzal.generation.GenJobRepository;
@@ -97,7 +98,7 @@ class MotionServiceTest {
         when(stepRepository.findSucceededByMotion(anyLong())).thenReturn(List.<GenStepRecord>of());
 
         service = new MotionService(runner, recorder, motionRecorder, jobRepository, stepRepository,
-                motionRepository, petRepository, registry, catalog, gate, 1, 2);
+                motionRepository, petRepository, registry, catalog, gate, mock(ZzalAlerts.class), 1, 2);
     }
 
     /** 실행기가 성공했다고 답하게 만든다. */
@@ -169,7 +170,7 @@ class MotionServiceTest {
     @Test
     @DisplayName("★ 판은 regenRound 가 아니라 attempts 다 — queue() 가 regenRound 를 0 으로 되돌린다")
     void regenRoundIsResetByQueueSoItCannotBeTheRound() {
-        ZzalMotion m = ZzalMotion.start(PET_ID, 3, MOTION_NAME, "v4");
+        ZzalMotion m = ZzalMotion.start(PET_ID, 3, MOTION_NAME, "v1");
         org.springframework.test.util.ReflectionTestUtils.setField(m, "status",
                 com.lore.zzal.motion.MotionStatus.FAILED);
         m.beginAttempt();
@@ -272,7 +273,8 @@ class MotionServiceTest {
     @DisplayName("시도 횟수를 2 이상으로 올리면 다시 굽는다 — 두 번째에 검수 대기까지 간다")
     void retriesWhenConfigured() {
         MotionService twice = new MotionService(runner, mock(GenerationRecorder.class), motionRecorder,
-                jobRepository, stepRepository, motionRepository, petRepository, registry, catalog, gate, 2, 2);
+                jobRepository, stepRepository, motionRepository, petRepository, registry, catalog, gate,
+                mock(ZzalAlerts.class), 2, 2);
         when(runner.run(any(), any(), any(), any()))
                 .thenAnswer(i -> RunResult.failed(i.getArgument(1), BigDecimal.ZERO, null))
                 .thenAnswer(i -> {

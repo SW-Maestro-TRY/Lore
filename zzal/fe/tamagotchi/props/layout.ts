@@ -28,6 +28,8 @@ export interface CharGeom {
 export interface StageGeom {
   width: number;
   height: number;
+  /** 발끝선 하한(px). 짧은 화면은 `FOOT_FLOOR_SHORT`. 없으면 `footlineFromBottom` 이 기본(`FOOT_FLOOR`)을 쓴다. */
+  footFloor?: number;
 }
 
 /** 한 장을 어디에 얼마나 크게 그릴지. 전부 px. */
@@ -84,6 +86,11 @@ export interface CharFit {
   belowFoot: number;
   /** 가장 키 큰 자세의 실루엣 / K. 짧은 화면에서 **머리가 안 잘리게** 깎는 데 쓴다. */
   tallestPerK: number;
+  /**
+   * 이 자세의 **머리끝→발끝 높이 ÷ 캔버스 세로**. 상자 세로(`CHAR_H`)에 곱하면 화면에서의 실루엣 키가 되고,
+   * `발끝선(LIFT) + CHAR_H×이 값` 이 곧 **머리끝 자리**다 — 말풍선을 머리 위로 띄우는 데 쓴다.
+   */
+  headSpanPerBoxH: number;
 }
 
 /**
@@ -105,6 +112,7 @@ export function charFit(anchors: CharAnchors, pose: string): CharFit {
     aspect: canvasW / canvasH,
     belowFoot: (canvasH - p.feet.y) / canvasH,
     tallestPerK: (tallest > 0 ? tallest : anchors.K) / anchors.K,
+    headSpanPerBoxH: (p.feet.y - p.head_top.y) / canvasH,
   };
 }
 
@@ -197,8 +205,39 @@ export function layoutProp(spec: PropSpec, stage: PropStage, geom: CharGeom): Pr
   };
 }
 
-/** 무대 아래에서 발끝선까지(px). **여섯 화면 전부 238 고정**이라 무대 높이와 무관하다. */
+/** 무대 아래에서 발끝선까지(px) — 옛 고정값. 좁은 화면의 기준으로만 남긴다. */
 export const FOOTLINE_FROM_BOTTOM = PROP_STAGE.footlineFromBottom;
+
+/**
+ * 발끝선 하한(px) — 팝오버가 발을 안 덮게 무대 아래에 비워 두는 예약.
+ *
+ * ★ 왜 둘인가(2026-09-16) — 보통 화면은 팝오버(186px)가 발을 안 덮게 220px 을 비운다(여유 16px).
+ *   그런데 **SE 처럼 짧은 화면**(무대 403px)에서는 이 220px 이 무대의 절반을 먹어 캐릭터가 들어갈
+ *   자리가 확 줄어 아이만 유독 작았다. 그래서 짧은 화면(`SHORT_Q`+`NARROW_Q`)에서는 **팝오버를
+ *   콤팩트하게 줄이고**(Popover 의 `compact`), 줄어든 만큼 이 예약도 낮춰(`FOOT_FLOOR_SHORT`)
+ *   아이에게 자리를 돌려준다. 팝오버가 작아진 만큼만 낮추므로 **여전히 발을 안 덮는다.**
+ */
+export const FOOT_FLOOR = 220;
+export const FOOT_FLOOR_SHORT = 178;
+
+/** 짧은·좁은 화면 판정 — Room.tsx(캐릭터)와 PropLayer(소품)가 **같은 기준**으로 갈라야 발끝선이 일치한다. */
+export const NARROW_Q = '(max-width: 640px)';
+export const SHORT_Q = '(max-height: 720px)';
+
+/**
+ * 발끝선 — 무대 아래에서 발끝까지(px). **Room.tsx 의 캐릭터 발끝(LIFT: `clamp(floor,30%,330px)`)과
+ * 똑같은 식**이라야 똥·바닥 소품이 아이 발에 붙는다(둘이 어긋나면 소품이 공중에 뜨거나 발을 파고든다).
+ *
+ * ★ 왜 무대 높이의 함수인가(2026-09-16) — 예전엔 여섯 화면 전부 238 고정이었는데, 큰·긴 화면에서는
+ *   발밑에 죽은 바닥이 넓게 남아 방이 미완성처럼 보였다. 무대가 커지면 발끝도 30% 지점까지 함께
+ *   올라와 바닥·벽 비율이 균형을 잡는다. 팝오버에 발이 안 덮이도록 하한 `floorPx`(보통 220px, 짧은
+ *   화면은 178px), 아주 긴 화면에서 발이 너무 높이 뜨지 않도록 상한 330px.
+ *   ★ `floorPx` 는 **Room.tsx 의 LIFT 하한과 반드시 같은 값**이어야 한다(짧은 화면이면 둘 다
+ *   `FOOT_FLOOR_SHORT`). 소품 층(PropLayer)이 `StageGeom.footFloor` 로 이 값을 넘긴다.
+ */
+export function footlineFromBottom(stageH: number, floorPx: number = FOOT_FLOOR): number {
+  return Math.min(330, Math.max(floorPx, stageH * 0.3));
+}
 
 /**
  * 화면 세로 여유가 이만큼도 안 되면 **아예 안 띄운다**(샤워 물줄기).
@@ -236,13 +275,23 @@ export function layoutRoomProp(spec: PropSpec, stage: PropStage, st: StageGeom, 
   const sign = side === 'left' ? -1 : 1;
   const off = offsetPx(spec.offset, u, boxW);
 
-  let x = st.width / 2;
-  if (spec.outside) x += sign * (width / 2);
-  x += sign * off.dx;
-  const y = st.height - FOOTLINE_FROM_BOTTOM + off.dy;
+  // ★ 방에 붙박인 소품은 **무대 한가운데에서 규격 오프셋(`offset.dx`)만큼 옆으로** 둔다(2026-09-16 개정).
+  //   한때 오프셋을 통째로 걷어 정중앙에 뒀더니 **똥이 캐릭터 발/신발을 정면으로 덮었다** — 아이와 소품이
+  //   같은 중심에 서서 겹친 것이다. 그래서 규격이 정한 옆 오프셋을 되살려 소품을 발 옆 바닥에 놓는다.
+  //   (예전 "완전히 왼쪽" 쏠림은 오프셋이 과했던 것이라, 값은 규격에서 조율한다 — 여기서는 그 값을 따를 뿐.)
+  //   세로 오프셋(`off.dy`)은 발끝선 미세조정이라 그대로 둔다. 자세·평행이동과 무관해 여전히 결정적이다.
+  // ★ 단계별 하강(`stage.sinkK`) — 넓고 큰 단계(3~4단 똥)를 발끝선 아래 앞쪽 바닥으로 더 내려
+  //   캐릭터 발/신발을 안 덮게 한다(2026-09-16). K 비율이라 아이가 커지면 같이 커진다. 없으면 0.
+  const y = st.height - footlineFromBottom(st.height, st.footFloor) + off.dy + (stage.sinkK ?? 0) * u.K;
+
+  // ★ 무대 밖으로 잘리지 않게 무대 안으로 물린다(2026-09-16). 소품이 커지면서 넓은 것(3~4단 똥·매트)이
+  //   좁은 화면 가장자리에서 잘렸다. 무대보다 좁으면 가장자리 안으로, 무대보다 넓으면 가운데에 둔다.
+  //   무대 폭·소품 폭만의 함수라 여전히 결정적이다(같은 개수면 언제나 같은 자리).
+  let left = st.width / 2 + sign * off.dx - width / 2;
+  left = width <= st.width ? Math.min(Math.max(left, 0), st.width - width) : (st.width - width) / 2;
 
   return {
-    left: x - width / 2,
+    left,
     top: spec.ref === 'bottom' ? y - height : y - height / 2,
     width,
     height,
@@ -282,9 +331,13 @@ export function layoutScreenProp(spec: PropSpec, stage: PropStage, st: StageGeom
   const k = st.width / PROP_STAGE.width;
 
   // 화면 위에서 내려오는 것(샤워 물줄기) — 아랫변이 발끝선 위 K x 0.60 에 온다.
+  // ★ 위 여백(`topFromStageTopPx`)과 발끝선 위 높이(`bottomFromFootlinePx`)는 **base(558폭) 좌표**라
+  //   무대 스케일 계수 `k` 로 함께 줄여야 한다(2026-09-16). 안 그러면 폰(무대 378px)에서 base 오프셋을
+  //   그대로 빼 높이가 음수가 되고 `SCREEN_FX_MIN_H` 미만으로 떨어져 **물줄기가 아예 안 떴다.**
+  //   bath·dust 는 아래 `heightPx x k` 분기라 이미 k 로 줄어드는데, 물줄기만 이 분기를 써서 빠져 있었다.
   if (s.topFromStageTopPx !== undefined) {
-    const top = s.topFromStageTopPx;
-    const bottomFromStageBottom = FOOTLINE_FROM_BOTTOM + (s.bottomFromFootlinePx ?? 0);
+    const top = s.topFromStageTopPx * k;
+    const bottomFromStageBottom = footlineFromBottom(st.height, st.footFloor) + (s.bottomFromFootlinePx ?? 0) * k;
     const height = st.height - bottomFromStageBottom - top;
     // ★ 여유가 없으면 안 띄운다 — 짧은 화면에서 물줄기가 얼룩으로 보인다.
     if (height < SCREEN_FX_MIN_H) return null;

@@ -12,8 +12,11 @@ test('30분 방치 뒤 밀린 부름이 순서대로', async ({ page }) => {
     expect(await call(page), key).toBe(`baby:${key}`);
     await doBabyStep(page, key);
   }
-  // 40분 칸은 아직
-  expect(await call(page)).toBeNull();
+  // ★ 여덟째 칸(재우기)이 **곧바로** 온다. 옛 "40분 칸은 아직" 은 시각 기반 잔재다 —
+  //   정본 v1.4 가 튜토리얼을 순서로 바꾸면서 기다림을 없앴다(§12: "사용자가 직접 눌러야
+  //   다음 칸으로 넘어가고, 그동안 게이지 시계는 켜지지 않는다 … 옛 '부화 순간부터 실시간
+  //   60분' 규칙은 폐기"). 표의 7번(공유) 다음은 8번(재우기)이고 그 사이에 빈 자리가 없다.
+  expect(await call(page)).toBe('baby:NAP');
 });
 
 test('60분이 지나도 남은 칸은 큐에 남는다(active=false)', async ({ page }) => {

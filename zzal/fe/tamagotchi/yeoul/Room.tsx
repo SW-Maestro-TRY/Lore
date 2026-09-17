@@ -23,10 +23,12 @@ import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
 import Panels from './Panels';
+import FeedbackSheet from '../FeedbackSheet';
 import { spriteUrl, useFootPad, useLive, yeoulSpriteUrl } from './useHatch';
+import { useIsWide } from '../useIsWide';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
-import { charFit, HEAD_SAFE, K_SCREEN_TARGET } from '../props/layout';
+import { charFit, HEAD_SAFE, FOOT_FLOOR, FOOT_FLOOR_SHORT, NARROW_Q, SHORT_Q } from '../props/layout';
 import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
 import {
   SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose, stageAt, stagePlanOf,
@@ -37,8 +39,17 @@ import { confirmedSpec } from '../props/catalog';
 /** 걷힘 바퀴에만 잠깐 생기는 줄의 이름. 표에 없는 이름이라 다른 줄과 안 부딪힌다. */
 const SWEEP_ROW_ID = '__sweep__';
 
+// `NARROW_Q`(좁은 폰)·`SHORT_Q`(짧은 화면)는 `../props/layout` 에서 가져온다 — 소품 층과 **같은 기준**이라야
+// 캐릭터 발끝선과 소품이 어긋나지 않는다. 좁고 짧은 화면(SE 등)만 `compact` 로 아이를 키우고 팝오버를 줄인다.
+
 export default function Room({ y }: { y: Yeoul }) {
-  const { v, actions } = y;
+  const { s, v, actions } = y;
+  // 좁은 폰(SE)에서 말풍선이 떴을 때만, 머리 위 공간을 벌기 위해 아이를 소폭 낮춘다(아래 SIL).
+  const narrow = useIsWide(NARROW_Q);
+  // ★ 좁고 **짧은** 화면(SE 667 등)만 — 팝오버를 콤팩트하게 줄이고 발끝선 예약(LIFT 하한)을 낮춰 아이를 키운다.
+  //   폭·높이 둘 다 걸어야 390x844(긴 폰)·1280x720(넓은 창)이 안 딸려 온다(그 화면들은 이미 마음에 드심).
+  const short = useIsWide(SHORT_Q);
+  const compact = narrow && short;
   // 무엇을 그릴지는 `v.spriteKey`(useYeoul)가, 누구를 그릴지는 `spriteUrl`(useHatch)이 정한다.
   const live = useLive();
   // 여울 샘플 방에서는 여울이, 진짜 방에서는 내 아이만 나온다.
@@ -133,20 +144,26 @@ export default function Room({ y }: { y: Yeoul }) {
   //   3) 팝오버가 발을 안 덮는다 — 발끝이 팝오버 윗변보다 위에.
   //   4) 그 안에서 최대한 크게.
   //
-  // ★ 발끝(`LIFT`) — 원래는 `POP_LIFT + 34` 한 값이었는데, 무대가 짧은 화면(360×640)에서는
-  //   그 높이가 무대에 비해 과해 아이 머리가 잘렸다. 그래서 **무대의 62% 로도 한 번 깎는다.**
-  //   62% 는 무대가 384px 아래로 내려갈 때만 걸리고, 그 아래에서도 발끝이 팝오버 윗변(최대
-  //   `POP_LIFT`)보다 위로 남는다. 화면 높이로만 정해지는 값이라 1)을 깨지 않는다.
-  // ★ 키(`CHAR_H`) — 규격값 `K_SCREEN_TARGET`(296px)이 기본이고, 무대가 짧으면 **남은 머리 공간에
-  //   맞춰 깎는다.** 머리끝 = 발끝 + 화면키 × (가장 큰 실루엣 ÷ K) 이므로 그 식을 뒤집었다.
+  // ★ 발끝(`LIFT`) — 무대 아래에서 발끝까지. 무대가 커지면 **발끝도 30% 지점까지 함께 올라와**
+  //   큰·긴 화면에서 발밑에 죽은 바닥이 넓게 남지 않는다(2026-09-16 art-direction: 방을 균형 있게).
+  //   하한(보통 220px)은 팝오버가 발을 안 덮게(여유 16px), 상한 330px 은 아주 긴
+  //   화면에서 발이 너무 높이 뜨지 않게 잡는다. 화면 높이로만 정해지는 값이라 1)을 깨지 않는다.
+  //   ★ 짧은 화면(`compact`)은 팝오버가 콤팩트해져(아래 `Popover compact`) 더 낮은 자리에서도 발을 안
+  //     덮으므로, 하한을 `FOOT_FLOOR_SHORT`(178px)로 낮춰 짧은 무대에서 아이에게 자리를 돌려준다.
+  //   ★ `props/layout.ts` 의 `footlineFromBottom(stageH, floor)` 과 **똑같은 식·같은 하한**이라야 똥·바닥
+  //     소품이 발에 붙는다(소품 층은 `StageGeom.footFloor` 로 같은 하한을 받는다).
+  // ★ 키(`CHAR_H`) — 이제 규격 고정값(296px)이 아니라 **무대의 약 60%(실루엣 기준)** 를 목표로 커졌다
+  //   줄었다 한다(2026-09-16: 큰 화면에서 아이가 너무 작아 보였다). 다만 머리끝이 무대 위로 넘지 않게
+  //   남은 높이(`100% - LIFT - HEAD_SAFE`)로 깎는다. 짧은 화면은 이 깎기가 걸려 60%보다 작아진다.
   //   깎는 기준을 **가장 큰 자세**로 잡는 이유 — 자세마다 깎으면 자세를 바꿀 때 아이가 출렁여
   //   1)이 깨진다. `HEAD_SAFE` 는 반올림에 먹히지 않도록 두는 최소 여유다.
-  const LIFT = `max(min(212px,34%),min(${POP_LIFT + 34}px,62%))`;
+  //   ★ 배경이 사라지지 않도록 60% 를 넘겨 키우지 말 것 — "방 안에 있다"가 유지돼야 한다(상훈님 지시).
+  const LIFT = `clamp(${compact ? FOOT_FLOOR_SHORT : FOOT_FLOOR}px, 30%, 330px)`;
 
   // ★ 크기는 **실루엣 키(K)로 정한다** — 상자를 먼저 정하고 그 안에 그림을 넣지 않는다.
-  //   규격의 모든 ratio 가 "화면 키 = K_screen(296px)" 을 전제하기 때문이다(→ `props/layout.ts` 머리말).
-  //   상자 폭으로 잡던 옛 방식에서는 K 가 220.6px 밖에 안 나와 규격이 통째로 1.34배 어긋났고,
-  //   그 탓에 하트 같은 작은 소품이 비율(41.2px)이 아니라 **하한 40px 에 걸려** 그려졌다.
+  //   규격의 모든 ratio 가 "화면 키 = K_screen(296px)" 을 전제한다(→ `props/layout.ts` 머리말) —
+  //   그 전제는 K 를 재는 **기준**일 뿐이고, 실제 화면 키는 무대에 맞춰 이보다 커지거나 작아진다.
+  //   소품은 캐릭터 상자 폭에서 자(K)를 뽑으므로(→ `unitPxOfWidth`) 아이가 커지면 소품도 같은 비율로 커진다.
   //   상자 크기·세로 자리는 여기서 **따라 나오는 값**이다.
   // ★ 앵커를 못 받았으면(옛 펫) K 를 모른다 → 예전처럼 **상자 기준**으로 되돌아간다. 두 길 다 돈다.
   const fit = useMemo(() => charFit(anchors.anchors, v.spriteKey), [anchors.anchors, v.spriteKey]);
@@ -157,14 +174,35 @@ export default function Room({ y }: { y: Yeoul }) {
   const charBoxRef = useRef<HTMLDivElement>(null);
   const byK = anchors.source === 'server' || v.sample.show;
 
-  // 화면에서의 실루엣 키. 규격값(296)이 기본이고, 무대가 짧으면 **머리가 잘리지 않을 만큼**만 깎는다.
-  const K_SCREEN = `min(${K_SCREEN_TARGET}px,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${fit.tallestPerK.toFixed(4)}))`;
+  // ★ 말풍선 공간 예약(2026-09-16) — SE(좁은 폰)에서 짧은 무대는 머리끝이 무대 위끝 바로 아래에
+  //   서서, 머리 위에 말풍선 한 줄도 안 들어가 윗부분이 잘렸다(실측 SE: 머리 위 44px뿐). **말풍선이
+  //   떴을 때만** 남은 높이에서 이만큼을 더 빼 아이를 낮춰, 서브헤더~머리 사이에 말풍선(2~3줄)이
+  //   전부 들어오게 한다. 메시지 가독이 최우선이라 아이를 소폭 양보한다. 넓은/긴 화면은 아래
+  //   `max(60%,150px)` 가 이겨 예약이 무시되므로 아이가 안 줄어든다(짧은 화면에서만 적용).
+  // ★ 짧은 화면(`compact`)은 발끝선을 낮춰 머리도 그만큼 내려와 머리 위 공간이 이미 늘었다 →
+  //   말풍선 예약을 76→50px 로 줄여 아이를 덜 깎는다(말풍선 2~3줄은 여전히 무대 안에 들어온다 — 실측
+  //   SE 2줄에서 무대 위끝 안쪽 여유 확보). 좁지만 긴 폰(390x844 등)은 예전대로 76px — 안 건드린다.
+  const BUBBLE_RESERVE = v.bub.show ? (compact ? 50 : narrow ? 76 : 0) : 0;
+  // 화면에서의 실루엣 키. **무대의 약 60%** 를 목표로 하되, 머리끝이 무대 위로 안 넘게 남은 높이로 깎는다.
+  //   `SIL` 은 가장 큰 자세의 실루엣이 화면에서 가질 높이다(무대 60%, 하한 150px, 머리 공간으로 상한).
+  //   K_SCREEN = SIL ÷ (가장 큰 실루엣÷K) — 이렇게 뒤집어야 어떤 자세든 무대 밖으로 안 나간다.
+  const SIL = `min(calc(100% - ${LIFT} - ${HEAD_SAFE}px - ${BUBBLE_RESERVE}px), max(60%, 150px))`;
+  const K_SCREEN = `calc(${SIL} / ${fit.tallestPerK.toFixed(4)})`;
   const CHAR_H = byK
     ? `calc(${K_SCREEN} * ${fit.boxHPerK.toFixed(4)})`
-    : `min(350px,58%,calc((100% - ${LIFT} - ${HEAD_SAFE}px) / ${(1 - footPad).toFixed(4)}))`;
+    : `calc(min(calc(100% - ${LIFT} - ${HEAD_SAFE}px - ${BUBBLE_RESERVE}px), max(64%, 160px)) / ${(1 - footPad).toFixed(4)})`;
   // 발끝이 발끝선(`LIFT`)에 오게 상자를 내린다. 앵커가 있으면 **그 자세의 발끝**을, 없으면 잰 여백을 쓴다.
   const BELOW_FOOT = byK ? fit.belowFoot : footPad;
   const CHAR_ASPECT = byK ? `${fit.aspect.toFixed(6)}` : '313/350';
+
+  // ★ 말풍선은 **머리끝 자리**를 계산해 그 위에 띄운다(2026-09-16). 예전엔 무대 위끝에서 고정 px
+  //   (샘플 96 · 진짜 12)이라, 화면이 짧거나 아이가 뛰면(`yHop` 최대 30px) 머리가 그 자리로 올라와
+  //   얼굴을 덮었다. 이제 자세·화면 크기에 따라 머리끝을 따라가므로 어느 폭에서도 얼굴을 안 덮는다.
+  //   머리끝(무대 아래 기준) = 발끝선(LIFT) + 상자세로(CHAR_H) × (그 자세 머리끝→발끝 / 캔버스세로).
+  //   그 위로 여유(뜀·흔들림 흡수)를 두고 **아래를 그 자리에 붙여** 위로 자란다(짧은 화면에서 위가 잘려도
+  //   얼굴은 안 덮는 쪽을 고른다). 여유 14px = 흔들림(yBob 4px)을 늘 덮고 뜀의 첫 구간까지 받는다.
+  const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${fit.headSpanPerBoxH.toFixed(4)})`;
+  const BUBBLE_BOTTOM = `calc(${headTopFromBottom} + 14px)`;
 
   return (
     <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
@@ -173,6 +211,27 @@ export default function Room({ y }: { y: Yeoul }) {
 
       {v.hud.show && <Hud y={y} />}
       {v.sample.show && <SampleHud y={y} />}
+
+      {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가 · 아기 시간표 중인가 · 받은 움직임이
+          도착했는가)는 **FeedbackSheet 이 정한다.** 여기서 판정하면 스킨이 그 규칙을 알아야 하고,
+          규칙이 바뀔 때마다 스킨이 같이 바뀐다 — 스크랩북과 같은 약속이다(skins/Scrapbook.tsx).
+          ★ 자리 — 머리줄 **아래, 무대 위**. 띠는 덮개 없이 세로 흐름에 끼어드는 한 줄이라
+            **아래 돌봄 타일을 한 번도 가리지 않는다**(예전에 돌봄 버튼을 덮어 띠로 바꾼 그 이유).
+            여울에는 도감 구역이 따로 없어서 스크랩북의 그 자리를 대신하는 곳이다.
+          ★ 목(여울 연습방·시안 미리보기)에서는 안 그린다 — 후기는 실서버 전용이다. */}
+      <FeedbackSheet
+        petId={!s.sampleMode && live.pet?.phase === 'ALIVE' ? live.petId : null}
+        // 받은 움직임이 실제로 있을 때만 "받은 움직임, 어땠어요?" 를 묻는다.
+        advancedArrived={(live.pet?.learnedToday?.length ?? 0) > 0 || live.pet?.firstGift?.status === 'OPEN'}
+        // 아기 시간표는 **서버가 센다**(계약 — 끝나면 블록이 null 이다). 화면이 다시 세지 않는다.
+        tutorialActive={live.pet?.tutorial?.active === true || s.tutorOn}
+        // 전면 판(해금 축하·선물)과 앨범 벽이 떠 있는 동안에는 저절로 안 올라온다.
+        hold={!!s.fire || v.wall.show || v.frame.show}
+        tone="yeoul"
+        // ★ 개발용 미리보기 — 이동 창에서 켜면 목(연습방)에서도 후기 판을 mock 으로 강제로 띄운다.
+        //   실서버 경로는 위 props 그대로이고, 이 값만 갈래를 나눈다(공개 도메인에선 켜질 길이 없다).
+        preview={v.fbPreview}
+      />
 
       {/* ── 무대 ───────────────────────────────────────────────── */}
       <div
@@ -185,17 +244,25 @@ export default function Room({ y }: { y: Yeoul }) {
       >
         <div style={{ position: 'absolute', inset: 0, backgroundImage: v.st.pattern, opacity: 0.5 }} />
 
-        {/* 창문 — 낮엔 해, 밤엔 달. */}
+        {/* 창문 — 낮엔 해, 밤엔 달.
+            ★ 자리·크기를 **무대 기준(%)** 으로 잡는다(2026-09-16). 예전엔 고정 px(left28·top34·98x98)라
+              큰 화면에서는 넓은 벽 구석에 작은 사각형이 홀로 떠 다른 요소와 동떨어져 보였다.
+              이제 무대에 비례해 커지고 자리도 벽의 같은 지점에 붙어 방의 일부로 읽힌다.
+              해·달은 창 안에서 %로 잡아 창이 커져도 같은 자리에 온다. */}
         <div style={{
-          position: 'absolute', left: 28, top: 34, width: 98, height: 98, borderRadius: 15,
+          position: 'absolute', left: '7%', top: '7%',
+          width: 'clamp(92px, 15%, 156px)', aspectRatio: '1 / 1', borderRadius: 15,
           border: `5px solid ${v.st.frame}`, background: v.st.sky, overflow: 'hidden',
         }}>
-          {v.st.moon && <div style={{ position: 'absolute', right: 15, top: 13, width: 27, height: 27, borderRadius: '50%', background: '#F7EDCD', boxShadow: '0 0 20px rgba(247,237,205,.75)' }} />}
-          {v.st.sun && <div style={{ position: 'absolute', right: 16, top: 15, width: 23, height: 23, borderRadius: '50%', background: '#FBE7B4' }} />}
+          {v.st.moon && <div style={{ position: 'absolute', right: '15%', top: '13%', width: '28%', height: '28%', borderRadius: '50%', background: '#F7EDCD', boxShadow: '0 0 20px rgba(247,237,205,.75)' }} />}
+          {v.st.sun && <div style={{ position: 'absolute', right: '16%', top: '15%', width: '24%', height: '24%', borderRadius: '50%', background: '#FBE7B4' }} />}
         </div>
 
-        {/* 바닥 */}
-        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 'min(266px,44%)', background: v.st.floor, borderTop: '1px solid rgba(74,64,56,.09)' }} />
+        {/* 바닥 — ★ 벽↔바닥 경계(수평선)를 **발끝선(`LIFT`) 위**에 둔다(2026-09-16).
+            예전엔 고정 `min(266px,44%)` 이라 짧은 화면(SE 378px)에서 경계(44%=167px)가 발끝선(220px)보다
+            **아래**로 내려가 아이가 바닥 위 허공에 뜨고 그 아래 바닥이 텅 비어 보였다. 이제 경계를
+            발끝선보다 한 뼘 위(무대 8%, 28~90px)로 올려 아이가 언제나 바닥에 발을 딛는다. */}
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `calc(${LIFT} + clamp(28px, 8%, 90px))`, background: v.st.floor, borderTop: '1px solid rgba(74,64,56,.09)' }} />
 
         {/* 그림자 — 캐릭터와 같은 걸음으로 움직인다. */}
         <div style={{
@@ -220,6 +287,8 @@ export default function Room({ y }: { y: Yeoul }) {
             position: 'absolute', left: 0, right: 0,
             bottom: `calc(${LIFT} - ${CHAR_H} * ${BELOW_FOOT.toFixed(4)})`,
             height: CHAR_H, display: 'flex', justifyContent: 'center', zIndex: 2,
+            // 말풍선이 뜰 때 아이가 소폭 낮아지는데(BUBBLE_RESERVE), 툭 튀지 않게 부드럽게 잇는다.
+            transition: 'height .28s ease, bottom .28s ease',
             animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
           }}
         >
@@ -289,11 +358,14 @@ export default function Room({ y }: { y: Yeoul }) {
             </div>
           </>
         )}
-        {v.st.sick && <div style={{ position: 'absolute', inset: 0, background: 'rgba(130,132,138,.2)', animation: 'yFadeIn .4s ease' }} />}
+        {/* 아픔 — 벽·창문은 그대로 두고 **채도만** 낮춘다(2026-09-16). backdrop 로 뒤(벽·무늬·창문·바닥)를
+            탈색하되 아이(zIndex:2)는 제 필터(saturate .5)를 그대로 쓴다. 예전의 단색 회색 슬래브(질감·창문이
+            사라져 "화면 깨짐"으로 읽힘)를 걷어냈다. backdrop 을 못 그리는 곳에서도 옅은 냉기 톤은 남는다. */}
+        {v.st.sick && <div style={{ position: 'absolute', inset: 0, backdropFilter: 'saturate(.45)', WebkitBackdropFilter: 'saturate(.45)', background: 'rgba(140,144,156,.12)', animation: 'yFadeIn .4s ease', pointerEvents: 'none' }} />}
 
         {v.bub.show && (
-          <div style={{
-            position: 'absolute', left: '50%', top: v.bub.top, zIndex: 3, width: 280, marginLeft: -140,
+          <div data-part="bubble" style={{
+            position: 'absolute', left: '50%', bottom: BUBBLE_BOTTOM, zIndex: 3, width: 280, marginLeft: -140,
             display: 'flex', justifyContent: 'center',
             animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
           }}>
@@ -311,8 +383,11 @@ export default function Room({ y }: { y: Yeoul }) {
         )}
       </div>
 
-      {/* ── 아래 — 팝오버와 타일 ─────────────────────────────────── */}
-      <div onClick={actions.bottomTap} style={{ position: 'relative', flex: 'none', padding: '10px 12px 22px' }}>
+      {/* ── 아래 — 팝오버와 타일 ───────────────────────────────────
+          ★ 무대 바닥(`v.st.floor`)을 이 컨트롤 영역 위쪽으로 **이어 준다**(2026-09-16). 예전엔 이 칸이
+            셸 크림색이라 무대 바닥(탄색)과 사이에 크림 띠 seam 이 생겨 "빈 베이지 띠"로 보였다.
+            위 38px 를 바닥 톤에서 셸로 풀어 seam 을 없애고 방 바닥이 타일까지 자연스럽게 내려오게 한다. */}
+      <div onClick={actions.bottomTap} style={{ position: 'relative', flex: 'none', padding: '10px 12px 22px', background: `linear-gradient(180deg, ${v.st.floor} 0, ${C.shell} 38px)` }}>
         {v.fab.show && <ChatFab y={y} />}
         {v.mini.show && <MiniCard y={y} />}
         {v.medFab.show && (
@@ -340,7 +415,7 @@ export default function Room({ y }: { y: Yeoul }) {
               <span style={{ background: 'rgba(74,64,56,.92)', color: '#FBF6EC', borderRadius: radius.pill, padding: '7px 16px', fontSize: 12, animation: 'yFadeIn .2s ease' }}>{v.toast.text}</span>
             </div>
           )}
-          {v.pop.show && <Popover y={y} />}
+          {v.pop.show && <Popover y={y} compact={compact} />}
         </div>
 
         <div data-part="tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 6 }}>
@@ -402,16 +477,18 @@ function cssText(text: string): React.CSSProperties {
  */
 function Hud({ y }: { y: Yeoul }) {
   const { v, actions } = y;
+  // 좁은 폰에서는 머리 띠(이름 줄·며칠째 줄)를 얇게 줄여 무대에 세로를 돌려준다(데스크톱은 그대로).
+  const narrow = useIsWide(NARROW_Q);
   return (
     <>
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 20px 5px' }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: narrow ? '6px 16px 2px' : '11px 20px 5px' }}>
         {/* 이름이 길어도(12자) 아래 버튼과 부딪히지 않게 한 줄로 자른다. */}
         <span data-part="pet-title" style={{
-          fontFamily: GAEGU, fontWeight: 700, fontSize: 22, lineHeight: 1.2, color: C.ink,
+          fontFamily: GAEGU, fontWeight: 700, fontSize: narrow ? 19 : 22, lineHeight: 1.2, color: C.ink,
           maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{v.pet.name}</span>
       </div>
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7, padding: '0 20px 8px' }}>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 7, padding: narrow ? '0 16px 5px' : '0 20px 8px' }}>
         <span style={{ fontSize: 14, color: '#635A52' }}>{v.pet.dayText}</span>
         <span style={{ fontSize: 12, color: '#8B8279' }}>·</span>
         <span style={{ fontSize: 14, color: '#635A52' }}>친밀도 {v.pet.bond}%</span>
@@ -451,9 +528,11 @@ function Hud({ y }: { y: Yeoul }) {
  */
 function SampleHud({ y }: { y: Yeoul }) {
   const { v } = y;
+  // 좁은 폰에서는 띠 여백을 줄여 무대에 세로를 돌려준다(데스크톱은 그대로).
+  const narrow = useIsWide(NARROW_Q);
   return (
     // 띠는 무대를 그만큼 잡아먹는다 — 아이가 주인공이라 여백을 최소로 잡았다.
-    <div data-part="sample-hud" style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 20px 7px' }}>
+    <div data-part="sample-hud" style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: narrow ? 4 : 6, padding: narrow ? '4px 14px 4px' : '8px 20px 7px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           onClick={v.sample.exit} data-part="sample-exit"
@@ -495,6 +574,8 @@ function TutorCard({ y }: { y: Yeoul }) {
   const { v } = y;
   const b = v.bub;
   const [folded, setFolded] = useState(false);
+  // 좁은 폰에서는 인사 카드의 여백·글씨를 줄여 무대에 세로를 돌려준다(데스크톱은 그대로).
+  const narrow = useIsWide(NARROW_Q);
   useEffect(() => { setFolded(false); }, [b.stepText]);
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
@@ -520,7 +601,7 @@ function TutorCard({ y }: { y: Yeoul }) {
 
   return (
     <div data-part="tutor" style={{
-      position: 'relative', padding: '6px 22px 6px 10px', borderRadius: radius.md,
+      position: 'relative', padding: narrow ? '4px 20px 4px 9px' : '6px 22px 6px 10px', borderRadius: radius.md,
       background: C.slot, border: `1px solid ${C.line}`,
       animation: 'yPop .24s ease',
     }}>
@@ -532,7 +613,7 @@ function TutorCard({ y }: { y: Yeoul }) {
 
       {/* 글과 손잡이들을 한 흐름에 둔다. 글이 끝난 자리에 이어 붙어 줄을 더 쓰지 않는다. */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 6px' }}>
-        <span style={{ fontFamily: GAEGU, fontSize: 15, lineHeight: 1.22, color: C.ink }}>{b.tutText}</span>
+        <span style={{ fontFamily: GAEGU, fontSize: narrow ? 13.5 : 15, lineHeight: 1.22, color: C.ink }}>{b.tutText}</span>
         <span style={{ font: `9.5px ${MONO}`, color: C.faint2 }}>{b.stepText}</span>
         {b.hasPrev && (
           <button onClick={stop(b.prev)} data-tutor-prev style={{ ...pill, border: `1px solid ${C.lineHard}`, background: C.slot, color: C.sub2 }}>이전</button>
@@ -832,7 +913,7 @@ function ChatBar({ y }: { y: Yeoul }) {
  *   `animation` 을 같이 걸면 키프레임이 인라인 값을 덮어 팝오버가 엉뚱한 자리에 떴다가
  *   끝나는 순간 튀어 들어온다(2026-09-07 실측: 앨범 타일에서 215px 순간이동).
  */
-function Popover({ y }: { y: Yeoul }) {
+function Popover({ y, compact = false }: { y: Yeoul; compact?: boolean }) {
   const p = y.v.pop;
   const room = y.v.selK;
   const box = useRef<HTMLDivElement>(null);
@@ -884,31 +965,33 @@ function Popover({ y }: { y: Yeoul }) {
     >
     <div
       data-part="pop-card"
+      // ★ 짧은 화면(`compact`)은 여백·글자를 조금씩 줄여 팝오버 높이를 낮춘다(색·모양·구성은 그대로).
+      //   낮아진 만큼 발끝선 예약(`FOOT_FLOOR_SHORT`)도 낮춰 아이가 커진다. 버튼 터치 타깃은 유지한다.
       style={{
         position: 'relative', width: '100%',
-        padding: '12px 13px', boxSizing: 'border-box', borderRadius: radius.lg,
+        padding: compact ? '8px 12px' : '12px 13px', boxSizing: 'border-box', borderRadius: radius.lg,
         background: C.paper, border: `1px solid ${C.lineSoft}`, boxShadow: '0 8px 24px rgba(74,64,56,.16)',
-        display: 'flex', flexDirection: 'column', gap: 11, animation: p.anim,
+        display: 'flex', flexDirection: 'column', gap: compact ? 7 : 11, animation: p.anim,
       }}
     >
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: compact ? 5 : 7 }}>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-          <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.25, color: C.ink }}>{p.say}</span>
+          <span style={{ fontFamily: GAEGU, fontSize: compact ? 16.5 : 19, lineHeight: compact ? 1.15 : 1.25, color: C.ink }}>{p.say}</span>
           <span style={{ flex: 1 }} />
           <span style={{ font: `10.5px ${MONO}`, color: C.faint }}>{p.count}</span>
         </span>
         {p.hasBar && (
           <span style={{ display: 'flex', gap: 5 }}>
-            {p.bar.map((g, i) => <span key={i} style={{ flex: 1, height: 11, borderRadius: 5, background: g.bg }} />)}
+            {p.bar.map((g, i) => <span key={i} style={{ flex: 1, height: compact ? 9 : 11, borderRadius: 5, background: g.bg }} />)}
           </span>
         )}
       </span>
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: compact ? 5 : 7 }}>
         {/* ★ '여기서 ○○ 누르기' 안내 줄은 없앴다(2026-09-07 상훈님 지시).
             같은 말을 세 번 하고 있었다 — 위 안내 카드가 무엇을 할지 말하고, 대상 버튼이 깜빡인다.
             깜빡임(yBlink)은 남긴다. 글자 없이 가리킬 수 있는 유일한 수단이라 그것까지 없애면 못 찾는다. */}
-        {p.a && <PopButton b={p.a} />}
-        {p.hasB && p.b && <PopButton b={p.b} />}
+        {p.a && <PopButton b={p.a} compact={compact} />}
+        {p.hasB && p.b && <PopButton b={p.b} compact={compact} />}
       </span>
       <span data-part="pop-tail" style={{ position: 'absolute', left: geo ? geo.tail : '50%', bottom: -6, width: 12, height: 12, background: C.paper, borderRight: `1px solid ${C.lineSoft}`, borderBottom: `1px solid ${C.lineSoft}`, transform: 'translateX(-50%) rotate(45deg)' }} />
     </div>
@@ -916,15 +999,16 @@ function Popover({ y }: { y: Yeoul }) {
   );
 }
 
-function PopButton({ b }: { b: NonNullable<Yeoul['v']['pop']['a']> }) {
+function PopButton({ b, compact = false }: { b: NonNullable<Yeoul['v']['pop']['a']>; compact?: boolean }) {
   return (
     // ★ 진짜 `disabled` 다(계약 10절 "거절될 버튼은 미리 잠가 둔다"). 회색으로만 칠하고 눌리게 두면
     //   눌러 봐야 왜 안 되는지 알 수 있고, 서버에는 나갈 필요 없던 요청이 나간다.
     //   ⚠️ `aria-disabled` 를 늘 달지 않는다 — `"false"` 도 검사 도구에 '비활성' 으로 읽힌다.
+    //   ★ 짧은 화면(`compact`)은 세로 여백만 살짝 줄인다(13→10px). 글자·터치 폭은 그대로라 여전히 잘 눌린다.
     <button
       onClick={b.tap} data-action={b.label} disabled={b.off}
       data-off={b.off ? '1' : undefined} data-why={b.why || undefined}
-      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px 14px', borderRadius: radius.md, border: b.bd, background: b.bg, color: b.fg, textAlign: 'left', animation: b.anim, cursor: b.off ? 'default' : 'pointer' }}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: compact ? '10px 14px' : '13px 14px', borderRadius: radius.md, border: b.bd, background: b.bg, color: b.fg, textAlign: 'left', animation: b.anim, cursor: b.off ? 'default' : 'pointer' }}
     >
       <span style={{ fontSize: 15.5 }}>{b.label}</span>
       <span style={{ flex: 1 }} />

@@ -11,12 +11,20 @@
 //    구 랜딩은 "(생성 1회 추가)" 라고 적어 두었는데, 지금 그대로 쓰면 지키지 않는 약속이 된다.
 //
 // ★ 디자인은 상훈님이 직접 다듬으실 자리다. 여기서는 동작이 도는 것까지만 한다.
+//
+// ★★ 2026-09-14 — **두 시안이 같은 이 부품을 쓴다**(스크랩북 · 여울). 띄울지 말지를 정하는
+//    규칙(이미 냈는가 · 아기 시간표 중인가 · 받은 움직임이 있는가 · 다른 판이 덮고 있는가)은
+//    아래 훅 하나에만 있고, 스킨은 값을 넘기고 자리를 잡아 줄 뿐이다.
+//    갈라지는 것은 **결(tone)뿐**이다 — 스크랩북은 종이·테이프·펜글씨, 여울은 `yeoul/ui.ts` 의
+//    토큰(손글씨 Gaegu · C 팔레트 · 알약 버튼). 규칙까지 스킨에 복사하면 두 판이 서로 다른
+//    순간에 뜨기 시작하고, 그 어긋남은 아무 소리도 안 낸다.
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { track } from '@common/analytics';
 import { ApiError } from '../lib/api';
 import { getMyFeedback, submitFeedback, type FeedbackTag } from '../lib/feedback';
+import { C, GAEGU as Y_GAEGU, radius, sel } from './yeoul/ui';
 
 const PEN = "'Nanum Pen Script',cursive";
 const GAEGU = "'Gaegu',cursive";
@@ -74,7 +82,25 @@ export interface FeedbackSheetProps {
    *   그 순간을 가리면 안 된다 — 사용자가 축하를 닫은 뒤에 올라온다.
    */
   hold?: boolean;
+  /**
+   * 어느 시안의 결로 그릴 것인가. **모양만 바뀐다** — 뜨는 조건도, 보내는 값도 같다.
+   *
+   * ★ 스킨별로 부품을 따로 두지 않은 이유 — 후기는 곁다리라 두 벌을 두면 한쪽만 고쳐진다.
+   *   실제로 스크랩북에만 붙어 있던 동안 여울 쓰는 사람은 후기를 낼 길이 아예 없었다.
+   */
+  tone?: 'scrapbook' | 'yeoul';
+  /**
+   * **개발용 미리보기.** 켜면 서버를 부르지 않고 mock 상태(아직 안 냄·움직임 막 도착)로 판을 강제로 연다.
+   *
+   * ★ 실서버 경로와 갈래를 나눈다 — `preview` 가 아닐 때는 예전과 **완전히 같다**(서버 조회·자동 띠·제출).
+   *   목(연습방)에서는 `petId` 가 없어 후기가 아예 안 그려지는데, 이 갈래만이 그 화면을 눈으로 보게 한다.
+   * ★ 공개 도메인에서는 이동 창 자체가 안 뜨므로(`useDevVisible`) 이 값이 켜질 길이 없다.
+   */
+  preview?: boolean;
 }
+
+/** 미리보기에서 쓰는 가짜 petId. 실제로 서버를 부르지 않으므로 아무 값이나 좋다(음수로 실 id 와 안 겹치게). */
+const PREVIEW_PET_ID = -1;
 
 /** 이 브라우저에서 이 아이에게 이미 저절로 띄웠는지. 새로고침마다 다시 뜨는 것을 막는다. */
 function askedKey(petId: number): string {
@@ -107,7 +133,9 @@ function messageOf(e: unknown): string {
   return '보내지 못했습니다';
 }
 
-export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, hold = false }: FeedbackSheetProps) {
+export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutorialActive, hold = false, tone = 'scrapbook', preview = false }: FeedbackSheetProps) {
+  // 미리보기일 때는 실 아이 대신 가짜 id 를 쓴다 — 아래 판정·렌더는 이 하나만 보면 된다.
+  const petId = preview ? PREVIEW_PET_ID : petIdProp;
   /** 서버가 아는 사실 — 이미 냈는가. null 이면 아직 못 물어봤다. */
   const [submitted, setSubmitted] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
@@ -131,6 +159,11 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
 
   // 이미 냈는지 물어본다. ★ 이 한 번이 "이미 낸 사람에게 또 띄우지 않는다" 를 지킨다.
   useEffect(() => {
+    // 미리보기는 서버를 안 부른다 — "아직 안 냄" 으로 두고 아래 효과가 곧바로 판을 연다.
+    if (preview) {
+      setSubmitted(false);
+      return;
+    }
     if (petId == null) {
       setSubmitted(null);
       return;
@@ -146,17 +179,25 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
         if (alive) setSubmitted(true);
       });
     return () => { alive = false; controller.abort(); };
-  }, [petId]);
+  }, [petId, preview]);
+
+  // 미리보기 — 서버 조회 대신 판(모달)을 곧바로 연다. 별점 고르기·칩·자유 글·보내기가 다 보인다.
+  useEffect(() => {
+    if (!preview) return;
+    from.current = 'dex';
+    setOpen(true);
+  }, [preview]);
 
   // 첫 심화 행동이 도착한 뒤 한 번. 축하 판이 떠 있는 동안·아기 시간표 중에는 안 띄운다.
   useEffect(() => {
+    if (preview) return; // 미리보기는 위 효과가 직접 연다 — 자동 띠 규칙을 타지 않는다.
     if (petId == null || submitted !== false || open || banner || hold) return;
     if (tutorialActive || !advancedArrived || wasAsked(petId)) return;
     markAsked(petId);
     from.current = 'unlock';
     setBanner(true);
     track('zzal_feedback_opened', { from: 'unlock' });
-  }, [petId, submitted, open, banner, hold, tutorialActive, advancedArrived]);
+  }, [petId, submitted, open, banner, hold, tutorialActive, advancedArrived, preview]);
 
   const openFromDex = useCallback(() => {
     if (petId == null) return;
@@ -180,6 +221,12 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
 
   const send = useCallback(async () => {
     if (petId == null || busy || rating < 1) return;
+    // 미리보기 — 서버로 안 보낸다. 화면 흐름(고마워요 판)만 그대로 보여 준다.
+    if (preview) {
+      setSubmitted(true);
+      setJustSent(true);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -206,17 +253,22 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
     } finally {
       setBusy(false);
     }
-  }, [petId, busy, rating, tags, text]);
+  }, [petId, busy, rating, tags, text, preview]);
 
   // 아이가 없거나, 아직 못 물어봤거나, 이미 낸 사람에게는 아무것도 안 그린다.
   if (petId == null || submitted === null) return null;
   if (submitted && !open) return null;
 
+  /** 이 시안의 한 벌. 아래 JSX 는 어느 시안인지 몰라도 되게 여기서 한 번만 고른다. */
+  const T = tone === 'yeoul' ? Y : S;
+
   return (
     <>
-      {/* 도감 구석의 작은 상시 링크. 첫 판을 닫은 사람이 나중에 다시 찾을 유일한 길이다. */}
-      {!submitted && (
-        <button data-action="feedback-open" onClick={openFromDex} style={S.link}>
+      {/* 작은 상시 링크. 첫 판을 닫은 사람이 나중에 다시 찾을 유일한 길이다.
+          ★ 띠가 떠 있는 동안에는 안 그린다 — 같은 자리에 "한 장 남기기" 가 이미 있어서
+            같은 뜻의 손잡이가 두 줄로 겹친다(여울에서 실측). 띠를 닫으면 다시 나온다. */}
+      {!submitted && !banner && !preview && (
+        <button data-action="feedback-open" onClick={openFromDex} style={T.link}>
           후기 남기기
         </button>
       )}
@@ -226,36 +278,32 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
         덮개(dim)도 없어서 하려던 일을 가로막지 않는다. 판으로 여는 것은 사람이 "네" 를 누른 뒤.
       */}
       {banner && !open && (
-        <div data-part="feedback-banner" style={S.banner}>
-          <span style={S.bannerText}>받은 움직임, 어땠어요?</span>
-          <button data-action="feedback-banner-open" onClick={openFromDex} style={S.bannerYes}>한 장 남기기</button>
-          <button data-action="feedback-close" onClick={() => { setBanner(false); }} style={S.bannerNo}>나중에</button>
+        <div data-part="feedback-banner" style={T.banner}>
+          <span style={T.bannerText}>받은 움직임, 어땠어요?</span>
+          <button data-action="feedback-banner-open" onClick={openFromDex} style={T.bannerYes}>한 장 남기기</button>
+          <button data-action="feedback-close" onClick={() => { setBanner(false); }} style={T.bannerNo}>나중에</button>
         </div>
       )}
 
       {open && (
-        <div style={S.overlay}>
-          <div onClick={close} style={S.dim} />
-          <div style={S.card} role="dialog" aria-label="후기 남기기">
-            <span style={S.tape} />
+        <div style={T.overlay}>
+          <div onClick={close} style={T.dim} />
+          <div style={T.card} role="dialog" aria-label="후기 남기기">
+            {tone === 'scrapbook' && <span style={T.tape} />}
 
             {justSent ? (
               <div style={{ textAlign: 'center' }}>
-                <p style={{ margin: '4px 0 8px', fontFamily: PEN, fontSize: 21, color: SUB }}>고마워요</p>
+                <p style={T.thanksEyebrow}>고마워요</p>
                 {/* ★ 여기에 "무엇을 드립니다" 를 쓰지 않는다. 지금은 아무것도 안 나간다. */}
-                <p style={{ margin: '0 0 16px', fontFamily: GAEGU, fontWeight: 700, fontSize: 18, color: INK, lineHeight: 1.5 }}>
-                  잘 읽고 다음 아이에 반영할게요
-                </p>
-                <button data-action="feedback-done" onClick={close} style={S.send(false)}>닫기</button>
+                <p style={T.thanksBody}>잘 읽고 다음 아이에 반영할게요</p>
+                <button data-action="feedback-done" onClick={close} style={T.send(false)}>닫기</button>
               </div>
             ) : (
               <>
-                <p style={{ margin: '0 0 2px', fontFamily: PEN, fontSize: 20, color: RED, lineHeight: 1 }}>한 장만</p>
-                <h3 style={{ margin: '0 0 14px', fontFamily: GAEGU, fontWeight: 700, fontSize: 21, color: INK }}>
-                  받은 움직임, 어땠어요?
-                </h3>
+                <p style={T.eyebrow}>한 장만</p>
+                <h3 style={T.h3}>받은 움직임, 어땠어요?</h3>
 
-                <span style={S.label}>별점</span>
+                <span style={T.label}>별점</span>
                 <div style={{ display: 'flex', gap: 4, margin: '6px 0 16px' }}>
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
@@ -263,15 +311,15 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
                       data-action={`feedback-star-${n}`}
                       onClick={() => setRating(n)}
                       aria-label={`별점 ${n}점`}
-                      style={S.star(n <= rating)}
+                      style={T.star(n <= rating)}
                     >
                       ★
                     </button>
                   ))}
                 </div>
 
-                <span style={S.label}>
-                  이런 점은 어땠나요 <span style={{ fontSize: 12, color: '#A79C82' }}>(여러 개)</span>
+                <span style={T.label}>
+                  이런 점은 어땠나요 <span style={T.labelHint}>(여러 개)</span>
                 </span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, margin: '8px 0 16px' }}>
                   {CHIPS.map((c) => (
@@ -280,30 +328,28 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
                       data-action={`feedback-chip-${c.tag}`}
                       onClick={() => toggle(c.tag)}
                       aria-pressed={tags.includes(c.tag)}
-                      style={S.chip(tags.includes(c.tag))}
+                      style={T.chip(tags.includes(c.tag))}
                     >
                       {c.label}
                     </button>
                   ))}
                 </div>
 
-                <span style={S.label}>하고 싶은 말 (선택)</span>
+                <span style={T.label}>하고 싶은 말 (선택)</span>
                 <textarea
                   data-action="feedback-text"
                   value={text}
                   onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT))}
                   rows={3}
                   placeholder="어떤 점이 좋았는지, 뭐가 아쉬웠는지 편하게 적어주세요"
-                  style={S.textarea}
+                  style={T.textarea}
                 />
-                <span style={{ alignSelf: 'flex-end', marginTop: 5, fontFamily: "'Nanum Gothic Coding',monospace", fontSize: 11, color: '#A79C82' }}>
-                  {text.length} / {MAX_TEXT}
-                </span>
+                <span style={T.counter}>{text.length} / {MAX_TEXT}</span>
 
-                {error && <p style={S.error}>{error}</p>}
+                {error && <p style={T.error}>{error}</p>}
 
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                  <button data-action="feedback-close" onClick={close} style={S.ghost}>나중에</button>
+                  <button data-action="feedback-close" onClick={close} style={T.ghost}>나중에</button>
                   {/* 별점 없이는 보낼 수 없다. 누를 수 있을 때는 aria-disabled 를 아예 붙이지
                       않는다 — "false" 를 비활성으로 읽는 도구가 있다(스크랩북의 돌봄 버튼과 같은 규칙). */}
                   <button
@@ -311,7 +357,7 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
                     onClick={() => void send()}
                     disabled={busy || rating < 1}
                     aria-disabled={busy || rating < 1 ? true : undefined}
-                    style={S.send(busy || rating < 1)}
+                    style={T.send(busy || rating < 1)}
                   >
                     {busy ? '보내는 중…' : '보내기'}
                   </button>
@@ -325,7 +371,23 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
   );
 }
 
-const S = {
+/**
+ * 한 시안의 스타일 한 벌. **두 벌이 같은 열쇠를 갖는다** — 한쪽에만 있는 열쇠가 생기면
+ * 그 시안에서만 조용히 스타일이 빠진다.
+ */
+type Tone = {
+  banner: CSSProperties; bannerText: CSSProperties; bannerYes: CSSProperties; bannerNo: CSSProperties;
+  link: CSSProperties; overlay: CSSProperties; dim: CSSProperties; card: CSSProperties; tape: CSSProperties;
+  eyebrow: CSSProperties; h3: CSSProperties; thanksEyebrow: CSSProperties; thanksBody: CSSProperties;
+  label: CSSProperties; labelHint: CSSProperties; textarea: CSSProperties; counter: CSSProperties;
+  error: CSSProperties; ghost: CSSProperties;
+  star: (on: boolean) => CSSProperties;
+  chip: (on: boolean) => CSSProperties;
+  send: (off: boolean) => CSSProperties;
+};
+
+/** 스크랩북 결 — 누런 종이 · 테이프 · 펜글씨. */
+const S: Tone = {
   banner: {
     display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
     margin: '12px 0 0', padding: '10px 12px',
@@ -369,7 +431,13 @@ const S = {
     borderLeft: '1px solid rgba(196,175,124,.5)', borderRight: '1px solid rgba(196,175,124,.5)',
     transform: 'rotate(-2deg)',
   } as CSSProperties,
+  eyebrow: { margin: '0 0 2px', fontFamily: PEN, fontSize: 20, color: RED, lineHeight: 1 } as CSSProperties,
+  h3: { margin: '0 0 14px', fontFamily: GAEGU, fontWeight: 700, fontSize: 21, color: INK } as CSSProperties,
+  thanksEyebrow: { margin: '4px 0 8px', fontFamily: PEN, fontSize: 21, color: SUB } as CSSProperties,
+  thanksBody: { margin: '0 0 16px', fontFamily: GAEGU, fontWeight: 700, fontSize: 18, color: INK, lineHeight: 1.5 } as CSSProperties,
   label: { fontFamily: GAEGU, fontWeight: 700, fontSize: 15, color: '#5C5445' } as CSSProperties,
+  labelHint: { fontSize: 12, color: '#A79C82' } as CSSProperties,
+  counter: { alignSelf: 'flex-end', marginTop: 5, fontFamily: "'Nanum Gothic Coding',monospace", fontSize: 11, color: '#A79C82' } as CSSProperties,
   star: (on: boolean): CSSProperties => ({
     border: 'none', background: 'none', padding: '0 2px', cursor: 'pointer',
     fontSize: 30, lineHeight: 1, color: on ? '#E0A93F' : '#DCD2B8', transition: 'color .12s',
@@ -396,5 +464,89 @@ const S = {
     border: '1px solid ' + (off ? '#DCD2B8' : '#2F2A22'),
     background: off ? 'rgba(230,224,206,.8)' : INK, color: off ? '#A79C82' : '#FFF8EC',
     fontFamily: GAEGU, fontWeight: 700, fontSize: 16, cursor: off ? 'default' : 'pointer',
+  }),
+};
+
+
+/**
+ * 여울 결 — `yeoul/ui.ts` 의 토큰만 쓴다. **여기에 색을 직접 적지 않는다**(그 파일의 약속).
+ *
+ * ★ 덮개가 `fixed` 가 아니라 `absolute` 다. 여울은 셸(560px) 한 통 안에서만 사는 화면이고,
+ *   `fixed` 로 덮으면 셸 바깥 바탕까지 어두워져 "앱 위에 뜬 판" 이 아니라 "페이지가 덮였다" 가 된다.
+ *   방(`Room`)의 뿌리가 `position: relative` 라 `inset: 0` 이 곧 셸 안쪽이다.
+ * ★ 층수 13 — 벽 9 · 액자 10 · 시트 11 · 전면 판 12 위다. 사람이 직접 연 판이므로 가장 위에 온다.
+ * ★ 띠(`banner`)는 방의 세로 흐름에 **끼어드는 한 줄**이다(덮개 없음·자리 차지). 그래서
+ *   무대만 그만큼 짧아지고 **아래 돌봄 타일은 한 번도 가려지지 않는다** — 예전 판이 돌봄 버튼을
+ *   덮어 띠로 바꾼 그 이유를 여기서도 지킨다.
+ */
+const Y: Tone = {
+  banner: {
+    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+    flex: 'none', margin: '0 20px 9px', padding: '10px 13px',
+    borderRadius: radius.md, background: C.accentSoft, border: `1px solid ${C.accentDim}`,
+    animation: 'yPop .26s ease',
+  },
+  bannerText: { flex: '1 1 auto', minWidth: 0, fontFamily: Y_GAEGU, fontWeight: 700, fontSize: 17, lineHeight: 1.25, color: C.ink },
+  bannerYes: {
+    flex: 'none', border: 'none', background: C.accent, color: C.accentInk,
+    borderRadius: radius.pill, padding: '7px 14px', fontSize: 12.5, cursor: 'pointer',
+  },
+  bannerNo: { flex: 'none', border: 'none', background: 'none', padding: '7px 5px', fontSize: 12, color: C.faint, cursor: 'pointer' },
+  // 띠를 닫은 사람이 나중에 다시 찾을 유일한 길. 방 화면에 늘 떠 있으므로 **가장 조용한 한 줄**이다.
+  link: {
+    alignSelf: 'flex-end', flex: 'none', margin: '0 20px 8px',
+    border: 'none', background: 'none', padding: 0, cursor: 'pointer',
+    fontSize: 11.5, color: C.faint, textDecoration: 'underline',
+    textUnderlineOffset: 3, textDecorationStyle: 'dotted',
+  },
+  overlay: {
+    position: 'absolute', inset: 0, zIndex: 13,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22,
+  },
+  dim: { position: 'absolute', inset: 0, background: 'rgba(74,64,56,.52)', animation: 'yFadeIn .2s ease' },
+  card: {
+    position: 'relative', width: '100%', maxWidth: 420, maxHeight: '88%', overflowY: 'auto',
+    display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
+    background: C.paper, border: 'none', borderRadius: radius.xl,
+    padding: '22px 22px 20px', boxShadow: '0 12px 30px rgba(74,64,56,.2)',
+    animation: 'yPop .3s ease',
+  },
+  // 테이프는 스크랩북의 것이다. 여울은 종이를 붙이지 않는다 — 자리를 비워 둔다.
+  tape: {},
+  eyebrow: { margin: '0 0 3px', fontFamily: Y_GAEGU, fontSize: 18, color: C.accent, lineHeight: 1 },
+  h3: { margin: '0 0 16px', fontFamily: Y_GAEGU, fontWeight: 700, fontSize: 24, lineHeight: 1.25, color: C.ink },
+  thanksEyebrow: { margin: '4px 0 8px', fontFamily: Y_GAEGU, fontSize: 18, color: C.accent },
+  thanksBody: { margin: '0 0 18px', fontFamily: Y_GAEGU, fontWeight: 700, fontSize: 20, lineHeight: 1.45, color: C.ink },
+  label: { fontSize: 11.5, color: C.faint },
+  labelHint: { fontSize: 11, color: C.faint2 },
+  star: (on: boolean): CSSProperties => ({
+    border: 'none', background: 'none', padding: '0 2px', cursor: 'pointer',
+    fontSize: 30, lineHeight: 1, color: on ? '#E0A93F' : C.accentDim, transition: 'color .12s',
+  }),
+  // 칩은 시안의 고름 표시(`sel`)를 그대로 쓴다 — 온보딩·아이 정보의 칩과 같은 모양이어야 한다.
+  chip: (on: boolean): CSSProperties => {
+    const k = sel(on);
+    return {
+      minHeight: 36, padding: '0 13px', borderRadius: radius.pill,
+      border: `${k.bw} solid ${k.bd}`, background: k.bg, color: k.fg,
+      fontSize: 12.5, cursor: 'pointer',
+    };
+  },
+  textarea: {
+    marginTop: 8, padding: '11px 13px', borderRadius: radius.md,
+    border: `1px solid ${C.line}`, background: C.paper, color: C.ink,
+    fontFamily: 'inherit', fontSize: 13, lineHeight: 1.7, resize: 'none', outline: 'none',
+  },
+  counter: { alignSelf: 'flex-end', marginTop: 6, fontSize: 11, color: C.faint2 },
+  error: { margin: '10px 0 0', fontSize: 12, lineHeight: 1.6, color: C.accent },
+  ghost: {
+    flex: 1, minHeight: 46, borderRadius: radius.md, border: `1px solid ${C.line}`,
+    background: C.slot, color: C.ink, fontSize: 13.5, cursor: 'pointer',
+  },
+  send: (off: boolean): CSSProperties => ({
+    flex: 1, minHeight: 46, borderRadius: radius.md, border: 'none',
+    background: off ? C.off : C.accent, color: off ? '#8B8175' : C.accentInk,
+    fontSize: 13.5, cursor: off ? 'default' : 'pointer',
+    boxShadow: off ? 'none' : '0 4px 12px rgba(192,104,92,.22)',
   }),
 };

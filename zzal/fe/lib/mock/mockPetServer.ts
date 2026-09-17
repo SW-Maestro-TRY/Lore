@@ -30,7 +30,7 @@ import {
   CARE_MISS_ZERO_MS, CHAT_MEMORY, CHAT_SLOTS, CHAT_MAX_CHARS, DROP_MS, FEATURE_UNLOCK,
   FOOD_CHARGE_MS, GAMES_PER_DAY, INTIMACY, INTIMACY_TIERS, LEFT_RIGHT, MAX_FOOD, MAX_GAUGE, MAX_TRASH, NAME_MAX_CHARS,
   NAP, RUN, SLEEP_WINDOW, SNACK_STREAK_SICK, UNLOCK_CONDITIONS, WAKE_WINDOW, WORLD_MAX_CHARS, moodOf,
-  GIFT_SEQ, FIRST_GIFT_DAYS, HIDDEN_PROGRESS_SEQ, TUTORIAL_FIRST_TRASH,
+  GIFT_SEQ, FIRST_GIFT_DAYS, TUTORIAL_FIRST_TRASH,
 } from '../../tamagotchi/rules';
 import { BACKGROUNDS, DEFAULT_BACKGROUND, MOTIONS, SPECIAL_ADV } from '../../tamagotchi/constants';
 import { BABY_CALLS } from '../../tamagotchi/tutorial';
@@ -153,7 +153,13 @@ interface Row {
   counters: {
     chatAnswers: number; sleepWakeCount: number; bathCount: number; gameStarts: number; leftRightWins: number;
     zeroMissDays: number; feedCount: number; petCount: number; cleanCount: number; shareCount: number; napCount: number;
+    /** 간식 개수(누적) — **그날 4개까지만** 센다(정본 §6 1.10 · 서버 `UnlockRule.Kind.SNACKS`). */
+    snackCount: number;
+    /** **손으로 깨운** 밤잠의 수. 아침 자동 기상·튜토리얼 낮잠은 안 센다(서버 `Kind.WAKES`). */
+    wakeCount: number;
   };
+  /** 오늘 준 간식 개수. 밤잠에 0 으로 돌아간다 — 위 `snackCount` 의 하루 4개 뚜껑을 재는 자다. */
+  snacksToday: number;
 
   motions: MotionRow[];
   personality: Personality | null;
@@ -364,6 +370,10 @@ export class MockPetServer implements PetSource {
         if (r.sick) throw err(409, 'ZZAL_SICK_REFUSES', '아파서 간식은 싫대요');
         // 가득이어도 받는다 — 거절하면 "연속 5개면 배탈"(§4) 에 닿을 길이 없다. 행복만 상한에서 멈춘다.
         r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
+        // ★ 해금은 **그날 4개까지만** 센다(정본 §6 1.10: "간식 9개 — 그날 4개까지만 셈, 배탈 난
+        //   5개째부터 안 셈"). 전부 세면 빨리 열려고 배탈이 날 때까지 먹이는 쪽이 이득이 된다.
+        if (r.snacksToday < SNACK_STREAK_SICK - 1) r.counters.snackCount += 1;
+        r.snacksToday += 1;
         r.pieceDay.snacks += 1;
         r.today.snackStreak += 1;
         if (r.today.snackStreak >= SNACK_STREAK_SICK) {
@@ -779,6 +789,7 @@ export class MockPetServer implements PetSource {
       r.bonusPiece = false;
       r.today = { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 };
       r.pieceDay = { feeds: 0, snacks: 0, gameWins: 0, cleans: 0, chats: 0 };
+      r.snacksToday = 0;
       if (r.game && !r.game.finished) r.game.finished = true;
     }
     if (!auto) {
@@ -811,6 +822,9 @@ export class MockPetServer implements PetSource {
     if (!auto) {
       r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.wake);
       r.counters.sleepWakeCount += 1;
+      // ★ 16번(일어나기)의 조건은 **손으로 깨운 밤잠**뿐이다(정본 §6 1.10 · 서버 `Kind.WAKES`).
+      //   아침 자동 기상(auto)과 튜토리얼 낮잠(NAP)은 "깨우기" 라는 행동이 아니라서 빠진다.
+      if (kind === 'NIGHT') r.counters.wakeCount += 1;
     }
   }
 
@@ -929,8 +943,11 @@ export class MockPetServer implements PetSource {
     };
   }
 
+  /**
+   * 조건이 세는 값. 정본 1.10 의 여덟 줄은 **전부 그 행동 자체의 횟수**라 특례가 하나도 없다
+   * (옛 `layer2Unlocked` — "다른 동작 6개 열림" — 은 그 표와 함께 폐기됐다).
+   */
   private counterValue(r: Row, counter: (typeof UNLOCK_CONDITIONS)[number]['counter']): number {
-    if (counter === 'layer2Unlocked') return r.motions.filter((m) => m.layer === 'BASIC_2' && m.unlockedAt !== null).length;
     return r.counters[counter];
   }
 
@@ -940,7 +957,9 @@ export class MockPetServer implements PetSource {
 
   /** 2층 조건을 다시 재고, 새로 열린 seq 를 돌려준다(즉시 해금 §6). */
   private newlyUnlocked(r: Row, before: Set<number>, now: number): number[] {
-    // 앉아 쉬기(6종)는 다른 것이 열린 뒤 열리므로 두 바퀴 돈다.
+    // ★ 정본 1.10 부터 조건이 전부 그 행동 자체라 **다른 해금에 얹힌 조건이 하나도 없다.**
+    //   옛 16번("다른 동작 6개 열림")이 사슬을 만들던 자리라 두 바퀴가 필요했다. 한 바퀴면 충분하지만
+    //   두 바퀴가 해로울 것이 없고(멱등), 사슬이 다시 생겨도 조용히 틀리지 않으므로 그대로 둔다.
     for (let pass = 0; pass < 2; pass++) {
       for (const c of UNLOCK_CONDITIONS) {
         const m = r.motions.find((x) => x.seq === c.seq);
@@ -972,9 +991,10 @@ export class MockPetServer implements PetSource {
         seq: m.seq, key: m.key, label: m.label, layer: m.layer, unlocked,
         basicImageKey: unlocked && m.layer !== 'GIFT' ? demoImage(m.key) : null,
         hint: !unlocked && cond ? cond.hint : (m.layer === 'GIFT' ? '3일이나 함께해서…' : null),
-        // ★ 15번(웃는 대기)만 진행도를 안 준다(계약 해석 40). 그 숫자는 곧 케어 미스를 되짚게 해 주는데
-        //   케어 미스는 숨은 수치다(정본 §4). 다른 잠긴 칸은 그대로 진행도를 준다.
-        progress: cond && cond.seq !== HIDDEN_PROGRESS_SEQ
+        // ★ 진행도를 가리는 칸이 v4 에는 없다. 서버는 조건이 `ZERO_MISS_DAYS`("잘 돌본 날 n번")일 때만
+        //   가리는데(케어 미스는 숨은 수치라 — 정본 §4 · 계약 해석 40), 정본 1.10 의 여덟 줄에는 그
+        //   조건이 없다. 옛 15번(웃는 대기)이 그 자리였고 v4 에서 놀람(게임 4판)으로 바뀌었다.
+        progress: cond
           ? { current: Math.min(cond.target, this.counterValue(r, cond.counter)), target: cond.target }
           : null,
         advanced: m.advanced,
@@ -1192,8 +1212,9 @@ export class MockPetServer implements PetSource {
       intimacy: 0, today: { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 },
       counters: {
         chatAnswers: 0, sleepWakeCount: 0, bathCount: 0, gameStarts: 0, leftRightWins: 0, zeroMissDays: 0,
-        feedCount: 0, petCount: 0, cleanCount: 0, shareCount: 0, napCount: 0,
+        feedCount: 0, petCount: 0, cleanCount: 0, shareCount: 0, napCount: 0, snackCount: 0, wakeCount: 0,
       },
+      snacksToday: 0,
       motions: [...MOTIONS.map(mk), ...SPECIAL_ADV.map(mk)],
       personality: null, world: null, background: DEFAULT_BACKGROUND,
       chatAnswered: new Set(), chatLog: new Map(), memory: [],
@@ -1239,9 +1260,12 @@ export class MockPetServer implements PetSource {
     if (preset === 'layer3') {
       // 2층 8종을 다 연 아이. ★ 조각은 아직 없다 — **다음 기상**에 등장한다(해석 49).
       const g = this.newRow('여울', '조용하지만 고집이 세요', now - 5 * 24 * HOUR_MS, now - 5 * 24 * HOUR_MS);
+      // 정본 1.10 2층 조건(밥 9 · 간식 9 · 청소 13 · 목욕 3 · 채팅 4 · 쓰다듬 4 · 게임 4 · 깨우기 4)을
+      // 여덟 줄 모두 넘긴 값이다. 하나라도 모자라면 이 프리셋은 "3층 직전" 이 아니게 된다.
       g.counters = {
-        ...g.counters, feedCount: 20, petCount: 20, chatAnswers: 12, cleanCount: 9, gameStarts: 3,
-        shareCount: 3, napCount: 1, sleepWakeCount: 8, bathCount: 3, zeroMissDays: 3, leftRightWins: 5,
+        ...g.counters, feedCount: 20, snackCount: 12, cleanCount: 15, bathCount: 3,
+        chatAnswers: 12, petCount: 20, gameStarts: 5, wakeCount: 5,
+        shareCount: 3, napCount: 1, sleepWakeCount: 8, zeroMissDays: 3, leftRightWins: 5,
       };
       g.personality = 'GENTLE';
       g.fullness = 2; g.happiness = 3; g.trash = 1; g.food = 3; g.intimacy = 700;
@@ -1258,9 +1282,13 @@ export class MockPetServer implements PetSource {
     if (preset === 'grown') {
       // 사흘째 아이 — 2층 4종이 열려 배경 바꾸기가 되고, 오늘 밤 첫 선물(구르기)이 구워진다.
       const g = this.newRow('여울', '조용하지만 고집이 세요', now - 3 * 24 * HOUR_MS, now - 3 * 24 * HOUR_MS);
+      // 정본 1.10 조건으로 **딱 4종**이 열린다 — 9 밥 먹기(밥 9) · 12 목욕하기(목욕 3) ·
+      // 13 답하기(채팅 4) · 14 쓰다듬받기(쓰다듬 4). 나머지 넷(간식 9 · 청소 13 · 게임 4 · 깨우기 4)은
+      // 아직 모자라다. 배경 바꾸기가 2층 4종이므로(FEATURE_UNLOCK.backgroundLayer2) 이 아이는 된다.
       g.counters = {
-        ...g.counters, feedCount: 9, petCount: 9, chatAnswers: 4, cleanCount: 5, gameStarts: 3,
-        shareCount: 2, napCount: 1, sleepWakeCount: 4, bathCount: 3,
+        ...g.counters, feedCount: 9, snackCount: 3, cleanCount: 5, bathCount: 3,
+        chatAnswers: 4, petCount: 9, gameStarts: 3, wakeCount: 2,
+        shareCount: 2, napCount: 1, sleepWakeCount: 4,
       };
       g.personality = 'GENTLE';
       g.fullness = 3; g.happiness = 3; g.trash = 1; g.food = 2; g.intimacy = 420;
@@ -1277,7 +1305,9 @@ export class MockPetServer implements PetSource {
     }
     // child — 두 시간 전에 태어나 튜토리얼을 다 지난 아이.
     const r = this.newRow('여울', '조용하지만 고집이 세요', now - 2 * HOUR_MS - HATCH_MS, now - 2 * HOUR_MS);
-    r.counters = { ...r.counters, feedCount: 1, petCount: 1, chatAnswers: 1, cleanCount: 1, gameStarts: 1, shareCount: 1, napCount: 1, sleepWakeCount: 2 };
+    // 튜토리얼이 한 번씩 시켜 준 만큼만 들고 있다 — 정본 1.10 조건으로는 2층이 아직 한 종도 안 열린다
+  // (옛 표에서는 "채팅 응답 1회" 하나로 9번이 열려 있었다).
+  r.counters = { ...r.counters, feedCount: 1, petCount: 1, chatAnswers: 1, cleanCount: 1, gameStarts: 1, shareCount: 1, napCount: 1, sleepWakeCount: 2 };
     r.chatAnswered.add('BABY');
     r.personality = 'GENTLE';
     r.fullness = 3; r.happiness = 3; r.trash = 1; r.food = 2; r.intimacy = 90;

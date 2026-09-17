@@ -322,8 +322,13 @@ public class NightSweep {
 
     // ── 시각 ──────────────────────────────────────────────────────────────
 
-    /** 이 순간이 속한 밤(23:00 이 속한 KST 날짜). 23:00 정각에 부르면 오늘. */
-    static LocalDate nightOf(Instant now) {
+    /**
+     * 이 순간이 속한 밤(23:00 이 속한 KST 날짜). 23:00 정각에 부르면 오늘.
+     *
+     * ★ 경보({@code ZzalAlerts.nightBakeFailed})도 이 자를 쓴다 — 새벽 1시의 실패는 <b>어제 밤</b>의
+     *   실패다. 거기서 날짜를 따로 계산하면 같은 규칙이 두 벌이 되고, 둘이 어긋나도 아무 소리가 안 난다.
+     */
+    public static LocalDate nightOf(Instant now) {
         ZonedDateTime z = now.atZone(ZzalRules.ZONE);
         return z.toLocalTime().isBefore(ZzalRules.AUTO_WAKE_AT) ? z.toLocalDate().minusDays(1) : z.toLocalDate();
     }

@@ -34,15 +34,29 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HttpContractIT extends ZzalItSupport {
 
     /** 튜토리얼을 지나 바로 놀 수 있는 펫. 조각(3층)은 안 연다 — 여기서 보려는 것이 아니다. */
+    /**
+     * ★★ 못 박은 낮 시각(오늘 KST 11:00) — 시험이 <b>언제 돌아도 같은 색</b>이게 한다.
+     *
+     * 안 박으면 두 가지가 시계에 걸린다.
+     * <ul>
+     *   <li>저녁 7시 뒤에 돌리면 {@code set-clock localTime "19:00"} 이 <b>부화보다 이른 시각</b>이
+     *       되어 400 이다(과거로는 못 맞춘다). 그 시험이 기대하는 것은 200 이다</li>
+     *   <li>23:00~10:00 에 돌리면 펫이 자동 취침 상태로 태어나 돌봄·놀이가 전부 거절된다</li>
+     * </ul>
+     */
+    private static final int ANCHOR_HOUR = 11;
+
     private ZzalPet playablePet(Long userId) {
-        Instant now = Instant.now();
-        return transactions.execute(status -> {
-            ZzalPet pet = petRepository.save(ZzalPet.draft(userId, newUploadedImageKey(userId), now));
-            pet.character("여울", null, null, null, null, null, now);
-            pet.markAlive("images/zzal/pets/sheet.png", "(시험용 정체성 문단)", now);
-            pet.skipTutorial(now);
-            return pet;
+        Instant anchor = kstToday(ANCHOR_HOUR, 0);
+        ZzalPet pet = transactions.execute(status -> {
+            ZzalPet created = petRepository.save(ZzalPet.draft(userId, newUploadedImageKey(userId), anchor));
+            created.character("여울", null, null, null, null, null, anchor);
+            created.markAlive("images/zzal/pets/sheet.png", "(시험용 정체성 문단)", anchor);
+            created.skipTutorial(anchor);
+            return created;
         });
+        pinClock(pet.getId(), anchor);
+        return pet;
     }
 
     /** 좌우 5승을 이미 거둔 것으로 둔다 — 달리기를 열려고 다섯 판을 실제로 이기는 것은 이 시험의 주제가 아니다. */

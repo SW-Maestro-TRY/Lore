@@ -27,7 +27,7 @@ public interface GenStepRecordRepository extends JpaRepository<GenStepRecord, Lo
     List<GenStepRecord> findSucceededByPet(@Param("petId") Long petId, @Param("kind") GenKind kind);
 
     /**
-     * ★ 같은 <b>파이프라인 버전</b>의 성공 단계만. v1 시도의 격자(8상태)를 v2 시도가 이어받으면 후처리가 v2 이름으로
+     * ★ 같은 <b>파이프라인 버전</b>의 성공 단계만. 옛 시도의 격자를 새 시도가 이어받으면 후처리가 새 이름으로
      * 자르려다 어긋난다(#218 리뷰). 버전이 바뀌면 처음부터 다시 굽는 것이 맞다.
      */
     @Query("select s from GenStepRecord s where s.jobId in "

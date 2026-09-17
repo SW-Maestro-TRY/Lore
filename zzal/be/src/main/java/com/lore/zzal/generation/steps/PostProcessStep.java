@@ -22,11 +22,10 @@ import org.springframework.stereotype.Component;
  * 실측 1~2초.
  *
  * <h3>★★ 작업 폴더의 수명을 여기가 쥔다</h3>
- * v4 는 1층·2층을 <b>연달아</b> 후처리하고, 2층이 1층이 남긴 {@code anchors.json} 에 합쳐 쓴다.
+ * 1층·2층을 <b>연달아</b> 후처리하고, 2층이 1층이 남긴 {@code anchors.json} 에 합쳐 쓴다.
  * 두 호출이 같은 폴더를 봐야 하는데, 전에는 자르는 쪽이 자기 안에서 폴더를 만들고 지워서
  * <b>1층이 지운 폴더를 2층이 보게</b> 됐다. 그래서 세션을 열어 두 호출을 감싸고, 닫는 자리에서
- * 앵커를 한 번 올린다. 1장짜리 경로(v1·v2)도 같은 세션 안에서 1회로 돈다 — 갈래마다 수명을
- * 다르게 두면 그 갈래만 조용히 다르게 동작한다.
+ * 앵커를 한 번 올린다.
  */
 @Component
 public class PostProcessStep implements GenerationStep {
@@ -63,59 +62,37 @@ public class PostProcessStep implements GenerationStep {
     }
 
     /**
-     * 격자가 한 장뿐인 판(2층 프롬프트가 없던 때의 v4·중간에 멈췄다 이어 도는 job)을 위해 남겨 둔다.
-     * 출력은 <b>16종과 같은 자리</b>(basic/)에 둔다.
+     * 두 층을 잘라 {@code basic/{판}/} 아래에 놓는다.
      *
-     * ★ 왜 v1 과 자리가 다른가 — 화면이 기본 행동을 {@code .../basic/{판}/{key}.webp} 로 조립한다(api-v2.md 2절).
-     *   v1 은 그 규약 이전의 8상태라 한 단 위에 떨어뜨리지만, v4 의 8종은 <b>16종의 앞 절반</b>이다.
-     *   같은 자리에 놓아야 2층이 확정돼 붙을 때 앞 절반을 다시 굽지 않아도 된다.
-     * ★ 이름은 카탈로그가 아니라 설정({@code app.zzal.hatch.states.v4})에서 온다 — 1층 8종의 key 정리가
-     *   아직 진행 중이라, 카탈로그를 여기서 같이 건드리면 두 곳이 서로를 기다리게 된다.
-     */
-    private static final java.util.Set<String> LAYER1_ONLY_TO_BASIC = java.util.Set.of("v4");
-
-    /**
-     * 칸의 자세 유형을 후처리에 넘기는 버전.
+     * <h3>★★ 버전으로 가르는 갈래를 두지 않는다</h3>
+     * 전에는 "이 버전은 옛 자리에 떨어뜨린다" · "이 버전만 자세 매핑을 넘긴다" 를 <b>버전 이름을 담은
+     * 집합</b>으로 갈랐다. 그 집합은 버전 이름이 바뀌어도 아무 소리를 안 내고 낡는다 — 이름은 새것인데
+     * 갈래는 옛것이 되고, 그건 화면을 봐야만 드러난다. 갈래를 없애면 낡을 것도 없다.
+     * 자세 매핑이 없는 버전은 {@link HatchPostures} 가 빈 문자열을 주고, 후처리가 그 인자를 안 넘긴다.
      *
-     * ★ v4 의 후처리(state8_v5)는 서 있는 칸을 <b>발</b> 기준으로, 앉은·누운 칸을 <b>본체</b> 기준으로
-     *   맞춘다. 어느 칸이 어느 자세인지는 층마다 다르다 — 1층은 5번 sick·8번 sleep, 2층은 4번 wash.
-     *   안 넘기면 파이썬이 1층 기본값으로 되돌아가 <b>2층의 reply·wake_up 을 앉기·눕기로</b> 맞춘다.
-     * ★ v1·v2 의 스크립트는 이 인자를 모른다 — 그래서 버전으로 가른다.
+     * <h3>★ 2층 격자가 없으면 <b>멈춘다</b></h3>
+     * 부화는 {@code [grid, grid2]} 를 한 묶음으로 굽고, 재시도도 앞선 성공분을 그대로 이어받는다.
+     * 그러니 여기서 2층이 비는 것은 "굽다 만 것" 이 아니라 <b>설명이 안 되는 상태</b>다.
+     * 1층만 잘라 성공으로 치면 16칸 중 8칸이 없는 펫이 완성으로 기록되고, 화면은 그 여덟 칸에
+     * 빈 그림을 그린다. 오류는 어디에서도 안 난다.
      */
-    private static final java.util.Set<String> POSTURE_AWARE = java.util.Set.of("v4");
-
     @Override
     public StepResult run(StepContext ctx) throws Exception {
         String grid2 = ctx.image(GRID2);
+        if (grid2 == null) {
+            throw new IllegalStateException(
+                    "2층 격자(%s)가 없습니다 — 1층만 자르면 16칸 중 8칸이 빈 채로 완성이 됩니다".formatted(GRID2));
+        }
         // ★ 판 번호는 자르기 <b>전에</b> 정한다 — 그 값이 곧 올릴 주소다.
         int round = recorder.nextBasicRound(ctx.petId());
-        boolean legacyLayout = grid2 == null && !LAYER1_ONLY_TO_BASIC.contains(ctx.version());
-        // v1 은 basic/ 규약 이전이라 판 칸이 없다. 그 버전은 더 굽지 않으므로 덮어쓸 일도 없다.
-        String prefix = legacyLayout
-                ? MotionImageKeys.legacyStatePrefix(ctx.petId())
-                : MotionImageKeys.basicPrefix(ctx.petId(), round);
+        String prefix = MotionImageKeys.basicPrefix(ctx.petId(), round);
 
         try (PostProcessor.Session session = postProcessor.open(prefix, ctx.version())) {
-            if (grid2 == null) {
-                if (legacyLayout) {
-                    // v1 — 격자 1장 → 8상태(idle·eat·…). 출력 이름은 설정 hatch.states.v1.
-                    session.split(ctx.image(GridStep.NAME));
-                    return StepResult.free(NAME);
-                }
-                // v4 — 1층 격자 1장 → 기본 행동 8종. 출력 이름은 설정 hatch.states.v4.
-                session.split(ctx.image(GridStep.NAME));
-            } else if (POSTURE_AWARE.contains(ctx.version())) {
-                // v4 — 격자 2장. 칸의 자세 유형까지 넘긴다(pipeline/v4/postures.txt).
-                // ★ 같은 세션·같은 스레드에서 순차로 돈다 — 2층이 1층 앵커에 합쳐 쓴다.
-                session.split(ctx.image(GridStep.NAME), keysOf(MotionLayer.BASIC_1),
-                        postures.forStep(ctx.version(), GridStep.NAME));
-                session.split(grid2, keysOf(MotionLayer.BASIC_2),
-                        postures.forStep(ctx.version(), GRID2));
-            } else {
-                // v2 — 그 버전의 스크립트는 --postures 를 모른다.
-                session.split(ctx.image(GridStep.NAME), keysOf(MotionLayer.BASIC_1));
-                session.split(grid2, keysOf(MotionLayer.BASIC_2));
-            }
+            // ★ 같은 세션·같은 스레드에서 순차로 돈다 — 2층이 1층 앵커에 합쳐 쓴다.
+            session.split(ctx.image(GridStep.NAME), keysOf(MotionLayer.BASIC_1),
+                    postures.forStep(ctx.version(), GridStep.NAME));
+            session.split(grid2, keysOf(MotionLayer.BASIC_2),
+                    postures.forStep(ctx.version(), GRID2));
         }
         // ★ 세션이 닫히고(앵커까지 올라가고) 나서 판을 올린다. 먼저 올리면 앵커가 빠진 판을
         //   화면이 먼저 받는다.
@@ -123,7 +100,7 @@ public class PostProcessStep implements GenerationStep {
         return StepResult.free(NAME);
     }
 
-    /** v2 두 번째 격자의 단계 이름. */
+    /** 두 번째 격자(2층) 단계의 이름. */
     public static final String GRID2 = "grid2";
 
     private java.util.List<String> keysOf(MotionLayer layer) {

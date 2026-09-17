@@ -1,5 +1,6 @@
 package com.lore.zzal.generation;
 
+import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.pet.PetPhase;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalPetRepository;
@@ -44,6 +45,7 @@ public class StuckHatchRecovery {
     private final GenJobRepository jobRepository;
     private final HatchService hatchService;
     private final GenerationRecorder recorder;
+    private final ZzalAlerts alerts;
     private final int maxAttempts;
     private final Duration graceperiod;
 
@@ -51,12 +53,14 @@ public class StuckHatchRecovery {
                               GenJobRepository jobRepository,
                               HatchService hatchService,
                               GenerationRecorder recorder,
+                              ZzalAlerts alerts,
                               @Value("${app.zzal.max-hatch-attempts:2}") int maxAttempts,
                               @Value("${app.zzal.recovery.grace-minutes:12}") int graceMinutes) {
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;
         this.hatchService = hatchService;
         this.recorder = recorder;
+        this.alerts = alerts;
         this.maxAttempts = maxAttempts;
         this.graceperiod = Duration.ofMinutes(graceMinutes);
     }
@@ -92,16 +96,35 @@ public class StuckHatchRecovery {
             String v = jobRepository.findFirstByPetIdOrderByIdDesc(pet.getId())
                     .map(GenJob::getPipelineVersion)
                     .orElse(hatchService.currentVersion());
-            if (hatchService.stepsDone(pet.getId(), v) >= hatchService.stepsTotal(v)) {
+            // ★★ 이 펫이 저장해 둔 파이프라인 버전을 지금 레지스트리가 모를 수 있다(옛 v2/v3 초안 등).
+            //    그때 PipelineRegistry 는 기동을 막으려고 일부러 예외를 던진다 — 정상 경로에서는 옳다.
+            //    하지만 여기는 @EventListener(ApplicationReadyEvent) 안이라, 그 예외가 올라오면
+            //    복구 스캔 전체가 죽어 **앱 자체가 안 뜬다**. 옛 버전 초안 한 줄이 재기동을 막는 셈이다.
+            //    그래서 <b>펫 단위로</b> 감싸, 모르는 버전이면 그 펫만 건너뛰고 경고만 남긴다.
+            //    (stepsTotal → registry.steps 가 유일한 동기 호출 지점이다. hatch() 는 @Async 라
+            //     여기서 던지지 않고, v 가 여기서 알려진 버전으로 확인되면 뒤의 hatch 도 안전하다.)
+            int stepsTotal;
+            try {
+                stepsTotal = hatchService.stepsTotal(v);
+            } catch (IllegalArgumentException e) {
+                log.warn("모르는 파이프라인 버전이라 기동 복구에서 이 펫만 건너뜁니다 — petId={} version={}",
+                        pet.getId(), v, e);
+                continue;
+            }
+            if (hatchService.stepsDone(pet.getId(), v) >= stepsTotal) {
                 continue;
             }
             if (attempts >= maxAttempts) {
                 log.warn("시도를 다 썼습니다 — petId={} 시도={}회 → 실패로 종료", pet.getId(), attempts);
                 recorder.markPetFailed(pet.getId());
+                // ★ 여기도 "부화가 끝내 실패" 다 — 기동 복구로 정리되는 알만 빠지면 연속 실패를
+                //   잘못 세고, 하필 그 상황(서버가 죽었다 뜬 직후)이 가장 알아야 할 때다.
+                //   ⚠️ "재시작했다" 를 알리는 것이 아니다. 실제로 죽은 알이 있을 때만 나간다.
+                alerts.hatchFinallyFailed(pet.getId(), Instant.now());
                 continue;
             }
-            // ★ 원래 job 의 버전(v)을 잇는다 — 설정이 그 사이 v2 로 바뀌었어도 굽던 알은 굽던 버전으로 끝낸다
-            //   (#218 리뷰: 안 그러면 v1 격자를 v2 후처리가 자르려다 어긋난다).
+            // ★ 원래 job 의 버전(v)을 잇는다 — 설정이 그 사이 바뀌었어도 굽던 알은 굽던 버전으로 끝낸다
+            //   (#218 리뷰: 안 그러면 옛 격자를 새 후처리가 자르려다 어긋난다).
             GenJob job = jobRepository.save(GenJob.start(
                     pet.getId(), GenKind.HATCH, (int) attempts + 1, v, Instant.now()));
             log.info("이어서 굽기 — petId={} phase={} attempt={}", pet.getId(), pet.getPhase(), attempts + 1);

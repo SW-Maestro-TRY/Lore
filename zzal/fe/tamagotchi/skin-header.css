@@ -54,11 +54,15 @@
 
   /* 폰 한 줄에 워드마크 + 탭 3개를 다 넣어야 한다.
    * 기본 여백 그대로면 390px 에서 12px 넘쳐 가로 스크롤이 생기므로 여기만 조인다.
-   * (zzal 스킨이 켜져 있을 때만 적용된다 — 다른 탭 헤더는 그대로) */
+   * (zzal 스킨이 켜져 있을 때만 적용된다 — 다른 탭 헤더는 그대로)
+   * ★ 세로 여백도 12→8px 로 줄인다(2026-09-16) — 짧은 화면(SE)에서 헤더가 무대 높이를 덜 먹어
+   *   아이가 더 크게 선다. **zzal 스킨에서만** 적용되므로 webtoon·trailer·랜딩 헤더는 그대로다. */
   :root[data-skin] header > div {
     gap: 8px;
     padding-left: 12px;
     padding-right: 12px;
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
   :root[data-skin] header nav {
     gap: 2px;

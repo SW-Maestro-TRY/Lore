@@ -92,15 +92,27 @@ class ConcurrentRequestsIT extends ZzalItSupport {
                 .findFirst().orElse(null);
     }
 
+    /**
+     * ★★ 시험이 <b>언제 돌아도 같은 자리</b>에서 시작하게 못 박은 시각(오늘 KST 11:00).
+     *
+     * 밤 11시에 돌리면 펫이 자동 취침에 들어가 돌보기가 거절된다 — 낮에는 초록, 밤에는 빨강인
+     * 시험이 된다. 그런 시험은 고장을 알리는 게 아니라 <b>시계를 알리는</b> 것이라 아무도 안 믿는다.
+     * 23:00~10:00 은 밤 판정 창이라 그 밖의 낮 시각을 고른다.
+     */
+    private static final int ANCHOR_HOUR = 11;
+
     private Long playablePet(Long userId) {
-        Instant now = Instant.now();
-        return transactions.execute(status -> {
-            ZzalPet pet = petRepository.save(ZzalPet.draft(userId, newUploadedImageKey(userId), now));
-            pet.character("여울", null, null, null, null, null, now);
-            pet.markAlive("images/zzal/pets/sheet.png", "(시험용 정체성 문단)", now);
-            pet.skipTutorial(now);
+        Instant anchor = kstToday(ANCHOR_HOUR, 0);
+        Long petId = transactions.execute(status -> {
+            ZzalPet pet = petRepository.save(ZzalPet.draft(userId, newUploadedImageKey(userId), anchor));
+            pet.character("여울", null, null, null, null, null, anchor);
+            pet.markAlive("images/zzal/pets/sheet.png", "(시험용 정체성 문단)", anchor);
+            pet.skipTutorial(anchor);
             return pet.getId();
         });
+        // 이 펫의 "지금" 도 그 자리에 세운다 — 안 세우면 부화만 못 박히고 흐르는 시간은 벽시계다.
+        pinClock(petId, anchor);
+        return petId;
     }
 
     // ══ M-12(가). 같은 펫에 돌보기 둘 ═══════════════════════════════════
@@ -110,7 +122,13 @@ class ConcurrentRequestsIT extends ZzalItSupport {
     void feedAndSnackAtTheSameMomentBothSurvive() throws Exception {
         Long userId = newUserId();
         Long petId = playablePet(userId);
-        advanceClock(userId, petId, Duration.ofHours(4));       // 배가 고파지게 시간을 민다
+        // ★ "지금부터 4시간" 이 아니라 <b>시각 자체</b>를 못 박는다 — 밤에 돌리면 그 4시간이
+        //   자정을 넘어 펫이 자고 있었다(자는 펫은 돌보기를 거절한다). 11시 + 5시간 = 16시,
+        //   깨어 있고 배도 고픈 자리다.
+        pinClock(petId, kstToday(ANCHOR_HOUR + 5, 0));
+        // 흐른 시간을 그 자리에서 한 번 정산한다 — 안 하면 아래 "before" 가 정산 전 값이라
+        // 밥을 주고도 "늘지 않았다" 가 된다.
+        petService.refresh(userId, petId, Instant.now());
         ZzalPet before = petRepository.findById(petId).orElseThrow();
         int fullnessBefore = before.getFullness();
         int happinessBefore = before.getHappiness();
@@ -199,7 +217,6 @@ class ConcurrentRequestsIT extends ZzalItSupport {
     // ══ M-5(나). 같은 사람이 그림을 동시에 두 번 올리기 ═════════════════
 
     @Test
-    @org.junit.jupiter.api.Disabled("결함 — 같은 사람의 draft 두 건이 동시에 들어오면 초안이 둘 생기고 굽기도 두 번 나간다")
     @DisplayName("★★ 그림을 동시에 두 번 올려도 초안은 하나 — 두 개면 한 번의 실수에 한 판 값이 두 배다")
     void twoDraftsAtOnceMakeOnePet() {
         Long userId = newUserId();

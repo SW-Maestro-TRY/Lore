@@ -78,6 +78,14 @@ export interface PropStage {
   srcW?: number;
   srcH?: number;
   screen?: PropScreenBox;
+  /**
+   * **방 붙박이 소품을 이 단계에서만 더 내리는 값**(K 비율, 아래가 +). `layoutRoomProp` 만 읽는다.
+   *
+   * ★ 왜 단계별인가(2026-09-16, 똥) — 3~4단계 덩이는 넓고 커서 발끝선에 아랫변을 맞추면
+   *   캐릭터 발·정강이를 정면으로 덮었다(1~2단계는 작고 옆이라 안 가렸다). 그 큰 단계만 앞쪽
+   *   바닥으로 내려 신발이 보이게 한다. 자리는 여전히 화면 크기·단계만의 함수라 결정적이다.
+   */
+  sinkK?: number;
 }
 
 export interface PropOffset {
