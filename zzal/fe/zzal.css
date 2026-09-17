@@ -122,3 +122,9 @@
 @media (prefers-reduced-motion: reduce) {
   .zt-ybob, .zt-popin { animation: none !important; }
 }
+
+/* v2(impeccable 응집 랜딩) 판 — LandingV2 가 자기 배경(C.shell)·도트를 직접 그리므로,
+ * 옛 .zzal-page 바탕(#f3ece0)·도트 텍스처가 뒤에서 비치지 않게 끈다.
+ * (색은 tamagotchi/yeoul/ui.ts 의 C.shell — 바꿀 땐 두 곳을 같이 고친다.) */
+.zzal-page.zt-v2 { background: #FFFBF4; }
+.zzal-page.zt-v2::before { display: none; }
