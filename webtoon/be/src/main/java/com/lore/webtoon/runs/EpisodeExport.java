@@ -110,6 +110,49 @@ public class EpisodeExport {
         }
     }
 
+    /**
+     * 한 컷만. {@link #png} 처럼 표시를 찍지만 <b>잇지 않는다</b> — 그
+     * 컷 하나에만 띠를 붙여 준다. 결과 화면에서 컷을 체크박스로 골라 몇 장만
+     * 받을 때 쓴다({@code RunController#pageDownload}). 그 장이 없으면
+     * {@code null}.
+     */
+    public byte[] pagePng(String runId, int no, String caption) {
+        BufferedImage sheet = loadOne(runId, no);
+        if (sheet == null) {
+            return null;
+        }
+        markEachSheet(sheet, List.of(sheet));
+        BufferedImage out = withBand(sheet, caption);
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+            ImageIO.write(out, "png", bytes);
+            return bytes.toByteArray();
+        } catch (IOException e) {
+            log.error("한 컷을 png 로 못 만들었습니다 (run={}, 장={})", runId, no, e);
+            return null;
+        }
+    }
+
+    /** 이 장 하나. {@link #load} 와 같은 자리(구운 것 우선)에서 하나만 읽는다. */
+    private BufferedImage loadOne(String runId, int no) {
+        Map<Integer, String> keys = new java.util.LinkedHashMap<>(pages.keysOf(runId));
+        keys.putAll(bakery.keysOf(runId));
+        String key = keys.get(no);
+        if (key == null) {
+            return null;
+        }
+        Path tmp = null;
+        try {
+            tmp = Files.createTempFile("lore-page-", ".png");
+            storage.download(key, tmp);
+            return ImageIO.read(tmp.toFile());
+        } catch (IOException | RuntimeException e) {
+            log.warn("장을 못 가져왔습니다 (run={}, 장={})", runId, no, e);
+            return null;
+        } finally {
+            deleteQuietly(tmp);
+        }
+    }
+
     /* ---- 낱장 가져오기 ---------------------------------------------------- */
 
     /**
