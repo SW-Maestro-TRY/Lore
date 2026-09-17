@@ -93,3 +93,32 @@
   .zt-closing-card { padding: 38px 22px; }
   .zt-closing-h2 { font-size: 32px; }
 }
+
+/* ── 랜딩 "적용후" 변경 단위용 (landingDev.tsx 토글) ────────────────────────
+ * 방향서 0917: 여울 톤 재사용. 여기 값은 tamagotchi/yeoul/ui.ts 의 C 와 같은 색이다
+ * (CSS 변수라 ui.ts 를 import 할 수 없어 값으로 옮긴다 — 바꿀 땐 두 곳을 같이 고친다). */
+
+/* toy-palette ON: 빨강+노랑 → 여울 저채도(액센트 1개). 페이지 바탕·기존 요소·선택색을 함께 바꾼다.
+ * (적용후 섹션은 C 토큰을 직접 써서 이 변수와 무관하게 늘 여울색이다.) */
+.zzal-page.zt-toy {
+  --accent: #9C4232;   /* C.accent */
+  --tape: #FBEAE5;     /* C.accentSoft — 원색 노랑 테이프 폐기 */
+  --paper: #FFFBF4;    /* C.shell — 셸 바탕 */
+  --ink: #4A4038;      /* C.ink */
+  --card: #FFFDF8;     /* C.paper */
+  --card-sh: 0 4px 14px rgba(74, 64, 56, .10);  /* 잉크 틴트 그림자만 */
+}
+.zzal-page.zt-toy ::selection { background: #9C4232; color: #FFF6F2; }
+
+/* 숨쉬기(±4px) — 여울 yBob 과 같은 진폭. 사람 같은 자연 모션 금지, "인형이 까딱" 수준. */
+@keyframes ztYBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.zt-ybob { animation: ztYBob 3.4s ease-in-out infinite; will-change: transform; }
+
+/* 진입 1회(yPopIn). */
+@keyframes ztPopIn { 0% { opacity: 0; transform: translateY(8px) scale(.98); } 100% { opacity: 1; transform: none; } }
+.zt-popin { animation: ztPopIn .5s ease both; }
+
+/* prefers-reduced-motion 에선 idle·진입 모션 정지. */
+@media (prefers-reduced-motion: reduce) {
+  .zt-ybob, .zt-popin { animation: none !important; }
+}
