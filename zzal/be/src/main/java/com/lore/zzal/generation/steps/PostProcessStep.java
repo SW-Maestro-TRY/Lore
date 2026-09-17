@@ -50,10 +50,16 @@ public class PostProcessStep implements GenerationStep {
         return NAME;
     }
 
-    /** 우리 서버 안 계산이라 늘어질 이유가 없다. */
+    /**
+     * 파이썬 계산(numpy/scipy)만 보면 1~2초지만, 이 단계는 <b>S3에서 격자를 받고 · 층마다 webp 8개를
+     * 한 개씩 올리는 왕복(2층이면 격자 2 다운 + webp 16 업로드) · 스크립트 추출 · 파이썬 2회 실행</b>을
+     * 모두 포함한다. 작은 t3.small 운영 서버에서는 이 왕복 오버헤드로 <b>실측 20~30초</b>가 나오고,
+     * 무거운 이미지는 옛 30초 값을 넘겨 <b>4/5(후처리)에서 TIMEOUT</b> 으로 멈췄다(2026-09-17 dev 실측).
+     * 그래서 넉넉히 120초로 둔다. (근본 최적화 — webp 병렬 업로드·스크립트 추출 재사용 — 은 별도 과제.)
+     */
     @Override
     public int limitSeconds() {
-        return 30;
+        return 120;
     }
 
     @Override
