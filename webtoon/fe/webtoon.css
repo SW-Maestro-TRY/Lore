@@ -3968,21 +3968,8 @@
    아래 그림이 통째로 밀려 읽던 자리를 잃는다.
 
    한 번에 하나만 열리므로 이 띠도 하나뿐이다. */
-/* 컷 밑 체크박스 — 「이 컷만 내려받기」에 쓸 것을 고른다.
-   `.reader .page` 가 이미지 사이 틈을 없애려고 font-size:0 을 깔아 둬서,
-   여기서 다시 글자 크기를 정하지 않으면 라벨 글자가 안 보인다. */
-.webtoon-page .cut-pick {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 4px 2px; font-size: .78rem; color: var(--dim);
-  cursor: pointer; user-select: none;
-}
-.webtoon-page .cut-pick input[type="checkbox"] {
-  width: 1.05em; height: 1.05em; accent-color: var(--accent); margin: 0;
-}
-.webtoon-page .cut-pick:has(:checked) { color: var(--accent-d); }
-
-/* 「선택한 컷만 내려받기」— 위 두 단추와 같은 격자에 있지만 셋이라 남는
-   한 칸이 어정쩡하게 빈다. 한 줄 통째로 차지하게 한다. */
+/* 「컷별로 내려받기」 — 위 두 단추와 같은 격자에 있지만 셋이라 남는 한
+   칸이 어정쩡하게 빈다. 한 줄 통째로 차지하게 한다. */
 .webtoon-page .result-actions .cut-download-btn { grid-column: 1 / -1; }
 
 .webtoon-page .page-caption {

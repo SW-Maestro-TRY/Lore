@@ -66,10 +66,6 @@ export default function Result({
   /* 지금 설명을 펼친 장. 한 번에 하나만 연다 — 여러 개를 켜 두면 읽는 흐름이
      설명으로 끊기고, 어차피 보고 있는 것은 한 장이다. */
   const [openPage, setOpenPage] = useState<number | null>(null);
-  /* 컷별로 골라 받기. 「내려받기」는 늘 한 편 전체(이어 붙인 파일)라 —
-     마음에 든 장 몇 개만 갖고 싶어도 전체를 받아 잘라야 했다. 여기 고른
-     번호만 낱장으로 하나씩 받는다(각 장에도 LORE 표시가 붙는다). */
-  const [selected, setSelected] = useState<Set<number>>(new Set());
   /* 「다음화 보기」는 아직 진짜 다음 화가 없다 — 눌렀을 때만 안내를 띄운다. */
   const [nextEpisodeNote, setNextEpisodeNote] = useState(false);
 
@@ -145,27 +141,21 @@ export default function Result({
   const short = data.preview && data.planned_pages > data.page_count
     ? ` · 미리보기 (${data.planned_pages}장 중 앞 ${data.page_count}장만 그렸습니다)` : "";
   /* 예시 스냅샷(`data.example`)은 서버에 실제 run 이 없어서 컷 하나만 받는
-     주소가 404 다 — 그때는 체크박스·선택 내려받기 자체를 안 보여준다. */
-  const canPickCuts = mine && !data.example;
+     주소가 404 다 — 그때는 컷별로 내려받기 자체를 안 보여준다. */
+  const canDownloadCuts = mine && !data.example;
 
-  function toggleCut(no: number) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(no)) next.delete(no); else next.add(no);
-      return next;
-    });
-  }
-
-  /* 고른 컷을 한 장씩 내려받는다. 한꺼번에 여러 개를 누르면 브라우저가
-     "여러 파일을 내려받으시겠습니까" 를 묻거나 뒤엣것을 막기도 해서,
-     조금씩 시차를 두고 하나씩 누른다. */
-  function downloadSelectedCuts() {
-    if (!runId) return;
-    [...selected].sort((a, b) => a - b).forEach((no, i) => {
+  /* 컷마다 한 장씩 내려받는다 — 「내려받기」는 늘 한 편 전체를 이어 붙인
+     파일이라, 컷 하나만 갖고 싶어도 전체를 받아 잘라야 했다. 한꺼번에
+     여러 파일을 내려받게 하면 브라우저가 "여러 파일을 내려받으시겠습니까"
+     를 묻거나 뒤엣것을 막기도 해서, 조금씩 시차를 두고 하나씩 누른다.
+     장마다 LORE 표시가 붙는다(pageDownloadUrl — episode.png 와 같은 이유). */
+  function downloadEachCut() {
+    if (!runId || !data) return;
+    data.pages.forEach((pg, i) => {
       setTimeout(() => {
         const a = document.createElement("a");
-        a.href = pageDownloadUrl(runId, no);
-        a.download = `${runId}-${no}.png`;
+        a.href = pageDownloadUrl(runId, pg.no);
+        a.download = `${runId}-${pg.no}.png`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -215,17 +205,17 @@ export default function Result({
               <button type="button" className="btn btn-quiet" onClick={onEditor}>
                 편집실로 가기
               </button>
-              {canPickCuts && (
+              {/* 2칸 격자의 왼쪽(내려받기) 밑으로 자연히 떨어진다. 한 편을
+                  이어 붙인 파일 대신, 장마다 따로 LORE 표시를 찍어 낱장으로
+                  내려받는다 — 골라야 하는 것도 아니고 전부 다 받는다. */}
+              {canDownloadCuts && (
                 <button type="button" className="btn btn-quiet cut-download-btn"
-                        disabled={selected.size === 0} onClick={downloadSelectedCuts}>
-                  선택한 컷만 내려받기{selected.size ? ` (${selected.size})` : ""}
+                        onClick={downloadEachCut}>
+                  컷별로 내려받기
                 </button>
               )}
             </div>
             <p className="wm-note">내려받는 파일에는 아래에 LORE 표시가 붙습니다.</p>
-            {canPickCuts && (
-              <p className="wm-note">아래 컷마다 체크박스로 골라 몇 장만 따로 받을 수도 있어요.</p>
-            )}
           </>
         )}
       </header>
@@ -267,16 +257,6 @@ export default function Result({
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img className="cut-img" src={pageUrl(runId, pg.no, 1080, false, data.example)}
                      alt={`${pg.no}번째 장`} loading="lazy" />
-              )}
-              {/* 컷 밑 체크박스. `.page-peek` 버튼 **안**이 아니라 그 옆(형제)에
-                  둔다 — 버튼 속에 체크박스를 넣으면 눌러도 설명 펼치기와
-                  고르기가 같이 눌려 헷갈린다. */}
-              {canPickCuts && (
-                <label className="cut-pick">
-                  <input type="checkbox" checked={selected.has(pg.no)}
-                         onChange={() => toggleCut(pg.no)} />
-                  <span>이 컷 선택</span>
-                </label>
               )}
             </div>
           );
