@@ -108,7 +108,7 @@ export type ActionKey = keyof typeof ACTION_SITUATION;
 //   **캐릭터 프레임은 그대로 반복하고 소품만 바뀐다.** 한 바퀴가 끝날 때마다 단계가 하나 넘어간다.
 
 /**
- * 캐릭터 움짤 **한 프레임**(ms). 확정본 16종 실측값 — `demo/v6/eat.webp` 은 2프레임 x 450ms 다.
+ * 캐릭터 움짤 **한 프레임**(ms). 확정본 16종 실측값 — `demo/v7/eat.webp` 은 2프레임 x 450ms 다.
  * ⚠️ 그림을 다시 뽑아 프레임 간격이 바뀌면 **여기 한 줄만** 고치면 된다(박자가 전부 이 값에서 나온다).
  */
 export const SPRITE_FRAME_MS = 450;
