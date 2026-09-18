@@ -1,0 +1,164 @@
+/* 진행 화면이 쓰는 문구·그림 이름.
+ *
+ * 원본 app.js 의 NH_STAGE_SAY · NH_STAGE_ART · renderNHProgress 와 **같은
+ * 값**이다. 서버가 단계 이름(stage)과 사람이 볼 이름(stage_label)을 같이
+ * 주므로 목록 자체는 서버가 정한다 — 여기 있는 것은 마스코트가 뭐라고
+ * 말하고 어떤 그림을 띄우느냐뿐이다.
+ */
+
+/** 단계별 마스코트 한 줄. 서버가 say 를 주면 그쪽이 이긴다(검수 중일 때). */
+export const NH_STAGE_SAY: Record<string, string> = {
+  story: "루가 이야기를 만들고 있어요",
+  sheet: "루가 캐릭터를 디자인하고 있어요",
+  board: "루가 고른 방향을 정리하고 있어요",
+  pages: "루가 그림을 그리고 있어요",
+};
+
+/* webtoon.css 의 .stage-art[data-stage] 그림은 classic 5단계
+   (story/sheet/board/art/bind) 이름을 쓴다 — new_harness 의 "pages" 는
+   그림을 그리는 단계라 가장 가까운 art 를 빌린다. */
+export const NH_STAGE_ART: Record<string, string> = {
+  story: "story",
+  sheet: "sheet",
+  board: "board",
+  pages: "art",
+};
+
+/** 서버가 이 문장을 그대로 보내는 동안(JobRunner.FULL_REVIEW_SAY, 화
+ * 전체를 처음부터 다시 읽는 검수 중)만 마스코트 그림을 "묶는" 그림
+ * (bind.webp)으로 바꾼다 — classic 5단계 중 지금 새 하네스 어디에도
+ * 안 쓰이던 그림을 "검수 중"에 빌려 쓰는 것이다. 문구가 한 글자라도
+ * 달라지면 이 매칭이 깨진다(자바 쪽 상수와 반드시 같아야 한다). */
+const FULL_REVIEW_SAY = "루가 그림을 검수하고 있어요!";
+
+export interface HeadLine {
+  eyebrow: string;
+  title: string;
+  sub: string;
+}
+
+/** 화면 맨 위 세 줄. 원본 renderNHProgress 와 같은 분기다. */
+export function headLine(status: string, styleLabel: string): HeadLine {
+  if (status === "queued") {
+    return {
+      eyebrow: "대기 중",
+      title: "앞에 만들고 있는 작품이 있습니다",
+      /* 동시에 둘까지 돈다(2026-09-13). 예전에는 「한 번에 한 편씩」이었는데
+         그대로 두면 화면이 옛말을 하고, 바로 위의 줄 표시(「앞에 2명 · 약 5분
+         뒤 시작」)와도 어긋난다 — 한 편씩이면 10분이어야 하니까. */
+      sub: "한 번에 두 편씩 만듭니다.",
+    };
+  }
+  if (status === "awaiting_sheet" || status === "awaiting_pick") {
+    return {
+      eyebrow: "확인이 필요합니다",
+      title: "잠깐 봐 주세요",
+      sub: "아래에서 확인하고 넘어가 주세요 — 그동안은 아무것도 안 돌아갑니다.",
+    };
+  }
+  /* 만드는 중에는 <b>아무 말도 안 얹는다.</b> 바로 위에 마스코트 · 진행
+     막대 · 경과 시간 · 단계 목록이 이미 있는데, 그 아래에 그림체 이름과
+     "웹툰을 만들고 있습니다" 를 또 적으면 같은 말을 두 번 하는 것이 된다.
+     빈 값이면 화면이 이 자리를 통째로 안 그린다. */
+  return { eyebrow: "", title: "", sub: "" };
+}
+
+/**
+ * 단계마다 <b>무엇을 하는지</b>.
+ *
+ * 목록 자체는 여전히 서버가 정한다(위 주석 참고) — 여기 있는 것은 그 단계의
+ * 설명뿐이고, 모르는 단계가 오면 설명 없이 이름만 나온다. 한동안 이 자리에
+ * 단계 <b>이름</b>만 있었는데, "story · sheet · board · pages" 넉 줄로는
+ * 몇 분씩 기다리는 사람이 무슨 일이 일어나는지 알 수가 없었다.
+ */
+export const NH_STAGE_DESC: Record<string, string> = {
+  story: "이야기의 축을 뽑고 서로 다른 방향 4개를 씁니다. 앞뒤가 안 맞는 곳과 "
+    + "처음 읽는 사람이 못 따라갈 곳을 검수한 뒤, 하나를 고릅니다.",
+  sheet: "고른 이야기에 맞춰 캐릭터의 생김새·옷·색을 글로 확정하고, "
+    + "그 사양대로 앞·옆·뒤 모습과 표정을 한 장에 그립니다.",
+  board: "고른 방향을 회차로 확정합니다 — 장면 순서, 함께 나오는 인물, "
+    + "이번 화에서 일부러 안 밝히고 남겨 둘 것.",
+  pages: "표지 한 장과 장면들을 차례로 그립니다. 한 장을 그릴 때마다 "
+    + "앞 장과 이어지는지 · 글이 그림에 담겼는지 검수하고, 걸리면 다시 그립니다.",
+};
+
+/**
+ * 단계의 이름.
+ *
+ * 서버는 <b>지금 하는 단계의 이름만</b> 준다(`stage_label`). 그래서 나머지 줄에는
+ * 영어 키가 그대로 보였다 — "01 이야기 짓기 · 02 sheet · 03 board · 04 pages".
+ * 지나갈 단계도 사람이 읽을 이름이어야 한다. 모르는 단계는 키를 그대로 쓴다.
+ */
+export const NH_STAGE_NAME: Record<string, string> = {
+  story: "이야기 짓기",
+  sheet: "캐릭터 그리기",
+  board: "회차 짜기",
+  pages: "페이지 그림",
+};
+
+/** 단계마다 이 화면이 보여줄 수 있는 것. 없으면 펼칠 것이 없다.
+ *
+ * `board` 는 없다 — **확정된 회차 보기를 없앴다.** 거기 있던 「이번 화에서
+ * 일부러 안 밝히고 남겨 둘 것」이 다음 화를 위해 감춰 둔 것을 사용자에게
+ * 먼저 까발리는 꼴이었다(사용자 피드백). 장면 순서·함께 나오는 인물도 같은
+ * 자리에서만 보이던 것이라 굳이 나눠 남길 이유가 없어 통째로 뺐다 — 회차
+ * 짜기 단계 자체는(진행 막대의 그 줄) 그대로 돈다. */
+export const NH_STAGE_RESULT: Record<string, string> = {
+  story: "지어낸 이야기 4개 보기",
+  sheet: "캐릭터 시트 보기",
+};
+
+/**
+ * 마스코트가 하는 말.
+ *
+ * 순서가 중요하다 — 서버가 준 `say`(검수 중이라는 말)가 **가장 세다.**
+ * 그 다음이 그림 단계의 "몇 장째"이고, 마지막이 단계 기본 문구다.
+ * 원본 renderNHProgress 도 이 순서로 덮어쓴다.
+ */
+export function mascotLine(
+  status: string,
+  stage: string,
+  say: string,
+  art: { done: number; total: number; retry_page?: number } | null,
+): string {
+  if (status === "running" && say) return say;
+  if (status === "running" && stage === "pages" && art?.total) {
+    // `art.done` 은 "지금 몇 번째 장을 그리기 시작했나" 다(하네스가 그 장을
+    // 그리기 **전에** 이 줄을 찍는다) — 그래서 이미 그 번호 자체가 "지금
+    // 그리는 장" 이다. +1 을 하면 한 장 앞서 말하게 된다.
+    if (art.retry_page) {
+      // 그 장이 안전 필터 등에 걸려 다시 그리는 중이다(pageart.py 의
+      // PAGE_RETRIES). 사람에게는 "왜 갑자기 멈췄지" 로 보일 수 있는 자리라
+      // 이유를 짧게라도 말해 준다.
+      return `${art.retry_page}번째 장이 걸려서 다시 그리고 있어요`;
+    }
+    // 다 그렸는데 아직 안 끝났으면(이어붙이기·S3 올리기가 도는 동안) 그냥
+    // "그리고 있어요" 를 계속 띄우면 사람 눈에는 다 그려 놓고 안 끝나는
+    // 것으로 보인다(사용자 피드백: "그림이 다 나왔는데 왜 안 끝나지?").
+    return art.done >= art.total
+      ? "루가 그림을 마무리하고 있어요"
+      : `루가 ${art.done}번째 장을 그리고 있어요 (${art.done}/${art.total})`;
+  }
+  return NH_STAGE_SAY[stage] || "루가 만들고 있어요";
+}
+
+/**
+ * 마스코트 그림의 `data-stage` 값.
+ *
+ * 보통은 단계(`stage`)로만 고른다({@link NH_STAGE_ART}). 다만 서버가
+ * {@link FULL_REVIEW_SAY}를 보내는 동안(화 전체 검수 중)만 예외로
+ * "bind" 그림을 쓴다 — 단계 자체는 여전히 "pages" 라(그리기 안에서 도는
+ * 걸음이지 새 단계가 아니다) 단계만으로는 못 가리고, `say` 문구로
+ * 가린다. `mascotLine` 과 같은 순서 원칙(서버가 준 `say` 가 가장 세다)을
+ * 그림에도 그대로 적용한 것이다.
+ */
+export function stageArt(stage: string, say: string): string {
+  if (say === FULL_REVIEW_SAY) return "bind";
+  return NH_STAGE_ART[stage] || stage;
+}
+
+/** 0:00 꼴. */
+export function mmss(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
