@@ -45,7 +45,11 @@ public class IdentityStep implements GenerationStep {
 
     @Override
     public int limitSeconds() {
-        return 60;
+        // ★ 60 → 120 (2026-09-18). 실측: 가짜 모드는 1.5초지만 진짜 gpt-5 는 213번 10.0초 · 308번 18.9초 ·
+        //   333번 60.2초(실패)→44.5초(재시도 성공). 입력이 촘촘한 캐릭터시트일수록 늘어진다.
+        //   60 에 걸리면 재시도로 넘어가긴 하지만 그때마다 $0.0145 가 헛돈다. 텍스트 클라이언트의
+        //   HTTP 타임아웃(OpenAiTextClient, 120초)과 같은 값으로 맞춘다.
+        return 120;
     }
 
     @Override
