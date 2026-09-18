@@ -120,7 +120,7 @@ export default function LandingV2() {
               />
             </div>
             {/* 예시임을 밝혀 첫 방문자의 "여울=내 캐릭터? 앱 이름?" 혼동을 없앤다(ux-heuristics). */}
-            <span className="zt-v2tag">여울 · 예시 친구</span>
+            <span className="zt-v2tag">여울</span>
           </section>
 
           <div className="zt-v2intro">
