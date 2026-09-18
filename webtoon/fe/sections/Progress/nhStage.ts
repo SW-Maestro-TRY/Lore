@@ -24,6 +24,13 @@ export const NH_STAGE_ART: Record<string, string> = {
   pages: "art",
 };
 
+/** 서버가 이 문장을 그대로 보내는 동안(JobRunner.FULL_REVIEW_SAY, 화
+ * 전체를 처음부터 다시 읽는 검수 중)만 마스코트 그림을 "묶는" 그림
+ * (bind.webp)으로 바꾼다 — classic 5단계 중 지금 새 하네스 어디에도
+ * 안 쓰이던 그림을 "검수 중"에 빌려 쓰는 것이다. 문구가 한 글자라도
+ * 달라지면 이 매칭이 깨진다(자바 쪽 상수와 반드시 같아야 한다). */
+const FULL_REVIEW_SAY = "루가 그림을 검수하고 있어요!";
+
 export interface HeadLine {
   eyebrow: string;
   title: string;
@@ -36,7 +43,10 @@ export function headLine(status: string, styleLabel: string): HeadLine {
     return {
       eyebrow: "대기 중",
       title: "앞에 만들고 있는 작품이 있습니다",
-      sub: "한 번에 한 편씩 만듭니다.",
+      /* 동시에 둘까지 돈다(2026-09-13). 예전에는 「한 번에 한 편씩」이었는데
+         그대로 두면 화면이 옛말을 하고, 바로 위의 줄 표시(「앞에 2명 · 약 5분
+         뒤 시작」)와도 어긋난다 — 한 편씩이면 10분이어야 하니까. */
+      sub: "한 번에 두 편씩 만듭니다.",
     };
   }
   if (status === "awaiting_sheet" || status === "awaiting_pick") {
@@ -130,6 +140,21 @@ export function mascotLine(
       : `루가 ${art.done}번째 장을 그리고 있어요 (${art.done}/${art.total})`;
   }
   return NH_STAGE_SAY[stage] || "루가 만들고 있어요";
+}
+
+/**
+ * 마스코트 그림의 `data-stage` 값.
+ *
+ * 보통은 단계(`stage`)로만 고른다({@link NH_STAGE_ART}). 다만 서버가
+ * {@link FULL_REVIEW_SAY}를 보내는 동안(화 전체 검수 중)만 예외로
+ * "bind" 그림을 쓴다 — 단계 자체는 여전히 "pages" 라(그리기 안에서 도는
+ * 걸음이지 새 단계가 아니다) 단계만으로는 못 가리고, `say` 문구로
+ * 가린다. `mascotLine` 과 같은 순서 원칙(서버가 준 `say` 가 가장 세다)을
+ * 그림에도 그대로 적용한 것이다.
+ */
+export function stageArt(stage: string, say: string): string {
+  if (say === FULL_REVIEW_SAY) return "bind";
+  return NH_STAGE_ART[stage] || stage;
 }
 
 /** 0:00 꼴. */

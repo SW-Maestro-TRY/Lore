@@ -77,6 +77,11 @@ export interface NhDirection {
   n: number;
   title: string;
   genre: string;
+  /** 사람이 고를 때 보는 짧은 요약(2~3문장) — 지금 story_prompt 가 실제로 낸다. */
+  intro: string;
+  /** 고른 뒤 scene_prompt 로 그대로 넘어가는 본문(5~8문장). 목록 화면에는 안 띄운다. */
+  body: string;
+  /** 옛 story_prompt(### 줄거리 절) 형식 run 과의 호환용 — 지금 형식에는 항상 빈 문자열. */
   plot: string;
   scenes: string[];
   cast?: { name: string; appearance?: string }[];
@@ -104,6 +109,13 @@ export interface NhJob {
   /** 줄에서의 자리. **내 차례면 없다(null)** — 그때는 적을 것이 없다.
    *  서버가 DB 를 보고 센다(JobQueue) — 화면이 세지 않는다. */
   queue: { ahead: number; minutes: number; line: string } | null;
+  /** 다 되면 어디로 알릴 것인가. **화면이 로그인 여부를 자기가 판단하지 않는다.**
+   *  email 이 비어 있으면 아직 받을 데가 없다는 뜻이고, 그때만 게스트에게
+   *  입력 칸을 띄운다. sent 가 참이면 이미 나간 뒤라 주소를 못 바꾼다. */
+  notice?: { logged_in: boolean; email: string | null; sent: boolean } | null;
+  /** 결과를 보기까지 남은 분. **사람이 답할 차례이거나 끝났으면 없다.**
+   *  서버가 센다 — 화면이 자기 시계로 세면 새로고침할 때마다 값이 뛴다. */
+  minutes_left?: number | null;
   pct: number;
   /** retry_page: 지금 걸려서 다시 그리는 중인 장 번호. 0(또는 없음)이면 없다. */
   art: { done: number; total: number; retry_page?: number } | null;
@@ -220,6 +232,33 @@ export function createJob(form: NhCreateRequest): Promise<{ id: string; credit_b
   return post("/nh/create", { ...form, uid: getUid() });
 }
 
+/** 게스트(비로그인)용 사진 업로드 주소. 로그인한 사람은 `@common/api/uploads`
+ *  의 `presign`(팀 공용, 계정에 묶인 티켓)을 그대로 쓴다 — 이 길은 게스트만 쓴다. */
+function guestPhotoPresign(contentType: string): Promise<{ key: string; url: string }> {
+  return post("/nh/photo-presign", { contentType });
+}
+
+/**
+ * 게스트가 들고 있는 data URL 사진들을 S3 로 올리고 key 를 돌려준다.
+ *
+ * `uploadDataUrls`(팀 공용, `@common/api/uploads`)와 하는 일은 같지만 로그인이
+ * 필요 없는 주소로 올린다 — 게스트는 본문에 사진을 그대로 실어 보내다가
+ * CloudFront 앞단 WAF(SizeRestrictions_BODY)에 막혀 있었다(2026-09-17).
+ */
+export async function uploadDataUrlsAsGuest(dataUrls: string[]): Promise<string[]> {
+  const keys: string[] = [];
+  for (const url of dataUrls) {
+    if (typeof url !== "string" || !url.startsWith("data:")) continue;
+    const blob = await (await fetch(url)).blob();
+    const type = blob.type || "image/png";
+    const { key, url: putUrl } = await guestPhotoPresign(type);
+    const res = await fetch(putUrl, { method: "PUT", headers: { "Content-Type": type }, body: blob });
+    if (!res.ok) throw new Error(`사진을 올리지 못했습니다 (${res.status})`);
+    keys.push(key);
+  }
+  return keys;
+}
+
 export function readJob(id: string): Promise<NhJob> {
   return call<NhJob>(`/nh/jobs/${encodeURIComponent(id)}`);
 }
@@ -230,9 +269,12 @@ export function decideSheet(id: string, decision: "approve" | "retry", note = ""
               note ? { decision, note } : { decision });
 }
 
-/** 이야기 고르기 — 넷 중 하나. */
-export function pickDirection(id: string, n: number) {
-  return post(`/nh/jobs/${encodeURIComponent(id)}/pick`, { n });
+/** 이야기 고르기 — 넷 중 하나. `editedBody` 를 주면 그 방향의 본문을
+ * 사람이 고친 내용으로 바꿔서 다음 단계(장면 나누기)부터 그 내용을
+ * 쓴다 — 안 주거나 원래 본문과 같으면 서버가 아무것도 안 건드린다. */
+export function pickDirection(id: string, n: number, editedBody?: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/pick`,
+              editedBody ? { n, body: editedBody } : { n });
 }
 
 /** 넷 다 마음에 안 들 때 — 후보를 다시 만든다. */
@@ -242,6 +284,16 @@ export function retryDirections(id: string, note = "") {
 
 export function cancelJob(id: string) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/cancel`);
+}
+
+/** 다 되면 이 주소로 알려 달라. **빈 값을 보내면 안 받겠다는 뜻이다.**
+ *
+ *  주소가 틀리면 서버가 400 과 함께 사람이 읽을 한 줄을 준다 — 담아 두고
+ *  보낸 척하면 화면에는 「보낼게요」가 떠 있는데 영영 아무것도 안 온다.
+ *
+ *  @returns 실제로 보낼 주소. 지웠으면 null. */
+export function notifyByEmail(id: string, email: string): Promise<{ email: string | null }> {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/notify`, { email });
 }
 
 /* ---- 그림 주소 ------------------------------------------------------------

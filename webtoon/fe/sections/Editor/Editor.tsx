@@ -142,6 +142,9 @@ export default function Editor({
         <div className="dock-scrim" id="dockScrim" hidden />
 
         <aside className="ed-dock" id="edDock" aria-label="말풍선 · 스티커 · 효과음">
+          {/* 폰 바텀시트 전용 손잡이. 넓은 화면(헤더 밑 가로 띠)에서는
+              webtoon.css 가 숨긴다 — 끌어내릴 방향이 없다. */}
+          <div className="dock-handle" id="dockHandle" aria-hidden="true" />
           <div className="dock-bar">
             <div className="dock-tabs" id="dockTabs">
               <button type="button" className="dock-tab is-on" data-tab="bubble">말풍선</button>

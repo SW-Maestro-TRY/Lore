@@ -1,0 +1,30 @@
+{
+  "name": "강냥이",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A young woman with short, messy black hair and large, floppy black animal ears on her head. She has bright orange eyes with slit pupils, fair skin, and visible scars on her shoulders and arms. She wears a sleeveless black high-neck top and a light blue jacket that hangs off her shoulders.",
+  "design_details": [
+    "머리 위에 큰 검은색 동물 귀 두 개가 좌우로 달려 있음",
+    "짧고 헝클어진 검은 머리, 목까지 오는 길이",
+    "양쪽 어깨와 팔에 긁힌 듯한 붉은 상처 자국",
+    "눈동자가 주황색이며 세로로 긴 동공",
+    "소매가 어깨에서 흘러내린 연한 파란색 재킷"
+  ],
+  "props": [],
+  "color_palette": {
+    "hair": "black (#181921)",
+    "eyes": "amber (#F9A825)",
+    "skin": "peach (#F6D6CB)",
+    "outfit_main": "black (#232323)",
+    "outfit_sub": "light blue (#A2B8D8)",
+    "accent": "scarlet (#C15B5B)"
+  },
+  "expression_set": [
+    "장난스러움 — 입꼬리가 올라가고 송곳니가 살짝 드러난 미소",
+    "무표정 — 입을 다물고 눈을 평범하게 뜬 얼굴",
+    "당황 — 눈이 살짝 커지고 볼이 붉어진 얼굴",
+    "분노 — 눈썹이 찌푸려지고 입술이 다물린 얼굴",
+    "상처받음 — 눈동자가 흔들리고 입꼬리가 약간 내려간 얼굴",
+    "평온 — 입을 다물고 눈꺼풀이 살짝 내려온 힘이 빠진 얼굴"
+  ]
+}

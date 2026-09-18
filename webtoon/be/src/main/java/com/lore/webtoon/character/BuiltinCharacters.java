@@ -83,7 +83,15 @@ public class BuiltinCharacters implements ApplicationRunner {
                     + "주머니에는 늘 한 갑이 있다."),
             new Seed("game", "ex-game-1.jpg", "이올",
                     "길드 청산인. 망한 길드를 찾아가 장비를 회수한다. "
-                    + "가는 곳마다 환영받지 못해서 말수가 적다."));
+                    + "가는 곳마다 환영받지 못해서 말수가 적다."),
+            /* 예외 — 그림체 고르개의 여덟 견본과 달리, 이건 실제로 한 사람이
+             * 「내 캐릭터」로 만든 캐릭터(id=10, source=PROMPT)를 둘러보기용
+             * 으로도 보이게 한 것이다. 그 원본 캐릭터는 그대로 그 사람 것으로
+             * 남고, 이건 같은 그림·이름으로 새로 심은 별개의 BUILTIN 줄이다
+             * (2026-09-14, #33). */
+            new Seed("webtoon", "ex-jiyun-1.jpg", "지윤",
+                    "창가 자리를 독차지하는 대학원생. 안경 너머로 다 보면서도 "
+                    + "정작 중요한 이야기는 늘 못 본 척 넘긴다."));
 
     private final WebtoonCharacterRepository characters;
     private final PrivateArt art;

@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@common/auth/useAuth";
 import { creditBalance } from "@common/api/credits";
+import { LEGAL_LINKS, CONTACT_CHANNEL } from "../links";
 import CreditHistory from "./CreditHistory";
 import CreditCharge from "./CreditCharge";
 import "./mypage.css";
@@ -18,9 +19,10 @@ import "./mypage.css";
  *
  * ## 껍데기와 칸을 가른다
  *
- * 여기(common)가 가진 것은 **레일과 크레딧**뿐이다 — 나 · 잔액 · 충전 ·
- * 내역 · 로그아웃. 무엇을 만들었는지는 도메인이 {@link Section} 으로 끼운다.
- * 그래야 공통 코드가 웹툰의 작품이나 짤의 펫을 알 필요가 없다.
+ * 여기(common)가 가진 것은 **레일과 크레딧, 그리고 설정**뿐이다 — 나 · 잔액 ·
+ * 충전 · 내역 · 1:1 문의하기 · 로그아웃 · 이용약관. 무엇을 만들었는지는
+ * 도메인이 {@link Section} 으로 끼운다. 그래야 공통 코드가 웹툰의 작품이나
+ * 짤의 펫을 알 필요가 없다.
  *
  * ```tsx
  * <MyPage sections={[
@@ -165,13 +167,20 @@ export default function MyPage({
               </div>
             );
           })}
-        </nav>
 
-        <div className="me-rail-foot">
-          <button type="button" className="me-quit" onClick={() => void signOut()}>
+          {/* 만드는 것과 무관한 계정 관리 칸. 「만든 것」·「재료」처럼
+              도메인이 채우는 것이 아니라 이 화면에 고정으로 둔다. */}
+          <p className="me-nav-grp">설정</p>
+          <a className="me-nav-a" href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">
+            1:1 문의하기
+          </a>
+          <button type="button" className="me-nav-a" onClick={() => void signOut()}>
             로그아웃
           </button>
-        </div>
+          <a className="me-nav-a" href={LEGAL_LINKS.terms} target="_blank" rel="noopener noreferrer">
+            이용약관
+          </a>
+        </nav>
       </aside>
 
       <div className="me-main">

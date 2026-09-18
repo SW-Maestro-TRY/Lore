@@ -1,0 +1,146 @@
+Character reference sheet for a Korean webtoon production. Flat even lighting, pure white background (#FFFFFF), no cast shadows, no text, no labels, no watermark, no logo, no signature. Clean line art with flat colors. The character is identical in every figure on the sheet.
+
+[CHARACTER SHEET — ONE PAGE, SEPARATE REGIONS]
+A single landscape sheet holding the regions below, stacked with clear empty white space between them so each region reads as its own block. No frames, no borders, no captions, no labels.
+
+REGION 1 — TOP BAND: turnaround.
+  The SAME character four times in one horizontal row, left to right:
+  (1) front view  (2) three-quarter view  (3) side view  (4) back view.
+  Full body, standing at attention, arms relaxed at the sides, feet together,
+  neutral expression, camera at eye level.
+  All four stand on one shared ground line with exactly the same height and the
+  same proportions. The outfit, hair length and body type do not change between
+  views. The character carries nothing in these four figures.
+
+REGION 2 — MIDDLE BAND: 6 expressions.
+  The SAME character's head and shoulders 6 times in one
+  horizontal row, evenly spaced, all the same size, all facing the camera at the
+  same angle. Only the expression changes; face shape, hairstyle and hair length
+  are identical in all of them.
+
+REGION 3 — BOTTOM LEFT: 5 close-up insets, one per fixed design element, each showing only that element, enlarged.
+
+REGION 4 — BOTTOM RIGHT: one horizontal row of flat color swatch chips, one chip per palette entry, in the listed order.
+
+CHARACTER
+A woman in her mid-twenties with straight black hair at shoulder length, wearing a casual hoodie and blue jeans. She has a calm and gentle look. Her skin is fair, her eyes are dark, and her overall build is average.
+
+COLOR PALETTE (use exactly these, and these are the chips in the swatch row)
+hair: black (#222222) / eyes: dark brown (#3B2F23) / skin: ivory (#F6E6D8) / outfit_main: gray (#B0B0B0) / outfit_sub: blue (#4477AA) / accent: white (#FFFFFF)
+
+FIXED DESIGN ELEMENTS — visible and identical everywhere on the sheet, and one inset each in region 3. Written in Korean; follow them literally:
+  1. 어깨까지 오는 검은 생머리
+  2. 왼쪽 소매에 작은 흰색 로고가 있는 회색 후드티
+  3. 중간색 워싱이 들어간 청바지
+  4. 양쪽 귀에 작은 은색 원형 귀걸이
+  5. 오른쪽 손목에 검은 고무줄
+
+EXPRESSIONS for region 2, left to right. Written in Korean; the part after the dash describes exactly what to draw:
+  1. 평온 — 입을 다물고 눈꺼풀이 살짝 내려온 얼굴
+  2. 미소 — 입꼬리가 살짝 올라가고 눈매가 부드러운 얼굴
+  3. 놀람 — 눈이 크게 뜨이고 입이 약간 벌어진 얼굴
+  4. 당황 — 눈썹이 위로 치켜오르고 입이 옅게 벌어진 얼굴
+  5. 진지 — 입을 다물고 눈이 정면을 응시하는 얼굴
+  6. 슬픔 — 눈꼬리가 아래로 내려가고 입이 일자로 굳어진 얼굴
+
+STYLE
+  ## GLOBAL RENDERING RULE — FROST
+
+  모든 컷과 모든 요소는 아래 FROST 렌더링을 최우선으로 따른다. 장면의
+  정보량이 많더라도(복잡한 장소·소품·조명이 컷 설명에 있어도) 디테일을
+  추가해서 설명하지 않는다 — 장소·소품·의상이 복잡할수록 오히려 FROST의
+  단순화 수준을 그대로 유지해야 한다.
+
+  The image must remain restrained even when the scene contains detailed
+  environments, props, clothing, or lighting. FROST is defined by
+  simplification, not by reduced image quality. Do not compensate for scene
+  complexity by adding detail, line density, hair strands, fabric texture,
+  or lighting effects.
+
+  restrained semi-realistic webtoon rendering,
+  mature adult anatomy with elegant stylization,
+  editorial and fashion-illustration sensibility,
+
+  simple selective linework,
+  thin delicate slightly irregular ink lines,
+  variable line density,
+  deliberate simplification,
+  uneven detail density,
+  large areas of clean negative space,
+  only essential lines are drawn,
+
+  broken and incomplete contours in low-detail areas,
+  minimal interior linework,
+  natural hand-drawn imperfections,
+  casual but controlled webtoon finish,
+  not every surface is fully rendered,
+
+  simplified facial rendering,
+  natural mature facial proportions,
+  moderately narrow almond-shaped eyes,
+  simple controlled irises,
+  restrained eyelashes,
+  minimal facial lines,
+  subtle eyebrows,
+  minimal nose and mouth definition,
+  if the character's skin tone is unspecified or a default/light-to-medium
+  tone, render it dramatically lighter and paler — porcelain-pale bright
+  skin with very little surface detail; if the character is explicitly
+  described with a dark or deeply-pigmented skin tone (e.g. Black), keep
+  that dark skin tone and do not lighten it — only brighten the surface
+  finish (less texture, softer shading), never the underlying tone,
+
+  simplified hair masses,
+  large coherent hair shapes,
+  only a few loose directional strand lines,
+  irregular sparse hair strokes,
+  no individual strand rendering,
+
+  selective clothing folds,
+  clothing defined primarily by silhouette and construction,
+  essential folds only,
+  hatching only in deeper shadows and important folds,
+  large untextured color areas,
+
+  broad flat muted color shapes,
+  limited tonal hierarchy,
+  simple shadow planes,
+  restrained cel-shaded planes,
+  minimal gradients,
+  minimal highlights,
+  minimal reflected light,
+  clean restrained color transitions,
+
+  background detail significantly reduced compared to the character,
+  soft simplified background shapes,
+  large quiet areas,
+  no uniform texture across the image,
+  background rendered with less detail and contrast than the character,
+
+  quiet sophisticated visual hierarchy,
+  mature understated aesthetic,
+  beautiful through simplification rather than detail.
+
+  ## 하지 마라
+
+  - hyper-detailed, over-rendered, excessive micro-detail, uniform detail
+    density, intricate facial details, intricate hair strands, individual
+    hair rendering, hair strand accumulation, perfectly rendered eyes,
+    sparkling eyes, gemstone eyes, oversized eyes
+  - detailed skin texture, skin pores, photorealistic skin, 3D skin
+    rendering, airbrushed skin, excessive facial shading
+  - for unspecified/default/light-to-medium skin tones: leaving the skin
+    at its ordinary tone instead of brightening it, tan skin, olive skin,
+    medium-tone skin left unlightened
+  - for characters explicitly described with dark/deeply-pigmented skin:
+    lightening or whitening the underlying skin tone — only the surface
+    finish (texture, shading) should soften, not the tone itself
+  - excessive eyelashes, glossy lips, excessive highlights, excessive
+    gradients, volumetric lighting, photorealistic lighting
+  - excessive clothing folds, detailed fabric texture, dense fabric
+    rendering, decorative linework, dense linework, uniform hatching,
+    heavy outlines, perfect vector linework
+  - dense background details, uniform background texture, background
+    competing with character, overdecorated background
+  - anime key visual, light novel illustration, moe, kawaii, childlike
+    proportions, milky pastel colors, oversaturated colors, neon colors

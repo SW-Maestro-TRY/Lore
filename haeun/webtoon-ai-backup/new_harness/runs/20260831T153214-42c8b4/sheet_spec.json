@@ -1,0 +1,30 @@
+{
+  "name": "스타일검증-cinematic",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A woman in her mid-20s with straight black hair cut to shoulder length. She has a calm and gentle expression. She wears a casual hoodie and blue jeans. Her build is average and her skin tone is fair. Her eyes are dark brown.",
+  "design_details": [
+    "어깨에 닿는 길이의 검은 생머리",
+    "후드가 달린 회색 후드티, 앞면에 주머니 있음",
+    "중간 파란색 계열의 일자핏 청바지",
+    "왼쪽 손목에 검은 고무줄",
+    "흰 운동화, 발목까지 올라오는 양말"
+  ],
+  "props": [],
+  "color_palette": {
+    "hair": "black (#222222)",
+    "eyes": "dark brown (#3B2F23)",
+    "skin": "light beige (#F5E2CC)",
+    "outfit_main": "gray (#B0B0B0)",
+    "outfit_sub": "blue (#4A7BA7)",
+    "accent": "white (#FFFFFF)"
+  },
+  "expression_set": [
+    "평온 — 입을 다물고 눈꺼풀이 살짝 내려온, 힘이 빠진 얼굴",
+    "미소 — 입꼬리가 살짝 올라간 부드러운 표정",
+    "놀람 — 눈이 크게 열리고 입이 약간 벌어진 얼굴",
+    "슬픔 — 입꼬리가 내려가고 눈썹이 안쪽으로 모인 얼굴",
+    "당황 — 눈이 흔들리고 입술이 굳게 다문 얼굴",
+    "집중 — 눈썹이 모이고 입술이 일자로 다문 얼굴"
+  ]
+}

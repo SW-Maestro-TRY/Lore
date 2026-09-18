@@ -1,0 +1,30 @@
+{
+  "name": "스타일테스트",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A woman in her mid-twenties with straight, shoulder-length black hair. She has fair skin and dark brown eyes. She wears a casual gray hoodie and blue jeans. Her build is average, and her overall style is simple and relaxed.",
+  "design_details": [
+    "어깨까지 오는 검은 생머리",
+    "짙은 갈색 눈, 쌍꺼풀 있음",
+    "회색 후드티, 앞에 큰 주머니",
+    "중청색 일자핏 청바지",
+    "왼쪽 손목에 얇은 검정 고무줄"
+  ],
+  "props": [],
+  "color_palette": {
+    "hair": "black (#222222)",
+    "eyes": "dark brown (#3B2F1B)",
+    "skin": "ivory (#FBE8D3)",
+    "outfit_main": "gray (#A9A9A9)",
+    "outfit_sub": "blue (#3571B8)",
+    "accent": "black (#222222)"
+  },
+  "expression_set": [
+    "평온 — 입을 다물고 눈꺼풀이 살짝 내려온, 힘이 빠진 얼굴",
+    "미소 — 입꼬리가 살짝 올라가고 눈이 부드럽게 휘어진 얼굴",
+    "놀람 — 눈이 크게 뜨이고 입이 약간 벌어진 얼굴",
+    "당황 — 눈썹이 위로 치켜 올라가고 입술이 일자로 굳어진 얼굴",
+    "슬픔 — 눈꼬리가 아래로 내려가고 입술이 살짝 일그러진 얼굴",
+    "분노 — 눈썹이 찌푸려지고 입술이 굳게 다문 얼굴"
+  ]
+}

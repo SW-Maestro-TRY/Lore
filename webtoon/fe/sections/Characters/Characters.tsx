@@ -74,7 +74,6 @@ export default function Characters({ onUse }: {
       <button type="button" className="char-new" onClick={() => setMaking(true)}>
         <b>+</b>
         새 캐릭터
-        <span>사진 없이 설명만으로도</span>
       </button>
     </li>
   );

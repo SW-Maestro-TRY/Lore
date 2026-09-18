@@ -1,0 +1,49 @@
+{
+  "run_id": "haeun1-cinematic-gpt",
+  "calls": [
+    {
+      "stage": "PAGE_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "medium",
+      "bytes": 2594994,
+      "refs": [
+        "sheet.png"
+      ],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=3954, input_tokens_details=UsageInputTokensDetails(image_tokens=1536, text_tokens=2418), output_tokens=1372, total_tokens=5326, output_tokens_details=UsageOutputTokensDetails(image_tokens=1372, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 3954,
+          "input_tokens_details": {
+            "image_tokens": 1536,
+            "text_tokens": 2418
+          },
+          "output_tokens": 1372,
+          "total_tokens": 5326,
+          "output_tokens_details": {
+            "image_tokens": 1372,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 3954,
+        "tokens_out": 1372,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 5326,
+        "tokens_in_text": 2418,
+        "tokens_in_image": 1536,
+        "tokens_out_image": 1372,
+        "cost_basis": "tokens",
+        "total": 0.065538,
+        "total_krw": 92
+      },
+      "output_path": "/Users/mint/project/Lore/haeun/new_harness/runs/haeun1-cinematic-gpt/pages/page01.png",
+      "page": 1,
+      "cuts": 1
+    }
+  ]
+}

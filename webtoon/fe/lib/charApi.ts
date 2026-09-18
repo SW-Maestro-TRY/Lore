@@ -74,11 +74,12 @@ export function listCharacters(): Promise<CharacterList> {
   return call<CharacterList>("/characters");
 }
 
-/** 만든다. 사진은 없어도 된다 — 그게 이 기능의 핵심이다. */
+/** 만든다. 사진은 없어도 된다 — 그게 이 기능의 핵심이다. 사진은 여러 장
+ *  (최대 4장, 같은 사람의 다른 각도·표정) 줄 수 있다. */
 export function createCharacter(body: {
   name: string;
   description: string;
-  photo_data?: string;
+  photos_data?: string[];
   style?: string;
 }): Promise<Character> {
   return call<Character>("/characters", {

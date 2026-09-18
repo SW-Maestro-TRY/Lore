@@ -12,6 +12,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 import java.net.URI;
+import java.time.Instant;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -117,5 +119,69 @@ class S3ServiceTest {
         assertThatThrownBy(() -> service.createUploadUrl(USER_ID, "zzl", "image/png"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("zzl");
+    }
+
+    /*
+     * 게스트(비로그인) presign — 2026-09-17, 게스트가 사진을 올릴 때 base64 로
+     * 요청 본문에 실어 보내다가 CloudFront 앞단 WAF(SizeRestrictions_BODY)에
+     * 막히던 것을 고치며 추가했다. 계정이 없으니 GuestGate 의 IP 해시로
+     * 티켓을 묶는데, 이 테스트는 그 묶임이 로그인 사람의 것과 똑같이
+     * "발급받은 사람만 그 키를 쓸 수 있다"를 지키는지 본다.
+     */
+
+    @Test
+    @DisplayName("게스트 발급 키도 images/{도메인}/{UUID} 형식이다")
+    void guestKeyFollowsExpectedShape() {
+        S3Service service = serviceReturningUrl("bucket-a");
+
+        String key = service.createUploadUrlForGuest("guest-abc", "webtoon", "image/png").key();
+
+        assertThat(key).matches("^images/webtoon/[0-9a-f-]{36}$");
+    }
+
+    @Test
+    @DisplayName("게스트 열쇠가 없으면 발급을 거부한다")
+    void rejectsGuestUploadWithoutKey() {
+        S3Service service = serviceReturningUrl("bucket-a");
+
+        assertThatThrownBy(() -> service.createUploadUrlForGuest("", "webtoon", "image/png"))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("게스트는 자기가 받은 티켓을 쓸 수 있다")
+    void guestCanConsumeOwnTicket() {
+        S3Service service = new S3Service(presigner, ticketRepository, "bucket-a", 10);
+        UploadTicket ticket = UploadTicket.issueForGuest("guest-abc", "images/webtoon/x", "webtoon",
+                "image/png", Instant.now());
+        when(ticketRepository.findByS3Key("images/webtoon/x")).thenReturn(Optional.of(ticket));
+
+        service.consumeGuest("guest-abc", "images/webtoon/x", Instant.now());
+
+        assertThat(ticket.isUsed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("다른 게스트의 키는 못 쓴다 — IP 해시가 달라도 없는 키와 같은 오류를 준다")
+    void rejectsAnotherGuestsKey() {
+        S3Service service = new S3Service(presigner, ticketRepository, "bucket-a", 10);
+        UploadTicket ticket = UploadTicket.issueForGuest("guest-abc", "images/webtoon/x", "webtoon",
+                "image/png", Instant.now());
+        when(ticketRepository.findByS3Key("images/webtoon/x")).thenReturn(Optional.of(ticket));
+
+        assertThatThrownBy(() -> service.consumeGuest("guest-other", "images/webtoon/x", Instant.now()))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("로그인 사람 티켓은 게스트 경로로 못 쓴다 — 계정 티켓과 게스트 티켓은 서로 남의 것이다")
+    void loggedInUserTicketIsNotConsumableAsGuest() {
+        S3Service service = new S3Service(presigner, ticketRepository, "bucket-a", 10);
+        UploadTicket ticket = UploadTicket.issue(USER_ID, "images/webtoon/x", "webtoon",
+                "image/png", Instant.now());
+        when(ticketRepository.findByS3Key("images/webtoon/x")).thenReturn(Optional.of(ticket));
+
+        assertThatThrownBy(() -> service.consumeGuest("guest-abc", "images/webtoon/x", Instant.now()))
+                .isInstanceOf(BusinessException.class);
     }
 }

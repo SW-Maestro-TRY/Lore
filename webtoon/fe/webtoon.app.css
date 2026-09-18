@@ -464,13 +464,16 @@
    빈 화면에서 갈 곳이 안 보인다. */
 .webtoon-page .char-new {
   border: 1.5px dashed var(--line-2); border-radius: 16px; background: transparent;
-  display: grid; place-items: center; gap: .3em; cursor: pointer;
-  min-height: 150px; padding: 14px; text-align: center;
+  display: grid; place-items: center; gap: 4px; cursor: pointer;
+  /* li(부모 grid item)가 이미 같은 줄의 char-card 높이로 늘어나 있다
+     (grid 의 기본 align-items: stretch). 이 버튼도 그 li 를 꽉 채워야
+     카드들과 같은 크기로 보인다 — width/height 없이는 내용 크기만큼만
+     찬다. */
+  width: 100%; height: 100%; min-height: 150px; padding: 14px; text-align: center;
   color: var(--accent-d); font-weight: 700; font-size: .9rem;
   transition: border-color .16s ease, background .16s ease;
 }
 .webtoon-page .char-new:hover { border-color: var(--accent); background: rgba(15,51,63,.03); }
-.webtoon-page .char-new span { font-size: .76rem; font-weight: 500; color: var(--dim); }
 .webtoon-page .char-new b { font-size: 1.5rem; font-weight: 400; line-height: 1; }
 
 /* ---- 캐릭터 만들기 (화면 하나) --------------------------------------------
@@ -596,7 +599,7 @@
   background: rgba(10,32,38,.45); cursor: pointer;
 }
 .webtoon-page .pick-way-box {
-  position: relative; width: min(560px, 100%);
+  position: relative; width: min(380px, 100%);
   background: var(--card); border-radius: 18px; padding: 20px;
   box-shadow: 0 20px 60px rgba(15,51,63,.28);
   /* 두 갈래를 **나란히** 둔다 — 위아래로 쌓으면 위쪽이 먼저 읽혀서
@@ -609,7 +612,10 @@
   margin: 0 0 .3em; text-align: center;
 }
 .webtoon-page .pick-way-one {
-  display: grid; gap: .3em; text-align: center; align-content: start;
+  display: grid; gap: .3em; text-align: center; align-content: center;
+  /* 설명 문구를 없앤 만큼 세로 크기가 줄지 않게, 있었을 때와 같은 높이를
+     min-height 로 지켜 준다(제목 한 줄만 있어도 가운데 놓인다). */
+  min-height: 94px;
   border: 1px solid var(--line-2); border-radius: 14px;
   background: var(--paper); padding: 18px 14px; cursor: pointer;
   font: inherit; color: var(--text);
@@ -619,7 +625,6 @@
   border-color: var(--accent); background: rgba(15,51,63,.03); transform: translateY(-1px);
 }
 .webtoon-page .pick-way-one b { font-size: .95rem; }
-.webtoon-page .pick-way-one span { font-size: .78rem; color: var(--dim); line-height: 1.5; }
 /* 닫기는 오른쪽 위 ✕ 로. 아래에 단추로 두면 두 갈래와 같은 무게로 읽혀서
    "세 번째 선택지" 처럼 보인다. */
 .webtoon-page .pick-way-x {
@@ -858,4 +863,70 @@
 .webtoon-page .progress-back {
   margin: 12px 0 0; font-size: .88rem; line-height: 1.6;
   color: var(--ink); word-break: keep-all;
+}
+
+/* ---- 다 되면 메일로 알려 주는 자리 -----------------------------------------
+ *
+ * 「기다리는 동안 나가는 줄」 바로 밑이다. 나갈까 말까를 정하는 그 자리에서
+ * "그럼 다 되면 어떻게 알지?" 가 나오기 때문이다.
+ *
+ * **주인공이 아니다.** 이 화면의 주인공은 루와 그려지는 장이고, 이건 나가도
+ * 된다는 말에 붙는 각주다 — 그래서 카드로 세우지 않고 옅은 띠로 둔다.
+ * 게스트에게만 입력 칸이 뜨고, 로그인한 사람에게는 한 줄만 뜬다. */
+
+.webtoon-page .notify-mail {
+  max-width: 560px; margin: 10px auto 0; padding: 13px 16px;
+  background: var(--paper-2); border: 1px solid var(--line-2); border-radius: 16px;
+  text-align: left;
+}
+/* 이미 받을 데가 있는 경우는 읽기만 하는 한 줄이라 더 조용하게. */
+.webtoon-page .notify-mail.is-set { background: transparent; border-style: dashed; }
+
+.webtoon-page .notify-say {
+  display: block; margin: 0 0 8px;
+  font-size: .86rem; font-weight: 600; color: var(--text); line-height: 1.5;
+}
+.webtoon-page .notify-mail.is-set .notify-say { margin-bottom: 4px; font-weight: 500; }
+.webtoon-page .notify-say b { color: var(--accent-d); word-break: break-all; }
+
+.webtoon-page .notify-row { display: flex; gap: 8px; align-items: stretch; }
+.webtoon-page .notify-row input {
+  flex: 1 1 auto; min-width: 0;
+  background: #fff; color: var(--text);
+  border: 1px solid var(--line-2); border-radius: 12px;
+  padding: .6em .9em; font: inherit; font-size: .9rem;
+}
+.webtoon-page .notify-row input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(14,143,181,.22);
+}
+.webtoon-page .notify-row input::placeholder { color: #9db6c0; }
+.webtoon-page .notify-row .btn { flex: none; white-space: nowrap; }
+
+.webtoon-page .notify-sub {
+  margin: 7px 0 0; font-size: .74rem; color: var(--dim); line-height: 1.55;
+}
+.webtoon-page .notify-bad {
+  margin: 7px 0 0; font-size: .76rem; font-weight: 600; color: #9c3b31;   /* btn-danger 와 같은 붉은색 — 이 화면의 「멈춤」 색이다 */
+}
+
+/* 「알림 받지 않기」 — 되돌릴 길이 있어야 적어 넣는다. 다만 단추처럼
+   보이면 안 적기를 권하는 것처럼 읽혀서, 글줄 안의 링크로 둔다. */
+.webtoon-page .notify-sub .linklike {
+  border: 0; background: none; padding: 0; font: inherit;
+  color: var(--dim); text-decoration: underline; cursor: pointer;
+}
+.webtoon-page .notify-sub .linklike:hover:not(:disabled) { color: var(--text); }
+.webtoon-page .notify-sub .linklike:disabled { cursor: default; opacity: .6; }
+
+@media (max-width: 420px) {
+  .webtoon-page .notify-row { flex-wrap: wrap; }
+  .webtoon-page .notify-row .btn { width: 100%; }
+}
+
+/* 남은 시간은 **제 줄을 준다.** 권유 문장에 붙여 놓으면 한 덩어리로 읽혀서
+   숫자가 안 보인다 — 기다릴지 나갈지를 정하는 값이라 눈에 걸려야 한다. */
+.webtoon-page .notify-left {
+  display: block; margin-top: 3px;
+  font-weight: 600; color: var(--accent-d);
 }

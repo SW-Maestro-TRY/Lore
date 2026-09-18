@@ -1,0 +1,583 @@
+[
+  [
+    {
+      "location": "마법사의 저택 내 하은의 방 및 식사 공간",
+      "time": "아침, 부드러운 햇살이 방 안으로 들어오는 시각",
+      "id": 1,
+      "size": "large",
+      "camera": {
+        "shot": "광각",
+        "angle": "하이앵글",
+        "facing": "앞모습"
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "마법사의 저택 침실, 하얀 시트가 깔린 침대, 이국적인 창문, 벽에 불규칙적인 마법진, 작은 자명종이 침대 옆 탁자에 있음"
+      },
+      "characters": [
+        {
+          "name": "하은",
+          "style": "LD",
+          "position": "가운데",
+          "expression": "살짝 멍한 채로 잠에서 깸",
+          "action": "이불을 젖히고 몸을 일으킴",
+          "moment": "직후",
+          "framing": "전신"
+        }
+      ],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": null,
+          "type": "나레이션",
+          "text": "여기는 마법사의 저택. 나는 이곳의 하녀, 하은이다.",
+          "bubble": {
+            "shape": "네모 상자",
+            "tail": null,
+            "position": "왼쪽 위"
+          }
+        },
+        {
+          "order": 2,
+          "speaker": "하은",
+          "type": "생각",
+          "text": "또 같은 아침이네. 햇살도, 자명종도, 모든 게 어제와 똑같아.",
+          "bubble": {
+            "shape": "구름",
+            "tail": null,
+            "position": "하은 머리 위"
+          }
+        },
+        {
+          "order": 3,
+          "speaker": "하은",
+          "type": "생각",
+          "text": "내가 여기서 하는 일이... 매일 이 아침을 준비하는 것뿐이라니.",
+          "bubble": {
+            "shape": "구름",
+            "tail": null,
+            "position": "하은 머리 위"
+          }
+        },
+        {
+          "order": 4,
+          "speaker": "하은",
+          "type": "생각",
+          "text": "이상해. 매일이 반복되는 느낌이 점점 더 선명해진다.",
+          "bubble": {
+            "shape": "구름",
+            "tail": null,
+            "position": "하은 머리 위"
+          }
+        }
+      ],
+      "sfx": [
+        {
+          "text": "딩-딩-딩",
+          "source": "자명종",
+          "position": "자명종 근처",
+          "reason": "자명종이 6:30을 알리는 소리"
+        }
+      ],
+      "forbid": [],
+      "note": "침실과 식탁의 반복된 배치, 자명종의 동일한 시각, 햇살 각도를 강조해 연쇄적 기시감을 준다.",
+      "scene": 1,
+      "cut": 1
+    }
+  ],
+  [
+    {
+      "location": "마법사의 저택 내 하은의 방 및 식사 공간",
+      "time": "아침, 부드러운 햇살이 방 안으로 들어오는 시각",
+      "id": 2,
+      "size": "normal",
+      "camera": {
+        "shot": "미디엄 클로즈업",
+        "angle": "정면",
+        "facing": "앞모습"
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "넓은 식탁 위, 빵·삶은 달걀·우유가 정확히 놓인 아침식사"
+      },
+      "characters": [
+        {
+          "name": "마법사",
+          "style": "LD",
+          "position": "오른쪽",
+          "expression": "차분하게 하은을 바라봄",
+          "action": "식탁에 앉아 하은을 바라봄",
+          "moment": "직후",
+          "framing": "가슴 위"
+        },
+        {
+          "name": "하은",
+          "style": "LD",
+          "position": "왼쪽",
+          "expression": "작은 미소, 어색하게 웃음",
+          "action": "식기 트레이를 들고 있음",
+          "moment": "직후",
+          "framing": "가슴 위"
+        }
+      ],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": "마법사",
+          "type": "말",
+          "text": "어제는 좋은 꿈을 꾸었나?",
+          "bubble": {
+            "shape": "둥근 타원",
+            "tail": "마법사 쪽",
+            "position": "오른쪽 위"
+          }
+        },
+        {
+          "order": 2,
+          "speaker": "하은",
+          "type": "생각",
+          "text": "질문이... 또 조금 달라졌어. 매번 어딘가 어긋나 있는 느낌인데.",
+          "bubble": {
+            "shape": "구름",
+            "tail": null,
+            "position": "하은 머리 위"
+          }
+        },
+        {
+          "order": 3,
+          "speaker": "하은",
+          "type": "말",
+          "text": "네, 평범했어요.",
+          "bubble": {
+            "shape": "둥근 타원",
+            "tail": "하은 쪽",
+            "position": "왼쪽 아래"
+          }
+        }
+      ],
+      "sfx": [],
+      "forbid": [],
+      "note": "식탁을 사이에 두고 180도 규칙 유지, 두 인물의 시선 교차. 마법사는 오른쪽, 하은 왼쪽을 고정.",
+      "scene": 1,
+      "cut": 2
+    },
+    {
+      "location": "마법사의 저택 내 하은의 방 및 식사 공간",
+      "time": "아침, 부드러운 햇살이 방 안으로 들어오는 시각",
+      "id": 3,
+      "size": "normal",
+      "camera": {
+        "shot": "상반신",
+        "angle": "정면",
+        "facing": "앞모습"
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "식탁 밑, 의자와 바닥 일부가 보임"
+      },
+      "characters": [
+        {
+          "name": "하은",
+          "style": "LD",
+          "position": "왼쪽",
+          "expression": "순간 멈칫",
+          "action": "포크가 손에서 미끄러져 바닥으로 떨어짐",
+          "moment": "도중",
+          "framing": "가슴 위"
+        },
+        {
+          "name": "마법사",
+          "style": "LD",
+          "position": "오른쪽",
+          "expression": "짧게 주목하는 눈빛",
+          "action": "시선을 고정, 움직임 멈춤",
+          "moment": "직후",
+          "framing": "가슴 위"
+        }
+      ],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": "하은",
+          "type": "생각",
+          "text": "방금 포크를 떨어뜨렸는데... 마법사가 나를 좀 더 주의 깊게 보는 것 같아.",
+          "bubble": {
+            "shape": "구름",
+            "tail": null,
+            "position": "하은 머리 위"
+          }
+        }
+      ],
+      "sfx": [
+        {
+          "text": "덜컥",
+          "source": "포크",
+          "position": "식탁 밑",
+          "reason": "포크가 바닥에 떨어지는 소리"
+        }
+      ],
+      "forbid": [],
+      "note": "마법사의 동공, 손끝 등의 미세한 리액션 강조. 하은의 불안한 감정이 단서처럼 남는다.",
+      "scene": 1,
+      "cut": 3
+    }
+  ],
+  [
+    {
+      "location": "마법사의 서재(책상, 벽에 책장이 가득한 공간)",
+      "time": "아침, 햇살이 창문 틈으로 들어오는 시간",
+      "id": 1,
+      "size": "normal",
+      "camera": {
+        "shot": "무릎",
+        "angle": "부감",
+        "facing": "앞모습"
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "책상 위, 고서와 마법 도구가 늘어선 서재"
+      },
+      "characters": [
+        {
+          "name": "하은",
+          "style": "LD",
+          "position": "오른쪽",
+          "expression": "호기심과 약간의 긴장",
+          "action": "책상 위 먼지를 닦다가 진서를 바라봄",
+          "moment": "직후",
+          "framing": "무릎 위"
+        }
+      ],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": "하은",
+          "type": "생각",
+          "text": "이 진서... 날짜마다 기록이 있는데, 여긴 며칠째 아무것도 써 있질 않아. 손바닥 자국까지...",
+          "bubble": {
+            "shape": "구름",
+            "tail": null,
+            "position": "하은 머리 위"
+          }
+        }
+      ],
+      "sfx": [],
+      "forbid": [],
+      "note": "마법진과 날짜 기록, 비어 있는 칸에 햇빛이 스며드는 연출로 미스터리 감 배가.",
+      "scene": 2,
+      "cut": 1
+    },
+    {
+      "location": "마법사의 서재(책상, 벽에 책장이 가득한 공간)",
+      "time": "아침, 햇살이 창문 틈으로 들어오는 시간",
+      "id": 2,
+      "size": "small",
+      "camera": {
+        "shot": "클로즈업",
+        "angle": "하이앵글",
+        "facing": ""
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "진서의 날짜표와 손바닥 자국만 부각, 주변은 흐림"
+      },
+      "characters": [],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": "하은",
+          "type": "생각",
+          "text": "혹시... 이 비어 있는 날이 오늘? 반복이 계속되니까 아무것도 기록되지 않는 걸까.",
+          "bubble": {
+            "shape": "구름",
+            "tail": null,
+            "position": "상단 중앙"
+          }
+        }
+      ],
+      "sfx": [],
+      "forbid": [],
+      "note": "진서 한 페이지 전체를 꽉 채운 클로즈업, 손바닥 자국을 무늬처럼 강조.",
+      "scene": 2,
+      "cut": 2
+    },
+    {
+      "location": "마법사의 저택 하은 방과 거실 사이 복도",
+      "time": "아침, 실내 자연광",
+      "id": 1,
+      "size": "normal",
+      "camera": {
+        "shot": "상반신",
+        "angle": "부감",
+        "facing": "앞모습"
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "방 출입문 옆, 의자가 어긋나 있음"
+      },
+      "characters": [
+        {
+          "name": "하은",
+          "style": "LD",
+          "position": "왼쪽",
+          "expression": "결의와 긴장 교차, 조심스레 문손잡이를 잡음",
+          "action": "의자를 일부러 어긋나게 밀고, 도어핸들을 돌림",
+          "moment": "도중",
+          "framing": "가슴 위"
+        }
+      ],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": "하은",
+          "type": "생각",
+          "text": "조금 일찍 나가면... 마법사가 즉시 움직여. 정말 내 행동을 다 지켜보고 있는 걸까?",
+          "bubble": {
+            "shape": "구름",
+            "tail": null,
+            "position": "하은 머리 위"
+          }
+        },
+        {
+          "order": 2,
+          "speaker": "하은",
+          "type": "말",
+          "text": "좋은 아침이에요.",
+          "bubble": {
+            "shape": "둥근 타원",
+            "tail": "하은 쪽",
+            "position": "왼쪽 아래"
+          }
+        }
+      ],
+      "sfx": [
+        {
+          "text": "지잉",
+          "source": "문손잡이",
+          "position": "문 근처",
+          "reason": "도어핸들을 돌리는 금속음"
+        }
+      ],
+      "forbid": [],
+      "note": "의자가 원래 자리에서 살짝 빗나간 연출, 문 쪽으로 시선 이동 유도.",
+      "scene": 3,
+      "cut": 1
+    }
+  ],
+  [
+    {
+      "location": "마법사의 저택 하은 방과 거실 사이 복도",
+      "time": "아침, 실내 자연광",
+      "id": 2,
+      "size": "normal",
+      "camera": {
+        "shot": "광각",
+        "angle": "정면",
+        "facing": "앞모습"
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "거실 한편 서재 책상 옆, 창밖에서 빛이 들어옴"
+      },
+      "characters": [
+        {
+          "name": "마법사",
+          "style": "LD",
+          "position": "오른쪽",
+          "expression": "무표정, 깊은 주시",
+          "action": "책상 옆에 서서 하은을 바라봄",
+          "moment": "직후",
+          "framing": "무릎 위"
+        },
+        {
+          "name": "하은",
+          "style": "LD",
+          "position": "왼쪽",
+          "expression": "일상적인 미소를 가장함, 약간 당황",
+          "action": "조용히 인사",
+          "moment": "직후",
+          "framing": "무릎 위"
+        }
+      ],
+      "dialogue": [],
+      "sfx": [],
+      "forbid": [],
+      "note": "마법 사의 시선이 정면으로 강렬하게 향하고, 하은은 이를 의식, 공간의 긴장감이 강조된다.",
+      "scene": 3,
+      "cut": 2
+    },
+    {
+      "location": "마법사의 저택 식사 공간",
+      "time": "아침, 햇빛이 식탁을 환히 밝힘",
+      "id": 1,
+      "size": "small",
+      "camera": {
+        "shot": "부분",
+        "angle": "부감",
+        "facing": ""
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "식탁 위, 향신료와 허브가 잔뜩 뿌려진 죽 그릇만 부각"
+      },
+      "characters": [],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": "하은",
+          "type": "생각",
+          "text": "이번엔 제대로 변화를 줬어. 마법사도 바로 눈치챘네?",
+          "bubble": {
+            "shape": "구름",
+            "tail": null,
+            "position": "상단 중앙"
+          }
+        }
+      ],
+      "sfx": [],
+      "forbid": [],
+      "note": "죽 위에 로즈마리, 정향 등 색이 뚜렷한 향신료 클로즈업, 평소와 다른 식사임을 시각적으로 부각.",
+      "scene": 4,
+      "cut": 1
+    },
+    {
+      "location": "마법사의 저택 식사 공간",
+      "time": "아침, 햇빛이 식탁을 환히 밝힘",
+      "id": 2,
+      "size": "normal",
+      "camera": {
+        "shot": "미디엄 클로즈업",
+        "angle": "정면",
+        "facing": "앞모습"
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "식탁 양쪽, 화창한 빛이 마법사 어깨 위에 드리움"
+      },
+      "characters": [
+        {
+          "name": "마법사",
+          "style": "LD",
+          "position": "오른쪽",
+          "expression": "순간 멈칫, 이내 가볍게 미소를 가장함",
+          "action": "죽을 한술 뜨며 하은을 바라봄, 컵을 내려놓을 때 손끝이 미세하게 떨림",
+          "moment": "직후",
+          "framing": "가슴 위"
+        },
+        {
+          "name": "하은",
+          "style": "LD",
+          "position": "왼쪽",
+          "expression": "일부러 밝은 미소, 관찰하는 눈길",
+          "action": "마법사 반응을 주시, 일부러 질문함",
+          "moment": "직후",
+          "framing": "가슴 위"
+        }
+      ],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": "하은",
+          "type": "말",
+          "text": "어떠세요? 오늘은 좀 특별하게 만들어봤는데.",
+          "bubble": {
+            "shape": "둥근 타원",
+            "tail": "하은 쪽",
+            "position": "왼쪽 아래"
+          }
+        },
+        {
+          "order": 2,
+          "speaker": "마법사",
+          "type": "말",
+          "text": "새로운 조합이군.",
+          "bubble": {
+            "shape": "둥근 타원",
+            "tail": "마법사 쪽",
+            "position": "오른쪽 위"
+          }
+        }
+      ],
+      "sfx": [
+        {
+          "text": "톡",
+          "source": "숟가락",
+          "position": "식탁 중앙",
+          "reason": "숟가락을 내려놓는 소리"
+        }
+      ],
+      "forbid": [],
+      "note": "마법사의 손끝이 미세하게 흔들리는 클로즈업으로 감정의 균열을 암시.",
+      "scene": 4,
+      "cut": 2
+    }
+  ],
+  [
+    {
+      "location": "마법사의 저택 내 하은의 방, 창문가",
+      "time": "밤, 실내등과 창 밖 달빛",
+      "id": 1,
+      "size": "normal",
+      "camera": {
+        "shot": "상반신",
+        "angle": "정면",
+        "facing": "옆모습"
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "어두운 방, 책상·침구·창문 가까이 등잔 하나 켜짐"
+      },
+      "characters": [
+        {
+          "name": "하은",
+          "style": "LD",
+          "position": "왼쪽",
+          "expression": "조용한 집중, 약간 떨리는 눈",
+          "action": "노트에 펜을 든 채 창문을 열고 밖을 바라봄",
+          "moment": "직후",
+          "framing": "가슴 위"
+        }
+      ],
+      "dialogue": [],
+      "sfx": [],
+      "forbid": [],
+      "note": "어둠 속에 실내와 바깥 풍경이 자연스럽게 이어지도록 프레이밍.",
+      "scene": 5,
+      "cut": 1
+    },
+    {
+      "location": "마법사의 저택 내 하은의 방, 창문가",
+      "time": "밤, 실내등과 창 밖 달빛",
+      "id": 2,
+      "size": "small",
+      "camera": {
+        "shot": "클로즈업",
+        "angle": "정면",
+        "facing": ""
+      },
+      "background": {
+        "type": "실제공간",
+        "desc": "창틀 바깥쪽, 멀리 어둠에 잠긴 정원 구석"
+      },
+      "characters": [],
+      "dialogue": [
+        {
+          "order": 1,
+          "speaker": "하은",
+          "type": "생각",
+          "text": "저 등불... 분명 이틀 전엔 없었는데. 내가 뭔가 바꿔낸 걸까?",
+          "bubble": {
+            "shape": "구름",
+            "tail": null,
+            "position": "상단 중앙"
+          }
+        }
+      ],
+      "sfx": [],
+      "forbid": [],
+      "note": "정원 구석의 작은 등불만이 또렷이 빛나며, 하은의 넓적한 동공에 등불이 반사되어 감정 강조.",
+      "scene": 5,
+      "cut": 2
+    }
+  ]
+]

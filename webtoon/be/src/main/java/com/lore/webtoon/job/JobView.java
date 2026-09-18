@@ -47,6 +47,21 @@ public record JobView(
          * 앞에 세 명이 있어도 내 그림이 그려지는 줄 알았다.
          */
         Queue queue,
+        /**
+         * <b>다 되면 어디로 알릴 것인가.</b> 진행 화면이 이걸로 안내를 고른다 —
+         * 로그인한 사람에게는 「완성되면 …로 알림을 드릴게요」, 게스트에게는
+         * 이메일 칸. 화면이 로그인 여부를 자기가 판단하면 두 화면이 갈린다.
+         */
+        /* 이름이 {@code notify} 가 아닌 이유: 레코드 칸은 {@code Object.notify()}
+           와 이름이 겹칠 수 없다(자바가 막는다). */
+        Notice notice,
+        /**
+         * 결과를 보기까지 앞으로 몇 분. <b>사람이 답할 차례이거나 끝났으면 없다.</b>
+         *
+         * 이 값이 있어야 기다리는 사람이 <b>나갔다 올지</b>를 정할 수 있다.
+         * 화면이 자기 시계로 세지 않는 이유: 새로고침할 때마다 값이 뛴다.
+         */
+        Integer minutes_left,
         int pct,
         Art art,
         List<String> log,
@@ -67,12 +82,26 @@ public record JobView(
     public record Queue(int ahead, int minutes, String line) {
     }
 
+    /**
+     * 알림을 어디로 보낼까.
+     *
+     * @param logged_in 로그인했나. 참이면 화면은 <b>안 묻는다</b> — 계정 주소로 보낸다
+     * @param email     실제로 보낼 주소. 없으면 아직 받을 데가 없다는 뜻이라
+     *                  화면이 게스트에게 입력 칸을 띄운다.
+     *                  <b>자기 주소를 자기에게 보여 주는 것</b>이라 그대로 적는다 —
+     *                  가려 놓으면 오타를 냈는지 확인할 길이 없다
+     * @param sent      이미 보냈나. 참이면 주소를 못 바꾼다(그 메일은 이미 나갔다)
+     */
+    public record Notice(boolean logged_in, String email, boolean sent) {
+    }
+
     public record Art(int done, int total, int retry_page) {
     }
 
     static JobView of(WebtoonJob job, JobProgress.Snapshot now,
                       List<Map<String, Object>> directions, String styleLabel,
-                      String stageLabel, JobQueue.Spot spot) {
+                      String stageLabel, JobQueue.Spot spot,
+                      String notifyEmail, Integer minutesLeft) {
         int stageIndex = job.getStage().order();
         double frac = now.total() > 0 ? (double) now.done() / now.total() : 0.0;
         int pct = job.getStatus() == JobStatus.DONE
@@ -97,6 +126,8 @@ public record JobView(
                 job.isCheckpoints(),
                 spot == null ? null
                         : new Queue(spot.ahead(), spot.minutes(), spot.line()),
+                new Notice(job.getUserId() != null, notifyEmail, job.getNotifiedAt() != null),
+                minutesLeft,
                 Math.max(0, Math.min(100, pct)),
                 now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage()) : null,
                 now.log(),

@@ -1,0 +1,30 @@
+{
+  "name": "스타일검증-frost",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A woman in her mid-twenties with straight black hair at shoulder length, wearing a casual hoodie and blue jeans. She has a calm and gentle look. Her skin is fair, her eyes are dark, and her overall build is average.",
+  "design_details": [
+    "어깨까지 오는 검은 생머리",
+    "왼쪽 소매에 작은 흰색 로고가 있는 회색 후드티",
+    "중간색 워싱이 들어간 청바지",
+    "양쪽 귀에 작은 은색 원형 귀걸이",
+    "오른쪽 손목에 검은 고무줄"
+  ],
+  "props": [],
+  "color_palette": {
+    "hair": "black (#222222)",
+    "eyes": "dark brown (#3B2F23)",
+    "skin": "ivory (#F6E6D8)",
+    "outfit_main": "gray (#B0B0B0)",
+    "outfit_sub": "blue (#4477AA)",
+    "accent": "white (#FFFFFF)"
+  },
+  "expression_set": [
+    "평온 — 입을 다물고 눈꺼풀이 살짝 내려온 얼굴",
+    "미소 — 입꼬리가 살짝 올라가고 눈매가 부드러운 얼굴",
+    "놀람 — 눈이 크게 뜨이고 입이 약간 벌어진 얼굴",
+    "당황 — 눈썹이 위로 치켜오르고 입이 옅게 벌어진 얼굴",
+    "진지 — 입을 다물고 눈이 정면을 응시하는 얼굴",
+    "슬픔 — 눈꼬리가 아래로 내려가고 입이 일자로 굳어진 얼굴"
+  ]
+}

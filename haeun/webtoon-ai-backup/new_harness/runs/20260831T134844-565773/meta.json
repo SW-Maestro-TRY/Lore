@@ -1,0 +1,64 @@
+{
+  "run_id": "20260831T134844-565773",
+  "calls": [
+    {
+      "stage": "SHEET",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "usage": {
+        "input": 1980,
+        "output": 394,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.00396,
+        "output": 0.003152,
+        "cache_read": 0.0,
+        "cache_write": 0.0,
+        "total": 0.007112
+      }
+    },
+    {
+      "stage": "SHEET_IMAGE",
+      "provider": "openai",
+      "model": "gpt-image-2",
+      "backend": "openai",
+      "quality": "high",
+      "bytes": 1724744,
+      "refs": [],
+      "meta": {
+        "revised_prompt": null,
+        "usage": "Usage(input_tokens=2238, input_tokens_details=UsageInputTokensDetails(image_tokens=0, text_tokens=2238), output_tokens=5488, total_tokens=7726, output_tokens_details=UsageOutputTokensDetails(image_tokens=5488, text_tokens=0))",
+        "usage_dict": {
+          "input_tokens": 2238,
+          "input_tokens_details": {
+            "image_tokens": 0,
+            "text_tokens": 2238
+          },
+          "output_tokens": 5488,
+          "total_tokens": 7726,
+          "output_tokens_details": {
+            "image_tokens": 5488,
+            "text_tokens": 0
+          }
+        }
+      },
+      "cost": {
+        "tokens_in": 2238,
+        "tokens_out": 5488,
+        "tokens_thought": null,
+        "tokens_cached": null,
+        "tokens_total": 7726,
+        "tokens_in_text": 2238,
+        "tokens_in_image": 0,
+        "tokens_out_image": 5488,
+        "cost_basis": "tokens",
+        "total": 0.17583,
+        "total_krw": 246
+      },
+      "output_path": "/Users/mint/project/Lore/agent-nh-style/haeun/new_harness/runs/20260831T134844-565773/sheet.png"
+    }
+  ]
+}

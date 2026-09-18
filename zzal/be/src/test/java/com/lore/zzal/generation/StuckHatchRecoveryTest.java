@@ -168,6 +168,24 @@ class StuckHatchRecoveryTest {
     }
 
     @Test
+    @DisplayName("★★ 모르는 파이프라인 버전(옛 v2/v3 초안)이 있어도 기동 복구가 예외 없이 끝난다 — 그 펫만 건너뛴다")
+    void skipsPetsWithUnknownPipelineVersionWithoutFailingBoot() {
+        // 이 펫의 마지막 job 이 지금은 없는 버전(v9)을 가리킨다 — 레지스트리는 정상 경로처럼 던진다.
+        when(jobs.findFirstByPetIdOrderByIdDesc(anyLong()))
+                .thenReturn(Optional.of(GenJob.start(1L, GenKind.HATCH, 1, "v9", LONG_AGO)));
+        when(hatch.stepsTotal("v9"))
+                .thenThrow(new IllegalArgumentException("모르는 파이프라인 버전입니다: HATCH v9"));
+        stuck(hatching(), 1, 3);
+
+        // 기동 복구는 예외 없이 끝나야 한다(그렇지 않으면 앱이 안 뜬다).
+        recovery.recover();
+
+        // 그 펫은 다시 굽지 않고 조용히 건너뛴다 — 실패로 종료하지도 않는다.
+        verify(hatch, never()).hatch(any(), any(), anyString());
+        verify(recorder, never()).markPetFailed(any());
+    }
+
+    @Test
     @DisplayName("★ 무엇을 찾는지 — DRAFT 와 HATCHING 둘뿐이다(ALIVE 를 집으면 살아 있는 아이를 다시 굽는다)")
     void looksOnlyForDraftAndHatching() {
         when(pets.findByPhaseInAndHatchStartedAtBefore(any(Collection.class), any())).thenReturn(List.of());

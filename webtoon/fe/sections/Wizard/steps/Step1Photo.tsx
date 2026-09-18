@@ -201,7 +201,6 @@ export default function Step1Photo({
               onClick={() => { setChoosing(false); inputRef.current?.click(); }}
             >
               <b>캐릭터 사진 올리기</b>
-              <span>자캐 그림이나 사진이 있으면 그걸로 그려요</span>
             </button>
             <button
               type="button"
@@ -209,7 +208,6 @@ export default function Step1Photo({
               onClick={() => { setChoosing(false); onPickCharacter(); }}
             >
               <b>캐릭터 직접 만들기</b>
-              <span>사진이 없어도 돼요 — 설명만으로 그려 드려요</span>
             </button>
           </div>
         </div>

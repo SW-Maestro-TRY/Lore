@@ -89,7 +89,18 @@ export interface FeedbackSheetProps {
    *   실제로 스크랩북에만 붙어 있던 동안 여울 쓰는 사람은 후기를 낼 길이 아예 없었다.
    */
   tone?: 'scrapbook' | 'yeoul';
+  /**
+   * **개발용 미리보기.** 켜면 서버를 부르지 않고 mock 상태(아직 안 냄·움직임 막 도착)로 판을 강제로 연다.
+   *
+   * ★ 실서버 경로와 갈래를 나눈다 — `preview` 가 아닐 때는 예전과 **완전히 같다**(서버 조회·자동 띠·제출).
+   *   목(연습방)에서는 `petId` 가 없어 후기가 아예 안 그려지는데, 이 갈래만이 그 화면을 눈으로 보게 한다.
+   * ★ 공개 도메인에서는 이동 창 자체가 안 뜨므로(`useDevVisible`) 이 값이 켜질 길이 없다.
+   */
+  preview?: boolean;
 }
+
+/** 미리보기에서 쓰는 가짜 petId. 실제로 서버를 부르지 않으므로 아무 값이나 좋다(음수로 실 id 와 안 겹치게). */
+const PREVIEW_PET_ID = -1;
 
 /** 이 브라우저에서 이 아이에게 이미 저절로 띄웠는지. 새로고침마다 다시 뜨는 것을 막는다. */
 function askedKey(petId: number): string {
@@ -122,7 +133,9 @@ function messageOf(e: unknown): string {
   return '보내지 못했습니다';
 }
 
-export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, hold = false, tone = 'scrapbook' }: FeedbackSheetProps) {
+export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutorialActive, hold = false, tone = 'scrapbook', preview = false }: FeedbackSheetProps) {
+  // 미리보기일 때는 실 아이 대신 가짜 id 를 쓴다 — 아래 판정·렌더는 이 하나만 보면 된다.
+  const petId = preview ? PREVIEW_PET_ID : petIdProp;
   /** 서버가 아는 사실 — 이미 냈는가. null 이면 아직 못 물어봤다. */
   const [submitted, setSubmitted] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
@@ -146,6 +159,11 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
 
   // 이미 냈는지 물어본다. ★ 이 한 번이 "이미 낸 사람에게 또 띄우지 않는다" 를 지킨다.
   useEffect(() => {
+    // 미리보기는 서버를 안 부른다 — "아직 안 냄" 으로 두고 아래 효과가 곧바로 판을 연다.
+    if (preview) {
+      setSubmitted(false);
+      return;
+    }
     if (petId == null) {
       setSubmitted(null);
       return;
@@ -161,17 +179,25 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
         if (alive) setSubmitted(true);
       });
     return () => { alive = false; controller.abort(); };
-  }, [petId]);
+  }, [petId, preview]);
+
+  // 미리보기 — 서버 조회 대신 판(모달)을 곧바로 연다. 별점 고르기·칩·자유 글·보내기가 다 보인다.
+  useEffect(() => {
+    if (!preview) return;
+    from.current = 'dex';
+    setOpen(true);
+  }, [preview]);
 
   // 첫 심화 행동이 도착한 뒤 한 번. 축하 판이 떠 있는 동안·아기 시간표 중에는 안 띄운다.
   useEffect(() => {
+    if (preview) return; // 미리보기는 위 효과가 직접 연다 — 자동 띠 규칙을 타지 않는다.
     if (petId == null || submitted !== false || open || banner || hold) return;
     if (tutorialActive || !advancedArrived || wasAsked(petId)) return;
     markAsked(petId);
     from.current = 'unlock';
     setBanner(true);
     track('zzal_feedback_opened', { from: 'unlock' });
-  }, [petId, submitted, open, banner, hold, tutorialActive, advancedArrived]);
+  }, [petId, submitted, open, banner, hold, tutorialActive, advancedArrived, preview]);
 
   const openFromDex = useCallback(() => {
     if (petId == null) return;
@@ -195,6 +221,12 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
 
   const send = useCallback(async () => {
     if (petId == null || busy || rating < 1) return;
+    // 미리보기 — 서버로 안 보낸다. 화면 흐름(고마워요 판)만 그대로 보여 준다.
+    if (preview) {
+      setSubmitted(true);
+      setJustSent(true);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -221,7 +253,7 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
     } finally {
       setBusy(false);
     }
-  }, [petId, busy, rating, tags, text]);
+  }, [petId, busy, rating, tags, text, preview]);
 
   // 아이가 없거나, 아직 못 물어봤거나, 이미 낸 사람에게는 아무것도 안 그린다.
   if (petId == null || submitted === null) return null;
@@ -235,7 +267,7 @@ export default function FeedbackSheet({ petId, advancedArrived, tutorialActive, 
       {/* 작은 상시 링크. 첫 판을 닫은 사람이 나중에 다시 찾을 유일한 길이다.
           ★ 띠가 떠 있는 동안에는 안 그린다 — 같은 자리에 "한 장 남기기" 가 이미 있어서
             같은 뜻의 손잡이가 두 줄로 겹친다(여울에서 실측). 띠를 닫으면 다시 나온다. */}
-      {!submitted && !banner && (
+      {!submitted && !banner && !preview && (
         <button data-action="feedback-open" onClick={openFromDex} style={T.link}>
           후기 남기기
         </button>

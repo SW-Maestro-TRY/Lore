@@ -382,6 +382,10 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
         { label: '앨범 벽', on: s.wallOpen, pick: actions.openWall },
         { label: '알림', on: s.sheet === 'notify', pick: actions.openNotify },
         { label: '아이 정보', on: s.sheet === 'settings', pick: actions.openSettings },
+        // ★ 후기 판을 mock 으로 강제로 띄운다(연습방·진짜 방 어디서나). 목에서는 실서버 후기가
+        //   안 그려져 이 길로만 화면을 볼 수 있다. 방 화면일 때 켜야 보인다(FeedbackSheet 은 방 안에 산다).
+        { label: '후기 미리보기', id: 'fb-preview', on: v.fbPreview, pick: actions.toggleFbPreview,
+          title: room ? undefined : '방(연습방·진짜 방)으로 들어가야 판이 보입니다' },
         { label: '가입 모달', on: s.authOpen, pick: actions.openAuth('signup') },
         { label: '로드맵 완료', on: s.cChat >= 4 && s.cBath >= 3 && s.cSleep >= 3 && s.cGame >= 3, pick: actions.finishRoadmap },
         { label: '다음 날', on: false, pick: actions.nextDay },
