@@ -44,9 +44,6 @@ export const GENRE_NOTE: Record<string, string> = {
   "히어로": "능력과 빌런, 등록과 자경단. 누가 구할 자격을 갖느냐가 규칙입니다.",
 };
 
-export const GENRE_NOTE_EMPTY =
-  "비워두면 루가 골라요 — 앞에서 적은 캐릭터 설명을 보고 이야기에 맞는 장르를 정합니다.";
-
 /** 위자드 네 걸음 — 캔버스의 「웹툰 만들기 1~4」. */
 export const WIZ_STEPS = ["캐릭터", "이야기 · 장르", "그림체", "그리기 방식"];
 export const WIZ_LAST = 4;

@@ -56,16 +56,6 @@ const dict: Dict = {
     ja: "キャラクターを入れると、そのキャラクターが主人公のウェブトゥーンができます。",
     zh: "放入角色，就会得到以这个角色为主角的漫画。",
   },
-  "캐릭터를 고르고 장르 하나만 누르면 줄거리 세 개가 나오고, 하나를 고르면 컷과 말풍선까지 그려집니다. 캐릭터 시트를 먼저 만들어 두기 때문에 얼굴과 옷이 마지막 컷까지 같은 사람이에요. 마음에 안 드는 컷은 그 컷만 다시 그리고, 다음 편은 같은 캐릭터로 이어서 만듭니다.": {
-    en: "Choose a character, tap one genre, and you get three plot options. Pick one, and the panels and speech bubbles are drawn for you. Because the character sheet is made first, the face and outfit stay the same person right through the last panel. If a panel isn't right, redraw just that one, and continue the next episode with the same character.",
-    ja: "キャラクターを選んでジャンルをひとつ押すと、あらすじが3つ出てきます。ひとつ選ぶと、コマと吹き出しまで描かれます。先にキャラクターシートを作っておくので、顔と服は最後のコマまで同じ人物のままです。気に入らないコマはそのコマだけ描き直し、次の話は同じキャラクターで続けて作れます。",
-    zh: "选好角色，点一个类型，就会出现三个剧情梗概；选一个，分镜和对话气泡也会一并画好。因为先做了角色设定表，脸和衣服到最后一格都是同一个人。不满意的格子只重画那一格，下一话可以用同一个角色接着做。",
-  },
-  "사진을 넣고 세계관을 고르면 그 세계관 그림체로 그린 웹툰 한 컷이 나와요. 세계관은 안 골라도 되고, 아무것도 안 넣고 랜덤으로 뽑아도 돼요. 회사원이 로판에서 개가 되기도 하고, 강아지가 강아지인 채로 악역 영애가 되기도 해요. 마음에 들면 「이 캐릭터로 1화 보기」로 바로 1화가 만들어집니다.": {
-    en: "Add a photo, pick a world, and you get one webtoon panel drawn in that world's style. You can skip the world, or add nothing and draw one at random. An office worker might become a dog in a romance-fantasy, and a puppy might become the villainess while staying a puppy. If you like it, \"See episode 1 with this character\" makes episode 1 right away.",
-    ja: "写真を入れて世界観を選ぶと、その世界観の画風で描いたウェブトゥーンの1コマができます。世界観は選ばなくてもいいし、何も入れずにランダムで引いてもかまいません。会社員がロマンスファンタジーで犬になったり、子犬が子犬のまま悪役令嬢になったりします。気に入ったら「このキャラクターで第1話を見る」で、すぐに第1話が作られます。",
-    zh: "放入照片、选一个世界观，就会得到一格用那个世界观画风画出的漫画。世界观可以不选，也可以什么都不放随机抽一个。上班族可能在浪漫奇幻里变成一条狗，小狗也可能保持小狗的样子成为反派千金。喜欢的话，点「用这个角色看第 1 话」就会马上做出第 1 话。",
-  },
   "뭐든 넣으면 웹툰 속 캐릭터가 돼요": { en: "Put in anything, and it becomes a webtoon character", ja: "何を入れても、ウェブトゥーンのキャラクターになります", zh: "放进什么，都会变成漫画角色" },
   "어떤 캐릭터가 나올지, 뽑아볼까요?": { en: "Curious which character you'd get? Draw one", ja: "どんなキャラクターが出るか、引いてみませんか？", zh: "会出来什么角色？抽一个看看吧" },
   "내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요. 의인화 없이 그대로 웹툰 세계관에 들어가요.": {

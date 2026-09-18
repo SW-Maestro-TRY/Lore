@@ -11,7 +11,7 @@ import {
 } from "../../lib/api";
 import { startJob } from "../../lib/start";
 import {
-  GENRE_NOTE, GENRE_NOTE_EMPTY, GENRE_QUICK, MAX_PHOTOS, QUALITY_INFO, STYLE_INFO,
+  GENRE_NOTE, GENRE_QUICK, MAX_PHOTOS, QUALITY_INFO, STYLE_INFO,
   emptyWizardForm, type WizardForm, type WizardQuality,
 } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
@@ -69,6 +69,64 @@ function Crumb({ at }: { at: number }) {
 
 function CheckMark() {
   return <span className="wt-wiz-check"><IconCheck size={14} /></span>;
+}
+
+/**
+ * 캐릭터 카드 줄. 여러 줄로 쌓지 않고 한 줄로 눕혀 좌우로 민다 — 캐릭터가
+ * 늘어나도 「또는 캐릭터를 어떻게 넣을까요?」 아래가 밀려 내려가지 않는다.
+ *
+ * 아래 점은 몇 번째 묶음을 보고 있는지 알려 주고, 누르면 그리로 민다. 점 수는
+ * 한 화면에 몇 장이 들어가는지로 정해진다(`스크롤 전체 폭 ÷ 보이는 폭`) —
+ * 세어서 적어 두면 카드 폭이나 화면이 바뀔 때 조용히 어긋난다.
+ */
+function CardRail({ small, children }: { small?: boolean; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pages, setPages] = useState(1);
+  const [at, setAt] = useState(0);
+
+  /* 점은 「밀 수 있는 거리」를 고르게 나눈다 — 마지막 점이 항상 끝에 닿는다.
+     한 화면 폭씩 미는 식으로 하면 마지막 묶음이 폭보다 짧아 점과 위치가 어긋난다. */
+  const measure = () => {
+    const el = ref.current;
+    if (!el || el.clientWidth === 0) return;
+    const max = el.scrollWidth - el.clientWidth;
+    const n = Math.max(1, Math.ceil(el.scrollWidth / el.clientWidth));
+    setPages(n);
+    setAt(max <= 1 ? 0 : Math.round((el.scrollLeft / max) * (n - 1)));
+  };
+
+  /* 카드가 늘거나 창이 바뀌면 다시 잰다. */
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  }, [children]);
+
+  const goTo = (i: number) => {
+    const el = ref.current;
+    if (!el || pages < 2) return;
+    const max = el.scrollWidth - el.clientWidth;
+    el.scrollTo({ left: (i / (pages - 1)) * max, behavior: "smooth" });
+  };
+
+  return (
+    <div className="wt-wiz-rail">
+      <div className={`wt-wiz-cards${small ? " small" : ""}`} ref={ref} onScroll={measure}>
+        {children}
+      </div>
+      {pages > 1 && (
+        <div className="wt-wiz-dots">
+          {Array.from({ length: pages }, (_, i) => (
+            <button key={i} type="button" className={i === at ? "on" : ""} aria-current={i === at}
+                    aria-label={`${i + 1} / ${pages}`} onClick={() => goTo(i)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Wizard({
@@ -161,7 +219,7 @@ export default function Wizard({
     : "";
   const [starting, setStarting] = useState(false);
   const [startErr, setStartErr] = useState("");
-  const canStart = form.agreeIp && !!form.style && !blockedReason && !starting && step1Ok;
+  const canStart = form.agreeIp && !blockedReason && !starting && step1Ok;
   const start = async () => {
     if (!canStart) return;
     setStarting(true);
@@ -209,11 +267,10 @@ export default function Wizard({
                   <>
                     <div className="wt-wiz-head">
                       <h2>{t("누가 주인공인가요?")}</h2>
-                      <span className="muted lede">{t("만들어 둔 캐릭터를 고르거나, 사진을 올리세요. 아는 만큼만 적으면 돼요.")}</span>
                     </div>
-                    <div className="wt-wiz-cards">
+                    <CardRail>
                       {[0, 1, 2].map((i) => <div key={i} className="ccard skeleton" style={{ height: 262 }} />)}
-                    </div>
+                    </CardRail>
                   </>
                 ) : picked && presetCharacterId ? (
                   /* 골라서 들어왔을 때 */
@@ -242,12 +299,8 @@ export default function Wizard({
                   <>
                     <div className="wt-wiz-head">
                       <h2>{t("누가 주인공인가요?")}</h2>
-                      <span className="muted lede">
-                        {t("만들어 둔 캐릭터를 고르거나, 사진을 올리세요. 아는 만큼만 적으면 돼요.")}{" "}
-                        <button type="button" onClick={() => go("characters")}>{t("내 캐릭터 전부 보기")} <IconArrow size={14} /></button>
-                      </span>
                     </div>
-                    <div className="wt-wiz-cards">
+                    <CardRail>
                       {mine.map((c) => {
                         const on = form.characterId === c.id;
                         return (
@@ -270,24 +323,23 @@ export default function Wizard({
                           </div>
                         );
                       })}
-                    </div>
+                    </CardRail>
                     <div className="wt-wiz-or"><i /><span className="dim">{t("또는 캐릭터를 어떻게 넣을까요?")}</span><i /></div>
                     <Ways form={form} onUpload={() => fileRef.current?.click()} onRemove={(i) => patch({ photos: form.photos.filter((_, k) => k !== i) })}
-                          makeLabel={t("캐릭터 직접 만들기")} makeSub={t("사진이 없어도 설명만으로 그려요")} onMake={() => go("try")} />
+                          makeLabel={t("캐릭터 만들어보기")} makeSub={t("사진·설명 없이도 돼요")} onMake={() => go("try")} />
                   </>
                 ) : (
                   /* 만든 것이 없을 때 */
                   <>
                     <div className="wt-wiz-head">
                       <h2>{t("누가 주인공인가요?")}</h2>
-                      <span className="muted lede">{t("아직 만들어 둔 캐릭터가 없어요. 사진을 올리거나 하나 만들어 보세요.")}</span>
                     </div>
                     <Ways tall form={form} onUpload={() => fileRef.current?.click()} onRemove={(i) => patch({ photos: form.photos.filter((_, k) => k !== i) })}
                           makeLabel={t("캐릭터 만들어보기")} makeSub={t("사진·설명 없이도 돼요")} onMake={() => go("try")} />
                     {builtins.length > 0 && (
                       <>
                         <div className="wt-wiz-or"><i /><span className="dim">{t("바로 써 볼 수 있는 캐릭터")}</span><i /></div>
-                        <div className="wt-wiz-cards small">
+                        <CardRail small>
                           {builtins.map((c) => {
                             const on = form.characterId === c.id;
                             return (
@@ -302,7 +354,7 @@ export default function Wizard({
                               </div>
                             );
                           })}
-                        </div>
+                        </CardRail>
                       </>
                     )}
                   </>
@@ -322,9 +374,6 @@ export default function Wizard({
                   <label htmlFor="wt-wiz-nm">{t("이름")} <span className="wt-wiz-req">{t("필수")}</span></label>
                   <input id="wt-wiz-nm" className="field" value={form.name} placeholder={t("예: 민시하")} aria-label={t("이름")}
                          onChange={(e) => patch({ name: e.target.value })} />
-                  {form.characterId && mine.length > 0 && !presetCharacterId && (
-                    <span className="dim" style={{ fontSize: 12 }}>{t("고른 캐릭터에서 채워졌어요 · 사진을 골랐다면 직접 적어요")}</span>
-                  )}
                 </div>
                 <div className="fieldset">
                   <label htmlFor="wt-wiz-ds">{t("캐릭터 설명")} <span className="dim wt-wiz-opt">{t("선택")}</span></label>
@@ -332,11 +381,6 @@ export default function Wizard({
                             placeholder={t("성격·말투·관계 등 아는 만큼. 예) 장난기 많은데 겁은 많아서 친구 앞에서만 센 척한다")}
                             onChange={(e) => patch({ character: e.target.value })} />
                 </div>
-                <span className="dim wt-wiz-note">
-                  {form.characterId
-                    ? t("완성한 웹툰은 둘러보기에 공개되고 마이페이지에서 비공개로 바꿀 수 있어요.")
-                    : t("본인이 찍었거나 직접 그린 사진, 쓸 권한이 있는 사진만 올려 주세요. 사진은 캐릭터 시트가 나오면 서버에서 지웁니다. 완성한 웹툰은 둘러보기에 공개되고 마이페이지에서 비공개로 바꿀 수 있어요.")}
-                </span>
               </div>
             </div>
 
@@ -346,9 +390,6 @@ export default function Wizard({
               ) : (
                 <button type="button" className="btn btn-w" onClick={() => go("entry")}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 입구")}</span></button>
               )}
-              <span className="dim mid">
-                {presetCharacterId ? t("1 / 4 · 다음은 이야기 · 장르") : t("1 / 4 · 다음은 이야기 · 장르 · 사진(또는 캐릭터)과 이름이 있어야 넘어가요")}
-              </span>
               <button type="button" className="btn btn-p" disabled={!step1Ok} onClick={() => goStep(2)}>{t("다음")} <IconArrow size={18} /></button>
             </div>
             <div className="mfoot">
@@ -364,7 +405,6 @@ export default function Wizard({
               <div className="wt-wiz-story">
                 <div className="wt-wiz-head">
                   <h2>{t("어떤 이야기를 볼까요?")}</h2>
-                  <span className="muted lede">{t("한 줄이어도 되고 줄거리여도 돼요. 비우면 캐릭터를 보고 지어요.")}</span>
                 </div>
                 <textarea className="field wt-wiz-storybox" aria-label={t("이야기")} value={form.story}
                           onChange={(e) => patch({ story: e.target.value })} />
@@ -382,14 +422,13 @@ export default function Wizard({
                 </div>
                 <input className="field" value={genreCustom} placeholder={t("목록에 없으면 직접 적기 · 예: 무협 / 로맨스 판타지")} aria-label={t("장르 직접 입력")}
                        onChange={(e) => patch({ genre: e.target.value })} />
-                {(!form.genre || GENRE_NOTE[form.genre]) && (
-                  <div className="wt-wiz-gnote">{form.genre ? t(GENRE_NOTE[form.genre]) : t(GENRE_NOTE_EMPTY)}</div>
+                {form.genre && GENRE_NOTE[form.genre] && (
+                  <div className="wt-wiz-gnote">{t(GENRE_NOTE[form.genre])}</div>
                 )}
               </div>
             </div>
             <div className="wt-wiz-foot">
               <button type="button" className="btn btn-w" onClick={() => goStep(1)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 캐릭터")}</span></button>
-              <span className="dim mid">{t("2 / 4 · 다음은 그림체 · 둘 다 비워도 만들 수 있어요")}</span>
               <button type="button" className="btn btn-p" onClick={() => goStep(3)}>{t("다음")} <IconArrow size={18} /></button>
             </div>
             <div className="mfoot">
@@ -405,9 +444,7 @@ export default function Wizard({
             <div className="wt-wiz-stylehead">
               <div className="wt-wiz-head">
                 <h2>{t("어떤 그림체로 그릴까요?")}</h2>
-                <span className="muted lede">{t("그림을 눌러 고르세요. 캐릭터 시트도 이 그림체로 그려져요.")}</span>
               </div>
-              <span className="dim" style={{ fontSize: 12.5 }}>{t("예시는 실제로 만들어진 편에서")}</span>
             </div>
             <div className="wt-wiz-styles">
               {STYLE_INFO.map(([key, label, desc]) => (
@@ -422,11 +459,10 @@ export default function Wizard({
             </div>
             <div className="wt-wiz-foot">
               <button type="button" className="btn btn-w" onClick={() => goStep(2)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 이야기 · 장르")}</span></button>
-              <span className="dim mid">{t("3 / 4 · 다음은 방식")}</span>
-              <button type="button" className="btn btn-p" disabled={!form.style} onClick={() => goStep(4)}>{t("다음")} <IconArrow size={18} /></button>
+              <button type="button" className="btn btn-p" onClick={() => goStep(4)}>{t("다음")} <IconArrow size={18} /></button>
             </div>
             <div className="mfoot">
-              <button type="button" className="btn btn-p" disabled={!form.style} onClick={() => goStep(4)}>{t("다음")}</button>
+              <button type="button" className="btn btn-p" onClick={() => goStep(4)}>{t("다음")}</button>
             </div>
           </>
         )}
@@ -503,7 +539,9 @@ export default function Wizard({
               </div>
             </div>
             <div className="wt-wiz-foot plain" style={{ justifyContent: "flex-start", paddingTop: 16 }}>
-              <button type="button" className="btn-ghost" onClick={() => goStep(3)}><IconBack size={16} /> {t("그림체")}</button>
+              <button type="button" className="btn btn-w" onClick={() => goStep(3)}>
+                <IconBack size={16} /> {t("이전")} <span className="dim">{t("· 그림체")}</span>
+              </button>
             </div>
             <div className="mfoot">
               <span className="dim wt-wiz-mfoot-note">{t("{time} · 앞에 사람이 있으면 더 걸려요", { time: qualityTime })}</span>
@@ -546,7 +584,7 @@ function Ways({ form, tall, onUpload, onRemove, makeLabel, makeSub, onMake }: {
           </svg>
         )}
         <b>{t("캐릭터 사진 올리기")}</b>
-        <span className="dim">{has ? t("{n} / {max}장 · 각도가 다양할수록 더 닮아요", { n: form.photos.length, max: MAX_PHOTOS }) : t("최대 4장 · 각도가 다양할수록 더 닮아요")}</span>
+        <span className="dim">{t("최대 4장 · 각도가 다양할수록 더 닮아요")}</span>
       </div>
       <button type="button" className="wt-wiz-way" onClick={onMake}>
         <IconEdit size={24} />

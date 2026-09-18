@@ -25,60 +25,26 @@ const dict: Dict = {
 
   /* ---- 1 · 캐릭터 ---- */
   "누가 주인공인가요?": { en: "Who's the main character?", ja: "主人公は誰ですか？", zh: "谁是主角？" },
-  "만들어 둔 캐릭터를 고르거나, 사진을 올리세요. 아는 만큼만 적으면 돼요.": {
-    en: "Pick a character you've made, or upload a photo. Just fill in what you know.",
-    ja: "作っておいたキャラクターを選ぶか、写真をアップロードしてください。わかる範囲で書けば大丈夫です。",
-    zh: "选择已创建的角色，或上传照片。知道多少写多少就好。",
-  },
   "{name}과 함께 갈게요!": { en: "Let's go with {name}!", ja: "{name}と一緒に進めます！", zh: "就和{name}一起吧！" },
   "다른 캐릭터로": { en: "Choose a different character", ja: "別のキャラクターに", zh: "换一个角色" },
   "다른 캐릭터 고르기": { en: "Pick another character", ja: "別のキャラクターを選ぶ", zh: "选择其他角色" },
-  "내 캐릭터 전부 보기": { en: "See all my characters", ja: "マイキャラクターをすべて見る", zh: "查看我的全部角色" },
   "또는 캐릭터를 어떻게 넣을까요?": { en: "Or, how would you like to add a character?", ja: "または、キャラクターをどう追加しますか？", zh: "或者，用哪种方式添加角色？" },
-  "캐릭터 직접 만들기": { en: "Make a character", ja: "キャラクターを作る", zh: "自己创建角色" },
-  "사진이 없어도 설명만으로 그려요": { en: "No photo needed — a description is enough", ja: "写真がなくても説明だけで描けます", zh: "没有照片也可以，只靠描述来画" },
-  "아직 만들어 둔 캐릭터가 없어요. 사진을 올리거나 하나 만들어 보세요.": {
-    en: "You haven't made a character yet. Upload a photo or create one.",
-    ja: "まだキャラクターがありません。写真をアップロードするか、ひとつ作ってみてください。",
-    zh: "还没有创建过角色。上传一张照片，或者先做一个吧。",
-  },
   "캐릭터 만들어보기": { en: "Try making a character", ja: "キャラクターを作ってみる", zh: "试着创建角色" },
   "사진·설명 없이도 돼요": { en: "No photo or description needed", ja: "写真や説明がなくても大丈夫です", zh: "无需照片或描述" },
   "바로 써 볼 수 있는 캐릭터": { en: "Characters ready to use", ja: "すぐに使えるキャラクター", zh: "可直接使用的角色" },
   "둘러보기용": { en: "Sample", ja: "サンプル", zh: "示例" },
   "이름": { en: "Name", ja: "名前", zh: "名字" },
   "예: 민시하": { en: "e.g. Min Siha", ja: "例：ミン・シハ", zh: "例如：闵时夏" },
-  "고른 캐릭터에서 채워졌어요 · 사진을 골랐다면 직접 적어요": {
-    en: "Filled in from the chosen character · if you're using a photo, type it yourself",
-    ja: "選んだキャラクターから入力されました · 写真を使う場合は自分で入力してください",
-    zh: "已根据所选角色填写 · 如使用照片，请自行填写",
-  },
   "캐릭터 설명": { en: "Character description", ja: "キャラクターの説明", zh: "角色描述" },
   "성격·말투·관계 등 아는 만큼. 예) 장난기 많은데 겁은 많아서 친구 앞에서만 센 척한다": {
     en: "Personality, way of speaking, relationships — whatever you know. e.g. Playful but timid, only acts tough around friends",
     ja: "性格・話し方・人間関係など、わかる範囲で。例）いたずら好きだけど怖がりで、友だちの前でだけ強がる",
     zh: "性格、说话方式、人际关系等，知道多少写多少。例如：爱闹却胆小，只在朋友面前逞强",
   },
-  "완성한 웹툰은 둘러보기에 공개되고 마이페이지에서 비공개로 바꿀 수 있어요.": {
-    en: "Finished webtoons are shown in Explore. You can make them private from My Page.",
-    ja: "完成したウェブトゥーンは「見て回る」に公開されます。マイページで非公開に変更できます。",
-    zh: "完成的条漫会公开在“浏览”中，可在“我的页面”改为私密。",
-  },
-  "본인이 찍었거나 직접 그린 사진, 쓸 권한이 있는 사진만 올려 주세요. 사진은 캐릭터 시트가 나오면 서버에서 지웁니다. 완성한 웹툰은 둘러보기에 공개되고 마이페이지에서 비공개로 바꿀 수 있어요.": {
-    en: "Please only upload photos you took, drew, or have permission to use. Photos are deleted from the server once the character sheet is ready. Finished webtoons are shown in Explore. You can make them private from My Page.",
-    ja: "ご自身で撮影・作成した写真、または使用権限のある写真のみアップロードしてください。写真はキャラクターシートができた時点でサーバーから削除されます。完成したウェブトゥーンは「見て回る」に公開され、マイページで非公開に変更できます。",
-    zh: "请只上传自己拍摄、绘制或有权使用的照片。角色设定图生成后，照片会从服务器删除。完成的条漫会公开在“浏览”中，可在“我的页面”改为私密。",
-  },
   "· 내 캐릭터": { en: "· My characters", ja: "· マイキャラクター", zh: "· 我的角色" },
   "· 입구": { en: "· Start", ja: "· 入口", zh: "· 入口" },
   "· 캐릭터": { en: "· Character", ja: "· キャラクター", zh: "· 角色" },
   "· 이야기 · 장르": { en: "· Story · Genre", ja: "· ストーリー · ジャンル", zh: "· 故事 · 题材" },
-  "1 / 4 · 다음은 이야기 · 장르": { en: "1 / 4 · Next: story & genre", ja: "1 / 4 · 次はストーリー · ジャンル", zh: "1 / 4 · 下一步：故事 · 题材" },
-  "1 / 4 · 다음은 이야기 · 장르 · 사진(또는 캐릭터)과 이름이 있어야 넘어가요": {
-    en: "1 / 4 · Next: story & genre · you need a photo (or character) and a name to continue",
-    ja: "1 / 4 · 次はストーリー · ジャンル · 写真（またはキャラクター）と名前があれば進めます",
-    zh: "1 / 4 · 下一步：故事 · 题材 · 需要照片（或角色）和名字才能继续",
-  },
 
   /* ---- 2 · 이야기 · 장르 ---- */
   "어떤 이야기를 볼까요?": { en: "What story would you like?", ja: "どんなストーリーにしますか？", zh: "想看什么样的故事？" },
@@ -96,7 +62,6 @@ const dict: Dict = {
     zh: "列表里没有就自己填 · 例如：武侠 / 浪漫奇幻",
   },
   "장르 직접 입력": { en: "Custom genre", ja: "ジャンルを入力", zh: "自定义题材" },
-  "2 / 4 · 다음은 그림체 · 둘 다 비워도 만들 수 있어요": { en: "2 / 4 · Next: art style · you can leave both blank", ja: "2 / 4 · 次は画風 · 両方空欄でも作れます", zh: "2 / 4 · 下一步：画风 · 两项都留空也可以" },
   "둘 다 비워도 만들 수 있어요": { en: "You can leave both blank", ja: "両方空欄でも作れます", zh: "两项都留空也可以" },
 
   /* 장르 칩 (lib/wizardData GENRE_QUICK) */
@@ -130,18 +95,12 @@ const dict: Dict = {
   "박자와 배신. 컷의 크기 차이로 웃깁니다.": { en: "Timing and subversion. Panel size differences bring the laughs.", ja: "テンポと裏切り。コマの大きさの差で笑わせます。", zh: "节奏与反转。用分镜大小的差异制造笑点。" },
   "큰 사건 없이 하루하루. 인물의 결이 곧 이야기입니다.": { en: "Day by day, no big events. The character's texture is the story.", ja: "大きな事件のない毎日。人物の質感がそのまま物語です。", zh: "没有大事的日复一日。人物的质感就是故事。" },
   "능력과 빌런, 등록과 자경단. 누가 구할 자격을 갖느냐가 규칙입니다.": { en: "Powers and villains, registration and vigilantes. Who's allowed to save is the rule.", ja: "能力とヴィラン、登録と自警団。誰に救う資格があるかがルールです。", zh: "能力与反派，登记与义警。谁有资格拯救就是规则。" },
-  "비워두면 루가 골라요 — 앞에서 적은 캐릭터 설명을 보고 이야기에 맞는 장르를 정합니다.": {
-    en: "Leave it blank and Lou will choose — based on the character description you wrote, picking a genre that fits the story.",
-    ja: "空欄ならLouが選びます — 先ほど書いたキャラクターの説明を見て、ストーリーに合うジャンルを決めます。",
-    zh: "留空的话由 Lou 来选 — 根据前面写的角色描述，选出适合故事的题材。",
-  },
 
   /* ---- 3 · 그림체 ---- */
   "어떤 그림체로 그릴까요?": { en: "Which art style?", ja: "どの画風で描きますか？", zh: "用什么画风来画？" },
   "그림을 눌러 고르세요. 캐릭터 시트도 이 그림체로 그려져요.": { en: "Tap a picture to choose. The character sheet uses this style too.", ja: "絵を押して選んでください。キャラクターシートもこの画風で描かれます。", zh: "点击图片选择。角色设定图也会用这个画风。" },
   "예시는 실제로 만들어진 편에서": { en: "Examples are from real episodes", ja: "例は実際に作られた作品から", zh: "示例来自实际生成的作品" },
   "{label} 예시": { en: "{label} example", ja: "{label}の例", zh: "{label}示例" },
-  "3 / 4 · 다음은 방식": { en: "3 / 4 · Next: options", ja: "3 / 4 · 次は進め方", zh: "3 / 4 · 下一步：方式" },
 
   /* 그림체 (lib/wizardData STYLE_INFO) */
   "일반 웹툰": { en: "Classic webtoon", ja: "一般ウェブトゥーン", zh: "普通条漫" },

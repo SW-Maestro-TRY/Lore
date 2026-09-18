@@ -7,8 +7,12 @@ import "./i18n";
 import { useT } from "../../lib/i18n";
 import { IconDownload, IconRetry, IconShare } from "../../ui/Icons";
 
-export const PAGE_IMG = "/static/samples/mock/scene1.jpg";
-export const SHEET_IMG = "/static/samples/sheet.jpg";
+/* 첫 화면(온보딩)에 뜨는 그림은 **디자인 캔버스에 올라간 바로 그 파일**이다.
+ * 아무 예시 그림이나 끌어다 쓰면 화면이 캔버스와 달라진다 — 예전에 시트는
+ * 다른 캐릭터, 페이지는 목업 장면, 다시 그리기는 몽이 컷이 들어가 있었다. */
+export const PAGE_IMG = "/static/samples/onboarding-page.jpg";
+export const SHEET_IMG = "/static/samples/onboarding-sheet.png";
+export const REGEN_IMG = "/static/samples/onboarding-regen.jpg";
 export const CUT_IMG = "/static/samples/ex-mongi-1.jpg";
 
 export default function EditorMock({ feat, s, height, who }: { feat: 0 | 1 | 2; s: number; height: number; who: string }) {
@@ -40,7 +44,7 @@ export default function EditorMock({ feat, s, height, who }: { feat: 0 | 1 | 2; 
 
         <div style={layer(feat === 1)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={CUT_IMG} alt={t("한 컷만 다시 그리기")} style={pageImg} />
+          <img src={REGEN_IMG} alt={t("한 컷만 다시 그리기")} style={pageImg} />
           <div style={{
             position: "absolute", left: px(40), top: px(60), width: px(300), height: px(180),
             border: "3px solid #0e8fb5", borderRadius: px(8), boxShadow: "0 0 0 9999px rgba(15,51,63,.35)",
@@ -56,7 +60,6 @@ export default function EditorMock({ feat, s, height, who }: { feat: 0 | 1 | 2; 
           <img src={CUT_IMG} alt={t("웹툰 한 컷")} style={pageImg} />
           <span className="wt-landing-genre" style={{ left: px(16), top: px(16), fontSize: px(11), padding: `${px(3)}px ${px(9)}px` }}>{t("로판")}</span>
           <div className="wt-landing-bubble" style={{ right: px(18), top: px(24), maxWidth: px(250), borderRadius: px(14), padding: `${px(8)}px ${px(12)}px`, fontSize: px(12.5) }}>
-            {t("진심이 아니었던 적은 단 한 번도 없어. 다만 그 진심이, 매번 다른 사람을 향했을 뿐이지.")}
           </div>
           <div className="wt-landing-cap" style={{ padding: `${px(14)}px ${px(16)}px`, fontSize: px(13.5), fontWeight: 700 }}>
             {t("몽이는 이 로맨스 웹툰에서, 강아지인 채로 악역 영애예요")}

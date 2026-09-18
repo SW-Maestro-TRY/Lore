@@ -152,6 +152,7 @@ const dict: Dict = {
   "전체 마감": { en: "Daily limit reached", ja: "本日分終了", zh: "今日总量已满" },
   "오늘은 여기까지예요": { en: "That's all for today", ja: "今日はここまでです", zh: "今天就到这里" },
   "오늘 만들 수 있는 전체 편수가 찼어요. 자정이 지나면 다시 만들 수 있어요.": { en: "Today's total creation limit has been reached. You can create again after midnight.", ja: "今日作れる全体の本数に達しました。深夜0時を過ぎるとまた作れます。", zh: "今天可制作的总量已满。过了午夜就可以再制作。" },
+  "완성본 미리 보기": { en: "Preview the finished pages", ja: "完成版をプレビュー", zh: "预览成品" },
 };
 
 registerDict(dict);

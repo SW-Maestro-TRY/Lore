@@ -134,15 +134,17 @@ export default function Photo({ go }: { go: Go }) {
               </div>
             )}
 
-            <div className="fieldset">
-              <label htmlFor="wt-ch-ds">{t("캐릭터에 대해 알려주세요")} <span className="dim" style={{ fontWeight: 400, fontSize: 12 }}>{t("선택")}</span></label>
-              <input id="wt-ch-ds" className="field" value={description} placeholder={t("예) 차가운 성격의 마법사")}
-                     onChange={(e) => setDescription(e.target.value)} />
-            </div>
             <div className="fieldset wt-ch-name">
               <label htmlFor="wt-ch-nm">{t("이름")} <span className="dim" style={{ fontWeight: 400, fontSize: 12 }}>{t("선택 · 비우면 지어요")}</span></label>
               <input id="wt-ch-nm" className="field" value={name} placeholder={t("예: 몽이, 세라핀")}
                      onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="fieldset">
+              <label htmlFor="wt-ch-ds">{t("캐릭터에 대해 알려주세요")} <span className="dim" style={{ fontWeight: 400, fontSize: 12 }}>{t("선택")}</span></label>
+              {/* 한 줄 칸이었는데, 성격·말투·사연까지 적으려면 좁았다 — 여러 줄로 둔다.
+                  세로로 늘릴 수 있게 열어 두고(resize: vertical), 기본 높이만 정한다. */}
+              <textarea id="wt-ch-ds" className="field wt-ch-desc" value={description} placeholder={t("예) 차가운 성격의 마법사")}
+                        onChange={(e) => setDescription(e.target.value)} />
             </div>
             <span className="dim" style={{ fontSize: 12.5 }}>{t("사진은 캐릭터를 그린 뒤 지워요. 남의 사진은 팬 창작 범위 안에서만.")}</span>
           </div>

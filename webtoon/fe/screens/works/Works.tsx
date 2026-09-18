@@ -227,7 +227,7 @@ function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolea
             <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
                     aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
             {pub ? t("공개") : t("비공개")}
-          </span> : <span className="dim" style={{ fontSize: 12 }}>{t("로그인하면 공개 여부를 바꿀 수 있어요")}</span>}
+          </span> : null}
           <button type="button" className="wt-works-edit" onClick={() => go("editor", { run: run.run_id })}>{t("편집실")}</button>
         </div>
       )}

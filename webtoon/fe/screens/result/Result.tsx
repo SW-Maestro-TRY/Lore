@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import {
-  episodeDownloadUrl, isMyRun, myAccountRuns, pageDownloadUrl, pageUrl, readResult, renameRun,
-  type RunResult,
+  browseRuns, coverUrl, episodeDownloadUrl, isMyRun, myAccountRuns, pageDownloadUrl, pageUrl,
+  readResult, renameRun, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
-import { IconBack, IconCheck, IconChevronUp, IconClose, IconDownload, IconEdit } from "../../ui/Icons";
+import { IconCheck, IconChevronUp, IconClose, IconDownload, IconEdit } from "../../ui/Icons";
 import { Crumb, MobileTop } from "../../ui/TopNav";
 import ShareMenu from "./ShareMenu";
 import "./i18n";
@@ -19,14 +19,25 @@ import "./Result.css";
  * 이 브라우저(isMyRun)와 계정 목록(myAccountRuns) 둘 중 하나만 맞아도 된다 —
  * 다른 기기에서 로그인해 열어도 내 작품이 남의 것으로 보이면 안 된다.
  * 완성본을 여는 것만으로는 rememberMyRun 을 하지 않는다(만든 사람만 남긴다). */
+/** 따옴표로 감싼 제목을 벗긴다 (첫 화면·둘러보기와 같은 규칙). */
+function titleOf(r: RunCard): string {
+  return (r.title || "").replace(/^"(.*)"$/, "$1");
+}
+
 export default function Result({ runId, go, authenticated = false }: { runId: string; go: Go; authenticated?: boolean }) {
   const t = useT();
   const [data, setData] = useState<RunResult | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [ownedByAccount, setOwnedByAccount] = useState(false);
-  const [openPage, setOpenPage] = useState<number | null>(null);
+  /* 아트보드 Done 의 「컷별로 내려받기」 — 켜면 장마다 내려받기 줄이 붙는다. */
+  const [perPage, setPerPage] = useState(false);
+  /* 크게 보기 — 장을 누르면 화면 전체에 띄운다. 웹툰 장은 세로로 길어서
+     화면에 통째로 맞추면 오히려 작아진다. 폭에 맞추고 세로로 흘린다. */
+  const [zoom, setZoom] = useState<number | null>(null);
   const [nextNote, setNextNote] = useState(false);
+  /* 「{캐릭터}의 다른 편」 (아트보드 Done) — 같은 캐릭터로 만든 다른 작품. */
+  const [siblings, setSiblings] = useState<RunCard[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -37,6 +48,19 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       .catch((e: Error) => { if (alive) setFailed(e.message || t("작품을 열지 못했습니다")); });
     return () => { alive = false; };
   }, [runId, tick]);
+
+  useEffect(() => {
+    const who = data?.character?.trim();
+    if (!who) { setSiblings([]); return; }
+    let alive = true;
+    browseRuns()
+      .then((all) => {
+        if (!alive) return;
+        setSiblings(all.filter((r) => r.character?.trim() === who && r.run_id !== runId).slice(0, 3));
+      })
+      .catch(() => { /* 없으면 줄 자체를 안 그린다 */ });
+    return () => { alive = false; };
+  }, [data?.character, runId]);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -70,7 +94,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   };
 
   const preview = data && data.preview && data.planned_pages > data.page_count
-    ? t("미리보기 ({planned}장 중 앞 {count}장만 그렸습니다)", { planned: data.planned_pages, count: data.page_count }) : "";
+    ? "" : "";
   const metaPc = data
     ? [data.character, epLabel, t(data.genre || ""), t("{n}컷", { n: data.page_count })].filter(Boolean).join(" · ") : "";
   const metaM = data ? [t(data.genre || ""), t("{n}컷", { n: data.page_count })].filter(Boolean).join(" · ") : "";
@@ -79,19 +103,31 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
   const toTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
+  useEffect(() => {
+    if (zoom == null) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(null); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [zoom]);
+
+  /* 누른 장으로 내려간다. 그림이 안 받아졌을 때 자리를 잡으면 높이가 0 이라
+     맨 위로 가버린다 — 그 장 위쪽 그림이 다 받아진 뒤에 자리를 잡는다. */
+  const [zoomLoaded, setZoomLoaded] = useState(0);
+  useEffect(() => { setZoomLoaded(0); }, [zoom]);
+  const above = zoom == null ? 0 : (data?.pages.filter((p) => p.no <= zoom).length ?? 0);
+  useEffect(() => {
+    if (zoom == null || zoomLoaded < above) return;
+    document.getElementById(`wt-zoom-${zoom}`)?.scrollIntoView({ block: "start" });
+  }, [zoom, zoomLoaded, above]);
+
   return (
     <div className="wt-result">
-      <MobileTop back={{ href: "/webtoon", label: t("처음으로"), onClick: () => go("landing") }}
-                 title={data?.title || t("완성")}
+      {/* 아트보드 MDone 의 위쪽 줄에는 뒤로 가기가 없다 — 제목과 회차뿐이다. */}
+      <MobileTop title={data?.title || t("완성")}
                  right={data ? [data.character, epLabel].filter(Boolean).join(" · ") : ""} />
 
       <div className="wt-wrap wt-page wt-result-page">
-        <div className="wt-result-crumbrow">
-          <Crumb items={[t("캐릭터"), t("이야기"), t("완성")]} at={2} />
-          <button type="button" className="btn-ghost" onClick={() => go("landing")}>
-            <IconBack size={16} /> {t("처음으로")}
-          </button>
-        </div>
+        <Crumb items={[t("캐릭터"), t("이야기"), t("완성")]} at={2} />
 
         {failed && (
           <div className="wt-result-state">
@@ -158,13 +194,21 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 </div>
                 {nextNote && <span className="wt-result-note" role="status">{t("아직 다음화 기능은 준비 중이에요!")}</span>}
                 {!data.example && (
-                  <span className="dim wt-result-wm">{t("내려받는 파일에는 아래에 LORE 표시가 붙습니다.")}</span>
+                  <div className="wt-result-dlrow">
+                    <label className="wt-result-perpage">
+                      <input type="checkbox" checked={perPage} aria-label={t("컷별로 내려받기")}
+                             onChange={(e) => setPerPage(e.target.checked)} />
+                      {t("컷별로 내려받기")}
+                    </label>
+                    {/* 아트보드는 PC 와 폰의 문구가 다르다 — 폰은 체크 칸 옆에 짧게 붙인다. */}
+                    <span className="dim wt-result-wm">{t("내려받는 파일에는 아래에 LORE 표시가 붙습니다.")}</span>
+                    <span className="dim wt-result-wm-m">{t("· 파일에 LORE 표시가 붙어요")}</span>
+                  </div>
                 )}
               </>
             ) : (
               <div className="wt-result-acts wt-result-acts-other">
                 <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
-                <span className="dim wt-result-otherline">{t("내 작품이 아니면 내려받기·편집실·다음 편은 없어요. 읽고 공유하는 것만.")}</span>
               </div>
             )}
 
@@ -172,7 +216,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               {data.pages.map((pg, i) => {
                 const gap = i === data.pages.length - 1 ? 0 : +pg.gap || 0;
                 const w = +pg.width || 1;
-                const isOpen = openPage === pg.no;
                 const img = (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={pageUrl(runId, pg.no, 1080, false, data.example)}
@@ -184,14 +227,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                          ...(gap ? { marginBottom: `${(gap * 100).toFixed(2)}%` } : {}),
                          ...(w !== 1 ? { width: `${(w * 100).toFixed(2)}%`, marginInline: "auto" } : {}),
                        }}>
-                    {pg.caption ? (
-                      <button type="button" className="wt-result-peek" aria-expanded={isOpen}
-                              onClick={() => setOpenPage(isOpen ? null : pg.no)}>
-                        {img}
-                        {isOpen && <span className="wt-result-cap">{pg.caption}</span>}
-                      </button>
-                    ) : img}
-                    {mine && !data.example && (
+                    <button type="button" className="wt-result-peek" aria-label={t("크게 보기")}
+                            onClick={() => setZoom(pg.no)}>
+                      {img}
+                    </button>
+                    {mine && !data.example && perPage && (
                       <a className="wt-result-pgdl" href={pageDownloadUrl(runId, pg.no)} download>
                         <IconDownload size={14} /> {t("이 장 내려받기")}
                       </a>
@@ -200,6 +240,24 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 );
               })}
             </div>
+
+            {mine && siblings.length > 0 && (
+              <div className="wt-result-others">
+                <b>{t("{who}의 다른 편", { who: data.character })}</b>
+                <div className="wt-result-others-row">
+                  {siblings.map((r) => (
+                    <button type="button" key={r.run_id} className="wt-result-other"
+                            onClick={() => go("result", { run: r.run_id })} aria-label={titleOf(r)}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1, !!r.example)} alt="" />
+                    </button>
+                  ))}
+                  <button type="button" className="wt-result-other-new" onClick={nextEpisode}>
+                    {t("EP.{n}", { n: ep + 1 })}<br />{t("만들기")}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {!mine && (
               <div className="wt-result-foot">
@@ -210,16 +268,38 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 </button>
               </div>
             )}
-            {mine && (
-              <div className="wt-result-foot">
-                <button type="button" className="btn-ghost wt-result-top" onClick={toTop}>
-                  <IconChevronUp size={16} /> {t("맨 위로")}
-                </button>
-              </div>
-            )}
+
           </div>
         )}
       </div>
+
+      {data && zoom != null && (
+        <div className="wt-result-zoom" role="dialog" aria-modal="true" aria-label={t("크게 보기")}
+             onClick={() => setZoom(null)}>
+          <button type="button" className="icon-btn" aria-label={t("닫기")}
+                  onClick={() => setZoom(null)}><IconClose size={18} /></button>
+          {/* 한 장씩이 아니라 한 편을 통째로 — 누른 장으로 먼저 내려가고,
+              거기서부터 쭉 내리면서 읽는다. */}
+          <div className="wt-result-zoom-scroll" onClick={(e) => e.stopPropagation()}>
+            {data.pages.map((pg, i) => {
+              const gap = i === data.pages.length - 1 ? 0 : +pg.gap || 0;
+              const w = +pg.width || 1;
+              return (
+                <div key={pg.no} id={`wt-zoom-${pg.no}`}
+                     style={{
+                       ...(gap ? { marginBottom: `${(gap * 100).toFixed(2)}%` } : {}),
+                       ...(w !== 1 ? { width: `${(w * 100).toFixed(2)}%`, marginInline: "auto" } : {}),
+                     }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={pageUrl(runId, pg.no, 1080, false, data.example)}
+                       alt={pg.caption || t("{n}쪽", { n: pg.no })}
+                       onLoad={zoom != null && pg.no <= zoom ? () => setZoomLoaded((n) => n + 1) : undefined} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {data && mine && (
         <div className="mfoot">

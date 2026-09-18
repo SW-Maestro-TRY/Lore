@@ -3,7 +3,7 @@
 /* 캐릭터 만들어보기 2 · 웹툰 한 컷 — PhotoResult.dc.html / MPhotoResult.dc.html.
  * 그림에는 글자가 없다 — 세계관 딱지와 말풍선은 화면이 얹는다. */
 import { useEffect, useRef, useState } from "react";
-import { listCharacters, readCharacter, readSharedCard, type Character } from "../../lib/api";
+import { readCharacter, readSharedCard, type Character } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { copyLink, kakaoAvailable, shareKakao, shareNative } from "../../lib/share";
@@ -23,7 +23,6 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
   const t = useT();
   const [ch, setCh] = useState<Character | null>(null);
   const [loadErr, setLoadErr] = useState("");
-  const [left, setLeft] = useState<{ free_left: number; free_per_day: number } | null>(null);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState<"episode" | "again" | null>(null);
   const [actErr, setActErr] = useState("");
@@ -54,11 +53,6 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
     void tick();
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [id, shared, tryN]);
-
-  useEffect(() => {
-    if (shared) return;
-    listCharacters().then((l) => setLeft({ free_left: l.free_left, free_per_day: l.free_per_day })).catch(() => {});
-  }, [id, shared]);
 
   useEffect(() => {
     if (!menu) return;
@@ -247,7 +241,6 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
                 {actErr && <span className="err">{actErr}</span>}
                 <div className="wt-ch-res-again">
                   <b>{t("마음에 안 들어요?")}</b>
-                  {left && <span className="dim" style={{ fontSize: 12.5 }}>{t("오늘 남은 다시 뽑기 {left} / {per}", { left: left.free_left, per: left.free_per_day })}</span>}
                 </div>
                 <button type="button" className="opt wt-ch-res-opt" disabled={busy !== null} onClick={() => void onAgain()}>
                   <b>{busy === "again" ? <span className="spin" /> : <IconRetry size={18} />} {t("다시 뽑기")}</b>

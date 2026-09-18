@@ -176,13 +176,13 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const louTitle = !job ? "" : waiting ? t("잠깐 봐 주세요")
     : queued ? t("앞에 대기자가 많아…")
     : art ? t("{n}번째 장을 그리고 있어요", { n: Math.min(art.done + 1, art.total) })
-    : job.say || (job.stage_label ? t(job.stage_label) : t("루가 만들고 있어요"));
+    : job.say || (job.stage_label ? t(job.stage_label) : t("만들고 있어요"));
   const louLine = !job ? "" : waiting
     ? (job.notice?.logged_in || job.notice?.email ? t("닫아도 괜찮아요. 다 되면 이메일로 알려드려요.") : t("닫아도 괜찮아요."))
     : queued ? t("현재 대기자 {n}명 · 약 {m}분 뒤 시작", { n: job.queue!.ahead, m: job.queue!.minutes })
     : job.minutes_left != null
-      ? t("{pct}% · {time} 경과 · 약 {n}분 남았어요", { pct: job.pct, time: mmss(job.elapsed), n: job.minutes_left })
-      : t("{pct}% · {time} 경과", { pct: job.pct, time: mmss(job.elapsed) });
+      ? t("약 {n}분 남았어요.", { n: job.minutes_left })
+      : "";
 
   const refundLine = job?.refunded === "credit" ? t("사용된 크레딧은 자동으로 환불되었어요.")
     : job?.refunded === "free" ? t("사용한 무료 생성 횟수는 자동으로 복구되었어요.") : "";
@@ -210,7 +210,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       ) : (
         <>
           <label htmlFor="wt-prog-em">
-            {t("이메일을 입력해 주시면 완성되면 결과물을 보여드릴게요!")}{" "}
+            {t("완성되면 이메일로 알려드릴게요.")}{" "}
             {job.minutes_left != null && <span className="dim">{t("지금 약 {n}분 남았어요.", { n: job.minutes_left })}</span>}
           </label>
           <div className="row">
@@ -221,7 +221,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               {t("알림 받기")}
             </button>
           </div>
-          <span className="dim">{t("이 작품의 알림에만 써요. 광고는 보내지 않아요. 안 적으셔도 만들기는 그대로 진행돼요.")}</span>
+          <span className="dim">{t("이 작품의 알림에만 써요.")}</span>
         </>
       )}
     </div>
@@ -344,7 +344,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <>
                   <div className="wt-prog-head">
                     <h2>{t("캐릭터 시트를 확인해 주세요")}</h2>
-                    <span className="muted lede">{t("이제부터 모든 페이지가 이 얼굴을 따라갑니다. 원본과 다르면 여기서 다시 만들어요. 확인 전까지는 아무것도 안 돌아가요.")}</span>
                   </div>
                   <button type="button" className="wt-prog-sheet" onClick={() => setZoom(sheetImageUrl(job.id, sheetV))}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -369,7 +368,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <>
                   <div className="wt-prog-head">
                     <h2>{t("어느 이야기로 갈까요?")}</h2>
-                    <span className="muted lede">{t("넷 중 하나를 고르면 그 뒤로는 안 멈춰요. 고른 이야기는 다음 화면에서 본문을 직접 고칠 수 있어요.")}</span>
                   </div>
                   <div className="wt-prog-dirs">
                     {dirs.map((d) => (
@@ -405,10 +403,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <>
                   <div className="wt-prog-head">
                     <h2>{selectedDir.n}. {selectedDir.title} {selectedDir.genre && <span className="dim">[{selectedDir.genre}]</span>}</h2>
-                    <span className="muted lede">{t("내용을 확인하세요. 마음에 안 드는 부분이 있으면 직접 고쳐도 됩니다 — 안 고쳐도 됩니다.")}</span>
+                    <span className="muted lede">{t("마음에 안 드는 부분은 직접 고쳐도 돼요.")}</span>
                   </div>
                   <textarea className="field wt-prog-bodybox" value={body} aria-label={t("이야기 본문")} onChange={(e) => setBody(e.target.value)} />
-                  <span className="dim" style={{ fontSize: 12.5 }}>{t("고친 내용은 원래 본문과 다를 때만 실려 가서, 다음 단계(장면 나누기)부터 그 내용을 씁니다.")}</span>
                   <div className="wt-prog-acts" style={{ marginTop: 4 }}>
                     <button type="button" className="btn btn-w" disabled={busy} onClick={() => setConfirming(false)}><IconBack size={16} /> {t("다른 이야기 보기")}</button>
                     <button type="button" className="btn btn-p" disabled={busy} onClick={confirmPick}>{t("이대로 진행하기")} <IconArrow size={18} /></button>
@@ -422,7 +419,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   <div className="wt-prog-head">
                     <h2>{art ? t("페이지를 그리고 있어요") : job.stage_label ? t(job.stage_label) : t("만들고 있어요")}</h2>
                     <span className="muted lede">
-                      {art ? t("한 장을 그릴 때마다 앞 장과 이어지는지, 글이 그림에 담겼는지 검수하고 걸리면 다시 그려요.") : job.say}
+                      {job.say}
                       {job.minutes_left != null && <> {t("약 {n}분 남았어요.", { n: job.minutes_left })}</>}
                     </span>
                   </div>
@@ -441,7 +438,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <>
                       <div className="wt-prog-pageshead">
                         <b>{t("그려진 장")}</b>
-                        <span className="dim">{t("{done} / {total}장 · 그려진 순서대로, 완성본과 같은 폭으로", { done: art.done, total: art.total })}</span>
+                        <span className="dim">{t("{done} / {total}장", { done: art.done, total: art.total })}</span>
                       </div>
                       <PageGrid jobId={job.id} art={art} onZoom={setZoom} />
                     </>
@@ -460,6 +457,14 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       </div>
                     )}
                   </div>
+                  {/* 아트보드 Drawing 의 「완성본 미리 보기」 — 다 그려지기 전에도
+                      지금까지 나온 것을 완성본 화면에서 볼 수 있다. */}
+                  {job.run_id && (
+                    <button type="button" className="btn btn-w btn-sm wt-prog-peek"
+                            onClick={() => go("result", { run: job.run_id! })}>
+                      {t("완성본 미리 보기")}
+                    </button>
+                  )}
                   {actErr && <span className="err">{actErr}</span>}
                 </>
               )}
@@ -511,7 +516,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <>
                   <div className="wt-prog-pageshead">
                     <b>{t("그려진 장")}</b>
-                    <span className="dim">{t("{done} / {total}장 · 그려진 순서대로, 완성본과 같은 폭으로", { done: art.done, total: art.total })}</span>
+                    <span className="dim">{t("{done} / {total}장", { done: art.done, total: art.total })}</span>
                   </div>
                   <PageGrid jobId={job.id} art={art} onZoom={setZoom} />
                 </>
