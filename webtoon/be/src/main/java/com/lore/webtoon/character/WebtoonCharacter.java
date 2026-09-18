@@ -11,7 +11,9 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * 사람이 가지고 노는 캐릭터.
@@ -90,6 +92,46 @@ public class WebtoonCharacter {
     @Column(length = 300)
     private String error;
 
+    /*
+     * 「캐릭터 만들어보기」로 만든 것만 아래 칸이 찬다 — 그 세계관 웹툰의 한 컷
+     * (art_key 가 그 그림이다)과 카드 글. 직접 만들기·기본 제공은 전부 비어 있다.
+     *
+     * 카드 글을 따로 표로 빼지 않는다. 캐릭터 하나에 카드 하나이고, 「이 캐릭터로
+     * 1화 보기」·「내 캐릭터에 저장」이 전부 이 줄 하나를 가리키면 되기 때문이다.
+     */
+
+    /** 세계관 — story-harness 프리셋 키. 사람이 직접 썼으면 비어 있다. */
+    @Column(length = 80)
+    private String world;
+
+    /** 딱지에 쓸 세계관 이름(로판·헌터처럼 짧게). */
+    @Column(name = "world_label", length = 20)
+    private String worldLabel;
+
+    /** 반전 문장에 들어가는 장르 한 단어. */
+    @Column(length = 40)
+    private String genre;
+
+    /** 그 세계관에서 맡은 자리. */
+    @Column(name = "role_name", length = 40)
+    private String roleName;
+
+    /** 반전 한 줄 — 카드의 제목이다. */
+    @Column(length = 300)
+    private String twist;
+
+    /** 한 컷의 말풍선에 들어갈 대사. 그림에는 글자가 없고 화면이 얹는다. */
+    @Column(length = 300)
+    private String quote;
+
+    /** 운명 두세 줄. 줄바꿈으로 잇는다. */
+    @Column(columnDefinition = "text")
+    private String fate;
+
+    /** 그린 그림체(prompt/style 의 이름). 1화를 같은 그림체로 그리려고 남긴다. */
+    @Column(length = 40)
+    private String style;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -134,6 +176,46 @@ public class WebtoonCharacter {
         this.status = CharacterStatus.READY;
         this.error = null;
         this.updatedAt = at;
+    }
+
+    /** 한 컷과 카드 글이 다 됐다 — 「캐릭터 만들어보기」의 끝. */
+    public void drewPanel(String key, CharacterSource source, Card card, Instant at) {
+        drewArt(key, source, at);
+        this.world = cut(card.world(), 80);
+        this.worldLabel = cut(card.worldLabel(), 20);
+        this.genre = cut(card.genre(), 40);
+        this.roleName = cut(card.role(), 40);
+        this.twist = cut(card.twist(), 300);
+        this.quote = cut(card.quote(), 300);
+        this.fate = card.fate() == null || card.fate().isEmpty()
+                ? null : String.join("\n", card.fate());
+        this.style = cut(card.style(), 40);
+    }
+
+    /** 카드 글. 한 컷으로 만든 캐릭터만 갖는다. */
+    public record Card(String world, String worldLabel, String genre, String role,
+                       String twist, String quote, List<String> fate, String style) {
+    }
+
+    /** 카드가 있나 — 「캐릭터 만들어보기」로 만든 것인가. */
+    public boolean hasCard() {
+        return twist != null && !twist.isBlank();
+    }
+
+    /** 운명 줄들. 없으면 빈 목록. */
+    public List<String> fateLines() {
+        if (fate == null || fate.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(fate.split("\n")).map(String::trim)
+                .filter(l -> !l.isEmpty()).toList();
+    }
+
+    private static String cut(String s, int max) {
+        if (s == null || s.isBlank()) {
+            return null;
+        }
+        return s.length() <= max ? s : s.substring(0, max);
     }
 
     /** 못 그렸다. 사유는 사람이 읽을 한 줄이어야 한다. */
@@ -183,6 +265,34 @@ public class WebtoonCharacter {
 
     public String getBrowserUid() {
         return browserUid;
+    }
+
+    public String getWorld() {
+        return world;
+    }
+
+    public String getWorldLabel() {
+        return worldLabel;
+    }
+
+    public String getGenre() {
+        return genre;
+    }
+
+    public String getRoleName() {
+        return roleName;
+    }
+
+    public String getTwist() {
+        return twist;
+    }
+
+    public String getQuote() {
+        return quote;
+    }
+
+    public String getStyle() {
+        return style;
     }
 
     /** 빈 문자열은 없는 것과 같다 — 그 값이 들어오면 아무나 자기 것이 된다. */
