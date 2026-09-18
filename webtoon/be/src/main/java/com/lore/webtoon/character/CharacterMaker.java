@@ -54,6 +54,11 @@ public class CharacterMaker {
         return Files.isRegularFile(harnessDir.resolve("character.py"));
     }
 
+    /** 「랜덤으로 만들어보기」 재료. 하네스 프롬프트 옆에 데이터로 둔다 — 코드가 아니다. */
+    public Path randomPoolFile() {
+        return harnessDir.resolve("prompt").resolve("random_pool.json");
+    }
+
     /** 세계관 프리셋 파일. new_harness 옆에 story-harness 가 같이 풀려 있다. */
     public Path worldsFile() {
         return harnessDir.getParent() == null ? null

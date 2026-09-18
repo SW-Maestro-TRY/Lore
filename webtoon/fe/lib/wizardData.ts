@@ -12,12 +12,12 @@
    실제로 어긋났던 적이 있다 — 이식본이 한동안 없어진 「선화 · 액션」을
    보여주고, 새로 생긴 「세미리얼」·「게임 원화」는 안 보여줬다. */
 export const STYLE_INFO: [key: string, label: string, desc: string][] = [
-  ["webtoon", "일반 웹툰", "깔끔한 선과 셀 채색. 매주 연재하는 그 그림 — 읽히는 속도가 기준입니다."],
-  ["romance", "로맨스 판타지", "표지 일러스트급 밀도. 보석 같은 눈, 장미와 금박, 레이스까지 하나하나."],
-  ["shoujo", "순정 · BL", "얼굴과 둘 사이의 거리. 길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃."],
-  ["frost", "세미리얼 · 성인향", "사실적인 인체에 선은 얇고 듬성듬성, 진한 디테일은 얼굴·손에만. 넓은 면은 비워 두고 저채도로 차분하게."],
-  ["pastel", "일상툰 감성", "일부러 덜 완성한 그림. 흔들리는 연필선, 종이 결, 바랜 파스텔 몇 색."],
-  ["game", "게임 원화", "고급 모바일 게임 캐릭터 CG. 섬세한 선화에 은은하게 빛나는 채색과 정제된 조명까지."],
+  ["webtoon", "일반 웹툰", "깔끔한 선과 셀 채색. 읽히는 속도가 기준."],
+  ["romance", "로맨스 판타지", "표지 일러스트급 밀도. 보석 같은 눈, 금박, 레이스."],
+  ["shoujo", "순정 · BL", "길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃."],
+  ["frost", "세미리얼 · 성인향", "사실적인 인체, 얇은 선, 저채도로 차분하게."],
+  ["pastel", "일상툰 감성", "흔들리는 연필선, 종이 결, 바랜 파스텔."],
+  ["game", "게임 원화", "섬세한 선화에 은은하게 빛나는 채색."],
 ];
 
 export const GENRE_QUICK = [
@@ -47,8 +47,9 @@ export const GENRE_NOTE: Record<string, string> = {
 export const GENRE_NOTE_EMPTY =
   "비워두면 루가 골라요 — 앞에서 적은 캐릭터 설명을 보고 이야기에 맞는 장르를 정합니다.";
 
-export const WIZ_NAMES = ["수면", "항해", "깊은 바다", "심해", "바닥"];
-export const WIZ_LAST = 5;
+/** 위자드 네 걸음 — 캔버스의 「웹툰 만들기 1~4」. */
+export const WIZ_STEPS = ["캐릭터", "이야기 · 장르", "그림체", "그리기 방식"];
+export const WIZ_LAST = 4;
 export const MAX_PHOTOS = 4;
 
 export type WizardMode = "simple" | "expert";
@@ -122,3 +123,15 @@ export const emptyWizardForm = (): WizardForm => ({
   mode: "expert",
   agreeIp: false,
 });
+
+/** 하네스 그림체 이름(캐릭터 카드의 style) → 화면 키. 카드에서 1화로 넘어갈 때
+ *  요약에 그림체 이름을 적으려고 쓴다. 서버는 어느 쪽이든 받는다. */
+export const STYLE_KEY_OF_HARNESS: Record<string, string> = {
+  webtoon_lock_bg: "webtoon", romance_fantasy: "romance", shoujo: "shoujo",
+  frost: "frost", pastel: "pastel", game: "game",
+};
+
+export function styleLabelOf(keyOrHarness: string): string {
+  const key = STYLE_KEY_OF_HARNESS[keyOrHarness] ?? keyOrHarness;
+  return STYLE_INFO.find(([k]) => k === key)?.[1] ?? "";
+}

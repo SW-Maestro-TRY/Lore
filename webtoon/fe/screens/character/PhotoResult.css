@@ -1,0 +1,61 @@
+/* 캐릭터 만들어보기 2 · 웹툰 한 컷 — PhotoResult.dc.html / MPhotoResult.dc.html */
+.wt .wt-ch-res-body { display: flex; gap: 36px; margin-top: 14px; flex-grow: 1; align-items: flex-start; }
+.wt .wt-ch-res-art {
+  position: relative; width: 600px; height: 600px; flex-shrink: 0; border-radius: 16px; overflow: hidden;
+  background: #fff; border: 1px solid var(--line); box-shadow: 0 14px 36px rgba(15, 51, 63, 0.12);
+}
+.wt .wt-ch-res-art img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.wt .wt-ch-res-art .badge { position: absolute; left: 12px; top: 12px; }
+.wt .wt-ch-res-bubble {
+  position: absolute; right: 16px; top: 22px; max-width: 330px; background: #fff; border: 1.5px solid var(--ink);
+  border-radius: 16px; padding: 8px 12px; font-size: 14px; line-height: 1.45;
+}
+.wt .wt-ch-res-bubble.short { white-space: nowrap; }
+.wt .wt-ch-res-wait {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; font-size: 14px; color: var(--sea-deep);
+}
+.wt .wt-ch-res-side { flex-grow: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.wt .wt-ch-res-side h2 { font-size: 26px; line-height: 1.35; }
+.wt .wt-ch-res-side .wt-ch-res-role { font-size: 20px; line-height: 1.4; }
+.wt .wt-ch-res-side .wt-ch-res-who { font-size: 14px; }
+.wt .wt-ch-res-fate { gap: 6px; padding: 16px 18px; }
+.wt .wt-ch-res-fate b { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; }
+.wt .wt-ch-res-fate span { font-size: 14px; line-height: 1.6; }
+.wt .wt-ch-res-row { display: flex; gap: 8px; }
+.wt .wt-ch-res-row .btn { flex-grow: 1; height: 46px; }
+.wt .wt-ch-res-share { position: relative; flex-grow: 1; display: flex; }
+.wt .wt-ch-res-share .btn { width: 100%; }
+.wt .wt-ch-res-menu {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 4; background: #fff; border: 1px solid var(--line-strong);
+  border-radius: 14px; padding: 6px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(15, 51, 63, 0.14);
+}
+.wt .wt-ch-res-menu button {
+  background: none; border: 0; text-align: left; padding: 10px 12px; border-radius: 10px; font-size: 14px; color: var(--ink); cursor: pointer;
+}
+.wt .wt-ch-res-menu button:hover { background: var(--water-light); }
+.wt .wt-ch-res-again { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
+.wt .wt-ch-res-again b { font-size: 14px; }
+.wt .wt-ch-res-opt b { display: inline-flex; align-items: center; gap: 6px; }
+.wt .wt-ch-res-mtitle { display: none; }
+.wt .wt-ch-res-pc-cta { margin-top: 4px; }
+.wt .wt-ch-steps { display: none; }
+.wt .wt-ch-res-skel { width: 100%; height: 100%; }
+
+@media (max-width: 767px) {
+  .wt .wt-ch-steps { display: flex; gap: 4px; padding: 10px 16px 0; }
+  .wt .wt-ch-steps span { height: 4px; flex: 1; border-radius: 2px; background: rgba(15, 51, 63, 0.15); }
+  .wt .wt-ch-steps span.on { background: var(--ink); }
+  .wt .wt-ch-res-body { flex-direction: column; gap: 14px; margin-top: 0; align-items: stretch; }
+  .wt .wt-ch-res-mtitle { display: block; font-size: 22px; line-height: 1.3; }
+  .wt .wt-ch-res-side > h2 { display: none; }
+  .wt .wt-ch-res-art { width: 100%; height: 320px; }
+  .wt .wt-ch-res-bubble { max-width: 196px; font-size: 12px; }
+  .wt .wt-ch-res-side { gap: 14px; }
+  .wt .wt-ch-res-side .wt-ch-res-role { font-size: 17px; }
+  .wt .wt-ch-res-side .wt-ch-res-who { font-size: 13px; }
+  .wt .wt-ch-res-fate span { font-size: 13px; }
+  .wt .wt-ch-res-row .btn { height: 44px; font-size: 14px; }
+  .wt .wt-ch-res-pc-cta { display: none; }
+  .wt .wt-ch-res-opt { padding: 12px 14px; }
+}

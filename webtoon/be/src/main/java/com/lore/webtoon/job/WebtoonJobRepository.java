@@ -54,4 +54,18 @@ public interface WebtoonJobRepository extends JpaRepository<WebtoonJob, Long> {
             where j.id = :id and j.notifiedAt is null
             """)
     int claimNotice(@Param("id") Long id, @Param("at") Instant at);
+
+    /**
+     * 이 사람이 만들던 것 — 아직 안 끝난 작업. 첫 화면의 「만들던 웹툰」 알약과
+     * 이어 만들기가 여기를 본다. 로그인 안 했으면 브라우저 uid 로만 가린다.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+           select j from WebtoonJob j
+            where (j.userId = :userId or j.browserUid in :uids)
+              and j.status in :statuses
+            order by j.id desc
+           """)
+    List<WebtoonJob> activeOf(@org.springframework.data.repository.query.Param("userId") Long userId,
+                              @org.springframework.data.repository.query.Param("uids") java.util.Collection<String> uids,
+                              @org.springframework.data.repository.query.Param("statuses") java.util.Collection<JobStatus> statuses);
 }

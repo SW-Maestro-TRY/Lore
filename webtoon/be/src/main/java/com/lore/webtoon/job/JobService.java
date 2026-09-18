@@ -32,6 +32,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -154,7 +155,11 @@ public class JobService {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "만들기를 시작하지 못했습니다");
         }
 
-        String style = STYLE.getOrDefault(blank(form.style()), DEFAULT_STYLE);
+        /* 그림체는 화면 키(romance)로도, 하네스 이름(romance_fantasy)으로도 받는다.
+           「캐릭터 만들어보기」의 카드는 하네스 이름을 들고 있어서 — 한 컷을 그린
+           그 그림체 그대로 1화를 그려야 같은 캐릭터로 읽힌다. */
+        String asked = blank(form.style());
+        String style = STYLE.containsValue(asked) ? asked : STYLE.getOrDefault(asked, DEFAULT_STYLE);
         String quality = WebtoonQuality.normalize(form.quality());
         WebtoonJob job = jobs.save(WebtoonJob.queued(
                 publicId, userId, browserUid, guestKey, style, quality,
@@ -194,6 +199,19 @@ public class JobService {
     }
 
     /** 이 작업이 만들고 있는 run 번호. 첫 단계가 끝나야 생기므로 없을 수 있다. */
+    /**
+     * 이 사람이 만들던 것들 — 아직 안 끝난 작업. 첫 화면이 「만들던 웹툰 · 7/12장」
+     * 알약을 띄우고, 눌러서 돌아간다. 새로고침하거나 기기를 바꿔도 하던 데로
+     * 돌아올 수 있어야 해서 주소나 화면 상태가 아니라 서버가 센다.
+     */
+    @Transactional(readOnly = true)
+    public List<JobView> activeOf(Long userId, Collection<String> uids) {
+        return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
+                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK)).stream()
+                .map(job -> view(job.getPublicId()))
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public String runOf(String publicId) {
         return store.byPublicId(publicId).getRunId();

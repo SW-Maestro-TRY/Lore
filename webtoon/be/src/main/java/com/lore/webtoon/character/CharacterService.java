@@ -130,6 +130,21 @@ public class CharacterService {
         return one;
     }
 
+    /**
+     * 공유 링크로 열리는 카드 — <b>주인을 안 가린다.</b> 카드는 남에게 보여 주려고
+     * 만드는 것이라, 링크를 받은 사람이 로그인 없이 봐야 한다. 카드가 없는
+     * 캐릭터(초상 한 장·기본 제공)는 여기로 안 열린다 — 공유할 것이 없다.
+     */
+    @Transactional(readOnly = true)
+    public WebtoonCharacter sharedCard(String publicId) {
+        WebtoonCharacter one = characters.findByPublicId(publicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 카드가 없습니다"));
+        if (!one.hasCard()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "그런 카드가 없습니다");
+        }
+        return one;
+    }
+
     /** 오늘 이 사람이 몇 개 더 공짜로 만들 수 있나. */
     @Transactional(readOnly = true)
     public int freeLeft(Long userId, Collection<String> uids) {
@@ -403,6 +418,77 @@ public class CharacterService {
         } catch (IOException | RuntimeException e) {
             log.warn("세계관 목록을 못 읽었습니다 ({})", file, e);
             return List.of();
+        }
+    }
+
+    /**
+     * 「랜덤으로 만들어보기」 — 입력 칸을 채울 재료 한 벌. <b>AI 를 안 부른다.</b>
+     *
+     * 존재 하나 + 결 하나를 붙여 설명이 되고, 이름은 그 존재의 이름 주머니에서,
+     * 세계관은 프리셋에서 뽑는다. 사람은 그 값을 보고 고치거나 다시 뽑거나
+     * 그대로 만든다 — 바로 생성으로 넘어가지 않는다. 재료는
+     * {@code new_harness/prompt/random_pool.json} 이라 늘리고 줄이는 것은 그
+     * 파일만 고치면 된다.
+     *
+     * @return {@code {name, description, world, world_label}}. 재료를 못 읽으면 빈 값들
+     */
+    public Map<String, String> randomSeed() {
+        Map<String, String> out = new LinkedHashMap<>();
+        out.put("name", "");
+        out.put("description", "");
+        out.put("world", "");
+        out.put("world_label", "");
+        Path file = maker.randomPoolFile();
+        if (file == null || !Files.isRegularFile(file)) {
+            return out;
+        }
+        try {
+            JsonNode pool = new ObjectMapper().readTree(Files.readString(file));
+            java.util.Random rnd = new java.util.Random();
+            JsonNode beings = pool.path("beings");
+            JsonNode traits = pool.path("traits");
+            JsonNode formats = pool.path("formats");
+            if (!beings.isArray() || beings.isEmpty() || !traits.isArray() || traits.isEmpty()) {
+                return out;
+            }
+            JsonNode being = beings.get(rnd.nextInt(beings.size()));
+            String trait = traits.get(rnd.nextInt(traits.size())).asText("");
+            JsonNode names = being.path("name_pool");
+            String name = names.isArray() && !names.isEmpty()
+                    ? names.get(rnd.nextInt(names.size())).asText("") : "";
+            String format = formats.isArray() && !formats.isEmpty()
+                    ? formats.get(rnd.nextInt(formats.size())).asText("{being}. {trait}.")
+                    : "{being}. {trait}.";
+            String description = format
+                    .replace("{being}", being.path("being").asText(""))
+                    .replace("{trait}", trait)
+                    .replace("{name}", name);
+            List<Map<String, String>> worlds = worlds();
+            JsonNode allowed = being.path("worlds");
+            List<Map<String, String>> pick = new ArrayList<>();
+            if (allowed.isArray() && !allowed.isEmpty()) {
+                for (Map<String, String> w : worlds) {
+                    for (JsonNode a : allowed) {
+                        if (a.asText("").equals(w.get("key"))) {
+                            pick.add(w);
+                        }
+                    }
+                }
+            }
+            if (pick.isEmpty()) {
+                pick = worlds;
+            }
+            out.put("name", name);
+            out.put("description", description);
+            if (!pick.isEmpty()) {
+                Map<String, String> w = pick.get(rnd.nextInt(pick.size()));
+                out.put("world", w.get("key"));
+                out.put("world_label", w.get("label"));
+            }
+            return out;
+        } catch (IOException | RuntimeException e) {
+            log.warn("랜덤 재료를 못 읽었습니다 ({})", file, e);
+            return out;
         }
     }
 

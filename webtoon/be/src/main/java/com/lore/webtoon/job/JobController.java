@@ -66,9 +66,12 @@ public class JobController {
     private final GuestGate guests;
     private final CreditGate credits;
     private final S3Service uploads;
+    private final com.lore.webtoon.character.CharacterOwner owner;
 
     public JobController(JobService jobs, JobQueue queue, RunArt art, SpendGuard guard,
-                         GuestGate guests, CreditGate credits, S3Service uploads) {
+                         GuestGate guests, CreditGate credits, S3Service uploads,
+                         com.lore.webtoon.character.CharacterOwner owner) {
+        this.owner = owner;
         this.jobs = jobs;
         this.queue = queue;
         this.art = art;
@@ -213,6 +216,15 @@ public class JobController {
         credits.charge(me, need, id, WebtoonQuality.labelOf(form.quality()));
         queue.remember(id, ahead);
         return ResponseEntity.ok(Map.of("id", id, "queue_position", ahead));
+    }
+
+    @Operation(summary = "내가 만들던 것", description = """
+            아직 안 끝난 작업들(줄 서 있거나 · 그리는 중 · 사람 차례). 첫 화면의
+            「만들던 웹툰」 알약이 이것을 본다. 로그인 안 했으면 uid 로 가린다.""")
+    @GetMapping("/jobs/mine")
+    public Map<String, Object> mine(@RequestParam(required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        return Map.of("jobs", jobs.activeOf(me, owner.uidsOf(me, uid)));
     }
 
     @Operation(summary = "진행 상황", description = """
