@@ -15,6 +15,27 @@ import { spriteUrl, useLive } from './useHatch';
 import { assetUrl } from '../../lib/assets';
 import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
+import { OnbDevProvider, OnbChangeList, useOnbFlag } from './onboardingDev';
+
+/**
+ * OB-09(문구만) — 랜딩 칸 카피 레지스터. "그림 한 장이면, 같이 살 수 있어요"의 무거운
+ * "함께 산다" 프레임을 랜딩 v2 와 같은 장난감 톤으로 바꾼다(표시 텍스트만, 로직 없음).
+ */
+const OB09_LANDING_COPY: readonly [string, string] = [
+  '안녕! 같이 키우자!',
+  '그림 한 장이면, 내가 그린 아이랑 같이 지낼 수 있어요.',
+];
+
+/**
+ * OB-03 진입 등장(stagger) 스타일. 랜딩 v2 의 ztV2Rise 결로, 이미 전역에 심긴 KEYFRAMES 의
+ * yPopIn 을 재사용한다. reduced-motion 에선 정지 — 요소 존재·순서·핸들러는 클래스 유무와 무관.
+ */
+const OB03_RISE_STYLE = `
+.onb-rise{ animation: yPopIn .5s cubic-bezier(.2,.7,.25,1) both; }
+@media (prefers-reduced-motion: reduce){ .onb-rise{ animation: none; } }
+/* OB-04 CTA hover 마감(알약형). active scale 은 전역 .yeoul button:active 가 이미 준다. */
+.onb-cta-v2:not(:disabled):hover{ background:#8c3a2c; box-shadow:0 8px 20px rgba(156,66,50,.28); }
+`;
 
 
 /** 세계관은 **고른 칩 전부**와 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
@@ -49,13 +70,40 @@ function ExampleImg({ src, alt, box, badge }: { src: string; alt: string; box: C
   );
 }
 
-export default function Onboarding({ y }: { y: Yeoul }) {
+/**
+ * ★ 리모컨(기존↔적용후) — 온보딩 겉모습 통일을 변경 단위(OB-01~09)로 토글한다.
+ *   provider 가 flags 를 들고, 안쪽 OnboardingInner 가 useOnbFlag 로 읽어 표현만 스왑한다.
+ *   OnbChangeList 패널은 useDevVisible 게이팅이라 공개 도메인(*.lorecomic.com)엔 안 뜬다.
+ */
+export default function Onboarding(props: { y: Yeoul }) {
+  return (
+    <OnbDevProvider>
+      <OnboardingInner {...props} />
+      <OnbChangeList />
+    </OnbDevProvider>
+  );
+}
+
+function OnboardingInner({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
   const live = useLive();
   const file = useRef<HTMLInputElement>(null);
   const o = v.onb;
   const key = o.stepKey;
-  const [title, sub] = ONB_COPY[key];
+  // OB-09 는 표시 텍스트만 랜딩 톤으로 바꾼다(landing 칸에서만). 나머지 칸 카피는 그대로.
+  const fCopy = useOnbFlag('ob-09');
+  const [title, sub] = fCopy && key === 'landing' ? OB09_LANDING_COPY : ONB_COPY[key];
+  // 겉모습 스왑 플래그(전부 OFF=현재 코드 그대로).
+  const fShell = useOnbFlag('ob-01');
+  const fTitle = useOnbFlag('ob-02');
+  const fRise = useOnbFlag('ob-03');
+  const fCta = useOnbFlag('ob-04');
+  const fFrame = useOnbFlag('ob-05');
+  const fDrop = useOnbFlag('ob-06');
+  const fEx = useOnbFlag('ob-07');
+  const fDots = useOnbFlag('ob-08');
+  // OB-03 등장은 클래스로만 붙인다 — off 면 빈 문자열이라 DOM·핸들러 변화 없음.
+  const rise = fRise ? 'onb-rise' : undefined;
 
   // ★ 그림은 **필수**다(상훈님 2026-09-07 결정). '그림 없이 계속' 은 없앴다 —
   //   그림 없이 넘어가면 아이를 만들 재료가 없어서 그 뒤 화면이 전부 목이 된다.
@@ -75,40 +123,65 @@ export default function Onboarding({ y }: { y: Yeoul }) {
     : (key === 'char' && live.busy ? '준비하는 중…' : o.cta);
 
   return (
-    <div data-part="onb" data-step={key} style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, background: key === 'born' ? C.bornBg : C.onbBg }}>
+    <div
+      data-part="onb"
+      data-step={key}
+      style={{
+        flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0,
+        // OB-01 셸 질감 — 바탕색은 그대로, 은은한 종이 도트만 얹는다(랜딩 v2 ::before 와 같은 결).
+        backgroundColor: key === 'born' ? C.bornBg : C.onbBg,
+        ...(fShell
+          ? { backgroundImage: 'radial-gradient(rgba(74,64,56,.07) .6px, transparent .7px)', backgroundSize: '8px 8px' }
+          : null),
+      }}
+    >
+      {(fRise || fCta) && <style>{OB03_RISE_STYLE}</style>}
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 22px 6px' }}>
         {/* ★ 태어남 칸에는 뒤로가 없다(상훈님 판정 4). 이미 태어난 아이가 있는데 되돌아가면
             여울 샘플로 가고 부화가 0/4 로 지워졌다 — 되돌릴 수 없는 지점은 되돌아가지지 않아야 한다. */}
         {o.canBack && key !== 'born' && (
-          <button onClick={actions.onBack} style={{ border: '1px solid rgba(74,64,56,.13)', background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: 13, color: C.sub2, lineHeight: 1 }} aria-label="뒤로">‹</button>
+          // OB-08 — 뒤로 버튼 크롬만 랜딩 line/paper/pill 톤으로. onBack·canBack·라벨은 그대로.
+          <button onClick={actions.onBack} style={{ border: `1px solid ${fDots ? C.lineHard : 'rgba(74,64,56,.13)'}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: 13, color: C.sub2, lineHeight: 1, ...(fDots ? { boxShadow: '0 1px 2px rgba(74,64,56,.06)' } : null) }} aria-label="뒤로">‹</button>
         )}
         <span style={{ flex: 1 }} />
-        {o.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 6, borderRadius: 3, background: d.bg }} />)}
+        {/* OB-08 — dots 개수·활성(d.w·d.bg)은 그대로, 모서리만 pill 로 다듬는다. */}
+        {o.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 6, borderRadius: fDots ? radius.pill : 3, background: d.bg }} />)}
       </div>
 
       <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '18px 24px 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 30, lineHeight: 1.25, color: C.ink, whiteSpace: 'pre-line' }}>{title}</span>
-          <span style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.58)' }}>{sub}</span>
+          {/* OB-02 제목 타이포(자간·balance), OB-03 진입 등장(순서 0·70ms). 문구·줄바꿈(pre-line)은 그대로. */}
+          <span className={rise} style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 30, lineHeight: fTitle ? 1.2 : 1.25, color: C.ink, whiteSpace: 'pre-line', ...(fTitle ? { letterSpacing: '-.5px', textWrap: 'balance' as const } : null), animationDelay: '0ms' }}>{title}</span>
+          <span className={rise} style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.58)', animationDelay: '70ms' }}>{sub}</span>
         </div>
 
         {key === 'landing' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '14px 0 0' }}>
-            {/* 알 일러스트 자리. 실물이 나오면 이 칸에 그대로 끼운다(214 × 214). */}
-            <div style={{
-              width: 214, height: 214, borderRadius: 34, backgroundColor: '#F6E7DF',
-              backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.07) 0 7px,transparent 7px 16px)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-              animation: 'yBob 5s ease-in-out infinite',
-            }}>
-              <span style={{ font: `11px ${MONO}`, color: C.sub }}>알 일러스트</span>
-              <span style={{ font: `10.5px ${MONO}`, color: '#645B52' }}>214 × 214</span>
-            </div>
+          <div className={rise} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '14px 0 0', animationDelay: '130ms' }}>
+            {/* 알 일러스트 자리. 실물이 나오면 이 칸에 그대로 끼운다(214 × 214). OB-05 는 이 자리를 종이 액자로 감싼다(크기·yBob 보존). */}
+            {(() => {
+              const eggBox = (
+                <div style={{
+                  width: 214, height: 214, borderRadius: fFrame ? radius.lg : 34,
+                  backgroundColor: fFrame ? C.slot : '#F6E7DF',
+                  backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.07) 0 7px,transparent 7px 16px)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  animation: 'yBob 5s ease-in-out infinite',
+                }}>
+                  <span style={{ font: `11px ${MONO}`, color: C.sub }}>알 일러스트</span>
+                  <span style={{ font: `10.5px ${MONO}`, color: '#645B52' }}>214 × 214</span>
+                </div>
+              );
+              return fFrame ? (
+                <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: radius.xl, padding: '12px 12px 9px', boxShadow: '0 12px 30px rgba(74,64,56,.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  {eggBox}
+                </div>
+              ) : eggBox;
+            })()}
           </div>
         )}
 
         {key === 'upload' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className={rise} style={{ display: 'flex', flexDirection: 'column', gap: 12, animationDelay: '130ms' }}>
             {/* ★ 올리는 칸이 **맨 위**다. 예시를 먼저 두었더니 390×844 에서 버튼이 화면 밖으로
                 밀려 스크롤해야 보였다(2026-09-07 상훈님 지적). 여기서 할 일은 하나뿐이므로
                 그 하나가 첫 화면에 있어야 한다. 예시는 참고물이라 아래로 내렸다. */}
@@ -123,7 +196,8 @@ export default function Onboarding({ y }: { y: Yeoul }) {
             />
             <button
               onClick={() => file.current?.click()} data-action="upload" disabled={live.busy}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: radius.lg, border: `2px dashed ${live.imageKey ? C.accent : 'rgba(74,64,56,.18)'}`, background: live.imageKey ? C.accentSoft : C.paper }}
+              // OB-06 — dash 색·라운드·바탕만 랜딩 토큰으로 정돈. 파일 선택·미리보기·busy/성공/오류·data-action 은 그대로.
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: fDrop ? radius.xl : radius.lg, border: `2px dashed ${live.imageKey ? C.accent : fDrop ? C.lineHard : 'rgba(74,64,56,.18)'}`, background: live.imageKey ? C.accentSoft : fDrop ? C.slot : C.paper }}
             >
               {/* 실패하면 useHatch 가 미리보기를 지운다 — 실패한 그림이 크게 남으면 성공처럼 읽힌다(판정 19). */}
               {live.previewUrl && (
@@ -156,7 +230,8 @@ export default function Onboarding({ y }: { y: Yeoul }) {
                   <ExampleImg
                     src={assetUrl(key)}
                     alt={`좋은 예: ${lbl}`}
-                    box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: color, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.05) 0 6px,transparent 6px 14px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `8.5px ${MONO}`, color: 'rgba(74,64,56,.42)' }}
+                    // OB-07 — 색면+빗금을 종이/slot 계열 차분한 카드로(빗금 약화·테두리). 데이터·onError·✓ 배지는 그대로.
+                    box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,rgba(74,64,56,${fEx ? '.03' : '.05'}) 0 6px,transparent 6px 14px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `8.5px ${MONO}`, color: 'rgba(74,64,56,.42)' }}
                     badge={<span style={{ position: 'absolute', left: 8, top: 8, width: 15, height: 15, borderRadius: '50%', border: '1.5px solid #5C8452', background: 'rgba(255,253,248,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, color: '#5C8452' }}>✓</span>}
                   />
                   <span style={{ fontSize: 11, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{lbl}</span>
@@ -171,7 +246,8 @@ export default function Onboarding({ y }: { y: Yeoul }) {
                   <ExampleImg
                     src={assetUrl(key)}
                     alt={`어려운 예: ${lbl}`}
-                    box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: color, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.05) 0 5px,transparent 5px 12px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `8px ${MONO}`, color: 'rgba(74,64,56,.34)' }}
+                    // OB-07 — 같은 결로 차분하게. 데이터·onError·✕ 배지는 그대로.
+                    box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,rgba(74,64,56,${fEx ? '.03' : '.05'}) 0 5px,transparent 5px 12px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `8px ${MONO}`, color: 'rgba(74,64,56,.34)' }}
                     badge={<span style={{ position: 'absolute', left: 5, top: 5, width: 14, height: 14, borderRadius: '50%', background: 'rgba(255,253,248,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, color: C.accent }}>✕</span>}
                   />
                   <span style={{ fontSize: 10.5, color: C.faint, textAlign: 'center' }}>{lbl}</span>
@@ -182,7 +258,7 @@ export default function Onboarding({ y }: { y: Yeoul }) {
         )}
 
         {key === 'user' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+          <div className={rise} style={{ display: 'flex', flexDirection: 'column', gap: 15, animationDelay: '130ms' }}>
             {o.userFields.map((f) => (
               <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <span style={{ fontSize: 11.5, color: C.faint }}>{f.label}</span>
@@ -198,7 +274,7 @@ export default function Onboarding({ y }: { y: Yeoul }) {
         )}
 
         {key === 'char' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 17 }}>
+          <div className={rise} style={{ display: 'flex', flexDirection: 'column', gap: 17, animationDelay: '130ms' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 11.5, color: C.faint }}>이름 · 12자까지</span>
@@ -260,11 +336,21 @@ export default function Onboarding({ y }: { y: Yeoul }) {
         )}
 
         {key === 'born' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, padding: '10px 0 0' }}>
-            <div style={{ width: 209, height: 209, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'yPop .5s ease' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={spriteUrl(live, 'base')} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-            </div>
+          <div className={rise} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, padding: '10px 0 0', animationDelay: '130ms' }}>
+            {/* OB-05 — 부화 스프라이트를 종이 액자로 감싼다(src·크기 209·yPop 보존). */}
+            {(() => {
+              const spriteBox = (
+                <div style={{ width: 209, height: 209, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'yPop .5s ease' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={spriteUrl(live, 'base')} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                </div>
+              );
+              return fFrame ? (
+                <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: radius.xl, padding: '12px 12px 9px', boxShadow: '0 12px 30px rgba(74,64,56,.12)' }}>
+                  <div style={{ background: C.slot, borderRadius: radius.lg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{spriteBox}</div>
+                </div>
+              ) : spriteBox;
+            })()}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
               <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 26, color: C.ink }}>{o.bornName}</span>
               <span style={{ fontSize: 12.5, color: 'rgba(74,64,56,.55)' }}>{o.bornTraits}</span>
@@ -307,12 +393,18 @@ export default function Onboarding({ y }: { y: Yeoul }) {
           }}
           data-action="onb-next"
           disabled={blocked}
+          // OB-04 — 알약형·GAEGU·hover(.onb-cta-v2)·잉크 틴트 그림자. active scale 은 전역 .yeoul button:active.
+          //   OB-03 등장(순서 190ms)도 여기서. onClick·disabled·라벨(ctaLabel)·data-action 은 전부 그대로.
+          className={[fCta ? 'onb-cta-v2' : '', rise ?? ''].filter(Boolean).join(' ') || undefined}
           style={{
-            padding: 16, borderRadius: radius.md, border: 'none', fontSize: 15.5,
+            padding: 16, borderRadius: fCta ? radius.pill : radius.md, border: 'none',
+            fontSize: fCta ? 17 : 15.5,
+            ...(fCta ? { fontFamily: GAEGU, fontWeight: 700 } : null),
             background: blocked ? C.off : C.accent,
             color: blocked ? '#8B8175' : C.accentInk,
             cursor: blocked ? 'default' : 'pointer',
-            boxShadow: blocked ? 'none' : '0 4px 12px rgba(192,104,92,.22)',
+            boxShadow: blocked ? 'none' : fCta ? '0 6px 16px rgba(156,66,50,.24)' : '0 4px 12px rgba(192,104,92,.22)',
+            animationDelay: '190ms',
           }}
         >{ctaLabel}</button>
       </div>
