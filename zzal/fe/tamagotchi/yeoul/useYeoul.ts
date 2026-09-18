@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LEARN_GOALS, LINE,
+  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
   STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS,
   type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
@@ -2166,7 +2166,8 @@ export function useYeoul(live?: Live) {
         //   올라갔는지 모르고 `s.uploaded`(파일을 골랐다) 까지만 안다. 진짜 기준인
         //   `live.imageKey` 는 화면(Onboarding)만 볼 수 있어서 거기서 덮어쓴다.
         cta: ({
-          landing: '내 아이 데려오기',
+          // 랜딩 칸 CTA 는 랜딩 v2 와 **같은 한 벌**(constants.LANDING_COPY)이다.
+          landing: LANDING_COPY.cta,
           upload: '다음',
           user: '다 됐어요',
           char: s.petName ? '이 아이로 시작하기' : '이름부터 지어 줘요',

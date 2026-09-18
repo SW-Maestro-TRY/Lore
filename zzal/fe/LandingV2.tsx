@@ -5,10 +5,18 @@
 // 만나는 **하나의 응집된 화면**이다. 랜딩이 "광고"가 아니라 "여울 앱의 첫 칸"으로 읽히게 해
 // 언캐니(거부감)를 줄인다.
 //
+// ★ 2026-09-18 — 랜딩 v2 가 **`/zzal` 의 첫 화면**이 되었다(SNS 링크 = `/zzal`).
+//   그래서 이 파일은 두 자리에 한 벌로 선다.
+//     1) `/zzal`        — 여울 온보딩 첫 칸 안(`LandingV2Stage variant="onboarding"`).
+//                         셸·머리줄(dots)·CTA 버튼은 온보딩이 이미 들고 있으므로 무대만 얹는다.
+//     2) `/zzal/landing` — 통짜 페이지(`LandingV2`, 기본 export). 제 셸과 CTA 링크를 스스로 그린다.
+//   ★ **복제하지 않는다** — 마감(액자·도트·stagger·알약 CTA)은 아래 한 벌(V2_STYLE + LandingV2Stage)
+//     뿐이고, 두 자리가 그것을 나눠 쓴다. 두 벌로 베끼면 나중에 한쪽만 고쳐진다.
+//
 // ★ 한 화면(one viewport) 규율 — 히어로 + 3스텝 + CTA + 최소 푸터를 세로 스크롤 없이 담는다.
-//   (domains)/layout.tsx 의 <main> 껍데기(패딩·maxWidth)를 v2 마운트 동안만 벗고(=다마고치와 같은
-//   방식, :root 변수 덮기), 헤더 높이를 실측해 calc(100dvh - header) 만큼만 차지한다. 언마운트 때 복원.
-//   폰이 정 안 되면 최소 스크롤을 허용(justify-center 로 남는 높이에 가운데 정렬).
+//   통짜 페이지는 (domains)/layout.tsx 의 <main> 껍데기(패딩·maxWidth)를 마운트 동안만 벗고
+//   헤더 높이를 실측해 calc(100dvh - header) 만큼만 차지한다. 언마운트 때 복원.
+//   온보딩 안에서는 셸이 이미 한 통이라 그 껍데기 규칙을 쓰지 않는다(.zt-v2page 없음).
 //
 // 언캐니 축소 레버(방향서 D): 저채도 토이 팔레트(액센트 1개)·종이 액자 프레임·숨쉬기(±4px)만·
 // 토이 카피(밴워드 없음)·여울 v6 원본 마스코트만(oc-*.webp·IP 금지). 토큰은 여울 ui.ts 재사용.
@@ -16,11 +24,10 @@
 
 import { useEffect } from "react";
 import { C, GAEGU, SANS, radius, SHELL_MAX } from "./tamagotchi/yeoul/ui";
+import { LANDING_COPY } from "./tamagotchi/yeoul/constants";
 import { YEOUL_MOTION } from "./tamagotchi/constants";
 
-const GREETING = "안녕! 같이 키우자!";
-const SUBCOPY = "그림 한 장이면, 내가 그린 아이랑 같이 지낼 수 있어요.";
-const CTA_LABEL = "같이 키우러 가기";
+/** 통짜 페이지의 CTA 가 가리키는 곳. 온보딩 안에서는 CTA 가 `onb-next` 버튼이라 안 쓴다. */
 const ONBOARDING_HREF = "/zzal";
 
 /** "이렇게 놀아요" 세 박자. 이미지 대신 한 획 손그림 SVG 아이콘(원본 캐릭터 미노출 안전). */
@@ -69,8 +76,100 @@ function StepIcon({ kind }: { kind: "upload" | "egg" | "care" }) {
   );
 }
 
+/**
+ * 랜딩 v2 **무대** — 두 자리가 나눠 쓰는 한 벌.
+ *
+ * `variant`
+ *   - `"page"`       : `/zzal/landing` 통짜 페이지. CTA 는 `/zzal` 로 가는 알약 링크, 푸터는 약관+©.
+ *   - `"onboarding"` : `/zzal` 온보딩 첫 칸. CTA 는 온보딩 푸터의 `onb-next` 버튼이 이미 들고 있어
+ *                      여기선 안 그린다(같은 뜻의 버튼 둘 = taste-lint "CTA 중복"). 푸터는 약관만.
+ *
+ * 바깥 셸(`.zt-v2root`)은 부르는 쪽이 감싼다 — 온보딩은 제 칸에, 페이지는 `LandingV2` 가.
+ */
+export function LandingV2Stage({ variant = "page" }: { variant?: "page" | "onboarding" }) {
+  const onPage = variant === "page";
+  return (
+    <div className="zt-v2col">
+      {/* 히어로 — 종이 액자 속 마스코트 + 인사·설명·CTA. 넓은 화면(통짜 페이지)에선 좌우 2단. */}
+      <div className="zt-v2hero">
+        <section className="zt-v2frame" data-rise style={{ ["--d" as string]: "0ms" }}>
+          <div className="zt-v2slot">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className="zt-v2mascot"
+              src={YEOUL_MOTION.hello}
+              alt="여울이가 손을 흔들며 인사해요"
+              width={320}
+              height={320}
+            />
+          </div>
+          {/* 예시임을 밝혀 첫 방문자의 "여울=내 캐릭터? 앱 이름?" 혼동을 없앤다(ux-heuristics). */}
+          <span className="zt-v2tag">여울</span>
+        </section>
+
+        <div className="zt-v2intro">
+          <h1 className="zt-v2h1" data-rise style={{ ["--d" as string]: "70ms" }}>
+            {LANDING_COPY.greeting}
+          </h1>
+          <p className="zt-v2sub" data-rise style={{ ["--d" as string]: "130ms" }}>
+            {LANDING_COPY.sub}
+          </p>
+          {onPage && (
+            <a
+              className="zt-v2cta"
+              href={ONBOARDING_HREF}
+              data-rise
+              data-action="landing-v2-cta"
+              style={{ ["--d" as string]: "190ms" }}
+            >
+              {LANDING_COPY.cta}
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* 이렇게 놀아요 — 조용한 세 박자(가로 3열, 같은 크기 카드 아님·헤어라인/박스 없음). */}
+      <section className="zt-v2steps" aria-labelledby="zt-v2steps-h" data-rise style={{ ["--d" as string]: "260ms" }}>
+        <h2 id="zt-v2steps-h" className="zt-v2h2">
+          이렇게 놀아요
+        </h2>
+        <ol className="zt-v2steplist">
+          {STEPS.map((s, i) => (
+            <li key={s.icon} className="zt-v2step">
+              <span className="zt-v2stepicon">
+                <StepIcon kind={s.icon} />
+                {/* 순번 배지 — <ol> 의 순서를 눈에도 보이게(ux-heuristics F1). 둘째 색 없이 종이·라인·sub2 톤. */}
+                <span className="zt-v2stepnum" aria-hidden="true">{i + 1}</span>
+              </span>
+              <span className="zt-v2steptitle">{s.title}</span>
+              <span className="zt-v2stepdesc">{s.desc}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {/* 최소 푸터 — 약관/개인정보(실 라우트). 탭 타깃 44px.
+          ★ 온보딩 칸에도 둔다 — 자캐 그림을 맡기는 사람이 가장 먼저 확인하려는 줄이고,
+            taste-lens §3-C 가 "법률 링크 누락"을 전략적 누락으로 센다. ©는 통짜 페이지에만
+            (온보딩은 웹페이지가 아니라 앱 한 통이라 저작권 줄이 자리를 뺏는다). */}
+      <footer className="zt-v2foot" data-rise style={{ ["--d" as string]: "320ms" }}>
+        <nav className="zt-v2footlinks">
+          <a href="/legal/terms">이용약관</a>
+          <span aria-hidden="true">·</span>
+          <a href="/legal/privacy">개인정보처리방침</a>
+        </nav>
+        {onPage && <span className="zt-v2copy">© 2026 zzal</span>}
+      </footer>
+    </div>
+  );
+}
+
+/**
+ * 랜딩 v2 **통짜 페이지**(`/zzal/landing`). 제 셸(`.zt-v2root.zt-v2page`)을 그리고 레이아웃
+ * 껍데기를 잠시 벗는다. `/zzal` 온보딩은 이걸 쓰지 않고 `LandingV2Stage` 만 제 칸에 얹는다.
+ */
 export default function LandingV2() {
-  // v2 만 (domains) <main> 껍데기를 벗고 헤더 높이를 실측해 한 화면 높이를 잡는다. 언마운트 때 복원.
+  // 통짜 페이지만 (domains) <main> 껍데기를 벗고 헤더 높이를 실측해 한 화면 높이를 잡는다. 언마운트 때 복원.
   useEffect(() => {
     const root = document.documentElement;
     const prev = {
@@ -101,96 +200,45 @@ export default function LandingV2() {
   }, []);
 
   return (
-    <div className="zt-v2root" data-part="landing-v2">
-      <style>{V2_STYLE}</style>
-
+    <div className="zt-v2root zt-v2page" data-part="landing-v2">
+      <LandingV2Style />
       {/* 레이아웃이 이미 <main> 을 제공하므로 여기선 <div>(landmark 중복 방지). */}
-      <div className="zt-v2col">
-        {/* 히어로 — 종이 액자 속 마스코트 + 인사·설명·CTA. 넓은 화면에선 좌우 2단. */}
-        <div className="zt-v2hero">
-          <section className="zt-v2frame" data-rise style={{ ["--d" as string]: "0ms" }}>
-            <div className="zt-v2slot">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                className="zt-v2mascot"
-                src={YEOUL_MOTION.hello}
-                alt="여울이가 손을 흔들며 인사해요"
-                width={320}
-                height={320}
-              />
-            </div>
-            {/* 예시임을 밝혀 첫 방문자의 "여울=내 캐릭터? 앱 이름?" 혼동을 없앤다(ux-heuristics). */}
-            <span className="zt-v2tag">여울</span>
-          </section>
-
-          <div className="zt-v2intro">
-            <h1 className="zt-v2h1" data-rise style={{ ["--d" as string]: "70ms" }}>
-              {GREETING}
-            </h1>
-            <p className="zt-v2sub" data-rise style={{ ["--d" as string]: "130ms" }}>
-              {SUBCOPY}
-            </p>
-            <a
-              className="zt-v2cta"
-              href={ONBOARDING_HREF}
-              data-rise
-              data-action="landing-v2-cta"
-              style={{ ["--d" as string]: "190ms" }}
-            >
-              {CTA_LABEL}
-            </a>
-          </div>
-        </div>
-
-        {/* 이렇게 놀아요 — 조용한 세 박자(가로 3열, 같은 크기 카드 아님·하어라인/박스 없음). */}
-        <section className="zt-v2steps" aria-labelledby="zt-v2steps-h" data-rise style={{ ["--d" as string]: "260ms" }}>
-          <h2 id="zt-v2steps-h" className="zt-v2h2">
-            이렇게 놀아요
-          </h2>
-          <ol className="zt-v2steplist">
-            {STEPS.map((s, i) => (
-              <li key={s.icon} className="zt-v2step">
-                <span className="zt-v2stepicon">
-                  <StepIcon kind={s.icon} />
-                  {/* 순번 배지 — <ol> 의 순서를 눈에도 보이게(ux-heuristics F1). 둘째 색 없이 종이·라인·sub2 톤. */}
-                  <span className="zt-v2stepnum" aria-hidden="true">{i + 1}</span>
-                </span>
-                <span className="zt-v2steptitle">{s.title}</span>
-                <span className="zt-v2stepdesc">{s.desc}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        {/* 최소 푸터 — © + 약관/개인정보(실 라우트). 탭 타깃 44px. */}
-        <footer className="zt-v2foot" data-rise style={{ ["--d" as string]: "320ms" }}>
-          <nav className="zt-v2footlinks">
-            <a href="/legal/terms">이용약관</a>
-            <span aria-hidden="true">·</span>
-            <a href="/legal/privacy">개인정보처리방침</a>
-          </nav>
-          <span className="zt-v2copy">© 2026 zzal</span>
-        </footer>
-      </div>
+      <LandingV2Stage variant="page" />
     </div>
   );
 }
 
+/** 스코프 스타일 한 벌. 두 자리(온보딩 칸·통짜 페이지)가 같은 것을 심는다. */
+export function LandingV2Style() {
+  return <style>{V2_STYLE}</style>;
+}
+
 /* 스코프 스타일 — .zt-v2root 안에서만. zzal.css 의 옛 변수(--accent #c14a4a 등)에 안 기댄다.
-   색은 전부 여울 C 토큰의 값이다(CSS 에선 import 불가라 값으로 옮김 — 바꿀 땐 ui.ts 와 같이). */
-const V2_STYLE = `
+   색은 전부 여울 C 토큰의 값이다(CSS 에선 import 불가라 값으로 옮김 — 바꿀 땐 ui.ts 와 같이).
+
+   ★ 두 겹으로 갈라 둔다.
+     .zt-v2root — 무대(내용)의 마감. 온보딩 칸과 통짜 페이지가 **함께** 쓴다.
+     .zt-v2page — 통짜 페이지의 **셸 크롬**(뷰포트 높이·바탕·도트·넓은 화면 패널·2단 히어로).
+                  온보딩 안에서는 셸을 여울이 이미 들고 있어 이 겹을 안 붙인다 — 안 그러면
+                  카드 안에 카드가 생기고, 1280 2단 히어로가 560 셸을 가로로 터뜨린다. */
+export const V2_STYLE = `
 .zt-v2root{
-  position:relative; box-sizing:border-box;
+  position:relative; box-sizing:border-box; width:100%;
+  color:${C.ink}; font-family:${SANS};
+  word-break:keep-all; overflow-wrap:break-word;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+/* ── 통짜 페이지 셸 ── */
+.zt-v2page{
   /* 한 화면: 헤더(실측 --zt-v2-header-h)를 뺀 뷰포트 높이만 차지. 남으면 가운데 정렬, 정 넘치면 최소 스크롤. */
   min-height:calc(100vh - var(--zt-v2-header-h, 56px));
   min-height:calc(100dvh - var(--zt-v2-header-h, 56px));
-  background:${C.shell}; color:${C.ink}; font-family:${SANS};
-  word-break:keep-all; overflow-wrap:break-word;
+  background:${C.shell};
   padding:20px 20px calc(env(safe-area-inset-bottom,0px) + 20px);
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
 }
-/* 은은한 종이 도트(잉크 틴트). 여울 톤의 "손안의 작은 물건" 신호. */
-.zt-v2root::before{
+/* 은은한 종이 도트(잉크 틴트). 여울 톤의 "손안의 작은 물건" 신호.
+   ★ 온보딩 칸에는 안 깐다 — 거기선 온보딩 셸(OB-01)이 같은 도트를 이미 깔고 있다(이중 질감 방지). */
+.zt-v2page::before{
   content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
   background-image:radial-gradient(rgba(74,64,56,.14) .6px, transparent .7px);
   background-size:8px 8px; opacity:.5;
@@ -227,10 +275,11 @@ const V2_STYLE = `
 }
 .zt-v2sub{
   font-family:${SANS}; font-size:clamp(14px,3.8vw,15.5px); line-height:1.6; color:${C.sub};
-  max-width:24em; margin:0 0 18px;
+  max-width:24em; margin:0;
 }
 .zt-v2cta{
   display:inline-flex; align-items:center; justify-content:center;
+  margin-top:18px;
   font-family:${GAEGU}; font-weight:700; font-size:19px; text-decoration:none;
   color:${C.accentInk}; background:${C.accent};
   padding:13px 32px; border-radius:${radius.pill}px;
@@ -288,39 +337,42 @@ const V2_STYLE = `
 }
 
 /* ── 탭+(≥768) — THESIS "여울 앱 한 통"을 탭부터 적용. 셸 밖은 C.ground, 셸은 경계 있는
-   종이 패널로 앉힌다(폰만 full-bleed). 크기도 키워 세 구간이 똑같이 완성돼 보이게. */
+   종이 패널로 앉힌다(폰만 full-bleed). 크기도 키워 세 구간이 똑같이 완성돼 보이게.
+   ★ 패널 처리는 통짜 페이지(.zt-v2page)에만 — 온보딩 안은 여울 셸이 이미 그 패널이다. */
 @media (min-width:768px){
-  .zt-v2root{ background:${C.ground}; padding:24px; }
-  .zt-v2root::before{ display:none; }
-  .zt-v2col{
-    gap:26px; max-width:600px;
+  .zt-v2page{ background:${C.ground}; padding:24px; }
+  .zt-v2page::before{ display:none; }
+  .zt-v2page .zt-v2col{
     background:${C.shell}; padding:44px 44px 34px;
     border-radius:${radius.xl}px; box-shadow:0 20px 52px rgba(74,64,56,.14);
   }
-  .zt-v2col::before{
+  .zt-v2page .zt-v2col::before{
     content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:0;
     background-image:radial-gradient(rgba(74,64,56,.14) .6px, transparent .7px);
     background-size:8px 8px; opacity:.5;
   }
-  .zt-v2col > *{ position:relative; z-index:1; }
+  .zt-v2page .zt-v2col > *{ position:relative; z-index:1; }
+  .zt-v2col{ gap:26px; max-width:600px; }
   .zt-v2hero{ gap:22px; }
   .zt-v2frame{ width:250px; }
   .zt-v2h1{ font-size:38px; }
   .zt-v2sub{ font-size:16px; }
+  .zt-v2cta{ margin-top:22px; }
   .zt-v2steps{ max-width:520px; }
   .zt-v2stepicon{ width:52px; height:52px; }
   .zt-v2steptitle{ font-size:16.5px; }
   .zt-v2stepdesc{ font-size:12.5px; }
 }
 
-/* ── PC(≥1280) — 세로 800 에도 한 화면. 히어로를 좌우 2단으로 눕혀 높이를 줄인다. */
+/* ── PC(≥1280) — 세로 800 에도 한 화면. 히어로를 좌우 2단으로 눕혀 높이를 줄인다.
+   ★ 통짜 페이지 전용. 온보딩 셸은 폭이 560 으로 고정이라 2단이 들어갈 자리가 없다. */
 @media (min-width:1280px){
-  .zt-v2col{ max-width:900px; gap:30px; padding:40px 52px 32px; }
-  .zt-v2hero{ flex-direction:row; align-items:center; justify-content:center; gap:44px; }
-  .zt-v2frame{ width:250px; flex:none; }
-  .zt-v2intro{ align-items:flex-start; text-align:left; max-width:360px; }
-  .zt-v2h1{ font-size:38px; margin-bottom:12px; }
-  .zt-v2sub{ font-size:16px; margin-bottom:22px; }
-  .zt-v2steps{ max-width:620px; }
+  .zt-v2page .zt-v2col{ max-width:900px; gap:30px; padding:40px 52px 32px; }
+  .zt-v2page .zt-v2hero{ flex-direction:row; align-items:center; justify-content:center; gap:44px; }
+  .zt-v2page .zt-v2frame{ width:250px; flex:none; }
+  .zt-v2page .zt-v2intro{ align-items:flex-start; text-align:left; max-width:360px; }
+  .zt-v2page .zt-v2h1{ font-size:38px; margin-bottom:12px; }
+  .zt-v2page .zt-v2sub{ font-size:16px; }
+  .zt-v2page .zt-v2steps{ max-width:620px; }
 }
 `;

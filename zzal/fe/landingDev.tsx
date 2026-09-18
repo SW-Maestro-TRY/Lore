@@ -81,9 +81,9 @@ type Flags = Record<string, boolean>;
 export type LandingVersion = "legacy" | "v1" | "v2";
 
 export const LANDING_VERSIONS: { id: LandingVersion; label: string; hint: string }[] = [
-  { id: "legacy", label: "기존", hint: "변경 전 옛 랜딩(공개 사이트와 동일)" },
+  { id: "legacy", label: "기존", hint: "변경 전 옛 자캐툰 랜딩(2026-09-18 이전 공개본)" },
   { id: "v1", label: "v1", hint: "방향서 변경 개별 토글" },
-  { id: "v2", label: "v2", hint: "impeccable 응집 디자인" },
+  { id: "v2", label: "v2", hint: "impeccable 응집 디자인 · 기본(공개 사이트와 동일)" },
 ];
 
 interface Ctx {
@@ -95,7 +95,7 @@ interface Ctx {
 }
 
 const DevFlagsCtx = createContext<Ctx>({
-  version: "legacy",
+  version: "v2",
   setVersion: () => {},
   flags: {},
   setFlag: () => {},
@@ -103,7 +103,9 @@ const DevFlagsCtx = createContext<Ctx>({
 });
 
 const LS_KEY = "zzal.landing.devflags.v1";
-const LS_VERSION_KEY = "zzal.landing.version.v1";
+// v1 → v2: 기본 판을 legacy 에서 v2 로 뒤집으면서 옛 저장값("legacy")이 되살아나면
+// 개발자 화면만 옛 랜딩으로 되돌아간다. 키를 올려 옛 값을 버린다(2026-09-18).
+const LS_VERSION_KEY = "zzal.landing.version.v2";
 
 function save(next: Flags) {
   try {
@@ -115,9 +117,11 @@ function save(next: Flags) {
 
 export function LandingDevProvider({ children }: { children: ReactNode }) {
   const [flags, setFlags] = useState<Flags>({});
-  // 첫 렌더는 늘 legacy — 서버·브라우저 렌더가 갈리면 하이드레이션 경고가 나므로(useDevVisible 과
-  // 같은 이유) useEffect 로 뒤늦게 불러온다. 공개 사이트엔 선택기가 없어 legacy 그대로 보인다.
-  const [version, setVersionState] = useState<LandingVersion>("legacy");
+  // ★ 첫 렌더는 늘 **v2** — 공개 사이트엔 선택기가 없으니 기본값이 곧 손님이 보는 화면이다.
+  //   2026-09-18 이전엔 기본이 legacy 라, SNS 로 들어온 사람에게 옛 랜딩이 나갔다.
+  //   서버·브라우저 렌더가 갈리면 하이드레이션 경고가 나므로(useDevVisible 과 같은 이유)
+  //   저장된 선택은 useEffect 로 뒤늦게 불러온다(개발자만 해당).
+  const [version, setVersionState] = useState<LandingVersion>("v2");
 
   useEffect(() => {
     try {
@@ -130,7 +134,7 @@ export function LandingDevProvider({ children }: { children: ReactNode }) {
       const v = localStorage.getItem(LS_VERSION_KEY);
       if (v === "legacy" || v === "v1" || v === "v2") setVersionState(v);
     } catch {
-      /* 읽기 실패 시 legacy 로 둔다. */
+      /* 읽기 실패 시 v2(기본·공개 사이트와 동일) 로 둔다. */
     }
   }, []);
 
