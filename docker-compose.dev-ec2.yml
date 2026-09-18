@@ -23,4 +23,13 @@ services:
       - ./infra/dev/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro          # certbot 발급 인증서(호스트)
       - /var/www/certbot:/var/www/certbot:ro          # ACME 챌린지 웹루트(갱신용, 호스트가 씀)
+      - /opt/lore-dev/htpasswd:/etc/nginx/htpasswd:ro  # basic auth 자격(호스트가 .env 로 생성)
+    networks:
+      default:
+        aliases:
+          # ★ 컨테이너 안에서 dev.lorecomic.com 을 nginx 로 직접 보낸다.
+          #   앱이 서버측 S3 업로드(생성 격자)를 https://dev.lorecomic.com/lore-content/ 로 하는데,
+          #   EIP 헤어핀(자기 자신의 공인 IP)은 VPC 에서 막히는 경우가 많다. 도커 DNS 로 풀면
+          #   nginx→minio 로 확실히 도달하고, Host=dev.lorecomic.com 이 보존돼 presign 서명도 맞는다.
+          - dev.lorecomic.com
     restart: unless-stopped

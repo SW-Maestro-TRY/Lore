@@ -30,7 +30,7 @@ services:
 
   # ── 오브젝트 스토리지 (S3 대체) ──────────────────────────────────
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY}
@@ -48,7 +48,7 @@ services:
   # ── 버킷 초기화 (한 번 돌고 끝) ──────────────────────────────────
   # 콘텐츠 버킷을 만들고, 이미지가 공개로 읽히게 한다(운영의 CloudFront /images/* 공개와 동일).
   minio-init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     depends_on:
       - minio
     environment:
@@ -91,12 +91,20 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
       # zzal 생성 OpenAI 키(비우면 가짜 모드 — 돈 안 나감)
       ZZAL_OPENAI_API_KEY: ${OPENAI_KEY:-}
+      # ★ 실제 OpenAI 호출 스위치(app.zzal.generation.real). 이 값을 안 넘기면 키가 있어도
+      #   application.yml 기본값(false)이라 가짜 모드로 뜬다. .env 의 ZZAL_GENERATION_REAL 로 켠다.
+      ZZAL_GENERATION_REAL: ${ZZAL_GENERATION_REAL:-false}
+      # 파이썬 후처리 실제 실행(돈 안 남). 슬림 JRE 이미지엔 numpy/scipy/PIL 이 없어 켜면 기동이 막힌다 → 기본 꺼짐.
+      ZZAL_REAL_POSTPROCESS: ${ZZAL_REAL_POSTPROCESS:-false}
       # 메일 계정(선택). 비워도 뜨도록 빈 기본값을 준다 — 안 주면 yml 의 ${MAIL_USERNAME}
       # 플레이스홀더가 안 풀려 기동이 막힌다.
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       # http(노트북)에서는 Secure 쿠키가 저장 안 되므로 false. https(박스)는 .env 에서 true.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # 메일 계정을 안 주면 SMTP 헬스 인디케이터가 연결 실패로 DOWN → /actuator/health 가 503 이 된다.
+      # 개발 스택은 메일을 안 쓰므로 이 헬스 검사만 끈다(앱 기능·다른 헬스는 그대로).
+      MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
     ports:
       - "8080:8080"
 
