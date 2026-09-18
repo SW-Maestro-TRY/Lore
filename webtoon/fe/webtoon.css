@@ -19,12 +19,19 @@
   --line-strong: rgba(15, 51, 63, 0.18);
   --gold: #a1732e;
 
+  /* 캔버스는 1280 폭 화면을 그린 것이라, 실물 크기로 띄우면 글자도 그림도
+   * 부담스럽게 크다. 비율은 그대로 두고 한 단계만 줄인다 — 값을 하나씩
+   * 깎으면 캔버스와 어긋나기 시작한다. */
+  zoom: 0.9;
+
   font-family: var(--font-noto-sans-kr, "Noto Sans KR"), system-ui, sans-serif;
   background: var(--paper);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   word-break: keep-all;
-  min-height: calc(100vh - var(--lore-header-h, 64px));
+  /* zoom 만큼 되나눈다 — 안 그러면 확대율이 걸린 안쪽에서 100vh 가 같이
+   * 줄어들어, 바닥에 붙는 줄(margin-top: auto)이 화면 끝까지 안 내려온다. */
+  min-height: calc((100vh - var(--lore-header-h, 64px)) / 0.9);
   display: flex;
   flex-direction: column;
 }
@@ -39,6 +46,23 @@
 .wt input, .wt textarea, .wt select { font-family: inherit; color: inherit; }
 
 /* ---- 폭 ------------------------------------------------------------------- */
+
+/* 도메인 탭 공용 껍데기(`apps/web/app/(domains)/layout.tsx` 의 <main>)를 웹툰
+ * 탭에서만 벗긴다.
+ *
+ * 그 <main> 은 `max-width: 1240px` + 좌우 `--gutter`(넓은 화면에서 40px) 라서,
+ * 그 안에 들어간 `.wt` 는 1160px 이 된다. 거기에 `.wt-page` 의 48px 을 또 빼면
+ * 글이 놓이는 폭이 1064px — 캔버스 아트보드(1280 프레임 − 좌우 48 = 1184px)보다
+ * 120px 좁다. 아트보드에서 그대로 옮겨 온 고정 폭들(입구 카드 880 · 이야기 옆칸
+ * 360 · 진행 화면 왼쪽 줄 360 · 편집실 가운데 520)이 전부 조금씩 눌려서, 화면마다
+ * "비슷한데 다른" 모양이 나왔다. 세로도 마찬가지로 <main> 의 56px 이 `.wt-page`
+ * 의 36px 위에 얹혀 위쪽이 92px 로 벌어졌다.
+ *
+ * 껍데기를 벗기면 폭을 잡는 곳이 `.wt-wrap` 하나가 되고, 1280 − 48 × 2 = 1184px
+ * 로 아트보드와 같아진다. 변수로 덮는 것은 저 layout.tsx 가 열어 둔 길이다
+ * (주석의 "화면 전체를 쓰는 페이지가 이 변수를 0/none 으로 덮어"). */
+main:has(> .wt) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
+
 .wt-wrap { width: 100%; max-width: 1280px; margin: 0 auto; }
 .wt-page { flex-grow: 1; display: flex; flex-direction: column; padding: 36px 48px 32px; }
 

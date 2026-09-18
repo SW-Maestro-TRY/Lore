@@ -62,6 +62,12 @@ const dict: Dict = {
   "라인": { en: "LINE", ja: "LINE", zh: "LINE" },
   "포스타입": { en: "Postype", ja: "Postype", zh: "Postype" },
   "링크 복사": { en: "Copy link", ja: "リンクをコピー", zh: "复制链接" },
+  "컷별로 내려받기": { en: "Download each page", ja: "コマごとにダウンロード", zh: "逐页下载" },
+  "{who}의 다른 편": { en: "Other episodes with {who}", ja: "{who}の他の話", zh: "{who}的其他话" },
+  "EP.{n}": { en: "EP.{n}", ja: "EP.{n}", zh: "EP.{n}" },
+  "만들기": { en: "Create", ja: "作る", zh: "制作" },
+  "· 파일에 LORE 표시가 붙어요": { en: "· downloads carry a LORE mark", ja: "· ファイルに LORE の表示が付きます", zh: "· 文件会带上 LORE 标记" },
+  "크게 보기": { en: "View larger", ja: "大きく見る", zh: "放大查看" },
 };
 
 registerDict(dict);

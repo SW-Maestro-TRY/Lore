@@ -181,9 +181,9 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
           </div>
 
           <div className="dock-body wt-ed-dockbody" id="dockBody">
-            <p className="dock-hint wt-ed-dockhint" id="dockHint">
-              {t("누르면 ")}<b id="activeSceneLabel">{t("{n}번째 장", { n: 1 })}</b>{t("에 올라갑니다 — 끌어서 옮기고, 한 번 더 누르면 글을 고칩니다.")}
-            </p>
+            {/* 엔진(editorCore)이 지금 고른 장 번호를 여기 적고, 위쪽 React 가 읽는다.
+                보이는 글이 아니라 둘을 잇는 자리다 — 화면에는 안 그린다. */}
+            <span id="activeSceneLabel" hidden />
             <div className="dock-grid wt-ed-dockgrid" id="dockGrid" />
           </div>
 
@@ -224,7 +224,6 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
             <input type="checkbox" id="regenAskTextless" />
             <span>{t("말풍선 없이 그림만")}</span>
           </label>
-          <p className="ask-warn">{t("실제로 다시 그립니다 — 1~2분과 생성 비용이 듭니다.")}</p>
           <div className="ask-actions">
             <button type="button" className="btn btn-w" id="regenAskCancel">{t("취소")}</button>
             <button type="button" className="btn btn-p" id="regenAskGo">{t("이 컷 다시 그리기")}</button>
