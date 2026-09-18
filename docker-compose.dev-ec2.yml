@@ -1,0 +1,26 @@
+# dev EC2 전용 override — base 위에 nginx(80/443·TLS)만 얹는다.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev-ec2.yml up -d
+#
+# 노트북은 이 파일을 쓰지 않는다 — base 만으로 app(8080)·web(3000)·minio(9000)를
+# localhost 로 직접 부른다. 박스에서만 한 도메인(dev.lorecomic.com) 아래로 묶어
+# 같은 출처로 만들어(쿠키·CORS 문제 제거) presigned 업로드까지 통하게 한다.
+#
+# 인증서는 호스트에서 certbot 이 발급/갱신하고(webroot=/var/www/certbot),
+# nginx 는 /etc/letsencrypt 와 그 webroot 를 읽기 전용으로 마운트만 한다.
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - app
+      - web
+      - minio
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/dev/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro          # certbot 발급 인증서(호스트)
+      - /var/www/certbot:/var/www/certbot:ro          # ACME 챌린지 웹루트(갱신용, 호스트가 씀)
+    restart: unless-stopped
