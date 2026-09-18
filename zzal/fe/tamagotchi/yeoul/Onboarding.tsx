@@ -1,5 +1,11 @@
 // 온보딩 — 첫 화면 → 올리기 → 캐릭터 → (여울 샘플) → 태어남.
 //
+// ★ 2026-09-18 — **첫 칸이 랜딩 v2 다.** SNS 마케팅 링크가 `/zzal` 이라, 처음 들어온 사람이
+//   맨 먼저 보는 것이 이 칸이다. 예전엔 여기에 "알 일러스트 214×214" 자리표가 있었다.
+//   무대는 `zzal/fe/LandingV2.tsx` 의 `LandingV2Stage` **한 벌**을 그대로 얹는다(복제 금지) —
+//   `/zzal/landing` 통짜 페이지가 쓰는 것과 같은 부품·같은 스타일이다.
+//   칸 순서(landing→upload→char→born)·뒤로 규칙·CTA 동작(`onb-next`)은 하나도 안 바뀐다.
+//
 // 네 칸뿐이다. 예전 다섯 칸에 있던 **가입**은 칸이 아니라 첫 화면에서 무언가 하려 할 때 뜨는
 // 모달로 옮겼고(→ `AuthModal.tsx`), **유저 설문**은 샘플 방에서 여울이 하나씩 묻는 것으로
 // 옮겼다(→ `Room.tsx` 의 AskCard). 둘 다 2026-09-07 확정.
@@ -10,21 +16,13 @@
 import { useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF } from './constants';
+import { LandingV2Stage, LandingV2Style } from '../../LandingV2';
 import { C, GAEGU, MONO, radius } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import { assetUrl } from '../../lib/assets';
 import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
 import { OnbDevProvider, OnbChangeList, useOnbFlag } from './onboardingDev';
-
-/**
- * OB-09(문구만) — 랜딩 칸 카피 레지스터. "그림 한 장이면, 같이 살 수 있어요"의 무거운
- * "함께 산다" 프레임을 랜딩 v2 와 같은 장난감 톤으로 바꾼다(표시 텍스트만, 로직 없음).
- */
-const OB09_LANDING_COPY: readonly [string, string] = [
-  '안녕! 같이 키우자!',
-  '그림 한 장이면, 내가 그린 아이랑 같이 지낼 수 있어요.',
-];
 
 /**
  * OB-03 진입 등장(stagger) 스타일. 랜딩 v2 의 ztV2Rise 결로, 이미 전역에 심긴 KEYFRAMES 의
@@ -42,7 +40,10 @@ const OB03_RISE_STYLE = `
  *   (display:contents) 둔다. 그래야 OB-10 이 꺼졌을 때 래퍼가 없는 것과 픽셀 동일(부모 flex 로
  *   그대로 흘러든다). OB-10 이 켜지면 아래 ONE_SCREEN_STYLE 이 탭·PC 에서 이걸 2열 그리드로 바꾼다.
  */
-const BASE_STYLE = `.onb-cgrid{ display:contents; }`;
+const BASE_STYLE = `.onb-cgrid{ display:contents; }
+/* 랜딩 v2 무대를 온보딩 칸 안에 앉힌다. 무대의 마감(.zt-v2*)은 LandingV2.tsx 한 벌 그대로 쓰고,
+   여기서는 **자리 잡기만** 한다 — 남는 높이를 먹고 세로 가운데로. 셸 크롬(.zt-v2page)은 안 붙인다. */
+.onb-v2stage{ flex:1 1 auto; min-height:0; }`;
 
 /**
  * OB-10 한 화면 맞춤 — `.onb-one` 안에서만. overflow 는 auto 그대로라 넘쳐도 클리핑 없이 스크롤로
@@ -56,9 +57,11 @@ const ONE_SCREEN_STYLE = `
 .onb-one .onb-title{ font-size:23px!important; line-height:1.18!important; }
 .onb-one .onb-sub{ font-size:12px!important; line-height:1.45!important; }
 
-/* landing */
-.onb-one[data-step="landing"] .onb-body{ gap:10px!important; padding-top:2px!important; }
-.onb-one .onb-egg{ width:150px!important; height:150px!important; }
+/* landing — 랜딩 v2 무대. 액자·간격만 조인다(글자 크기·탭 타깃 44px 은 안 건드린다). */
+.onb-one[data-step="landing"] .onb-scroll{ padding-top:6px!important; }
+.onb-one .zt-v2col{ gap:16px!important; }
+.onb-one .zt-v2hero{ gap:14px!important; }
+.onb-one .zt-v2frame{ width:min(170px,42vw)!important; }
 
 /* upload — 예시 카드가 세로를 먹으니 카드 높이·간격·미리보기 압축(버튼은 푸터라 늘 보임). */
 .onb-one[data-step="upload"] .onb-body{ gap:6px!important; }
@@ -86,7 +89,7 @@ const ONE_SCREEN_STYLE = `
 @media (min-width:768px){
   .onb-one .onb-cgrid{ gap:8px!important; }
   .onb-one .onb-cgroup button{ font-size:12px!important; padding:6px 11px!important; }
-  .onb-one .onb-egg{ width:168px!important; height:168px!important; }
+  .onb-one .zt-v2frame{ width:190px!important; }
 }
 
 /* ── 폰(≤520, 셸 full-bleed) — char 잔여 스크롤을 더 줄인다(간격·패딩만, 칩·글자 크기 유지). ── */
@@ -102,7 +105,9 @@ const ONE_SCREEN_STYLE = `
 @media (max-height:840px){
   .onb-one .onb-scroll{ gap:9px!important; padding-top:10px!important; }
   .onb-one .onb-title{ font-size:21px!important; }
-  .onb-one .onb-egg{ width:130px!important; height:130px!important; }
+  .onb-one .zt-v2col{ gap:13px!important; }
+  .onb-one .zt-v2frame{ width:min(148px,38vw)!important; }
+  .onb-one .zt-v2h2{ margin-bottom:8px!important; }
   .onb-one .onb-excell > div{ height:50px!important; }
   .onb-one[data-step="char"] .onb-body{ gap:7px!important; }
   .onb-one .onb-cgroup{ padding:7px 9px!important; gap:5px!important; }
@@ -163,9 +168,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
   const file = useRef<HTMLInputElement>(null);
   const o = v.onb;
   const key = o.stepKey;
-  // OB-09 는 표시 텍스트만 랜딩 톤으로 바꾼다(landing 칸에서만). 나머지 칸 카피는 그대로.
-  const fCopy = useOnbFlag('ob-09');
-  const [title, sub] = fCopy && key === 'landing' ? OB09_LANDING_COPY : ONB_COPY[key];
+  // 랜딩 칸의 제목·부제는 랜딩 v2 무대가 직접 들고 있다(같은 상수 LANDING_COPY). 나머지 칸만 여기서.
+  const [title, sub] = ONB_COPY[key];
   // 겉모습 스왑 플래그(전부 OFF=현재 코드 그대로).
   const fShell = useOnbFlag('ob-01');
   const fTitle = useOnbFlag('ob-02');
@@ -225,34 +229,23 @@ function OnboardingInner({ y }: { y: Yeoul }) {
       </div>
 
       <div className="onb-scroll" style={{ flex: '1 1 auto', overflow: 'auto', padding: '18px 24px 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* ★ 랜딩 칸에는 이 머리말이 없다 — 무대(LandingV2Stage)가 같은 인사를 제 <h1> 으로
+            들고 있어서, 여기까지 그리면 같은 말이 두 번 나온다. 나머지 칸은 그대로. */}
+        {key !== 'landing' && (
         <div className="onb-head" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {/* OB-02 제목 타이포(자간·balance), OB-03 진입 등장(순서 0·70ms). 문구·줄바꿈(pre-line)은 그대로. */}
           <span className={['onb-title', rise].filter(Boolean).join(' ')} style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 30, lineHeight: fTitle ? 1.2 : 1.25, color: C.ink, whiteSpace: 'pre-line', ...(fTitle ? { letterSpacing: '-.5px', textWrap: 'balance' as const } : null), animationDelay: '0ms' }}>{title}</span>
           <span className={['onb-sub', rise].filter(Boolean).join(' ')} style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.58)', animationDelay: '70ms' }}>{sub}</span>
         </div>
+        )}
 
+        {/* 첫 칸 = 랜딩 v2. `/zzal/landing` 통짜 페이지와 **같은 부품·같은 스타일 한 벌**이다.
+            CTA 는 그리지 않는다 — 아래 푸터의 `onb-next` 버튼이 그 자리이고, 누르면 올리기 칸으로 간다.
+            (같은 뜻의 버튼을 둘 두면 taste-lint 의 "CTA 중복"이고, 무엇을 눌러야 할지 흐려진다.) */}
         {key === 'landing' && (
-          <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '14px 0 0', animationDelay: '130ms' }}>
-            {/* 알 일러스트 자리. 실물이 나오면 이 칸에 그대로 끼운다(214 × 214). OB-05 는 이 자리를 종이 액자로 감싼다(크기·yBob 보존). */}
-            {(() => {
-              const eggBox = (
-                <div className="onb-egg" style={{
-                  width: 214, height: 214, borderRadius: fFrame ? radius.lg : 34,
-                  backgroundColor: fFrame ? C.slot : '#F6E7DF',
-                  backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.07) 0 7px,transparent 7px 16px)',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  animation: 'yBob 5s ease-in-out infinite',
-                }}>
-                  <span style={{ font: `11px ${MONO}`, color: C.sub }}>알 일러스트</span>
-                  <span style={{ font: `10.5px ${MONO}`, color: '#645B52' }}>214 × 214</span>
-                </div>
-              );
-              return fFrame ? (
-                <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: radius.xl, padding: '12px 12px 9px', boxShadow: '0 12px 30px rgba(74,64,56,.12)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                  {eggBox}
-                </div>
-              ) : eggBox;
-            })()}
+          <div className="onb-body onb-v2stage zt-v2root" data-part="landing-v2">
+            <LandingV2Style />
+            <LandingV2Stage variant="onboarding" />
           </div>
         )}
 

@@ -11,8 +11,13 @@
 //   로컬·테일넷 dev 에서만 뜬다. 새 게이팅을 만들지 않고 tamagotchi/useDevVisible 을 그대로 쓴다.
 //
 // 상태 저장
-//   per-viewer localStorage(try/catch). 첫 렌더는 늘 전부 OFF(기존 화면) — 서버·브라우저 렌더가
+//   per-viewer localStorage(try/catch). 첫 렌더는 **늘 전부 ON(적용후)** — 서버·브라우저 렌더가
 //   갈리면 하이드레이션 경고가 나므로(useDevVisible 과 같은 이유) useEffect 로 뒤늦게 불러온다.
+//
+// ★ 2026-09-18 기본값 뒤집음 — SNS 마케팅 링크가 `/zzal` 이라 **처음 들어온 사람이 보는 것이
+//   적용후여야 한다.** 예전엔 기본이 전부 OFF(기존 화면)라, 선택기가 안 뜨는 공개 도메인에서는
+//   영영 옛 화면만 보였다. 리모컨은 그대로 두되(개발자가 기존↔적용후를 비교해야 하므로)
+//   **기본이 적용후**이고, 옛 localStorage 값이 남아 OFF 로 되돌지 않게 키를 v2 로 올렸다.
 //
 // ★ 불변식 — 이 토글들은 **겉모습만** 바꾼다. 핸들러·data-action·서버 호출·상태·화면 이동은 전부 보존한다.
 'use client';
@@ -40,11 +45,10 @@ export const ONB_UNITS: OnbUnit[] = [
   { id: 'ob-02', label: '제목 타이포', desc: 'GAEGU 제목에 자간 -.5px·text-wrap:balance·스케일 랜딩 정렬' },
   { id: 'ob-03', label: '진입 등장', desc: '툭 나타남 → 제목·부제·내용·CTA 순차 떠오름(1회, reduced-motion 정지)' },
   { id: 'ob-04', label: 'CTA 마감', desc: '네모 accent 버튼 → 알약형·GAEGU·hover·active scale·잉크 틴트 그림자' },
-  { id: 'ob-05', label: '알·부화 액자', desc: '밋밋한 네모 → 종이 액자(paper+line+xl+slot 안쪽) 프레이밍' },
+  { id: 'ob-05', label: '부화 액자', desc: '밋밋한 네모 → 종이 액자(paper+line+xl+slot 안쪽) 프레이밍 · 태어남 칸' },
   { id: 'ob-06', label: '업로드 드롭존', desc: '점선 박스 톤을 랜딩 토큰(dash·paper/slot·라운드)으로 정돈' },
   { id: 'ob-07', label: '예시 그리드', desc: '빗금+색면 → 종이/slot 계열 차분한 카드(빗금 약화)' },
   { id: 'ob-08', label: '진행 점·뒤로', desc: 'dots·뒤로 버튼을 랜딩 line/paper/pill 톤으로' },
-  { id: 'ob-09', label: '(문구) 랜딩 카피', desc: '"같이 살 수 있어요" → 장난감 톤 카피(표시 텍스트만)' },
   { id: 'ob-10', label: '한 화면 맞춤(반응형)', desc: '각 단계를 세로 스크롤 없이 한 뷰포트에(폰·탭·PC 압축·2열)' },
 ];
 
@@ -62,7 +66,9 @@ const OnbDevCtx = createContext<Ctx>({
   setAll: () => {},
 });
 
-const LS_KEY = 'zzal.onboarding.devflags.v1';
+// v1 → v2: 기본값을 "전부 적용후"로 뒤집으면서 옛 저장값(전부 OFF)이 그대로 되살아나면
+// 개발자 화면만 옛 화면으로 되돌아간다. 키를 올려 옛 값을 버린다.
+const LS_KEY = 'zzal.onboarding.devflags.v2';
 
 function save(next: Flags) {
   try {
@@ -72,15 +78,18 @@ function save(next: Flags) {
   }
 }
 
+/** 기본값 = 전부 적용후. 공개 사이트가 보는 것이 이것이다(선택기는 거기서 안 뜬다). */
+const ALL_ON: Flags = Object.fromEntries(ONB_UNITS.map((u) => [u.id, true]));
+
 export function OnbDevProvider({ children }: { children: ReactNode }) {
-  const [flags, setFlags] = useState<Flags>({});
-  // 첫 렌더는 늘 전부 OFF(기존) — 서버·브라우저 렌더가 갈리면 하이드레이션 경고가 나므로 useEffect 로 뒤늦게 불러온다.
+  const [flags, setFlags] = useState<Flags>(ALL_ON);
+  // 첫 렌더는 늘 전부 ON(적용후) — 서버·브라우저 렌더가 갈리면 하이드레이션 경고가 나므로 useEffect 로 뒤늦게 불러온다.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_KEY);
       if (raw) setFlags(JSON.parse(raw) as Flags);
     } catch {
-      /* 읽기 실패 시 전부 OFF(기존) 로 둔다. */
+      /* 읽기 실패 시 전부 ON(적용후) 로 둔다 — 공개 사이트와 같은 화면이다. */
     }
   }, []);
 
@@ -251,7 +260,7 @@ export function OnbChangeList() {
       </div>
 
       <div style={{ font: `9px ${MONO}`, color: C.faint, lineHeight: 1.4 }}>
-        {onCount}/{ONB_UNITS.length} 적용후 · 이 패널은 로컬·테일넷 dev 에서만 보입니다.
+        {onCount}/{ONB_UNITS.length} 적용후 · 기본값은 전부 적용후(공개 사이트와 같음) · 이 패널은 로컬·테일넷 dev 에서만 보입니다.
       </div>
     </div>
   );
