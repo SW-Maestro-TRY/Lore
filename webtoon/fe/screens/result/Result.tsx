@@ -19,7 +19,7 @@ import "./Result.css";
  * 이 브라우저(isMyRun)와 계정 목록(myAccountRuns) 둘 중 하나만 맞아도 된다 —
  * 다른 기기에서 로그인해 열어도 내 작품이 남의 것으로 보이면 안 된다.
  * 완성본을 여는 것만으로는 rememberMyRun 을 하지 않는다(만든 사람만 남긴다). */
-export default function Result({ runId, go }: { runId: string; go: Go }) {
+export default function Result({ runId, go, authenticated = false }: { runId: string; go: Go; authenticated?: boolean }) {
   const t = useT();
   const [data, setData] = useState<RunResult | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -39,12 +39,13 @@ export default function Result({ runId, go }: { runId: string; go: Go }) {
   }, [runId, tick]);
 
   useEffect(() => {
+    if (!authenticated) return;
     let alive = true;
     myAccountRuns()
       .then((got) => { if (alive) setOwnedByAccount(got.some((r) => r.run_id === runId)); })
       .catch(() => { /* 브라우저 것만 쓴다 */ });
     return () => { alive = false; };
-  }, [runId]);
+  }, [runId, authenticated]);
 
   const mine = isMyRun(runId) || ownedByAccount;
   const ep = data?.episode || 1;

@@ -282,12 +282,19 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
     call = llm.Call("SHEET")
     log(f"[한 컷] {call.describe()} 로 사양을 적습니다…")
     images = llm.load_images([str(p) for p in photos]) if photos else None
-    text, meta = call(prompt, images=images, temperature=0.8)
-    spec = parse_panel_spec(text)
-    bad = gate_panel_spec(spec)
-    if bad:
-        log("[한 컷] 사양에 빠진 것: " + " · ".join(bad))
-    return spec, meta
+    # 사양이 모자라면 **그림을 그리기 전에** 한 번 더 묻는다. 그림 값(64원)이
+    # 나간 뒤에 반전·대사가 비어 있으면 "카드 없는 카드" 가 된다 — 그림은 있는데
+    # 공유 링크가 404 고 말풍선·운명 칸이 빈다. 두 번째도 모자라면 멈춘다.
+    metas = []
+    for attempt in (1, 2):
+        text, meta = call(prompt, images=images, temperature=0.8 if attempt == 1 else 0.5)
+        metas.append(meta)
+        spec = parse_panel_spec(text)
+        bad = gate_panel_spec(spec)
+        if not bad:
+            return spec, metas
+        log(f"[한 컷] 사양에 빠진 것({attempt}/2): " + " · ".join(bad))
+    raise SystemExit("한 컷 사양이 두 번 다 모자랍니다 — 그림은 그리지 않습니다.")
 
 
 def panel_prompt(spec: dict, style_text: str) -> str:
@@ -325,8 +332,8 @@ def run_panel(args) -> int:
     world_key, world_label, world_text = resolve_world(args.world)
     if world_label:
         log(f"[한 컷] 세계관: {world_label}" + (f" ({world_key})" if world_key else ""))
-    spec, spec_meta = panel_spec_of(args.name, args.description, photos,
-                                    world_label, world_text)
+    spec, spec_metas = panel_spec_of(args.name, args.description, photos,
+                                     world_label, world_text)
     style_text = imageprompt.load_style(args.style or spec["style"])
     prompt = panel_prompt(spec, style_text)
 
@@ -352,7 +359,7 @@ def run_panel(args) -> int:
         "fate": spec["fate"],
         "style": args.style or spec["style"],
         "source": "photo" if photos else "prompt",
-        "calls": [spec_meta, art_meta],
+        "calls": [*spec_metas, art_meta],
     }
     (args.out.parent / "panel.json").write_text(
         json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
