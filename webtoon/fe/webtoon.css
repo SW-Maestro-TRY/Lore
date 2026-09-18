@@ -2730,37 +2730,39 @@
 .webtoon-page .dock-bar { max-width: 820px; margin-inline: auto; }
 }
 
-/* 편집실 — 넓은 화면에서는 도구를 **헤더 바로 밑, 가로 띠**로 둔다.
+/* 편집실 — 넓은 화면에서는 도구를 **오른쪽 세로 사이드바**로 둔다.
 
-   전에는 오른쪽 세로 서랍이었는데, 그림 옆 좁은 기둥에 있어 눈이 그림과
-   서랍 사이를 계속 오가야 했다. 지금은 그림 위쪽, 헤더 바로 아래에 가로로
-   붙여 그림을 내려다보는 한 시선 안에 둔다. PC 는 늘 열어 두고(JS 의
-   880px 자동 setDock(true)) 열고 닫을 것이 없으니 폰의 끌어내리는 손잡이도
-   여기서는 뺀다 — 닫을 때는 ✕ 를 누른다.
+   한동안(2026-09-16) 헤더 밑 가로 띠로 옮겨 봤는데, `position:fixed`라
+   스크롤해도 화면 맨 위에 계속 남아서 — 어떤 말풍선이든 그 자리로
+   스크롤되면 몸통이 띠 뒤에 숨고 손잡이만 삐죽 남았다("이상하게 떠
+   있다"·크기 조절이 안 된다, 2026-09-17 실측). 오른쪽 사이드바는 본문을
+   **밀어내는(padding-right)** 것이라 애초에 겹칠 자리가 없다 — 자바스크립트로
+   손잡이가 가려졌는지 재서 스크롤을 보정하던 것 자체가 필요 없어진다.
 
    PC 기준(880px)부터 바로 적용한다. 폰에서만 바텀시트로 올라온다. */
 @media (min-width: 880px) {
   .webtoon-page .ed .ed-dock {
-    position: fixed; top: var(--lore-header-h, 0px); left: 0; right: 0; bottom: auto;
-    width: auto; max-height: 44vh; margin: 0;
-    border: none; border-bottom: 1px solid var(--line); border-radius: 0;
-    box-shadow: 0 14px 34px rgba(15,51,63,.10);
+    position: fixed; top: var(--lore-header-h, 0px); right: 0; bottom: 0; left: auto;
+    width: 360px; max-height: none; margin: 0;
+    border: none; border-left: 1px solid var(--line); border-radius: 0;
+    box-shadow: -14px 0 34px rgba(15,51,63,.10);
     overflow-y: auto;
-    /* 닫으면 헤더 뒤로 밀려 올라간다. top 이 헤더 높이만큼 이미 내려와
-       있어서 -100% 만으로는 그 높이만큼 아래쪽이 화면에 계속 걸쳐
-       보인다(실측) — 헤더 높이까지 더 올려야 완전히 가려진다. */
-    transform: translateY(calc(-100% - var(--lore-header-h, 0px)));
+    transform: translateX(100%);          /* 닫으면 오른쪽으로 밀려난다 */
     z-index: 61;
   }
   .webtoon-page .ed .ed-dock.is-open { transform: none; }
   .webtoon-page .ed .ed-dock::before,
-  .webtoon-page .ed .dock-handle { display: none; }   /* 위쪽 띠에서는 끌어내릴 게 없다 */
-  .webtoon-page .ed .dock-scrim { display: none; }    /* 위에 붙어 있어 뒤를 가리지 않는다 */
+  .webtoon-page .ed .dock-handle { display: none; }   /* 옆에 붙어서 끌어내릴 게 없다 */
+  .webtoon-page .ed .dock-scrim { display: none; }    /* 옆에 붙어 있어 뒤를 가리지 않는다 */
 
   .webtoon-page .ed .ed-dock .dock-bar,
-  .webtoon-page .ed .ed-dock .dock-body { max-width: 820px; margin-inline: auto; }
+  .webtoon-page .ed .ed-dock .dock-body { max-width: none; margin-inline: 0; }
 
-  /* 손잡이는 **닫혔을 때만** 나온다 — 열려 있으면 띠 안의 ✕ 가 그 일을
+  /* 말풍선·스티커·효과음 팔레트를 두 칸으로 — 사이드바 폭(360px)에 맞춰
+     기본(3칸, .dock-grid)보다 한 칸 줄인다. */
+  .webtoon-page .ed .ed-dock .dock-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* 손잡이는 **닫혔을 때만** 나온다 — 열려 있으면 서랍 안의 ✕ 가 그 일을
      한다. 둘 다 떠 있으면 무엇을 눌러야 할지 알 수 없다. */
   .webtoon-page .ed #dockOpen {
     position: fixed; right: 24px; bottom: 24px; top: auto; left: auto;
@@ -2771,24 +2773,10 @@
   }
   .webtoon-page .ed.dock-open-on #dockOpen { display: none; }
 
-  /* 위에서 덮은 만큼 본문을 아래로 민다. `--ed-dock-h` 는 editorCore.ts 가
-     띠의 실제 렌더 높이를 재서 넣는다(ResizeObserver) — 팔레트가 두 줄
-     이상으로 늘어나거나 탭을 바꿔 줄 수가 바뀌어도 그만큼 따라 움직인다.
-     이전에는 230px 로 고정해 둬서, 띠가 그보다 커지면(작은 창 높이 ·
-     탭 전환으로 팔레트가 두 줄이 되는 경우) 그 차이만큼 캔버스 맨 위가
-     띠 밑에 깔려 그 자리의 말풍선을 못 잡고 크기 조절 손잡이도 안 눌렸다
-     (2026-09-17 실측 확인). 자바스크립트가 아직 값을 못 넣은 순간(마운트
-     직후 한 프레임)을 위해 230px 를 기본값으로 남겨 둔다. */
-  .webtoon-page .ed.dock-open-on .ed-body { padding-top: var(--ed-dock-h, 230px); }
-
-  /* 이 띠는 `position:fixed` 라 스크롤해도 늘 화면 맨 위에 남는다 — 처음
-     자리를 맞춰도(위 padding-top) 그 뒤로 얼마든지 스크롤해서 어떤
-     말풍선이든 이 자리에 걸릴 수 있다. 그러면 몸통이 띠 뒤로 숨고 손잡이만
-     삐죽 남아 "이상하게 떠 있는" 것처럼 보이고, 그 손잡이도 못 눌렀다
-     (2026-09-17 실측). `scroll-margin-top` 을 띠 높이만큼 주면
-     `scrollIntoView`(editorCore.ts 의 revealFromDock)가 이 여백을 그대로
-     존중해서, 골랐을 때 항상 띠 밑으로 내려와 준다. */
-  .webtoon-page .ed .item { scroll-margin-top: calc(var(--ed-dock-clear, 300px) + 16px); }
+  /* 서랍이 연 만큼 본문 오른쪽에 자리를 비운다. 그림은 옆으로 안 밀리는
+     대신 그만큼 줄어든다 — 위쪽 여백이 아니라 옆쪽 여백이라 캔버스와
+     겹칠 일이 없다. */
+  .webtoon-page .ed.dock-open-on .ed-body { padding-right: 360px; }
 }
 
 /* ---- 그림을 그냥 저장해 가지 못하게 ------------------------------------ *
@@ -3066,7 +3054,8 @@
      캔버스  장이 세로로 이어지는 본체
      단추줄  제목 바로 밑 — 도구 · 대사 · 이미지로 뽑기
      도구    단추줄에서 올라오는 바텀시트 (기본은 닫힘)
-   1200px 이상에서만 도구가 오른쪽 서랍으로 바뀝니다. */
+   880px 이상에서는 도구가 오른쪽 서랍으로 바뀝니다(아래 "편집실 — 넓은
+   화면" 절). */
 
 .webtoon-page .ed { background: var(--ink); }
 
@@ -3240,17 +3229,26 @@
 }
 .webtoon-page .item.dragging { cursor: grabbing; }
 .webtoon-page .item.sel { outline: 2px dashed var(--accent); outline-offset: 4px; }
-/* 모서리 손잡이 두 개 — 오른쪽 아래는 폭, 오른쪽 위는 기울기.
-   둘 다 고른 것에만 뜬다. 그림 위라 안 고른 것까지 점이 붙으면 지저분하다. */
+/* 네 모서리는 크기, 그 바깥 한 점은 기울기. 전부 고른 것에만 뜬다 — 그림
+   위라 안 고른 것까지 점이 붙으면 지저분하다.
+
+   크기 손잡이를 넷 다 두는 이유: 풍선은 아무 데나 놓이므로 오른쪽 아래가
+   화면 밖이거나 다른 풍선에 가릴 수 있다. 어느 모서리로도 같은 일을 할 수
+   있으면 잡을 자리를 찾아 헤맬 일이 없다. */
 .webtoon-page .item .handle {
   position: absolute; width: 17px; height: 17px;
   border-radius: 50%; background: var(--accent); border: 2px solid #fff;
   box-shadow: 0 2px 6px rgba(15,51,63,.3);
   display: none;
 }
-.webtoon-page .item .handle-size { right: -8px; bottom: -8px; cursor: nwse-resize; }
+.webtoon-page .item .handle-nw { left: -8px; top: -8px; cursor: nwse-resize; }
+.webtoon-page .item .handle-ne { right: -8px; top: -8px; cursor: nesw-resize; }
+.webtoon-page .item .handle-sw { left: -8px; bottom: -8px; cursor: nesw-resize; }
+.webtoon-page .item .handle-se { right: -8px; bottom: -8px; cursor: nwse-resize; }
+/* 기울기는 모서리 <b>바깥</b>으로 비켜 앉는다 — 모서리에 겹쳐 두면 크기를
+   잡으려다 매번 풍선이 돌아간다. */
 .webtoon-page .item .handle-rot {
-  right: -8px; top: -8px; cursor: grab;
+  right: -30px; top: -30px; cursor: grab;
   background: #fff; border-color: var(--accent);
 }
 /* 돌리기 손잡이는 무엇을 하는 손잡이인지 스스로 말해야 한다 — 같은 점이 둘
@@ -3699,10 +3697,11 @@
 .webtoon-page .ask-actions .btn { flex: 1; min-height: 46px; }
 
 /* ------------------------------------------------------------------ 큰 화면
-   1200px 이상에서 도구를 다시 오른쪽 세로 서랍으로 돌리던 옛 규칙은 지웠다
-   — 캔버스가 480px 이던 시절 계산(컬럼 오른쪽 끝 (vw+480)/2)이라 지금
-   820px 캔버스에서는 서랍이 그림을 덮었다. 880px 이상은 위 "편집실 — 넓은
-   화면" 절의 헤더 밑 가로 띠 하나로 통일한다(2026-09-16). */
+   880px 이상의 도구 서랍 규칙은 위 "편집실 — 넓은 화면" 절에 있다
+   (오른쪽 세로 서랍, 2026-09-17). 한동안 헤더 밑 가로 띠였는데
+   `position:fixed`가 스크롤해도 화면 맨 위에 계속 남아 말풍선을 가리는
+   문제가 있어(위 절 주석 참고) 오른쪽 서랍으로 되돌렸다 — 오른쪽 서랍은
+   본문을 옆으로 밀어내는 것이라 애초에 캔버스와 겹칠 자리가 없다. */
 
 /* 구운 결과 창의 워터마크 안내. 창에 적힌 크기는 **작품**의 크기라, 실제로
    받는 파일은 표시 띠만큼 더 길다 — 그 차이를 여기서 말해 둔다. */
@@ -3968,9 +3967,19 @@
    아래 그림이 통째로 밀려 읽던 자리를 잃는다.
 
    한 번에 하나만 열리므로 이 띠도 하나뿐이다. */
-/* 「컷별로 내려받기」 — 위 두 단추와 같은 격자에 있지만 셋이라 남는 한
-   칸이 어정쩡하게 빈다. 한 줄 통째로 차지하게 한다. */
-.webtoon-page .result-actions .cut-download-btn { grid-column: 1 / -1; }
+/* 「컷별로 내려받기」 — 단추가 아니라 체크박스다. 「내려받기」 단추의
+   동작을 바꾸는 스위치라서, 격자에서 셋째 칸으로 안 두고 그 자리에
+   자연히 떨어지게 둔다(2칸 격자라 3번째 자식은 왼쪽 칸, 즉 내려받기
+   밑으로 줄 바꿈된다 — 오른쪽 「편집실로 가기」 밑은 비워 둔 채로). */
+.webtoon-page .result-actions .cut-only-check {
+  display: flex; align-items: center; gap: 6px;
+  padding: 2px 2px 0; font-size: .78rem; color: var(--dim); cursor: pointer;
+  user-select: none;
+}
+.webtoon-page .result-actions .cut-only-check input[type="checkbox"] {
+  width: 1.05em; height: 1.05em; accent-color: var(--accent); margin: 0; flex: none;
+}
+.webtoon-page .result-actions .cut-only-check:has(:checked) { color: var(--accent-d); font-weight: 600; }
 
 .webtoon-page .page-caption {
   position: fixed;

@@ -734,7 +734,8 @@ export function mountEditor(
       style="left:${it.x}%; top:${it.y}%; width:${it.w}%; transform:rotate(${it.rot}deg)">
       ${inner}
       <div class="handle handle-rot" data-rot title="돌리기"></div>
-      <div class="handle handle-size" title="폭"></div></div>`;
+      ${["nw", "ne", "sw", "se"].map(c =>
+        `<div class="handle handle-size handle-${c}" data-corner="${c}" title="크기"></div>`).join("")}</div>`;
   }
 
 
@@ -750,33 +751,54 @@ export function mountEditor(
     const v = it.variant;
     const round = v !== "narration";
 
-    /* **어디서 줄을 바꿀지 모양을 보고 고른다.**
-       한 줄로 다 들어간다고 그냥 두면 대사가 길수록 풍선이 국수 가락이 된다.
-       몇 가지 폭으로 놓아 보고 가로세로 비가 가장 보기 좋은 것을 고른다 —
-       굽는 쪽(overlay.py 의 _fit)과 같은 규칙이라 화면과 결과가 안 갈린다. */
+    /* **끈 폭이 곧 풍선 폭이다.**
+
+       예전에는 글에 맞춰 풍선을 도로 줄였다 — 몇 가지 폭으로 놓아 보고
+       가로세로 비가 제일 나은 것을 골랐다. 그래서 손잡이를 끌어도 안 커지거나
+       오히려 작아지고, 풍선은 그대론데 글자만 커 보이는 일이 생겼다(실제 제보).
+       크기를 정하는 손잡이인데 그 값을 프로그램이 도로 덮어쓰면 고장 난 것과
+       같다. 지금은 끈 폭을 그대로 쓰고, 글은 그 안에서 줄바꿈될 뿐이다.
+
+       굽는 쪽(overlay.py 의 _fit, BubbleArtist.fit)도 같은 규칙이라 화면과
+       내려받은 그림이 안 갈린다. */
     const full = el.clientWidth || bub.offsetWidth;
     const target = v === "narration" ? 4.0 : 2.4;
-    let best = null;
-    for (const f of [1, 0.82, 0.68, 0.56, 0.46, 0.38]) {
-      bub.style.maxWidth = `${Math.max(40, full * f)}px`;
-      const bw = bub.offsetWidth, bh = bub.offsetHeight;
-      const score = Math.abs(bw / Math.max(1, bh) - target);
-      if (!best || score < best.score) best = { score, f, bw, bh };
-    }
-    bub.style.maxWidth = `${Math.max(40, full * best.f)}px`;
 
     /* 타원은 글 상자보다 √2 만큼 크다. 글 상자를 그대로 타원 크기로 쓰면
        네 모서리가 선 밖으로 나간다 — 그걸 피하려고 폭을 키우다 보니 예전
        풍선이 그렇게 넓적했다. */
     const spread = round ? Math.SQRT2 / (v === "shout" ? 0.8 : 1) : 1;
-    const w = best.bw, h = best.bh;
+
+    // 글 상자는 타원 안에 들어가야 하니 그만큼 좁다.
+    const w = Math.max(20, full / spread);
+    bub.style.maxWidth = "none";
+    bub.style.width = `${w}px`;
+    const h = bub.offsetHeight;
+
     const sw = 2.5;
-    const ew = w * spread, eh = h * spread;
-    const cx = w / 2, cy = h / 2, a = (ew - sw) / 2, b = (eh - sw) / 2;
+    const ew = full;
+    // 글이 짧다고 납작한 국수 가락이 되지는 않게 가장 낮은 높이를 둔다.
+    const eh = Math.max(h * spread, full / target);
+
+    /* **고른 표시와 손잡이는 <u>보이는 풍선</u>을 감싸야 한다.**
+       예전에는 항목 상자가 글 상자 크기였다 — 타원은 그보다 √2 만큼 크니까,
+       점선 네모가 풍선 한가운데를 가로지르고 손잡이도 거기 앉았다("말풍선
+       중앙에 점이 있다"는 제보). 항목 상자를 타원에 맞추고 글을 그 안
+       가운데로 밀면, 네 모서리 점이 풍선 모서리에 그대로 온다. */
+    // 서랍 미리보기(.prev)는 제 칸이 이미 글을 가운데 두므로 건드리지 않는다 —
+    // 여기서 높이를 박으면 서랍 칸이 통째로 늘어난다.
+    if (el.classList.contains("item")) {
+      el.style.height = `${eh}px`;
+      bub.style.marginLeft = `${(full - w) / 2}px`;
+      bub.style.marginTop = `${(eh - h) / 2}px`;
+    }
+    const cx = bub.offsetLeft + w / 2, cy = bub.offsetTop + h / 2;
+    const a = (ew - sw) / 2, b = (eh - sw) / 2;
 
     let body;
     if (v === "narration") {
-      body = `<rect x="${sw / 2}" y="${sw / 2}" width="${w - sw}" height="${h - sw}" rx="3"/>`;
+      body = `<rect x="${cx - ew / 2 + sw / 2}" y="${cy - eh / 2 + sw / 2}"`
+           + ` width="${ew - sw}" height="${eh - sw}" rx="3"/>`;
     } else if (v === "shout") {
       const pts = [];
       for (let i = 0; i < 24; i++) {
@@ -822,20 +844,31 @@ export function mountEditor(
        선은 덮여 사라지고 바깥 윤곽만 제 굵기로 남는다. 굽는 쪽도 같은 결과를
        낸다(overlay.py 는 덩어리를 깎아서 윤곽을 얻는다). */
     const pad = 400;                    // 밖으로 뻗은 꼬리가 잘리지 않게
-    svg.setAttribute("viewBox", `${-pad} ${-pad} ${w + pad * 2} ${h + pad * 2}`);
+    const vw = Math.max(full, w) + pad * 2, vh = Math.max(eh, h) + pad * 2;
+    svg.setAttribute("viewBox", `${-pad} ${-pad} ${vw} ${vh}`);
     svg.style.left = `${-pad}px`; svg.style.top = `${-pad}px`;
-    svg.style.width = `${w + pad * 2}px`; svg.style.height = `${h + pad * 2}px`;
+    svg.style.width = `${vw}px`; svg.style.height = `${vh}px`;
     svg.innerHTML = `<g class="bs bs-${v}">${tail}${body}</g>`
                     + `<g class="bs-fill">${tail}${body}</g>`;
 
     const grip = $(".handle-tail", el);
     if (grip) {
-      // %로 두면 풍선 상자(글에 맞춰 줄어든 것)가 아니라 <b>항목 상자</b>가
-      // 기준이 돼서, 손잡이가 꼬리 끝에서 비켜 앉는다.
-      grip.style.left = `${bub.offsetLeft + cx - ew / 2 + ew * it.tx / 100}px`;
-      grip.style.top = `${bub.offsetTop + cy - eh / 2 + eh * it.ty / 100}px`;
+      // %로 두면 항목 상자가 기준이 돼서 손잡이가 꼬리 끝에서 비켜 앉는다.
+      // cx·cy 는 이미 글 상자가 놓인 자리를 셈에 넣은 값이다.
+      grip.style.left = `${cx - ew / 2 + ew * it.tx / 100}px`;
+      grip.style.top = `${cy - eh / 2 + eh * it.ty / 100}px`;
       grip.classList.toggle("is-off", it.tail === "none");
     }
+  }
+
+  /* 글자 크기를 <b>다시 그리지 않고</b> 고친다 — 폭을 끄는 동안 매 순간
+     부르는 자리라, 여기서 항목을 통째로 새로 그리면 끌던 손을 놓치게 된다.
+     배수는 itemHTML 이 처음 심는 것과 같아야 한다. */
+  function paintFont(el, it) {
+    const t = $(".bub, .stk, .sfx", el);
+    if (!t) return;
+    const mul = it.type === "sticker" ? 2.2 : it.type === "sfx" ? 2 : 1;
+    t.style.fontSize = `${it.size * mul}px`;
   }
 
   function itemOf(el) {
@@ -875,10 +908,6 @@ export function mountEditor(
     sel = { sceneNo: no, id: it.id };
     paintItems(no); paintProps();
     document.getElementById(`scene-${no}`).scrollIntoView({ behavior: "smooth", block: "center" });
-    // 부드러운 스크롤이 끝날 즈음 도구 띠에 덮여 있으면 그만큼 더 내린다
-    // (revealFromDock 주석 참고 — 여기는 즉시 반응할 필요가 없어 기다려도 된다).
-    const el = document.querySelector(`#scene-${no} .item[data-id="${it.id}"]`);
-    setTimeout(() => revealFromDock(el), 400);
   }
 
   function findItem() {
@@ -901,9 +930,6 @@ export function mountEditor(
       $$(".item", el.parentElement).forEach(n =>
         n.classList.toggle("sel", n.dataset.id === id));
       paintProps();
-      // 여기서 즉시(동기) 스크롤해야 한다 — 아래에서 곧바로 el 의 위치를
-      // 다시 재서(box·r0·cx·cy) 끌기·돌리기 계산의 기준으로 삼는다.
-      revealFromDock(el);
     };
 
     const text = $("[data-edit]", el);
@@ -942,11 +968,16 @@ export function mountEditor(
       const tailing = ev.target.dataset.tailDrag !== undefined;
       const resizing = !rot && !tailing && ev.target.classList.contains("handle");
       const sx = ev.clientX, sy = ev.clientY;
-      const ox = it.x, oy = it.y, ow = it.w, orot = it.rot;
+      const ox = it.x, oy = it.y, ow = it.w, orot = it.rot, osize = it.size;
       const otx = it.tx, oty = it.ty;
-      // 꼬리 자리는 <b>풍선 자기 크기</b>에 대한 %다 — 그림이 커지거나 폭을
-      // 바꿔도 같은 곳을 계속 가리킨다.
-      const bubBox = tailing ? $(".bub", el).getBoundingClientRect() : null;
+      // 꼬리 자리는 <b>타원 크기</b>에 대한 %다 — 그림이 커지거나 폭을 바꿔도
+      // 같은 곳을 계속 가리킨다. 항목 상자가 곧 타원 상자다(paintShape).
+      const ellipse = tailing ? el.getBoundingClientRect() : null;
+      // 어느 모서리를 잡았나. 왼쪽을 잡으면 오른쪽 변이, 위를 잡으면 아래
+      // 변이 제자리에 머물러야 한다 — 안 그러면 늘릴 때마다 풍선이 기어간다.
+      const corner = ev.target.dataset.corner || "se";
+      const west = corner[1] === "w", north = corner[0] === "n";
+      const oh = el.offsetHeight;
       // 돌리기는 요소의 **가운데를 축으로** 잰다 — 끄는 점과 가운데가 이루는
       // 각이 곧 기울기다. 손이 가는 대로 돌아간다.
       const r0 = el.getBoundingClientRect();
@@ -973,21 +1004,31 @@ export function mountEditor(
         }
         if (Math.abs(dx) > 0.4 || Math.abs(dy) > 0.4) moved = true;
         if (tailing) {
-          // 화면 픽셀 -> 타원 상자 % (위 paintShape 와 같은 기준)
-          const sp = it.variant === "narration" ? 1
-            : Math.SQRT2 / (it.variant === "shout" ? 0.8 : 1);
           it.tx = Math.max(-300, Math.min(400,
-            otx + (e.clientX - sx) / Math.max(1, bubBox.width * sp) * 100));
+            otx + (e.clientX - sx) / Math.max(1, ellipse.width) * 100));
           it.ty = Math.max(-300, Math.min(400,
-            oty + (e.clientY - sy) / Math.max(1, bubBox.height * sp) * 100));
+            oty + (e.clientY - sy) / Math.max(1, ellipse.height) * 100));
           // 꼬리를 끌어내면 꺼 뒀던 꼬리가 다시 켜진다 — 다시 켜려고 딴 데를
           // 찾아갈 필요가 없다.
           if (it.tail === "none") it.tail = "left";
           paintShape(el);
           return;
         }
-        if (resizing) it.w = Math.max(5, Math.min(96, ow + dx));
-        else { it.x = Math.max(-6, Math.min(98, ox + dx)); it.y = Math.max(-4, Math.min(97, oy + dy)); }
+        if (resizing) {
+          // 왼쪽 모서리는 <b>바깥으로</b> 끌어야 커진다.
+          it.w = Math.max(5, Math.min(96, ow + (west ? -dx : dx)));
+          /* **글자도 폭을 따라 큰다.** 크기 손잡이인데 풍선만 커지고 글은
+             그대로면, 늘릴수록 글이 작아 보인다(실제 제보). 통째로 키우고
+             줄이는 것이 손잡이가 뜻하는 바다. */
+          it.size = Math.max(6, Math.min(70, Math.round(osize * it.w / Math.max(1, ow))));
+          paintFont(el, it);
+          // 잡지 않은 쪽 변은 제자리에 둔다. 폭은 바로 알 수 있고, 높이는
+          // 글이 다시 흐른 뒤에야 알 수 있으니 모양을 그린 다음에 잰다.
+          if (west) it.x = ox + (ow - it.w);
+          el.style.width = `${it.w}%`;
+          paintShape(el, it);
+          if (north) it.y = oy + (oh - el.offsetHeight) / box.height * 100;
+        } else { it.x = Math.max(-6, Math.min(98, ox + dx)); it.y = Math.max(-4, Math.min(97, oy + dy)); }
         el.style.left = `${it.x}%`; el.style.top = `${it.y}%`; el.style.width = `${it.w}%`;
       };
       const up = () => {
@@ -1077,69 +1118,6 @@ export function mountEditor(
     if (scrim) scrim.hidden = !open;
     if (opener) opener.setAttribute("aria-expanded", open ? "true" : "false");
     if (close) close.setAttribute("aria-label", "도구 닫기");
-    syncDockHeight();
-  }
-
-  /* PC 는 도구 띠가 헤더 밑에 상시 깔리고(`position:fixed`), 본문은
-     `--ed-dock-h` 만큼 padding-top 으로 비켜선다(webtoon.css 참고). 이 값을
-     실제 띠 높이로 채우지 않으면 — 팔레트가 두 줄로 늘어나거나 창이
-     낮아 44vh 한도까지 커지면 — 띠가 캔버스 위쪽을 그만큼 덮어서 그
-     자리의 말풍선을 못 잡고 크기 조절 손잡이도 안 눌린다(2026-09-17,
-     "말풍선 크기조절이 안 된다" 로 실측 확인 — 고정값 230px 가 실제
-     높이보다 작을 때만 재현된다). transform 은 레이아웃 높이를 안 바꾸므로
-     닫혀 있어도 같은 값을 그대로 잰다. */
-  function syncDockHeight() {
-    const dock = $("#edDock"), ed = document.querySelector(".ed");
-    if (!dock || !ed) return;
-    const rect = dock.getBoundingClientRect();
-    ed.style.setProperty("--ed-dock-h", `${Math.ceil(rect.height)}px`);
-    // `--ed-dock-clear` 는 띠의 **화면(뷰포트) 기준** 아래쪽 끝이다 — 헤더
-    // 높이까지 이미 포함돼 있다. `.item` 의 scroll-margin-top(아래
-    // revealFromDock 주석)이 이 값을 그대로 써야 한다: `--ed-dock-h`(띠
-    // 자기 높이)만 쓰면 헤더 높이만큼 모자라서, "충분히 내려왔다" 는 판단이
-    // 실제 띠 아래보다 헤더 높이만큼 일찍 나 버린다(2026-09-17 실측 — 처음
-    // 이 값으로 시도했을 때 정확히 헤더 높이만큼 손잡이가 계속 띠 밑에
-    // 남았다). position:fixed 라 스크롤과 무관하게 같은 값이다.
-    ed.style.setProperty("--ed-dock-clear", `${Math.ceil(rect.bottom)}px`);
-  }
-
-  /* 항목이 **도구 띠 밑에 깔려 있으면** 그만큼 화면을 밀어 드러낸다.
-     PC(880px 이상)는 이 띠가 `position:fixed`라 스크롤해도 늘 화면 맨 위에
-     남는다 — `--ed-dock-h` 를 실측해도(위 syncDockHeight) 그건 처음 스크롤
-     자리를 맞출 뿐이고, 그 뒤로 스크롤해서 어떤 말풍선이든 화면 위쪽
-     그 자리에 걸리면 몸통이 띠 뒤로 숨고 손잡이만 삐죽 남는다("이상하게
-     떠 있다" — 2026-09-17 실측). 즉시(behavior 없이) 스크롤한다 — 이 함수는
-     회전 계산이 el 의 위치를 다시 재기 **전에** 끝나야 하고, 애니메이션이
-     끝나기를 기다리면 그사이 사람이 이미 손잡이를 눌러 버린다. */
-  function revealFromDock(el) {
-    if (!el || !matchMedia("(min-width: 880px)").matches) return;
-    const dock = $("#edDock");
-    if (!dock || !dock.classList.contains("is-open")) return;
-    const dockBottom = dock.getBoundingClientRect().bottom;
-    if (el.getBoundingClientRect().top < dockBottom) {
-      // `.item` 의 `scroll-margin-top`(webtoon.css, 띠 높이 + 16px)을
-      // scrollIntoView 가 그대로 존중한다 — 직접 픽셀을 계산해 스크롤하는
-      // 것보다 화면 배율·DPI 에 덜 흔들린다.
-      el.scrollIntoView({ block: "nearest", behavior: "instant" });
-    }
-  }
-
-  let dockRO = null;
-  function watchDockHeight() {
-    const dock = $("#edDock");
-    if (!dock) return;
-    syncDockHeight();
-    if (typeof ResizeObserver !== "undefined") {
-      dockRO = new ResizeObserver(syncDockHeight);
-      dockRO.observe(dock);
-    }
-    // 여닫는 것은 `transform`(translateY) 애니메이션이다 — 박스 **크기**는
-    // 안 바뀌므로 ResizeObserver 가 안 걸린다. 그런데 그 사이에 잰
-    // `getBoundingClientRect()` 는 애니메이션 도중의 값이라 실제보다
-    // 작게 잡힌다(2026-09-17 실측 — `--ed-dock-clear` 가 226px 로 잡혀
-    // 실제 349px 보다 한참 낮았다). 다 여닫힌 뒤(transitionend)에 다시 잰다.
-    on(dock, "transitionend", e => { if (e.propertyName === "transform") syncDockHeight(); });
-    on(window, "resize", syncDockHeight);
   }
 
   /* 크레딧 내역은 **다른 모드**다 — 그림에 얹는 자리가 아니라 얼마 썼는지
@@ -1659,7 +1637,6 @@ export function mountEditor(
     $("#dockOpen")?.addEventListener("click", () => setDock(true));
     $("#dockScrim")?.addEventListener("click", () => setDock(false));
     wireDockDrag();
-    watchDockHeight();
     // 그림 바깥을 누르면 선택이 풀린다. 손잡이 줄이 그림 위에 떠 있어서, 풀
     // 길이 없으면 다 끝낸 뒤에도 줄이 계속 그림을 가린다.
     on(document, "pointerdown", e => {
@@ -1731,6 +1708,5 @@ export function mountEditor(
   return () => {
     for (const [t, type, fn] of bound) t.removeEventListener(type, fn);
     clearTimeout(pushT);
-    dockRO?.disconnect();
   };
 }
