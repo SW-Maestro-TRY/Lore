@@ -45,6 +45,7 @@ export const ONB_UNITS: OnbUnit[] = [
   { id: 'ob-07', label: '예시 그리드', desc: '빗금+색면 → 종이/slot 계열 차분한 카드(빗금 약화)' },
   { id: 'ob-08', label: '진행 점·뒤로', desc: 'dots·뒤로 버튼을 랜딩 line/paper/pill 톤으로' },
   { id: 'ob-09', label: '(문구) 랜딩 카피', desc: '"같이 살 수 있어요" → 장난감 톤 카피(표시 텍스트만)' },
+  { id: 'ob-10', label: '한 화면 맞춤(반응형)', desc: '각 단계를 세로 스크롤 없이 한 뷰포트에(폰·탭·PC 압축·2열)' },
 ];
 
 type Flags = Record<string, boolean>;
