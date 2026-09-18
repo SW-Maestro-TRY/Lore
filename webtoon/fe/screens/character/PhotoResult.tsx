@@ -12,7 +12,7 @@ import { emptyWizardForm } from "../../lib/wizardData";
 import { IconDownload, IconRetry, IconShare } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import { LimitView } from "./Photo";
-import { isLimitError, loadDraft, runTry } from "./draft";
+import { isLimitError, loadDraft, runTry, lastCardId } from "./draft";
 import "./i18n";
 import "./PhotoResult.css";
 
@@ -117,7 +117,12 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
     if (!ch) return;
     setBusy("again");
     setActErr("");
-    const d = loadDraft() || { name: ch.name, description: ch.description, world: card?.world || "" };
+    // 지금 보는 카드의 입력이 기준이다. 초안(sessionStorage)은 이 카드를 만든 그것일 때만 통째로 쓴다 —
+    // 옛 카드를 목록에서 열고 「다시 뽑기」를 누르면 다른 입력으로 만들어지면 안 된다.
+    const draft = loadDraft();
+    const d = draft && lastCardId() === ch.id
+      ? draft
+      : { name: ch.name, description: ch.description, world: card?.world || "", photo: draft?.photo };
     try {
       const c = await runTry(d);
       go("card", { id: c.id });

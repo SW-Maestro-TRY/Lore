@@ -166,7 +166,7 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
         {shown && !noneAtAll && !hiddenByToggle && (
           <div className="wt-works-grid">
             {shown.map((r) => (
-              <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} />
+              <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated} />
             ))}
           </div>
         )}
@@ -175,7 +175,7 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
   );
 }
 
-function WorkCard({ run, mine, go }: { run: RunCard; mine: boolean; go: Go }) {
+function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolean; go: Go; authenticated: boolean }) {
   const t = useT();
   const eps = run.episodes || [];
   const first = eps[0] || 1;
@@ -223,11 +223,11 @@ function WorkCard({ run, mine, go }: { run: RunCard; mine: boolean; go: Go }) {
       )}
       {mine && (
         <div className="wt-works-mine">
-          <span className="wt-works-pub">
+          {authenticated ? <span className="wt-works-pub">
             <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
                     aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
             {pub ? t("공개") : t("비공개")}
-          </span>
+          </span> : <span className="dim" style={{ fontSize: 12 }}>{t("로그인하면 공개 여부를 바꿀 수 있어요")}</span>}
           <button type="button" className="wt-works-edit" onClick={() => go("editor", { run: run.run_id })}>{t("편집실")}</button>
         </div>
       )}

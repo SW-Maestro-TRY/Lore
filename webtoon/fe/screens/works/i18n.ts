@@ -45,6 +45,7 @@ const dict: Dict = {
   "공개": { en: "Public", ja: "公開", zh: "公开" },
   "비공개": { en: "Private", ja: "非公開", zh: "不公开" },
   "편집실": { en: "Editor", ja: "編集室", zh: "编辑室" },
+  "로그인하면 공개 여부를 바꿀 수 있어요": { en: "Sign in to change who can see it", ja: "ログインすると公開設定を変えられます", zh: "登录后可更改公开设置" },
 };
 
 registerDict(dict);
