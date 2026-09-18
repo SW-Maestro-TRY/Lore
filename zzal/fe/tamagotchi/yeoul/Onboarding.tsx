@@ -15,7 +15,7 @@
 
 import { useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF } from './constants';
+import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF, STEPS } from './constants';
 import { LandingV2Stage, LandingV2Style } from '../../LandingV2';
 import { C, GAEGU, MONO, radius } from './ui';
 import { spriteUrl, useLive } from './useHatch';
@@ -43,7 +43,13 @@ const OB03_RISE_STYLE = `
 const BASE_STYLE = `.onb-cgrid{ display:contents; }
 /* 랜딩 v2 무대를 온보딩 칸 안에 앉힌다. 무대의 마감(.zt-v2*)은 LandingV2.tsx 한 벌 그대로 쓰고,
    여기서는 **자리 잡기만** 한다 — 남는 높이를 먹고 세로 가운데로. 셸 크롬(.zt-v2page)은 안 붙인다. */
-.onb-v2stage{ flex:1 1 auto; min-height:0; }`;
+.onb-v2stage{ flex:1 1 auto; min-height:0; }
+/* 뒤로 — 보이는 동그라미는 28px(시안 그대로)이고, **누르는 자리만** 44x44 로 넓힌다.
+   이 화면에서 유일한 비상구라(Nielsen #3) 손가락이 빗나가면 갈 곳이 없다. */
+   ★ z-index 가 필요하다 — 넓힌 자리가 머리줄 밖(아래)으로 8px 나가는데, 뒤따르는 형제인
+   .onb-scroll 이 나중에 그려져 그 8px 을 덮는다(실측: 아래·오른쪽만 안 눌렸다). */
+.onb-back{ position:relative; z-index:1; }
+.onb-back::after{ content:''; position:absolute; inset:-8px; }`;
 
 /**
  * OB-10 한 화면 맞춤 — `.onb-one` 안에서만. overflow 는 auto 그대로라 넘쳐도 클리핑 없이 스크롤로
@@ -71,7 +77,9 @@ const ONE_SCREEN_STYLE = `
 .onb-one .onb-excell{ gap:3px!important; }
 .onb-one .onb-excell > div{ aspect-ratio:auto!important; height:56px!important; }
 .onb-one .onb-excell > span{ font-size:10px!important; line-height:1.2!important; }
-.onb-one .onb-privacy{ font-size:10.5px!important; line-height:1.4!important; }
+/* ★ 학습 미사용 한 줄은 압축 대상에서 뺀다 — 자캐를 맡기는 사람이 제일 먼저 확인하는 줄이라
+   여기서 한 번 더 줄이면 가장 중요한 문장이 화면에서 가장 안 읽히는 문장이 된다. */
+.onb-one .onb-privacy{ line-height:1.45!important; }
 
 /* char — 밀도 최고. 4묶음+그밖에를 **2열**로 눕혀 세로를 반으로(폰 포함, 셸이 좁아도 칩이 짧아 견딤).
    간격·패딩·칩·입력을 최대 압축. 칩을 접지 않고(기능 보존) 크기만 줄인다. */
@@ -221,12 +229,22 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             여울 샘플로 가고 부화가 0/4 로 지워졌다 — 되돌릴 수 없는 지점은 되돌아가지지 않아야 한다. */}
         {o.canBack && key !== 'born' && (
           // OB-08 — 뒤로 버튼 크롬만 랜딩 line/paper/pill 톤으로. onBack·canBack·라벨은 그대로.
-          <button onClick={actions.onBack} style={{ border: `1px solid ${fDots ? C.lineHard : 'rgba(74,64,56,.13)'}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: 13, color: C.sub2, lineHeight: 1, ...(fDots ? { boxShadow: '0 1px 2px rgba(74,64,56,.06)' } : null) }} aria-label="뒤로">‹</button>
+          <button onClick={actions.onBack} className="onb-back" style={{ border: `1px solid ${fDots ? C.lineHard : 'rgba(74,64,56,.13)'}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: 13, color: C.sub2, lineHeight: 1, ...(fDots ? { boxShadow: '0 1px 2px rgba(74,64,56,.06)' } : null) }} aria-label="뒤로">‹</button>
         )}
         <span style={{ flex: 1 }} />
         {/* OB-08 — dots 개수·활성(d.w·d.bg)은 그대로, 모서리만 pill 로 다듬는다. */}
         {o.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 6, borderRadius: fDots ? radius.pill : 3, background: d.bg }} />)}
       </div>
+
+      {/* ★ 칸이 바뀌어도 아래 CTA 버튼은 **같은 DOM 노드**라 포커스가 그대로 남는다 — 눈으로 보는
+          사람은 화면이 바뀐 걸 알지만 화면 낭독기 쓰는 사람에게는 아무 말도 없었다(Nielsen #1).
+          점(dots)은 색뿐이라 읽히지도 않는다. 그래서 칸 이름을 조용히 한 줄 알린다. */}
+      <span
+        aria-live="polite"
+        style={{ position: 'absolute', width: 1, height: 1, margin: -1, padding: 0, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}
+      >
+        {`${o.dots.length}칸 중 ${(STEPS as readonly string[]).indexOf(key) + 1}번째 · ${ONB_COPY[key][0].replace('\n', ' ')}`}
+      </span>
 
       <div className="onb-scroll" style={{ flex: '1 1 auto', overflow: 'auto', padding: '18px 24px 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* ★ 랜딩 칸에는 이 머리말이 없다 — 무대(LandingV2Stage)가 같은 인사를 제 <h1> 으로
@@ -235,7 +253,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
         <div className="onb-head" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {/* OB-02 제목 타이포(자간·balance), OB-03 진입 등장(순서 0·70ms). 문구·줄바꿈(pre-line)은 그대로. */}
           <span className={['onb-title', rise].filter(Boolean).join(' ')} style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 30, lineHeight: fTitle ? 1.2 : 1.25, color: C.ink, whiteSpace: 'pre-line', ...(fTitle ? { letterSpacing: '-.5px', textWrap: 'balance' as const } : null), animationDelay: '0ms' }}>{title}</span>
-          <span className={['onb-sub', rise].filter(Boolean).join(' ')} style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.58)', animationDelay: '70ms' }}>{sub}</span>
+          <span className={['onb-sub', rise].filter(Boolean).join(' ')} style={{ fontSize: 13, lineHeight: 1.7, color: C.sub2, animationDelay: '70ms' }}>{sub}</span>
         </div>
         )}
 
@@ -280,7 +298,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               <span style={{ fontFamily: GAEGU, fontSize: 20, color: C.ink }}>
                 {live.busy ? '올리는 중…' : live.imageKey ? '그림을 올렸어요' : '그림 올리기'}
               </span>
-              <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.48)' }}>
+              <span style={{ fontSize: 11.5, color: C.sub2 }}>
                 {live.imageKey ? '다시 누르면 바꿀 수 있어요' : 'PNG · JPG · 10MB까지'}
               </span>
             </button>
@@ -291,9 +309,9 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               </span>
             )}
             {/* 가장 먼저 읽혀야 하는 한 줄 — 자캐를 맡기는 사람이 제일 먼저 의심하는 지점이다. */}
-            <span className="onb-privacy" style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
+            <span className="onb-privacy" style={{ fontSize: 11.5, lineHeight: 1.7, color: C.sub2 }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
 
-            <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림이면 좋아요</span>
+            <span style={{ fontSize: 11.5, color: C.sub2 }}>이런 그림이면 좋아요</span>
             <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {GOOD_EX.map(([lbl, color, key]) => (
                 <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
@@ -309,7 +327,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               ))}
             </div>
 
-            <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림은 어려워요</span>
+            <span style={{ fontSize: 11.5, color: C.sub2 }}>이런 그림은 어려워요</span>
             <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
               {BAD_EX.map(([lbl, color, key]) => (
                 <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
@@ -320,7 +338,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                     box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,rgba(74,64,56,${fEx ? '.03' : '.05'}) 0 5px,transparent 5px 12px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `8px ${MONO}`, color: 'rgba(74,64,56,.34)' }}
                     badge={<span style={{ position: 'absolute', left: 5, top: 5, width: 14, height: 14, borderRadius: '50%', background: 'rgba(255,253,248,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, color: C.accent }}>✕</span>}
                   />
-                  <span style={{ fontSize: 10.5, color: C.faint, textAlign: 'center' }}>{lbl}</span>
+                  <span style={{ fontSize: 10.5, color: C.sub2, textAlign: 'center' }}>{lbl}</span>
                 </div>
               ))}
             </div>
@@ -331,7 +349,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
           <div className={rise} style={{ display: 'flex', flexDirection: 'column', gap: 15, animationDelay: '130ms' }}>
             {o.userFields.map((f) => (
               <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span style={{ fontSize: 11.5, color: C.faint }}>{f.label}</span>
+                <span style={{ fontSize: 11.5, color: C.sub2 }}>{f.label}</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {f.opts.map((x) => (
                     <button key={x.text} onClick={x.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: 12.5, color: x.fg }}>{x.text}</button>
@@ -339,7 +357,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                 </div>
               </div>
             ))}
-            <span style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>전부 선택이에요. 나중에 설정에서 바꿀 수 있어요.</span>
+            <span style={{ fontSize: 11.5, lineHeight: 1.7, color: C.sub2 }}>전부 선택이에요. 나중에 설정에서 바꿀 수 있어요.</span>
           </div>
         )}
 
@@ -347,7 +365,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
           <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', gap: 17, animationDelay: '130ms' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 11.5, color: C.faint }}>이름 · 12자까지</span>
+                <span style={{ fontSize: 11.5, color: C.sub2 }}>이름 · 12자까지</span>
                 <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: C.accentSoft, color: C.accent, fontSize: 10 }}>필수</span>
               </span>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -362,7 +380,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               {/* 두고 간 초안을 이어붙였을 때. 그림을 다시 올리라고 하면 이미 구운 시트를 버리는
                   셈이라(계약 4절), 여기서 이름만 받아 이어 간다. */}
               {live.resumedDraft && (
-                <span style={{ fontSize: 11.5, lineHeight: 1.6, color: C.faint }}>
+                <span style={{ fontSize: 11.5, lineHeight: 1.6, color: C.sub2 }}>
                   올려 두신 그림이 있어요. 이름만 지어 주면 이어서 시작해요.
                 </span>
               )}
@@ -370,7 +388,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
 
             <div className="onb-note" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '11px 13px', borderRadius: radius.md, background: C.slot }}>
               <span style={{ width: 5, height: 5, flex: 'none', marginTop: 7, borderRadius: '50%', background: C.frameWood }} />
-              <span style={{ fontSize: 12, lineHeight: 1.65, color: 'rgba(74,64,56,.62)' }}>아래는 전부 선택이에요. 지금 안 정해도 나중에 여울이 방에서 물어봐요.</span>
+              <span style={{ fontSize: 12, lineHeight: 1.65, color: C.sub2 }}>아래는 전부 선택이에요. 지금 안 정해도 나중에 여울이 방에서 물어봐요.</span>
             </div>
 
             {/* OB-10 — 이 래퍼는 기본 display:contents(투명)라 OFF 는 원본과 동일. 탭·PC(≥768)에서만 2열 그리드가 되어 세로를 반으로 접는다. */}
@@ -379,9 +397,9 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               <div key={g.key} className="onb-cgroup" style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13.5, color: C.ink }}>{g.title}</span>
-                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'rgba(74,64,56,.07)', color: C.faint, fontSize: 10 }}>선택</span>
+                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'rgba(74,64,56,.07)', color: C.sub2, fontSize: 10 }}>선택</span>
                   {/* 칩만 보면 하나만 고르는 줄 안다 — 여러 개가 된다는 것은 글로 말해 준다. */}
-                  <span data-part="chip-note" style={{ fontSize: 10.5, color: C.faint }}>{g.note}</span>
+                  <span data-part="chip-note" style={{ fontSize: 10.5, color: C.sub2 }}>{g.note}</span>
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -426,7 +444,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             })()}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
               <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 26, color: C.ink }}>{o.bornName}</span>
-              <span style={{ fontSize: 12.5, color: 'rgba(74,64,56,.55)' }}>{o.bornTraits}</span>
+              <span style={{ fontSize: 12.5, color: C.sub2 }}>{o.bornTraits}</span>
             </div>
           </div>
         )}
@@ -474,7 +492,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             fontSize: fCta ? 17 : 15.5,
             ...(fCta ? { fontFamily: GAEGU, fontWeight: 700 } : null),
             background: blocked ? C.off : C.accent,
-            color: blocked ? '#8B8175' : C.accentInk,
+            color: blocked ? C.sub2 : C.accentInk,
             cursor: blocked ? 'default' : 'pointer',
             boxShadow: blocked ? 'none' : fCta ? '0 6px 16px rgba(156,66,50,.24)' : '0 4px 12px rgba(192,104,92,.22)',
             animationDelay: '190ms',
