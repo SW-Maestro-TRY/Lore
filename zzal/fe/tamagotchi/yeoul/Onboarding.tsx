@@ -6,17 +6,24 @@
 //   `/zzal/landing` 통짜 페이지가 쓰는 것과 같은 부품·같은 스타일이다.
 //   칸 순서(landing→upload→char→born)·뒤로 규칙·CTA 동작(`onb-next`)은 하나도 안 바뀐다.
 //
-// 네 칸뿐이다. 예전 다섯 칸에 있던 **가입**은 칸이 아니라 첫 화면에서 무언가 하려 할 때 뜨는
-// 모달로 옮겼고(→ `AuthModal.tsx`), **유저 설문**은 샘플 방에서 여울이 하나씩 묻는 것으로
-// 옮겼다(→ `Room.tsx` 의 AskCard). 둘 다 2026-09-07 확정.
+// 네 칸뿐이다. 예전 다섯 칸에 있던 **가입**은 칸이 아니라 모달로 옮겼고(→ `AuthModal.tsx`),
+// **유저 설문**은 샘플 방에서 여울이 하나씩 묻는 것으로 옮겼다(→ `Room.tsx` 의 AskCard).
+// 둘 다 2026-09-07 확정.
+//
+// ★ 2026-09-19 — 그 모달이 뜨는 **시점**이 첫 화면에서 **올리기 칸**으로 내려왔다.
+//   랜딩 CTA 한 번에 가입 창이 뜨면, SNS 로 처음 온 사람이 무엇을 주는 곳인지도 모른 채
+//   계정부터 만들어야 한다. 이제 랜딩은 아무것도 묻지 않고 이 칸으로 보내고, 가입은
+//   **그림을 실제로 올리는 순간**(`presign` 직전) 한 번만 묻는다. 그동안 고른 파일은
+//   `useHatch.holdUpload` 가 들고 있다가 로그인 뒤 **같은 파일로** 이어서 올린다.
 //
 // 캐릭터 칸은 "이름만 필수" 다. 나머지는 칩 한 줄 + 긴 글 한 줄이고, 안 채워도 넘어간다.
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF, STEPS } from './constants';
+import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF, STEPS, UPLOAD_COPY } from './constants';
 import { LandingV2Stage, LandingV2Style } from '../../LandingV2';
+import { useAuth } from '@common/auth/useAuth';
 import { C, GAEGU, MONO, radius } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import { assetUrl } from '../../lib/assets';
@@ -176,6 +183,21 @@ function OnboardingInner({ y }: { y: Yeoul }) {
   const file = useRef<HTMLInputElement>(null);
   const o = v.onb;
   const key = o.stepKey;
+  /**
+   * ★ 2026-09-19 — **가입은 여기서 묻는다.** 랜딩 CTA 는 이제 아무것도 안 묻고 이 칸으로 보낸다.
+   *   올리기가 로그인이 필요한 첫 호출이라, 그림을 고른 순간(= `presign` 직전)에 가른다.
+   *   판정은 `useAuth` 한 곳이다 — 목(`s.authed`)은 이미 로그인한 사람도 'session' 으로 통과시키는
+   *   뒤따르는 값이라, 무엇을 물을지 정하는 자리에서는 서버가 답한 이쪽을 본다.
+   * ★ `isLoading` 중에는 **어느 쪽으로도 단정하지 않는다**(useAuth 머리말). 그림만 들고 있다가
+   *   답이 오면 그때 올리거나(로그인) 창을 연다(미로그인).
+   */
+  const { isAuthenticated, isLoading } = useAuth();
+  /** 이 그림 때문에 가입 창을 이미 띄웠는가. 사용자가 닫으면 저절로 다시 뜨지 않는다. */
+  const askedAuth = useRef(false);
+  /** 고른 그림이 손에 있는데 아직 로그인 전 — 올리기가 여기서 멈춰 있다. */
+  const needAuth = live.pendingUpload && !isAuthenticated;
+  const openSignup = actions.openAuth('signup');
+  const askAuth = () => { askedAuth.current = true; openSignup(); };
   // 랜딩 칸의 제목·부제는 랜딩 v2 무대가 직접 들고 있다(같은 상수 LANDING_COPY). 나머지 칸만 여기서.
   const [title, sub] = ONB_COPY[key];
   // 겉모습 스왑 플래그(전부 OFF=현재 코드 그대로).
@@ -192,6 +214,19 @@ function OnboardingInner({ y }: { y: Yeoul }) {
   // OB-03 등장은 클래스로만 붙인다 — off 면 빈 문자열이라 DOM·핸들러 변화 없음.
   const rise = fRise ? 'onb-rise' : undefined;
 
+  /**
+   * 들고 있는 그림이 있는데 미로그인으로 **확정되면** 가입 창을 연다.
+   *
+   * 고른 순간에 바로 열지 않고 한 박자 두는 이유 — 그 순간 `useAuth` 가 아직 `loading` 일 수 있다.
+   * 그때 열면 **이미 로그인한 사람에게 가입 창**을 들이민다.
+   * 한 번 열고 나면 `askedAuth` 가 잠근다 — 닫은 창이 저절로 다시 뜨면 화면을 빠져나갈 수 없다.
+   */
+  useEffect(() => {
+    if (!live.pendingUpload || isLoading || isAuthenticated || askedAuth.current) return;
+    askAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- askAuth 는 매 렌더 새로 만들어진다(actions.openAuth 가 클로저를 돌려준다). 여는 조건은 위 세 값뿐이다.
+  }, [live.pendingUpload, isLoading, isAuthenticated]);
+
   // ★ 그림은 **필수**다(상훈님 2026-09-07 결정). '그림 없이 계속' 은 없앴다 —
   //   그림 없이 넘어가면 아이를 만들 재료가 없어서 그 뒤 화면이 전부 목이 된다.
   // ★ 판정 기준은 목 상태(`s.uploaded`)가 아니라 **실제로 올라간 키**(`live.imageKey`)다.
@@ -199,14 +234,17 @@ function OnboardingInner({ y }: { y: Yeoul }) {
   //   그것으로 막으면 재료 없이 통과한다.
   // ★ 두 칸의 '못 넘어감' 표현을 맞춘다(상훈님 판정 22). 예전엔 올리기는 버튼이 잠기고,
   //   캐릭터는 눌러야 오류가 떴다 — 같은 뜻인데 배우는 법이 둘이었다. 둘 다 **잠그는 쪽**으로.
-  const uploadBlocked = key === 'upload' && !live.imageKey;
+  // ★ 2026-09-19 — 고른 그림을 손에 들고 **가입을 기다리는 중**이면 잠그지 않는다.
+  //   그림은 이미 골랐는데 '그림을 먼저 올려 주세요' 가 잠긴 채 남으면 그 말이 거짓이 되고,
+  //   앞으로 갈 길이 화면에서 사라진다. 이때 버튼은 **가입 창을 다시 여는 자리**다.
+  const uploadBlocked = key === 'upload' && !live.imageKey && !needAuth;
   const nameBlocked = key === 'char' && !s.petName.trim();
   // ★ 보내는 동안에도 잠근다(2026-09-10). 안 잠그면 두 번 눌려 같은 이름을 두 번 보내고,
   //   그사이 화면은 아무 반응이 없어 사람이 계속 누른다.
   const sending = live.busy && (key === 'upload' || key === 'char');
   const blocked = uploadBlocked || nameBlocked || sending;
   const ctaLabel = key === 'upload'
-    ? (live.busy ? '올리는 중…' : live.imageKey ? '다음' : '그림을 먼저 올려 주세요')
+    ? (live.busy ? '올리는 중…' : live.imageKey ? '다음' : needAuth ? UPLOAD_COPY.pendingCta : '그림을 먼저 올려 주세요')
     : (key === 'char' && live.busy ? '준비하는 중…' : o.cta);
 
   return (
@@ -277,12 +315,25 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) { void live.upload(f); actions.onUpload(); }
+                if (f) {
+                  actions.onUpload();
+                  // 이 그림으로는 아직 안 물어봤다 — 다시 물을 수 있게 푼다.
+                  askedAuth.current = false;
+                  // ★ 로그인했으면 그대로 올린다. 아니면(모르는 중 포함) **들고만 있는다** —
+                  //   가입 창은 위 effect 가 미로그인으로 확정된 뒤에 연다.
+                  if (isAuthenticated) void live.upload(f);
+                  else live.holdUpload(f);
+                }
                 e.target.value = '';
               }}
             />
             <button
-              onClick={() => file.current?.click()} data-action="upload" disabled={live.busy}
+              onClick={() => {
+                // 고른 그림이 손에 있는데 로그인 전이면 **다시 고르게 하지 않는다** — 가입 창만 다시 연다.
+                if (needAuth) { askAuth(); return; }
+                file.current?.click();
+              }}
+              data-action="upload" data-pending-auth={needAuth ? 'true' : undefined} disabled={live.busy}
               className="onb-drop"
               // OB-06 — dash 색·라운드·바탕만 랜딩 토큰으로 정돈. 파일 선택·미리보기·busy/성공/오류·data-action 은 그대로.
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: fDrop ? radius.xl : radius.lg, border: `2px dashed ${live.imageKey ? C.accent : fDrop ? C.lineHard : 'rgba(74,64,56,.18)'}`, background: live.imageKey ? C.accentSoft : fDrop ? C.slot : C.paper }}
@@ -296,10 +347,10 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                   알아서, 업로드가 실패해도 '그림을 올렸어요' 라고 거짓말을 했다(2026-09-07 실측 S3 403).
                   아래 CTA 는 잠겨 있는데 여기만 성공이라 말하면 사용자가 갇힌다. */}
               <span style={{ fontFamily: GAEGU, fontSize: 20, color: C.ink }}>
-                {live.busy ? '올리는 중…' : live.imageKey ? '그림을 올렸어요' : '그림 올리기'}
+                {live.busy ? '올리는 중…' : live.imageKey ? '그림을 올렸어요' : needAuth ? UPLOAD_COPY.pending : '그림 올리기'}
               </span>
               <span style={{ fontSize: 11.5, color: C.sub2 }}>
-                {live.imageKey ? '다시 누르면 바꿀 수 있어요' : 'PNG · JPG · 10MB까지'}
+                {live.imageKey ? '다시 누르면 바꿀 수 있어요' : needAuth ? UPLOAD_COPY.pendingNote : 'PNG · JPG · 10MB까지'}
               </span>
             </button>
             {live.error && (
@@ -458,6 +509,9 @@ function OnboardingInner({ y }: { y: Yeoul }) {
         {live.blocked && <BlockedNotice b={live.blocked} />}
         <button
           onClick={() => {
+            // ★ 고른 그림이 손에 있고 로그인 전이면, 이 버튼은 **가입 창을 여는 자리**다(2026-09-19).
+            //   여기서 앞으로 보내면 재료(그림)가 서버에 없는 채로 캐릭터 칸에 서게 된다.
+            if (needAuth) { askAuth(); return; }
             // 그림을 올렸으면 이 순간이 **격자 생성 시작**이다(계약 4절의 두 번째 걸음).
             // 첫 걸음(초안 잡기)은 이미 그림을 올린 순간에 끝났다 — 그래서 여기까지 오는 동안
             // 서버가 캐릭터 시트를 미리 구워 두었다.
