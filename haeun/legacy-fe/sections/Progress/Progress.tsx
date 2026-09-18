@@ -1,0 +1,372 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { setupLou, setupTips } from "../../lib/mascotPlay";
+import {
+  cancelJob, decideSheet, jobPageUrl, pickDirection, rememberMyRun, retryDirections,
+} from "../../lib/nhApi";
+import { useNhJob } from "./useNhJob";
+import { headLine, mascotLine, mmss, stageArt } from "./nhStage";
+import NotifyByEmail from "./NotifyByEmail";
+import SheetApproval from "./SheetApproval";
+import PickApproval from "./PickApproval";
+import ZoomView from "./ZoomView";
+import StageRail from "./StageRail";
+
+/* 기다리는 화면 — haeun/landing/web 의 #progress 를 옮겼다.
+ *
+ * **이제 흉내가 아니다.** 예전에는 백엔드가 없어서 로컬 타이머로 진행을
+ * 흉내 냈는데(useFakeProgress), 지금은 `/api/webtoon/v1/nh/jobs/{id}` 를 0.8초
+ * 마다 받아 실제 작업을 그린다 — 원본 app.js 의 nhTick 과 같은 방식이다.
+ *
+ * 사람이 멈춰 서는 자리는 **둘뿐**이다. 시트 확인 → 이야기 고르기, 그
+ * 순서다(시트가 먼저인 이유는 SheetApproval 주석). 이야기를 고른 다음은 안
+ * 멈춘다 — 곧장 그림이다.
+ *
+ * 단계 목록은 **서버가 준 것**을 그린다(s.stages · s.stage_index ·
+ * s.stage_label · s.pct). 화면이 단계 목록을 들고 있으면 파이프라인이 바뀔
+ * 때마다 화면이 거짓말을 한다 — 실제로 그랬다. 이 화면이 한동안 이미
+ * 없어진 콘티 단계("1화를 컷으로 나누고 대사를 붙입니다")를 계속 보여주고
+ * 있었다.
+ */
+export default function Progress({
+  jobId,
+  styleLabel,
+  onExit,
+  onDone,
+  onBrowse,
+}: {
+  jobId: string;
+  /** 만들 때 고른 그림체 이름. 서버도 style_label 을 주지만 첫 폴링 전까지 비어 있다. */
+  styleLabel?: string;
+  onExit: () => void;
+  onDone: (runId: string) => void;
+  /** 기다리는 동안 둘러보기로. 만들기는 서버에서 계속 돈다. */
+  onBrowse: () => void;
+}) {
+  const { job, offline, busy, send } = useNhJob(jobId);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [zoom, setZoom] = useState<{ src: string; alt: string } | null>(null);
+  // 시트를 다시 만들면 주소가 같아서 옛 그림이 뜬다 — 이 값으로 캐시를 흘린다.
+  const [sheetVersion, setSheetVersion] = useState(() => Date.now());
+  const [failed, setFailed] = useState<string | null>(null);
+
+  /** 사람이 답할 차례인가. */
+  const waiting = job?.status === "awaiting_sheet" || job?.status === "awaiting_pick";
+  /** 루 놀이터가 지금 화면에 있는가 — 아래 렌더 조건과 **똑같아야 한다.** */
+  const playOpen = !!job && !waiting;
+
+  /* 루 놀이터는 **확인 차례에는 DOM 에 없다**(아래 `{!waiting && ...}`).
+     그런데 붙이는 일을 마운트 때 한 번만 하면, 확인 차례에 이 화면이 뜬
+     경우 붙일 대상이 없어서 그냥 지나가고 — 확인이 끝나 놀이터가 나타나도
+     **영영 아무 반응이 없다.** 실제로 그랬다: 시트 확인 중에 새로고침하면
+     그 뒤로 루를 눌러도 안 움직였다.
+
+     그래서 놀이터가 나타나고 사라질 때마다 다시 붙인다. 조건을 `waiting`
+     하나로 두면 안 된다 — 첫 폴링 전에는 job 이 없어 화면 자체가 안 그려지는데
+     `waiting` 은 그때도 false 라, 곧바로 진행 중으로 오면 효과가 다시 안 돈다. */
+  useEffect(() => {
+    if (!playOpen) return;
+    const disposeLou = setupLou();
+    const disposeTips = setupTips();
+    return () => { disposeLou(); disposeTips(); };
+  }, [playOpen]);
+
+  /* 다 되면 결과 화면으로. **내 작품으로 남기는 것을 잊으면 안 된다** —
+     안 남기면 앱이 남의 작품으로 보고 완성본 화면의 내려받기·편집실·저장·
+     공유를 통째로 감춘다(원본에서 실제로 겪은 것이다). */
+  const doneRunId = job?.status === "done" ? job.run_id : null;
+  useEffect(() => {
+    if (!doneRunId) return;
+    rememberMyRun(doneRunId);
+    onDone(doneRunId);
+  }, [doneRunId, onDone]);
+
+  if (!job) {
+    return (
+      <section className="progress">
+        <div className="progress-inner">
+          <header className="progress-head">
+            <h2>{offline ? "서버에 닿지 못했습니다" : "불러오는 중…"}</h2>
+            {offline && (
+              <p className="progress-sub">
+                잠시 뒤 다시 시도합니다 — 만들기는 서버에서 계속 돌고 있습니다.
+              </p>
+            )}
+          </header>
+
+        {/* **기다리는 동안 다른 걸 봐도 된다.**
+            한 편에 십 분 안팎이 걸리는데 이 화면이 그동안 사람을 붙들고
+            있었다. 만들기는 서버에서 도는 것이라 창을 닫아도 안 멈춘다 —
+            그 말을 같이 적는다.
+
+            **진행 카드 바로 아래**에 둔다. 맨 밑에 두었더니 스크롤을 한참
+            내려야 보여서, 나갈 수 있다는 것 자체를 모르고 붙들려 있었다.
+
+            확인 차례에는 안 띄운다: 그때는 사람이 답해야 앞으로 간다. */}
+        {!waiting && (
+          <div className="wait-away">
+            <button type="button" className="btn btn-quiet btn-sm" onClick={onBrowse}>
+              기다리는 동안 웹툰 보기
+            </button>
+            <span>만들기는 서버에서 계속 돌아요. 나갔다 와도 이어집니다.</span>
+          </div>
+        )}
+        </div>
+      </section>
+    );
+  }
+
+  if (job.status === "error") {
+    /* **무엇을 돌려줬는지 서버가 말해 준 대로만 적는다.**
+     *
+     * 로그인한 사람에게는 크레딧을, 게스트에게는 오늘의 무료 횟수를
+     * 돌려주므로 같은 말을 쓸 수 없다 — 크레딧이 없는 사람에게 "크레딧을
+     * 환불했어요" 는 없는 것을 돌려줬다는 말이라 아무 뜻이 없다.
+     *
+     * 화면이 로그인 여부를 보고 **짐작해서** 적지 않는다. 돌려주는 일은
+     * 조용히 실패할 수 있고, 그때 "돌려드렸어요" 가 떠 있으면 그건 거짓말이다.
+     * 서버가 실제로 돌려준 것만 말하고(`refunded`), 없거나 못 돌려줬으면 그
+     * 줄을 **안 그린다** — 틀린 말보다 없는 편이 낫다. */
+    const back =
+      job.refunded === "credit" ? "사용된 크레딧은 자동으로 환불되었어요."
+      : job.refunded === "free" ? "사용한 무료 생성 횟수는 자동으로 복구되었어요."
+      : "";
+
+    return (
+      <section className="progress">
+        <div className="progress-inner">
+          <header className="progress-head">
+            <p className="eyebrow">멈췄습니다</p>
+            <h2>웹툰 생성에 실패했어요</h2>
+            {/* 하네스가 사유를 한글로 적어 보낸다 — 그대로 보여준다. */}
+            <p className="progress-sub">
+              {job.error || "생성하는 동안 문제가 발생해 웹툰을 완성하지 못했어요."}
+            </p>
+            {back && <p className="progress-back">{back}</p>}
+          </header>
+          <button type="button" className="btn btn-primary" style={{ width: "100%" }} onClick={onExit}>
+            홈으로 가기
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const head = headLine(job.status, job.style_label || styleLabel || "");
+  const line = mascotLine(job.status, job.stage, job.say, job.art);
+
+  /** 검수 답 보내기 — 실패하면 그 자리에서 말한다(조용히 삼키면 사람이 또 누른다). */
+  const answer = (fn: () => Promise<unknown>) => {
+    setFailed(null);
+    void send(fn).catch((e: Error) => setFailed(e.message));
+  };
+
+  return (
+    <section className="progress">
+      <div className="progress-inner">
+        <header className="progress-head">
+          {/* **줄을 보여 준다.**
+              만들기는 한 번에 두 편까지만 돈다. 앞에 사람이 있으면 내 차례가
+              그만큼 늦는데, 이 줄이 없을 때 화면은 그동안 「루가 그림을 그리고
+              있어요」만 보여 줬다 — 내 그림이 그려지는 줄 알고 기다린다.
+              모르는 15분과 아는 15분은 다르다.
+
+              서버가 DB 를 보고 센다(JobQueue). 내 차례가 오면 서버가 null 을
+              주고 이 띠는 사라진다 — 화면이 판단하지 않는다. */}
+          {job.queue && job.queue.ahead > 0 && (
+            <p className="queue-line" role="status">
+              <span className="queue-dot" aria-hidden="true" />
+              {job.queue.line}
+            </p>
+          )}
+          <div className="stage-now">
+            <div className="stage-art" data-stage={stageArt(job.stage, job.say)} />
+            <p className="stage-say">{line}</p>
+            <div className="lou-progress" role="progressbar"
+                 aria-valuemin={0} aria-valuemax={100} aria-valuenow={job.pct}>
+              <div className="lou-bar"><i style={{ width: `${job.pct}%` }} /></div>
+              <span className="lou-pct">{job.pct}%</span>
+            </div>
+            <p className="stage-clock">
+              <span className="clock-time">{mmss(job.elapsed)}</span>
+              <span className="clock-label">경과</span>
+            </p>
+
+            <details className="stage-detail">
+              <summary>지금 하고 있는 일 자세히</summary>
+              <StageRail
+                job={job}
+                jobId={jobId}
+                sheetVersion={sheetVersion}
+                onZoom={(src, alt) => setZoom({ src, alt })}
+              />
+            </details>
+          </div>
+
+          {/* 만드는 중에는 이 세 줄이 비어 있다 — 위에 이미 다 있는 말이라
+              또 적으면 같은 말을 두 번 하는 것이 된다(nhStage 의 headLine). */}
+          {head.title && (
+            <>
+              {head.eyebrow && <p className="eyebrow">{head.eyebrow}</p>}
+              <h2>{head.title}</h2>
+              {head.sub && <p className="progress-sub">{head.sub}</p>}
+            </>
+          )}
+        </header>
+
+        {/* **기다리는 동안 다른 걸 봐도 된다.** 진행 카드 바로 아래에 둔다 —
+            맨 밑에 두면 스크롤을 한참 내려야 보여서, 나갈 수 있다는 것 자체를
+            모르고 붙들려 있었다. 확인 차례(waiting)에는 안 띄운다: 그때는
+            사람이 답해야 앞으로 간다.
+
+            ★ `!job` 일 때(첫 폴링 전)의 같은 블록과 짝이다 — 여기 없으면
+            로딩이 끝나는 순간 이 버튼이 화면에서 통째로 사라진다. */}
+        {!waiting && (
+          <div className="wait-away">
+            <button type="button" className="btn btn-quiet btn-sm" onClick={onBrowse}>
+              기다리는 동안 웹툰 보기
+            </button>
+            <span>만들기는 서버에서 계속 돌아요. 나갔다 와도 이어집니다.</span>
+          </div>
+        )}
+
+        {/* **나가도 된다고 말했으면, 언제 돌아오는지도 말해야 한다.**
+            바로 위 「나갔다 와도 이어집니다」 밑에 붙인다 — 나갈까 말까를
+            정하는 그 자리에서 "그럼 다 되면 어떻게 알지?" 가 나오기 때문이다.
+
+            확인 차례에는 안 띄운다: 그때는 사람이 답해야 앞으로 가고,
+            눌러야 할 것이 있는데 입력 칸이 하나 더 있으면 그쪽으로 눈이 간다. */}
+        {!waiting && <NotifyByEmail jobId={jobId} job={job} />}
+
+        {/* ---- 사람이 멈춰 서는 자리 둘 ---- */}
+        {job.status === "awaiting_sheet" && (
+          <SheetApproval
+            jobId={jobId}
+            version={sheetVersion}
+            busy={busy}
+            onApprove={() => answer(() => decideSheet(jobId, "approve"))}
+            onRetry={(note) => {
+              setSheetVersion(Date.now());
+              answer(() => decideSheet(jobId, "retry", note));
+            }}
+            onZoom={(src, alt) => setZoom({ src, alt })}
+          />
+        )}
+
+        {job.status === "awaiting_pick" && (
+          <PickApproval
+            directions={job.directions}
+            busy={busy}
+            onPick={(n, editedBody) => answer(() => pickDirection(jobId, n, editedBody))}
+            onRetry={(note) => answer(() => retryDirections(jobId, note))}
+          />
+        )}
+
+        {failed && <p className="progress-sub" role="alert">{failed}</p>}
+
+        {/* 기다리는 동안 놀 것. 사람이 답할 차례일 때는 안 띄운다 — 눌러야
+            할 것이 화면에 있는데 마스코트가 같이 움직이면 그쪽으로 눈이 간다. */}
+        {!waiting && (
+          <>
+            <div className="play">
+              <div className="mascot-stage" id="mascotStage">
+                <button type="button" className="mascot" id="mascot" data-mood="think"
+                        aria-label="루를 눌러 보기">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img id="mascotImg" src="/static/lou/react/idle/01.webp" alt="" draggable={false} />
+                </button>
+              </div>
+              <p className="play-say" id="playSay">루를 눌러 보세요</p>
+              <p className="play-hint" id="playHint">
+                눌러 보기 · 연달아 누르기 · 꾹 누르기 · 끌어당기기
+              </p>
+              <button type="button" className="btn btn-quiet btn-sm" id="shakeAllow" hidden>
+                흔들기 켜기
+              </button>
+            </div>
+
+            <div className="tips" id="tips" hidden aria-live="polite">
+              <span className="tip-kind" id="tipKind">팁</span>
+              <p className="tip-text" id="tipText" />
+            </div>
+          </>
+        )}
+
+        {/* 그려진 장은 나오는 대로 보여준다 — 몇 분을 기다리는 사람에게
+            가장 큰 정보다.
+
+            **작은 격자가 아니라 완성본과 같은 폭으로 세로로 이어 보여준다**
+            (`.reader` 는 `Result.tsx` 가 쓰는 것과 같은 자리). 손바닥만 한
+            카드 여섯 개보다, 실제로 읽게 될 크기로 한 장씩 내려가며 보는 쪽이
+            "지금 이런 웹툰이 만들어지고 있다" 를 훨씬 잘 보여준다(사용자
+            피드백). */}
+        {job.art && job.art.done > 0 && (
+          <div className="cutstrip">
+            <div className="cutstrip-head">
+              <span>그려진 장</span>
+              <span>{job.art.done} / {job.art.total}장</span>
+            </div>
+            <div className="reader">
+              {Array.from({ length: job.art.done }, (_, i) => i + 1).map((n) => (
+                <div className="page" key={n}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img className="cut-img" src={jobPageUrl(jobId, n, 1080)}
+                       alt={`${n}번째 장`} loading="lazy" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 파이프라인 로그(「자세히 보기」)를 뺐다 — 무엇을 하고 있는지는
+            위 「지금 하고 있는 일 자세히」가 사람 말로 다 보여 준다. 서버가
+            찍는 줄은 그 위에 한 겹 더 쌓여 화면만 길어졌다. 로그가 필요하면
+            서버 쪽에서 본다(job.log 는 API 로 계속 나간다). */}
+
+        {/* 통신이 잠깐 끊긴 것은 작업 실패가 아니다 — 서버에서는 계속 돈다. */}
+        {offline && (
+          <p className="progress-sub">연결이 잠깐 끊겼습니다 — 다시 받아오는 중입니다.</p>
+        )}
+
+        {!waiting && (
+          <div className="cancel-row">
+            <button type="button" className="btn btn-danger btn-sm" onClick={() => setCancelOpen(true)}>
+              만들기 중단
+            </button>
+          </div>
+        )}
+      </div>
+
+      {cancelOpen && (
+        <div
+          className="modal-veil"
+          onClick={(e) => { if (e.target === e.currentTarget) setCancelOpen(false); }}
+        >
+          <div className="modal-box modal-narrow" role="dialog" aria-modal="true"
+               aria-labelledby="cancelModalTitle">
+            <h3 id="cancelModalTitle">정말로 중단하시겠습니까?</h3>
+            <p className="cancel-warn"><b>크레딧은 환불되지 않습니다.</b></p>
+            <p className="cancel-sub">
+              지금까지 그려 둔 장은 그대로 남습니다 — 편집실에서 볼 수 있습니다.
+            </p>
+            <div className="cancel-actions">
+              <button type="button" className="btn btn-quiet" onClick={() => setCancelOpen(false)}>
+                계속 만들기
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => { setCancelOpen(false); answer(() => cancelJob(jobId)); }}
+              >
+                중단하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {zoom && <ZoomView src={zoom.src} alt={zoom.alt} onClose={() => setZoom(null)} />}
+    </section>
+  );
+}

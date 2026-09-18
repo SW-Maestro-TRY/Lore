@@ -1,0 +1,932 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   앱 안에 들어오면서 달라지는 것 — **여기만 손으로 씁니다.**
+
+   위(webtoon.css 의 앞부분)는 랜딩 원본을 기계가 옮긴 것이라 손대면
+   다음번에 사라집니다(port-css.mjs 참고). 원본과 달라야 하는 이유가 있는
+   것만 이 파일에 적고, 왜 다른지를 같이 적습니다.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ---- 자기 머리(상단 바)는 안 그린다 -----------------------------------
+   원본은 혼자 뜨는 페이지라 자기 상단 바가 필요했지만, 여기서는 Lore 앱
+   헤더가 이미 위에 있다 — 둘 다 그리면 "LORE" 가 두 번 나온다. 마크업에서
+   안 그리지만, 원본 CSS 가 그 높이(59px)를 빼고 화면을 채우게 돼 있어서
+   그 계산만 되돌린다. */
+.webtoon-page .top,
+.webtoon-page .studio,
+.webtoon-page .progress,
+.webtoon-page .works,
+.webtoon-page .me,
+.webtoon-page .result { min-height: calc(100dvh - var(--lore-header-h, 0px)); }
+
+/* ---- 앱 헤더 높이 -----------------------------------------------------
+   Lore 앱 헤더는 화면 위에 붙어 따라온다. 그 높이를 코드에 적어 두면 헤더가
+   바뀔 때 조용히 어긋나므로, WebtoonPage 가 실제 헤더를 재서 이 변수에
+   넣는다. 아직 안 쟀거나 헤더가 없으면 0 이다. */
+
+/* ---- 편집실 머리줄은 없앤다 -------------------------------------------
+   원본 style.css 의 "화면을 그림으로 꽉 채우기로 한 결정"과 같다. 제목 띠
+   (☰ 작품 · 제목 · 6장 6컷)와 크레딧 칩을 끄고 머리 자리를 납작하게 만든다 —
+   웹툰은 그림을 보러 온 화면이고, 제목과 작품 목록은 한 번 보면 되는 것이다.
+   마크업은 남긴다(지우지 않는다): 엔진이 #worksToggle · #edTitle 을 계속
+   채우고 있어서, DOM 을 지우면 그쪽이 빈손을 잡는다. */
+.webtoon-page .ed-top {
+  background: transparent; border: none; box-shadow: none; position: static;
+}
+.webtoon-page .ed-top::before { display: none; }
+.webtoon-page .ed-strip, .webtoon-page .ed-chips { display: none; }
+
+/* 도구 서랍은 화면 오른쪽에 붙박여 있다. 원본은 혼자 뜨는 페이지라 천장이
+   화면 맨 위였지만, 여기서는 그 위에 앱 헤더가 있다 — 그 아래에서 시작해야
+   헤더의 단추를 덮지 않는다. */
+@media (min-width: 880px) {
+  .webtoon-page .ed-dock { top: var(--lore-header-h, 0px); }
+}
+
+/* ---- 물이 화면 끝까지 흐르게 ------------------------------------------
+   원본은 880px 부터 아트보드를 걷어내고 화면 전체를 쓴다. 여기서는 앱
+   레이아웃(main)이 1240px + 좌우 여백으로 묶고 있어서, 그 틀을 뚫고 나와야
+   같은 그림이 된다. */
+@media (min-width: 880px) {
+  .webtoon-page {
+    /* 세로 스크롤바 때문에 100vw 가 실제 폭보다 넓어 가로 스크롤이 생길 수
+       있으므로 넘치는 것은 자른다. */
+    width: 100vw;
+    margin-inline: calc(50% - 50vw);
+    /* 위아래는 앱이 준 여백을 되돌린다 — 안 되돌리면 앱 헤더와 물빛 사이에
+       흰 띠가 남는다. */
+    margin-block: calc(-1 * var(--lore-main-pad, 40px));
+    overflow-x: clip;
+
+    /* 원본은 이 물빛을 html 에 깔고 body 를 투명하게 둔다. 여기서는 html 이
+       Lore 앱 것이라 못 건드리므로 이 화면의 바깥 틀이 직접 깐다 —
+       투명하게 두면 앱의 흰 바탕이 비쳐서 히어로 아래가 하얘진다. */
+    background:
+      radial-gradient(120% 90% at 50% 0%, #f4fcfe 0%, #e3f4fa 60%, #d2ecf4 100%)
+      fixed;
+  }
+}
+
+/* ---- 그림을 그냥 저장해 가지 못하게 -----------------------------------
+   가져가는 길은 「내려받기」·「이미지로 뽑기」 하나로 모은다 — 그 길로 나가는
+   파일에만 LORE 표시가 붙는다.
+
+   ⚠ **막는 것이 아니라 문턱이다.** 주소를 알면 그대로 받을 수 있다. 여기서
+   없애는 것은 실수로 새어 나가는 길이고, 오른쪽 누르기·끌어 놓기는
+   WebtoonPage 가 같이 막는다. 화면 찍기는 그대로 둔다.
+
+   (원본은 이것을 style.css 에 갖고 있지만, 거기서는 `img` 전역 규칙이다 —
+   여기서는 이 화면 안으로 가둬야 해서 다시 적는다.) */
+.webtoon-page img {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---- 편집실로 가는 길은 원본에서 링크(<a>)다 --------------------------
+   여기서는 화면 안 이동이라 <button> 이어야 하는데(주소가 아니라 화면
+   상태를 바꾼다), 그러면 브라우저 기본 단추 껍데기가 붙어 글씨 링크가
+   상자로 보인다. 껍데기만 벗긴다 — 색·크기는 원본 규칙 그대로. */
+.webtoon-page button.works-edit {
+  padding: 0; border: 0; background: none;
+  font: inherit; font-size: .72rem; text-align: left; cursor: pointer;
+}
+
+/* ---- 공개 / 비공개 스위치 ----------------------------------------------
+ *
+ * 원본은 네모 체크박스에 「둘러보기에 공개 / 나만 보기」 였는데, 체크가 켜진
+ * 것이 "지금 공개" 인지 "공개하겠다" 인지 안 읽혔다. 지금 상태를 그냥
+ * 공개·비공개로 말하고, 모양도 **스위치**로 바꾼다 — 네모는 "고른다",
+ * 스위치는 "켜져 있다/꺼져 있다" 로 읽힌다. 여기서 말하려는 것은 뒤쪽이다.
+ *
+ * 마크업은 그대로 checkbox 다(`role="switch"`). 스크린리더도 키보드도 그대로
+ * 동작하고, 바꾸는 것은 보이는 모양뿐이다.
+ *
+ * ⚠ 선택자를 `.works-pub .works-pub-box` 로 한 겹 더 준 이유 — 원본에
+ *   `.works-pub input { width: 1.05em }` 이 있어서, 한 겹으로 쓰면 그쪽이
+ *   특정도로 이겨 스위치가 14px 로 쪼그라든다(실측). !important 로 덮으면
+ *   다음 사람이 왜 안 먹는지 또 찾게 된다. */
+.webtoon-page .works-pub {
+  display: flex; align-items: center; gap: .5em; margin-top: .5em;
+  font-size: .74rem; font-weight: 600; color: var(--accent-d); cursor: pointer;
+}
+.webtoon-page .works-pub.is-off { color: var(--dim); }
+
+.webtoon-page .works-pub .works-pub-box {
+  appearance: none; -webkit-appearance: none;
+  flex: none; position: relative; margin: 0; cursor: pointer;
+  width: 34px; height: 20px; border-radius: 999px;
+  background: var(--line-2); border: none;
+  transition: background-color .16s ease;
+}
+/* 손잡이. 켜지면 오른쪽으로 미끄러진다 — 그 움직임이 "바뀌었다" 를 말한다. */
+.webtoon-page .works-pub .works-pub-box::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(15,51,63,.35);
+  transition: transform .16s ease;
+}
+.webtoon-page .works-pub .works-pub-box:checked { background: var(--accent); }
+.webtoon-page .works-pub .works-pub-box:checked::after { transform: translateX(14px); }
+.webtoon-page .works-pub .works-pub-box:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+/* 보내는 중에는 못 누르게 하고, 그 사실을 흐리게 알린다. */
+.webtoon-page .works-pub .works-pub-box:disabled { opacity: .5; cursor: progress; }
+
+.webtoon-page .works-pub-fail {
+  display: block; margin-top: .35em;
+  font-size: .72rem; color: #b5453c; font-weight: 600;
+}
+
+
+/* ── 결과 화면 머리 ───────────────────────────────────────────────────
+   표지 카드가 제 내용만큼만 좁게 서서 아래 그림과 왼쪽 끝이 안 맞았다.
+   읽기 전에 보는 것이 제목이라 그 자리가 흔들리면 읽는 것부터 어수선하다.
+   본문(.reader)과 같은 폭으로 세우고, 긴 제목이 잘리는 대신 줄바꿈되게 한다. */
+.webtoon-page .result-head > .result-cover {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.webtoon-page .result-cover-text {
+  min-width: 0;             /* 안 주면 flex 안에서 제목이 안 줄고 넘친다 */
+}
+
+/* 제목은 자르지 않는다. 한 줄에 안 들어가면 줄을 바꾼다 — 「칠흑의 꽃 피어날
+   때…」처럼 끝이 잘리면 무슨 작품인지 알 수가 없다. */
+.webtoon-page .result-cover-text h2 {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+/* ── 장면 설명 (눌러서 펴기) ──────────────────────────────────────────
+   그림 자체가 단추다. 그래서 단추의 기본 꾸밈을 전부 걷어낸다 — 안 걷으면
+   장마다 회색 테두리가 생겨서 읽는 흐름이 칸으로 끊긴다. */
+.webtoon-page .page-peek {
+  appearance: none;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  position: relative;
+  cursor: zoom-in;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.webtoon-page .page-peek.is-open {
+  cursor: zoom-out;
+}
+
+/* 설명은 **화면 아래에 붙여** 띄운다.
+   처음에는 그림 아래쪽에 겹쳐 깔았는데, 세로 스크롤 웹툰의 한 장은 화면보다
+   몇 배 길어서 「누른 자리」와 「그림의 맨 아래」가 아주 멀다 — 눌러도 아무
+   일이 없는 것처럼 보였다(실측). 흐름에 끼워 넣는 것도 안 된다: 펼 때마다
+   아래 그림이 통째로 밀려 읽던 자리를 잃는다.
+
+   한 번에 하나만 열리므로 이 띠도 하나뿐이다. */
+.webtoon-page .page-caption {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(680px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: rgba(9, 22, 28, .93);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  overflow-wrap: anywhere;
+  box-shadow: 0 8px 28px rgba(15, 51, 63, .3);
+}
+
+/* ── 공유하기 ───────────────────────────────────────────────────────
+   제목 옆에 서는 아이콘 하나. 목록은 그 아래에 떠서 아무것도 안 민다 —
+   흐름에 끼워 넣으면 펼 때마다 제목 아래가 통째로 내려간다. */
+.webtoon-page .share {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+
+.webtoon-page .share-icon {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .14s ease, border-color .14s ease;
+}
+
+.webtoon-page .share-icon:hover,
+.webtoon-page .share-icon[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 목록은 아이콘 아래에 띄운다. 제목 줄 안에 있으므로 흐름에 넣으면 제목이
+   밀린다 — 누를 때마다 글이 움직이면 읽던 자리를 잃는다. */
+.webtoon-page .share-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--paper, #fff);
+  box-shadow: 0 10px 28px rgba(15, 51, 63, .16);
+}
+
+.webtoon-page .share-one {
+  appearance: none;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.webtoon-page .share-one:hover {
+  background: var(--line-2);
+  color: var(--accent);
+}
+
+/* 알림 한 줄. 아이콘 옆에 짧게 뜬다 — 자리를 차지하지만 곧 사라진다. */
+.webtoon-page .share-said {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ── 둘러보기 카드의 그림체 딱지 ─────────────────────────────────────
+   제목·이름 아래에 작게. 고르는 데 쓰이는 값이지만 제목만큼은 아니다. */
+.webtoon-page .works-style {
+  /* 카드 본문이 세로 flex 라, inline-block 만으로는 안 줄고 한 줄을 다 먹는다
+     (stretch 가 기본이다) — 회색 띠가 카드를 가로지르는 꼴이 된다. */
+  align-self: flex-start;
+  width: fit-content;
+  margin: 6px 0 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--line-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ---- 진행 화면의 단계 패널 --------------------------------------------------
+ *
+ * 단계마다 무엇을 하는지 적고, 지나온 단계는 눌러서 결과를 볼 수 있게 한다
+ * (sections/Progress/StageRail.tsx). 「빠르게 결과부터」로 만들어도 똑같이
+ * 보이되, 읽기만 된다. */
+
+.webtoon-page .stage-open {
+  margin-top: .6em;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: .82rem;
+  cursor: pointer;
+}
+.webtoon-page .stage-open:hover { border-color: var(--accent); color: var(--accent); }
+
+.webtoon-page .stage-result {
+  margin-top: .8em;
+  border-top: 1px solid var(--line);
+  padding-top: .8em;
+  display: grid;
+  gap: .7em;
+}
+.webtoon-page .stage-hint { color: var(--dim); font-size: .8rem; margin: 0; }
+
+.webtoon-page .story-picks { list-style: none; margin: 0; padding: 0; display: grid; gap: .6em; }
+.webtoon-page .story-pick {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  /* 안 고른 것은 흐리게. 지운 것이 아니라 "이것도 있었다" 는 기록이다. */
+  opacity: .55;
+}
+.webtoon-page .story-pick[data-chosen="true"] { opacity: 1; border-color: var(--accent); }
+.webtoon-page .story-pick-head { display: flex; align-items: center; gap: .5em; flex-wrap: wrap; }
+.webtoon-page .story-pick-tag {
+  font-size: .72rem; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 999px; padding: 1px 8px;
+}
+.webtoon-page .story-pick p { margin: .4em 0 0; font-size: .86rem; color: var(--muted); line-height: 1.55; }
+
+.webtoon-page .board-scenes {
+  margin: 0; padding-left: 1.2em; display: grid; gap: .4em;
+  font-size: .86rem; color: var(--muted); line-height: 1.55;
+}
+
+.webtoon-page .stage-sheet {
+  border: 1px solid var(--line); border-radius: 10px;
+  background: transparent; padding: 0; cursor: zoom-in; overflow: hidden;
+  display: block; width: 100%;
+}
+.webtoon-page .stage-sheet img { display: block; width: 100%; height: auto; }
+
+/* 좁은 화면에서는 단계 칸의 동그라미가 자리를 너무 먹는다 — 설명이 두 줄로
+   접히면서 글이 손톱만해진다. */
+@media (max-width: 560px) {
+  .webtoon-page .stage { grid-template-columns: 26px 1fr; padding: 13px 14px; gap: 10px; }
+  .webtoon-page .stage-dot { width: 26px; height: 26px; font-size: .72rem; }
+  .webtoon-page .stage[data-state="active"] .stage-dot::after { width: 26px; height: 26px; }
+}
+
+/* ---- 만들기 전에 알려 주는 한 줄 ------------------------------------------
+ *
+ * 「−12크레딧」은 로그인한 사람에게만 참이다. 게스트에게는 크레딧이 아예
+ * 없는데 그 값이 적혀 있었고, 정작 무료 몇 편이 남았는지는 어디에도 없었다.
+ * 홈의 시작 단추 아래와 만들기 걸음 내내 같은 줄을 둔다. */
+
+.webtoon-page .hero-allowance {
+  /* 시작 단추 **바로 밑**에 붙인다 — 떨어뜨려 두면 어느 단추에 붙은 말인지
+     흐려진다. */
+  margin: .55em 0 0;
+  color: var(--muted);
+  font-size: .8rem;
+  /* 글줄 정렬은 히어로 블록을 따른다 — 가운데로 못 박으면 왼쪽 정렬인
+     본문에서 이 줄만 떠 보인다. */
+}
+.webtoon-page .submit-allowance {
+  margin: .5em 0 0;
+  color: var(--dim);
+  font-size: .8rem;
+  text-align: center;
+}
+
+/* ---- 캐릭터 ----------------------------------------------------------------
+ *
+ * 웹툰보다 **먼저 있는 자리**다. 캐릭터를 만들어 두고 그 캐릭터로 웹툰을
+ * 만든다(sections/Characters).
+ *
+ * **모바일이 기본이다.** 이 파일 위쪽의 다른 화면들과 같은 규칙 — 좁은 화면
+ * 기준으로 쓰고, 넓어질 때만 칸을 늘린다. 처음에 데스크톱만 보고 만들었더니
+ * 폰에서 카드 하나가 화면을 통째로 먹었다.
+ *
+ * 껍데기·카드·머리글은 「둘러보기」(.works)와 같은 모양을 쓴다. 두 화면이
+ * 나란히 있는데 결이 다르면 다른 서비스처럼 보인다. */
+
+.webtoon-page .chars {
+  min-height: 100dvh;
+  padding: 18px 16px 90px;
+  background: linear-gradient(180deg, var(--sea-sand) 0%, var(--paper-2) 30%, var(--ink) 100%);
+}
+.webtoon-page .chars-head { margin: 0 0 20px; }
+.webtoon-page .chars-head h2 {
+  font-size: clamp(1.5rem, 6vw, 1.9rem); font-weight: 800;
+  color: var(--accent-d); margin: 0 0 .3em;
+}
+.webtoon-page .chars-lede { color: var(--muted); font-size: .9rem; line-height: 1.65; margin: 0; }
+.webtoon-page .chars-quota {
+  display: inline-block; margin-top: 12px;
+  font-size: .8rem; color: var(--accent-d);
+  background: rgba(15,51,63,.06); border-radius: 999px; padding: .3em .9em;
+}
+.webtoon-page .chars-section {
+  font-size: 1rem; font-weight: 700; color: var(--accent-d); margin: 30px 0 2px;
+}
+.webtoon-page .chars-empty { color: var(--dim); font-size: .9rem; }
+.webtoon-page .chars-error { color: #d64545; font-size: .88rem; margin: 0; }
+
+/* 카드 — 폰에서 두 칸. 「둘러보기」와 같은 격자다. */
+.webtoon-page .char-grid {
+  list-style: none; margin: 12px 0 0; padding: 0;
+  display: grid; gap: 12px; grid-template-columns: 1fr 1fr;
+}
+.webtoon-page .char-card {
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 16px; background: var(--card);
+  box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 6px 20px rgba(15,51,63,.07);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.webtoon-page .char-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 0 rgba(15,51,63,.06), 0 14px 30px rgba(15,51,63,.12);
+}
+.webtoon-page .char-art {
+  aspect-ratio: 1 / 1; background: var(--card-2);
+  display: grid; place-items: center; overflow: hidden;
+}
+.webtoon-page .char-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.webtoon-page .char-art-none {
+  color: var(--dim); font-size: .78rem; text-align: center; line-height: 1.5; padding: 0 8px;
+}
+.webtoon-page .char-art[data-status="drawing"] {
+  /* 그리는 중인 것은 숨 쉬듯 옅어졌다 진해진다 — 멈춘 화면과 구별된다. */
+  animation: char-wait 1.6s ease-in-out infinite;
+}
+@keyframes char-wait { 50% { opacity: .55; } }
+
+.webtoon-page .char-body { padding: 9px 10px 11px; display: grid; gap: .3em; }
+.webtoon-page .char-name { font-size: .88rem; line-height: 1.35; }
+.webtoon-page .char-desc {
+  margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.webtoon-page .char-acts { display: grid; gap: 6px; margin-top: .3em; }
+.webtoon-page .char-acts .btn { width: 100%; }
+
+/* 만들기로 가는 칸 — 목록 안에 같이 둔다. 오른쪽 구석에 단추 하나만 두면
+   빈 화면에서 갈 곳이 안 보인다. */
+.webtoon-page .char-new {
+  border: 1.5px dashed var(--line-2); border-radius: 16px; background: transparent;
+  display: grid; place-items: center; gap: 4px; cursor: pointer;
+  /* li(부모 grid item)가 이미 같은 줄의 char-card 높이로 늘어나 있다
+     (grid 의 기본 align-items: stretch). 이 버튼도 그 li 를 꽉 채워야
+     카드들과 같은 크기로 보인다 — width/height 없이는 내용 크기만큼만
+     찬다. */
+  width: 100%; height: 100%; min-height: 150px; padding: 14px; text-align: center;
+  color: var(--accent-d); font-weight: 700; font-size: .9rem;
+  transition: border-color .16s ease, background .16s ease;
+}
+.webtoon-page .char-new:hover { border-color: var(--accent); background: rgba(15,51,63,.03); }
+.webtoon-page .char-new b { font-size: 1.5rem; font-weight: 400; line-height: 1; }
+
+/* ---- 캐릭터 만들기 (화면 하나) --------------------------------------------
+ *
+ * 작은 창으로 두면 적을 것과 그림체 여덟 개가 그 안에 안 들어간다.
+ * 웹툰 만들기가 화면을 통째로 쓰는 것과 같은 이유다. */
+
+.webtoon-page .charmake {
+  min-height: 100dvh;
+  padding: 18px 16px 90px;
+  background: linear-gradient(180deg, var(--sea-sand) 0%, var(--paper-2) 30%, var(--ink) 100%);
+}
+.webtoon-page .charmake-head { margin: 0 0 18px; }
+.webtoon-page .charmake-head h2 {
+  font-size: clamp(1.5rem, 6vw, 1.9rem); font-weight: 800;
+  color: var(--accent-d); margin: .2em 0 .3em;
+}
+.webtoon-page .charmake-body { display: grid; gap: 22px; }
+.webtoon-page .charmake-card {
+  background: var(--card); border-radius: 16px; padding: 16px;
+  box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 6px 20px rgba(15,51,63,.07);
+}
+.webtoon-page .char-field { display: grid; gap: .4em; margin-bottom: 15px; }
+.webtoon-page .char-field:last-child { margin-bottom: 0; }
+.webtoon-page .char-field > span { font-size: .85rem; font-weight: 700; color: var(--accent-d); }
+.webtoon-page .char-req { color: #d64545; font-size: .72rem; font-weight: 700; }
+.webtoon-page .char-opt { color: var(--dim); font-size: .72rem; font-style: normal; font-weight: 500; }
+.webtoon-page .char-field input[type="text"],
+.webtoon-page .char-field textarea {
+  border: 1px solid var(--line-2); border-radius: 12px; padding: 11px 13px;
+  font: inherit; background: var(--paper); color: var(--text); width: 100%;
+  line-height: 1.6;
+}
+.webtoon-page .char-field textarea { resize: vertical; }
+.webtoon-page .char-field input:focus-visible,
+.webtoon-page .char-field textarea:focus-visible {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(15,51,63,.08);
+}
+.webtoon-page .char-photo {
+  border: 1.5px dashed var(--line-2); border-radius: 12px; padding: 14px;
+  display: grid; gap: .7em; justify-items: center;
+}
+.webtoon-page .char-photo img { max-height: 150px; border-radius: 10px; }
+.webtoon-page .char-photo-none { color: var(--dim); font-size: .8rem; text-align: center; }
+.webtoon-page .char-photo-acts { display: flex; gap: 8px; }
+.webtoon-page .char-note { color: var(--dim); font-size: .76rem; line-height: 1.6; margin: .5em 0 0; }
+
+/* 그림체는 **보고** 고른다 — 이름만으로는 "세미리얼" 이 무엇인지 알 수 없다. */
+.webtoon-page .style-pick {
+  list-style: none; margin: 10px 0 0; padding: 0;
+  display: grid; gap: 10px; grid-template-columns: 1fr 1fr;
+}
+.webtoon-page .style-card {
+  width: 100%; text-align: left; cursor: pointer; padding: 0 0 10px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--paper);
+  overflow: hidden; display: grid; gap: .2em; align-content: start;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.webtoon-page .style-card:hover { transform: translateY(-1px); }
+.webtoon-page .style-card img {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; margin-bottom: .4em;
+}
+.webtoon-page .style-card b { font-size: .84rem; padding: 0 10px; color: var(--text); }
+.webtoon-page .style-card span {
+  font-size: .72rem; color: var(--dim); line-height: 1.45; padding: 0 10px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.webtoon-page .style-card.is-on {
+  border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset;
+}
+
+.webtoon-page .charmake-foot { margin-top: 4px; display: grid; gap: .5em; }
+.webtoon-page .charmake-foot .btn { width: 100%; }
+
+/* ---- 넓어지면 칸을 늘린다 -------------------------------------------------- */
+
+@media (min-width: 620px) {
+  /* 칸 수를 못 박지 않고 **한 칸의 최대 폭**으로 끊는다. 개수로 끊으면
+     화면이 넓어질수록 카드가 같이 커져서 한 장이 손바닥만 해진다. */
+  .webtoon-page .char-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .webtoon-page .style-pick { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 900px) {
+  .webtoon-page .chars,
+  .webtoon-page .charmake { padding: 30px 24px 100px; }
+  .webtoon-page .chars > *,
+  .webtoon-page .charmake > * { max-width: 1040px; margin-left: auto; margin-right: auto; }
+  .webtoon-page .char-grid { grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); }
+  /* 적는 곳과 고르는 곳을 좌우로. 여기서 처음 나뉜다.
+   *
+   * 만들기 단추는 **적는 칸 바로 밑**(사진 문구 아래)에 붙는다. 화면 맨
+   * 아래에 두면 그림체 여덟 개를 지나 한참 내려가야 눌린다.
+   *
+   * 좁은 화면에서는 그대로 맨 아래다 — 거기서는 그림체가 단추 위에 있어야
+   * 한다. 안 그러면 고르기도 전에 만들기가 먼저 나온다. */
+  .webtoon-page .charmake-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    align-items: start;
+  }
+  .webtoon-page .charmake-body > .charmake-card:nth-of-type(2) {
+    grid-column: 2; grid-row: 1 / span 2;
+  }
+  .webtoon-page .charmake-foot { grid-column: 1; justify-items: start; }
+  .webtoon-page .charmake-foot .btn { width: 100%; }
+}
+
+/* ---- 사진 칸을 누르면 뜨는 두 갈래 ------------------------------------------
+ *
+ * 바로 파일 고르개를 열면 자캐 그림이 없는 사람은 거기서 막힌다. 그 사람에게도
+ * 길이 있다는 것을 **누른 그 자리에서** 말해야 한다.
+ *
+ * 화면 밖에 안내를 덧붙이는 대신 여기서 묻는 이유: 사진 칸 옆에 같은 크기의
+ * 안내 칸을 하나 더 뒀더니 둘이 싸웠고, 아래에 한 줄로 붙였더니 사진 칸을
+ * 먼저 누른 사람은 그 줄을 지나쳐 버렸다. */
+
+.webtoon-page .pick-way {
+  position: fixed; inset: 0; z-index: 60;
+  display: grid; place-items: center; padding: 20px;
+}
+.webtoon-page .pick-way-veil {
+  position: absolute; inset: 0; border: 0; padding: 0;
+  background: rgba(10,32,38,.45); cursor: pointer;
+}
+.webtoon-page .pick-way-box {
+  position: relative; width: min(380px, 100%);
+  background: var(--card); border-radius: 18px; padding: 20px;
+  box-shadow: 0 20px 60px rgba(15,51,63,.28);
+  /* 두 갈래를 **나란히** 둔다 — 위아래로 쌓으면 위쪽이 먼저 읽혀서
+     "사진이 기본이고 만들기는 대안" 처럼 보인다. 둘 다 같은 길이다. */
+  display: grid; gap: 10px; grid-template-columns: 1fr 1fr;
+}
+.webtoon-page .pick-way-box h3 {
+  grid-column: 1 / -1;
+  font-size: 1.05rem; font-weight: 800; color: var(--accent-d);
+  margin: 0 0 .3em; text-align: center;
+}
+.webtoon-page .pick-way-one {
+  display: grid; gap: .3em; text-align: center; align-content: center;
+  /* 설명 문구를 없앤 만큼 세로 크기가 줄지 않게, 있었을 때와 같은 높이를
+     min-height 로 지켜 준다(제목 한 줄만 있어도 가운데 놓인다). */
+  min-height: 94px;
+  border: 1px solid var(--line-2); border-radius: 14px;
+  background: var(--paper); padding: 18px 14px; cursor: pointer;
+  font: inherit; color: var(--text);
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+.webtoon-page .pick-way-one:hover {
+  border-color: var(--accent); background: rgba(15,51,63,.03); transform: translateY(-1px);
+}
+.webtoon-page .pick-way-one b { font-size: .95rem; }
+/* 닫기는 오른쪽 위 ✕ 로. 아래에 단추로 두면 두 갈래와 같은 무게로 읽혀서
+   "세 번째 선택지" 처럼 보인다. */
+.webtoon-page .pick-way-x {
+  position: absolute; right: 10px; top: 10px;
+  width: 32px; height: 32px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--dim); cursor: pointer;
+  font-size: .95rem; line-height: 1; display: grid; place-items: center;
+}
+.webtoon-page .pick-way-x:hover { background: rgba(15,51,63,.06); color: var(--text); }
+
+/* 아주 좁은 폰에서는 나란히 두면 글자가 두 글자씩 끊긴다 — 거기서만 쌓는다. */
+@media (max-width: 380px) {
+  .webtoon-page .pick-way-box { grid-template-columns: 1fr; }
+}
+
+/* ---- 2걸음: 이야기 칸을 크게 ----------------------------------------------
+ *
+ * 이 걸음은 **적는 것 하나뿐**인데 칸이 다섯 줄이라, 넓은 화면에서는 카드
+ * 안이 텅 비고 좁은 화면에서는 줄거리를 두어 줄 쓰면 바로 안쪽으로 스크롤이
+ * 생겼다. 화면 높이에 맞춰 늘린다 — 다만 위아래로 끝없이 자라지 않게 천장을
+ * 둔다(폰을 가로로 눕히면 화면보다 커진다). */
+
+.webtoon-page .wiz-step[data-step="2"] .field textarea {
+  min-height: clamp(190px, 38vh, 360px);
+}
+
+/* ---- 마이페이지 -------------------------------------------------------------
+ *
+ * 흰 카드가 셋 쌓여 있었고(프로필 · 크레딧 · 작품), 크레딧 칸은 숫자 하나에
+ * 카드를 통째로 쓰느라 안이 텅 비었다. 하나로 묶되 **줄을 나눈다** —
+ * 위는 나(누구인가 · 무엇을 할 것인가), 아래는 크레딧(얼마 남았나).
+ * 옆으로 다 밀어 넣었더니 숫자와 안내와 단추가 한 덩어리로 뭉쳤다.
+ *
+ * **모바일이 기본이다.** 좁은 화면 기준으로 쓰고, 넓어질 때만 좌우로 편다. */
+
+
+/* ---- 내 캐릭터 줄 ---------------------------------------------------------- */
+
+.webtoon-page .me-chars { margin: 24px 0 0; }
+.webtoon-page .me-chars-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.webtoon-page .me-chars-head h3 {
+  font-size: 1.02rem; font-weight: 700; margin: 0; color: var(--accent-d);
+}
+.webtoon-page .mychar-strip {
+  list-style: none; margin: 12px 0 0; padding: 0 0 4px;
+  display: flex; gap: 10px; overflow-x: auto;
+  /* 폰에서 옆으로 넘겨 본다 — 세로로 쌓으면 작품 목록이 한참 밀린다. */
+  scroll-snap-type: x proximity;
+}
+.webtoon-page .mychar-strip > li { flex: 0 0 108px; scroll-snap-align: start; }
+.webtoon-page .mychar {
+  width: 100%; border-radius: 12px; overflow: hidden; background: var(--card);
+  box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 4px 14px rgba(15,51,63,.07);
+  display: grid; cursor: pointer; border: 0; padding: 0; text-align: left;
+  transition: transform .16s ease;
+}
+.webtoon-page .mychar:hover { transform: translateY(-2px); }
+.webtoon-page .mychar img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; }
+.webtoon-page .mychar-none {
+  width: 100%; aspect-ratio: 1 / 1; display: grid; place-items: center;
+  background: var(--card-2); color: var(--dim); font-size: .72rem; text-align: center;
+}
+.webtoon-page .mychar b { font-size: .78rem; padding: 7px 8px 9px; font-weight: 700; }
+
+/* 만든 것이 없을 때 — **줄을 지우지 않는다.** 지우면 캐릭터라는 것이 있는
+   줄도 모른 채로 웹툰만 만들게 된다.
+   폭을 다 쓰지 않는다: 넓은 화면에서 늘려 두면 글과 링크가 양 끝으로 갈려
+   한눈에 안 읽힌다. */
+.webtoon-page .mychar-blank {
+  margin-top: 12px; cursor: pointer; font: inherit; text-align: left;
+  width: 100%; max-width: 520px;
+  display: flex; align-items: center; gap: 14px;
+  border: 1.5px dashed var(--line-2); border-radius: 16px; padding: 14px 16px;
+  background: transparent; color: var(--text);
+  transition: border-color .16s ease, background .16s ease;
+}
+.webtoon-page .mychar-blank:hover { border-color: var(--accent); background: rgba(15,51,63,.03); }
+.webtoon-page .mychar-blank > b {
+  flex: 0 0 42px; width: 42px; height: 42px; border-radius: 12px;
+  background: rgba(15,51,63,.06); color: var(--accent);
+  display: grid; place-items: center; font-size: 1.35rem; font-weight: 400;
+}
+.webtoon-page .mychar-blank > span { display: grid; gap: .2em; min-width: 0; }
+.webtoon-page .mychar-blank strong {
+  font-size: .9rem; font-weight: 700; color: var(--text);
+}
+.webtoon-page .mychar-blank small {
+  font-size: .78rem; color: var(--muted); line-height: 1.55;
+  /* 설명이 한 줄에 안 들어가면 두 줄로 흐르게 둔다 — 낱말 가운데서 끊지
+     않는다. 앞의 「+」와 세로로 어긋나지 않게 왼쪽 정렬을 유지한다. */
+  word-break: keep-all;
+}
+
+/* ---- 넓어지면 좌우로 편다 --------------------------------------------------- */
+
+/* ---- 다섯 걸음 모두 「다음」을 고정한다 --------------------------------------
+ *
+ * 마지막 걸음만 단추줄을 바닥에 안 붙여 뒀다(webtoon.css 의
+ * `.create[data-step="5"] .wiz-actions { position: static; }`). 거기서 읽어야
+ * 하는 것(요약 · 저작권 확인)을 떠 있는 띠가 가린다는 이유였는데, 그 결과
+ * 걸음을 넘길 때마다 단추가 있는 자리가 달라졌다 — 네 걸음은 바닥에 붙어
+ * 있다가 마지막에만 스크롤 끝으로 도망간다.
+ *
+ * 자리가 바뀌는 쪽이 더 나쁘다. 다섯 걸음 다 붙여 두고, 가리는 문제는 아래
+ * 여백으로 푼다 — 띠 높이만큼 내용 끝에 자리를 비워 두면 마지막 항목이 띠
+ * 뒤로 안 들어간다. */
+
+.webtoon-page .create[data-step="5"] .wiz-actions { position: sticky; }
+.webtoon-page .create[data-step="5"] .wiz-actions::before { display: block; }
+
+/* 띠에 가리지 않게 마지막 걸음 내용 끝에 **띠 높이만큼** 자리를 비운다.
+   실측으로 확인했다 — 안 비우면 저작권 동의 칸이 단추줄 뒤로 들어가 눌리지
+   않는다(원래 이 걸음만 안 붙여 뒀던 이유가 그것이다). */
+.webtoon-page .create[data-step="5"] .wiz-step {
+  /* 띠 115px + 그 위 흐림 28px. 넉넉히 잡는다 — 모자라면 동의 칸이 띠 뒤로
+     들어가 눌리지 않는다. */
+  padding-bottom: 160px;
+}
+
+/* ---- 갤러리 아래 「완성된 웹툰 보러 가기」 ----------------------------------
+ *
+ * 폭을 꽉 채운 옅은 알약이라 **눌리지 않는 띠**처럼 보였다. 이 자리는 견본
+ * 몇 장을 보고 "실제로는 어떻게 나오나" 가 궁금해진 사람이 누르는 곳이라,
+ * 단추로 보여야 한다. 글자 길이만큼만 쓰고 가운데에 둔다. */
+
+.webtoon-page .gallery-full {
+  width: auto; margin: 22px auto 0;
+  background: var(--card); color: var(--accent-d);
+  border: 1px solid var(--line-2); font-weight: 700;
+  box-shadow: 0 1px 0 rgba(15,51,63,.05), 0 4px 14px rgba(15,51,63,.07);
+}
+.webtoon-page .gallery-full:hover {
+  border-color: var(--accent); background: var(--card-2);
+}
+
+/* ---- 둘러보기용 캐릭터 덩어리 ---------------------------------------------
+ *
+ * 내 캐릭터가 없으면 이 덩어리가 **위로 올라간다**(Characters.tsx 참고).
+ * 순서가 두 가지라 간격을 제목의 margin 에 기대지 않고 덩어리가 갖는다. */
+
+.webtoon-page .chars-builtin { margin-top: 28px; }
+.webtoon-page .chars-builtin:first-of-type { margin-top: 16px; }
+
+
+/* ---- 만들던 것으로 돌아가는 띠 -------------------------------------------
+ *
+ * 기다리는 동안 둘러보러 나갈 수 있게 해 놓고 돌아올 단추가 없으면, 나간
+ * 사람은 만들던 것이 어디 갔는지 모른다. 화면 어디에 있든 같은 자리에
+ * 떠 있어야 해서 화면에 고정한다.
+ *
+ * 오른쪽 아래에 두는 이유: 왼쪽 아래는 루 마스코트 자리이고(둘이 겹친다),
+ * 위쪽은 앱 헤더가 쓴다. */
+
+.webtoon-page .back-to-run {
+  position: fixed; right: 16px; bottom: 16px; z-index: 40;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px 8px 8px; border: 1px solid var(--line-2);
+  border-radius: 999px; background: var(--card); cursor: pointer;
+  box-shadow: 0 2px 0 rgba(15,51,63,.06), 0 10px 28px rgba(15,51,63,.16);
+  font-family: inherit; text-align: left;
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.webtoon-page .back-to-run:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 0 rgba(15,51,63,.06), 0 16px 36px rgba(15,51,63,.22);
+}
+.webtoon-page .back-to-run img {
+  width: 34px; height: 34px; flex: none; border-radius: 50%;
+  background: var(--card-2); object-fit: cover;
+  /* 만드는 중이라는 것이 멈춘 화면과 구별되게 숨 쉬듯 옅어졌다 진해진다. */
+  animation: back-to-run-breathe 1.8s ease-in-out infinite;
+}
+@keyframes back-to-run-breathe { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) {
+  .webtoon-page .back-to-run img { animation: none; }
+}
+.webtoon-page .back-to-run span { display: grid; }
+.webtoon-page .back-to-run b { font-size: .82rem; color: var(--accent-d); }
+.webtoon-page .back-to-run small { font-size: .7rem; color: var(--dim); }
+
+/* ---- 기다리는 동안 나가는 줄 ---------------------------------------------- */
+
+.webtoon-page .wait-away {
+  display: grid; justify-items: center; gap: 6px; margin: 18px 0 4px;
+}
+.webtoon-page .wait-away span {
+  font-size: .76rem; color: var(--dim); text-align: center;
+}
+
+/* ---- 편집실 「도구」 손잡이를 단추줄로 되돌린다 ---------------------------
+ *
+ * PC 에서 화면 오른쪽 아래에 동그란 단추로 떠 있었다(webtoon.css 의
+ * `position: fixed; right:24px; bottom:24px`). 그런데 그 자리는 **작품과
+ * 아무 관계가 없어 보이는 자리**다 — 「이미지로 뽑기」·공유는 제목 아래
+ * 단추줄에 모여 있는데 도구만 화면 구석에 혼자 떠 있으니, 무엇을 여는
+ * 단추인지도 어디에 걸린 것인지도 안 읽힌다.
+ *
+ * 제목 아래 단추줄(`.ed-top-right`)의 한 칸으로 되돌린다. DOM 에서는 원래
+ * 거기에 있다(Editor.tsx) — 떠 있게 만든 것이 이 규칙뿐이라 그것만 푼다. */
+
+@media (min-width: 880px) {
+  .webtoon-page .ed #dockOpen {
+    position: static;
+    width: auto; height: auto; border-radius: 999px;
+    padding: 8px 16px; min-height: 40px;
+    display: inline-flex; align-items: center; gap: 6px;
+    box-shadow: 0 1px 0 rgba(15,51,63,.06);
+  }
+  /* 단추줄 안에서는 글자가 보여야 무엇인지 안다 — 동그란 단추일 때만
+     아이콘 하나로 줄여 뒀던 것을 되돌린다. */
+  .webtoon-page .ed #dockOpen .dock-open-label { display: inline; }
+}
+
+/* ---- 편집실: 장면 한 줄 ---------------------------------------------------
+ *
+ * 그림만 늘어놓으면 "이 장이 무엇을 그린 것인지" 를 다시 그리기 전에 확인할
+ * 길이 없다. 전개가 어색해서 고치려 할 때 원래 무엇을 그리라고 했는지가
+ * 필요하다. 그림 아래에 둔다 — 머리줄은 번호·컷·판본이 이미 차 있다. */
+
+.webtoon-page .ed .scene-note {
+  margin: 8px 2px 0; font-size: .82rem; line-height: 1.6;
+  color: var(--muted); word-break: keep-all;
+}
+
+/* 내 캐릭터 덩어리 — 만든 것이 있으면 둘러보기용 위에 선다. */
+.webtoon-page .chars-mine { margin-top: 16px; }
+
+/* ---- 실패 안내: 돌려준 것 한 줄 -------------------------------------------
+ *
+ * 사유 아래에 붙는다. 사유는 "왜 멈췄나"고 이 줄은 "그래서 어떻게 됐나"라,
+ * 같은 회색으로 흘려 두면 못 읽고 넘어간다 — 사람이 실제로 궁금해하는 쪽은
+ * 이쪽이다. 글자색을 본문으로 올리고 위에 한 칸 띄운다. */
+
+.webtoon-page .progress-back {
+  margin: 12px 0 0; font-size: .88rem; line-height: 1.6;
+  color: var(--ink); word-break: keep-all;
+}
+
+/* ---- 다 되면 메일로 알려 주는 자리 -----------------------------------------
+ *
+ * 「기다리는 동안 나가는 줄」 바로 밑이다. 나갈까 말까를 정하는 그 자리에서
+ * "그럼 다 되면 어떻게 알지?" 가 나오기 때문이다.
+ *
+ * **주인공이 아니다.** 이 화면의 주인공은 루와 그려지는 장이고, 이건 나가도
+ * 된다는 말에 붙는 각주다 — 그래서 카드로 세우지 않고 옅은 띠로 둔다.
+ * 게스트에게만 입력 칸이 뜨고, 로그인한 사람에게는 한 줄만 뜬다. */
+
+.webtoon-page .notify-mail {
+  max-width: 560px; margin: 10px auto 0; padding: 13px 16px;
+  background: var(--paper-2); border: 1px solid var(--line-2); border-radius: 16px;
+  text-align: left;
+}
+/* 이미 받을 데가 있는 경우는 읽기만 하는 한 줄이라 더 조용하게. */
+.webtoon-page .notify-mail.is-set { background: transparent; border-style: dashed; }
+
+.webtoon-page .notify-say {
+  display: block; margin: 0 0 8px;
+  font-size: .86rem; font-weight: 600; color: var(--text); line-height: 1.5;
+}
+.webtoon-page .notify-mail.is-set .notify-say { margin-bottom: 4px; font-weight: 500; }
+.webtoon-page .notify-say b { color: var(--accent-d); word-break: break-all; }
+
+.webtoon-page .notify-row { display: flex; gap: 8px; align-items: stretch; }
+.webtoon-page .notify-row input {
+  flex: 1 1 auto; min-width: 0;
+  background: #fff; color: var(--text);
+  border: 1px solid var(--line-2); border-radius: 12px;
+  padding: .6em .9em; font: inherit; font-size: .9rem;
+}
+.webtoon-page .notify-row input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(14,143,181,.22);
+}
+.webtoon-page .notify-row input::placeholder { color: #9db6c0; }
+.webtoon-page .notify-row .btn { flex: none; white-space: nowrap; }
+
+.webtoon-page .notify-sub {
+  margin: 7px 0 0; font-size: .74rem; color: var(--dim); line-height: 1.55;
+}
+.webtoon-page .notify-bad {
+  margin: 7px 0 0; font-size: .76rem; font-weight: 600; color: #9c3b31;   /* btn-danger 와 같은 붉은색 — 이 화면의 「멈춤」 색이다 */
+}
+
+/* 「알림 받지 않기」 — 되돌릴 길이 있어야 적어 넣는다. 다만 단추처럼
+   보이면 안 적기를 권하는 것처럼 읽혀서, 글줄 안의 링크로 둔다. */
+.webtoon-page .notify-sub .linklike {
+  border: 0; background: none; padding: 0; font: inherit;
+  color: var(--dim); text-decoration: underline; cursor: pointer;
+}
+.webtoon-page .notify-sub .linklike:hover:not(:disabled) { color: var(--text); }
+.webtoon-page .notify-sub .linklike:disabled { cursor: default; opacity: .6; }
+
+@media (max-width: 420px) {
+  .webtoon-page .notify-row { flex-wrap: wrap; }
+  .webtoon-page .notify-row .btn { width: 100%; }
+}
+
+/* 남은 시간은 **제 줄을 준다.** 권유 문장에 붙여 놓으면 한 덩어리로 읽혀서
+   숫자가 안 보인다 — 기다릴지 나갈지를 정하는 값이라 눈에 걸려야 한다. */
+.webtoon-page .notify-left {
+  display: block; margin-top: 3px;
+  font-weight: 600; color: var(--accent-d);
+}
