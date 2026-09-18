@@ -215,3 +215,5 @@
   .wt .wt-landing-badges { flex-direction: column; gap: 8px; }
   .wt .wt-landing-copy { font-size: 11px; }
 }
+
+.wt .wt-landing-lang .tag { font-size: 11px; padding: 3px 9px; cursor: pointer; }

@@ -244,7 +244,14 @@ public class PageStore {
 
     /** 키 -> 읽을 수 있는 주소. */
     String url(String key) {
-        return cdn.isEmpty() ? "/" + key : cdn + "/" + key;
+        /* CDN 이 없으면(로컬) 잠깐 열리는 S3 주소를 준다. 예전에는 "/" + key 를
+           돌려줬는데, 그 주소는 어디서도 안 열려서 로컬에서 완성본이 늘 비어
+           보였다. 서명 주소는 만료되지만, CDN 없는 자리는 개발 기계뿐이다. */
+        if (cdn.isEmpty()) {
+            String signed = art.ready() ? art.temporaryUrl(key) : null;
+            return signed != null ? signed : "/" + key;
+        }
+        return cdn + "/" + key;
     }
 
     /**

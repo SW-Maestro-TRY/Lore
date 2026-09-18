@@ -4,6 +4,7 @@
  * 그림에는 글자가 없다 — 세계관 딱지와 말풍선은 화면이 얹는다. */
 import { useEffect, useRef, useState } from "react";
 import { listCharacters, readCharacter, readSharedCard, type Character } from "../../lib/api";
+import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { copyLink, kakaoAvailable, shareKakao, shareNative } from "../../lib/share";
 import { startJob } from "../../lib/start";
@@ -12,12 +13,14 @@ import { IconDownload, IconRetry, IconShare } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import { LimitView } from "./Photo";
 import { isLimitError, loadDraft, runTry } from "./draft";
+import "./i18n";
 import "./PhotoResult.css";
 
 const POLL_MS = 2500;
 const SHORT_QUOTE = 16;
 
 export default function PhotoResult({ id, shared, go, authenticated }: { id: string; shared: boolean; go: Go; authenticated: boolean }) {
+  const t = useT();
   const [ch, setCh] = useState<Character | null>(null);
   const [loadErr, setLoadErr] = useState("");
   const [left, setLeft] = useState<{ free_left: number; free_per_day: number } | null>(null);
@@ -45,7 +48,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
         if (!shared && c.status === "drawing") timer = setTimeout(tick, POLL_MS);
       } catch (e) {
         if (!alive) return;
-        setLoadErr(e instanceof Error ? e.message : "카드를 못 불러왔습니다");
+        setLoadErr(e instanceof Error ? e.message : t("카드를 못 불러왔습니다"));
       }
     };
     void tick();
@@ -68,7 +71,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
 
   const card = ch?.card;
   const url = typeof window === "undefined" ? "" : `${window.location.origin}/webtoon?card=${encodeURIComponent(id)}`;
-  const title = card?.twist || ch?.name || "캐릭터 카드";
+  const title = card?.twist || ch?.name || t("캐릭터 카드");
 
   const onShare = async () => {
     if (await shareNative(url, title)) return;
@@ -105,7 +108,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
       }, authenticated);
       go("running", { job }, { replace: true });
     } catch (e) {
-      setActErr(e instanceof Error ? e.message : "1화를 시작하지 못했습니다");
+      setActErr(e instanceof Error ? e.message : t("1화를 시작하지 못했습니다"));
       setBusy(null);
     }
   };
@@ -120,7 +123,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
       go("card", { id: c.id });
     } catch (e) {
       if (isLimitError(e)) setLimited(e instanceof Error ? e.message : "");
-      else setActErr(e instanceof Error ? e.message : "다시 뽑지 못했습니다");
+      else setActErr(e instanceof Error ? e.message : t("다시 뽑지 못했습니다"));
       setBusy(null);
     }
   };
@@ -135,16 +138,16 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
       {ready ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={ch!.art_url!} alt="웹툰 한 컷" />
-          {card?.world_label && <span className="badge">{card.world_label}</span>}
+          <img src={ch!.art_url!} alt={t("웹툰 한 컷")} />
+          {card?.world_label && <span className="badge">{t(card.world_label)}</span>}
           {quote && <div className={`wt-ch-res-bubble${quote.length <= SHORT_QUOTE ? " short" : ""}`}>{quote}</div>}
         </>
       ) : ch?.status === "error" ? (
         <div className="wt-ch-res-wait">
-          <span className="err">{ch.error || "못 그렸어요"}</span>
+          <span className="err">{ch.error || t("못 그렸어요")}</span>
           {!shared && (
             <button type="button" className="btn btn-w btn-sm" disabled={busy !== null} onClick={() => void onAgain()}>
-              <IconRetry size={16} /> 다시 뽑기
+              <IconRetry size={16} /> {t("다시 뽑기")}
             </button>
           )}
         </div>
@@ -152,13 +155,13 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
         <div className="wt-ch-res-wait">
           <span className="err">{loadErr}</span>
           <button type="button" className="btn btn-w btn-sm" onClick={() => setTryN((n) => n + 1)}>
-            <IconRetry size={16} /> 다시 시도
+            <IconRetry size={16} /> {t("다시 시도")}
           </button>
         </div>
       ) : (
         <>
           <div className="skeleton wt-ch-res-skel" />
-          <div className="wt-ch-res-wait"><span className="spin" />그리는 중 · 약 1분</div>
+          <div className="wt-ch-res-wait"><span className="spin" />{t("그리는 중 · 약 1분")}</div>
         </>
       )}
     </div>
@@ -167,12 +170,12 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
   const shareBtn = (
     <div className="wt-ch-res-share" ref={shareRef}>
       <button type="button" className="btn btn-w" onClick={() => void onShare()}>
-        <IconShare size={18} /> {copied ? "링크를 복사했어요" : "공유"}
+        <IconShare size={18} /> {copied ? t("링크를 복사했어요") : t("공유")}
       </button>
       {menu && (
         <div className="wt-ch-res-menu">
-          {kakaoAvailable() && <button type="button" onClick={() => void onKakao()}>카카오톡</button>}
-          <button type="button" onClick={() => void onCopy()}>링크 복사</button>
+          {kakaoAvailable() && <button type="button" onClick={() => void onKakao()}>{t("카카오톡")}</button>}
+          <button type="button" onClick={() => void onCopy()}>{t("링크 복사")}</button>
         </div>
       )}
     </div>
@@ -182,12 +185,12 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
     <>
       <MobileTop
         back={shared ? undefined : { href: "/webtoon?view=try", onClick: () => go("try") }}
-        title="웹툰 한 컷"
+        title={t("웹툰 한 컷")}
         right={shared ? undefined : "2 / 3"}
       />
       {!shared && <div className="wt-ch-steps"><span className="on" /><span className="on" /><span /></div>}
       <div className="wt-wrap wt-page">
-        <div className="crumb"><span>캐릭터</span><i>›</i><b>웹툰 한 컷</b><i>›</i><span>1화</span></div>
+        <div className="crumb"><span>{t("캐릭터")}</span><i>›</i><b>{t("웹툰 한 컷")}</b><i>›</i><span>{t("1화")}</span></div>
         <div className="wt-ch-res-body">
           {ch ? (
             <h2 className="wt-ch-res-mtitle">{card?.twist || ch.name}</h2>
@@ -205,7 +208,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
                 </span>
                 {card && card.fate?.length > 0 && (
                   <div className="card wt-ch-res-fate">
-                    <b>운명</b>
+                    <b>{t("운명")}</b>
                     {card.fate.map((line, i) => <span key={i}>{line}</span>)}
                   </div>
                 )}
@@ -221,29 +224,29 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
             {shared ? (
               <div className="wt-ch-res-row">
                 {shareBtn}
-                <button type="button" className="btn btn-p" onClick={() => go("try")}>나도 만들어보기</button>
+                <button type="button" className="btn btn-p" onClick={() => go("try")}>{t("나도 만들어보기")}</button>
               </div>
             ) : (
               <>
                 <button type="button" className="btn btn-p wt-ch-res-pc-cta" disabled={!ready || busy !== null} onClick={() => void onEpisode()}>
-                  {busy === "episode" && <span className="spin" style={{ borderTopColor: "#fff" }} />} 이 캐릭터로 1화 보기
+                  {busy === "episode" && <span className="spin" style={{ borderTopColor: "#fff" }} />} {t("이 캐릭터로 1화 보기")}
                 </button>
                 <div className="wt-ch-res-row">
                   {shareBtn}
                   {saved ? (
-                    <button type="button" className="btn btn-w" onClick={() => go("characters")}>내 캐릭터에 있어요</button>
+                    <button type="button" className="btn btn-w" onClick={() => go("characters")}>{t("내 캐릭터에 있어요")}</button>
                   ) : (
-                    <button type="button" className="btn btn-w" onClick={() => setSaved(true)}><IconDownload size={18} /> 내 캐릭터에 저장</button>
+                    <button type="button" className="btn btn-w" onClick={() => setSaved(true)}><IconDownload size={18} /> {t("내 캐릭터에 저장")}</button>
                   )}
                 </div>
                 {actErr && <span className="err">{actErr}</span>}
                 <div className="wt-ch-res-again">
-                  <b>마음에 안 들어요?</b>
-                  {left && <span className="dim" style={{ fontSize: 12.5 }}>오늘 남은 다시 뽑기 {left.free_left} / {left.free_per_day}</span>}
+                  <b>{t("마음에 안 들어요?")}</b>
+                  {left && <span className="dim" style={{ fontSize: 12.5 }}>{t("오늘 남은 다시 뽑기 {left} / {per}", { left: left.free_left, per: left.free_per_day })}</span>}
                 </div>
                 <button type="button" className="opt wt-ch-res-opt" disabled={busy !== null} onClick={() => void onAgain()}>
-                  <b>{busy === "again" ? <span className="spin" /> : <IconRetry size={18} />} 다시 뽑기</b>
-                  <span>같은 입력으로 다른 캐릭터</span>
+                  <b>{busy === "again" ? <span className="spin" /> : <IconRetry size={18} />} {t("다시 뽑기")}</b>
+                  <span>{t("같은 입력으로 다른 캐릭터")}</span>
                 </button>
               </>
             )}
@@ -253,7 +256,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
       {!shared && (
         <div className="mfoot">
           <button type="button" className="btn btn-p" style={{ height: 52 }} disabled={!ready || busy !== null} onClick={() => void onEpisode()}>
-            {busy === "episode" && <span className="spin" style={{ borderTopColor: "#fff" }} />} 이 캐릭터로 1화 보기
+            {busy === "episode" && <span className="spin" style={{ borderTopColor: "#fff" }} />} {t("이 캐릭터로 1화 보기")}
           </button>
         </div>
       )}

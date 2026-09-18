@@ -1,0 +1,142 @@
+/* 캐릭터 영역 사전 — 원문(한국어)이 키. Photo · PhotoResult · CharList 의 화면 글과
+ * 서버 세계관 프리셋 라벨(story-harness/worlds.json). 카드의 반전·대사·운명·역할은
+ * 서버 생성물이라 여기 없다. */
+import { registerDict, type Dict } from "../../lib/i18n";
+
+const dict: Dict = {
+  /* ---- 공통 · 빵부스러기 · 상단 ---- */
+  "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
+  "캐릭터 카드": { en: "Character card", ja: "キャラクターカード", zh: "角色卡" },
+  "웹툰": { en: "Webtoon", ja: "ウェブトゥーン", zh: "网络漫画" },
+  "웹툰 한 컷": { en: "One panel", ja: "ウェブトゥーン一コマ", zh: "漫画一格" },
+  "1화": { en: "Episode 1", ja: "第1話", zh: "第1话" },
+  "내 캐릭터": { en: "My characters", ja: "マイキャラクター", zh: "我的角色" },
+  "처음으로": { en: "Start over", ja: "最初へ", zh: "回到开始" },
+  "다시 시도": { en: "Try again", ja: "もう一度試す", zh: "重试" },
+  "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
+  "저장": { en: "Save", ja: "保存", zh: "保存" },
+
+  /* ---- Photo · 입력 ---- */
+  "어떤 캐릭터를 만들어볼까요?": { en: "Who shall we bring to life?", ja: "どんなキャラクターを作ってみましょうか？", zh: "想创造一个什么样的角色？" },
+  "내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요.": {
+    en: "A photo of you, your favorite, your dog, or nothing at all.",
+    ja: "自分の写真でも、推しでも、愛犬でも、何もなくても大丈夫です。",
+    zh: "你的照片、你的最爱、你的小狗，或者什么都不用。",
+  },
+  "넣은 사진": { en: "Your photo", ja: "選んだ写真", zh: "已选照片" },
+  "사진 1장": { en: "1 photo", ja: "写真1枚", zh: "1张照片" },
+  "사진 빼기": { en: "Remove photo", ja: "写真を外す", zh: "移除照片" },
+  "사진을 넣어주세요": { en: "Add a photo", ja: "写真を入れてください", zh: "添加一张照片" },
+  "· 선택": { en: "· optional", ja: "・任意", zh: "· 可选" },
+  "파일 고르기": { en: "Choose file", ja: "ファイルを選ぶ", zh: "选择文件" },
+  "내 사진 · 최애 사진 · 그림 · 캐릭터 이미지": {
+    en: "Your photo · a favorite · a drawing · a character image",
+    ja: "自分の写真・推しの写真・イラスト・キャラクター画像",
+    zh: "自己的照片 · 最爱的照片 · 画作 · 角色图片",
+  },
+  "사진 고르기": { en: "Choose a photo", ja: "写真を選ぶ", zh: "选择照片" },
+  "캐릭터에 대해 알려주세요": { en: "Tell us about the character", ja: "キャラクターについて教えてください", zh: "介绍一下这个角色" },
+  "선택": { en: "optional", ja: "任意", zh: "可选" },
+  "예) 차가운 성격의 마법사": { en: "e.g. a cold-hearted mage", ja: "例）冷たい性格の魔法使い", zh: "例：性格冷淡的魔法师" },
+  "이름": { en: "Name", ja: "名前", zh: "名字" },
+  "선택 · 비우면 지어요": { en: "optional · we'll pick one if blank", ja: "任意・空欄なら付けます", zh: "可选 · 留空则由我们起名" },
+  "예: 몽이, 세라핀": { en: "e.g. Mongi, Seraphine", ja: "例：モンイ、セラフィン", zh: "例：蒙伊、瑟拉芬" },
+  "사진은 캐릭터를 그린 뒤 지워요. 남의 사진은 팬 창작 범위 안에서만.": {
+    en: "Photos are deleted once the character is drawn. Use other people's photos only for fan works.",
+    ja: "写真はキャラクターを描いた後に削除します。他人の写真はファン創作の範囲内でのみ。",
+    zh: "照片在角色绘制完成后会被删除。他人的照片仅限用于同人创作。",
+  },
+  "세계관": { en: "World", ja: "世界観", zh: "世界观" },
+  "안 고르면 랜덤": { en: "random if none picked", ja: "選ばなければランダム", zh: "不选则随机" },
+  "직접 쓰기": { en: "Write your own", ja: "自分で書く", zh: "自己写" },
+  "예: 무협 / 좀비 아포칼립스 / 우주 해적": {
+    en: "e.g. wuxia / zombie apocalypse / space pirates",
+    ja: "例：武侠／ゾンビアポカリプス／宇宙海賊",
+    zh: "例：武侠 / 丧尸末日 / 太空海盗",
+  },
+  "랜덤으로 만들어보기": { en: "Surprise me", ja: "ランダムで作ってみる", zh: "随机试试" },
+  "캐릭터 만들기": { en: "Create character", ja: "キャラクターを作る", zh: "创建角色" },
+  "약 30초 · 무료": { en: "About 30 seconds · free", ja: "約30秒・無料", zh: "约30秒 · 免费" },
+  "사진을 읽지 못했습니다": { en: "Couldn't read the photo.", ja: "写真を読み込めませんでした。", zh: "无法读取照片。" },
+  "랜덤을 못 받았습니다": { en: "Couldn't get a random character.", ja: "ランダムを取得できませんでした。", zh: "无法获取随机角色。" },
+  "캐릭터를 만들지 못했습니다": { en: "Couldn't create the character.", ja: "キャラクターを作れませんでした。", zh: "无法创建角色。" },
+
+  /* ---- Limit · 오늘 한도 ---- */
+  "오늘 다시 뽑기 {n}번을 다 썼어요": {
+    en: "You've used all {n} redraws for today",
+    ja: "今日の引き直し{n}回を使い切りました",
+    zh: "今天的{n}次重抽已用完",
+  },
+  "오늘 다시 뽑기를 다 썼어요": { en: "You've used today's redraws", ja: "今日の引き直しを使い切りました", zh: "今天的重抽已用完" },
+  "자정에 다시 채워져요. 지금 카드는 그대로 공유하거나 웹툰으로 만들 수 있어요.": {
+    en: "They refill at midnight. You can still share this card or turn it into a webtoon.",
+    ja: "深夜0時に回復します。今のカードはそのまま共有したり、ウェブトゥーンにしたりできます。",
+    zh: "午夜会重新补满。当前的卡片仍可以分享或制作成漫画。",
+  },
+  "다시 채워지기까지 {left}": { en: "Refills in {left}", ja: "回復まで {left}", zh: "距离补满还有 {left}" },
+  "이 캐릭터로 1화 보기": { en: "See episode 1 with this character", ja: "このキャラクターで第1話を見る", zh: "用这个角色看第1话" },
+  "가입하면 하루 10번": { en: "Sign up for 10 a day", ja: "登録すると1日10回", zh: "注册后每天10次" },
+
+  /* ---- PhotoResult · 웹툰 한 컷 ---- */
+  "카드를 못 불러왔습니다": { en: "Couldn't load the card.", ja: "カードを読み込めませんでした。", zh: "无法加载卡片。" },
+  "1화를 시작하지 못했습니다": { en: "Couldn't start episode 1.", ja: "第1話を始められませんでした。", zh: "无法开始第1话。" },
+  "다시 뽑지 못했습니다": { en: "Couldn't redraw.", ja: "引き直せませんでした。", zh: "无法重抽。" },
+  "못 그렸어요": { en: "Couldn't draw it", ja: "描けませんでした", zh: "没能画出来" },
+  "다시 뽑기": { en: "Redraw", ja: "引き直す", zh: "重抽" },
+  "그리는 중 · 약 1분": { en: "Drawing · about 1 minute", ja: "描いています・約1分", zh: "绘制中 · 约1分钟" },
+  "링크를 복사했어요": { en: "Link copied", ja: "リンクをコピーしました", zh: "已复制链接" },
+  "공유": { en: "Share", ja: "共有", zh: "分享" },
+  "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
+  "링크 복사": { en: "Copy link", ja: "リンクをコピー", zh: "复制链接" },
+  "운명": { en: "Fate", ja: "運命", zh: "命运" },
+  "나도 만들어보기": { en: "Make my own", ja: "私も作ってみる", zh: "我也来做一个" },
+  "내 캐릭터에 있어요": { en: "Saved to my characters", ja: "マイキャラクターにあります", zh: "已在我的角色中" },
+  "내 캐릭터에 저장": { en: "Save to my characters", ja: "マイキャラクターに保存", zh: "保存到我的角色" },
+  "마음에 안 들어요?": { en: "Not quite right?", ja: "気に入りませんか？", zh: "不满意？" },
+  "오늘 남은 다시 뽑기 {left} / {per}": { en: "Redraws left today {left} / {per}", ja: "今日の残り引き直し {left} / {per}", zh: "今日剩余重抽 {left} / {per}" },
+  "같은 입력으로 다른 캐릭터": { en: "A different character from the same input", ja: "同じ入力で別のキャラクター", zh: "用相同输入换一个角色" },
+
+  /* ---- CharList · 내 캐릭터 ---- */
+  "목록을 못 불러왔습니다": { en: "Couldn't load the list.", ja: "一覧を読み込めませんでした。", zh: "无法加载列表。" },
+  "누구로 웹툰을 만들까요?": { en: "Who will star in your webtoon?", ja: "誰でウェブトゥーンを作りましょうか？", zh: "用谁来制作漫画？" },
+  "캐릭터를 만들어 두면 웹툰을 만들 때마다 다시 적지 않아도 돼요. 사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.": {
+    en: "Create a character once and you won't have to describe them again for every webtoon. Use a photo if you have one, or just a description.",
+    ja: "キャラクターを作っておけば、ウェブトゥーンを作るたびに書き直さなくて済みます。写真があれば写真で、なければ説明だけでも作れます。",
+    zh: "先创建好角色，之后每次制作漫画都不用再重新描述。有照片就用照片，没有的话只用文字描述也可以。",
+  },
+  "오늘 {n}개까지 무료": { en: "Up to {n} free today", ja: "今日は{n}個まで無料", zh: "今天最多免费{n}个" },
+  "아직 만든 캐릭터가 없어요.": { en: "No characters yet.", ja: "まだ作ったキャラクターがありません。", zh: "还没有创建过角色。" },
+  "캐릭터 만들어보기": { en: "Try creating one", ja: "キャラクターを作ってみる", zh: "试着创建角色" },
+  "새 캐릭터": { en: "New character", ja: "新しいキャラクター", zh: "新角色" },
+  "저장하지 못했습니다": { en: "Couldn't save.", ja: "保存できませんでした。", zh: "无法保存。" },
+  "지우지 못했습니다": { en: "Couldn't delete.", ja: "削除できませんでした。", zh: "无法删除。" },
+  "그리는 중…": { en: "Drawing…", ja: "描いています…", zh: "绘制中…" },
+  "1분쯤 걸려요": { en: "About a minute", ja: "1分ほどかかります", zh: "大约需要1分钟" },
+  "설명": { en: "Description", ja: "説明", zh: "描述" },
+  "이름·설명 고치기": { en: "Edit name and description", ja: "名前・説明を編集", zh: "编辑名字和描述" },
+  "정말 지울까요?": { en: "Delete for good?", ja: "本当に削除しますか？", zh: "确定要删除吗？" },
+  "지우기": { en: "Delete", ja: "削除", zh: "删除" },
+  "이 캐릭터로 웹툰": { en: "Make a webtoon", ja: "このキャラクターでウェブトゥーン", zh: "用这个角色做漫画" },
+  "카드 보기": { en: "View card", ja: "カードを見る", zh: "查看卡片" },
+
+  /* ---- 세계관 프리셋 라벨 (story-harness/worlds.json · 17개) ---- */
+  "현대 한국 — 평범한 도시": { en: "Modern Korea — an ordinary city", ja: "現代韓国 — ありふれた都市", zh: "现代韩国 — 平凡的城市" },
+  "헌터 — 게이트와 각성": { en: "Hunters — gates and awakening", ja: "ハンター — ゲートと覚醒", zh: "猎人 — 门与觉醒" },
+  "마법학교 — 입학과 기숙사": { en: "Magic school — admission and dorms", ja: "魔法学校 — 入学と寮", zh: "魔法学校 — 入学与宿舍" },
+  "궁정 — 왕궁과 계승": { en: "Court — the palace and succession", ja: "宮廷 — 王宮と継承", zh: "宫廷 — 王宫与继承" },
+  "아이돌 — 연습생과 데뷔": { en: "Idols — trainees and debut", ja: "アイドル — 練習生とデビュー", zh: "偶像 — 练习生与出道" },
+  "근미래 — 기술이 한 발 앞선 도시": { en: "Near future — a city one step ahead", ja: "近未来 — 技術が一歩先を行く都市", zh: "近未来 — 科技领先一步的城市" },
+  "재난 이후 — 무너진 뒤의 질서": { en: "After the disaster — order among the ruins", ja: "災害の後 — 崩壊後の秩序", zh: "灾后 — 崩塌之后的秩序" },
+  "히어로 — 능력자와 빌런": { en: "Heroes — the gifted and the villains", ja: "ヒーロー — 能力者とヴィラン", zh: "英雄 — 能力者与反派" },
+  "로맨스 판타지 — 빙의와 원작": { en: "Romance fantasy — transmigration and the original story", ja: "ロマンスファンタジー — 憑依と原作", zh: "浪漫奇幻 — 穿书与原作" },
+  "판타지 — 검과 마법의 대륙": { en: "Fantasy — a continent of swords and magic", ja: "ファンタジー — 剣と魔法の大陸", zh: "奇幻 — 剑与魔法的大陆" },
+  "게임 판타지 — 시스템과 랭커": { en: "Game fantasy — the system and the rankers", ja: "ゲームファンタジー — システムとランカー", zh: "游戏奇幻 — 系统与排名者" },
+  "센티넬 — 적합률과 배정": { en: "Sentinels — match rates and assignment", ja: "センチネル — 適合率と配属", zh: "哨兵 — 契合率与分配" },
+  "오메가버스 — 판정과 등급": { en: "Omegaverse — testing and grades", ja: "オメガバース — 判定と等級", zh: "Omegaverse — 判定与等级" },
+  "스릴러 — 기록과 목격": { en: "Thriller — records and witnesses", ja: "スリラー — 記録と目撃", zh: "惊悚 — 记录与目击" },
+  "액션 — 의뢰와 계약": { en: "Action — jobs and contracts", ja: "アクション — 依頼と契約", zh: "动作 — 委托与契约" },
+  "개그 — 정정되지 않은 오해": { en: "Comedy — a misunderstanding no one corrects", ja: "ギャグ — 訂正されない誤解", zh: "搞笑 — 没被纠正的误会" },
+  "일상 — 말하지 않은 것들": { en: "Slice of life — the things left unsaid", ja: "日常 — 言わなかったこと", zh: "日常 — 没说出口的事" },
+};
+
+registerDict(dict);

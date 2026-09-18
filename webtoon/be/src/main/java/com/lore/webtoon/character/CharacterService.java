@@ -387,9 +387,10 @@ public class CharacterService {
         if (key == null || key.isBlank()) {
             return null;
         }
-        if (!PrivateArt.isPrivate(key)) {
-            return cdn.isEmpty() ? "/" + key : cdn + "/" + key;
+        if (!PrivateArt.isPrivate(key) && !cdn.isEmpty()) {
+            return cdn + "/" + key;
         }
+        // 비공개 자리이거나 CDN 이 없는 자리(로컬)면 잠깐 열리는 주소 — PageStore.url 과 같은 규칙.
         return art.ready() ? art.temporaryUrl(key) : null;
     }
 

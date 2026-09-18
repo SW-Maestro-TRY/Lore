@@ -16,13 +16,14 @@
 //     새로 생겨서 한 번만 잇는 것으로는 두 번째 기기가 안 붙는다.
 //   - 「내 작품」·공개여부는 자바(`/my/...`)를 거친다.
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@common/auth/useAuth";
 import "./webtoon.css";
 
 import { hrefOf, type Go, type View } from "./lib/nav";
 import { linkThisBrowser } from "./lib/api";
+import { LangProvider } from "./lib/i18n";
 import Landing from "./screens/landing/Landing";
 import Entry from "./screens/landing/Entry";
 import Wizard from "./screens/wizard/Wizard";
@@ -38,7 +39,9 @@ import MyPage from "./screens/mypage/MyPage";
 export default function WebtoonPage() {
   return (
     <Suspense fallback={null}>
-      <WebtoonScreens />
+      <LangProvider>
+        <WebtoonScreens />
+      </LangProvider>
     </Suspense>
   );
 }
@@ -79,11 +82,9 @@ function routeOf(search: URLSearchParams): Route {
 function WebtoonScreens() {
   const router = useRouter();
   const search = useSearchParams();
-  const [route, setRoute] = useState<Route>({ view: "landing", step: 1 });
-
-  useEffect(() => {
-    setRoute(routeOf(new URLSearchParams(search.toString())));
-  }, [search]);
+  /* 주소에서 바로 계산한다 — 상태에 넣고 effect 로 맞추면 첫 화면이 한 번
+     번쩍 보였다가 바뀐다(직접 주소로 들어올 때 실제로 그랬다). */
+  const route = useMemo(() => routeOf(new URLSearchParams(search.toString())), [search]);
 
   const go: Go = useCallback((view, p, opts) => {
     const href = hrefOf(view, p);
