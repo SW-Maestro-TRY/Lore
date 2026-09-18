@@ -110,7 +110,11 @@ public class PythonPostProcessor implements PostProcessor {
                 throw new IllegalArgumentException("--keys 가 비었습니다(후처리는 카탈로그 key 8개가 필요)");
             }
             requireDeclared(keys);
-            List<String> args = new ArrayList<>(List.of("--keys", String.join(",", keys)));
+            // --normalize: 2층 칸을 1층 Hw·발끝선 기준으로 크기 정규화한다(1층은 켜도 바이트 불변, 스스로 건너뜀).
+            // 커밋 73ac033 이 파이썬(service_post.py)에만 넣고 이 배선을 빠뜨려 한 번도 안 돌았다
+            // → 2층 8종이 1층보다 위로 뜨고 3.7% 크게 나왔다(2026-09-18 발견·재현).
+            // (버전이 늘면 --postures 처럼 버전으로 가려 넘겨야 한다 — 지금은 v1 뿐이라 무조건 넘겨도 안전.)
+            List<String> args = new ArrayList<>(List.of("--keys", String.join(",", keys), "--normalize"));
             if (postures != null && !postures.isBlank()) {
                 // ★ 빈 값이면 아예 안 넘긴다 — 이 인자를 모르는 스크립트에 넘기면 argparse 가 죽는다.
                 args.addAll(List.of("--postures", postures));
@@ -258,7 +262,9 @@ public class PythonPostProcessor implements PostProcessor {
             // 스크립트가 남긴 말을 그대로 붙인다 — 어느 프레임이 없다든지 하는 원인이 거기 있다.
             throw new IllegalStateException("후처리 실패(exit %d)\n%s".formatted(p.exitValue(), output));
         }
-        log.debug("후처리 로그\n{}", output);
+        // info 로 남긴다 — 파이썬의 [정규화] 등 후처리 진단 줄이 서버 로그에 보여야
+        // 같은 류(배선 누락으로 조용히 안 도는)를 놓치지 않는다.
+        log.info("후처리 로그\n{}", output);
     }
 
     private void deleteQuietly(Path dir) {
