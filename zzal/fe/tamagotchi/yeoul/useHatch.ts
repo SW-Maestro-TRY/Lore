@@ -165,6 +165,25 @@ export interface Live {
   /** 파일 하나를 올린다 — 성공하면 **그 자리에서 초안까지** 잡는다. */
   upload: (file: File) => Promise<void>;
   /**
+   * **고른 그림을 아직 안 올리고 손에 들고 있다**(2026-09-19).
+   *
+   * 가입 창이 여기서 뜬다 — 올리기는 로그인이 필요한 첫 호출이라, 미로그인이면 `presign` 직전에
+   * 멈춰 세우고 창을 띄운다. 그동안 `File` 을 잃으면 사용자가 그림을 **다시 고르게** 되므로
+   * 여기에 둔다. 미리보기는 곧바로 보여 준다 — 고른 그림이 눈앞에 있어야 "이 그림으로 이어진다"
+   * 가 읽힌다.
+   */
+  pendingUpload: boolean;
+  /** 올리지 않고 들고만 있는다. 미리보기는 그 자리에서 뜬다. */
+  holdUpload: (file: File) => void;
+  /** 들고 있던 그림을 이제 올린다(로그인이 끝난 순간). 없으면 아무 일도 안 한다. */
+  resumeUpload: () => Promise<void>;
+  /**
+   * 들고 있던 그림을 버린다 — **서버에 이미 아이가 있을 때만**.
+   * 두고 간 초안을 이어받았는데 들고 있던 그림까지 올리면 초안이 둘이 되고, 굽는 중이면
+   * `ZZAL_PET_ALREADY_HATCHING` 에 막힌다.
+   */
+  discardUpload: () => void;
+  /**
    * 이름·성격을 보낸다. 이 순간부터 격자 생성이 돈다.
    * @returns 서버가 받아들였으면 true. **false 면 알 화면으로 넘어가면 안 된다** — 굽고 있지 않다.
    */
@@ -255,7 +274,9 @@ const EMPTY: Live = {
   game: null, guessing: false, album: null, ready: false, petReady: false, failed: false, step: null,
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
   img: () => null,
-  upload: async () => {}, setChar: async () => false, doCare: async () => ({ ok: false, message: null }),
+  pendingUpload: false,
+  upload: async () => {}, holdUpload: () => {}, resumeUpload: async () => {}, discardUpload: () => {},
+  setChar: async () => false, doCare: async () => ({ ok: false, message: null }),
   doRest: async () => ({ ok: false, message: null }),
   savePersonality: async () => ({ ok: false, message: null }),
   finishTutorial: async () => ({ ok: false, message: null }),
@@ -282,6 +303,13 @@ export function useHatchState(): Live {
    */
   const [blocked, setBlocked] = useState<HatchBlocked | null>(null);
   const objectUrl = useRef<string | null>(null);
+  /**
+   * 아직 안 올린 그림(가입 창을 기다리는 중). **ref 와 상태를 함께** 둔다 —
+   * 손잡이(`resumeUpload`)는 옛 껍데기를 들고 불릴 수 있어 ref 로 읽어야 하고,
+   * 화면은 "가입하면 이 그림으로 시작해요" 를 그려야 하므로 상태도 필요하다.
+   */
+  const pendingFile = useRef<File | null>(null);
+  const [pendingUpload, setPendingUpload] = useState(false);
   /** 이름을 보냈는가. 이게 켜져야 굽기가 도는 것이므로 그때부터 진행을 묻는다. */
   const [charSet, setCharSet] = useState(false);
   const [hatch, setHatch] = useState<HatchProgress | null>(null);
@@ -395,6 +423,41 @@ export function useHatchState(): Live {
     } finally {
       setBusy(false);
     }
+  }, []);
+
+  /**
+   * ★ 2026-09-19 — **올리기 직전에 멈춰 세우는 자리.**
+   *
+   * `upload` 의 첫 걸음인 `presign` 은 로그인이 필요한 첫 호출이다. 미로그인이면 여기서
+   * 파일만 들고 가입 창을 띄우고(창은 화면이 연다), 로그인이 끝나면 `resumeUpload` 가
+   * **같은 File 로** 이어서 올린다 — 다시 고르게 하지 않는다.
+   */
+  const holdUpload = useCallback((file: File) => {
+    setError(null);
+    setBlocked(null);
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    objectUrl.current = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl.current);
+    pendingFile.current = file;
+    setPendingUpload(true);
+  }, []);
+
+  const resumeUpload = useCallback(async () => {
+    const file = pendingFile.current;
+    if (!file) return;
+    // 먼저 비운다 — `upload` 를 기다리는 동안 두 번 불려도 같은 파일이 두 번 나가지 않는다.
+    pendingFile.current = null;
+    setPendingUpload(false);
+    await upload(file);
+  }, [upload]);
+
+  const discardUpload = useCallback(() => {
+    if (!pendingFile.current) return;
+    pendingFile.current = null;
+    setPendingUpload(false);
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
+    objectUrl.current = null;
+    setPreviewUrl(null);
   }, []);
 
   /**
@@ -756,6 +819,9 @@ export function useHatchState(): Live {
   const reset = useCallback(() => {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = null;
+    // 들고 있던 그림도 함께 놓는다 — 로그아웃한 화면에 **앞사람이 고른 그림**이 남으면 안 된다.
+    pendingFile.current = null;
+    setPendingUpload(false);
     // ★ 번호를 0 으로 되돌리지 않는다. **지금까지 나간 것을 전부 지난 것으로 만든다** —
     //   되돌리면 날아가 있던 옛 응답이 다시 '최신' 이 되어 들어온다.
     applied.current = issued.current;
@@ -787,7 +853,9 @@ export function useHatchState(): Live {
       ? BASIC_KEYS.filter((k) => !motionAliases(k).some((a) => pet.motions?.some((m) => m.key === a && m.basicImageKey)))
       : [],
     careing, optimistic, resting, chat, chatting, game, guessing, album,
-    img, upload, setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, loadAlbum, shareMotion, resume, reset,
+    pendingUpload,
+    img, upload, holdUpload, resumeUpload, discardUpload,
+    setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, loadAlbum, shareMotion, resume, reset,
   };
 }
 
