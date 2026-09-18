@@ -37,6 +37,79 @@ const OB03_RISE_STYLE = `
 .onb-cta-v2:not(:disabled):hover{ background:#8c3a2c; box-shadow:0 8px 20px rgba(156,66,50,.28); }
 `;
 
+/**
+ * ★ 항상 심는 최소 규칙 — 캐릭터 칸의 칩 묶음을 감싸는 `.onb-cgrid` 래퍼를 기본은 **투명하게**
+ *   (display:contents) 둔다. 그래야 OB-10 이 꺼졌을 때 래퍼가 없는 것과 픽셀 동일(부모 flex 로
+ *   그대로 흘러든다). OB-10 이 켜지면 아래 ONE_SCREEN_STYLE 이 탭·PC 에서 이걸 2열 그리드로 바꾼다.
+ */
+const BASE_STYLE = `.onb-cgrid{ display:contents; }`;
+
+/**
+ * OB-10 한 화면 맞춤 — `.onb-one` 안에서만. overflow 는 auto 그대로라 넘쳐도 클리핑 없이 스크롤로
+ * 빠진다. 대신 간격·타이포·칩·마스코트·예시 그리드를 브레이크포인트별로 압축해 스크롤을 0 으로.
+ * ★ 순수 레이아웃/표현 — 핸들러·이동·상태·data-action 은 하나도 안 건드린다.
+ */
+const ONE_SCREEN_STYLE = `
+/* ── 공통(폰 우선, <768) ── */
+.onb-one .onb-scroll{ gap:11px!important; padding:12px 22px 8px!important; }
+.onb-one .onb-head{ gap:4px!important; }
+.onb-one .onb-title{ font-size:23px!important; line-height:1.18!important; }
+.onb-one .onb-sub{ font-size:12px!important; line-height:1.45!important; }
+
+/* landing */
+.onb-one[data-step="landing"] .onb-body{ gap:10px!important; padding-top:2px!important; }
+.onb-one .onb-egg{ width:150px!important; height:150px!important; }
+
+/* upload — 예시 카드가 세로를 먹으니 카드 높이·간격·미리보기 압축(버튼은 푸터라 늘 보임). */
+.onb-one[data-step="upload"] .onb-body{ gap:6px!important; }
+.onb-one .onb-drop{ padding:14px 18px!important; }
+.onb-one .onb-drop img{ width:96px!important; height:96px!important; }
+.onb-one .onb-exgrid{ gap:5px!important; }
+.onb-one .onb-excell{ gap:3px!important; }
+.onb-one .onb-excell > div{ aspect-ratio:auto!important; height:56px!important; }
+.onb-one .onb-excell > span{ font-size:10px!important; line-height:1.2!important; }
+.onb-one .onb-privacy{ font-size:10.5px!important; line-height:1.4!important; }
+
+/* char — 밀도 최고. 4묶음+그밖에를 **2열**로 눕혀 세로를 반으로(폰 포함, 셸이 좁아도 칩이 짧아 견딤).
+   간격·패딩·칩·입력을 최대 압축. 칩을 접지 않고(기능 보존) 크기만 줄인다. */
+.onb-one[data-step="char"] .onb-body{ gap:9px!important; }
+.onb-one .onb-cgrid{ display:grid!important; grid-template-columns:1fr 1fr!important; gap:7px!important; align-items:start; }
+.onb-one .onb-cgrid > :last-child{ grid-column:1 / -1; }
+.onb-one .onb-cgroup{ padding:8px 10px!important; gap:6px!important; }
+.onb-one .onb-cgroup > div{ gap:6px!important; }
+.onb-one .onb-cgroup input{ padding:7px 10px!important; font-size:12px!important; }
+.onb-one .onb-name-input{ padding:10px 13px!important; }
+.onb-one .onb-note{ padding:8px 11px!important; }
+.onb-one .onb-cgroup button{ padding:5px 10px!important; font-size:11.5px!important; }
+
+/* ── 탭·PC(≥768, 셸 560 고정) — 폭이 넉넉하니 마스코트를 키우고 칩을 한 톤 키운다. ── */
+@media (min-width:768px){
+  .onb-one .onb-cgrid{ gap:8px!important; }
+  .onb-one .onb-cgroup button{ font-size:12px!important; padding:6px 11px!important; }
+  .onb-one .onb-egg{ width:168px!important; height:168px!important; }
+}
+
+/* ── 폰(≤520, 셸 full-bleed) — char 잔여 스크롤을 더 줄인다(간격·패딩만, 칩·글자 크기 유지). ── */
+@media (max-width:520px){
+  .onb-one .onb-head{ gap:3px!important; }
+  .onb-one .onb-note{ padding:7px 10px!important; }
+  .onb-one[data-step="char"] .onb-body{ gap:8px!important; }
+  .onb-one .onb-cgrid{ gap:6px!important; }
+  .onb-one .onb-cgroup{ padding:7px 9px!important; gap:5px!important; }
+}
+
+/* ── 세로 좁은 화면(PC 800 등, ≤840) — 한 겹 더 짜낸다. ── */
+@media (max-height:840px){
+  .onb-one .onb-scroll{ gap:9px!important; padding-top:10px!important; }
+  .onb-one .onb-title{ font-size:21px!important; }
+  .onb-one .onb-egg{ width:130px!important; height:130px!important; }
+  .onb-one .onb-excell > div{ height:50px!important; }
+  .onb-one[data-step="char"] .onb-body{ gap:7px!important; }
+  .onb-one .onb-cgroup{ padding:7px 9px!important; gap:5px!important; }
+  .onb-one .onb-cgroup input{ padding:7px 10px!important; }
+}
+`;
+
 
 /** 세계관은 **고른 칩 전부**와 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
 const worldOf = (chips: readonly string[] | undefined, text: string | undefined) =>
@@ -102,6 +175,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
   const fDrop = useOnbFlag('ob-06');
   const fEx = useOnbFlag('ob-07');
   const fDots = useOnbFlag('ob-08');
+  // OB-10 — 각 단계를 세로 스크롤 없이 한 뷰포트에(폰·탭·PC 반응형 압축). 겉모습·간격만, 핸들러 불변.
+  const fOne = useOnbFlag('ob-10');
   // OB-03 등장은 클래스로만 붙인다 — off 면 빈 문자열이라 DOM·핸들러 변화 없음.
   const rise = fRise ? 'onb-rise' : undefined;
 
@@ -126,6 +201,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
     <div
       data-part="onb"
       data-step={key}
+      className={fOne ? 'onb-one' : undefined}
       style={{
         flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0,
         // OB-01 셸 질감 — 바탕색은 그대로, 은은한 종이 도트만 얹는다(랜딩 v2 ::before 와 같은 결).
@@ -135,7 +211,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
           : null),
       }}
     >
-      {(fRise || fCta) && <style>{OB03_RISE_STYLE}</style>}
+      <style>{BASE_STYLE + (fRise || fCta ? OB03_RISE_STYLE : '') + (fOne ? ONE_SCREEN_STYLE : '')}</style>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 22px 6px' }}>
         {/* ★ 태어남 칸에는 뒤로가 없다(상훈님 판정 4). 이미 태어난 아이가 있는데 되돌아가면
             여울 샘플로 가고 부화가 0/4 로 지워졌다 — 되돌릴 수 없는 지점은 되돌아가지지 않아야 한다. */}
@@ -148,19 +224,19 @@ function OnboardingInner({ y }: { y: Yeoul }) {
         {o.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 6, borderRadius: fDots ? radius.pill : 3, background: d.bg }} />)}
       </div>
 
-      <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '18px 24px 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <div className="onb-scroll" style={{ flex: '1 1 auto', overflow: 'auto', padding: '18px 24px 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="onb-head" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {/* OB-02 제목 타이포(자간·balance), OB-03 진입 등장(순서 0·70ms). 문구·줄바꿈(pre-line)은 그대로. */}
-          <span className={rise} style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 30, lineHeight: fTitle ? 1.2 : 1.25, color: C.ink, whiteSpace: 'pre-line', ...(fTitle ? { letterSpacing: '-.5px', textWrap: 'balance' as const } : null), animationDelay: '0ms' }}>{title}</span>
-          <span className={rise} style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.58)', animationDelay: '70ms' }}>{sub}</span>
+          <span className={['onb-title', rise].filter(Boolean).join(' ')} style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 30, lineHeight: fTitle ? 1.2 : 1.25, color: C.ink, whiteSpace: 'pre-line', ...(fTitle ? { letterSpacing: '-.5px', textWrap: 'balance' as const } : null), animationDelay: '0ms' }}>{title}</span>
+          <span className={['onb-sub', rise].filter(Boolean).join(' ')} style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.58)', animationDelay: '70ms' }}>{sub}</span>
         </div>
 
         {key === 'landing' && (
-          <div className={rise} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '14px 0 0', animationDelay: '130ms' }}>
+          <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '14px 0 0', animationDelay: '130ms' }}>
             {/* 알 일러스트 자리. 실물이 나오면 이 칸에 그대로 끼운다(214 × 214). OB-05 는 이 자리를 종이 액자로 감싼다(크기·yBob 보존). */}
             {(() => {
               const eggBox = (
-                <div style={{
+                <div className="onb-egg" style={{
                   width: 214, height: 214, borderRadius: fFrame ? radius.lg : 34,
                   backgroundColor: fFrame ? C.slot : '#F6E7DF',
                   backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.07) 0 7px,transparent 7px 16px)',
@@ -181,7 +257,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
         )}
 
         {key === 'upload' && (
-          <div className={rise} style={{ display: 'flex', flexDirection: 'column', gap: 12, animationDelay: '130ms' }}>
+          <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', gap: 12, animationDelay: '130ms' }}>
             {/* ★ 올리는 칸이 **맨 위**다. 예시를 먼저 두었더니 390×844 에서 버튼이 화면 밖으로
                 밀려 스크롤해야 보였다(2026-09-07 상훈님 지적). 여기서 할 일은 하나뿐이므로
                 그 하나가 첫 화면에 있어야 한다. 예시는 참고물이라 아래로 내렸다. */}
@@ -196,6 +272,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             />
             <button
               onClick={() => file.current?.click()} data-action="upload" disabled={live.busy}
+              className="onb-drop"
               // OB-06 — dash 색·라운드·바탕만 랜딩 토큰으로 정돈. 파일 선택·미리보기·busy/성공/오류·data-action 은 그대로.
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: fDrop ? radius.xl : radius.lg, border: `2px dashed ${live.imageKey ? C.accent : fDrop ? C.lineHard : 'rgba(74,64,56,.18)'}`, background: live.imageKey ? C.accentSoft : fDrop ? C.slot : C.paper }}
             >
@@ -221,12 +298,12 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               </span>
             )}
             {/* 가장 먼저 읽혀야 하는 한 줄 — 자캐를 맡기는 사람이 제일 먼저 의심하는 지점이다. */}
-            <span style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
+            <span className="onb-privacy" style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
 
             <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림이면 좋아요</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+            <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
               {GOOD_EX.map(([lbl, color, key]) => (
-                <div key={lbl} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+                <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
                   <ExampleImg
                     src={assetUrl(key)}
                     alt={`좋은 예: ${lbl}`}
@@ -240,9 +317,9 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             </div>
 
             <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림은 어려워요</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
+            <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
               {BAD_EX.map(([lbl, color, key]) => (
-                <div key={lbl} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+                <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
                   <ExampleImg
                     src={assetUrl(key)}
                     alt={`어려운 예: ${lbl}`}
@@ -274,7 +351,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
         )}
 
         {key === 'char' && (
-          <div className={rise} style={{ display: 'flex', flexDirection: 'column', gap: 17, animationDelay: '130ms' }}>
+          <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', gap: 17, animationDelay: '130ms' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 11.5, color: C.faint }}>이름 · 12자까지</span>
@@ -283,7 +360,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   value={s.petName} onChange={(e) => actions.onName(e.target.value)} maxLength={12} placeholder="여울"
-                  data-part="pet-name"
+                  data-part="pet-name" className="onb-name-input"
                   style={{ flex: 1, minWidth: 0, padding: '13px 15px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: 15, color: C.ink, outline: 'none' }}
                 />
                 <button onClick={actions.randomName} style={{ flex: 'none', padding: '0 17px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 13, color: C.sub2 }}>랜덤</button>
@@ -298,13 +375,15 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '11px 13px', borderRadius: radius.md, background: C.slot }}>
+            <div className="onb-note" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '11px 13px', borderRadius: radius.md, background: C.slot }}>
               <span style={{ width: 5, height: 5, flex: 'none', marginTop: 7, borderRadius: '50%', background: C.frameWood }} />
               <span style={{ fontSize: 12, lineHeight: 1.65, color: 'rgba(74,64,56,.62)' }}>아래는 전부 선택이에요. 지금 안 정해도 나중에 여울이 방에서 물어봐요.</span>
             </div>
 
+            {/* OB-10 — 이 래퍼는 기본 display:contents(투명)라 OFF 는 원본과 동일. 탭·PC(≥768)에서만 2열 그리드가 되어 세로를 반으로 접는다. */}
+            <div className="onb-cgrid">
             {v.charGroups.map((g) => (
-              <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
+              <div key={g.key} className="onb-cgroup" style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13.5, color: C.ink }}>{g.title}</span>
                   <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'rgba(74,64,56,.07)', color: C.faint, fontSize: 10 }}>선택</span>
@@ -323,7 +402,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               </div>
             ))}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${C.lineSoft}`, background: C.paper }}>
+            <div className="onb-cgroup" style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${C.lineSoft}`, background: C.paper }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 13.5, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
                 <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'rgba(74,64,56,.07)', color: C.faint, fontSize: 10 }}>선택</span>
@@ -332,11 +411,12 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                 placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요"
                 style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: 13, color: C.ink, outline: 'none' }} />
             </div>
+            </div>
           </div>
         )}
 
         {key === 'born' && (
-          <div className={rise} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, padding: '10px 0 0', animationDelay: '130ms' }}>
+          <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, padding: '10px 0 0', animationDelay: '130ms' }}>
             {/* OB-05 — 부화 스프라이트를 종이 액자로 감싼다(src·크기 209·yPop 보존). */}
             {(() => {
               const spriteBox = (
