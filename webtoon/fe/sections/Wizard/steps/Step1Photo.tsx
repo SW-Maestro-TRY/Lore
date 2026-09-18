@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { MAX_PHOTOS, type WizardForm } from "../../../lib/wizardData";
+import { PHOTO_ACCEPT, readPhoto } from "../../../lib/photoFile";
 
 /* 1 · 수면 — 사진 · 이름 · 캐릭터 설명. haeun/landing의 setupPhoto() 를
  * React 상태(form.photos)로 옮겼다 — data URL 배열인 것은 그대로다. */
@@ -22,27 +23,27 @@ export default function Step1Photo({
      이 자리에서 말해야 한다. */
   const [choosing, setChoosing] = useState(false);
 
-  const addFiles = (files: FileList | null) => {
+  /* 한 장씩 차례로 읽는다. 예전에는 FileReader 를 한꺼번에 띄워 두고 먼저
+     끝나는 대로 담았는데, 여러 장을 고르면 순서가 뒤섞였고 `form.photos` 를
+     같은 값으로 읽어 서로를 덮어쓰기도 했다. */
+  const addFiles = async (files: FileList | null) => {
     const list = [...(files ?? [])];
+    if (inputRef.current) inputRef.current.value = "";
     if (!list.length) return;
     const room = MAX_PHOTOS - form.photos.length;
     if (room <= 0) {
       window.alert(`사진은 ${MAX_PHOTOS}장까지 올릴 수 있습니다`);
       return;
     }
-    list.slice(0, room).forEach((file) => {
-      if (!file.type.startsWith("image/")) return;
-      if (file.size > 6 * 1024 * 1024) {
-        window.alert("사진이 너무 큽니다 (6MB 까지)");
-        return;
+    const added: string[] = [];
+    for (const file of list.slice(0, room)) {
+      try {
+        added.push(await readPhoto(file));
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : "사진을 열지 못했습니다");
       }
-      const fr = new FileReader();
-      fr.onload = () => {
-        onChange({ photos: [...form.photos, String(fr.result)] });
-      };
-      fr.readAsDataURL(file);
-    });
-    if (inputRef.current) inputRef.current.value = "";
+    }
+    if (added.length) onChange({ photos: [...form.photos, ...added] });
   };
 
   const removePhoto = (i: number) => {
@@ -84,7 +85,7 @@ export default function Step1Photo({
           <input
             ref={inputRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp"
+            accept={PHOTO_ACCEPT}
             multiple
             hidden
             onChange={(e) => addFiles(e.target.files)}
