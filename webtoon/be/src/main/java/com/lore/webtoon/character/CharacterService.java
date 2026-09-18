@@ -1,5 +1,7 @@
 package com.lore.webtoon.character;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PrivateArt;
 import com.lore.webtoon.credit.CreditGate;
@@ -31,7 +33,9 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -150,6 +154,30 @@ public class CharacterService {
     @Transactional
     public WebtoonCharacter create(Long userId, String browserUid, String name,
                                    String description, List<String> photoDataUrls, String style) {
+        return start(userId, browserUid, name, description, photoDataUrls, style, null);
+    }
+
+    /**
+     * 「캐릭터 만들어보기」 — 그 세계관 웹툰의 한 컷과 카드 글.
+     *
+     * <b>아무것도 안 넣어도 된다.</b> 사진·설명·이름·세계관이 전부 비어도
+     * 만든다(하네스가 존재부터 정한다). 직접 만들기({@link #create})와 다른
+     * 점은 그것 하나와, 결과가 초상이 아니라 한 컷 + 카드라는 것이다. 값과
+     * 하루 몫은 같은 자리에서 같은 규칙으로 센다 — 한 장 그리는 값은 같다.
+     *
+     * @param world 프리셋 키이거나 사람이 직접 쓴 한 줄. 비우면 무작위
+     */
+    @Transactional
+    public WebtoonCharacter tryOut(Long userId, String browserUid, String name,
+                                   String description, List<String> photoDataUrls, String world) {
+        return start(userId, browserUid, name, description, photoDataUrls, null,
+                     world == null ? "" : world.trim());
+    }
+
+    /** @param world {@code null} 이면 초상 한 장, 아니면 한 컷("" 는 세계관 무작위) */
+    private WebtoonCharacter start(Long userId, String browserUid, String name,
+                                   String description, List<String> photoDataUrls, String style,
+                                   String world) {
         /* **로그인은 안 시킨다.** 이 제품은 회원가입 없이 한번 써 보게 하는
            것이 목적이고, 웹툰 만들기가 이미 그렇다 — 캐릭터만 로그인을
            요구하면 "캐릭터로 웹툰 만들기" 로 가는 길이 거기서 끊긴다.
@@ -166,7 +194,8 @@ public class CharacterService {
                 .limit(MAX_PHOTOS)
                 .toList();
         boolean hasPhoto = !photos.isEmpty();
-        if (!hasPhoto && (description == null || description.isBlank())) {
+        // 한 컷은 빈손도 된다 — 그게 「랜덤으로 만들어보기」다.
+        if (world == null && !hasPhoto && (description == null || description.isBlank())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "어떤 캐릭터인지 한 줄만 적어 주세요 — 사진은 없어도 됩니다.");
         }
@@ -238,28 +267,30 @@ public class CharacterService {
                         @Override
                         public void afterCommit() {
                             line.submit(() -> draw(id, called, description, finalPhotos,
-                                    style, dir));
+                                    style, world, dir));
                         }
                     });
         } else {
-            line.submit(() -> draw(id, called, description, finalPhotos, style, dir));
+            line.submit(() -> draw(id, called, description, finalPhotos, style, world, dir));
         }
         return saved;
     }
 
     /** 뒤에서 그린다. 여기서 죽어도 줄이 멈추면 안 된다. */
     private void draw(Long id, String name, String description, List<Path> photos,
-                      String style, Path dir) {
-        Path drawn = dir.resolve("art.png");
+                      String style, String world, Path dir) {
+        Path drawn = dir.resolve(world == null ? "art.png" : "panel.png");
         try {
-            CharacterMaker.Made made = maker.make(name, description, photos, style, drawn);
+            CharacterMaker.Made made = world == null
+                    ? maker.make(name, description, photos, style, drawn)
+                    : maker.makePanel(name, description, photos, world, drawn);
             String key = uploadArt(made.art());
             // 사람이 이름을 안 적었으면 사양이 지어 준 것을 쓴다.
             finish(id, key, made.source(), null,
-                    name.isBlank() ? made.named() : null);
+                    name.isBlank() ? made.named() : null, made.card());
         } catch (Exception e) {                    // noqa: 사유는 로그에, 사람에겐 한 줄
             log.error("캐릭터를 못 그렸습니다 (id={}, name={})", id, name, e);
-            finish(id, null, null, "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.", null);
+            finish(id, null, null, "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.", null, null);
         } finally {
             // **어떻게 끝나든 올린 사진은 지운다.** 외모를 글로 적는 데만 쓰고,
             // 그 뒤로는 다시 안 쓴다. 사람 얼굴을 서버에 둘 이유가 없다.
@@ -268,7 +299,8 @@ public class CharacterService {
     }
 
     @Transactional
-    protected void finish(Long id, String key, CharacterSource source, String why, String named) {
+    protected void finish(Long id, String key, CharacterSource source, String why, String named,
+                          WebtoonCharacter.Card card) {
         characters.findById(id).ifPresent(one -> {
             Instant now = Instant.now(clock);
             if (why != null) {
@@ -277,7 +309,12 @@ public class CharacterService {
                 if (named != null && !named.isBlank()) {
                     one.rename(named, one.getDescription(), now);
                 }
-                one.drewArt(key, source == null ? CharacterSource.PROMPT : source, now);
+                CharacterSource from = source == null ? CharacterSource.PROMPT : source;
+                if (card != null) {
+                    one.drewPanel(key, from, card, now);
+                } else {
+                    one.drewArt(key, from, now);
+                }
             }
             characters.save(one);
         });
@@ -339,6 +376,34 @@ public class CharacterService {
             return cdn.isEmpty() ? "/" + key : cdn + "/" + key;
         }
         return art.ready() ? art.temporaryUrl(key) : null;
+    }
+
+    /**
+     * 고를 수 있는 세계관 — 하네스의 프리셋({@code story-harness/worlds.json})을
+     * 그대로 내준다. 자바가 목록을 한 벌 더 갖지 않는다: 프리셋을 더하면 여기도
+     * 같이 늘어야 하는데, 두 벌이면 반드시 어긋난다.
+     *
+     * @return {@code [{key, label}]}. 못 읽으면 빈 목록 — 화면은 그러면 직접 쓰기만 보여 준다
+     */
+    public List<Map<String, String>> worlds() {
+        Path file = maker.worldsFile();
+        if (file == null || !Files.isRegularFile(file)) {
+            return List.of();
+        }
+        try {
+            JsonNode presets = new ObjectMapper().readTree(Files.readString(file)).path("presets");
+            List<Map<String, String>> out = new ArrayList<>();
+            presets.fieldNames().forEachRemaining(key -> {
+                Map<String, String> one = new LinkedHashMap<>();
+                one.put("key", key);
+                one.put("label", presets.path(key).path("label").asText(key));
+                out.add(one);
+            });
+            return out;
+        } catch (IOException | RuntimeException e) {
+            log.warn("세계관 목록을 못 읽었습니다 ({})", file, e);
+            return List.of();
+        }
     }
 
     int cost() {
