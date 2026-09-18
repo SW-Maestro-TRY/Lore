@@ -173,8 +173,21 @@ export type StepKey = (typeof STEPS)[number] | 'user';
 /** 화면 큰 갈래. onb → (샘플)room → egg → room. */
 export type ScreenKey = 'onb' | 'room' | 'egg';
 
+/**
+ * 랜딩 v2 카피 — **한 벌**이다. `/zzal` 온보딩 첫 칸(LandingV2Stage)과 `/zzal/landing` 이
+ * 같은 이 상수를 읽는다. 복제하면 나중에 한쪽만 고쳐진다.
+ *
+ * ★ "같이 산다·살아난다·부활·재현" 류 무거운 말은 쓰지 않는다(언캐니 규칙). 옛 카피
+ *   "그림 한 장이면, 같이 살 수 있어요" 를 2026-09-18 상훈님 확정 문구로 갈아치웠다.
+ */
+export const LANDING_COPY = {
+  greeting: '안녕! 같이 키우자!',
+  sub: '그림 한 장이면, 내가 그린 아이랑 같이 지낼 수 있어요.',
+  cta: '같이 키우러 가기',
+} as const;
+
 export const ONB_COPY: Record<StepKey, readonly [string, string]> = {
-  landing: ['그림 한 장이면,\n같이 살 수 있어요', '내가 그린 아이가 방 하나를 얻습니다.'],
+  landing: [LANDING_COPY.greeting, LANDING_COPY.sub],
   upload: ['캐릭터 이미지를 업로드해 주세요', '한 장만 올릴 수 있어요. 얼굴이 잘 보이는 그림일수록 좋아요.'],
   user: ['당신은 어떤 분인가요', '알려주면 아이가 더 살갑게 대해요. 전부 선택이에요.'],
   char: ['어떤 아이인가요', '이름만 정하면 시작할 수 있어요.'],
