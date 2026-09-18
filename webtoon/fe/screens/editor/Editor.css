@@ -225,9 +225,6 @@
 .wt .wt-ed-dockfold { display: none; width: 32px; height: 32px; }
 .wt .wt-ed-dockbody { display: flex; flex-direction: column; gap: 10px; }
 .wt .wt-ed-dockbody[hidden] { display: none; }
-.wt .wt-ed-dockhint { font-size: 12px; color: var(--dim); line-height: 1.5; }
-.wt .wt-ed-dockhint b { color: var(--sea-deep); }
-.wt .wt-ed-dockhint[hidden] { display: none; }
 .wt .wt-ed-dockgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .wt .wt-ed-dockgrid[hidden] { display: none; }
 .wt .wt-ed .dock-item {
@@ -280,8 +277,6 @@
 .wt .wt-ed-askfield textarea.field { min-height: 80px; font-size: 13px; padding: 10px 12px; }
 .wt .wt-ed .check-line { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; cursor: pointer; }
 .wt .wt-ed .check-line input { accent-color: var(--ink); width: 16px; height: 16px; margin: 0; }
-.wt .wt-ed .ask-warn { font-size: 11.5px; color: #a13a2e; }
-.wt .wt-ed .ask-warn[hidden] { display: none; }
 .wt .wt-ed .ask-actions { display: flex; gap: 8px; margin-top: 6px; }
 .wt .wt-ed .ask-actions .btn { flex: 1; height: 46px; font-size: 14px; }
 

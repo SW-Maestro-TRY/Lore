@@ -187,3 +187,6 @@
   .wt .wt-prog-limit .muted { font-size: 13.5px; }
   .wt .wt-prog-limit .btn { display: none; }
 }
+
+/* 「완성본 미리 보기」 (아트보드 Drawing) */
+.wt .wt-prog-peek { align-self: flex-start; margin-top: 10px; }

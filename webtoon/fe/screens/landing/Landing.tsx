@@ -12,7 +12,10 @@ import { hrefOf, type Go } from "../../lib/nav";
 import { IconDownload, IconEdit, IconPlus, IconRetry, IconShare, IconUser } from "../../ui/Icons";
 import EditorMock, { CUT_IMG, PAGE_IMG, SHEET_IMG } from "./EditorMock";
 
-const DONE_COVER = api.coverUrl("20260910T132240-ae8c28", 1, 1, true);
+/* 04 완성 칸의 표지. 캔버스가 쓰는 그림과 같은 파일이다(예시 작품
+ * 「가면 아래의 조건」의 표지) — 실행 id 를 코드에 박아 두면 그 작품이
+ * 빠질 때 조용히 빈칸이 된다. */
+const DONE_COVER = "/static/gallery/20260910T132240-ae8c28/cover.jpg";
 import { usePhone } from "./usePhone";
 import "./Landing.css";
 
@@ -35,11 +38,6 @@ const PROMISES = [
   { n: "/ 02", t: "마음에 안 드는 컷만 다시", d: "한 편을 다시 만들지 않아요. 그 컷만 콕 집어 다시 그려요." },
   { n: "/ 03", t: "넣은 그대로, 그 세계관 안에", d: "강아지는 강아지인 채로 악역 영애가 돼요. 사람으로 바꾸지도, 다른 얼굴로 바꾸지도 않아요." },
 ] as const;
-
-const NEED_LONG = [
-  "캐릭터를 고르고 장르 하나만 누르면 줄거리 세 개가 나오고, 하나를 고르면 컷과 말풍선까지 그려집니다. 캐릭터 시트를 먼저 만들어 두기 때문에 얼굴과 옷이 마지막 컷까지 같은 사람이에요. 마음에 안 드는 컷은 그 컷만 다시 그리고, 다음 편은 같은 캐릭터로 이어서 만듭니다.",
-  "사진을 넣고 세계관을 고르면 그 세계관 그림체로 그린 웹툰 한 컷이 나와요. 세계관은 안 골라도 되고, 아무것도 안 넣고 랜덤으로 뽑아도 돼요. 회사원이 로판에서 개가 되기도 하고, 강아지가 강아지인 채로 악역 영애가 되기도 해요. 마음에 들면 「이 캐릭터로 1화 보기」로 바로 1화가 만들어집니다.",
-];
 
 function titleOf(r: api.RunCard): string {
   return (r.title || "").replace(/^"(.*)"$/, "$1");
@@ -225,7 +223,6 @@ export default function Landing({ go }: { go: Go }) {
                   ? t("설정만 있던 캐릭터가 이야기 속에서 말하고 움직여요. 캐릭터를 넣으면 그 캐릭터가 주인공인 웹툰이 나옵니다.")
                   : <>{t("설정만 있던 캐릭터가 이야기 속에서 말하고 움직여요.")}<br />{t("캐릭터를 넣으면, 그 캐릭터가 주인공인 웹툰이 나옵니다.")}</>}
               </span>
-              <div className="wt-landing-need-more"><p className="muted">{t(NEED_LONG[0])}</p></div>
             </div>
             <div className="wt-landing-need-fig">
               <EditorMock feat={0} s={phone ? 0.7 : 0.9} height={phone ? 260 : 400} who={t("세이엘")} />
@@ -237,11 +234,8 @@ export default function Landing({ go }: { go: Go }) {
             <div className="wt-landing-need-text">
               <b>{t(phone ? "뭐든 넣으면 웹툰 속 캐릭터가 돼요" : "어떤 캐릭터가 나올지, 뽑아볼까요?")}</b>
               <span className="muted">
-                {phone
-                  ? t("내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요. 의인화 없이 그대로 웹툰 세계관에 들어가요.")
-                  : <>{t("사진을 넣어도, 이야기를 적어도, 아무것도 없이 시작해도 좋아요.")}<br />{t("당신이 고른 세계관에 맞춰 새로운 캐릭터를 만들어드려요.")}</>}
+                <>{t("사진을 넣어도, 이야기를 적어도, 아무것도 없이 시작해도 좋아요.")}<br />{t("당신이 고른 세계관에 맞춰 새로운 캐릭터를 만들어드려요.")}</>
               </span>
-              <div className="wt-landing-need-more"><p className="muted">{t(NEED_LONG[1])}</p></div>
             </div>
             <div className="wt-landing-need-fig">
               <div className="wt-landing-cut">

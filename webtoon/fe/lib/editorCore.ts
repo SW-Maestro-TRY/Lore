@@ -546,9 +546,6 @@ export function mountEditor(
     $("#regenAskSub").textContent = RUN_ID
       ? tr("이 장만 새로 굽습니다. 지금 그림은 지난 판으로 남아서 언제든 되돌릴 수 있습니다.")
       : tr("샘플이라 실제로 그리지는 않습니다 — 화면만 흉내 냅니다.");
-    // 샘플에서는 굽지 않으니 비용 경고도 띄우지 않는다 — 바로 위 줄에
-    // "실제로 그리지는 않습니다" 라고 써 놓고 밑에서 비용을 경고하면 말이 어긋난다.
-    $(".ask-warn").hidden = !RUN_ID;
     paintAskTags();
     // 장 밑에 이미 적어 둔 것이 있으면 그대로 실어 준다. 여기서 고쳐도 되고,
     // 다 지우고 눌러도 된다.
@@ -1170,7 +1167,7 @@ export function mountEditor(
 
   function setLedger(open) {
     $("#dockLedger").hidden = !open;
-    for (const sel of ["#dockTabs", "#dockHint", "#dockGrid"]) {
+    for (const sel of ["#dockTabs", "#dockGrid"]) {
       const el = $(sel);
       if (el) el.hidden = open;
     }
