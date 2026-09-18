@@ -196,7 +196,7 @@
 .wt .wt-ed .ver-thumb .ver-label { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-size: 10px; padding: 1px 0; background: rgba(15, 51, 63, 0.6); color: #fff; }
 
 /* 장 사이 여백 — 끌어서 고친다 */
-.wt .wt-ed .scene-gap { position: relative; width: 100%; min-height: 34px; margin-bottom: 16px; border: 1px dashed rgba(15, 51, 63, 0.25); border-radius: 10px; background: #fff; cursor: ns-resize; touch-action: none; transition: padding-top 0.12s ease; }
+.wt .wt-ed .scene-gap { position: relative; width: 100%; min-height: 34px; margin-bottom: 16px; border: 1px dashed rgba(15, 51, 63, 0.25); border-radius: 10px; background: #fff; cursor: ns-resize; touch-action: none; }
 .wt .wt-ed .scene-gap span { position: absolute; left: 12px; top: 8px; font-size: 12px; color: var(--dim); white-space: nowrap; }
 .wt .wt-ed .scene-gap span::before { content: "다음 장까지 여백 · "; }
 .wt .wt-ed .scene:has(+ .scene-gap) { margin-bottom: 6px; }
@@ -264,7 +264,7 @@
 .wt .wt-ed .ask-box { width: min(440px, 100%); max-height: 86vh; overflow: auto; background: #fff; border-radius: 22px; box-shadow: 0 20px 60px rgba(15, 51, 63, 0.28); padding: 22px 20px 18px; display: flex; flex-direction: column; gap: 8px; }
 .wt .wt-ed .ask-box h2 { font-size: 18px; }
 .wt .wt-ed .ask-sub { color: var(--muted); font-size: 13px; line-height: 1.6; }
-.wt .wt-ed .ask-scene { padding: 10px 12px; background: var(--water-light); border-left: 3px solid var(--sea); border-radius: 0 8px 8px 0; font-size: 13px; line-height: 1.55; }
+.wt .wt-ed .ask-scene { padding: 10px 12px; background: var(--water-light); border-radius: 8px; font-size: 13px; line-height: 1.55; }
 .wt .wt-ed .ask-scene[hidden] { display: none; }
 .wt .wt-ed .fb-lead { font-size: 12.5px; margin-top: 6px; }
 .wt .wt-ed .fb-lead small { color: var(--dim); font-size: 12px; }

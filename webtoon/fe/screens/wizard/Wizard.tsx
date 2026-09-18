@@ -104,7 +104,10 @@ export default function Wizard({
           name: c.name, character: c.description || "",
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        // 지웠거나 남의 것이면 그 번호를 떼고 일반 목록으로 — 스켈레톤에 갇히지 않게
+        go("create", { step: 1 }, { replace: true });
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetCharacterId]);
 

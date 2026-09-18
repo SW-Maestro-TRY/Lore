@@ -77,5 +77,6 @@ export async function runTry(d: TryDraft): Promise<Character> {
 export function isLimitError(e: unknown): boolean {
   const status = (e as { status?: number } | null)?.status;
   const msg = (e as { message?: string } | null)?.message || "";
-  return status === 402 || status === 403 || msg.includes("다 쓰셨어요");
+  // 402 는 크레딧 부족일 수도 있다 — 서버가 「다 쓰셨어요」라고 했을 때만 한도 화면.
+  return msg.includes("다 쓰셨어요") || (status === 403 && msg.includes("무료"));
 }

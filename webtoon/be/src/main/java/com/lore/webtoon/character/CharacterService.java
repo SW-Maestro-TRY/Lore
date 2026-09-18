@@ -73,6 +73,7 @@ public class CharacterService {
 
     private final WebtoonCharacterRepository characters;
     private final CharacterMaker maker;
+    private final CharacterOwner owner;
     private final PrivateArt art;
     private final CreditGate credits;
     private final Path workDir;
@@ -89,20 +90,21 @@ public class CharacterService {
     /* 생성자가 둘이다(아래 하나는 검사에서 시계를 갈아 끼우려고 둔 것) */
     @Autowired
     public CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
-                            PrivateArt art, CreditGate credits,
+                            CharacterOwner owner, PrivateArt art, CreditGate credits,
                             @Value("${lore.webtoon.character.work-dir:}") String workDir,
                             @Value("${lore.webtoon.character.free-per-day:5}") int freePerDay,
                             @Value("${lore.webtoon.character.credit-cost:1}") int cost,
                             @Value("${lore.webtoon.cdn-base:}") String cdn) {
-        this(characters, maker, art, credits, workDir, freePerDay, cost, cdn,
+        this(characters, maker, owner, art, credits, workDir, freePerDay, cost, cdn,
              Clock.system(ZONE));
     }
 
     CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
-                     PrivateArt art, CreditGate credits, String workDir,
+                     CharacterOwner owner, PrivateArt art, CreditGate credits, String workDir,
                      int freePerDay, int cost, String cdn, Clock clock) {
         this.characters = characters;
         this.maker = maker;
+        this.owner = owner;
         this.art = art;
         this.credits = credits;
         this.workDir = Path.of(workDir == null || workDir.isBlank()
@@ -224,7 +226,9 @@ public class CharacterService {
         }
 
         // **값은 만들기 전에 본다.** 그린 뒤에 모자라다고 하면 돈은 이미 나갔다.
-        boolean free = freeLeft(userId, List.of(browserUid == null ? "" : browserUid)) > 0;
+        // 컨트롤러(list/freeLeft)와 같은 uid 묶음으로 센다 — 기기를 여럿 이은 사람에게
+        // 화면은 "0개 남음" 인데 서버는 공짜로 만들어 주던 어긋남을 없앤다.
+        boolean free = freeLeft(userId, owner.uidsOf(userId, browserUid)) > 0;
         if (!free) {
             /* 게스트는 낼 크레딧이 없다 — 계정 쪽 확인은 통과해 버리므로
                여기서 따로 막는다. 없는 잔액을 보고 "모자랍니다" 라고 하면
