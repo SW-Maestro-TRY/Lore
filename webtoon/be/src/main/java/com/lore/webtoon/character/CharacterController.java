@@ -114,6 +114,26 @@ public class CharacterController {
         return Map.of("worlds", characters.worlds());
     }
 
+    @Operation(summary = "랜덤 재료", description = """
+            「랜덤으로 만들어보기」가 입력 칸을 채울 값 한 벌 — 이름 · 설명 · 세계관.
+            AI 를 안 부르고 조합에서 뽑는다. 사람이 보고 고친 뒤 만든다.""")
+    @GetMapping("/random")
+    public Map<String, String> random() {
+        return characters.randomSeed();
+    }
+
+    @Operation(summary = "공유된 카드", description = """
+            「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.
+            내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.""")
+    @GetMapping("/{publicId}/card")
+    public Map<String, Object> card(@PathVariable String publicId) {
+        WebtoonCharacter one = characters.sharedCard(publicId);
+        Map<String, Object> m = view(one, null, List.of());
+        m.remove("mine");
+        m.remove("error");
+        return m;
+    }
+
     @Operation(summary = "캐릭터 하나", description = """
             그리는 중인 것을 다시 읽는 자리. 내 것과 기본 제공만 보인다.""")
     @GetMapping("/{publicId}")
