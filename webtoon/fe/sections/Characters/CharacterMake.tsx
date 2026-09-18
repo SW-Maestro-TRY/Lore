@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { createCharacter, type Character } from "../../lib/charApi";
 import { MAX_PHOTOS, STYLE_INFO } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
+import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 
 /* 캐릭터 하나 만들기 — **화면 하나를 통째로 쓴다.**
  *
@@ -29,20 +30,23 @@ export default function CharacterMake({ onClose, onMade }: {
   const [failed, setFailed] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
-  /** 여러 장을 한꺼번에 골라도 된다 — 같은 사람의 다른 각도·표정. */
-  const pick = (files: FileList | null) => {
+  /** 여러 장을 한꺼번에 골라도 된다 — 같은 사람의 다른 각도·표정.
+   *  한 장씩 차례로 읽어야 고른 순서 그대로 담긴다. */
+  const pick = async (files: FileList | null) => {
     const list = [...(files ?? [])];
+    if (file.current) file.current.value = "";
     if (!list.length) return;
     const room = MAX_PHOTOS - photos.length;
     if (room <= 0) { setFailed(`사진은 ${MAX_PHOTOS}장까지 올릴 수 있습니다`); return; }
     setFailed(null);
-    list.slice(0, room).forEach((f) => {
-      if (f.size > 6 * 1024 * 1024) { setFailed("사진이 너무 큽니다 (6MB 까지)"); return; }
-      const r = new FileReader();
-      r.onload = () => setPhotos((prev) => [...prev, String(r.result)]);
-      r.readAsDataURL(f);
-    });
-    if (file.current) file.current.value = "";
+    for (const f of list.slice(0, room)) {
+      try {
+        const url = await readPhoto(f);
+        setPhotos((prev) => [...prev, url]);
+      } catch (e) {
+        setFailed(e instanceof Error ? e.message : "사진을 열지 못했습니다");
+      }
+    }
   };
 
   const dropPhoto = (i: number) => {
@@ -116,7 +120,7 @@ export default function CharacterMake({ onClose, onMade }: {
                     ))}
                   </ul>
                 )}
-              <input ref={file} type="file" accept="image/*" multiple hidden disabled={busy}
+              <input ref={file} type="file" accept={PHOTO_ACCEPT} multiple hidden disabled={busy}
                      onChange={(e) => pick(e.target.files)} />
               {photos.length < MAX_PHOTOS && (
                 <div className="char-photo-acts">
