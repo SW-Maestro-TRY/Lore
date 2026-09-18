@@ -186,6 +186,21 @@ export const LANDING_COPY = {
   cta: '같이 키우러 가기',
 } as const;
 
+/**
+ * 올리기 칸 — **그림은 골랐는데 아직 안 올린** 한 박자의 카피(2026-09-19).
+ *
+ * 가입 창이 뜨는 자리가 여기다. 그동안 화면이 말해야 하는 것은 하나뿐이다 —
+ * "고른 그림은 그대로 있다". 다시 고르라고 읽히면 사람은 창을 닫고 처음부터 다시 한다.
+ */
+export const UPLOAD_COPY = {
+  /** 미리보기 아래 한 줄(원래 '그림 올리기' 자리). */
+  pending: '가입하면 이 그림으로 시작해요',
+  /** 그 아래 작은 줄. 고른 그림이 어디 가지 않는다는 것만 말한다. */
+  pendingNote: '고른 그림은 그대로 두었어요',
+  /** 아래 버튼. 누르면 가입 창이 다시 열린다. */
+  pendingCta: '가입하고 올리기',
+} as const;
+
 export const ONB_COPY: Record<StepKey, readonly [string, string]> = {
   landing: [LANDING_COPY.greeting, LANDING_COPY.sub],
   upload: ['캐릭터 이미지를 업로드해 주세요', '한 장만 올릴 수 있어요. 얼굴이 잘 보이는 그림일수록 좋아요.'],

@@ -1249,8 +1249,11 @@ export function useYeoul(live?: Live) {
 
   const onNext = useCallback(() => {
     const key = STEPS[s.step];
-    // 랜딩에서 무언가 하려 하면 가입·로그인부터(상훈님 9/7 결정).
-    if (key === 'landing' && !s.authed) { patch({ authOpen: true, authTab: 'signup' }); return; }
+    // ★ 2026-09-19 — **랜딩에서는 아무것도 묻지 않는다.** 전에는 첫 CTA 한 번에 가입 창이 떠서
+    //   SNS 로 처음 온 사람이 무엇을 주는 곳인지도 모른 채 계정부터 만들어야 했다.
+    //   가입은 **그림을 실제로 올리는 순간**(presign 직전)으로 미뤘다 — 자리는 `Onboarding` 의
+    //   올리기 칸이고, 그동안 고른 그림은 `useHatch.holdUpload` 가 들고 있다.
+    //   9/7 결정("가입은 칸이 아니라 모달")은 그대로다. 뜨는 **시점만** 뒤로 갔다.
     if (key === 'char') {
       if (!s.petName) {
         patch({ nameErr: true });
@@ -1265,7 +1268,7 @@ export function useYeoul(live?: Live) {
       return;
     }
     patch({ screen: 'onb', step: s.step + 1 });
-  }, [s.step, s.authed, s.petName, patch, later, enterSample]);
+  }, [s.step, s.petName, patch, later, enterSample]);
 
   const onBack = useCallback(() => setS((v) => ({ ...v, step: Math.max(0, v.step - 1) })), []);
   const onUpload = useCallback(() => patch({ uploaded: true }), [patch]);

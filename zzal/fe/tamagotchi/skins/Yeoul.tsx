@@ -60,7 +60,7 @@ export default function Yeoul(_props: SkinProps) {
   // ★ 로그아웃하면 다시 물어봐야 한다(2026-09-10). 전에는 한 번 켜면 그 마운트에서 영영 꺼지지 않아,
   //   같은 탭에서 계정을 바꾸면 **앞사람의 아이가 그대로 남아 보였다.** 로그인 상태가 꺼질 때 되돌린다.
   const asked = useRef(false);
-  const { resume, reset } = live;
+  const { resume, reset, resumeUpload, discardUpload } = live;
   const { patch } = actions;
   useEffect(() => {
     if (isAuthenticated) return;
@@ -85,11 +85,17 @@ export default function Yeoul(_props: SkinProps) {
     const mine = era.current;
     void resume().then((r) => {
       if (mine !== era.current) return;   // 그사이 로그인 상태가 바뀌었다 — 남의 답이다
-      if (r === 'draft') goStep(STEPS.indexOf('char'));
-      else if (r === 'hatching') goEgg();
-      else if (r === 'alive') enterRoom();
+      // ★ 2026-09-19 — **들고 있던 그림은 여기서만 올린다.** 올리기 칸에서 가입 창이 뜨는 동안
+      //   파일을 손에 들고 있는데(`holdUpload`), 로그인되자마자 화면이 혼자 올려 버리면
+      //   바로 이 조회와 경주가 된다 — 두고 간 초안이 있는 사람은 초안이 둘이 되고, 굽는 중이면
+      //   `ZZAL_PET_ALREADY_HATCHING` 에 막힌다. 그래서 **답을 보고 나서** 가른다.
+      if (r === 'draft') { discardUpload(); goStep(STEPS.indexOf('char')); }
+      else if (r === 'hatching') { discardUpload(); goEgg(); }
+      else if (r === 'alive') { discardUpload(); enterRoom(); }
+      // 이어갈 아이가 없다 = 방금 가입한 사람. 멈춰 세워 둔 그 그림을 이제 올린다.
+      else void resumeUpload();
     });
-  }, [isAuthenticated, resume, goStep, goEgg, enterRoom]);
+  }, [isAuthenticated, resume, goStep, goEgg, enterRoom, resumeUpload, discardUpload]);
 
   /**
    * 서버가 아는 이름을 목에도 넣어 둔다.
