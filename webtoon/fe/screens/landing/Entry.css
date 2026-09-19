@@ -10,7 +10,7 @@
 }
 .wt .wt-entry-card:hover { color: var(--ink); border-color: var(--ink); }
 .wt .wt-entry-card.on { border: 2px solid var(--sea); }
-.wt .wt-entry-pic { position: relative; height: 250px; background: var(--water-light); overflow: hidden; flex-shrink: 0; }
+.wt .wt-entry-pic { position: relative; height: 380px; background: var(--water-light); overflow: hidden; flex-shrink: 0; }
 .wt .wt-entry-pic img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
 .wt .wt-entry-tag {
   position: absolute; left: 12px; top: 12px; font-size: 12px; padding: 4px 10px; border-radius: 999px;
@@ -31,7 +31,7 @@
   .wt .wt-entry-cards { grid-template-columns: 1fr; gap: 12px; width: 100%; }
   .wt .wt-entry-card { flex-direction: row; align-items: stretch; }
   .wt .wt-entry-card.on { border-color: var(--ink); }
-  .wt .wt-entry-pic { width: 104px; height: 150px; }
+  .wt .wt-entry-pic { width: 120px; height: 190px; }
   .wt .wt-entry-tag { display: none; }
   .wt .wt-entry-body { padding: 16px 14px; justify-content: center; }
   .wt .wt-entry-ic { display: none; }
