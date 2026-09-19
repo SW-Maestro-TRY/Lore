@@ -20,6 +20,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.credit.CreditGate;
+import com.lore.webtoon.work.WorkLedger;
+
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +64,7 @@ public class RunController {
     private final StoryStore stories;
     private final RegenService regen;
     private final AfterRun after;
+    private final WorkLedger ledger;
     /* **경계에서는 Map 으로 주고받는다.**
      *
      * 이 앱의 HTTP 변환기는 Jackson 3(tools.jackson) 인데, 얹은 것을 다루는
@@ -70,7 +76,7 @@ public class RunController {
 
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
-                         RegenService regen, AfterRun after) {
+                         RegenService regen, AfterRun after, WorkLedger ledger) {
         this.runs = runs;
         this.pages = pages;
         this.export = export;
@@ -79,6 +85,30 @@ public class RunController {
         this.stories = stories;
         this.regen = regen;
         this.after = after;
+        this.ledger = ledger;
+    }
+
+    /**
+     * 편집실이 작품을 <b>고치는</b> 길의 문지기.
+     *
+     * 예전에는 아무 확인이 없어서, 주소만 알면 남의 작품을 다시 그리거나
+     * 제목을 바꿀 수 있었다 — 다시 그리기는 실제로 돈이 나간다.
+     *
+     * 주인은 <b>계정</b>이다. 게스트(브라우저)는 편집실을 못 쓴다 — 브라우저
+     * uid 는 같은 컴퓨터를 쓰는 사람끼리 겹치고, 지우면 사라져서 "고칠 권리"를
+     * 걸기에는 약하다. 대신 로그인하면 {@code POST /my/link} 가 그 브라우저를
+     * 계정에 이어 주고, 그때 그 브라우저로 만든(아직 주인 없는) 작품이
+     * 그대로 내 것이 된다({@link WorkLedger} 의 isOwner).
+     */
+    private void mustOwn(String runId) {
+        Long userId = CreditGate.currentUser();
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED,
+                    "편집실은 로그인해야 쓸 수 있어요. 로그인하면 이 브라우저로 만든 작품도 같이 따라옵니다.");
+        }
+        if (!ledger.mayChange(runId, userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 고칠 수 있습니다");
+        }
     }
 
     /**
@@ -92,6 +122,7 @@ public class RunController {
     @PostMapping("/{runId}/title")
     public ResponseEntity<Map<String, Object>> title(@PathVariable String runId,
                                                       @RequestBody Map<String, Object> body) {
+        mustOwn(runId);
         try {
             String got = stories.editTitle(runId, String.valueOf(body.getOrDefault("title", "")));
             return ResponseEntity.ok(Map.of("title", got));
@@ -126,6 +157,7 @@ public class RunController {
     public Map<String, Object> saveOverlay(@PathVariable String runId,
                                            @RequestParam(defaultValue = "1") int ep,
                                            @RequestBody(required = false) Map<String, Object> body) {
+        mustOwn(runId);
         return Map.of("ok", true, "items", overlays.save(runId, ep, asNode(body)));
     }
 
@@ -258,6 +290,7 @@ public class RunController {
                                                       @PathVariable int no,
                                                       @RequestBody(required = false)
                                                       Map<String, Object> body) {
+        mustOwn(runId);
         try {
             String note = body == null ? "" : String.valueOf(body.getOrDefault("feedback", ""));
             String id = regen.start(runId, no, note);
@@ -294,6 +327,7 @@ public class RunController {
     public ResponseEntity<Map<String, Object>> revert(@PathVariable String runId,
                                                        @PathVariable int no,
                                                        @RequestBody Map<String, Object> body) {
+        mustOwn(runId);
         try {
             int version = Integer.parseInt(String.valueOf(body.get("version")));
             List<Map<String, Object>> versions = regen.revert(runId, no, version);

@@ -71,11 +71,37 @@
 .wt .wt-my-char-new:hover { border-color: var(--ink); }
 
 @media (max-width: 767px) {
-  .wt .wt-my { flex-direction: column; gap: 18px; }
-  .wt .wt-my-rail { width: auto; }
+  /* 폰은 왼쪽 줄을 그대로 쌓지 않는다 — 아트보드 MMyPage 처럼 계정·크레딧을
+     한 줄로 눕히고 메뉴를 가로 칩 줄로 접는다. 그대로 쌓으면 키 큰 카드 넷을
+     지나야 작품이 나온다. */
+  .wt .wt-my { flex-direction: column; gap: 14px; }
+  .wt .wt-my-rail { width: auto; gap: 10px; }
+
+  .wt .wt-my-me { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; }
+  .wt .wt-my-me .wt-my-avatar { width: 44px; height: 44px; flex-shrink: 0; }
+  .wt .wt-my-me b { font-size: 15px; }
+  .wt .wt-my-me .dim { margin-left: auto; }
+
+  .wt .wt-my-credit { flex-direction: row; align-items: baseline; gap: 8px; padding: 12px 14px; flex-wrap: wrap; }
+  .wt .wt-my-credit > b { font-size: 19px; }
+
+  .wt .wt-my-menu { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; }
+  .wt .wt-my-menu small { display: none; }
+  .wt .wt-my-menu button {
+    width: auto; flex: 0 0 auto; gap: 6px; padding: 8px 12px; border-radius: 999px;
+    border: 1px solid var(--line-strong);
+  }
+  .wt .wt-my-menu button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .wt .wt-my-menu button.on .dim { color: rgba(255, 255, 255, 0.75); }
+  .wt .wt-my-lang { padding: 10px 14px; }
+  /* 제목과 단추가 한 줄에서 겹쳐 보인다 — 폰에서는 위아래로 나누고 단추는
+     가로로 나란히 둔다. */
+  .wt .wt-my-head { flex-direction: column; align-items: stretch; gap: 10px; }
   .wt .wt-my-head h2 { font-size: 24px; }
   .wt .wt-my-head-sub h2 { font-size: 19px; }
-  .wt .wt-my-headacts { flex-direction: column; align-items: stretch; }
+  .wt .wt-my-headacts { flex-direction: row; }
+  .wt .wt-my-headacts .btn { flex: 1 1 0; }
+  .wt .wt-my-head-sub .btn { align-self: flex-start; }
   .wt .wt-my-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .wt .wt-my-cover img { height: 180px; border-radius: 10px; }
   .wt .wt-my-char img, .wt .wt-my-char-new { width: 76px; height: 76px; }

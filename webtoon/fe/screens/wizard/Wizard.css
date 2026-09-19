@@ -168,7 +168,7 @@
 .wt .wt-wiz-mfoot-note { display: none; }
 
 @media (max-width: 767px) {
-  .wt .wt-wiz-crumb, .wt .wt-wiz-foot { display: none; }
+  .wt .wt-wiz-foot { display: none; }
   .wt .wt-wiz-mbars { display: flex; gap: 4px; padding: 10px 16px 0; }
   .wt .wt-wiz-mbars i { height: 4px; flex: 1; border-radius: 2px; background: rgba(15, 51, 63, 0.15); }
   .wt .wt-wiz-mbars i.on { background: var(--ink); }

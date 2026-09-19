@@ -138,7 +138,7 @@ function WebtoonScreens() {
         <Progress jobId={route.job} go={go} />
       )}
       {route.view === "result" && route.run && <Result runId={route.run} go={go} authenticated={authenticated} />}
-      {route.view === "editor" && route.run && <Editor runId={route.run} go={go} />}
+      {route.view === "editor" && route.run && <Editor runId={route.run} go={go} authStatus={authStatus} />}
       {route.view === "works" && <Works go={go} authenticated={authenticated} />}
       {route.view === "characters" && <CharList go={go} />}
       {route.view === "try" && <Photo go={go} />}
