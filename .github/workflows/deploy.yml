@@ -30,6 +30,10 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/deploy.yml'
+      # dev 스택은 박스에서 compose 로 다시 빌드된다 — 이 둘만 고쳐도 배포가 필요하다.
+      # (staging·prod 는 backend/frontend 필터를 보므로 이 경로만 바뀌면 배포 잡이 안 돈다.)
+      - 'infra/**'
+      - 'docker-compose*.yml'
   workflow_dispatch:
 
 permissions:
@@ -91,6 +95,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -116,6 +121,11 @@ jobs:
               - 'haeun/landing/web/**'
               - 'package.json'
               - 'package-lock.json'
+            # dev 전용 — 배포 스크립트·compose·Dockerfile·nginx 가 바뀌면 박스를 다시 올려야 한다.
+            # backend·frontend 잡은 이 키를 보지 않으므로 staging·prod 동작은 그대로다.
+            infra:
+              - 'infra/**'
+              - 'docker-compose*.yml'
 
   # ── dev 전용: 도커 박스 배포 ─────────────────────────────────────
   # dev 는 jar/번들을 systemd 에 꽂는 게 아니라 compose 스택 한 덩어리를 박스에서 다시 빌드한다.
@@ -129,9 +139,14 @@ jobs:
       needs.setup.outputs.env_name == 'dev' &&
       (needs.changes.outputs.backend == 'true' ||
        needs.changes.outputs.frontend == 'true' ||
+       needs.changes.outputs.infra == 'true' ||
        github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: dev
+    env:
+      # 박스가 도커 이미지를 다시 굽는다 — 기본 10분 상한이면 아직 돌고 있는 배포를
+      # '실패'로 끊는다(거짓 빨간불). dev 만 30분으로 늘린다(staging·prod 는 기본값 유지).
+      SSM_WAIT_MAX_POLLS: 360
     steps:
       - uses: actions/checkout@v4
 
@@ -242,13 +257,26 @@ jobs:
             "s3://$B/builds/$E/setup-python-${GITHUB_SHA}.sh" --region "$AWS_REGION"
 
       # 웹툰 생성 하네스(new_harness)도 파이썬을 쓴다 — 짤과 패키지가 달라 따로 둔다.
+      #
+      # ★ 파일이 있을 때만 올린다. haeun/landing/requirements.txt 는 생성 파이프라인이
+      #   webtoon/ai/ 로 옮겨가며 사라졌는데(aab7ac2) 이 스텝만 남아, 다음 backend 배포 때
+      #   '파일 없음'으로 배포 전체가 멈춘다. 경로를 여기서 추측해 바꾸면 더 조용히 틀리므로
+      #   (하은님 영역) 일단 없으면 건너뛰고, 올바른 경로는 담당자가 채운다.
       - name: 웹툰 하네스 파이썬 준비물 업로드
         run: |
           B="${{ needs.setup.outputs.s3_bucket }}"; E="${{ needs.setup.outputs.env_name }}"
-          aws s3 cp haeun/landing/requirements.txt \
-            "s3://$B/builds/$E/webtoon-requirements-${GITHUB_SHA}.txt" --region "$AWS_REGION"
-          aws s3 cp webtoon/be/setup-python.sh \
-            "s3://$B/builds/$E/webtoon-setup-python-${GITHUB_SHA}.sh" --region "$AWS_REGION"
+          if [ -f haeun/landing/requirements.txt ]; then
+            aws s3 cp haeun/landing/requirements.txt \
+              "s3://$B/builds/$E/webtoon-requirements-${GITHUB_SHA}.txt" --region "$AWS_REGION"
+          else
+            echo "skip: haeun/landing/requirements.txt 없음 (웹툰 하네스 경로 재지정 필요)"
+          fi
+          if [ -f webtoon/be/setup-python.sh ]; then
+            aws s3 cp webtoon/be/setup-python.sh \
+              "s3://$B/builds/$E/webtoon-setup-python-${GITHUB_SHA}.sh" --region "$AWS_REGION"
+          else
+            echo "skip: webtoon/be/setup-python.sh 없음"
+          fi
 
       - name: SSM 으로 배포 (포트 안 엶)
         run: |

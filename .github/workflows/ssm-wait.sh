@@ -9,8 +9,11 @@ set -uo pipefail
 CMD_ID="${1:?command-id 인자가 필요합니다}"
 REGION="${AWS_REGION:-ap-northeast-2}"
 
-# 명령이 대상에 퍼지고 끝날 때까지 폴링(최대 ~10분).
-for _ in $(seq 1 120); do
+# 명령이 대상에 퍼지고 끝날 때까지 폴링(5초 간격 × 기본 120회 = 약 10분).
+# ★ 상한을 부르는 쪽이 늘릴 수 있게 열어 둔다. dev 는 박스에서 도커 이미지를 다시 굽느라
+#   10분을 넘길 수 있는데, 그때 여기서 끊기면 아직 InProgress 인 명령이 '실패'로 찍힌다
+#   (실제로는 배포가 돌고 있는데 빨간불 — 거짓 실패). 기본값은 그대로라 staging·prod 는 안 바뀐다.
+for _ in $(seq 1 "${SSM_WAIT_MAX_POLLS:-120}"); do
   sleep 5
   STATUSES=$(aws ssm list-command-invocations \
     --command-id "$CMD_ID" --region "$REGION" \
