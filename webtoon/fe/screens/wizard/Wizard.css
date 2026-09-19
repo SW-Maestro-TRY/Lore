@@ -88,10 +88,8 @@
 
 /* 2걸음 */
 .wt .wt-wiz-story { flex-grow: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.wt textarea.wt-wiz-storybox { flex-grow: 1; min-height: 420px; padding: 18px 20px; resize: none; line-height: 1.8; font-size: 16px; }
-.wt .wt-wiz-genre { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
-.wt .wt-wiz-genre h2 { font-size: 22px; }
-.wt .wt-wiz-genre .lede { font-size: 13.5px; }
+.wt .wt-wiz-story-1col { width: 100%; max-width: 720px; margin: 0 auto; }
+.wt textarea.wt-wiz-storybox { flex-grow: 1; min-height: 260px; padding: 18px 20px; resize: none; line-height: 1.8; font-size: 16px; }
 .wt .wt-wiz-chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .wt .wt-wiz-chips .chip { height: 34px; }
 .wt .wt-wiz-gnote { padding: 12px 14px; border-radius: 12px; background: #fff; border: 1px solid var(--line); color: var(--muted); font-size: 13.5px; line-height: 1.6; }
@@ -173,7 +171,8 @@
   .wt .wt-wiz-mbars i { height: 4px; flex: 1; border-radius: 2px; background: rgba(15, 51, 63, 0.15); }
   .wt .wt-wiz-mbars i.on { background: var(--ink); }
   .wt .wt-wiz-body, .wt .wt-wiz-body.gap48 { flex-direction: column; gap: 14px; margin-top: 0; }
-  .wt .wt-wiz-left, .wt .wt-wiz-right, .wt .wt-wiz-genre, .wt .wt-wiz-side { width: auto; padding-top: 0; gap: 14px; }
+  .wt .wt-wiz-left, .wt .wt-wiz-right, .wt .wt-wiz-side { width: auto; padding-top: 0; gap: 14px; }
+  .wt .wt-wiz-story-1col { max-width: none; }
   .wt .wt-wiz-head h2 { font-size: 24px; line-height: 1.3; }
   .wt .wt-wiz-head .lede { font-size: 13.5px; line-height: 1.5; }
   .wt .wt-wiz-cards { gap: 10px; }
@@ -191,7 +190,6 @@
   .wt .wt-wiz-way span, .wt .wt-wiz-ways.tall .wt-wiz-way span { font-size: 11.5px; text-align: center; }
   .wt textarea.wt-wiz-desc { height: 96px; padding: 12px 14px; line-height: 1.55; font-size: 14px; }
   .wt textarea.wt-wiz-storybox { min-height: 150px; height: 150px; padding: 12px 14px; line-height: 1.6; font-size: 14px; flex-grow: 0; }
-  .wt .wt-wiz-genre h2 { font-size: 14px; }
   .wt .wt-wiz-chips .chip { height: 36px; font-size: 13px; padding: 0 14px; }
   .wt .wt-wiz-gnote { padding: 10px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.55; color: var(--sea-deep); }
   .wt .wt-wiz-stylehead { margin: 0; }
