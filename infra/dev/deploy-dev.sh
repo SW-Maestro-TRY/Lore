@@ -27,7 +27,6 @@ HEALTH_TIMEOUT="${5:-300}"          # 앱 기동 대기 상한(초)
 
 ROOT=/opt/lore-dev
 ENV_FILE="$ROOT/.env"
-HTPASSWD="$ROOT/htpasswd"
 SRC_LINK="$ROOT/src"
 NEW_DIR="$ROOT/src.$SHA"
 TMP_DIR="$ROOT/.src.$SHA.tmp"
@@ -48,8 +47,6 @@ command -v curl >/dev/null || { echo "curl 이 없습니다"; exit 1; }
 
 # .env 는 박스에만 있는 비밀 — 없으면 만들지 말고 멈춘다(빈 값으로 뜨면 조용히 망가진다).
 [ -f "$ENV_FILE" ] || { echo "$ENV_FILE 이 없습니다. 박스에 먼저 만들어 두세요(배포가 만들지 않습니다)."; exit 1; }
-# nginx 가 읽기전용으로 무는 파일. 없으면 도커가 '디렉터리'로 만들어 버려 nginx 가 기동에 실패한다.
-[ -f "$HTPASSWD" ] || { echo "$HTPASSWD 이 없습니다(basic auth 자격). 박스에서 먼저 생성하세요."; exit 1; }
 
 mkdir -p "$ROOT"
 
@@ -92,8 +89,8 @@ log "compose up -d --build (빌드 때문에 몇 분 걸립니다)"
 "${COMPOSE[@]}" up -d --build
 
 # ── 4. 헬스 대기 ─────────────────────────────────────────────────
-# nginx(443)는 basic auth 가 걸려 있어 판정에 못 쓴다. compose 가 호스트로 내보낸
-# app:8080 을 직접 두드린다(= 실제로 요청을 받을 수 있는 상태인지).
+# nginx(443)로 재는 대신 compose 가 호스트로 내보낸 app:8080 을 직접 두드린다
+# (= 프록시·TLS 를 건너뛰고 앱이 실제로 요청을 받을 수 있는 상태인지만 본다).
 log "앱 헬스 대기: http://localhost:8080/actuator/health (상한 ${HEALTH_TIMEOUT}s)"
 deadline=$(( $(date +%s) + HEALTH_TIMEOUT ))
 healthy=0

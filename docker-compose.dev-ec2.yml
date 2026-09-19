@@ -23,7 +23,6 @@ services:
       - ./infra/dev/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro          # certbot 발급 인증서(호스트)
       - /var/www/certbot:/var/www/certbot:ro          # ACME 챌린지 웹루트(갱신용, 호스트가 씀)
-      - /opt/lore-dev/htpasswd:/etc/nginx/htpasswd:ro  # basic auth 자격(호스트가 .env 로 생성)
     networks:
       default:
         aliases:
