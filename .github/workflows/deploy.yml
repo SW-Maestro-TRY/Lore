@@ -1,27 +1,28 @@
-# 배포 (CI/CD) — SSM 방식
+# 배포 (CI/CD) — SSM 방식, 환경별(dev / staging / prod)
 #
-# develop 에 머지되면 바뀐 곳만 자동 배포한다.
-#   백엔드(**/be, apps/api …) → jar 빌드 → S3 → SSM → lore-api 재시작
-#   프론트(**/fe, apps/web)   → standalone 빌드 → S3 → SSM → lore-web 재시작 → CloudFront 무효화
+# 브랜치마다 "좌표"(서버·버킷·CF·role)만 바꿔 같은 절차로 배포한다.
+#   develop → dev     (싼 EC2 1대, CloudFront 없음 — 직결)
+#   staging → staging (현 인프라 재활용, i-0204)
+#   main    → prod    (신설, 인스턴스ID 대신 태그로 타깃 → 스케일 대비)
 #
-# 서버 포트는 하나도 안 연다. SSM 은 서버가 밖으로 나가서 명령을 받아오는 방식이라
-# 인바운드가 필요 없다.
+# 좌표는 아래 setup 잡 한 곳(case 문)에 모아 둔다 — "무엇을 어디로"의 단일 출처.
+# 절차(빌드→S3→SSM→재시작)는 그대로. 서버 쪽 실제 실행은 /opt/lore/deploy-api.sh · deploy-web.sh.
 #
-# 서버에서 실제로 실행되는 절차는 /opt/lore/deploy-api.sh · deploy-web.sh 에 있다.
-# 워크플로에 인라인으로 박지 않는 이유: 절차를 서버 쪽 파일로 두면 나중에
-# CodeDeploy 로 옮길 때 같은 스크립트를 그대로 부르면 된다.
+# SSM 은 서버가 밖으로 나가 명령을 받아오는 방식이라 인바운드 포트를 하나도 안 연다.
 
 name: Deploy to EC2
 
 on:
   push:
-    branches: [develop]
+    branches: [develop, staging, main]
     paths:
       - 'common/**'
       - 'zzal/**'
       - 'webtoon/**'
       - 'trailer/**'
       - 'apps/**'
+      # Webtoon 탭 화면의 원본. 여기만 고쳐도 프론트가 바뀐다.
+      - 'haeun/landing/web/**'
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle/**'
@@ -29,27 +30,72 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/deploy.yml'
+      # dev 스택은 박스에서 compose 로 다시 빌드된다 — 이 둘만 고쳐도 배포가 필요하다.
+      # (staging·prod 는 backend/frontend 필터를 보므로 이 경로만 바뀌면 배포 잡이 안 돈다.)
+      - 'infra/**'
+      - 'docker-compose*.yml'
   workflow_dispatch:
 
 permissions:
   id-token: write     # OIDC 신분증 발급 (AWS 명찰 걸기용)
   contents: read
 
+# 같은 환경(브랜치)에 배포가 겹치지 않게 한 번에 하나만.
+# 진행 중인 배포는 안 끊고(cancel-in-progress:false), 뒤엣것을 큐에 세운다.
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   AWS_REGION: ap-northeast-2
-  ROLE_ARN: arn:aws:iam::046797548177:role/lore-github-deploy
-  S3_BUCKET: lore-deploy-046797548177-ap-northeast-2-an
-  INSTANCE_ID: i-0204d071a9c94bc08
-  CF_DISTRIBUTION_ID: E2DQOZKTRM3UGJ
 
 jobs:
-  # 바뀐 영역을 먼저 판별한다. 프론트만 고쳤는데 백엔드까지 빌드하면
-  # 배포가 2배 느려지고 멀쩡한 서버를 괜히 재시작하게 된다.
+  # 브랜치 → 환경 좌표 매핑. "무엇을 어디로"를 여기 한 곳에 모은다.
+  # 새 인프라가 생기면 TODO_ 자리만 채우면 된다.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      env_name:   ${{ steps.map.outputs.env_name }}
+      ssm_target: ${{ steps.map.outputs.ssm_target }}
+      s3_bucket:  ${{ steps.map.outputs.s3_bucket }}
+      cf_dist:    ${{ steps.map.outputs.cf_dist }}
+      role_arn:   ${{ steps.map.outputs.role_arn }}
+    steps:
+      - id: map
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            develop)   # dev — 싼 EC2 1대(인스턴스ID 고정), CloudFront 없음(직결)
+              env_name=dev
+              ssm_target='--instance-ids i-0169c150550d91895'
+              cf_dist=''                    # 없음 → 무효화 스텝 건너뜀
+              role_arn='arn:aws:iam::046797548177:role/lore-github-deploy' ;;
+            staging)   # staging — 현 인프라 재활용(1대 고정)
+              env_name=staging
+              ssm_target='--instance-ids i-0204d071a9c94bc08'
+              cf_dist='E2DQOZKTRM3UGJ'
+              role_arn='arn:aws:iam::046797548177:role/lore-github-deploy' ;;
+            main)      # prod — 태그로 타깃(스케일 대비), 전용 role
+              env_name=prod
+              ssm_target='--targets Key=tag:Environment,Values=prod'
+              cf_dist='TODO_PROD_CF_DISTRIBUTION_ID'
+              role_arn='TODO_PROD_ROLE_ARN' ;;
+            *)
+              echo "지원하지 않는 브랜치: $GITHUB_REF_NAME"; exit 1 ;;
+          esac
+          # 배포 버킷은 전 환경 공유(빌드 산출물 임시창고, env 폴더로 구분).
+          # 이미지·DB 같은 실데이터는 여기 없다 — 콘텐츠 버킷·RDS 별도.
+          s3_bucket='lore-deploy-046797548177-ap-northeast-2-an'
+          for kv in env_name ssm_target s3_bucket cf_dist role_arn; do
+            echo "$kv=${!kv}" >> "$GITHUB_OUTPUT"
+          done
+
+  # 바뀐 영역만 배포하려고 먼저 판별한다.
   changes:
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -58,9 +104,6 @@ jobs:
           filters: |
             backend:
               - 'common/be/**'
-              # 생성 파이프라인(파이썬). 코드가 아니라 jar 리소스로 실려
-              # 나가므로, 여기만 고쳐도 서버를 다시 빌드·기동해야 반영된다.
-              - 'webtoon/ai/**'
               - 'zzal/be/**'
               - 'webtoon/be/**'
               - 'trailer/be/**'
@@ -75,16 +118,101 @@ jobs:
               - 'webtoon/fe/**'
               - 'trailer/fe/**'
               - 'apps/web/**'
-              # 화면이 쓰는 마스코트·견본 그림의 원본. 빌드가 여기서
-              # apps/web/public/static 으로 떠 온다 (webtoon/fe/sync-landing.sh).
-              - 'webtoon/ai/assets/**'
+              - 'haeun/landing/web/**'
               - 'package.json'
               - 'package-lock.json'
+            # dev 전용 — 배포 스크립트·compose·Dockerfile·nginx 가 바뀌면 박스를 다시 올려야 한다.
+            # backend·frontend 잡은 이 키를 보지 않으므로 staging·prod 동작은 그대로다.
+            infra:
+              - 'infra/**'
+              - 'docker-compose*.yml'
+
+  # ── dev 전용: 도커 박스 배포 ─────────────────────────────────────
+  # dev 는 jar/번들을 systemd 에 꽂는 게 아니라 compose 스택 한 덩어리를 박스에서 다시 빌드한다.
+  # 그래서 올리는 것도 jar 가 아니라 "소스 tar" 다. 실제 절차는 박스 위 infra/dev/deploy-dev.sh.
+  #
+  # 배포 스크립트 자체도 매번 같이 올려 박스가 레포 판본으로 갱신되게 한다 — 스크립트를 고칠 때마다
+  # 사람이 박스에 손복사하러 들어가는 단계를 없앤다(손복사본과 레포가 갈라지는 사고 방지).
+  dev_deploy:
+    needs: [changes, setup]
+    if: >-
+      needs.setup.outputs.env_name == 'dev' &&
+      (needs.changes.outputs.backend == 'true' ||
+       needs.changes.outputs.frontend == 'true' ||
+       needs.changes.outputs.infra == 'true' ||
+       github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      # 박스가 도커 이미지를 다시 굽는다 — 기본 10분 상한이면 아직 돌고 있는 배포를
+      # '실패'로 끊는다(거짓 빨간불). dev 만 30분으로 늘린다(staging·prod 는 기본값 유지).
+      SSM_WAIT_MAX_POLLS: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      # 박스가 도커로 다시 빌드하므로 러너에서는 빌드하지 않는다 — 소스만 묶어 보낸다.
+      # 무거운 산출물(.git·node_modules·build·.next·bundle)은 뺀다. 체크아웃 직후라 대개 없지만,
+      # 있으면 tar 가 수백 MB 로 불어나 전송·해제가 길어진다.
+      #
+      # ★ haeun/webtoon-ai-backup 은 추적 파일만 747MB 다(지운 하네스의 백업본).
+      #   빌드가 한 줄도 읽지 않는데 넣으면 매 배포마다 850MB 를 올리고 내려받고, 박스엔
+      #   src 두 벌(=1.7GB)이 남는다. 싼 dev 박스의 디스크·시간이 여기서 다 나간다 → 제외.
+      #   (라이브 하네스는 webtoon/ai/new_harness 라 영향 없다.)
+      - name: 소스 tar 로 묶기
+        run: |
+          SRC_TAR="$RUNNER_TEMP/src-${GITHUB_SHA}.tar.gz"
+          tar czf "$SRC_TAR" \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='build' \
+            --exclude='.next' \
+            --exclude='bundle' \
+            --exclude='webtoon-ai-backup' \
+            -C "$GITHUB_WORKSPACE" .
+          ls -lh "$SRC_TAR"
+          echo "SRC_TAR=$SRC_TAR" >> "$GITHUB_ENV"
+
+      - name: AWS 명찰 걸기 (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ needs.setup.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 소스 tar·배포 스크립트 S3 업로드
+        run: |
+          B="${{ needs.setup.outputs.s3_bucket }}"
+          SRC_KEY="builds/dev/src-${GITHUB_SHA}.tar.gz"
+          SCRIPT_KEY="builds/dev/deploy-dev-${GITHUB_SHA}.sh"
+          aws s3 cp "$SRC_TAR" "s3://$B/$SRC_KEY" --region "$AWS_REGION"
+          aws s3 cp infra/dev/deploy-dev.sh "s3://$B/$SCRIPT_KEY" --region "$AWS_REGION"
+          {
+            echo "SRC_KEY=$SRC_KEY"
+            echo "SCRIPT_KEY=$SCRIPT_KEY"
+          } >> "$GITHUB_ENV"
+
+      # 박스는 깃허브 자격이 없다 — S3 에서 스크립트를 먼저 받아 갱신한 뒤 그걸 실행한다.
+      # set -e 를 맨 앞에 둬야 중간(스크립트 내려받기)이 실패했을 때 옛 스크립트로 계속 밀지 않는다.
+      - name: SSM 으로 배포 (도커 박스)
+        run: |
+          B="${{ needs.setup.outputs.s3_bucket }}"
+          CMD_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            ${{ needs.setup.outputs.ssm_target }} \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy dev ${GITHUB_SHA}" \
+            --parameters commands="[\"set -e\",\"aws s3 cp s3://$B/$SCRIPT_KEY /opt/lore-dev/deploy-dev.sh --region $AWS_REGION\",\"chmod +x /opt/lore-dev/deploy-dev.sh\",\"sudo bash /opt/lore-dev/deploy-dev.sh $B $SRC_KEY $AWS_REGION ${GITHUB_SHA}\"]" \
+            --query "Command.CommandId" --output text)
+          echo "command-id: $CMD_ID"
+          bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
 
   backend:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [changes, setup]
+    # dev 는 systemd 가 아니라 compose 스택이라 아래 절차가 안 맞는다 → dev_deploy 가 대신 맡는다.
+    if: >-
+      needs.setup.outputs.env_name != 'dev' &&
+      (needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.env_name }}   # prod 환경에 "리뷰어 필수" 걸면 배포 승인게이트
     steps:
       - uses: actions/checkout@v4
 
@@ -109,70 +237,67 @@ jobs:
       - name: AWS 명찰 걸기 (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.ROLE_ARN }}
+          role-to-assume: ${{ needs.setup.outputs.role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: jar 를 S3 에 업로드
         run: |
-          KEY="builds/api-${GITHUB_SHA}.jar"
+          KEY="builds/${{ needs.setup.outputs.env_name }}/api-${GITHUB_SHA}.jar"
           echo "S3_KEY=$KEY" >> "$GITHUB_ENV"
-          aws s3 cp build/libs/app.jar "s3://$S3_BUCKET/$KEY" --region "$AWS_REGION"
+          aws s3 cp build/libs/app.jar "s3://${{ needs.setup.outputs.s3_bucket }}/$KEY" --region "$AWS_REGION"
 
       # 후처리(격자 → 8종 움짤)가 파이썬을 쓴다. jar 만 올리면 서버에 numpy·scipy·pillow 가
       # 없어 부화 마지막 단계에서만 터진다 — 배포도 기동도 성공한 채로.
-      # 목록과 설치 스크립트를 함께 올려 두고, deploy-api.sh 가 필요할 때만 설치한다.
       - name: 파이썬 준비물 업로드
         run: |
+          B="${{ needs.setup.outputs.s3_bucket }}"; E="${{ needs.setup.outputs.env_name }}"
           aws s3 cp zzal/be/src/main/resources/zzal/pipeline/v1/requirements.txt \
-            "s3://$S3_BUCKET/builds/requirements-${GITHUB_SHA}.txt" --region "$AWS_REGION"
+            "s3://$B/builds/$E/requirements-${GITHUB_SHA}.txt" --region "$AWS_REGION"
           aws s3 cp infra/setup-python.sh \
-            "s3://$S3_BUCKET/builds/setup-python-${GITHUB_SHA}.sh" --region "$AWS_REGION"
+            "s3://$B/builds/$E/setup-python-${GITHUB_SHA}.sh" --region "$AWS_REGION"
 
-      # 웹툰 생성 하네스(new_harness)도 파이썬을 쓴다(openai·google-genai·PyYAML·requests).
-      # 짤과 필요한 패키지가 달라 가상환경도 스크립트도 따로 둔다(webtoon/be/setup-python.sh) —
-      # 위 zzal 스텝과 같은 이유, 다른 자리.
+      # 웹툰 생성 하네스(new_harness)도 파이썬을 쓴다 — 짤과 패키지가 달라 따로 둔다.
+      #
+      # ★ 파일이 있을 때만 올린다. haeun/landing/requirements.txt 는 생성 파이프라인이
+      #   webtoon/ai/ 로 옮겨가며 사라졌는데(aab7ac2) 이 스텝만 남아, 다음 backend 배포 때
+      #   '파일 없음'으로 배포 전체가 멈춘다. 경로를 여기서 추측해 바꾸면 더 조용히 틀리므로
+      #   (하은님 영역) 일단 없으면 건너뛰고, 올바른 경로는 담당자가 채운다.
       - name: 웹툰 하네스 파이썬 준비물 업로드
         run: |
-          aws s3 cp webtoon/ai/requirements.txt \
-            "s3://$S3_BUCKET/builds/webtoon-requirements-${GITHUB_SHA}.txt" --region "$AWS_REGION"
-          aws s3 cp webtoon/be/setup-python.sh \
-            "s3://$S3_BUCKET/builds/webtoon-setup-python-${GITHUB_SHA}.sh" --region "$AWS_REGION"
+          B="${{ needs.setup.outputs.s3_bucket }}"; E="${{ needs.setup.outputs.env_name }}"
+          if [ -f haeun/landing/requirements.txt ]; then
+            aws s3 cp haeun/landing/requirements.txt \
+              "s3://$B/builds/$E/webtoon-requirements-${GITHUB_SHA}.txt" --region "$AWS_REGION"
+          else
+            echo "skip: haeun/landing/requirements.txt 없음 (웹툰 하네스 경로 재지정 필요)"
+          fi
+          if [ -f webtoon/be/setup-python.sh ]; then
+            aws s3 cp webtoon/be/setup-python.sh \
+              "s3://$B/builds/$E/webtoon-setup-python-${GITHUB_SHA}.sh" --region "$AWS_REGION"
+          else
+            echo "skip: webtoon/be/setup-python.sh 없음"
+          fi
 
       - name: SSM 으로 배포 (포트 안 엶)
         run: |
           CMD_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
-            --instance-ids "$INSTANCE_ID" \
+            ${{ needs.setup.outputs.ssm_target }} \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy api ${GITHUB_SHA}" \
-            --parameters commands="[\"sudo /opt/lore/deploy-api.sh $S3_BUCKET $S3_KEY $AWS_REGION ${GITHUB_SHA}\"]" \
+            --comment "Deploy api ${{ needs.setup.outputs.env_name }} ${GITHUB_SHA}" \
+            --parameters commands="[\"sudo /opt/lore/deploy-api.sh ${{ needs.setup.outputs.s3_bucket }} $S3_KEY $AWS_REGION ${GITHUB_SHA}\"]" \
             --query "Command.CommandId" --output text)
           echo "command-id: $CMD_ID"
-
-          aws ssm wait command-executed \
-            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
-
-          STATUS=$(aws ssm get-command-invocation \
-            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-            --query "Status" --output text)
-          echo "===== 서버 출력 ====="
-          aws ssm get-command-invocation \
-            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-            --query "StandardOutputContent" --output text
-          echo "배포 상태: $STATUS"
-
-          if [ "$STATUS" != "Success" ]; then
-            echo "===== 에러 출력 ====="
-            aws ssm get-command-invocation \
-              --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-              --query "StandardErrorContent" --output text
-            exit 1
-          fi
+          bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
 
   frontend:
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [changes, setup]
+    # dev 는 systemd 가 아니라 compose 스택이라 아래 절차가 안 맞는다 → dev_deploy 가 대신 맡는다.
+    if: >-
+      needs.setup.outputs.env_name != 'dev' &&
+      (needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.env_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -188,8 +313,8 @@ jobs:
       - name: 빌드
         run: npm run build
 
-      # standalone 산출물은 server.js 와 최소 node_modules 만 담고 있다.
-      # static/public 은 별도로 복사해야 한다 — Next 가 그렇게 나눠 내보낸다.
+      # standalone 산출물은 server.js 와 최소 node_modules 만 담는다.
+      # static/public 은 Next 가 따로 내보내므로 별도로 복사한다.
       - name: 번들 묶기
         run: |
           rm -rf bundle && mkdir -p bundle
@@ -203,52 +328,33 @@ jobs:
       - name: AWS 명찰 걸기 (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.ROLE_ARN }}
+          role-to-assume: ${{ needs.setup.outputs.role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: 번들을 S3 에 업로드
         run: |
-          KEY="builds/web-${GITHUB_SHA}.tar.gz"
+          KEY="builds/${{ needs.setup.outputs.env_name }}/web-${GITHUB_SHA}.tar.gz"
           echo "S3_KEY=$KEY" >> "$GITHUB_ENV"
-          aws s3 cp web.tar.gz "s3://$S3_BUCKET/$KEY" --region "$AWS_REGION"
+          aws s3 cp web.tar.gz "s3://${{ needs.setup.outputs.s3_bucket }}/$KEY" --region "$AWS_REGION"
 
       - name: SSM 으로 배포
         run: |
           CMD_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
-            --instance-ids "$INSTANCE_ID" \
+            ${{ needs.setup.outputs.ssm_target }} \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy web ${GITHUB_SHA}" \
-            --parameters commands="[\"sudo /opt/lore/deploy-web.sh $S3_BUCKET $S3_KEY $AWS_REGION\"]" \
+            --comment "Deploy web ${{ needs.setup.outputs.env_name }} ${GITHUB_SHA}" \
+            --parameters commands="[\"sudo /opt/lore/deploy-web.sh ${{ needs.setup.outputs.s3_bucket }} $S3_KEY $AWS_REGION\"]" \
             --query "Command.CommandId" --output text)
           echo "command-id: $CMD_ID"
+          bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
 
-          aws ssm wait command-executed \
-            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
-
-          STATUS=$(aws ssm get-command-invocation \
-            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-            --query "Status" --output text)
-          echo "===== 서버 출력 ====="
-          aws ssm get-command-invocation \
-            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-            --query "StandardOutputContent" --output text
-          echo "배포 상태: $STATUS"
-
-          if [ "$STATUS" != "Success" ]; then
-            echo "===== 에러 출력 ====="
-            aws ssm get-command-invocation \
-              --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-              --query "StandardErrorContent" --output text
-            exit 1
-          fi
-
-      # SSR 페이지는 캐시하지 않지만 /_next/static/* 은 캐시한다.
-      # 파일명에 해시가 붙어 있어 무효화가 꼭 필요하진 않으나,
-      # 배포 직후 옛 자원이 남는 경우가 있어 한 번 비운다.
+      # dev 는 CloudFront 가 없다(직결) → cf_dist 가 비면 무효화를 건너뛴다.
+      # 파일명에 해시가 붙어 무효화가 꼭 필요친 않으나, 배포 직후 옛 자원이 남는 걸 한 번 비운다.
       - name: CloudFront 캐시 무효화
+        if: needs.setup.outputs.cf_dist != ''
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id "$CF_DISTRIBUTION_ID" \
+            --distribution-id "${{ needs.setup.outputs.cf_dist }}" \
             --paths "/*" \
             --query "Invalidation.Id" --output text
