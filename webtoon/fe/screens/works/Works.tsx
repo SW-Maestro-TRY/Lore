@@ -212,23 +212,22 @@ function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolea
           <span className="wt-works-nocover" aria-hidden="true" />
         )}
       </button>
-      <b>{run.title || t("제목 없음")}</b>
+      <div className="wt-works-titlerow">
+        <b>{run.title || t("제목 없음")}</b>
+        {mine && authenticated && (
+          <span className="wt-works-pub">
+            <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
+                    aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
+            {pub ? t("공개") : t("비공개")}
+          </span>
+        )}
+      </div>
       <span className="muted wt-works-sub">{sub}</span>
       {eps.length > 0 && (
         <div className="wt-works-eps">
           {eps.map((n) => (
             <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
           ))}
-        </div>
-      )}
-      {mine && (
-        <div className="wt-works-mine">
-          {authenticated ? <span className="wt-works-pub">
-            <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
-                    aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
-            {pub ? t("공개") : t("비공개")}
-          </span> : null}
-          <button type="button" className="wt-works-edit" onClick={() => go("editor", { run: run.run_id })}>{t("편집실")}</button>
         </div>
       )}
       {err && <span className="err" style={{ fontSize: 12 }}>{err}</span>}
