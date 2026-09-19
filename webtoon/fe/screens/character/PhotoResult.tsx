@@ -7,8 +7,6 @@ import { readCharacter, readSharedCard, type Character } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { copyLink, kakaoAvailable, shareKakao, shareNative } from "../../lib/share";
-import { startJob } from "../../lib/start";
-import { emptyWizardForm } from "../../lib/wizardData";
 import { IconDownload, IconRetry, IconShare } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import { LimitView } from "./Photo";
@@ -24,7 +22,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
   const [ch, setCh] = useState<Character | null>(null);
   const [loadErr, setLoadErr] = useState("");
   const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState<"episode" | "again" | null>(null);
+  const [busy, setBusy] = useState<"again" | null>(null);
   const [actErr, setActErr] = useState("");
   const [limited, setLimited] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
@@ -83,29 +81,9 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
     if (!(await shareKakao(url))) void onCopy();
   };
 
-  const onEpisode = async () => {
-    if (!ch) return;
-    setBusy("episode");
-    setActErr("");
-    try {
-      const job = await startJob({
-        ...emptyWizardForm(),
-        characterId: id,
-        name: ch.name,
-        character: ch.description || card?.twist || "",
-        genre: card?.genre || card?.world_label || "",
-        style: card?.style || "webtoon_lock_bg",
-        quality: "surf",
-        mode: "simple",
-        agreeIp: true,
-        photos: [],
-      }, authenticated);
-      go("running", { job }, { replace: true });
-    } catch (e) {
-      setActErr(e instanceof Error ? e.message : t("1화를 시작하지 못했습니다"));
-      setBusy(null);
-    }
-  };
+  /* 만들기 위저드로 보낸다. 예전에는 여기서 곧장 만들기를 시작했는데, 이야기·장르·
+   * 그림체를 사용자가 한 번도 못 고르고 웹툰이 나와 버렸다. */
+  const onEpisode = () => go("create", { step: 1, character: id });
 
   const onAgain = async () => {
     if (!ch) return;
@@ -127,7 +105,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
     }
   };
 
-  if (limited !== null) return <LimitView go={go} message={limited} />;
+  if (limited !== null) return <LimitView go={go} message={limited} authenticated={authenticated} />;
 
   const quote = card?.quote || "";
   const ready = !!ch && ch.status === "ready" && !!ch.art_url;
@@ -227,8 +205,8 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
               </div>
             ) : (
               <>
-                <button type="button" className="btn btn-p wt-ch-res-pc-cta" disabled={!ready || busy !== null} onClick={() => void onEpisode()}>
-                  {busy === "episode" && <span className="spin" style={{ borderTopColor: "#fff" }} />} {t("이 캐릭터로 1화 보기")}
+                <button type="button" className="btn btn-p wt-ch-res-pc-cta" disabled={!ready} onClick={onEpisode}>
+                  {t("이 캐릭터로 1화 보기")}
                 </button>
                 <div className="wt-ch-res-row">
                   {shareBtn}
@@ -253,8 +231,8 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
       </div>
       {!shared && (
         <div className="mfoot">
-          <button type="button" className="btn btn-p" style={{ height: 52 }} disabled={!ready || busy !== null} onClick={() => void onEpisode()}>
-            {busy === "episode" && <span className="spin" style={{ borderTopColor: "#fff" }} />} {t("이 캐릭터로 1화 보기")}
+          <button type="button" className="btn btn-p" style={{ height: 52 }} disabled={!ready} onClick={onEpisode}>
+            {t("이 캐릭터로 1화 보기")}
           </button>
         </div>
       )}
