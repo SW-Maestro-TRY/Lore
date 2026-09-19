@@ -8,11 +8,13 @@
 //
 // "use client" 인 이유: 현재 경로를 알아야 열려 있는 탭을 표시할 수 있어서다.
 // (로그인 상태와 모달도 클라이언트에서만 도는 것들이라 같은 이유로 여기 들어온다.)
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import TabLink from "./TabLink";
 import AuthModal from "./auth/AuthModal";
+import CreditCharge from "./mypage/CreditCharge";
+import { creditBalance } from "./api/credits";
 import { useAuth } from "./auth/useAuth";
 import { TABS } from "./links";
 import styles from "./SiteHeader.module.css";
@@ -27,8 +29,23 @@ export default function SiteHeader() {
   /* 웹툰 탭은 헤더에서 **로그인 하나만** 본다. (담당: 하은, #223) */
   const onWebtoon = pathname.startsWith("/webtoon");
 
+  /* 크레딧은 계정 것이라 탭과 상관없이 같은 값이다 — 헤더에 두고 어디서나 보이게 한다.
+     누르면 충전 창이 열린다. 잔액을 묻는 것 자체가 오늘 몫을 챙겨 주는 길이라
+     (`/api/v1/credits/me`), 들어오자마자 한 번 부르면 오늘 것이 들어와 있다. */
+  const [credits, setCredits] = useState<number | null>(null);
+  const [chargeOpen, setChargeOpen] = useState(false);
+
 
   const { status, user, isAuthenticated, signOut } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated) { setCredits(null); return; }
+    let alive = true;
+    creditBalance()
+      .then((b) => { if (alive) setCredits(b.balance); })
+      .catch(() => { /* 못 받으면 칩을 아예 안 그린다 */ });
+    return () => { alive = false; };
+  }, [isAuthenticated]);
   const [authOpen, setAuthOpen] = useState(false);
 
   // 이메일 전체를 다 그리면 좁은 화면에서 헤더가 밀린다. 아이디 부분만 보여 주고
@@ -77,9 +94,18 @@ export default function SiteHeader() {
                로그인한 사람이 자기 이름을 누르는 것은 어디서나 "내 자리로"
                라는 뜻이라, 라벨을 따로 달지 않아도 읽힌다. */
             onWebtoon ? (
-              <Link href={MY_PAGE} className={styles.authButton} title={user?.email}>
-                {displayName}
-              </Link>
+              <>
+                {credits != null && (
+                  <button type="button" className={styles.creditChip}
+                          onClick={() => setChargeOpen(true)}
+                          title="크레딧 충전">
+                    ◈ {credits.toLocaleString("ko-KR")}
+                  </button>
+                )}
+                <Link href={MY_PAGE} className={styles.authButton} title={user?.email}>
+                  {displayName}
+                </Link>
+              </>
             ) : (
               <>
                 <span className={styles.userEmail} title={user?.email}>
@@ -103,6 +129,8 @@ export default function SiteHeader() {
       {/* 로그인에 성공하면 웹툰 탭에서는 곧장 마이페이지로 간다 — 여기서
           로그인하는 이유가 대개 "내가 만든 것을 보려고" 라서다. 다른 탭은
           하던 자리에 그대로 남는다(모달의 원래 뜻). */}
+      {chargeOpen && <CreditCharge onClose={() => setChargeOpen(false)} />}
+
       <AuthModal
         open={authOpen}
         onClose={() => setAuthOpen(false)}

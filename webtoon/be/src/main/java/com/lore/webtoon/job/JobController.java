@@ -99,6 +99,8 @@ public class JobController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("logged_in", me != null);
         out.put("credit_cost", credits.cost());
+        // 편집실 단추가 값을 적으려고 쓴다 — 화면에 박아 두면 서버 설정과 어긋난다.
+        out.put("regen_cost", credits.regenCost());
         /* 화질 셋과 각각의 값. **화면이 여기서 받아 간다** — 같은 표를 화면에도
            적어 두면, 한쪽만 고치는 순간 적힌 값과 실제로 빠지는 크레딧이
            어긋난다. 사람에게 그건 거짓말이다. */

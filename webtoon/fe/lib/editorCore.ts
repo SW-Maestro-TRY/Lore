@@ -103,7 +103,6 @@ export function mountEditor(
 
   /* 크레딧은 아직 안 붙었습니다 (#16). 목업에서만 흉내로 셉니다. */
   const COST = { regen: 40, nobubble: 0 };
-  const START_CREDIT = 1240;
 
   const BUBBLES = [
     ["normal",    tr("일반"),    tr("여기 앉아도 돼?")],
@@ -122,7 +121,7 @@ export function mountEditor(
 
   let data = null;
   // gaps: 장 뒤의 여백을 사람이 고친 값 {장 번호: 0~3}. 콘티 값을 덮어쓴다.
-  let state = { credit: START_CREDIT, scenes: {}, ledger: [], gaps: {} };
+  let state = { scenes: {}, gaps: {} };
   let sel = null;          // 선택한 요소 { sceneNo, id }
   let activeScene = 1;
   let tab = "bubble";
@@ -133,7 +132,7 @@ export function mountEditor(
   /* 작품이 정해진 **뒤에** 부른다 — 열쇠가 run_id 에 매여 있어서, 먼저 부르면
      앞 작품 칸을 읽는다. */
   function load() {
-    state = { credit: START_CREDIT, scenes: {}, ledger: [], gaps: {} };
+    state = { scenes: {}, gaps: {} };
     try {
       const raw = JSON.parse(localStorage.getItem(storeKey()) || "null");
       if (raw && typeof raw === "object") state = { ...state, ...raw };
@@ -218,46 +217,9 @@ export function mountEditor(
     return state.scenes[no];
   }
 
-  /* ------------------------------------------------------------------ 크레딧 */
-
-  function spend(amount, label, fromEl) {
-    state.credit = Math.max(0, state.credit - amount);
-    state.ledger.unshift({ label, amount, at: new Date().toLocaleTimeString("ko-KR",
-      { hour: "2-digit", minute: "2-digit" }) });
-    state.ledger = state.ledger.slice(0, 12);
-    save();
-    paintCredit(true);
-    paintLedger();
-    if (fromEl) flyCredit(amount, fromEl);
-  }
-  function paintCredit(bump) {
-    // 실제 작품에서는 크레딧 칩이 감춰져 있다(위 참고) — 없어도 그냥 넘어간다.
-    const el = $("#creditNum");
-    if (el) el.textContent = state.credit.toLocaleString("ko-KR");
-    const box = $("#creditBox");
-    if (bump && box) {
-      box.classList.remove("bump"); void box.offsetWidth; box.classList.add("bump");
-    }
-  }
-  function flyCredit(amount, el) {
-    const fly = $("#fly"), r = el.getBoundingClientRect();
-    fly.textContent = `−${amount} C`;
-    fly.style.left = `${r.left + r.width / 2 - 22}px`;
-    fly.style.top = `${r.top - 8}px`;
-    fly.hidden = false;
-    fly.style.animation = "none"; void fly.offsetWidth; fly.style.animation = "";
-    clearTimeout(fly._t);
-    fly._t = setTimeout(() => { fly.hidden = true; }, 1150);
-  }
-  function paintLedger() {
-    const ul = $("#ledgerList");
-    if (!state.ledger.length) {
-      ul.innerHTML = `<li class="ledger-empty">${tr("아직 쓴 크레딧이 없습니다.")}</li>`;
-      return;
-    }
-    ul.innerHTML = state.ledger.map(x =>
-      `<li><span>${x.at} · ${esc(x.label)}</span><b>−${x.amount}</b></li>`).join("");
-  }
+  /* 크레딧 잔액·사용 내역은 **화면(React)** 이 공용 API 에서 읽어 그린다
+     (`@common/api/credits`). 예전에는 엔진이 1,240 에서 시작하는 값을 세션
+     안에서만 깎아 보여 줬는데, 새로고침하면 되돌아가는 목업이었다. */
 
   /* ------------------------------------------------------------------ 장 그리기 */
 
@@ -598,9 +560,7 @@ export function mountEditor(
     wrap.append(veil);
 
     if (!RUN_ID) {
-      // 목업 — 서버가 없다. 크레딧 흉내와 기다리는 모습만.
-      if (state.credit < cost) { veil.remove(); return toast(tr("크레딧이 모자랍니다. (목업이라 충전은 없습니다)")); }
-      spend(cost, tr("{n}번째 장 다시 그리기", { n: no }), btn);
+      // 목업 — 서버가 없다. 기다리는 모습만 흉내 낸다.
       setTimeout(() => {
         veil.remove();
         st.ver += 1; save();
@@ -1161,18 +1121,7 @@ export function mountEditor(
     handle.addEventListener("pointercancel", end);
   }
 
-  function setLedger(open) {
-    $("#dockLedger").hidden = !open;
-    for (const sel of ["#dockTabs", "#dockGrid"]) {
-      const el = $(sel);
-      if (el) el.hidden = open;
-    }
-    // 고치는 손잡이는 이제 서랍이 아니라 그림 위에 있다. 내역을 보는 동안에는
-    // 그림을 만질 일이 없으니 선택도 같이 푼다 — 안 그러면 내역 위로 손잡이 줄이
-    // 계속 떠 있다.
-    if (open) clearSel();
-    if (open) setDock(true);
-  }
+
 
   /* 고른 요소를 고치는 손잡이 — **그림 위에** 뜬다.
    *
@@ -1581,7 +1530,7 @@ export function mountEditor(
     RUN_ID = openWith.runId || "";
     EPISODE = openWith.episode || 1;
     // load() 는 RUN_ID·EPISODE 가 정해진 **뒤에** 부른다 — 열쇠가 거기 매여 있다.
-    load(); paintCredit(); paintLedger(); paintDock();
+    load(); paintDock();
     loadSceneTags();
     setupTitleEdit();
     // 작품 목록은 **여는 데 실패해도** 남아 있어야 한다. 한 작품이 안 열린다고
@@ -1619,7 +1568,7 @@ export function mountEditor(
     // 엔진은 그 노드를 다시 찾다가 빈손을 잡는다(실제로 그렇게 터졌다).
     // 감추기만 하면 트리가 그대로라 몇 번을 드나들어도 같다.
     if (RUN_ID) {
-      for (const sel of [".mock-badge", "#creditBox", "#ledgerBtn"]) {
+      for (const sel of [".mock-badge"]) {
         const el = document.querySelector(sel);
         if (el) el.hidden = true;
       }
@@ -1674,8 +1623,6 @@ export function mountEditor(
     $("#showOverlay").addEventListener("change", () =>
       data.scenes.forEach(s => paintItems(s.no)));
 
-    $("#ledgerBtn")?.addEventListener("click", () => setLedger($("#dockLedger").hidden));
-    $("#ledgerClose").addEventListener("click", () => setLedger(false));
 
     // 저장은 항목을 건드릴 때마다 자동으로 된다(save() → pushSoon()). 이 단추는
     // **지금 당장** 올리고 그 결과를 말해 주는 자리다 — 자동 저장은 조용해서,

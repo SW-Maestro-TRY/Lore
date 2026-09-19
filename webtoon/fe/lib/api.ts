@@ -105,6 +105,8 @@ function post<T>(path: string, body?: unknown): Promise<T> {
 export interface Allowance {
   logged_in: boolean;
   credit_cost: number;
+  /** 편집실에서 한 장 다시 그리는 값. 화면에 박지 않고 서버가 정한다. */
+  regen_cost?: number;
   free_left?: number | null;
   free_per_day?: number;
   balance?: number;
