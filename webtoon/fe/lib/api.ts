@@ -360,6 +360,16 @@ export function setVisibility(runId: string, isPublic: boolean) {
   );
 }
 
+/** 웹툰이 다 만들어졌을 때 계정 이메일로 알릴지. 행이 없으면(안 건드렸으면)
+ *  켜진 것으로 온다 — 지금까지 항상 보내던 것과 같은 기본값. */
+export function readNotifySetting(): Promise<{ on: boolean }> {
+  return appRequest<{ on: boolean }>("/api/webtoon/v1/my/notify-setting");
+}
+
+export function setNotifySetting(on: boolean): Promise<{ on: boolean }> {
+  return appRequest<{ on: boolean }>("/api/webtoon/v1/my/notify-setting", { method: "POST", body: { on } });
+}
+
 /* ---- 캐릭터 ------------------------------------------------------------------ */
 
 /** 「캐릭터 만들어보기」로 만든 것만 갖는다 — 그 세계관 웹툰의 한 컷과 카드 글. */
