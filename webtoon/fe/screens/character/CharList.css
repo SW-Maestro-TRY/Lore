@@ -3,6 +3,7 @@
 .wt .wt-ch-list-head > div { display: flex; flex-direction: column; gap: 6px; }
 .wt .wt-ch-list-head h2 { font-size: 32px; }
 .wt .wt-ch-list-head .wt-ch-list-lede { font-size: 15px; }
+.wt .wt-ch-list-lede-m { display: none; }
 .wt .wt-ch-list-head .chip { height: 36px; font-size: 13px; flex-shrink: 0; cursor: default; }
 .wt .wt-ch-list-h3 { margin: 22px 0 10px; font-size: 17px; }
 .wt .wt-ch-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
@@ -34,6 +35,8 @@
 .wt .wt-ch-list-mnew { display: none; }
 
 @media (max-width: 767px) {
+  .wt .wt-ch-list-lede { display: none; }
+  .wt .wt-ch-list-lede-m { display: block; font-size: 13.5px; }
   .wt .wt-ch-list-head { flex-direction: column; align-items: flex-start; gap: 4px; }
   .wt .wt-ch-list-head > div { gap: 4px; }
   .wt .wt-ch-list-head h2 { font-size: 24px; line-height: 1.3; }

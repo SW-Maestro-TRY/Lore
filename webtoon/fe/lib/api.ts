@@ -281,7 +281,11 @@ export async function browseRuns(): Promise<RunCard[]> {
   const got = await call<{ runs: RunCard[] }>("/runs");
   const real = (got.runs || []).map((r) => ({ ...r, example: false }));
   const examples = await exampleRuns();
-  return [...real, ...examples];
+  /* 예시로 구워 둔 작품이 **서버에도 살아 있으면** 같은 작품이 두 번 나온다
+     (지금 네 편이 그렇다). 실제 것을 남기고 예시 쪽을 뺀다 — 실제 것이라야
+     공개 전환·편집실 같은 것이 제대로 걸린다. */
+  const seen = new Set(real.map((r) => r.run_id));
+  return [...real, ...examples.filter((r) => !seen.has(r.run_id))];
 }
 
 /** 이 브라우저가 만든 것만(비공개 포함). 예시는 안 섞는다. */

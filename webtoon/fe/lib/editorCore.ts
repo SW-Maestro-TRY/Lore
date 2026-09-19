@@ -296,11 +296,7 @@ export function mountEditor(
       character: data.character, ep, scenes: data.scenes.length,
       cuts: data.scenes.reduce((n, s) => n + s.cuts.length, 0),
     });
-    // 그림체를 안 적어 둔 run 이 있다 — 빈 값을 그대로 이으면 "로맨스 판타지 · "
-    // 처럼 꼬리만 남는다.
-    $("#edGenre").textContent = [data.genre, data.style_label].filter(Boolean).join(" · ");
     $("#edEpisode").textContent = data.title;
-    $("#edLogline").textContent = data.logline;
     $("#edFootNote").textContent = tr("여기까지가 {ep}화입니다.", { ep });
     paintEpTabs();
 
@@ -1499,8 +1495,34 @@ export function mountEditor(
   async function paintWorks(current) {
     const host = $("#worksList");
     if (!host) return;
+    /* **내 작품만** 모은다. 예전에는 `/runs` 를 그대로 불렀는데 그건 공개된
+       작품 전부라, 「내 작품」 아래에 남의 작품이 뜨고 아무나 남의 것을 편집실로
+       열 수 있었다. 이 브라우저가 만든 것(uid)과 계정 것(로그인했을 때)을
+       합치고 run_id 로 겹치는 것을 거른다 — 기기를 바꾸면 둘이 다르다. */
+    let uid = "";
+    try { uid = localStorage.getItem("lore_uid") || ""; } catch { /* 비공개 창 */ }
+
     let runs = null;                    // null = 못 물어봄, [] = 물어봤는데 없음
-    try { runs = (await (await fetch(`${API}/runs`)).json()).runs || []; } catch { /* 아래에서 */ }
+    try {
+      const mine = (await (await fetch(
+        `${API}/runs?mine=1&uid=${encodeURIComponent(uid)}`)).json()).runs || [];
+      // 계정 것은 쿠키로 판단한다. 로그인 안 했으면 빈 목록이라 그냥 넘어간다.
+      let account = [];
+      try {
+        const res = await fetch("/api/webtoon/v1/my/runs", { credentials: "same-origin" });
+        if (res.ok) {
+          const body = await res.json();
+          account = Array.isArray(body) ? body : (body.runs || body.data || []);
+        }
+      } catch { /* 계정 것 없이 브라우저 것만 보여 준다 */ }
+      const seen = new Set();
+      runs = [];
+      for (const r of [...mine, ...account]) {
+        if (!r || seen.has(r.run_id)) continue;
+        seen.add(r.run_id);
+        runs.push(r);
+      }
+    } catch { /* 아래에서 */ }
 
     if (runs === null) {
       host.innerHTML = `<div class="lou-note">`
@@ -1515,12 +1537,9 @@ export function mountEditor(
         + `<p>${tr("아직 만든 웹툰이 없어요.")}</p></div>`;
       return;
     }
-    host.innerHTML = runs.map(r => workCard(r, current)).join("")
-      + `<button type="button" class="work-card" data-run=""`
-      + `${current ? "" : ' aria-current="true"'}>`
-      + `<span class="work-thumb is-empty" aria-hidden="true">◇</span>`
-      + `<span><span class="work-name">${tr("샘플 보기")}</span>`
-      + `<span class="work-sub">${tr("목업 — 서버 없이도 열립니다")}</span></span></button>`;
+    // 예전에는 목록 끝에 「샘플 보기」(목업) 카드를 붙였는데, 그건 개발용
+    // 진입점이라 아트보드에도 없고 쓰는 사람에게는 남의 작품처럼 보인다.
+    host.innerHTML = runs.map(r => workCard(r, current)).join("");
 
     host.addEventListener("click", e => {
       const card = e.target.closest(".work-card");

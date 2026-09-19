@@ -61,7 +61,6 @@
 
 @media (max-width: 767px) {
   /* 폰은 위쪽 얇은 줄(MobileTop)이 위치를 말한다 — 빵부스러기는 숨긴다. */
-  .wt .wt-result-page > .crumb { display: none; }
   .wt .wt-result-body { gap: 14px; margin-top: 0; }
   .wt .wt-result-head h2 { font-size: 24px; }
   .wt .wt-result-meta { font-size: 13px; }

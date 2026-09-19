@@ -54,7 +54,13 @@ export default function CharList({ go }: { go: Go }) {
           <div>
             <span className="num">{t("내 캐릭터")}</span>
             <h2>{t("누구로 웹툰을 만들까요?")}</h2>
+            {/* 아트보드는 PC 와 폰의 문구가 다르다 — 폰은 짧게. */}
+            <span className="muted wt-ch-list-lede">{t("사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.")}</span>
+            <span className="muted wt-ch-list-lede-m">{t("사진으로도, 설명만으로도 만들 수 있어요.")}</span>
           </div>
+          {list && list.free_per_day > 0 && (
+            <span className="chip">{t("오늘 {n}개까지 무료", { n: list.free_per_day })}</span>
+          )}
         </div>
 
         {err ? (
