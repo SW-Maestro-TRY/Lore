@@ -11,6 +11,9 @@
  * API 가 아직 없어서, 지금 붙이면 눌러도 아무 일이 없는 단추가 된다. */
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@common/auth/useAuth";
+import { creditBalance } from "@common/api/credits";
+import CreditCharge from "@common/mypage/CreditCharge";
+import CreditHistory from "@common/mypage/CreditHistory";
 import {
   coverUrl, listCharacters, myAccountRuns, myBrowserRuns, readAllowance, setVisibility,
   type Allowance, type Character, type RunCard,
@@ -52,6 +55,8 @@ registerDict({
   "만들기": { en: "Create", ja: "作る", zh: "制作" },
   "아직 만든 웹툰이 없어요": { en: "No webtoons yet", ja: "まだ作品がありません", zh: "还没有作品" },
   "제목 없음": { en: "Untitled", ja: "無題", zh: "无标题" },
+  "충전": { en: "Top up", ja: "チャージ", zh: "充值" },
+  "내역": { en: "History", ja: "履歴", zh: "记录" },
 });
 
 export default function MyPage({ go }: { go: Go }) {
@@ -60,6 +65,12 @@ export default function MyPage({ go }: { go: Go }) {
 
   const [runs, setRuns] = useState<RunCard[]>([]);
   const [chars, setChars] = useState<Character[]>([]);
+  /* 크레딧 창 — 충전·내역은 공용 것을 그대로 쓴다(계정 크레딧이라 도메인마다
+     따로 만들 것이 아니다). 잔액도 헤더와 같은 `/credits/me` 를 읽어야 두
+     자리가 같은 값을 말한다. */
+  const [credits, setCredits] = useState<number | null>(null);
+  const [creditModal, setCreditModal] = useState<"charge" | "history" | null>(null);
+
   const [allowance, setAllowance] = useState<Allowance | null>(null);
 
   /* 내 작품 — 로그인했으면 계정 것과 이 브라우저 것을 합친다(기기를 바꾸면
@@ -83,6 +94,7 @@ export default function MyPage({ go }: { go: Go }) {
   useEffect(() => {
     listCharacters().then((l) => setChars(l.characters.filter((c) => c.mine))).catch(() => {});
     readAllowance().then(setAllowance).catch(() => {});
+    if (isAuthenticated) creditBalance().then((b) => setCredits(b.balance)).catch(() => {});
   }, [isAuthenticated]);
 
   const hidden = runs.filter((r) => r.public === false).length;
@@ -96,11 +108,15 @@ export default function MyPage({ go }: { go: Go }) {
           <span className="dim">{isAuthenticated ? t("로그인됨") : t("로그인 안 함")}</span>
         </div>
 
-        {allowance?.logged_in && (
+        {isAuthenticated && (
           <div className="card wt-my-credit">
             <span className="dim">{t("크레딧")}</span>
-            <b>◈ {(allowance.balance ?? 0).toLocaleString()} <span>C</span></b>
-            <span className="dim">{t("한 편 {n} C", { n: allowance.credit_cost })}</span>
+            <b>◈ {(credits ?? allowance?.balance ?? 0).toLocaleString()} <span>C</span></b>
+            {allowance && <span className="dim">{t("한 편 {n} C", { n: allowance.credit_cost })}</span>}
+            <div className="wt-my-creditacts">
+              <button type="button" className="btn btn-p btn-sm" onClick={() => setCreditModal("charge")}>{t("충전")}</button>
+              <button type="button" className="btn btn-w btn-sm" onClick={() => setCreditModal("history")}>{t("내역")}</button>
+            </div>
           </div>
         )}
 
@@ -169,6 +185,9 @@ export default function MyPage({ go }: { go: Go }) {
           </button>
         </div>
       </div>
+
+      {creditModal === "charge" && <CreditCharge onClose={() => setCreditModal(null)} />}
+      {creditModal === "history" && <CreditHistory onClose={() => setCreditModal(null)} />}
     </div>
   );
 }
