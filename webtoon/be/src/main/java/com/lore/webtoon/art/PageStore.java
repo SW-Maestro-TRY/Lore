@@ -28,20 +28,21 @@ public class PageStore {
 
     private final WebtoonPageRepository pages;
     private final PrivateArt art;
-    /** 그림을 읽어 주는 곳. 비어 있으면 같은 도메인의 상대경로로 준다. */
-    private final String cdn;
+    /** 로컬에서만 켠다 — 서명 주소로 준다(아래 url 주석). */
+    private final boolean presignLocally;
     private final Clock clock;
 
     @Autowired
     public PageStore(WebtoonPageRepository pages, PrivateArt art,
-                     @Value("${lore.webtoon.cdn-base:}") String cdn) {
-        this(pages, art, cdn, Clock.systemUTC());
+                     @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally) {
+        this(pages, art, presignLocally, Clock.systemUTC());
     }
 
-    PageStore(WebtoonPageRepository pages, PrivateArt art, String cdn, Clock clock) {
+    PageStore(WebtoonPageRepository pages, PrivateArt art,
+              boolean presignLocally, Clock clock) {
         this.pages = pages;
         this.art = art;
-        this.cdn = cdn == null ? "" : cdn.replaceAll("/+$", "");
+        this.presignLocally = presignLocally;
         this.clock = clock;
     }
 
@@ -242,16 +243,42 @@ public class PageStore {
         return runId != null && !runId.isBlank() && pages.existsByRunId(runId);
     }
 
-    /** 키 -> 읽을 수 있는 주소. */
+    /**
+     * 키 -> 읽을 수 있는 주소. <b>도메인을 절대 안 붙인다.</b>
+     *
+     * <h2>왜 도메인을 못 붙이게 막았나</h2>
+     *
+     * 예전에는 {@code lore.webtoon.cdn-base} 에 적힌 주소를 앞에 붙였다. 그
+     * 설정이 2026-09-19 에 서비스를 통째로 멈춰 세웠다 — 거기 적혀 있던
+     * {@code dev.lorecomic.com} 이 스테이징 서버로 갈아끼워지면서 basic auth 가
+     * 붙었고, 운영 화면이 <b>그림마다 브라우저 로그인 팝업</b>을 띄웠다. 홈부터
+     * 아무 화면도 못 쓰는 상태였다.
+     *
+     * 값을 고치는 것으로는 다시 안 막힌다 — 누가 또 다른 호스트를 적으면 그날로
+     * 같은 일이 난다. 그래서 <b>붙일 자리 자체를 없앴다.</b> 지금은 언제나
+     * {@code /images/...} 상대경로이고, 그러면:
+     *
+     * <ul>
+     *   <li>보고 있는 그 도메인에서 그림이 나온다 — 운영 CloudFront 는
+     *       {@code /images/*} 를 S3 로 보낸다</li>
+     *   <li>인증 걸린 남의 호스트를 가리킬 방법이 없다 — 이 사고가 구조적으로
+     *       재발하지 않는다</li>
+     *   <li>주소가 안 만료되고 CDN 캐시를 그대로 탄다</li>
+     * </ul>
+     *
+     * <h2>로컬만 예외</h2>
+     *
+     * 개발 기계에는 {@code /images/*} 를 받아 줄 것이 없다(next.config 의
+     * rewrites 는 {@code /api/*} 만 넘긴다). 그래서 로컬은
+     * {@code lore.webtoon.presign-locally=true} 로 켜서 잠깐 열리는 S3 서명
+     * 주소를 받는다. 운영에서는 켜지 않는다.
+     */
     String url(String key) {
-        /* CDN 이 없으면(로컬) 잠깐 열리는 S3 주소를 준다. 예전에는 "/" + key 를
-           돌려줬는데, 그 주소는 어디서도 안 열려서 로컬에서 완성본이 늘 비어
-           보였다. 서명 주소는 만료되지만, CDN 없는 자리는 개발 기계뿐이다. */
-        if (cdn.isEmpty()) {
+        if (presignLocally) {
             String signed = art.ready() ? art.temporaryUrl(key) : null;
-            return signed != null ? signed : "/" + key;
+            if (signed != null) return signed;
         }
-        return cdn + "/" + key;
+        return "/" + key;
     }
 
     /**
