@@ -1,16 +1,15 @@
-// 루와 놀기 — haeun/landing/web/lou-play.js 를 거의 그대로 옮겼다.
+// 루와 놀기 — 만드는 중 화면의 「루와 놀기」 자리가 쓰는 물리.
 //
 // 드래그·흔들기·연속 클릭 판정은 DOM 이벤트와 타이머를 직접 다루는 물리에
-// 가까운 코드라, React 상태로 다시 짜면 오히려 원본과 미묘하게 달라질
-// 위험이 크다 — 그래서 리팩터하지 않고 querySelector 로 DOM 을 직접 만지는
-// 방식 그대로 옮기고, React 쪽에서는 useEffect 안에서 한 번 불러 주기만
-// 한다. 그림은 apps/web/public/static/lou (haeun/landing/web/lou 를
-// sync-landing.sh 가 그대로 옮겨 둔 것)에 있다 — 이 파일은 안 건드려도 된다.
+// 가까운 코드라, React 상태로 다시 짜면 미묘하게 달라질 위험이 크다 — 그래서
+// querySelector 로 DOM 을 직접 만지는 방식 그대로 두고, React 쪽에서는
+// useEffect 안에서 한 번 불러 주기만 한다. 프레임과 대사는
+// /static/lou/react/manifest.json, 팁은 /static/lou/tips.json 에 있고
+// (원본은 webtoon/ai/assets/lou, sync-landing.sh 가 떠 온다) 이 파일은 그
+// 목록을 읽을 뿐이라 반응을 늘리려면 manifest 쪽만 고치면 된다.
 //
-// 원본과 다른 점: window 전역에 얹는 대신 export 하고, 정리(clearInterval·
-// removeEventListener)를 위해 cleanup 함수를 돌려준다 — React 는 화면을
-// 나가면 언마운트되고, 다음에 들어오면 새로 mount 되므로 원본(정적 페이지,
-// 한 번만 뜨는 것)에는 없던 정리가 필요하다.
+// 정리(clearInterval·removeEventListener)를 위해 cleanup 함수를 돌려준다 —
+// 탭을 옮기면 언마운트되고 다시 들어오면 새로 mount 되기 때문이다.
 
 const ART = "/static/lou/react";
 
