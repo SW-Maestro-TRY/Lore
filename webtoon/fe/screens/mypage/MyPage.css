@@ -53,6 +53,27 @@
 .wt .wt-my-edit { height: 30px; font-size: 12px; padding: 0 14px; }
 .wt .wt-my-err { font-size: 11.5px; color: var(--gold); }
 
+/* 설정 탭 */
+.wt .wt-my-setting { padding: 18px 20px; }
+.wt .wt-my-setting-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.wt .wt-my-setting-row > div { display: flex; flex-direction: column; gap: 6px; max-width: 480px; }
+.wt .wt-my-setting-row b { font-size: 14.5px; }
+.wt .wt-my-setting-row .muted { font-size: 12.5px; line-height: 1.55; }
+.wt .wt-my-setting-row .sw { flex-shrink: 0; margin-top: 2px; }
+
+/* 작품 목록이 실패했거나(에러) 아직 없을 때(빈 목록). 둘을 가른다 —
+   실패를 "그냥 없음"으로 보이게 두면 웹툰이 사라진 것처럼 읽힌다. */
+.wt .wt-my-empty {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  padding: 24px 0;
+}
+.wt .wt-my-empty img { width: 96px; }
+.wt .wt-my-empty b { font-size: 15px; }
+.wt .wt-my-empty .inline-link {
+  background: none; border: 0; padding: 0; font: inherit; color: var(--sea-deep);
+  text-decoration: underline; cursor: pointer;
+}
+
 /* 캐릭터 줄 */
 .wt .wt-my-chars { display: flex; gap: 12px; flex-wrap: wrap; }
 .wt .wt-my-char {
@@ -89,7 +110,7 @@
 
   .wt .wt-my-menu { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; }
   .wt .wt-my-menu small { display: none; }
-  .wt .wt-my-menu button {
+  .wt .wt-my-menu button, .wt .wt-my-menu a {
     width: auto; flex: 0 0 auto; gap: 6px; padding: 8px 12px; border-radius: 999px;
     border: 1px solid var(--line-strong);
   }

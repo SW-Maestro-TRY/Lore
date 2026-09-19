@@ -1,6 +1,7 @@
 package com.lore.webtoon.work;
 
 import com.lore.webtoon.WebtoonApi;
+import com.lore.webtoon.job.NotifySettingService;
 import com.lore.common.auth.jwt.LoginUser;
 import com.lore.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,9 +42,11 @@ public class MyWebtoonController {
     static final String PREFIX = WebtoonApi.V1 + "/my";
 
     private final MyWebtoonService service;
+    private final NotifySettingService notifySettings;
 
-    public MyWebtoonController(MyWebtoonService service) {
+    public MyWebtoonController(MyWebtoonService service, NotifySettingService notifySettings) {
         this.service = service;
+        this.notifySettings = notifySettings;
     }
 
     @Operation(summary = "이 브라우저를 내 계정에 잇기", description = """
@@ -93,8 +96,32 @@ public class MyWebtoonController {
         return ApiResponse.ok(new ReuploadResult(runId, service.reupload(userId, runId)));
     }
 
+    @Operation(summary = "웹툰 완성 메일 — 켜져 있는가", description = """
+            행이 없으면(한 번도 안 건드렸으면) true 다 — 지금까지 계정 이메일로
+            항상 보냈던 것과 같은 기본값이다.""")
+    @GetMapping("/notify-setting")
+    public ApiResponse<NotifySettingResult> notifySetting(@LoginUser Long userId) {
+        return ApiResponse.ok(new NotifySettingResult(notifySettings.isOn(userId)));
+    }
+
+    @Operation(summary = "웹툰 완성 메일 — 켜고 끄기", description = """
+            웹툰이 다 만들어졌을 때 계정 이메일로 알리는 것을 켜고 끈다.
+            게스트로 만들 때 직접 적은 주소는 이 설정과 무관하게 그대로 간다 —
+            그건 그 한 번만의 명시적인 선택이다.""")
+    @PostMapping("/notify-setting")
+    public ApiResponse<NotifySettingResult> setNotifySetting(@LoginUser Long userId,
+                                                             @RequestBody NotifySettingRequest request) {
+        return ApiResponse.ok(new NotifySettingResult(notifySettings.set(userId, request.on())));
+    }
+
     /** @param recorded 이번에 새로 적은 그림 줄 수. 0 이면 이미 다 적혀 있었다. */
     public record ReuploadResult(String runId, int recorded) {
+    }
+
+    public record NotifySettingResult(boolean on) {
+    }
+
+    public record NotifySettingRequest(boolean on) {
     }
 
     /** @param isPublic 바뀐 뒤의 상태. 화면은 이 값으로 스위치를 맞춘다. */
