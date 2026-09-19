@@ -138,8 +138,19 @@
 .wt .wt-landing-faq details > p { padding: 0 4px 22px; font-size: 15px; line-height: 1.7; }
 
 /* 마지막 CTA */
-.wt .wt-landing-last { padding: 110px 48px 80px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; }
-.wt .wt-landing-last h2 { font-size: 40px; }
+.wt .wt-landing-last {
+  margin: 96px 48px 80px; height: 280px; background: var(--ink); border-radius: 28px; overflow: hidden;
+  display: flex; align-items: center; justify-content: space-between; gap: 32px;
+}
+.wt .wt-landing-last-text {
+  padding-left: 56px; display: flex; flex-direction: column; align-items: flex-start;
+  text-align: left; gap: 22px; flex: 1 1 auto; min-width: 0;
+}
+.wt .wt-landing-last h2 { font-size: 34px; line-height: 1.32; color: #fff; }
+.wt .wt-landing-last-cta { background: #fff; color: var(--ink); }
+.wt .wt-landing-last-cta:hover:not(:disabled) { background: var(--water-light); color: var(--ink); }
+.wt .wt-landing-last-pic { width: 340px; height: 100%; flex-shrink: 0; }
+.wt .wt-landing-last-pic img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
 
 /* 푸터 */
 .wt .wt-landing-foot { padding: 48px 48px 40px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
@@ -210,8 +221,11 @@
   .wt .wt-landing-faq summary { padding: 16px 2px; font-size: 15px; }
   .wt .wt-landing-faq details > p { padding: 0 2px 18px; font-size: 14px; }
 
-  .wt .wt-landing-last { padding: 64px 20px 36px; gap: 12px; }
-  .wt .wt-landing-last h2 { font-size: 27px; }
+  .wt .wt-landing-last { margin: 48px 16px 36px; height: auto; flex-direction: column-reverse; border-radius: 22px; gap: 0; }
+  .wt .wt-landing-last-text { padding: 32px 20px 40px; align-items: flex-start; text-align: left; gap: 18px; }
+  .wt .wt-landing-last h2 { font-size: 26px; }
+  .wt .wt-landing-last-cta { width: 100%; height: 52px; font-size: 15px; }
+  .wt .wt-landing-last-pic { width: 100%; height: 200px; }
 
   .wt .wt-landing-foot { padding: 32px 20px 36px; }
   .wt .wt-landing-foot > b { font-size: 15px; }

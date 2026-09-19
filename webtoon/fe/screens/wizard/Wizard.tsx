@@ -402,16 +402,9 @@ export default function Wizard({
         {step === 2 && (
           <>
             <div className="wt-wiz-body gap48">
-              <div className="wt-wiz-story">
+              <div className="wt-wiz-story wt-wiz-story-1col">
                 <div className="wt-wiz-head">
                   <h2>{t("어떤 이야기를 볼까요?")}</h2>
-                </div>
-                <textarea className="field wt-wiz-storybox" aria-label={t("이야기")} value={form.story}
-                          onChange={(e) => patch({ story: e.target.value })} />
-              </div>
-              <div className="wt-wiz-genre">
-                <div className="wt-wiz-head">
-                  <h2>{t("장르")}</h2>
                   <span className="muted lede">{t("안 고르면 이야기에 맞춰 정해요.")}</span>
                 </div>
                 <div className="wt-wiz-chips">
@@ -425,6 +418,8 @@ export default function Wizard({
                 {form.genre && GENRE_NOTE[form.genre] && (
                   <div className="wt-wiz-gnote">{t(GENRE_NOTE[form.genre])}</div>
                 )}
+                <textarea className="field wt-wiz-storybox" aria-label={t("이야기")} value={form.story}
+                          onChange={(e) => patch({ story: e.target.value })} />
               </div>
             </div>
             <div className="wt-wiz-foot">
