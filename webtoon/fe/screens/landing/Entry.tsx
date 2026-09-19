@@ -5,7 +5,7 @@ import "./i18n";
 import * as api from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
-import { IconArrow, IconBack, IconUser } from "../../ui/Icons";
+import { IconBack, IconUser } from "../../ui/Icons";
 import { usePhone } from "./usePhone";
 import "./Entry.css";
 
@@ -23,13 +23,11 @@ export default function Entry({ go }: { go: Go }) {
   const t = useT();
   const phone = usePhone();
   const to = (fn: () => void) => (ev: React.MouseEvent) => { ev.preventDefault(); fn(); };
-  const arrow = <IconArrow size={phone ? 14 : 16} />;
 
   return (
     <div className="wt-wrap wt-page wt-entry">
       <div className="wt-entry-head">
         <h2 style={phone ? { whiteSpace: "pre-line" } : undefined}>{t(phone ? "LORE에서\n무엇을 해볼까요?" : "LORE에서 무엇을 해볼까요?")}</h2>
-        <span className="muted">{t(phone ? "둘 다 마지막엔 웹툰이에요." : "둘 다 마지막엔 웹툰이에요. 만든 캐릭터는 저장돼서 다음엔 바로 웹툰으로 갑니다.")}</span>
       </div>
 
       <div className="wt-entry-cards">
@@ -42,7 +40,6 @@ export default function Entry({ go }: { go: Go }) {
           <div className="wt-entry-body">
             <div className="wt-entry-title"><span className="wt-entry-ic"><IconUser size={20} /></span><b>{t("내 캐릭터로 바로 웹툰을 만들고 싶어요")}</b></div>
             <span className="muted">{t("내가 가진 캐릭터, 최애, 이미지, 설정으로 바로 웹툰을 만들어요.")}</span>
-            <span className="wt-entry-go">{t("이걸로 만들기")} {arrow}</span>
           </div>
         </a>
 
@@ -57,7 +54,6 @@ export default function Entry({ go }: { go: Go }) {
             <span className="muted">
               {t(phone ? "사진이든 설명이든, 아무것도 없어도 돼요. 뭐든 웹툰 속 캐릭터가 돼요." : "내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요. 뭐든 넣으면 웹툰 속 캐릭터가 돼요.")}
             </span>
-            <span className="wt-entry-go">{t("이걸로 만들기")} {arrow}</span>
           </div>
         </a>
       </div>
