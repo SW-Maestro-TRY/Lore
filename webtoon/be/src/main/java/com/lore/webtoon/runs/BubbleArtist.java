@@ -270,11 +270,16 @@ public class BubbleArtist {
     }
 
     /**
-     * 글을 어디서 끊을지 <b>모양을 보고</b> 고른다.
+     * 풍선 크기와 줄바꿈.
      *
-     * 한 줄로 다 들어간다고 그냥 두면 대사가 길수록 풍선이 국수 가락이 된다.
-     * 몇 가지 폭으로 끊어 보고 가로세로 비가 가장 보기 좋은 것을 고른다 —
-     * 사람이 정한 폭은 넘지 않는다. 화면과 같은 규칙이다.
+     * <b>폭은 사람이 정한 그대로다.</b> 예전에는 글에 맞춰 풍선을 도로 줄였다 —
+     * 몇 가지 폭으로 끊어 보고 가로세로 비가 제일 나은 것을 고르는 식이었는데,
+     * 그러면 끌어도 안 커지거나 오히려 작아졌다. 끌어서 크기를 정하는 손잡이인데
+     * 그 값을 프로그램이 도로 덮어쓰면 고장 난 것과 같다.
+     *
+     * 글은 그 폭 안에서 줄바꿈될 뿐이고, 높이만 글에 맞춰 늘어난다. 다만 글이
+     * 짧다고 납작한 국수 가락이 되지는 않게 가장 낮은 높이를 둔다 —
+     * 폭÷{@code target} 보다 낮아지지 않는다. 화면과 같은 규칙이다.
      */
     private Fit fit(String text, Font font, int boxW, int padX, int padY,
                     double spread, double target) {
@@ -284,23 +289,12 @@ public class BubbleArtist {
         FontMetrics fm = g.getFontMetrics();
         int lh = Math.max(1, (int) (font.getSize() * 1.35));
 
-        Fit best = null;
-        double bestScore = Double.MAX_VALUE;
-        for (double frac : new double[]{1.0, 0.82, 0.68, 0.56, 0.46, 0.38}) {
-            int inner = Math.max(10, (int) (boxW * frac / spread) - padX * 2);
-            List<String> lines = wrap(text, fm, inner);
-            int tw = lines.stream().mapToInt(fm::stringWidth).max().orElse(0);
-            int th = lh * lines.size();
-            int w = Math.min(boxW, (int) (tw * spread) + padX * 2);
-            int h = (int) (th * spread) + padY * 2;
-            double score = Math.abs((double) w / Math.max(1, h) - target);
-            if (score < bestScore) {
-                bestScore = score;
-                best = new Fit(w, h, lines);
-            }
-        }
+        int inner = Math.max(10, (int) (boxW / spread) - padX * 2);
+        List<String> lines = wrap(text, fm, inner);
+        int h = Math.max((int) (lh * lines.size() * spread) + padY * 2,
+                (int) (boxW / Math.max(0.1, target)));
         g.dispose();
-        return best;
+        return new Fit(boxW, h, lines);
     }
 
     /** 폭에 맞춰 줄을 나눈다. 한국어는 어절에서 끊고, 한 어절이 넘치면 글자로 자른다. */

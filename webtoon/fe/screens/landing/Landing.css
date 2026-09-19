@@ -1,0 +1,219 @@
+/* 첫 화면 — 보드 Landing.dc.html · MLanding.dc.html */
+.wt .wt-landing { width: 100%; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; }
+.wt .wt-landing section { flex-shrink: 0; }
+
+/* 히어로 */
+.wt .wt-landing-hero { padding: 64px 48px 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 18px; }
+.wt .wt-landing-hero h1 { font-size: 64px; line-height: 1.15; }
+.wt .wt-landing-hero p { font-size: 19px; line-height: 1.6; }
+.wt .wt-landing-cta { height: 56px; padding: 0 34px; font-size: 17px; margin-top: 6px; }
+.wt .wt-landing-allow { font-size: 13px; color: var(--dim); margin-top: -6px; }
+.wt .wt-landing-jobpill { height: 42px; padding: 0 16px 0 8px; font-size: 13.5px; gap: 8px; }
+.wt .wt-landing-jobpill img { width: 28px; }
+
+/* 4단계 (시작 · 캐릭터 · 컷 · 완성) */
+.wt .wt-landing-steps { padding: 96px 48px 0; display: flex; flex-direction: column; gap: 28px; align-items: center; }
+.wt .wt-landing-steps h2 { font-size: 40px; text-align: center; }
+.wt .wt-landing-steps-row { display: flex; align-items: flex-end; justify-content: center; }
+.wt .wt-landing-step { width: 262px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+.wt .wt-landing-step > b { font-size: 15px; text-align: center; }
+.wt .wt-landing-step-box {
+  position: relative; height: 300px; border-radius: 16px; overflow: hidden; background: #fff;
+  border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(15,51,63,.10);
+}
+.wt .wt-landing-step-box > img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.wt .wt-landing-step-no {
+  position: absolute; left: 12px; top: 12px; font-size: 12px; font-weight: 700; padding: 4px 9px;
+  border-radius: 999px; background: var(--ink); color: #fff; letter-spacing: .06em;
+}
+.wt .wt-landing-step-line { width: 30px; display: flex; align-items: center; justify-content: center; padding-bottom: 32px; flex-shrink: 0; }
+.wt .wt-landing-step-line > div { width: 100%; height: 2px; background: rgba(15,51,63,.18); }
+.wt .wt-landing-step-form { position: absolute; inset: 0; padding: 48px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+.wt .wt-landing-step-name { display: flex; align-items: center; gap: 10px; }
+.wt .wt-landing-step-avatar { width: 44px; height: 44px; border-radius: 10px; background: var(--water); overflow: hidden; display: flex; align-items: flex-end; justify-content: center; flex-shrink: 0; }
+.wt .wt-landing-step-input { flex-grow: 1; height: 40px; border: 1.5px solid var(--line-strong); border-radius: 10px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; background: #fff; }
+.wt .wt-landing-step-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wt .wt-landing-step-chips span {
+  height: 30px; padding: 0 12px; border-radius: 999px; border: 1.5px solid rgba(15,51,63,.16); background: #fff;
+  color: var(--ink); font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center;
+}
+.wt .wt-landing-step-chips span.on { border-color: var(--sea); background: var(--water-light); color: var(--sea-deep); }
+.wt .wt-landing-step-btn { margin-top: auto; height: 40px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.wt .wt-landing-step-tools {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; height: 40px; border-radius: 12px; background: rgba(255,255,255,.92);
+  display: flex; align-items: center; justify-content: space-around; padding: 0 8px; color: var(--ink);
+}
+
+/* 니즈 카드 */
+.wt .wt-landing-needs { padding: 110px 48px 0; display: flex; flex-direction: column; gap: 32px; }
+.wt .wt-landing-needs h2 { font-size: 44px; line-height: 1.3; }
+.wt .wt-landing-needs-row { display: flex; gap: 24px; align-items: stretch; }
+.wt .wt-landing-need {
+  flex: 1 1 0; min-width: 0; border: 1px solid var(--line);
+  transition: flex-grow .3s ease, border-color .3s ease;
+  text-decoration: none; color: var(--ink); display: flex; flex-direction: column; gap: 18px;
+  padding: 32px 32px 0; border-radius: 22px; background: #fff; overflow: hidden; height: 640px;
+}
+.wt .wt-landing-need:hover { color: var(--ink); }
+.wt .wt-landing-need.on { flex: 1.55 1 0; border: 2px solid var(--sea); }
+.wt .wt-landing-need-text { display: flex; flex-direction: column; gap: 8px; }
+.wt .wt-landing-need-text > b { font-size: 26px; line-height: 1.3; }
+.wt .wt-landing-need-text > span { font-size: 15px; line-height: 1.65; }
+.wt .wt-landing-need-more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s ease; }
+.wt .wt-landing-need-more > p { overflow: hidden; font-size: 14px; line-height: 1.7; max-width: 620px; }
+.wt .wt-landing-need.on .wt-landing-need-more { grid-template-rows: 1fr; }
+.wt .wt-landing-need.on .wt-landing-need-more > p { margin-top: 6px; }
+.wt .wt-landing-need-fig { flex-grow: 1; min-height: 0; padding: 0 8px; }
+.wt .wt-landing-cut {
+  position: relative; height: 100%; border-radius: 14px; overflow: hidden; background: #fff;
+  border: 1px solid rgba(15,51,63,.12); box-shadow: 0 12px 30px rgba(15,51,63,.12);
+}
+.wt .wt-landing-cut > img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+
+/* 편집실 목업 (니즈 카드 · 약속 셋 공용) */
+.wt .wt-landing-mock {
+  overflow: hidden; background: #fff; border: 1px solid rgba(15,51,63,.12);
+  box-shadow: 0 16px 40px rgba(15,51,63,.14); display: flex; flex-direction: column;
+}
+.wt .wt-landing-mock-bar { display: flex; align-items: center; border-bottom: 1px solid var(--line); color: var(--muted); flex-shrink: 0; }
+.wt .wt-landing-mock-bar b { color: var(--ink); letter-spacing: .08em; }
+.wt .wt-landing-mock-body { flex-grow: 1; position: relative; overflow: hidden; background: #f0f6f8; }
+.wt .wt-landing-mock-sheet {
+  position: absolute; overflow: hidden; background: #fff; border: 1px solid rgba(15,51,63,.12);
+  box-shadow: 0 10px 24px rgba(15,51,63,.16);
+}
+.wt .wt-landing-genre { position: absolute; border-radius: 999px; background: #fff; color: var(--sea-deep); font-weight: 700; }
+.wt .wt-landing-bubble { position: absolute; background: #fff; border: 1.5px solid var(--ink); line-height: 1.45; color: var(--ink); }
+.wt .wt-landing-cap { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(15,51,63,.82); color: #fff; line-height: 1.4; }
+
+/* 약속 셋 */
+.wt .wt-landing-promise { padding: 110px 48px 0; display: flex; flex-direction: column; gap: 56px; }
+.wt .wt-landing-promise h2 { font-size: 44px; line-height: 1.3; text-align: center; }
+.wt .wt-landing-hl { background: var(--water); padding: 0 10px; border-radius: 8px; }
+.wt .wt-landing-promise-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 56px; align-items: start; }
+.wt .wt-landing-promise-list { display: flex; flex-direction: column; padding-top: 8px; }
+.wt .wt-landing-promise-item {
+  display: flex; align-items: baseline; gap: 22px; padding: 34px 0; border-top: 1px solid rgba(15,51,63,.14);
+  opacity: .32; transition: opacity .3s ease; cursor: pointer;
+}
+.wt .wt-landing-promise-item.on { opacity: 1; }
+.wt .wt-landing-promise-n { font-size: 22px; font-weight: 700; letter-spacing: .04em; flex-shrink: 0; }
+.wt .wt-landing-promise-item b { font-size: 24px; }
+.wt .wt-landing-promise-more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s ease; }
+.wt .wt-landing-promise-more > p { overflow: hidden; font-size: 15px; line-height: 1.65; max-width: 440px; }
+.wt .wt-landing-promise-item.on .wt-landing-promise-more { grid-template-rows: 1fr; }
+.wt .wt-landing-promise-item.on .wt-landing-promise-more > p { margin-top: 10px; }
+.wt .wt-landing-hr { border-top: 1px solid rgba(15,51,63,.14); }
+
+/* 예시 작품 띠 */
+.wt .wt-landing-works { padding: 52px 0 0 48px; display: flex; flex-direction: column; gap: 18px; }
+.wt .wt-landing-works-label { font-size: 15px; }
+.wt .wt-landing-works-err { display: flex; align-items: center; gap: 12px; padding-right: 48px; }
+.wt .wt-landing-marq-clip { overflow: hidden; }
+.wt .wt-landing-marq { display: flex; gap: 24px; width: max-content; padding-right: 24px; animation: wt-landing-marquee 40s linear infinite; }
+.wt .wt-landing-marq:hover { animation-play-state: paused; }
+@keyframes wt-landing-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.wt .wt-landing-fig { margin: 0; width: 300px; }
+.wt .wt-landing-fig a { display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: var(--ink); }
+.wt .wt-landing-cover { width: 300px; height: 450px; border-radius: 12px; }
+.wt .wt-landing-fig figcaption { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 0 2px; }
+.wt .wt-landing-fig figcaption b { font-size: 15px; }
+.wt .wt-landing-fig figcaption span { font-size: 13px; flex-shrink: 0; }
+
+/* FAQ */
+.wt .wt-landing-faq { padding: 40px 48px 72px; display: flex; flex-direction: column; align-items: center; gap: 28px; }
+.wt .wt-landing-faq h2 { font-size: 40px; }
+.wt .wt-landing-faq-list { display: flex; flex-direction: column; width: 860px; max-width: 100%; }
+.wt .wt-landing-faq details { border-top: 1px solid rgba(15,51,63,.14); }
+.wt .wt-landing-faq summary {
+  padding: 20px 4px; font-size: 17px; font-weight: 700; cursor: pointer; list-style: none;
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+}
+.wt .wt-landing-faq summary::-webkit-details-marker { display: none; }
+.wt .wt-landing-faq-ic { color: var(--sea); flex-shrink: 0; display: inline-flex; transition: transform .3s ease; }
+.wt .wt-landing-faq details[open] .wt-landing-faq-ic { transform: rotate(45deg); }
+.wt .wt-landing-faq details > p { padding: 0 4px 22px; font-size: 15px; line-height: 1.7; }
+
+/* 마지막 CTA */
+.wt .wt-landing-last { padding: 110px 48px 80px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 16px; }
+.wt .wt-landing-last h2 { font-size: 40px; }
+
+/* 푸터 */
+.wt .wt-landing-foot { padding: 48px 48px 40px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
+.wt .wt-landing-foot > b { font-size: 16px; }
+.wt .wt-landing-foot nav { display: flex; gap: 18px; font-size: 13px; }
+.wt .wt-landing-foot nav a, .wt .wt-landing-foot nav span { color: var(--ink); text-decoration: none; }
+.wt .wt-landing-badges { display: flex; gap: 22px; flex-wrap: wrap; }
+.wt .wt-landing-badges span { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.wt .wt-landing-badges img { width: 20px; height: 20px; object-fit: contain; }
+.wt .wt-landing-copy { font-size: 12px; }
+
+/* ---- 폰 (MLanding) ---------------------------------------------------------- */
+@media (max-width: 767px) {
+  .wt .wt-landing-hero { padding: 36px 20px 0; gap: 12px; }
+  .wt .wt-landing-hero h1 { font-size: 36px; line-height: 1.2; }
+  .wt .wt-landing-hero p { font-size: 15px; }
+  .wt .wt-landing-cta { width: 100%; height: 54px; font-size: 15px; padding: 0 20px; margin-top: 4px; }
+  .wt .wt-landing-jobpill { height: 36px; padding: 0 12px 0 6px; font-size: 12.5px; gap: 6px; }
+  .wt .wt-landing-jobpill img { width: 24px; }
+
+  .wt .wt-landing-steps { padding: 60px 20px 0; gap: 16px; }
+  .wt .wt-landing-steps h2 { font-size: 27px; }
+  .wt .wt-landing-steps-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; width: 100%; }
+  .wt .wt-landing-step { width: auto; }
+  .wt .wt-landing-step > b { font-size: 14px; }
+  .wt .wt-landing-step-box { height: 200px; }
+  .wt .wt-landing-step-line { display: none; }
+  .wt .wt-landing-step-form { padding: 38.4px 14.4px 14.4px; gap: 9.6px; }
+  .wt .wt-landing-step-name { gap: 8px; }
+  .wt .wt-landing-step-avatar { width: 35.2px; height: 35.2px; border-radius: 8px; }
+  .wt .wt-landing-step-input { height: 32px; border-radius: 8px; padding: 0 9.6px; font-size: 10.4px; }
+  .wt .wt-landing-step-chips { gap: 4.8px; }
+  .wt .wt-landing-step-chips span { height: 24px; padding: 0 9.6px; font-size: 10px; }
+  .wt .wt-landing-step-btn { height: 32px; font-size: 10.4px; }
+  .wt .wt-landing-step-tools { left: 9.6px; right: 9.6px; bottom: 9.6px; height: 32px; border-radius: 9.6px; padding: 0 6.4px; }
+
+  .wt .wt-landing-needs { padding: 60px 20px 0; gap: 18px; }
+  .wt .wt-landing-needs h2 { font-size: 27px; }
+  .wt .wt-landing-needs-row { flex-direction: column; gap: 18px; }
+  .wt .wt-landing-need { padding: 22px 20px 0; height: 470px; }
+  .wt .wt-landing-need + .wt-landing-need { height: 500px; }
+  .wt .wt-landing-need.on { flex: 1 1 0; }
+  .wt .wt-landing-need-text > b { font-size: 20px; }
+  .wt .wt-landing-need-text > span { font-size: 13.5px; line-height: 1.6; }
+
+  .wt .wt-landing-promise { padding: 64px 20px 0; gap: 22px; }
+  .wt .wt-landing-promise h2 { font-size: 26px; line-height: 1.35; }
+  .wt .wt-landing-hl { padding: 0 6px; border-radius: 6px; }
+  .wt .wt-landing-promise-grid { grid-template-columns: 1fr; gap: 22px; }
+  .wt .wt-landing-promise-list { padding-top: 0; }
+  .wt .wt-landing-promise-item { padding: 20px 0; }
+  .wt .wt-landing-promise-n { font-size: 16px; }
+  .wt .wt-landing-promise-item b { font-size: 18px; }
+  .wt .wt-landing-promise-more > p { font-size: 13.5px; }
+
+  .wt .wt-landing-works { padding: 32px 0 0 20px; gap: 12px; }
+  .wt .wt-landing-works-label { font-size: 13px; }
+  .wt .wt-landing-works-err { padding-right: 20px; flex-wrap: wrap; }
+  .wt .wt-landing-marq { gap: 14px; padding-right: 14px; }
+  .wt .wt-landing-fig { width: 210px; }
+  .wt .wt-landing-cover { width: 210px; height: 315px; }
+  .wt .wt-landing-fig figcaption b { font-size: 14px; }
+  .wt .wt-landing-fig figcaption span { font-size: 12px; }
+
+  .wt .wt-landing-faq { padding: 24px 20px 48px; align-items: stretch; gap: 12px; }
+  .wt .wt-landing-faq h2 { font-size: 27px; }
+  .wt .wt-landing-faq-list { width: 100%; }
+  .wt .wt-landing-faq summary { padding: 16px 2px; font-size: 15px; }
+  .wt .wt-landing-faq details > p { padding: 0 2px 18px; font-size: 14px; }
+
+  .wt .wt-landing-last { padding: 64px 20px 36px; gap: 12px; }
+  .wt .wt-landing-last h2 { font-size: 27px; }
+
+  .wt .wt-landing-foot { padding: 32px 20px 36px; }
+  .wt .wt-landing-foot > b { font-size: 15px; }
+  .wt .wt-landing-badges { flex-direction: column; gap: 8px; }
+  .wt .wt-landing-copy { font-size: 11px; }
+}
+
+.wt .wt-landing-lang .tag { font-size: 11px; padding: 3px 9px; cursor: pointer; }

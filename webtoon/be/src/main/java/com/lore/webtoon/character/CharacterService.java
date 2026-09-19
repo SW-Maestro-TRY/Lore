@@ -1,5 +1,7 @@
 package com.lore.webtoon.character;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PrivateArt;
 import com.lore.webtoon.credit.CreditGate;
@@ -31,7 +33,9 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -69,6 +73,7 @@ public class CharacterService {
 
     private final WebtoonCharacterRepository characters;
     private final CharacterMaker maker;
+    private final CharacterOwner owner;
     private final PrivateArt art;
     private final CreditGate credits;
     private final Path workDir;
@@ -85,20 +90,21 @@ public class CharacterService {
     /* 생성자가 둘이다(아래 하나는 검사에서 시계를 갈아 끼우려고 둔 것) */
     @Autowired
     public CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
-                            PrivateArt art, CreditGate credits,
+                            CharacterOwner owner, PrivateArt art, CreditGate credits,
                             @Value("${lore.webtoon.character.work-dir:}") String workDir,
                             @Value("${lore.webtoon.character.free-per-day:5}") int freePerDay,
                             @Value("${lore.webtoon.character.credit-cost:1}") int cost,
                             @Value("${lore.webtoon.cdn-base:}") String cdn) {
-        this(characters, maker, art, credits, workDir, freePerDay, cost, cdn,
+        this(characters, maker, owner, art, credits, workDir, freePerDay, cost, cdn,
              Clock.system(ZONE));
     }
 
     CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
-                     PrivateArt art, CreditGate credits, String workDir,
+                     CharacterOwner owner, PrivateArt art, CreditGate credits, String workDir,
                      int freePerDay, int cost, String cdn, Clock clock) {
         this.characters = characters;
         this.maker = maker;
+        this.owner = owner;
         this.art = art;
         this.credits = credits;
         this.workDir = Path.of(workDir == null || workDir.isBlank()
@@ -122,6 +128,21 @@ public class CharacterService {
         if (!one.isBuiltin() && !one.madeBy(userId, uids)) {
             // 있는 것을 "권한 없음" 으로 알리면 남의 번호를 하나씩 찔러 볼 수 있다.
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다");
+        }
+        return one;
+    }
+
+    /**
+     * 공유 링크로 열리는 카드 — <b>주인을 안 가린다.</b> 카드는 남에게 보여 주려고
+     * 만드는 것이라, 링크를 받은 사람이 로그인 없이 봐야 한다. 카드가 없는
+     * 캐릭터(초상 한 장·기본 제공)는 여기로 안 열린다 — 공유할 것이 없다.
+     */
+    @Transactional(readOnly = true)
+    public WebtoonCharacter sharedCard(String publicId) {
+        WebtoonCharacter one = characters.findByPublicId(publicId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 카드가 없습니다"));
+        if (!one.hasCard()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "그런 카드가 없습니다");
         }
         return one;
     }
@@ -150,6 +171,30 @@ public class CharacterService {
     @Transactional
     public WebtoonCharacter create(Long userId, String browserUid, String name,
                                    String description, List<String> photoDataUrls, String style) {
+        return start(userId, browserUid, name, description, photoDataUrls, style, null);
+    }
+
+    /**
+     * 「캐릭터 만들어보기」 — 그 세계관 웹툰의 한 컷과 카드 글.
+     *
+     * <b>아무것도 안 넣어도 된다.</b> 사진·설명·이름·세계관이 전부 비어도
+     * 만든다(하네스가 존재부터 정한다). 직접 만들기({@link #create})와 다른
+     * 점은 그것 하나와, 결과가 초상이 아니라 한 컷 + 카드라는 것이다. 값과
+     * 하루 몫은 같은 자리에서 같은 규칙으로 센다 — 한 장 그리는 값은 같다.
+     *
+     * @param world 프리셋 키이거나 사람이 직접 쓴 한 줄. 비우면 무작위
+     */
+    @Transactional
+    public WebtoonCharacter tryOut(Long userId, String browserUid, String name,
+                                   String description, List<String> photoDataUrls, String world) {
+        return start(userId, browserUid, name, description, photoDataUrls, null,
+                     world == null ? "" : world.trim());
+    }
+
+    /** @param world {@code null} 이면 초상 한 장, 아니면 한 컷("" 는 세계관 무작위) */
+    private WebtoonCharacter start(Long userId, String browserUid, String name,
+                                   String description, List<String> photoDataUrls, String style,
+                                   String world) {
         /* **로그인은 안 시킨다.** 이 제품은 회원가입 없이 한번 써 보게 하는
            것이 목적이고, 웹툰 만들기가 이미 그렇다 — 캐릭터만 로그인을
            요구하면 "캐릭터로 웹툰 만들기" 로 가는 길이 거기서 끊긴다.
@@ -166,7 +211,8 @@ public class CharacterService {
                 .limit(MAX_PHOTOS)
                 .toList();
         boolean hasPhoto = !photos.isEmpty();
-        if (!hasPhoto && (description == null || description.isBlank())) {
+        // 한 컷은 빈손도 된다 — 그게 「랜덤으로 만들어보기」다.
+        if (world == null && !hasPhoto && (description == null || description.isBlank())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "어떤 캐릭터인지 한 줄만 적어 주세요 — 사진은 없어도 됩니다.");
         }
@@ -180,7 +226,9 @@ public class CharacterService {
         }
 
         // **값은 만들기 전에 본다.** 그린 뒤에 모자라다고 하면 돈은 이미 나갔다.
-        boolean free = freeLeft(userId, List.of(browserUid == null ? "" : browserUid)) > 0;
+        // 컨트롤러(list/freeLeft)와 같은 uid 묶음으로 센다 — 기기를 여럿 이은 사람에게
+        // 화면은 "0개 남음" 인데 서버는 공짜로 만들어 주던 어긋남을 없앤다.
+        boolean free = freeLeft(userId, owner.uidsOf(userId, browserUid)) > 0;
         if (!free) {
             /* 게스트는 낼 크레딧이 없다 — 계정 쪽 확인은 통과해 버리므로
                여기서 따로 막는다. 없는 잔액을 보고 "모자랍니다" 라고 하면
@@ -238,28 +286,30 @@ public class CharacterService {
                         @Override
                         public void afterCommit() {
                             line.submit(() -> draw(id, called, description, finalPhotos,
-                                    style, dir));
+                                    style, world, dir));
                         }
                     });
         } else {
-            line.submit(() -> draw(id, called, description, finalPhotos, style, dir));
+            line.submit(() -> draw(id, called, description, finalPhotos, style, world, dir));
         }
         return saved;
     }
 
     /** 뒤에서 그린다. 여기서 죽어도 줄이 멈추면 안 된다. */
     private void draw(Long id, String name, String description, List<Path> photos,
-                      String style, Path dir) {
-        Path drawn = dir.resolve("art.png");
+                      String style, String world, Path dir) {
+        Path drawn = dir.resolve(world == null ? "art.png" : "panel.png");
         try {
-            CharacterMaker.Made made = maker.make(name, description, photos, style, drawn);
+            CharacterMaker.Made made = world == null
+                    ? maker.make(name, description, photos, style, drawn)
+                    : maker.makePanel(name, description, photos, world, drawn);
             String key = uploadArt(made.art());
             // 사람이 이름을 안 적었으면 사양이 지어 준 것을 쓴다.
             finish(id, key, made.source(), null,
-                    name.isBlank() ? made.named() : null);
+                    name.isBlank() ? made.named() : null, made.card());
         } catch (Exception e) {                    // noqa: 사유는 로그에, 사람에겐 한 줄
             log.error("캐릭터를 못 그렸습니다 (id={}, name={})", id, name, e);
-            finish(id, null, null, "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.", null);
+            finish(id, null, null, "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.", null, null);
         } finally {
             // **어떻게 끝나든 올린 사진은 지운다.** 외모를 글로 적는 데만 쓰고,
             // 그 뒤로는 다시 안 쓴다. 사람 얼굴을 서버에 둘 이유가 없다.
@@ -268,7 +318,8 @@ public class CharacterService {
     }
 
     @Transactional
-    protected void finish(Long id, String key, CharacterSource source, String why, String named) {
+    protected void finish(Long id, String key, CharacterSource source, String why, String named,
+                          WebtoonCharacter.Card card) {
         characters.findById(id).ifPresent(one -> {
             Instant now = Instant.now(clock);
             if (why != null) {
@@ -277,7 +328,12 @@ public class CharacterService {
                 if (named != null && !named.isBlank()) {
                     one.rename(named, one.getDescription(), now);
                 }
-                one.drewArt(key, source == null ? CharacterSource.PROMPT : source, now);
+                CharacterSource from = source == null ? CharacterSource.PROMPT : source;
+                if (card != null) {
+                    one.drewPanel(key, from, card, now);
+                } else {
+                    one.drewArt(key, from, now);
+                }
             }
             characters.save(one);
         });
@@ -335,10 +391,110 @@ public class CharacterService {
         if (key == null || key.isBlank()) {
             return null;
         }
-        if (!PrivateArt.isPrivate(key)) {
-            return cdn.isEmpty() ? "/" + key : cdn + "/" + key;
+        if (!PrivateArt.isPrivate(key) && !cdn.isEmpty()) {
+            return cdn + "/" + key;
         }
+        // 비공개 자리이거나 CDN 이 없는 자리(로컬)면 잠깐 열리는 주소 — PageStore.url 과 같은 규칙.
         return art.ready() ? art.temporaryUrl(key) : null;
+    }
+
+    /**
+     * 고를 수 있는 세계관 — 하네스의 프리셋({@code story-harness/worlds.json})을
+     * 그대로 내준다. 자바가 목록을 한 벌 더 갖지 않는다: 프리셋을 더하면 여기도
+     * 같이 늘어야 하는데, 두 벌이면 반드시 어긋난다.
+     *
+     * @return {@code [{key, label}]}. 못 읽으면 빈 목록 — 화면은 그러면 직접 쓰기만 보여 준다
+     */
+    public List<Map<String, String>> worlds() {
+        Path file = maker.worldsFile();
+        if (file == null || !Files.isRegularFile(file)) {
+            return List.of();
+        }
+        try {
+            JsonNode presets = new ObjectMapper().readTree(Files.readString(file)).path("presets");
+            List<Map<String, String>> out = new ArrayList<>();
+            presets.fieldNames().forEachRemaining(key -> {
+                Map<String, String> one = new LinkedHashMap<>();
+                one.put("key", key);
+                one.put("label", presets.path(key).path("label").asText(key));
+                out.add(one);
+            });
+            return out;
+        } catch (IOException | RuntimeException e) {
+            log.warn("세계관 목록을 못 읽었습니다 ({})", file, e);
+            return List.of();
+        }
+    }
+
+    /**
+     * 「랜덤으로 만들어보기」 — 입력 칸을 채울 재료 한 벌. <b>AI 를 안 부른다.</b>
+     *
+     * 존재 하나 + 결 하나를 붙여 설명이 되고, 이름은 그 존재의 이름 주머니에서,
+     * 세계관은 프리셋에서 뽑는다. 사람은 그 값을 보고 고치거나 다시 뽑거나
+     * 그대로 만든다 — 바로 생성으로 넘어가지 않는다. 재료는
+     * {@code new_harness/prompt/random_pool.json} 이라 늘리고 줄이는 것은 그
+     * 파일만 고치면 된다.
+     *
+     * @return {@code {name, description, world, world_label}}. 재료를 못 읽으면 빈 값들
+     */
+    public Map<String, String> randomSeed() {
+        Map<String, String> out = new LinkedHashMap<>();
+        out.put("name", "");
+        out.put("description", "");
+        out.put("world", "");
+        out.put("world_label", "");
+        Path file = maker.randomPoolFile();
+        if (file == null || !Files.isRegularFile(file)) {
+            return out;
+        }
+        try {
+            JsonNode pool = new ObjectMapper().readTree(Files.readString(file));
+            java.util.Random rnd = new java.util.Random();
+            JsonNode beings = pool.path("beings");
+            JsonNode traits = pool.path("traits");
+            JsonNode formats = pool.path("formats");
+            if (!beings.isArray() || beings.isEmpty() || !traits.isArray() || traits.isEmpty()) {
+                return out;
+            }
+            JsonNode being = beings.get(rnd.nextInt(beings.size()));
+            String trait = traits.get(rnd.nextInt(traits.size())).asText("");
+            JsonNode names = being.path("name_pool");
+            String name = names.isArray() && !names.isEmpty()
+                    ? names.get(rnd.nextInt(names.size())).asText("") : "";
+            String format = formats.isArray() && !formats.isEmpty()
+                    ? formats.get(rnd.nextInt(formats.size())).asText("{being}. {trait}.")
+                    : "{being}. {trait}.";
+            String description = format
+                    .replace("{being}", being.path("being").asText(""))
+                    .replace("{trait}", trait)
+                    .replace("{name}", name);
+            List<Map<String, String>> worlds = worlds();
+            JsonNode allowed = being.path("worlds");
+            List<Map<String, String>> pick = new ArrayList<>();
+            if (allowed.isArray() && !allowed.isEmpty()) {
+                for (Map<String, String> w : worlds) {
+                    for (JsonNode a : allowed) {
+                        if (a.asText("").equals(w.get("key"))) {
+                            pick.add(w);
+                        }
+                    }
+                }
+            }
+            if (pick.isEmpty()) {
+                pick = worlds;
+            }
+            out.put("name", name);
+            out.put("description", description);
+            if (!pick.isEmpty()) {
+                Map<String, String> w = pick.get(rnd.nextInt(pick.size()));
+                out.put("world", w.get("key"));
+                out.put("world_label", w.get("label"));
+            }
+            return out;
+        } catch (IOException | RuntimeException e) {
+            log.warn("랜덤 재료를 못 읽었습니다 ({})", file, e);
+            return out;
+        }
     }
 
     int cost() {

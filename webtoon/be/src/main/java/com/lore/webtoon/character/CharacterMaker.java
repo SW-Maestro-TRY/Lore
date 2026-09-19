@@ -54,9 +54,25 @@ public class CharacterMaker {
         return Files.isRegularFile(harnessDir.resolve("character.py"));
     }
 
-    /** 만든 결과. {@code art} 는 그린 파일, {@code source} 는 사진에서인지 글에서인지. */
-    /** @param named 사양이 정한 이름. 사람이 안 적었을 때 쓴다. */
-    public record Made(Path art, CharacterSource source, String named, List<JsonNode> calls) {
+    /** 「랜덤으로 만들어보기」 재료. 하네스 프롬프트 옆에 데이터로 둔다 — 코드가 아니다. */
+    public Path randomPoolFile() {
+        return harnessDir.resolve("prompt").resolve("random_pool.json");
+    }
+
+    /** 세계관 프리셋 파일. new_harness 옆에 story-harness 가 같이 풀려 있다. */
+    public Path worldsFile() {
+        return harnessDir.getParent() == null ? null
+                : harnessDir.getParent().resolve("story-harness").resolve("worlds.json");
+    }
+
+    /**
+     * 만든 결과. {@code art} 는 그린 파일, {@code source} 는 사진에서인지 글에서인지.
+     *
+     * @param named 사양이 정한 이름. 사람이 안 적었을 때 쓴다
+     * @param card  「캐릭터 만들어보기」(한 컷)일 때만 있다. 초상 한 장이면 {@code null}
+     */
+    public record Made(Path art, CharacterSource source, String named, List<JsonNode> calls,
+                       WebtoonCharacter.Card card) {
     }
 
     /**
@@ -68,9 +84,27 @@ public class CharacterMaker {
      */
     public Made make(String name, String description, List<Path> photos, String style, Path out)
             throws IOException, InterruptedException {
+        return run(name, description, photos, style, out, null);
+    }
+
+    /**
+     * 「캐릭터 만들어보기」 — 그 세계관 웹툰의 <b>한 컷</b>과 카드 글.
+     *
+     * 사진·설명·이름이 전부 없어도 된다. {@code world} 는 프리셋 키이거나 사람이
+     * 직접 쓴 한 줄이고, 비우면 하네스가 프리셋에서 무작위로 고른다. 규칙은
+     * 전부 하네스({@code character.py --panel} · {@code prompt/panel_prompt})에
+     * 있다 — 자바는 넘기고 받기만 한다.
+     */
+    public Made makePanel(String name, String description, List<Path> photos, String world,
+                          Path out) throws IOException, InterruptedException {
+        return run(name, description, photos, null, out, world == null ? "" : world);
+    }
+
+    private Made run(String name, String description, List<Path> photos, String style, Path out,
+                     String world) throws IOException, InterruptedException {
         List<String> cmd = new ArrayList<>(List.of(
                 python, "-u", "character.py",
-                "--name", name,
+                "--name", name == null ? "" : name,
                 "--description", description == null ? "" : description,
                 "--out", out.toString()));
         for (Path photo : photos) {
@@ -80,6 +114,13 @@ public class CharacterMaker {
         if (style != null && !style.isBlank()) {
             cmd.add("--style");
             cmd.add(style);
+        }
+        if (world != null) {                       // null = 초상 한 장, "" = 한 컷(세계관 무작위)
+            cmd.add("--panel");
+            if (!world.isBlank()) {
+                cmd.add("--world");
+                cmd.add(world);
+            }
         }
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -126,6 +167,29 @@ public class CharacterMaker {
                 ? CharacterSource.PHOTO : CharacterSource.PROMPT;
         List<JsonNode> calls = new ArrayList<>();
         got.path("calls").forEach(calls::add);
-        return new Made(art, source, got.path("named").asText(""), calls);
+        return new Made(art, source, got.path("named").asText(""), calls, cardOf(got));
+    }
+
+    /** 한 컷 결과의 카드 글. 반전 한 줄이 없으면 카드가 아니다(초상 한 장). */
+    static WebtoonCharacter.Card cardOf(JsonNode got) {
+        String twist = got.path("twist").asText("");
+        if (twist.isBlank()) {
+            return null;
+        }
+        List<String> fate = new ArrayList<>();
+        got.path("fate").forEach(f -> {
+            if (!f.asText("").isBlank()) {
+                fate.add(f.asText());
+            }
+        });
+        return new WebtoonCharacter.Card(
+                got.path("world").asText(""),
+                got.path("world_label").asText(""),
+                got.path("genre").asText(""),
+                got.path("role").asText(""),
+                twist,
+                got.path("quote").asText(""),
+                fate,
+                got.path("style").asText(""));
     }
 }

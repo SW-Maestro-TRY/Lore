@@ -22,6 +22,17 @@ import { louArt } from "./louArt";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
+/* 엔진이 그리는 글의 번역. 화면(screens/editor/Editor.tsx)이 mountEditor 직전에
+ * setEditorTranslator(t) 로 꽂아 준다 — 안 꽂으면 한국어 원문에 자리표만 채운다.
+ * 언어가 바뀌면 화면이 엔진을 다시 올리므로, 여기서는 그린 것을 갱신하지 않는다. */
+type Tr = (s: string, v?: Record<string, string | number>) => string;
+const fillVars = (s: string, v?: Record<string, string | number>) =>
+  v ? s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? String(v[k]) : m)) : s;
+let tr: Tr = fillVars;
+export function setEditorTranslator(fn: Tr | null): void {
+  tr = fn || fillVars;
+}
+
 export interface EditorOpen {
   /** 열 작품. 비면 목업(샘플)이다 — 원본이 `?run=` 없이 열었을 때와 같다. */
   runId?: string;
@@ -95,19 +106,19 @@ export function mountEditor(
   const START_CREDIT = 1240;
 
   const BUBBLES = [
-    ["normal",    "일반",    "여기 앉아도 돼?"],
-    ["shout",     "외침",    "비켜!!"],
-    ["whisper",   "속삭임",  "…아무한테도 말하지 마."],
-    ["thought",   "속마음",  "이건 좀 아닌데."],
-    ["narration", "나레이션", "그날 밤, 아무도 잠들지 못했다."],
-    ["flash",     "회상",    "그때도 이랬지."],
+    ["normal",    tr("일반"),    tr("여기 앉아도 돼?")],
+    ["shout",     tr("외침"),    tr("비켜!!")],
+    ["whisper",   tr("속삭임"),  tr("…아무한테도 말하지 마.")],
+    ["thought",   tr("속마음"),  tr("이건 좀 아닌데.")],
+    ["narration", tr("나레이션"), tr("그날 밤, 아무도 잠들지 못했다.")],
+    ["flash",     tr("회상"),    tr("그때도 이랬지.")],
   ];
   // 꼬리를 가질 수 있는 말풍선. 나레이션은 상자라서 꼬리가 없고(화자가 없다),
   // 회상은 흐려지는 테두리가 그 자리를 대신한다.
   const TAILED = new Set(["normal", "shout", "whisper", "thought"]);
 
   const STICKERS = ["💦", "❤️", "✨", "💢", "❗", "❓", "🌟", "🎵", "⚡", "💀", "😳", "🔥"];
-  const SFX = ["쿵", "우당탕", "스윽", "두근", "촤악", "번쩍", "탁", "위이잉—"];
+  const SFX = ["쿵", "우당탕", "스윽", "두근", "촤악", "번쩍", "탁", "위이잉—"].map(s => tr(s));
 
   let data = null;
   // gaps: 장 뒤의 여백을 사람이 고친 값 {장 번호: 0~3}. 콘티 값을 덮어쓴다.
@@ -148,8 +159,8 @@ export function mountEditor(
     const el = document.getElementById("savedNote");
     if (!el) return;
     el.dataset.state = stateName;
-    el.textContent = stateName === "saving" ? "저장하는 중…"
-                   : stateName === "fail" ? "저장하지 못했습니다 — 연결을 확인해 주세요 (이 브라우저에는 남아 있습니다)"
+    el.textContent = stateName === "saving" ? tr("저장하는 중…")
+                   : stateName === "fail" ? tr("저장하지 못했습니다 — 연결을 확인해 주세요 (이 브라우저에는 남아 있습니다)")
                    : "";
   }
   let pushT = null, pushing = false, pushDirty = false;
@@ -241,7 +252,7 @@ export function mountEditor(
   function paintLedger() {
     const ul = $("#ledgerList");
     if (!state.ledger.length) {
-      ul.innerHTML = `<li class="ledger-empty">아직 쓴 크레딧이 없습니다.</li>`;
+      ul.innerHTML = `<li class="ledger-empty">${tr("아직 쓴 크레딧이 없습니다.")}</li>`;
       return;
     }
     ul.innerHTML = state.ledger.map(x =>
@@ -281,15 +292,16 @@ export function mountEditor(
     $("#edTitle").textContent = data.title;
     // 한 컬럼 머리에 들어가야 해서 한 줄로 줄인다 — 한 장에 몇 컷인지는 그림을
     // 보면 바로 아는 것이라, 여기서까지 셀 필요가 없다.
-    $("#edMeta").textContent =
-      `${data.character} · ${ep}화 · ${data.scenes.length}장 ` +
-      `${data.scenes.reduce((n, s) => n + s.cuts.length, 0)}컷`;
+    $("#edMeta").textContent = tr("{character} · {ep}화 · {scenes}장 {cuts}컷", {
+      character: data.character, ep, scenes: data.scenes.length,
+      cuts: data.scenes.reduce((n, s) => n + s.cuts.length, 0),
+    });
     // 그림체를 안 적어 둔 run 이 있다 — 빈 값을 그대로 이으면 "로맨스 판타지 · "
     // 처럼 꼬리만 남는다.
     $("#edGenre").textContent = [data.genre, data.style_label].filter(Boolean).join(" · ");
     $("#edEpisode").textContent = data.title;
     $("#edLogline").textContent = data.logline;
-    $("#edFootNote").textContent = `여기까지가 ${ep}화입니다.`;
+    $("#edFootNote").textContent = tr("여기까지가 {ep}화입니다.", { ep });
     paintEpTabs();
 
     // 장과 장 사이의 **진짜 여백**을 여기서도 보여 준다.
@@ -320,7 +332,7 @@ export function mountEditor(
     host.hidden = false;
     host.innerHTML = eps.map(n =>
       `<button type="button" class="ep-tab" data-ep="${n}"` +
-      `${n === cur ? ' aria-current="true"' : ""}>${n}화</button>`).join("");
+      `${n === cur ? ' aria-current="true"' : ""}>${tr("{n}화", { n })}</button>`).join("");
     $$(".ep-tab", host).forEach(b => b.addEventListener("click", () => {
       if (b.getAttribute("aria-current") === "true") return;
       openRun(RUN_ID, Number(b.dataset.ep) || 1);
@@ -340,7 +352,7 @@ export function mountEditor(
    * 쓰는 눈금에 없는 값이 생겨서, 다시 구울 때 맞출 기준이 없어진다.
    */
 
-  const GAP_NAMES = ["붙임", "한 박자", "쉼", "크게 쉼"];
+  const GAP_NAMES = ["붙임", "한 박자", "쉼", "크게 쉼"].map(s => tr(s));
 
   function gapScale(step) {
     const t = (data && data.gap_scale) || {};
@@ -360,7 +372,7 @@ export function mountEditor(
     const step = gapStep(s);
     return `<div class="scene-gap" data-gap="${s.no}"
         style="padding-top:${(gapScale(step) * 100).toFixed(2)}%"
-        title="끌어서 여백을 고칩니다 — 내려받는 파일도 이만큼 벌어집니다">
+        title="${tr("끌어서 여백을 고칩니다 — 내려받는 파일도 이만큼 벌어집니다")}">
         <span data-gap-label>${GAP_NAMES[step]}</span>
         <div class="gap-steps">${GAP_NAMES.map((n, i) =>
           `<button type="button" class="gap-dot${i === step ? " is-on" : ""}"
@@ -419,16 +431,16 @@ export function mountEditor(
         ? ` style="width:${((+s.width) * 100).toFixed(2)}%;margin-left:auto;margin-right:auto"`
         : ""}>
       <div class="scene-head">
-        <span class="scene-no">${s.no}번째 장</span>
-        <span>컷 ${cuts}</span>
+        <span class="scene-no">${tr("{n}번째 장", { n: s.no })}</span>
+        <span>${tr("컷 {cuts}", { cuts })}</span>
         <span class="ver" data-ver>v${st.ver}</span>
-        <span class="flag" data-nobub ${st.noBubble ? "" : "hidden"}>말풍선 없음</span>
+        <span class="flag" data-nobub ${st.noBubble ? "" : "hidden"}>${tr("말풍선 없음")}</span>
       </div>
 
       <div class="stage-wrap" data-wrap style="aspect-ratio:${s.w}/${s.h}">
         <!-- width/height 를 박아 자리를 미리 잡는다. 안 그러면 lazy 이미지가
              뜨기 전까지 높이가 0 이라 카드가 납작해졌다가 튄다. -->
-        <img src="${rawImg(s)}" alt="${s.no}번째 장" width="${s.w}" height="${s.h}" loading="lazy">
+        <img src="${rawImg(s)}" alt="${tr("{n}번째 장", { n: s.no })}" width="${s.w}" height="${s.h}" loading="lazy">
         <div class="overlay" data-overlay></div>
       </div>
 
@@ -436,7 +448,7 @@ export function mountEditor(
 
       <div class="scene-tools">
         <button type="button" class="btn btn-quiet btn-sm" data-act="regen">
-          다시 그리기${RUN_ID ? "" : ` <span class="cost">−${COST.regen} C</span>`}
+          ${tr("다시 그리기")}${RUN_ID ? "" : ` <span class="cost">−${COST.regen} C</span>`}
         </button>
       </div>
 
@@ -472,7 +484,7 @@ export function mountEditor(
   function setActive(no) {
     activeScene = no;
     $$(".scene").forEach(el => el.classList.toggle("is-active", +el.dataset.scene === no));
-    $("#activeSceneLabel").textContent = `${no}번째 장`;
+    $("#activeSceneLabel").textContent = tr("{n}번째 장", { n: no });
   }
 
   /* ------------------------------------------------------------------ 다시 그리기
@@ -530,10 +542,10 @@ export function mountEditor(
   function askRegen(no, btn, cost) {
     askCtx = { no, btn, cost };
     const st = sc(no);
-    $("#regenAskTitle").textContent = `${no}번째 장 다시 그리기`;
+    $("#regenAskTitle").textContent = tr("{n}번째 장 다시 그리기", { n: no });
     $("#regenAskSub").textContent = RUN_ID
-      ? "이 장만 새로 굽습니다. 지금 그림은 지난 판으로 남아서 언제든 되돌릴 수 있습니다."
-      : "샘플이라 실제로 그리지는 않습니다 — 화면만 흉내 냅니다.";
+      ? tr("이 장만 새로 굽습니다. 지금 그림은 지난 판으로 남아서 언제든 되돌릴 수 있습니다.")
+      : tr("샘플이라 실제로 그리지는 않습니다 — 화면만 흉내 냅니다.");
     // 샘플에서는 굽지 않으니 비용 경고도 띄우지 않는다 — 바로 위 줄에
     // "실제로 그리지는 않습니다" 라고 써 놓고 밑에서 비용을 경고하면 말이 어긋난다.
     $(".ask-warn").hidden = !RUN_ID;
@@ -583,25 +595,25 @@ export function mountEditor(
     // 아무 말도 안 적는 사람이 대부분이라, 고른 항목도 같이 적는다.
     const picked = (body.tags || [])
       .map(id => (sceneTags.find(t => t.id === id) || {}).label).filter(Boolean);
-    const what = [body.textless ? "글자 없이" : "글자 포함",
+    const what = [body.textless ? tr("글자 없이") : tr("글자 포함"),
                   ...picked, body.feedback].filter(Boolean);
 
     const veil = document.createElement("div");
     veil.className = "regen-veil";
-    veil.innerHTML = `<div class="spin"></div><div data-veil-msg>${no}번째 장을 다시 그리는 중…<br>
+    veil.innerHTML = `<div class="spin"></div><div data-veil-msg>${tr("{n}번째 장을 다시 그리는 중…", { n: no })}<br>
       <small class="veil-what">${esc(what.join(" · ").slice(0, 90))}</small></div>`;
     wrap.append(veil);
 
     if (!RUN_ID) {
       // 목업 — 서버가 없다. 크레딧 흉내와 기다리는 모습만.
-      if (state.credit < cost) { veil.remove(); return toast("크레딧이 모자랍니다. (목업이라 충전은 없습니다)"); }
-      spend(cost, `${no}번째 장 다시 그리기`, btn);
+      if (state.credit < cost) { veil.remove(); return toast(tr("크레딧이 모자랍니다. (목업이라 충전은 없습니다)")); }
+      spend(cost, tr("{n}번째 장 다시 그리기", { n: no }), btn);
       setTimeout(() => {
         veil.remove();
         st.ver += 1; save();
         $("[data-ver]", el).textContent = `v${st.ver}`;
         $("[data-nobub]", el).hidden = !st.noBubble;
-        toast(`목업입니다 — 실제 작품을 열면 여기서 진짜로 다시 그립니다.`);
+        toast(tr("목업입니다 — 실제 작품을 열면 여기서 진짜로 다시 그립니다."));
       }, 1800 + Math.random() * 900);
       return;
     }
@@ -618,7 +630,7 @@ export function mountEditor(
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body) });
       job = await res.json();
-      if (!res.ok) throw new Error(job.error || "시작하지 못했습니다");
+      if (!res.ok) throw new Error(job.error || tr("시작하지 못했습니다"));
     } catch (err) {
       veil.remove(); btn.disabled = false;
       return toast(err.message);
@@ -631,18 +643,18 @@ export function mountEditor(
       try { s = await (await fetch(`${API}/regens/${job.id}`)).json(); }
       catch { continue; }                       // 잠깐 끊겨도 다음 번에 이어진다
       if (msg && s.note) msg.innerHTML =
-        `${no}번째 장을 다시 그리는 중…<br><small class="veil-what">${esc(s.note.slice(0, 90))}</small>`;
+        `${tr("{n}번째 장을 다시 그리는 중…", { n: no })}<br><small class="veil-what">${esc(s.note.slice(0, 90))}</small>`;
       if (s.status === "done") {
         veil.remove();
         bustScene(no);
         paintVersions(no, s.versions);
-        toast(`${no}번째 장을 다시 그렸습니다`);
+        toast(tr("{n}번째 장을 다시 그렸습니다", { n: no }));
         break;
       }
       if (s.status === "error" || s.status === "cancelled") {
         // 실패해도 원래 그림은 서버가 되돌려 놓는다. 화면은 그대로 두면 된다.
         veil.remove();
-        toast(s.error || "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
+        toast(s.error || tr("다시 그리지 못했습니다 — 원래 그림은 그대로입니다"));
         break;
       }
     }
@@ -669,19 +681,19 @@ export function mountEditor(
     }
     if (!versions || !versions.length) { slot.innerHTML = ""; return; }
     const cur = `
-      <span class="ver-thumb is-current" title="지금 걸린 그림">
+      <span class="ver-thumb is-current" title="${tr("지금 걸린 그림")}">
         <img src="${API}/runs/${encodeURIComponent(RUN_ID)}/page/${no}?raw=1&w=160${epq('&')}&t=${sceneBust[no] || 0}"
-             alt="지금 그림" loading="lazy">
-        <span class="ver-label">지금</span>
+             alt="${tr("지금 그림")}" loading="lazy">
+        <span class="ver-label">${tr("지금")}</span>
       </span>`;
     const past = versions.map(v => `
-      <button type="button" class="ver-thumb js-revert" data-v="${v.version}" title="이 판으로 바꾸기">
+      <button type="button" class="ver-thumb js-revert" data-v="${v.version}" title="${tr("이 판으로 바꾸기")}">
         <img src="${API}/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/versions/${v.version}?w=160${epq('&')}"
              alt="v${v.version}" loading="lazy">
         <span class="ver-label">v${v.version}</span>
       </button>`).join("");
     slot.innerHTML =
-      `<span class="ver-strip-label">지난 판 — 눌러서 바꿔 보기</span>
+      `<span class="ver-strip-label">${tr("지난 판 — 눌러서 바꿔 보기")}</span>
        <div class="ver-strip">${cur}${past}</div>`;
     $$(".js-revert", slot).forEach(b => b.addEventListener("click", async () => {
       b.disabled = true;
@@ -691,10 +703,10 @@ export function mountEditor(
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ version: Number(b.dataset.v) }) });
         const out = await res.json();
-        if (!res.ok) throw new Error(out.error || "되돌리지 못했습니다");
+        if (!res.ok) throw new Error(out.error || tr("되돌리지 못했습니다"));
         bustScene(no);
         paintVersions(no, out.versions);
-        toast(`${no}번째 장을 v${b.dataset.v} 로 바꿨습니다`);
+        toast(tr("{n}번째 장을 v{v} 로 바꿨습니다", { n: no, v: b.dataset.v }));
       } catch (err) { toast(err.message); }
       b.disabled = false;
     }));
@@ -724,7 +736,7 @@ export function mountEditor(
         ? `<svg class="bub-svg" aria-hidden="true"></svg>` +
           `<div class="bub bub-${it.variant}" style="font-size:${it.size}px"${ed}>${esc(it.text)}</div>` +
           (TAILED.has(it.variant)
-            ? `<div class="handle handle-tail" data-tail-drag title="꼬리를 끌어 말하는 사람을 가리키세요"></div>`
+            ? `<div class="handle handle-tail" data-tail-drag title="${tr("꼬리를 끌어 말하는 사람을 가리키세요")}"></div>`
             : "")
         : it.type === "sticker"
           ? `<div class="stk" style="font-size:${it.size * 2.2}px">${it.text}</div>`
@@ -733,8 +745,9 @@ export function mountEditor(
       data-type="${it.type}"
       style="left:${it.x}%; top:${it.y}%; width:${it.w}%; transform:rotate(${it.rot}deg)">
       ${inner}
-      <div class="handle handle-rot" data-rot title="돌리기"></div>
-      <div class="handle handle-size" title="폭"></div></div>`;
+      <div class="handle handle-rot" data-rot title="${tr("돌리기")}"></div>
+      ${["nw", "ne", "sw", "se"].map(c =>
+        `<div class="handle handle-size handle-${c}" data-corner="${c}" title="${tr("크기")}"></div>`).join("")}</div>`;
   }
 
 
@@ -750,33 +763,54 @@ export function mountEditor(
     const v = it.variant;
     const round = v !== "narration";
 
-    /* **어디서 줄을 바꿀지 모양을 보고 고른다.**
-       한 줄로 다 들어간다고 그냥 두면 대사가 길수록 풍선이 국수 가락이 된다.
-       몇 가지 폭으로 놓아 보고 가로세로 비가 가장 보기 좋은 것을 고른다 —
-       굽는 쪽(overlay.py 의 _fit)과 같은 규칙이라 화면과 결과가 안 갈린다. */
+    /* **끈 폭이 곧 풍선 폭이다.**
+
+       예전에는 글에 맞춰 풍선을 도로 줄였다 — 몇 가지 폭으로 놓아 보고
+       가로세로 비가 제일 나은 것을 골랐다. 그래서 손잡이를 끌어도 안 커지거나
+       오히려 작아지고, 풍선은 그대론데 글자만 커 보이는 일이 생겼다(실제 제보).
+       크기를 정하는 손잡이인데 그 값을 프로그램이 도로 덮어쓰면 고장 난 것과
+       같다. 지금은 끈 폭을 그대로 쓰고, 글은 그 안에서 줄바꿈될 뿐이다.
+
+       굽는 쪽(overlay.py 의 _fit, BubbleArtist.fit)도 같은 규칙이라 화면과
+       내려받은 그림이 안 갈린다. */
     const full = el.clientWidth || bub.offsetWidth;
     const target = v === "narration" ? 4.0 : 2.4;
-    let best = null;
-    for (const f of [1, 0.82, 0.68, 0.56, 0.46, 0.38]) {
-      bub.style.maxWidth = `${Math.max(40, full * f)}px`;
-      const bw = bub.offsetWidth, bh = bub.offsetHeight;
-      const score = Math.abs(bw / Math.max(1, bh) - target);
-      if (!best || score < best.score) best = { score, f, bw, bh };
-    }
-    bub.style.maxWidth = `${Math.max(40, full * best.f)}px`;
 
     /* 타원은 글 상자보다 √2 만큼 크다. 글 상자를 그대로 타원 크기로 쓰면
        네 모서리가 선 밖으로 나간다 — 그걸 피하려고 폭을 키우다 보니 예전
        풍선이 그렇게 넓적했다. */
     const spread = round ? Math.SQRT2 / (v === "shout" ? 0.8 : 1) : 1;
-    const w = best.bw, h = best.bh;
+
+    // 글 상자는 타원 안에 들어가야 하니 그만큼 좁다.
+    const w = Math.max(20, full / spread);
+    bub.style.maxWidth = "none";
+    bub.style.width = `${w}px`;
+    const h = bub.offsetHeight;
+
     const sw = 2.5;
-    const ew = w * spread, eh = h * spread;
-    const cx = w / 2, cy = h / 2, a = (ew - sw) / 2, b = (eh - sw) / 2;
+    const ew = full;
+    // 글이 짧다고 납작한 국수 가락이 되지는 않게 가장 낮은 높이를 둔다.
+    const eh = Math.max(h * spread, full / target);
+
+    /* **고른 표시와 손잡이는 <u>보이는 풍선</u>을 감싸야 한다.**
+       예전에는 항목 상자가 글 상자 크기였다 — 타원은 그보다 √2 만큼 크니까,
+       점선 네모가 풍선 한가운데를 가로지르고 손잡이도 거기 앉았다("말풍선
+       중앙에 점이 있다"는 제보). 항목 상자를 타원에 맞추고 글을 그 안
+       가운데로 밀면, 네 모서리 점이 풍선 모서리에 그대로 온다. */
+    // 서랍 미리보기(.prev)는 제 칸이 이미 글을 가운데 두므로 건드리지 않는다 —
+    // 여기서 높이를 박으면 서랍 칸이 통째로 늘어난다.
+    if (el.classList.contains("item")) {
+      el.style.height = `${eh}px`;
+      bub.style.marginLeft = `${(full - w) / 2}px`;
+      bub.style.marginTop = `${(eh - h) / 2}px`;
+    }
+    const cx = bub.offsetLeft + w / 2, cy = bub.offsetTop + h / 2;
+    const a = (ew - sw) / 2, b = (eh - sw) / 2;
 
     let body;
     if (v === "narration") {
-      body = `<rect x="${sw / 2}" y="${sw / 2}" width="${w - sw}" height="${h - sw}" rx="3"/>`;
+      body = `<rect x="${cx - ew / 2 + sw / 2}" y="${cy - eh / 2 + sw / 2}"`
+           + ` width="${ew - sw}" height="${eh - sw}" rx="3"/>`;
     } else if (v === "shout") {
       const pts = [];
       for (let i = 0; i < 24; i++) {
@@ -822,20 +856,31 @@ export function mountEditor(
        선은 덮여 사라지고 바깥 윤곽만 제 굵기로 남는다. 굽는 쪽도 같은 결과를
        낸다(overlay.py 는 덩어리를 깎아서 윤곽을 얻는다). */
     const pad = 400;                    // 밖으로 뻗은 꼬리가 잘리지 않게
-    svg.setAttribute("viewBox", `${-pad} ${-pad} ${w + pad * 2} ${h + pad * 2}`);
+    const vw = Math.max(full, w) + pad * 2, vh = Math.max(eh, h) + pad * 2;
+    svg.setAttribute("viewBox", `${-pad} ${-pad} ${vw} ${vh}`);
     svg.style.left = `${-pad}px`; svg.style.top = `${-pad}px`;
-    svg.style.width = `${w + pad * 2}px`; svg.style.height = `${h + pad * 2}px`;
+    svg.style.width = `${vw}px`; svg.style.height = `${vh}px`;
     svg.innerHTML = `<g class="bs bs-${v}">${tail}${body}</g>`
                     + `<g class="bs-fill">${tail}${body}</g>`;
 
     const grip = $(".handle-tail", el);
     if (grip) {
-      // %로 두면 풍선 상자(글에 맞춰 줄어든 것)가 아니라 <b>항목 상자</b>가
-      // 기준이 돼서, 손잡이가 꼬리 끝에서 비켜 앉는다.
-      grip.style.left = `${bub.offsetLeft + cx - ew / 2 + ew * it.tx / 100}px`;
-      grip.style.top = `${bub.offsetTop + cy - eh / 2 + eh * it.ty / 100}px`;
+      // %로 두면 항목 상자가 기준이 돼서 손잡이가 꼬리 끝에서 비켜 앉는다.
+      // cx·cy 는 이미 글 상자가 놓인 자리를 셈에 넣은 값이다.
+      grip.style.left = `${cx - ew / 2 + ew * it.tx / 100}px`;
+      grip.style.top = `${cy - eh / 2 + eh * it.ty / 100}px`;
       grip.classList.toggle("is-off", it.tail === "none");
     }
+  }
+
+  /* 글자 크기를 <b>다시 그리지 않고</b> 고친다 — 폭을 끄는 동안 매 순간
+     부르는 자리라, 여기서 항목을 통째로 새로 그리면 끌던 손을 놓치게 된다.
+     배수는 itemHTML 이 처음 심는 것과 같아야 한다. */
+  function paintFont(el, it) {
+    const t = $(".bub, .stk, .sfx", el);
+    if (!t) return;
+    const mul = it.type === "sticker" ? 2.2 : it.type === "sfx" ? 2 : 1;
+    t.style.fontSize = `${it.size * mul}px`;
   }
 
   function itemOf(el) {
@@ -935,11 +980,16 @@ export function mountEditor(
       const tailing = ev.target.dataset.tailDrag !== undefined;
       const resizing = !rot && !tailing && ev.target.classList.contains("handle");
       const sx = ev.clientX, sy = ev.clientY;
-      const ox = it.x, oy = it.y, ow = it.w, orot = it.rot;
+      const ox = it.x, oy = it.y, ow = it.w, orot = it.rot, osize = it.size;
       const otx = it.tx, oty = it.ty;
-      // 꼬리 자리는 <b>풍선 자기 크기</b>에 대한 %다 — 그림이 커지거나 폭을
-      // 바꿔도 같은 곳을 계속 가리킨다.
-      const bubBox = tailing ? $(".bub", el).getBoundingClientRect() : null;
+      // 꼬리 자리는 <b>타원 크기</b>에 대한 %다 — 그림이 커지거나 폭을 바꿔도
+      // 같은 곳을 계속 가리킨다. 항목 상자가 곧 타원 상자다(paintShape).
+      const ellipse = tailing ? el.getBoundingClientRect() : null;
+      // 어느 모서리를 잡았나. 왼쪽을 잡으면 오른쪽 변이, 위를 잡으면 아래
+      // 변이 제자리에 머물러야 한다 — 안 그러면 늘릴 때마다 풍선이 기어간다.
+      const corner = ev.target.dataset.corner || "se";
+      const west = corner[1] === "w", north = corner[0] === "n";
+      const oh = el.offsetHeight;
       // 돌리기는 요소의 **가운데를 축으로** 잰다 — 끄는 점과 가운데가 이루는
       // 각이 곧 기울기다. 손이 가는 대로 돌아간다.
       const r0 = el.getBoundingClientRect();
@@ -966,21 +1016,31 @@ export function mountEditor(
         }
         if (Math.abs(dx) > 0.4 || Math.abs(dy) > 0.4) moved = true;
         if (tailing) {
-          // 화면 픽셀 -> 타원 상자 % (위 paintShape 와 같은 기준)
-          const sp = it.variant === "narration" ? 1
-            : Math.SQRT2 / (it.variant === "shout" ? 0.8 : 1);
           it.tx = Math.max(-300, Math.min(400,
-            otx + (e.clientX - sx) / Math.max(1, bubBox.width * sp) * 100));
+            otx + (e.clientX - sx) / Math.max(1, ellipse.width) * 100));
           it.ty = Math.max(-300, Math.min(400,
-            oty + (e.clientY - sy) / Math.max(1, bubBox.height * sp) * 100));
+            oty + (e.clientY - sy) / Math.max(1, ellipse.height) * 100));
           // 꼬리를 끌어내면 꺼 뒀던 꼬리가 다시 켜진다 — 다시 켜려고 딴 데를
           // 찾아갈 필요가 없다.
           if (it.tail === "none") it.tail = "left";
           paintShape(el);
           return;
         }
-        if (resizing) it.w = Math.max(5, Math.min(96, ow + dx));
-        else { it.x = Math.max(-6, Math.min(98, ox + dx)); it.y = Math.max(-4, Math.min(97, oy + dy)); }
+        if (resizing) {
+          // 왼쪽 모서리는 <b>바깥으로</b> 끌어야 커진다.
+          it.w = Math.max(5, Math.min(96, ow + (west ? -dx : dx)));
+          /* **글자도 폭을 따라 큰다.** 크기 손잡이인데 풍선만 커지고 글은
+             그대로면, 늘릴수록 글이 작아 보인다(실제 제보). 통째로 키우고
+             줄이는 것이 손잡이가 뜻하는 바다. */
+          it.size = Math.max(6, Math.min(70, Math.round(osize * it.w / Math.max(1, ow))));
+          paintFont(el, it);
+          // 잡지 않은 쪽 변은 제자리에 둔다. 폭은 바로 알 수 있고, 높이는
+          // 글이 다시 흐른 뒤에야 알 수 있으니 모양을 그린 다음에 잰다.
+          if (west) it.x = ox + (ow - it.w);
+          el.style.width = `${it.w}%`;
+          paintShape(el, it);
+          if (north) it.y = oy + (oh - el.offsetHeight) / box.height * 100;
+        } else { it.x = Math.max(-6, Math.min(98, ox + dx)); it.y = Math.max(-4, Math.min(97, oy + dy)); }
         el.style.left = `${it.x}%`; el.style.top = `${it.y}%`; el.style.width = `${it.w}%`;
       };
       const up = () => {
@@ -1069,7 +1129,7 @@ export function mountEditor(
     document.querySelector(".ed")?.classList.toggle("dock-open-on", open);
     if (scrim) scrim.hidden = !open;
     if (opener) opener.setAttribute("aria-expanded", open ? "true" : "false");
-    if (close) close.setAttribute("aria-label", "도구 닫기");
+    if (close) close.setAttribute("aria-label", tr("도구 닫기"));
   }
 
   /* 크레딧 내역은 **다른 모드**다 — 그림에 얹는 자리가 아니라 얼마 썼는지
@@ -1144,7 +1204,7 @@ export function mountEditor(
     const cur = tailOf(it);
     const tailBtn = (v, label) =>
       `<button type="button" class="ib${cur === v ? " is-on" : ""}" data-tail="${v}"` +
-      ` title="꼬리 ${label}">${label}</button>`;
+      ` title="${tr("꼬리 {label}", { label })}">${label}</button>`;
     // 글을 고치는 중에는 「완료」 하나만 낸다. 나머지(크기·꼬리·복제·삭제)는
     // 다 쓰고 나서 할 일이라, 키보드가 화면을 반쯤 덮은 상태에서 같이
     // 늘어놓으면 정작 눌러야 할 것이 안 보인다.
@@ -1154,18 +1214,18 @@ export function mountEditor(
     // 키보드에 가려서 안 보인다 — 그대로 두면 다 쓰고 나서 말풍선을 옮길
     // 수가 없다(글 고치는 중에는 끄는 것이 글자 고르기라, 그건 일부러 그렇다).
     if (editing) {
-      return b("done", "완료", "다 썼습니다 — 이제 옮기거나 크기를 고칠 수 있습니다",
+      return b("done", tr("완료"), tr("다 썼습니다 — 이제 옮기거나 크기를 고칠 수 있습니다"),
                "is-done");
     }
     return [
-      b("smaller", "ᴀ⁻", "글자 작게"),
-      b("bigger", "ᴀ⁺", "글자 크게"),
+      b("smaller", "ᴀ⁻", tr("글자 작게")),
+      b("bigger", "ᴀ⁺", tr("글자 크게")),
       tailed ? `<span class="ib-sep"></span>` +
                tailBtn("left", "◀") + tailBtn("right", "▶") + tailBtn("none", "✕") : "",
       `<span class="ib-sep"></span>`,
-      b("front", "⬆", "맨 앞으로"),
-      b("dup", "⧉", "복제"),
-      b("del", "🗑", "삭제", "is-danger"),
+      b("front", "⬆", tr("맨 앞으로")),
+      b("dup", "⧉", tr("복제")),
+      b("del", "🗑", tr("삭제"), "is-danger"),
     ].join("");
   }
 
@@ -1281,7 +1341,7 @@ export function mountEditor(
       if (!data) return;
       if (!RUN_ID) {                          // 목업은 저장할 곳이 없다
         h.textContent = data ? data.title : want;
-        return toast("샘플입니다 — 제목은 실제 작품에서만 바뀝니다.");
+        return toast(tr("샘플입니다 — 제목은 실제 작품에서만 바뀝니다."));
       }
       if (want === (data.title || "") || saving) { h.textContent = data.title; return; }
       saving = true;
@@ -1291,12 +1351,12 @@ export function mountEditor(
           body: JSON.stringify({ episode: EPISODE, title: want }),
         });
         const out = await res.json();
-        if (!res.ok) throw new Error(out.error || "저장하지 못했습니다");
+        if (!res.ok) throw new Error(out.error || tr("저장하지 못했습니다"));
         // 서버가 돌려준 것이 **앞으로 보일 이름**이다 (비웠으면 원래 제목).
         data.title = out.title;
         h.textContent = out.title;
         $("#edTitle").textContent = out.title;
-        toast("제목을 바꿨습니다");
+        toast(tr("제목을 바꿨습니다"));
       } catch (err) {
         h.textContent = data.title;           // 못 바꿨으면 화면도 되돌린다
         toast(err.message);
@@ -1365,23 +1425,22 @@ export function mountEditor(
      그것을 알아야 하고, 그건 한 줄에 안 들어간다. */
   function showBaked(out) {
     const box = $("#bakeResult");
-    if (!box) return toast(`${out.scenes.length}장을 구웠습니다`);
+    if (!box) return toast(tr("{n}장을 구웠습니다", { n: out.scenes.length }));
     const gone = (out.missing || []).length
-      ? `<p class="bake-warn">아직 안 그려진 장 ${out.missing.join(", ")}번은 빠졌습니다.</p>` : "";
+      ? `<p class="bake-warn">${tr("아직 안 그려진 장 {list}번은 빠졌습니다.", { list: out.missing.join(", ") })}</p>` : "";
     const skip = (out.skipped || []).length
-      ? `<p class="bake-warn">못 그린 것: ${out.skipped.map(esc).join(", ")}`
-        + ` — 이모지 글꼴이 없는 서버에서는 스티커가 빠집니다.</p>` : "";
+      ? `<p class="bake-warn">${tr("못 그린 것: {list} — 이모지 글꼴이 없는 서버에서는 스티커가 빠집니다.", { list: out.skipped.map(esc).join(", ") })}</p>` : "";
     box.innerHTML = `
       <div class="bake-head">
-        <b>${out.scenes.length}장을 구웠습니다</b>
-        <span>${out.width}×${out.height}px · 얹은 것 ${out.items}개</span>
-        <span class="bake-wm">내려받는 파일에는 컷마다 LORE 표시가 붙고, 맨 아래에 브랜드 띠가 한 줄 덧대집니다.</span>
+        <b>${tr("{n}장을 구웠습니다", { n: out.scenes.length })}</b>
+        <span>${tr("{w}×{h}px · 얹은 것 {n}개", { w: out.width, h: out.height, n: out.items })}</span>
+        <span class="bake-wm">${tr("내려받는 파일에는 컷마다 LORE 표시가 붙고, 맨 아래에 브랜드 띠가 한 줄 덧대집니다.")}</span>
       </div>
       ${gone}${skip}
       <div class="bake-acts">
-        <a class="btn btn-primary btn-sm" href="${atApi(out.url)}" download>내려받기</a>
-        <a class="btn btn-quiet btn-sm" href="${atApi(out.url)}" target="_blank" rel="noopener">새 탭에서 보기</a>
-        <button type="button" class="btn btn-quiet btn-sm" id="bakeClose">닫기</button>
+        <a class="btn btn-primary btn-sm" href="${atApi(out.url)}" download>${tr("내려받기")}</a>
+        <a class="btn btn-quiet btn-sm" href="${atApi(out.url)}" target="_blank" rel="noopener">${tr("새 탭에서 보기")}</a>
+        <button type="button" class="btn btn-quiet btn-sm" id="bakeClose">${tr("닫기")}</button>
       </div>`;
     box.hidden = false;
     $("#bakeClose").addEventListener("click", () => { box.hidden = true; });
@@ -1412,16 +1471,16 @@ export function mountEditor(
     const thumb = r.cover_page
       ? `<img class="work-thumb" alt=""`
         + ` src="${API}/runs/${encodeURIComponent(r.run_id)}/page/${r.cover_page}`
-        + `?w=160&ep=${r.cover_episode || 1}">`
+        + `?w=320&ep=${r.cover_episode || 1}">`
       : `<span class="work-thumb is-empty" aria-hidden="true">🖼</span>`;
     // "2화" 만 쓰면 **2편이 있다**는 뜻인지 **2화를 보고 있다**는 뜻인지 갈린다.
     // 여러 편이면 범위로 적어서(1~3화) 그 애매함을 없앤다.
     const eps = r.episodes || [];
-    const epLabel = eps.length > 1 ? `${eps[0]}~${eps[eps.length - 1]}화`
-                                   : `${eps[0] || 1}화`;
+    const epLabel = eps.length > 1 ? tr("{a}~{b}화", { a: eps[0], b: eps[eps.length - 1] })
+                                   : tr("{n}화", { n: eps[0] || 1 });
     const sub = [
       epLabel,
-      r.page_count ? `${r.page_count}장` : "",
+      r.page_count ? tr("{n}장", { n: r.page_count }) : "",
       r.genre || "",
     ].filter(Boolean).join(" · ");
     // 그 작품에서 **실제로 그려진 첫 회차**를 연다. 1화를 못 그리고 2화만 남은
@@ -1430,7 +1489,7 @@ export function mountEditor(
       + ` data-ep="${eps[0] || 1}"`
       + `${on ? ' aria-current="true"' : ""}>`
       + thumb
-      + `<span><span class="work-name">${esc(r.character || "이름 없음")}`
+      + `<span><span class="work-name">${esc(r.character || tr("이름 없음"))}`
       + `${r.title ? " · " + esc(r.title) : ""}</span>`
       + `<span class="work-sub">${esc(sub)}</span></span></button>`;
   }
@@ -1449,22 +1508,22 @@ export function mountEditor(
     if (runs === null) {
       host.innerHTML = `<div class="lou-note">`
         + `<img src="${louArt("error")}" alt="" aria-hidden="true">`
-        + `<p>목록을 불러오지 못했습니다.<br>서버가 떠 있는지 봐 주세요.</p></div>`;
+        + `<p>${tr("목록을 불러오지 못했습니다.")}<br>${tr("서버가 떠 있는지 봐 주세요.")}</p></div>`;
       return;
     }
     if (!runs.length) {
       // 목록을 아예 지우지 않는다 — 자리가 사라지면 기능이 없는 것과 구별이 안 된다.
       host.innerHTML = `<div class="lou-note">`
         + `<img src="${louArt("empty")}" alt="" aria-hidden="true">`
-        + `<p>아직 만든 웹툰이 없어요.</p></div>`;
+        + `<p>${tr("아직 만든 웹툰이 없어요.")}</p></div>`;
       return;
     }
     host.innerHTML = runs.map(r => workCard(r, current)).join("")
       + `<button type="button" class="work-card" data-run=""`
       + `${current ? "" : ' aria-current="true"'}>`
       + `<span class="work-thumb is-empty" aria-hidden="true">◇</span>`
-      + `<span><span class="work-name">샘플 보기</span>`
-      + `<span class="work-sub">목업 — 서버 없이도 열립니다</span></span></button>`;
+      + `<span><span class="work-name">${tr("샘플 보기")}</span>`
+      + `<span class="work-sub">${tr("목업 — 서버 없이도 열립니다")}</span></span></button>`;
 
     host.addEventListener("click", e => {
       const card = e.target.closest(".work-card");
@@ -1527,9 +1586,9 @@ export function mountEditor(
       const html =
         `<div class="lou-note">` +
         `<img src="${louArt("error")}" alt="" aria-hidden="true"><p>` +
-        (RUN_ID ? `${EPISODE}화를 열지 못했어요.<br>그 회차에 그려진 장이 있어야 합니다.`
-                : `목업 데이터를 읽지 못했어요.`) +
-        `<br><br>위 <b>작품</b>에서 다른 작품을 골라 보세요.` +
+        (RUN_ID ? `${tr("{ep}화를 열지 못했어요.", { ep: EPISODE })}<br>${tr("그 회차에 그려진 장이 있어야 합니다.")}`
+                : tr("목업 데이터를 읽지 못했어요.")) +
+        `<br><br>${tr("위 <b>작품</b>에서 다른 작품을 골라 보세요.")}` +
         `</p></div>`;
       // 원본은 무대가 없으면 body 를 덮었다. 여기서는 앱 안이라 그러면 Lore
       // 앱까지 사라진다 — 무대가 없으면 아무 데도 안 쓴다.
@@ -1610,18 +1669,18 @@ export function mountEditor(
     // 저장과 굽기를 한 번에 보낸다. 따로 왕복하면 그 사이에 실패했을 때 화면에
     // 보이는 것과 구운 것이 갈린다.
     $("#bakeBtn")?.addEventListener("click", async () => {
-      if (!RUN_ID) return toast("샘플에는 구울 그림이 없습니다. 실제 작품을 열어 주세요.");
+      if (!RUN_ID) return toast(tr("샘플에는 구울 그림이 없습니다. 실제 작품을 열어 주세요."));
       const btn = $("#bakeBtn");
       btn.disabled = true;
       const was = btn.textContent;
-      btn.textContent = "굽는 중…";
+      btn.textContent = tr("굽는 중…");
       clearTimeout(pushT);
       try {
         const res = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/bake${epq()}`,
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(overlayPayload()) });
         const out = await res.json();
-        if (!res.ok) throw new Error(out.error || "굽지 못했습니다");
+        if (!res.ok) throw new Error(out.error || tr("굽지 못했습니다"));
         showBaked(out);
         // 굽자마자 바로 받는다 (pullFile 머리말 참고)
         pullFile(atApi(out.url), `${RUN_ID}.png`);
