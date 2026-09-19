@@ -28,7 +28,6 @@ class PageStoreTest {
 
     private static final Clock FIXED =
             Clock.fixed(Instant.parse("2026-09-06T00:00:00Z"), ZoneOffset.UTC);
-    private static final String CDN = "https://lorecomic.com";
 
     private final List<WebtoonPage> rows = new ArrayList<>();
     /* 자리를 옮기는 일은 S3 를 만지므로 여기서 볼 것이 아니다(PrivateArtTest 가
@@ -61,7 +60,7 @@ class PageStoreTest {
             }
             return p;
         });
-        store = new PageStore(repo, art, CDN, FIXED);
+        store = new PageStore(repo, art, false, FIXED);
     }
 
     private static PageStore.Upload up(int page, int width, String key) {
@@ -74,7 +73,7 @@ class PageStoreTest {
         assertThat(store.record("run-1", List.of(up(2, 1080, "images/webtoon/abc.jpg")))).isEqualTo(1);
 
         assertThat(store.urlOf("run-1", 2, 1080))
-                .isEqualTo("https://lorecomic.com/images/webtoon/abc.jpg");
+                .isEqualTo("/images/webtoon/abc.jpg");
     }
 
     @Test
@@ -128,30 +127,30 @@ class PageStoreTest {
     }
 
     @Test
-    @DisplayName("읽어 주는 곳을 안 정했으면 같은 도메인의 상대경로로 준다")
-    void CDN_이_비면_상대경로() {
+    @DisplayName("그림 주소에는 도메인을 안 붙인다 — 언제나 상대경로다")
+    void 언제나_상대경로() {
         WebtoonPageRepository repo = mock(WebtoonPageRepository.class);
         when(repo.findByRunIdAndPageNoAndWidth(anyString(), anyInt(), anyInt()))
                 .thenReturn(Optional.of(WebtoonPage.of(
                         "run-1", 2, 1080, "images/webtoon/abc.jpg", 1, Instant.now())));
 
-        assertThat(new PageStore(repo, art, "", FIXED).urlOf("run-1", 2, 1080))
+        assertThat(new PageStore(repo, art, false, FIXED).urlOf("run-1", 2, 1080))
                 .isEqualTo("/images/webtoon/abc.jpg");
     }
 
     @Test
-    @DisplayName("읽어 주는 곳 끝의 빗금은 하나로 — 두 겹이 되면 주소가 깨진다")
-    void 빗금_정리() {
+    @DisplayName("로컬(presign-locally)에서는 잠깐 열리는 서명 주소로 준다")
+    void 로컬은_서명주소() {
         WebtoonPageRepository repo = mock(WebtoonPageRepository.class);
         when(repo.findByRunIdAndPageNoAndWidth(anyString(), anyInt(), anyInt()))
                 .thenReturn(Optional.of(WebtoonPage.of(
                         "run-1", 2, 1080, "images/webtoon/abc.jpg", 1, Instant.now())));
+        when(art.ready()).thenReturn(true);
+        when(art.temporaryUrl("images/webtoon/abc.jpg")).thenReturn("https://s3.example/abc?sig=1");
 
-        assertThat(new PageStore(repo, art, "https://cdn.example.com///", FIXED)
-                .urlOf("run-1", 2, 1080))
-                .isEqualTo("https://cdn.example.com/images/webtoon/abc.jpg");
+        assertThat(new PageStore(repo, art, true, FIXED).urlOf("run-1", 2, 1080))
+                .isEqualTo("https://s3.example/abc?sig=1");
     }
-
     @Test
     @DisplayName("올라와 있는 작품인지 물을 수 있다")
     void 올라왔나() {
