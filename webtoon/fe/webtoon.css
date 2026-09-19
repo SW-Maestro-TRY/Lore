@@ -214,6 +214,10 @@ main:has(> .wt) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
 
 @media (max-width: 767px) {
   .wt-page { padding: 18px 16px 24px; }
+  /* 폰에는 빵부스러기가 없다 — 위쪽 얇은 줄(MobileTop)이 위치를 말한다.
+     모바일 아트보드 21장 어디에도 빵부스러기가 없다. 화면마다 따로 숨기면
+     새 화면에서 빠뜨려 위치 표시가 둘이 된다(캐릭터 만들어보기가 그랬다). */
+  .wt .crumb { display: none; }
   .wt .mtop {
     height: 56px; display: flex; align-items: center; justify-content: space-between;
     padding: 0 16px; border-bottom: 1px solid rgba(15, 51, 63, 0.08); background: #fff;

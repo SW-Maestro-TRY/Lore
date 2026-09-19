@@ -137,6 +137,8 @@ const dict: Dict = {
   "액션": { en: "Action", ja: "アクション", zh: "动作" },
   "개그": { en: "Comedy", ja: "ギャグ", zh: "搞笑" },
   "일상": { en: "Slice of life", ja: "日常", zh: "日常" },
+  "사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.": { en: "With a photo, or with a description alone.", ja: "写真からでも、説明だけでも作れます。", zh: "有照片可以，只有描述也可以。" },
+  "사진으로도, 설명만으로도 만들 수 있어요.": { en: "From a photo, or a description alone.", ja: "写真からでも、説明だけでも。", zh: "用照片，或只用描述。" },
 };
 
 registerDict(dict);

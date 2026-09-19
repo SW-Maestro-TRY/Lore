@@ -132,7 +132,7 @@
 .wt .wt-prog-mbars, .wt .wt-prog-mchips, .wt .wt-prog-mnote { display: none; }
 
 @media (max-width: 767px) {
-  .wt .wt-prog-crumb, .wt .wt-prog-acts, .wt .wt-prog-railfoot > .btn, .wt .wt-prog-steps, .wt .wt-prog-fail .btn { display: none; }
+  .wt .wt-prog-acts, .wt .wt-prog-railfoot > .btn, .wt .wt-prog-steps, .wt .wt-prog-fail .btn { display: none; }
   .wt .wt-prog-mbars { display: flex; gap: 4px; padding: 10px 16px 0; }
   .wt .wt-prog-mbars i { height: 4px; flex: 1; border-radius: 2px; background: rgba(15, 51, 63, 0.15); }
   .wt .wt-prog-mbars i.on { background: var(--ink); }

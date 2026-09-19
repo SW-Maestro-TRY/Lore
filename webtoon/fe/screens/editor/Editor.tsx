@@ -33,17 +33,29 @@ function creditLine(t: T, a: Allowance | null): string {
   return t("한 편 {cost}크레딧 · 보유 {balance}C", { cost: a.credit_cost, balance: a.balance ?? 0 });
 }
 
-export default function Editor({ runId, go }: { runId: string; go: Go }) {
+export default function Editor({ runId, go, authStatus = "loading" }:
+  { runId: string; go: Go; authStatus?: string }) {
+  /* 로그인 확인이 **끝난 뒤에** 셋 중 하나로 간다.
+     - loading  : 아직 모른다 → 아무것도 안 그린다. 여기서 엔진을 올리면
+                  곧 잠금 화면으로 바뀌며 엔진이 잡고 있던 노드가 통째로
+                  뜯겨 나가 터진다(editorCore 의 render 가 null 을 잡는다).
+                  반대로 잠금 화면을 먼저 그리면 로그인한 사람에게 번쩍인다.
+     - anonymous: 막는다.
+     - 그 밖("authenticated" · "unknown") : 연다. 서버가 한 번 더 본다
+                  (RunController.mustOwn). */
+  const locked = authStatus === "anonymous";
+  const authenticated = authStatus !== "loading" && !locked;
   const { lang, t } = useLang();
   const episode = 1;
 
   useEffect(() => {
+    if (!authenticated) return;                 // 잠긴 화면에서는 엔진을 안 올린다
     /* 주소에 회차 칸이 없다(lib/nav.ts) — 다른 작품으로 건너갈 때는 1화로 연다.
        언어(lang)가 바뀌면 엔진을 다시 올린다 — 엔진은 그린 글을 스스로 갱신하지 않는다. */
     setEditorTranslator(t);
     const dispose = mountEditor({ runId, episode }, (r) => go("editor", { run: r }));
     return () => { dispose(); setEditorTranslator(null); };
-  }, [runId, go, lang, t]);
+  }, [runId, go, lang, t, authenticated]);
 
   /* 페이지 썸네일과 장면 한 줄은 완성본 API 에서 받는다 — 엔진은 자기 데이터를
      밖으로 내주지 않는다. */
@@ -90,6 +102,27 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
   };
 
   const activeNote = info?.pages.find((p) => p.no === active)?.caption || "";
+
+  /* 편집실은 로그인해야 쓴다 (서버도 같은 규칙 — RunController.mustOwn).
+     게스트 브라우저 uid 는 같은 컴퓨터를 쓰는 사람끼리 겹치고 지우면 사라져서
+     "고칠 권리"를 걸기에 약하다. 로그인하면 이 브라우저로 만든 작품이 그대로
+     계정에 따라온다(POST /my/link). */
+  if (authStatus === "loading") {
+    return <div className="wt-wrap wt-page wt-ed-gate" aria-busy="true" />;
+  }
+
+  if (locked) {
+    return (
+      <div className="wt-wrap wt-page wt-ed-gate">
+        <h2>{t("편집실은 로그인하고 쓸 수 있어요")}</h2>
+        <p className="muted">{t("로그인하면 이 브라우저로 만든 작품도 그대로 따라옵니다. 위쪽 로그인 단추를 눌러 주세요.")}</p>
+        <div className="wt-ed-gate-acts">
+          <button type="button" className="btn btn-w" onClick={() => go("result", { run: runId })}>{t("완성본 보기")}</button>
+          <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기")}</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="ed wt-ed">
@@ -153,10 +186,6 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
         </aside>
 
         <main className="ed-stage wt-ed-stage" id="stageCol">
-          <div className="ed-stage-head wt-ed-stagehead">
-            <p className="eyebrow wt-ed-genre" id="edGenre" />
-            <p className="ed-logline wt-ed-logline" id="edLogline" />
-          </div>
           <div className="ep-tabs wt-ed-eptabs" id="edEpTabs" hidden />
           <div id="scenes" className="wt-ed-scenes" />
           <p className="ed-foot-note wt-ed-footnote" id="edFootNote" />
