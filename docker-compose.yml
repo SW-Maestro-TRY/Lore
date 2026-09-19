@@ -1,0 +1,127 @@
+# Lore 개발용 self-contained 스택 (base).
+#
+# 같은 compose 가 개발자 노트북과 dev EC2 양쪽에서 돈다 — 차이는 .env 하나뿐이다.
+#   노트북 : docker compose --env-file infra/dev/.env up
+#   dev EC2: docker compose -f docker-compose.yml -f docker-compose.dev-ec2.yml up -d
+#            (override 가 nginx(80/443·TLS)를 얹는다)
+#
+# RDS→postgres, S3→minio 로 통째로 대체해 외부 AWS 자원 없이 앱 전체가 뜬다.
+# 환경변수 목록·노트북/박스 차이는 infra/dev/.env.example 참고.
+
+name: lore-dev
+
+services:
+  # ── DB (RDS 대체) ────────────────────────────────────────────────
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: lore                     # application.yml 의 jdbc URL(.../lore)과 같아야 한다
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"                         # 로컬에서 DB 를 직접 들여다볼 때만 필요
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d lore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── 오브젝트 스토리지 (S3 대체) ──────────────────────────────────
+  minio:
+    image: quay.io/minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+      # ★ presigned URL 이 프록시(nginx) 뒤에서도 맞물리게 "공개 주소"를 알려준다.
+      #   이 주소로 서명이 계산되므로 브라우저가 실제로 닿는 주소와 같아야 한다.
+      #   노트북=http://localhost:9000 · dev EC2=https://dev.lorecomic.com
+      MINIO_SERVER_URL: ${S3_PUBLIC_URL}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "9000:9000"                         # S3 API (presigned 업로드/서빙)
+      - "9001:9001"                         # 웹 콘솔
+
+  # ── 버킷 초기화 (한 번 돌고 끝) ──────────────────────────────────
+  # 콘텐츠 버킷을 만들고, 이미지가 공개로 읽히게 한다(운영의 CloudFront /images/* 공개와 동일).
+  minio-init:
+    image: quay.io/minio/mc:latest
+    depends_on:
+      - minio
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      CONTENT_BUCKET: ${CONTENT_BUCKET}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        until mc alias set local http://minio:9000 "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY"; do
+          echo 'minio 기다리는 중...'; sleep 2;
+        done;
+        mc mb --ignore-existing local/"$$CONTENT_BUCKET";
+        mc anonymous set download local/"$$CONTENT_BUCKET";
+        echo "버킷 준비 완료: $$CONTENT_BUCKET"
+
+  # ── 백엔드 (Spring Boot) ─────────────────────────────────────────
+  app:
+    build:
+      context: .                            # 도메인 소스가 레포 전체에 흩어져 있어 컨텍스트=루트
+      dockerfile: infra/dev/Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      LORE_ENV: dev
+      # DB — 컨테이너 이름 postgres 로 붙는다(SPRING_DATASOURCE_URL 이 yml 기본값을 덮는다)
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lore
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # S3(MinIO) — endpoint 를 채우면 S3Config 가 경로 방식으로 MinIO 에 붙는다
+      APP_S3_ENDPOINT: ${S3_PUBLIC_URL}
+      CONTENT_S3_BUCKET: ${CONTENT_BUCKET}  # application.yml 의 app.s3.content-bucket 이 읽는 이름
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      # DefaultCredentialsProvider 가 이 두 환경변수를 집어 MinIO 루트 키로 쓴다
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
+      # zzal 생성 OpenAI 키(비우면 가짜 모드 — 돈 안 나감)
+      ZZAL_OPENAI_API_KEY: ${OPENAI_KEY:-}
+      # ★ 실제 OpenAI 호출 스위치(app.zzal.generation.real). 이 값을 안 넘기면 키가 있어도
+      #   application.yml 기본값(false)이라 가짜 모드로 뜬다. .env 의 ZZAL_GENERATION_REAL 로 켠다.
+      ZZAL_GENERATION_REAL: ${ZZAL_GENERATION_REAL:-false}
+      # 파이썬 후처리 실제 실행(돈 안 남). 슬림 JRE 이미지엔 numpy/scipy/PIL 이 없어 켜면 기동이 막힌다 → 기본 꺼짐.
+      ZZAL_REAL_POSTPROCESS: ${ZZAL_REAL_POSTPROCESS:-false}
+      # 메일 계정(선택). 비워도 뜨도록 빈 기본값을 준다 — 안 주면 yml 의 ${MAIL_USERNAME}
+      # 플레이스홀더가 안 풀려 기동이 막힌다.
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      # http(노트북)에서는 Secure 쿠키가 저장 안 되므로 false. https(박스)는 .env 에서 true.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # 메일 계정을 안 주면 SMTP 헬스 인디케이터가 연결 실패로 DOWN → /actuator/health 가 503 이 된다.
+      # 개발 스택은 메일을 안 쓰므로 이 헬스 검사만 끈다(앱 기능·다른 헬스는 그대로).
+      MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
+    ports:
+      - "8080:8080"
+
+  # ── 프론트엔드 (Next.js standalone) ──────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: infra/dev/Dockerfile.web
+      args:
+        # base(노트북)엔 nginx 가 없어 Next rewrite 로 /api → app:8080 프록시를 굽는다.
+        # dev EC2 는 nginx 가 /api 를 먼저 잡으므로 이 값이 쓰이지 않는다(무해).
+        API_PROXY: http://app:8080
+    depends_on:
+      - app
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  miniodata:

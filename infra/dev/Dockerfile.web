@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1
+#
+# Lore 프론트엔드(Next.js) 개발용 이미지 — standalone 출력.
+# 컨텍스트는 레포 루트다: npm workspaces 이고 화면 코드가 도메인 fe/(common·webtoon·zzal·trailer)에
+# 흩어져 있어(tsconfig paths @zzal 등) 빌드에 레포 전체가 필요하다.
+# CI 와 같은 방식: npm ci && npm run build → .next/standalone + static + public 을 묶는다.
+
+# ── 빌드 단계 ──
+FROM node:22-alpine AS build
+WORKDIR /workspace
+
+# prebuild 훅(webtoon/fe/sync-landing.sh)이 bash·rsync 를 쓴다.
+RUN apk add --no-cache bash rsync
+
+# 의존성 먼저 — 매니페스트만 복사해 npm ci 를 레이어로 캐시.
+COPY package.json package-lock.json ./
+COPY apps/web/package.json ./apps/web/package.json
+RUN npm ci
+
+# 나머지 소스(도메인 fe/ 와 sync-landing 이 읽는 webtoon/ai/assets 포함).
+COPY . .
+
+# base(노트북)엔 nginx 가 없어 Next rewrite 로 /api → app:8080 프록시를 굽는다.
+# rewrites 는 빌드 때 routes-manifest 에 박히므로 이 값은 빌드 인자여야 한다.
+# dev EC2 는 nginx 가 /api 를 먼저 잡으므로 이 값이 쓰이지 않는다(무해).
+ARG API_PROXY=http://app:8080
+ENV API_PROXY=$API_PROXY
+RUN npm run build --workspace lore-web
+
+# ── 실행 단계 ──
+FROM node:22-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+# standalone 출력은 모노레포 루트 기준이라 server.js 가 apps/web/ 아래에 생긴다.
+# 정적 자원(.next/static)과 public 은 standalone 에 자동 포함되지 않아 따로 복사한다.
+COPY --from=build /workspace/apps/web/.next/standalone ./
+COPY --from=build /workspace/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build /workspace/apps/web/public ./apps/web/public
+EXPOSE 3000
+CMD ["node", "apps/web/server.js"]

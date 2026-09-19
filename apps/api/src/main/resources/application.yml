@@ -121,6 +121,11 @@ app:
 
   s3:
     region: ${AWS_REGION:ap-northeast-2}
+    # 선택적 S3 엔드포인트 재지정. 비어 있으면(기본) 실제 AWS S3 — 지금까지의 동작 그대로.
+    # 값이 있으면 그 주소를 S3 로 쓴다. 개발 도커의 MinIO(S3 호환) 대체용.
+    #   예) http://localhost:9000 (노트북) · https://dev.lorecomic.com (dev EC2, nginx 경유)
+    # 채우면 S3Config 가 경로 방식(host/bucket/key)을 강제한다(MinIO 필수).
+    endpoint: ${APP_S3_ENDPOINT:}
     content-bucket: ${CONTENT_S3_BUCKET:}
     presign-expiry-minutes: ${S3_PRESIGN_EXPIRY:10}
 
