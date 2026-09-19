@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -185,6 +186,32 @@ NO_TEXT_CLAUSE = (
     "only; every balloon and every word is composited on afterwards.")
 
 
+# 자리의 무게 — **코드가 굴린다.**
+#
+# 모델에게 "다양하게 골라라" 라고 적어도 매번 무난한 중간으로 수렴한다
+# (2026-09-19 실측: 같은 입력으로 두 번 뽑았더니 둘 다 비슷한 무게의 조연이
+# 나왔다. 프롬프트에 "한쪽으로 몰지 마라" 를 적어 둔 상태였다). 뽑는 재미는
+# 낙차에서 오고, 낙차는 주사위가 만든다.
+#
+# 자리의 **내용**은 여기 적지 않는다 — 세계관마다 자리 목록을 손으로 적으면
+# 그 소재가 다른 장르로 새고, 목록 밖의 것이 안 나온다. 무게만 주고 그 무게에
+# 맞는 자리가 이 세계관에서 무엇인지는 모델이 정한다.
+ROLE_TIERS = {
+    "중심": "이야기의 한가운데. 이 웹툰이 이 인물을 따라간다.",
+    "곁": "중심 옆의 비중 있는 자리. 이름이 불리고 대사가 있다.",
+    "스쳐감": "한두 컷 나오고 마는 자리. 이름이 없거나 불리지 않는다.",
+    "뜬금": "그 세계관에 분명히 있을 법한데, 아무도 주인공이라고 생각하지 않는 자리.",
+}
+
+# 결과를 보면서 조절한다. 지금 값은 첫 어림이다.
+TIER_WEIGHTS = {"중심": 25, "곁": 35, "스쳐감": 30, "뜬금": 10}
+
+
+def roll_role_tier() -> str:
+    keys = list(TIER_WEIGHTS)
+    return random.choices(keys, weights=[TIER_WEIGHTS[k] for k in keys], k=1)[0]
+
+
 def load_worlds() -> dict:
     try:
         return json.loads(WORLDS_FILE.read_text(encoding="utf-8")).get("presets") or {}
@@ -203,7 +230,6 @@ def resolve_world(world: str) -> tuple[str, str, str]:
     if text:
         return "", text, text
     if presets:
-        import random
         key = random.choice(sorted(presets))
         one = presets[key]
         return key, str(one.get("label") or key), str(one.get("text") or "")
@@ -256,7 +282,8 @@ def gate_panel_spec(spec: dict) -> list[str]:
 
 
 def panel_spec_of(name: str, description: str, photos: list[Path],
-                  world_label: str, world_text: str) -> tuple[dict, dict]:
+                  world_label: str, world_text: str,
+                  tier: str | None = None) -> tuple[dict, dict]:
     lines = ["# 이번 입력", ""]
     lines.append(f"이름: {name.strip()}" if name.strip()
                  else "이름: (없음 — 네가 짓는다)")
@@ -275,6 +302,8 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
             lines.append(world_text)
     else:
         lines += ["", "세계관: (없음 — 네가 정한다)"]
+    tier = tier or roll_role_tier()
+    lines += ["", f"이번에 맡을 자리의 무게: {tier}", f"  {ROLE_TIERS[tier]}"]
     lines += ["", "그림체 목록:"]
     lines += [f"  - {k}: {v}" for k, v in PANEL_STYLES.items()]
     prompt = load_prompt("panel_prompt") + "\n\n---\n\n" + "\n".join(lines)
@@ -282,19 +311,16 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
     call = llm.Call("SHEET")
     log(f"[한 컷] {call.describe()} 로 사양을 적습니다…")
     images = llm.load_images([str(p) for p in photos]) if photos else None
-    # 사양이 모자라면 **그림을 그리기 전에** 한 번 더 묻는다. 그림 값(64원)이
-    # 나간 뒤에 반전·대사가 비어 있으면 "카드 없는 카드" 가 된다 — 그림은 있는데
-    # 공유 링크가 404 고 말풍선·운명 칸이 빈다. 두 번째도 모자라면 멈춘다.
-    metas = []
-    for attempt in (1, 2):
-        text, meta = call(prompt, images=images, temperature=0.8 if attempt == 1 else 0.5)
-        metas.append(meta)
-        spec = parse_panel_spec(text)
-        bad = gate_panel_spec(spec)
-        if not bad:
-            return spec, metas
-        log(f"[한 컷] 사양에 빠진 것({attempt}/2): " + " · ".join(bad))
-    raise SystemExit("한 컷 사양이 두 번 다 모자랍니다 — 그림은 그리지 않습니다.")
+    # 한 번만 묻는다. 예전에는 사양이 모자라면 한 번 더 물었는데, 글 값이 매번
+    # 두 배로 나갔다. 모자라면 그 자리에서 멈춘다 — 그림 값은 나가지 않는다.
+    text, meta = call(prompt, images=images, temperature=0.8)
+    metas = [meta]
+    spec = parse_panel_spec(text)
+    spec["role_tier"] = tier
+    bad = gate_panel_spec(spec)
+    if bad:
+        raise SystemExit("한 컷 사양이 모자랍니다 — 그림은 그리지 않습니다: " + " · ".join(bad))
+    return spec, metas
 
 
 def panel_prompt(spec: dict, style_text: str) -> str:
@@ -354,6 +380,7 @@ def run_panel(args) -> int:
         "world_label": spec["world_label"] or world_label,
         "genre": spec["genre_word"],
         "role": spec["role"],
+        "role_tier": spec.get("role_tier", ""),
         "twist": spec["twist"],
         "quote": spec["quote"],
         "fate": spec["fate"],
