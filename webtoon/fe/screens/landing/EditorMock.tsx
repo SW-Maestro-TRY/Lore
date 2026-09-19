@@ -62,7 +62,7 @@ export default function EditorMock({ feat, s, height, who }: { feat: 0 | 1 | 2; 
           <div className="wt-landing-bubble" style={{ right: px(18), top: px(24), maxWidth: px(250), borderRadius: px(14), padding: `${px(8)}px ${px(12)}px`, fontSize: px(12.5) }}>
           </div>
           <div className="wt-landing-cap" style={{ padding: `${px(14)}px ${px(16)}px`, fontSize: px(13.5), fontWeight: 700 }}>
-            {t("몽이는 이 로맨스 웹툰에서, 강아지인 채로 악역 영애예요")}
+            {t("몽이는 이 로맨스 판타지 웹툰에서 아주 악마같은 악역 영애예요")}
           </div>
         </div>
       </div>

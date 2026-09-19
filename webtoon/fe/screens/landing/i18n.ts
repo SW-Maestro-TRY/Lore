@@ -78,10 +78,10 @@ const dict: Dict = {
   "웹툰 한 컷": { en: "A webtoon panel", ja: "ウェブトゥーンの1コマ", zh: "漫画的一格" },
   "로판": { en: "Rom-fantasy", ja: "ロマファン", zh: "浪漫奇幻" },
   "멍!": { en: "Woof!", ja: "ワン！", zh: "汪！" },
-  "몽이는 이 로맨스 웹툰에서, 강아지인 채로 악역 영애예요": {
-    en: "In this romance webtoon, Mongi is the villainess, and still a puppy",
-    ja: "モンイはこのロマンスウェブトゥーンで、子犬のまま悪役令嬢です",
-    zh: "在这部爱情漫画里，蒙伊保持小狗的样子，成了反派千金",
+  "몽이는 이 로맨스 판타지 웹툰에서 아주 악마같은 악역 영애예요": {
+    en: "In this romance-fantasy webtoon, Mongi is a devilishly wicked villainess",
+    ja: "モンイはこのロマンスファンタジーウェブトゥーンで、まるで悪魔のような悪役令嬢です",
+    zh: "在这部浪漫奇幻漫画里，蒙伊是个像恶魔一样凶狠的反派千金",
   },
   "이 캐릭터로 1화 보기": { en: "See episode 1 with this character", ja: "このキャラクターで第1話を見る", zh: "用这个角色看第 1 话" },
 
@@ -110,6 +110,7 @@ const dict: Dict = {
   /* ---- 마지막 CTA ---- */
   "당신의 이야기를 기다리고 있어요": { en: "Your story is waiting", ja: "あなたの物語を待っています", zh: "等待着你的故事" },
   "당신의 이야기를\n기다리고 있어요": { en: "Your story\nis waiting", ja: "あなたの物語を\n待っています", zh: "等待着\n你的故事" },
+  "만들러가기": { en: "Start making", ja: "作りに行く", zh: "去创作" },
 
   /* ---- FAQ ---- */
   "자주 묻는 것": { en: "FAQ", ja: "よくある質問", zh: "常见问题" },
