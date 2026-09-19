@@ -757,7 +757,6 @@ def choose(directions: list[dict], pick: int | None) -> dict:
 # (2026-09-17, 사용자 지적으로 확인).
 _WORLD_KEYWORDS = {
     # 합성 장르 — '판타지' 보다 먼저
-    "game_system": ("게임 판타지", "게임판타지", "랭커", "가상현실"),
     "romance_novel": ("로맨스 판타지", "로판", "빙의", "회귀", "영애"),
     "hunter_gate": ("헌터", "게이트"),
     "academy_magic": ("마법학교", "마법", "학원"),
@@ -766,11 +765,8 @@ _WORLD_KEYWORDS = {
     "omegaverse_grade": ("오메가버스", "옴버"),
     "hero_city": ("히어로", "능력자", "빌런"),
     "post_disaster": ("재난", "좀비", "아포칼립스"),
-    "royal_court": ("궁정", "왕궁", "무협"),
     "thriller_record": ("스릴러", "서스펜스"),
     "action_contract": ("액션", "격투"),
-    "comedy_mixup": ("개그", "코미디"),
-    "daily_korea": ("일상",),
     # 넓은 쪽은 맨 아래 — 위에서 아무것도 안 걸렸을 때만 쓴다
     "fantasy_continent": ("판타지",),
 }
