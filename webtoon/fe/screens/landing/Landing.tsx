@@ -5,12 +5,32 @@
  * 히어로 위에 알약 하나만 둔다. */
 import "./i18n";
 import Link from "next/link";
+import localFont from "next/font/local";
 import { useEffect, useState } from "react";
 import * as api from "../../lib/api";
 import { LangSwitch, useT, type T } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
 import { IconDownload, IconEdit, IconPlus, IconRetry, IconShare, IconUser } from "../../ui/Icons";
 import EditorMock, { CUT_IMG, PAGE_IMG, SHEET_IMG } from "./EditorMock";
+
+/* 글꼴 시험 (2026-09-19, 온보딩 화면에만) — 제목은 Gmarket Sans, 나머지는
+ * SUIT. 다른 화면(위자드·편집실 등)은 그대로 Noto Sans KR 이다 — 이 두 훅이
+ * 만드는 className 을 이 파일 바깥에서 안 쓰면 다른 화면에 안 번진다. */
+const gmarketSans = localFont({
+  src: "../../assets/fonts/GmarketSansBold.woff2",
+  weight: "700",
+  variable: "--font-landing-title",
+});
+const suit = localFont({
+  src: [
+    { path: "../../assets/fonts/SUIT-Regular.woff2", weight: "400" },
+    { path: "../../assets/fonts/SUIT-Medium.woff2", weight: "500" },
+    { path: "../../assets/fonts/SUIT-SemiBold.woff2", weight: "600" },
+    { path: "../../assets/fonts/SUIT-Bold.woff2", weight: "700" },
+    { path: "../../assets/fonts/SUIT-ExtraBold.woff2", weight: "800" },
+  ],
+  variable: "--font-landing-body",
+});
 
 /* 04 완성 칸의 표지. 캔버스가 쓰는 그림과 같은 파일이다(예시 작품
  * 「가면 아래의 조건」의 표지) — 실행 id 를 코드에 박아 두면 그 작품이
@@ -107,7 +127,7 @@ export default function Landing({ go }: { go: Go }) {
   const marqueeList = runs && runs.length ? [...runs, ...runs] : [];
 
   return (
-    <div className="wt-landing">
+    <div className={`wt-landing ${gmarketSans.variable} ${suit.variable}`}>
       {/* 히어로 */}
       <section className="wt-landing-hero">
         {job && (
@@ -218,7 +238,9 @@ export default function Landing({ go }: { go: Go }) {
 
       {/* 니즈 카드 둘 */}
       <section className="wt-landing-needs">
-        <h2>{phone ? <>{t("이야기가 웹툰이 되는 과정,")}<br />{t("LORE 하나로 충분합니다")}</> : <>{t("이미지 한장이 웹툰이 되는 과정,")}<br />{t("LORE 하나로 충분합니다.")}</>}</h2>
+        <h2>{phone
+          ? <>{t("이야기가 웹툰이 되는 과정,")}<br /><span className="wt-landing-hl">LORE</span>{t(" 하나로 충분합니다")}</>
+          : <>{t("이미지 한장이 웹툰이 되는 과정,")}<br /><span className="wt-landing-hl">LORE</span>{t(" 하나로 충분합니다.")}</>}</h2>
         <div className="wt-landing-needs-row">
           <a href={hrefOf("create")} className={`wt-landing-need${need === 0 ? " on" : ""}`}
              onMouseEnter={() => setNeed(0)} onClick={needTo(0)}>
@@ -263,7 +285,7 @@ export default function Landing({ go }: { go: Go }) {
       <section className="wt-landing-promise">
         <h2><span className="wt-landing-hl">{t("웹툰 1화를 위해서")}</span><br />{t("LORE가 약속 하는 세 가지")}</h2>
         <div className="wt-landing-promise-grid">
-          <EditorMock feat={feat} s={phone ? 0.8 : 1} height={phone ? 360 : 560} who={t("몽이")} />
+          <EditorMock feat={feat} s={phone ? 0.8 : 1} height={phone ? 360 : 560} who={t("세이엘")} />
           <div className="wt-landing-promise-list">
             {PROMISES.map((p, i) => (
               <div key={p.n} className={`wt-landing-promise-item${feat === i ? " on" : ""}`}
