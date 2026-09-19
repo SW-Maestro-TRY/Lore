@@ -15,12 +15,11 @@ import {
   cancelJob, decideSheet, jobPageUrl, notifyByEmail, pickDirection, readJob, retryDirections,
   sheetImageUrl, type NhDirection, type NhJob, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
-import { louArt, louStage, LOU_IDLE } from "../../lib/louArt";
+import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
 import { IconArrow, IconBack, IconChevronDown, IconChevronUp, IconClose, IconRetry, IconZoom } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import LouPlay from "./LouPlay";
-import ProgressLog from "./ProgressLog";
 import "./i18n";
 import "./Progress.css";
 
@@ -83,7 +82,14 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const [busy, setBusy] = useState(false);
   const [actErr, setActErr] = useState("");
   const stopped = useRef(false);
-  const startedAt = useRef(Date.now()); // 진행 기록의 mm:ss 기준 — 화면을 연 시각
+
+  /* 퍼센트를 계단식으로 툭 바뀌게 두지 않고, 서버가 준 값까지 눈에 보이게
+   * 세면서 올린다 — 3초 폴링 사이에도 화면이 살아 있는 것처럼 느끼게 하려는
+   * 것. 실제 값보다 앞서가진 않는다(오르는 방향으로만, 서버가 확인해 준
+   * 목표치까지만). */
+  const [shownPct, setShownPct] = useState(0);
+  const shownPctRef = useRef(0);
+  shownPctRef.current = shownPct;
 
   const pull = useCallback(async () => {
     try {
@@ -146,6 +152,23 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
   useEffect(() => { if (status === "awaiting_sheet") setSheetV((v) => v + 1); }, [status]);
   useEffect(() => {
+    const target = Math.max(0, Math.min(100, job?.pct ?? 0));
+    if (target <= shownPctRef.current) {
+      setShownPct(target);
+      return;
+    }
+    const id = setInterval(() => {
+      setShownPct((p) => {
+        if (p >= target) {
+          clearInterval(id);
+          return p;
+        }
+        return p + 1;
+      });
+    }, 35);
+    return () => clearInterval(id);
+  }, [job?.pct]);
+  useEffect(() => {
     if (status !== "awaiting_pick") { setConfirming(false); setPickN(null); }
     setTab(null);
   }, [status]);
@@ -190,10 +213,13 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   }
 
   /* ---- 루 카드 문구 ---- */
-  /* 왼쪽 위 루는 늘 같은 얼굴이다 — 여기는 상태를 알리는 자리가 아니라 놀이터로
-   * 들어가는 문이라, 걸음마다 그림이 바뀌면 누를 것으로 안 보인다. 걸음별 루는
-   * 오른쪽 화면 제목 옆에 있다(louStage). */
-  const louSrc = useMemo(() => (status === "error" ? louArt("error") : waiting ? louArt("notice") : LOU_IDLE), [status, waiting]);
+  /* 왼쪽 위 루는 지금 걸음 그림(story·sheet·art·bind)을 그대로 보여준다 —
+   * "지금 뭘 하는 중인지" 를 이 카드 하나로 알 수 있어야 한다. 그래도
+   * 누르면 놀이터로 들어간다(카드 자체가 문). */
+  const louSrc = useMemo(
+    () => (status === "error" ? louArt("error") : waiting ? louArt("notice") : louStage(job?.stage)),
+    [status, waiting, job?.stage],
+  );
   const queued = !!job?.queue && job.queue.ahead > 0;
   const louTitle = !job ? "" : waiting ? t("잠깐 봐 주세요")
     : queued ? t("앞에 대기자가 많아…")
@@ -279,7 +305,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         <button type="button" className="btn btn-w" onClick={() => go("landing")}>{t("홈으로 가기")}</button>
       </>
     );
-    return <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기 하며 기다리기")}</button>;
+    return <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("다른 사람 웹툰 둘러보기")}</button>;
   })();
 
   return (
@@ -317,6 +343,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <div className="txt">
                   {job ? <b>{louTitle}</b> : <b className="skeleton" style={{ width: 140, height: 18, borderRadius: 6 }} />}
                   <div className="wt-prog-bar"><i style={{ transform: `scaleX(${Math.max(2, Math.min(100, job?.pct ?? 2)) / 100})` }} /></div>
+                  {job && <span className="wt-prog-pct">{shownPct}%</span>}
                   <span className="dim">{louLine}</span>
                 </div>
               </button>
@@ -350,7 +377,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
               {job && (
                 <div className="wt-prog-railfoot">
-                  <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기 하며 기다리기")}</button>
+                  <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("다른 사람 웹툰 둘러보기")}</button>
                   {mailCard}
                 </div>
               )}
@@ -441,9 +468,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
               {pane === "play" && job && (
                 <>
-                  <div className="wt-prog-head">
-                    <h2>{t("루와 놀기")}</h2>
-                    <span className="muted lede">{t("기다리는 동안 루를 눌러 보세요.")}</span>
+                  <div className="wt-prog-head wt-prog-playhead">
+                    <h2>{t("기다리는 동안 루를 놀아주세요!")}</h2>
+                    <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("웹툰 보면서 기다리기")}</button>
                   </div>
                   <LouPlay />
                 </>
@@ -549,12 +576,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   </div>
                   <PageGrid jobId={job.id} art={art} onZoom={setZoom} />
                 </>
-              )}
-
-              {/* 탭을 바꿔도 이어지도록 화면 하나로 둔다(어느 pane 이든 안 지운다) —
-                  사람이 답할 차례(sheet·making·confirm)엔 결정할 것에 눈이 가야 하니 뺀다. */}
-              {job && !waiting && pane !== "sheet" && pane !== "making" && pane !== "confirm" && (
-                <ProgressLog stage={job.stage} say={job.say} artDone={art?.done ?? 0} artTotal={art?.total ?? 0} started={startedAt.current} />
               )}
             </div>
           </div>
