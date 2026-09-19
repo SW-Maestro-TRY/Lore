@@ -398,3 +398,57 @@ export 방식으로 대신 씀) worktree 를 팔 때 심링크할 원본부터 �
   export WEBTOON_API_KEY=$(grep '^WEBTOON_API_KEY=' <저장소 루트>/.env | cut -d= -f2-)
   ```
   (`<저장소 루트>` 는 지금 위치가 `webtoon/ai/new_harness` 면 `../../..`.)
+
+## UI/UX 스킬 정책 (2026-09-17, quickstart v5 기반)
+
+`apps/web`(webtoon 화면을 렌더링하는 Next 셸)에 UI/UX 자동화 스킬 세트를 설치했습니다
+(`.claude/skills/` — 전부 gitignore 처리됨, 팀 레포에는 안 올라감). 이 절은 **webtoon 화면
+작업에 한정**됩니다 — zzal·trailer는 각자 담당자가 별도로 정합니다.
+
+### 1. Design Authority
+
+- **Impeccable이 우선 권위**입니다. `apps/web/PRODUCT.md`(webtoon 범위로만 작성됨)가 지속되는
+  제품 맥락이고, DESIGN.md는 아직 없습니다(`/impeccable document`로 나중에 만들 수 있음).
+- `frontend-design`·`interface-design`도 설치돼 있지만, quickstart 문서는 원래 이 둘을
+  "Impeccable과 권한이 겹쳐 설치 금지"로 권고합니다 — 이번엔 멘토링 메모를 보고 그래도
+  설치했습니다. **셋이 서로 다른 방향을 제안하면 Impeccable 판단이 이깁니다.** 화면 작업을
+  시킬 때는 어느 스킬을 쓸지 명시하는 편이 충돌을 줄입니다.
+- DESIGN.md(생기면)와 실제 코드 토큰이 다르면 어느 한쪽을 자동으로 덮어쓰지 말고 Design
+  Drift로 보고합니다.
+
+### 2. Research
+
+- `ux-researcher-designer`는 실제 사용자 evidence(인터뷰·analytics·세션 리코딩·설문)가 있을
+  때만 씁니다. **지금은 그 evidence가 없습니다** — 있는 척 가상 리서치를 만들지 않고, 필요하면
+  Hypothesis로 명시합니다.
+
+### 3. Taste Lens
+
+- `design-taste-frontend`·`redesign-existing-projects`는 검증 렌즈일 뿐, 코드를 직접 고치지
+  않습니다. 실행 단위는 `docs/ux/taste-lens.md`(webtoon 전용, 다이얼 DESIGN_VARIANCE 4 /
+  MOTION_INTENSITY 2 / VISUAL_DENSITY 5로 고정 — 대화 중 추론/상향 금지)입니다.
+- 소형 작업·Operate 화면(위저드·편집실·마이페이지)의 taste read에는 적용하지 않습니다
+  (Operate는 렌즈 §3-B~E만).
+- `/impeccable critique` 앞이나 `/impeccable polish` 뒤에 taste를 두지 않습니다.
+
+### 4. Independent Validation & 예산
+
+- 중형/대형 UI 변경은 `ux-heuristics`로 독립 평가합니다. `web-design-guidelines`는 릴리스
+  준비 단계에서만 씁니다.
+- 예산: 소형 작업 Skill 호출 0 · 중형 1(ux-heuristics) · 대형 2(+shape). 자동 수정 루프는
+  검증자 실패를 합산해 최대 3회 — 넘기면 자동 반복을 멈추고 사람에게 보여줍니다.
+- 조사·검증은 가능하면 서브에이전트로 돌리고 요약만 받습니다. 스킬 `references/`는 필요한
+  절만 읽고 전체를 열지 않습니다.
+
+### 5. 산출물 로그
+
+- `docs/ux-log/`에 기능당 통합 보고서 1개(`YYYY-MM-DD-<feature>-r<n>.md`). taste 산출물은
+  `docs/ux-log/…-taste.md` 또는 `docs/ux/hypothesis-taste-*.md`.
+- `.claude/hooks/skill-log.sh`(Skill 호출 기록)·`.claude/hooks/ux-report-guard.sh`(보고서만
+  쓰고 Skill을 안 부른 경우 되돌림)가 걸려 있습니다 — 다음 세션부터 반영됩니다.
+
+### 6. 생성 이미지 에셋
+
+- 새 화면은 기본 **code-first**로 만듭니다(이미지 컴프를 먼저 생성하지 않음 — 2026-09-17
+  확정). 제품에 들어가는 생성 이미지(마스코트·배경 등)는 PRODUCT.md의 브랜드 톤(바다 팔레트)을
+  따르고, UI 프레임이나 화면 텍스트를 이미지에 굽지 않습니다.
