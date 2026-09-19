@@ -75,7 +75,6 @@ const dict: Dict = {
   },
   "다시 채워지기까지 {left}": { en: "Refills in {left}", ja: "回復まで {left}", zh: "距离补满还有 {left}" },
   "이 캐릭터로 1화 보기": { en: "See episode 1 with this character", ja: "このキャラクターで第1話を見る", zh: "用这个角色看第1话" },
-  "가입하면 하루 10번": { en: "Sign up for 10 a day", ja: "登録すると1日10回", zh: "注册后每天10次" },
 
   /* ---- PhotoResult · 웹툰 한 컷 ---- */
   "카드를 못 불러왔습니다": { en: "Couldn't load the card.", ja: "カードを読み込めませんでした。", zh: "无法加载卡片。" },
@@ -139,6 +138,7 @@ const dict: Dict = {
   "일상": { en: "Slice of life", ja: "日常", zh: "日常" },
   "사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.": { en: "With a photo, or with a description alone.", ja: "写真からでも、説明だけでも作れます。", zh: "有照片可以，只有描述也可以。" },
   "사진으로도, 설명만으로도 만들 수 있어요.": { en: "From a photo, or a description alone.", ja: "写真からでも、説明だけでも。", zh: "用照片，或只用描述。" },
+  "로그인하면 크레딧으로 이어서": { en: "Sign in to keep going with credits", ja: "ログインするとクレジットで続けられます", zh: "登录后可用积分继续" },
 };
 
 registerDict(dict);
