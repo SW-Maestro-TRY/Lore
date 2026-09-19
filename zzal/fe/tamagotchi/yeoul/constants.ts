@@ -106,15 +106,15 @@ export const CHAR_GROUPS = [
 //   · 그림은 Codex(무과금)로 그린 가상의 샘플 캐릭터(실존/기존 IP 아님)를 S3
 //     images/zzal/onboarding/ 에 올린 것이다. 로드 실패 시 색+'그림' 자리표시자로 폴백한다.
 export const GOOD_EX: ReadonlyArray<readonly [string, string, string]> = [
-  ['얼굴이 크게 나온 정면', '#E8F0E2', 'zzal/onboarding/good_front.webp'],
-  ['전신이 다 보이는 그림', '#E8F0E2', 'zzal/onboarding/good_lines.webp'],
-  ['한 마리만 · 배경 없이', '#E8F0E2', 'zzal/onboarding/good_solo.webp'],
+  ['얼굴이 크게 나온 정면', '#E8F0E2', 'zzal/onboarding/v2/good_front.webp'],
+  ['전신이 다 보이는 그림', '#E8F0E2', 'zzal/onboarding/v2/good_lines.webp'],
+  ['한 마리만 · 배경 없이', '#E8F0E2', 'zzal/onboarding/v2/good_solo.webp'],
 ];
 export const BAD_EX: ReadonlyArray<readonly [string, string, string]> = [
-  ['여러 명', '#F6E7E4', 'zzal/onboarding/bad_multi.webp'],
-  ['뒷모습', '#F6E7E4', 'zzal/onboarding/bad_back.webp'],
-  ['너무 작음', '#F6E7E4', 'zzal/onboarding/bad_small.webp'],
-  ['배경이 복잡', '#F6E7E4', 'zzal/onboarding/bad_busy.webp'],
+  ['여러 명', '#F6E7E4', 'zzal/onboarding/v2/bad_multi.webp'],
+  ['뒷모습', '#F6E7E4', 'zzal/onboarding/v2/bad_back.webp'],
+  ['너무 작음', '#F6E7E4', 'zzal/onboarding/v2/bad_small.webp'],
+  ['배경이 복잡', '#F6E7E4', 'zzal/onboarding/v2/bad_busy.webp'],
 ];
 
 /**
