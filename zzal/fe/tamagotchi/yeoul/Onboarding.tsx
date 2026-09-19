@@ -82,7 +82,11 @@ const ONE_SCREEN_STYLE = `
 .onb-one .onb-drop img{ width:96px!important; height:96px!important; }
 .onb-one .onb-exgrid{ gap:5px!important; }
 .onb-one .onb-excell{ gap:3px!important; }
-.onb-one .onb-excell > div{ aspect-ratio:auto!important; height:56px!important; }
+/* ★ 예시 카드의 3:4 를 깨지 않는다 — 예전엔 여기서 aspect-ratio:auto + height:56px 로 눌렀는데,
+   칸이 빈 자리표시자일 때는 티가 안 나다가 **진짜 예시 그림(600x800, 3:4)이 들어오자**
+   가로로 납작한 칸에 letterbox 되어 좌우가 빗금 바탕으로 크게 남았다
+   (390 실측: 칸 111x56 에 그림 41x54, 좌우 여백 34px, 칸 채움 35%).
+   세로를 아끼는 OB-10 의 목적은 높이 고정이 아니라 **그리드 폭을 줄여 비율째 축소**로 달성한다. */
 .onb-one .onb-excell > span{ font-size:10px!important; line-height:1.2!important; }
 /* ★ 학습 미사용 한 줄은 압축 대상에서 뺀다 — 자캐를 맡기는 사람이 제일 먼저 확인하는 줄이라
    여기서 한 번 더 줄이면 가장 중요한 문장이 화면에서 가장 안 읽히는 문장이 된다. */
@@ -123,7 +127,8 @@ const ONE_SCREEN_STYLE = `
   .onb-one .zt-v2col{ gap:13px!important; }
   .onb-one .zt-v2frame{ width:min(148px,38vw)!important; }
   .onb-one .zt-v2h2{ margin-bottom:8px!important; }
-  .onb-one .onb-excell > div{ height:50px!important; }
+  /* 세로가 좁으면 카드를 눌러 납작하게 만들지 말고 **그리드 폭을 줄여** 3:4 인 채로 같이 줄인다. */
+  .onb-one .onb-exgrid{ width:72%!important; margin-inline:auto!important; }
   .onb-one[data-step="char"] .onb-body{ gap:7px!important; }
   .onb-one .onb-cgroup{ padding:7px 9px!important; gap:5px!important; }
   .onb-one .onb-cgroup input{ padding:7px 10px!important; }
