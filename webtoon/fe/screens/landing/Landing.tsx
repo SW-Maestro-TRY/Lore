@@ -57,7 +57,9 @@ function allowanceText(t: T, a: api.Allowance | null): string {
     if (a.free_left == null) return "";
     return a.free_left > 0 ? t("오늘 무료 {n}편", { n: a.free_left }) : t("오늘 무료 소진 · 로그인하면 이어서");
   }
-  return t("한 편 {cost}크레딧 · 보유 {balance}C", { cost: a.credit_cost, balance: a.balance ?? 0 });
+  // 로그인한 사람의 "한 편 {cost}크레딧 · 보유 {balance}C" 는 여기서 안 보여준다 —
+  // 헤더에 잔액이 이미 있고, 온보딩 히어로에 또 나오면 중복이다(2026-09-19 지적).
+  return "";
 }
 
 export default function Landing({ go }: { go: Go }) {
@@ -123,7 +125,11 @@ export default function Landing({ go }: { go: Go }) {
 
       {/* 예시 작품 띠 */}
       <section className="wt-landing-works">
-        <span className="muted wt-landing-works-label">{t("이 서비스로 만들어진 편")}</span>
+        <div className="wt-landing-works-head">
+          <button type="button" className="btn btn-w btn-sm wt-landing-works-all" onClick={() => go("works")}>
+            {t("웹툰 전체 보러가기")}
+          </button>
+        </div>
         {runsErr ? (
           <div className="wt-landing-works-err">
             <span className="err">{runsErr}</span>
