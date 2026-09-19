@@ -66,9 +66,12 @@ public class JobController {
     private final GuestGate guests;
     private final CreditGate credits;
     private final S3Service uploads;
+    private final com.lore.webtoon.character.CharacterOwner owner;
 
     public JobController(JobService jobs, JobQueue queue, RunArt art, SpendGuard guard,
-                         GuestGate guests, CreditGate credits, S3Service uploads) {
+                         GuestGate guests, CreditGate credits, S3Service uploads,
+                         com.lore.webtoon.character.CharacterOwner owner) {
+        this.owner = owner;
         this.jobs = jobs;
         this.queue = queue;
         this.art = art;
@@ -96,6 +99,8 @@ public class JobController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("logged_in", me != null);
         out.put("credit_cost", credits.cost());
+        // 편집실 단추가 값을 적으려고 쓴다 — 화면에 박아 두면 서버 설정과 어긋난다.
+        out.put("regen_cost", credits.regenCost());
         /* 화질 셋과 각각의 값. **화면이 여기서 받아 간다** — 같은 표를 화면에도
            적어 두면, 한쪽만 고치는 순간 적힌 값과 실제로 빠지는 크레딧이
            어긋난다. 사람에게 그건 거짓말이다. */
@@ -213,6 +218,15 @@ public class JobController {
         credits.charge(me, need, id, WebtoonQuality.labelOf(form.quality()));
         queue.remember(id, ahead);
         return ResponseEntity.ok(Map.of("id", id, "queue_position", ahead));
+    }
+
+    @Operation(summary = "내가 만들던 것", description = """
+            아직 안 끝난 작업들(줄 서 있거나 · 그리는 중 · 사람 차례). 첫 화면의
+            「만들던 웹툰」 알약이 이것을 본다. 로그인 안 했으면 uid 로 가린다.""")
+    @GetMapping("/jobs/mine")
+    public Map<String, Object> mine(@RequestParam(required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        return Map.of("jobs", jobs.activeOf(me, owner.uidsOf(me, uid)));
     }
 
     @Operation(summary = "진행 상황", description = """

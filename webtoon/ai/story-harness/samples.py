@@ -157,23 +157,42 @@ def _fmt_card(c: dict, index: int = 0) -> str:
 EXEMPLAR_PICK = 3
 
 
-def _pick_cards(cards: list, pick: int, r) -> list:
+def _pick_cards(cards: list, pick: int, r, avoid: set | None = None) -> list:
     """정통 1장 + 반전 1장을 보장하고 나머지를 무작위로 채운다.
 
     반전(04~06)이 한 장도 안 뽑히면 그 장르는 정통만 있는 것처럼 보인다 —
     romance.ts 주석의 "반전 카드가 뽑히는 게 이 세계관의 진짜 훅"이 무너진다.
+
+    `avoid`(2026-09-19 추가) — 최근에 이미 보여준 카드 id 들. **순수 추가다**:
+    안 주면(`None`) 예전과 완전히 같게 돈다. 주면 정통·반전·나머지 각 자리에서
+    먼저 `avoid` 에 없는 카드로만 고르고, 그 칸이 비면(6장 중 대부분이 최근에
+    다 나온 경우) 그제서야 전체 풀로 돌아간다 — 다양성을 넓히려다 생성 자체가
+    막히면 안 된다(축의 `pick_fresh`와 같은 원칙).
     """
     if pick <= 0 or pick >= len(cards):
         return list(cards)
+
+    def _choice(pool: list):
+        if avoid:
+            fresh = [c for c in pool if c.get("id") not in avoid]
+            if fresh:
+                return r.choice(fresh)
+        return r.choice(pool)
+
     straight, twist = cards[:3], cards[3:]
     picked = []
     if straight:
-        picked.append(r.choice(straight))
+        picked.append(_choice(straight))
     if twist:
-        picked.append(r.choice(twist))
+        picked.append(_choice(twist))
     rest = [c for c in cards if c not in picked]
-    r.shuffle(rest)
-    picked.extend(rest[:max(0, pick - len(picked))])
+    if avoid:
+        fresh_rest = [c for c in rest if c.get("id") not in avoid]
+        pool_rest = fresh_rest if len(fresh_rest) >= max(0, pick - len(picked)) else rest
+    else:
+        pool_rest = rest
+    r.shuffle(pool_rest)
+    picked.extend(pool_rest[:max(0, pick - len(picked))])
     # 원래 순서대로 되돌린다. 정통이 먼저 보여야 반전이 반전으로 읽힌다.
     picked.sort(key=cards.index)
     return picked[:pick]
@@ -191,6 +210,59 @@ def exemplars(genre: str, limit: int = 6, pick: int = EXEMPLAR_PICK, rng=None) -
         return "(이 장르의 샘플 카드가 없습니다. 아래 공식만으로 씁니다.)"
     chosen = _pick_cards(cards[:limit], pick, rng or random)
     return "\n\n".join(_fmt_card(c, i) for i, c in enumerate(chosen, 1))
+
+
+def exemplars_fresh(genre: str, avoid_ids=None, limit: int = 6,
+                    pick: int = EXEMPLAR_PICK, rng=None) -> tuple[str, list]:
+    """`exemplars` 와 같은 카드를 고르되, **최근에 쓴 카드를 피하고 무엇을
+    골랐는지도 같이 돌려준다**(2026-09-19 추가, 순수 추가 함수 — `exemplars`
+    자체는 그대로 둔다).
+
+    호출한 쪽(new_harness)이 돌려받은 id 목록을 run 디렉터리에 남기면, 다음
+    run 이 `recent_card_ids` 로 읽어서 또 피할 수 있다 — 축의 `axes.json` /
+    `recent_combos` 와 같은 짝이다. 장르당 카드가 6장뿐이라(`EXEMPLAR_PICK`
+    바로 위 주석 참고) 회피 없이는 몇 번 안 가 같은 3장 조합이 반복된다.
+    """
+    try:
+        cards = load(genre)
+    except SampleError:
+        return "(이 장르의 샘플 카드가 없습니다. 아래 공식만으로 씁니다.)", []
+    chosen = _pick_cards(cards[:limit], pick, rng or random, avoid=avoid_ids)
+    text = "\n\n".join(_fmt_card(c, i) for i, c in enumerate(chosen, 1))
+    return text, [c.get("id", "") for c in chosen if c.get("id")]
+
+
+def recent_card_ids(genre: str, runs_dir, limit: int | None = None) -> set:
+    """이 장르에서 최근 run 들이 보여준 카드 id. 읽다 실패하면 조용히
+    건너뛴다 — `recent_combos` 와 같은 원칙(회피는 있으면 좋은 것이지,
+    이것 때문에 생성이 멈추면 안 된다).
+
+    `limit` 기본값은 `AVOID_RECENT`(구조 회피와 같은 값)다. 그 상수가 이
+    함수보다 아래에 정의돼 있어서 파라미터 기본값으로는 못 쓴다(파이썬은
+    def 문 실행 시점에 기본값을 계산한다) — 그래서 `None` 을 받고 본문에서
+    채운다.
+    """
+    from pathlib import Path
+    if limit is None:
+        limit = AVOID_RECENT
+    root = Path(runs_dir) if runs_dir else None
+    if not root or not root.is_dir():
+        return set()
+    out: set = set()
+    count = 0
+    for d in sorted((p for p in root.iterdir() if p.is_dir()),
+                    key=lambda p: p.name, reverse=True):
+        if count >= limit:
+            break
+        try:
+            data = json.loads((d / "story_cards.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if data.get("genre") != genre:
+            continue
+        out.update(data.get("ids") or [])
+        count += 1
+    return out
 
 
 def exemplars_all(per_genre: int = 2, genres: int = 3, rng=None) -> str:

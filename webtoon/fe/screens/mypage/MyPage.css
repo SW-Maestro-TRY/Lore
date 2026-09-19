@@ -1,0 +1,131 @@
+/* 마이페이지 — 보드 MyPage.dc.html / MMyPage.dc.html */
+.wt .wt-my { flex-direction: row; gap: 32px; }
+.wt .wt-my-rail { width: 250px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px; }
+.wt .wt-my-main { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+
+/* 왼쪽 줄 */
+.wt .wt-my-me { align-items: center; padding: 20px 14px; gap: 6px; }
+.wt .wt-my-me b { font-size: 16px; }
+.wt .wt-my-me .dim { font-size: 12px; }
+.wt .wt-my-avatar {
+  width: 56px; height: 56px; border-radius: 50%; background: var(--water);
+  display: inline-flex; align-items: center; justify-content: center; color: var(--sea-deep);
+}
+.wt .wt-my-credit { gap: 6px; }
+.wt .wt-my-credit .dim { font-size: 12px; }
+.wt .wt-my-credit > b { font-size: 24px; }
+.wt .wt-my-credit > b span { font-size: 13px; font-weight: 400; }
+.wt .wt-my-creditacts { display: flex; gap: 6px; margin-top: 4px; }
+.wt .wt-my-creditacts .btn { flex: 1 1 0; }
+.wt .wt-my-menu { gap: 2px; padding: 8px; }
+.wt .wt-my-menu .dim { font-size: 12px; }
+.wt .wt-my-lang { gap: 8px; }
+.wt .wt-my-lang label { font-size: 12px; color: var(--dim); font-weight: 700; }
+
+/* 오른쪽 — 머리 줄 */
+.wt .wt-my-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.wt .wt-my-head > div { display: flex; flex-direction: column; gap: 4px; }
+.wt .wt-my-head h2 { font-size: 30px; }
+.wt .wt-my-head .muted { font-size: 14px; }
+.wt .wt-my-head-sub { margin-top: 10px; }
+.wt .wt-my-head-sub h2 { font-size: 22px; }
+.wt .wt-my-head-sub .muted { font-size: 13.5px; }
+.wt .wt-my-head .btn, .wt .wt-my-headacts .btn { height: 42px; font-size: 14px; }
+.wt .wt-my-head-sub .btn { height: 38px; font-size: 13px; }
+.wt .wt-my-headacts { display: flex; gap: 8px; }
+
+/* 작품 그리드 */
+.wt .wt-my-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.wt .wt-my-work > b { font-size: 15px; }
+.wt .wt-my-work > .muted { font-size: 12.5px; }
+.wt .wt-my-cover { padding: 0; border: 0; background: none; cursor: pointer; display: block; }
+.wt .wt-my-cover img {
+  width: 100%; height: 260px; object-fit: cover; object-position: top;
+  border-radius: 12px; display: block; background: var(--water-light);
+}
+.wt .wt-my-eps { display: flex; gap: 6px; flex-wrap: wrap; }
+.wt .wt-my-eps .ep { cursor: pointer; }
+.wt .wt-my-workfoot {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line);
+}
+.wt .wt-my-pub { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.wt .wt-my-edit { height: 30px; font-size: 12px; padding: 0 14px; }
+.wt .wt-my-err { font-size: 11.5px; color: var(--gold); }
+
+/* 설정 탭 */
+.wt .wt-my-setting { padding: 18px 20px; }
+.wt .wt-my-setting-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.wt .wt-my-setting-row > div { display: flex; flex-direction: column; gap: 6px; max-width: 480px; }
+.wt .wt-my-setting-row b { font-size: 14.5px; }
+.wt .wt-my-setting-row .muted { font-size: 12.5px; line-height: 1.55; }
+.wt .wt-my-setting-row .sw { flex-shrink: 0; margin-top: 2px; }
+
+/* 작품 목록이 실패했거나(에러) 아직 없을 때(빈 목록). 둘을 가른다 —
+   실패를 "그냥 없음"으로 보이게 두면 웹툰이 사라진 것처럼 읽힌다. */
+.wt .wt-my-empty {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  padding: 24px 0;
+}
+.wt .wt-my-empty img { width: 96px; }
+.wt .wt-my-empty b { font-size: 15px; }
+.wt .wt-my-empty .inline-link {
+  background: none; border: 0; padding: 0; font: inherit; color: var(--sea-deep);
+  text-decoration: underline; cursor: pointer;
+}
+
+/* 캐릭터 줄 */
+.wt .wt-my-chars { display: flex; gap: 12px; flex-wrap: wrap; }
+.wt .wt-my-char {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: none; border: 0; padding: 0; cursor: pointer; color: var(--ink);
+}
+.wt .wt-my-char img {
+  width: 96px; height: 96px; border-radius: 50%; object-fit: cover; object-position: top;
+  display: block; background: var(--water-light);
+}
+.wt .wt-my-char b { font-size: 13px; }
+.wt .wt-my-char-new {
+  width: 96px; height: 96px; border-radius: 50%; border: 1.5px dashed rgba(15, 51, 63, 0.25);
+  background: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; color: var(--ink); font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.wt .wt-my-char-new b { font-size: 20px; }
+.wt .wt-my-char-new:hover { border-color: var(--ink); }
+
+@media (max-width: 767px) {
+  /* 폰은 왼쪽 줄을 그대로 쌓지 않는다 — 아트보드 MMyPage 처럼 계정·크레딧을
+     한 줄로 눕히고 메뉴를 가로 칩 줄로 접는다. 그대로 쌓으면 키 큰 카드 넷을
+     지나야 작품이 나온다. */
+  .wt .wt-my { flex-direction: column; gap: 14px; }
+  .wt .wt-my-rail { width: auto; gap: 10px; }
+
+  .wt .wt-my-me { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; }
+  .wt .wt-my-me .wt-my-avatar { width: 44px; height: 44px; flex-shrink: 0; }
+  .wt .wt-my-me b { font-size: 15px; }
+  .wt .wt-my-me .dim { margin-left: auto; }
+
+  .wt .wt-my-credit { flex-direction: row; align-items: baseline; gap: 8px; padding: 12px 14px; flex-wrap: wrap; }
+  .wt .wt-my-credit > b { font-size: 19px; }
+
+  .wt .wt-my-menu { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; }
+  .wt .wt-my-menu small { display: none; }
+  .wt .wt-my-menu button, .wt .wt-my-menu a {
+    width: auto; flex: 0 0 auto; gap: 6px; padding: 8px 12px; border-radius: 999px;
+    border: 1px solid var(--line-strong);
+  }
+  .wt .wt-my-menu button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .wt .wt-my-menu button.on .dim { color: rgba(255, 255, 255, 0.75); }
+  .wt .wt-my-lang { padding: 10px 14px; }
+  /* 제목과 단추가 한 줄에서 겹쳐 보인다 — 폰에서는 위아래로 나누고 단추는
+     가로로 나란히 둔다. */
+  .wt .wt-my-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .wt .wt-my-head h2 { font-size: 24px; }
+  .wt .wt-my-head-sub h2 { font-size: 19px; }
+  .wt .wt-my-headacts { flex-direction: row; }
+  .wt .wt-my-headacts .btn { flex: 1 1 0; }
+  .wt .wt-my-head-sub .btn { align-self: flex-start; }
+  .wt .wt-my-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .wt .wt-my-cover img { height: 180px; border-radius: 10px; }
+  .wt .wt-my-char img, .wt .wt-my-char-new { width: 76px; height: 76px; }
+}

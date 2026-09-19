@@ -1,0 +1,58 @@
+/* 내 캐릭터 목록 — CharList.dc.html / MCharList.dc.html */
+.wt .wt-ch-list-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.wt .wt-ch-list-head > div { display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-ch-list-head h2 { font-size: 32px; }
+.wt .wt-ch-list-head .wt-ch-list-lede { font-size: 15px; }
+.wt .wt-ch-list-lede-m { display: none; }
+.wt .wt-ch-list-head .chip { height: 36px; font-size: 13px; flex-shrink: 0; cursor: default; }
+.wt .wt-ch-list-h3 { margin: 22px 0 10px; font-size: 17px; }
+.wt .wt-ch-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.wt .wt-ch-item img, .wt .wt-ch-item .wt-ch-item-box {
+  width: 100%; height: 220px; border-radius: 12px; object-fit: cover; object-position: top; display: block;
+}
+.wt .wt-ch-item .wt-ch-item-box {
+  display: flex; align-items: center; justify-content: center; text-align: center; font-size: 13px; line-height: 1.6; padding: 0 16px;
+}
+.wt .wt-ch-item .wt-ch-item-box.drawing { background: var(--water-light); color: var(--sea-deep); }
+.wt .wt-ch-item .wt-ch-item-box.failed { background: #fbeeee; color: #a13a2e; }
+.wt .wt-ch-item .wt-ch-item-name { font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.wt .wt-ch-item .wt-ch-item-desc { font-size: 12.5px; line-height: 1.5; }
+.wt .wt-ch-item .wt-ch-item-acts { display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap; }
+.wt .wt-ch-item .wt-ch-item-acts .btn { height: 38px; font-size: 13px; padding: 0 12px; }
+.wt .wt-ch-item .wt-ch-item-acts .grow { flex-grow: 1; }
+.wt .wt-ch-item .wt-ch-item-acts .btn.wait { background: rgba(15, 51, 63, 0.12); color: var(--dim); cursor: default; }
+.wt .wt-ch-item .wt-ch-item-edit { display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-ch-item .wt-ch-item-edit .field { height: 40px; font-size: 14px; }
+.wt .wt-ch-item .icon-btn { width: 28px; height: 28px; border: 0; background: none; color: var(--dim); }
+.wt .wt-ch-item .icon-btn:hover { color: var(--ink); }
+.wt .wt-ch-new {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border-radius: 16px;
+  border: 1.5px dashed rgba(15, 51, 63, 0.25); background: none; color: var(--ink); font-weight: 700; font-size: 14px;
+  min-height: 320px; cursor: pointer; font-family: inherit;
+}
+.wt .wt-ch-list-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; margin-top: 22px; }
+.wt .wt-ch-list-empty span { font-size: 15px; }
+.wt .wt-ch-list-mnew { display: none; }
+
+@media (max-width: 767px) {
+  .wt .wt-ch-list-lede { display: none; }
+  .wt .wt-ch-list-lede-m { display: block; font-size: 13.5px; }
+  .wt .wt-ch-list-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .wt .wt-ch-list-head > div { gap: 4px; }
+  .wt .wt-ch-list-head h2 { font-size: 24px; line-height: 1.3; }
+  .wt .wt-ch-list-head .wt-ch-list-lede { font-size: 13px; line-height: 1.5; }
+  .wt .wt-ch-list-head .chip { height: 30px; font-size: 12px; margin-top: 4px; }
+  .wt .wt-ch-list-h3 { margin: 14px 0 0; font-size: 14px; }
+  .wt .wt-ch-grid { grid-template-columns: 1fr; gap: 14px; margin-top: 14px; }
+  .wt .wt-ch-item { flex-direction: row; gap: 12px; padding: 10px; }
+  .wt .wt-ch-item img, .wt .wt-ch-item .wt-ch-item-box { width: 92px; height: 120px; border-radius: 10px; flex-shrink: 0; }
+  .wt .wt-ch-item .wt-ch-item-box { font-size: 11.5px; line-height: 1.5; padding: 0 6px; }
+  .wt .wt-ch-item .wt-ch-item-body { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; min-width: 0; }
+  .wt .wt-ch-item .wt-ch-item-name { font-size: 14px; }
+  .wt .wt-ch-item .wt-ch-item-desc { font-size: 12px; }
+  .wt .wt-ch-item .wt-ch-item-acts { margin-top: auto; gap: 10px; align-items: center; }
+  .wt .wt-ch-item .wt-ch-item-acts .btn { height: 34px; font-size: 12px; }
+  .wt .wt-ch-item .wt-ch-item-acts .grow { flex-grow: 0; }
+  .wt .wt-ch-new { display: none; }
+  .wt .wt-ch-list-mnew { display: flex; }
+}

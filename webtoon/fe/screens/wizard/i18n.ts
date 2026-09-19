@@ -1,0 +1,166 @@
+/* 웹툰 만들기(위자드) 사전 — 한국어 원문이 키. lib/wizardData.ts 의 문구도
+ * 쓰는 자리에서 t() 하므로 여기 원문 그대로 넣어 둔다. */
+import { registerDict, type Dict } from "../../lib/i18n";
+
+const dict: Dict = {
+  /* ---- 빵부스러기 · 폰 제목 ---- */
+  "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
+  "이야기 · 장르": { en: "Story · Genre", ja: "ストーリー · ジャンル", zh: "故事 · 题材" },
+  "그림체": { en: "Art style", ja: "画風", zh: "画风" },
+  "방식": { en: "Options", ja: "進め方", zh: "方式" },
+  "만들기": { en: "Create", ja: "作成", zh: "制作" },
+  "완성": { en: "Done", ja: "完成", zh: "完成" },
+  "지금 위치": { en: "Current step", ja: "現在の位置", zh: "当前位置" },
+  "다음": { en: "Next", ja: "次へ", zh: "下一步" },
+  "이전": { en: "Back", ja: "戻る", zh: "上一步" },
+  "다시 시도": { en: "Try again", ja: "もう一度", zh: "重试" },
+  "필수": { en: "Required", ja: "必須", zh: "必填" },
+  "선택": { en: "Optional", ja: "任意", zh: "选填" },
+
+  /* ---- 오류 ---- */
+  "캐릭터를 불러오지 못했습니다": { en: "Couldn't load your characters", ja: "キャラクターを読み込めませんでした", zh: "无法加载角色" },
+  "사진은 {n}장까지 올릴 수 있어요": { en: "You can upload up to {n} photos", ja: "写真は{n}枚までアップロードできます", zh: "最多可上传 {n} 张照片" },
+  "사진을 열지 못했습니다": { en: "Couldn't open that photo", ja: "写真を開けませんでした", zh: "无法打开照片" },
+  "만들기를 시작하지 못했습니다": { en: "Couldn't start creating", ja: "作成を開始できませんでした", zh: "无法开始制作" },
+
+  /* ---- 1 · 캐릭터 ---- */
+  "누가 주인공인가요?": { en: "Who's the main character?", ja: "主人公は誰ですか？", zh: "谁是主角？" },
+  "{name}과 함께 갈게요!": { en: "Let's go with {name}!", ja: "{name}と一緒に進めます！", zh: "就和{name}一起吧！" },
+  "다른 캐릭터로": { en: "Choose a different character", ja: "別のキャラクターに", zh: "换一个角色" },
+  "다른 캐릭터 고르기": { en: "Pick another character", ja: "別のキャラクターを選ぶ", zh: "选择其他角色" },
+  "또는 캐릭터를 어떻게 넣을까요?": { en: "Or, how would you like to add a character?", ja: "または、キャラクターをどう追加しますか？", zh: "或者，用哪种方式添加角色？" },
+  "캐릭터 만들어보기": { en: "Try making a character", ja: "キャラクターを作ってみる", zh: "试着创建角色" },
+  "사진·설명 없이도 돼요": { en: "No photo or description needed", ja: "写真や説明がなくても大丈夫です", zh: "无需照片或描述" },
+  "바로 써 볼 수 있는 캐릭터": { en: "Characters ready to use", ja: "すぐに使えるキャラクター", zh: "可直接使用的角色" },
+  "둘러보기용": { en: "Sample", ja: "サンプル", zh: "示例" },
+  "이름": { en: "Name", ja: "名前", zh: "名字" },
+  "예: 민시하": { en: "e.g. Min Siha", ja: "例：ミン・シハ", zh: "例如：闵时夏" },
+  "캐릭터 설명": { en: "Character description", ja: "キャラクターの説明", zh: "角色描述" },
+  "성격·말투·관계 등 아는 만큼. 예) 장난기 많은데 겁은 많아서 친구 앞에서만 센 척한다": {
+    en: "Personality, way of speaking, relationships — whatever you know. e.g. Playful but timid, only acts tough around friends",
+    ja: "性格・話し方・人間関係など、わかる範囲で。例）いたずら好きだけど怖がりで、友だちの前でだけ強がる",
+    zh: "性格、说话方式、人际关系等，知道多少写多少。例如：爱闹却胆小，只在朋友面前逞强",
+  },
+  "· 내 캐릭터": { en: "· My characters", ja: "· マイキャラクター", zh: "· 我的角色" },
+  "· 입구": { en: "· Start", ja: "· 入口", zh: "· 入口" },
+  "· 캐릭터": { en: "· Character", ja: "· キャラクター", zh: "· 角色" },
+  "· 이야기 · 장르": { en: "· Story · Genre", ja: "· ストーリー · ジャンル", zh: "· 故事 · 题材" },
+
+  /* ---- 2 · 이야기 · 장르 ---- */
+  "어떤 이야기를 볼까요?": { en: "What story would you like?", ja: "どんなストーリーにしますか？", zh: "想看什么样的故事？" },
+  "한 줄이어도 되고 줄거리여도 돼요. 비우면 캐릭터를 보고 지어요.": {
+    en: "One line or a full plot — either works. Leave it blank and we'll write one from the character.",
+    ja: "一行でもあらすじでも構いません。空欄ならキャラクターを見て考えます。",
+    zh: "一句话或完整梗概都可以。留空的话，会根据角色来编。",
+  },
+  "이야기": { en: "Story", ja: "ストーリー", zh: "故事" },
+  "장르": { en: "Genre", ja: "ジャンル", zh: "题材" },
+  "안 고르면 이야기에 맞춰 정해요.": { en: "If you don't pick one, we'll match it to the story.", ja: "選ばなければストーリーに合わせて決めます。", zh: "不选的话，会根据故事来定。" },
+  "목록에 없으면 직접 적기 · 예: 무협 / 로맨스 판타지": {
+    en: "Not in the list? Type your own · e.g. wuxia / romance fantasy",
+    ja: "リストになければ入力 · 例：武侠 / ロマンスファンタジー",
+    zh: "列表里没有就自己填 · 例如：武侠 / 浪漫奇幻",
+  },
+  "장르 직접 입력": { en: "Custom genre", ja: "ジャンルを入力", zh: "自定义题材" },
+  "둘 다 비워도 만들 수 있어요": { en: "You can leave both blank", ja: "両方空欄でも作れます", zh: "两项都留空也可以" },
+
+  /* 장르 칩 (lib/wizardData GENRE_QUICK) */
+  "로맨스 판타지": { en: "Romance fantasy", ja: "ロマンスファンタジー", zh: "浪漫奇幻" },
+  "무협": { en: "Wuxia", ja: "武侠", zh: "武侠" },
+  "판타지": { en: "Fantasy", ja: "ファンタジー", zh: "奇幻" },
+  "헌터·게이트": { en: "Hunters & gates", ja: "ハンター·ゲート", zh: "猎人·传送门" },
+  "마법학교": { en: "Magic school", ja: "魔法学校", zh: "魔法学校" },
+  "게임 판타지": { en: "Game fantasy", ja: "ゲームファンタジー", zh: "游戏奇幻" },
+  "센티넬": { en: "Sentinel", ja: "センチネル", zh: "哨兵" },
+  "오메가버스": { en: "Omegaverse", ja: "オメガバース", zh: "ABO" },
+  "아이돌": { en: "Idol", ja: "アイドル", zh: "偶像" },
+  "스릴러": { en: "Thriller", ja: "スリラー", zh: "惊悚" },
+  "액션": { en: "Action", ja: "アクション", zh: "动作" },
+  "개그": { en: "Comedy", ja: "ギャグ", zh: "搞笑" },
+  "일상": { en: "Slice of life", ja: "日常", zh: "日常" },
+  "히어로": { en: "Hero", ja: "ヒーロー", zh: "英雄" },
+
+  /* 장르 한 줄 (lib/wizardData GENRE_NOTE) */
+  "드레스와 무도회, 계약 결혼과 회귀. 감정이 사건을 끕니다.": { en: "Gowns and balls, contract marriages and second chances. Feelings drive the plot.", ja: "ドレスと舞踏会、契約結婚と回帰。感情が事件を動かします。", zh: "礼服与舞会，契约婚姻与重生。情感推动事件。" },
+  "강호와 문파, 내공과 검. 은원이 이야기를 끕니다.": { en: "The martial world and its sects, inner power and swords. Old debts drive the story.", ja: "江湖と門派、内功と剣。恩讐が物語を動かします。", zh: "江湖与门派，内功与剑。恩怨推动故事。" },
+  "검과 마법, 다른 세계. 종족과 왕국이 배경이 됩니다.": { en: "Swords and magic in another world. Races and kingdoms set the stage.", ja: "剣と魔法、異世界。種族と王国が舞台になります。", zh: "剑与魔法，异世界。种族与王国构成背景。" },
+  "현대 한국에 열린 게이트. 각성자와 길드, 등급이 규칙입니다.": { en: "Gates open in modern Korea. Awakened, guilds and ranks are the rules.", ja: "現代の韓国に開いたゲート。覚醒者とギルド、ランクがルールです。", zh: "现代韩国出现的传送门。觉醒者、公会与等级就是规则。" },
+  "입학과 기숙사, 수업과 시험. 학교가 세계의 크기입니다.": { en: "Enrollment and dorms, classes and exams. The school is the whole world.", ja: "入学と寮、授業と試験。学校が世界の大きさです。", zh: "入学与宿舍，课程与考试。学校就是整个世界。" },
+  "상태창과 레벨, 퀘스트와 스킬. 규칙이 눈에 보입니다.": { en: "Status windows and levels, quests and skills. The rules are visible.", ja: "ステータス画面とレベル、クエストとスキル。ルールが目に見えます。", zh: "状态栏与等级，任务与技能。规则一目了然。" },
+  "가이드와 센티넬, 감각 폭주와 결합. 관계가 곧 설정입니다.": { en: "Guides and sentinels, sensory overload and bonding. The relationship is the setting.", ja: "ガイドとセンチネル、感覚の暴走と結合。関係がそのまま設定です。", zh: "向导与哨兵，感官暴走与结合。关系即设定。" },
+  "알파·베타·오메가, 페로몬과 각인. 관계의 규칙이 세계입니다.": { en: "Alpha, beta, omega — pheromones and imprinting. The rules of the relationship are the world.", ja: "アルファ·ベータ·オメガ、フェロモンと刻印。関係のルールが世界です。", zh: "Alpha·Beta·Omega，信息素与标记。关系的规则就是世界。" },
+  "연습생과 데뷔, 무대와 팬. 성장과 경쟁이 축입니다.": { en: "Trainees and debuts, stages and fans. Growth and rivalry are the axis.", ja: "練習生とデビュー、ステージとファン。成長と競争が軸です。", zh: "练习生与出道，舞台与粉丝。成长与竞争是主线。" },
+  "쫓고 쫓기는 것. 정보를 언제 주는지가 연출이 됩니다.": { en: "The chase. When information is revealed becomes the direction.", ja: "追う者と追われる者。情報をいつ出すかが演出になります。", zh: "追与被追。何时给出信息就是演出。" },
+  "몸으로 부딪히는 것. 합과 속도로 컷을 나눕니다.": { en: "Physical clashes. Panels are cut by choreography and speed.", ja: "体でぶつかること。組み合いと速度でコマを割ります。", zh: "肉体碰撞。用招式与速度来分镜。" },
+  "박자와 배신. 컷의 크기 차이로 웃깁니다.": { en: "Timing and subversion. Panel size differences bring the laughs.", ja: "テンポと裏切り。コマの大きさの差で笑わせます。", zh: "节奏与反转。用分镜大小的差异制造笑点。" },
+  "큰 사건 없이 하루하루. 인물의 결이 곧 이야기입니다.": { en: "Day by day, no big events. The character's texture is the story.", ja: "大きな事件のない毎日。人物の質感がそのまま物語です。", zh: "没有大事的日复一日。人物的质感就是故事。" },
+  "능력과 빌런, 등록과 자경단. 누가 구할 자격을 갖느냐가 규칙입니다.": { en: "Powers and villains, registration and vigilantes. Who's allowed to save is the rule.", ja: "能力とヴィラン、登録と自警団。誰に救う資格があるかがルールです。", zh: "能力与反派，登记与义警。谁有资格拯救就是规则。" },
+
+  /* ---- 3 · 그림체 ---- */
+  "어떤 그림체로 그릴까요?": { en: "Which art style?", ja: "どの画風で描きますか？", zh: "用什么画风来画？" },
+  "그림을 눌러 고르세요. 캐릭터 시트도 이 그림체로 그려져요.": { en: "Tap a picture to choose. The character sheet uses this style too.", ja: "絵を押して選んでください。キャラクターシートもこの画風で描かれます。", zh: "点击图片选择。角色设定图也会用这个画风。" },
+  "예시는 실제로 만들어진 편에서": { en: "Examples are from real episodes", ja: "例は実際に作られた作品から", zh: "示例来自实际生成的作品" },
+  "{label} 예시": { en: "{label} example", ja: "{label}の例", zh: "{label}示例" },
+
+  /* 그림체 (lib/wizardData STYLE_INFO) */
+  "일반 웹툰": { en: "Classic webtoon", ja: "一般ウェブトゥーン", zh: "普通条漫" },
+  "깔끔한 선과 셀 채색. 읽히는 속도가 기준.": { en: "Clean lines and cel shading. Built for reading speed.", ja: "すっきりした線とセル塗り。読みやすさが基準です。", zh: "干净的线条与赛璐璐上色。以阅读速度为标准。" },
+  "표지 일러스트급 밀도. 보석 같은 눈, 금박, 레이스.": { en: "Cover-illustration density. Jewel-like eyes, gold leaf, lace.", ja: "表紙イラスト級の密度。宝石のような瞳、金箔、レース。", zh: "封面插画级的密度。宝石般的眼睛、金箔、蕾丝。" },
+  "순정 · BL": { en: "Shoujo · BL", ja: "少女 · BL", zh: "少女 · BL" },
+  "길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃.": { en: "Long sharp eyes, screentone, flowers floating in the margins.", ja: "長く鋭い目、スクリーントーン、余白に浮かぶ花。", zh: "细长锐利的眼睛、网点、留白处的花。" },
+  "세미리얼 · 성인향": { en: "Semi-realistic · Mature", ja: "セミリアル · 大人向け", zh: "半写实 · 成人向" },
+  "사실적인 인체, 얇은 선, 저채도로 차분하게.": { en: "Realistic anatomy, thin lines, calm low saturation.", ja: "リアルな人体、細い線、低彩度で落ち着いた雰囲気。", zh: "写实的人体、细线、低饱和度的沉稳感。" },
+  "일상툰 감성": { en: "Slice-of-life", ja: "日常マンガ風", zh: "日常漫风" },
+  "흔들리는 연필선, 종이 결, 바랜 파스텔.": { en: "Wobbly pencil lines, paper grain, faded pastels.", ja: "揺れる鉛筆線、紙の質感、色あせたパステル。", zh: "颤动的铅笔线、纸张纹理、褪色的粉彩。" },
+  "게임 원화": { en: "Game concept art", ja: "ゲーム原画", zh: "游戏原画" },
+  "섬세한 선화에 은은하게 빛나는 채색.": { en: "Delicate linework with a soft glowing finish.", ja: "繊細な線画にほのかに光る彩色。", zh: "细腻的线稿配上柔和发光的上色。" },
+
+  /* ---- 4 · 방식 ---- */
+  "얼마나 촘촘히 그릴까요?": { en: "How detailed should it be?", ja: "どれくらい細かく描きますか？", zh: "画得多精细？" },
+  "{n}크레딧": { en: "{n} credits", ja: "{n}クレジット", zh: "{n} 点数" },
+  "그리고 어떻게 볼까요?": { en: "And how do you want to follow along?", ja: "そして、どう進めますか？", zh: "以及，如何跟进？" },
+  "빠르게 결과부터": { en: "Straight to the result", ja: "まずは結果を早く", zh: "直接看结果" },
+  "중간에 안 멈추고 알아서 그려 와요.": { en: "No stops in between — it draws everything on its own.", ja: "途中で止まらず、そのまま描き上げます。", zh: "中途不停，自动画完。" },
+  "2번 확인하며": { en: "Check in twice", ja: "2回確認しながら", zh: "中途确认两次" },
+  "캐릭터 시트와 이야기에서 한 번씩 멈춰 확인해요.": { en: "Pauses once at the character sheet and once at the story so you can check.", ja: "キャラクターシートとストーリーで一度ずつ止まって確認します。", zh: "在角色设定图和故事处各停一次，供你确认。" },
+  "이렇게 만들어요": { en: "Here's the plan", ja: "こう作ります", zh: "将这样制作" },
+  "{name} · 내 캐릭터": { en: "{name} · my character", ja: "{name} · マイキャラクター", zh: "{name} · 我的角色" },
+  "{name} · 사진 {n}장": { en: "{name} · {n} photos", ja: "{name} · 写真{n}枚", zh: "{name} · {n} 张照片" },
+  "비움": { en: "Blank", ja: "空欄", zh: "留空" },
+  "촘촘함": { en: "Detail", ja: "細かさ", zh: "精细度" },
+  "보는 방식": { en: "Follow along", ja: "進め方", zh: "跟进方式" },
+  "쓰는 크레딧": { en: "Credits used", ja: "使用クレジット", zh: "使用点数" },
+  "무료": { en: "Free", ja: "無料", zh: "免费" },
+  "저작권 확인": { en: "Copyright confirmation", ja: "著作権の確認", zh: "版权确认" },
+  "업로드한 사진·설정에 대한 저작권 문제가 없음을 확인합니다": { en: "I confirm there are no copyright issues with the photos and settings I uploaded", ja: "アップロードした写真・設定に著作権上の問題がないことを確認します", zh: "我确认上传的照片与设定不存在版权问题" },
+  "이용약관 요약 보기": { en: "See terms summary", ja: "利用規約の要約を見る", zh: "查看条款摘要" },
+  "업로드한 사진·설정은 본인이 저작권을 가지고 있거나 사용 권한이 있는 것이어야 합니다.": { en: "Uploaded photos and settings must be ones you own the copyright to or have permission to use.", ja: "アップロードする写真・設定は、ご自身が著作権を持つか使用権限のあるものに限ります。", zh: "上传的照片与设定必须是本人拥有版权或有权使用的内容。" },
+  "다른 사람의 캐릭터·작품을 무단으로 써서 문제가 생기면 책임은 올린 사람에게 있습니다.": { en: "If using someone else's character or work without permission causes a problem, the uploader is responsible.", ja: "他人のキャラクター・作品を無断で使用して問題が生じた場合、責任はアップロードした本人にあります。", zh: "擅自使用他人角色或作品引发的问题，由上传者本人负责。" },
+  "LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.": { en: "LORE is not responsible for copyright disputes over generated results.", ja: "LOREは生成された結果物の著作権紛争について責任を負いません。", zh: "LORE 对生成结果的版权纠纷不承担责任。" },
+  "시작하는 중": { en: "Starting", ja: "開始中", zh: "正在开始" },
+  "웹툰 만들기": { en: "Create webtoon", ja: "ウェブトゥーンを作る", zh: "制作条漫" },
+  "시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸려요.": { en: "Times assume an empty queue. It takes longer if others are ahead of you.", ja: "時間は待ち行列が空のときの目安です。前に人がいるとさらにかかります。", zh: "时间以队列为空时为准。前面有人的话会更久。" },
+  "{time} · 앞에 사람이 있으면 더 걸려요": { en: "{time} · longer if others are ahead", ja: "{time} · 前に人がいるとさらにかかります", zh: "{time} · 前面有人会更久" },
+
+  /* 화질 (lib/wizardData QUALITY_INFO) — lede 의 " · " 는 앞부분만 잘라 쓰므로 유지 */
+  "물결": { en: "Ripple", ja: "さざ波", zh: "涟漪" },
+  "약 6분 · 가장 빠른 생성": { en: "About 6 min · Fastest", ja: "約6分 · 最速", zh: "约 6 分钟 · 最快" },
+  "굵고 단순한 선으로 가볍게 표현해요.": { en: "Bold, simple lines with a light touch.", ja: "太くシンプルな線で軽やかに表現します。", zh: "用粗而简洁的线条轻快呈现。" },
+  "배경과 소품은 필요한 만큼만 담아요.": { en: "Backgrounds and props only as needed.", ja: "背景と小物は必要な分だけ描きます。", zh: "背景与道具只画必要的部分。" },
+  "파도": { en: "Wave", ja: "波", zh: "波浪" },
+  "약 8분 · 자연스러운 디테일": { en: "About 8 min · Natural detail", ja: "約8分 · 自然なディテール", zh: "约 8 分钟 · 自然细节" },
+  "인물과 배경을 가장 자연스럽게 표현해요.": { en: "Characters and backgrounds at their most natural.", ja: "人物と背景を最も自然に表現します。", zh: "人物与背景最自然的呈现。" },
+  "너울": { en: "Swell", ja: "うねり", zh: "涌浪" },
+  "약 15분 · 가장 섬세한 표현": { en: "About 15 min · Most detailed", ja: "約15分 · 最も繊細", zh: "约 15 分钟 · 最精细" },
+  "가는 선과 풍부한 디테일로 표현해요.": { en: "Fine lines and rich detail.", ja: "細い線と豊かなディテールで表現します。", zh: "用细线与丰富的细节呈现。" },
+  "배경과 소품까지 깊이 있게 담아내요.": { en: "Backgrounds and props rendered in depth.", ja: "背景と小物まで深く描き込みます。", zh: "背景与道具也深入刻画。" },
+
+  /* ---- 사진 칸 ---- */
+  "사진 {n}": { en: "Photo {n}", ja: "写真{n}", zh: "照片 {n}" },
+  "사진 빼기": { en: "Remove photo", ja: "写真を外す", zh: "移除照片" },
+  "캐릭터 사진 올리기": { en: "Upload character photos", ja: "キャラクターの写真をアップロード", zh: "上传角色照片" },
+  "{n} / {max}장 · 각도가 다양할수록 더 닮아요": { en: "{n} / {max} · more angles, closer likeness", ja: "{n} / {max}枚 · 角度が多いほど似ます", zh: "{n} / {max} 张 · 角度越多越像" },
+  "최대 4장 · 각도가 다양할수록 더 닮아요": { en: "Up to 4 · more angles, closer likeness", ja: "最大4枚 · 角度が多いほど似ます", zh: "最多 4 张 · 角度越多越像" },
+};
+
+registerDict(dict);

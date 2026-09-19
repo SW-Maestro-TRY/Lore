@@ -72,3 +72,6 @@ __pycache__/
 
 # 하네스 비교용으로 쌓이는 작업물 (새/옛 파이프라인 run 비교 등) — 작업대지
 haeun/run-compare/
+
+# 개인 작업 메모/스킬 셋업 문서 (Claude Code 로컬 세팅) — 팀 레포에 안 올림
+.claude/

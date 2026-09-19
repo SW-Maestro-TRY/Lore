@@ -1,0 +1,64 @@
+/* 캐릭터 만들어보기 1 · 입력 — Photo.dc.html / MPhoto.dc.html */
+.wt .wt-ch-photo-body { display: flex; gap: 48px; margin-top: 16px; flex-grow: 1; }
+.wt .wt-ch-photo-left { width: 520px; display: flex; flex-direction: column; gap: 14px; }
+.wt .wt-ch-photo-right { flex-grow: 1; display: flex; flex-direction: column; gap: 12px; }
+.wt .wt-ch-photo-sub { display: none; }
+.wt .wt-ch-drop {
+  position: relative; height: 180px; border-radius: 16px; border: 2px dashed rgba(15, 51, 63, 0.22);
+  background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; overflow: hidden;
+}
+.wt .wt-ch-drop b { font-size: 16px; }
+.wt .wt-ch-drop .wt-ch-drop-hint { display: none; }
+.wt .wt-ch-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.wt .wt-ch-drop.has { border-style: solid; border-color: var(--line); flex-direction: row; justify-content: flex-start; padding: 12px; gap: 16px; }
+.wt .wt-ch-drop.has img { height: 100%; aspect-ratio: 3 / 4; object-fit: cover; object-position: top; border-radius: 10px; display: block; }
+.wt .wt-ch-drop .wt-ch-drop-x { position: absolute; right: 10px; top: 10px; }
+.wt .wt-ch-name { width: 220px; }
+/* 캐릭터 설명 — 성격·말투·사연을 몇 줄 적을 만큼. 세로로 늘릴 수 있다. */
+.wt .wt-ch-desc { min-height: 150px; }
+.wt .wt-ch-worlds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-ch-worlds .opt { padding: 18px 20px; }
+.wt .wt-ch-worlds .opt b { font-size: 17px; }
+.wt .wt-ch-worlds .opt.on { padding: 17.5px 19.5px; }
+.wt .wt-ch-photo-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding-top: 20px; }
+.wt .wt-ch-photo-foot .wt-ch-acts { display: flex; gap: 10px; }
+.wt .wt-ch-photo-cost { display: none; }
+.wt .wt-ch-steps { display: none; }
+
+/* 한도 소진 — Limit.dc.html / MLimit.dc.html */
+.wt .wt-ch-limit { flex-grow: 1; display: flex; align-items: center; justify-content: center; }
+.wt .wt-ch-limit-box {
+  width: 520px; padding: 36px; border-radius: 22px; background: #fff; border: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 14px; align-items: center; text-align: center;
+  box-shadow: 0 14px 36px rgba(15, 51, 63, 0.10);
+}
+.wt .wt-ch-limit-box img { width: 120px; height: 160px; object-fit: cover; object-position: top; border-radius: 12px; }
+.wt .wt-ch-limit-box h2 { font-size: 26px; }
+.wt .wt-ch-limit-acts { display: flex; gap: 10px; margin-top: 6px; }
+
+@media (max-width: 767px) {
+  .wt .wt-ch-steps { display: flex; gap: 4px; padding: 10px 16px 0; }
+  .wt .wt-ch-steps span { height: 4px; flex: 1; border-radius: 2px; background: rgba(15, 51, 63, 0.15); }
+  .wt .wt-ch-steps span.on { background: var(--ink); }
+  .wt .wt-ch-photo-body { flex-direction: column; gap: 14px; margin-top: 0; }
+  .wt .wt-ch-photo-left, .wt .wt-ch-photo-right { width: auto; gap: 14px; }
+  .wt .wt-ch-photo-left h2 { font-size: 24px; line-height: 1.3; }
+  .wt .wt-ch-photo-sub { display: block; font-size: 13.5px; line-height: 1.5; margin-top: -10px; }
+  .wt .wt-ch-drop { height: 130px; border-radius: 14px; gap: 6px; }
+  .wt .wt-ch-drop b { font-size: 14.5px; }
+  .wt .wt-ch-drop .wt-ch-drop-pick { display: none; }
+  .wt .wt-ch-drop .wt-ch-drop-hint { display: block; }
+  .wt .wt-ch-name { width: auto; }
+  .wt .wt-ch-desc { min-height: 110px; }
+  .wt .wt-ch-worlds { grid-template-columns: 1fr; gap: 8px; }
+  .wt .wt-ch-worlds .opt { padding: 12px 14px; }
+  .wt .wt-ch-worlds .opt b { font-size: 15px; }
+  .wt .wt-ch-worlds .opt.on { padding: 11.5px 13.5px; }
+  .wt .wt-ch-photo-foot { display: none; }
+  .wt .wt-ch-photo-cost { display: block; font-size: 12px; text-align: center; }
+  .wt .wt-ch-limit-box { width: auto; padding: 20px 0; border: 0; background: none; box-shadow: none; gap: 12px; }
+  .wt .wt-ch-limit-box img { width: 110px; height: 148px; }
+  .wt .wt-ch-limit-box h2 { font-size: 22px; }
+  .wt .wt-ch-limit-acts { display: none; }
+}

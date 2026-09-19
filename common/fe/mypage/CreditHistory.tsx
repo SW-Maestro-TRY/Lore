@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { creditHistory, type CreditLine } from "@common/api/credits";
+/* 이 창의 모양도 mypage.css 에 있다 — CreditCharge 와 같은 이유로 직접 읽는다. */
+import "./mypage.css";
 
 /* 크레딧 내역 — 눌러서 여는 창.
  *

@@ -1,338 +1,154 @@
-// Webtoon 탭의 실제 화면. (담당: 하은)
-//
-// haeun/landing 프로토타입(index.html + app.js)을 React 로 옮긴 것이다.
-// 화면 여섯(홈 · 위자드 · 진행 · 결과 · 둘러보기 · 마이페이지)과 편집실.
-//
-// **만들기는 이제 진짜로 돈다.** 위자드에서 「웹툰 만들기」를 누르면
-// `/api/webtoon/v1/nh/create` 로 나가고(그 앞에 스프링이 서서 생성 하네스로
-// 넘긴다 — webtoon/be 참고), 진행 화면이 그 작업을 0.8초마다 받아 그린다.
-// 사람이 멈춰 서는 자리 둘(시트 확인 · 이야기 고르기)도 실제 검수다.
-//
-// **결과 · 둘러보기 · 편집실도 진짜다.** 다 그리면 진행 화면이 run_id 를
-// 넘겨주고 결과 화면이 그것으로 방금 만든 작품을 연다. 둘러보기는 실제 작품
-// 목록을 걸고, 편집실은 그 작품을 열어 다시 그리기 · 지난 판 되돌리기 ·
-// 이미지로 뽑기가 전부 실제로 돈다.
-//
-// 아직 mock 인 것: **마이페이지 하나**. 이 화면만 계정에 달려 있는데, 웹툰
-// 탭이 Lore 앱 계정을 쓸지 하네스 쪽 계정을 쓸지가 아직 안 정해졌다 —
-// 정해지기 전에 아무거나 붙이면 로그인이 두 개가 된다.
-//
-// **자기 머리는 안 그린다.** 원본은 혼자 뜨는 페이지라 자기 머리(.topbar)가
-// 필요했지만, 여기서는 Lore 앱 헤더가 이미 위에 있다 — 둘 다 그리면 머리가
-// 두 개가 되고 "LORE" 가 두 번 나온다.
-//
-// 전역 오염을 막으려고 .webtoon-page 스코프로 감싼다(webtoon.css 참고).
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+// Webtoon 탭의 화면. (담당: 하은)
+//
+// 디자인 캔버스(https://claude.ai/artifact/1LtLUmeSzSbgDUx28xhkKb)를 그대로
+// 옮긴 화면들이다. 화면마다 screens/ 아래 한 폴더, 서버에 말 거는 것은
+// lib/api.ts 한 곳, 화면 사이 이동 규칙은 lib/nav.ts 한 곳이다.
+//
+// **자기 머리는 안 그린다.** Lore 앱 헤더(@common/SiteHeader)가 이미 위에
+// 있어서, 여기서 또 그리면 "LORE" 가 두 번 나온다 — 보조 헤더도 없다.
+//
+// 이어받은 것(haeun/legacy-fe/BACKUP.md):
+//   - `lore_uid`(localStorage) 키 이름 그대로. 바꾸면 기존 사용자가 만든
+//     작품이 전부 남의 것이 된다.
+//   - 로그인해 있으면 들어올 때마다 `POST /my/link` — 기기를 바꾸면 uid 가
+//     새로 생겨서 한 번만 잇는 것으로는 두 번째 기기가 안 붙는다.
+//   - 「내 작품」·공개여부는 자바(`/my/...`)를 거친다.
+
+import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@common/auth/useAuth";
 import "./webtoon.css";
 
-import Hero from "./sections/Hero";
-import HowGalleryFaq from "./sections/HowGalleryFaq";
-import Foot from "./sections/Foot";
-import Wizard from "./sections/Wizard/Wizard";
-import Progress from "./sections/Progress/Progress";
-import Result from "./sections/Result/Result";
-import Works from "./sections/Works/Works";
-import MyPage from "./sections/MyPage/MyPage";
-import Editor from "./sections/Editor/Editor";
-import Characters from "./sections/Characters/Characters";
-import { STYLE_INFO, type WizardForm } from "./lib/wizardData";
-import { createJob, linkThisBrowser, uploadDataUrlsAsGuest } from "./lib/nhApi";
-import { uploadDataUrls } from "@common/api/uploads";
-import type { Character } from "./lib/charApi";
+import { hrefOf, type Go, type View } from "./lib/nav";
+import { linkThisBrowser } from "./lib/api";
+import { LangProvider } from "./lib/i18n";
+import Landing from "./screens/landing/Landing";
+import Entry from "./screens/landing/Entry";
+import Wizard from "./screens/wizard/Wizard";
+import Progress from "./screens/progress/Progress";
+import Result from "./screens/result/Result";
+import Editor from "./screens/editor/Editor";
+import Works from "./screens/works/Works";
+import Photo from "./screens/character/Photo";
+import PhotoResult from "./screens/character/PhotoResult";
+import CharList from "./screens/character/CharList";
+import MyPage from "./screens/mypage/MyPage";
 
-type View = "landing" | "create" | "running" | "result" | "works" | "mypage"
-  | "editor" | "characters";
-
-/** 주소로 열 수 있는 화면. 만들던 중(running)은 뺀다 — 주소만으로는 어느
- *  작업인지 알 수 없어서, 넣으면 빈 진행 화면이 뜬다. */
-const VIEWS = { landing: 1, create: 1, result: 1, works: 1, mypage: 1, editor: 1,
-                characters: 1 } as const;
-
-/* 주소(`?view=`·`?run=`)를 읽으려면 useSearchParams 가 필요한데, 그것을 쓰는
-   컴포넌트는 <Suspense> 안에 있어야 한다 — 없으면 빌드가 이 페이지를 미리
-   그리다가 멈춘다("should be wrapped in a suspense boundary"). 주소를 읽는
-   일은 브라우저에서만 할 수 있으니, 미리 그리는 동안에는 빈 자리를 둔다. */
 export default function WebtoonPage() {
   return (
     <Suspense fallback={null}>
-      <WebtoonScreens />
+      <LangProvider>
+        <WebtoonScreens />
+      </LangProvider>
     </Suspense>
   );
 }
 
-function WebtoonScreens() {
-  // 원본(app.js 의 view())은 body[data-view] 로 화면을 스위치한다. 여기서는
-  // 그것을 상태로 둔다.
-  const [view, setView] = useState<View>("landing");
-  /** 지금 지켜보고 있는 작업. 진행 화면이 이것으로 서버에 묻는다. */
-  const [jobId, setJobId] = useState<string | null>(null);
-  /** 다 만들어진 작품. 결과·편집실이 이것으로 서버에 묻는다. */
-  const [runId, setRunId] = useState<string | null>(null);
-  const [styleLabel, setStyleLabel] = useState("");
+interface Route {
+  view: View;
+  step: number;
+  character?: string;
+  job?: string;
+  run?: string;
+  id?: string;
+}
 
-  /* 화면을 바꿀 때 **주소도 같이 민다.**
-     예전에는 상태만 바꿔서, 홈 → 둘러보기 → 완성본으로 들어간 뒤 뒤로가기를
-     누르면 웹툰 탭을 통째로 빠져나갔다(주소가 한 번도 안 바뀌었으니 브라우저가
-     보기엔 그 사이에 아무 일도 없었다). 화면 여섯을 오가는 것이 이 탭의 거의
-     전부라, 뒤로가기가 안 되면 들어간 곳마다 갇힌다.
-
-     민 주소는 아래 useEffect 가 다시 읽어 화면을 맞춘다 — 그래서 앞으로가기도
-     같이 산다. 만들던 중(running)은 `?view=running&job=<번호>` 로 싣는다 —
-     번호가 있어야 서버에 무엇을 묻는지 알 수 있고, 그래야 새로고침해도
-     하던 데로 돌아온다. */
-  const router = useRouter();
-  const go = (next: Exclude<View, "running">, id?: string) => {
-    const q = next === "result" && id ? `?run=${encodeURIComponent(id)}`
-      : next === "editor" && id ? `?view=editor&run=${encodeURIComponent(id)}`
-      : next === "landing" ? ""
-      : `?view=${next}`;
-    router.push(`/webtoon${q}`);
+/* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
+function routeOf(search: URLSearchParams): Route {
+  const view = search.get("view");
+  const run = search.get("run") || undefined;
+  const card = search.get("card") || undefined;
+  const step = Math.min(4, Math.max(1, Number(search.get("step") || 1) || 1));
+  const base = {
+    step,
+    character: search.get("character") || undefined,
+    job: search.get("job") || undefined,
+    run,
+    id: search.get("id") || undefined,
   };
-  const goHome = () => go("landing");
+  if (view === "running" && base.job) return { view: "running", ...base };
+  if (view === "editor" && run) return { view: "editor", ...base };
+  if (view === "card" && base.id) return { view: "card", ...base };
+  if (view && ["entry", "create", "works", "characters", "try", "mypage"].includes(view)) {
+    return { view: view as View, ...base };
+  }
+  if (run) return { view: "result", ...base };
+  if (card) return { view: "sharedCard", ...base, id: card };
+  return { view: "landing", ...base };
+}
 
-  /* Lore 앱 헤더는 화면 위에 붙어 따라온다. 이 화면의 여러 자리가 그 높이를
-     알아야 한다 — 화면을 꽉 채우는 min-height, 편집실 제목 띠가 서는 자리,
-     도구 서랍의 천장. 높이를 코드에 적어 두면 앱 헤더가 바뀔 때 조용히
-     어긋나므로, 붙어 있는 헤더를 **재서** 변수로 넘긴다. */
+function WebtoonScreens() {
+  const router = useRouter();
+  const search = useSearchParams();
+  /* 주소에서 바로 계산한다 — 상태에 넣고 effect 로 맞추면 첫 화면이 한 번
+     번쩍 보였다가 바뀐다(직접 주소로 들어올 때 실제로 그랬다). */
+  const route = useMemo(() => routeOf(new URLSearchParams(search.toString())), [search]);
+
+  const go: Go = useCallback((view, p, opts) => {
+    const href = hrefOf(view, p);
+    if (opts?.replace) router.replace(href);
+    else router.push(href);
+  }, [router]);
+
+  /* Lore 앱 헤더는 화면 위에 붙어 따라온다. 높이를 재서 변수로 넘긴다 —
+     코드에 적어 두면 헤더가 바뀔 때 조용히 어긋난다. */
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
     const measure = () => {
       const head = [...document.querySelectorAll("header")].find(
-        (h) => !h.closest(".webtoon-page") && getComputedStyle(h).position === "sticky",
+        (h) => !h.closest(".wt") && getComputedStyle(h).position === "sticky",
       );
-      el.style.setProperty("--lore-header-h",
-        `${Math.round(head?.getBoundingClientRect().height || 0)}px`);
+      el.style.setProperty("--lore-header-h", `${Math.round(head?.getBoundingClientRect().height || 0)}px`);
     };
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  /* 주소로 바로 열기.
-       `/webtoon?run=<id>`     그 작품의 완성본 (공유 링크가 이 길로 들어온다 —
-                               남의 작품이면 결과 화면이 내려받기·편집실을 감춘다)
-       `/webtoon?view=mypage`  마이페이지 (헤더가 이 길로 보낸다)
-
-     주소를 **읽기만** 하는 것이 아니라 뒤로가기에도 따라간다. 헤더에서
-     마이페이지로 가면 주소가 바뀌는데, 뒤로가기를 눌러도 화면이 그대로면
-     "뒤로가기가 안 먹는다" 가 된다 — Next 의 라우팅은 이 컴포넌트를 다시
-     안 만든다. */
-  const search = useSearchParams();
-  useEffect(() => {
-    const run = search.get("run");
-    if (run) setRunId(run);
-
-    /* **만들던 중이면 그 작업으로 돌아간다.**
-       진행 상황은 서버가 들고 있는데(작업 번호로 묻는다) 그 번호가 화면
-       상태에만 있어서, 새로고침 한 번이면 만들던 데로 돌아갈 길이 없었다.
-       자주 묻는 것에 "나중에 다시 들어오면 하던 데서 이어집니다" 라고
-       적어 둔 그 약속이 안 지켜지고 있었다. 번호를 주소에 실어 지킨다. */
-    const job = search.get("job");
-    if (job) { setJobId(job); setView("running"); return; }
-
-    const asked = search.get("view");
-    // view 를 먼저 본다 — 편집실은 `?view=editor&run=x` 처럼 둘 다 달고 오므로,
-    // run 을 먼저 보면 편집실로 못 가고 늘 완성본이 뜬다.
-    if (asked && asked in VIEWS) { setView(asked as View); return; }
-    setView(run ? "result" : "landing");
-  }, [search]);
-
-  /* 로그인해 있으면 이 브라우저를 계정에 잇는다.
-     안 이으면 마이페이지의 「내가 만든 웹툰」이 빈다 — 작품이 계정이 아니라
-     브라우저 uid 로 묶여 있어서다(webtoon/be 의 BrowserLink 참고).
-
-     **로그인할 때가 아니라 이 화면에 들어올 때마다** 한다. 기기를 바꾸면 uid
-     가 새로 생기고, 다른 탭에서 로그인하고 여기로 건너올 수도 있다. 서버는
-     같은 짝이면 아무 일도 안 하므로 여러 번 불러도 된다.
-
-     실패해도 삼킨다 — 목록이 비어 보일 뿐이고 다음에 다시 시도한다. 이걸로
-     화면을 막으면 만들던 사람이 로그인 때문에 멈춘다. (잇는 일이 공용 헤더가
-     아니라 여기 있는 이유: 공용 코드가 도메인을 알면 안 된다.) */
-  /* 「이 캐릭터로 웹툰 만들기」로 넘어올 때 들고 오는 것. 만들기 화면이
-     이름·설명·그림을 이미 채운 채로 열린다 — 캐릭터를 만들어 두고도 다시
-     처음부터 적게 하면 만들어 둔 의미가 없다. */
-  const [preset, setPreset] = useState<Character | null>(null);
-
   const { status: authStatus } = useAuth();
   useEffect(() => {
     if (authStatus === "authenticated") void linkThisBrowser().catch(() => {});
   }, [authStatus]);
+  const authenticated = authStatus === "authenticated";
 
-  /* 그림을 그냥 저장해 가지 못하게 — 오른쪽 누르기와 끌어다 놓기.
-     원본은 base.js 가 document 에 걸지만, 여기는 Lore 앱 안이라 이 화면
-     안에서만 막는다(앱 전체의 오른쪽 누르기를 뺏을 자리가 아니다).
-     폰의 길게 누르기와 끌기는 webtoon.css 의 img 규칙이 같이 막는다.
-     ⚠ 막는 것이 아니라 문턱이다 — 주소를 알면 그대로 받을 수 있다.
-
-     **`IMG` 만 보면 샌다.** 그림 위에 손잡이·말풍선·빈 칸이 겹쳐 있으면
-     오른쪽 누르기의 과녁이 그 겹친 것이 되고(pointer-events 로 위에 뜬
-     것들), 그때는 이 검사를 그냥 통과했다. 그림 한 장을 정확히 겨눠야만
-     막히는 문턱은 문턱이 아니다.
-
-     그래서 이 화면 안에서는 오른쪽 누르기를 통째로 막고, **글 쓰는 칸만**
-     비워 둔다 — 제목이나 대사를 고쳐 쓸 때 복사·붙여넣기 메뉴는 있어야
-     하고, 거기엔 저장할 그림도 없다. */
-  const inText = (el: HTMLElement | null) =>
-    !!el?.closest?.('input, textarea, [contenteditable="true"], [contenteditable=""]');
-
+  /* 그림을 그냥 저장해 가지 못하게 — 오른쪽 누르기와 끌어다 놓기. 글 쓰는
+     칸만 비워 둔다(복사·붙여넣기 메뉴는 있어야 한다). 막는 것이 아니라 문턱이다. */
   const guardImage = (ev: React.SyntheticEvent) => {
-    if (inText(ev.target as HTMLElement)) return;
+    const el = ev.target as HTMLElement;
+    if (el?.closest?.('input, textarea, [contenteditable="true"], [contenteditable=""]')) return;
     ev.preventDefault();
   };
 
-  /* 만들기 시작. 실패는 **위자드가 그 자리에서** 보여줘야 하므로 여기서
-     삼키지 않고 그대로 던진다 — 진행 화면으로 넘어가 버리면 무엇이
-     잘못됐는지 볼 자리가 없다(원본 startRun 과 같은 이유). */
-  const start = async (form: WizardForm) => {
-    /* **사진은 S3 로 먼저 올린다.** 본문에 data URL 로 실으면 사진 한 장만
-       커져도 요청이 1MB 를 넘고, CloudFront 앞단 WAF(SizeRestrictions_BODY)가
-       그 크기를 보고 요청을 통째로 막는다 — 로그인 여부와 무관하게 겪는다
-       (2026-09-17 dev 실측: 403). 브라우저가 S3 로 바로 올리고 우리는 키만
-       넘긴다.
-
-       로그인한 사람은 팀 공용 presign(계정에 묶인 티켓)을, 게스트는
-       webtoon 전용 presign(GuestGate 의 IP 해시로 묶은 티켓)을 쓴다 — 둘 다
-       "발급받은 사람만 그 키를 쓸 수 있다" 는 같은 보호를 받는다.
-
-       올리다 실패하면 data URL 로 되돌린다. 사진 올리는 길이 잠깐 막혔다고
-       만들기가 통째로 죽으면 안 된다. */
-    let keys: string[] | undefined;
-    if (form.photos.length) {
-      try {
-        keys = authStatus === "authenticated"
-          ? await uploadDataUrls(form.photos, "webtoon")
-          : await uploadDataUrlsAsGuest(form.photos);
-      } catch {
-        keys = undefined;
-      }
-    }
-
-    const got = await createJob({
-      name: form.name.trim(),
-      character: form.character.trim(),
-      photo_note: "",
-      fields: {},
-      genre: form.genre.trim(),
-      // 「어떤 이야기를 만들까요?」에 적은 것. 한동안 이 값을 안 보내서
-      // 사람이 적은 이야기가 그대로 버려지고 있었다 — 물어보고 버리면
-      // 사람은 자기가 적은 것이 반영된 줄 안다.
-      story: form.story.trim(),
-      style: form.style,
-      // 5걸음에서 고른 화질. 값이 여기서 빠지면 서버가 기본(파도)으로 그리고,
-      // 화면에는 「너울」이라고 적혀 있는 채로 파도가 나온다.
-      quality: form.quality,
-      // 키로 올렸으면 사진은 안 싣는다 — 두 벌을 보내는 셈이 된다.
-      photos_data: keys ? [] : form.photos,
-      photo_keys: keys,
-      // 고른 캐릭터가 있으면 번호만 보낸다 — 그림은 서버가 붙인다.
-      character_id: form.characterId,
-      agree_ip: form.agreeIp,
-      // 갈림길에서 고른 것. 한동안 이 값을 안 보내서 「빠르게 결과부터」를
-      // 골라도 똑같이 두 번 멈췄다 — 카드에는 "중간에 안 멈춥니다" 라고
-      // 적혀 있었다.
-      checkpoints: form.mode === "expert",
-    });
-    setStyleLabel(STYLE_INFO.find(([key]) => key === form.style)?.[1] || "");
-    setJobId(got.id);
-    setView("running");
-    /* 작업 번호를 주소에 싣는다 — 새로고침하거나 창을 닫았다 다시 와도
-       하던 데로 돌아온다. replace 로 미는 이유: 뒤로가기가 방금 떠난
-       만들기 화면으로 가야지, 만들던 중으로 되돌아오면 안 된다. */
-    router.replace(`/webtoon?view=running&job=${encodeURIComponent(got.id)}`);
-  };
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [route.view, route.step, route.id, route.run, route.job]);
 
   return (
-    <div
-      ref={rootRef}
-      className={`webtoon-page${view === "result" ? " is-result" : ""}`}
-      onContextMenu={guardImage}
-      onDragStart={guardImage}
-    >
-      {/* 홈은 한 겹으로 묶는다 — 원본의 #landing 자리다. 폭·배경 규칙이
-          그 덩어리에 걸려 있어서, 안 묶으면 넓은 화면에서 홈만 틀에 갇힌다. */}
-      {/* **만들던 것이 있으면 돌아갈 길을 늘 띄운다.**
-          기다리는 동안 둘러보러 나갈 수 있게 해 놓고 돌아올 단추가 없으면,
-          나간 사람은 만들던 것이 어디 갔는지 모른다 — 주소를 외워 둘 리도
-          없다. 진행 화면 자신에게는 안 띄운다(이미 거기다). */}
-      {jobId && view !== "running" && (
-        <button type="button" className="back-to-run"
-                onClick={() => { setView("running"); router.replace(
-                  `/webtoon?view=running&job=${encodeURIComponent(jobId)}`); }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/static/lou/react/idle/01.webp" alt="" aria-hidden="true" />
-          <span>
-            <b>루가 웹툰을 만들고 있어요</b>
-            <small>눌러서 돌아가기</small>
-          </span>
-        </button>
+    <div ref={rootRef} className="wt" onContextMenu={guardImage} onDragStart={guardImage}>
+      {route.view === "landing" && <Landing go={go} />}
+      {route.view === "entry" && <Entry go={go} />}
+      {route.view === "create" && (
+        <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated} />
       )}
-
-      {view === "landing" && (
-        <div className="landing">
-          <Hero onStart={() => go("create")} onBrowse={() => go("works")} />
-          {/* 「완성된 웹툰 한 편 전체 보기」 — **둘러보기로 보낸다.**
-              전에는 특정 작품 하나를 열었는데, 그 자리는 견본 몇 장을 보고
-              "실제로는 어떻게 나오나" 가 궁금해진 자리다. 한 편만 보여주면
-              그 한 편이 전부인 줄 안다. */}
-          <HowGalleryFaq onSeeFull={() => go("works")} />
-          <Foot />
-        </div>
+      {route.view === "running" && route.job && (
+        <Progress jobId={route.job} go={go} />
       )}
-      {view === "create" && (
-        <Wizard onClose={goHome} onSubmit={start} preset={preset}
-                onPickCharacter={() => go("characters")} />
+      {route.view === "result" && route.run && <Result runId={route.run} go={go} authenticated={authenticated} />}
+      {route.view === "editor" && route.run && <Editor runId={route.run} go={go} authStatus={authStatus} />}
+      {route.view === "works" && <Works go={go} authenticated={authenticated} />}
+      {route.view === "characters" && <CharList go={go} />}
+      {route.view === "try" && <Photo go={go} authenticated={authenticated} />}
+      {route.view === "card" && route.id && (
+        <PhotoResult id={route.id} shared={false} go={go} authenticated={authenticated} />
       )}
-      {view === "characters" && (
-        <Characters onUse={(c) => { setPreset(c); go("create"); }} />
+      {route.view === "sharedCard" && route.id && (
+        <PhotoResult id={route.id} shared go={go} authenticated={authenticated} />
       )}
-      {view === "running" && jobId && (
-        <Progress
-          jobId={jobId}
-          onBrowse={() => go("works")}
-          styleLabel={styleLabel}
-          onExit={() => { setJobId(null); goHome(); }}
-          onDone={(id) => {
-            /* **다 만들었으면 돌아갈 것이 없다.** 안 지우면 결과 화면에서도
-               「루가 웹툰을 만들고 있어요」 띠가 그대로 떠 있고, 눌러 보면
-               이미 끝난 작업의 진행 화면으로 되돌아간다. */
-            setJobId(null);
-            go("result", id);
-          }}
-        />
-      )}
-      {view === "result" && (
-        <Result runId={runId} onExit={goHome} onEditor={() => go("editor", runId || undefined)} />
-      )}
-      {view === "works" && (
-        <Works
-          onOpen={(id) => go("result", id)}
-          onCreate={() => go("create")}
-          onHome={goHome}
-        />
-      )}
-      {view === "mypage" && (
-        <MyPage
-          onOpenWork={(id) => go("result", id)}
-          onOpenEditor={(id) => go("editor", id)}
-          onCreate={() => go("create")}
-          onBrowse={() => go("works")}
-          onCharacters={() => go("characters")}
-        />
-      )}
-      {/* 편집실은 완성본에서 들어온다 — 그 작품 그 회차를 그대로 연다.
-          runId 가 없으면 원본과 같이 샘플이 열린다. */}
-      {view === "editor" && (
-        <Editor
-          runId={runId || undefined}
-          onOpenRun={(id) => { setRunId(id); }}
-        />
-      )}
+      {route.view === "mypage" && <MyPage go={go} />}
     </div>
   );
 }
