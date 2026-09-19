@@ -186,6 +186,17 @@ def page_path(run_dir: Path, page_no: int) -> Path:
     return run_dir / PAGE_DIR / f"page{page_no:02d}.png"
 
 
+def scene_context() -> str:
+    """그림 프롬프트에 장면을 몇 개 주는가. `all`(기본) 또는 `one`.
+
+    **기본값은 코드에 둔다** — `.env` 는 jar 에 안 실려서 서버에서는
+    통째로 사라진다(webtoon/CLAUDE.md). 기본이 `all` 이라 이 값을 안 주면
+    예전과 똑같이 돈다.
+    """
+    want = (llm.env("NH_SCENE_CONTEXT") or "").strip().lower()
+    return "one" if want == "one" else "all"
+
+
 def opens_at(scenes: list[dict], scene_no: int) -> str:
     """장면 `scene_no` 가 시작하는 자리 — 그 장면 자신의 「직전 상태」.
 
@@ -222,7 +233,25 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
     lines = ["## 이 화 전체 줄거리 (지금 그릴 자리는 아래 「장면 내용」이 정한다)", ""]
     if title or genre:
         lines.append(f"[작품] {title}" + (f" · {genre}" if genre else ""))
-    if scenes:
+    if scenes and scene_context() == "one":
+        # 지금 그릴 장면 하나만 준다. 앞뒤를 안 보여주면 그림 모델이 이
+        # 장면을 **화 전체의 요약**으로 그리지 않고 그 순간만 그리는지
+        # 보려고 둔 자리다(2026-09-19 비교 실험). 기본값은 아니다 —
+        # 켜려면 `.env` 에 `NH_SCENE_CONTEXT=one`.
+        one = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
+        lines += ["", "[이 장에서 그릴 장면]", (one.get("what") or "").strip(),
+                  "", "앞뒤 장면은 주지 않는다. 이 한 순간만 그린다 — 화 전체를 "
+                  "요약하거나 앞에서 이미 지나온 상황을 다시 설명하지 않는다."]
+        if scene_no > 1:
+            # 나레이션 이어쓰기. 지금 나오는 것이 장마다 도입부로 되돌아가서,
+            # 독자가 같은 설명을 네 번 읽는다(2026-09-19 전체 검수가 3·4·5
+            # 페이지를 그렇게 잡았다). 무엇을 쓸지는 안 정해 준다 — 어디서부터
+            # 쓰는지만 못 박는다.
+            lines += ["", "[나레이션] 앞 장이 이미 설명한 것을 다시 설명하지 "
+                      "않는다. 독자는 앞 장을 읽고 여기로 왔다 — 상황을 다시 "
+                      "깔지 말고, 앞 장 마지막 줄 다음에서 이어 쓴다. 이 장에서 "
+                      "처음 알게 되는 것만 적는다. 무슨 말을 쓸지는 네가 정한다."]
+    elif scenes:
         lines += ["", "[장면들 — 순서대로 일어나는 사건들이다]"]
         for i, s in enumerate(scenes, 1):
             mark = " ← 이 장에서 그릴 자리" if i == scene_no else ""
@@ -251,7 +280,9 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         role = "중간 장면 — 앞 장면에서 자연스럽게 이어받아 진행한다."
 
     lines = [f"[이 페이지의 역할] {role}", "",
-             f"위 목록의 {scene_no}번 장면 자리를 그린다: \"{scene.get('what', '')}\"", ""]
+             (f"위 목록의 {scene_no}번 장면 자리를 그린다: "
+              if scene_context() == "all" else "이 장면을 그린다: ")
+             + f"\"{scene.get('what', '')}\"", ""]
     if scene.get("where"):
         lines += [f"[장소와 상황] {scene['where']}", ""]
     if scene.get("acting"):
@@ -471,7 +502,11 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                 run_dir, page_no, scene_no=n_, direction=direction,
                 char=char, cast=cast, prev_is_cover=(n_ == 1),
                 next_from=prev_from,
-                suffix="" if attempt == 0 else f".{attempt + 1}")
+                suffix="" if attempt == 0 else f".{attempt + 1}",
+                # 그림이 보고 그린 것과 **같은 장면**을 검수에게 준다.
+                # direction 만 넘기던 때는 검수 쪽 장면 목록이 통째로
+                # 비었다(pagecheck.scene_texts 참고).
+                scenes=scenes)
             if rmeta and on_page:
                 on_page(rmeta)
             if not got:
