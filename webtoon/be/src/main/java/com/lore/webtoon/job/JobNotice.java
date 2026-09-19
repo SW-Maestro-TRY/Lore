@@ -62,15 +62,17 @@ public class JobNotice {
     private final UserRepository users;
     private final StoryStore stories;
     private final EmailService mail;
+    private final NotifySettingService settings;
     private final String site;
 
     public JobNotice(JobStore store, UserRepository users, StoryStore stories,
-                     EmailService mail,
+                     EmailService mail, NotifySettingService settings,
                      @Value("${lore.webtoon.site-url:https://lorecomic.com}") String site) {
         this.store = store;
         this.users = users;
         this.stories = stories;
         this.mail = mail;
+        this.settings = settings;
         this.site = site.endsWith("/") ? site.substring(0, site.length() - 1) : site;
     }
 
@@ -90,7 +92,9 @@ public class JobNotice {
      * 이 작업의 결과를 어디로 보낼까. 보낼 데가 없으면 {@code null}.
      *
      * 게스트가 적은 주소가 <b>계정 이메일을 이긴다</b> — 로그인한 사람이
-     * 굳이 다른 주소를 적었다면 그쪽으로 받고 싶다는 뜻이다.
+     * 굳이 다른 주소를 적었다면 그쪽으로 받고 싶다는 뜻이다. 그래서
+     * {@link NotifySettingService}는 <b>계정 이메일로 떨어지는 자리에서만</b>
+     * 본다 — 이번만 다른 주소로 받겠다는 명시적 선택까지 막으면 안 된다.
      */
     public String addressOf(WebtoonJob job) {
         if (job == null) {
@@ -100,7 +104,7 @@ public class JobNotice {
         if (typed != null) {
             return typed;
         }
-        if (job.getUserId() == null) {
+        if (job.getUserId() == null || !settings.isOn(job.getUserId())) {
             return null;
         }
         return users.findById(job.getUserId()).map(User::getEmail).map(JobNotice::clean).orElse(null);
