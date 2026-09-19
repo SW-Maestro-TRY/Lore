@@ -45,7 +45,7 @@ import java.util.concurrent.Executors;
  *
  * <h2>값은 하루 몫이 먼저다</h2>
  *
- * 하루 몇 개까지는 <b>공짜</b>이고, 그 뒤로 1크레딧이다. 캐릭터를 못 만들면
+ * 하루 몇 개까지는 <b>공짜</b>이고, 그 뒤로 2크레딧이다. 캐릭터를 못 만들면
  * 웹툰 자체를 못 만드는 자리라 여기서 막히면 안 되고, 그렇다고 공짜로 열어
  * 두면 한 장에 실측 75원이 무한히 나간다 — "마음에 안 드네, 다시" 를 열 번
  * 하면 웹툰 한 편 값이다.
@@ -92,8 +92,8 @@ public class CharacterService {
     public CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
                             CharacterOwner owner, PrivateArt art, CreditGate credits,
                             @Value("${lore.webtoon.character.work-dir:}") String workDir,
-                            @Value("${lore.webtoon.character.free-per-day:5}") int freePerDay,
-                            @Value("${lore.webtoon.character.credit-cost:1}") int cost,
+                            @Value("${lore.webtoon.character.free-per-day:3}") int freePerDay,
+                            @Value("${lore.webtoon.character.credit-cost:2}") int cost,
                             @Value("${lore.webtoon.cdn-base:}") String cdn) {
         this(characters, maker, owner, art, credits, workDir, freePerDay, cost, cdn,
              Clock.system(ZONE));
