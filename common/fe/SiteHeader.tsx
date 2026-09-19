@@ -53,6 +53,10 @@ export default function SiteHeader() {
   const displayName = user ? user.email.split("@")[0] : "";
 
   return (
+    /* 딸림창은 <header> **밖**에 둔다. 헤더에 backdrop-filter 가 걸려 있어서
+       그 안에 있으면 position: fixed 가 뷰포트가 아니라 헤더(높이 60px)를
+       기준으로 잡힌다 — 창이 위쪽으로 잘리고 어두운 막도 헤더만 덮는다. */
+    <>
     <header className={styles.header}>
       <div className={styles.headerInner}>
         <Link href="/" className={styles.wordmark}>
@@ -129,13 +133,15 @@ export default function SiteHeader() {
       {/* 로그인에 성공하면 웹툰 탭에서는 곧장 마이페이지로 간다 — 여기서
           로그인하는 이유가 대개 "내가 만든 것을 보려고" 라서다. 다른 탭은
           하던 자리에 그대로 남는다(모달의 원래 뜻). */}
-      {chargeOpen && <CreditCharge onClose={() => setChargeOpen(false)} />}
-
-      <AuthModal
-        open={authOpen}
-        onClose={() => setAuthOpen(false)}
-        onSuccess={onWebtoon ? () => router.push(MY_PAGE) : undefined}
-      />
     </header>
+
+    {chargeOpen && <CreditCharge onClose={() => setChargeOpen(false)} />}
+
+    <AuthModal
+      open={authOpen}
+      onClose={() => setAuthOpen(false)}
+      onSuccess={onWebtoon ? () => router.push(MY_PAGE) : undefined}
+    />
+    </>
   );
 }
