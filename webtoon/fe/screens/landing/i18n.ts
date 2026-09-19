@@ -15,7 +15,7 @@ const dict: Dict = {
   "한 편 {cost}크레딧 · 보유 {balance}C": { en: "{cost} credits per episode · you have {balance}C", ja: "1話 {cost}クレジット・残高 {balance}C", zh: "每话 {cost} 积分 · 余额 {balance}C" },
 
   /* ---- 예시 작품 띠 ---- */
-  "이 서비스로 만들어진 편": { en: "Episodes made here", ja: "このサービスで作られた作品", zh: "用这个服务做出的作品" },
+  "웹툰 전체 보러가기": { en: "See all webtoons", ja: "ウェブトゥーンをすべて見る", zh: "查看全部漫画" },
   "작품을 못 불러왔습니다": { en: "Couldn't load the works", ja: "作品を読み込めませんでした", zh: "无法加载作品" },
   "다시 시도": { en: "Try again", ja: "もう一度", zh: "重试" },
   "{title} 표지": { en: "{title} cover", ja: "{title} の表紙", zh: "{title} 封面" },
