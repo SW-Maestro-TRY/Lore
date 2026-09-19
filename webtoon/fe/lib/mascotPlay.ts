@@ -137,16 +137,15 @@ export function setupLou(): () => void {
   }
 
   // ---- 흔들기 ------------------------------------------------------------
+  /* 흔들기는 드래그 중 방향을 빠르게 3번 뒤집는 것으로만 낸다(아래 onPointerMove) —
+   * 실제 기기 흔들기(DeviceMotionEvent)와 그 권한 요청 버튼은 뺐다: 데스크톱에서는
+   * 뜻 없는 버튼이고, 모바일에서도 권한 팝업까지 띄우면서 얻는 재미보다 그 팝업이
+   * 주는 거부감이 더 크다는 판단. */
   const DRAG_SHAKE_FLIPS = 3;
   const DRAG_SHAKE_WINDOW = 900;
-  const HINT_BASE = "누르기 · 연달아 누르기 · 꾹 누르기 · 끌어당기기 · 잡고 흔들기";
-  const SHAKE_JERK = 16;
   const SHAKE_GAP = 2000;
 
-  let shakeOn = false;
-  let shakeAsked = false;
   let shakeAt = 0;
-  let lastAcc: number[] | null = null;
 
   function canShake(): boolean {
     return !!art?.shake && Date.now() - shakeAt >= SHAKE_GAP;
@@ -156,72 +155,6 @@ export function setupLou(): () => void {
     shakeAt = Date.now();
     touchedAt = Date.now();
     play(pickKind("shake"), 380, hold, after || rest);
-  }
-
-  function onShake(e: DeviceMotionEvent) {
-    const g = e.acceleration;
-    const a = g && g.x !== null ? g : e.accelerationIncludingGravity;
-    if (!a) return;
-    const now = [a.x || 0, a.y || 0, a.z || 0];
-    if (!lastAcc) {
-      lastAcc = now;
-      return;
-    }
-    const jerk =
-      Math.abs(now[0] - lastAcc[0]) + Math.abs(now[1] - lastAcc[1]) + Math.abs(now[2] - lastAcc[2]);
-    lastAcc = now;
-    if (jerk < SHAKE_JERK || !canShake()) return;
-    fireShake();
-  }
-
-  function startShake() {
-    if (shakeOn) return;
-    shakeOn = true;
-    window.addEventListener("devicemotion", onShake);
-    const btn = document.querySelector<HTMLElement>("#shakeAllow");
-    if (btn) btn.hidden = true;
-    const hint = document.querySelector<HTMLElement>("#playHint");
-    if (hint) hint.textContent = `${HINT_BASE} · 폰 흔들기`;
-  }
-
-  async function askShake() {
-    if (shakeOn || shakeAsked) return;
-    shakeAsked = true;
-    const DME = (window as any).DeviceMotionEvent;
-    if (!DME) return;
-    if (typeof DME.requestPermission !== "function") {
-      startShake();
-      return;
-    }
-    try {
-      if ((await DME.requestPermission()) === "granted") return startShake();
-    } catch {
-      /* 아래에서 버튼을 보여 준다 */
-    }
-    const b = document.querySelector<HTMLElement>("#shakeAllow");
-    if (b) b.hidden = false;
-  }
-
-  function setupShake() {
-    const DME = (window as any).DeviceMotionEvent;
-    const btn = document.querySelector<HTMLButtonElement>("#shakeAllow");
-    if (!DME) return;
-    if (typeof DME.requestPermission !== "function") {
-      startShake();
-      return;
-    }
-    if (!btn) return;
-    btn.hidden = false;
-    const onClick = async () => {
-      shakeAsked = true;
-      try {
-        if ((await DME.requestPermission()) === "granted") startShake();
-      } catch {
-        /* 거절하면 그냥 흔들기만 없다 */
-      }
-    };
-    btn.addEventListener("click", onClick);
-    cleanupFns.push(() => btn.removeEventListener("click", onClick));
   }
 
   const cleanupFns: Array<() => void> = [];
@@ -317,7 +250,6 @@ export function setupLou(): () => void {
         play("longpress", 900, 900);
       }, 550);
       preloadRest();
-      askShake();
     };
 
     const onPointerMove = (e: PointerEvent) => {
@@ -420,8 +352,6 @@ export function setupLou(): () => void {
       if (clickWindow) clearTimeout(clickWindow);
       if (holdTimer) clearTimeout(holdTimer);
     });
-
-    setupShake();
   }
 
   setupLouInner();
@@ -430,7 +360,6 @@ export function setupLou(): () => void {
     disposed = true;
     if (idleInterval) clearInterval(idleInterval);
     if (timer) clearTimeout(timer);
-    window.removeEventListener("devicemotion", onShake);
     for (const fn of cleanupFns) fn();
   };
 }
