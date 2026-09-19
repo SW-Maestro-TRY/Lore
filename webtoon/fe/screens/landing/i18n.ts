@@ -40,6 +40,8 @@ const dict: Dict = {
   "이미지 한장이 웹툰이 되는 과정,": { en: "From a single image to a finished webtoon,", ja: "1枚の画像がウェブトゥーンになるまで、", zh: "从一张图片到漫画的全过程，" },
   "LORE 하나로 충분합니다": { en: "LORE is all you need", ja: "LOREひとつで十分です", zh: "有 LORE 就够了" },
   "LORE 하나로 충분합니다.": { en: "LORE is all you need.", ja: "LOREひとつで十分です。", zh: "有 LORE 就够了。" },
+  " 하나로 충분합니다": { en: " is all you need", ja: "ひとつで十分です", zh: " 就够了" },
+  " 하나로 충분합니다.": { en: " is all you need.", ja: "ひとつで十分です。", zh: " 就够了。" },
   "내 캐릭터가 살아 움직이는 걸 보세요": { en: "Watch your character come to life", ja: "あなたのキャラクターが動き出すのを見てください", zh: "看你的角色活起来" },
   "설정만 있던 캐릭터가 이야기 속에서 말하고 움직여요. 캐릭터를 넣으면 그 캐릭터가 주인공인 웹툰이 나옵니다.": {
     en: "A character that was only a description starts talking and moving inside a story. Put in a character, and you get a webtoon with them as the lead.",
