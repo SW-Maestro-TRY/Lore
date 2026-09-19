@@ -224,6 +224,17 @@ def direction_block(directions: list[dict]) -> str:
         n = _int(d.get("n"))
         lines.append(f"### 후보 {n}. {_text(d.get('title'))}"
                      + (f" [{_text(d.get('genre'))}]" if _text(d.get("genre")) else ""))
+        # 이야기 본문. **`plot` 만 보면 안 된다** — 지금 story 형식은 소개
+        # (`intro`)와 본문(`body`)으로 나오고, `plot`·`scenes` 는 옛 형식
+        # (### 하위 절)에서만 채워지는 호환 자리라 늘 비어 있다
+        # (`run.parse_directions`). 그래서 이 검수에 제목 네 줄만 가고 있었고,
+        # 모델이 없는 이야기를 지어내 읽고 전부 통과시켰다
+        # (2026-09-19, run 20260919T022231-383b4b — 마법탑 이야기를 학교
+        # 교실 이야기로 읽었다).
+        if _text(d.get("intro")):
+            lines += ["", "[소개]", _text(d["intro"])]
+        if _text(d.get("body")):
+            lines += ["", "[본문]", _text(d["body"])]
         if _text(d.get("plot")):
             lines += ["", "[줄거리]", _text(d["plot"])]
         cast = [c for c in (d.get("cast") or []) if isinstance(c, dict) and _text(c.get("name"))]
@@ -475,6 +486,18 @@ def review_directions(run_dir: Path, char: dict | None, directions: list[dict],
     directions = [d for d in (directions or []) if isinstance(d, dict)]
     if not directions:
         return None, None
+
+    # 읽을 것이 없으면 **부르지 않는다.** 본문 없이 제목만 보내면 모델은
+    # "못 읽겠다" 고 하지 않고 그럴듯한 이야기를 지어내 검수한다 — 그 결과가
+    # `통과` 로 사람 앞에 붙으면, 검수가 없는 것보다 나쁘다(있다고 믿게 된다).
+    empty = [d for d in directions
+             if not (_text(d.get("body")) or _text(d.get("plot"))
+                     or _strs(d.get("scenes")))]
+    if empty:
+        raise SystemExit(
+            f"이야기 후보 {len(empty)}개에 본문이 없습니다 "
+            f"(후보 {', '.join(str(_int(d.get('n'))) for d in empty)}). "
+            "검수가 읽을 것이 없어 멈춥니다 — story 단계 산출물을 확인하세요.")
 
     prompt = build_prompt(char, directions)
     write_text(run_dir / "story_review_prompt.txt", prompt)
