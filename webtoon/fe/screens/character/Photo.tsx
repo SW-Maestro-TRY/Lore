@@ -15,7 +15,7 @@ import { isLimitError, lastCardId, loadDraft, runTry, saveDraft } from "./draft"
 import "./i18n";
 import "./Photo.css";
 
-export default function Photo({ go }: { go: Go }) {
+export default function Photo({ go, authenticated = false }: { go: Go; authenticated?: boolean }) {
   const t = useT();
   const [worlds, setWorlds] = useState<World[]>([]);
   const [photo, setPhoto] = useState<string | undefined>();
@@ -100,7 +100,7 @@ export default function Photo({ go }: { go: Go }) {
   };
 
   if (limited !== null) {
-    return <LimitView go={go} message={limited} />;
+    return <LimitView go={go} message={limited} authenticated={authenticated} />;
   }
 
   return (
@@ -206,7 +206,8 @@ function untilMidnight(): string {
   return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
-export function LimitView({ go, message }: { go: Go; message?: string }) {
+export function LimitView({ go, message, authenticated = false }:
+  { go: Go; message?: string; authenticated?: boolean }) {
   const t = useT();
   const [last, setLast] = useState<Character | null>(null);
   const [perDay, setPerDay] = useState<number | null>(null);
@@ -241,7 +242,9 @@ export function LimitView({ go, message }: { go: Go; message?: string }) {
               {last && (
                 <button type="button" className="btn btn-p" onClick={() => go("card", { id: last.id })}>{t("이 캐릭터로 1화 보기")}</button>
               )}
-              <span className="btn btn-w" style={{ cursor: "default" }}>{t("가입하면 하루 10번")}</span>
+              {!authenticated && (
+                <span className="btn btn-w" style={{ cursor: "default" }}>{t("로그인하면 크레딧으로 이어서")}</span>
+              )}
             </div>
           </div>
         </div>
@@ -250,7 +253,9 @@ export function LimitView({ go, message }: { go: Go; message?: string }) {
         {last && (
           <button type="button" className="btn btn-p" style={{ height: 52 }} onClick={() => go("card", { id: last.id })}>{t("이 캐릭터로 1화 보기")}</button>
         )}
-        <span className="btn btn-w" style={{ cursor: "default" }}>{t("가입하면 하루 10번")}</span>
+        {!authenticated && (
+                <span className="btn btn-w" style={{ cursor: "default" }}>{t("로그인하면 크레딧으로 이어서")}</span>
+              )}
       </div>
     </>
   );

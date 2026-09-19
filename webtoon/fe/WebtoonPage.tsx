@@ -141,7 +141,7 @@ function WebtoonScreens() {
       {route.view === "editor" && route.run && <Editor runId={route.run} go={go} authStatus={authStatus} />}
       {route.view === "works" && <Works go={go} authenticated={authenticated} />}
       {route.view === "characters" && <CharList go={go} />}
-      {route.view === "try" && <Photo go={go} />}
+      {route.view === "try" && <Photo go={go} authenticated={authenticated} />}
       {route.view === "card" && route.id && (
         <PhotoResult id={route.id} shared={false} go={go} authenticated={authenticated} />
       )}
