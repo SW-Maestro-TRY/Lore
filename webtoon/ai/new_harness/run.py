@@ -49,6 +49,7 @@ import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
 import detailart                              # noqa: E402
 import storycheck                             # noqa: E402
+import storydiff                              # noqa: E402
 import fullreview                             # noqa: E402
 import pages as pagemod                       # noqa: E402
 import runmeta                                # noqa: E402
@@ -638,12 +639,18 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
 
 
 def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
-                review: bool | None = None) -> list[dict]:
+                review: bool | None = None, diff: bool | None = None) -> list[dict]:
     """이야기 후보 4개. 다 쓰고 나서 **한 번 더 독자의 눈으로 읽는다.**
 
-    review : 후보를 검수한다(storycheck). 사람이 고르는 화면에 판정이 같이
-    붙어 보이는 것이 전부고, **아무 후보도 막지 않는다.** None 이면
-    `.env`(`NH_STORY_REVIEW`, 기본 켜짐)를 따른다.
+    review : 후보 하나하나를 검수한다(storycheck). 사람이 고르는 화면에
+    판정이 같이 붙어 보이는 것이 전부고, **아무 후보도 막지 않는다.**
+    None 이면 `.env`(`NH_STORY_REVIEW`, 기본 켜짐)를 따른다.
+
+    diff : 후보 넷이 서로 다른가를 견준다(storydiff). review 와 같은
+    자리에서 도는 별도 검수다 — 하나가 하나를 읽는 것이 아니라 넷을 짝지어
+    본다. None 이면 `.env`(`NH_STORY_DIFF`, **기본 꺼짐**)를 따른다. 이
+    자가 사람 눈과 맞는지 아직 확인되지 않아서, storycheck 과 달리 켜져
+    있지 않다(`storydiff.enabled` 참고).
     """
     block = story_input_block(char).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
     note = (note or "").strip()
@@ -682,6 +689,14 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         _, rmeta = storycheck.review_directions(run_dir, char, directions)
         if rmeta:
             record(run_dir, rmeta)
+
+    # 넷이 서로 다른가는 후보 하나하나를 보는 것과 다른 질문이라, 따로
+    # 붙였다(storydiff 문서 참고) — 기본 꺼짐이라 지금은 켜기 전까지
+    # 아무 run 에도 안 걸린다.
+    if (storydiff.enabled() if diff is None else diff) and directions:
+        _, dmeta = storydiff.diff_directions(run_dir, char, directions)
+        if dmeta:
+            record(run_dir, dmeta)
     return directions
 
 
@@ -1178,6 +1193,10 @@ def main(argv=None) -> int:
     p.add_argument("--no-story-review", action="store_true",
                    help="이야기 후보를 만든 뒤 검수를 하지 않는다 (기본은 켜짐 — "
                         ".env 의 NH_STORY_REVIEW=0 과 같다)")
+    p.add_argument("--story-diff", action="store_true",
+                   help="이미 만든 이야기 후보 넷이 서로 다른가를 견주기만 한다 "
+                        "(기본 흐름에선 NH_STORY_DIFF=1 일 때만 자동으로 도는 단계 — "
+                        "단독 재실행용. 후보는 안 건드리고 story_diff.json 만 쓴다)")
     p.add_argument("--full-review", action="store_true",
                    help="이미 그린 화를 처음부터 끝까지 읽어 검수만 한다 "
                         "(다시 그리지 않는다. full_review.json 만 쓴다)")
@@ -1245,7 +1264,7 @@ def main(argv=None) -> int:
     # --sheet-from 만 준 것도 여기서 끝난다 — 시트를 가져다 놓는 것이 그
     # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
-    if (args.story_review or args.full_review
+    if (args.story_review or args.story_diff or args.full_review
             or args.sheet or args.sheet_spec or args.detail_pages
             or args.page or args.sheet_from or args.pick_save or args.restory
             or args.scenes):
@@ -1256,11 +1275,15 @@ def main(argv=None) -> int:
             # 지난 판정도 같이 지운다 — 후보가 바뀌었는데 옛 판정이 남아
             # 있으면 화면이 다른 이야기의 지적을 붙여 보여준다.
             (run_dir / "story_review.json").unlink(missing_ok=True)
+            (run_dir / "story_diff.json").unlink(missing_ok=True)
             stage_story(run_dir, char, args.dry_run, note=args.note,
                         review=False if args.no_story_review else None)
         if args.story_review:
             storycheck.review_run(run_dir, dry_run=args.dry_run,
                                   on_call=lambda meta: record(run_dir, meta))
+        if args.story_diff:
+            storydiff.diff_run(run_dir, dry_run=args.dry_run,
+                               on_call=lambda meta: record(run_dir, meta))
         if args.full_review:
             fullreview.review_run(run_dir, dry_run=args.dry_run,
                                   on_call=lambda meta: record(run_dir, meta))
