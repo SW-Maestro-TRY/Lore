@@ -200,7 +200,7 @@ def user_story_block(char: dict) -> str:
             "한다. 배경 설정으로만 깔고 넘어가지 마라.\n")
 
 
-def story_input_block(char: dict) -> str:
+def story_input_block(char: dict, run_dir: Path | None = None) -> str:
     """이야기 단계의 입력 — 장르가 주어졌을 때만 장르 참고 자료를 더한다.
 
     장르가 없으면 story_prompt 가 4개 방향마다 서로 다른 장르를 스스로
@@ -209,6 +209,11 @@ def story_input_block(char: dict) -> str:
     world_text_for) — 구체화 단계에서만 장르 세계관을 주면, 장면 목록 자체가
     이미 장르 색이 없는 소재(출입증·CCTV 등)로 굳어 있어서 구체화가 소재를
     바꿔치기하는 식으로만 손볼 수 있었다(2026-08-31, 사용자 지적).
+
+    `run_dir`(2026-09-19 추가) — 있으면 장르 샘플 카드가 **최근에 안 보여준
+    카드를 우선** 고르고, 이번에 고른 카드를 그 run 에 남겨 다음 run 이 이어
+    피하게 한다(`genre_samples_for` 참고). 없으면(기본) 예전처럼 그냥
+    무작위로 고른다 — 호출부를 다 못 고친 자리가 있어도 안 깨진다.
     """
     block = input_block(char).rstrip("\n")
     genre = char["genre"]
@@ -218,7 +223,7 @@ def story_input_block(char: dict) -> str:
     world = world_text_for(genre)
     if world:
         lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
-    cards = genre_samples_for(genre)
+    cards = genre_samples_for(genre, run_dir=run_dir)
     if cards:
         lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
                   "", GENRE_SAMPLE_NOTE, "", cards]
@@ -645,7 +650,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
     붙어 보이는 것이 전부고, **아무 후보도 막지 않는다.** None 이면
     `.env`(`NH_STORY_REVIEW`, 기본 켜짐)를 따른다.
     """
-    block = story_input_block(char).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
+    block = story_input_block(char, run_dir).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
     note = (note or "").strip()
     if note:
         # 다시 만들기에서 사람이 남긴 요청 — 캐릭터 설정 자체가 아니라 "이번엔
@@ -780,7 +785,7 @@ GENRE_SAMPLE_NOTE = (
 )
 
 
-def genre_samples_for(genre: str) -> str:
+def genre_samples_for(genre: str, run_dir: Path | None = None) -> str:
     """장르에 맞는 story-harness 의 검수된 기준 샘플 카드. 없으면 빈 문자열.
 
     samples/ 에는 장르 14종마다 사람이 검수해 실제로 서비스에 나간 카드가
@@ -795,6 +800,12 @@ def genre_samples_for(genre: str) -> str:
 
     못 찾으면 빈 문자열이다. 안 맞는 장르 카드를 억지로 붙이지 않는다
     (resolve_genre_templates 와 같은 원칙).
+
+    `run_dir` 이 있으면 회피가 붙는다(2026-09-19) — 장르당 카드가 6장뿐이라
+    (`samples.EXEMPLAR_PICK` 주석 참고) 최근 run들과 안 겹치게 고르지 않으면
+    몇 번 안 가 같은 3장 조합이 반복된다(사용자 지적 — "시작점이 5개뿐이라
+    매번 비슷해 보인다"와 같은 종류의 문제, 카드 쪽이 더 좁다). 골랐으면 그
+    run 디렉터리에 `story_cards.json` 으로 남겨서 다음 run 이 이어 피한다.
     """
     genre = (genre or "").strip()
     if not genre:
@@ -803,7 +814,13 @@ def genre_samples_for(genre: str) -> str:
         key = samples.guess_genre(genre)
         if not key:
             return ""
-        return samples.exemplars(key)
+        if run_dir is None:
+            return samples.exemplars(key)
+        avoid = samples.recent_card_ids(key, RUNS_DIR)
+        text, ids = samples.exemplars_fresh(key, avoid_ids=avoid)
+        if ids:
+            write_json(run_dir / "story_cards.json", {"genre": key, "ids": ids})
+        return text
     except Exception:
         return ""
 
