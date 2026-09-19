@@ -5,6 +5,7 @@
  * 히어로 위에 알약 하나만 둔다. */
 import "./i18n";
 import Link from "next/link";
+import localFont from "next/font/local";
 import { useEffect, useState } from "react";
 import * as api from "../../lib/api";
 import { LangSwitch, useT, type T } from "../../lib/i18n";
@@ -12,7 +13,29 @@ import { hrefOf, type Go } from "../../lib/nav";
 import { IconDownload, IconEdit, IconPlus, IconRetry, IconShare, IconUser } from "../../ui/Icons";
 import EditorMock, { CUT_IMG, PAGE_IMG, SHEET_IMG } from "./EditorMock";
 
-const DONE_COVER = api.coverUrl("20260910T132240-ae8c28", 1, 1, true);
+/* 글꼴 시험 (2026-09-19, 온보딩 화면에만) — 제목은 Gmarket Sans, 나머지는
+ * SUIT. 다른 화면(위자드·편집실 등)은 그대로 Noto Sans KR 이다 — 이 두 훅이
+ * 만드는 className 을 이 파일 바깥에서 안 쓰면 다른 화면에 안 번진다. */
+const gmarketSans = localFont({
+  src: "../../assets/fonts/GmarketSansBold.woff2",
+  weight: "700",
+  variable: "--font-landing-title",
+});
+const suit = localFont({
+  src: [
+    { path: "../../assets/fonts/SUIT-Regular.woff2", weight: "400" },
+    { path: "../../assets/fonts/SUIT-Medium.woff2", weight: "500" },
+    { path: "../../assets/fonts/SUIT-SemiBold.woff2", weight: "600" },
+    { path: "../../assets/fonts/SUIT-Bold.woff2", weight: "700" },
+    { path: "../../assets/fonts/SUIT-ExtraBold.woff2", weight: "800" },
+  ],
+  variable: "--font-landing-body",
+});
+
+/* 04 완성 칸의 표지. 캔버스가 쓰는 그림과 같은 파일이다(예시 작품
+ * 「가면 아래의 조건」의 표지) — 실행 id 를 코드에 박아 두면 그 작품이
+ * 빠질 때 조용히 빈칸이 된다. */
+const DONE_COVER = "/static/gallery/20260910T132240-ae8c28/cover.jpg";
 import { usePhone } from "./usePhone";
 import "./Landing.css";
 
@@ -36,11 +59,6 @@ const PROMISES = [
   { n: "/ 03", t: "넣은 그대로, 그 세계관 안에", d: "강아지는 강아지인 채로 악역 영애가 돼요. 사람으로 바꾸지도, 다른 얼굴로 바꾸지도 않아요." },
 ] as const;
 
-const NEED_LONG = [
-  "캐릭터를 고르고 장르 하나만 누르면 줄거리 세 개가 나오고, 하나를 고르면 컷과 말풍선까지 그려집니다. 캐릭터 시트를 먼저 만들어 두기 때문에 얼굴과 옷이 마지막 컷까지 같은 사람이에요. 마음에 안 드는 컷은 그 컷만 다시 그리고, 다음 편은 같은 캐릭터로 이어서 만듭니다.",
-  "사진을 넣고 세계관을 고르면 그 세계관 그림체로 그린 웹툰 한 컷이 나와요. 세계관은 안 골라도 되고, 아무것도 안 넣고 랜덤으로 뽑아도 돼요. 회사원이 로판에서 개가 되기도 하고, 강아지가 강아지인 채로 악역 영애가 되기도 해요. 마음에 들면 「이 캐릭터로 1화 보기」로 바로 1화가 만들어집니다.",
-];
-
 function titleOf(r: api.RunCard): string {
   return (r.title || "").replace(/^"(.*)"$/, "$1");
 }
@@ -59,7 +77,9 @@ function allowanceText(t: T, a: api.Allowance | null): string {
     if (a.free_left == null) return "";
     return a.free_left > 0 ? t("오늘 무료 {n}편", { n: a.free_left }) : t("오늘 무료 소진 · 로그인하면 이어서");
   }
-  return t("한 편 {cost}크레딧 · 보유 {balance}C", { cost: a.credit_cost, balance: a.balance ?? 0 });
+  // 로그인한 사람의 "한 편 {cost}크레딧 · 보유 {balance}C" 는 여기서 안 보여준다 —
+  // 헤더에 잔액이 이미 있고, 온보딩 히어로에 또 나오면 중복이다(2026-09-19 지적).
+  return "";
 }
 
 export default function Landing({ go }: { go: Go }) {
@@ -107,7 +127,7 @@ export default function Landing({ go }: { go: Go }) {
   const marqueeList = runs && runs.length ? [...runs, ...runs] : [];
 
   return (
-    <div className="wt-landing">
+    <div className={`wt-landing ${gmarketSans.variable} ${suit.variable}`}>
       {/* 히어로 */}
       <section className="wt-landing-hero">
         {job && (
@@ -125,7 +145,11 @@ export default function Landing({ go }: { go: Go }) {
 
       {/* 예시 작품 띠 */}
       <section className="wt-landing-works">
-        <span className="muted wt-landing-works-label">{t("이 서비스로 만들어진 편")}</span>
+        <div className="wt-landing-works-head">
+          <button type="button" className="btn btn-w btn-sm wt-landing-works-all" onClick={() => go("works")}>
+            {t("웹툰 전체 보러가기")}
+          </button>
+        </div>
         {runsErr ? (
           <div className="wt-landing-works-err">
             <span className="err">{runsErr}</span>
@@ -214,7 +238,9 @@ export default function Landing({ go }: { go: Go }) {
 
       {/* 니즈 카드 둘 */}
       <section className="wt-landing-needs">
-        <h2>{phone ? <>{t("이야기가 웹툰이 되는 과정,")}<br />{t("LORE 하나로 충분합니다")}</> : <>{t("이미지 한장이 웹툰이 되는 과정,")}<br />{t("LORE 하나로 충분합니다.")}</>}</h2>
+        <h2>{phone
+          ? <>{t("이야기가 웹툰이 되는 과정,")}<br /><span className="wt-landing-hl">LORE</span>{t(" 하나로 충분합니다")}</>
+          : <>{t("이미지 한장이 웹툰이 되는 과정,")}<br /><span className="wt-landing-hl">LORE</span>{t(" 하나로 충분합니다.")}</>}</h2>
         <div className="wt-landing-needs-row">
           <a href={hrefOf("create")} className={`wt-landing-need${need === 0 ? " on" : ""}`}
              onMouseEnter={() => setNeed(0)} onClick={needTo(0)}>
@@ -225,7 +251,6 @@ export default function Landing({ go }: { go: Go }) {
                   ? t("설정만 있던 캐릭터가 이야기 속에서 말하고 움직여요. 캐릭터를 넣으면 그 캐릭터가 주인공인 웹툰이 나옵니다.")
                   : <>{t("설정만 있던 캐릭터가 이야기 속에서 말하고 움직여요.")}<br />{t("캐릭터를 넣으면, 그 캐릭터가 주인공인 웹툰이 나옵니다.")}</>}
               </span>
-              <div className="wt-landing-need-more"><p className="muted">{t(NEED_LONG[0])}</p></div>
             </div>
             <div className="wt-landing-need-fig">
               <EditorMock feat={0} s={phone ? 0.7 : 0.9} height={phone ? 260 : 400} who={t("세이엘")} />
@@ -237,11 +262,8 @@ export default function Landing({ go }: { go: Go }) {
             <div className="wt-landing-need-text">
               <b>{t(phone ? "뭐든 넣으면 웹툰 속 캐릭터가 돼요" : "어떤 캐릭터가 나올지, 뽑아볼까요?")}</b>
               <span className="muted">
-                {phone
-                  ? t("내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요. 의인화 없이 그대로 웹툰 세계관에 들어가요.")
-                  : <>{t("사진을 넣어도, 이야기를 적어도, 아무것도 없이 시작해도 좋아요.")}<br />{t("당신이 고른 세계관에 맞춰 새로운 캐릭터를 만들어드려요.")}</>}
+                <>{t("사진을 넣어도, 이야기를 적어도, 아무것도 없이 시작해도 좋아요.")}<br />{t("당신이 고른 세계관에 맞춰 새로운 캐릭터를 만들어드려요.")}</>
               </span>
-              <div className="wt-landing-need-more"><p className="muted">{t(NEED_LONG[1])}</p></div>
             </div>
             <div className="wt-landing-need-fig">
               <div className="wt-landing-cut">
@@ -263,7 +285,7 @@ export default function Landing({ go }: { go: Go }) {
       <section className="wt-landing-promise">
         <h2><span className="wt-landing-hl">{t("웹툰 1화를 위해서")}</span><br />{t("LORE가 약속 하는 세 가지")}</h2>
         <div className="wt-landing-promise-grid">
-          <EditorMock feat={feat} s={phone ? 0.8 : 1} height={phone ? 360 : 560} who={t("몽이")} />
+          <EditorMock feat={feat} s={phone ? 0.8 : 1} height={phone ? 360 : 560} who={t("세이엘")} />
           <div className="wt-landing-promise-list">
             {PROMISES.map((p, i) => (
               <div key={p.n} className={`wt-landing-promise-item${feat === i ? " on" : ""}`}

@@ -20,7 +20,9 @@ const archivo = Archivo({
 
 const notoSansKr = Noto_Sans_KR({
   subsets: ["latin"],
-  weight: ["400", "500", "700", "900"],
+  // 800 이 빠져 있었다. 웹툰 탭의 제목(h1·h2·h3)이 전부 800 이라, 없는 굵기를
+  // 브라우저가 900 으로 대신 그려서 디자인 캔버스보다 굵고 넓게 나왔다.
+  weight: ["400", "500", "700", "800", "900"],
   variable: "--font-noto-sans-kr",
   display: "swap",
 });

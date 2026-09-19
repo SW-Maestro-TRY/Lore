@@ -15,7 +15,7 @@ import { isLimitError, lastCardId, loadDraft, runTry, saveDraft } from "./draft"
 import "./i18n";
 import "./Photo.css";
 
-export default function Photo({ go }: { go: Go }) {
+export default function Photo({ go, authenticated = false }: { go: Go; authenticated?: boolean }) {
   const t = useT();
   const [worlds, setWorlds] = useState<World[]>([]);
   const [photo, setPhoto] = useState<string | undefined>();
@@ -100,7 +100,7 @@ export default function Photo({ go }: { go: Go }) {
   };
 
   if (limited !== null) {
-    return <LimitView go={go} message={limited} />;
+    return <LimitView go={go} message={limited} authenticated={authenticated} />;
   }
 
   return (
@@ -134,15 +134,17 @@ export default function Photo({ go }: { go: Go }) {
               </div>
             )}
 
-            <div className="fieldset">
-              <label htmlFor="wt-ch-ds">{t("캐릭터에 대해 알려주세요")} <span className="dim" style={{ fontWeight: 400, fontSize: 12 }}>{t("선택")}</span></label>
-              <input id="wt-ch-ds" className="field" value={description} placeholder={t("예) 차가운 성격의 마법사")}
-                     onChange={(e) => setDescription(e.target.value)} />
-            </div>
             <div className="fieldset wt-ch-name">
               <label htmlFor="wt-ch-nm">{t("이름")} <span className="dim" style={{ fontWeight: 400, fontSize: 12 }}>{t("선택 · 비우면 지어요")}</span></label>
               <input id="wt-ch-nm" className="field" value={name} placeholder={t("예: 몽이, 세라핀")}
                      onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="fieldset">
+              <label htmlFor="wt-ch-ds">{t("캐릭터에 대해 알려주세요")} <span className="dim" style={{ fontWeight: 400, fontSize: 12 }}>{t("선택")}</span></label>
+              {/* 한 줄 칸이었는데, 성격·말투·사연까지 적으려면 좁았다 — 여러 줄로 둔다.
+                  세로로 늘릴 수 있게 열어 두고(resize: vertical), 기본 높이만 정한다. */}
+              <textarea id="wt-ch-ds" className="field wt-ch-desc" value={description} placeholder={t("예) 차가운 성격의 마법사")}
+                        onChange={(e) => setDescription(e.target.value)} />
             </div>
             <span className="dim" style={{ fontSize: 12.5 }}>{t("사진은 캐릭터를 그린 뒤 지워요. 남의 사진은 팬 창작 범위 안에서만.")}</span>
           </div>
@@ -204,7 +206,8 @@ function untilMidnight(): string {
   return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
-export function LimitView({ go, message }: { go: Go; message?: string }) {
+export function LimitView({ go, message, authenticated = false }:
+  { go: Go; message?: string; authenticated?: boolean }) {
   const t = useT();
   const [last, setLast] = useState<Character | null>(null);
   const [perDay, setPerDay] = useState<number | null>(null);
@@ -239,7 +242,9 @@ export function LimitView({ go, message }: { go: Go; message?: string }) {
               {last && (
                 <button type="button" className="btn btn-p" onClick={() => go("card", { id: last.id })}>{t("이 캐릭터로 1화 보기")}</button>
               )}
-              <span className="btn btn-w" style={{ cursor: "default" }}>{t("가입하면 하루 10번")}</span>
+              {!authenticated && (
+                <span className="btn btn-w" style={{ cursor: "default" }}>{t("로그인하면 크레딧으로 이어서")}</span>
+              )}
             </div>
           </div>
         </div>
@@ -248,7 +253,9 @@ export function LimitView({ go, message }: { go: Go; message?: string }) {
         {last && (
           <button type="button" className="btn btn-p" style={{ height: 52 }} onClick={() => go("card", { id: last.id })}>{t("이 캐릭터로 1화 보기")}</button>
         )}
-        <span className="btn btn-w" style={{ cursor: "default" }}>{t("가입하면 하루 10번")}</span>
+        {!authenticated && (
+                <span className="btn btn-w" style={{ cursor: "default" }}>{t("로그인하면 크레딧으로 이어서")}</span>
+              )}
       </div>
     </>
   );

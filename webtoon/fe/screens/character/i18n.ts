@@ -75,7 +75,6 @@ const dict: Dict = {
   },
   "다시 채워지기까지 {left}": { en: "Refills in {left}", ja: "回復まで {left}", zh: "距离补满还有 {left}" },
   "이 캐릭터로 1화 보기": { en: "See episode 1 with this character", ja: "このキャラクターで第1話を見る", zh: "用这个角色看第1话" },
-  "가입하면 하루 10번": { en: "Sign up for 10 a day", ja: "登録すると1日10回", zh: "注册后每天10次" },
 
   /* ---- PhotoResult · 웹툰 한 컷 ---- */
   "카드를 못 불러왔습니다": { en: "Couldn't load the card.", ja: "カードを読み込めませんでした。", zh: "无法加载卡片。" },
@@ -119,24 +118,21 @@ const dict: Dict = {
   "이 캐릭터로 웹툰": { en: "Make a webtoon", ja: "このキャラクターでウェブトゥーン", zh: "用这个角色做漫画" },
   "카드 보기": { en: "View card", ja: "カードを見る", zh: "查看卡片" },
 
-  /* ---- 세계관 프리셋 라벨 (story-harness/worlds.json · 17개) ---- */
-  "현대 한국 — 평범한 도시": { en: "Modern Korea — an ordinary city", ja: "現代韓国 — ありふれた都市", zh: "现代韩国 — 平凡的城市" },
-  "헌터 — 게이트와 각성": { en: "Hunters — gates and awakening", ja: "ハンター — ゲートと覚醒", zh: "猎人 — 门与觉醒" },
-  "마법학교 — 입학과 기숙사": { en: "Magic school — admission and dorms", ja: "魔法学校 — 入学と寮", zh: "魔法学校 — 入学与宿舍" },
-  "궁정 — 왕궁과 계승": { en: "Court — the palace and succession", ja: "宮廷 — 王宮と継承", zh: "宫廷 — 王宫与继承" },
-  "아이돌 — 연습생과 데뷔": { en: "Idols — trainees and debut", ja: "アイドル — 練習生とデビュー", zh: "偶像 — 练习生与出道" },
-  "근미래 — 기술이 한 발 앞선 도시": { en: "Near future — a city one step ahead", ja: "近未来 — 技術が一歩先を行く都市", zh: "近未来 — 科技领先一步的城市" },
-  "재난 이후 — 무너진 뒤의 질서": { en: "After the disaster — order among the ruins", ja: "災害の後 — 崩壊後の秩序", zh: "灾后 — 崩塌之后的秩序" },
-  "히어로 — 능력자와 빌런": { en: "Heroes — the gifted and the villains", ja: "ヒーロー — 能力者とヴィラン", zh: "英雄 — 能力者与反派" },
-  "로맨스 판타지 — 빙의와 원작": { en: "Romance fantasy — transmigration and the original story", ja: "ロマンスファンタジー — 憑依と原作", zh: "浪漫奇幻 — 穿书与原作" },
-  "판타지 — 검과 마법의 대륙": { en: "Fantasy — a continent of swords and magic", ja: "ファンタジー — 剣と魔法の大陸", zh: "奇幻 — 剑与魔法的大陆" },
-  "게임 판타지 — 시스템과 랭커": { en: "Game fantasy — the system and the rankers", ja: "ゲームファンタジー — システムとランカー", zh: "游戏奇幻 — 系统与排名者" },
-  "센티넬 — 적합률과 배정": { en: "Sentinels — match rates and assignment", ja: "センチネル — 適合率と配属", zh: "哨兵 — 契合率与分配" },
-  "오메가버스 — 판정과 등급": { en: "Omegaverse — testing and grades", ja: "オメガバース — 判定と等級", zh: "Omegaverse — 判定与等级" },
-  "스릴러 — 기록과 목격": { en: "Thriller — records and witnesses", ja: "スリラー — 記録と目撃", zh: "惊悚 — 记录与目击" },
-  "액션 — 의뢰와 계약": { en: "Action — jobs and contracts", ja: "アクション — 依頼と契約", zh: "动作 — 委托与契约" },
-  "개그 — 정정되지 않은 오해": { en: "Comedy — a misunderstanding no one corrects", ja: "ギャグ — 訂正されない誤解", zh: "搞笑 — 没被纠正的误会" },
-  "일상 — 말하지 않은 것들": { en: "Slice of life — the things left unsaid", ja: "日常 — 言わなかったこと", zh: "日常 — 没说出口的事" },
+  /* ---- 세계관 프리셋 라벨 (story-harness/worlds.json · 11개) ---- */
+  "헌터": { en: "Hunters", ja: "ハンター", zh: "猎人" },
+  "마법학교": { en: "Magic school", ja: "魔法学校", zh: "魔法学校" },
+  "아이돌": { en: "Idols", ja: "アイドル", zh: "偶像" },
+  "아포칼립스": { en: "Apocalypse", ja: "アポカリプス", zh: "末世" },
+  "히어로": { en: "Heroes", ja: "ヒーロー", zh: "英雄" },
+  "로맨스 판타지": { en: "Romance fantasy", ja: "ロマンスファンタジー", zh: "浪漫奇幻" },
+  "판타지": { en: "Fantasy", ja: "ファンタジー", zh: "奇幻" },
+  "센티넬": { en: "Sentinels", ja: "センチネル", zh: "哨兵" },
+  "오메가버스": { en: "Omegaverse", ja: "オメガバース", zh: "Omegaverse" },
+  "스릴러": { en: "Thriller", ja: "スリラー", zh: "惊悚" },
+  "액션": { en: "Action", ja: "アクション", zh: "动作" },
+  "사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.": { en: "With a photo, or with a description alone.", ja: "写真からでも、説明だけでも作れます。", zh: "有照片可以，只有描述也可以。" },
+  "사진으로도, 설명만으로도 만들 수 있어요.": { en: "From a photo, or a description alone.", ja: "写真からでも、説明だけでも。", zh: "用照片，或只用描述。" },
+  "로그인하면 크레딧으로 이어서": { en: "Sign in to keep going with credits", ja: "ログインするとクレジットで続けられます", zh: "登录后可用积分继续" },
 };
 
 registerDict(dict);

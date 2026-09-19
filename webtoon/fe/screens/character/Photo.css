@@ -15,6 +15,8 @@
 .wt .wt-ch-drop.has img { height: 100%; aspect-ratio: 3 / 4; object-fit: cover; object-position: top; border-radius: 10px; display: block; }
 .wt .wt-ch-drop .wt-ch-drop-x { position: absolute; right: 10px; top: 10px; }
 .wt .wt-ch-name { width: 220px; }
+/* 캐릭터 설명 — 성격·말투·사연을 몇 줄 적을 만큼. 세로로 늘릴 수 있다. */
+.wt .wt-ch-desc { min-height: 150px; }
 .wt .wt-ch-worlds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .wt .wt-ch-worlds .opt { padding: 18px 20px; }
 .wt .wt-ch-worlds .opt b { font-size: 17px; }
@@ -48,6 +50,7 @@
   .wt .wt-ch-drop .wt-ch-drop-pick { display: none; }
   .wt .wt-ch-drop .wt-ch-drop-hint { display: block; }
   .wt .wt-ch-name { width: auto; }
+  .wt .wt-ch-desc { min-height: 110px; }
   .wt .wt-ch-worlds { grid-template-columns: 1fr; gap: 8px; }
   .wt .wt-ch-worlds .opt { padding: 12px 14px; }
   .wt .wt-ch-worlds .opt b { font-size: 15px; }

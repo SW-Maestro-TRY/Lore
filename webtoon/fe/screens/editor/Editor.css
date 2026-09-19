@@ -57,10 +57,21 @@
 .wt .wt-ed .btn-quiet { background: #fff; color: var(--ink); border: 1.5px solid var(--line-strong); }
 .wt .wt-ed .btn-quiet:hover:not(:disabled) { border-color: var(--ink); }
 
+/* 편집실만 1:1 로 되돌린다.
+ *
+ * 탭 전체에 걸어 둔 zoom: 0.9 는 캔버스가 1280 화면을 그린 것이라 첫 화면·만들기
+ * 걸음이 실물 크기로는 부담스러워서 준 것이다. 편집실은 반대다 — 여기서 그림을
+ * 만지는 작업 화면이라, 0.9 가 걸리면 아트보드(제목 15px · 왼쪽 목록 220px)보다
+ * 더 작아져 제목이 잘리고 그림이 보기 힘들어진다. zoom 은 곱해지므로
+ * 0.9 × 1.1112 ≈ 1 이 되어 아트보드와 같은 치수로 그려진다. */
+.wt .wt-ed { zoom: 1.1112; }
+
 /* ---- 뼈대: 왼쪽 220 · 가운데 · 오른쪽 260 ------------------------------------ */
 .wt .wt-ed-body { display: flex; flex-grow: 1; min-height: 0; align-items: stretch; }
 .wt .wt-ed-left {
-  width: 220px; flex: none; border-right: 1px solid rgba(15, 51, 63, 0.08); padding: 16px 12px;
+  /* 아트보드는 220인데 거기 목록은 썸네일 없는 한 줄이었다. 여기는 썸네일과
+     두 줄이라 220이면 제목이 잘린다 — 그만큼 넓힌다. */
+  width: 260px; flex: none; border-right: 1px solid rgba(15, 51, 63, 0.08); padding: 16px 12px;
   display: flex; flex-direction: column; gap: 6px; background: #fff;
   position: sticky; top: calc(var(--lore-header-h, 0px) + 64px); align-self: flex-start;
   max-height: calc(100vh - var(--lore-header-h, 0px) - 64px); overflow: auto;
@@ -91,19 +102,17 @@
 .wt .wt-ed-thumb.on { border: 2px solid var(--ink); }
 
 .wt .wt-ed-stage { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px; background: #eef4f6; }
-.wt .wt-ed-stagehead { width: 520px; max-width: 100%; display: flex; flex-direction: column; gap: 2px; }
-.wt .wt-ed-stagehead:empty { display: none; }
-.wt .wt-ed-genre { font-size: 12px; color: var(--dim); }
-.wt .wt-ed-genre:empty, .wt .wt-ed-logline:empty { display: none; }
-.wt .wt-ed-logline { font-size: 13px; color: var(--muted); }
-.wt .wt-ed-eptabs { width: 520px; max-width: 100%; display: flex; gap: 6px; }
+/* 무대 폭. 아트보드는 1280 프레임이라 가운데가 520이었는데, 실제 화면은 그보다
+ * 훨씬 넓어서 그대로 두면 양옆이 600px 넘게 논다. 얹은 것의 좌표가 전부 %라
+ * (editorCore 의 left/top/width) 넓혀도 말풍선이 그림을 따라간다. */
+.wt .wt-ed-eptabs { width: min(100%, 860px); display: flex; gap: 6px; }
 .wt .wt-ed-eptabs[hidden] { display: none; }
 .wt .wt-ed .ep-tab {
   display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
   border: 1.5px solid rgba(15, 51, 63, 0.16); background: #fff; color: var(--ink); cursor: pointer; font-family: inherit;
 }
 .wt .wt-ed .ep-tab[aria-current="true"] { background: var(--ink); border-color: var(--ink); color: #fff; cursor: default; }
-.wt .wt-ed-scenes { width: 520px; max-width: 100%; display: flex; flex-direction: column; }
+.wt .wt-ed-scenes { width: min(100%, 860px); display: flex; flex-direction: column; }
 .wt .wt-ed-footnote { font-size: 12px; color: var(--dim); text-align: center; margin-top: 12px; }
 .wt .wt-ed-stage > .lou-note { margin-top: 40px; max-width: 360px; }
 
@@ -225,9 +234,6 @@
 .wt .wt-ed-dockfold { display: none; width: 32px; height: 32px; }
 .wt .wt-ed-dockbody { display: flex; flex-direction: column; gap: 10px; }
 .wt .wt-ed-dockbody[hidden] { display: none; }
-.wt .wt-ed-dockhint { font-size: 12px; color: var(--dim); line-height: 1.5; }
-.wt .wt-ed-dockhint b { color: var(--sea-deep); }
-.wt .wt-ed-dockhint[hidden] { display: none; }
 .wt .wt-ed-dockgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .wt .wt-ed-dockgrid[hidden] { display: none; }
 .wt .wt-ed .dock-item {
@@ -280,8 +286,6 @@
 .wt .wt-ed-askfield textarea.field { min-height: 80px; font-size: 13px; padding: 10px 12px; }
 .wt .wt-ed .check-line { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; cursor: pointer; }
 .wt .wt-ed .check-line input { accent-color: var(--ink); width: 16px; height: 16px; margin: 0; }
-.wt .wt-ed .ask-warn { font-size: 11.5px; color: #a13a2e; }
-.wt .wt-ed .ask-warn[hidden] { display: none; }
 .wt .wt-ed .ask-actions { display: flex; gap: 8px; margin-top: 6px; }
 .wt .wt-ed .ask-actions .btn { flex: 1; height: 46px; font-size: 14px; }
 
@@ -307,7 +311,7 @@
   .wt .wt-ed-pages { margin-top: 8px; }
   .wt .wt-ed-pagegrid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .wt .wt-ed-stage { padding: 16px; }
-  .wt .wt-ed-stagehead, .wt .wt-ed-eptabs, .wt .wt-ed-scenes { width: 100%; }
+  .wt .wt-ed-eptabs, .wt .wt-ed-scenes { width: 100%; }
 
   .wt .wt-ed-dockopen {
     display: inline-flex; align-items: center; gap: 6px; position: fixed; right: 16px; bottom: 16px; z-index: 62;
@@ -329,3 +333,22 @@
   .wt .wt-ed-dockfold { display: inline-flex; }
   .wt .wt-ed-dockgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* 로그인해야 열리는 편집실 */
+.wt .wt-ed-gate { align-items: center; justify-content: center; text-align: center; gap: 12px; flex-grow: 1; }
+.wt .wt-ed-gate h2 { font-size: 26px; }
+.wt .wt-ed-gate p { font-size: 15px; line-height: 1.6; max-width: 460px; }
+.wt .wt-ed-gate-acts { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+
+/* 크레딧 칩 안의 「내역」 · 진짜 사용 내역 줄 */
+.wt .wt-ed-ledgerbtn {
+  border: 0; background: none; padding: 0 0 0 6px; margin-left: 2px; cursor: pointer;
+  color: var(--sea); font: inherit; font-size: 12px; font-weight: 700;
+}
+.wt .wt-ed-ledgerbtn:hover { color: var(--sea-deep); }
+.wt .wt-ed-cost { font-size: 12px; }
+.wt .wt-ed .dock-ledger ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.wt .wt-ed .dock-ledger li { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 5px 2px; border-bottom: 1px solid var(--line); }
+.wt .wt-ed .dock-ledger li b.plus { color: #0f9e8a; }
+.wt .wt-ed .dock-ledger .ledger-empty { justify-content: center; color: var(--dim); border: 0; padding: 14px 0; }
+.wt .wt-ed .dock-ledger .err { font-size: 12.5px; padding: 8px 2px; }

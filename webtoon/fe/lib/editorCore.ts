@@ -103,7 +103,6 @@ export function mountEditor(
 
   /* 크레딧은 아직 안 붙었습니다 (#16). 목업에서만 흉내로 셉니다. */
   const COST = { regen: 40, nobubble: 0 };
-  const START_CREDIT = 1240;
 
   const BUBBLES = [
     ["normal",    tr("일반"),    tr("여기 앉아도 돼?")],
@@ -122,7 +121,7 @@ export function mountEditor(
 
   let data = null;
   // gaps: 장 뒤의 여백을 사람이 고친 값 {장 번호: 0~3}. 콘티 값을 덮어쓴다.
-  let state = { credit: START_CREDIT, scenes: {}, ledger: [], gaps: {} };
+  let state = { scenes: {}, gaps: {} };
   let sel = null;          // 선택한 요소 { sceneNo, id }
   let activeScene = 1;
   let tab = "bubble";
@@ -133,7 +132,7 @@ export function mountEditor(
   /* 작품이 정해진 **뒤에** 부른다 — 열쇠가 run_id 에 매여 있어서, 먼저 부르면
      앞 작품 칸을 읽는다. */
   function load() {
-    state = { credit: START_CREDIT, scenes: {}, ledger: [], gaps: {} };
+    state = { scenes: {}, gaps: {} };
     try {
       const raw = JSON.parse(localStorage.getItem(storeKey()) || "null");
       if (raw && typeof raw === "object") state = { ...state, ...raw };
@@ -218,46 +217,9 @@ export function mountEditor(
     return state.scenes[no];
   }
 
-  /* ------------------------------------------------------------------ 크레딧 */
-
-  function spend(amount, label, fromEl) {
-    state.credit = Math.max(0, state.credit - amount);
-    state.ledger.unshift({ label, amount, at: new Date().toLocaleTimeString("ko-KR",
-      { hour: "2-digit", minute: "2-digit" }) });
-    state.ledger = state.ledger.slice(0, 12);
-    save();
-    paintCredit(true);
-    paintLedger();
-    if (fromEl) flyCredit(amount, fromEl);
-  }
-  function paintCredit(bump) {
-    // 실제 작품에서는 크레딧 칩이 감춰져 있다(위 참고) — 없어도 그냥 넘어간다.
-    const el = $("#creditNum");
-    if (el) el.textContent = state.credit.toLocaleString("ko-KR");
-    const box = $("#creditBox");
-    if (bump && box) {
-      box.classList.remove("bump"); void box.offsetWidth; box.classList.add("bump");
-    }
-  }
-  function flyCredit(amount, el) {
-    const fly = $("#fly"), r = el.getBoundingClientRect();
-    fly.textContent = `−${amount} C`;
-    fly.style.left = `${r.left + r.width / 2 - 22}px`;
-    fly.style.top = `${r.top - 8}px`;
-    fly.hidden = false;
-    fly.style.animation = "none"; void fly.offsetWidth; fly.style.animation = "";
-    clearTimeout(fly._t);
-    fly._t = setTimeout(() => { fly.hidden = true; }, 1150);
-  }
-  function paintLedger() {
-    const ul = $("#ledgerList");
-    if (!state.ledger.length) {
-      ul.innerHTML = `<li class="ledger-empty">${tr("아직 쓴 크레딧이 없습니다.")}</li>`;
-      return;
-    }
-    ul.innerHTML = state.ledger.map(x =>
-      `<li><span>${x.at} · ${esc(x.label)}</span><b>−${x.amount}</b></li>`).join("");
-  }
+  /* 크레딧 잔액·사용 내역은 **화면(React)** 이 공용 API 에서 읽어 그린다
+     (`@common/api/credits`). 예전에는 엔진이 1,240 에서 시작하는 값을 세션
+     안에서만 깎아 보여 줬는데, 새로고침하면 되돌아가는 목업이었다. */
 
   /* ------------------------------------------------------------------ 장 그리기 */
 
@@ -296,11 +258,7 @@ export function mountEditor(
       character: data.character, ep, scenes: data.scenes.length,
       cuts: data.scenes.reduce((n, s) => n + s.cuts.length, 0),
     });
-    // 그림체를 안 적어 둔 run 이 있다 — 빈 값을 그대로 이으면 "로맨스 판타지 · "
-    // 처럼 꼬리만 남는다.
-    $("#edGenre").textContent = [data.genre, data.style_label].filter(Boolean).join(" · ");
     $("#edEpisode").textContent = data.title;
-    $("#edLogline").textContent = data.logline;
     $("#edFootNote").textContent = tr("여기까지가 {ep}화입니다.", { ep });
     paintEpTabs();
 
@@ -546,9 +504,6 @@ export function mountEditor(
     $("#regenAskSub").textContent = RUN_ID
       ? tr("이 장만 새로 굽습니다. 지금 그림은 지난 판으로 남아서 언제든 되돌릴 수 있습니다.")
       : tr("샘플이라 실제로 그리지는 않습니다 — 화면만 흉내 냅니다.");
-    // 샘플에서는 굽지 않으니 비용 경고도 띄우지 않는다 — 바로 위 줄에
-    // "실제로 그리지는 않습니다" 라고 써 놓고 밑에서 비용을 경고하면 말이 어긋난다.
-    $(".ask-warn").hidden = !RUN_ID;
     paintAskTags();
     // 장 밑에 이미 적어 둔 것이 있으면 그대로 실어 준다. 여기서 고쳐도 되고,
     // 다 지우고 눌러도 된다.
@@ -605,9 +560,7 @@ export function mountEditor(
     wrap.append(veil);
 
     if (!RUN_ID) {
-      // 목업 — 서버가 없다. 크레딧 흉내와 기다리는 모습만.
-      if (state.credit < cost) { veil.remove(); return toast(tr("크레딧이 모자랍니다. (목업이라 충전은 없습니다)")); }
-      spend(cost, tr("{n}번째 장 다시 그리기", { n: no }), btn);
+      // 목업 — 서버가 없다. 기다리는 모습만 흉내 낸다.
       setTimeout(() => {
         veil.remove();
         st.ver += 1; save();
@@ -1168,18 +1121,7 @@ export function mountEditor(
     handle.addEventListener("pointercancel", end);
   }
 
-  function setLedger(open) {
-    $("#dockLedger").hidden = !open;
-    for (const sel of ["#dockTabs", "#dockHint", "#dockGrid"]) {
-      const el = $(sel);
-      if (el) el.hidden = open;
-    }
-    // 고치는 손잡이는 이제 서랍이 아니라 그림 위에 있다. 내역을 보는 동안에는
-    // 그림을 만질 일이 없으니 선택도 같이 푼다 — 안 그러면 내역 위로 손잡이 줄이
-    // 계속 떠 있다.
-    if (open) clearSel();
-    if (open) setDock(true);
-  }
+
 
   /* 고른 요소를 고치는 손잡이 — **그림 위에** 뜬다.
    *
@@ -1502,8 +1444,34 @@ export function mountEditor(
   async function paintWorks(current) {
     const host = $("#worksList");
     if (!host) return;
+    /* **내 작품만** 모은다. 예전에는 `/runs` 를 그대로 불렀는데 그건 공개된
+       작품 전부라, 「내 작품」 아래에 남의 작품이 뜨고 아무나 남의 것을 편집실로
+       열 수 있었다. 이 브라우저가 만든 것(uid)과 계정 것(로그인했을 때)을
+       합치고 run_id 로 겹치는 것을 거른다 — 기기를 바꾸면 둘이 다르다. */
+    let uid = "";
+    try { uid = localStorage.getItem("lore_uid") || ""; } catch { /* 비공개 창 */ }
+
     let runs = null;                    // null = 못 물어봄, [] = 물어봤는데 없음
-    try { runs = (await (await fetch(`${API}/runs`)).json()).runs || []; } catch { /* 아래에서 */ }
+    try {
+      const mine = (await (await fetch(
+        `${API}/runs?mine=1&uid=${encodeURIComponent(uid)}`)).json()).runs || [];
+      // 계정 것은 쿠키로 판단한다. 로그인 안 했으면 빈 목록이라 그냥 넘어간다.
+      let account = [];
+      try {
+        const res = await fetch("/api/webtoon/v1/my/runs", { credentials: "same-origin" });
+        if (res.ok) {
+          const body = await res.json();
+          account = Array.isArray(body) ? body : (body.runs || body.data || []);
+        }
+      } catch { /* 계정 것 없이 브라우저 것만 보여 준다 */ }
+      const seen = new Set();
+      runs = [];
+      for (const r of [...mine, ...account]) {
+        if (!r || seen.has(r.run_id)) continue;
+        seen.add(r.run_id);
+        runs.push(r);
+      }
+    } catch { /* 아래에서 */ }
 
     if (runs === null) {
       host.innerHTML = `<div class="lou-note">`
@@ -1518,12 +1486,9 @@ export function mountEditor(
         + `<p>${tr("아직 만든 웹툰이 없어요.")}</p></div>`;
       return;
     }
-    host.innerHTML = runs.map(r => workCard(r, current)).join("")
-      + `<button type="button" class="work-card" data-run=""`
-      + `${current ? "" : ' aria-current="true"'}>`
-      + `<span class="work-thumb is-empty" aria-hidden="true">◇</span>`
-      + `<span><span class="work-name">${tr("샘플 보기")}</span>`
-      + `<span class="work-sub">${tr("목업 — 서버 없이도 열립니다")}</span></span></button>`;
+    // 예전에는 목록 끝에 「샘플 보기」(목업) 카드를 붙였는데, 그건 개발용
+    // 진입점이라 아트보드에도 없고 쓰는 사람에게는 남의 작품처럼 보인다.
+    host.innerHTML = runs.map(r => workCard(r, current)).join("");
 
     host.addEventListener("click", e => {
       const card = e.target.closest(".work-card");
@@ -1565,7 +1530,7 @@ export function mountEditor(
     RUN_ID = openWith.runId || "";
     EPISODE = openWith.episode || 1;
     // load() 는 RUN_ID·EPISODE 가 정해진 **뒤에** 부른다 — 열쇠가 거기 매여 있다.
-    load(); paintCredit(); paintLedger(); paintDock();
+    load(); paintDock();
     loadSceneTags();
     setupTitleEdit();
     // 작품 목록은 **여는 데 실패해도** 남아 있어야 한다. 한 작품이 안 열린다고
@@ -1603,7 +1568,7 @@ export function mountEditor(
     // 엔진은 그 노드를 다시 찾다가 빈손을 잡는다(실제로 그렇게 터졌다).
     // 감추기만 하면 트리가 그대로라 몇 번을 드나들어도 같다.
     if (RUN_ID) {
-      for (const sel of [".mock-badge", "#creditBox", "#ledgerBtn"]) {
+      for (const sel of [".mock-badge"]) {
         const el = document.querySelector(sel);
         if (el) el.hidden = true;
       }
@@ -1658,8 +1623,6 @@ export function mountEditor(
     $("#showOverlay").addEventListener("change", () =>
       data.scenes.forEach(s => paintItems(s.no)));
 
-    $("#ledgerBtn")?.addEventListener("click", () => setLedger($("#dockLedger").hidden));
-    $("#ledgerClose").addEventListener("click", () => setLedger(false));
 
     // 저장은 항목을 건드릴 때마다 자동으로 된다(save() → pushSoon()). 이 단추는
     // **지금 당장** 올리고 그 결과를 말해 주는 자리다 — 자동 저장은 조용해서,

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { pageUrl, readAllowance, readResult, type Allowance, type RunResult } from "../../lib/api";
+import { creditBalance, creditHistory, type CreditLine } from "@common/api/credits";
+import { pageUrl, readAllowance, readResult, type RunResult } from "../../lib/api";
 import { mountEditor, setEditorTranslator } from "../../lib/editorCore";
-import { useLang, type T } from "../../lib/i18n";
+import { useLang } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconEdit, IconMenu } from "../../ui/Icons";
 import ShareMenu from "../result/ShareMenu";
@@ -22,28 +23,30 @@ import "./Editor.css";
  * React 가 더 그리는 것: 왼쪽 페이지 썸네일, 오른쪽 「다시 그리기」 단(활성 장의
  * 장면 한 줄 + 단추 — 누르면 엔진의 그 장 다시 그리기 단추를 대신 누른다),
  * 크레딧 딱지, 공유, 「완성본으로」. */
-/* lib/api.ts 의 allowanceLine 과 같은 줄을 언어에 맞게 — 문장을 이어 붙이지 않으려고 자리표로 만든다. */
-function creditLine(t: T, a: Allowance | null): string {
-  if (!a) return "";
-  if (a.blocked) return a.blocked;
-  if (!a.logged_in) {
-    if (a.free_left == null) return "";
-    return a.free_left > 0 ? t("오늘 무료 {n}편", { n: a.free_left }) : t("오늘 무료 소진 · 로그인하면 이어서");
-  }
-  return t("한 편 {cost}크레딧 · 보유 {balance}C", { cost: a.credit_cost, balance: a.balance ?? 0 });
-}
 
-export default function Editor({ runId, go }: { runId: string; go: Go }) {
+export default function Editor({ runId, go, authStatus = "loading" }:
+  { runId: string; go: Go; authStatus?: string }) {
+  /* 로그인 확인이 **끝난 뒤에** 셋 중 하나로 간다.
+     - loading  : 아직 모른다 → 아무것도 안 그린다. 여기서 엔진을 올리면
+                  곧 잠금 화면으로 바뀌며 엔진이 잡고 있던 노드가 통째로
+                  뜯겨 나가 터진다(editorCore 의 render 가 null 을 잡는다).
+                  반대로 잠금 화면을 먼저 그리면 로그인한 사람에게 번쩍인다.
+     - anonymous: 막는다.
+     - 그 밖("authenticated" · "unknown") : 연다. 서버가 한 번 더 본다
+                  (RunController.mustOwn). */
+  const locked = authStatus === "anonymous";
+  const authenticated = authStatus !== "loading" && !locked;
   const { lang, t } = useLang();
   const episode = 1;
 
   useEffect(() => {
+    if (!authenticated) return;                 // 잠긴 화면에서는 엔진을 안 올린다
     /* 주소에 회차 칸이 없다(lib/nav.ts) — 다른 작품으로 건너갈 때는 1화로 연다.
        언어(lang)가 바뀌면 엔진을 다시 올린다 — 엔진은 그린 글을 스스로 갱신하지 않는다. */
     setEditorTranslator(t);
     const dispose = mountEditor({ runId, episode }, (r) => go("editor", { run: r }));
     return () => { dispose(); setEditorTranslator(null); };
-  }, [runId, go, lang, t]);
+  }, [runId, go, lang, t, authenticated]);
 
   /* 페이지 썸네일과 장면 한 줄은 완성본 API 에서 받는다 — 엔진은 자기 데이터를
      밖으로 내주지 않는다. */
@@ -54,13 +57,37 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
     return () => { alive = false; };
   }, [runId]);
 
-  const [allowance, setAllowance] = useState<Allowance | null>(null);
+  /* 크레딧 잔액과 사용 내역은 **계정** 것이라 공용 모듈에서 읽는다
+     (`@common/api/credits`). 예전에는 엔진이 1,240 에서 시작하는 값을 그 세션
+     안에서만 깎아 보여 줬는데, 그건 목업이라 새로고침하면 되돌아갔다. */
+  const [regenCost, setRegenCost] = useState<number | null>(null);
   useEffect(() => {
     let alive = true;
-    readAllowance().then((a) => { if (alive) setAllowance(a); }).catch(() => {});
+    readAllowance().then((a) => { if (alive) setRegenCost(a.regen_cost ?? null); }).catch(() => {});
     return () => { alive = false; };
   }, []);
-  const credit = creditLine(t, allowance);
+
+  const [balance, setBalance] = useState<number | null>(null);
+  const [ledger, setLedger] = useState<CreditLine[] | null>(null);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [ledgerErr, setLedgerErr] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    creditBalance().then((b) => { if (alive) setBalance(b.balance); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  /* 내역은 **펼칠 때** 받는다 — 편집실을 열 때마다 받으면 안 볼 사람에게도 한 번씩 묻는다. */
+  useEffect(() => {
+    if (!ledgerOpen) return;
+    let alive = true;
+    setLedgerErr("");
+    creditHistory(20)
+      .then((lines) => { if (alive) setLedger(lines); })
+      .catch(() => { if (alive) setLedgerErr(t("내역을 불러오지 못했습니다.")); });
+    return () => { alive = false; };
+  }, [ledgerOpen, t]);
 
   /* 지금 고른 장 — 엔진이 #activeSceneLabel 에 「N번째 장」이라고 적는 것을 읽는다. */
   const [active, setActive] = useState(1);
@@ -91,6 +118,27 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
 
   const activeNote = info?.pages.find((p) => p.no === active)?.caption || "";
 
+  /* 편집실은 로그인해야 쓴다 (서버도 같은 규칙 — RunController.mustOwn).
+     게스트 브라우저 uid 는 같은 컴퓨터를 쓰는 사람끼리 겹치고 지우면 사라져서
+     "고칠 권리"를 걸기에 약하다. 로그인하면 이 브라우저로 만든 작품이 그대로
+     계정에 따라온다(POST /my/link). */
+  if (authStatus === "loading") {
+    return <div className="wt-wrap wt-page wt-ed-gate" aria-busy="true" />;
+  }
+
+  if (locked) {
+    return (
+      <div className="wt-wrap wt-page wt-ed-gate">
+        <h2>{t("편집실은 로그인하고 쓸 수 있어요")}</h2>
+        <p className="muted">{t("로그인하면 이 브라우저로 만든 작품도 그대로 따라옵니다. 위쪽 로그인 단추를 눌러 주세요.")}</p>
+        <div className="wt-ed-gate-acts">
+          <button type="button" className="btn btn-w" onClick={() => go("result", { run: runId })}>{t("완성본 보기")}</button>
+          <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기")}</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="ed wt-ed">
       <header className="ed-top wt-ed-top">
@@ -112,14 +160,11 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
           </div>
 
           <div className="ed-chips wt-ed-chips">
-            <span className="mock-badge" title={t("작품을 고르기 전까지는 샘플입니다.")}>{t("샘플")}</span>
-            <div className="credit" id="creditBox">
-              <span className="credit-icon">◈</span>
-              <span className="credit-num" id="creditNum">1,240</span>
-              <span className="credit-unit">{t("크레딧")}</span>
-              <button type="button" className="credit-more" id="ledgerBtn">{t("내역")}</button>
-            </div>
-            {credit && <span className="chip wt-ed-credit">◈ {credit}</span>}
+            <span className="chip wt-ed-credit">
+              ◈ {balance == null ? "—" : balance.toLocaleString("ko-KR")} {t("크레딧")}
+              <button type="button" className="wt-ed-ledgerbtn" aria-expanded={ledgerOpen}
+                      onClick={() => setLedgerOpen((v) => !v)}>{t("내역")}</button>
+            </span>
             <label className="mini-toggle wt-ed-overlaytoggle">
               <input type="checkbox" id="showOverlay" defaultChecked aria-label={t("내가 얹은 것 보기")} />
               {t("내가 얹은 것 보기")}
@@ -153,10 +198,6 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
         </aside>
 
         <main className="ed-stage wt-ed-stage" id="stageCol">
-          <div className="ed-stage-head wt-ed-stagehead">
-            <p className="eyebrow wt-ed-genre" id="edGenre" />
-            <p className="ed-logline wt-ed-logline" id="edLogline" />
-          </div>
           <div className="ep-tabs wt-ed-eptabs" id="edEpTabs" hidden />
           <div id="scenes" className="wt-ed-scenes" />
           <p className="ed-foot-note wt-ed-footnote" id="edFootNote" />
@@ -181,27 +222,43 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
           </div>
 
           <div className="dock-body wt-ed-dockbody" id="dockBody">
-            <p className="dock-hint wt-ed-dockhint" id="dockHint">
-              {t("누르면 ")}<b id="activeSceneLabel">{t("{n}번째 장", { n: 1 })}</b>{t("에 올라갑니다 — 끌어서 옮기고, 한 번 더 누르면 글을 고칩니다.")}
-            </p>
+            {/* 엔진(editorCore)이 지금 고른 장 번호를 여기 적고, 위쪽 React 가 읽는다.
+                보이는 글이 아니라 둘을 잇는 자리다 — 화면에는 안 그린다. */}
+            <span id="activeSceneLabel" hidden />
             <div className="dock-grid wt-ed-dockgrid" id="dockGrid" />
           </div>
 
-          <div className="dock-ledger wt-ed-ledger" id="dockLedger" hidden>
+          <div className="dock-ledger wt-ed-ledger" hidden={!ledgerOpen}>
             <div className="dock-props-head">
               <b>{t("크레딧 사용 내역")}</b>
-              <button type="button" className="icon-btn" id="ledgerClose" aria-label={t("닫기")}><IconClose size={14} /></button>
+              <button type="button" className="icon-btn" aria-label={t("닫기")}
+                      onClick={() => setLedgerOpen(false)}><IconClose size={14} /></button>
             </div>
-            <ul id="ledgerList">
-              <li className="ledger-empty">{t("아직 쓴 크레딧이 없습니다.")}</li>
-            </ul>
+            {ledgerErr ? (
+              <p className="err">{ledgerErr}</p>
+            ) : (
+              <ul>
+                {ledger == null ? (
+                  <li className="ledger-empty">{t("불러오는 중…")}</li>
+                ) : ledger.length === 0 ? (
+                  <li className="ledger-empty">{t("아직 쓴 크레딧이 없습니다.")}</li>
+                ) : ledger.map((x) => (
+                  <li key={x.id}>
+                    <span>{new Date(x.at).toLocaleDateString("ko-KR")} · {x.label}</span>
+                    <b className={x.delta < 0 ? "" : "plus"}>{x.delta < 0 ? "" : "+"}{x.delta}</b>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="wt-ed-regen">
             <b>{t("다시 그리기")}</b>
             {activeNote && <span className="dim">{t("이 장의 장면 · {note}", { note: activeNote })}</span>}
             <button type="button" className="btn btn-p wt-ed-regenbtn" onClick={regenActive}>
-              {t("이 컷 다시 그리기 · 3크레딧")}
+              {regenCost == null
+                ? t("이 컷 다시 그리기")
+                : t("이 컷 다시 그리기 · {n}크레딧", { n: regenCost })}
             </button>
           </div>
         </aside>
@@ -224,7 +281,6 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
             <input type="checkbox" id="regenAskTextless" />
             <span>{t("말풍선 없이 그림만")}</span>
           </label>
-          <p className="ask-warn">{t("실제로 다시 그립니다 — 1~2분과 생성 비용이 듭니다.")}</p>
           <div className="ask-actions">
             <button type="button" className="btn btn-w" id="regenAskCancel">{t("취소")}</button>
             <button type="button" className="btn btn-p" id="regenAskGo">{t("이 컷 다시 그리기")}</button>
@@ -233,7 +289,6 @@ export default function Editor({ runId, go }: { runId: string; go: Go }) {
       </div>
 
       <div className="toast wt-ed-toast" id="toast" hidden />
-      <div className="fly wt-ed-fly" id="fly" hidden />
     </div>
   );
 }

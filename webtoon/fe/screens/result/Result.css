@@ -1,7 +1,6 @@
 /* 완성본 — 캔버스 Done · DoneOther · MDone. 전부 .wt .wt-result 아래. */
 
 .wt .wt-result { display: flex; flex-direction: column; flex-grow: 1; }
-.wt .wt-result-crumbrow { display: flex; align-items: center; justify-content: space-between; }
 .wt .wt-result-body { display: flex; flex-direction: column; align-items: center; gap: 18px; margin-top: 12px; }
 .wt .wt-result-state { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 60px 0; }
 
@@ -28,11 +27,6 @@
 .wt .wt-result-peek {
   appearance: none; display: block; width: 100%; padding: 0; border: 0; background: none;
   position: relative; cursor: zoom-in; text-align: left; color: inherit; font: inherit;
-}
-.wt .wt-result-peek[aria-expanded="true"] { cursor: zoom-out; }
-.wt .wt-result-cap {
-  position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 18px;
-  background: rgba(15, 51, 63, 0.82); color: #fff; font-size: 13.5px; line-height: 1.5;
 }
 .wt .wt-result-pgdl {
   position: absolute; right: 10px; top: 10px; display: inline-flex; align-items: center; gap: 5px;
@@ -66,7 +60,7 @@
 }
 
 @media (max-width: 767px) {
-  .wt .wt-result-crumbrow { display: none; }
+  /* 폰은 위쪽 얇은 줄(MobileTop)이 위치를 말한다 — 빵부스러기는 숨긴다. */
   .wt .wt-result-body { gap: 14px; margin-top: 0; }
   .wt .wt-result-head h2 { font-size: 24px; }
   .wt .wt-result-meta { font-size: 13px; }
@@ -79,4 +73,54 @@
   .wt .wt-result-sheet { border-radius: 14px; }
   .wt .wt-result-pgdl { opacity: 1; }
   .wt .wt-result-foot { padding: 4px 0 8px; }
+}
+
+/* 「컷별로 내려받기」 체크 칸 (아트보드 Done) */
+.wt .wt-result-dlrow { display: flex; align-items: center; gap: 16px; margin-top: -6px; flex-wrap: wrap; justify-content: center; }
+.wt .wt-result-perpage { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.wt .wt-result-perpage input { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
+.wt .wt-result-wm-m { display: none; }
+
+/* 「{캐릭터}의 다른 편」 (아트보드 Done) */
+.wt .wt-result-others { width: 720px; max-width: 100%; display: flex; flex-direction: column; gap: 12px; padding: 8px 0 24px; }
+.wt .wt-result-others > b { font-size: 16px; }
+.wt .wt-result-others-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.wt .wt-result-other { width: 120px; height: 170px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--water-light); }
+.wt .wt-result-other img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.wt .wt-result-other-new {
+  width: 120px; height: 170px; border-radius: 12px; border: 1.5px dashed rgba(15, 51, 63, 0.25); background: none;
+  display: flex; align-items: center; justify-content: center; text-align: center; font-size: 13px; color: var(--ink);
+  font-weight: 700; cursor: pointer; font-family: inherit; line-height: 1.5;
+}
+.wt .wt-result-other-new:hover { border-color: var(--ink); }
+@media (max-width: 767px) {
+  .wt .wt-result-others { width: auto; padding: 4px 0 16px; }
+  .wt .wt-result-other, .wt .wt-result-other-new { width: 96px; height: 136px; }
+}
+
+@media (max-width: 767px) {
+  /* 폰은 「컷별로 내려받기 · 파일에 LORE 표시가 붙어요」 한 줄 (아트보드 MDone) */
+  .wt .wt-result-dlrow { gap: 4px; }
+  .wt .wt-result-wm { display: none; }
+  .wt .wt-result-wm-m { display: inline; font-size: 12px; }
+}
+
+/* 크게 보기 — 장을 누르면 화면 전체. 폭에 맞추고 세로로 흘린다. */
+.wt .wt-result-zoom {
+  position: fixed; inset: 0; z-index: 60; background: rgba(15, 51, 63, 0.92);
+  overflow-y: auto; overscroll-behavior: contain; padding: 24px 16px; cursor: zoom-out;
+}
+.wt .wt-result-zoom-scroll { width: min(100%, 1024px); margin: 0 auto; cursor: default; }
+.wt .wt-result-zoom-scroll img {
+  width: 100%; height: auto; display: block; background: #fff;
+}
+/* 한 편을 통째로 흘리므로 장 사이가 붙어 보이게 — 바깥 모서리만 둥글린다. */
+.wt .wt-result-zoom-scroll > div:first-child img { border-radius: 12px 12px 0 0; }
+.wt .wt-result-zoom-scroll > div:last-child img { border-radius: 0 0 12px 12px; }
+.wt .wt-result-zoom-scroll > div:only-child img { border-radius: 12px; }
+.wt .wt-result-zoom .icon-btn { position: fixed; top: 20px; right: 20px; z-index: 1; }
+.wt .wt-result-peek { cursor: zoom-in; }
+@media (max-width: 767px) {
+  .wt .wt-result-zoom { padding: 16px 8px; }
+  .wt .wt-result-zoom .icon-btn { top: 12px; right: 12px; }
 }
