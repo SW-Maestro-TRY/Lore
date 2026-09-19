@@ -23,10 +23,6 @@
 .wt .wt-entry-body > .muted { font-size: 13.5px; line-height: 1.55; }
 .wt .wt-entry-go { display: inline-flex; align-items: center; gap: 6px; color: var(--sea); font-size: 13px; font-weight: 700; margin-top: 6px; }
 
-.wt .wt-entry-back { margin-top: auto; padding-top: 24px; }
-.wt .wt-entry-back a { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); text-decoration: none; }
-.wt .wt-entry-back a:hover { color: var(--ink); }
-
 @media (max-width: 767px) {
   .wt .wt-entry { padding: 28px 16px 24px; gap: 12px; }
   .wt .wt-entry-head { align-items: flex-start; text-align: left; gap: 12px; margin: 0 0 6px; }

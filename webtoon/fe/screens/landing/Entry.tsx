@@ -5,7 +5,7 @@ import "./i18n";
 import * as api from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
-import { IconBack, IconUser } from "../../ui/Icons";
+import { IconUser } from "../../ui/Icons";
 import { usePhone } from "./usePhone";
 import "./Entry.css";
 
@@ -56,10 +56,6 @@ export default function Entry({ go }: { go: Go }) {
             </span>
           </div>
         </a>
-      </div>
-
-      <div className="wt-entry-back">
-        <a href={hrefOf("landing")} onClick={to(() => go("landing"))}><IconBack size={16} /> {t("처음으로")}</a>
       </div>
     </div>
   );

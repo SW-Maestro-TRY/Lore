@@ -88,6 +88,12 @@ export default function Landing({ go }: { go: Go }) {
   const [need, setNeed] = useState(0);
   const [feat, setFeat] = useState<0 | 1 | 2>(0);
 
+  /* 약속 셋 — 마우스를 올려도 바뀌고, 가만히 둬도 시간이 지나면 저절로 다음으로 넘어간다. */
+  useEffect(() => {
+    const id = setInterval(() => setFeat((f) => ((f + 1) % 3) as 0 | 1 | 2), 4000);
+    return () => clearInterval(id);
+  }, []);
+
   /* 만들던 작업 알약 */
   const [job, setJob] = useState<api.NhJob | null>(null);
   useEffect(() => {
@@ -272,7 +278,7 @@ export default function Landing({ go }: { go: Go }) {
                 <span className="wt-landing-genre" style={{ left: 12, top: 12, fontSize: 11, padding: "3px 9px" }}>{t("로판")}</span>
                 <div className="wt-landing-bubble" style={{ right: 14, top: 18, maxWidth: "58%", borderRadius: 14, padding: "7px 11px", fontSize: phone ? 11 : 12.5 }}>{t("멍!")}</div>
                 <div className="wt-landing-cap" style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 4 }}>
-                  <b style={{ fontSize: phone ? 13 : 14.5, lineHeight: 1.4 }}>{t("몽이는 이 로맨스 웹툰에서, 강아지인 채로 악역 영애예요")}</b>
+                  <b style={{ fontSize: phone ? 13 : 14.5, lineHeight: 1.4 }}>{t("몽이는 이 로맨스 판타지 웹툰에서 아주 악마같은 악역 영애예요")}</b>
                   <span style={{ fontSize: phone ? 11.5 : 12.5, opacity: 0.85 }}>{t("이 캐릭터로 1화 보기")}</span>
                 </div>
               </div>
@@ -304,8 +310,14 @@ export default function Landing({ go }: { go: Go }) {
 
       {/* 마지막 CTA */}
       <section className="wt-landing-last">
-        <h2 style={phone ? { whiteSpace: "pre-line" } : undefined}>{t(phone ? "당신의 이야기를\n기다리고 있어요" : "당신의 이야기를 기다리고 있어요")}</h2>
-        <button type="button" className="btn btn-p wt-landing-cta" onClick={start}>{t("지금 시작하기")}</button>
+        <div className="wt-landing-last-text">
+          <h2 style={phone ? { whiteSpace: "pre-line" } : undefined}>{t(phone ? "당신의 이야기를\n기다리고 있어요" : "당신의 이야기를 기다리고 있어요")}</h2>
+          <button type="button" className="btn wt-landing-last-cta" onClick={start}>{t("만들러가기")}</button>
+        </div>
+        <div className="wt-landing-last-pic">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/static/samples/ex-romance-2.jpg" alt="" />
+        </div>
       </section>
 
       {/* FAQ */}
