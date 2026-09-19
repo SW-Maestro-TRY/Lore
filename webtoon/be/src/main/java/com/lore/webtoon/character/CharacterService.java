@@ -79,8 +79,8 @@ public class CharacterService {
     private final Path workDir;
     private final int freePerDay;
     private final int cost;
-    /** 공개 그림을 내주는 앞자리. PageStore 와 같은 값을 본다. */
-    private final String cdn;
+    /** 로컬에서만 켠다 — 서명 주소로 준다. PageStore 와 같은 값. */
+    private final boolean presignLocally;
     private final Clock clock;
     /* 한 줄로 세운다 — 그림 호출을 한꺼번에 여러 개 띄우면 값이 몰려 나간다. */
     private final ExecutorService line =
@@ -94,14 +94,14 @@ public class CharacterService {
                             @Value("${lore.webtoon.character.work-dir:}") String workDir,
                             @Value("${lore.webtoon.character.free-per-day:3}") int freePerDay,
                             @Value("${lore.webtoon.character.credit-cost:2}") int cost,
-                            @Value("${lore.webtoon.cdn-base:}") String cdn) {
-        this(characters, maker, owner, art, credits, workDir, freePerDay, cost, cdn,
-             Clock.system(ZONE));
+                            @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally) {
+        this(characters, maker, owner, art, credits, workDir, freePerDay, cost,
+             presignLocally, Clock.system(ZONE));
     }
 
     CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
                      CharacterOwner owner, PrivateArt art, CreditGate credits, String workDir,
-                     int freePerDay, int cost, String cdn, Clock clock) {
+                     int freePerDay, int cost, boolean presignLocally, Clock clock) {
         this.characters = characters;
         this.maker = maker;
         this.owner = owner;
@@ -111,7 +111,7 @@ public class CharacterService {
                 ? "webtoon/ai/work/characters" : workDir).toAbsolutePath().normalize();
         this.freePerDay = freePerDay;
         this.cost = cost;
-        this.cdn = cdn == null ? "" : cdn.replaceAll("/+$", "");
+        this.presignLocally = presignLocally;
         this.clock = clock;
     }
 
@@ -391,10 +391,13 @@ public class CharacterService {
         if (key == null || key.isBlank()) {
             return null;
         }
-        if (!PrivateArt.isPrivate(key) && !cdn.isEmpty()) {
-            return cdn + "/" + key;
+        // 공개 자리는 언제나 상대경로다 — 도메인을 붙일 자리를 없앴다.
+        // 이유는 PageStore.url 주석 참고(2026-09-19, 적어 둔 호스트에 basic auth 가
+        // 붙으면서 운영 화면이 그림마다 로그인 팝업을 띄웠다).
+        if (!PrivateArt.isPrivate(key) && !presignLocally) {
+            return "/" + key;
         }
-        // 비공개 자리이거나 CDN 이 없는 자리(로컬)면 잠깐 열리는 주소 — PageStore.url 과 같은 규칙.
+        // 비공개 자리이거나, 로컬(presign-locally)이면 잠깐 열리는 주소.
         return art.ready() ? art.temporaryUrl(key) : null;
     }
 
