@@ -187,14 +187,24 @@ def page_path(run_dir: Path, page_no: int) -> Path:
 
 
 def scene_context() -> str:
-    """그림 프롬프트에 장면을 몇 개 주는가. `all`(기본) 또는 `one`.
+    """그림 프롬프트에 장면을 몇 개 주는가. `one`(기본) 또는 `all`.
+
+    **기본값을 `one` 으로 바꿨다(2026-09-19).** 장면 전체를 다 주던 `all` 은
+    페이지마다 이야기가 도입부로 되돌아가는 문제가 실측으로 확인됐다 — 같은
+    이야기·같은 캐릭터 시트로 `all` 과 `one` 을 제품과 같은 조건(자바처럼
+    페이지 4장을 프로세스 4개로 동시에 그림)에서 견줘서, 전체 검수의 `opens`
+    판정(이 장 나레이션 첫 줄이 앞에 이미 나왔는가)이 `all` 에서는 뒤 세 장
+    전부 "이미"(되돌아감)로 나왔고 `one` 에서는 전부 "처음"으로 바뀌는 것을
+    확인했다(run 20260919T022231-383b4b vs -concurrent, 비교 결과는
+    `webtoon/ai/work/compare-scene-context/`).
 
     **기본값은 코드에 둔다** — `.env` 는 jar 에 안 실려서 서버에서는
-    통째로 사라진다(webtoon/CLAUDE.md). 기본이 `all` 이라 이 값을 안 주면
-    예전과 똑같이 돈다.
+    통째로 사라진다(webtoon/CLAUDE.md). `NH_SCENE_CONTEXT=all` 을 주면
+    예전 방식(장면 전체)으로 되돌릴 수 있다 — 되돌릴 일이 생기면 여기를
+    다시 볼 것.
     """
     want = (llm.env("NH_SCENE_CONTEXT") or "").strip().lower()
-    return "one" if want == "one" else "all"
+    return "all" if want == "all" else "one"
 
 
 def opens_at(scenes: list[dict], scene_no: int) -> str:
