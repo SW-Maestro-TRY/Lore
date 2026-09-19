@@ -172,6 +172,9 @@ const dict: Dict = {
   "로그인하면 이 브라우저로 만든 작품도 그대로 따라옵니다. 위쪽 로그인 단추를 눌러 주세요.": { en: "Signing in brings over what you made in this browser. Use the sign-in button above.", ja: "ログインすると、このブラウザで作った作品もそのまま引き継がれます。上のログインボタンを押してください。", zh: "登录后，你在这个浏览器里创作的作品也会一起带过来。请点击上方的登录按钮。" },
   "완성본 보기": { en: "View the finished episode", ja: "完成版を見る", zh: "查看成品" },
   "둘러보기": { en: "Browse", ja: "見てまわる", zh: "浏览" },
+  "내역을 불러오지 못했습니다.": { en: "Couldn't load the history.", ja: "履歴を読み込めませんでした。", zh: "无法加载记录。" },
+  "불러오는 중…": { en: "Loading…", ja: "読み込み中…", zh: "加载中…" },
+  "이 컷 다시 그리기 · {n}크레딧": { en: "Redraw this panel · {n} credits", ja: "このコマを描き直す · {n}クレジット", zh: "重绘这一格 · {n} 积分" },
 };
 
 registerDict(dict);

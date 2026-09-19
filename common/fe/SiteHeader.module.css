@@ -125,3 +125,12 @@
     display: none;
   }
 }
+
+/* 크레딧 칩. 누르면 충전 창이 열린다. 로그인했을 때만 그린다. */
+.creditChip {
+  display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 14px;
+  border-radius: 999px; border: 1px solid var(--line-strong, rgba(15, 51, 63, 0.18));
+  background: #fff; color: inherit; font: inherit; font-size: 13px; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+}
+.creditChip:hover { border-color: currentColor; }

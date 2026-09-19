@@ -65,6 +65,7 @@ public class RunController {
     private final RegenService regen;
     private final AfterRun after;
     private final WorkLedger ledger;
+    private final CreditGate credits;
     /* **경계에서는 Map 으로 주고받는다.**
      *
      * 이 앱의 HTTP 변환기는 Jackson 3(tools.jackson) 인데, 얹은 것을 다루는
@@ -76,7 +77,8 @@ public class RunController {
 
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
-                         RegenService regen, AfterRun after, WorkLedger ledger) {
+                         RegenService regen, AfterRun after, WorkLedger ledger,
+                         CreditGate credits) {
         this.runs = runs;
         this.pages = pages;
         this.export = export;
@@ -86,6 +88,7 @@ public class RunController {
         this.regen = regen;
         this.after = after;
         this.ledger = ledger;
+        this.credits = credits;
     }
 
     /**
@@ -100,7 +103,7 @@ public class RunController {
      * 계정에 이어 주고, 그때 그 브라우저로 만든(아직 주인 없는) 작품이
      * 그대로 내 것이 된다({@link WorkLedger} 의 isOwner).
      */
-    private void mustOwn(String runId) {
+    private Long mustOwn(String runId) {
         Long userId = CreditGate.currentUser();
         if (userId == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED,
@@ -109,6 +112,7 @@ public class RunController {
         if (!ledger.mayChange(runId, userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 고칠 수 있습니다");
         }
+        return userId;
     }
 
     /**
@@ -290,10 +294,22 @@ public class RunController {
                                                       @PathVariable int no,
                                                       @RequestBody(required = false)
                                                       Map<String, Object> body) {
-        mustOwn(runId);
+        Long userId = mustOwn(runId);
+        /* 화면이 단추에 값을 적어 놓고 실제로는 안 받고 있었다. 만들기·캐릭터와
+           같은 규칙으로 여기서도 받는다 — **시작하기 전에** 낼 수 있는지 보고,
+           줄을 세운 뒤에 뺀다. 먼저 빼면 시작이 실패했을 때 낸 것만 사라진다.
+           같은 ref 로 두 번 불려도 한 번만 빠진다(CreditGate.charge). */
+        int cost = credits.regenCost();
+        String blocked = cost > 0 ? credits.whyBlocked(userId, cost) : null;
+        if (blocked != null) {
+            throw new BusinessException(CreditGate.notEnough(), blocked);
+        }
         try {
             String note = body == null ? "" : String.valueOf(body.getOrDefault("feedback", ""));
             String id = regen.start(runId, no, note);
+            if (cost > 0) {
+                credits.charge(userId, cost, "regen:" + runId + ":" + no + ":" + id, "장 다시 그리기");
+            }
             return ResponseEntity.ok(regen.statusOf(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));

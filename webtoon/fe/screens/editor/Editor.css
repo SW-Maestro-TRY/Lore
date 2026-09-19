@@ -339,3 +339,16 @@
 .wt .wt-ed-gate h2 { font-size: 26px; }
 .wt .wt-ed-gate p { font-size: 15px; line-height: 1.6; max-width: 460px; }
 .wt .wt-ed-gate-acts { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+
+/* 크레딧 칩 안의 「내역」 · 진짜 사용 내역 줄 */
+.wt .wt-ed-ledgerbtn {
+  border: 0; background: none; padding: 0 0 0 6px; margin-left: 2px; cursor: pointer;
+  color: var(--sea); font: inherit; font-size: 12px; font-weight: 700;
+}
+.wt .wt-ed-ledgerbtn:hover { color: var(--sea-deep); }
+.wt .wt-ed-cost { font-size: 12px; }
+.wt .wt-ed .dock-ledger ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.wt .wt-ed .dock-ledger li { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 5px 2px; border-bottom: 1px solid var(--line); }
+.wt .wt-ed .dock-ledger li b.plus { color: #0f9e8a; }
+.wt .wt-ed .dock-ledger .ledger-empty { justify-content: center; color: var(--dim); border: 0; padding: 14px 0; }
+.wt .wt-ed .dock-ledger .err { font-size: 12.5px; padding: 8px 2px; }
