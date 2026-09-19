@@ -62,7 +62,7 @@ jobs:
           case "${GITHUB_REF_NAME}" in
             develop)   # dev — 싼 EC2 1대(인스턴스ID 고정), CloudFront 없음(직결)
               env_name=dev
-              ssm_target='--instance-ids TODO_DEV_INSTANCE_ID'
+              ssm_target='--instance-ids i-0169c150550d91895'
               cf_dist=''                    # 없음 → 무효화 스텝 건너뜀
               role_arn='arn:aws:iam::046797548177:role/lore-github-deploy' ;;
             staging)   # staging — 현 인프라 재활용(1대 고정)
@@ -117,9 +117,85 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
 
+  # ── dev 전용: 도커 박스 배포 ─────────────────────────────────────
+  # dev 는 jar/번들을 systemd 에 꽂는 게 아니라 compose 스택 한 덩어리를 박스에서 다시 빌드한다.
+  # 그래서 올리는 것도 jar 가 아니라 "소스 tar" 다. 실제 절차는 박스 위 infra/dev/deploy-dev.sh.
+  #
+  # 배포 스크립트 자체도 매번 같이 올려 박스가 레포 판본으로 갱신되게 한다 — 스크립트를 고칠 때마다
+  # 사람이 박스에 손복사하러 들어가는 단계를 없앤다(손복사본과 레포가 갈라지는 사고 방지).
+  dev_deploy:
+    needs: [changes, setup]
+    if: >-
+      needs.setup.outputs.env_name == 'dev' &&
+      (needs.changes.outputs.backend == 'true' ||
+       needs.changes.outputs.frontend == 'true' ||
+       github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      # 박스가 도커로 다시 빌드하므로 러너에서는 빌드하지 않는다 — 소스만 묶어 보낸다.
+      # 무거운 산출물(.git·node_modules·build·.next·bundle)은 뺀다. 체크아웃 직후라 대개 없지만,
+      # 있으면 tar 가 수백 MB 로 불어나 전송·해제가 길어진다.
+      #
+      # ★ haeun/webtoon-ai-backup 은 추적 파일만 747MB 다(지운 하네스의 백업본).
+      #   빌드가 한 줄도 읽지 않는데 넣으면 매 배포마다 850MB 를 올리고 내려받고, 박스엔
+      #   src 두 벌(=1.7GB)이 남는다. 싼 dev 박스의 디스크·시간이 여기서 다 나간다 → 제외.
+      #   (라이브 하네스는 webtoon/ai/new_harness 라 영향 없다.)
+      - name: 소스 tar 로 묶기
+        run: |
+          SRC_TAR="$RUNNER_TEMP/src-${GITHUB_SHA}.tar.gz"
+          tar czf "$SRC_TAR" \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='build' \
+            --exclude='.next' \
+            --exclude='bundle' \
+            --exclude='webtoon-ai-backup' \
+            -C "$GITHUB_WORKSPACE" .
+          ls -lh "$SRC_TAR"
+          echo "SRC_TAR=$SRC_TAR" >> "$GITHUB_ENV"
+
+      - name: AWS 명찰 걸기 (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ needs.setup.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 소스 tar·배포 스크립트 S3 업로드
+        run: |
+          B="${{ needs.setup.outputs.s3_bucket }}"
+          SRC_KEY="builds/dev/src-${GITHUB_SHA}.tar.gz"
+          SCRIPT_KEY="builds/dev/deploy-dev-${GITHUB_SHA}.sh"
+          aws s3 cp "$SRC_TAR" "s3://$B/$SRC_KEY" --region "$AWS_REGION"
+          aws s3 cp infra/dev/deploy-dev.sh "s3://$B/$SCRIPT_KEY" --region "$AWS_REGION"
+          {
+            echo "SRC_KEY=$SRC_KEY"
+            echo "SCRIPT_KEY=$SCRIPT_KEY"
+          } >> "$GITHUB_ENV"
+
+      # 박스는 깃허브 자격이 없다 — S3 에서 스크립트를 먼저 받아 갱신한 뒤 그걸 실행한다.
+      # set -e 를 맨 앞에 둬야 중간(스크립트 내려받기)이 실패했을 때 옛 스크립트로 계속 밀지 않는다.
+      - name: SSM 으로 배포 (도커 박스)
+        run: |
+          B="${{ needs.setup.outputs.s3_bucket }}"
+          CMD_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            ${{ needs.setup.outputs.ssm_target }} \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy dev ${GITHUB_SHA}" \
+            --parameters commands="[\"set -e\",\"aws s3 cp s3://$B/$SCRIPT_KEY /opt/lore-dev/deploy-dev.sh --region $AWS_REGION\",\"chmod +x /opt/lore-dev/deploy-dev.sh\",\"sudo bash /opt/lore-dev/deploy-dev.sh $B $SRC_KEY $AWS_REGION ${GITHUB_SHA}\"]" \
+            --query "Command.CommandId" --output text)
+          echo "command-id: $CMD_ID"
+          bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
+
   backend:
     needs: [changes, setup]
-    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
+    # dev 는 systemd 가 아니라 compose 스택이라 아래 절차가 안 맞는다 → dev_deploy 가 대신 맡는다.
+    if: >-
+      needs.setup.outputs.env_name != 'dev' &&
+      (needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: ${{ needs.setup.outputs.env_name }}   # prod 환경에 "리뷰어 필수" 걸면 배포 승인게이트
     steps:
@@ -188,7 +264,10 @@ jobs:
 
   frontend:
     needs: [changes, setup]
-    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+    # dev 는 systemd 가 아니라 compose 스택이라 아래 절차가 안 맞는다 → dev_deploy 가 대신 맡는다.
+    if: >-
+      needs.setup.outputs.env_name != 'dev' &&
+      (needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: ${{ needs.setup.outputs.env_name }}
     steps:
