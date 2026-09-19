@@ -2,6 +2,13 @@
 .wt .wt-landing { width: 100%; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; }
 .wt .wt-landing section { flex-shrink: 0; }
 
+/* 글꼴 시험 (2026-09-19) — 제목만 Gmarket Sans, 이 화면의 나머지 전부는
+   SUIT. Landing.tsx 가 --font-landing-title/--font-landing-body 변수를
+   이 wt-landing 루트에 심는다(next/font/local) — 다른 화면은 그대로
+   Noto Sans KR(webtoon.css 의 .wt 기본값)이다. */
+.wt .wt-landing { font-family: var(--font-landing-body), "Noto Sans KR", sans-serif; }
+.wt .wt-landing h1 { font-family: var(--font-landing-title), "Noto Sans KR", sans-serif; }
+
 /* 히어로 */
 .wt .wt-landing-hero { padding: 64px 48px 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 18px; }
 .wt .wt-landing-hero h1 { font-size: 64px; line-height: 1.15; }
@@ -46,7 +53,7 @@
 
 /* 니즈 카드 */
 .wt .wt-landing-needs { padding: 110px 48px 0; display: flex; flex-direction: column; gap: 32px; }
-.wt .wt-landing-needs h2 { font-size: 44px; line-height: 1.3; }
+.wt .wt-landing-needs h2 { font-size: 32px; line-height: 1.35; font-weight: 800; }
 .wt .wt-landing-needs-row { display: flex; gap: 24px; align-items: stretch; }
 .wt .wt-landing-need {
   flex: 1 1 0; min-width: 0; border: 1px solid var(--line);
@@ -170,7 +177,7 @@
   .wt .wt-landing-step-tools { left: 9.6px; right: 9.6px; bottom: 9.6px; height: 32px; border-radius: 9.6px; padding: 0 6.4px; }
 
   .wt .wt-landing-needs { padding: 60px 20px 0; gap: 18px; }
-  .wt .wt-landing-needs h2 { font-size: 27px; }
+  .wt .wt-landing-needs h2 { font-size: 21px; }
   .wt .wt-landing-needs-row { flex-direction: column; gap: 18px; }
   .wt .wt-landing-need { padding: 22px 20px 0; height: 470px; }
   .wt .wt-landing-need + .wt-landing-need { height: 500px; }
