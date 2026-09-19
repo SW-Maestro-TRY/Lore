@@ -201,7 +201,7 @@ def user_story_block(char: dict) -> str:
             "한다. 배경 설정으로만 깔고 넘어가지 마라.\n")
 
 
-def story_input_block(char: dict) -> str:
+def story_input_block(char: dict, run_dir: Path | None = None) -> str:
     """이야기 단계의 입력 — 장르가 주어졌을 때만 장르 참고 자료를 더한다.
 
     장르가 없으면 story_prompt 가 4개 방향마다 서로 다른 장르를 스스로
@@ -210,6 +210,11 @@ def story_input_block(char: dict) -> str:
     world_text_for) — 구체화 단계에서만 장르 세계관을 주면, 장면 목록 자체가
     이미 장르 색이 없는 소재(출입증·CCTV 등)로 굳어 있어서 구체화가 소재를
     바꿔치기하는 식으로만 손볼 수 있었다(2026-08-31, 사용자 지적).
+
+    `run_dir`(2026-09-19 추가) — 있으면 장르 샘플 카드가 **최근에 안 보여준
+    카드를 우선** 고르고, 이번에 고른 카드를 그 run 에 남겨 다음 run 이 이어
+    피하게 한다(`genre_samples_for` 참고). 없으면(기본) 예전처럼 그냥
+    무작위로 고른다 — 호출부를 다 못 고친 자리가 있어도 안 깨진다.
     """
     block = input_block(char).rstrip("\n")
     genre = char["genre"]
@@ -219,7 +224,7 @@ def story_input_block(char: dict) -> str:
     world = world_text_for(genre)
     if world:
         lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
-    cards = genre_samples_for(genre)
+    cards = genre_samples_for(genre, run_dir=run_dir)
     if cards:
         lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
                   "", GENRE_SAMPLE_NOTE, "", cards]
@@ -617,17 +622,27 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     parts = [
         "", head, "",
         "아래 값은 방향 번호에 그대로 대응한다. **방향 N 은 N 번 값으로 쓴다.** "
-        "4개가 서로 다른 이야기가 되게 하는 장치가 이것이다 — 값을 무시하고 그 "
-        "장르에서 가장 흔한 설정으로 돌아가면 넷이 비슷해진다.", "",
+        "4개가 서로 다른 이야기가 되게 하는 장치가 이것이다 — 넷이 같은 소재로 "
+        "모이면 값을 안 쓴 것이다.", "",
+        # 값은 어느 세계에나 얹히는 말이라, 번역하지 않으면 아무 데서나 가능한
+        # 장면이 된다. 실측으로 확인됐다 — 「동료 · 반복되는 하루 · 대리인」이
+        # 마법학교에서 관청 서류 업무로 나왔다(2026-09-19). 무대만 그 장르이고
+        # 벌어지는 일은 어느 장르에서나 가능한 판이 되는 것을 여기서 막는다.
+        "**값은 그 세계 안에서 무엇으로 나타나는지를 먼저 정하고 쓴다.** 값은 어느 "
+        "세계에나 얹히는 말이라, 그대로 두면 아무 데서나 가능한 장면이 된다 — "
+        "「동료」를 사무실 동료로, 「반복되는 하루」를 출근길로 쓰면 무대만 그 "
+        "장르이고 벌어지는 일은 그 장르가 아니다. 위에 적힌 세계관의 규칙과 그 "
+        "장르가 실제로 다루는 것으로 값을 옮겨 적어라. **옮긴 결과를 다른 장르에 "
+        "그대로 가져가도 말이 되면, 아직 옮기지 않은 것이다.**", "",
         "**이것은 소재가 아니라 경로다.** 무엇에 대한 이야기인지가 아니라, 처음 "
         "문제가 마지막에 무엇이 되어 있는지를 정한 것이다. 배정된 시작점과 도착점을 "
-        "먼저 잡고 그 사이를 채워라 — 소재는 장르에서 고른다. 도착점이 시작점과 "
-        "같은 종류의 문제면 실패고, 넷의 도착점이 서로 비슷해도 실패다.",
+        "먼저 잡고 그 사이를 채워라. 도착점이 시작점과 같은 종류의 문제면 실패고, "
+        "넷의 도착점이 서로 비슷해도 실패다.",
     ]
     if use_axes:
         parts += ["", "이야기 변수는 인물이 어디에 서서 무엇과 부딪히는지를, 회차 "
-                  "구조는 그것을 어떤 순서로 보여줄지를 정한다. 소재는 장르에서 "
-                  "고르고 이 위에 얹는다."]
+                  "구조는 그것을 어떤 순서로 보여줄지를 정한다. 그 '어디'와 '무엇'은 "
+                  "이 세계의 것이어야 한다 — 값과 세계는 따로가 아니다."]
     for i in range(count):
         parts += ["", f"### 방향 {i + 1}", ""]
         for txt in (_engine_block(engines[i]) if i < len(engines) else "",
@@ -652,7 +667,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
     자가 사람 눈과 맞는지 아직 확인되지 않아서, storycheck 과 달리 켜져
     있지 않다(`storydiff.enabled` 참고).
     """
-    block = story_input_block(char).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
+    block = story_input_block(char, run_dir).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
     note = (note or "").strip()
     if note:
         # 다시 만들기에서 사람이 남긴 요청 — 캐릭터 설정 자체가 아니라 "이번엔
@@ -795,7 +810,7 @@ GENRE_SAMPLE_NOTE = (
 )
 
 
-def genre_samples_for(genre: str) -> str:
+def genre_samples_for(genre: str, run_dir: Path | None = None) -> str:
     """장르에 맞는 story-harness 의 검수된 기준 샘플 카드. 없으면 빈 문자열.
 
     samples/ 에는 장르 14종마다 사람이 검수해 실제로 서비스에 나간 카드가
@@ -810,6 +825,12 @@ def genre_samples_for(genre: str) -> str:
 
     못 찾으면 빈 문자열이다. 안 맞는 장르 카드를 억지로 붙이지 않는다
     (resolve_genre_templates 와 같은 원칙).
+
+    `run_dir` 이 있으면 회피가 붙는다(2026-09-19) — 장르당 카드가 6장뿐이라
+    (`samples.EXEMPLAR_PICK` 주석 참고) 최근 run들과 안 겹치게 고르지 않으면
+    몇 번 안 가 같은 3장 조합이 반복된다(사용자 지적 — "시작점이 5개뿐이라
+    매번 비슷해 보인다"와 같은 종류의 문제, 카드 쪽이 더 좁다). 골랐으면 그
+    run 디렉터리에 `story_cards.json` 으로 남겨서 다음 run 이 이어 피한다.
     """
     genre = (genre or "").strip()
     if not genre:
@@ -818,7 +839,13 @@ def genre_samples_for(genre: str) -> str:
         key = samples.guess_genre(genre)
         if not key:
             return ""
-        return samples.exemplars(key)
+        if run_dir is None:
+            return samples.exemplars(key)
+        avoid = samples.recent_card_ids(key, RUNS_DIR)
+        text, ids = samples.exemplars_fresh(key, avoid_ids=avoid)
+        if ids:
+            write_json(run_dir / "story_cards.json", {"genre": key, "ids": ids})
+        return text
     except Exception:
         return ""
 
