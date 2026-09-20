@@ -291,10 +291,12 @@ function Fire({ y }: { y: Yeoul }) {
           </div>
         )}
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 26, lineHeight: 1.2, color: C.ink, textAlign: 'center' }}>{f.title}</span>
-        <span style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.62)', textAlign: 'center' }}>{f.body}</span>
+        {/* ★ `pre-line` — 문구가 줄바꿈(\n)으로 두 마디를 갈라 둔 판이 있다(졸업 판). 없으면 한 덩어리로 붙는다. */}
+        <span style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.62)', textAlign: 'center', whiteSpace: 'pre-line' }}>{f.body}</span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', marginTop: 2 }}>
           {f.actions.map((a) => (
-            <button key={a.label} onClick={a.tap} style={{ padding: 13, borderRadius: radius.md, border: `1px solid ${a.primary ? C.accent : C.line}`, background: a.primary ? C.accent : C.slot, color: a.primary ? C.accentInk : C.ink, fontSize: 13.5 }}>{a.label}</button>
+            /* ★ 버튼은 문구가 아니라 `data-action` 으로 집는다(팀 규약 C25) — 문구는 바뀌는 자리다. */
+            <button key={a.action} data-action={a.action} onClick={a.tap} style={{ padding: 13, borderRadius: radius.md, border: `1px solid ${a.primary ? C.accent : C.line}`, background: a.primary ? C.accent : C.slot, color: a.primary ? C.accentInk : C.ink, fontSize: 13.5 }}>{a.label}</button>
           ))}
         </div>
         <span style={{ font: `10px ${MONO}`, color: 'rgba(74,64,56,.33)' }}>{f.hint}</span>

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
-  STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS,
+  STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS, GRAD_COPY,
   type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
@@ -26,6 +26,7 @@ import {
   cyclesOfAction, poseOfSituation, situationOfAction, stagePlanOf, type ActionKey,
 } from '../props/situations';
 import { motionAliases } from '../constants';
+import { trackConversion } from '../../lib/analytics';
 
 /**
  * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
@@ -70,7 +71,14 @@ export interface LogLine { who: 'pet' | 'me'; text: string }
  *   2층 동작 key 까지 오므로 8종으로는 못 담는다. 무엇을 그릴지는 `spriteUrl` 한 곳이 정한다.
  */
 export interface FrameData { name: string; open: boolean; cond: string; key: string }
-export interface FireAction { label: string; tap: () => void; primary: boolean }
+/**
+ * 전면 판의 버튼 하나.
+ *
+ * ★ `action` 은 **비워 둘 수 없다**(팀 규약 C25 — 버튼은 문구가 아니라 `data-action` 으로 집는다).
+ *   문구는 상훈님이 언제든 바꾸시는 자리라, 문구로 집는 검사는 디자인을 다듬을 때마다 깨진다.
+ *   필수로 둔 이유는 **새 판을 만드는 사람이 빠뜨릴 수 없게** 하기 위해서다.
+ */
+export interface FireAction { label: string; action: string; tap: () => void; primary: boolean }
 export interface Fire {
   title: string; body: string; hint?: string; tapAny?: boolean;
   polaroid?: boolean; caption?: string; shot?: string; shotLabel?: string;
@@ -635,6 +643,22 @@ export function useYeoul(live?: Live) {
     later('toast', 1700, () => setS((v) => ({ ...v, toast: '' })));
   }, [later]);
 
+  /**
+   * "이런 동작도 보고 싶어요" — 정본 §심화 행동의 수요조사 한 줄.
+   *
+   * ★★ 2026-09-20 — 예전에는 **아무 데도 안 보내면서** "기록해 뒀어요" 라고 했다. 화면이
+   *   하지 않은 일을 했다고 말하는 자리였다. 지금은 진짜로 남긴다 — 전용 서버 API 를 새로
+   *   만들 필요가 없다. 행동 기록 수집기(`POST /api/v1/events`)가 이미 열려 있고 비로그인도 받는다.
+   * ★ `trackConversion` 인 이유 — 평범한 `track` 은 5초 뒤에 묶어 보낸다. 이 판은 누르고
+   *   바로 닫고 나가는 자리라, 그 5초 안에 탭이 사라지면 정작 알고 싶은 한 줄을 잃는다.
+   * ★ props 키는 수집기 허용 목록(`ALLOWED_PROP_KEYS`) 안의 것만 쓴다 — 목록 밖 키는 조용히 버려진다.
+   */
+  const recordWish = useCallback((from: string) => {
+    void trackConversion('zzal_motion_wish', { from });
+    setS((v) => ({ ...v, wishes: v.wishes + 1, fire: null }));
+    flash('기록해 뒀어요');
+  }, [flash]);
+
   // ── 튜토리얼 ──
   //
   // ★ 2026-09-10 — 진짜 아이는 **서버가 칸을 센다**(`tutorial.step`). 화면은 순서를 다시 판정하지 않는다.
@@ -658,28 +682,31 @@ export function useYeoul(live?: Live) {
    *
    * ★ 정본 v1.2(2026-09-07) — **구르기 = 첫날 튜토리얼 완주 보상**으로 앞당겨졌다.
    *   (3층 첫 심화 행동 선물은 '뒤로 넘어짐' 하나로 줄었다)
-   *   정본 §심화 행동: 선물 화면에는 **다운로드 + "이런 동작도 원해요?" 수요조사**가 붙는다.
    *
-   * ★ 문구에 담는 것 셋 — 끝냈다 · 구르기를 배웠다(지금 볼 수 있다) · 내일 오면 **이 아이의**
-   *   새 동작을 하나 더 볼 수 있다. 일반적인 "새 기능" 이 아니라 눈앞의 이 아이 이야기여야 한다.
+   * ★★ 2026-09-20 — 이 판이 **사실과 다른 말을 세 가지** 하고 있어서 고쳤다. 무엇이 왜
+   *   거짓이었는지는 문구를 쥔 `constants.ts` 의 `GRAD_COPY` 머리말에 적어 두었다.
+   *   요지만 — (1) 구르기는 이 순간 굽기가 시작될 뿐이라 앨범에 아직 없다,
+   *   (2) 밤에 새 동작을 연습하지 않는다(조건을 채운 순간 굽는 모델 + 3층 목록이 비어 있다),
+   *   (3) "구르기 저장하기" 는 저장할 그림이 없는데 저장했다고 말했다 → 버튼을 없앴다.
+   *   그림이 실제로 도착한 뒤의 저장·공유는 이미 앨범 액자가 하고 있다(`Album.tsx` 의 frame-save).
+   *
    * ★ 쓰지 않는 말 — "꼭 오세요"·"기다릴게요"·"안 오면 서운해요". 초대이지 숙제가 아니고,
    *   아이가 사용자를 원망하는 말은 자캐 커뮤니티에서 가장 싫어하는 결이다.
-   * ★ "매일 하나씩" 같이 **못 지킬 수 있는 약속도 안 쓴다** — 정본상 굽기는 실패할 수 있고
-   *   그때 화면은 "아직 연습 중이에요" 다. 그래서 "연습해 볼 참" 이라고만 말한다.
+   * ★ 지킬 수 없는 약속(날짜·시각·"매일 하나씩")도 안 쓴다 — 굽기는 실패할 수 있고,
+   *   그때 화면은 "아직 연습 중이에요" 다.
    */
   const finishTutor = (v: YeoulState): YeoulState => ({
     ...v, tutor: 0, tutorOn: false,
     ...(v.tutorDone ? {} : {
       tutorDone: true, rollUnlocked: true,
       fire: {
-        title: '첫날을 함께 마쳤어요',
-        body: `${petWith(v.petName, '이', '가')} 둘러보는 법을 다 익혔어요. 기념으로 구르기를 하나 배웠고, 앨범에서 바로 볼 수 있어요.\n오늘 밤에는 새 동작을 하나 연습해 볼 참이라, 내일 오시면 ${v.petName || '아이'}의 새로운 모습을 보실 수 있어요.`,
+        title: GRAD_COPY.title,
+        body: GRAD_COPY.body(petWith(v.petName, '이', '가')),
         hint: '', tapAny: true,
         actions: [
-          // 정본이 선물 화면에 붙이라고 한 둘. 지금은 프론트 목이라 눌리기만 한다.
-          { label: '구르기 저장하기', tap: () => { setS((w) => ({ ...w, fire: null })); flash('앨범에 저장했어요'); }, primary: true },
-          { label: '이런 동작도 보고 싶어요', tap: () => { setS((w) => ({ ...w, wishes: w.wishes + 1, fire: null })); flash('기록해 뒀어요'); }, primary: false },
-          { label: '닫기', tap: () => setS((w) => ({ ...w, fire: null })), primary: false },
+          // 정본이 선물 화면에 붙이라고 한 수요조사. **이쪽은 진짜로 서버에 남는다**(recordWish).
+          { label: GRAD_COPY.wish, action: 'grad-wish', tap: () => recordWish('tutorial_gift'), primary: true },
+          { label: GRAD_COPY.close, action: 'grad-close', tap: () => setS((w) => ({ ...w, fire: null })), primary: false },
         ],
       },
     }),
@@ -1131,7 +1158,7 @@ export function useYeoul(live?: Live) {
       }
     })();
   }, [flash, careAct]);
-  const addWish = useCallback(() => { setS((v) => ({ ...v, wishes: v.wishes + 1, fire: null })); flash('기록해 뒀어요'); }, [flash]);
+  const addWish = useCallback(() => recordWish('postcard'), [recordWish]);
 
   const tapAlbumCell = useCallback((open: number, name: string) => () => {
     const parts = name.split(' · ');
@@ -1140,7 +1167,7 @@ export function useYeoul(live?: Live) {
         title: parts[0],
         body: `아직 잠긴 칸이에요. ${parts[1] || '조건 미정'} 조건을 채우면 열려요.`,
         hint: '조건은 여정마다 달라요', tapAny: true,
-        actions: [{ label: '알겠어요', tap: closeFire, primary: true }],
+        actions: [{ label: '알겠어요', action: 'frame-locked-ok', tap: closeFire, primary: true }],
       } });
       return;
     }
@@ -1148,7 +1175,10 @@ export function useYeoul(live?: Live) {
       title: parts[0], body: `${petWith(v.petName, '과', '와')} 남긴 장면이에요.`,
       polaroid: true, caption: `${parts[0]} — ${v.day}일째`,
       shot: '#EBD3C7', shotLabel: '장면 이미지', hint: '',
-      actions: [{ label: '앨범에 저장', tap: saveShot, primary: true }, { label: '닫기', tap: closeFire, primary: false }],
+      actions: [
+        { label: '앨범에 저장', action: 'scene-save', tap: saveShot, primary: true },
+        { label: '닫기', action: 'scene-close', tap: closeFire, primary: false },
+      ],
     } }));
   }, [patch, closeFire, saveShot]);
 
@@ -1159,9 +1189,9 @@ export function useYeoul(live?: Live) {
         title: '아침에 도착했어요', body: '문구는 세 벌 중 하나로 바뀌어요.',
         polaroid: true, caption, shot, shotLabel: '아침 폴라로이드', hint: '',
         actions: [
-          { label: '저장', tap: saveShot, primary: true },
-          { label: '이런 동작도 보고 싶어요', tap: addWish, primary: false },
-          { label: '닫기', tap: closeFire, primary: false },
+          { label: '저장', action: 'postcard-save', tap: saveShot, primary: true },
+          { label: '이런 동작도 보고 싶어요', action: 'postcard-wish', tap: addWish, primary: false },
+          { label: '닫기', action: 'postcard-close', tap: closeFire, primary: false },
         ],
       } };
     });
@@ -1172,7 +1202,7 @@ export function useYeoul(live?: Live) {
       title: '저장한 장면',
       body: `지금까지 ${v.saved}장 저장했어요. 앨범 칸을 누르면 다시 볼 수 있어요.`,
       hint: '', tapAny: true,
-      actions: [{ label: '앨범으로', tap: closeFire, primary: true }],
+      actions: [{ label: '앨범으로', action: 'scenes-close', tap: closeFire, primary: true }],
     } }));
   }, [closeFire]);
 
@@ -1415,7 +1445,7 @@ export function useYeoul(live?: Live) {
       fire: {
         title: '2층이 열렸어요', body: '조각 네 칸과 달리기가 함께 열렸어요.',
         hint: '탭하면 넘어가요', tapAny: true,
-        actions: [{ label: '방으로 돌아가기', tap: () => setS((w) => ({ ...w, fire: null })), primary: true }],
+        actions: [{ label: '방으로 돌아가기', action: 'unlock-close', tap: () => setS((w) => ({ ...w, fire: null })), primary: true }],
       },
     }));
   }, [s.bond, s.floorLv, s.unlockShown, s.screen, careAct]);
