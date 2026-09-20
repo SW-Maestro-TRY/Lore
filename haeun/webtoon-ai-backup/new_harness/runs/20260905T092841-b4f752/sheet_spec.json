@@ -1,0 +1,30 @@
+{
+  "name": "도하람",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A 24-year-old man with pale skin, short straight black hair sticking out from under a deep navy blue cap, and a distinct old scar on his left eyebrow. He has large round brown eyes, thick straight eyebrows, and a neutral expression. He wears a dark gray uniform top with a round brown collar. His overall demeanor is quiet and reserved.",
+  "design_details": [
+    "왼쪽 눈썹 위에 대각선으로 난 오래된 흉터",
+    "짙은 남색 챙모자를 항상 착용",
+    "머리는 짧고 귀 옆으로 일자로 뻗어 있음",
+    "눈동자는 크고 동그라며 갈색임",
+    "유니폼 상의는 어두운 회색, 둥근 갈색 칼라가 있음"
+  ],
+  "props": [],
+  "color_palette": {
+    "hair": "black (#22252B)",
+    "eyes": "brown (#8C6B4A)",
+    "skin": "beige (#F6E7D8)",
+    "outfit_main": "dark gray (#474A52)",
+    "outfit_sub": "brown (#8B4A32)",
+    "accent": "navy (#232E3A)"
+  },
+  "expression_set": [
+    "무표정 — 입을 다물고 눈이 약간 커진, 변화 없는 얼굴",
+    "당황 — 눈썹이 살짝 올라가고 입이 일자로 굳은 얼굴",
+    "평온 — 눈꺼풀이 약간 내려오고 입꼬리가 아주 살짝 올라간 얼굴",
+    "놀람 — 눈이 크게 열리고 입이 작게 벌어진 얼굴",
+    "곤란 — 눈썹이 안쪽으로 모이고 입꼬리가 내려간 얼굴",
+    "집중 — 눈이 약간 가늘어지고 입이 다문 얼굴"
+  ]
+}

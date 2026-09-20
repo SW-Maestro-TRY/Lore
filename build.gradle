@@ -1,18 +1,19 @@
 // 백엔드 빌드 스크립트. 레포 전체에서 이 파일 하나뿐이다.
 //
-// 폴더는 도메인별로 나뉘어 있지만(common/be, story/be, ...) 빌드는 하나로 합친다.
+// 폴더는 도메인별로 나뉘어 있지만(common/be, webtoon/be, ...) 빌드는 하나로 합친다.
 // 아래 srcDirs 가 흩어진 도메인 폴더를 하나의 컴파일 단위로 묶어주는 부분.
 //
 // 그래서 각 도메인 담당자는:
-//   - 자기 폴더(예: comic/be/src/main/java) 안에서만 작업하면 되고
+//   - 자기 폴더(예: zzal/be/src/main/java) 안에서만 작업하면 되고
 //   - 공통 기능은 그냥 import 해서 쓰면 된다 (예: import com.lore.common.response.ApiResponse;)
 //   - Gradle 모듈 / 의존성 선언을 몰라도 된다. 의존성은 아래 dependencies 한 곳에만 적는다.
 
 plugins {
     id 'java'
-    // Spring Boot / dependency-management 플러그인 및 버전 확정은 백엔드 담당자 몫으로 비워둠.
-    // id 'org.springframework.boot' version '3.x.x'
-    // id 'io.spring.dependency-management' version '1.x.x'
+    // Spring Boot 3.x 전 브랜치는 2026-06-30 오픈소스 지원 종료 → 4.1.0(현행 정식)로 확정.
+    // 버전은 Maven Central 및 start.spring.io 실물 대조로 확인(2026-07-27).
+    id 'org.springframework.boot' version '4.1.0'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
 group = 'com.lore'
@@ -32,22 +33,30 @@ sourceSets {
         java {
             srcDirs = [
                 'common/be/src/main/java',   // 공통: config, 인증, 공통 응답
-                'story/be/src/main/java',    // 하은
-                'comic/be/src/main/java',    // 상훈
+                'webtoon/be/src/main/java',  // 하은
+                'zzal/be/src/main/java',     // 상훈
                 'trailer/be/src/main/java',  // 병연
                 'apps/api/src/main/java'     // 서버 실행 진입점(main 클래스)
             ]
         }
         resources {
-            srcDirs = ['apps/api/src/main/resources']  // application.yml 등 실행 설정
+            srcDirs = [
+                'apps/api/src/main/resources',   // application.yml 등 실행 설정
+                // 도메인별 리소스 — 프롬프트·스크립트처럼 코드와 함께 배포돼야 하는 파일.
+                // 여기 없으면 빌드 결과에 안 들어가고, 실행할 때가 되어서야 "파일이 없다"로 터진다.
+                'common/be/src/main/resources',
+                'webtoon/be/src/main/resources',
+                'zzal/be/src/main/resources',
+                'trailer/be/src/main/resources'
+            ]
         }
     }
     test {
         java {
             srcDirs = [
                 'common/be/src/test/java',
-                'story/be/src/test/java',
-                'comic/be/src/test/java',
+                'webtoon/be/src/test/java',
+                'zzal/be/src/test/java',
                 'trailer/be/src/test/java'
             ]
         }
@@ -61,11 +70,154 @@ repositories {
 dependencies {
     // 의존성은 도메인 구분 없이 여기 한 곳에만 적는다.
     //
-    // Spring 스타터(web, data-jpa, security, springdoc 등)와 DB 드라이버는
-    // 버전 정책과 함께 백엔드 담당자가 확정하는 게 맞다고 보고 비워둠.
+    // ★ Spring Boot 4.x 주의 — 인터넷 자료 대부분이 3.x 기준이라 그대로 쓰면 깨진다.
+    //   - starter-web  →  starter-webmvc 로 이름이 바뀌었다.
+    //   - starter-test →  모듈별(webmvc-test / data-jpa-test / validation-test)로 쪼개졌다.
+    //   아래 구성은 start.spring.io 가 Boot 4.1.0 + Java 21 로 생성한 공식 템플릿을 따랐다.
+
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+    // 서버가 살아 있는지 알려주는 상태 확인 엔드포인트(/actuator/health).
+    // 배포 직후 "떴는가" 확인, 앞단 게이트웨이(Nginx)·나중의 로드밸런서 헬스체크, CI/CD 배포 성공 판정에 쓴다.
+    // 이게 없으면 확인에 일반 API 를 써야 해서 확인할 때마다 DB 조회가 발생한다.
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // API 문서(Swagger UI). 2.x 는 Boot 3.x 용이라 Boot 4 에서는 3.x 를 써야 한다.
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // AWS S3 (v2) — 콘텐츠 이미지 presigned URL 발급용.
+    // 실제 업로드는 브라우저 → S3 직접(presigned PUT)이라 서버(t3.micro)를 안 거친다.
+    // BOM 으로 버전을 한 곳에서 관리한다.
+    implementation platform('software.amazon.awssdk:bom:2.28.16')
+    // ── 스키마 이력(Flyway) ────────────────────────────────────────────
     //
-    // implementation 'org.springframework.boot:spring-boot-starter-web'
-    // implementation 'org.springframework.boot:spring-boot-starter-security'
-    // runtimeOnly 'org.postgresql:postgresql'
-    // testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // ★ ddl-auto: update 는 그대로 둔다. 표·칸을 더하는 일은 계속 자동으로 맡기고,
+    //   Flyway 는 <b>update 가 못 하는 것</b>만 맡는다 — CHECK 제약 고치기·칸 지우기·값 채우기.
+    //
+    // ★ 왜 필요한가 — enum 에 값을 더하면 Hibernate 가 만들어 둔 CHECK 제약이 새 값을 막는데,
+    //   update 는 그 제약을 갱신하지 않는다. 빌드·배포·기동이 전부 통과하고 <b>실제 호출에서만</b>
+    //   500 이 난다(2026-09-09 회원가입에서 실제로 겪음). 사람이 SQL 을 기억해 치는 방식으로는
+    //   팀이 셋만 돼도 한 번은 빠뜨린다.
+    // ★ 스프링 부트 4 는 자동설정이 모듈별로 쪼개져 있어, flyway-core 만 넣으면
+    //   라이브러리는 클래스패스에 있는데 아무 일도 안 일어난다(로그조차 없다).
+    //   자동설정 모듈을 같이 넣어야 기동할 때 마이그레이션이 돈다.
+    implementation 'org.springframework.boot:spring-boot-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+    implementation 'software.amazon.awssdk:s3'
+    // ★ SSO 라이브러리는 **배포물에 넣지 않는다** — 서버(EC2)는 IAM 역할로 자격증명을
+    //   얻으므로 쓸 일이 없고, 로컬 편의를 위해 서버 배포물에 코드를 더할 이유가 없다.
+    //
+    //   다만 로컬에서 SSO 프로필(`aws sso login --profile lore`)을 그대로 쓰면, 이게
+    //   없을 때 "the 'sso' service module must be on the class path" 로 죽어서 S3 가
+    //   전부 막힌다. 그래서 `developmentOnly` 로 둔다 — bootRun 의 클래스패스에는
+    //   올라가고 bootJar(배포물)에는 안 실린다. 배포물에 안 넣는다는 원칙은 그대로다.
+    //
+    //   AWS CLI 가 내주는 임시 키를 환경변수로 넘기는 방식(_local/run.sh)을 써도 된다.
+    //   그 경우 이 두 줄은 그냥 안 쓰일 뿐이다.
+    //   (버전 관리는 위 BOM 을 그대로 쓴다 — developmentOnly 는 별도 구성이라
+    //    implementation 에 건 platform 이 안 따라온다. 없으면 "버전을 못 찾음" 으로 죽는다.)
+    developmentOnly platform('software.amazon.awssdk:bom:2.28.16')
+    developmentOnly 'software.amazon.awssdk:sso'
+    developmentOnly 'software.amazon.awssdk:ssooidc'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // 인증 (2026-09-01 착수 — 회원가입·로그인을 공통으로 구현하기로 결정)
+    //
+    // Security 를 넣는 순간 모든 요청이 로그인으로 튕기므로, 어디를 열어둘지는
+    // WebSecurityConfig 에서 명시한다. 비밀번호 해싱(BCrypt)도 여기서 온다 —
+    // 직접 구현하면 거의 반드시 취약해지는 영역이라 검증된 것을 쓴다.
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // JWT — access(30분) / refresh(14일) 두 종류를 발급·검증한다.
+    // jjwt 는 스프링과 무관한 순수 라이브러리라 Boot 4.x 호환 문제가 없다.
+    // api 는 컴파일에, impl·jackson 은 실행에만 필요하다(공식 권장 구성).
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    testImplementation 'org.springframework.security:spring-security-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// 생성 하네스(webtoon/ai)를 jar 리소스로 실어 배포한다 — 파이썬은 jar 안에서
+// 실행할 수 없으므로, 서버가 뜰 때 AiHarnessResources 가 임시 폴더로 풀어서
+// 그 경로로 돌린다. 이 절차가 없으면 운영 서버에 파이썬 코드 자체가 없다(#274).
+//
+// **복사 스크립트는 없앴다(2026-09-12).** 예전에는 원본이 haeun/ 에 있어서
+// sync-harness.sh 가 webtoon/be/src/main/resources 로 복사해 줘야 했고, 그
+// 과정에서 .env 가 빠지면서 하네스가 엉뚱한 프로바이더로 붙어 죽는 사고가
+// 났다. 지금은 원본이 webtoon/ai 라 gradle 이 바로 담으면 된다 — 사본이
+// 하나 줄고, "어느 쪽이 최신인지" 를 헷갈릴 자리도 사라진다.
+//
+// 담지 않는 것: .env(키) · 실행하며 쌓이는 데이터(runs · outputs · jobs ·
+// characters). 안 빼면 키가 jar 에 실리거나 수백 MB 가 들어간다.
+tasks.named('processResources') {
+    from("${rootDir}/webtoon/ai") {
+        into 'webtoon/ai'
+        exclude '**/.env', '**/.env.local'
+        exclude '**/__pycache__/**', '**/*.pyc'
+        exclude '**/runs/**', '**/runs_backup/**', '**/outputs/**'
+        exclude '**/jobs/**', '**/jobs_nh/**', '**/jobs_spring/**'
+        exclude '**/work/**', '**/input/**'
+        exclude '**/test_*.py'
+    }
+    // 기본 제공 캐릭터 견본 그림. BuiltinCharacters 가 서버 기동 때마다 이
+    // 그림들을 S3 에 올려 캐릭터 탭을 채운다 — 배포 서버에 없으면 탭이 통째로
+    // 빈다(#274).
+    from("${rootDir}/webtoon/ai/assets/samples") {
+        into 'webtoon/character-samples'
+        exclude '**/.DS_Store'
+    }
+}
+
+// 로컬 개발용 .env 자동 주입 (bootRun 전용).
+//
+// Spring Boot 는 .env 파일을 스스로 읽지 않는다 — application.yml 의
+// ${MAIL_USERNAME} 같은 자리는 진짜 OS 환경변수만 본다. 그래서 매번
+// `MAIL_USERNAME=... ./gradlew bootRun` 처럼 손으로 export 하지 않도록,
+// 레포 루트의 .env(커밋 안 됨, .gitignore)를 읽어 bootRun 의 실행 환경에만 심는다.
+//
+// ★ 이미 셸에 진짜로 설정된 환경변수가 있으면 그게 이긴다 — .env 는 로컬 편의용
+//   기본값일 뿐이고, CI·운영에는 이 파일 자체가 없다(배포 산출물에 안 들어간다).
+def dotenvFile = file("${rootDir}/.env")
+if (dotenvFile.exists()) {
+    def dotenv = [:]
+    dotenvFile.eachLine { raw ->
+        def line = raw.trim()
+        if (line && !line.startsWith('#') && line.contains('=')) {
+            def idx = line.indexOf('=')
+            def key = line.substring(0, idx).trim()
+            def value = line.substring(idx + 1).trim()
+            if (value.length() >= 2 && value[0] == value[value.length() - 1]
+                    && (value[0] == '"' || value[0] == "'")) {
+                value = value.substring(1, value.length() - 1)
+            }
+            dotenv[key] = value
+        }
+    }
+    tasks.named('bootRun') {
+        dotenv.each { key, value ->
+            if (System.getenv(key) == null) {
+                environment key, value
+            }
+        }
+    }
 }

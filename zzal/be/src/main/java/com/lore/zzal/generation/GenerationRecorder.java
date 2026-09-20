@@ -1,0 +1,176 @@
+package com.lore.zzal.generation;
+
+import com.lore.zzal.pet.ZzalPet;
+import com.lore.zzal.pet.ZzalPetRepository;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+
+/**
+ * 생성 진행을 DB 에 남기는 곳.
+ *
+ * ★★ 별도 클래스인 이유가 둘이다.
+ *
+ *   1) 스프링은 프록시라는 대역을 통해 트랜잭션을 걸어 준다. 같은 클래스 안에서 자기
+ *      메서드를 부르면 대역을 거치지 않아 **@Transactional 이 통째로 무시된다.**
+ *      (2026-09-02 실제로 이 상태였다 — 로그에는 "부화 완료" 가 찍히는데 DB 는 그대로였다)
+ *
+ *   2) REQUIRES_NEW 로 **단계마다 따로 커밋**해야 한다. 부화 전체를 한 트랜잭션으로 묶으면
+ *      다 끝날 때까지 아무것도 저장되지 않아, 그동안 화면이 진행 상황을 읽을 수 없다.
+ */
+@Component
+public class GenerationRecorder {
+
+    private final GenJobRepository jobRepository;
+    private final GenStepRecordRepository stepRepository;
+    private final ZzalPetRepository petRepository;
+
+    public GenerationRecorder(GenJobRepository jobRepository,
+                              GenStepRecordRepository stepRepository,
+                              ZzalPetRepository petRepository) {
+        this.jobRepository = jobRepository;
+        this.stepRepository = stepRepository;
+        this.petRepository = petRepository;
+    }
+
+    /**
+     * 이 펫이 지금까지 성공시킨 단계들. **시도(job)가 아니라 펫 단위로 본다.**
+     * 재시도가 앞 단계를 다시 굽지 않게 하는 핵심이다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public List<GenStepRecord> loadSucceeded(Long petId, GenKind kind) {
+        return stepRepository.findSucceededByPet(petId, kind);
+    }
+
+    /** 같은 버전의 성공 단계만 이어받는다(#218 리뷰 — 옛 산출물을 새 버전 컨텍스트로 재사용하지 않게). */
+    public List<GenStepRecord> loadSucceeded(Long petId, GenKind kind, String version) {
+        return stepRepository.findSucceededByPetAndVersion(petId, kind, version);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markJobRunning(Long jobId) {
+        jobRepository.findById(jobId).ifPresent(j -> j.markRunning(Instant.now()));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Long startStep(Long jobId, int seq, String name) {
+        return stepRepository.findByJobIdAndName(jobId, name)
+                .map(GenStepRecord::getId)
+                .orElseGet(() -> stepRepository
+                        .save(GenStepRecord.start(jobId, seq, name, Instant.now()))
+                        .getId());
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void succeedStep(Long stepId, StepResult r) {
+        stepRepository.findById(stepId)
+                .ifPresent(s -> s.succeed(r.imageKey(), r.text(), r.model(), r.costUsd(), Instant.now()));
+    }
+
+    /**
+     * 이 단계를 실패로 남긴다. <b>실패해도 나간 돈은 적는다.</b>
+     *
+     * ★★ 예전에는 비용 자리가 {@code BigDecimal.ZERO} 상수였다. 유료 호출은 응답이 200 으로 돌아온
+     *   순간 과금이 끝나므로, 그 뒤의 응답 파싱·S3 업로드에서 실패하면 그 돈이 단계 기록에도
+     *   job 합계에도 비용 알림에도 <b>안 잡혔다</b> — 원가가 실제보다 낮게 보여 중복 과금이나
+     *   급증을 못 본다. 얼마가 나갔는지는 클라이언트가 {@code BilledFailureException} 에 실어 보낸다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void failStep(Long stepId, GenErrorCode code, BigDecimal costUsd) {
+        BigDecimal spent = costUsd == null ? BigDecimal.ZERO : costUsd;
+        stepRepository.findById(stepId)
+                .ifPresent(s -> s.fail(code, spent, Instant.now()));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void succeedJob(Long jobId, BigDecimal total, Instant now) {
+        jobRepository.findById(jobId).ifPresent(j -> j.succeed(total, now));
+    }
+
+    /**
+     * 부화가 끝나 펫을 살린다.
+     *
+     * ★ job 성공 처리와 갈라 둔 이유 — 모션도 같은 실행기를 쓰는데, 모션이 끝났다고
+     *   펫이 다시 태어나면 안 된다. "작업이 성공했다" 와 "그래서 무엇이 되었나" 는 다른 일이다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markPetAlive(Long petId, String sheetKey, String identityText, Instant now) {
+        petRepository.findById(petId).ifPresent(p -> p.markAlive(sheetKey, identityText, now));
+    }
+
+    /**
+     * 이번에 구울 기본 그림의 <b>판 번호</b>. 첫 판은 1 이다.
+     *
+     * ★ 판이 주소에 들어가므로 <b>자르기 전에</b> 정해져 있어야 한다. 굽고 나서 매기면
+     *   이미 올린 파일의 주소를 되돌릴 수 없다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public int nextBasicRound(Long petId) {
+        return petRepository.findById(petId).map(ZzalPet::nextBasicRound).orElse(1);
+    }
+
+    /**
+     * 그 판의 기본 그림이 다 올라갔다 — <b>이 순간부터 응답이 새 주소를 가리킨다.</b>
+     *
+     * ★ 올린 뒤에 올린다. 먼저 올리면 아직 없는 주소를 화면이 받아 빈 그림을 그리고,
+     *   그 사이에 후처리가 실패하면 그 주소는 <b>영영 안 채워진다.</b>
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markBasicBaked(Long petId, int round) {
+        petRepository.findById(petId).ifPresent(p -> p.markBasicBaked(round));
+    }
+
+    /** 이 시도만 실패로 남긴다. 펫을 FAILED 로 만들지는 부르는 쪽이 정한다(재시도가 남았을 수 있다). */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void failJob(Long jobId, GenErrorCode code, BigDecimal total) {
+        jobRepository.findById(jobId).ifPresent(j -> j.fail(code, total, Instant.now()));
+    }
+
+
+    /**
+     * 거부(moderation)로 실패했을 때, 원인이 된 단계의 성공 기록을 지운다.
+     *
+     * ★★ 왜 필요한가 — 거부는 **입력 자체가 막힌 것**이라 같은 걸 다시 보내면 또 막힌다.
+     *   그런데 우리 재시도는 "성공한 단계는 건너뛴다". 그래서 문단이 원인인데 문단을
+     *   건너뛰면 **똑같은 문단으로 격자를 또 시도하고 또 거부당한다** — 시간만 쓰고
+     *   결과는 같다("재시도 3번 하고 실패" 라는 최악).
+     *
+     *   2026-08-26 실측에서 실제로 있었다. 고양이 시트를 보고 엉뚱한 캐릭터를 묘사한
+     *   문단이 나왔고 그 때문에 격자가 차단됐다. 문단을 새로 만들어야 풀린다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int discardSucceeded(Long petId, GenKind kind, String stepName) {
+        List<GenStepRecord> targets = stepRepository.findSucceededByPet(petId, kind).stream()
+                .filter(s -> s.getName().equals(stepName))
+                .toList();
+        targets.forEach(stepRepository::delete);
+        return targets.size();
+    }
+
+    /**
+     * 이 모션이 지금까지 성공시킨 단계를 전부 폐기한다.
+     *
+     * ★★ 왜 필요한가 — 게이트가 "이 그림은 안 된다" 고 했는데 재시도가
+     *   <b>바로 그 그림을 다시 판정한다.</b> 재시도는 성공한 단계를 건너뛰는데,
+     *   격자도 후처리도 "성공" 으로 남아 있어 실행기가 둘 다 건너뛰기 때문이다.
+     *   그러면 세 번을 시도해도 같은 결과가 세 번 나오고, 시간만 쓰고 실패로 끝난다.
+     *
+     *   부화에서 이미 겪은 것과 같은 종류다 — 거부당한 문단을 폐기하지 않으면
+     *   같은 문단으로 또 거부당한다(discardSucceeded 주석 참고).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int discardMotionSteps(Long motionId) {
+        List<GenStepRecord> targets = stepRepository.findSucceededByMotion(motionId);
+        targets.forEach(stepRepository::delete);
+        return targets.size();
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markPetFailed(Long petId) {
+        petRepository.findById(petId).ifPresent(p -> p.markHatchFailed());
+    }
+}

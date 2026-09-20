@@ -1,0 +1,58 @@
+{
+  "_note": [
+    "모델별 단가. 단위는 **100만 토큰당 USD** 입니다.",
+    "",
+    "이 표가 코드가 아니라 파일에 있는 이유: 요금은 코드와 다른 속도로 바뀝니다.",
+    "모델을 바꿀 때마다 파이썬을 고치게 하면 결국 아무도 안 고치고, 비용 표시가",
+    "조용히 거짓말을 하게 됩니다. 여기에 없는 모델은 비용을 **0 으로 세지 않고**",
+    "'모른다'고 기록합니다 (meta.json 의 unpriced_models).",
+    "",
+    "새 모델을 쓰면 아래 models 에 한 줄 추가하세요. 요금표를 직접 보고 적고,",
+    "_as_of 날짜도 같이 고치세요. 추측한 숫자를 적느니 비워 두는 편이 낫습니다.",
+    "",
+    "cache_read : 캐시에서 읽은 입력 토큰의 단가",
+    "cache_write: 캐시에 쓴 입력 토큰의 단가 (Anthropic 만 별도 과금)",
+    "  - OpenAI 는 캐시 쓰기에 추가 요금이 없어 0 입니다.",
+    "  - Gemini 는 쓰기가 아니라 '저장 시간'으로 과금해서(시간당) 토큰 단가로는",
+    "    표현되지 않습니다. 0 으로 두고, 캐시를 실제로 쓰면 따로 확인하세요.",
+    "    (이 파이프라인은 단발 호출만 해서 현재 캐시 쓰기가 발생하지 않습니다.)"
+  ],
+  "_as_of": "2026-08-14",
+  "_unit": "USD per 1,000,000 tokens",
+  "_sources": {
+    "openai": "https://developers.openai.com/api/docs/pricing",
+    "anthropic": "https://platform.claude.com/docs/en/pricing",
+    "gemini": "https://ai.google.dev/gemini-api/docs/pricing"
+  },
+
+  "models": {
+    "gpt-4.1": {
+      "input": 2.00, "output": 8.00, "cache_read": 0.50, "cache_write": 0.0,
+      "checked": "2026-08-14", "source": "openai"
+    },
+    "gpt-4.1-mini": {
+      "input": 0.40, "output": 1.60, "cache_read": 0.10, "cache_write": 0.0,
+      "checked": "2026-08-14", "source": "openai"
+    },
+
+    "gemini-3.5-flash": {
+      "input": 1.50, "output": 9.00, "cache_read": 0.15, "cache_write": 0.0,
+      "checked": "2026-08-14", "source": "gemini",
+      "note": "output 은 사고(thinking) 토큰 포함. 캐시는 시간당 저장료가 별도입니다."
+    },
+
+    "claude-opus-4-6": {
+      "input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25,
+      "checked": "2026-08-14", "source": "anthropic",
+      "note": "캐시 읽기 0.1x, 쓰기 1.25x (5분 TTL) 규칙에서 계산."
+    },
+    "claude-sonnet-4-6": {
+      "input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75,
+      "checked": "2026-08-14", "source": "anthropic"
+    },
+    "claude-haiku-4-5": {
+      "input": 1.00, "output": 5.00, "cache_read": 0.10, "cache_write": 1.25,
+      "checked": "2026-08-14", "source": "anthropic"
+    }
+  }
+}

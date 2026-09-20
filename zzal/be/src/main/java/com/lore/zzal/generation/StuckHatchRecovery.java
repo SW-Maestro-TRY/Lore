@@ -1,0 +1,134 @@
+package com.lore.zzal.generation;
+
+import com.lore.zzal.alert.ZzalAlerts;
+import com.lore.zzal.pet.PetPhase;
+import com.lore.zzal.pet.ZzalPet;
+import com.lore.zzal.pet.ZzalPetRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+/**
+ * 멈춘 알을 찾아 이어서 굽는다.
+ *
+ * ★★ 왜 필요한가 — 부화는 메모리에서 도는 작업이다. 서버가 재시작하면(배포·장애·자동 정리)
+ *   그때 굽고 있던 것이 통째로 사라지고, 펫은 HATCHING 인 채로 **영영 남는다.**
+ *   사용자는 끝나지 않는 알을 보게 되고, 그림도 키도 이미 소모된 뒤다.
+ *
+ *   배포는 앞으로도 계속 할 것이므로, 그때마다 그 시각에 부화 중이던 사람들이 전부
+ *   피해를 본다. 타임아웃만으로 처리하면 **우리 배포 때문에 사용자 부화가 실패**한다.
+ *
+ * ★ 이어서 굽는 게 가능한 이유 — 단계마다 결과가 zzal_gen_step 에 남아 있고,
+ *   실행기가 **이미 성공한 단계는 건너뛰기** 때문이다. 시트가 됐으면 $0.063 을 다시 안 쓴다.
+ *
+ * ★ 유예 시간을 두는 이유 — 방금 시작된 작업까지 "멈췄다" 고 보면, 정상적으로 돌고 있는
+ *   부화를 두 번 굽게 된다(돈이 두 배). 한 번의 부화가 걸릴 수 있는 최대 시간보다
+ *   넉넉히 지난 것만 집는다.
+ *
+ * ⚠️ 서버가 여러 대가 되면 두 서버가 같은 알을 동시에 집을 수 있다. 그때는 "내가 맡았다" 는
+ *    표시가 필요하다(지금은 한 대라 문제가 없다).
+ */
+@Component
+public class StuckHatchRecovery {
+
+    private static final Logger log = LoggerFactory.getLogger(StuckHatchRecovery.class);
+
+    private final ZzalPetRepository petRepository;
+    private final GenJobRepository jobRepository;
+    private final HatchService hatchService;
+    private final GenerationRecorder recorder;
+    private final ZzalAlerts alerts;
+    private final int maxAttempts;
+    private final Duration graceperiod;
+
+    public StuckHatchRecovery(ZzalPetRepository petRepository,
+                              GenJobRepository jobRepository,
+                              HatchService hatchService,
+                              GenerationRecorder recorder,
+                              ZzalAlerts alerts,
+                              @Value("${app.zzal.max-hatch-attempts:2}") int maxAttempts,
+                              @Value("${app.zzal.recovery.grace-minutes:12}") int graceMinutes) {
+        this.petRepository = petRepository;
+        this.jobRepository = jobRepository;
+        this.hatchService = hatchService;
+        this.recorder = recorder;
+        this.alerts = alerts;
+        this.maxAttempts = maxAttempts;
+        this.graceperiod = Duration.ofMinutes(graceMinutes);
+    }
+
+    /**
+     * 서버가 완전히 뜬 뒤에 한 번 돈다. 기동 중에 부화를 시작하면 준비 안 된 빈을 건드릴 수 있다.
+     *
+     * ★ readOnly 로 두면 안 된다 — 여기서 새 작업(GenJob)을 저장하기 때문이다.
+     *   읽기 전용 트랜잭션에서 INSERT 하면 "cannot execute INSERT in a read-only transaction"
+     *   으로 죽고, 그러면 멈춘 알이 그대로 남는다(2026-09-03 실제로 이 상태였다).
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void recover() {
+        Instant cutoff = Instant.now().minus(graceperiod);
+        // ★ DRAFT 도 집는다 — 그림을 올리는 순간부터 굽기 때문에, 이름 짓는 동안 서버가 죽으면
+        //   그 굽기도 사라진다. HATCHING 만 집으면 그 사람은 이름을 낸 뒤 다음 재기동까지 멈춰 있다.
+        List<ZzalPet> stuck = petRepository.findByPhaseInAndHatchStartedAtBefore(
+                List.of(PetPhase.DRAFT, PetPhase.HATCHING), cutoff);
+        if (stuck.isEmpty()) {
+            return;
+        }
+
+        for (ZzalPet pet : stuck) {
+            long attempts = jobRepository.countByPetIdAndKind(pet.getId(), GenKind.HATCH);
+            // ★ 한 번도 안 구운 DRAFT 는 건드리지 않는다 — 이 규칙이 생기기 전에 만들어진 초안이
+            //   여기 걸리면 주인이 부르지도 않은 굽기에 돈이 나간다.
+            if (attempts == 0) {
+                continue;
+            }
+            // ★ 굽기가 이미 다 끝난 DRAFT 는 멈춘 것이 아니라 **이름을 기다리는 중**이다.
+            //   다시 구우면 $0.25 가 그대로 두 번 나간다.
+            String v = jobRepository.findFirstByPetIdOrderByIdDesc(pet.getId())
+                    .map(GenJob::getPipelineVersion)
+                    .orElse(hatchService.currentVersion());
+            // ★★ 이 펫이 저장해 둔 파이프라인 버전을 지금 레지스트리가 모를 수 있다(옛 v2/v3 초안 등).
+            //    그때 PipelineRegistry 는 기동을 막으려고 일부러 예외를 던진다 — 정상 경로에서는 옳다.
+            //    하지만 여기는 @EventListener(ApplicationReadyEvent) 안이라, 그 예외가 올라오면
+            //    복구 스캔 전체가 죽어 **앱 자체가 안 뜬다**. 옛 버전 초안 한 줄이 재기동을 막는 셈이다.
+            //    그래서 <b>펫 단위로</b> 감싸, 모르는 버전이면 그 펫만 건너뛰고 경고만 남긴다.
+            //    (stepsTotal → registry.steps 가 유일한 동기 호출 지점이다. hatch() 는 @Async 라
+            //     여기서 던지지 않고, v 가 여기서 알려진 버전으로 확인되면 뒤의 hatch 도 안전하다.)
+            int stepsTotal;
+            try {
+                stepsTotal = hatchService.stepsTotal(v);
+            } catch (IllegalArgumentException e) {
+                log.warn("모르는 파이프라인 버전이라 기동 복구에서 이 펫만 건너뜁니다 — petId={} version={}",
+                        pet.getId(), v, e);
+                continue;
+            }
+            if (hatchService.stepsDone(pet.getId(), v) >= stepsTotal) {
+                continue;
+            }
+            if (attempts >= maxAttempts) {
+                log.warn("시도를 다 썼습니다 — petId={} 시도={}회 → 실패로 종료", pet.getId(), attempts);
+                recorder.markPetFailed(pet.getId());
+                // ★ 여기도 "부화가 끝내 실패" 다 — 기동 복구로 정리되는 알만 빠지면 연속 실패를
+                //   잘못 세고, 하필 그 상황(서버가 죽었다 뜬 직후)이 가장 알아야 할 때다.
+                //   ⚠️ "재시작했다" 를 알리는 것이 아니다. 실제로 죽은 알이 있을 때만 나간다.
+                alerts.hatchFinallyFailed(pet.getId(), Instant.now());
+                continue;
+            }
+            // ★ 원래 job 의 버전(v)을 잇는다 — 설정이 그 사이 바뀌었어도 굽던 알은 굽던 버전으로 끝낸다
+            //   (#218 리뷰: 안 그러면 옛 격자를 새 후처리가 자르려다 어긋난다).
+            GenJob job = jobRepository.save(GenJob.start(
+                    pet.getId(), GenKind.HATCH, (int) attempts + 1, v, Instant.now()));
+            log.info("이어서 굽기 — petId={} phase={} attempt={}", pet.getId(), pet.getPhase(), attempts + 1);
+            hatchService.hatch(job.getId(), pet.getId(), job.getPipelineVersion());
+        }
+    }
+}

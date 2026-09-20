@@ -1,0 +1,476 @@
+/* 생성 하네스에 말 거는 자리.
+ *
+ * 원본(haeun/landing/web/app.js)이 `/api/nh/...` 를 직접 부르는 것을, 여기서는
+ * `/api/webtoon/v1/nh/...` 로 부른다 — 그 앞에 스프링이 서 있고(webtoon/be),
+ * 접두사만 갈아 끼워 같은 하네스로 넘긴다. **응답 모양은 원본과 같다.**
+ * 그래서 이 파일이 하는 일은 주소 앞에 접두사를 붙이고 타입을 적는 것뿐이다.
+ *
+ * 주소를 화면 여기저기에 흩지 않고 이 파일 하나에 모은다 — 나중에 자바가
+ * 어떤 주소를 가로채기 시작해도 고칠 자리가 하나다.
+ */
+
+/* 어디로 부르는가.
+ *
+ * 기본은 상대경로 `/api/webtoon` 이다 — 배포에서는 CloudFront 가 같은 도메인
+ * 아래에서 `/api/*` 만 백엔드로 보내므로 CORS 가 없다.
+ *
+ * 로컬에서 스프링 없이 하네스에 바로 붙여 보고 싶을 때만 환경변수로 덮는다:
+ *
+ *     NEXT_PUBLIC_WEBTOON_API=http://127.0.0.1:8800/api
+ *
+ * (그때는 하네스를 `python3 serve.py --dev-cors` 로 띄워야 브라우저가 막지
+ *  않는다. 배포에서는 같은 도메인이라 그 스위치가 필요 없다.) */
+import { request as appRequest } from "@common/api/client";
+
+const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
+
+/** 이 브라우저를 가리키는 값. 원본(app.js 의 getUid)과 **같은 키**를 쓴다 —
+ *  프로토타입에서 만든 작품과 이식본에서 만든 작품이 같은 사람 것이 되어야
+ *  「내 작품」이 갈리지 않는다. */
+export function getUid(): string {
+  if (typeof window === "undefined") return "";
+  let uid = localStorage.getItem("lore_uid");
+  if (!uid) {
+    uid = "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem("lore_uid", uid);
+  }
+  return uid;
+}
+
+/* ---- 내가 만든 작품 -------------------------------------------------------
+ *
+ * 이걸 안 남기면 앱이 남의 작품으로 보고 완성본 화면의 내려받기·편집실·
+ * 저장·공유를 통째로 감춘다 — 방금 자기가 만든 것인데 가져갈 길이 없어진다.
+ * 원본과 **같은 키**를 쓴다(위 uid 와 같은 이유). */
+const MY_RUNS_KEY = "lore_my_runs";
+const MY_RUNS_MAX = 200;
+
+export function myRuns(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const v = JSON.parse(localStorage.getItem(MY_RUNS_KEY) || "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];                       // 비공개 창이거나 값이 깨졌을 때
+  }
+}
+
+export function rememberMyRun(runId: string): void {
+  if (!runId || typeof window === "undefined") return;
+  const list = myRuns().filter((x) => x !== runId);
+  list.push(runId);
+  try {
+    localStorage.setItem(MY_RUNS_KEY, JSON.stringify(list.slice(-MY_RUNS_MAX)));
+  } catch {
+    /* 못 남겨도 만드는 것 자체는 막지 않는다 */
+  }
+}
+
+/* ---- 주고받는 모양 -------------------------------------------------------- */
+
+/** 사람이 멈춰 서는 자리는 **둘뿐**이다 — 시트 확인, 이야기 고르기.
+ *  (하네스의 AWAITING 과 같다. 콘티 검수는 그 단계가 없어지면서 같이 사라졌다.) */
+export type NhStatus =
+  | "queued" | "running" | "awaiting_sheet" | "awaiting_pick" | "done" | "error";
+
+export interface NhDirection {
+  n: number;
+  title: string;
+  genre: string;
+  /** 사람이 고를 때 보는 짧은 요약(2~3문장) — 지금 story_prompt 가 실제로 낸다. */
+  intro: string;
+  /** 고른 뒤 scene_prompt 로 그대로 넘어가는 본문(5~8문장). 목록 화면에는 안 띄운다. */
+  body: string;
+  /** 옛 story_prompt(### 줄거리 절) 형식 run 과의 호환용 — 지금 형식에는 항상 빈 문자열. */
+  plot: string;
+  scenes: string[];
+  cast?: { name: string; appearance?: string }[];
+  hidden?: string[];
+}
+
+/** `/api/nh/jobs/{id}` 가 주는 것. 원본 app.js 의 nhTick 이 읽는 것과 같다. */
+export interface NhJob {
+  id: string;
+  status: NhStatus;
+  run_id: string | null;
+  error: string | null;
+  /** 실패했을 때 **실제로** 돌려준 것. 파이썬 서버는 안 보낸다(undefined). */
+  refunded?: "credit" | "free" | "none" | null;
+  directions: NhDirection[];
+  pick: number | null;
+  style: string;
+  style_label: string;
+  stage: string;
+  stage_index: number;
+  stages: string[];
+  stage_label: string;
+  /** 검수가 도는 동안 띄울 한 줄. 비어 있으면 단계 기본 문구를 쓴다. */
+  say: string;
+  /** 줄에서의 자리. **내 차례면 없다(null)** — 그때는 적을 것이 없다.
+   *  서버가 DB 를 보고 센다(JobQueue) — 화면이 세지 않는다. */
+  queue: { ahead: number; minutes: number; line: string } | null;
+  /** 다 되면 어디로 알릴 것인가. **화면이 로그인 여부를 자기가 판단하지 않는다.**
+   *  email 이 비어 있으면 아직 받을 데가 없다는 뜻이고, 그때만 게스트에게
+   *  입력 칸을 띄운다. sent 가 참이면 이미 나간 뒤라 주소를 못 바꾼다. */
+  notice?: { logged_in: boolean; email: string | null; sent: boolean } | null;
+  /** 결과를 보기까지 남은 분. **사람이 답할 차례이거나 끝났으면 없다.**
+   *  서버가 센다 — 화면이 자기 시계로 세면 새로고침할 때마다 값이 뛴다. */
+  minutes_left?: number | null;
+  pct: number;
+  /** retry_page: 지금 걸려서 다시 그리는 중인 장 번호. 0(또는 없음)이면 없다. */
+  art: { done: number; total: number; retry_page?: number } | null;
+  log: string[];
+  elapsed: number;
+}
+
+/** 만들기 요청. 원본 collectNH() 와 **같은 필드**를 보낸다. */
+export interface NhCreateRequest {
+  name: string;
+  character: string;
+  photo_note: string;
+  fields: Record<string, string>;
+  genre: string;
+  /** 「어떤 이야기를 만들까요?」에 적은 것. 비면 하네스가 알아서 만든다. */
+  story: string;
+  style: string;
+  /** 얼마나 촘촘히 그릴까 — wave · surf · swell. 안 보내면 서버가 기본(파도). */
+  quality: string;
+  /** data URL 목록. 원본과 같은 이름(photos_data)으로 보낸다. */
+  photos_data: string[];
+  /** presign 으로 먼저 올린 사진의 키. 있으면 서버가 이쪽을 쓰고 본문에
+   *  사진이 안 실린다 — 넷이면 20MB 넘던 요청이 몇백 바이트가 된다. */
+  photo_keys?: string[];
+  agree_ip: boolean;
+  /** 사람이 보고 넘어가는 자리(시트 확인 · 이야기 고르기)를 둘 것인가.
+   *  갈림길에서 「2번 확인하며」를 고르면 참, 「빠르게 결과부터」면 거짓이다.
+   *  안 보내면 서버가 멈추는 쪽으로 본다. */
+  checkpoints: boolean;
+  /** 고른 캐릭터 번호. 있으면 사진 대신 이것으로 그린다 — 그림은 서버가
+   *  자기 저장소에서 꺼내 붙이므로 브라우저가 다시 올리지 않는다. */
+  character_id?: string;
+}
+
+/* ---- 부르는 자리 ---------------------------------------------------------- */
+
+async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(BASE + path, init);
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    /* 본문이 JSON 이 아닐 수 있다 — 아래에서 상태로 판단한다 */
+  }
+  if (!res.ok) {
+    // 하네스가 사유를 한글로 적어 보낸다(예: "크레딧이 모자랍니다").
+    // 그것을 그대로 올려야 화면이 무엇이 잘못됐는지 말할 수 있다.
+    throw new Error(reasonOf(body) || `요청이 실패했습니다 (${res.status})`);
+  }
+  return body as T;
+}
+
+/** 실패한 응답에서 **사람이 읽을 한 줄**을 꺼낸다.
+ *
+ * 사유가 오는 모양이 두 가지다. 하네스는 `{error: "크레딧이 모자랍니다"}` 로
+ * 적어 보내고, 스프링의 공용 봉투는 `{error: {code, message}, message}` 로 적어
+ * 보낸다. 앞의 모양만 읽고 있어서, 봉투가 오면 그 **객체**가 그대로 글자가 돼
+ * 화면에 `[object Object]` 가 떴다 — 서버는 왜 안 되는지 정확히 말했는데
+ * 사람에게는 아무 말도 안 한 셈이다.
+ *
+ * 자세한 쪽(`error.message`)을 먼저 본다. 봉투의 바깥 `message` 는 오류 코드의
+ * 기본 문구라 대개 더 뭉툭하다. */
+function reasonOf(body: unknown): string {
+  const b = body as { error?: unknown; message?: unknown } | null;
+  const err = b?.error;
+  if (typeof err === "string" && err.trim()) return err;
+  const inner = (err as { message?: unknown } | null)?.message;
+  if (typeof inner === "string" && inner.trim()) return inner;
+  if (typeof b?.message === "string" && b.message.trim()) return b.message;
+  return "";
+}
+
+/* ---- 하네스가 없을 때 ------------------------------------------------------
+ *
+ * 실제 서버(lorecomic.com)에는 생성 하네스가 없다 — 올리는 순간 API 키와
+ * 무한 생성이 따라오므로 일부러 안 올렸다. 그래서 위 주소들은 배포에서 전부
+ * 502 로 죽는다. 그대로 두면 웹툰 탭에 걸린 작품이 하나도 안 보인다.
+ *
+ * 그 자리를 **미리 구워 둔 공개본 한 벌**로 메운다(haeun/landing/export_demo.py
+ * 가 뽑고, 빌드가 /static/gallery 로 떠 온다). 만들기·편집실은 여전히 안 된다 —
+ * 그건 하네스가 있어야 하는 일이고, 없는 것을 있는 척하지 않는다.
+ *
+ * **먼저 진짜 서버를 부르고, 실패했을 때만** 이리 온다. 로컬에서 하네스를
+ * 띄워 두면 이 길로 아예 안 들어오므로, 개발 중에 옛 스냅샷을 보고 있을 일이
+ * 없다. */
+
+const DEMO = "/static/gallery";
+
+/** 지금 화면이 스냅샷을 보고 있는가.
+ *
+ *  그림 주소(coverUrl·pageUrl)는 그냥 문자열을 만드는 함수라 스스로 실패를
+ *  알아챌 수가 없다 — <img src> 에 박히면 끝이다. 그래서 목록·완성본을 받는
+ *  쪽이 실패를 겪으면 여기에 표시를 남기고, 그림 주소는 그 표시를 본다.
+ *  둘 중 하나는 그림보다 반드시 먼저 도므로(목록이 있어야 카드를 그리고,
+ *  완성본이 있어야 장을 그린다) 순서가 어긋나지 않는다. */
+let onSnapshot = false;
+
+async function snapshot<T>(path: string): Promise<T> {
+  const res = await fetch(`${DEMO}${path}`);
+  if (!res.ok) throw new Error("작품을 불러오지 못했습니다");
+  onSnapshot = true;
+  return (await res.json()) as T;
+}
+
+function post<T>(path: string, body?: unknown): Promise<T> {
+  return call<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+export function createJob(form: NhCreateRequest): Promise<{ id: string; credit_balance?: number }> {
+  return post("/nh/create", { ...form, uid: getUid() });
+}
+
+/** 게스트(비로그인)용 사진 업로드 주소. 로그인한 사람은 `@common/api/uploads`
+ *  의 `presign`(팀 공용, 계정에 묶인 티켓)을 그대로 쓴다 — 이 길은 게스트만 쓴다. */
+function guestPhotoPresign(contentType: string): Promise<{ key: string; url: string }> {
+  return post("/nh/photo-presign", { contentType });
+}
+
+/**
+ * 게스트가 들고 있는 data URL 사진들을 S3 로 올리고 key 를 돌려준다.
+ *
+ * `uploadDataUrls`(팀 공용, `@common/api/uploads`)와 하는 일은 같지만 로그인이
+ * 필요 없는 주소로 올린다 — 게스트는 본문에 사진을 그대로 실어 보내다가
+ * CloudFront 앞단 WAF(SizeRestrictions_BODY)에 막혀 있었다(2026-09-17).
+ */
+export async function uploadDataUrlsAsGuest(dataUrls: string[]): Promise<string[]> {
+  const keys: string[] = [];
+  for (const url of dataUrls) {
+    if (typeof url !== "string" || !url.startsWith("data:")) continue;
+    const blob = await (await fetch(url)).blob();
+    const type = blob.type || "image/png";
+    const { key, url: putUrl } = await guestPhotoPresign(type);
+    const res = await fetch(putUrl, { method: "PUT", headers: { "Content-Type": type }, body: blob });
+    if (!res.ok) throw new Error(`사진을 올리지 못했습니다 (${res.status})`);
+    keys.push(key);
+  }
+  return keys;
+}
+
+export function readJob(id: string): Promise<NhJob> {
+  return call<NhJob>(`/nh/jobs/${encodeURIComponent(id)}`);
+}
+
+/** 시트 확인 — 이대로 가거나(approve), 요청을 적어 다시 만들거나(retry). */
+export function decideSheet(id: string, decision: "approve" | "retry", note = "") {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/sheet-decision`,
+              note ? { decision, note } : { decision });
+}
+
+/** 이야기 고르기 — 넷 중 하나. `editedBody` 를 주면 그 방향의 본문을
+ * 사람이 고친 내용으로 바꿔서 다음 단계(장면 나누기)부터 그 내용을
+ * 쓴다 — 안 주거나 원래 본문과 같으면 서버가 아무것도 안 건드린다. */
+export function pickDirection(id: string, n: number, editedBody?: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/pick`,
+              editedBody ? { n, body: editedBody } : { n });
+}
+
+/** 넷 다 마음에 안 들 때 — 후보를 다시 만든다. */
+export function retryDirections(id: string, note = "") {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/pick-retry`, note ? { note } : {});
+}
+
+export function cancelJob(id: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/cancel`);
+}
+
+/** 다 되면 이 주소로 알려 달라. **빈 값을 보내면 안 받겠다는 뜻이다.**
+ *
+ *  주소가 틀리면 서버가 400 과 함께 사람이 읽을 한 줄을 준다 — 담아 두고
+ *  보낸 척하면 화면에는 「보낼게요」가 떠 있는데 영영 아무것도 안 온다.
+ *
+ *  @returns 실제로 보낼 주소. 지웠으면 null. */
+export function notifyByEmail(id: string, email: string): Promise<{ email: string | null }> {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/notify`, { email });
+}
+
+/* ---- 그림 주소 ------------------------------------------------------------
+ *
+ * <img src> 에 그대로 넣는 값이라 fetch 가 아니라 문자열을 돌려준다. */
+
+/** 검수 화면의 캐릭터 시트. `v` 로 캐시를 흘린다 — 다시 만든 시트가
+ *  같은 주소라, 안 붙이면 옛 그림이 그대로 뜬다. */
+export function sheetImageUrl(jobId: string, v: number | string = ""): string {
+  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet.png${v ? `?v=${v}` : ""}`;
+}
+
+/** 그리는 동안 하나씩 뜨는 페이지. */
+export function jobPageUrl(jobId: string, no: number, width = 260): string {
+  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/page/${no}.png?w=${width}`;
+}
+
+/* ---- 작품 목록 -------------------------------------------------------------
+ *
+ * 둘러보기·마이페이지가 같은 목록을 쓴다. `mine=1` 이면 내가 만든 것만
+ * 골라 오는데, 서버는 uid 로 가르므로 그 값을 같이 보낸다. */
+
+export interface RunCard {
+  run_id: string;
+  character: string;
+  title: string;
+  genre: string;
+  /** 실제로 그려진 회차들. 하나뿐이면 카드에 회차 딱지를 안 낸다. */
+  episodes: number[];
+  next_episode?: number;
+  cover_episode?: number;
+  /** 표지로 쓸 장 번호. 없으면 아직 그림이 없는 작품이다. */
+  cover_page?: number;
+  page_count: number;
+  /** 어느 그림체로 그렸나. 그 기록이 생기기 전 작품은 빈 값이다. */
+  style_label?: string;
+  /** 내 작품 목록에서만 온다 — 둘러보기에 걸려 있는가. */
+  public?: boolean;
+  /** 루가 미리 구워 둔 예시 작품인가 — 실제로 누가 만든 것이 아니다.
+   *  둘러보기의 "예시 작품 빼기" 스위치가 이 값으로 거른다. */
+  example?: boolean;
+}
+
+/** 예시 스냅샷만. 실패하면(첫 배포 직후처럼 아직 하나도 안 구웠을 때) 빈 목록.
+ *
+ * **`snapshot()` 을 안 쓴다.** 그 함수는 부르면 전역 `onSnapshot` 을 켠다 —
+ * "진짜 서버가 죽어서 이 화면 전체가 예시로 대신한다" 는 뜻으로 켜는 것인데,
+ * 여기는 그런 자리가 아니다. 둘러보기는 **실제 작품이 있어도 예시를 늘 같이**
+ * 보여주므로(위 listRuns 주석), 이 호출은 정상적으로 매번 성공한다. 그런데
+ * `snapshot()` 을 그대로 썼더니 둘러보기에 한 번만 들어가도 `onSnapshot` 이
+ * 영영 켜진 채로 남아서, 그 뒤에 여는 **진짜** 작품의 완성본(`Result.tsx` 의
+ * `pageUrl`)까지 예시 자리(`/static/gallery/...`)에서 그림을 찾다가 404 가
+ * 났다 — 새로고침해야 고쳐진 것은 이 표시가 이 브라우저 탭이 살아있는 동안
+ * 안 꺼졌기 때문이다(실측으로 확인). */
+function exampleRuns(): Promise<RunCard[]> {
+  return fetch(`${DEMO}/runs.json`)
+    .then((res) => {
+      if (!res.ok) throw new Error("예시를 못 불러왔습니다");
+      return res.json() as Promise<{ runs: RunCard[] }>;
+    })
+    .then((got) => (got.runs || []).map((r) => ({ ...r, example: true })))
+    .catch(() => []);
+}
+
+export function listRuns(mine = false): Promise<{ runs: RunCard[] }> {
+  const q = mine ? `?mine=1&uid=${encodeURIComponent(getUid())}` : "";
+  if (mine) {
+    // 「내가 만든 것」은 예시로 안 채운다 — 구워 둔 것은 남의 작품이라,
+    // 내 목록에 끼워 넣으면 만든 적 없는 작품이 내 것으로 보인다.
+    return call<{ runs: RunCard[] }>(`/runs${q}`);
+  }
+  // ★ 둘러보기는 **실제 작품 + 예시를 늘 같이** 보여준다. 예전에는 실제
+  //   작품이 하나라도 있으면 예시를 통째로 안 보여줬는데, 그러면 실제
+  //   작품이 막 하나 생긴 순간 그 전까지 걸려 있던 예시들이 전부 사라져
+  //   "둘러보기가 텅 빈 것처럼" 보였다. 실제 작품이 앞에, 예시가 뒤에
+  //   붙는다 — 진짜 작품이 먼저 읽히는 게 맞다.
+  return call<{ runs: RunCard[] }>(`/runs${q}`)
+    .then((got) => (got.runs || []).map((r) => ({ ...r, example: false })))
+    .catch(() => [] as RunCard[])
+    .then((real) => exampleRuns().then((examples) => ({ runs: [...real, ...examples] })));
+}
+
+/** 카드 표지. 목록은 화면을 바꿔 끼우며 그리므로 loading="lazy" 를 안 쓴다 —
+ *  그 경로에서는 브라우저가 "화면에 들어왔다" 를 다시 안 재서 표지가 영영 안
+ *  뜬다. ?w=320 으로 줄여 받아 한 장에 60KB 안쪽이다.
+ *
+ * @param example 이 카드가 예시인지 **호출하는 쪽이 안다면** 직접 넘긴다
+ *   (둘러보기 목록처럼 실제 작품과 예시가 한 화면에 섞여 있을 때 — 전역
+ *   `onSnapshot` 깃발 하나로는 어느 카드가 어느 쪽인지 구분이 안 된다).
+ *   안 넘기면 예전처럼 `onSnapshot` 을 본다(작품 하나만 여는 화면들). */
+export function coverUrl(runId: string, page: number, episode = 1, example?: boolean): string {
+  if (example ?? onSnapshot) return `${DEMO}/${encodeURIComponent(runId)}/cover.jpg`;
+  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`;
+}
+
+/* ---- 로그인한 사람의 것 ---------------------------------------------------
+ *
+ * 위 주소들과 다르다. 여기는 **자바가 판단하는 자리**라 로그인이 필요하고,
+ * 응답도 이 저장소 규약대로 봉투에 담겨 온다(`{success, data, ...}`) —
+ * 그래서 공용 클라이언트로 부른다(봉투를 벗기고 실패를 던져 준다). */
+
+/** 이 브라우저를 내 계정에 잇는다. **로그인할 때마다** 부른다 — 기기를 바꾸면
+ *  uid 가 새로 생겨서, 한 번만 잇는 것으로는 두 번째 기기가 안 붙는다. */
+export function linkThisBrowser(): Promise<{ linked: boolean }> {
+  return appRequest<{ linked: boolean }>("/api/webtoon/v1/my/link", {
+    method: "POST", body: { uid: getUid() },
+  });
+}
+
+/** 내 계정에 이어진 브라우저들이 만든 작품 전부. 나만 보기로 내려 둔 것도 온다. */
+export function myAccountRuns(): Promise<RunCard[]> {
+  return appRequest<RunCard[]>("/api/webtoon/v1/my/runs");
+}
+
+/** 둘러보기에 거는가 내리는가. 실패하면 화면도 되돌려야 한다 — 껐다고
+ *  보이는데 실제로는 걸려 있는 것이 제일 나쁘다.
+ *
+ *  하네스로 바로 넘기지 않고 **자바를 거친다**(`/my/...`). 하네스의 같은
+ *  주소는 하네스 자기 계정 세션을 보는데 웹툰 탭은 앱 계정으로 로그인하므로
+ *  그 세션이 없다 — 그대로 부르면 눌러도 늘 401 이었다. 자바가 내 계정에
+ *  이어진 브라우저의 작품인지 보고 넘긴다. */
+export function setVisibility(runId: string, isPublic: boolean) {
+  return appRequest<{ runId: string; public: boolean }>(
+    `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/visibility`,
+    { method: "POST", body: { public: isPublic } });
+}
+
+/* ---- 완성본 --------------------------------------------------------------- */
+
+/** `/api/runs/{id}/result` 가 주는 것. 원본 app.js 의 paintResult 가 읽는 것과 같다. */
+export interface RunResult {
+  run_id: string;
+  character: string;
+  title: string;
+  genre: string;
+  style_label: string;
+  logline: string;
+  episode: number;
+  /** 장마다 아래 여백(gap)과 지면 폭(width) — 파일과 같은 눈금으로 그리려고 준다. */
+  /** `caption` 은 그 장이 그린 장면 한 줄. 표지(1장)와 옛 작품은 빈 값이다. */
+  pages: { no: number; gap: number; width: number; caption?: string }[];
+  page_count: number;
+  planned_pages: number;
+  preview: boolean;
+  /** 진짜 서버가 실패해서 예시 스냅샷으로 대신 연 것인가. `Result.tsx` 가
+   *  이 값을 `pageUrl` 에 그대로 넘긴다 — 전역 `onSnapshot` 에 기대면,
+   *  이 작품 하나가 스냅샷으로 열렸다는 사실이 그 뒤에 여는 **다른**(진짜)
+   *  작품에까지 새어 나간다(exampleRuns 주석과 같은 사고). */
+  example?: boolean;
+}
+
+export function readResult(runId: string): Promise<RunResult> {
+  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`)
+    .then((r) => ({ ...r, example: false }))
+    .catch(() => snapshot<RunResult>(`/${encodeURIComponent(runId)}/result.json`)
+      .then((r) => ({ ...r, example: true })));
+}
+
+/** 완성본의 한 장. `raw` 는 얹은 것(말풍선) 없이 밑그림만 — 편집실이 쓴다. */
+/** @param example 이 작품이 예시 스냅샷인지 **호출하는 쪽이 안다면** 직접
+ *   넘긴다(`coverUrl` 과 같은 이유 — `readResult` 가 돌려주는 `example` 을
+ *   그대로 쓴다). 안 넘기면 예전처럼 전역 `onSnapshot` 을 본다. */
+export function pageUrl(
+  runId: string, no: number, width = 1080, raw = false, example?: boolean,
+): string {
+  if ((example ?? onSnapshot) && !raw) {
+    return `${DEMO}/${encodeURIComponent(runId)}/p${String(no).padStart(2, "0")}.jpg`;
+  }
+  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`;
+}
+
+/** 한 편을 통째로 내려받는 주소. 이 길로 나가는 파일에만 LORE 표시가 붙는다. */
+export function episodeDownloadUrl(runId: string): string {
+  return `${BASE}/runs/${encodeURIComponent(runId)}/episode.png`;
+}
+
+/** 이 브라우저가 만든 작품인가. 아니면 내려받기·편집실·저장·공유를 감춘다. */
+export function isMyRun(runId: string): boolean {
+  return !!runId && myRuns().includes(runId);
+}

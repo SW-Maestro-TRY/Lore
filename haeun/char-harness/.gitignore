@@ -1,0 +1,19 @@
+# API 키
+.env
+.env.*
+!.env.example
+
+# 실행 산출물
+outputs/
+!outputs/.gitkeep
+
+# 레퍼런스 이미지 (용량 큼 / 개인 소스일 수 있음). 커밋하려면 이 줄을 지우세요.
+refs/*
+!refs/.gitkeep
+!refs/README.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/

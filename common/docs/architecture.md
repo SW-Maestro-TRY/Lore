@@ -9,17 +9,17 @@
 ```
 
 - 실행되는 프로세스는 **웹 1개 + API 서버 1개**. (멘토링에서 정한 "API 서버는 공통 하나" 원칙)
-- 코드는 도메인(story / comic / trailer)별 폴더로 나뉘어 있지만, 빌드/실행 시 하나로 합쳐진다.
+- 코드는 도메인(webtoon / zzal / trailer)별 폴더로 나뉘어 있지만, 빌드/실행 시 하나로 합쳐진다.
 
 ## 폴더 조직 방식: domain-first
 
 도메인 폴더가 최상위이고, 그 안에 `be / fe / docs` 가 들어간다.
 
 ```
-story/
-├── be/     # Story 백엔드 (Gradle 모듈)
-├── fe/     # Story 프론트엔드 화면
-└── docs/   # Story 문서
+webtoon/
+├── be/     # Webtoon 백엔드 (Gradle 모듈)
+├── fe/     # Webtoon 프론트엔드 화면
+└── docs/   # Webtoon 문서
 ```
 
 **왜 이렇게 했나**
@@ -43,8 +43,8 @@ domain-first 로 나눠도 결국 하나로 실행돼야 하므로, 합치는 �
 
 **왜 `apps/` 가 필요한가**
 
-- FE: Next.js App Router 는 URL 이 파일 위치로 결정된다. `/comic` 이 존재하려면 `app/comic/page.tsx` 가
-  반드시 있어야 해서, `comic/fe/` 에만 두면 라우팅이 잡히지 않는다. 그래서 라우팅 파일은 얇게 두고
+- FE: Next.js App Router 는 URL 이 파일 위치로 결정된다. `/zzal` 이 존재하려면 `app/zzal/page.tsx` 가
+  반드시 있어야 해서, `zzal/fe/` 에만 두면 라우팅이 잡히지 않는다. 그래서 라우팅 파일은 얇게 두고
   실제 화면은 도메인 폴더에 둔다.
 - BE: `@SpringBootApplication` main 클래스는 특정 도메인 소유가 아니므로, 도메인 폴더가 아닌
   공용 실행 자리에 둔다.
@@ -60,8 +60,8 @@ sourceSets {
         java {
             srcDirs = [
                 'common/be/src/main/java',
-                'story/be/src/main/java',
-                'comic/be/src/main/java',
+                'webtoon/be/src/main/java',
+                'zzal/be/src/main/java',
                 'trailer/be/src/main/java',
                 'apps/api/src/main/java'
             ]
@@ -90,13 +90,13 @@ sourceSets {
 ```
 apps/api  ──▶  common
                  ▲
-      story ─────┤
-      comic ─────┤
+    webtoon ─────┤
+      zzal ─────┤
     trailer ─────┘
 ```
 
 - 도메인 코드는 `common` 만 참조한다. **도메인끼리는 서로 import 하지 않는다.**
-  (story 가 comic 을 직접 부르기 시작하면 폴더만 나뉘고 실제로는 얽히게 된다.)
+  (webtoon 이 zzal 을 직접 부르기 시작하면 폴더만 나뉘고 실제로는 얽히게 된다.)
 - 도메인 간 협업이 필요하면 `common` 으로 올리거나 API 로 주고받는다.
 
 ## 공통(common)에 두는 것

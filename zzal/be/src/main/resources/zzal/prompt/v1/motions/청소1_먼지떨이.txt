@@ -1,0 +1,32 @@
+TASK: Draw the character DUSTING with a feather duster, sweeping it down through the air twice, as a 16-frame loop.
+
+THE DUSTER (identical object in all 16 cells): a short-handled feather duster held in ONE hand — the hand on the viewer's left — with a soft fluffy head. The handle keeps the same length and the duster keeps the same size in every cell; only its height and angle change. It never rises above the top of the head and never reaches below the knees, so it always stays within the character's own body width and never touches a cell boundary or a grid mark.
+
+MUST CHANGE from frame to frame:
+- the height and angle of the duster arm — this is the whole motion
+- small round dust puffs beside the duster head, appearing only where named below
+- the expression, from focused to pleased
+
+NEVER CHANGE:
+- ★the shoes stay flat on the ground at exactly the same x and y in all 16 cells. The feet never step, slide or lift.
+- ★the torso, head and the other arm stay exactly where they are. The other arm hangs relaxed at the side and never moves. The character never leans, bends, ducks or turns.
+- character height, width, head size and proportions are identical in every cell
+- the duster stays in the same hand throughout; the grip never changes
+
+POSE OF EACH FRAME
+Frame 1 — Duster held at chest height, angled slightly up. Eyes open, small focused closed-mouth expression. No dust.
+Frame 2 — The duster arm lifts, duster rising toward shoulder height.
+Frame 3 — The duster reaches its highest point, just below the top of the head, tilted back a little.
+Frame 4 — The arm starts down, duster passing shoulder height.
+Frame 5 — Sweeping down, duster at chest height, the fluffy head bending back from the speed.
+Frame 6 — Sweeping down, duster near waist height.
+Frame 7 — THE FLICK: duster at its lowest, near knee height. One small dust puff appears beside the duster head.
+Frame 8 — The arm begins to rise again; the dust puff is slightly larger and drifting.
+Frame 9 — Duster back at chest height; the puff is fading.
+Frame 10 — Duster near its highest point again; the first puff is gone.
+Frame 11 — The arm starts down for the second sweep.
+Frame 12 — Sweeping down, duster at chest height, fluffy head bending back.
+Frame 13 — THE SECOND FLICK: duster at its lowest. Two dust puffs appear, clearly larger than the first one.
+Frame 14 — The arm rises, the two puffs drifting and beginning to fade. Mouth opens in a small pleased breath.
+Frame 15 — Duster back at chest height, puffs almost gone, a satisfied closed-mouth smile.
+Frame 16 — Duster settling back to the starting height and angle, puffs gone, expression returning to focused, leading straight into frame 1.

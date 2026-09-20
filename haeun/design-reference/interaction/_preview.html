@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOU 인터랙션 확인</title>
+<style>
+  :root {
+    --bg: #eaf4f7; --ink: #1b3a45; --muted: #5d7f8b;
+    --card: #ffffff; --line: #cfe3ea; --accent: #2f8fa8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  header {
+    padding: 14px 18px; background: var(--card); border-bottom: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center;
+  }
+  h1 { font-size: 16px; margin: 0 8px 0 0; }
+  .hint { color: var(--muted); font-size: 13px; }
+  label { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+  select, button {
+    font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 8px;
+    border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  main { flex: 1; position: relative; overflow: hidden; touch-action: none; }
+  #lou {
+    position: absolute; width: 260px; height: 260px; left: 50%; top: 45%;
+    margin: -130px 0 0 -130px; cursor: grab; user-select: none; touch-action: none;
+  }
+  #lou.grabbing { cursor: grabbing; }
+  #lou img { width: 100%; height: 100%; object-fit: contain; pointer-events: none;
+             -webkit-user-drag: none; filter: drop-shadow(0 6px 10px rgba(20,70,90,.12)); }
+  #status {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 18px;
+    background: rgba(255,255,255,.85); border-top: 1px solid var(--line);
+    font-size: 13px; color: var(--muted); display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  #status b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>LOU 인터랙션 확인</h1>
+  <span class="hint">클릭 · 연타 · 끌기 · 꾹 누르기 · 쓰다듬기(누른 채 좌우로 문지르기)</span>
+  <label>드래그 <select id="pick-drag"></select></label>
+  <label>연속 클릭 <select id="pick-multiclick"></select></label>
+  <label>쓰다듬기 <select id="pick-pet"></select></label>
+  <label>Idle <select id="pick-idle"></select></label>
+  <button id="btn-shake">흔들기</button>
+</header>
+
+<main id="stage">
+  <div id="lou"><img id="sprite" alt="LOU"></div>
+  <div id="status">
+    <span>지금: <b id="s-state">idle</b></span>
+    <span>컷: <b id="s-frame">-</b></span>
+    <span>장면: <b id="s-note">-</b></span>
+  </div>
+</main>
+
+<script src="_manifest.js"></script>
+<script>
+const M = window.LOU_INTERACTION.gestures;
+const sprite = document.getElementById('sprite');
+const lou = document.getElementById('lou');
+const stage = document.getElementById('stage');
+const sState = document.getElementById('s-state');
+const sFrame = document.getElementById('s-frame');
+const sNote = document.getElementById('s-note');
+
+// 제스처마다 어느 판(seq)을 쓸지 — 위 셀렉트로 바꾼다
+const pick = { drag: 'seq1', multiclick: 'seq1', pet: 'seq1', idle: 'seq1',
+               longpress: 'seq1', shake: 'seq2' };
+for (const g of ['drag', 'multiclick', 'pet', 'idle']) {
+  const sel = document.getElementById('pick-' + g);
+  for (const s of Object.keys(M[g].sequences)) {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s + ' (' + M[g].sequences[s].frames.length + '컷)';
+    sel.appendChild(o);
+  }
+  sel.value = pick[g];
+  sel.onchange = () => { pick[g] = sel.value; if (mode === 'idle') idleTick(true); };
+}
+
+function seq(g) { return M[g].sequences[pick[g]] || null; }
+function show(gesture, item) {
+  sprite.src = gesture + '/' + item.file;
+  sState.textContent = gesture;
+  sFrame.textContent = item.file;
+  sNote.textContent = item.note || '-';
+}
+function showFrame(gesture, i) {
+  const s = seq(gesture);
+  if (!s) return;
+  show(gesture, s.frames[Math.max(0, Math.min(i, s.frames.length - 1))]);
+}
+function showRandom(gesture) {
+  const pool = M[gesture].random;
+  if (!pool.length) return;
+  show(gesture, pool[Math.floor(Math.random() * pool.length)]);
+}
+
+// ----------------------------------------------------------------- idle
+let mode = 'idle';           // idle | click | multiclick | drag | pet | longpress | shake
+let idleFrame = 0, lastInput = Date.now(), timer = null, holdTimer = null;
+
+function idleTick(force) {
+  if (mode !== 'idle' && !force) return;
+  const asleep = Date.now() - lastInput > 9000;   // 오래 두면 잠든다
+  const s = M.idle.sequences[asleep ? 'seq2' : pick.idle];
+  idleFrame = asleep ? Math.min(idleFrame + 1, 2) : (idleFrame + 1) % s.frames.length;
+  show('idle', s.frames[idleFrame]);
+}
+setInterval(() => { if (mode === 'idle') idleTick(); }, 1400);
+
+function backToIdle(delay) {
+  clearTimeout(timer);
+  timer = setTimeout(() => { mode = 'idle'; idleFrame = 0; idleTick(true); }, delay);
+}
+function playSequence(gesture, from, step, onEnd) {
+  const s = seq(gesture);
+  if (!s) return;
+  let i = from;
+  clearTimeout(timer);
+  (function next() {
+    showFrame(gesture, i);
+    if (i >= s.frames.length - 1) { if (onEnd) onEnd(); return; }
+    i++;
+    timer = setTimeout(next, step);
+  })();
+}
+
+// ----------------------------------------------------------- 포인터 입력
+let down = false, startX = 0, startY = 0, startT = 0, moved = 0, reversals = 0, lastDX = 0;
+let originX = 0, originY = 0, homeX = 0, homeY = 0;
+let clicks = 0, clickTimer = null;
+
+lou.addEventListener('pointerdown', e => {
+  lou.setPointerCapture(e.pointerId);
+  down = true; startX = e.clientX; startY = e.clientY; startT = Date.now();
+  moved = 0; reversals = 0; lastDX = 0;
+  const r = lou.getBoundingClientRect();
+  originX = e.clientX - r.left - r.width / 2;
+  originY = e.clientY - r.top - r.height / 2;
+  homeX = r.left + r.width / 2; homeY = r.top + r.height / 2;
+  lastInput = Date.now();
+  clearTimeout(holdTimer);
+  holdTimer = setTimeout(() => {                    // 꾹 누르기
+    if (!down || moved > 12) return;
+    mode = 'longpress';
+    playSequence('longpress', 1, 900);
+  }, 600);
+});
+
+stage.addEventListener('pointermove', e => {
+  if (!down) return;
+  const dx = e.clientX - startX, dy = e.clientY - startY;
+  const dist = Math.hypot(dx, dy);
+  if (dist > moved) moved = dist;
+  const dir = Math.sign(e.movementX || 0);
+  if (dir && lastDX && dir !== lastDX) reversals++;
+  if (dir) lastDX = dir;
+  lastInput = Date.now();
+
+  if (moved > 70) {                                  // 멀리 끌면 드래그
+    if (mode !== 'drag') {
+      clearTimeout(holdTimer); clearTimeout(timer);
+      mode = 'drag'; lou.classList.add('grabbing');
+      showFrame('drag', 1);                          // 손에 잡힌 컷
+      setTimeout(() => { if (mode === 'drag') showFrame('drag', 2); }, 220);
+    }
+    const sr = stage.getBoundingClientRect();
+    lou.style.left = (e.clientX - sr.left - originX) + 'px';
+    lou.style.top = (e.clientY - sr.top - originY) + 'px';
+  } else if (reversals >= 3 && mode !== 'drag') {     // 제자리 문지르면 쓰다듬기
+    if (mode !== 'pet') {
+      clearTimeout(holdTimer); clearTimeout(timer);
+      mode = 'pet';
+      playSequence('pet', 1, 700);
+    }
+  }
+});
+
+stage.addEventListener('pointerup', e => {
+  if (!down) return;
+  down = false;
+  clearTimeout(holdTimer);
+  lou.classList.remove('grabbing');
+  const held = Date.now() - startT;
+  lastInput = Date.now();
+
+  if (mode === 'drag') {
+    const s = seq('drag');
+    showFrame('drag', s.frames.length - 1);          // 놓아주면 기뻐한다
+    backToIdle(1600);
+    return;
+  }
+  if (mode === 'pet') { backToIdle(1800); return; }
+  if (mode === 'longpress') {                        // 놓으면 깨어난다
+    const s = seq('longpress');
+    showFrame('longpress', s.frames.length - 1);
+    backToIdle(1600);
+    return;
+  }
+  if (moved > 12 || held > 600) { backToIdle(600); return; }
+
+  clicks++;                                          // 여기부터는 그냥 클릭
+  clearTimeout(clickTimer);
+  clearTimeout(timer);
+  if (clicks === 1) {
+    mode = 'click'; showRandom('click');
+  } else {
+    mode = 'multiclick';
+    showFrame('multiclick', Math.min(clicks - 1, seq('multiclick').frames.length - 1));
+  }
+  clickTimer = setTimeout(() => { clicks = 0; }, 900);
+  backToIdle(1500);
+});
+
+// ------------------------------------------------------------------ 흔들기
+function doShake() {
+  lastInput = Date.now();
+  clearTimeout(timer); clearTimeout(holdTimer);
+  mode = 'shake';
+  playSequence('shake', 0, 420, () => backToIdle(1400));
+}
+document.getElementById('btn-shake').onclick = doShake;
+
+let lastShake = 0;
+window.addEventListener('devicemotion', e => {
+  const a = e.accelerationIncludingGravity;
+  if (!a) return;
+  const power = Math.abs(a.x || 0) + Math.abs(a.y || 0) + Math.abs(a.z || 0);
+  if (power > 34 && Date.now() - lastShake > 2500) { lastShake = Date.now(); doShake(); }
+});
+
+// 시작
+idleTick(true);
+</script>
+</body>
+</html>

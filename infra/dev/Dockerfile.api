@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1
+#
+# Lore 백엔드(Spring Boot) 개발용 이미지.
+# 컨텍스트는 레포 루트다(도메인 소스가 common/·zzal/·webtoon/·trailer/·apps/api 로 흩어져 있음).
+# CI 와 같은 방식으로 빌드한다: ./gradlew clean build -x test → build/libs/*.jar 중 -plain 이 아닌 것.
+
+# ── 빌드 단계: Gradle 로 bootJar (Java 21) ──
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /workspace
+
+# 래퍼·빌드 스크립트 먼저 복사 — Gradle 배포본/플러그인 내려받기를 레이어로 캐시한다.
+COPY gradlew gradlew.bat settings.gradle build.gradle ./
+COPY gradle ./gradle
+RUN chmod +x gradlew && ./gradlew --no-daemon --version
+
+# 백엔드 소스(도메인 폴더 + 실행 진입점).
+# fe/ 는 jar 에 안 들어가지만 폴더째 복사가 단순하고, .dockerignore 가 무거운 것(node_modules 등)을 이미 거른다.
+COPY common ./common
+COPY zzal ./zzal
+COPY webtoon ./webtoon
+COPY trailer ./trailer
+COPY apps/api ./apps/api
+
+# 테스트 제외 빌드 → -plain 아닌 실행 jar 를 골라 app.jar 로.
+RUN ./gradlew --no-daemon clean bootJar -x test \
+ && cp "$(ls build/libs/*.jar | grep -v plain)" /workspace/app.jar
+
+# ── 실행 단계: JRE + zzal 후처리 파이썬 ──
+FROM eclipse-temurin:21-jre AS runtime
+WORKDIR /app
+ENV LORE_ENV=dev
+
+# ★ zzal 후처리(격자 → 8상태 움짤 webp)는 numpy·scipy·pillow 파이썬으로 돈다.
+#   app.zzal.generation.real-postprocess=true 일 때 PythonPostProcessor 가 service_post.py 를
+#   이 파이썬으로 실행하고, 기동 때 boot-guard 가 이 bin 으로 세 모듈을 확인한다(GenerationConfig).
+#   버전은 requirements.txt 에 못박혀 있다 — 실험과 같은 격자 절단 결과를 재현하기 위해서다.
+#   webtoon 하네스 파이썬은 넣지 않는다(zzal 후처리만 필요).
+#   libgomp1 은 numpy/scipy 휠이 쓰는 OpenMP 런타임이다.
+COPY zzal/be/src/main/resources/zzal/pipeline/v1/requirements.txt /tmp/zzal-requirements.txt
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 python3-venv libgomp1 \
+ && python3 -m venv /opt/lore/venv \
+ && /opt/lore/venv/bin/pip install --no-cache-dir --upgrade pip \
+ && /opt/lore/venv/bin/pip install --no-cache-dir -r /tmp/zzal-requirements.txt \
+ && /opt/lore/venv/bin/python -c "import numpy, scipy, PIL; print('zzal post deps OK', numpy.__version__, scipy.__version__, PIL.__version__)" \
+ && rm -rf /var/lib/apt/lists/* /tmp/zzal-requirements.txt
+
+# 앱이 이 파이썬을 쓰도록 고정(app.zzal.python.bin). 이 값이 없으면 기본 python3 를 찾는다.
+ENV ZZAL_PYTHON_BIN=/opt/lore/venv/bin/python
+
+COPY --from=build /workspace/app.jar /app/app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

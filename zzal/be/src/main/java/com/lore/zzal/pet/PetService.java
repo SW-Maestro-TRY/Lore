@@ -1,0 +1,881 @@
+package com.lore.zzal.pet;
+
+import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
+import com.lore.common.s3.S3Service;
+import com.lore.common.user.User;
+import com.lore.common.user.UserRepository;
+import com.lore.zzal.generation.GenJob;
+import com.lore.zzal.generation.GenJobRepository;
+import com.lore.zzal.generation.GenKind;
+import com.lore.zzal.generation.GenStatus;
+import com.lore.zzal.generation.GenStepRecordRepository;
+import com.lore.zzal.pet.dto.PetResponses;
+import com.lore.zzal.piece.PieceEvent;
+import com.lore.zzal.generation.HatchService;
+import com.lore.zzal.guard.HatchBlock;
+import com.lore.zzal.guard.HatchGuard;
+import com.lore.zzal.generation.PetHatchRequested;
+import com.lore.zzal.generation.PetNamed;
+import com.lore.zzal.generation.StepLabels;
+import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionSeeder;
+import com.lore.zzal.motion.MotionSpec;
+import com.lore.zzal.motion.MotionStatus;
+import com.lore.zzal.motion.ZzalMotion;
+import com.lore.zzal.motion.ZzalMotionRepository;
+import com.lore.zzal.night.BakeTrigger;
+import com.lore.zzal.text.Josa;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * 펫 생성·조회·돌봄·잠.
+ *
+ * <h3>★ 시각은 두 벌이다 — 실제 시각과 펫의 시각</h3>
+ * 컨트롤러가 주는 {@code realNow} 는 서버 시계다. 펫에는 dev 오프셋이 걸릴 수 있어({@link ZzalPet#now})
+ * 모든 규칙은 <b>펫의 시각</b>으로 판정한다. 여기서 한 번 변환하고 아래로는 펫의 시각만 흐른다.
+ * 응답의 {@code serverNow} 도 펫의 시각이다(화면은 그 시계만 본다).
+ *
+ * <h3>"할 수 있나" 는 여기서 묻고, 결과는 엔티티가 적는다</h3>
+ * 서버는 "무엇을 눌렀다" 만 받고 결과는 서버가 정한다. 브라우저가 보낸 수치를 믿으면 개발자도구로
+ * 게이지를 채울 수 있다. 거절 이유는 사용자 말로 답한다({@link ErrorCode}).
+ */
+@Service
+public class PetService {
+
+    private final ZzalPetRepository petRepository;
+    private final GenJobRepository jobRepository;
+    private final GenStepRecordRepository stepRepository;
+    private final StepLabels labels;
+    private final UserRepository userRepository;
+    private final S3Service s3Service;
+    private final HatchService hatchService;
+    private final ApplicationEventPublisher events;
+    private final MotionCatalog catalog;
+    private final ZzalMotionRepository motionRepository;
+    private final MotionSeeder motionSeeder;
+    private final BakeTrigger bakeTrigger;
+    private final com.lore.zzal.scene.SceneService sceneService;
+    private final com.lore.zzal.leave.LeaveService leaveService;
+    private final com.lore.zzal.piece.PieceService pieceService;
+    private final HatchGuard hatchGuard;
+
+    public PetService(ZzalPetRepository petRepository,
+                      GenJobRepository jobRepository,
+                      GenStepRecordRepository stepRepository,
+                      StepLabels labels,
+                      UserRepository userRepository,
+                      S3Service s3Service,
+                      HatchService hatchService,
+                      ApplicationEventPublisher events,
+                      MotionCatalog catalog,
+                      ZzalMotionRepository motionRepository,
+                      MotionSeeder motionSeeder,
+                      BakeTrigger bakeTrigger,
+                      com.lore.zzal.scene.SceneService sceneService,
+                      com.lore.zzal.leave.LeaveService leaveService,
+                      com.lore.zzal.piece.PieceService pieceService,
+                      HatchGuard hatchGuard) {
+        this.hatchGuard = hatchGuard;
+        this.catalog = catalog;
+        this.motionRepository = motionRepository;
+        this.motionSeeder = motionSeeder;
+        this.bakeTrigger = bakeTrigger;
+        this.sceneService = sceneService;
+        this.leaveService = leaveService;
+        this.pieceService = pieceService;
+        this.petRepository = petRepository;
+        this.jobRepository = jobRepository;
+        this.stepRepository = stepRepository;
+        this.labels = labels;
+        this.userRepository = userRepository;
+        this.s3Service = s3Service;
+        this.hatchService = hatchService;
+        this.events = events;
+    }
+
+    /**
+     * 그림을 등록한다 — <b>초안</b>을 만들고 <b>부화를 끝까지</b> 굽기 시작한다.
+     *
+     * <h3>★ 왜 여기서 끝까지 굽나 (2026-09-11)</h3>
+     * 전에는 시트 한 장만 굽고 이름이 올 때까지 멈춰 있었다. 실측에서 그 공백이 <b>2분 54초</b>였고,
+     * 그동안 서버는 아무것도 안 했다. 그림 생성에 들어가는 사용자 입력은 없으므로
+     * (자유 메모마저 1.9에서 빠졌다 — {@code IdentityStep} 주석) 기다릴 이유가 없다.
+     * 목표는 <b>사용자가 이름을 다 지었을 때 이미 끝나 있는 것</b>이다.
+     *
+     * <h3>★ 그래도 이름 없이는 안 살아난다</h3>
+     * 굽기가 먼저 끝나면 펫은 초안인 채로 기다린다. 살아나는 조건은
+     * <b>굽기 완료 + 이름 제출</b> 둘 다이고, 나중에 갖춰지는 쪽이 살린다
+     * ({@code HatchService.completeIfReady}).
+     *
+     * <h3>★ 이름을 안 짓고 나갔다가 다시 오면 그 초안을 이어간다</h3>
+     * 시트는 이미 구웠고 돈도 나갔다. 새 그림으로 시작하고 싶으면 초안을 버리는 길을 따로 둔다.
+     * 여기서 매번 새로 만들면 <b>나갔다 올 때마다 시트 값이 나간다.</b>
+     */
+    @Transactional
+    public ZzalPet draft(Long userId, String imageKey, Instant now) {
+        return draft(userId, imageKey, null, now);
+    }
+
+    /**
+     * 접속자 주소까지 아는 자리 — 컨트롤러가 부른다.
+     *
+     * <h3>★ 왜 주소를 인자로 받나</h3>
+     * IP 상한({@link HatchBlock#IP_RATE})은 <b>다른 넷을 다 통과한 뒤</b>에 물어야 한다. 먼저 물으면
+     * 이미 아이가 있는 사람에게도 "같은 곳에서 자주 시작했다" 고 답하게 되어, 자기 사정으로
+     * 설명될 일이 남의 사정으로 설명된다. 그래서 판정 순서를 지키려고 주소를 여기까지 들고 온다.
+     * 주소를 모르는 자리(시험·내부 호출)는 {@code null} 을 주고, 그러면 그 문만 열려 있다.
+     */
+    @Transactional
+    public ZzalPet draft(Long userId, String imageKey, String clientIp, Instant now) {
+        // ★★ 세기 전에 이 사람의 줄을 잠근다 — 검사와 저장 사이에 같은 사람의 두 번째 요청이
+        //    끼어들면 둘 다 통과해 굽기가 두 번 나간다($0.25 가 두 배). 잠그면 그 틈이 없어지고,
+        //    뒤늦게 들어온 쪽은 아래에서 <b>먼저 만들어진 초안</b>을 보게 된다(HatchUserLockRepository).
+        hatchGuard.lockUser(userId);
+
+        ZzalPet existing = petRepository.findFirstByUserIdAndPhase(userId, PetPhase.DRAFT).orElse(null);
+        if (existing != null) {
+            return existing;
+        }
+        petRepository.findFirstByUserIdAndPhase(userId, PetPhase.HATCHING)
+                .ifPresent(hatching -> {
+                    throw new BusinessException(ErrorCode.ZZAL_PET_ALREADY_HATCHING,
+                            "%s 부화 중이에요".formatted(Josa.nameSubject(hatching.getName())));
+                });
+
+        // ★★ 돈이 나가기 직전의 마지막 문. 다섯 가지 상한이 여기서 갈린다(HatchGuard).
+        //   ★ 아래의 "칸 수(petSlots)" 검사보다 <b>먼저</b> 묻는다. 뒤에 두면 기본 칸 수가 1 이라
+        //     동시 상한이 늘 옛 코드(ZZAL_PET_LIMIT_REACHED)로 먼저 걸리고, 그러면 화면이 쓰는
+        //     새 코드도, 막힘 기록도 한 번도 안 남는다(막혔는데 아무 줄도 없는 상태).
+        hatchGuard.check(userId, clientIp, now);
+
+        // 사람마다 따로 늘려 줄 수 있는 칸 수. 상한 설정이 꺼져 있을 때의 마지막 빗장이다.
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        long occupied = petRepository.countByUserIdAndPhaseIn(userId, PetPhase.OCCUPYING_SLOT);
+        if (occupied >= user.getPetSlots()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_LIMIT_REACHED);
+        }
+
+        s3Service.consume(userId, imageKey, now);
+
+        ZzalPet pet = petRepository.save(ZzalPet.draft(userId, imageKey, now));
+        String version = hatchService.currentVersion();
+        pet.setHatchPipelineVersion(version);
+        GenJob job = jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, version, now));
+        // ★ IP 자국은 <b>시작한 것</b>에만 남긴다 — 막힌 시도까지 세면 거절당한 사람이
+        //   자기 거절로 자기를 한 시간 잠근다(IpRateLimiter).
+        hatchGuard.recordStarted(clientIp, now);
+        events.publishEvent(new PetHatchRequested(job.getId(), pet.getId(), version));
+        return pet;
+    }
+
+    /**
+     * 초안에 캐릭터 정보를 채운다.
+     *
+     * <h3>★ 여기서 굽기를 시작하지 않는다 (2026-09-11)</h3>
+     * 굽기는 그림을 올릴 때 이미 시작했다. 이 호출이 하는 일은 <b>이름을 채우는 것</b>과,
+     * 그 사이 굽기가 끝나 있었다면 <b>그 자리에서 살리는 것</b>뿐이다.
+     * 굽는 중이면 아무 일도 일어나지 않고, 굽기가 끝나는 쪽이 살린다.
+     */
+    @Transactional
+    public ZzalPet character(Long userId, Long petId, String name, String note,
+                             java.util.List<Personality> personalities,
+                             String world, String tone, String genre, Instant now) {
+        ZzalPet pet = findMine(userId, petId);
+        // ★★ 굽기가 실패한 펫을 "이미 이름을 지었다" 로 답하면 안 된다 — 이름을 방금 처음 지은
+        //   사람에게 사실과 정반대로 말하게 되고, 다음에 무엇을 해야 하는지도 알 수 없다.
+        //   그림을 올리는 순간부터 굽기 때문에, 이름을 짓는 2~3분 사이에 실패가 끝나 있을 수 있다.
+        if (pet.getPhase() == PetPhase.FAILED) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_HATCH_FAILED);
+        }
+        if (!pet.isDraft()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_DRAFT);
+        }
+        pet.character(name, note, personalities, world, tone, genre, now);
+
+        String version = pet.getHatchPipelineVersion() != null
+                ? pet.getHatchPipelineVersion() : hatchService.currentVersion();
+        events.publishEvent(new PetNamed(petId, version));
+        return pet;
+    }
+
+    /** 내 펫 하나. 남의 펫이면 403 이 아니라 404 — 403 은 "그 번호의 펫이 있다" 를 알려준다. */
+    @Transactional(readOnly = true)
+    public ZzalPet get(Long userId, Long petId) {
+        // 읽기 전용 — 잠그지 않는다(읽기 트랜잭션에서 FOR UPDATE 는 뜻이 없다).
+        return petRepository.findById(petId)
+                .filter(p -> p.isOwnedBy(userId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
+    }
+
+    /**
+     * 내 펫을 <b>잠그고</b> 꺼낸다. 상태를 바꾸는 모든 길(정산·돌봄·잠·dev 시계)이 여기를 지난다.
+     *
+     * <h3>★★ 왜 잠그는가 — 같은 펫에 요청 둘이 겹치면 하나가 사라진다</h3>
+     * 두 요청이 같은 행을 각자 읽어 각자 저장하면 나중 저장이 먼저 것을 덮어쓴다. 리뷰 실측: FEED 와 SNACK 을
+     * 동시에 보내면 둘 다 200 인데 FEED 가 소실됐다(3/3). 놀이 시작({@code GameService.start})과 같은 방식으로
+     * {@code SELECT … FOR UPDATE} 를 걸어 같은 펫의 요청을 직렬화한다. 다른 펫끼리는 안 기다린다.
+     *
+     * ★ 같은 클래스 안에서 자기 메서드를 부르면 프록시를 안 거쳐 {@code @Transactional} 이 무시된다.
+     *   그래서 아래 메서드들은 {@link #get} 이 아니라 이것을 부른다(2026-09-02 에 이 함정으로
+     *   "부화 완료" 로그는 찍히는데 DB 는 QUEUED 인 일이 있었다). 잠금은 트랜잭션 안에서만 뜻이 있다.
+     */
+    private ZzalPet findMine(Long userId, Long petId) {
+        return petRepository.findByIdForUpdate(petId)
+                .filter(p -> p.isOwnedBy(userId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ZzalPet> list(Long userId) {
+        return petRepository.findByUserIdOrderByIdDesc(userId);
+    }
+
+    /**
+     * 그 펫의 동작 행(seq → 행). 지금 부화한 펫은 18행, 옛 펫은 옛 seq(0부터) 행이라 카탈로그 seq 와 안 겹쳐 비어 보인다.
+     * 심화 행동 상태(`motions[].advanced`)의 재료. 읽기만 한다.
+     */
+    @Transactional
+    public Map<Integer, ZzalMotion> motionRows(Long petId) {
+        Map<Integer, ZzalMotion> rows = rowsOf(petId);
+        // ★ 자가 치유(#218 리뷰) — markPetAlive 는 커밋됐는데 18행 저장이 실패하면 "ALIVE 인데 행 0개" 로 영구 고착된다
+        //   (CHECK 제약 사고가 그 모양). ALIVE 펫의 행이 18 미만이면 멱등 seed 로 채운다(PR-5 전 부화한 펫도 여기서 따라온다).
+        if (rows.size() < catalog.all().size()) {
+            petRepository.findById(petId)
+                    .filter(p -> p.isAlive() && p.getHatchedAt() != null)
+                    .ifPresent(p -> {
+                        int made = motionSeeder.seed(petId, p.getHatchedAt());
+                        if (made > 0) {
+                            org.slf4j.LoggerFactory.getLogger(PetService.class)
+                                    .warn("동작 행 자가 치유 — petId={} {}행 채움(부화 완료 때 빠졌던 것)", petId, made);
+                        }
+                    });
+            return rowsOf(petId);
+        }
+        return rows;
+    }
+
+    private Map<Integer, ZzalMotion> rowsOf(Long petId) {
+        return motionRepository.findByPetIdOrderBySeqAsc(petId).stream()
+                .filter(m -> m.getLayer() != null)
+                .collect(Collectors.toMap(ZzalMotion::getSeq, m -> m, (a, b) -> a));
+    }
+
+    // ── 조회 = 정산 ───────────────────────────────────────────────────────
+
+    /**
+     * 조회하면서 흐른 시간을 반영한다. 읽기 전용이 아니다 — 조회용 계산과 행동용 반영을 따로 두면
+     * 언젠가 두 식이 어긋나고, 그때는 화면과 판정이 다른 값을 말한다.
+     * 그날 처음 열었으면 함께한 날 +1(설계 규칙). 떠남 예고 취소는 PR-11.
+     */
+    @Transactional
+    public ZzalPet refresh(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        touch(pet, realNow);
+        return pet;
+    }
+
+    @Transactional
+    public List<ZzalPet> refreshAll(Long userId, Instant realNow) {
+        List<ZzalPet> pets = petRepository.findByUserIdOrderByIdDesc(userId);
+        pets.forEach(p -> touch(p, realNow));
+        return pets;
+    }
+
+    /** 정산 + 방문(그날 처음이면 함께한 날 +1) + 아침 공개. 조회든 행동이든 펫을 만지는 모든 길이 여기를 지난다. */
+    private void touch(ZzalPet pet, Instant realNow) {
+        if (!pet.isAlive()) {
+            return;
+        }
+        Instant now = pet.now(realNow);
+        // ★ 정산 전의 시각을 잡아 둔다 — 이번 정산 안에서 열린 칸은 "그 사이 어딘가" 에 열린 것이고,
+        //   그 시각을 <b>구간의 시작</b>으로 잡아야 그 사이에 있었던 기상을 놓치지 않는다(#234 리뷰 중-1).
+        Instant windowStart = pet.getSettledAt() == null ? now : pet.getSettledAt();
+        pet.settle(now);
+        // ★★ 순서가 중요하다 — 부재 장면은 <b>방문 기록 전에</b> 정산해야 한다.
+        //   {@code visit} 이 "부재는 여기서 끝" 이라며 부재 시계를 0으로 끊기 때문에,
+        //   뒤로 미루면 방금 비운 시간이 통째로 사라진다.
+        int made = sceneService.recordAbsence(pet, now) + sceneService.recordNight(pet);
+        if (made > 0) {
+            pet.markSceneMade();
+        }
+        // ★ 여행 중이면 소식(엽서)만 쌓인다 — 장면도 도착도 없다(방에 없으므로).
+        //   밀린 몫까지 채운다(조회를 했든 안 했든 결과가 같아야 한다).
+        leaveService.fillPostcards(pet, now);
+        pet.visit(now);
+        reveal(pet, now);
+        openPieces(pet, windowStart, now);
+        // ★ 기상에 네 칸을 되돌리고 기분 좋은 날의 선물을 얹는다(설계 규칙). 엔티티가 남긴 쪽지를 본다.
+        pieceService.settle(pet);
+    }
+
+    /**
+     * 조각 4칸 등장 — 2층 8종이 다 열린 뒤 <b>처음 맞는 기상</b>(설계 규칙).
+     *
+     * ★ 여기(서비스)에서 판정하는 이유 — "2층 8종이 다 열렸나" 는 카탈로그와 해금 규칙을 알아야 답할 수 있고,
+     *   엔티티는 그 둘을 모른다. 엔티티는 "언제 다 열렸는지" 와 "언제 열어 줬는지" 만 기억한다.
+     */
+    private void openPieces(ZzalPet pet, Instant unlockedAt, Instant now) {
+        if (pet.isPiecesEnabled()) {
+            return;
+        }
+        Map<Integer, ZzalMotion> rows = rowsOf(pet.getId());
+        int opened = 0;
+        int layerTwoTotal = 0;
+        Instant lastUnlock = null;
+        for (MotionSpec spec : catalog.basic()) {
+            if (spec.layer() != com.lore.zzal.motion.MotionLayer.BASIC_2) {
+                continue;
+            }
+            layerTwoTotal++;
+            if (!UnlockRules.isUnlocked(pet, spec, catalog)) {
+                continue;
+            }
+            opened++;
+            ZzalMotion row = rows.get(spec.seq());
+            if (row != null) {
+                // ★ 열린 시각을 그 자리에서 적어 둔다. 그러지 않으면 "언제 열렸나" 를 나중에 알 길이 없어
+                //   완성 시각을 관측 시각으로 쓰게 되고, 그러면 조각이 한 기상 늦게 등장한다(#234 리뷰 중-1).
+                row.markUnlocked(unlockedAt);
+                lastUnlock = row.getUnlockedAt() == null || lastUnlock == null
+                        || row.getUnlockedAt().isAfter(lastUnlock) ? row.getUnlockedAt() : lastUnlock;
+            }
+        }
+        if (opened >= layerTwoTotal) {
+            // ★★ 완성 시각 = <b>마지막 칸이 열린 시각</b>(관측 시각이 아니다). 23:00 자동 취침 판정으로
+            //   마지막 칸이 열리고 다음 날 아침에 조회하는 정상 흐름에서, 관측 시각을 쓰면 완성이 그 아침으로
+            //   적혀 <b>바로 그 기상을 놓친다</b> — 조각이 하루 늦게 등장한다.
+            pet.markLayerTwoDone(lastUnlock != null ? lastUnlock : unlockedAt);
+        }
+        if (pet.readyForPieces(now)) {
+            pet.enablePieces(now);
+            pieceService.open(pet.getId());   // 3층이 열리는 이 순간부터 센다(그 전 돌보기는 소급 없음)
+        }
+    }
+
+    /** 그 펫의 조각 줄. 3층 전이면 null. */
+    @Transactional(readOnly = true)
+    public com.lore.zzal.piece.ZzalPiece pieces(Long petId) {
+        return pieceService.find(petId);
+    }
+
+    /** 그 펫의 혼자 논 장면(최근 것부터, 최대 3). */
+    @Transactional(readOnly = true)
+    public List<com.lore.zzal.scene.ZzalScene> scenes(Long petId) {
+        return sceneService.recent(petId);
+    }
+
+    /**
+     * 아침 공개 — 검수를 통과한(OPEN) 동작을 <b>펫이 깨어 있는 첫 정산</b>에 도착시킨다(설계 규칙 "기상 첫 화면").
+     *
+     * <h3>★ 왜 시각이 아니라 "깨어 있는 첫 정산" 인가</h3>
+     * "아침 7시에 준다" 로 못 박으면 두 가지가 어긋난다 — (1) 판정이 10:00 을 넘기면 그날은 못 준다.
+     * 설계 규칙은 그 경우 <b>낮에 도착</b>하라고 한다. (2) 늦잠 자는 펫에게 자는 동안 도착하면
+     * "일어나 보니 이미 알고 있던 일" 이 된다. 그래서 <b>깨어 있는 첫 정산</b> 하나로 둘 다 만족시킨다.
+     * 자는 동안에는 아무것도 안 찍히고, 깨는 순간(사용자가 깨우든 10:00 자동이든) 그 정산에서 도착한다.
+     *
+     * ★ 도착 시각({@code revealedAt})이 곧 "사용자가 볼 수 있다" 의 판정이다 — {@code advancedImageKey()} 가
+     *   그 전에는 null 을 준다. 검수 대기 중인 그림이 화면에 새는 길을 여기 한 곳으로 모았다.
+     */
+    private void reveal(ZzalPet pet, Instant now) {
+        if (pet.isSleeping()) {
+            return;
+        }
+        List<ZzalMotion> arrived = motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
+                pet.getId(), MotionStatus.OPEN);
+        arrived.forEach(m -> m.reveal(now));
+        if (!arrived.isEmpty()) {
+            // ★ 자연 발병은 심화 행동이 열린 뒤에만 예약된다(설계 규칙). 1·2층 기간엔 방치 발병만 있다.
+            //   "받은 순간" 을 기준으로 삼는 이유 — 검수 통과 시각은 사용자가 모르는 서버 사정이다.
+            pet.scheduleNaturalSickness();
+        }
+    }
+
+    /**
+     * "배워왔어요" 를 확인했다 — {@code learnedToday} 에서 빠진다.
+     *
+     * ★ 도착하지 않은 동작에는 못 찍는다({@code ZZAL_MOTION_NOT_OPEN}) — 안 그러면 화면이
+     *   아직 오지도 않은 것을 미리 지워 버릴 수 있다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action markSeen(Long userId, Long petId, int seq, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        Instant now = pet.now(realNow);
+        ZzalMotion row = motionRepository.findByPetIdAndSeq(petId, seq)
+                .filter(ZzalMotion::isRevealed)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_MOTION_NOT_OPEN));
+        return withUnlockDiff(pet, () -> row.markSeen(now));
+    }
+
+    /**
+     * 행동 결과 — 펫의 새 상태, 이번 행동으로 열린 2층 동작(seq), 그리고 <b>방금 나았나</b>.
+     *
+     * ★★ 거절({@link BusinessException})이 나도 <b>정산은 되돌리지 않는다</b>(위 메서드들의 {@code noRollbackFor}).
+     *   모든 행동은 먼저 흐른 시간을 반영하고(settle) 그다음에 "할 수 있나" 를 묻는다. 기본값대로 롤백하면
+     *   거절 한 번에 그 정산이 통째로 사라져 <b>화면이 말하는 상태와 DB 가 한 요청 동안 어긋난다</b>
+     *   (영구 손실은 아니지만 다음 조회에서 시간이 되감긴 것처럼 보인다 — #225 리뷰 하-1).
+     *   거절은 검사 단계에서 나므로 중간까지 바뀐 값이 남을 자리가 없다.
+     *
+     * ★ {@code justHealed} 를 응답에 싣는 이유 — 설계 규칙의 "나은 동작(기쁜 자세 + 반짝) 1회" 는
+     *   <b>한 번만</b> 나와야 한다. 상태(안 아픔)로는 "방금 나은 것" 과 "원래 안 아팠던 것" 을 못 가른다.
+     */
+    public record Action(ZzalPet pet, List<Integer> justUnlocked, boolean justHealed) {
+
+        public Action(ZzalPet pet, List<Integer> justUnlocked) {
+            this(pet, justUnlocked, false);
+        }
+
+        Action healed() {
+            return new Action(pet, justUnlocked, true);
+        }
+    }
+
+
+    /** 행동 전후의 열린 동작을 비교해 새로 열린 seq 를 얻는다(폭죽). 저장하지 않고 계산한다(UnlockRules). 채팅·게임도 이걸 쓴다. */
+    public Action withUnlockDiff(ZzalPet pet, Runnable action) {
+        Set<String> before = Set.copyOf(UnlockRules.unlockedKeys(pet, catalog));
+        action.run();
+        // ★ 행동으로 마지막 2층 칸이 열렸을 수 있다 — touch 의 판정은 행동 <b>전</b>에 돌았다(#234 리뷰 중-1).
+        //   행동으로 열린 것은 "지금" 열린 것이라 구간 시작도 지금이다.
+        Instant actedAt = pet.getSettledAt() == null ? Instant.now() : pet.getSettledAt();
+        openPieces(pet, actedAt, actedAt);
+        List<Integer> opened = UnlockRules.unlockedKeys(pet, catalog).stream()
+                .filter(k -> !before.contains(k))
+                .map(k -> catalog.byKey(k).orElseThrow().seq())
+                .sorted()
+                .toList();
+        return new Action(pet, opened);
+    }
+
+    // ── 돌봄 6종 (설계 규칙) ─────────────────────────────────────────────
+
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action care(Long userId, Long petId, CareAction action, Instant realNow) {
+        ZzalPet pet = awake(userId, petId, realNow);
+        Instant now = pet.now(realNow);
+        boolean wasSick = pet.isSick();
+        Action result = withUnlockDiff(pet, () -> doCare(pet, action, now));
+        // 약을 먹고 나은 그 응답에만 "나은 동작" 연출이 실린다(설계 규칙).
+        return wasSick && !pet.isSick() ? result.healed() : result;
+    }
+
+    /**
+     * 돌보기 하나를 실제로 적용하고, <b>성공했을 때만</b> 조각을 센다(설계 규칙).
+     *
+     * ★ 거절("배가 불러요" · "이미 깨끗해요" · "오늘은 목욕했어요")은 여기서 예외로 끝나므로
+     *   조각을 세는 줄에 닿지 않는다 — 세지 않으려고 따로 막을 것이 없다.
+     */
+    private void doCare(ZzalPet pet, CareAction action, Instant now) {
+        switch (action) {
+            case FEED -> {
+                if (pet.getFood() <= 0) {
+                    throw new BusinessException(ErrorCode.ZZAL_NO_FOOD);
+                }
+                if (pet.getFullness() >= ZzalRules.GAUGE_MAX) {
+                    throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED,
+                            "%s 배가 불러요".formatted(Josa.nameTopic(pet.getName())));
+                }
+                pet.feed(now);
+                pieceService.count(pet, PieceEvent.FEED);
+            }
+            // ★ 간식은 행복이 가득이어도 받는다(2026-09-05 확정 — 원조도 간식은 항상 먹고 과다 시 병).
+            //   밥만 가득이면 거절. 연속 5개 배탈은 PR-8.
+            case SNACK -> {
+                if (pet.isSick()) {
+                    throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
+                }
+                // ★ 배탈이 나는 그 간식(그날 5개째부터)은 조각에 세지 않는다(설계 규칙).
+                //   묻는 것이 먹이기 <b>전</b>이어야 한다 — 먹인 뒤에는 이미 숫자가 올라가 있다.
+                boolean upsets = pet.nextSnackUpsets();
+                pet.snack(now);
+                if (!upsets) {
+                    pieceService.count(pet, PieceEvent.SNACK);
+                }
+            }
+            // 쓰다듬기는 거절이 없다 — 하루 3회를 넘어도 반응 동작은 나온다. 친밀도만 안 오른다.
+            case PET -> {
+                // ★ 쓰다듬기는 하루 3회까지만 센다. 거절이 없어 그대로 두면 연타로 채울 수 있다(설계 규칙).
+                //   친밀도가 멈추는 선과 같은 선을 쓴다 — todayPetCount 가 실제로 올랐을 때만 센다.
+                int before = pet.getTodayPetCount();
+                pet.pet(now);
+                if (pet.getTodayPetCount() > before) {
+                    pieceService.count(pet, PieceEvent.PET);
+                }
+            }
+            case CLEAN -> {
+                if (pet.getTrash() <= 0) {
+                    throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED, "바닥이 이미 깨끗해요");
+                }
+                pet.clean(now);
+                pieceService.count(pet, PieceEvent.CLEAN);
+            }
+            case BATH -> {
+                if (pet.isTodayBathDone()) {
+                    throw new BusinessException(ErrorCode.ZZAL_BATH_DONE_TODAY);
+                }
+                pet.bath(now);
+                pieceService.count(pet, PieceEvent.BATH);
+            }
+            case MEDICINE -> {
+                if (!pet.isSick()) {
+                    throw new BusinessException(ErrorCode.ZZAL_CARE_NOT_NEEDED,
+                            "%s 아프지 않아요".formatted(Josa.nameTopic(pet.getName())));
+                }
+                pet.medicine(now);
+            }
+        }
+    }
+
+    // ── 잠 (설계 규칙) ──────────────────────────────────────────────────
+
+    /**
+     * 재운다. 19:00~23:00 밤잠, 아기 60분 안에는 낮잠 한 번.
+     * 창 밖이면 {@code ZZAL_NOT_SLEEP_TIME} — 화면은 "저녁 7시가 되면 재워 주세요" 를 띄운다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action sleep(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = awake(userId, petId, realNow);
+        Instant now = pet.now(realNow);
+        if (pet.sleepKindAvailable(now) == null) {
+            // ★ 튜토리얼 중에는 8칸 차례가 오기 전까지 아이가 안 졸리다 — 시각과 무관하므로
+            //   "저녁 7시" 라고 말하면 사용자가 저녁까지 기다린다.
+            throw new BusinessException(ErrorCode.ZZAL_NOT_SLEEP_TIME,
+                    pet.isInTutorial() ? "아직 안 졸린가 봐요" : "저녁 7시가 되면 재워 주세요");
+        }
+        Action a = withUnlockDiff(pet, () -> pet.sleep(now));
+        // ★ 재우는 그 응답에 밤 연습 장면이 실리게 한다(touch 는 잠들기 전에 돌았다).
+        if (sceneService.recordNight(pet) > 0) {
+            pet.markSceneMade();
+        }
+        // ★ 밤잠에 든 순간 = 첫 심화 행동 판정(그날 케어 미스 0 이 여기서 확정된다)과 3층 차례.
+        //   1.8 부터는 예약만 하지 않고 <b>그 자리에서 굽기 시작</b>한다.
+        if (pet.getSleepKind() == SleepKind.NIGHT) {
+            bakeTrigger.onSleep(pet, now);
+        }
+        return a;
+    }
+
+    /**
+     * 깨운다. 밤잠은 07:00~10:00, 낮잠은 5분 뒤.
+     *
+     * ★ 먼저 정산한다 — 10:00 이 지났으면 정산 중에 저절로 깨어 있어 {@code ZZAL_PET_NOT_SLEEPING} 이 된다.
+     *   그게 맞다. "깨웠다" 는 보상(친밀도 +10)은 창 안에서 사용자가 눌렀을 때만.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action wake(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        Instant now = pet.now(realNow);
+        touch(pet, realNow);
+        if (!pet.isSleeping()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_SLEEPING);
+        }
+        if (!pet.canWake(now)) {
+            throw new BusinessException(ErrorCode.ZZAL_NOT_WAKE_TIME,
+                    pet.getSleepKind() == SleepKind.NAP ? "조금만 더 재워 주세요" : "아침 7시에 깨워 주세요");
+        }
+        Action action = withUnlockDiff(pet, () -> pet.wake(now));
+        // ★★ 깨우는 그 응답에 아침 도착이 실려야 한다(#224 리뷰 상-2). touch 는 이 메서드 앞에서 돌았고
+        //   그때는 자는 중이라 아무것도 안 찍혔다. 여기서 안 부르면 "깨웠다" 응답에는 안 오고 다음 조회에서야 온다 —
+        //   "행동 응답 = 최신 상태" 원칙을 어기고, 화면은 깨우자마자 새로고침해야 배워 온 것을 본다.
+        reveal(pet, now);
+        return action;
+    }
+
+    /**
+     * 튜토리얼 마지막 칸 — <b>시계를 켠다</b>(설계 규칙 9칸 · 1.4).
+     *
+     * <h3>★ 왜 이것 하나만 API 인가</h3>
+     * 1~8칸은 각자 제 API 가 있어서(밥 = care, 채팅 = answer …) 서버가 알아서 넘긴다.
+     * 9칸("이제 혼자서도 괜찮아요")은 <b>누를 것이 없어서</b> 서버가 알 방법이 없다.
+     * 화면의 "알겠어요" 가 이 자리다.
+     *
+     * <h3>★ 이 순간부터 게임이 진짜로 시작된다</h3>
+     * 게이지가 줄기 시작하고, 병이 나고, 밤 11시에 자동으로 잔다. 그 전까지는 아무 일도 없다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action tutorialDone(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        if (!pet.isInTutorial()) {
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_ALREADY_DONE);
+        }
+        if (pet.getTutorialStep() < TutorialSchedule.TOTAL - 1) {
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_NOT_FINISHED);
+        }
+        Action a = withUnlockDiff(pet, () -> pet.startClock(pet.now(realNow)));
+        // ★ 튜토리얼 완주 보상(구르기)을 <b>그 순간</b> 굽는다(설계 규칙).
+        //   첫날에 손에 쥐는 결과물이 있어야 다음 날 다시 온다.
+        bakeTrigger.onTutorialDone(pet, pet.now(realNow));
+        return a;
+    }
+
+    // ── 성격·배경·공유 (설계 규칙) ───────────────────────────────────
+
+    /** 성격·세계관. 언제든, 자는 중에도(설계 규칙 "언제든 변경"). */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action choosePersonality(Long userId, Long petId, java.util.List<Personality> personalities,
+                                    String world, Instant realNow) {
+        if (personalities == null || personalities.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "성격을 하나는 골라 주세요");
+        }
+        ZzalPet pet = alive(userId, petId, realNow);
+        return withUnlockDiff(pet, () -> pet.choosePersonality(personalities, world));
+    }
+
+    /**
+     * 튜토리얼 4칸("이 성격이 맞나요") — <b>아이 정보를 확인만 해도</b> 넘어간다(2026-09-11 확정).
+     *
+     * <h3>★ 왜 화면 혼자 넘기면 안 되나</h3>
+     * 두 군데서 막힌다. 서버가 4칸에 남아 있으면 그다음 행동(청소)이 와도 {@code != done} 으로
+     * 무시돼 <b>튜토리얼이 영영 막히고</b>, <b>첫 흔적이 이 칸을 넘길 때 생기므로</b> 화면만
+     * 넘기면 바닥이 깨끗해 5칸(청소)에서 또 막힌다.
+     *
+     * ★ 성격을 한 번도 안 고른 사람은 {@code null} 인 채 지나간다 — 그래도 된다고 확정됐다
+     *   ("괜찮아. 튜토리얼에서도 한 번 더 받으니까"). 기본 톤으로 가고 언제든 바꿀 수 있다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action tutorialSeen(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        if (!pet.isInTutorial()) {
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_ALREADY_DONE);
+        }
+        if (TutorialSchedule.currentOf(pet.getTutorialStep()) != TutorialSchedule.Step.PERSONALITY) {
+            // ★ 아무 칸에서나 밀면 순서가 무너진다 — 지금 칸이 아니면 아무 일도 하지 않는다.
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+        }
+        return withUnlockDiff(pet, () -> pet.advanceTutorial(TutorialSchedule.Step.PERSONALITY));
+    }
+
+    /** 배경 바꾸기 — 2층 4종이 열린 뒤(설계 규칙). 값은 검증하지 않는다(해석 6). */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action changeBackground(Long userId, Long petId, String background, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        if (UnlockRules.openedLayerTwo(pet, catalog) < ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN) {
+            throw new BusinessException(ErrorCode.ZZAL_FEATURE_LOCKED,
+                    "동작을 %d개 더 배우면 배경을 바꿀 수 있어요".formatted(
+                            ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN - UnlockRules.openedLayerTwo(pet, catalog)));
+        }
+        return withUnlockDiff(pet, () -> pet.changeBackground(background));
+    }
+
+    /**
+     * 다운로드·공유 기록. 대상 = 지금 열린 동작 어느 것이든 — 기본 행동(해금)과 <b>도착한 심화 행동</b> 둘 다.
+     * 모르는 key 도 "안 열린 동작" 으로 답한다 — 카탈로그 밖 이름을 구분해 주면 key 목록을 훑는 수단이 된다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action share(Long userId, Long petId, String motionKey, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        Map<Integer, ZzalMotion> rows = rowsOf(petId);
+        boolean open = catalog.byKey(motionKey)
+                // 기본 행동은 해금 규칙으로, 심화 행동(선물 포함)은 "도착했나" 로 판정한다(설계 규칙).
+                .map(spec -> UnlockRules.isUnlocked(pet, spec, catalog)
+                        || (rows.get(spec.seq()) != null && rows.get(spec.seq()).isRevealed()))
+                .orElse(false);
+        if (!open) {
+            throw new BusinessException(ErrorCode.ZZAL_MOTION_NOT_OPEN);
+        }
+        return withUnlockDiff(pet, pet::share);
+    }
+
+    // ── 떠남·재회 (설계 규칙) ──────────────────────────────────────────────
+
+    /**
+     * 부르기 — 여행 중인 아이를 즉시 데려온다. 엽서도 이때 한꺼번에 전달된다.
+     *
+     * ★ 조건은 "여행 중" 하나뿐이다. 데려오는 데 값을 매기지 않는다 — 그건 벌이 된다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action callBack(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        Instant now = pet.now(realNow);
+        pet.settle(now);
+        if (!pet.isTraveling()) {
+            throw new BusinessException(ErrorCode.ZZAL_NOT_TRAVELING);
+        }
+        // ★★ 데려오기 <b>전에</b> 밀린 엽서를 채운다(#235 리뷰 중-1). 여행 중 한 번도 앱을 안 연 사람은
+        //   이 자리가 유일한 기회다 — callBack 이 먼저 돌면 tripStartedAt 이 지워져 몇 장이었는지 알 수 없다.
+        leaveService.fillPostcards(pet, now);
+        return withUnlockDiff(pet, () -> {
+            pet.callBack(now);
+            leaveService.deliverAll(petId, now);
+            pet.visit(now);
+        });
+    }
+
+    /** 떠남 켜기·끄기(설계 규칙). 끄면 예고 중이던 것도 즉시 사라진다. */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action changeSettings(Long userId, Long petId, boolean leaveEnabled, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        touch(pet, realNow);
+        return withUnlockDiff(pet, () -> pet.setLeaveEnabled(leaveEnabled));
+    }
+
+    /** 전달된 엽서(앨범). */
+    @Transactional(readOnly = true)
+    public List<com.lore.zzal.leave.ZzalPostcard> postcards(Long petId) {
+        return leaveService.delivered(petId);
+    }
+
+    // ── 개발용 시계 (DevClockController 만 부른다) ─────────────────────────
+
+    /**
+     * 이 펫의 시계를 {@code by} 만큼 앞으로 민다. 규칙은 한 글자도 안 바뀌고 기다림만 사라진다.
+     * 남의 펫은 못 건드린다 — 돌봄 API 와 같은 {@link #findMine} 을 탄다.
+     */
+    @Transactional
+    public ZzalPet advanceClock(Long userId, Long petId, Duration by, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        pet.advanceDevClock(by);
+        touch(pet, realNow);
+        return pet;
+    }
+
+    /**
+     * dev — 그 자리의 심화 행동을 가짜 그림으로 즉시 검수 통과시킨다(아침 도착 화면 확인용).
+     *
+     * ★ 도착까지 건너뛰지는 않는다. {@code revealedAt} 은 {@link #touch} 가 규칙대로 찍는다 —
+     *   그래야 "자는 동안에는 안 온다 / 낮에 판정되면 낮에 온다" 를 여기서 실제로 확인할 수 있다.
+     */
+    @Transactional
+    public ZzalPet forceOpen(Long userId, Long petId, int seq, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        Instant now = pet.now(realNow);
+        ZzalMotion row = motionRepository.findByPetIdAndSeq(petId, seq)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_MOTION_NOT_OPEN));
+        // ★ 실제로 구운 것이 아니라 주소만 만든다 — 판은 지금까지의 시도 횟수를 그대로 쓴다.
+        //   크기는 재지 않았으므로 null 이다. 모르는 것을 숫자로 채우면 화면이 그 값을 믿는다.
+        row.toReview(
+                com.lore.zzal.motion.MotionImageKeys.advanced(petId, row.getId(), row.getAttempts()),
+                null, null,
+                com.lore.zzal.motion.MotionSource.API,
+                com.lore.zzal.motion.GateVerdict.REVIEW, "dev force-open", "dev");
+        row.approve(now);
+        // 깨어 있으면 이 자리에서 바로 도착한다(자는 중이면 깨어난 뒤 첫 정산).
+        reveal(pet, now);
+        return pet;
+    }
+
+    /** 이 펫의 지금을 {@code target} 으로 맞춘다. */
+    @Transactional
+    public ZzalPet setClock(Long userId, Long petId, Instant target, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        pet.setDevClock(target, realNow);
+        touch(pet, realNow);
+        return pet;
+    }
+
+    // ── 보내기 ────────────────────────────────────────────────────────────
+
+    /**
+     * 보낸다(놓아주기). 자리가 비어 다른 그림으로 새로 시작할 수 있다.
+     * 부화 중에는 막는다(굽는 작업이 주인을 잃는다). 이미 떠난 아이면 조용히 넘어간다. 행은 지우지 않는다.
+     */
+    @Transactional
+    public ZzalPet release(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (pet.isHatching()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_RELEASE_NOT_ALLOWED,
+                    "%s 아직 부화 중이에요".formatted(Josa.nameSubject(pet.getName())));
+        }
+        touch(pet, realNow);
+        pet.release(pet.now(realNow));
+        return pet;
+    }
+
+    /**
+     * 지금 뭔가를 할 수 있는 상태인지 확인하고, 흐른 시간을 반영해 돌려준다.
+     * 돌봄·재우기가 공통으로 거치는 문. (여행 중 거절은 PR-11)
+     */
+    /** 잠그고·정산하고·방문하고·깨어 있는지 확인. 채팅 답·게임 시작이 같은 문을 쓴다(트랜잭션 안에서 부를 것). */
+    public ZzalPet awake(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        if (pet.isSleeping()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_SLEEPING,
+                    "%s 자고 있어요".formatted(Josa.nameSubject(pet.getName())));
+        }
+        return pet;
+    }
+
+    /** ALIVE 인지 확인하고 잠그고 정산·방문한다. 자는 중에도 되는 것(성격·배경·공유·채팅 조회)이 거치는 문. */
+    public ZzalPet alive(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) {
+            throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        }
+        touch(pet, realNow);
+        // ★ 여행 중에는 방에 없다 — 돌봄도 놀이도 말 걸기도 안 된다. 조회는 되고(엽서를 봐야 한다),
+        //   데려오는 것은 call-back 뿐이다.
+        if (pet.isTraveling()) {
+            throw new BusinessException(ErrorCode.ZZAL_TRAVELING,
+                    "%s 여행 중이에요".formatted(Josa.nameSubject(pet.getName())));
+        }
+        return pet;
+    }
+
+    /** 지금 하는 일을 사람 말로. 부화 중이 아니면 비어 있다. */
+
+        /**
+     * 부화 진행 — 알 화면이 되풀이해 묻는 자리.
+     *
+     * <h3>★ 진행률은 "성공한 단계 수" 로 센다</h3>
+     * 시간으로 재면 오래 걸리는 판에서 100%를 넘거나 멈춘 것처럼 보인다. 단계 수는
+     * 실제로 무엇이 끝났는지를 그대로 말한다.
+     *
+     * <h3>★ 실패 문구는 두 가지뿐이다</h3>
+     * 원인(거부·시간 초과·모델 오류)을 노출하면 사용자는 자기 그림이 무엇에 걸렸는지 추측하게 되고,
+     * 그 추측은 대개 틀린다. 다시 해 볼 만한지 아닌지만 말한다.
+     *
+     * <h3>★ phase 와 progress 가 서로 다른 것을 말한다 (1.9)</h3>
+     * {@code progress} 는 <b>굽기가 몇 단계까지 됐나</b>이고, {@code phase} 는 <b>살아났나</b>이다.
+     * 그림을 올린 순간부터 끝까지 굽기 때문에 <b>DRAFT 인데 진행이 5/5</b> 인 상태가 생긴다 —
+     * "굽기는 끝났고 이름을 기다리는 중" 이라는 뜻이다. 이름을 안 낸 사람에게 ALIVE 를 주지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public PetResponses.Hatch hatchProgress(Long userId, Long petId, Instant now) {
+        ZzalPet pet = get(userId, petId);
+        String version = pet.getHatchPipelineVersion() != null
+                ? pet.getHatchPipelineVersion() : hatchService.currentVersion();
+        int total = hatchService.stepsTotal(version);
+        int done = hatchService.stepsDone(petId, version);
+
+        long left = 0;
+        if (pet.getHatchStartedAt() != null) {
+            long spent = Duration.between(pet.getHatchStartedAt(), now).toSeconds();
+            left = Math.max(0, ZzalRules.HATCH_ESTIMATE.toSeconds() - spent);
+        }
+        // ★ 제출 순간의 오류(ZZAL_PET_HATCH_FAILED)와 <b>같은 말</b>이어야 한다. 두 화면이 다르게
+        //   말하면 사용자는 서로 다른 두 가지 일이 일어난 줄로 읽는다.
+        String message = pet.getPhase() == PetPhase.FAILED
+                ? ErrorCode.ZZAL_PET_HATCH_FAILED.getDefaultMessage()
+                : null;
+        return new PetResponses.Hatch(pet.getPhase().name(), currentStepLabel(petId),
+                Math.min(done, total), total, left, message);
+    }
+
+    public String currentStepLabel(Long petId) {
+        return jobRepository.findFirstByPetIdOrderByIdDesc(petId)
+                .flatMap(job -> stepRepository.findByJobIdOrderBySeqAsc(job.getId()).stream()
+                        .filter(s -> s.getStatus() == GenStatus.RUNNING)
+                        .findFirst())
+                .map(s -> labels.label(s.getName()))
+                .orElse(null);
+    }
+}

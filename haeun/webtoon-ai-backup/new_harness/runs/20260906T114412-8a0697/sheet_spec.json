@@ -1,0 +1,33 @@
+{
+  "name": "봉순",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "An elderly Korean woman in her seventies, with short, permed gray hair and deep wrinkles. She has a sturdy, slightly stooped build, and wears a simple floral-patterned house dress with a faded pink cardigan over it. Her hands are large and rough from years of work, and her knees appear slightly swollen. She typically wears slip-on rubber sandals and has a towel draped around her neck. Her expression is stern and watchful.",
+  "design_details": [
+    "짧고 곱슬거리는 회색 머리, 귀 윗선까지",
+    "양 볼과 이마에 깊은 주름",
+    "손등과 손가락 마디가 굵고 검게 탄 흔적",
+    "무릎이 부어 보이고 다리에 압박 붕대",
+    "목에 항상 하얀 수건을 걸침"
+  ],
+  "props": [
+    "빨간 플라스틱 때밀이 타월, 손바닥만 한 크기, 군데군데 해짐",
+    "낡은 스테인리스 대야, 손바닥 두 개만 한 크기, 군데군데 물때가 낀 상태"
+  ],
+  "color_palette": {
+    "hair": "gray (#B0B0B0)",
+    "eyes": "dark brown (#4B2E18)",
+    "skin": "beige (#F3D6B3)",
+    "outfit_main": "light pink (#F8B6C1)",
+    "outfit_sub": "floral blue (#7AA6D6)",
+    "accent": "white (#FFFFFF)"
+  },
+  "expression_set": [
+    "무표정 — 입을 다물고 눈썹을 약간 찌푸린, 감정이 드러나지 않는 얼굴",
+    "호통 — 입을 크게 벌리고 눈을 치켜뜬, 꾸짖는 얼굴",
+    "미소 — 입꼬리를 살짝 올리고 눈가에 주름이 깊어진 얼굴",
+    "걱정 — 눈썹이 안쪽으로 모이고 입술을 살짝 깨문 얼굴",
+    "집중 — 눈을 가늘게 뜨고 입을 굳게 다문, 손에 힘이 들어간 얼굴",
+    "피곤 — 눈꺼풀이 내려오고 입꼬리가 처진, 지친 얼굴"
+  ]
+}

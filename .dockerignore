@@ -1,0 +1,11 @@
+# 도커 빌드 컨텍스트(레포 루트)에서 무거운 것·빌드 산출물을 제외한다.
+.git
+**/node_modules
+build
+.gradle
+**/.next
+apps/web/public/static
+**/*.log
+**/.DS_Store
+# 다른 워크트리(레포 루트 밖에 있으니 보통 안 잡히지만 안전상)
+Lore-wt-*/

@@ -1,0 +1,49 @@
+{
+  "run_id": "20260906T143811-1bfd46",
+  "calls": [
+    {
+      "stage": "STORY",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-06T14:38:11+09:00",
+      "seconds": 15.72,
+      "usage": {
+        "input": 12163,
+        "output": 2109,
+        "cache_read": 8960,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.024326,
+        "output": 0.016872,
+        "cache_read": 0.00448,
+        "cache_write": 0.0,
+        "total": 0.045678,
+        "total_krw": 64
+      }
+    },
+    {
+      "stage": "STORY_REVIEW",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "at": "2026-09-06T14:38:27+09:00",
+      "seconds": 23.03,
+      "usage": {
+        "input": 5357,
+        "output": 4281,
+        "cache_read": 2944,
+        "cache_write": 0
+      },
+      "stop": "stop",
+      "cost": {
+        "input": 0.010714,
+        "output": 0.034248,
+        "cache_read": 0.001472,
+        "cache_write": 0.0,
+        "total": 0.046434,
+        "total_krw": 65
+      }
+    }
+  ]
+}

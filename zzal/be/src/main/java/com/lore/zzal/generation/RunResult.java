@@ -1,0 +1,57 @@
+package com.lore.zzal.generation;
+
+import java.math.BigDecimal;
+
+/**
+ * 한 번 돌린 결과.
+ *
+ * ★ 실행기가 마무리까지 하지 않고 이걸 돌려주는 이유 — 부화는 끝나면 펫이 살아나야 하고,
+ *   모션은 끝나면 움직임이 열려야 한다. 마무리가 다르다. 실행기가 그걸 알면
+ *   종류가 늘 때마다 실행기를 고쳐야 하므로, <b>돌리는 일</b>과 <b>끝내는 일</b>을 나눈다.
+ */
+public record RunResult(boolean success,
+                        StepContext ctx,
+                        BigDecimal costUsd,
+                        GenErrorCode errorCode,
+                        boolean gridRejected,
+                        boolean quotaBlocked) {
+
+    public static RunResult ok(StepContext ctx, BigDecimal cost) {
+        return new RunResult(true, ctx, cost, null, false, false);
+    }
+
+    public static RunResult failed(StepContext ctx, BigDecimal cost, GenErrorCode code) {
+        return new RunResult(false, ctx, cost, code, false, false);
+    }
+
+    /**
+     * 바깥이 <b>한도(429)</b> 로 막아서 실패했다 — <b>다시 구우면 또 막힌다.</b>
+     *
+     * <h3>★★ 왜 이 신호를 따로 두나 — 한 번 막히면 돈이 두 배로 나갔다</h3>
+     * 지금까지는 실패 원인을 안 가리고 무조건 한 번 더 구웠다. 429 는 "잔액이 없다 / 너무
+     * 빠르다" 는 뜻이라 곧바로 다시 보내면 <b>같은 자리에서 또 막히고</b>, 그 전에 이미 200 을
+     * 받은 단계의 값은 그대로 나간 뒤다({@code BilledFailureException}). 타임아웃·격자 구조
+     * 이상과는 처방이 정반대라 반드시 갈라야 한다.
+     *
+     * ★ {@link GenErrorCode} 를 늘리지 않은 이유는 {@link #gridRejected} 와 같다 — 그 값은 DB 에
+     *   남고 칼럼에 값 목록 CHECK 가 걸려 있어 마이그레이션이 필요하다. 이 신호는 한 번의
+     *   {@code hatch()} 안에서만 쓰이므로 기록할 필요가 없다(멈춤 상태는 {@code QuotaBreaker} 가 든다).
+     */
+    public static RunResult quotaBlocked(StepContext ctx, BigDecimal cost, GenErrorCode code) {
+        return new RunResult(false, ctx, cost, code, false, true);
+    }
+
+    /**
+     * 격자 자체가 못 쓸 물건이어서 실패했다 — <b>같은 격자로 다시 해 봐야 같은 결과</b>다.
+     *
+     * ★ 왜 {@link GenErrorCode} 를 늘리지 않았나 — 오류 코드는 DB 에 남고 그 컬럼에
+     *   값 목록 CHECK 제약이 걸려 있다. 값을 늘리려면 마이그레이션이 필요한데,
+     *   마이그레이션 번호는 지금 여러 갈래가 동시에 쓰고 있어 충돌한다.
+     *   이 신호는 <b>한 번의 {@code hatch()} 안에서만</b> 쓰이므로 기록할 필요가 없다.
+     * ⚠️ 그래서 서버가 재시작되면 이 신호는 사라진다(그때는 평범한 재시도가 된다).
+     *   영구 기록이 필요해지면 그때 오류 코드와 마이그레이션을 함께 올린다.
+     */
+    public static RunResult gridRejected(StepContext ctx, BigDecimal cost, GenErrorCode code) {
+        return new RunResult(false, ctx, cost, code, true, false);
+    }
+}

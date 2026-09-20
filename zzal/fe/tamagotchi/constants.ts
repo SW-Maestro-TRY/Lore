@@ -1,0 +1,324 @@
+// 자캐 다마고치 — 스킨과 무관한 상수(동작 카탈로그·공통 에셋·앵커·배경).
+//
+// 정본 = `~/.claude/soma/lore/다마고치-플레이-설계.md` v1.2 §13(기본 동작 16종과 공통 에셋) · §11(장면).
+//
+// v1 에서 지운 것: MOVES(13종 옛 카탈로그) · FRIENDS(친구 목업) · MOVE_IMG(해금 그림 표).
+// 이미지 키는 서버(Motion.basicImageKey)가 준다 — 여기 그림 주소는 서버 값이 없을 때의 여울 폴백뿐이다.
+
+import type { MotionLayer } from '../lib/pet';
+
+/**
+ * 정적 에셋이 사는 곳. **레포에는 그림을 넣지 않는다**(→ .gitignore).
+ *
+ *   배포(dev·운영)  `/images`  → CloudFront 가 S3 로 보낸다.
+ *   로컬            `''`       → `/zzal/demo/idle.webp` 가 되어 apps/web/public 에서 서빙된다.
+ *                               `.env.local` 에 `NEXT_PUBLIC_CDN_BASE=` 한 줄이면 켜진다.
+ *
+ * ★ lib/assets.ts 의 CDN 과 **같은 값**이어야 한다(한쪽만 바꾸면 조용히 어긋난다).
+ */
+const CDN = process.env.NEXT_PUBLIC_CDN_BASE ?? '/images';
+
+export const NAMES = ['여름', '노루', '단이', '보리', '설아', '하루', '도담', '미르', '온이', '새벽', '비단', '초록'];
+
+export interface MotionDef {
+  seq: number;
+  key: string;
+  label: string;
+  layer: MotionLayer;
+}
+
+/**
+ * 기본 동작 16종(§13). 격자 1장 = 1층(1~8, 부화 즉시) · 격자 2장 = 2층(9~16, 행동 조건).
+ * 순서 = seq = 3층 심화 순서(§16). 서버 MotionCatalog 고정 18 과 key 가 같아야 한다.
+ *
+ * ★ 잠긴 동작의 이름도 화면에 보인다(정본 §6 조건표 "갸웃 · 채팅 응답 1/1"). v1 의 "안 연 것의 이름은
+ *   쓰지 않는다" 는 정본에 밀려 폐기(플랜 T2 핵심 결정 4).
+ */
+// ★ **서버 `MotionCatalog` 를 그대로 옮긴 표다**(2026-09-13 실측으로 대조 — `GET /me/pets/{id}` 의
+//   `motions[]` 18줄과 seq·key·layer 가 한 글자도 다르지 않다).
+//
+//   ⚠️ 전에는 여기가 **낡은 쪽**이었다. 서버는 이미 확정 16종(`pet`·`hello`·`eat_rice`·`eat_snack`·
+//   `sweep`·`reply`·`petted`·`wake_up`)을 주는데 화면은 옛 여덟(`practice`·`shy`·`call`·`tilt`·
+//   `wave`·`nod`·`smile_idle`·`sit`)을 들고 있었다. 그 어긋남이 **아무 소리도 안 냈다** —
+//   `motionAliases` 가 그림은 양쪽으로 두드려 주었지만, **seq 로 찾는 자리**(`motionBySeq`, 선물·심화
+//   도착 축하)는 seq 8 을 `call`, seq 11 을 `sleep` 으로 읽어 **엉뚱한 동작 이름을 띄웠다.**
+//   서버는 seq 8 이 `sleep` 이고 seq 11 이 `sweep` 이다.
+//
+// ★ 이름(label)은 **명사형 한 벌**(상훈님 2026-09-13 "명사형" · 제안서 B절 안 1 · 서버 `dbe6af8`).
+//   ⚠️ 진짜 방의 앨범은 **서버가 준 `album.motions[].label` 을 그대로 쓴다** — 이름의 정본은 서버
+//   한 곳이다. 여기 이름은 목(연습방·목 서버·오프라인)에서만 쓰인다. 서버 값을 덮지 않는다.
+//
+// ★ 그림은 **key 로만** 고른다(label 로 고르는 자리는 전수로 훑어 하나도 없음을 확인했다 —
+//   `spriteUrl`·`useHatch.img`·`useAlbum.img` 전부 key/imageKey. `useAlbum` 의 `m.label` 은
+//   내려받기 **파일 이름**에만 쓴다). 그래서 label 이 바뀌어도 그림이 비지 않는다.
+export const MOTIONS: readonly MotionDef[] = [
+  // ── 1층 8종(부화 즉시) ──
+  { seq: 1, key: 'base', label: '기본', layer: 'BASIC_1' },
+  { seq: 2, key: 'eat', label: '식사', layer: 'BASIC_1' },
+  { seq: 3, key: 'joy', label: '기쁨', layer: 'BASIC_1' },
+  { seq: 4, key: 'sad', label: '슬픔', layer: 'BASIC_1' },
+  { seq: 5, key: 'sick', label: '아픔', layer: 'BASIC_1' },
+  { seq: 6, key: 'pet', label: '쓰다듬', layer: 'BASIC_1' },
+  { seq: 7, key: 'hello', label: '인사', layer: 'BASIC_1' },
+  // ⚠️ v4 에서 **칸이 바뀐 유일한 자리** — 옛 `practice`(훈련)가 빠지고 `sleep`(잠)이 1층으로 올라왔다.
+  { seq: 8, key: 'sleep', label: '잠', layer: 'BASIC_1' },
+  // ── 2층 8종(행동 조건) ── 해금은 "못 보던 행동이 열리는 것"이 아니라 "하던 행동이 좋아지는 것"이다.
+  { seq: 9, key: 'eat_rice', label: '밥 먹기', layer: 'BASIC_2' },
+  { seq: 10, key: 'eat_snack', label: '간식 먹기', layer: 'BASIC_2' },
+  { seq: 11, key: 'sweep', label: '청소하기', layer: 'BASIC_2' },
+  { seq: 12, key: 'wash', label: '목욕하기', layer: 'BASIC_2' },
+  { seq: 13, key: 'reply', label: '답하기', layer: 'BASIC_2' },
+  { seq: 14, key: 'petted', label: '쓰다듬 받기', layer: 'BASIC_2' },
+  { seq: 15, key: 'startle', label: '놀람', layer: 'BASIC_2' },
+  { seq: 16, key: 'wake_up', label: '일어나기', layer: 'BASIC_2' },
+];
+
+/** 카탈로그 밖 특별 심화 행동 2(§6·§16). 구르기 먼저, 뒤로 넘어짐은 3층 8번째 뒤 두 번째 선물. */
+export const SPECIAL_ADV: readonly MotionDef[] = [
+  { seq: 101, key: 'roll', label: '구르기', layer: 'GIFT' },
+  { seq: 102, key: 'fall_back', label: '뒤로 넘어지기', layer: 'GIFT' },
+];
+
+export const ALL_MOTIONS: readonly MotionDef[] = [...MOTIONS, ...SPECIAL_ADV];
+
+export function motionByKey(key: string): MotionDef | undefined {
+  return ALL_MOTIONS.find((m) => m.key === key);
+}
+
+export function motionBySeq(seq: number): MotionDef | undefined {
+  return ALL_MOTIONS.find((m) => m.seq === seq);
+}
+
+/**
+ * 잠긴 2층 동작이 필요한 상황을 1층 동작 + 에셋이 임시로 채운다(§6).
+ * 열리는 순간부터 진짜 동작. 화면은 `fallbackKey(key, unlocked)` 로 고른다.
+ */
+export const MOTION_FALLBACK: Record<string, string> = {
+  // ── v4 2층 8종 → 1층 대역. **사슬은 반드시 1층 8종에서 끝나야 한다**(useHatch.spriteUrl 머리말).
+  eat_rice: 'eat', eat_snack: 'eat', sweep: 'base', wash: 'joy',
+  reply: 'base', petted: 'pet', startle: 'joy', wake_up: 'base',
+  // ── 선물 2종은 기본 그림이 없다(심화만). 가장 가까운 것으로 버틴다.
+  roll: 'joy', fall_back: 'sad',
+  // ── 옛 이름은 **지우지 않는다.** 남의 코드(스크랩북 시안·옛 목 데이터)가 아직 이 이름으로 물어볼 수 있고,
+  //    있어서 손해가 없다(못 찾으면 안 쓰인다). 대역은 전부 v4 1층으로 댄다.
+  tilt: 'base', wave: 'hello', nod: 'base', smile_idle: 'joy', sit: 'base',
+  practice: 'base', shy: 'pet', call: 'hello',
+};
+
+/**
+ * **옛 이름 → 새 이름**(v4 1층·2층 재편, `contract/자세-16종-명세.md` 2·3절).
+ * 서버가 이름을 바꾸는 순간 화면이 못 찾는 일이 없게, 물어보는 이름을 먼저 여기로 모은다.
+ */
+const MOTION_CANON: Record<string, string> = {
+  shy: 'pet', call: 'hello', nod: 'reply',
+};
+
+/**
+ * **그림을 찾을 때 시도할 이름 순서** — 있는 쪽(새 이름)을 먼저 쓰고 없으면 옛것으로.
+ *
+ * ★ 왜 필요한가 — 서버가 곧 1층·2층 key 를 새 이름으로 바꾸는데 화면 코드에는 옛 이름이 박혀 있다.
+ *   한쪽만 바뀌면 **그림을 못 찾고도 아무 소리가 안 난다**(여울로 조용히 폴백된다).
+ * ⚠️ 서버가 옛 이름을 다 버린 뒤에 옛 항목을 지운다. 그 전에 지우면 지금 화면이 깨진다.
+ */
+export const MOTION_ALIAS: Record<string, readonly string[]> = {
+  pet: ['pet', 'shy'],
+  hello: ['hello', 'call'],
+  // 임시: 옛 2층 wash 가 청소를 겸했다. 옛 키 제거할 때 이 줄도 삭제
+  sweep: ['sweep', 'wash'],
+  reply: ['reply', 'nod'],
+  eat_rice: ['eat_rice', 'eat'],
+  eat_snack: ['eat_snack', 'eat'],
+  petted: ['petted', 'pet', 'shy'],
+  wake_up: ['wake_up', 'base'],
+  startle: ['startle'],
+  wash: ['wash'],
+};
+
+/**
+ * 그 동작을 찾을 때 **시도할 이름들**(앞에서부터). 옛 이름으로 물어도 새 이름이 먼저 나온다.
+ * 표에 없는 이름은 그대로 하나만 돌려준다.
+ */
+export function motionAliases(key: string): readonly string[] {
+  const canon = MOTION_CANON[key] ?? key;
+  return MOTION_ALIAS[canon] ?? [canon];
+}
+
+/** 여울 기본 움짤(정지 대표컷 자리에도 쓴다). */
+export const YEOUL = `${CDN}/zzal/demo/idle.webp`;
+
+/**
+ * 다 자란 여울이 쉬지 않고 노는 한 바퀴(30.7초). 랜딩·부화 대기의 여울 시연에 쓴다.
+ * 만든 곳 = `~/work/jakae-lab/01_움짤/과정/2026-08-31_여울완성본/루프빌드.py` · S3 images/zzal/demo/loop.webp
+ */
+export const YEOUL_LOOP = `${CDN}/zzal/demo/loop.webp`;
+
+/**
+ * 동작 키 → 여울 그림 폴백. 서버가 basicImageKey 를 안 줬을 때(목 서버·잠긴 칸·그림 준비 전)만 쓴다.
+ * 여울 실물은 옛 8상태(idle·eat·hungry·clean·happy·sad·pet·train)뿐이라 가장 가까운 것으로 댄다.
+ */
+export const YEOUL_MOTION: Record<string, string> = {
+  // ── 확정 판정본 16종(2026-09-13 교체). 1층 v6 · 2층 v3.
+  //    ★ 옛 그림(`demo/idle.webp` 등)은 **옛 세대**라 오늘 확정한 자세가 아니다.
+  //      CDN 이 1년 불변 캐시라 덮어쓰지 못하므로 **새 경로 `demo/v6/`** 로 올렸다.
+  //      옛 파일은 그대로 두었다(다른 화면이 쓸 수 있다).
+  base: `${CDN}/zzal/demo/v6/base.webp`,
+  eat: `${CDN}/zzal/demo/v6/eat.webp`,
+  joy: `${CDN}/zzal/demo/v6/joy.webp`,
+  sad: `${CDN}/zzal/demo/v6/sad.webp`,
+  sick: `${CDN}/zzal/demo/v6/sick.webp`,
+  pet: `${CDN}/zzal/demo/v6/pet.webp`,
+  hello: `${CDN}/zzal/demo/v6/hello.webp`,
+  sleep: `${CDN}/zzal/demo/v6/sleep.webp`,
+  eat_rice: `${CDN}/zzal/demo/v6/eat_rice.webp`,
+  eat_snack: `${CDN}/zzal/demo/v6/eat_snack.webp`,
+  sweep: `${CDN}/zzal/demo/v6/sweep.webp`,
+  wash: `${CDN}/zzal/demo/v6/wash.webp`,
+  reply: `${CDN}/zzal/demo/v6/reply.webp`,
+  petted: `${CDN}/zzal/demo/v6/petted.webp`,
+  startle: `${CDN}/zzal/demo/v6/startle.webp`,
+  wake_up: `${CDN}/zzal/demo/v6/wake_up.webp`,
+
+  // ── 옛 이름은 **새 그림 중 가장 가까운 것**으로 잇는다. 서버가 아직 옛 키를 주기 때문이다.
+  //    이름이 사라진 셋(`practice`·`tilt`·`wave`·`smile_idle`·`sit`)은 새 세대에 대응 자세가 없어 기본으로 간다.
+  shy: `${CDN}/zzal/demo/v6/pet.webp`,
+  call: `${CDN}/zzal/demo/v6/hello.webp`,
+  nod: `${CDN}/zzal/demo/v6/reply.webp`,
+  practice: `${CDN}/zzal/demo/v6/base.webp`,
+  tilt: `${CDN}/zzal/demo/v6/base.webp`,
+  wave: `${CDN}/zzal/demo/v6/hello.webp`,
+  smile_idle: `${CDN}/zzal/demo/v6/joy.webp`,
+  sit: `${CDN}/zzal/demo/v6/base.webp`,
+  // 선물 2종은 기본 그림이 없다(심화만). 가장 가까운 것으로 버틴다.
+  roll: `${CDN}/zzal/demo/v6/joy.webp`,
+  fall_back: `${CDN}/zzal/demo/v6/sad.webp`,
+};
+
+/** 여울 시연용 자세별 앵커(연습방이 진짜 앵커로 돌게). 실제 아이는 서버가 주는 `anchorsKey` 를 쓴다. */
+export const YEOUL_ANCHORS_URL = `${CDN}/zzal/demo/v6/anchors.json`;
+
+
+/** 받침이 있으면 앞의 것, 없으면 뒤의 것. "쓰다듬을" / "청소를" */
+export function josa(word: string, withFinal: string, withoutFinal: string): string {
+  const last = word.charCodeAt(word.length - 1);
+  if (last < 0xac00 || last > 0xd7a3) return withoutFinal;
+  return (last - 0xac00) % 28 > 0 ? withFinal : withoutFinal;
+}
+
+// ── 앵커(§13) ────────────────────────────────────────────────────────────
+
+/** 캐릭터 그림(313×350) 안의 상대 좌표(0~1). 소품·말풍선·이펙트가 여기 붙는다. */
+export interface Anchor { x: number; y: number }
+export type AnchorName = 'foot' | 'hand' | 'head';
+
+/**
+ * 앵커 기본값 — 캐릭터마다 한 번 잡기 전까지 쓰는 313×350 비율의 평균 자리.
+ * 발 = 그림 아래 13%(무대 바닥선과 같음, Scrapbook charBox.bottom 13%) · 손 = 오른쪽 가슴 옆 · 머리 = 위 12%.
+ */
+export const ANCHORS_DEFAULT: Record<AnchorName, Anchor> = {
+  foot: { x: 0.5, y: 0.87 },
+  hand: { x: 0.68, y: 0.56 },
+  head: { x: 0.5, y: 0.12 },
+};
+
+/** 공통 에셋 하나가 어디에 어떻게 겹치는가. full = 캐릭터와 같은 313×350 이라 그대로 겹친다. */
+export interface AssetDef {
+  src: string;
+  /** 'full' 이면 앵커 무시. */
+  at: AnchorName | 'full';
+  /** 캐릭터 폭 대비 크기(full 이면 1). */
+  size: number;
+  /** 앵커에서의 오프셋(캐릭터 폭 대비). */
+  dx?: number;
+  dy?: number;
+  /** 아직 실물이 없어 임시 대체(CSS)로 그려야 하는 것(플랜 "에셋 임시 대체 v0"). E4 가 오면 false 로. */
+  placeholder?: boolean;
+}
+
+const asset = (file: string, at: AssetDef['at'], size: number, extra: Partial<AssetDef> = {}): AssetDef =>
+  ({ src: `${CDN}/zzal/assets/${file}`, at, size, ...extra });
+
+/**
+ * 공통 에셋 — 전 사용자가 함께 쓰는 그림(§13). 실물이 있는 것: 알 3·쓰레기 5·커튼 2·달·zzz·폭죽.
+ * 나머지는 E4(9/8·9/12)가 만들 때까지 placeholder — 파일명만 맞춰 두어 그림이 오면 교체만 하면 된다.
+ * 원본 시트·제작법 = jakae-lab/01_움짤/01_결과/공통에셋/
+ */
+export const ASSET = {
+  eggIdle: asset('egg_idle.webp', 'full', 1),
+  eggCrack: asset('egg_crack.webp', 'full', 1),
+  eggHatch: asset('egg_hatch.webp', 'full', 1),
+  /** 바닥 흔적 1~4단계(정본은 흔적 최대 4, 5단계 파일은 안 쓴다). 캐릭터 앞을 가린다. */
+  trash: [1, 2, 3, 4].map((n) => asset(`trash${n}.webp`, 'full', 1)),
+  trashSweep: asset('trash_sweep.webp', 'full', 1),
+  firework: asset('firework.webp', 'full', 1),
+  zzz: asset('zzz.webp', 'head', 0.35, { dx: 0.2, dy: -0.1 }),
+  curtainClosed: asset('curtain_closed.webp', 'full', 1),
+  curtainOpen: asset('curtain_open.webp', 'full', 1),
+  moon: asset('moon.webp', 'full', 1),
+  // ── 아직 실물 없음(E4 1차 9/8) ──
+  bubbleBang: asset('bubble_bang.webp', 'head', 0.3, { dx: 0.22, dy: -0.12, placeholder: true }),
+  bubbleQuestion: asset('bubble_question.webp', 'head', 0.3, { dx: 0.22, dy: -0.12, placeholder: true }),
+  bubbleDots: asset('bubble_dots.webp', 'head', 0.3, { dx: 0.22, dy: -0.12, placeholder: true }),
+  bubbleNote: asset('bubble_note.webp', 'head', 0.3, { dx: 0.22, dy: -0.12, placeholder: true }),
+  bubbleZzz: asset('bubble_zzz.webp', 'head', 0.3, { dx: 0.22, dy: -0.12, placeholder: true }),
+  bubbleHeart: asset('bubble_heart.webp', 'head', 0.3, { dx: 0.22, dy: -0.12, placeholder: true }),
+  growl: asset('growl.webp', 'hand', 0.3, { dx: -0.3, dy: 0.05, placeholder: true }),
+  sweat: asset('sweat.webp', 'head', 0.18, { dx: 0.25, dy: 0.05, placeholder: true }),
+  skull: asset('skull.webp', 'head', 0.22, { dx: 0.3, dy: -0.1, placeholder: true }),
+  fly: asset('fly.webp', 'head', 0.25, { dx: -0.3, dy: -0.05, placeholder: true }),
+  sparkle: asset('sparkle.webp', 'full', 1, { placeholder: true }),
+  heart: asset('heart.webp', 'head', 0.22, { dx: 0.28, dy: -0.15, placeholder: true }),
+  // ── E4 2차(9/12) ──
+  bowl: [1, 2, 3].map((n) => asset(`bowl${n}.webp`, 'foot', 0.35, { dx: -0.4, dy: 0.02, placeholder: true })),
+  snack: [1, 2, 3].map((n) => asset(`snack${n}.webp`, 'foot', 0.3, { dx: -0.4, dy: 0.02, placeholder: true })),
+  medicine: asset('medicine.webp', 'hand', 0.25, { placeholder: true }),
+  bath: asset('bath.webp', 'full', 1, { placeholder: true }),
+  bag: asset('bag.webp', 'foot', 0.4, { dx: 0.45, dy: 0.02, placeholder: true }),
+  robot: asset('robot.webp', 'foot', 0.35, { dx: 0.45, dy: 0.02, placeholder: true }),
+  mat: asset('mat.webp', 'foot', 1.1, { dy: 0.06, placeholder: true }),
+  postcard: asset('postcard.webp', 'full', 1, { placeholder: true }),
+  sun: asset('sun.webp', 'full', 1, { placeholder: true }),
+  /** 하루 하나 뽑는 소품(§11). 손 앵커 옆. */
+  props: {
+    ball: asset('prop_ball.webp', 'hand', 0.25, { dx: 0.2, placeholder: true }),
+    book: asset('prop_book.webp', 'hand', 0.28, { dx: 0.2, placeholder: true }),
+    cup: asset('prop_cup.webp', 'hand', 0.2, { dx: 0.2, placeholder: true }),
+    plant: asset('prop_plant.webp', 'foot', 0.3, { dx: 0.45, placeholder: true }),
+  },
+} as const;
+
+export type PropKey = keyof typeof ASSET.props;
+export const PROP_KEYS = Object.keys(ASSET.props) as PropKey[];
+
+/**
+ * 무대 배경 16종 — 캐릭터 **뒤**에 깔린다(2026-08-30 생성). 사용자가 고르고 빛(§11)만 덧씌운다.
+ * 원본 시트 = jakae-lab/01_움짤/과정/2026-08-30_배경/배경_4x4.png
+ */
+export const BACKGROUNDS = [
+  { key: 'room', label: '기본 방' },
+  { key: 'window_day', label: '햇살 창' },
+  { key: 'window_night', label: '밤 창' },
+  { key: 'window_rain', label: '비 오는 창' },
+  { key: 'field', label: '풀밭' },
+  { key: 'blossom', label: '벚꽃' },
+  { key: 'sunset', label: '노을' },
+  { key: 'starry', label: '별 밤' },
+  { key: 'sea', label: '바닷가' },
+  { key: 'snow', label: '눈' },
+  { key: 'forest', label: '숲' },
+  { key: 'cafe', label: '카페' },
+  { key: 'library', label: '책장 방' },
+  { key: 'cloud', label: '구름 위' },
+  { key: 'dots', label: '도트 벽지' },
+  { key: 'checker', label: '체커 바닥' },
+] as const;
+
+export type BackgroundKey = (typeof BACKGROUNDS)[number]['key'];
+export const DEFAULT_BACKGROUND: BackgroundKey = 'room';
+
+export const bgUrl = (key: string) => `${CDN}/zzal/bg/${key}.webp`;
+
+/** 여울 시연 그림(idle·eat·happy·sad·hungry·train·pet·clean·loop). */
+export const demoUrl = (key: string) => `${CDN}/zzal/demo/${key}.webp`;
+
+/** 소품 그림(알·커튼·쓰레기·달·폭죽·zzz). */
+export const assetUrl = (key: string) => `${CDN}/zzal/assets/${key}.webp`;

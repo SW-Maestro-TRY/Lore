@@ -1,0 +1,60 @@
+BACKGROUND — DRAW A PICTURE BOOK, NOT A PLACE.
+
+This overrides every other background instruction above, including anything in
+the shot description. The character is already right; only the world behind and
+around it changes.
+
+FLAT DEPTH. There is no atmospheric perspective in this drawing. No haze, no
+mist, no fog, no smog, no dust in the air, no depth-of-field, no distance blur,
+no fading toward the horizon. Something far away is drawn with exactly the same
+line and the same clarity as something near — it is only smaller, and carries
+fewer details. Never soften a far object to push it back.
+
+SHAPE, NOT TEXTURE. Every element behind the character is reduced to a handful
+of simple drawn shapes with a visible outline. Concretely:
+  · A beach is one or two flat bands of colour. It is NOT grains of sand, not
+    scattered pebbles, not a speckled surface.
+  · Water is a few flat shapes with two or three drawn wave lines on top. It is
+    NOT a reflective rippling surface, not glittering, not mirroring the sky.
+  · Wood is a shape with at most two or three drawn plank lines. It is NOT
+    weathered, not grainy, not splintered, not stained.
+  · Rock, stone, brick, foliage, fabric: three or four drawn shapes standing in
+    for the whole mass. Never a field of repeated texture.
+  · Sky is one flat wash, or two flat bands meeting at a soft edge. Never a
+    photographic gradient, never rendered clouds.
+No paper grain, no canvas tooth, no noise, no scanned-texture overlay anywhere
+in the background.
+
+COUNT LIMIT. At most four or five named things exist behind the character. If
+the shot description lists more than that, keep the ones the story actually
+needs and silently drop the rest. An emptier background is always the safer
+reading of this instruction.
+
+LEAVE IT UNFINISHED. A real part of the background — often the top, the edges,
+or the ground far from the character — is left as plain flat colour with nothing
+drawn on it at all. Empty space is the point of this look, not a mistake to fill.
+
+NO PHOTOGRAPHIC LIGHT. No sun glare, no god rays, no lens flare, no bloom, no
+specular sparkle on water or metal, no rim light, no bokeh, no vignette, no
+golden-hour gradient doing the work of the drawing. Light is shown, if at all,
+as one flat lighter shape and one flat darker shape.
+
+SAME HAND. Background objects are outlined with the same visible hand-drawn line
+as the character, in the same weight and the same colour family. The background
+must never look airbrushed, painted or rendered while the character is drawn —
+that split is exactly what makes an image read as realistic.
+
+QUIETER THAN THE CHARACTER. The character is always the most saturated and most
+detailed thing in the panel. The background sits lower in both, so the eye lands
+on the character first, every time.
+
+TREAT THE SHOT DESCRIPTION AS MOOD, NOT AS A RENDER ORDER. The description above
+is written in film language and will say things like "extreme wide shot",
+"shrouded in mist", "weathered pier", "soft morning light catching the water",
+"atmospheric". Those words describe how the moment should FEEL. Do not render
+them literally: no actual mist, no actual weathering, no actual glinting water,
+no cinematic haze. Translate the feeling into flat shapes and quiet colour.
+
+The finished panel should look like a page from a children's picture book or a
+gentle Korean webtoon — drawn, flat, calm, with generous empty space — and never
+like a photograph, a matte painting, a concept-art landscape or a 3D render.

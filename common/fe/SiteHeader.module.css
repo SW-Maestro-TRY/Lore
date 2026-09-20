@@ -1,0 +1,127 @@
+/* 사이트 공통 sticky 헤더. 랜딩과 도메인 탭이 같은 헤더를 쓴다.
+ * 색·간격은 전부 common/fe/styles/tokens.css 의 변수를 참조한다. */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: var(--header-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+
+.headerInner {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 12px var(--gutter);
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 3vw, 30px);
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+/* 마침표만 Zzal 액센트 */
+.wordmarkDot {
+  color: var(--accent-zzal);
+}
+
+.nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 2.4vw, 20px);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.navLink {
+  color: var(--text-muted);
+  padding: 8px 10px;
+  border-radius: 999px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.navLink:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+/* 현재 보고 있는 탭 */
+.navLinkActive {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* 이 줄은 절대 줄바꿈되면 안 된다. 헤더가 두 줄이 되면 sticky 높이가 바뀌어
+   * 아래 화면이 통째로 밀린다(세 도메인이 다 이 헤더를 쓴다). */
+  flex: none;
+}
+
+/* 로그인 / 로그아웃. 보더만 준 secondary 톤. */
+.authButton {
+  padding: 9px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.authButton:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* 로그인 여부를 확인하는 동안 버튼 자리를 미리 잡아 둔다(레이아웃 덜컹임 방지). */
+.authPlaceholder {
+  display: inline-block;
+  width: 68px;
+  height: 34px;
+}
+
+.userEmail {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* 좁은 화면에서 헤더 한 줄이 넘쳐서, 여기서만 미디어쿼리로 내비를 숨긴다.
+ * (Zzal/Trailer/Webtoon 진입점은 랜딩 탭 카드와 푸터에도 있어 잃는 게 없다.) */
+@media (max-width: 640px) {
+  .nav {
+    display: none;
+  }
+
+  .headerActions {
+    margin-left: auto;
+    gap: 8px;
+  }
+
+  /* 로그인하면 아이디 + 로그아웃이 한 줄에 서게 되는데, 360px 폭에서는 둘 다
+   * 못 들어간다. 없어도 되는 것은 아이디다 — 로그인했다는 사실은 버튼이
+   * "로그아웃" 이라는 것으로 이미 드러난다. */
+  .userEmail {
+    display: none;
+  }
+}

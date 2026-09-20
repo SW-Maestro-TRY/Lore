@@ -1,0 +1,1236 @@
+package com.lore.webtoon.job;
+
+import com.lore.webtoon.credit.CreditGate;
+import com.lore.webtoon.credit.GuestGate;
+import com.lore.webtoon.work.WorkLedger;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.lore.webtoon.story.StoryStore;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.UUID;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * 한 편을 실제로 만든다 — 걸음마다 파이썬을 부른다.
+ *
+ * <h2>한 번에 둘씩</h2>
+ *
+ * 한 줄로 세워 한 편씩만 돌렸다. 그런데 실측해 보니 <b>한 장 37초 중 대부분이
+ * 모델 응답을 기다리는 시간</b>이고 CPU 는 거의 안 쓴다 — 나란히 돌리면 거의
+ * 그대로 두 배가 나오는 모양이다. 반면 기다리는 쪽은 아팠다: 2026-09-13 에
+ * 세 편을 걸어 보니 셋째가 <b>15분 16초</b>를 기다렸다(실측).
+ *
+ * <b>그래서 둘까지만 나란히 돌린다.</b> 무제한이 아닌 이유:
+ *
+ * <ul>
+ *   <li><b>메모리</b> — 이어붙이기가 1024×9216 캔버스를 만든다. 배포 서버
+ *       (t3.small)의 여유는 899MB 다. 둘까지가 재 보지 않고 걸 수 있는 선이다.</li>
+ *   <li><b>rate limit</b> — 같은 열쇠로 동시 요청이 늘면 429 가 난다.</li>
+ *   <li><b>돈</b> — 동시에 시작하면 하루 상한을 넘겨서 시작할 수 있다
+ *       ({@code SpendGuard} 는 시작할 때만 본다).</li>
+ * </ul>
+ *
+ * 넷·다섯으로 먼저 올리지 않는다. <b>둘로 재 보고</b>({@code started_at} ·
+ * {@code finished_at}) 그 숫자가 괜찮다고 하면 그때 올린다.
+ *
+ * <h2>둘이 되면서 같이 고쳐야 했던 것</h2>
+ *
+ * 한 줄일 때만 맞던 것들이 있었다 — 작품 번호를 「가장 최근 폴더」로 되찾던
+ * 것({@link #newRunId} 로 옮김)과, 도는 프로세스를 하나만 기억하던 것
+ * ({@code HarnessProcess} 가 작업마다 담는다). 둘 다 <b>오류를 내지 않고
+ * 조용히 틀리는</b> 자리였다.
+ *
+ * <h2>사람이 멈춰 서는 자리 둘</h2>
+ *
+ * <pre>
+ *   story  ─→ (이야기 넷을 보여주고 고르기를 기다림)  ─→ sheet
+ *   sheet  ─→ (캐릭터 시트를 보여주고 확인을 기다림)  ─→ board · pages
+ * </pre>
+ *
+ * 「빠르게 결과부터」를 고른 사람은 안 멈춘다 — 서버가 알아서 고르고 끝까지
+ * 간다. 그래도 <b>고르는 규칙은 같다</b>: 검수를 통과한 것 중에서 고른다.
+ */
+@Service
+public class JobRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(JobRunner.class);
+
+    /**
+     * 나란히 도는 수. <b>기본 둘.</b>
+     *
+     * 배포에서 줄여야 하면 {@code lore.webtoon.workers} 로 1 을 주면 예전처럼
+     * 한 줄이 된다 — 배포 후에 rate limit 이나 메모리가 터지면 코드를 되돌리지
+     * 않고 이 값만 내린다.
+     */
+    static final int DEFAULT_WORKERS = 2;
+
+    /**
+     * 한 편 안에서 <b>동시에 그리는 장 수.</b> 기본 셋.
+     *
+     * 1 이면 예전처럼 한 프로세스가 차례로 그린다 — 배포에서 rate limit 이나
+     * 메모리가 터지면 코드를 되돌리지 않고 {@code lore.webtoon.page-workers}
+     * 를 1 로 내린다.
+     *
+     * 크게 잡지 않는 이유는 편 단위로 이미 둘이 나란히 돌기 때문이다
+     * ({@link #DEFAULT_WORKERS}) — 실제 동시 그림 호출은 이 값의 두 배까지
+     * 간다. 셋이면 최대 여섯이다.
+     */
+    static final int DEFAULT_PAGE_WORKERS = 3;
+
+    /**
+     * 화 전체 검수(fullreview)에서 critical 로 걸린 페이지를 자동으로
+     * 다시 그리는 <b>최대 라운드 수.</b>
+     *
+     * 라운드마다 다른 페이지가 걸릴 수 있어서(1차 [7,12,18] → 2차 [7] →
+     * 3차 [12]처럼) 이 값만으로 "한 페이지가 몇 번 고쳐졌는지"를 잴 수는
+     * 없다 — 그건 {@link #MAX_PAGE_REDRAWS}가 따로 잰다.
+     *
+     * <b>작품 만들기를 시작하는 순간, 이 한도까지는 사전 승인된 것으로
+     * 본다</b>(webtoon/docs/full-review-design.md §6.3, 2026-09-16 확정).
+     * 실제 재생성 하나하나마다 다시 승인을 묻지 않는다 — 라운드 수를
+     * 늘리려면 이 상수를 고쳐야 하고, 그 자체가 새 승인이 필요한 일이다.
+     */
+    static final int MAX_FULL_REVIEW_ROUNDS = 3;
+
+    /**
+     * 같은 페이지를 이 루프 안에서 최대 몇 번 다시 그리는가.
+     *
+     * {@link #MAX_FULL_REVIEW_ROUNDS}와 독립적으로 페이지마다 따로 센다.
+     * 한도를 넘긴 페이지는 <b>그 페이지만 포기하고 그대로 둔다</b> — 전체
+     * 루프를 죽이지 않는다.
+     */
+    static final int MAX_PAGE_REDRAWS = 2;
+
+    /**
+     * 화 전체 검수를 도는 동안 진행 화면에 뜨는 말. <b>문자열을 한 글자도
+     * 안 바꿔야 한다</b> — FE(`webtoon/fe/sections/Progress/nhStage.ts`)가
+     * 이 문자열을 그대로 보고 마스코트 그림을 검수 중 그림(`bind.webp`)으로
+     * 바꾼다. 라운드·페이지 번호를 넣지 않는 것도 그래서다(값이 바뀌면
+     * 매칭이 깨진다).
+     */
+    static final String FULL_REVIEW_SAY = "루가 그림을 검수하고 있어요!";
+
+    /** 그리는 단계의 기본 말 — {@code nhStage.ts}의 {@code NH_STAGE_SAY.pages}
+     * 와 정확히 같아야 한다. 검수(bind 그림)에서 다시 그리기(art 그림)로
+     * 넘어갈 때 이 문자열로 되돌려서 마스코트 그림도 같이 돌아가게 한다. */
+    static final String PAGES_SAY = "루가 그림을 그리고 있어요";
+
+    private final int workers;
+    private final int pageWorkers;
+    private final ExecutorService line;
+    /**
+     * 장면을 동시에 그리는 자리.
+     *
+     * {@link #line} 과 따로 둔다 — 같은 줄에 넣으면 그림을 기다리는 작업이
+     * 줄을 다 차지해서, 뒤에 걸린 다른 편이 시작조차 못 한다(서로 기다리다
+     * 멈춘다).
+     */
+    private final ExecutorService paint;
+
+    /** 나란히 도는 수. 줄 예상이 이 값으로 나눈다({@link JobQueue}). */
+    public int workers() {
+        return workers;
+    }
+
+    /** 사람이 화면에서 그만두라고 했을 때 남는 말. */
+    static final String CANCELLED = "만들기를 취소했습니다";
+
+    /**
+     * 그만두라는 말을 들은 작업들.
+     *
+     * <b>돌고 있는 것을 죽이는 것만으로는 모자라다.</b> 죽이면 그 걸음이
+     * 「그림을 만들지 못했습니다」로 끝나서, 사람이 스스로 그만둔 것을 우리
+     * 잘못처럼 보여 준다. 그래서 표시를 따로 남기고, 걸음마다 그것부터 본다.
+     */
+    private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
+
+    /** 지금 하네스 안에 들어가 있는 작업. 취소가 이걸 보고 죽일지 정한다. */
+
+    private final HarnessProcess harness;
+    private final JobProgress progress;
+    private final JobStore store;
+    private final StoryStore stories;
+    private final AfterRun after;
+    private final WorkLedger works;
+    /** 다 되면(또는 못 만들면) 메일로 알리는 자리. 실패해도 만들기를 안 깬다. */
+    private final JobNotice notice;
+    private final CreditGate credits;
+    private final GuestGate guests;
+    private final Path runsDir;
+    /** 사람이 올린 사진과 입력이 있는 자리. 시트가 나오면 사진을 여기서 지운다. */
+    private final Path jobsDir;
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
+                     StoryStore stories, AfterRun after, WorkLedger works,
+                     CreditGate credits, GuestGate guests, JobNotice notice,
+                     @Value("${lore.webtoon.workers:2}") int workers,
+                     @Value("${lore.webtoon.page-workers:3}") int pageWorkers,
+                     @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
+        /* 0 이나 음수를 주면 만들기가 통째로 멈춘다 — 설정 실수로 서비스가
+           죽지 않게 최소 하나는 돈다. */
+        this.workers = Math.max(1, workers);
+        java.util.concurrent.atomic.AtomicInteger seq = new java.util.concurrent.atomic.AtomicInteger();
+        this.line = Executors.newFixedThreadPool(this.workers, r -> {
+            Thread t = Thread.ofPlatform().unstarted(r);
+            t.setName("webtoon-job-" + seq.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        });
+        /* 0 이나 음수면 예전처럼 한 프로세스에서 차례로 그린다 — 설정 실수로
+           그림이 아예 안 그려지는 일은 없게 한다. */
+        this.pageWorkers = Math.max(1, pageWorkers);
+        java.util.concurrent.atomic.AtomicInteger pseq =
+                new java.util.concurrent.atomic.AtomicInteger();
+        this.paint = Executors.newFixedThreadPool(this.pageWorkers, r -> {
+            Thread t = Thread.ofPlatform().unstarted(r);
+            t.setName("webtoon-paint-" + pseq.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        });
+        log.info("만들기를 {}편씩 나란히 돌리고, 한 편 안에서 장면을 {}장씩 동시에 그립니다",
+                this.workers, this.pageWorkers);
+        this.harness = harness;
+        this.progress = progress;
+        this.store = store;
+        this.stories = stories;
+        this.after = after;
+        this.works = works;
+        this.credits = credits;
+        this.guests = guests;
+        this.notice = notice;
+        /* **자리는 HarnessProcess 하나가 정한다.** 여기서 기본값을 또 적으면
+           넷이 같은 문자열을 따로 갖게 되고, 한쪽만 안 고치는 순간 그 걸음만
+           다른 폴더를 본다 — 실제로 AfterRun 이 그래서 비용을 하나도 못 적었다
+           (2026-09-12 배포에서 실측). 바꾸려면 `lore.webtoon.python.runs-dir`. */
+        this.runsDir = harness.runsDir();
+        this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
+                ? "webtoon/ai/work/jobs" : jobsDir).toAbsolutePath().normalize();
+    }
+
+    /**
+     * 웹툰 만들기가 아닌 다른 이미지 호출도 <b>같은 줄</b>에 세운다.
+     *
+     * 지금은 편집실의 다시 그리기({@code RegenService})가 쓴다. 만들기와
+     * 다시 그리기가 같은 하네스 프로세스를 동시에 돌리면 요금과 rate limit이
+     * 같이 터진다 — 파이썬도 같은 큐를 썼다({@code NHRunner._enqueue} 가
+     * job 과 regen 을 구분하지 않는다).
+     */
+    public void enqueue(Runnable step) {
+        line.submit(step);
+    }
+
+    /** 차례에 넣는다. 곧바로 돌지 않을 수 있다 — 앞에 밀린 것이 있으면 기다린다. */
+    public void enqueue(Long jobId, Path jobDir) {
+        line.submit(() -> {
+            try {
+                story(jobId, jobDir);
+            } catch (Exception e) {                 // noqa: 여기서 죽으면 줄이 멈춘다
+                fail(jobId, e);
+            }
+        });
+    }
+
+    /** 사람이 이야기를 골랐다(또는 서버가 골랐다). 다음 걸음으로. */
+    public void resumeAfterPick(Long jobId) {
+        line.submit(() -> {
+            try {
+                sheet(jobId);
+            } catch (Exception e) {
+                fail(jobId, e);
+            }
+        });
+    }
+
+    /**
+     * 넷 다 마음에 안 든다 — <b>이야기 후보를 다시 짓는다.</b>
+     *
+     * 콘티 검수가 없어진 뒤로 「다시 만들기」가 갈 곳은 여기뿐이다. 사람이
+     * 적어 보낸 말은 이번 시도에만 반영할 요청으로 하네스에 넘긴다
+     * ({@code --note}) — 파이썬 쪽 {@code _run_restory_phase} 와 같은 인자다.
+     */
+    public void retryDirections(Long jobId, String note) {
+        line.submit(() -> {
+            try {
+                restory(jobId, note);
+            } catch (Exception e) {
+                fail(jobId, e);
+            }
+        });
+    }
+
+    /**
+     * 그만둔다. -> 도는 것을 실제로 멈췄나
+     *
+     * <h2>두 갈래다</h2>
+     *
+     * <b>돌고 있으면</b> 표시만 남기고 하네스를 멈춘다 — 뒷정리(값 적기 ·
+     * 돌려주기 · 실패 적기)는 그 걸음이 한다. 여기서도 같이 하면 같은 작업을
+     * 두 곳에서 끝내게 되고, 로그인 안 한 사람의 하루 몫이 <b>두 번</b>
+     * 돌아온다({@code GuestGate.refundKey} 는 부를 때마다 하나씩 돌려준다).
+     *
+     * <b>안 돌고 있으면</b> — 줄에서 기다리거나, 사람이 볼 차례로 멈춰 서
+     * 있거나 — 여기서 바로 끝낸다. 줄에 넣어 두면 앞의 것이 몇 분씩 걸리는
+     * 동안 취소를 누른 사람이 계속 기다리게 된다. 그 사이에 그 작업의 차례가
+     * 오더라도 첫 걸음에서 표시를 보고 그냥 물러난다.
+     */
+    public void cancel(Long jobId) {
+        cancelled.add(jobId);
+        if (harness.stopCurrent(jobId)) {
+            log.info("만들기를 멈춥니다 (job={})", jobId);
+            return;
+        }
+        stop(jobId, CANCELLED);
+    }
+
+    /** 사람이 시트를 확인했다. 마지막 걸음으로. */
+    public void resumeAfterSheet(Long jobId) {
+        line.submit(() -> {
+            try {
+                pages(jobId);
+            } catch (Exception e) {
+                fail(jobId, e);
+            }
+        });
+    }
+
+    /**
+     * 시트만 <b>다시 그린다.</b> 그리고 나서 다시 확인을 기다린다.
+     *
+     * 사람이 적어 보낸 말은 하네스의 {@code --note} 로 넘긴다 — 파이썬 쪽
+     * ({@code newharness_pipeline._run_sheet_phase})과 같은 인자다. 환경변수가
+     * 아니다: 하네스는 이 값을 그리는 프롬프트 뒤에 붙인다.
+     *
+     * 지운 것은 부르는 쪽이 이미 지웠다({@code JobService.clearSheet}) —
+     * 안 지우면 하네스가 "이미 있다" 며 그냥 넘어간다.
+     */
+    public void redrawSheet(Long jobId, String note) {
+        line.submit(() -> {
+            try {
+                if (!startable(jobId)) {
+                    return;         // 줄에서 기다리는 동안 그만뒀다
+                }
+                WebtoonJob job = store.running(jobId, JobStage.SHEET);
+                progress.say(jobId, "루가 캐릭터를 다시 그리고 있어요");
+
+                List<String> args = new ArrayList<>(
+                        List.of("--run-id", job.getRunId(), "--sheet"));
+                if (note != null && !note.isBlank()) {
+                    args.add("--note");
+                    args.add(note);
+                }
+                int code = callHarness(jobId, job, args);
+                after.cost(job.getRunId());      // 다시 그리는 것도 값이 나간다
+                stopIfCancelled(jobId);
+                if (code != 0) {
+                    throw new IllegalStateException("캐릭터 시트를 다시 만들지 못했습니다");
+                }
+                store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
+            } catch (Exception e) {
+                fail(jobId, e);
+            }
+        });
+    }
+
+    /** 이 작품의 폴더. 시트를 지우는 쪽이 쓴다. */
+    public Path runDir(String runId) {
+        return runsDir.resolve(runId);
+    }
+
+    /* ---- 걸음 셋 ---------------------------------------------------------- */
+
+    /**
+     * 하네스를 부른다 — <b>취소가 손을 뻗을 수 있게 표시해 두고.</b>
+     *
+     * 부르기 전에 한 번 본다(줄에서 기다리는 동안 그만뒀을 수 있다), 부르는
+     * 동안 어느 작업인지 남겨 둔다({@link #cancel} 이 이걸 보고 죽인다),
+     * 끝나면 지운다 — 안 지우면 다음 사람의 취소가 엉뚱한 걸음을 죽인다.
+     */
+    private int callHarness(Long jobId, WebtoonJob job, List<String> args)
+            throws IOException, InterruptedException {
+        stopIfCancelled(jobId);
+        return harness.run(jobId, args, env(job), out -> progress.line(jobId, out));
+    }
+
+    /** 그만두라고 했으면 여기서 멈춘다. 버그가 아니므로 따로 던진다. */
+    private void stopIfCancelled(Long jobId) {
+        if (cancelled.contains(jobId)) {
+            throw new Cancelled();
+        }
+    }
+
+    /**
+     * <b>이 작업을 시작해도 되나.</b> 줄에서 차례가 온 걸음이 제일 먼저 묻는다.
+     *
+     * <h2>왜 메모리가 아니라 DB 를 보나</h2>
+     *
+     * 취소 표시({@link #cancelled})는 {@link #stop} 이 <b>끝내면서 지운다.</b>
+     * 그래서 아직 줄에 있는 작업을 취소하면, 표시가 지워진 뒤에 그 작업의
+     * 차례가 와서 <b>표시를 못 보고 그냥 돈다.</b> 2026-09-13 에 실제로 그랬다 —
+     * 취소하고 값을 돌려받은 작품이 되살아나 끝까지 그려졌다. 돈은 두 번 나가고
+     * 환불은 한 번 됐다.
+     *
+     * 끝났다는 사실은 DB 에 남으므로 그걸 본다. 표시는 <b>도는 것을 멈추는</b>
+     * 용도로만 남기고, <b>시작하지 않는</b> 판단은 여기서 한다.
+     *
+     * @return 시작해도 되면 true. 이미 끝난 것이면 false — 조용히 물러난다
+     */
+    private boolean startable(Long jobId) {
+        WebtoonJob job = store.byId(jobId);
+        if (job == null || job.getStatus().isOver()) {
+            log.info("이미 끝난 작업이라 시작하지 않습니다 (job={})", jobId);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 사람이 그만뒀다는 표시.
+     *
+     * 실패와 <b>같은 길로 끝나되</b>(값을 적고, 낸 것을 돌려주고, 끝났다고
+     * 적는다) 로그에는 오류로 안 남는다 — 우리가 뭘 잘못한 게 아니다.
+     */
+    private static final class Cancelled extends RuntimeException {
+        Cancelled() {
+            super(CANCELLED);
+        }
+    }
+
+    private void story(Long jobId, Path jobDir) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
+        WebtoonJob job = store.running(jobId, JobStage.STORY);
+        progress.say(jobId, "루가 이야기를 짓고 있어요");
+
+        /* **번호를 여기서 정해서 넘긴다.**
+         *
+         * 예전에는 하네스가 짓고 자바가 <b>가장 최근에 생긴 폴더</b>로 그걸
+         * 되찾았다. 한 줄로 세워 돌 때만 우연히 맞는 방법이고, 두 편을 같이
+         * 돌리는 순간 <b>두 사람의 작품이 뒤바뀐다</b> — 그리고 그 다음에
+         * 이어지는 것이 전부 어긋난다(소유권·크레딧·공개 여부·비용 귀속).
+         *
+         * 이제 번호는 자바 것이다. 되찾을 일이 없으니 가릴 것도 없다. */
+        String runId = newRunId();
+        int code = callHarness(jobId, job, List.of(
+                "--run-id", runId,
+                "--character", jobDir.resolve("character.json").toString()));
+        /* **성공을 보기 전에 값부터 적는다.** 이 걸음이 죽어도 이야기 넷을 쓴
+           값은 이미 나갔다. 이제 어느 작품인지 알고 있으므로 짐작하지 않는다. */
+        after.cost(runId);
+        stopIfCancelled(jobId);
+        if (code != 0) {
+            throw new IllegalStateException("이야기 후보를 만들지 못했습니다");
+        }
+
+        store.learnRun(jobId, runId);
+        // 장부에도 채운다 — 이게 없으면 「내가 만든 웹툰」이 이 작품을 못 찾는다.
+        works.learnedRun(job.getPublicId(), runId, job.getUserId());
+        writeStyle(runId, job.getStyle());
+        writeQuality(runId, job.getQuality());
+
+        List<Map<String, Object>> directions = directionsOf(runId);
+        if (directions.isEmpty()) {
+            throw new IllegalStateException("이야기 후보를 하나도 못 읽었습니다");
+        }
+        store.directions(jobId, directions);
+        // **이야기를 DB 로 옮겨 담는다.** 이게 없으면 하네스 폴더가 없어질 때
+        // 제목도 줄거리도 못 읽는다 — 그 폴더는 작업대지 창고가 아니다.
+        stories.save(runId, directions);
+
+        if (job.isCheckpoints()) {
+            store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
+            return;                                 // 사람이 고를 때까지 멈춘다
+        }
+        // 「빠르게 결과부터」 — 서버가 고른다. 규칙은 사람이 볼 때와 같다.
+        int picked = autoPick(runId, directions.size());
+        store.pick(jobId, picked);
+        stories.choose(runId, picked);
+        sheet(jobId);
+    }
+
+    /**
+     * 이야기 후보를 <b>다시</b> 짓는다. 그리고 다시 고르기를 기다린다.
+     *
+     * 첫 걸음과 달리 작품 번호가 이미 있다 — 같은 폴더 안에서 후보만 갈아
+     * 끼운다({@code --restory}).
+     */
+    private void restory(Long jobId, String note) throws Exception {
+        WebtoonJob job = store.running(jobId, JobStage.STORY);
+        progress.say(jobId, "루가 이야기를 다시 짓고 있어요");
+
+        List<String> args = new ArrayList<>(
+                List.of("--run-id", job.getRunId(), "--restory"));
+        if (note != null && !note.isBlank()) {
+            args.add("--note");
+            args.add(note.trim());
+        }
+        int code = callHarness(jobId, job, args);
+        after.cost(job.getRunId());          // 다시 짓는 것도 값이 나간다
+        stopIfCancelled(jobId);
+        if (code != 0) {
+            throw new IllegalStateException("이야기 후보를 다시 만들지 못했습니다");
+        }
+
+        List<Map<String, Object>> directions = directionsOf(job.getRunId());
+        if (directions.isEmpty()) {
+            throw new IllegalStateException("이야기 후보를 하나도 못 읽었습니다");
+        }
+        store.directions(jobId, directions);
+        /* **갈아 끼운다.** 그냥 적으면(save) 이미 적힌 작품이라 아무 일도 안
+           일어나서, 화면에는 새 이야기가 뜨고 DB 에는 옛 이야기가 남는다 —
+           다 만든 뒤 「내가 만든 웹툰」에 고른 적 없는 제목이 뜬다. */
+        stories.replace(job.getRunId(), directions);
+        store.unpick(jobId);                 // 옛 번호를 지운다 — 후보가 바뀌었다
+        store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
+    }
+
+    private void sheet(Long jobId) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
+        WebtoonJob job = store.running(jobId, JobStage.SHEET);
+        progress.say(jobId, "루가 캐릭터를 그리고 있어요");
+
+        /* **두 번 부른다.** `--pick-save` 는 고른 번호를 파일에 적기만 하고
+           (0.5 초면 끝난다), 실제로 시트를 그리는 것은 `--sheet` 다. 처음에
+           하나로 알고 `--pick-save` 만 불렀더니 시트 없이 다음 걸음으로
+           넘어가 거기서 죽었다 — 그때도 이야기 짓는 값은 이미 나간 뒤였다. */
+        int picked = callHarness(jobId, job,
+                List.of("--run-id", job.getRunId(),
+                        "--pick", String.valueOf(job.getPicked()), "--pick-save"));
+        if (picked != 0) {
+            throw new IllegalStateException("고른 이야기를 저장하지 못했습니다");
+        }
+
+        int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--sheet"));
+        after.cost(job.getRunId());          // 시트는 그림이다 — 죽어도 값은 나갔다
+        stopIfCancelled(jobId);
+        if (code != 0) {
+            throw new IllegalStateException("캐릭터 시트를 만들지 못했습니다");
+        }
+
+        // 여기서 올린 사진을 지운다 — 화면이 그렇게 약속했다.
+        dropPhotos(jobId);
+
+        if (job.isCheckpoints()) {
+            store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
+            return;
+        }
+        pages(jobId);
+    }
+
+    private void pages(Long jobId) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
+        WebtoonJob job = store.running(jobId, JobStage.PAGES);
+        progress.say(jobId, "루가 그림을 그리고 있어요");
+
+        /* **장면부터 먼저 나눠 둔다.** `pageCount()`가 몇 장인지 알아야 순차로
+           그릴지 동시에 그릴지 정하는데, 지금 story_prompt 는 이야기 후보의
+           `scenes`를 항상 빈 배열로 낸다(장면은 고른 뒤 scene_prompt 가 따로
+           만든다) — 그래서 이 걸음 없이는 `pageCount()`가 항상 0으로 읽혀
+           `drawPages()`가 매번 순차 경로로만 빠졌다(2026-09-16 실측: 실제
+           job에서 "3장씩 동시에"가 한 번도 안 탄 것을 확인). */
+        ensureScenes(jobId, job);
+
+        drawPages(jobId, job);
+
+        /* 화 전체 검수 + critical 만 자동으로 다시 그리는 루프
+           (webtoon/docs/full-review-design.md §6). **실패해도 만들기는
+           성공이다** — 이미 다 그린 페이지가 있으니, 검수가 못 돌거나
+           한도를 넘겨도 지금까지 그린 것으로 그대로 진행한다. */
+        runFullReviewLoop(jobId, job);
+
+        if (harness.stitch(job.getRunId(), env(job), line -> progress.line(jobId, line)) != 0) {
+            throw new IllegalStateException("이어 붙이기가 실패했습니다");
+        }
+
+        /* **"다 됐다" 고 하기 전에 그림부터 S3 에 올리고 적는다.**
+           화면은 0.8초마다 상태를 묻다가 done 을 보는 즉시 완성본으로 건너가
+           그 폭(1080)의 그림 주소를 묻는다(RunController#page). 여기서 순서를
+           바꿔 store.done 을 먼저 부르면, 화면이 이미 완성본으로 넘어간 뒤에야
+           S3 업로드와 PageStore 기록이 끝나는 틈이 생긴다 — 그 틈에 들어간
+           요청은 그림이 아직 안 적혀 있어 404 를 받는다(새로고침하면 그새
+           끝나 있어 멀쩡해 보였다 — 실측으로 확인).
+           after.finish 는 안에서 실패를 전부 삼키므로(여기서 실패해도 만들기는
+           성공이다) 먼저 불러도 이 메서드가 죽지 않는다 — 순서만 바뀐다. */
+        after.finish(job.getRunId(), line -> progress.line(jobId, line));
+        store.done(jobId);
+        progress.forget(jobId);
+        /* **다 됐다고 적은 뒤에 알린다.** 먼저 보내면 메일의 링크를 눌러
+           들어온 사람이 아직 안 끝난 작품을 본다. 이 부름은 안에서 실패를
+           전부 삼키므로 여기서 죽지 않는다 — 메일이 안 가는 것보다 다 만든
+           작품이 실패로 적히는 것이 훨씬 나쁘다. */
+        notice.finished(jobId);
+    }
+
+    /**
+     * 한 화의 그림을 그린다 — <b>장면마다 프로세스를 나눠 동시에.</b>
+     *
+     * <h2>왜 나눌 수 있게 됐나</h2>
+     *
+     * 전에는 나눌 수가 없었다. 장면 N+1 을 그리려면 N 의 <b>그림</b>이 있어야
+     * 했기 때문이다(직전 그림을 참조로 붙이고, 직전 장 검수가 적어 준
+     * 「다음은 여기서부터」를 물려받았다). 지금은 그리기 전에 {@link #ensureScenes}
+     * 가 이음새를 한 번 정해 둔다 — 장면마다 「어디서 끝나는가」가 글로 박히고,
+     * 그 마무리가 곧 다음 장면의 시작이다. 그래서 옆 장의 그림을 못 봐도 이어진다.
+     *
+     * <h2>이 메서드가 불릴 때는 이미 장면이 나뉘어 있다</h2>
+     *
+     * {@code pages()}가 이 메서드를 부르기 전에 {@link #ensureScenes}를 먼저
+     * 불러 둔다 — {@link #pageCount}가 실제 장면 수를 읽으려면 `scenes.json`이
+     * 이미 있어야 하기 때문이다. 예전에는 여기서 `--scene-link`(존재하지 않는
+     * 플래그였다)를 불러 실패하면 순차로 빠지게 해 뒀는데, `pageCount()`가
+     * 그 전부터 이미 0을 돌려주고 있어서(§아래) 그 안전장치는 한 번도 실제로
+     * 안 탔다 — 실측으로 확인(2026-09-16, 첫 실사용 job이 계속 순차로만
+     * 돌았다). 지금은 `ensureScenes()`가 그 자리를 대신한다.
+     */
+    private void drawPages(Long jobId, WebtoonJob job) throws Exception {
+        int pages = pageCount(job);             // 표지 1장 + 장면 수
+        if (pages <= 1 || pageWorkers <= 1) {
+            drawInOneProcess(jobId, job);
+            return;
+        }
+
+        log.info("장면 {}장을 {}개씩 동시에 그립니다 (job={})", pages, pageWorkers, jobId);
+        java.util.concurrent.atomic.AtomicInteger drawn =
+                new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicReference<Exception> failed =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        progress.drew(jobId, 0, pages);
+
+        List<java.util.concurrent.Future<?>> waiting = new ArrayList<>();
+        for (int n = 1; n <= pages; n++) {
+            final int page = n;
+            waiting.add(paint.submit(() -> {
+                /* 이미 어긋났으면 시작하지 않는다 — 한 장이 실패했는데 남은
+                   장을 계속 그리면 어차피 못 쓸 화에 그림 값만 더 나간다. */
+                if (failed.get() != null || cancelled.contains(jobId)) {
+                    return;
+                }
+                try {
+                    int code = callHarness(jobId, job,
+                            List.of("--run-id", job.getRunId(), "--detail-pages",
+                                    "--page", String.valueOf(page)));
+                    if (code != 0) {
+                        throw new IllegalStateException(page + "번째 장을 그리지 못했습니다");
+                    }
+                    progress.drew(jobId, drawn.incrementAndGet(), pages);
+                } catch (Exception e) {         // noqa: 여기서 새면 기다리는 쪽이 영원히 기다린다
+                    failed.compareAndSet(null, e);
+                }
+            }));
+        }
+        for (java.util.concurrent.Future<?> one : waiting) {
+            one.get();                          // 다 끝나야 이어 붙일 수 있다
+        }
+
+        /* **한 편에서 돈이 제일 많이 나가는 자리다.** 여기서 죽으면 그린
+           만큼은 이미 값이 나갔는데, 끝에서만 적으면 그게 통째로 0원이 된다. */
+        after.cost(job.getRunId());
+        stopIfCancelled(jobId);
+        Exception bad = failed.get();
+        if (bad != null) {
+            throw bad instanceof Cancelled ? bad
+                    : new IllegalStateException("그림을 만들지 못했습니다", bad);
+        }
+    }
+
+    /** 예전 길 — 한 프로세스가 표지부터 마지막 장까지 차례로 그린다. */
+    private void drawInOneProcess(Long jobId, WebtoonJob job) throws Exception {
+        int code = callHarness(jobId, job,
+                List.of("--run-id", job.getRunId(), "--detail-pages"));
+        after.cost(job.getRunId());
+        stopIfCancelled(jobId);
+        if (code != 0) {
+            throw new IllegalStateException("그림을 만들지 못했습니다");
+        }
+    }
+
+    /**
+     * 고른 방향을 장면으로 나눠 둔다 — {@code scenes.json}을 미리 만든다.
+     *
+     * <b>{@link #pageCount}가 실제 장면 수를 읽으려면 이게 먼저 있어야 한다.</b>
+     * `run.py --detail-pages`도 `scenes.json`이 없으면 알아서 한 번 만들지만,
+     * 그건 그리기 호출 <i>안에서</i> 일어나는 일이라 자바가 그 전에 미리 몇
+     * 장인지 알 방법이 없다 — 그래서 순차/동시 그리기를 정하기 전에 이 걸음을
+     * 먼저 따로 뗀다. 이미 있으면(재시도 등) 그냥 넘어간다 — `run.py` 자체가
+     * 있으면 다시 안 만든다(글 호출·돈이 두 번 안 나간다는 뜻).
+     */
+    private void ensureScenes(Long jobId, WebtoonJob job) throws Exception {
+        if (Files.isRegularFile(runsDir.resolve(job.getRunId()).resolve("scenes.json"))) {
+            return;
+        }
+        int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--scenes"));
+        after.cost(job.getRunId());
+        stopIfCancelled(jobId);
+        if (code != 0) {
+            throw new IllegalStateException("장면을 나누지 못했습니다");
+        }
+    }
+
+    /**
+     * 화 전체 검수(fullreview) → critical 만 자동 재생성 → 다시 전체 검수,
+     * 를 한도 안에서 도는 루프.
+     *
+     * <h2>책임 분리 — 자바가 상태 머신, 파이썬은 실행 단위</h2>
+     *
+     * {@code fullreview.py}는 판정만 내고, {@code run.py --detail-pages
+     * --page N}은 그 페이지를 다시 그리기만 한다(그 안에서 {@code
+     * pagecheck}가 자동으로 같이 돈다 — 여기서 따로 또 부르지 않는다).
+     * <b>언제 다시 검수를 돌리고, 몇 번까지 다시 그리고, 언제 멈추고
+     * 사람에게 넘길지</b>는 전부 여기서 정한다
+     * (webtoon/docs/full-review-design.md §6.1, 2026-09-16 확정).
+     *
+     * <h2>major/minor 는 자동 재생성하지 않는다</h2>
+     *
+     * {@code fullreview}가 이미 {@code severity}가 critical 이 아니면
+     * {@code redraw}를 강제로 false 로 눌러서 내려준다
+     * ({@code fullreview.parse}). 여기서는 그 값을 그대로 믿는다 — major·
+     * minor 는 기록만 되고(진행 로그에 통과로 표시), 자동으로 값을 더
+     * 쓰지 않는다.
+     *
+     * <h2>루프가 멈춰도 작품은 실패가 아니다</h2>
+     *
+     * 검수 호출이 죽거나, 결과를 못 읽거나, 한도를 넘겨도 <b>예외를 밖으로
+     * 던지지 않는다</b> — 이미 그린 페이지로 그대로 진행한다. 대신 진행
+     * 로그({@link JobProgress#say})에 사람이 읽을 말을 남긴다. 화면은 이미
+     * 이 채널을 그대로 보여준다(STORY·SHEET 단계의 "루가 …하고 있어요"와
+     * 같은 자리) — 조용히 오류로 끝나는 대신, "루가 최대한 다듬었어요"
+     * 같은 말로 마지막 상태를 알린다.
+     *
+     * <b>취소는 예외다.</b> {@link Cancelled}는 여기서 안 삼킨다 — 취소
+     * 표시가 있으면 곧바로 돌아가고, {@code callHarness}가 던지는
+     * {@code Cancelled}도 그대로 위로 흘려보낸다. 취소된 작품이 "다
+     * 됐다"로 끝나면 안 된다.
+     */
+    private void runFullReviewLoop(Long jobId, WebtoonJob job) {
+        // 페이지 -> 이 루프 안에서 다시 그린 횟수.
+        Map<Integer, Integer> redrawn = new HashMap<>();
+        for (int round = 1; round <= MAX_FULL_REVIEW_ROUNDS; round++) {
+            if (cancelled.contains(jobId)) {
+                return;
+            }
+            /* 문구를 정확히 이 문자열로 고정한다 — FE(nhStage.ts) 가 이
+               문자열을 보고 마스코트 그림을 "검수 중" 그림(bind.webp)으로
+               바꾼다. 라운드 번호·페이지 번호처럼 매번 달라지는 값을 넣으면
+               그 매칭이 깨진다. */
+            progress.say(jobId, FULL_REVIEW_SAY);
+
+            int code;
+            try {
+                code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--full-review"));
+            } catch (IOException | InterruptedException e) {
+                log.warn("전체 검수 호출이 실패했습니다 (job={}, round={})", jobId, round, e);
+                return;
+            }
+            after.cost(job.getRunId());
+            if (cancelled.contains(jobId)) {
+                return;
+            }
+            if (code != 0) {
+                log.warn("전체 검수를 하지 못했습니다 — 이미 그린 페이지로 진행합니다 "
+                        + "(job={}, round={})", jobId, round);
+                return;
+            }
+
+            JsonNode review = readFullReview(job.getRunId());
+            if (review == null) {
+                return;                  // 읽지 못했다 — readFullReview 가 이미 로그를 남긴다
+            }
+            JsonNode issues = review.path("issues");
+            if (!issues.isArray() || issues.isEmpty()) {
+                return;                  // 지적이 하나도 없다 — 끝
+            }
+
+            // 페이지별 한도(MAX_PAGE_REDRAWS) 안에서만 이번 라운드에 다시 그릴
+            // 대상을 추린다. 같은 페이지가 이슈 여러 개에 걸리면 사유를 모은다.
+            Map<Integer, String> target = new LinkedHashMap<>();
+            List<Integer> gaveUp = new ArrayList<>();
+            for (JsonNode issue : issues) {
+                if (!issue.path("redraw").asBoolean(false)) {
+                    continue;             // critical 이 아니거나(major/minor) 구조적 문제 — 자동 재생성 안 함
+                }
+                String why = issue.path("why").asText("");
+                for (JsonNode pageNode : issue.path("redraw_pages")) {
+                    int page = pageNode.asInt(-1);
+                    if (page <= 0) {
+                        continue;
+                    }
+                    int used = redrawn.getOrDefault(page, 0);
+                    if (used >= MAX_PAGE_REDRAWS) {
+                        gaveUp.add(page);
+                        continue;
+                    }
+                    target.merge(page, why, (a, b) -> a + "\n" + b);
+                }
+            }
+            if (!gaveUp.isEmpty()) {
+                log.info("페이지별 재생성 한도({}회)를 넘겨 그대로 둡니다: {} (job={})",
+                        MAX_PAGE_REDRAWS, gaveUp, jobId);
+            }
+            if (target.isEmpty()) {
+                // critical 로 걸린 페이지가 전부 한도를 넘겼거나(재시도 소진),
+                // 걸린 게 전부 major/minor 였다 — 더 자동으로 할 게 없다.
+                return;
+            }
+
+            /* 그리는 단계의 기본 문구로 되돌린다 — 그래야 FE 마스코트 그림도
+               "검수 중"(bind.webp)에서 "그리는 중"(art.webp) 으로 같이
+               돌아간다(nhStage.ts 의 기본 매핑, NH_STAGE_SAY.pages 와
+               한 글자도 같아야 한다). */
+            progress.say(jobId, PAGES_SAY);
+            for (Map.Entry<Integer, String> entry : target.entrySet()) {
+                if (cancelled.contains(jobId)) {
+                    return;
+                }
+                int page = entry.getKey();
+                redrawn.merge(page, 1, Integer::sum);
+                redrawPage(jobId, job, page, entry.getValue());
+            }
+            // 라운드 끝 — for 가 다음 회차로 넘어가 전체 검수를 다시 돈다.
+        }
+        log.info("전체 검수 자동 수정 한도({}라운드)를 다 썼습니다 — 남은 문제가 있어도 "
+                + "여기서 멈춥니다 (job={})", MAX_FULL_REVIEW_ROUNDS, jobId);
+        progress.say(jobId, "루가 최대한 다듬었어요 — 일부는 더 못 고쳤지만 완성으로 넘어가요");
+    }
+
+    /**
+     * 페이지 하나를 다시 그린다 — 검수가 찾은 이유를 {@code --note}로 같이
+     * 넘긴다(그리는 프롬프트 뒤에 붙어 "이 문제를 반영해서 다시 그려라"가
+     * 된다, {@code detailart.note_block}). 그 안에서 {@code pagecheck}도
+     * 자동으로 같이 돈다 — 여기서 따로 또 부르지 않는다.
+     *
+     * 실패해도 예외를 던지지 않는다 — 원래 그림이 그대로 있으니 그 페이지만
+     * 포기하고 나머지 루프는 계속된다. {@link Cancelled}(취소)만은 그대로
+     * 위로 흘려보낸다 — 여기서 잡지 않는다(IOException·InterruptedException
+     * 만 잡는다).
+     */
+    private void redrawPage(Long jobId, WebtoonJob job, int page, String why) {
+        Path png = runsDir.resolve(job.getRunId()).resolve("pages")
+                .resolve("page%02d.png".formatted(page));
+        try {
+            Files.deleteIfExists(png);   // run.py 는 파일이 있으면 안 다시 그린다
+        } catch (IOException e) {
+            log.warn("{}페이지 원본을 못 지웠습니다 — 그대로 둡니다 (job={})", page, jobId, e);
+            return;
+        }
+        List<String> args = List.of("--run-id", job.getRunId(), "--detail-pages",
+                "--page", String.valueOf(page), "--note", why);
+        try {
+            int code = callHarness(jobId, job, args);
+            after.cost(job.getRunId());
+            if (code != 0) {
+                log.warn("{}페이지를 다시 그리지 못했습니다 (job={})", page, jobId);
+            }
+        } catch (IOException | InterruptedException e) {
+            log.warn("{}페이지를 다시 그리다 실패했습니다 (job={})", page, jobId, e);
+        }
+    }
+
+    /** {@code full_review.json}을 읽는다. 없거나 못 읽으면 {@code null}
+     * (읽는 쪽이 로그만 남기고 그대로 진행한다 — {@link #directionsOf}와
+     * 같은 관례). */
+    private JsonNode readFullReview(String runId) {
+        Path file = runsDir.resolve(runId).resolve("full_review.json");
+        try {
+            return mapper.readTree(file.toFile());
+        } catch (IOException e) {
+            log.warn("전체 검수 결과를 못 읽었습니다 (run={})", runId, e);
+            return null;
+        }
+    }
+
+    /**
+     * 이 화가 몇 장인가 — <b>표지 1장 + 장면 수.</b> 모르면 0.
+     *
+     * 파이썬이 페이지를 그 순서 그대로 매긴다(1 이 표지, 2 부터가 장면).
+     *
+     * <b>{@code scenes.json}에서 센다 — {@code directions.json}의 `scenes`가
+     * 아니다.</b> 이야기 후보(story_prompt)는 제목·소개·본문만 내고 장면
+     * 목록은 항상 빈 배열이다(장면은 고른 뒤 scene_prompt 가 따로 만든다) —
+     * 예전에는 여기서 그 빈 배열을 읽어서 <b>항상 0을 돌려줬고</b>, 그래서
+     * {@link #drawPages}가 매번 "표지·장면 1장뿐"으로 오판해 순차 경로로만
+     * 빠졌다(2026-09-16 실측, 첫 실사용 job으로 확인). 호출 전에
+     * {@link #ensureScenes}가 `scenes.json`을 먼저 만들어 둔다.
+     */
+    private int pageCount(WebtoonJob job) {
+        Path file = runsDir.resolve(job.getRunId()).resolve("scenes.json");
+        try {
+            JsonNode scenes = mapper.readTree(file.toFile()).path("scenes");
+            return scenes.isArray() && !scenes.isEmpty() ? scenes.size() + 1 : 0;
+        } catch (IOException e) {
+            log.warn("장면 수를 못 읽었습니다 (run={})", job.getRunId(), e);
+            return 0;
+        }
+    }
+
+    /* ---- 곁가지 ----------------------------------------------------------- */
+
+    /**
+     * 하네스에 넘기는 환경변수.
+     *
+     * <b>사람이 고른 것만</b> 넘긴다 — 그림체와 화질 둘이다. 프로바이더·모델
+     * 같은 <b>우리가 정하는 값</b>은 하네스 코드의 기본값이 정한다
+     * ({@code llm.py} 의 {@code DEFAULT_PROVIDER}, {@code imagegen.py} 의
+     * {@code DEFAULT_IMAGE_QUALITY}) — 그런 값을 자바와 파이썬 두 군데에 적으면
+     * 한쪽만 고치는 사고가 난다.
+     *
+     * 가르는 기준은 <b>요청마다 달라지느냐</b>다. 달라지는 값은 여기로 넘기고,
+     * 안 달라지는 값은 하네스에 박는다.
+     */
+    private Map<String, String> env(WebtoonJob job) {
+        Map<String, String> env = new HashMap<>();
+        env.put("NH_STYLE", job.getStyle());
+        /* 사람이 고른 화질. 그림체와 <b>같은 성격</b>이라 같이 넘긴다 —
+           요청마다 다른 값이므로 코드 기본값으로는 못 정한다.
+           안 넘어가면 하네스가 자기 기본값(medium)으로 그린다. */
+        env.put("OPENAI_IMAGE_QUALITY", WebtoonQuality.harnessValue(job.getQuality()));
+        // NH_RUNS_DIR 은 HarnessProcess 가 띄우는 모든 파이썬에 한자리에서 넣는다.
+        return env;
+    }
+
+    /**
+     * 어느 그림체로 그렸는지 작품 폴더에 남긴다.
+     *
+     * <b>없으면 둘러보기 카드에 그림체가 안 뜬다</b> — 실제로 스프링 경로로
+     * 처음 만든 작품이 그랬다. 파이썬 서버는 이걸 남기는데(write_style) 이 길은
+     * 안 남기고 있었다.
+     *
+     * 나중에 한 장만 다시 그릴 때도 쓴다. 이 기록이 없으면 다시 그린 장만
+     * 하네스 기본 그림체로 나와서 한 편 안에서 그 장만 화풍이 다르다.
+     *
+     * 못 남겨도 만들기는 안 막는다 — 딱지가 안 뜰 뿐이다.
+     */
+    private void writeStyle(String runId, String style) {
+        try {
+            Files.writeString(runsDir.resolve(runId).resolve("style.txt"), style);
+        } catch (IOException e) {
+            log.warn("그림체를 남기지 못했습니다 (run={}, style={})", runId, style, e);
+        }
+    }
+
+    /**
+     * 어느 화질로 그렸는지 작품 폴더에 남긴다.
+     *
+     * <b>한 장만 다시 그릴 때 읽는다</b>({@code RegenService}). 이게 없으면 그
+     * 장만 하네스 기본값으로 나와서 한 편 안에서 밀도가 갈린다 — 그림체를
+     * 남기는 것과 같은 이유이고, 같은 자리에 같은 방식으로 남긴다.
+     *
+     * 못 남겨도 만들기는 안 막는다 — 다시 그릴 때 기본값으로 떨어질 뿐이다.
+     */
+    private void writeQuality(String runId, String quality) {
+        try {
+            Files.writeString(runsDir.resolve(runId).resolve("quality.txt"),
+                    WebtoonQuality.normalize(quality));
+        } catch (IOException e) {
+            log.warn("화질을 남기지 못했습니다 (run={}, quality={})", runId, quality, e);
+        }
+    }
+
+    /**
+     * 방금 만들어진 작품 번호.
+     *
+     * 파이썬이 시각으로 폴더 이름을 지으므로 <b>가장 최근에 생긴 것</b>이
+     * 방금 것이다. 한 줄로 세워 돌리기 때문에 그 사이에 다른 것이 끼어들지
+     * 않는다 — 여럿을 같이 돌리기 시작하면 이 방법부터 못 쓴다.
+     */
+    /**
+     * 새 작품 번호. <b>하네스가 짓던 것과 같은 모양</b>이다
+     * ({@code story.new_run_id} — 시각 + 여섯 자리).
+     *
+     * 같은 초에 둘이 시작해도 뒤가 달라서 안 겹친다. 시각을 앞에 두는 것은
+     * 폴더를 늘어놓았을 때 사람이 순서를 읽을 수 있게 하려는 것이다.
+     */
+    private String newRunId() {
+        String when = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss")
+                .withZone(ZoneId.systemDefault()).format(Instant.now());
+        return when + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
+    }
+
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> directionsOf(String runId) {
+        Path file = runsDir.resolve(runId).resolve("directions.json");
+        try {
+            JsonNode root = mapper.readTree(file.toFile());
+            return root.isArray()
+                    ? mapper.convertValue(root, List.class)
+                    : List.of();
+        } catch (IOException e) {
+            log.warn("이야기 후보를 못 읽었습니다 (run={})", runId, e);
+            return List.of();
+        }
+    }
+
+    /**
+     * 사람이 확인 화면에서 이야기 본문을 직접 고쳐 보냈을 때, 실제
+     * `directions.json`의 그 방향 번호 `body`를 덮어쓴다.
+     *
+     * <b>이 파일이 진짜 재료다.</b> 장면을 나누는 단계(`run.py --scenes`,
+     * {@link #ensureScenes})가 이 파일에서 고른 방향의 본문을 그대로
+     * 읽어 간다 — 화면에서만 고치고 이 파일을 안 건드리면 "고친 게
+     * 반영 안 됐다"는 사고가 난다.
+     *
+     * 실패해도 예외를 던지지 않는다 — 못 고쳤어도 원래 본문으로 그대로
+     * 진행하는 것이 아무것도 안 만드는 것보다 낫다. 대신 로그를 남긴다.
+     */
+    void overwriteDirectionBody(String runId, int n, String body) {
+        Path file = runsDir.resolve(runId).resolve("directions.json");
+        try {
+            JsonNode root = mapper.readTree(file.toFile());
+            if (!(root instanceof ArrayNode array)) {
+                log.warn("이야기 후보 파일 모양이 예상과 다릅니다 (run={})", runId);
+                return;
+            }
+            boolean changed = false;
+            for (JsonNode one : array) {
+                if (one.path("n").asInt(-1) == n && one instanceof ObjectNode obj) {
+                    obj.put("body", body);
+                    changed = true;
+                }
+            }
+            if (!changed) {
+                log.warn("고칠 방향을 못 찾았습니다 (run={}, n={})", runId, n);
+                return;
+            }
+            mapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), array);
+            log.info("이야기 본문을 사람이 고친 대로 반영했습니다 (run={}, n={})", runId, n);
+        } catch (IOException e) {
+            log.warn("이야기 본문을 못 고쳤습니다 — 원래 본문으로 진행합니다 (run={}, n={})",
+                    runId, n, e);
+        }
+    }
+
+    /**
+     * 서버가 고른다 — 「빠르게 결과부터」를 고른 사람 몫, 그리고
+     * {@link CheckpointTimeouts}가 체크포인트 시간 초과로 대신 고를 때도 쓴다.
+     *
+     * <b>아무거나 고르지 않는다.</b> 하네스가 후보마다 검수를 남기는데
+     * ({@code story_review.json}), 통과한 것 중에서 고른다. 통과한 것이 없으면
+     * 전부에서 고른다 — 그때는 무엇을 골라도 같은 처지다.
+     */
+    int autoPick(String runId, int howMany) {
+        List<Integer> passed = new ArrayList<>();
+        Path review = runsDir.resolve(runId).resolve("story_review.json");
+        try {
+            JsonNode root = mapper.readTree(review.toFile());
+            for (JsonNode one : root.isArray() ? root : mapper.createArrayNode()) {
+                if ("통과".equals(one.path("verdict").asText())) {
+                    int n = one.path("n").asInt(0);
+                    if (n > 0) {
+                        passed.add(n);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            log.debug("이야기 검수 결과가 없습니다 (run={}) — 전부에서 고릅니다", runId);
+        }
+        if (passed.isEmpty()) {
+            for (int n = 1; n <= howMany; n++) {
+                passed.add(n);
+            }
+        }
+        return passed.get((int) (Math.random() * passed.size()));
+    }
+
+    /**
+     * 실패했다. <b>사람에게는 사람 말로, 그리고 낸 것은 돌려준다.</b>
+     *
+     * 전에는 예외 메시지를 그대로 화면에 실었다. 그래서 자바가 던진
+     * {@code No value present} 같은 영어 한 줄이 사람에게 그대로 나갔다 —
+     * 무슨 일이 났는지도, 무엇을 하면 되는지도 알 수 없고, 크레딧은 이미
+     * 빠진 뒤였다. 실제로 그렇게 나갔다.
+     *
+     * 그래서 두 가지를 한다.
+     *
+     * <ul>
+     *   <li><b>말을 고른다.</b> 우리가 사람에게 하려고 쓴 한글 문장만
+     *       내보내고, 나머지(버그에서 나온 영어 예외)는 로그에만 남기고
+     *       화면에는 무슨 일인지 · 크레딧은 어떻게 됐는지를 적는다.</li>
+     *   <li><b>돌려준다.</b> 크레딧과, 로그인 안 한 사람의 하루 몫을.
+     *       만들어진 것이 없는데 값만 빠져 있으면 그건 그냥 잃은 것이다.</li>
+     * </ul>
+     */
+    private void fail(Long jobId, Exception e) {
+        if (e instanceof Cancelled) {
+            log.info("사람이 만들기를 그만뒀습니다 (job={})", jobId);
+            stop(jobId, CANCELLED);
+            return;
+        }
+        log.error("만들기가 실패했습니다 (job={})", jobId, e);
+        stop(jobId, humanReason(e));
+    }
+
+    /**
+     * 여기서 끝낸다 — 값을 적고, 낸 것을 돌려주고, 왜 끝났는지 적는다.
+     *
+     * <b>이미 끝난 것은 다시 안 끝낸다.</b> 취소는 두 곳에서 들어올 수 있다
+     * (그만두라고 한 자리와, 그 말을 본 걸음). 그냥 두면 로그인 안 한 사람의
+     * 하루 몫이 두 번 돌아온다 — {@code GuestGate.refundKey} 는 부를 때마다
+     * 하나씩 돌려주기 때문이다.
+     */
+    private void stop(Long jobId, String why) {
+        WebtoonJob job = store.byId(jobId);
+        if (job == null || job.getStatus().isOver()) {
+            cancelled.remove(jobId);
+            return;
+        }
+        spentSoFar(jobId);
+        Refunded back = refund(jobId);
+        store.failed(jobId, why, back);
+        progress.forget(jobId);
+        cancelled.remove(jobId);
+        /* **주소를 적어 준 사람에게 아무 말도 안 하는 것이 제일 나쁘다.**
+           기다리라고 해 놓고 영영 안 오면 돈만 받고 사라진 줄 안다.
+           다만 **사람이 스스로 그만둔 것은 안 알린다** — 자기가 누른 것을
+           메일로 또 알려 주는 것은 알림이 아니라 잔소리다. */
+        if (!CANCELLED.equals(why)) {
+            notice.failed(jobId, why, back);
+        }
+    }
+
+    /**
+     * 실패한 작품에 <b>여기까지 나간 값</b>을 적는다.
+     *
+     * <b>돌려주는 것과 다른 이야기다.</b> 낸 사람에게 크레딧을 돌려주는 것은
+     * 우리 사정이고(만들어진 게 없으니 받으면 안 된다), 모델에 이미 낸 돈은
+     * 그래도 나갔다. 그 둘을 같은 것으로 보면 실패한 편은 하루 상한에서
+     * <b>0원</b>이 되고, 실패가 잦을수록 상한이 헐거워진다.
+     *
+     * 걸음마다 이미 적고 있지만(각 걸음의 {@code after.cost} 참고) 그 사이에서
+     * 죽는 자리가 있다 — 이어 붙이기, 후보를 하나도 못 읽은 때. 여기가 그
+     * 그물이다. 겹쳐도 서버가 거른다.
+     */
+    private void spentSoFar(Long jobId) {
+        try {
+            WebtoonJob job = store.byId(jobId);
+            if (job != null) {
+                after.cost(job.getRunId());
+            }
+        } catch (RuntimeException ex) {   // noqa: 여기서 죽으면 실패를 아예 못 적는다
+            log.error("실패한 작품의 값을 못 적었습니다 (job={})", jobId, ex);
+        }
+    }
+
+    /**
+     * 낸 것을 돌려준다. -> <b>실제로</b> 돌려준 것.
+     *
+     * 전에는 "돌려줄 사람이 있었나"(로그인했나 · 게스트 열쇠가 있나)를 그대로
+     * 돌려줬는데, 그건 돌려줬다는 뜻이 아니다 — 돌려주는 일이 조용히 실패해도
+     * 화면에는 "돌려드렸어요" 가 그대로 떴다. 돌려주는 쪽이 알려 주는 값으로
+     * 정한다.
+     */
+    Refunded refund(Long jobId) {
+        try {
+            WebtoonJob job = store.byId(jobId);
+            if (job == null) {
+                return Refunded.NONE;
+            }
+            if (credits.refund(job.getUserId(), job.getPublicId()) > 0) {
+                return Refunded.CREDIT;
+            }
+            if (guests.refundKey(job.getGuestKey())) {
+                return Refunded.FREE;
+            }
+            return Refunded.NONE;
+        } catch (RuntimeException ex) {      // noqa: 돌려주다 죽어서 실패를 못 적으면 더 나쁘다
+            log.error("낸 것을 못 돌려줬습니다 (job={}) — 사람이 맞춰야 합니다", jobId, ex);
+            return Refunded.NONE;
+        }
+    }
+
+    /**
+     * 화면에 나갈 한 줄.
+     *
+     * 사람에게 보여도 되는 것은 <b>우리가 그러라고 쓴 한글 문장</b>뿐이다
+     * (예: "이야기 후보를 만들지 못했습니다"). 그 밖의 예외는 전부 버그이고,
+     * 그 문구는 사람에게 아무 도움이 안 된다 — 무슨 일인지만 말하고 사유는
+     * 로그에 둔다.
+     */
+    private static String humanReason(Exception e) {
+        String said = e.getMessage();
+        /* **돌려준 이야기는 여기에 안 붙인다.** 로그인한 사람에게는 크레딧을,
+           게스트에게는 무료 횟수를 돌려주므로 같은 말을 쓸 수 없다 — 크레딧이
+           없는 사람에게 "크레딧을 돌려드렸어요" 는 없는 것을 돌려줬다는 말이라
+           아무 뜻이 없다. 무엇을 돌려줬는지는 따로 보내고(Refunded), 문장은
+           화면이 고른다. 여기는 **왜 멈췄는가**만 말한다. */
+        return said != null && hasHangul(said)
+                ? said
+                : "그리는 도중에 문제가 생겼습니다.";
+    }
+
+    /** 한글이 섞여 있는가 — 우리가 사람에게 하려고 쓴 말인지 가르는 자리. */
+    private static boolean hasHangul(String s) {
+        return s.codePoints().anyMatch(c -> c >= 0xAC00 && c <= 0xD7A3);
+    }
+
+    /**
+     * 사람이 올린 사진을 지운다.
+     *
+     * <h2>왜 여기인가</h2>
+     *
+     * 사진은 <b>시트 사양을 쓸 때만</b> 쓰인다 — 모델이 사진을 읽고 외모를
+     * 글로 적고, 그림은 그 글만 보고 그린다(run.py 의 `[시트] 그리는 중…
+     * (사진 없이 사양만)`). 사양이 나온 뒤로는 다시 안 쓰이므로, 이 걸음이
+     * 끝나는 자리가 지울 수 있는 가장 이른 자리다.
+     *
+     * <h2>왜 지우나</h2>
+     *
+     * 만들기 첫 걸음에 <b>"올린 사진은 캐릭터를 만드는 데만 쓰고, 시트가
+     * 나오면 서버에서 지웁니다"</b> 라고 적혀 있다. 그런데 안 지우고 있었다 —
+     * 다 만든 작업 폴더에 photo1.png 가 그대로 남아 있었다. 사람 얼굴이 들어올
+     * 수 있는 값이고, 무엇보다 <b>안 지킬 약속을 화면에 적어 두면 안 된다.</b>
+     *
+     * 못 지워도 만들기는 안 멈춘다 — 그림은 이미 나오는 중이다. 대신 크게
+     * 남긴다: 안 지워진 사진은 사람이 나중에 치워야 하는 일이다.
+     */
+    private void dropPhotos(Long jobId) {
+        WebtoonJob job = store.byId(jobId);
+        if (job == null) {
+            return;
+        }
+        Path dir = jobsDir.resolve(job.getPublicId());
+        try (var found = Files.list(dir)) {
+            List<Path> photos = found
+                    .filter(p -> p.getFileName().toString().startsWith("photo"))
+                    .toList();
+            for (Path one : photos) {
+                Files.deleteIfExists(one);
+            }
+            if (!photos.isEmpty()) {
+                log.info("올린 사진 {}장을 지웠습니다 (job={})", photos.size(), job.getPublicId());
+            }
+        } catch (IOException | RuntimeException e) {
+            log.error("올린 사진을 못 지웠습니다 (job={}) — 사람이 치워야 합니다",
+                    job.getPublicId(), e);
+        }
+    }
+
+    /** 지금 시각. 검사에서 갈아 끼우려고 따로 둔다. */
+    Instant now() {
+        return Instant.now();
+    }
+}

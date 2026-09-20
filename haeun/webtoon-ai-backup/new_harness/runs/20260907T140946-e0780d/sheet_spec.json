@@ -1,0 +1,33 @@
+{
+  "name": "이올",
+  "species": "사람",
+  "species_en": "",
+  "appearance_en": "A young woman in her late twenties with a slim build and pale skin. She has straight, shoulder-length black hair parted to one side, and dark brown eyes with a sharp gaze. Her outfit consists of a dark gray, practical jacket with multiple pockets, black fitted pants, and sturdy black boots. She wears a utility belt with pouches and a small holster on her right thigh. Her expression is reserved and she carries herself with a quiet, cautious demeanor.",
+  "design_details": [
+    "왼쪽 어깨에 작은 흉터",
+    "검은색 어깨 길이 직모, 왼쪽 가르마",
+    "짙은 회색 다용도 재킷, 가슴과 허리에 주머니가 여러 개 있음",
+    "오른쪽 허벅지에 작은 홀스터가 달린 벨트",
+    "검은색 발목까지 오는 부츠"
+  ],
+  "props": [
+    "철제 열쇠 뭉치, 손바닥만 한 크기, 오래되어 표면이 닳아 은색이 벗겨짐",
+    "작은 수첩, 검은색 가죽 커버, 모서리가 닳아 하얗게 트임"
+  ],
+  "color_palette": {
+    "hair": "black (#222222)",
+    "eyes": "dark brown (#3B2F2F)",
+    "skin": "pale beige (#F5E6D3)",
+    "outfit_main": "dark gray (#474747)",
+    "outfit_sub": "black (#181818)",
+    "accent": "silver (#B0B0B0)"
+  },
+  "expression_set": [
+    "무표정 — 입을 다물고 눈썹이 거의 움직이지 않은, 감정이 드러나지 않는 얼굴",
+    "경계 — 눈썹이 살짝 찌푸려지고 시선이 옆으로 향한 얼굴",
+    "피로 — 눈꺼풀이 약간 내려오고 입꼬리가 살짝 처진 얼굴",
+    "놀람 — 눈이 크게 뜨이고 입이 약간 벌어진 얼굴",
+    "단호 — 입을 굳게 다물고 눈썹이 아래로 모인 얼굴",
+    "슬픔 — 눈동자가 아래로 향하고 입꼬리가 내려간 얼굴"
+  ]
+}

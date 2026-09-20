@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin:0; padding:0; background:#FFFFFF; }
+  * { box-sizing:border-box; }
+  body { -webkit-font-smoothing:antialiased; }
+  a { color:#5B2BE8; text-decoration:none; }
+  a:hover { color:#3F16C4; }
+  ::selection { background:#FFD9A0; color:#17121F; }
+  @keyframes loreBob { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-12px) } }
+</style>
+</helmet>
+
+<div style="background:#FFFFFF; color:#17121F; font-family:'Noto Sans KR', system-ui, sans-serif; overflow-x:hidden">
+
+  <header style="position:sticky; top:0; z-index:60; background:rgba(255,255,255,0.82); backdrop-filter:blur(16px); border-bottom:1px solid rgba(23,18,31,0.07)">
+    <div style="max-width:1240px; margin:0 auto; padding:12px clamp(16px,4vw,40px); display:flex; align-items:center; gap:clamp(12px,3vw,30px)">
+      <a href="#top" style="font-family:'Archivo', sans-serif; font-weight:900; font-size:22px; letter-spacing:-0.03em; color:#17121F">LORE<span style="color:#FF6B45">.</span></a>
+      <nav style="margin-left:auto; display:flex; align-items:center; gap:clamp(10px,2.4vw,20px); font-size:14px; font-weight:500">
+        <a href="#comic" style="color:#4B4358; padding:8px 10px; border-radius:999px" style-hover="color:#17121F; background:#F4F1FA">Comic</a>
+        <a href="#trailer" style="color:#4B4358; padding:8px 10px; border-radius:999px" style-hover="color:#17121F; background:#F4F1FA">Trailer</a>
+        <a href="#story" style="color:#4B4358; padding:8px 10px; border-radius:999px" style-hover="color:#17121F; background:#F4F1FA">Story</a>
+      </nav>
+      <a href="#cta" style="padding:10px 18px; background:#17121F; color:#fff; font-size:13.5px; font-weight:700; border-radius:999px; white-space:nowrap" style-hover="background:#3F16C4">시작하기</a>
+    </div>
+  </header>
+
+  <section id="top" style="position:relative; overflow:hidden; background-color:#F7F4FF; background-image:radial-gradient(120% 90% at 8% 0%, #E9E1FF 0%, rgba(233,225,255,0) 55%), radial-gradient(100% 80% at 92% 4%, #FFE6D2 0%, rgba(255,230,210,0) 52%), radial-gradient(90% 70% at 60% 100%, #DDF3F0 0%, rgba(221,243,240,0) 60%)">
+    <div style="max-width:1240px; margin:0 auto; padding:clamp(34px,7vw,84px) clamp(16px,4vw,40px) clamp(38px,7vw,84px); display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:clamp(28px,5vw,56px); align-items:center">
+      <div>
+        <div style="display:inline-flex; align-items:center; gap:8px; background:#FFFFFF; border:1px solid rgba(23,18,31,0.08); padding:7px 14px; border-radius:999px; font-size:12.5px; font-weight:500; color:#4B4358">
+          <span style="width:7px; height:7px; border-radius:50%; background:#FF6B45"></span>우리만의 캐릭터로 노는 만화 플랫폼
+        </div>
+        <h1 style="font-weight:900; font-size:clamp(34px,4.6vw,62px); line-height:1.16; letter-spacing:-0.04em; margin:18px 0 0; text-wrap:pretty">그림은 못 그려도<br />내 캐릭터는<br />있으니까</h1>
+        <p style="font-size:clamp(15px,3.6vw,17px); line-height:1.8; color:#4B4358; margin:18px 0 0; max-width:34ch; font-weight:400; text-wrap:pretty">사진 한 장에서 캐릭터를 뽑고, 설정은 내가 고쳐 가며 정합니다. 그렇게 만든 우리 애로 4컷 · 예고편 · 웹툰까지.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:26px">
+          <a href="#comic" style="padding:16px 28px; background:#17121F; color:#fff; font-weight:700; font-size:15px; border-radius:999px" style-hover="background:#3F16C4">우리 애 만들러 가기</a>
+          <a href="#comic" style="padding:16px 26px; background:#FFFFFF; border:1px solid rgba(23,18,31,0.12); color:#17121F; font-weight:500; font-size:15px; border-radius:999px" style-hover="background:#F4F1FA">먼저 예시 보기</a>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:clamp(10px,1.6vw,16px); animation:loreBob 11s ease-in-out infinite">
+        <div style="border-radius:22px; overflow:hidden; background:#EDE6FF; aspect-ratio:3/4; display:flex; align-items:flex-end; padding:14px; background-image:repeating-linear-gradient(135deg, rgba(91,43,232,0.1) 0 7px, transparent 7px 16px)"><span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; letter-spacing:0.1em; color:#5B2BE8">CHARACTER SHEET</span></div>
+        <div style="display:grid; gap:clamp(10px,1.6vw,16px)">
+          <div style="border-radius:22px; background:#FFE2CE; aspect-ratio:1/1; background-image:repeating-linear-gradient(135deg, rgba(255,107,69,0.14) 0 7px, transparent 7px 16px); display:flex; align-items:flex-end; padding:12px"><span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; letter-spacing:0.1em; color:#C2451F">4-CUT</span></div>
+          <div style="border-radius:22px; background:#DCEFEA; aspect-ratio:4/3; background-image:repeating-linear-gradient(135deg, rgba(28,120,102,0.12) 0 7px, transparent 7px 16px); display:flex; align-items:flex-end; padding:12px"><span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; letter-spacing:0.1em; color:#1C7866">TEASER</span></div>
+        </div>
+      </div>
+    </div>
+    <div style="background:rgba(255,255,255,0.66); border-top:1px solid rgba(23,18,31,0.06)">
+      <div style="max-width:1240px; margin:0 auto; padding:14px clamp(16px,4vw,40px); display:flex; flex-wrap:wrap; gap:10px; align-items:center">
+        <span style="background:#17121F; color:#fff; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:999px">한 캐릭터</span>
+        <span style="font-size:13.5px; color:#4B4358">4컷 · 예고편 · 웹툰 — 어느 탭에서 꺼내도 같은 얼굴, 같은 설정으로 이어집니다.</span>
+      </div>
+    </div>
+  </section>
+
+  <section style="max-width:1240px; margin:0 auto; padding:clamp(46px,8vw,96px) clamp(16px,4vw,40px) clamp(20px,3vw,32px)">
+    <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:0.18em; color:#5B2BE8; text-transform:uppercase">Comic → Trailer → Story</div>
+    <h2 style="font-weight:900; font-size:clamp(27px,6.6vw,48px); line-height:1.22; letter-spacing:-0.035em; margin:12px 0 0; max-width:22ch; text-wrap:pretty">4컷에서 시작해<br />웹툰 한 화까지</h2>
+    <p style="font-size:15.5px; line-height:1.8; color:#4B4358; margin:14px 0 0; max-width:42ch; font-weight:400; text-wrap:pretty">한 번 만들고 끝나는 이미지가 아니라, 내 캐릭터로 계속 뭔가를 하는 자리. 가볍게 4컷부터 시작해서 마음이 생기면 본편까지 이어집니다.</p>
+  </section>
+
+  <section id="comic" style="max-width:1240px; margin:0 auto; padding:0 clamp(16px,4vw,40px)">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(290px,1fr)); gap:clamp(14px,2vw,20px)">
+
+      <a href="#comic" style="background:#FFF2E4; border:1px solid rgba(255,107,69,0.22); border-radius:28px; padding:clamp(22px,4vw,30px); display:flex; flex-direction:column; min-height:clamp(340px,64vw,440px); color:#17121F" style-hover="background:#FFE9D5">
+        <div style="display:flex; align-items:center; justify-content:space-between">
+          <span style="background:#FF6B45; color:#fff; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:999px">01 Comic · 시작점</span>
+          <span style="font-family:'Archivo', sans-serif; font-weight:700; font-size:18px; color:#FF6B45">↗</span>
+        </div>
+        <h3 style="font-weight:900; font-size:clamp(22px,4.6vw,27px); line-height:1.32; letter-spacing:-0.025em; margin:18px 0 0">한 방에 웃기는<br />4컷 만화</h3>
+        <p style="font-size:14.5px; line-height:1.75; color:#5A5166; margin:12px 0 0; font-weight:400; max-width:32ch">오늘 있었던 일을 우리 애한테 시켜보세요. 대사 두 줄이면 기승전결 4컷, 그대로 타임라인에 올릴 수 있는 크기로.</p>
+        <sc-if value="{{ showPreviews }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:auto; padding-top:22px; display:grid; grid-template-columns:1fr 1fr; gap:8px">
+            <div style="aspect-ratio:1/1; border-radius:14px; background:#FFFFFF; border:1px solid rgba(255,107,69,0.18); display:flex; align-items:flex-start; padding:9px"><span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; color:#C2451F">1</span></div>
+            <div style="aspect-ratio:1/1; border-radius:14px; background:#FFFFFF; border:1px solid rgba(255,107,69,0.18); display:flex; align-items:flex-start; padding:9px"><span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; color:#C2451F">2</span></div>
+            <div style="aspect-ratio:1/1; border-radius:14px; background:#FFFFFF; border:1px solid rgba(255,107,69,0.18); display:flex; align-items:flex-start; padding:9px"><span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; color:#C2451F">3</span></div>
+            <div style="aspect-ratio:1/1; border-radius:14px; background:#FF6B45; display:flex; align-items:center; justify-content:center"><span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; letter-spacing:0.1em; color:#fff">4 / PUNCH</span></div>
+          </div>
+        </sc-if>
+      </a>
+
+      <a href="#trailer" style="background:#EAF6F3; border:1px solid rgba(28,120,102,0.2); border-radius:28px; padding:clamp(22px,4vw,30px); display:flex; flex-direction:column; min-height:clamp(340px,64vw,440px); color:#17121F" style-hover="background:#DFF1EC">
+        <div style="display:flex; align-items:center; justify-content:space-between">
+          <span style="background:#1C7866; color:#fff; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:999px">02 Trailer · 건너뛰기 가능</span>
+          <span style="font-family:'Archivo', sans-serif; font-weight:700; font-size:18px; color:#1C7866">↗</span>
+        </div>
+        <h3 style="font-weight:900; font-size:clamp(22px,4.6vw,27px); line-height:1.32; letter-spacing:-0.025em; margin:18px 0 0">다음 화가 궁금한<br />예고편 만화</h3>
+        <p style="font-size:14.5px; line-height:1.75; color:#4A5A56; margin:12px 0 0; font-weight:400; max-width:32ch">“다음 화 언제 나와요”를 내 캐릭터로 만들어 보는 티저 컷. 본편은 아직 없어도, 기다리게 만드는 건 오늘 됩니다.</p>
+        <sc-if value="{{ showPreviews }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:auto; padding-top:22px">
+            <div style="aspect-ratio:16/9; border-radius:16px; background:#FFFFFF; border:1px solid rgba(28,120,102,0.18); display:flex; align-items:flex-end; padding:10px"><span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; color:#1C7866; letter-spacing:0.1em">TEASER CUT · 와이드</span></div>
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px">
+              <div style="aspect-ratio:1/1; border-radius:12px; background:#FFFFFF; border:1px solid rgba(28,120,102,0.14)"></div>
+              <div style="aspect-ratio:1/1; border-radius:12px; background:#FFFFFF; border:1px solid rgba(28,120,102,0.14)"></div>
+              <div style="aspect-ratio:1/1; border-radius:12px; background:#1C7866; display:flex; align-items:center; justify-content:center"><span style="font-family:'IBM Plex Mono', monospace; font-size:9px; color:#fff; letter-spacing:0.08em">TO BE</span></div>
+            </div>
+          </div>
+        </sc-if>
+      </a>
+
+      <a href="#story" style="background:#5B2BE8; border-radius:28px; padding:clamp(22px,4vw,30px); display:flex; flex-direction:column; min-height:clamp(340px,64vw,440px); color:#fff" style-hover="background:#6C3EFF">
+        <div style="display:flex; align-items:center; justify-content:space-between">
+          <span style="background:rgba(255,255,255,0.18); color:#fff; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:999px">03 Story · 본편</span>
+          <span style="font-family:'Archivo', sans-serif; font-weight:700; font-size:18px">↗</span>
+        </div>
+        <h3 style="font-weight:900; font-size:clamp(22px,4.6vw,27px); line-height:1.32; letter-spacing:-0.025em; margin:18px 0 0">내가 주인공인<br />스크롤 웹툰</h3>
+        <p style="font-size:14.5px; line-height:1.75; color:rgba(255,255,255,0.86); margin:12px 0 0; font-weight:400; max-width:32ch">세계관을 고르면 그 안에서 내 캐릭터가 어떤 존재였는지부터 시작합니다. 쌓인 컷에 스토리를 붙여 한 화 완성.</p>
+        <sc-if value="{{ showPreviews }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:auto; padding-top:22px; display:flex; gap:10px; align-items:flex-end">
+            <div style="flex:1.3; display:grid; gap:6px">
+              <div style="aspect-ratio:16/9; border-radius:12px; background:rgba(255,255,255,0.18)"></div>
+              <div style="aspect-ratio:16/11; border-radius:12px; background:rgba(255,255,255,0.18); display:flex; align-items:flex-end; padding:9px"><span style="font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:0.1em; color:#fff">EP.01 SCROLL</span></div>
+            </div>
+            <div style="flex:1; aspect-ratio:3/4; border-radius:12px; background:rgba(255,255,255,0.1)"></div>
+          </div>
+        </sc-if>
+      </a>
+    </div>
+  </section>
+
+  <section style="margin-top:clamp(46px,8vw,96px); background:#F7F5FB; border-top:1px solid rgba(23,18,31,0.06); border-bottom:1px solid rgba(23,18,31,0.06)">
+    <div style="max-width:1240px; margin:0 auto; padding:clamp(44px,7vw,84px) clamp(16px,4vw,40px); display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:clamp(26px,5vw,56px); align-items:start">
+      <div>
+        <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:0.18em; color:#FF6B45; text-transform:uppercase">One character sheet</div>
+        <h2 style="font-weight:900; font-size:clamp(26px,6vw,42px); line-height:1.24; letter-spacing:-0.035em; margin:12px 0 0; text-wrap:pretty">캐릭터 시트 하나가<br />세 탭을 굴립니다</h2>
+        <p style="font-size:15px; line-height:1.8; color:#4B4358; margin:14px 0 0; max-width:34ch; font-weight:400">사진 한 장으로 만든 캐릭터 시트가 공통 자산이 됩니다. 어느 탭에서 뭘 만들든 같은 얼굴, 같은 설정으로 쌓입니다.</p>
+      </div>
+      <div style="display:grid; gap:12px">
+        <div style="display:flex; gap:16px; align-items:center; background:#FFFFFF; border:1px solid rgba(23,18,31,0.07); border-radius:20px; padding:18px 20px">
+          <span style="font-family:'Archivo', sans-serif; font-weight:800; font-size:13px; color:#fff; background:#5B2BE8; min-width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center">01</span>
+          <div><div style="font-weight:700; font-size:16px">우리 애 만들기</div><div style="font-size:13.5px; color:#5A5166; margin-top:4px; font-weight:400">사진 한 장에서 뽑고, 얼굴·표정·설정은 마음에 들 때까지 직접 고칩니다.</div></div>
+        </div>
+        <div style="display:flex; gap:16px; align-items:center; background:#FFFFFF; border:1px solid rgba(23,18,31,0.07); border-radius:20px; padding:18px 20px">
+          <span style="font-family:'Archivo', sans-serif; font-weight:800; font-size:13px; color:#fff; background:#FF6B45; min-width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center">02</span>
+          <div><div style="font-weight:700; font-size:16px">원하는 포맷에서 꺼내 쓰기</div><div style="font-size:13.5px; color:#5A5166; margin-top:4px; font-weight:400">같은 시트로 4컷도, 예고편도, 웹툰도. 매번 다시 만들 필요 없습니다.</div></div>
+        </div>
+        <div style="display:flex; gap:16px; align-items:center; background:#FFFFFF; border:1px solid rgba(23,18,31,0.07); border-radius:20px; padding:18px 20px">
+          <span style="font-family:'Archivo', sans-serif; font-weight:800; font-size:13px; color:#fff; background:#1C7866; min-width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center">03</span>
+          <div><div style="font-weight:700; font-size:16px">보여주고, 다음 화로</div><div style="font-size:13.5px; color:#5A5166; margin-top:4px; font-weight:400">올린 컷에 달린 반응이 다음 화 소재가 됩니다. 친구 캐릭터를 불러와 같이 굴려도 되고요.</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <sc-if value="{{ showFoundations }}" hint-placeholder-val="{{ true }}">
+    <section style="max-width:1240px; margin:0 auto; padding:clamp(44px,8vw,88px) clamp(16px,4vw,40px)">
+      <div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:0.18em; color:#5B2BE8; text-transform:uppercase">Design foundations</div>
+      <h2 style="font-weight:900; font-size:clamp(24px,5.4vw,34px); letter-spacing:-0.03em; margin:12px 0 clamp(24px,4vw,40px)">Lore 시스템 기준 · Light</h2>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px,1fr)); gap:clamp(22px,4vw,40px)">
+        <div>
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:0.14em; color:#7A7288; text-transform:uppercase; padding-bottom:9px; border-bottom:1px solid rgba(23,18,31,0.1)">Color</div>
+          <div style="display:grid; gap:9px; margin-top:14px; font-family:'IBM Plex Mono', monospace; font-size:11px; color:#5A5166">
+            <div style="display:flex; align-items:center; gap:11px"><span style="width:28px; height:28px; border-radius:8px; background:#5B2BE8"></span>#5B2BE8 · story violet</div>
+            <div style="display:flex; align-items:center; gap:11px"><span style="width:28px; height:28px; border-radius:8px; background:#FF6B45"></span>#FF6B45 · comic coral</div>
+            <div style="display:flex; align-items:center; gap:11px"><span style="width:28px; height:28px; border-radius:8px; background:#1C7866"></span>#1C7866 · trailer green</div>
+            <div style="display:flex; align-items:center; gap:11px"><span style="width:28px; height:28px; border-radius:8px; background:#17121F"></span>#17121F · ink</div>
+            <div style="display:flex; align-items:center; gap:11px"><span style="width:28px; height:28px; border-radius:8px; background:#F7F5FB; border:1px solid rgba(23,18,31,0.1)"></span>#F7F5FB · surface</div>
+            <div style="display:flex; align-items:center; gap:11px"><span style="width:28px; height:28px; border-radius:8px; background-image:linear-gradient(135deg,#E9E1FF,#FFE6D2 55%,#DDF3F0)"></span>hero soft blend</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:0.14em; color:#7A7288; text-transform:uppercase; padding-bottom:9px; border-bottom:1px solid rgba(23,18,31,0.1)">Type</div>
+          <div style="margin-top:14px; display:grid; gap:14px">
+            <div><div style="font-family:'Archivo', sans-serif; font-weight:900; font-size:40px; letter-spacing:-0.045em; line-height:1">Lore</div><div style="font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:#7A7288; margin-top:4px">Archivo 900 · latin display</div></div>
+            <div><div style="font-weight:900; font-size:24px; letter-spacing:-0.035em; line-height:1.25">우리 애로 만드는 만화</div><div style="font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:#7A7288; margin-top:4px">Noto Sans KR 900 · ko heading</div></div>
+            <div><div style="font-size:15px; line-height:1.8; color:#4B4358; font-weight:400">본문 400 · 줄간 1.8 · 최대 34자</div><div style="font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:#7A7288; margin-top:4px">Noto Sans KR 400 · body</div></div>
+            <div><div style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:0.16em; color:#FF6B45">LABEL / META 0.16EM</div><div style="font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:#7A7288; margin-top:4px">IBM Plex Mono 400 · label</div></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:0.14em; color:#7A7288; text-transform:uppercase; padding-bottom:9px; border-bottom:1px solid rgba(23,18,31,0.1)">Components</div>
+          <div style="margin-top:14px; display:flex; flex-direction:column; gap:12px; align-items:flex-start">
+            <span style="padding:14px 26px; background:#17121F; color:#fff; font-weight:700; font-size:14px; border-radius:999px">Primary · ink pill</span>
+            <span style="padding:13px 22px; background:#FFFFFF; border:1px solid rgba(23,18,31,0.12); color:#17121F; font-size:14px; border-radius:999px">Secondary · outline pill</span>
+            <span style="background:#FF6B45; color:#fff; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:999px">Badge · tab tag</span>
+            <div style="width:100%; background:#FFF2E4; border:1px solid rgba(255,107,69,0.22); border-radius:24px; padding:16px"><div style="font-weight:900; font-size:16px; letter-spacing:-0.02em">탭 카드 · radius 28</div><div style="font-size:13px; color:#5A5166; margin-top:6px">탭별 파스텔 배경 + 동일 채도의 보더</div></div>
+            <div style="width:100%; display:flex; align-items:center; gap:10px; border:1px dashed rgba(23,18,31,0.18); background:#FAF9FD; border-radius:20px; padding:14px 16px"><span style="font-size:13px; color:#7A7288">사진을 끌어다 놓으세요</span><span style="margin-left:auto; font-family:'IBM Plex Mono', monospace; font-size:10px; color:#5B2BE8">UPLOAD</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </sc-if>
+
+  <section id="cta" style="background:#17121F; color:#fff">
+    <div style="max-width:1240px; margin:0 auto; padding:clamp(46px,8vw,92px) clamp(16px,4vw,40px)">
+      <h2 style="font-weight:900; font-size:clamp(28px,7.2vw,56px); line-height:1.18; letter-spacing:-0.04em; margin:0; max-width:20ch; text-wrap:pretty">우리 애 이야기,<br />오늘 1화부터</h2>
+      <p style="font-size:15.5px; line-height:1.75; color:rgba(255,255,255,0.7); margin:16px 0 0; max-width:36ch; font-weight:400; text-wrap:pretty">사진 한 장이면 됩니다. 그림 실력도, 설정집도 미리 준비할 필요 없어요.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:26px">
+        <a href="#top" style="padding:16px 28px; background:#FF6B45; color:#fff; font-weight:700; font-size:15px; border-radius:999px" style-hover="background:#FF835F">사진 올리기</a>
+        <a href="#comic" style="padding:16px 26px; border:1px solid rgba(255,255,255,0.35); color:#fff; font-weight:500; font-size:15px; border-radius:999px" style-hover="background:rgba(255,255,255,0.1)">둘러보기</a>
+      </div>
+    </div>
+  </section>
+
+  <footer style="background:#FFFFFF; border-top:1px solid rgba(23,18,31,0.07)">
+    <div style="max-width:1240px; margin:0 auto; padding:26px clamp(16px,4vw,40px) 40px; display:flex; flex-wrap:wrap; gap:16px; align-items:center; font-size:12.5px; color:#7A7288">
+      <span style="font-family:'Archivo', sans-serif; font-weight:900; font-size:17px; color:#17121F; letter-spacing:-0.03em">LORE<span style="color:#FF6B45">.</span></span>
+      <div style="display:flex; flex-wrap:wrap; gap:16px">
+        <a href="#comic" style="color:#7A7288">Comic</a>
+        <a href="#trailer" style="color:#7A7288">Trailer</a>
+        <a href="#story" style="color:#7A7288">Story</a>
+      </div>
+      <span style="margin-left:auto">© 2026 LORE — 우리만의 캐릭터로 만드는 만화</span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showPreviews&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sections&quot;},&quot;showFoundations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sections&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    return {
+      showPreviews: p.showPreviews ?? true,
+      showFoundations: p.showFoundations ?? true,
+    };
+  }
+}
+</script>
+</body>
+</html>

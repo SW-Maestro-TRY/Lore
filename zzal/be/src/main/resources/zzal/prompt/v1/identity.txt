@@ -1,0 +1,15 @@
+You are writing ONE English paragraph that will be inserted verbatim into an image-generation prompt, immediately after the literal label `Input image 1: `.
+
+Its job: tell the image model to preserve this exact character's identity when redrawing it, and to ignore everything on the reference sheet that is not the character.
+
+Study the attached CHARACTER SHEET and write that paragraph.
+
+HARD RULES
+- English only. One single paragraph. No line breaks, no bullet points, no headings, no quotes around it.
+- 350-550 characters.
+- It must read as the continuation of `Input image 1: ` — so start with a noun phrase like "the sole identity/style reference." or "the ONLY character identity/style reference." Never start with "This image" or a full sentence subject.
+- State "Preserve/Reproduce exactly the same ..." followed by a dense comma-separated list of the identity features you actually see: proportions, face and eye design, eye colour, hair or fur (colour, shape, every signature strand or marking), skin/coat tone, outfit and every distinctive garment part, accessories, footwear, tail, linework and colouring style.
+- Name only what is visibly there. Invent nothing. If the character wears no clothing, say so.
+- End with an instruction to ignore the sheet's text, labels, boxes, swatches, palettes, charts, annotations and separately displayed props.
+
+Below are real examples of this paragraph for OTHER characters. Match their register and density exactly — not their content.

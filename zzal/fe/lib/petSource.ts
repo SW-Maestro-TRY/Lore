@@ -1,0 +1,92 @@
+// 펫 데이터의 출처 — 실서버(HTTP) 와 목 서버가 같은 얼굴을 갖는다.
+//
+// 훅(usePet·useZzalSession)은 이 인터페이스만 본다. 어느 쪽이 붙었는지는 `kind` 로만 안다.
+// 시연 모드(브라우저 타이머로 수치를 굴리던 v1 useTamagotchi)는 삭제됐고, 그 자리를 `?mock=` 이 맡는다.
+//
+//   ?mock=1 | baby   부화 직후(아기 0분)
+//   ?mock=child      두 시간 전에 태어나 튜토리얼을 지난 아이
+//   ?mock=new        아이 없음(올리기부터)
+//   ?mock=failed     부화 실패(ALIVE 블록이 전부 null 인 응답 — 화면이 안 죽는지 보는 자리)
+//   ?mock=grown      사흘째 · 2층 4종 열림 · 오늘 밤 첫 선물이 구워지는 자리
+//   ?mock=layer3     닷새째 · 2층 8종 전부 열림 — 다음 기상에 조각 4칸이 등장
+//   &clock=2026-09-05T10:30   시작 시각을 KST 로 못 박음(그 뒤로는 실시간)
+//
+// ★ 목은 페이지당 하나(모듈 싱글턴). 훅이 여러 번 만들면 각자 다른 시계를 갖게 된다.
+
+import {
+  answerChat, care, draftPet, setCharacter, getHatchProgress, getAlbum, getChat, getPet, listPets, markMotionSeen, setBackground,
+  setPersonality, share, sleep, tutorialDone, wake,
+  type Album, type CareAction, type ChatSlot, type ChatState, type CharacterInput, type Drafted, type HatchProgress,
+  type PetCreated, type PetDetail, type Personality, type Shared, type ShareKind,
+} from './pet';
+import {
+  getCurrentGame, guess, startGame,
+  type GameKind, type GameState, type GuessResult, type Side,
+} from './game';
+
+export interface PetSource {
+  readonly kind: 'http' | 'mock';
+
+  /** 그림 등록 → 초안. 시트 굽기가 여기서 시작된다 */
+  draftPet(imageKey: string): Promise<Drafted>;
+  /** 캐릭터 정보 등록 → 격자 생성 시작 */
+  setCharacter(petId: number, input: CharacterInput): Promise<PetCreated>;
+  /** 부화 진행. 알 화면이 되풀이해 부른다 */
+  getHatchProgress(petId: number, signal?: AbortSignal): Promise<HatchProgress>;
+  listPets(signal?: AbortSignal): Promise<PetDetail[]>;
+  getPet(petId: number, signal?: AbortSignal): Promise<PetDetail>;
+
+  care(petId: number, action: CareAction): Promise<PetDetail>;
+  sleep(petId: number): Promise<PetDetail>;
+  wake(petId: number): Promise<PetDetail>;
+  /** 튜토리얼 마지막 칸 — 시계가 켜진다. */
+  tutorialDone(petId: number): Promise<PetDetail>;
+  setPersonality(petId: number, personality: Personality, world?: string): Promise<PetDetail>;
+  setBackground(petId: number, background: string): Promise<PetDetail>;
+  share(petId: number, motionKey: string, kind: ShareKind): Promise<Shared>;
+
+  getChat(petId: number, signal?: AbortSignal): Promise<ChatState>;
+  /** 응답은 PetDetail + chatReply. */
+  answerChat(petId: number, slot: ChatSlot, text: string): Promise<PetDetail>;
+
+  markMotionSeen(petId: number, seq: number): Promise<PetDetail>;
+  getAlbum(petId: number, signal?: AbortSignal): Promise<Album>;
+
+  startGame(petId: number, kind?: GameKind): Promise<GameState>;
+  guess(petId: number, gameId: number, pick: Side): Promise<GuessResult>;
+  getCurrentGame(petId: number, signal?: AbortSignal): Promise<GameState>;
+}
+
+/** 실서버. pet.ts·game.ts 의 함수를 그대로 묶은 것이라 여기엔 규칙이 없다. */
+export const httpPetSource: PetSource = {
+  kind: 'http',
+  draftPet, setCharacter, getHatchProgress, listPets, getPet, care, sleep, wake, tutorialDone, setPersonality,
+  setBackground, share,
+  getChat, answerChat, markMotionSeen, getAlbum,
+  startGame, guess, getCurrentGame,
+};
+
+let mockSingleton: PetSource | null = null;
+
+/** 주소창의 `?mock=` 을 읽어 어느 출처를 쓸지 정한다. 목은 동적으로 불러 실서버 번들에 안 섞이게 한다. */
+export async function resolvePetSource(search: string): Promise<PetSource> {
+  const params = new URLSearchParams(search);
+  const mock = params.get('mock');
+  if (!mock) return httpPetSource;
+  if (mockSingleton) return mockSingleton;
+  const { MockPetServer, installMockHandle, parseClockParam } = await import('./mock/mockPetServer');
+  type MockPreset = Parameters<typeof MockPetServer.prototype.reset>[0] & string;
+  // ★ 아는 이름만 골라 쓴다. 목록에 없으면 조용히 'baby' 가 되므로, 새 프리셋을 만들 때 여기를 빼먹으면
+  //   "프리셋을 만들었는데 아기가 뜬다" 가 된다(실제로 한 번 겪었다).
+  const KNOWN: MockPreset[] = ['new', 'baby', 'child', 'failed', 'grown', 'layer3'];
+  const preset = (KNOWN as string[]).includes(mock) ? (mock as MockPreset) : 'baby';
+  const server = new MockPetServer({ preset, clockStartMs: parseClockParam(params.get('clock')) });
+  installMockHandle(server);
+  mockSingleton = server;
+  return server;
+}
+
+/** 지금 페이지가 목으로 도는가(주소만 보고 동기 판정). 화면이 "목 서버" 배지를 띄우는 데 쓴다. */
+export function isMockRequested(search: string): boolean {
+  return new URLSearchParams(search).has('mock');
+}

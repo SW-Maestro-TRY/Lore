@@ -1,0 +1,655 @@
+package com.lore.zzal.motion;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import java.time.Instant;
+import java.time.LocalDate;
+
+/**
+ * 펫이 배운 움직임 하나. 16프레임 고급 동작이다.
+ *
+ * ★ 펫의 {@code unlockedCount}(숫자 하나)로는 도감을 못 만든다 — <b>무엇을</b> 배웠고
+ *   그 그림이 <b>어디</b> 있으며 지금 <b>어떤 상태</b>인지가 필요하다.
+ *
+ * ★★ 판정 칸이 두 개인 것이 이 표의 핵심이다.
+ *
+ *   {@code gateVerdict}   기계가 뭐라 했나
+ *   {@code humanVerdict}  사람이 뭐라 했나
+ *
+ *   한 칸에 몰아넣으면 덮어써져서 "기계는 통과라 했는데 사람은 재생성이라 한" 건수를
+ *   셀 수 없다. 그 건수가 곧 게이트를 강화할 재료이고, 일치율이 오르면 그때
+ *   "PASS 는 사람 없이 지급" 으로 넘어간다. <b>전환 시점을 감이 아니라 숫자로 정하기 위한 구조다.</b>
+ *
+ * ★ {@code gateVersion} 을 함께 남기는 이유 — 게이트도 계속 좋아진다. 어느 버전이 내린
+ *   판정인지 모르면, 나중에 일치율이 올랐을 때 게이트가 좋아진 건지 다른 게 바뀐 건지 못 가른다
+ *   (결과물에 파이프라인 버전을 박아두는 것과 같은 이유).
+ *
+ * ⚠️ 이 표는 <b>운영 전용</b>이다. 실험 판정 원장과 절대 섞지 않는다 —
+ *    모양이 비슷해도 한쪽을 고칠 때 다른 쪽이 따라 바뀌면 그게 곧 섞이는 길이다(2026-09-03 지시).
+ */
+@Entity
+@Table(
+        name = "zzal_motion",
+        uniqueConstraints = @UniqueConstraint(name = "uk_zzal_motion_pet_seq", columnNames = {"pet_id", "seq"}),
+        indexes = {
+                @Index(name = "idx_zzal_motion_pet", columnList = "pet_id"),
+                @Index(name = "idx_zzal_motion_review", columnList = "human_verdict")
+        })
+@EntityListeners(AuditingEntityListener.class)
+public class ZzalMotion {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "pet_id", nullable = false)
+    private Long petId;
+
+    /** 이 펫의 몇 번째 움직임인가. 0부터. */
+    @Column(nullable = false)
+    private int seq;
+
+    /**
+     * 어떤 동작인가. 실험의 동작 블록 이름을 그대로 쓴다(예: "교감1_머리쓰다듬").
+     *
+     * ★ enum 이 아니라 문자열인 이유 — 동작 목록은 실험 결과를 보고 계속 바뀐다.
+     *   enum 으로 박으면 동작을 하나 더할 때마다 코드를 고쳐야 하고, 그 순간
+     *   이미 옛 이름으로 저장된 행들이 깨진다(생성 단계를 행으로 둔 것과 같은 이유).
+     */
+    @Column(nullable = false, length = 60)
+    private String name;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private MotionStatus status;
+
+    /** 완성된 움짤의 S3 키. 다 구워지기 전에는 비어 있다. */
+    @Column(length = 300)
+    private String imageKey;
+
+    /** 어느 파이프라인 버전으로 구웠나. */
+    @Column(length = 20)
+    private String pipelineVersion;
+
+    /**
+     * 완성된 움짤의 캔버스 크기(px).
+     *
+     * <h3>★ 왜 응답에 실어야 하나</h3>
+     * 판마다 캔버스가 다르다(실측 295~301 x 321~339). 화면이 상수로 가정하면 어떤 판에서는
+     * 몇 px 씩 어긋난 자리에 그림이 얹히는데, <b>오류가 안 나서 눈으로 봐야만</b> 드러난다.
+     *
+     * <h3>★ 왜 nullable 인가</h3>
+     * 맥미니가 올린 재생성본은 서버가 파일을 열어 보지 않아 크기를 모른다. 모르는 것을 0 으로
+     * 적으면 화면이 그 값을 믿고 0px 로 그린다. 비워 두면 "모른다" 가 그대로 전달된다.
+     */
+    @Column(name = "image_width")
+    private Integer imageWidth;
+
+    @Column(name = "image_height")
+    private Integer imageHeight;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private MotionSource source;
+
+    // ── 판정 (게이트와 사람을 나란히) ─────────────────────────────────────
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gate_verdict", length = 20)
+    private GateVerdict gateVerdict;
+
+    /** 게이트가 남긴 근거. 무엇에 걸렸는지(잘림·침범·빈 칸 …). */
+    @Column(name = "gate_note", length = 300)
+    private String gateNote;
+
+    @Column(name = "gate_version", length = 20)
+    private String gateVersion;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "human_verdict", length = 20)
+    private HumanVerdict humanVerdict;
+
+    /** 검수자가 남긴 말. 판정 코멘트는 등급보다 정보가 많다(실험에서 확인된 것). */
+    @Column(name = "human_note", length = 500)
+    private String humanNote;
+
+    @Column
+    private Instant reviewedAt;
+
+    /**
+     * 몇 번 구웠나 — API 는 <b>굽기를 시작할 때</b>, 맥미니는 <b>결과를 올릴 때</b> 하나 오른다.
+     *
+     * ★ 두 시점이 다른 이유 — API 는 우리가 호출하니 시작을 알지만, 맥미니가 몇 번 실패했는지는 서버가 못 본다.
+     *   그래서 이 값은 "돈·시간이 든 횟수" 가 아니라 <b>서버가 아는 굽기 횟수</b>다. 맥미니가 몇 번 헛돌았는지는
+     *   러너 로그에만 남는다. 재생성 횟수는 {@code regenRound} 가 따로 센다.
+     */
+    @Column(nullable = false)
+    private int attempts;
+
+    @Column
+    private Instant openedAt;
+
+    // ── v2 (설계 규칙, 설계 결정) — 추가 칸은 전부 nullable/default ─────
+
+    /** 어느 층인가. v1 행은 null. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private MotionLayer layer;
+
+    /** 기본 행동이 열린 시각(기록용 — 판정은 UnlockRules). 1층은 부화 시각. */
+    @Column
+    private Instant unlockedAt;
+
+    /** 어느 밤의 큐에 올랐나(KST 날짜). */
+    @Column
+    private LocalDate nightOf;
+
+    /** 맥미니 재생성 몇 번째인가(최대 2). */
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int regenRound;
+
+    /** 아침에 "배워왔어요" 로 공개된 시각. */
+    @Column
+    private Instant revealedAt;
+
+    /** 사용자가 확인한 시각(learnedToday 에서 빠짐). */
+    @Column
+    private Instant seenAt;
+
+    /** 스위프가 집어 간 시각·서버(여러 대 안전). */
+    @Column
+    private Instant claimedAt;
+
+    @Column(length = 60)
+    private String claimedBy;
+
+    /**
+     * 맥미니(codex) 러너가 이 주문을 <b>가져간</b> 시각.
+     *
+     * <h3>★★ 왜 claimedAt 과 따로 두나</h3>
+     * {@code claimedAt}·{@code claimedBy} 는 <b>서버가 굽기를 집은 자리</b>({@code QUEUED} → {@code BAKING})다.
+     * 그 값은 굽기가 실패해 {@code LOCAL_REQUESTED} 로 내려가도 <b>지워지지 않고 남아 있어</b>, 그대로 재활용하면
+     * 모든 주문이 "이미 누가 집었다" 로 보여 러너가 영영 빈손으로 돌아간다. 두 집기는 <b>다른 사건</b>이므로
+     * 칸도 따로 둔다(V11).
+     */
+    @Column(name = "agent_claimed_at")
+    private Instant agentClaimedAt;
+
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @LastModifiedDate
+    @Column(nullable = false)
+    private Instant updatedAt;
+
+    protected ZzalMotion() {
+    }
+
+    /** 굽기 시작한다. 아직 사용자에게 안 보인다. */
+    public static ZzalMotion start(Long petId, int seq, String name, String pipelineVersion) {
+        ZzalMotion m = new ZzalMotion();
+        m.petId = petId;
+        m.seq = seq;
+        m.name = name;
+        m.status = MotionStatus.PENDING;
+        m.pipelineVersion = pipelineVersion;
+        m.attempts = 0;
+        return m;
+    }
+
+    /**
+     * 부화 완료 때 카탈로그 한 칸을 행으로 앉힌다(18행). 심화 행동은 아직 안 굽는다(NONE).
+     * 1층 8종은 부화 순간이 곧 열린 시각.
+     */
+    public static ZzalMotion forCatalog(Long petId, MotionSpec spec, Instant hatchedAt) {
+        ZzalMotion m = new ZzalMotion();
+        m.petId = petId;
+        m.seq = spec.seq();
+        m.name = spec.key();
+        m.layer = spec.layer();
+        m.status = MotionStatus.NONE;
+        m.attempts = 0;
+        if (spec.layer() == MotionLayer.BASIC_1) {
+            m.unlockedAt = hatchedAt;
+        }
+        return m;
+    }
+
+    /** 2층 기본 행동이 열린 순간(기록). */
+    public void markUnlocked(Instant at) {
+        if (unlockedAt == null) {
+            unlockedAt = at;
+        }
+    }
+
+    /**
+     * 밤 큐에 올린다(설계 규칙).
+     *
+     * ★★ {@code regenRound} 를 <b>0 으로 되돌린다.</b> 그 값은 "이번 밤에 맥미니를 몇 번 썼나" 이지
+     *   그 동작의 평생 횟수가 아니다. 안 돌리면 지난 밤에 두 번 쓴 자리는 다음 밤에 API 한 판이 실패하는 순간
+     *   곧바로 {@code FAILED} 가 돼, <b>재생성 기회가 영구히 사라진다</b>(#224 리뷰 중-1).
+     *   설계 규칙은 "굽기 실패는 조각을 소모하지 않는다 — 다음 밤에 같은 동작을 다시 굽는다" 이므로
+     *   다음 밤은 처음과 같은 조건이어야 한다. 평생 누적이 필요해지면 별도 칸을 만든다.
+     *
+     * <h3>★★ 조건부다 — 집어 둔 줄을 되돌리면 같은 것을 두 번 굽는다</h3>
+     * 집기({@code ZzalMotionRepository.claim})는 {@code WHERE status='QUEUED'} 로 지키는데, 여기가
+     * 조건 없이 {@code QUEUED} 를 쓰면 그 문이 뚫린다:
+     * <pre>
+     *   T1  queue → claim(BAKING) → 커밋 → 굽기 제출
+     *   T2  (오래된 값을 들고) queue → BAKING 을 QUEUED 로 덮어씀 → claim 성공 → 또 굽기 제출
+     * </pre>
+     * 돌보기·재우기는 펫 행 잠금으로 줄을 서지만, <b>조각 완성 트리거는 커밋 뒤 새 트랜잭션</b>이라
+     * 그 잠금 밖에서 돈다. 그래서 창이 실제로 열린다. 한 판이 $0.086 이다.
+     *
+     * @return 실제로 큐에 올렸으면 true
+     */
+    public boolean queue(LocalDate nightOf) {
+        // ★★ 이미 굽고 있거나 판정을 지난 줄은 큐로 되돌리지 않는다. 아래 설명 참조.
+        if (!QUEUEABLE.contains(this.status)) {
+            return false;
+        }
+        this.status = MotionStatus.QUEUED;
+        this.nightOf = nightOf;
+        this.claimedAt = null;
+        this.claimedBy = null;
+        this.agentClaimedAt = null;
+        this.regenRound = 0;
+        return true;
+    }
+
+    /**
+     * 큐에 올릴 수 있는 자리.
+     *
+     * ★ {@code QUEUED} 를 포함하는 이유 — 아직 아무도 안 집은 줄을 다시 올리는 것은 해가 없다(밤만 갱신된다).
+     * ★ {@code HOLD} 가 빠진 이유 — 보류함은 <b>사람이 꺼내기 전까지 아무도 안 집는 자리</b>다(1.9).
+     */
+    private static final java.util.Set<MotionStatus> QUEUEABLE =
+            java.util.EnumSet.of(MotionStatus.NONE, MotionStatus.FAILED, MotionStatus.QUEUED);
+
+    /** 그 밤 실패 — 조각은 소모하지 않고 다음 밤에 다시 오른다. */
+    public void failNight() {
+        this.status = MotionStatus.FAILED;
+    }
+
+    /**
+     * 집어 갔는데 굽지 못한 채 멈춘 것을 큐로 되돌린다(밤은 그대로 둔다).
+     *
+     * ★ 왜 곧바로 다시 굽지 않고 큐로 되돌리나 — 굽기 순서·상한(K)·집기 경쟁은 전부 스위프가 쥐고 있다.
+     *   회수한 자리에서 바로 구우면 그 세 가지를 우회해 밤 상한이 조용히 넘는다.
+     */
+    public void releaseClaim() {
+        this.status = MotionStatus.QUEUED;
+        this.claimedAt = null;
+        this.claimedBy = null;
+        this.agentClaimedAt = null;
+    }
+
+    /**
+     * 맥미니에 넘긴 채 <b>응답이 영영 안 오는 자리</b>를 큐로 되돌린다.
+     *
+     * <h3>★★ 왜 필요한가 — {@code LOCAL_REQUESTED} 는 아무도 안 보는 상태였다</h3>
+     * 밤 계획도 스위프의 집기도 {@code NONE}·{@code FAILED}·{@code QUEUED} 만 본다. 기동 복구가 보던 것도
+     * {@code BAKING}·{@code PENDING} 둘뿐이었다. 그래서 맥미니가 죽거나(전원·네트워크) 러너가 결과를
+     * 안 올리면 그 동작은 <b>영구 고착</b>이었다 — 아무도 안 줍는다.
+     *
+     * <h3>★ {@code regenRound} 를 그대로 둔다 — 되돌리면 무한 반복이 된다</h3>
+     * {@code queue()} 는 라운드를 0 으로 되돌리는데, 여기서 그러면 "API 로 굽고 → 실패 → 맥미니 →
+     * 고착 → 회수 → 라운드 0" 이 끝없이 돌아 <b>유료 호출이 계속 나간다.</b> 라운드를 지키면
+     * {@code local-regen-max}(2)를 다 쓴 뒤 보류함({@code HOLD})으로 내려가 멈춘다.
+     *
+     * @return 실제로 되돌렸으면 true
+     */
+    public boolean releaseLocalRequest() {
+        if (this.status != MotionStatus.LOCAL_REQUESTED) {
+            return false;
+        }
+        this.status = MotionStatus.QUEUED;
+        this.agentClaimedAt = null;
+        return true;
+    }
+
+    public void markSeen(Instant at) {
+        if (seenAt == null) {
+            seenAt = at;
+        }
+    }
+
+    /** 앞서 실패한 자리를 다시 굽는다. 시도 횟수와 판정 이력은 남긴다. */
+    public void retry(String pipelineVersion) {
+        this.status = MotionStatus.PENDING;
+        this.pipelineVersion = pipelineVersion;
+    }
+
+    public void beginAttempt() {
+        this.attempts += 1;
+    }
+
+    /** 다 구워졌다. 게이트 판정을 함께 받아 적는다. 크기를 모르면 {@code null} 을 준다. */
+    public void done(String imageKey, Integer width, Integer height, MotionSource source,
+                     GateVerdict verdict, String note, String gateVersion) {
+        this.imageKey = imageKey;
+        this.imageWidth = width;
+        this.imageHeight = height;
+        this.source = source;
+        this.gateVerdict = verdict;
+        this.gateNote = note;
+        this.gateVersion = gateVersion;
+    }
+
+    /**
+     * 다 구워졌다 → <b>검수 대기</b>. 사용자에게는 아직 안 보인다.
+     *
+     * <h3>★★ 굽는 중({@code BAKING})이던 줄만 받는다 — 늦게 끝난 굽기가 끝난 판정을 지우면 안 된다</h3>
+     * 굽기가 느려 {@code StuckMotionRecovery} 의 유예를 넘기면 그 줄은 큐로 되돌아가 <b>다른 판이 다시 구워진다.</b>
+     * 그런데 처음 굽던 스레드는 죽은 것이 아니라 느릴 뿐이라, 나중에 결과를 들고 돌아온다. 그때 무조건 받으면
+     * <pre>
+     *   느린 굽기 A 시작 → 유예 초과 → 복구가 큐로 → 굽기 B → 검수 → 사람 OK → OPEN
+     *   그제서야 A 도착 → OPEN 이 REVIEW 로 되돌아가고 humanVerdict 가 지워진다
+     * </pre>
+     * 사용자에게는 <b>아침에 받은 동작이 다시 "연습 중" 으로 사라진다.</b> 검수도 다시 해야 한다.
+     *
+     * ★ 판정을 지우는 것({@code humanVerdict = null}) 자체는 맞다 — 다시 구운 <b>새 그림</b>이 옛 판정을 달고
+     *   나가면 안 된다. 문제는 <b>이미 끝난 줄에까지</b> 그러는 것이라, 상태로 문을 잠근다.
+     *
+     * @return 이 호출이 실제로 검수 대기로 옮겼으면 true. false 면 <b>진 쪽</b>이다 — 조용히 물러난다
+     *
+     * ★★ v1 은 여기서 바로 열었다("검수 전 지급"). PR-7 에서 <b>없앴다</b> — 설계 규칙은
+     *   "밤에 굽고 → 판정하고 → <b>아침에</b> 배워 온다" 이고, 그 순서가 지켜지려면 검수를 통과하기 전의 그림이
+     *   사용자 화면에 뜨면 안 된다. 밤에 재운 사용자가 갇히는 문제는 "아침 공개" 로 이미 풀린다 —
+     *   판정 창이 23:00~10:00 이고, 10:00 을 넘겨 판정되면 낮에 도착한다(설계 규칙).
+     *
+     * ★ 다시 구운 것이면 사람 판정을 지운다. 안 지우면 새 그림이 옛 판정을 달고 검수 목록에서 사라진다.
+     */
+    public boolean toReview(String imageKey, Integer width, Integer height, MotionSource source,
+                            GateVerdict verdict, String note, String gateVersion) {
+        // ★★ 굽는 중이던 줄만 받는다. 아래 설명 참조.
+        if (this.status != MotionStatus.BAKING) {
+            return false;
+        }
+        done(imageKey, width, height, source, verdict, note, gateVersion);
+        this.status = MotionStatus.REVIEW;
+        this.humanVerdict = null;
+        this.humanNote = null;
+        this.reviewedAt = null;
+        return true;
+    }
+
+    /**
+     * 맥미니(codex)에게 다시 만들어 달라고 건다. {@code regenRound} 가 하나 오른다.
+     *
+     * ★ API 로 다시 굽지 않는다(설계 규칙) — 한 판이 $0.10 이고, 로컬 재생성은 돈이 안 든다.
+     */
+    public void requestLocalRegen() {
+        this.status = MotionStatus.LOCAL_REQUESTED;
+        this.regenRound += 1;
+        // ★ 새 라운드는 아무도 안 가져간 상태로 시작한다. 앞 라운드의 집기가 남아 있으면 러너가 못 가져간다.
+        this.agentClaimedAt = null;
+    }
+
+    /**
+     * 러너가 이 주문을 가져간다 — <b>같은 판을 두 번 내주지 않기 위한 유일한 장치</b>.
+     *
+     * <h3>★★ 왜 필요한가</h3>
+     * 집기가 없으면 맥미니가 10분짜리 재생성을 굽는 동안 러너의 폴링이 <b>매번 같은 motionId</b> 를 받는다.
+     * 러너가 둘이면 둘 다 같은 판을 굽는다 — codex 구독 한도를 같은 그림에 N배로 태운다.
+     * 두 번째 업로드는 {@code ZZAL_REGEN_NOT_REQUESTED} 로 거절되지만 <b>그림은 이미 다 구운 뒤다.</b>
+     *
+     * ★ 빌려주는 것이지 영영 주는 것이 아니다 — 러너가 중간에 죽으면 아무도 안 올린다. 그래서
+     *   {@code leaseCutoff}(지금 - 유예)보다 오래된 집기는 <b>없는 것으로 친다.</b> 그 유예를 더 넘기면
+     *   {@code StuckMotionRecovery} 가 주문 자체를 큐로 되돌린다.
+     *
+     * @return 이번에 가져갔으면 true. false 면 남이 들고 있는 중이다
+     */
+    public boolean claimByAgent(Instant now, Instant leaseCutoff) {
+        if (this.status != MotionStatus.LOCAL_REQUESTED) {
+            return false;
+        }
+        if (this.agentClaimedAt != null && this.agentClaimedAt.isAfter(leaseCutoff)) {
+            return false;
+        }
+        this.agentClaimedAt = now;
+        return true;
+    }
+
+    /** 맥미니가 올린 그림으로 갈아 끼우고 다시 검수 대기로. */
+    public void uploadedLocal(String imageKey) {
+        // 결과가 올라왔다 — 집기를 지운다. 안 지우면 보류함에서 꺼낸 뒤 같은 자리가 유예만큼 안 나간다.
+        this.agentClaimedAt = null;
+        this.imageKey = imageKey;
+        // ★ 새 그림의 크기는 모른다(서버가 파일을 열지 않는다). 옛 판의 크기를 남겨 두면
+        //   화면이 다른 판의 값으로 그린다 — 지우는 편이 "모른다" 를 정확히 말한다.
+        this.imageWidth = null;
+        this.imageHeight = null;
+        this.source = MotionSource.LOCAL;
+        this.status = MotionStatus.REVIEW;
+        this.attempts += 1;
+        this.humanVerdict = null;
+        this.humanNote = null;
+        this.reviewedAt = null;
+    }
+
+    /**
+     * 검수 통과 — 공개해도 된다.
+     *
+     * ★ 이게 곧 "사용자 화면에 떴다" 는 아니다. 실제 도착은 {@link #reveal(Instant)} 이고,
+     *   그건 <b>펫이 깨어 있는 첫 정산</b>에서 일어난다(설계 규칙 "기상 첫 화면").
+     */
+    public void approve(Instant now) {
+        this.status = MotionStatus.OPEN;
+        if (this.openedAt == null) {
+            this.openedAt = now;
+        }
+    }
+
+    /** 아침(또는 깨어 있는 첫 정산)에 사용자에게 도착했다. 한 번만 찍힌다. */
+    public void reveal(Instant now) {
+        if (revealedAt == null) {
+            revealedAt = now;
+        }
+    }
+
+    public void markFailed() {
+        this.status = MotionStatus.FAILED;
+    }
+
+    /**
+     * <b>사람이</b> 보류함에서 꺼낸다 — 지시문이나 원본을 고친 뒤.
+     *
+     * <h3>★★ 왜 {@code queue()} 와 다른 문인가</h3>
+     * {@code queue()} 는 자동 경로(밤 계획·스위프·트리거)가 쓰는 문이고, 거기서 {@code HOLD} 를 못 집는 것이
+     * <b>"자동으로 안 풀린다" 를 지키는 방법</b>이다(1.9). 그런데 사람은 꺼낼 수 있어야 하므로 문을 따로 낸다.
+     * 한 문으로 합치면 조건 한 줄이 사라지는 순간 자동 재시도가 되살아난다 — 그때 돈은 이미 나간 뒤다.
+     *
+     * ★ 꺼내면 <b>처음 조건으로</b> 돌아간다({@code regenRound = 0}). 안 그러면 꺼내자마자 한 판 실패로
+     *   곧바로 다시 보류함이 되어 그 동작은 영영 못 배운다.
+     *
+     * @return 보류함에 있던 것을 꺼냈으면 true
+     */
+    public boolean releaseFromHold(LocalDate nightOf) {
+        if (this.status != MotionStatus.HOLD) {
+            return false;
+        }
+        this.status = MotionStatus.QUEUED;
+        this.nightOf = nightOf;
+        this.claimedAt = null;
+        this.claimedBy = null;
+        this.agentClaimedAt = null;
+        this.regenRound = 0;
+        return true;
+    }
+
+    /**
+     * 후보가 전부 아니었다 → 보류함. 사람이 꺼내기 전까지 아무도 안 집는다.
+     *
+     * ★ 밤 계획({@code NightPlanner})과 스위프는 {@code NONE}·{@code FAILED}·{@code QUEUED} 만 본다.
+     *   그래서 이 상태로 두면 <b>자동 재시도가 물리적으로 일어나지 않는다</b> — 조건이 아니라
+     *   상태로 막는 것이 안전하다. 조건은 나중에 누가 한 줄 더하면 뚫린다.
+     */
+    public void hold() {
+        this.status = MotionStatus.HOLD;
+    }
+
+    /**
+     * 사람이 고른 판으로 대표를 갈아 끼운다(설계 규칙 — 나온 판 중에서 고른다).
+     *
+     * ★ 대표를 바꿔야 하는 이유 — 사용자에게 나가는 그림은 모션 행의 {@code imageKey} 다.
+     *   후보 줄에만 표시하고 여기를 안 바꾸면 <b>고르지 않은 판이 공개된다.</b>
+     */
+    public void useCandidate(String imageKey, MotionSource source) {
+        this.imageKey = imageKey;
+        this.source = source;
+        // ★ 고른 판의 크기는 모른다. 앞 판의 값을 남기면 다른 그림의 크기로 그린다.
+        this.imageWidth = null;
+        this.imageHeight = null;
+    }
+
+    /** 사람 판정을 받아 적는다. 게이트 판정은 그대로 남는다(둘을 비교해야 하므로). */
+    public void review(HumanVerdict verdict, String note, Instant now) {
+        this.humanVerdict = verdict;
+        this.humanNote = note;
+        this.reviewedAt = now;
+    }
+
+    public boolean isOpen() {
+        return status == MotionStatus.OPEN;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Long getPetId() {
+        return petId;
+    }
+
+    public int getSeq() {
+        return seq;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public MotionStatus getStatus() {
+        return status;
+    }
+
+    public String getImageKey() {
+        return imageKey;
+    }
+
+    public String getPipelineVersion() {
+        return pipelineVersion;
+    }
+
+    public MotionSource getSource() {
+        return source;
+    }
+
+    public GateVerdict getGateVerdict() {
+        return gateVerdict;
+    }
+
+    public String getGateNote() {
+        return gateNote;
+    }
+
+    public String getGateVersion() {
+        return gateVersion;
+    }
+
+    public HumanVerdict getHumanVerdict() {
+        return humanVerdict;
+    }
+
+    public String getHumanNote() {
+        return humanNote;
+    }
+
+    public Instant getReviewedAt() {
+        return reviewedAt;
+    }
+
+    public int getAttempts() {
+        return attempts;
+    }
+
+    /** 움짤 캔버스 가로(px). 모르면 null. */
+    public Integer getImageWidth() {
+        return imageWidth;
+    }
+
+    /** 움짤 캔버스 세로(px). 모르면 null. */
+    public Integer getImageHeight() {
+        return imageHeight;
+    }
+
+    public Instant getOpenedAt() {
+        return openedAt;
+    }
+
+    public MotionLayer getLayer() {
+        return layer;
+    }
+
+    public Instant getUnlockedAt() {
+        return unlockedAt;
+    }
+
+    public LocalDate getNightOf() {
+        return nightOf;
+    }
+
+    public int getRegenRound() {
+        return regenRound;
+    }
+
+    public Instant getRevealedAt() {
+        return revealedAt;
+    }
+
+    public Instant getSeenAt() {
+        return seenAt;
+    }
+
+    /**
+     * 심화 행동 그림 키(api-v2.md 2절) — <b>사용자에게 도착한 뒤에만</b> 준다.
+     *
+     * ★ 검수 대기·재생성 요청 중인 그림은 절대 안 내려간다. 그게 "검수 후 공개" 의 실제 잠금이다.
+     */
+    public String advancedImageKey() {
+        return status == MotionStatus.OPEN && revealedAt != null ? imageKey : null;
+    }
+
+    /** 사용자에게 도착했나(아침 공개). */
+    public boolean isRevealed() {
+        return status == MotionStatus.OPEN && revealedAt != null;
+    }
+
+    /** 도착했는데 아직 "확인" 을 안 눌렀나 — {@code learnedToday} 에 실린다. */
+    public boolean isUnseenArrival() {
+        return isRevealed() && seenAt == null;
+    }
+
+    public Instant getAgentClaimedAt() {
+        return agentClaimedAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+}

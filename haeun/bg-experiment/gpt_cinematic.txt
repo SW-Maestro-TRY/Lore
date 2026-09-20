@@ -1,0 +1,59 @@
+THIS IS A DRAWN COMIC PANEL WITH CINEMATIC STAGING — NOT A MATTE PAINTING.
+
+This overrides every other rendering instruction above, including anything the
+shot description implies. Keep the cinematic part; drop the photorealism.
+
+WHAT STAYS. Dramatic staging is the whole point of this style, so keep it:
+strong perspective and vanishing points, low or high camera angles, a figure
+placed small inside a large space, deep foreground framing elements, strong
+backlight and long cast shadows, a bold silhouette read. Compose it like a film
+frame.
+
+WHAT GOES. It must be DRAWN, not rendered or photographed. The failure mode here
+is a concept-art matte painting or a 3D render, and that is what must not happen.
+
+LINEWORK — KEEP THE DRAWING VISIBLE. Figures and the significant foreground
+objects carry a drawn outline. Shapes stay closed and readable. Never let a form
+be defined purely by photographic light and texture with no drawing underneath.
+If you removed the colour, a comic drawing should still be there.
+
+SURFACES ARE FLAT, NOT PHOTOGRAPHED. Rubble, asphalt, concrete, brick, foliage,
+rusted metal, cloth: each is a few large drawn shapes with a hard-edged shadow
+tone — never a photographic texture, never per-pebble or per-leaf detail, never
+scanned grain, never procedural noise. A cracked road is a handful of drawn crack
+lines on one flat tone, not thousands of rendered fragments.
+
+CEL SHADING. One flat base tone per area, one shadow tone, at most one light
+tone, meeting at HARD edges. Big flat areas of a single colour are correct. No
+airbrushed transitions, no soft blended falloff, no painterly rendering, no
+gradient meshes.
+
+LIGHT IS DRAWN, NOT SIMULATED. Backlight becomes one flat bright shape and a
+hard-edged silhouette. A sunset becomes two or three flat bands of colour. Cast
+shadows are flat drawn shapes with clean edges. Forbidden: lens flare, bloom,
+glow layers, god rays as volumetric light, haze and dust in the air,
+depth-of-field blur, chromatic aberration, specular highlights, HDR glare.
+Atmosphere is suggested by flattening distant shapes to a paler flat tone — one
+step, not a continuous fade.
+
+DETAIL BUDGET. Distant and peripheral areas get FEWER drawn elements, not softer
+ones. If the description lists a lot of debris and machinery, choose a few strong
+silhouettes and leave the rest as plain shapes. A crowded photorealistic
+background is exactly the thing to avoid.
+
+THE COMIC FURNITURE STILL APPLIES. Narration goes in a caption box with a visible
+border or on a clean flat band, not floating on the artwork. Speech goes inside a
+drawn speech bubble with an outline and a tail. Korean sound effects are drawn
+display lettering. Use drawn effect marks — speed lines, focus lines, impact
+bursts — where the moment calls for them.
+
+TREAT THE SHOT DESCRIPTION AS MOOD, NOT AS A RENDER ORDER. It is written in film
+language and will say things like "golden hour", "dust hangs in the air",
+"shattered asphalt", "atmospheric", "light catches the debris". Those describe
+how the moment should FEEL. Do not render them literally: no volumetric dust, no
+photographic weathering, no glinting rubble. Translate the feeling into flat
+shapes, hard-edged tones and strong silhouettes.
+
+The result should look like a dramatic panel from a professionally drawn Korean
+webtoon — cinematic in staging, flat and drawn in execution — and never like a
+film still, a matte painting, concept art or a 3D render.

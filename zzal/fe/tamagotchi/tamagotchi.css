@@ -1,0 +1,70 @@
+/* 자캐 다마고치 — 스킨 두 벌이 함께 쓰는 애니메이션.
+ *
+ * 색·글꼴 같은 겉모습은 각 스킨의 인라인 스타일에 있고, 여기에는
+ * 인라인으로 못 쓰는 @keyframes 와 placeholder 만 둔다.
+ * 전역 오염을 막으려고 .tama 스코프 안에서만 적용한다(zzal.css 와 같은 방식).
+ *
+ * 폰트는 스킨마다 다르지만 두 벌을 나란히 띄워 비교할 일이 많아 한 번에 받는다.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen+Script&family=Gowun+Dodum&family=Nanum+Gothic+Coding:wght@400;700&family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+/* 앱이 떠 있는 동안 페이지 자체는 스크롤하지 않는다 — 안에서 섹션을 훑기 때문에
+ * 바깥까지 같이 움직이면 조작이 어긋난다. 헤더는 남긴다(여기서 다른 탭으로 건너간다).
+ *
+ * 본문 껍데기(가운데 정렬된 main 의 max-width·padding)는 반드시 풀어야 한다.
+ * 안 풀면 그 폭이 문서를 넓혀 폰에서 CSS 뷰포트가 390 보다 커지고 오른쪽이 잘린다.
+ * (푸는 규칙은 skin-header.css 에 있다 — 헤더 옷 갈아입히기와 한 묶음이라서) */
+body:has(.tama-fullscreen) { overflow: hidden; }
+
+.tama, .tama * { box-sizing: border-box; }
+.tama input, .tama textarea, .tama button { font-family: inherit; }
+.tama input::placeholder, .tama textarea::placeholder { color: #B6AC96; }
+.tama-dark input::placeholder, .tama-dark textarea::placeholder { color: #7C838C; }
+
+/* 캐릭터는 CSS 로 흔들지 않는다 — 그림 자체가 이미 움직인다.
+   (bobSmooth·bobStep 은 2026-08-30 에 걷어냈다. 이중으로 움직여 미끄러져 보였고,
+    발 정렬을 흐트러뜨렸다.) */
+
+@keyframes tamaEggShake { 0%, 100% { transform: rotate(-3.5deg); } 50% { transform: rotate(3.5deg); } }
+@keyframes tamaEggDrop {
+  0% { transform: translateY(-360px) rotate(-18deg); opacity: 0; }
+  55% { transform: translateY(0) rotate(6deg); opacity: 1; }
+  72% { transform: translateY(-28px) rotate(-5deg); }
+  88% { transform: translateY(0) rotate(2deg); }
+  100% { transform: translateY(0) rotate(0); }
+}
+@keyframes tamaCrackFlash { 0%, 100% { opacity: 0; } 45% { opacity: .9; } }
+@keyframes tamaRiseIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes tamaSheetUp { from { transform: translateY(101%); } to { transform: none; } }
+@keyframes tamaFloatUp {
+  0% { opacity: 0; transform: translateY(6px) scale(.6) rotate(-8deg); }
+  18% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-78px) scale(1.1) rotate(6deg); }
+}
+@keyframes tamaSoftPulse { 0%, 100% { opacity: .4; } 50% { opacity: .95; } }
+@keyframes tamaVeilIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* 레트로 카트리지 스킨 전용 — 전원 LED 와 잠들 때 닫히는 커튼. */
+@keyframes tamaLedBlink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@keyframes tamaCurtainL { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes tamaCurtainR { from { transform: translateX(100%); } to { transform: none; } }
+
+/* 움직임을 줄여 달라고 설정한 사람에게는 흔들지 않는다.
+   루프 애니메이션이 5초를 넘으므로 접근성 기준상 멈출 방법이 있어야 한다. */
+@media (prefers-reduced-motion: reduce) {
+  .tama *, .tama *::before, .tama *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* 말 걸기 — 시안 Cream Minimal v2 */
+@keyframes tamaPopIn {
+  0%   { transform: scale(.7) translateY(8px); opacity: 0 }
+  100% { transform: scale(1) translateY(0); opacity: 1 }
+}
+@keyframes tamaDot {
+  0%, 100% { transform: translateY(0); opacity: .5 }
+  50%      { transform: translateY(-4px); opacity: 1 }
+}

@@ -1,0 +1,387 @@
+package com.lore.zzal.admin;
+
+import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
+import com.lore.common.s3.S3Service;
+import com.lore.zzal.admin.dto.AdminRequests;
+import com.lore.zzal.admin.dto.AdminResponses;
+import com.lore.zzal.generation.GenJob;
+import com.lore.zzal.generation.GenJobRepository;
+import com.lore.zzal.generation.GenStepRecordRepository;
+import com.lore.zzal.motion.HumanVerdict;
+import com.lore.zzal.motion.MotionCatalog;
+import com.lore.zzal.motion.MotionSource;
+import com.lore.zzal.motion.MotionSpec;
+import com.lore.zzal.motion.MotionStatus;
+import com.lore.zzal.motion.ZzalMotion;
+import com.lore.zzal.motion.ZzalMotionCandidate;
+import com.lore.zzal.motion.ZzalMotionCandidateRepository;
+import com.lore.zzal.motion.ZzalMotionRepository;
+import com.lore.zzal.pet.ZzalPet;
+import com.lore.zzal.pet.ZzalPetRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 밤에 구운 움짤을 상훈님이 눈으로 보고 판정하는 일 — <b>공개 전에</b>.
+ *
+ * <h3>★★ v1 과 뒤바뀐 것 — 이제 판정이 공개를 결정한다</h3>
+ * v1 은 굽자마자 열고("검수 전 지급") 판정은 기록으로만 쌓았다. PR-7 에서 정본 순서로 돌렸다 —
+ * <b>밤에 굽고 → 검수하고 → 아침에 도착</b>(정본 2·6장). 검수 창이 23:00~10:00 이라
+ * 사용자가 갇히지 않고, 10:00 을 넘겨 판정되면 그날 낮에 도착한다(정본 16장).
+ *
+ * <h3>판정 두 개는 계속 나란히 쌓인다</h3>
+ * 기계 게이트({@code gateVerdict})와 사람({@code humanVerdict})을 한 칸에 몰지 않는다. 그 둘의 일치율이
+ * "PASS 는 사람 없이 지급" 으로 넘어갈 시점을 <b>감이 아니라 숫자로</b> 정해 준다({@link ZzalMotion} 주석).
+ *
+ * <h3>★ 실험 판정 원장과 절대 섞지 않는다</h3>
+ * 여기는 <b>운영</b>이다. 모양이 비슷하다고 실험 쪽 도구(/judge)와 합치면, 한쪽 기준을 고칠 때
+ * 다른 쪽이 조용히 따라 바뀐다(2026-09-03 지시).
+ */
+@Service
+public class AdminService {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminService.class);
+
+    private final AdminGuard adminGuard;
+    private final ZzalMotionRepository motionRepository;
+    private final ZzalMotionCandidateRepository candidateRepository;
+    private final ZzalPetRepository petRepository;
+    private final GenJobRepository jobRepository;
+    private final GenStepRecordRepository stepRepository;
+    private final MotionCatalog catalog;
+    private final S3Service s3Service;
+    private final int localRegenMax;
+
+    /**
+     * 러너에게 일감을 빌려주는 시간 — {@code StuckMotionRecovery} 의 회수 유예와 <b>같은 값</b>이다.
+     *
+     * ★ 같아야 하는 이유 — 이 값보다 오래된 집기는 여기서 다시 내주고, 그만큼 오래된 주문은
+     *   기동 복구가 큐로 되돌린다. 값이 갈리면 한쪽이 내주는 중인 것을 다른 쪽이 회수한다.
+     */
+    private final java.time.Duration agentLease;
+
+    /**
+     * 한 라운드에 올릴 수 있는 판 — 러너는 3판을 나란히 굽는다(정본 1.9).
+     *
+     * ★ 이것과 {@code localRegenMax}(2) 가 곱해져 한 판 굽는 동안 남는 판이 <b>1 + 3 x 2 = 7</b> 로 묶인다.
+     *   주석에만 두면 언젠가 달라진다. 여기서 막고 시험이 지킨다.
+     */
+    static final int PER_ROUND_MAX = 3;
+
+    public AdminService(AdminGuard adminGuard,
+                        ZzalMotionRepository motionRepository,
+                        ZzalMotionCandidateRepository candidateRepository,
+                        ZzalPetRepository petRepository,
+                        GenJobRepository jobRepository,
+                        GenStepRecordRepository stepRepository,
+                        MotionCatalog catalog,
+                        S3Service s3Service,
+                        @Value("${app.zzal.night.local-regen-max:2}") int localRegenMax,
+                        @Value("${app.zzal.recovery.local-grace-minutes:60}") int agentLeaseMinutes) {
+        this.adminGuard = adminGuard;
+        this.motionRepository = motionRepository;
+        this.candidateRepository = candidateRepository;
+        this.petRepository = petRepository;
+        this.jobRepository = jobRepository;
+        this.stepRepository = stepRepository;
+        this.catalog = catalog;
+        this.s3Service = s3Service;
+        this.localRegenMax = localRegenMax;
+        this.agentLease = java.time.Duration.ofMinutes(agentLeaseMinutes);
+    }
+
+    /**
+     * 검수 대기 목록 — {@code REVIEW} 인 것만, 오래된 순.
+     *
+     * ★ v1 은 "사람 판정이 안 찍힌 행" 을 다 긁어 굽는 중·실패한 자리까지 딸려 왔다. 이제 상태로 고른다 —
+     *   볼 그림이 없는 것을 목록에 띄우면 상훈님이 빈 칸 앞에서 판단할 수 없는 판정을 강요당한다.
+     */
+    @Transactional(readOnly = true)
+    public List<AdminResponses.Pending> pending(Long userId) {
+        adminGuard.require(userId);
+        List<ZzalMotion> rows = motionRepository.findByStatusOrderByIdAsc(MotionStatus.REVIEW);
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        // ★ 판정 화면은 넷을 나란히 본다 — 원본 그림 · 시트 · 격자 · 완성본.
+        //   원본과 시트는 펫에, 격자와 완성본은 후보 줄에 있다.
+        Map<Long, ZzalPet> pets = petRepository
+                .findAllById(rows.stream().map(ZzalMotion::getPetId).distinct().toList())
+                .stream().collect(java.util.stream.Collectors.toMap(ZzalPet::getId, p -> p));
+        Map<Long, List<ZzalMotionCandidate>> byMotion = candidateRepository
+                .findByMotionIdInOrderByRoundAscIdAsc(rows.stream().map(ZzalMotion::getId).toList())
+                .stream().collect(java.util.stream.Collectors.groupingBy(ZzalMotionCandidate::getMotionId));
+        return rows.stream()
+                .map(m -> AdminResponses.Pending.from(m, label(m), pets.get(m.getPetId()),
+                        byMotion.getOrDefault(m.getId(), List.of())))
+                .toList();
+    }
+
+    /**
+     * 판정을 받아 적고 <b>다음 상태로 옮긴다.</b>
+     *
+     * <ul>
+     *   <li>{@code OK} → {@code OPEN}. 아직 화면에 뜨는 건 아니다 — 펫이 깨어 있는 첫 정산에 도착한다</li>
+     *   <li>{@code REGENERATE} → 재생성 한도가 남았으면 {@code LOCAL_REQUESTED}(맥미니), 다 썼으면 {@code FAILED}.
+     *       {@code nightOf} 는 그대로 둔다 — 다음 밤 계획이 FAILED 를 다시 올리고, 이월 우선권도 그 밤으로 잡힌다</li>
+     * </ul>
+     *
+     * ★ 판정은 <b>검수 대기(REVIEW)인 행에만</b> 통한다. 공개된 것을 되돌리지 않는 것은 물론이고,
+     *   반려해 둔 자리({@code LOCAL_REQUESTED})에도 못 누른다 — 거기에는 <b>퇴짜 맞은 옛 그림이 그대로 붙어 있어</b>
+     *   OK 가 통하면 그 그림이 공개된다(#224 리뷰 실측). 잘못 누른 판정을 고치는 것은 새 그림이 올라와
+     *   다시 REVIEW 가 된 뒤에 한다.
+     */
+    @Transactional
+    public void review(Long userId, Long motionId, HumanVerdict verdict, String note, Long candidateId) {
+        adminGuard.require(userId);
+        ZzalMotion motion = motionRepository.findByIdForUpdate(motionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그 모션을 찾을 수 없어요"));
+        // ★★ 지금 검수 대기인 행에만 판정한다(#224 리뷰 상-1).
+        //   안 보면 REGENERATE 로 반려한 자리(LOCAL_REQUESTED — 반려된 옛 그림이 그대로 붙어 있다)에 OK 를 눌러
+        //   <b>퇴짜 맞은 그림이 그대로 공개된다.</b> 실측으로 그 일이 났다. FAILED·QUEUED·NONE 도 같은 이유로 막는다.
+        //   "다시 눌러 고칠 수 있어야 한다" 는 REVIEW 안에서만 성립한다.
+        if (motion.getStatus() != MotionStatus.REVIEW) {
+            throw new BusinessException(ErrorCode.ZZAL_NOT_IN_REVIEW,
+                    "지금은 검수할 수 없어요(%s)".formatted(motion.getStatus()));
+        }
+        Instant now = Instant.now();
+        motion.review(verdict, note, now);
+
+        if (verdict == HumanVerdict.OK) {
+            chooseCandidate(motion, candidateId);
+            motion.approve(now);
+            log.info("검수 통과 — motionId={} 동작={} candidateId={} (아침 공개 대기)",
+                    motionId, motion.getName(), candidateId);
+            return;
+        }
+        if (motion.getRegenRound() >= localRegenMax) {
+            // ★ 후보 일곱 판이 전부 아니었다는 뜻이다. 같은 지시문·같은 원본으로 또 구우면 또 같은 것이 나온다.
+            //   자동 재시도는 돈만 쓰고 같은 자리로 돌아오므로 보류함에 둔다(상훈님 2026-09-11).
+            motion.hold();
+            log.warn("재생성 한도({})를 다 썼다 — motionId={} 보류함으로(자동 재시도 없음)", localRegenMax, motionId);
+            return;
+        }
+        motion.requestLocalRegen();
+        log.info("재생성 요청 — motionId={} {}번째", motionId, motion.getRegenRound());
+    }
+
+    /**
+     * 고른 판으로 대표를 갈아 끼운다.
+     *
+     * ★★ 여기를 빠뜨리면 <b>고르지 않은 판이 공개된다.</b> 사용자에게 나가는 그림은 모션 행의 키이고,
+     *   후보 줄에 표시만 하는 것으로는 아무것도 안 바뀐다.
+     *
+     * ★ 번호를 안 주면 지금 대표로 올라와 있는 판을 고른 것으로 본다 — 후보가 하나뿐인 흔한 경우에
+     *   번호를 강제하면 판정이 느려진다.
+     * ★ 남의 모션의 판은 못 고른다. 안 보면 관리자 계정 하나가 아무 그림이나 아무 도감에 넣을 수 있다.
+     */
+    private void chooseCandidate(ZzalMotion motion, Long candidateId) {
+        List<ZzalMotionCandidate> rows = candidateRepository
+                .findByMotionIdOrderByRoundAscIdAsc(motion.getId());
+        if (rows.isEmpty()) {
+            return;     // 옛 행(후보 표가 생기기 전에 구운 것) — 대표가 이미 그 그림이다
+        }
+        ZzalMotionCandidate picked;
+        if (candidateId == null) {
+            picked = rows.stream()
+                    .filter(c -> c.getImageKey().equals(motion.getImageKey()))
+                    .findFirst()
+                    .orElse(rows.get(rows.size() - 1));
+        } else {
+            picked = rows.stream()
+                    .filter(c -> c.getId().equals(candidateId))
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그 판을 찾을 수 없어요"));
+        }
+        rows.forEach(ZzalMotionCandidate::unchoose);
+        picked.choose();
+        motion.useCandidate(picked.getImageKey(), picked.getSource());
+    }
+
+    /**
+     * 맥미니(codex) 러너가 폴링해 갈 주문 목록.
+     *
+     * ★ 시트·정체성 문단·지시문 본문을 함께 실어 보낸다 — 맥미니가 레포도 DB 도 안 봐도 되게.
+     *   펫이 사라졌거나 지시문이 없는 주문은 목록에서 빼고 로그만 남긴다(러너가 빈손으로 헤매지 않게).
+     */
+    @Transactional(readOnly = true)
+    public List<AdminResponses.RegenRequest> regenRequests(Long userId) {
+        adminGuard.require(userId);
+        // ★ 사람이 보는 목록은 <b>집지 않는다</b> — 관리자가 화면을 열었다고 러너의 일감을 뺏으면 안 된다.
+        return describe(motionRepository.findByStatusOrderByIdAsc(MotionStatus.LOCAL_REQUESTED));
+    }
+
+    /**
+     * 맥미니 전용 — 열쇠로 이미 신원을 확인했으므로 관리자 판정을 다시 하지 않는다.
+     *
+     * ★ 열쇠에 묶인 사용자는 <b>관리자일 필요가 없다.</b> 기계는 판정 화면을 안 보고 일감만 가져간다.
+     *   관리자 권한을 요구하면 그 열쇠가 새는 순간 관리자 화면까지 열리므로, 오히려 나쁘다.
+     *
+     * <h3>★★ 내주면서 <b>집는다</b> — 같은 판을 다시 안 내주기 위한 유일한 장치</h3>
+     * 예전에는 읽기만 하고 상태를 한 글자도 안 바꿨다. 그래서 맥미니가 10분짜리 재생성을 굽는 동안
+     * 러너의 폴링이 <b>매번 같은 motionId</b> 를 받았고, 러너가 둘이면 둘 다 같은 판을 구웠다 —
+     * codex 구독 한도를 같은 그림에 N배로 태운다. 두 번째 업로드는 {@code ZZAL_REGEN_NOT_REQUESTED} 로
+     * 거절되지만 <b>그림은 이미 다 구운 뒤다.</b>
+     *
+     * ★ 빌려주는 것이지 영영 주는 것이 아니다 — {@code agentLease} 보다 오래된 집기는 없는 것으로 치고
+     *   다시 내준다(러너가 중간에 죽으면 아무도 안 올린다). 그보다 더 오래 묵으면 기동 복구가 큐로 되돌린다.
+     *
+     * ⚠️ {@code readOnly} 가 아니다 — 여기서 집기를 찍는다. 읽기 전용으로 두면 집는 시늉만 하고 아무것도 안 남는다.
+     */
+    @Transactional
+    public List<AdminResponses.RegenRequest> regenRequestsForAgent(Long agentUserId) {
+        Instant now = Instant.now();
+        Instant leaseCutoff = now.minus(agentLease);
+        List<ZzalMotion> mine = motionRepository.findByStatusOrderByIdAsc(MotionStatus.LOCAL_REQUESTED).stream()
+                .filter(m -> m.claimByAgent(now, leaseCutoff))
+                .toList();
+        return describe(mine);
+    }
+
+    /** 주문 줄을 러너가 읽을 모양으로 바꾼다. 펫이 없거나 지시문을 못 읽는 줄은 빼고 로그만 남긴다. */
+    private List<AdminResponses.RegenRequest> describe(List<ZzalMotion> rows) {
+        Map<Long, ZzalPet> pets = petRepository.findAllById(rows.stream().map(ZzalMotion::getPetId).distinct().toList())
+                .stream().collect(java.util.stream.Collectors.toMap(ZzalPet::getId, p -> p));
+        return rows.stream().map(m -> {
+            ZzalPet pet = pets.get(m.getPetId());
+            if (pet == null) {
+                log.warn("재생성 주문의 펫이 없다 — motionId={} petId={}", m.getId(), m.getPetId());
+                return null;
+            }
+            try {
+                return new AdminResponses.RegenRequest(m.getId(), pet.getId(),
+                        pet.getSheetImageKey(), pet.getIdentityText(),
+                        m.getName(), catalog.block(m.getName()), m.getRegenRound());
+            } catch (RuntimeException e) {
+                log.error("재생성 주문의 지시문을 못 읽었다 — motionId={} key={}", m.getId(), m.getName(), e);
+                return null;
+            }
+        }).filter(java.util.Objects::nonNull).toList();
+    }
+
+    /**
+     * 맥미니가 올린 결과를 등록한다 → 다시 <b>검수 대기</b>.
+     *
+     * ★ 곧바로 열지 않는다. 다시 구운 것도 사람이 한 번 본다 — 그게 "검수 후 공개" 다.
+     * ★ 재생성을 요청한 자리가 아니면 거절한다({@code ZZAL_REGEN_NOT_REQUESTED}) — 아무 모션에나
+     *   그림을 밀어 넣을 수 있으면 관리자 계정 하나가 도감을 통째로 바꿔 쓸 수 있다.
+     */
+    @Transactional
+    public void upload(Long userId, Long motionId, List<AdminRequests.Candidate> candidates) {
+        adminGuard.require(userId);
+        uploadRows(userId, motionId, candidates);
+    }
+
+    /** 맥미니 전용 — 열쇠로 신원이 확인됐다. 올린 그림의 주인은 그 열쇠에 묶인 사용자다. */
+    @Transactional
+    public void uploadForAgent(Long agentUserId, Long motionId, List<AdminRequests.Candidate> candidates) {
+        uploadRows(agentUserId, motionId, candidates);
+    }
+
+    private void uploadRows(Long userId, Long motionId, List<AdminRequests.Candidate> candidates) {
+        ZzalMotion motion = motionRepository.findByIdForUpdate(motionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그 모션을 찾을 수 없어요"));
+        if (motion.getStatus() != MotionStatus.LOCAL_REQUESTED) {
+            throw new BusinessException(ErrorCode.ZZAL_REGEN_NOT_REQUESTED);
+        }
+        // ★ 부화 때와 같은 문 — 내 키인지·이미 쓴 키인지 여기서 판정된다. 판마다 따로 본다.
+        //   한 판이라도 남의 키면 통째로 거절된다(트랜잭션이 하나라 앞의 소비도 되돌아간다).
+        // ★★ 여기서 MotionRecorder(REQUIRES_NEW)를 부르면 안 된다 — 위에서 findByIdForUpdate 로
+        //   이 줄을 이미 잠갔으므로, 새 트랜잭션이 같은 줄을 건드리면 <b>서로를 기다리며 멈춘다.</b>
+        //   같은 트랜잭션 안에서 끝낸다.
+        // ★★ 한 라운드의 상한을 서버가 잡는다. DTO 의 {@code @Size(max = 7)} 는 <b>요청 하나</b>의 상한이라
+        //   그대로 두면 "API 1 + 7 + 7 = 15판" 이 들어간다. 정본은 최대 일곱이다(API 1 + 러너 3 x 2라운드).
+        //
+        // ★ 여기만 막으면 총량도 따라온다 — 재생성 라운드는 {@code localRegenMax}(2)가 이미 막으므로
+        //   한 판 굽는 동안 남는 판은 <b>1 + 3 x 2 = 7</b> 을 넘을 수 없다. 총량을 따로 세지 않는 이유는
+        //   아래와 같다.
+        //
+        // ★★ <b>총량을 세면 보류함에서 꺼낸 자리가 막힌다.</b> 사람이 꺼내면 라운드가 0 부터 다시 시작하는데,
+        //   지난 밤의 후보는 (게이트 보정 재료라) 그대로 남아 있다. 그 둘을 합쳐 세면 두 번째 밤은
+        //   시작하자마자 상한에 걸린다 — 고치라고 꺼내 준 자리를 우리가 다시 잠그는 셈이다.
+        //   같은 이유로 "이 라운드는 이미 올렸나" 도 세지 않는다. 라운드 번호는 밤마다 0 으로 돌아가
+        //   밤을 가로질러 같은 것을 가리키지 않는다. 한 라운드를 두 번 올리는 것은
+        //   <b>상태 잠금</b>이 막는다 — 올리는 순간 REVIEW 가 되어 다음 업로드는 ZZAL_REGEN_NOT_REQUESTED 다.
+        //
+        // ★★ 하한도 서버가 잡는다 — {@code @Size(min = 1)} 은 <b>DTO 에만</b> 있어서, {@code @Valid} 를 안 거치는
+        //   호출자(러너 경로 재사용 등)가 빈 목록으로 부르면 아래 {@code candidates.get(0)} 이
+        //   {@code IndexOutOfBoundsException} 으로 터져 곧바로 <b>500</b> 이었다. 만료 없는 열쇠를 쥔 기계가
+        //   새벽에 혼자 부르는 자리라 아무도 안 본다. 상한만 재고 하한을 안 재면 이런 모양이 남는다.
+        if (candidates.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "올릴 판이 한 판도 없어요");
+        }
+        if (candidates.size() > PER_ROUND_MAX) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "한 라운드에는 %d판까지 올릴 수 있어요".formatted(PER_ROUND_MAX));
+        }
+        Instant now = Instant.now();
+        for (AdminRequests.Candidate c : candidates) {
+            s3Service.consume(userId, c.imageKey(), now);
+            if (c.gridKey() != null && !c.gridKey().isBlank()) {
+                s3Service.consume(userId, c.gridKey(), now);
+            }
+            candidateRepository.save(ZzalMotionCandidate.of(
+                    motionId, motion.getRegenRound(), c.gridKey(), c.imageKey(), MotionSource.LOCAL,
+                    null, null, null, c.gateScore(), now));
+        }
+        // ★ 대표는 맨 앞 판. 판정 화면은 후보 전부를 보므로 대표가 무엇이든 보이는 것은 같고,
+        //   사람이 고르는 순간 고른 판으로 갈아 끼운다.
+        motion.uploadedLocal(candidates.get(0).imageKey());
+        log.info("맥미니 재생성 등록 — motionId={} {}번째 판 {}개 (검수 대기)",
+                motionId, motion.getRegenRound(), candidates.size());
+    }
+
+    /** 그 밤 현황 — 모션 행을 직접 센다(밤 기록의 숫자는 "집기 완료" 라 실제와 다르다, B52). */
+    /**
+     * 한 펫의 생성 단계별 소요·비용 — 프론트 요청으로 연 창구(2026-09-11).
+     *
+     * ★ 데이터는 처음부터 쌓이고 있었다. <b>없던 것은 창구뿐</b>이라 서버 로그를 SSM 으로 읽어야 했다.
+     * ★ 시도 순·단계 순으로 준다. 재시도가 섞이면 어느 판의 몇 초인지 알 수 없다.
+     */
+    @Transactional(readOnly = true)
+    public List<AdminResponses.GenStep> genSteps(Long userId, Long petId) {
+        adminGuard.require(userId);
+        List<GenJob> jobs = jobRepository.findByPetIdOrderByIdAsc(petId);
+        return jobs.stream()
+                .flatMap(job -> stepRepository.findByJobIdOrderBySeqAsc(job.getId()).stream()
+                        .map(r -> AdminResponses.GenStep.from(job, r)))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AdminResponses.NightSummary nightSummary(Long userId, LocalDate nightOf) {
+        adminGuard.require(userId);
+        List<ZzalMotion> rows = motionRepository.findByNightOf(nightOf);
+        BigDecimal cost = rows.isEmpty()
+                ? BigDecimal.ZERO
+                : jobRepository.sumCostByMotionIds(rows.stream().map(ZzalMotion::getId).toList());
+        return new AdminResponses.NightSummary(nightOf,
+                count(rows, MotionStatus.QUEUED),
+                count(rows, MotionStatus.BAKING),
+                count(rows, MotionStatus.REVIEW),
+                count(rows, MotionStatus.LOCAL_REQUESTED),
+                count(rows, MotionStatus.OPEN),
+                count(rows, MotionStatus.FAILED),
+                count(rows, MotionStatus.HOLD),
+                cost);
+    }
+
+    private static long count(List<ZzalMotion> rows, MotionStatus status) {
+        return rows.stream().filter(m -> m.getStatus() == status).count();
+    }
+
+    /** 카탈로그 밖 이름(v1 행)이면 key 를 그대로 보여 준다. */
+    private String label(ZzalMotion m) {
+        return catalog.byKey(m.getName()).map(MotionSpec::label).orElse(m.getName());
+    }
+}
