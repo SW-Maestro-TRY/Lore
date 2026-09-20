@@ -83,3 +83,7 @@ minio 로 넘길 때 **Host 헤더를 그대로 보존**해야 서명이 맞는�
 - 화면 포트가 **3100** 인 이유 — `application.yml` 의 `app.zzal.share.base-url` 기본값이
   `http://localhost:3100/zzal/s` 다. 3000 으로 띄우면 로컬에서 만든 공유 링크가 죽은 주소를 가리킨다.
 - `ZZAL_GENERATION_REAL=true` 는 **부화 한 바퀴마다 과금**된다. 기본은 꺼진 채로 둔다.
+- 이미지 안에 파이썬 가상환경이 **둘** 있다 — 짤 후처리용 `/opt/lore/venv`(numpy·scipy·pillow)와
+  웹툰 하네스용 `/opt/lore/venv-webtoon`(openai·google-genai·PyYAML·boto3). staging·prod 박스와 같은 배치다.
+  앱에는 `ZZAL_PYTHON_BIN`·`LORE_WEBTOON_PYTHON_BIN` 으로 각각 알려 준다. 웹툰 만들기를 실제로 돌리려면
+  `.env` 의 `WEBTOON_API_KEY`·`LORE_WEBTOON_INTERNAL_TOKEN` 을 채운다(둘 다 비어 있으면 만들기만 멈추고 스택은 뜬다).
