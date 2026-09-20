@@ -37,20 +37,26 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
  * 홑/겹따옴표 문자열을 뽑는다. 템플릿 리터럴의 **글자 부분**은 건너뛴다 — 거긴 `${}` 로 진짜 값이 들어간다.
  * 주석도 건너뛴다(주석에 예시로 적어 둔 것까지 잡으면 설명을 못 쓴다).
  *
- * ★★ 다만 **`${}` 안은 다시 훑는다.** 거긴 글자가 아니라 코드라서, 그 안에 또 문자열이 들어갈 수 있다.
- *   실제로 그렇게 다섯 곳이 숨어 있었다 — `` `1px solid ${on ? C.accent : 'ink(.22)'}` `` 같은 꼴.
- *   템플릿을 통째로 건너뛰면 이 다섯은 영원히 안 걸린다(2026-09-21 실측으로 놓쳤던 자리).
+ * ★★ 값이 안 들어가는 자리는 **셋**이다. 셋 다 봐야 한다 — 하나라도 빼면 그쪽으로 다시 샌다.
+ *   1) 홑/겹따옴표 문자열      `boxShadow: '0 4px 14px ink(.2)'`
+ *   2) `${}` 안에 **중첩된** 문자열  `` `1px solid ${on ? C.accent : 'ink(.22)'}` ``
+ *   3) 템플릿의 **글자 부분**    `` `box-shadow: 0 6px 16px acc(.24)` ``  ← ${} 를 안 씌운 것
+ *   2026-09-21 에 셋이 차례로 나왔다(50 → 5 → 11곳). 1번만 보던 검사는 2·3번을 놓쳤다.
+ * ★ 템플릿 안의 CSS 주석(`/* … *\/`)은 글일 뿐이라 건드리지 않는다.
  */
 function plainStrings(src: string, base = 0, out: { line: number; text: string }[] = [], whole = src): { line: number; text: string }[] {
   let i = 0;
   const lineOf = (at: number) => whole.slice(0, at).split('\n').length;
   while (i < src.length) {
     const ch = src[i];
-    if (ch === '`') {                                   // 템플릿 — 글자는 건너뛰고 ${} 안만 다시 본다
+    if (ch === '`') {                                   // 템플릿
       i++;
+      let litStart = i; let lit = '';
+      const flushLiteral = () => { if (lit) out.push({ line: lineOf(base + litStart), text: lit }); lit = ''; };
       while (i < src.length) {
-        if (src[i] === '\\') { i += 2; continue; }
-        if (src[i] === '$' && src[i + 1] === '{') {
+        if (src[i] === '\\') { lit += src.slice(i, i + 2); i += 2; continue; }
+        if (src[i] === '$' && src[i + 1] === '{') {      // ${} 안은 코드 — 그 안의 문자열을 다시 본다
+          flushLiteral();
           let d = 1; let j = i + 2; const st = j;
           while (j < src.length && d > 0) {
             if (src[j] === '\\') { j += 2; continue; }
@@ -59,11 +65,17 @@ function plainStrings(src: string, base = 0, out: { line: number; text: string }
             j++;
           }
           plainStrings(src.slice(st, j - 1), base + st, out, whole);
-          i = j; continue;
+          i = j; litStart = i; continue;
         }
-        if (src[i] === '`') { i++; break; }
-        i++;
+        if (src[i] === '/' && src[i + 1] === '*') {      // 템플릿 안의 CSS 주석 — 글일 뿐이다
+          flushLiteral();
+          const j = src.indexOf('*/', i);
+          i = j < 0 ? src.length : j + 2; litStart = i; continue;
+        }
+        if (src[i] === '`') { flushLiteral(); i++; break; }
+        lit += src[i]; i++;
       }
+      flushLiteral();
       continue;
     }
     if (ch === '/' && src[i + 1] === '/') { const j = src.indexOf('\n', i); i = j < 0 ? src.length : j; continue; }
@@ -83,7 +95,7 @@ function plainStrings(src: string, base = 0, out: { line: number; text: string }
   return out;
 }
 
-test('색·토큰 함수가 문자열 안에 글자로 남아 있지 않다', () => {
+test('색·토큰 함수가 값이 안 되는 자리에 글자로 남아 있지 않다', () => {
   const names = tokenFunctionNames();
   expect(names.length, 'ui.ts 에서 함수 이름을 하나도 못 읽었다 — 경로나 형식이 바뀌었는지 확인').toBeGreaterThan(0);
   const re = new RegExp(`\\b(?:${names.join('|')})\\(`);
