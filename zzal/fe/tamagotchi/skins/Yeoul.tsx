@@ -23,7 +23,7 @@ import Onboarding from '../yeoul/Onboarding';
 import AuthSkin from '../yeoul/authSkin';
 import Room from '../yeoul/Room';
 import { STEPS, WEB_KEYS } from '../yeoul/constants';
-import { C, C2, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, gap, monoSize, radius, fz } from '../yeoul/ui';
+import { C, C2, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, gap, monoSize, radius, fz, ink, pad } from '../yeoul/ui';
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import { useDevVisible } from '../useDevVisible';
@@ -136,8 +136,8 @@ export default function Yeoul(_props: SkinProps) {
         //   가운데 밝은 셸이 "일부러 방 가운데 둔 카드"로 명확히 읽힌다(수평선은 카드 안 무대와
         //   대략 맞춘 52% — 카드가 그림자로 떠 있어 픽셀 단위로 안 맞아도 어색하지 않다).
         background: `
-          repeating-linear-gradient(90deg, rgba(74,64,56,.03) 0 1px, transparent 1px 22px),
-          radial-gradient(130% 78% at 50% 112%, rgba(74,64,56,.16), rgba(74,64,56,0) 46%),
+          repeating-linear-gradient(90deg, ink(.03) 0 1px, transparent 1px 22px),
+          radial-gradient(130% 78% at 50% 112%, ink(.16), ink(0) 46%),
           linear-gradient(180deg, ${C.bornBg} 0%, ${C.bornBg} 50%, #EFDFCC 55%, #E9D6BF 100%)`,
         color: C.ink, fontFamily: SANS, WebkitFontSmoothing: 'antialiased',
       }}
@@ -154,7 +154,7 @@ export default function Yeoul(_props: SkinProps) {
           // ★ 방 배경 위에서 셸이 **떠 있는 카드**로 읽히게 그림자를 키웠다(2026-09-16).
           //   폰(width=100%)에서는 좌우 가장자리가 화면 밖이라 이 그림자가 안 보이고,
           //   넓은 화면에서만 카드가 살짝 떠 보인다 — 좌우 빈 베이지가 사라진다.
-          boxShadow: '0 0 0 1px rgba(74,64,56,.04), 0 22px 60px rgba(74,64,56,.20)',
+          boxShadow: '0 0 0 1px ink(.04), 0 22px 60px ink(.20)',
           display: 'flex', flexDirection: 'column',
         }}
       >
@@ -439,8 +439,8 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       style={{
         position: 'absolute', right: 10, bottom: 10, zIndex: 30, width: 'min(414px,calc(100% - 20px))',
         maxHeight: '70%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: gap.md,
-        padding: '11px 13px', borderRadius: radius.lg,
-        background: 'rgba(255,251,244,.96)', border: `1px solid ${C.line}`, boxShadow: '0 8px 24px rgba(74,64,56,.18)',
+        padding: pad.card, borderRadius: radius.lg,
+        background: 'rgba(255,251,244,.96)', border: `1px solid ${C.line}`, boxShadow: '0 8px 24px ink(.18)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
@@ -474,7 +474,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
                   // 확정이 아닌 상황은 눌러도 소품이 안 뜬다 — 고장이 아니라 결정 대기라는 뜻으로 흐리게 둔다.
                   title={i.title ?? (i.dim ? '아직 확정 전(decide·pending) — 눌러도 소품은 안 뜹니다' : undefined)}
                   style={{
-                    border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: fz.xs,
+                    border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: pad.tiny, fontSize: fz.xs,
                     background: t.bg, color: t.fg, opacity: i.dim && !i.on ? 0.5 : 1,
                   }}
                 >{i.label}</button>
@@ -489,7 +489,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       {/* ★ 기본 8종 중 서버가 그림을 안 준 것. **방에 들어온 시점에 비어 있어야 한다.**
           지금 가짜 생성은 6종만 만들어서 sick·call 이 늘 뜬다 — 정상적인 경고다. */}
       {missingBasics.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm, padding: '6px 9px', borderRadius: radius.sm, background: C.accentSoft }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm, padding: pad.tiny, borderRadius: radius.sm, background: C.accentSoft }}>
           <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>기본 8종 중 그림 없음</span>
           <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>{missingBasics.join(' · ')}</span>
         </div>
@@ -498,7 +498,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: gap.sm, paddingTop: 2 }}>
         {WEB_KEYS.map(([k, text]) => (
           <span key={k} style={{ display: 'flex', alignItems: 'center', gap: gap.sm, fontSize: fz.sm, color: C.sub }}>
-            <span style={{ padding: '3px 7px', borderRadius: radius.xs, border: '1px solid rgba(74,64,56,.18)', background: C.paper, font: `${monoSize.sm}px ${MONO}`, color: C.ink }}>{k}</span>
+            <span style={{ padding: '3px 7px', borderRadius: radius.xs, border: '1px solid ink(.18)', background: C.paper, font: `${monoSize.sm}px ${MONO}`, color: C.ink }}>{k}</span>
             {text}
           </span>
         ))}
@@ -563,7 +563,7 @@ function DevServerRow({ live }: { live: Live }) {
               {CLOCK_JUMPS.map((j) => (
                 <button key={j.label} data-jump={`clock:${j.label}`} disabled={busy} onClick={() => void run(j)}
                   style={{
-                    border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: fz.xs,
+                    border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, padding: pad.tiny, fontSize: fz.xs,
                     background: C.slot, color: C.ink, opacity: busy ? 0.5 : 1,
                   }}
                 >{j.label}</button>

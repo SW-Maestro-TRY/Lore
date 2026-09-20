@@ -5,7 +5,7 @@
 // 액자 = 벽에서 한 칸을 누르면 크게. 열린 칸은 저장·공유, 잠긴 칸은 조건만 알려 준다.
 'use client';
 
-import { C, C2, GAEGU, gap, radius, fz } from './ui';
+import { C, C2, GAEGU, gap, radius, fz, ink, paperA } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
@@ -28,19 +28,24 @@ function Wall({ y }: { y: Yeoul }) {
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, color: C.ink }}>함께한 순간</span>
         <span style={{ fontSize: fz.sm, color: C.faint }}>{w.count}</span>
         <span style={{ flex: 1 }} />
-        <button onClick={w.close} style={{ width: 28, height: 28, borderRadius: radius.pill, border: '1px solid rgba(74,64,56,.16)', background: 'rgba(255,253,248,.9)', fontSize: fz.sm, color: C.sub, lineHeight: 1 }} aria-label="닫기">✕</button>
+        <button onClick={w.close} style={{ width: 28, height: 28, borderRadius: radius.pill, border: '1px solid ink(.16)', background: 'paperA(.9)', fontSize: fz.sm, color: C.sub, lineHeight: 1 }} aria-label="닫기">✕</button>
       </div>
 
       <div style={{
         flex: '1 1 auto', overflow: 'auto', padding: '6px 18px 18px',
         display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 14px',
         alignContent: 'start', alignItems: 'start',
-        backgroundImage: 'repeating-linear-gradient(90deg,rgba(74,64,56,.05) 0 2px,transparent 2px 22px)',
+        backgroundImage: 'repeating-linear-gradient(90deg,ink(.05) 0 2px,transparent 2px 22px)',
       }}>
         {w.frames.map((f, i) => (
           <span key={i} style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, alignSelf: 'start', margin: '0 0 22px' }}>
+            {/* ★ 이 버튼 안에는 그림 한 장뿐이라 **화면 낭독기에는 "버튼" 으로만 들린다**
+                (2026-09-21 실측 — 전 화면에서 이름 없는 버튼은 이 하나였다).
+                밑에 붙은 이름표는 버튼 **밖**이라 이름이 되어 주지 못한다. 열림/잠김까지 말해 준다 —
+                흐린 액자와 또렷한 액자의 차이는 눈으로만 갈리기 때문이다. */}
             <button
               onClick={f.tap}
+              aria-label={f.open ? f.name : `${f.name} · 아직 못 배운 모습 · ${f.cond}`}
               style={{ position: 'relative', width: '100%', height: 0, padding: '0 0 133%', boxSizing: 'content-box', border: `5px solid ${f.bd}`, borderRadius: radius.frame, background: f.bg, boxShadow: f.shadow, overflow: 'hidden' }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -110,7 +115,7 @@ function FrameView({ y }: { y: Yeoul }) {
           <img src={src} alt="" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: f.opacity }} />
         </span>
         <span style={{ fontFamily: GAEGU, fontSize: fz.h2, color: C2.onDark }}>{f.name}</span>
-        {f.locked && <span style={{ padding: '7px 14px', borderRadius: radius.pill, background: 'rgba(255,253,248,.16)', fontSize: fz.sm, color: '#F3E9DC' }}>{f.cond}</span>}
+        {f.locked && <span style={{ padding: '7px 14px', borderRadius: radius.pill, background: 'paperA(.16)', fontSize: fz.sm, color: '#F3E9DC' }}>{f.cond}</span>}
         {f.open && (
           <span style={{ display: 'flex', gap: gap.sm }}>
             <button onClick={f.save} data-action="frame-save" style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>저장</button>

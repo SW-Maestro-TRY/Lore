@@ -17,7 +17,7 @@ import {
   type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
-import { ACCENT, C, C2, LV, sel, type LvKey, type Sel } from './ui';
+import { ACCENT, C, C2, LV, sel, type LvKey, type Sel, ink, paperA } from './ui';
 import type { Live } from './useHatch';
 import type { CareAction, ChatState, Personality } from '../../lib/pet';
 import { takeGrownLine } from '../tutorial';
@@ -1988,7 +1988,7 @@ export function useYeoul(live?: Live) {
     const cur = P[selK];
 
     const bar = Array.from({ length: cur.n }, (_, i) => ({
-      bg: i < cur.on ? (locked ? 'rgba(74,64,56,.28)' : cur.tint) : C.line,
+      bg: i < cur.on ? (locked ? 'ink(.28)' : cur.tint) : C.line,
     }));
 
     const pbtn = (r: Raw | null, isTutTarget: boolean): PopBtn | null => {
@@ -2050,7 +2050,7 @@ export function useYeoul(live?: Live) {
       frame: C.paper,
       sky: mode === 'day' || (mode === 'sick' && !es.night) ? '#DCEBF5'
         : mode === 'night' || mode === 'sleep' || (mode === 'sick' && es.night) ? '#33406B' : '#E4E7EC',
-      pattern: 'repeating-linear-gradient(90deg,rgba(74,64,56,.035) 0 1px,transparent 1px 22px)',
+      pattern: 'repeating-linear-gradient(90deg,ink(.035) 0 1px,transparent 1px 22px)',
       moon: mode === 'night' || mode === 'sleep' || (mode === 'sick' && es.night),
       sun: mode === 'day' || (mode === 'sick' && !es.night),
       curtain: mode === 'sleep',
@@ -2216,8 +2216,8 @@ export function useYeoul(live?: Live) {
         label: open ? f.name : (cond || '조건 미정'),
         labelFg: open ? '#5A4A3C' : C.faint,
         bd: open ? C.frameWood : 'rgba(201,169,141,.45)',
-        bg: open ? C.paper : 'rgba(255,253,248,.5)',
-        shadow: open ? '0 4px 10px rgba(74,64,56,.18)' : 'none',
+        bg: open ? C.paper : 'paperA(.5)',
+        shadow: open ? '0 4px 10px ink(.18)' : 'none',
         opacity: open ? 1 : 0.2,
         filter: open ? 'none' : 'grayscale(.4)',
         tap: pickFrame(f),
@@ -2445,7 +2445,7 @@ export function useYeoul(live?: Live) {
           : hatchN === 3 ? 'yWiggle 2.4s ease-in-out infinite' : 'yBob 2.8s ease-in-out infinite',
         eggNote: hatchReady ? '부화 완료' : '부화 중',
         eggCount: hatchText,
-        noteBg: hatchReady ? ACCENT : 'rgba(74,64,56,.82)',
+        noteBg: hatchReady ? ACCENT : 'ink(.82)',
         haloOpacity: hatchReady ? 1 : 0,
         exit: exitSample, forceHatch: goEgg,
       },
@@ -2605,7 +2605,7 @@ export function useYeoul(live?: Live) {
         dots: STEPS.map((_, i) => ({ w: i === s.step ? '20px' : '6px', bg: i === s.step ? ACCENT : i < s.step ? C.accentDim : '#E3DBCD' })),
         stepKey: STEPS[s.step] as StepKey,
         nameError: s.nameErr,
-        upBd: s.uploaded ? ACCENT : 'rgba(74,64,56,.18)',
+        upBd: s.uploaded ? ACCENT : 'ink(.18)',
         upBg: s.uploaded ? C.accentSoft : C.paper,
         upLabel: s.uploaded ? '그림을 올렸어요' : '그림 올리기',
         upNote: s.uploaded ? '다시 누르면 바꿀 수 있어요' : 'PNG · JPG · 10MB까지',

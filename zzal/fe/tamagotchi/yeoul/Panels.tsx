@@ -9,7 +9,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { C, C2, GAEGU, MONO, gap, input as inputStyle, monoSize, radius, shadow, fz } from './ui';
+import { C, C2, GAEGU, MONO, gap, input as inputStyle, monoSize, radius, shadow, fz, ink, pad } from './ui';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 
 export default function Panels({ y }: { y: Yeoul }) {
@@ -29,7 +29,7 @@ function Sheet({ y }: { y: Yeoul }) {
     <>
       {/* ★ 쌓임 순서 — 무대의 캐릭터가 z 2, 타일이 z 6 이라 z 를 안 주면 그 밑에 깔린다.
           실제로 전면 판의 버튼이 캐릭터 그림에 가려 안 눌렸다(2026-09-07). 벽 9 · 액자 10 위로 올린다. */}
-      <div onClick={actions.closeSheet} style={{ position: 'absolute', inset: 0, zIndex: 11, background: 'rgba(74,64,56,.32)', animation: sh.dimAnim }} />
+      <div onClick={actions.closeSheet} style={{ position: 'absolute', inset: 0, zIndex: 11, background: 'ink(.32)', animation: sh.dimAnim }} />
       <div
         data-part="sheet" data-sheet={sh.key ?? ''}
         style={{
@@ -38,12 +38,12 @@ function Sheet({ y }: { y: Yeoul }) {
           borderRadius: '24px 24px 44px 44px', boxShadow: shadow.sheet, animation: sh.anim,
         }}
       >
-        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 11px', borderBottom: '1px solid rgba(74,64,56,.07)' }}>
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 11px', borderBottom: '1px solid ink(.07)' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: gap.md }}>
             <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, lineHeight: 1, color: C.ink }}>{sh.title}</span>
             <span style={{ fontSize: fz.sm, color: C.faint2 }}>{sh.sub}</span>
           </div>
-          <button onClick={actions.closeSheet} style={{ border: '1px solid rgba(74,64,56,.13)', background: C.slot, borderRadius: radius.pill, width: 27, height: 27, fontSize: fz.sm, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
+          <button onClick={actions.closeSheet} style={{ border: '1px solid ink(.13)', background: C.slot, borderRadius: radius.pill, width: 27, height: 27, fontSize: fz.sm, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
         </div>
 
         {/* ★ 아래 여백이 120px 인 이유 — 시트는 화면 아래끝까지 오는데 그 위에 하단 타일(층 6)이
@@ -86,11 +86,11 @@ function PlaySheet({ y }: { y: Yeoul }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: gap.md }}>
           <span style={{ fontSize: fz.sm, color: C.faint }}>오늘 부름 {p.callsLeft} · 40자 답 · 기억 {p.memCount}</span>
           {p.log.map((l, i) => (
-            <div key={i} style={{ alignSelf: l.align, maxWidth: '84%', padding: '11px 14px', borderRadius: l.radius, background: l.bg, color: l.fg, fontSize: fz.md, lineHeight: 1.55 }}>{l.text}</div>
+            <div key={i} style={{ alignSelf: l.align, maxWidth: '84%', padding: pad.field, borderRadius: l.radius, background: l.bg, color: l.fg, fontSize: fz.md, lineHeight: 1.55 }}>{l.text}</div>
           ))}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
             {p.quick.map((q) => (
-              <button key={q.text} onClick={q.pick} style={{ padding: '6px 11px', borderRadius: radius.pill, border: '1px solid #EFDFD9', background: '#FDF1EE', fontSize: fz.sm, color: C2.accentInk2 }}>{q.text}</button>
+              <button key={q.text} onClick={q.pick} style={{ padding: pad.tiny, borderRadius: radius.pill, border: '1px solid #EFDFD9', background: '#FDF1EE', fontSize: fz.sm, color: C2.accentInk2 }}>{q.text}</button>
             ))}
           </div>
           <div style={{ display: 'flex', gap: gap.sm, alignItems: 'center' }}>
@@ -104,22 +104,22 @@ function PlaySheet({ y }: { y: Yeoul }) {
                 if (composing.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
                 send();
               }}
-              style={{ flex: 1, padding: '11px 14px', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.md, color: C.ink, outline: 'none' }}
+              style={{ flex: 1, padding: pad.field, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.md, color: C.ink, outline: 'none' }}
             />
-            <button onClick={send} data-action="play-chat-send" style={{ padding: '11px 16px', borderRadius: radius.pill, border: 'none', background: C.ink, color: C2.onDark, fontSize: fz.md }}>보내기</button>
+            <button onClick={send} data-action="play-chat-send" style={{ padding: pad.field, borderRadius: radius.pill, border: 'none', background: C.ink, color: C2.onDark, fontSize: fz.md }}>보내기</button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
             {p.memories.map((m, i) => (
-              <span key={i} style={{ padding: '5px 10px', borderRadius: radius.pill, background: C2.paperDim, border: '1px solid rgba(74,64,56,.08)', fontSize: fz.xs, color: C.sub2 }}>{m.text}</span>
+              <span key={i} style={{ padding: pad.tiny, borderRadius: radius.pill, background: C2.paperDim, border: '1px solid ink(.08)', fontSize: fz.xs, color: C.sub2 }}>{m.text}</span>
             ))}
           </div>
         </div>
       )}
 
       {p.isRun && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, padding: 17, borderRadius: radius.md, background: C2.paperDim, border: '1px dashed rgba(74,64,56,.18)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, padding: 17, borderRadius: radius.md, background: C2.paperDim, border: '1px dashed ink(.18)' }}>
           <span style={{ fontSize: fz.md, color: C.sub2 }}>달리기 · 잠겨 있어요</span>
-          <span style={{ fontSize: fz.md, lineHeight: 1.65, color: 'rgba(74,64,56,.55)' }}>{p.runCond}</span>
+          <span style={{ fontSize: fz.md, lineHeight: 1.65, color: 'ink(.55)' }}>{p.runCond}</span>
         </div>
       )}
     </>
@@ -131,7 +131,7 @@ function NotifySheet({ y }: { y: Yeoul }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: gap.md }}>
       {n.items.map((x, i) => (
-        <button key={i} onClick={x.tap} style={{ display: 'flex', alignItems: 'center', gap: gap.md, padding: '13px 15px', borderRadius: radius.md, border: `1px solid ${x.bd}`, background: x.bg, textAlign: 'left' }}>
+        <button key={i} onClick={x.tap} style={{ display: 'flex', alignItems: 'center', gap: gap.md, padding: pad.field, borderRadius: radius.md, border: `1px solid ${x.bd}`, background: x.bg, textAlign: 'left' }}>
           <span style={{ width: 9, height: 9, flex: 'none', borderRadius: '50%', background: x.dot }} />
           <span style={{ display: 'flex', flexDirection: 'column', gap: gap.xs, flex: 1 }}>
             <span style={{ fontSize: fz.md, color: C.ink }}>{x.text}</span>
@@ -140,7 +140,7 @@ function NotifySheet({ y }: { y: Yeoul }) {
           <span style={{ fontSize: fz.sm, color: C2.accentInk2 }}>{x.action}</span>
         </button>
       ))}
-      {n.empty && <div style={{ padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center', fontSize: fz.md, color: 'rgba(74,64,56,.55)' }}>지금은 기다리는 게 없어요</div>}
+      {n.empty && <div style={{ padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center', fontSize: fz.md, color: 'ink(.55)' }}>지금은 기다리는 게 없어요</div>}
     </div>
   );
 }
@@ -158,7 +158,7 @@ function CharCard({ g, open, onToggle }: { g: Yeoul['v']['charGroups'][number]; 
       <button
         onClick={onToggle} aria-expanded={open} data-action={`char-toggle-${g.key}`}
         style={{
-          display: 'flex', alignItems: 'center', gap: gap.sm, minHeight: 46, padding: '12px 13px',
+          display: 'flex', alignItems: 'center', gap: gap.sm, minHeight: 46, padding: pad.card,
           border: 'none', background: 'none', textAlign: 'left', width: '100%',
         }}
       >
@@ -174,11 +174,11 @@ function CharCard({ g, open, onToggle }: { g: Yeoul['v']['charGroups'][number]; 
           <span data-part="chip-note" style={{ fontSize: fz.xs, color: C.faint }}>{g.note}</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
             {g.opts.map((o) => (
-              <button key={o.text} onClick={o.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
+              <button key={o.text} onClick={o.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
             ))}
           </div>
           <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={60} placeholder={g.ph}
-            style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
+            style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
         </div>
       )}
     </div>
@@ -203,7 +203,7 @@ function SettingsSheet({ y }: { y: Yeoul }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
         <span style={{ fontSize: fz.sm, color: C.faint }}>이름 · 12자까지</span>
         <input value={s.petName} onChange={(e) => actions.onName(e.target.value)} maxLength={12} placeholder="보리"
-          style={{ padding: '13px 15px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: fz.lg, color: C.ink, outline: 'none' }} />
+          style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: fz.lg, color: C.ink, outline: 'none' }} />
       </div>
 
       {v.settings.saveNote && (
@@ -218,7 +218,7 @@ function SettingsSheet({ y }: { y: Yeoul }) {
         <span style={{ fontSize: fz.sm, color: C.faint }}>그 밖에 알려주고 싶은 것</span>
         <input value={v.onb.extraVal} onChange={(e) => v.onb.onExtra(e.target.value)} maxLength={60}
           placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나"
-          style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
+          style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
       </div>
 
       {/* ★ 성격을 서버에 보내는 유일한 자리. 튜토리얼 4칸(PERSONALITY)도 이 버튼으로 넘어간다. */}
@@ -239,7 +239,7 @@ function SettingsSheet({ y }: { y: Yeoul }) {
           <span style={{ fontSize: fz.sm, color: C.faint }}>{g.label}</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
             {g.opts.map((o) => (
-              <button key={o.text} onClick={o.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
+              <button key={o.text} onClick={o.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
             ))}
           </div>
         </div>
@@ -247,7 +247,7 @@ function SettingsSheet({ y }: { y: Yeoul }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
         <span style={{ fontSize: fz.sm, color: C.faint }}>떠남</span>
-        <button onClick={v.settings.toggleLeave} style={{ alignSelf: 'flex-start', padding: '9px 14px', borderRadius: radius.pill, border: `${v.settings.leaveBw} solid ${v.settings.leaveBd}`, background: v.settings.leaveBg, fontSize: fz.md, color: v.settings.leaveFg }}>{v.settings.leaveLabel}</button>
+        <button onClick={v.settings.toggleLeave} style={{ alignSelf: 'flex-start', padding: pad.chip, borderRadius: radius.pill, border: `${v.settings.leaveBw} solid ${v.settings.leaveBd}`, background: v.settings.leaveBg, fontSize: fz.md, color: v.settings.leaveFg }}>{v.settings.leaveLabel}</button>
         <span style={{ fontSize: fz.sm, lineHeight: 1.7, color: C.faint2 }}>떠나도 앨범과 배운 동작은 그대로예요.</span>
       </div>
     </div>
@@ -270,7 +270,7 @@ function WishBox({ y }: { y: Yeoul }) {
   const w = y.v.wish;
   if (w.sent) {
     return (
-      <span data-part="fire-wish" data-wish="sent" style={{ width: '100%', padding: '11px 13px', borderRadius: radius.md, background: C.slot, fontSize: fz.md, lineHeight: 1.6, color: C.sub, boxSizing: 'border-box' }}>
+      <span data-part="fire-wish" data-wish="sent" style={{ width: '100%', padding: pad.card, borderRadius: radius.md, background: C.slot, fontSize: fz.md, lineHeight: 1.6, color: C.sub, boxSizing: 'border-box' }}>
         {w.done}
       </span>
     );
@@ -280,7 +280,7 @@ function WishBox({ y }: { y: Yeoul }) {
       <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: gap.sm }}>
         <span style={{ fontSize: fz.sm, color: C.faint }}>{w.label}</span>
         {/* 남은 양의 표시다. 못 넘게 막으므로 경고가 아니고, 꽉 찼을 때만 색이 또렷해진다. */}
-        <span data-note="wish-count" style={{ font: `${monoSize.xs}px ${MONO}`, color: w.full ? C.accent : 'rgba(74,64,56,.33)' }}>{w.count}</span>
+        <span data-note="wish-count" style={{ font: `${monoSize.xs}px ${MONO}`, color: w.full ? C.accent : 'ink(.33)' }}>{w.count}</span>
       </span>
       <input
         data-action="wish-input" value={w.value} onChange={(e) => w.onInput(e.target.value)}
@@ -355,19 +355,19 @@ function Fire({ y }: { y: Yeoul }) {
   //   같은 모양인데 어떤 건 닫히고 어떤 건 안 닫혔다 — 사용자가 규칙을 세울 수 없다.
   const backdrop = y.actions.closeFire;
   return (
-    <div data-part="fire" style={{ position: 'absolute', inset: 0, zIndex: 12, background: 'rgba(74,64,56,.52)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yFadeIn .2s ease' }}>
+    <div data-part="fire" style={{ position: 'absolute', inset: 0, zIndex: 12, background: 'ink(.52)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yFadeIn .2s ease' }}>
       <div onClick={backdrop} style={{ position: 'absolute', inset: 0 }} />
       <div style={{ position: 'relative', width: '100%', padding: '24px 22px', borderRadius: radius.xl, background: C.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.lg, animation: 'yPop .3s ease', boxSizing: 'border-box' }}>
         {f.polaroid && (
           <div style={{ width: '100%', padding: '11px 11px 16px', background: '#FFFFFF', border: `1px solid ${C.lineSoft}`, boxShadow: shadow.raised, display: 'flex', flexDirection: 'column', gap: gap.md }}>
-            <div style={{ width: '100%', aspectRatio: '1/1', backgroundColor: f.shot, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.07) 0 6px,transparent 6px 14px)', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{f.shotLabel}</div>
+            <div style={{ width: '100%', aspectRatio: '1/1', backgroundColor: f.shot, backgroundImage: 'repeating-linear-gradient(135deg,ink(.07) 0 6px,transparent 6px 14px)', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{f.shotLabel}</div>
             <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.35, color: C.ink, textAlign: 'center' }}>{f.caption}</span>
           </div>
         )}
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.2, color: C.ink, textAlign: 'center' }}>{f.title}</span>
         {f.preview && <FirePreview p={f.preview} />}
         {/* ★ `pre-line` — 문구가 줄바꿈(\n)으로 두 마디를 갈라 둔 판이 있다(졸업 판). 없으면 한 덩어리로 붙는다. */}
-        <span style={{ fontSize: fz.md, lineHeight: 1.7, color: 'rgba(74,64,56,.62)', textAlign: 'center', whiteSpace: 'pre-line' }}>{f.body}</span>
+        <span style={{ fontSize: fz.md, lineHeight: 1.7, color: 'ink(.62)', textAlign: 'center', whiteSpace: 'pre-line' }}>{f.body}</span>
         {f.wish && <WishBox y={y} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, width: '100%', marginTop: 2 }}>
           {f.actions.map((a) => (
@@ -387,7 +387,7 @@ function Fire({ y }: { y: Yeoul }) {
             >{a.label}</button>
           ))}
         </div>
-        <span style={{ font: `${monoSize.xs}px ${MONO}`, color: 'rgba(74,64,56,.33)' }}>{f.hint}</span>
+        <span style={{ font: `${monoSize.xs}px ${MONO}`, color: 'ink(.33)' }}>{f.hint}</span>
       </div>
     </div>
   );

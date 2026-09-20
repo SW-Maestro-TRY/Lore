@@ -62,7 +62,7 @@ export const SHELL_MAX = 560;
 
 /** 모서리 한 벌. `frame` 은 액자·사진 테두리, `xs` 는 작은 견본 칸이다.
  *  ★ 아이콘 안쪽 도형(2·3·8px)은 이 계단이 아니다 — 그림의 일부라 손대지 않는다. */
-export const radius = { frame: 3, xs: 7, sm: 12, md: 15, lg: 20, xl: 24, pill: 999 } as const;
+export const radius = { frame: 3, xs: 7, sm: 12, md: 15, lg: 20, xl: 24, sheet: 44, pill: 999 } as const;
 
 /**
  * 글자 크기 한 벌. **여기 없는 숫자를 쓰지 않는다.**
@@ -102,6 +102,31 @@ export const C2 = {
   /** 어두운 바탕 위 글자 */        onDark: '#FBF6EC',
   /** 띠·칩 바탕 */               paperWarm: '#FDF8EE',
   /** 기억 칩 바탕 */             paperDim: '#F1EBE0',
+} as const;
+
+/**
+ * **한 색을 투명도만 달리해 쓰는 자리.**
+ *
+ * 2026-09-21 실측 — `rgba(...)` 가 92곳 있었는데 그중 **52곳이 잉크 한 색**(74,64,56)이고
+ * 8곳이 강조색, 6곳이 종이색이었다. 값이 같은데 곳곳에 다시 적혀 있어서, 색을 손보려면
+ * 66곳을 찾아다녀야 했다. 함수로 두면 "우리 색은 셋뿐이고 투명도만 다르다" 가 코드에 드러난다.
+ *
+ * ★ 값은 `C.ink`·`C.accent`·`C.paper` 와 **같은 색**이다(#4A4038 = 74,64,56 등). 바꾸려면 둘 다 바꾼다.
+ */
+export const ink = (a: number | string) => `rgba(74,64,56,${a})`;
+export const acc = (a: number | string) => `rgba(156,66,50,${a})`;
+export const paperA = (a: number | string) => `rgba(255,253,248,${a})`;
+
+/**
+ * 되풀이되는 **부품 모양**의 안여백. 하나뿐인 값에는 이름을 안 붙인다 —
+ * 억지로 계단에 맞추면 일부러 비뚤게 잡아 둔 자리(시트 바닥 120px 등)가 눈에 띄게 어긋난다.
+ * 2026-09-21 기준 안여백 75종 중 되풀이되는 넷만 여기로 모았다(옮긴 폭 최대 1px).
+ */
+export const pad = {
+  /** 알약 칩 */        chip: '9px 14px',
+  /** 입력칸 */         field: '12px 15px',
+  /** 작은 카드 */      card: '12px 13px',
+  /** 작은 알약·배지 */  tiny: '5px 10px',
 } as const;
 
 /**

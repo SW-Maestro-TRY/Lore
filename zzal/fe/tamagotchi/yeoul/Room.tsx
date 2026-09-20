@@ -20,7 +20,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
 import { YEOUL_ANCHORS_URL } from '../constants';
-import { C, C2, GAEGU, LV, MONO, gap, monoSize, radius, shadow, fz } from './ui';
+import { C, C2, GAEGU, LV, MONO, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
 import Album from './Album';
 import Panels from './Panels';
 import FeedbackSheet from '../FeedbackSheet';
@@ -327,7 +327,7 @@ export default function Room({ y }: { y: Yeoul }) {
             예전엔 고정 `min(266px,44%)` 이라 짧은 화면(SE 378px)에서 경계(44%=167px)가 발끝선(220px)보다
             **아래**로 내려가 아이가 바닥 위 허공에 뜨고 그 아래 바닥이 텅 비어 보였다. 이제 경계를
             발끝선보다 한 뼘 위(무대 8%, 28~90px)로 올려 아이가 언제나 바닥에 발을 딛는다. */}
-        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `calc(${LIFT} + clamp(28px, 8%, 90px))`, background: v.st.floor, borderTop: '1px solid rgba(74,64,56,.09)' }} />
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `calc(${LIFT} + clamp(28px, 8%, 90px))`, background: v.st.floor, borderTop: '1px solid ink(.09)' }} />
 
         {/* ★ 말풍선 자리 계산의 **기준자**. 눈에 안 보이고 아무것도 안 덮는다.
             말풍선이 아이를 낮추면(위 `HEADROOM`) 아이 상자가 줄어드는데, 그 줄어든 상자로 다시
@@ -348,7 +348,7 @@ export default function Room({ y }: { y: Yeoul }) {
           display: 'flex', justifyContent: 'center',
           animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
         }}>
-          <span style={{ display: 'block', width: 'min(236px,62%)', height: '100%', borderRadius: '50%', background: 'rgba(74,64,56,.15)', filter: 'blur(7px)' }} />
+          <span style={{ display: 'block', width: 'min(236px,62%)', height: '100%', borderRadius: '50%', background: 'ink(.15)', filter: 'blur(7px)' }} />
         </div>
 
         {/* 아이 — 좌우로 오가고(wander) 가끔 뛴다(hop). 눌러서 쓰다듬는다.
@@ -375,11 +375,11 @@ export default function Room({ y }: { y: Yeoul }) {
           <div ref={charBoxRef} style={{ position: 'relative', height: '100%', aspectRatio: CHAR_ASPECT, maxWidth: byK ? 'none' : '88%', flex: 'none' }}>
             {v.guide.tap && (
               <>
-                <span style={{ position: 'absolute', left: '50%', top: '52%', marginLeft: -70, width: 140, height: 140, borderRadius: '50%', border: '2px solid rgba(156,66,50,.5)', animation: 'yRipple 1.9s ease-out infinite', pointerEvents: 'none' }} />
+                <span style={{ position: 'absolute', left: '50%', top: '52%', marginLeft: -70, width: 140, height: 140, borderRadius: '50%', border: '2px solid acc(.5)', animation: 'yRipple 1.9s ease-out infinite', pointerEvents: 'none' }} />
                 <span style={{
                   position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
                   display: 'flex', alignItems: 'center', gap: gap.sm, padding: '5px 12px', borderRadius: radius.pill,
-                  background: 'rgba(255,253,248,.94)', border: '1px solid rgba(156,66,50,.22)',
+                  background: 'paperA(.94)', border: '1px solid acc(.22)',
                   fontSize: fz.sm, color: C.accent, whiteSpace: 'nowrap',
                   animation: 'yTapdot 1.9s ease-in-out infinite', pointerEvents: 'none',
                 }}>
@@ -523,7 +523,7 @@ const WANDER = 30;
  * 연습방 1200 에서 21.6px, 390 에서 22.4px). 겹침을 없앤 대가로 생기는 몫이라 여기서 갚는다.
  */
 const HOP = 31;
-const BUBBLE_LINE = '1px solid rgba(74,64,56,.13)';
+const BUBBLE_LINE = '1px solid ink(.13)';
 
 type BubblePlace =
   | { at: 'above'; w: number; left: number }
@@ -660,7 +660,7 @@ function Bubble({
               position: 'absolute', boxSizing: 'border-box', left: place.left, width: place.w,
               ...(place.at === 'above' ? { bottom: BUBBLE_GAP } : { top: place.top }),
               background: C.paper, border: BUBBLE_LINE, borderRadius: radius.md,
-              padding: '9px 15px', boxShadow: shadow.card,
+              padding: pad.chip, boxShadow: shadow.card,
               textAlign: place.at === 'above' ? 'center' : 'left',
               animation: 'yPop .28s ease',
             }}
@@ -743,7 +743,7 @@ function MedChip({ y }: { y: Yeoul }) {
 function Toast({ text }: { text: string }) {
   return (
     <div style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', marginBottom: 9, zIndex: 7, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
-      <span data-part="toast" style={{ background: 'rgba(74,64,56,.92)', color: C2.onDark, borderRadius: radius.pill, padding: '7px 16px', fontSize: fz.sm, animation: 'yFadeIn .2s ease' }}>{text}</span>
+      <span data-part="toast" style={{ background: 'ink(.92)', color: C2.onDark, borderRadius: radius.pill, padding: '7px 16px', fontSize: fz.sm, animation: 'yFadeIn .2s ease' }}>{text}</span>
     </div>
   );
 }
@@ -845,7 +845,7 @@ function GuessPanel({ y }: { y: Yeoul }) {
             style={{
               width: 12, height: 12, borderRadius: '50%', boxSizing: 'border-box',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: `1.5px solid ${m.hit === null ? C.lineHard : m.hit ? '#41633A' : 'rgba(74,64,56,.32)'}`,
+              border: `1.5px solid ${m.hit === null ? C.lineHard : m.hit ? '#41633A' : 'ink(.32)'}`,
               background: m.hit === true ? '#E4F0DC' : 'transparent',
               font: `${monoSize.xs}px ${MONO}`, color: C.sub2, lineHeight: 1,
               outline: m.now ? `2px solid ${C.accentDim}` : 'none',
@@ -898,7 +898,7 @@ function Hud({ y }: { y: Yeoul }) {
         <button
           onClick={actions.openSettings} data-part="pet-info" data-hl={v.hud.hl ? '1' : undefined}
           style={{
-            display: 'flex', alignItems: 'center', gap: gap.xs, flex: 'none', padding: '5px 11px',
+            display: 'flex', alignItems: 'center', gap: gap.xs, flex: 'none', padding: pad.tiny,
             borderRadius: radius.pill,
             // 튜토리얼 4칸(성격)은 이 버튼 안에서 하는 일이라, 타일 대신 여기가 깜빡인다.
             border: v.hud.hl ? `2px solid ${C.accent}` : '1px solid ${C2.lineWarm}',
@@ -1007,7 +1007,7 @@ function TutChip({ label, onTap, primary = false, ...rest }: {
       {...rest}
       onClick={(e) => { e.stopPropagation(); onTap(); }}
       style={{
-        minHeight: 36, padding: '8px 14px', borderRadius: radius.pill, fontSize: fz.md,
+        minHeight: 36, padding: pad.chip, borderRadius: radius.pill, fontSize: fz.md,
         border: primary ? 'none' : `1px solid ${C.lineHard}`,
         background: primary ? C.accent : C.slot,
         color: primary ? C.accentInk : C.sub,
@@ -1088,7 +1088,7 @@ function MiniCard({ y }: { y: Yeoul }) {
                 <span key={x.label} data-shard={x.label} data-on={x.on ? '1' : '0'}
                   style={{
                     width: 13, height: 13, borderRadius: 3, transform: 'rotate(45deg)',
-                    border: `1px solid ${x.on ? C.accent : 'rgba(74,64,56,.22)'}`,
+                    border: `1px solid ${x.on ? C.accent : 'ink(.22)'}`,
                     background: x.on ? C.accentSoft : C.slotDim,
                   }} />
               ))}
@@ -1098,7 +1098,7 @@ function MiniCard({ y }: { y: Yeoul }) {
           <span className={more} data-part="mini-more" style={{ flexDirection: 'column', gap: gap.xs, paddingTop: 2 }}>
             {m.shards.map((x) => (
               <span key={x.label} style={{ display: 'flex', alignItems: 'baseline', gap: gap.sm }}>
-                <span style={{ width: 8, height: 8, flex: 'none', borderRadius: 2, transform: 'rotate(45deg)', border: `1px solid ${x.on ? C.accent : 'rgba(74,64,56,.22)'}`, background: x.on ? C.accentSoft : C.slotDim }} />
+                <span style={{ width: 8, height: 8, flex: 'none', borderRadius: 2, transform: 'rotate(45deg)', border: `1px solid ${x.on ? C.accent : 'ink(.22)'}`, background: x.on ? C.accentSoft : C.slotDim }} />
                 <span style={{ fontSize: fz.sm, color: x.on ? C.ink : C.sub2 }}>{x.label}</span>
                 <span style={{ flex: 1 }} />
                 <span style={{ fontSize: fz.xs, color: C.faint2, whiteSpace: 'nowrap' }}>{x.cond}</span>
@@ -1167,14 +1167,14 @@ function AskCard({ y }: { y: Yeoul }) {
               if (a.hasConfirm) a.confirm();
             }}
             style={{
-              flex: 1, minWidth: 0, padding: '9px 13px', borderRadius: radius.pill,
+              flex: 1, minWidth: 0, padding: pad.chip, borderRadius: radius.pill,
               border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none',
             }}
           />
           {a.hasConfirm && (
             <button
               onClick={a.confirm} data-ask-confirm
-              style={{ flex: 'none', padding: '9px 13px', borderRadius: radius.pill, border: 'none', background: C.accent, color: C.accentInk, fontSize: fz.md, whiteSpace: 'nowrap' }}
+              style={{ flex: 'none', padding: pad.chip, borderRadius: radius.pill, border: 'none', background: C.accent, color: C.accentInk, fontSize: fz.md, whiteSpace: 'nowrap' }}
             >이렇게 불러 주세요</button>
           )}
         </div>
@@ -1229,9 +1229,9 @@ function ChatBar({ y }: { y: Yeoul }) {
         </span>
       )}
       {v.chat.hasMine && (
-        <span data-part="chat-mine" style={{ display: 'flex', alignItems: 'center', gap: gap.sm, maxWidth: '82%', padding: '7px 13px', borderRadius: radius.pill, background: C.accentSoft, border: '1px solid rgba(156,66,50,.22)', animation: 'yPopIn .2s cubic-bezier(.2,.9,.25,1)' }}>
+        <span data-part="chat-mine" style={{ display: 'flex', alignItems: 'center', gap: gap.sm, maxWidth: '82%', padding: '7px 13px', borderRadius: radius.pill, background: C.accentSoft, border: '1px solid acc(.22)', animation: 'yPopIn .2s cubic-bezier(.2,.9,.25,1)' }}>
           <span style={{ fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.2, color: '#8B3A2C' }}>{v.chat.mine}</span>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(156,66,50,.45)' }} />
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'acc(.45)' }} />
         </span>
       )}
       <div style={{ width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: gap.sm, padding: '7px 7px 7px 15px', borderRadius: radius.pill, background: C.paper, border: `1.5px solid ${C.ink}`, boxShadow: shadow.card }}>
@@ -1253,7 +1253,7 @@ function ChatBar({ y }: { y: Yeoul }) {
         <button
           onClick={send} disabled={!v.chat.can} data-action="chat-send"
           style={{
-            flex: 'none', padding: '9px 15px', borderRadius: radius.pill, border: 'none',
+            flex: 'none', padding: pad.chip, borderRadius: radius.pill, border: 'none',
             background: v.chat.can ? C.accent : C.off, color: v.chat.can ? C.accentInk : C2.dim2, fontSize: fz.md,
           }}
         >보내기</button>

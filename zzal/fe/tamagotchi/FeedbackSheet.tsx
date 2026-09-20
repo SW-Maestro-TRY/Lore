@@ -24,7 +24,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { track } from '@common/analytics';
 import { ApiError } from '../lib/api';
 import { getMyFeedback, submitFeedback, type FeedbackTag } from '../lib/feedback';
-import { C, C2, GAEGU as Y_GAEGU, gap, radius, sel, fz } from './yeoul/ui';
+import { C, C2, GAEGU as Y_GAEGU, gap, radius, sel, fz, ink, pad } from './yeoul/ui';
 
 const PEN = "'Nanum Pen Script',cursive";
 const GAEGU = "'Gaegu',cursive";
@@ -396,7 +396,7 @@ const S: Tone = {
   } as CSSProperties,
   bannerText: { flex: '1 1 auto', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.lg, color: INK } as CSSProperties,
   bannerYes: {
-    border: '1px solid ' + INK, background: PAPER, borderRadius: 3, padding: '5px 10px',
+    border: '1px solid ' + INK, background: PAPER, borderRadius: 3, padding: pad.tiny,
     cursor: 'pointer', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.md, color: INK,
   } as CSSProperties,
   bannerNo: {
@@ -482,7 +482,7 @@ const S: Tone = {
 const Y: Tone = {
   banner: {
     display: 'flex', alignItems: 'center', gap: gap.sm, flexWrap: 'wrap',
-    flex: 'none', margin: '0 20px 9px', padding: '10px 13px',
+    flex: 'none', margin: '0 20px 9px', padding: pad.chip,
     borderRadius: radius.md, background: C.accentSoft, border: `1px solid ${C.accentDim}`,
     animation: 'yPop .26s ease',
   },
@@ -503,12 +503,12 @@ const Y: Tone = {
     position: 'absolute', inset: 0, zIndex: 13,
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22,
   },
-  dim: { position: 'absolute', inset: 0, background: 'rgba(74,64,56,.52)', animation: 'yFadeIn .2s ease' },
+  dim: { position: 'absolute', inset: 0, background: 'ink(.52)', animation: 'yFadeIn .2s ease' },
   card: {
     position: 'relative', width: '100%', maxWidth: 420, maxHeight: '88%', overflowY: 'auto',
     display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
     background: C.paper, border: 'none', borderRadius: radius.xl,
-    padding: '22px 22px 20px', boxShadow: '0 12px 30px rgba(74,64,56,.2)',
+    padding: '22px 22px 20px', boxShadow: '0 12px 30px ink(.2)',
     animation: 'yPop .3s ease',
   },
   // 테이프는 스크랩북의 것이다. 여울은 종이를 붙이지 않는다 — 자리를 비워 둔다.
@@ -533,7 +533,7 @@ const Y: Tone = {
     };
   },
   textarea: {
-    marginTop: 8, padding: '11px 13px', borderRadius: radius.md,
+    marginTop: 8, padding: pad.card, borderRadius: radius.md,
     border: `1px solid ${C.line}`, background: C.paper, color: C.ink,
     fontFamily: 'inherit', fontSize: fz.md, lineHeight: 1.7, resize: 'none', outline: 'none',
   },

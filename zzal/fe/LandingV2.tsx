@@ -23,7 +23,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { C, GAEGU, SANS, radius, shadow, SHELL_MAX } from "./tamagotchi/yeoul/ui";
+import { C, GAEGU, SANS, radius, shadow, SHELL_MAX, ink, acc } from './tamagotchi/yeoul/ui';
 import { LANDING_COPY } from "./tamagotchi/yeoul/constants";
 import { YEOUL_MOTION } from "./tamagotchi/constants";
 
@@ -240,7 +240,7 @@ export const V2_STYLE = `
    ★ 온보딩 칸에는 안 깐다 — 거기선 온보딩 셸(OB-01)이 같은 도트를 이미 깔고 있다(이중 질감 방지). */
 .zt-v2page::before{
   content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
-  background-image:radial-gradient(rgba(74,64,56,.14) .6px, transparent .7px);
+  background-image:radial-gradient(ink(.14) .6px, transparent .7px);
   background-size:8px 8px; opacity:.5;
 }
 .zt-v2col{
@@ -283,10 +283,10 @@ export const V2_STYLE = `
   font-family:${GAEGU}; font-weight:700; font-size:19px; text-decoration:none;
   color:${C.accentInk}; background:${C.accent};
   padding:13px 32px; border-radius:${radius.pill}px;
-  box-shadow:0 6px 16px rgba(156,66,50,.24);
+  box-shadow:0 6px 16px acc(.24);
   transition:transform .14s ease, box-shadow .18s ease, background .18s ease;
 }
-.zt-v2cta:hover{ background:#8c3a2c; box-shadow:0 8px 20px rgba(156,66,50,.28); }
+.zt-v2cta:hover{ background:#8c3a2c; box-shadow:0 8px 20px acc(.28); }
 .zt-v2cta:active{ transform:scale(.97); }
 
 /* 이렇게 놀아요 — 가로 3열 */
@@ -344,11 +344,11 @@ export const V2_STYLE = `
   .zt-v2page::before{ display:none; }
   .zt-v2page .zt-v2col{
     background:${C.shell}; padding:44px 44px 34px;
-    border-radius:${radius.xl}px; box-shadow:0 20px 52px rgba(74,64,56,.14);
+    border-radius:${radius.xl}px; box-shadow:0 20px 52px ink(.14);
   }
   .zt-v2page .zt-v2col::before{
     content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:0;
-    background-image:radial-gradient(rgba(74,64,56,.14) .6px, transparent .7px);
+    background-image:radial-gradient(ink(.14) .6px, transparent .7px);
     background-size:8px 8px; opacity:.5;
   }
   .zt-v2page .zt-v2col > *{ position:relative; z-index:1; }
