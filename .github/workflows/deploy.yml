@@ -61,7 +61,6 @@ jobs:
       env_name:   ${{ steps.map.outputs.env_name }}
       ssm_target: ${{ steps.map.outputs.ssm_target }}
       s3_bucket:  ${{ steps.map.outputs.s3_bucket }}
-      cf_dist:    ${{ steps.map.outputs.cf_dist }}
       role_arn:   ${{ steps.map.outputs.role_arn }}
       ec2_id:     ${{ steps.map.outputs.ec2_id }}
       rds_id:     ${{ steps.map.outputs.rds_id }}
@@ -72,19 +71,18 @@ jobs:
             develop)   # dev — 싼 EC2 1대(인스턴스ID 고정), CloudFront 없음(직결)
               env_name=dev
               ssm_target='--instance-ids i-0169c150550d91895'
-              cf_dist=''                    # 없음 → 무효화 스텝 건너뜀
               role_arn='arn:aws:iam::046797548177:role/lore-github-deploy'
               ec2_id=''; rds_id='' ;;       # 전원 사이클 안 씀 — 항상 켜 둔다
             staging)   # staging — 현 인프라 재활용(1대 고정)
               env_name=staging
               ssm_target='--instance-ids i-0204d071a9c94bc08'
-              cf_dist='E2DQOZKTRM3UGJ'
+              # CloudFront E2DQOZKTRM3UGJ — 무효화를 걸지 않으므로 좌표만 적어 둔다
               role_arn='arn:aws:iam::046797548177:role/lore-github-deploy'
               ec2_id='i-0204d071a9c94bc08'; rds_id='lore-staging-db' ;;
             main)      # prod — 태그로 타깃(스케일 대비), 전용 role
               env_name=prod
               ssm_target='--targets Key=tag:Environment,Values=prod'
-              cf_dist='E198BSQE3JQYCS'
+              # CloudFront E198BSQE3JQYCS — 위와 같다
               role_arn='arn:aws:iam::046797548177:role/lore-prod-github-deploy'
               ec2_id=''; rds_id='' ;;       # prod 는 끄지 않는다
             *)
@@ -93,7 +91,7 @@ jobs:
           # 배포 버킷은 전 환경 공유(빌드 산출물 임시창고, env 폴더로 구분).
           # 이미지·DB 같은 실데이터는 여기 없다 — 콘텐츠 버킷·RDS 별도.
           s3_bucket='lore-deploy-046797548177-ap-northeast-2-an'
-          for kv in env_name ssm_target s3_bucket cf_dist role_arn ec2_id rds_id; do
+          for kv in env_name ssm_target s3_bucket role_arn ec2_id rds_id; do
             echo "$kv=${!kv}" >> "$GITHUB_OUTPUT"
           done
 
@@ -105,10 +103,49 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       infra: ${{ steps.filter.outputs.infra }}
     steps:
+      # 얕게 받되 직전 커밋 하나는 남긴다 — 아래 대비책(HEAD~1)이 여기서 나온다.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # ★ 기준점을 직접 정하는 이유
+      #   paths-filter 는 base 를 안 주면 저장소 기본 브랜치(develop)와의 merge-base 를
+      #   기준으로 삼는다. 승격(develop→staging·staging→main)은 fast-forward 라 올라간
+      #   쪽이 develop 의 조상이 되고, 그러면 merge-base 가 방금 올라간 커밋 자신이 되어
+      #   "바뀐 것 없음"이 나온다. 2026-09-20 main 승격에서 실제로 그렇게 떨어져
+      #   (merge-base bce8ea5, 검출 1개) backend·frontend 잡이 통째로 건너뛰어졌다.
+      #
+      #   push 이벤트는 밀기 직전의 브랜치 tip 을 before 로 알려 준다. 40자 SHA 를 base 로
+      #   주면 paths-filter 는 merge-base 를 찾지 않고 그 커밋과 곧장 비교한다 — develop
+      #   푸시가 이미 밟고 있던 경로와 같으므로(base 기본값이 head 와 같아 before 로 떨어진다)
+      #   dev 동작은 그대로고, staging·main 만 같은 판정으로 합류한다.
+      - id: since
+        name: 변경 비교 기준점 정하기
+        run: |
+          BEFORE='${{ github.event.before }}'
+          ZERO='0000000000000000000000000000000000000000'
+          SINCE=''
+          # 브랜치를 새로 만든 push 는 before 가 0 뿐이고, 강제 push 뒤엔 그 커밋이
+          # 원격에 없을 수 있다. 실제로 받아와지는지까지 보고 나서 쓴다.
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "$ZERO" ]; then
+            if git fetch --no-tags --depth=1 origin "$BEFORE" >/dev/null 2>&1; then
+              SINCE="$BEFORE"
+            else
+              echo "before($BEFORE) 를 받아오지 못했다 — 직전 커밋으로 물러선다"
+            fi
+          fi
+          # 대비책 — 직전 커밋. before 가 없는 workflow_dispatch 도 여기로 온다.
+          # 그마저 없으면 빈 값을 넘겨 paths-filter 의 기본값(기본 브랜치)에 맡긴다.
+          if [ -z "$SINCE" ]; then
+            SINCE="$(git rev-parse -q --verify HEAD~1 || true)"
+          fi
+          echo "since=$SINCE" >> "$GITHUB_OUTPUT"
+          echo "기준점: ${SINCE:-(없음 — 기본 브랜치와 비교)}"
+
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          base: ${{ steps.since.outputs.since }}
           filters: |
             backend:
               - 'common/be/**'
@@ -264,6 +301,11 @@ jobs:
       # 박스 위 운영 스크립트를 레포 판본으로 갈아끼운다. 배포·전원 스크립트를 고칠 때마다
       # 사람이 서버에 들어가 손복사하는 단계를 없앤다(손복사본과 레포가 갈라지는 사고 방지).
       # dev 가 deploy-dev.sh 를 매 배포마다 같이 올리는 것과 같은 방식이다.
+      #
+      # ★ load-env-params.sh 만 이름을 바꿔 깐다. 박스에서 이 파일을 부르는 것은
+      #   lore-api.service 의 ExecStartPre(/opt/lore/load-secrets.sh)인데, 레포에는
+      #   그 이름으로 둘 수 없다(비밀 파일 검사가 이름만 보고 막는다). 유닛 파일을
+      #   건드리지 않으려고 박스 쪽 경로를 그대로 두고 복사로 맞춘다.
       - name: 운영 스크립트를 박스에 배포 (infra/staging → /opt/lore)
         if: steps.gate.outputs.ship == 'true'
         run: |
@@ -277,7 +319,7 @@ jobs:
             ${{ needs.setup.outputs.ssm_target }} \
             --document-name "AWS-RunShellScript" \
             --comment "Sync scripts $E ${GITHUB_SHA}" \
-            --parameters commands="[\"set -e\",\"aws s3 cp s3://$B/$PREFIX/ /opt/lore/ --recursive --region $AWS_REGION\",\"chmod +x /opt/lore/*.sh\",\"ls -l /opt/lore/*.sh\"]" \
+            --parameters commands="[\"set -e\",\"aws s3 cp s3://$B/$PREFIX/ /opt/lore/ --recursive --region $AWS_REGION\",\"cp /opt/lore/load-env-params.sh /opt/lore/load-secrets.sh\",\"chmod +x /opt/lore/*.sh\",\"ls -l /opt/lore/*.sh\"]" \
             --query "Command.CommandId" --output text)
           echo "command-id: $CMD_ID"
           bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
@@ -517,15 +559,12 @@ jobs:
           echo "command-id: $CMD_ID"
           bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
 
-      # dev 는 CloudFront 가 없다(직결) → cf_dist 가 비면 무효화를 건너뛴다.
-      # 파일명에 해시가 붙어 무효화가 꼭 필요친 않으나, 배포 직후 옛 자원이 남는 걸 한 번 비운다.
-      - name: CloudFront 캐시 무효화
-        if: needs.setup.outputs.cf_dist != ''
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id "${{ needs.setup.outputs.cf_dist }}" \
-            --paths "/*" \
-            --query "Invalidation.Id" --output text
+      # ★ 배포 뒤 CloudFront 무효화는 하지 않는다.
+      #   HTML·API 응답은 CachingDisabled 라 CloudFront 가 쥐고 있지 않고,
+      #   /_next/static/* 은 내용이 바뀌면 파일 이름(해시)이 같이 바뀌며,
+      #   /images/* 는 판이 바뀌면 키가 바뀐다. 셋 다 옛것이 남을 자리가 없다.
+      #   그런데 "/*" 무효화는 그림 캐시까지 통째로 비워, 배포와 상관없는 /images/*
+      #   를 매 배포마다 원본(S3)에서 다시 받아 오게 만든다 — 느려지고 요금만 는다.
 
   # ── staging 전용: 다시 재우기 예약 ───────────────────────────────
   # 배포가 끝난 시점부터 60분을 센다. 한 시간 안에 배포가 또 들어오면 예약을 새로 걸므로

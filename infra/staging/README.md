@@ -32,14 +32,22 @@ staging 은 하루 종일 켜 둘 이유가 없는 서버다. 그래서 **아무
 | `power-off.sh` | RDS 를 세우고 `shutdown -h now` 로 박스를 끈다 |
 | `schedule-power-off.sh <분>` | N분 뒤 `power-off.sh` 를 돌리는 systemd 일회성 타이머를 건다. 기존 예약은 지우고 새로 건다 |
 | `cancel-power-off.sh` | 걸려 있는 예약을 취소한다 |
+| `load-env-params.sh` | SSM Parameter Store 의 `/lore/{env}/` 값을 읽어 `/etc/lore/secrets.env` 를 만든다. 박스에는 `load-secrets.sh` 라는 이름으로 깔린다 |
 
 `setup-python.sh` 는 dev·staging 이 같은 것을 쓰므로 한 칸 위 `infra/setup-python.sh` 하나만 둔다.
 CI 의 `backend` 잡이 그 파일을 S3 에 올리고 `deploy-api.sh` 가 받아 쓴다 — 여기에 사본을 두지 않는다.
 
-아직 박스에만 있는 것이 하나 남아 있다. `/opt/lore/load-secrets.sh` 는 SSM Parameter Store 의
-`/lore/{env}/` 값을 읽어 `/etc/lore/secrets.env` 를 만들고 `lore-api.service` 가 기동 때마다 부른다.
-비밀값을 담지 않고 가져오기만 하는 파일이지만 이름 때문에 비밀 파일 검사에 걸려 레포에 넣지 못했다.
-CI 의 스크립트 동기화는 이 파일을 건드리지 않으므로 박스의 것이 그대로 쓰인다.
+웹툰 생성 하네스는 쓰는 패키지가 달라 가상환경을 따로 쓴다(`/opt/lore/venv-webtoon`).
+목록과 설치 스크립트가 `webtoon/` 아래에 있고, CI 가 짤 것과 다른 이름으로 올린다.
+`deploy-api.sh` 는 짤 가상환경을 맞춘 뒤 이어서 그쪽도 맞춘다 —
+**이 단계가 실패해도 배포는 멈추지 않는다.** 다른 도메인의 준비물 때문에 짤 배포를
+되돌리지 않으려는 것이고, 실패는 배포 로그에 `WEBTOON_PYTHON_FAIL` 로 남는다.
+
+`load-env-params.sh` 만 **박스에서 이름이 다르다.** `lore-api.service` 의 `ExecStartPre` 가
+`/opt/lore/load-secrets.sh` 를 부르는데, 그 이름으로는 레포에 둘 수 없다 — 비밀 파일 검사가
+이름에 `secret` 이 들어간 파일을 내용과 상관없이 막기 때문이다. 이 스크립트는 값을 담지 않고
+Parameter Store 에서 가져오기만 한다. 유닛 파일을 고치는 대신 동기화 단계가 박스에서
+`load-secrets.sh` 로 복사해 깐다. 고칠 일이 있으면 여기 `load-env-params.sh` 를 고친다.
 
 ## 3. 서버를 계속 켜 두고 싶을 때
 

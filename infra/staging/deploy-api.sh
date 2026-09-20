@@ -43,6 +43,40 @@ if [ -n "$SHA" ]; then
   fi
 fi
 
+# ── 웹툰 하네스 파이썬 준비 ──────────────────────────────────────────
+# 웹툰 생성 하네스는 짤과 쓰는 패키지가 달라 가상환경을 따로 둔다(/opt/lore/venv-webtoon).
+# 그래서 CI 도 목록과 설치 스크립트를 짤 것과 다른 이름으로 올린다
+# (webtoon-requirements-<sha>.txt · webtoon-setup-python-<sha>.sh).
+# 설치 스크립트는 목록 경로를 인자로 받고, 목록이 안 바뀌었으면 스스로 건너뛴다.
+#
+# ★ 여기서 실패해도 배포를 멈추지 않는다. 웹툰은 짤과 다른 도메인이라, 그쪽 준비물이
+#   없거나 설치가 깨졌다는 이유로 짤 배포까지 되돌리면 손해가 더 크다.
+#   무슨 일이 있었는지 한 줄 남기고 지나간다.
+fetch_webtoon_assets() {
+  for base in "builds/$LORE_ENV" "builds"; do
+    if aws s3 cp "s3://$BUCKET/$base/webtoon-setup-python-$SHA.sh" /tmp/webtoon-setup-python.sh --region "$REGION" 2>/dev/null \
+       && aws s3 cp "s3://$BUCKET/$base/webtoon-requirements-$SHA.txt" /opt/lore/webtoon-requirements.txt --region "$REGION" 2>/dev/null; then
+      echo "webtoon python assets: s3://$BUCKET/$base/"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [ -n "$SHA" ]; then
+  if fetch_webtoon_assets; then
+    cp /tmp/webtoon-setup-python.sh /opt/lore/webtoon-setup-python.sh
+    chmod +x /opt/lore/webtoon-setup-python.sh
+    if bash /opt/lore/webtoon-setup-python.sh /opt/lore/webtoon-requirements.txt; then
+      echo "WEBTOON_PYTHON_OK"
+    else
+      echo "WEBTOON_PYTHON_FAIL — 웹툰 가상환경 갱신 실패, 배포는 그대로 진행한다"
+    fi
+  else
+    echo "webtoon python assets 없음 — 건너뜀"
+  fi
+fi
+
 aws s3 cp "s3://$BUCKET/$KEY" /tmp/app.jar --region "$REGION"
 cp /opt/lore/lore.jar /opt/lore/lore.jar.bak 2>/dev/null || true
 mv /tmp/app.jar /opt/lore/lore.jar
