@@ -84,8 +84,8 @@ jobs:
             main)      # prod — 태그로 타깃(스케일 대비), 전용 role
               env_name=prod
               ssm_target='--targets Key=tag:Environment,Values=prod'
-              cf_dist='TODO_PROD_CF_DISTRIBUTION_ID'
-              role_arn='TODO_PROD_ROLE_ARN'
+              cf_dist='E198BSQE3JQYCS'
+              role_arn='arn:aws:iam::046797548177:role/lore-prod-github-deploy'
               ec2_id=''; rds_id='' ;;       # prod 는 끄지 않는다
             *)
               echo "지원하지 않는 브랜치: $GITHUB_REF_NAME"; exit 1 ;;
@@ -149,6 +149,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       woke: ${{ steps.gate.outputs.woke }}
+      ship: ${{ steps.gate.outputs.ship }}
     steps:
       - id: gate
         name: 깨울 차례인가
@@ -157,8 +158,15 @@ jobs:
           BE='${{ needs.changes.outputs.backend }}'
           FE='${{ needs.changes.outputs.frontend }}'
           EV='${{ github.event_name }}'
-          if [ "$ENV_NAME" = staging ] \
-             && { [ "$BE" = true ] || [ "$FE" = true ] || [ "$EV" = workflow_dispatch ]; }; then
+          # 배포할 것이 있는가 — 깨우기와 스크립트 동기화가 함께 보는 조건이다.
+          if [ "$BE" = true ] || [ "$FE" = true ] || [ "$EV" = workflow_dispatch ]; then
+            DEPLOYING=true
+          else
+            DEPLOYING=false
+          fi
+
+          # 깨우기는 staging 만이다. dev 는 절차가 다르고, prod 는 늘 켜 둔다.
+          if [ "$ENV_NAME" = staging ] && [ "$DEPLOYING" = true ]; then
             echo "woke=true" >> "$GITHUB_OUTPUT"
             echo "staging 배포 — 서버를 깨운다"
           else
@@ -166,11 +174,20 @@ jobs:
             echo "깨울 것 없음 (env=$ENV_NAME backend=$BE frontend=$FE event=$EV)"
           fi
 
+          # 스크립트 동기화는 systemd 로 도는 환경 전부(staging·prod)가 받아야 한다.
+          # dev 는 compose 스택이라 deploy-dev.sh 를 따로 받아 가므로 제외한다.
+          if [ "$ENV_NAME" != dev ] && [ "$DEPLOYING" = true ]; then
+            echo "ship=true" >> "$GITHUB_OUTPUT"
+            echo "$ENV_NAME 배포 — 운영 스크립트를 레포 판본으로 맞춘다"
+          else
+            echo "ship=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.woke == 'true'
+        if: steps.gate.outputs.woke == 'true' || steps.gate.outputs.ship == 'true'
 
       - name: AWS 명찰 걸기 (OIDC)
-        if: steps.gate.outputs.woke == 'true'
+        if: steps.gate.outputs.woke == 'true' || steps.gate.outputs.ship == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ needs.setup.outputs.role_arn }}
@@ -248,7 +265,7 @@ jobs:
       # 사람이 서버에 들어가 손복사하는 단계를 없앤다(손복사본과 레포가 갈라지는 사고 방지).
       # dev 가 deploy-dev.sh 를 매 배포마다 같이 올리는 것과 같은 방식이다.
       - name: 운영 스크립트를 박스에 배포 (infra/staging → /opt/lore)
-        if: steps.gate.outputs.woke == 'true'
+        if: steps.gate.outputs.ship == 'true'
         run: |
           B='${{ needs.setup.outputs.s3_bucket }}'
           E='${{ needs.setup.outputs.env_name }}'
