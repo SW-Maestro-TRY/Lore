@@ -26,7 +26,6 @@ import { C, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, radius } from '../yeoul/
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import { useDevVisible } from '../useDevVisible';
-import { RoomPlanProvider, ROOM_PLAN_LIST, useRoomPlanPick } from '../yeoul/roomPlan';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { GIFT_CYCLES, SITUATION_TABLE, scenePlays } from '../props/situations';
 import { ApiError } from '../../lib/api';
@@ -144,9 +143,6 @@ export default function Yeoul(_props: SkinProps) {
     >
       <style>{KEYFRAMES}</style>
 
-      {/* ★ 방 화면 UX 안 1·2·3 리모컨의 상태. 셸과 이동 창이 **같은 값**을 봐야 해서
-          둘을 함께 감싼다. 공개 사이트에는 리모컨이 없고 기본값(안 1)만 그려진다. */}
-      <RoomPlanProvider>
       <LiveProvider value={live}>
       <div
         data-part="shell"
@@ -177,7 +173,6 @@ export default function Yeoul(_props: SkinProps) {
       </LiveProvider>
 
       <DevJump y={y} live={live} missingBasics={live.missingBasics} />
-      </RoomPlanProvider>
     </div>
   );
 }
@@ -238,7 +233,6 @@ const DAILY: ReadonlyArray<readonly [string, string]> = [
 function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; live: Live; missingBasics?: string[] }) {
   const [open, setOpen] = useState(false);
   const visible = useDevVisible();
-  const { id: planId, pick: pickPlan } = useRoomPlanPick();
   const { s, v, actions } = y;
   const d = v.dev;
   const now = v.now;
@@ -273,15 +267,6 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
   });
 
   const rows: Row[] = [
-    {
-      // ★ 방 화면 UX **안 1·2·3 리모컨**(2026-09-20). 상훈님이 셋을 눈으로 비교하시는 손잡이다.
-      //   판정이 끝나 한 안으로 정해지면 이 줄과 `yeoul/roomPlan.tsx` 를 지우면 된다.
-      n: '0', label: '방 UX 안', note: '이 브라우저만',
-      items: ROOM_PLAN_LIST.map((r): Chip => ({
-        label: r.label, id: `plan:${r.id}`, on: planId === r.id, title: r.hint,
-        pick: () => pickPlan(r.id),
-      })),
-    },
     {
       n: '1', label: '화면',
       items: [
@@ -432,7 +417,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
           background: 'rgba(255,251,244,.86)', font: `10px ${MONO}`, color: C.sub,
           writingMode: 'vertical-rl', letterSpacing: '.08em',
         }}
-      >이동 · {planId.replace('p', '안 ')}</button>
+      >이동</button>
     );
   }
 
