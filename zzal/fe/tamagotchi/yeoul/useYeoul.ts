@@ -467,6 +467,10 @@ export interface Bubble {
 export interface Opt extends Sel { text: string; pick: () => void }
 export interface CharGroup {
   key: string; title: string; ph: string; value: string;
+  /** 접었을 때 보이는 한 줄. 고른 칩을 그대로 읽어 준다. */
+  summary: string;
+  /** 무언가 채웠는가 — 접힌 칸의 테두리 색이 이걸 본다. */
+  done: boolean;
   /** "여러 개 고를 수 있어요" 같은 한 줄 안내. 칩 위에 작게 붙는다. */
   note: string;
   onInput: (v: string) => void; cardBd: string; cardBg: string; opts: Opt[];
@@ -2171,6 +2175,15 @@ export function useYeoul(live?: Live) {
         cardBd: done ? C.accentDim : C.lineSoft,
         cardBg: done ? C.shell : C.paper,
         opts: g.opts.map((o) => ({ text: o, pick: pickChip(g.key, o, picked), ...sel(picked.includes(o)) })),
+        /**
+         * 접었을 때 보이는 한 줄(A-17). **고른 것을 그대로 읽어 준다** — 접힌 칸이 무엇을 담고
+         * 있는지 안 보이면 접는 것이 숨기는 것이 된다. 아무것도 안 골랐으면 재촉하지 않고
+         * 비어 있다는 사실만 담담히 말한다.
+         */
+        summary: picked.length > 0
+          ? picked.join(', ') + (noteVal ? ' · 적어 둔 말 있음' : '')
+          : (noteVal ? '적어 둔 말 있음' : '아직 안 골랐어요'),
+        done,
       };
     });
 
@@ -2552,6 +2565,10 @@ export function useYeoul(live?: Live) {
          * 성격 저장. **서버에 붙어 있을 때만 낸다** — 목에는 보낼 곳이 없다.
          * 튜토리얼 4칸(PERSONALITY)을 넘기는 것이 이 버튼이다.
          */
+        /** 연습방에서는 저장 버튼이 없다 — **없는 이유를 말해 준다**(A-19).
+         *  예전에는 버튼만 조용히 사라져 "저장이 어디 갔지" 로 읽혔다. 사용자를 탓하지 않고
+         *  여기가 연습하는 곳이라는 사실만 담담히 적는다. */
+        saveNote: onServer ? '' : '연습방이라 저장되지 않아요',
         save: {
           show: onServer,
           label: '성격 저장하기',

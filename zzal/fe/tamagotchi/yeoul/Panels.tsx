@@ -145,24 +145,33 @@ function NotifySheet({ y }: { y: Yeoul }) {
   );
 }
 
-/** 아이 정보 — 이름·성격 네 묶음·그 밖에·떠남. 온보딩의 캐릭터 칸과 같은 표를 쓴다. */
-function SettingsSheet({ y }: { y: Yeoul }) {
-  const { s, v, actions } = y;
+/**
+ * 성격 묶음 한 칸. 접으면 제목 + 고른 것 한 줄, 펴면 칩과 적는 칸.
+ * ★ 손잡이는 카드 전체다 — 작은 화살표만 누르게 하면 손가락이 빗나간다(터치 타깃 44px 이상).
+ */
+function CharCard({ g, open, onToggle }: { g: Yeoul['v']['charGroups'][number]; open: boolean; onToggle: () => void }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: gap.lg }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
-        <span style={{ fontSize: fz.sm, color: C.faint }}>이름 · 12자까지</span>
-        <input value={s.petName} onChange={(e) => actions.onName(e.target.value)} maxLength={12} placeholder="보리"
-          style={{ padding: '13px 15px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: fz.lg, color: C.ink, outline: 'none' }} />
-      </div>
-
-      {v.charGroups.map((g) => (
-        <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: gap.md, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: fz.md, color: C.ink }}>{g.title}</span>
-            {/* 칩만 보면 하나만 고르는 줄 안다 — 여러 개가 된다는 것은 글로 말해 준다. */}
-            <span data-part="chip-note" style={{ fontSize: fz.xs, color: C.faint }}>{g.note}</span>
-          </span>
+    <div
+      data-part="char-card" data-group={g.key} data-open={open ? '1' : '0'}
+      style={{ display: 'flex', flexDirection: 'column', borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg, overflow: 'hidden' }}
+    >
+      <button
+        onClick={onToggle} aria-expanded={open} data-action={`char-toggle-${g.key}`}
+        style={{
+          display: 'flex', alignItems: 'center', gap: gap.sm, minHeight: 46, padding: '12px 13px',
+          border: 'none', background: 'none', textAlign: 'left', width: '100%',
+        }}
+      >
+        <span style={{ flex: 'none', fontSize: fz.md, color: C.ink }}>{g.title}</span>
+        {/* 접혀 있을 때 **무엇이 들었는지**를 읽어 준다. 펴면 칩이 직접 보이므로 겹쳐 말하지 않는다. */}
+        {!open && <span style={{ flex: 1, minWidth: 0, fontSize: fz.sm, color: g.done ? C.sub2 : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.summary}</span>}
+        {open && <span style={{ flex: 1 }} />}
+        <span aria-hidden style={{ flex: 'none', fontSize: fz.xs, color: C.faint2 }}>{open ? '\u2227' : '\u2228'}</span>
+      </button>
+      {open && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: gap.md, padding: '0 13px 12px' }}>
+          {/* 칩만 보면 하나만 고르는 줄 안다 — 여러 개가 된다는 것은 글로 말해 준다. */}
+          <span data-part="chip-note" style={{ fontSize: fz.xs, color: C.faint }}>{g.note}</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
             {g.opts.map((o) => (
               <button key={o.text} onClick={o.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
@@ -171,6 +180,38 @@ function SettingsSheet({ y }: { y: Yeoul }) {
           <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={60} placeholder={g.ph}
             style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
         </div>
+      )}
+    </div>
+  );
+}
+
+/** 아이 정보 — 이름·성격 네 묶음·그 밖에·떠남. 온보딩의 캐릭터 칸과 같은 표를 쓴다. */
+function SettingsSheet({ y }: { y: Yeoul }) {
+  const { s, v, actions } = y;
+  /**
+   * ★ 묶음 접기(2026-09-21 A-17 · G-5 1안).
+   *
+   * 실측 — 이 창은 높이 406px 인데 내용이 **1,330px**(3.3화면)이었다. 한 화면에 성격 묶음
+   * 하나가 겨우 들어와서, 무엇이 몇 개 있는지 **전체를 볼 수 없었다.**
+   * 넷을 접어 두면 한 화면에 지도가 들어오고, 이미 채운 사람은 굴릴 일이 없다.
+   * ★ 한 번에 하나만 편다 — 둘 이상 펴지면 접은 보람이 없다.
+   * ★ 기본은 **전부 접힘**이다. 접힌 칸도 고른 것을 한 줄로 읽어 주므로 숨기는 것이 아니다.
+   */
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: gap.lg }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
+        <span style={{ fontSize: fz.sm, color: C.faint }}>이름 · 12자까지</span>
+        <input value={s.petName} onChange={(e) => actions.onName(e.target.value)} maxLength={12} placeholder="보리"
+          style={{ padding: '13px 15px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: fz.lg, color: C.ink, outline: 'none' }} />
+      </div>
+
+      {v.settings.saveNote && (
+        <span data-note="save" style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.faint }}>{v.settings.saveNote}</span>
+      )}
+
+      {v.charGroups.map((g) => (
+        <CharCard key={g.key} g={g} open={openGroup === g.key} onToggle={() => setOpenGroup((k) => (k === g.key ? null : g.key))} />
       ))}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
