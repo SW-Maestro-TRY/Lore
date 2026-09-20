@@ -1782,7 +1782,10 @@ export function useYeoul(live?: Live) {
         //   마당에는 게임을 하나둘 붙일 예정이라 그 자리를 비워 둔다.
         // 오늘 남은 판은 서버가 센다(두 게임 합산 · 지금 치는 판은 빠져 있다).
         a: { label: '좌우 맞히기', count: `${playsLeft}판 남음`, tap: startGuess },
-        b: null,
+        // ★ 놀이 시트의 **입구**(2026-09-21). 좌우 맞히기가 무대로 나가면서 시트가 문을 잃었는데,
+        //   시트 이름이 '놀이' 이고 마당이 놀이의 집이라 **같은 팝오버의 둘째 칸**이 가장 자연스럽다.
+        //   왼쪽 칸 = 바로 하는 놀이 · 오른쪽 칸 = 지난 말과 아직 잠긴 놀이(대화·달리기 탭).
+        b: { label: '놀이', count: '대화 · 달리기', tap: openPlay('talk') },
       },
       /**
        * 침실. **서버에 붙어 있으면 되는지 안 되는지를 서버가 정한다**(`clock.canSleep`·`canWake`).
@@ -2292,12 +2295,11 @@ export function useYeoul(live?: Live) {
         /** 대기 중에만 누를 수 있다 — 섞기·공개·여운에는 잠긴다. */
         can: s.gOn && s.gPhase === 'wait' && !live?.guessing,
         pick: (side: Side) => () => onGuess(side),
-        /** 점 다섯 칸. 맞힘 ● · 빗나감 ✕ · 아직 ○ — **색만으로 가르지 않는다.** */
+        /** 판 표시는 **점 다섯 칸뿐**이다(2026-09-21 상훈님 — 글줄 삭제). 규칙은 그대로 돈다.
+         *  맞힘 ● · 빗나감 ✕ · 아직 ○ — **색만으로 가르지 않는다.** */
         marks: s.gMarks.map((m, i) => ({
           hit: m, now: i === s.gRound && s.gPhase !== 'done',
         })),
-        /** 그 아래 한 줄. 규칙(5판 3승·하루 3판)을 글자로도 말한다. */
-        note: `${Math.min(gRoundNo, gRounds)}번째 · ${gWinAt}번 맞히면 이겨요 · 오늘 ${playsLeft}판 남음`,
       },
       toast: { show: !!s.toast, text: s.toast },
       wall: {
