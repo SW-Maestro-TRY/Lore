@@ -28,8 +28,8 @@ import { spriteUrl, useFootPad, useHeadPad, useLive, useSideEdges, yeoulSpriteUr
 import { useIsWide } from '../useIsWide';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
-import { charFit, HEAD_SAFE, FOOT_FLOOR, FOOT_FLOOR_SHORT, NARROW_Q, SHORT_Q, type CharFit } from '../props/layout';
-import { propUrl } from '../props/spec';
+import { charFit, HEAD_SAFE, FOOT_FLOOR, FOOT_FLOOR_SHORT, NARROW_Q, SHORT_Q } from '../props/layout';
+import { poseFacing, propSide, propUrl } from '../props/spec';
 import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
 import {
   SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose, stageAt, stagePlanOf,
@@ -149,6 +149,27 @@ export default function Room({ y }: { y: Yeoul }) {
     // `daily_prop` 은 표가 `prop_ball|prop_book|prop_cup|prop_plant` 로 적어 둔 줄이라 **고른 것**을 말해 줘야 한다.
     ...(v.scene.daily ? { choices: { daily_prop: v.scene.daily } } : {}),
   };
+
+  /**
+   * **머리 옆을 이미 쓰고 있는 소품이 있는 쪽.** 말풍선이 옆으로 비킬 때 이쪽은 피한다.
+   *
+   * ★ 왜 — 게임 이김 표시(`win_star`)·짐 표시(`lose_dots`)가 `head_side` 앵커라, 1200 에서
+   *   옆으로 비킨 말풍선과 **같은 자리**를 노린다(2026-09-21 실측: 47.7px 겹침).
+   *   말풍선을 머리 위로 올리면 아이가 그만큼 작아지므로, **반대쪽으로 보내는 쪽**을 골랐다.
+   * ★ 만화 말풍선(`bubble_*`)은 종이 말풍선이 뜨면 이미 꺼지므로(위 `speaking`) 여기 안 걸린다.
+   */
+  const headSideTaken: 'left' | 'right' | null = (() => {
+    // ★ 게임이 도는 동안에는 **매치 내내** 같은 쪽을 피한다. 결과 표시는 판마다 떴다 사라지는데,
+    //   뜰 때만 비키면 말풍선이 판마다 좌우로 튄다(실측: 대기 왼쪽 → 결과 오른쪽 → 다시 왼쪽).
+    if (v.game.show) return poseFacing(v.spriteKey);
+    for (const id of scene.active) {
+      const row = table.find((r) => r.id === id);
+      if (!row?.prop || row.anchor !== 'head_side') continue;
+      const spec = confirmedSpec(row.prop);
+      return spec ? propSide(spec, v.spriteKey) : 'left';
+    }
+    return null;
+  })();
 
   // ── 아이를 어디에 얼마나 크게 세울 것인가 ──────────────────────────────
   //
@@ -388,8 +409,6 @@ export default function Room({ y }: { y: Yeoul }) {
             </div>
             {/* 아이 앞에 얹히는 것(머리 옆 기호·손 앞 먹을 것·발치 소품). */}
             <PropLayer scene={scene} table={table} anchors={anchors} />
-            {/* 좌우 맞히기 — 아이가 내민 두 손. 소품 층과 **같은 규칙**으로 붙는다(아래 머리말). */}
-            {v.game.show && <GuessHands y={y} fit={fit} play={v.st.play} />}
           </div>
         </div>
 
@@ -425,13 +444,10 @@ export default function Room({ y }: { y: Yeoul }) {
         <Bubble
           show={v.bub.show} text={v.bub.text} play={v.st.play}
           headSpan={headSpan} faceSpan={Math.max(0, headSpan - headSideDrop)}
-          silLeft={silLeft} silRight={silRight}
+          silLeft={silLeft} silRight={silRight} avoid={headSideTaken}
           headBottom={headTopFromBottom} faceBottom={faceFromBottom}
           stageRef={stageRef} probeRef={charProbeRef} onHeadroom={setBubbleHeadroom}
         />
-
-        {/* 좌우 맞히기 — 발밑 점 다섯 칸. 선반이 쓰던 **같은 땅**이고, 게임 중에는 선반이 내려가 있다. */}
-        {v.game.show && <GuessBoard y={y} lift={LIFT} />}
 
         {v.hearts.show && (
           <div data-part="hearts" style={{ position: 'absolute', left: '50%', bottom: '44%', animation: 'yFloatup 1.1s ease forwards', fontSize: 24, letterSpacing: 3, color: '#D97386', textShadow: '0 1px 5px rgba(255,255,255,.8)' }}>
@@ -454,6 +470,8 @@ export default function Room({ y }: { y: Yeoul }) {
           {/* 발밑 빈 땅(진짜 방 194.8px = 세로 23.1%)에 놓는 **낮은 선반**.
               구석에 따로 떠 있던 셋(다음 배울 것·약·대화)이 여기 한 줄로 앉는다. */}
           <Shelf y={y} />
+          {/* 좌우 맞히기 — 선반과 **같은 땅**에 놓는 낮은 판. 게임이 도는 동안 선반은 내려가 있다. */}
+          {v.game.show && <GuessPanel y={y} />}
           {v.chat.show && <ChatBar y={y} />}
           {v.toast.show && <Toast text={v.toast.text} />}
           {v.pop.show && <Popover y={y} compact={compact} />}
@@ -520,10 +538,12 @@ function samePlace(a: BubblePlace, b: BubblePlace): boolean {
 }
 
 function Bubble({
-  show, text, play, headSpan, faceSpan, silLeft, silRight,
+  show, text, play, headSpan, faceSpan, silLeft, silRight, avoid,
   headBottom, faceBottom, stageRef, probeRef, onHeadroom,
 }: {
   show: boolean; text: string; play: string;
+  /** 머리 옆을 이미 소품이 쓰고 있는 쪽. 옆으로 비킬 때 **이쪽은 피한다**(겹침 0). */
+  avoid: 'left' | 'right' | null;
   /** 발끝선 ↔ 정수리 · 발끝선 ↔ 얼굴선 (상자 세로 대비). 무대 px 로 옮기는 건 여기서 한다. */
   headSpan: number; faceSpan: number;
   /** 실루엣 좌·우 가장자리(상자 가로 대비). 아이 옆에 자리가 얼마나 남았는지 잰다. */
@@ -570,10 +590,14 @@ function Bubble({
       }
 
       // 2) 머리 옆 — 여백이 큰 쪽. 걸어가도 안 잘리게 진폭(WANDER)을 미리 뺀다.
+      //    ★ 다만 **소품이 이미 쓰는 쪽(`avoid`)은 건너뛴다** — 거기 두면 겹친다.
       const gapL = silL - WANDER;
       const gapR = st.width - silR - WANDER;
-      const side: 'left' | 'right' = gapR >= gapL ? 'right' : 'left';
-      const sideW = Math.min(BUBBLE_MAX_W, Math.floor(Math.max(gapL, gapR) - 12));
+      const wide: 'left' | 'right' = gapR >= gapL ? 'right' : 'left';
+      const other: 'left' | 'right' = wide === 'right' ? 'left' : 'right';
+      const side: 'left' | 'right' = avoid === wide ? other : wide;
+      const gap = side === 'left' ? gapL : gapR;
+      const sideW = Math.min(BUBBLE_MAX_W, Math.floor(gap - 12));
       if (sideW >= BUBBLE_SIDE_MIN) {
         card.style.width = `${sideW}px`;
         const h = card.offsetHeight;
@@ -610,7 +634,7 @@ function Bubble({
     //   내므로(폭을 재기 전에 스스로 정한다) 이 관찰이 되먹임 고리를 만들지 않는다 — `put` 참조.
     if (cardRef.current) ro.observe(cardRef.current);
     return () => ro.disconnect();
-  }, [show, text, headSpan, faceSpan, silLeft, silRight, stageRef, probeRef, onHeadroom]);
+  }, [show, text, headSpan, faceSpan, silLeft, silRight, avoid, stageRef, probeRef, onHeadroom]);
 
   const tailBase: React.CSSProperties = {
     position: 'absolute', width: 11, height: 11, background: C.paper,
@@ -757,21 +781,15 @@ function Tiles({ y }: { y: Yeoul }) {
   );
 }
 
-// ── 좌우 맞히기 — 무대 위에서 마주 보고 ─────────────────────────────────
+// ── 좌우 맞히기 — 발밑 낮은 판 ───────────────────────────────────────────
 //
-// ★ 왜 무대인가 — 예전엔 아래에서 올라오는 시트가 화면의 54%를 먹고 **아이를 40.8% 가렸다.**
-//   "그 아이와 논다" 가 성립할 수 없는 구조였다(2026-09-20 재설계안, 안 1 확정).
-// ★ **새 그림·새 앵커·새 키프레임을 만들지 않았다.** 손 여섯 장은 이미 있던 자산이고, 자리는
-//   소품 체계의 `hand_front` 앵커 하나로 잡는다. 아이가 걷고 뛰면(`yWander`·`yHop`) 손도 같이 탄다 —
-//   말풍선에 건 규칙과 **같은 규칙**이다.
+// ★ 왜 발밑인가 — 예전엔 아래에서 올라오는 시트가 화면의 54%를 먹고 **아이를 40.8% 가렸다.**
+//   시트는 없앴고(어두운 막도 없다), **아이를 한 픽셀도 안 가리는** 낮은 판만 남았다.
+//   ⚠️ **시트가 아니다** — 무대 위에 얹힌 판이고, 선반·팝오버와 **같은 땅·같은 자리**를 쓴다.
+// ★ 처음에는 손을 아이 몸(`hand_front` 앵커)에 붙였는데(재설계안 안 1), 상훈님이 3210 에서
+//   직접 보시고 **손을 아래로 내리는 쪽**을 고르셨다(2026-09-21). 재설계안 안 2 의 배치다.
+// ★ **새 그림·새 키프레임을 만들지 않았다.** 손 여섯 장은 이미 있던 자산 그대로다.
 // ★ 게임의 말은 **아이 말풍선**이 한다(`v.bub`). 게임 전용 말 장치를 따로 만들지 않는다.
-
-/** 손 한 변 = 머리 폭의 이만큼. 재설계안 E-1 의 숫자 그대로다. */
-const HAND_W_PER_HW = 0.58;
-/** 좌우로 벌리는 양(머리 폭 대비) — 실루엣 밖으로 조금 나와야 "내민 손" 으로 읽힌다. */
-const HAND_OUT_PER_HW = 0.12;
-/** 아래로 내리는 양(머리 폭 대비). */
-const HAND_DOWN_PER_HW = 0.22;
 
 /** 그 손이 지금 무슨 그림인가. 주먹 · 펼친 빈 손 · 펼친 사탕 손 셋뿐이다. */
 function handSrc(side: 'LEFT' | 'RIGHT', open: boolean, kind: 'candy' | 'empty'): string {
@@ -779,69 +797,48 @@ function handSrc(side: 'LEFT' | 'RIGHT', open: boolean, kind: 'candy' | 'empty')
   return propUrl(open ? `guess_${lr}_open_${kind}` : `guess_${lr}_fist`, 1);
 }
 
-function GuessHands({ y, fit, play }: { y: Yeoul; fit: CharFit; play: string }) {
-  const g = y.v.game;
-  const w = HAND_W_PER_HW * fit.hwPerBoxW;                       // 상자 가로 대비 손 한 변
-  const out = HAND_OUT_PER_HW * fit.hwPerBoxW;                   // 상자 가로 대비 벌림
-  const down = HAND_DOWN_PER_HW * fit.hwPerBoxH;                 // 상자 세로 대비 내림
-  const bottom = 1 - (fit.handYPerBoxH + down);                  // 상자 아래에서 손 아래끝까지
-  const sides: ReadonlyArray<{ side: 'LEFT' | 'RIGHT'; cx: number }> = [
-    { side: 'LEFT', cx: fit.handLeftPerBoxW - out },
-    { side: 'RIGHT', cx: fit.handRightPerBoxW + out },
-  ];
-  return (
-    // ★ 소품 층과 **같은 겹**이다 — 걸음(`yWander`)은 부모가, 뜀(`yHop`)은 여기서 탄다.
-    //   뒤집힘(`yFace`) 안에는 안 넣는다. 왼손 그림·오른손 그림이 따로 있어 뒤집으면 짝이 바뀐다.
-    <div style={{ position: 'absolute', inset: 0, animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: play, zIndex: 3 }}>
-      {sides.map(({ side, cx }) => {
-        const open = g.openSide === side;
-        return (
-          <button
-            key={side} data-action={side === 'LEFT' ? 'guess-left' : 'guess-right'}
-            data-open={open ? '1' : '0'}
-            onClick={(e) => { e.stopPropagation(); if (g.can) g.pick(side)(); }}
-            disabled={!g.can}
-            aria-label={side === 'LEFT' ? '왼손 고르기' : '오른손 고르기'}
-            style={{
-              position: 'absolute',
-              left: `${cx * 100}%`, bottom: `${bottom * 100}%`, width: `${w * 100}%`,
-              aspectRatio: '1 / 1', transform: 'translateX(-50%)',
-              // 누르는 자리는 그림보다 넉넉하게 — 그림이 작아도 손가락은 44x44 를 넘는다.
-              padding: 0, minWidth: 44, minHeight: 44, border: 'none', background: 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: g.can ? 'pointer' : 'default',
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={handSrc(side, open, g.openKind)} alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', animation: open ? 'yPop .22s ease' : 'yFadeIn .2s ease' }}
-            />
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * 발밑 점 다섯 칸 + 한 줄.
- *
- * ★ **색만으로 가르지 않는다**(taste-lens §5-5) — 맞힘은 채운 원, 빗나감은 ✕, 아직은 빈 원이다.
- * ★ 선반이 쓰던 그 땅을 쓴다. 게임이 도는 동안에는 선반·미니카드·약·대화가 **표시 조건 하나로**
- *   내려가 있어(`v.mini.show` 등에 `!gOn`) 자리를 다투지 않는다 — 겹침 규칙을 새로 두지 않았다.
- */
-function GuessBoard({ y, lift }: { y: Yeoul; lift: string }) {
+function GuessPanel({ y }: { y: Yeoul }) {
   const g = y.v.game;
   return (
     <div
-      data-part="guess-board"
+      data-part="guess-panel"
+      onClick={(e) => e.stopPropagation()}
       style={{
-        position: 'absolute', left: 0, right: 0, bottom: `calc(${lift} - 62px)`, zIndex: 3,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, pointerEvents: 'none',
+        width: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', gap: 9, padding: '10px 10px 9px', borderRadius: radius.lg,
+        background: C.paper, border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.10)',
       }}
     >
-      <div style={{ display: 'flex', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, width: '100%' }}>
+        {(['LEFT', 'RIGHT'] as const).map((side) => {
+          const open = g.openSide === side;
+          return (
+            <button
+              key={side} data-action={side === 'LEFT' ? 'guess-left' : 'guess-right'}
+              data-open={open ? '1' : '0'}
+              onClick={(e) => { e.stopPropagation(); if (g.can) g.pick(side)(); }}
+              disabled={!g.can}
+              aria-label={side === 'LEFT' ? '왼손 고르기' : '오른손 고르기'}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                minHeight: 84, padding: '8px 6px', borderRadius: radius.md,
+                border: `1px solid ${C.lineHard}`, background: g.can ? C.slot : C.slotDim,
+                cursor: g.can ? 'pointer' : 'default',
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={handSrc(side, open, g.openKind)} alt=""
+                style={{ width: 64, height: 64, objectFit: 'contain', display: 'block', animation: open ? 'yPop .22s ease' : 'yFadeIn .2s ease' }}
+              />
+            </button>
+          );
+        })}
+      </div>
+      {/* 판 표시는 **점만**이다(2026-09-21 상훈님) — "N번째 · 3번 맞히면 이겨요 · 오늘 N판 남음"
+          글줄은 지웠다. 규칙(하루 3판 · 매치당 5판 3승)은 그대로 돌고, 화면에서 글로 안 말할 뿐이다.
+          ★ 색만으로 가르지 않는다 — 맞힘은 채운 원, 빗나감은 ✕, 아직은 빈 원. */}
+      <div data-part="guess-marks" style={{ display: 'flex', gap: 14 }}>
         {g.marks.map((m, i) => (
           <span
             key={i} data-mark={m.hit === null ? 'none' : m.hit ? 'hit' : 'miss'}
@@ -851,13 +848,11 @@ function GuessBoard({ y, lift }: { y: Yeoul; lift: string }) {
               border: `1.5px solid ${m.hit === null ? C.lineHard : m.hit ? '#41633A' : 'rgba(74,64,56,.32)'}`,
               background: m.hit === true ? '#E4F0DC' : 'transparent',
               font: `9px ${MONO}`, color: '#6B6058', lineHeight: 1,
-              // 지금 치는 칸만 살짝 도드라진다 — 크기·테두리로만(새 색 없음).
               outline: m.now ? `2px solid ${C.accentDim}` : 'none',
             }}
           >{m.hit === false ? '✕' : ''}</span>
         ))}
       </div>
-      <span style={{ fontSize: 11.5, color: C.sub2 }}>{g.note}</span>
     </div>
   );
 }

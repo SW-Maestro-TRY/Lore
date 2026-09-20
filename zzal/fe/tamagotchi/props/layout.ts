@@ -102,18 +102,6 @@ export interface CharFit {
    * 곧 얼굴 높이다 — 머리 옆으로 비킨 말풍선의 세로 한가운데를 여기에 맞춘다.
    */
   headSidePerBoxH: number;
-  /**
-   * 좌우 맞히기 손을 아이 몸에 붙이는 자(2026-09-20). 전부 **상자 크기 대비 비율**이라
-   * 화면이 커져도 손이 같은 자리에 붙는다. 기준은 `hand_front` 앵커 하나뿐이다 —
-   * 새 앵커를 만들지 않았다.
-   */
-  handLeftPerBoxW: number;
-  handRightPerBoxW: number;
-  handYPerBoxH: number;
-  /** 머리 폭(Hw) ÷ 상자 가로. 손 크기·벌림·내림이 전부 이 값의 배수로 적혀 있다. */
-  hwPerBoxW: number;
-  /** 머리 폭(Hw) ÷ 상자 세로. 세로 방향(내림)은 이쪽으로 나눠야 한다. */
-  hwPerBoxH: number;
 }
 
 /**
@@ -139,11 +127,6 @@ export function charFit(anchors: CharAnchors, pose: string): CharFit {
     silLeftPerBoxW: p.bbox.x / canvasW,
     silRightPerBoxW: (p.bbox.x + p.bbox.w) / canvasW,
     headSidePerBoxH: (p.feet.y - p.head_side.y) / canvasH,
-    handLeftPerBoxW: p.hand_front.left_x / canvasW,
-    handRightPerBoxW: p.hand_front.right_x / canvasW,
-    handYPerBoxH: p.hand_front.y / canvasH,
-    hwPerBoxW: anchors.Hw / canvasW,
-    hwPerBoxH: anchors.Hw / canvasH,
   };
 }
 
