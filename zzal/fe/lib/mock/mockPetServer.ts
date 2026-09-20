@@ -141,8 +141,6 @@ interface Row {
    * 블록이라, 내부용 숫자를 섞으면 계약에 없는 필드가 새어 나간다.
    */
   pieceDay: { feeds: number; snacks: number; gameWins: number; cleans: number; chats: number };
-  /** 네 칸을 며칠 연속 채웠나(0~2). 잠들 때 판정한다(해석 48). */
-  pieceStreak: number;
   bonusPiece: boolean;
   goodDay: boolean;
   /** 다음 기상에 기분 좋은 날로 켤 것인가(잠들 때 판정 → 다음 날 기상, 해석 52). */
@@ -778,10 +776,6 @@ export class MockPetServer implements PetSource {
       // ★ 반드시 리셋 **앞**에서 계획한다 — 밤 굽기 조건이 "그날 케어 미스 0" 이라,
       //   today 를 지운 뒤에 물으면 언제나 0 이 나와 **아무 날이나 굽게** 된다.
       this.planNight(r);
-      // ★ 조각은 **잠들 때만** 판정한다(해석 48). 3층 전에는 아예 안 센다 — 연속도 안 쌓인다.
-      if (r.piecesEnabled) {
-        r.pieceStreak = this.pieceCount(r) >= 4 ? Math.min(2, r.pieceStreak + 1) : 0;
-      }
       // 기분 좋은 날은 **잠들 때 판정해 다음 기상에** 켠다(해석 52). 잠들면 꺼진다.
       r.goodDayNext = r.piecesEnabled && r.today.careMiss === 0
         && r.fullness >= 2 && r.happiness >= 2 && (MAX_TRASH - r.trash) >= 2;
@@ -890,7 +884,7 @@ export class MockPetServer implements PetSource {
       if (firstEmpty) filled[firstEmpty] = true;
     }
     const count = keys.filter((k) => filled[k]).length;
-    return { ...filled, count, streak: r.pieceStreak, bonus: r.bonusPiece };
+    return { ...filled, count, bonus: r.bonusPiece };
   }
 
   private pieceCount(r: Row): number {
@@ -1207,7 +1201,7 @@ export class MockPetServer implements PetSource {
       acc: { fullness: 0, happiness: 0, trash: 0 }, zeroAcc: { fullness: 0, happiness: 0, trash: 0 },
       zeroArmed: { fullness: false, happiness: false, trash: false },
       food: MAX_FOOD, foodAcc: 0, sick: null, dirtyAcc: 0,
-      piecesEnabled: false, layer2DoneAt: null, pieceStreak: 0, bonusPiece: false, goodDay: false, goodDayNext: false,
+      piecesEnabled: false, layer2DoneAt: null, bonusPiece: false, goodDay: false, goodDayNext: false,
       pieceDay: { feeds: 0, snacks: 0, gameWins: 0, cleans: 0, chats: 0 },
       intimacy: 0, today: { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 },
       counters: {
