@@ -10,12 +10,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, GUESS_HANDS, GUESS_HAND_KINDS,
-  GUESS_HAND_PX, GUESS_LOSE_DOTS, GUESS_LOSE_DOTS_PX, LANDING_COPY, LEARN_GOALS, LINE,
+  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
   STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
   WISH_COPY, WISH_MAX,
-  type GuessHandKind, type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
+  type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
 import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';

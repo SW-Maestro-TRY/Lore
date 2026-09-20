@@ -127,58 +127,6 @@ function PlaySheet({ y }: { y: Yeoul }) {
   );
 }
 
-/**
- * 좌우 맞히기 버튼 한 짝 — 손 그림 한 장 + 라벨.
- *
- * ★ 세 장(주먹·빈 손·사탕 손)을 **같은 칸에 겹쳐 두고** 한 장만 보인다.
- *   1) 갈아 끼울 때 그림을 새로 받지 않아 손이 깜빡하고 사라지지 않는다.
- *   2) 세 장이 **한 픽셀도 안 어긋난다** — 같은 칸·같은 `object-fit` 이라 좌표를 잡을 여지가 없다.
- *      그림 여섯 장이 전부 512×512 에 손목이 바닥이라(→ `constants.GUESS_HANDS`) 칸만 정사각이면
- *      주먹↔펼침 손목 편차가 0 이다. **칸을 정사각이 아니게 바꾸면 이 약속이 깨진다.**
- * ★ 진 판의 점 세 개는 **자리를 차지하지 않는다**(`position: absolute`). 시트에 새 줄이 생기면
- *   좁은 폰에서 아래가 잘리거나 스크롤이 생긴다 — 그래서 버튼 안 빈 구석에 얹는다.
- */
-function GuessHand({ p, side, label, onPick }: {
-  p: Yeoul['v']['play']; side: 'left' | 'right'; label: string; onPick: () => void;
-}) {
-  const slot = side === 'left' ? p.hands.left : p.hands.right;
-  const dots = p.hands.dots && p.hands.dots.side === (side === 'left' ? 'LEFT' : 'RIGHT') ? p.hands.dots : null;
-  return (
-    <button
-      onClick={onPick} disabled={!p.canGuess} data-action={`guess-${side}`}
-      style={{
-        position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-        padding: '8px 6px 10px', borderRadius: radius.md, border: `1px solid ${C.line}`,
-        background: p.canGuess ? C.slot : C.off, fontSize: 14, color: p.canGuess ? C.ink : '#8B8175',
-      }}
-    >
-      <span style={{ position: 'relative', display: 'block', width: p.hands.px, height: p.hands.px, flex: 'none' }}>
-        {slot.imgs.map((im) => (
-          <img
-            key={im.kind} src={im.src} alt="" aria-hidden="true" draggable={false}
-            data-part="guess-hand" data-side={side} data-hand={im.kind}
-            data-shown={im.kind === slot.now ? '1' : '0'}
-            width={p.hands.px} height={p.hands.px}
-            style={{
-              position: 'absolute', left: 0, top: 0, width: p.hands.px, height: p.hands.px,
-              objectFit: 'contain', opacity: im.kind === slot.now ? 1 : 0, pointerEvents: 'none',
-            }}
-          />
-        ))}
-      </span>
-      {dots && (
-        <img
-          src={dots.src} alt="" aria-hidden="true" draggable={false}
-          data-part="guess-dots" data-side={side}
-          width={dots.px} height={dots.px}
-          style={{ position: 'absolute', top: 0, right: 2, width: dots.px, height: dots.px, pointerEvents: 'none' }}
-        />
-      )}
-      {label}
-    </button>
-  );
-}
-
 function AlbumSheet({ y }: { y: Yeoul }) {
   const a = y.v.album;
   return (
