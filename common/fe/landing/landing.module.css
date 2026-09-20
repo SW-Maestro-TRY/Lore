@@ -1,9 +1,17 @@
-/* 랜딩페이지 스타일. 색·간격 값은 전부 common/fe/styles/tokens.css 의 변수를 참조한다.
- * (여기에 hex 를 직접 적으면 다크 모드가 깨진다. 예외는 Webtoon 카드 / CTA 처럼
- *  두 테마 모두 진한 색면 위라서 항상 흰 글자인 자리뿐이다.)
+/* 랜딩페이지 스타일.
  *
- * 반응형은 clamp() 와 repeat(auto-fit, minmax()) 로 처리하고 미디어쿼리는 쓰지 않는다.
- * 단 하나의 예외는 헤더 내비게이션이며, 이유는 아래에 적어뒀다. */
+ * 2026-09-20 — 시안 C(갈림길)를 확정안으로 반영했다. 프로토타입은
+ * haeun/landing-concepts/c-split.html 에 있었고, 여기 있는 클래스는 전부 그 파일의
+ * 클래스(kebab-case)를 camelCase 로만 옮긴 것이다 — 값을 다시 고르지 않았다.
+ *
+ * .container · 8. 푸터 두 블록만 옛 파일 그대로다(SiteFooter.tsx 가 그 클래스 이름을
+ * 그대로 참조하고, 이번 작업이 "헤더는 그대로 둔다"고 정했으므로 푸터도 손대지
+ * 않았다). 그 위 나머지는 전부 이번에 새로 썼다.
+ *
+ * 색은 tokens.css 의 브랜드 팔레트(보라·주황·청록)를 안 쓴다 — 확정 시안이 웹툰
+ * 탭에서 쓰는 바다 톤(잉크·바다·물색)을 그대로 가져왔기 때문이다. 그래서 이 파일
+ * 전용 변수(--l-*)를 .page 에 따로 심고, 전역 tokens.css 는 건드리지 않았다(다른
+ * 탭·헤더·푸터의 색은 이 파일과 무관하게 그대로다). */
 
 .container {
   max-width: var(--container);
@@ -12,619 +20,596 @@
   padding-right: var(--gutter);
 }
 
-/* 1. 헤더는 랜딩 전용이 아니라 도메인 탭과 공유하므로 common/fe/SiteHeader.module.css 에 있다. */
+/* ── 0. 이 페이지 전용 토큰 · 기본값 ─────────────────────────────── */
 
-/* ── 버튼 공통 ───────────────────────────────────────── */
+.page {
+  --l-ink: #0f333f;
+  --l-sea: #0e8fb5;
+  --l-sea-deep: #0a5f7a;
+  --l-water: #cfe9f0;
+  --l-water-light: #e7f6fa;
+  --l-paper: #f7fbfc;
+  --l-muted: #3f6472;
+  --l-dim: #5b7f8c;
+  --l-gold: #a1732e;
+  --l-line: rgba(15, 51, 63, 0.1);
+  --l-line-strong: rgba(15, 51, 63, 0.18);
+  --l-wrap: 1184px;
 
-.btnPrimary {
-  padding: 16px 28px;
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-fg);
-  font-size: 15px;
-  font-weight: 700;
-  border-radius: 999px;
-  transition: background-color 150ms ease, color 150ms ease;
+  background: var(--l-paper);
+  color: var(--l-ink);
+  font-family: var(--font-landing-body), var(--font-ko);
+  line-height: 1.65;
 }
 
-.btnPrimary:hover {
-  background: var(--accent-webtoon);
+.wrap {
+  width: 100%;
+  max-width: var(--l-wrap);
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.page :global(h1),
+.page :global(h2),
+.page :global(h3) {
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+}
+
+.heroTitle,
+.sectionTitle,
+.sideTitle,
+.trioTitle,
+.ctaTitle {
+  font-family: var(--font-landing-title), var(--font-landing-body), var(--font-ko);
+  font-weight: 700;
+}
+
+/* 단추 — 웹툰 탭 .btn 규격(높이 52 · 알약)과 같다. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 26px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
+  border: 0;
+  cursor: pointer;
+  transition: 0.18s;
+}
+
+.btnFill {
+  composes: btn;
+  background: var(--l-ink);
   color: #fff;
 }
-
-.btnSecondary {
-  padding: 16px 26px;
-  background: var(--bg);
-  border: 1px solid var(--border-strong);
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 500;
-  border-radius: 999px;
-  transition: background-color 150ms ease;
+.btnFill:hover {
+  background: var(--l-sea-deep);
 }
 
-.btnSecondary:hover {
-  background: var(--surface-hover);
-}
+/* ── 1. 히어로 — 첫 화면을 웹툰 / 키우기 두 갈래로 가른다 ─────────── */
 
-/* ── 2. 히어로 ───────────────────────────────────────── */
-
-.hero {
+.heroSection {
   position: relative;
-  overflow: hidden;
-  background: var(--hero-bg);
 }
 
-.heroInner {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: clamp(28px, 5vw, 56px);
-  align-items: center;
-  padding-top: clamp(34px, 7vw, 84px);
-  padding-bottom: clamp(38px, 7vw, 84px);
+/* 가운데 카피 — 두 면 사이에 걸친다. */
+.heroCenter {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding-top: min(20vh, 170px);
+  text-align: center;
+  pointer-events: none;
 }
 
-.badge {
+.kicker {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  padding: 7px 14px;
+  height: 36px;
+  padding: 0 16px;
   border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--l-sea-deep);
 }
-
-.badgeDot {
-  width: 7px;
-  height: 7px;
-  flex: none;
+.kickerDot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--accent-zzal);
+  background: var(--l-sea);
 }
 
-/* vw 계수 4.6 은 의도값. 올리면 900~1250px 구간에서 컬럼보다 글자가 커져 줄이 깨진다. */
-.heroTitle {
-  font-weight: 900;
-  font-size: clamp(34px, 4.6vw, 62px);
-  line-height: 1.16;
-  letter-spacing: -0.04em;
-  margin: 18px 0 0;
-  text-wrap: pretty;
+.heroCenter .heroTitle {
+  margin-top: 20px;
+  font-size: clamp(36px, 5.4vw, 62px);
+  color: #fff;
+  text-shadow: 0 2px 28px rgba(15, 51, 63, 0.5);
 }
 
-.heroBody {
-  font-size: clamp(15px, 3.6vw, 17px);
-  line-height: 1.8;
-  color: var(--text-muted);
-  margin: 18px 0 0;
-  max-width: 34ch;
-  text-wrap: pretty;
+.heroLede {
+  margin-top: 16px;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 2px 16px rgba(15, 51, 63, 0.6);
 }
 
-.heroActions {
+/* 가른 첫 화면.
+ * 실제 헤더(SiteHeader)가 position:sticky 로 이미 제 자리를 차지하고 있어서,
+ * 프로토타입처럼 "투명한 고정 헤더가 히어로 위에 뜬다"는 전제가 없다 — 그래서
+ * 100vh 대신 헤더 높이만큼 뺀 값을 근사치로 쓴다(정확한 헤더 높이는 화면 폭·로그인
+ * 상태에 따라 달라져 빌드 시점에 알 수 없다). */
+.split {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 26px;
+  min-height: min(88vh, 720px);
+}
+/* 가운데 카피가 밝은 오른쪽 면 위에 얹히면 흰 글자가 안 읽힌다 — 위쪽에만 잉크
+   막을 깐다(프로토타입과 동일한 이유). */
+.split::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 440px;
+  z-index: 10;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(15, 51, 63, 0.62) 0%,
+    rgba(15, 51, 63, 0.28) 55%,
+    rgba(15, 51, 63, 0) 100%
+  );
 }
 
-/* 이미지 콜라주 — 실제 아트가 준비되면 같은 비율의 슬롯에 그대로 갈아 끼운다. */
-.collage {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: clamp(10px, 1.6vw, 16px);
-  animation: loreBob 11s ease-in-out infinite;
-}
-
-.collageStack {
-  display: grid;
-  gap: clamp(10px, 1.6vw, 16px);
-}
-
-.slot {
-  border-radius: 22px;
+.side {
+  position: relative;
+  flex: 1 1 0;
   overflow: hidden;
   display: flex;
-  align-items: flex-end;
-  padding: 12px;
-}
-
-.slotSheet {
-  aspect-ratio: 3 / 4;
-  padding: 14px;
-  background-color: var(--tint-webtoon);
-  background-image: repeating-linear-gradient(135deg, var(--hatch-webtoon) 0 7px, transparent 7px 16px);
-}
-
-.slotCut {
-  aspect-ratio: 1 / 1;
-  background-color: var(--tint-zzal-strong);
-  background-image: repeating-linear-gradient(135deg, var(--hatch-zzal) 0 7px, transparent 7px 16px);
-}
-
-.slotTeaser {
-  aspect-ratio: 4 / 3;
-  background-color: var(--tint-trailer-strong);
-  background-image: repeating-linear-gradient(135deg, var(--hatch-trailer) 0 7px, transparent 7px 16px);
-}
-
-.slotLabel {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.1em;
-}
-
-.labelWebtoon {
-  color: var(--accent-webtoon);
-}
-
-.labelZzal {
-  color: var(--accent-zzal-deep);
-}
-
-.labelTrailer {
-  color: var(--accent-trailer);
-}
-
-/* 히어로 하단 바 */
-.heroBar {
-  background: var(--hero-bar-bg);
-  border-top: 1px solid var(--border);
-}
-
-.heroBarInner {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  padding-top: 14px;
-  padding-bottom: 14px;
-}
-
-.heroBarPill {
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-fg);
-  font-size: 11.5px;
-  font-weight: 700;
-  padding: 6px 12px;
-  border-radius: 999px;
-}
-
-.heroBarText {
-  font-size: 13.5px;
-  color: var(--text-muted);
-}
-
-/* ── 3. 섹션 인트로 ──────────────────────────────────── */
-
-.intro {
-  padding-top: clamp(46px, 8vw, 96px);
-  padding-bottom: clamp(20px, 3vw, 32px);
-}
-
-.eyebrow {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--accent-webtoon);
-}
-
-.eyebrowZzal {
-  color: var(--accent-zzal);
-}
-
-.introTitle {
-  font-weight: 900;
-  font-size: clamp(27px, 6.6vw, 48px);
-  line-height: 1.22;
-  letter-spacing: -0.035em;
-  margin: 12px 0 0;
-  max-width: 22ch;
-  text-wrap: pretty;
-}
-
-.introBody {
-  font-size: 15.5px;
-  line-height: 1.8;
-  color: var(--text-muted);
-  margin: 14px 0 0;
-  max-width: 42ch;
-  text-wrap: pretty;
-}
-
-/* ── 4. 탭 카드 (Zzal → Trailer → Webtoon) ───────────── */
-
-.tabs {
-  /* sticky 헤더에 제목이 가리지 않도록 앵커 도착 지점을 내린다. */
-  scroll-margin-top: 72px;
-}
-
-.tabGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-  gap: clamp(14px, 2vw, 20px);
-}
-
-.card {
-  display: flex;
   flex-direction: column;
-  min-height: clamp(340px, 64vw, 440px);
-  padding: clamp(22px, 4vw, 30px);
-  border-radius: 28px;
-  border: 1px solid transparent;
-  transition: background-color 150ms ease;
-}
-
-.cardZzal {
-  background: var(--tint-zzal);
-  border-color: var(--border-zzal);
-  color: var(--text);
-}
-
-.cardZzal:hover {
-  background: var(--tint-zzal-strong);
-}
-
-.cardTrailer {
-  background: var(--tint-trailer);
-  border-color: var(--border-trailer);
-  color: var(--text);
-}
-
-.cardTrailer:hover {
-  background: var(--tint-trailer-strong);
-}
-
-.cardWebtoon {
-  background: var(--webtoon-card);
-  color: #fff;
-}
-
-.cardWebtoon:hover {
-  background: var(--webtoon-card-hover);
-}
-
-.cardTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.cardBadge {
-  font-size: 11.5px;
-  font-weight: 700;
-  padding: 6px 12px;
-  border-radius: 999px;
-  color: #fff;
-}
-
-.badgeZzal {
-  background: var(--accent-zzal);
-}
-
-.badgeTrailer {
-  background: var(--accent-trailer);
-}
-
-.badgeWebtoon {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.cardArrow {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 18px;
-  /* Webtoon 카드에서는 상속받은 흰색을 그대로 쓴다. */
+  justify-content: flex-end;
+  padding: 64px 48px 56px;
+  transition: flex-grow 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+  text-decoration: none;
   color: inherit;
 }
-
-.arrowZzal {
-  color: var(--accent-zzal);
+.side:hover {
+  flex-grow: 1.35;
 }
-
-.arrowTrailer {
-  color: var(--accent-trailer);
+.sideBg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
 }
-
-.cardTitle {
-  font-weight: 900;
-  font-size: clamp(22px, 4.6vw, 27px);
-  line-height: 1.32;
-  letter-spacing: -0.025em;
+.sideBg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s ease;
+}
+.side:hover .sideBg img {
+  transform: scale(1.04);
+}
+.sideInner {
+  position: relative;
+  z-index: 2;
+  max-width: 440px;
+}
+.sideNum {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  opacity: 0.8;
+}
+.sideTitle {
+  margin-top: 14px;
+  font-size: clamp(30px, 3.6vw, 46px);
+}
+.sideText {
+  margin-top: 16px;
+  font-size: 16.5px;
+  line-height: 1.7;
+}
+/* 자세한 단계는 접어 두고, 마우스를 올리거나(또는 키보드로 포커스하면) 펼친다.
+   마우스가 없는 기기(폰·태블릿)에서는 아래 hover:none 이 항상 펴 둔다. */
+.sideMore {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.36s ease;
+}
+.side:hover .sideMore,
+.side:focus-within .sideMore {
+  grid-template-rows: 1fr;
+}
+.sideMoreIn {
+  overflow: hidden;
+  min-height: 0;
+}
+.sideList {
   margin: 18px 0 0;
-}
-
-.cardBody {
-  font-size: 14.5px;
-  line-height: 1.75;
-  color: var(--text-muted);
-  margin: 12px 0 0;
-  max-width: 32ch;
-}
-
-/* Webtoon 카드는 두 테마 모두 진한 색면 위라 흰 글자로 고정한다. */
-.cardBodyOnInk {
-  color: rgba(255, 255, 255, 0.86);
-}
-
-.preview {
-  margin-top: auto;
-  padding-top: 22px;
-}
-
-/* Zzal 프리뷰: 2×2, 마지막 칸이 펀치라인 */
-.zzalGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
-
-.zzalCell {
-  aspect-ratio: 1 / 1;
-  border-radius: 14px;
-  background: var(--card);
-  border: 1px solid var(--border-zzal);
+.sideList li {
   display: flex;
-  align-items: flex-start;
-  padding: 9px;
-}
-
-.zzalCellPunch {
-  background: var(--accent-zzal);
-  border-color: transparent;
-  align-items: center;
-  justify-content: center;
-}
-
-.cellNum {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--accent-zzal-deep);
-}
-
-/* Trailer 프리뷰: 16:9 와이드 + 1:1 3컷 */
-.trailerWide {
-  aspect-ratio: 16 / 9;
-  border-radius: 16px;
-  background: var(--card);
-  border: 1px solid var(--border-trailer);
-  display: flex;
-  align-items: flex-end;
-  padding: 10px;
-}
-
-.trailerRow {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.trailerCell {
-  aspect-ratio: 1 / 1;
-  border-radius: 12px;
-  background: var(--card);
-  border: 1px solid var(--border-trailer);
-}
-
-.trailerCellLast {
-  background: var(--accent-trailer);
-  border-color: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Webtoon 프리뷰: 세로 스택 + 3/4 */
-.webtoonPreview {
-  display: flex;
-  gap: 10px;
-  align-items: flex-end;
-}
-
-.webtoonStack {
-  flex: 1.3;
-  display: grid;
-  gap: 6px;
-}
-
-.webtoonWide {
-  aspect-ratio: 16 / 9;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.webtoonScroll {
-  aspect-ratio: 16 / 11;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.18);
-  display: flex;
-  align-items: flex-end;
-  padding: 9px;
-}
-
-.webtoonSide {
-  flex: 1;
-  aspect-ratio: 3 / 4;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.previewLabelOnInk {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  color: #fff;
-}
-
-.cellLabelOnInk {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.1em;
-  color: #fff;
-}
-
-.previewLabel {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.1em;
-  color: var(--accent-trailer);
-}
-
-/* ── 5. 캐릭터 시트 ──────────────────────────────────── */
-
-.sheet {
-  margin-top: clamp(46px, 8vw, 96px);
-  background: var(--surface-2);
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-
-.sheetInner {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: clamp(26px, 5vw, 56px);
-  align-items: start;
-  padding-top: clamp(44px, 7vw, 84px);
-  padding-bottom: clamp(44px, 7vw, 84px);
-}
-
-.sheetTitle {
-  font-weight: 900;
-  font-size: clamp(26px, 6vw, 42px);
-  line-height: 1.24;
-  letter-spacing: -0.035em;
-  margin: 12px 0 0;
-  text-wrap: pretty;
-}
-
-.sheetBody {
-  font-size: 15px;
-  line-height: 1.8;
-  color: var(--text-muted);
-  margin: 14px 0 0;
-  max-width: 34ch;
-}
-
-.steps {
-  display: grid;
   gap: 12px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.sideList b {
+  font-weight: 700;
+  flex: none;
 }
 
-.step {
+/* 왼쪽 — 웹툰(잉크) */
+.sideWebtoon .sideBg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 51, 63, 0.35) 0%, rgba(15, 51, 63, 0.92) 62%, #0f333f 100%);
+}
+.sideWebtoon {
+  color: #fff;
+}
+.sideWebtoon .sideText {
+  color: rgba(255, 255, 255, 0.78);
+}
+.sideWebtoon .sideList b {
+  color: var(--l-water);
+}
+
+/* 오른쪽 — 우리 애랑 같이 살기(물색, 자캐 다마고치) */
+.sideTama {
+  background: var(--l-water-light);
+}
+.sideTama .sideBg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(231, 246, 250, 0.15) 0%,
+    rgba(231, 246, 250, 0.9) 60%,
+    var(--l-water-light) 100%
+  );
+}
+.sideTama .sideText {
+  color: var(--l-muted);
+}
+.sideTama .sideList b {
+  color: var(--l-sea-deep);
+}
+
+/* ── 2. 세 칸 아코디언 — 캐릭터 생성 · 웹툰 1화 · 캐릭터 키우기 ───── */
+
+.trioSection,
+.ctaSection {
+  padding: 104px 0;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  text-align: center;
+}
+.eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--l-sea);
+}
+.sectionTitle {
+  font-size: clamp(28px, 3.6vw, 40px);
+}
+.sectionLede {
+  font-size: 16.5px;
+  color: var(--l-muted);
+  max-width: 56ch;
+}
+
+/* 기본은 세 칸이 똑같이 나뉘어 사진과 제목만 보인다. 마우스를 올리거나(스크롤해서
+   가져다 대면) 클릭하면 그 칸이 가로로 넓어지고, 안에 접혀 있던 설명이 세로로도
+   펼쳐진다 — align-items:stretch 라 옆 칸들도 그 칸 높이에 맞춰 같이 늘어난다.
+   클릭 토글(.isOpen)은 터치 기기를 위한 것 — Trio.tsx 가 상태로 관리한다. */
+.trioGrid {
+  margin-top: 54px;
+  display: flex;
+  gap: 18px;
+  align-items: stretch;
+}
+.trioCard {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  background: #fff;
+  border: 1.5px solid var(--l-line);
+  border-radius: 24px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: flex-grow 0.42s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.trioCard:hover,
+.trioCard:focus-within,
+.trioCard.isOpen {
+  flex-grow: 2.2;
+  box-shadow: 0 20px 46px rgba(15, 51, 63, 0.14);
+}
+.trioCardCharacter:hover,
+.trioCardCharacter:focus-within,
+.trioCardCharacter.isOpen {
+  border-color: var(--l-gold);
+}
+.trioCardWebtoon:hover,
+.trioCardWebtoon:focus-within,
+.trioCardWebtoon.isOpen {
+  border-color: var(--l-ink);
+}
+.trioCardTama:hover,
+.trioCardTama:focus-within,
+.trioCardTama.isOpen {
+  border-color: var(--l-sea);
+}
+
+/* 세 그림의 비율이 다 다르다(캐릭터·웹툰 표지는 세로, 계절 콜라주는 가로로
+   넓다). 높이를 카드 폭에 비례시키면(aspect-ratio) 카드가 넓어질수록 칸이 같이
+   치솟아서 세로로 지나치게 길어진다 — 그래서 높이는 고정값으로 두고(가로로만
+   넓어진다), object-fit 은 cover 대신 contain 을 써서 잘리지 않게 한다(남는
+   자리는 --l-water-light 로 채운다). */
+.trioMedia {
+  height: 200px;
+  flex: none;
+  overflow: hidden;
+  background: var(--l-water-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.trioMedia img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: transform 0.5s ease;
+}
+.trioCard:hover .trioMedia img {
+  transform: scale(1.04);
+}
+.trioBody {
+  padding: 22px 24px 26px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.trioNo {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.trioCardCharacter .trioNo {
+  color: var(--l-gold);
+}
+.trioCardWebtoon .trioNo {
+  color: var(--l-sea-deep);
+}
+.trioCardTama .trioNo {
+  color: var(--l-sea);
+}
+.trioTitle {
+  margin-top: 8px;
+  font-size: 22px;
+  white-space: nowrap;
+}
+/* 접힌 설명 — grid-template-rows 를 0fr→1fr 로 바꿔 세로로도 펼쳐지게 한다. */
+.trioMore {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.4s ease;
+}
+.trioCard:hover .trioMore,
+.trioCard:focus-within .trioMore,
+.trioCard.isOpen .trioMore {
+  grid-template-rows: 1fr;
+}
+.trioMoreIn {
+  overflow: hidden;
+  min-height: 0;
+}
+.trioLead {
+  margin-top: 14px;
+  font-size: 15px;
+  color: var(--l-muted);
+  line-height: 1.6;
+}
+.trioList {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.trioList li {
+  position: relative;
+  padding-left: 15px;
+  font-size: 14px;
+  color: var(--l-muted);
+  line-height: 1.6;
+}
+.trioList li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--l-sea);
+}
+
+/* ── 3. 마지막 CTA ────────────────────────────────────────────── */
+
+.ctaSection {
+  background: var(--l-ink);
+  color: #fff;
+  text-align: center;
+}
+.ctaTitle {
+  font-size: clamp(30px, 4vw, 46px);
+  color: #fff;
+}
+.ctaText {
+  margin-top: 16px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 17px;
+}
+.ctaBtn {
+  composes: btn;
+  margin-top: 28px;
+  background: #fff;
+  color: var(--l-ink);
+}
+.ctaBtn:hover {
+  background: var(--l-water);
+}
+
+/* ── 4. 작품 벽 — 맨 아래, CTA 다음 · 푸터 바로 위 ────────────────
+   제목도 단추도 없이 그림만 두 줄로 흐른다(시안 A 히어로의 콜라주를 옮겨 온 것).
+   위·아래 줄이 반대 방향으로 돌고, 가장자리는 마스크로 옅게 지운다.
+   overflow:hidden 이 꼭 있어야 한다 — 없으면 흐르는 줄이 페이지 폭을 밀어서
+   가로 스크롤바가 생긴다(실제로 겪었던 문제). */
+.wall {
+  overflow: hidden;
+  padding: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.wallRow {
   display: flex;
   gap: 16px;
-  align-items: center;
-  background: var(--bg);
-  border: 1px solid var(--card-border);
-  border-radius: 20px;
-  padding: 18px 20px;
+  width: max-content;
+  animation: wallSlide 44s linear infinite;
+}
+.wallRowBack {
+  animation-duration: 58s;
+  animation-direction: reverse;
+}
+.wallRow:hover {
+  animation-play-state: paused;
+}
+@keyframes wallSlide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.wallTile {
+  width: 128px;
+  flex: none;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--l-water-light);
+  border: 1px solid var(--l-line);
+  box-shadow: 0 6px 16px rgba(15, 51, 63, 0.1);
+  transition: transform 0.22s ease;
+}
+.wallTile img {
+  width: 128px;
+  height: 182px;
+  object-fit: cover;
+}
+.wallTile:hover {
+  transform: translateY(-7px);
 }
 
-.stepNum {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 13px;
-  color: #fff;
-  min-width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+@media (hover: none) {
+  .sideMore {
+    grid-template-rows: 1fr;
+  }
+  .trioMore {
+    grid-template-rows: 1fr;
+  }
 }
 
-.stepNumWebtoon {
-  background: var(--accent-webtoon);
+@media (max-width: 900px) {
+  .split {
+    flex-direction: column;
+    min-height: 0;
+  }
+  .side {
+    min-height: 78vh;
+    flex: none;
+  }
+  .heroCenter {
+    position: static;
+    padding: 120px 24px 0;
+    background: var(--l-ink);
+  }
+  .split::after {
+    display: none;
+  }
+  .heroCenter .heroTitle,
+  .heroLede {
+    text-shadow: none;
+  }
+  /* 세로로 쌓을 때는 flex-basis:0 + overflow:hidden 조합이 높이를 0으로
+     찌그러뜨린다(자동 최소 크기가 overflow:visible 이 아니면 auto→0 이 되는
+     flexbox 규칙) — basis 를 auto 로 돌려 내용 높이만큼 나오게 한다. */
+  .trioGrid {
+    flex-direction: column;
+  }
+  .trioCard {
+    flex: 1 1 auto;
+  }
+  .trioCard,
+  .trioCard:hover,
+  .trioCard.isOpen {
+    flex-grow: 0;
+  }
+  .trioTitle {
+    white-space: normal;
+  }
+  .trioSection,
+  .ctaSection {
+    padding: 76px 0;
+  }
+  .wall {
+    padding: 0 20px 8px;
+  }
+  .wallTile {
+    width: 98px;
+  }
+  .wallTile img {
+    width: 98px;
+    height: 140px;
+  }
 }
 
-.stepNumZzal {
-  background: var(--accent-zzal);
-}
-
-.stepNumTrailer {
-  background: var(--accent-trailer);
-}
-
-.stepTitle {
-  font-weight: 700;
-  font-size: 16px;
-}
-
-.stepDesc {
-  font-size: 13.5px;
-  color: var(--text-muted);
-  margin-top: 4px;
-}
-
-/* ── 7. CTA ─────────────────────────────────────────── */
-
-.cta {
-  background: var(--ink-section);
-  color: #fff;
-}
-
-.ctaInner {
-  padding-top: clamp(46px, 8vw, 92px);
-  padding-bottom: clamp(46px, 8vw, 92px);
-}
-
-.ctaTitle {
-  font-weight: 900;
-  font-size: clamp(28px, 7.2vw, 56px);
-  line-height: 1.18;
-  letter-spacing: -0.04em;
-  margin: 0;
-  max-width: 20ch;
-  text-wrap: pretty;
-}
-
-.ctaBody {
-  font-size: 15.5px;
-  line-height: 1.75;
-  color: rgba(255, 255, 255, 0.7);
-  margin: 16px 0 0;
-  max-width: 36ch;
-  text-wrap: pretty;
-}
-
-.ctaActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 26px;
-}
-
-.btnZzal {
-  padding: 16px 28px;
-  background: var(--accent-zzal);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 700;
-  border-radius: 999px;
-  transition: background-color 150ms ease;
-}
-
-.btnZzal:hover {
-  background: var(--accent-zzal-hover);
-}
-
-.btnGhost {
-  padding: 16px 26px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 500;
-  border-radius: 999px;
-  transition: background-color 150ms ease;
-}
-
-.btnGhost:hover {
-  background: rgba(255, 255, 255, 0.1);
+@media (prefers-reduced-motion: reduce) {
+  .wallRow {
+    animation: none;
+  }
 }
 
 /* ── 8. 푸터 ────────────────────────────────────────── */
