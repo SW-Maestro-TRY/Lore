@@ -20,7 +20,7 @@
 | 이미지 키 | `images/…` 뒷부분만. 화면이 `assetUrl()`로 CDN을 앞에 붙인다 |
 | 서버 정본 | 수치는 저장하지 않고 조회 때 계산(lazy settle). 낙관적 업데이트 금지 |
 | 케어 미스 | **어디에도 내려가지 않는다.** 보이는 신호는 `leaving`(짐 가방)뿐 |
-| 삭제 | v1 경로 전부(`/api/zzal/v1/me/pets/**` · `train` · `tutorial-done` · v1 `motions` 도감). v2에는 훈련이 없다 |
+| 삭제 | **주소가 아니라 엔드포인트를 지운다.** 앞머리 `/api/zzal/v1` 은 그대로 쓰고(여기서 v2는 계약 판을 가리키는 말이지 주소가 아니다), 옛 v1 엔드포인트만 없앤다 — 훈련(`train`) 계열 · 도감을 따로 주던 `motions` 조회 등. v2에는 훈련이 없고 도감은 `GET /{petId}/album` 이 준다 |
 | 개발 시계 | `serverNow`는 **그 펫의 시계**다. dev 도구로 오프셋을 걸면 `serverNow`도 같이 밀린다(화면은 몰라도 된다) |
 
 ---
@@ -527,7 +527,7 @@
 | 배포 절차 — 서버 비밀 | **JWT 서명 키를 바꾸면 확률 흐름도 바뀐다.** 뽑기 소금이 그 키에서 파생되기 때문(해석 42). 이미 적힌 기록(`sick.since` 등)은 그대로지만 **앞으로의 발병 시각·당첨 순번은 달라진다** — 키 회전은 사용자에게 안 보이는 변화이므로 그 자체로 문제는 아니나, "왜 갑자기 병 패턴이 바뀌었나" 를 나중에 못 짚지 않도록 회전 시각을 배포 기록에 남긴다 | PR-8 |
 | 배포 절차 | `ZZAL_PIPELINE_VERSION` 전환은 **`HATCHING` 0건일 때**(굽는 도중 버전이 바뀌면 복구가 다른 버전 산출물을 이어받을 수 있음). 복구 job은 원래 job의 버전을 잇고 단계 재사용도 같은 버전만 | PR-5 |
 | 부화 파이프라인 v2 | `PipelineRegistry` HATCH v2 = sheet→identity→grid→grid2→post(`basic/{key}.webp`, `--keys`). `prompt/v2/*.txt`가 없으면 **v1로 기동하고 부팅 로그에 경고**, 기록도 v1 | PR-5 |
-| 5 관리자 | **v2 동작** — `/api/zzal/v1/admin/motions` 5개(`pending`·`verdict`·`regen-requests`·`upload`·`night/summary`). v1 경로는 제거 | PR-7 |
+| 5 관리자 | **v2 동작** — `/api/zzal/v1/admin/motions` 5개(`pending`·`verdict`·`regen-requests`·`upload`·`night/summary`). 주소 앞머리는 `/api/zzal/v1` 그대로다 | PR-7 |
 | 6 개발 도구 | `advance-clock`·`set-clock`·**`night-sweep`(이 펫만 계획→집기→굽기, run 기록 없음)**·**`force-open/{seq}`**(가짜 검수 통과, 도착은 규칙대로) | PR-2·6·7 |
 | 밤 굽기 큐 | **동작** — 23:00 `NightSweep`(`sweep-enabled` 기본 false·서버 한 대만), `zzal_night_run(night_of PK)`, 첫 심화(3일째·케어 미스 0)·FAILED 재등록, 우선순위 선물>케어미스0일수>친밀도>id, K=200 이월, claim `UPDATE…WHERE QUEUED`, 기동 복구(23~10시 창). 굽기는 `MotionService.bakeNow` — **API 1회 → 게이트 → REVIEW / FAIL이면 LOCAL_REQUESTED**. 굽기 중 예외는 `FAILED`, 집힌 채 멈춘 자리는 기동 복구가 `QUEUED`로 회수 | PR-6·7 |
 | 후기 | v1 경로 `/api/zzal/v1/me/pets/{id}/feedback` 유지 | (변경 없음) |
