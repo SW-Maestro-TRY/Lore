@@ -137,6 +137,20 @@ services:
       ZZAL_GENERATION_REAL: ${ZZAL_GENERATION_REAL:-false}
       # 파이썬 후처리 실제 실행(돈 안 남). 슬림 JRE 이미지엔 numpy/scipy/PIL 이 없어 켜면 기동이 막힌다 → 기본 꺼짐.
       ZZAL_REAL_POSTPROCESS: ${ZZAL_REAL_POSTPROCESS:-false}
+      # ── 웹툰 만들기 ────────────────────────────────────────────────
+      # 하네스를 돌릴 파이썬(lore.webtoon.python.bin). 이미지가 심어 둔 두 번째 가상환경을
+      # 가리킨다 — zzal 것(/opt/lore/venv)에는 openai·google-genai·PyYAML 이 없다.
+      # 박스와 같은 경로라 .env 로 바꿀 일이 거의 없지만 덮을 수는 있게 둔다.
+      LORE_WEBTOON_PYTHON_BIN: ${LORE_WEBTOON_PYTHON_BIN:-/opt/lore/venv-webtoon/bin/python}
+      # 하네스가 그림·이야기를 부를 때 쓰는 열쇠. 자바 프로세스 환경으로 들어가 파이썬이
+      # 물려받고, llm.py 가 OPENAI_API_KEY 로 풀어 쓴다. 비우면 만들기가 그 자리에서 멈춘다.
+      WEBTOON_API_KEY: ${WEBTOON_API_KEY:-}
+      # 하네스가 다 그린 그림을 올리고 비용을 적을 때 서버에 대는 한 마디
+      # (lore.webtoon.internal-token · upload/s3_upload.py). 비우면 S3 에는 올라가도
+      # 주소가 DB 에 안 적힌다.
+      LORE_WEBTOON_INTERNAL_TOKEN: ${LORE_WEBTOON_INTERNAL_TOKEN:-}
+      # 완성 알림 메일에 들어가는 기준 주소(lore.webtoon.site-url). 안 주면 운영 주소가 박힌다.
+      LORE_WEBTOON_SITE_URL: ${LORE_WEBTOON_SITE_URL:-http://localhost:3100}
       # 메일 계정(선택). 비워도 뜨도록 빈 기본값을 준다 — 안 주면 yml 의 ${MAIL_USERNAME}
       # 플레이스홀더가 안 풀려 기동이 막힌다.
       MAIL_USERNAME: ${MAIL_USERNAME:-}

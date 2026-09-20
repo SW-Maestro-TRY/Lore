@@ -413,18 +413,22 @@ jobs:
 
       # 웹툰 생성 하네스(new_harness)도 파이썬을 쓴다 — 짤과 패키지가 달라 따로 둔다.
       #
-      # ★ 파일이 있을 때만 올린다. haeun/landing/requirements.txt 는 생성 파이프라인이
-      #   webtoon/ai/ 로 옮겨가며 사라졌는데(aab7ac2) 이 스텝만 남아, 다음 backend 배포 때
-      #   '파일 없음'으로 배포 전체가 멈춘다. 경로를 여기서 추측해 바꾸면 더 조용히 틀리므로
-      #   (하은님 영역) 일단 없으면 건너뛰고, 올바른 경로는 담당자가 채운다.
+      # ★ 파일이 있을 때만 올린다. 옛 경로 haeun/landing/requirements.txt 는 생성 파이프라인이
+      #   webtoon/ai/ 로 옮겨가며 사라졌는데(aab7ac2) 이 스텝만 남아 있었다 — 그래서 올라간 것이
+      #   없고, 박스의 /opt/lore/venv-webtoon 은 손으로 만든 채 배포마다 그대로였다.
+      #   지금 경로는 webtoon/ai/requirements.txt 이며, 그 파일 머리말이 "이것만 S3 로 올려서
+      #   서버에서 설치한다"고 스스로 못박고 있다. 가드는 남겨 둔다 — 없으면 배포 전체가 멈춘다.
+      #
+      # ★ 짤 것과 **열쇠를 달리해서** 올린다(requirements- / webtoon-requirements-).
+      #   가상환경이 둘이라(/opt/lore/venv · /opt/lore/venv-webtoon) 목록도 둘이어야 한다.
       - name: 웹툰 하네스 파이썬 준비물 업로드
         run: |
           B="${{ needs.setup.outputs.s3_bucket }}"; E="${{ needs.setup.outputs.env_name }}"
-          if [ -f haeun/landing/requirements.txt ]; then
-            aws s3 cp haeun/landing/requirements.txt \
+          if [ -f webtoon/ai/requirements.txt ]; then
+            aws s3 cp webtoon/ai/requirements.txt \
               "s3://$B/builds/$E/webtoon-requirements-${GITHUB_SHA}.txt" --region "$AWS_REGION"
           else
-            echo "skip: haeun/landing/requirements.txt 없음 (웹툰 하네스 경로 재지정 필요)"
+            echo "skip: webtoon/ai/requirements.txt 없음"
           fi
           if [ -f webtoon/be/setup-python.sh ]; then
             aws s3 cp webtoon/be/setup-python.sh \
