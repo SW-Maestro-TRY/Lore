@@ -91,6 +91,17 @@ export interface CharFit {
    * `발끝선(LIFT) + CHAR_H×이 값` 이 곧 **머리끝 자리**다 — 말풍선을 머리 위로 띄우는 데 쓴다.
    */
   headSpanPerBoxH: number;
+  /**
+   * 이 자세 실루엣의 **왼쪽·오른쪽 가장자리 ÷ 상자 가로**(0~1). 상자에는 투명 여백이 들어 있어
+   * 상자 폭으로 "아이 옆에 얼마나 남았나" 를 재면 틀린다 — 말풍선을 머리 옆으로 비킬 때 쓴다.
+   */
+  silLeftPerBoxW: number;
+  silRightPerBoxW: number;
+  /**
+   * 이 자세의 **머리 옆선(head_side) 높이 ÷ 캔버스 세로**. `발끝선 + 상자세로 x 이 값` 이
+   * 곧 얼굴 높이다 — 머리 옆으로 비킨 말풍선의 세로 한가운데를 여기에 맞춘다.
+   */
+  headSidePerBoxH: number;
 }
 
 /**
@@ -113,6 +124,9 @@ export function charFit(anchors: CharAnchors, pose: string): CharFit {
     belowFoot: (canvasH - p.feet.y) / canvasH,
     tallestPerK: (tallest > 0 ? tallest : anchors.K) / anchors.K,
     headSpanPerBoxH: (p.feet.y - p.head_top.y) / canvasH,
+    silLeftPerBoxW: p.bbox.x / canvasW,
+    silRightPerBoxW: (p.bbox.x + p.bbox.w) / canvasW,
+    headSidePerBoxH: (p.feet.y - p.head_side.y) / canvasH,
   };
 }
 

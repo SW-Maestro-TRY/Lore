@@ -813,14 +813,32 @@ export function useLive(): Live {
 //   안 줘서 캔버스로 읽는 순간 막히고, 콘솔에 오류만 쌓인다(2026-09-07 실측). 시도조차 안 하는
 //   편이 조용하다. `/images/*` 를 같은 출처로 넘기는 프록시가 생기면 그때 저절로 켜진다.
 //   그때까지 생성된 아이는 여울 기준값으로 앉는다 — 상훈님 결정(2026-09-07): 지금은 이대로 간다.
-const padCache = new Map<string, number>();
+/**
+ * 그림 위·아래의 **투명 여백 비율**. 한 번 훑어 둘 다 잰다.
+ *
+ * ★ 위쪽(`top`)을 같이 재게 된 이유(2026-09-20) — 서버 앵커가 없는 아이(옛 펫·목)는 머리끝을
+ *   **고정 앵커표**로 잡는데, 그 표는 옛 판 그림에서 잰 값이라 지금 그림과 어긋난다. 실측에서
+ *   그 어긋남이 44.5px 이었고, 말풍선이 딱 그만큼 얼굴을 덮었다(진짜 방 1200 에서 24.5px).
+ *   발밑을 그림에서 재는 것과 **같은 이유·같은 방법**으로 머리 위도 그림에서 잰다.
+ */
+interface SpritePads {
+  /** 위 여백 ÷ 캔버스 세로. */
+  top: number;
+  /** 아래 여백 ÷ 캔버스 세로. */
+  bottom: number;
+  /** 실루엣 **왼쪽 가장자리** ÷ 캔버스 가로. */
+  left: number;
+  /** 실루엣 **오른쪽 가장자리** ÷ 캔버스 가로. */
+  right: number;
+}
+const padCache = new Map<string, SpritePads>();
 
-export function useFootPad(src: string, fallback: number): number {
-  const [pad, setPad] = useState(() => padCache.get(src) ?? fallback);
+function useSpritePads(src: string, fallbackBottom: number): SpritePads {
+  const [pads, setPads] = useState(() => padCache.get(src) ?? { top: 0, bottom: fallbackBottom, left: 0, right: 1 });
 
   useEffect(() => {
     const cached = padCache.get(src);
-    if (cached !== undefined) { setPad(cached); return; }
+    if (cached !== undefined) { setPads(cached); return; }
     if (!src) return;
     // 다른 출처면 어차피 못 읽는다. 조용히 기본값으로 간다.
     try {
@@ -838,26 +856,61 @@ export function useFootPad(src: string, fallback: number): number {
         if (!ctx) return;
         ctx.drawImage(img, 0, 0);
         const d = ctx.getImageData(0, 0, c.width, c.height).data;
+        const opaqueRow = (y: number) => {
+          for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 10) return true;
+          return false;
+        };
         let bottom = -1;
         // 아래에서 위로 훑다가 처음 만나는 불투명한 줄이 발끝이다.
-        for (let y = c.height - 1; y >= 0 && bottom < 0; y--) {
-          for (let x = 0; x < c.width; x++) {
-            if (d[(y * c.width + x) * 4 + 3] > 10) { bottom = y; break; }
-          }
-        }
+        for (let y = c.height - 1; y >= 0 && bottom < 0; y--) if (opaqueRow(y)) bottom = y;
         if (bottom < 0) return;
-        const p = (c.height - 1 - bottom) / c.height;
-        padCache.set(src, p);
-        if (alive) setPad(p);
+        let top = -1;
+        // 위에서 아래로 훑다가 처음 만나는 불투명한 줄이 정수리다.
+        for (let y = 0; y < c.height && top < 0; y++) if (opaqueRow(y)) top = y;
+        const opaqueCol = (x: number) => {
+          for (let y = 0; y < c.height; y++) if (d[(y * c.width + x) * 4 + 3] > 10) return true;
+          return false;
+        };
+        let left = -1;
+        for (let x = 0; x < c.width && left < 0; x++) if (opaqueCol(x)) left = x;
+        let right = -1;
+        for (let x = c.width - 1; x >= 0 && right < 0; x--) if (opaqueCol(x)) right = x;
+        const next = {
+          top: Math.max(0, top) / c.height,
+          bottom: (c.height - 1 - bottom) / c.height,
+          left: Math.max(0, left) / c.width,
+          right: (right < 0 ? c.width - 1 : right + 1) / c.width,
+        };
+        padCache.set(src, next);
+        if (alive) setPads(next);
       } catch {
         // 캔버스를 못 읽는 경우(CORS)엔 기본값 그대로 간다. 화면은 멀쩡히 돈다.
       }
     };
     img.src = src;
     return () => { alive = false; };
-  }, [src, fallback]);
+  }, [src, fallbackBottom]);
 
-  return pad;
+  return pads;
+}
+
+export function useFootPad(src: string, fallback: number): number {
+  return useSpritePads(src, fallback).bottom;
+}
+
+/** 그림 **위쪽** 투명 여백의 비율. 못 재면 0(= 예전처럼 앵커표를 그대로 믿는다). */
+export function useHeadPad(src: string, fallbackBottom: number): number {
+  return useSpritePads(src, fallbackBottom).top;
+}
+
+/**
+ * 실루엣의 **좌·우 가장자리**(캔버스 가로 대비 0~1). 머리 옆에 말풍선을 놓을 때 "아이 옆에 얼마나
+ * 남았나" 를 재는 자다. 못 재면 상자 전체(0~1)로 두어 **가장 불리하게** 잡는다 — 자리를 넉넉히
+ * 요구하게 되므로 옆으로 비키지 못할 뿐, 잘리거나 겹치지는 않는다.
+ */
+export function useSideEdges(src: string, fallbackBottom: number): { left: number; right: number } {
+  const pads = useSpritePads(src, fallbackBottom);
+  return { left: pads.left, right: pads.right };
 }
 
 /**
