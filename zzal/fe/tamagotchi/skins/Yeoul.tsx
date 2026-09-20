@@ -396,6 +396,12 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
         //   안 그려져 이 길로만 화면을 볼 수 있다. 방 화면일 때 켜야 보인다(FeedbackSheet 은 방 안에 산다).
         { label: '후기 미리보기', id: 'fb-preview', on: v.fbPreview, pick: actions.toggleFbPreview,
           title: room ? undefined : '방(연습방·진짜 방)으로 들어가야 판이 보입니다' },
+        // ★ 해금 판은 **두 갈래**다(즉시·아침). 실제로는 서버 응답으로만 오는 판이라 이 손잡이가
+        //   없으면 눈으로 확인할 길이 없다. 갈래를 묶지 않는다 — 말도 그림 출처도 다르다.
+        { label: '해금 판(즉시)', id: 'fire-unlock-now', on: false, pick: actions.showUnlock('now'),
+          title: '2층 기본 행동이 그 자리에서 열린 판 (motions[].basicImageKey)' },
+        { label: '해금 판(아침)', id: 'fire-unlock-slept', on: false, pick: actions.showUnlock('slept'),
+          title: '자는 동안 배워 아침에 도착한 판 (learnedToday[].imageKey · 그림이 아직 없을 수 있음)' },
         { label: '가입 모달', on: s.authOpen, pick: actions.openAuth('signup') },
         { label: '로드맵 완료', on: s.cChat >= 4 && s.cBath >= 3 && s.cSleep >= 3 && s.cGame >= 3, pick: actions.finishRoadmap },
         { label: '다음 날', on: false, pick: actions.nextDay },

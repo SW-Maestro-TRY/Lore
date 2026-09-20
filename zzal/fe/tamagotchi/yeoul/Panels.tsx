@@ -8,7 +8,7 @@
 //   내용(제목·본문·버튼)은 부르는 쪽이 넘긴다.
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { C, C2, GAEGU, MONO, gap, input as inputStyle, monoSize, radius, shadow, fz } from './ui';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 
@@ -298,6 +298,49 @@ function WishBox({ y }: { y: Yeoul }) {
   );
 }
 
+/**
+ * 전면 판의 예시 그림 한 칸.
+ *
+ * ★ 방 안 액자(나무 테두리)와 **다른 모양**(점선 틀)이어야 한다 — 사용자는 이 자리에서 제 아이를
+ *   기대하므로, 같은 틀로 그리면 남의 캐릭터를 제 것으로 읽는다. 그래서 칩·캡션(글자) ·
+ *   점선 틀(모양) · 본문(말) 세 겹으로 예시임을 말한다.
+ *
+ * ★★ **그림이 안 열리면 칸을 통째로 접는다**(2026-09-21 판정 5 · A-09).
+ *   예전에는 "주소 문자열이 비면 안 그린다" 만 막고 있었는데, 그 방어로는 **주소는 있는데
+ *   그림이 없는 경우**를 못 잡는다. 실제로 그랬다 — 축하 창의 구르기 주소가 404 라
+ *   점선 상자 201px 이 빈 채로 남고 깨진 아이콘과 대체 글자가 떴다(2026-09-21 실측).
+ *   해금 판은 이 경우가 **정상 경로**다: 심화 행동 그림은 `revealedAt` 전에는 아예 없고,
+ *   자는 동안에는 채워지지도 않는다. 그러니 "아직 없음" 이 기본값이라고 보고 그린다.
+ *
+ * ★ 빈 자리표("곧 보여드릴게요" 같은 회색 상자)를 두지 않는다 — 그것 자체가 지킬 수 없는
+ *   약속이고, 판은 제목·본문·입력칸만으로도 완결된다. 할 말이 있으면 본문이 말한다.
+ * ★ `alt` 를 비우는 이유 — 같은 문장이 바로 위 캡션에 이미 보인다. 채워 두면 화면 낭독기가
+ *   두 번 읽고, 그림이 깨졌을 때 글자가 한 번 더 나와 같은 말이 두 줄이 된다.
+ * ★ 크기는 서버가 준 값을 쓴다. 판마다 캔버스가 달라 높이를 상수로 박으면 안쪽에 빈 띠가 생긴다.
+ */
+function FirePreview({ p }: { p: NonNullable<Yeoul['s']['fire']>['preview'] }) {
+  const [failed, setFailed] = useState(false);
+  if (!p || failed) return null;
+  return (
+    <div data-part="fire-preview" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.sm, padding: 11, border: `1.5px dashed ${C.lineHard}`, borderRadius: radius.md, background: C.slot, boxSizing: 'border-box' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm, alignSelf: 'flex-start' }}>
+        <span style={{ padding: '2px 8px', borderRadius: radius.pill, background: C.accentSoft, color: C.accent, fontSize: fz.xs, lineHeight: 1.6 }}>{p.badge}</span>
+        <span style={{ fontSize: fz.xs, color: C.faint }}>{p.caption}</span>
+      </span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={p.src} alt="" data-part="fire-preview-img"
+        onError={() => setFailed(true)}
+        style={{
+          height: 150, width: 'auto', maxWidth: '100%', display: 'block',
+          // 서버가 판 크기를 주면 자리를 미리 잡아 둔다 — 그림이 들어오며 판이 덜컥 커지지 않는다.
+          ...(p.w && p.h ? { aspectRatio: `${p.w} / ${p.h}` } : null),
+        }}
+      />
+    </div>
+  );
+}
+
 function Fire({ y }: { y: Yeoul }) {
   const f = y.s.fire!;
   // ★ 배경을 누르면 **어느 판이든** 닫힌다(상훈님 판정 22). 예전엔 tapAny 를 준 판만 닫혀서
@@ -314,21 +357,7 @@ function Fire({ y }: { y: Yeoul }) {
           </div>
         )}
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.2, color: C.ink, textAlign: 'center' }}>{f.title}</span>
-        {/* 예시 그림 한 칸. ★ 방 안 액자(나무 테두리)와 **다른 모양**(점선 틀)이어야 한다 —
-            사용자는 이 자리에서 제 아이를 기대하므로, 같은 틀로 그리면 남의 캐릭터를 제 것으로 읽는다.
-            그래서 칩·캡션(글자) · 점선 틀(모양) · 본문("{이름}도 …", 말) 세 겹으로 예시임을 말한다. */}
-        {f.preview && (
-          <div data-part="fire-preview" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.sm, padding: 11, border: `1.5px dashed ${C.lineHard}`, borderRadius: radius.md, background: C.slot, boxSizing: 'border-box' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm, alignSelf: 'flex-start' }}>
-              <span style={{ padding: '2px 8px', borderRadius: radius.pill, background: C.accentSoft, color: C.accent, fontSize: fz.xs, lineHeight: 1.6 }}>{f.preview.badge}</span>
-              <span style={{ fontSize: fz.xs, color: C.faint }}>{f.preview.caption}</span>
-            </span>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {/* ★ 높이만 고정하고 너비는 그림이 정한다 — 상자 비율을 손으로 적으면 그림이 바뀔 때마다
-                안쪽에 빈 띠가 생긴다. `maxWidth` 는 세로로 긴 그림이 와도 판을 안 밀게 하는 안전선. */}
-            <img src={f.preview.src} alt={f.preview.caption} style={{ height: 150, width: 'auto', maxWidth: '100%', display: 'block' }} />
-          </div>
-        )}
+        {f.preview && <FirePreview p={f.preview} />}
         {/* ★ `pre-line` — 문구가 줄바꿈(\n)으로 두 마디를 갈라 둔 판이 있다(졸업 판). 없으면 한 덩어리로 붙는다. */}
         <span style={{ fontSize: fz.md, lineHeight: 1.7, color: 'rgba(74,64,56,.62)', textAlign: 'center', whiteSpace: 'pre-line' }}>{f.body}</span>
         {f.wish && <WishBox y={y} />}

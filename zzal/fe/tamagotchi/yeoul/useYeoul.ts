@@ -13,7 +13,7 @@ import {
   ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
   STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
-  WISH_COPY, WISH_MAX,
+  WISH_COPY, WISH_MAX, UNLOCK_COPY, WISH_REPLY,
   type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
@@ -26,7 +26,9 @@ import {
   ACTION_SITUATION, CYCLE_MS, GIFT_CYCLES, SITUATION_TABLE,
   cyclesOfAction, poseOfSituation, situationOfAction, stagePlanOf, type ActionKey,
 } from '../props/situations';
-import { motionAliases } from '../constants';
+import { motionAliases, YEOUL_MOTION } from '../constants';
+import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
+import { assetUrl } from '../../lib/assets';
 import { trackConversion } from '../../lib/analytics';
 
 /**
@@ -126,8 +128,16 @@ export interface Fire {
    * ★ 폴라로이드(`polaroid`)와 **일부러 다른 모양**이다. 폴라로이드는 "내 아이와 남긴 것" 이고
    *   이쪽은 "남이 먼저 보여주는 예시" 라, 같은 틀로 그리면 사용자가 제 것으로 읽는다.
    * ★ 그림 주소가 없으면 이 칸 자체를 안 만든다 — 빈 액자가 뜨는 것보다 없는 편이 낫다.
+   * ★ 주소가 **있는데도 안 열리는** 경우는 화면(`Panels.FirePreview`)이 칸을 접어서 막는다.
+   *   해금 판에서는 그게 정상 경로다(심화 그림은 도착 전까지 없다).
+   * ★ `w`·`h` 는 서버가 준 판 크기다. 주면 자리를 미리 잡아 판이 덜컥 커지지 않는다.
    */
-  preview?: { src: string; badge: string; caption: string };
+  preview?: { src: string; badge: string; caption: string; w?: number; h?: number };
+  /**
+   * 자유 입력을 **어느 판에서** 보냈는지. 기록에만 쓴다(문구에는 안 나온다).
+   * 졸업 판과 해금 판이 같은 입력칸을 쓰므로, 이걸 안 남기면 어디서 온 글인지 영영 모른다.
+   */
+  wishFrom?: string;
   /**
    * 자유 입력칸을 이 판에 둘 것인가.
    *
@@ -756,8 +766,24 @@ export function useYeoul(live?: Live) {
     void (async () => {
       const r = await liveRef.current?.sendWish(text) ?? { ok: false, code: null };
       if (r.ok) {
-        void trackConversion('motion_wish_submitted', { from: 'tutorial_gift' });
-        setS((v) => ({ ...v, wishSending: false, wishDone: true, wishDraft: '', wishError: '' }));
+        void trackConversion('motion_wish_submitted', { from: sRef.current.fire?.wishFrom ?? 'tutorial_gift' });
+        /**
+         * ★ 보낸 뒤 **답 판**으로 갈아 끼운다(2026-09-21 판정 5 · A-12). 예전에는 입력칸 자리에
+         *   한 줄만 남기고 끝이라, 보낸 사람 입장에서는 그 글이 어디로 갔는지 알 수 없었다.
+         * ★★ 문구가 **"곧 추가하겠다" 를 약속하지 않는다.** 언제 되는지 우리도 모르고,
+         *   단정하는 순간 늦어지는 분께는 그대로 거짓말이 된다. 이미 참인 것만 말한다 —
+         *   글은 진짜로 남고, 만드는 사람이 그걸 읽는다.
+         */
+        setS((v) => ({
+          ...v, wishSending: false, wishDone: true, wishDraft: '', wishError: '',
+          fire: {
+            title: WISH_REPLY.title, body: WISH_REPLY.body, hint: '', tapAny: true,
+            actions: [{
+              label: WISH_REPLY.close, action: 'wish-reply-close', primary: true,
+              tap: () => setS((w) => ({ ...w, fire: null })),
+            }],
+          },
+        }));
         return;
       }
       setS((v) => ({ ...v, wishSending: false, wishError: wishFailLine(r.code) }));
@@ -805,6 +831,8 @@ export function useYeoul(live?: Live) {
     ...v, tutor: 0, tutorOn: false,
     ...(v.tutorDone ? {} : {
       tutorDone: true, rollUnlocked: true,
+      // 자유 입력칸은 이 판에서 처음 열린다 — 앞 판의 글·오류가 남아 있으면 안 된다(→ `withFire`).
+      wishDraft: '', wishError: '', wishSending: false, wishDone: false,
       fire: {
         title: GRAD_COPY.title,
         body: GRAD_COPY.body(v.petName || '아이'),
@@ -817,7 +845,7 @@ export function useYeoul(live?: Live) {
         // 정본이 선물 화면에 붙이라고 한 수요조사. **한 번 누르는 버튼이 아니라 자유 글**이다 —
         // 우리가 알고 싶은 것은 "더 원한다" 가 아니라 **목록에 없는 동작이 무엇인가** 라서,
         // 정해진 값만 받으면 그 질문에 영영 답할 수 없다.
-        wish: true,
+        wish: true, wishFrom: 'tutorial_gift',
         actions: [
           { label: GRAD_COPY.close, action: 'grad-close', tap: () => setS((w) => ({ ...w, fire: null })), primary: false },
         ],
@@ -1623,20 +1651,138 @@ export function useYeoul(live?: Live) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onServer, sv]);
 
-  // 2층 해금 — 친밀도 50% 를 넘긴 순간 한 번만 축하한다(시안 componentDidUpdate).
+  /**
+   * 판을 띄우면서 **자유 입력칸을 깨끗이 비운다.**
+   *
+   * ★ 2026-09-21 실측 — 앞 판에서 난 실패 한 줄("아이를 찾지 못했어요")이 **다음 판에 그대로
+   *   남았다.** 졸업 판과 해금 판이 같은 입력칸을 쓰게 되면서 생긴 자리다. 판이 바뀌면
+   *   그 판의 입력은 처음부터다 — 보낸 적 있음(`wishDone`)까지 같이 푼다. 중복 전송은
+   *   `wishSending` 잠금과 서버의 하루 상한이 막는다.
+   */
+  const withFire = (v: YeoulState, fire: Fire | null): YeoulState =>
+    ({ ...v, fire, wishDraft: '', wishError: '', wishSending: false, wishDone: false });
+
+  /**
+   * 해금 판 한 장을 만든다 — **판은 하나, 출처는 둘**(2026-09-21 판정 5 · A-10).
+   *
+   * ★★ 해금은 두 종류이고 그림을 가져오는 칸이 서로 다르다.
+   *   - `now`   2층 기본 행동 : 돌보는 그 자리에서 열린다. `justUnlocked`(seq 목록)로 알고,
+   *             그림은 `motions[].basicImageKey` 에 **잠겨 있을 때부터** 들어 있다.
+   *   - `slept` 심화 행동·선물 : 자는 동안 되고 아침에 도착한다. `learnedToday[].imageKey` 로 알고,
+   *             그 칸은 **`revealedAt` 전에는 null** 이며 자는 동안에는 채워지지도 않는다.
+   *   ⚠️ `album.motions[].imageKey` 라는 칸은 **없다.** 그 이름으로 찾지 말 것.
+   *   두 경우를 한 칸으로 뭉치면 한쪽이 조용히 빈 화면이 된다 — 그래서 여기서만 갈라 둔다.
+   *
+   * ★ 그림이 없으면 미리보기를 **안 만든다**(빈 자리표를 두지 않는다). 아침 도착 판에서만
+   *   본문 뒤에 "아직 그리는 중" 한 줄을 붙인다 — 즉시 해금은 그림이 원래 있으므로,
+   *   그때 안 보이는 것은 "아직" 이 아니라 불러오기 실패고 그건 화면이 조용히 접는다.
+   */
+  const unlockFire = useCallback((
+    kind: 'now' | 'slept',
+    items: ReadonlyArray<{ label: string; src: string | null }>,
+    bodyOverride?: string,
+  ): Fire | null => {
+    if (items.length === 0) return null;
+    const c = UNLOCK_COPY[kind];
+    const names = items.map((i) => i.label).join(' · ');
+    const shot = items.find((i) => i.src);
+    const missing = kind === 'slept' && !shot;
+    return {
+      title: c.title,
+      body: bodyOverride ?? (c.body(names) + (missing ? `\n${UNLOCK_COPY.noPreviewNote}` : '')),
+      ...(shot?.src
+        ? { preview: { src: shot.src, badge: c.previewBadge, caption: c.previewCaption(shot.label) } }
+        : {}),
+      hint: '', tapAny: true,
+      // 정본 §심화 행동의 수요조사. 졸업 판과 **같은 입력칸**이고, 보낸 자리만 다르게 기록한다.
+      wish: true, wishFrom: `unlock_${kind}`,
+      actions: [{
+        label: c.close, action: `unlock-close-${kind}`, primary: false,
+        tap: () => setS((w) => ({ ...w, fire: null })),
+      }],
+    };
+  }, []);
+
+  /**
+   * 개발용 — **해금 판을 강제로 띄운다**(2026-09-21 A-13).
+   *
+   * ★ 왜 필요한가 — 실제 해금은 `justUnlocked`(행동 응답에만 실림)·`learnedToday`(아침 도착)로만
+   *   온다. 이동 창의 `친밀도 80%` 는 덮어쓰기 겹(`s.dev.bond`)에만 쓰는데 목 트리거는 본 값
+   *   (`s.bond`)을 보므로, **눌러도 판이 안 떴다**. 판정할 화면을 눈으로 못 보는 상태였다.
+   * ★ 두 갈래를 따로 띄운다 — 즉시형과 아침형은 말도 그림 출처도 다르다. 한 버튼으로 묶으면
+   *   한쪽만 확인하고 다 봤다고 착각한다.
+   */
+  const showUnlock = useCallback((kind: 'now' | 'slept') => () => {
+    const motions = sv?.motions ?? [];
+    const pick = kind === 'now'
+      ? motions.find((x) => x.layer === 'BASIC_2') ?? motions[0]
+      : motions.find((x) => x.advanced?.imageKey) ?? motions.find((x) => x.layer === 'GIFT');
+    const src = kind === 'now'
+      ? (pick?.basicImageKey ? assetUrl(pick.basicImageKey) : null)
+      : (pick?.advanced?.imageKey ? assetUrl(pick.advanced.imageKey) : null);
+    // 목(연습방)에는 서버 목록이 없다. 2층 자세표의 **진짜 이름**을 쓴다 — 개발 화면과 앨범이
+    // 같은 한 벌을 쓰므로, 여기서만 '2층' 같은 가짜 이름을 지어내면 대화할 때마다 통역이 든다.
+    // 연습방의 아이는 여울 자신이라 여울 그림을 거는 것이 맞다(진짜 방에서는 위 `pick` 이 이긴다).
+    const mockKey = POSE_FLOORS[1][1][0];
+    const items = pick
+      ? [{ label: pick.label, src }]
+      : [{ label: POSE_LABEL[mockKey] ?? mockKey, src: kind === 'now' ? (YEOUL_MOTION[mockKey] ?? null) : null }];
+    setS((v) => withFire({ ...v, sheet: null }, unlockFire(kind, items)));
+  }, [sv, unlockFire]);
+
+  // 2층 해금(목) — 친밀도 50% 를 넘긴 순간 한 번만 축하한다(시안 componentDidUpdate).
+  // ★ 서버에 붙어 있으면 이 길로 안 온다 — 아래 `justUnlocked` 효과가 맡는다. 두 곳이 같이
+  //   띄우면 같은 사건에 판이 두 번 뜬다.
   useEffect(() => {
+    if (onServer) return;
     if (s.bond < 50 || s.floorLv >= 3 || s.unlockShown || s.screen !== 'room') return;
     // A절 표 "해금 · 나음 · 공유" 줄의 첫째 — 기쁨 + 폭죽 한 바퀴.
     careAct('unlock');
-    setS((v) => ({
-      ...v, unlockShown: true, floorLv: 3, sheet: null,
-      fire: {
-        title: '2층이 열렸어요', body: '조각 네 칸과 달리기가 함께 열렸어요.',
-        hint: '탭하면 넘어가요', tapAny: true,
-        actions: [{ label: '방으로 돌아가기', action: 'unlock-close', tap: () => setS((w) => ({ ...w, fire: null })), primary: true }],
-      },
-    }));
-  }, [s.bond, s.floorLv, s.unlockShown, s.screen, careAct]);
+    // 목에는 서버 목록이 없다. 무엇이 열렸는지는 아는 대로만 말하고, 그림은 걸지 않는다
+    // (여울 그림을 걸면 "내 아이가 여울로 바뀌었나" 로 읽힌다 — 자캐 규범).
+    const fire = unlockFire('now', [{ label: '2층', src: null }], '조각 네 칸과 달리기가 함께 열렸어요.');
+    setS((v) => withFire({ ...v, unlockShown: true, floorLv: 3, sheet: null }, fire));
+  }, [onServer, s.bond, s.floorLv, s.unlockShown, s.screen, careAct, unlockFire]);
+
+  /**
+   * 2층 해금(서버·즉시형) — `justUnlocked` 가 실려 온 **그 응답에서만** 한 번.
+   *
+   * ★ 조회 응답의 `justUnlocked` 는 늘 비어 있다(계약 2절 "행동 응답에만"). 그래서 다음 조회
+   *   한 번이면 `[]` 로 덮인다 — 본 순간 붙잡아 두지 않으면 판을 놓친다. seq 를 기록해 둔다.
+   */
+  const unlockSeen = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (!onServer || s.screen !== 'room' || s.fire) return;
+    const fresh = (sv?.justUnlocked ?? []).filter((q) => !unlockSeen.current.has(q));
+    if (fresh.length === 0) return;
+    fresh.forEach((q) => unlockSeen.current.add(q));
+    const motions = sv?.motions ?? [];
+    const items = fresh.map((q) => {
+      const m = motions.find((x) => x.seq === q);
+      return { label: m?.label ?? '새 동작', src: m?.basicImageKey ? assetUrl(m.basicImageKey) : null };
+    });
+    careAct('unlock');
+    setS((v) => withFire({ ...v, sheet: null }, unlockFire('now', items)));
+  }, [onServer, sv, s.screen, s.fire, careAct, unlockFire]);
+
+  /**
+   * 심화 행동 도착(서버·기상형) — `learnedToday` 에 남아 있는 것만.
+   *
+   * ★ 서버는 **확인(`…/motions/{seq}/seen`) 전까지** 이 목록에 남겨 둔다. 화면이 판을 닫는 것과
+   *   서버가 "봤다" 를 아는 것은 다른 일이라, 닫기만으로 목록이 비지 않는다 — 다시 들어오면
+   *   또 뜬다. 그게 맞다(아직 안 본 것으로 서버가 알고 있으므로). 확인을 보내는 것은
+   *   상태 층(`useHatch`)의 일이고 여기서 하지 않는다.
+   * ★ `imageKey` 는 도착 전에는 없다. 없으면 미리보기를 안 만든다 — 그게 정상 경로다.
+   */
+  const learnedSeen = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (!onServer || s.screen !== 'room' || s.fire) return;
+    const fresh = (sv?.learnedToday ?? []).filter((m) => !learnedSeen.current.has(m.seq));
+    if (fresh.length === 0) return;
+    fresh.forEach((m) => learnedSeen.current.add(m.seq));
+    const items = fresh.map((m) => ({ label: m.label, src: m.imageKey ? assetUrl(m.imageKey) : null }));
+    setS((v) => withFire({ ...v, sheet: null }, unlockFire('slept', items)));
+  }, [onServer, sv, s.screen, s.fire, unlockFire]);
 
   /**
    * **재운 순간 한 바퀴 덮기.** 잠은 상태(무한)라 박자를 못 타므로, 들어오는 그 한 번만 여기서 센다.
@@ -2481,7 +2627,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview, showUnlock,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
     backToSample: () => patch({ screen: 'room' }),
   }), [
@@ -2490,7 +2636,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview, showUnlock,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
   ]);
 
