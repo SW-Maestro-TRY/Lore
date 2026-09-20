@@ -211,10 +211,19 @@ export const PROP_SPECS: Record<string, PropSpec> = {
     offset: { dx: 0.22, dy: 0.0, unit: "K" },
     stages: [
       // 3~4단계는 넓어 발끝선에 맞추면 발/정강이를 덮는다 → 그 단계만 앞쪽 바닥으로 더 내린다(sinkK).
+      //
+      // ★★ `sinkK` 는 **K 배수**다 — 화면 자(K)가 바뀌면 내려가는 px 이 같은 비율로 따라 움직인다.
+      //   여울 스프라이트 v7 전환(caa7e84)에서 `anchors-fixed` 의 K 239→274 · Hw 95→109 가 되며
+      //   화면 K 가 322.06 → 342.36(x1.0630) 으로 늘었고, 그만큼 3·4단계만 더 내려갔다
+      //   (3단계 193.2→205.4 · 4단계 144.9→154.1). 1·2단계는 sinkK 가 없어 0.00px 도 안 움직였다.
+      //   3단계가 아래 팝오버 띠 안으로 189px 파고드는 것이 눈에 걸린 그림이다(2026-09-21 상훈님).
+      //   → 옛 화면 px(193.2 / 144.9)을 그대로 두려고 새 K 기준으로 다시 나눈 값이다:
+      //     0.60 x (322.06/342.36) = 0.565 · 0.45 x (322.06/342.36) = 0.423
+      //   ⚠️ 여기 대신 `Room.tsx` 의 K_SCREEN 을 건드리면 **아이가 6.3% 작아진다.** 그쪽은 안 만진다.
       { n: 1, key: "trash_1", ver: 1, file: "trash_1.v1.webp", ratio: 0.301, srcW: 178, srcH: 247 },
       { n: 2, key: "trash_2", ver: 1, file: "trash_2.v1.webp", ratio: 0.735, srcW: 435, srcH: 315 },
-      { n: 3, key: "trash_3", ver: 1, file: "trash_3.v1.webp", ratio: 0.9408, srcW: 557, srcH: 362, sinkK: 0.60 },
-      { n: 4, key: "trash_4", ver: 1, file: "trash_4.v1.webp", ratio: 1.169, srcW: 692, srcH: 273, sinkK: 0.45 },
+      { n: 3, key: "trash_3", ver: 1, file: "trash_3.v1.webp", ratio: 0.9408, srcW: 557, srcH: 362, sinkK: 0.565 },
+      { n: 4, key: "trash_4", ver: 1, file: "trash_4.v1.webp", ratio: 1.169, srcW: 692, srcH: 273, sinkK: 0.423 },
     ],
   },
   /** 아이 밑에 깔린다 — 캐릭터보다 먼저 그린다. 아랫변이 발끝선보다 K×0.02 아래. */
