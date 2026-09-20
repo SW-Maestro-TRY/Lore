@@ -775,7 +775,9 @@ export function useYeoul(live?: Live) {
   }, [patch, later]);
 
   const closeFire = useCallback(() => patch({ fire: null }), [patch]);
-  const openChat = useCallback(() => { lastSel.current = Date.now(); patch({ chatOpen: true, popOpen: false, toast: '' }); }, [patch]);
+  // ★ 대화를 **열 때** 지난 판의 내 말을 비운다 — 내 말이 안 사라지게 바꿨으므로(→ `pushReply`)
+  //   비우는 자리를 한 곳으로 옮긴 것이다. 한 판 안에서는 주고받은 두 줄이 그대로 남는다.
+  const openChat = useCallback(() => { lastSel.current = Date.now(); patch({ chatOpen: true, popOpen: false, toast: '', mine: '' }); }, [patch]);
   const closeChat = useCallback(() => {
     lastSel.current = Date.now();
     patch({ chatClosing: true });
@@ -1038,8 +1040,9 @@ export function useYeoul(live?: Live) {
     if (onServerRef.current) {
       // ★ 보내면 잠그고 기다린다(계약 10절). 아이가 돌려주는 말도, 그때 짓는 자세도 서버가 정한다.
       //   화면이 미리 답을 띄우지 않는다 — 그러면 서버 말이 왔을 때 두 번 말한 꼴이 된다.
+      // ★ 내 말은 **안 사라진다**(2026-09-20). 예전엔 4.2초 뒤 지워서, 아이 답이 오는 사이에
+      //   내가 뭐라고 했는지가 화면에서 없어졌다. 다음 부름을 열 때(`openChat`) 비운다.
       patch({ draft: '', mine: text });
-      later('mine', 4200, () => setS((w) => ({ ...w, mine: '' })));
       void (async () => {
         const r = await liveRef.current?.sendChat(text);
         if (!r) return;
@@ -1066,10 +1069,9 @@ export function useYeoul(live?: Live) {
         cChat: v.cChat + 1,
       };
     });
-    later('mine', 4200, () => setS((v) => ({ ...v, mine: '' })));
     careAct('reply');
     tutorDone('chat');
-  }, [later, act, careAct, tutorDone, patch, flash]);
+  }, [act, careAct, tutorDone, patch, flash]);
   /**
    * 보내기.
    *
@@ -1917,6 +1919,8 @@ export function useYeoul(live?: Live) {
         show: s.screen === 'room' && (s.chatOpen || s.chatClosing) && !s.sheet,
         anim: s.chatClosing ? 'yPopOut .17s ease forwards' : 'yPopIn .2s cubic-bezier(.2,.9,.25,1)',
         hasMine: !!s.mine, mine: s.mine, draft: s.draft,
+        // 입력칸 위에 남기는 '아이 말' 한 줄. 무대 말풍선과 **같은 문장**이다(출처 하나).
+        hasLine: !!chatLine, line: chatLine ?? '',
         // 열린 부름이 없으면 적을 곳을 잠그고 **언제 다시 부르는지**만 알려 준다.
         // 이건 아이의 말이 아니라 화면의 안내라, 아이 말풍선이 아니라 입력칸에 둔다.
         can: canAnswer && !live?.chatting,

@@ -24,11 +24,13 @@ import { C, GAEGU, MONO, radius } from './ui';
 import Album from './Album';
 import Panels from './Panels';
 import FeedbackSheet from '../FeedbackSheet';
-import { spriteUrl, useFootPad, useLive, yeoulSpriteUrl } from './useHatch';
+import { spriteUrl, useFootPad, useHeadPad, useLive, useSideEdges, yeoulSpriteUrl } from './useHatch';
 import { useIsWide } from '../useIsWide';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
 import { charFit, HEAD_SAFE, FOOT_FLOOR, FOOT_FLOOR_SHORT, NARROW_Q, SHORT_Q } from '../props/layout';
+import { propUrl } from '../props/spec';
+import { useRoomPlan, type RoomPlan } from './roomPlan';
 import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
 import {
   SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose, stageAt, stagePlanOf,
@@ -44,6 +46,9 @@ const SWEEP_ROW_ID = '__sweep__';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
+  // ★ 방 화면 UX 안 1·2·3 의 **유일한 갈림길**. 표는 `./roomPlan` 한 곳에 있고 여기서는
+  //   불린만 읽는다 — 한 안으로 정해지면 그 불린을 고정값으로 접으면 끝이다.
+  const plan = useRoomPlan();
   // 좁은 폰(SE)에서 말풍선이 떴을 때만, 머리 위 공간을 벌기 위해 아이를 소폭 낮춘다(아래 SIL).
   const narrow = useIsWide(NARROW_Q);
   // ★ 좁고 **짧은** 화면(SE 667 등)만 — 팝오버를 콤팩트하게 줄이고 발끝선 예약(LIFT 하한)을 낮춰 아이를 키운다.
@@ -74,6 +79,9 @@ export default function Room({ y }: { y: Yeoul }) {
   const charSrc = brokenSrc.has(wantSrc) ? fallbackSrc : wantSrc;
   // 발밑 여백은 그림마다 다르다 — 상수로 두면 어떤 아이는 뜨고 어떤 아이는 잠긴다.
   const footPad = useFootPad(charSrc, SPRITE_FOOT_PAD);
+  // 머리 위 여백·좌우 가장자리도 **그림에서 잰다** — 아래 `headSpan`·`silLeft` 참조.
+  const headPad = useHeadPad(charSrc, SPRITE_FOOT_PAD);
+  const sideEdges = useSideEdges(charSrc, SPRITE_FOOT_PAD);
 
   // ── 소품 오버레이 ─────────────────────────────────────────────────────
   //
@@ -122,10 +130,22 @@ export default function Room({ y }: { y: Yeoul }) {
     }
     : null;
   const table = signalRow ? [...propTable, signalRow] : propTable;
+  /**
+   * ★ **같은 말을 두 언어로 하지 않는다**(2026-09-20 · 재설계안 H5).
+   *   종이 말풍선(글)이 떠 있는 동안에는 머리 옆 만화 말풍선(`bubble_*` — 느낌표·물음표·음표…)을 끈다.
+   *   둘이 같이 뜨면 "아이가 말한다" 를 두 가지 문법으로 동시에 말해 화면이 번잡해진다.
+   *   무대에 종이 말풍선이 없는 안 3(말띠)에서는 만화 말풍선이 **유일한 언어**라 그대로 둔다.
+   */
+  const mutedBubbleProps = useMemo(
+    () => new Set(table.filter((r) => (r.prop ?? '').startsWith('bubble_')).map((r) => r.id)),
+    [table],
+  );
+  const speaking = plan.speech === 'pet' && v.bub.show;
   const scene = {
     pose: v.spriteKey,
     // 걷힘 바퀴에는 **덮고 있던 줄을 끈다** — 안 끄면 첫 단계로 되돌아가 다시 덮인다.
     active: (sweeping && v.scene.act ? active.filter((id) => id !== v.scene.act) : active)
+      .filter((id) => !(speaking && mutedBubbleProps.has(id)))
       .concat(signalRow ? [SWEEP_ROW_ID] : []),
     stages: {
       trash: v.scene.trash,
@@ -174,35 +194,64 @@ export default function Room({ y }: { y: Yeoul }) {
   const charBoxRef = useRef<HTMLDivElement>(null);
   const byK = anchors.source === 'server' || v.sample.show;
 
-  // ★ 말풍선 공간 예약(2026-09-16) — SE(좁은 폰)에서 짧은 무대는 머리끝이 무대 위끝 바로 아래에
-  //   서서, 머리 위에 말풍선 한 줄도 안 들어가 윗부분이 잘렸다(실측 SE: 머리 위 44px뿐). **말풍선이
-  //   떴을 때만** 남은 높이에서 이만큼을 더 빼 아이를 낮춰, 서브헤더~머리 사이에 말풍선(2~3줄)이
-  //   전부 들어오게 한다. 메시지 가독이 최우선이라 아이를 소폭 양보한다. 넓은/긴 화면은 아래
-  //   `max(60%,150px)` 가 이겨 예약이 무시되므로 아이가 안 줄어든다(짧은 화면에서만 적용).
-  // ★ 짧은 화면(`compact`)은 발끝선을 낮춰 머리도 그만큼 내려와 머리 위 공간이 이미 늘었다 →
-  //   말풍선 예약을 76→50px 로 줄여 아이를 덜 깎는다(말풍선 2~3줄은 여전히 무대 안에 들어온다 — 실측
-  //   SE 2줄에서 무대 위끝 안쪽 여유 확보). 좁지만 긴 폰(390x844 등)은 예전대로 76px — 안 건드린다.
-  const BUBBLE_RESERVE = v.bub.show ? (compact ? 50 : narrow ? 76 : 0) : 0;
+  // ★ 말풍선 자리 — **화면 폭으로 가르지 않는다**(2026-09-20 재설계 · 안 1).
+  //
+  //   예전엔 `max-width: 640` 인 좁은 폰에서만 머리 위 자리를 예약하고(`BUBBLE_RESERVE`),
+  //   주석에 *"넓은/긴 화면은 이미 여유가 있어 예약이 무시된다"* 고 적어 두었다.
+  //   **실측은 정반대였다**(2026-09-20 · `방화면-UX-재설계안-0920.md` C-2):
+  //     · 1200x844 진짜 방 — 4자 한마디 **27.9px**, 18자 55.6px, 42자 **83.3px** 잘림
+  //     · 390x844 진짜 방 — 42자에서만 10.9px · 375x667 연습방 — 42자 57.3px
+  //   넓은 화면일수록 아이가 무대의 60%로 크게 서서 머리 위에 22px밖에 안 남기 때문이다.
+  //   즉 **잘림이 가장 심한 곳이 예약을 안 걸던 화면**이었다.
+  //
+  //   이제 갈림은 아래 `Bubble` 이 **그 말풍선이 실제로 몇 px 인지 재서** 정한다.
+  //     1) 머리 위에 들어가면 그대로 머리 위       → 아이 크기 그대로
+  //     2) 안 들어가면 **머리 옆**으로 비킨다        → 아이 크기 그대로(PC 는 아이 양옆에 180px 넘게 남는다)
+  //     3) 위도 옆도 없으면(좁고 짧은 폰) 그때만     → 아이를 **딱 모자란 만큼** 낮춘다
+  //   그래서 넓은 화면에서 아이가 공연히 줄지 않고, 좁은 화면에서도 필요 이상 줄지 않는다.
+  const [bubbleHeadroom, setBubbleHeadroom] = useState(0);
+  //   안 3 은 말이 무대 밖 말띠로 나가므로 머리 위를 살 이유가 없다 — 늘 최소 여유뿐이다.
+  const HEADROOM = plan.speech === 'pet' ? Math.max(HEAD_SAFE, bubbleHeadroom) : HEAD_SAFE;
   // 화면에서의 실루엣 키. **무대의 약 60%** 를 목표로 하되, 머리끝이 무대 위로 안 넘게 남은 높이로 깎는다.
   //   `SIL` 은 가장 큰 자세의 실루엣이 화면에서 가질 높이다(무대 60%, 하한 150px, 머리 공간으로 상한).
   //   K_SCREEN = SIL ÷ (가장 큰 실루엣÷K) — 이렇게 뒤집어야 어떤 자세든 무대 밖으로 안 나간다.
-  const SIL = `min(calc(100% - ${LIFT} - ${HEAD_SAFE}px - ${BUBBLE_RESERVE}px), max(60%, 150px))`;
+  const silOf = (pad: number) => `min(calc(100% - ${LIFT} - ${pad}px), max(60%, 150px))`;
+  const SIL = silOf(HEADROOM);
   const K_SCREEN = `calc(${SIL} / ${fit.tallestPerK.toFixed(4)})`;
-  const CHAR_H = byK
-    ? `calc(${K_SCREEN} * ${fit.boxHPerK.toFixed(4)})`
-    : `calc(min(calc(100% - ${LIFT} - ${HEAD_SAFE}px - ${BUBBLE_RESERVE}px), max(64%, 160px)) / ${(1 - footPad).toFixed(4)})`;
+  const boxHOf = (pad: number) => (byK
+    ? `calc(${silOf(pad)} / ${fit.tallestPerK.toFixed(4)} * ${fit.boxHPerK.toFixed(4)})`
+    : `calc(min(calc(100% - ${LIFT} - ${pad}px), max(64%, 160px)) / ${(1 - footPad).toFixed(4)})`);
+  const CHAR_H = boxHOf(HEADROOM);
+  /** 말풍선이 자리를 사기 **전**의 아이 상자. 말풍선 자리 계산의 기준자다(→ `Bubble` 머리말). */
+  const CHAR_H_FREE = boxHOf(HEAD_SAFE);
   // 발끝이 발끝선(`LIFT`)에 오게 상자를 내린다. 앵커가 있으면 **그 자세의 발끝**을, 없으면 잰 여백을 쓴다.
   const BELOW_FOOT = byK ? fit.belowFoot : footPad;
   const CHAR_ASPECT = byK ? `${fit.aspect.toFixed(6)}` : '313/350';
 
-  // ★ 말풍선은 **머리끝 자리**를 계산해 그 위에 띄운다(2026-09-16). 예전엔 무대 위끝에서 고정 px
-  //   (샘플 96 · 진짜 12)이라, 화면이 짧거나 아이가 뛰면(`yHop` 최대 30px) 머리가 그 자리로 올라와
-  //   얼굴을 덮었다. 이제 자세·화면 크기에 따라 머리끝을 따라가므로 어느 폭에서도 얼굴을 안 덮는다.
+  // ★ 말풍선은 **머리끝 자리**를 계산해 그 옆이나 위에 띄운다(2026-09-16 · 2026-09-20 개정).
   //   머리끝(무대 아래 기준) = 발끝선(LIFT) + 상자세로(CHAR_H) × (그 자세 머리끝→발끝 / 캔버스세로).
-  //   그 위로 여유(뜀·흔들림 흡수)를 두고 **아래를 그 자리에 붙여** 위로 자란다(짧은 화면에서 위가 잘려도
-  //   얼굴은 안 덮는 쪽을 고른다). 여유 14px = 흔들림(yBob 4px)을 늘 덮고 뜀의 첫 구간까지 받는다.
-  const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${fit.headSpanPerBoxH.toFixed(4)})`;
-  const BUBBLE_BOTTOM = `calc(${headTopFromBottom} + 14px)`;
+  //   예전엔 이 자리에 **가만히** 떠 있고 여유가 14px 뿐이라, 아이가 뛰면(`yHop` 30 + `yBob` 4)
+  //   얼굴을 최대 26.0px 덮었다. 이제 말풍선이 **같은 뜀을 같이 타서** 간격이 안 변한다(→ `Bubble`).
+  //
+  // ★ **머리끝은 앵커표만 믿으면 안 된다**(2026-09-20). 서버 앵커가 없는 아이(옛 펫·목·연습 전)는
+  //   고정 앵커표로 잡는데, 그 표는 **옛 판 그림**에서 잰 값이라 지금 그림과 어긋난다.
+  //   실측(진짜 방 1200, 고정 앵커 + v7 그림): 표가 말하는 머리끝이 실제보다 44.5px 아래여서
+  //   말풍선이 그만큼 얼굴을 덮었다. 그래서 앵커를 못 믿는 경우에는 발밑과 **같은 방법**으로
+  //   그림에서 직접 잰 여백(`headPad`·`footPad`)으로 실루엣 높이를 잡는다.
+  const headSpan = byK
+    ? fit.headSpanPerBoxH
+    : Math.max(0.2, 1 - footPad - headPad);
+  /** 정수리 ↔ 머리 옆선 사이(상자 세로 대비). 머리 모양의 상수라 표 값을 그대로 쓴다. */
+  const headSideDrop = Math.max(0, fit.headSpanPerBoxH - fit.headSidePerBoxH);
+  // 실루엣 좌·우도 같은 이유로 갈린다 — 앵커를 믿을 수 있으면 표, 아니면 그림에서 잰 값.
+  const silLeft = byK ? fit.silLeftPerBoxW : sideEdges.left;
+  const silRight = byK ? fit.silRightPerBoxW : sideEdges.right;
+  const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${headSpan.toFixed(4)})`;
+  /** 얼굴 높이(머리 옆선). 머리 옆으로 비킨 말풍선의 세로 한가운데를 여기에 맞춘다. */
+  const faceFromBottom = `calc(${LIFT} + ${CHAR_H} * ${Math.max(0, headSpan - headSideDrop).toFixed(4)})`;
+  /** 무대와 **자리를 사기 전 아이 상자**를 재는 두 손잡이 — 말풍선이 이 둘로 자리를 정한다. */
+  const stageRef = useRef<HTMLDivElement>(null);
+  const charProbeRef = useRef<HTMLDivElement>(null);
 
   return (
     <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
@@ -234,7 +283,12 @@ export default function Room({ y }: { y: Yeoul }) {
       />
 
       {/* ── 무대 ───────────────────────────────────────────────── */}
+      {/* 안 3 — 아이 말을 무대 **밖** 고정 말띠로 올린다. 무대가 그만큼 낮아지고, 잘림·겹침이
+          구조적으로 불가능해지는 대신 꼬리가 없어 "나에게 말한다" 가 가장 약하다(그게 안 3 이다). */}
+      {plan.speech === 'band' && <SpeechBand y={y} />}
+
       <div
+        ref={stageRef}
         data-part="stage"
         onClick={actions.closePop}
         style={{
@@ -263,6 +317,22 @@ export default function Room({ y }: { y: Yeoul }) {
             **아래**로 내려가 아이가 바닥 위 허공에 뜨고 그 아래 바닥이 텅 비어 보였다. 이제 경계를
             발끝선보다 한 뼘 위(무대 8%, 28~90px)로 올려 아이가 언제나 바닥에 발을 딛는다. */}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `calc(${LIFT} + clamp(28px, 8%, 90px))`, background: v.st.floor, borderTop: '1px solid rgba(74,64,56,.09)' }} />
+
+        {/* 안 2 — 바닥에 방의 물건을 놓는다(러그·밥그릇·화분). **안 2 에서만** 그린다.
+            새 그림을 발주하지 않고 이미 있는 에셋(매트·주먹밥 그릇·화분)을 바닥 소품으로 쓴다. */}
+        {plan.floorProps && <FloorProps lift={LIFT} />}
+
+        {/* ★ 말풍선 자리 계산의 **기준자**. 눈에 안 보이고 아무것도 안 덮는다.
+            말풍선이 아이를 낮추면(위 `HEADROOM`) 아이 상자가 줄어드는데, 그 줄어든 상자로 다시
+            자리를 재면 값이 서로를 쫓아 출렁인다. 그래서 **자리를 사기 전 상자**를 따로 하나 둔다. */}
+        <div
+          ref={charProbeRef} aria-hidden data-part="char-probe"
+          style={{
+            position: 'absolute', left: '50%', bottom: LIFT, height: CHAR_H_FREE,
+            aspectRatio: CHAR_ASPECT, transform: 'translateX(-50%)',
+            visibility: 'hidden', pointerEvents: 'none',
+          }}
+        />
 
         {/* 그림자 — 캐릭터와 같은 걸음으로 움직인다. */}
         <div style={{
@@ -363,17 +433,15 @@ export default function Room({ y }: { y: Yeoul }) {
             사라져 "화면 깨짐"으로 읽힘)를 걷어냈다. backdrop 을 못 그리는 곳에서도 옅은 냉기 톤은 남는다. */}
         {v.st.sick && <div style={{ position: 'absolute', inset: 0, backdropFilter: 'saturate(.45)', WebkitBackdropFilter: 'saturate(.45)', background: 'rgba(140,144,156,.12)', animation: 'yFadeIn .4s ease', pointerEvents: 'none' }} />}
 
-        {v.bub.show && (
-          <div data-part="bubble" style={{
-            position: 'absolute', left: '50%', bottom: BUBBLE_BOTTOM, zIndex: 3, width: 280, marginLeft: -140,
-            display: 'flex', justifyContent: 'center',
-            animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
-          }}>
-            <div style={{ position: 'relative', maxWidth: '100%', background: C.paper, border: '1px solid rgba(74,64,56,.13)', borderRadius: radius.md, padding: '9px 15px', boxShadow: '0 4px 14px rgba(74,64,56,.12)', textAlign: 'center', animation: 'yPop .28s ease' }}>
-              <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.3, color: C.ink }}>{v.bub.text}</span>
-              <div style={{ position: 'absolute', left: '50%', bottom: -6, transform: 'translateX(-50%) rotate(45deg)', width: 11, height: 11, background: C.paper, borderRight: '1px solid rgba(74,64,56,.13)', borderBottom: '1px solid rgba(74,64,56,.13)' }} />
-            </div>
-          </div>
+        {/* 안 1·2 — 말풍선이 **아이에게 붙어** 같은 걸음·같은 뜀을 탄다. */}
+        {plan.speech === 'pet' && (
+          <Bubble
+            show={v.bub.show} text={v.bub.text} play={v.st.play}
+            headSpan={headSpan} faceSpan={Math.max(0, headSpan - headSideDrop)}
+            silLeft={silLeft} silRight={silRight}
+            headBottom={headTopFromBottom} faceBottom={faceFromBottom}
+            stageRef={stageRef} probeRef={charProbeRef} onHeadroom={setBubbleHeadroom}
+          />
         )}
 
         {v.hearts.show && (
@@ -388,63 +456,30 @@ export default function Room({ y }: { y: Yeoul }) {
             셸 크림색이라 무대 바닥(탄색)과 사이에 크림 띠 seam 이 생겨 "빈 베이지 띠"로 보였다.
             위 38px 를 바닥 톤에서 셸로 풀어 seam 을 없애고 방 바닥이 타일까지 자연스럽게 내려오게 한다. */}
       <div onClick={actions.bottomTap} style={{ position: 'relative', flex: 'none', padding: '10px 12px 22px', background: `linear-gradient(180deg, ${v.st.floor} 0, ${C.shell} 38px)` }}>
-        {v.fab.show && <ChatFab y={y} />}
-        {v.mini.show && <MiniCard y={y} />}
-        {v.medFab.show && (
-          <button
-            onClick={(e) => { e.stopPropagation(); actions.onMed(); }}
-            disabled={v.medFab.off} data-action="med"
-            style={{
-              position: 'absolute', right: 72, bottom: 116, zIndex: 4, width: 48, height: 48, borderRadius: '50%',
-              border: `2px solid ${C.accent}`, background: C.paper, boxShadow: '0 4px 14px rgba(74,64,56,.14)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'yBlink 1.3s ease-in-out infinite',
-            }}
-            aria-label="약 주기"
-          >
-            <span style={{ position: 'relative', width: 30, height: 16, display: 'block' }}>
-              <span style={{ position: 'absolute', inset: 0, border: `2px solid ${C.accent}`, borderRadius: radius.pill, background: `linear-gradient(90deg,${C.accent} 0 50%,${C.paper} 50% 100%)` }} />
-            </span>
-          </button>
-        )}
+        {/* ★ 토스트는 **지금 아래에 떠 있는 것 바로 위**에 띄운다(2026-09-20 · 재설계안 H6).
+            예전엔 미니카드와 같은 상자 안에서 `bottom:100%` 라 좌하단에서 둘이 26px 겹쳤다.
+            이제 부모를 바꿔 자리를 가른다 — 겹침 규칙을 새로 두지 않는다.
+            · 안 1·2 = 선반·대화·팝오버가 **떠 있는 칸 안**에 두어 그 위로 뜬다.
+            · 안 3 = 아래가 흐름 속 독이라 떠 있는 칸이 비어 있다 → 컨트롤 영역 통째로 위에 둔다. */}
+        {plan.dock && v.toast.show && <Toast text={v.toast.text} />}
 
         <div style={{ position: 'absolute', left: 12, right: 12, bottom: 116, zIndex: 5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
           {v.ask.show && <AskCard y={y} />}
-          {v.chat.show && <ChatBar y={y} />}
-          {v.toast.show && (
-            <div style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', marginBottom: 9, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
-              <span style={{ background: 'rgba(74,64,56,.92)', color: '#FBF6EC', borderRadius: radius.pill, padding: '7px 16px', fontSize: 12, animation: 'yFadeIn .2s ease' }}>{v.toast.text}</span>
-            </div>
-          )}
+          {/* 안 1·2 — 발밑 빈 땅(진짜 방 194.8px = 세로 23.1%)에 놓는 **낮은 선반**.
+              구석에 따로 떠 있던 셋(다음 배울 것·약·대화)이 여기 한 줄로 앉는다. */}
+          {plan.shelf && <Shelf y={y} />}
+          {v.chat.show && <ChatBar y={y} plan={plan} />}
+          {!plan.dock && v.toast.show && <Toast text={v.toast.text} />}
           {v.pop.show && <Popover y={y} compact={compact} />}
         </div>
 
-        <div data-part="tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 6 }}>
-          {v.tiles.map((r) => (
-            <button
-              key={r.key} data-room={r.key}
-              onClick={(e) => { e.stopPropagation(); r.pick(); }}
-              style={{
-                position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
-                padding: '11px 4px 10px', borderRadius: radius.md,
-                borderStyle: 'solid', borderWidth: r.bw, borderColor: r.bd, background: r.tileBg, animation: r.anim,
-                // 자는 동안은 눌러도 안 열린다(판정 13). 눌리는 것처럼 보이지 않게 흐리게.
-                opacity: r.dim ? 0.45 : 1,
-              }}
-            >
-              <span style={{ position: 'relative', width: 26, height: 26, flex: 'none', color: r.fg }}>
-                {r.layers.map((p, i) => <span key={i} style={cssText(p)} />)}
-              </span>
-              <span style={{ fontSize: 12, lineHeight: 1, letterSpacing: '.01em', color: r.fg }}>{r.label}</span>
-              {r.hasBadge && (
-                <span style={{
-                  position: 'absolute', top: -5, right: -3, minWidth: 18, height: 18, padding: '0 4px', boxSizing: 'border-box',
-                  borderRadius: 9, background: C.paper, border: '1px solid rgba(74,64,56,.16)',
-                  font: `9.5px ${MONO}`, color: C.sub2, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>{r.badge}</span>
-              )}
-            </button>
-          ))}
-        </div>
+        {/* 안 3 — 아래를 타일과 **한 덩어리**인 컨트롤 독으로. 빈 땅 개념 자체가 없어진다. */}
+        {plan.dock ? (
+          <div data-part="dock" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 9, borderRadius: radius.lg, background: C.paper, border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.10)' }}>
+            <Shelf y={y} inDock />
+            <Tiles y={y} />
+          </div>
+        ) : <Tiles y={y} />}
       </div>
 
       <Album y={y} />
@@ -454,6 +489,333 @@ export default function Room({ y }: { y: Yeoul }) {
 }
 
 // ── 조각들 ──────────────────────────────────────────────────────────────
+
+// ── 안 1·2 — 아이에게 붙는 말풍선 ────────────────────────────────────────
+//
+// ★ 지키는 것 하나 — **"아이가 나에게 말한다"**. 그래서 꼬리는 어디에 뜨든 아이를 가리키고,
+//   말풍선은 아이와 **같은 걸음(`yWander`)·같은 뜀(`yHop`)** 을 탄다(새 키프레임은 안 만든다).
+// ★ 껍데기는 **말이 없을 때도 늘 붙어 있다.** 늦게 붙으면 CSS 애니메이션이 그때부터 시작해
+//   아이와 박자가 어긋난다 — 그러면 같은 키프레임을 타도 걸음·뜀이 따로 논다.
+// ★ 자리는 세 가지고, 위에서부터 고른다(실측으로 판정 — 재설계안 E-1).
+//   1) 머리 위        : 아래끝을 머리끝 20px 위에 붙이고 위로 자란다
+//   2) 머리 옆        : 1)이 무대 위끝(+8px)을 넘길 때. 여백이 큰 쪽, 세로는 얼굴 높이
+//   3) 머리 위 + 양보 : 옆에도 자리가 없을 때만(좁고 짧은 폰) 아이를 **딱 모자란 만큼** 낮춘다
+//   어느 쪽이든 무대 밖으로 나가는 경우가 없으므로 **잘림은 0** 이다.
+
+/** 머리끝 ↔ 말풍선 아래끝. 숨쉬기(`yBob` 4px)를 늘 덮고도 남는다(예전 14px). */
+const BUBBLE_GAP = 20;
+/** 무대 위끝에서 남기는 최소 여유. 이 값이 지켜지는 한 잘림은 0 이다. */
+const BUBBLE_EDGE = 8;
+/** 아이 옆에 말풍선을 놓을 수 있는 최소 폭. 이보다 좁으면 두세 글자씩 끊겨 오히려 못 읽는다. */
+const BUBBLE_SIDE_MIN = 132;
+const BUBBLE_MAX_W = 280;
+/** 걸음(`yWander`)의 좌우 진폭. 옆자리는 **가장 불리한 쪽**으로 재야 걸어가도 안 잘린다. */
+const WANDER = 30;
+/**
+ * 뜀(`yHop`)의 위쪽 진폭. 말풍선이 **아이와 같이 뛰므로** 그만큼 위로 올라간다 —
+ * 위 여유를 이만큼 더 잡아 두지 않으면 **뛰는 순간에만** 윗변이 잘린다(2026-09-20 실측:
+ * 연습방 1200 에서 21.6px, 390 에서 22.4px). 겹침을 없앤 대가로 생기는 몫이라 여기서 갚는다.
+ */
+const HOP = 31;
+const BUBBLE_LINE = '1px solid rgba(74,64,56,.13)';
+
+type BubblePlace =
+  | { at: 'above'; w: number; left: number }
+  | { at: 'side'; w: number; left: number; top: number; tail: number; side: 'left' | 'right' };
+
+function Bubble({
+  show, text, play, headSpan, faceSpan, silLeft, silRight,
+  headBottom, faceBottom, stageRef, probeRef, onHeadroom,
+}: {
+  show: boolean; text: string; play: string;
+  /** 발끝선 ↔ 정수리 · 발끝선 ↔ 얼굴선 (상자 세로 대비). 무대 px 로 옮기는 건 여기서 한다. */
+  headSpan: number; faceSpan: number;
+  /** 실루엣 좌·우 가장자리(상자 가로 대비). 아이 옆에 자리가 얼마나 남았는지 잰다. */
+  silLeft: number; silRight: number;
+  headBottom: string; faceBottom: string;
+  stageRef: React.RefObject<HTMLDivElement | null>;
+  probeRef: React.RefObject<HTMLDivElement | null>;
+  onHeadroom: (px: number) => void;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<BubblePlace>({ at: 'above', w: BUBBLE_MAX_W, left: -BUBBLE_MAX_W / 2 });
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    const probe = probeRef.current;
+    if (!stage || !probe) return undefined;
+    const measure = () => {
+      const card = cardRef.current;
+      if (!card) { onHeadroom(0); return; }
+      const st = stage.getBoundingClientRect();
+      const pb = probe.getBoundingClientRect();
+      if (!st.height || !pb.height) return;
+      // 기준자(`char-probe`)는 **말풍선이 자리를 사기 전** 아이 상자다 — 줄어든 상자로 다시 재면
+      // 두 값이 서로를 쫓아 출렁인다. 그래서 여기서 읽는 머리·발·폭은 전부 '양보 전' 값이다.
+      const lift = st.bottom - pb.bottom;
+      const headTopY = st.height - (lift + pb.height * headSpan);
+      const faceY = st.height - (lift + pb.height * faceSpan);
+      const boxL = (st.width - pb.width) / 2;
+      const silL = boxL + pb.width * silLeft;
+      const silR = boxL + pb.width * silRight;
+
+      // 1) 머리 위 — 뜀(HOP)까지 미리 갚아 둔다. 안 그러면 **뛰는 순간에만** 윗변이 잘린다.
+      const aboveW = Math.min(BUBBLE_MAX_W, Math.round(st.width - 32));
+      card.style.width = `${aboveW}px`;
+      const aboveH = card.offsetHeight;
+      const need = aboveH + BUBBLE_GAP + BUBBLE_EDGE + HOP;
+      if (need <= headTopY) {
+        setPlace({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
+        onHeadroom(0);
+        return;
+      }
+
+      // 2) 머리 옆 — 여백이 큰 쪽. 걸어가도 안 잘리게 진폭(WANDER)을 미리 뺀다.
+      const gapL = silL - WANDER;
+      const gapR = st.width - silR - WANDER;
+      const side: 'left' | 'right' = gapR >= gapL ? 'right' : 'left';
+      const sideW = Math.min(BUBBLE_MAX_W, Math.floor(Math.max(gapL, gapR) - 12));
+      if (sideW >= BUBBLE_SIDE_MIN) {
+        card.style.width = `${sideW}px`;
+        const h = card.offsetHeight;
+        // 옆자리도 같이 뛴다 — 위쪽은 HOP 만큼 더 물리고, 아래는 숨쉬기(yBob 4px)만 본다.
+        const topMin = BUBBLE_EDGE + HOP;
+        const top = Math.min(
+          Math.max(faceY - h / 2, topMin),
+          Math.max(topMin, st.height - BUBBLE_EDGE - 4 - h),
+        );
+        const inner = Math.round((side === 'right' ? silR - st.width / 2 : st.width / 2 - silL) + 10);
+        setPlace({
+          at: 'side', w: sideW, side,
+          left: side === 'right' ? inner : -(inner + sideW),
+          top: Math.round(top - faceY),
+          tail: Math.round(Math.min(Math.max(faceY - top, 16), Math.max(16, h - 16))),
+        });
+        onHeadroom(0);
+        return;
+      }
+
+      // 3) 위도 옆도 없다(좁고 짧은 폰) — 그때만 아이가 **딱 모자란 만큼** 자리를 내준다.
+      card.style.width = `${aboveW}px`;
+      setPlace({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
+      onHeadroom(Math.ceil(need));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(stage);
+    ro.observe(probe);
+    return () => ro.disconnect();
+  }, [show, text, headSpan, faceSpan, silLeft, silRight, stageRef, probeRef, onHeadroom]);
+
+  const tailBase: React.CSSProperties = {
+    position: 'absolute', width: 11, height: 11, background: C.paper,
+  };
+
+  return (
+    <div
+      data-part="bubble-box"
+      style={{
+        position: 'absolute', left: '50%', bottom: place.at === 'above' ? headBottom : faceBottom,
+        width: 0, height: 0, zIndex: 3,
+        animation: 'yWander 21s ease-in-out infinite', animationPlayState: play,
+      }}
+    >
+      <div style={{
+        position: 'absolute', left: 0, bottom: 0, width: 0, height: 0,
+        animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: play,
+      }}>
+        {show && (
+          <div
+            ref={cardRef} data-part="bubble" data-place={place.at}
+            style={{
+              position: 'absolute', boxSizing: 'border-box', left: place.left, width: place.w,
+              ...(place.at === 'above' ? { bottom: BUBBLE_GAP } : { top: place.top }),
+              background: C.paper, border: BUBBLE_LINE, borderRadius: radius.md,
+              padding: '9px 15px', boxShadow: '0 4px 14px rgba(74,64,56,.12)',
+              textAlign: place.at === 'above' ? 'center' : 'left',
+              animation: 'yPop .28s ease',
+            }}
+          >
+            <span style={{ fontFamily: GAEGU, fontSize: 19, lineHeight: 1.3, color: C.ink }}>{text}</span>
+            {/* 꼬리는 **언제나 아이를 가리킨다** — 위면 아래 한가운데, 옆이면 아이 쪽 옆면 얼굴 높이. */}
+            {place.at === 'above' ? (
+              <div style={{ ...tailBase, left: '50%', bottom: -6, transform: 'translateX(-50%) rotate(45deg)', borderRight: BUBBLE_LINE, borderBottom: BUBBLE_LINE }} />
+            ) : place.side === 'right' ? (
+              <div style={{ ...tailBase, left: -6, top: place.tail, transform: 'translateY(-50%) rotate(45deg)', borderLeft: BUBBLE_LINE, borderBottom: BUBBLE_LINE }} />
+            ) : (
+              <div style={{ ...tailBase, right: -6, top: place.tail, transform: 'translateY(-50%) rotate(45deg)', borderRight: BUBBLE_LINE, borderTop: BUBBLE_LINE }} />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 안 3 — 아이 말을 **무대 밖 고정 말띠**로 올린다.
+ *
+ * ★ 잘림·겹침이 **구조적으로** 불가능해진다(무대가 자르는 상자 밖에 있고 아이와 안 겹친다).
+ * ★ 대신 꼬리가 없어 "아이가 나에게 말한다" 가 가장 약하다. 안 3 을 안 3 답게 보이려고
+ *   여기에 꼬리를 붙이지 않는다 — 상훈님이 그 차이를 눈으로 비교하시려는 것이다.
+ * ★ 자리를 **늘 차지한다**(말이 없어도). 있다 없다 하면 무대 높이가 출렁여 아이가 오르내린다.
+ */
+function SpeechBand({ y }: { y: Yeoul }) {
+  const { v } = y;
+  return (
+    <div
+      data-part="speech-band"
+      style={{
+        flex: 'none', margin: '0 12px 8px', boxSizing: 'border-box', minHeight: 46,
+        display: 'flex', alignItems: 'center', padding: '9px 15px', borderRadius: radius.md,
+        background: C.paper, border: `1px solid ${C.line}`,
+      }}
+    >
+      <span style={{ fontFamily: GAEGU, fontSize: 18, lineHeight: 1.3, color: v.bub.show ? C.ink : C.faint2 }}>
+        {v.bub.show ? v.bub.text : '…'}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * 안 2 — 바닥에 방의 물건을 놓는다(러그·밥그릇·화분).
+ *
+ * ★ **새 그림을 발주하지 않았다.** 이미 있는 에셋(매트·주먹밥 그릇·화분)을 바닥 소품으로 쓴다.
+ *   안 2 의 뜻("빈 땅이 덜 만든 화면이 아니라 방으로 읽힌다")을 눈으로 보는 데는 이걸로 충분하고,
+ *   채택되면 그때 전용 그림을 발주한다.
+ * ★ 아이 뒤(zIndex 1)에 깔린다. 상호작용은 없다(정본 불변 — 누를 수 있는 것을 늘리지 않는다).
+ */
+// ★ 크기는 **무대 폭의 %** 로 잡는다 — 아이 상자 높이(`CHAR_H`)를 그대로 못 쓴다. 그 식은 `100%`·`30%`
+//   같은 퍼센트를 품고 있고, 퍼센트는 `bottom` 에서는 높이, `width` 에서는 **폭**으로 풀려 같은 글이
+//   다른 값이 된다(실측: 폰에서 러그가 310px 이 아니라 119px 로 나왔다).
+// ★ `drop` 은 **제 높이에 대한 비율**(`translateY(%)` — 퍼센트가 제 크기로 푼다). 러그는 발끝선보다
+//   제 높이의 절반쯤 내려 깔아야 아이가 그 위에 선 것으로 읽히고, 그릇·화분은 발끝선에 얹는다.
+const FLOOR_PROPS: ReadonlyArray<{ key: string; ver: number; w: number; x: number; drop: number }> = [
+  { key: 'mat', ver: 1, w: 52, x: 50, drop: 45 },
+  { key: 'bowl_1', ver: 1, w: 9, x: 72, drop: 0 },
+  { key: 'prop_plant', ver: 1, w: 10, x: 86, drop: 0 },
+];
+function FloorProps({ lift }: { lift: string }) {
+  return (
+    <>
+      {FLOOR_PROPS.map((p) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={p.key} src={propUrl(p.key, p.ver)} alt="" aria-hidden data-floor-prop={p.key}
+          style={{
+            position: 'absolute', left: `${p.x}%`, bottom: lift, width: `${p.w}%`,
+            transform: `translate(-50%, ${p.drop}%)`,
+            zIndex: 1, pointerEvents: 'none',
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
+ * 발밑 선반 — 구석에 따로 떠 있던 셋(다음 배울 것 · 약 · 대화)을 **한 줄로 앉힌다**(안 1·2).
+ *
+ * ★ 왜 — 발끝 아래 194.8px(세로 23.1%)이 늘 비어 있었다. 잘못 비운 게 아니라(팝오버가 쓸 자리다)
+ *   **닫혀 있는 동안 아무도 안 쓰는 것**이 문제였다. 그래서 그 땅에 낮은 선반을 놓고 떠 있던 것을 앉힌다.
+ * ★ 표시 조건은 **하나도 안 바꿨다** — 팝오버·대화·시트가 열리면 셋이 각자 사라지고(`mini.show` 등)
+ *   선반도 같이 사라져 팝오버가 그 자리를 쓴다. 겹침 규칙을 새로 두지 않았다.
+ * ★ 안 3 은 이 줄이 **독 안(`inDock`)** 으로 들어가 타일과 한 덩어리가 된다 — 종이 한 겹을 벗는다.
+ */
+function Shelf({ y, inDock = false }: { y: Yeoul; inDock?: boolean }) {
+  const { v } = y;
+  if (!inDock && !(v.mini.show || v.medFab.show || v.fab.show)) return null;
+  // ★ **앉힐 것이 없으면 선반을 안 깐다.** 연습방에는 '다음 배울 것' 카드가 없어서, 종이 띠에 동그란
+  //   단추 하나만 놓이면 "덜 만든 줄" 로 읽혔다(실측 스크린샷). 그때는 단추만 제자리에 둔다.
+  const solid = !inDock && v.mini.show;
+  return (
+    <div
+      data-part="shelf" data-dock={inDock ? '1' : '0'} data-solid={solid ? '1' : '0'}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'flex-end', gap: 8,
+        // 독 안에서는 종이를 한 겹 벗는다 — 독 자체가 이미 종이다. 높이만 붙들어 둔다.
+        ...(inDock ? { minHeight: 52 } : {}),
+        ...(solid
+          ? {
+            padding: '8px 9px', borderRadius: radius.lg, background: C.paper,
+            border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.10)',
+          }
+          : {}),
+      }}
+    >
+      {v.mini.show ? <MiniCard y={y} /> : <span style={{ flex: 1 }} />}
+      {/* 종이가 없는 판에서도 단추는 오른쪽 끝에 붙는다(위 빈 칸이 밀어 준다). */}
+      {v.medFab.show && <MedChip y={y} />}
+      {v.fab.show && <ChatFab y={y} />}
+    </div>
+  );
+}
+
+/** 선반 칸 한 벌 — 셋이 같은 결이라야 한 줄로 읽힌다. */
+const slotChip: React.CSSProperties = {
+  flex: 'none', width: 46, height: 46, borderRadius: radius.md,
+  border: `1px solid ${C.lineHard}`, background: C.slot,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+};
+
+function MedChip({ y }: { y: Yeoul }) {
+  const { v, actions } = y;
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); actions.onMed(); }}
+      disabled={v.medFab.off} data-action="med" aria-label="약 주기"
+      style={{ ...slotChip, position: 'relative', borderColor: C.accent, animation: 'yBlink 1.3s ease-in-out infinite' }}
+    >
+      <span style={{ position: 'relative', width: 28, height: 15, display: 'block' }}>
+        <span style={{ position: 'absolute', inset: 0, border: `2px solid ${C.accent}`, borderRadius: radius.pill, background: `linear-gradient(90deg,${C.accent} 0 50%,${C.paper} 50% 100%)` }} />
+      </span>
+    </button>
+  );
+}
+
+/** 잠깐 뜨는 알림 한 줄. 자리는 **부모가 정한다**(→ 위 머리말) — 자기 자리를 스스로 안 고른다. */
+function Toast({ text }: { text: string }) {
+  return (
+    <div style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', marginBottom: 9, zIndex: 7, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+      <span data-part="toast" style={{ background: 'rgba(74,64,56,.92)', color: '#FBF6EC', borderRadius: radius.pill, padding: '7px 16px', fontSize: 12, animation: 'yFadeIn .2s ease' }}>{text}</span>
+    </div>
+  );
+}
+
+/** 돌보기 타일 다섯. 안 1·2 는 그대로 아래에, 안 3 은 컨트롤 독 **안**에 들어간다. */
+function Tiles({ y }: { y: Yeoul }) {
+  return (
+    <div data-part="tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 6 }}>
+      {y.v.tiles.map((r) => (
+        <button
+          key={r.key} data-room={r.key}
+          onClick={(e) => { e.stopPropagation(); r.pick(); }}
+          style={{
+            position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+            padding: '11px 4px 10px', borderRadius: radius.md,
+            borderStyle: 'solid', borderWidth: r.bw, borderColor: r.bd, background: r.tileBg, animation: r.anim,
+            // 자는 동안은 눌러도 안 열린다(판정 13). 눌리는 것처럼 보이지 않게 흐리게.
+            opacity: r.dim ? 0.45 : 1,
+          }}
+        >
+          <span style={{ position: 'relative', width: 26, height: 26, flex: 'none', color: r.fg }}>
+            {r.layers.map((p, i) => <span key={i} style={cssText(p)} />)}
+          </span>
+          <span style={{ fontSize: 12, lineHeight: 1, letterSpacing: '.01em', color: r.fg }}>{r.label}</span>
+          {r.hasBadge && (
+            <span style={{
+              position: 'absolute', top: -5, right: -3, minWidth: 18, height: 18, padding: '0 4px', boxSizing: 'border-box',
+              borderRadius: 9, background: C.paper, border: '1px solid rgba(74,64,56,.16)',
+              font: `9.5px ${MONO}`, color: C.sub2, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>{r.badge}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** 시안이 타일 아이콘을 CSS 한 줄로 적어 두었다. 그 줄을 React 스타일 객체로 옮긴다. */
 function cssText(text: string): React.CSSProperties {
@@ -637,9 +999,8 @@ function ChatFab({ y }: { y: Yeoul }) {
       onClick={(e) => { e.stopPropagation(); actions.openChat(); }}
       data-part="chat-fab"
       style={{
-        position: 'absolute', right: 14, bottom: 116, zIndex: 4, width: 48, height: 48, borderRadius: '50%',
-        borderStyle: 'solid', borderWidth: v.fab.bw, borderColor: v.fab.bd, background: C.paper,
-        boxShadow: '0 4px 14px rgba(74,64,56,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        ...slotChip, position: 'relative',
+        borderStyle: 'solid', borderWidth: v.fab.bw, borderColor: v.fab.bd,
         animation: v.fab.anim,
       }}
       aria-label="대화하기"
@@ -678,9 +1039,12 @@ function MiniCard({ y }: { y: Yeoul }) {
       onClick={(e) => { e.stopPropagation(); if (canOpen) setOpen((v) => !v); }}
       data-part="mini" data-open={open ? '1' : '0'}
       style={{
-        position: 'absolute', left: 14, bottom: 116, zIndex: 4, maxWidth: 232,
-        display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 11px', borderRadius: radius.md,
-        background: 'rgba(255,253,248,.95)', border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.12)',
+        // ★ 이제 **선반 위 한 칸**이다(2026-09-20) — 구석에 따로 떠 있지 않는다. 펼침은 그대로
+        //   위로 자란다(선반이 아래에 붙어 있어 내려갈 곳이 없는 것은 예전과 같다).
+        flex: 1, minWidth: 0, alignSelf: 'stretch',
+        display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6,
+        padding: '8px 11px', borderRadius: radius.md,
+        background: C.slot, border: `1px solid ${C.lineHard}`,
         cursor: canOpen ? 'pointer' : 'default',
       }}
     >
@@ -849,7 +1213,7 @@ function AskCard({ y }: { y: Yeoul }) {
  * ★ Enter 는 **조합 중이면 무시**한다. 한글에서 마지막 글자를 확정하려고 누른 Enter 까지
  *   보내기로 받으면, 확정 전의 글자로 보내 버린다.
  */
-function ChatBar({ y }: { y: Yeoul }) {
+function ChatBar({ y, plan }: { y: Yeoul; plan: RoomPlan }) {
   const { v, actions } = y;
   const box = useRef<HTMLInputElement>(null);
   const composing = useRef(false);
@@ -864,8 +1228,17 @@ function ChatBar({ y }: { y: Yeoul }) {
       onClick={(e) => e.stopPropagation()}
       style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 7, animation: v.chat.anim }}
     >
+      {/* ★ 주고받은 **두 줄이 입력칸 바로 위에 남는다**(2026-09-20 · 재설계안 E-3).
+          예전엔 아이 말이 화면 위 말풍선(입력칸에서 470px 위)에만 있고, 내 말은 4.2초 뒤 사라져
+          한 화면에 대화가 남지 않았다. 자리·개폐·하루 3회·40자 규칙은 **하나도 안 바꿨다.**
+          안 3 은 아이 말을 무대 밖 말띠가 맡으므로 여기서는 내 말만 남긴다. */}
+      {plan.chatPetRow && v.chat.hasLine && (
+        <span data-part="chat-pet" style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 7, maxWidth: '86%', padding: '7px 13px', borderRadius: radius.pill, background: C.slot, border: `1px solid ${C.lineHard}` }}>
+          <span style={{ fontFamily: GAEGU, fontSize: 16, lineHeight: 1.2, color: C.ink }}>{v.chat.line}</span>
+        </span>
+      )}
       {v.chat.hasMine && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 7, maxWidth: '82%', padding: '7px 13px', borderRadius: radius.pill, background: 'rgba(156,66,50,.1)', border: '1px solid rgba(156,66,50,.22)', animation: 'yMineIn 4.2s ease forwards' }}>
+        <span data-part="chat-mine" style={{ display: 'flex', alignItems: 'center', gap: 7, maxWidth: '82%', padding: '7px 13px', borderRadius: radius.pill, background: C.accentSoft, border: '1px solid rgba(156,66,50,.22)', animation: 'yPopIn .2s cubic-bezier(.2,.9,.25,1)' }}>
           <span style={{ fontFamily: GAEGU, fontSize: 16, lineHeight: 1.2, color: '#8B3A2C' }}>{v.chat.mine}</span>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(156,66,50,.45)' }} />
         </span>
