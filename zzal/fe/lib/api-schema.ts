@@ -339,6 +339,7 @@ export interface paths {
         /**
          * 캐릭터 만들기
          * @description 사진을 주면 그것을 읽어 외모를 적고, 안 주면 이름·설명만으로 적는다.
+         *     사진은 여러 장(최대 4장, 같은 사람의 다른 각도·표정) 줄 수 있다.
          *     **올린 사진은 그림이 나오면 지운다** — 보관하는 것은 그린 것뿐이다.
          *
          *     하루 몫이 남아 있으면 공짜, 아니면 크레딧을 받는다.
@@ -661,6 +662,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/nh/jobs/{id}/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 완성 알림 받을 이메일
+         * @description 빈 값을 보내면 안 받겠다는 뜻이라 적어 둔 주소를 지운다.
+         */
+        post: operations["notify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/nh/jobs/{id}/page/{no}.png": {
         parameters: {
             query?: never;
@@ -687,7 +708,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 이야기 고르기 */
+        /**
+         * 이야기 고르기
+         * @description body 를 같이 보내면 그 방향의 본문을 사람이 고친 내용으로 바꿔서 다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.
+         */
         post: operations["pick"];
         delete?: never;
         options?: never;
@@ -766,6 +790,26 @@ export interface paths {
         get: operations["sheetImage"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/photo-presign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 게스트 사진 업로드 주소 발급
+         * @description 로그인 없이 S3 에 직접 올릴 임시 주소를 받는다. 10분간 유효.
+         */
+        post: operations["photoPresign"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1373,7 +1417,7 @@ export interface paths {
          *     - **보상은 지금 나가지 않는다.** 무엇을 줄지 아직 안 정해졌고, 정해지면 설정값만
          *       바꾸면 붙는다. 화면에 "무엇을 드립니다" 라고 쓰지 말 것
          */
-        post: operations["submit"];
+        post: operations["submit_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1497,6 +1541,34 @@ export interface paths {
         get: operations["hatch"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/motion-wish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 보고 싶은 동작 남기기
+         * @description 자유 글 한 줄을 받는다. 로그인이 필요하고, 내 펫에만 남길 수 있다.
+         *
+         *     - 앞뒤 공백은 서버가 떼고 저장한다. **공백뿐이면 400**(INVALID_INPUT)
+         *     - 길이는 받은 그대로 재서 1~60자. 넘으면 400
+         *     - **한 번 부를 때마다 한 줄**이다 — 후기와 달리 여러 번 남길 수 있다
+         *     - 한 아이에 **하루 20줄**까지. 넘으면 409(ZZAL_MOTION_WISH_DAILY_LIMIT),
+         *       한국 시각 자정에 풀린다
+         *     - 성공하면 **본문 없이 204** 다. 남긴 글을 되돌려줄 이유가 없고,
+         *       화면은 방금 자기가 보낸 값을 이미 들고 있다
+         */
+        post: operations["submit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2521,6 +2593,9 @@ export interface components {
             id?: string;
             log?: string[];
             /** Format: int32 */
+            minutes_left?: number;
+            notice?: components["schemas"]["Notice"];
+            /** Format: int32 */
             pct?: number;
             /** Format: int32 */
             pick?: number;
@@ -2618,8 +2693,24 @@ export interface components {
             seq?: number;
             unlocked?: boolean;
         };
+        /** @description 보고 싶은 동작 한 줄 — 앞뒤 공백은 서버가 떼고, 공백뿐이면 거절한다 */
+        MotionWishSubmit: {
+            /**
+             * @description 보고 싶은 동작. 1~60자
+             * @example 기지개 켜는 모습이 보고 싶어요
+             */
+            text: string;
+        };
         NoteRequest: {
             note?: string;
+        };
+        Notice: {
+            email?: string;
+            logged_in?: boolean;
+            sent?: boolean;
+        };
+        NotifyRequest: {
+            email?: string;
         };
         PagesRequest: {
             pages?: components["schemas"]["Upload"][];
@@ -2680,7 +2771,11 @@ export interface components {
              */
             world?: string;
         };
+        PhotoPresignRequest: {
+            contentType?: string;
+        };
         PickRequest: {
+            body?: string;
             /** Format: int32 */
             n?: number;
         };
@@ -3891,6 +3986,34 @@ export interface operations {
             };
         };
     };
+    notify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["NotifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     pageImage: {
         parameters: {
             query?: {
@@ -4046,6 +4169,30 @@ export interface operations {
                 };
                 content: {
                     "image/png": string;
+                };
+            };
+        };
+    };
+    photoPresign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotoPresignRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedUpload"];
                 };
             };
         };
@@ -4897,7 +5044,7 @@ export interface operations {
             };
         };
     };
-    submit: {
+    submit_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -5125,6 +5272,60 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ApiResponseHatch"];
                 };
+            };
+        };
+    };
+    submit: {
+        parameters: {
+            query?: never;
+            header?: {
+                "User-Agent"?: string;
+            };
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotionWishSubmit"];
+            };
+        };
+        responses: {
+            /** @description 남겼음(본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 빈 글·공백뿐·60자 초과(INVALID_INPUT) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 로그인이 필요함 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오늘 몫을 다 씀(ZZAL_MOTION_WISH_DAILY_LIMIT) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
