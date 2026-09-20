@@ -103,10 +103,49 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       infra: ${{ steps.filter.outputs.infra }}
     steps:
+      # 얕게 받되 직전 커밋 하나는 남긴다 — 아래 대비책(HEAD~1)이 여기서 나온다.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      # ★ 기준점을 직접 정하는 이유
+      #   paths-filter 는 base 를 안 주면 저장소 기본 브랜치(develop)와의 merge-base 를
+      #   기준으로 삼는다. 승격(develop→staging·staging→main)은 fast-forward 라 올라간
+      #   쪽이 develop 의 조상이 되고, 그러면 merge-base 가 방금 올라간 커밋 자신이 되어
+      #   "바뀐 것 없음"이 나온다. 2026-09-20 main 승격에서 실제로 그렇게 떨어져
+      #   (merge-base bce8ea5, 검출 1개) backend·frontend 잡이 통째로 건너뛰어졌다.
+      #
+      #   push 이벤트는 밀기 직전의 브랜치 tip 을 before 로 알려 준다. 40자 SHA 를 base 로
+      #   주면 paths-filter 는 merge-base 를 찾지 않고 그 커밋과 곧장 비교한다 — develop
+      #   푸시가 이미 밟고 있던 경로와 같으므로(base 기본값이 head 와 같아 before 로 떨어진다)
+      #   dev 동작은 그대로고, staging·main 만 같은 판정으로 합류한다.
+      - id: since
+        name: 변경 비교 기준점 정하기
+        run: |
+          BEFORE='${{ github.event.before }}'
+          ZERO='0000000000000000000000000000000000000000'
+          SINCE=''
+          # 브랜치를 새로 만든 push 는 before 가 0 뿐이고, 강제 push 뒤엔 그 커밋이
+          # 원격에 없을 수 있다. 실제로 받아와지는지까지 보고 나서 쓴다.
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "$ZERO" ]; then
+            if git fetch --no-tags --depth=1 origin "$BEFORE" >/dev/null 2>&1; then
+              SINCE="$BEFORE"
+            else
+              echo "before($BEFORE) 를 받아오지 못했다 — 직전 커밋으로 물러선다"
+            fi
+          fi
+          # 대비책 — 직전 커밋. before 가 없는 workflow_dispatch 도 여기로 온다.
+          # 그마저 없으면 빈 값을 넘겨 paths-filter 의 기본값(기본 브랜치)에 맡긴다.
+          if [ -z "$SINCE" ]; then
+            SINCE="$(git rev-parse -q --verify HEAD~1 || true)"
+          fi
+          echo "since=$SINCE" >> "$GITHUB_OUTPUT"
+          echo "기준점: ${SINCE:-(없음 — 기본 브랜치와 비교)}"
+
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          base: ${{ steps.since.outputs.since }}
           filters: |
             backend:
               - 'common/be/**'
