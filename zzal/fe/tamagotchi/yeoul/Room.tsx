@@ -17,7 +17,7 @@
 //   `useFootPad` 가 그림에서 직접 잰다(못 재면 여울 기준값으로 되돌아간다).
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
 import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, C2, GAEGU, MONO, gap, monoSize, radius, shadow, fz } from './ui';
@@ -956,78 +956,6 @@ function SampleHud({ y }: { y: Yeoul }) {
           <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{v.sample.eggCount}</span>
         </button>
       </div>
-      {v.bub.isTut && <TutorCard y={y} />}
-    </div>
-  );
-}
-
-/**
- * 여울 샘플 방의 상단 안내.
- *
- * ★ 이제 **무대 밖 머리 띠 안**에 산다(→ `SampleHud`). 무대 위에 떠 있던 것을 내렸다.
- * ★ 크기도 압축했다(2026-09-07 상훈님 지시 "조금 더 콤팩트하게 수납").
- *   - 점 여덟 개 → `3 / 8` 한 덩어리. 여덟 개는 자리만 먹고 몇 번째인지 읽히지도 않았다.
- *   - 이전·다음·진행을 **글과 같은 흐름에** 흘려 둔 줄을 없앴다(따로 한 줄이면 그만큼 더 덮는다).
- * ★ 접을 수 있다. 다만 **기본은 펼침**이고, 부름이 다음으로 넘어가면 **자동으로 다시 펼친다** —
- *   새 안내가 접힌 채로 지나가면 사용자가 못 읽는다. 그래서 접힘은 이 카드가 스스로만 들고,
- *   튜토리얼 진행(useYeoul)은 건드리지 않는다.
- */
-function TutorCard({ y }: { y: Yeoul }) {
-  const { v } = y;
-  const b = v.bub;
-  const [folded, setFolded] = useState(false);
-  // 좁은 폰에서는 인사 카드의 여백·글씨를 줄여 무대에 세로를 돌려준다(데스크톱은 그대로).
-  const narrow = useIsWide(NARROW_Q);
-  useEffect(() => { setFolded(false); }, [b.stepText]);
-
-  const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
-  const pill = { padding: '4px 10px', borderRadius: radius.pill, fontSize: fz.sm, whiteSpace: 'nowrap' as const };
-
-  if (folded) {
-    return (
-      <button
-        data-part="tutor-folded"
-        onClick={stop(() => setFolded(false))}
-        style={{
-          alignSelf: 'flex-start',
-          display: 'flex', alignItems: 'center', gap: gap.sm, padding: '5px 11px', borderRadius: radius.pill,
-          background: C.slot, border: `1px solid ${C.line}`,
-        }}
-      >
-        <span style={{ fontSize: fz.sm, color: C.sub2 }}>여울의 안내</span>
-        <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{b.stepText}</span>
-        <span style={{ fontSize: fz.xs, color: C.faint2 }}>∨</span>
-      </button>
-    );
-  }
-
-  return (
-    <div data-part="tutor" style={{
-      position: 'relative', padding: narrow ? '4px 20px 4px 9px' : '6px 22px 6px 10px', borderRadius: radius.md,
-      background: C.slot, border: `1px solid ${C.line}`,
-      animation: 'yPop .24s ease',
-    }}>
-      {/* 손잡이는 흐름 밖에 둔다 — 글이 그 밑으로 흐르지 않게 오른쪽 여백을 미리 비워 뒀다. */}
-      <button
-        data-part="tutor-fold" onClick={stop(() => setFolded(true))} aria-label="안내 접기"
-        style={{ position: 'absolute', right: 6, top: 6, width: 20, height: 20, borderRadius: radius.pill, border: 'none', background: 'none', fontSize: fz.xs, color: C.faint2, lineHeight: 1 }}
-      >∧</button>
-
-      {/* 글과 손잡이들을 한 흐름에 둔다. 글이 끝난 자리에 이어 붙어 줄을 더 쓰지 않는다. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 6px' }}>
-        <span style={{ fontFamily: GAEGU, fontSize: narrow ? fz.md : fz.lg, lineHeight: 1.22, color: C.ink }}>{b.tutText}</span>
-        <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{b.stepText}</span>
-        {b.hasPrev && (
-          <button onClick={stop(b.prev)} data-tutor-prev style={{ ...pill, border: `1px solid ${C.lineHard}`, background: C.slot, color: C.sub2 }}>이전</button>
-        )}
-        {b.hasNext && (
-          <button onClick={stop(b.chipTap)} data-tutor-next style={{ ...pill, border: 'none', background: C.accent, color: C.accentInk }}>{b.chipLabel}</button>
-        )}
-        {b.hasHint && <span style={{ fontSize: fz.xs, color: C.faint2, whiteSpace: 'nowrap' }}>{b.hintText}</span>}
-        {b.hasSkip && (
-          <button onClick={stop(b.skipStep)} style={{ ...pill, border: `1px solid ${C.lineHard}`, background: C.slot, color: C.sub2 }}>나중에</button>
-        )}
-      </div>
     </div>
   );
 }
@@ -1067,6 +995,27 @@ function ChatFab({ y }: { y: Yeoul }) {
  * ★ 팝오버·대화·시트가 열리면 이 카드는 **아예 사라진다**(`mini.show` 조건). 그래서 펼친 채로
  *   그것들과 겹칠 일이 없다 — 겹침을 막는 규칙을 따로 두지 않고 표시 조건 하나로 끝냈다.
  */
+/**
+ * 안내 카드의 손잡이 한 칸. **셋이 같은 결이라야 한 줄로 읽힌다.**
+ * ★ 터치 타깃 36px 을 지킨다 — 예전 연습방 알약은 높이 21px 이라 손가락이 자주 빗나갔다.
+ */
+function TutChip({ label, onTap, primary = false, ...rest }: {
+  label: string; onTap: () => void; primary?: boolean;
+} & React.HTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...rest}
+      onClick={(e) => { e.stopPropagation(); onTap(); }}
+      style={{
+        minHeight: 36, padding: '8px 14px', borderRadius: radius.pill, fontSize: fz.md,
+        border: primary ? 'none' : `1px solid ${C.lineHard}`,
+        background: primary ? C.accent : C.slot,
+        color: primary ? C.accentInk : C.sub,
+      }}
+    >{label}</button>
+  );
+}
+
 function MiniCard({ y }: { y: Yeoul }) {
   const m = y.v.mini;
   const [open, setOpen] = useState(false);
@@ -1089,20 +1038,23 @@ function MiniCard({ y }: { y: Yeoul }) {
       }}
     >
       {m.isTut && (
-        <span style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
+        <span data-part="tutor" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
           <span style={{ display: 'flex', alignItems: 'baseline', gap: gap.sm }}>
             <span style={{ fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.3, color: C.ink }}>{m.tutText}</span>
             <span style={{ flex: 1 }} />
             <span data-part="tut-step" style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2, whiteSpace: 'nowrap' }}>{m.tutStep}</span>
           </span>
-          {/* ★ 서버 튜토리얼에는 '나중에' 가 없다 — 건너뛸 방법이 서버에 없어서, 눌러도 아무 일이
+          {/* ★ 손잡이 한 줄. **연습방과 진짜 방이 같은 자리·같은 크기**를 쓴다(2026-09-21 A-07).
+              예전엔 연습방이 11.5px 알약 셋(높이 21px), 진짜 방이 12.5px 알약 하나(높이 36px)로 따로 놀았다.
+              ★ 서버 튜토리얼에는 '나중에' 가 없다 — 건너뛸 방법이 서버에 없어서, 눌러도 아무 일이
               안 나면 고장으로 읽힌다. 마지막 칸에서만 "이제 시작할게요" 가 나온다. */}
-          {m.tutBtn.show && (
-            <button
-              onClick={(e) => { e.stopPropagation(); m.tutBtn.tap(); }}
-              data-action="tut-btn"
-              style={{ alignSelf: 'flex-start', minHeight: 36, padding: '8px 14px', borderRadius: radius.pill, border: '1px solid rgba(74,64,56,.16)', background: C.slot, fontSize: fz.md, color: C.sub }}
-            >{m.tutBtn.label}</button>
+          {(m.tutPrev.show || m.tutNext.show || m.tutBtn.show || m.tutHint) && (
+            <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: gap.xs }}>
+              {m.tutPrev.show && <TutChip label="이전" onTap={m.tutPrev.tap} data-tutor-prev />}
+              {m.tutNext.show && <TutChip label={m.tutNext.label} onTap={m.tutNext.tap} primary data-tutor-next />}
+              {m.tutBtn.show && <TutChip label={m.tutBtn.label} onTap={m.tutBtn.tap} data-action="tut-btn" />}
+              {m.tutHint && <span style={{ fontSize: fz.sm, color: C.faint2 }}>{m.tutHint}</span>}
+            </span>
           )}
         </span>
       )}

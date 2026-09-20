@@ -452,14 +452,16 @@ export interface Stage {
   moon: boolean; sun: boolean; curtain: boolean; sick: boolean;
   charFilter: string; play: 'running' | 'paused';
 }
+/**
+ * 아이 말풍선이 그릴 것. **말 한 줄이 전부다.**
+ *
+ * ★ 2026-09-21(A-05~A-08) — 튜토리얼 안내가 여기 얹혀 있었다. 연습방에서는 그 안내가 무대
+ *   **위쪽 머리 띠**의 카드로 나왔고, 진짜 방에서는 **아래 선반 카드**로 나왔다. 같은 안내인데
+ *   화면마다 자리가 달랐다(실측 — 위에서 40px 대 아래에서 125px). 이제 두 화면 모두
+ *   선반 카드(`mini`)가 맡는다. 말풍선은 아이의 말만 한다.
+ */
 export interface Bubble {
-  isTut: boolean; top: string; tutText: string;
-  show: boolean; text: string; chipLabel: string;
-  hasPrev: boolean; hasNext: boolean; hasHint: boolean; hintText: string; hasSkip: boolean;
-  dots: { w: string; bg: string }[];
-  /** '3 / 8' — 점 여덟 개 대신 쓰는 한 덩어리. 자리도 덜 먹고 읽히기도 낫다. */
-  stepText: string;
-  prev: () => void; chipTap: () => void; skipStep: () => void;
+  show: boolean; text: string;
 }
 export interface Opt extends Sel { text: string; pick: () => void }
 export interface CharGroup {
@@ -2097,29 +2099,12 @@ export function useYeoul(live?: Live) {
             : `${gRoundNo}번째 · 어느 손에 있을까요?`;
 
     const bub: Bubble = {
-      isTut: !!tut && s.sampleMode && !es.sleeping && !s.chatOpen,
-      top: s.sampleMode ? '96px' : '12px',
-      tutText: tut?.text ?? '',
-      // ★ 튜토리얼 중에는 부름 말풍선을 접어 둔다 — 그 자리 안내는 좌측 하단 카드가 맡는다.
+      // ★ 튜토리얼 중에는 부름 말풍선을 접어 둔다 — 그 자리 안내는 아래 선반 카드가 맡는다.
       //   다만 **대화를 열어 아이가 건넨 말이 있으면 그건 보여야 한다**. 안 그러면 서버가 준
       //   대사가 화면에 한 번도 안 나온다(2026-09-09 실측으로 그랬다).
       // 게임이 도는 동안에는 **게임이 말한다** — 부름·튜토리얼보다 앞선다(무대에 그것만 남으므로).
       show: s.gOn ? true : ((!tut || !!chatLine) && (!!top || !!chatLine) && !es.sleeping),
       text: s.gOn ? guessLine : (chatLine || (top?.text ?? '')),
-      chipLabel: tut ? (tutIdx === TUT.length - 1 ? '알았어요' : '다음') : '답하기',
-      hasPrev: !!tut && s.sampleMode && s.tutor > 0,
-      hasNext: !!tut && s.sampleMode,
-      hasHint: !!tut && !s.sampleMode,
-      hintText: '직접 해 보면 다음으로',
-      hasSkip: !!tut && !s.sampleMode,
-      stepText: `${tutIdx + 1} / ${TUT.length}`,
-      dots: TUT.map((_, i) => ({
-        w: tut && i === tutIdx ? '14px' : '5px',
-        bg: tut && i === tutIdx ? ACCENT : i < tutIdx ? C.accentDim : C.lineHard,
-      })),
-      prev: prevTutor,
-      chipTap: tut ? nextTutor : onAnswerCall,
-      skipStep: skipTutorStep,
     };
 
     // ── 시트 ──
@@ -2218,7 +2203,9 @@ export function useYeoul(live?: Live) {
     const goal = LEARN_GOALS
       .map((g) => ({ ...g, have: s[g.counter] as number }))
       .find((g) => g.have < g.need) ?? null;
-    const showTutMini = !!tut && !s.sampleMode;
+    // ★ 연습방·진짜 방 **둘 다** 이 카드가 안내를 맡는다(2026-09-21 A-06). 예전에는 연습방만
+    //   머리 띠 위의 다른 카드를 썼다 — 같은 안내가 화면마다 다른 자리에 있었다.
+    const showTutMini = !!tut && !es.sleeping && !s.chatOpen;
 
     /**
      * 자유 입력칸이 그릴 것 한 벌. **뷰에서 만든다** — 글자마다 바뀌는 값이라
@@ -2356,9 +2343,21 @@ export function useYeoul(live?: Live) {
       // ★ 로드맵이 끝나도 카드가 사라지지 않는다(2026-09-07 상훈님 지시). 정본상 2층 8종을
       //   다 열면 3층이 시작되고 그때 조각 4칸이 등장하므로, 그 자리를 그대로 이어받는다.
       mini: {
-        show: s.screen === 'room' && !s.sampleMode && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
+        show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
         isTut: showTutMini, tutText: tut?.text ?? '',
         tutStep: `${tutIdx + 1} / ${TUT.length}`,
+        /**
+         * 연습방에서만 앞뒤로 오간다 — 연습이라 되돌아가 다시 볼 수 있어야 한다.
+         * 진짜 방에는 없다: 서버가 칸을 세므로 화면이 되감으면 두 곳에서 세게 되고 언젠가 갈린다.
+         */
+        tutPrev: { show: !!tut && s.sampleMode && s.tutor > 0, tap: prevTutor },
+        tutNext: {
+          show: !!tut && s.sampleMode,
+          label: tutIdx === TUT.length - 1 ? '알았어요' : '다음',
+          tap: nextTutor,
+        },
+        /** 진짜 방(목)에서만 뜨는 한 줄. 누를 것이 아니라 **어떻게 넘어가는지**를 말해 준다. */
+        tutHint: !!tut && !s.sampleMode && !onServer ? '직접 해 보면 다음으로' : '',
         /**
          * 칸 아래 버튼. **서버 튜토리얼에는 '나중에' 가 없다** — 건너뛸 방법이 서버에 없어서,
          * 눌러도 아무 일이 안 나면 고장으로 읽힌다. 마지막 칸에서만 "다 배웠어요" 를 낸다.
