@@ -17,7 +17,7 @@ import {
   type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
-import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
+import { ACCENT, C, C2, LV, sel, type LvKey, type Sel } from './ui';
 import type { Live } from './useHatch';
 import type { CareAction, ChatState, Personality } from '../../lib/pet';
 import { takeGrownLine } from '../tutorial';
@@ -1722,7 +1722,7 @@ export function useYeoul(live?: Live) {
       return {
         key: k, label: ROOM_NAME[k],
         layers: [...LINE[k]],
-        fg: on ? '#FBF6EC' : l.fg,
+        fg: on ? C2.onDark : l.fg,
         tileBg: on ? C.ink : l.bg,
         bw: hl ? '2.5px' : '0',
         bd: hl ? ACCENT : 'transparent',
@@ -1829,7 +1829,7 @@ export function useYeoul(live?: Live) {
     const cur = P[selK];
 
     const bar = Array.from({ length: cur.n }, (_, i) => ({
-      bg: i < cur.on ? (locked ? 'rgba(74,64,56,.28)' : cur.tint) : 'rgba(74,64,56,.12)',
+      bg: i < cur.on ? (locked ? 'rgba(74,64,56,.28)' : cur.tint) : C.line,
     }));
 
     const pbtn = (r: Raw | null, isTutTarget: boolean): PopBtn | null => {
@@ -1969,7 +1969,7 @@ export function useYeoul(live?: Live) {
       stepText: `${tutIdx + 1} / ${TUT.length}`,
       dots: TUT.map((_, i) => ({
         w: tut && i === tutIdx ? '14px' : '5px',
-        bg: tut && i === tutIdx ? ACCENT : i < tutIdx ? C.accentDim : 'rgba(74,64,56,.14)',
+        bg: tut && i === tutIdx ? ACCENT : i < tutIdx ? C.accentDim : C.lineHard,
       })),
       prev: prevTutor,
       chipTap: tut ? nextTutor : onAnswerCall,
@@ -2031,7 +2031,7 @@ export function useYeoul(live?: Live) {
           : '여러 개 고를 수 있어요',
         onInput: onGroupText(g.key),
         cardBd: done ? C.accentDim : C.lineSoft,
-        cardBg: done ? '#FFFBF4' : C.paper,
+        cardBg: done ? C.shell : C.paper,
         opts: g.opts.map((o) => ({ text: o, pick: pickChip(g.key, o, picked), ...sel(picked.includes(o)) })),
       };
     });
@@ -2270,7 +2270,7 @@ export function useYeoul(live?: Live) {
       },
       sample: {
         show: s.sampleMode,
-        ring: `conic-gradient(${ACCENT} 0 ${hatchPct}%, rgba(74,64,56,.14) ${hatchPct}% 100%)`,
+        ring: `conic-gradient(${ACCENT} 0 ${hatchPct}%, ${C.lineHard} ${hatchPct}% 100%)`,
         eggAnim: hatchReady ? 'yCrack 1.5s ease-in-out infinite'
           : hatchN === 3 ? 'yWiggle 2.4s ease-in-out infinite' : 'yBob 2.8s ease-in-out infinite',
         eggNote: hatchReady ? '부화 완료' : '부화 중',
@@ -2323,9 +2323,9 @@ export function useYeoul(live?: Live) {
       },
       bath: {
         trace: s.trace, sick: s.sick,
-        bathBg: s.bathUsed ? C.off : C.slot, bathFg: s.bathUsed ? '#8B8279' : C.ink,
+        bathBg: s.bathUsed ? C.off : C.slot, bathFg: s.bathUsed ? C2.dim : C.ink,
         bathNote: s.bathUsed ? '오늘 완료' : '오늘 1회',
-        medBg: s.sick ? '#FADCD6' : C.off, medFg: s.sick ? ACCENT : '#8B8279',
+        medBg: s.sick ? '#FADCD6' : C.off, medFg: s.sick ? ACCENT : C2.dim,
         medBd: s.sick ? '#EFBDB2' : '#DFD9D0',
       },
       play: {
@@ -2333,14 +2333,14 @@ export function useYeoul(live?: Live) {
         //   대화·달리기 탭은 그대로다.
         tabs: ([['talk', '대화'], ['run', '달리기']] as const).map(([k, label]) => ({
           label, pick: pickTab(k),
-          ...(s.playTab === k ? { bg: C.ink, fg: '#FBF6EC', bd: C.ink } : { bg: C.slot, fg: C.sub2, bd: '#E3DBCD' }),
+          ...(s.playTab === k ? { bg: C.ink, fg: C2.onDark, bd: C.ink } : { bg: C.slot, fg: C.sub2, bd: '#E3DBCD' }),
         })),
         isTalk: s.playTab === 'talk', isRun: s.playTab === 'run',
         callsLeft: onServer ? (openCall ? 1 : 0) : s.calls,
         memCount: onServer ? (sc?.memories.length ?? 0) : s.memories.length,
         // 오늘 오간 말. 서버가 부름마다 [건넨 말 · 내가 한 답 · 돌려준 말] 셋을 들고 있다.
         log: (onServer ? serverLog(sc) : s.log).map((l) => (l.who === 'pet'
-          ? { text: l.text, align: 'flex-start', radius: '15px 15px 15px 5px', bg: '#F1EBE0', fg: C.ink }
+          ? { text: l.text, align: 'flex-start', radius: '15px 15px 15px 5px', bg: C2.paperDim, fg: C.ink }
           : { text: l.text, align: 'flex-end', radius: '15px 15px 5px 15px', bg: ACCENT, fg: C.accentInk })),
         // 빠른 답은 **내가 하는 말**이라 화면이 갖고 있어도 된다(아이 대사가 아니다).
         quick: CHAT_QUICK.map((t) => ({ text: t, pick: () => pushReply(t) })),
@@ -2361,7 +2361,7 @@ export function useYeoul(live?: Live) {
             : s.night ? '창 밖이 어두워요. 지금 재울 수 있어요.'
               // 연습방은 시각을 안 본다 — 시각을 말하면 안 되는 줄 알고 안 누른다.
               : s.sampleMode ? '연습방이라 지금 재울 수 있어요.' : '저녁 7시부터 재울 수 있어요.',
-          bg: on ? '#DFE5F2' : C.off, fg: on ? '#3B4A6E' : '#8B8279',
+          bg: on ? '#DFE5F2' : C.off, fg: on ? '#3B4A6E' : C2.dim,
           bd: on ? '#C2CBE2' : '#DFD9D0', opacity: on ? 1 : 0.7,
         };
       })(),
@@ -2383,7 +2383,7 @@ export function useYeoul(live?: Live) {
           .map(([label, tap], i) => ({
             label, tap,
             ...(i === 2 && s.decoOpen
-              ? { bg: C.accentSoft, bd: ACCENT, fg: '#9C5145' }
+              ? { bg: C.accentSoft, bd: ACCENT, fg: C2.accentInk2 }
               : { bg: C.slot, bd: C.line, fg: C.ink }),
           })),
         deco: s.decoOpen,
@@ -2399,7 +2399,7 @@ export function useYeoul(live?: Live) {
           // ★ '시간대'·'몸 상태' 줄은 **여기서 뺐다**(2026-09-13). 사용자용 시트에 개발 버튼이
           //   섞여 있었고, 같은 일을 하는 버튼이 이동 창에도 있어 **두 벌이 서로 어긋났다.**
           //   지금은 이동 창 한 곳(`setMode`·`devSet`)만이 그 둘을 바꾼다.
-          { label: '알림', opts: [{ text: s.notifOn ? '부름 알림 받는 중' : '알림 꺼짐', pick: toggleNotif, bg: s.notifOn ? C.accentSoft : C.slotDim, bd: s.notifOn ? ACCENT : C.lineHard, bw: s.notifOn ? '2px' : '1px', fg: s.notifOn ? '#9C5145' : C.sub2 }] },
+          { label: '알림', opts: [{ text: s.notifOn ? '부름 알림 받는 중' : '알림 꺼짐', pick: toggleNotif, bg: s.notifOn ? C.accentSoft : C.slotDim, bd: s.notifOn ? ACCENT : C.lineHard, bw: s.notifOn ? '2px' : '1px', fg: s.notifOn ? C2.accentInk2 : C.sub2 }] },
         ],
         /**
          * 성격 저장. **서버에 붙어 있을 때만 낸다** — 목에는 보낼 곳이 없다.
@@ -2416,7 +2416,7 @@ export function useYeoul(live?: Live) {
         toggleLeave,
         leaveLabel: s.leaveOff ? '떠나지 않아요' : '오래 비우면 여행을 가요',
         leaveBw: s.leaveOff ? '2px' : '1px', leaveBd: s.leaveOff ? ACCENT : C.lineHard,
-        leaveBg: s.leaveOff ? C.accentSoft : C.paper, leaveFg: s.leaveOff ? '#9C5145' : C.ink,
+        leaveBg: s.leaveOff ? C.accentSoft : C.paper, leaveFg: s.leaveOff ? C2.accentInk2 : C.ink,
       },
       egg: {
         title: s.cracking ? '지금 나오고 있어요' : (hatchReady ? '다 됐어요' : '부화 중이에요'),
@@ -2428,7 +2428,7 @@ export function useYeoul(live?: Live) {
         count: hatchText,
         cta: s.cracking ? '지금 나오고 있어요' : '지금 만나러 가기',
         ctaBg: hatchReady && !s.cracking ? ACCENT : '#DED6C9',
-        ctaFg: hatchReady && !s.cracking ? C.accentInk : '#8B8175',
+        ctaFg: hatchReady && !s.cracking ? C.accentInk : C2.dim2,
         hasMsg: !!s.eggMsg, msg: s.eggMsg,
       },
       onb: {

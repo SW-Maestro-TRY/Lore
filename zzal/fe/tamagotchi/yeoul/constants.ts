@@ -6,6 +6,7 @@
 // ★ 여기 값은 **프론트 전용 목**이다. 서버가 붙으면 rules.ts·서버 응답이 정본을 들고 오고
 //   이 표는 문구(카피)만 남는다. 지금 숫자는 화면을 눌러 보기 위한 자리표시다.
 import { assetUrl, demoUrl } from '../constants';
+import { C } from './ui';
 import type { Personality as PersonalityValue } from '../../lib/pet';
 
 /** 방 다섯 칸. key 는 상태 저장·검사의 손잡이라 함부로 안 바꾼다. */
@@ -64,7 +65,7 @@ export const SAY = {
  *   그때 여기에 `img` 를 더해 색 대신 그림을 깐다.
  */
 export const WALLS = [
-  { id: 'cream', name: '크림', wall: '#FBEFE2', floor: '#EFDFCC' },
+  { id: 'cream', name: '크림', wall: C.bornBg, floor: '#EFDFCC' },
   { id: 'mint', name: '민트', wall: '#E5F1EA', floor: '#D5E5DA' },
   { id: 'sky', name: '하늘', wall: '#E7EFF8', floor: '#D8E3EF' },
   { id: 'peach', name: '복숭아', wall: '#FBE7E2', floor: '#F0D5CE' },

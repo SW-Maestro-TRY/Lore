@@ -22,7 +22,7 @@ import Egg from '../yeoul/Egg';
 import Onboarding from '../yeoul/Onboarding';
 import Room from '../yeoul/Room';
 import { STEPS, WEB_KEYS } from '../yeoul/constants';
-import { C, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, radius } from '../yeoul/ui';
+import { C, C2, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, gap, monoSize, radius, fz } from '../yeoul/ui';
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import { useDevVisible } from '../useDevVisible';
@@ -130,14 +130,14 @@ export default function Yeoul(_props: SkinProps) {
         position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center',
         // ★ 바깥 바탕을 **화면 전체 폭의 방**으로 깐다(2026-09-16 강화). 은은한 그라데이션만으로는
         //   1920 에서 옆이 평평한 베이지로 남아 "좁은 기둥" 으로 읽혔다. 그래서 방의 실제 색
-        //   (벽 `#FBEFE2`·바닥 `#EFDFCC`)으로 위=벽/아래=바닥 두 띠를 나누고, 벽엔 무대와 같은 세로
+        //   (벽 `${C.bornBg}`·바닥 `#EFDFCC`)으로 위=벽/아래=바닥 두 띠를 나누고, 벽엔 무대와 같은 세로
         //   줄무늬를, 바닥엔 가장자리 그림자(비네트)를 얹는다. 이제 넓은 화면 전체가 하나의 방이고
         //   가운데 밝은 셸이 "일부러 방 가운데 둔 카드"로 명확히 읽힌다(수평선은 카드 안 무대와
         //   대략 맞춘 52% — 카드가 그림자로 떠 있어 픽셀 단위로 안 맞아도 어색하지 않다).
         background: `
           repeating-linear-gradient(90deg, rgba(74,64,56,.03) 0 1px, transparent 1px 22px),
           radial-gradient(130% 78% at 50% 112%, rgba(74,64,56,.16), rgba(74,64,56,0) 46%),
-          linear-gradient(180deg, #FBEFE2 0%, #FBEFE2 50%, #EFDFCC 55%, #E9D6BF 100%)`,
+          linear-gradient(180deg, ${C.bornBg} 0%, ${C.bornBg} 50%, #EFDFCC 55%, #E9D6BF 100%)`,
         color: C.ink, fontFamily: SANS, WebkitFontSmoothing: 'antialiased',
       }}
     >
@@ -187,7 +187,7 @@ function RoomWait() {
       data-part="room-wait"
       style={{
         flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', gap: 13, background: C.shell,
+        alignItems: 'center', justifyContent: 'center', gap: gap.lg, background: C.shell,
       }}
     >
       <span style={{
@@ -195,7 +195,7 @@ function RoomWait() {
         border: `2px solid ${C.line}`, borderTopColor: C.accentDim,
         animation: 'ySpin .9s linear infinite',
       }} />
-      <span style={{ fontSize: 12, color: C.faint }}>방을 여는 중이에요</span>
+      <span style={{ fontSize: fz.sm, color: C.faint }}>방을 여는 중이에요</span>
     </div>
   );
 }
@@ -414,7 +414,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
           // 오른쪽 가장자리 가운데 — 타일도 헤더도 안 가리는 유일한 빈자리다.
           position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', zIndex: 30,
           padding: '9px 4px', borderRadius: '8px 0 0 8px', border: `1px solid ${C.line}`, borderRight: 'none',
-          background: 'rgba(255,251,244,.86)', font: `10px ${MONO}`, color: C.sub,
+          background: 'rgba(255,251,244,.86)', font: `${monoSize.xs}px ${MONO}`, color: C.sub,
           writingMode: 'vertical-rl', letterSpacing: '.08em',
         }}
       >이동</button>
@@ -426,35 +426,35 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       data-part="dev"
       style={{
         position: 'absolute', right: 10, bottom: 10, zIndex: 30, width: 'min(414px,calc(100% - 20px))',
-        maxHeight: '70%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 9,
+        maxHeight: '70%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: gap.md,
         padding: '11px 13px', borderRadius: radius.lg,
         background: 'rgba(255,251,244,.96)', border: `1px solid ${C.line}`, boxShadow: '0 8px 24px rgba(74,64,56,.18)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ font: `10.5px ${MONO}`, color: C.sub, lineHeight: 1.35 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
+        <span style={{ font: `${monoSize.sm}px ${MONO}`, color: C.sub, lineHeight: 1.35 }}>
           여기 버튼은 <b>화면만</b> 바꿉니다 · 규칙(재고·흔적·시각)에 안 막힙니다
           <br />실제로 돌보는 것은 아래 방 버튼입니다
         </span>
         <span style={{ flex: 1 }} />
-        <button onClick={() => setOpen(false)} style={{ width: 24, height: 24, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
+        <button onClick={() => setOpen(false)} style={{ width: 24, height: 24, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.xs, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
       </div>
 
       {rows.map((g) => (
-        <div key={g.n} style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, width: 86, flex: 'none', paddingTop: 3 }}>
+        <div key={g.n} style={{ display: 'flex', alignItems: 'flex-start', gap: gap.md }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm, width: 86, flex: 'none', paddingTop: 3 }}>
             <span style={{
               width: 18, height: 18, flex: 'none', borderRadius: '50%',
               background: g.items.some((i) => i.on) ? C.accent : '#E3DBCD',
-              color: g.items.some((i) => i.on) ? '#FFF6F2' : C.sub,
-              font: `10px ${MONO}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: g.items.some((i) => i.on) ? C.accentInk : C.sub,
+              font: `${monoSize.xs}px ${MONO}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>{g.n}</span>
             <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-              <span style={{ fontSize: 11.5, color: C.sub }}>{g.label}</span>
-              {g.note && <span style={{ font: `9px ${MONO}`, color: C.faint }}>{g.note}</span>}
+              <span style={{ fontSize: fz.sm, color: C.sub }}>{g.label}</span>
+              {g.note && <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint }}>{g.note}</span>}
             </span>
           </span>
-          <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
             {g.items.map((i) => {
               const t = chipTone(i.on);
               return (
@@ -462,7 +462,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
                   // 확정이 아닌 상황은 눌러도 소품이 안 뜬다 — 고장이 아니라 결정 대기라는 뜻으로 흐리게 둔다.
                   title={i.title ?? (i.dim ? '아직 확정 전(decide·pending) — 눌러도 소품은 안 뜹니다' : undefined)}
                   style={{
-                    border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11,
+                    border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: fz.xs,
                     background: t.bg, color: t.fg, opacity: i.dim && !i.on ? 0.5 : 1,
                   }}
                 >{i.label}</button>
@@ -477,16 +477,16 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       {/* ★ 기본 8종 중 서버가 그림을 안 준 것. **방에 들어온 시점에 비어 있어야 한다.**
           지금 가짜 생성은 6종만 만들어서 sick·call 이 늘 뜬다 — 정상적인 경고다. */}
       {missingBasics.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 9px', borderRadius: radius.sm, background: C.accentSoft }}>
-          <span style={{ font: `10px ${MONO}`, color: C.accent }}>기본 8종 중 그림 없음</span>
-          <span style={{ font: `10px ${MONO}`, color: C.accent }}>{missingBasics.join(' · ')}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm, padding: '6px 9px', borderRadius: radius.sm, background: C.accentSoft }}>
+          <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>기본 8종 중 그림 없음</span>
+          <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>{missingBasics.join(' · ')}</span>
         </div>
       )}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingTop: 2 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: gap.sm, paddingTop: 2 }}>
         {WEB_KEYS.map(([k, text]) => (
-          <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: C.sub }}>
-            <span style={{ padding: '3px 7px', borderRadius: 7, border: '1px solid rgba(74,64,56,.18)', background: C.paper, font: `10.5px ${MONO}`, color: C.ink }}>{k}</span>
+          <span key={k} style={{ display: 'flex', alignItems: 'center', gap: gap.sm, fontSize: fz.sm, color: C.sub }}>
+            <span style={{ padding: '3px 7px', borderRadius: radius.xs, border: '1px solid rgba(74,64,56,.18)', background: C.paper, font: `${monoSize.sm}px ${MONO}`, color: C.ink }}>{k}</span>
             {text}
           </span>
         ))}
@@ -536,22 +536,22 @@ function DevServerRow({ live }: { live: Live }) {
   };
 
   return (
-    <div data-part="dev-server" style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingTop: 4, borderTop: `1px dashed ${C.lineHard}` }}>
+    <div data-part="dev-server" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, paddingTop: 4, borderTop: `1px dashed ${C.lineHard}` }}>
       <button
         data-jump="server:toggle" onClick={() => setOpen((x) => !x)}
-        style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'none', padding: 0 }}
+        style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: gap.sm, border: 'none', background: 'none', padding: 0 }}
       >
-        <span style={{ font: `10.5px ${MONO}`, color: C.sub }}>{open ? '▾' : '▸'} 서버(dev) — 여기만 진짜 서버를 부릅니다</span>
+        <span style={{ font: `${monoSize.sm}px ${MONO}`, color: C.sub }}>{open ? '▾' : '▸'} 서버(dev) — 여기만 진짜 서버를 부릅니다</span>
       </button>
       {open && (
         <>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-            <span style={{ width: 86, flex: 'none', fontSize: 11.5, color: C.sub, paddingTop: 4 }}>시계</span>
-            <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: gap.md }}>
+            <span style={{ width: 86, flex: 'none', fontSize: fz.sm, color: C.sub, paddingTop: 4 }}>시계</span>
+            <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
               {CLOCK_JUMPS.map((j) => (
                 <button key={j.label} data-jump={`clock:${j.label}`} disabled={busy} onClick={() => void run(j)}
                   style={{
-                    border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11,
+                    border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: fz.xs,
                     background: C.slot, color: C.ink, opacity: busy ? 0.5 : 1,
                   }}
                 >{j.label}</button>
@@ -559,14 +559,14 @@ function DevServerRow({ live }: { live: Live }) {
             </div>
           </div>
           {/* ⚠️ 아직 못 하는 것 — 지어내지 않고 무엇이 없는지 적어 둔다. */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-            <span style={{ width: 86, flex: 'none', fontSize: 11.5, color: C.sub, paddingTop: 2 }}>해금 카운터</span>
-            <span style={{ flex: 1, font: `10px ${MONO}`, color: C.faint, lineHeight: 1.5 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: gap.md }}>
+            <span style={{ width: 86, flex: 'none', fontSize: fz.sm, color: C.sub, paddingTop: 2 }}>해금 카운터</span>
+            <span style={{ flex: 1, font: `${monoSize.xs}px ${MONO}`, color: C.faint, lineHeight: 1.5 }}>
               서버 주소 없음 — 밥·간식·청소·목욕·채팅답·쓰다듬·게임시작·깨우기 횟수를 올릴 dev 주소가
               아직 없습니다. 2층 해금은 위 <b>2층 해금</b> 줄로 화면에서만 열어 보세요.
             </span>
           </div>
-          {note && <span data-dev-note style={{ font: `10px ${MONO}`, color: C.accent }}>{note}</span>}
+          {note && <span data-dev-note style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>{note}</span>}
         </>
       )}
     </div>

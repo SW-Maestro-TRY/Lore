@@ -23,7 +23,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { C, GAEGU, SANS, radius, SHELL_MAX } from "./tamagotchi/yeoul/ui";
+import { C, GAEGU, SANS, radius, shadow, SHELL_MAX } from "./tamagotchi/yeoul/ui";
 import { LANDING_COPY } from "./tamagotchi/yeoul/constants";
 import { YEOUL_MOTION } from "./tamagotchi/constants";
 
@@ -254,7 +254,7 @@ export const V2_STYLE = `
 .zt-v2frame{
   width:min(200px, 44vw); box-sizing:border-box;
   background:${C.paper}; border:1px solid ${C.line}; border-radius:${radius.xl}px;
-  padding:12px 12px 9px; box-shadow:0 12px 30px rgba(74,64,56,.12);
+  padding:12px 12px 9px; box-shadow:${shadow.frame};
   display:flex; flex-direction:column; align-items:center; gap:6px;
 }
 .zt-v2slot{
