@@ -9,6 +9,9 @@
 # 절차(빌드→S3→SSM→재시작)는 그대로. 서버 쪽 실제 실행은 /opt/lore/deploy-api.sh · deploy-web.sh.
 #
 # SSM 은 서버가 밖으로 나가 명령을 받아오는 방식이라 인바운드 포트를 하나도 안 연다.
+#
+# ★ staging 은 기본이 '꺼짐'이다. 배포가 들어오면 wake 잡이 RDS·EC2 를 깨우고,
+#   배포가 끝나면 power 잡이 박스에 60분 뒤 자동 차단을 예약한다. 자세한 것은 infra/staging/README.md.
 
 name: Deploy to EC2
 
@@ -60,6 +63,8 @@ jobs:
       s3_bucket:  ${{ steps.map.outputs.s3_bucket }}
       cf_dist:    ${{ steps.map.outputs.cf_dist }}
       role_arn:   ${{ steps.map.outputs.role_arn }}
+      ec2_id:     ${{ steps.map.outputs.ec2_id }}
+      rds_id:     ${{ steps.map.outputs.rds_id }}
     steps:
       - id: map
         run: |
@@ -68,24 +73,27 @@ jobs:
               env_name=dev
               ssm_target='--instance-ids i-0169c150550d91895'
               cf_dist=''                    # 없음 → 무효화 스텝 건너뜀
-              role_arn='arn:aws:iam::046797548177:role/lore-github-deploy' ;;
+              role_arn='arn:aws:iam::046797548177:role/lore-github-deploy'
+              ec2_id=''; rds_id='' ;;       # 전원 사이클 안 씀 — 항상 켜 둔다
             staging)   # staging — 현 인프라 재활용(1대 고정)
               env_name=staging
               ssm_target='--instance-ids i-0204d071a9c94bc08'
               cf_dist='E2DQOZKTRM3UGJ'
-              role_arn='arn:aws:iam::046797548177:role/lore-github-deploy' ;;
+              role_arn='arn:aws:iam::046797548177:role/lore-github-deploy'
+              ec2_id='i-0204d071a9c94bc08'; rds_id='lore-staging-db' ;;
             main)      # prod — 태그로 타깃(스케일 대비), 전용 role
               env_name=prod
               ssm_target='--targets Key=tag:Environment,Values=prod'
               cf_dist='TODO_PROD_CF_DISTRIBUTION_ID'
-              role_arn='TODO_PROD_ROLE_ARN' ;;
+              role_arn='TODO_PROD_ROLE_ARN'
+              ec2_id=''; rds_id='' ;;       # prod 는 끄지 않는다
             *)
               echo "지원하지 않는 브랜치: $GITHUB_REF_NAME"; exit 1 ;;
           esac
           # 배포 버킷은 전 환경 공유(빌드 산출물 임시창고, env 폴더로 구분).
           # 이미지·DB 같은 실데이터는 여기 없다 — 콘텐츠 버킷·RDS 별도.
           s3_bucket='lore-deploy-046797548177-ap-northeast-2-an'
-          for kv in env_name ssm_target s3_bucket cf_dist role_arn; do
+          for kv in env_name ssm_target s3_bucket cf_dist role_arn ec2_id rds_id; do
             echo "$kv=${!kv}" >> "$GITHUB_OUTPUT"
           done
 
@@ -126,6 +134,136 @@ jobs:
             infra:
               - 'infra/**'
               - 'docker-compose*.yml'
+
+  # ── staging 전용: 서버 깨우기 ────────────────────────────────────
+  # staging 은 기본이 꺼짐이다. 아무도 안 쓰는 서버를 하루 종일 켜 둘 이유가 없다.
+  # 배포가 들어온 이 순간이 유일하게 켜져 있어야 할 때이므로 여기서 깨운다.
+  #
+  # 순서가 있다 — RDS 를 먼저 깨운다. DB 가 없으면 API 의 /actuator/health 가 DOWN 이고,
+  # deploy-api.sh 는 그걸 배포 실패로 읽어 jar 를 되돌린다.
+  #
+  # 이미 켜져 있으면 아무것도 하지 않고 지나간다(멱등). dev·prod 는 잡이 돌긴 하되
+  # 모든 스텝이 건너뛰어져 즉시 성공한다 — needs 그래프를 갈래로 쪼개지 않으려는 것이다.
+  wake:
+    needs: [changes, setup]
+    runs-on: ubuntu-latest
+    outputs:
+      woke: ${{ steps.gate.outputs.woke }}
+    steps:
+      - id: gate
+        name: 깨울 차례인가
+        run: |
+          ENV_NAME='${{ needs.setup.outputs.env_name }}'
+          BE='${{ needs.changes.outputs.backend }}'
+          FE='${{ needs.changes.outputs.frontend }}'
+          EV='${{ github.event_name }}'
+          if [ "$ENV_NAME" = staging ] \
+             && { [ "$BE" = true ] || [ "$FE" = true ] || [ "$EV" = workflow_dispatch ]; }; then
+            echo "woke=true" >> "$GITHUB_OUTPUT"
+            echo "staging 배포 — 서버를 깨운다"
+          else
+            echo "woke=false" >> "$GITHUB_OUTPUT"
+            echo "깨울 것 없음 (env=$ENV_NAME backend=$BE frontend=$FE event=$EV)"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.woke == 'true'
+
+      - name: AWS 명찰 걸기 (OIDC)
+        if: steps.gate.outputs.woke == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ needs.setup.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 정지 상태에서 available 까지 보통 5~10분. stopping 중이면 stopped 가 될 때까지
+      # 기다렸다가 시작한다 — 차단 타이머가 막 돈 직후에 배포가 들어오는 경우다.
+      - name: RDS 깨우기
+        if: steps.gate.outputs.woke == 'true'
+        run: |
+          DB='${{ needs.setup.outputs.rds_id }}'
+          t0=$SECONDS; started=no; ok=no
+          for i in $(seq 1 72); do
+            ST=$(aws rds describe-db-instances --db-instance-identifier "$DB" \
+                   --region "$AWS_REGION" \
+                   --query 'DBInstances[0].DBInstanceStatus' --output text)
+            case "$ST" in
+              available)
+                ok=yes; break ;;
+              stopped)
+                if [ "$started" = no ]; then
+                  echo "RDS 정지 상태 — 시작한다"
+                  aws rds start-db-instance --db-instance-identifier "$DB" \
+                    --region "$AWS_REGION" --query 'DBInstance.DBInstanceStatus' --output text
+                  started=yes
+                fi ;;
+              *)
+                echo "RDS $ST — 기다린다 ($((SECONDS-t0))s)" ;;
+            esac
+            sleep 10
+          done
+          [ "$ok" = yes ] || { echo "RDS 가 12분 안에 available 이 되지 않았다"; exit 1; }
+          echo "RDS available — $((SECONDS-t0))초 걸림"
+
+      # 부팅 1~2분 + SSM 에이전트가 붙는 데 조금 더. PingStatus 만 믿지 않고
+      # 마지막 핑 시각이 2분 이내인지도 본다 — 방금 꺼진 박스가 한동안 Online 으로
+      # 남아 있어서, 그걸 믿고 명령을 보내면 InvalidInstanceId 로 배포가 깨진다.
+      - name: EC2 깨우기
+        if: steps.gate.outputs.woke == 'true'
+        run: |
+          IID='${{ needs.setup.outputs.ec2_id }}'
+          t0=$SECONDS; started=no; ok=no
+          for i in $(seq 1 30); do
+            ST=$(aws ec2 describe-instances --instance-ids "$IID" --region "$AWS_REGION" \
+                   --query 'Reservations[0].Instances[0].State.Name' --output text)
+            if [ "$ST" = stopped ] && [ "$started" = no ]; then
+              echo "EC2 정지 상태 — 시작한다"
+              aws ec2 start-instances --instance-ids "$IID" --region "$AWS_REGION" \
+                --query 'StartingInstances[0].CurrentState.Name' --output text
+              started=yes
+            fi
+            if [ "$ST" = running ]; then
+              PING=$(aws ssm describe-instance-information \
+                       --filters "Key=InstanceIds,Values=$IID" --region "$AWS_REGION" \
+                       --query 'InstanceInformationList[0].[PingStatus,LastPingDateTime]' \
+                       --output text 2>/dev/null || echo "None None")
+              STATUS=$(echo "$PING" | cut -f1)
+              LAST=$(echo "$PING" | cut -f2)
+              if [ "$STATUS" = Online ] && [ "$LAST" != None ]; then
+                AGE=$(( $(date -u +%s) - $(date -u -d "$LAST" +%s) ))
+                if [ "$AGE" -lt 120 ]; then ok=yes; break; fi
+                echo "SSM Online 이지만 마지막 핑이 ${AGE}초 전 — 아직 못 믿는다"
+              else
+                echo "SSM $STATUS — 기다린다 ($((SECONDS-t0))s)"
+              fi
+            else
+              echo "EC2 $ST — 기다린다 ($((SECONDS-t0))s)"
+            fi
+            sleep 10
+          done
+          [ "$ok" = yes ] || { echo "EC2 가 5분 안에 SSM 으로 붙지 않았다"; exit 1; }
+          echo "EC2 running + SSM Online — $((SECONDS-t0))초 걸림"
+
+      # 박스 위 운영 스크립트를 레포 판본으로 갈아끼운다. 배포·전원 스크립트를 고칠 때마다
+      # 사람이 서버에 들어가 손복사하는 단계를 없앤다(손복사본과 레포가 갈라지는 사고 방지).
+      # dev 가 deploy-dev.sh 를 매 배포마다 같이 올리는 것과 같은 방식이다.
+      - name: 운영 스크립트를 박스에 배포 (infra/staging → /opt/lore)
+        if: steps.gate.outputs.woke == 'true'
+        run: |
+          B='${{ needs.setup.outputs.s3_bucket }}'
+          E='${{ needs.setup.outputs.env_name }}'
+          PREFIX="builds/$E/scripts/${GITHUB_SHA}"
+          aws s3 cp infra/staging/ "s3://$B/$PREFIX/" \
+            --recursive --exclude '*' --include '*.sh' --region "$AWS_REGION"
+          CMD_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            ${{ needs.setup.outputs.ssm_target }} \
+            --document-name "AWS-RunShellScript" \
+            --comment "Sync scripts $E ${GITHUB_SHA}" \
+            --parameters commands="[\"set -e\",\"aws s3 cp s3://$B/$PREFIX/ /opt/lore/ --recursive --region $AWS_REGION\",\"chmod +x /opt/lore/*.sh\",\"ls -l /opt/lore/*.sh\"]" \
+            --query "Command.CommandId" --output text)
+          echo "command-id: $CMD_ID"
+          bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
 
   # ── dev 전용: 도커 박스 배포 ─────────────────────────────────────
   # dev 는 jar/번들을 systemd 에 꽂는 게 아니라 compose 스택 한 덩어리를 박스에서 다시 빌드한다.
@@ -206,7 +344,7 @@ jobs:
           bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
 
   backend:
-    needs: [changes, setup]
+    needs: [changes, setup, wake]
     # dev 는 systemd 가 아니라 compose 스택이라 아래 절차가 안 맞는다 → dev_deploy 가 대신 맡는다.
     if: >-
       needs.setup.outputs.env_name != 'dev' &&
@@ -300,7 +438,7 @@ jobs:
           bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
 
   frontend:
-    needs: [changes, setup]
+    needs: [changes, setup, wake]
     # dev 는 systemd 가 아니라 compose 스택이라 아래 절차가 안 맞는다 → dev_deploy 가 대신 맡는다.
     if: >-
       needs.setup.outputs.env_name != 'dev' &&
@@ -367,3 +505,35 @@ jobs:
             --distribution-id "${{ needs.setup.outputs.cf_dist }}" \
             --paths "/*" \
             --query "Invalidation.Id" --output text
+
+  # ── staging 전용: 다시 재우기 예약 ───────────────────────────────
+  # 배포가 끝난 시점부터 60분을 센다. 한 시간 안에 배포가 또 들어오면 예약을 새로 걸므로
+  # 카운트다운도 그 시점부터 다시 시작된다.
+  #
+  # 배포가 실패해도 예약은 건다. 깨워 놓은 박스를 실패한 채로 켜 둔 것을 잊는 쪽이
+  # 더 비싸기 때문이다. 붙잡아 두고 들여다볼 일이 있으면 Session Manager 로 들어가
+  # `sudo /opt/lore/cancel-power-off.sh` 한 줄로 예약을 취소한다.
+  power:
+    needs: [setup, wake, backend, frontend]
+    if: always() && needs.wake.outputs.woke == 'true' && needs.wake.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AWS 명찰 걸기 (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ needs.setup.outputs.role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 60분 뒤 전원 차단 예약
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            ${{ needs.setup.outputs.ssm_target }} \
+            --document-name "AWS-RunShellScript" \
+            --comment "Schedule power-off staging ${GITHUB_SHA}" \
+            --parameters commands="[\"sudo /opt/lore/schedule-power-off.sh 60\"]" \
+            --query "Command.CommandId" --output text)
+          echo "command-id: $CMD_ID"
+          bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
