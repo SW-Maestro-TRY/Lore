@@ -14,6 +14,7 @@ import {
   GUESS_HAND_PX, GUESS_LOSE_DOTS, GUESS_LOSE_DOTS_PX, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
   STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
+  WISH_COPY, WISH_MAX,
   type GuessHandKind, type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
@@ -35,6 +36,24 @@ import { trackConversion } from '../../lib/analytics';
  * 조사 판정은 공용 `josa()` 가 이미 한다 — 여기서는 이름이 빈 경우까지 함께 막는다.
  */
 const sleepingLine = (name: string) => `${petWith(name, '이', '가')} 자고 있어요`;
+
+/**
+ * 동작 요청 실패 코드 → 화면 문구.
+ *
+ * ★ 표를 한 곳에 두는 이유는 `lib/hatchBlocked.ts` 와 같다 — 사유가 하나 늘 때 부르는 쪽마다
+ *   흩어 두면 빠뜨린 자리만 조용히 옛 문구를 낸다. 모르는 코드는 공통 문구로 떨어진다.
+ * ★ 어느 줄도 사용자를 탓하지 않는다. 하루 상한도 "많이 보냈다" 가 아니라 아이 쪽 사정으로 말한다.
+ */
+const wishFailLine = (code: string | null): string => {
+  switch (code) {
+    case 'INVALID_INPUT': return WISH_COPY.fail.tooLong;
+    case 'unauthorized': return WISH_COPY.fail.login;
+    case 'ZZAL_PET_NOT_FOUND':
+    case 'no_pet': return WISH_COPY.fail.noPet;
+    case 'ZZAL_MOTION_WISH_DAILY_LIMIT': return WISH_COPY.fail.limit;
+    default: return WISH_COPY.fail.other;
+  }
+};
 
 // ★ 옛 `ACT_MS = 2500`(행동 한 번의 가장 짧은 길이)은 **없앴다**(2026-09-13).
 //
@@ -91,6 +110,14 @@ export interface Fire {
    * ★ 그림 주소가 없으면 이 칸 자체를 안 만든다 — 빈 액자가 뜨는 것보다 없는 편이 낫다.
    */
   preview?: { src: string; badge: string; caption: string };
+  /**
+   * 자유 입력칸을 이 판에 둘 것인가.
+   *
+   * ★ **값이 아니라 플래그다.** 입력은 글자마다 바뀌는데 `fire` 는 판이 뜰 때 한 번 만들어
+   *   상태에 눌러앉는 객체라, 값을 여기 담으면 타이핑이 화면에 안 보인다.
+   *   실제 값·손잡이는 뷰(`v.wish`)가 매 렌더 새로 만든다.
+   */
+  wish?: boolean;
   actions: FireAction[];
 }
 
@@ -208,6 +235,13 @@ export interface YeoulState {
   frame: FrameData | null; frameClosing: boolean;
   notifOn: boolean; needStyleLocal: NeedStyle | null; unlockShown: boolean;
   saved: number; wishes: number; cardIdx: number;
+  /** 자유 입력칸에 쓰는 중인 글. 상한(`WISH_MAX`)을 넘겨 담지 않는다. */
+  wishDraft: string;
+  wishSending: boolean;
+  /** 보내고 받아진 뒤. 입력칸 자리에 "잘 들었어요" 한 줄이 대신 남는다. */
+  wishDone: boolean;
+  /** 실패 안내 한 줄. 서버 문장이 아니라 우리 표(`WISH_COPY.fail`)에서 고른 것이다. */
+  wishError: string;
   sampleMode: boolean; hatch: number; snapshot: Partial<YeoulState> | null;
   tutor: number; tutorOn: boolean;
   cracking: boolean; eggMsg: string; nameErr: boolean;
@@ -262,6 +296,7 @@ const INITIAL: YeoulState = {
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
   saved: 0, wishes: 0, cardIdx: 0,
+  wishDraft: '', wishSending: false, wishDone: false, wishError: '',
   sampleMode: false, hatch: 0, snapshot: null,
   tutor: 0, tutorOn: false, cracking: false, eggMsg: '', nameErr: false,
   hintI: 0, leaveOff: false, sleepCover: false,
@@ -674,6 +709,35 @@ export function useYeoul(live?: Live) {
     flash('기록해 뒀어요');
   }, [flash]);
 
+  /** 입력칸에 쓰는 중. **상한을 넘겨 담지 않는다** — 넘긴 뒤 꾸짖는 것보다 못 넘게 하는 쪽이 낫다. */
+  const onWishDraft = useCallback((t: string) => {
+    setS((v) => ({ ...v, wishDraft: t.slice(0, WISH_MAX), wishError: '' }));
+  }, []);
+
+  /**
+   * 보고 싶은 동작 한 줄 보내기.
+   *
+   * ★ 보낸 뒤 **같은 자리에서** "받았다" 고 말하고 입력칸을 접는다(`wishDone`). 토스트만 띄우고
+   *   입력칸을 남겨 두면 보낸 줄 모르고 한 번 더 보낸다.
+   * ★ 사람이 쓴 글은 전용 API 로만 간다. 행동 기록에는 **고정된 이름 한 줄**만 —
+   *   글을 실어 보내 봐야 수집기가 조용히 버린다(`common/fe/analytics.ts` 의 허용 키).
+   * ★ 실패 문구는 **코드로 고른다.** 서버 문장을 그대로 띄우면 말투의 주인이 백엔드로 넘어간다.
+   */
+  const sendWish = useCallback(() => {
+    const text = sRef.current.wishDraft.trim();
+    if (!text || sRef.current.wishSending || sRef.current.wishDone) return;
+    setS((v) => ({ ...v, wishSending: true, wishError: '' }));
+    void (async () => {
+      const r = await liveRef.current?.sendWish(text) ?? { ok: false, code: null };
+      if (r.ok) {
+        void trackConversion('motion_wish_submitted', { from: 'tutorial_gift' });
+        setS((v) => ({ ...v, wishSending: false, wishDone: true, wishDraft: '', wishError: '' }));
+        return;
+      }
+      setS((v) => ({ ...v, wishSending: false, wishError: wishFailLine(r.code) }));
+    })();
+  }, []);
+
   // ── 튜토리얼 ──
   //
   // ★ 2026-09-10 — 진짜 아이는 **서버가 칸을 센다**(`tutorial.step`). 화면은 순서를 다시 판정하지 않는다.
@@ -724,9 +788,11 @@ export function useYeoul(live?: Live) {
           ? { preview: { src: GRAD_PREVIEW_SRC, badge: GRAD_COPY.previewBadge, caption: GRAD_COPY.previewCaption } }
           : {}),
         hint: '', tapAny: true,
+        // 정본이 선물 화면에 붙이라고 한 수요조사. **한 번 누르는 버튼이 아니라 자유 글**이다 —
+        // 우리가 알고 싶은 것은 "더 원한다" 가 아니라 **목록에 없는 동작이 무엇인가** 라서,
+        // 정해진 값만 받으면 그 질문에 영영 답할 수 없다.
+        wish: true,
         actions: [
-          // 정본이 선물 화면에 붙이라고 한 수요조사. **이쪽은 진짜로 서버에 남는다**(recordWish).
-          { label: GRAD_COPY.wish, action: 'grad-wish', tap: () => recordWish('tutorial_gift'), primary: true },
           { label: GRAD_COPY.close, action: 'grad-close', tap: () => setS((w) => ({ ...w, fire: null })), primary: false },
         ],
       },
@@ -1931,7 +1997,37 @@ export function useYeoul(live?: Live) {
       .find((g) => g.have < g.need) ?? null;
     const showTutMini = !!tut && !s.sampleMode;
 
+    /**
+     * 자유 입력칸이 그릴 것 한 벌. **뷰에서 만든다** — 글자마다 바뀌는 값이라
+     * 상태에 눌러앉는 `fire` 객체에 담으면 타이핑이 화면에 안 보인다.
+     *
+     * ★ `canSend` 가 **공백을 뗀 뒤**를 본다. 공백만 친 사람에게 버튼을 열어 주면 서버가 400 으로
+     *   거절하고, 화면은 자기가 막을 수 있었던 실패를 사용자에게 보여 주게 된다.
+     */
+    const wishText = s.wishDraft.trim();
+    const wish = {
+      label: WISH_COPY.label,
+      placeholder: WISH_COPY.placeholder,
+      done: WISH_COPY.done,
+      // ★ 이름을 따로 준다 — `...WISH_COPY` 로 펼치면 문구 `send`·`sending` 이
+      //   아래의 손잡이·불리언에 **조용히 덮인다**(버튼 글자가 빈 값이 된다).
+      sendLabel: WISH_COPY.send,
+      sendingLabel: WISH_COPY.sending,
+      value: s.wishDraft,
+      max: WISH_MAX,
+      /** "12 / 60". 넘긴 뒤 꾸짖지 않고 **못 넘게** 막으므로 이건 경고가 아니라 남은 양의 표시다. */
+      count: `${s.wishDraft.length} / ${WISH_MAX}`,
+      full: s.wishDraft.length >= WISH_MAX,
+      canSend: wishText.length > 0 && !s.wishSending && !s.wishDone,
+      sending: s.wishSending,
+      sent: s.wishDone,
+      error: s.wishError,
+      onInput: onWishDraft,
+      send: sendWish,
+    };
+
     return {
+      wish,
       lv, calls, top, mode, tut, TUT, unlimited, selK,
       tiles, pop, st, bub, sheet, charGroups, frames, spriteKey,
       /** 개발용 고정(자세·상황 고르기). 방과 이동 창이 함께 읽는다. */

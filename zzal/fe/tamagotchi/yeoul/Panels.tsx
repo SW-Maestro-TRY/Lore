@@ -9,7 +9,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { C, GAEGU, MONO, radius } from './ui';
+import { C, GAEGU, MONO, input as inputStyle, radius } from './ui';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 
 export default function Panels({ y }: { y: Yeoul }) {
@@ -321,6 +321,53 @@ function SettingsSheet({ y }: { y: Yeoul }) {
 
 // ── 전면 판 ─────────────────────────────────────────────────────────────
 
+/**
+ * "이런 동작도 보고 싶어요" 자유 입력칸.
+ *
+ * ★★ 보낸 뒤에는 **같은 자리에서** 받았다고 말하고 입력칸을 접는다. 토스트만 띄우고 칸을
+ *   남겨 두면 보낸 줄 모르고 한 번 더 보낸다 — 이 API 는 부를 때마다 한 줄이 쌓이므로
+ *   그 중복이 그대로 데이터에 남는다.
+ * ★ 상한은 `maxLength` 로 **못 넘게** 막는다. 넘긴 뒤 붉은 글씨로 꾸짖는 것보다 낫고,
+ *   서버·DB 와 같은 값이라 화면이 받아 놓고 서버가 거절하는 자리가 생기지 않는다.
+ * ★ 새 색·새 그림자·새 애니메이션을 쓰지 않는다 — 전부 `ui.ts` 토큰과 기존 입력 스타일이다.
+ */
+function WishBox({ y }: { y: Yeoul }) {
+  const w = y.v.wish;
+  if (w.sent) {
+    return (
+      <span data-part="fire-wish" data-wish="sent" style={{ width: '100%', padding: '11px 13px', borderRadius: radius.md, background: C.slot, fontSize: 12.5, lineHeight: 1.6, color: C.sub, boxSizing: 'border-box' }}>
+        {w.done}
+      </span>
+    );
+  }
+  return (
+    <div data-part="fire-wish" data-wish="open" style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
+      <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ fontSize: 11.5, color: C.faint }}>{w.label}</span>
+        {/* 남은 양의 표시다. 못 넘게 막으므로 경고가 아니고, 꽉 찼을 때만 색이 또렷해진다. */}
+        <span data-note="wish-count" style={{ font: `10px ${MONO}`, color: w.full ? C.accent : 'rgba(74,64,56,.33)' }}>{w.count}</span>
+      </span>
+      <input
+        data-action="wish-input" value={w.value} onChange={(e) => w.onInput(e.target.value)}
+        maxLength={w.max} placeholder={w.placeholder} disabled={w.sending}
+        style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+      />
+      {w.error && (
+        <span data-note="wish-error" style={{ fontSize: 11.5, lineHeight: 1.6, color: C.accent }}>{w.error}</span>
+      )}
+      <button
+        data-action="wish-send" onClick={w.send} disabled={!w.canSend}
+        style={{
+          padding: 13, borderRadius: radius.md, fontSize: 13.5,
+          border: `1px solid ${w.canSend ? C.accent : C.line}`,
+          background: w.canSend ? C.accent : C.slot,
+          color: w.canSend ? C.accentInk : C.faint,
+        }}
+      >{w.sending ? w.sendingLabel : w.sendLabel}</button>
+    </div>
+  );
+}
+
 function Fire({ y }: { y: Yeoul }) {
   const f = y.s.fire!;
   // ★ 배경을 누르면 **어느 판이든** 닫힌다(상훈님 판정 22). 예전엔 tapAny 를 준 판만 닫혀서
@@ -354,6 +401,7 @@ function Fire({ y }: { y: Yeoul }) {
         )}
         {/* ★ `pre-line` — 문구가 줄바꿈(\n)으로 두 마디를 갈라 둔 판이 있다(졸업 판). 없으면 한 덩어리로 붙는다. */}
         <span style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.62)', textAlign: 'center', whiteSpace: 'pre-line' }}>{f.body}</span>
+        {f.wish && <WishBox y={y} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', marginTop: 2 }}>
           {f.actions.map((a) => (
             /* ★ 버튼은 문구가 아니라 `data-action` 으로 집는다(팀 규약 C25) — 문구는 바뀌는 자리다. */

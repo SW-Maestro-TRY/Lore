@@ -22,13 +22,14 @@ import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
 import { BASIC_KEYS } from './constants';
 import {
   answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
-  setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, wake as wakePet,
+  motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, wake as wakePet,
   type Album, type CareAction, type ChatReply, type ChatState, type CharacterInput,
   type HatchProgress, type PetDetail, type Personality,
 } from '../../lib/pet';
 import { getCurrentGame, guess, startGame, type GameState, type GuessResult, type Side } from '../../lib/game';
 import { classifyUploadFailure, uploadFailureLine, uploadImage, type UploadFailure } from '../../lib/upload';
 import { readHatchBlocked, type HatchBlocked } from '../../lib/hatchBlocked';
+import { ApiError } from '../../lib/api';
 
 /**
  * 눌린 순간 **먼저 얹는 값**(낙관적 갱신). 서버 응답이 오면 그 자리에서 사라지고,
@@ -271,6 +272,13 @@ export interface Live {
   loadAlbum: () => Promise<void>;
   /** 동작 하나를 공유한다. 같은 동작을 다시 공유하면 있던 링크가 그대로 온다. */
   shareMotion: (motionKey: string) => Promise<{ error: string | null; url: string | null }>;
+  /**
+   * 보고 싶은 동작 한 줄을 남긴다.
+   *
+   * @returns `ok` 가 true 면 서버가 **204** 로 받았다는 뜻이다. `code` 는 화면이 문구를 고르는
+   *          데만 쓴다 — 서버 문장을 그대로 띄우지 않는다(말투의 주인이 백엔드로 넘어간다).
+   */
+  sendWish: (text: string) => Promise<{ ok: boolean; code: string | null }>;
   /** 두고 간 아이가 있는지 서버에 물어본다. 로그인한 뒤에 한 번만 부른다. */
   resume: () => Promise<'draft' | 'hatching' | 'alive' | null>;
   reset: () => void;
@@ -291,6 +299,7 @@ const EMPTY: Live = {
   sendChat: async () => ({ error: null, reply: null }),
   startPlay: async () => null,
   pickSide: async () => ({ error: null, result: null }),
+  sendWish: async () => ({ ok: false, code: 'no_pet' }),
   loadAlbum: async () => {}, shareMotion: async () => ({ error: null, url: null }),
   resume: async () => null, reset: () => {},
 };
@@ -670,6 +679,26 @@ export function useHatchState(): Live {
     try { setAlbum(await getAlbum(petId)); } catch { /* 못 읽으면 도감은 펫 상태의 18칸으로 그린다 */ }
   }, [petId]);
 
+  /**
+   * 보고 싶은 동작 한 줄.
+   *
+   * ★★ **성공 응답에 본문이 없다(204).** 공통 클라이언트는 본문을 `res.text()` 로 한 번만 읽고
+   *   비어 있으면 봉투를 null 로 두므로 그대로 성공으로 흘러간다. 여기서 응답을 따로 파싱하지
+   *   않는 것이 중요하다 — `res.json()` 류가 끼면 **성공한 요청이 실패로 뒤집히고**, 화면은
+   *   안 보낸 줄 알고 사용자가 한 번 더 보낸다.
+   * ★ 401 은 봉투에 코드가 없을 수 있어 **상태로 가른다**(`ApiError.isUnauthorized` 와 같은 기준).
+   */
+  const sendWish = useCallback(async (text: string) => {
+    if (!petId) return { ok: false, code: 'no_pet' };
+    try {
+      await motionWish(petId, text);
+      return { ok: true, code: null };
+    } catch (e) {
+      if (!(e instanceof ApiError)) return { ok: false, code: null };
+      return { ok: false, code: e.isUnauthorized ? 'unauthorized' : e.code ?? String(e.status) };
+    }
+  }, [petId]);
+
   const shareMotion = useCallback(async (motionKey: string) => {
     if (!petId) return { error: null, url: null };
     try {
@@ -871,7 +900,7 @@ export function useHatchState(): Live {
     careing, optimistic, resting, chat, chatting, game, guessing, album,
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
-    setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, loadAlbum, shareMotion, resume, reset,
+    setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, loadAlbum, shareMotion, sendWish, resume, reset,
   };
 }
 
