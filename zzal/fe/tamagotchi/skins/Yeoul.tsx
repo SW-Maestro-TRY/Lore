@@ -20,6 +20,7 @@ import AuthModal from '@common/auth/AuthModal';
 import { useAuth } from '@common/auth/useAuth';
 import Egg from '../yeoul/Egg';
 import Onboarding from '../yeoul/Onboarding';
+import AuthSkin from '../yeoul/authSkin';
 import Room from '../yeoul/Room';
 import { STEPS, WEB_KEYS } from '../yeoul/constants';
 import { C, C2, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, gap, monoSize, radius, fz } from '../yeoul/ui';
@@ -169,6 +170,11 @@ export default function Yeoul(_props: SkinProps) {
           //   로그인도 안 한 채 올리기 칸으로 넘어간다 — 실측으로 그랬다(2026-09-09).
           onSuccess={(how) => { if (how === 'login') actions.passAuth(how); }}
         />
+        {/* ★ 공통 가입 창을 **여울의 결로 감싸는 겉옷**(2026-09-21 A-01~A-04).
+            창 자체는 안 고친다 — trailer·webtoon 과 같이 쓰는 공통 부품이라 팀원 화면이 같이 바뀐다.
+            겉옷이 하는 일: 머리에 "그림 받았어요" 한 줄 + 고른 그림 · 색·서체를 여울 변수로 덮기
+            · 셸을 넘던 높이를 안으로 들이기. 자세한 사연은 `yeoul/authSkin.tsx` 머리말에. */}
+        <AuthSkin open={s.authOpen} thumb={live.previewUrl} pending={live.pendingUpload} />
       </div>
       </LiveProvider>
 
