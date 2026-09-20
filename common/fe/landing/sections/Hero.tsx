@@ -22,10 +22,9 @@ export default function Hero() {
           <span className={styles.kickerDot} aria-hidden="true" />
           우리만의 캐릭터로 노는 만화 플랫폼
         </span>
-        <h1 className={styles.heroTitle}>우리 애, 어디서 놀릴까요</h1>
+        <h1 className={styles.heroTitle}>우리 애, 어디서 놀까요</h1>
         <p className={styles.heroLede}>
-          사진 한 장으로 내 캐릭터를 만들고, 웹툰 한 화를 만들거나 곁에 두고
-          키웁니다.
+          내 캐릭터가 살아 움직이는 경험!
         </p>
       </div>
 
@@ -68,7 +67,7 @@ export default function Hero() {
           </span>
           <span className={styles.sideInner}>
             <span className={styles.sideNum}>/ 매일 조금씩</span>
-            <h2 className={styles.sideTitle}>우리 애랑 같이 살기</h2>
+            <h2 className={styles.sideTitle}>캐릭터 다마고치</h2>
             <p className={styles.sideText}>
               만든 캐릭터가 화면 안에서 삽니다. 돌본 만큼 새 동작을 하나씩
               배워 와요.
