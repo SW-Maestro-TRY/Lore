@@ -88,6 +88,12 @@ COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.dev-ec2.yml --en
 log "compose up -d --build (빌드 때문에 몇 분 걸립니다)"
 "${COMPOSE[@]}" up -d --build
 
+# nginx 는 설정 파일을 bind mount 로 읽는데, 경로가 고정 링크(src)라 compose 눈에는 "바뀐 게 없는" 서비스다.
+# 그래서 nginx.conf 가 바뀌어도 컨테이너가 재생성되지 않고, app·web 이 새 IP 로 뜨면 옛 IP 를 물고 502 를 낸다
+# (2026-09-20 #337 배포에서 실제로 발생). 매 배포마다 nginx 만 강제로 다시 띄운다(1초, 무해).
+log "nginx 재생성(설정·업스트림 IP 반영)"
+"${COMPOSE[@]}" up -d --force-recreate --no-deps nginx
+
 # ── 4. 헬스 대기 ─────────────────────────────────────────────────
 # nginx(443)로 재는 대신 compose 가 호스트로 내보낸 app:8080 을 직접 두드린다
 # (= 프록시·TLS 를 건너뛰고 앱이 실제로 요청을 받을 수 있는 상태인지만 본다).
@@ -110,6 +116,16 @@ if [ "$healthy" -ne 1 ]; then
   exit 1
 fi
 log "앱 헬스 OK"
+
+# nginx 를 거친 응답도 본다 — 앱·프론트가 멀쩡해도 nginx 가 옛 업스트림을 물면 사용자는 502 를 본다.
+log "nginx 경유 확인: https://localhost/ (Host: dev.lorecomic.com)"
+edge_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 -H 'Host: dev.lorecomic.com' https://localhost/ 2>/dev/null || echo 000)
+if [ "$edge_code" = "502" ] || [ "$edge_code" = "000" ]; then
+  echo "nginx 경유 응답 $edge_code — 업스트림 연결 실패. 아래 로그 확인"
+  "${COMPOSE[@]}" logs --tail=30 nginx || true
+  exit 1
+fi
+log "nginx 경유 응답 코드 $edge_code"
 
 # 프론트는 상태코드를 가리지 않는다(라우팅에 따라 404 일 수 있음). 응답 자체가 없으면 기동 실패로 본다.
 log "프론트 응답 확인: http://localhost:3000/"
