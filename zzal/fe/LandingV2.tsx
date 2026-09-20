@@ -240,7 +240,7 @@ export const V2_STYLE = `
    ★ 온보딩 칸에는 안 깐다 — 거기선 온보딩 셸(OB-01)이 같은 도트를 이미 깔고 있다(이중 질감 방지). */
 .zt-v2page::before{
   content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
-  background-image:radial-gradient(ink(.14) .6px, transparent .7px);
+  background-image:radial-gradient(${ink(.14)} .6px, transparent .7px);
   background-size:8px 8px; opacity:.5;
 }
 .zt-v2col{
@@ -283,10 +283,10 @@ export const V2_STYLE = `
   font-family:${GAEGU}; font-weight:700; font-size:19px; text-decoration:none;
   color:${C.accentInk}; background:${C.accent};
   padding:13px 32px; border-radius:${radius.pill}px;
-  box-shadow:0 6px 16px acc(.24);
+  box-shadow:0 6px 16px ${acc(.24)};
   transition:transform .14s ease, box-shadow .18s ease, background .18s ease;
 }
-.zt-v2cta:hover{ background:#8c3a2c; box-shadow:0 8px 20px acc(.28); }
+.zt-v2cta:hover{ background:#8c3a2c; box-shadow:0 8px 20px ${acc(.28)}; }
 .zt-v2cta:active{ transform:scale(.97); }
 
 /* 이렇게 놀아요 — 가로 3열 */
@@ -336,7 +336,7 @@ export const V2_STYLE = `
   .zt-v2mascot{ animation:none; }
 }
 
-/* ── 탭+(≥768) — THESIS "여울 앱 한 통"을 탭부터 적용. 셸 밖은 C.ground, 셸은 경계 있는
+/* ── 탭+(≥768) — THESIS "여울 앱 한 통"을 탭부터 적용. 셸 밖은 바깥 바탕(ground), 셸은 경계 있는
    종이 패널로 앉힌다(폰만 full-bleed). 크기도 키워 세 구간이 똑같이 완성돼 보이게.
    ★ 패널 처리는 통짜 페이지(.zt-v2page)에만 — 온보딩 안은 여울 셸이 이미 그 패널이다. */
 @media (min-width:768px){
@@ -344,11 +344,11 @@ export const V2_STYLE = `
   .zt-v2page::before{ display:none; }
   .zt-v2page .zt-v2col{
     background:${C.shell}; padding:44px 44px 34px;
-    border-radius:${radius.xl}px; box-shadow:0 20px 52px ink(.14);
+    border-radius:${radius.xl}px; box-shadow:0 20px 52px ${ink(.14)};
   }
   .zt-v2page .zt-v2col::before{
     content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:0;
-    background-image:radial-gradient(ink(.14) .6px, transparent .7px);
+    background-image:radial-gradient(${ink(.14)} .6px, transparent .7px);
     background-size:8px 8px; opacity:.5;
   }
   .zt-v2page .zt-v2col > *{ position:relative; z-index:1; }

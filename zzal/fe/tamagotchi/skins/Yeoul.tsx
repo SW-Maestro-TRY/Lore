@@ -131,13 +131,13 @@ export default function Yeoul(_props: SkinProps) {
         position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center',
         // ★ 바깥 바탕을 **화면 전체 폭의 방**으로 깐다(2026-09-16 강화). 은은한 그라데이션만으로는
         //   1920 에서 옆이 평평한 베이지로 남아 "좁은 기둥" 으로 읽혔다. 그래서 방의 실제 색
-        //   (벽 C.bornBg·바닥 `#EFDFCC`)으로 위=벽/아래=바닥 두 띠를 나누고, 벽엔 무대와 같은 세로
+        //   (벽 `#FBEFE2`·바닥 `#EFDFCC`)으로 위=벽/아래=바닥 두 띠를 나누고, 벽엔 무대와 같은 세로
         //   줄무늬를, 바닥엔 가장자리 그림자(비네트)를 얹는다. 이제 넓은 화면 전체가 하나의 방이고
         //   가운데 밝은 셸이 "일부러 방 가운데 둔 카드"로 명확히 읽힌다(수평선은 카드 안 무대와
         //   대략 맞춘 52% — 카드가 그림자로 떠 있어 픽셀 단위로 안 맞아도 어색하지 않다).
         background: `
-          repeating-linear-gradient(90deg, ink(.03) 0 1px, transparent 1px 22px),
-          radial-gradient(130% 78% at 50% 112%, ink(.16), ink(0) 46%),
+          repeating-linear-gradient(90deg, ${ink(.03)} 0 1px, transparent 1px 22px),
+          radial-gradient(130% 78% at 50% 112%, ${ink(.16)}, ${ink(0)} 46%),
           linear-gradient(180deg, ${C.bornBg} 0%, ${C.bornBg} 50%, #EFDFCC 55%, #E9D6BF 100%)`,
         color: C.ink, fontFamily: SANS, WebkitFontSmoothing: 'antialiased',
       }}

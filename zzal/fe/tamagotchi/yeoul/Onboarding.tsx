@@ -39,7 +39,7 @@ const OB03_RISE_STYLE = `
 .onb-rise{ animation: yPopIn .5s cubic-bezier(.2,.7,.25,1) both; }
 @media (prefers-reduced-motion: reduce){ .onb-rise{ animation: none; } }
 /* OB-04 CTA hover 마감(알약형). active scale 은 전역 .yeoul button:active 가 이미 준다. */
-.onb-cta-v2:not(:disabled):hover{ background:#8c3a2c; box-shadow:0 8px 20px acc(.28); }
+.onb-cta-v2:not(:disabled):hover{ background:#8c3a2c; box-shadow:0 8px 20px ${acc(.28)}; }
 `;
 
 /**
@@ -394,7 +394,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                       src={assetUrl(key)}
                       alt={`좋은 예: ${lbl}`}
                       // OB-07 — 색면+빗금을 종이/slot 계열 차분한 카드로(빗금 약화·테두리). 데이터·onError·✓ 배지는 그대로.
-                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,ink(fEx ? '.03' : '.05') 0 6px,transparent 6px 14px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `${monoSize.xs}px ${MONO}`, color: ink(.42) }}
+                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,${ink(fEx ? '.03' : '.05')} 0 6px,transparent 6px 14px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `${monoSize.xs}px ${MONO}`, color: ink(.42) }}
                       badge={<span style={{ position: 'absolute', left: 8, top: 8, width: 15, height: 15, borderRadius: '50%', border: '1.5px solid #5C8452', background: paperA(.85), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fz.xs, lineHeight: 1, color: '#5C8452' }}>✓</span>}
                     />
                     <span style={{ fontSize: fz.xs, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{lbl}</span>
@@ -410,7 +410,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                       src={assetUrl(key)}
                       alt={`어려운 예: ${lbl}`}
                       // OB-07 — 같은 결로 차분하게. 데이터·onError·✕ 배지는 그대로.
-                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,ink(fEx ? '.03' : '.05') 0 5px,transparent 5px 12px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `${monoSize.xs}px ${MONO}`, color: ink(.34) }}
+                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,${ink(fEx ? '.03' : '.05')} 0 5px,transparent 5px 12px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `${monoSize.xs}px ${MONO}`, color: ink(.34) }}
                       badge={<span style={{ position: 'absolute', left: 5, top: 5, width: 14, height: 14, borderRadius: '50%', background: paperA(.85), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fz.xs, lineHeight: 1, color: C.accent }}>✕</span>}
                     />
                     <span style={{ fontSize: fz.xs, color: C.sub2, textAlign: 'center' }}>{lbl}</span>
