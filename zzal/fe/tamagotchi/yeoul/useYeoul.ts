@@ -1370,6 +1370,16 @@ export function useYeoul(live?: Live) {
     later('postcard', 500, popPostcard);
   }, [flash, later, popPostcard]);
   const restart = useCallback(() => setS(() => ({ ...INITIAL })), []);
+  /**
+   * 로그아웃 — 화면을 **첫 화면(랜딩 칸)으로** 되돌린다.
+   *
+   * ★ 왜 `screen` 만 되돌리지 않는가 — 이 상태 한 벌에는 방금까지 함께 있던 아이의 흔적이
+   *   곳곳에 남는다(이름·오간 말·기억 칩·앨범·게임 결과·튜토리얼 진행·연습방 스냅샷).
+   *   화면만 랜딩으로 옮기면 그 값들이 그대로 살아 있다가, 같은 탭에서 **다음 사람이 로그인하는
+   *   순간 앞사람의 것이 그대로 보인다.** 그래서 처음 들어온 사람과 똑같은 한 벌로 통째로 되돌린다.
+   *   (서버에서 받아 둔 것은 `useHatch.reset` 이 같은 순간에 함께 버린다.)
+   */
+  const leaveAccount = useCallback(() => setS(() => ({ ...INITIAL })), []);
   /** 개발용 — 2층 로드맵을 다 배운 것으로 만든다(= 3층 시작 = 조각 등장). */
   const finishRoadmap = useCallback(() => patch({ cChat: 4, cBath: 3, cSleep: 3, cGame: 3 }), [patch]);
   /** 개발용 — 조각 도장을 0·2·4 로 바꿔 본다. 실제로는 잠들 때 판정·리셋된다(정본). */
@@ -2205,7 +2215,7 @@ export function useYeoul(live?: Live) {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
+    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
     openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
     backToSample: () => patch({ screen: 'room' }),
@@ -2214,7 +2224,7 @@ export function useYeoul(live?: Live) {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
+    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
     openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
   ]);

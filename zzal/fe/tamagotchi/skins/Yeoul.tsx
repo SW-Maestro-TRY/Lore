@@ -59,17 +59,21 @@ export default function Yeoul(_props: SkinProps) {
    */
   // ★ 로그아웃하면 다시 물어봐야 한다(2026-09-10). 전에는 한 번 켜면 그 마운트에서 영영 꺼지지 않아,
   //   같은 탭에서 계정을 바꾸면 **앞사람의 아이가 그대로 남아 보였다.** 로그인 상태가 꺼질 때 되돌린다.
+  // ★ 2026-09-20 — 되돌리는 김에 **화면도 첫 칸(랜딩)으로** 돌린다. 전에는 서버에서 받은 것만
+  //   버리고 화면은 있던 자리에 그대로 서 있어서, 방에서 로그아웃하면 **남의 아이 방이 그대로
+  //   떠 있었다**(게이지·이름·오간 말이 목 값으로 슬쩍 바뀐 채). 로그아웃은 "나가기" 라서
+  //   첫 화면으로 돌아가는 것이 사람이 기대하는 결과다.
   const asked = useRef(false);
   const { resume, reset, resumeUpload, discardUpload } = live;
-  const { patch } = actions;
+  const { leaveAccount } = actions;
   useEffect(() => {
     if (isAuthenticated) return;
     if (!asked.current) return;
     asked.current = false;
     reset();
-    // 이름도 함께 지운다 — 안 지우면 로그아웃한 화면에 **앞사람 아이의 이름**이 그대로 남는다.
-    patch({ petName: '' });
-  }, [isAuthenticated, reset, patch]);
+    // 이름·오간 말·게임 결과까지 통째로 첫 상태로. 무엇을 지우는지는 `useYeoul.leaveAccount` 에.
+    leaveAccount();
+  }, [isAuthenticated, reset, leaveAccount]);
   /**
    * ★ 화면을 옮기는 것도 **지금 세대의 답일 때만** 한다(2026-09-10).
    *   `asked` 를 되돌리는 것은 *다음* 로그인이 다시 묻게 할 뿐, **이미 날아간 요청**은 못 막는다.
