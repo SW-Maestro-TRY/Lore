@@ -29,8 +29,6 @@ import { useIsWide } from '../useIsWide';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
 import { charFit, HEAD_SAFE, FOOT_FLOOR, FOOT_FLOOR_SHORT, NARROW_Q, SHORT_Q } from '../props/layout';
-import { propUrl } from '../props/spec';
-import { useRoomPlan, type RoomPlan } from './roomPlan';
 import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
 import {
   SITUATION_TABLE, activeSituations, alwaysSituationIds, situationsOfPose, stageAt, stagePlanOf,
@@ -46,9 +44,6 @@ const SWEEP_ROW_ID = '__sweep__';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
-  // ★ 방 화면 UX 안 1·2·3 의 **유일한 갈림길**. 표는 `./roomPlan` 한 곳에 있고 여기서는
-  //   불린만 읽는다 — 한 안으로 정해지면 그 불린을 고정값으로 접으면 끝이다.
-  const plan = useRoomPlan();
   // 좁은 폰(SE)에서 말풍선이 떴을 때만, 머리 위 공간을 벌기 위해 아이를 소폭 낮춘다(아래 SIL).
   const narrow = useIsWide(NARROW_Q);
   // ★ 좁고 **짧은** 화면(SE 667 등)만 — 팝오버를 콤팩트하게 줄이고 발끝선 예약(LIFT 하한)을 낮춰 아이를 키운다.
@@ -134,13 +129,12 @@ export default function Room({ y }: { y: Yeoul }) {
    * ★ **같은 말을 두 언어로 하지 않는다**(2026-09-20 · 재설계안 H5).
    *   종이 말풍선(글)이 떠 있는 동안에는 머리 옆 만화 말풍선(`bubble_*` — 느낌표·물음표·음표…)을 끈다.
    *   둘이 같이 뜨면 "아이가 말한다" 를 두 가지 문법으로 동시에 말해 화면이 번잡해진다.
-   *   무대에 종이 말풍선이 없는 안 3(말띠)에서는 만화 말풍선이 **유일한 언어**라 그대로 둔다.
    */
   const mutedBubbleProps = useMemo(
     () => new Set(table.filter((r) => (r.prop ?? '').startsWith('bubble_')).map((r) => r.id)),
     [table],
   );
-  const speaking = plan.speech === 'pet' && v.bub.show;
+  const speaking = v.bub.show;
   const scene = {
     pose: v.spriteKey,
     // 걷힘 바퀴에는 **덮고 있던 줄을 끈다** — 안 끄면 첫 단계로 되돌아가 다시 덮인다.
@@ -210,8 +204,7 @@ export default function Room({ y }: { y: Yeoul }) {
   //     3) 위도 옆도 없으면(좁고 짧은 폰) 그때만     → 아이를 **딱 모자란 만큼** 낮춘다
   //   그래서 넓은 화면에서 아이가 공연히 줄지 않고, 좁은 화면에서도 필요 이상 줄지 않는다.
   const [bubbleHeadroom, setBubbleHeadroom] = useState(0);
-  //   안 3 은 말이 무대 밖 말띠로 나가므로 머리 위를 살 이유가 없다 — 늘 최소 여유뿐이다.
-  const HEADROOM = plan.speech === 'pet' ? Math.max(HEAD_SAFE, bubbleHeadroom) : HEAD_SAFE;
+  const HEADROOM = Math.max(HEAD_SAFE, bubbleHeadroom);
   // 화면에서의 실루엣 키. **무대의 약 60%** 를 목표로 하되, 머리끝이 무대 위로 안 넘게 남은 높이로 깎는다.
   //   `SIL` 은 가장 큰 자세의 실루엣이 화면에서 가질 높이다(무대 60%, 하한 150px, 머리 공간으로 상한).
   //   K_SCREEN = SIL ÷ (가장 큰 실루엣÷K) — 이렇게 뒤집어야 어떤 자세든 무대 밖으로 안 나간다.
@@ -283,10 +276,6 @@ export default function Room({ y }: { y: Yeoul }) {
       />
 
       {/* ── 무대 ───────────────────────────────────────────────── */}
-      {/* 안 3 — 아이 말을 무대 **밖** 고정 말띠로 올린다. 무대가 그만큼 낮아지고, 잘림·겹침이
-          구조적으로 불가능해지는 대신 꼬리가 없어 "나에게 말한다" 가 가장 약하다(그게 안 3 이다). */}
-      {plan.speech === 'band' && <SpeechBand y={y} />}
-
       <div
         ref={stageRef}
         data-part="stage"
@@ -317,10 +306,6 @@ export default function Room({ y }: { y: Yeoul }) {
             **아래**로 내려가 아이가 바닥 위 허공에 뜨고 그 아래 바닥이 텅 비어 보였다. 이제 경계를
             발끝선보다 한 뼘 위(무대 8%, 28~90px)로 올려 아이가 언제나 바닥에 발을 딛는다. */}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `calc(${LIFT} + clamp(28px, 8%, 90px))`, background: v.st.floor, borderTop: '1px solid rgba(74,64,56,.09)' }} />
-
-        {/* 안 2 — 바닥에 방의 물건을 놓는다(러그·밥그릇·화분). **안 2 에서만** 그린다.
-            새 그림을 발주하지 않고 이미 있는 에셋(매트·주먹밥 그릇·화분)을 바닥 소품으로 쓴다. */}
-        {plan.floorProps && <FloorProps lift={LIFT} />}
 
         {/* ★ 말풍선 자리 계산의 **기준자**. 눈에 안 보이고 아무것도 안 덮는다.
             말풍선이 아이를 낮추면(위 `HEADROOM`) 아이 상자가 줄어드는데, 그 줄어든 상자로 다시
@@ -433,16 +418,14 @@ export default function Room({ y }: { y: Yeoul }) {
             사라져 "화면 깨짐"으로 읽힘)를 걷어냈다. backdrop 을 못 그리는 곳에서도 옅은 냉기 톤은 남는다. */}
         {v.st.sick && <div style={{ position: 'absolute', inset: 0, backdropFilter: 'saturate(.45)', WebkitBackdropFilter: 'saturate(.45)', background: 'rgba(140,144,156,.12)', animation: 'yFadeIn .4s ease', pointerEvents: 'none' }} />}
 
-        {/* 안 1·2 — 말풍선이 **아이에게 붙어** 같은 걸음·같은 뜀을 탄다. */}
-        {plan.speech === 'pet' && (
-          <Bubble
-            show={v.bub.show} text={v.bub.text} play={v.st.play}
-            headSpan={headSpan} faceSpan={Math.max(0, headSpan - headSideDrop)}
-            silLeft={silLeft} silRight={silRight}
-            headBottom={headTopFromBottom} faceBottom={faceFromBottom}
-            stageRef={stageRef} probeRef={charProbeRef} onHeadroom={setBubbleHeadroom}
-          />
-        )}
+        {/* 말풍선이 **아이에게 붙어** 같은 걸음·같은 뜀을 탄다. */}
+        <Bubble
+          show={v.bub.show} text={v.bub.text} play={v.st.play}
+          headSpan={headSpan} faceSpan={Math.max(0, headSpan - headSideDrop)}
+          silLeft={silLeft} silRight={silRight}
+          headBottom={headTopFromBottom} faceBottom={faceFromBottom}
+          stageRef={stageRef} probeRef={charProbeRef} onHeadroom={setBubbleHeadroom}
+        />
 
         {v.hearts.show && (
           <div data-part="hearts" style={{ position: 'absolute', left: '50%', bottom: '44%', animation: 'yFloatup 1.1s ease forwards', fontSize: 24, letterSpacing: 3, color: '#D97386', textShadow: '0 1px 5px rgba(255,255,255,.8)' }}>
@@ -456,30 +439,21 @@ export default function Room({ y }: { y: Yeoul }) {
             셸 크림색이라 무대 바닥(탄색)과 사이에 크림 띠 seam 이 생겨 "빈 베이지 띠"로 보였다.
             위 38px 를 바닥 톤에서 셸로 풀어 seam 을 없애고 방 바닥이 타일까지 자연스럽게 내려오게 한다. */}
       <div onClick={actions.bottomTap} style={{ position: 'relative', flex: 'none', padding: '10px 12px 22px', background: `linear-gradient(180deg, ${v.st.floor} 0, ${C.shell} 38px)` }}>
-        {/* ★ 토스트는 **지금 아래에 떠 있는 것 바로 위**에 띄운다(2026-09-20 · 재설계안 H6).
-            예전엔 미니카드와 같은 상자 안에서 `bottom:100%` 라 좌하단에서 둘이 26px 겹쳤다.
-            이제 부모를 바꿔 자리를 가른다 — 겹침 규칙을 새로 두지 않는다.
-            · 안 1·2 = 선반·대화·팝오버가 **떠 있는 칸 안**에 두어 그 위로 뜬다.
-            · 안 3 = 아래가 흐름 속 독이라 떠 있는 칸이 비어 있다 → 컨트롤 영역 통째로 위에 둔다. */}
-        {plan.dock && v.toast.show && <Toast text={v.toast.text} />}
-
+        {/* ★ 떠 있는 것은 **한 칸 안에 쌓는다** — 선반·대화·팝오버·토스트가 서로 자리를 안 뺏는다.
+            토스트는 그 칸의 `bottom:100%` 라 늘 그 위로 뜬다(2026-09-20 · 재설계안 H6).
+            예전엔 미니카드와 같은 상자 안에 있어 좌하단에서 둘이 26px 겹쳤다 — 겹침 규칙을
+            새로 두지 않고 부모를 바꿔 자리를 갈랐다. */}
         <div style={{ position: 'absolute', left: 12, right: 12, bottom: 116, zIndex: 5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
           {v.ask.show && <AskCard y={y} />}
-          {/* 안 1·2 — 발밑 빈 땅(진짜 방 194.8px = 세로 23.1%)에 놓는 **낮은 선반**.
+          {/* 발밑 빈 땅(진짜 방 194.8px = 세로 23.1%)에 놓는 **낮은 선반**.
               구석에 따로 떠 있던 셋(다음 배울 것·약·대화)이 여기 한 줄로 앉는다. */}
-          {plan.shelf && <Shelf y={y} />}
-          {v.chat.show && <ChatBar y={y} plan={plan} />}
-          {!plan.dock && v.toast.show && <Toast text={v.toast.text} />}
+          <Shelf y={y} />
+          {v.chat.show && <ChatBar y={y} />}
+          {v.toast.show && <Toast text={v.toast.text} />}
           {v.pop.show && <Popover y={y} compact={compact} />}
         </div>
 
-        {/* 안 3 — 아래를 타일과 **한 덩어리**인 컨트롤 독으로. 빈 땅 개념 자체가 없어진다. */}
-        {plan.dock ? (
-          <div data-part="dock" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 9, borderRadius: radius.lg, background: C.paper, border: `1px solid ${C.line}`, boxShadow: '0 4px 14px rgba(74,64,56,.10)' }}>
-            <Shelf y={y} inDock />
-            <Tiles y={y} />
-          </div>
-        ) : <Tiles y={y} />}
+        <Tiles y={y} />
       </div>
 
       <Album y={y} />
@@ -490,7 +464,15 @@ export default function Room({ y }: { y: Yeoul }) {
 
 // ── 조각들 ──────────────────────────────────────────────────────────────
 
-// ── 안 1·2 — 아이에게 붙는 말풍선 ────────────────────────────────────────
+// ── 아이에게 붙는 말풍선 ─────────────────────────────────────────────────
+//
+// ★ **왜 말풍선이 아이를 따라다니나** — 2026-09-20 에 세 안(아이에게 붙이기 / 바닥까지 꾸미기 /
+//   무대 밖 고정 말띠)을 다 만들어 상훈님이 눈으로 비교하신 뒤 **이 안을 고르셨다.** 기준은 하나였다:
+//   *"아이가 나한테 말을 거는 느낌은 무조건 나야 해서."* 무대 밖 말띠는 잘림·겹침이 구조적으로
+//   0 이라 점수는 더 높았지만 꼬리가 없어 그 느낌이 가장 약했고, 그게 zzal 의 유일한 정서 자산이다.
+//   → 그러니 **꼬리와 "아이를 따라간다"는 성질을 성능·단순함과 바꾸지 말 것.** 자리를 옮기거나
+//   최적화할 일이 생기면 이 두 가지를 먼저 지키고 나머지를 조정한다.
+//   (세 안 비교판과 개발 창 리모컨은 결정 뒤 걷어냈다 — 죽은 코드를 남기지 않는다.)
 //
 // ★ 지키는 것 하나 — **"아이가 나에게 말한다"**. 그래서 꼬리는 어디에 뜨든 아이를 가리키고,
 //   말풍선은 아이와 **같은 걸음(`yWander`)·같은 뜀(`yHop`)** 을 탄다(새 키프레임은 안 만든다).
@@ -523,6 +505,14 @@ type BubblePlace =
   | { at: 'above'; w: number; left: number }
   | { at: 'side'; w: number; left: number; top: number; tail: number; side: 'left' | 'right' };
 
+/** 두 자리가 같은가. 같은 값으로 다시 그리지 않으려고 본다(아래 `ro.observe(card)` 의 짝). */
+function samePlace(a: BubblePlace, b: BubblePlace): boolean {
+  if (a.at !== b.at) return false;
+  if (a.w !== b.w || a.left !== b.left) return false;
+  if (a.at === 'above' || b.at === 'above') return true;
+  return a.top === b.top && a.tail === b.tail && a.side === b.side;
+}
+
 function Bubble({
   show, text, play, headSpan, faceSpan, silLeft, silRight,
   headBottom, faceBottom, stageRef, probeRef, onHeadroom,
@@ -544,6 +534,9 @@ function Bubble({
     const stage = stageRef.current;
     const probe = probeRef.current;
     if (!stage || !probe) return undefined;
+    // ★ 같은 답이면 상태를 안 건드린다 — 말풍선 자신을 관찰 대상에 넣었기 때문에(아래),
+    //   매번 새 객체를 넣으면 그리기→크기변화→다시 재기가 끝없이 돈다.
+    const put = (next: BubblePlace) => setPlace((prev) => (samePlace(prev, next) ? prev : next));
     const measure = () => {
       const card = cardRef.current;
       if (!card) { onHeadroom(0); return; }
@@ -565,7 +558,7 @@ function Bubble({
       const aboveH = card.offsetHeight;
       const need = aboveH + BUBBLE_GAP + BUBBLE_EDGE + HOP;
       if (need <= headTopY) {
-        setPlace({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
+        put({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
         onHeadroom(0);
         return;
       }
@@ -585,7 +578,7 @@ function Bubble({
           Math.max(topMin, st.height - BUBBLE_EDGE - 4 - h),
         );
         const inner = Math.round((side === 'right' ? silR - st.width / 2 : st.width / 2 - silL) + 10);
-        setPlace({
+        put({
           at: 'side', w: sideW, side,
           left: side === 'right' ? inner : -(inner + sideW),
           top: Math.round(top - faceY),
@@ -597,13 +590,19 @@ function Bubble({
 
       // 3) 위도 옆도 없다(좁고 짧은 폰) — 그때만 아이가 **딱 모자란 만큼** 자리를 내준다.
       card.style.width = `${aboveW}px`;
-      setPlace({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
+      put({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
       onHeadroom(Math.ceil(need));
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(stage);
     ro.observe(probe);
+    // ★ **말풍선 자신도 본다**(2026-09-20 실측으로 추가). 글씨체(Gaegu)가 늦게 도착하면 글이
+    //   한 줄에서 두 줄로 불어나는데, 그때 다시 재지 않으면 **이미 내린 결정이 낡은 채로 남는다** —
+    //   실측에서 연습방 18자가 한 줄(47.7px)로 재어져 "머리 위" 로 갔다가, 글씨체가 와서
+    //   두 줄(75.4px)이 되자 뛰는 순간 5.3~17px 잘렸다. 자리 계산은 늘 같은 입력에서 같은 답을
+    //   내므로(폭을 재기 전에 스스로 정한다) 이 관찰이 되먹임 고리를 만들지 않는다 — `put` 참조.
+    if (cardRef.current) ro.observe(cardRef.current);
     return () => ro.disconnect();
   }, [show, text, headSpan, faceSpan, silLeft, silRight, stageRef, probeRef, onHeadroom]);
 
@@ -653,90 +652,25 @@ function Bubble({
 }
 
 /**
- * 안 3 — 아이 말을 **무대 밖 고정 말띠**로 올린다.
- *
- * ★ 잘림·겹침이 **구조적으로** 불가능해진다(무대가 자르는 상자 밖에 있고 아이와 안 겹친다).
- * ★ 대신 꼬리가 없어 "아이가 나에게 말한다" 가 가장 약하다. 안 3 을 안 3 답게 보이려고
- *   여기에 꼬리를 붙이지 않는다 — 상훈님이 그 차이를 눈으로 비교하시려는 것이다.
- * ★ 자리를 **늘 차지한다**(말이 없어도). 있다 없다 하면 무대 높이가 출렁여 아이가 오르내린다.
- */
-function SpeechBand({ y }: { y: Yeoul }) {
-  const { v } = y;
-  return (
-    <div
-      data-part="speech-band"
-      style={{
-        flex: 'none', margin: '0 12px 8px', boxSizing: 'border-box', minHeight: 46,
-        display: 'flex', alignItems: 'center', padding: '9px 15px', borderRadius: radius.md,
-        background: C.paper, border: `1px solid ${C.line}`,
-      }}
-    >
-      <span style={{ fontFamily: GAEGU, fontSize: 18, lineHeight: 1.3, color: v.bub.show ? C.ink : C.faint2 }}>
-        {v.bub.show ? v.bub.text : '…'}
-      </span>
-    </div>
-  );
-}
-
-/**
- * 안 2 — 바닥에 방의 물건을 놓는다(러그·밥그릇·화분).
- *
- * ★ **새 그림을 발주하지 않았다.** 이미 있는 에셋(매트·주먹밥 그릇·화분)을 바닥 소품으로 쓴다.
- *   안 2 의 뜻("빈 땅이 덜 만든 화면이 아니라 방으로 읽힌다")을 눈으로 보는 데는 이걸로 충분하고,
- *   채택되면 그때 전용 그림을 발주한다.
- * ★ 아이 뒤(zIndex 1)에 깔린다. 상호작용은 없다(정본 불변 — 누를 수 있는 것을 늘리지 않는다).
- */
-// ★ 크기는 **무대 폭의 %** 로 잡는다 — 아이 상자 높이(`CHAR_H`)를 그대로 못 쓴다. 그 식은 `100%`·`30%`
-//   같은 퍼센트를 품고 있고, 퍼센트는 `bottom` 에서는 높이, `width` 에서는 **폭**으로 풀려 같은 글이
-//   다른 값이 된다(실측: 폰에서 러그가 310px 이 아니라 119px 로 나왔다).
-// ★ `drop` 은 **제 높이에 대한 비율**(`translateY(%)` — 퍼센트가 제 크기로 푼다). 러그는 발끝선보다
-//   제 높이의 절반쯤 내려 깔아야 아이가 그 위에 선 것으로 읽히고, 그릇·화분은 발끝선에 얹는다.
-const FLOOR_PROPS: ReadonlyArray<{ key: string; ver: number; w: number; x: number; drop: number }> = [
-  { key: 'mat', ver: 1, w: 52, x: 50, drop: 45 },
-  { key: 'bowl_1', ver: 1, w: 9, x: 72, drop: 0 },
-  { key: 'prop_plant', ver: 1, w: 10, x: 86, drop: 0 },
-];
-function FloorProps({ lift }: { lift: string }) {
-  return (
-    <>
-      {FLOOR_PROPS.map((p) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={p.key} src={propUrl(p.key, p.ver)} alt="" aria-hidden data-floor-prop={p.key}
-          style={{
-            position: 'absolute', left: `${p.x}%`, bottom: lift, width: `${p.w}%`,
-            transform: `translate(-50%, ${p.drop}%)`,
-            zIndex: 1, pointerEvents: 'none',
-          }}
-        />
-      ))}
-    </>
-  );
-}
-
-/**
  * 발밑 선반 — 구석에 따로 떠 있던 셋(다음 배울 것 · 약 · 대화)을 **한 줄로 앉힌다**(안 1·2).
  *
  * ★ 왜 — 발끝 아래 194.8px(세로 23.1%)이 늘 비어 있었다. 잘못 비운 게 아니라(팝오버가 쓸 자리다)
  *   **닫혀 있는 동안 아무도 안 쓰는 것**이 문제였다. 그래서 그 땅에 낮은 선반을 놓고 떠 있던 것을 앉힌다.
  * ★ 표시 조건은 **하나도 안 바꿨다** — 팝오버·대화·시트가 열리면 셋이 각자 사라지고(`mini.show` 등)
  *   선반도 같이 사라져 팝오버가 그 자리를 쓴다. 겹침 규칙을 새로 두지 않았다.
- * ★ 안 3 은 이 줄이 **독 안(`inDock`)** 으로 들어가 타일과 한 덩어리가 된다 — 종이 한 겹을 벗는다.
  */
-function Shelf({ y, inDock = false }: { y: Yeoul; inDock?: boolean }) {
+function Shelf({ y }: { y: Yeoul }) {
   const { v } = y;
-  if (!inDock && !(v.mini.show || v.medFab.show || v.fab.show)) return null;
+  if (!(v.mini.show || v.medFab.show || v.fab.show)) return null;
   // ★ **앉힐 것이 없으면 선반을 안 깐다.** 연습방에는 '다음 배울 것' 카드가 없어서, 종이 띠에 동그란
   //   단추 하나만 놓이면 "덜 만든 줄" 로 읽혔다(실측 스크린샷). 그때는 단추만 제자리에 둔다.
-  const solid = !inDock && v.mini.show;
+  const solid = v.mini.show;
   return (
     <div
-      data-part="shelf" data-dock={inDock ? '1' : '0'} data-solid={solid ? '1' : '0'}
+      data-part="shelf" data-solid={solid ? '1' : '0'}
       onClick={(e) => e.stopPropagation()}
       style={{
         width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'flex-end', gap: 8,
-        // 독 안에서는 종이를 한 겹 벗는다 — 독 자체가 이미 종이다. 높이만 붙들어 둔다.
-        ...(inDock ? { minHeight: 52 } : {}),
         ...(solid
           ? {
             padding: '8px 9px', borderRadius: radius.lg, background: C.paper,
@@ -784,7 +718,7 @@ function Toast({ text }: { text: string }) {
   );
 }
 
-/** 돌보기 타일 다섯. 안 1·2 는 그대로 아래에, 안 3 은 컨트롤 독 **안**에 들어간다. */
+/** 돌보기 타일 다섯. */
 function Tiles({ y }: { y: Yeoul }) {
   return (
     <div data-part="tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 6 }}>
@@ -1213,7 +1147,7 @@ function AskCard({ y }: { y: Yeoul }) {
  * ★ Enter 는 **조합 중이면 무시**한다. 한글에서 마지막 글자를 확정하려고 누른 Enter 까지
  *   보내기로 받으면, 확정 전의 글자로 보내 버린다.
  */
-function ChatBar({ y, plan }: { y: Yeoul; plan: RoomPlan }) {
+function ChatBar({ y }: { y: Yeoul }) {
   const { v, actions } = y;
   const box = useRef<HTMLInputElement>(null);
   const composing = useRef(false);
@@ -1230,9 +1164,8 @@ function ChatBar({ y, plan }: { y: Yeoul; plan: RoomPlan }) {
     >
       {/* ★ 주고받은 **두 줄이 입력칸 바로 위에 남는다**(2026-09-20 · 재설계안 E-3).
           예전엔 아이 말이 화면 위 말풍선(입력칸에서 470px 위)에만 있고, 내 말은 4.2초 뒤 사라져
-          한 화면에 대화가 남지 않았다. 자리·개폐·하루 3회·40자 규칙은 **하나도 안 바꿨다.**
-          안 3 은 아이 말을 무대 밖 말띠가 맡으므로 여기서는 내 말만 남긴다. */}
-      {plan.chatPetRow && v.chat.hasLine && (
+          한 화면에 대화가 남지 않았다. 자리·개폐·하루 3회·40자 규칙은 **하나도 안 바꿨다.** */}
+      {v.chat.hasLine && (
         <span data-part="chat-pet" style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 7, maxWidth: '86%', padding: '7px 13px', borderRadius: radius.pill, background: C.slot, border: `1px solid ${C.lineHard}` }}>
           <span style={{ fontFamily: GAEGU, fontSize: 16, lineHeight: 1.2, color: C.ink }}>{v.chat.line}</span>
         </span>
