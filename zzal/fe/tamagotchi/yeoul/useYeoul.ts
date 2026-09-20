@@ -70,6 +70,25 @@ const wishFailLine = (code: string | null): string => {
 /** 바퀴 타이머를 걷어낼 때 훑을 최대 바퀴 수. 표에서 가장 긴 단계 차례(4)보다 넉넉히. */
 const ACT_MAX_CYCLES = 6;
 
+// ── 좌우 맞히기의 박자 ──────────────────────────────────────────────────
+//
+// ★ **프레임 규칙(`situations.ts`)에서 일부러 떼어 냈다**(2026-09-20). 재설계안은 여운을
+//   `CYCLE_MS`(1800ms)를 재사용해 적었는데, 그 상수는 **돌보기 연출 길이**를 정하는 값이라
+//   프레임 규칙이 바뀌면 게임 박자까지 같이 흔들린다. 게임이 원하는 것은 "한 바퀴"가 아니라
+//   "결과를 읽을 시간" 이므로 **여기 숫자로 따로 적는다.** 값이 같은 것은 우연이다.
+// ★ 다만 **2층의 공개 지연만은 `CYCLE_MS` 를 그대로 쓴다** — 그건 `놀람` 움짤이 실제로 도는
+//   길이라, 프레임 규칙이 바뀌면 **같이 바뀌는 것이 맞다**(→ `onGuess` 의 `revealAfter`).
+
+/** 섞기 — 고른 뒤 공개까지. 양손은 주먹 그대로이고 입력만 잠긴다. 서버 왕복이 더 길면 그쪽이 이긴다. */
+const GUESS_SHUFFLE_MS = 250;
+/** 여운 — 결과를 읽을 시간. 끝나면 **누르지 않아도** 다음 판이 시작된다. */
+const GUESS_AFTERGLOW_MS = 1800;
+/** 매치 끝 — 결과 문장과 행복 한 칸을 같이 읽어야 해서 여운의 두 배다. */
+const GUESS_MATCH_END_MS = 3600;
+/** 정본 §7 — 한 매치 5판, 3판 먼저 맞히면 이김. **서버가 들고 있는 값과 같다**(`rounds`·`winAt`). */
+const GUESS_ROUNDS = 5;
+const GUESS_WIN_AT = 3;
+
 const petWith = (name: string, withFinal: string, withoutFinal: string) => {
   const n = name || '아이';
   return `${n}${josa(n, withFinal, withoutFinal)}`;
@@ -176,13 +195,19 @@ export interface YeoulState {
   /** 방금 친 좌우 맞히기 결과(서버가 준 것). 한 줄 문구를 그리는 데만 쓴다. */
   lastGuess: GuessResult | null;
   /**
-   * 지금 펼쳐 보일 손. **서버판·목판이 같은 칸을 쓴다** — 그래야 그리는 코드가 한 벌이고,
-   * 서버가 붙고 안 붙고에 따라 손이 다르게 뜨는 일이 없다(`lastGuess` 는 서버에만 있다).
-   * `null` 이면 아직 안 골랐다는 뜻이라 양손 다 주먹이다.
+   * 좌우 맞히기 **한 매치**. 시트가 아니라 **무대 위**에서 돈다(2026-09-20 안 1).
+   * 규칙은 정본 §7 그대로 — 5판 3승 · 하루 3판. 화면이 규칙을 새로 만들지 않는다.
+   *   `gOn`    매치가 도는 중인가(무대에 손·점 줄이 뜬다)
+   *   `gPhase` 대기 → 섞기 → 공개 → (여운 뒤 자동으로 다음 판) · 마지막엔 `done`
+   *   `gMarks` 판마다 맞혔나(점 다섯 칸). `null` = 아직 안 친 판
    */
-  guessHand: { side: Side; hit: boolean } | null;
+  gOn: boolean;
+  gPhase: 'wait' | 'shuffle' | 'reveal' | 'done';
+  gRound: number; gHits: number;
+  gPick: Side | null; gHit: boolean | null;
+  gMarks: readonly (boolean | null)[];
   log: LogLine[]; memories: string[];
-  resolved: Record<string, boolean>; calls: number; guess: string | null;
+  resolved: Record<string, boolean>; calls: number;
   wallId: string;
   /**
    * 캐릭터 칸에서 고른 칩들. **한 묶음에 여러 개**를 고를 수 있다(상훈님 2026-09-11).
@@ -282,10 +307,12 @@ const INITIAL: YeoulState = {
   full: 2, happy: 2, stock: 3, trace: 2, plays: 3, snacks: 0,
   bathUsed: false, pets: 1, sick: false, sleeping: false, night: false,
   hearts: false, toast: '',
-  sheet: null, sheetClosing: false, playTab: 'talk', draft: '', lastGuess: null, guessHand: null,
+  sheet: null, sheetClosing: false, playTab: 'talk', draft: '', lastGuess: null,
+  gOn: false, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
+  gMarks: [null, null, null, null, null],
   log: [{ who: 'pet', text: '있잖아, 오늘은 뭐 했어요?' }],
   memories: ['빵 좋아함', '비 싫어함', '왼쪽을 잘 맞힘', '늦잠', '파란색'],
-  resolved: {}, calls: 3, guess: null,
+  resolved: {}, calls: 3,
   wallId: 'cream', picks: {}, texts: {}, user: {}, uq: 0,
   // ★ 이름은 **비워 둔다**(상훈님 판정 3). 미리 채워 두면 지우지 않고 넘긴 사람의 아이가
   //   남의 이름으로 만들어진다. 자리표시자('여울')만 보여 주고 값은 빈 칸이다.
@@ -1103,51 +1130,109 @@ export function useYeoul(live?: Live) {
   }, [s.sleeping, s.night, s.sampleMode, s.day, s.resolved, s.cSleep, patch, flash, careAct, tutorDone]);
 
   /**
-   * 좌우 맞히기 한 판.
+   * 좌우 맞히기 **한 매치**(2026-09-20 재설계 · 안 1). 시트를 없애고 무대 위에서 아이와 마주 본다.
    *
-   * ★ 서버에 붙어 있으면 **답은 서버가 쥔다.** 화면이 혼자 이겼다고 정할 수 없어서 한 판에
-   *   한 번씩 왕복하고, 그게 의도다(`lib/game.ts` 머리말). 판이 없으면 먼저 시작한다.
-   * ★ 목일 때는 어느 쪽을 골랐든 반반이다.
+   * ★ **게임 규칙은 정본 §7 그대로다** — 5판 3승 · 하루 3판 · 답은 서버가 쥔다. 바꾼 것은
+   *   *어디서·어떻게 보이나* 뿐이다. 목(연습방)에도 같은 규칙의 카운터를 넣었다(예전엔 없었다 —
+   *   판을 쳐도 "오늘 남은 판 3" 이 그대로였다).
+   * ★ 한 판의 박자: 대기(주먹 둘) → 탭 → 섞기 → 공개(손·얼굴 **동시**) → 여운 → **자동으로 다음 판**.
+   *   예전엔 결과가 난 뒤 화면이 **영구 정지**했고(18.4초 재어 확인) 두 손도 안 돌아왔다.
+   * ★ 공개를 **0초로 당긴다** — 1층은 `game_choose` 가 표에서 `null` 이라 기다리는 한 바퀴가
+   *   빈 시간이었다(결과와 아이 반응이 1.95초 어긋났다). 2층은 그 한 바퀴에 `놀람` 이 실제로
+   *   돌므로 예전처럼 한 바퀴 뒤에 결과를 붙인다.
+   */
+  const startGuess = useCallback(() => {
+    lastSel.current = Date.now();
+    // 하루 판수는 **매치 단위**로 준다(정본: 판 = 한 매치). 예전 목은 한 판(라운드)마다 깎았다.
+    setS((v) => (v.gOn ? v : {
+      ...v,
+      gOn: true, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
+      gMarks: [null, null, null, null, null],
+      lastGuess: null,
+      // 시작하면 팝오버를 내린다 — 예전엔 안 내려서 방으로 돌아가는 데 2탭이 들었다.
+      popOpen: false, popClosing: false, sheet: null, toast: '',
+      plays: v.sampleMode || onServerRef.current ? v.plays : Math.max(0, v.plays - 1),
+    }));
+  }, []);
+
+  /** 매치를 접고 마당 팝오버를 다시 연다 — 거기 "좌우 맞히기" 가 곧 "한 판 더" 다. */
+  const endGuess = useCallback(() => {
+    for (const k of ['guessAct', 'guessReveal', 'guessNext', 'guessEnd']) clearTimeout(T.current[k]);
+    setS((v) => ({ ...v, gOn: false, gPhase: 'wait', gPick: null, gHit: null, roomSel: 'play', popOpen: true, popClosing: false }));
+  }, []);
+
+  /**
+   * 한 판을 친다. 대기 중일 때만 받는다(섞기·공개·여운 동안은 입력 잠금).
+   *
+   * ★ 서버에 붙어 있으면 **답은 서버가 쥔다**(`lib/game.ts` 머리말). 목일 때는 반반이다.
    */
   const onGuess = useCallback((side: Side = 'LEFT') => {
-    // ★ A절 표 "게임 좌·우 고르기" — 고른 순간 한 바퀴(2층이면 `놀람` + 머리 위 느낌표,
-    //   1층이면 표가 "변화 없음" 이라 `careAct` 가 아무것도 안 짓는다).
-    //   결과(이김·짐) 연출은 그 한 바퀴가 끝난 뒤에 이어 붙인다 — 안 그러면 목처럼 답이
-    //   즉시 오는 자리에서 **놀람이 한 프레임도 안 보이고 지나간다.**
+    if (!sRef.current.gOn || sRef.current.gPhase !== 'wait') return;
+    // 섞기 — 양손은 주먹 그대로, 입력만 잠근다. 서버 왕복이 더 길면 그쪽이 곧 섞기다.
+    patch({ gPhase: 'shuffle', gPick: side });
     careAct('game_choose');
     const pickedAt = Date.now();
-    const afterChoose = (fn: () => void) =>
-      later('guessAct', Math.max(0, CYCLE_MS - (Date.now() - pickedAt)), fn);
+    /** 공개까지의 시간. **2층만** 한 바퀴를 기다린다 — 그 바퀴에 `놀람` 이 실제로 도니까. */
+    const revealAfter = () => {
+      const span = floor2Of('game_choose') ? CYCLE_MS : GUESS_SHUFFLE_MS;
+      return Math.max(0, span - (Date.now() - pickedAt));
+    };
+
+    /** 공개 → 여운 → 다음 판(또는 매치 끝). 목·서버가 같은 길을 쓴다. */
+    const reveal = (hit: boolean, hits: number, finished: boolean, win: boolean | null) => {
+      later('guessReveal', revealAfter(), () => {
+        setS((v) => {
+          const marks = v.gMarks.slice();
+          marks[v.gRound] = hit;
+          return { ...v, gPhase: 'reveal', gHit: hit, gHits: hits, gMarks: marks };
+        });
+        careAct(hit ? 'game_win' : 'game_lose');
+        if (finished) {
+          later('guessEnd', GUESS_AFTERGLOW_MS, () => {
+            setS((v) => ({ ...v, gPhase: 'done' }));
+            later('guessNext', GUESS_MATCH_END_MS, endGuess);
+          });
+          return;
+        }
+        // ★ 여운이 끝나면 **누르지 않아도** 다음 판이 시작되고 두 손이 주먹으로 돌아온다.
+        later('guessNext', GUESS_AFTERGLOW_MS, () => setS((v) => ({
+          ...v, gPhase: 'wait', gPick: null, gHit: null, gRound: Math.min(v.gRound + 1, 4),
+        })));
+      });
+    };
+
     if (onServerRef.current) {
       void (async () => {
         const lv = liveRef.current;
-        if (!lv) return;
+        if (!lv) { patch({ gPhase: 'wait', gPick: null }); return; }
         if (!lv.game?.playing) {
           const err = await lv.startPlay();
-          if (err) { flash(err); return; }
-          patch({ lastGuess: null, guessHand: null });
+          if (err) { flash(err); patch({ gPhase: 'wait', gPick: null }); return; }
+          patch({ lastGuess: null });
         }
         const { error, result } = await lv.pickSide(side);
-        if (error) { flash(error); return; }
-        if (!result) return;
-        patch({ lastGuess: result, guessHand: { side: result.pick, hit: result.hit } });
-        afterChoose(() => careAct(result.hit ? 'game_win' : 'game_lose'));
+        if (error) { flash(error); patch({ gPhase: 'wait', gPick: null }); return; }
+        if (!result) { patch({ gPhase: 'wait', gPick: null }); return; }
+        patch({ lastGuess: result });
+        reveal(result.hit, result.hits, result.finished, result.win);
       })();
       return;
     }
-    if (s.plays <= 0 && !s.sampleMode) { flash('오늘 남은 판이 없어요'); return; }
-    const win = Math.random() < 0.5;
+
+    // ── 목(연습방·진짜 방 목) — 규칙은 서버와 **같은 값**으로 센다(5판 3승) ──
+    const v0 = sRef.current;
+    const hit = Math.random() < 0.5;
+    const hits = v0.gHits + (hit ? 1 : 0);
+    const misses = v0.gRound + 1 - hits;
+    const finished = hits >= GUESS_WIN_AT || misses > GUESS_ROUNDS - GUESS_WIN_AT;
+    const win = finished ? hits >= GUESS_WIN_AT : null;
     patch({
-      plays: s.sampleMode ? s.plays : s.plays - 1,
-      cGame: s.cGame + 1,
-      happy: win ? Math.min(4, s.happy + 1) : s.happy,
-      guess: win ? '맞았어요!' : '아쉬워요, 반대쪽이었어요',
-      bond: win ? Math.min(100, s.bond + 1) : s.bond,
-      // 서버판과 **같은 칸**에 적는다 — 손을 그리는 코드가 목이냐 서버냐를 묻지 않게.
-      guessHand: { side, hit: win },
+      cGame: v0.cGame + 1,
+      happy: finished && win ? Math.min(4, v0.happy + 1) : v0.happy,
+      bond: finished && win ? Math.min(100, v0.bond + 1) : v0.bond,
     });
-    afterChoose(() => careAct(win ? 'game_win' : 'game_lose'));
-  }, [s.plays, s.sampleMode, s.cGame, s.happy, s.bond, patch, careAct, flash, later]);
+    reveal(hit, hits, finished, win);
+  }, [patch, careAct, flash, later, endGuess, floor2Of]);
   const onGuessSide = useCallback((side: Side) => () => onGuess(side), [onGuess]);
 
   // ── 대화 ──
@@ -1696,7 +1781,7 @@ export function useYeoul(live?: Live) {
         // ★ '대화하기' 는 뺐다(상훈님 판정 11) — 대화는 오른쪽 아래 말풍선이 맡고,
         //   마당에는 게임을 하나둘 붙일 예정이라 그 자리를 비워 둔다.
         // 오늘 남은 판은 서버가 센다(두 게임 합산 · 지금 치는 판은 빠져 있다).
-        a: { label: '좌우 맞히기', count: `${playsLeft}판 남음`, tap: openPlay('guess') },
+        a: { label: '좌우 맞히기', count: `${playsLeft}판 남음`, tap: startGuess },
         b: null,
       },
       /**
@@ -1844,6 +1929,25 @@ export function useYeoul(live?: Live) {
     const chatLine = s.chatOpen
       ? (onServer ? svPetLine : (s.petLine || '오늘은 뭐 했어요?'))
       : null;
+    /**
+     * 좌우 맞히기가 **아이 말풍선으로** 말한다(2026-09-20 안 1) — 게임 전용 말 장치를 새로 만들지 않는다.
+     * ★ 사용자를 탓하는 말을 쓰지 않는다(자캐 규범) — 빗나가도 "아쉬워요" 까지다.
+     */
+    //   ★ 숫자는 **서버에 붙으면 서버 것**을 쓴다(`rounds`·`winAt`·`hits`). 목은 같은 값을 스스로 센다.
+    const gr = s.lastGuess;
+    const gHits = onServer ? (gr?.hits ?? 0) : s.gHits;
+    const gRounds = onServer ? (gr?.rounds ?? GUESS_ROUNDS) : GUESS_ROUNDS;
+    const gWinAt = onServer ? (gr?.winAt ?? GUESS_WIN_AT) : GUESS_WIN_AT;
+    const gRoundNo = (onServer ? (gr?.nextRound ?? s.gRound) : s.gRound) + 1;
+    const guessLine = !s.gOn ? ''
+      : s.gPhase === 'shuffle' ? '어느 쪽일까…'
+        : s.gPhase === 'reveal' ? (s.gHit ? '맞았어요!' : '아쉬워요, 반대쪽이었어요')
+          : s.gPhase === 'done'
+            ? (gHits >= gWinAt
+              ? `${gHits} / ${gRounds} 맞혔어요. 이겼어요!`
+              : `${gHits} / ${gRounds} 맞혔어요. 다음엔 이겨요.`)
+            : `${gRoundNo}번째 · 어느 손에 있을까요?`;
+
     const bub: Bubble = {
       isTut: !!tut && s.sampleMode && !es.sleeping && !s.chatOpen,
       top: s.sampleMode ? '96px' : '12px',
@@ -1851,8 +1955,9 @@ export function useYeoul(live?: Live) {
       // ★ 튜토리얼 중에는 부름 말풍선을 접어 둔다 — 그 자리 안내는 좌측 하단 카드가 맡는다.
       //   다만 **대화를 열어 아이가 건넨 말이 있으면 그건 보여야 한다**. 안 그러면 서버가 준
       //   대사가 화면에 한 번도 안 나온다(2026-09-09 실측으로 그랬다).
-      show: (!tut || !!chatLine) && (!!top || !!chatLine) && !es.sleeping,
-      text: chatLine || (top?.text ?? ''),
+      // 게임이 도는 동안에는 **게임이 말한다** — 부름·튜토리얼보다 앞선다(무대에 그것만 남으므로).
+      show: s.gOn ? true : ((!tut || !!chatLine) && (!!top || !!chatLine) && !es.sleeping),
+      text: s.gOn ? guessLine : (chatLine || (top?.text ?? '')),
       chipLabel: tut ? (tutIdx === TUT.length - 1 ? '알았어요' : '다음') : '답하기',
       hasPrev: !!tut && s.sampleMode && s.tutor > 0,
       hasNext: !!tut && s.sampleMode,
@@ -1927,36 +2032,6 @@ export function useYeoul(live?: Live) {
         cardBg: done ? '#FFFBF4' : C.paper,
         opts: g.opts.map((o) => ({ text: o, pick: pickChip(g.key, o, picked), ...sel(picked.includes(o)) })),
       };
-    });
-
-    // ── 좌우 맞히기 한 줄 ──
-    // 결과·진행은 **서버 숫자**로 적는다. 이건 아이 대사가 아니라 화면의 말이라 여기서 만든다.
-    const gm = live?.game ?? null;
-    const gr = s.lastGuess;
-    const guessNote = live?.guessing ? '어느 쪽일까…'
-      : gr
-        ? (gr.finished
-          ? (gr.win ? `${gr.hits} / ${gr.rounds} 맞혔어요. 이겼어요!` : `${gr.hits} / ${gr.rounds} 맞혔어요. 다음엔 이겨요.`)
-          : `${gr.hit ? '맞았어요!' : '아쉬워요.'} ${gr.hits} / ${gr.winAt} · ${(gr.nextRound ?? 0) + 1}번째`)
-        : (gm?.playing ? `${(gm.round ?? 0) + 1}번째 · 어느 손에 있을까요?` : '어느 손에 있을까요?');
-
-    /**
-     * ── 손 그림 두 장 ──
-     *
-     * 규칙은 한 줄이다. **고른 손만 펼친다** — 맞았으면 사탕이, 틀렸으면 빈 손이 나온다.
-     * 안 고른 손은 계속 주먹이다(답을 미리 까지 않는다. 맞았는지 틀렸는지는 윗줄이 말해 준다).
-     *
-     * ★ 답을 기다리는 동안(`live.guessing`)에는 **양손 다 주먹**으로 되돌린다. 앞 판의 펼친 손을
-     *   그대로 두면 아직 안 친 판의 답처럼 읽힌다.
-     * ★ 세 장을 다 실어 두고 한 장만 보인다(`imgs`). 고른 순간에 받아 오면 첫 판에서 손이
-     *   한 박자 사라졌다 나타난다 — 시트를 연 순간 세 장을 미리 받아 두는 편이 조용하다.
-     */
-    const shownHand = live?.guessing ? null : s.guessHand;
-    const handKind = (side: Side): GuessHandKind =>
-      shownHand?.side !== side ? 'fist' : shownHand.hit ? 'open_candy' : 'open_empty';
-    const handSlot = (side: Side) => ({
-      now: handKind(side),
-      imgs: GUESS_HAND_KINDS.map((kind) => ({ kind, src: GUESS_HANDS[side][kind] })),
     });
 
     // ── 앨범 벽 ──
@@ -2113,7 +2188,7 @@ export function useYeoul(live?: Live) {
         // ★ 대화의 **유일한 입구**다(상훈님 2026-09-08 판정 14). 마당 팝오버에서 대화를 뺐고,
         //   아파도 눌린다 — 아플 때 말이 막히면 아이가 제일 필요한 순간에 말을 못 한다.
         //   자는 동안만 안 뜬다.
-        show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !es.sleeping,
+        show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
         dot: onServer ? !!openCall : s.calls > 0,
         bw: tut && tut.room === 'chat' ? '2.5px' : '1px',
         bd: tut && tut.room === 'chat' ? ACCENT : C.line,
@@ -2125,7 +2200,7 @@ export function useYeoul(live?: Live) {
        * 돌보기가 도는 동안에는 잠근다(연타 방지).
        */
       medFab: {
-        show: s.screen === 'room' && es.sick && !s.chatOpen && !s.popOpen && !s.sheet && !es.sleeping,
+        show: s.screen === 'room' && es.sick && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
         off: !!live?.careing,
       },
       // 좌측 하단 카드. 세 얼굴을 차례로 갖는다 —
@@ -2133,7 +2208,7 @@ export function useYeoul(live?: Live) {
       // ★ 로드맵이 끝나도 카드가 사라지지 않는다(2026-09-07 상훈님 지시). 정본상 2층 8종을
       //   다 열면 3층이 시작되고 그때 조각 4칸이 등장하므로, 그 자리를 그대로 이어받는다.
       mini: {
-        show: s.screen === 'room' && !s.sampleMode && !s.chatOpen && !s.popOpen && !s.sheet && !es.sleeping,
+        show: s.screen === 'room' && !s.sampleMode && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
         isTut: showTutMini, tutText: tut?.text ?? '',
         tutStep: `${tutIdx + 1} / ${TUT.length}`,
         /**
@@ -2169,7 +2244,7 @@ export function useYeoul(live?: Live) {
         const q = s.sampleMode && !tut && s.uq < USER_Q.length ? USER_Q[s.uq] : null;
         const draft = s.askDraft.trim();
         return {
-          show: s.screen === 'room' && !!q && !s.chatOpen && !s.sheet && !s.popOpen,
+          show: s.screen === 'room' && !!q && !s.chatOpen && !s.sheet && !s.popOpen && !s.gOn,
           // label 이 이미 여울의 말(물음표 포함)이라 손대지 않고 그대로 쓴다.
           text: q ? q.label : '', step: `${s.uq + 1} / ${USER_Q.length}`,
           // 시각이 붙은 칩은 그 시각까지 답으로 저장한다 — '아침' 만 남기면 나중에 구간을 알 수 없다.
@@ -2188,7 +2263,7 @@ export function useYeoul(live?: Live) {
         };
       })(),
       guide: {
-        tap: s.screen === 'room' && s.sampleMode && !es.sleeping && !es.sick && !s.chatOpen && !s.sheet && !s.popOpen && (!tut || tut.act === 'pet'),
+        tap: s.screen === 'room' && s.sampleMode && !es.sleeping && !es.sick && !s.chatOpen && !s.sheet && !s.popOpen && !s.gOn && (!tut || tut.act === 'pet'),
         label: '톡 눌러 보세요',
       },
       sample: {
@@ -2205,6 +2280,25 @@ export function useYeoul(live?: Live) {
       // 하트 개수는 **오늘 쓰다듬은 횟수**다. 서버에 붙었으면 서버가 센 값(`es.pets`)을 쓴다 —
       // 목의 `s.pets` 는 서버 모드에서 영영 0 이라 늘 ♥♡♡ 만 떴다(2026-09-10).
       hearts: { show: s.hearts, text: es.pets >= 3 ? '♥♥♥' : es.pets === 2 ? '♥♥♡' : '♥♡♡' },
+      /**
+       * 무대 위 좌우 맞히기(2026-09-20 안 1). 시트가 아니라 **아이 몸에 붙은 손**과 **발밑 점 줄**이다.
+       * ★ 손 그림 여섯 장은 이미 있던 자산 그대로다(`guess_*`). 새 그림·새 앵커를 만들지 않았다.
+       */
+      game: {
+        show: s.gOn,
+        /** 대기·섞기면 주먹, 공개·끝이면 **고른 쪽만** 펼친다(사탕이 있었나에 따라 두 장 중 하나). */
+        openSide: s.gPhase === 'reveal' || s.gPhase === 'done' ? s.gPick : null,
+        openKind: (s.gHit ? 'candy' : 'empty') as 'candy' | 'empty',
+        /** 대기 중에만 누를 수 있다 — 섞기·공개·여운에는 잠긴다. */
+        can: s.gOn && s.gPhase === 'wait' && !live?.guessing,
+        pick: (side: Side) => () => onGuess(side),
+        /** 점 다섯 칸. 맞힘 ● · 빗나감 ✕ · 아직 ○ — **색만으로 가르지 않는다.** */
+        marks: s.gMarks.map((m, i) => ({
+          hit: m, now: i === s.gRound && s.gPhase !== 'done',
+        })),
+        /** 그 아래 한 줄. 규칙(5판 3승·하루 3판)을 글자로도 말한다. */
+        note: `${Math.min(gRoundNo, gRounds)}번째 · ${gWinAt}번 맞히면 이겨요 · 오늘 ${playsLeft}판 남음`,
+      },
       toast: { show: !!s.toast, text: s.toast },
       wall: {
         show: s.screen === 'room' && (s.wallOpen || s.wallClosing),
@@ -2234,11 +2328,13 @@ export function useYeoul(live?: Live) {
         medBd: s.sick ? '#EFBDB2' : '#DFD9D0',
       },
       play: {
-        tabs: ([['talk', '대화'], ['guess', '좌우 맞히기'], ['run', '달리기']] as const).map(([k, label]) => ({
+        // ★ 좌우 맞히기 탭을 뺐다(2026-09-20) — 그 놀이는 이제 **무대 위**에서 한다.
+        //   대화·달리기 탭은 그대로다.
+        tabs: ([['talk', '대화'], ['run', '달리기']] as const).map(([k, label]) => ({
           label, pick: pickTab(k),
           ...(s.playTab === k ? { bg: C.ink, fg: '#FBF6EC', bd: C.ink } : { bg: C.slot, fg: C.sub2, bd: '#E3DBCD' }),
         })),
-        isTalk: s.playTab === 'talk', isGuess: s.playTab === 'guess', isRun: s.playTab === 'run',
+        isTalk: s.playTab === 'talk', isRun: s.playTab === 'run',
         callsLeft: onServer ? (openCall ? 1 : 0) : s.calls,
         memCount: onServer ? (sc?.memories.length ?? 0) : s.memories.length,
         // 오늘 오간 말. 서버가 부름마다 [건넨 말 · 내가 한 답 · 돌려준 말] 셋을 들고 있다.
@@ -2249,21 +2345,8 @@ export function useYeoul(live?: Live) {
         quick: CHAT_QUICK.map((t) => ({ text: t, pick: () => pushReply(t) })),
         draft: s.draft,
         memories: (onServer ? (sc?.memories ?? []) : s.memories).map((t) => ({ text: t })),
-        guessNote: onServer ? guessNote : (s.guess ?? '어느 손에 있을까요?'),
-        hands: {
-          px: GUESS_HAND_PX,
-          left: handSlot('LEFT'),
-          right: handSlot('RIGHT'),
-          /** 진 판에만 뜨는 점 세 개. 어느 손 위에 붙일지까지 여기서 정한다. */
-          dots: shownHand && !shownHand.hit
-            ? { src: GUESS_LOSE_DOTS, px: GUESS_LOSE_DOTS_PX, side: shownHand.side }
-            : null,
-        },
         // 오늘 남은 판은 **두 게임 합산**이고 지금 치는 판은 빠져 있다(서버 규칙).
         playsLeft,
-        canGuess: onServer
-          ? !live?.guessing && (live?.game?.playing || (live?.game?.remainingToday ?? 0) > 0)
-          : true,
         // ★ 달리기는 2차다. 서버가 열렸다고 해도 화면은 아직 없으므로 잠긴 채로 둔다.
         runCond: onServer
           ? '달리기는 아직 준비 중이에요. 좌우 맞히기부터 함께해요.'
@@ -2384,7 +2467,7 @@ export function useYeoul(live?: Live) {
   }, [
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
     s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
-    openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor,
+    openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,
     toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash,
@@ -2396,7 +2479,7 @@ export function useYeoul(live?: Live) {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
+    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess,
     openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
     backToSample: () => patch({ screen: 'room' }),
@@ -2405,7 +2488,7 @@ export function useYeoul(live?: Live) {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
+    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess,
     openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
   ]);

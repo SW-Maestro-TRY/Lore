@@ -117,24 +117,6 @@ function PlaySheet({ y }: { y: Yeoul }) {
         </div>
       )}
 
-      {p.isGuess && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <span style={{ fontSize: 11.5, color: C.faint }}>행복</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5 }}>
-              {v.happyCells.map((c, i) => <div key={i} style={{ height: 14, borderRadius: 5, border: `1px solid ${C.lineSoft}`, background: c.bg }} />)}
-            </div>
-          </div>
-          <span data-part="guess-note" style={{ fontFamily: GAEGU, fontSize: 19, color: C.ink }}>{p.guessNote}</span>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
-            {/* 어느 쪽을 골랐는지 서버에 보낸다 — 답은 서버가 쥐고 있다. */}
-            <GuessHand p={p} side="left" label="왼쪽" onPick={actions.onGuessSide('LEFT')} />
-            <GuessHand p={p} side="right" label="오른쪽" onPick={actions.onGuessSide('RIGHT')} />
-          </div>
-          <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.45)' }}>오늘 남은 판 {p.playsLeft}</span>
-        </div>
-      )}
-
       {p.isRun && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 17, borderRadius: radius.md, background: '#F1EBE0', border: '1px dashed rgba(74,64,56,.18)' }}>
           <span style={{ fontSize: 14, color: C.sub2 }}>달리기 · 잠겨 있어요</span>
