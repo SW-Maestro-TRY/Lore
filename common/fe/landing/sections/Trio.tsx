@@ -107,10 +107,10 @@ export default function Trio() {
       <div className={styles.wrap}>
         <div className={styles.head}>
           <span className={styles.eyebrow}>ONE CHARACTER</span>
-          <h2 className={styles.sectionTitle}>캐릭터는 하나, 하는 일은 셋</h2>
+          <h2 className={styles.sectionTitle}>내 캐릭터로, 하고 싶은 걸 해보세요</h2>
           <p className={styles.sectionLede}>
-            먼저 캐릭터를 만들고, 그 캐릭터로 웹툰 한 화를 만들거나 곁에 두고
-            키웁니다. 눌러서 자세히 보세요.
+            캐릭터를 하나 만들면 이야기가 시작됩니다.
+            웹툰의 주인공으로 만들거나, 나만의 캐릭터로 간직해보세요.
           </p>
         </div>
 
