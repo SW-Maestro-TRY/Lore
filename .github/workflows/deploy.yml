@@ -84,8 +84,8 @@ jobs:
             main)      # prod — 태그로 타깃(스케일 대비), 전용 role
               env_name=prod
               ssm_target='--targets Key=tag:Environment,Values=prod'
-              cf_dist='TODO_PROD_CF_DISTRIBUTION_ID'
-              role_arn='TODO_PROD_ROLE_ARN'
+              cf_dist='E198BSQE3JQYCS'
+              role_arn='arn:aws:iam::046797548177:role/lore-prod-github-deploy'
               ec2_id=''; rds_id='' ;;       # prod 는 끄지 않는다
             *)
               echo "지원하지 않는 브랜치: $GITHUB_REF_NAME"; exit 1 ;;
