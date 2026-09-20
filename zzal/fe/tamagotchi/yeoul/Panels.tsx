@@ -29,7 +29,7 @@ function Sheet({ y }: { y: Yeoul }) {
     <>
       {/* ★ 쌓임 순서 — 무대의 캐릭터가 z 2, 타일이 z 6 이라 z 를 안 주면 그 밑에 깔린다.
           실제로 전면 판의 버튼이 캐릭터 그림에 가려 안 눌렸다(2026-09-07). 벽 9 · 액자 10 위로 올린다. */}
-      <div onClick={actions.closeSheet} style={{ position: 'absolute', inset: 0, zIndex: 11, background: 'ink(.32)', animation: sh.dimAnim }} />
+      <div onClick={actions.closeSheet} style={{ position: 'absolute', inset: 0, zIndex: 11, background: ink(.32), animation: sh.dimAnim }} />
       <div
         data-part="sheet" data-sheet={sh.key ?? ''}
         style={{
@@ -38,12 +38,12 @@ function Sheet({ y }: { y: Yeoul }) {
           borderRadius: '24px 24px 44px 44px', boxShadow: shadow.sheet, animation: sh.anim,
         }}
       >
-        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 11px', borderBottom: '1px solid ink(.07)' }}>
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 11px', borderBottom: `1px solid ${ink(.07)}` }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: gap.md }}>
             <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, lineHeight: 1, color: C.ink }}>{sh.title}</span>
             <span style={{ fontSize: fz.sm, color: C.faint2 }}>{sh.sub}</span>
           </div>
-          <button onClick={actions.closeSheet} style={{ border: '1px solid ink(.13)', background: C.slot, borderRadius: radius.pill, width: 27, height: 27, fontSize: fz.sm, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
+          <button onClick={actions.closeSheet} style={{ border: `1px solid ${ink(.13)}`, background: C.slot, borderRadius: radius.pill, width: 27, height: 27, fontSize: fz.sm, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
         </div>
 
         {/* ★ 아래 여백이 120px 인 이유 — 시트는 화면 아래끝까지 오는데 그 위에 하단 타일(층 6)이
@@ -110,16 +110,16 @@ function PlaySheet({ y }: { y: Yeoul }) {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
             {p.memories.map((m, i) => (
-              <span key={i} style={{ padding: pad.tiny, borderRadius: radius.pill, background: C2.paperDim, border: '1px solid ink(.08)', fontSize: fz.xs, color: C.sub2 }}>{m.text}</span>
+              <span key={i} style={{ padding: pad.tiny, borderRadius: radius.pill, background: C2.paperDim, border: `1px solid ${ink(.08)}`, fontSize: fz.xs, color: C.sub2 }}>{m.text}</span>
             ))}
           </div>
         </div>
       )}
 
       {p.isRun && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, padding: 17, borderRadius: radius.md, background: C2.paperDim, border: '1px dashed ink(.18)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, padding: 17, borderRadius: radius.md, background: C2.paperDim, border: `1px dashed ${ink(.18)}` }}>
           <span style={{ fontSize: fz.md, color: C.sub2 }}>달리기 · 잠겨 있어요</span>
-          <span style={{ fontSize: fz.md, lineHeight: 1.65, color: 'ink(.55)' }}>{p.runCond}</span>
+          <span style={{ fontSize: fz.md, lineHeight: 1.65, color: ink(.55) }}>{p.runCond}</span>
         </div>
       )}
     </>
@@ -140,7 +140,7 @@ function NotifySheet({ y }: { y: Yeoul }) {
           <span style={{ fontSize: fz.sm, color: C2.accentInk2 }}>{x.action}</span>
         </button>
       ))}
-      {n.empty && <div style={{ padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center', fontSize: fz.md, color: 'ink(.55)' }}>지금은 기다리는 게 없어요</div>}
+      {n.empty && <div style={{ padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center', fontSize: fz.md, color: ink(.55) }}>지금은 기다리는 게 없어요</div>}
     </div>
   );
 }
@@ -280,7 +280,7 @@ function WishBox({ y }: { y: Yeoul }) {
       <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: gap.sm }}>
         <span style={{ fontSize: fz.sm, color: C.faint }}>{w.label}</span>
         {/* 남은 양의 표시다. 못 넘게 막으므로 경고가 아니고, 꽉 찼을 때만 색이 또렷해진다. */}
-        <span data-note="wish-count" style={{ font: `${monoSize.xs}px ${MONO}`, color: w.full ? C.accent : 'ink(.33)' }}>{w.count}</span>
+        <span data-note="wish-count" style={{ font: `${monoSize.xs}px ${MONO}`, color: w.full ? C.accent : ink(.33) }}>{w.count}</span>
       </span>
       <input
         data-action="wish-input" value={w.value} onChange={(e) => w.onInput(e.target.value)}
@@ -355,19 +355,19 @@ function Fire({ y }: { y: Yeoul }) {
   //   같은 모양인데 어떤 건 닫히고 어떤 건 안 닫혔다 — 사용자가 규칙을 세울 수 없다.
   const backdrop = y.actions.closeFire;
   return (
-    <div data-part="fire" style={{ position: 'absolute', inset: 0, zIndex: 12, background: 'ink(.52)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yFadeIn .2s ease' }}>
+    <div data-part="fire" style={{ position: 'absolute', inset: 0, zIndex: 12, background: ink(.52), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yFadeIn .2s ease' }}>
       <div onClick={backdrop} style={{ position: 'absolute', inset: 0 }} />
       <div style={{ position: 'relative', width: '100%', padding: '24px 22px', borderRadius: radius.xl, background: C.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.lg, animation: 'yPop .3s ease', boxSizing: 'border-box' }}>
         {f.polaroid && (
           <div style={{ width: '100%', padding: '11px 11px 16px', background: '#FFFFFF', border: `1px solid ${C.lineSoft}`, boxShadow: shadow.raised, display: 'flex', flexDirection: 'column', gap: gap.md }}>
-            <div style={{ width: '100%', aspectRatio: '1/1', backgroundColor: f.shot, backgroundImage: 'repeating-linear-gradient(135deg,ink(.07) 0 6px,transparent 6px 14px)', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{f.shotLabel}</div>
+            <div style={{ width: '100%', aspectRatio: '1/1', backgroundColor: f.shot, backgroundImage: `repeating-linear-gradient(135deg,${ink(.07)} 0 6px,transparent 6px 14px)`, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{f.shotLabel}</div>
             <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.35, color: C.ink, textAlign: 'center' }}>{f.caption}</span>
           </div>
         )}
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.2, color: C.ink, textAlign: 'center' }}>{f.title}</span>
         {f.preview && <FirePreview p={f.preview} />}
         {/* ★ `pre-line` — 문구가 줄바꿈(\n)으로 두 마디를 갈라 둔 판이 있다(졸업 판). 없으면 한 덩어리로 붙는다. */}
-        <span style={{ fontSize: fz.md, lineHeight: 1.7, color: 'ink(.62)', textAlign: 'center', whiteSpace: 'pre-line' }}>{f.body}</span>
+        <span style={{ fontSize: fz.md, lineHeight: 1.7, color: ink(.62), textAlign: 'center', whiteSpace: 'pre-line' }}>{f.body}</span>
         {f.wish && <WishBox y={y} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, width: '100%', marginTop: 2 }}>
           {f.actions.map((a) => (
@@ -387,7 +387,7 @@ function Fire({ y }: { y: Yeoul }) {
             >{a.label}</button>
           ))}
         </div>
-        <span style={{ font: `${monoSize.xs}px ${MONO}`, color: 'ink(.33)' }}>{f.hint}</span>
+        <span style={{ font: `${monoSize.xs}px ${MONO}`, color: ink(.33) }}>{f.hint}</span>
       </div>
     </div>
   );

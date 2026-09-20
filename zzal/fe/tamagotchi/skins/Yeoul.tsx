@@ -131,7 +131,7 @@ export default function Yeoul(_props: SkinProps) {
         position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center',
         // ★ 바깥 바탕을 **화면 전체 폭의 방**으로 깐다(2026-09-16 강화). 은은한 그라데이션만으로는
         //   1920 에서 옆이 평평한 베이지로 남아 "좁은 기둥" 으로 읽혔다. 그래서 방의 실제 색
-        //   (벽 `${C.bornBg}`·바닥 `#EFDFCC`)으로 위=벽/아래=바닥 두 띠를 나누고, 벽엔 무대와 같은 세로
+        //   (벽 C.bornBg·바닥 `#EFDFCC`)으로 위=벽/아래=바닥 두 띠를 나누고, 벽엔 무대와 같은 세로
         //   줄무늬를, 바닥엔 가장자리 그림자(비네트)를 얹는다. 이제 넓은 화면 전체가 하나의 방이고
         //   가운데 밝은 셸이 "일부러 방 가운데 둔 카드"로 명확히 읽힌다(수평선은 카드 안 무대와
         //   대략 맞춘 52% — 카드가 그림자로 떠 있어 픽셀 단위로 안 맞아도 어색하지 않다).
@@ -154,7 +154,7 @@ export default function Yeoul(_props: SkinProps) {
           // ★ 방 배경 위에서 셸이 **떠 있는 카드**로 읽히게 그림자를 키웠다(2026-09-16).
           //   폰(width=100%)에서는 좌우 가장자리가 화면 밖이라 이 그림자가 안 보이고,
           //   넓은 화면에서만 카드가 살짝 떠 보인다 — 좌우 빈 베이지가 사라진다.
-          boxShadow: '0 0 0 1px ink(.04), 0 22px 60px ink(.20)',
+          boxShadow: `0 0 0 1px ${ink(.04)}, 0 22px 60px ${ink(.20)}`,
           display: 'flex', flexDirection: 'column',
         }}
       >
@@ -440,7 +440,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
         position: 'absolute', right: 10, bottom: 10, zIndex: 30, width: 'min(414px,calc(100% - 20px))',
         maxHeight: '70%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: gap.md,
         padding: pad.card, borderRadius: radius.lg,
-        background: 'rgba(255,251,244,.96)', border: `1px solid ${C.line}`, boxShadow: '0 8px 24px ink(.18)',
+        background: 'rgba(255,251,244,.96)', border: `1px solid ${C.line}`, boxShadow: `0 8px 24px ${ink(.18)}`,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
@@ -498,7 +498,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: gap.sm, paddingTop: 2 }}>
         {WEB_KEYS.map(([k, text]) => (
           <span key={k} style={{ display: 'flex', alignItems: 'center', gap: gap.sm, fontSize: fz.sm, color: C.sub }}>
-            <span style={{ padding: '3px 7px', borderRadius: radius.xs, border: '1px solid ink(.18)', background: C.paper, font: `${monoSize.sm}px ${MONO}`, color: C.ink }}>{k}</span>
+            <span style={{ padding: '3px 7px', borderRadius: radius.xs, border: `1px solid ${ink(.18)}`, background: C.paper, font: `${monoSize.sm}px ${MONO}`, color: C.ink }}>{k}</span>
             {text}
           </span>
         ))}

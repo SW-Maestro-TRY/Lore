@@ -60,7 +60,7 @@ export default function Egg({ y }: { y: Yeoul }) {
     <div data-part="egg" style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, padding: '18px 22px 26px', gap: gap.xl, background: C.eggBg }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.25, color: C.ink }}>{e.title}</span>
-        <span style={{ fontSize: fz.md, lineHeight: 1.7, color: 'ink(.6)' }}>{e.sub}</span>
+        <span style={{ fontSize: fz.md, lineHeight: 1.7, color: ink(.6) }}>{e.sub}</span>
       </div>
 
       <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: gap.xl }}>
@@ -70,11 +70,11 @@ export default function Egg({ y }: { y: Yeoul }) {
           <span style={{ display: 'flex', gap: gap.xs }}>
             {e.dots.map((d, i) => <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: d.bg }} />)}
           </span>
-          <span style={{ fontSize: fz.sm, color: 'ink(.55)' }}>{stage}</span>
+          <span style={{ fontSize: fz.sm, color: ink(.55) }}>{stage}</span>
           {/* 몇 단계 중 몇 번째인지 — 서버가 준 숫자 그대로다(총 단계가 넷이 아닐 수 있다). */}
-          <span style={{ font: `${monoSize.xs}px ${MONO}`, color: 'ink(.38)' }}>{e.count}</span>
+          <span style={{ font: `${monoSize.xs}px ${MONO}`, color: ink(.38) }}>{e.count}</span>
         </span>
-        {left && <span style={{ fontSize: fz.sm, color: 'ink(.42)' }}>{left}</span>}
+        {left && <span style={{ fontSize: fz.sm, color: ink(.42) }}>{left}</span>}
       </div>
 
       <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: gap.md }}>

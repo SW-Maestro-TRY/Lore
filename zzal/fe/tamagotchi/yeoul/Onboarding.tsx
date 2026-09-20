@@ -271,7 +271,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
         // OB-01 셸 질감 — 바탕색은 그대로, 은은한 종이 도트만 얹는다(랜딩 v2 ::before 와 같은 결).
         backgroundColor: key === 'born' ? C.bornBg : C.onbBg,
         ...(fShell
-          ? { backgroundImage: 'radial-gradient(ink(.07) .6px, transparent .7px)', backgroundSize: '8px 8px' }
+          ? { backgroundImage: `radial-gradient(${ink(.07)} .6px, transparent .7px)`, backgroundSize: '8px 8px' }
           : null),
       }}
     >
@@ -281,7 +281,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             여울 샘플로 가고 부화가 0/4 로 지워졌다 — 되돌릴 수 없는 지점은 되돌아가지지 않아야 한다. */}
         {o.canBack && key !== 'born' && (
           // OB-08 — 뒤로 버튼 크롬만 랜딩 line/paper/pill 톤으로. onBack·canBack·라벨은 그대로.
-          <button onClick={actions.onBack} className="onb-back" style={{ border: `1px solid ${fDots ? C.lineHard : 'ink(.13)'}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: fz.md, color: C.sub2, lineHeight: 1, ...(fDots ? { boxShadow: '0 1px 2px ink(.06)' } : null) }} aria-label="뒤로">‹</button>
+          <button onClick={actions.onBack} className="onb-back" style={{ border: `1px solid ${fDots ? C.lineHard : ink(.13)}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: fz.md, color: C.sub2, lineHeight: 1, ...(fDots ? { boxShadow: `0 1px 2px ${ink(.06)}` } : null) }} aria-label="뒤로">‹</button>
         )}
         <span style={{ flex: 1 }} />
         {/* OB-08 — dots 개수·활성(d.w·d.bg)은 그대로, 모서리만 pill 로 다듬는다. */}
@@ -350,7 +350,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               data-action="upload" data-pending-auth={needAuth ? 'true' : undefined} disabled={live.busy}
               className="onb-drop"
               // OB-06 — dash 색·라운드·바탕만 랜딩 토큰으로 정돈. 파일 선택·미리보기·busy/성공/오류·data-action 은 그대로.
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: gap.sm, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: fDrop ? radius.xl : radius.lg, border: `2px dashed ${live.imageKey ? C.accent : fDrop ? C.lineHard : 'ink(.18)'}`, background: live.imageKey ? C.accentSoft : fDrop ? C.slot : C.paper }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: gap.sm, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: fDrop ? radius.xl : radius.lg, border: `2px dashed ${live.imageKey ? C.accent : fDrop ? C.lineHard : ink(.18)}`, background: live.imageKey ? C.accentSoft : fDrop ? C.slot : C.paper }}
             >
               {/* 실패하면 useHatch 가 미리보기를 지운다 — 실패한 그림이 크게 남으면 성공처럼 읽힌다(판정 19). */}
               {live.previewUrl && (
@@ -394,8 +394,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                       src={assetUrl(key)}
                       alt={`좋은 예: ${lbl}`}
                       // OB-07 — 색면+빗금을 종이/slot 계열 차분한 카드로(빗금 약화·테두리). 데이터·onError·✓ 배지는 그대로.
-                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,ink(fEx ? '.03' : '.05') 0 6px,transparent 6px 14px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `${monoSize.xs}px ${MONO}`, color: 'ink(.42)' }}
-                      badge={<span style={{ position: 'absolute', left: 8, top: 8, width: 15, height: 15, borderRadius: '50%', border: '1.5px solid #5C8452', background: 'paperA(.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fz.xs, lineHeight: 1, color: '#5C8452' }}>✓</span>}
+                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,ink(fEx ? '.03' : '.05') 0 6px,transparent 6px 14px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `${monoSize.xs}px ${MONO}`, color: ink(.42) }}
+                      badge={<span style={{ position: 'absolute', left: 8, top: 8, width: 15, height: 15, borderRadius: '50%', border: '1.5px solid #5C8452', background: paperA(.85), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fz.xs, lineHeight: 1, color: '#5C8452' }}>✓</span>}
                     />
                     <span style={{ fontSize: fz.xs, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{lbl}</span>
                   </div>
@@ -410,8 +410,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                       src={assetUrl(key)}
                       alt={`어려운 예: ${lbl}`}
                       // OB-07 — 같은 결로 차분하게. 데이터·onError·✕ 배지는 그대로.
-                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,ink(fEx ? '.03' : '.05') 0 5px,transparent 5px 12px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `${monoSize.xs}px ${MONO}`, color: 'ink(.34)' }}
-                      badge={<span style={{ position: 'absolute', left: 5, top: 5, width: 14, height: 14, borderRadius: '50%', background: 'paperA(.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fz.xs, lineHeight: 1, color: C.accent }}>✕</span>}
+                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,ink(fEx ? '.03' : '.05') 0 5px,transparent 5px 12px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `${monoSize.xs}px ${MONO}`, color: ink(.34) }}
+                      badge={<span style={{ position: 'absolute', left: 5, top: 5, width: 14, height: 14, borderRadius: '50%', background: paperA(.85), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fz.xs, lineHeight: 1, color: C.accent }}>✕</span>}
                     />
                     <span style={{ fontSize: fz.xs, color: C.sub2, textAlign: 'center' }}>{lbl}</span>
                   </div>
@@ -474,7 +474,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               <div key={g.key} className="onb-cgroup" style={{ display: 'flex', flexDirection: 'column', gap: gap.md, padding: pad.card, borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
                   <span style={{ fontSize: fz.md, color: C.ink }}>{g.title}</span>
-                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'ink(.07)', color: C.sub2, fontSize: fz.xs }}>선택</span>
+                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.sub2, fontSize: fz.xs }}>선택</span>
                   {/* 칩만 보면 하나만 고르는 줄 안다 — 여러 개가 된다는 것은 글로 말해 준다. */}
                   <span data-part="chip-note" style={{ fontSize: fz.xs, color: C.sub2 }}>{g.note}</span>
                 </span>
@@ -493,7 +493,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             <div className="onb-cgroup" style={{ display: 'flex', flexDirection: 'column', gap: gap.md, padding: pad.card, borderRadius: radius.md, border: `1px solid ${C.lineSoft}`, background: C.paper }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
                 <span style={{ fontSize: fz.md, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
-                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'ink(.07)', color: C.faint, fontSize: fz.xs }}>선택</span>
+                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>선택</span>
               </span>
               <input value={o.extraVal} onChange={(e) => o.onExtra(e.target.value)} maxLength={60}
                 placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요"
@@ -574,7 +574,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             background: blocked ? C.off : C.accent,
             color: blocked ? C.sub2 : C.accentInk,
             cursor: blocked ? 'default' : 'pointer',
-            boxShadow: blocked ? 'none' : fCta ? '0 6px 16px acc(.24)' : '0 4px 12px rgba(192,104,92,.22)',
+            boxShadow: blocked ? 'none' : fCta ? `0 6px 16px ${acc(.24)}` : '0 4px 12px rgba(192,104,92,.22)',
             animationDelay: '190ms',
           }}
         >{ctaLabel}</button>

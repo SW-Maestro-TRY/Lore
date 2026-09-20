@@ -503,12 +503,12 @@ const Y: Tone = {
     position: 'absolute', inset: 0, zIndex: 13,
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22,
   },
-  dim: { position: 'absolute', inset: 0, background: 'ink(.52)', animation: 'yFadeIn .2s ease' },
+  dim: { position: 'absolute', inset: 0, background: ink(.52), animation: 'yFadeIn .2s ease' },
   card: {
     position: 'relative', width: '100%', maxWidth: 420, maxHeight: '88%', overflowY: 'auto',
     display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
     background: C.paper, border: 'none', borderRadius: radius.xl,
-    padding: '22px 22px 20px', boxShadow: '0 12px 30px ink(.2)',
+    padding: '22px 22px 20px', boxShadow: `0 12px 30px ${ink(.2)}`,
     animation: 'yPop .3s ease',
   },
   // 테이프는 스크랩북의 것이다. 여울은 종이를 붙이지 않는다 — 자리를 비워 둔다.
