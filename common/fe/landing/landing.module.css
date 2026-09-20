@@ -323,33 +323,31 @@
   max-width: 56ch;
 }
 
-/* 기본은 세 칸이 똑같이 나뉘어 사진과 제목만 보인다. 마우스를 올리거나(스크롤해서
-   가져다 대면) 클릭하면 그 칸이 가로로 넓어지고, 안에 접혀 있던 설명이 세로로도
-   펼쳐진다 — align-items:stretch 라 옆 칸들도 그 칸 높이에 맞춰 같이 늘어난다.
+/* 세 칸을 가로로 나란히 두지 않고, 폭 전체를 쓰는 가로 막대 셋을 위아래로
+   쌓는다 — 눌린(또는 호버된) 막대만 안에 접혀 있던 설명이 펼쳐지며 그만큼
+   살짝 키가 커진다(옆 막대는 그대로다, flex-grow 로 넓이를 다투지 않으므로).
    클릭 토글(.isOpen)은 터치 기기를 위한 것 — Trio.tsx 가 상태로 관리한다. */
 .trioGrid {
   margin-top: 54px;
   display: flex;
-  gap: 18px;
-  align-items: stretch;
+  flex-direction: column;
+  gap: 16px;
 }
 .trioCard {
-  flex: 1 1 0;
-  min-width: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
   text-align: left;
   background: #fff;
   border: 1.5px solid var(--l-line);
   border-radius: 24px;
   overflow: hidden;
   cursor: pointer;
-  transition: flex-grow 0.42s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.3s ease, box-shadow 0.3s ease;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 .trioCard:hover,
 .trioCard:focus-within,
 .trioCard.isOpen {
-  flex-grow: 2.2;
   box-shadow: 0 20px 46px rgba(15, 51, 63, 0.14);
 }
 .trioCardCharacter:hover,
@@ -369,12 +367,11 @@
 }
 
 /* 세 그림의 비율이 다 다르다(캐릭터·웹툰 표지는 세로, 계절 콜라주는 가로로
-   넓다). 높이를 카드 폭에 비례시키면(aspect-ratio) 카드가 넓어질수록 칸이 같이
-   치솟아서 세로로 지나치게 길어진다 — 그래서 높이는 고정값으로 두고(가로로만
-   넓어진다), object-fit 은 cover 대신 contain 을 써서 잘리지 않게 한다(남는
-   자리는 --l-water-light 로 채운다). */
+   넓다) — 폭을 고정값으로 두고 object-fit 은 cover 대신 contain 을 써서
+   잘리지 않게 한다(남는 자리는 --l-water-light 로 채운다). */
 .trioMedia {
-  height: 200px;
+  width: 240px;
+  height: 170px;
   flex: none;
   overflow: hidden;
   background: var(--l-water-light);
@@ -547,9 +544,6 @@
   .sideMore {
     grid-template-rows: 1fr;
   }
-  .trioMore {
-    grid-template-rows: 1fr;
-  }
 }
 
 @media (max-width: 900px) {
@@ -573,19 +567,11 @@
   .heroLede {
     text-shadow: none;
   }
-  /* 세로로 쌓을 때는 flex-basis:0 + overflow:hidden 조합이 높이를 0으로
-     찌그러뜨린다(자동 최소 크기가 overflow:visible 이 아니면 auto→0 이 되는
-     flexbox 규칙) — basis 를 auto 로 돌려 내용 높이만큼 나오게 한다. */
-  .trioGrid {
-    flex-direction: column;
+  .trioMedia {
+    width: 104px;
   }
-  .trioCard {
-    flex: 1 1 auto;
-  }
-  .trioCard,
-  .trioCard:hover,
-  .trioCard.isOpen {
-    flex-grow: 0;
+  .trioBody {
+    padding: 14px 16px 16px;
   }
   .trioTitle {
     white-space: normal;
