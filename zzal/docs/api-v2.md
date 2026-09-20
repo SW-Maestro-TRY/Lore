@@ -380,12 +380,12 @@
 
 ---
 
-## 5. 관리자 `/api/zzal/v2/admin/motions` (`ZZAL_ADMIN=true`일 때만 존재, 관리자 계정만)
+## 5. 관리자 `/api/zzal/v1/admin/motions` (`ZZAL_ADMIN=true`일 때만 존재, 관리자 계정만)
 
 | 호출 | 요청 | 응답·비고 |
 |---|---|---|
-| `GET /pending` | | `REVIEW` 상태 목록(오래된 순). 펫 이름·주인 없음. `{motionId, key, label, imageKey, gateVerdict, gateNote, gateVersion, attempts, regenRound, nightOf, createdAt}` |
-| `POST /{id}/verdict` | `{verdict: OK\|REGENERATE, note? ≤500}` | **`REVIEW`인 행에만** — 아니면 409 `ZZAL_NOT_IN_REVIEW`. OK → `OPEN`(아침 공개). REGENERATE → `regenRound<2`면 `LOCAL_REQUESTED`, 아니면 `FAILED`(다음 밤 재등록, `nightOf` 유지) |
+| `GET /pending` | | `REVIEW` 상태 목록(오래된 순). 펫 이름·주인 없음. `{motionId, key, label, imageKey, gateVerdict, gateNote, gateVersion, attempts, regenRound, nightOf, createdAt, sourceImageKey, sheetImageKey, candidates[]}` — 판정 화면이 **넷을 나란히** 보게 원본 그림·시트·나온 판 전부를 함께 준다. `candidates[]` 는 `{candidateId, round, gridKey, imageKey, source, gateVerdict, gateNote, gateScore, chosen}`(라운드 순, 최대 7판) |
+| `POST /{id}/verdict` | `{verdict: OK\|REGENERATE, note? ≤500, candidateId?}` | **`REVIEW`인 행에만** — 아니면 409 `ZZAL_NOT_IN_REVIEW`. OK → `OPEN`(아침 공개). REGENERATE → `regenRound<2`면 `LOCAL_REQUESTED`, 아니면 `FAILED`(다음 밤 재등록, `nightOf` 유지) |
 | `GET /regen-requests` | | 맥미니 폴링. `LOCAL_REQUESTED` 목록 `{motionId, petId, sheetImageKey, identityText, motionKey, blockText, regenRound}` — **지시문 본문(`blockText`)을 통째로 실어 보낸다**(러너가 레포·DB를 안 봐도 되게). 펫이 없거나 지시문을 못 읽는 주문은 목록에서 빠지고 서버 로그에만 남는다 |
 | `POST /{id}/upload` | `{imageKey}` | 맥미니가 presign으로 올린 결과 등록 → `REVIEW`(바로 열지 않는다). `LOCAL_REQUESTED`가 아니면 `ZZAL_REGEN_NOT_REQUESTED`. 키는 부화와 같은 문(`S3Service.consume`)을 지난다 |
 | `GET /night/summary?date=YYYY-MM-DD` | | 그 밤 현황 `{nightOf, queued, baking, review, localRequested, open, failed, costUsd}` — **모션 행을 직접 세어** 만든다(`zzal_night_run`의 숫자는 "집어서 넘긴 수"라 실제와 다르다) |
