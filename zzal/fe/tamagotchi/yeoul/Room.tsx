@@ -20,7 +20,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
 import { YEOUL_ANCHORS_URL } from '../constants';
-import { C, C2, GAEGU, MONO, gap, monoSize, radius, shadow, fz } from './ui';
+import { C, C2, GAEGU, LV, MONO, gap, monoSize, radius, shadow, fz } from './ui';
 import Album from './Album';
 import Panels from './Panels';
 import FeedbackSheet from '../FeedbackSheet';
@@ -1376,7 +1376,18 @@ function PopButton({ b, compact = false }: { b: NonNullable<Yeoul['v']['pop']['a
     >
       <span style={{ fontSize: fz.lg }}>{b.label}</span>
       <span style={{ flex: 1 }} />
-      <span style={{ fontSize: fz.sm, color: b.subFg }}>{b.count}</span>
+      {/* ★ 남은 횟수와 **못 누르는 이유**를 다른 결로 그린다(2026-09-21 A-20).
+          예전엔 둘이 같은 칸·같은 색이라 "4번 남음" 과 "아플 땐 간식을 안 먹어요" 가 구분되지 않았다.
+          ★ 색만으로 가르지 않는다(렌즈 §5-5) — 이유 앞에 모양 표시를 하나 세운다.
+          숫자는 고정폭이라 자릿수가 바뀌어도 자리가 안 흔들린다. */}
+      {b.why
+        ? (
+          <span data-note="why" style={{ display: 'flex', alignItems: 'center', gap: gap.xs, minWidth: 0 }}>
+            <span aria-hidden style={{ flex: 'none', fontSize: fz.xs, lineHeight: 1, color: C.accent }}>{LV.off.shape}</span>
+            <span style={{ fontSize: fz.sm, lineHeight: 1.35, color: C.accent, textAlign: 'right' }}>{b.why}</span>
+          </span>
+        )
+        : <span style={{ font: `${monoSize.sm}px ${MONO}`, color: b.subFg }}>{b.count}</span>}
     </button>
   );
 }

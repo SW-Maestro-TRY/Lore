@@ -293,10 +293,13 @@ function WishBox({ y }: { y: Yeoul }) {
       <button
         data-action="wish-send" onClick={w.send} disabled={!w.canSend}
         style={{
-          padding: 13, borderRadius: radius.md, fontSize: fz.md,
-          border: `1px solid ${w.canSend ? C.accent : C.line}`,
-          background: w.canSend ? C.accent : C.slot,
-          color: w.canSend ? C.accentInk : C.faint,
+          minHeight: 46, padding: 13, borderRadius: radius.md, fontSize: fz.md,
+          border: 'none',
+          background: w.canSend ? C.accent : C.off,
+          color: w.canSend ? C.accentInk : C2.dim2,
+          fontWeight: w.canSend ? 700 : 400,
+          // ★ 못 누르는 동안에도 **모양이 같아야** 눌린 뒤 버튼이 튀지 않는다. 색과 굵기만 바뀐다.
+          cursor: w.canSend ? 'pointer' : 'default',
         }}
       >{w.sending ? w.sendingLabel : w.sendLabel}</button>
     </div>
@@ -369,7 +372,19 @@ function Fire({ y }: { y: Yeoul }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, width: '100%', marginTop: 2 }}>
           {f.actions.map((a) => (
             /* ★ 버튼은 문구가 아니라 `data-action` 으로 집는다(팀 규약 C25) — 문구는 바뀌는 자리다. */
-            <button key={a.action} data-action={a.action} onClick={a.tap} style={{ padding: 13, borderRadius: radius.md, border: `1px solid ${a.primary ? C.accent : C.line}`, background: a.primary ? C.accent : C.slot, color: a.primary ? C.accentInk : C.ink, fontSize: fz.md }}>{a.label}</button>
+            /* ★ 주·보조를 **모양으로** 가른다(2026-09-21 A-22). 예전엔 둘 다 같은 크기의 채운 칸이라
+               무엇이 주인지 안 읽혔다 — 축하 창의 「보내기」와 「닫기」가 특히 그랬다.
+               보조는 테두리 없는 글자 버튼으로 낮춘다(자리·터치 높이는 그대로). */
+            <button
+              key={a.action} data-action={a.action} onClick={a.tap} data-primary={a.primary ? '1' : '0'}
+              style={{
+                minHeight: 46, padding: 13, borderRadius: radius.md, fontSize: fz.md,
+                border: a.primary ? 'none' : `1px solid ${C.lineSoft}`,
+                background: a.primary ? C.accent : 'transparent',
+                color: a.primary ? C.accentInk : C.sub,
+                fontWeight: a.primary ? 700 : 400,
+              }}
+            >{a.label}</button>
           ))}
         </div>
         <span style={{ font: `${monoSize.xs}px ${MONO}`, color: 'rgba(74,64,56,.33)' }}>{f.hint}</span>
