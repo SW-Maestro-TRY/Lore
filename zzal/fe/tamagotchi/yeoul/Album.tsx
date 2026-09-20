@@ -51,6 +51,46 @@ function Wall({ y }: { y: Yeoul }) {
         ))}
       </div>
 
+      {/* ★ 손잡이 줄 — 앨범 시트에 있던 것을 여기로 옮겼다(2026-09-21 A-14).
+          예전엔 시트로 가는 입구가 팝오버 버튼 하나뿐이라, 그 버튼을 지우면 도감·엽서·저장·벽지가
+          통째로 갈 곳이 없어졌다. 앨범은 이제 이 화면 하나다.
+          ★★ **개수가 늘 것을 전제로 그린다** — 엽서·여행처럼 앨범에 들어올 것이 더 있다.
+          `auto-fit` 이라 칸을 더해도 이 코드는 안 고친다(넉 줄을 딱 맞춰 그리면 다음에 다시 뜯는다). */}
+      <div
+        data-part="wall-actions"
+        style={{
+          flex: 'none', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(72px, 1fr))',
+          gap: gap.sm, padding: '0 18px 10px',
+        }}
+      >
+        {w.actions.map((a) => (
+          <button
+            key={a.label} onClick={a.tap} data-action={`album-${a.label}`}
+            style={{ minHeight: 40, padding: '10px 4px', borderRadius: radius.sm, border: `1px solid ${a.bd}`, background: a.bg, fontSize: fz.sm, color: a.fg }}
+          >{a.label}</button>
+        ))}
+      </div>
+
+      {w.deco && (
+        <div data-part="wall-deco" style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: gap.sm, padding: '0 18px 10px' }}>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: gap.sm, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: fz.sm, color: C.faint }}>벽지</span>
+            {w.decoNote && <span style={{ fontSize: fz.xs, color: C.faint }}>{w.decoNote}</span>}
+          </span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(64px, 1fr))', gap: gap.sm }}>
+            {w.walls.map((x) => (
+              <button
+                key={x.name} onClick={x.pick} data-action={`wall-${x.name}`}
+                style={{ display: 'flex', flexDirection: 'column', gap: gap.xs, alignItems: 'center', padding: '7px 4px', borderRadius: radius.sm, border: `${x.bw} solid ${x.bd}`, background: C.paper }}
+              >
+                <span style={{ width: '100%', height: 30, borderRadius: radius.xs, background: x.color }} />
+                <span style={{ fontSize: fz.xs, color: C.sub2 }}>{x.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <span style={{ flex: 'none', padding: '0 18px 16px', fontSize: fz.xs, color: C.faint }}>
         액자를 누르면 크게 볼 수 있어요 · 흐린 액자는 아직 못 배운 모습이에요
       </span>

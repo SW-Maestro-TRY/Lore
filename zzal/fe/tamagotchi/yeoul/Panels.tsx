@@ -52,7 +52,6 @@ function Sheet({ y }: { y: Yeoul }) {
         <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '14px 20px 120px', display: 'flex', flexDirection: 'column', gap: gap.lg }}>
           {/* 주방·욕실·침실은 시트가 없다 — 팝오버로 다 된다(상훈님 판정 12). */}
           {sh.key === 'play' && <PlaySheet y={y} />}
-          {sh.key === 'album' && <AlbumSheet y={y} />}
           {sh.key === 'notify' && <NotifySheet y={y} />}
           {sh.key === 'settings' && <SettingsSheet y={y} />}
         </div>
@@ -121,41 +120,6 @@ function PlaySheet({ y }: { y: Yeoul }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, padding: 17, borderRadius: radius.md, background: C2.paperDim, border: '1px dashed rgba(74,64,56,.18)' }}>
           <span style={{ fontSize: fz.md, color: C.sub2 }}>달리기 · 잠겨 있어요</span>
           <span style={{ fontSize: fz.md, lineHeight: 1.65, color: 'rgba(74,64,56,.55)' }}>{p.runCond}</span>
-        </div>
-      )}
-    </>
-  );
-}
-
-function AlbumSheet({ y }: { y: Yeoul }) {
-  const a = y.v.album;
-  return (
-    <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: gap.sm }}>
-        {a.cells.map((c, i) => (
-          <button key={i} onClick={c.tap} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: gap.xs, borderRadius: radius.sm, border: `1px solid ${c.bd}`, background: c.bg, padding: '8px 9px 9px', textAlign: 'left' }}>
-            <span style={{ width: '100%', height: 34, borderRadius: radius.xs, background: c.thumb, backgroundImage: c.stripe }} />
-            <span style={{ fontSize: fz.sm, lineHeight: 1.25, color: c.fg }}>{c.name}</span>
-            <span style={{ fontSize: fz.xs, lineHeight: 1.3, color: c.condFg }}>{c.cond}</span>
-          </button>
-        ))}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: gap.sm }}>
-        {a.actions.map((x) => (
-          <button key={x.label} onClick={x.tap} style={{ padding: '12px 4px', borderRadius: radius.sm, border: `1px solid ${x.bd}`, background: x.bg, fontSize: fz.sm, color: x.fg }}>{x.label}</button>
-        ))}
-      </div>
-      {a.deco && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
-          <span style={{ fontSize: fz.sm, color: C.faint }}>방 꾸미기 · 벽지</span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: gap.sm }}>
-            {a.walls.map((w) => (
-              <button key={w.name} onClick={w.pick} style={{ display: 'flex', flexDirection: 'column', gap: gap.xs, alignItems: 'center', padding: '7px 4px', borderRadius: radius.sm, border: `${w.bw} solid ${w.bd}`, background: C.paper }}>
-                <span style={{ width: '100%', height: 30, borderRadius: radius.xs, background: w.color }} />
-                <span style={{ fontSize: fz.xs, color: C.sub2 }}>{w.name}</span>
-              </button>
-            ))}
-          </div>
         </div>
       )}
     </>

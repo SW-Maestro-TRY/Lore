@@ -102,7 +102,8 @@ export type Mode = 'day' | 'night' | 'sleep' | 'sick';
  * 시트로 남는 넷. **주방·욕실·침실은 시트가 없다**(상훈님 2026-09-08 판정 12) —
  * 그 셋은 팝오버로 할 일이 다 되고, 알림에서만 열리는 큰 창을 남길 이유가 없었다.
  */
-export type SheetKey = 'play' | 'album' | 'notify' | 'settings';
+// ★ 'album' 은 2026-09-21 에 빠졌다 — 앨범은 시트가 아니라 **전체 화면(벽)** 하나로 모았다(A-14).
+export type SheetKey = 'play' | 'notify' | 'settings';
 export interface LogLine { who: 'pet' | 'me'; text: string }
 /**
  * 벽에 걸린 액자 하나.
@@ -1970,8 +1971,14 @@ export function useYeoul(live?: Live) {
       })(),
       album: {
         say: `함께한 순간이 ${albumOpen}개예요`, n: albumAll, on: albumOpen, tint: '#B08968',
-        a: { label: '벽 보기', count: `${albumOpen}개 열림`, tap: openWall },
-        b: { label: '방 꾸미기', count: `${s.floorLv > 1 ? '4' : '1'}개 열림`, tap: openSheet('album') },
+        /**
+         * ★ 2026-09-21(A-14·A-15) — 버튼 **하나**다. 예전에는 「벽 보기」·「방 꾸미기」 둘이었고,
+         *   둘째가 앨범 시트로 가는 **유일한 상시 입구**였다. 그래서 그 버튼만 지우면 시트 안의
+         *   도감 18칸·엽서·장면·저장·벽지가 통째로 도달 불가가 됐다.
+         *   시트를 없애고 그 내용을 **앨범 보기(벽) 안**으로 옮겼다 — 갈 곳이 한 군데면 헤맬 일이 없다.
+         */
+        a: { label: '앨범 보기', count: `${albumOpen}개 열림`, tap: openWall },
+        b: null,
       },
     };
     const cur = P[selK];
@@ -2109,16 +2116,16 @@ export function useYeoul(live?: Live) {
 
     // ── 시트 ──
     const sk = s.sheet;
-    const sheetTitle: readonly [string, string] = sk === 'album'
-      ? ['앨범', `${albumOpen} / ${albumAll}`]
-      : sk === 'settings'
-        ? [s.petName || '아이', '아이 정보']
-        : sk ? SHEET_TITLE[sk] : ['', ''];
+    const sheetTitle: readonly [string, string] = sk === 'settings'
+      // ★ 제목은 **기능 이름**, 부제가 아이 이름이다(A-18). 다른 시트(놀이·알림)와 같은 규칙 —
+      //   예전에는 이 시트만 거꾸로라 머리글을 읽는 법이 화면마다 달랐다.
+      ? ['아이 정보', s.petName || '아이']
+      : sk ? SHEET_TITLE[sk] : ['', ''];
     const sheet = {
       show: !!sk && s.screen === 'room',
       anim: s.sheetClosing ? 'ySheetOut .2s ease forwards' : 'ySheetIn .26s cubic-bezier(.2,.8,.2,1)',
       dimAnim: s.sheetClosing ? 'yFadeOut .2s ease forwards' : 'yFadeIn .2s ease',
-      height: sk && ['album', 'play', 'settings'].includes(sk) ? '58%' : '46%',
+      height: sk && ['play', 'settings'].includes(sk) ? '58%' : '46%',
       title: sheetTitle[0], sub: sheetTitle[1], key: sk,
     };
 
@@ -2135,7 +2142,7 @@ export function useYeoul(live?: Live) {
       dot: ACCENT, bg: C.paper, bd: C.line,
     })).concat(s.saved > 0 ? [{
       text: `폴라로이드 ${s.saved}장`, note: '앨범에 저장돼 있어요', action: '보기',
-      tap: openSheet('album'), dot: C.accentDim, bg: C.slot, bd: C.lineSoft,
+      tap: openWall, dot: C.accentDim, bg: C.slot, bd: C.lineSoft,
     }] : []);
 
     // ── 캐릭터 칸(온보딩·아이 정보 공용) ──
@@ -2450,6 +2457,28 @@ export function useYeoul(live?: Live) {
         show: s.screen === 'room' && (s.wallOpen || s.wallClosing),
         anim: s.wallClosing ? 'yWallDown .22s ease forwards' : 'yWallUp .3s cubic-bezier(.2,.85,.25,1)',
         count: `${albumOpen} / ${albumAll}`, close: closeWall, frames,
+        /**
+         * 앨범 안의 손잡이 줄. **개수가 늘 것을 전제로 둔다** — 엽서·여행처럼 앨범에 들어올 것이
+         * 더 있다(2026-09-21). 그래서 화면이 넉 줄을 딱 맞춰 그리지 않고 **흐르게** 그린다
+         * (`auto-fit`). 여기 한 줄을 더해도 화면은 안 고친다.
+         */
+        actions: ([
+          ['엽서', popPostcard],
+          ['장면', popScenes],
+          ['저장', saveShot],
+          ['방 꾸미기', toggleDeco],
+        ] as const).map(([label, tap]) => ({
+          label, tap,
+          ...(label === '방 꾸미기' && s.decoOpen
+            ? { bg: C.accentSoft, bd: ACCENT, fg: C2.accentInk2 }
+            : { bg: C.paper, bd: C.line, fg: C.ink }),
+        })),
+        deco: s.decoOpen,
+        decoNote: s.floorLv > 1 ? '' : '2층 동작을 열면 더 고를 수 있어요',
+        walls: WALLS.map((w) => ({
+          name: w.name, color: w.wall, pick: pickWall(w.id),
+          ...(s.wallId === w.id ? { bd: ACCENT, bw: '2px' } : { bd: C.line, bw: '1px' }),
+        })),
       },
       frame: {
         show: !!s.frame,
@@ -2510,33 +2539,6 @@ export function useYeoul(live?: Live) {
           bd: on ? '#C2CBE2' : '#DFD9D0', opacity: on ? 1 : 0.7,
         };
       })(),
-      album: {
-        cells: ALBUM.map(([name, open]) => {
-          const parts = name.split(' · ');
-          return {
-            name: parts[0], cond: open ? '열림' : (parts[1] || '조건 미정'),
-            tap: tapAlbumCell(open, name),
-            bg: open ? '#F6E7DF' : C.slotDim,
-            bd: open ? C.accentDim : C.lineHard,
-            fg: open ? '#5A3D32' : C.ink,
-            condFg: open ? '#8A6152' : C.sub2,
-            thumb: open ? '#EBD3C7' : '#E6DFD3',
-            stripe: open ? 'repeating-linear-gradient(135deg,rgba(74,64,56,.07) 0 5px,transparent 5px 12px)' : 'none',
-          };
-        }),
-        actions: ([['엽서', popPostcard], ['장면', popScenes], ['방 꾸미기', toggleDeco], ['저장', saveShot]] as const)
-          .map(([label, tap], i) => ({
-            label, tap,
-            ...(i === 2 && s.decoOpen
-              ? { bg: C.accentSoft, bd: ACCENT, fg: C2.accentInk2 }
-              : { bg: C.slot, bd: C.line, fg: C.ink }),
-          })),
-        deco: s.decoOpen,
-        walls: WALLS.map((w) => ({
-          name: w.name, color: w.wall, pick: pickWall(w.id),
-          ...(s.wallId === w.id ? { bd: ACCENT, bw: '2px' } : { bd: C.line, bw: '1px' }),
-        })),
-      },
       notif: { items: notifItems, empty: notifItems.length === 0, dot: s.notifOn && calls.length > 0, count: calls.length },
       settings: {
         groups: [
