@@ -278,14 +278,23 @@ jobs:
             echo "skip: webtoon/be/setup-python.sh 없음"
           fi
 
+      # 5번째 인자 = 이 배포가 산출물을 올린 **환경별 폴더**(builds/dev · builds/staging · builds/prod).
+      #
+      # ★ 위 두 스텝이 파이썬 준비물을 builds/<env>/ 아래에 올리는데, 박스 스크립트는 예전에
+      #   builds/ 바로 아래(환경 폴더 없음)를 찾아 "python assets 없음 — 건너뜀"만 찍고 지나갔다.
+      #   배포도 기동도 성공한 채로 requirements 만 영원히 안 갱신되는 종류의 고장이다.
+      #   그래서 CI 가 "어디에 올렸는지"를 추측 대상으로 남기지 않고 그대로 넘겨 준다.
+      #   (박스가 LORE_ENV 로 풀어도 같은 값이다. 인자를 쓰면 LORE_ENV 가 스크립트 환경에
+      #    실려 있는지에 기대지 않아도 된다. 옛 스크립트는 이 인자를 무시하므로 안전하다.)
       - name: SSM 으로 배포 (포트 안 엶)
         run: |
+          BUILDS_PREFIX="builds/${{ needs.setup.outputs.env_name }}"
           CMD_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
             ${{ needs.setup.outputs.ssm_target }} \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy api ${{ needs.setup.outputs.env_name }} ${GITHUB_SHA}" \
-            --parameters commands="[\"sudo /opt/lore/deploy-api.sh ${{ needs.setup.outputs.s3_bucket }} $S3_KEY $AWS_REGION ${GITHUB_SHA}\"]" \
+            --parameters commands="[\"sudo /opt/lore/deploy-api.sh ${{ needs.setup.outputs.s3_bucket }} $S3_KEY $AWS_REGION ${GITHUB_SHA} $BUILDS_PREFIX\"]" \
             --query "Command.CommandId" --output text)
           echo "command-id: $CMD_ID"
           bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
