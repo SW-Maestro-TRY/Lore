@@ -337,6 +337,21 @@ function Fire({ y }: { y: Yeoul }) {
           </div>
         )}
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 26, lineHeight: 1.2, color: C.ink, textAlign: 'center' }}>{f.title}</span>
+        {/* 예시 그림 한 칸. ★ 방 안 액자(나무 테두리)와 **다른 모양**(점선 틀)이어야 한다 —
+            사용자는 이 자리에서 제 아이를 기대하므로, 같은 틀로 그리면 남의 캐릭터를 제 것으로 읽는다.
+            그래서 칩·캡션(글자) · 점선 틀(모양) · 본문("{이름}도 …", 말) 세 겹으로 예시임을 말한다. */}
+        {f.preview && (
+          <div data-part="fire-preview" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: 11, border: `1.5px dashed ${C.lineHard}`, borderRadius: radius.md, background: C.slot, boxSizing: 'border-box' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
+              <span style={{ padding: '2px 8px', borderRadius: radius.pill, background: C.accentSoft, color: C.accent, fontSize: 10, lineHeight: 1.6 }}>{f.preview.badge}</span>
+              <span style={{ fontSize: 11, color: C.faint }}>{f.preview.caption}</span>
+            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {/* ★ 높이만 고정하고 너비는 그림이 정한다 — 상자 비율을 손으로 적으면 그림이 바뀔 때마다
+                안쪽에 빈 띠가 생긴다. `maxWidth` 는 세로로 긴 그림이 와도 판을 안 밀게 하는 안전선. */}
+            <img src={f.preview.src} alt={f.preview.caption} style={{ height: 150, width: 'auto', maxWidth: '100%', display: 'block' }} />
+          </div>
+        )}
         {/* ★ `pre-line` — 문구가 줄바꿈(\n)으로 두 마디를 갈라 둔 판이 있다(졸업 판). 없으면 한 덩어리로 붙는다. */}
         <span style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.62)', textAlign: 'center', whiteSpace: 'pre-line' }}>{f.body}</span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', marginTop: 2 }}>

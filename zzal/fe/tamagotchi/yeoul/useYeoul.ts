@@ -13,7 +13,7 @@ import {
   ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, GUESS_HANDS, GUESS_HAND_KINDS,
   GUESS_HAND_PX, GUESS_LOSE_DOTS, GUESS_LOSE_DOTS_PX, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
-  STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS, GRAD_COPY,
+  STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
   type GuessHandKind, type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
@@ -83,6 +83,14 @@ export interface FireAction { label: string; action: string; tap: () => void; pr
 export interface Fire {
   title: string; body: string; hint?: string; tapAny?: boolean;
   polaroid?: boolean; caption?: string; shot?: string; shotLabel?: string;
+  /**
+   * 예시 그림 한 칸(졸업 판의 구르기 미리보기).
+   *
+   * ★ 폴라로이드(`polaroid`)와 **일부러 다른 모양**이다. 폴라로이드는 "내 아이와 남긴 것" 이고
+   *   이쪽은 "남이 먼저 보여주는 예시" 라, 같은 틀로 그리면 사용자가 제 것으로 읽는다.
+   * ★ 그림 주소가 없으면 이 칸 자체를 안 만든다 — 빈 액자가 뜨는 것보다 없는 편이 낫다.
+   */
+  preview?: { src: string; badge: string; caption: string };
   actions: FireAction[];
 }
 
@@ -691,7 +699,8 @@ export function useYeoul(live?: Live) {
    *   (3층 첫 심화 행동 선물은 '뒤로 넘어짐' 하나로 줄었다)
    *
    * ★★ 2026-09-20 — 이 판이 **사실과 다른 말을 세 가지** 하고 있어서 고쳤다. 무엇이 왜
-   *   거짓이었는지는 문구를 쥔 `constants.ts` 의 `GRAD_COPY` 머리말에 적어 두었다.
+   *   거짓이었는지, 그리고 아직 안 붙인 자리 둘(구르기 미리보기 · 자유 입력)이 무엇인지는
+   *   문구를 쥔 `constants.ts` 의 `GRAD_COPY` 머리말에 적어 두었다.
    *   요지만 — (1) 구르기는 이 순간 굽기가 시작될 뿐이라 앨범에 아직 없다,
    *   (2) 밤에 새 동작을 연습하지 않는다(조건을 채운 순간 굽는 모델 + 3층 목록이 비어 있다),
    *   (3) "구르기 저장하기" 는 저장할 그림이 없는데 저장했다고 말했다 → 버튼을 없앴다.
@@ -708,7 +717,12 @@ export function useYeoul(live?: Live) {
       tutorDone: true, rollUnlocked: true,
       fire: {
         title: GRAD_COPY.title,
-        body: GRAD_COPY.body(petWith(v.petName, '이', '가')),
+        body: GRAD_COPY.body(v.petName || '아이'),
+        // ★ 그림이 게시되기 전에는 `GRAD_PREVIEW_SRC` 가 비어 있어 이 칸이 아예 안 생긴다.
+        //   주소가 정해지면 상수 한 줄만 채우면 되고, 여기도 화면도 안 고친다.
+        ...(GRAD_PREVIEW_SRC
+          ? { preview: { src: GRAD_PREVIEW_SRC, badge: GRAD_COPY.previewBadge, caption: GRAD_COPY.previewCaption } }
+          : {}),
         hint: '', tapAny: true,
         actions: [
           // 정본이 선물 화면에 붙이라고 한 수요조사. **이쪽은 진짜로 서버에 남는다**(recordWish).
