@@ -99,6 +99,7 @@ images/zzal/demo/v7/joy.webp
 images/zzal/demo/v7/pet.webp
 images/zzal/demo/v7/petted.webp
 images/zzal/demo/v7/reply.webp
+images/zzal/demo/v7/roll.v1.webp
 images/zzal/demo/v7/sad.webp
 images/zzal/demo/v7/sick.webp
 images/zzal/demo/v7/sleep.webp
