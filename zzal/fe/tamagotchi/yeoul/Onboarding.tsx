@@ -247,6 +247,15 @@ function OnboardingInner({ y }: { y: Yeoul }) {
   // ★ 보내는 동안에도 잠근다(2026-09-10). 안 잠그면 두 번 눌려 같은 이름을 두 번 보내고,
   //   그사이 화면은 아무 반응이 없어 사람이 계속 누른다.
   const sending = live.busy && (key === 'upload' || key === 'char');
+  /**
+   * 이번 실패가 **우리 쪽 사정**인가(연결 끊김·CORS·S3·5xx). 그렇다면 「이런 그림이면 좋아요 /
+   * 어려워요」 예시를 **안 그린다.**
+   *
+   * ★★ 왜 — 예시가 오류 한 줄 바로 아래 그대로 남아 있어서, 서버가 그림을 보지도 못한 실패인데
+   *   사용자가 **제 그림 탓으로 읽었다.** 그림이 정말 거절당했을 때(`errorKind === 'image'`)만
+   *   예시가 도움이 되고, 그때는 그대로 둔다. 갈래 판정은 `lib/upload.ts` 한 곳이 한다.
+   */
+  const infraFail = key === 'upload' && !!live.error && live.errorKind === 'infra';
   const blocked = uploadBlocked || nameBlocked || sending;
   const ctaLabel = key === 'upload'
     ? (live.busy ? '올리는 중…' : live.imageKey ? '다음' : needAuth ? UPLOAD_COPY.pendingCta : '그림을 먼저 올려 주세요')
@@ -359,45 +368,57 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               </span>
             </button>
             {live.error && (
-              <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '10px 12px', borderRadius: radius.sm, background: C.accentSoft }}>
+              <span data-part="upload-error" data-error-kind={live.errorKind ?? 'infra'} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '10px 12px', borderRadius: radius.sm, background: C.accentSoft }}>
                 <span style={{ width: 5, height: 5, flex: 'none', marginTop: 6, borderRadius: '50%', background: C.accent }} />
-                <span style={{ fontSize: 12, lineHeight: 1.6, color: C.accent }}>{live.error}</span>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 12, lineHeight: 1.6, color: C.accent }}>{live.error}</span>
+                  {/* ★ 우리 쪽 사정일 때만 한 줄 더. "당신 그림이 문제가 아니다" 를 **말로** 못 박는다 —
+                      예시를 감추는 것만으로는 이미 읽은 사람의 오해가 안 풀린다. */}
+                  {infraFail && (
+                    <span data-note="infra" style={{ fontSize: 11.5, lineHeight: 1.6, color: C.sub }}>{UPLOAD_COPY.infraNote}</span>
+                  )}
+                </span>
               </span>
             )}
             {/* 가장 먼저 읽혀야 하는 한 줄 — 자캐를 맡기는 사람이 제일 먼저 의심하는 지점이다. */}
-            <span className="onb-privacy" style={{ fontSize: 11.5, lineHeight: 1.7, color: C.sub2 }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
+            <span className="onb-privacy" style={{ fontSize: 11.5, lineHeight: 1.7, color: C.sub2 }}>{UPLOAD_COPY.privacy}</span>
 
-            <span style={{ fontSize: 11.5, color: C.sub2 }}>이런 그림이면 좋아요</span>
-            <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-              {GOOD_EX.map(([lbl, color, key]) => (
-                <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
-                  <ExampleImg
-                    src={assetUrl(key)}
-                    alt={`좋은 예: ${lbl}`}
-                    // OB-07 — 색면+빗금을 종이/slot 계열 차분한 카드로(빗금 약화·테두리). 데이터·onError·✓ 배지는 그대로.
-                    box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,rgba(74,64,56,${fEx ? '.03' : '.05'}) 0 6px,transparent 6px 14px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `8.5px ${MONO}`, color: 'rgba(74,64,56,.42)' }}
-                    badge={<span style={{ position: 'absolute', left: 8, top: 8, width: 15, height: 15, borderRadius: '50%', border: '1.5px solid #5C8452', background: 'rgba(255,253,248,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, color: '#5C8452' }}>✓</span>}
-                  />
-                  <span style={{ fontSize: 11, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{lbl}</span>
-                </div>
-              ))}
-            </div>
+            {!infraFail && (
+              <>
 
-            <span style={{ fontSize: 11.5, color: C.sub2 }}>이런 그림은 어려워요</span>
-            <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
-              {BAD_EX.map(([lbl, color, key]) => (
-                <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
-                  <ExampleImg
-                    src={assetUrl(key)}
-                    alt={`어려운 예: ${lbl}`}
-                    // OB-07 — 같은 결로 차분하게. 데이터·onError·✕ 배지는 그대로.
-                    box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,rgba(74,64,56,${fEx ? '.03' : '.05'}) 0 5px,transparent 5px 12px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `8px ${MONO}`, color: 'rgba(74,64,56,.34)' }}
-                    badge={<span style={{ position: 'absolute', left: 5, top: 5, width: 14, height: 14, borderRadius: '50%', background: 'rgba(255,253,248,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, color: C.accent }}>✕</span>}
-                  />
-                  <span style={{ fontSize: 10.5, color: C.sub2, textAlign: 'center' }}>{lbl}</span>
-                </div>
-              ))}
-            </div>
+              <span style={{ fontSize: 11.5, color: C.sub2 }}>{UPLOAD_COPY.goodTitle}</span>
+              <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+                {GOOD_EX.map(([lbl, color, key]) => (
+                  <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+                    <ExampleImg
+                      src={assetUrl(key)}
+                      alt={`좋은 예: ${lbl}`}
+                      // OB-07 — 색면+빗금을 종이/slot 계열 차분한 카드로(빗금 약화·테두리). 데이터·onError·✓ 배지는 그대로.
+                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,rgba(74,64,56,${fEx ? '.03' : '.05'}) 0 6px,transparent 6px 14px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `8.5px ${MONO}`, color: 'rgba(74,64,56,.42)' }}
+                      badge={<span style={{ position: 'absolute', left: 8, top: 8, width: 15, height: 15, borderRadius: '50%', border: '1.5px solid #5C8452', background: 'rgba(255,253,248,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, color: '#5C8452' }}>✓</span>}
+                    />
+                    <span style={{ fontSize: 11, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{lbl}</span>
+                  </div>
+                ))}
+              </div>
+
+              <span style={{ fontSize: 11.5, color: C.sub2 }}>{UPLOAD_COPY.badTitle}</span>
+              <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
+                {BAD_EX.map(([lbl, color, key]) => (
+                  <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+                    <ExampleImg
+                      src={assetUrl(key)}
+                      alt={`어려운 예: ${lbl}`}
+                      // OB-07 — 같은 결로 차분하게. 데이터·onError·✕ 배지는 그대로.
+                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,rgba(74,64,56,${fEx ? '.03' : '.05'}) 0 5px,transparent 5px 12px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `8px ${MONO}`, color: 'rgba(74,64,56,.34)' }}
+                      badge={<span style={{ position: 'absolute', left: 5, top: 5, width: 14, height: 14, borderRadius: '50%', background: 'rgba(255,253,248,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1, color: C.accent }}>✕</span>}
+                    />
+                    <span style={{ fontSize: 10.5, color: C.sub2, textAlign: 'center' }}>{lbl}</span>
+                  </div>
+                ))}
+              </div>
+              </>
+            )}
           </div>
         )}
 

@@ -27,7 +27,7 @@ import {
   type HatchProgress, type PetDetail, type Personality,
 } from '../../lib/pet';
 import { getCurrentGame, guess, startGame, type GameState, type GuessResult, type Side } from '../../lib/game';
-import { uploadImage } from '../../lib/upload';
+import { classifyUploadFailure, uploadFailureLine, uploadImage, type UploadFailure } from '../../lib/upload';
 import { readHatchBlocked, type HatchBlocked } from '../../lib/hatchBlocked';
 
 /**
@@ -111,6 +111,14 @@ export interface Live {
   pet: PetDetail | null;
   busy: boolean;
   error: string | null;
+  /**
+   * 그 오류가 **그림 탓인가 우리 쪽 사정인가**(`error` 가 있을 때만 채워진다).
+   *
+   * ★★ 화면이 이걸 보고 「이런 그림은 어려워요」 예시를 띄울지 말지 정한다. 인프라 실패
+   *   (연결 끊김·CORS·S3·5xx)인데 예시가 같이 뜨면 사용자가 **제 그림을 의심한다** —
+   *   그림을 서버가 보지도 못한 실패인데도 그렇다. 판정 규칙은 `lib/upload.ts` 한 곳에 있다.
+   */
+  errorKind: UploadFailure | null;
   /**
    * **부화가 막혔다** — 자리·상한·바깥 한도에 걸려 서버가 거절했다.
    *
@@ -269,7 +277,7 @@ export interface Live {
 }
 
 const EMPTY: Live = {
-  previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null, blocked: null,
+  previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null, errorKind: null, blocked: null,
   draftOnly: false, resumedDraft: false, careing: null, optimistic: null, resting: false, chat: null, chatting: false,
   game: null, guessing: false, album: null, ready: false, petReady: false, failed: false, step: null,
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
@@ -297,6 +305,8 @@ export function useHatchState(): Live {
   petRef.current = pet;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 그 오류가 그림 탓인가 우리 쪽 사정인가. `error` 와 같이 켜지고 같이 꺼진다. */
+  const [errorKind, setErrorKind] = useState<UploadFailure | null>(null);
   /**
    * 막힘 안내. 오류(`error`)와 한 짝으로 움직인다 — **한쪽을 켜면 다른 쪽은 끈다.**
    * 같은 사건을 두 줄로 띄우지 않으려는 것이다(→ Live.blocked 머리말).
@@ -396,6 +406,7 @@ export function useHatchState(): Live {
   const upload = useCallback(async (file: File) => {
     setBusy(true);
     setError(null);
+    setErrorKind(null);
     setBlocked(null);
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = URL.createObjectURL(file);
@@ -419,7 +430,12 @@ export function useHatchState(): Live {
       //   붉은 한 줄로 그리면 사용자가 제 그림을 의심한다(명세 E절 "고장으로 안 읽히게").
       const stop = readHatchBlocked(e);
       setBlocked(stop);
-      setError(stop ? null : e instanceof Error ? e.message : '그림을 올리지 못했어요');
+      // ★ 문구는 `uploadFailureLine` 이 고른다 — 그냥 `e.message` 를 쓰면 네트워크 단 실패에서
+      //   브라우저가 만든 영어("Failed to fetch")가 그대로 화면에 뜬다(실패 주입으로 실측).
+      setError(stop ? null : uploadFailureLine(e));
+      // ★ 무엇 때문에 실패했는지도 같이 남긴다 — 화면이 예시 안내를 띄울지 이걸로 정한다.
+      //   막힘이면 오류가 아니므로 갈래도 비운다(둘 다 켜면 같은 사건이 두 줄로 뜬다).
+      setErrorKind(stop ? null : classifyUploadFailure(e));
     } finally {
       setBusy(false);
     }
@@ -827,14 +843,14 @@ export function useHatchState(): Live {
     applied.current = issued.current;
     appliedGame.current = issued.current;
     session.current += 1;
-    setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null); setBlocked(null);
+    setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null); setErrorKind(null); setBlocked(null);
     setCharSet(false); setHatch(null); setResumedDraft(false); setOptimistic(null);
     setGameLoaded(false); setChatLoaded(false);
     setChat(null); putGame(takeSeq(), null); setAlbum(null);
   }, [takeSeq, putGame]);
 
   return {
-    previewUrl, imageKey, petId, pet, busy, error, blocked,
+    previewUrl, imageKey, petId, pet, busy, error, errorKind, blocked,
     // 초안은 아직 부화가 아니다 — 이름을 받아야 굽기가 시작된다.
     draftOnly: !!petId && !charSet,
     resumedDraft: resumedDraft && !charSet,
