@@ -31,7 +31,7 @@ MinIO 는 빈 통으로 뜬다. 그런데 화면은 배경 16종·소품·여울
 
 그래서 첫 기동에 **staging CloudFront(공개)에서 같은 키를 그대로 받아 MinIO 에 넣는다.**
 
-- 목록: `infra/dev/seed-assets.txt` — **정적 자산 118개**(`assets` `bg` `demo` `landing` `onboarding`).
+- 목록: `infra/dev/seed-assets.txt` — **정적 자산 126개**(`assets` `bg` `demo` `landing` `onboarding`).
   사용자 업로드·펫 그림은 **안 받는다**(사람이 만들어야 나오는 것).
 - 순서: `minio-init`(버킷 생성) → `seed-fetch`(curl 로 내려받기) → `minio-seed`(mc 로 업로드).
 - **AWS 자격이 필요 없다.** 공개 CloudFront 주소만 쓴다(`SEED_BASE_URL`).
