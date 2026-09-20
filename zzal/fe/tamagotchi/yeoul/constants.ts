@@ -302,6 +302,47 @@ export const EGG_IMG = {
   idle: assetUrl('egg_idle'), hatch: assetUrl('egg_hatch'), crack: assetUrl('egg_crack'),
 } as const;
 
+/**
+ * 좌우 맞히기의 손 그림 — 주먹 두 장, 펼친 손 네 장.
+ *
+ * ★ **`props/catalog.ts` 에 등록하지 않는다.** 소품 렌더러(`PropLayer`)는 무대 안에만 마운트되는데
+ *   이 그림들은 무대가 아니라 **시트 안 버튼**에 붙는다 — 등록해도 그려질 자리가 없다. 게다가 그
+ *   파일은 바깥 규격 JSON 을 옮겨 적는 자리라 다음 갱신 때 손으로 적은 줄이 지워진다.
+ *   그래서 화면이 직접 드는 상수로 여기 둔다.
+ *
+ * ★ 왼쪽·오른쪽은 **화면 기준**이다(아이 기준이 아니다). 그림 파일 이름의 `l`·`r` 이 곧 화면의 좌·우다.
+ *
+ * ★ 여섯 장이 전부 512×512 이고 **손목이 캔버스 바닥에 붙어 있다.** 그래서 같은 정사각 칸에
+ *   `object-fit: contain` 으로 넣으면 주먹↔펼침을 갈아 끼워도 손목이 한 픽셀도 안 움직인다.
+ *   칸을 정사각이 아닌 모양으로 바꾸면 이 약속이 깨진다 — 손이 위아래로 튄다.
+ */
+export const GUESS_HANDS = {
+  LEFT: {
+    fist: assetUrl('guess_l_fist.v1'),
+    open_empty: assetUrl('guess_l_open_empty.v1'),
+    open_candy: assetUrl('guess_l_open_candy.v1'),
+  },
+  RIGHT: {
+    fist: assetUrl('guess_r_fist.v1'),
+    open_empty: assetUrl('guess_r_open_empty.v1'),
+    open_candy: assetUrl('guess_r_open_candy.v1'),
+  },
+} as const;
+
+/** 손 그림 한 칸의 한 변(px). 정사각이어야 손목이 안 튄다(위 주석). */
+export const GUESS_HAND_PX = 64;
+
+/** 손 그림 세 갈래. 화면이 이 순서대로 세 장을 겹쳐 두고 한 장만 보여 준다(갈아 끼울 때 안 깜빡이게). */
+export const GUESS_HAND_KINDS = ['fist', 'open_empty', 'open_candy'] as const;
+export type GuessHandKind = (typeof GUESS_HAND_KINDS)[number];
+
+/**
+ * 진 판에 뜨는 점 세 개. 256×256 이고 잉크는 가로로 넓은 띠라(실측 228×61, 캔버스 정중앙)
+ * 정사각 칸에 넣으면 위아래가 비어 보인다 — 그게 정상이다.
+ */
+export const GUESS_LOSE_DOTS = assetUrl('lose_dots.v1');
+export const GUESS_LOSE_DOTS_PX = 40;
+
 /** 버튼 표기 세 가지 — 색맹·저시력 대비로 색 말고 모양·글자를 함께 낼 수 있게(정본 §16). */
 export const NEED_STYLES = ['색+모양+글자', '색+글자', '색+모양'] as const;
 export type NeedStyle = (typeof NEED_STYLES)[number];

@@ -10,10 +10,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
+  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, GUESS_HANDS, GUESS_HAND_KINDS,
+  GUESS_HAND_PX, GUESS_LOSE_DOTS, GUESS_LOSE_DOTS_PX, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
   STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS,
-  type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
+  type GuessHandKind, type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
 import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
@@ -131,6 +132,12 @@ export interface YeoulState {
   playTab: 'talk' | 'guess' | 'run'; draft: string;
   /** 방금 친 좌우 맞히기 결과(서버가 준 것). 한 줄 문구를 그리는 데만 쓴다. */
   lastGuess: GuessResult | null;
+  /**
+   * 지금 펼쳐 보일 손. **서버판·목판이 같은 칸을 쓴다** — 그래야 그리는 코드가 한 벌이고,
+   * 서버가 붙고 안 붙고에 따라 손이 다르게 뜨는 일이 없다(`lastGuess` 는 서버에만 있다).
+   * `null` 이면 아직 안 골랐다는 뜻이라 양손 다 주먹이다.
+   */
+  guessHand: { side: Side; hit: boolean } | null;
   log: LogLine[]; memories: string[];
   resolved: Record<string, boolean>; calls: number; guess: string | null;
   wallId: string;
@@ -225,7 +232,7 @@ const INITIAL: YeoulState = {
   full: 2, happy: 2, stock: 3, trace: 2, plays: 3, snacks: 0,
   bathUsed: false, pets: 1, sick: false, sleeping: false, night: false,
   hearts: false, toast: '',
-  sheet: null, sheetClosing: false, playTab: 'talk', draft: '', lastGuess: null,
+  sheet: null, sheetClosing: false, playTab: 'talk', draft: '', lastGuess: null, guessHand: null,
   log: [{ who: 'pet', text: '있잖아, 오늘은 뭐 했어요?' }],
   memories: ['빵 좋아함', '비 싫어함', '왼쪽을 잘 맞힘', '늦잠', '파란색'],
   resolved: {}, calls: 3, guess: null,
@@ -1009,12 +1016,12 @@ export function useYeoul(live?: Live) {
         if (!lv.game?.playing) {
           const err = await lv.startPlay();
           if (err) { flash(err); return; }
-          patch({ lastGuess: null });
+          patch({ lastGuess: null, guessHand: null });
         }
         const { error, result } = await lv.pickSide(side);
         if (error) { flash(error); return; }
         if (!result) return;
-        patch({ lastGuess: result });
+        patch({ lastGuess: result, guessHand: { side: result.pick, hit: result.hit } });
         afterChoose(() => careAct(result.hit ? 'game_win' : 'game_lose'));
       })();
       return;
@@ -1027,6 +1034,8 @@ export function useYeoul(live?: Live) {
       happy: win ? Math.min(4, s.happy + 1) : s.happy,
       guess: win ? '맞았어요!' : '아쉬워요, 반대쪽이었어요',
       bond: win ? Math.min(100, s.bond + 1) : s.bond,
+      // 서버판과 **같은 칸**에 적는다 — 손을 그리는 코드가 목이냐 서버냐를 묻지 않게.
+      guessHand: { side, hit: win },
     });
     afterChoose(() => careAct(win ? 'game_win' : 'game_lose'));
   }, [s.plays, s.sampleMode, s.cGame, s.happy, s.bond, patch, careAct, flash, later]);
@@ -1819,6 +1828,25 @@ export function useYeoul(live?: Live) {
           : `${gr.hit ? '맞았어요!' : '아쉬워요.'} ${gr.hits} / ${gr.winAt} · ${(gr.nextRound ?? 0) + 1}번째`)
         : (gm?.playing ? `${(gm.round ?? 0) + 1}번째 · 어느 손에 있을까요?` : '어느 손에 있을까요?');
 
+    /**
+     * ── 손 그림 두 장 ──
+     *
+     * 규칙은 한 줄이다. **고른 손만 펼친다** — 맞았으면 사탕이, 틀렸으면 빈 손이 나온다.
+     * 안 고른 손은 계속 주먹이다(답을 미리 까지 않는다. 맞았는지 틀렸는지는 윗줄이 말해 준다).
+     *
+     * ★ 답을 기다리는 동안(`live.guessing`)에는 **양손 다 주먹**으로 되돌린다. 앞 판의 펼친 손을
+     *   그대로 두면 아직 안 친 판의 답처럼 읽힌다.
+     * ★ 세 장을 다 실어 두고 한 장만 보인다(`imgs`). 고른 순간에 받아 오면 첫 판에서 손이
+     *   한 박자 사라졌다 나타난다 — 시트를 연 순간 세 장을 미리 받아 두는 편이 조용하다.
+     */
+    const shownHand = live?.guessing ? null : s.guessHand;
+    const handKind = (side: Side): GuessHandKind =>
+      shownHand?.side !== side ? 'fist' : shownHand.hit ? 'open_candy' : 'open_empty';
+    const handSlot = (side: Side) => ({
+      now: handKind(side),
+      imgs: GUESS_HAND_KINDS.map((kind) => ({ kind, src: GUESS_HANDS[side][kind] })),
+    });
+
     // ── 앨범 벽 ──
     // ★ 구르기는 18칸 **밖의 선물**이다(정본 §"첫 심화 행동 동작 = 카탈로그 밖 특별 1종").
     //   그래서 칸 수(N/18)를 건드리지 않고 맨 앞에 따로 붙인다.
@@ -2078,6 +2106,15 @@ export function useYeoul(live?: Live) {
         draft: s.draft,
         memories: (onServer ? (sc?.memories ?? []) : s.memories).map((t) => ({ text: t })),
         guessNote: onServer ? guessNote : (s.guess ?? '어느 손에 있을까요?'),
+        hands: {
+          px: GUESS_HAND_PX,
+          left: handSlot('LEFT'),
+          right: handSlot('RIGHT'),
+          /** 진 판에만 뜨는 점 세 개. 어느 손 위에 붙일지까지 여기서 정한다. */
+          dots: shownHand && !shownHand.hit
+            ? { src: GUESS_LOSE_DOTS, px: GUESS_LOSE_DOTS_PX, side: shownHand.side }
+            : null,
+        },
         // 오늘 남은 판은 **두 게임 합산**이고 지금 치는 판은 빠져 있다(서버 규칙).
         playsLeft,
         canGuess: onServer
