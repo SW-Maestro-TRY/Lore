@@ -81,11 +81,20 @@ const nextConfig = {
       ? [{ source: '/api/:path*', destination: `${process.env.API_PROXY}/api/:path*` }]
       : [];
 
+    // 그림도 같은 사정이다. 화면은 `/images/zzal/...` 로 그림을 부르고(assets.ts 의
+    // NEXT_PUBLIC_CDN_BASE 기본값 = '/images'), 배포에서는 CloudFront 가 그 자리를
+    // S3 로 보낸다. 앞에 아무것도 없는 로컬(docker compose base)에서만 Next 가 대신
+    // 넘겨 준다 — IMAGE_PROXY 를 준 빌드에서만 켜지므로 CI 빌드에는 영향이 없다.
+    const imageProxy = process.env.IMAGE_PROXY
+      ? [{ source: '/images/:path*', destination: `${process.env.IMAGE_PROXY}/:path*` }]
+      : [];
+
     return {
       // beforeFiles — 라우트가 있든 없든 이쪽이 먼저 잡는다.
       // 나중에 /webtoon 아래에 React 화면이 생겨도 이 규칙이 계속 유효하도록.
       beforeFiles: [
         ...apiProxy,
+        ...imageProxy,
         // page('', 'index.html') — 홈은 뺐다. React 화면(app/(domains)/webtoon)이
         // 대신 잡는다. **정적 파일로 되돌리면 Lore 앱 헤더가 같이 사라진다** —
         // rewrite 는 Next 레이아웃을 통째로 건너뛰기 때문이다.

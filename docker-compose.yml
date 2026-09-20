@@ -1,12 +1,12 @@
 # Lore 개발용 self-contained 스택 (base).
 #
 # 같은 compose 가 개발자 노트북과 dev EC2 양쪽에서 돈다 — 차이는 .env 하나뿐이다.
-#   노트북 : docker compose --env-file infra/dev/.env up
+#   노트북 : docker compose --env-file infra/dev/.env up --build   (→ http://localhost:3100)
 #   dev EC2: docker compose -f docker-compose.yml -f docker-compose.dev-ec2.yml up -d
 #            (override 가 nginx(80/443·TLS)를 얹는다)
 #
 # RDS→postgres, S3→minio 로 통째로 대체해 외부 AWS 자원 없이 앱 전체가 뜬다.
-# 환경변수 목록·노트북/박스 차이는 infra/dev/.env.example 참고.
+# 환경변수 목록·노트북/박스 차이는 infra/dev/env.example 참고.
 
 name: lore-dev
 
@@ -66,6 +66,47 @@ services:
         mc anonymous set download local/"$$CONTENT_BUCKET";
         echo "버킷 준비 완료: $$CONTENT_BUCKET"
 
+  # ── 정적 그림 씨뿌리기 1/2 : 내려받기 ────────────────────────────
+  # MinIO 는 빈 통으로 뜨는데 화면은 배경·소품·여울 시연·온보딩·랜딩 썸네일이 버킷에
+  # 있다고 가정하고 /images/zzal/... 를 부른다 → 안 채우면 전 화면이 깨진 그림이다.
+  # staging CloudFront(공개)에서 같은 키를 그대로 받아 온다 — AWS 자격이 필요 없다.
+  # 목록 = infra/dev/seed-assets.txt (118개). 실패해도 스택은 뜬다(경고만 찍고 exit 0).
+  seed-fetch:
+    image: curlimages/curl:latest
+    user: "0:0"                             # 명명 볼륨이 root 소유로 생긴다 — 기본 유저는 못 쓴다
+    environment:
+      SEED_BASE_URL: ${SEED_BASE_URL:-https://staging.lorecomic.com}
+    volumes:
+      - seeddata:/seed/data
+      - ./infra/dev/seed-assets.txt:/seed/seed-assets.txt:ro
+      - ./infra/dev/seed-assets.sh:/seed/seed-assets.sh:ro
+    entrypoint: ["/bin/sh", "/seed/seed-assets.sh"]
+
+  # ── 정적 그림 씨뿌리기 2/2 : 버킷에 올리기 ───────────────────────
+  # 받아 둔 파일을 키 그대로 버킷에 넣는다. mc mirror 는 이미 있는 키를 건너뛰므로
+  # 다시 올려도 안전하다(멱등). 버킷 준비(minio-init)와 내려받기가 모두 끝난 뒤에 돈다.
+  minio-seed:
+    image: quay.io/minio/mc:latest
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+      seed-fetch:
+        condition: service_completed_successfully
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      CONTENT_BUCKET: ${CONTENT_BUCKET}
+    volumes:
+      - seeddata:/seed/data:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        mc alias set local http://minio:9000 "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" || exit 0;
+        mc mirror /seed/data local/"$$CONTENT_BUCKET" || echo '[seed] 업로드 일부 실패 — 스택은 계속 뜹니다';
+        mc du local/"$$CONTENT_BUCKET"/images/zzal || true;
+        exit 0
+
   # ── 백엔드 (Spring Boot) ─────────────────────────────────────────
   app:
     build:
@@ -102,6 +143,9 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       # http(노트북)에서는 Secure 쿠키가 저장 안 되므로 false. https(박스)는 .env 에서 true.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # 공유 링크의 기준 주소. 안 넘기면 application.yml 기본값(http://localhost:3100/zzal/s)이라
+      # 박스에서 만든 링크가 노트북 주소를 가리킨다 → .env 에서 박스 주소로 바꾼다.
+      ZZAL_SHARE_BASE_URL: ${ZZAL_SHARE_BASE_URL:-http://localhost:3100/zzal/s}
       # 메일 계정을 안 주면 SMTP 헬스 인디케이터가 연결 실패로 DOWN → /actuator/health 가 503 이 된다.
       # 개발 스택은 메일을 안 쓰므로 이 헬스 검사만 끈다(앱 기능·다른 헬스는 그대로).
       MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
@@ -117,11 +161,19 @@ services:
         # base(노트북)엔 nginx 가 없어 Next rewrite 로 /api → app:8080 프록시를 굽는다.
         # dev EC2 는 nginx 가 /api 를 먼저 잡으므로 이 값이 쓰이지 않는다(무해).
         API_PROXY: http://app:8080
+        # 같은 이유로 /images → MinIO 도 Next 가 대신 넘겨 준다.
+        # 화면은 ${CDN}/zzal/... = /images/zzal/... 로 그림을 부르는데(assets.ts 기본값),
+        # 노트북엔 그 주소를 받아 줄 자리가 없어 전부 404 가 난다. dev EC2 는 nginx
+        # location /images/ 가 먼저 잡으므로 이 값이 쓰이지 않는다(무해).
+        IMAGE_PROXY: http://minio:9000/${CONTENT_BUCKET}/images
     depends_on:
       - app
     ports:
-      - "3000:3000"
+      # ★ 3100 이 노트북의 기준 주소다 — application.yml 의 app.zzal.share.base-url
+      #   기본값이 http://localhost:3100/zzal/s 라, 여기가 3000 이면 공유 링크가 죽는다.
+      - "3100:3000"
 
 volumes:
   pgdata:
   miniodata:
+  seeddata:        # 씨뿌리기용 내려받기 캐시 — 두 번째 기동부터는 다시 안 받는다
