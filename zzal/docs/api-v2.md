@@ -13,7 +13,7 @@
 |---|---|
 | 봉투 | `ApiResponse` — `{success, data, error{code,message}, message}` (v1과 동일) |
 | 인증 | HttpOnly 쿠키 JWT. 모든 v2 경로는 로그인 필요 |
-| 경로 | `/api/zzal/v2/me/pets` 밑. 내 것은 `me`, 남의 펫은 **404**(`ZZAL_PET_NOT_FOUND`) — 403은 "그 번호의 펫이 있다"를 알려준다 |
+| 경로 | `/api/zzal/v1/me/pets` 밑. 내 것은 `me`, 남의 펫은 **404**(`ZZAL_PET_NOT_FOUND`) — 403은 "그 번호의 펫이 있다"를 알려준다 |
 | 행동 응답 | **모든 행동(POST)의 응답 = `PetDetail` 최신 상태.** 누른 뒤 다시 조회하지 않는다 |
 | 시각 | ISO-8601 UTC(`2026-09-05T10:00:00Z`). 화면은 `serverNow`와의 차이로만 시간을 다루고, **기기 시계·시간대를 쓰지 않는다** |
 | 시간대 | 서버 계산은 KST(Asia/Seoul) 고정. 창(19:00·23:00·07:00·10:00)은 KST 벽시계 |
@@ -27,7 +27,7 @@
 
 ## 1. 엔드포인트
 
-기준 경로 `/api/zzal/v2/me/pets`
+기준 경로 `/api/zzal/v1/me/pets`
 
 ### 1.1 펫
 
@@ -398,7 +398,7 @@
 
 ---
 
-## 6. 개발 도구 `/api/zzal/v2/dev/pets/{id}` (`ZZAL_DEV_TOOLS=true`일 때만 존재, 내 펫만)
+## 6. 개발 도구 `/api/zzal/v1/dev/pets/{id}` (`ZZAL_DEV_TOOLS=true`일 때만 존재, 내 펫만)
 
 **의미 변경 — 앵커를 미는 것이 아니라 그 펫의 시계에 오프셋을 건다.** "지금이 23:00"이 성립해야 창·자동 취침을 실제 규칙으로 검증할 수 있다. 오프셋은 `zzal_pet.dev_clock_offset_seconds`에 남고 모든 계산과 `serverNow`가 그 시계를 쓴다.
 
@@ -527,7 +527,7 @@
 | 배포 절차 — 서버 비밀 | **JWT 서명 키를 바꾸면 확률 흐름도 바뀐다.** 뽑기 소금이 그 키에서 파생되기 때문(해석 42). 이미 적힌 기록(`sick.since` 등)은 그대로지만 **앞으로의 발병 시각·당첨 순번은 달라진다** — 키 회전은 사용자에게 안 보이는 변화이므로 그 자체로 문제는 아니나, "왜 갑자기 병 패턴이 바뀌었나" 를 나중에 못 짚지 않도록 회전 시각을 배포 기록에 남긴다 | PR-8 |
 | 배포 절차 | `ZZAL_PIPELINE_VERSION` 전환은 **`HATCHING` 0건일 때**(굽는 도중 버전이 바뀌면 복구가 다른 버전 산출물을 이어받을 수 있음). 복구 job은 원래 job의 버전을 잇고 단계 재사용도 같은 버전만 | PR-5 |
 | 부화 파이프라인 v2 | `PipelineRegistry` HATCH v2 = sheet→identity→grid→grid2→post(`basic/{key}.webp`, `--keys`). `prompt/v2/*.txt`가 없으면 **v1로 기동하고 부팅 로그에 경고**, 기록도 v1 | PR-5 |
-| 5 관리자 | **v2 동작** — `/api/zzal/v2/admin/motions` 5개(`pending`·`verdict`·`regen-requests`·`upload`·`night/summary`). v1 경로는 제거 | PR-7 |
+| 5 관리자 | **v2 동작** — `/api/zzal/v1/admin/motions` 5개(`pending`·`verdict`·`regen-requests`·`upload`·`night/summary`). v1 경로는 제거 | PR-7 |
 | 6 개발 도구 | `advance-clock`·`set-clock`·**`night-sweep`(이 펫만 계획→집기→굽기, run 기록 없음)**·**`force-open/{seq}`**(가짜 검수 통과, 도착은 규칙대로) | PR-2·6·7 |
 | 밤 굽기 큐 | **동작** — 23:00 `NightSweep`(`sweep-enabled` 기본 false·서버 한 대만), `zzal_night_run(night_of PK)`, 첫 심화(3일째·케어 미스 0)·FAILED 재등록, 우선순위 선물>케어미스0일수>친밀도>id, K=200 이월, claim `UPDATE…WHERE QUEUED`, 기동 복구(23~10시 창). 굽기는 `MotionService.bakeNow` — **API 1회 → 게이트 → REVIEW / FAIL이면 LOCAL_REQUESTED**. 굽기 중 예외는 `FAILED`, 집힌 채 멈춘 자리는 기동 복구가 `QUEUED`로 회수 | PR-6·7 |
 | 후기 | v1 경로 `/api/zzal/v1/me/pets/{id}/feedback` 유지 | (변경 없음) |
