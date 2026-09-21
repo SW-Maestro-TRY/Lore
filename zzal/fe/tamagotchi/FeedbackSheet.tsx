@@ -264,10 +264,16 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
 
   return (
     <>
-      {/* 작은 상시 링크. 첫 판을 닫은 사람이 나중에 다시 찾을 유일한 길이다.
+      {/* 작은 링크. 첫 판(띠)을 닫은 사람이 나중에 다시 찾을 유일한 길이다.
           ★ 띠가 떠 있는 동안에는 안 그린다 — 같은 자리에 "한 장 남기기" 가 이미 있어서
-            같은 뜻의 손잡이가 두 줄로 겹친다(여울에서 실측). 띠를 닫으면 다시 나온다. */}
-      {!submitted && !banner && !preview && (
+            같은 뜻의 손잡이가 두 줄로 겹친다(여울에서 실측). 띠를 닫으면 다시 나온다.
+          ★★ **받은 움직임이 있을 때만 그린다**(2026-09-22 상훈님 판정 E). 예전에는 이 링크만
+            `advancedArrived` 를 안 봐서, **아무것도 못 받은 첫날 튜토리얼 1칸부터** 떠 있었다
+            (dev 실측). 띠가 "받은 움직임이 실제로 있을 때만 묻는다" 로 참는 동안 링크가 먼저
+            물어보고 있었던 셈이다. 두 손잡이가 같은 기준을 본다.
+          ★ 곁들여 얻는 것 — 이 줄이 사라지면 **무대가 24px 돌아온다**(머리줄과 무대 사이에
+            끼어 있던 16px + 여백). 아이가 커 보이던 문제의 실제 해결분이다. */}
+      {!submitted && !banner && !preview && advancedArrived && (
         <button data-action="feedback-open" onClick={openFromDex} style={T.link}>
           후기 남기기
         </button>
