@@ -182,6 +182,38 @@ const CHAR_LAYOUT_STYLE = `
 .onb-cchev[data-open="1"]{ transform:rotate(225deg); margin-top:4px; }
 `;
 
+/**
+ * 자유 입력칸의 글자 수 상한.
+ *
+ * ★★ **서버가 받는 만큼만 연다.** 화면만 넓혀 두면 사용자가 쓴 글이 서버에서 **말없이** 잘린다.
+ *   정본 1.5 는 "자유 입력칸 각 100자" 인데, 실제 서버 한도를 세어 보니 칸마다 다르다
+ *   (2026-09-22 `zzal/be` 실측):
+ *     · 그 밖에(note)  → `@Size(max = 200)`            ⇒ 100 으로 연다.
+ *     · 세계관(world)  → `WORLD_MAX_CHARS = 100` 인데 **고른 칩까지 합쳐** 100 이다
+ *                        (`worldOf` 가 합친 뒤 slice). 칩 일곱이면 35자쯤을 칩이 먹으므로
+ *                        입력칸만 100 으로 열면 그만큼이 조용히 잘린다 ⇒ **60 유지**.
+ *     · 말투(tone)·장르(genre) → `TONE_MAX_CHARS`·`GENRE_MAX_CHARS` 가 **32** ⇒ 60 유지.
+ *     · 성격 자유 입력 → 보내는 자리 자체가 없다(`CharacterInput`) ⇒ 60 유지.
+ *   넷은 정본과 코드 중 어느 쪽을 옮길지가 판단거리라 **여기서 고치지 않고 보고**한다.
+ */
+const TEXT_MAX: Record<string, number> = { persona: 60, tone: 60, genre: 60, world: 60 };
+const EXTRA_MAX = 100;
+
+/**
+ * **지금 서버에 저장되지 않는 칸.** 사실만 적는다 — "곧 대화에 반영돼요" 같은 말은 지킬 수
+ * 없는 약속이라 적지 않는다(자캐 규범: 주인에게 헛된 기대를 주지 않는다).
+ *
+ * 근거는 계약 한 곳이다 — `lib/pet.ts` 의 `CharacterInput` 이 보내는 칸은
+ * `name`·`personality`·`world`·`note` 넷뿐이다. (서버 DTO 에는 `tone`·`genre`·`personalities`
+ * 자리가 이미 있는데 **프론트가 아직 안 보낸다** — 그쪽을 여는 것은 별도 판단거리다.)
+ * ★ 배치 세 가지 중 무엇을 고르든 같은 자리에 뜬다 — 묶음 카드 안이라 배치와 무관하다.
+ */
+const NOT_SAVED: Record<string, string> = {
+  persona: '적어 주신 글은 아직 저장되지 않아요.',
+  tone: '아직 저장되지 않는 칸이에요.',
+  genre: '아직 저장되지 않는 칸이에요.',
+};
+
 /** 세계관은 **고른 칩 전부**와 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
 const worldOf = (chips: readonly string[] | undefined, text: string | undefined) =>
   [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, 100);
@@ -574,8 +606,13 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                       <button key={x.text} onClick={x.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: fz.md, color: x.fg }}>{x.text}</button>
                     ))}
                   </div>
-                  <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={60} placeholder={g.ph}
+                  <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={TEXT_MAX[g.key] ?? 60} placeholder={g.ph}
                     style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
+                  {/* 저장되지 않는 칸은 **그 자리에서** 말해 준다. 공들여 적은 글이 말없이 사라지는 것이
+                      자캐를 맡기는 사람에게는 가장 나쁜 일이다. 약속은 적지 않고 사실만 적는다. */}
+                  {NOT_SAVED[g.key] && (
+                    <span data-part="not-saved" style={{ fontSize: fz.xs, lineHeight: 1.45, color: C.sub2 }}>{NOT_SAVED[g.key]}</span>
+                  )}
                 </div>
                 )}
               </div>
@@ -600,7 +637,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                     <span style={{ fontSize: fz.md, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
                     <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>선택</span>
                   </span>
-                  <input value={o.extraVal} onChange={(e) => o.onExtra(e.target.value)} maxLength={60}
+                  {/* 정본 1.5 의 "각 100자". 이 칸만 서버가 200자를 받아 안전하게 열 수 있다(TEXT_MAX 머리말). */}
+                  <input value={o.extraVal} onChange={(e) => o.onExtra(e.target.value)} maxLength={EXTRA_MAX}
                     placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요"
                     style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
                 </>
