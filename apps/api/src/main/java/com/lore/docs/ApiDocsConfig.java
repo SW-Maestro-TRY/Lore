@@ -124,6 +124,9 @@ public class ApiDocsConfig {
         if (HttpMethod.GET.name().equals(httpMethod) && matches(path, "/api/zzal/v1/public/**")) {
             return false;
         }
+        if (HttpMethod.GET.name().equals(httpMethod) && matches(path, "/api/trailer/v1/public/**")) {
+            return false;                                   // 복선 카드 조회(trailer) — 조회만 열려 있다
+        }
         // 맥미니(codex 러너) 전용 문 — 사람 로그인이 아니라 전용 열쇠(X-Zzal-Agent-Key)로 지킨다.
         // 쿠키 자물쇠를 그리면 "로그인하면 부를 수 있다" 는 거짓말이 된다.
         if (matches(path, "/api/zzal/v1/agent/**")) {
