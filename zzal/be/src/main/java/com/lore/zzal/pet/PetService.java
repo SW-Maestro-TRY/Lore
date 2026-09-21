@@ -658,6 +658,30 @@ public class PetService {
         return withUnlockDiff(pet, () -> pet.advanceTutorial(TutorialSchedule.Step.PERSONALITY));
     }
 
+    /**
+     * 졸업 축하 창을 봤다고 적는다 — 돌려줄 것이 없어 {@code void} 다(주소는 204 로 답한다).
+     *
+     * <h3>★★ 왜 {@link #alive} 를 안 거치나 — 거절할 이유가 없다</h3>
+     * {@code alive} 는 ALIVE 가 아니면 거절하고 여행 중이면 {@code ZZAL_TRAVELING} 을 던진다.
+     * 여기서 그 문을 쓰면 <b>이미 본 축하를 저장하지 못한 채</b> 요청이 튕겨, 그 사람은 다음 접속에
+     * 축하 창을 다시 본다. 이 호출은 아이를 돌보는 것이 아니라 <b>화면이 무엇을 이미 보여 줬는지</b>
+     * 를 적는 것이라, 자고 있든 여행 중이든 적어야 맞다. 그래서 소유권만 보고 지나간다.
+     *
+     * <h3>★ 정산({@code touch})도 하지 않는다</h3>
+     * 이 호출은 아이를 만지는 것이 아니다. 여기서 정산을 태우면 <b>축하 창을 닫는 것만으로</b>
+     * 함께한 날이 오르거나 게이지가 흐른다 — 화면이 이미 조회로 정산을 마친 직후인데 한 번 더다.
+     *
+     * <h3>★ 소유권은 다른 펫 API 와 같은 자리에서 본다</h3>
+     * 잠그고 꺼내는 {@code findMine} 을 그대로 쓴다. 남의 펫이면 403 이 아니라 <b>404</b> 다 —
+     * 403 은 "그 번호의 펫이 있다" 를 알려주는 셈이라 번호를 훑을 수단이 된다.
+     * 잠금은 닫기를 연달아 눌렀을 때 두 요청이 같은 행을 각자 읽고 각자 쓰는 것을 막는다.
+     */
+    @Transactional
+    public void markGraduationSeen(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        pet.markGraduationSeen(pet.now(realNow));
+    }
+
     /** 배경 바꾸기 — 2층 4종이 열린 뒤(설계 규칙). 값은 검증하지 않는다(해석 6). */
     @Transactional(noRollbackFor = BusinessException.class)
     public Action changeBackground(Long userId, Long petId, String background, Instant realNow) {

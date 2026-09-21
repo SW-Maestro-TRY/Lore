@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -46,7 +45,11 @@ class ToneAndGenreLengthContractTest {
     private static final Pattern ADD_COLUMN =
             Pattern.compile("ADD COLUMN\\s+%s\\s+character varying\\((\\d+)\\)", Pattern.CASE_INSENSITIVE);
 
-    private static final Pattern VERSION = Pattern.compile("^V(\\d+)__");
+    /**
+     * 마이그레이션 판 번호. 마디가 여럿일 수 있다 — Flyway 는 파일 이름의 {@code _} 를
+     * {@code .} 과 <b>똑같이</b> 마디 구분자로 읽는다({@code V20260922_0100} = 20260922.0100).
+     */
+    private static final Pattern VERSION = Pattern.compile("^V(\\d+(?:_\\d+)*)__");
 
     private static ValidatorFactory factory;
     private static Validator validator;
@@ -120,7 +123,7 @@ class ToneAndGenreLengthContractTest {
         List<Path> ordered;
         try (Stream<Path> files = Files.list(dir)) {
             ordered = files.filter(p -> p.getFileName().toString().endsWith(".sql"))
-                    .sorted(Comparator.comparingInt(ToneAndGenreLengthContractTest::versionOf))
+                    .sorted(ToneAndGenreLengthContractTest::compareVersions)
                     .toList();
         }
         Pattern pattern = Pattern.compile(ADD_COLUMN.pattern().formatted(column), Pattern.CASE_INSENSITIVE);
@@ -135,12 +138,32 @@ class ToneAndGenreLengthContractTest {
         return length;
     }
 
-    private static int versionOf(Path file) {
+    /**
+     * 판 번호 비교 — <b>Flyway 가 견주는 방식 그대로</b> 마디마다 숫자로 견준다.
+     *
+     * ★ 문자열로 견주면 {@code V10} 이 {@code V9} 앞에 오고, 첫 마디만 {@code int} 로 읽으면
+     *   날짜 번호({@code V20260922_0100})가 넘친다. 순서가 틀리면 이 시험은 <b>조용히</b>
+     *   옛 칸 길이를 마지막 값으로 읽어, 어긋난 스키마를 초록으로 통과시킨다.
+     */
+    private static int compareVersions(Path a, Path b) {
+        long[] left = versionOf(a);
+        long[] right = versionOf(b);
+        for (int i = 0; i < Math.max(left.length, right.length); i++) {
+            long l = i < left.length ? left[i] : 0;
+            long r = i < right.length ? right[i] : 0;
+            if (l != r) {
+                return Long.compare(l, r);
+            }
+        }
+        return 0;
+    }
+
+    private static long[] versionOf(Path file) {
         Matcher m = VERSION.matcher(file.getFileName().toString());
         if (!m.find()) {
             throw new IllegalStateException("판 번호가 없는 마이그레이션입니다: " + file.getFileName());
         }
-        return Integer.parseInt(m.group(1));
+        return java.util.Arrays.stream(m.group(1).split("_")).mapToLong(Long::parseLong).toArray();
     }
 
     private Path repoRoot() {
