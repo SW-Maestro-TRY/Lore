@@ -1803,9 +1803,11 @@ export function useYeoul(live?: Live) {
    *   ⚠️ `album.motions[].imageKey` 라는 칸은 **없다.** 그 이름으로 찾지 말 것.
    *   두 경우를 한 칸으로 뭉치면 한쪽이 조용히 빈 화면이 된다 — 그래서 여기서만 갈라 둔다.
    *
-   * ★ 그림이 없으면 미리보기를 **안 만든다**(빈 자리표를 두지 않는다). 아침 도착 판에서만
-   *   본문 뒤에 "아직 그리는 중" 한 줄을 붙인다 — 즉시 해금은 그림이 원래 있으므로,
-   *   그때 안 보이는 것은 "아직" 이 아니라 불러오기 실패고 그건 화면이 조용히 접는다.
+   * ★ 그림이 없으면 미리보기를 **안 만든다**(빈 자리표를 두지 않는다).
+   * ★★ 옛 "그림은 아직 그리는 중이에요" 한 줄은 **뺐다**(2026-09-21 판정 11). 서버는 아침 목록에
+   *   **검수를 통과(OPEN)하고 도착 시각이 찍힌 것만** 담는다(`PetResponses`·`ZzalMotion`·`AdminService`
+   *   전수 확인). 즉 아침 판에 그림이 없는 경우가 없으므로, 그 문장은 설 자리가 없다.
+   *   여기서 그림이 안 보이면 그것은 "아직" 이 아니라 **불러오기 실패**고, 화면은 조용히 접는다.
    */
   const unlockFire = useCallback((
     kind: 'now' | 'slept',
@@ -1816,10 +1818,9 @@ export function useYeoul(live?: Live) {
     const c = UNLOCK_COPY[kind];
     const names = items.map((i) => i.label).join(' · ');
     const shot = items.find((i) => i.src);
-    const missing = kind === 'slept' && !shot;
     return {
       title: c.title,
-      body: bodyOverride ?? (c.body(names) + (missing ? `\n${UNLOCK_COPY.noPreviewNote}` : '')),
+      body: bodyOverride ?? c.body(names),
       ...(shot?.src
         ? { preview: { src: shot.src, badge: c.previewBadge, caption: c.previewCaption(shot.label) } }
         : {}),
@@ -1846,19 +1847,22 @@ export function useYeoul(live?: Live) {
     const motions = sv?.motions ?? [];
     const pick = kind === 'now'
       ? motions.find((x) => x.layer === 'BASIC_2') ?? motions[0]
-      : motions.find((x) => x.advanced?.imageKey) ?? motions.find((x) => x.layer === 'GIFT');
-    const src = kind === 'now'
-      ? (pick?.basicImageKey ? assetUrl(pick.basicImageKey) : null)
-      : (pick?.advanced?.imageKey ? assetUrl(pick.advanced.imageKey) : null);
+      : motions.find((x) => x.advanced?.imageKey);
+    const key = kind === 'now' ? pick?.basicImageKey : pick?.advanced?.imageKey;
     // 목(연습방)에는 서버 목록이 없다. 2층 자세표의 **진짜 이름**을 쓴다 — 개발 화면과 앨범이
     // 같은 한 벌을 쓰므로, 여기서만 '2층' 같은 가짜 이름을 지어내면 대화할 때마다 통역이 든다.
     // 연습방의 아이는 여울 자신이라 여울 그림을 거는 것이 맞다(진짜 방에서는 위 `pick` 이 이긴다).
     const mockKey = POSE_FLOORS[1][1][0];
-    const items = pick
-      ? [{ label: pick.label, src }]
-      : [{ label: POSE_LABEL[mockKey] ?? mockKey, src: kind === 'now' ? (YEOUL_MOTION[mockKey] ?? null) : null }];
-    setS((v) => withFire({ ...v, sheet: null }, unlockFire(kind, items)));
-  }, [sv, unlockFire]);
+    const item = pick && key
+      ? { label: pick.label, src: assetUrl(key) }
+      : { label: POSE_LABEL[mockKey] ?? mockKey, src: YEOUL_MOTION[mockKey] ?? null };
+    // ★★ 아침 판은 **그림이 있는 것만** 띄운다(2026-09-21 판정 11). 서버는 아침 목록에 검수를
+    //   통과(OPEN)하고 도착한 것만 담으므로 **그림 없는 아침 판은 실제로 존재하지 않는다.**
+    //   그런데 이 손잡이만 그림 없는 것까지 띄워서, 상훈님이 보신 "그림은 아직 그리는 중이에요"
+    //   가 바로 여기서 나왔다 — 화면이 아니라 손잡이가 없는 상태를 만들어 낸 것이다.
+    if (kind === 'slept' && !item.src) { flash('아침 판은 그림이 도착한 동작이 있어야 떠요'); return; }
+    setS((v) => withFire({ ...v, sheet: null }, unlockFire(kind, [item])));
+  }, [sv, unlockFire, flash]);
 
   // 2층 해금(목) — 친밀도 50% 를 넘긴 순간 한 번만 축하한다(시안 componentDidUpdate).
   // ★ 서버에 붙어 있으면 이 길로 안 온다 — 아래 `justUnlocked` 효과가 맡는다. 두 곳이 같이
