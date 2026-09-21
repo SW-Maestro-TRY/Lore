@@ -838,20 +838,37 @@ function GuessPanel({ y }: { y: Yeoul }) {
       {/* 판 표시는 **점만**이다(2026-09-21 상훈님) — "N번째 · 3번 맞히면 이겨요 · 오늘 N판 남음"
           글줄은 지웠다. 규칙(하루 3판 · 매치당 5판 3승)은 그대로 돌고, 화면에서 글로 안 말할 뿐이다.
           ★ 색만으로 가르지 않는다 — 맞힘은 채운 원, 빗나감은 ✕, 아직은 빈 원. */}
-      <div data-part="guess-marks" style={{ display: 'flex', gap: gap.lg }}>
-        {g.marks.map((m, i) => (
-          <span
-            key={i} data-mark={m.hit === null ? 'none' : m.hit ? 'hit' : 'miss'}
-            style={{
-              width: 12, height: 12, borderRadius: '50%', boxSizing: 'border-box',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: `1.5px solid ${m.hit === null ? C.lineHard : m.hit ? '#41633A' : ink(.32)}`,
-              background: m.hit === true ? '#E4F0DC' : 'transparent',
-              font: `${monoSize.xs}px ${MONO}`, color: C.sub2, lineHeight: 1,
-              outline: m.now ? `2px solid ${C.accentDim}` : 'none',
-            }}
-          >{m.hit === false ? '✕' : ''}</span>
-        ))}
+      {/* ★ 나가는 문은 **하나**다(2026-09-21 판정 3). 타일을 눌러 판을 접는 것은 이탈이 아니고
+          (판은 살아 있다) 이 ✕ 만 기권이다. 그래서 ✕ 는 묻고 나가고, 타일은 안 묻는다.
+          ★ **아파도 눌린다** — 서버가 아픔 거절을 만들지 않았다(`quitFailLine` 머리말).
+          ★ 자리 — 손 두 칸을 **안 건드리는** 아래 줄 오른쪽 끝. 점 줄은 가운데 그대로 두고
+            그 줄 안에서 오른쪽으로 비켜 앉혀, 고르다가 잘못 눌릴 거리를 둔다. */}
+      <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div data-part="guess-marks" style={{ display: 'flex', gap: gap.lg }}>
+          {g.marks.map((m, i) => (
+            <span
+              key={i} data-mark={m.hit === null ? 'none' : m.hit ? 'hit' : 'miss'}
+              style={{
+                width: 12, height: 12, borderRadius: '50%', boxSizing: 'border-box',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: `1.5px solid ${m.hit === null ? C.lineHard : m.hit ? '#41633A' : ink(.32)}`,
+                background: m.hit === true ? '#E4F0DC' : 'transparent',
+                font: `${monoSize.xs}px ${MONO}`, color: C.sub2, lineHeight: 1,
+                outline: m.now ? `2px solid ${C.accentDim}` : 'none',
+              }}
+            >{m.hit === false ? '✕' : ''}</span>
+          ))}
+        </div>
+        <button
+          data-action="guess-quit" onClick={(e) => { e.stopPropagation(); g.quit(); }}
+          aria-label="게임 나가기"
+          style={{
+            position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
+            width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot,
+            fontSize: fz.sm, color: C.sub2, lineHeight: 1,
+          }}
+        >✕</button>
       </div>
     </div>
   );

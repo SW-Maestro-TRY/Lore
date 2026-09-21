@@ -20,6 +20,7 @@ import { josa } from '../constants';
 import { ACCENT, C, C2, LV, sel, type LvKey, type Sel, ink, paperA } from './ui';
 import type { Live } from './useHatch';
 import type { CareAction, ChatState, Personality } from '../../lib/pet';
+import { ApiError } from '../../lib/api';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
 import {
@@ -53,6 +54,25 @@ const wishFailLine = (code: string | null): string => {
     case 'no_pet': return WISH_COPY.fail.noPet;
     case 'ZZAL_MOTION_WISH_DAILY_LIMIT': return WISH_COPY.fail.limit;
     default: return WISH_COPY.fail.other;
+  }
+};
+
+/**
+ * **기권**(게임판 ✕ → 「나가기」) 실패 코드 → 화면 문구.
+ *
+ * ★ 넷 다 **사용자를 탓하지 않는다.** 특히 `ZZAL_GAME_FINISHED` 는 사용자 잘못이 아니다 —
+ *   내가 나가려던 사이 판이 먼저 끝났을 뿐이라 "이미 정리된 판" 이라고만 말한다.
+ * ★ 넷 다 **화면에서는 판을 닫는다.** 기권이 안 됐다고 게임판에 가둬 두면 나갈 길이 없다.
+ * ★★ **아플 때는 거절이 없다** — 이 호출에는 `ZZAL_SICK_REFUSES` 가 없다(서버가 일부러 뺐다).
+ *   그러니 화면도 **아플 때 ✕ 를 잠그면 안 된다.**
+ */
+const quitFailLine = (code: string | null): string => {
+  switch (code) {
+    case 'ZZAL_GAME_NOT_FOUND':
+    case 'ZZAL_GAME_FINISHED': return '이미 정리된 판이에요. 방으로 돌아갈게요.';
+    case 'ZZAL_PET_SLEEPING': return '자고 있어요. 깨우면 정리할게요.';
+    case 'ZZAL_TRAVELING': return '여행 중이에요. 돌아오면 정리할게요.';
+    default: return '지금은 정리하지 못했어요. 방으로 돌아갈게요.';
   }
 };
 
@@ -216,6 +236,12 @@ export interface YeoulState {
   gRound: number; gHits: number;
   gPick: Side | null; gHit: boolean | null;
   gMarks: readonly (boolean | null)[];
+  /**
+   * 이 매치가 **기권으로** 끝났는가(2026-09-21 판정 3). 끝말 한 줄을 고르는 데만 쓴다 —
+   * 친 라운드까지의 성적("N / 5 맞혔어요")은 기권에 맞지 않는 말이라 다른 문장이 필요하다.
+   * 규칙은 서버가 쥔다(진 판으로 남는다) — 화면이 승패를 새로 정하지 않는다.
+   */
+  gQuit: boolean;
   log: LogLine[]; memories: string[];
   resolved: Record<string, boolean>; calls: number;
   wallId: string;
@@ -319,7 +345,7 @@ const INITIAL: YeoulState = {
   hearts: false, toast: '',
   sheet: null, sheetClosing: false, playTab: 'talk', draft: '', lastGuess: null,
   gOn: false, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
-  gMarks: [null, null, null, null, null],
+  gMarks: [null, null, null, null, null], gQuit: false,
   log: [{ who: 'pet', text: '있잖아, 오늘은 뭐 했어요?' }],
   memories: ['빵 좋아함', '비 싫어함', '왼쪽을 잘 맞힘', '늦잠', '파란색'],
   resolved: {}, calls: 3,
@@ -1181,7 +1207,7 @@ export function useYeoul(live?: Live) {
     setS((v) => (v.gOn ? v : {
       ...v,
       gOn: true, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
-      gMarks: [null, null, null, null, null],
+      gMarks: [null, null, null, null, null], gQuit: false,
       lastGuess: null,
       // 시작하면 팝오버를 내린다 — 예전엔 안 내려서 방으로 돌아가는 데 2탭이 들었다.
       popOpen: false, popClosing: false, sheet: null, toast: '',
@@ -1192,8 +1218,73 @@ export function useYeoul(live?: Live) {
   /** 매치를 접고 마당 팝오버를 다시 연다 — 거기 "좌우 맞히기" 가 곧 "한 판 더" 다. */
   const endGuess = useCallback(() => {
     for (const k of ['guessAct', 'guessReveal', 'guessNext', 'guessEnd']) clearTimeout(T.current[k]);
-    setS((v) => ({ ...v, gOn: false, gPhase: 'wait', gPick: null, gHit: null, roomSel: 'play', popOpen: true, popClosing: false }));
+    setS((v) => ({ ...v, gOn: false, gPhase: 'wait', gPick: null, gHit: null, gQuit: false, roomSel: 'play', popOpen: true, popClosing: false }));
   }, []);
+
+  /**
+   * 기권이 받아들여진 뒤 — **끝난 판과 똑같은 길**을 탄다(2026-09-21 판정 3).
+   * 새 화면을 만들지 않는다: 끝말 한 줄(`gQuit`)이 바뀔 뿐, 여운 3.6초 뒤 `endGuess` 로 방에 돌아간다.
+   * ★ 표정을 새로 짓지 않는다 — 진 연출(`game_lose`)을 붙이면 나가겠다고 누른 사람에게
+   *   아이가 시무룩해 보이고, 그건 규범상 원망으로 읽힐 수 있는 자리다.
+   */
+  const quitEnd = useCallback(() => {
+    for (const k of ['guessAct', 'guessReveal', 'guessNext', 'guessEnd']) clearTimeout(T.current[k]);
+    setS((v) => ({ ...v, fire: null, gQuit: true, gPhase: 'done', gPick: null, gHit: null }));
+    later('guessNext', GUESS_MATCH_END_MS, endGuess);
+  }, [later, endGuess]);
+
+  /**
+   * 확인창의 「나가기」 — 서버에 기권을 보낸다.
+   *
+   * ★ 이름·모양은 **A·B 두 사람이 먼저 맞춰 둔 것**이다: `Live.abandonPlay(): Promise<void>` —
+   *   인자가 없고(펫·판 번호는 배관이 안다), 실패는 던진다. 화면은 잡아서 문구만 고른다.
+   * ★ 목(연습방)에는 서버가 없다. 같은 끝 연출만 태운다 — 규칙(판수·승패)은 서버의 몫이라
+   *   화면이 목에서 따로 깎지 않는다.
+   */
+  const abandonGuess = useCallback(() => {
+    if (!onServerRef.current) { quitEnd(); return; }
+    patch({ fire: null });
+    void (async () => {
+      // ★ **임시 다리** — 배관(`useHatch`)이 아직 안 얹혔을 수 있다. 이름·모양은 미리 맞춰 두었으니
+      //   (`abandonPlay(): Promise<void>`) 배관이 들어오면 이 `&` 한 줄만 지우면 된다.
+      const lv = liveRef.current as (Live & { abandonPlay?: () => Promise<void> }) | undefined;
+      if (!lv?.abandonPlay) { quitEnd(); return; }
+      try {
+        await lv.abandonPlay();
+        quitEnd();
+      } catch (e) {
+        flash(quitFailLine(e instanceof ApiError ? e.code : null));
+        endGuess();
+      }
+    })();
+  }, [patch, flash, endGuess, quitEnd]);
+
+  /**
+   * 게임판의 ✕ — **나가기 전에 한 번만 묻는다**(2026-09-21 판정 3).
+   *
+   * ★ 타일 탭은 이탈이 아니다 — 게임판을 접어도 판은 살아 있다. **✕ 만 기권이다.**
+   * ★ 한 판도 안 쳤으면 **판 자체가 없다**(서버는 첫 탭에서야 판을 만든다). 차감도 기권도
+   *   없으므로 묻지 않고, 서버도 부르지 않고 그냥 닫는다 — 안 일어난 일을 경고하면 거짓말이다.
+   * ★ 아파도 누를 수 있다(서버가 아픔 거절을 안 만들어 두었다 → `quitFailLine` 머리말).
+   */
+  const quitGuess = useCallback(() => {
+    const v0 = sRef.current;
+    // 이미 끝난 판이면 물어볼 것이 없다 — 남은 여운만 접고 방으로 돌아간다.
+    if (v0.gPhase === 'done') { endGuess(); return; }
+    const played = onServerRef.current
+      ? !!liveRef.current?.game?.playing
+      : v0.gRound > 0 || v0.gPhase !== 'wait';
+    if (!played) { endGuess(); return; }
+    setS((v) => ({ ...v, fire: {
+      title: '지금 나가면 이 판은 져요',
+      body: '오늘 세 판 중 한 판을 쓴 것이 되고, 치던 판은 진 것으로 남아요.',
+      hint: '',
+      actions: [
+        { label: '계속 치기', action: 'guess-quit-cancel', tap: closeFire, primary: true },
+        { label: '나가기', action: 'guess-quit-ok', tap: abandonGuess, primary: false },
+      ],
+    } }));
+  }, [endGuess, closeFire, abandonGuess]);
 
   /**
    * 한 판을 친다. 대기 중일 때만 받는다(섞기·공개·여운 동안은 입력 잠금).
@@ -2109,9 +2200,11 @@ export function useYeoul(live?: Live) {
       : s.gPhase === 'shuffle' ? '어느 쪽일까…'
         : s.gPhase === 'reveal' ? (s.gHit ? '맞았어요!' : '아쉬워요, 반대쪽이었어요')
           : s.gPhase === 'done'
-            ? (gHits >= gWinAt
-              ? `${gHits} / ${gRounds} 맞혔어요. 이겼어요!`
-              : `${gHits} / ${gRounds} 맞혔어요. 다음엔 이겨요.`)
+            // ★ 기권으로 끝난 판은 **성적을 말하지 않는다** — "N / 5 맞혔어요" 는 끝까지 친 판의 말이다.
+            ? (s.gQuit ? '이 판은 여기까지 할게요.'
+              : gHits >= gWinAt
+                ? `${gHits} / ${gRounds} 맞혔어요. 이겼어요!`
+                : `${gHits} / ${gRounds} 맞혔어요. 다음엔 이겨요.`)
             : `${gRoundNo}번째 · 어느 손에 있을까요?`;
 
     const bub: Bubble = {
@@ -2464,6 +2557,11 @@ export function useYeoul(live?: Live) {
         /** 대기 중에만 누를 수 있다 — 섞기·공개·여운에는 잠긴다. */
         can: s.gOn && s.gPhase === 'wait' && !live?.guessing,
         pick: (side: Side) => () => onGuess(side),
+        /**
+         * ✕ — 나가기. **아플 때도 잠그지 않는다**(서버가 아픔 거절을 안 만들어 두었다).
+         * 확인창을 띄울지·그냥 닫을지는 `quitGuess` 가 정한다(한 판도 안 쳤으면 안 묻는다).
+         */
+        quit: quitGuess,
         /** 판 표시는 **점 다섯 칸뿐**이다(2026-09-21 상훈님 — 글줄 삭제). 규칙은 그대로 돈다.
          *  맞힘 ● · 빗나감 ✕ · 아직 ○ — **색만으로 가르지 않는다.** */
         marks: s.gMarks.map((m, i) => ({
@@ -2637,7 +2735,7 @@ export function useYeoul(live?: Live) {
   }, [
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
     s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
-    openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess,
+    openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess, quitGuess,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,
     toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash,
@@ -2649,7 +2747,7 @@ export function useYeoul(live?: Live) {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess,
+    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess, quitGuess,
     openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview, showUnlock,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
     backToSample: () => patch({ screen: 'room' }),
@@ -2658,7 +2756,7 @@ export function useYeoul(live?: Live) {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess,
+    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess, quitGuess,
     openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview, showUnlock,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
   ]);
