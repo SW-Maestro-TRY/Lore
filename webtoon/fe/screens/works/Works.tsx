@@ -10,26 +10,19 @@ import { MobileTop } from "../../ui/TopNav";
 import "./i18n";
 import "./Works.css";
 
-/* 둘러보기 — 캔버스 Works · WorksEmpty · WorksNoExample · WorksError · MWorks.
+/* 둘러보기 — 캔버스 Works · WorksEmpty · WorksError · MWorks.
  *
- * 목록은 browseRuns() 하나로 받는다(실제 작품 + 루가 구워 둔 예시). 실제 목록을
- * 못 받으면 던지므로 그때는 「못 받음」 보드다. 내 작품(이 브라우저가 만든 것,
- * 로그인했으면 계정 것도)에만 공개 스위치와 편집실이 붙는다. */
+ * 목록은 browseRuns() 하나로 받는다. 예시 작품도 DB 에 심겨 있어 보통 작품과
+ * 구별되지 않는다(`ExampleWorks`) — 전에는 예시를 따로 받아 「예시」 배지를
+ * 붙이고 숨기는 스위치를 뒀는데, 갈래가 하나가 되면서 둘 다 없앴다. 못 받으면
+ * 던지므로 그때는 「못 받음」 보드다. 내 작품(이 브라우저가 만든 것, 로그인했으면
+ * 계정 것도)에만 공개 스위치와 편집실이 붙는다. */
 export default function Works({ go, authenticated }: { go: Go; authenticated: boolean }) {
   const t = useT();
   const [runs, setRuns] = useState<RunCard[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
   const [accountRuns, setAccountRuns] = useState<string[]>([]);
-
-  const [showExamples, setShowExamples] = useState(true);
-  useEffect(() => {
-    try { setShowExamples(localStorage.getItem("lore_hide_example_works") !== "1"); } catch { /* 기본값 */ }
-  }, []);
-  const toggleExamples = (show: boolean) => {
-    setShowExamples(show);
-    try { localStorage.setItem("lore_hide_example_works", show ? "0" : "1"); } catch { /* 무시 */ }
-  };
 
   useEffect(() => {
     let alive = true;
@@ -50,7 +43,7 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     return () => { alive = false; };
   }, [authenticated]);
 
-  const mineOf = (r: RunCard) => !r.example && (isMyRun(r.run_id) || accountRuns.includes(r.run_id));
+  const mineOf = (r: RunCard) => isMyRun(r.run_id) || accountRuns.includes(r.run_id);
 
   /* 칩: 전체 · 내 작품 · 장르들. 정렬: 최신순 ↔ 오래된순 (run_id 가 시각으로 시작한다). */
   const [filter, setFilter] = useState<"all" | "mine" | string>("all");
@@ -62,17 +55,15 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
 
   const shown = useMemo(() => {
     if (!runs) return null;
-    let list = showExamples ? runs : runs.filter((r) => !r.example);
+    let list = runs;
     if (filter === "mine") list = list.filter(mineOf);
     else if (filter !== "all") list = list.filter((r) => r.genre === filter);
     list = [...list].sort((a, b) => (newest ? b.run_id.localeCompare(a.run_id) : a.run_id.localeCompare(b.run_id)));
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, showExamples, filter, newest, accountRuns]);
+  }, [runs, filter, newest, accountRuns]);
 
-  const hasExamples = !!runs?.some((r) => r.example);
   const noneAtAll = !!runs && runs.length === 0;
-  const hiddenByToggle = !!runs && !showExamples && runs.every((r) => r.example);
 
   const chips = (
     <div className="wt-works-chips">
@@ -88,14 +79,6 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     </div>
   );
 
-  const exampleToggle = hasExamples && (
-    <label className="wt-works-extoggle">
-      <input type="checkbox" checked={showExamples} aria-label={t("예시 작품 보기")}
-             onChange={(e) => toggleExamples(e.target.checked)} />
-      {t("예시 작품도 보기")}
-    </label>
-  );
-
   return (
     <div className="wt-works">
       <MobileTop title={t("둘러보기")} />
@@ -106,7 +89,6 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
             <span className="muted">{t("표지를 누르면 그대로 읽을 수 있어요.")}</span>
           </div>
           <div className="wt-works-headacts">
-            {exampleToggle}
             <button type="button" className="btn btn-p wt-works-create" onClick={() => go("entry")}>{t("내 웹툰 만들기")}</button>
           </div>
         </div>
@@ -150,20 +132,7 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
           </div>
         )}
 
-        {runs && !noneAtAll && hiddenByToggle && (
-          <div className="wt-works-state">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={louArt("empty")} alt="" style={{ width: 180 }} />
-            <h2>{t("예시를 빼니 볼 게 없어요")}</h2>
-            <span className="muted">{t("작품이 없는 게 아니라 「예시 작품도 보기」를 꺼 둔 탓이에요. 실제 작품이 걸리면 이 자리에 먼저 보입니다.")}</span>
-            <div className="wt-works-stateacts">
-              <button type="button" className="btn btn-p" onClick={() => toggleExamples(true)}>{t("예시 작품 다시 보기")}</button>
-              <button type="button" className="btn btn-w" onClick={() => go("entry")}>{t("내 웹툰 만들기")}</button>
-            </div>
-          </div>
-        )}
-
-        {shown && !noneAtAll && !hiddenByToggle && (
+        {shown && !noneAtAll && (
           <div className="wt-works-grid">
             {shown.map((r) => (
               <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated} />
@@ -204,10 +173,9 @@ function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolea
   return (
     <div className="card wt-works-card">
       <button type="button" className="wt-works-cover" onClick={open} aria-label={t("{title} 열기", { title: run.title || run.run_id })}>
-        {run.example && <span className="badge wt-works-badge">{t("예시")}</span>}
         {run.cover_page ? (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={coverUrl(run.run_id, run.cover_page, run.cover_episode || first, run.example)} alt={run.title || ""} />
+          <img src={coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt={run.title || ""} />
         ) : (
           <span className="wt-works-nocover" aria-hidden="true" />
         )}

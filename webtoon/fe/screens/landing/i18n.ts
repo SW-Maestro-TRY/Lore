@@ -6,9 +6,12 @@ const dict: Dict = {
   /* ---- 히어로 ---- */
   "만들던 웹툰": { en: "Webtoon in progress", ja: "作りかけのウェブトゥーン", zh: "正在制作的漫画" },
   "{done} / {total}장": { en: "{done} / {total} pages", ja: "{done} / {total}枚", zh: "{done} / {total} 页" },
-  "AI 웹툰 제작 서비스 LORE": { en: "LORE, the AI webtoon studio", ja: "AIウェブトゥーン制作サービス LORE", zh: "AI 漫画创作服务 LORE" },
-  "캐릭터 · 사진 · 그림 · 좋아하는 사람": { en: "A character, a photo, a drawing, someone you love", ja: "キャラクター・写真・絵・好きな人", zh: "角色 · 照片 · 画作 · 喜欢的人" },
-  "캐릭터 · 사진 · 그림 · 그 무엇이든!": { en: "A character, a photo, a drawing, anything at all!", ja: "キャラクター・写真・絵・なんでも！", zh: "角色 · 照片 · 画作 · 什么都可以！" },
+  "AI 웹툰 스튜디오, LORE": { en: "LORE, the AI webtoon studio", ja: "AIウェブトゥーン制作サービス LORE", zh: "AI 漫画创作服务 LORE" },
+  "내 캐릭터가 이야기 속에서 살아 움직이는 순간.": {
+    en: "The moment my character comes to life in the story.",
+    ja: "私のキャラクターが物語の中で生き生きと動き出す瞬間。",
+    zh: "我的角色在故事中鲜活起来的瞬间。"
+  },
   "지금 시작하기": { en: "Get started", ja: "はじめる", zh: "立即开始" },
   "오늘 무료 {n}편": { en: "{n} free today", ja: "本日無料 {n}話", zh: "今日免费 {n} 话" },
   "오늘 무료 소진 · 로그인하면 이어서": { en: "Today's free episodes are used up · sign in to keep going", ja: "本日の無料分は終了・ログインすると続けられます", zh: "今日免费次数已用完 · 登录后可继续" },
