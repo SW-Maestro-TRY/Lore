@@ -16,6 +16,7 @@
 //     2층 즉시 해금(`justUnlocked`) · 아침 도착(`learnedToday`) · 기능 열림(`features`).
 
 import { request } from './api';
+import type { components, operations } from './api-schema';
 
 /** 지금 어느 단계인가. 프론트의 'none'(아직 아무도 없음)은 서버에 없다 — 그건 행이 없는 것. */
 /**
@@ -423,9 +424,14 @@ export interface PetDetail {
    *   (2026-09-22 dev 재현). 사람 기준으로 한 번이려면 사람 편에 남는 곳은 서버뿐이다.
    * ★ **배포 전에는 이 칸이 안 온다.** 그때는 `undefined` 라 `!= null` 이 거짓이 되고, 화면은
    *   예전처럼 탭 기억으로만 막는다 — 없다고 깨지지 않고, 오면 저절로 서버 기준으로 올라선다.
-   * ⚠️ 손으로 적은 칸이다(위 `graduationSeen` 머리말의 걷어내는 조건과 한 짝).
+   * ★ 칸의 형은 **서버 명세에서 생성한 타입**을 그대로 쓴다
+   *   (`components['schemas']['Detail']['graduationSeenAt']`). 손으로 적던 자리를 걷어낸 것이라,
+   *   서버가 이 칸의 형을 바꾸면 생성 파일이 바뀌고 여기가 따라 바뀐다.
+   * ★ 한 칸만 다시 조인다 — `| null`. 명세(OpenAPI)에 이 칸을 `nullable` 로 적을 자리가 없어
+   *   생성물은 `string | undefined` 로만 나오지만, **서버는 안 봤을 때 null 을 보낸다.**
+   *   조이지 않으면 위 `!= null` 판정이 타입상 죽은 가지로 읽힌다.
    */
-  graduationSeenAt?: string | null;
+  graduationSeenAt?: components['schemas']['Detail']['graduationSeenAt'] | null;
 }
 
 /** 펫 생성 결과. 부화는 뒤에서 계속 돌고, 진행 상황은 상태 조회로 본다. */
@@ -661,11 +667,15 @@ export function tutorialSeen(petId: number): Promise<PetDetail> {
  * ★ **멱등**이다. 잠든·여행 중·튜토리얼 미완료여도 204 라, 거절 갈래가 사실상 `404
  *   ZZAL_PET_NOT_FOUND` 하나뿐이다. 그래서 화면이 "보냈는지" 를 따로 기억하지 않는다 —
  *   실패하면 다음에 또 보내면 된다(→ `useHatch.markGraduationSeen`).
- * ⚠️ **임시로 손으로 적은 자리다.** 자동 생성 타입(`lib/api-schema.ts`)에는 아직 이 주소가 없다.
- *   재생성본은 백엔드 `feat/zzal-game-abandon`(`b890ff2`·`f6f76dd`)에 있고, 그것이 합쳐져
- *   `api-schema.ts` 에 `graduation-seen` 이 생기면 **이 손글씨를 걷어낸다.**
+ * ★ 손으로 적어 두었던 자리를 걷어냈다(백엔드 `b890ff2`·`f6f76dd` 가 합쳐져 생성 타입에
+ *   이 주소가 생겼다). 인자는 생성 타입이 쥔다 — `operations['graduationSeen']` 이 명세에서
+ *   사라지거나 이름이 바뀌면 **빌드가 먼저 깨진다.**
+ * ★ 돌려주는 것은 `void` 다. 생성 타입의 204 갈래가 `content?: never`(본문 없음)라서,
+ *   여기서 파싱할 것이 아무것도 없다는 뜻이다 — 위 ★★ 의 "응답을 파싱하지 말 것" 과 한 짝.
  */
-export function graduationSeen(petId: number): Promise<void> {
+export function graduationSeen(
+  petId: operations['graduationSeen']['parameters']['path']['petId'],
+): Promise<void> {
   return request<void>(`${PET_BASE}/${petId}/graduation-seen`, { method: 'POST' });
 }
 
