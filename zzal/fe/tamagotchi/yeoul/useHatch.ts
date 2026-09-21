@@ -26,7 +26,7 @@ import {
   type Album, type CareAction, type ChatReply, type ChatState, type CharacterInput,
   type HatchProgress, type PetDetail, type Personality,
 } from '../../lib/pet';
-import { getCurrentGame, guess, startGame, type GameState, type GuessResult, type Side } from '../../lib/game';
+import { abandonGame, getCurrentGame, guess, startGame, type GameState, type GuessResult, type Side } from '../../lib/game';
 import { classifyUploadFailure, uploadFailureLine, uploadImage, type UploadFailure } from '../../lib/upload';
 import { readHatchBlocked, type HatchBlocked } from '../../lib/hatchBlocked';
 import { ApiError } from '../../lib/api';
@@ -266,6 +266,18 @@ export interface Live {
    * @returns `error` 면 띄울 한 줄, 아니면 방금 친 결과.
    */
   pickSide: (side: Side) => Promise<{ error: string | null; result: GuessResult | null }>;
+  /**
+   * 치던 판을 접는다(기권). **인자가 없다** — 어느 펫의 어느 판인지는 이 훅이 들고 있다.
+   *
+   * ★ 성공하면 `game` 이 **'끝남'** 으로 갱신된다(`playing:false`). 접은 판은 패배로 확정되고
+   *   다시 못 친다 — 하루 판수는 시작할 때 이미 깎였으므로 **더 깎지도 돌려주지도 않는다.**
+   * ★ **실패하면 던진다**(`ApiError`). 화면이 잡아서 문구를 고른다 —
+   *   `ZZAL_GAME_NOT_FOUND`·`ZZAL_GAME_FINISHED`(이미 정리된 판) · `ZZAL_PET_SLEEPING` ·
+   *   `ZZAL_TRAVELING`. **네 경우 모두 화면은 판을 닫는다.**
+   * ★ **아플 때도 된다** — 서버에 `ZZAL_SICK_REFUSES` 가 없다(의도). 화면도 아플 때 ✕ 를 잠그면 안 된다.
+   * ★ 칠 판이 애초에 없으면 아무것도 안 보내고 그냥 끝난다(화면은 어차피 판을 닫는다).
+   */
+  abandonPlay: () => Promise<void>;
   /** 앨범(도감 18칸 · 엽서 · 장면 · 첫 선물). 아직 안 읽었으면 null. */
   album: Album | null;
   /** 앨범을 (다시) 읽는다. 벽을 열 때 부른다. */
@@ -299,6 +311,7 @@ const EMPTY: Live = {
   sendChat: async () => ({ error: null, reply: null }),
   startPlay: async () => null,
   pickSide: async () => ({ error: null, result: null }),
+  abandonPlay: async () => {},
   sendWish: async () => ({ ok: false, code: 'no_pet' }),
   loadAlbum: async () => {}, shareMotion: async () => ({ error: null, url: null }),
   resume: async () => null, reset: () => {},
@@ -354,6 +367,8 @@ export function useHatchState(): Live {
   const [guessing, setGuessing] = useState(false);
   /** 좌우 맞히기 연타 자물쇠. `guessing`(상태)만으로는 같은 틱의 두 번째 클릭을 못 막는다. */
   const guessingRef = useRef(false);
+  /** 기권 연타 자물쇠. ✕ 를 두 번 누르면 두 번째는 `ZZAL_GAME_FINISHED` 로 튕겨 헛 문구가 뜬다. */
+  const abandoningRef = useRef(false);
   /** 판 응답도 늦게 온 옛것이 최신을 덮지 않게. 펫과 같은 순번표를 쓴다. */
   const appliedGame = useRef(0);
   const [album, setAlbum] = useState<Album | null>(null);
@@ -674,6 +689,39 @@ export function useHatchState(): Live {
     }
   }, [petId, takeSeq, putPet, putGame]);
 
+  /**
+   * 기권 — 치던 판을 접는다. **인자가 없다**(→ Live.abandonPlay).
+   *
+   * ★ 성공하면 판을 **끝난 것**으로 갈아 둔다. 모양은 `games/current` 가 판 없이 답할 때와 같게 맞춘다
+   *   (`playing:false` 면 `gameId`·`round`·`hits` 는 null — `GameState` 머리말) — 그래야 새로고침으로
+   *   들어온 화면과 방금 접은 화면이 **같은 것을 본다.**
+   * ★ **실패는 그대로 던진다.** 여기서 삼키면 화면이 "접었다" 로 읽고 판을 닫는데 서버에는 판이
+   *   살아 있게 된다. 문구를 고르는 것은 화면의 몫이다.
+   * ★ 보상이 없는 행동이지만 **상태는 다시 읽는다** — 마당 뱃지(오늘 남은 판)와 게이지가
+   *   그 자리에서 맞아야 한다. 못 읽어도 접은 것은 접은 것이라 조용히 넘어간다.
+   */
+  const abandonPlay = useCallback(async (): Promise<void> => {
+    const id = gameRef.current?.gameId;
+    // 칠 판이 없으면 보낼 것이 없다. 서버도 이 경우 ZZAL_GAME_NOT_FOUND 를 주고 화면은 판을 닫으므로,
+    // 없는 판을 서버에 물어 404 를 만들어 낼 이유가 없다.
+    if (!petId || !id) { putGame(takeSeq(), null); return; }
+    // ✕ 를 두 번 누르면 두 번째는 ZZAL_GAME_FINISHED 로 튕긴다 — 같은 틱에 막는다(→ pickSide 와 같은 함정).
+    if (abandoningRef.current) return;
+    abandoningRef.current = true;
+    try {
+      const r = await abandonGame(petId, id);
+      putGame(takeSeq(), {
+        playing: false, gameId: null, kind: null, round: null, hits: null,
+        rounds: r.rounds, winAt: r.winAt, remainingToday: r.remainingToday,
+        justUnlocked: [], runUnlocked: r.runUnlocked,
+      });
+      const seq = takeSeq();
+      try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 판은 접혔다 */ }
+    } finally {
+      abandoningRef.current = false;
+    }
+  }, [petId, takeSeq, putPet, putGame]);
+
   const loadAlbum = useCallback(async () => {
     if (!petId) return;
     try { setAlbum(await getAlbum(petId)); } catch { /* 못 읽으면 도감은 펫 상태의 18칸으로 그린다 */ }
@@ -900,7 +948,8 @@ export function useHatchState(): Live {
     careing, optimistic, resting, chat, chatting, game, guessing, album,
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
-    setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, loadAlbum, shareMotion, sendWish, resume, reset,
+    setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, abandonPlay,
+    loadAlbum, shareMotion, sendWish, resume, reset,
   };
 }
 
