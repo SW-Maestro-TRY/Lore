@@ -408,13 +408,14 @@ export interface PetDetail {
   trip: Trip | null;
   tutorial: Tutorial | null;
   /**
-   * **첫날 축하 판을 본 시각**(ISO) — 안 봤으면 `null`.
+   * **첫날 축하 판을 본 시각**(ISO) — 안 봤으면 `null`. 떠난 아이에게도 남는다.
    *
    * ★★ 왜 서버가 들고 있나 — 이 판은 "한 번만" 이 목숨인 판이다. 예전에는 탭 기억
    *   (`sessionStorage`)으로만 막아서, **새 탭·앱 재시작·다른 기기면 또 떴다**
    *   (2026-09-22 dev 재현). 사람 기준으로 한 번이려면 사람 편에 남는 곳은 서버뿐이다.
-   * ★ **아직 서버가 안 줄 수 있다**(백엔드 작업 중). 그때는 `undefined` 로 와서 `!= null` 이
-   *   거짓이 되고, 화면은 예전처럼 탭 기억으로만 막는다 — 없다고 깨지지 않는다.
+   * ★ **배포 전에는 이 칸이 안 온다.** 그때는 `undefined` 라 `!= null` 이 거짓이 되고, 화면은
+   *   예전처럼 탭 기억으로만 막는다 — 없다고 깨지지 않고, 오면 저절로 서버 기준으로 올라선다.
+   * ⚠️ 손으로 적은 칸이다(위 `graduationSeen` 머리말의 걷어내는 조건과 한 짝).
    */
   graduationSeenAt?: string | null;
 }
@@ -601,11 +602,17 @@ export function tutorialDone(petId: number): Promise<PetDetail> {
 }
 
 /**
- * 첫날 축하 판을 **봤다고 남긴다**(2026-09-22).
+ * 첫날 축하 판을 **봤다고 남긴다**(2026-09-22 · 백엔드 확정 스펙).
  *
- * ★ 본문이 없고 204 로 답한다. **멱등** — 두 번 불러도 같은 결과다(이미 본 사람에게 다시 보내도 된다).
- * ★ 실패해도 화면은 그대로 간다. 서버에 못 남겼으면 다음에 한 번 더 뜰 뿐이고,
- *   그건 판을 못 띄우는 것보다 낫다 — 그래서 부르는 쪽이 조용히 삼킨다(→ `useHatch.markGraduationSeen`).
+ * ★★ **본문 없이 204 이고 공통 봉투를 안 탄다.** 공통 클라이언트가 빈 본문을 `null` 로 두므로
+ *   그대로 성공으로 흘러간다(`motionWish` 와 같은 자리). **응답을 파싱하지 말 것** —
+ *   `res.json()` 류가 끼면 **성공한 요청이 실패로 뒤집힌다.**
+ * ★ **멱등**이다. 잠든·여행 중·튜토리얼 미완료여도 204 라, 거절 갈래가 사실상 `404
+ *   ZZAL_PET_NOT_FOUND` 하나뿐이다. 그래서 화면이 "보냈는지" 를 따로 기억하지 않는다 —
+ *   실패하면 다음에 또 보내면 된다(→ `useHatch.markGraduationSeen`).
+ * ⚠️ **임시로 손으로 적은 자리다.** 자동 생성 타입(`lib/api-schema.ts`)에는 아직 이 주소가 없다.
+ *   재생성본은 백엔드 `feat/zzal-game-abandon`(`b890ff2`·`f6f76dd`)에 있고, 그것이 합쳐져
+ *   `api-schema.ts` 에 `graduation-seen` 이 생기면 **이 손글씨를 걷어낸다.**
  */
 export function graduationSeen(petId: number): Promise<void> {
   return request<void>(`${PET_BASE}/${petId}/graduation-seen`, { method: 'POST' });
