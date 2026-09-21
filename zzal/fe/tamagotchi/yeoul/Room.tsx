@@ -653,19 +653,34 @@ function Bubble({
         position: 'absolute', left: 0, bottom: 0, width: 0, height: 0,
         animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: play,
       }}>
-        {show && (
+        {/* ★★ 말이 없을 때도 **카드를 그대로 둔다**(2026-09-21 판정 8 — 상훈님 "끝 기준으로 통일").
+            왜 — 아이 크기는 말풍선이 머리 위에 들어가느냐로 정해진다. 튜토리얼 동안은 말풍선이
+            없어 아이가 크고, 끝나는 순간 말풍선이 떠서 **한 번에 100px 넘게 내려앉았다**
+            (390 에서 461.1 → 359.4px 실측). 이제 **한 줄짜리 자리를 늘 미리 사 두어서**
+            말이 있든 없든 아이가 안 움직인다. 값은 지금 「끝」과 같다.
+            ★ 안 보이는 동안에도 자리를 **재야** 하므로 `display:none` 이 아니라 `visibility` 다.
+            ★ 두 줄 말풍선은 여전히 한 번 더 내려간다 — 완전 통일(두 줄 기준 예약)은 아이가 더
+              작아져서 **일부러 안 했다**(상훈님 판정).
+            ★ `key` 로 갈라 두는 이유 — 말이 생길 때 `yPop` 이 다시 돌아야 한다(안 갈면 한 번
+              올라온 카드라 애니메이션이 안 뜬다). 카드가 새로 붙으면 아래 관찰자도 같이 다시 건다. */}
+        {(
           <div
-            ref={cardRef} data-part="bubble" data-place={place.at}
+            key={show ? 'said' : 'reserve'}
+            ref={cardRef} data-part={show ? 'bubble' : 'bubble-reserve'} data-place={place.at}
+            aria-hidden={!show}
             style={{
               position: 'absolute', boxSizing: 'border-box', left: place.left, width: place.w,
               ...(place.at === 'above' ? { bottom: BUBBLE_GAP } : { top: place.top }),
               background: C.paper, border: BUBBLE_LINE, borderRadius: radius.md,
               padding: pad.chip, boxShadow: shadow.card,
               textAlign: place.at === 'above' ? 'center' : 'left',
-              animation: 'yPop .28s ease',
+              animation: show ? 'yPop .28s ease' : 'none',
+              visibility: show ? 'visible' : 'hidden',
+              pointerEvents: 'none',
             }}
           >
-            <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.3, color: C.ink }}>{text}</span>
+            {/* 빈 칸 한 줄(`\u00A0`) — 재는 것은 글이 아니라 **한 줄짜리 카드의 높이**다. */}
+            <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.3, color: C.ink }}>{show ? text : '\u00A0'}</span>
             {/* 꼬리는 **언제나 아이를 가리킨다** — 위면 아래 한가운데, 옆이면 아이 쪽 옆면 얼굴 높이. */}
             {place.at === 'above' ? (
               <div style={{ ...tailBase, left: '50%', bottom: -6, transform: 'translateX(-50%) rotate(45deg)', borderRight: BUBBLE_LINE, borderBottom: BUBBLE_LINE }} />
