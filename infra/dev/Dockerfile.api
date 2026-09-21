@@ -25,28 +25,54 @@ COPY apps/api ./apps/api
 RUN ./gradlew --no-daemon clean bootJar -x test \
  && cp "$(ls build/libs/*.jar | grep -v plain)" /workspace/app.jar
 
-# ── 실행 단계: JRE + zzal 후처리 파이썬 ──
-FROM eclipse-temurin:21-jre AS runtime
-WORKDIR /app
-ENV LORE_ENV=dev
+# ── 파이썬 단계: 가상환경 둘 (zzal 후처리 · webtoon 하네스) ──
+#
+# ★ 두 도메인이 쓰는 패키지가 달라 가상환경을 **나눈다**. staging·prod 박스도 같은 배치다
+#   (infra/setup-python.sh → /opt/lore/venv · webtoon/be/setup-python.sh → /opt/lore/venv-webtoon).
+#   한 환경에 몰면 zzal 이 못박아 둔 과학 스택 버전과 하네스 쪽 요구가 서로를 끌어내린다.
+# ★ 따로 단계를 둔 이유 — 자바 빌드와 무관하므로 소스가 바뀌어도 이 레이어가 안 깨지고,
+#   `--target pydeps` 로 파이썬 설치만 따로 검증할 수 있다.
+FROM eclipse-temurin:21-jre AS pydeps
+
+# libgomp1 은 numpy/scipy 휠이 쓰는 OpenMP 런타임이다.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 python3-venv libgomp1 \
+ && rm -rf /var/lib/apt/lists/*
 
 # ★ zzal 후처리(격자 → 8상태 움짤 webp)는 numpy·scipy·pillow 파이썬으로 돈다.
 #   app.zzal.generation.real-postprocess=true 일 때 PythonPostProcessor 가 service_post.py 를
 #   이 파이썬으로 실행하고, 기동 때 boot-guard 가 이 bin 으로 세 모듈을 확인한다(GenerationConfig).
 #   버전은 requirements.txt 에 못박혀 있다 — 실험과 같은 격자 절단 결과를 재현하기 위해서다.
-#   webtoon 하네스 파이썬은 넣지 않는다(zzal 후처리만 필요).
-#   libgomp1 은 numpy/scipy 휠이 쓰는 OpenMP 런타임이다.
 COPY zzal/be/src/main/resources/zzal/pipeline/v1/requirements.txt /tmp/zzal-requirements.txt
-RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-venv libgomp1 \
- && python3 -m venv /opt/lore/venv \
+RUN python3 -m venv /opt/lore/venv \
  && /opt/lore/venv/bin/pip install --no-cache-dir --upgrade pip \
  && /opt/lore/venv/bin/pip install --no-cache-dir -r /tmp/zzal-requirements.txt \
  && /opt/lore/venv/bin/python -c "import numpy, scipy, PIL; print('zzal post deps OK', numpy.__version__, scipy.__version__, PIL.__version__)" \
- && rm -rf /var/lib/apt/lists/* /tmp/zzal-requirements.txt
+ && rm -f /tmp/zzal-requirements.txt
 
-# 앱이 이 파이썬을 쓰도록 고정(app.zzal.python.bin). 이 값이 없으면 기본 python3 를 찾는다.
+# ★ webtoon 생성 하네스(new_harness)도 파이썬으로 돈다. HarnessProcess·CharacterMaker 가
+#   jar 에서 꺼낸 run.py·character.py 를 lore.webtoon.python.bin 으로 실행한다.
+#   여기가 비어 있으면 빌드도 기동도 성공한 채로, 사람이 만들기를 눌렀을 때
+#   `ModuleNotFoundError: openai` 로 처음 드러난다.
+#   ★ requirements.txt 하나만 복사한다 — 하네스 소스가 바뀌어도 이 설치 레이어를 안 깬다.
+COPY webtoon/ai/requirements.txt /tmp/webtoon-requirements.txt
+RUN python3 -m venv /opt/lore/venv-webtoon \
+ && /opt/lore/venv-webtoon/bin/pip install --no-cache-dir --upgrade pip \
+ && /opt/lore/venv-webtoon/bin/pip install --no-cache-dir -r /tmp/webtoon-requirements.txt \
+ && /opt/lore/venv-webtoon/bin/python -c "import openai, yaml, requests, PIL, boto3; print('webtoon harness deps OK', openai.__version__, yaml.__version__, requests.__version__)" \
+ && rm -f /tmp/webtoon-requirements.txt
+
+# ── 실행 단계: 위 파이썬 단계 위에 jar 를 얹는다 ──
+# 가상환경을 stage 사이로 복사하지 않는다 — venv 안의 경로·심볼릭 링크가 시스템 파이썬을
+# 가리켜서, 옮겨 심으면 같은 이미지처럼 보이는데 실행만 조용히 깨질 수 있다.
+FROM pydeps AS runtime
+WORKDIR /app
+ENV LORE_ENV=dev
+
+# 앱이 이 파이썬들을 쓰도록 고정(app.zzal.python.bin · lore.webtoon.python.bin).
+# 이 값이 없으면 둘 다 기본 python3 를 찾고, 거기에는 아무 패키지도 없다.
 ENV ZZAL_PYTHON_BIN=/opt/lore/venv/bin/python
+ENV LORE_WEBTOON_PYTHON_BIN=/opt/lore/venv-webtoon/bin/python
 
 COPY --from=build /workspace/app.jar /app/app.jar
 EXPOSE 8080

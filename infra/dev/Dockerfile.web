@@ -25,6 +25,14 @@ COPY . .
 # dev EC2 는 nginx 가 /api 를 먼저 잡으므로 이 값이 쓰이지 않는다(무해).
 ARG API_PROXY=http://app:8080
 ENV API_PROXY=$API_PROXY
+
+# 같은 이유로 /images → MinIO 도 Next rewrite 로 굽는다.
+# 화면은 /images/zzal/... 로 그림을 부르는데(assets.ts 의 NEXT_PUBLIC_CDN_BASE 기본값),
+# 노트북엔 그 주소를 받아 줄 자리가 없어 전부 404 다. dev EC2 는 nginx 의
+# location /images/ 가 먼저 잡으므로 이 값이 쓰이지 않는다(무해).
+ARG IMAGE_PROXY=http://minio:9000/lore-content/images
+ENV IMAGE_PROXY=$IMAGE_PROXY
+
 RUN npm run build --workspace lore-web
 
 # ── 실행 단계 ──
