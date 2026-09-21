@@ -19,7 +19,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { assetUrl } from '../../lib/assets';
 import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
-import { BASIC_KEYS } from './constants';
+import { BASIC_KEYS, GUESS_HAND_PRELOAD } from './constants';
 import {
   answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
   motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, wake as wakePet,
@@ -899,6 +899,30 @@ export function useHatchState(): Live {
     // 받아만 두면 브라우저 캐시에 남는다. 끊지 않는다 — 끊으면 미리 받은 의미가 없다.
     basicKeys.split('|').filter(Boolean).forEach((k) => { new Image().src = assetUrl(k); });
   }, [basicKeys]);
+
+  /**
+   * **좌우 맞히기의 펼친 손 네 장을 미리 받아 둔다**(2026-09-21 판정 4).
+   *
+   * ★ 왜 여기인가 — 이 훅은 여울 화면(`skins/Yeoul.tsx`) 맨 위에서 한 번 만들어져 **연습방과
+   *   진짜 방을 모두 덮는다.** 손 그림은 두 방이 **같은 정적 파일**을 쓰므로 한 번만 데우면 된다.
+   * ★ 왜 판이 뜰 때가 아니라 들어올 때인가 — 판이 뜬 뒤에 받기 시작하면 **첫 탭과 경주**가 된다.
+   *   네 장 다 합쳐 100KB 남짓이고 `max-age=31536000, immutable` 이라 두 번 받지 않는다.
+   * ★ 실패해도 조용히 넘어간다 — 미리 받기는 편의일 뿐이라 화면을 막으면 안 된다.
+   *   못 받았으면 그때 `<img>` 가 평소처럼 받는다(지금과 같아질 뿐 더 나빠지지 않는다).
+   */
+  // ★★ 받아 둔 `Image` 를 **붙잡고 있는다.** 기본 8종처럼 `new Image().src = …` 만 하고 놓아 주면
+  //   그 객체가 치워지면서 브라우저의 **메모리 그림 칸**에서도 함께 빠진다. 그러면 개발 서버처럼
+  //   `max-age=0` 을 주는 곳에서는 공개하는 순간 **20KB 를 다시 받는다**(실측: 미리 받고도 200 응답).
+  //   네 장뿐이라 붙잡는 값이 싸고, 붙잡으면 그 왕복이 통째로 사라진다.
+  const handsHeld = useRef<HTMLImageElement[]>([]);
+  useEffect(() => {
+    if (handsHeld.current.length) return;
+    handsHeld.current = GUESS_HAND_PRELOAD.filter(Boolean).map((src) => {
+      const im = new Image();
+      im.src = src;
+      return im;
+    });
+  }, []);
 
   /**
    * 카탈로그 key 하나를 **내 아이 그림 주소**로. 아직 못 받았으면 null.

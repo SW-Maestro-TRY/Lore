@@ -6,6 +6,7 @@
 // ★ 여기 값은 **프론트 전용 목**이다. 서버가 붙으면 rules.ts·서버 응답이 정본을 들고 오고
 //   이 표는 문구(카피)만 남는다. 지금 숫자는 화면을 눌러 보기 위한 자리표시다.
 import { assetUrl, demoUrl } from '../constants';
+import { propUrl } from '../props/spec';
 import { C } from './ui';
 import type { Personality as PersonalityValue } from '../../lib/pet';
 
@@ -328,18 +329,40 @@ export const EGG_IMG = {
  *   `object-fit: contain` 으로 넣으면 주먹↔펼침을 갈아 끼워도 손목이 한 픽셀도 안 움직인다.
  *   칸을 정사각이 아닌 모양으로 바꾸면 이 약속이 깨진다 — 손이 위아래로 튄다.
  */
+/**
+ * ★ 주소는 **`propUrl`** 로 만든다 — `assetUrl` 이 아니다.
+ *   예전에는 `assetUrl('guess_l_fist.v1')` 이라 `<CDN>/guess_l_fist.v1` 이 됐다. `zzal/assets/` 도
+ *   `.webp` 도 빠져 **쓰는 순간 404** 인 값이었고, 그래서 화면은 이 표를 안 쓰고 `Room.tsx` 의
+ *   `handSrc()` 가 `propUrl()` 로 주소를 따로 만들었다. 이제 **같은 함수로 같은 주소**를 만드므로
+ *   미리 받기(`preloadGuessHands`)가 화면이 실제로 요청할 그 주소를 그대로 데운다.
+ *   ⚠️ 두 곳이 어긋나면 미리 받기는 조용히 헛돈다(딴 주소를 받아 두고 캐시가 안 맞는다).
+ */
 export const GUESS_HANDS = {
   LEFT: {
-    fist: assetUrl('guess_l_fist.v1'),
-    open_empty: assetUrl('guess_l_open_empty.v1'),
-    open_candy: assetUrl('guess_l_open_candy.v1'),
+    fist: propUrl('guess_l_fist', 1),
+    open_empty: propUrl('guess_l_open_empty', 1),
+    open_candy: propUrl('guess_l_open_candy', 1),
   },
   RIGHT: {
-    fist: assetUrl('guess_r_fist.v1'),
-    open_empty: assetUrl('guess_r_open_empty.v1'),
-    open_candy: assetUrl('guess_r_open_candy.v1'),
+    fist: propUrl('guess_r_fist', 1),
+    open_empty: propUrl('guess_r_open_empty', 1),
+    open_candy: propUrl('guess_r_open_candy', 1),
   },
 } as const;
+
+/**
+ * **미리 받아 둘 네 장** — 펼친 손(빈손·사탕) 좌·우.
+ *
+ * ★ 왜 주먹은 뺐나 — 주먹은 판이 뜨는 그 순간 이미 화면에 그려져 있어 저절로 받아진다.
+ *   늦는 것은 **탭한 뒤 갈아 끼우는 펼친 손**이다(1층 실측: 주소 교체 → 그려짐 94ms).
+ * ★ 왜 미리 받아야 하나 — `<img>` 한 장의 `src` 를 갈아 끼우는 구조라, 새 그림이 도착할 때까지
+ *   브라우저가 **주먹을 계속 그린다.** 그게 "손이 늦게 펴진다" 의 정체다.
+ *   로컬은 −94ms 지만 staging·운영은 그림이 원격 CDN 이라 **첫 공개마다 왕복 한 번**이 통째로 얹힌다.
+ */
+export const GUESS_HAND_PRELOAD: readonly string[] = [
+  GUESS_HANDS.LEFT.open_empty, GUESS_HANDS.LEFT.open_candy,
+  GUESS_HANDS.RIGHT.open_empty, GUESS_HANDS.RIGHT.open_candy,
+];
 
 /** 손 그림 한 칸의 한 변(px). 정사각이어야 손목이 안 튄다(위 주석). */
 export const GUESS_HAND_PX = 64;
