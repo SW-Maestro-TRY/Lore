@@ -1029,8 +1029,12 @@ export function useYeoul(live?: Live) {
   }, [later, careAct]);
 
   const onPet = useCallback(() => {
-    if (s.chatOpen) { patch({ chatOpen: false, draft: '' }); return; }
-    if (s.popOpen) { patch({ popOpen: false }); return; }
+    // ★★ 떠 있는 창은 닫되 **탭을 삼키지 않는다**(2026-09-21 판정 8). 예전에는 여기서 그냥
+    //   돌아서서, 팝오버를 열어 둔 채 아이를 누르면 창만 닫히고 아무 일도 안 났다 —
+    //   "한 번은 그냥 없어지는 탭" 이라는 규칙은 사용자가 세울 수 없는 규칙이다.
+    //   닫는 일은 그대로 하고(바깥을 눌렀으니 맞다), 쓰다듬기도 **같이** 한다.
+    if (s.chatOpen) patch({ chatOpen: false, draft: '' });
+    else if (s.popOpen) patch({ popOpen: false });
     if (esRef.current.sleeping) { flash('자고 있어요'); return; }
     if (onServerRef.current) {
       // ★ 4회째부터 — **반응 동작만 나온다.** 하트도 안 뜨고, 문구도 안 뜬다(상훈님 2026-09-10 판정).
@@ -2471,6 +2475,12 @@ export function useYeoul(live?: Live) {
         // 열린 부름이 없으면 적을 곳을 잠그고 **언제 다시 부르는지**만 알려 준다.
         // 이건 아이의 말이 아니라 화면의 안내라, 아이 말풍선이 아니라 입력칸에 둔다.
         can: canAnswer && !live?.chatting,
+        /**
+         * 보낼 수 있는가 — **적은 글이 있어야 한다**(2026-09-21 판정 8).
+         * 예전엔 빈 칸으로 「보내기」를 눌러도 아무 일도 안 났다(눌리기는 하는데 조용히 버려졌다).
+         * 자유 입력칸(`WishBox`)이 이미 쓰는 방식 그대로 — 적기 전에는 버튼을 흐리게 둔다.
+         */
+        canSend: canAnswer && !live?.chatting && s.draft.trim().length > 0,
         hint: !canAnswer
           ? nextCallHint(sv?.chatSummary?.nextAt ?? null)
           : `${CHAT_HINTS[s.hintI % CHAT_HINTS.length]}처럼 · 40자까지`,

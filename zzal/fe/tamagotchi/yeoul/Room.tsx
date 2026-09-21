@@ -782,7 +782,9 @@ function Tiles({ y }: { y: Yeoul }) {
           <span style={{ position: 'relative', width: 26, height: 26, flex: 'none', color: r.fg }}>
             {r.layers.map((p, i) => <span key={i} style={cssText(p)} />)}
           </span>
-          <span style={{ fontSize: fz.sm, lineHeight: 1, letterSpacing: '.01em', color: r.fg }}>{r.label}</span>
+          {/* ★ 줄높이 1 은 **한글이 들어갈 수 없는 칸**이다(2026-09-21 판정 8) — 글자 상자가 글씨
+              크기와 똑같아서 받침·윗선의 잉크가 칸 밖으로 비어져 나온다. 1.3 이면 담긴다. */}
+          <span style={{ fontSize: fz.sm, lineHeight: 1.3, letterSpacing: '.01em', color: r.fg }}>{r.label}</span>
           {r.hasBadge && (
             <span style={{
               position: 'absolute', top: -5, right: -3, minWidth: 18, height: 18, padding: '0 4px', boxSizing: 'border-box',
@@ -1283,10 +1285,10 @@ function ChatBar({ y }: { y: Yeoul }) {
         />
         <button onClick={actions.closeChat} style={{ width: 28, height: 28, flex: 'none', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.sm, color: C.sub2, lineHeight: 1 }} aria-label="대화 닫기">✕</button>
         <button
-          onClick={send} disabled={!v.chat.can} data-action="chat-send"
+          onClick={send} disabled={!v.chat.canSend} data-action="chat-send"
           style={{
             flex: 'none', padding: pad.chip, borderRadius: radius.pill, border: 'none',
-            background: v.chat.can ? C.accent : C.off, color: v.chat.can ? C.accentInk : C2.dim2, fontSize: fz.md,
+            background: v.chat.canSend ? C.accent : C.off, color: v.chat.canSend ? C.accentInk : C2.dim2, fontSize: fz.md,
           }}
         >보내기</button>
       </div>
