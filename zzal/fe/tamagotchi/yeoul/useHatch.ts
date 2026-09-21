@@ -278,6 +278,25 @@ export interface Live {
    * ★ 칠 판이 애초에 없으면 아무것도 안 보내고 그냥 끝난다(화면은 어차피 판을 닫는다).
    */
   abandonPlay: () => Promise<void>;
+  /**
+   * **방금 열린 2층 동작 seq — 본 순간 여기 쌓인다.**
+   *
+   * ★★ 왜 훅이 들고 있나 — `justUnlocked` 는 **그 응답 한 번에만** 실려 온다(계약 2절
+   *   "행동 응답에만"). 화면이 그 순간 다른 판(시트·폭죽·전면판)을 띄우고 있어 못 받으면,
+   *   **다음 조회 한 번이 `[]` 로 덮어 해금 판이 영영 안 뜬다.** 그래서 받은 자리에서 쌓아 둔다.
+   * ★ 화면은 판을 다 보여 준 뒤 `clearJustUnlocked()` 로 비운다. 비우기 전에는 계속 남는다 —
+   *   **판을 못 띄운 채로 닫아도 다음에 방이 조용해지면 그때 뜬다.**
+   * ★ 같은 방식이 스크랩북 쪽에 먼저 있다(`lib/usePet.ts`). 여울은 이 훅을 쓰므로 여기에 둔다.
+   */
+  justUnlocked: number[];
+  /** 해금 판을 다 보여 준 뒤 비운다. */
+  clearJustUnlocked: () => void;
+  /**
+   * 펫 응답이 아닌 곳(미니게임)에서 열린 동작을 이 줄에 얹는다.
+   * ★ 게임 응답은 `PetDetail` 이 아니라 상태 갱신 길을 안 탄다. 다시 물어서도 못 잡는다 —
+   *   조회 응답의 `justUnlocked` 는 늘 비어 있다.
+   */
+  noteUnlocked: (seqs: number[]) => void;
   /** 앨범(도감 18칸 · 엽서 · 장면 · 첫 선물). 아직 안 읽었으면 null. */
   album: Album | null;
   /** 앨범을 (다시) 읽는다. 벽을 열 때 부른다. */
@@ -300,6 +319,7 @@ const EMPTY: Live = {
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null, errorKind: null, blocked: null,
   draftOnly: false, resumedDraft: false, careing: null, optimistic: null, resting: false, chat: null, chatting: false,
   game: null, guessing: false, album: null, ready: false, petReady: false, failed: false, step: null,
+  justUnlocked: [],
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
   img: () => null,
   pendingUpload: false,
@@ -312,6 +332,7 @@ const EMPTY: Live = {
   startPlay: async () => null,
   pickSide: async () => ({ error: null, result: null }),
   abandonPlay: async () => {},
+  clearJustUnlocked: () => {}, noteUnlocked: () => {},
   sendWish: async () => ({ ok: false, code: 'no_pet' }),
   loadAlbum: async () => {}, shareMotion: async () => ({ error: null, url: null }),
   resume: async () => null, reset: () => {},
@@ -367,6 +388,11 @@ export function useHatchState(): Live {
   const [guessing, setGuessing] = useState(false);
   /** 좌우 맞히기 연타 자물쇠. `guessing`(상태)만으로는 같은 틱의 두 번째 클릭을 못 막는다. */
   const guessingRef = useRef(false);
+  /**
+   * 방금 열린 2층 동작 seq 를 **모아 두는 자리**(→ Live.justUnlocked).
+   * 화면이 판을 띄우고 비울 때까지 남는다 — 다음 조회가 덮지 못한다.
+   */
+  const [justUnlocked, setJustUnlocked] = useState<number[]>([]);
   /** 기권 연타 자물쇠. ✕ 를 두 번 누르면 두 번째는 `ZZAL_GAME_FINISHED` 로 튕겨 헛 문구가 뜬다. */
   const abandoningRef = useRef(false);
   /** 판 응답도 늦게 온 옛것이 최신을 덮지 않게. 펫과 같은 순번표를 쓴다. */
@@ -408,13 +434,27 @@ export function useHatchState(): Live {
   const session = useRef(0);
   /** 보낼 때 순번을 받는다. */
   const takeSeq = useCallback(() => ++issued.current, []);
+  /**
+   * 해금 seq 를 쌓는다. **이미 있는 것은 안 넣는다** — 같은 응답을 두 번 받아도 폭죽이 두 번 안 뜬다.
+   * ⚠️ 여기서 비우지 않는다. 비우는 것은 판을 **보여 준** 화면의 몫이다(`clearJustUnlocked`).
+   */
+  const noteUnlocked = useCallback((seqs: number[]) => {
+    if (!seqs || seqs.length === 0) return;
+    setJustUnlocked((prev) => {
+      const add = seqs.filter((q) => !prev.includes(q));
+      return add.length === 0 ? prev : [...prev, ...add];
+    });
+  }, []);
+  const clearJustUnlocked = useCallback(() => setJustUnlocked((prev) => (prev.length === 0 ? prev : [])), []);
   /** 받은 상태를 얹는다. 옛 응답이면 **버린다.** @returns 얹었으면 true */
   const putPet = useCallback((seq: number, next: PetDetail) => {
     if (seq <= applied.current) return false;
     applied.current = seq;
     setPet(next);
+    // ★ 위에서 버린 **낡은 응답**의 해금은 안 쌓는다 — 그건 이미 지난 사건이다.
+    noteUnlocked(next.justUnlocked ?? []);
     return true;
-  }, []);
+  }, [noteUnlocked]);
   /** 판도 같은 규칙으로. ref 를 함께 바꿔 **같은 틱에** 읽을 수 있게 한다. */
   const putGame = useCallback((seq: number, next: GameState | null) => {
     if (seq <= appliedGame.current) return false;
@@ -650,7 +690,11 @@ export function useHatchState(): Live {
     if (!petId) return null;
     try {
       // ★ `putGame` 이 ref 도 함께 바꾼다 — 바로 뒤에 `pickSide` 를 불러도 판을 찾을 수 있다.
-      putGame(takeSeq(), await startGame(petId, 'LEFT_RIGHT'));
+      const started = await startGame(petId, 'LEFT_RIGHT');
+      putGame(takeSeq(), started);
+      // 놀람은 판을 **시작하는 것만으로** 열린다. 게임 응답은 PetDetail 이 아니라 상태 갱신 길을
+      // 안 타므로, 여기서 직접 쌓지 않으면 그 판을 영영 못 띄운다.
+      noteUnlocked(started.justUnlocked ?? []);
       // ★ 판을 **시작하는 것만으로** 튜토리얼 6칸이 넘어간다(2026-09-10 실측).
       //   그런데 이 응답은 `GameState` 라 펫이 안 들어 있어, 다시 읽지 않으면 화면의 칸이 안 넘어간다.
       //   ⚠️ 치던 판이 있으면 서버가 그 판을 그대로 주고 칸을 **안** 넘긴다 — 그것도 실측이다.
@@ -658,7 +702,7 @@ export function useHatchState(): Live {
       try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 판은 시작됐다 */ }
       return null;
     } catch (e) { return e instanceof Error ? e.message : '지금은 못 놀아요'; }
-  }, [petId, takeSeq, putPet, putGame]);
+  }, [petId, takeSeq, putPet, putGame, noteUnlocked]);
 
   const pickSide = useCallback(async (side: Side) => {
     // ★ 상태가 아니라 ref 를 본다 — 방금 시작한 판도 여기서 바로 잡힌다.
@@ -676,6 +720,7 @@ export function useHatchState(): Live {
       if (g) {
         putGame(takeSeq(), { ...g, round: r.nextRound, hits: r.hits, playing: !r.finished, remainingToday: r.remainingToday, runUnlocked: r.runUnlocked });
       }
+      noteUnlocked(r.justUnlocked ?? []);
       // 이긴 판은 기분이 오른다. 그 값은 펫 상태에 있으므로 다시 읽어 화면을 맞춘다.
       if (r.finished) { const seq = takeSeq(); try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 판 결과는 보여 준다 */ } }
       return { error: null, result: r };
@@ -687,7 +732,7 @@ export function useHatchState(): Live {
       guessingRef.current = false;
       setGuessing(false);
     }
-  }, [petId, takeSeq, putPet, putGame]);
+  }, [petId, takeSeq, putPet, putGame, noteUnlocked]);
 
   /**
    * 기권 — 치던 판을 접는다. **인자가 없다**(→ Live.abandonPlay).
@@ -948,6 +993,8 @@ export function useHatchState(): Live {
     setCharSet(false); setHatch(null); setResumedDraft(false); setOptimistic(null);
     setGameLoaded(false); setChatLoaded(false);
     setChat(null); putGame(takeSeq(), null); setAlbum(null);
+    // 앞사람의 해금 판이 다음 사람 화면에 뜨면 안 된다.
+    setJustUnlocked([]);
   }, [takeSeq, putGame]);
 
   return {
@@ -972,7 +1019,9 @@ export function useHatchState(): Live {
     careing, optimistic, resting, chat, chatting, game, guessing, album,
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
+    justUnlocked,
     setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, abandonPlay,
+    clearJustUnlocked, noteUnlocked,
     loadAlbum, shareMotion, sendWish, resume, reset,
   };
 }
