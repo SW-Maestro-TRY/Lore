@@ -1,31 +1,236 @@
 // 온보딩 — 첫 화면 → 올리기 → 캐릭터 → (여울 샘플) → 태어남.
 //
-// 네 칸뿐이다. 예전 다섯 칸에 있던 **가입**은 칸이 아니라 첫 화면에서 무언가 하려 할 때 뜨는
-// 모달로 옮겼고(→ `AuthModal.tsx`), **유저 설문**은 샘플 방에서 여울이 하나씩 묻는 것으로
-// 옮겼다(→ `Room.tsx` 의 AskCard). 둘 다 2026-09-07 확정.
+// ★ 2026-09-18 — **첫 칸이 랜딩 v2 다.** SNS 마케팅 링크가 `/zzal` 이라, 처음 들어온 사람이
+//   맨 먼저 보는 것이 이 칸이다. 예전엔 여기에 "알 일러스트 214×214" 자리표가 있었다.
+//   무대는 `zzal/fe/LandingV2.tsx` 의 `LandingV2Stage` **한 벌**을 그대로 얹는다(복제 금지) —
+//   `/zzal/landing` 통짜 페이지가 쓰는 것과 같은 부품·같은 스타일이다.
+//   칸 순서(landing→upload→char→born)·뒤로 규칙·CTA 동작(`onb-next`)은 하나도 안 바뀐다.
+//
+// 네 칸뿐이다. 예전 다섯 칸에 있던 **가입**은 칸이 아니라 모달로 옮겼고(→ `AuthModal.tsx`),
+// **유저 설문**은 샘플 방에서 여울이 하나씩 묻는 것으로 옮겼다(→ `Room.tsx` 의 AskCard).
+// 둘 다 2026-09-07 확정.
+//
+// ★ 2026-09-19 — 그 모달이 뜨는 **시점**이 첫 화면에서 **올리기 칸**으로 내려왔다.
+//   랜딩 CTA 한 번에 가입 창이 뜨면, SNS 로 처음 온 사람이 무엇을 주는 곳인지도 모른 채
+//   계정부터 만들어야 한다. 이제 랜딩은 아무것도 묻지 않고 이 칸으로 보내고, 가입은
+//   **그림을 실제로 올리는 순간**(`presign` 직전) 한 번만 묻는다. 그동안 고른 파일은
+//   `useHatch.holdUpload` 가 들고 있다가 로그인 뒤 **같은 파일로** 이어서 올린다.
 //
 // 캐릭터 칸은 "이름만 필수" 다. 나머지는 칩 한 줄 + 긴 글 한 줄이고, 안 채워도 넘어간다.
 'use client';
 
-import { useRef } from 'react';
-import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF } from './constants';
-import { C, GAEGU, MONO, radius } from './ui';
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF, STEPS, UPLOAD_COPY } from './constants';
+import { LandingV2Stage, LandingV2Style } from '../../LandingV2';
+import { useAuth } from '@common/auth/useAuth';
+import { C, C2, GAEGU, MONO, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
 import { spriteUrl, useLive } from './useHatch';
+import { assetUrl } from '../../lib/assets';
 import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
+import { OnbDevProvider, OnbChangeList, useOnbFlag } from './onboardingDev';
+
+/**
+ * OB-03 진입 등장(stagger) 스타일. 랜딩 v2 의 ztV2Rise 결로, 이미 전역에 심긴 KEYFRAMES 의
+ * yPopIn 을 재사용한다. reduced-motion 에선 정지 — 요소 존재·순서·핸들러는 클래스 유무와 무관.
+ */
+const OB03_RISE_STYLE = `
+.onb-rise{ animation: yPopIn .5s cubic-bezier(.2,.7,.25,1) both; }
+@media (prefers-reduced-motion: reduce){ .onb-rise{ animation: none; } }
+/* OB-04 CTA hover 마감(알약형). active scale 은 전역 .yeoul button:active 가 이미 준다. */
+.onb-cta-v2:not(:disabled):hover{ background:#8c3a2c; box-shadow:0 8px 20px ${acc(.28)}; }
+`;
+
+/**
+ * ★ 항상 심는 최소 규칙 — 캐릭터 칸의 칩 묶음을 감싸는 `.onb-cgrid` 래퍼를 기본은 **투명하게**
+ *   (display:contents) 둔다. 그래야 OB-10 이 꺼졌을 때 래퍼가 없는 것과 픽셀 동일(부모 flex 로
+ *   그대로 흘러든다). OB-10 이 켜지면 아래 ONE_SCREEN_STYLE 이 탭·PC 에서 이걸 2열 그리드로 바꾼다.
+ */
+const BASE_STYLE = `.onb-cgrid{ display:contents; }
+/* 랜딩 v2 무대를 온보딩 칸 안에 앉힌다. 무대의 마감(.zt-v2*)은 LandingV2.tsx 한 벌 그대로 쓰고,
+   여기서는 **자리 잡기만** 한다 — 남는 높이를 먹고 세로 가운데로. 셸 크롬(.zt-v2page)은 안 붙인다. */
+.onb-v2stage{ flex:1 1 auto; min-height:0; }
+/* 뒤로 — 보이는 동그라미는 28px(시안 그대로)이고, **누르는 자리만** 44x44 로 넓힌다.
+   이 화면에서 유일한 비상구라(Nielsen #3) 손가락이 빗나가면 갈 곳이 없다. */
+   ★ z-index 가 필요하다 — 넓힌 자리가 머리줄 밖(아래)으로 8px 나가는데, 뒤따르는 형제인
+   .onb-scroll 이 나중에 그려져 그 8px 을 덮는다(실측: 아래·오른쪽만 안 눌렸다). */
+.onb-back{ position:relative; z-index:1; }
+.onb-back::after{ content:''; position:absolute; inset:-8px; }`;
+
+/**
+ * OB-10 한 화면 맞춤 — `.onb-one` 안에서만. overflow 는 auto 그대로라 넘쳐도 클리핑 없이 스크롤로
+ * 빠진다. 대신 간격·타이포·칩·마스코트·예시 그리드를 브레이크포인트별로 압축해 스크롤을 0 으로.
+ * ★ 순수 레이아웃/표현 — 핸들러·이동·상태·data-action 은 하나도 안 건드린다.
+ */
+const ONE_SCREEN_STYLE = `
+/* ── 공통(폰 우선, <768) ── */
+.onb-one .onb-scroll{ gap:11px!important; padding:12px 22px 8px!important; }
+.onb-one .onb-head{ gap:4px!important; }
+.onb-one .onb-title{ font-size:23px!important; line-height:1.18!important; }
+.onb-one .onb-sub{ font-size:12px!important; line-height:1.45!important; }
+
+/* landing — 랜딩 v2 무대. 액자·간격만 조인다(글자 크기·탭 타깃 44px 은 안 건드린다). */
+.onb-one[data-step="landing"] .onb-scroll{ padding-top:6px!important; }
+.onb-one .zt-v2col{ gap:16px!important; }
+.onb-one .zt-v2hero{ gap:14px!important; }
+.onb-one .zt-v2frame{ width:min(170px,42vw)!important; }
+
+/* upload — 예시 카드가 세로를 먹으니 카드 높이·간격·미리보기 압축(버튼은 푸터라 늘 보임). */
+.onb-one[data-step="upload"] .onb-body{ gap:6px!important; }
+.onb-one .onb-drop{ padding:14px 18px!important; }
+.onb-one .onb-drop img{ width:96px!important; height:96px!important; }
+.onb-one .onb-exgrid{ gap:5px!important; }
+.onb-one .onb-excell{ gap:3px!important; }
+/* ★ 예시 카드의 3:4 를 깨지 않는다 — 예전엔 여기서 aspect-ratio:auto + height:56px 로 눌렀는데,
+   칸이 빈 자리표시자일 때는 티가 안 나다가 **진짜 예시 그림(600x800, 3:4)이 들어오자**
+   가로로 납작한 칸에 letterbox 되어 좌우가 빗금 바탕으로 크게 남았다
+   (390 실측: 칸 111x56 에 그림 41x54, 좌우 여백 34px, 칸 채움 35%).
+   세로를 아끼는 OB-10 의 목적은 높이 고정이 아니라 **그리드 폭을 줄여 비율째 축소**로 달성한다. */
+.onb-one .onb-excell > span{ font-size:10px!important; line-height:1.2!important; }
+/* ★ 학습 미사용 한 줄은 압축 대상에서 뺀다 — 자캐를 맡기는 사람이 제일 먼저 확인하는 줄이라
+   여기서 한 번 더 줄이면 가장 중요한 문장이 화면에서 가장 안 읽히는 문장이 된다. */
+.onb-one .onb-privacy{ line-height:1.45!important; }
+
+/* char — 밀도 최고. 4묶음+그밖에를 **2열**로 눕혀 세로를 반으로(폰 포함, 셸이 좁아도 칩이 짧아 견딤).
+   간격·패딩·칩·입력을 최대 압축. 칩을 접지 않고(기능 보존) 크기만 줄인다. */
+.onb-one[data-step="char"] .onb-body{ gap:9px!important; }
+.onb-one .onb-cgrid{ display:grid!important; grid-template-columns:1fr 1fr!important; gap:7px!important; align-items:start; }
+.onb-one .onb-cgrid > :last-child{ grid-column:1 / -1; }
+.onb-one .onb-cgroup{ padding:8px 10px!important; gap:6px!important; }
+.onb-one .onb-cgroup > div{ gap:6px!important; }
+.onb-one .onb-cgroup input{ padding:7px 10px!important; font-size:12px!important; }
+.onb-one .onb-name-input{ padding:10px 13px!important; }
+.onb-one .onb-note{ padding:8px 11px!important; }
+.onb-one .onb-cgroup button{ padding:5px 10px!important; font-size:11.5px!important; }
+
+/* ── 탭·PC(≥768, 셸 560 고정) — 폭이 넉넉하니 마스코트를 키우고 칩을 한 톤 키운다. ── */
+@media (min-width:768px){
+  .onb-one .onb-cgrid{ gap:8px!important; }
+  .onb-one .onb-cgroup button{ font-size:12px!important; padding:6px 11px!important; }
+  .onb-one .zt-v2frame{ width:190px!important; }
+}
+
+/* ── 폰(≤520, 셸 full-bleed) — char 잔여 스크롤을 더 줄인다(간격·패딩만, 칩·글자 크기 유지). ── */
+@media (max-width:520px){
+  .onb-one .onb-head{ gap:3px!important; }
+  .onb-one .onb-note{ padding:7px 10px!important; }
+  .onb-one[data-step="char"] .onb-body{ gap:8px!important; }
+  .onb-one .onb-cgrid{ gap:6px!important; }
+  .onb-one .onb-cgroup{ padding:7px 9px!important; gap:5px!important; }
+}
+
+/* ── 세로 좁은 화면(PC 800 등, ≤840) — 한 겹 더 짜낸다. ── */
+@media (max-height:840px){
+  .onb-one .onb-scroll{ gap:9px!important; padding-top:10px!important; }
+  .onb-one .onb-title{ font-size:21px!important; }
+  .onb-one .zt-v2col{ gap:13px!important; }
+  .onb-one .zt-v2frame{ width:min(148px,38vw)!important; }
+  .onb-one .zt-v2h2{ margin-bottom:8px!important; }
+  /* 세로가 좁으면 카드를 눌러 납작하게 만들지 말고 **그리드 폭을 줄여** 3:4 인 채로 같이 줄인다. */
+  .onb-one .onb-exgrid{ width:72%!important; margin-inline:auto!important; }
+  .onb-one[data-step="char"] .onb-body{ gap:7px!important; }
+  .onb-one .onb-cgroup{ padding:7px 9px!important; gap:5px!important; }
+  .onb-one .onb-cgroup input{ padding:7px 10px!important; }
+}
+`;
 
 
 /** 세계관은 **고른 칩 전부**와 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
 const worldOf = (chips: readonly string[] | undefined, text: string | undefined) =>
   [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, 100);
 
-export default function Onboarding({ y }: { y: Yeoul }) {
+/**
+ * 업로드 안내의 예시 그림 한 칸.
+ *
+ * ★ 로드에 실패하면 옛 색네모 + '그림' 자리표시자로 폴백한다(상훈님 요청) —
+ *   CDN 이 죽어도 안내 자체가 무너지지 않게. `box` 는 폴백 때 쓰는 색/빗금/글자 스타일까지
+ *   담고 있고(부르는 쪽이 좋음/어려움 칸을 다르게 준다), 그림이 뜨면 그 위를 img 가 덮는다.
+ *   img 는 투명 배경이라, 캐릭터 둘레로는 칸의 색·빗금이 그대로 비쳐 종이 느낌을 살린다.
+ */
+function ExampleImg({ src, alt, box, badge }: { src: string; alt: string; box: CSSProperties; badge: ReactNode }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div style={box}>
+      {failed || !src ? (
+        '그림'
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={alt}
+          onError={() => setFailed(true)}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+        />
+      )}
+      {badge}
+    </div>
+  );
+}
+
+/**
+ * ★ 리모컨(기존↔적용후) — 온보딩 겉모습 통일을 변경 단위(OB-01~09)로 토글한다.
+ *   provider 가 flags 를 들고, 안쪽 OnboardingInner 가 useOnbFlag 로 읽어 표현만 스왑한다.
+ *   OnbChangeList 패널은 useDevVisible 게이팅이라 공개 도메인(*.lorecomic.com)엔 안 뜬다.
+ */
+export default function Onboarding(props: { y: Yeoul }) {
+  return (
+    <OnbDevProvider>
+      <OnboardingInner {...props} />
+      <OnbChangeList />
+    </OnbDevProvider>
+  );
+}
+
+function OnboardingInner({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
   const live = useLive();
   const file = useRef<HTMLInputElement>(null);
   const o = v.onb;
   const key = o.stepKey;
+  /**
+   * ★ 2026-09-19 — **가입은 여기서 묻는다.** 랜딩 CTA 는 이제 아무것도 안 묻고 이 칸으로 보낸다.
+   *   올리기가 로그인이 필요한 첫 호출이라, 그림을 고른 순간(= `presign` 직전)에 가른다.
+   *   판정은 `useAuth` 한 곳이다 — 목(`s.authed`)은 이미 로그인한 사람도 'session' 으로 통과시키는
+   *   뒤따르는 값이라, 무엇을 물을지 정하는 자리에서는 서버가 답한 이쪽을 본다.
+   * ★ `isLoading` 중에는 **어느 쪽으로도 단정하지 않는다**(useAuth 머리말). 그림만 들고 있다가
+   *   답이 오면 그때 올리거나(로그인) 창을 연다(미로그인).
+   */
+  const { isAuthenticated, isLoading } = useAuth();
+  /** 이 그림 때문에 가입 창을 이미 띄웠는가. 사용자가 닫으면 저절로 다시 뜨지 않는다. */
+  const askedAuth = useRef(false);
+  /** 고른 그림이 손에 있는데 아직 로그인 전 — 올리기가 여기서 멈춰 있다. */
+  const needAuth = live.pendingUpload && !isAuthenticated;
+  const openSignup = actions.openAuth('signup');
+  const askAuth = () => { askedAuth.current = true; openSignup(); };
+  // 랜딩 칸의 제목·부제는 랜딩 v2 무대가 직접 들고 있다(같은 상수 LANDING_COPY). 나머지 칸만 여기서.
   const [title, sub] = ONB_COPY[key];
+  // 겉모습 스왑 플래그(전부 OFF=현재 코드 그대로).
+  const fShell = useOnbFlag('ob-01');
+  const fTitle = useOnbFlag('ob-02');
+  const fRise = useOnbFlag('ob-03');
+  const fCta = useOnbFlag('ob-04');
+  const fFrame = useOnbFlag('ob-05');
+  const fDrop = useOnbFlag('ob-06');
+  const fEx = useOnbFlag('ob-07');
+  const fDots = useOnbFlag('ob-08');
+  // OB-10 — 각 단계를 세로 스크롤 없이 한 뷰포트에(폰·탭·PC 반응형 압축). 겉모습·간격만, 핸들러 불변.
+  const fOne = useOnbFlag('ob-10');
+  // OB-03 등장은 클래스로만 붙인다 — off 면 빈 문자열이라 DOM·핸들러 변화 없음.
+  const rise = fRise ? 'onb-rise' : undefined;
+
+  /**
+   * 들고 있는 그림이 있는데 미로그인으로 **확정되면** 가입 창을 연다.
+   *
+   * 고른 순간에 바로 열지 않고 한 박자 두는 이유 — 그 순간 `useAuth` 가 아직 `loading` 일 수 있다.
+   * 그때 열면 **이미 로그인한 사람에게 가입 창**을 들이민다.
+   * 한 번 열고 나면 `askedAuth` 가 잠근다 — 닫은 창이 저절로 다시 뜨면 화면을 빠져나갈 수 없다.
+   */
+  useEffect(() => {
+    if (!live.pendingUpload || isLoading || isAuthenticated || askedAuth.current) return;
+    askAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- askAuth 는 매 렌더 새로 만들어진다(actions.openAuth 가 클로저를 돌려준다). 여는 조건은 위 세 값뿐이다.
+  }, [live.pendingUpload, isLoading, isAuthenticated]);
 
   // ★ 그림은 **필수**다(상훈님 2026-09-07 결정). '그림 없이 계속' 은 없앴다 —
   //   그림 없이 넘어가면 아이를 만들 재료가 없어서 그 뒤 화면이 전부 목이 된다.
@@ -34,51 +239,88 @@ export default function Onboarding({ y }: { y: Yeoul }) {
   //   그것으로 막으면 재료 없이 통과한다.
   // ★ 두 칸의 '못 넘어감' 표현을 맞춘다(상훈님 판정 22). 예전엔 올리기는 버튼이 잠기고,
   //   캐릭터는 눌러야 오류가 떴다 — 같은 뜻인데 배우는 법이 둘이었다. 둘 다 **잠그는 쪽**으로.
-  const uploadBlocked = key === 'upload' && !live.imageKey;
+  // ★ 2026-09-19 — 고른 그림을 손에 들고 **가입을 기다리는 중**이면 잠그지 않는다.
+  //   그림은 이미 골랐는데 '그림을 먼저 올려 주세요' 가 잠긴 채 남으면 그 말이 거짓이 되고,
+  //   앞으로 갈 길이 화면에서 사라진다. 이때 버튼은 **가입 창을 다시 여는 자리**다.
+  const uploadBlocked = key === 'upload' && !live.imageKey && !needAuth;
   const nameBlocked = key === 'char' && !s.petName.trim();
   // ★ 보내는 동안에도 잠근다(2026-09-10). 안 잠그면 두 번 눌려 같은 이름을 두 번 보내고,
   //   그사이 화면은 아무 반응이 없어 사람이 계속 누른다.
   const sending = live.busy && (key === 'upload' || key === 'char');
+  /**
+   * 이번 실패가 **우리 쪽 사정**인가(연결 끊김·CORS·S3·5xx). 그렇다면 「이런 그림이면 좋아요 /
+   * 어려워요」 예시를 **안 그린다.**
+   *
+   * ★★ 왜 — 예시가 오류 한 줄 바로 아래 그대로 남아 있어서, 서버가 그림을 보지도 못한 실패인데
+   *   사용자가 **제 그림 탓으로 읽었다.** 그림이 정말 거절당했을 때(`errorKind === 'image'`)만
+   *   예시가 도움이 되고, 그때는 그대로 둔다. 갈래 판정은 `lib/upload.ts` 한 곳이 한다.
+   */
+  const infraFail = key === 'upload' && !!live.error && live.errorKind === 'infra';
   const blocked = uploadBlocked || nameBlocked || sending;
   const ctaLabel = key === 'upload'
-    ? (live.busy ? '올리는 중…' : live.imageKey ? '다음' : '그림을 먼저 올려 주세요')
+    ? (live.busy ? '올리는 중…' : live.imageKey ? '다음' : needAuth ? UPLOAD_COPY.pendingCta : '그림을 먼저 올려 주세요')
     : (key === 'char' && live.busy ? '준비하는 중…' : o.cta);
 
   return (
-    <div data-part="onb" data-step={key} style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, background: key === 'born' ? C.bornBg : C.onbBg }}>
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '14px 22px 6px' }}>
+    <div
+      data-part="onb"
+      data-step={key}
+      className={fOne ? 'onb-one' : undefined}
+      style={{
+        flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0,
+        // OB-01 셸 질감 — 바탕색은 그대로, 은은한 종이 도트만 얹는다(랜딩 v2 ::before 와 같은 결).
+        backgroundColor: key === 'born' ? C.bornBg : C.onbBg,
+        ...(fShell
+          ? { backgroundImage: `radial-gradient(${ink(.07)} .6px, transparent .7px)`, backgroundSize: '8px 8px' }
+          : null),
+      }}
+    >
+      <style>{BASE_STYLE + (fRise || fCta ? OB03_RISE_STYLE : '') + (fOne ? ONE_SCREEN_STYLE : '')}</style>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.md, padding: '14px 22px 6px' }}>
         {/* ★ 태어남 칸에는 뒤로가 없다(상훈님 판정 4). 이미 태어난 아이가 있는데 되돌아가면
             여울 샘플로 가고 부화가 0/4 로 지워졌다 — 되돌릴 수 없는 지점은 되돌아가지지 않아야 한다. */}
         {o.canBack && key !== 'born' && (
-          <button onClick={actions.onBack} style={{ border: '1px solid rgba(74,64,56,.13)', background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: 13, color: C.sub2, lineHeight: 1 }} aria-label="뒤로">‹</button>
+          // OB-08 — 뒤로 버튼 크롬만 랜딩 line/paper/pill 톤으로. onBack·canBack·라벨은 그대로.
+          <button onClick={actions.onBack} className="onb-back" style={{ border: `1px solid ${fDots ? C.lineHard : ink(.13)}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: fz.md, color: C.sub2, lineHeight: 1, ...(fDots ? { boxShadow: `0 1px 2px ${ink(.06)}` } : null) }} aria-label="뒤로">‹</button>
         )}
         <span style={{ flex: 1 }} />
-        {o.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 6, borderRadius: 3, background: d.bg }} />)}
+        {/* OB-08 — dots 개수·활성(d.w·d.bg)은 그대로, 모서리만 pill 로 다듬는다. */}
+        {o.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 6, borderRadius: fDots ? radius.pill : 3, background: d.bg }} />)}
       </div>
 
-      <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '18px 24px 10px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 30, lineHeight: 1.25, color: C.ink, whiteSpace: 'pre-line' }}>{title}</span>
-          <span style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.58)' }}>{sub}</span>
-        </div>
+      {/* ★ 칸이 바뀌어도 아래 CTA 버튼은 **같은 DOM 노드**라 포커스가 그대로 남는다 — 눈으로 보는
+          사람은 화면이 바뀐 걸 알지만 화면 낭독기 쓰는 사람에게는 아무 말도 없었다(Nielsen #1).
+          점(dots)은 색뿐이라 읽히지도 않는다. 그래서 칸 이름을 조용히 한 줄 알린다. */}
+      <span
+        aria-live="polite"
+        style={{ position: 'absolute', width: 1, height: 1, margin: -1, padding: 0, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 }}
+      >
+        {`${o.dots.length}칸 중 ${(STEPS as readonly string[]).indexOf(key) + 1}번째 · ${ONB_COPY[key][0].replace('\n', ' ')}`}
+      </span>
 
+      <div className="onb-scroll" style={{ flex: '1 1 auto', overflow: 'auto', padding: '18px 24px 10px', display: 'flex', flexDirection: 'column', gap: gap.lg }}>
+        {/* ★ 랜딩 칸에는 이 머리말이 없다 — 무대(LandingV2Stage)가 같은 인사를 제 <h1> 으로
+            들고 있어서, 여기까지 그리면 같은 말이 두 번 나온다. 나머지 칸은 그대로. */}
+        {key !== 'landing' && (
+        <div className="onb-head" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
+          {/* OB-02 제목 타이포(자간·balance), OB-03 진입 등장(순서 0·70ms). 문구·줄바꿈(pre-line)은 그대로. */}
+          <span className={['onb-title', rise].filter(Boolean).join(' ')} style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h0, lineHeight: fTitle ? 1.2 : 1.25, color: C.ink, whiteSpace: 'pre-line', ...(fTitle ? { letterSpacing: '-.5px', textWrap: 'balance' as const } : null), animationDelay: '0ms' }}>{title}</span>
+          <span className={['onb-sub', rise].filter(Boolean).join(' ')} style={{ fontSize: fz.md, lineHeight: 1.7, color: C.sub2, animationDelay: '70ms' }}>{sub}</span>
+        </div>
+        )}
+
+        {/* 첫 칸 = 랜딩 v2. `/zzal/landing` 통짜 페이지와 **같은 부품·같은 스타일 한 벌**이다.
+            CTA 는 그리지 않는다 — 아래 푸터의 `onb-next` 버튼이 그 자리이고, 누르면 올리기 칸으로 간다.
+            (같은 뜻의 버튼을 둘 두면 taste-lint 의 "CTA 중복"이고, 무엇을 눌러야 할지 흐려진다.) */}
         {key === 'landing' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '14px 0 0' }}>
-            {/* 알 일러스트 자리. 실물이 나오면 이 칸에 그대로 끼운다(214 × 214). */}
-            <div style={{
-              width: 214, height: 214, borderRadius: 34, backgroundColor: '#F6E7DF',
-              backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.07) 0 7px,transparent 7px 16px)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-              animation: 'yBob 5s ease-in-out infinite',
-            }}>
-              <span style={{ font: `11px ${MONO}`, color: C.sub }}>알 일러스트</span>
-              <span style={{ font: `10.5px ${MONO}`, color: '#645B52' }}>214 × 214</span>
-            </div>
+          <div className="onb-body onb-v2stage zt-v2root" data-part="landing-v2">
+            <LandingV2Style />
+            <LandingV2Stage variant="onboarding" />
           </div>
         )}
 
         {key === 'upload' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', gap: gap.lg, animationDelay: '130ms' }}>
             {/* ★ 올리는 칸이 **맨 위**다. 예시를 먼저 두었더니 390×844 에서 버튼이 화면 밖으로
                 밀려 스크롤해야 보였다(2026-09-07 상훈님 지적). 여기서 할 일은 하나뿐이므로
                 그 하나가 첫 화면에 있어야 한다. 예시는 참고물이라 아래로 내렸다. */}
@@ -87,13 +329,28 @@ export default function Onboarding({ y }: { y: Yeoul }) {
               ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) { void live.upload(f); actions.onUpload(); }
+                if (f) {
+                  actions.onUpload();
+                  // 이 그림으로는 아직 안 물어봤다 — 다시 물을 수 있게 푼다.
+                  askedAuth.current = false;
+                  // ★ 로그인했으면 그대로 올린다. 아니면(모르는 중 포함) **들고만 있는다** —
+                  //   가입 창은 위 effect 가 미로그인으로 확정된 뒤에 연다.
+                  if (isAuthenticated) void live.upload(f);
+                  else live.holdUpload(f);
+                }
                 e.target.value = '';
               }}
             />
             <button
-              onClick={() => file.current?.click()} data-action="upload" disabled={live.busy}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: radius.lg, border: `2px dashed ${live.imageKey ? C.accent : 'rgba(74,64,56,.18)'}`, background: live.imageKey ? C.accentSoft : C.paper }}
+              onClick={() => {
+                // 고른 그림이 손에 있는데 로그인 전이면 **다시 고르게 하지 않는다** — 가입 창만 다시 연다.
+                if (needAuth) { askAuth(); return; }
+                file.current?.click();
+              }}
+              data-action="upload" data-pending-auth={needAuth ? 'true' : undefined} disabled={live.busy}
+              className="onb-drop"
+              // OB-06 — dash 색·라운드·바탕만 랜딩 토큰으로 정돈. 파일 선택·미리보기·busy/성공/오류·data-action 은 그대로.
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: gap.sm, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: fDrop ? radius.xl : radius.lg, border: `2px dashed ${live.imageKey ? C.accent : fDrop ? C.lineHard : ink(.18)}`, background: live.imageKey ? C.accentSoft : fDrop ? C.slot : C.paper }}
             >
               {/* 실패하면 useHatch 가 미리보기를 지운다 — 실패한 그림이 크게 남으면 성공처럼 읽힌다(판정 19). */}
               {live.previewUrl && (
@@ -103,143 +360,174 @@ export default function Onboarding({ y }: { y: Yeoul }) {
               {/* ★ 문구는 **올라간 키**만 보고 정한다. 목 상태(`o.upLabel`)는 '파일을 골랐다' 까지만
                   알아서, 업로드가 실패해도 '그림을 올렸어요' 라고 거짓말을 했다(2026-09-07 실측 S3 403).
                   아래 CTA 는 잠겨 있는데 여기만 성공이라 말하면 사용자가 갇힌다. */}
-              <span style={{ fontFamily: GAEGU, fontSize: 20, color: C.ink }}>
-                {live.busy ? '올리는 중…' : live.imageKey ? '그림을 올렸어요' : '그림 올리기'}
+              <span style={{ fontFamily: GAEGU, fontSize: fz.h2, color: C.ink }}>
+                {live.busy ? '올리는 중…' : live.imageKey ? '그림을 올렸어요' : needAuth ? UPLOAD_COPY.pending : '그림 올리기'}
               </span>
-              <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.48)' }}>
-                {live.imageKey ? '다시 누르면 바꿀 수 있어요' : 'PNG · JPG · 10MB까지'}
+              <span style={{ fontSize: fz.sm, color: C.sub2 }}>
+                {live.imageKey ? '다시 누르면 바꿀 수 있어요' : needAuth ? UPLOAD_COPY.pendingNote : 'PNG · JPG · 10MB까지'}
               </span>
             </button>
             {live.error && (
-              <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '10px 12px', borderRadius: radius.sm, background: C.accentSoft }}>
+              <span data-part="upload-error" data-error-kind={live.errorKind ?? 'infra'} style={{ display: 'flex', alignItems: 'flex-start', gap: gap.sm, padding: '10px 12px', borderRadius: radius.sm, background: C.accentSoft }}>
                 <span style={{ width: 5, height: 5, flex: 'none', marginTop: 6, borderRadius: '50%', background: C.accent }} />
-                <span style={{ fontSize: 12, lineHeight: 1.6, color: C.accent }}>{live.error}</span>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: gap.xs }}>
+                  <span style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.accent }}>{live.error}</span>
+                  {/* ★ 우리 쪽 사정일 때만 한 줄 더. "당신 그림이 문제가 아니다" 를 **말로** 못 박는다 —
+                      예시를 감추는 것만으로는 이미 읽은 사람의 오해가 안 풀린다. */}
+                  {infraFail && (
+                    <span data-note="infra" style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.sub }}>{UPLOAD_COPY.infraNote}</span>
+                  )}
+                </span>
               </span>
             )}
             {/* 가장 먼저 읽혀야 하는 한 줄 — 자캐를 맡기는 사람이 제일 먼저 의심하는 지점이다. */}
-            <span style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.</span>
+            <span className="onb-privacy" style={{ fontSize: fz.sm, lineHeight: 1.7, color: C.sub2 }}>{UPLOAD_COPY.privacy}</span>
 
-            <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림이면 좋아요</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
-              {GOOD_EX.map(([lbl, color]) => (
-                <div key={lbl} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
-                  <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: color, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.05) 0 6px,transparent 6px 14px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `8.5px ${MONO}`, color: 'rgba(74,64,56,.42)' }}>
-                    그림
-                    <span style={{ position: 'absolute', left: 8, top: 8, width: 12, height: 12, borderRadius: '50%', border: '1.5px solid #5C8452' }} />
-                  </div>
-                  <span style={{ fontSize: 11, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{lbl}</span>
-                </div>
-              ))}
-            </div>
+            {!infraFail && (
+              <>
 
-            <span style={{ fontSize: 11.5, color: C.faint }}>이런 그림은 어려워요</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
-              {BAD_EX.map(([lbl, color]) => (
-                <div key={lbl} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
-                  <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: color, backgroundImage: 'repeating-linear-gradient(135deg,rgba(74,64,56,.05) 0 5px,transparent 5px 12px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `8px ${MONO}`, color: 'rgba(74,64,56,.34)' }}>
-                    그림
-                    <span style={{ position: 'absolute', left: 6, top: 5, fontSize: 12, lineHeight: 1, color: C.accent }}>✕</span>
+              <span style={{ fontSize: fz.sm, color: C.sub2 }}>{UPLOAD_COPY.goodTitle}</span>
+              <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: gap.sm }}>
+                {GOOD_EX.map(([lbl, color, key]) => (
+                  <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, alignItems: 'center' }}>
+                    <ExampleImg
+                      src={assetUrl(key)}
+                      alt={`좋은 예: ${lbl}`}
+                      // OB-07 — 색면+빗금을 종이/slot 계열 차분한 카드로(빗금 약화·테두리). 데이터·onError·✓ 배지는 그대로.
+                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,${ink(fEx ? '.03' : '.05')} 0 6px,transparent 6px 14px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `${monoSize.xs}px ${MONO}`, color: ink(.42) }}
+                      badge={<span style={{ position: 'absolute', left: 8, top: 8, width: 15, height: 15, borderRadius: '50%', border: '1.5px solid #5C8452', background: paperA(.85), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fz.xs, lineHeight: 1, color: '#5C8452' }}>✓</span>}
+                    />
+                    <span style={{ fontSize: fz.xs, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{lbl}</span>
                   </div>
-                  <span style={{ fontSize: 10.5, color: C.faint, textAlign: 'center' }}>{lbl}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+
+              <span style={{ fontSize: fz.sm, color: C.sub2 }}>{UPLOAD_COPY.badTitle}</span>
+              <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: gap.sm }}>
+                {BAD_EX.map(([lbl, color, key]) => (
+                  <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, alignItems: 'center' }}>
+                    <ExampleImg
+                      src={assetUrl(key)}
+                      alt={`어려운 예: ${lbl}`}
+                      // OB-07 — 같은 결로 차분하게. 데이터·onError·✕ 배지는 그대로.
+                      box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,${ink(fEx ? '.03' : '.05')} 0 5px,transparent 5px 12px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `${monoSize.xs}px ${MONO}`, color: ink(.34) }}
+                      badge={<span style={{ position: 'absolute', left: 5, top: 5, width: 14, height: 14, borderRadius: '50%', background: paperA(.85), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fz.xs, lineHeight: 1, color: C.accent }}>✕</span>}
+                    />
+                    <span style={{ fontSize: fz.xs, color: C.sub2, textAlign: 'center' }}>{lbl}</span>
+                  </div>
+                ))}
+              </div>
+              </>
+            )}
           </div>
         )}
 
         {key === 'user' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+          <div className={rise} style={{ display: 'flex', flexDirection: 'column', gap: gap.lg, animationDelay: '130ms' }}>
             {o.userFields.map((f) => (
-              <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span style={{ fontSize: 11.5, color: C.faint }}>{f.label}</span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <div key={f.label} style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
+                <span style={{ fontSize: fz.sm, color: C.sub2 }}>{f.label}</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
                   {f.opts.map((x) => (
-                    <button key={x.text} onClick={x.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: 12.5, color: x.fg }}>{x.text}</button>
+                    <button key={x.text} onClick={x.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: fz.md, color: x.fg }}>{x.text}</button>
                   ))}
                 </div>
               </div>
             ))}
-            <span style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(74,64,56,.45)' }}>전부 선택이에요. 나중에 설정에서 바꿀 수 있어요.</span>
+            <span style={{ fontSize: fz.sm, lineHeight: 1.7, color: C.sub2 }}>전부 선택이에요. 나중에 설정에서 바꿀 수 있어요.</span>
           </div>
         )}
 
         {key === 'char' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 17 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 11.5, color: C.faint }}>이름 · 12자까지</span>
-                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: C.accentSoft, color: C.accent, fontSize: 10 }}>필수</span>
+          <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', gap: gap.xl, animationDelay: '130ms' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
+                <span style={{ fontSize: fz.sm, color: C.sub2 }}>이름 · 12자까지</span>
+                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: C.accentSoft, color: C.accent, fontSize: fz.xs }}>필수</span>
               </span>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: gap.sm }}>
                 <input
                   value={s.petName} onChange={(e) => actions.onName(e.target.value)} maxLength={12} placeholder="여울"
-                  data-part="pet-name"
-                  style={{ flex: 1, minWidth: 0, padding: '13px 15px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: 15, color: C.ink, outline: 'none' }}
+                  data-part="pet-name" className="onb-name-input"
+                  style={{ flex: 1, minWidth: 0, padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: fz.lg, color: C.ink, outline: 'none' }}
                 />
-                <button onClick={actions.randomName} style={{ flex: 'none', padding: '0 17px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 13, color: C.sub2 }}>랜덤</button>
+                <button onClick={actions.randomName} style={{ flex: 'none', padding: '0 17px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.md, color: C.sub2 }}>랜덤</button>
               </div>
-              {o.nameError && <span style={{ fontSize: 11.5, color: C.accent }}>이름을 지어 주면 시작할 수 있어요.</span>}
+              {o.nameError && <span style={{ fontSize: fz.sm, color: C.accent }}>이름을 지어 주면 시작할 수 있어요.</span>}
               {/* 두고 간 초안을 이어붙였을 때. 그림을 다시 올리라고 하면 이미 구운 시트를 버리는
                   셈이라(계약 4절), 여기서 이름만 받아 이어 간다. */}
               {live.resumedDraft && (
-                <span style={{ fontSize: 11.5, lineHeight: 1.6, color: C.faint }}>
+                <span style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.sub2 }}>
                   올려 두신 그림이 있어요. 이름만 지어 주면 이어서 시작해요.
                 </span>
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '11px 13px', borderRadius: radius.md, background: C.slot }}>
+            <div className="onb-note" style={{ display: 'flex', alignItems: 'flex-start', gap: gap.sm, padding: pad.card, borderRadius: radius.md, background: C.slot }}>
               <span style={{ width: 5, height: 5, flex: 'none', marginTop: 7, borderRadius: '50%', background: C.frameWood }} />
-              <span style={{ fontSize: 12, lineHeight: 1.65, color: 'rgba(74,64,56,.62)' }}>아래는 전부 선택이에요. 지금 안 정해도 나중에 여울이 방에서 물어봐요.</span>
+              <span style={{ fontSize: fz.sm, lineHeight: 1.65, color: C.sub2 }}>아래는 전부 선택이에요. 지금 안 정해도 나중에 여울이 방에서 물어봐요.</span>
             </div>
 
+            {/* OB-10 — 이 래퍼는 기본 display:contents(투명)라 OFF 는 원본과 동일. 탭·PC(≥768)에서만 2열 그리드가 되어 세로를 반으로 접는다. */}
+            <div className="onb-cgrid">
             {v.charGroups.map((g) => (
-              <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13.5, color: C.ink }}>{g.title}</span>
-                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'rgba(74,64,56,.07)', color: C.faint, fontSize: 10 }}>선택</span>
+              <div key={g.key} className="onb-cgroup" style={{ display: 'flex', flexDirection: 'column', gap: gap.md, padding: pad.card, borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
+                  <span style={{ fontSize: fz.md, color: C.ink }}>{g.title}</span>
+                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.sub2, fontSize: fz.xs }}>선택</span>
                   {/* 칩만 보면 하나만 고르는 줄 안다 — 여러 개가 된다는 것은 글로 말해 준다. */}
-                  <span data-part="chip-note" style={{ fontSize: 10.5, color: C.faint }}>{g.note}</span>
+                  <span data-part="chip-note" style={{ fontSize: fz.xs, color: C.sub2 }}>{g.note}</span>
                 </span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: gap.md }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
                     {g.opts.map((x) => (
-                      <button key={x.text} onClick={x.pick} style={{ padding: '9px 14px', borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: 12.5, color: x.fg }}>{x.text}</button>
+                      <button key={x.text} onClick={x.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: fz.md, color: x.fg }}>{x.text}</button>
                     ))}
                   </div>
                   <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={60} placeholder={g.ph}
-                    style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: 13, color: C.ink, outline: 'none' }} />
+                    style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
                 </div>
               </div>
             ))}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '12px 13px', borderRadius: radius.md, border: `1px solid ${C.lineSoft}`, background: C.paper }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13.5, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
-                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: 'rgba(74,64,56,.07)', color: C.faint, fontSize: 10 }}>선택</span>
+            <div className="onb-cgroup" style={{ display: 'flex', flexDirection: 'column', gap: gap.md, padding: pad.card, borderRadius: radius.md, border: `1px solid ${C.lineSoft}`, background: C.paper }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
+                <span style={{ fontSize: fz.md, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
+                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>선택</span>
               </span>
               <input value={o.extraVal} onChange={(e) => o.onExtra(e.target.value)} maxLength={60}
                 placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요"
-                style={{ padding: '12px 15px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: 13, color: C.ink, outline: 'none' }} />
+                style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
+            </div>
             </div>
           </div>
         )}
 
         {key === 'born' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 15, padding: '10px 0 0' }}>
-            <div style={{ width: 209, height: 209, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'yPop .5s ease' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={spriteUrl(live, 'base')} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-              <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 26, color: C.ink }}>{o.bornName}</span>
-              <span style={{ fontSize: 12.5, color: 'rgba(74,64,56,.55)' }}>{o.bornTraits}</span>
+          <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.lg, padding: '10px 0 0', animationDelay: '130ms' }}>
+            {/* OB-05 — 부화 스프라이트를 종이 액자로 감싼다(src·크기 209·yPop 보존). */}
+            {(() => {
+              const spriteBox = (
+                <div style={{ width: 209, height: 209, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'yPop .5s ease' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={spriteUrl(live, 'base')} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                </div>
+              );
+              return fFrame ? (
+                <div style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: radius.xl, padding: '12px 12px 9px', boxShadow: shadow.frame }}>
+                  <div style={{ background: C.slot, borderRadius: radius.lg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{spriteBox}</div>
+                </div>
+              ) : spriteBox;
+            })()}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.xs }}>
+              <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, color: C.ink }}>{o.bornName}</span>
+              <span style={{ fontSize: fz.md, color: C.sub2 }}>{o.bornTraits}</span>
             </div>
           </div>
         )}
       </div>
 
-      <div style={{ flex: 'none', padding: '10px 24px 30px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <div style={{ flex: 'none', padding: '10px 24px 30px', display: 'flex', flexDirection: 'column', gap: gap.md }}>
         {/* ★ 막힘 안내는 **버튼 바로 위**다(알 화면과 같은 규칙). 스크롤 칸 안에 두면 누른 자리와
             답이 멀어지고, 긴 캐릭터 칸에서는 답이 화면 밖에 남는다. 여기는 안 스크롤된다.
             ★ 두 칸(올리기·캐릭터) 어디서 막히든 같은 자리에 같은 모양으로 뜬다 — 사용자가 규칙을
@@ -247,6 +535,9 @@ export default function Onboarding({ y }: { y: Yeoul }) {
         {live.blocked && <BlockedNotice b={live.blocked} />}
         <button
           onClick={() => {
+            // ★ 고른 그림이 손에 있고 로그인 전이면, 이 버튼은 **가입 창을 여는 자리**다(2026-09-19).
+            //   여기서 앞으로 보내면 재료(그림)가 서버에 없는 채로 캐릭터 칸에 서게 된다.
+            if (needAuth) { askAuth(); return; }
             // 그림을 올렸으면 이 순간이 **격자 생성 시작**이다(계약 4절의 두 번째 걸음).
             // 첫 걸음(초안 잡기)은 이미 그림을 올린 순간에 끝났다 — 그래서 여기까지 오는 동안
             // 서버가 캐릭터 시트를 미리 구워 두었다.
@@ -273,12 +564,18 @@ export default function Onboarding({ y }: { y: Yeoul }) {
           }}
           data-action="onb-next"
           disabled={blocked}
+          // OB-04 — 알약형·GAEGU·hover(.onb-cta-v2)·잉크 틴트 그림자. active scale 은 전역 .yeoul button:active.
+          //   OB-03 등장(순서 190ms)도 여기서. onClick·disabled·라벨(ctaLabel)·data-action 은 전부 그대로.
+          className={[fCta ? 'onb-cta-v2' : '', rise ?? ''].filter(Boolean).join(' ') || undefined}
           style={{
-            padding: 16, borderRadius: radius.md, border: 'none', fontSize: 15.5,
+            padding: 16, borderRadius: fCta ? radius.pill : radius.md, border: 'none',
+            fontSize: fCta ? fz.xl : fz.lg,
+            ...(fCta ? { fontFamily: GAEGU, fontWeight: 700 } : null),
             background: blocked ? C.off : C.accent,
-            color: blocked ? '#8B8175' : C.accentInk,
+            color: blocked ? C.sub2 : C.accentInk,
             cursor: blocked ? 'default' : 'pointer',
-            boxShadow: blocked ? 'none' : '0 4px 12px rgba(192,104,92,.22)',
+            boxShadow: blocked ? 'none' : fCta ? `0 6px 16px ${acc(.24)}` : '0 4px 12px rgba(192,104,92,.22)',
+            animationDelay: '190ms',
           }}
         >{ctaLabel}</button>
       </div>
@@ -299,14 +596,14 @@ function BlockedNotice({ b }: { b: HatchBlocked }) {
     <div
       data-part="hatch-blocked" data-reason={b.reason}
       style={{
-        display: 'flex', flexDirection: 'column', gap: 5,
-        padding: '13px 15px', borderRadius: radius.md,
+        display: 'flex', flexDirection: 'column', gap: gap.xs,
+        padding: pad.field, borderRadius: radius.md,
         border: `1px solid ${C.line}`, background: C.slot,
         animation: 'yPop .24s ease',
       }}
     >
-      <span data-part="hatch-blocked-title" style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 18, lineHeight: 1.3, color: C.ink }}>{b.title}</span>
-      <span data-part="hatch-blocked-body" style={{ fontSize: 12.5, lineHeight: 1.7, color: C.sub2 }}>{b.body}</span>
+      <span data-part="hatch-blocked-title" style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.xl, lineHeight: 1.3, color: C.ink }}>{b.title}</span>
+      <span data-part="hatch-blocked-body" style={{ fontSize: fz.md, lineHeight: 1.7, color: C.sub2 }}>{b.body}</span>
     </div>
   );
 }

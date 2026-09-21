@@ -25,7 +25,9 @@ import type {
   CharacterInput, Drafted, HatchProgress,
   TutorialStepKey, CareAction,
 } from '../pet';
-import type { GameKind, GameState, GuessResult, RunResult, Side } from '../game';
+import type { AbandonResult, GameKind, GameState, GuessResult, RunResult, Side } from '../game';
+// ★ 목 파일이 **진짜 HTTP 함수**를 하나 들고 있는 유일한 자리다(→ ZzalMockHandle.abandonOverHttp).
+import { abandonGame as abandonGameOverHttp } from '../game';
 import {
   CARE_MISS_ZERO_MS, CHAT_MEMORY, CHAT_SLOTS, CHAT_MAX_CHARS, DROP_MS, FEATURE_UNLOCK,
   FOOD_CHARGE_MS, GAMES_PER_DAY, INTIMACY, INTIMACY_TIERS, LEFT_RIGHT, MAX_FOOD, MAX_GAUGE, MAX_TRASH, NAME_MAX_CHARS,
@@ -141,8 +143,6 @@ interface Row {
    * 블록이라, 내부용 숫자를 섞으면 계약에 없는 필드가 새어 나간다.
    */
   pieceDay: { feeds: number; snacks: number; gameWins: number; cleans: number; chats: number };
-  /** 네 칸을 며칠 연속 채웠나(0~2). 잠들 때 판정한다(해석 48). */
-  pieceStreak: number;
   bonusPiece: boolean;
   goodDay: boolean;
   /** 다음 기상에 기분 좋은 날로 켤 것인가(잠들 때 판정 → 다음 날 기상, 해석 52). */
@@ -614,6 +614,38 @@ export class MockPetServer implements PetSource {
     };
   }
 
+  /**
+   * 기권 — 치던 판을 그 자리에서 접는다. **진짜 서버(`GameService.abandon`)와 같은 규칙**이라야
+   * 연습방의 ✕ 가 진짜 방과 같은 말을 한다.
+   *
+   * ★★ **여기서 안 하는 것들이 이 함수의 본체다.**
+   *   `today.games`(하루 3판)·`counters.leftRightWins`·`pieceDay.gameWins`·`happiness` 를
+   *   **하나도 안 건드린다.** 하루 판수는 시작할 때 이미 깎였고, 접은 판은 승리가 아니다.
+   * ★ 3번 맞힌 뒤 접어도 `win` 은 false 다 — 끝까지 치지 않은 판이라서다.
+   * ★ **아픔을 안 본다**(`ZZAL_SICK_REFUSES` 없음). 아픔은 '노는 것'을 막는 조건이라,
+   *   아픈 동안 판이 열린 채 갇히면 나갈 길이 사라진다. 서버가 일부러 뺀 검사다.
+   * ⚠️ 서버에는 여행 중 거절(`ZZAL_TRAVELING`)도 있는데 **목에는 여행이라는 상태가 없다** —
+   *   흉내 낼 것이 없어 그 갈래만 빠진다.
+   */
+  async abandonGame(petId: number, gameId: number): Promise<AbandonResult> {
+    await this.wait();
+    const r = this.alive(petId);
+    this.settle(r, this.now());
+    // 순서도 서버와 같다 — 잠(awake) → 판 찾기(404) → 이미 끝난 판(409).
+    if (r.sleeping) throw err(409, 'ZZAL_PET_SLEEPING', '자고 있어요');
+    const g = r.game;
+    if (!g || g.gameId !== gameId) throw err(404, 'ZZAL_GAME_NOT_FOUND', '진행 중인 놀이가 없어요');
+    if (g.finished) throw err(409, 'ZZAL_GAME_FINISHED', '이미 끝난 놀이예요');
+    g.finished = true;
+    g.win = false;
+    return {
+      gameId, kind: g.kind, round: g.round, pick: null, hit: false, hits: g.hits,
+      finished: true, win: false, rounds: LEFT_RIGHT.rounds, winAt: LEFT_RIGHT.winAt,
+      remainingToday: Math.max(0, GAMES_PER_DAY - r.today.games),
+      justUnlocked: [], runUnlocked: this.featuresOf(r).run,
+    };
+  }
+
   async getCurrentGame(petId: number): Promise<GameState> {
     await this.wait();
     const r = this.alive(petId);
@@ -778,10 +810,6 @@ export class MockPetServer implements PetSource {
       // ★ 반드시 리셋 **앞**에서 계획한다 — 밤 굽기 조건이 "그날 케어 미스 0" 이라,
       //   today 를 지운 뒤에 물으면 언제나 0 이 나와 **아무 날이나 굽게** 된다.
       this.planNight(r);
-      // ★ 조각은 **잠들 때만** 판정한다(해석 48). 3층 전에는 아예 안 센다 — 연속도 안 쌓인다.
-      if (r.piecesEnabled) {
-        r.pieceStreak = this.pieceCount(r) >= 4 ? Math.min(2, r.pieceStreak + 1) : 0;
-      }
       // 기분 좋은 날은 **잠들 때 판정해 다음 기상에** 켠다(해석 52). 잠들면 꺼진다.
       r.goodDayNext = r.piecesEnabled && r.today.careMiss === 0
         && r.fullness >= 2 && r.happiness >= 2 && (MAX_TRASH - r.trash) >= 2;
@@ -890,7 +918,7 @@ export class MockPetServer implements PetSource {
       if (firstEmpty) filled[firstEmpty] = true;
     }
     const count = keys.filter((k) => filled[k]).length;
-    return { ...filled, count, streak: r.pieceStreak, bonus: r.bonusPiece };
+    return { ...filled, count, bonus: r.bonusPiece };
   }
 
   private pieceCount(r: Row): number {
@@ -1207,7 +1235,7 @@ export class MockPetServer implements PetSource {
       acc: { fullness: 0, happiness: 0, trash: 0 }, zeroAcc: { fullness: 0, happiness: 0, trash: 0 },
       zeroArmed: { fullness: false, happiness: false, trash: false },
       food: MAX_FOOD, foodAcc: 0, sick: null, dirtyAcc: 0,
-      piecesEnabled: false, layer2DoneAt: null, pieceStreak: 0, bonusPiece: false, goodDay: false, goodDayNext: false,
+      piecesEnabled: false, layer2DoneAt: null, bonusPiece: false, goodDay: false, goodDayNext: false,
       pieceDay: { feeds: 0, snacks: 0, gameWins: 0, cleans: 0, chats: 0 },
       intimacy: 0, today: { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 },
       counters: {
@@ -1373,6 +1401,17 @@ export interface ZzalMockHandle {
   now: () => string;
   state: () => unknown;
   reset: (preset?: MockPreset) => void;
+  /**
+   * 목이 아니라 **진짜 HTTP 배관**(`lib/game.ts` 의 `abandonGame`)을 그대로 부른다.
+   *
+   * ★ 왜 여기 있나 — 기권은 **화면 손잡이(✕)가 아직 없고** 실서버·DB 없이 성공/거절 네 갈래를
+   *   눌러 볼 길도 없다. 그래서 e2e 가 `page.route` 로 응답을 주입한 뒤 이 손잡이로 배관만
+   *   때려 본다("배관이 제대로 던지는가"). 화면 문구는 화면 쪽 스펙의 몫이다.
+   * ★ **`?mock=` 일 때만 설치된다**(`installMockHandle`). 목 모듈 자체가 동적 import 라
+   *   실서비스 번들에 안 섞인다.
+   * @returns 성공하면 서버 응답, 실패하면 `{ error: { status, code } }`.
+   */
+  abandonOverHttp: (petId: number, gameId: number) => Promise<unknown>;
 }
 
 declare global {
@@ -1394,5 +1433,13 @@ export function installMockHandle(server: MockPetServer): void {
     now: () => new Date(server.now()).toISOString(),
     state: () => server.state(),
     reset: (preset) => server.reset(preset),
+    abandonOverHttp: async (petId, gameId) => {
+      try {
+        return { ok: true, data: await abandonGameOverHttp(petId, gameId) };
+      } catch (e) {
+        const err = e as { status?: number; code?: string | null; message?: string };
+        return { ok: false, error: { status: err.status ?? null, code: err.code ?? null, message: err.message ?? null } };
+      }
+    },
   };
 }
