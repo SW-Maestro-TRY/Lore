@@ -110,7 +110,9 @@ export const CHAR_GROUPS = [
 export const GOOD_EX: ReadonlyArray<readonly [string, string, string]> = [
   ['얼굴이 크게 나온 정면', '#E8F0E2', 'zzal/onboarding/v2/good_front.webp'],
   ['전신이 다 보이는 그림', '#E8F0E2', 'zzal/onboarding/v2/good_lines.webp'],
-  ['한 마리만 · 배경 없이', '#E8F0E2', 'zzal/onboarding/v2/good_solo.webp'],
+  // ★ '한 마리만' 을 뺐다(2026-09-21 판정 7) — 나쁜 예의 「여러 명」이 이미 같은 말을 하고 있어
+  //   좋은 예까지 반복하면 "혼자여야 한다" 가 두 번 잔소리가 된다. 나쁜 예 쪽은 그대로 둔다.
+  ['배경 없이', '#E8F0E2', 'zzal/onboarding/v2/good_solo.webp'],
 ];
 export const BAD_EX: ReadonlyArray<readonly [string, string, string]> = [
   ['여러 명', '#F6E7E4', 'zzal/onboarding/v2/bad_multi.webp'],
@@ -240,11 +242,14 @@ export const TUTOR_MAIN: readonly TutorStep[] = [
   { at: '0분', room: null, act: null, done: 'any', text: '오늘부터 함께예요. 천천히 둘러봐도 돼요.' },
   { at: '3분', room: null, act: 'pet', done: 'pet', text: '손을 대 보세요. 쓰다듬기는 하루 세 번까지 세어 줘요.' },
   { at: '8분', room: 'table', act: 'a', done: 'feed', text: '배가 고파요. 주방에서 밥을 주세요 · 재고는 시간이 지나면 채워져요.' },
-  { at: '15분', room: 'bath', act: 'a', done: 'clean', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요.' },
-  { at: '20분', room: 'play', act: 'a', done: 'game', text: '놀고 싶어요. 좌우 맞히기는 하루 세 판이에요.' },
+  { at: '15분', room: 'bath', act: 'a', done: 'clean', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요. 한 번 쓸면 하나예요.' },
+  { at: '20분', room: 'play', act: 'a', done: 'game', text: '놀고 싶어요. 시작하면 오늘 세 판 중 하나예요. 중간에 나가면 그 판은 져요.' },
   { at: '25분', room: 'chat', act: null, done: 'chat', text: '하루에 세 번 불러요. 말풍선을 누르면 답할 수 있어요.' },
   { at: '40분', room: 'bed', act: 'a', done: 'sleep', text: '저녁 7시가 되면 침실에서 재워 주세요. 자는 동안 다 회복돼요.' },
-  { at: '60분', room: 'album', act: 'a', done: 'album', text: '함께한 순간은 앨범 벽에 쌓여요. 열어 보세요.' },
+  // ★ 마지막 칸이 **남은 규칙 셋**을 받는다(2026-09-21 판정 — 8칸짜리 목에도 넣는다).
+  //   간식·목욕·약은 튜토리얼에서 한 번도 안 눌리는데 셋 다 거절이 붙어, 안 말해 주면
+  //   **처음 만나는 순간이 곧 첫 실패**가 된다(간식은 거절도 아니고 아이가 아파진다).
+  { at: '60분', room: 'album', act: 'a', done: 'album', text: '함께한 순간은 앨범 벽에 쌓여요. 열어 보세요. 간식은 하루 네 개까지예요 — 다섯 개째는 배탈이 나요. 목욕은 하루 한 번, 약은 아플 때만 줄 수 있어요.' },
 ];
 
 /** 앨범 18칸. `이름 · 조건` 형식이고 두 번째 값이 1 이면 이미 열린 칸이다. */
@@ -406,11 +411,11 @@ export const TUTOR_SERVER: readonly TutorStep[] = [
   { at: '2칸', room: null, act: 'pet', done: 'PET', text: '쓰다듬어 주세요. 아이를 톡 누르면 돼요.' },
   { at: '3칸', room: 'chat', act: null, done: 'CHAT', text: '뭐라고 말을 거네요. 오른쪽 아래 말풍선을 눌러 답해 주세요.' },
   { at: '4칸', room: 'info', act: null, done: 'PERSONALITY', text: '어떤 아이인가요. 아이 정보에서 성격을 골라 주세요.' },
-  { at: '5칸', room: 'bath', act: 'a', done: 'CLEAN', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요.' },
-  { at: '6칸', room: 'play', act: 'a', done: 'GAME', text: '같이 놀아 볼까요. 마당에서 좌우 맞히기를 한 판 시작해 주세요.' },
+  { at: '5칸', room: 'bath', act: 'a', done: 'CLEAN', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요. 한 번 쓸면 하나예요.' },
+  { at: '6칸', room: 'play', act: 'a', done: 'GAME', text: '같이 놀아 볼까요. 마당에서 좌우 맞히기를 한 판 시작해 주세요. 시작하면 오늘 세 판 중 하나예요. 중간에 나가면 그 판은 져요.' },
   { at: '7칸', room: 'album', act: 'a', done: 'SHARE', text: '이 모습 가져가실래요. 앨범 벽에서 액자를 열어 공유해 보세요.' },
   { at: '8칸', room: 'bed', act: 'a', done: 'NAP', text: '졸린가 봐요. 침실에서 재우고, 다시 깨워 주세요.' },
-  { at: '9칸', room: null, act: null, done: 'DONE', text: '이제 혼자서도 괜찮아요. 여기부터는 시간이 흐르기 시작해요.' },
+  { at: '9칸', room: null, act: null, done: 'DONE', text: '이제 혼자서도 괜찮아요. 여기부터는 시간이 흐르기 시작해요. 저녁 7시가 되면 재워 주세요. 간식은 하루 네 개까지예요 — 다섯 개째는 배탈이 나요. 목욕은 하루 한 번, 약은 아플 때만 줄 수 있어요.' },
 ];
 
 export const LEARN_GOALS = [
@@ -557,9 +562,12 @@ export const WISH_COPY = {
  */
 export const UNLOCK_COPY = {
   now: {
+    // ★ 즉시 해금 판 문안 = **3안**(상훈님 2026-09-21 판정 1). "배웠어요" 가 아니라
+    //   "할 수 있게 됐어요" 로 둔 것은, 이 판이 **지금 바로 눌러 볼 수 있는 동작**을 알리는 자리라서다.
+    //   "자고 일어나면 보여드릴게요" 의 결은 아침 판(`slept`)의 몫이다 — 여기 쓰면 거짓이 된다.
     title: '새로 할 수 있게 됐어요',
     /** @param names 이번에 열린 것들. 한 개면 그대로, 여러 개면 가운뎃점으로 잇는다. */
-    body: (names: string) => `${names} — 방금 열렸어요.`,
+    body: (names: string) => `${names} — 방금 열렸어요. 바로 보여드릴게요!`,
     previewBadge: '새 동작',
     previewCaption: (name: string) => `${name}, 이렇게 움직여요`,
     close: '방으로 돌아가기',
@@ -571,8 +579,17 @@ export const UNLOCK_COPY = {
     previewCaption: (name: string) => `${name}, 이렇게 움직여요`,
     close: '앨범에서 보기',
   },
-  /** 그림이 아직 안 온 판에서 본문 뒤에 한 줄 더. **자리표를 그리는 대신 말로 한다.** */
-  noPreviewNote: '그림은 아직 그리는 중이에요.',
+  /**
+   * @deprecated 2026-09-21 판정 — **더 쓰지 않는다. 빈 문자열이다.**
+   *
+   * ★ 왜 없앴나 — 이 줄은 아침 판(`slept`)에서 "그림은 아직 그리는 중이에요" 를 붙이던 자리인데,
+   *   **아침 목록에는 그림이 반드시 있다.** 서버는 `OPEN`(사람이 검수를 통과시킨 것) 이면서
+   *   도착 시각이 찍힌 것만 담고, 그림 키도 도착한 뒤에만 준다
+   *   (`PetResponses.java` · `ZzalMotion.java` · `AdminService.java`). 설 자리가 없는 문장이다.
+   * ⚠️ **키를 지우지 않고 빈 문자열로 둔 것은** 화면(`useYeoul.unlockFire`)이 아직 이 키를 읽고
+   *   있어서다. 화면에서 붙이는 곳이 사라지면 **이 줄도 같이 지운다.**
+   */
+  noPreviewNote: '',
 } as const;
 
 /**
