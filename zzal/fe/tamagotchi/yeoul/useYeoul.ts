@@ -874,6 +874,17 @@ export function useYeoul(live?: Live) {
    * ★ 지킬 수 없는 약속(날짜·시각·"매일 하나씩")도 안 쓴다 — 굽기는 실패할 수 있고,
    *   그때 화면은 "아직 연습 중이에요" 다.
    */
+  /**
+   * 판에 적을 아이 이름. **서버가 아는 이름이 먼저다.**
+   *
+   * ★★ 2026-09-22 dev 실측 — 축하 판이 **"아이도 구르기를…"** 로 떴다. 머리줄에는 "초코" 가
+   *   제대로 있는데 판만 그랬다. 까닭은 경주다: 이 판을 여는 효과(아래 `clockStartedAt` 효과)가
+   *   **서버 이름을 목 칸에 옮겨 적는 효과(`skins/Yeoul.tsx`)보다 한 틱 먼저** 돌고, 판은 한 번
+   *   만들어지면 그 문자열을 그대로 쥐고 있어서다. 그래서 목 칸(`v.petName`)을 보면 안 되고
+   *   **그 순간 이미 손에 있는 서버 값**을 본다. 한 화면에 이름이 둘로 갈리는 일이 없어진다.
+   */
+  const petNameFor = (v: YeoulState) => (onServer ? sv?.name : '') || v.petName || '아이';
+
   const finishTutor = (v: YeoulState): YeoulState => ({
     ...v, tutor: 0, tutorOn: false,
     ...(v.tutorDone ? {} : {
@@ -882,7 +893,7 @@ export function useYeoul(live?: Live) {
       wishDraft: '', wishError: '', wishSending: false, wishDone: false,
       fire: {
         title: GRAD_COPY.title,
-        body: GRAD_COPY.body(v.petName || '아이'),
+        body: GRAD_COPY.body(petNameFor(v)),
         // ★ 그림이 게시되기 전에는 `GRAD_PREVIEW_SRC` 가 비어 있어 이 칸이 아예 안 생긴다.
         //   주소가 정해지면 상수 한 줄만 채우면 되고, 여기도 화면도 안 고친다.
         ...(GRAD_PREVIEW_SRC
