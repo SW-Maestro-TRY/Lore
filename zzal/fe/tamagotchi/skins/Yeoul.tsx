@@ -407,7 +407,12 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
         { label: '해금 판(즉시)', id: 'fire-unlock-now', on: false, pick: actions.showUnlock('now'),
           title: '2층 기본 행동이 그 자리에서 열린 판 (motions[].basicImageKey)' },
         { label: '해금 판(아침)', id: 'fire-unlock-slept', on: false, pick: actions.showUnlock('slept'),
-          title: '자는 동안 배워 아침에 도착한 판 (learnedToday[].imageKey · 그림이 아직 없을 수 있음)' },
+          title: '자는 동안 배워 아침에 도착한 판 (learnedToday[].imageKey)' },
+        // ★ 엽서는 **앨범 벽에서 내렸다**(2026-09-21 상훈님 — 실물이 붙기 전까지). 그래도 문구가
+        //   어떻게 보이는지는 눈으로 봐야 하므로 여기 하나만 남긴다. 「다음 날」이 몰래 띄우던
+        //   길은 없앴다 — 날짜를 넘기려고 누른 사람에게 판이 튀어나오던 자리였다.
+        { label: '엽서 판', id: 'fire-postcard', on: false, pick: actions.popPostcard,
+          title: '아침 엽서 판 (앨범 벽에서는 내려간 판)' },
         { label: '가입 모달', on: s.authOpen, pick: actions.openAuth('signup') },
         { label: '로드맵 완료', on: s.cChat >= 4 && s.cBath >= 3 && s.cSleep >= 3 && s.cGame >= 3, pick: actions.finishRoadmap },
         { label: '다음 날', on: false, pick: actions.nextDay },

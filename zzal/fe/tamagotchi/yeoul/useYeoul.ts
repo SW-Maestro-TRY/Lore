@@ -142,11 +142,14 @@ export interface FrameData { name: string; open: boolean; cond: string; key: str
 export interface FireAction { label: string; action: string; tap: () => void; primary: boolean }
 export interface Fire {
   title: string; body: string; hint?: string; tapAny?: boolean;
-  polaroid?: boolean; caption?: string; shot?: string; shotLabel?: string;
   /**
    * 예시 그림 한 칸(졸업 판의 구르기 미리보기).
    *
-   * ★ 폴라로이드(`polaroid`)와 **일부러 다른 모양**이다. 폴라로이드는 "내 아이와 남긴 것" 이고
+   * ★★ 옛 **폴라로이드 칸**(`polaroid`·`caption`·`shot`·`shotLabel`)은 **없앴다**(2026-09-21 A-09).
+   *   그 칸은 그림 대신 **빗금 친 색상자**를 그렸다 — 없는 장면을 있는 것처럼 보이게 하는 자리라,
+   *   "그림이 없으면 칸을 접는다" 는 규칙과 정면으로 어긋났다. 진짜 그림이 생기는 날에는
+   *   이 `preview` 를 쓰면 된다 — 접는 규칙이 이미 들어 있다.
+   * ★ 예시 그림은 방 안 액자와 **일부러 다른 모양**(점선 틀)이다. 액자는 "내 아이와 남긴 것" 이고
    *   이쪽은 "남이 먼저 보여주는 예시" 라, 같은 틀로 그리면 사용자가 제 것으로 읽는다.
    * ★ 그림 주소가 없으면 이 칸 자체를 안 만든다 — 빈 액자가 뜨는 것보다 없는 편이 낫다.
    * ★ 주소가 **있는데도 안 열리는** 경우는 화면(`Panels.FirePreview`)이 칸을 접어서 막는다.
@@ -1494,34 +1497,25 @@ export function useYeoul(live?: Live) {
   }, [flash, careAct]);
   const addWish = useCallback(() => recordWish('postcard'), [recordWish]);
 
-  const tapAlbumCell = useCallback((open: number, name: string) => () => {
-    const parts = name.split(' · ');
-    if (!open) {
-      patch({ fire: {
-        title: parts[0],
-        body: `아직 잠긴 칸이에요. ${parts[1] || '조건 미정'} 조건을 채우면 열려요.`,
-        hint: '조건은 여정마다 달라요', tapAny: true,
-        actions: [{ label: '알겠어요', action: 'frame-locked-ok', tap: closeFire, primary: true }],
-      } });
-      return;
-    }
-    setS((v) => ({ ...v, fire: {
-      title: parts[0], body: `${petWith(v.petName, '과', '와')} 남긴 장면이에요.`,
-      polaroid: true, caption: `${parts[0]} — ${v.day}일째`,
-      shot: '#EBD3C7', shotLabel: '장면 이미지', hint: '',
-      actions: [
-        { label: '앨범에 저장', action: 'scene-save', tap: saveShot, primary: true },
-        { label: '닫기', action: 'scene-close', tap: closeFire, primary: false },
-      ],
-    } }));
-  }, [patch, closeFire, saveShot]);
+  // ★ 옛 `tapAlbumCell`(앨범 칸을 눌렀을 때의 판)은 **지웠다**(2026-09-21). 앨범이 시트에서
+  //   벽 한 장으로 합쳐질 때(A-14) 부르는 곳이 끊겼는데 함수만 남아 있었고, 그 안에 빗금
+  //   폴라로이드와 「앨범에 저장」이 들어 있어 **고칠 것 목록에 유령으로 올라왔다.**
+  //   지금 앨범 칸은 `pickFrame` 이 받아 액자를 크게 연다.
 
+  /**
+   * 아침 엽서 한 장.
+   *
+   * ★ **앨범 벽에서는 내렸다**(2026-09-21 상훈님 — 실물이 붙기 전까지). 지금 이 판을 여는 길은
+   *   이동 창의 「엽서 판」 하나뿐이다. 문구가 어떻게 보이는지는 눈으로 봐야 하므로 남긴다.
+   * ★ 빗금 색상자(가짜 폴라로이드)를 **안 그린다**(A-09) — 엽서 그림은 아직 없다. 대신 엽서에
+   *   적힌 **말 자체를 본문으로** 올린다. 그림이 생기면 `preview` 로 붙이면 된다.
+   * ★ "문구는 세 벌 중 하나로 바뀌어요" 는 **개발 메모**였다. 아이 방에 남길 말이 아니다.
+   */
   const popPostcard = useCallback(() => {
     setS((v) => {
-      const [caption, shot] = POSTCARDS[v.cardIdx % POSTCARDS.length];
+      const [caption] = POSTCARDS[v.cardIdx % POSTCARDS.length];
       return { ...v, cardIdx: v.cardIdx + 1, fire: {
-        title: '아침에 도착했어요', body: '문구는 세 벌 중 하나로 바뀌어요.',
-        polaroid: true, caption, shot, shotLabel: '아침 폴라로이드', hint: '',
+        title: '아침에 도착했어요', body: caption, hint: '',
         actions: [
           { label: '저장', action: 'postcard-save', tap: saveShot, primary: true },
           { label: '이런 동작도 보고 싶어요', action: 'postcard-wish', tap: addWish, primary: false },
@@ -1725,14 +1719,19 @@ export function useYeoul(live?: Live) {
     });
     patch({ screen: 'room', sheet: null, toast: '' });
   }, [devSet, patch]);
+  /**
+   * 개발용 — 하루를 넘긴다.
+   * ★ 예전에는 0.5초 뒤 **엽서 판**을 자동으로 띄웠다. 날짜를 넘기려고 누른 사람에게 판이
+   *   튀어나오는 자리였고, 엽서는 실물이 없어 내린 판이다(2026-09-21). 엽서를 보려면
+   *   이동 창의 「엽서 판」 을 누른다 — 칩 자체는 날짜를 넘기는 데 계속 쓴다.
+   */
   const nextDay = useCallback(() => {
     setS((v) => ({
       ...v, day: v.day + 1, full: Math.max(0, v.full - 2), trace: Math.min(4, v.trace + 2),
       plays: 3, pets: 0, bathUsed: false, calls: 3, resolved: {}, sleeping: false, night: false, sheet: null,
     }));
     flash('다음 날 아침이에요');
-    later('postcard', 500, popPostcard);
-  }, [flash, later, popPostcard]);
+  }, [flash]);
   const restart = useCallback(() => setS(() => ({ ...INITIAL })), []);
   /**
    * 로그아웃 — 화면을 **첫 화면(랜딩 칸)으로** 되돌린다.
@@ -2613,8 +2612,8 @@ export function useYeoul(live?: Live) {
          * 더 있다(2026-09-21). 그래서 화면이 넉 줄을 딱 맞춰 그리지 않고 **흐르게** 그린다
          * (`auto-fit`). 여기 한 줄을 더해도 화면은 안 고친다.
          */
+        // ★ 「엽서」는 **내렸다**(2026-09-21 상훈님) — 실물 엽서가 붙기 전까지. 이동 창에는 남아 있다.
         actions: ([
-          ['엽서', popPostcard],
           ['장면', popScenes],
           ['저장', saveShot],
           ['방 꾸미기', toggleDeco],
@@ -2772,7 +2771,7 @@ export function useYeoul(live?: Live) {
     s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess, quitGuess,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
-    pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,
+    pushReply, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,
     toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash,
     tutIdx, atDone, onFinishTutorial, onSavePersona, noop, live?.resting,
   ]);
@@ -2783,6 +2782,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess, quitGuess,
+    popPostcard,
     openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview, showUnlock,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
     backToSample: () => patch({ screen: 'room' }),
@@ -2792,6 +2792,7 @@ export function useYeoul(live?: Live) {
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
     setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess, quitGuess,
+    popPostcard,
     openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview, showUnlock,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
   ]);

@@ -358,12 +358,10 @@ function Fire({ y }: { y: Yeoul }) {
     <div data-part="fire" style={{ position: 'absolute', inset: 0, zIndex: 12, background: ink(.52), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yFadeIn .2s ease' }}>
       <div onClick={backdrop} style={{ position: 'absolute', inset: 0 }} />
       <div style={{ position: 'relative', width: '100%', padding: '24px 22px', borderRadius: radius.xl, background: C.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.lg, animation: 'yPop .3s ease', boxSizing: 'border-box' }}>
-        {f.polaroid && (
-          <div style={{ width: '100%', padding: '11px 11px 16px', background: '#FFFFFF', border: `1px solid ${C.lineSoft}`, boxShadow: shadow.raised, display: 'flex', flexDirection: 'column', gap: gap.md }}>
-            <div style={{ width: '100%', aspectRatio: '1/1', backgroundColor: f.shot, backgroundImage: `repeating-linear-gradient(135deg,${ink(.07)} 0 6px,transparent 6px 14px)`, display: 'flex', alignItems: 'center', justifyContent: 'center', font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{f.shotLabel}</div>
-            <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.35, color: C.ink, textAlign: 'center' }}>{f.caption}</span>
-          </div>
-        )}
+        {/* ★★ 옛 **폴라로이드 칸**은 지웠다(2026-09-21 A-09). 그림 대신 빗금 친 색상자와
+            "장면 이미지" 라는 글자를 그려, 없는 장면을 있는 것처럼 보이게 하던 자리다.
+            그림이 없으면 **칸을 접는다** 가 이 판의 규칙이고(→ `FirePreview`), 진짜 그림이
+            생기면 그 칸을 쓰면 된다. 자리표를 다시 만들지 말 것. */}
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.2, color: C.ink, textAlign: 'center' }}>{f.title}</span>
         {f.preview && <FirePreview p={f.preview} />}
         {/* ★ `pre-line` — 문구가 줄바꿈(\n)으로 두 마디를 갈라 둔 판이 있다(졸업 판). 없으면 한 덩어리로 붙는다. */}
