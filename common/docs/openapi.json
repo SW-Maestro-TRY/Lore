@@ -1,6 +1,84 @@
 {
   "components": {
     "schemas": {
+      "AbandonResult": {
+        "description": "기권 결과. 진행 중이던 매치는 패배로 확정되며 다시 진행할 수 없다",
+        "properties": {
+          "finished": {
+            "description": "항상 true — 기권한 매치는 그 자리에서 끝난다",
+            "type": "boolean"
+          },
+          "gameId": {
+            "example": 12,
+            "format": "int64",
+            "type": "integer"
+          },
+          "hit": {
+            "description": "항상 false — 기권은 회차를 진행한 것이 아니다",
+            "type": "boolean"
+          },
+          "hits": {
+            "description": "기권 시점까지 맞힌 횟수",
+            "example": 1,
+            "format": "int32",
+            "type": "integer"
+          },
+          "justUnlocked": {
+            "description": "항상 빈 목록 — 기권으로 해금되는 동작은 없다",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "description": "LEFT_RIGHT · RUN",
+            "example": "LEFT_RIGHT",
+            "type": "string"
+          },
+          "pick": {
+            "description": "기권에는 선택이 없으므로 항상 null. Guess 와 같은 모양을 유지하기 위한 자리",
+            "enum": [
+              "LEFT",
+              "RIGHT"
+            ],
+            "type": "string"
+          },
+          "remainingToday": {
+            "description": "오늘 남은 매치 수. 일일 매치는 시작 시점에 차감하므로 기권해도 돌려주지 않는다",
+            "example": 2,
+            "format": "int32",
+            "type": "integer"
+          },
+          "round": {
+            "description": "기권 시점까지 진행한 회차(0부터). 달리기는 항상 0",
+            "example": 2,
+            "format": "int32",
+            "type": "integer"
+          },
+          "rounds": {
+            "description": "한 매치의 총 회차",
+            "example": 5,
+            "format": "int32",
+            "type": "integer"
+          },
+          "runUnlocked": {
+            "description": "달리기 해금 여부",
+            "type": "boolean"
+          },
+          "win": {
+            "description": "항상 false — 기권은 패배로 확정된다. 접는 시점에 이미 정답 수가 승리 조건을 넘겼더라도 끝까지 진행하지 않은 매치이므로 승리가 아니다",
+            "type": "boolean"
+          },
+          "winAt": {
+            "description": "승리에 필요한 정답 수",
+            "example": 3,
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "AdvanceClock": {
         "description": "시간 당기기 요청 — 초·분 중 아무 쪽이나 준다(둘 다 주면 더한다)",
         "properties": {
@@ -140,6 +218,23 @@
           },
           "pet": {
             "$ref": "#/components/schemas/Detail"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseAbandonResult": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AbandonResult"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -5858,6 +5953,73 @@
           }
         ],
         "summary": "진행 중인 매치 조회",
+        "tags": [
+          "미니게임"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/games/{gameId}/abandon": {
+      "post": {
+        "description": "진행 중인 매치를 그 자리에서 접는다. 좌우 맞히기와 달리기 모두 이 주소로 접는다.\n\n접은 매치는 패배로 확정되어 다시 진행할 수 없고 current 에도 더는 잡히지 않는다.\n게임 중에 나가면 그 판은 끝이라는 규칙이며, 지고 있는 판을 버리고 다시 시작하는 것을 막는다.\n\n오늘 남은 매치 수는 시작 시점에 이미 차감했으므로 기권으로 돌려주지 않는다. 승리 보상·\n패배 판정(두 번째 선물)·놀이 조각은 어느 것도 발생하지 않는다.\n\n★ 아픈 펫도 기권할 수 있다(ZZAL_SICK_REFUSES 없음) — 아픔은 '노는 것'을 막는 조건이고\n기권은 그만두는 것이다. 여기서 막으면 병든 동안 열어 둔 매치를 닫을 길이 사라진다.",
+        "operationId": "abandon",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "gameId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseAbandonResult"
+                }
+              }
+            },
+            "description": "기권 처리됨"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseAbandonResult"
+                }
+              }
+            },
+            "description": "ZZAL_GAME_NOT_FOUND"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseAbandonResult"
+                }
+              }
+            },
+            "description": "ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "매치 기권",
         "tags": [
           "미니게임"
         ]

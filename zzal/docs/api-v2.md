@@ -126,12 +126,14 @@
 | `POST /{id}/games` | `{kind: LEFT_RIGHT\|RUN}` | 시작. 진행 중인 판이 있으면 그것을 돌려준다 | `ZZAL_GAME_DAILY_LIMIT` `ZZAL_SICK_REFUSES` `ZZAL_FEATURE_LOCKED`(RUN 잠김) `ZZAL_PET_SLEEPING` |
 | `POST /{id}/games/{gameId}/guess` | `{pick: LEFT\|RIGHT}` | 좌우 맞히기 한 판. 5판 3승. 답은 서버가 쥔다 | `ZZAL_GAME_NOT_FOUND` `ZZAL_GAME_FINISHED` |
 | `POST /{id}/games/{gameId}/finish` | `{survivedMs}` | 달리기 끝. 30,000ms 이상이면 승리. 서버는 상한(60,000)만 검증 | `ZZAL_GAME_NOT_FOUND` `ZZAL_GAME_FINISHED` |
+| `POST /{id}/games/{gameId}/abandon` | | 기권. 치던 판을 그 자리에서 접는다(패). 좌우·달리기 공통. 아픈 펫도 된다 | `ZZAL_GAME_NOT_FOUND` `ZZAL_GAME_FINISHED` `ZZAL_PET_SLEEPING` |
 | `GET /{id}/games/current` | | 치던 판 잇기 | |
 
 - 두 게임 합쳐 **하루 3판**, 시작한 판 기준, 잠들 때 리셋. `RUN`은 좌우 맞히기 **5승** 뒤.
 - 승리 = 행복 +1(설정 `app.zzal.reward.game-win: HAPPINESS`).
-- 응답 `GameState{playing, gameId, kind, round, hits, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(★ `finished`·`win`은 **없다** — 판이 끝났는지는 `guess` 응답이 말한다) · `Guess{gameId, round, pick, answer, hit, hits, finished, win, nextRound, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(`win`은 끝났을 때만·`nextRound`는 안 끝났을 때만) · `RunResult{gameId, survivedMs, win, remainingToday, justUnlocked[], runUnlocked}` — **행동 응답 = 상태**: 게임 경로 해금(13번 놀라기 = 3판 시작, 달리기 = 5승)이 그 응답에 실린다(`runUnlocked`는 동작이 아니라 기능이라 별도 불리언).
+- 응답 `GameState{playing, gameId, kind, round, hits, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(★ `finished`·`win`은 **없다** — 판이 끝났는지는 `guess` 응답이 말한다) · `Guess{gameId, round, pick, answer, hit, hits, finished, win, nextRound, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(`win`은 끝났을 때만·`nextRound`는 안 끝났을 때만) · `RunResult{gameId, survivedMs, win, remainingToday, justUnlocked[], runUnlocked}` · `AbandonResult{gameId, kind, round, pick, hit, hits, finished, win, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(`Guess`와 같은 모양 · `pick`은 늘 null · `finished`는 늘 true · `win`은 늘 false) — **행동 응답 = 상태**: 게임 경로 해금(13번 놀라기 = 3판 시작, 달리기 = 5승)이 그 응답에 실린다(`runUnlocked`는 동작이 아니라 기능이라 별도 불리언).
 - **「해석」27** 밤잠을 넘긴 미완료 판은 잇지 않는다 — 익일 첫 `start`가 어제 판(오늘 기상 전 시작)을 접고(패) 새 판을 연다.
+- **게임 중에 나가면 그 판은 끝이다** — `abandon`이 그 자리에서 패로 확정한다(`current`에도 안 잡힌다). 기회는 시작 시점에 이미 깎였으므로 **더 깎지도 돌려주지도 않는다**. 한 번도 안 치고 나가면 판이 없어 차감도 없다. 승리 보상·두 번째 선물·놀이 조각은 어느 것도 발생하지 않는다.
 - 달리기 서버 검증은 정본대로 상한(60,000ms)만. "시작 뒤 경과 시간 + 2초" 검사는 보류(결정기록).
 
 ### 1.8 떠남·설정(v2 판, 9/14)
@@ -537,7 +539,7 @@
 | 2 `pieces` · `goodDay` · `features.pieces` | **v2 동작** — 조각 4종·잠들 때 판정·이틀 연속 → 다음 심화 큐·기분 좋은 날 선지급 | PR-10 |
 | 2 `leaving` · `trip` · `settings.leaveEnabled` · 앨범 `postcards` | **v2 동작** — 예고(짐 가방)·여행·엽서·부르기·떠남 끄기 | PR-11 |
 | 1.5 채팅 | **v2 동작** — `GET /chat` · `POST /chat/{slot}/answer`(해석 22~24). `chatSummary.openSlot`은 null | PR-4 |
-| 1.7 미니게임 | **v2 동작** — `POST /games {kind}` · `guess` · `finish` · `current`. 합산 3판·잠들 때 리셋·RUN 5승 해금 | PR-4 |
+| 1.7 미니게임 | **v2 동작** — `POST /games {kind}` · `guess` · `finish` · `abandon` · `current`. 합산 3판·잠들 때 리셋·RUN 5승 해금 | PR-4 |
 | 1.6 앨범·동작 | **`GET /album` 동작** — 도감 18칸(잠긴 칸 hint/progress). 엽서·장면 빈 목록. v0 동안 잠금은 **플래그만**(해석 25). **`POST /motions/{seq}/seen` 동작**(도착한 것만), 공유 대상에 도착한 심화 행동 포함 | PR-5·7 |
 | 배포 절차 — 서버 비밀 | **JWT 서명 키를 바꾸면 확률 흐름도 바뀐다.** 뽑기 소금이 그 키에서 파생되기 때문(해석 42). 이미 적힌 기록(`sick.since` 등)은 그대로지만 **앞으로의 발병 시각·당첨 순번은 달라진다** — 키 회전은 사용자에게 안 보이는 변화이므로 그 자체로 문제는 아니나, "왜 갑자기 병 패턴이 바뀌었나" 를 나중에 못 짚지 않도록 회전 시각을 배포 기록에 남긴다 | PR-8 |
 | 배포 절차 | `ZZAL_PIPELINE_VERSION` 전환은 **`HATCHING` 0건일 때**(굽는 도중 버전이 바뀌면 복구가 다른 버전 산출물을 이어받을 수 있음). 복구 job은 원래 job의 버전을 잇고 단계 재사용도 같은 버전만 | PR-5 |

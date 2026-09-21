@@ -1475,6 +1475,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/games/{gameId}/abandon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 매치 기권
+         * @description 진행 중인 매치를 그 자리에서 접는다. 좌우 맞히기와 달리기 모두 이 주소로 접는다.
+         *
+         *     접은 매치는 패배로 확정되어 다시 진행할 수 없고 current 에도 더는 잡히지 않는다.
+         *     게임 중에 나가면 그 판은 끝이라는 규칙이며, 지고 있는 판을 버리고 다시 시작하는 것을 막는다.
+         *
+         *     오늘 남은 매치 수는 시작 시점에 이미 차감했으므로 기권으로 돌려주지 않는다. 승리 보상·
+         *     패배 판정(두 번째 선물)·놀이 조각은 어느 것도 발생하지 않는다.
+         *
+         *     ★ 아픈 펫도 기권할 수 있다(ZZAL_SICK_REFUSES 없음) — 아픔은 '노는 것'을 막는 조건이고
+         *     기권은 그만두는 것이다. 여기서 막으면 병든 동안 열어 둔 매치를 닫을 길이 사라진다.
+         */
+        post: operations["abandon"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/games/{gameId}/finish": {
         parameters: {
             query?: never;
@@ -1815,6 +1844,64 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description 기권 결과. 진행 중이던 매치는 패배로 확정되며 다시 진행할 수 없다 */
+        AbandonResult: {
+            /** @description 항상 true — 기권한 매치는 그 자리에서 끝난다 */
+            finished?: boolean;
+            /**
+             * Format: int64
+             * @example 12
+             */
+            gameId?: number;
+            /** @description 항상 false — 기권은 회차를 진행한 것이 아니다 */
+            hit?: boolean;
+            /**
+             * Format: int32
+             * @description 기권 시점까지 맞힌 횟수
+             * @example 1
+             */
+            hits?: number;
+            /** @description 항상 빈 목록 — 기권으로 해금되는 동작은 없다 */
+            justUnlocked?: number[];
+            /**
+             * @description LEFT_RIGHT · RUN
+             * @example LEFT_RIGHT
+             */
+            kind?: string;
+            /**
+             * @description 기권에는 선택이 없으므로 항상 null. Guess 와 같은 모양을 유지하기 위한 자리
+             * @enum {string}
+             */
+            pick?: "LEFT" | "RIGHT";
+            /**
+             * Format: int32
+             * @description 오늘 남은 매치 수. 일일 매치는 시작 시점에 차감하므로 기권해도 돌려주지 않는다
+             * @example 2
+             */
+            remainingToday?: number;
+            /**
+             * Format: int32
+             * @description 기권 시점까지 진행한 회차(0부터). 달리기는 항상 0
+             * @example 2
+             */
+            round?: number;
+            /**
+             * Format: int32
+             * @description 한 매치의 총 회차
+             * @example 5
+             */
+            rounds?: number;
+            /** @description 달리기 해금 여부 */
+            runUnlocked?: boolean;
+            /** @description 항상 false — 기권은 패배로 확정된다. 접는 시점에 이미 정답 수가 승리 조건을 넘겼더라도 끝까지 진행하지 않은 매치이므로 승리가 아니다 */
+            win?: boolean;
+            /**
+             * Format: int32
+             * @description 승리에 필요한 정답 수
+             * @example 3
+             */
+            winAt?: number;
+        };
         /** @description 시간 당기기 요청 — 초·분 중 아무 쪽이나 준다(둘 다 주면 더한다) */
         AdvanceClock: {
             /**
@@ -1877,6 +1964,12 @@ export interface components {
         Answered: {
             chatReply?: components["schemas"]["Reply"];
             pet?: components["schemas"]["Detail"];
+        };
+        ApiResponseAbandonResult: {
+            data?: components["schemas"]["AbandonResult"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
         };
         ApiResponseAlbum: {
             data?: components["schemas"]["Album"];
@@ -5150,6 +5243,47 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseState"];
+                };
+            };
+        };
+    };
+    abandon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+                gameId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 기권 처리됨 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAbandonResult"];
+                };
+            };
+            /** @description ZZAL_GAME_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAbandonResult"];
+                };
+            };
+            /** @description ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAbandonResult"];
                 };
             };
         };
