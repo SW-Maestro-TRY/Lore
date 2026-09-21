@@ -110,11 +110,14 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
       <div className="wt-ch-steps"><span className="on" /><span /><span /></div>
       <div className="wt-wrap wt-page">
         <div className="crumb"><b>{t("캐릭터")}</b><i>›</i><span>{t("캐릭터 카드")}</span><i>›</i><span>{t("웹툰")}</span></div>
+        {/* 제목은 두 칸 위에 걸친다 — 왼쪽 칸 안에 두면 오른쪽 첫 칸(이름)이
+            제목과 같은 줄에 서서 제목 옆에 딸린 것처럼 보였다. */}
+        <div className="wt-ch-photo-lead">
+          <h2 style={{ fontSize: 32 }}>{t("어떤 캐릭터를 만들어볼까요?")}</h2>
+          <span className="muted wt-ch-photo-sub">{t("내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요.")}</span>
+        </div>
         <div className="wt-ch-photo-body">
           <div className="wt-ch-photo-left">
-            <h2 style={{ fontSize: 32 }}>{t("어떤 캐릭터를 만들어볼까요?")}</h2>
-            <span className="muted wt-ch-photo-sub">{t("내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요.")}</span>
-
             {photo ? (
               <div className="wt-ch-drop has">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
