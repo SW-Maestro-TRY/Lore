@@ -444,6 +444,8 @@ export default function Room({ y }: { y: Yeoul }) {
         <Bubble
           show={v.bub.show} text={v.bub.text} play={v.st.play}
           headSpan={headSpan} faceSpan={Math.max(0, headSpan - headSideDrop)}
+          headSpanReserve={fit.headSpanTallestPerBoxH}
+          silLeftReserve={fit.silLeftUprightPerBoxW} silRightReserve={fit.silRightUprightPerBoxW}
           silLeft={silLeft} silRight={silRight} avoid={headSideTaken}
           headBottom={headTopFromBottom} faceBottom={faceFromBottom}
           stageRef={stageRef} probeRef={charProbeRef} onHeadroom={setBubbleHeadroom}
@@ -538,7 +540,7 @@ function samePlace(a: BubblePlace, b: BubblePlace): boolean {
 }
 
 function Bubble({
-  show, text, play, headSpan, faceSpan, silLeft, silRight, avoid,
+  show, text, play, headSpan, faceSpan, headSpanReserve, silLeft, silRight, silLeftReserve, silRightReserve, avoid,
   headBottom, faceBottom, stageRef, probeRef, onHeadroom,
 }: {
   show: boolean; text: string; play: string;
@@ -546,6 +548,16 @@ function Bubble({
   avoid: 'left' | 'right' | null;
   /** 발끝선 ↔ 정수리 · 발끝선 ↔ 얼굴선 (상자 세로 대비). 무대 px 로 옮기는 건 여기서 한다. */
   headSpan: number; faceSpan: number;
+  /**
+   * **자리를 얼마나 예약할지 정할 때 쓰는 머리 높이** — 자세를 안 본다(가장 높은 머리끝).
+   * 지금 자세로 정하면 누웠을 때 예약이 0 이 되어 아이가 갑자기 커진다(→ `layout.ts` 머리말).
+   */
+  headSpanReserve: number;
+  /**
+   * **자리를 정할 때 쓰는 실루엣 좌·우** — 자세를 안 본다(선 자세의 폭).
+   * 지금 자세로 재면 누웠을 때만 옆자리가 막혀 아이가 출렁인다(→ `layout.ts` 머리말).
+   */
+  silLeftReserve: number; silRightReserve: number;
   /** 실루엣 좌·우 가장자리(상자 가로 대비). 아이 옆에 자리가 얼마나 남았는지 잰다. */
   silLeft: number; silRight: number;
   headBottom: string; faceBottom: string;
@@ -554,6 +566,11 @@ function Bubble({
   onHeadroom: (px: number) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  /**
+   * **늘 붙어 있는 두 줄짜리 자**(보이지 않는다). 예약 높이는 이것으로만 잰다 —
+   * 말풍선이 없을 때도, 한 줄일 때도 같은 자리를 사 두려면 재는 자가 변하면 안 된다.
+   */
+  const reserveRef = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState<BubblePlace>({ at: 'above', w: BUBBLE_MAX_W, left: -BUBBLE_MAX_W / 2 });
 
   useLayoutEffect(() => {
@@ -565,23 +582,34 @@ function Bubble({
     const put = (next: BubblePlace) => setPlace((prev) => (samePlace(prev, next) ? prev : next));
     const measure = () => {
       const card = cardRef.current;
-      if (!card) { onHeadroom(0); return; }
+      const res = reserveRef.current;
+      if (!res) return;
       const st = stage.getBoundingClientRect();
       const pb = probe.getBoundingClientRect();
       if (!st.height || !pb.height) return;
       // 기준자(`char-probe`)는 **말풍선이 자리를 사기 전** 아이 상자다 — 줄어든 상자로 다시 재면
       // 두 값이 서로를 쫓아 출렁인다. 그래서 여기서 읽는 머리·발·폭은 전부 '양보 전' 값이다.
       const lift = st.bottom - pb.bottom;
-      const headTopY = st.height - (lift + pb.height * headSpan);
+      // ★★ 예약은 **가장 높은 머리끝**으로 잰다(자세 무관). 지금 자세로 재면 누웠을 때만
+      //   말풍선이 그냥 들어가 예약이 0 이 되고, 깨는 순간 아이가 108px 튄다(2026-09-22 dev 실측).
+      const headTopY = st.height - (lift + pb.height * Math.max(headSpan, headSpanReserve));
       const faceY = st.height - (lift + pb.height * faceSpan);
       const boxL = (st.width - pb.width) / 2;
       const silL = boxL + pb.width * silLeft;
       const silR = boxL + pb.width * silRight;
+      // ★ 옆자리가 되는지는 **선 자세**로 잰다 — 자세마다 갈리면 아이가 출렁인다.
+      const silLWide = boxL + pb.width * silLeftReserve;
+      const silRWide = boxL + pb.width * silRightReserve;
 
       // 1) 머리 위 — 뜀(HOP)까지 미리 갚아 둔다. 안 그러면 **뛰는 순간에만** 윗변이 잘린다.
       const aboveW = Math.min(BUBBLE_MAX_W, Math.round(st.width - 32));
-      card.style.width = `${aboveW}px`;
-      const aboveH = card.offsetHeight;
+      res.style.width = `${aboveW}px`;
+      if (card) card.style.width = `${aboveW}px`;
+      // ★★ 높이는 **늘 두 줄 기준**이다(2026-09-22 상훈님 판정 C). 지금 말풍선이 한 줄이라고
+      //   덜 예약하면, 두 줄짜리 말이 오는 순간 아이가 35px 내려앉는다(dev 실측 368 → 335).
+      //   두 줄로 잡아 두면 한 줄이든 없든 자리가 같아 **흔들림이 0** 이다. 대가는 아이가 그만큼
+      //   늘 작다는 것이고, 상훈님이 그 값을 알고 고르셨다.
+      const aboveH = Math.max(res.offsetHeight, card?.offsetHeight ?? 0);
       const need = aboveH + BUBBLE_GAP + BUBBLE_EDGE + HOP;
       if (need <= headTopY) {
         put({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
@@ -591,16 +619,18 @@ function Bubble({
 
       // 2) 머리 옆 — 여백이 큰 쪽. 걸어가도 안 잘리게 진폭(WANDER)을 미리 뺀다.
       //    ★ 다만 **소품이 이미 쓰는 쪽(`avoid`)은 건너뛴다** — 거기 두면 겹친다.
-      const gapL = silL - WANDER;
-      const gapR = st.width - silR - WANDER;
+      const gapL = silLWide - WANDER;
+      const gapR = st.width - silRWide - WANDER;
       const wide: 'left' | 'right' = gapR >= gapL ? 'right' : 'left';
       const other: 'left' | 'right' = wide === 'right' ? 'left' : 'right';
       const side: 'left' | 'right' = avoid === wide ? other : wide;
       const gap = side === 'left' ? gapL : gapR;
       const sideW = Math.min(BUBBLE_MAX_W, Math.floor(gap - 12));
       if (sideW >= BUBBLE_SIDE_MIN) {
-        card.style.width = `${sideW}px`;
-        const h = card.offsetHeight;
+        // 보이는 말풍선이 없으면 예약 카드로 잰다 — 자리는 같은 자로 재야 뜰 때 안 움직인다.
+        const meas = card ?? res;
+        meas.style.width = `${sideW}px`;
+        const h = meas.offsetHeight;
         // 옆자리도 같이 뛴다 — 위쪽은 HOP 만큼 더 물리고, 아래는 숨쉬기(yBob 4px)만 본다.
         const topMin = BUBBLE_EDGE + HOP;
         const top = Math.min(
@@ -619,7 +649,8 @@ function Bubble({
       }
 
       // 3) 위도 옆도 없다(좁고 짧은 폰) — 그때만 아이가 **딱 모자란 만큼** 자리를 내준다.
-      card.style.width = `${aboveW}px`;
+      res.style.width = `${aboveW}px`;
+      if (card) card.style.width = `${aboveW}px`;
       put({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
       onHeadroom(Math.ceil(need));
     };
@@ -633,8 +664,9 @@ function Bubble({
     //   두 줄(75.4px)이 되자 뛰는 순간 5.3~17px 잘렸다. 자리 계산은 늘 같은 입력에서 같은 답을
     //   내므로(폭을 재기 전에 스스로 정한다) 이 관찰이 되먹임 고리를 만들지 않는다 — `put` 참조.
     if (cardRef.current) ro.observe(cardRef.current);
+    if (reserveRef.current) ro.observe(reserveRef.current);
     return () => ro.disconnect();
-  }, [show, text, headSpan, faceSpan, silLeft, silRight, avoid, stageRef, probeRef, onHeadroom]);
+  }, [show, text, headSpan, faceSpan, headSpanReserve, silLeft, silRight, silLeftReserve, silRightReserve, avoid, stageRef, probeRef, onHeadroom]);
 
   const tailBase: React.CSSProperties = {
     position: 'absolute', width: 11, height: 11, background: C.paper,
@@ -653,34 +685,38 @@ function Bubble({
         position: 'absolute', left: 0, bottom: 0, width: 0, height: 0,
         animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: play,
       }}>
-        {/* ★★ 말이 없을 때도 **카드를 그대로 둔다**(2026-09-21 판정 8 — 상훈님 "끝 기준으로 통일").
-            왜 — 아이 크기는 말풍선이 머리 위에 들어가느냐로 정해진다. 튜토리얼 동안은 말풍선이
-            없어 아이가 크고, 끝나는 순간 말풍선이 떠서 **한 번에 100px 넘게 내려앉았다**
-            (390 에서 461.1 → 359.4px 실측). 이제 **한 줄짜리 자리를 늘 미리 사 두어서**
-            말이 있든 없든 아이가 안 움직인다. 값은 지금 「끝」과 같다.
-            ★ 안 보이는 동안에도 자리를 **재야** 하므로 `display:none` 이 아니라 `visibility` 다.
-            ★ 두 줄 말풍선은 여전히 한 번 더 내려간다 — 완전 통일(두 줄 기준 예약)은 아이가 더
-              작아져서 **일부러 안 했다**(상훈님 판정).
-            ★ `key` 로 갈라 두는 이유 — 말이 생길 때 `yPop` 이 다시 돌아야 한다(안 갈면 한 번
-              올라온 카드라 애니메이션이 안 뜬다). 카드가 새로 붙으면 아래 관찰자도 같이 다시 건다. */}
-        {(
+        {/* ★★ **두 줄짜리 자**(2026-09-22 판정 C·D). 늘 붙어 있고 절대 안 보인다.
+            왜 — 아이 크기는 "말풍선이 머리 위에 들어가느냐" 로 정해진다. 그 판단을 **지금 떠 있는
+            말풍선**으로 하면 말이 없을 때·한 줄일 때·두 줄일 때가 전부 달라져 아이가 출렁인다
+            (dev 실측 390: 없음 370.6 · 한 줄 368.0 · 두 줄 335.2 · 잠 478.2).
+            그래서 **늘 두 줄짜리 카드 하나만 자로 쓴다** — 자가 안 변하니 자리도 안 변한다.
+            ★ 안 보이는 동안에도 **재야** 하므로 `display:none` 이 아니라 `visibility:hidden` 이다.
+            ★ 대가 = 아이가 늘 두 줄만큼 작다. 상훈님이 그 값을 알고 고르셨다(판정 C 1안). */}
+        <div
+          ref={reserveRef} data-part="bubble-reserve" aria-hidden
+          style={{
+            position: 'absolute', boxSizing: 'border-box', left: place.left, width: place.w,
+            bottom: BUBBLE_GAP,
+            border: BUBBLE_LINE, borderRadius: radius.md, padding: pad.chip,
+            visibility: 'hidden', pointerEvents: 'none',
+          }}
+        >
+          {/* 빈 칸 **두 줄**. 재는 것은 글이 아니라 두 줄짜리 카드의 높이다. */}
+          <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.3, color: C.ink, whiteSpace: 'pre-line' }}>{'\u00A0\n\u00A0'}</span>
+        </div>
+        {show && (
           <div
-            key={show ? 'said' : 'reserve'}
-            ref={cardRef} data-part={show ? 'bubble' : 'bubble-reserve'} data-place={place.at}
-            aria-hidden={!show}
+            ref={cardRef} data-part="bubble" data-place={place.at}
             style={{
               position: 'absolute', boxSizing: 'border-box', left: place.left, width: place.w,
               ...(place.at === 'above' ? { bottom: BUBBLE_GAP } : { top: place.top }),
               background: C.paper, border: BUBBLE_LINE, borderRadius: radius.md,
               padding: pad.chip, boxShadow: shadow.card,
               textAlign: place.at === 'above' ? 'center' : 'left',
-              animation: show ? 'yPop .28s ease' : 'none',
-              visibility: show ? 'visible' : 'hidden',
-              pointerEvents: 'none',
+              animation: 'yPop .28s ease',
             }}
           >
-            {/* 빈 칸 한 줄(`\u00A0`) — 재는 것은 글이 아니라 **한 줄짜리 카드의 높이**다. */}
-            <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.3, color: C.ink }}>{show ? text : '\u00A0'}</span>
+            <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.3, color: C.ink }}>{text}</span>
             {/* 꼬리는 **언제나 아이를 가리킨다** — 위면 아래 한가운데, 옆이면 아이 쪽 옆면 얼굴 높이. */}
             {place.at === 'above' ? (
               <div style={{ ...tailBase, left: '50%', bottom: -6, transform: 'translateX(-50%) rotate(45deg)', borderRight: BUBBLE_LINE, borderBottom: BUBBLE_LINE }} />
