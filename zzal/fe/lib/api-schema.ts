@@ -1553,6 +1553,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/graduation-seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 졸업 축하 봤음
+         * @description 튜토리얼 졸업(첫날 완주) 축하 창을 봤음을 기록한다. 본문이 없고 **204** 로 답한다.
+         *
+         *     화면이 sessionStorage 로 기억하면 새 탭·재시작마다 같은 축하 창이 다시 뜬다.
+         *     한 번 본 연출은 다시 나오지 않아야 하고, 그 판정은 기기가 아니라 캐릭터에 붙는다.
+         *
+         *     **같은 요청을 몇 번 보내도 결과가 같다** — 이미 봤으면 시각을 바꾸지 않고 그대로 204 다.
+         *     기록된 시각은 상태 조회 응답의 `graduationSeenAt` 으로 내려간다.
+         *
+         *     수면 중·여행 중에도 호출할 수 있다. 아이를 돌보는 호출이 아니라 화면이 무엇을 이미
+         *     보여 줬는지 적는 호출이라 거절할 이유가 없고, 여기서 거절하면 이미 본 축하 창이
+         *     다음 접속에 다시 뜬다.
+         *
+         *     서버가 보는 튜토리얼 진행이 아직 완료 전이어도 받는다 — 기준은 서버의 진행도가 아니라
+         *     화면이 그 판을 닫은 시점이다.
+         */
+        post: operations["graduationSeen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/hatch": {
         parameters: {
             query?: never;
@@ -2391,6 +2424,13 @@ export interface components {
              *     조건을 만족하면 조각 1개를 선지급한다. 심화 단계 진입 전에는 항상 false
              */
             goodDay?: boolean;
+            /**
+             * Format: date-time
+             * @description 튜토리얼 졸업 축하 창을 본 시각. 아직 안 봤으면 null.
+             *     화면은 이 값이 null 일 때만 축하 창을 띄우고, 닫을 때 POST /{petId}/graduation-seen 을 부른다.
+             *     기기가 아니라 캐릭터에 붙는 값이라 새 탭·재시작에도 같은 창이 다시 뜨지 않는다
+             */
+            graduationSeenAt?: string;
             /** Format: date-time */
             hatchStartedAt?: string;
             /** Format: date-time */
@@ -5384,6 +5424,40 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ApiResponseGuessResult"];
                 };
+            };
+        };
+    };
+    graduationSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 기록됨(본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 로그인이 필요함 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

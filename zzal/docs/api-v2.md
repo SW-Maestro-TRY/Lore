@@ -37,9 +37,15 @@
 | `GET /` | | `PetDetail[]` | |
 | `GET /{id}` | | `PetDetail` | `ZZAL_PET_NOT_FOUND` |
 | `POST /{id}/release` | | `PetDetail`(phase DEAD) | `ZZAL_PET_RELEASE_NOT_ALLOWED` |
+| `POST /{id}/graduation-seen` | | **204, 본문 없음** | `ZZAL_PET_NOT_FOUND`(404) |
 
 - 조회 = settle(흐른 시간 반영) + **그날 처음 열었으면 함께한 날 +1** + 떠남 예고 중이면 즉시 취소. 조회도 상태를 바꾸므로 읽기 전용 트랜잭션이 아니다.
 - 이름 12자(정본 15장). v1의 20자에서 줄었다.
+- **졸업 축하 봤음**(2026-09-22) — 튜토리얼 졸업(첫날 완주) 축하 창을 봤다는 사실을 서버가 든다. 화면이 `sessionStorage`로 기억하면 **새 탭·재시작마다 같은 창이 다시 뜬다**. 적힌 시각은 `PetDetail.graduationSeenAt`으로 내려가고, 화면은 그 값이 `null`일 때만 축하 창을 띄운 뒤 닫을 때 이 주소를 부른다.
+  - **몇 번을 불러도 같은 답이다** — 이미 봤으면 시각을 **안 바꾸고** 그대로 204다. 처음 본 시각이 밀리면 "언제 처음 봤나"를 못 읽는다.
+  - **수면 중·여행 중·튜토리얼 미완료에도 받는다.** 아이를 돌보는 호출이 아니라 **화면이 무엇을 이미 보여 줬는지** 적는 호출이라 거절할 이유가 없고, 기준은 서버의 진행도가 아니라 **화면이 그 판을 닫은 시점**이다. 여기서 거절하면 이미 본 축하 창이 다음 접속에 다시 뜨는데, 그 사실은 로그 어디에도 안 남고 **창으로만** 드러난다.
+  - **정산(settle)을 태우지 않는다** — 축하 창을 닫는 것만으로 함께한 날이 오르거나 게이지가 흐르면 안 된다.
+  - **204인 이유**는 1.9(동작 요청)와 같다. 돌려줄 것이 없고, 값은 다음 조회에 실려 온다.
 - **말투·장르**(2026-09-13 추가)는 자유 입력 32자. **대사 톤에만** 쓰고 그림 생성에는 넣지 않는다. 상한은 `ZzalRules.TONE_MAX_CHARS`·`GENRE_MAX_CHARS` 하나가 요청 검증·엔티티·DB 칸·이 표를 함께 정한다 — 갈리면 검증을 통과한 입력이 저장에서 터져 사용자에게 500 만 간다.
 
 ### 1.2 돌봄
@@ -281,6 +287,8 @@
   "trip": null,                          // 여행 중: { "startedAt": "...", "postcards": 2 }
   "settings": { "leaveEnabled": true },
 
+  "graduationSeenAt": null,              // 졸업 축하 창을 본 시각. 아직 안 봤으면 null (1.1). 기기가 아니라 이 아이에 붙는다
+
   "tutorial": {                          // 아기 시간표(정본 12장). 전부 서버 카운터에서 파생. 브라우저 저장 없음
     "active": true,                      // babyUntil 전인가
     "minutesSince": 27,                  // 부화 뒤 몇 분
@@ -312,6 +320,7 @@
 - `advanced.width` · `advanced.height` · `learnedToday[].width` · `learnedToday[].height` = 움짤 캔버스(px). **판마다 다르다**(실측 295~301 x 321~339) — 상수로 가정하지 말 것. 도착 전이거나 맥미니 재생성본이면 `null`.
 - `mood`는 정본 4장 우선순위 그대로. 화면의 대기 동작 선택은 `mood` 하나로 한다.
 - `intimacy.percent` = `floor(score / 999 * 10) * 10`(0·10·…·100). **「해석」** tier 경계는 percent 기준 LOW ≤30 · MID 40~70 · HIGH ≥80.
+- `graduationSeenAt`은 **`phase != ALIVE`여도 null로 덮지 않는다**(해석 20의 예외). 축하를 본 뒤 떠난 아이도 "봤다"는 사실은 남아야 한다 — 비우면 그 화면이 다시 뜰 수 있고, 그건 이 칸이 막으려던 바로 그 일이다.
 - `firstGift.daysLeft` = **항상 0**. 첫 선물은 날짜가 아니라 튜토리얼 완주로 열린다 — 남은 날이라는 개념이 없다(필드는 화면 계약이라 남긴다).
 
 ### 부화 초기값 「해석」
@@ -551,6 +560,7 @@
 
 ## 변경 기록
 
+- **2026-09-22** — 졸업 축하 봤음(1.1) 추가: `POST /me/pets/{petId}/graduation-seen`(204·멱등), `PetDetail.graduationSeenAt`, `zzal_pet.graduation_seen_at`(V20260922_0100).
 - **2026-09-20** — 동작 요청(1.9) 추가: `POST /me/pets/{petId}/motion-wish`(204), `zzal_motion_wish`(V23), `ZZAL_MOTION_WISH_DAILY_LIMIT`.
 - **2026-09-05** — 최초(PR-1, #192). 정본 v1.2 + 플랜 API v2 계약을 전문으로.
 - **2026-09-05** — PR-3: 9절 구현 진행 표 추가. `settings.leaveEnabled` 는 v2 판까지 항상 true.
