@@ -170,13 +170,16 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 </form>
               ) : (
                 <div className="wt-result-titlerow">
-                  <h2>{data.title}</h2>
-                  {mine && (
-                    <button type="button" className="icon-btn" aria-label={t("제목 고치기")} title={t("제목 고치기")}
-                            onClick={startRename}><IconEdit size={16} /></button>
-                  )}
-                  {/* 공유는 이 작품 자체를 가리키므로 제목 옆에 둔다 — 아래 줄의
-                      편집실·내려받기는 내 작품일 때만 있는 것들이라 결이 다르다. */}
+                  <span className="wt-result-titlemid">
+                    <h2>{data.title}</h2>
+                    {mine && (
+                      <button type="button" className="icon-btn" aria-label={t("제목 고치기")} title={t("제목 고치기")}
+                              onClick={startRename}><IconEdit size={16} /></button>
+                    )}
+                  </span>
+                  {/* 공유는 이 작품 자체를 가리키므로 제목 줄에 둔다 — 아래 줄의
+                      편집실·내려받기는 내 작품일 때만 있는 것들이라 결이 다르다.
+                      제목은 가운데 그대로 두고 공유만 오른쪽 끝으로 보낸다. */}
                   <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
                 </div>
               )}
