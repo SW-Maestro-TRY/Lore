@@ -49,6 +49,17 @@ const dict: Dict = {
   "세계관": { en: "World", ja: "世界観", zh: "世界观" },
   "안 고르면 랜덤": { en: "random if none picked", ja: "選ばなければランダム", zh: "不选则随机" },
   "직접 쓰기": { en: "Write your own", ja: "自分で書く", zh: "自己写" },
+  "고르거나 직접 적기 · 예: 무협 / 좀비 아포칼립스": {
+    en: "Pick one or write your own · e.g. wuxia / zombie apocalypse",
+    ja: "選ぶか自分で書く · 例: 武侠 / ゾンビアポカリプス",
+    zh: "选择或自己填写 · 例：武侠 / 丧尸末日",
+  },
+  "목록에 없어요 — 적은 그대로 씁니다": {
+    en: "Not in the list — we'll use what you typed",
+    ja: "リストにありません — 入力したものをそのまま使います",
+    zh: "不在列表中 — 将直接使用你输入的内容",
+  },
+  "목록 열기": { en: "Open the list", ja: "リストを開く", zh: "打开列表" },
   "예: 무협 / 좀비 아포칼립스 / 우주 해적": {
     en: "e.g. wuxia / zombie apocalypse / space pirates",
     ja: "例：武侠／ゾンビアポカリプス／宇宙海賊",
