@@ -52,23 +52,62 @@ export const ONB_UNITS: OnbUnit[] = [
   { id: 'ob-10', label: '한 화면 맞춤(반응형)', desc: '각 단계를 세로 스크롤 없이 한 뷰포트에(폰·탭·PC 압축·2열)' },
 ];
 
+/**
+ * 캐릭터 칸(성격 받는 화면) **배치 고르기** — 2026-09-22.
+ *
+ * 왜 토글이 아니라 3지 선택인가
+ *   위의 OB-01~10 은 **서로 겹쳐 켤 수 있는** 변경이라 토글이 맞는데, 배치는 셋 중 하나만
+ *   성립한다(한 줄이면서 동시에 접이식일 수 없다). 랜딩 `landingDev.tsx` 의 버전 선택기와 같은 꼴이다.
+ *
+ * ★ 기본은 `now`(지금 올라가 있는 2열 격자)다. 공개 도메인에는 선택기가 안 뜨므로,
+ *   기본을 바꾸는 순간 아무도 고르지 않은 화면이 밖으로 나간다. **고르신 뒤에 기본을 옮긴다.**
+ *
+ * ★ 불변식은 위와 같다 — **배치만 바꾼다.** 칩·입력칸의 핸들러·`data-part`·서버 호출·칸 이동은
+ *   세 배치에서 하나도 다르지 않다. 접이식이 칸을 접는 것도 **그리느냐 마느냐**일 뿐,
+ *   고른 값(`s.picks`·`s.texts`)은 접어도 그대로 남는다.
+ */
+export type CharLayout = 'now' | 'col' | 'fold';
+
+export const CHAR_LAYOUTS: { id: CharLayout; label: string; hint: string }[] = [
+  // hint 의 숫자는 **390×844 실측**(2026-09-22). 어림값을 적으면 고르는 근거가 흐려진다.
+  { id: 'now', label: '기존', hint: '2열 격자 — 지금 올라가 있는 화면. 카드 폭 169px · 칩 28px · 스크롤 115px' },
+  { id: 'col', label: '안1 한 줄', hint: '한 줄에 한 묶음씩. 카드 폭 344px · 칩 39px · 스크롤 638px(내려 보는 대신 칸이 커짐)' },
+  { id: 'fold', label: '안2 접이식', hint: '한 칸만 펼침. 여섯 칸이 거의 한 화면 · 스크롤 73px · 접힌 줄에 고른 값이 보임' },
+];
+
 type Flags = Record<string, boolean>;
 
 interface Ctx {
   flags: Flags;
   setFlag: (id: string, v: boolean) => void;
   setAll: (v: boolean) => void;
+  charLayout: CharLayout;
+  setCharLayout: (v: CharLayout) => void;
 }
 
 const OnbDevCtx = createContext<Ctx>({
   flags: {},
   setFlag: () => {},
   setAll: () => {},
+  charLayout: 'now',
+  setCharLayout: () => {},
 });
 
 // v1 → v2: 기본값을 "전부 적용후"로 뒤집으면서 옛 저장값(전부 OFF)이 그대로 되살아나면
 // 개발자 화면만 옛 화면으로 되돌아간다. 키를 올려 옛 값을 버린다.
 const LS_KEY = 'zzal.onboarding.devflags.v2';
+/** 배치 선택은 토글과 **따로** 저장한다 — 성격이 다른 값이라 한 통에 섞으면 둘 다 읽기 어려워진다. */
+const LS_LAYOUT_KEY = 'zzal.onboarding.charlayout.v1';
+
+const LAYOUT_IDS = CHAR_LAYOUTS.map((x) => x.id) as string[];
+
+function saveLayout(next: CharLayout) {
+  try {
+    localStorage.setItem(LS_LAYOUT_KEY, next);
+  } catch {
+    /* 프라이빗 창·차단 등. 저장만 못 할 뿐 화면은 정상 동작한다. */
+  }
+}
 
 function save(next: Flags) {
   try {
@@ -83,6 +122,8 @@ const ALL_ON: Flags = Object.fromEntries(ONB_UNITS.map((u) => [u.id, true]));
 
 export function OnbDevProvider({ children }: { children: ReactNode }) {
   const [flags, setFlags] = useState<Flags>(ALL_ON);
+  // 첫 렌더는 늘 'now' — 서버가 그린 것과 같아야 하이드레이션 경고가 안 난다(위 flags 와 같은 이유).
+  const [charLayout, setLayout] = useState<CharLayout>('now');
   // 첫 렌더는 늘 전부 ON(적용후) — 서버·브라우저 렌더가 갈리면 하이드레이션 경고가 나므로 useEffect 로 뒤늦게 불러온다.
   useEffect(() => {
     try {
@@ -91,7 +132,18 @@ export function OnbDevProvider({ children }: { children: ReactNode }) {
     } catch {
       /* 읽기 실패 시 전부 ON(적용후) 로 둔다 — 공개 사이트와 같은 화면이다. */
     }
+    try {
+      const raw = localStorage.getItem(LS_LAYOUT_KEY);
+      if (raw && LAYOUT_IDS.includes(raw)) setLayout(raw as CharLayout);
+    } catch {
+      /* 읽기 실패 시 'now' — 공개 사이트와 같은 화면이다. */
+    }
   }, []);
+
+  const setCharLayout = (v: CharLayout) => {
+    setLayout(v);
+    saveLayout(v);
+  };
 
   const setFlag = (id: string, v: boolean) =>
     setFlags((prev) => {
@@ -108,7 +160,7 @@ export function OnbDevProvider({ children }: { children: ReactNode }) {
     });
 
   return (
-    <OnbDevCtx.Provider value={{ flags, setFlag, setAll }}>{children}</OnbDevCtx.Provider>
+    <OnbDevCtx.Provider value={{ flags, setFlag, setAll, charLayout, setCharLayout }}>{children}</OnbDevCtx.Provider>
   );
 }
 
@@ -121,13 +173,21 @@ export function useOnbFlag(id: string): boolean {
 }
 
 /**
+ * 지금 고른 캐릭터 칸 배치. 공개 사이트·첫 렌더는 늘 `'now'`(지금 화면).
+ * Onboarding.tsx 가 이 값으로 **배치만** 갈아 끼운다.
+ */
+export function useCharLayout(): CharLayout {
+  return useContext(OnbDevCtx).charLayout;
+}
+
+/**
  * dev 전용 "변경 목록" 패널. 항목마다 [라벨 + 토글 + 한 줄 설명], 맨 위에 전체 켜기/끄기.
  * useDevVisible() 로만 뜬다 — 공개 도메인에선 null.
  * ★ 왼쪽 아래에 둔다 — 오른쪽은 여울 이동 창(DevJump)이 이미 쓴다(겹침 방지).
  */
 export function OnbChangeList() {
   const visible = useDevVisible();
-  const { flags, setFlag, setAll } = useContext(OnbDevCtx);
+  const { flags, setFlag, setAll, charLayout, setCharLayout } = useContext(OnbDevCtx);
   const [open, setOpen] = useState(false);
 
   if (!visible) return null;
@@ -210,6 +270,43 @@ export function OnbChangeList() {
 
       <div style={{ font: `9px ${MONO}`, color: C.faint, lineHeight: 1.4 }}>
         겉모습만 바꿉니다 · 업로드·이름·부화 동작은 그대로예요
+      </div>
+
+      {/* 성격 받는 칸 배치 — 셋 중 하나. 랜딩 버전 선택기와 같은 꼴(겹쳐 켜지지 않는다). */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ font: `9px ${MONO}`, color: C.faint, letterSpacing: '.04em' }}>성격 받는 칸 배치</div>
+        <div role="radiogroup" aria-label="성격 받는 칸 배치" data-part="onb-charlayout" style={{ display: 'flex', gap: 5 }}>
+          {CHAR_LAYOUTS.map((x) => {
+            const on = charLayout === x.id;
+            return (
+              <button
+                key={x.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                data-part="onb-charlayout-opt"
+                data-layout={x.id}
+                onClick={() => setCharLayout(x.id)}
+                style={{
+                  flex: 1,
+                  padding: '7px 6px',
+                  borderRadius: radius.pill,
+                  border: `1px solid ${on ? C.accent : C.lineHard}`,
+                  background: on ? C.accentSoft : C.paper,
+                  color: on ? C.accent : C.sub2,
+                  fontSize: 11.5,
+                  lineHeight: 1.2,
+                  cursor: 'pointer',
+                }}
+              >
+                {x.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.45 }}>
+          {CHAR_LAYOUTS.find((x) => x.id === charLayout)?.hint}
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 6 }}>
