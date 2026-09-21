@@ -407,6 +407,17 @@ export interface PetDetail {
   leaving: Leaving | null;
   trip: Trip | null;
   tutorial: Tutorial | null;
+  /**
+   * **첫날 축하 판을 본 시각**(ISO) — 안 봤으면 `null`. 떠난 아이에게도 남는다.
+   *
+   * ★★ 왜 서버가 들고 있나 — 이 판은 "한 번만" 이 목숨인 판이다. 예전에는 탭 기억
+   *   (`sessionStorage`)으로만 막아서, **새 탭·앱 재시작·다른 기기면 또 떴다**
+   *   (2026-09-22 dev 재현). 사람 기준으로 한 번이려면 사람 편에 남는 곳은 서버뿐이다.
+   * ★ **배포 전에는 이 칸이 안 온다.** 그때는 `undefined` 라 `!= null` 이 거짓이 되고, 화면은
+   *   예전처럼 탭 기억으로만 막는다 — 없다고 깨지지 않고, 오면 저절로 서버 기준으로 올라선다.
+   * ⚠️ 손으로 적은 칸이다(위 `graduationSeen` 머리말의 걷어내는 조건과 한 짝).
+   */
+  graduationSeenAt?: string | null;
 }
 
 /** 펫 생성 결과. 부화는 뒤에서 계속 돌고, 진행 상황은 상태 조회로 본다. */
@@ -427,7 +438,11 @@ export interface Drafted {
 /**
  * 캐릭터 정보. **이름 말고는 전부 선택**이다.
  *
- * ★ 그림 생성에 들어가는 것은 `note` 뿐이다 — 성격·세계관은 대사 톤에만 쓰인다.
+ * ★★ **어느 칸도 그림 생성에 안 들어간다**(정본 1.6 · 서버 `PetRequests` 기준 · 2026-09-22 정정).
+ *   옛 주석은 *"그림 생성에 들어가는 것은 `note` 뿐"* 이라고 적어 두었는데 **사실이 아니었다.**
+ *   그림은 **올린 그림 한 장**에서만 나온다 — 온보딩에서 받는 말(성격·말투·장르·세계관·그 밖에)은
+ *   전부 **대사와 말투**에만 쓰인다. 이 주석을 믿고 "그림을 바꾸려면 `note` 를 고치라" 고
+ *   안내하면 그대로 거짓말이 된다.
  */
 export interface CharacterInput {
   /** 12자 이하(정본 15장). */
@@ -436,7 +451,7 @@ export interface CharacterInput {
   personality?: Personality;
   /** 세계관·설정. 100자 이하. 선택 */
   world?: string;
-  /** 그 밖에 알려 주고 싶은 것. 200자 이하. 선택. ★ 이것만 그림 생성에 참고된다 */
+  /** 그 밖에 알려 주고 싶은 것. 200자 이하. 선택. ★ **그림이 아니라 대사에 쓰인다**(위 머리말). */
   note?: string;
 }
 
@@ -588,6 +603,23 @@ export function wake(petId: number): Promise<PetDetail> {
  */
 export function tutorialDone(petId: number): Promise<PetDetail> {
   return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/done`, { method: 'POST' });
+}
+
+/**
+ * 첫날 축하 판을 **봤다고 남긴다**(2026-09-22 · 백엔드 확정 스펙).
+ *
+ * ★★ **본문 없이 204 이고 공통 봉투를 안 탄다.** 공통 클라이언트가 빈 본문을 `null` 로 두므로
+ *   그대로 성공으로 흘러간다(`motionWish` 와 같은 자리). **응답을 파싱하지 말 것** —
+ *   `res.json()` 류가 끼면 **성공한 요청이 실패로 뒤집힌다.**
+ * ★ **멱등**이다. 잠든·여행 중·튜토리얼 미완료여도 204 라, 거절 갈래가 사실상 `404
+ *   ZZAL_PET_NOT_FOUND` 하나뿐이다. 그래서 화면이 "보냈는지" 를 따로 기억하지 않는다 —
+ *   실패하면 다음에 또 보내면 된다(→ `useHatch.markGraduationSeen`).
+ * ⚠️ **임시로 손으로 적은 자리다.** 자동 생성 타입(`lib/api-schema.ts`)에는 아직 이 주소가 없다.
+ *   재생성본은 백엔드 `feat/zzal-game-abandon`(`b890ff2`·`f6f76dd`)에 있고, 그것이 합쳐져
+ *   `api-schema.ts` 에 `graduation-seen` 이 생기면 **이 손글씨를 걷어낸다.**
+ */
+export function graduationSeen(petId: number): Promise<void> {
+  return request<void>(`${PET_BASE}/${petId}/graduation-seen`, { method: 'POST' });
 }
 
 /** 성격·세계관. 언제든 바꿀 수 있다(정본 0장 6). */

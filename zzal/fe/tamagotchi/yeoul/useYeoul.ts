@@ -874,6 +874,17 @@ export function useYeoul(live?: Live) {
    * ★ 지킬 수 없는 약속(날짜·시각·"매일 하나씩")도 안 쓴다 — 굽기는 실패할 수 있고,
    *   그때 화면은 "아직 연습 중이에요" 다.
    */
+  /**
+   * 판에 적을 아이 이름. **서버가 아는 이름이 먼저다.**
+   *
+   * ★★ 2026-09-22 dev 실측 — 축하 판이 **"아이도 구르기를…"** 로 떴다. 머리줄에는 "초코" 가
+   *   제대로 있는데 판만 그랬다. 까닭은 경주다: 이 판을 여는 효과(아래 `clockStartedAt` 효과)가
+   *   **서버 이름을 목 칸에 옮겨 적는 효과(`skins/Yeoul.tsx`)보다 한 틱 먼저** 돌고, 판은 한 번
+   *   만들어지면 그 문자열을 그대로 쥐고 있어서다. 그래서 목 칸(`v.petName`)을 보면 안 되고
+   *   **그 순간 이미 손에 있는 서버 값**을 본다. 한 화면에 이름이 둘로 갈리는 일이 없어진다.
+   */
+  const petNameFor = (v: YeoulState) => (onServer ? sv?.name : '') || v.petName || '아이';
+
   const finishTutor = (v: YeoulState): YeoulState => ({
     ...v, tutor: 0, tutorOn: false,
     ...(v.tutorDone ? {} : {
@@ -882,7 +893,7 @@ export function useYeoul(live?: Live) {
       wishDraft: '', wishError: '', wishSending: false, wishDone: false,
       fire: {
         title: GRAD_COPY.title,
-        body: GRAD_COPY.body(v.petName || '아이'),
+        body: GRAD_COPY.body(petNameFor(v)),
         // ★ 그림이 게시되기 전에는 `GRAD_PREVIEW_SRC` 가 비어 있어 이 칸이 아예 안 생긴다.
         //   주소가 정해지면 상수 한 줄만 채우면 되고, 여기도 화면도 안 고친다.
         ...(GRAD_PREVIEW_SRC
@@ -1768,18 +1779,27 @@ export function useYeoul(live?: Live) {
   const pickTab = useCallback((t: 'talk' | 'guess' | 'run') => () => patch({ playTab: t }), [patch]);
 
   /**
-   * 튜토리얼 졸업 — **시계가 켜진 순간** 한 번만 축하한다.
+   * 튜토리얼 졸업 — **시계가 켜진 순간, 사람 기준으로 딱 한 번** 축하한다.
    *
    * ★ 판정 기준이 `tutorial.steps` 의 DONE 칸이 **아니다.** 아홉 칸을 다 한 사람에게는
    *   서버가 `tutorial` 블록 자체를 null 로 준다(계약 해석 9). 그러면 DONE 칸을 못 찾아
    *   **가장 잘 따라온 사람만 축하를 못 받는다.** 그래서 `clock.clockStartedAt` 으로 본다 —
    *   그게 곧 졸업의 정의다(`tamagotchi/tutorial.ts` 의 `takeGrownLine` 과 같은 기준).
-   * ★ 한 번만 뜨는 것은 sessionStorage 가 맡는다. 서버에 "봤다" 를 남길 사실이 없다.
+   *
+   * ★★ **"한 번" 을 서버가 기억한다**(2026-09-22). 예전에는 탭 기억(`sessionStorage`)뿐이라
+   *   **새 탭·앱 재시작·다른 기기에서 또 떴다** — dev 에서 그대로 재현했다. 순서는 이렇다:
+   *     1) 서버가 `graduationSeenAt` 을 주면 **그것이 먼저다** — 값이 있으면 여기서 끝.
+   *     2) 탭 기억은 **보조**다. 서버 기록이 오가는 사이 같은 탭에서 두 번 뜨는 것만 막는다.
+   *     3) 판을 띄운 뒤 서버에 "봤다" 를 남긴다. 실패해도 화면은 그대로 간다(다음에 한 번 더 뜰 뿐).
+   *   ⚠️ 백엔드가 아직 이 칸을 안 줄 수 있다. 그때는 `undefined` 라 1)이 통과하고 **예전과 똑같이**
+   *   탭 기억으로만 막힌다 — 새 칸이 오면 저절로 서버 기준으로 올라선다.
    */
   useEffect(() => {
     if (!onServer || !sv?.clock?.clockStartedAt) return;
+    if (sv.graduationSeenAt != null) return;
     if (!takeGrownLine(sv.petId, sv)) return;
     setS((v) => finishTutor(v));
+    void liveRef.current?.markGraduationSeen();
     // finishTutor 는 렌더마다 새로 만들어지는 평범한 함수라 의존성에 넣지 않는다(넣으면 매 렌더 재실행).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onServer, sv]);
@@ -2527,13 +2547,19 @@ export function useYeoul(live?: Live) {
         /** 진짜 방(목)에서만 뜨는 한 줄. 누를 것이 아니라 **어떻게 넘어가는지**를 말해 준다. */
         tutHint: !!tut && !s.sampleMode && !onServer ? '직접 해 보면 다음으로' : '',
         /**
-         * 칸 아래 버튼. **서버 튜토리얼에는 '나중에' 가 없다** — 건너뛸 방법이 서버에 없어서,
-         * 눌러도 아무 일이 안 나면 고장으로 읽힌다. 마지막 칸에서만 "다 배웠어요" 를 낸다.
-         * 목(연습방·시안)은 예전처럼 건너뛸 수 있다.
+         * 칸 아래 버튼.
+         *
+         * ★ **서버 튜토리얼에는 '나중에' 가 없다** — 건너뛸 방법이 서버에 없어서, 눌러도 아무
+         *   일이 안 나면 고장으로 읽힌다. 마지막 칸에서만 「이제 시작할게요」를 낸다.
+         * ★★ **연습방에서도 뺐다**(2026-09-22 상훈님 판정 F). 연습방에는 이미 「이전」·「다음」이
+         *   있는데 '나중에' 가 **「다음」과 거의 같은 일**(칸 +1)을 해서 한 줄에 셋이 겹쳐 떴다.
+         *   판정 8 에서 이 버튼이 "죽은 버튼" 에서 진짜 버튼으로 살아난 결과였다.
+         *   연습은 앞뒤로 오가며 보는 자리이므로 **넘기는 손잡이는 「다음」 하나면 된다.**
+         * ★ 진짜 방(목)에는 남긴다 — 거기는 「이전」·「다음」이 없어서 이것이 유일한 손잡이다.
          */
         tutBtn: onServer
           ? (atDone ? { show: true, label: '이제 시작할게요', tap: onFinishTutorial } : { show: false, label: '', tap: noop })
-          : { show: true, label: '나중에', tap: skipTutorStep },
+          : { show: !s.sampleMode, label: '나중에', tap: skipTutorStep },
         hasGoal: !showTutMini && !!goal,
         name: goal?.name ?? '',
         cond: goal ? `${goal.cond} ${Math.min(goal.have, goal.need)} / ${goal.need}` : '',
