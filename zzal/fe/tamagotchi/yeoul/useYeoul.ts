@@ -242,6 +242,12 @@ export interface YeoulState {
    * 규칙은 서버가 쥔다(진 판으로 남는다) — 화면이 승패를 새로 정하지 않는다.
    */
   gQuit: boolean;
+  /**
+   * 매치를 **시작할 때**의 기분(0~4). 끝말에서 "기분이 한 칸 올랐어요" 를 말해도 되는지
+   * 판정하는 데만 쓴다 — 기분이 이미 가득(4)이면 이겨도 안 오르는데, 그때까지 올랐다고
+   * 말하면 판정 12 에서 짚인 거짓말이 자리만 옮긴 꼴이 된다.
+   */
+  gHappy0: number;
   log: LogLine[]; memories: string[];
   resolved: Record<string, boolean>; calls: number;
   wallId: string;
@@ -345,7 +351,7 @@ const INITIAL: YeoulState = {
   hearts: false, toast: '',
   sheet: null, sheetClosing: false, playTab: 'talk', draft: '', lastGuess: null,
   gOn: false, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
-  gMarks: [null, null, null, null, null], gQuit: false,
+  gMarks: [null, null, null, null, null], gQuit: false, gHappy0: 0,
   log: [{ who: 'pet', text: '있잖아, 오늘은 뭐 했어요?' }],
   memories: ['빵 좋아함', '비 싫어함', '왼쪽을 잘 맞힘', '늦잠', '파란색'],
   resolved: {}, calls: 3,
@@ -1203,11 +1209,12 @@ export function useYeoul(live?: Live) {
    */
   const startGuess = useCallback(() => {
     lastSel.current = Date.now();
+    const happy0 = esRef.current.happy;
     // 하루 판수는 **매치 단위**로 준다(정본: 판 = 한 매치). 예전 목은 한 판(라운드)마다 깎았다.
     setS((v) => (v.gOn ? v : {
       ...v,
       gOn: true, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
-      gMarks: [null, null, null, null, null], gQuit: false,
+      gMarks: [null, null, null, null, null], gQuit: false, gHappy0: happy0,
       lastGuess: null,
       // 시작하면 팝오버를 내린다 — 예전엔 안 내려서 방으로 돌아가는 데 2탭이 들었다.
       popOpen: false, popClosing: false, sheet: null, toast: '',
@@ -1218,7 +1225,10 @@ export function useYeoul(live?: Live) {
   /** 매치를 접고 마당 팝오버를 다시 연다 — 거기 "좌우 맞히기" 가 곧 "한 판 더" 다. */
   const endGuess = useCallback(() => {
     for (const k of ['guessAct', 'guessReveal', 'guessNext', 'guessEnd']) clearTimeout(T.current[k]);
-    setS((v) => ({ ...v, gOn: false, gPhase: 'wait', gPick: null, gHit: null, gQuit: false, roomSel: 'play', popOpen: true, popClosing: false }));
+    // ★ 매치가 끝나도 **팝오버를 자동으로 열지 않는다**(2026-09-21 판정 12). 예전엔 결과를
+    //   읽기도 전에 「기분 N/4」 게이지가 먼저 덮어, 맞힌 횟수가 곧 기분인 것처럼 읽혔다.
+    //   한 판 더 치려면 마당 타일을 누르면 된다 — 고른 방은 그대로 마당으로 둔다.
+    setS((v) => ({ ...v, gOn: false, gPhase: 'wait', gPick: null, gHit: null, gQuit: false, roomSel: 'play', popOpen: false, popClosing: false }));
   }, []);
 
   /**
@@ -1351,10 +1361,11 @@ export function useYeoul(live?: Live) {
     const misses = v0.gRound + 1 - hits;
     const finished = hits >= GUESS_WIN_AT || misses > GUESS_ROUNDS - GUESS_WIN_AT;
     const win = finished ? hits >= GUESS_WIN_AT : null;
+    // ★ 이긴 매치의 보상은 **기분 +1 하나뿐**이다(정본 §7). 친밀도는 안 올린다 —
+    //   정본 8장 친밀도 목록에 게임 승리가 없는데 목만 몰래 올리고 있었다(2026-09-21 판정 12).
     patch({
       cGame: v0.cGame + 1,
       happy: finished && win ? Math.min(4, v0.happy + 1) : v0.happy,
-      bond: finished && win ? Math.min(100, v0.bond + 1) : v0.bond,
     });
     reveal(hit, hits, finished, win);
   }, [patch, careAct, flash, later, endGuess, floor2Of]);
@@ -2201,9 +2212,12 @@ export function useYeoul(live?: Live) {
         : s.gPhase === 'reveal' ? (s.gHit ? '맞았어요!' : '아쉬워요, 반대쪽이었어요')
           : s.gPhase === 'done'
             // ★ 기권으로 끝난 판은 **성적을 말하지 않는다** — "N / 5 맞혔어요" 는 끝까지 친 판의 말이다.
+            // ★ 이겼으면 **무엇이 좋아졌는지 말한다**(판정 12) — 기분이 오른 사실이 화면 어디에도
+            //   안 적혀 있어서, 마당 게이지의 「기분 N/4」 를 맞힌 횟수로 읽는 일이 생겼다.
+            //   기분이 이미 가득이면 안 오르므로 그때는 말하지 않는다.
             ? (s.gQuit ? '이 판은 여기까지 할게요.'
               : gHits >= gWinAt
-                ? `${gHits} / ${gRounds} 맞혔어요. 이겼어요!`
+                ? `${gHits} / ${gRounds} 맞혔어요. 이겼어요!${es.happy > s.gHappy0 ? ' 기분이 한 칸 올랐어요.' : ''}`
                 : `${gHits} / ${gRounds} 맞혔어요. 다음엔 이겨요.`)
             : `${gRoundNo}번째 · 어느 손에 있을까요?`;
 
