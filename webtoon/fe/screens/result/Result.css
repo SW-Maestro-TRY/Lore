@@ -5,7 +5,14 @@
 .wt .wt-result-state { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 60px 0; }
 
 .wt .wt-result-head { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
-.wt .wt-result-titlerow { display: flex; align-items: center; gap: 10px; }
+/* 제목은 가운데, 공유는 오른쪽 끝. 좌우 칸이 같은 폭(1fr)이라 공유 단추가
+   붙어도 제목이 왼쪽으로 밀리지 않는다 (아래 「맨 위로」 줄과 같은 방식). */
+.wt .wt-result-titlerow {
+  width: 720px; max-width: 100%; display: grid;
+  grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;
+}
+.wt .wt-result-titlemid { grid-column: 2; display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.wt .wt-result-titlerow .wt-share { grid-column: 3; justify-self: end; }
 .wt .wt-result-head h2 { font-size: 34px; }
 .wt .wt-result-rename { display: flex; align-items: center; gap: 8px; width: min(520px, 100%); }
 .wt .wt-result-rename .field { font-size: 20px; font-weight: 800; text-align: center; }
