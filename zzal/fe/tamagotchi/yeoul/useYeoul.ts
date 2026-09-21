@@ -301,7 +301,12 @@ export interface YeoulState {
   wallOpen: boolean; wallClosing: boolean;
   frame: FrameData | null; frameClosing: boolean;
   notifOn: boolean; needStyleLocal: NeedStyle | null; unlockShown: boolean;
-  saved: number; wishes: number; cardIdx: number;
+  /**
+   * ★ `saved`(저장한 장수)는 **뺐다**(2026-09-21 상훈님) — 저장이 아직 준비 중이라 셀 것이 없다.
+   *   예전에는 아무 데도 안 담으면서 이 숫자만 올리고 "N장 저장했어요" 라고 말했다.
+   *   진짜 저장이 붙는 날 다시 세면 된다.
+   */
+  wishes: number; cardIdx: number;
   /** 자유 입력칸에 쓰는 중인 글. 상한(`WISH_MAX`)을 넘겨 담지 않는다. */
   wishDraft: string;
   wishSending: boolean;
@@ -364,7 +369,7 @@ const INITIAL: YeoulState = {
   fire: null, decoOpen: false, albumOpen: 8,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
-  saved: 0, wishes: 0, cardIdx: 0,
+  wishes: 0, cardIdx: 0,
   wishDraft: '', wishSending: false, wishDone: false, wishError: '',
   sampleMode: false, hatch: 0, snapshot: null,
   tutor: 0, tutorOn: false, cracking: false, eggMsg: '', nameErr: false,
@@ -1444,7 +1449,24 @@ export function useYeoul(live?: Live) {
   }, [mode, openChat, selRoom]);
 
   // ── 앨범·엽서 ──
-  const saveShot = useCallback(() => { setS((v) => ({ ...v, saved: v.saved + 1, fire: null })); flash('앨범에 저장했어요'); }, [flash]);
+  /**
+   * 저장 — **아직 준비 중이라 안내만 한다**(2026-09-21 상훈님 "저장, 공유는 준비중이에요!").
+   *
+   * ★★ 예전에는 세는 숫자만 1 올리고 **"앨범에 저장했어요"** 라고 했다. 아무 데도 안 담으면서
+   *   담았다고 말하는 자리였고, 이어서 "앨범 칸을 누르면 다시 볼 수 있어요"·"폴라로이드 N장"
+   *   까지 같은 거짓말을 퍼뜨렸다. 셋 다 지웠다.
+   * ★ **진짜 내려받기를 여기 연결하지 않는다** — 네 자리 중 셋은 받을 그림 자체가 아직 없다.
+   * ★ 토스트가 아니라 **전면 판**인 이유 — 저장 버튼은 액자 판(zIndex 10)·전면 판(12) 위에서도
+   *   눌린다. 토스트는 그 아래(5)라 정작 눌린 자리에서는 안 보인다.
+   */
+  const saveShot = useCallback(() => {
+    setS((v) => ({ ...v, fire: {
+      title: '저장은 준비 중이에요',
+      body: '아직 만드는 중이라, 지금은 담아 드릴 수 없어요.',
+      hint: '', tapAny: true,
+      actions: [{ label: '알겠어요', action: 'save-soon-ok', tap: closeFire, primary: true }],
+    } }));
+  }, [closeFire]);
 
   /**
    * 액자 하나를 공유한다. 서버가 주소를 만들어 주고, 같은 동작을 다시 공유하면 있던 주소가 온다.
@@ -1512,7 +1534,7 @@ export function useYeoul(live?: Live) {
   const popScenes = useCallback(() => {
     setS((v) => ({ ...v, fire: {
       title: '저장한 장면',
-      body: `지금까지 ${v.saved}장 저장했어요. 앨범 칸을 누르면 다시 볼 수 있어요.`,
+      body: '아직 모아 둔 장면이 없어요. 저장이 준비되면 여기에 모여요.',
       hint: '', tapAny: true,
       actions: [{ label: '앨범으로', action: 'scenes-close', tap: closeFire, primary: true }],
     } }));
@@ -1526,13 +1548,13 @@ export function useYeoul(live?: Live) {
         petName: v.petName, day: v.day, bond: v.bond, full: v.full, trace: v.trace, plays: v.plays,
         pets: v.pets, stock: v.stock, snacks: v.snacks, bathUsed: v.bathUsed, sick: v.sick, night: v.night,
         sleeping: v.sleeping, calls: v.calls, log: v.log, memories: v.memories, resolved: v.resolved,
-        floorLv: v.floorLv, saved: v.saved, albumOpen: v.albumOpen,
+        floorLv: v.floorLv, albumOpen: v.albumOpen,
       },
       screen: 'room', sampleMode: true, hatch: 0, tutor: 0, sheet: null, toast: '', fire: null,
       popOpen: false, chatOpen: false, uq: 0,
       petName: '여울', day: 0, bond: 12, full: 2, trace: 1, plays: 3, pets: 0, stock: 3, snacks: 0,
       bathUsed: false, sick: false, night: false, sleeping: false, calls: 3, resolved: {},
-      floorLv: 1, saved: 0, albumOpen: 2,
+      floorLv: 1, albumOpen: 2,
       log: [{ who: 'pet', text: '저는 여울이에요. 연습 상대예요.' }],
       memories: ['연습용 기억'],
     }));
@@ -2256,10 +2278,9 @@ export function useYeoul(live?: Live) {
       //   (상훈님 2026-09-08 판정 12). 시트를 열면 그 방은 이제 막다른 길이다.
       tap: c.kind === 'chat' ? openChatFromNotify : goRoomFromNotify(c.room),
       dot: ACCENT, bg: C.paper, bd: C.line,
-    })).concat(s.saved > 0 ? [{
-      text: `폴라로이드 ${s.saved}장`, note: '앨범에 저장돼 있어요', action: '보기',
-      tap: openWall, dot: C.accentDim, bg: C.slot, bd: C.lineSoft,
-    }] : []);
+    }));
+    // ★ 옛 "폴라로이드 N장 · 앨범에 저장돼 있어요" 줄은 **지웠다**(2026-09-21) — 저장이 준비 중이라
+    //   담긴 것이 없고, 받은 것이 생기더라도 그건 앨범이 아니라 **그분 기기**에 있다.
 
     // ── 캐릭터 칸(온보딩·아이 정보 공용) ──
     // 서버가 아는 성격을 칩 이름으로. 아직 아무것도 안 고른 사람에게 **지금 값**을 보여 준다
