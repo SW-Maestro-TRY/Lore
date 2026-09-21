@@ -35,7 +35,9 @@ const suit = localFont({
 /* 04 완성 칸의 표지. 캔버스가 쓰는 그림과 같은 파일이다(예시 작품
  * 「가면 아래의 조건」의 표지) — 실행 id 를 코드에 박아 두면 그 작품이
  * 빠질 때 조용히 빈칸이 된다. */
-const DONE_COVER = "/static/gallery/20260910T132240-ae8c28/cover.jpg";
+/* 04 「완성」 칸의 표지. 목록 맨 앞 작품을 쓴다 — 전에는 작품 번호를 적어
+   뒀는데, 그 작품이 빠지면 조용히 빈칸이 됐다. */
+const DONE_FALLBACK = "/static/samples/ex-romance-2.jpg";
 import { usePhone } from "./usePhone";
 import "./Landing.css";
 
@@ -143,8 +145,10 @@ export default function Landing({ go }: { go: Go }) {
             {t("만들던 웹툰")} <span className="dim" style={{ fontWeight: 400 }}>· {jobLabel}</span>
           </button>
         )}
-        <h1>{t("AI 웹툰 제작 서비스 LORE")}</h1>
-        <p className="muted">{t(phone ? "캐릭터 · 사진 · 그림 · 좋아하는 사람" : "캐릭터 · 사진 · 그림 · 그 무엇이든!")}</p>
+        <h1>{t("AI 웹툰 스튜디오, LORE")}</h1>
+        <p className="muted">
+          {t("내 캐릭터가 이야기 속에서 살아 움직이는 순간.")}
+        </p>
         <button type="button" className="btn btn-p wt-landing-cta" onClick={start}>{t("지금 시작하기")}</button>
         {allowLine && <span className="wt-landing-allow">{allowLine}</span>}
       </section>
@@ -177,7 +181,7 @@ export default function Landing({ go }: { go: Go }) {
                   <a href={hrefOf("result", { run: r.run_id })} onClick={(ev) => { ev.preventDefault(); go("result", { run: r.run_id }); }}
                      aria-hidden={i >= runs.length} tabIndex={i >= runs.length ? -1 : 0}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img className="cover wt-landing-cover" src={api.coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1, !!r.example)} alt={t("{title} 표지", { title: titleOf(r) })} />
+                    <img className="cover wt-landing-cover" src={api.coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1)} alt={t("{title} 표지", { title: titleOf(r) })} />
                     <figcaption><b>{titleOf(r)}</b><span className="dim">{r.genre}</span></figcaption>
                   </a>
                 </figure>
@@ -231,7 +235,7 @@ export default function Landing({ go }: { go: Go }) {
           <div className="wt-landing-step">
             <div className="wt-landing-step-box">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={DONE_COVER} alt="" />
+              <img src={runs?.[0] ? api.coverUrl(runs[0].run_id, runs[0].cover_page ?? 1, runs[0].cover_episode ?? 1) : DONE_FALLBACK} alt="" />
               <div className="wt-landing-step-tools">
                 <IconEdit size={phone ? 14 : 18} /><IconRetry size={phone ? 14 : 18} /><IconShare size={phone ? 14 : 18} /><IconDownload size={phone ? 14 : 18} />
               </div>

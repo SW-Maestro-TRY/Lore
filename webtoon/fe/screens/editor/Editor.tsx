@@ -189,7 +189,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
                 <button key={p.no} type="button" className={`wt-ed-thumb${p.no === active ? " on" : ""}`}
                         onClick={() => pickScene(p.no)} aria-label={t("{n}번째 장", { n: p.no })} aria-current={p.no === active}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={pageUrl(runId, p.no, 160, false, info.example)} alt="" loading="lazy" />
+                  <img src={pageUrl(runId, p.no, 160)} alt="" loading="lazy" />
                   <span>{p.no}</span>
                 </button>
               )) : [1, 2, 3].map((i) => <div key={i} className="skeleton wt-ed-thumb" />)}

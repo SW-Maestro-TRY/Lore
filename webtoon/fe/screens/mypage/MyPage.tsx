@@ -336,7 +336,7 @@ function WorkCard({ run, go }: { run: RunCard; go: Go }) {
     <div className="card wt-my-work">
       <button type="button" className="wt-my-cover" onClick={open} aria-label={run.title || t("제목 없음")}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={coverUrl(run.run_id, run.cover_page ?? 1, run.cover_episode ?? 1, !!run.example)} alt="" />
+        <img src={coverUrl(run.run_id, run.cover_page ?? 1, run.cover_episode ?? 1)} alt="" />
       </button>
       <b>{run.title || t("제목 없음")}</b>
       <span className="muted">{[run.character, run.genre].filter(Boolean).join(" · ")}</span>

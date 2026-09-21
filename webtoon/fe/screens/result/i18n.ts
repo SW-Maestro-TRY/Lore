@@ -17,6 +17,7 @@ const dict: Dict = {
   "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
   "이야기": { en: "Story", ja: "ストーリー", zh: "故事" },
   "다시 시도": { en: "Try again", ja: "もう一度", zh: "重试" },
+  "확인": { en: "OK", ja: "確認", zh: "确定" },
   "제목": { en: "Title", ja: "タイトル", zh: "标题" },
   "저장": { en: "Save", ja: "保存", zh: "保存" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },

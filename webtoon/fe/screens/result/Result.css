@@ -36,10 +36,28 @@
 }
 .wt .wt-result-pg:hover .wt-result-pgdl, .wt .wt-result-pgdl:focus-visible { opacity: 1; }
 
+/* 좌 · 가운데 · 우 세 칸. 좌우가 같은 폭(1fr)이라 가운데 칸이 줄 한가운데에
+   온다 — 「맨 위로」가 오른쪽 단추 폭만큼 밀리지 않는다. */
 .wt .wt-result-foot {
-  width: 720px; max-width: 100%; display: flex; gap: 10px; padding: 8px 0 24px; align-items: center; flex-wrap: wrap;
+  width: 720px; max-width: 100%; display: grid;
+  grid-template-columns: 1fr auto 1fr; gap: 10px; padding: 8px 0 24px; align-items: center;
 }
-.wt .wt-result-top { margin-left: auto; font-size: 13px; color: var(--sea); }
+.wt .wt-result-foot .wt-result-note { grid-column: 1 / -1; text-align: center; }
+.wt .wt-result-top { grid-column: 2; justify-self: center; font-size: 13px; color: var(--sea); }
+.wt .wt-result-next { grid-column: 3; justify-self: end; }
+
+/* 「다음화 보기」를 눌렀을 때 뜨는 알림. 편집실의 확인 창과 같은 결로 맞춘다. */
+.wt .wt-result-soon {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: rgba(15, 51, 63, 0.55); padding: 16px;
+}
+.wt .wt-result-soonbox {
+  width: min(360px, 100%); background: #fff; border-radius: 22px;
+  box-shadow: 0 20px 60px rgba(15, 51, 63, 0.28); padding: 24px 20px 18px;
+  display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center;
+}
+.wt .wt-result-soonbox h2 { font-size: 16px; margin: 0; line-height: 1.5; }
+.wt .wt-result-soonbox .btn { min-width: 96px; }
 
 /* ---- 공유 단추와 목록 (완성본 · 편집실 공용) ---- */
 .wt .wt-share { position: relative; display: inline-flex; }

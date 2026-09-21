@@ -178,6 +178,17 @@ public class BuiltinCharacters implements ApplicationRunner {
         if (!on) {
             return;
         }
+        /* **한 명이라도 심겨 있으면 새로 심지 않는다.**
+         *
+         * 이 목록과 DB 를 이름으로 맞춰 보기 때문에, DB 에서 이름을 고치면
+         * 그 이름이 "아직 안 심긴 것" 으로 보인다 — 고쳐 놓으면 다음 기동에
+         * 옛 이름이 새 줄로 되살아나서, 고친 것과 옛것이 나란히 뜬다.
+         *
+         * 그래서 심는 것은 <b>기본 제공이 하나도 없을 때뿐</b>이다. 그 뒤로는
+         * DB 가 원본이고, 예시를 늘리고 싶으면 DB 에 직접 넣는다
+         * ({@code webtoon/docs/images.md}).
+         */
+        boolean fresh = characters.findBySource(CharacterSource.BUILTIN).isEmpty();
         int made = 0;
         int fixed = 0;
         for (Seed seed : SEEDS) {
@@ -193,6 +204,9 @@ public class BuiltinCharacters implements ApplicationRunner {
                     .orElse(null);
             if (old != null && old.getArtKey() != null && !old.getArtKey().isBlank()) {
                 continue;
+            }
+            if (old == null && !fresh) {
+                continue;               // 이미 심은 뒤다 — 이름이 바뀐 것이지 빠진 것이 아니다
             }
             Path file = samples.resolve(seed.file());
             if (!Files.isRegularFile(file)) {
