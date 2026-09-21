@@ -1267,11 +1267,10 @@ export function useYeoul(live?: Live) {
     if (!onServerRef.current) { quitEnd(); return; }
     patch({ fire: null });
     void (async () => {
-      // ★ **임시 다리** — 배관(`useHatch`)이 아직 안 얹혔을 수 있다. 이름·모양은 미리 맞춰 두었으니
-      //   (`abandonPlay(): Promise<void>`) 배관이 들어오면 이 `&` 한 줄만 지우면 된다.
-      const lv = liveRef.current as (Live & { abandonPlay?: () => Promise<void> }) | undefined;
-      if (!lv?.abandonPlay) { quitEnd(); return; }
+      const lv = liveRef.current;
+      if (!lv) { quitEnd(); return; }
       try {
+        // 인자가 없다 — 펫·판 번호는 배관이 안다. 연타 자물쇠도 배관 쪽에 있다(`useHatch.abandonPlay`).
         await lv.abandonPlay();
         quitEnd();
       } catch (e) {
@@ -1883,17 +1882,19 @@ export function useYeoul(live?: Live) {
   }, [onServer, s.bond, s.floorLv, s.unlockShown, s.screen, careAct, unlockFire]);
 
   /**
-   * 2층 해금(서버·즉시형) — `justUnlocked` 가 실려 온 **그 응답에서만** 한 번.
+   * 2층 해금(서버·즉시형).
    *
-   * ★ 조회 응답의 `justUnlocked` 는 늘 비어 있다(계약 2절 "행동 응답에만"). 그래서 다음 조회
-   *   한 번이면 `[]` 로 덮인다 — 본 순간 붙잡아 두지 않으면 판을 놓친다. seq 를 기록해 둔다.
+   * ★★ **원본(`sv.justUnlocked`)을 보지 않는다** — 그 칸은 행동 응답 **한 번에만** 실려 오고
+   *   다음 조회가 `[]` 로 덮는다(계약 2절). 마침 그때 다른 판이 떠 있으면 판을 영영 놓쳤다.
+   *   그래서 배관이 받은 자리에서 쌓아 두고(`live.justUnlocked` · `useHatch`), 화면은 **다 보여 준 뒤**
+   *   `clearJustUnlocked()` 로 비운다. 못 띄운 채 닫아도 방이 조용해지면 그때 뜬다.
+   * ★ 그래서 "본 seq 를 따로 기억하는 자리" 도 없앴다 — 비우는 것이 곧 본 표시다. 두 벌로 두면
+   *   한쪽만 지워졌을 때 판이 다시 뜨거나 영영 안 뜬다.
    */
-  const unlockSeen = useRef<Set<number>>(new Set());
   useEffect(() => {
     if (!onServer || s.screen !== 'room' || s.fire) return;
-    const fresh = (sv?.justUnlocked ?? []).filter((q) => !unlockSeen.current.has(q));
+    const fresh = live?.justUnlocked ?? [];
     if (fresh.length === 0) return;
-    fresh.forEach((q) => unlockSeen.current.add(q));
     const motions = sv?.motions ?? [];
     const items = fresh.map((q) => {
       const m = motions.find((x) => x.seq === q);
@@ -1901,7 +1902,8 @@ export function useYeoul(live?: Live) {
     });
     careAct('unlock');
     setS((v) => withFire({ ...v, sheet: null }, unlockFire('now', items)));
-  }, [onServer, sv, s.screen, s.fire, careAct, unlockFire]);
+    live?.clearJustUnlocked();
+  }, [onServer, live, sv, s.screen, s.fire, careAct, unlockFire]);
 
   /**
    * 심화 행동 도착(서버·기상형) — `learnedToday` 에 남아 있는 것만.

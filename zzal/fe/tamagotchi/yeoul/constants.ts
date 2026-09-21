@@ -579,17 +579,11 @@ export const UNLOCK_COPY = {
     previewCaption: (name: string) => `${name}, 이렇게 움직여요`,
     close: '앨범에서 보기',
   },
-  /**
-   * @deprecated 2026-09-21 판정 — **더 쓰지 않는다. 빈 문자열이다.**
-   *
-   * ★ 왜 없앴나 — 이 줄은 아침 판(`slept`)에서 "그림은 아직 그리는 중이에요" 를 붙이던 자리인데,
-   *   **아침 목록에는 그림이 반드시 있다.** 서버는 `OPEN`(사람이 검수를 통과시킨 것) 이면서
-   *   도착 시각이 찍힌 것만 담고, 그림 키도 도착한 뒤에만 준다
-   *   (`PetResponses.java` · `ZzalMotion.java` · `AdminService.java`). 설 자리가 없는 문장이다.
-   * ⚠️ **키를 지우지 않고 빈 문자열로 둔 것은** 화면(`useYeoul.unlockFire`)이 아직 이 키를 읽고
-   *   있어서다. 화면에서 붙이는 곳이 사라지면 **이 줄도 같이 지운다.**
-   */
-  noPreviewNote: '',
+  // ★ 옛 `noPreviewNote`("그림은 아직 그리는 중이에요")는 **없앴다**(2026-09-21 판정 11).
+  //   아침 목록에는 그림이 반드시 있다 — 서버가 `OPEN`(사람이 검수를 통과시킨 것)이면서 도착
+  //   시각이 찍힌 것만 담고, 그림 키도 도착한 뒤에만 준다(`PetResponses.java` · `ZzalMotion.java`
+  //   · `AdminService.java`). 설 자리가 없는 문장이라 화면에서 붙이던 자리와 함께 지웠다.
+  //   자리표를 다시 만들지 말 것 — 그림이 없으면 `FirePreview` 가 칸을 접는다(A-09).
 } as const;
 
 /**
