@@ -111,7 +111,18 @@ public enum ErrorCode {
     // 관리자
     // ★ 404 가 아니라 403 을 준다 — 관리자 화면의 존재 자체는 비밀이 아니고,
     //   404 로 감추면 권한 설정을 빠뜨렸을 때 "주소가 틀렸나" 로 헤매게 된다.
-    ADMIN_ONLY(HttpStatus.FORBIDDEN, "관리자만 볼 수 있어요");
+    ADMIN_ONLY(HttpStatus.FORBIDDEN, "관리자만 볼 수 있어요"),
+
+    // 복선 카드 (trailer) — 2026-09-22. 카드 API 셋(GET /api/trailer/v1/public/cards/**)이 쓴다.
+    // ★ 회차(chapter)의 400 만 코드를 따로 둔다 — 화면은 이 코드를 보면 저장해 둔 "판정 기준" 회차를 되돌린다.
+    //   그 밖의 인자(page · size · search)가 틀린 것은 공통 INVALID_INPUT 이다.
+    TRAILER_INVALID_CHAPTER(HttpStatus.BAD_REQUEST, "회차가 올바르지 않습니다"),
+    // ★ 503 — 서버가 아니라 자료가 준비되지 않은 상태다. 운영 DB 에 카드 SQL 을 넣기 전이 여기다.
+    //   500 으로 두면 "서버가 터졌다" 로 읽혀 자료를 넣는 대신 서버를 뒤진다.
+    TRAILER_LEDGER_NOT_LOADED(HttpStatus.SERVICE_UNAVAILABLE, "복선 장부가 아직 준비되지 않았습니다"),
+    // ★ 모르는 번호와 독자가 읽은 회차 뒤에 심은 카드를 한 코드로 답한다 — 갈라 주면 번호를 바꿔 가며
+    //   뒤 회차의 카드가 있는지 알아낼 수 있다. 공통 NOT_FOUND 의 문구("주소를 찾을 수 없습니다")는 카드에 맞지 않는다.
+    TRAILER_CARD_NOT_FOUND(HttpStatus.NOT_FOUND, "카드를 찾을 수 없습니다");
 
     // 도메인별 코드는 각 담당자가 아래에 추가한다.
     // 예) ZZAL_PET_NOT_FOUND(HttpStatus.NOT_FOUND, "펫을 찾을 수 없습니다"),

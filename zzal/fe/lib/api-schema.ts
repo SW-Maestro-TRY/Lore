@@ -31,6 +31,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trailer/v1/public/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 카드 목록과 검색
+         * @description 독자가 읽은 회차 N 이하에 심은 카드를 표의 id 순(= T 번호 순)으로 나눠 준다.
+         *     N화 뒤에 회수된 복선은 status=open, resolvedChapter=null, resolution=null 로 가려서 준다.
+         *
+         *     검색 규칙은 화면이 브라우저에서 찾던 것과 같다.
+         *     · search 가 T12 꼴이면 그 번호의 카드 한 장만(대소문자 무관)
+         *     · 그 밖에는 빈칸으로 나눈 단어가 모두 카드의 글(id · 제목 · 본문 · 인물 · 유형 · "12화")에 들어 있어야 한다.
+         *       소문자로 바꾸고 빈칸을 없애고 견준다. % 와 _ 는 글자 그대로 찾는다
+         *     · kind 는 유형의 한국어 이름이 똑같은 카드만. 검색어와 함께 건다
+         *
+         *     chapter 가 없거나 숫자가 아니거나 1~maxChapter 를 벗어나면 400(TRAILER_INVALID_CHAPTER).
+         *     search 가 200자 또는 단어 10개를 넘거나 page · size 가 틀리면 400(INVALID_INPUT).
+         */
+        get: operations["list_3"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trailer/v1/public/cards/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 장부 정보
+         * @description 화면을 열 때 한 번 부른다. 가장 뒤 회차, 해시 둘, 유형 다섯, 권하는 인물 다섯을 준다.
+         *
+         *     카드를 50장씩 나눠 받으면 첫 쪽에 유형과 인물이 다 없고, 해시는 첫 쪽을 받기 전에 있어야
+         *     브라우저 저장 키를 만들 수 있다. 그래서 카드와 상관없는 값을 따로 준다.
+         *
+         *     카드 표가 비어 있으면 503(TRAILER_LEDGER_NOT_LOADED). 운영 DB 에 카드 SQL 을 넣기 전이다.
+         */
+        get: operations["meta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trailer/v1/public/cards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 카드 상세
+         * @description 카드 한 장을 번호로 연다. 게시글에 적힌 번호로 카드를 열 때 부른다.
+         *     목록이 준 카드에는 상세의 칸이 다 있어서, 목록에서 여는 상세는 이 API 를 부르지 않는다.
+         *
+         *     회수 칸 셋은 목록과 같은 규칙으로 N 기준으로 가린다.
+         *     모르는 번호와 N화 뒤에 심은 카드는 같은 404(TRAILER_CARD_NOT_FOUND)다 — 구분해 주면
+         *     번호를 바꿔 가며 뒤 회차의 카드가 있는지 알아낼 수 있다.
+         */
+        get: operations["detail_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -339,11 +419,79 @@ export interface paths {
         /**
          * 캐릭터 만들기
          * @description 사진을 주면 그것을 읽어 외모를 적고, 안 주면 이름·설명만으로 적는다.
+         *     사진은 여러 장(최대 4장, 같은 사람의 다른 각도·표정) 줄 수 있다.
          *     **올린 사진은 그림이 나오면 지운다** — 보관하는 것은 그린 것뿐이다.
          *
          *     하루 몫이 남아 있으면 공짜, 아니면 크레딧을 받는다.
          */
         post: operations["create_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/characters/random": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 랜덤 재료
+         * @description 「랜덤으로 만들어보기」가 입력 칸을 채울 값 한 벌 — 이름 · 설명 · 세계관.
+         *     AI 를 안 부르고 조합에서 뽑는다. 사람이 보고 고친 뒤 만든다.
+         */
+        get: operations["random"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/characters/try": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 캐릭터 만들어보기
+         * @description 뭐든 넣으면 그대로 그 세계관 웹툰의 한 컷이 된다. 사진·설명·이름·세계관 전부
+         *     **선택** — 아무것도 없이 보내면 「랜덤으로 만들어보기」다.
+         *     world 는 GET /worlds 의 key 이거나 사람이 직접 쓴 한 줄.
+         *
+         *     바로 돌려주고 뒤에서 그린다(status=drawing). GET /{id} 로 다시 읽으면
+         *     그림(art_url)과 카드(twist · quote · fate)가 채워진다.
+         *     값과 하루 몫은 「캐릭터 만들기」와 같다.
+         */
+        post: operations["tryOut"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/characters/worlds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 고를 수 있는 세계관
+         * @description 「캐릭터 만들어보기」의 세계관 목록. 하네스 프리셋 그대로다.
+         */
+        get: operations["worlds"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -357,7 +505,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * 캐릭터 하나
+         * @description 그리는 중인 것을 다시 읽는 자리. 내 것과 기본 제공만 보인다.
+         */
+        get: operations["one"];
         put?: never;
         post?: never;
         /**
@@ -369,6 +521,27 @@ export interface paths {
         head?: never;
         /** 이름·설명 고치기 */
         patch: operations["rename"];
+        trace?: never;
+    };
+    "/api/webtoon/v1/characters/{publicId}/card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 공유된 카드
+         * @description 「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.
+         *     내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.
+         */
+        get: operations["card"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/webtoon/v1/config": {
@@ -509,6 +682,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/my/notify-setting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 웹툰 완성 메일 — 켜져 있는가
+         * @description 행이 없으면(한 번도 안 건드렸으면) true 다 — 지금까지 계정 이메일로
+         *     항상 보냈던 것과 같은 기본값이다.
+         */
+        get: operations["notifySetting"];
+        put?: never;
+        /**
+         * 웹툰 완성 메일 — 켜고 끄기
+         * @description 웹툰이 다 만들어졌을 때 계정 이메일로 알리는 것을 켜고 끈다.
+         *     게스트로 만들 때 직접 적은 주소는 이 설정과 무관하게 그대로 간다 —
+         *     그건 그 한 번만의 명시적인 선택이다.
+         */
+        post: operations["setNotifySetting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/my/runs": {
         parameters: {
             query?: never;
@@ -621,6 +821,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/nh/jobs/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내가 만들던 것
+         * @description 아직 안 끝난 작업들(줄 서 있거나 · 그리는 중 · 사람 차례). 첫 화면의
+         *     「만들던 웹툰」 알약이 이것을 본다. 로그인 안 했으면 uid 로 가린다.
+         */
+        get: operations["mine_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/nh/jobs/{id}": {
         parameters: {
             query?: never;
@@ -661,6 +882,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/nh/jobs/{id}/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 완성 알림 받을 이메일
+         * @description 빈 값을 보내면 안 받겠다는 뜻이라 적어 둔 주소를 지운다.
+         */
+        post: operations["notify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/nh/jobs/{id}/page/{no}.png": {
         parameters: {
             query?: never;
@@ -687,7 +928,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 이야기 고르기 */
+        /**
+         * 이야기 고르기
+         * @description body 를 같이 보내면 그 방향의 본문을 사람이 고친 내용으로 바꿔서 다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.
+         */
         post: operations["pick"];
         delete?: never;
         options?: never;
@@ -766,6 +1010,26 @@ export interface paths {
         get: operations["sheetImage"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/photo-presign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 게스트 사진 업로드 주소 발급
+         * @description 로그인 없이 S3 에 직접 올릴 임시 주소를 받는다. 10분간 유효.
+         */
+        post: operations["photoPresign"];
         delete?: never;
         options?: never;
         head?: never;
@@ -902,6 +1166,26 @@ export interface paths {
          * @description 구운 것이 있으면 그것. raw=1 이면 밑그림. 없으면 404.
          */
         get: operations["page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/page/{no}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 컷 하나 내려받기
+         * @description 그 장 하나에 LORE 표시를 찍어서 준다.
+         */
+        get: operations["pageDownload"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1848,6 +2132,24 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseForeshadowing: {
+            data?: components["schemas"]["Foreshadowing"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseForeshadowingMeta: {
+            data?: components["schemas"]["ForeshadowingMeta"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseForeshadowingPage: {
+            data?: components["schemas"]["ForeshadowingPage"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponseGranted: {
             data?: components["schemas"]["Granted"];
             error?: components["schemas"]["ErrorBody"];
@@ -1906,6 +2208,12 @@ export interface components {
         };
         ApiResponseMe: {
             data?: components["schemas"]["Me"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseNotifySettingResult: {
+            data?: components["schemas"]["NotifySettingResult"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -2354,6 +2662,107 @@ export interface components {
             /** Format: int64 */
             nextInSeconds?: number;
         };
+        /** @description 복선 카드 한 장. 회수 칸 셋(status · resolvedChapter · resolution)은 독자가 읽은 회차 N 기준으로 가린 값이다 */
+        Foreshadowing: {
+            /**
+             * Format: int32
+             * @description 복선을 심은 회차
+             * @example 12
+             */
+            chapter?: number;
+            /** @description 장부의 원문(영어) */
+            excerpt?: string;
+            /** @description 카드 본문 */
+            fact?: string;
+            /**
+             * @description 카드 번호. 담기·상세·판정 요청의 열쇠
+             * @example T12
+             */
+            id?: string;
+            /**
+             * @description 유형의 한국어 이름
+             * @example 약속
+             */
+            kind?: string;
+            /** @description 인물 이름. 없으면 빈 배열 */
+            people?: string[];
+            /** @description 회수 기록의 글. 미회수(또는 N화 뒤 회수)면 null */
+            resolution?: string;
+            /**
+             * Format: int32
+             * @description 회수된 회차. 미회수(또는 N화 뒤 회수)면 null
+             * @example 214
+             */
+            resolvedChapter?: number;
+            /**
+             * @description 연결된 장면의 번호. 없으면 null
+             * @example V12
+             */
+            scene?: string;
+            /** @description 장면의 글. 없으면 빈 글 */
+            sceneExcerpt?: string;
+            /**
+             * @description open 또는 resolved. N화 뒤에 회수된 복선은 open 으로 온다
+             * @enum {string}
+             */
+            status?: "open" | "resolved";
+            /** @description 카드 제목 */
+            title?: string;
+        };
+        /** @description 장부 정보. 화면을 열 때 한 번 받는다 */
+        ForeshadowingMeta: {
+            /** @description 400화 카드 파일의 sha256. 위와 같다 */
+            cardsDigest?: string;
+            /** @description 유형의 한국어 이름. 카드에 먼저 나온 순서 */
+            kinds?: string[];
+            /**
+             * Format: int32
+             * @description 고를 수 있는 가장 뒤 회차
+             * @example 400
+             */
+            maxChapter?: number;
+            /** @description 400화 장부 파일의 sha256. 브라우저 저장 키와 판정 요청에 실린다 */
+            stateDigest?: string;
+            /** @description 검색창 아래에 권하는 인물. 카드에 먼저 나온 다섯 */
+            suggestedPeople?: string[];
+        };
+        /** @description 카드 목록 한 쪽. chapter · page · size 는 요청한 값 그대로다 — 늦게 온 응답을 화면이 버리는 기준 */
+        ForeshadowingPage: {
+            /**
+             * Format: int32
+             * @description 요청한 회차 N
+             * @example 200
+             */
+            chapter?: number;
+            /**
+             * Format: int64
+             * @description N화 카드의 전체 수(검색어와 유형을 걸기 전)
+             * @example 774
+             */
+            chapterTotal?: number;
+            /** @description 다음 쪽이 있나 */
+            hasNext?: boolean;
+            /** @description 카드. 순서는 표의 id 순 = T 번호 순 */
+            items?: components["schemas"]["Foreshadowing"][];
+            /**
+             * Format: int32
+             * @description 요청한 쪽. 0부터
+             * @example 0
+             */
+            page?: number;
+            /**
+             * Format: int32
+             * @description 요청한 크기
+             * @example 50
+             */
+            size?: number;
+            /**
+             * Format: int64
+             * @description 찾은 카드의 수(검색어와 유형을 건 뒤)
+             * @example 12
+             */
+            total?: number;
+        };
         Gauges: {
             /** Format: int32 */
             clean?: number;
@@ -2521,6 +2930,9 @@ export interface components {
             id?: string;
             log?: string[];
             /** Format: int32 */
+            minutes_left?: number;
+            notice?: components["schemas"]["Notice"];
+            /** Format: int32 */
             pct?: number;
             /** Format: int32 */
             pick?: number;
@@ -2621,6 +3033,20 @@ export interface components {
         NoteRequest: {
             note?: string;
         };
+        Notice: {
+            email?: string;
+            logged_in?: boolean;
+            sent?: boolean;
+        };
+        NotifyRequest: {
+            email?: string;
+        };
+        NotifySettingRequest: {
+            on?: boolean;
+        };
+        NotifySettingResult: {
+            on?: boolean;
+        };
         PagesRequest: {
             pages?: components["schemas"]["Upload"][];
             runId: string;
@@ -2680,7 +3106,11 @@ export interface components {
              */
             world?: string;
         };
+        PhotoPresignRequest: {
+            contentType?: string;
+        };
         PickRequest: {
+            body?: string;
             /** Format: int32 */
             n?: number;
         };
@@ -3046,6 +3476,12 @@ export interface components {
             /** Format: date-time */
             startedAt?: string;
         };
+        TryRequest: {
+            description?: string;
+            name?: string;
+            photos_data?: string[];
+            world?: string;
+        };
         Tutorial: {
             active?: boolean;
             /** Format: int32 */
@@ -3121,6 +3557,104 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    list_3: {
+        parameters: {
+            query: {
+                /**
+                 * @description 독자가 읽은 회차 N. 1부터 maxChapter 까지
+                 * @example 200
+                 */
+                chapter: number;
+                /**
+                 * @description 검색어. 200자 · 단어 10개까지. 비면 N화 카드 전부
+                 * @example 밀짚모자
+                 */
+                search?: string;
+                /**
+                 * @description 유형의 한국어 이름. 비면 거르지 않는다
+                 * @example 약속
+                 */
+                kind?: string;
+                /**
+                 * @description 쪽. 0부터. 기본 0
+                 * @example 0
+                 */
+                page?: number;
+                /**
+                 * @description 한 쪽의 크기. 기본 50, 최대 100
+                 * @example 50
+                 */
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseForeshadowingPage"];
+                };
+            };
+        };
+    };
+    meta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseForeshadowingMeta"];
+                };
+            };
+        };
+    };
+    detail_1: {
+        parameters: {
+            query: {
+                /**
+                 * @description 독자가 읽은 회차 N. 1부터 maxChapter 까지
+                 * @example 200
+                 */
+                chapter: number;
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description 카드 번호
+                 * @example T12
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseForeshadowing"];
                 };
             };
         };
@@ -3533,6 +4067,104 @@ export interface operations {
             };
         };
     };
+    random: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    tryOut: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Lore-Uid"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    worlds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    one: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Lore-Uid"?: string;
+            };
+            path: {
+                publicId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     remove: {
         parameters: {
             query?: never;
@@ -3575,6 +4207,30 @@ export interface operations {
                 "application/json": components["schemas"]["CreateRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    card: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publicId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -3729,6 +4385,50 @@ export interface operations {
             };
         };
     };
+    notifySetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseNotifySettingResult"];
+                };
+            };
+        };
+    };
+    setNotifySetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifySettingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseNotifySettingResult"];
+                };
+            };
+        };
+    };
     runs: {
         parameters: {
             query?: never;
@@ -3845,6 +4545,30 @@ export interface operations {
             };
         };
     };
+    mine_1: {
+        parameters: {
+            query?: {
+                uid?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     job: {
         parameters: {
             query?: never;
@@ -3877,6 +4601,34 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    notify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["NotifyRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -4046,6 +4798,30 @@ export interface operations {
                 };
                 content: {
                     "image/png": string;
+                };
+            };
+        };
+    };
+    photoPresign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotoPresignRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedUpload"];
                 };
             };
         };
@@ -4258,6 +5034,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    pageDownload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
             };
         };
     };
