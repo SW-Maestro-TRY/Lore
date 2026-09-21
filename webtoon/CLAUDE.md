@@ -375,6 +375,31 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
 ```
 
 
+## 그림 창고는 환경마다 다릅니다
+
+**dev 는 S3 를 안 씁니다.** 박스 안 MinIO 가 S3 흉내를 냅니다. staging·prod
+만 진짜 S3 이고, 그 앞에 CloudFront 가 붙습니다.
+
+| 환경 | 그림이 실제로 있는 곳 |
+| --- | --- |
+| 내 노트북 | 루트 `.env` 의 `CONTENT_S3_BUCKET` 이 가리키는 버킷 |
+| dev | 박스 안 MinIO (`/images/` → MinIO, nginx 가 이음) |
+| staging · prod | 각 환경의 S3 + CloudFront |
+
+그래서 **코드는 어느 버킷인지 몰라야 합니다.** 화면에 나가는 주소는 항상
+`/images/...` 로 시작하는 상대경로이고(`PageStore.url()`), 앞에 무엇이
+붙는지는 환경이 정합니다. 도메인이나 버킷 이름을 코드에 적지 마세요 —
+`lore.webtoon.cdn-base` 설정을 없앤 이유가 그것입니다(2026-09-19).
+
+그림을 넣는 코드도 같은 이유로 **버킷에 직접 올리지 말고** `PrivateArt`
+(자바)나 `upload/s3_upload.py`(파이썬)를 거쳐야 합니다. 그래야 dev 에서는
+MinIO 로, 운영에서는 S3 로 알아서 갑니다.
+
+`lore-contents-046797548177-…` 는 **옛 버킷**입니다(보관). 지금 쓰는 버킷이
+아니니 새 코드가 이 이름을 보게 하지 마세요.
+
+환경·배포·비밀값의 전체 그림은 `webtoon/docs/server.md` 에 있습니다.
+
 ## 로컬에서 띄우기
 
 ```
