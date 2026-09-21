@@ -140,6 +140,20 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int tutorialStep;
 
+    /**
+     * 튜토리얼 졸업(첫날 완주) 축하 창을 <b>본 순간</b>. null 이면 아직 안 봤다.
+     *
+     * <h3>★ 왜 서버가 드나</h3>
+     * 화면이 {@code sessionStorage} 로 기억하던 값이다. 탭을 새로 열거나 앱을 다시 켜면 그 기억이
+     * 사라져 <b>같은 축하 창이 다시 떴다</b>. 한 번 본 연출은 다시 나오지 않아야 하고, 그 판정은
+     * 기기·탭이 아니라 <b>이 아이</b>에 붙어야 한다({@link #tutorialStep} 을 서버가 드는 것과 같은 이유다).
+     *
+     * ★ 한 번 찍히면 안 움직인다 — {@link #markGraduationSeen} 이 비어 있을 때만 채운다.
+     *   그래서 "언제 처음 봤나" 가 그대로 남고, 같은 요청을 몇 번 보내도 결과가 같다.
+     */
+    @Column
+    private Instant graduationSeenAt;
+
     // ── 시계 (설계 규칙) ─────────────────────────────────────────────
 
     /** 마지막으로 정산한 시각. 여기서 지금까지를 {@link AwakeClock} 이 자른다. */
@@ -731,6 +745,34 @@ public class ZzalPet {
 
     public int getTutorialStep() {
         return tutorialStep;
+    }
+
+    /** 졸업 축하 창을 본 순간. 아직 안 봤으면 null. */
+    public Instant getGraduationSeenAt() {
+        return graduationSeenAt;
+    }
+
+    /**
+     * 졸업 축하 창을 봤다고 적는다 — <b>처음 한 번만</b> 찍힌다.
+     *
+     * <h3>★ 같은 요청을 몇 번 보내도 결과가 같다</h3>
+     * 이미 시각이 있으면 아무것도 안 바꾼다. 닫기를 두 번 눌러도, 네트워크가 끊겨 재시도가
+     * 겹쳐도 시각이 뒤로 밀리지 않는다 — 밀리면 "언제 처음 봤나" 를 못 읽는다.
+     *
+     * <h3>★ 튜토리얼이 아직 안 끝난 것으로 보여도 막지 않는다</h3>
+     * 기준은 서버의 진행도가 아니라 <b>화면이 축하 판을 닫은 시점</b>이다. 완주 응답과 이 호출
+     * 사이에 서버가 어떻게 보이든(다른 탭에서 먼저 눌렀거나 완주 응답이 늦게 닿았거나)
+     * 사용자는 이미 축하를 봤다. 여기서 거절하면 그 사람은 축하 창을 <b>다음 접속마다 다시</b>
+     * 보게 되고, 저장이 안 됐다는 사실은 로그 어디에도 안 남은 채 창으로만 드러난다.
+     *
+     * @return 이번 호출이 실제로 찍었으면 true, 이미 봤던 것이면 false
+     */
+    public boolean markGraduationSeen(Instant now) {
+        if (graduationSeenAt != null) {
+            return false;
+        }
+        graduationSeenAt = now.truncatedTo(ChronoUnit.SECONDS);
+        return true;
     }
 
     /**

@@ -378,7 +378,12 @@ public final class PetResponses {
             @Schema(description = """
                     튜토리얼 진행 상태. 9단계를 모두 완료하면 null 이 되고 clock.clockStartedAt 이 채워진다.
                     진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다""")
-            Tutorial tutorial) {
+            Tutorial tutorial,
+            @Schema(description = """
+                    튜토리얼 졸업 축하 창을 본 시각. 아직 안 봤으면 null.
+                    화면은 이 값이 null 일 때만 축하 창을 띄우고, 닫을 때 POST /{petId}/graduation-seen 을 부른다.
+                    기기가 아니라 캐릭터에 붙는 값이라 새 탭·재시작에도 같은 창이 다시 뜨지 않는다""")
+            Instant graduationSeenAt) {
 
         /**
          * <b>조각 판을 빼고</b> 그린다 — 이름이 그 사실을 말한다.
@@ -420,7 +425,10 @@ public final class PetResponses {
                         List.of(), List.of(), false, List.of(),
                         // firstGift · chatSummary · scenes · personality · world · tone · genre
                         // · background · anchorsKey · features · leaving · trip · tutorial
-                        null, null, null, null, null, null, null, null, null, null, null, null, null);
+                        null, null, null, null, null, null, null, null, null, null, null, null, null,
+                        // ★ 여기만 ALIVE 전용이 아니다 — 축하를 본 뒤 떠난 아이도 "봤다" 는 사실은 남는다.
+                        //   빈 값으로 덮으면 그 화면이 다시 뜰 수 있고, 그건 이 칸이 막으려던 바로 그 일이다.
+                        pet.getGraduationSeenAt());
             }
 
             boolean sleeping = pet.isSleeping();
@@ -490,7 +498,8 @@ public final class PetResponses {
                     features,
                     leaving(pet),
                     pet.isTraveling() ? new Trip(pet.getTripStartedAt(), pet.getPostcardCount()) : null,
-                    tutorial);
+                    tutorial,
+                    pet.getGraduationSeenAt());
         }
 
         /**
