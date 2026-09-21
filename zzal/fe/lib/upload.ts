@@ -6,7 +6,7 @@
 // 파일 바이트가 우리 서버를 안 지나가므로 t3.micro 가 업로드로 멈출 일이 없다.
 // 대신 서버는 업로드 순간을 못 보므로, 나중에 key 를 도메인 API 에 넘겨 확정한다.
 
-import { request } from './api';
+import { ApiError, request } from './api';
 
 /** 키가 들어갈 폴더. 서버 ALLOWED_DOMAINS 밖의 값은 400 이다. */
 export type UploadDomain = 'zzal' | 'webtoon' | 'trailer' | 'common';
@@ -69,4 +69,51 @@ export async function uploadImage(file: File, domain: UploadDomain = 'zzal'): Pr
   }
 
   return key;
+}
+
+
+// ── 실패를 가르는 한 칸 ────────────────────────────────────────────────────
+
+/**
+ * 올리기가 왜 실패했나. **사용자 그림 탓인가, 우리 쪽 사정인가.**
+ *
+ * ★★ 왜 필요한가 — 올리기 칸에는 「이런 그림은 어려워요」 예시가 붙어 있다. 연결이 끊기거나
+ *   S3 가 거절해서 실패해도 그 예시가 오류 한 줄 바로 아래 그대로 남아서, 사용자가
+ *   **제 그림 탓으로 읽었다.** 실제로는 그림을 한 번 보지도 못한 실패다.
+ *   그래서 화면이 둘을 갈라 그릴 수 있게, 여기서 한 칸으로 답해 준다.
+ *
+ * ★ 올리는 단계에서 **그림 탓인 실패는 사실상 한 가지뿐**이다 — 서버가
+ *   `ZZAL_PET_HATCH_FAILED`("이 그림으로는 그리기가 어려웠어요")를 줄 때.
+ *   presign 400·401·5xx, S3 403/CORS, 네트워크 끊김은 전부 우리 쪽 사정이다
+ *   (업로드 서버는 파일 내용을 보지 않는다 — MIME 검사조차 없다).
+ * ★ 막힘(`ZZAL_HATCH_BLOCKED_*`)은 여기 안 온다. 그건 오류가 아니라 안내라서
+ *   `readHatchBlocked` 가 먼저 걷어 간다(→ `lib/hatchBlocked.ts`).
+ */
+export type UploadFailure = 'image' | 'infra';
+
+/** 서버가 "이 그림으로는 못 그리겠다" 고 답하는 코드. `common/be` 의 ErrorCode 와 같은 이름. */
+const IMAGE_REJECTED = 'ZZAL_PET_HATCH_FAILED';
+
+export function classifyUploadFailure(e: unknown): UploadFailure {
+  return e instanceof ApiError && e.code === IMAGE_REJECTED ? 'image' : 'infra';
+}
+
+/**
+ * 화면에 띄울 실패 한 줄. **영어가 새는 것을 막는 자리**다.
+ *
+ * ★★ 왜 필요한가 — presign(우리 서버)이 네트워크 단에서 실패하면 공통 클라이언트는 브라우저가
+ *   만든 `TypeError: Failed to fetch` 를 그대로 던진다. 부르는 쪽이 `e.message` 를 띄우므로
+ *   사용자가 **영어 오류를 본다**(2026-09-20 실패 주입으로 실측). S3 PUT 쪽은 이미 위에서
+ *   막아 두었는데 presign 쪽 길이 뚫려 있었다.
+ * ★ 판정 기준을 예외의 종류가 아니라 **한글이 들어 있는가**로 잡은 이유 — 우리가 만든 줄과
+ *   서버 봉투(ApiError.message)는 전부 한국어다. 반대로 브라우저·런타임이 만든 문구는
+ *   전부 영어다. 새 실패 경로가 생겨도 이 규칙은 그대로 맞는다.
+ */
+const NETWORK_LINE = '이미지를 올리지 못했습니다. 잠시 후 다시 시도해 주세요';
+const HANGUL = /[가-힣]/;
+
+export function uploadFailureLine(e: unknown): string {
+  if (e instanceof ApiError) return e.message;
+  if (e instanceof Error && HANGUL.test(e.message)) return e.message;
+  return NETWORK_LINE;
 }

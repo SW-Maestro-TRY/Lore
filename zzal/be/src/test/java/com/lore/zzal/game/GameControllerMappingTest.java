@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
  * 그래서 매핑 자체를 확인하고, 찾은 메서드를 <b>그 매핑으로 불러</b> 서비스까지 이어지는지 본다.
  * 메서드 이름을 직접 적지 않으므로 이 시험은 고치기 전 코드에서도 컴파일되고, 그때는 빨갛다.
  */
-@DisplayName("미니게임 HTTP 계약 — 달리기 종료 주소")
+@DisplayName("미니게임 HTTP 계약 — 달리기 종료·기권 주소")
 class GameControllerMappingTest {
 
     private static final String PATH = "/{gameId}/finish";
@@ -60,6 +60,39 @@ class GameControllerMappingTest {
 
         // 화면이 보낸 생존 시간이 그대로 서비스까지 간다
         verify(gameService).finish(eq(1L), eq(7L), eq(12L), eq(30_000L), any());
+    }
+
+    @Test
+    @DisplayName("★ POST /{gameId}/abandon 매핑이 있고 GameService.abandon 으로 이어진다")
+    void abandonIsMappedAndDelegates() throws Exception {
+        String path = "/{gameId}/abandon";
+        Method mapped = mappingFor(path);
+        assertThat(mapped).as("POST %s 매핑이 없다 — 시작한 판을 접을 길이 없다", path).isNotNull();
+
+        GameService gameService = mock(GameService.class);
+        PetService petService = mock(PetService.class);
+        ZzalPet pet = mock(ZzalPet.class);
+        ZzalGame game = ZzalGame.start(1L, 7L, GameKind.LEFT_RIGHT, "LRLRL", Instant.now());
+        when(petService.get(anyLong(), anyLong())).thenReturn(pet);
+        when(gameService.remainingToday(any())).thenReturn(2);
+        when(gameService.abandon(anyLong(), anyLong(), anyLong(), any()))
+                .thenReturn(new GameService.Abandoned(game, List.of(), false));
+
+        GameController controller = new GameController(gameService, petService);
+        // ★ 기권은 본문이 없다 — userId · petId · gameId 세 자리뿐이다
+        assertThat(mapped.getParameterTypes()).containsExactly(Long.class, Long.class, Long.class);
+        assertThat(mapped.invoke(controller, 1L, 7L, 12L)).isNotNull();
+
+        verify(gameService).abandon(eq(1L), eq(7L), eq(12L), any());
+    }
+
+    /** {@code @PostMapping(path)} 가 붙은 메서드를 찾는다. 메서드 이름을 적지 않으므로 없으면 빨갛다. */
+    private static Method mappingFor(String path) {
+        return Arrays.stream(GameController.class.getDeclaredMethods())
+                .filter(m -> m.isAnnotationPresent(PostMapping.class))
+                .filter(m -> Arrays.asList(m.getAnnotation(PostMapping.class).value()).contains(path))
+                .findFirst()
+                .orElse(null);
     }
 
     /** 매핑된 메서드의 인자 자리를 타입으로 채운다 — 순서가 바뀌어도 이 시험은 계속 돈다. */

@@ -339,6 +339,7 @@ export interface paths {
         /**
          * 캐릭터 만들기
          * @description 사진을 주면 그것을 읽어 외모를 적고, 안 주면 이름·설명만으로 적는다.
+         *     사진은 여러 장(최대 4장, 같은 사람의 다른 각도·표정) 줄 수 있다.
          *     **올린 사진은 그림이 나오면 지운다** — 보관하는 것은 그린 것뿐이다.
          *
          *     하루 몫이 남아 있으면 공짜, 아니면 크레딧을 받는다.
@@ -661,6 +662,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/nh/jobs/{id}/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 완성 알림 받을 이메일
+         * @description 빈 값을 보내면 안 받겠다는 뜻이라 적어 둔 주소를 지운다.
+         */
+        post: operations["notify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/nh/jobs/{id}/page/{no}.png": {
         parameters: {
             query?: never;
@@ -687,7 +708,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 이야기 고르기 */
+        /**
+         * 이야기 고르기
+         * @description body 를 같이 보내면 그 방향의 본문을 사람이 고친 내용으로 바꿔서 다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.
+         */
         post: operations["pick"];
         delete?: never;
         options?: never;
@@ -766,6 +790,26 @@ export interface paths {
         get: operations["sheetImage"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/photo-presign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 게스트 사진 업로드 주소 발급
+         * @description 로그인 없이 S3 에 직접 올릴 임시 주소를 받는다. 10분간 유효.
+         */
+        post: operations["photoPresign"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1373,7 +1417,7 @@ export interface paths {
          *     - **보상은 지금 나가지 않는다.** 무엇을 줄지 아직 안 정해졌고, 정해지면 설정값만
          *       바꾸면 붙는다. 화면에 "무엇을 드립니다" 라고 쓰지 말 것
          */
-        post: operations["submit"];
+        post: operations["submit_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1425,6 +1469,35 @@ export interface paths {
         get: operations["current"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/games/{gameId}/abandon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 매치 기권
+         * @description 진행 중인 매치를 그 자리에서 접는다. 좌우 맞히기와 달리기 모두 이 주소로 접는다.
+         *
+         *     접은 매치는 패배로 확정되어 다시 진행할 수 없고 current 에도 더는 잡히지 않는다.
+         *     게임 중에 나가면 그 판은 끝이라는 규칙이며, 지고 있는 판을 버리고 다시 시작하는 것을 막는다.
+         *
+         *     오늘 남은 매치 수는 시작 시점에 이미 차감했으므로 기권으로 돌려주지 않는다. 승리 보상·
+         *     패배 판정(두 번째 선물)·놀이 조각은 어느 것도 발생하지 않는다.
+         *
+         *     ★ 아픈 펫도 기권할 수 있다(ZZAL_SICK_REFUSES 없음) — 아픔은 '노는 것'을 막는 조건이고
+         *     기권은 그만두는 것이다. 여기서 막으면 병든 동안 열어 둔 매치를 닫을 길이 사라진다.
+         */
+        post: operations["abandon"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1497,6 +1570,34 @@ export interface paths {
         get: operations["hatch"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/motion-wish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 보고 싶은 동작 남기기
+         * @description 자유 글 한 줄을 받는다. 로그인이 필요하고, 내 펫에만 남길 수 있다.
+         *
+         *     - 앞뒤 공백은 서버가 떼고 저장한다. **공백뿐이면 400**(INVALID_INPUT)
+         *     - 길이는 받은 그대로 재서 1~60자. 넘으면 400
+         *     - **한 번 부를 때마다 한 줄**이다 — 후기와 달리 여러 번 남길 수 있다
+         *     - 한 아이에 **하루 20줄**까지. 넘으면 409(ZZAL_MOTION_WISH_DAILY_LIMIT),
+         *       한국 시각 자정에 풀린다
+         *     - 성공하면 **본문 없이 204** 다. 남긴 글을 되돌려줄 이유가 없고,
+         *       화면은 방금 자기가 보낸 값을 이미 들고 있다
+         */
+        post: operations["submit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1743,6 +1844,64 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description 기권 결과. 진행 중이던 매치는 패배로 확정되며 다시 진행할 수 없다 */
+        AbandonResult: {
+            /** @description 항상 true — 기권한 매치는 그 자리에서 끝난다 */
+            finished?: boolean;
+            /**
+             * Format: int64
+             * @example 12
+             */
+            gameId?: number;
+            /** @description 항상 false — 기권은 회차를 진행한 것이 아니다 */
+            hit?: boolean;
+            /**
+             * Format: int32
+             * @description 기권 시점까지 맞힌 횟수
+             * @example 1
+             */
+            hits?: number;
+            /** @description 항상 빈 목록 — 기권으로 해금되는 동작은 없다 */
+            justUnlocked?: number[];
+            /**
+             * @description LEFT_RIGHT · RUN
+             * @example LEFT_RIGHT
+             */
+            kind?: string;
+            /**
+             * @description 기권에는 선택이 없으므로 항상 null. Guess 와 같은 모양을 유지하기 위한 자리
+             * @enum {string}
+             */
+            pick?: "LEFT" | "RIGHT";
+            /**
+             * Format: int32
+             * @description 오늘 남은 매치 수. 일일 매치는 시작 시점에 차감하므로 기권해도 돌려주지 않는다
+             * @example 2
+             */
+            remainingToday?: number;
+            /**
+             * Format: int32
+             * @description 기권 시점까지 진행한 회차(0부터). 달리기는 항상 0
+             * @example 2
+             */
+            round?: number;
+            /**
+             * Format: int32
+             * @description 한 매치의 총 회차
+             * @example 5
+             */
+            rounds?: number;
+            /** @description 달리기 해금 여부 */
+            runUnlocked?: boolean;
+            /** @description 항상 false — 기권은 패배로 확정된다. 접는 시점에 이미 정답 수가 승리 조건을 넘겼더라도 끝까지 진행하지 않은 매치이므로 승리가 아니다 */
+            win?: boolean;
+            /**
+             * Format: int32
+             * @description 승리에 필요한 정답 수
+             * @example 3
+             */
+            winAt?: number;
+        };
         /** @description 시간 당기기 요청 — 초·분 중 아무 쪽이나 준다(둘 다 주면 더한다) */
         AdvanceClock: {
             /**
@@ -1805,6 +1964,12 @@ export interface components {
         Answered: {
             chatReply?: components["schemas"]["Reply"];
             pet?: components["schemas"]["Detail"];
+        };
+        ApiResponseAbandonResult: {
+            data?: components["schemas"]["AbandonResult"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
         };
         ApiResponseAlbum: {
             data?: components["schemas"]["Album"];
@@ -2521,6 +2686,9 @@ export interface components {
             id?: string;
             log?: string[];
             /** Format: int32 */
+            minutes_left?: number;
+            notice?: components["schemas"]["Notice"];
+            /** Format: int32 */
             pct?: number;
             /** Format: int32 */
             pick?: number;
@@ -2618,8 +2786,24 @@ export interface components {
             seq?: number;
             unlocked?: boolean;
         };
+        /** @description 보고 싶은 동작 한 줄 — 앞뒤 공백은 서버가 떼고, 공백뿐이면 거절한다 */
+        MotionWishSubmit: {
+            /**
+             * @description 보고 싶은 동작. 1~60자
+             * @example 기지개 켜는 모습이 보고 싶어요
+             */
+            text: string;
+        };
         NoteRequest: {
             note?: string;
+        };
+        Notice: {
+            email?: string;
+            logged_in?: boolean;
+            sent?: boolean;
+        };
+        NotifyRequest: {
+            email?: string;
         };
         PagesRequest: {
             pages?: components["schemas"]["Upload"][];
@@ -2680,7 +2864,11 @@ export interface components {
              */
             world?: string;
         };
+        PhotoPresignRequest: {
+            contentType?: string;
+        };
         PickRequest: {
+            body?: string;
             /** Format: int32 */
             n?: number;
         };
@@ -3891,6 +4079,34 @@ export interface operations {
             };
         };
     };
+    notify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["NotifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     pageImage: {
         parameters: {
             query?: {
@@ -4046,6 +4262,30 @@ export interface operations {
                 };
                 content: {
                     "image/png": string;
+                };
+            };
+        };
+    };
+    photoPresign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotoPresignRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedUpload"];
                 };
             };
         };
@@ -4897,7 +5137,7 @@ export interface operations {
             };
         };
     };
-    submit: {
+    submit_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -5003,6 +5243,47 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseState"];
+                };
+            };
+        };
+    };
+    abandon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+                gameId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 기권 처리됨 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAbandonResult"];
+                };
+            };
+            /** @description ZZAL_GAME_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAbandonResult"];
+                };
+            };
+            /** @description ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAbandonResult"];
                 };
             };
         };
@@ -5125,6 +5406,60 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ApiResponseHatch"];
                 };
+            };
+        };
+    };
+    submit: {
+        parameters: {
+            query?: never;
+            header?: {
+                "User-Agent"?: string;
+            };
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotionWishSubmit"];
+            };
+        };
+        responses: {
+            /** @description 남겼음(본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 빈 글·공백뿐·60자 초과(INVALID_INPUT) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 로그인이 필요함 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오늘 몫을 다 씀(ZZAL_MOTION_WISH_DAILY_LIMIT) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

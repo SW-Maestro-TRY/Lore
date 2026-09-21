@@ -20,8 +20,8 @@ import {
   type PetCreated, type PetDetail, type Personality, type Shared, type ShareKind,
 } from './pet';
 import {
-  getCurrentGame, guess, startGame,
-  type GameKind, type GameState, type GuessResult, type Side,
+  abandonGame, getCurrentGame, guess, startGame,
+  type AbandonResult, type GameKind, type GameState, type GuessResult, type Side,
 } from './game';
 
 export interface PetSource {
@@ -54,6 +54,11 @@ export interface PetSource {
 
   startGame(petId: number, kind?: GameKind): Promise<GameState>;
   guess(petId: number, gameId: number, pick: Side): Promise<GuessResult>;
+  /**
+   * 치던 판을 접는다(기권). **목도 같은 규칙을 지킨다** — 연습방의 ✕ 가 진짜 방과 다르게
+   * 굴면 연습이 거짓말이 된다.
+   */
+  abandonGame(petId: number, gameId: number): Promise<AbandonResult>;
   getCurrentGame(petId: number, signal?: AbortSignal): Promise<GameState>;
 }
 
@@ -63,7 +68,7 @@ export const httpPetSource: PetSource = {
   draftPet, setCharacter, getHatchProgress, listPets, getPet, care, sleep, wake, tutorialDone, setPersonality,
   setBackground, share,
   getChat, answerChat, markMotionSeen, getAlbum,
-  startGame, guess, getCurrentGame,
+  startGame, guess, abandonGame, getCurrentGame,
 };
 
 let mockSingleton: PetSource | null = null;

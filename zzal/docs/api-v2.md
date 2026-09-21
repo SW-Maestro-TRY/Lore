@@ -126,12 +126,14 @@
 | `POST /{id}/games` | `{kind: LEFT_RIGHT\|RUN}` | 시작. 진행 중인 판이 있으면 그것을 돌려준다 | `ZZAL_GAME_DAILY_LIMIT` `ZZAL_SICK_REFUSES` `ZZAL_FEATURE_LOCKED`(RUN 잠김) `ZZAL_PET_SLEEPING` |
 | `POST /{id}/games/{gameId}/guess` | `{pick: LEFT\|RIGHT}` | 좌우 맞히기 한 판. 5판 3승. 답은 서버가 쥔다 | `ZZAL_GAME_NOT_FOUND` `ZZAL_GAME_FINISHED` |
 | `POST /{id}/games/{gameId}/finish` | `{survivedMs}` | 달리기 끝. 30,000ms 이상이면 승리. 서버는 상한(60,000)만 검증 | `ZZAL_GAME_NOT_FOUND` `ZZAL_GAME_FINISHED` |
+| `POST /{id}/games/{gameId}/abandon` | | 기권. 치던 판을 그 자리에서 접는다(패). 좌우·달리기 공통. 아픈 펫도 된다 | `ZZAL_GAME_NOT_FOUND` `ZZAL_GAME_FINISHED` `ZZAL_PET_SLEEPING` |
 | `GET /{id}/games/current` | | 치던 판 잇기 | |
 
 - 두 게임 합쳐 **하루 3판**, 시작한 판 기준, 잠들 때 리셋. `RUN`은 좌우 맞히기 **5승** 뒤.
 - 승리 = 행복 +1(설정 `app.zzal.reward.game-win: HAPPINESS`).
-- 응답 `GameState{playing, gameId, kind, round, hits, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(★ `finished`·`win`은 **없다** — 판이 끝났는지는 `guess` 응답이 말한다) · `Guess{gameId, round, pick, answer, hit, hits, finished, win, nextRound, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(`win`은 끝났을 때만·`nextRound`는 안 끝났을 때만) · `RunResult{gameId, survivedMs, win, remainingToday, justUnlocked[], runUnlocked}` — **행동 응답 = 상태**: 게임 경로 해금(13번 놀라기 = 3판 시작, 달리기 = 5승)이 그 응답에 실린다(`runUnlocked`는 동작이 아니라 기능이라 별도 불리언).
+- 응답 `GameState{playing, gameId, kind, round, hits, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(★ `finished`·`win`은 **없다** — 판이 끝났는지는 `guess` 응답이 말한다) · `Guess{gameId, round, pick, answer, hit, hits, finished, win, nextRound, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(`win`은 끝났을 때만·`nextRound`는 안 끝났을 때만) · `RunResult{gameId, survivedMs, win, remainingToday, justUnlocked[], runUnlocked}` · `AbandonResult{gameId, kind, round, pick, hit, hits, finished, win, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(`Guess`와 같은 모양 · `pick`은 늘 null · `finished`는 늘 true · `win`은 늘 false) — **행동 응답 = 상태**: 게임 경로 해금(13번 놀라기 = 3판 시작, 달리기 = 5승)이 그 응답에 실린다(`runUnlocked`는 동작이 아니라 기능이라 별도 불리언).
 - **「해석」27** 밤잠을 넘긴 미완료 판은 잇지 않는다 — 익일 첫 `start`가 어제 판(오늘 기상 전 시작)을 접고(패) 새 판을 연다.
+- **게임 중에 나가면 그 판은 끝이다** — `abandon`이 그 자리에서 패로 확정한다(`current`에도 안 잡힌다). 기회는 시작 시점에 이미 깎였으므로 **더 깎지도 돌려주지도 않는다**. 한 번도 안 치고 나가면 판이 없어 차감도 없다. 승리 보상·두 번째 선물·놀이 조각은 어느 것도 발생하지 않는다.
 - 달리기 서버 검증은 정본대로 상한(60,000ms)만. "시작 뒤 경과 시간 + 2초" 검사는 보류(결정기록).
 
 ### 1.8 떠남·설정(v2 판, 9/14)
@@ -143,6 +145,20 @@
 
 - **예고**(정본 9·16장) — 미방문 **달력 5일** 또는 **케어 미스 8** → 그 **기상 시점**에 짐 싸기. 접속하면 **즉시 취소 + 케어 미스 -2**. 예고 뒤 **2일**에 출발. 함께한 날 **30일 이상이면 예고·유예 각 2배**.
 - **여행 중** — 게이지·병·케어 미스·부재·장면이 전부 멈추고 **함께한 날도 안 는다**. 돌봄·잠·놀이·채팅·공유는 `ZZAL_TRAVELING`(조회는 된다). 엽서는 **하루 1장·최대 3장**이고 **재회 때 전달**된다.
+
+### 1.9 동작 요청 ("이런 동작도 보고 싶어요")
+
+| 호출 | 요청 | 응답 | 거절 |
+|---|---|---|---|
+| `POST /api/zzal/v1/me/pets/{petId}/motion-wish` | `{text}` 1~60자 | **204, 본문 없음** | `INVALID_INPUT`(400) `ZZAL_PET_NOT_FOUND`(404) `ZZAL_MOTION_WISH_DAILY_LIMIT`(409) |
+
+- 로그인 필수. 주소가 `me` 밑이라 **내 아이에게만** 남길 수 있고, 남의 펫은 403이 아니라 **404**다(다른 `me/pets` 호출과 같은 규칙).
+- **한 번 부를 때마다 한 줄**이다 — 후기(`1회`)와 달리 여러 번 남길 수 있다. 보고 싶은 동작은 여러 개일 수 있고, 쌓인 목록 자체가 우리가 보려는 것이다.
+- 앞뒤 공백은 서버가 떼고 저장한다. **공백뿐이면 400**. 길이는 **받은 그대로**(다듬기 전) 재므로, 공백을 붙여 60자를 넘기면 400이다.
+- **한 아이에 하루 20줄**까지. 넘으면 409, 한국 시각 자정에 풀린다(부화·놀이의 하루 상한과 같은 경계). 막으려는 것은 사용자가 아니라 눌린 채 굴러가는 화면이라 상한이 넉넉하고, 조용히 버리지 않고 분명히 거절한다.
+- **204인 이유** — 이 서비스의 다른 응답은 전부 공통 봉투(`ApiResponse`)를 쓰지만, 여기서 돌려줄 것이 하나도 없다. 방금 보낸 글은 화면이 이미 들고 있고, 되돌려주면 화면이 그 값을 다시 믿을 자리가 생긴다. 공통 프론트 클라이언트는 본문 없는 성공을 이미 다룬다(`readEnvelope` → null).
+- **글은 표(`zzal_motion_wish`)에만 남는다.** 행동 기록으로는 `motion_wish_submitted` 라는 **고정된 이름 한 줄**만 가고 자유 글은 실리지 않는다 — 기록층은 사람이 쓴 글을 일부러 안 받는 곳이다(허용 키 목록). **무엇을 바랐나는 표에서, 몇 명이 바랐나는 기록에서** 읽는다.
+- 스키마 문서 이름은 `MotionWishSubmit` 로 못 박았다. 후기에도 `Submit` 이라는 record 가 있어 이름을 안 주면 OpenAPI 문서에서 한쪽이 다른 쪽을 덮는다.
 
 ---
 
@@ -374,6 +390,7 @@
 | **`ZZAL_NOT_IN_REVIEW`** | 409 | 검수 대기가 아닌 행에 판정(#224 리뷰) |
 | `ZZAL_GAME_NOT_FOUND` · `ZZAL_GAME_FINISHED` · `ZZAL_GAME_DAILY_LIMIT` | 404·409·409 | v1과 같음 |
 | `ZZAL_FEEDBACK_ALREADY_SUBMITTED` | 409 | v1과 같음 |
+| **`ZZAL_MOTION_WISH_DAILY_LIMIT`** | 409 | 한 아이에 동작 요청을 하루 20줄 넘게 남김(한국 시각 자정에 초기화) |
 | `ADMIN_ONLY` | 403 | 관리자 아님 |
 
 삭제(v1 전용, PR-3에서 v1 컨트롤러와 함께 제거): `ZZAL_TRAIN_IN_PROGRESS` `ZZAL_TRAIN_ENOUGH` `ZZAL_TRAIN_NOT_ENOUGH` `ZZAL_ALL_UNLOCKED` `ZZAL_MOTION_NOT_READY` `ZZAL_PET_STILL_SLEEPING`. 프론트 `common/fe/api/client.ts`의 코드 유니온도 같이 갱신한다.
@@ -522,7 +539,7 @@
 | 2 `pieces` · `goodDay` · `features.pieces` | **v2 동작** — 조각 4종·잠들 때 판정·이틀 연속 → 다음 심화 큐·기분 좋은 날 선지급 | PR-10 |
 | 2 `leaving` · `trip` · `settings.leaveEnabled` · 앨범 `postcards` | **v2 동작** — 예고(짐 가방)·여행·엽서·부르기·떠남 끄기 | PR-11 |
 | 1.5 채팅 | **v2 동작** — `GET /chat` · `POST /chat/{slot}/answer`(해석 22~24). `chatSummary.openSlot`은 null | PR-4 |
-| 1.7 미니게임 | **v2 동작** — `POST /games {kind}` · `guess` · `finish` · `current`. 합산 3판·잠들 때 리셋·RUN 5승 해금 | PR-4 |
+| 1.7 미니게임 | **v2 동작** — `POST /games {kind}` · `guess` · `finish` · `abandon` · `current`. 합산 3판·잠들 때 리셋·RUN 5승 해금 | PR-4 |
 | 1.6 앨범·동작 | **`GET /album` 동작** — 도감 18칸(잠긴 칸 hint/progress). 엽서·장면 빈 목록. v0 동안 잠금은 **플래그만**(해석 25). **`POST /motions/{seq}/seen` 동작**(도착한 것만), 공유 대상에 도착한 심화 행동 포함 | PR-5·7 |
 | 배포 절차 — 서버 비밀 | **JWT 서명 키를 바꾸면 확률 흐름도 바뀐다.** 뽑기 소금이 그 키에서 파생되기 때문(해석 42). 이미 적힌 기록(`sick.since` 등)은 그대로지만 **앞으로의 발병 시각·당첨 순번은 달라진다** — 키 회전은 사용자에게 안 보이는 변화이므로 그 자체로 문제는 아니나, "왜 갑자기 병 패턴이 바뀌었나" 를 나중에 못 짚지 않도록 회전 시각을 배포 기록에 남긴다 | PR-8 |
 | 배포 절차 | `ZZAL_PIPELINE_VERSION` 전환은 **`HATCHING` 0건일 때**(굽는 도중 버전이 바뀌면 복구가 다른 버전 산출물을 이어받을 수 있음). 복구 job은 원래 job의 버전을 잇고 단계 재사용도 같은 버전만 | PR-5 |
@@ -534,6 +551,7 @@
 
 ## 변경 기록
 
+- **2026-09-20** — 동작 요청(1.9) 추가: `POST /me/pets/{petId}/motion-wish`(204), `zzal_motion_wish`(V23), `ZZAL_MOTION_WISH_DAILY_LIMIT`.
 - **2026-09-05** — 최초(PR-1, #192). 정본 v1.2 + 플랜 API v2 계약을 전문으로.
 - **2026-09-05** — PR-3: 9절 구현 진행 표 추가. `settings.leaveEnabled` 는 v2 판까지 항상 true.
 - **2026-09-05** — 리뷰 반영(PR-2·3): 해석 16~20 추가(낮잠 보상 0·낮잠 우선·깬 직후 밤잠 전이·자동 경계 해금 알림·비-ALIVE 리스트 `[]`).

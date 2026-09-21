@@ -62,8 +62,10 @@ test('오늘 한 일로 칸이 차고, 세는 것은 잠들 때다(해석 48)', 
   await press(page, 'bath');
   await expect(page.locator('[data-piece="clean"]')).toHaveAttribute('data-on', '1');
 
-  // ★ 낮에 칸이 차도 그 자리에서는 아무 일도 안 일어난다 — 연속은 잠들 때만 는다.
-  await expect(page.locator('[data-part="pieces"]')).toHaveAttribute('data-streak', '0');
+  // ★ 낮에 칸이 차도 그 자리에서는 아무 일도 안 일어난다 — 세는 것은 잠들 때다.
+  //   (연속일수 표시는 없앴다. 서버 응답에 그 칸이 없어 화면에 뜬 적이 없다.)
+  await expect(page.locator('[data-part="pieces"]')).toHaveAttribute('data-count', '2');
+  await expect(page.locator('[data-part="pieces"]')).not.toHaveAttribute('data-streak', /.*/);
 });
 
 test('기분 좋은 날은 조각 하나를 미리 받고 첫 부름이 살갑다(해석 52)', async ({ page }) => {
