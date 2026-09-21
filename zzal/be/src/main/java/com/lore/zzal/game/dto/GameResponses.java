@@ -121,6 +121,56 @@ public final class GameResponses {
         }
     }
 
+    /**
+     * 기권 결과 — {@link Guess} 와 같은 모양으로 답한다.
+     *
+     * ★ 모양을 맞춘 것은 화면을 위해서다. 기권도 "한 판이 끝났다" 는 같은 사건이라, 화면이 판을 닫는
+     *   코드를 하나만 두게 한다. 그래서 고를 것이 없는 {@code pick}·{@code hit} 도 자리를 비워 둔 채 남긴다.
+     *
+     * ★ {@code answer} 는 없다. 기권한 판의 남은 답을 알려 줄 이유가 없고, 이 파일의 규칙이기도 하다.
+     */
+    @Schema(name = "AbandonResult",
+            description = "기권 결과. 진행 중이던 매치는 패배로 확정되며 다시 진행할 수 없다")
+    public record AbandonResult(
+
+            @Schema(example = "12") Long gameId,
+
+            @Schema(description = "LEFT_RIGHT · RUN", example = "LEFT_RIGHT") String kind,
+
+            @Schema(description = "기권 시점까지 진행한 회차(0부터). 달리기는 항상 0", example = "2") int round,
+
+            @Schema(description = "기권에는 선택이 없으므로 항상 null. Guess 와 같은 모양을 유지하기 위한 자리")
+            Side pick,
+
+            @Schema(description = "항상 false — 기권은 회차를 진행한 것이 아니다") boolean hit,
+
+            @Schema(description = "기권 시점까지 맞힌 횟수", example = "1") int hits,
+
+            @Schema(description = "항상 true — 기권한 매치는 그 자리에서 끝난다") boolean finished,
+
+            @Schema(description = "항상 false — 기권은 패배로 확정된다. 접는 시점에 이미 정답 수가 "
+                    + "승리 조건을 넘겼더라도 끝까지 진행하지 않은 매치이므로 승리가 아니다") boolean win,
+
+            @Schema(description = "한 매치의 총 회차", example = "5") int rounds,
+            @Schema(description = "승리에 필요한 정답 수", example = "3") int winAt,
+
+            @Schema(description = "오늘 남은 매치 수. 일일 매치는 시작 시점에 차감하므로 기권해도 돌려주지 않는다",
+                    example = "2") int remainingToday,
+
+            @Schema(description = "항상 빈 목록 — 기권으로 해금되는 동작은 없다") List<Integer> justUnlocked,
+
+            @Schema(description = "달리기 해금 여부") boolean runUnlocked) {
+
+        public static AbandonResult of(GameService.Abandoned r, int remainingToday) {
+            ZzalGame game = r.game();
+            // ★ win 은 game.isWin() 이 아니라 상수 false 다. 좌우 맞히기의 isWin() 은 "3회 이상 정답" 이라
+            //   3회를 맞힌 뒤 접으면 true 가 되는데, 그 판은 끝까지 치지 않은 판이라 승리가 아니다.
+            return new AbandonResult(game.getId(), game.getKind().name(), game.round(), null, false,
+                    game.getHits(), true, false,
+                    ZzalGame.ROUNDS, ZzalGame.WIN_AT, remainingToday, r.justUnlocked(), r.runUnlocked());
+        }
+    }
+
     @Schema(description = "달리기 종료 결과")
     public record RunResult(
             @Schema(example = "12") Long gameId,

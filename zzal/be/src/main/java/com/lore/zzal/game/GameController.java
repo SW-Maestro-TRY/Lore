@@ -100,6 +100,29 @@ public class GameController {
         return ApiResponse.ok(GameResponses.RunResult.of(r, remaining(userId, petId)));
     }
 
+    @Operation(summary = "매치 기권", description = """
+            진행 중인 매치를 그 자리에서 접는다. 좌우 맞히기와 달리기 모두 이 주소로 접는다.
+
+            접은 매치는 패배로 확정되어 다시 진행할 수 없고 current 에도 더는 잡히지 않는다.
+            게임 중에 나가면 그 판은 끝이라는 규칙이며, 지고 있는 판을 버리고 다시 시작하는 것을 막는다.
+
+            오늘 남은 매치 수는 시작 시점에 이미 차감했으므로 기권으로 돌려주지 않는다. 승리 보상·
+            패배 판정(두 번째 선물)·놀이 조각은 어느 것도 발생하지 않는다.
+
+            ★ 아픈 펫도 기권할 수 있다(ZZAL_SICK_REFUSES 없음) — 아픔은 '노는 것'을 막는 조건이고
+            기권은 그만두는 것이다. 여기서 막으면 병든 동안 열어 둔 매치를 닫을 길이 사라진다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "기권 처리됨"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ZZAL_GAME_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING")})
+    @PostMapping("/{gameId}/abandon")
+    public ApiResponse<GameResponses.AbandonResult> abandon(@LoginUser Long userId, @PathVariable Long petId,
+                                                            @PathVariable Long gameId) {
+        GameService.Abandoned r = gameService.abandon(userId, petId, gameId, Instant.now());
+        return ApiResponse.ok(GameResponses.AbandonResult.of(r, remaining(userId, petId)));
+    }
+
     @Operation(summary = "진행 중인 매치 조회", description = """
             새로고침 등으로 화면이 초기화된 경우 진행 중인 매치를 이어받는다.
             진행 중인 매치가 없으면 playing 이 false 다.

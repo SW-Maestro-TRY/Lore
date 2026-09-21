@@ -69,6 +69,10 @@ public class GameService {
     public record RunResult(ZzalGame game, boolean win, List<Integer> justUnlocked, boolean runUnlocked) {
     }
 
+    /** 기권 결과 — 접은 판. 기권으로 열리는 것이 없어 {@code justUnlocked} 는 늘 비어 있다. */
+    public record Abandoned(ZzalGame game, List<Integer> justUnlocked, boolean runUnlocked) {
+    }
+
     /**
      * 새 판. 진행 중인 판이 있으면 그것을 돌려준다(두 번 눌러도 안전, 하루 횟수도 안 먹는다).
      * 펫은 {@link PetService#awake} 로 잠근다 — 검사와 저장 사이에 다른 요청이 끼면 판이 둘 생긴다.
@@ -197,6 +201,45 @@ public class GameService {
             }
         });
         return new RunResult(game, game.isWin(), a.justUnlocked(), runUnlocked(pet));
+    }
+
+    /**
+     * 기권 — 치던 판을 그 자리에서 접는다. 진행 중이던 판은 <b>패배로 확정</b>되고 다시 못 친다.
+     *
+     * <h3>★ 왜 "나가면 끝" 인가</h3>
+     * 지고 있는 판을 나갔다가 다시 들어와 이어 치면 하루 3판이 <b>이길 때까지 3판</b>이 된다.
+     * 하루 횟수를 끝난 판이 아니라 <b>시작한 판</b>으로 세는 것(정본 7장)과 같은 이유다.
+     * 그래서 기회는 깎지도 돌려주지도 않는다 — 시작할 때 이미 깎였다.
+     *
+     * <h3>★★ 여기서 <b>부르지 않는 것</b>들이 이 메서드의 본체다</h3>
+     * <ul>
+     *   <li>{@code pet.winLeftRight()} · {@code rewardService.forGameWin} — 기권은 승리가 아니다.
+     *       접는 순간 이미 3승을 쌓았더라도 마찬가지다(그 판은 끝까지 안 친 판이다).</li>
+     *   <li>{@code bakeTrigger.onFirstGameLoss} — 접은 판이 패배로 세면 <b>한 판도 끝까지 안 친 사람이
+     *       선물을 받고, 진 적이 없어 그 선물의 이유를 모른다.</b> {@code guess} 에 적어 둔 금지와 같다.</li>
+     *   <li>{@code pieceService.count} · {@code pet.startGame} — 하루 3판·2층 13번·놀이 조각은
+     *       <b>시작할 때 이미 셌다.</b> 접었다고 또 세지도, 돌려주지도 않는다.</li>
+     * </ul>
+     *
+     * <h3>★ 아픔은 여기서만 안 본다 — 빠뜨린 게 아니라 일부러다</h3>
+     * {@code start}·{@code guess}·{@code finish} 의 {@code isSick} 검사는 "아프면 놀지 않는다"(정본 16장)를
+     * 지키는 것이라 <b>노는 쪽</b>에 건다. 기권은 노는 게 아니라 그만두는 것이다. 여기서까지 거절하면
+     * 병든 사람은 열어 둔 판을 닫지도 못한 채 나을 때까지 갇히고, 그 판이 {@code current} 로 계속 돌아와
+     * 화면도 못 닫는다 — 병이 벌이 되어 버린다.
+     *
+     * ★ 거절이 나도 정산은 되돌리지 않는다 — {@code start} 주석과 같은 규약이다(#225 리뷰 하-1).
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Abandoned abandon(Long userId, Long petId, Long gameId, Instant realNow) {
+        ZzalPet pet = petService.awake(userId, petId, realNow);
+        Instant now = pet.now(realNow);
+        ZzalGame game = myGame(userId, pet, gameId);
+        if (game.isFinished()) {
+            throw new BusinessException(ErrorCode.ZZAL_GAME_FINISHED);
+        }
+        // ★ 좌우·달리기를 가리지 않는다 — 달리기도 나가면 그 판은 끝이다(kind 검사 없음이 의도다).
+        game.abandon(now);      // finishedAt 만 찍는다
+        return new Abandoned(game, List.of(), runUnlocked(pet));
     }
 
     /** 치던 판. 새로고침 복구용. 자는 중이어도 조회는 된다. */
