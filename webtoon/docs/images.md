@@ -46,64 +46,132 @@ S3 에 올라간 그림의 주소는 언제나 `/` 로 시작하는 상대경로
 
 ## 갈래별로 넣는 법
 
-### 예시 웹툰 (홈 마퀴 · 둘러보기에 「예시」 배지로 뜨는 작품)
+### 예시는 둘 다 "저장소에 그림, 부팅 때 심기" 입니다
 
-지금 네 편이 정적 파일로 들어 있습니다. DB 와 무관하고 로그인도 필요 없습니다.
+예시 작품과 예시 캐릭터는 같은 방식으로 돕니다. **그림은 저장소에 두고,
+서버가 뜰 때 그 환경의 창고에 올린 뒤 DB 에 심습니다.**
 
 ```
-webtoon/fe/static/gallery/
-  runs.json                  ← 목록
-  <run_id>/cover.jpg         ← 표지
-  <run_id>/p01.jpg … pNN.jpg ← 본문 (2자리 zero-pad)
-  <run_id>/result.json       ← 제목·로그라인·쪽 정보
+webtoon/ai/assets/examples/<run_id>/   예시 작품 (쪽 그림 + meta.json)
+webtoon/ai/assets/samples/ex-*.jpg     예시 캐릭터 (그림 한 장)
 ```
 
-읽는 코드는 `webtoon/fe/lib/api.ts:267-278`(목록),
-`:299-302`(표지 주소), `:329-332`(본문 주소), `:319-327`(`result.json` 폴백)
-입니다.
+**심는 것은 한 번뿐입니다.** 이미 심긴 것은 건드리지 않습니다 — 그래서
+심은 뒤 **DB 에서 고친 것이 다음 기동에 안 되돌아갑니다.** 예시를 다듬는
+자리는 시드 목록이 아니라 DB 입니다(아래 「DB 에서 고치기」).
 
-**한 편 추가하기**
+창고는 환경마다 다릅니다(노트북·dev 는 MinIO, staging·prod 는 각자 S3).
+넣는 쪽은 어느 것인지 알 필요가 없습니다.
 
-1. `webtoon/fe/static/gallery/<run_id>/` 를 만들고 `cover.jpg`,
-   `p01.jpg`…, `result.json` 을 넣습니다. `result.json` 모양은 기존 폴더
-   것을 복사해 고치는 게 빠릅니다(필드는 `api.ts:304-317` 의 `RunResult`).
-2. `runs.json` 의 `runs[]` 에 항목을 추가합니다. 실제로 쓰이는 필드는
-   `run_id` · `title` · `genre` · `episodes` · `cover_episode` ·
-   `cover_page` · `page_count` · `style_label` 입니다.
-3. `bash webtoon/fe/sync-landing.sh` 로 복사합니다.
+### 예시 웹툰 — 한 편 추가하기
 
-이렇게 하면 홈 마퀴와 둘러보기에 자동으로 붙습니다. **다만 아래 "하드코딩된
-자리" 두 곳은 따로 고쳐야 합니다.**
+1. `webtoon/ai/assets/examples/<run_id>/` 를 만듭니다. 폴더 이름이 그대로
+   작품 번호로 쓰입니다(겹치지만 않으면 됩니다).
+2. 쪽 그림을 **`pNN-w320.jpg` 와 `pNN-w1080.jpg` 두 폭으로** 넣습니다.
+   - **두 폭 다 필요합니다.** 목록 카드가 320 을, 본문이 1080 을 부르는데
+     **없는 폭은 대체하지 않고 404** 가 됩니다(`PageStore.java:114-123`).
+   - 원본(`w0`)은 넣지 않습니다. 다시 그릴 때만 쓰는 것이라 예시에는 필요
+     없고, 용량이 몇 배가 됩니다(아홉 편 기준 18MB 대 115MB).
+3. 같은 폴더에 `meta.json` 을 둡니다:
 
-**한 편 빼기**: 폴더를 지우고 `runs.json` 에서 항목을 뺍니다. 그 `run_id` 를
-하드코딩해 쓰는 자리가 있으면 거기도 같이 고쳐야 조용히 빈칸이 안 됩니다.
+   ```json
+   {
+     "title": "대리인의 밤",
+     "genre": "스릴러",
+     "character": "제하",
+     "style": "frost",
+     "logline": "밤에만 여는 상담소에 오늘은 주인이 오지 않는다…",
+     "captions": ["2쪽 설명", "3쪽 설명"]
+   }
+   ```
 
-예시와 같은 `run_id` 의 작품이 DB 에도 살아 있으면 실제 것만 나옵니다
-(`api.ts:282-291`).
+   - `captions` 는 **2쪽부터** 차례로 붙습니다(1쪽은 표지라 설명이 없습니다).
+     없으면 설명만 빕니다.
+   - `style` 은 그림체 키입니다(`romance_fantasy` · `frost` · `noir` 등).
+     모르는 값이면 카드에 그림체 이름이 안 뜹니다.
+4. 서버를 다시 빌드·기동합니다.
 
-### 예시 캐릭터 (위저드 1걸음의 「기본 제공」 카드)
+**한 편 빼기**: 폴더를 지우는 것으로는 **안 없어집니다** — 이미 DB 에 심겨
+있기 때문입니다. 비공개로 돌리거나 DB 에서 지웁니다. 폴더도 같이 지우면
+다음에 빈 DB 로 시작할 때 안 심깁니다.
 
-여기만 **DB + S3** 로 돕니다. 정적 파일이 아닙니다.
+**그림만 바꾸기**: 파일을 바꿔도 이미 심긴 작품은 안 올라갑니다. 그 작품의
+`webtoon_page` 줄을 지우고 다시 띄우면 새 그림으로 올라갑니다.
 
-지금 여덟 명이 서버 부팅 때 DB 에 심어지고, 그때 그림이 S3 공개 자리
-(`images/webtoon/char/<uuid>.jpg`)로 올라갑니다
-(`webtoon/be/.../character/BuiltinCharacters.java:66-101` 의 `SEEDS`,
-업로드는 `:205-207`). 화면에는 JSON 의 `art_url` 로 나갑니다
-(`webtoon/be/.../character/CharacterService.java:389-402`).
+심는 코드: `webtoon/be/src/main/java/com/lore/webtoon/work/ExampleWorks.java`
 
-**추가/교체하기**
+### 예시 캐릭터 — 추가·교체하기
 
 1. 그림을 `webtoon/ai/assets/samples/ex-<이름>-1.jpg` 로 넣습니다.
-2. `BuiltinCharacters.java` 의 `SEEDS` 에 `new Seed(그림체, 파일명, 이름, 설명)`
-   을 한 줄 추가합니다.
-3. **`webtoon/be` 를 다시 빌드·기동해야 반영됩니다.** `webtoon/ai/` 는 jar
-   리소스로 담겨서 기동할 때 풀리기 때문에, 파일만 바꿔 놓고 반영됐다고
-   보면 안 됩니다(`webtoon/CLAUDE.md` 의 "ai/ 를 고쳤을 때" 절).
-4. 그림체 고르개 썸네일로도 쓰려면 `webtoon/fe/lib/styleThumbs.ts:17-24` 에
-   키를 추가합니다.
+2. `BuiltinCharacters.java` 의 `SEEDS` 에 `new Seed(파일명, 이름, 설명)` 을
+   한 줄 추가합니다. **이름과 설명만 씁니다** — 카드 설정(세계관·한 줄 반전
+   등)은 시드에 넣지 않고, 필요하면 심은 뒤 DB 에서 붙입니다.
+3. 서버를 다시 빌드·기동합니다.
 
-**빼기**: `SEEDS` 에서 줄을 지우면 부팅 때 DB 에서 자동으로 지워집니다
-(`BuiltinCharacters.java:239-262`). 파일을 지울 필요는 없습니다.
+**빼기**: `SEEDS` 에서 줄을 지워도 **DB 에서는 안 지워집니다**(기동할 때
+로그로만 알려 줍니다). DB 에서 직접 지웁니다:
+`delete from webtoon_character where source='BUILTIN' and name='…';`
+
+**그림만 바꾸기**: 같은 파일명으로 덮어쓰고, 그 캐릭터의 `art_key` 를 비운
+뒤 다시 띄웁니다 — 그림이 비어 있는 줄은 시더가 다시 채웁니다.
+`update webtoon_character set art_key=null where name='…';`
+
+**그림체 고르개 썸네일**(`webtoon/fe/lib/styleThumbs.ts:17-24`)은 예시
+캐릭터와 **별개**입니다. `ex-webtoon-1.jpg` 같은 옛 견본 파일을 아직 그쪽이
+쓰고 있으니 지우지 마세요.
+
+### DB 에서 고치기 — 예시를 다듬는 자리
+
+심은 뒤에는 DB 가 원본입니다. 서버를 다시 띄워도 안 되돌아갑니다.
+
+**캐릭터 이름·설명 바꾸기**
+
+```sql
+update webtoon_character
+   set name = '시연',
+       description = '연습실 불을 마지막으로 끄는 사람.',
+       updated_at = now()
+ where source = 'BUILTIN' and name = '세아';
+```
+
+**캐릭터에 카드 설정 붙이기** — `twist` 가 차면 「카드 보기」가 생깁니다
+(`WebtoonCharacter.java:201-203`).
+
+```sql
+update webtoon_character
+   set world = 'modern', world_label = '현대 드라마', genre = '드라마',
+       role_name = '연습생',
+       twist = '무대에 서는 날, 거울이 먼저 깨진다',
+       quote = '나는 아직 아무것도 아니야.',
+       fate = E'데뷔조에서 밀려난다\n대신 무대를 완성한다',
+       updated_at = now()
+ where name = '시연';
+```
+
+| 칸 | 화면에서 |
+| --- | --- |
+| `twist` | 카드 큰 제목 · 목록의 한 줄 요약 |
+| `role_name` | 제목 아래 역할 |
+| `genre` | 이름과 나란히 |
+| `world_label` | 세계관 배지 |
+| `quote` | 대사 |
+| `fate` | 운명 줄들 (줄바꿈으로 나눔) |
+| `world` | 이 캐릭터로 1화 만들 때 넘어감 |
+| `style` | **지금은 화면에서 안 씁니다** |
+
+**작품 제목·장르·로그라인 바꾸기** — 「고른 이야기」 줄을 고칩니다.
+
+```sql
+update webtoon_story
+   set title = '새 제목', genre = '스릴러', plot = '새 로그라인'
+ where run_id = '20260909T153021-9e927b' and chosen;
+```
+
+**작품 감추기**
+
+```sql
+update webtoon_work set is_public = false where run_id = '…';
+```
 
 ### 온보딩·홈의 목업 그림
 
