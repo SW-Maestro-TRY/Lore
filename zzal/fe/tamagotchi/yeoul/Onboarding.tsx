@@ -29,7 +29,7 @@ import { spriteUrl, useLive } from './useHatch';
 import { assetUrl } from '../../lib/assets';
 import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
-import { OnbDevProvider, OnbChangeList, useOnbFlag } from './onboardingDev';
+import { OnbDevProvider, OnbChangeList, useOnbFlag, useCharLayout } from './onboardingDev';
 
 /**
  * OB-03 진입 등장(stagger) 스타일. 랜딩 v2 의 ztV2Rise 결로, 이미 전역에 심긴 KEYFRAMES 의
@@ -136,6 +136,84 @@ const ONE_SCREEN_STYLE = `
 `;
 
 
+/**
+ * 캐릭터 칸 **배치 고르기**(2026-09-22) — 리모컨(`onboardingDev`)의 3지 선택에 물린 표현 규칙.
+ *
+ * `now`  = 아무 규칙도 안 붙는다. 지금 올라가 있는 2열 격자 그대로다(공개 사이트가 보는 것).
+ * `col`  = 안 1. 격자를 풀어 **한 줄에 한 묶음씩** 세우고, OB-10 이 깎아 둔 칩·입력 크기를
+ *          토큰 값(`pad.chip`·`pad.field`·`fz.md`)으로 되돌린다. 스크롤은 허용한다.
+ * `fold` = 안 2. `col` 과 같은 크기를 쓰되 **한 칸만 펼친다**(접기는 마크업 쪽에서 한다).
+ *
+ * ★ 여기 있는 것은 **크기와 줄바꿈뿐**이다. 색·글꼴·모션은 한 줄도 없다.
+ * ★ 이 블록은 ONE_SCREEN_STYLE **뒤에** 붙는다 — 같은 무게(specificity)라 나중에 오는 쪽이 이긴다.
+ *   `!important` 를 맞불로 쓰는 이유도 같다(상대가 전부 `!important` 다).
+ */
+const CHAR_LAYOUT_STYLE = `
+/* ── 안 1·2 공통 — 한 열로 세우고 깎인 크기를 되돌린다 ── */
+/* ★ align-items 도 같이 되돌린다 — OB-10 의 격자 규칙에 align-items:start 가 붙어 있어서,
+   그대로 세로 flex 가 되면 그게 가로 정렬로 읽혀 카드가 글자 폭까지 쪼그라든다(실측 344 -> 201). */
+[data-charlayout="col"] .onb-cgrid,
+[data-charlayout="fold"] .onb-cgrid{ display:flex!important; flex-direction:column!important; gap:13px!important; align-items:stretch!important; }
+[data-charlayout="col"][data-step="char"] .onb-body,
+[data-charlayout="fold"][data-step="char"] .onb-body{ gap:18px!important; }
+[data-charlayout="col"] .onb-cgroup,
+[data-charlayout="fold"] .onb-cgroup{ padding:12px 13px!important; gap:9px!important; }
+[data-charlayout="col"] .onb-cgroup > div,
+[data-charlayout="fold"] .onb-cgroup > div{ gap:9px!important; }
+[data-charlayout="col"] .onb-cgroup button,
+[data-charlayout="fold"] .onb-cgroup button{ padding:9px 14px!important; font-size:13px!important; }
+[data-charlayout="col"] .onb-cgroup input,
+[data-charlayout="fold"] .onb-cgroup input{ padding:12px 15px!important; font-size:13px!important; }
+[data-charlayout="col"] .onb-note,
+[data-charlayout="fold"] .onb-note{ padding:12px 13px!important; }
+
+/* 머리줄 — 제목 옆에 붙어 4줄로 접히던 부연을 **제 줄**로 내린다(390 에서 60px → 36px). */
+[data-charlayout="col"] .onb-chead,
+[data-charlayout="fold"] .onb-chead{ flex-wrap:wrap; }
+[data-charlayout="col"] [data-part="chip-note"],
+[data-charlayout="fold"] [data-part="chip-note"]{ flex-basis:100%; margin-top:1px; }
+
+/* ── 안 2 만 — 접힌 칸 ── */
+[data-charlayout="fold"] .onb-cgrid{ gap:9px!important; }
+[data-charlayout="fold"] .onb-cgroup:has(> .onb-cfold){ padding:10px 13px!important; }
+.onb-cfold{ display:flex; align-items:center; gap:7px; width:100%; padding:0!important; border:none!important; background:none!important; text-align:left; cursor:pointer; font-size:13px!important; }
+.onb-cfold .onb-csum{ margin-left:auto; }
+.onb-cchev{ width:7px; height:7px; flex:none; margin-left:4px; opacity:.55; transform:rotate(45deg); }
+.onb-cchev[data-open="1"]{ transform:rotate(225deg); margin-top:4px; }
+`;
+
+/**
+ * 자유 입력칸의 글자 수 상한.
+ *
+ * ★★ **서버가 받는 만큼만 연다.** 화면만 넓혀 두면 사용자가 쓴 글이 서버에서 **말없이** 잘린다.
+ *   정본 1.5 는 "자유 입력칸 각 100자" 인데, 실제 서버 한도를 세어 보니 칸마다 다르다
+ *   (2026-09-22 `zzal/be` 실측):
+ *     · 그 밖에(note)  → `@Size(max = 200)`            ⇒ 100 으로 연다.
+ *     · 세계관(world)  → `WORLD_MAX_CHARS = 100` 인데 **고른 칩까지 합쳐** 100 이다
+ *                        (`worldOf` 가 합친 뒤 slice). 칩 일곱이면 35자쯤을 칩이 먹으므로
+ *                        입력칸만 100 으로 열면 그만큼이 조용히 잘린다 ⇒ **60 유지**.
+ *     · 말투(tone)·장르(genre) → `TONE_MAX_CHARS`·`GENRE_MAX_CHARS` 가 **32** ⇒ 60 유지.
+ *     · 성격 자유 입력 → 보내는 자리 자체가 없다(`CharacterInput`) ⇒ 60 유지.
+ *   넷은 정본과 코드 중 어느 쪽을 옮길지가 판단거리라 **여기서 고치지 않고 보고**한다.
+ */
+const TEXT_MAX: Record<string, number> = { persona: 60, tone: 60, genre: 60, world: 60 };
+const EXTRA_MAX = 100;
+
+/**
+ * **지금 서버에 저장되지 않는 칸.** 사실만 적는다 — "곧 대화에 반영돼요" 같은 말은 지킬 수
+ * 없는 약속이라 적지 않는다(자캐 규범: 주인에게 헛된 기대를 주지 않는다).
+ *
+ * 근거는 계약 한 곳이다 — `lib/pet.ts` 의 `CharacterInput` 이 보내는 칸은
+ * `name`·`personality`·`world`·`note` 넷뿐이다. (서버 DTO 에는 `tone`·`genre`·`personalities`
+ * 자리가 이미 있는데 **프론트가 아직 안 보낸다** — 그쪽을 여는 것은 별도 판단거리다.)
+ * ★ 배치 세 가지 중 무엇을 고르든 같은 자리에 뜬다 — 묶음 카드 안이라 배치와 무관하다.
+ */
+const NOT_SAVED: Record<string, string> = {
+  persona: '적어 주신 글은 아직 저장되지 않아요.',
+  tone: '아직 저장되지 않는 칸이에요.',
+  genre: '아직 저장되지 않는 칸이에요.',
+};
+
 /** 세계관은 **고른 칩 전부**와 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
 const worldOf = (chips: readonly string[] | undefined, text: string | undefined) =>
   [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, 100);
@@ -186,6 +264,16 @@ function OnboardingInner({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
   const live = useLive();
   const file = useRef<HTMLInputElement>(null);
+  /**
+   * 캐릭터 칸 배치 — 리모컨이 고른 셋 중 하나. 공개 사이트·첫 렌더는 늘 `'now'`(지금 화면).
+   * ★ **표현만** 가른다. 칩·입력의 핸들러, `data-part`, 서버 호출, 칸 이동은 셋이 완전히 같다.
+   */
+  const layout = useCharLayout();
+  /**
+   * 접이식(안 2)에서 **지금 펼쳐 둔 묶음**. 표현 상태라 서버·저장과 아무 상관이 없고,
+   * 접어도 고른 값(`s.picks`·`s.texts`)은 그대로 남는다 — 접는 것은 **그리느냐 마느냐**뿐이다.
+   */
+  const [openGroup, setOpenGroup] = useState<string | null>('persona');
   const o = v.onb;
   const key = o.stepKey;
   /**
@@ -265,6 +353,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
     <div
       data-part="onb"
       data-step={key}
+      data-charlayout={layout}
       className={fOne ? 'onb-one' : undefined}
       style={{
         flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0,
@@ -275,7 +364,9 @@ function OnboardingInner({ y }: { y: Yeoul }) {
           : null),
       }}
     >
-      <style>{BASE_STYLE + (fRise || fCta ? OB03_RISE_STYLE : '') + (fOne ? ONE_SCREEN_STYLE : '')}</style>
+      {/* ★ 배치 규칙은 **맨 뒤**에 붙는다 — OB-10 과 무게가 같아 나중에 오는 쪽이 이긴다.
+          `now` 일 때는 한 글자도 안 붙어 지금 화면과 픽셀이 같다. */}
+      <style>{BASE_STYLE + (fRise || fCta ? OB03_RISE_STYLE : '') + (fOne ? ONE_SCREEN_STYLE : '') + (layout === 'now' ? '' : CHAR_LAYOUT_STYLE)}</style>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.md, padding: '14px 22px 6px' }}>
         {/* ★ 태어남 칸에는 뒤로가 없다(상훈님 판정 4). 이미 태어난 아이가 있는데 되돌아가면
             여울 샘플로 가고 부화가 0/4 로 지워졌다 — 되돌릴 수 없는 지점은 되돌아가지지 않아야 한다. */}
@@ -470,34 +561,88 @@ function OnboardingInner({ y }: { y: Yeoul }) {
 
             {/* OB-10 — 이 래퍼는 기본 display:contents(투명)라 OFF 는 원본과 동일. 탭·PC(≥768)에서만 2열 그리드가 되어 세로를 반으로 접는다. */}
             <div className="onb-cgrid">
-            {v.charGroups.map((g) => (
+            {v.charGroups.map((g) => {
+              // 접이식에서 **지금 접혀 있는가.** 다른 두 배치에서는 늘 펼쳐져 있다(= 오늘과 같은 DOM).
+              const folded = layout === 'fold' && openGroup !== g.key;
+              return (
               <div key={g.key} className="onb-cgroup" style={{ display: 'flex', flexDirection: 'column', gap: gap.md, padding: pad.card, borderRadius: radius.md, border: `1px solid ${g.cardBd}`, background: g.cardBg }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
+                {folded ? (
+                  // 접힌 줄 — 누르면 이 칸이 펼쳐지고 앞 칸이 닫힌다. 무엇을 골랐는지는 그대로 읽어 준다
+                  // (접는 것이 숨기는 것이 되지 않게). 문구는 `useYeoul` 의 `summary` 한 곳에서 온다.
+                  <button
+                    type="button" className="onb-cfold" data-part="cgroup-fold" data-group={g.key}
+                    aria-expanded={false} onClick={() => setOpenGroup(g.key)}
+                    style={{ color: C.ink }}
+                  >
+                    <span style={{ fontSize: fz.md, color: C.ink }}>{g.title}</span>
+                    <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.sub2, fontSize: fz.xs }}>선택</span>
+                    <span className="onb-csum" style={{ fontSize: fz.sm, color: C.sub2 }}>{g.summary}</span>
+                    <span className="onb-cchev" aria-hidden style={{ borderRight: `1.5px solid ${C.sub2}`, borderBottom: `1.5px solid ${C.sub2}` }} />
+                  </button>
+                ) : (
+                <span className="onb-chead" style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
                   <span style={{ fontSize: fz.md, color: C.ink }}>{g.title}</span>
                   <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.sub2, fontSize: fz.xs }}>선택</span>
+                  {/* 접기 단추는 **부연보다 앞**이다 — 부연은 제 줄로 내려가므로(flex-basis:100%),
+                      뒤에 두면 셋째 줄로 밀려 빈 줄이 하나 생긴다(실측 40px). */}
+                  {layout === 'fold' && (
+                    <button
+                      type="button" className="onb-cfold" data-part="cgroup-fold" data-group={g.key}
+                      aria-expanded onClick={() => setOpenGroup(null)}
+                      style={{ width: 'auto', marginLeft: 'auto', color: C.sub2 }}
+                      aria-label={`${g.title} 접기`}
+                    >
+                      <span className="onb-cchev" data-open="1" aria-hidden style={{ borderRight: `1.5px solid ${C.sub2}`, borderBottom: `1.5px solid ${C.sub2}` }} />
+                    </button>
+                  )}
                   {/* 칩만 보면 하나만 고르는 줄 안다 — 여러 개가 된다는 것은 글로 말해 준다. */}
                   <span data-part="chip-note" style={{ fontSize: fz.xs, color: C.sub2 }}>{g.note}</span>
                 </span>
+                )}
+                {!folded && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: gap.md }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
                     {g.opts.map((x) => (
                       <button key={x.text} onClick={x.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: fz.md, color: x.fg }}>{x.text}</button>
                     ))}
                   </div>
-                  <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={60} placeholder={g.ph}
+                  <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={TEXT_MAX[g.key] ?? 60} placeholder={g.ph}
                     style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
+                  {/* 저장되지 않는 칸은 **그 자리에서** 말해 준다. 공들여 적은 글이 말없이 사라지는 것이
+                      자캐를 맡기는 사람에게는 가장 나쁜 일이다. 약속은 적지 않고 사실만 적는다. */}
+                  {NOT_SAVED[g.key] && (
+                    <span data-part="not-saved" style={{ fontSize: fz.xs, lineHeight: 1.45, color: C.sub2 }}>{NOT_SAVED[g.key]}</span>
+                  )}
                 </div>
+                )}
               </div>
-            ))}
+              );
+            })}
 
             <div className="onb-cgroup" style={{ display: 'flex', flexDirection: 'column', gap: gap.md, padding: pad.card, borderRadius: radius.md, border: `1px solid ${C.lineSoft}`, background: C.paper }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
-                <span style={{ fontSize: fz.md, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
-                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>선택</span>
-              </span>
-              <input value={o.extraVal} onChange={(e) => o.onExtra(e.target.value)} maxLength={60}
-                placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요"
-                style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
+              {layout === 'fold' && openGroup !== 'extra' ? (
+                <button
+                  type="button" className="onb-cfold" data-part="cgroup-fold" data-group="extra"
+                  aria-expanded={false} onClick={() => setOpenGroup('extra')}
+                  style={{ color: C.ink }}
+                >
+                  <span style={{ fontSize: fz.md, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
+                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>선택</span>
+                  <span className="onb-csum" style={{ fontSize: fz.sm, color: C.sub2 }}>{o.extraVal ? '적어 둔 말 있음' : '아직 비어 있어요'}</span>
+                  <span className="onb-cchev" aria-hidden style={{ borderRight: `1.5px solid ${C.sub2}`, borderBottom: `1.5px solid ${C.sub2}` }} />
+                </button>
+              ) : (
+                <>
+                  <span className="onb-chead" style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
+                    <span style={{ fontSize: fz.md, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
+                    <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>선택</span>
+                  </span>
+                  {/* 정본 1.5 의 "각 100자". 이 칸만 서버가 200자를 받아 안전하게 열 수 있다(TEXT_MAX 머리말). */}
+                  <input value={o.extraVal} onChange={(e) => o.onExtra(e.target.value)} maxLength={EXTRA_MAX}
+                    placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요"
+                    style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
+                </>
+              )}
             </div>
             </div>
           </div>
