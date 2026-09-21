@@ -2547,13 +2547,19 @@ export function useYeoul(live?: Live) {
         /** 진짜 방(목)에서만 뜨는 한 줄. 누를 것이 아니라 **어떻게 넘어가는지**를 말해 준다. */
         tutHint: !!tut && !s.sampleMode && !onServer ? '직접 해 보면 다음으로' : '',
         /**
-         * 칸 아래 버튼. **서버 튜토리얼에는 '나중에' 가 없다** — 건너뛸 방법이 서버에 없어서,
-         * 눌러도 아무 일이 안 나면 고장으로 읽힌다. 마지막 칸에서만 "다 배웠어요" 를 낸다.
-         * 목(연습방·시안)은 예전처럼 건너뛸 수 있다.
+         * 칸 아래 버튼.
+         *
+         * ★ **서버 튜토리얼에는 '나중에' 가 없다** — 건너뛸 방법이 서버에 없어서, 눌러도 아무
+         *   일이 안 나면 고장으로 읽힌다. 마지막 칸에서만 「이제 시작할게요」를 낸다.
+         * ★★ **연습방에서도 뺐다**(2026-09-22 상훈님 판정 F). 연습방에는 이미 「이전」·「다음」이
+         *   있는데 '나중에' 가 **「다음」과 거의 같은 일**(칸 +1)을 해서 한 줄에 셋이 겹쳐 떴다.
+         *   판정 8 에서 이 버튼이 "죽은 버튼" 에서 진짜 버튼으로 살아난 결과였다.
+         *   연습은 앞뒤로 오가며 보는 자리이므로 **넘기는 손잡이는 「다음」 하나면 된다.**
+         * ★ 진짜 방(목)에는 남긴다 — 거기는 「이전」·「다음」이 없어서 이것이 유일한 손잡이다.
          */
         tutBtn: onServer
           ? (atDone ? { show: true, label: '이제 시작할게요', tap: onFinishTutorial } : { show: false, label: '', tap: noop })
-          : { show: true, label: '나중에', tap: skipTutorStep },
+          : { show: !s.sampleMode, label: '나중에', tap: skipTutorStep },
         hasGoal: !showTutMini && !!goal,
         name: goal?.name ?? '',
         cond: goal ? `${goal.cond} ${Math.min(goal.have, goal.need)} / ${goal.need}` : '',
