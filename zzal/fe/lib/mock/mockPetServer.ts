@@ -114,6 +114,8 @@ interface Row {
   clockStartedAt: number | null;
   /** 튜토리얼 몇 번째 칸인가(0부터). 9 면 끝. 서버 ZzalPet.tutorialStep 과 같은 뜻. */
   tutorialStep: number;
+  /** 첫날 축하 판을 본 시각. **null 이면 아직 안 봤다** — 판을 딱 한 번 띄우는 기준(2026-09-22). */
+  graduationSeenAt: number | null;
   sleeping: boolean;
   sleepKind: 'NIGHT' | 'NAP' | null;
   sleptAt: number;
@@ -466,6 +468,19 @@ export class MockPetServer implements PetSource {
    * ★ 앞 8칸을 다 안 했으면 거절한다. 화면이 순서를 다시 판정하지 않게 하려는 것이다.
    * ★ 켜지는 시각이 곧 하루의 기준(dayBase)이다 — 그 전에는 하루라는 것이 없었다.
    */
+  /**
+   * 첫날 축하 판을 봤다고 남긴다. **진짜 서버와 같은 약속** — 본문 없음 · 멱등.
+   *
+   * ★ 두 번째부터는 시각을 **안 덮는다.** 처음 본 때가 사실이고, 덮으면 "언제 봤나" 가 사라진다.
+   * ★ 아직 축하할 것이 없는(시계가 안 켜진) 펫에도 거절하지 않는다 — 멱등한 기록일 뿐이고,
+   *   거절을 만들면 화면이 그 거절을 또 다뤄야 한다.
+   */
+  async graduationSeen(petId: number): Promise<void> {
+    await this.wait();
+    const r = this.alive(petId);
+    if (r.graduationSeenAt === null) r.graduationSeenAt = this.now();
+  }
+
   async tutorialDone(petId: number): Promise<PetDetail> {
     await this.wait();
     const r = this.alive(petId);
@@ -1218,6 +1233,7 @@ export class MockPetServer implements PetSource {
       features: alive ? this.featuresOf(r) : null,
       leaving: null, trip: null,
       tutorial: alive ? this.tutorialOf(r) : null,
+      graduationSeenAt: r.graduationSeenAt === null ? null : new Date(r.graduationSeenAt).toISOString(),
     };
   }
 
@@ -1229,7 +1245,7 @@ export class MockPetServer implements PetSource {
     });
     const r: Row = {
       id: this.nextId++, name, note, phase: 'HATCHING', hatchStartedAt, hatchedAt: null,
-      settledAt: hatchStartedAt, clockStartedAt: null, tutorialStep: 0,
+      settledAt: hatchStartedAt, clockStartedAt: null, tutorialStep: 0, graduationSeenAt: null,
       sleeping: false, sleepKind: null, sleptAt: hatchStartedAt, dayBase: hatchStartedAt, nightCount: 0, overslept: false,
       fullness: 1, happiness: 3, trash: 0,
       acc: { fullness: 0, happiness: 0, trash: 0 }, zeroAcc: { fullness: 0, happiness: 0, trash: 0 },

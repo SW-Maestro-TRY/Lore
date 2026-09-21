@@ -1779,18 +1779,27 @@ export function useYeoul(live?: Live) {
   const pickTab = useCallback((t: 'talk' | 'guess' | 'run') => () => patch({ playTab: t }), [patch]);
 
   /**
-   * 튜토리얼 졸업 — **시계가 켜진 순간** 한 번만 축하한다.
+   * 튜토리얼 졸업 — **시계가 켜진 순간, 사람 기준으로 딱 한 번** 축하한다.
    *
    * ★ 판정 기준이 `tutorial.steps` 의 DONE 칸이 **아니다.** 아홉 칸을 다 한 사람에게는
    *   서버가 `tutorial` 블록 자체를 null 로 준다(계약 해석 9). 그러면 DONE 칸을 못 찾아
    *   **가장 잘 따라온 사람만 축하를 못 받는다.** 그래서 `clock.clockStartedAt` 으로 본다 —
    *   그게 곧 졸업의 정의다(`tamagotchi/tutorial.ts` 의 `takeGrownLine` 과 같은 기준).
-   * ★ 한 번만 뜨는 것은 sessionStorage 가 맡는다. 서버에 "봤다" 를 남길 사실이 없다.
+   *
+   * ★★ **"한 번" 을 서버가 기억한다**(2026-09-22). 예전에는 탭 기억(`sessionStorage`)뿐이라
+   *   **새 탭·앱 재시작·다른 기기에서 또 떴다** — dev 에서 그대로 재현했다. 순서는 이렇다:
+   *     1) 서버가 `graduationSeenAt` 을 주면 **그것이 먼저다** — 값이 있으면 여기서 끝.
+   *     2) 탭 기억은 **보조**다. 서버 기록이 오가는 사이 같은 탭에서 두 번 뜨는 것만 막는다.
+   *     3) 판을 띄운 뒤 서버에 "봤다" 를 남긴다. 실패해도 화면은 그대로 간다(다음에 한 번 더 뜰 뿐).
+   *   ⚠️ 백엔드가 아직 이 칸을 안 줄 수 있다. 그때는 `undefined` 라 1)이 통과하고 **예전과 똑같이**
+   *   탭 기억으로만 막힌다 — 새 칸이 오면 저절로 서버 기준으로 올라선다.
    */
   useEffect(() => {
     if (!onServer || !sv?.clock?.clockStartedAt) return;
+    if (sv.graduationSeenAt != null) return;
     if (!takeGrownLine(sv.petId, sv)) return;
     setS((v) => finishTutor(v));
+    void liveRef.current?.markGraduationSeen();
     // finishTutor 는 렌더마다 새로 만들어지는 평범한 함수라 의존성에 넣지 않는다(넣으면 매 렌더 재실행).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onServer, sv]);

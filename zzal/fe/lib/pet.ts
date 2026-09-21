@@ -407,6 +407,16 @@ export interface PetDetail {
   leaving: Leaving | null;
   trip: Trip | null;
   tutorial: Tutorial | null;
+  /**
+   * **첫날 축하 판을 본 시각**(ISO) — 안 봤으면 `null`.
+   *
+   * ★★ 왜 서버가 들고 있나 — 이 판은 "한 번만" 이 목숨인 판이다. 예전에는 탭 기억
+   *   (`sessionStorage`)으로만 막아서, **새 탭·앱 재시작·다른 기기면 또 떴다**
+   *   (2026-09-22 dev 재현). 사람 기준으로 한 번이려면 사람 편에 남는 곳은 서버뿐이다.
+   * ★ **아직 서버가 안 줄 수 있다**(백엔드 작업 중). 그때는 `undefined` 로 와서 `!= null` 이
+   *   거짓이 되고, 화면은 예전처럼 탭 기억으로만 막는다 — 없다고 깨지지 않는다.
+   */
+  graduationSeenAt?: string | null;
 }
 
 /** 펫 생성 결과. 부화는 뒤에서 계속 돌고, 진행 상황은 상태 조회로 본다. */
@@ -588,6 +598,17 @@ export function wake(petId: number): Promise<PetDetail> {
  */
 export function tutorialDone(petId: number): Promise<PetDetail> {
   return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/done`, { method: 'POST' });
+}
+
+/**
+ * 첫날 축하 판을 **봤다고 남긴다**(2026-09-22).
+ *
+ * ★ 본문이 없고 204 로 답한다. **멱등** — 두 번 불러도 같은 결과다(이미 본 사람에게 다시 보내도 된다).
+ * ★ 실패해도 화면은 그대로 간다. 서버에 못 남겼으면 다음에 한 번 더 뜰 뿐이고,
+ *   그건 판을 못 띄우는 것보다 낫다 — 그래서 부르는 쪽이 조용히 삼킨다(→ `useHatch.markGraduationSeen`).
+ */
+export function graduationSeen(petId: number): Promise<void> {
+  return request<void>(`${PET_BASE}/${petId}/graduation-seen`, { method: 'POST' });
 }
 
 /** 성격·세계관. 언제든 바꿀 수 있다(정본 0장 6). */

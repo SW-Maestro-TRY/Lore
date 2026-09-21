@@ -22,7 +22,7 @@ import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
 import { BASIC_KEYS, GUESS_HAND_PRELOAD } from './constants';
 import {
   answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
-  motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, wake as wakePet,
+  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, wake as wakePet,
   type Album, type CareAction, type ChatReply, type ChatState, type CharacterInput,
   type HatchProgress, type PetDetail, type Personality,
 } from '../../lib/pet';
@@ -241,6 +241,15 @@ export interface Live {
    */
   finishTutorial: () => Promise<CareResult>;
   /**
+   * 첫날 축하 판을 **봤다고 서버에 남긴다.**
+   *
+   * ★★ 왜 서버까지 가나 — 이 판은 "사람 기준 한 번" 이어야 한다. 탭 기억만 쓰던 동안에는
+   *   새 탭·앱 재시작·다른 기기에서 **또 떴다**(2026-09-22 dev 재현).
+   * ★ **던지지 않는다.** 못 남기면 다음에 한 번 더 뜰 뿐이고, 그건 판을 못 띄우는 것보다 낫다.
+   *   백엔드가 아직 이 주소를 안 열었으면 404 인데, 그때도 조용히 넘어가 예전처럼 굴러야 한다.
+   */
+  markGraduationSeen: () => Promise<void>;
+  /**
    * 오늘의 부름과 기억. **대사는 전부 여기서 온다** — 화면이 지어내지 않는다(상훈님 지시).
    * 아직 안 읽었거나 서버에 안 붙었으면 null.
    */
@@ -328,6 +337,7 @@ const EMPTY: Live = {
   doRest: async () => ({ ok: false, message: null }),
   savePersonality: async () => ({ ok: false, message: null }),
   finishTutorial: async () => ({ ok: false, message: null }),
+  markGraduationSeen: async () => {},
   sendChat: async () => ({ error: null, reply: null }),
   startPlay: async () => null,
   pickSide: async () => ({ error: null, result: null }),
@@ -658,6 +668,23 @@ export function useHatchState(): Live {
   const finishTutorial = useCallback(() => (
     send(() => tutorialDone(petId as number), '아직 배울 것이 남았어요')
   ), [petId, send]);
+
+  /**
+   * 첫날 축하 판을 봤다고 남긴다(→ Live.markGraduationSeen).
+   *
+   * ★ `send` 를 안 쓴다 — 그쪽은 실패를 화면 문구로 만들어 주는 길인데, 이 기록은 **사용자가
+   *   시킨 일이 아니라** 화면이 알아서 남기는 것이라 실패를 보여 줄 자리가 없다. 조용히 삼킨다.
+   * ★ 남긴 뒤 상태를 다시 읽어 `graduationSeenAt` 을 손에 쥔다 — 그래야 같은 세션에서
+   *   조회가 한 번 더 돌아도 판이 다시 안 뜬다.
+   */
+  const markGraduationSeen = useCallback(async () => {
+    if (!petId) return;
+    try {
+      await graduationSeen(petId);
+      const seq = takeSeq();
+      try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 기록은 남았다 */ }
+    } catch { /* 못 남겼으면 다음에 한 번 더 뜬다 — 화면은 그대로 간다 */ }
+  }, [petId, takeSeq, putPet]);
 
   /**
    * 부름에 답하기.
@@ -1020,7 +1047,7 @@ export function useHatchState(): Live {
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
     justUnlocked,
-    setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, abandonPlay,
+    setChar, doCare, doRest, savePersonality, finishTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
     clearJustUnlocked, noteUnlocked,
     loadAlbum, shareMotion, sendWish, resume, reset,
   };
