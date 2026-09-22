@@ -49,10 +49,40 @@ def extract(text: str) -> tuple[str, str]:
     return title, body
 
 
+# 게시본 본문에 남으면 안 되는 것 — 사용자에게 아무 의미가 없고, 안에서 쓰는 말이
+# 밖으로 새는 자리다. `[[...]]` 가드는 이걸 못 잡는다(빈칸이 아니라 채워진 내부 참조다).
+# 실제로 부칙에 `zzal/docs/...-v1-초안.md` 와 `user_agreement.version` 이 남아 있었다.
+INTERNAL = [
+    (re.compile(r"[\w./-]+\.(?:md|py|ts|tsx|java|sql|ya?ml)\b"), "저장소 파일 경로"),
+    (re.compile(r"\b\w+_\w+\.\w+\b"), "DB 컬럼·코드 식별자"),
+    (re.compile(r"\b(?:초안|목업|TODO|FIXME|미구현|검증 전)\b"), "작업 중 표시"),
+    (re.compile(r"/Users/|C:\\"), "로컬 경로"),
+]
+
+
+def lint(name: str, body: str) -> list[str]:
+    """게시본에 남으면 안 되는 줄을 찾아 돌려준다."""
+    bad = []
+    for i, line in enumerate(body.split("\n"), 1):
+        for pat, why in INTERNAL:
+            m = pat.search(line)
+            if m:
+                bad.append(f"{name}:{i} [{why}] {m.group(0)} — {line.strip()[:70]}")
+                break
+    return bad
+
+
 def main() -> int:
     DST.mkdir(parents=True, exist_ok=True)
     for src_name, dst_name in DOCS:
         title, body = extract((SRC / src_name).read_text(encoding="utf-8"))
+        bad = lint(dst_name, body)
+        if bad:
+            print("게시본에 내부 참조가 남아 있어 쓰지 않는다:", file=sys.stderr)
+            for b in bad:
+                print(f"    {b}", file=sys.stderr)
+            print("\n작업본에서 <!--내부--> 로 감싸거나 문장을 고친 뒤 다시 돌리세요.", file=sys.stderr)
+            return 1
         (DST / dst_name).write_text(f"# {title}\n\n{body}", encoding="utf-8")
         blanks = sorted(set(re.findall(r"\[\[[^\]]+\]\]", body)))
         print(f"{dst_name} — 남은 칸 {len(blanks)}개")

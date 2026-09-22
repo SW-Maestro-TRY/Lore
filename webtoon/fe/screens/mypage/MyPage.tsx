@@ -66,6 +66,7 @@ registerDict({
   "내역": { en: "History", ja: "履歴", zh: "记录" },
   "1:1 문의하기": { en: "Contact us", ja: "1:1お問い合わせ", zh: "1:1 咨询" },
   "이용약관": { en: "Terms of use", ja: "利用規約", zh: "使用条款" },
+  "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },
   "목록을 가져오지 못했어요": { en: "Couldn't load the list", ja: "一覧を読み込めませんでした", zh: "无法加载列表" },
   "서버가 떠 있는지 확인해 주세요": { en: "Please check that the server is running", ja: "サーバーが起動しているか確認してください", zh: "请确认服务器是否已启动" },
   "내 캐릭터로 웹툰 만들기": { en: "Make a webtoon with my character", ja: "マイキャラクターでウェブトゥーンを作る", zh: "用我的角色制作漫画" },
@@ -204,6 +205,7 @@ export default function MyPage({ go }: { go: Go }) {
             <button type="button" onClick={() => void signOut()}>{t("로그아웃")}</button>
           )}
           <a href={LEGAL_LINKS.terms} target="_blank" rel="noopener noreferrer">{t("이용약관")}</a>
+          <a href={LEGAL_LINKS.privacy} target="_blank" rel="noopener noreferrer">{t("개인정보처리방침")}</a>
         </div>
 
         <div className="card wt-my-lang">

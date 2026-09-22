@@ -661,3 +661,14 @@
 .copyright {
   margin-left: auto;
 }
+
+/* 약관 줄은 워드마크·탭 줄 아래로 내린다 — flex-basis 100% 로 줄바꿈을 강제한다.
+   탭과 섞어 두면 도메인 이동처럼 보인다. */
+.footerLegal {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
