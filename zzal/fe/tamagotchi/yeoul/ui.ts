@@ -100,6 +100,23 @@ export const gap = { xs: 4, sm: 7, md: 9, lg: 13, xl: 18 } as const;
 export const TAP_MIN = 44;
 
 /**
+ * **겉모양은 그대로 두고 누르는 판만 `TAP_MIN` 으로 넓히는 투명 단추.**
+ *
+ * 쓰는 자리 — 보이는 알약·배지·글자 단추가 44 보다 작은데 **키우면 줄이 밀리는** 곳.
+ * 바깥 단추는 판만 맡고(테두리·바탕 없음), 보이는 모양은 안쪽 span 이 그대로 그린다.
+ * `visibleH` 를 주면 넘치는 몫을 음수 세로 여백으로 되돌려 **줄 높이가 한 픽셀도 안 변한다.**
+ *
+ * ★ 값(44)을 곳곳에 다시 적지 않으려고 둔 자리다 — 고칠 곳은 `TAP_MIN` 하나뿐이다.
+ * ★ 알약을 키워도 되는 자리(옆 칩이 이미 44 인 곳)는 이걸 쓰지 말고 알약에 `minHeight: TAP_MIN`
+ *   을 직접 준다 — 그때는 겉모양이 커지는 것이 **맞는** 답이다.
+ */
+export const tapWrap = (visibleH?: number): CSSProperties => ({
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  boxSizing: 'border-box', minHeight: TAP_MIN, padding: 0, border: 'none', background: 'none',
+  margin: visibleH === undefined ? 0 : `${-Math.max(0, (TAP_MIN - visibleH) / 2)}px 0`,
+});
+
+/**
  * 색 보탬. `C` 에 이름이 없어 곳곳에 hex 로 적히던 값들만 올렸다(2026-09-21 실측 148곳).
  * ★ **색값 자체는 하나도 안 바꿨다.** 이름만 붙인 것이라 화면은 그대로다.
  */
