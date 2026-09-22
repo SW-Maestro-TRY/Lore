@@ -29,6 +29,9 @@ export default defineConfig({
     // 없는 요소를 집으면 기본값은 '무한 대기'다. 시한이 없으면 실패가 아니라 테스트 전체가 멎는다.
     actionTimeout: 10_000,
   },
+  // ★ 밟기 전에 전제부터 — 그림 폴더(public/zzal)가 없으면 **모든 검사가 시작되기 전에** 멈춘다.
+  //   없으면 baby·baby-resume 만 엉뚱한 이유로 깨져, 다음 사람이 원인을 찾는 데 오래 걸린다.
+  globalSetup: require.resolve('./e2e/global-setup'),
   projects: [
     { name: 'phone', use: { viewport: { width: 390, height: 844 }, hasTouch: true } },   // isMobile 은 뺐다 — 안드로이드 에뮬레이션에서 <a download> 가 새 대상으로 열려 페이지가 닫힌다(실측)
     { name: 'pc', use: { ...devices['Desktop Chrome'], viewport: { width: 1200, height: 900 } }, testMatch: /layout\.spec\.ts/ },
