@@ -619,7 +619,6 @@ export class MockPetServer implements PetSource {
     if (r.game && !r.game.finished) {
       r.game.finished = true;
       r.game.win = false;
-      this.uncountPiece(r, 'GAME');
     }
     if (r.sleeping) throw err(409, 'ZZAL_PET_SLEEPING', '자고 있어요');
     if (r.sick) throw err(409, 'ZZAL_SICK_REFUSES', '아파서 놀 기운이 없대요');
@@ -627,17 +626,13 @@ export class MockPetServer implements PetSource {
     if (kind === 'RUN' && !this.featuresOf(r).run) throw err(409, 'ZZAL_FEATURE_LOCKED', '좌우 맞히기에서 5번 이기면 열려요');
     const before = this.unlockedSeqs(r);
     r.today.games += 1;
-    r.counters.gameStarts += 1;
     this.advanceTutorial(r, 'GAME');
-    // ★ 놀이 조각은 **판을 시작한 것**으로 센다(정본 §6 "게임 5판(매치. 승패 무관)" · 서버 `PieceEvent.GAME`).
-    //   옛 목은 이긴 판만 셌다 — 그러면 지는 사람은 놀이 조각을 영영 못 채운다.
-    this.countPiece(r, 'GAME');
     r.game = {
       gameId: this.nextGameId++, kind, round: 0, hits: 0, finished: false, win: null,
       answers: Array.from({ length: LEFT_RIGHT.rounds }, () => (this.nextSeed() % 2 === 0 ? 'LEFT' : 'RIGHT')),
     };
-    // 놀라기(13번)는 3판째 **시작**으로 열린다. 게임 응답은 PetDetail 이 아니지만
-    // 서버가 justUnlocked 를 함께 주므로("행동 응답 = 상태") 목도 같이 싣는다.
+    // ★ 시작에서 열리는 것은 이제 없다 — 놀람(15번)도 놀이 조각도 **완주**에서 센다(guess).
+    //   게임 응답은 PetDetail 이 아니지만 서버가 justUnlocked 를 함께 주므로 목도 같이 싣는다.
     return this.gameState(r, now, this.newlyUnlocked(r, before, now));
   }
 
@@ -657,6 +652,15 @@ export class MockPetServer implements PetSource {
     g.finished = g.round >= LEFT_RIGHT.rounds;
     let win: boolean | null = null;
     if (g.finished) {
+      // ★★ 2층 15번(놀람)의 "미니게임 4판" 은 **끝까지 친 매치**만 센다(서버 `ZzalPet.finishGame()` ·
+      //   2026-09-22 결정). 옛 목은 `start` 에서 셌고, 그러면 **시작하고 나가기를 되풀이해** 열 수 있었다.
+      //   ★ 기권·강제 종료한 판은 여기 오지 않으므로 자연히 안 세인다 — 서버와 같은 자리, 같은 이유다.
+      //   ★ 이 줄이 `newlyUnlocked` 를 부르기 **전**이어야 폭죽이 **이 응답**에 실린다(서버 주석과 같은 자).
+      r.counters.gameStarts += 1;
+      // ★★ 놀이 조각도 **완주한 매치**만 센다(서버 `GameService.guess` — 2026-09-22 결정).
+      //   시작에서 세면 기권한 판의 조각이 남고, 승리에서만 세면 "승패 무관"(정본 §6)이 깨진다.
+      //   접은 판은 이 자리에 오지 않으므로 무르는 코드(uncountPiece)가 아예 필요 없어졌다.
+      this.countPiece(r, 'GAME');
       win = g.hits >= LEFT_RIGHT.winAt;
       if (win) {
         r.counters.leftRightWins += 1;
@@ -679,8 +683,8 @@ export class MockPetServer implements PetSource {
    * ★★ **여기서 안 하는 것들이 이 함수의 본체다.**
    *   `today.games`(하루 3판)·`counters.leftRightWins`·`happiness` 를
    *   **하나도 안 건드린다.** 하루 판수는 시작할 때 이미 깎였고, 접은 판은 승리가 아니다.
-   * ★ 다만 **조각은 되돌린다**(판정 F3 "기권 제외" · 백엔드 F7 과 같은 규칙) — 시작으로 센
-   *   놀이 조각을 남겨 두면 시작하고 바로 접기를 되풀이해 조각을 채울 수 있다.
+   * ★ 조각도 **여기서 안 센다** — 놀이 조각과 놀람(15번)은 둘 다 `guess` 의 **완주**에서만 센다
+   *   (서버 2026-09-22 결정). 시작에서 세고 여기서 무르던 예전 방식은 더 필요 없어졌다.
    * ★ 3번 맞힌 뒤 접어도 `win` 은 false 다 — 끝까지 치지 않은 판이라서다.
    * ★ **아픔을 안 본다**(`ZZAL_SICK_REFUSES` 없음). 아픔은 '노는 것'을 막는 조건이라,
    *   아픈 동안 판이 열린 채 갇히면 나갈 길이 사라진다. 서버가 일부러 뺀 검사다.
@@ -698,7 +702,6 @@ export class MockPetServer implements PetSource {
     if (g.finished) throw err(409, 'ZZAL_GAME_FINISHED', '이미 끝난 놀이예요');
     g.finished = true;
     g.win = false;
-    this.uncountPiece(r, 'GAME');
     return {
       gameId, kind: g.kind, round: g.round, pick: null, hit: false, hits: g.hits,
       finished: true, win: false, rounds: LEFT_RIGHT.rounds, winAt: LEFT_RIGHT.winAt,
@@ -898,7 +901,6 @@ export class MockPetServer implements PetSource {
       if (r.game && !r.game.finished) {
         r.game.finished = true;
         r.game.win = false;
-        this.uncountPiece(r, 'GAME');
       }
     }
     if (!auto) {
@@ -1033,18 +1035,6 @@ export class MockPetServer implements PetSource {
     const next = r.piece.counts[event] + 1;
     r.piece.counts[event] = next;
     if (next >= PIECE_NEED[event]) r.piece.done[kind] = true;
-  }
-
-  /**
-   * 센 것을 도로 무른다 — **접힌 판**뿐이다(판정 F3 "기권 제외").
-   * 도장이 이미 찍힌 칸은 건드리지 않는다 — 벗기면 화면에서 칸이 사라져 보이고, 서버(F7)도
-   * 도장까지 되돌리지는 않는다.
-   */
-  private uncountPiece(r: Row, event: PieceEventKey): void {
-    if (!r.piecesEnabled) return;
-    const kind = PIECE_KIND[event];
-    if (r.piece.done[kind]) return;
-    r.piece.counts[event] = Math.max(0, r.piece.counts[event] - 1);
   }
 
   private pieceCount(r: Row): number {
