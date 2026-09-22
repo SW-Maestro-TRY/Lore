@@ -65,8 +65,17 @@ GitHub → Actions → Deploy → Run workflow → 브랜치 선택 (develop / s
 | dev | 박스 안 `.env` |
 | staging | AWS Systems Manager → Parameter Store → `/lore/staging/<이름>` |
 | prod | `/lore/prod/<이름>` |
-- 이름은 세 환경 모두 같음 (예: `webtoon_api_key`, `LORE_WEBTOON_CDN_BASE`, `zzal_openai_api_key`). 값만 환경별로 다르게
+- 이름은 세 환경 모두 같음 (예: `webtoon_api_key`, `mail_username`, `zzal_openai_api_key`). 값만 환경별로 다르게
 - dev `.env` 실물 확인: AWS 콘솔 → EC2 → `lore-dev` → Connect → Session Manager → `sudo cat /opt/lore-dev/.env`
+- **dev 는 staging·prod 와 달리 Parameter Store 를 안 읽는다.** systemd 기동 훅
+  (`load-env-params.sh`)이 없고, 대신 `docker compose --env-file`로 박스 `.env`를
+  직접 읽는다. `docker-compose.yml`도 `env_file`이 아니라 각 서비스 `environment:`에
+  변수 이름을 하나하나 적어 넘기는 방식이라, **dev `.env`에 새 값을 추가해도
+  `docker-compose.yml`에 그 이름을 받는 줄이 없으면 컨테이너 안으로 안 들어간다.**
+  새 비밀값·설정을 쓰려면 `.env`뿐 아니라 `docker-compose.yml`의 `environment:`
+  (프론트 전용 `NEXT_PUBLIC_*`는 `next build`가 번들에 박아 넣으므로 `build.args`)에도
+  통로를 추가해야 한다(2026-09-22, #364 — `WEBTOON_API_KEY`가 이 문서만 보고는
+  Parameter Store 에 넣으면 자동 반영되는 줄 알았다가 빈 값으로 막힌 사고).
 
 ### 4-3. 이미지 창고 (S3)
 
