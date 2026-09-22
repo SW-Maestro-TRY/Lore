@@ -1156,7 +1156,10 @@ export class MockPetServer implements PetSource {
       download: true, leftRight: true, run: r.counters.leftRightWins >= FEATURE_UNLOCK.runLeftRightWins,
       scenes: false, background: l2 >= FEATURE_UNLOCK.backgroundLayer2,
       // 앨범은 첫 심화 행동이 **도착**하면 열린다(계약 1.6).
-      album: r.motions.some((m) => m.advanced.status === 'OPEN'), pieces: r.piecesEnabled,
+      // ★ 앨범은 **처음부터** 열려 있다(정본 §6·§16 "앨범 = 처음부터" · 서버 2026-09-22 결정).
+      //   기본 행동 8종부터 담기므로 심화 행동을 기다릴 이유가 없다. 옛 값은 "첫 심화가 OPEN 이면" 이라
+      //   화면은 이미 열어 주는데 플래그만 늦어, 계약과 정본이 조용히 어긋나 있었다(연결 감사 J1).
+      album: true, pieces: r.piecesEnabled,
     };
   }
 
