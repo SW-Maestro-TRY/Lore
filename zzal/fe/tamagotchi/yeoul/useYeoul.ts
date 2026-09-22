@@ -2373,12 +2373,14 @@ export function useYeoul(live?: Live) {
       return {
         key: g.key, title: g.label.split(' · ')[0], ph: g.ph, value: noteVal,
         // 여러 개 고를 수 있다는 것은 **글로 말해 준다** — 칩만 보면 하나만 되는 줄 안다.
-        //   성격은 서버가 하나만 받으므로 어느 것이 저장되는지까지 적는다.
+        // ★★ 다만 **맨 위 한 번만** 말한다(2026-09-22 상훈님 "기존처럼 깔끔하게"). 예전에는 네 묶음이
+        //   각각 같은 줄을 달고 있어 한 화면에 **똑같은 안내가 네 번** 떴다. 규칙은 네 칸 모두 같으니
+        //   첫 칸에서 한 번 말하면 된다. 성격은 서버가 하나만 받으므로 그 사실만 뒤에 덧붙인다.
         note: g.key === 'persona'
           ? (picked.length > 1
             ? `여러 개 고를 수 있어요 · 대표는 '${picked[0]}'`
-            : '여러 개 고를 수 있어요 · 처음 고른 것이 대표예요')
-          : '여러 개 고를 수 있어요',
+            : '여러 개 고를 수 있어요 · 성격은 처음 고른 것이 대표예요')
+          : '',
         onInput: onGroupText(g.key),
         cardBd: done ? C.accentDim : C.lineSoft,
         cardBg: done ? C.shell : C.paper,
