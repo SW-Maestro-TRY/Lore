@@ -1,15 +1,21 @@
 "use client";
 
-/* Piece Maker — 복선 카드를 근거로 가설을 만들고 판정받는 화면.
+/* Piece Maker — 복선 카드를 근거로 가설을 만들고 판정을 맡기는 화면.
  * NarrativeAnalysis 의 판정 화면(`src/gpt_judge/web`)을 옮겼다(1부). 2부에서 카드를 lore 백엔드에서 받게 했다 —
  * 독자가 회차를 고르고, 카드는 그 회차로 거르고 가려서 50장씩 오고, 검색은 서버가 한다. 초안은 카드 전체를 담는다.
+ * 3부에서 판정을 lore 에 맡긴다 — "가설 판정하기"는 로그인한 독자의 가설을 서버에 저장하고(2-5), 초안은 얼고,
+ * 결과는 요청 id 로 되묻는다(2-6, `useHypothesis`). 판정은 운영자가 따로 넣는다. 판정이 가리키는 카드는 판정이 함께
+ * 실어 온 인용 카드(`cited_cards`) → 가설이 복사해 둔 카드 → 손에 있는 카드 → 카드 상세 API 순으로 찾는다(1-29 · 2-31).
  *
  * 구조: `.trailer-page` 안에 `.app`(레일과 작업 영역), 모달, 알림이 형제로 놓인다.
  * `.trailer-page` 는 원본의 `body` 자리다 — 변수와 바탕색, `data-view` 가 여기에 붙는다. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchCard, type Card } from "../lib/api";
+import AuthModal from "@common/auth/AuthModal";
+import { useAuth } from "@common/auth/useAuth";
+import { ApiError } from "@common/api/client";
+import { fetchCard, fetchHypothesis, fetchMyHypotheses, type Card, type JudgeResult } from "../lib/api";
 import { cardIds, hasCard, type Draft } from "../lib/draft";
-import { JUDGE_TEXT } from "../lib/judgement";
+import { JUDGE_TEXT, checkJudgement, citedCards, citedIds } from "../lib/judgement";
 import { postText } from "../lib/postText";
 import { ALL_KINDS } from "../lib/search";
 import ComposePane from "./ComposePane";
@@ -17,14 +23,17 @@ import ExplorePane from "./ExplorePane";
 import JudgePanel from "./JudgePanel";
 import MobileTabs, { type View } from "./MobileTabs";
 import Modal, { type ModalContent } from "./Modal";
-import { COPY_FIELD_ID, detailModal, helpModal, previewModal, resetModal, savedModal, type ModalState } from "./modals";
+import { COPY_FIELD_ID, detailModal, helpModal, previewModal, resetModal, savedModal, type MineState, type ModalState } from "./modals";
 import RailNav from "./RailNav";
 import Toast, { useToast } from "./Toast";
 import TopBar from "./TopBar";
 import { useCards } from "./useCards";
 import { useDraft } from "./useDraft";
-import { useJudge } from "./useJudge";
+import { useHypothesis } from "./useHypothesis";
 import { useMeta } from "./useMeta";
+import { useSubmit } from "./useSubmit";
+
+const NEW_DRAFT_TOAST = "맡긴 가설은 내 가설에 두고 새 가설을 시작했어요.";
 
 export default function PieceMaker() {
   const root = useRef<HTMLDivElement>(null);
@@ -38,16 +47,45 @@ export default function PieceMaker() {
   const { meta, reload: reloadMeta } = useMeta();
   const { message, showToast } = useToast();
 
-  const { state: judged, judge, invalidate } = useJudge();
-  // 독자가 초안이나 회차를 바꾸면 받아 둔 판정을 푼다.
-  const { draft, saved, saveStatus, ready, chapter, selectChapter, setTitle, setClaim, setNote, toggle, move, reset, save, loadSaved } =
-    useDraft(meta, invalidate);
+  const { state: submission, submit, clear: clearSubmission } = useSubmit();
+  // 독자가 초안을 고치면 맡기지 못한 문구를 지운다.
+  const {
+    draft,
+    frozen,
+    saved,
+    saveStatus,
+    ready,
+    chapter,
+    selectChapter,
+    setTitle,
+    setClaim,
+    setNote,
+    toggle,
+    move,
+    reset,
+    markSubmitted,
+    loadHypothesis,
+    save,
+    loadSaved,
+  } = useDraft(meta, clearSubmission);
   const { cards, more, reload: reloadCards } = useCards(chapter, query, filter === ALL_KINDS ? "" : filter);
+  /** 맡긴 초안이면 그 가설을 되묻는다. 판정이 아직이면 이따금 다시 묻는다. */
+  const { state: watched, reload: reloadHypothesis } = useHypothesis(frozen ? (draft.hypothesisId ?? null) : null);
+  const hypothesis = watched.status === "ready" ? watched.hypothesis : null;
 
-  // 장부 정보를 다시 받기 시작하면 받아 둔 판정도 푼다.
+  /* ---- 로그인 ---------------------------------------------------------------- */
+
+  const { isAuthenticated } = useAuth();
+  const [authOpen, setAuthOpen] = useState(false);
+  /** 로그인 창을 "가설 판정하기"가 열었는가. 로그인이 끝나면 곧 맡긴다. */
+  const resumeSubmit = useRef(false);
+  /** 로그인 창을 "내 가설"의 로그인 단추가 열었는가. 로그인이 끝나면 보관함을 다시 열고 받는다. */
+  const resumeMine = useRef(false);
+
+  // 로그인이 없어 되묻지 못했던 가설은 로그인이 되면 곧 다시 묻는다(헤더에서 로그인해도).
   useEffect(() => {
-    if (meta.status === "loading") invalidate();
-  }, [meta.status, invalidate]);
+    if (isAuthenticated && watched.status === "unauthorized") void reloadHypothesis();
+  }, [isAuthenticated, watched.status, reloadHypothesis]);
 
   // lore 공용 헤더의 높이를 재서 CSS 변수로 넘긴다. 이 화면은 헤더 아래 남은 높이만 쓴다.
   // 헤더 높이는 화면 폭과 글꼴에 따라 달라지므로 값을 박지 않는다(zzal 의 TamagotchiScreen 과 같다).
@@ -71,39 +109,72 @@ export default function PieceMaker() {
   /* ---- 손에 있는 카드 --------------------------------------------------------- */
 
   const loaded = cards.status === "ready" ? cards.items : [];
-  /** 판정이 가리키는 카드. 판정을 받을 때 함께 찾아 둔다(`useJudge`). */
-  const cited = judged.status === "done" ? judged.cited : [];
+  /** 판정이 가리키는 카드를 찾아 둔 것. `key` 는 어느 판정의 것인지(가설 번호와 판정 시각)다. `ok` 가 거짓이면 근거를 다 찾지 못했다. */
+  const [cited, setCited] = useState<{ key: string; cards: Card[]; ok: boolean } | null>(null);
+  /** 가설이 복사해 둔 카드. 맡길 때 그 회차로 가린 값이라 목록에 없어도 그대로 그린다. */
+  const copied = hypothesis?.cards ?? [];
   /** 최신 값을 ref 에도 둔다. 탐색 패널에 넘기는 함수가 늘 같은 함수로 남아야 `memo` 가 듣는다. */
-  const hand = useRef<{ draft: Draft; loaded: Card[]; cited: Card[]; chapter: number | null }>({ draft, loaded, cited, chapter });
-  hand.current = { draft, loaded, cited, chapter };
+  const hand = useRef<{ draft: Draft; loaded: Card[]; cited: Card[]; copied: Card[]; chapter: number | null; meta: typeof meta }>({
+    draft,
+    loaded,
+    cited: [],
+    copied,
+    chapter,
+    meta,
+  });
+  hand.current = { draft, loaded, cited: cited?.cards ?? [], copied, chapter, meta };
 
-  /** 손에 있는 카드 — 담은 카드, 받아 둔 목록, 판정이 가리킨 카드 순으로 찾는다. 없으면 undefined 다. */
+  /** 손에 있는 카드 — 담은 카드, 받아 둔 목록, 판정의 인용 카드, 가설이 복사한 카드 순으로 찾는다. 없으면 undefined 다. */
   const findCard = useCallback((id: string): Card | undefined => {
-    const { draft: current, loaded: items, cited: referenced } = hand.current;
+    const { draft: current, loaded: items, cited: referenced, copied: kept } = hand.current;
     return (
       current.cards.find((card) => card.id === id) ??
       items.find((card) => card.id === id) ??
-      referenced.find((card) => card.id === id)
+      referenced.find((card) => card.id === id) ??
+      kept.find((card) => card.id === id)
     );
   }, []);
 
-  /**
-   * 판정이 가리키는 카드를 찾아 준다. 손에 없는 카드는 서버에 한 장씩 묻는다(카드 상세 API).
-   * judge.py 는 독자가 담지 않은 열린 복선도 인용한다 — 예를 들어 T2 만 담은 가설의 판정이 T374 를 근거로 든다.
-   * 없는 카드(모르는 번호, N화 뒤에 심은 카드)는 빼고 돌려준다. 그러면 `checkJudgement` 가 판정을 버린다.
-   */
-  const resolveCited = useCallback(
-    async (ids: string[], signal: AbortSignal): Promise<Card[]> => {
-      const current = hand.current.chapter;
+  /* ---- 판정 결과 ------------------------------------------------------------- */
+
+  /** 어느 판정을 그릴 차례인지. COMPLETE 이고 판정 칸이 있을 때만 값이 있다. */
+  const judgedKey =
+    hypothesis && hypothesis.judgementStatus === "COMPLETE" && hypothesis.judgement ? `${hypothesis.id}:${hypothesis.judgedAt ?? ""}` : null;
+
+  // 판정이 오면 그것이 가리키는 카드를 찾아 둔다 — 인용 카드 → 복사한 카드 → 손에 있는 카드 → 카드 상세 API.
+  // 하나라도 못 찾으면 판정을 그리지 않는다(checkJudgement). 다른 판정이 오면 다시 찾는다.
+  useEffect(() => {
+    if (!hypothesis || judgedKey === null || !hypothesis.judgement) return;
+    if (cited?.key === judgedKey) return;
+    const controller = new AbortController();
+    const judgement = hypothesis.judgement;
+    const known = [...citedCards(judgement), ...hypothesis.cards];
+    void (async () => {
       const found: Card[] = [];
-      for (const id of ids) {
-        const card = findCard(id) ?? (current === null ? null : await fetchCard(id, current, signal));
+      for (const id of citedIds(judgement)) {
+        const card =
+          known.find((item) => item.id === id) ??
+          findCard(id) ??
+          (await fetchCard(id, hypothesis.chapter, controller.signal).catch(() => null));
         if (card) found.push(card);
       }
-      return found;
-    },
-    [findCard],
-  );
+      if (controller.signal.aborted) return;
+      let ok = true;
+      try {
+        checkJudgement({ judgement, presentation: hypothesis.presentation }, (id) => found.some((card) => card.id === id));
+      } catch {
+        ok = false;
+      }
+      setCited({ key: judgedKey, cards: found, ok });
+    })();
+    return () => controller.abort();
+  }, [hypothesis, judgedKey, cited?.key, findCard]);
+
+  /** 그릴 판정. 근거 카드를 다 찾은 뒤에만 값이 있다. */
+  const result: JudgeResult | null =
+    hypothesis && judgedKey !== null && hypothesis.judgement && cited?.key === judgedKey && cited.ok
+      ? { judgement: hypothesis.judgement, presentation: hypothesis.presentation }
+      : null;
 
   /* ---- 모달 ---------------------------------------------------------------- */
 
@@ -146,7 +217,25 @@ export default function PieceMaker() {
     },
     [findCard, openModal, showToast],
   );
-  const openSaved = useCallback(() => openModal({ kind: "saved" }), [openModal]);
+  /* ---- 보관함 ---------------------------------------------------------------- */
+
+  const [mine, setMine] = useState<MineState>({ status: "idle" });
+
+  /** 서버의 보관함을 받는다. 401 은 로그인 단추로, 그 밖의 실패는 다시 받기 단추로 보인다. */
+  const loadMine = useCallback(async () => {
+    setMine({ status: "loading" });
+    try {
+      setMine({ status: "ready", items: await fetchMyHypotheses() });
+    } catch (error) {
+      if (error instanceof ApiError && error.isUnauthorized) setMine({ status: "unauthorized" });
+      else setMine({ status: "error", reason: error instanceof Error ? error.message : String(error) });
+    }
+  }, []);
+
+  const openSaved = useCallback(() => {
+    openModal({ kind: "saved" });
+    void loadMine();
+  }, [openModal, loadMine]);
   const openHelp = useCallback(() => openModal({ kind: "help" }), [openModal]);
   const openReset = useCallback(() => openModal({ kind: "reset" }), [openModal]);
   const openPreview = useCallback(() => openModal({ kind: "preview" }), [openModal]);
@@ -177,13 +266,21 @@ export default function PieceMaker() {
 
   /* ---- 초안 ---------------------------------------------------------------- */
 
+  /** 카드를 담거나 뺀다. 맡긴 초안이면 그 카드로 새 초안이 시작된다 — 그때는 알린다. */
+  const toggleCard = useCallback(
+    (card: Card) => {
+      if (toggle(card)) showToast(NEW_DRAFT_TOAST);
+    },
+    [toggle, showToast],
+  );
+
   /** 작성 패널의 "근거 제거". 담은 카드에서 그 번호를 찾아 뺀다. */
   const removeCard = useCallback(
     (id: string) => {
       const card = hand.current.draft.cards.find((item) => item.id === id);
-      if (card) toggle(card);
+      if (card) toggleCard(card);
     },
-    [toggle],
+    [toggleCard],
   );
 
   function saveDraft() {
@@ -196,6 +293,35 @@ export default function PieceMaker() {
     clearSearch();
     closeModal();
     show("compose");
+  }
+
+  /** 보관함의 맡긴 가설 하나를 연다. 서버에서 전부 받아 그 회차의 얼어 있는 초안으로 되살린다. */
+  async function openMine(id: number) {
+    try {
+      const found = await fetchHypothesis(id);
+      if (!found) {
+        showToast("가설을 찾을 수 없습니다.");
+        void loadMine();
+        return;
+      }
+      if (!loadHypothesis(found)) {
+        showToast("이 장부에서는 열 수 없는 회차의 가설입니다.");
+        return;
+      }
+      clearSearch();
+      closeModal();
+      show("compose");
+    } catch (error) {
+      if (error instanceof ApiError && error.isUnauthorized) loginForMine();
+      else showToast("가설을 불러오지 못했습니다.");
+    }
+  }
+
+  /** 보관함의 로그인 단추. 공용 로그인 창은 <dialog> 아래에 깔리므로 모달을 먼저 닫고, 로그인이 끝나면 다시 연다. */
+  function loginForMine() {
+    closeModal();
+    resumeMine.current = true;
+    setAuthOpen(true);
   }
 
   async function copyPost() {
@@ -211,41 +337,101 @@ export default function PieceMaker() {
     }
   }
 
+  /* ---- 판정 맡기기 --------------------------------------------------------- */
+
+  /** 누른 순간의 초안을 서버에 맡긴다. 저장되면 초안이 얼고, 로그인이 없으면 로그인 창을 연다. */
+  const submitDraft = useCallback(async () => {
+    const { draft: current, chapter: at, meta: ledger } = hand.current;
+    if (ledger.status !== "ready" || at === null || current.hypothesisId !== undefined) return;
+    const outcome = await submit({
+      chapter: at,
+      title: current.title,
+      claim: current.claim,
+      cards: cardIds(current),
+      notes: { ...current.notes },
+      state_digest: ledger.meta.stateDigest,
+      cards_digest: ledger.meta.cardsDigest,
+    });
+    if (outcome === "unauthorized") {
+      resumeSubmit.current = true;
+      setAuthOpen(true);
+      return;
+    }
+    if (outcome) {
+      markSubmitted(outcome.id);
+      showToast("판정을 맡겼어요. 결과는 준비되면 여기에 보여요.");
+    }
+  }, [submit, markSubmitted, showToast]);
+
+  function requestJudge() {
+    if (!isAuthenticated) {
+      // 로그인 뒤에 이어서 맡긴다. 독자가 다시 누르지 않게.
+      resumeSubmit.current = true;
+      setAuthOpen(true);
+      return;
+    }
+    void submitDraft();
+  }
+
+  const closeAuth = useCallback(() => {
+    setAuthOpen(false);
+    resumeSubmit.current = false;
+    resumeMine.current = false;
+  }, []);
+
+  const authSucceeded = useCallback(
+    (how: "login" | "signup") => {
+      setAuthOpen(false);
+      // 가입은 로그인이 아니다 — 가입 뒤에는 독자가 다시 누른다(zzal 의 Yeoul 과 같다).
+      if (how !== "login") return;
+      if (resumeSubmit.current) {
+        resumeSubmit.current = false;
+        void submitDraft();
+      }
+      if (resumeMine.current) {
+        resumeMine.current = false;
+        openSaved();
+      }
+    },
+    [submitDraft, openSaved],
+  );
+
   const maxChapter = meta.status === "ready" ? meta.meta.maxChapter : null;
   // 담은 카드의 번호. 제목이나 해석을 칠 때는 `cards` 배열이 그대로라 탐색 패널이 다시 그려지지 않는다.
   const selectedIds = useMemo(() => cardIds(draft), [draft.cards]); // eslint-disable-line react-hooks/exhaustive-deps
-  const result = judged.status === "done" ? judged.result : null;
+  /** 맡긴 초안의 상태 한 줄. 되묻기의 상태와 판정의 상태를 차례로 본다. */
+  function frozenText(): string {
+    switch (watched.status) {
+      case "idle":
+      case "loading":
+        return JUDGE_TEXT.checking;
+      case "unauthorized":
+        return JUDGE_TEXT.loginToSee;
+      case "missing":
+        return JUDGE_TEXT.missing;
+      case "error":
+        return JUDGE_TEXT.fetchFailed;
+      case "ready": {
+        const value = watched.hypothesis;
+        if (value.judgementStatus === "PENDING") return JUDGE_TEXT.pending;
+        if (value.judgementStatus === "FAILED") return JUDGE_TEXT.judgeFailed(value.failureMessage ?? "");
+        if (result) return JUDGE_TEXT.done;
+        return cited?.key === judgedKey ? JUDGE_TEXT.brokenResult : JUDGE_TEXT.resolving;
+      }
+    }
+  }
   const stateText =
     meta.status === "loading"
       ? "장부를 불러오는 중입니다."
       : meta.status === "error"
         ? JUDGE_TEXT.cardsFailed
-        : judged.status === "waiting"
-          ? JUDGE_TEXT.waiting
-          : judged.status === "done"
-            ? JUDGE_TEXT.done
-            : judged.status === "failed"
-              ? JUDGE_TEXT.failed(judged.reason)
-              : judged.changed
-                ? JUDGE_TEXT.changed
-                : JUDGE_TEXT.idle;
-
-  function requestJudge() {
-    if (meta.status !== "ready" || chapter === null) return;
-    // 누른 순간의 초안을 그대로 보낸다. 판정이 가리키는 카드는 `resolveCited` 가 찾아 준다.
-    void judge(
-      {
-        chapter,
-        title: draft.title,
-        claim: draft.claim,
-        cards: cardIds(draft),
-        notes: { ...draft.notes },
-        state_digest: meta.meta.stateDigest,
-        cards_digest: meta.meta.cardsDigest,
-      },
-      resolveCited,
-    );
-  }
+        : frozen
+          ? frozenText()
+          : submission.status === "submitting"
+            ? JUDGE_TEXT.submitting
+            : submission.status === "failed"
+              ? JUDGE_TEXT.failed(submission.reason)
+              : JUDGE_TEXT.idle;
 
   function modalContent(): ModalContent | null {
     if (modal === null) return null;
@@ -255,13 +441,17 @@ export default function PieceMaker() {
           onClose: closeModal,
           // 모달에서 담거나 빼면 모달을 닫는다. 목록에서 담을 때는 포커스를 건드리지 않는다.
           onToggle: (card) => {
-            toggle(card);
+            toggleCard(card);
             closeModal();
           },
           onPerson: searchPerson,
         });
       case "saved":
-        return savedModal(saved, chapter, openSavedEntry);
+        return savedModal(saved, chapter, openSavedEntry, mine, {
+          onOpen: (id) => void openMine(id),
+          onLogin: loginForMine,
+          onRetry: () => void loadMine(),
+        });
       case "preview":
         return previewModal(chapter === null || maxChapter === null ? "" : postText(draft, chapter, maxChapter, result), {
           onClose: closeModal,
@@ -303,11 +493,12 @@ export default function PieceMaker() {
               onReload={reloadAll}
               onMore={more}
               onOpen={openDetail}
-              onToggle={toggle}
+              onToggle={toggleCard}
               onHelp={openHelp}
             />
             <ComposePane
               ready={ready}
+              frozen={frozen}
               chapter={chapter}
               draft={draft}
               saveStatus={saveStatus}
@@ -316,16 +507,21 @@ export default function PieceMaker() {
                   canJudge={
                     meta.status === "ready" &&
                     chapter !== null &&
-                    judged.status !== "waiting" &&
+                    !frozen &&
+                    submission.status !== "submitting" &&
                     draft.cards.length > 0 &&
                     Boolean(draft.claim.trim())
                   }
-                  waiting={judged.status === "waiting"}
+                  waiting={submission.status === "submitting"}
+                  frozen={frozen}
+                  pending={hypothesis?.judgementStatus === "PENDING"}
                   stateText={stateText}
                   result={result}
                   chapter={chapter}
                   titleOf={(id) => findCard(id)?.title}
                   onJudge={requestJudge}
+                  onNew={reset}
+                  onRefresh={() => void reloadHypothesis()}
                   onOpen={openDetail}
                 />
               }
@@ -345,6 +541,8 @@ export default function PieceMaker() {
       </div>
       <Modal content={modalContent()} onClose={closeModal} />
       <Toast message={message} />
+      {/* 로그인 창은 공용 부품이다 — 헤더의 "로그인"과 같은 창. 여기서는 여닫기만 든다. */}
+      <AuthModal open={authOpen} onClose={closeAuth} onSuccess={authSucceeded} />
     </div>
   );
 }

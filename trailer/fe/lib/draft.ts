@@ -7,6 +7,8 @@
  *   되면서 화면이 카드를 다 갖고 있지 않다. 되살릴 때 서버를 부르지 않고, 판정이 가리키는 카드도 담은 카드
  *   안에서 찾는다. 담은 카드는 그 회차 기준으로 가린 값이다 — 초안이 회차마다 따로라 어긋나지 않는다.
  *
+ * 맡긴 초안은 요청 id(`hypothesisId`)를 달고 얼어 있다. 서버에 있는 가설이 정본이고 이 초안은 그 자리 표시다.
+ *
  * 초안을 바꾸는 함수는 모두 새 객체를 돌려준다. 받은 초안을 고치지 않는다. */
 import type { Card } from "./api";
 
@@ -27,6 +29,8 @@ export type Draft = {
   /** 카드마다 적은 해석. 담은 카드에만 있다. */
   notes: Record<string, string>;
   updated: number;
+  /** 서버에 맡긴 뒤의 요청 id. 있으면 이 초안은 얼어 있다 — 고칠 수 없고, 새 가설은 새로 쓴다(NA decisions.md 1-23). */
+  hypothesisId?: number;
 };
 
 /** 저장소에 넣는 값. `drafts` 의 키는 회차다. `chapter` 는 독자가 마지막에 고른 회차다. */
@@ -54,6 +58,11 @@ export function cardIds(draft: Draft): string[] {
 
 export function hasCard(draft: Draft, id: string): boolean {
   return draft.cards.some((card) => card.id === id);
+}
+
+/** 서버에 맡긴 초안인가. 얼어 있는 초안은 입력을 받지 않는다. */
+export function isFrozen(draft: Draft): boolean {
+  return draft.hypothesisId !== undefined;
 }
 
 const THREAD_ID = /^T\d+$/;
@@ -119,6 +128,9 @@ export function cleanDraft(raw: unknown, maxChapter: number): Draft | null {
     cards,
     notes,
     updated: Number(value.updated) || 0,
+    ...(typeof value.hypothesisId === "number" && Number.isInteger(value.hypothesisId) && value.hypothesisId > 0
+      ? { hypothesisId: value.hypothesisId }
+      : {}),
   };
 }
 

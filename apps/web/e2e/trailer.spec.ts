@@ -1,12 +1,12 @@
 // Trailer 탭(Piece Maker) — 복선 카드를 근거로 가설을 만들고 판정받는 화면.
 //
-// 왜 라우트 가로채기인가 — 카드는 lore 백엔드의 카드 API 셋(`/api/trailer/v1/public/cards…`)에서 오고, 판정은
-// 아직 lore 밖의 Python 서버(`/api/judge`)가 한다. 검사는 서버와 DB 없이 돌아야 하므로 둘을 여기서 답한다.
-// 카드는 `trailer-lore.ts` 의 가짜 lore 서버가 표본 25장 위에서 진짜 서버와 같은 규칙(회차로 거르기 · 회수 칸
-// 가리기 · 검색 · 나눠 주기)으로 답하고, 판정은 그 서버가 실제로 준 것을 뽑아 둔 파일이다
-// (`trailer/fe/tests/fixtures/`. NarrativeAnalysis 의 `python3.12 -m src.gpt_judge.web.export_fixtures --out <폴더>`).
+// 왜 라우트 가로채기인가 — 카드는 lore 백엔드의 카드 API 셋(`/api/trailer/v1/public/cards…`)에서 오고, 가설은
+// 같은 백엔드에 맡긴다(`/api/trailer/v1/hypotheses`, 로그인 필요). 검사는 서버와 DB 없이 돌아야 하므로 `trailer-lore.ts` 의
+// 가짜 lore 서버가 표본 25장 위에서 진짜 서버와 같은 규칙(회차로 거르기 · 회수 칸 가리기 · 검색 · 나눠 주기 · 맡길 때 카드
+// 복사)으로 답하고, 로그인(`/api/v1/users/me` · `/api/v1/auth/login`)도 대신 답한다. 표본은 `trailer/fe/tests/fixtures/`
+// (NarrativeAnalysis 의 `python3.12 -m src.gpt_judge.web.export_fixtures --out <폴더>`)다.
 //
-// 처음 온 독자는 1화 장부를 본다. 저장된 T2 판정은 400화의 것이라, 판정 검사는 400화를 골라 놓고 돈다(`open(page, 400)`).
+// 처음 온 독자는 1화 장부를 본다. 표본의 카드가 다 보이는 400화를 골라 놓고 도는 검사가 많다(`open(page, 400)`).
 //
 // ★ 여기서 지키는 사실 셋
 //   1. 요소는 문구가 아니라 표식으로 집는다(`data-part` · `data-action` · `data-card-id`). 같은
@@ -18,18 +18,15 @@
 import { expect, test, type Page } from '@playwright/test';
 import { collectErrors } from './helpers';
 import { ALL_KINDS, matchesCard } from '../../../trailer/fe/lib/search';
-import { CARDS, JUDGE_URL, LIST_URL, answer, fail, load, mockLore, visibleCards, type Fixture } from './trailer-lore';
+import { CARDS, HYPOTHESES_URL, LIST_URL, answer, fail, load, mockLore, visibleCards, type Fixture, type LoreHypothesis } from './trailer-lore';
 
+/** Python 서버가 실제로 준 T2 판정(400화). 3부에서는 운영자가 넣은 판정이 가설의 `judgement` · `presentation` 으로 온다. */
 type JudgeResponse = {
-  status: string;
-  chapter: number;
-  state_digest: string;
-  cards_digest: string;
   judgement: { grade: string; reason: string; support: string[]; against: string[] };
   presentation?: { status: string; headline: string; sections: unknown[]; details: unknown[] };
 };
-
 const JUDGE_T2 = load<JudgeResponse>('judge-t2.json');
+
 const LAST = CARDS.max_chapter;
 /** 400화 독자에게 보이는 표본 전부 — 가릴 것이 없다. */
 const ALL_CARDS = visibleCards(CARDS, LAST);
@@ -67,7 +64,20 @@ async function pick(page: Page, ...ids: string[]): Promise<void> {
   for (const id of ids) await listCard(page, id).locator('[data-action="add"]').click();
 }
 
-/** 판정을 받을 수 있는 가설을 만든다. 저장된 T2 판정이 가리키는 카드(T2 · T374)는 표본에 모두 있다. */
+/** 판정이 가리키는 카드를 그 회차의 값으로 실어 준다 — judge.py 가 붙이는 `cited_cards` 와 같은 모양(밑줄 표기 열두 칸). */
+function citedCardsFor(ids: string[]) {
+  return ids.map((id) => ALL_CARDS.find((card) => card.id === id)!);
+}
+
+/** 가짜 서버의 가설에 판정을 넣는다 — 운영자가 2-9 로 넣은 뒤의 모양이다. */
+function judgeAs(item: LoreHypothesis, judgement: Record<string, unknown>, presentation: Record<string, unknown> | null): void {
+  item.judgementStatus = 'COMPLETE';
+  item.judgement = judgement;
+  item.presentation = presentation;
+  item.judgedAt = new Date().toISOString();
+}
+
+/** 맡길 수 있는 가설을 만든다 — 카드 둘(T2 · T374)과 주장. */
 async function writeTheory(page: Page, claim = '샹크스와 루피는 다시 만난다.'): Promise<void> {
   await pick(page, 'T2', 'T374');
   await page.fill('#trailer-claim', claim);
@@ -236,62 +246,6 @@ test.describe('데스크톱', () => {
     await pickedCard(again, 'T1648').locator('[data-action="open"]').click();
     await expect(modal(again).locator('#trailer-modal-title')).toHaveText(t1648.title);
     await again.close();
-  });
-
-  test('★ 판정이 가리키는 카드가 목록에 없어도 담은 카드에서 찾아 받아들인다', async ({ page, context }) => {
-    await mockLore(context);
-    await context.route(JUDGE_URL, (route) => answer(route, json(JUDGE_T2)));
-    await open(page, LAST);
-    await writeTheory(page);
-    // 목록을 T2 · T374 가 없는 결과로 바꾼다. 판정의 근거는 담은 카드에서 찾는다.
-    await page.fill('#trailer-search', 'koby');
-    await expect(listCard(page, 'T2')).toHaveCount(0);
-    await expect(listCard(page, 'T374')).toHaveCount(0);
-
-    await page.click('[data-action="judge"]');
-    const result = page.locator('[data-part="judge-result"]');
-    await expect(result).toBeVisible();
-    await expect(result.locator('[data-part="judge-grade"]')).toHaveAttribute('data-grade', JUDGE_T2.judgement.grade);
-    await result.locator('[data-action="open"][data-card-id="T374"]').click();
-    await expect(modal(page).locator('#trailer-modal-title')).toHaveText(ALL_CARDS.find((card) => card.id === 'T374')!.title);
-  });
-
-  test('★ 판정이 가리키는 카드가 손에 없으면 서버에 한 장을 묻는다 — judge.py 는 담지 않은 카드도 인용한다', async ({ page, context }) => {
-    // 목록은 첫 쪽 10장(T1~T10)뿐이고 담은 카드는 T2 하나다. 판정이 든 T374 는 어디에도 없어 카드 상세 API 로 받아 온다.
-    const detailCalls: string[] = [];
-    await mockLore(context, { pageSize: 10 });
-    await context.route(/\/api\/trailer\/v1\/public\/cards\/(T\d+)/, (route) => {
-      detailCalls.push(new URL(route.request().url()).pathname);
-      return route.fallback();
-    });
-    // 판정 응답의 회차는 요청의 회차를 되돌려 준다 — 아래에서 3화로도 판정을 받는다.
-    await context.route(JUDGE_URL, (route) => {
-      const body = route.request().postDataJSON() as { chapter: number };
-      return answer(route, json({ ...JUDGE_T2, chapter: body.chapter }));
-    });
-    await open(page, LAST);
-    await expect(listCard(page, 'T374')).toHaveCount(0);
-    await pick(page, 'T2');
-    await page.fill('#trailer-claim', '샹크스와 루피는 다시 만난다.');
-    await page.click('[data-action="judge"]');
-
-    const result = page.locator('[data-part="judge-result"]');
-    await expect(result).toBeVisible();
-    expect(detailCalls).toEqual(['/api/trailer/v1/public/cards/T374']);
-    const t374 = ALL_CARDS.find((card) => card.id === 'T374')!;
-    await expect(result.locator('[data-action="open"][data-card-id="T374"]')).toContainText(t374.title);
-    await result.locator('[data-action="open"][data-card-id="T374"]').click();
-    await expect(modal(page).locator('#trailer-modal-title')).toHaveText(t374.title);
-    await page.keyboard.press('Escape');
-
-    // 3화 독자에게는 T374(96화에 심음)가 없다 — 그 회차로 같은 판정을 받으면 서버가 404 를 주고 화면은 판정을 버린다.
-    await selectChapter(page, 3);
-    await pick(page, 'T2');
-    await page.fill('#trailer-claim', '3화에서 같은 주장');
-    await page.click('[data-action="judge"]');
-    await expect(page.locator('[data-action="judge"]')).toBeEnabled();
-    await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
-    expect(detailCalls).toEqual(['/api/trailer/v1/public/cards/T374', '/api/trailer/v1/public/cards/T374']);
   });
 
   test('★ 회차를 바꾼 뒤 늦게 온 앞 회차의 응답은 버린다', async ({ page, context }) => {
@@ -500,137 +454,263 @@ test.describe('데스크톱', () => {
     }
   });
 
-  test('판정을 받는다 — 등급, 편집본, 근거 카드', async ({ page, context }) => {
-    await mockLore(context);
-    let sent: Record<string, unknown> | null = null;
-    await context.route(JUDGE_URL, (route) => {
-      sent = route.request().postDataJSON();
-      return answer(route, json(JUDGE_T2));
+  test('★ 로그인하지 않은 독자가 "가설 판정하기"를 누르면 로그인 창이 뜨고, 로그인하면 이어서 맡긴다', async ({ page, context }) => {
+    let sent: unknown = null;
+    const lore = await mockLore(context, { onSubmit: (body) => (sent = body) });
+    await open(page, LAST);
+    await writeTheory(page);
+    await page.click('[data-action="judge"]');
+
+    // 공용 로그인 창(role="dialog")이 뜬다. 아직 아무것도 맡기지 않았다.
+    const auth = page.locator('[role="dialog"]');
+    await expect(auth).toBeVisible();
+    expect(lore.hypotheses).toHaveLength(0);
+    await auth.locator('input[type="email"]').fill('reader@example.invalid');
+    await auth.locator('input[type="password"]').fill('secret-pass-1');
+    await auth.locator('button[type="submit"]').click();
+
+    // 로그인이 끝나면 화면이 곧 맡긴다 — 독자가 다시 누르지 않는다. 몸통은 서버가 받는 모양(camelCase) 그대로다.
+    const compose = page.locator('[data-part="compose"]');
+    await expect(compose).toHaveAttribute('data-frozen', 'true');
+    expect(sent).toEqual({
+      chapter: LAST,
+      title: '',
+      claim: '샹크스와 루피는 다시 만난다.',
+      cards: ['T2', 'T374'],
+      notes: { T2: '', T374: '' },
+      stateDigest: CARDS.state_digest,
+      cardsDigest: CARDS.cards_digest,
+    });
+    expect(lore.hypotheses.map((item) => [item.judgementStatus, item.cards.map((card) => card.id)])).toEqual([['PENDING', ['T2', 'T374']]]);
+    // 맡긴 초안은 얼어 있다 — 글은 읽기만, 저장은 막히고, 단추는 "새 가설 쓰기"로 바뀐다. 상태 줄은 되물은 결과(PENDING)다.
+    await expect(page.locator('[data-part="judge-state"]')).toContainText('기다리는 중');
+    await expect(page.locator('#trailer-claim')).toHaveAttribute('readonly', '');
+    await expect(page.locator('[data-action="judge"]')).toHaveCount(0);
+    await expect(page.locator('[data-action="new-draft"]')).toBeVisible();
+    await expect(compose.locator('[data-action="save"]')).toBeDisabled();
+    await expect(compose.locator('[data-part="frozen-tag"]')).toBeVisible();
+  });
+
+  test('맡긴 가설은 새 페이지에서도 얼어 있고, "새 가설 쓰기"가 빈 초안을 시작한다. 맡긴 가설은 서버에 남는다', async ({ page, context }) => {
+    const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
+    await open(page, LAST);
+    await page.fill('#trailer-title', '맡긴 가설');
+    await writeTheory(page);
+    await page.click('[data-action="judge"]');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+
+    const again = await context.newPage();
+    await open(again);
+    await expect(again.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+    await expect(again.locator('#trailer-title')).toHaveValue('맡긴 가설');
+    await expect(again.locator('[data-action="new-draft"]')).toBeVisible();
+    await again.close();
+
+    await page.click('[data-action="new-draft"]');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'false');
+    await expect(page.locator('#trailer-title')).toHaveValue('');
+    expect(await pickedIds(page)).toEqual([]);
+    await expect(page.locator('[data-action="judge"]')).toBeDisabled();
+    expect(lore.hypotheses).toHaveLength(1);
+  });
+
+  test('얼어 있는 가설에서 카드를 담으면 그 카드로 새 가설이 시작된다', async ({ page, context }) => {
+    await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
+    await open(page, LAST);
+    await writeTheory(page);
+    await page.click('[data-action="judge"]');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+
+    await pick(page, 'T6');
+    await expect(page.locator('[data-part="toast"]')).toContainText('새 가설');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'false');
+    expect(await pickedIds(page)).toEqual(['T6']);
+    await expect(page.locator('#trailer-claim')).toHaveValue('');
+    await expect(page.locator('#trailer-claim')).not.toHaveAttribute('readonly', '');
+  });
+
+  test('맡기지 못하면 서버의 문구가 나오고 쓰던 글이 남는다. 입력을 고치면 문구가 사라진다', async ({ page, context }) => {
+    await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
+    // 뒤에 건 라우트가 먼저 듣는다 — 표를 갈아 넣은 뒤의 옛 화면처럼 해시가 다르다는 400 을 준다.
+    const reason = '화면의 장부와 서버의 장부가 다릅니다. 페이지를 새로 열어 주세요';
+    await context.route(HYPOTHESES_URL, (route) => answer(route, fail(400, 'TRAILER_DIGEST_MISMATCH', reason)));
+    await open(page, LAST);
+    await writeTheory(page, '남아 있어야 하는 주장');
+    await page.click('[data-action="judge"]');
+
+    await expect(page.locator('[data-part="judge-state"]')).toContainText(reason);
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'false');
+    await expect(page.locator('#trailer-claim')).toHaveValue('남아 있어야 하는 주장');
+    expect(await pickedIds(page)).toEqual(['T2', 'T374']);
+    await expect(page.locator('[data-action="judge"]')).toBeEnabled();
+
+    await page.fill('#trailer-claim', '고친 주장');
+    await expect(page.locator('[data-part="judge-state"]')).not.toContainText(reason);
+  });
+  test('★ 판정이 들어오면 결과가 그려진다 — 등급, 편집본, 그리고 담지 않은 근거 카드는 판정이 실어 온 인용 카드에서 찾는다', async ({ page, context }) => {
+    const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
+    const detailCalls: string[] = [];
+    await context.route(/\/api\/trailer\/v1\/public\/cards\/(T\d+)/, (route) => {
+      detailCalls.push(new URL(route.request().url()).pathname);
+      return route.fallback();
     });
     const errors = collectErrors(page);
     await open(page, LAST);
-    const button = page.locator('[data-action="judge"]');
-    await expect(button).toBeDisabled();
+    // T2 만 담고, 목록에서는 T374 가 보이지 않게 한다 — 판정의 근거 T374 는 어디에도 없다.
     await pick(page, 'T2');
-    await expect(button).toBeDisabled(); // 주장이 없다
     await page.fill('#trailer-claim', '샹크스와 루피는 다시 만난다.');
-    await button.click();
+    await page.fill('#trailer-search', 'koby');
+    await expect(listCard(page, 'T374')).toHaveCount(0);
+    await page.click('[data-action="judge"]');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+    await expect(page.locator('[data-part="judge-state"]')).toContainText('기다리는 중');
+    await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
+
+    // 운영자가 판정을 넣었다. 인용 카드(cited_cards)를 함께 실었다(decisions.md 1-29).
+    const ids = [...new Set([...JUDGE_T2.judgement.support, ...JUDGE_T2.judgement.against])];
+    judgeAs(lore.hypotheses[0], { ...JUDGE_T2.judgement, cited_cards: citedCardsFor(ids) }, JUDGE_T2.presentation ?? null);
+    await page.click('[data-action="refresh"]');
 
     const result = page.locator('[data-part="judge-result"]');
     await expect(result).toBeVisible();
     await expect(result.locator('[data-part="judge-grade"]')).toHaveAttribute('data-grade', JUDGE_T2.judgement.grade);
     await expect(result.locator('[data-part="judge-edited"] > [data-part="judge-section"]')).toHaveCount(JUDGE_T2.presentation!.sections.length);
-    await expect(result.locator('[data-part="judge-details"] [data-part="judge-section"]')).toHaveCount(JUDGE_T2.presentation!.details.length);
-
-    // 화면이 보낸 요청은 서버가 받는 모양 그대로다. 회차는 고른 회차, 해시는 장부 정보에서 받은 값이다.
-    expect(sent).toEqual({
-      chapter: LAST,
-      title: '',
-      claim: '샹크스와 루피는 다시 만난다.',
-      cards: ['T2'],
-      notes: { T2: '' },
-      state_digest: CARDS.state_digest,
-      cards_digest: CARDS.cards_digest,
-    });
-
-    // 근거 단추를 누르면 그 카드의 상세가 열린다. T374 는 담지 않았지만 400화 목록에 있어서 거기서 찾았다.
-    const support = JUDGE_T2.judgement.support[1];
-    await result.locator(`[data-action="open"][data-card-id="${support}"]`).click();
-    await expect(modal(page).locator('#trailer-modal-title')).toHaveText(ALL_CARDS.find((card) => card.id === support)!.title);
+    await expect(page.locator('[data-part="judge-state"]')).toContainText('끝났습니다');
+    await expect(page.locator('[data-action="refresh"]')).toHaveCount(0);
+    // 담지 않은 T374 의 제목이 근거 단추에 붙고, 누르면 상세가 열린다 — 카드 상세 API 는 부르지 않았다.
+    const t374 = ALL_CARDS.find((card) => card.id === 'T374')!;
+    await expect(result.locator('[data-action="open"][data-card-id="T374"]')).toContainText(t374.title);
+    await result.locator('[data-action="open"][data-card-id="T374"]').click();
+    await expect(modal(page).locator('#trailer-modal-title')).toHaveText(t374.title);
     await page.keyboard.press('Escape');
-
+    expect(detailCalls).toEqual([]);
     // 받은 판정은 게시글에도 들어간다.
     await page.click('[data-action="preview"]');
     expect(await modal(page).locator('#trailer-copy-text').inputValue()).toContain(JUDGE_T2.presentation!.headline);
     expect(errors).toEqual([]);
   });
 
-  test('편집본이 없으면 판정 원문이 나온다', async ({ page, context }) => {
-    await mockLore(context);
-    const { presentation: _dropped, ...plain } = JUDGE_T2;
-    await context.route(JUDGE_URL, (route) => answer(route, json(plain)));
+  test('편집본이 없으면 판정 원문이 나온다. 근거 카드를 하나라도 못 찾으면 판정을 그리지 않는다', async ({ page, context }) => {
+    const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     await open(page, LAST);
     await writeTheory(page);
     await page.click('[data-action="judge"]');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+
+    judgeAs(lore.hypotheses[0], { ...JUDGE_T2.judgement }, null);
+    await page.click('[data-action="refresh"]');
     const result = page.locator('[data-part="judge-result"]');
     await expect(result.locator('[data-part="judge-reason"]')).toHaveText(JUDGE_T2.judgement.reason);
     await expect(result.locator('[data-part="judge-edited"]')).toHaveCount(0);
+
+    // 모르는 카드를 근거로 든 판정 — 인용 카드도 없고 상세 API 도 404 라 그리지 않는다.
+    const again = await context.newPage();
+    judgeAs(lore.hypotheses[0], { ...JUDGE_T2.judgement, support: ['T99999'] }, null);
+    await open(again);
+    await expect(again.locator('[data-part="judge-state"]')).toContainText('확인할 수 없어');
+    await expect(again.locator('[data-part="judge-result"]')).toBeHidden();
+    await again.close();
   });
 
-  test('판정이 실패하면 서버의 문구가 나오고 쓰던 글이 남는다', async ({ page, context }) => {
-    await mockLore(context);
-    const reason = '모델 판정을 완료하지 못했습니다.';
-    await context.route(JUDGE_URL, (route) => answer(route, json({ error: reason }, 502)));
-    await open(page, LAST);
-    await writeTheory(page, '남아 있어야 하는 주장');
-    await page.click('[data-action="judge"]');
-    await expect(page.locator('[data-part="judge-state"]')).toContainText(reason);
-    await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
-    await expect(page.locator('#trailer-claim')).toHaveValue('남아 있어야 하는 주장');
-    expect(await pickedIds(page)).toEqual(['T2', 'T374']);
-    await expect(page.locator('[data-action="judge"]')).toBeEnabled();
-  });
-
-  test('판정이 가리키는 카드가 담은 카드에 없으면 판정을 버린다', async ({ page, context }) => {
-    await mockLore(context);
-    const broken = { ...JUDGE_T2, judgement: { ...JUDGE_T2.judgement, support: ['T99999'] } };
-    await context.route(JUDGE_URL, (route) => answer(route, json(broken)));
+  test('판정이 실패하면 운영자가 남긴 문구가 나오고, 새 가설을 쓸 수 있다', async ({ page, context }) => {
+    const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     await open(page, LAST);
     await writeTheory(page);
     await page.click('[data-action="judge"]');
-    await expect(page.locator('[data-action="judge"]')).toBeEnabled();
+    await expect(page.locator('[data-action="refresh"]')).toBeVisible();
+
+    const item = lore.hypotheses[0];
+    item.judgementStatus = 'FAILED';
+    item.failureMessage = '모델이 답하지 않았습니다';
+    item.judgedAt = new Date().toISOString();
+    await page.click('[data-action="refresh"]');
+    await expect(page.locator('[data-part="judge-state"]')).toContainText('모델이 답하지 않았습니다');
     await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
+    await expect(page.locator('[data-action="refresh"]')).toHaveCount(0);
+    await expect(page.locator('[data-action="new-draft"]')).toBeVisible();
   });
 
-  test('입력을 고치면 받아 둔 판정이 풀린다. 회차를 바꿔도 풀린다', async ({ page, context }) => {
-    await mockLore(context);
-    await context.route(JUDGE_URL, (route) => answer(route, json(JUDGE_T2)));
+  test('새 페이지는 맡긴 가설을 다시 묻는다 — 로그인이 없으면 로그인 안내, 가설이 없으면 없다는 안내', async ({ page, context }) => {
+    const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     await open(page, LAST);
     await writeTheory(page);
     await page.click('[data-action="judge"]');
-    await expect(page.locator('[data-part="judge-result"]')).toBeVisible();
-    await page.fill('#trailer-claim', '고친 주장');
-    await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
-    await expect(page.locator('[data-action="judge"]')).toBeEnabled();
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
 
+    lore.loggedIn = false;
+    const loggedOut = await context.newPage();
+    await open(loggedOut);
+    await expect(loggedOut.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+    await expect(loggedOut.locator('[data-part="judge-state"]')).toContainText('로그인하면');
+    await loggedOut.close();
+
+    lore.loggedIn = true;
+    lore.hypotheses.length = 0;
+    const gone = await context.newPage();
+    await open(gone);
+    await expect(gone.locator('[data-part="judge-state"]')).toContainText('찾을 수 없습니다');
+    await expect(gone.locator('[data-action="new-draft"]')).toBeVisible();
+    await gone.close();
+  });
+  test('★ "내 가설"에 맡긴 가설이 최신순으로 보이고, 하나를 열면 그 회차의 얼어 있는 초안으로 되살아난다', async ({ page, context }) => {
+    const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
+    await open(page, 3);
+    await pick(page, 'T2');
+    await page.fill('#trailer-title', '3화 가설');
+    await page.fill('#trailer-claim', '3화에서 세운 주장');
     await page.click('[data-action="judge"]');
-    await expect(page.locator('[data-part="judge-result"]')).toBeVisible();
-    await selectChapter(page, 3);
-    await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
-    // 3화의 초안은 비어 있다 — 회차마다 초안이 따로다.
-    expect(await pickedIds(page)).toEqual([]);
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+
+    await selectChapter(page, LAST);
+    await page.fill('#trailer-title', '400화 가설');
+    await writeTheory(page);
+    await page.click('[data-action="judge"]');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+    // 400화 초안은 비우고, 3화 것은 판정이 끝났다고 치자.
+    await page.click('[data-action="new-draft"]');
+    judgeAs(lore.hypotheses[0], { ...JUDGE_T2.judgement, support: ['T2'], against: [] }, null);
+
+    await page.click('[data-part="topbar"] [data-action="saved"]');
+    const mineList = modal(page).locator('[data-part="my-hypotheses"] [data-hypothesis-id]');
+    await expect(mineList).toHaveCount(2);
+    await expect(mineList.nth(0)).toContainText('400화 가설');
+    await expect(mineList.nth(0).locator('[data-part="mine-status"]')).toHaveAttribute('data-status', 'PENDING');
+    await expect(mineList.nth(1)).toContainText('3화 가설');
+    await expect(mineList.nth(1).locator('[data-part="mine-status"]')).toHaveAttribute('data-status', 'COMPLETE');
+
+    // 3화 가설을 열면 회차가 3화로 바뀌고, 얼어 있는 초안으로 되살아나고, 판정이 그려진다.
+    await mineList.nth(1).locator('[data-action="open-hypothesis"]').click();
+    // 서버에서 전부 받은 뒤에 모달이 닫힌다 — 회차가 바뀐 것을 먼저 기다린다.
+    await expect(page.locator(SELECT)).toHaveValue('3');
+    expect(await modalIsOpen(page)).toBe(false);
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+    await expect(page.locator('#trailer-title')).toHaveValue('3화 가설');
+    await expect(page.locator('#trailer-claim')).toHaveValue('3화에서 세운 주장');
+    expect(await pickedIds(page)).toEqual(['T2']);
+    await expect(page.locator('[data-part="judge-result"] [data-part="judge-grade"]')).toHaveAttribute('data-grade', JUDGE_T2.judgement.grade);
   });
 
-  test('기다리는 동안 입력을 고치면 늦게 온 판정을 버린다', async ({ page, context }) => {
+  test('로그인하지 않으면 "내 가설"의 서버 목록 자리에 로그인 단추가 나오고, 브라우저 임시 저장은 그대로 보인다. 로그인하면 목록이 온다', async ({ page, context }) => {
     await mockLore(context);
-    const late = { ...JUDGE_T2, judgement: { ...JUDGE_T2.judgement, grade: 'unlikely' } };
-    const fresh = { ...JUDGE_T2, judgement: { ...JUDGE_T2.judgement, grade: 'likely' } };
-    let release: () => void = () => {};
-    const held = new Promise<void>((resolve) => (release = resolve));
-    let calls = 0;
-    await context.route(JUDGE_URL, async (route) => {
-      calls += 1;
-      if (calls === 1) {
-        await held; // 첫 판정은 붙잡아 둔다
-        return answer(route, json(late));
-      }
-      return answer(route, json(fresh));
-    });
     await open(page, LAST);
-    await writeTheory(page, '처음 주장');
-    const button = page.locator('[data-action="judge"]');
-    await button.click();
-    await expect(button).toBeDisabled(); // 기다리는 중
+    await pick(page, 'T2');
+    await page.fill('#trailer-title', '임시 저장한 가설');
+    await page.click('[data-action="save"]');
+    await expect(page.locator('[data-part="toast"]')).toBeVisible();
 
-    await page.fill('#trailer-claim', '고친 주장');
-    await expect(button).toBeEnabled();
-    await button.click();
-    const grade = page.locator('[data-part="judge-result"] [data-part="judge-grade"]');
-    await expect(grade).toHaveAttribute('data-grade', 'likely');
+    await page.click('[data-part="topbar"] [data-action="saved"]');
+    const mineSection = modal(page).locator('[data-part="my-hypotheses"]');
+    await expect(mineSection).toContainText('로그인하면');
+    await expect(modal(page).locator('[data-part="saved-drafts"] .saved-entry')).toContainText('임시 저장한 가설');
 
-    release();
-    await page.waitForTimeout(500);
-    await expect(grade).toHaveAttribute('data-grade', 'likely');
-    expect(calls).toBe(2);
+    // 로그인 단추 → 공용 로그인 창(모달은 닫힘) → 로그인 → 보관함이 다시 열리고 서버 목록(빈 것)이 온다.
+    await mineSection.locator('[data-action="login"]').click();
+    expect(await modalIsOpen(page)).toBe(false);
+    const auth = page.locator('[role="dialog"]');
+    await expect(auth).toBeVisible();
+    await auth.locator('input[type="email"]').fill('reader@example.invalid');
+    await auth.locator('input[type="password"]').fill('secret-pass-1');
+    await auth.locator('button[type="submit"]').click();
+    await expect(modal(page).locator('[data-part="my-hypotheses"]')).toContainText('아직 맡긴 가설이 없습니다');
   });
 });
