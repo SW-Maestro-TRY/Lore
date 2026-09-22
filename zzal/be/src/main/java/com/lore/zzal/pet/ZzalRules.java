@@ -370,4 +370,24 @@ public final class ZzalRules {
      *   이름을 짓고 나면 이미 상당 부분이 지나 있다(이름 짓는 데 걸린 실측 2분 54초).
      */
     public static final Duration HATCH_ESTIMATE = Duration.ofMinutes(4);
+
+    // ── 동작 요청 ─────────────────────────────────────────────────────────
+
+    /**
+     * "이런 동작도 보고 싶어요" 한 줄의 상한 — <b>60자</b>.
+     *
+     * ★ 서비스 전체의 자유 글 상한과 같은 값이라 여기 한 상수로 둔다. 요청 검증(@Size)과
+     *   DB 칸 길이(varchar(60))가 <b>같은 숫자</b>여야 한다 — 어긋나면 검증을 지나온 글이
+     *   저장에서 터져 사용자가 400 이 아니라 500 을 본다.
+     */
+    public static final int MOTION_WISH_MAX_CHARS = 60;
+
+    /**
+     * 한 아이에게 하루에 남길 수 있는 요청 수 — <b>20</b>.
+     *
+     * ★ 막으려는 것은 사용자가 아니라 <b>눌린 채 굴러가는 화면</b>이다. 실제로 스무 개를 떠올려
+     *   적는 사람은 없고, 스무 줄이 들어왔다면 그건 사람이 아니다. 날짜 경계는 다른 하루 상한과
+     *   같은 한국 시각 자정이다({@link #ZONE}).
+     */
+    public static final int MOTION_WISH_DAILY_LIMIT = 20;
 }

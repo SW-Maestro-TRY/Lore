@@ -13,6 +13,7 @@ import { IconArrow, IconBack, IconClose, IconDice, IconUpload } from "../../ui/I
 import { MobileTop } from "../../ui/TopNav";
 import { isLimitError, lastCardId, loadDraft, runTry, saveDraft } from "./draft";
 import "./i18n";
+import WorldCombo from "./WorldCombo";
 import "./Photo.css";
 
 export default function Photo({ go, authenticated = false }: { go: Go; authenticated?: boolean }) {
@@ -109,11 +110,14 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
       <div className="wt-ch-steps"><span className="on" /><span /><span /></div>
       <div className="wt-wrap wt-page">
         <div className="crumb"><b>{t("캐릭터")}</b><i>›</i><span>{t("캐릭터 카드")}</span><i>›</i><span>{t("웹툰")}</span></div>
+        {/* 제목은 두 칸 위에 걸친다 — 왼쪽 칸 안에 두면 오른쪽 첫 칸(이름)이
+            제목과 같은 줄에 서서 제목 옆에 딸린 것처럼 보였다. */}
+        <div className="wt-ch-photo-lead">
+          <h2 style={{ fontSize: 32 }}>{t("어떤 캐릭터를 만들어볼까요?")}</h2>
+          <span className="muted wt-ch-photo-sub">{t("내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요.")}</span>
+        </div>
         <div className="wt-ch-photo-body">
           <div className="wt-ch-photo-left">
-            <h2 style={{ fontSize: 32 }}>{t("어떤 캐릭터를 만들어볼까요?")}</h2>
-            <span className="muted wt-ch-photo-sub">{t("내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요.")}</span>
-
             {photo ? (
               <div className="wt-ch-drop has">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -134,6 +138,10 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
               </div>
             )}
 
+            <span className="dim" style={{ fontSize: 12.5 }}>{t("사진은 캐릭터를 그린 뒤 지워요. 남의 사진은 팬 창작 범위 안에서만.")}</span>
+          </div>
+
+          <div className="wt-ch-photo-right">
             <div className="fieldset wt-ch-name">
               <label htmlFor="wt-ch-nm">{t("이름")} <span className="dim" style={{ fontWeight: 400, fontSize: 12 }}>{t("선택 · 비우면 지어요")}</span></label>
               <input id="wt-ch-nm" className="field" value={name} placeholder={t("예: 몽이, 세라핀")}
@@ -146,24 +154,10 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
               <textarea id="wt-ch-ds" className="field wt-ch-desc" value={description} placeholder={t("예) 차가운 성격의 마법사")}
                         onChange={(e) => setDescription(e.target.value)} />
             </div>
-            <span className="dim" style={{ fontSize: 12.5 }}>{t("사진은 캐릭터를 그린 뒤 지워요. 남의 사진은 팬 창작 범위 안에서만.")}</span>
-          </div>
-
-          <div className="wt-ch-photo-right">
             <label style={{ fontSize: 15 }}>{t("세계관")} <span className="dim" style={{ fontWeight: 400, fontSize: 12 }}>{t("안 고르면 랜덤")}</span></label>
-            <div className="wt-ch-worlds">
-              {worlds.map((w) => (
-                <button type="button" key={w.key} className={`opt${worldKey === w.key && !worldText.trim() ? " on" : ""}`}
-                        onClick={() => { setWorldKey(worldKey === w.key ? "" : w.key); setWorldText(""); }}>
-                  <b>{t(w.label)}</b>
-                </button>
-              ))}
-            </div>
-            <div className="fieldset">
-              <label htmlFor="wt-ch-wd">{t("직접 쓰기")} <span className="dim" style={{ fontWeight: 400, fontSize: 12 }}>{t("선택")}</span></label>
-              <input id="wt-ch-wd" className="field" value={worldText} placeholder={t("예: 무협 / 좀비 아포칼립스 / 우주 해적")}
-                     onChange={(e) => { setWorldText(e.target.value); if (e.target.value.trim()) setWorldKey(""); }} />
-            </div>
+            <WorldCombo worlds={worlds} worldKey={worldKey} worldText={worldText}
+                        onPick={(key) => { setWorldKey(key); setWorldText(""); }}
+                        onType={(text) => { setWorldText(text); if (text.trim()) setWorldKey(""); }} />
             {err && <span className="err">{err}</span>}
           </div>
         </div>

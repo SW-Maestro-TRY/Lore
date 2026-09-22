@@ -28,7 +28,15 @@ images/zzal/assets/egg_hatch.webp
 images/zzal/assets/egg_idle.webp
 images/zzal/assets/firework.webp
 images/zzal/assets/growl.v1.webp
+images/zzal/assets/guess_candy.v1.webp
+images/zzal/assets/guess_l_fist.v1.webp
+images/zzal/assets/guess_l_open_candy.v1.webp
+images/zzal/assets/guess_l_open_empty.v1.webp
+images/zzal/assets/guess_r_fist.v1.webp
+images/zzal/assets/guess_r_open_candy.v1.webp
+images/zzal/assets/guess_r_open_empty.v1.webp
 images/zzal/assets/heart.v1.webp
+images/zzal/assets/lose_dots.v1.webp
 images/zzal/assets/mat.v1.webp
 images/zzal/assets/medicine.v1.webp
 images/zzal/assets/moon.v1.webp
