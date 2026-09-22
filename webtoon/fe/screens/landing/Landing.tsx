@@ -334,8 +334,10 @@ export default function Landing({ go }: { go: Go }) {
       <section className="wt-landing-faq">
         <h2>{t("자주 묻는 것")}</h2>
         <div className="wt-landing-faq-list">
-          {FAQ.map((f, i) => (
-            <details key={f.q} open={i === 0}>
+          {/* 처음에는 전부 닫아 둔다 — 첫 항목만 펼쳐 두면 목록이 한쪽으로 기울어
+              보이고, 무엇을 물을 수 있는지 한눈에 훑기 어렵다. */}
+          {FAQ.map((f) => (
+            <details key={f.q}>
               <summary>{t(f.q)}<span className="wt-landing-faq-ic"><IconPlus size={20} /></span></summary>
               <p className="muted">{bold(t(f.a))}</p>
             </details>
