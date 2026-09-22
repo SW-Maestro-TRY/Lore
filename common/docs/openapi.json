@@ -894,7 +894,7 @@
           "genre": {
             "description": "장르. 자유 입력이며 대사 톤에만 사용한다(그림에는 들어가지 않는다)",
             "example": "느와르",
-            "maxLength": 32,
+            "maxLength": 100,
             "minLength": 0,
             "type": "string"
           },
@@ -945,14 +945,14 @@
           "tone": {
             "description": "말투. 자유 입력이며 대사 톤에만 사용한다(그림에는 들어가지 않는다)",
             "example": "무뚝뚝한 존댓말",
-            "maxLength": 32,
+            "maxLength": 100,
             "minLength": 0,
             "type": "string"
           },
           "world": {
             "description": "세계관·설정. 자유 입력이며 대사 생성에만 사용한다",
             "example": "비 오는 도시의 탐정",
-            "maxLength": 100,
+            "maxLength": 200,
             "minLength": 0,
             "type": "string"
           }
@@ -2132,7 +2132,7 @@
           "world": {
             "description": "세계관 한 줄. 생략할 수 있다",
             "example": "구름 위 마을에 사는 고양이",
-            "maxLength": 100,
+            "maxLength": 200,
             "minLength": 0,
             "type": "string"
           }
