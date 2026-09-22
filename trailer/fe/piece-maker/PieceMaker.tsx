@@ -12,7 +12,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthModal from "@common/auth/AuthModal";
 import { useAuth } from "@common/auth/useAuth";
-import { fetchCard, type Card, type JudgeResult } from "../lib/api";
+import { ApiError } from "@common/api/client";
+import { fetchCard, fetchHypothesis, fetchMyHypotheses, type Card, type JudgeResult } from "../lib/api";
 import { cardIds, hasCard, type Draft } from "../lib/draft";
 import { JUDGE_TEXT, checkJudgement, citedCards, citedIds } from "../lib/judgement";
 import { postText } from "../lib/postText";
@@ -22,7 +23,7 @@ import ExplorePane from "./ExplorePane";
 import JudgePanel from "./JudgePanel";
 import MobileTabs, { type View } from "./MobileTabs";
 import Modal, { type ModalContent } from "./Modal";
-import { COPY_FIELD_ID, detailModal, helpModal, previewModal, resetModal, savedModal, type ModalState } from "./modals";
+import { COPY_FIELD_ID, detailModal, helpModal, previewModal, resetModal, savedModal, type MineState, type ModalState } from "./modals";
 import RailNav from "./RailNav";
 import Toast, { useToast } from "./Toast";
 import TopBar from "./TopBar";
@@ -48,8 +49,25 @@ export default function PieceMaker() {
 
   const { state: submission, submit, clear: clearSubmission } = useSubmit();
   // 독자가 초안을 고치면 맡기지 못한 문구를 지운다.
-  const { draft, frozen, saved, saveStatus, ready, chapter, selectChapter, setTitle, setClaim, setNote, toggle, move, reset, markSubmitted, save, loadSaved } =
-    useDraft(meta, clearSubmission);
+  const {
+    draft,
+    frozen,
+    saved,
+    saveStatus,
+    ready,
+    chapter,
+    selectChapter,
+    setTitle,
+    setClaim,
+    setNote,
+    toggle,
+    move,
+    reset,
+    markSubmitted,
+    loadHypothesis,
+    save,
+    loadSaved,
+  } = useDraft(meta, clearSubmission);
   const { cards, more, reload: reloadCards } = useCards(chapter, query, filter === ALL_KINDS ? "" : filter);
   /** 맡긴 초안이면 그 가설을 되묻는다. 판정이 아직이면 이따금 다시 묻는다. */
   const { state: watched, reload: reloadHypothesis } = useHypothesis(frozen ? (draft.hypothesisId ?? null) : null);
@@ -61,6 +79,8 @@ export default function PieceMaker() {
   const [authOpen, setAuthOpen] = useState(false);
   /** 로그인 창을 "가설 판정하기"가 열었는가. 로그인이 끝나면 곧 맡긴다. */
   const resumeSubmit = useRef(false);
+  /** 로그인 창을 "내 가설"의 로그인 단추가 열었는가. 로그인이 끝나면 보관함을 다시 열고 받는다. */
+  const resumeMine = useRef(false);
 
   // 로그인이 없어 되묻지 못했던 가설은 로그인이 되면 곧 다시 묻는다(헤더에서 로그인해도).
   useEffect(() => {
@@ -197,7 +217,25 @@ export default function PieceMaker() {
     },
     [findCard, openModal, showToast],
   );
-  const openSaved = useCallback(() => openModal({ kind: "saved" }), [openModal]);
+  /* ---- 보관함 ---------------------------------------------------------------- */
+
+  const [mine, setMine] = useState<MineState>({ status: "idle" });
+
+  /** 서버의 보관함을 받는다. 401 은 로그인 단추로, 그 밖의 실패는 다시 받기 단추로 보인다. */
+  const loadMine = useCallback(async () => {
+    setMine({ status: "loading" });
+    try {
+      setMine({ status: "ready", items: await fetchMyHypotheses() });
+    } catch (error) {
+      if (error instanceof ApiError && error.isUnauthorized) setMine({ status: "unauthorized" });
+      else setMine({ status: "error", reason: error instanceof Error ? error.message : String(error) });
+    }
+  }, []);
+
+  const openSaved = useCallback(() => {
+    openModal({ kind: "saved" });
+    void loadMine();
+  }, [openModal, loadMine]);
   const openHelp = useCallback(() => openModal({ kind: "help" }), [openModal]);
   const openReset = useCallback(() => openModal({ kind: "reset" }), [openModal]);
   const openPreview = useCallback(() => openModal({ kind: "preview" }), [openModal]);
@@ -257,6 +295,35 @@ export default function PieceMaker() {
     show("compose");
   }
 
+  /** 보관함의 맡긴 가설 하나를 연다. 서버에서 전부 받아 그 회차의 얼어 있는 초안으로 되살린다. */
+  async function openMine(id: number) {
+    try {
+      const found = await fetchHypothesis(id);
+      if (!found) {
+        showToast("가설을 찾을 수 없습니다.");
+        void loadMine();
+        return;
+      }
+      if (!loadHypothesis(found)) {
+        showToast("이 장부에서는 열 수 없는 회차의 가설입니다.");
+        return;
+      }
+      clearSearch();
+      closeModal();
+      show("compose");
+    } catch (error) {
+      if (error instanceof ApiError && error.isUnauthorized) loginForMine();
+      else showToast("가설을 불러오지 못했습니다.");
+    }
+  }
+
+  /** 보관함의 로그인 단추. 공용 로그인 창은 <dialog> 아래에 깔리므로 모달을 먼저 닫고, 로그인이 끝나면 다시 연다. */
+  function loginForMine() {
+    closeModal();
+    resumeMine.current = true;
+    setAuthOpen(true);
+  }
+
   async function copyPost() {
     const field = document.getElementById(COPY_FIELD_ID);
     if (!(field instanceof HTMLTextAreaElement)) return;
@@ -309,17 +376,24 @@ export default function PieceMaker() {
   const closeAuth = useCallback(() => {
     setAuthOpen(false);
     resumeSubmit.current = false;
+    resumeMine.current = false;
   }, []);
 
   const authSucceeded = useCallback(
     (how: "login" | "signup") => {
       setAuthOpen(false);
       // 가입은 로그인이 아니다 — 가입 뒤에는 독자가 다시 누른다(zzal 의 Yeoul 과 같다).
-      if (how !== "login" || !resumeSubmit.current) return;
-      resumeSubmit.current = false;
-      void submitDraft();
+      if (how !== "login") return;
+      if (resumeSubmit.current) {
+        resumeSubmit.current = false;
+        void submitDraft();
+      }
+      if (resumeMine.current) {
+        resumeMine.current = false;
+        openSaved();
+      }
     },
-    [submitDraft],
+    [submitDraft, openSaved],
   );
 
   const maxChapter = meta.status === "ready" ? meta.meta.maxChapter : null;
@@ -373,7 +447,11 @@ export default function PieceMaker() {
           onPerson: searchPerson,
         });
       case "saved":
-        return savedModal(saved, chapter, openSavedEntry);
+        return savedModal(saved, chapter, openSavedEntry, mine, {
+          onOpen: (id) => void openMine(id),
+          onLogin: loginForMine,
+          onRetry: () => void loadMine(),
+        });
       case "preview":
         return previewModal(chapter === null || maxChapter === null ? "" : postText(draft, chapter, maxChapter, result), {
           onClose: closeModal,

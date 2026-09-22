@@ -58,6 +58,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trailer/v1/hypotheses/my": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내 가설 보관함
+         * @description 로그인한 독자가 맡긴 가설을 **최신이 앞**으로 준다. 목록에 필요한 칸만 든다 — 카드와 판정은 하나를 눌러 2-6 으로 받는다.
+         *     - 판정을 맡기지 않고 저장만 하는 가설은 서버에 없다(브라우저 임시 저장). 여기 오는 것은 모두 맡긴 가설이다
+         *     - 없으면 빈 배열
+         */
+        get: operations["my"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trailer/v1/hypotheses/{id}": {
         parameters: {
             query?: never;
@@ -2508,6 +2530,12 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseTrailerHypothesisList: {
+            data?: components["schemas"]["TrailerHypothesisList"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponseVisibilityResult: {
             data?: components["schemas"]["VisibilityResult"];
             error?: components["schemas"]["ErrorBody"];
@@ -3760,6 +3788,11 @@ export interface components {
             /** @description 제목. 없으면 빈 글 */
             title?: string;
         };
+        /** @description 내 가설 보관함. 최신이 앞이다 */
+        TrailerHypothesisList: {
+            /** @description 맡긴 가설. 없으면 빈 배열 */
+            items?: components["schemas"]["TrailerHypothesisSummary"][];
+        };
         /** @description 가설 맡기기. 저장이 곧 맡기기다 — 서버는 PENDING 으로 두고 운영자가 판정을 넣는다 */
         TrailerHypothesisSubmit: {
             /**
@@ -3787,6 +3820,39 @@ export interface components {
             /** @description 장부 정보(cards/meta)의 stateDigest. 카드 표의 값과 다르면 400 TRAILER_DIGEST_MISMATCH */
             stateDigest?: string;
             /** @description 가설 제목. 180자까지. 비어도 된다 */
+            title?: string;
+        };
+        /** @description 보관함의 한 줄. 누르면 가설 하나(2-6)를 받는다 */
+        TrailerHypothesisSummary: {
+            /**
+             * Format: int32
+             * @description 독자가 읽은 회차 N
+             * @example 200
+             */
+            chapter?: number;
+            /**
+             * Format: date-time
+             * @description 맡긴 때(UTC)
+             */
+            createdAt?: string;
+            /**
+             * Format: int64
+             * @description 요청 id
+             * @example 17
+             */
+            id?: number;
+            /**
+             * Format: date-time
+             * @description 판정을 넣은 때(UTC). PENDING 이면 null
+             */
+            judgedAt?: string | null;
+            /**
+             * @description 판정 상태
+             * @example PENDING
+             * @enum {string}
+             */
+            judgementStatus?: "PENDING" | "COMPLETE" | "FAILED";
+            /** @description 제목. 없으면 빈 글 */
             title?: string;
         };
         Trip: {
@@ -3927,6 +3993,35 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
+                };
+            };
+        };
+    };
+    my: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 보관함 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesisList"];
+                };
+            };
+            /** @description 로그인 필요 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesisList"];
                 };
             };
         };

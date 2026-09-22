@@ -24,7 +24,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * 가설 — 맡기기(2-5)와 하나 보기(2-6). 보관함 · 운영자 API 는 뒤 기능에서 여기에 더한다.
+ * 가설 — 맡기기(2-5), 하나 보기(2-6), 보관함(2-7). 운영자 API 는 뒤 기능에서 여기에 더한다.
  *
  * <p>검사는 모두 여기서 한다. 틀린 칸마다 한국어 문구를 붙여 400 {@code INVALID_INPUT} 으로 답한다.
  * 회차는 카드 API 와 같은 코드({@code TRAILER_INVALID_CHAPTER})다. 해시 둘이 카드 표의 값과 다르면
@@ -89,6 +89,15 @@ public class HypothesisService {
         Hypothesis hypothesis = hypotheses.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TRAILER_HYPOTHESIS_NOT_FOUND));
         return toResponse(hypothesis);
+    }
+
+    /** 내 가설 보관함(2-7). 최신이 앞. 카드는 싸지 않으니 목록에는 실지 않는다 — 하나를 누르면 2-6 으로 받는다. */
+    @Transactional(readOnly = true)
+    public HypothesisResponses.MyList my(Long userId) {
+        List<HypothesisResponses.Summary> items = hypotheses.findByUserIdOrderByCreatedAtDescIdDesc(userId).stream()
+                .map(HypothesisResponses.Summary::of)
+                .toList();
+        return new HypothesisResponses.MyList(items);
     }
 
     /** 경로의 id. 숫자가 아니면 그런 가설이 없는 것이다(404) — 500 이 되지 않게 직접 읽는다(found.md 5-8). */

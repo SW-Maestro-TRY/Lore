@@ -309,6 +309,43 @@ export async function submitHypothesis(body: JudgeRequest, signal?: AbortSignal)
   return toHypothesis(item);
 }
 
+/** 보관함의 한 줄(2-7). 카드와 판정은 없다 — 하나를 열 때 `fetchHypothesis` 로 받는다. */
+export type HypothesisSummary = {
+  id: number;
+  chapter: number;
+  title: string;
+  judgementStatus: HypothesisStatus;
+  createdAt: string;
+  judgedAt: string | null;
+};
+
+/** 내 가설 보관함(2-7). 최신이 앞. 로그인이 없으면 `ApiError`(401)를 그대로 던진다. */
+export async function fetchMyHypotheses(signal?: AbortSignal): Promise<HypothesisSummary[]> {
+  const list: unknown = await request<unknown>(`${HYPOTHESES_PATH}/my`, { signal });
+  if (!isRecord(list) || !Array.isArray(list.items)) throw new Error("보관함 응답의 모양을 확인할 수 없습니다.");
+  return list.items.map((item): HypothesisSummary => {
+    if (
+      !isRecord(item) ||
+      !Number.isInteger(item.id) ||
+      !Number.isInteger(item.chapter) ||
+      typeof item.title !== "string" ||
+      typeof item.judgementStatus !== "string" ||
+      !STATUSES.includes(item.judgementStatus) ||
+      !isFilledString(item.createdAt)
+    ) {
+      throw new Error("보관함 응답의 모양을 확인할 수 없습니다.");
+    }
+    return {
+      id: item.id as number,
+      chapter: item.chapter as number,
+      title: item.title,
+      judgementStatus: item.judgementStatus as HypothesisStatus,
+      createdAt: item.createdAt,
+      judgedAt: typeof item.judgedAt === "string" ? item.judgedAt : null,
+    };
+  });
+}
+
 /** 가설 하나를 되묻는다(2-6). 없는 번호와 남의 가설은 null 이다. 로그인이 없으면 `ApiError`(401)를 그대로 던진다. */
 export async function fetchHypothesis(id: number, signal?: AbortSignal): Promise<Hypothesis | null> {
   try {

@@ -15,8 +15,10 @@
  * 최신 초안은 ref 에도 둔다. 초안을 바꾸는 함수가 늘 같은 함수로 남아야 탐색 패널의
  * `memo` 가 듣는다. */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Card } from "../lib/api";
+import type { Card, Hypothesis } from "../lib/api";
 import {
+  CLAIM_MAX,
+  TITLE_MAX,
   blankDraft,
   cleanDraft,
   emptyMemory,
@@ -173,6 +175,32 @@ export function useDraft(meta: MetaState, onChange: () => void) {
     [store],
   );
 
+  /**
+   * 보관함에서 맡긴 가설 하나를 연다. 그 가설의 회차로 바꾸고, 그 회차의 초안을 얼어 있는 복사본으로 바꾼다.
+   * 서버의 가설이 정본이라 초안은 자리 표시다 — 되묻기가 곧 그 id 로 상태를 받는다. 열었으면 true 다.
+   */
+  const loadHypothesis = useCallback(
+    (hypothesis: Hypothesis): boolean => {
+      const ledger = ledgerRef.current;
+      if (!ledger || hypothesis.chapter < 1 || hypothesis.chapter > ledger.maxChapter) return false;
+      chapterRef.current = hypothesis.chapter;
+      setChapter(hypothesis.chapter);
+      const notes: Record<string, string> = {};
+      for (const card of hypothesis.cards) notes[card.id] = hypothesis.notes[card.id] ?? "";
+      change({
+        chapter: hypothesis.chapter,
+        title: hypothesis.title.slice(0, TITLE_MAX),
+        claim: hypothesis.claim.slice(0, CLAIM_MAX),
+        cards: hypothesis.cards,
+        notes,
+        updated: 0,
+        hypothesisId: hypothesis.id,
+      });
+      return true;
+    },
+    [change],
+  );
+
   /** "내 가설"에 넣는다. 독자에게 보일 알림 글을 돌려준다. 넣을 것이 없거나 얼어 있으면 null 이다. */
   const save = useCallback((): string | null => {
     const current = draftRef.current;
@@ -210,6 +238,7 @@ export function useDraft(meta: MetaState, onChange: () => void) {
     move,
     reset,
     markSubmitted,
+    loadHypothesis,
     save,
     loadSaved,
   };

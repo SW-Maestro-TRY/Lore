@@ -813,6 +813,23 @@
         },
         "type": "object"
       },
+      "ApiResponseTrailerHypothesisList": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrailerHypothesisList"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseVisibilityResult": {
         "properties": {
           "data": {
@@ -3143,6 +3160,19 @@
         },
         "type": "object"
       },
+      "TrailerHypothesisList": {
+        "description": "내 가설 보관함. 최신이 앞이다",
+        "properties": {
+          "items": {
+            "description": "맡긴 가설. 없으면 빈 배열",
+            "items": {
+              "$ref": "#/components/schemas/TrailerHypothesisSummary"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "TrailerHypothesisSubmit": {
         "description": "가설 맡기기. 저장이 곧 맡기기다 — 서버는 PENDING 으로 두고 운영자가 판정을 넣는다",
         "properties": {
@@ -3184,6 +3214,51 @@
           },
           "title": {
             "description": "가설 제목. 180자까지. 비어도 된다",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TrailerHypothesisSummary": {
+        "description": "보관함의 한 줄. 누르면 가설 하나(2-6)를 받는다",
+        "properties": {
+          "chapter": {
+            "description": "독자가 읽은 회차 N",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "createdAt": {
+            "description": "맡긴 때(UTC)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "요청 id",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "judgedAt": {
+            "description": "판정을 넣은 때(UTC). PENDING 이면 null",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "judgementStatus": {
+            "description": "판정 상태",
+            "enum": [
+              "PENDING",
+              "COMPLETE",
+              "FAILED"
+            ],
+            "example": "PENDING",
+            "type": "string"
+          },
+          "title": {
+            "description": "제목. 없으면 빈 글",
             "type": "string"
           }
         },
@@ -3447,6 +3522,43 @@
           }
         ],
         "summary": "가설 맡기기",
+        "tags": [
+          "가설"
+        ]
+      }
+    },
+    "/api/trailer/v1/hypotheses/my": {
+      "get": {
+        "description": "로그인한 독자가 맡긴 가설을 **최신이 앞**으로 준다. 목록에 필요한 칸만 든다 — 카드와 판정은 하나를 눌러 2-6 으로 받는다.\n- 판정을 맡기지 않고 저장만 하는 가설은 서버에 없다(브라우저 임시 저장). 여기 오는 것은 모두 맡긴 가설이다\n- 없으면 빈 배열",
+        "operationId": "my",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesisList"
+                }
+              }
+            },
+            "description": "보관함"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesisList"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "내 가설 보관함",
         "tags": [
           "가설"
         ]
