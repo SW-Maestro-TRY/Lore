@@ -19,7 +19,7 @@ import {
 import { josa } from '../constants';
 import { ACCENT, C, C2, LV, sel, type LvKey, type Sel, ink, paperA } from './ui';
 import type { Live } from './useHatch';
-import type { CareAction, ChatState, Personality } from '../../lib/pet';
+import { CHAR_TEXT_MAX, type CareAction, type ChatState, type Personality } from '../../lib/pet';
 import { ApiError } from '../../lib/api';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
@@ -1696,7 +1696,19 @@ export function useYeoul(live?: Live) {
     const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
     return { ...w, picks: { ...w.picks, [k]: next } };
   }), []);
-  const onGroupText = useCallback((k: string) => (t: string) => setS((w) => ({ ...w, texts: { ...w.texts, [k]: t.slice(0, 60) } })), []);
+  /**
+   * 자유 입력 한 칸에 적는다.
+   *
+   * ★★ 자르는 길이는 **`CHAR_TEXT_MAX` 한 곳에서만** 가져온다(`lib/pet.ts`, 계약 옆).
+   *   2026-09-22 — 여기가 혼자 `60` 으로 자르고 있어서, 화면이 `maxLength` 를 100·200 으로 열어도
+   *   **상태에 담길 때 60 에서 조용히 멎었다.** 세계관의 "남은 자리" 안내도 그 벽 때문에
+   *   20 밑으로 못 내려가 영영 안 떴다. 숫자를 여기 다시 박으면 같은 일이 또 난다.
+   * ★ 모르는 칸은 가장 넉넉한 값으로 받는다 — 화면이 서버보다 먼저 자르면 사용자는 **왜 잘렸는지**
+   *   알 길이 없다. 넘치면 서버가 이유를 말해 준다.
+   */
+  const onGroupText = useCallback((k: string) => (t: string) => setS((w) => ({
+    ...w, texts: { ...w.texts, [k]: t.slice(0, CHAR_TEXT_MAX[k] ?? 200) },
+  })), []);
   const pickUser = useCallback((k: string, v: string) => () => setS((w) => ({ ...w, user: { ...w.user, [k]: w.user[k] === v ? null : v } })), []);
   /**
    * 여울의 물음에 답하거나 넘긴다. 답은 `user` 에 쌓인다.
