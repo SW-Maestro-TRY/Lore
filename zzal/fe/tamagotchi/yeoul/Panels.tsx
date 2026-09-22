@@ -232,6 +232,18 @@ function SettingsSheet({ y }: { y: Yeoul }) {
           style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
       </div>
 
+      {/* ★★ **저장이 거절되면 여기서 말한다**(2026-09-22 판정 6). 토스트는 방 바닥에 뜨는데
+          이 시트가 그 위를 덮어, 서버가 400 으로 거절해도 화면이 한 마디도 안 했다.
+          무엇이 막혔고 어떻게 하면 되는지까지 적는다(→ `useYeoul` 의 `saveFailLine`). */}
+      {v.settings.save.err && (
+        <span
+          data-part="save-error" role="alert"
+          style={{
+            display: 'flex', gap: gap.sm, padding: '10px 12px', borderRadius: radius.sm,
+            background: C.accentSoft, fontSize: fz.sm, lineHeight: 1.6, color: C.ink,
+          }}
+        >{v.settings.save.err}</span>
+      )}
       {/* ★ 성격을 서버에 보내는 유일한 자리. 튜토리얼 4칸(PERSONALITY)도 이 버튼으로 넘어간다. */}
       {v.settings.save.show && (
         <button

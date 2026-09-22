@@ -66,6 +66,31 @@ const wishFailLine = (code: string | null): string => {
  * ★★ **아플 때는 거절이 없다** — 이 호출에는 `ZZAL_SICK_REFUSES` 가 없다(서버가 일부러 뺐다).
  *   그러니 화면도 **아플 때 ✕ 를 잠그면 안 된다.**
  */
+/**
+ * **성격·세계관을 저장하지 못했을 때** 무엇이 막혔고 어떻게 하면 되는지.
+ *
+ * ★★ 왜 있나 — 2026-09-22 실측: 세계관을 길게 적고 저장하면 서버가 400 으로 거절하는데
+ *   **화면이 한 마디도 안 했다.** 토스트는 방 바닥에 뜨는데 그때 아이 정보 시트가 그 위를
+ *   덮고 있어 보이지도 않았다. 사용자는 저장된 줄 알았다. 그래서 **시트 안, 저장 단추 옆**에
+ *   이 줄을 낸다(→ `settings.save.err`).
+ * ★ **사용자를 탓하지 않는다**(자캐 규범). 길이를 미리 못 막은 것은 화면 잘못이지 사용자
+ *   잘못이 아니다. "어떻게 하면 되는지" 까지 적는다 — "저장하지 못했어요" 만으로는 부족하다.
+ * ★ **적은 글은 그대로 둔다.** 이 줄만 뜨고 시트는 열린 채 남는다(저장 성공 때만 닫힌다).
+ * ★ 문장이 아니라 **코드로 가른다** — 서버 문장이 바뀌어도 안 깨진다(기권 실패와 같은 방식).
+ */
+const saveFailLine = (code: string | null, status: number | undefined, message: string | null): string => {
+  if (status === 401 || code === 'UNAUTHORIZED') return '로그인이 풀렸어요. 다시 로그인하면 적어 두신 글 그대로 저장할 수 있어요.';
+  switch (code) {
+    // 지금 이 자리에서 400 이 나는 유일한 길은 **세계관이 서버 한도보다 긴 것**이다.
+    case 'INVALID_INPUT': return '세계관이 서버가 받는 길이를 넘었어요. 화면이 미리 막았어야 했는데 못 막았어요 — 조금 줄이면 그대로 저장돼요.';
+    case 'FORBIDDEN': return '이 아이를 고칠 수 있는 계정이 아니에요. 로그인한 계정을 확인해 주세요.';
+    case 'ZZAL_PET_NOT_FOUND': return '아이를 찾지 못했어요. 새로 고치면 다시 이어져요 — 적어 두신 글은 그대로 있어요.';
+    case 'ZZAL_PET_NOT_ALIVE': return '지금은 이 아이의 정보를 바꿀 수 없어요. 잠시 뒤에 다시 눌러 주세요.';
+    // 모르는 사유 — 서버가 준 문장을 **그대로 보여 주고** 무엇을 하면 되는지만 덧붙인다.
+    default: return `${message || '지금은 저장하지 못했어요'} · 잠시 뒤에 다시 눌러 주세요. 적어 두신 글은 그대로 있어요.`;
+  }
+};
+
 const quitFailLine = (code: string | null): string => {
   switch (code) {
     case 'ZZAL_GAME_NOT_FOUND':
@@ -1249,6 +1274,8 @@ export function useYeoul(live?: Live) {
     const chosen = sRef.current.picks.persona ?? (svName ? [svName] : []);
     const persona = PERSONALITY_OF[chosen[0] ?? ''];
     if (!persona) { flash('성격을 하나 이상 골라 주세요'); return; }
+    // 다시 눌렀다 — 지난 실패 줄은 지우고 시작한다.
+    patch({ saveErr: '' });
     // 세계관은 칩 여러 개 + 직접 적은 한 줄을 **서버 한 칸에** 이어 붙인다.
     // ★★ 자르는 길이는 `CHAR_TEXT_MAX.world` 한 곳에서만 온다(`lib/pet.ts`, 계약 옆).
     //   2026-09-22 — 여기 `100` 이 박혀 있어, 한도를 200 으로 열어도 **방(아이 정보)에서 저장할 때
@@ -1257,8 +1284,10 @@ export function useYeoul(live?: Live) {
       .filter(Boolean).join(' · ').slice(0, CHAR_TEXT_MAX.world);
     void (async () => {
       const r = await liveRef.current?.savePersonality(persona, world || undefined);
-      if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
-      patch({ sheet: null });
+      // ★ 거절이면 **시트 안에** 남긴다(2026-09-22 판정 6). 토스트는 시트 밑에 깔려 안 보인다 —
+      //   실제로 그래서 400 거절이 화면에 한 마디도 안 나왔다. 시트도 안 닫고, 적은 글도 안 지운다.
+      if (!r || !r.ok) { patch({ saveErr: saveFailLine(r?.code ?? null, r?.status, r?.message ?? null) }); return; }
+      patch({ sheet: null, saveErr: '' });
       flash('기억해 뒀어요');
     })();
   }, [flash, patch]);
@@ -1822,7 +1851,8 @@ export function useYeoul(live?: Live) {
     // ★ 튜토리얼이 '아이 정보' 칸을 가리킬 때만 열린다(판정 J8).
     const tl = tutLockRef.current;
     if (tl && tl.room !== 'info') { flash(tl.note); return; }
-    patch({ sheet: 'settings', decoOpen: false });
+    // 새로 열 때는 지난 실패 줄을 지운다 — 다시 와서 보는 사람에게 옛 경고가 남아 있으면 안 된다.
+    patch({ sheet: 'settings', decoOpen: false, saveErr: '' });
   }, [patch, flash]);
   const pickNeedStyle = useCallback((v: NeedStyle) => () => patch({ needStyleLocal: v }), [patch]);
   const toggleNotif = useCallback(() => setS((v) => ({ ...v, notifOn: !v.notifOn })), []);
@@ -2956,6 +2986,8 @@ export function useYeoul(live?: Live) {
           // 고르지 않았으면 보낼 것이 없다. 서버가 성격을 필수로 받는다.
           off: !personaShown[0],
           why: '성격을 하나 이상 골라 주세요',
+          /** 저장이 거절된 이유 한 줄. 빈 문자열이면 안 그린다(→ `saveFailLine`). */
+          err: s.saveErr,
         },
         toggleLeave,
         leaveLabel: s.leaveOff ? '떠나지 않아요' : '오래 비우면 여행을 가요',
