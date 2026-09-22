@@ -16,6 +16,8 @@
 # ★ 왜 (c) 가 경고인가 — 순번도 겹치지만 않으면 당장은 돈다. 여기서 막으면 급한 수정이 멈춘다.
 #   막는 것은 (a)·(b) 뿐이고, (c) 는 "다음엔 날짜 번호로" 라고 알려 주는 자리다.
 #
+# 새 파일을 만들 때는 `./scripts/new-migration.sh <zzal|webtoon|trailer> <설명>` 이 이름을 대신 짓는다.
+#
 # 쓰는 법
 #   ./scripts/check-migrations.sh                    # 중복·형식만 (a·b)
 #   ./scripts/check-migrations.sh --base origin/develop   # 새 파일 경고(c)까지
@@ -71,6 +73,7 @@ for d in "${DIRS[@]}"; do
     # (b) 이름 형식
     if [[ ! "$base" =~ $NAME_RE ]]; then
       echo "$rel: 이름 형식이 규칙과 다릅니다 — V<날짜8>_<시각4~6>__<소문자설명>.sql (git-convention.md 9절)"
+      echo "      ↳ 새로 만들 때는 ./scripts/new-migration.sh <zzal|webtoon|trailer> <설명> 을 쓰면 이름이 자동으로 붙습니다."
       annotate error "$rel" "마이그레이션 이름 형식이 규칙과 다릅니다"
       fail_count=$((fail_count + 1))
       continue                       # 형식이 깨진 파일은 번호를 못 믿으니 중복 검사에서 뺀다
@@ -105,7 +108,7 @@ if [ -n "$BASE" ]; then
       [ -n "$rel" ] || continue
       base="$(basename "$rel")"
       if [[ "$base" =~ $SEQ_RE ]]; then
-        echo "$rel: 새 파일인데 순번 번호입니다 — 날짜 번호 V<YYYYMMDD>_<HHMM>__ 로 바꿔 주세요 (경고)"
+        echo "$rel: 새 파일인데 순번 번호입니다 — ./scripts/new-migration.sh 로 날짜 번호를 받아 주세요 (경고)"
         annotate warning "$rel" "새 마이그레이션은 날짜 번호로 붙여 주세요"
         warn_count=$((warn_count + 1))
       fi
