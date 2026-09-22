@@ -220,9 +220,13 @@ export interface YeoulState {
   mine: string; petLine: string;
   day: number; bond: number; floorLv: number;
   cChat: number; cBath: number; cSleep: number; cGame: number;
+  /** 손으로 깨운 횟수. 2층 '일어나기' 조건(정본 §6 16번)이라 재우기(`cSleep`)와 따로 센다. */
+  cWake: number;
   full: number; happy: number; stock: number; trace: number; plays: number; snacks: number;
   bathUsed: boolean; pets: number; sick: boolean; sleeping: boolean; night: boolean;
   hearts: boolean; toast: string;
+  /** 성격·세계관 저장이 거절됐을 때 **시트 안에** 남는 한 줄. 빈 문자열이면 안 뜬다(→ `saveFailLine`). */
+  saveErr: string;
   /**
    * 선반의 「다음에 배울 것」 카드를 **펼쳤는가**.
    *
@@ -368,10 +372,10 @@ export interface YeoulState {
 const INITIAL: YeoulState = {
   screen: 'onb', step: 0, roomSel: 'table', popOpen: true, popClosing: false,
   chatOpen: false, chatClosing: false, mine: '', petLine: '',
-  day: 12, bond: 40, floorLv: 2, cChat: 0, cBath: 0, cSleep: 0, cGame: 0,
+  day: 12, bond: 40, floorLv: 2, cChat: 0, cBath: 0, cSleep: 0, cGame: 0, cWake: 0,
   full: 2, happy: 2, stock: 3, trace: 2, plays: 3, snacks: 0,
   bathUsed: false, pets: 1, sick: false, sleeping: false, night: false,
-  hearts: false, toast: '', miniOpen: false,
+  hearts: false, toast: '', miniOpen: false, saveErr: '',
   sheet: null, sheetClosing: false, playTab: 'talk', draft: '', lastGuess: null,
   gOn: false, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
   gMarks: [null, null, null, null, null], gQuit: false, gHappy0: 0, gStarted: false,
@@ -1289,7 +1293,8 @@ export function useYeoul(live?: Live) {
       return;
     }
     if (esRef.current.sleeping) {
-      patch({ sleeping: false, night: false, pets: 0, bathUsed: false, plays: 3, day: s.day + 1, sheet: null });
+      // ★ 손으로 깨운 것만 센다 — 2층 '일어나기' 조건(정본 §6 16번). 이 자리가 바로 그 손이다.
+      patch({ sleeping: false, night: false, pets: 0, bathUsed: false, plays: 3, day: s.day + 1, sheet: null, cWake: s.cWake + 1 });
       careAct('wake');
       flash('잘 잤어요');
       return;
@@ -1303,7 +1308,7 @@ export function useYeoul(live?: Live) {
     patch({ sleeping: true, sheet: null, resolved: { ...s.resolved, bed: true }, cSleep: s.cSleep + 1 });
     flash('잘 자요');
     tutorDone('sleep');
-  }, [s.sleeping, s.night, s.sampleMode, s.day, s.resolved, s.cSleep, patch, flash, careAct, tutorDone]);
+  }, [s.sleeping, s.night, s.sampleMode, s.day, s.resolved, s.cSleep, s.cWake, patch, flash, careAct, tutorDone]);
 
   /**
    * 좌우 맞히기 **한 매치**(2026-09-20 재설계 · 안 1). 시트를 없애고 무대 위에서 아이와 마주 본다.
@@ -1884,7 +1889,7 @@ export function useYeoul(live?: Live) {
    */
   const leaveAccount = useCallback(() => setS(() => ({ ...INITIAL })), []);
   /** 개발용 — 2층 로드맵을 다 배운 것으로 만든다(= 3층 시작 = 조각 등장). */
-  const finishRoadmap = useCallback(() => patch({ cChat: 4, cBath: 3, cSleep: 3, cGame: 4 }), [patch]);
+  const finishRoadmap = useCallback(() => patch({ cChat: 4, cBath: 3, cSleep: 3, cGame: 4, cWake: 4 }), [patch]);
   /** 개발용 — 조각 도장을 0·2·4 로 바꿔 본다. 실제로는 잠들 때 판정·리셋된다(정본). */
   const setShards = useCallback((n: number) => () => patch({ shards: n }), [patch]);
   /**
