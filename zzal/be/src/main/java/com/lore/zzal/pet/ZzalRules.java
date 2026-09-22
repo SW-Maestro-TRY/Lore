@@ -205,8 +205,11 @@ public final class ZzalRules {
      */
     public static final int PIECE_PETS = 5;
 
-    /** 두 번째 선물(뒤로 넘어짐)은 3층 심화가 이만큼 열린 뒤(정본 6·16장). */
-    public static final int SECOND_GIFT_AFTER_ADVANCED = 8;
+    // ★ 옛 SECOND_GIFT_AFTER_ADVANCED(= 8, "3층 심화 8종이 열린 뒤") 는 지웠다 —
+    //   선언 말고 참조가 한 곳도 없는 잔존 상수였다(연결 감사 J2). 두 번째 선물(뒤로 넘어짐)의
+    //   조건은 2026-09-22 상훈님 결정으로 <b>튜토리얼 뒤 좌우 맞히기 완주 패배</b>이고,
+    //   그것을 판정하는 자리는 GameService.guess 다(정본 6·16장을 그 결정으로 개정).
+    //   상수를 남겨 두면 "심화 8종" 이 아직 규칙인 것처럼 읽혀, 다음 사람이 그 값으로 코드를 짠다.
 
     /** 기분 좋은 날(3층) = 잠들 때 케어 미스 0 + 세 게이지 2칸 이상 → 다음 날 조각 1 선지급. */
     public static final int GOOD_DAY_GAUGE_AT_LEAST = 2;
