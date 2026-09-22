@@ -6,6 +6,8 @@
 // ★ 여기 값은 **프론트 전용 목**이다. 서버가 붙으면 rules.ts·서버 응답이 정본을 들고 오고
 //   이 표는 문구(카피)만 남는다. 지금 숫자는 화면을 눌러 보기 위한 자리표시다.
 import { assetUrl, demoUrl } from '../constants';
+import { propUrl } from '../props/spec';
+import { C } from './ui';
 import type { Personality as PersonalityValue } from '../../lib/pet';
 
 /** 방 다섯 칸. key 는 상태 저장·검사의 손잡이라 함부로 안 바꾼다. */
@@ -64,7 +66,7 @@ export const SAY = {
  *   그때 여기에 `img` 를 더해 색 대신 그림을 깐다.
  */
 export const WALLS = [
-  { id: 'cream', name: '크림', wall: '#FBEFE2', floor: '#EFDFCC' },
+  { id: 'cream', name: '크림', wall: C.bornBg, floor: '#EFDFCC' },
   { id: 'mint', name: '민트', wall: '#E5F1EA', floor: '#D5E5DA' },
   { id: 'sky', name: '하늘', wall: '#E7EFF8', floor: '#D8E3EF' },
   { id: 'peach', name: '복숭아', wall: '#FBE7E2', floor: '#F0D5CE' },
@@ -101,16 +103,22 @@ export const CHAR_GROUPS = [
   { key: 'world', label: '세계관', opts: WORLD, ph: '사는 곳, 시대, 함께 있는 사람들 같은 걸 적어 주세요' },
 ] as const;
 
-export const GOOD_EX: ReadonlyArray<readonly [string, string]> = [
-  ['얼굴이 크게 나온 정면', '#E8F0E2'],
-  ['선이 또렷한 그림', '#E8F0E2'],
-  ['한 마리만 · 배경 없이', '#E8F0E2'],
+// 업로드 안내의 예시 그림. 튜플은 [설명(라벨), 폴백 색, 이미지 키] 다.
+//   · 이미지 키는 서버 키 규칙(앞머리 images/ 없이)으로 적는다 — 화면은 assetUrl() 로 CDN 주소를 만든다.
+//   · 그림은 Codex(무과금)로 그린 가상의 샘플 캐릭터(실존/기존 IP 아님)를 S3
+//     images/zzal/onboarding/ 에 올린 것이다. 로드 실패 시 색+'그림' 자리표시자로 폴백한다.
+export const GOOD_EX: ReadonlyArray<readonly [string, string, string]> = [
+  ['얼굴이 크게 나온 정면', '#E8F0E2', 'zzal/onboarding/v2/good_front.webp'],
+  ['전신이 다 보이는 그림', '#E8F0E2', 'zzal/onboarding/v2/good_lines.webp'],
+  // ★ '한 마리만' 을 뺐다(2026-09-21 판정 7) — 나쁜 예의 「여러 명」이 이미 같은 말을 하고 있어
+  //   좋은 예까지 반복하면 "혼자여야 한다" 가 두 번 잔소리가 된다. 나쁜 예 쪽은 그대로 둔다.
+  ['배경 없이', '#E8F0E2', 'zzal/onboarding/v2/good_solo.webp'],
 ];
-export const BAD_EX: ReadonlyArray<readonly [string, string]> = [
-  ['여러 명', '#F6E7E4'],
-  ['뒷모습', '#F6E7E4'],
-  ['너무 작음', '#F6E7E4'],
-  ['배경이 복잡', '#F6E7E4'],
+export const BAD_EX: ReadonlyArray<readonly [string, string, string]> = [
+  ['여러 명', '#F6E7E4', 'zzal/onboarding/v2/bad_multi.webp'],
+  ['뒷모습', '#F6E7E4', 'zzal/onboarding/v2/bad_back.webp'],
+  ['너무 작음', '#F6E7E4', 'zzal/onboarding/v2/bad_small.webp'],
+  ['배경이 복잡', '#F6E7E4', 'zzal/onboarding/v2/bad_busy.webp'],
 ];
 
 /**
@@ -169,8 +177,47 @@ export type StepKey = (typeof STEPS)[number] | 'user';
 /** 화면 큰 갈래. onb → (샘플)room → egg → room. */
 export type ScreenKey = 'onb' | 'room' | 'egg';
 
+/**
+ * 랜딩 v2 카피 — **한 벌**이다. `/zzal` 온보딩 첫 칸(LandingV2Stage)과 `/zzal/landing` 이
+ * 같은 이 상수를 읽는다. 복제하면 나중에 한쪽만 고쳐진다.
+ *
+ * ★ "같이 산다·살아난다·부활·재현" 류 무거운 말은 쓰지 않는다(언캐니 규칙). 옛 카피
+ *   "그림 한 장이면, 같이 살 수 있어요" 를 2026-09-18 상훈님 확정 문구로 갈아치웠다.
+ */
+export const LANDING_COPY = {
+  greeting: '안녕! 같이 키우자!',
+  sub: '그림 한 장이면, 내가 그린 아이랑 같이 지낼 수 있어요.',
+  cta: '같이 키우러 가기',
+} as const;
+
+/**
+ * 그림 올리기 칸의 문구. **두 갈래가 한 상수에 모여 있다**(2026-09-21 통합).
+ *
+ * 1) 그림은 골랐는데 아직 안 올린 한 박자(2026-09-19) — 가입 창이 뜨는 자리가 여기다.
+ *    그동안 화면이 말해야 하는 것은 하나뿐이다 — "고른 그림은 그대로 있다".
+ *    다시 고르라고 읽히면 사람은 창을 닫고 처음부터 다시 한다.
+ *
+ * 2) ★★ `infraNote` — 연결이 끊기거나 S3 가 거절하면(CORS·403·5xx)
+ *    "이미지를 올리지 못했습니다" 한 줄 **바로 아래에 「이런 그림은 어려워요」 예시가 붙어 있어서**,
+ *    사용자가 제 그림 탓으로 읽었다. 인프라 실패일 때는 예시를 아예 안 그리고(→ `Onboarding.tsx`),
+ *    대신 "그림 때문이 아니다" 를 명시한다. 그림이 정말 거절당한 경우(`ZZAL_PET_HATCH_FAILED`)
+ *    에만 예시가 도움이 되므로 그때는 그대로 둔다.
+ */
+export const UPLOAD_COPY = {
+  /** 미리보기 아래 한 줄(원래 '그림 올리기' 자리). */
+  pending: '가입하면 이 그림으로 시작해요',
+  /** 그 아래 작은 줄. 고른 그림이 어디 가지 않는다는 것만 말한다. */
+  pendingNote: '고른 그림은 그대로 두었어요',
+  /** 아래 버튼. 누르면 가입 창이 다시 열린다. */
+  pendingCta: '가입하고 올리기',
+  goodTitle: '이런 그림이면 좋아요',
+  badTitle: '이런 그림은 어려워요',
+  privacy: '올린 그림은 학습에 쓰지 않아요. 이 아이를 만드는 데만 써요.',
+  infraNote: '그림 때문이 아니에요. 연결이 잠깐 끊겼거나 서버가 응답하지 않았어요. 같은 그림으로 다시 눌러 주세요.',
+} as const;
+
 export const ONB_COPY: Record<StepKey, readonly [string, string]> = {
-  landing: ['그림 한 장이면,\n같이 살 수 있어요', '내가 그린 아이가 방 하나를 얻습니다.'],
+  landing: [LANDING_COPY.greeting, LANDING_COPY.sub],
   upload: ['캐릭터 이미지를 업로드해 주세요', '한 장만 올릴 수 있어요. 얼굴이 잘 보이는 그림일수록 좋아요.'],
   user: ['당신은 어떤 분인가요', '알려주면 아이가 더 살갑게 대해요. 전부 선택이에요.'],
   char: ['어떤 아이인가요', '이름만 정하면 시작할 수 있어요.'],
@@ -195,11 +242,14 @@ export const TUTOR_MAIN: readonly TutorStep[] = [
   { at: '0분', room: null, act: null, done: 'any', text: '오늘부터 함께예요. 천천히 둘러봐도 돼요.' },
   { at: '3분', room: null, act: 'pet', done: 'pet', text: '손을 대 보세요. 쓰다듬기는 하루 세 번까지 세어 줘요.' },
   { at: '8분', room: 'table', act: 'a', done: 'feed', text: '배가 고파요. 주방에서 밥을 주세요 · 재고는 시간이 지나면 채워져요.' },
-  { at: '15분', room: 'bath', act: 'a', done: 'clean', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요.' },
-  { at: '20분', room: 'play', act: 'a', done: 'game', text: '놀고 싶어요. 좌우 맞히기는 하루 세 판이에요.' },
+  { at: '15분', room: 'bath', act: 'a', done: 'clean', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요. 한 번 쓸면 하나예요.' },
+  { at: '20분', room: 'play', act: 'a', done: 'game', text: '놀고 싶어요. 시작하면 오늘 세 판 중 하나예요. 중간에 나가면 그 판은 져요.' },
   { at: '25분', room: 'chat', act: null, done: 'chat', text: '하루에 세 번 불러요. 말풍선을 누르면 답할 수 있어요.' },
   { at: '40분', room: 'bed', act: 'a', done: 'sleep', text: '저녁 7시가 되면 침실에서 재워 주세요. 자는 동안 다 회복돼요.' },
-  { at: '60분', room: 'album', act: 'a', done: 'album', text: '함께한 순간은 앨범 벽에 쌓여요. 열어 보세요.' },
+  // ★ 마지막 칸이 **남은 규칙 셋**을 받는다(2026-09-21 판정 — 8칸짜리 목에도 넣는다).
+  //   간식·목욕·약은 튜토리얼에서 한 번도 안 눌리는데 셋 다 거절이 붙어, 안 말해 주면
+  //   **처음 만나는 순간이 곧 첫 실패**가 된다(간식은 거절도 아니고 아이가 아파진다).
+  { at: '60분', room: 'album', act: 'a', done: 'album', text: '함께한 순간은 앨범 벽에 쌓여요. 열어 보세요. 간식은 하루 네 개까지예요 — 다섯 개째는 배탈이 나요. 목욕은 하루 한 번, 약은 아플 때만 줄 수 있어요.' },
 ];
 
 /** 앨범 18칸. `이름 · 조건` 형식이고 두 번째 값이 1 이면 이미 열린 칸이다. */
@@ -270,6 +320,69 @@ export const EGG_IMG = {
   idle: assetUrl('egg_idle'), hatch: assetUrl('egg_hatch'), crack: assetUrl('egg_crack'),
 } as const;
 
+/**
+ * 좌우 맞히기의 손 그림 — 주먹 두 장, 펼친 손 네 장.
+ *
+ * ★ **`props/catalog.ts` 에 등록하지 않는다.** 소품 렌더러(`PropLayer`)는 무대 안에만 마운트되는데
+ *   이 그림들은 무대가 아니라 **시트 안 버튼**에 붙는다 — 등록해도 그려질 자리가 없다. 게다가 그
+ *   파일은 바깥 규격 JSON 을 옮겨 적는 자리라 다음 갱신 때 손으로 적은 줄이 지워진다.
+ *   그래서 화면이 직접 드는 상수로 여기 둔다.
+ *
+ * ★ 왼쪽·오른쪽은 **화면 기준**이다(아이 기준이 아니다). 그림 파일 이름의 `l`·`r` 이 곧 화면의 좌·우다.
+ *
+ * ★ 여섯 장이 전부 512×512 이고 **손목이 캔버스 바닥에 붙어 있다.** 그래서 같은 정사각 칸에
+ *   `object-fit: contain` 으로 넣으면 주먹↔펼침을 갈아 끼워도 손목이 한 픽셀도 안 움직인다.
+ *   칸을 정사각이 아닌 모양으로 바꾸면 이 약속이 깨진다 — 손이 위아래로 튄다.
+ */
+/**
+ * ★ 주소는 **`propUrl`** 로 만든다 — `assetUrl` 이 아니다.
+ *   예전에는 `assetUrl('guess_l_fist.v1')` 이라 `<CDN>/guess_l_fist.v1` 이 됐다. `zzal/assets/` 도
+ *   `.webp` 도 빠져 **쓰는 순간 404** 인 값이었고, 그래서 화면은 이 표를 안 쓰고 `Room.tsx` 의
+ *   `handSrc()` 가 `propUrl()` 로 주소를 따로 만들었다. 이제 **같은 함수로 같은 주소**를 만드므로
+ *   미리 받기(`preloadGuessHands`)가 화면이 실제로 요청할 그 주소를 그대로 데운다.
+ *   ⚠️ 두 곳이 어긋나면 미리 받기는 조용히 헛돈다(딴 주소를 받아 두고 캐시가 안 맞는다).
+ */
+export const GUESS_HANDS = {
+  LEFT: {
+    fist: propUrl('guess_l_fist', 1),
+    open_empty: propUrl('guess_l_open_empty', 1),
+    open_candy: propUrl('guess_l_open_candy', 1),
+  },
+  RIGHT: {
+    fist: propUrl('guess_r_fist', 1),
+    open_empty: propUrl('guess_r_open_empty', 1),
+    open_candy: propUrl('guess_r_open_candy', 1),
+  },
+} as const;
+
+/**
+ * **미리 받아 둘 네 장** — 펼친 손(빈손·사탕) 좌·우.
+ *
+ * ★ 왜 주먹은 뺐나 — 주먹은 판이 뜨는 그 순간 이미 화면에 그려져 있어 저절로 받아진다.
+ *   늦는 것은 **탭한 뒤 갈아 끼우는 펼친 손**이다(1층 실측: 주소 교체 → 그려짐 94ms).
+ * ★ 왜 미리 받아야 하나 — `<img>` 한 장의 `src` 를 갈아 끼우는 구조라, 새 그림이 도착할 때까지
+ *   브라우저가 **주먹을 계속 그린다.** 그게 "손이 늦게 펴진다" 의 정체다.
+ *   로컬은 −94ms 지만 staging·운영은 그림이 원격 CDN 이라 **첫 공개마다 왕복 한 번**이 통째로 얹힌다.
+ */
+export const GUESS_HAND_PRELOAD: readonly string[] = [
+  GUESS_HANDS.LEFT.open_empty, GUESS_HANDS.LEFT.open_candy,
+  GUESS_HANDS.RIGHT.open_empty, GUESS_HANDS.RIGHT.open_candy,
+];
+
+/** 손 그림 한 칸의 한 변(px). 정사각이어야 손목이 안 튄다(위 주석). */
+export const GUESS_HAND_PX = 64;
+
+/** 손 그림 세 갈래. 화면이 이 순서대로 세 장을 겹쳐 두고 한 장만 보여 준다(갈아 끼울 때 안 깜빡이게). */
+export const GUESS_HAND_KINDS = ['fist', 'open_empty', 'open_candy'] as const;
+export type GuessHandKind = (typeof GUESS_HAND_KINDS)[number];
+
+/**
+ * 진 판에 뜨는 점 세 개. 256×256 이고 잉크는 가로로 넓은 띠라(실측 228×61, 캔버스 정중앙)
+ * 정사각 칸에 넣으면 위아래가 비어 보인다 — 그게 정상이다.
+ */
+export const GUESS_LOSE_DOTS = assetUrl('lose_dots.v1');
+export const GUESS_LOSE_DOTS_PX = 40;
+
 /** 버튼 표기 세 가지 — 색맹·저시력 대비로 색 말고 모양·글자를 함께 낼 수 있게(정본 §16). */
 export const NEED_STYLES = ['색+모양+글자', '색+글자', '색+모양'] as const;
 export type NeedStyle = (typeof NEED_STYLES)[number];
@@ -298,11 +411,11 @@ export const TUTOR_SERVER: readonly TutorStep[] = [
   { at: '2칸', room: null, act: 'pet', done: 'PET', text: '쓰다듬어 주세요. 아이를 톡 누르면 돼요.' },
   { at: '3칸', room: 'chat', act: null, done: 'CHAT', text: '뭐라고 말을 거네요. 오른쪽 아래 말풍선을 눌러 답해 주세요.' },
   { at: '4칸', room: 'info', act: null, done: 'PERSONALITY', text: '어떤 아이인가요. 아이 정보에서 성격을 골라 주세요.' },
-  { at: '5칸', room: 'bath', act: 'a', done: 'CLEAN', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요.' },
-  { at: '6칸', room: 'play', act: 'a', done: 'GAME', text: '같이 놀아 볼까요. 마당에서 좌우 맞히기를 한 판 시작해 주세요.' },
+  { at: '5칸', room: 'bath', act: 'a', done: 'CLEAN', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요. 한 번 쓸면 하나예요.' },
+  { at: '6칸', room: 'play', act: 'a', done: 'GAME', text: '같이 놀아 볼까요. 마당에서 좌우 맞히기를 한 판 시작해 주세요. 시작하면 오늘 세 판 중 하나예요. 중간에 나가면 그 판은 져요.' },
   { at: '7칸', room: 'album', act: 'a', done: 'SHARE', text: '이 모습 가져가실래요. 앨범 벽에서 액자를 열어 공유해 보세요.' },
   { at: '8칸', room: 'bed', act: 'a', done: 'NAP', text: '졸린가 봐요. 침실에서 재우고, 다시 깨워 주세요.' },
-  { at: '9칸', room: null, act: null, done: 'DONE', text: '이제 혼자서도 괜찮아요. 여기부터는 시간이 흐르기 시작해요.' },
+  { at: '9칸', room: null, act: null, done: 'DONE', text: '이제 혼자서도 괜찮아요. 여기부터는 시간이 흐르기 시작해요. 저녁 7시가 되면 재워 주세요. 간식은 하루 네 개까지예요 — 다섯 개째는 배탈이 나요. 목욕은 하루 한 번, 약은 아플 때만 줄 수 있어요.' },
 ];
 
 export const LEARN_GOALS = [
@@ -335,3 +448,157 @@ export const POSTCARDS: ReadonlyArray<readonly [string, string]> = [
 export const WEB_KEYS: ReadonlyArray<readonly [string, string]> = [
   ['1~5', '방'], ['Space', '쓰다듬기'], ['Enter', '대화'], ['Esc', '닫기'],
 ];
+
+/**
+ * 튜토리얼 완주 축하 판(첫날 선물 화면)의 문구.
+ *
+ * ★★ 2026-09-20 — **화면이 사실과 다른 말을 하던 자리**라 여기로 끌어냈다. 고친 것 셋:
+ *   1) "앨범에서 바로 볼 수 있어요" → 거짓이었다. 구르기는 이 순간 **굽기가 시작될 뿐**이고
+ *      (`night/BakeTrigger.onTutorialDone`), 그림은 검수를 지나 깨어 있는 첫 정산에서야 도착한다
+ *      (`ZzalMotion.reveal` · `AdvancedMotion.imageKey` 는 도착 뒤에만 채워진다). 즉 이 판을
+ *      보는 순간 앨범에는 아무것도 없다.
+ *   2) "오늘 밤에는 새 동작을 하나 연습해 볼 참" → 밤에 굽는 모델이 아니고(1.8·1.9 에서 조건을
+ *      채운 그 순간 굽기로 바뀌었다), 3층 심화 목록(`app.zzal.advanced-motions`)도 비어 있어
+ *      **내일 새 모습이 생기지 않는다.** 약속을 지우고 결만 남긴다.
+ *   3) "구르기 저장하기" 버튼 → 누르면 서버 호출이 한 건도 없는데 "앨범에 저장했어요" 라고 했다.
+ *      저장할 그림 자체가 아직 없으므로 버튼을 없앴다(→ 도착한 뒤 앨범 액자에서 저장한다).
+ *
+ * ★ 말투 규칙(자캐 커뮤니티 규범) — "꼭 오세요"·"기다릴게요"·"안 오면 서운해요" 처럼 **아이가
+ *   사용자를 재촉하거나 원망하는 결은 쓰지 않는다.** 지킬 수 없는 약속(날짜·시각)도 안 쓴다.
+ *
+ * ★★ **아직 안 붙인 것 둘** — 자리는 이 판 안에 잡아 두었고, 재료가 오면 갈아 끼운다.
+ *   1) ~~구르기 미리보기~~ → **붙였다**(`GRAD_PREVIEW_SRC`). 말로만 하던 "구르기" 를 실제로 보여준다.
+ *      ⚠️ `tamagotchi/constants.ts` 의 `YEOUL_MOTION.roll` 은 **여전히 기쁨 자세로 버티는 중**이고
+ *      그건 그대로 둔다 — 그쪽은 도감·방이 쓰는 자리라 별개 판단이다.
+ *   2) **"이런 동작도 보고 싶어요" 자유 입력** — 받아 줄 서버 칸이 아직 없다. 행동 기록 수집기
+ *      (`POST /api/v1/events`)는 사람이 쓴 글을 **일부러 안 받아** 조용히 버린다. 전용 API 가
+ *      열리면 지금의 한 번 누르는 버튼을 입력칸으로 바꾼다.
+ */
+export const GRAD_COPY = {
+  title: '첫날을 함께 마쳤어요',
+  /**
+   * ★★ **"~쯤" 과 "~을 거예요" 를 지우지 말 것.** 이 두 마디가 이 문장을 참으로 만든다.
+   *
+   *   구르기는 굽고 나서 **검수를 통과해야** 앨범에 들어오고, 그 검수가 언제 끝나는지는
+   *   화면도 서버도 미리 모른다. "내일 열려 있어요" 처럼 단정하는 순간 지킬 수 없는 약속이 되고,
+   *   늦어지는 사람에게는 그 문장이 그대로 거짓말이 된다.
+   *   여지를 남긴 채로 기대를 주는 것이 이 문구가 하려는 일이다.
+   *
+   * @param name 아이 이름(빈 값이면 '아이').
+   */
+  body: (name: string) => `${name}도 구르기를 하나 그리는 중이에요.\n다음에 오실 때쯤 앨범에서 만날 수 있을 거예요.`,
+  /** 정본 §심화 행동이 선물 화면에 붙이라고 한 수요조사. **이 한 줄은 진짜로 서버에 남는다.** */
+  wish: '이런 동작도 보고 싶어요',
+  close: '닫기',
+  /**
+   * 미리보기에 붙는 두 마디. **그림보다 먼저 읽혀야 하는 말**이다.
+   *
+   * ★★ 여기 뜨는 것은 **여울(연습 상대)의 구르기**이지 사용자의 아이가 아니다. 사용자는 이 자리에서
+   *   제 아이를 기대하므로, 표시가 약하면 **"내 아이가 여울로 바뀌었나"** 로 읽힌다. 자캐 커뮤니티에서
+   *   다른 캐릭터로의 치환은 캐붕의 시각적 형태라 가장 민감한 지점이다.
+   * ★ 그래서 세 겹으로 말한다 — **글자**(이 칩과 캡션) · **모양**(방 액자의 나무 테두리와 다른 점선 틀)
+   *   · **말**(본문이 "{이름}도 …" 로 둘을 나란히 놓는다). 색 하나로 가르지 않는다.
+   */
+  previewBadge: '예시',
+  previewCaption: '여울이 먼저 보여주는 구르기예요',
+} as const;
+
+/**
+ * 졸업 판 미리보기 그림의 주소. **비어 있으면 미리보기를 아예 안 그린다.**
+ *
+ * ★★ 왜 상수 한 줄인가 — 그림이 정식 주소로 게시되는 시점과 이 화면을 만드는 시점이 다르다.
+ *   값이 비어 있는 동안에는 자리 자체가 없어서 **레이아웃이 흔들리지 않고**, 주소가 정해지면
+ *   이 한 줄만 바꾸면 판이 그대로 완성된다. 화면 코드에는 조건이 한 곳뿐이다.
+ * ★ **`YEOUL_MOTION.roll` 을 쓰지 않는다.** 그쪽은 기본 그림이 없어 기쁨 자세로 버티는 자리라,
+ *   그대로 가져다 쓰면 **기쁨 자세를 놓고 "구르기" 라고 말하게 된다.** 미리보기는 진짜 구르기
+ *   그림이 있을 때만 뜨는 것이 맞고, 그 판단을 이 상수 하나가 쥔다.
+ * ★ 타입을 `string` 으로 박아 둔 이유 — 빈 문자열 리터럴로 좁혀지면 값을 채웠을 때 조건문이
+ *   죽은 가지로 취급된다. 미리보기를 끄려면 `''` 로 되돌리면 된다.
+ * ★ 주소는 `demoUrl` 이 만든다 — 손으로 적으면 배포에서 `/images` 앞머리가 겹치거나 빠진다
+ *   (`lib/assets.ts` 머리말). 키는 `images/zzal/demo/v7/roll.v1.webp` 한 벌이고,
+ *   앞머리를 누가 붙이느냐만 로컬·배포가 다르다.
+ */
+export const GRAD_PREVIEW_SRC: string = demoUrl('v7/roll.v1');
+
+/**
+ * "이런 동작도 보고 싶어요" 자유 입력칸의 문구와 상한.
+ *
+ * ★★ **문구가 사용자를 탓하지 않는다.** 특히 하루 상한에 걸렸을 때 "너무 많이 보냈어요" 는
+ *   쓰지 않는다 — 우리 쪽 사정을 사용자 잘못으로 옮기는 말이고, 자캐 커뮤니티에서 가장 싫어하는
+ *   결이다. 아이가 "오늘 들은 이야기는 여기까지" 라고 제 사정으로 말하게 둔다.
+ * ★ `limit` 문구에만 "내일" 을 쓸 수 있다 — 하루 상한은 **한국 시각 자정에 풀린다**는 것이
+ *   서버 계약에 적혀 있어서다. 다른 문구에는 시각을 약속하지 않는다.
+ * ★ 상한 60자는 **서버·DB·화면이 같은 값**이다(요청 검증 `@Size(60)` · 표의 `varchar(60)`).
+ *   한쪽만 바꾸면 화면은 받아 놓고 서버가 거절하는 자리가 생긴다.
+ */
+export const WISH_COPY = {
+  label: '이런 동작도 보고 싶어요',
+  placeholder: '예) 검을 휘두른다',
+  send: '보내기',
+  sending: '보내는 중…',
+  /** 보낸 뒤 입력칸 자리에 대신 남는 한 줄. */
+  done: '잘 들었어요. 적어 두었어요.',
+  /** 실패 안내. 코드별로 한 줄씩 — 어느 것도 사용자를 탓하지 않는다. */
+  fail: {
+    tooLong: '한 줄로 짧게 적어 주시면 보낼 수 있어요.',
+    login: '로그인하면 남길 수 있어요.',
+    noPet: '아이를 찾지 못했어요. 새로고침하고 다시 해 주세요.',
+    limit: '오늘 들은 이야기는 여기까지예요. 내일 또 들려주세요.',
+    other: '지금은 보내지 못했어요. 잠시 후 다시 눌러 주세요.',
+  },
+} as const;
+
+/**
+ * 해금 판 문구 — **두 가지 해금을 같은 판으로, 다른 말로** 알린다(2026-09-21 판정 5).
+ *
+ * ★★ 해금은 하나가 아니다. 언제 오는지도, 그림을 어디서 가져오는지도 다르다.
+ *   - `now`   = 2층 기본 행동. 돌보다가 **그 자리에서** 열린다. 그림은 부화 때 이미 구워져 있다.
+ *   - `slept` = 심화 행동·선물. **자는 동안 되고 아침에 도착**한다. 그림이 아직 없을 수 있다.
+ *   두 경우를 한 문장으로 뭉치면 한쪽이 반드시 거짓이 된다 — "자는 동안 배웠어요" 를
+ *   즉시 해금에 쓰면 자지도 않았는데 잤다고 말하는 꼴이다.
+ *
+ * ★ 지킬 수 없는 약속을 쓰지 않는다. 언제 또 열리는지 우리도 모르므로 다음을 예고하지 않는다.
+ * ★ 사용자를 탓하거나 재촉하지 않는다("드디어"·"이제야"·"자주 오셔야" 전부 안 쓴다).
+ */
+export const UNLOCK_COPY = {
+  now: {
+    // ★ 즉시 해금 판 문안 = **3안**(상훈님 2026-09-21 판정 1). "배웠어요" 가 아니라
+    //   "할 수 있게 됐어요" 로 둔 것은, 이 판이 **지금 바로 눌러 볼 수 있는 동작**을 알리는 자리라서다.
+    //   "자고 일어나면 보여드릴게요" 의 결은 아침 판(`slept`)의 몫이다 — 여기 쓰면 거짓이 된다.
+    title: '새로 할 수 있게 됐어요',
+    /** @param names 이번에 열린 것들. 한 개면 그대로, 여러 개면 가운뎃점으로 잇는다. */
+    body: (names: string) => `${names} — 방금 열렸어요. 바로 보여드릴게요!`,
+    previewBadge: '새 동작',
+    previewCaption: (name: string) => `${name}, 이렇게 움직여요`,
+    close: '방으로 돌아가기',
+  },
+  slept: {
+    title: '자는 동안 배워 왔어요',
+    body: (names: string) => `${names} — 오늘 아침에 도착했어요.`,
+    previewBadge: '새 동작',
+    previewCaption: (name: string) => `${name}, 이렇게 움직여요`,
+    close: '앨범에서 보기',
+  },
+  // ★ 옛 `noPreviewNote`("그림은 아직 그리는 중이에요")는 **없앴다**(2026-09-21 판정 11).
+  //   아침 목록에는 그림이 반드시 있다 — 서버가 `OPEN`(사람이 검수를 통과시킨 것)이면서 도착
+  //   시각이 찍힌 것만 담고, 그림 키도 도착한 뒤에만 준다(`PetResponses.java` · `ZzalMotion.java`
+  //   · `AdminService.java`). 설 자리가 없는 문장이라 화면에서 붙이던 자리와 함께 지웠다.
+  //   자리표를 다시 만들지 말 것 — 그림이 없으면 `FirePreview` 가 칸을 접는다(A-09).
+} as const;
+
+/**
+ * "이런 동작도 보고 싶어요" 를 보낸 뒤 뜨는 답 판(2026-09-21 판정 5).
+ *
+ * ★★ **"곧 추가하겠다" 를 쓰지 않는다.** 언제 되는지 우리도 모르고, 단정하는 순간
+ *   늦어지는 분께는 그대로 거짓말이 된다. 대신 **이미 참인 것**만 말한다 —
+ *   글은 진짜로 저장되고, 만드는 사람이 그걸 읽고 다음에 무엇을 그릴지 정한다.
+ * ★ 고마움을 전하되 보답을 약속하지 않는다. 약속은 문구가 아니라 다음 판으로 갚는다.
+ */
+export const WISH_REPLY = {
+  title: '잘 받았어요',
+  body: '적어 주신 동작, 만드는 사람이 그대로 읽어요.\n어떤 걸 보고 싶어 하시는지 알아야 다음에 무엇을 그릴지 정할 수 있어요.',
+  close: '방으로 돌아가기',
+} as const;
+
+/** 자유 입력 상한. 서버 검증·DB 칸 길이와 같은 값이라 **한쪽만 바꾸면 안 된다.** */
+export const WISH_MAX = 60;

@@ -176,8 +176,9 @@ export interface Pieces {
   bond: boolean;
   /** 지금 채워진 칸 수(0~4). 네 칸을 직접 세지 말고 이 값을 쓴다. */
   count: number;
-  /** 네 칸을 며칠 연속 채웠나(0~2). 2가 되는 밤에 다음 심화 하나가 큐에 오른다. */
-  streak: number;
+  // ★ 연속일수(`streak`) 칸은 없다. 서버 응답(`PetResponses.Pieces`)에 그 칸이 없는데도
+  //   타입에만 적혀 있어서, 화면이 늘 `undefined` 를 읽고 조용히 아무것도 안 그렸다.
+  //   타입에 적힌 것과 오는 것이 다르면 컴파일러가 못 잡는다 — 그래서 아예 지웠다.
   /** 기분 좋은 날의 선물 조각 — 네 칸 중 **가장 앞의 빈 칸**을 채운 것으로 친다. */
   bonus: boolean;
 }
@@ -519,6 +520,23 @@ export const PET_BASE = '/api/zzal/v1/me/pets';
  */
 export function draftPet(imageKey: string): Promise<Drafted> {
   return request<Drafted>(`${PET_BASE}/draft`, { method: 'POST', body: { imageKey } });
+}
+
+/**
+ * 보고 싶은 동작 한 줄 남기기.
+ *
+ * ★★ **본문 없는 응답(204)을 받는 첫 API 다.** 공통 클라이언트는 본문을 `res.text()` 로 한 번만
+ *   읽고 비어 있으면 봉투를 `null` 로 두므로(`common/fe/api/client.ts` 의 `readEnvelope`),
+ *   204 가 그대로 성공으로 흘러간다. `res.json()` 을 부르는 자리가 없어야 이게 유지된다 —
+ *   누가 그걸 넣으면 **성공한 요청이 실패로 보이고**, 화면은 안 보낸 줄 알고 한 번 더 보낸다.
+ * ★ 사람이 쓴 글은 **이 API 로만** 나간다. 행동 기록(`POST /api/v1/events`)은 허용 키 밖의 값을
+ *   조용히 버리므로, 그쪽에는 "남겼다" 는 사실만 고정된 이름으로 간다.
+ *
+ * 실패 코드 — 400 INVALID_INPUT(공백뿐이거나 60자 초과) · 401(비로그인) ·
+ * 404 ZZAL_PET_NOT_FOUND(남의 펫) · 409 ZZAL_MOTION_WISH_DAILY_LIMIT(하루 20줄).
+ */
+export function motionWish(petId: number, text: string): Promise<void> {
+  return request<void>(`${PET_BASE}/${petId}/motion-wish`, { method: 'POST', body: { text } });
 }
 
 /** 캐릭터 정보 등록 — 여기서 **격자 생성이 시작된다.** 알이 흔들리기 시작하는 자리. */

@@ -14,6 +14,7 @@
 //
 // 두 게임 합쳐 **하루 3판**(잠들 때 리셋). 판수는 시작한 판 기준(정본 16장).
 
+import type { components } from './api-schema';
 import { request } from './api';
 import { PET_BASE } from './pet';
 
@@ -105,4 +106,46 @@ export function guess(petId: number, gameId: number, pick: Side): Promise<GuessR
 /** 치던 판 잇기(새로고침 복구). 치던 판이 없어도 에러가 아니다 — playing 이 false 로 온다. */
 export function getCurrentGame(petId: number, signal?: AbortSignal): Promise<GameState> {
   return request<GameState>(`${base(petId)}/current`, { signal });
+}
+
+/**
+ * 기권 결과 — **서버 명세에서 생성한 타입을 그대로 쓴다**(`components['schemas']['AbandonResult']`).
+ *
+ * ★ 손으로 적어 두었던 인터페이스를 걷어낸 자리다. 이제 칸의 목록은 `api-schema.ts` 가 쥐고 있어서,
+ *   서버가 응답에 칸을 더하거나 빼면 **생성 파일이 바뀌고 이 타입이 따라 바뀐다** — 실행해 보고
+ *   알게 되는 일이 없다.
+ *
+ * ★ 다만 두 칸만 다시 조인다. OpenAPI 가 적지 못하는 것들이다.
+ *   - `Required<>` — 명세에 `required` 목록이 없어 생성물은 모든 칸이 선택(`?`)으로 나오지만,
+ *     서버는 늘 전부 채워 보낸다. 조이지 않으면 받는 쪽이 칸마다 `undefined` 를 걸러야 한다.
+ *   - `pick` 은 **늘 null** 이다(기권에는 고른 것이 없다). 명세에는 `LEFT`·`RIGHT` 만 적혀 있어
+ *     null 을 표현할 자리가 없고, `kind` 도 명세에서는 그냥 문자열이라 `GameKind` 로 좁힌다.
+ *
+ * ★ 모양은 한 판 친 결과(`GuessResult`)와 맞춰져 있다. 기권도 "한 판이 끝났다" 는 같은 사건이라,
+ *   판을 닫는 코드를 화면이 하나만 두게 하려는 것이다. 그래서 고를 것이 없는 `pick`·`hit` 도
+ *   자리를 비워 둔 채 남아 있다.
+ * ★ `answer` 는 **없다** — 기권한 판의 남은 답을 알려 줄 이유가 없다(이 파일 머리말의 규칙).
+ * ★ `nextRound` 도 없다. 끝난 판이라 다음이 없다.
+ */
+export type AbandonResult =
+  Omit<Required<components['schemas']['AbandonResult']>, 'kind' | 'pick'> & {
+    /** 접은 판의 종류. 좌우·달리기를 같은 주소로 접으므로 어느 쪽이었는지 여기서만 안다. */
+    kind: GameKind;
+    /** 늘 null — 기권에는 고른 것이 없다. `GuessResult` 와 모양을 맞추려고 남긴 자리. */
+    pick: null;
+  };
+
+/**
+ * 치던 판을 접는다(기권). 좌우 맞히기·달리기 **같은 주소**다.
+ *
+ * ★ 접은 판은 **패배로 확정**되고 `current` 에도 더는 안 잡힌다. 되돌릴 수 없다.
+ * ★ 하루 한도·조각·보상·굽기 **아무것도 안 건드린다.**
+ * ★ **아픈 펫도 기권할 수 있다** — `ZZAL_SICK_REFUSES` 가 **없다**(의도된 것이다. 아픔은 '노는 것'을
+ *   막는 조건이라, 아픈 동안 판이 열린 채 갇히면 나갈 길이 사라진다). 화면도 아플 때 ✕ 를 잠그면 안 된다.
+ *
+ * 실패 코드 — ZZAL_GAME_NOT_FOUND(404) · ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING ·
+ * ZZAL_TRAVELING(409).
+ */
+export function abandonGame(petId: number, gameId: number): Promise<AbandonResult> {
+  return request<AbandonResult>(`${base(petId)}/${gameId}/abandon`, { method: 'POST' });
 }

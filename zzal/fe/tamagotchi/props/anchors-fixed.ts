@@ -1,7 +1,15 @@
 // 고정 앵커표 — **서버가 앵커를 안 줘도 화면이 완성이어야 한다.** 이것만으로 끝까지 그려진다.
 //
-// 값은 `~/.claude/soma/lore/contract/소품-앵커-자세별-v1.json`(v1 · 2026-09-13)의 **여울** 칸을
-// 그대로 옮긴 것이다. 브라우저가 아니라 그림에서 잰 값이라 화면 크기와 무관하다.
+// 값은 **스프라이트와 같은 판에서 나온 `demo/v7/anchors.json`(정본 v02 · 2026-09-19)** 을
+// 스크립트로 옮긴 것이다(손으로 베끼지 않는다). 그림이 바뀌면 그 판의 `anchors.json` 으로 다시 낸다 —
+// 표와 그림은 **반드시 같은 판**이어야 한다(다른 판을 섞으면 소품만 조용히 어긋난다).
+// 브라우저가 아니라 그림에서 잰 값이라 화면 크기와 무관하다.
+//
+// ★ v6(K=239) → v02/v7(K=274) 로 갈아끼우며 달라진 것 —
+//   1) 실루엣이 커졌다: K 239→274 · Hw 95→109. 화면 키(`K_SCREEN_TARGET`)는 그대로라
+//      `boxHPerK`(=349/K)가 1.46→1.27 로 줄어 **상자만 작아지고 아이 크기는 안 변한다**(layout.ts 머리말).
+//   2) 발끝이 한 줄로 섰다: v6 는 1층 289 · 2층 267 로 **22px 벌어져** 자세를 바꾸면 아이가 튀었는데,
+//      v02 는 16 자세 전부 318~319(편차 1px)다. `belowFoot` 보정이 사실상 필요 없어진다.
 //
 // ★ 왜 자세마다 다른 표인가 — 지금 코드의 `head` 앵커는 캐릭터 상자 위에서 **12% 고정**이라
 //   `sick`(웅크림)은 정수리가 109px, `sleep`(눕기)은 205px 어긋난다. 그래서 해골·zzz 가
@@ -39,137 +47,137 @@ export const POSE_LABEL: Record<string, string> = {
  */
 export const FIXED_ANCHORS: CharAnchors = {
   char: '여울',
-  K: 239,
-  Hw: 95,
+  K: 274,
+  Hw: 109,
   canvas: [312, 349],
   poses: {
     /** 1층 */
     base: {
-      bbox: { x: 99, y: 50, w: 118, h: 239 },
-      head_top: { x: 158.6, y: 50 },
-      head_side: { y: 73.8, left_x: 111.1, right_x: 206.1 },
-      hand_front: { y: 181.5, left_x: 104, right_x: 214 },
-      feet: { y: 289, left_x: 130, right_x: 184, center_x: 158.0 },
+      bbox: { x: 95, y: 44, w: 130, h: 274 },
+      head_top: { x: 146.5, y: 44 },
+      head_side: { y: 71.2, left_x: 92, right_x: 201 },
+      hand_front: { y: 194.7, left_x: 105, right_x: 216 },
+      feet: { y: 318, left_x: 124, right_x: 178, center_x: 160 },
     },
     /** 1층 */
     eat: {
-      bbox: { x: 97, y: 49, w: 119, h: 240 },
-      head_top: { x: 156.7, y: 49 },
-      head_side: { y: 72.8, left_x: 109.2, right_x: 204.2 },
-      hand_front: { y: 180.5, left_x: 101, right_x: 212 },
-      feet: { y: 289, left_x: 130, right_x: 184, center_x: 156.5 },
-    },
-    /** 1층 */
-    hello: {
-      bbox: { x: 84, y: 46, w: 135, h: 243 },
-      head_top: { x: 160.8, y: 46 },
-      head_side: { y: 69.8, left_x: 113.3, right_x: 208.3 },
-      hand_front: { y: 177.5, left_x: 104, right_x: 219 },
-      feet: { y: 289, left_x: 129, right_x: 186, center_x: 151.5 },
+      bbox: { x: 96, y: 44, w: 131, h: 274 },
+      head_top: { x: 147.1, y: 44 },
+      head_side: { y: 71.2, left_x: 92.6, right_x: 201.6 },
+      hand_front: { y: 194.7, left_x: 106, right_x: 215 },
+      feet: { y: 318, left_x: 124, right_x: 177, center_x: 161.5 },
     },
     /** 1층 */
     joy: {
-      bbox: { x: 98, y: 52, w: 119, h: 236 },
-      head_top: { x: 157.3, y: 52 },
-      head_side: { y: 75.8, left_x: 109.8, right_x: 204.8 },
-      hand_front: { y: 183.5, left_x: 103, right_x: 213 },
-      feet: { y: 288, left_x: 130, right_x: 185, center_x: 157.5 },
-    },
-    /** 1층 */
-    pet: {
-      bbox: { x: 97, y: 56, w: 117, h: 233 },
-      head_top: { x: 153.5, y: 56 },
-      head_side: { y: 79.8, left_x: 106.0, right_x: 201.0 },
-      hand_front: { y: 187.5, left_x: 103, right_x: 209 },
-      feet: { y: 289, left_x: 130, right_x: 184, center_x: 155.5 },
+      bbox: { x: 98, y: 45, w: 128, h: 273 },
+      head_top: { x: 147.7, y: 45 },
+      head_side: { y: 72.2, left_x: 93.2, right_x: 202.2 },
+      hand_front: { y: 195.7, left_x: 105, right_x: 221 },
+      feet: { y: 318, left_x: 124, right_x: 179, center_x: 162 },
     },
     /** 1층 */
     sad: {
-      bbox: { x: 98, y: 52, w: 121, h: 236 },
-      head_top: { x: 154.0, y: 52 },
-      head_side: { y: 75.8, left_x: 106.5, right_x: 201.5 },
-      hand_front: { y: 183.5, left_x: 105, right_x: 215 },
-      feet: { y: 288, left_x: 128, right_x: 185, center_x: 158.5 },
+      bbox: { x: 93, y: 45, w: 130, h: 273 },
+      head_top: { x: 140.2, y: 45 },
+      head_side: { y: 72.2, left_x: 85.7, right_x: 194.7 },
+      hand_front: { y: 195.7, left_x: 102, right_x: 220 },
+      feet: { y: 318, left_x: 125, right_x: 178, center_x: 158 },
     },
     /** 1층 */
     sick: {
-      bbox: { x: 98, y: 119, w: 117, h: 169 },
-      head_top: { x: 149.3, y: 119 },
-      head_side: { y: 142.8, left_x: 101.8, right_x: 196.8 },
-      hand_front: { y: 250.5, left_x: 114, right_x: 206 },
-      feet: { y: 288, left_x: 119, right_x: 171, center_x: 156.5 },
+      bbox: { x: 90, y: 121, w: 133, h: 198 },
+      head_top: { x: 134.6, y: 121 },
+      head_side: { y: 148.2, left_x: 80.1, right_x: 189.1 },
+      hand_front: { y: 271.7, left_x: 99, right_x: 211 },
+      feet: { y: 319, left_x: 108, right_x: 157, center_x: 156.5 },
+    },
+    /** 1층 */
+    pet: {
+      bbox: { x: 95, y: 55, w: 131, h: 264 },
+      head_top: { x: 134.4, y: 55 },
+      head_side: { y: 82.2, left_x: 79.9, right_x: 191 },
+      hand_front: { y: 205.7, left_x: 108, right_x: 215 },
+      feet: { y: 319, left_x: 125, right_x: 178, center_x: 160.5 },
+    },
+    /** 1층 */
+    hello: {
+      bbox: { x: 81, y: 44, w: 147, h: 275 },
+      head_top: { x: 149.7, y: 44 },
+      head_side: { y: 71.2, left_x: 95.2, right_x: 204.2 },
+      hand_front: { y: 194.7, left_x: 98, right_x: 219 },
+      feet: { y: 319, left_x: 123, right_x: 178, center_x: 154.5 },
     },
     /** 1층 */
     sleep: {
-      bbox: { x: 76, y: 151, w: 161, h: 138 },
-      head_top: { x: 124.0, y: 151 },
-      head_side: { y: 174.8, left_x: 76.5, right_x: 181 },
-      hand_front: { y: 282.5, left_x: 173, right_x: 234 },
-      feet: { y: 289, left_x: 192, right_x: 232, center_x: 156.5 },
+      bbox: { x: 70, y: 163, w: 172, h: 156 },
+      head_top: { x: 125.8, y: 163 },
+      head_side: { y: 190.2, left_x: 71.3, right_x: 193 },
+      hand_front: { y: 313.7, left_x: 219, right_x: 238 },
+      feet: { y: 319, left_x: 220, right_x: 236, center_x: 156 },
     },
     /** 2층 */
     eat_rice: {
-      bbox: { x: 88, y: 12, w: 132, h: 255 },
-      head_top: { x: 146.9, y: 12 },
-      head_side: { y: 35.8, left_x: 99.4, right_x: 194.4 },
-      hand_front: { y: 143.5, left_x: 90, right_x: 220 },
-      feet: { y: 267, left_x: 116, right_x: 181, center_x: 154.0 },
+      bbox: { x: 85, y: 60, w: 131, h: 259 },
+      head_top: { x: 136.2, y: 60 },
+      head_side: { y: 87.2, left_x: 81.7, right_x: 190.7 },
+      hand_front: { y: 210.7, left_x: 89, right_x: 214 },
+      feet: { y: 319, left_x: 117, right_x: 172, center_x: 150.5 },
     },
     /** 2층 */
     eat_snack: {
-      bbox: { x: 89, y: 12, w: 133, h: 255 },
-      head_top: { x: 147.0, y: 12 },
-      head_side: { y: 35.8, left_x: 99.5, right_x: 196 },
-      hand_front: { y: 143.5, left_x: 91, right_x: 221 },
-      feet: { y: 267, left_x: 116, right_x: 180, center_x: 155.5 },
-    },
-    /** 2층 */
-    petted: {
-      bbox: { x: 89, y: 18, w: 127, h: 249 },
-      head_top: { x: 99.4, y: 18 },
-      head_side: { y: 41.8, left_x: 51.9, right_x: 182 },
-      hand_front: { y: 149.5, left_x: 91, right_x: 214 },
-      feet: { y: 267, left_x: 117, right_x: 180, center_x: 152.5 },
-    },
-    /** 2층 */
-    reply: {
-      bbox: { x: 92, y: 30, w: 126, h: 237 },
-      head_top: { x: 145.6, y: 30 },
-      head_side: { y: 53.8, left_x: 98.1, right_x: 194 },
-      hand_front: { y: 161.5, left_x: 95, right_x: 218 },
-      feet: { y: 267, left_x: 116, right_x: 181, center_x: 155.0 },
-    },
-    /** 2층 */
-    startle: {
-      bbox: { x: 90, y: 15, w: 129, h: 252 },
-      head_top: { x: 146.4, y: 15 },
-      head_side: { y: 38.8, left_x: 98.9, right_x: 195 },
-      hand_front: { y: 146.5, left_x: 93, right_x: 219 },
-      feet: { y: 267, left_x: 117, right_x: 182, center_x: 154.5 },
+      bbox: { x: 86, y: 57, w: 133, h: 262 },
+      head_top: { x: 136.5, y: 57 },
+      head_side: { y: 84.2, left_x: 82, right_x: 191 },
+      hand_front: { y: 207.7, left_x: 89, right_x: 217 },
+      feet: { y: 319, left_x: 118, right_x: 169, center_x: 152.5 },
     },
     /** 2층 */
     sweep: {
-      bbox: { x: 34, y: 34, w: 180, h: 233 },
-      head_top: { x: 138.3, y: 34 },
-      head_side: { y: 57.8, left_x: 90.8, right_x: 186 },
-      hand_front: { y: 165.5, left_x: 91, right_x: 209 },
-      feet: { y: 267, left_x: 112, right_x: 182, center_x: 124.0 },
-    },
-    /** 2층 */
-    wake_up: {
-      bbox: { x: 79, y: 16, w: 145, h: 251 },
-      head_top: { x: 155.3, y: 16 },
-      head_side: { y: 39.8, left_x: 107.8, right_x: 202.8 },
-      hand_front: { y: 147.5, left_x: 95, right_x: 224 },
-      feet: { y: 267, left_x: 116, right_x: 181, center_x: 151.5 },
+      bbox: { x: 71, y: 71, w: 171, h: 248 },
+      head_top: { x: 154.2, y: 71 },
+      head_side: { y: 98.2, left_x: 99.8, right_x: 209 },
+      hand_front: { y: 221.7, left_x: 117, right_x: 233 },
+      feet: { y: 319, left_x: 149, right_x: 198, center_x: 156.5 },
     },
     /** 2층 */
     wash: {
-      bbox: { x: 86, y: 55, w: 141, h: 212 },
-      head_top: { x: 152.7, y: 55 },
-      head_side: { y: 78.8, left_x: 105.2, right_x: 201 },
-      hand_front: { y: 186.5, left_x: 102, right_x: 223 },
-      feet: { y: 267, left_x: 110, right_x: 203, center_x: 156.5 },
+      bbox: { x: 83, y: 92, w: 147, h: 227 },
+      head_top: { x: 143.7, y: 92 },
+      head_side: { y: 119.2, left_x: 89.2, right_x: 198.2 },
+      hand_front: { y: 242.7, left_x: 83, right_x: 230 },
+      feet: { y: 319, left_x: 104, right_x: 209, center_x: 156.5 },
+    },
+    /** 2층 */
+    reply: {
+      bbox: { x: 86, y: 73, w: 131, h: 246 },
+      head_top: { x: 134.2, y: 73 },
+      head_side: { y: 100.2, left_x: 79.7, right_x: 188.7 },
+      hand_front: { y: 223.7, left_x: 95, right_x: 209 },
+      feet: { y: 319, left_x: 120, right_x: 169, center_x: 151.5 },
+    },
+    /** 2층 */
+    petted: {
+      bbox: { x: 63, y: 64, w: 153, h: 255 },
+      head_top: { x: 80.4, y: 64 },
+      head_side: { y: 91.2, left_x: 25.9, right_x: 180 },
+      hand_front: { y: 214.7, left_x: 90, right_x: 210 },
+      feet: { y: 319, left_x: 121, right_x: 169, center_x: 139.5 },
+    },
+    /** 2층 */
+    startle: {
+      bbox: { x: 85, y: 67, w: 132, h: 252 },
+      head_top: { x: 134.9, y: 67 },
+      head_side: { y: 94.2, left_x: 80.4, right_x: 189.4 },
+      hand_front: { y: 217.7, left_x: 93, right_x: 207 },
+      feet: { y: 319, left_x: 116, right_x: 170, center_x: 151 },
+    },
+    /** 2층 */
+    wake_up: {
+      bbox: { x: 80, y: 65, w: 140, h: 254 },
+      head_top: { x: 139.7, y: 65 },
+      head_side: { y: 92.2, left_x: 85.2, right_x: 194.2 },
+      hand_front: { y: 215.7, left_x: 89, right_x: 219 },
+      feet: { y: 319, left_x: 121, right_x: 170, center_x: 150 },
     },
   },
 };

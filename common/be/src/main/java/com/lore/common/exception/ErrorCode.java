@@ -103,6 +103,12 @@ public enum ErrorCode {
     // 후기 (zzal)
     ZZAL_FEEDBACK_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 후기를 남겼어요"),
 
+    // 동작 요청 (zzal)
+    // ★ 429 가 아니라 409 다 — 이 서비스의 하루 상한은 전부 409 + 전용 코드로 답해 왔고
+    //   (부화 DAILY_CAP · 놀이 DAILY_LIMIT), 화면은 상태가 아니라 코드로 갈린다.
+    //   429 를 새로 들이면 화면에 "상태로 분기하는 길" 이 하나 더 생긴다.
+    ZZAL_MOTION_WISH_DAILY_LIMIT(HttpStatus.CONFLICT, "오늘은 충분히 남겼어요(한국 시각 자정에 초기화)"),
+
     // 미니게임 (zzal)
     ZZAL_GAME_NOT_FOUND(HttpStatus.NOT_FOUND, "진행 중인 놀이가 없어요"),
     ZZAL_GAME_FINISHED(HttpStatus.CONFLICT, "이미 끝난 놀이예요"),

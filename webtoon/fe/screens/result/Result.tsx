@@ -110,6 +110,13 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     return () => window.removeEventListener("keydown", esc);
   }, [zoom]);
 
+  useEffect(() => {
+    if (!nextNote) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setNextNote(false); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [nextNote]);
+
   /* 누른 장으로 내려간다. 그림이 안 받아졌을 때 자리를 잡으면 높이가 0 이라
      맨 위로 가버린다 — 그 장 위쪽 그림이 다 받아진 뒤에 자리를 잡는다. */
   const [zoomLoaded, setZoomLoaded] = useState(0);
@@ -163,11 +170,17 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 </form>
               ) : (
                 <div className="wt-result-titlerow">
-                  <h2>{data.title}</h2>
-                  {mine && (
-                    <button type="button" className="icon-btn" aria-label={t("제목 고치기")} title={t("제목 고치기")}
-                            onClick={startRename}><IconEdit size={16} /></button>
-                  )}
+                  <span className="wt-result-titlemid">
+                    <h2>{data.title}</h2>
+                    {mine && (
+                      <button type="button" className="icon-btn" aria-label={t("제목 고치기")} title={t("제목 고치기")}
+                              onClick={startRename}><IconEdit size={16} /></button>
+                    )}
+                  </span>
+                  {/* 공유는 이 작품 자체를 가리키므로 제목 줄에 둔다 — 아래 줄의
+                      편집실·내려받기는 내 작품일 때만 있는 것들이라 결이 다르다.
+                      제목은 가운데 그대로 두고 공유만 오른쪽 끝으로 보낸다. */}
+                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
                 </div>
               )}
               {renameErr && <span className="err">{renameErr}</span>}
@@ -185,32 +198,22 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   <button type="button" className="btn btn-w" onClick={() => go("editor", { run: runId })}>
                     <IconEdit size={18} /> {t("편집실")}
                   </button>
-                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
-                  {!data.example && (
-                    <a className="btn btn-w" href={episodeDownloadUrl(runId)} download>
-                      <IconDownload size={18} /> {t("내려받기")}
-                    </a>
-                  )}
+                  <a className="btn btn-w" href={episodeDownloadUrl(runId)} download>
+                    <IconDownload size={18} /> {t("내려받기")}
+                  </a>
                 </div>
-                {nextNote && <span className="wt-result-note" role="status">{t("아직 다음화 기능은 준비 중이에요!")}</span>}
-                {!data.example && (
-                  <div className="wt-result-dlrow">
-                    <label className="wt-result-perpage">
-                      <input type="checkbox" checked={perPage} aria-label={t("컷별로 내려받기")}
-                             onChange={(e) => setPerPage(e.target.checked)} />
-                      {t("컷별로 내려받기")}
-                    </label>
-                    {/* 아트보드는 PC 와 폰의 문구가 다르다 — 폰은 체크 칸 옆에 짧게 붙인다. */}
-                    <span className="dim wt-result-wm">{t("내려받는 파일에는 아래에 LORE 표시가 붙습니다.")}</span>
-                    <span className="dim wt-result-wm-m">{t("· 파일에 LORE 표시가 붙어요")}</span>
-                  </div>
-                )}
+                <div className="wt-result-dlrow">
+                  <label className="wt-result-perpage">
+                    <input type="checkbox" checked={perPage} aria-label={t("컷별로 내려받기")}
+                           onChange={(e) => setPerPage(e.target.checked)} />
+                    {t("컷별로 내려받기")}
+                  </label>
+                  {/* 아트보드는 PC 와 폰의 문구가 다르다 — 폰은 체크 칸 옆에 짧게 붙인다. */}
+                  <span className="dim wt-result-wm">{t("내려받는 파일에는 아래에 LORE 표시가 붙습니다.")}</span>
+                  <span className="dim wt-result-wm-m">{t("· 파일에 LORE 표시가 붙어요")}</span>
+                </div>
               </>
-            ) : (
-              <div className="wt-result-acts wt-result-acts-other">
-                <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
-              </div>
-            )}
+            ) : null}
 
             <div className="wt-result-sheet">
               {data.pages.map((pg, i) => {
@@ -218,7 +221,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 const w = +pg.width || 1;
                 const img = (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={pageUrl(runId, pg.no, 1080, false, data.example)}
+                  <img src={pageUrl(runId, pg.no, 1080)}
                        alt={pg.caption || t("{n}쪽", { n: pg.no })} loading="lazy" />
                 );
                 return (
@@ -231,7 +234,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                             onClick={() => setZoom(pg.no)}>
                       {img}
                     </button>
-                    {mine && !data.example && perPage && (
+                    {mine && perPage && (
                       <a className="wt-result-pgdl" href={pageDownloadUrl(runId, pg.no)} download>
                         <IconDownload size={14} /> {t("이 장 내려받기")}
                       </a>
@@ -249,7 +252,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                     <button type="button" key={r.run_id} className="wt-result-other"
                             onClick={() => go("result", { run: r.run_id })} aria-label={titleOf(r)}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1, !!r.example)} alt="" />
+                      <img src={coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1)} alt="" />
                     </button>
                   ))}
                   <button type="button" className="wt-result-other-new" onClick={nextEpisode}>
@@ -259,12 +262,16 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               </div>
             )}
 
+            {/* 「맨 위로」가 가운데, 「다음화 보기」가 오른쪽. 가운데를 진짜
+                가운데에 두려면 좌우 칸의 폭이 같아야 해서 격자로 짠다 —
+                한 줄 flex 로는 오른쪽 단추 폭만큼 밀린다. */}
             {!mine && (
               <div className="wt-result-foot">
-                <button type="button" className="btn btn-p" onClick={nextEpisode}>{t("다음화 보기")}</button>
-                {nextNote && <span className="wt-result-note" role="status">{t("아직 다음화 기능은 준비 중이에요!")}</span>}
                 <button type="button" className="btn-ghost wt-result-top" onClick={toTop}>
                   <IconChevronUp size={16} /> {t("맨 위로")}
+                </button>
+                <button type="button" className="btn btn-p wt-result-next" onClick={nextEpisode}>
+                  {t("다음화 보기")}
                 </button>
               </div>
             )}
@@ -272,6 +279,20 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
           </div>
         )}
       </div>
+
+      {/* 다음 편은 아직 없다. 눌렀을 때 줄 끝에 문구만 붙이면 화면 밖이라
+          못 보고 다시 누르게 된다 — 가운데에 띄워 한 번에 읽히게 한다. */}
+      {nextNote && (
+        <div className="wt-result-soon" onClick={() => setNextNote(false)}>
+          <div className="wt-result-soonbox" role="dialog" aria-modal="true"
+               aria-labelledby="wt-soon-title" onClick={(e) => e.stopPropagation()}>
+            <h2 id="wt-soon-title">{t("아직 다음화 기능은 준비 중이에요!")}</h2>
+            <button type="button" className="btn btn-p" autoFocus onClick={() => setNextNote(false)}>
+              {t("확인")}
+            </button>
+          </div>
+        </div>
+      )}
 
       {data && zoom != null && (
         <div className="wt-result-zoom" role="dialog" aria-modal="true" aria-label={t("크게 보기")}
@@ -291,7 +312,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                        ...(w !== 1 ? { width: `${(w * 100).toFixed(2)}%`, marginInline: "auto" } : {}),
                      }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={pageUrl(runId, pg.no, 1080, false, data.example)}
+                  <img src={pageUrl(runId, pg.no, 1080)}
                        alt={pg.caption || t("{n}쪽", { n: pg.no })}
                        onLoad={zoom != null && pg.no <= zoom ? () => setZoomLoaded((n) => n + 1) : undefined} />
                 </div>

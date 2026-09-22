@@ -95,7 +95,8 @@ export interface paths {
         };
         /**
          * 카드 상세
-         * @description 카드 한 장을 번호로 연다. 게시글에 적힌 번호로 카드를 열 때 부른다.
+         * @description 카드 한 장을 번호로 연다.
+          *     게시글에 적힌 번호로 카드를 열 때 부른다.
          *     목록이 준 카드에는 상세의 칸이 다 있어서, 목록에서 여는 상세는 이 API 를 부르지 않는다.
          *
          *     회수 칸 셋은 목록과 같은 규칙으로 N 기준으로 가린다.
@@ -431,73 +432,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/webtoon/v1/characters/random": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 랜덤 재료
-         * @description 「랜덤으로 만들어보기」가 입력 칸을 채울 값 한 벌 — 이름 · 설명 · 세계관.
-         *     AI 를 안 부르고 조합에서 뽑는다. 사람이 보고 고친 뒤 만든다.
-         */
-        get: operations["random"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/webtoon/v1/characters/try": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 캐릭터 만들어보기
-         * @description 뭐든 넣으면 그대로 그 세계관 웹툰의 한 컷이 된다. 사진·설명·이름·세계관 전부
-         *     **선택** — 아무것도 없이 보내면 「랜덤으로 만들어보기」다.
-         *     world 는 GET /worlds 의 key 이거나 사람이 직접 쓴 한 줄.
-         *
-         *     바로 돌려주고 뒤에서 그린다(status=drawing). GET /{id} 로 다시 읽으면
-         *     그림(art_url)과 카드(twist · quote · fate)가 채워진다.
-         *     값과 하루 몫은 「캐릭터 만들기」와 같다.
-         */
-        post: operations["tryOut"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/webtoon/v1/characters/worlds": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 고를 수 있는 세계관
-         * @description 「캐릭터 만들어보기」의 세계관 목록. 하네스 프리셋 그대로다.
-         */
-        get: operations["worlds"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/webtoon/v1/characters/{publicId}": {
         parameters: {
             query?: never;
@@ -505,11 +439,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * 캐릭터 하나
-         * @description 그리는 중인 것을 다시 읽는 자리. 내 것과 기본 제공만 보인다.
-         */
-        get: operations["one"];
+        get?: never;
         put?: never;
         post?: never;
         /**
@@ -521,27 +451,6 @@ export interface paths {
         head?: never;
         /** 이름·설명 고치기 */
         patch: operations["rename"];
-        trace?: never;
-    };
-    "/api/webtoon/v1/characters/{publicId}/card": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 공유된 카드
-         * @description 「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.
-         *     내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.
-         */
-        get: operations["card"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/webtoon/v1/config": {
@@ -682,33 +591,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/webtoon/v1/my/notify-setting": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 웹툰 완성 메일 — 켜져 있는가
-         * @description 행이 없으면(한 번도 안 건드렸으면) true 다 — 지금까지 계정 이메일로
-         *     항상 보냈던 것과 같은 기본값이다.
-         */
-        get: operations["notifySetting"];
-        put?: never;
-        /**
-         * 웹툰 완성 메일 — 켜고 끄기
-         * @description 웹툰이 다 만들어졌을 때 계정 이메일로 알리는 것을 켜고 끈다.
-         *     게스트로 만들 때 직접 적은 주소는 이 설정과 무관하게 그대로 간다 —
-         *     그건 그 한 번만의 명시적인 선택이다.
-         */
-        post: operations["setNotifySetting"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/webtoon/v1/my/runs": {
         parameters: {
             query?: never;
@@ -821,27 +703,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/webtoon/v1/nh/jobs/mine": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 내가 만들던 것
-         * @description 아직 안 끝난 작업들(줄 서 있거나 · 그리는 중 · 사람 차례). 첫 화면의
-         *     「만들던 웹툰」 알약이 이것을 본다. 로그인 안 했으면 uid 로 가린다.
-         */
-        get: operations["mine_1"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/webtoon/v1/nh/jobs/{id}": {
         parameters: {
             query?: never;
@@ -882,26 +743,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/webtoon/v1/nh/jobs/{id}/notify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 완성 알림 받을 이메일
-         * @description 빈 값을 보내면 안 받겠다는 뜻이라 적어 둔 주소를 지운다.
-         */
-        post: operations["notify"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/webtoon/v1/nh/jobs/{id}/page/{no}.png": {
         parameters: {
             query?: never;
@@ -928,10 +769,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * 이야기 고르기
-         * @description body 를 같이 보내면 그 방향의 본문을 사람이 고친 내용으로 바꿔서 다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.
-         */
+        /** 이야기 고르기 */
         post: operations["pick"];
         delete?: never;
         options?: never;
@@ -1010,26 +848,6 @@ export interface paths {
         get: operations["sheetImage"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/webtoon/v1/nh/photo-presign": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 게스트 사진 업로드 주소 발급
-         * @description 로그인 없이 S3 에 직접 올릴 임시 주소를 받는다. 10분간 유효.
-         */
-        post: operations["photoPresign"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1166,26 +984,6 @@ export interface paths {
          * @description 구운 것이 있으면 그것. raw=1 이면 밑그림. 없으면 404.
          */
         get: operations["page"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/webtoon/v1/runs/{runId}/page/{no}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 컷 하나 내려받기
-         * @description 그 장 하나에 LORE 표시를 찍어서 준다.
-         */
-        get: operations["pageDownload"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1715,6 +1513,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/games/{gameId}/abandon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 매치 기권
+         * @description 진행 중인 매치를 그 자리에서 접는다. 좌우 맞히기와 달리기 모두 이 주소로 접는다.
+         *
+         *     접은 매치는 패배로 확정되어 다시 진행할 수 없고 current 에도 더는 잡히지 않는다.
+         *     게임 중에 나가면 그 판은 끝이라는 규칙이며, 지고 있는 판을 버리고 다시 시작하는 것을 막는다.
+         *
+         *     오늘 남은 매치 수는 시작 시점에 이미 차감했으므로 기권으로 돌려주지 않는다. 승리 보상·
+         *     패배 판정(두 번째 선물)·놀이 조각은 어느 것도 발생하지 않는다.
+         *
+         *     ★ 아픈 펫도 기권할 수 있다(ZZAL_SICK_REFUSES 없음) — 아픔은 '노는 것'을 막는 조건이고
+         *     기권은 그만두는 것이다. 여기서 막으면 병든 동안 열어 둔 매치를 닫을 길이 사라진다.
+         */
+        post: operations["abandon"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/games/{gameId}/finish": {
         parameters: {
             query?: never;
@@ -1781,6 +1608,34 @@ export interface paths {
         get: operations["hatch"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/motion-wish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 보고 싶은 동작 남기기
+         * @description 자유 글 한 줄을 받는다. 로그인이 필요하고, 내 펫에만 남길 수 있다.
+         *
+         *     - 앞뒤 공백은 서버가 떼고 저장한다. **공백뿐이면 400**(INVALID_INPUT)
+         *     - 길이는 받은 그대로 재서 1~60자. 넘으면 400
+         *     - **한 번 부를 때마다 한 줄**이다 — 후기와 달리 여러 번 남길 수 있다
+         *     - 한 아이에 **하루 20줄**까지. 넘으면 409(ZZAL_MOTION_WISH_DAILY_LIMIT),
+         *       한국 시각 자정에 풀린다
+         *     - 성공하면 **본문 없이 204** 다. 남긴 글을 되돌려줄 이유가 없고,
+         *       화면은 방금 자기가 보낸 값을 이미 들고 있다
+         */
+        post: operations["submit"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2027,6 +1882,64 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description 기권 결과. 진행 중이던 매치는 패배로 확정되며 다시 진행할 수 없다 */
+        AbandonResult: {
+            /** @description 항상 true — 기권한 매치는 그 자리에서 끝난다 */
+            finished?: boolean;
+            /**
+             * Format: int64
+             * @example 12
+             */
+            gameId?: number;
+            /** @description 항상 false — 기권은 회차를 진행한 것이 아니다 */
+            hit?: boolean;
+            /**
+             * Format: int32
+             * @description 기권 시점까지 맞힌 횟수
+             * @example 1
+             */
+            hits?: number;
+            /** @description 항상 빈 목록 — 기권으로 해금되는 동작은 없다 */
+            justUnlocked?: number[];
+            /**
+             * @description LEFT_RIGHT · RUN
+             * @example LEFT_RIGHT
+             */
+            kind?: string;
+            /**
+             * @description 기권에는 선택이 없으므로 항상 null. Guess 와 같은 모양을 유지하기 위한 자리
+             * @enum {string}
+             */
+            pick?: "LEFT" | "RIGHT";
+            /**
+             * Format: int32
+             * @description 오늘 남은 매치 수. 일일 매치는 시작 시점에 차감하므로 기권해도 돌려주지 않는다
+             * @example 2
+             */
+            remainingToday?: number;
+            /**
+             * Format: int32
+             * @description 기권 시점까지 진행한 회차(0부터). 달리기는 항상 0
+             * @example 2
+             */
+            round?: number;
+            /**
+             * Format: int32
+             * @description 한 매치의 총 회차
+             * @example 5
+             */
+            rounds?: number;
+            /** @description 달리기 해금 여부 */
+            runUnlocked?: boolean;
+            /** @description 항상 false — 기권은 패배로 확정된다. 접는 시점에 이미 정답 수가 승리 조건을 넘겼더라도 끝까지 진행하지 않은 매치이므로 승리가 아니다 */
+            win?: boolean;
+            /**
+             * Format: int32
+             * @description 승리에 필요한 정답 수
+             * @example 3
+             */
+            winAt?: number;
+        };
         /** @description 시간 당기기 요청 — 초·분 중 아무 쪽이나 준다(둘 다 주면 더한다) */
         AdvanceClock: {
             /**
@@ -2089,6 +2002,12 @@ export interface components {
         Answered: {
             chatReply?: components["schemas"]["Reply"];
             pet?: components["schemas"]["Detail"];
+        };
+        ApiResponseAbandonResult: {
+            data?: components["schemas"]["AbandonResult"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
         };
         ApiResponseAlbum: {
             data?: components["schemas"]["Album"];
@@ -2208,12 +2127,6 @@ export interface components {
         };
         ApiResponseMe: {
             data?: components["schemas"]["Me"];
-            error?: components["schemas"]["ErrorBody"];
-            message?: string;
-            success?: boolean;
-        };
-        ApiResponseNotifySettingResult: {
-            data?: components["schemas"]["NotifySettingResult"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -3030,6 +2943,14 @@ export interface components {
             seq?: number;
             unlocked?: boolean;
         };
+        /** @description 보고 싶은 동작 한 줄 — 앞뒤 공백은 서버가 떼고, 공백뿐이면 거절한다 */
+        MotionWishSubmit: {
+            /**
+             * @description 보고 싶은 동작. 1~60자
+             * @example 기지개 켜는 모습이 보고 싶어요
+             */
+            text: string;
+        };
         NoteRequest: {
             note?: string;
         };
@@ -3040,12 +2961,6 @@ export interface components {
         };
         NotifyRequest: {
             email?: string;
-        };
-        NotifySettingRequest: {
-            on?: boolean;
-        };
-        NotifySettingResult: {
-            on?: boolean;
         };
         PagesRequest: {
             pages?: components["schemas"]["Upload"][];
@@ -3475,12 +3390,6 @@ export interface components {
             postcards?: number;
             /** Format: date-time */
             startedAt?: string;
-        };
-        TryRequest: {
-            description?: string;
-            name?: string;
-            photos_data?: string[];
-            world?: string;
         };
         Tutorial: {
             active?: boolean;
@@ -4067,104 +3976,6 @@ export interface operations {
             };
         };
     };
-    random: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    tryOut: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Lore-Uid"?: string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["TryRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    worlds: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    one: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-Lore-Uid"?: string;
-            };
-            path: {
-                publicId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
     remove: {
         parameters: {
             query?: never;
@@ -4385,50 +4196,6 @@ export interface operations {
             };
         };
     };
-    notifySetting: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApiResponseNotifySettingResult"];
-                };
-            };
-        };
-    };
-    setNotifySetting: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NotifySettingRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApiResponseNotifySettingResult"];
-                };
-            };
-        };
-    };
     runs: {
         parameters: {
             query?: never;
@@ -4531,30 +4298,6 @@ export interface operations {
                 "application/json": components["schemas"]["CreateRequest"];
             };
         };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    mine_1: {
-        parameters: {
-            query?: {
-                uid?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -5034,29 +4777,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    pageDownload: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                runId: string;
-                no: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "image/png": string;
-                };
             };
         };
     };
@@ -5696,7 +5416,7 @@ export interface operations {
             };
         };
     };
-    submit: {
+    submit_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -5802,6 +5522,47 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseState"];
+                };
+            };
+        };
+    };
+    abandon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+                gameId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 기권 처리됨 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAbandonResult"];
+                };
+            };
+            /** @description ZZAL_GAME_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAbandonResult"];
+                };
+            };
+            /** @description ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAbandonResult"];
                 };
             };
         };
@@ -5924,6 +5685,60 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ApiResponseHatch"];
                 };
+            };
+        };
+    };
+    submit: {
+        parameters: {
+            query?: never;
+            header?: {
+                "User-Agent"?: string;
+            };
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotionWishSubmit"];
+            };
+        };
+        responses: {
+            /** @description 남겼음(본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 빈 글·공백뿐·60자 초과(INVALID_INPUT) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 로그인이 필요함 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 오늘 몫을 다 씀(ZZAL_MOTION_WISH_DAILY_LIMIT) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
