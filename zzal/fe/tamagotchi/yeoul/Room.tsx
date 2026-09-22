@@ -1050,13 +1050,16 @@ function ChatFab({ y }: { y: Yeoul }) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); actions.openChat(); }}
-      data-part="chat-fab"
+      data-part="chat-fab" data-off={v.fab.off ? '1' : undefined}
       style={{
         ...slotChip, position: 'relative',
         borderStyle: 'solid', borderWidth: v.fab.bw, borderColor: v.fab.bd,
         animation: v.fab.anim,
+        // ★ 튜토리얼 중 다른 칸이면 **흐리게 둔다**(판정 J8) — 없애면 "사라졌다" 로 읽힌다.
+        //   눌러도 대화가 안 열리고 왜 지금이 아닌지 한 줄이 뜬다(`actions.openChat` 이 막는다).
+        opacity: v.fab.off ? 0.45 : 1,
       }}
-      aria-label="대화하기"
+      aria-label="대화하기" aria-disabled={v.fab.off ? true : undefined}
     >
       <span style={{ position: 'relative', width: 24, height: 24, color: '#5A554E' }}>
         <span style={{ position: 'absolute', left: 1, top: 3, width: 22, height: 15, border: '2px solid currentColor', borderRadius: 8 }} />
