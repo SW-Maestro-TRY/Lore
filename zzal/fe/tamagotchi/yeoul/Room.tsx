@@ -261,9 +261,11 @@ export default function Room({ y }: { y: Yeoul }) {
   // 실루엣 좌·우도 같은 이유로 갈린다 — 앵커를 믿을 수 있으면 표, 아니면 그림에서 잰 값.
   const silLeft = byK ? fit.silLeftPerBoxW : sideEdges.left;
   const silRight = byK ? fit.silRightPerBoxW : sideEdges.right;
-  const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${headSpan.toFixed(4)})`;
+  // ★ 아이 그림이 줄면(배부름 0 → 0.7배) **머리도 그만큼 내려온다.** 말풍선이 옛 머리 자리에
+  //   그대로 떠 있으면 머리 위로 한참 뜬다 — 같은 배율을 여기에도 건다(→ `st.charScale`).
+  const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${(headSpan * v.st.charScale).toFixed(4)})`;
   /** 얼굴 높이(머리 옆선). 머리 옆으로 비킨 말풍선의 세로 한가운데를 여기에 맞춘다. */
-  const faceFromBottom = `calc(${LIFT} + ${CHAR_H} * ${Math.max(0, headSpan - headSideDrop).toFixed(4)})`;
+  const faceFromBottom = `calc(${LIFT} + ${CHAR_H} * ${(Math.max(0, headSpan - headSideDrop) * v.st.charScale).toFixed(4)})`;
   /** 무대와 **자리를 사기 전 아이 상자**를 재는 두 손잡이 — 말풍선이 이 둘로 자리를 정한다. */
   const stageRef = useRef<HTMLDivElement>(null);
   const charProbeRef = useRef<HTMLDivElement>(null);
@@ -390,7 +392,14 @@ export default function Room({ y }: { y: Yeoul }) {
             )}
             {/* 아이 뒤에 깔리는 것(매트). 반전 바깥이라 걸음마다 뒤집히지 않는다. */}
             <PropLayer z="below_char" scene={scene} table={table} anchors={anchors} />
-            <div style={{ width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play }}>
+            {/* ★ 배부름 0 이면 **그림만 0.7배**로 줄인다(정본 §게이지 · 2026-09-22 판정 J).
+                상자는 그대로 둔다 — 상자를 줄이면 바닥 소품(똥)이 읽는 자(`charBox` 폭)까지
+                같이 줄어 방 안 물건이 통째로 작아진다. 발끝은 그대로 바닥에 두려고 아래를 축으로 잡는다. */}
+            <div style={{
+              width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play,
+              ...(v.st.charScale === 1 ? null : { transform: `scale(${v.st.charScale})`, transformOrigin: 'bottom center' }),
+              transition: 'transform .3s ease',
+            }}>
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img

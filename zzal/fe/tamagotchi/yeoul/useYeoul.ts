@@ -24,7 +24,7 @@ import { ApiError } from '../../lib/api';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
 import {
-  ACTION_SITUATION, CYCLE_MS, GIFT_CYCLES, SITUATION_TABLE,
+  ACTION_SITUATION, CYCLE_MS, GIFT_CYCLES, LOCKED_POSE, SITUATION_TABLE,
   cyclesOfAction, poseOfSituation, situationOfAction, stagePlanOf, type ActionKey,
 } from '../props/situations';
 import { motionAliases, YEOUL_MOTION } from '../constants';
@@ -423,7 +423,10 @@ function callQueueOf(s: YeoulState, m: Mode): CallItem[] {
   //   첫 부름의 방이 흔들리므로 이 순서가 곧 **강조되는 타일의 순서**이기도 하다.
   if (m === 'sick') out.push({ kind: 'call', text: '몸이 무거워요…', room: 'bath' });
   if (m === 'night' && !r.bed) out.push({ kind: 'call', text: '이제 졸려요', room: 'bed' });
-  if (s.full <= 2 && !r.table) out.push({ kind: 'call', text: '배고파요', room: 'table' });
+  // ★ 문턱을 **자세와 같은 0 칸**으로 맞췄다(2026-09-22 판정 J). 예전에는 `<= 2` 라 두 칸이나
+  //   남았는데도 "배고파요" 가 떠 있었고, 자세는 0 칸에서야 바뀌어 **말과 몸이 따로 놀았다**
+  //   (상훈님 dev 실측: 배부름 1·2 에서 말풍선만 떠 있음).
+  if (s.full <= 0 && !r.table) out.push({ kind: 'call', text: '배고파요', room: 'table' });
   if (s.trace >= 2 && !r.bath) out.push({ kind: 'call', text: '여기 좀 치워 주세요', room: 'bath' });
 
   const last = s.log[s.log.length - 1];
@@ -492,6 +495,13 @@ export interface Stage {
   wall: string; floor: string; frame: string; sky: string; pattern: string;
   moon: boolean; sun: boolean; curtain: boolean; sick: boolean;
   charFilter: string; play: 'running' | 'paused';
+  /**
+   * 아이 그림에만 거는 배율. 평소 1, **배부름 0 이면 0.7**(정본 §게이지 "배부름 0 = 기본 자세 0.7배").
+   *
+   * ★ 상자(레이아웃)는 안 건드리고 **그림에만** 건다 — 상자를 줄이면 바닥 소품(똥)이 읽는 자(`charBox` 폭)
+   *   까지 같이 줄어 방 안 물건이 통째로 작아진다. 말풍선 자리는 같은 배율로 따로 낮춘다.
+   */
+  charScale: number;
 }
 /**
  * 아이 말풍선이 그릴 것. **말 한 줄이 전부다.**
@@ -720,12 +730,27 @@ export function useYeoul(live?: Live) {
    * ★ 지금 2층을 여는 길은 **연습방 스위치 하나뿐**이다(`floor2`). 진짜 아이의 해금은 서버가 쥔다 —
    *   그 값이 오면 여기만 바꿔 읽으면 된다.
    */
+  /**
+   * 이 행동의 **2층이 열렸는가.**
+   *
+   * ★★ 2026-09-22 판정 H — 예전에는 **개발 창 값만** 봤다(`s.dev.floor2`·`s.dev.unlocked`).
+   *   그래서 진짜 방에서는 서버가 아무리 열어 줘도 **2층 자세가 영영 안 나왔다.**
+   *   dev 실측: 쓰다듬 2층(`petted`)이 서버에서 `unlocked=true` 인데 화면은 1층 `pet` 을 재생.
+   *   도감(앨범)은 서버를 읽고 재생은 목을 읽어서, **한 화면에서 두 출처가 갈려 있었다.**
+   * ★ 이제 순서는 이렇다 — 개발 창(목·연습방 전용) → **서버 도감** → 닫힘.
+   *   개발 창 값은 **덮어쓰기**로만 남는다(켜면 열린 것으로 친다). 끄는 데는 안 쓴다.
+   * ★ 자세 key 는 서버 도감의 key 와 **같은 낱말**이다(`petted`·`eat_rice`·`sweep`…) —
+   *   표(`SITUATION_TABLE`)가 그 낱말로 적혀 있어 통역이 필요 없다.
+   */
   const floor2Of = useCallback((action: ActionKey) => {
     const d = sRef.current.dev;
     if (d.floor2) return true;
     const l2 = (ACTION_SITUATION[action] as { l2?: string }).l2;
     const pose = l2 ? poseOfSituation(SITUATION_TABLE, l2) : null;
-    return !!(pose && d.unlocked[pose]);
+    if (!pose) return false;
+    if (d.unlocked[pose]) return true;
+    if (!onServerRef.current) return false;
+    return !!liveRef.current?.pet?.motions?.find((m) => m.key === pose)?.unlocked;
   }, []);
   const sitOf = useCallback((action: ActionKey) => situationOfAction(action, floor2Of(action)), [floor2Of]);
 
@@ -753,8 +778,14 @@ export function useYeoul(live?: Live) {
   const careAct = useCallback((action: ActionKey) => {
     const f2 = floor2Of(action);
     const sit = situationOfAction(action, f2);
-    // ★ 표가 그 층에 줄을 안 적어 둔 행동은 **아무것도 안 짓는다**(게임 좌·우 고르기 1층 = "변화 없음").
-    if (!sit) return;
+    // ★ 표가 그 층에 줄을 안 적어 둔 행동(답하기·깨우기·좌우 고르기의 1층)은 **소품 없이 몸짓만**
+    //   짓는다(2026-09-22 판정 I). 예전에는 그 셋이 1층 줄이 없다는 이유로 **잠겨 있어도 2층
+    //   자세를 그대로 재생**하거나(답하기·깨우기) **아무 자세도 안 켜졌다**(좌우 고르기).
+    if (!sit) {
+      const fallback = LOCKED_POSE[action];
+      if (fallback) act(fallback, null, cyclesOfAction(SITUATION_TABLE, action, false));
+      return;
+    }
     // ★ 그 행동이 건드리는 칸의 개발 덮개를 걷는다 — 안 그러면 눌러도 화면이 안 바뀐다.
     const keys = RELEASE[action];
     if (keys?.length) {
@@ -2210,6 +2241,8 @@ export function useYeoul(live?: Live) {
       sick: mode === 'sick',
       charFilter: mode === 'sleep' ? 'saturate(.65) brightness(.9)' : mode === 'sick' ? 'saturate(.5)' : 'none',
       play: mode === 'sleep' || mode === 'sick' ? 'paused' : 'running',
+      // 정본 §게이지 — 배부름 0 이면 기본 자세를 **0.7배**로. 자는 동안·아플 때는 그 상태가 먼저다.
+      charScale: mode !== 'sleep' && mode !== 'sick' && es.full <= 0 ? 0.7 : 1,
     };
 
     /**
@@ -2229,8 +2262,12 @@ export function useYeoul(live?: Live) {
         //   ⚠️ 대신하고 있던 동안 **땀(`sick_light`)이 영영 안 떴다** — 표의 그 줄은 자세가 `sick` 일 때만
         //   켜지는데 화면은 `sad` 를 짓고 있어서, 그리는 쪽이 자세 불일치로 조용히 걸렀다(2026-09-13 실측).
         : es.sick ? 'sick'
-          : (es.full <= 0 || es.happy <= 0) ? 'sad'
-            : s.chatOpen ? 'joy' : 'base';
+          // ★ 정본 §게이지 61줄 — **배부름 0 = 기본 자세 0.7배**(슬픈 자세가 아니다). 우선순위도
+          //   정본 그대로 **병 > 배부름 > 행복** 이라, 배가 고프면 그쪽이 먼저다(2026-09-22 판정 J).
+          //   0.7배는 아래 `st.charScale` 이 건다. 꼬르륵 소품은 상훈님 2026-09-13 지시대로 계속 끈 채다.
+          : es.full <= 0 ? 'base'
+            : es.happy <= 0 ? 'sad'
+              : s.chatOpen ? 'joy' : 'base';
 
     // ── 대화 ──
     //
