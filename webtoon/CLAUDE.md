@@ -385,7 +385,7 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
 
 | 환경 | 그림이 실제로 있는 곳 |
 | --- | --- |
-| 내 노트북 | 루트 `.env` 의 `CONTENT_S3_BUCKET` 이 가리키는 버킷 |
+| 내 노트북 | `~/lore-minio/lore-dev-contents/` (아래 절 참고 — 루트 `.env` 기본값만 믿으면 안 됩니다) |
 | dev | 박스 안 MinIO (`/images/` → MinIO, nginx 가 이음) |
 | staging · prod | 각 환경의 S3 + CloudFront |
 
@@ -402,6 +402,87 @@ MinIO 로, 운영에서는 S3 로 알아서 갑니다.
 아니니 새 코드가 이 이름을 보게 하지 마세요.
 
 환경·배포·비밀값의 전체 그림은 `webtoon/docs/server.md` 에 있습니다.
+
+## 노트북에 S3 가 없을 때 그림 뜨게 하기 (2026-09-23)
+
+노트북의 그림 실물은 **`~/lore-minio/lore-dev-contents/`** 에 있습니다. DB
+(`webtoon_page.s3_key`)의 키가 그 폴더 안에 그대로 들어 있습니다. **AWS 버킷
+세 개(옛 `lore-contents-…` · staging · prod)에는 이 그림이 하나도 없습니다**
+(2026-09-23에 키 104개를 전부 대조했습니다).
+
+전에는 루트 `.env` 가 `CONTENT_S3_BUCKET` 을 옛 AWS 버킷으로 두고
+`APP_S3_ENDPOINT` 는 비워 둬서, 그냥 `./gradlew bootRun` 으로 띄우면 앱이 AWS 를
+보고 **모든 그림이 404** 가 됐습니다. 2026-09-23에 `.env` 를 로컬 창고 쪽으로
+바꿔 뒀습니다(아래 「한 번만 해 두면 되는 것」). **새로 체크아웃한 사람은 그
+설정이 없으니 이 절을 보고 직접 넣어야 합니다.**
+
+**증상** — 화면은 깨진 그림, 서버 로그에는 에러가 없습니다. 예시 작품 목록도
+글자만 나옵니다. `/api/webtoon/v1/runs/<run>/page/<n>` 은 302 를 잘 내주기
+때문에 API 만 보면 정상으로 보입니다.
+
+**AWS 로그인 문제가 아닙니다.** `aws sso login --profile lore` 를 해도 그대로
+안 뜹니다. 자격증명이 만료되면 502·500 으로 죽지만, 이 경우는 presign 주소가
+멀쩡히 나오고 그 주소를 열었을 때 `NoSuchKey` 가 옵니다.
+
+**어디를 보고 있는지 확인하는 법** — presign 주소의 호스트를 봅니다.
+
+```
+curl -sD - -o /dev/null "http://localhost:8080/api/webtoon/v1/runs/<run_id>/page/1?w=320" | grep -i location
+```
+
+`…amazonaws.com` 이면 잘못된 창고를 보는 것입니다. `localhost:9000` 이어야
+합니다.
+
+### 한 번만 해 두면 되는 것 — 루트 `.env`
+
+```
+APP_S3_ENDPOINT=http://localhost:9000
+CONTENT_S3_BUCKET=lore-dev-contents
+AWS_ACCESS_KEY_ID=lore-minio
+AWS_SECRET_ACCESS_KEY=lore-minio-secret
+```
+
+- 키 두 개는 아래 창고의 `--auth-key` 와 같은 값이면 아무거나 됩니다. 환경변수가
+  `AWS_PROFILE` 보다 먼저 읽히므로 `AWS_PROFILE=lore` 줄은 그대로 둬도 됩니다.
+- 진짜 AWS 를 봐야 할 때만 이 네 줄을 주석 처리합니다(옛 버킷 이름은 `.env` 에
+  주석으로 남겨 뒀습니다).
+
+**이 설정은 webtoon 만의 것이 아닙니다.** `app.s3.content-bucket` 은 zzal 도 같이
+쓰기 때문에, 창고를 로컬로 돌리면 zzal 그림도 같은 창고에서 찾습니다. 그래서
+2026-09-23에 zzal·comic 그림(약 130MB)을 옛 버킷에서 `~/lore-minio` 로 한 번
+내려받아 뒀습니다. **zzal 쪽 코드는 건드리지 않았습니다** — 로컬 파일만 채웠습니다.
+새로 받는 사람은 이렇게 하면 됩니다:
+
+```
+aws s3 sync s3://lore-contents-046797548177-ap-northeast-2-an/images/zzal/ \
+  ~/lore-minio/lore-dev-contents/images/zzal/
+```
+
+### 창고는 MinIO 말고 rclone 으로 띄웁니다 — 서버 띄우기 전에 매번
+
+`.env` 만 고쳐 두고 창고를 안 띄우면 그림 대신 연결 거부가 납니다.
+
+**MinIO 는 이 맥에서 안 됩니다.** brew 로 깐 것(2025-10-15, 최신)이 뜨자마자
+SIGSEGV 로 죽습니다 — go-m1cpu 가 cgo 로 CPU 정보를 읽다가 macOS 26 에서
+터집니다. upstream 저장소가 archived 라 formula 도 deprecated(2027-02-17 폐지
+예정)여서 새 빌드를 기다릴 수 없습니다. **재설치·업그레이드로 안 고쳐집니다.**
+
+대신 **`rclone serve s3`** 가 같은 자리를 채웁니다. 폴더 하나를 S3 로 열어 주고,
+presigned GET 도 업로드(PUT)도 됩니다(2026-09-23 둘 다 확인).
+
+```
+rclone serve s3 ~/lore-minio --addr 127.0.0.1:9000 \
+  --auth-key lore-minio,lore-minio-secret --force-path-style
+```
+
+- `~/lore-minio` 아래의 폴더 이름이 그대로 버킷이 됩니다(`lore-dev-contents`).
+- `--auth-key` 값은 위 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` 와 같아야 합니다.
+- 없으면 `brew install rclone`.
+
+급하게 보기만 할 거면 파일이 이미 키 경로 그대로 있어서 정적 서버로도 됩니다.
+다만 **업로드가 안 되고**(생성까지는 못 돌려 봅니다), `python3 -m http.server`
+는 한 번에 하나만 받아서 표지를 여러 장 동시에 부르는 목록 화면이 통째로
+멈추니 스레드 버전을 써야 합니다.
 
 ## 로컬에서 띄우기
 
