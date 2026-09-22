@@ -98,7 +98,11 @@ function optimisticOf(action: CareAction, pet: PetDetail | null): CareOptimistic
       if (!t) return null;
       return { action, ...cut, pets: Math.min(PET_PER_DAY, t.pets + 1) };
     case 'CLEAN':
-      return { action, ...cut, trash: 0 };
+      // ★★ **한 번 쓸면 하나**다(서버 `ZzalPet.clean()` = `trash - 1` · 정본 §12 튜토리얼 안내).
+      //   먼저 그리는 값이 0 이면, 흔적 2개일 때 **둘 다 사라졌다가** 서버 답이 와서 하나가
+      //   되살아난다 — 화면이 서버보다 더 많이 지우는 것처럼 보인다(2026-09-22 상훈님 확인).
+      if (!g) return null;
+      return { action, ...cut, trash: Math.max(0, g.trash - 1) };
     case 'BATH':
       if (!g) return null;
       return { action, ...cut, trash: 0, happiness: up(g.happiness), bathDone: true };

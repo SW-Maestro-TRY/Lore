@@ -1249,7 +1249,10 @@ export function useYeoul(live?: Live) {
     // 청소는 v4 에서 `sweep` 이다. 아직 그 그림이 없으면 별칭이 옛 `wash` 로 받쳐 준다(constants.MOTION_ALIAS).
     if (onServerRef.current) { void serverCare('CLEAN', 'clean', '깨끗해졌어요'); return; }
     if (esRef.current.trace <= 0 && !s.sampleMode) { flash('이미 깨끗해요'); return; }
-    patch({ trace: 0 });
+    // ★★ **한 번 쓸면 하나**(서버 `ZzalPet.clean()` = `trash - 1` · 정본 §12 "한 번 쓸면 하나예요").
+    //   5차에 목 서버(`mockPetServer`)만 고치고 **여기 시연 경로가 남아 있었다** — 3202 에서
+    //   흔적 2개를 한 번에 지웠다(2026-09-22 상훈님 확인). "가득" 을 지우는 것은 목욕이다(§4 표).
+    patch({ trace: Math.max(0, s.trace - 1) });
     careAct('clean');
     flash('깨끗해졌어요');
     tutorDone('CLEAN');
