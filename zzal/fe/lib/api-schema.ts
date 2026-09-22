@@ -55,6 +55,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trailer/v1/admin/hypotheses/judge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 판정 넣기
+         * @description `judge.py` 가 끝난 뒤 결과를 넣는다. `id` 의 줄을 찾아 판정 칸을 채우고 `judgementStatus` 를 바꾸고 `judgedAt` 을 찍는다.
+         *     - `COMPLETE` 면 `judgement` 필수(grade · reason · support · against — `cited_cards` 도 그대로 실린다). `presentation` 은 있을 때만
+         *     - `FAILED` 면 `failureMessage` 필수(독자에게 보인다)
+         *     - **이미 판정한 가설도 덮어쓴다** — 다시 돌린 결과를 넣을 수 있게
+         *     - 몸통의 `id` 는 lore 의 요청 id 다. judge.py 의 `request_id`(입력의 해시)가 아니다
+         *     - 없는 `id` 는 404(TRAILER_HYPOTHESIS_NOT_FOUND). 운영자가 아니면 403(ADMIN_ONLY). 모양이 틀리면 400(INVALID_INPUT)
+         */
+        post: operations["judge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trailer/v1/hypotheses": {
         parameters: {
             query?: never;
@@ -3818,6 +3843,31 @@ export interface components {
             /** @description 제목. 없으면 빈 글 */
             title?: string;
         };
+        /** @description 운영자가 판정을 넣는다. judge.py 출력을 그대로 싣는다. 이미 판정한 가설이면 덮어쓴다 */
+        TrailerHypothesisJudge: {
+            /** @description 독자에게 보일 실패 문구. FAILED 면 필수 */
+            failureMessage?: string | null;
+            /**
+             * Format: int64
+             * @description 판정한 가설의 요청 id(2-8 의 items[].id). judge.py 의 request_id 가 아니다
+             * @example 17
+             */
+            id?: number;
+            /** @description judge.py 출력의 judgement(grade · reason · support · against · cited_cards). COMPLETE 면 필수 */
+            judgement?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description COMPLETE 또는 FAILED
+             * @example COMPLETE
+             * @enum {string}
+             */
+            judgementStatus?: "COMPLETE" | "FAILED";
+            /** @description 편집본(editor 출력). 있을 때만 */
+            presentation?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** @description 내 가설 보관함. 최신이 앞이다 */
         TrailerHypothesisList: {
             /** @description 맡긴 가설. 없으면 빈 배열 */
@@ -4049,6 +4099,66 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseTrailerPendingHypothesisList"];
+                };
+            };
+        };
+    };
+    judge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrailerHypothesisJudge"];
+            };
+        };
+        responses: {
+            /** @description 판정을 넣은 가설(2-6 의 모양) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
+                };
+            };
+            /** @description 모양이 틀림(INVALID_INPUT) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
+                };
+            };
+            /** @description 로그인 필요 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
+                };
+            };
+            /** @description 운영자가 아님(ADMIN_ONLY) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
+                };
+            };
+            /** @description 없는 id(TRAILER_HYPOTHESIS_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
                 };
             };
         };

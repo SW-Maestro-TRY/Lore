@@ -2,11 +2,14 @@ package com.lore.trailer.hypothesis;
 
 import com.lore.common.auth.jwt.LoginUser;
 import com.lore.common.response.ApiResponse;
+import com.lore.trailer.hypothesis.dto.HypothesisRequests;
 import com.lore.trailer.hypothesis.dto.HypothesisResponses;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -40,5 +43,24 @@ public class HypothesisAdminController {
     @GetMapping
     public ApiResponse<HypothesisResponses.PendingList> pending(@LoginUser Long userId) {
         return ApiResponse.ok(service.pendingForOperator(userId));
+    }
+
+    @Operation(summary = "판정 넣기", description = """
+            `judge.py` 가 끝난 뒤 결과를 넣는다. `id` 의 줄을 찾아 판정 칸을 채우고 `judgementStatus` 를 바꾸고 `judgedAt` 을 찍는다.
+            - `COMPLETE` 면 `judgement` 필수(grade · reason · support · against — `cited_cards` 도 그대로 실린다). `presentation` 은 있을 때만
+            - `FAILED` 면 `failureMessage` 필수(독자에게 보인다)
+            - **이미 판정한 가설도 덮어쓴다** — 다시 돌린 결과를 넣을 수 있게
+            - 몸통의 `id` 는 lore 의 요청 id 다. judge.py 의 `request_id`(입력의 해시)가 아니다
+            - 없는 `id` 는 404(TRAILER_HYPOTHESIS_NOT_FOUND). 운영자가 아니면 403(ADMIN_ONLY). 모양이 틀리면 400(INVALID_INPUT)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "판정을 넣은 가설(2-6 의 모양)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "모양이 틀림(INVALID_INPUT)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "로그인 필요"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "운영자가 아님(ADMIN_ONLY)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "없는 id(TRAILER_HYPOTHESIS_NOT_FOUND)")})
+    @PostMapping("/judge")
+    public ApiResponse<HypothesisResponses.Hypothesis> judge(@LoginUser Long userId,
+                                                             @RequestBody HypothesisRequests.Judge body) {
+        return ApiResponse.ok(service.judgeForOperator(userId, body));
     }
 }

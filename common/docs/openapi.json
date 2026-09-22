@@ -3177,6 +3177,50 @@
         },
         "type": "object"
       },
+      "TrailerHypothesisJudge": {
+        "description": "운영자가 판정을 넣는다. judge.py 출력을 그대로 싣는다. 이미 판정한 가설이면 덮어쓴다",
+        "properties": {
+          "failureMessage": {
+            "description": "독자에게 보일 실패 문구. FAILED 면 필수",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "판정한 가설의 요청 id(2-8 의 items[].id). judge.py 의 request_id 가 아니다",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "judgement": {
+            "additionalProperties": { },
+            "description": "judge.py 출력의 judgement(grade · reason · support · against · cited_cards). COMPLETE 면 필수",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "judgementStatus": {
+            "description": "COMPLETE 또는 FAILED",
+            "enum": [
+              "COMPLETE",
+              "FAILED"
+            ],
+            "example": "COMPLETE",
+            "type": "string"
+          },
+          "presentation": {
+            "additionalProperties": { },
+            "description": "편집본(editor 출력). 있을 때만",
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "TrailerHypothesisList": {
         "description": "내 가설 보관함. 최신이 앞이다",
         "properties": {
@@ -3585,6 +3629,83 @@
           }
         ],
         "summary": "판정 안 된 가설 가져가기",
+        "tags": [
+          "가설 운영자"
+        ]
+      }
+    },
+    "/api/trailer/v1/admin/hypotheses/judge": {
+      "post": {
+        "description": "`judge.py` 가 끝난 뒤 결과를 넣는다. `id` 의 줄을 찾아 판정 칸을 채우고 `judgementStatus` 를 바꾸고 `judgedAt` 을 찍는다.\n- `COMPLETE` 면 `judgement` 필수(grade · reason · support · against — `cited_cards` 도 그대로 실린다). `presentation` 은 있을 때만\n- `FAILED` 면 `failureMessage` 필수(독자에게 보인다)\n- **이미 판정한 가설도 덮어쓴다** — 다시 돌린 결과를 넣을 수 있게\n- 몸통의 `id` 는 lore 의 요청 id 다. judge.py 의 `request_id`(입력의 해시)가 아니다\n- 없는 `id` 는 404(TRAILER_HYPOTHESIS_NOT_FOUND). 운영자가 아니면 403(ADMIN_ONLY). 모양이 틀리면 400(INVALID_INPUT)",
+        "operationId": "judge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrailerHypothesisJudge"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "판정을 넣은 가설(2-6 의 모양)"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "모양이 틀림(INVALID_INPUT)"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "운영자가 아님(ADMIN_ONLY)"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "없는 id(TRAILER_HYPOTHESIS_NOT_FOUND)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "판정 넣기",
         "tags": [
           "가설 운영자"
         ]

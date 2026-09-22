@@ -24,7 +24,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * 가설 — 맡기기(2-5), 하나 보기(2-6), 보관함(2-7), 운영자의 가져가기(2-8). 판정 넣기(2-9)는 뒤 기능에서 더한다.
+ * 가설 — 맡기기(2-5), 하나 보기(2-6), 보관함(2-7), 운영자의 가져가기(2-8)와 판정 넣기(2-9).
  *
  * <p>검사는 모두 여기서 한다. 틀린 칸마다 한국어 문구를 붙여 400 {@code INVALID_INPUT} 으로 답한다.
  * 회차는 카드 API 와 같은 코드({@code TRAILER_INVALID_CHAPTER})다. 해시 둘이 카드 표의 값과 다르면
@@ -120,6 +120,60 @@ public class HypothesisService {
                     h.getStateDigest(), h.getCardsDigest(), h.getCreatedAt()));
         }
         return new HypothesisResponses.PendingList(items);
+    }
+
+    static final int FAILURE_MESSAGE_MAX = 1_000;
+    private static final Set<String> GRADES = Set.of("likely", "unlikely", "insufficient");
+
+    /**
+     * 운영자가 판정을 넣는다(2-9). COMPLETE 면 판정(과 편집본)을, FAILED 면 실패 문구를 넣고 judgedAt 을 찍는다.
+     * 이미 판정한 가설도 덮어쓴다 — 다시 돌린 결과를 넣을 수 있게(decisions.md 2-24). 서버는 판정의 안을 읽지 않는다.
+     * 모양만 본다: grade 셋 가운데 하나, reason 은 글, support · against 는 글의 배열.
+     */
+    @Transactional
+    public HypothesisResponses.Hypothesis judgeForOperator(Long operatorId, HypothesisRequests.Judge body) {
+        adminGuard.require(operatorId);
+        if (body.id() == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "id가 필요합니다");
+        }
+        Hypothesis hypothesis = hypotheses.findById(body.id())
+                .orElseThrow(() -> new BusinessException(ErrorCode.TRAILER_HYPOTHESIS_NOT_FOUND));
+        String status = body.judgementStatus() == null ? "" : body.judgementStatus();
+        switch (status) {
+            case Hypothesis.COMPLETE -> hypothesis.complete(writeJudgement(body.judgement()),
+                    body.presentation() == null ? null : write(body.presentation()), Instant.now());
+            case Hypothesis.FAILED -> hypothesis.fail(required(body.failureMessage(), "실패 문구", FAILURE_MESSAGE_MAX), Instant.now());
+            default -> throw new BusinessException(ErrorCode.INVALID_INPUT, "judgementStatus는 COMPLETE 또는 FAILED 입니다");
+        }
+        return toResponse(hypothesis);
+    }
+
+    /** 판정의 모양을 보고 JSON 글로 만든다. 안(reason 의 내용, cited_cards)은 읽지 않는다. */
+    private static String writeJudgement(Map<String, Object> judgement) {
+        if (judgement == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "COMPLETE 에는 judgement가 필요합니다");
+        }
+        Object grade = judgement.get("grade");
+        if (!(grade instanceof String g) || !GRADES.contains(g)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "judgement.grade는 likely · unlikely · insufficient 가운데 하나입니다");
+        }
+        if (!(judgement.get("reason") instanceof String reason) || reason.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "judgement.reason이 비어 있습니다");
+        }
+        for (String field : List.of("support", "against")) {
+            if (!(judgement.get(field) instanceof List<?> ids) || !ids.stream().allMatch(String.class::isInstance)) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "judgement." + field + "는 카드 번호의 배열입니다");
+            }
+        }
+        return write(judgement);
+    }
+
+    private static String write(Map<String, Object> value) {
+        try {
+            return JSON.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "JSON으로 쓸 수 없는 값입니다");
+        }
     }
 
     /** 경로의 id. 숫자가 아니면 그런 가설이 없는 것이다(404) — 500 이 되지 않게 직접 읽는다(found.md 5-8). */

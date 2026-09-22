@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** 운영자용 가설 API 의 통합 검사 — 가져가기(2-8). 운영자는 users.role 을 ADMIN 으로 바꾼 시험용 사용자다. */
 @TrailerIntegrationTest
-@DisplayName("운영자용 가설 API — 판정 안 된 가설 가져가기(2-8)")
+@DisplayName("운영자용 가설 API — 가져가기(2-8) · 판정 넣기(2-9)")
 class HypothesisAdminApiIT extends TrailerItSupport {
 
     private static final String CARDS = "/api/trailer/v1/public/cards";
@@ -112,5 +112,115 @@ class HypothesisAdminApiIT extends TrailerItSupport {
         JsonNode items = data(getAs(newAdminId(), ADMIN)).path("items");
         assertThat(items.isArray()).isTrue();
         assertThat(items.size()).isZero();
+    }
+
+    /* ---- 판정 넣기(2-9) ---------------------------------------------------------- */
+
+    private static Map<String, Object> judgement(String grade, List<String> support, List<String> against) {
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("grade", grade);
+        value.put("reason", "샹크스의 약속은 장부에 두 번 나온다.");
+        value.put("support", support);
+        value.put("against", against);
+        value.put("cited_cards", List.of(Map.of("id", "T2", "title", "약속")));
+        return value;
+    }
+
+    private static Map<String, Object> judgeBody(long id, String status, Map<String, Object> judgement,
+                                                 Map<String, Object> presentation, String failure) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", id);
+        body.put("judgementStatus", status);
+        if (judgement != null) {
+            body.put("judgement", judgement);
+        }
+        if (presentation != null) {
+            body.put("presentation", presentation);
+        }
+        if (failure != null) {
+            body.put("failureMessage", failure);
+        }
+        return body;
+    }
+
+    @Test
+    @DisplayName("★ COMPLETE 를 넣으면 판정과 편집본이 그대로 저장되고, 독자가 되물으면 그대로 보이고, 대기 목록에서 빠진다")
+    void completeIsStoredAndVisibleToReader() throws Exception {
+        Long admin = newAdminId();
+        Long reader = newUserId();
+        long id = submit(reader, 400, List.of("T2", "T374"), "판정받을 가설");
+        Map<String, Object> presentation = Map.of("status", "complete", "headline", "약속은 이어진다", "sections", List.of(), "details", List.of());
+
+        MvcResult result = postJson(admin, ADMIN + "/judge",
+                judgeBody(id, "COMPLETE", judgement("likely", List.of("T2", "T374"), List.of()), presentation, null));
+
+        assertThat(status(result)).as(result.getResponse().getContentAsString()).isEqualTo(200);
+        JsonNode h = data(result);
+        assertThat(h.path("id").asLong()).isEqualTo(id);
+        assertThat(h.path("judgementStatus").asText()).isEqualTo("COMPLETE");
+        assertThat(h.path("judgement").path("grade").asText()).isEqualTo("likely");
+        assertThat(h.path("judgement").path("cited_cards").get(0).path("title").asText()).isEqualTo("약속");
+        assertThat(h.path("presentation").path("headline").asText()).isEqualTo("약속은 이어진다");
+        assertThat(h.path("judgedAt").asText()).isNotEmpty();
+        assertThat(h.path("failureMessage").isNull()).isTrue();
+        // 독자의 되묻기(2-6)에 그대로 보인다.
+        JsonNode seen = data(getAs(reader, HYPOTHESES + "/" + id));
+        assertThat(seen.path("judgementStatus").asText()).isEqualTo("COMPLETE");
+        assertThat(seen.path("judgement")).isEqualTo(h.path("judgement"));
+        // 대기 목록에서 빠진다.
+        assertThat(data(getAs(admin, ADMIN)).path("items").size()).isZero();
+        assertThat(jdbc.queryForObject("select judgement_status from hypotheses where id = ?", String.class, id)).isEqualTo("COMPLETE");
+    }
+
+    @Test
+    @DisplayName("FAILED 를 넣으면 실패 문구가 저장되고 판정 칸은 비어 있다. 다시 COMPLETE 로 덮어쓸 수 있다")
+    void failedThenOverwrite() throws Exception {
+        Long admin = newAdminId();
+        long id = submit(newUserId(), 400, List.of("T2"), "실패할 가설");
+
+        MvcResult failed = postJson(admin, ADMIN + "/judge", judgeBody(id, "FAILED", null, null, "모델이 답하지 않았습니다"));
+        assertThat(status(failed)).isEqualTo(200);
+        assertThat(data(failed).path("judgementStatus").asText()).isEqualTo("FAILED");
+        assertThat(data(failed).path("failureMessage").asText()).isEqualTo("모델이 답하지 않았습니다");
+        assertThat(data(failed).path("judgement").isNull()).isTrue();
+
+        MvcResult redone = postJson(admin, ADMIN + "/judge",
+                judgeBody(id, "COMPLETE", judgement("insufficient", List.of(), List.of()), null, null));
+        assertThat(status(redone)).isEqualTo(200);
+        assertThat(data(redone).path("judgementStatus").asText()).isEqualTo("COMPLETE");
+        assertThat(data(redone).path("failureMessage").isNull()).isTrue();
+        assertThat(data(redone).path("presentation").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("모양이 틀리면 400 — 상태 값, 판정 없음, 등급, 근거 배열, 실패 문구 없음, id 없음. 없는 id 는 404. 비운영자는 403")
+    void judgeValidation() throws Exception {
+        Long admin = newAdminId();
+        Long reader = newUserId();
+        long id = submit(reader, 400, List.of("T2"), "검사용");
+
+        record Case(String name, Map<String, Object> body, int status, String code) {
+        }
+        List<Case> cases = List.of(
+                new Case("상태 값", judgeBody(id, "PENDING", null, null, null), 400, "INVALID_INPUT"),
+                new Case("판정 없음", judgeBody(id, "COMPLETE", null, null, null), 400, "INVALID_INPUT"),
+                new Case("등급", judgeBody(id, "COMPLETE", judgement("maybe", List.of(), List.of()), null, null), 400, "INVALID_INPUT"),
+                new Case("근거 배열", judgeBody(id, "COMPLETE", Map.of("grade", "likely", "reason", "x", "support", "T2", "against", List.of()), null, null), 400, "INVALID_INPUT"),
+                new Case("실패 문구 없음", judgeBody(id, "FAILED", null, null, "  "), 400, "INVALID_INPUT"),
+                new Case("없는 id", judgeBody(999_999, "FAILED", null, null, "x"), 404, "TRAILER_HYPOTHESIS_NOT_FOUND"));
+        for (Case c : cases) {
+            MvcResult result = postJson(admin, ADMIN + "/judge", c.body());
+            assertThat(status(result)).as(c.name()).isEqualTo(c.status());
+            assertThat(errorCode(result)).as(c.name()).isEqualTo(c.code());
+        }
+        Map<String, Object> noId = new LinkedHashMap<>();
+        noId.put("judgementStatus", "FAILED");
+        noId.put("failureMessage", "x");
+        assertThat(status(postJson(admin, ADMIN + "/judge", noId))).isEqualTo(400);
+        // 독자 자신은 판정을 넣을 수 없다.
+        MvcResult forbidden = postJson(reader, ADMIN + "/judge", judgeBody(id, "FAILED", null, null, "x"));
+        assertThat(status(forbidden)).isEqualTo(403);
+        assertThat(errorCode(forbidden)).isEqualTo("ADMIN_ONLY");
+        assertThat(jdbc.queryForObject("select judgement_status from hypotheses where id = ?", String.class, id)).isEqualTo("PENDING");
     }
 }
