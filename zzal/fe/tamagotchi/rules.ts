@@ -10,6 +10,7 @@
 // v1(수치설계-3안-0824)에서 지운 것: 훈련(TRAIN_PRICE·HAPPY_BONUS·trainGain), 5칸 게이지, 시연 배속(DEMO/REAL),
 // 잠 길이표. 정본 §6 "훈련 행동 없음".
 
+import { CHAR_TEXT_MAX } from '../lib/pet';
 import type { Mood, Personality, PetDetail } from '../lib/pet';
 
 const MIN = 60_000;
@@ -88,8 +89,16 @@ export const CHAT_SLOTS = {
 /** 자유 입력 40자. §10 */
 export const CHAT_MAX_CHARS = 40;
 
-/** 세계관 한 줄 40자. §16 */
-export const WORLD_MAX_CHARS = 40;
+/**
+ * 세계관 한 칸의 한도. **고른 칩과 직접 쓴 말을 합친 길이**다(서버도 한 칸에 합쳐 담는다).
+ *
+ * ★★ **숫자를 여기 박지 않는다.** 이 한도는 최소 네 곳이 같이 봐야 한다 —
+ *   서버 `@Size`/`ZzalRules` · 이 파일 · 화면 `maxLength` · 목 서버.
+ *   2026-09-22 에 정확히 그 때문에 막혔다: 서버가 100 으로 올라간 뒤에도 **여기가 40 에 멈춰
+ *   있었고**, 목 서버가 이 값을 그대로 읽어 41자부터 400 으로 거절했다. 화면만 넓혀 봐야
+ *   연습방에서 같은 벽에 부딪힌다. 그래서 계약 옆(`lib/pet.ts` 의 `CHAR_TEXT_MAX`) 한 곳만 본다.
+ */
+export const WORLD_MAX_CHARS = CHAR_TEXT_MAX.world;
 
 /** 기억 = 최근 답 5개. §10 */
 export const CHAT_MEMORY = 5;
