@@ -1,0 +1,57 @@
+/* 약관·처리방침 화면. 조문을 읽는 것이 전부인 화면이라 장식을 두지 않고
+   글줄 길이·행간·표 읽힘만 맞춘다. */
+.legal {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 3rem 1.25rem 6rem;
+  line-height: 1.75;
+  font-size: 0.9375rem;
+  color: var(--text, inherit);
+  word-break: keep-all; /* 한글은 어절 단위로 끊는 편이 읽힌다 */
+}
+
+.legal h1 { font-size: 1.75rem; line-height: 1.35; margin: 0 0 2rem; }
+.legal h2 { font-size: 1.1875rem; line-height: 1.4; margin: 2.75rem 0 0.875rem; }
+.legal h3 { font-size: 1rem; margin: 2rem 0 0.625rem; }
+.legal h4 { font-size: 0.9375rem; margin: 1.5rem 0 0.5rem; }
+
+.legal p { margin: 0 0 1rem; }
+.legal ul, .legal ol { margin: 0 0 1rem; padding-left: 1.5rem; }
+.legal li { margin: 0.375rem 0; }
+.legal li > ul, .legal li > ol { margin: 0.375rem 0 0; }
+
+.legal strong { font-weight: 700; }
+.legal code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.legal hr {
+  border: 0;
+  border-top: 1px solid var(--border, color-mix(in srgb, currentColor 15%, transparent));
+  margin: 2.5rem 0;
+}
+
+.legal blockquote {
+  margin: 1.25rem 0;
+  padding: 0.875rem 1.125rem;
+  border-left: 3px solid var(--border, color-mix(in srgb, currentColor 25%, transparent));
+  background: color-mix(in srgb, currentColor 4%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+.legal blockquote p:last-child { margin-bottom: 0; }
+
+/* 국외 이전 고지처럼 칸이 넓은 표가 있다. 좁은 화면에서는 표만 가로로 민다 —
+   글 전체가 가로로 밀리면 읽을 수 없다. */
+.legal-tablewrap { overflow-x: auto; margin: 0 0 1.25rem; }
+.legal table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+.legal th, .legal td {
+  border: 1px solid var(--border, color-mix(in srgb, currentColor 15%, transparent));
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+.legal th { background: color-mix(in srgb, currentColor 5%, transparent); font-weight: 600; }
