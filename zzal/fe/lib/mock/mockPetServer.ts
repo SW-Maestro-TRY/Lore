@@ -649,7 +649,11 @@ export class MockPetServer implements PetSource {
     const round = g.round;
     if (hit) g.hits += 1;
     g.round += 1;
-    g.finished = g.round >= LEFT_RIGHT.rounds;
+    // ★★ **3승 또는 3패에서 끝난다**(서버 `ZzalGame.guess` — 2026-09-22 `1f7093f`).
+    //   3선승제라 틀린 것이 셋이면 남은 회차로 뒤집을 수 없다 — 그 자리에서 끝낸다.
+    //   다섯 회차는 그래서 **상한**이지 반드시 다 치는 수가 아니다(최단 3회차).
+    const misses = g.round - g.hits;
+    g.finished = g.hits >= LEFT_RIGHT.winAt || misses >= LEFT_RIGHT.winAt || g.round >= LEFT_RIGHT.rounds;
     let win: boolean | null = null;
     if (g.finished) {
       // ★★ 2층 15번(놀람)의 "미니게임 4판" 은 **끝까지 친 매치**만 센다(서버 `ZzalPet.finishGame()` ·
