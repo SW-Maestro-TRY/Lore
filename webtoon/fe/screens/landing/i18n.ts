@@ -223,20 +223,6 @@ const dict: Dict = {
     zh: "请只上传**自己拍摄的、或有权使用的照片。**含有他人面孔的照片需要本人同意，漫画、动画、游戏角色等他人作品不可上传。因上传照片引起的问题由上传者承担责任。",
   },
 
-  "만든 웹툰을 판매하거나 광고에 써도 되나요?": { en: "Can I sell my webtoon or use it in ads?", ja: "作ったウェブトゥーンを販売したり広告に使ったりできますか？", zh: "做好的漫画可以拿去卖或用在广告上吗？" },
-  "개인적으로 간직하거나 **SNS에 올려 공유하는 것은 자유롭게** 하셔도 됩니다. 다만 결과물을 **팔거나, 굿즈·이모티콘 상품으로 만들거나, 광고에 쓰는 것은 지금은 허용되지 않아요.** AI가 만든 그림은 저작권이 인정되지 않을 수 있다는 점도 함께 알아 두시면 좋아요.": {
-    en: "Keeping it for yourself and **sharing it on social media is entirely fine.** But **selling the results, turning them into merchandise or sticker products, or using them in advertising is not allowed for now.** It's also worth knowing that AI-generated images may not be recognized as copyrightable.",
-    ja: "個人で楽しんだり、**SNSに投稿して共有したりするのは自由**です。ただし、生成物を**販売したり、グッズ・スタンプ商品にしたり、広告に使ったりすることは現在は認められていません。**AIが作った絵には著作権が認められない場合があることも、あわせて知っておいてください。",
-    zh: "自己保存或**发到社交平台分享都可以。**但**出售成品、制作成周边或表情包商品、用于广告，目前都不允许。**另外也请了解：AI 生成的图像有可能不被认定享有著作权。",
-  },
-
-  "몇 살부터 쓸 수 있나요?": { en: "What's the minimum age?", ja: "何歳から使えますか？", zh: "多大年龄可以用？" },
-  "**만 14세 이상**부터 이용하실 수 있어요. 회원 가입을 할 때 확인받습니다.": {
-    en: "You need to be **14 or older**. We confirm this when you sign up.",
-    ja: "**満14歳以上**からご利用いただけます。会員登録の際に確認します。",
-    zh: "需要**满 14 周岁**才能使用。注册会员时会进行确认。",
-  },
-
   /* ---- 푸터 ---- */
   "LORE 웹툰 스튜디오": { en: "LORE Webtoon Studio", ja: "LORE ウェブトゥーンスタジオ", zh: "LORE 漫画工作室" },
   "이용약관": { en: "Terms of Service", ja: "利用規約", zh: "服务条款" },
