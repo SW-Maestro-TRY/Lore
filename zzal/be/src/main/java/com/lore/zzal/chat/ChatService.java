@@ -79,12 +79,14 @@ public class ChatService {
 
         List<String> memories = memories(pet);
         String reply = BanFilter.clean(ChatTemplates.reply(pet.getPersonality(), text, memories, pet.getChatAnswers()));
-        String reaction = reactionKey(pet);
+        // ★★ 세는 것을 <b>먼저</b> 한다 — 반응 동작을 이번 답까지 센 뒤에 골라야
+        //   "해금되는 바로 그 답부터 reply" 가 된다(아래 reactionKey 주석).
         PetService.Action action = petService.withUnlockDiff(pet, () -> {
-            call.answer(text, reply, reaction, now);
             pet.answerChat();
             pieceService.count(pet, com.lore.zzal.piece.PieceEvent.CHAT);
         });
+        String reaction = reactionKey(pet);
+        call.answer(text, reply, reaction, now);
         return new Answered(action, reply, reaction);
     }
 
@@ -168,17 +170,29 @@ public class ChatService {
     }
 
     /**
-     * 답한 뒤의 반응 동작 — <b>답하기</b>(2층)가 열렸으면 그것, 아직이면 <b>교감 자세</b>(1층).
+     * 답한 뒤의 반응 동작 — <b>답하기</b>(2층)가 열렸으면 그것, 아직이면 <b>인사</b>(1층).
      *
      * ★ 옛 사다리(끄덕 > 인사 > 갸웃)는 없어졌다. 채팅에 붙는 2층 자세는 이제 하나뿐이고
      *   (해금은 "못 보던 행동이 열리는 것" 이 아니라 "하던 행동이 좋아지는 것"), 나머지 셋은
      *   행동에 붙지 않는 관상용이라 3층으로 내려갔다.
+     *
+     * <h3>★★ 잠긴 동안은 {@code hello} 다 — {@code pet} 이 아니다</h3>
+     * 정본 6장이 두 예외를 이름으로 못 박았다: <b>"답하기는 1층에 대응 행동이 없어, 잠긴 동안
+     * 인사({@code hello})를 쓰고 열리면 {@code reply} 로 바꾼다."</b> 화면에도 같은 대체표
+     * ({@code LOCKED_POSE.reply = 'hello'})가 있는데, 서버가 {@code pet}(쓰다듬 자세)을 주면
+     * 화면은 <b>서버가 준 키를 그대로 재생</b>해 그 대체표를 거치지 않는다 — 답을 했는데
+     * 쓰다듬는 자세가 나온다(연결 감사 F6).
+     *
+     * <h3>★★ 부르는 자리가 규칙의 일부다 — 세고 나서 고른다</h3>
+     * 이 함수를 {@code pet.answerChat()} <b>앞</b>에서 부르면, 네 번째 답(= 해금되는 그 답)의
+     * 반응이 아직 {@code hello} 다. 사용자는 "이번에 열렸다" 는 폭죽을 보면서 옛 동작을 본다.
+     * 정본은 <b>"열리는 순간부터 2층 행동을 재생한다"</b> 이므로 그 순간은 이번 답이다.
      */
     private String reactionKey(ZzalPet pet) {
         if (UnlockRules.unlockedKeys(pet, catalog).contains("reply")) {
             return "reply";
         }
-        return "pet";
+        return "hello";
     }
 
     public record View(String openSlot, List<ZzalChatCall> calls, List<String> memories) {
