@@ -112,6 +112,77 @@ staging 은 평소 꺼져 있고, 배포가 알아서 켜고 끔.
 
 GitHub 의 해당 PR 화면에서 environment `prod` 표시로 확인. 어떤 PR 이 운영에 반영됐는지 PR 마다 배포 이력이 남음.
 
+### 4-6. DB 에 직접 접근하기 ★
+
+RDS 는 **EC2 안에서만 열립니다** — 노트북에서 바로 `psql` 을 붙일 수 없습니다
+(연결 시도하면 timeout). 콘솔 Session Manager 로 들어가 손으로 쳐도 되고,
+아래처럼 `aws ssm send-command` 로 스크립트를 보내 결과만 받아도 됩니다 —
+비밀번호를 터미널에 한 번도 안 찍고 끝납니다.
+
+**★ DB 접속 정보의 실제 환경변수 이름은 `DB_URL`/`DB_USERNAME`/`DB_PASSWORD`
+가 아니라 `SPRING_DATASOURCE_URL`/`SPRING_DATASOURCE_USERNAME`/
+`SPRING_DATASOURCE_PASSWORD` 입니다.** (`application.yml` 은
+`${DB_URL:jdbc:postgresql://localhost:5432/lore}` 처럼 적혀 있지만, 박스에
+실제로 깔린 `/etc/lore/lore.env` 는 스프링 표준 이름을 씁니다 — 스프링이
+`spring.datasource.url` 에 매핑되는 환경변수를 relaxed binding 으로 직접
+찾기 때문에 이 이름도 그대로 통합니다. 2026-09-23에 `DB_URL` 인 줄 알고
+찾다가 못 찾아서 처음부터 다시 뒤진 적이 있습니다.)
+
+이 값은 **SSM Parameter Store 에 없습니다** — `/etc/lore/lore.env` 에
+박스 생성 때부터 고정으로 박혀 있는 값입니다(4-2절의 `webtoon_api_key` 같은
+것들과 다른 자리입니다).
+
+```
+# 인스턴스 ID는 이 문서 1절 · deploy.yml 의 setup 잡 참고
+#   dev:     i-0169c150550d91895
+#   staging: i-0204d071a9c94bc08
+
+INSTANCE=i-0204d071a9c94bc08   # 바꿀 환경의 인스턴스 ID
+REGION=ap-northeast-2
+
+cat > /tmp/query.sh <<'REMOTE'
+#!/usr/bin/env bash
+set -uo pipefail
+for f in /etc/lore/lore.env /etc/lore/secrets.env; do
+  [ -f "$f" ] && set -a && source "$f" && set +a
+done
+export PGPASSWORD="$SPRING_DATASOURCE_PASSWORD"
+HOSTPORT=$(echo "$SPRING_DATASOURCE_URL" | sed -E 's#jdbc:postgresql://([^/]+)/.*#\1#')
+DBNAME=$(echo "$SPRING_DATASOURCE_URL" | sed -E 's#.*/([^/?]+).*#\1#')
+HOST=$(echo "$HOSTPORT" | cut -d: -f1)
+PORT=$(echo "$HOSTPORT" | cut -d: -f2)
+psql -h "$HOST" -p "$PORT" -U "$SPRING_DATASOURCE_USERNAME" -d "$DBNAME" -c "여기에 SQL"
+REMOTE
+
+B64=$(base64 < /tmp/query.sh | tr -d '\n')
+CMD_ID=$(aws ssm send-command --profile lore --region "$REGION" \
+  --instance-ids "$INSTANCE" \
+  --document-name "AWS-RunShellScript" \
+  --parameters commands="[\"echo $B64 | base64 -d > /tmp/q.sh\",\"sudo bash /tmp/q.sh\",\"rm -f /tmp/q.sh\"]" \
+  --query "Command.CommandId" --output text)
+
+# 실행이 끝나길 기다렸다가(보통 2~4초) 결과만 본다
+sleep 4
+aws ssm get-command-invocation --profile lore --region "$REGION" \
+  --command-id "$CMD_ID" --instance-id "$INSTANCE" \
+  --query "StandardOutputContent" --output text
+```
+
+- `-c "여기에 SQL"` 자리만 바꿔 씁니다. 되돌릴 수 없는 명령(`DELETE`·`UPDATE`)
+  은 실행 전에 같은 조건으로 `SELECT` 를 먼저 돌려 몇 행이 걸리는지 확인하고,
+  실행 뒤에도 확인하는 걸 스크립트 안에 같이 넣어 둡니다(사고 나면 되돌릴 수
+  없습니다).
+- `sudo` 가 필요합니다 — `lore.env` 가 `600` 권한(root 전용)입니다.
+- **AWS CLI 는 `--profile lore` 로 이미 로그인돼 있습니다**(`aws sts
+  get-caller-identity --profile lore` 로 확인). 세션이 끊겼으면
+  `aws sso login --profile lore`.
+- RDS 인스턴스 식별자는 `lore-staging-db`/`lore-prod-db`(4-3절과 같은 이름).
+  엔드포인트가 필요하면
+  `aws rds describe-db-instances --profile lore --region ap-northeast-2
+  --db-instance-identifier lore-staging-db --query
+  'DBInstances[0].Endpoint.Address'` 로 뽑을 수 있지만, 위 스크립트는
+  `lore.env` 의 `SPRING_DATASOURCE_URL` 에서 알아서 뽑으므로 몰라도 됩니다.
+
 ## 5. 조심할 것
 
 - 비용 — 전부 켜 두면 월 약 $160, staging 을 꺼 둔 평소는 월 약 $105
