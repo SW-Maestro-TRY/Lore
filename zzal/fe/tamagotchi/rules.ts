@@ -257,3 +257,52 @@ export const PERSONALITIES: readonly Personality[] = ['GENTLE', 'LIVELY', 'SHY',
 
 /** 이름 12자(§15). */
 export const NAME_MAX_CHARS = 12;
+
+
+// ── §0 원칙 6 · §16 원망 금지 ─────────────────────────────────────────────
+
+/**
+ * 원망·비난·죄책감 유발 어간 — **서버 `BanFilter.DENY` 와 같은 목록**(43개, 2026-09-22 대조).
+ *
+ * ★★ 이것은 취향이 아니라 **자캐 커뮤니티 규범**이다 — 캐릭터가 사용자를 원망하는 말은
+ *   자캐 주인에게 침해로 읽힌다(정본 §0 원칙 6). 그래서 템플릿을 믿지 않고 **출력 직전에 한 번 더**
+ *   거른다. 목록이 서버보다 성기면 서버에서 걸리는 말이 목·연습방에서는 그대로 화면에 나온다.
+ *   실제로 그랬다 — 프론트에는 정규식 11개뿐이라 **서버가 잡는 32어간이 안 걸렸다.**
+ * ★ 어미 변형까지 잡도록 **어간**으로 적고, 대조 전에 정규화해 띄어쓰기·문장부호를 지운다
+ *   (점으로 잘라 쓴 "왜.안.왔.어" 도 같이 잡힌다). **사용자 입력은 거르지 않는다** — 사용자 말은 자유다.
+ * ★ 이 목록을 손볼 때는 **서버 `BanFilter.java` 와 함께** 손본다. 한쪽만 고치면 조용히 갈린다.
+ */
+export const DENY_STEMS: readonly string[] = [
+  // 안 옴·늦음
+  '왜안왔', '왜안와', '왜안오', '안오셨', '안오는줄', '안와줬', '안오면', '또안왔', '왜이렇게늦', '늦게왔',
+  // 두고 감·혼자·외로움
+  '나를두고', '날두고', '저를두고', '혼자뒀', '혼자두', '혼자있', '외로', '어디갔', '어디가셨',
+  // 버림·잊음
+  '버렸', '버리', '잊었', '잊어버', '잊으',
+  // 원망·실망·탓
+  '미워', '원망', '실망', '네탓', '너때문', '당신때문', '무시했', '무시하', '신경도안', '관심도없', '관심없',
+  // 기다림을 앞세움
+  '기다리게', '기다렸', '기다렸는데',
+  // 약속·배신·섭섭
+  '약속어', '어겼', '배신', '섭섭', '서운',
+];
+
+/** 걸렸을 때 대신 나가는 말 — 서버 `BanFilter.SAFE_LINE`. 아무도 탓하지 않는다. */
+export const SAFE_LINE = '…♪';
+
+/** 대조 전 정규화 — NFKC 뒤 한글·영숫자만 남긴다(서버 `BanFilter.normalize` 와 같은 자). */
+function normalizeLine(line: string): string {
+  return line.normalize('NFKC').replace(/[^가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9]/g, '');
+}
+
+/** 이 줄에 원망이 섞였나(서버 `BanFilter.isBanned`). */
+export function isBannedLine(line: string | null | undefined): boolean {
+  if (!line) return false;
+  const tight = normalizeLine(line);
+  return DENY_STEMS.some((stem) => tight.includes(stem));
+}
+
+/** 출력 직전 — 걸리면 안전한 한 줄로(서버 `BanFilter.clean`). */
+export function cleanLine(line: string): string {
+  return isBannedLine(line) ? SAFE_LINE : line;
+}

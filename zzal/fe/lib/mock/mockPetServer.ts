@@ -31,7 +31,8 @@ import { abandonGame as abandonGameOverHttp } from '../game';
 import {
   CARE_MISS_ZERO_MS, CHAT_MEMORY, CHAT_SLOTS, CHAT_MAX_CHARS, DROP_MS, FEATURE_UNLOCK,
   FOOD_CHARGE_MS, GAMES_PER_DAY, INTIMACY, INTIMACY_TIERS, LEFT_RIGHT, MAX_FOOD, MAX_GAUGE, MAX_TRASH, NAME_MAX_CHARS,
-  NAP, RUN, SLEEP_WINDOW, SNACK_STREAK_SICK, UNLOCK_CONDITIONS, WAKE_WINDOW, WORLD_MAX_CHARS, moodOf,
+  NAP, RUN, SLEEP_WINDOW, SNACK_STREAK_SICK, UNLOCK_CONDITIONS, WAKE_WINDOW, WORLD_MAX_CHARS,
+  cleanLine, moodOf,
   GIFT_SEQ, FIRST_GIFT_DAYS, TUTORIAL_FIRST_TRASH,
 } from '../../tamagotchi/rules';
 import { BACKGROUNDS, DEFAULT_BACKGROUND, MOTIONS, SPECIAL_ADV } from '../../tamagotchi/constants';
@@ -546,9 +547,10 @@ export class MockPetServer implements PetSource {
     r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.chat);
     r.today.snackStreak = 0;
     const { reply, reactionKey } = templateReply(r.personality, trimmed, r.memory, this.nextSeed());
+    const safeReply = cleanLine(reply);   // 서버 `ChatService` 도 답 대사를 같은 필터로 거른다
     r.memory = [...r.memory, clampChat(trimmed)].slice(-CHAT_MEMORY);
     const open = r.motions.find((m) => m.key === reactionKey && m.unlockedAt !== null);
-    const chatReply: ChatReply = { line: reply, reactionKey: open ? reactionKey : 'shy' };
+    const chatReply: ChatReply = { line: safeReply, reactionKey: open ? reactionKey : 'shy' };
     r.chatLog.set(this.slotKey(r, slot), { answer: clampChat(trimmed), replyLine: chatReply.line, reactionKey: chatReply.reactionKey });
     return this.detail(r, now, this.newlyUnlocked(r, before, now), chatReply);
   }
@@ -1099,7 +1101,7 @@ export class MockPetServer implements PetSource {
     const baby = times[0];
     if (babyAlive && baby.atMs <= now) {
       calls.push({
-        slot: 'BABY', line: templateCall('BABY', r.personality, r.daysTogether), calledAt: iso(baby.atMs),
+        slot: 'BABY', line: cleanLine(templateCall('BABY', r.personality, r.daysTogether)), calledAt: iso(baby.atMs),
         expiresAt: null, answered: answered('BABY'), ...this.answerOf(r, 'BABY'),
       });
     }
@@ -1107,7 +1109,9 @@ export class MockPetServer implements PetSource {
       const next = daily[i + 1] ?? times.find((x) => x.slot !== 'BABY' && x.atMs > t.atMs);
       calls.push({
         // 기분 좋은 날은 **그날 첫 부름**만 살갑다(정본 §6). 하루 내내 들뜨면 그날의 특별함이 사라진다.
-        slot: t.slot, line: templateCall(t.slot, r.personality, r.counters.chatAnswers + r.daysTogether + i, r.goodDay && i === 0),
+        slot: t.slot,
+        // ★ 서버가 `BanFilter.clean(...)` 으로 거르는 그 자리다 — **같은 43어간 목록**을 쓴다.
+        line: cleanLine(templateCall(t.slot, r.personality, r.counters.chatAnswers + r.daysTogether + i, r.goodDay && i === 0)),
         calledAt: iso(t.atMs), expiresAt: next ? iso(next.atMs) : null, answered: answered(t.slot),
         ...this.answerOf(r, t.slot),
       });
