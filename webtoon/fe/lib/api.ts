@@ -261,33 +261,14 @@ export interface RunCard {
   page_count: number;
   style_label?: string;
   public?: boolean;
-  example?: boolean;
 }
 
-const DEMO = "/static/gallery";
-
-/** 루가 미리 구워 둔 예시 작품. 없으면 빈 목록. */
-export function exampleRuns(): Promise<RunCard[]> {
-  return fetch(`${DEMO}/runs.json`)
-    .then((res) => {
-      if (!res.ok) throw new Error("예시를 못 불러왔습니다");
-      return res.json() as Promise<{ runs: RunCard[] }>;
-    })
-    .then((got) => (got.runs || []).map((r) => ({ ...r, example: true })))
-    .catch(() => []);
-}
-
-/** 둘러보기 — 실제 작품 + 예시. 실제 목록을 못 받으면 **던진다**(화면이
- *  「못 받음」 상태를 그린다). 예시는 늘 뒤에 붙는다. */
+/** 둘러보기 — 공개된 작품 전부. 예시 작품도 여기 섞여 있다(DB 에 심겨 있어
+ *  보통 작품과 구별되지 않는다 — `ExampleWorks` 참고). 못 받으면 **던진다**
+ *  (화면이 「못 받음」 상태를 그린다). */
 export async function browseRuns(): Promise<RunCard[]> {
   const got = await call<{ runs: RunCard[] }>("/runs");
-  const real = (got.runs || []).map((r) => ({ ...r, example: false }));
-  const examples = await exampleRuns();
-  /* 예시로 구워 둔 작품이 **서버에도 살아 있으면** 같은 작품이 두 번 나온다
-     (지금 네 편이 그렇다). 실제 것을 남기고 예시 쪽을 뺀다 — 실제 것이라야
-     공개 전환·편집실 같은 것이 제대로 걸린다. */
-  const seen = new Set(real.map((r) => r.run_id));
-  return [...real, ...examples.filter((r) => !seen.has(r.run_id))];
+  return got.runs || [];
 }
 
 /** 이 브라우저가 만든 것만(비공개 포함). 예시는 안 섞는다. */
@@ -296,8 +277,7 @@ export function myBrowserRuns(): Promise<RunCard[]> {
     .then((got) => got.runs || []);
 }
 
-export function coverUrl(runId: string, page: number, episode = 1, example = false): string {
-  if (example) return `${DEMO}/${encodeURIComponent(runId)}/cover.jpg`;
+export function coverUrl(runId: string, page: number, episode = 1): string {
   return `${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`;
 }
 
@@ -313,21 +293,13 @@ export interface RunResult {
   page_count: number;
   planned_pages: number;
   preview: boolean;
-  example?: boolean;
 }
 
 export function readResult(runId: string): Promise<RunResult> {
-  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`)
-    .then((r) => ({ ...r, example: false }))
-    .catch(async (e) => {
-      const res = await fetch(`${DEMO}/${encodeURIComponent(runId)}/result.json`);
-      if (!res.ok) throw e;
-      return { ...((await res.json()) as RunResult), example: true };
-    });
+  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`);
 }
 
-export function pageUrl(runId: string, no: number, width = 1080, raw = false, example = false): string {
-  if (example && !raw) return `${DEMO}/${encodeURIComponent(runId)}/p${String(no).padStart(2, "0")}.jpg`;
+export function pageUrl(runId: string, no: number, width = 1080, raw = false): string {
   return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`;
 }
 

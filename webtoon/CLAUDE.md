@@ -167,11 +167,11 @@ worktree 안에는 프로젝트 전체가 그대로 있고, 에이전트는 그 
 # 2. 이미 쓰는 이름인지 확인하고, 겹치면 -2, -3 ... 을 붙인다
 git worktree list | grep -q "agent-<슬러그>" && 슬러그="<슬러그>-2"   # 필요할 때만
 
-# 3. haeun 브랜치 최신에서 새 브랜치+worktree를 판다
-git worktree add ../agent-<슬러그> -b agent/<슬러그> haeun
+# 3. 지금 작업 중인 feature 브랜치에서 새 브랜치+worktree를 판다
+git worktree add ../agent-<슬러그> -b agent/<슬러그> feature/<작업이름>
 
 # 예: 사용자 피드백 반영 확인 미션을 받았을 때
-git worktree add ../agent-feedback -b agent/feedback haeun
+git worktree add ../agent-feedback -b agent/feedback feature/<작업이름>
 ```
 
 ```
@@ -189,7 +189,7 @@ ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webt
   `agent/cost-tracking`) — 담당 파일이 아니라 **미션**을 이름으로 쓴다.
 - 세션 하나 = worktree 하나 = 브랜치 하나. 같은 브랜치를 두 worktree에서
   동시에 체크아웃할 수 없으니 자연히 강제된다.
-- **병합은 미션 워크트리 세션 자신이 못 한다** — `haeun` 브랜치가 이미 원본
+- **병합은 미션 워크트리 세션 자신이 못 한다** — 그 feature 브랜치가 이미 원본
   저장소 폴더(`Lore/`)에서 체크아웃돼 있어서, 같은 브랜치를 두 worktree에서
   동시에 체크아웃할 수 없기 때문이다(git이 막는다). 그래서 병합은 항상
   **원본 저장소 폴더에 있는 세션**이 실행한다.
@@ -198,7 +198,7 @@ ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webt
   "커밋은 자동, push는 항상 확인" 원칙과 같은 선). 테스트(`test_imports.py`
   ALL PASS)만 확인되면 곧장 진행한다:
   ```
-  git checkout haeun
+  git checkout feature/<작업이름>
   git merge agent/<미션명>
   ```
   - **충돌 없이 끝나면** 그 자리에서 바로 정리까지 한다:
@@ -252,9 +252,21 @@ gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않�
 `[이슈타입]/#이슈번호` (예: `feat/#14`). 이슈가 없는 잡무만 예외
 (`Chore: 내용`).
 
-**`webtoon/` · `haeun/` 작업 시** (2026-08-21부터 적용) — 위 컨벤션을 그대로
-안 쓰고 단순화합니다. 브랜치가 `haeun` 하나라 그 이름을 씁니다:
-- 브랜치는 `haeun` 하나로 통일 (이슈별로 안 나눔), `develop`에서 분기했습니다.
+**`webtoon/` · `haeun/` 작업 시** (2026-08-21부터 적용, 브랜치 규칙은
+2026-09-21에 아래와 같이 바뀜):
+- **작업 하나에 이슈 하나, 브랜치 하나, PR 하나입니다.** 일을 시작하기 전에
+  GitHub 이슈를 만들고, `feature/<작업이름>` 브랜치를 파서 그 안에서 작업한
+  뒤(예: `feature/example-content`), **`develop` 으로 PR** 을 냅니다.
+  - 전에는 브랜치를 `haeun` 하나로만 썼습니다. 작업이 여러 갈래로 늘면서
+    한 브랜치에 섞이면 무엇이 어느 작업인지 못 가리게 되어 바꿨습니다.
+  - **`haeun` 으로 머지하지 않습니다.** 팀 전체가 `피처 → develop → staging
+    → main` 으로 흐르고(`webtoon/docs/server.md`), webtoon 만 다른 길을 쓰면
+    배포 흐름에서 혼자 빠집니다.
+  - 피처 브랜치는 develop 에 머지된 뒤에도 **지우지 않습니다** — 같은
+    브랜치로 staging 에 PR 을 한 번 더 낼 수 있습니다(`server.md` 브랜치 규칙).
+  - 브랜치 이름은 `agent/…` 가 아니라 `feature/…` 입니다. 병렬 에이전트용
+    워크트리(`agent/…`)는 "미커밋 변경이 안 섞이게" 격리하는 용도이지
+    작업 단위를 나누는 이름이 아닙니다 — 둘을 섞어 쓰지 마세요.
 - 커밋 메시지는 `[#이슈번호] 설명` — 공유 저장소 컨벤션의 `Type:` 부분은
   생략합니다.
 - 한 파일이 여러 이슈에 걸치면(예: `webtoon.py`처럼 한 파일에 여러 파이프라인
@@ -299,7 +311,7 @@ git 설정(`git config user.name`/`user.email`, 지금은 `haeun
   이슈 페이지만 열어도 그 이슈에 연결된 커밋을 바로 볼 수 있게 하는 게 목적).
   이미 그 이슈에 단 댓글이 있으면 새로 하나 더 달지 말고 기존 댓글을 최신
   커밋까지 포함하도록 수정(PATCH)합니다. **커밋 목록은 `origin/develop`이
-  아니라 `origin/haeun`(또는 그 시점의 로컬 HEAD) 기준으로 뽑습니다** — haeun
+  아니라 지금 push 한 브랜치(또는 그 시점의 로컬 HEAD) 기준으로 뽑습니다** — 피처
   브랜치는 PR이 develop에 머지되기 전에도 계속 push되므로, develop 기준으로
   뽑으면 아직 안 머지된 최신 커밋이 목록에서 빠집니다 (2026-08-21에 실제로
   이 실수를 했다가 바로 잡음).
@@ -365,6 +377,31 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
 }){ projectV2Item{ id } } }'
 ```
 
+
+## 그림 창고는 환경마다 다릅니다
+
+**dev 는 S3 를 안 씁니다.** 박스 안 MinIO 가 S3 흉내를 냅니다. staging·prod
+만 진짜 S3 이고, 그 앞에 CloudFront 가 붙습니다.
+
+| 환경 | 그림이 실제로 있는 곳 |
+| --- | --- |
+| 내 노트북 | 루트 `.env` 의 `CONTENT_S3_BUCKET` 이 가리키는 버킷 |
+| dev | 박스 안 MinIO (`/images/` → MinIO, nginx 가 이음) |
+| staging · prod | 각 환경의 S3 + CloudFront |
+
+그래서 **코드는 어느 버킷인지 몰라야 합니다.** 화면에 나가는 주소는 항상
+`/images/...` 로 시작하는 상대경로이고(`PageStore.url()`), 앞에 무엇이
+붙는지는 환경이 정합니다. 도메인이나 버킷 이름을 코드에 적지 마세요 —
+`lore.webtoon.cdn-base` 설정을 없앤 이유가 그것입니다(2026-09-19).
+
+그림을 넣는 코드도 같은 이유로 **버킷에 직접 올리지 말고** `PrivateArt`
+(자바)나 `upload/s3_upload.py`(파이썬)를 거쳐야 합니다. 그래야 dev 에서는
+MinIO 로, 운영에서는 S3 로 알아서 갑니다.
+
+`lore-contents-046797548177-…` 는 **옛 버킷**입니다(보관). 지금 쓰는 버킷이
+아니니 새 코드가 이 이름을 보게 하지 마세요.
+
+환경·배포·비밀값의 전체 그림은 `webtoon/docs/server.md` 에 있습니다.
 
 ## 로컬에서 띄우기
 

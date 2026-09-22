@@ -1,6 +1,7 @@
 "use client";
 
 /* 입구 — 보드 Entry.dc.html(PC) · MEntry.dc.html(폰). 카드 둘 중 하나를 고른다. */
+import { useEffect, useState } from "react";
 import "./i18n";
 import * as api from "../../lib/api";
 import { useT } from "../../lib/i18n";
@@ -9,8 +10,11 @@ import { IconUser } from "../../ui/Icons";
 import { usePhone } from "./usePhone";
 import "./Entry.css";
 
-const COVER_A = api.coverUrl("20260903T174524-309e57", 1, 1, true);
-const COVER_B = api.coverUrl("20260906T124144-63e2a7", 1, 1, true);
+/* 카드에 걸 표지는 **둘러보기 맨 앞 두 편**을 그대로 쓴다. 전에는 예시 작품
+   번호를 여기 적어 뒀는데, 그 작품을 빼면 오류 없이 빈칸이 됐다. 목록을 못
+   받았을 때만 아래 견본 그림으로 버틴다. */
+const FALLBACK_A = "/static/samples/onboarding-page.jpg";
+const FALLBACK_B = "/static/samples/ex-romance-2.jpg";
 
 const IconCamera = ({ size = 20 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
@@ -22,6 +26,17 @@ const IconCamera = ({ size = 20 }: { size?: number }) => (
 export default function Entry({ go }: { go: Go }) {
   const t = useT();
   const phone = usePhone();
+  const [covers, setCovers] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    api.browseRuns()
+      .then((runs) => {
+        if (!alive) return;
+        setCovers(runs.slice(0, 2).map((r) => api.coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1)));
+      })
+      .catch(() => { /* 견본 그림으로 둔다 */ });
+    return () => { alive = false; };
+  }, []);
   const to = (fn: () => void) => (ev: React.MouseEvent) => { ev.preventDefault(); fn(); };
 
   return (
@@ -34,7 +49,7 @@ export default function Entry({ go }: { go: Go }) {
         <a href={hrefOf("create", { step: 1 })} className="wt-entry-card on" onClick={to(() => go("create", { step: 1 }))}>
           <div className="wt-entry-pic">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={COVER_A} alt="" />
+            <img src={covers[0] || FALLBACK_A} alt="" />
             <span className="wt-entry-tag">{t("웹툰 만들기")}</span>
           </div>
           <div className="wt-entry-body">
@@ -46,7 +61,7 @@ export default function Entry({ go }: { go: Go }) {
         <a href={hrefOf("try")} className="wt-entry-card" onClick={to(() => go("try"))}>
           <div className="wt-entry-pic">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={COVER_B} alt="" />
+            <img src={covers[1] || FALLBACK_B} alt="" />
             <span className="wt-entry-tag">{t("캐릭터 만들어보기")}</span>
           </div>
           <div className="wt-entry-body">

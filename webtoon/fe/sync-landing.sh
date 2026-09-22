@@ -34,12 +34,12 @@ DST="$ROOT/apps/web/public/static"
 #   lou     마스코트. 파이썬·자바도 읽으므로 webtoon/ai/assets 가 원본이다.
 #   samples 그림체 예시. 기본 캐릭터로도 쓰여서 같은 자리에 있다.
 #   badges  후원 기관 배지. 화면에만 쓰이므로 webtoon/fe 가 원본이다.
-#   gallery 둘러보기 예시 작품. 위와 같다.
+#
+# 예시 작품은 여기 없다 — DB 에 심고 그림은 창고에 올린다(ExampleWorks).
 SRCS=(
   "$ROOT/webtoon/ai/assets/lou:lou"
   "$ROOT/webtoon/ai/assets/samples:samples"
   "$HERE/static/badges:badges"
-  "$HERE/static/gallery:gallery"
 )
 
 for pair in "${SRCS[@]}"; do
