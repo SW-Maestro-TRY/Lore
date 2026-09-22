@@ -110,13 +110,22 @@ class UnlockRulesTest {
     }
 
     @Test
-    @DisplayName("★ 게임 4판 → 놀라기(15)")
+    @DisplayName("★ 게임 4판 → 놀라기(15). ★★ 세는 것은 <b>끝까지 친</b> 매치다(2026-09-22)")
     void gamesOpenStartle() {
         assertOpensAt("startle", (pet, n) -> {
             for (int i = 0; i < n; i++) {
-                pet.startGame();
+                pet.finishGame();
             }
         });
+
+        // ★★ 시작만 해서는 한 칸도 안 오른다 — 옛 규칙(startGame 이 세던 때)에서는 열렸다.
+        ZzalPet started = baby();
+        for (int i = 0; i < 10; i++) {
+            started.startGame();
+        }
+        assertThat(UnlockRules.current(started, UnlockRule.Kind.GAME_STARTS, CATALOG))
+                .as("시작한 판은 2층 조건에 안 센다").isZero();
+        assertThat(UnlockRules.isUnlocked(started, CATALOG.byKey("startle").orElseThrow(), CATALOG)).isFalse();
     }
 
     @Test

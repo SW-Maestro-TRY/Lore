@@ -46,10 +46,16 @@ public class GameController {
             좌우 맞히기는 5회 중 3회를 맞히면 승리한다. 정답은 매치 시작 시 서버가 결정해
             보관하며 응답에 포함하지 않는다. 승리 시 행복 +1 을 부여한다.
 
-            진행 중인 매치가 있으면 새로 생성하지 않고 해당 매치를 반환한다.
-            일일 3매치는 두 게임 합산이며 시작 시점에 차감하고 취침 시 초기화한다.""")
+            ★ 이어치기는 없다 — 아직 끝나지 않은 매치가 남아 있으면 그 매치를 그 자리에서
+            패배로 확정하고 새 매치를 연다(게임 중에 나가면 그 판은 끝이다). 접힌 매치는
+            승리 보상·달리기 해금·두 번째 선물·놀이 조각을 어느 것도 발생시키지 않는다.
+
+            일일 3매치는 두 게임 합산이며 시작 시점에 차감하고 취침 시 초기화한다. 나갔다
+            돌아온 사람도 새 매치를 시작하는 것이므로 한도가 정상 차감된다.
+
+            아픔·달리기 잠김·일일 한도로 거절되는 경우에는 남아 있던 매치를 접지 않는다.""")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "매치 시작 또는 진행 중인 매치 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "매치 시작(남아 있던 미완료 매치는 패배로 접는다)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "ZZAL_GAME_DAILY_LIMIT · ZZAL_SICK_REFUSES · ZZAL_FEATURE_LOCKED(RUN) · ZZAL_PET_SLEEPING")})
     @PostMapping
@@ -63,7 +69,9 @@ public class GameController {
             선택한 방향을 전달하면 정답 여부를 서버가 판정한다. 응답에는 방금 진행한 회차의
             정답만 포함하며 남은 회차의 정답은 노출하지 않는다.
 
-            5회를 모두 진행하면 finished 가 true 가 되고 그때 win 이 채워진다.""")
+            ★ 3승 또는 3패가 나면 그 회차에서 finished 가 true 가 되고 win 이 채워진다 —
+            5회를 채우지 않는다(최단 3회·최장 5회). 3선승제라 셋을 맞히거나 셋을 틀리면
+            남은 회차가 결과를 바꿀 수 없다.""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "진행 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ZZAL_GAME_NOT_FOUND"),
@@ -103,8 +111,9 @@ public class GameController {
     @Operation(summary = "매치 기권", description = """
             진행 중인 매치를 그 자리에서 접는다. 좌우 맞히기와 달리기 모두 이 주소로 접는다.
 
-            접은 매치는 패배로 확정되어 다시 진행할 수 없고 current 에도 더는 잡히지 않는다.
+            접은 매치는 패배로 확정되어 다시 진행할 수 없다(current 는 애초에 매치를 돌려주지 않는다).
             게임 중에 나가면 그 판은 끝이라는 규칙이며, 지고 있는 판을 버리고 다시 시작하는 것을 막는다.
+            나가기 버튼을 누르지 않고 화면을 떠난 매치도 다음 시작 때 같은 방식으로 접힌다.
 
             오늘 남은 매치 수는 시작 시점에 이미 차감했으므로 기권으로 돌려주지 않는다. 승리 보상·
             패배 판정(두 번째 선물)·놀이 조각은 어느 것도 발생하지 않는다.
@@ -124,11 +133,13 @@ public class GameController {
     }
 
     @Operation(summary = "진행 중인 매치 조회", description = """
-            새로고침 등으로 화면이 초기화된 경우 진행 중인 매치를 이어받는다.
-            진행 중인 매치가 없으면 playing 이 false 다.
+            ★ 이 API 는 매치 복구용이 아니다 — playing 은 항상 false 다.
 
-            일일 매치 수는 시작 시점에 차감하므로, 이 API 가 없으면 새로고침 시
-            차감된 매치를 이어서 진행할 수 없다.""")
+            게임 중에 나가면 그 판은 끝이라는 규칙이므로 되돌려 줄 매치가 없다. 새로고침으로
+            gameId 를 잃으면 그 매치는 다시 진행할 수 없고, 다음 시작이 그 매치를 패배로 접는다.
+
+            응답에는 오늘 남은 매치 수(remainingToday)와 달리기 해금 여부가 최신 값으로 실린다 —
+            화면은 이 값으로 새 매치 버튼을 그린다.""")
     @GetMapping("/current")
     public ApiResponse<GameResponses.State> current(@LoginUser Long userId, @PathVariable Long petId) {
         // current() 가 정산을 먼저 하므로 남은 판수는 그 뒤에 읽는다(정산 전 값 방지 — 리뷰 반영).

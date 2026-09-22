@@ -712,6 +712,21 @@ public class ZzalPet {
         return real.plusSeconds(devClockOffsetSeconds);
     }
 
+    /**
+     * 이 펫의 <b>하루가 시작된 시각</b>(펫 시계) — 마지막 밤잠에서 깬 때. 아직 한 번도 안 자 봤으면 부화 시각.
+     *
+     * <h3>★★ 하루의 경계는 자정이 아니다</h3>
+     * 정본 16장 "하루의 경계 = 밤잠 드는 순간" — {@code today*} 카운터는 {@link #sleep} 에서 0 이 되고,
+     * 자는 동안에는 아무 행동도 할 수 없으므로 <b>사용자가 겪는 하루</b>는 이 기상부터 다음 기상까지다.
+     * 낮잠은 경계가 아니다({@code wokeAt} 은 밤잠에서 깰 때만 갱신된다).
+     *
+     * ★ 여기를 한 곳으로 모은 이유 — 같은 식이 채팅 부름·심화 공개·동작 희망에 각각 적혀 있었다.
+     *   한 곳이라도 자정으로 남으면 사용자에게는 "어떤 것은 자정에, 어떤 것은 기상에 풀린다" 로 보인다.
+     */
+    public Instant dayStartedAt() {
+        return wokeAt == null ? hatchedAt : wokeAt;
+    }
+
     /** dev — 시계를 앞으로 민다. 규칙은 한 글자도 안 바뀌고 기다림만 사라진다. */
     public void advanceDevClock(Duration by) {
         devClockOffsetSeconds += by.getSeconds();
@@ -1841,12 +1856,34 @@ public class ZzalPet {
 
     // ── 미니게임·채팅 카운터 (설계 규칙) ────────────────────────────────
 
-    /** 판을 시작했다. 하루 3판(합산)·2층 13번 조건은 시작한 판 기준. */
+    /**
+     * 판을 시작했다 — <b>하루 3판</b>(합산)과 튜토리얼 GAME 칸만 여기서 움직인다.
+     *
+     * ★ 하루 3판을 시작 기준으로 세는 이유는 그대로다(정본 7장) — 끝낸 판만 세면 지고 있는 판을
+     *   버리고 새로 시작하는 것이 공짜가 되어 제한이 있으나 마나가 된다.
+     * ★★ 2층 15번(놀람)의 조건은 <b>여기가 아니다</b> — {@link #finishGame()} 로 옮겼다
+     *   (2026-09-22 결정). 시작으로 세면 시작·기권만 되풀이해 열 수 있었다.
+     */
     public void startGame() {
         todayGames += 1;
-        gameStarts += 1;
         advanceTutorial(TutorialSchedule.Step.GAME);
         afterNonSnack(null);
+    }
+
+    /**
+     * 매치를 <b>끝까지 쳤다</b>(승패 무관) — 2층 15번(놀람)의 조건 카운터.
+     *
+     * <h3>★★ 필드 이름({@code gameStarts} · 컬럼 {@code game_starts})은 옛 규칙의 흔적이다</h3>
+     * 2026-09-22 결정 전에는 <b>시작한 판</b>을 셌다. 지금 세는 것은 <b>끝까지 친 매치</b>이고,
+     * 기권·강제 종료한 매치는 여기 오지 않는다(정본 7-A를 조각과 같은 선으로 맞췄다).
+     * 이름을 안 바꾼 것은 컬럼 개명이 마이그레이션을 부르기 때문이다 — <b>이름이 아니라 이 주석과
+     * 부르는 자리가 규칙이다.</b> {@code GameService.guess}·{@code GameService.finish} 두 곳에서만 부른다.
+     *
+     * ★ 조각({@code PieceEvent.GAME})과 <b>같은 자리</b>에서 부른다. 둘이 갈리면 "조각은 안 차는데
+     *   해금은 되는" 상태가 생기고, 사용자는 어느 쪽이 규칙인지 알 수 없다.
+     */
+    public void finishGame() {
+        gameStarts += 1;
     }
 
     /** 좌우 맞히기 승리 — 달리기 해금(5승)의 재료. */
@@ -2137,6 +2174,12 @@ public class ZzalPet {
         return wakes;
     }
 
+    /**
+     * 2층 15번(놀람)의 조건 카운터 — <b>끝까지 친 매치 수</b>(2026-09-22부터).
+     *
+     * ★ 이름이 {@code Starts} 인 것은 옛 규칙의 흔적이다({@link #finishGame()} 참조).
+     *   시작한 판 수는 이제 어디에도 누적하지 않는다(하루치는 {@code todayGames}).
+     */
     public int getGameStarts() {
         return gameStarts;
     }

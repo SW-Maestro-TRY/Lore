@@ -3,12 +3,14 @@ package com.lore.zzal.wish;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.zzal.pet.PetService;
+import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 
 /**
@@ -24,6 +26,12 @@ import java.time.Instant;
  * 막으려는 것은 <b>눌린 채 굴러가는 화면</b>이다. 그래서 상한이 넉넉하고(하루 20줄), 넘으면
  * 조용히 버리지 않고 {@link ErrorCode#ZZAL_MOTION_WISH_DAILY_LIMIT} 로 분명히 답한다 —
  * 남긴 줄 알았는데 안 남는 쪽이 사용자에게 훨씬 나쁘다.
+ *
+ * <h3>★★ "하루" 는 취침 기준이다 — 자정이 아니다 (2026-09-22 상훈님 결정)</h3>
+ * 정본 16장은 <b>"하루의 경계 = 밤잠 드는 순간"</b> 이고 다른 상한(놀이 3판·간식·쓰다듬·목욕)이
+ * 전부 그 경계를 쓴다. 이 상한만 한국 시각 자정이었다(연결 감사 J10) — 사용자에게는
+ * "어떤 것은 자정에, 어떤 것은 기상에 풀린다" 로 보이고, 자정을 낀 늦은 밤에는 <b>한 번의
+ * 깨어 있는 시간에 상한이 두 번 풀렸다.</b> 지금은 {@link ZzalPet#dayStartedAt()} 한 곳을 본다.
  */
 @Service
 public class MotionWishService {
@@ -52,9 +60,9 @@ public class MotionWishService {
     @Transactional
     public ZzalMotionWish submit(Long userId, Long petId, String text, Instant now) {
         // 소유권 판정이 먼저다. 통과하지 못하면 아무것도 읽지도 쓰지도 않는다.
-        petService.get(userId, petId);
+        ZzalPet pet = petService.get(userId, petId);
 
-        long today = wishRepository.countByPetIdAndCreatedAtGreaterThanEqual(petId, startOfDay(now));
+        long today = wishRepository.countByPetIdAndCreatedAtGreaterThanEqual(petId, dayStart(pet, now));
         if (today >= ZzalRules.MOTION_WISH_DAILY_LIMIT) {
             log.info("동작 요청 하루 상한 — userId={} petId={} 오늘 {}줄", userId, petId, today);
             throw new BusinessException(ErrorCode.ZZAL_MOTION_WISH_DAILY_LIMIT);
@@ -64,12 +72,17 @@ public class MotionWishService {
     }
 
     /**
-     * 한국 시각 자정.
+     * 이 펫의 하루가 시작된 <b>실제</b> 시각 — 저장된 줄의 {@code createdAt} 과 견줄 수 있게.
      *
-     * ★ 다른 하루 상한(부화·놀이)과 <b>같은 경계</b>여야 한다. 경계가 갈리면 사용자에게는
-     *   "어떤 것은 자정에, 어떤 것은 아홉 시에 풀린다" 로 보인다.
+     * <h3>★★ 펫 시계와 실제 시계를 섞으면 상한이 조용히 사라진다</h3>
+     * {@link ZzalPet#dayStartedAt()} 은 <b>펫 시계</b>의 시각이고 {@code zzal_motion_wish.created_at}
+     * 은 <b>실제</b> 시각이다. dev 시계로 앞당긴 펫에서는 펫 시각이 실제보다 미래라, 그대로 견주면
+     * 모든 줄이 경계 앞으로 떨어져 <b>세는 줄이 0 이 되고 상한이 없어진다.</b> 그래서 "하루가
+     * 시작된 뒤로 흐른 시간" 만큼 실제 시각을 되돌린다.
+     *
+     * ★ 운영에서는 오프셋이 0 이라 {@code dayStartedAt()} 과 같은 값이다.
      */
-    private static Instant startOfDay(Instant now) {
-        return now.atZone(ZzalRules.ZONE).toLocalDate().atStartOfDay(ZzalRules.ZONE).toInstant();
+    private static Instant dayStart(ZzalPet pet, Instant now) {
+        return now.minus(Duration.between(pet.dayStartedAt(), pet.now(now)));
     }
 }
